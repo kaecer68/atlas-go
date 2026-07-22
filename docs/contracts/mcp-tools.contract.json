@@ -1,51 +1,67 @@
 {
   "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
   "version": "1",
-  "generated_at": "2026-07-22T22:27:07.027007+00:00",
+  "generated_at": "2026-07-22T23:00:15.731068+00:00",
   "source": "cmd/atlas-mcp/server/tools_canary_test.go",
   "total_tools": 97,
   "tools": {
     "alert_get_rules": {
       "method": "GET",
       "path": "/api/alerts/rules",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "alert_get_stats": {
       "method": "GET",
       "path": "/api/alerts/stats",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "alert_list": {
       "method": "GET",
       "path": "/api/alerts",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "alert_list_unacknowledged": {
       "method": "GET",
       "path": "/api/alerts/unacknowledged",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "backtest_signals": {
       "method": "GET",
       "path": "/api/backtest/signals",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "timeout — heavy computation"
+      "canary_skip_reason": "timeout — heavy computation",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "backtest_status": {
       "method": "GET",
       "path": "/api/backtest/status",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "calendar_events": {
       "method": "GET",
       "path": "/api/dashboard/calendar-events",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "capital_flow_daily": {
       "method": "GET",
       "path": "/api/capital-flow/daily",
       "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
       "response_keys": [
         "date",
         "forces",
@@ -56,6 +72,8 @@
       "method": "GET",
       "path": "/api/capital-flow/summary",
       "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
       "response_keys": [
         "assessment",
         "summary",
@@ -65,74 +83,113 @@
     "crossmarket_get_correlation": {
       "method": "GET",
       "path": "/api/cross-market/correlation",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
+      "response_keys": [
+        "correlation",
+        "observations"
+      ]
     },
     "crossmarket_get_status": {
       "method": "GET",
       "path": "/api/cross-market/status",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
+      "response_keys": [
+        "generated_at",
+        "data_status"
+      ]
     },
     "crossmarket_get_us_indices": {
       "method": "GET",
       "path": "/api/dashboard/us-indices",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
+      "response_keys": [
+        "indices"
+      ]
     },
     "daily_report": {
       "method": "GET",
       "path": "/api/reports/latest",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "data_get_channel_detail": {
       "method": "GET",
       "path": "/api/dashboard/data-channels/fugle",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "data_get_channels": {
       "method": "GET",
       "path": "/api/dashboard/data-channels",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "data_get_field_contract": {
       "method": "GET",
       "path": "/api/field-contract",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "data_get_quality": {
       "method": "GET",
       "path": "/api/dashboard/data-quality",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "detector_registry_list": {
       "method": "GET",
       "path": "/api/detector/registry/list",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "event_calendar": {
       "method": "GET",
       "path": "/api/events/calendar",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "event_flow_prediction": {
       "method": "GET",
       "path": "/api/events/prediction",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "experiment_diff": {
       "method": "GET",
       "path": "/api/experiment/diff",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "needs experiment_id param"
+      "canary_skip_reason": "needs experiment_id param",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "experiment_history": {
       "method": "GET",
       "path": "/api/experiment/history",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "explain_market_move": {
       "method": "GET",
       "path": "/api/market/explain",
       "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
       "response_keys": [
         "generated_at",
         "headline",
@@ -143,164 +200,228 @@
     "get_recommendations": {
       "method": "GET",
       "path": "/api/recommendations",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "industry_sector_list": {
       "method": "GET",
       "path": "/api/industry/sectors",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "industry_sector_lookup": {
       "method": "GET",
       "path": "/api/industry/lookup?symbol=2330",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "llm_get_cost": {
       "method": "GET",
       "path": "/api/llm_annotator/cost",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "backend 503 — llm_annotator not initialized"
+      "canary_skip_reason": "backend 503 — llm_annotator not initialized",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "llm_get_health": {
       "method": "GET",
       "path": "/api/llm/health",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_capital_flow_latest": {
       "method": "GET",
       "path": "/api/macro/capital-flow/latest",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_ingest_status": {
       "method": "GET",
       "path": "/api/dashboard/macro-data-health",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_snapshot_history": {
       "method": "GET",
       "path": "/api/macro/snapshot/timeline",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_snapshot_latest": {
       "method": "GET",
       "path": "/api/macro/snapshot/latest",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_stress_index_current": {
       "method": "GET",
       "path": "/api/narrative/stress-index/current",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "macro_get_stress_index_history": {
       "method": "GET",
       "path": "/api/narrative/stress-index/history?days=7",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "mcp_anomaly_get_recent": {
       "method": "GET",
       "path": "/api/mcp/anomalies/recent",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_get_call_stats": {
       "method": "GET",
       "path": "/api/mcp/call-stats",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_get_session_topology": {
       "method": "GET",
       "path": "/api/mcp/session-topology",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_get_tenant_usage": {
       "method": "GET",
       "path": "/api/mcp/tenant-usage",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_get_top_slow_tools": {
       "method": "GET",
       "path": "/api/mcp/top-slow-tools",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_quickstart": {
       "method": "GET",
       "path": "/api/mcp/quickstart",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "mcp_roots_list": {
       "method": "GET",
       "path": "/api/mcp/roots",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "narrative_get_bundle": {
       "method": "GET",
       "path": "/api/narrative/bundle",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_get_chains": {
       "method": "GET",
       "path": "/api/narrative/chains",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_get_events": {
       "method": "GET",
       "path": "/api/narrative/events",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_get_models": {
       "method": "GET",
       "path": "/api/narrative/models",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_get_seasonal": {
       "method": "GET",
       "path": "/api/narrative/seasonal",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_get_templates": {
       "method": "GET",
       "path": "/api/narrative/templates",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "narrative_stress_index_thresholds": {
       "method": "GET",
       "path": "/api/narrative/stress-index/thresholds",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "parameters_get": {
       "method": "GET",
       "path": "/api/parameters",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "parameters_get_audit_log": {
       "method": "GET",
       "path": "/api/parameters/audit-log",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "parameters_get_categories": {
       "method": "GET",
       "path": "/api/parameters/categories",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "parameters_get_metadata": {
       "method": "GET",
       "path": "/api/parameters/metadata",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "parameters_get_snapshots": {
       "method": "GET",
       "path": "/api/parameters/snapshots",
-      "auth": "required"
+      "auth": "required",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "prism_get_training_results": {
       "method": "GET",
       "path": "/api/prism/training-results",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "regime_get_history": {
       "method": "GET",
       "path": "/api/regime/history?days=7",
       "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
       "response_keys": [
         "sessions",
         "current_regime"
@@ -309,108 +430,152 @@
     "report_get_daily_summary": {
       "method": "GET",
       "path": "/api/dashboard/daily-summary",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "report_get_export_link": {
       "method": "GET",
       "path": "/api/dashboard/performance-report/export",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "report_get_performance": {
       "method": "GET",
       "path": "/api/dashboard/performance-report",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "report_get_tax_snapshot": {
       "method": "GET",
       "path": "/api/dashboard/tax-snapshot",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_exposure": {
       "method": "GET",
       "path": "/api/dashboard/risk-exposure",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_get_calibration": {
       "method": "GET",
       "path": "/api/dashboard/risk-calibration",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_get_commentary": {
       "method": "GET",
       "path": "/api/risk/commentary",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_get_correlation_matrix": {
       "method": "GET",
       "path": "/api/dashboard/correlation-matrix",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_get_drawdown": {
       "method": "GET",
       "path": "/api/dashboard/drawdown",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "risk_get_metrics": {
       "method": "GET",
       "path": "/api/dashboard/risk",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
+      "response_keys": [
+        "gate_mode",
+        "risk_snapshot"
+      ]
     },
     "scheduler_get_status": {
       "method": "GET",
       "path": "/api/scheduler/status",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "sector_allocation_plan": {
       "method": "GET",
       "path": "/api/dashboard/sector-allocation-plan",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "backend 503 — snapshot not configured"
+      "canary_skip_reason": "backend 503 — snapshot not configured",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "stock_get_chips": {
       "method": "GET",
       "path": "/api/stock/chips?symbol=2330",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "stock_get_fundamentals": {
       "method": "GET",
       "path": "/api/stock/fundamentals?symbol=2330",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "stock_get_quote": {
       "method": "GET",
       "path": "/api/stock/quote?symbol=2330",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "timeout — fugle API latency"
+      "canary_skip_reason": "timeout — fugle API latency",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "stock_get_technical": {
       "method": "GET",
       "path": "/api/stock/technical?symbol=2330&days=10",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "backend 503 — computation timeout"
+      "canary_skip_reason": "backend 503 — computation timeout",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "strategy_get": {
       "method": "GET",
       "path": "/api/strategies/foreign-3day-inflow",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "strategy_get_attribution": {
       "method": "GET",
       "path": "/api/strategies/foreign-3day-inflow/attribution",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "strategy_get_layers": {
       "method": "GET",
       "path": "/api/strategies/layers",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "strategy_get_summary": {
       "method": "GET",
       "path": "/api/strategies/foreign-3day-inflow/summary",
       "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
       "response_keys": [
         "id",
         "summary"
@@ -419,114 +584,162 @@
     "strategy_list_active": {
       "method": "GET",
       "path": "/api/strategies/active",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "strategy_ranker": {
       "method": "GET",
       "path": "/api/strategy-ranker/rank",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "synergy_get_darwinian_status": {
       "method": "GET",
       "path": "/api/synergy/darwinian/status",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "synergy_get_darwinian_trend": {
       "method": "GET",
       "path": "/api/synergy/darwinian/trend",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "synergy_get_l2_4_schedule": {
       "method": "GET",
       "path": "/api/synergy/l2-4-schedule",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_circuit_breaker": {
       "method": "GET",
       "path": "/api/dashboard/circuit-breaker",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_data_pipeline": {
       "method": "GET",
       "path": "/api/dashboard/data-pipeline",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_health": {
       "method": "GET",
       "path": "/api/dashboard/system-health",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": "",
+      "response_keys": [
+        "regime",
+        "data_channels"
+      ]
     },
     "system_get_maturity": {
       "method": "GET",
       "path": "/api/dashboard/maturity",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_metrics": {
       "method": "GET",
       "path": "/api/dashboard/metrics",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_metrics_trend": {
       "method": "GET",
       "path": "/api/dashboard/metrics/trend?minutes=30",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "system_get_thresholds": {
       "method": "GET",
       "path": "/api/dashboard/metrics/thresholds",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "taiwan_stress_index": {
       "method": "GET",
       "path": "/api/taiwan/stress-index",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "task_list": {
       "method": "GET",
       "path": "/api/tasks",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "template_detector_status": {
       "method": "GET",
       "path": "/api/detector/scan/status",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": false,
+      "consumer_note": "internal"
     },
     "trace_get_agent_observatory": {
       "method": "GET",
       "path": "/api/dashboard/agent-observatory",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "trace_get_decision_chain": {
       "method": "GET",
       "path": "/api/dashboard/decision-chain?symbol=2330",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "trace_get_reasoning": {
       "method": "GET",
       "path": "/api/dashboard/reasoning-trace?session_id=latest",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "trace_get_sim_latest": {
       "method": "GET",
       "path": "/api/traces/sim-latest",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "universe_get_session_detail": {
       "method": "GET",
       "path": "/api/dashboard/sessions/latest",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "requires caller-provided session_id — canary has no known ID"
+      "canary_skip_reason": "requires caller-provided session_id — canary has no known ID",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "universe_get_sessions": {
       "method": "GET",
       "path": "/api/dashboard/sessions",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     },
     "universe_get_universe_overlap": {
       "method": "GET",
       "path": "/api/dashboard/universe-overlap",
-      "auth": "optional"
+      "auth": "optional",
+      "consumer_facing": true,
+      "consumer_note": ""
     }
   }
 }

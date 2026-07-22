@@ -96,6 +96,10 @@ def build_contract():
         if existing.get(name, {}).get("canary_skip"):
             entry["canary_skip"] = True
             entry["canary_skip_reason"] = existing[name].get("canary_skip_reason", "")
+        # Preserve consumer_facing flag
+        if "consumer_facing" in existing.get(name, {}):
+            entry["consumer_facing"] = existing[name]["consumer_facing"]
+            entry["consumer_note"] = existing[name].get("consumer_note", "")
         # Attach shape if we have one
         for label, canonical in LABEL_TO_NAME.items():
             if canonical == name and label in shapes:
