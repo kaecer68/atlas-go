@@ -1439,7 +1439,7 @@ export interface ForceScore {
   weight_deprecated?: boolean;
   leading_z?: number;
   leading_trend?: string;
-  data_available?: boolean;
+  data_available: boolean;
 }
 
 export interface ForecastVsRealityItem {
