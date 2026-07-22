@@ -431,10 +431,18 @@ jobs:
     - name: Verify route uniqueness
       run: bash ./scripts/check-routes.sh
 
+
+  # Contract validation — ensures MCP tool paths match route table
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - name: Validate MCP tool contracts
+      run: python3 scripts/gen-contracts.py --validate
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes, contracts]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write

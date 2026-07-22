@@ -1,0 +1,518 @@
+{
+  "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
+  "version": "1",
+  "generated_at": "2026-07-22T19:18:55.255547+00:00",
+  "source": "cmd/atlas-mcp/server/tools_canary_test.go",
+  "total_tools": 97,
+  "tools": {
+    "alert_get_rules": {
+      "method": "GET",
+      "path": "/api/alerts/rules",
+      "auth": "optional"
+    },
+    "alert_get_stats": {
+      "method": "GET",
+      "path": "/api/alerts/stats",
+      "auth": "optional"
+    },
+    "alert_list": {
+      "method": "GET",
+      "path": "/api/alerts",
+      "auth": "optional"
+    },
+    "alert_list_unacknowledged": {
+      "method": "GET",
+      "path": "/api/alerts/unacknowledged",
+      "auth": "optional"
+    },
+    "backtest_signals": {
+      "method": "GET",
+      "path": "/api/backtest/signals",
+      "auth": "optional"
+    },
+    "backtest_status": {
+      "method": "GET",
+      "path": "/api/backtest/status",
+      "auth": "optional"
+    },
+    "calendar_events": {
+      "method": "GET",
+      "path": "/api/events/calendar",
+      "auth": "optional"
+    },
+    "capital_flow_daily": {
+      "method": "GET",
+      "path": "/api/capital-flow/daily",
+      "auth": "optional",
+      "response_keys": [
+        "date",
+        "forces",
+        "resonance"
+      ]
+    },
+    "capital_flow_summary": {
+      "method": "GET",
+      "path": "/api/capital-flow/summary",
+      "auth": "optional",
+      "response_keys": [
+        "assessment",
+        "summary",
+        "forces"
+      ]
+    },
+    "crossmarket_get_correlation": {
+      "method": "GET",
+      "path": "/api/cross-market/correlation",
+      "auth": "optional"
+    },
+    "crossmarket_get_status": {
+      "method": "GET",
+      "path": "/api/cross-market/status",
+      "auth": "optional"
+    },
+    "crossmarket_get_us_indices": {
+      "method": "GET",
+      "path": "/api/dashboard/us-indices",
+      "auth": "optional"
+    },
+    "daily_report": {
+      "method": "GET",
+      "path": "/api/daily-report",
+      "auth": "optional"
+    },
+    "data_get_channel_detail": {
+      "method": "GET",
+      "path": "/api/dashboard/data-channels/fugle",
+      "auth": "optional"
+    },
+    "data_get_channels": {
+      "method": "GET",
+      "path": "/api/dashboard/data-channels",
+      "auth": "optional"
+    },
+    "data_get_field_contract": {
+      "method": "GET",
+      "path": "/api/field-contract",
+      "auth": "optional"
+    },
+    "data_get_quality": {
+      "method": "GET",
+      "path": "/api/dashboard/data-quality",
+      "auth": "optional"
+    },
+    "detector_registry_list": {
+      "method": "GET",
+      "path": "/api/detector/registry/list",
+      "auth": "optional"
+    },
+    "event_calendar": {
+      "method": "GET",
+      "path": "/api/events/calendar",
+      "auth": "optional"
+    },
+    "event_flow_prediction": {
+      "method": "GET",
+      "path": "/api/events/prediction",
+      "auth": "optional"
+    },
+    "experiment_diff": {
+      "method": "GET",
+      "path": "/api/experiment/diff",
+      "auth": "optional"
+    },
+    "experiment_history": {
+      "method": "GET",
+      "path": "/api/experiment/history",
+      "auth": "optional"
+    },
+    "explain_market_move": {
+      "method": "GET",
+      "path": "/api/market/explain",
+      "auth": "optional",
+      "response_keys": [
+        "generated_at",
+        "headline",
+        "detail",
+        "sections"
+      ]
+    },
+    "get_recommendations": {
+      "method": "GET",
+      "path": "/api/recommendations",
+      "auth": "optional"
+    },
+    "industry_sector_list": {
+      "method": "GET",
+      "path": "/api/industry/sectors",
+      "auth": "optional"
+    },
+    "industry_sector_lookup": {
+      "method": "GET",
+      "path": "/api/industry/lookup?symbol=2330",
+      "auth": "optional"
+    },
+    "llm_get_cost": {
+      "method": "GET",
+      "path": "/api/llm_annotator/cost",
+      "auth": "optional"
+    },
+    "llm_get_health": {
+      "method": "GET",
+      "path": "/api/llm/health",
+      "auth": "optional"
+    },
+    "macro_get_capital_flow_latest": {
+      "method": "GET",
+      "path": "/api/macro/capital-flow/latest",
+      "auth": "optional"
+    },
+    "macro_get_ingest_status": {
+      "method": "GET",
+      "path": "/api/macro/snapshot/timeline",
+      "auth": "optional"
+    },
+    "macro_get_snapshot_history": {
+      "method": "GET",
+      "path": "/api/macro/snapshot/history?date=2026-07-22",
+      "auth": "optional"
+    },
+    "macro_get_snapshot_latest": {
+      "method": "GET",
+      "path": "/api/macro/snapshot/latest",
+      "auth": "optional"
+    },
+    "macro_get_stress_index_current": {
+      "method": "GET",
+      "path": "/api/narrative/stress-index/current",
+      "auth": "optional"
+    },
+    "macro_get_stress_index_history": {
+      "method": "GET",
+      "path": "/api/narrative/stress-index/history?days=7",
+      "auth": "optional"
+    },
+    "mcp_anomaly_get_recent": {
+      "method": "GET",
+      "path": "/api/mcp/anomalies/recent",
+      "auth": "optional"
+    },
+    "mcp_get_call_stats": {
+      "method": "GET",
+      "path": "/api/mcp/call-stats",
+      "auth": "optional"
+    },
+    "mcp_get_session_topology": {
+      "method": "GET",
+      "path": "/api/mcp/session-topology",
+      "auth": "optional"
+    },
+    "mcp_get_tenant_usage": {
+      "method": "GET",
+      "path": "/api/mcp/tenant-usage",
+      "auth": "optional"
+    },
+    "mcp_get_top_slow_tools": {
+      "method": "GET",
+      "path": "/api/mcp/top-slow-tools",
+      "auth": "optional"
+    },
+    "mcp_quickstart": {
+      "method": "GET",
+      "path": "/api/mcp/quickstart",
+      "auth": "optional"
+    },
+    "mcp_roots_list": {
+      "method": "GET",
+      "path": "/api/mcp/roots",
+      "auth": "optional"
+    },
+    "narrative_get_bundle": {
+      "method": "GET",
+      "path": "/api/narrative/bundle",
+      "auth": "optional"
+    },
+    "narrative_get_chains": {
+      "method": "GET",
+      "path": "/api/narrative/chains",
+      "auth": "optional"
+    },
+    "narrative_get_events": {
+      "method": "GET",
+      "path": "/api/narrative/events",
+      "auth": "optional"
+    },
+    "narrative_get_models": {
+      "method": "GET",
+      "path": "/api/narrative/models",
+      "auth": "optional"
+    },
+    "narrative_get_seasonal": {
+      "method": "GET",
+      "path": "/api/narrative/seasonal",
+      "auth": "optional"
+    },
+    "narrative_get_templates": {
+      "method": "GET",
+      "path": "/api/narrative/templates",
+      "auth": "optional"
+    },
+    "narrative_stress_index_thresholds": {
+      "method": "GET",
+      "path": "/api/narrative/stress-index/thresholds",
+      "auth": "optional"
+    },
+    "parameters_get": {
+      "method": "GET",
+      "path": "/api/parameters",
+      "auth": "optional"
+    },
+    "parameters_get_audit_log": {
+      "method": "GET",
+      "path": "/api/parameters/audit-log",
+      "auth": "optional"
+    },
+    "parameters_get_categories": {
+      "method": "GET",
+      "path": "/api/parameters/categories",
+      "auth": "optional"
+    },
+    "parameters_get_metadata": {
+      "method": "GET",
+      "path": "/api/parameters/metadata",
+      "auth": "optional"
+    },
+    "parameters_get_snapshots": {
+      "method": "GET",
+      "path": "/api/parameters/snapshots",
+      "auth": "optional"
+    },
+    "prism_get_training_results": {
+      "method": "GET",
+      "path": "/api/prism/training-results",
+      "auth": "optional"
+    },
+    "regime_get_history": {
+      "method": "GET",
+      "path": "/api/regime/history?days=7",
+      "auth": "optional",
+      "response_keys": [
+        "sessions",
+        "current_regime"
+      ]
+    },
+    "report_get_daily_summary": {
+      "method": "GET",
+      "path": "/api/dashboard/daily-summary",
+      "auth": "optional"
+    },
+    "report_get_export_link": {
+      "method": "GET",
+      "path": "/api/dashboard/performance-report/export",
+      "auth": "optional"
+    },
+    "report_get_performance": {
+      "method": "GET",
+      "path": "/api/dashboard/performance-report",
+      "auth": "optional"
+    },
+    "report_get_tax_snapshot": {
+      "method": "GET",
+      "path": "/api/dashboard/tax-snapshot",
+      "auth": "optional"
+    },
+    "risk_exposure": {
+      "method": "GET",
+      "path": "/api/dashboard/risk-exposure",
+      "auth": "optional"
+    },
+    "risk_get_calibration": {
+      "method": "GET",
+      "path": "/api/dashboard/risk-calibration",
+      "auth": "optional"
+    },
+    "risk_get_commentary": {
+      "method": "GET",
+      "path": "/api/risk/commentary",
+      "auth": "optional"
+    },
+    "risk_get_correlation_matrix": {
+      "method": "GET",
+      "path": "/api/dashboard/correlation-matrix",
+      "auth": "optional"
+    },
+    "risk_get_drawdown": {
+      "method": "GET",
+      "path": "/api/dashboard/drawdown",
+      "auth": "optional"
+    },
+    "risk_get_metrics": {
+      "method": "GET",
+      "path": "/api/dashboard/risk",
+      "auth": "optional"
+    },
+    "scheduler_get_status": {
+      "method": "GET",
+      "path": "/api/scheduler/status",
+      "auth": "optional"
+    },
+    "sector_allocation_plan": {
+      "method": "GET",
+      "path": "/api/dashboard/sector-allocation-plan",
+      "auth": "optional"
+    },
+    "stock_get_chips": {
+      "method": "GET",
+      "path": "/api/stock/chips?symbol=2330",
+      "auth": "optional"
+    },
+    "stock_get_fundamentals": {
+      "method": "GET",
+      "path": "/api/stock/fundamentals?symbol=2330",
+      "auth": "optional"
+    },
+    "stock_get_quote": {
+      "method": "GET",
+      "path": "/api/stock/quote?symbol=2330",
+      "auth": "optional"
+    },
+    "stock_get_technical": {
+      "method": "GET",
+      "path": "/api/stock/technical?symbol=2330&days=10",
+      "auth": "optional"
+    },
+    "strategy_get": {
+      "method": "GET",
+      "path": "/api/strategies/foreign-3day-inflow",
+      "auth": "optional"
+    },
+    "strategy_get_attribution": {
+      "method": "GET",
+      "path": "/api/strategies/foreign-3day-inflow/attribution",
+      "auth": "optional"
+    },
+    "strategy_get_layers": {
+      "method": "GET",
+      "path": "/api/strategies/layers",
+      "auth": "optional"
+    },
+    "strategy_get_summary": {
+      "method": "GET",
+      "path": "/api/strategies/foreign-3day-inflow/summary",
+      "auth": "optional",
+      "response_keys": [
+        "id",
+        "summary"
+      ]
+    },
+    "strategy_list_active": {
+      "method": "GET",
+      "path": "/api/strategies/active",
+      "auth": "optional"
+    },
+    "strategy_ranker": {
+      "method": "GET",
+      "path": "/api/strategy-ranker/rank",
+      "auth": "optional"
+    },
+    "synergy_get_darwinian_status": {
+      "method": "GET",
+      "path": "/api/synergy/darwinian/status",
+      "auth": "optional"
+    },
+    "synergy_get_darwinian_trend": {
+      "method": "GET",
+      "path": "/api/synergy/darwinian/trend",
+      "auth": "optional"
+    },
+    "synergy_get_l2_4_schedule": {
+      "method": "GET",
+      "path": "/api/synergy/l2-4-schedule",
+      "auth": "optional"
+    },
+    "system_get_circuit_breaker": {
+      "method": "GET",
+      "path": "/api/dashboard/circuit-breaker",
+      "auth": "optional"
+    },
+    "system_get_data_pipeline": {
+      "method": "GET",
+      "path": "/api/dashboard/data-pipeline",
+      "auth": "optional"
+    },
+    "system_get_health": {
+      "method": "GET",
+      "path": "/api/dashboard/system-health",
+      "auth": "optional"
+    },
+    "system_get_maturity": {
+      "method": "GET",
+      "path": "/api/dashboard/maturity",
+      "auth": "optional"
+    },
+    "system_get_metrics": {
+      "method": "GET",
+      "path": "/api/dashboard/metrics",
+      "auth": "optional"
+    },
+    "system_get_metrics_trend": {
+      "method": "GET",
+      "path": "/api/dashboard/metrics/trend?minutes=30",
+      "auth": "optional"
+    },
+    "system_get_thresholds": {
+      "method": "GET",
+      "path": "/api/dashboard/metrics/thresholds",
+      "auth": "optional"
+    },
+    "taiwan_stress_index": {
+      "method": "GET",
+      "path": "/api/taiwan/stress-index",
+      "auth": "optional"
+    },
+    "task_list": {
+      "method": "GET",
+      "path": "/api/tasks",
+      "auth": "optional"
+    },
+    "template_detector_status": {
+      "method": "GET",
+      "path": "/api/detector/scan/status",
+      "auth": "optional"
+    },
+    "trace_get_agent_observatory": {
+      "method": "GET",
+      "path": "/api/dashboard/agent-observatory",
+      "auth": "optional"
+    },
+    "trace_get_decision_chain": {
+      "method": "GET",
+      "path": "/api/dashboard/decision-chain?symbol=2330",
+      "auth": "optional"
+    },
+    "trace_get_reasoning": {
+      "method": "GET",
+      "path": "/api/dashboard/reasoning-trace?session_id=latest",
+      "auth": "optional"
+    },
+    "trace_get_sim_latest": {
+      "method": "GET",
+      "path": "/api/traces/sim-latest",
+      "auth": "optional"
+    },
+    "universe_get_session_detail": {
+      "method": "GET",
+      "path": "/api/universe/sessions/latest",
+      "auth": "optional"
+    },
+    "universe_get_sessions": {
+      "method": "GET",
+      "path": "/api/universe/sessions",
+      "auth": "optional"
+    },
+    "universe_get_universe_overlap": {
+      "method": "GET",
+      "path": "/api/universe/overlap",
+      "auth": "optional"
+    }
+  }
+}

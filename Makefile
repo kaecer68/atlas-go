@@ -285,13 +285,17 @@ check-routes:
 hermes-smoke:
 	@bash scripts/hermes-smoke.sh
 
+
+check-contracts:
+	@python3 scripts/gen-contracts.py --validate
+
 gate:
 	@echo "🔐 Running contract gate (check-routes + hermes-smoke)..."
 	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)
 	@bash scripts/hermes-smoke.sh || (echo "❌ Hermes smoke failed" && exit 1)
 	@echo "✅ Contract gate passed"
 
-.PHONY: check-routes hermes-smoke gate
+.PHONY: check-routes hermes-smoke gate check-contracts
 # ---- 整合 target ----
 
 install: install-frontend
