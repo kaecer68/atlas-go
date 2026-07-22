@@ -30,7 +30,7 @@
 | **Darwinian 權重靜默夾制** | portfolio | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | sim | 多次 simulation run 之間不可共用同一個 slice。 |
 | **Yahoo Provider range=1y 產出 YoY 而非 daily change** | marketdata | US 股票/指數 provider 若使用 `range: "1y"` + `prev := closes[0]`，會計算「年增率 (YoY)」而非「日增率 (daily change)」，導致 ChangePct 出現 +84.9% 等荒謬數值。正確模式：`range: "5d"` + `prev := closes[len(closes)-2]`，並對 `abs(changePct) > 30%` 做 bounds reject。詳見 PR #948。 |
-| **StatusSummary 回傳過期資料不以為錯** | apigateway | `StatusSummary` 的 `stale_after` 欄位只用於 UI 顯示，不主動驅動資料失效邏輯。`LastMacroSnapshot` / `LastEventCalendar` 等時間戳若超時，`StatusSummary` 仍會回傳這些過期資料而不標記 error — 呼叫端若未自行比對時間戳與 `freshness_threshold`，會以為拿到的是最新資料（PR #1283 修復 #1086 根因）。 |
+| **`UnifiedHealthStore.StatusSummary` 會把超時的 "ok" 隱性降級為 "stale"** | apigateway | **修法**（PR #1283 修復 #1086 根因）：`StatusSummary()` 走 `deriveStatusWithFreshness()` 對 `LastFetchAt` 超過 `StaleDataThreshold=48h` 的 channel 自動把 status 由 "ok" 降級為 "stale"（`internal/apigateway/health.go:26,114,161`）。**新 trap**：不要在呼叫端寫「`status == "ok" 就不檢查 timestamp`」的程式碼——PR #1283 之前這是 silent failure mode（66+ 天沒 refresh 仍回 "ok"），之後 status 可能是 "stale" 必須顯式處理。對外 contract：`/api/scheduler/status` 等 consumer **必須** switch-case 處理 "stale" 而不是 fallback 到 "ok"。
 | **cron-entrypoint.sh weekday 比對需字串轉 int** | cron / data | `cron-entrypoint.sh` 內 `wday` 變數是 `$(date +%w)` 輸出（0-6 字串），比對時若直接與 shell 數字 `6` / `0` 比較會因 string-vs-integer 擴展而失效（如 `"06" != 6`）。正確做法：`wday=$(date +%w | sed 's/^0//')` 或 `[ "$wday" = "0" ]` 改為 `(( wday == 0 ))` 做算術比較。若比對失敗，觀測資料 backfill 邏輯不會觸發，導致 cron image 執行結果缺少 backfill 補資料步驟（PR #1280 修復 #1203）。 |
 
 ### 架構規範（Constitution 違反）

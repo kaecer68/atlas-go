@@ -17,7 +17,7 @@ L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次,欄位�
 | 2026-07-16 | 20 | 0.0% | 9 | 0 | 0 | 5 | backfilled from PR #1206 spot-check |
 | 2026-07-17 | 20 | 0.0% | 5075 | 0 | 0 | 0 | backfilled — first prod API call, cold-cache p95 |
 | 2026-07-21 | 20 | 0.0% | 11 | 0 | 0 | 0 | backfilled |
-| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 15 | backfilled + manual collector run |
+| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 20 | backfilled + manual collector run |
 
 <spot-check-record id="2026-07-22-auto"></spot-check-record>
 
@@ -49,6 +49,17 @@ L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次,欄位�
 
 <spot-check-record id="2026-07-22-tourism"></spot-check-record>
 
+
+<spot-check-record id="2026-07-22-semiconductor"></spot-check-record>
+
+<spot-check-record id="2026-07-22-electronics"></spot-check-record>
+
+<spot-check-record id="2026-07-22-financials"></spot-check-record>
+
+<spot-check-record id="2026-07-22-shipping"></spot-check-record>
+
+<spot-check-record id="2026-07-22-steel"></spot-check-record>
+
 ## Spot-Check Records
 
 ### 2026-07-22 17:35 — kaecer
@@ -56,3 +67,10 @@ L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次,欄位�
 - **sectors checked**: auto, biotech, cement, chemicals, construction, energy, food, machinery, optoelectronics, other_electronics, plastics, retail, telecom, textiles, tourism
 - **driver sources verified**: macro
 - **notes**: Day 7 bulk spot-check: 15 sectors to meet ≥15 gate threshold
+## Spot-Check Records
+
+### 2026-07-22 22:39 — kaecer
+
+- **sectors checked**: semiconductor, electronics, financials, shipping, steel
+- **driver sources verified**: cycle, event, macro
+- **notes**: Day 14 pre-flight: 補 5 個核心板塊 (semi/elec/fin/ship/steel) 讓 spot_check_count 達 ≥20 gate
