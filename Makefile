@@ -288,8 +288,6 @@ hermes-smoke:
 canary:
 	@python3 scripts/canary-check.py
 
-check-contracts:
-	@python3 scripts/gen-contracts.py --validate
 
 .PHONY: check-routes hermes-smoke gate check-contracts canary release-check
 gate:
@@ -303,11 +301,9 @@ release-check:
 	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)
 	@python3 scripts/gen-contracts.py --validate || (echo "❌ Contract check failed" && exit 1)
 	@go build ./... || (echo "❌ Build failed" && exit 1)
-	@echo "✅ Release check passed — ready to merge"
-
-install: install-frontend
-	@echo "📦 Downloading Go modules..."
-	go mod download
+check-contracts:
+	@python3 scripts/verify-canary-vs-handler.py || (echo "❌ Canary-handler mismatch — fix canaryRoutes" && exit 1)
+	@python3 scripts/gen-contracts.py --validate || (echo "❌ Contract validation failed" && exit 1)
 
 build: build-frontend build-backend
 	@echo "✅ Build complete"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
   "version": "1",
-  "generated_at": "2026-07-22T22:19:56.054703+00:00",
+  "generated_at": "2026-07-22T22:27:07.027007+00:00",
   "source": "cmd/atlas-mcp/server/tools_canary_test.go",
   "total_tools": 97,
   "tools": {
@@ -39,7 +39,7 @@
     },
     "calendar_events": {
       "method": "GET",
-      "path": "/api/events/calendar",
+      "path": "/api/dashboard/calendar-events",
       "auth": "optional"
     },
     "capital_flow_daily": {
@@ -79,7 +79,7 @@
     },
     "daily_report": {
       "method": "GET",
-      "path": "/api/daily-report",
+      "path": "/api/reports/latest",
       "auth": "optional"
     },
     "data_get_channel_detail": {
@@ -174,12 +174,12 @@
     },
     "macro_get_ingest_status": {
       "method": "GET",
-      "path": "/api/macro/snapshot/timeline",
+      "path": "/api/dashboard/macro-data-health",
       "auth": "optional"
     },
     "macro_get_snapshot_history": {
       "method": "GET",
-      "path": "/api/macro/snapshot/history?date=2026-07-22",
+      "path": "/api/macro/snapshot/timeline",
       "auth": "optional"
     },
     "macro_get_snapshot_latest": {
