@@ -1798,6 +1798,22 @@ func run(args []string, deps appDeps) error {
 					stRegistry,
 				)
 			}
+			// Wire condition evaluator (Phase 2 of #1259): evaluate
+			// strategy conditions against historical macro data to
+			// compute actual hit_rate.
+			if stRegistry != nil {
+				snapDir := filepath.Join(cfg.WorkDir, constants.StateMacro)
+				snapshots, err := strategy_techniques.LoadSnapshotsFromDir(snapDir)
+				if err != nil {
+					log.Printf("[AutoBacktest] condition evaluator skipped: load snapshots from %s: %v", snapDir, err)
+				} else if len(snapshots) > 0 {
+					evaluator := strategy_techniques.NewMacroSnapshotEvaluator(snapshots, 1)
+					btRunner.WithConditionEvaluator(evaluator)
+					log.Printf("[AutoBacktest] condition evaluator wired with %d snapshots", len(snapshots))
+				} else {
+					log.Printf("[AutoBacktest] condition evaluator skipped: no dated snapshots in %s", snapDir)
+				}
+			}
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "autobacktest_daily",
 				Interval: 1 * time.Hour,

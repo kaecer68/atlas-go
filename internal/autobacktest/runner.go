@@ -27,6 +27,7 @@ type Runner struct {
 	eventBus    *eventbus.ChannelEventBus
 	attribution AttributionWriter
 	strategies  StrategySource
+	evaluator   ConditionEvaluator
 }
 
 func NewRunner(cfg config.Config) *Runner {
@@ -56,6 +57,15 @@ func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 func (r *Runner) WithAttribution(fb AttributionWriter, src StrategySource) *Runner {
 	r.attribution = fb
 	r.strategies = src
+	return r
+}
+
+// WithConditionEvaluator wires the strategy condition evaluator. When
+// set, writeAttributionMarkers computes per-strategy hit_rate from
+// actual condition evaluation (Phase 2). nil disables evaluation —
+// the Phase 1 zero-writer behaviour is preserved as fallback.
+func (r *Runner) WithConditionEvaluator(evaluator ConditionEvaluator) *Runner {
+	r.evaluator = evaluator
 	return r
 }
 
@@ -248,13 +258,14 @@ func (r *Runner) writeAttributionMarkers(targetDate time.Time) {
 		}
 		rec := AttributionRecord{
 			StrategyID: f.ID,
-			// total_tests=0 + Status='attribution_attempted' marks the
-			// strategy as measured. Phase 2 will replace these zeros
-			// with the real per-strategy hit_rate.
-			TotalTests: 0,
-			TotalHits:  0,
-			HitRate:    0,
 			Status:     "attribution_attempted",
+		}
+		if r.evaluator != nil {
+			if er := r.evaluator.Evaluate(f); er != nil {
+				rec.TotalTests = er.TotalTests
+				rec.TotalHits = er.TotalHits
+				rec.HitRate = er.HitRate
+			}
 		}
 		if err := r.attribution.Write(rec); err != nil {
 			logging.Warn("autobacktest", "attribution_write_failed",
