@@ -112,10 +112,10 @@ type RegimePoint struct {
 }
 
 type RegimeGetHistoryOutput struct {
-	Regimes              []RegimePoint `json:"regimes"`
-	CurrentRegimeScore   *float64      `json:"current_regime_score,omitempty"`
-	CurrentScoreSource   string        `json:"current_score_source,omitempty"`   // "janus_composite" or ""
-	CurrentScoreSynthetic bool         `json:"current_score_synthetic,omitempty"` // true when score is macro-derived, not from PRISM training
+	Regimes               []RegimePoint `json:"regimes"`
+	CurrentRegimeScore    *float64      `json:"current_regime_score,omitempty"`
+	CurrentScoreSource    string        `json:"current_score_source,omitempty"`    // "janus_composite" or ""
+	CurrentScoreSynthetic bool          `json:"current_score_synthetic,omitempty"` // true when score is macro-derived, not from PRISM training
 }
 
 type StrategyListActiveOutput struct {
