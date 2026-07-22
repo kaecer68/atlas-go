@@ -9,6 +9,8 @@
 // (matched by adapter in main.go). Tests use an in-memory fake.
 package autobacktest
 
+import "github.com/kaecer68/atlas-go/internal/strategy_techniques"
+
 type AttributionRecord struct {
 	StrategyID string
 	TotalTests int
@@ -23,4 +25,11 @@ type AttributionRecord struct {
 // packages.
 type AttributionWriter interface {
 	Write(r AttributionRecord) error
+}
+
+// ConditionEvaluator evaluates strategy conditions against historical
+// data and returns per-strategy performance metrics. Implementations
+// live in strategy_techniques to avoid importing marketdata here.
+type ConditionEvaluator interface {
+	Evaluate(frame strategy_techniques.StrategyFrame) *strategy_techniques.EvalResult
 }
