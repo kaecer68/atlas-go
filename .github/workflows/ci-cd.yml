@@ -439,11 +439,33 @@ jobs:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - name: Validate MCP tool contracts
       run: python3 scripts/gen-contracts.py --validate
+  # Release gate — aggregates all CI-safe checks into one pass/fail signal
+  release-check:
+    runs-on: ubuntu-latest
+    needs: [routes, contracts, build, lint, test-cmd-atlas]
+    if: always()
+    steps:
+    - name: Gate decision
+      run: |
+        if [ "${{ needs.routes.result }}" = "success" ] && \
+           [ "${{ needs.contracts.result }}" = "success" ] && \
+           [ "${{ needs.build.result }}" = "success" ] && \
+           [ "${{ needs.lint.result }}" = "success" ] && \
+           [ "${{ needs.test-cmd-atlas.result }}" = "success" ]; then
+          echo "✅ Release gate: ALL PASSED"
+        else
+          echo "❌ Release gate: BLOCKED"
+          echo "  routes:       ${{ needs.routes.result }}"
+          echo "  contracts:    ${{ needs.contracts.result }}"
+          echo "  build:        ${{ needs.build.result }}"
+          echo "  lint:         ${{ needs.lint.result }}"
+          echo "  test:         ${{ needs.test-cmd-atlas.result }}"
+          exit 1
+        fi
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes, contracts]
-    if: github.event_name == 'pull_request' && always()
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes, contracts, release-check]
     permissions:
       pull-requests: write
     steps:

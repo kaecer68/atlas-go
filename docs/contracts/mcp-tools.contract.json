@@ -1,7 +1,7 @@
 {
   "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
   "version": "1",
-  "generated_at": "2026-07-22T19:18:55.255547+00:00",
+  "generated_at": "2026-07-22T22:02:26.300404+00:00",
   "source": "cmd/atlas-mcp/server/tools_canary_test.go",
   "total_tools": 97,
   "tools": {

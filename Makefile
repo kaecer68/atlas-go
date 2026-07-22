@@ -291,15 +291,19 @@ canary:
 check-contracts:
 	@python3 scripts/gen-contracts.py --validate
 
-.PHONY: check-routes hermes-smoke gate check-contracts canary
+.PHONY: check-routes hermes-smoke gate check-contracts canary release-check
 gate:
 	@echo "🔐 Running contract gate (check-routes + hermes-smoke)..."
 	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)
 	@bash scripts/hermes-smoke.sh || (echo "❌ Hermes smoke failed" && exit 1)
 	@echo "✅ Contract gate passed"
 
-.PHONY: check-routes hermes-smoke gate check-contracts
-# ---- 整合 target ----
+release-check:
+	@echo "🚀 Running release gate (CI-safe checks)..."
+	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)
+	@python3 scripts/gen-contracts.py --validate || (echo "❌ Contract check failed" && exit 1)
+	@go build ./... || (echo "❌ Build failed" && exit 1)
+	@echo "✅ Release check passed — ready to merge"
 
 install: install-frontend
 	@echo "📦 Downloading Go modules..."
