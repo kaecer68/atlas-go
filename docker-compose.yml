@@ -451,6 +451,7 @@ services:
       - CRON_SCHEDULE=0 2 * * *
       - CRON_COMMAND=/app/backfill-institutional-investors -date $$(date -d 'yesterday' +%Y-%m-%d)
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - FINMIND_API_KEY=${FINMIND_API_KEY}
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
