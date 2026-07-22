@@ -244,36 +244,37 @@ func main() {
 	}
 
 	var newSpotCheckCount int
-	if rowMatch != nil {
-		// Count unique spot-check records already in the log for this date
-		// by scanning the raw markdown for embedded markers.
-		newSpotCheckCount = countSpotChecksForDate(raw, *date, sectorList)
-		// Update spot_check_count: add the new unique (date, sector) pairs.
-		// The count is total unique spot-check records for the date, so we
-		// count the existing embedded markers + the new ones we're adding.
-		newSpotCheckCount = countTotalSpotChecksForDate(raw, *date) + len(sectorList)
-	} else {
-		// No row for this date yet — the collector will have created it.
-		// We append a new row; spot_check_count = len(sectorList).
-		newSpotCheckCount = len(sectorList)
-	}
+	// Dedup: filter sectorList down to sectors that don't yet have a marker
+	// for this date. The final count is existing markers + new (unique) sectors.
+	existingTotal := countTotalSpotChecksForDate(raw, *date)
+	newUniqueSectors := filterNewSectors(raw, *date, sectorList)
+	newSpotCheckCount = existingTotal + len(newUniqueSectors)
+	_ = rowMatch // rowMatch unused after dedup refactor; newUniqueSectors gates the action.
 
 	if *dryRun {
 		fmt.Println("DRY-RUN: would update obs log:")
-		if rowMatch != nil {
-			fmt.Printf("  date: %s\n", *date)
-			fmt.Printf("  sector list: %v\n", sectorList)
-			fmt.Printf("  new spot_check_count: %d\n", newSpotCheckCount)
-		} else {
-			fmt.Printf("  would append new row for date %s with spot_check_count=%d\n", *date, newSpotCheckCount)
-		}
+		fmt.Printf("  date: %s\n", *date)
+		fmt.Printf("  sector list: %v\n", sectorList)
+		fmt.Printf("  already recorded: %d (existing markers for this date)\n", existingTotal)
+		fmt.Printf("  new unique sectors: %v (will write markers + increment count)\n", newUniqueSectors)
+		fmt.Printf("  new spot_check_count: %d\n", newSpotCheckCount)
 		fmt.Printf("  driver sources: %v\n", uniqSources)
+		if len(newUniqueSectors) == 0 {
+			fmt.Println("  (no-op: all requested sectors already recorded)")
+		}
 		os.Exit(0)
 	}
 
-	// Build the embedded spot-check record markers (one per sector).
+	if len(newUniqueSectors) == 0 {
+		// All requested sectors already have markers — idempotent no-op.
+		fmt.Printf("No new spot-checks: all %d requested sectors already recorded for %s (spot_check_count remains %d)\n",
+			len(sectorList), *date, existingTotal)
+		os.Exit(0)
+	}
+
+	// Build the embedded spot-check record markers (one per NEW unique sector).
 	var markers []string
-	for _, sid := range sectorList {
+	for _, sid := range newUniqueSectors {
 		rec := spotCheckRecord{
 			ID:        fmt.Sprintf("%s-%s", *date, sid),
 			Date:      *date,
@@ -290,15 +291,15 @@ func main() {
 	}
 
 	// Build the narrative section to append.
-	narrativeSec := buildNarrativeSection(ts, sectorList, uniqSources, *notes, operator)
+	narrativeSec := buildNarrativeSection(ts, newUniqueSectors, uniqSources, *notes, operator)
 
 	// Update or append the obs log.
-	if err := updateObsLog(*obsLog, raw, rows, *date, sectorList, newSpotCheckCount, rowIdx, narrativeSec, strings.Join(markers, "")); err != nil {
+	if err := updateObsLog(*obsLog, raw, rows, *date, newUniqueSectors, newSpotCheckCount, rowIdx, narrativeSec, strings.Join(markers, "")); err != nil {
 		os.Exit(ExitMalformedObsLog)
 	}
 
-	fmt.Printf("Recorded spot-check for %s: sectors=%v, spot_check_count=%d, sources=%v\n",
-		*date, sectorList, newSpotCheckCount, uniqSources)
+	fmt.Printf("Recorded spot-check for %s: sectors=%v (new: %v), spot_check_count=%d, sources=%v\n",
+		*date, sectorList, newUniqueSectors, newSpotCheckCount, uniqSources)
 	os.Exit(0)
 }
 
@@ -481,6 +482,20 @@ func parsePercent(s string) float64 {
 	return f / 100
 }
 
+// filterNewSectors returns the subset of sectors whose (date, sector_id)
+// marker does not yet exist in the raw obs log. Order is preserved.
+func filterNewSectors(raw, date string, sectors []string) []string {
+	var out []string
+	for _, sid := range sectors {
+		id := fmt.Sprintf("%s-%s", date, sid)
+		pattern := fmt.Sprintf(`<spot-check-record id=%q>`, id)
+		if !strings.Contains(raw, pattern) {
+			out = append(out, sid)
+		}
+	}
+	return out
+}
+
 // countSpotChecksForDate counts how many of the given sectorList already have
 // embedded spot-check markers in the raw markdown for the given date.
 func countSpotChecksForDate(raw, date string, sectorList []string) int {
@@ -569,7 +584,7 @@ func updateRowSpotCheckCount(raw string, rows []obsRow, rowIdx int, date string,
 	// Find the line in raw that matches the date.
 	lines := strings.Split(raw, "\n")
 	for i, line := range lines {
-		if !strings.Contains(line, "|") {
+		if !strings.HasPrefix(line, "|") {
 			continue
 		}
 		cells := splitTableRow(line)
@@ -579,7 +594,7 @@ func updateRowSpotCheckCount(raw string, rows []obsRow, rowIdx int, date string,
 		if strings.TrimSpace(cells[1]) == date {
 			// Update the spot_check_count cell (index 7).
 			cells[7] = fmt.Sprintf(" %d ", newCount)
-			lines[i] = "|" + strings.Join(cells, "|")
+			lines[i] = strings.Join(cells, "|")
 			break
 		}
 	}
