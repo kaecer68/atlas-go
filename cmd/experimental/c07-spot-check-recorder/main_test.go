@@ -541,7 +541,7 @@ func TestUpdateRowSpotCheckCount(t *testing.T) {
 		t.Fatal("expected to find 2026-07-22 row")
 	}
 
-	updated := updateRowSpotCheckCount(raw, rows, rowIdx, "2026-07-22", 5)
+	updated := updateRowSpotCheckCount(raw, rowIdx, "2026-07-22", 5)
 
 	if !strings.Contains(updated, "| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 5 |") {
 		t.Error("updated row should have spot_check_count=5")

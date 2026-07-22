@@ -483,8 +483,7 @@ func parseInt(s string) int {
 func parsePercent(s string) float64 {
 	s = strings.TrimSpace(s)
 	s = strings.TrimSuffix(s, "%")
-	var f float64
-	fmt.Sscanf(s, "%f", &f)
+	f, _ := strconv.ParseFloat(s, 64) //nolint:errcheck // best-effort: 0 on parse failure
 	return f / 100
 }
 
@@ -554,7 +553,7 @@ func updateObsLog(path, raw string, rows []obsRow, date string, newCount, rowIdx
 
 	var updated string
 	if rowIdx >= 0 {
-		updated = updateRowSpotCheckCount(raw, rows, rowIdx, date, newCount)
+		updated = updateRowSpotCheckCount(raw, rowIdx, date, newCount)
 	} else {
 		// No existing row — build one from scratch.
 		updated = raw + buildNewRow(date, newCount)
@@ -586,7 +585,7 @@ func updateObsLog(path, raw string, rows []obsRow, date string, newCount, rowIdx
 }
 
 // updateRowSpotCheckCount updates the spot_check_count cell for the given row index.
-func updateRowSpotCheckCount(raw string, rows []obsRow, rowIdx int, date string, newCount int) string {
+func updateRowSpotCheckCount(raw string, rowIdx int, date string, newCount int) string {
 	// Find the line in raw that matches the date.
 	lines := strings.Split(raw, "\n")
 	for i, line := range lines {
