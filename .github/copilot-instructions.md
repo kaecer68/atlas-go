@@ -63,6 +63,6 @@ go tool cover -func=coverage.out | tail -n 1
 
 - **Language preference**: 繁體中文 throughout codebase (enforced in AGENTS.md)
 - **Project origin**: Taiwan equity investment research with AI agent orchestration
-- **Current wave**: Wave 11 — L2.3 PoC shipped, L2.4 observation window PLANNED
+- **Current wave**: Wave 11 — L2.3 PoC shipped, L2.4 observation window **SHIPPED**（PR #821, 2026-06-29）
 
-**Last Updated**: June 2026
+**Last Updated**: July 2026

@@ -78,7 +78,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_judge",
-		Description: autoDescOr("experiment_judge", "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history."),
+		Description: autoDescOr("experiment_judge", "Trigger statistical replay judge scoring for a candidate experiment vs the baseline (Welch t-test, Sharpe stability, drawdown protection, OOS validation — no LLM call). Side-effect: writes to experiment history."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	}, s.handleExperimentJudge)
 

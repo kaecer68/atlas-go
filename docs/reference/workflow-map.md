@@ -1,9 +1,9 @@
 # Atlas-go Workflow Map（For AI Agents）
 
-> **狀態**: v1（骨架版）— Wave 11（2026-06-29）
+> **狀態**: v2（post-#821）— Wave 11（2026-07-22）
 > **Audience**: AI Agent（Claude Code / Codex / Cursor / OpenCode 等）需要理解 atlas-go 運作的全貌時
 > **產生方式**: Stage 1 骨架盤查（從 `cmd/atlas/main.go` + `internal/orchestrator/` + `internal/eventbus/` + `docs/specs/` + `internal/scheduler/` + `internal/marketdata/` 入口往外推導）
-> **下一步**: v2 由 Stage 2「針對缺口 deep dive」補完
+> **下一步**: v3 由 Stage 3 deep dive 補完
 > **權威來源**: 本文件編號 `WA-XXX`（W = Workflow，A = Atlas）。v2 後將成為 agent-facing 唯一參照入口
 
 ---
@@ -97,7 +97,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-602** | Factor Weight Regression | `NewFactorWeightRegressionDetector` | event-driven | 回歸警示 | 因子 weight 反應 |
 | **WA-603** | Channel Health Synthesizer | `NewChannelHealthSynthesizer` | event-driven | 各 channel 綜合健康度 | 從何事件綜合 |
 | **WA-604** | System Health Check | `internal/scheduler/system_health.go` | cron | 系統整體健康度 | 排程頻率 |
-| **WA-605** | L2.4 Observation Window | `docs/operations/l2-4-runbook.md` | `--use-llm-sector-agents=true` + `LLM_SECTOR_AGENTS_ENABLED=true` | slog event 觀察 | metrics 計算細則 |
+| **WA-605** | L2.4 Observation Window | `docs/operations/l2-4-runbook.md` | `--use-llm-sector-agents=true` + `LLM_SECTOR_AGENTS_ENABLED=true` | slog event 觀察（**已 ship — PR #821, 2026-06-29**） | observation metrics 計算細則 |
 | **WA-606** | Drawdown Breach Consumer | `NewDrawdownConsumer` | event-driven | 觸發停損決策 | 對接的 risk gate |
 
 ### 3.7 系統內部 sub-daemon

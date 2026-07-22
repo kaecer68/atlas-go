@@ -64,6 +64,7 @@
 | **SignalEngine 需要 FullStore** | `NewSignalEngine()` 會將 `ledger.NewStore()` 斷言為 `ledger.FullStore`，若 store 類型不符會 panic。 |
 | **syncToLiveStore 為 best-effort** | 同步至 live store 失敗時僅記錄 Warn 日誌，不會中斷主流程。 |
 | **熔斷門檻為 15% 回撤** | `SignalCircuitBreaker` 在 `drawdown > 0.15` 時觸發。 |
+| **Backtest VaR 使用 20-obs gate（非 canonical 252）** | `SignalEngine.Evaluate()` 使用 `risk.CalculateVaRPercentile()`（無 min-obs guard），自備 20-sample gate。生產 VaR（`risk.CalculateVaR()`）需要 252 obs，不適用於 backtest 較短窗口。見 #1265 canonical metric source。 |
 
 ---
 

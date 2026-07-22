@@ -54,7 +54,7 @@
 通用 ACI 規則見全域 `~/.config/opencode/AGENTS.md`。
 
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
-- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)（**112 tools**，預設啟用）
+- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)（**113+ tools**，預設啟用；啟動期 assert ∈ [111, 114]）
 - **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
 - **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)

@@ -56,9 +56,9 @@
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/auto-desc.gen.json`](../../cmd/atlas-mcp/auto-desc.gen.json)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [110, 112]`，防止文件↔程式碼漂移；110 = 業務 102 + roots 2 + template_detector 2 + audit 4，post-Round-2 dedup 基線；sampling/elicitation feature-gated 各 +1 達 112）。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/server/server.go`](../../cmd/atlas-mcp/server/server.go)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [111, 114]`，防止文件↔程式碼漂移）。
 
-**當前實際**：**110 個 tool**(業務 102 + template_detector 2 + roots 2 + audit 4；sampling / elicitation feature-gated 各 +1 達 112，但**預設 OFF**)。本節保留 high-level 群組對照；單一 tool 名稱請以 `auto-desc.gen.json` 為準。
+**當前實際**：**113+ 個 tool**（含 #1272 `mcp_anomaly_ack` + #1278 `data_get_quality` + #1279 canonical metric fixes）。本節保留 high-level 群組對照；單一 tool 名稱請以 `tool-catalog.md` 為準。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
@@ -86,7 +86,7 @@
 | MCP 自我觀測 | `mcp_get_*`、`mcp_anomaly_*` | 6 | session topology、call stats、tenant usage、slow tools + anomaly |
 | MCP 協議擴充 | `mcp_roots_*`、`mcp_elicit_user`、`mcp_sample_llm` | 4 | Phase 4 protocol extensions（roots/elicitation/sampling）|
 | Daily Briefing | `mcp_quickstart`、`daily_report` | 2 | 一站式摘要、每日報告 |
-| **總計（v0.0.0.31）** | | **91** | 87 業務 + 4 audit（`mcp_get_*`） |
+| **總計（post-#1265）** | | **113+** | 詳見 `tool-catalog.md` |
 
 ### 3.2 不暴露的 endpoints（安全邊界）
 
@@ -337,7 +337,7 @@ func RunServer(transport string) error {
 ```json
 {
   "name": "experiment_judge",
-  "description": "觸發 LLM judge 評分候選策略 vs baseline。⚠️ 副作用：寫入 experiment history。",
+  "description": "觸發統計式 replay judge 評分候選策略 vs baseline（Welch t-test、Sharpe 穩定性、回撤保護、OOS 驗證；非 LLM 評審）。⚠️ 副作用：寫入 experiment history。",
   "inputSchema": { ... },
   "annotations": {
     "readOnlyHint": false,
@@ -632,7 +632,7 @@ cmd/atlas-mcp/
 
 ### 13.1 v0.0.0.31（2026-07-06 PR #945–#950+）
 
-**Tool 演進**：74（§11 末）→ 87（v0.0.0.31 baseline，含 Phase 4 B extensions）→ **91（當前）**
+**Tool 演進**：74（§11 末）→ 87（v0.0.0.31 baseline）→ 91（v0.0.0.31 後）→ **113+（post-#1265, 2026-07-22）**
 
 | 變更類型 | 增量 | 對應 WA / Primitive |
 |---------|------|--------------------|

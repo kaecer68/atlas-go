@@ -107,11 +107,15 @@ Parameters use dot notation for nested values:
 - **Requirements**: 100+ historical returns
 - **Validation**: Stationarity constraint (alpha + beta < 1)
 
-### VaR Calibration
-- **Method**: Historical simulation
+### VaR Calibration（#1265 canonical metric source）
+- **Method**: Historical simulation（與 `risk.CalculateVaR()` 相同公式，不同 estimand）
 - **Updates**: `sizing_target_volatility`, `sizing_max_drawdown_limit`
-- **Requirements**: 30+ historical returns
+- **Requirements**: 30+ historical returns（校準用閘；生產監控用 252）
 - **Validation**: ES > VaR, negative values for losses
+- **Canonical split**（#1265）：
+  - **生產監控 VaR**：`risk.CalculateVaR(returns, 0.95)` — 252 obs gate，用於 `/api/risk/metrics`、`risk_get_metrics`
+  - **校準 VaR**：`config.InferenceEngine.EstimateVaR()` — 30 obs gate，用於參數自動校準
+  - **回測訊號 VaR**：`risk.CalculateVaRPercentile()` — 無 gate，由 `SignalEngine` 自備 20-sample guard
 
 ### Industry Threshold Calibration
 - **Method**: Percentile-based from revenue data

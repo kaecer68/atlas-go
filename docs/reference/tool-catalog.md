@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **112 tools**（預設啟用；sampling/elicitation feature-gated 全開時 114）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **113+ tools**（預設啟用；sampling/elicitation feature-gated 全開時 115+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 106 + template_detector 2 + audit 4 = 112（**基礎 112**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 114；啟動期 assert ∈ [111, 114]，見 `cmd/atlas-mcp/server/server.go`）
+業務 107+ + template_detector 2 + audit 5 = 114+（**基礎 114+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 116+；啟動期 assert ∈ [111, 114]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（114 個 tool，其中 112 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（116 個 tool 槽位，其中 114+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -25,12 +25,11 @@
 | `macro_get_capital_flow_latest` | 外資/法人/散戶資金流 snapshot |
 | `macro_get_ingest_status` | 通道 ingest 狀態 |
 
-### Capital Flow（4 個）
+### Capital Flow（3 個）
 | Tool | 用途 |
 |------|------|
 | `capital_flow_daily` | 台股每日七維錢潮雷達（3+2+2 分層）分解 + 共振強度：官方法人（外資 / 投信 / 自營商）+ 行為代理（官股 / 散戶）+ 領先／跨市場訊號（期貨 / TSM ADR）。actor 共識僅計入官方actor 層；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `capital_flow_summary` | 資金流向摘要（適合晨報）；摘要敘事來自 official_actor 共識＋行為／訊號層支援 |
-| `capital_flow_history` | 多日七維錢潮滾動樣本時序（`?days=N`，預設 60，上限 60）。每個 dimension 回傳已排序的 `{trading_date, raw_value, unit, source_id}` 陣列；無資料期間（非交易日）不回樣本（CF-INV-016 skip-and-log）；缺資料 dimension 不補 0（CF-INV-06）。詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §18 |
 | `explain_market_move` | 「為什麼漲跌」市場解說（繁體中文）。回傳大盤表現、資金面、國際環境與風險提示，適合散戶快速理解市場變動。Hermes/OpenClaw 可用此工具生成白話市場解讀 |
 
 ### Crossmarket（3 個）
@@ -124,13 +123,14 @@
 
 > 寫入操作（pause/resume-agent、sector-ban）需後端 auth 強制保護，ATLAS_API_KEY 必須設定。MCP server 透過 `X-API-Key` header 轉發 API key。
 
-### Scheduler / Task（4 個）
+### Scheduler / Task（4 個 — PR #1277 scheduler health split）
 | Tool | 用途 |
 |------|------|
-| `scheduler_get_status` | 背景排程器狀態 |
+| `scheduler_get_status` | 背景排程器狀態（含 `data_health` 欄位：channel freshness、ingestion lag；與 `system_health` 分離，PR #1277） |
 | `task_list` | 背景任務清單 |
 | `task_get` | 單筆任務 |
 | `task_get_events` | 任務 lifecycle events |
+> **CI 防回歸**：`tools_canary_test.go`（PR #1276）在 CI 對 98 個 read-only tools 跑 runtime smoke test，確保所有 tool response 非空且符合基本 sanity。
 
 ### System（7 個：1 Phase 1 + 6 Phase 2.2）
 | Tool | 用途 |
@@ -174,7 +174,7 @@
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 
 > **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract-spec.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
-> **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。剩餘 follow-up 見 `.omo/plans/2026-07-09-stock-quote-followup.md`。
+> **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）+ E2E unskip（PR #1274）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。
 
 ### Parameters（5 個 — PR 2 新增）
 | Tool | 用途 |

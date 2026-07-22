@@ -115,6 +115,17 @@ var authFreeExactPaths = map[string]bool{
     "/api/llm/health":  true,  // ← 必加
 }
 
+// Prefix paths (PR #1269):
+var authFreePrefixPaths = []string{
+    "/api/market/",  // explain_market_move + future market endpoints
+}
+    "/health":          true,
+    "/metrics":         true,
+    "/admin":           true,
+    "/client":          true,
+    "/api/llm/health":  true,  // ← 必加
+}
+
 // 檔案 2: cmd/atlas/main.go
 func isPublicPath(p string) bool {
     switch {
