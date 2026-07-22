@@ -36,6 +36,14 @@ type ScheduledTask struct {
 	failuresMu          sync.Mutex
 	lastError           string
 	lastErrorMu         sync.RWMutex
+
+	// Data-health fields (#1265): separated from run-success so
+	// "task ran without error" is not confused with "new data arrived".
+	dataHealthMu     sync.RWMutex
+	lastDataAsOf     time.Time // timestamp of the newest ingested data point
+	lastNewSamples   int       // count of new records/rows added
+	lastPersistedAt  time.Time // time when data was written to store
+	noProgressReason string    // e.g. "source not yet published", "empty response"
 }
 
 // IsEnabled returns whether the task is enabled.
@@ -106,6 +114,24 @@ func (t *ScheduledTask) LastError() string {
 	t.lastErrorMu.RLock()
 	defer t.lastErrorMu.RUnlock()
 	return t.lastError
+}
+
+// SetDataHealth records data-health metrics after a successful fetch.
+// All fields are optional — tasks that don't track data health can pass zero values.
+func (t *ScheduledTask) SetDataHealth(asOf time.Time, newSamples int, persistedAt time.Time, noProgressReason string) {
+	t.dataHealthMu.Lock()
+	defer t.dataHealthMu.Unlock()
+	t.lastDataAsOf = asOf
+	t.lastNewSamples = newSamples
+	t.lastPersistedAt = persistedAt
+	t.noProgressReason = noProgressReason
+}
+
+// DataHealth returns the last recorded data-health snapshot.
+func (t *ScheduledTask) DataHealth() (asOf time.Time, newSamples int, persistedAt time.Time, noProgressReason string) {
+	t.dataHealthMu.RLock()
+	defer t.dataHealthMu.RUnlock()
+	return t.lastDataAsOf, t.lastNewSamples, t.lastPersistedAt, t.noProgressReason
 }
 
 // TaskFailureHandler is called when a task fails, receiving the task name and error.
@@ -369,9 +395,15 @@ type TaskStatus struct {
 	Enabled             bool          `json:"enabled"`
 	Interval            time.Duration `json:"interval"`
 	LastRun             time.Time     `json:"last_run"`
-	NextRun             time.Time     `json:"next_run"` // Zero = task never ran; past time = missed schedule (overlap or extended runtime); future time = upcoming scheduled execution
+	NextRun             time.Time     `json:"next_run"`
 	ConsecutiveFailures int           `json:"consecutive_failures"`
 	LastError           string        `json:"last_error,omitempty"`
+
+	// Data-health fields (#1265): separated from run-success.
+	LastDataAsOf     time.Time `json:"last_data_as_of,omitempty"`
+	LastNewSamples   int       `json:"last_new_samples"`
+	LastPersistedAt  time.Time `json:"last_persisted_at,omitempty"`
+	NoProgressReason string    `json:"no_progress_reason,omitempty"`
 }
 
 // Status returns runtime status for all tasks.
@@ -385,6 +417,7 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 		if !t.LastRun().IsZero() {
 			nextRun = t.LastRun().Add(t.Interval)
 		}
+		asOf, newSamples, persistedAt, noProgress := t.DataHealth()
 		result = append(result, TaskStatus{
 			Name:                t.Name,
 			ChannelID:           t.ChannelID,
@@ -394,6 +427,10 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 			NextRun:             nextRun,
 			ConsecutiveFailures: t.Failures(),
 			LastError:           t.LastError(),
+			LastDataAsOf:        asOf,
+			LastNewSamples:      newSamples,
+			LastPersistedAt:     persistedAt,
+			NoProgressReason:    noProgress,
 		})
 	}
 	return result
