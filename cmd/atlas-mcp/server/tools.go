@@ -2,7 +2,6 @@ package server
 
 //go:generate go run ../descgen -out ../auto-desc.gen.json -pkgdir .
 
-
 import (
 	"context"
 	"errors"
@@ -12,10 +11,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
 // RegisteredToolCount is incremented by countedAddTool for every successfully
 // registered MCP tool. It is used by server.go to assert the tool inventory
 // has not drifted at startup.
 var RegisteredToolCount int
+
 // countedAddTool is a thin wrapper around mcp.AddTool that tracks the total
 // tool count for startup assertions. It MUST be used instead of calling
 // mcp.AddTool directly in all tool registration functions.
