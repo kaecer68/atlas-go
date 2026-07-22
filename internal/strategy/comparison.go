@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 )
 
 type Trade struct {
@@ -156,23 +157,24 @@ func (e *ComparisonEngine) calculateSharpeRatios(result *ComparisonResult) {
 	if len(result.Comparisons) == 0 {
 		return
 	}
+	cfg := shared.SharpeConfig{
+		Frequency:  shared.FrequencyPerOutcome,
+		MinSamples: 2,
+	}
 	for _, comp := range result.Comparisons {
 		trades := e.trades[comp.StrategyID]
 		if len(trades) < 2 {
 			comp.SharpeRatio = 0.5
 			continue
 		}
-		var sum, sumSq float64
-		for _, t := range trades {
-			sum += t.Return
-			sumSq += t.Return * t.Return
+		returns := make([]float64, len(trades))
+		for i, t := range trades {
+			returns[i] = t.Return
 		}
-		mean := sum / float64(len(trades))
-		variance := sumSq/float64(len(trades)) - mean*mean
-		if variance > 0 {
-			stdDev := sqrt(variance)
-			comp.SharpeRatio = mean / stdDev
-		} else {
+		comp.SharpeRatio = shared.ComputeSharpe(returns, cfg)
+		if comp.SharpeRatio == 0 && len(returns) >= 2 {
+			// Canonical sharp returns 0 for near-constant series; preserve
+			// the original 0.5 fallback for the recommender consumer.
 			comp.SharpeRatio = 0.5
 		}
 	}
@@ -199,17 +201,6 @@ func (e *ComparisonEngine) calculateMaxDrawdowns(result *ComparisonResult) {
 		}
 		comp.MaxDrawdown = maxDD
 	}
-}
-
-func sqrt(x float64) float64 {
-	if x <= 0 {
-		return 0
-	}
-	z := x / 2
-	for range 10 {
-		z = (z + x/z) / 2
-	}
-	return z
 }
 
 func (e *ComparisonEngine) GetResult(date time.Time) (*ComparisonResult, bool) {

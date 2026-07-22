@@ -40,16 +40,25 @@ func (c *VaRCalculator) ComputeComponentVaR(returns map[string][]float64, weight
 	return CalculateComponentVaR(returns, weights, c.primaryConfidence)
 }
 
-// CalculateVaR computes historical VaR and CVaR from a series of daily returns.
-// confidence should be 0.95 or 0.99.
+// CalculateVaR computes historical VaR from a series of daily returns.
+// confidence should be 0.95 or 0.99. Returns 0.0 when the series has fewer
+// than MinObservationsForVaR entries (252 = 1 trading year).
 func CalculateVaR(dailyReturns []float64, confidence float64) float64 {
 	if len(dailyReturns) < MinObservationsForVaR {
 		return 0.0
 	}
+	return CalculateVaRPercentile(dailyReturns, confidence)
+}
+
+// CalculateVaRPercentile computes historical VaR as the (1-confidence)
+// percentile of daily returns WITHOUT a minimum-observation guard.
+// Callers must enforce their own sample-size threshold. Use this when
+// the canonical 252-day gate is inappropriate (e.g., backtest signals
+// with shorter windows — see #1265 canonical metric source).
+func CalculateVaRPercentile(dailyReturns []float64, confidence float64) float64 {
 	sorted := make([]float64, len(dailyReturns))
 	copy(sorted, dailyReturns)
 	sort.Float64s(sorted)
-
 	index := max(int(math.Floor((1.0-confidence)*float64(len(sorted)))), 0)
 	if index >= len(sorted) {
 		index = len(sorted) - 1

@@ -121,6 +121,11 @@ type VaRResult struct {
 	Observations int
 }
 
+// // EstimateVaR uses the same percentile formula as risk.CalculateVaR
+// but a different estimand: this is for model calibration (30 obs minimum,
+// embedded ES in VaRResult), while risk.CalculateVaR is for production
+// monitoring (252 obs minimum, separate CalculateCVaR). Do not unify —
+// the different gates serve different purposes (#1265 canonical metric source).
 // EstimateVaR computes historical VaR and ES at the given confidence level.
 func (ie *InferenceEngine) EstimateVaR(returns []float64, confidence float64) (VaRResult, error) {
 	if len(returns) < 30 {

@@ -2,7 +2,6 @@ package autobacktest
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	riskpkg "github.com/kaecer68/atlas-go/internal/risk"
@@ -53,7 +52,7 @@ func (se *SignalEngine) Evaluate() (Signals, error) {
 		returns = append(returns, o.ForwardReturn)
 	}
 
-	sort.Float64s(returns)
+	// sort.Float64s removed — canonical risk.CalculateVaR sorts internally (#1265)
 
 	n := len(returns)
 	if n == 0 {
@@ -62,9 +61,10 @@ func (se *SignalEngine) Evaluate() (Signals, error) {
 
 	var95 := 0.0
 	var99 := 0.0
+	// Use the canonical VaR calculator (#1265 canonical metric source).
 	if n >= 20 {
-		var95 = returns[int(float64(n)*0.05)]
-		var99 = returns[int(float64(n)*0.01)]
+		var95 = riskpkg.CalculateVaRPercentile(returns, 0.95)
+		var99 = riskpkg.CalculateVaRPercentile(returns, 0.99)
 	}
 
 	scorecards, _, err := se.store.LoadAllSessionScorecards()
