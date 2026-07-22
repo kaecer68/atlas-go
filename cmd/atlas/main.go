@@ -1042,6 +1042,7 @@ func run(args []string, deps appDeps) error {
 				realtimeAdapter: realtimeAdapter,
 				repo:            repo,
 				collector:       collector,
+				janusEngine:     janusEngine,
 				// BK-15: plumb the shared capitalflow.Service so the
 				// 5-minute capital_flow_refresh closure can call
 				// Refresh(ctx, tradingDate) against the persisted
