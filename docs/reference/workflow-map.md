@@ -56,7 +56,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | ID | 工作流程 | 入口位置 | 觸發條件 | 主要產出 | 缺口 |
 |----|---------|---------|---------|---------|------|
 | **WA-200** | Regime Detection (JANUS) | `internal/janus`（`janus.NewEngine()` 於 main.go:271） | API 啟動時呼叫 `EnsureAllRegimes` + `Update` | RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL | 體制分類細則 |
-| **WA-201** | Macro Ingestion Pipeline | `internal/macro_pipeline`（GitNexus 顯示有 integration test） | daily macro cron | MacroDataSnapshot | 排程時點 |
+| **WA-201** | Macro Ingestion Pipeline | `internal/macroflow`（daily macro cron → `MacroDataSnapshot`） | daily macro cron | MacroDataSnapshot | 排程時點 |
 | **WA-202** | Narrative Conviction Modulator | `internal/orchestrator/narrative_conviction_modulator.go`（L2.4 觀察期功能） | planreflect loop event | conviction 調整 | 是否仍在 L2.4 觀察 |
 
 ### 3.3 決策與執行層
@@ -108,7 +108,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-701** | OTel / observability | `obsotel.Init`（main.go:166） | 啟動時 | distributed trace | sampling policy |
 | **WA-800** | 資金流向日報 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/daily` | 7 勢力 Z-score + 共振 | Phase B tier-gated dashboard |
 | **WA-801** | 資金流向摘要 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/summary` | 共振 + 品質分數 + 主力方向 | Phase B 摘要渲染 |
-| **WA-801.1** | 資金流向歷史 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/history?days=N` | 多日滾動樣本時序（max 60） | PR #1228 CL-1 新增；CF-INV-15/16/17 |
+| **WA-801.1** | 資金流向歷史 | `internal/capitalflow/handler.go` | HTTP `GET /api/capital-flow/history?days=N` | 多日滾動樣本時序（max 252） | PR #1228 CL-1 新增；CF-INV-15/16/17 |
 | **WA-802** | 事件日曆 | `internal/eventdriven/handler.go` | HTTP `GET /api/events/calendar` | 未來 14 天事件 + 預估方向 | Phase B 近期事件區塊 |
 | **WA-803** | 5 日事件預測 | `internal/eventdriven/handler.go` | HTTP `GET /api/events/prediction` | 5 日 forward + ETF 預估 | Phase B 預測區塊 |
 | **WA-804** | 推薦分層 | `internal/recommender/handler.go` | HTTP `GET /api/recommendations`（需 JWT） | tier-gated 策略推薦 + 市場燈號 | Phase B 推薦區塊 |

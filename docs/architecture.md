@@ -133,14 +133,14 @@ Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「�
 ```
 
 **API 端點**（v0.0.0.37 新增）：
-- `/api/capital-flow/{daily,summary}` — `capitalflow`
+- `/api/capital-flow/{daily,summary,history}` — `capitalflow`（history 為 PR #1228 新增，days 預設 252）
 - `/api/events/{calendar,prediction}` — `eventdriven`
 - `/api/recommendations` — `recommender`（需 JWT）
 - `/api/reports/{latest,archive,subscribe}` — `dailyreport`
 - `/api/auth/{register,login}` + `/api/user/{profile,subscription}` — `subscription`
 
 **前端整合**（Phase A/B/C）：
-- `client_web/static/js/services/auth.js` — JWT + tier 解析
+- `shared_web/static/js/services/auth.js`（client-web 透過 esbuild `shared-static-fallback` plugin 在 build 時解析至此路徑）— JWT + tier 解析
 - `client_web/static/js/components/home-tier-sections.js` — 依 tier 渲染 dashboard（`renderHomeTierSections()`，4 個 API 平行呼叫）
 - `client_web/static/js/page-shells/{login,register,premium,mcp,errors/404}.js` — 認證、MCP 整合、404 fallback
 
@@ -160,7 +160,7 @@ Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資�
 2. **信念增減** → `ConvictionBreakdown` 含 base/floor/final 與每步 rule/delta/reason
 3. **宏觀事件** → `NarrativeEvent` 含 `confidence_source` 與 `historical_hit_rate`
 
-前端 `client_web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。共享頁面邏輯位於 `shared_web/static/js/pages/`。
+前端 `client_web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。共享頁面邏輯位於 `shared_web/static/js/pages/decision-chain.js`；client-web 端另有 `client_web/static/js/page-shells/decision-chain.js` 作為 entry。
 
 ## Modes
 

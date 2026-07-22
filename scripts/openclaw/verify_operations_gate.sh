@@ -88,10 +88,10 @@ validate_runbook_contract() {
 	fi
 
 	log "Validating runbook coverage for rollback and replay workflow"
-	assert_file_contains "$runbook" 'human-approval\.sh --revert' 'revert decision entry'
-	assert_file_contains "$runbook" 'replay-approval-event\.sh --event' 'approval event replay command'
-	assert_file_contains "$runbook" 'verify-human-approval-event\.sh' 'approval event verifier command'
-	assert_file_contains "$runbook" 'verify-governance-gates\.sh --require-scenario-diversity' 'strict governance gate command'
+	assert_file_contains "$runbook" 'human_approval\.sh --revert' 'revert decision entry'
+	assert_file_contains "$runbook" 'replay_approval_event\.sh --event' 'approval event replay command'
+	assert_file_contains "$runbook" 'verify_human_approval_event\.sh' 'approval event verifier command'
+	assert_file_contains "$runbook" 'verify_governance_gates\.sh --require-scenario-diversity' 'strict governance gate command'
 }
 
 validate_prometheus_config() {

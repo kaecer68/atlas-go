@@ -102,8 +102,8 @@ curl -s http://localhost:18080/api/capital-flow/summary | jq .
 curl -s http://localhost:18080/api/events/calendar | jq '.events | length'
 curl -s http://localhost:18080/api/events/prediction | jq '.predictions | length'
 
-# 每日報告（premium tier 才有完整內容，未登入回 free tier 簡化版）
-curl -s http://localhost:18080/api/reports/latest | jq '.tier, .summary'
+# 每日報告（premium tier 才有完整內容，未登入回 free tier 簡化版；response 結構見 internal/dailyreport/report.go）
+curl -s http://localhost:18080/api/reports/latest | jq '{generated, summary}'
 
 # 認證（測試用，新用戶自動 7 天 premium 試用）
 curl -X POST http://localhost:18080/api/auth/register \

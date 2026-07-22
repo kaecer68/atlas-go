@@ -554,7 +554,7 @@ Use `--with-governance` when you want to chain M8 checks with strict governance 
 To record a revert decision for an experiment:
 
 ```bash
-./scripts/openclaw/human-approval.sh --revert <experiment-id> --reason "performance regression"
+./scripts/openclaw/human_approval.sh --revert <experiment-id> --reason "performance regression"
 ```
 
 ### Approval Event Replay
@@ -562,7 +562,7 @@ To record a revert decision for an experiment:
 To replay an approval event for testing:
 
 ```bash
-./scripts/openclaw/replay-approval-event.sh --event <event-file>
+./scripts/openclaw/replay_approval_event.sh --event <event-file>
 ```
 
 ### Approval Event Verification
@@ -570,7 +570,7 @@ To replay an approval event for testing:
 To verify approval event schema and replay contract:
 
 ```bash
-./scripts/openclaw/verify-human-approval-event.sh
+./scripts/openclaw/verify_human_approval_event.sh
 ```
 
 ### Strict Governance Gate
@@ -578,7 +578,7 @@ To verify approval event schema and replay contract:
 To run strict governance verification with scenario diversity:
 
 ```bash
-./scripts/openclaw/verify-governance-gates.sh --require-scenario-diversity
+./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 ```
 
 ---
