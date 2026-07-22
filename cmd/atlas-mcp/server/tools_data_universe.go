@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -91,7 +92,15 @@ func (s *server) handleDataGetQuality(ctx context.Context, _ *mcp.CallToolReques
 func (s *server) handleDataGetFieldContract(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, dataUniverseBaseOutput, error) {
 	var out dataUniverseBaseOutput
 	if err := s.withAudit(ctx, "data_get_field_contract", nil, func() error {
-		return s.cli.Get(ctx, "/api/field-contract", nil, &out.Result)
+		raw, err := s.cli.GetRaw(ctx, "/api/field-contract", nil)
+		if err != nil {
+			return err
+		}
+		// /api/field-contract returns a JSON array of field names.
+		// Wrap it in an object so the MCP client can unmarshal it.
+		wrapper := map[string]any{"fields": json.RawMessage(raw)}
+		out.Result = &wrapper
+		return nil
 	}); err != nil {
 		return nil, dataUniverseBaseOutput{}, err
 	}

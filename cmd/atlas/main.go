@@ -1626,6 +1626,11 @@ func run(args []string, deps appDeps) error {
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)
 
+			// Wire strategy summary handler (opt-in; 503 until wired — #1280).
+			if stRegistry != nil {
+				dashboard.SetStrategiesSummaryHandler(capabilities.NewStrategySummaryHandler(llmRouter))
+			}
+
 			// =============================================================================
 			// Phase 2: LLM Capability Wiring (opt-in via LLM_*_ENABLED flags)
 			// =============================================================================
