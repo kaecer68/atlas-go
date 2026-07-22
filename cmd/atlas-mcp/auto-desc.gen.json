@@ -285,7 +285,7 @@
   },
   "experiment_judge": {
     "name": "experiment_judge",
-    "description": "Trigger LLM judge scoring for a candidate experiment vs the baseline. Side-effect: writes to experiment history.",
+    "description": "Trigger statistical replay judge scoring for a candidate experiment vs the baseline (Welch t-test, Sharpe stability, drawdown protection, OOS validation — no LLM call). Side-effect: writes to experiment history.",
     "inputSchema": {
       "properties": {
         "experiment_id": {
