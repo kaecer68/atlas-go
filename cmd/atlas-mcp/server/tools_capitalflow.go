@@ -22,11 +22,14 @@ func registerCapitalFlowTools(mcpSrv *mcp.Server, s *server) {
 
 func (s *server) handleCapitalFlowDaily(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
 	var out map[string]any
+	var fetchErr error
 	if err := s.withAudit(ctx, "capital_flow_daily", nil, func() error {
-		return s.cli.Get(ctx, "/api/capital-flow/daily", nil, &out)
+		fetchErr = s.cli.Get(ctx, "/api/capital-flow/daily", nil, &out)
+		return fetchErr
 	}); err != nil {
 		return nil, nil, err
 	}
+	injectDataQuality(out, "capital_flow_daily", fetchErr)
 	return nil, out, nil
 }
 
