@@ -58,6 +58,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-200** | Regime Detection (JANUS) | `internal/janus`（`janus.NewEngine()` 於 main.go:271） | API 啟動時呼叫 `EnsureAllRegimes` + `Update` | RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL | 體制分類細則 |
 | **WA-201** | Macro Ingestion Pipeline | `internal/macroflow`（daily macro cron → `MacroDataSnapshot`） | daily macro cron | MacroDataSnapshot | 排程時點 |
 | **WA-202** | Narrative Conviction Modulator | `internal/orchestrator/narrative_conviction_modulator.go`（L2.4 觀察期功能） | planreflect loop event | conviction 調整 | 是否仍在 L2.4 觀察 |
+| **WA-203** | C07 Sector Prediction Observation | `cmd/experimental/c07-day-evaluator` + `c07-spot-check-recorder` + `docs/operations/sector-prediction-{runbook,observation-log}.md` | Day 7 / Day 14 evaluator 跑（每日 09:00 cron，見 runbook §3）+ operator 手動 spot-check | `sector-prediction-eval-day{7,14}.md` report | Day 14 promotion gate（待 7/30 跑） |
 
 ### 3.3 決策與執行層
 
@@ -99,6 +100,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-604** | System Health Check | `internal/scheduler/system_health.go` | cron | 系統整體健康度 | 排程頻率 |
 | **WA-605** | L2.4 Observation Window | `docs/operations/l2-4-runbook.md` | `--use-llm-sector-agents=true` + `LLM_SECTOR_AGENTS_ENABLED=true` | slog event 觀察（**已 ship — PR #821, 2026-06-29**） | observation metrics 計算細則 |
 | **WA-606** | Drawdown Breach Consumer | `NewDrawdownConsumer` | event-driven | 觸發停損決策 | 對接的 risk gate |
+| **WA-607** | Hermes MCP Data-Access Audit | `cmd/atlas-mcp/server/tools.go`（descgen contract test） + `cmd/atlas-mcp/server/server.go`（runtime canary） + `internal/scheduler`（health split） + `internal/domain/types.go`（metadata envelope） + `cmd/atlas-mcp/server/audit.go`（self-healing） | PR #1275 (contract test) → #1276 (canary) → #1277 (scheduler) → #1278 (envelope) → #1272 (audit-writer) — 每次 PR ship 觸發 contract / canary re-run | 6 項 E-01~E-06 + #1265/#1266/#1267 修復；後續 E-0X 由 descgen 自動 contract gate 守護 | 新增 MCP tool 須通過 descgen + canary |
 
 ### 3.7 系統內部 sub-daemon
 
