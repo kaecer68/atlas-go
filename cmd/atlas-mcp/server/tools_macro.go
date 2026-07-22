@@ -60,10 +60,17 @@ type macroStressIndexHistoryInput struct {
 
 func (s *server) handleMacroGetSnapshotLatest(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, macroBaseOutput, error) {
 	var out macroBaseOutput
+	var fetchErr error
 	if err := s.withAudit(ctx, "macro_get_snapshot_latest", nil, func() error {
-		return s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &out.Result)
+		fetchErr = s.cli.Get(ctx, "/api/macro/snapshot/latest", nil, &out.Result)
+		return fetchErr
 	}); err != nil {
 		return nil, macroBaseOutput{}, err
+	}
+	if out.Result != nil {
+		if dq := dataQualityFromIngestStatus(*out.Result, "macro_get_snapshot_latest"); dq != nil {
+			(*out.Result)["data_quality"] = dq.ToMap()
+		}
 	}
 	return nil, out, nil
 }

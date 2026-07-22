@@ -62,10 +62,15 @@ type riskAlertBaseOutput struct {
 
 func (s *server) handleRiskGetMetrics(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, riskAlertBaseOutput, error) {
 	var out riskAlertBaseOutput
+	var fetchErr error
 	if err := s.withAudit(ctx, "risk_get_metrics", nil, func() error {
-		return s.cli.Get(ctx, "/api/dashboard/risk", nil, &out.Result)
+		fetchErr = s.cli.Get(ctx, "/api/dashboard/risk", nil, &out.Result)
+		return fetchErr
 	}); err != nil {
 		return nil, riskAlertBaseOutput{}, err
+	}
+	if out.Result != nil {
+		injectDataQuality(*out.Result, "risk_get_metrics", fetchErr)
 	}
 	return nil, out, nil
 }
