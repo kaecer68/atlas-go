@@ -767,14 +767,25 @@ func run(args []string, deps appDeps) error {
 			// originally implemented as a main.go inline handler before
 			// the audit revealed the existing implementation.
 			// H03: market explain endpoint for retail "為什麼漲跌" button.
+			// BK-15: hoist the capitalflow.Service handle BEFORE
+			// marketexplain.NewHandler so the handler gets a non-nil
+			// Service pointer. Previously these two lines were in
+			// the wrong order (L777 was below L770), causing
+			// marketexplain.Handler to be constructed with a nil
+			// *capitalflow.Service and panic with nil-pointer
+			// dereference at every /api/market/explain request
+			// (curl 52 Empty reply, server logs show
+			// "panic ... capitalflow.(*Service).LatestDaily" — bug
+			// independently confirmed by Hermes on 2026-07-22,
+			// missed in PR #1269 audit which only fixed the auth
+			// path, not the handler init order). Moving the
+			// ServiceFromHandler call up two statements fixes the
+			// init order.
+			capitalFlowService = capitalflow.ServiceFromHandler(cfHandler)
+			// H03: market explain endpoint for retail "為什麼漲跌" button.
 			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
 			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))
 			log.Printf("[CapitalFlow] registered /api/capital-flow/* routes")
-			// BK-15: hoist the capitalflow.Service handle so the
-			// operations_tasks capital_flow_refresh closure can call
-			// Service.Refresh(ctx, tradingDate) — which is the only
-			// writer to the shared rolling store.
-			capitalFlowService = capitalflow.ServiceFromHandler(cfHandler)
 			// Wire the daily report to the same live sources (fix manifest #B06).
 			dailyRptGen.SetProvider(newLiveDailyReportProvider(macroProvider, capitalFlowService, eventCalendar))
 
