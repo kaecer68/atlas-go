@@ -85,8 +85,24 @@ func main() {
 				monitoring.RecordChannelFetchWithPool(stateDir, channelID, "ok", "", pool)
 			}
 		}
+		// channelID list must mirror register_adapters.go so the dashboard
+		// /api/dashboard/data-channels page reflects the same health for each
+		// registered channel. tw_vol was added in feat/tw-vol-channel-2026-07-22.
 		recordChannel("us_yahoo", "yahoo_finance")
 		recordChannel("frankfurter_fx", "frankfurter_fx")
+		recordChannel("twse_capital_flow", "twse_capital_flow")
+		recordChannel("export_statistics", "export_statistics")
+		recordChannel("twse_margin", "twse_margin")
+		recordChannel("sox_index", "sox_index")
+		recordChannel("us_spx", "us_spx")
+		recordChannel("us_ndx", "us_ndx")
+		recordChannel("us_dji", "us_dji")
+		recordChannel("tsm_adr", "tsm_adr")
+		recordChannel("taiex_index", "taiex_index")
+		recordChannel("us_nvda", "us_nvda")
+		recordChannel("us_aapl", "us_aapl")
+		recordChannel("us_msft", "us_msft")
+		recordChannel("tw_vol", "tw_vol")
 		if len(snap.FailedChannels) > 0 {
 			log.Printf("[MacroIngest] partial failure: providers failed=%v", snap.FailedChannels)
 		}

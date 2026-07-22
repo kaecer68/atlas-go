@@ -120,6 +120,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"tej":                    rate.NewLimiter(TEJRate, TEJBurst),
 			"exchange_rate":          rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"sox_index":              rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"tw_vol":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst), // ^TWII 3mo bars → volatility_20d
 			"sector_data":            rate.NewLimiter(rate.Inf, 0),
 			"day_trading":            rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
 			"bdi":                    rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),

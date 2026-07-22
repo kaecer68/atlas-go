@@ -173,6 +173,15 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		taiexAdapter := NewTAIEXIndexChannelAdapter(taiexProvider)
 		g.registry.Register("taiex_index", taiexAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "taiex_index")
+
+		// --- TAIEX 20-day annualized volatility (^TWII) ---
+		// Provides MacroDataSnapshot.HistoricalVolatility consumed by
+		// internal/strategy_techniques/evaluator.go (resolveField "HistoricalVolatility").
+		// See docs/data-sources.md §tw_vol for the ChangePct semantic caveat.
+		twVolProvider := marketdata.NewTaiwanVolatilityProvider()
+		twVolAdapter := NewTaiwanVolatilityChannelAdapter(twVolProvider)
+		g.registry.Register("tw_vol", twVolAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "tw_vol")
 	}
 
 	// --- US Indexes (S&P 500, Nasdaq Composite, Dow Jones) ---
