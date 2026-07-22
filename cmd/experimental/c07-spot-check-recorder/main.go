@@ -196,7 +196,7 @@ func main() {
 	driversMap := buildDriversMap(report, *date)
 
 	// Verify drivers for each sector.
-	var verifiedSectors, unverifiedSectors []string
+	var unverifiedSectors []string
 	var driverSources []string
 	for _, sid := range sectorList {
 		drivers, ok := driversMap[sid]
@@ -208,7 +208,6 @@ func main() {
 		if sources == nil {
 			unverifiedSectors = append(unverifiedSectors, sid)
 		} else {
-			verifiedSectors = append(verifiedSectors, sid)
 			driverSources = append(driverSources, sources...)
 		}
 	}
