@@ -3640,6 +3640,8 @@ export interface StrategyFrameSummary {
   sectors: string[];
   regimes: string[];
   attribution: string[];
+  measured: boolean;
+  last_backtest_date?: string;
 }
 
 export interface StrategyParameters {

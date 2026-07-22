@@ -134,6 +134,10 @@ func isPrismWorkerCmd(args []string) bool {
 // internal/monitoring/api/dashboard/handlers.go:116).
 var janusEngine *janus.Engine
 
+// strategyFeedbackStore is the FeedbackStore wired by main.go at startup
+// and consumed by the autobacktest attribution pipeline (#1259).
+var strategyFeedbackStore *apistrategies.FeedbackStore
+
 // isPublicPath determines whether a request bypasses the API-key
 // AuthMiddleware. Web UI pages and their static assets under /admin/
 // and /client/, plus probing endpoints, are loaded by the browser
@@ -1560,6 +1564,7 @@ func run(args []string, deps appDeps) error {
 					apistrategies.NewFeedbackStore(filepath.Join(cfg.LedgerDir, "strategy_feedback")))
 				dashboard.SetStrategiesHandlers(stHandlers)
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
+				strategyFeedbackStore = stHandlers.FeedbackStore
 				// so the original call encountered a nil handler. nil-safe.
 				dashboard.RegisterStrategiesRoutes(mux)
 				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
@@ -1783,6 +1788,15 @@ func run(args []string, deps appDeps) error {
 			} else {
 				btRunner = autobacktest.NewRunner(cfg)
 				log.Printf("[AutoBacktest] running without EventBus (no SSE events)")
+			}
+			// Wire attribution pipeline (#1259): every backtest writes a
+			// measured-attribution marker per active strategy so listActive
+			// can distinguish 'never validated' from 'validated, no hits yet'.
+			if stRegistry != nil && strategyFeedbackStore != nil {
+				btRunner.WithAttribution(
+					strategyAttributionAdapter{fb: strategyFeedbackStore},
+					stRegistry,
+				)
 			}
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
 				Name:     "autobacktest_daily",

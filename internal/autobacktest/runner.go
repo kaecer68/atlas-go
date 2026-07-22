@@ -11,12 +11,22 @@ import (
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/replay"
+	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
+// StrategySource is the minimal interface for resolving active strategy
+// IDs. *strategy_techniques.Registry satisfies it; tests can supply a
+// static slice to avoid loading the production seed.
+type StrategySource interface {
+	All() []strategy_techniques.StrategyFrame
+}
+
 type Runner struct {
-	btRunner *backtest.Runner
-	cfg      config.Config
-	eventBus *eventbus.ChannelEventBus
+	btRunner    *backtest.Runner
+	cfg         config.Config
+	eventBus    *eventbus.ChannelEventBus
+	attribution AttributionWriter
+	strategies  StrategySource
 }
 
 func NewRunner(cfg config.Config) *Runner {
@@ -38,6 +48,15 @@ func NewRunnerWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		cfg:      cfg,
 		eventBus: eventBus,
 	}
+}
+
+// WithAttribution wires the FeedbackStore + StrategyRegistry. The Runner
+// will write one attribution marker per active strategy after every
+// successful backtest. nil disables attribution.
+func (r *Runner) WithAttribution(fb AttributionWriter, src StrategySource) *Runner {
+	r.attribution = fb
+	r.strategies = src
+	return r
 }
 
 func (r *Runner) RunAndStore() error {
@@ -85,6 +104,11 @@ func (r *Runner) RunAndStore() error {
 		})
 	}
 
+	// Phase 1 of #1259: write a measured-attribution marker for every
+	// active strategy so listActive can distinguish 'never validated'
+	// (measured=false) from 'validated, no hits yet' (measured=true).
+	// Per-strategy hit computation is a follow-up.
+	r.writeAttributionMarkers(targetDate)
 	return nil
 }
 
@@ -208,4 +232,36 @@ func (r *Runner) mostRecentTradingDay() (time.Time, error) {
 	}
 
 	return ds.Dates[len(ds.Dates)-1], nil
+}
+
+// writeAttributionMarkers emits one FeedbackStore record per active
+// strategy. The record carries total_tests=0 + a 'attribution_attempted'
+// status so the consumer can flip Measured=true. Errors are logged but
+// not returned — attribution is best-effort, not a backtest gate.
+func (r *Runner) writeAttributionMarkers(targetDate time.Time) {
+	if r.attribution == nil || r.strategies == nil {
+		return
+	}
+	for _, f := range r.strategies.All() {
+		if f.Status != strategy_techniques.StatusActive {
+			continue
+		}
+		rec := AttributionRecord{
+			StrategyID: f.ID,
+			// total_tests=0 + Status='attribution_attempted' marks the
+			// strategy as measured. Phase 2 will replace these zeros
+			// with the real per-strategy hit_rate.
+			TotalTests: 0,
+			TotalHits:  0,
+			HitRate:    0,
+			Status:     "attribution_attempted",
+		}
+		if err := r.attribution.Write(rec); err != nil {
+			logging.Warn("autobacktest", "attribution_write_failed",
+				"strategy_id", f.ID, "err", err.Error())
+			continue
+		}
+	}
+	logging.Info("autobacktest", "attribution_markers_written",
+		"target_date", targetDate.Format("2006-01-02"))
 }

@@ -136,6 +136,69 @@ func TestHandlers_ListActive(t *testing.T) {
 	}
 }
 
+// TestHandlers_ListActive_ReportsMeasuredFalseByDefault verifies that a
+// strategy with no FeedbackStore record is reported as measured=false.
+func TestHandlers_ListActive_ReportsMeasuredFalseByDefault(t *testing.T) {
+	reg := newTestRegistry(t)
+	h := NewHandlers(reg, NewFeedbackStore(t.TempDir()))
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	code, body := doGET(t, mux, "/api/strategies/active")
+	if code != http.StatusOK {
+		t.Fatalf("status=%d body=%v", code, body)
+	}
+	strategies := body["strategies"].([]any)
+	for _, s := range strategies {
+		if got := s.(map[string]any)["measured"]; got != false {
+			t.Errorf("strategy %v expected measured=false, got %v", s.(map[string]any)["id"], got)
+		}
+	}
+}
+
+// TestHandlers_ListActive_ReportsMeasuredTrueAfterAttribution verifies
+// that a strategy with a FeedbackStore record is reported as measured=true
+// with last_backtest_date set (#1259).
+func TestHandlers_ListActive_ReportsMeasuredTrueAfterAttribution(t *testing.T) {
+	reg := newTestRegistry(t)
+	fb := NewFeedbackStore(t.TempDir())
+	if err := fb.Write(Record{
+		StrategyID: "alpha",
+		TotalTests: 50,
+		TotalHits:  32,
+		HitRate:    0.64,
+		Status:     "attribution_attempted",
+	}); err != nil {
+		t.Fatalf("seed feedback: %v", err)
+	}
+	h := NewHandlers(reg, fb)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	code, body := doGET(t, mux, "/api/strategies/active")
+	if code != http.StatusOK {
+		t.Fatalf("status=%d body=%v", code, body)
+	}
+	strategies := body["strategies"].([]any)
+	found := false
+	for _, s := range strategies {
+		sm := s.(map[string]any)
+		if sm["id"] == "alpha" {
+			found = true
+			if sm["measured"] != true {
+				t.Errorf("alpha expected measured=true, got %v", sm["measured"])
+			}
+			if sm["hit_rate"] == 0.0 {
+				t.Errorf("alpha expected non-zero hit_rate after attribution, got %v", sm["hit_rate"])
+			}
+			if _, ok := sm["last_backtest_date"].(string); !ok {
+				t.Errorf("alpha expected last_backtest_date string, got %T", sm["last_backtest_date"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("alpha strategy not found in listActive response")
+	}
+}
+
 func TestHandlers_ListByLayer_Valid(t *testing.T) {
 	reg := newTestRegistry(t)
 	mux := newTestMux(reg)
@@ -316,15 +379,13 @@ func TestHandlers_NilRegistry_Returns503(t *testing.T) {
 }
 
 func TestToSummary_PreservesAllFields(t *testing.T) {
-	reg, err := strategy_techniques.LoadFromBytes([]byte(testSeedsJSON))
-	if err != nil {
-		t.Fatalf("LoadFromBytes: %v", err)
-	}
+	reg, _ := strategy_techniques.LoadFromBytes([]byte(testSeedsJSON))
 	frame, err := reg.FindByID("gamma")
 	if err != nil {
 		t.Fatal("expected to find gamma frame")
 	}
-	sum := toSummary(*frame)
+	h := &Handlers{registry: reg}
+	sum := h.toSummary(*frame)
 	if sum.ID != "gamma" || sum.Layer != "L3" || sum.Direction != "up" ||
 		sum.Risk != "low" || sum.Status != "degraded" || sum.Source != "backtest" {
 		t.Errorf("summary mismatch: %+v", sum)

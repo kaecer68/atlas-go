@@ -89,10 +89,16 @@ type StrategyFrameSummary struct {
 	Sectors     []string `json:"sectors"`
 	Regimes     []string `json:"regimes"`
 	Attribution []string `json:"attribution"`
+	// Measured is true when at least one backtest attribution has
+	// been recorded for this strategy via the FeedbackStore. False
+	// means the strategy is enabled but never validated against
+	// real backtest data (manifest #F07 / #1259).
+	Measured         bool   `json:"measured"`
+	LastBacktestDate string `json:"last_backtest_date,omitempty"` // ISO date of latest attribution
 }
 
-func toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {
-	return StrategyFrameSummary{
+func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {
+	s := StrategyFrameSummary{
 		ID:          f.ID,
 		Name:        f.Name,
 		Layer:       string(f.Layer),
@@ -110,6 +116,26 @@ func toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {
 		Regimes:     f.Regimes,
 		Attribution: f.Attribution,
 	}
+	// Enrich with measured state from the FeedbackStore (#1259).
+	// Without this, consumers cannot distinguish 'zero from real
+	// backtest' (measured=true, hit_rate=0) from 'never tested'
+	// (measured=false, hit_rate=0).
+	if h.FeedbackStore != nil {
+		if rec, ok, _ := h.FeedbackStore.Load(f.ID); ok {
+			s.Measured = true
+			if !rec.UpdatedAt.IsZero() {
+				s.LastBacktestDate = rec.UpdatedAt.Format("2006-01-02")
+			}
+			// Surface cumulative hit_rate/total_tests so consumers
+			// see the real aggregate even if the seed still has 0s.
+			if rec.TotalTests > 0 {
+				s.HitRate = rec.HitRate
+				s.TotalTests = rec.TotalTests
+				s.TotalHits = rec.TotalHits
+			}
+		}
+	}
+	return s
 }
 
 // StrategiesListResponse is the response shape for list endpoints.
@@ -160,7 +186,7 @@ func (h *Handlers) listStrategies(r *http.Request) (int, any) {
 	}
 	summaries := make([]StrategyFrameSummary, 0, len(frames))
 	for _, f := range frames {
-		summaries = append(summaries, toSummary(f))
+		summaries = append(summaries, h.toSummary(f))
 	}
 	return http.StatusOK, StrategiesListResponse{Strategies: summaries, Total: len(summaries)}
 }
@@ -173,7 +199,7 @@ func (h *Handlers) listActive(r *http.Request) (int, any) {
 	summaries := make([]StrategyFrameSummary, 0, len(all))
 	for _, f := range all {
 		if f.Status == strategy_techniques.StatusActive {
-			summaries = append(summaries, toSummary(f))
+			summaries = append(summaries, h.toSummary(f))
 		}
 	}
 	return http.StatusOK, StrategiesListResponse{Strategies: summaries, Total: len(summaries)}
@@ -208,7 +234,7 @@ func (h *Handlers) getStrategy(r *http.Request) (int, any) {
 	if err != nil {
 		return http.StatusNotFound, map[string]any{"error": "strategy not found"}
 	}
-	return http.StatusOK, toSummary(*f)
+	return http.StatusOK, h.toSummary(*f)
 }
 
 func (h *Handlers) validateStrategy(r *http.Request) (int, any) {
