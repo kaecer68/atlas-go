@@ -3,9 +3,27 @@ package apigateway
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// StaleDataThreshold is the maximum age of a "ok" ChannelHealthRecord.LastFetchAt
+// before StatusSummary() downgrades the channel's status to "stale".
+//
+// Background: Issue #1086 — TEJ and janus_regime channels were last fetched
+// 66+ days ago but HealthCheck (live API ping) still returned "ok" because
+// the API itself was reachable. To catch the silent-failure pattern without
+// breaking channels that legitimately have low-frequency schedules, we
+// downgrade *ok* status to *stale* when no successful fetch has happened
+// within the threshold.
+//
+// 48h was chosen because:
+//   - The slowest legitimate refresh interval is 24h (etf_nav_refresh,
+//     auto_daily_simulation). 48h gives a full interval of slack.
+//   - Channels that fail to refresh for 2x their normal interval almost
+//     certainly have a real problem (scheduler drift, upstream outage, etc).
+const StaleDataThreshold = 48 * time.Hour
 
 // UnifiedHealthStore wraps the local ChannelHealthStore (relocated from
 // internal/monitoring in Wave 12 Phase 2, Issue #731) with gateway-specific
@@ -87,6 +105,12 @@ func (u *UnifiedHealthStore) ChannelLatencyMs(channelID string) int64 {
 }
 
 // StatusSummary returns a summary of all channel health statuses.
+//
+// Freshness-aware: channels whose status is "ok" but whose LastFetchAt is older
+// than StaleDataThreshold (48h by default) are downgraded to "stale" by
+// deriveStatusWithFreshness. This catches the silent-failure pattern reported
+// in Issue #1086 where channels reported "ok" (live API ping worked) but had
+// not actually been refreshed in 66+ days.
 func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	ids := channelIDs()
 	summary := make(map[string]HealthSummary)
@@ -103,7 +127,7 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 
 		summary[id] = HealthSummary{
 			ChannelID: id,
-			Status:    rec.Status,
+			Status:    u.deriveStatusWithFreshness(rec),
 			LastFetch: rec.LastFetchAt,
 			LastError: rec.LastError,
 		}
@@ -112,7 +136,34 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	return summary
 }
 
-// HealthSummary represents a channel's health status.
+// deriveStatusWithFreshness downgrades an "ok" record to "stale" when its
+// LastFetchAt is older than StaleDataThreshold. Other statuses (error, warn,
+// inactive) pass through unchanged — they're already alerting on real failures.
+//
+// Returns "stale" if the record is "ok" AND LastFetchAt parses as RFC3339 AND
+// time.Since() exceeds StaleDataThreshold. Unparseable timestamps or empty
+// LastFetchAt keep the original status — the channel is broken, but not
+// because of staleness, so mislabeling as "stale" would mislead on-call.
+func (u *UnifiedHealthStore) deriveStatusWithFreshness(rec *ChannelHealthRecord) string {
+	if rec == nil {
+		return "unknown"
+	}
+	if rec.Status != "ok" {
+		return rec.Status
+	}
+	if rec.LastFetchAt == "" {
+		return rec.Status
+	}
+	ts, err := time.Parse(time.RFC3339, rec.LastFetchAt)
+	if err != nil {
+		return rec.Status
+	}
+	if time.Since(ts) > StaleDataThreshold {
+		return "stale"
+	}
+	return rec.Status
+}
+
 type HealthSummary struct {
 	ChannelID string `json:"channel_id"`
 	Status    string `json:"status"`
