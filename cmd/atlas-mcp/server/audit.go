@@ -164,11 +164,16 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 	if err := w.f.Close(); err != nil {
 		return 0, fmt.Errorf("audit: close before cleanup: %w", err)
 	}
-	w.f = nil
+	// Do NOT set w.f = nil here — the mutex already serializes Write access.
+	// If the reopen below fails, we want to retry rather than leave the
+	// writer permanently poisoned (#1267).
 
 	rf, err := os.Open(w.path)
 	if err != nil {
-		return 0, fmt.Errorf("audit: reopen for cleanup: %w", err)
+		if re := w.reopenForAppend(); re != nil {
+			return 0, fmt.Errorf("audit: open for read failed (%w) and reopen also failed (%w)", err, re)
+		}
+		return 0, fmt.Errorf("audit: reopen for cleanup (read failed, but writer recovered): %w", err)
 	}
 
 	cutoff := now.Add(-time.Duration(retentionDays) * 24 * time.Hour)
@@ -189,59 +194,88 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 	scanErr := scanner.Err()
 	_ = rf.Close()
 	if scanErr != nil {
+		_ = w.reopenForAppend()
 		return removed, fmt.Errorf("audit: scan during cleanup: %w", scanErr)
 	}
 
 	tmpPath := w.path + ".cleanup.tmp"
 	tf, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
+		_ = w.reopenForAppend()
 		return removed, fmt.Errorf("audit: open tmp: %w", err)
 	}
 	for _, line := range keep {
 		if _, wErr := tf.Write(line); wErr != nil {
 			_ = tf.Close()
 			_ = os.Remove(tmpPath)
+			_ = w.reopenForAppend()
 			return removed, fmt.Errorf("audit: write tmp: %w", wErr)
 		}
 		if _, wErr := tf.Write([]byte("\n")); wErr != nil {
 			_ = tf.Close()
 			_ = os.Remove(tmpPath)
+			_ = w.reopenForAppend()
 			return removed, fmt.Errorf("audit: write tmp newline: %w", wErr)
 		}
 	}
 	if sErr := tf.Sync(); sErr != nil {
 		_ = tf.Close()
 		_ = os.Remove(tmpPath)
+		_ = w.reopenForAppend()
 		return removed, fmt.Errorf("audit: sync tmp: %w", sErr)
 	}
 	if cErr := tf.Close(); cErr != nil {
 		_ = os.Remove(tmpPath)
+		_ = w.reopenForAppend()
 		return removed, fmt.Errorf("audit: close tmp: %w", cErr)
 	}
 	if rErr := os.Rename(tmpPath, w.path); rErr != nil {
+		_ = w.reopenForAppend()
 		return removed, fmt.Errorf("audit: rename tmp: %w", rErr)
 	}
 
 	// Reopen for append so subsequent Writes succeed.
-	f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
+	if err := w.reopenForAppend(); err != nil {
 		return removed, fmt.Errorf("audit: reopen after cleanup: %w", err)
 	}
-	w.f = f
-	w.enc = json.NewEncoder(f)
 
 	return removed, nil
 }
 
+// reopenForAppend reopens the audit log file for append. It retries up to 3
+// times with exponential backoff. The caller MUST hold w.mu. After a
+// successful call, w.f and w.enc are restored.
+func (w *AuditWriter) reopenForAppend() error {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * 50 * time.Millisecond
+			time.Sleep(backoff)
+		}
+		f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err == nil {
+			w.f = f
+			w.enc = json.NewEncoder(f)
+			return nil
+		}
+	}
+	return fmt.Errorf("audit: reopen failed after %d attempts: %w", maxAttempts, os.ErrNotExist)
+}
+
+// Healthy returns whether the writer's underlying file handle is open and
+// usable. A false return means the writer is in a poisoned state that may
+// self-heal on the next Write or Cleanup.
+func (w *AuditWriter) Healthy() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.f != nil
+}
+
 // extractTS pulls the "ts":"..." value from a JSON line. Returns nil if not
 // parseable. Best-effort: malformed lines are kept (audit log integrity
-// takes priority over cleanup aggression).
 func extractTS(line []byte) *time.Time {
-	e, err := ParseAuditEntry(line)
-	if err != nil {
-		return nil
-	}
-	if e.TS == "" {
+	var e AuditEntry
+	if err := json.Unmarshal(line, &e); err != nil {
 		return nil
 	}
 	if t, err := time.Parse(time.RFC3339Nano, e.TS); err == nil {

@@ -64,6 +64,10 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("server: open audit log: %w", err)
 	}
 
+	// Lifecycle instrumentation (#1267): log PID and Run start so operators
+	// can correlate MCP process lifecycle with audit log entries. Transport
+	// is included for multi-instance diagnostics.
+	fmt.Fprintf(os.Stderr, "atlas-mcp: Run start pid=%d transport=%s\n", os.Getpid(), cfg.Transport)
 	if cfg.AuditRetentionDays > 0 {
 		if removed, cErr := audit.Cleanup(cfg.AuditRetentionDays, time.Now()); cErr != nil {
 			fmt.Fprintf(os.Stderr, "atlas-mcp: startup audit cleanup failed: %v\n", cErr)
@@ -198,6 +202,7 @@ func Run(ctx context.Context, cfg Config) error {
 }
 
 // runRetentionLoop prunes the audit log every 24h until ctx is done.
+// On failure, retries after 1h instead of waiting a full 24h cycle (#1267).
 func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
@@ -207,7 +212,9 @@ func runRetentionLoop(ctx context.Context, audit *AuditWriter, days int) {
 			return
 		case <-ticker.C:
 			if removed, err := audit.Cleanup(days, time.Now()); err != nil {
-				fmt.Fprintf(os.Stderr, "atlas-mcp: scheduled audit cleanup failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, "atlas-mcp: scheduled audit cleanup failed: %v (retrying in 1h)\n", err)
+				// Reset ticker to retry in 1h instead of waiting 24h.
+				ticker.Reset(1 * time.Hour)
 			} else if removed > 0 {
 				fmt.Fprintf(os.Stderr, "atlas-mcp: scheduled audit cleanup removed %d entries\n", removed)
 			}

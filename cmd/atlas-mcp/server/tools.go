@@ -138,6 +138,8 @@ type AlertListUnacknowledgedOutput struct {
 type SystemHealthOutput struct {
 	Status string         `json:"status"`
 	Info   map[string]any `json:"info,omitempty"`
+	Audit  map[string]any `json:"audit,omitempty"` // MCP-local audit writer health (#1267)
+	Proc   map[string]any `json:"proc,omitempty"`  // MCP process diagnostics (#1267)
 }
 
 // --- Handlers ----------------------------------------------------------------
@@ -271,6 +273,15 @@ func (s *server) handleSystemGetHealth(ctx context.Context, _ *mcp.CallToolReque
 	}); err != nil {
 		return nil, SystemHealthOutput{}, err
 	}
+
+	// MCP-local health signals (#1267): audit writer and process info.
+	out.Audit = map[string]any{
+		"healthy": s.audit.Healthy(),
+	}
+	out.Proc = map[string]any{
+		"pid": os.Getpid(),
+	}
+
 	return nil, out, nil
 }
 
