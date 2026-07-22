@@ -340,7 +340,7 @@
   },
   "get_recommendations": {
     "name": "get_recommendations",
-    "description": "Tier-appropriate investment recommendations: market light, active strategy and ranked suggestions based on the caller's subscription tier.",
+    "description": "Tier-appropriate portfolio allocation recommendations (growth, momentum, defensive, all_weather, value). Returns market light overview for free tier. These are portfolio-level strategy IDs — for market signal detectors (e.g. foreign-3day-inflow, margin-balance-extreme), use strategy_list_active.",
     "inputSchema": {
       "type": "object"
     }
@@ -968,14 +968,14 @@
   },
   "strategy_list_active": {
     "name": "strategy_list_active",
-    "description": "List the strategy set currently active in production (per docs/workflow-map.md WA-500).",
+    "description": "List the market technique set (L1-L5 signal detectors) currently active in production. Includes detectors like foreign-3day-inflow, margin-balance-extreme — these are trading signal rules, NOT portfolio allocation strategies. For portfolio strategies (growth, momentum, defensive), use get_recommendations.",
     "inputSchema": {
       "type": "object"
     }
   },
   "strategy_ranker": {
     "name": "strategy_ranker",
-    "description": "Return the current active strategies ranked by performance with free/registered/premium tier labels.",
+    "description": "Return the current active market techniques ranked by performance with free/registered/premium tier labels. These are signal detectors (e.g. foreign-3day-inflow, margin-balance-extreme), NOT portfolio allocation strategies — see get_recommendations for portfolio strategies.",
     "inputSchema": {
       "type": "object"
     }
