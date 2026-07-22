@@ -277,6 +277,21 @@ lint-backend:
 	@command -v gofmt >/dev/null && gofmt -l $(GO_PKGS) | (read; if [ $$? -ne 0 ]; then echo "❌ gofmt issues found"; exit 1; fi) || echo "  (gofmt skipped)"
 	go vet $(GO_PKGS)
 
+# ---- API / contract gate ----
+
+check-routes:
+	@bash scripts/check-routes.sh
+
+hermes-smoke:
+	@bash scripts/hermes-smoke.sh
+
+gate:
+	@echo "🔐 Running contract gate (check-routes + hermes-smoke)..."
+	@bash scripts/check-routes.sh || (echo "❌ Route check failed" && exit 1)
+	@bash scripts/hermes-smoke.sh || (echo "❌ Hermes smoke failed" && exit 1)
+	@echo "✅ Contract gate passed"
+
+.PHONY: check-routes hermes-smoke gate
 # ---- 整合 target ----
 
 install: install-frontend

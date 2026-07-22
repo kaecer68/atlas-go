@@ -175,3 +175,48 @@ docker compose up -d
 - **No duplicate rules**: This file intentionally does not repeat AGENTS.md rules. One source of truth only.
 
 
+
+## PR 驗證清單（必跑）
+
+每筆 PR merge 前，AI 必須跑以下 3 個 gate。不可 skip。
+
+### 1. Route uniqueness check
+
+```bash
+make check-routes
+```
+
+檢查所有 HTTP 路由是否有**概念衝突**（同一資源兩條不同路徑）或 **canary test stale path**。
+若有 `FAIL`，必須修正後才能 merge。
+
+### 2. Hermes consumer smoke test
+
+```bash
+make hermes-smoke
+```
+
+對 running atlas-go 打出 Hermes（使用 agent）所有驗證過的 endpoint：
+- E-01~E-13 audit items（market explain, regime, risk, correlation, strategy, capital flow…）
+- data quality, LLM health, stress index, system health
+
+全部 200 才算通過。任何非 200 → 不能 merge。
+
+### 3. Consumer contract check（合約檔）
+
+每個 MCP tool 對應的 HTTP path 必須滿足：
+1. 存在於 route table（`make check-routes` 已含）
+2. canary test path（`tools_canary_test.go`）與 handler code path（`tools_*.go`）一致
+3. consumer（Hermes）可以直打並拿到 200 + 合法 JSON
+
+**違反案例**：`data_get_field_contract` → canary test 寫 `/api/data/field-contract`，但 handler code 打 `/api/field-contract`。
+前者 401，後者 200。這種 mismatch 是 E-12 audit 浪費 20 小時的根本原因。
+
+### Gate 順序
+
+```
+make check-routes  →  靜態分析（不需 container）
+make hermes-smoke  →  動態驗證（需 running atlas-go）
+
+兩者皆 0 fail → 可 merge
+任一 fail     → 先修再測
+```
