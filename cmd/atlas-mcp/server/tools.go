@@ -100,18 +100,22 @@ type RegimeGetHistoryInput struct {
 	Days int `json:"days" jsonschema:"how many days back; default 30, max 365"`
 }
 
-// RegimePoint represents one session in regime_get_history output. Score is a
-// pointer with omitempty: when the handler cannot supply a meaningful score
-// (e.g., before Layer B wires Engine.UpdateFromMacro into the pipeline), the
-// field is omitted rather than emitting 0 — honest "unknown" vs misleading "0".
+// RegimePoint represents one session in regime_get_history output.
+// Score is a float64 pointer with omitempty: when the handler cannot supply
+// a meaningful historical score, the field is omitted — honest "unknown".
+// The current composite score is carried separately in the output envelope
+// (CurrentRegimeScore), NOT cloned into every historical row.
 type RegimePoint struct {
-	Date   string `json:"date"`
-	Regime string `json:"regime"`
-	Score  *int   `json:"score,omitempty"`
+	Date   string   `json:"date"`
+	Regime string   `json:"regime"`
+	Score  *float64 `json:"score,omitempty"`
 }
 
 type RegimeGetHistoryOutput struct {
-	Regimes []RegimePoint `json:"regimes"`
+	Regimes              []RegimePoint `json:"regimes"`
+	CurrentRegimeScore   *float64      `json:"current_regime_score,omitempty"`
+	CurrentScoreSource   string        `json:"current_score_source,omitempty"`   // "janus_composite" or ""
+	CurrentScoreSynthetic bool         `json:"current_score_synthetic,omitempty"` // true when score is macro-derived, not from PRISM training
 }
 
 type StrategyListActiveOutput struct {
@@ -164,17 +168,18 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 				Date:   sess.RecordedAt,
 				Regime: sess.Regime,
 			}
+			// Score intentionally left nil — historical scores are not
+			// yet persisted (regime_history table has no score column).
+			// When they become available, each row will carry its own
+			// historical Score. Until then, consumers should use
+			// CurrentRegimeScore for the latest composite snapshot.
 		}
-		// Score comes from /api/janus/regime-score (CL-3 B02): the janus
-		// engine's composite score with is_synthetic flag. When the endpoint
-		// is unavailable, the score field is omitted entirely (honest
-		// unknown) rather than emitting 0.
+		// Current composite score from /api/janus/regime-score, reported
+		// once at the output envelope level — NOT cloned into every row.
 		if score, isSynthetic, ok := fetchRegimeScore(ctx, s); ok {
-			_ = isSynthetic // reserved for future client-side rendering
-			for i := range out.Regimes {
-				s := score
-				out.Regimes[i].Score = &s
-			}
+			out.CurrentRegimeScore = &score
+			out.CurrentScoreSource = "janus_composite"
+			out.CurrentScoreSynthetic = isSynthetic
 		}
 		return nil
 	}); err != nil {
@@ -183,13 +188,11 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 	return nil, out, nil
 }
 
-// fetchRegimeScore queries /api/janus/regime-score and returns the integer
-// score plus the is_synthetic flag. Returns ok=false when the endpoint is
-// unavailable; the caller is expected to omit the score field rather than
-// emit a misleading 0. The synthetic flag is reserved for future client-side
-// rendering (see spec §18.6.4 — MCP currently attaches the same score to
-// every regime point, which is honest per the "unknown" design).
-func fetchRegimeScore(ctx context.Context, s *server) (int, bool, bool) {
+// fetchRegimeScore queries /api/janus/regime-score and returns the float64
+// composite score plus the is_synthetic flag. Returns ok=false when the
+// endpoint is unavailable. The score is kept as float64 to preserve precision;
+// int truncation (e.g. 0.018 → 0) is a data-integrity bug (#1263).
+func fetchRegimeScore(ctx context.Context, s *server) (float64, bool, bool) {
 	var raw struct {
 		Score       float64 `json:"score"`
 		IsSynthetic bool    `json:"is_synthetic"`
@@ -197,7 +200,7 @@ func fetchRegimeScore(ctx context.Context, s *server) (int, bool, bool) {
 	if err := s.cli.Get(ctx, "/api/janus/regime-score", nil, &raw); err != nil {
 		return 0, false, false
 	}
-	return int(raw.Score), raw.IsSynthetic, true
+	return raw.Score, raw.IsSynthetic, true
 }
 
 func (s *server) handleStrategyListActive(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, StrategyListActiveOutput, error) {
