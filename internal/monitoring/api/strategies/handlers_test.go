@@ -379,7 +379,7 @@ func TestHandlers_NilRegistry_Returns503(t *testing.T) {
 }
 
 func TestToSummary_PreservesAllFields(t *testing.T) {
-	reg, err := strategy_techniques.LoadFromBytes([]byte(testSeedsJSON))
+	reg, _ := strategy_techniques.LoadFromBytes([]byte(testSeedsJSON))
 	frame, err := reg.FindByID("gamma")
 	if err != nil {
 		t.Fatal("expected to find gamma frame")

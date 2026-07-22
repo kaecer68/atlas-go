@@ -73,28 +73,28 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 // StrategyFrameSummary is the API-facing representation of a StrategyFrame.
 // JSON tags are snake_case per internal/monitoring/AGENTS.md.
 type StrategyFrameSummary struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Layer           string    `json:"layer"`
-	Summary         string    `json:"summary"`
-	Rationale       string    `json:"rationale"`
-	Direction       string    `json:"direction"`
-	Risk            string    `json:"risk"`
-	Status          string    `json:"status"`
-	Source          string    `json:"source"`
-	HitRate         float64   `json:"hit_rate"`
-	TotalTests      int       `json:"total_tests"`
-	TotalHits       int       `json:"total_hits"`
-	Themes          []string  `json:"themes"`
-	Sectors         []string  `json:"sectors"`
-	Regimes         []string  `json:"regimes"`
-	Attribution     []string  `json:"attribution"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Layer       string   `json:"layer"`
+	Summary     string   `json:"summary"`
+	Rationale   string   `json:"rationale"`
+	Direction   string   `json:"direction"`
+	Risk        string   `json:"risk"`
+	Status      string   `json:"status"`
+	Source      string   `json:"source"`
+	HitRate     float64  `json:"hit_rate"`
+	TotalTests  int      `json:"total_tests"`
+	TotalHits   int      `json:"total_hits"`
+	Themes      []string `json:"themes"`
+	Sectors     []string `json:"sectors"`
+	Regimes     []string `json:"regimes"`
+	Attribution []string `json:"attribution"`
 	// Measured is true when at least one backtest attribution has
 	// been recorded for this strategy via the FeedbackStore. False
 	// means the strategy is enabled but never validated against
 	// real backtest data (manifest #F07 / #1259).
-	Measured         bool      `json:"measured"`
-	LastBacktestDate string    `json:"last_backtest_date,omitempty"` // ISO date of latest attribution
+	Measured         bool   `json:"measured"`
+	LastBacktestDate string `json:"last_backtest_date,omitempty"` // ISO date of latest attribution
 }
 
 func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {

@@ -6,8 +6,8 @@
 package main
 
 import (
-	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
+	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 )
 
 type strategyAttributionAdapter struct {

@@ -104,7 +104,6 @@ func (r *Runner) RunAndStore() error {
 		})
 	}
 
-
 	// Phase 1 of #1259: write a measured-attribution marker for every
 	// active strategy so listActive can distinguish 'never validated'
 	// (measured=false) from 'validated, no hits yet' (measured=true).
