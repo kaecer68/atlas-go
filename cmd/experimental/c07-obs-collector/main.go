@@ -43,7 +43,7 @@ const (
 	defaultAtlasURL  = "http://localhost:18080"
 	defaultObsLog    = "docs/operations/sector-prediction-observation-log.md"
 	defaultAlertDir  = "data/state/alerts"
-	httpTimeout      = 10 * time.Second
+	httpTimeout      = 30 * time.Second
 	jsdThreshold     = 0.25
 	confidenceFloor  = 0.40
 	latencyThreshold = 200 // ms
@@ -252,12 +252,11 @@ func appendToObsLog(path, row string) error {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("read file: %w", err)
 		}
-		// File doesn't exist — create with header.
 		header := `# Sector Prediction Observation Log
 
 > **對應 runbook**：` + "`docs/operations/sector-prediction-runbook.md`" + `
-> **對應 spec**：` + "[`docs/specs/sector-dimension-prediction-spec.md`](../specs/sector-dimension-prediction.md)" + `
-> **對應 invariant manifest**：` + "[`docs/manifests/sector-dimension-prediction-invariant-manifest.md`](../manifests/sector-dimension-prediction-invariant-manifest.md)" + `
+> **對應 spec**：` + "[`docs/specs/sector-dimension-prediction-spec.md`](../specs/sector-dimension-prediction-spec.md)" + `
+> **對應 invariant manifest**：` + "[`docs/manifests/README.md`](../manifests/README.md)（governance templates 入口,individual manifests 走 `.omo/manifests/`）" + `
 
 L2.4-style 觀察窗口的逐日記錄表。每個交易日填寫一次，欄位說明見 runbook §「Daily Check-in」。
 
