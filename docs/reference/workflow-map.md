@@ -58,7 +58,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-200** | Regime Detection (JANUS) | `internal/janus`（`janus.NewEngine()` 於 main.go:271） | API 啟動時呼叫 `EnsureAllRegimes` + `Update` | RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL | 體制分類細則 |
 | **WA-201** | Macro Ingestion Pipeline | `internal/macroflow`（daily macro cron → `MacroDataSnapshot`） | daily macro cron | MacroDataSnapshot | 排程時點 |
 | **WA-202** | Narrative Conviction Modulator | `internal/orchestrator/narrative_conviction_modulator.go`（L2.4 觀察期功能） | planreflect loop event | conviction 調整 | 是否仍在 L2.4 觀察 |
-| **WA-203** | C07 Sector Prediction Observation | `cmd/experimental/c07-day-evaluator` + `c07-spot-check-recorder` + `docs/operations/sector-prediction-{runbook,observation-log}.md` | Day 7 / Day 14 evaluator 跑（每日 09:00 cron，見 runbook §3）+ operator 手動 spot-check | `sector-prediction-eval-day{7,14}.md` report | Day 14 promotion gate（待 7/30 跑） |
+| **WA-203** | C07 Sector Prediction Observation | `cmd/experimental/c07-day-evaluator` + `cmd/experimental/c07-spot-check-recorder` + `docs/operations/sector-prediction-runbook.md` + `docs/operations/sector-prediction-observation-log.md` | Day 7 / Day 14 evaluator 跑（每日 09:00 cron，見 runbook §3）+ operator 手動 spot-check | `docs/operations/sector-prediction-eval-day{7,14}.md` report | Day 14 promotion gate（待 7/30 跑） |
 
 ### 3.3 決策與執行層
 
