@@ -43,6 +43,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"us_aapl":                false,
 		"us_msft":                false,
 		"tsm_adr":                false,
+		"tw_vol":                 false, // ^TWII 3mo bars → volatility_20d
 		"twse_sbl":               false, // G02
 		"tdcc_equity_dispersion": false, // G01
 	}

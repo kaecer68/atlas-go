@@ -127,6 +127,41 @@ Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS uti
 | Used By | `MacroDataSnapshot.DRAMSpotPrice` → narrative detectors |
 | Note | MU 為全球最大 DRAM 製造商之一，與現貨價高度同步；無官方 DRAMeXchange channel 替代品 |
 
+### TAIEX 20-Day Volatility — 台股指數波動率（`tw_vol`）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | Yahoo Finance — `^TWII` (TAIEX) 3-month daily bars |
+| Method | 計算 20 個交易日對數報酬率標準差 × √252（年化） |
+| Frequency | On-demand via `tw_vol` channel；production 由 `cfg.YahooEnabled` gate 控制（見 `internal/apigateway/register_adapters.go`） |
+| Rate Limit | 1 req / 5s, burst 1（`limits.go:123`，`ExportStatisticsRate` 共享） |
+| Channel ID | `tw_vol` |
+| Gateway Adapter | `internal/apigateway/adapter_tw_vol.go` |
+| Used By | `internal/strategy_techniques/evaluator.go:resolveField("HistoricalVolatility")` 讀 `MacroDataSnapshot.HistoricalVolatility.Value`（= ^TWII 最新收盤價）；`internal/feature/feature.go:434` 為公式定義來源 |
+| Provider | `internal/marketdata/taiwan_volatility_provider.go` |
+
+**⚠️ `ChangePct` 語意警示**：此 provider 把**年化波動率**（例 0.18 = 18%）寫入 `MacroDataPoint.ChangePct`，把**最新收盤價**寫入 `MacroDataPoint.Value`。其他 channel 的 `ChangePct` 為「日漲跌幅 %」，**tw_vol 為唯一例外**。下游若以「日漲跌 %」解讀此 channel 的 `ChangePct` 會被誤導為「年化波動率 × 252 倍誤差」。已知消費者（strategy_techniques、feature）只讀 `.Value`，不受影響。新增 consumer 須特別注意此語意差異。
+
+### 排程與健康監控
+
+- **Cron 排程**：`docker-compose.yml:cron-macro-ingest` 每天 08:00 跑 `/app/macro-ingest`（US market close 後）
+- **Provider wire**：`cmd/macro-ingest/main.go:58` 已 wire 進 `CompositeMacroProvider`
+- **Health 記錄**：`RecordChannelFetchWithPool` 對 15 個 channel（含 tw_vol）寫 `data/state/channel_health/`；**修正於 feat/tw-vol-channel-2026-07-22，之前只記 us_yahoo + frankfurter_fx 兩個 channel**
+- **Alert**：`monitoring/rules/wave9_channel_individual_health.yml:ChannelHighErrorRatePerChannel` 自動涵蓋
+
+### 歷史資料
+
+- **`tw_vol` 是 sliding 20d 計算**：每次 Fetch 從 Yahoo 拉 3-month bars 重新算年化波動率，**不需 backfill**
+- **`MacroDataSnapshot` daily**：macro-ingest 自動保存 `data/state/macro_snapshot/YYYY-MM-DD.json` + `latest.json` + `previous.json`（`internal/narrative/ingestor.go:saveSnapshot`）。tw_vol 從啟用日（2026-07-22）起自然累積 daily 歷史
+
+### 前端 / MCP 穿透
+
+- **MCP `data_get_channels`** + **`data_get_channel_detail`**：自動可見（透過 `gateway.ChannelIDs()` 動態列舉）
+- **HTTP `/api/dashboard/data-channels`**：同上
+- **前端 admin `datachannels.js`**：同上
+- **前端 `home.js` marketPulse group**：`shared_web/static/js/pages/home.js` 已加 `tw_vol`（緊鄰 `taiex_index`），投資人首頁可見 channel 健康 badge
+- **MCP canary**：`data_get_channels` 在 canary test 名單 → 自動觸及 tw_vol
+
 ## Provider Roles
 
 ### TWSE

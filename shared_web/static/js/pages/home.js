@@ -33,7 +33,7 @@ const DATA_SOURCES = ['TWSE', 'Fugle', 'Replay 資料'];
 const CHANNELS_BY_SECTION = {
   hero: ['us_yahoo', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
   signalStrip: ['geopolitical', 'us_yahoo'],
-  marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'export_statistics', 'twse_capital_flow'],
+  marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'tw_vol', 'export_statistics', 'twse_capital_flow'],
   predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
   sevenForce: ['twse_capital_flow', 'frankfurter_fx', 'us_yahoo', 'tsm_adr'],
   calendar: ['twse_replay', 'us_yahoo', 'tsmc_revenue'],
