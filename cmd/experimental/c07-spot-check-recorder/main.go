@@ -231,31 +231,22 @@ func main() {
 	sort.Strings(uniqSources)
 
 	// Parse the existing obs log.
-	rows, raw, err := parseObsLogRaw(*obsLog)
+	_, raw, err := parseObsLogRaw(*obsLog)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: parse obs log: %v\n", err)
 		os.Exit(ExitMalformedObsLog)
 	}
 
-	// Find the row for the target date.
+	// Note: dedup refactor (filterNewSectors + countTotalSpotChecksForDate) means
+	// we no longer need to find a specific row index — updateObsLog scans raw for
+	// the date itself.
 	ts := time.Now().Format("2006-01-02 15:04")
-	var rowMatch *obsRow
-	var rowIdx int = -1
-	for i, r := range rows {
-		if r.Date == *date {
-			rowMatch = &rows[i]
-			rowIdx = i
-			break
-		}
-	}
-
 	newSpotCheckCount := 0
 	// Dedup: filter sectorList down to sectors that don't yet have a marker
 	// for this date. The final count is existing markers + new (unique) sectors.
 	existingTotal := countTotalSpotChecksForDate(raw, *date)
 	newUniqueSectors := filterNewSectors(raw, *date, sectorList)
 	newSpotCheckCount = existingTotal + len(newUniqueSectors)
-	_ = rowMatch // rowMatch unused after dedup refactor; newUniqueSectors gates the action.
 
 	if *dryRun {
 		fmt.Println("DRY-RUN: would update obs log:")
@@ -300,7 +291,7 @@ func main() {
 	narrativeSec := buildNarrativeSection(ts, newUniqueSectors, uniqSources, *notes, operator)
 
 	// Update or append the obs log.
-	if err := updateObsLog(*obsLog, raw, rows, *date, newSpotCheckCount, rowIdx, narrativeSec, strings.Join(markers, "")); err != nil {
+	if err := updateObsLog(*obsLog, raw, *date, newSpotCheckCount, narrativeSec, strings.Join(markers, "")); err != nil {
 		os.Exit(ExitMalformedObsLog)
 	}
 
@@ -545,17 +536,17 @@ func buildNarrativeSection(ts string, sectors []string, sources []string, notes,
 // - If rowIdx >= 0: updates the spot_check_count of the matching row
 // - Appends the narrative section after the table
 // - Writes via rename to ensure atomicity.
-func updateObsLog(path, raw string, rows []obsRow, date string, newCount, rowIdx int, narrative, markers string) error {
+func updateObsLog(path, raw string, date string, newCount int, narrative, markers string) error {
 	// Ensure parent directory exists.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
 
+	// Scan raw for an existing row; if not found, append a new one.
 	var updated string
-	if rowIdx >= 0 {
-		updated = updateRowSpotCheckCount(raw, rowIdx, date, newCount)
+	if rowHasDate(raw, date) {
+		updated = updateRowSpotCheckCount(raw, date, newCount)
 	} else {
-		// No existing row — build one from scratch.
 		updated = raw + buildNewRow(date, newCount)
 	}
 
@@ -584,8 +575,22 @@ func updateObsLog(path, raw string, rows []obsRow, date string, newCount, rowIdx
 	return nil
 }
 
+// rowHasDate reports whether the obs log markdown already has a row for the given date.
+func rowHasDate(raw, date string) bool {
+	for _, line := range strings.Split(raw, "\n") {
+		if !strings.HasPrefix(line, "|") {
+			continue
+		}
+		cells := splitTableRow(line)
+		if len(cells) >= 2 && strings.TrimSpace(cells[1]) == date {
+			return true
+		}
+	}
+	return false
+}
+
 // updateRowSpotCheckCount updates the spot_check_count cell for the given row index.
-func updateRowSpotCheckCount(raw string, rowIdx int, date string, newCount int) string {
+func updateRowSpotCheckCount(raw string, date string, newCount int) string {
 	// Find the line in raw that matches the date.
 	lines := strings.Split(raw, "\n")
 	for i, line := range lines {

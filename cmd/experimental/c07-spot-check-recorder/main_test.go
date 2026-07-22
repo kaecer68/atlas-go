@@ -541,7 +541,7 @@ func TestUpdateRowSpotCheckCount(t *testing.T) {
 		t.Fatal("expected to find 2026-07-22 row")
 	}
 
-	updated := updateRowSpotCheckCount(raw, rowIdx, "2026-07-22", 5)
+	updated := updateRowSpotCheckCount(raw, "2026-07-22", 5)
 
 	if !strings.Contains(updated, "| 2026-07-22 | 20 | 0.0% | 14 | 0 | 0 | 5 |") {
 		t.Error("updated row should have spot_check_count=5")
@@ -632,20 +632,12 @@ func TestUpdateObsLogAtomic(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	rows, raw, err := parseObsLogRaw(obsLog)
+	_, raw, err := parseObsLogRaw(obsLog)
 	if err != nil {
 		t.Fatalf("parseObsLogRaw: %v", err)
 	}
 
-	rowIdx := -1
-	for i, r := range rows {
-		if r.Date == "2026-07-22" {
-			rowIdx = i
-			break
-		}
-	}
-
-	if err := updateObsLog(obsLog, raw, rows, "2026-07-22", 2, rowIdx, narrative, marker); err != nil {
+	if err := updateObsLog(obsLog, raw, "2026-07-22", 2, narrative, marker); err != nil {
 		t.Fatalf("updateObsLog: %v", err)
 	}
 
