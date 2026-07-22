@@ -536,6 +536,7 @@ export interface CorrelationResponse {
   observations: number;
   computed_at: string;
   is_fallback: boolean;
+  fallback_reason?: string;
 }
 
 export interface CrossFootCheck {
