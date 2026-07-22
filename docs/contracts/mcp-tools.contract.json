@@ -1,7 +1,7 @@
 {
   "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
   "version": "1",
-  "generated_at": "2026-07-22T22:10:07.540084+00:00",
+  "generated_at": "2026-07-22T22:03:44.611815+00:00",
   "source": "cmd/atlas-mcp/server/tools_canary_test.go",
   "total_tools": 97,
   "tools": {
@@ -513,20 +513,24 @@
     },
     "universe_get_session_detail": {
       "method": "GET",
-      "path": "/api/dashboard/sessions/{id}",
+      "path": "/api/universe/sessions/latest",
       "auth": "optional",
       "canary_skip": true,
-      "canary_skip_reason": "requires caller-provided session_id"
+      "canary_skip_reason": "404 — endpoint not registered"
     },
     "universe_get_sessions": {
       "method": "GET",
-      "path": "/api/dashboard/sessions",
-      "auth": "optional"
+      "path": "/api/universe/sessions",
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "404 — endpoint not registered"
     },
     "universe_get_universe_overlap": {
       "method": "GET",
-      "path": "/api/dashboard/universe-overlap",
-      "auth": "optional"
+      "path": "/api/universe/overlap",
+      "auth": "optional",
+      "canary_skip": true,
+      "canary_skip_reason": "404 — endpoint not registered"
     }
   }
 }
