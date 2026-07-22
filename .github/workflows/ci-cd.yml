@@ -423,10 +423,18 @@ jobs:
     - name: Verify Operations Gate
       run: bash ./scripts/openclaw/verify_operations_gate.sh
 
+  # Route uniqueness check — catches stale/conflicting HTTP paths
+  routes:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - name: Verify route uniqueness
+      run: bash ./scripts/check-routes.sh
+
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes]
     if: github.event_name == 'pull_request' && always()
     permissions:
       pull-requests: write

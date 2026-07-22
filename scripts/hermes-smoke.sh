@@ -1,60 +1,109 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# hermes-smoke.sh — Hermes 13 項 audit smoke test
-# 對 running atlas-go container 打所有 Hermes audit 驗證過的 endpoint
-# 路徑來源：MCP handler code (tools_*.go)，不是 canary test (後者有 stale 路徑)
-# Exit 0 = all pass, Exit 1 = any fail
+# hermes-smoke.sh — Hermes consumer smoke test with JSON shape validation
+# 對 running atlas-go container 打所有 endpoint，驗證 HTTP status + JSON structure
+# Exit 0 = all pass (shape warnings non-blocking), Exit 1 = hard HTTP fail
 
 ATLAS_URL="${ATLAS_URL:-http://localhost:18080}"
+BODY_FILE=$(mktemp -t smoke-body-XXXXXX)
+trap 'rm -f "$BODY_FILE"' EXIT
 
-check() {
+# ---------------------------------------------------------------------------
+# HTTP status check — writes body to BODY_FILE, returns status
+# ---------------------------------------------------------------------------
+http_check() {
   local name="$1" path="$2" expected_status="${3:-200}"
+  > "$BODY_FILE"
+  docker exec atlas-go curl -sS -w '\n%{http_code}' "$ATLAS_URL$path" \
+    2>/dev/null > "$BODY_FILE" || { echo "ERR" > "$BODY_FILE"; }
   local status
-  status=$(docker exec atlas-go curl -sS -o /dev/null -w '%{http_code}' \
-    "$ATLAS_URL$path" 2>/dev/null || echo "ERR")
+  status=$(tail -1 "$BODY_FILE")
+  sed -i.bak '$d' "$BODY_FILE" 2>/dev/null && rm -f "$BODY_FILE.bak"
   if [ "$status" = "$expected_status" ]; then
-    printf "  ✓ %-40s HTTP %s\n" "$name" "$status"
+    printf "  ✓ %-42s HTTP %s\n" "$name" "$status"
     return 0
   else
-    printf "  ✗ %-40s HTTP %s (expected %s)\n" "$name" "$status" "$expected_status"
+    printf "  ✗ %-42s HTTP %s (expected %s)\n" "$name" "$status" "$expected_status"
     return 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# JSON shape check (warning only, never hard-fails)
+# $1 = name, $2 = comma-separated expected top-level keys
+# ---------------------------------------------------------------------------
+shape_check() {
+  local name="$1" expected_keys="$2"
+  [ "$expected_keys" = "-" ] && return 0
+  [ ! -s "$BODY_FILE" ] && return 0
+
+  local body missing
+  body=$(cat "$BODY_FILE")
+  missing=$(echo "$body" | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print('__PARSE_ERROR__')
+    sys.exit(0)
+if isinstance(d, list):
+    # JSON array — just check it's valid
+    sys.exit(0)
+expected = '$expected_keys'.split(',')
+missing = [k for k in expected if k not in d]
+if missing:
+    print(','.join(missing))
+" 2>/dev/null)
+
+  if [ "$missing" = "__PARSE_ERROR__" ]; then
+    printf "    ⚠  %-40s JSON parse error\n" ""
+  elif [ -n "$missing" ]; then
+    printf "    ⚠  %-40s missing: %s\n" "" "$missing"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Combined: HTTP → shape
+# ---------------------------------------------------------------------------
+smoke() {
+  local name="$1" path="$2" expected_keys="$3"
+  http_check "$name" "$path" 200
+  local rc=$?
+  [ $rc -eq 0 ] && shape_check "$name" "$expected_keys"
+  return $rc
 }
 
 echo "=== Hermes Smoke Test ==="
 echo "  Target: $ATLAS_URL"
 echo ""
 
-FAIL=0
-PASS=0
-
-do_check() { check "$@" && PASS=$((PASS+1)) || FAIL=$((FAIL+1)); }
+FAIL=0 PASS=0
+do_smoke() { smoke "$@" && PASS=$((PASS+1)) || FAIL=$((FAIL+1)); }
 
 # === Hermes audit items (E-01 ~ E-13) ===
-do_check "E-01 explain_market_move"        "/api/market/explain"
-do_check "E-02 regime_get_history"         "/api/regime/history?days=7"
-do_check "E-03 risk_get_metrics"           "/api/dashboard/risk"
-do_check "E-04 crossmarket_correlation"    "/api/cross-market/correlation"
-do_check "E-05 strategy_get_summary"       "/api/strategies/foreign-3day-inflow/summary"
-do_check "E-06 capital_flow_daily"         "/api/capital-flow/daily"
-do_check "E-07 crossmarket_us_indices"     "/api/dashboard/us-indices"
-do_check "E-08 macro_snapshot_latest"      "/api/macro/snapshot/latest"
-# E-09~E-11: crossmarket/strategy/data tools — tested below
-do_check "E-12 data_field_contract"        "/api/field-contract"
-do_check "E-13 strategy_summary_llm"       "/api/strategies/foreign-3day-inflow/summary"
+do_smoke "E-01 explain_market_move"        "/api/market/explain"                           "generated_at,headline,detail,sections"
+do_smoke "E-02 regime_get_history"         "/api/regime/history?days=7"                    "sessions,current_regime"
+do_smoke "E-03 risk_get_metrics"           "/api/dashboard/risk"                           "-"
+do_smoke "E-04 crossmarket_correlation"    "/api/cross-market/correlation"                 "-"
+do_smoke "E-05 strategy_get_summary"       "/api/strategies/foreign-3day-inflow/summary"   "id,summary"
+do_smoke "E-06 capital_flow_daily"         "/api/capital-flow/daily"                       "date,forces,resonance"
+do_smoke "E-07 crossmarket_us_indices"     "/api/dashboard/us-indices"                     "-"
+do_smoke "E-08 macro_snapshot_latest"      "/api/macro/snapshot/latest"                    "recorded_at"
+do_smoke "E-12 data_field_contract"        "/api/field-contract"                           "-"
+do_smoke "E-13 strategy_summary_llm"       "/api/strategies/foreign-3day-inflow/summary"   "id,summary"
 
 # === Additional key endpoints ===
-do_check "data_get_quality"                "/api/dashboard/data-quality"
-do_check "llm_get_health"                  "/api/llm/health"
-do_check "taiwan_stress_index"             "/api/taiwan/stress-index"
-do_check "capital_flow_summary"            "/api/capital-flow/summary"
-do_check "crossmarket_status"              "/api/cross-market/status"
-do_check "system_health"                   "/api/dashboard/system-health"
+do_smoke "data_get_quality"                "/api/dashboard/data-quality"                   "-"
+do_smoke "llm_get_health"                  "/api/llm/health"                               "providers"
+do_smoke "taiwan_stress_index"             "/api/taiwan/stress-index"                      "score,regime"
+do_smoke "capital_flow_summary"            "/api/capital-flow/summary"                     "assessment,summary,forces"
+do_smoke "crossmarket_status"              "/api/cross-market/status"                      "-"
+do_smoke "system_health"                   "/api/dashboard/system-health"                  "-"
 
 TOTAL=$((PASS + FAIL))
 echo ""
-echo "==========================================="
-printf "  %d passed | %d failed | %d total\n" "$PASS" "$FAIL" "$TOTAL"
+printf "  HTTP: %d passed | %d failed | %d total\n" "$PASS" "$FAIL" "$TOTAL"
+echo "  Shape warnings above are non-blocking"
 echo "==========================================="
 
 [ "$FAIL" -eq 0 ] && echo "✅ SMOKE PASSED" && exit 0
