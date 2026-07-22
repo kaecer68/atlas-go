@@ -37,9 +37,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// operatorFlag is the -operator CLI flag for spot-check audit trail.
+// Declared at package level so getOperator() can read it. CLI tools must not
+// call os.Getenv directly (constitution rule).
+var operatorFlag = flag.String("operator", "OPERATOR", "operator identity (recorded in audit marker)")
 
 const (
 	defaultAtlasURL = "http://localhost:18080"
@@ -243,7 +249,7 @@ func main() {
 		}
 	}
 
-	var newSpotCheckCount int
+	newSpotCheckCount := 0
 	// Dedup: filter sectorList down to sectors that don't yet have a marker
 	// for this date. The final count is existing markers + new (unique) sectors.
 	existingTotal := countTotalSpotChecksForDate(raw, *date)
@@ -294,7 +300,7 @@ func main() {
 	narrativeSec := buildNarrativeSection(ts, newUniqueSectors, uniqSources, *notes, operator)
 
 	// Update or append the obs log.
-	if err := updateObsLog(*obsLog, raw, rows, *date, newUniqueSectors, newSpotCheckCount, rowIdx, narrativeSec, strings.Join(markers, "")); err != nil {
+	if err := updateObsLog(*obsLog, raw, rows, *date, newSpotCheckCount, rowIdx, narrativeSec, strings.Join(markers, "")); err != nil {
 		os.Exit(ExitMalformedObsLog)
 	}
 
@@ -303,9 +309,11 @@ func main() {
 	os.Exit(0)
 }
 
-// getOperator returns the operator identity from OPERATOR env var.
+// getOperator returns the operator identity from the -operator flag.
+// CLI tools must not call os.Getenv directly (constitution rule: 配置應走
+// config.GetSecret 或 flag,避免在 main 之外的隱式環境耦合).
 func getOperator() string {
-	if op := os.Getenv("OPERATOR"); op != "" {
+	if op := *operatorFlag; op != "" {
 		return op
 	}
 	return "OPERATOR"
@@ -408,15 +416,13 @@ func parseObsLogRaw(path string) ([]obsRow, string, error) {
 		return nil, "", fmt.Errorf("read file: %w", err)
 	}
 	content := string(data)
-	rows, err := parseObsLog(content)
-	if err != nil {
-		return nil, content, err
-	}
+	rows := parseObsLog(content)
 	return rows, content, nil
 }
 
 // parseObsLog parses table rows from raw markdown content.
-func parseObsLog(content string) ([]obsRow, error) {
+// Always succeeds on well-formed markdown; no error path.
+func parseObsLog(content string) []obsRow {
 	var rows []obsRow
 	inRecords := false
 	for _, line := range strings.Split(content, "\n") {
@@ -449,7 +455,7 @@ func parseObsLog(content string) ([]obsRow, error) {
 		}
 		rows = append(rows, row)
 	}
-	return rows, nil
+	return rows
 }
 
 // splitTableRow splits a markdown table row into cells.
@@ -469,7 +475,7 @@ func splitTableRow(line string) []string {
 // parseInt parses an integer, returning 0 on failure.
 func parseInt(s string) int {
 	s = strings.TrimSpace(s)
-	n, _ := fmt.Sscanf(s, "%d", new(int))
+	n, _ := strconv.Atoi(s) //nolint:errcheck // best-effort: 0 on parse failure
 	return n
 }
 
@@ -540,7 +546,7 @@ func buildNarrativeSection(ts string, sectors []string, sources []string, notes,
 // - If rowIdx >= 0: updates the spot_check_count of the matching row
 // - Appends the narrative section after the table
 // - Writes via rename to ensure atomicity.
-func updateObsLog(path, raw string, rows []obsRow, date string, sectorList []string, newCount, rowIdx int, narrative, markers string) error {
+func updateObsLog(path, raw string, rows []obsRow, date string, newCount, rowIdx int, narrative, markers string) error {
 	// Ensure parent directory exists.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)

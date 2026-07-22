@@ -553,19 +553,22 @@ func TestUpdateRowSpotCheckCount(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetOperator(t *testing.T) {
-	os.Unsetenv("OPERATOR")
+	// Default: empty flag -> "OPERATOR"
+	prev := *operatorFlag
+	*operatorFlag = ""
+	defer func() { *operatorFlag = prev }()
+
 	if got := getOperator(); got != "OPERATOR" {
-		t.Errorf("getOperator() without env = %q, want OPERATOR", got)
+		t.Errorf("getOperator() with empty flag = %q, want OPERATOR", got)
 	}
 
-	os.Setenv("OPERATOR", "alice")
-	defer os.Unsetenv("OPERATOR")
+	// Set flag to "alice" -> "alice"
+	*operatorFlag = "alice"
 	if got := getOperator(); got != "alice" {
-		t.Errorf("getOperator() with OPERATOR=alice = %q, want alice", got)
+		t.Errorf("getOperator() with flag=alice = %q, want alice", got)
 	}
 }
 
-// ---------------------------------------------------------------------------
 // TestBuildDriversMap
 // ---------------------------------------------------------------------------
 
@@ -642,7 +645,7 @@ func TestUpdateObsLogAtomic(t *testing.T) {
 		}
 	}
 
-	if err := updateObsLog(obsLog, raw, rows, "2026-07-22", []string{"semiconductor"}, 2, rowIdx, narrative, marker); err != nil {
+	if err := updateObsLog(obsLog, raw, rows, "2026-07-22", 2, rowIdx, narrative, marker); err != nil {
 		t.Fatalf("updateObsLog: %v", err)
 	}
 
