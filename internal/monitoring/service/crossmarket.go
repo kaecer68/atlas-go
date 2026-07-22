@@ -94,11 +94,12 @@ type CrossMarketIndex struct {
 
 // CorrelationResponse carries the dynamic correlation estimate.
 type CorrelationResponse struct {
-	Correlation  float64 `json:"correlation"`
-	WindowSize   int     `json:"window_size"`
-	Observations int     `json:"observations"`
-	ComputedAt   string  `json:"computed_at"`
-	IsFallback   bool    `json:"is_fallback"`
+	Correlation    float64 `json:"correlation"`
+	WindowSize     int     `json:"window_size"`
+	Observations   int     `json:"observations"`
+	ComputedAt     string  `json:"computed_at"`
+	IsFallback     bool    `json:"is_fallback"`
+	FallbackReason string  `json:"fallback_reason,omitempty"`
 }
 
 // USIndicesResponse returns snapshot of US market indices.
@@ -358,11 +359,12 @@ func (s *CrossMarketService) GetCorrelation() (*CorrelationResponse, error) {
 	rho := s.rollingSPXTWSE.GetCurrent()
 	obs := s.rollingSPXTWSE.Observations()
 	return &CorrelationResponse{
-		Correlation:  rho,
-		WindowSize:   correlationWindow,
-		Observations: obs,
-		ComputedAt:   time.Now().Format(time.RFC3339),
-		IsFallback:   rho == 0.5 && obs < 3,
+		Correlation:    rho,
+		WindowSize:     correlationWindow,
+		Observations:   obs,
+		ComputedAt:     time.Now().Format(time.RFC3339),
+		IsFallback:     s.rollingSPXTWSE.IsFallback(),
+		FallbackReason: s.rollingSPXTWSE.FallbackReason(),
 	}, nil
 }
 

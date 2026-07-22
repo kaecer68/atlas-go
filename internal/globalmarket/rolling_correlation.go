@@ -8,13 +8,15 @@ import (
 // RollingCorrelation computes a rolling Pearson correlation between two return
 // series using a ring buffer. Default window is 20 observations (~1 trading month).
 type RollingCorrelation struct {
-	mu         sync.RWMutex
-	window     int
-	xs         []float64
-	ys         []float64
-	pos        int
-	count      int
-	currentRho float64
+	mu             sync.RWMutex
+	window         int
+	xs             []float64
+	ys             []float64
+	pos            int
+	count          int
+	currentRho     float64
+	isFallback     bool   // true when currentRho is a sentinel, not a real Pearson
+	fallbackReason string // "insufficient_samples" | "zero_variance" | "non_finite" | ""
 }
 
 // NewRollingCorrelation creates a rolling correlation tracker with the given
@@ -31,6 +33,9 @@ func NewRollingCorrelation(window int) *RollingCorrelation {
 }
 
 // Update pushes a new observation pair and recomputes the correlation.
+// The isFallback and fallbackReason fields are set so callers can
+// distinguish real Pearson rho from sentinel values without reverse-
+// engineering the rho value (see #1264).
 func (rc *RollingCorrelation) Update(x, y float64) float64 {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
@@ -45,6 +50,8 @@ func (rc *RollingCorrelation) Update(x, y float64) float64 {
 	n := rc.count
 	if n < 3 {
 		rc.currentRho = 0.5
+		rc.isFallback = true
+		rc.fallbackReason = "insufficient_samples"
 		return rc.currentRho
 	}
 
@@ -65,14 +72,38 @@ func (rc *RollingCorrelation) Update(x, y float64) float64 {
 
 	if denX <= 0 || denY <= 0 {
 		rc.currentRho = 0.5
+		rc.isFallback = true
+		rc.fallbackReason = "zero_variance"
 		return rc.currentRho
 	}
 
 	rc.currentRho = num / math.Sqrt(denX*denY)
 	if math.IsNaN(rc.currentRho) || math.IsInf(rc.currentRho, 0) {
 		rc.currentRho = 0.5
+		rc.isFallback = true
+		rc.fallbackReason = "non_finite"
+	} else {
+		rc.isFallback = false
+		rc.fallbackReason = ""
 	}
 	return rc.currentRho
+}
+
+// IsFallback reports whether the current correlation value is a sentinel
+// (insufficient data, zero variance, or non-finite result) rather than
+// a genuine Pearson rho from real data.
+func (rc *RollingCorrelation) IsFallback() bool {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.isFallback
+}
+
+// FallbackReason returns the reason the current value is a sentinel.
+// Empty string when IsFallback() is false.
+func (rc *RollingCorrelation) FallbackReason() string {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.fallbackReason
 }
 
 // GetCurrent returns the latest rolling correlation value.
