@@ -111,12 +111,22 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 			"max_drawdown_pct": computed.MaxDrawdownPct,
 			"data_points":      float64(len(dailyReturns)),
 		}
-	} else {
+	} else if len(dailyReturns) == 0 {
 		snap = map[string]float64{
 			"var_95":            0,
 			"var_99":            0,
 			"cvar_95":           0,
 			"max_drawdown_pct":  0,
+			"data_points":       0,
+			"insufficient_data": 1,
+		}
+	} else {
+		dd := risk.CalculateMaxDrawdown(portfolioValues)
+		snap = map[string]float64{
+			"var_95":            risk.CalculateVaRPercentile(dailyReturns, 0.95),
+			"var_99":            risk.CalculateVaRPercentile(dailyReturns, 0.99),
+			"cvar_95":           0,
+			"max_drawdown_pct":  dd,
 			"data_points":       float64(len(dailyReturns)),
 			"insufficient_data": 1,
 		}
@@ -127,11 +137,15 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		gateMode = string(h.RiskGate.Mode())
 	}
 
-	return http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"risk_snapshot": snap,
 		"session_count": len(portfolioValues),
 		"gate_mode":     gateMode,
 	}
+	if len(dailyReturns) < risk.MinObservationsForVaR {
+		resp["var_gate"] = "light" // <252 obs — provisional VaR estimate
+	}
+	return http.StatusOK, resp
 }
 
 // CorrelationMatrixResponse is the response for GET /api/dashboard/correlation-matrix.
