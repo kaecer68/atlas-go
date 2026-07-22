@@ -90,9 +90,9 @@ type ForceScore struct {
 	// the flag instead.
 	Weight           float64 `json:"weight,omitempty"`
 	WeightDeprecated bool    `json:"weight_deprecated,omitempty"`
-	LeadingZ         float64 `json:"leading_z,omitempty"`      // foreign-only: Z of the leading indicator series (futures OI)
-	LeadingTrend     string  `json:"leading_trend,omitempty"`  // foreign-only: trend from LeadingZ
-	DataAvailable    bool    `json:"data_available,omitempty"` // false when the source channel was empty (e.g. no government file)
+	LeadingZ         float64 `json:"leading_z,omitempty"`     // foreign-only: Z of the leading indicator series (futures OI)
+	LeadingTrend     string  `json:"leading_trend,omitempty"` // foreign-only: trend from LeadingZ
+	DataAvailable    bool    `json:"data_available"`          // false when the source channel was empty; always emitted per #1262
 }
 
 // Force roles — manifest #E05 §7 taxonomy (legacy; kept for back-compat

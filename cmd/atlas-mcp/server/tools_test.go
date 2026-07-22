@@ -139,11 +139,22 @@ func TestHandleRegimeGetHistory_PrefersRealEngineScore(t *testing.T) {
 	if len(out.Regimes) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(out.Regimes))
 	}
-	if out.Regimes[0].Score == nil {
-		t.Fatal("expected non-nil Score")
+	// Historical rows no longer carry the current score — it is in the
+	// output envelope as CurrentRegimeScore (#1263).
+	if out.Regimes[0].Score != nil {
+		t.Fatal("expected nil Score on historical row; score is in CurrentRegimeScore")
 	}
-	if got := *out.Regimes[0].Score; got != 7 {
-		t.Errorf("expected real score 7 from /api/janus/regime-score (int of 7.7), got %d", got)
+	if out.CurrentRegimeScore == nil {
+		t.Fatal("expected non-nil CurrentRegimeScore")
+	}
+	if got := *out.CurrentRegimeScore; got != 7.7 {
+		t.Errorf("expected current_regime_score 7.7 (float64, not int), got %v", got)
+	}
+	if got := out.CurrentScoreSource; got != "janus_composite" {
+		t.Errorf("expected current_score_source=janus_composite, got %q", got)
+	}
+	if !out.CurrentScoreSynthetic {
+		t.Error("expected current_score_synthetic=true")
 	}
 }
 

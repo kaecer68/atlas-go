@@ -102,7 +102,7 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	}
 
 	var snap map[string]float64
-	if len(dailyReturns) >= 30 {
+	if len(dailyReturns) >= risk.MinObservationsForVaR {
 		computed := risk.ComputeRiskSnapshot(dailyReturns, portfolioValues)
 		snap = map[string]float64{
 			"var_95":           computed.VaR95,

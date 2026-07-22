@@ -679,6 +679,7 @@
   "fallback_events",
   "fallback_message",
   "fallback_price_targets",
+  "fallback_reason",
   "fallback_strategy",
   "fallback_weight_reduction",
   "favorable_confidence_min",

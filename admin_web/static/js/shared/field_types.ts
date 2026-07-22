@@ -536,6 +536,7 @@ export interface CorrelationResponse {
   observations: number;
   computed_at: string;
   is_fallback: boolean;
+  fallback_reason?: string;
 }
 
 export interface CrossFootCheck {
@@ -1438,7 +1439,7 @@ export interface ForceScore {
   weight_deprecated?: boolean;
   leading_z?: number;
   leading_trend?: string;
-  data_available?: boolean;
+  data_available: boolean;
 }
 
 export interface ForecastVsRealityItem {
