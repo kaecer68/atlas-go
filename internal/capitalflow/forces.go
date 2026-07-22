@@ -84,6 +84,7 @@ func (e *ForceExtractor) Score(
 		f.WeightDeprecated = true
 		// E07 / spec §7 — every fresh reading reports
 		// CalibrationStatus="calibrating" until H-CF-02 is validated.
+		f.DisplayName = f.Force.DisplayName()
 		f.CalibrationStatus = CalibrationCalibrating
 		switch f.Force {
 		case ForceForeign, ForceInstitutional, ForceDealer:

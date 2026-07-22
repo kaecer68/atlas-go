@@ -1433,6 +1433,7 @@ export interface FlowPrediction {
 
 export interface ForceScore {
   force: string;
+  display_name: string;
   role?: string;
   deprecated?: boolean;
   dimension_role: string;

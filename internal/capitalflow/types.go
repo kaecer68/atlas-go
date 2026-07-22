@@ -24,6 +24,28 @@ const (
 	ForceGovernment    ForceName = "government"    // 公股行庫（heuristic）
 	ForceRetail        ForceName = "retail"        // 散戶（融資+當沖）
 )
+// DisplayName returns the Chinese display name for a force.
+func (f ForceName) DisplayName() string {
+	switch f {
+	case ForceForeign:
+		return "外資"
+	case ForceFutures:
+		return "外資期貨"
+	case ForceTSMADR:
+		return "TSM ADR"
+	case ForceInstitutional:
+		return "投信"
+	case ForceDealer:
+		return "自營商"
+	case ForceGovernment:
+		return "公股行庫"
+	case ForceRetail:
+		return "散戶"
+	default:
+		return string(f)
+	}
+}
+
 
 // ForceScore is a standardized score for a single capital force.
 //
@@ -47,6 +69,7 @@ const (
 // compatibility but no longer driving resonance (futures + tsm_adr after #E05).
 type ForceScore struct {
 	Force      ForceName `json:"force"`
+	DisplayName string   `json:"display_name"`
 	Role       string    `json:"role,omitempty"` // "subject" | "leading_indicator" | "sentiment"
 	Deprecated bool      `json:"deprecated,omitempty"`
 	// DimensionRole classifies the dimension per the E07 4-bucket
