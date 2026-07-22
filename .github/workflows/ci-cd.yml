@@ -462,6 +462,29 @@ jobs:
           echo "  test:         ${{ needs.test-cmd-atlas.result }}"
           exit 1
         fi
+
+  # Consumer smoke test — runs against live docker-compose on main pushes
+  hermes-smoke:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [release-check]
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - name: Validate docker-compose
+      run: docker compose config -q
+    - name: Start atlas-go
+      run: docker compose up -d atlas-go
+    - name: Wait for healthy
+      run: |
+        for i in $(seq 1 60); do
+          if docker compose ps atlas-go | grep -q healthy; then break; fi
+          sleep 2
+        done
+    - name: Run consumer smoke
+      run: bash scripts/hermes-smoke.sh
+    - name: Teardown
+      if: always()
+      run: docker compose down -v
   # CI summary notification — posts pass/fail comment on PR
   notify:
     runs-on: ubuntu-latest
