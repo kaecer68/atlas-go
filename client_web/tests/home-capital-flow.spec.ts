@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+import { installAuthMocks } from './auth-mock';
 
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 
 /**
  * Stage 6.2a/b/c: Homepage capital-flow features.
@@ -91,6 +90,7 @@ async function bypassOnboarding(page) {
 }
 
 test('home: high-confidence event banner is visible and dismissible', async ({ page }) => {
+  await installAuthMocks(page);
   await bypassOnboarding(page);
   await mockHomeApis(page);
   await page.goto('/');
@@ -130,6 +130,7 @@ test('home: market calendar renders events, filters, and confidence badges', asy
 });
 
 test('home: 5-day capital flow prediction card renders 5 dates with bars', async ({ page }) => {
+  await installAuthMocks(page);
   await bypassOnboarding(page);
   await mockHomeApis(page);
   await page.goto('/');

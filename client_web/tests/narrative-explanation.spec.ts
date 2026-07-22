@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+import { installAuthMocks } from './auth-mock';
 
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 
 test('narrative event card renders explanation and sentiment_explanation', async ({ page }) => {
+  await installAuthMocks(page);
   await page.route('**/api/system/status', route => route.fulfill({ json: { status: "ok" } }));
   await page.route('**/api/dashboard/snapshot', route => route.fulfill({ json: {} }));
   await page.route('**/api/taiwan/stress-index', route => route.fulfill({ json: { score: 50, regime: "high" } }));

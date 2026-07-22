@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+import { installAuthMocks } from './auth-mock';
 
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -53,6 +52,7 @@ function sseEvent(eventType: string, data: object): string {
 // ---------------------------------------------------------------------------
 
 test('risk gate SSE event with confidence_commentary is received on stream connect', async ({ page }) => {
+  await installAuthMocks(page);
   // Ensure test-results directory exists for evidence artifacts.
   mkdirSync(TEST_EVENTS_DIR, { recursive: true });
 

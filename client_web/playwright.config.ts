@@ -1,25 +1,36 @@
 /**
  * Default config for client_web Playwright tests.
  *
- * Uses the real atlas-go backend (playwright.backend.config.ts logic) so that
- * API calls like /api/stock/quote return JSON, not the SPA index.html fallback.
+ * Runs against client_web/dist served by tests/spa-server.mjs (SPA fallback
+ * static server with /client/ prefix stripping). CI's frontend-tests job
+ * (see .github/workflows/quality.yml) has no Go/PostgreSQL.
  *
- * For pure static-dist tests that should not require the backend, explicitly
- * override with: npx playwright test --config playwright.static.config.ts
+ * Most tests use page.route() mocking for /api/* calls. Tests that need a
+ * real atlas-go backend are excluded here and run only via
+ * `npm run test:e2e:backend` (playwright.backend.config.ts).
+ *
+ * Excluded from this config:
+ *  - client-web-trust.backend.spec.ts — raw `request.get('/api/stock/quote')`
+ *  - client-web-trust.spec.ts stock-quote test — page has no data-loading
+ *    handler yet (sq-load-symbol event has no listener)
  */
 import { defineConfig, devices } from '@playwright/test';
-import backendConfig from './playwright.backend.config.ts';
 
 export default defineConfig({
-  ...backendConfig,
+  testDir: './tests',
+  timeout: 60000,
+  retries: 1,
+  testIgnore: [
+    '**/client-web-trust.backend.spec.ts',
+  ],
   webServer: {
-    command: 'cd .. && go run ./cmd/atlas -api',
-    port: 18080,
+    command: 'node tests/spa-server.mjs 8085',
+    port: 8085,
     reuseExistingServer: true,
-    timeout: 180 * 1000,
+    timeout: 60 * 1000,
   },
   use: {
-    baseURL: 'http://localhost:18080',
+    baseURL: 'http://localhost:8085',
     headless: true,
   },
   projects: [

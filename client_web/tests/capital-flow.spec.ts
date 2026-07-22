@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { skipIfAtlasOffline } from '../../tests-shared/atlas-check';
+import { installAuthMocks } from './auth-mock';
 
-test.beforeAll(async () => { await skipIfAtlasOffline(test); });
 
 const PREDICTIONS_PAYLOAD = {
   predictions: [
@@ -57,6 +56,7 @@ const MODELS_PAYLOAD = {
 };
 
 test('capital predictions page renders 5-day cards and sector heatmap', async ({ page }) => {
+  await installAuthMocks(page);
   await page.addInitScript(() => { localStorage.setItem('atlas-onboarded', '1'); });
   await page.route('**/api/events/prediction', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PREDICTIONS_PAYLOAD) }));
   await page.route('**/api/narrative/models', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MODELS_PAYLOAD) }));
@@ -93,6 +93,7 @@ test('capital predictions page renders 5-day cards and sector heatmap', async ({
 });
 
 test('capital board page renders weighted sector counts and pie chart', async ({ page }) => {
+  await installAuthMocks(page);
   await page.addInitScript(() => { localStorage.setItem('atlas-onboarded', '1'); });
   await page.route('**/api/narrative/models', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MODELS_PAYLOAD) }));
 
