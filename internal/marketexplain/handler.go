@@ -330,8 +330,10 @@ func countDivergent(forces []capitalflow.ForceScore) int {
 
 func buildHeadline(snap marketdata.MacroDataSnapshot, cfSummary capitalflow.SummaryReport) string {
 	chg := snap.TAIEX.ChangePct
-	dir := "上漲"
-	if chg < 0 {
+	dir := "持平"
+	if chg > 0 {
+		dir = "上漲"
+	} else if chg < 0 {
 		dir = "下跌"
 	}
 	absChg := chg
