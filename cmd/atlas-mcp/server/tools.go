@@ -70,7 +70,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_list_active",
-		Description: autoDescOr("strategy_list_active", "List the strategy set currently active in production (per docs/workflow-map.md WA-500)."),
+		Description: autoDescOr("strategy_list_active", "List the market technique set (L1-L5 signal detectors) currently active in production. Includes detectors like foreign-3day-inflow, margin-balance-extreme — these are trading signal rules, NOT portfolio allocation strategies. For portfolio strategies (growth, momentum, defensive), use get_recommendations."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyListActive)
 
