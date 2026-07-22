@@ -48,7 +48,7 @@ var skipCanary = map[string]bool{
 // canaryRoutes maps MCP tool names to upstream routes.
 // Keep in sync with tool registration files (tools.go, tools_*.go).
 var canaryRoutes = map[string]canaryTest{
-	"regime_get_history":                {Path: "/api/janus/regime-history?days=7"},
+	"regime_get_history":                {Path: "/api/regime/history?days=7"},
 	"strategy_list_active":              {Path: "/api/strategies/active"},
 	"alert_list_unacknowledged":         {Path: "/api/alerts/unacknowledged"},
 	"system_get_health":                 {Path: "/api/dashboard/system-health"},
@@ -107,10 +107,10 @@ var canaryRoutes = map[string]canaryTest{
 	"system_get_maturity":               {Path: "/api/system/maturity"},
 	"llm_get_cost":                      {Path: "/api/llm/cost"},
 	"llm_get_health":                    {Path: "/api/llm/health"},
-	"data_get_channels":                 {Path: "/api/data/channels"},
-	"data_get_channel_detail":           {Path: "/api/data/channels/fugle"},
-	"data_get_field_contract":           {Path: "/api/data/field-contract"},
-	"data_get_quality":                  {Path: "/api/data/quality"},
+	"data_get_channels":                 {Path: "/api/dashboard/data-channels"},
+	"data_get_channel_detail":           {Path: "/api/dashboard/data-channels/fugle"},
+	"data_get_field_contract":           {Path: "/api/field-contract"},
+	"data_get_quality":                  {Path: "/api/dashboard/data-quality"},
 	"universe_get_sessions":             {Path: "/api/universe/sessions"},
 	"universe_get_session_detail":       {Path: "/api/universe/sessions/latest"},
 	"universe_get_universe_overlap":     {Path: "/api/universe/overlap"},
