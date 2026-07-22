@@ -6,7 +6,7 @@ package main
 // snapshot work that runs independently of the realtime / live trading
 // paths.
 //
-// Tasks (9 total):
+// Tasks (10 total):
 //   1. system_health_monitor    — healthMonitor.RunDaily (24h)
 //   2. auto_backfill            — daily-replay-sync binary (24h)
 //   3. fundamentals_staleness_check — monitor.Alert on >90d (24h)
@@ -16,6 +16,7 @@ package main
 //   7. realtime_feed            — realtimeAdapter.IngestData (30s)
 //   8. silicon_cycle_update     — industrySvc.UpdateSiliconIndicators (10m)
 //   9. metrics_snapshot         — repo.SaveSnapshot (60s)
+//  10. government_flow_aggregate — GovernmentBrokerAggregator daily (24h, BK-13)
 
 import (
 	"context"
@@ -64,6 +65,9 @@ type operationsDeps struct {
 	janusEngine        *janus.Engine
 	prismMgr           *prism.PRISMManager
 	vixBaselineTracker *marketdata.VIXBaselineTracker
+	// governmentFlowDir is the directory where GovernmentBrokerAggregator
+	// writes daily readings consumed by GovernmentFlowProvider (BK-13).
+	governmentFlowDir string
 }
 
 // registerOperationsTasks wires the operational probes / data ingest /
@@ -428,6 +432,37 @@ func registerOperationsTasks(d operationsDeps) {
 			},
 		})
 		log.Printf("[Gateway] registered prism_training background task (6h interval)")
+	}
+
+	// BK-13: Government flow aggregation — daily fetch of 5 core bank
+	// broker data from TWSE, written to the directory read by
+	// GovernmentFlowProvider (28h interval to avoid overlap).
+	if d.governmentFlowDir != "" {
+		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "government_flow_aggregate",
+			Interval: 28 * time.Hour,
+			Enabled:  true,
+			Task: func(ctx context.Context) error {
+				agg := marketdata.NewGovernmentBrokerAggregator(d.governmentFlowDir)
+				today := time.Now()
+				// TWSE data is available T+1
+				yesterday := today.AddDate(0, 0, -1)
+				// Skip weekends
+				if yesterday.Weekday() == time.Saturday {
+					yesterday = yesterday.AddDate(0, 0, -1)
+				} else if yesterday.Weekday() == time.Sunday {
+					yesterday = yesterday.AddDate(0, 0, -2)
+				}
+				_, err := agg.AggregateDate(ctx, yesterday)
+				if err != nil {
+					logging.Warn("main", "government_flow_aggregate_failed", "err", err)
+					return err
+				}
+				logging.Info("main", "government_flow_aggregate_ok", "date", yesterday.Format("20060102"))
+				return nil
+			},
+		})
+		log.Printf("[Gateway] registered government_flow_aggregate task (28h interval, BK-13)")
 	}
 }
 

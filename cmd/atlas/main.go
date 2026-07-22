@@ -1043,11 +1043,13 @@ func run(args []string, deps appDeps) error {
 				repo:            repo,
 				collector:       collector,
 				janusEngine:     janusEngine,
+				prismMgr:        prismMgr,
 				// BK-15: plumb the shared capitalflow.Service so the
 				// 5-minute capital_flow_refresh closure can call
 				// Refresh(ctx, tradingDate) against the persisted
 				// rolling store built above.
-				capitalFlow: capitalFlowService,
+				governmentFlowDir: filepath.Join(cfg.WorkDir, "data/state/government_flow"),
+				capitalFlow:       capitalFlowService,
 			})
 
 			// Schedule daily report generation after market close (14:00–14:59
