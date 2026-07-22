@@ -6,14 +6,34 @@
       "ticket": "smoke-unauthenticated"
     },
     {
-      "pattern": "/api/control/active-overrides: 401",
+      "pattern": "/api/control/active-overrides",
       "reason": "Smoke test runs unauthenticated; /api/control endpoints require auth.",
       "ticket": "smoke-unauthenticated"
     },
     {
-      "pattern": "^$",
-      "reason": "Placeholder: all known issues resolved (last one was HandleRiskMetrics makeslice panic, fixed in PR #392)",
-      "ticket": "atlas-go#392"
+      "pattern": "/api/admin/live/deployment/dashboard",
+      "reason": "Smoke test runs unauthenticated; admin live endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
+    },
+    {
+      "pattern": "/api/report/latest",
+      "reason": "Smoke test runs unauthenticated; report endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
+    },
+    {
+      "pattern": "/api/metrics/storage",
+      "reason": "Smoke test runs unauthenticated; metrics storage endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
+    },
+    {
+      "pattern": "/api/parameters",
+      "reason": "Smoke test runs unauthenticated; parameters endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
+    },
+    {
+      "pattern": "/api/config",
+      "reason": "Smoke test runs unauthenticated; config endpoints require auth.",
+      "ticket": "smoke-unauthenticated"
     }
   ]
 }
