@@ -153,6 +153,8 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
 		return true
+	case strings.HasPrefix(p, "/api/routes"):
+		return true
 	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
 		return true
 	case p == "/api/dashboard/sessions" || strings.HasPrefix(p, "/api/dashboard/sessions/"):
@@ -528,10 +530,6 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] data fetcher prepared for DashboardAPI")
 			}
 		}
-		if gateway != nil {
-			rc.gatewayChan = len(gateway.ChannelIDs())
-		}
-
 		mux := http.NewServeMux()
 		log.Printf("[Auth] API key authentication %s", map[bool]string{true: "ENABLED", false: "DISABLED (no ATLAS_API_KEY set)"}[os.Getenv("ATLAS_API_KEY") != ""])
 		healthStore, err := portfolio.NewAgentHealthStore(filepath.Join(cfg.WorkDir, "data/state"))
@@ -1892,9 +1890,16 @@ func run(args []string, deps appDeps) error {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
 		}))
+		// F-02: API route discovery — serve known endpoint mappings as JSON.
+		// This is a curated list of top-level routes; for the full MCP tool
+		// inventory, connect via MCP protocol (atlas-mcp stdio server).
+		routesJSON := `{"routes":[{"pattern":"GET /api/routes","description":"This route list","auth_required":false},{"pattern":"GET /api/health","description":"Simple health check","auth_required":false},{"pattern":"GET /health","description":"Detailed health with port probes","auth_required":false},{"pattern":"GET /api/market/explain","description":"今日台股解說","auth_required":false},{"pattern":"GET /api/capital-flow/daily","description":"七維錢潮雷達 daily","auth_required":false},{"pattern":"GET /api/capital-flow/summary","description":"錢潮摘要","auth_required":false},{"pattern":"GET /api/capital-flow/history","description":"歷史資金流向","auth_required":false},{"pattern":"GET /api/regime/history","description":"市場體質歷史","auth_required":true},{"pattern":"GET /api/dashboard/system-health","description":"完整系統健康","auth_required":true},{"pattern":"GET /api/narrative/stress-index/current","description":"壓力指數","auth_required":true},{"pattern":"GET /api/taiwan/stress-index","description":"壓力指數（前端用）","auth_required":false},{"pattern":"GET /api/cross-market/status","description":"跨市場狀態","auth_required":true},{"pattern":"GET /api/dashboard/risk","description":"風險指標 VaR","auth_required":true},{"pattern":"MCP tools (97 total)","description":"使用 MCP 協定連接 atlas-mcp stdio server","auth_required":true}],"count":14}`
+		mux.Handle("GET /api/routes", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(routesJSON))
+		}))
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
-
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
 			if isPublicPath(r.URL.Path) {
