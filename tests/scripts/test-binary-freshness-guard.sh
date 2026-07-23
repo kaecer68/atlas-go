@@ -157,6 +157,7 @@ run_static_contract_tests() {
   for binary in daily-replay-sync backfill-replay calibrate-seasonal; do
     assert_contains "$ROOT/scripts/check-binary-freshness.sh" "/app/$binary"
   done
+  assert_contains "$ROOT/scripts/deploy-staging.sh" 'ATLAS_GIT_COMMIT="$(git rev-parse HEAD)"'
 }
 
 run_cleanup_failure_test
