@@ -404,7 +404,6 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 		"/api/recommendations",
 		"/api/reports/latest",
 		"/api/strategy-ranker/rank",
-		"/api/universe/sessions",
 	}
 	exactPaths := []string{
 		"/api/alerts",
