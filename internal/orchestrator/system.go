@@ -167,8 +167,10 @@ func (s *System) WithSectorExposureCalculator(c *portfolio.SectorExposureCalcula
 	return s
 }
 
-// WithSectorWeightEngine injects the sector WeightEngine used by
-// currentSectorAllocations for computing sector-rotation weights.
+// WithSectorWeightEngine injects the sector WeightEngine (SA06 plumbing).
+// SA08 consumer (currentSectorAllocations → StrategyEvolver) is pending
+// Layer 3-4 wiring completion. The field is intentionally write-only until
+// the StrategyEvolver's closureStore/sessionResolver/weightEngine are injected.
 func (s *System) WithSectorWeightEngine(eng sectorallocation.WeightEngine) *System {
 	s.sectorWeightEngine = eng
 	return s

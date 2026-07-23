@@ -240,8 +240,8 @@
 
 | 指標 | 數值 |
 |------|------|
-| 頂層 cmd 目錄 | 52 個 |
-| experimental 子目錄 | 17 個 |
-| **總 binary 數量** | **69 個** |
+| 頂層 cmd 目錄 | 61 個 |
+| experimental 子目錄 | 18 個 |
+| **總 binary 數量** | **79 個** |
 | Dead code（Deprecated + Spike） | 2 個 |
-| 有 main_test.go | ~28 個（46%） |
+| Orphan（需確認） | 2 個 |
