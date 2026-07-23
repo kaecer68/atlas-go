@@ -174,13 +174,6 @@
 ## Dead Code（建議移除）
 
 ### 🔴 Deprecated
-
-| Binary | 原因 | 依據 |
-|--------|------|------|
-| `experimental/validate-narrative-shock` | doc comment 明確標記 DEPRECATED；已被 `go test -tags=integration` 取代 | cmd/experimental/validate-narrative-shock/main.go |
-
-### 🟡 Spike（時限性，應有移除計畫）
-
 | Binary | 原因 | 依據 |
 |--------|------|------|
 | `cmd/atlas-mcp-server-sdk-spike` | doc comment：「will be removed in T2.2–T2.4」 | cmd/atlas-mcp-server-sdk-spike/spike.go |

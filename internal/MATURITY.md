@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 37 packages
+## E · Evolving（演進中）— 38 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -91,9 +91,10 @@
 | `recommender` | 投資推薦分層系統 — 依 user tier 返回不同層級推薦內容（public/registered/premium） | `Handler`, `TierRecommendation` | Wave 11 新增；消費 subscription + strategy_ranker |
 | `marketexplain` | 「為什麼漲跌」散戶市場解說 — 規則式 compose endpoint，彙整 TAIEX、資金流向、國際環境、風險提示 | `Handler`, `Explanation` | H03 新增；API: /api/market/explain |
 | `macroflow` | 宏觀 regime → factor weight 調整引擎 — 6 rules（Yellow/Orange/Red × Calm/Stress）+ 7d max-stale + VIX stress 偵測 | `Engine`, `AdjustmentResult`, `RiskLevel` | Wave 11 L2.4 orchestrator integration；`MacroFlowStrategy` 為 orchestrator pipeline 第 7 步，consumed by `internal/orchestrator`，API 可能依 follow-up 整合演進 |
+| `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | SA08 完成：defaultEngine 建構、FileClosureStore 實作、6 個 adapter 工廠、composition.BuildSystem 延遲建構、StrategyEvolver 注入；**v0.0.0.39 晉升 E** |
 ---
 
-## X · Experimental（實驗中）— 13 packages
+## X · Experimental（實驗中）— 11 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -103,7 +104,6 @@
 | `forecast_bridge` | Forecast → TradeSignal 轉換層 — 依 conviction thresholds 將 `forecast.ForecastResult` 升級為可下單的 `TradeSignal` | `Adapter`, `CircuitBreaker`, `TradeSignal` | Phase 3.5 M4 ✅ shipped（2026-07-02）；尚無 runtime 引用 |
 | `reflexivity` | 自反性價格動態引擎 | `Engine` | **v0.0.0.38 維持 X**：被 orchestrator + sim runtime 使用但無 AGENTS.md，需補文件 |
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，零 runtime 依賴 |
-| `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | 取代硬編碼 12 個 switch case；deprecated: `monitoring/service.calculateWeightDerivation` |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈，健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Wave 11 L2.1：effective routing chain 為 3 層（Primary → Backup1 → LastResort）；`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作（Issue #720）。**Phase 2 canonical 介面（Issue #722）**：Phase 2 canonical 介面已就緒（`adapters` + `capabilities`），承接 `llm_annotator` 的角色。詳見 `docs/llm-integration-strategy-framework.md` |
 | `llm/schemas` | LLM 能力輸入/輸出結構合約 — 9 個 capability 的 typed I/O 結構，JSON 序列化 | `RationaleGenerationResponse`, `StrategySummaryResponse`, `PromptLintResponse`, `ScenarioSimulationResponse`, `RiskSurfaceExtractionResponse`, `RegimeExplanationResponse`, `PerformanceForensicsResponse`, `CodeReviewAnnotationResponse`, `SentimentExplanationResponse` | Phase 2 為 9 個 capability handlers 提供型別安全 contract；handler 端用 `json.Marshal/Unmarshal` 對接 Router |
