@@ -66,7 +66,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
-		Description: autoDescOr("regime_get_history", "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL."),
+		Description: autoDescOr("regime_get_history", "Return the market regime history for the last N days (HTTP: GET /api/regime/history). Regimes: RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRegimeGetHistory)
 
@@ -90,7 +90,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_health",
-		Description: autoDescOr("system_get_health", "Return overall system health status (per docs/workflow-map.md WA-606)."),
+		Description: autoDescOr("system_get_health", "Return overall system health status (HTTP: GET /api/dashboard/system-health). See docs/workflow-map.md WA-606."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetHealth)
 }
@@ -165,7 +165,7 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 			} `json:"sessions"`
 			Current string `json:"current_regime"`
 		}
-		if err := s.cli.Get(ctx, "/api/dashboard/regime-history", urlValues(q), &raw); err != nil {
+		if err := s.cli.Get(ctx, "/api/regime/history", urlValues(q), &raw); err != nil {
 			return err
 		}
 		out.Regimes = make([]RegimePoint, len(raw.Sessions))
