@@ -1896,7 +1896,7 @@ func run(args []string, deps appDeps) error {
 		routesJSON := `{"routes":[{"pattern":"GET /api/routes","description":"This route list","auth_required":false},{"pattern":"GET /api/health","description":"Simple health check","auth_required":false},{"pattern":"GET /health","description":"Detailed health with port probes","auth_required":false},{"pattern":"GET /api/market/explain","description":"今日台股解說","auth_required":true},{"pattern":"GET /api/capital-flow/daily","description":"七維錢潮雷達 daily","auth_required":false},{"pattern":"GET /api/capital-flow/summary","description":"錢潮摘要","auth_required":false},{"pattern":"GET /api/capital-flow/history","description":"歷史資金流向","auth_required":false},{"pattern":"GET /api/regime/history","description":"市場體質歷史","auth_required":false},{"pattern":"GET /api/dashboard/system-health","description":"完整系統健康","auth_required":false},{"pattern":"GET /api/narrative/stress-index/current","description":"壓力指數","auth_required":false},{"pattern":"GET /api/taiwan/stress-index","description":"壓力指數（前端用）","auth_required":false},{"pattern":"GET /api/cross-market/status","description":"跨市場狀態","auth_required":false},{"pattern":"GET /api/dashboard/risk","description":"風險指標 VaR","auth_required":false},{"pattern":"MCP tools (97 total)","description":"使用 MCP 協定連接 atlas-mcp stdio server","auth_required":true}],"count":14}`
 		mux.Handle("GET /api/routes", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(routesJSON))
+			_, _ = w.Write([]byte(routesJSON))
 		}))
 
 		// C-04: catch-all 404 for unmatched /api/* routes (any method).
@@ -1904,7 +1904,7 @@ func run(args []string, deps appDeps) error {
 		mux.Handle("/api/{rest...}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"error": "route not found",
 				"code":  "404",
 				"path":  r.URL.Path,
