@@ -283,6 +283,25 @@ func run(args []string, deps appDeps) error {
 	fubonproxy.SetFubonProxyPort(*fubonProxyPort)
 
 	cfg := deps.loadConfig()
+	// SA06: composition root for shared dependency wiring.
+	// Elevated from apiMode block so it is also visible to -live/-simulate paths.
+	compositionRoot, err = composition.NewRoot(cfg)
+	if err != nil {
+		log.Printf("[Composition] failed to create root: %v", err)
+	} else {
+		// SA08 Gap D: wire closure store and session resolver for StrategyEvolver.
+		// FileClosureStore persists sector allocation snapshots as JSONL.
+		// NoOpNextSessionResolver is used for non-replay paths; the replay
+		// path will supply a real resolver via a future buildSystemOrFallback
+		// overload.
+		closureStore := sectorallocation.NewFileClosureStore(
+			filepath.Join(cfg.WorkDir, "sector", "allocation"),
+		)
+		sessionResolver := &orchestrator.NoOpNextSessionResolver{}
+		compositionRoot.
+			WithClosureStore(closureStore).
+			WithSessionResolver(sessionResolver)
+	}
 
 	// --use-llm-sector-agents CLI override (delivered scaffold via PR #828,
 	// wired here). Tri-state flag: empty = no override (env var / parameters.json
@@ -351,6 +370,10 @@ func run(args []string, deps appDeps) error {
 	} else {
 		logging.Info("main", "postgres_ready")
 	}
+
+	// SA06: composition root for shared dependency wiring.
+	// Elevated to run() level so it is visible to -live/-simulate paths.
+	var compositionRoot *composition.Root
 
 	// Security gate: live broker requires both the CLI flag AND the
 	// ATLAS_ALLOW_LIVE_BROKER=true env var. This prevents accidental
@@ -428,7 +451,7 @@ func run(args []string, deps appDeps) error {
 
 	// Handle --simulate mode: run one-shot daily simulation and exit
 	if *simulateMode {
-		return runSimulationMode(rt, cfg, *verboseMode, *dateOverride)
+		return runSimulationMode(rt, cfg, compositionRoot, *verboseMode, *dateOverride)
 	}
 
 	// Handle --build-universe: run SmartUniverseBuilder pipeline and exit.
@@ -548,25 +571,6 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 
-		// SA06: composition root for shared dependency wiring.
-		compositionRoot, err := composition.NewRoot(cfg)
-		if err != nil {
-			log.Printf("[Composition] failed to create root: %v", err)
-		} else {
-			// SA08 Gap D: wire closure store and session resolver for StrategyEvolver.
-			// FileClosureStore persists sector allocation snapshots as JSONL.
-			// NoOpNextSessionResolver is used for non-replay paths; the replay
-			// path will supply a real resolver via a future buildSystemOrFallback
-			// overload.
-			closureStore := sectorallocation.NewFileClosureStore(
-				filepath.Join(cfg.WorkDir, "sector", "allocation"),
-			)
-			sessionResolver := &orchestrator.NoOpNextSessionResolver{}
-			compositionRoot.
-				WithClosureStore(closureStore).
-				WithSessionResolver(sessionResolver)
-			dashboard.SetCompositionRoot(compositionRoot)
-		}
 		dashboard.SetPool(pool)
 		// Manifest #G05: feed the full ChannelRegistry into the admin data-channels
 		// page so it lists every registered adapter (not just the hand-maintained
@@ -1991,15 +1995,20 @@ func run(args []string, deps appDeps) error {
 		}
 		return nil
 	}
-
 	if *liveMode {
-		return runLiveTrading(cfg, deps, collector, repo, baselineMgr, *apiAddr, *forceIntradayCycles)
+		return runLiveTrading(cfg, compositionRoot, deps, collector, repo, baselineMgr, *apiAddr, *forceIntradayCycles)
 	}
-	return runSimulation(cfg, false, collector, repo, deps.shutdown)
+	return runSimulation(cfg, compositionRoot, false, collector, repo, deps.shutdown)
 }
-
-func runSimulation(cfg config.Config, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
-	system, err := orchestrator.NewProductionSystem(cfg)
+func runSimulation(cfg config.Config, root *composition.Root, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
+	eventBus := eventbus.NewChannelEventBus(64)
+	var system *orchestrator.System
+	var err error
+	if root != nil {
+		system, err = root.BuildSystem(composition.PathCLISimulation, eventBus, nil)
+	} else {
+		system, err = orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
@@ -2123,9 +2132,15 @@ func runSimulation(cfg config.Config, verbose bool, collector *monitoring.Metric
 	}
 }
 
-func runLiveTrading(cfg config.Config, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, apiAddr string, forceIntradayCycles bool) error {
+func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, baselineMgr *baseline.Manager, apiAddr string, forceIntradayCycles bool) error {
 	eventBus := live.NewChannelEventBus(64)
-	system, err := orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
+	var system *orchestrator.System
+	var err error
+	if root != nil {
+		system, err = root.BuildSystem(composition.PathLiveTrading, eventBus, nil)
+	} else {
+		system, err = orchestrator.NewProductionSystemWithEventBus(cfg, eventBus, nil)
+	}
 	if err != nil {
 		return fmt.Errorf("create system: %w", err)
 	}
@@ -2398,7 +2413,7 @@ func runPrismWorker(cfg config.Config, deps appDeps) error { //nolint:unparam
 	return nil
 }
 
-func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, dateOverride string) error {
+func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, root *composition.Root, verbose bool, dateOverride string) error {
 	if verbose {
 		log.Println("[SIMULATE] verbose mode enabled")
 	}
@@ -2422,8 +2437,7 @@ func runSimulationMode(rt *bootstrap.Runtime, cfg config.Config, verbose bool, d
 
 	collector := rt.MetricsCollector
 	repo := rt.Repository
-
-	if err := runSimulation(cfg, verbose, collector, repo, nil); err != nil {
+	if err := runSimulation(cfg, root, verbose, collector, repo, nil); err != nil {
 		return fmt.Errorf("simulation failed: %w", err)
 	}
 
