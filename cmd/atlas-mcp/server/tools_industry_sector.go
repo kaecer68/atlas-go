@@ -120,13 +120,13 @@ func (s *server) handleSectorLookup(ctx context.Context, _ *mcp.CallToolRequest,
 func registerSectorTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "industry_sector_list",
-		Description: autoDescOr("industry_sector_list", "List all Taiwan-sector canonical identifiers with their Traditional-Chinese labels and representative stock symbols. Returns the full 20-sector taxonomy used by atlas-go. No input parameters required."),
+		Description: autoDescOr("industry_sector_list", "List all Taiwan-sector canonical identifiers with their Traditional-Chinese labels and representative stock symbols. Returns the full 20-sector taxonomy used by atlas-go. No input parameters required (in-memory, no HTTP route). Alternative: industry_sector_lookup, sector_allocation_plan."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSectorList)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "industry_sector_lookup",
-		Description: autoDescOr("industry_sector_lookup", "Look up a Taiwan sector by stock symbol (e.g. 2330) or sector name/alias (canonical ID, full Chinese label, or legacy alias like 半導體, 金融, semiconductor). Returns the canonical identifier, Chinese display label, and representative stock symbols. Provide at least one of: symbol, sector."),
+		Description: autoDescOr("industry_sector_lookup", "Look up a Taiwan sector by stock symbol (e.g. 2330) or sector name/alias (canonical ID, full Chinese label, or legacy alias like 半導體, 金融, semiconductor). Returns the canonical identifier, Chinese display label, and representative stock symbols. Provide at least one of: symbol, sector (in-memory, no HTTP route). Alternative: industry_sector_list, sector_allocation_plan."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSectorLookup)
 }

@@ -10,7 +10,7 @@ func registerBriefingTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name: "mcp_quickstart",
 		Description: autoDescOr("mcp_quickstart",
-			"一站式市場速覽 (MCP aggregated: macro + capital + regime + events)。回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。首次接入調用即可取得完整操作脈絡。"),
+			"一站式市場速覽 (MCP aggregated: macro + capital + regime + events)。回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。首次接入調用即可取得完整操作脈絡。 Alternative: daily_report, narrative_get_bundle."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMCPQuickstart)
 

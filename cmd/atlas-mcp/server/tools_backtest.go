@@ -37,13 +37,13 @@ func (s *server) handleBacktestSignals(ctx context.Context, _ *mcp.CallToolReque
 func registerBacktestTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "backtest_status",
-		Description: autoDescOr("backtest_status", "Latest backtest run summary (last_auto_date, last_auto_portfolio_val)."),
+		Description: autoDescOr("backtest_status", "Latest backtest run summary (last_auto_date, last_auto_portfolio_val) HTTP: GET /api/backtest/status. Alternative: backtest_signals, report_get_performance."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleBacktestStatus)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "backtest_signals",
-		Description: autoDescOr("backtest_signals", "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct)."),
+		Description: autoDescOr("backtest_signals", "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct) HTTP: GET /api/backtest/signals. Alternative: backtest_status, prism_get_training_results."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleBacktestSignals)
 }

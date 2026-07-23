@@ -9,31 +9,31 @@ import (
 func registerRiskAlertTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_metrics",
-		Description: autoDescOr("risk_get_metrics", "Aggregate risk metrics (current regime risk, VaR estimate, drawdown, exposure)."),
+		Description: autoDescOr("risk_get_metrics", "Aggregate risk metrics (current regime risk, VaR estimate, drawdown, exposure) HTTP: GET /api/dashboard/risk. Alternative: risk_get_drawdown, risk_get_correlation_matrix."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetMetrics)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_correlation_matrix",
-		Description: autoDescOr("risk_get_correlation_matrix", "Cross-strategy correlation matrix (risk concentration indicator)."),
+		Description: autoDescOr("risk_get_correlation_matrix", "Cross-strategy correlation matrix (risk concentration indicator) HTTP: GET /api/dashboard/correlation-matrix. Alternative: risk_get_metrics, crossmarket_get_correlation."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCorrelationMatrix)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_drawdown",
-		Description: autoDescOr("risk_get_drawdown", "Current drawdown, peak drawdown, recovery stats."),
+		Description: autoDescOr("risk_get_drawdown", "Current drawdown, peak drawdown, recovery stats.  HTTP: GET /api/dashboard/drawdown. Alternative: risk_get_metrics, risk_exposure."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetDrawdown)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_calibration",
-		Description: autoDescOr("risk_get_calibration", "Risk model calibration metrics (predicted vs realized VaR)."),
+		Description: autoDescOr("risk_get_calibration", "Risk model calibration metrics (predicted vs realized VaR) HTTP: GET /api/dashboard/risk-calibration. Alternative: risk_get_metrics, risk_get_commentary."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCalibration)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_get_commentary",
-		Description: autoDescOr("risk_get_commentary", "Latest narrative risk commentary (auto-generated from the risk engine)."),
+		Description: autoDescOr("risk_get_commentary", "Latest narrative risk commentary (auto-generated from the risk engine) HTTP: GET /api/risk/commentary. Alternative: risk_get_metrics, explain_market_move."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskGetCommentary)
 
