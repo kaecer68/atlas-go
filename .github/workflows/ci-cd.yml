@@ -472,6 +472,8 @@ jobs:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - name: Create .env for docker compose
+      run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
     - name: Validate docker-compose
       run: docker compose config -q
     - name: Start atlas-go
@@ -501,6 +503,8 @@ jobs:
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
+    - name: Create .env for docker compose
+      run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
     - name: Start atlas-go
       run: docker compose up -d atlas
     - name: Wait for healthy
