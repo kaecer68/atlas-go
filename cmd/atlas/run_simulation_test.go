@@ -16,7 +16,7 @@ func TestRunSimulation_ImmediateShutdownReturnsShutdownError(t *testing.T) {
 	shutdown := make(chan struct{})
 	close(shutdown) // pre-close so the select fires immediately
 
-	err := runSimulation(configStub(t), false, nil, nil, shutdown)
+	err := runSimulation(configStub(t), nil, false, nil, nil, shutdown)
 	if err == nil {
 		t.Fatal("expected shutdown error, got nil")
 	}
@@ -42,5 +42,5 @@ func TestRunSimulation_NilCollectorNilRepoDoesNotPanic(t *testing.T) {
 		}
 	}()
 
-	_ = runSimulation(configStub(t), false, nil, nil, shutdown)
+	_ = runSimulation(configStub(t), nil, false, nil, nil, shutdown)
 }

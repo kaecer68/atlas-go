@@ -31,7 +31,7 @@ func TestRunSimulationMode_InvalidDateFormat(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Pass nil rt — date validation happens BEFORE rt access.
-			err := runSimulationMode(nil, configStub(t), false, tc.dateInput)
+			err := runSimulationMode(nil, configStub(t), nil, false, tc.dateInput)
 			if err == nil {
 				t.Fatalf("expected error for date %q, got nil", tc.dateInput)
 			}
@@ -66,7 +66,7 @@ func TestRunSimulationMode_EmptyDateReachesRuntimeAccess(t *testing.T) {
 		t.Logf("confirmed: empty-date path reaches rt.MetricsCollector (panic: %v)", r)
 	}()
 
-	_ = runSimulationMode(nil, configStub(t), false, "")
+	_ = runSimulationMode(nil, configStub(t), nil, false, "")
 }
 
 // configStub returns a minimal Config that allows runSimulationMode to reach

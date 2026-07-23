@@ -283,8 +283,11 @@ func run(args []string, deps appDeps) error {
 	fubonproxy.SetFubonProxyPort(*fubonProxyPort)
 
 	cfg := deps.loadConfig()
+
 	// SA06: composition root for shared dependency wiring.
-	// Elevated from apiMode block so it is also visible to -live/-simulate paths.
+	// Elevated to run() level so it is visible to -live/-simulate paths.
+	var compositionRoot *composition.Root
+	var err error
 	compositionRoot, err = composition.NewRoot(cfg)
 	if err != nil {
 		log.Printf("[Composition] failed to create root: %v", err)
@@ -370,10 +373,6 @@ func run(args []string, deps appDeps) error {
 	} else {
 		logging.Info("main", "postgres_ready")
 	}
-
-	// SA06: composition root for shared dependency wiring.
-	// Elevated to run() level so it is visible to -live/-simulate paths.
-	var compositionRoot *composition.Root
 
 	// Security gate: live broker requires both the CLI flag AND the
 	// ATLAS_ALLOW_LIVE_BROKER=true env var. This prevents accidental
@@ -2000,6 +1999,7 @@ func run(args []string, deps appDeps) error {
 	}
 	return runSimulation(cfg, compositionRoot, false, collector, repo, deps.shutdown)
 }
+
 func runSimulation(cfg config.Config, root *composition.Root, verbose bool, collector *monitoring.MetricsCollector, repo *repository.DualWriteRepository, shutdown <-chan struct{}) error {
 	eventBus := eventbus.NewChannelEventBus(64)
 	var system *orchestrator.System
