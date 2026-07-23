@@ -40,7 +40,7 @@ LDFLAGS_VERSION := -X main.Version=$(VERSION)
 # SystemHealthResponse.Runtime so dashboards can audit a deployed binary
 # against its source commit (CF-INV-12). When not running inside a git
 # checkout (e.g. a release tarball), Commit falls back to "unknown".
-GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS_RUNTIME := -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=$(VERSION) \
                    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=$(GIT_COMMIT) \
@@ -533,7 +533,7 @@ status:
 .PHONY: rebuild-all rebuild-cron rebuild-atlas rebuild-host-bin check-binaries
 
 HOST_GO       := $(shell which go 2>/dev/null || echo /opt/homebrew/bin/go)
-GIT_COMMIT    := $(shell git rev-parse HEAD 2>/dev/null)
+export ATLAS_GIT_COMMIT ?= $(GIT_COMMIT)
 BUILDTIME     := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 GOENV_LINUX   := GOOS=linux GOARCH=arm64
 
@@ -564,9 +564,9 @@ rebuild-atlas-bins: | .build-atlas
 
 # Rebuild atlas-atlas image from host-built binaries + restart container.
 rebuild-atlas: rebuild-atlas-bins
-	@docker build -t atlas-atlas:local -f Dockerfile.atlas.local .
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker build -t atlas-atlas:local -f Dockerfile.atlas.local .
 	@docker tag atlas-atlas:local atlas-atlas:latest
-	@docker compose up -d atlas
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d atlas
 
 # Rebuild the 10 cron binaries on host.
 # daily-replay-sync/backfill-replay/macro-ingest/geo-ingest/backfill-month-revenue/
@@ -589,8 +589,7 @@ rebuild-cron-bins: | .build-cron
 # Rebuild cron image + force-recreate all 10 cron containers.
 rebuild-cron: rebuild-cron-bins
 	@docker build -t atlas-cron-rebuilt:local -f Dockerfile.cron.local .
-	@bash -c 'declare -a t=(atlas-cron-quote-backfill:latest atlas-cron-backfill-month-revenue:latest atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest atlas-cron-replay-sync:latest atlas-cron-backfill-institutional-investors:latest atlas-atlas-cron-c07-evaluate:latest atlas-cron-darwinian:latest atlas-cron-backfill-financial-statements:latest atlas-cron-macro-ingest:latest); for x in "$${t[@]}"; do docker tag atlas-cron-rebuilt:local "$$x"; done'
-	@docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-backfill-financial-statements cron-backfill-month-revenue cron-darwinian cron-geo-ingest atlas-cron-c07-collect cron-backfill-institutional-investors
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-backfill-financial-statements cron-backfill-month-revenue cron-darwinian cron-geo-ingest atlas-cron-c07-collect cron-backfill-institutional-investors
 
 # Full rebuild: host bin + atlas image + cron images.
 rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron

@@ -5,14 +5,11 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        # Allow local builds to embed a meaningful version, build timestamp,
-        # and git commit (validation drill F4, 2026-07-20). Defaults keep
-        # the image buildable without any extra env vars; override ATLAS_VERSION
-        # / ATLAS_BUILDTIME / ATLAS_GIT_COMMIT before running docker compose build.
-        # For local dev: `ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose build`
+        # Local and CI builds must provide the source commit explicitly. An image
+        # with `Commit=unknown` cannot pass the binary freshness gate.
         VERSION: ${ATLAS_VERSION:-dev}
         BUILDTIME: ${ATLAS_BUILDTIME:-}
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-go
     restart: unless-stopped
     command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
@@ -232,7 +229,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-geo-ingest
     restart: unless-stopped
     environment:
@@ -257,7 +254,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-macro-ingest
     restart: unless-stopped
     environment:
@@ -282,7 +279,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-replay-sync
     restart: unless-stopped
     environment:
@@ -307,7 +304,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-darwinian
     restart: unless-stopped
     environment:
@@ -337,7 +334,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-c07-collect
     restart: unless-stopped
     environment:
@@ -368,7 +365,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-c07-evaluate
     restart: unless-stopped
     environment:
@@ -394,7 +391,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-backfill-month-revenue
     restart: unless-stopped
     environment:
@@ -419,7 +416,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-backfill-financial-statements
     restart: unless-stopped
     environment:
@@ -444,7 +441,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-backfill-institutional-investors
     restart: unless-stopped
     environment:
@@ -470,7 +467,7 @@ services:
       context: .
       dockerfile: Dockerfile.cron
       args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-cron-quote-backfill
     restart: unless-stopped
     environment:
@@ -493,6 +490,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
     container_name: atlas-prism-worker
     restart: unless-stopped
     # Command is args-only — the Dockerfile ENTRYPOINT already provides

@@ -6,6 +6,8 @@ RUN go mod download
 COPY . .
 ARG TARGETARCH
 ARG GIT_COMMIT
+RUN test -n "${GIT_COMMIT:-}" && test "${GIT_COMMIT}" != unknown || \
+    (echo "GIT_COMMIT must be set to a non-unknown source commit" >&2 && exit 1)
 
 # Internal/buildinfo ldflags pattern (mirrors Dockerfile main image so cron
 # binaries expose the same runtime metadata as atlas). Validation drill F4.
