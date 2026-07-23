@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 CHECK="$ROOT/scripts/check-binary-freshness.sh"
 SESSION_START="$ROOT/scripts/session-start.sh"
+RETAG_TARGET=retag-cron-images
 
 fail() {
   echo "FAIL: $*" >&2
@@ -16,6 +17,25 @@ assert_contains() {
   grep -Fq -- "$pattern" "$file" || fail "$file does not contain: $pattern"
 }
 
+run_cron_retag_test() {
+  local dir
+  dir=$(mktemp -d)
+  trap 'rm -rf "$dir"' RETURN
+
+  cat >"$dir/docker" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${FAKE_DOCKER_LOG:?}"
+EOF
+  chmod +x "$dir/docker"
+  : >"$dir/docker.log"
+
+  if ! make -s -C "$ROOT" "$RETAG_TARGET" DOCKER_BIN="$dir/docker" FAKE_DOCKER_LOG="$dir/docker.log"; then
+    fail "Makefile does not provide a working $RETAG_TARGET target"
+  fi
+  test "$(wc -l <"$dir/docker.log" | tr -d ' ')" -eq 10 || \
+    fail "$RETAG_TARGET did not create all ten cron image tags"
+}
 run_cleanup_failure_test() {
   local dir
   dir=$(mktemp -d)
@@ -79,12 +99,15 @@ counter="${FAKE_DOCKER_COUNTER:?}"
 case "${1:-}" in
   create)
     n=$(cat "$counter")
-    n=$((n + 1))
-    printf '%s\n' "$n" >"$counter"
     echo "fake-container-$n"
     ;;
   cp)
-    printf 'Commit=%s\n' "${FAKE_DOCKER_HEAD:?}" >"${@: -1}"
+    destination=${@: -1}
+    case "$destination" in
+      "${FAKE_FRESHNESS_TMPDIR:?}"/*) ;;
+      *) exit 43 ;;
+    esac
+    printf 'Commit=%s\n' "${FAKE_DOCKER_HEAD:?}" >"$destination"
     ;;
   rm)
     echo "$2" >>"${FAKE_DOCKER_RM_LOG:?}"
@@ -96,7 +119,10 @@ EOF
   : >"$dir/rm.log"
   head=$(git -C "$ROOT" rev-parse HEAD)
 
+  mkdir -p "$dir/freshness"
   DOCKER_BIN="$dir/docker" \
+    FRESHNESS_TMPDIR="$dir/freshness" \
+    FAKE_FRESHNESS_TMPDIR="$dir/freshness" \
     FAKE_DOCKER_COUNTER="$dir/counter" \
     FAKE_DOCKER_RM_LOG="$dir/rm.log" \
     FAKE_DOCKER_HEAD="$head" \
@@ -104,11 +130,10 @@ EOF
 
   test "$(wc -l <"$dir/rm.log" | tr -d ' ')" -eq 6 || \
     fail "successful freshness check did not clean all temporary containers"
-  for tmp_bin in /tmp/.atlas-go-freshness-check-* /tmp/.atlas-mcp-freshness-check-* /tmp/.daily-replay-sync-freshness-check-* /tmp/.backfill-replay-freshness-check-* /tmp/.calibrate-seasonal-freshness-check-* /tmp/.macro-ingest-freshness-check-*; do
-    if [ -e "$tmp_bin" ]; then
-      fail "freshness check left temporary file: $tmp_bin"
-    fi
-  done
+  leftover=$(cd "$dir/freshness" && shopt -s nullglob dotglob && echo *)
+  if [ -n "$leftover" ]; then
+    fail "freshness check left files in its isolated temporary directory: $leftover"
+  fi
 }
 
 run_session_start_test() {
@@ -129,12 +154,25 @@ case "${*: -1}" in
   *) exit 99 ;;
 esac
 EOF
+  cat >"$dir/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *'rev-parse --git-dir') printf '%s\n' "${FAKE_GIT_DIR:?}" ;;
+  *'rev-parse --git-common-dir') printf '%s\n' "${FAKE_GIT_COMMON:?}" ;;
+  *) exit 99 ;;
+esac
+EOF
+  chmod +x "$dir/make" "$dir/git"
+  : >"$dir/make.log"
   chmod +x "$dir/make"
   : >"$dir/make.log"
 
   CLAUDE_PROJECT_DIR="$ROOT" \
-    ATLAS_ALLOW_LINKED_WORKTREE_REBUILD=1 \
+    GIT_BIN="$dir/git" \
     MAKE_BIN="$dir/make" \
+    FAKE_GIT_DIR=.git \
+    FAKE_GIT_COMMON=.git \
     FAKE_MAKE_LOG="$dir/make.log" \
     "$SESSION_START" >/dev/null
 
@@ -146,7 +184,10 @@ EOF
 
   : >"$dir/make.log"
   CLAUDE_PROJECT_DIR="$ROOT" \
+    GIT_BIN="$dir/git" \
     MAKE_BIN="$dir/make" \
+    FAKE_GIT_DIR=.git/worktrees/test \
+    FAKE_GIT_COMMON=.git \
     FAKE_MAKE_LOG="$dir/make.log" \
     "$SESSION_START" >/dev/null
   test ! -s "$dir/make.log" || fail "linked worktree session-start modified shared Docker state"
@@ -168,6 +209,7 @@ run_static_contract_tests() {
   assert_contains "$ROOT/scripts/deploy-staging.sh" 'ATLAS_GIT_COMMIT="$(git rev-parse HEAD)"'
 }
 
+run_cron_retag_test
 run_cleanup_failure_test
 run_missing_image_test
 run_success_cleanup_test

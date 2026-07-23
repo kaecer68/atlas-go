@@ -8,6 +8,7 @@
 set -euo pipefail
 
 DOCKER_BIN="${DOCKER_BIN:-docker}"
+FRESHNESS_TMPDIR="${FRESHNESS_TMPDIR:-${TMPDIR:-/tmp}}"
 declare -a TEMP_CONTAINERS=()
 declare -a TEMP_FILES=()
 
@@ -75,17 +76,17 @@ check_image_binary() {
 
 echo "=== Docker images ==="
 check_image_binary "atlas-atlas:latest" /app/atlas-go \
-    "atlas-atlas image → /app/atlas-go" "/tmp/.atlas-go-freshness-check-$$"
+    "atlas-atlas image → /app/atlas-go" "$FRESHNESS_TMPDIR/.atlas-go-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/atlas-mcp \
-    "atlas-atlas image → /app/atlas-mcp" "/tmp/.atlas-mcp-freshness-check-$$"
+    "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
-    "atlas-atlas image → /app/daily-replay-sync" "/tmp/.daily-replay-sync-freshness-check-$$"
+    "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/backfill-replay \
-    "atlas-atlas image → /app/backfill-replay" "/tmp/.backfill-replay-freshness-check-$$"
+    "atlas-atlas image → /app/backfill-replay" "$FRESHNESS_TMPDIR/.backfill-replay-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
-    "atlas-atlas image → /app/calibrate-seasonal" "/tmp/.calibrate-seasonal-freshness-check-$$"
+    "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
 check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \
-    "atlas-cron-rebuilt:local → /app/macro-ingest" "/tmp/.macro-ingest-freshness-check-$$"
+    "atlas-cron-rebuilt:local → /app/macro-ingest" "$FRESHNESS_TMPDIR/.macro-ingest-freshness-check-$$"
 
 echo ""
 echo "=== Host binaries ==="
