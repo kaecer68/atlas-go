@@ -147,6 +147,8 @@ func isPublicPath(p string) bool {
 	switch {
 	case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
 		return true
+	case p == "/api/health" || p == "/api/health/":
+		return true
 	case p == "/api/llm/health":
 		return true
 	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
@@ -1883,6 +1885,13 @@ func run(args []string, deps appDeps) error {
 			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
 			log.Printf("[Gateway] scheduler API routes registered")
 		}
+		// /api/health as alias for /health (public, no auth)
+		// Used by external probes that expect /api/ prefix.
+		mux.Handle("GET /api/health", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		}))
 
 		authWrappedMux := apishared.AuthMiddleware(mux)
 
