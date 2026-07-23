@@ -11,13 +11,13 @@ import (
 func registerMacroTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_snapshot_latest",
-		Description: autoDescOr("macro_get_snapshot_latest", "Return the latest macro data snapshot (HTTP: GET /api/macro/snapshot/latest) — from on-disk cache (5-min refresh cycle, may lag real-time data). Use crossmarket_get_us_indices for real-time US stock/index data."),
+		Description: autoDescOr("macro_get_snapshot_latest", "Return the latest macro data snapshot — from on-disk cache (5-min refresh cycle, may lag real-time data). Use crossmarket_get_us_indices for real-time US stock/index data. Covers: foreign capital, regime, chips, US indices, tech stocks, FX, commodities."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetSnapshotLatest)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_snapshot_history",
-		Description: autoDescOr("macro_get_snapshot_history", "Macro snapshot history over the last N days (HTTP: GET /api/macro/snapshot/timeline); default 30, max 365."),
+		Description: autoDescOr("macro_get_snapshot_history", "Macro snapshot history over the last N days (default 30, max 365)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetSnapshotHistory)
 
