@@ -24,6 +24,7 @@ const (
 	ForceGovernment    ForceName = "government"    // 公股行庫（heuristic）
 	ForceRetail        ForceName = "retail"        // 散戶（融資+當沖）
 )
+
 // DisplayName returns the Chinese display name for a force.
 func (f ForceName) DisplayName() string {
 	switch f {
@@ -46,7 +47,6 @@ func (f ForceName) DisplayName() string {
 	}
 }
 
-
 // ForceScore is a standardized score for a single capital force.
 //
 // Role categorizes the force in the legacy §7 taxonomy (manifest #E05):
@@ -68,10 +68,10 @@ func (f ForceName) DisplayName() string {
 // Deprecated=true marks forces kept in the API shape for backward
 // compatibility but no longer driving resonance (futures + tsm_adr after #E05).
 type ForceScore struct {
-	Force      ForceName `json:"force"`
-	DisplayName string   `json:"display_name"`
-	Role       string    `json:"role,omitempty"` // "subject" | "leading_indicator" | "sentiment"
-	Deprecated bool      `json:"deprecated,omitempty"`
+	Force       ForceName `json:"force"`
+	DisplayName string    `json:"display_name"`
+	Role        string    `json:"role,omitempty"` // "subject" | "leading_indicator" | "sentiment"
+	Deprecated  bool      `json:"deprecated,omitempty"`
 	// DimensionRole classifies the dimension per the E07 4-bucket
 	// taxonomy (spec §6 / CF-INV-01): one of
 	// "official_actor" / "behavioral_proxy" / "positioning_indicator"

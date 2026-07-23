@@ -133,7 +133,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			WriteJSONError(w, http.StatusServiceUnavailable, "server misconfigured: ATLAS_API_KEY required in production")
+			WriteJSONErrorEx(w, http.StatusServiceUnavailable, "503", "server misconfigured: ATLAS_API_KEY required in production")
 		})
 	}
 	if apiKey == "" {
@@ -154,7 +154,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 		if sha256Hex(provided) != expectedHash {
-			WriteJSONError(w, http.StatusUnauthorized, "unauthorized")
+			WriteJSONErrorEx(w, http.StatusUnauthorized, "401", "unauthorized")
 			return
 		}
 		next.ServeHTTP(w, r)

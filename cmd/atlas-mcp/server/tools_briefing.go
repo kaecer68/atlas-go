@@ -10,14 +10,14 @@ func registerBriefingTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name: "mcp_quickstart",
 		Description: autoDescOr("mcp_quickstart",
-			"一站式市場速覽：回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。外部 AI 首次接入時調用此 tool 即可取得完整操作脈絡，無需多次調用。"),
+			"一站式市場速覽 (MCP aggregated: macro + capital + regime + events)。回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。首次接入調用即可取得完整操作脈絡。"),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMCPQuickstart)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name: "daily_report",
 		Description: autoDescOr("daily_report",
-			"回傳最新每日市場報告 JSON，含全球資金總開關、台股七維錢潮雷達（3+2+2 分層）分解、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。"),
+			"回傳最新每日市場報告 JSON (HTTP: GET /api/reports/latest)，含全球資金總開關、台股七維錢潮雷達、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。"),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleDailyReport)
 }

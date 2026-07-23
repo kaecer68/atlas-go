@@ -107,7 +107,7 @@ func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/dashboard/regime-history" {
+	if rec.path != "/api/regime/history" {
 		t.Fatalf("path=%s", rec.path)
 	}
 	if rec.query.Get("limit") != "30" {

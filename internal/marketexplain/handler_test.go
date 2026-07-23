@@ -316,7 +316,7 @@ func TestCountDivergent(t *testing.T) {
 
 func TestBuildHeadline_basic(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
-		s.TAIEX = marketdata.MacroDataPoint{ChangePct: 0.8}
+		s.TAIEX = marketdata.MacroDataPoint{Symbol: "^TWII", ChangePct: 0.8}
 	})
 	cf := capitalflow.SummaryReport{Summary: "三大法人合計買超 50 億。"}
 	got := buildHeadline(s, cf)
@@ -330,7 +330,7 @@ func TestBuildHeadline_basic(t *testing.T) {
 
 func TestBuildHeadline_downWithVIX(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
-		s.TAIEX = marketdata.MacroDataPoint{ChangePct: -1.5}
+		s.TAIEX = marketdata.MacroDataPoint{Symbol: "^TWII", ChangePct: -1.5}
 		s.VIX = marketdata.MacroDataPoint{Value: 28}
 	})
 	got := buildHeadline(s, capitalflow.SummaryReport{})
@@ -346,7 +346,7 @@ func TestBuildHeadline_truncatesCapitalAtFirstSentence(t *testing.T) {
 	// buildHeadline should only embed the FIRST sentence of cfSummary
 	// to keep the headline one line; otherwise it overflows the UI.
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
-		s.TAIEX = marketdata.MacroDataPoint{ChangePct: 0.5}
+		s.TAIEX = marketdata.MacroDataPoint{Symbol: "^TWII", ChangePct: 0.5}
 	})
 	cf := capitalflow.SummaryReport{
 		Summary: "三大法人合計買超 50 億。投信加碼電子股。",
@@ -363,7 +363,7 @@ func TestBuildHeadline_truncatesCapitalAtFirstSentence(t *testing.T) {
 // for the rule-based fallback (the LLM-degraded path).
 func TestCompose_happyPath(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
-		s.TAIEX = marketdata.MacroDataPoint{Value: 17000, ChangePct: 0.8}
+		s.TAIEX = marketdata.MacroDataPoint{Symbol: "^TWII", Value: 17000, ChangePct: 0.8}
 		s.TaiwanSemiIndex = marketdata.MacroDataPoint{Value: 500, ChangePct: 1.0}
 		s.VIX = marketdata.MacroDataPoint{Value: 16, ChangePct: -1.0}
 		s.USD_TWD = marketdata.MacroDataPoint{Value: 31.5, ChangePct: 0.2}
