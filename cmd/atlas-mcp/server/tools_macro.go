@@ -23,25 +23,25 @@ func registerMacroTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_current",
-		Description: autoDescOr("macro_get_stress_index_current", "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite."),
+		Description: autoDescOr("macro_get_stress_index_current", "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.  HTTP: GET /api/narrative/stress-index/current. Alternative: taiwan_stress_index, narrative_stress_index_thresholds."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexCurrent)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_history",
-		Description: autoDescOr("macro_get_stress_index_history", "Stress index history over the last N days."),
+		Description: autoDescOr("macro_get_stress_index_history", "Stress index history over the last N days.  HTTP: GET /api/narrative/stress-index/history. Alternative: taiwan_stress_index, regime_get_history."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexHistory)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_capital_flow_latest",
-		Description: autoDescOr("macro_get_capital_flow_latest", "Latest foreign / institutional / retail capital flow snapshot."),
+		Description: autoDescOr("macro_get_capital_flow_latest", "Latest foreign / institutional / retail capital flow snapshot.  HTTP: GET /api/macro/capital-flow/latest. Alternative: capital_flow_daily, capital_flow_summary."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetCapitalFlowLatest)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_ingest_status",
-		Description: autoDescOr("macro_get_ingest_status", "Channel ingestion status (last fetch times, error counts). Use to diagnose data freshness."),
+		Description: autoDescOr("macro_get_ingest_status", "Channel ingestion status (last fetch times, error counts). Use to diagnose data freshness.  HTTP: GET /api/dashboard/macro-data-health. Alternative: macro_get_snapshot_latest, system_get_health."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetIngestStatus)
 }

@@ -21,13 +21,13 @@ func registerStrategyTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_attribution",
-		Description: autoDescOr("strategy_get_attribution", "Performance attribution for a strategy over the requested window."),
+		Description: autoDescOr("strategy_get_attribution", "Performance attribution for a strategy over the requested window.  HTTP: GET /api/strategies/{id}/attribution. Alternative: strategy_get_summary, strategy_ranker."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGetAttribution)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_summary",
-		Description: autoDescOr("strategy_get_summary", "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior)."),
+		Description: autoDescOr("strategy_get_summary", "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior) HTTP: GET /api/strategies/{id}/summary. Alternative: strategy_get_attribution, strategy_ranker."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyGetSummary)
 }

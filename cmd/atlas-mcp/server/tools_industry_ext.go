@@ -92,31 +92,31 @@ func (s *server) handleRiskExposure(ctx context.Context, _ *mcp.CallToolRequest,
 func registerIndustryExtTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "calendar_events",
-		Description: autoDescOr("calendar_events", "Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window."),
+		Description: autoDescOr("calendar_events", "Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events. Alternative: event_calendar, event_flow_prediction."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCalendarEvents)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "sector_allocation_plan",
-		Description: autoDescOr("sector_allocation_plan", "Latest persisted simulation sector-allocation snapshot, including target/current/delta, provenance, fallback status, mutation receipt, and next-session consumption evidence."),
+		Description: autoDescOr("sector_allocation_plan", "Latest persisted simulation sector-allocation snapshot, including target/current/delta, provenance, fallback status, mutation receipt, and next-session consumption evidence.  HTTP: GET /api/dashboard/sector-allocation-plan. Alternative: industry_sector_list, industry_sector_lookup."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSectorAllocationPlan)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "channel_health",
-		Description: autoDescOr("channel_health", "Channel-level health summary (channel_id, status, updated_at) for the data ingestion pipeline."),
+		Description: autoDescOr("channel_health", "Channel-level health summary (channel_id, status, updated_at) for the data ingestion pipeline.  HTTP: GET /api/dashboard/channel-health. Alternative: system_get_data_pipeline, macro_get_ingest_status."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleChannelHealth)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "taiwan_stress_index",
-		Description: autoDescOr("taiwan_stress_index", "Taiwan market stress index (TRJ narrative) — score, regime, components by source. Use for risk appetite assessment."),
+		Description: autoDescOr("taiwan_stress_index", "Taiwan market stress index (TRJ narrative) — score, regime, components by source. Use for risk appetite assessment.  HTTP: GET /api/taiwan/stress-index. Alternative: macro_get_stress_index_current, narrative_stress_index_thresholds."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleTaiwanStressIndex)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_exposure",
-		Description: autoDescOr("risk_exposure", "Current portfolio risk exposure: var_95/99, cvar_95, max_drawdown_pct, cash_ratio, sector/factor/concentration breakdown."),
+		Description: autoDescOr("risk_exposure", "Current portfolio risk exposure: var_95/99, cvar_95, max_drawdown_pct, cash_ratio, sector/factor/concentration breakdown.  HTTP: GET /api/dashboard/risk-exposure. Alternative: risk_get_metrics, risk_get_drawdown."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleRiskExposure)
 }

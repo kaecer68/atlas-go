@@ -9,7 +9,7 @@ import (
 func registerStrategyRankerTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_ranker",
-		Description: autoDescOr("strategy_ranker", "Return the current active market techniques ranked by performance with free/registered/premium tier labels. These are signal detectors (e.g. foreign-3day-inflow, margin-balance-extreme), NOT portfolio allocation strategies — see get_recommendations for portfolio strategies."),
+		Description: autoDescOr("strategy_ranker", "Return the current active market techniques ranked by performance with free/registered/premium tier labels. These are signal detectors (e.g. foreign-3day-inflow, margin-balance-extreme), NOT portfolio allocation strategies — see get_recommendations for portfolio strategies.  HTTP: GET /api/strategy-ranker/rank. Alternative: strategy_get_summary, strategy_list_active."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStrategyRanker)
 }
