@@ -10,5 +10,5 @@
 //	adjusted = baseWeight × cycleMultiplier × seasonalMultiplier ×
 //	          linkageMultiplier × narrativeMultiplier × macroTilt × factorTilt
 //
-// Maturity: experimental
+// Maturity: evolving
 package sectorallocation

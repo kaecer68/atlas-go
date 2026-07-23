@@ -67,6 +67,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/startup"
 	"github.com/kaecer68/atlas-go/internal/stocktools"
 	"github.com/kaecer68/atlas-go/internal/storage"
@@ -548,11 +549,22 @@ func run(args []string, deps appDeps) error {
 		}
 
 		// SA06: composition root for shared dependency wiring.
-		// Created once, shared across dashboard and all simulation paths.
 		compositionRoot, err := composition.NewRoot(cfg)
 		if err != nil {
 			log.Printf("[Composition] failed to create root: %v", err)
 		} else {
+			// SA08 Gap D: wire closure store and session resolver for StrategyEvolver.
+			// FileClosureStore persists sector allocation snapshots as JSONL.
+			// NoOpNextSessionResolver is used for non-replay paths; the replay
+			// path will supply a real resolver via a future buildSystemOrFallback
+			// overload.
+			closureStore := sectorallocation.NewFileClosureStore(
+				filepath.Join(cfg.WorkDir, "sector", "allocation"),
+			)
+			sessionResolver := &orchestrator.NoOpNextSessionResolver{}
+			compositionRoot.
+				WithClosureStore(closureStore).
+				WithSessionResolver(sessionResolver)
 			dashboard.SetCompositionRoot(compositionRoot)
 		}
 		dashboard.SetPool(pool)

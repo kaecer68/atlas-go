@@ -23,8 +23,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
-// CompositionPath identifies the caller context for wiring decisions.
-// Only simulation paths (admin/auto/stress/cli) may enable sector rotation;
 // live and auto_experiment paths receive DisableSectorRotation.
 type CompositionPath string
 
@@ -56,6 +54,11 @@ type Root struct {
 	// dashboard (for monitoring/web UI) or by simulation orchestrator.
 	// Nil until wired.
 	weightEngine sectorallocation.WeightEngine
+
+	// SA08: closure store and session resolver for StrategyEvolver.
+	// Set via WithClosureStore / WithSessionResolver before BuildSystem.
+	closureStore    sectorallocation.ClosureStore
+	sessionResolver orchestrator.TradingSessionResolver
 }
 
 // NewRoot constructs the shared dependency root.
@@ -88,11 +91,73 @@ func (r *Root) WeightEngine() sectorallocation.WeightEngine {
 	return r.weightEngine
 }
 
+// WithClosureStore sets the closure store for SA08 StrategyEvolver wiring.
+func (r *Root) WithClosureStore(store sectorallocation.ClosureStore) *Root {
+	r.closureStore = store
+	return r
+}
+
+// WithSessionResolver sets the trading session resolver for SA08 StrategyEvolver wiring.
+func (r *Root) WithSessionResolver(resolver orchestrator.TradingSessionResolver) *Root {
+	r.sessionResolver = resolver
+	return r
+}
+
 // InjectSectorDeps wires the mapper and exposure calculator into a
 // previously-constructed System. Callers should invoke this after
 // system construction but before the first simulation run.
 func (r *Root) InjectSectorDeps(sys *orchestrator.System) {
 	sys.WithSectorL1Mapper(r.Mapper).WithSectorExposureCalculator(r.Calc)
+}
+
+// buildWeightEngine lazily constructs a fully-wired default WeightEngine using
+// NewDefaultEngineWithProjector (SA04 path). Adapters are extracted from the
+// industry service infrastructure (cycle/seasonal/linkage); narrative/macro/factor
+// use nil until SA08 completes the full adapter wiring.
+// Returns nil if prior cannot be loaded (pre-SA02 config), in which case callers
+// that require a functional engine will receive nil and degrade gracefully.
+func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
+	params := config.GetParametersConfig()
+
+	// prior — loaded from ParametersConfig; nil on pre-SA02 config.
+	prior, err := sectorallocation.LoadStrategicPrior(params)
+	if err != nil {
+		// Cannot construct a functional engine without prior; degrade.
+		return nil
+	}
+
+	// projector — SA04 default constraints (0.5 min / 0.005 max / 1e-9 sum tolerance).
+	projector := sectorallocation.NewDefaultProjector()
+
+	// Extract industry adapters from the shared L1 mapper's classification tree.
+
+	seasonalEngine := industry.NewSeasonalEngine()
+	cycleTracker := industry.NewCycleTracker()
+	linkageAnalyzer := industry.NewLinkageAnalyzer()
+
+	// Wire basic supply-chain graph into seasonal engine (no narrative provider yet).
+	seasonalEngine.SetLinkageGraph(linkageAnalyzer.GetSupplyChainGraph())
+
+	// Wire validators into cycle tracker for multi-dimensional confidence.
+	cycleTracker.SetExternalValidators(seasonalEngine, linkageAnalyzer)
+
+	// weight bounds from Darwinian parameters.
+	weightMin := params.Darwinian.WeightMin.Value
+	weightMax := params.Darwinian.WeightMax.Value
+
+	return sectorallocation.NewDefaultEngineWithProjector(
+		params.SectorAllocation,
+		prior,
+		projector,
+		sectorallocation.NewCycleAdapter(cycleTracker),
+		sectorallocation.NewSeasonalAdapter(seasonalEngine),
+		sectorallocation.NewLinkageAdapter(linkageAnalyzer, nil),
+		nil, // narrative — nil until narrative engine is wired into Root (future)
+		nil, // macro    — nil until macro provider is wired into Root (future)
+		nil, // factor   — nil until factor provider is wired into Root (future)
+		weightMin,
+		weightMax,
+	)
 }
 
 // BuildSystem creates a fully-wired System for the given CompositionPath.
@@ -121,10 +186,23 @@ func (r *Root) BuildSystem(
 
 	// For denied paths (auto_experiment, live_trading) we skip wiring
 	// to prevent any accidental sector-allocation mutation.
-	if path.AllowsSectorRotation() && r.weightEngine != nil {
-		// SA06 establishes the plumbing; actual consumption goes live
-		// when SA08 delivers the session policy store + allocator.
-		system.WithSectorWeightEngine(r.weightEngine)
+	// SA08 Gap A+B: lazily construct weightEngine if nil (path.AllowsSectorRotation only).
+	if path.AllowsSectorRotation() {
+		if r.weightEngine == nil {
+			r.weightEngine = r.buildWeightEngine()
+		}
+		if r.weightEngine != nil {
+			// SA06 establishes the plumbing; actual consumption goes live
+			// when SA08 delivers the session policy store + allocator.
+			system.WithSectorWeightEngine(r.weightEngine)
+		}
+	}
+	// SA08: wire StrategyEvolver with closure store, session resolver,
+	// and weight engine so ApplySectorRotation is fully functional.
+	if evolver := system.GetStrategyEvolver(); evolver != nil {
+		evolver.WithClosureStore(r.closureStore).
+			WithSessionResolver(r.sessionResolver).
+			WithSectorWeightEngine(r.weightEngine)
 	}
 
 	return system, nil
