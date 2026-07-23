@@ -27,7 +27,7 @@ echo "[1/4] git pull --ff-only"
 git pull --ff-only
 
 echo "[2/4] docker compose build && up -d"
-( cd "$COMPOSE_DIR" && docker compose build atlas && docker compose up -d )
+( cd "$COMPOSE_DIR" && ATLAS_GIT_COMMIT="$(git rev-parse HEAD)" docker compose build atlas && ATLAS_GIT_COMMIT="$(git rev-parse HEAD)" docker compose up -d )
 
 # Step 3: wait for /health endpoint (max 60s)
 echo "[3/4] wait for staging health"

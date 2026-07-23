@@ -42,13 +42,13 @@ ARG TARGETARCH
 ARG VERSION
 ARG BUILDTIME
 ARG GIT_COMMIT
+RUN test -n "${GIT_COMMIT:-}" && test "${GIT_COMMIT}" != unknown || \
+    (echo "GIT_COMMIT must be set to a non-unknown source commit" >&2 && exit 1)
 
-# Build the application.
 # VERSION/BUILDTIME/GIT_COMMIT are injected via build-args (CI or docker
 # compose) so the binary embeds meaningful metadata even though .git is
-# excluded from the Docker build context. When not provided, VERSION defaults
-# to "dev", BUILDTIME defaults to the current UTC timestamp, and GIT_COMMIT
-# falls back to the "unknown" sentinel (CF-INV-12, §11.4).
+# excluded from the Docker build context. GIT_COMMIT is required and cannot
+# use the "unknown" sentinel because the freshness gate audits it.
 #
 # The internal/buildinfo.* ldflags are the canonical runtime-parity source;
 # main.version / main.buildTime are kept for backwards compatibility with
@@ -66,7 +66,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
     -o daily-replay-sync ./cmd/daily-replay-sync
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
+    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+    -o backfill-replay ./cmd/backfill-replay
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \

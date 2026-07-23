@@ -2,31 +2,35 @@
 # check-binary-freshness.sh
 #
 # Verifies that every deployed binary's buildinfo.Commit matches HEAD.
-# Run BEFORE marking work complete and BEFORE cleanup — see AGENTS.md
-# workspace-close SOP.
-#
-# Exit codes:
-#   0 — all binaries fresh (match HEAD)
-#   1 — at least one stale binary detected (with per-binary report)
-#   2 — environment error (git/docker not available, buildinfo missing, etc.)
+# Temporary Docker containers and extracted files are always cleaned up, including
+# when Docker copy fails or the shell exits early.
 
 set -euo pipefail
 
-HEAD=$(git rev-parse HEAD 2>/dev/null) || { echo "ERROR: not in a git repo"; exit 2; }
-echo "checking binaries against HEAD=$HEAD"
-echo ""
+DOCKER_BIN="${DOCKER_BIN:-docker}"
+FRESHNESS_TMPDIR="${FRESHNESS_TMPDIR:-${TMPDIR:-/tmp}}"
+declare -a TEMP_CONTAINERS=()
+declare -a TEMP_FILES=()
 
 declare -a STALE=()
 declare -a MISSING_BUILDINFO=()
 
-# Helper: extract buildinfo.Commit from a binary inside a docker container.
-# BusyBox grep lacks -P/-o, so we use strings + grep + sed for portability.
-extract_commit_container() {
-    local container=$1
-    local bin_path=$2
-    docker exec "$container" sh -c "strings '$bin_path' 2>/dev/null | grep 'Commit='" 2>/dev/null \
-        | head -1 | sed 's/.*Commit=\([a-f0-9]*\).*/\1/' | grep -E '^[a-f0-9]{7,}$' || echo ""
+cleanup() {
+    local status=$?
+    set +e
+    for file in "${TEMP_FILES[@]}"; do
+        rm -f "$file"
+    done
+    for container in "${TEMP_CONTAINERS[@]}"; do
+        "$DOCKER_BIN" rm -f "$container" >/dev/null 2>&1
+    done
+    exit "$status"
 }
+trap cleanup EXIT
+
+HEAD=$(git rev-parse HEAD 2>/dev/null) || { echo "ERROR: not in a git repo"; exit 2; }
+echo "checking binaries against HEAD=$HEAD"
+echo ""
 
 # Helper: extract buildinfo.Commit from a host binary file.
 extract_commit_host() {
@@ -38,7 +42,6 @@ extract_commit_host() {
 check_one() {
     local label=$1
     local commit=$2
-    local ref_image=${3:-}  # optional, for reporting only
     if [ -z "$commit" ]; then
         MISSING_BUILDINFO+=("$label (no buildinfo.Commit found)")
         echo "  ⚠ $label: buildinfo.Commit NOT FOUND"
@@ -50,55 +53,51 @@ check_one() {
     fi
 }
 
-echo "=== Docker images ==="
+# Copy one binary from a temporary container. Cleanup is deferred to EXIT so a
+# failed docker cp cannot leave a random Created container behind.
+check_image_binary() {
+    local image=$1
+    local binary=$2
+    local label=$3
+    local tmp_bin=$4
+    local container
 
-# atlas-atlas image (contains atlas-go, atlas-mcp, daily-replay-sync, backfill-replay, calibrate-seasonal)
-# We extract atlas-go without running it: create a tmp container, copy, remove.
-TMP_CID=$(docker create atlas-atlas:latest 2>/dev/null || echo "")
-if [ -n "$TMP_CID" ]; then
-    TMP_BIN=/tmp/.atlas-go-freshness-check
-    docker cp "$TMP_CID:/app/atlas-go" "$TMP_BIN" 2>/dev/null
-    docker rm "$TMP_CID" 2>/dev/null >/dev/null
-    check_one "atlas-atlas image → /app/atlas-go" "$(extract_commit_host "$TMP_BIN")"
-    rm -f "$TMP_BIN"
-
-    # Also check the atlas-mcp inside atlas-atlas image (same ldflags as atlas-go)
-    TMP_CID=$(docker create atlas-atlas:latest 2>/dev/null || echo "")
-    if [ -n "$TMP_CID" ]; then
-        TMP_BIN=/tmp/.atlas-mcp-freshness-check
-        docker cp "$TMP_CID:/app/atlas-mcp" "$TMP_BIN" 2>/dev/null
-        docker rm "$TMP_CID" 2>/dev/null >/dev/null
-        check_one "atlas-atlas image → /app/atlas-mcp" "$(extract_commit_host "$TMP_BIN")"
-        rm -f "$TMP_BIN"
+    container=$("$DOCKER_BIN" create --label atlas.binary-freshness=true "$image" 2>/dev/null || true)
+    if [ -z "$container" ]; then
+        MISSING_BUILDINFO+=("$label (image unavailable: $image)")
+        echo "  ⚠ $label: image unavailable ($image)" >&2
+        return 0
     fi
-fi
+    TEMP_CONTAINERS+=("$container")
+    TEMP_FILES+=("$tmp_bin")
+    "$DOCKER_BIN" cp "$container:$binary" "$tmp_bin"
+    check_one "$label" "$(extract_commit_host "$tmp_bin")"
+}
 
-# Cron image (single image, used by all 10 cron containers)
-TMP_CID=$(docker create atlas-cron-rebuilt:local 2>/dev/null || echo "")
-if [ -n "$TMP_CID" ]; then
-    TMP_BIN=/tmp/.macro-ingest-freshness-check
-    docker cp "$TMP_CID:/app/macro-ingest" "$TMP_BIN" 2>/dev/null
-    docker rm "$TMP_CID" 2>/dev/null >/dev/null
-    check_one "atlas-cron-rebuilt:local → /app/macro-ingest" "$(extract_commit_host "$TMP_BIN")"
-    rm -f "$TMP_BIN"
-fi
+echo "=== Docker images ==="
+check_image_binary "atlas-atlas:latest" /app/atlas-go \
+    "atlas-atlas image → /app/atlas-go" "$FRESHNESS_TMPDIR/.atlas-go-freshness-check-$$"
+check_image_binary "atlas-atlas:latest" /app/atlas-mcp \
+    "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
+check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
+    "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
+check_image_binary "atlas-atlas:latest" /app/backfill-replay \
+    "atlas-atlas image → /app/backfill-replay" "$FRESHNESS_TMPDIR/.backfill-replay-freshness-check-$$"
+check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
+    "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
+check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \
+    "atlas-cron-rebuilt:local → /app/macro-ingest" "$FRESHNESS_TMPDIR/.macro-ingest-freshness-check-$$"
 
 echo ""
 echo "=== Host binaries ==="
-
-# Detect repo root (parent of scripts/ directory). Avoids cwd-dependent failures.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# bin/atlas-mcp (host MCP wrapper)
 HOST_ATLAS_MCP="$REPO_ROOT/bin/atlas-mcp"
 if [ -f "$HOST_ATLAS_MCP" ]; then
     check_one "bin/atlas-mcp" "$(extract_commit_host "$HOST_ATLAS_MCP")"
 else
     echo "  ⚠ bin/atlas-mcp not found at $HOST_ATLAS_MCP (skipping)"
 fi
-
-# bin/execute-experiment — skip (removed as x86_64 legacy orphan)
 
 echo ""
 echo "=== Summary ==="

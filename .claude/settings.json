@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"${CLAUDE_PROJECT_DIR:-}\" ] && [ -x \"$CLAUDE_PROJECT_DIR/scripts/session-start.sh\" ]; then \"$CLAUDE_PROJECT_DIR/scripts/session-start.sh\"; fi",
+            "timeout": 600,
+            "statusMessage": "Checking Atlas binary freshness..."
+          }
+        ]
+      }
+    ]
+  }
+}
