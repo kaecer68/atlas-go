@@ -475,11 +475,11 @@ jobs:
     - name: Validate docker-compose
       run: docker compose config -q
     - name: Start atlas-go
-      run: docker compose up -d atlas-go
+      run: docker compose up -d atlas
     - name: Wait for healthy
       run: |
         for i in $(seq 1 60); do
-          if docker compose ps atlas-go | grep -q healthy; then break; fi
+          if docker compose ps atlas | grep -q healthy; then break; fi
           sleep 2
         done
     - name: Run consumer smoke
@@ -502,11 +502,11 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Start atlas-go
-      run: docker compose up -d atlas-go
+      run: docker compose up -d atlas
     - name: Wait for healthy
       run: |
         for i in $(seq 1 90); do
-          if docker compose ps atlas-go | grep -q healthy; then break; fi
+          if docker compose ps atlas | grep -q healthy; then break; fi
           sleep 2
         done
     - name: Run runtime canary
