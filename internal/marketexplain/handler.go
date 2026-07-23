@@ -329,6 +329,23 @@ func countDivergent(forces []capitalflow.ForceScore) int {
 }
 
 func buildHeadline(snap marketdata.MacroDataSnapshot, cfSummary capitalflow.SummaryReport) string {
+	// Check if TAIEX data is available. D-01: the taiex_index channel
+	// can fail independently, leaving snap.TAIEX as an empty struct
+	// (Symbol="" → ChangePct=0.0). In that case "持平 0.00%" is a
+	// misleading zero-value artifact, not a real market reading.
+	if snap.TAIEX.Symbol == "" {
+		headline := "今日台股指數資料待更新"
+		if cfSummary.Summary != "" {
+			firstSentence := cfSummary.Summary
+			if idx := strings.Index(firstSentence, "。"); idx > 0 {
+				firstSentence = firstSentence[:idx]
+			}
+			headline += "，" + firstSentence
+		}
+		headline += "。"
+		return headline
+	}
+
 	chg := snap.TAIEX.ChangePct
 	dir := "持平"
 	if chg > 0 {
