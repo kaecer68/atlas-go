@@ -50,14 +50,14 @@
   },
   "capital_flow_daily": {
     "name": "capital_flow_daily",
-    "description": "Full daily Taiwan stock market capital flow report: 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioral proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier.",
+    "description": "Full daily Taiwan stock market capital flow report (HTTP: GET /api/capital-flow/daily): 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioral proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier.",
     "inputSchema": {
       "type": "object"
     }
   },
   "capital_flow_summary": {
     "name": "capital_flow_summary",
-    "description": "Condensed 七維錢潮雷達（3+2+2 分層） summary suitable for a quick Taiwan market briefing; actor consensus is derived from the three official actor dimensions only.",
+    "description": "Condensed 七維錢潮雷達 summary (HTTP: GET /api/capital-flow/summary); actor consensus from three official actor dimensions only.",
     "inputSchema": {
       "type": "object"
     }
@@ -176,28 +176,28 @@
   },
   "crossmarket_get_correlation": {
     "name": "crossmarket_get_correlation",
-    "description": "Latest cross-market correlation matrix (Taiwan sector vs US indices).",
+    "description": "Latest cross-market correlation matrix (HTTP: GET /api/cross-market/correlation) — Taiwan sector vs US indices.",
     "inputSchema": {
       "type": "object"
     }
   },
   "crossmarket_get_status": {
     "name": "crossmarket_get_status",
-    "description": "Cross-market data feed status (US indices source, freshness, error count).",
+    "description": "Cross-market data feed status (HTTP: GET /api/cross-market/status) — US indices source, freshness, error count.",
     "inputSchema": {
       "type": "object"
     }
   },
   "crossmarket_get_us_indices": {
     "name": "crossmarket_get_us_indices",
-    "description": "Latest US index and tech stock snapshots — live-fetched from Yahoo Finance (real-time freshness). Includes S\u0026P 500, NASDAQ, Dow Jones, SOX, NVDA, AAPL, MSFT, TSM ADR. Prefer this over macro_get_snapshot_latest when you need the most current data.",
+    "description": "Latest US index and tech stock snapshots (HTTP: GET /api/dashboard/us-indices) — live-fetched from Yahoo Finance. Includes S\u0026P 500, NASDAQ, Dow Jones, SOX, NVDA, AAPL, MSFT, TSM ADR.",
     "inputSchema": {
       "type": "object"
     }
   },
   "daily_report": {
     "name": "daily_report",
-    "description": "回傳最新每日市場報告 JSON，含全球資金總開關、台股七維錢潮雷達（3+2+2 分層）分解、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。",
+    "description": "回傳最新每日市場報告 JSON (HTTP: GET /api/reports/latest)，含全球資金總開關、台股七維錢潮雷達、事件日曆、策略訊號與風險提示。適合 LLM agent 每日晨報摘要生成。",
     "inputSchema": {
       "type": "object"
     }
@@ -333,7 +333,7 @@
   },
   "explain_market_move": {
     "name": "explain_market_move",
-    "description": "提供繁體中文的「為什麼漲跌」市場解說。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。適合散戶快速理解市場變動的背後因素。LLM agent（如 Hermes、OpenClaw）可用此工具為用戶生成白話市場解讀。",
+    "description": "提供繁體中文的「為什麼漲跌」市場解說 (HTTP: GET /api/market/explain)。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。",
     "inputSchema": {
       "type": "object"
     }
@@ -399,7 +399,7 @@
   },
   "macro_get_snapshot_history": {
     "name": "macro_get_snapshot_history",
-    "description": "Macro snapshot history over the last N days (default 30, max 365).",
+    "description": "Macro snapshot history over the last N days (HTTP: GET /api/macro/snapshot/timeline); default 30, max 365.",
     "inputSchema": {
       "properties": {
         "days": {
@@ -412,7 +412,7 @@
   },
   "macro_get_snapshot_latest": {
     "name": "macro_get_snapshot_latest",
-    "description": "Return the latest macro data snapshot — from on-disk cache (5-min refresh cycle, may lag real-time data). Use crossmarket_get_us_indices for real-time US stock/index data. Covers: foreign capital, regime, chips, US indices, tech stocks, FX, commodities.",
+    "description": "Return the latest macro data snapshot (HTTP: GET /api/macro/snapshot/latest) — from on-disk cache (5-min refresh cycle, may lag real-time data). Use crossmarket_get_us_indices for real-time US stock/index data.",
     "inputSchema": {
       "type": "object"
     }
@@ -572,7 +572,7 @@
   },
   "mcp_quickstart": {
     "name": "mcp_quickstart",
-    "description": "一站式市場速覽：回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。外部 AI 首次接入時調用此 tool 即可取得完整操作脈絡，無需多次調用。",
+    "description": "一站式市場速覽 (MCP aggregated: macro + capital + regime + events)。回傳最新宏觀快照、當前推薦策略、壓力指數與資金流向摘要、今日事件。首次接入調用即可取得完整操作脈絡。",
     "inputSchema": {
       "type": "object"
     }
@@ -741,7 +741,7 @@
   },
   "regime_get_history": {
     "name": "regime_get_history",
-    "description": "Return the market regime history for the last N days. Regimes are RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL.",
+    "description": "Return the market regime history for the last N days (HTTP: GET /api/regime/history). Regimes: RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL.",
     "inputSchema": {
       "properties": {
         "days": {
@@ -1017,7 +1017,7 @@
   },
   "system_get_health": {
     "name": "system_get_health",
-    "description": "Return overall system health status (per docs/workflow-map.md WA-606).",
+    "description": "Return overall system health status (HTTP: GET /api/dashboard/system-health). See docs/workflow-map.md WA-606.",
     "inputSchema": {
       "type": "object"
     }
