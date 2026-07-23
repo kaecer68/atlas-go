@@ -216,7 +216,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    newWiredIndustryService(narrativeEng, provider),
+		industryService:    newWiredIndustryService(narrativeEng, provider, workDir),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -255,7 +255,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 		taiwanGeoProvider:  taiwanGeoProvider,
 		taiwanStressCalc:   narrative.NewTaiwanStressCalculator(geoProvider, workDir),
 		reportGenerator:    narrative.NewReportGenerator(),
-		industryService:    newWiredIndustryService(narrativeEng, macroProvider),
+		industryService:    newWiredIndustryService(narrativeEng, macroProvider, workDir),
 		metricsCollector:   metricsCollector,
 		metricsHistory:     NewMetricsHistory(1000),
 		healthManager:      portfolio.NewAgentHealthManager(),
@@ -264,7 +264,7 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 	}
 }
 
-func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider) *service.IndustryService {
+func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider, workDir string) *service.IndustryService {
 	seasonalEngine := industry.NewSeasonalEngine()
 	cycleTracker := industry.NewCycleTracker()
 	linkageAnalyzer := industry.NewLinkageAnalyzer()
@@ -455,6 +455,8 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		params.Darwinian.WeightMin.Value,
 		params.Darwinian.WeightMax.Value,
 	)
+
+	svc.WithSnapshotReader(sectorallocation.NewFileClosureStore(filepath.Join(workDir, "data/state")))
 
 	return svc
 }
