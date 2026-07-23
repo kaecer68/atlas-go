@@ -186,7 +186,7 @@ func (s *server) handleResourceStrategiesActive(ctx context.Context, _ *mcp.Read
 
 func (s *server) handleResourceMarketRegime(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 	var out map[string]any
-	if err := s.cli.Get(ctx, "/api/dashboard/regime-history?limit=1", nil, &out); err != nil {
+	if err := s.cli.Get(ctx, "/api/regime/history?limit=1", nil, &out); err != nil {
 		return nil, fmt.Errorf("resource market regime: %w", err)
 	}
 	return resourceText("atlas://market/regime", "application/json", mustJSON(out)), nil

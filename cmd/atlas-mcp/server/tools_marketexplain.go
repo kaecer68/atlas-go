@@ -9,7 +9,7 @@ import (
 func registerMarketExplainTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "explain_market_move",
-		Description: autoDescOr("explain_market_move", "提供繁體中文的「為什麼漲跌」市場解說。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。適合散戶快速理解市場變動的背後因素。LLM agent（如 Hermes、OpenClaw）可用此工具為用戶生成白話市場解讀。"),
+		Description: autoDescOr("explain_market_move", "提供繁體中文的「為什麼漲跌」市場解說 (HTTP: GET /api/market/explain)。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。"),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleExplainMarketMove)
 }

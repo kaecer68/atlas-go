@@ -38,8 +38,11 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/reasoning-trace", shared.Get(h.ReasoningHandler.HandleReasoningTrace))
 	mux.Handle("GET /api/synergy/darwinian/status", shared.Get(h.HandleDarwinianStatus))
 	mux.Handle("GET /api/synergy/darwinian/trend", shared.Get(h.HandleDarwinianTrend))
-	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
+	// Canonical: /api/regime/history (public, per isPublicPath).
+	// Deprecated alias: /api/dashboard/regime-history (same handler, auth-required).
+	// R-02: consumers should use /api/regime/history going forward.
 	mux.Handle("GET /api/regime/history", shared.Get(h.HandleRegimeHistory))
+	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
 	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }
 
