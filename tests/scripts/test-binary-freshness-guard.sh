@@ -133,6 +133,7 @@ EOF
   : >"$dir/make.log"
 
   CLAUDE_PROJECT_DIR="$ROOT" \
+    ATLAS_ALLOW_LINKED_WORKTREE_REBUILD=1 \
     MAKE_BIN="$dir/make" \
     FAKE_MAKE_LOG="$dir/make.log" \
     "$SESSION_START" >/dev/null
@@ -142,6 +143,13 @@ EOF
   sed -n '1p' "$dir/make.log" | grep -Fq -- "check-binaries" || fail "first session-start command was not check-binaries"
   sed -n '2p' "$dir/make.log" | grep -Fq -- "rebuild-all" || fail "second session-start command was not rebuild-all"
   sed -n '3p' "$dir/make.log" | grep -Fq -- "check-binaries" || fail "third session-start command was not check-binaries"
+
+  : >"$dir/make.log"
+  CLAUDE_PROJECT_DIR="$ROOT" \
+    MAKE_BIN="$dir/make" \
+    FAKE_MAKE_LOG="$dir/make.log" \
+    "$SESSION_START" >/dev/null
+  test ! -s "$dir/make.log" || fail "linked worktree session-start modified shared Docker state"
 }
 
 run_static_contract_tests() {
