@@ -67,12 +67,12 @@ import (
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/startup"
 	"github.com/kaecer68/atlas-go/internal/stocktools"
 	"github.com/kaecer68/atlas-go/internal/storage"
 	strategyRanker "github.com/kaecer68/atlas-go/internal/strategy_ranker"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
-	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 

@@ -22,6 +22,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
+
 // live and auto_experiment paths receive DisableSectorRotation.
 type CompositionPath string
 
@@ -56,8 +57,8 @@ type Root struct {
 
 	// SA08: closure store and session resolver for StrategyEvolver.
 	// Set via WithClosureStore / WithSessionResolver before BuildSystem.
-	closureStore     sectorallocation.ClosureStore
-	sessionResolver  orchestrator.TradingSessionResolver
+	closureStore    sectorallocation.ClosureStore
+	sessionResolver orchestrator.TradingSessionResolver
 }
 
 // NewRoot constructs the shared dependency root.
@@ -108,6 +109,7 @@ func (r *Root) WithSessionResolver(resolver orchestrator.TradingSessionResolver)
 func (r *Root) InjectSectorDeps(sys *orchestrator.System) {
 	sys.WithSectorL1Mapper(r.Mapper).WithSectorExposureCalculator(r.Calc)
 }
+
 // buildWeightEngine lazily constructs a fully-wired default WeightEngine using
 // NewDefaultEngineWithProjector (SA04 path). Adapters are extracted from the
 // industry service infrastructure (cycle/seasonal/linkage); narrative/macro/factor
