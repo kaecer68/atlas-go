@@ -468,6 +468,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs: [release-check]
+    env:
+      ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - name: Validate docker-compose
@@ -492,6 +494,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs: [release-check]
+    env:
+      ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
