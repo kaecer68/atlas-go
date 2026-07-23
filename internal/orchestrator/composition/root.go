@@ -149,16 +149,16 @@ func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 	// Uses the same hardcoded theme→bias map as dashboard_api.go:416-440.
 	narrativeEngine := narrative.NewNarrativeEngine()
 	narrativeThemeMap := map[string]map[string]float64{
-		"US_rates_up":              {"financials": 0.05, "semiconductor": -0.04, "electronics": -0.03},
-		"US_rates_down":            {"financials": -0.05, "semiconductor": 0.04, "electronics": 0.03},
-		"USD_strengther":           {"semiconductor": -0.04, "electronics": -0.03, "tourism": -0.03},
-		"USD_weaker":               {"semiconductor": 0.03, "electronics": 0.03, "tourism": 0.03},
-		"risk_on":                  {"semiconductor": 0.05, "electronics": 0.04, "financials": 0.03},
-		"risk_off":                 {"semiconductor": -0.05, "electronics": -0.04, "financials": -0.03},
-		"JPY_carry_unwind":         {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
-		"geopolitical_risk_spike":  {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
-		"oil_price_shock":          {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
-		"semiconductor_downturn":   {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
+		"US_rates_up":             {"financials": 0.05, "semiconductor": -0.04, "electronics": -0.03},
+		"US_rates_down":           {"financials": -0.05, "semiconductor": 0.04, "electronics": 0.03},
+		"USD_strengther":          {"semiconductor": -0.04, "electronics": -0.03, "tourism": -0.03},
+		"USD_weaker":              {"semiconductor": 0.03, "electronics": 0.03, "tourism": 0.03},
+		"risk_on":                 {"semiconductor": 0.05, "electronics": 0.04, "financials": 0.03},
+		"risk_off":                {"semiconductor": -0.05, "electronics": -0.04, "financials": -0.03},
+		"JPY_carry_unwind":        {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
+		"geopolitical_risk_spike": {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
+		"oil_price_shock":         {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
+		"semiconductor_downturn":  {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
 	}
 	narrativeAdapter := sectorallocation.NewNarrativeAdapter(
 		func(_ context.Context, industryID string) (float64, float64, string, error) {
