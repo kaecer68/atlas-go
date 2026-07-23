@@ -3,5 +3,5 @@
 // Non-runtime utility consumed by internal/experiment. CSV input must conform
 // to TWSE specification.
 //
-// Maturity: utility
+// Maturity: evolving
 package replay

@@ -17,5 +17,5 @@
 //   - GET /api/events/prediction — 5-day capital flow prediction
 //   - GET /api/events/calendar — upcoming event list (wraps EventCalendar)
 //
-// Maturity: experimental
+// Maturity: evolving
 package eventdriven

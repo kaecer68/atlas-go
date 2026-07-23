@@ -24,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/retail"
 	"github.com/kaecer68/atlas-go/internal/risk"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 	"github.com/kaecer68/atlas-go/internal/sim"
 	"github.com/kaecer68/atlas-go/internal/strategy"
 	"github.com/kaecer68/atlas-go/internal/stress"
@@ -129,8 +130,9 @@ type System struct {
 
 	maturityTracker *domain.MaturityTracker
 
-	sectorL1Mapper portfolio.L1SymbolResolver
-	sectorCalc     *portfolio.SectorExposureCalculator
+	sectorL1Mapper     portfolio.L1SymbolResolver
+	sectorCalc         *portfolio.SectorExposureCalculator
+	sectorWeightEngine sectorallocation.WeightEngine
 
 	// F04: event-driven prediction for simulation tilt.
 	eventPredictor EventFlowPredictor
@@ -162,6 +164,15 @@ func (s *System) WithSectorL1Mapper(m portfolio.L1SymbolResolver) *System {
 // by currentSectorAllocations.
 func (s *System) WithSectorExposureCalculator(c *portfolio.SectorExposureCalculator) *System {
 	s.sectorCalc = c
+	return s
+}
+
+// WithSectorWeightEngine injects the sector WeightEngine (SA06 plumbing).
+// SA08 consumer (currentSectorAllocations → StrategyEvolver) is pending
+// Layer 3-4 wiring completion. The field is intentionally write-only until
+// the StrategyEvolver's closureStore/sessionResolver/weightEngine are injected.
+func (s *System) WithSectorWeightEngine(eng sectorallocation.WeightEngine) *System {
+	s.sectorWeightEngine = eng
 	return s
 }
 

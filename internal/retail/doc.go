@@ -6,5 +6,5 @@
 //   - Part C (25%): Institutional net flow, futures OI, and ETF subscription proxies
 //   - Part D: Adjustment factor (0.8–1.2) from geopolitical risk, VIX spikes, and credit events
 //
-// Maturity: experimental
+// Maturity: evolving
 package retail

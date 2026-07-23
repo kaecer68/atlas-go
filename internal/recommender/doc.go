@@ -8,5 +8,5 @@
 // This module uses the ranking engine from internal/strategy_ranker/
 // and the event-driven system from internal/eventdriven/.
 //
-// Maturity: experimental
+// Maturity: evolving
 package recommender

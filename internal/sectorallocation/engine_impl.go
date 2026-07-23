@@ -324,41 +324,119 @@ func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers Driv
 	return e.projector.Project(base, drivers)
 }
 
-// collectCycleDeltas 把 cycle multiplier 轉成 additive delta：multiplier-1 對每個 L1 sector。
-func collectCycleDeltas(_ context.Context, p CycleInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
+// collectCycleDeltas applies the cycle multiplier from p to each sector in in.
+// If p is nil or the call fails, in is returned unchanged.
+func collectCycleDeltas(ctx context.Context, p CycleInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
 	if p == nil {
 		return in
 	}
-	// 既有 caller 已提供 deltas；不做 transform（避免雙計算）。
-	// 此 helper 留作 future extension：若 caller 只傳 multiplier，可在此轉 (m-1)。
-	return in
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetCycleMultiplier(ctx, string(id))
+		if err != nil || m <= 0 {
+			out[id] = v
+			continue
+		}
+		out[id] = v * m
+	}
+	return out
 }
 
+// collectSeasonalDeltas applies the seasonal multiplier from p to each sector in in.
+// If p is nil or the call fails, in is returned unchanged.
 func collectSeasonalDeltas(ctx context.Context, p SeasonalInputProvider, in map[industry.SectorID]float64, asOf string) map[industry.SectorID]float64 {
-	_ = p
-	_ = asOf
-	return in
+	if p == nil {
+		return in
+	}
+	// Parse asOf into time.Time for GetSeasonalMultiplier.
+	asOfDate, err := time.Parse("2006-01-02", asOf)
+	if err != nil {
+		return in
+	}
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetSeasonalMultiplier(ctx, string(id), asOfDate)
+		if err != nil || m <= 0 {
+			out[id] = v
+			continue
+		}
+		out[id] = v * m
+	}
+	return out
 }
 
+// collectLinkageDeltas applies the linkage multiplier from p to each sector in in.
+// If p is nil or the call fails, in is returned unchanged.
 func collectLinkageDeltas(ctx context.Context, p LinkageInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
-	_ = p
-	return in
+	if p == nil {
+		return in
+	}
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetLinkageMultiplier(ctx, string(id))
+		if err != nil || m <= 0 {
+			out[id] = v
+			continue
+		}
+		out[id] = v * m
+	}
+	return out
 }
 
+// collectNarrativeDeltas applies the narrative multiplier from p to each sector in in.
+// If p is nil or the call fails, in is returned unchanged.
 func collectNarrativeDeltas(ctx context.Context, p NarrativeInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
-	_ = p
-	return in
+	if p == nil {
+		return in
+	}
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetNarrativeMultiplier(ctx, string(id))
+		if err != nil || m <= 0 {
+			out[id] = v
+			continue
+		}
+		out[id] = v * m
+	}
+	return out
 }
 
+// collectMacroDeltas applies the macro tilt from p to each sector in in.
+// MacroAction is passed to GetMacroTilt. If p is nil or the call fails, in is returned unchanged.
 func collectMacroDeltas(ctx context.Context, p MacroInputProvider, in map[industry.SectorID]float64, action MacroAction) map[industry.SectorID]float64 {
-	_ = p
-	_ = action
-	return in
+	if p == nil {
+		return in
+	}
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetMacroTilt(ctx, string(id), string(action), "")
+		if err != nil {
+			out[id] = v
+			continue
+		}
+		// macro tilt is additive: new = v * (1 + tilt)
+		out[id] = v * (1 + m)
+	}
+	return out
 }
 
+// collectFactorDeltas applies the factor tilt from p to each sector in in.
+// If p is nil or the call fails, in is returned unchanged.
 func collectFactorDeltas(ctx context.Context, p FactorInputProvider, in map[industry.SectorID]float64) map[industry.SectorID]float64 {
-	_ = p
-	return in
+	if p == nil {
+		return in
+	}
+	out := make(map[industry.SectorID]float64, len(in))
+	for id, v := range in {
+		m, err := p.GetFactorTilt(ctx, string(id))
+		if err != nil {
+			out[id] = v
+			continue
+		}
+		// factor tilt is additive: new = v * (1 + tilt)
+		out[id] = v * (1 + m)
+	}
+	return out
 }
 
 func clamp(v, lo, hi float64) float64 {

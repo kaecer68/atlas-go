@@ -18,5 +18,5 @@
 // Reports are pure: they take structured data and return formatted strings,
 // no I/O. The caller handles file writing.
 //
-// Maturity: utility
+// Maturity: evolving
 package reporting

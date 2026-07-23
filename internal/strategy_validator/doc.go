@@ -14,5 +14,5 @@
 //	report := v.Validate("momentum", dailyReturns, taiexReturns)
 //	// report.AnnualizedReturn, report.SharpeRatio, report.TaiexCorrelation ...
 //
-// Maturity: experimental
+// Maturity: evolving
 package strategy_validator

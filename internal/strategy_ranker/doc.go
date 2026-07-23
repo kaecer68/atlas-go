@@ -4,5 +4,5 @@
 // It consumes StrategyReport from internal/strategy_validator and produces
 // ranked, tier-tagged output suitable for the recommendation engine.
 //
-// Maturity: experimental
+// Maturity: evolving
 package strategy_ranker

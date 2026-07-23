@@ -9,5 +9,5 @@
 //
 // Output formats: JSON (API/MCP), Markdown (web display), optional HTML email.
 //
-// Maturity: experimental
+// Maturity: evolving
 package dailyreport

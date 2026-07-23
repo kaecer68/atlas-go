@@ -3,7 +3,7 @@
 > **Wave**：8.x（規劃中）
 > **穩定性**：draft
 > **首次上線**：未上線
-> **EventType 常數**：`eventbus.EventSharpeDegradation`（待定義）
+> **EventType 常數**：已移除（`EventSharpeDegradation` 從未實作，2026-07-24 zombie cleanup — 保留本文件作為未來實作參考）
 > **字串值**：`"performance.sharpe_degradation"`
 > **Severity**：`warning`
 

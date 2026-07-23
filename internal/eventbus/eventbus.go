@@ -77,7 +77,6 @@ const (
 	EventOrderError EventType = "order.error"
 
 	// 自动监控事件
-	EventSharpeDegradation   EventType = "monitor.sharpe.degradation"
 	EventDrawdownBreach      EventType = "monitor.drawdown.breach"
 	EventConcentrationBreach EventType = "portfolio.concentration.breach"
 
