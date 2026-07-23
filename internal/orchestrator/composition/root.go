@@ -119,14 +119,12 @@ func (r *Root) BuildSystem(
 	// safe to include on all paths (they are read-only utilities).
 	r.InjectSectorDeps(system)
 
-	// WeightEngine is only relevant for paths that allow sector rotation.
 	// For denied paths (auto_experiment, live_trading) we skip wiring
 	// to prevent any accidental sector-allocation mutation.
 	if path.AllowsSectorRotation() && r.weightEngine != nil {
-		// SA08: system.WithSectorWeightEngine(r.weightEngine)
 		// SA06 establishes the plumbing; actual consumption goes live
 		// when SA08 delivers the session policy store + allocator.
-		_ = system // no-op placeholder
+		system.WithSectorWeightEngine(r.weightEngine)
 	}
 
 	return system, nil
