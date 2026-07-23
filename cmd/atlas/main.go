@@ -1899,6 +1899,18 @@ func run(args []string, deps appDeps) error {
 			w.Write([]byte(routesJSON))
 		}))
 
+		// C-04: catch-all 404 for unmatched /api/* routes (any method).
+		// Registered last — mux matches most specific pattern first.
+		mux.Handle("/api/{rest...}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error": "route not found",
+				"code":  http.StatusNotFound,
+				"path":  r.URL.Path,
+			})
+		}))
+
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
