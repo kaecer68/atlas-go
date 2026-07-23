@@ -130,8 +130,8 @@ type System struct {
 
 	maturityTracker *domain.MaturityTracker
 
-	sectorL1Mapper   portfolio.L1SymbolResolver
-	sectorCalc       *portfolio.SectorExposureCalculator
+	sectorL1Mapper     portfolio.L1SymbolResolver
+	sectorCalc         *portfolio.SectorExposureCalculator
 	sectorWeightEngine sectorallocation.WeightEngine
 
 	// F04: event-driven prediction for simulation tilt.

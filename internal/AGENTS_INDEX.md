@@ -82,7 +82,7 @@
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A，僅供 atlas-mcp 消費）|
 | `reflexivity` | 自反性價格動態引擎（⚠️ 被 orchestrator + sim runtime 使用但無 AGENTS.md）|
 | `robustness` | 穩健性與敏感度測試（SK-20~22，零 runtime 依賴，Fin-Skills 驅動）|
-| `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（`docs/specs/sector-allocation-weight-engine-v1.md`）|
+| `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（`docs/specs/sector-allocation-simulation-closure-spec.md`）|
 
 ### A · Archived（封存，1 個）
 

@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 36 packages
+## E · Evolving（演進中）— 37 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -81,6 +81,7 @@
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
 | `strategy_ranker` | 策略排名與分層 — 依 backtest 績效對 5 策略排名並分配 public/paid tier | `Ranker`, `RankedStrategy` | **v0.0.0.38 升級**：Wave 11 新增；消費 strategy_validator；產出供 recommender 使用 |
 | `strategy_validator` | 策略歷史回測驗證 — Sharpe/最大回撤/勝率/TAIEX 相關係數、排名與分層 | `Validator`, `StrategyReport`, `BatchReport` | **v0.0.0.38 升級**：Wave 11 新增；消費 backtest + strategy；產出供 strategy_ranker 使用 |
+| `scheduler` | ML 模型重訓排程 — auto_calibration、auto_rollback、seasonal_task、l2_4_auto_cron、system_health 定時任務 | `Manager`, `Dispatcher` | **v0.0.0.38 新增**：scheduler 為獨立 orchestrator pipeline 步驟，產出供 strategy_evolver 與 prism retrain 消費 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | **v0.0.0.38 升級**：進入 orchestrator SystemCore live risk evaluation |
 | `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | **v0.0.0.38 升級**：Wave 11 新增；進入 MCP auth + recommender runtime |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
@@ -111,14 +112,13 @@
 | `mcp/anomaly` | MCP audit event 異常偵測 — rolling-window z-score、per-tool/per-tenant error-rate、in-memory ring buffer | `Detector`, `Store`, `AnomalyEvent` | Wave 11 Phase 4 Direction A：僅供 `cmd/atlas-mcp` 消費，不應被其他 stable/evolving 模組依賴 |
 | `stocktools` | 個股級查詢端點 — quote、fundamentals、chips、technical | `QuoteHandler`, `FundamentalsHandler`, `ChipsHandler`, `TechnicalHandler` | Wave 11 新增；API: /api/stock/*；供 atlas-mcp stock_* tools 使用 |
 ---
-## A · Archived（封存）— 2 packages
+## A · Archived（封存）— 1 package
 
 已被 Phase 2 canonical 取代；API frozen，僅接受 bug fix 維護；新程式碼禁止依賴。
 
 | Package | 描述 | 關鍵型別/介面 | 封存原因 |
 |---------|------|--------------|----------|
 | `llm_annotator` | LLM 歸因標註 — 自然語言解釋 StrategyFrame 失效原因（Kimi/Moonshot API） | `Annotator`, `KimiClient`, `MockAnnotator`, `FailureContext`, `CircuitBreaker`(wrapper), `CircuitState`(alias) | **Wave 11 L2.1（Issue #722）**：Phase 2 canonical 介面（`internal/llm/capabilities/failure_attribution` + `internal/llm/adapters`）已就緒，承接本套件的角色。**Wave 12 Phase 2（Issue #731）**：CircuitBreaker 統一為 `apigateway.CircuitBreaker` canonical owner；本套件保留 `CircuitBreaker` thin wrapper 委派（含 `CircuitState = apigateway.State` 型別別名、`ErrCircuitOpen` sentinel、`Allow()`/`Snapshot()`/`WithNowFunc()`）；4 層 transitive import cycle 已破壞（`monitoring.ChannelHealthStore` 等搬到 `apigateway`）。需 `LLM_ANNOTATOR_API_KEY` 環境變數（透過 apigateway `config.GetSecret` 取得），opt-in 啟用（空時 `/api/strategies/{id}/annotate` 回 50…
-| `swarm` | Swarm 狀態容器 | — | **v0.0.0.38 封存**：目錄已刪除（PR #963）；模擬引擎已降級為 pass-through；保留條目供歷史參考 |
 
 ---
 

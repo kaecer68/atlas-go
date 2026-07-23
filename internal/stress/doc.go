@@ -10,5 +10,5 @@
 //   - risktest: multi-scenario batch execution via cmd/stress-test
 //   - stress: single-scenario runtime API used by live risk evaluation
 //
-// Maturity: experimental
+// Maturity: evolving
 package stress

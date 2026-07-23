@@ -7,5 +7,5 @@
 //   - Middleware-pattern tier validation: ValidateTier(minTier)
 //   - 7-day premium trial for new registered users
 //
-// Maturity: experimental
+// Maturity: evolving
 package subscription
