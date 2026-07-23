@@ -2,8 +2,8 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：59 個模組（24 S / 18 E / 12 X / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
-> **v0.0.0.38 變更**：成熟度重分組（2026-07-24 審計修正）：swarm A、replay/capitalflow/forecast/retail/strategy_ranker/strategy_validator/stress/reporting/subscription 升至 E。S 24 / E 27 / X 6 / A 1 / U 3（sectorallocation 補加入 X）。
+> **總計**：61 個模組（24 S / 27 E / 6 X / 1 A / 3 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **v0.0.0.38 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/strategy_validator/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
