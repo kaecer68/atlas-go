@@ -194,6 +194,16 @@ func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketSe
 
 // UpdateCorrelation pushes a new daily return pair (SPX, TWSE proxy = SOX)
 // into the legacy SPX-TWSE rolling correlation engine. Preserved for
+// WarmupFromHistory feeds historical snapshots into all rolling correlation
+// engines so the API returns meaningful data immediately instead of
+// waiting for the window to fill (fix manifest #E05). Each snapshot
+// contributes one observation per engine via UpdateAllCorrelations.
+func (s *CrossMarketService) WarmupFromHistory(snapshots []marketdata.MacroDataSnapshot) {
+	for _, snap := range snapshots {
+		s.UpdateAllCorrelations(snap)
+	}
+}
+
 // back-compat; new callers should use UpdateAllCorrelations.
 func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
 	s.rollingSPXTWSE.Update(spxReturn, soxReturn)

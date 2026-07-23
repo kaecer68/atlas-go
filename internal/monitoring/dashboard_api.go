@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -1198,6 +1199,36 @@ func (a *DashboardAPI) RegisterMacroRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 	a.crossMarketSvc = service.NewCrossMarketService(a.macroProvider)
+
+	// E05: warm up rolling correlation engines with historical snapshots
+	// so the correlation API returns meaningful data immediately instead
+	// of waiting 20 trading days for the window to fill.
+	snapshotDir := filepath.Join(a.workDir, "data", "state", "macro")
+	if entries, err := os.ReadDir(snapshotDir); err == nil {
+		var snapshots []marketdata.MacroDataSnapshot
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+				continue
+			}
+			if entry.Name() == "latest.json" || entry.Name() == "previous.json" || entry.Name() == "_metadata.json" {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(snapshotDir, entry.Name()))
+			if err != nil {
+				continue
+			}
+			var snap marketdata.MacroDataSnapshot
+			if err := json.Unmarshal(data, &snap); err == nil {
+				snapshots = append(snapshots, snap)
+			}
+		}
+		if len(snapshots) > 0 {
+			a.crossMarketSvc.WarmupFromHistory(snapshots)
+			logging.Info("dashboard_api", "correlation_warmup_complete",
+				"snapshots", len(snapshots))
+		}
+	}
+
 	dm := metrics.NewDegradedMetrics()
 	dm.SetOnInc(func(name string, labels []string, value float64) {
 		labelMap := make(map[string]string, len(labels)/2)
