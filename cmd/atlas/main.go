@@ -1776,19 +1776,13 @@ func run(args []string, deps appDeps) error {
 					}
 					return nil
 				})
-				dashEventBus.Subscribe(eventbus.EventSharpeDegradation, func(ctx context.Context, ev eventbus.BusEvent) error {
-					logging.Warn("monitor", "sharpe_degradation",
-						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
-						"description", ev.Description)
-					return nil
-				})
 				dashEventBus.Subscribe(eventbus.EventDrawdownBreach, func(ctx context.Context, ev eventbus.BusEvent) error {
 					logging.Error("monitor", "drawdown_breach",
 						"id", ev.ID, "payload", fmt.Sprintf("%+v", ev.Payload),
 						"description", ev.Description)
 					return nil
 				})
-				log.Printf("[Monitor] subscribed to regime/sharpe/drawdown events")
+				log.Printf("[Monitor] subscribed to regime/drawdown events")
 			}
 
 			log.Printf("[RiskGate] injected into DashboardAPI for calibration reports")
