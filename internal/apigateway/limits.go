@@ -132,6 +132,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"twse_etf":               rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
 			"twse_sbl":               rate.NewLimiter(rate.Every(2*time.Second), 1), // G02: TWSE SBL daily
 			"tdcc_equity_dispersion": rate.NewLimiter(rate.Every(5*time.Second), 1), // G01: TDCC weekly
+			"government_flow":        rate.NewLimiter(rate.Inf, 0),                // file-backed, no upstream HTTP
 			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter
 			// (see yahooIndexLimiter / yahooTechLimiter / taiexIndexLimiter above) so the 9-channel
 			// us_market_refresh batch does not serialize at 1 req/s.

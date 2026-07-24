@@ -17,11 +17,11 @@ func TestGovernmentFlowAdapter_Metadata(t *testing.T) {
 	if m.ChannelID != "government_flow" {
 		t.Errorf("channel id=%s", m.ChannelID)
 	}
-	if m.HasLimiter {
-		t.Error("file-backed adapter must not report HasLimiter=true")
+	if !m.HasLimiter {
+		t.Error("file-backed adapter must report HasLimiter=true per Constitution Art.2")
 	}
-	if a.RateLimit() != nil {
-		t.Error("file-backed adapter must return nil limiter")
+	if a.RateLimit() == nil {
+		t.Error("file-backed adapter must return non-nil limiter per Constitution Art.2")
 	}
 }
 
