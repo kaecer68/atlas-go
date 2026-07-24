@@ -162,8 +162,8 @@
 
 ## Session-End State
 
-- **Done this session**: `narrative/calibration` 子套件拆分完成，透過 `narrative/calibration_facade.go` 維持公開 API 相容；detector / seasonal 經實證判定為 blocked
-- **Remaining**: Phase C 收尾（gofmt / go test / check-binaries / commit / PR）；F-07/F-08 doc.go 補充留待 Phase 2
-- **Next action**: 提交 F-02 PR
-- **Uncommitted code**: yes (`internal/narrative/calibration/` + `calibration_facade.go` + manifest 更新)
-- **Branch / PR**: `fix/f02-narrative-detector-calibration-split` / TBD
+- **Done this session**: All Phase 2 items (F-07/F-08/F-09) completed and merged via PR #1324; paths-filter negation bug fixed and fast-track verified via PR #1325 + PR #1326; all binaries aligned with HEAD.
+- **Remaining**: None for this audit.
+- **Next action**: Monitor issue #1322 for future F-02 detector/seasonal split decisions.
+- **Uncommitted code**: no
+- **Branch / PR**: N/A (all merged to main)
