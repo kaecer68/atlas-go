@@ -74,7 +74,7 @@ func (a *GovernmentFlowAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	status := "ok"
@@ -85,7 +85,7 @@ func (a *GovernmentFlowAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 	return HealthStatus{
 		Status:    status,
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+			CheckType: "readiness",
 	}, nil
 }
 // RateLimit returns the limiter for file-read rate control.

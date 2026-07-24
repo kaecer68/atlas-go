@@ -53,13 +53,13 @@ func (a *ExportStatisticsChannelAdapter) HealthCheck(ctx context.Context) (Healt
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	return HealthStatus{
 		Status:    "ok",
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+		CheckType: "readiness",
 	}, nil
 }
 
