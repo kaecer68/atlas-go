@@ -1,6 +1,6 @@
 // Package strategy_ranker 提供策略排名的可呼叫介面，供策略推薦器使用。
 //
-// Ranker 封裝 strategy_validator.Rank() 與 strategy_validator.AssignTiers()，
+// Ranker 封裝 Rank() 與 AssignTiers()，
 // 對外提供統一的排名 + 分層入口。
 //
 // 預設分層規則：
@@ -11,9 +11,7 @@
 // Maturity: experimental
 package strategy_ranker
 
-import (
-	"github.com/kaecer68/atlas-go/internal/strategy_validator"
-)
+import ()
 
 // Ranker 為策略排名的統一入口。
 type Ranker struct{}
@@ -27,24 +25,24 @@ func New() *Ranker {
 //
 // 回傳已排序的報告（第 1 名在前），各報告 .Tier 為 "premium" /
 // "registered" / "free" 三者之一。
-func (r *Ranker) RankAndTier(reports []*strategy_validator.StrategyReport) []strategy_validator.RankedReport {
-	ranked := strategy_validator.Rank(reports)
-	strategy_validator.AssignTiers(ranked)
+func (r *Ranker) RankAndTier(reports []*StrategyReport) []RankedReport {
+	ranked := Rank(reports)
+	AssignTiers(ranked)
 	return ranked
 }
 
 // FreeReports 過濾並回傳免費層的策略報告。
-func (r *Ranker) FreeReports(ranked []strategy_validator.RankedReport) []strategy_validator.RankedReport {
+func (r *Ranker) FreeReports(ranked []RankedReport) []RankedReport {
 	return filterByTier(ranked, "free")
 }
 
 // PremiumReports 過濾並回傳付費層的策略報告。
-func (r *Ranker) PremiumReports(ranked []strategy_validator.RankedReport) []strategy_validator.RankedReport {
+func (r *Ranker) PremiumReports(ranked []RankedReport) []RankedReport {
 	return filterByTier(ranked, "premium")
 }
 
-func filterByTier(ranked []strategy_validator.RankedReport, tier string) []strategy_validator.RankedReport {
-	result := make([]strategy_validator.RankedReport, 0)
+func filterByTier(ranked []RankedReport, tier string) []RankedReport {
+	result := make([]RankedReport, 0)
 	for _, r := range ranked {
 		if r.Tier == tier {
 			result = append(result, r)

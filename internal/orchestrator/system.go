@@ -364,6 +364,52 @@ func ResolveReplayContext(cfg config.Config) (domain.AgentRegistry, baseline.Pol
 	return registry, policy, ds
 }
 
+// publishSessionClose publishes session close lifecycle events.
+// Handles GuardOutcomes, DarwinianClamping, and SimulationComplete
+// — the three publish blocks that cluster at the end of every simulation run.
+func (s *System) publishSessionClose(
+	sessionID string,
+	guardOutcomes []domain.GuardOutcome,
+	portfolioValue float64,
+	orderCount int,
+	positionCount int,
+	clampingEvents []portfolio.ClampingEvent,
+) {
+	if s.Risk().eventBus == nil {
+		if len(clampingEvents) > 0 && s.Risk().clampingLogger != nil {
+			// Still log clamping events even without event bus.
+			for _, e := range clampingEvents {
+				s.Risk().clampingLogger.Append(eventbus.ClampingEventPayload{
+					AgentID: e.AgentID, RawWeight: e.RawWeight,
+					FinalWeight: e.FinalWeight, Boundary: e.Boundary,
+					Timestamp: e.Timestamp,
+				})
+			}
+		}
+		return
+	}
+
+	go s.Risk().eventBus.PublishGuardOutcomes(sessionID, guardOutcomes)
+
+	if len(clampingEvents) > 0 {
+		payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
+		for i, e := range clampingEvents {
+			payloads[i] = eventbus.ClampingEventPayload{
+				AgentID: e.AgentID, RawWeight: e.RawWeight,
+				FinalWeight: e.FinalWeight, Boundary: e.Boundary,
+				Timestamp: e.Timestamp,
+			}
+		}
+		go s.Risk().eventBus.PublishDarwinianClamping(payloads)
+		if s.Risk().clampingLogger != nil {
+			for _, p := range payloads {
+				s.Risk().clampingLogger.Append(p)
+			}
+		}
+	}
+
+	go s.Risk().eventBus.PublishSimulationComplete(sessionID, portfolioValue, orderCount, positionCount)
+}
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
@@ -551,9 +597,6 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		s.drawdownMu.RUnlock()
 	}
 	result.GuardOutcomes = guardOutcomes
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
-	}
 
 	s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
 	if len(s.Sim().portfolioHistory) > 1 {
@@ -575,18 +618,11 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	tw.Record(7, "ledger_write", "START", nil)
-	// Use replay-based forward returns when dataset is available (real data).
-	// Falls back to synthetic when replay is nil. Synthetic outcomes are
-	// recorded to the ledger for audit, but must NOT drive Darwinian weight
-	// evolution (fake data would pollute the learning signal); on such gap
-	// days the weights are left unchanged.
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
 	syntheticOutcomes := len(outcomes) == 0
 	if syntheticOutcomes {
 		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
 	}
-	// Write outcomes to ALL stores: PostgreSQL (if available), global file, and per-session file.
-	// The XOR pattern was removed because DualWriteRepository already handles DB ↔ file sync.
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
 	}
@@ -598,16 +634,13 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 	s.Sim().lastOutcomes = outcomes
 
-	// F06: feed non-synthetic outcomes into comparison engine for real strategy rankings.
 	if s.Strat().comparisonEngine != nil && !syntheticOutcomes {
-		// Dereference pointers for the evaluator.
 		strats := s.Strat().strategyRegistry.List()
 		vals := make([]strategy.Strategy, len(strats))
 		for i, sp := range strats {
 			vals[i] = *sp
 		}
 		eval := strategy.NewShadowStrategyEvaluator(vals)
-		// Convert domain outcomes to strategy package's local type.
 		stratOutcomes := make([]strategy.RecommendationOutcome, len(outcomes))
 		for i, o := range outcomes {
 			stratOutcomes[i] = strategy.RecommendationOutcome{
@@ -618,7 +651,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		}
 		benchmarkReturn := 0.0
 		if s.macroSnapshot != nil {
-			benchmarkReturn = s.macroSnapshot.TAIEX.ChangePct / 100 // convert % to decimal
+			benchmarkReturn = s.macroSnapshot.TAIEX.ChangePct / 100
 		}
 		benchmark := strategy.BenchmarkObservation{
 			TradingDate: asOf.Format("2006-01-02"),
@@ -639,39 +672,21 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 
 	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
+	var clampingEvents []portfolio.ClampingEvent
 	if s.Port().darwinian != nil && !syntheticOutcomes {
 		for _, outcome := range outcomes {
 			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		_, clampingEvents := s.Port().darwinian.PerformDailyAdjustment()
+		_, clampingEvents = s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()
 		_ = s.Port().darwinian.AppendSnapshot()
-		// Publish clamping events for monitoring and audit trail
-		if len(clampingEvents) > 0 && s.Risk().eventBus != nil {
-			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
-			for i, e := range clampingEvents {
-				payloads[i] = eventbus.ClampingEventPayload{
-					AgentID:     e.AgentID,
-					RawWeight:   e.RawWeight,
-					FinalWeight: e.FinalWeight,
-					Boundary:    e.Boundary,
-					Timestamp:   e.Timestamp,
-				}
-			}
-			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
-			if s.Risk().clampingLogger != nil {
-				for _, p := range payloads {
-					s.Risk().clampingLogger.Append(p)
-				}
-			}
-		}
 	}
 
 	s.host.PostSimulation(quotes, regime, asOf)
 
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
-	}
+	s.publishSessionClose(s.Sim().session.ID, guardOutcomes,
+		result.PortfolioValue, len(result.Orders), len(result.Positions),
+		clampingEvents)
 
 	if s.Sim().scratchpad != nil {
 		// Add portfolio summary trace showing current holdings + P&L

@@ -6,7 +6,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -179,9 +178,6 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	}
 	tw.Record(6, "sim_exec", "OK", map[string]any{"orders": len(result.Orders), "positions": len(result.Positions)})
 	result.GuardOutcomes = guardOutcomes
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishGuardOutcomes(s.Sim().session.ID, guardOutcomes)
-	}
 	tw.Record(7, "ledger_write", "START", nil)
 	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, string(regime), s.Sim().replay)
 	if s.Risk().repo != nil {
@@ -210,40 +206,21 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	s.Sim().lastQuotes = quotes
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
-	// Skip weight evolution entirely on replay-gap days (no real outcomes):
-	// adjusting over a stale window would drift weights on non-trading days.
+	var clampingEvents []portfolio.ClampingEvent
 	if s.Port().darwinian != nil && len(outcomes) > 0 {
 		for _, outcome := range outcomes {
 			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
 		}
-		_, clampingEvents := s.Port().darwinian.PerformDailyAdjustment()
+		_, clampingEvents = s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()
 		_ = s.Port().darwinian.AppendSnapshot()
-		if len(clampingEvents) > 0 && s.Risk().eventBus != nil {
-			payloads := make([]eventbus.ClampingEventPayload, len(clampingEvents))
-			for i, e := range clampingEvents {
-				payloads[i] = eventbus.ClampingEventPayload{
-					AgentID:     e.AgentID,
-					RawWeight:   e.RawWeight,
-					FinalWeight: e.FinalWeight,
-					Boundary:    e.Boundary,
-					Timestamp:   e.Timestamp,
-				}
-			}
-			go s.Risk().eventBus.PublishDarwinianClamping(payloads)
-			if s.Risk().clampingLogger != nil {
-				for _, p := range payloads {
-					s.Risk().clampingLogger.Append(p)
-				}
-			}
-		}
 	}
 
 	s.host.PostSimulation(quotes, regime, sessionDate)
 
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishSimulationComplete(s.Sim().session.ID, result.PortfolioValue, len(result.Orders), len(result.Positions))
-	}
+	s.publishSessionClose(s.Sim().session.ID, guardOutcomes,
+		result.PortfolioValue, len(result.Orders), len(result.Positions),
+		clampingEvents)
 
 	if s.Sim().scratchpad != nil {
 		posData := make([]map[string]any, 0, len(result.Positions))

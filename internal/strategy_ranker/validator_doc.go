@@ -1,4 +1,4 @@
-// Package strategy_validator 提供策略歷史回測驗證與績效指標計算。
+// Package strategy_ranker 提供策略歷史回測驗證、排名與分層。
 //
 // Validator 接受策略的每日報酬序列，計算年化報酬、最大回撤、Sharpe 比率、
 // 勝率以及與加權指數的相關係數（Pearson），輸出結構化的策略驗證報告。
@@ -10,9 +10,9 @@
 //
 // 使用範例：
 //
-//	v := strategy_validator.NewValidator()
+//	v := NewValidator()
 //	report := v.Validate("momentum", dailyReturns, taiexReturns)
 //	// report.AnnualizedReturn, report.SharpeRatio, report.TaiexCorrelation ...
 //
 // Maturity: evolving
-package strategy_validator
+package strategy_ranker
