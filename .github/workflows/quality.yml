@@ -632,8 +632,17 @@ jobs:
     - name: Run shared JS unit tests
       run: node --test shared_web/static/js/__tests__/*.mjs
 
-    - name: Install Playwright chromium
-      run: npx playwright install --with-deps chromium
+    # Install browsers from each project's Playwright version. Running
+    # `npx playwright` from the repo root resolves to the latest published
+    # version, which installs browser binaries incompatible with the pinned
+    # @playwright/test versions in admin_web/client_web.
+    - name: Install Playwright chromium (admin_web)
+      working-directory: admin_web
+      run: npm exec playwright install --with-deps chromium
+
+    - name: Install Playwright chromium (client_web)
+      working-directory: client_web
+      run: npm exec playwright install --with-deps chromium
 
     - name: Run admin_web E2E tests
       working-directory: admin_web
