@@ -134,7 +134,7 @@
 | PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
 | PR #1320 | F-01 | 清理 `strategy_validator` 殘留文件引用 | ✅ merged |
 | PR #1321 | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | ✅ merged |
-| PR #1324 | F-07 / F-08 / F-09 | 補充 doc.go 邊界說明 + docs-only fast-track CI | 🔄 in progress |
+| PR #1324 | F-07 / F-08 / F-09 | 補充 doc.go 邊界說明 + docs-only fast-track CI | ✅ merged |
 | PR #1318 | F-06 paramcheck | 合併 `internal/paramcheck` → `internal/config` | ✅ merged |
 | PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | ✅ merged |
 
@@ -148,7 +148,7 @@
 | F-03 | ✅ closed: Publish 重複區塊已抽取為 System helper methods | — |
 | F-07 | ✅ closed: eventbus/eventdriven/eventquality 邊界說明已補充至各 doc.go | PR #1324 |
 | F-08 | ✅ closed: `llm` 與 `llm_annotator` 封存/替代關係已補充至 doc.go | PR #1324 |
-| F-09 | docs/manifest 變更 fast-track CI（重型 job skip + docs-only-gate） | Phase 2 |
+| F-09 | ✅ closed: docs/manifest 變更 fast-track CI（重型 job skip + docs-only-gate） | PR #1324 |
 
 ---
 
