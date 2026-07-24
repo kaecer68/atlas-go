@@ -73,15 +73,13 @@
 > 註：24 個 S-tier + 27 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
 
-### X · Experimental（實驗中，6 個）
+### X · Experimental（實驗中，4 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
 | `adversarial` | 對抗性訓練、BattleResult（⚠️ 被 orchestrator runtime 使用但無 AGENTS.md） |
-| `forecast_bridge` | Forecast → TradeSignal 轉換層（Phase 3.5 M4 PoC，尚無 runtime 引用）|
-| `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A，僅供 atlas-mcp 消費）|
 | `reflexivity` | 自反性價格動態引擎（⚠️ 被 orchestrator + sim runtime 使用但無 AGENTS.md）|
-| `robustness` | 穩健性與敏感度測試（SK-20~22，零 runtime 依賴，Fin-Skills 驅動）|
+| `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A，僅供 atlas-mcp 消費）|
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（`docs/specs/sector-allocation-simulation-closure-spec.md`）|
 
 ### A · Archived（封存，1 個）
