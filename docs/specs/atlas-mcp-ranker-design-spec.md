@@ -77,7 +77,7 @@ cmd/atlas-mcp/server
 #### 資料來源
 
 - 呼叫 `internal/monitoring/api/strategies` 的 `Registry` 取得 active strategy frames。
-- 將 frame 中的 `HitRate`、`TotalTests` 等指標轉換為 `strategy_validator.StrategyReport`，再透過 `strategy_ranker.RankAndTier` 產出 `RankedReport`。
+- 將 frame 中的 `HitRate`、`TotalTests` 等指標轉換為 `strategy_ranker.StrategyReport`，再透過 `strategy_ranker.RankAndTier` 產出 `RankedReport`。
 - 未來若策略回測日報酬序列可取得，再換成完整績效指標（Sharpe、MaxDrawdown 等）。
 
 ---
@@ -92,7 +92,7 @@ cmd/atlas-mcp/server
 | `stock_get_technical` | `/api/stock/technical?symbol={symbol}&days={days}` | `symbol`, `days?` | close、volume、sma20、sma50、rsi14 |
 | `capital_flow_daily` | `/api/capital-flow/daily` | — | `capitalflow.DailyReport` |
 | `capital_flow_summary` | `/api/capital-flow/summary` | — | `capitalflow.SummaryReport` |
-| `strategy_ranker` | `/api/strategy-ranker/rank` | — | `[]strategy_validator.RankedReport` |
+| `strategy_ranker` | `/api/strategy-ranker/rank` | — | `[]strategy_ranker.RankedReport` |
 
 ---
 

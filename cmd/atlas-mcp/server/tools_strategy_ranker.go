@@ -17,7 +17,7 @@ func registerStrategyRankerTools(mcpSrv *mcp.Server, s *server) {
 // strategyRankerOutput decodes the JSON array returned by
 // GET /api/strategy-ranker/rank (internal/strategy_ranker/handler.go
 // HandleRank). Items stay as map[string]any to keep MCP schema decoupled
-// from strategy_validator.RankedReport.
+// from strategy_ranker.RankedReport.
 type strategyRankerOutput struct {
 	Strategies []map[string]any `json:"strategies"`
 }

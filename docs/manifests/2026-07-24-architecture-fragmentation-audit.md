@@ -11,7 +11,7 @@
 ## Invariant Table
 
 | ID | 問題 | 證據 | 分類 | 決策 | 優先級 |
-| **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 只被 `strategy_ranker/` import，無獨立邊界 | 結構碎片 | merge → `strategy_ranker/`（`strategy_techniques/` 和 `strategy/` 的 `Registry` 命名衝突，保留分離） | P1 |
+| **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 已於 PR #1311 合併至 `strategy_ranker/`（validator.go/validator_test.go/validator_doc.go 已搬移）；殘留文件引用待清理 | 結構碎片 | ✅ closed: 合併已完成，文件引用已清理 | P1 |
 | **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: 拆為子套件 | P1 |
 | **F-03** | `system.go` / `system_dispatcher.go` Publish 重複 | `PublishSimulationStart`、`PublishRegimeChange`（含 factor engine sync）、`PublishRecommendation` 在 `RunDailySimulation` 與 `runReplaySimulation` 中重複；`publishSessionClose` 已抽但還有 3 組 | 重複碼 | ✅ extract: 抽取 `publishSimulationStart` / `publishRegimeChange` / `publishRecommendation` | P1 |
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套獨立但互補的實作，共享 EventBus/domain 但執行模型不同；已透過 `orchestrator.AdapterProducer` 復用模擬 `ExecuteWithContext` 作為 live 建議來源 | 設計意圖（非斷裂） | ✅ won't fix：記錄為雙引擎架構決策，補 doc.go 說明 | P2 |
@@ -93,7 +93,7 @@
 
 | ID | 決策 | 理由 |
 |---|---|---|
-| F-01 | merge `strategy*` → `strategy/` | 4 套件無循環依賴、無獨立公開 API 消費者 |
+| F-01 | ✅ closed | `strategy_validator` 已於 PR #1311 合併至 `strategy_ranker`（validator.go/validator_test.go/validator_doc.go 搬移）；`strategy_techniques` 與 `strategy` 的 `Registry` 命名衝突保留分離 |
 | F-02 | split `narrative/` → 4 子套件 | 凝聚力最低，detector/calibration/seasonal/geopolitical 獨立 |
 | F-03 | ✅ extract | 抽取 `publishSimulationStart`、`publishRegimeChange`（含 factor engine sync）、`publishRecommendation` 到 `system.go`；兩條執行路徑共用 |
 | F-04 | ✅ won't fix | 雙引擎是設計意圖：orchestrator.System 負責批次研究/學習，live.Orchestrator 負責事件驅動執行；bridge 為 `orchestrator.AdapterProducer` |
@@ -107,10 +107,10 @@
 | PR #1311 | F-06 部分 | 已移除 dead packages `robustness/`, `forecast_bridge/` | ✅ merged |
 | PR #1315 | — | `cmd/backtest-window` SQLite 測試 hermetic | ✅ merged |
 | PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
-| PR #? | F-01 | 合併 `strategy_ranker/validator/techniques` → `strategy/` | pending |
+| PR #? | F-01 | 清理 `strategy_validator` 殘留文件引用 | pending |
 | PR #? | F-02 | 拆分 `narrative/` → 子套件 | pending |
 | PR #1318 | F-06 paramcheck | 合併 `internal/paramcheck` → `internal/config` | ✅ merged |
-| PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | pending |
+| PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | ✅ merged |
 
 ---
 
