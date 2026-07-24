@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // TaiwanStressIndex represents a composite market pressure score for Taiwan.
@@ -76,7 +77,7 @@ const (
 
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.
 type TaiwanStressCalculator struct {
-	geoProvider    GeopoliticalRiskProvider
+	geoProvider    geopolitical.GeopoliticalRiskProvider
 	mu             sync.RWMutex
 	cache          *TaiwanStressIndex
 	cachedAt       time.Time
@@ -184,7 +185,7 @@ func (c *StressIndexWeightsConfig) isValid() bool {
 // DXY/JPY/US10Y/Oil/Gold. Production hot path: callers do not need to
 // invoke NewTaiwanStressCalculatorWithBaseline explicitly. First-run
 // (no baselines file) gracefully falls back to pure change_pct.
-func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
+func NewTaiwanStressCalculator(geoProvider geopolitical.GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
 	cfg := loadWeightsFromParameters()
 	calc := &TaiwanStressCalculator{
 		geoProvider:   geoProvider,
@@ -204,7 +205,7 @@ func NewTaiwanStressCalculator(geoProvider GeopoliticalRiskProvider, workDir str
 // signal computation for DXY, JPY, Oil, and Gold components. When baselines is non-nil
 // and signalStrategy is SignalHybrid, these four components use max(|level deviation|, |change_pct|)
 // instead of pure change_pct. Other components (US10Y, ForeignFlow, VIX, Geopolitical) are unchanged.
-func NewTaiwanStressCalculatorWithBaseline(geoProvider GeopoliticalRiskProvider, workDir string, baselines *BaselineConfig, strategy SignalStrategy) *TaiwanStressCalculator {
+func NewTaiwanStressCalculatorWithBaseline(geoProvider geopolitical.GeopoliticalRiskProvider, workDir string, baselines *BaselineConfig, strategy SignalStrategy) *TaiwanStressCalculator {
 	cfg := loadWeightsFromParameters()
 	return &TaiwanStressCalculator{
 		geoProvider:    geoProvider,
@@ -314,7 +315,7 @@ func (c *TaiwanStressCalculator) selectConfigForSnapshot(snap marketdata.MacroDa
 // The prev snapshot is used to compute change percentages for indicators where the current change is zero.
 // Uses runtime weights from configs/stress_index_weights.json if loaded, falling back to compile-time defaults.
 // When baselines are configured with SignalHybrid, DXY/JPY/Oil/Gold components use hybrid signal.
-func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore GeopoliticalRiskScore) TaiwanStressIndex {
+func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapshot, geoScore geopolitical.GeopoliticalRiskScore) TaiwanStressIndex {
 	components := make(map[string]float64)
 
 	cfg := c.selectConfigForSnapshot(snap)
@@ -476,7 +477,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 	c.mu.RUnlock()
 
 	if c.geoProvider == nil {
-		idx := c.Calculate(snap, prev, GeopoliticalRiskScore{})
+		idx := c.Calculate(snap, prev, geopolitical.GeopoliticalRiskScore{})
 		c.mu.Lock()
 		c.cache = &idx
 		c.cachedAt = time.Now()
@@ -498,7 +499,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshot(ctx context.Context, snap
 
 // CalculateFromSnapshotWithStore fetches the geopolitical score and computes the index,
 // falling back to a persisted score from the provided store if the live fetch fails.
-func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Context, snap, prev marketdata.MacroDataSnapshot, store *GeopoliticalStore) (TaiwanStressIndex, error) {
+func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Context, snap, prev marketdata.MacroDataSnapshot, store *geopolitical.GeopoliticalStore) (TaiwanStressIndex, error) {
 	c.mu.RLock()
 	if c.cache != nil && time.Since(c.cachedAt) < c.cacheTTL {
 		idx := *c.cache
@@ -519,7 +520,7 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 				return idx, nil
 			}
 		}
-		idx := c.Calculate(snap, prev, GeopoliticalRiskScore{})
+		idx := c.Calculate(snap, prev, geopolitical.GeopoliticalRiskScore{})
 		c.mu.Lock()
 		c.cache = &idx
 		c.cachedAt = time.Now()

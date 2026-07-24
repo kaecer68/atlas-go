@@ -129,7 +129,7 @@
     },
     {
       "name": "UpdateMacro",
-      "params": "(macro marketdata.MacroDataSnapshot, geo GeopoliticalRiskScore)",
+      "params": "(macro marketdata.MacroDataSnapshot, geo geopolitical.GeopoliticalRiskScore)",
       "receiver": "NarrativeEngine",
       "results": ""
     },
@@ -217,7 +217,7 @@
         "stressMu sync.Mutex",
         "lastMacro marketdata.MacroDataSnapshot",
         "prevMacro marketdata.MacroDataSnapshot",
-        "lastGeo GeopoliticalRiskScore",
+        "lastGeo geopolitical.GeopoliticalRiskScore",
         "weightHook WeightAuditHook"
       ],
       "kind": "struct",

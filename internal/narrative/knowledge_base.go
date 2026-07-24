@@ -12,6 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -29,7 +30,7 @@ type NarrativeEngine struct {
 	stressMu      sync.Mutex
 	lastMacro     marketdata.MacroDataSnapshot
 	prevMacro     marketdata.MacroDataSnapshot
-	lastGeo       GeopoliticalRiskScore
+	lastGeo       geopolitical.GeopoliticalRiskScore
 	weightHook    WeightAuditHook
 }
 
@@ -515,7 +516,7 @@ func (ne *NarrativeEngine) ListModels() []InvestmentModel {
 
 // UpdateMacro updates the engine's macro state after each successful ingestion.
 // Must be called to populate lastMacro/prevMacro/lastGeo used by GetCurrentStressIndex.
-func (ne *NarrativeEngine) UpdateMacro(macro marketdata.MacroDataSnapshot, geo GeopoliticalRiskScore) {
+func (ne *NarrativeEngine) UpdateMacro(macro marketdata.MacroDataSnapshot, geo geopolitical.GeopoliticalRiskScore) {
 	ne.stressMu.Lock()
 	defer ne.stressMu.Unlock()
 	ne.prevMacro = ne.lastMacro

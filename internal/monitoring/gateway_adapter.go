@@ -10,7 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apisystem "github.com/kaecer68/atlas-go/internal/monitoring/api/system"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // macroDataGatewayAdapter implements marketdata.MacroDataProvider using DataFetcher.
@@ -439,13 +439,13 @@ func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroData
 // Geopolitical Gateway Adapter
 // ---------------------------------------------------------------------------
 
-// geopoliticalGatewayAdapter implements narrative.GeopoliticalRiskProvider using DataFetcher.
+// geopoliticalGatewayAdapter implements geopolitical.GeopoliticalRiskProvider using DataFetcher.
 type geopoliticalGatewayAdapter struct {
 	fetcher DataFetcher
 }
 
 // NewGeopoliticalGatewayAdapter creates a GeopoliticalRiskProvider backed by the Gateway.
-func NewGeopoliticalGatewayAdapter(fetcher DataFetcher) narrative.GeopoliticalRiskProvider {
+func NewGeopoliticalGatewayAdapter(fetcher DataFetcher) geopolitical.GeopoliticalRiskProvider {
 	return &geopoliticalGatewayAdapter{fetcher: fetcher}
 }
 
@@ -454,24 +454,24 @@ func (a *geopoliticalGatewayAdapter) Name() string {
 }
 
 // FetchScore fetches geopolitical risk data from the Gateway.
-func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	// Use a short timeout — store fallback preferred over slow live fetch.
 	fastCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	data, _, err := a.fetcher(fastCtx, "geopolitical")
 	if err != nil {
-		return narrative.GeopoliticalRiskScore{}, err
+		return geopolitical.GeopoliticalRiskScore{}, err
 	}
 	// The Gateway geopolitical channel wraps scores in {global, taiwan} envelope.
 	var wrapper struct {
-		Global *narrative.GeopoliticalRiskScore `json:"global"`
-		Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan"`
+		Global *geopolitical.GeopoliticalRiskScore `json:"global"`
+		Taiwan *geopolitical.GeopoliticalRiskScore `json:"taiwan"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("geo unmarshal: %w", err)
+		return geopolitical.GeopoliticalRiskScore{}, fmt.Errorf("geo unmarshal: %w", err)
 	}
 	if wrapper.Global == nil || wrapper.Global.Intensity == 0 {
-		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("geopolitical score unavailable (global=nil or intensity=0)")
+		return geopolitical.GeopoliticalRiskScore{}, fmt.Errorf("geopolitical score unavailable (global=nil or intensity=0)")
 	}
 	return *wrapper.Global, nil
 }
@@ -480,14 +480,14 @@ func (a *geopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.
 // Taiwan Geopolitical Gateway Adapter
 // ---------------------------------------------------------------------------
 
-// taiwanGeopoliticalGatewayAdapter implements narrative.GeopoliticalRiskProvider
+// taiwanGeopoliticalGatewayAdapter implements geopolitical.GeopoliticalRiskProvider
 // using DataFetcher for the geopolitical_taiwan channel.
 type taiwanGeopoliticalGatewayAdapter struct {
 	fetcher DataFetcher
 }
 
 // NewTaiwanGeopoliticalGatewayAdapter creates a GeopoliticalRiskProvider backed by the Gateway.
-func NewTaiwanGeopoliticalGatewayAdapter(fetcher DataFetcher) narrative.GeopoliticalRiskProvider {
+func NewTaiwanGeopoliticalGatewayAdapter(fetcher DataFetcher) geopolitical.GeopoliticalRiskProvider {
 	return &taiwanGeopoliticalGatewayAdapter{fetcher: fetcher}
 }
 
@@ -496,14 +496,14 @@ func (a *taiwanGeopoliticalGatewayAdapter) Name() string {
 }
 
 // FetchScore fetches Taiwan-specific geopolitical risk data from the Gateway.
-func (a *taiwanGeopoliticalGatewayAdapter) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+func (a *taiwanGeopoliticalGatewayAdapter) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	data, _, err := a.fetcher(ctx, "geopolitical_taiwan")
 	if err != nil {
-		return narrative.GeopoliticalRiskScore{}, err
+		return geopolitical.GeopoliticalRiskScore{}, err
 	}
-	var score narrative.GeopoliticalRiskScore
+	var score geopolitical.GeopoliticalRiskScore
 	if err := json.Unmarshal(data, &score); err != nil {
-		return narrative.GeopoliticalRiskScore{}, fmt.Errorf("taiwan geo unmarshal: %w", err)
+		return geopolitical.GeopoliticalRiskScore{}, fmt.Errorf("taiwan geo unmarshal: %w", err)
 	}
 	return score, nil
 }
@@ -526,9 +526,9 @@ func NewDayTradingFetcher(fetcher DataFetcher) func(ctx context.Context) (*marke
 
 // Ensure adapters implement their interfaces at compile time.
 var (
-	_ marketdata.MacroDataProvider       = (*macroDataGatewayAdapter)(nil)
-	_ narrative.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
-	_ narrative.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
+	_ marketdata.MacroDataProvider          = (*macroDataGatewayAdapter)(nil)
+	_ geopolitical.GeopoliticalRiskProvider = (*geopoliticalGatewayAdapter)(nil)
+	_ geopolitical.GeopoliticalRiskProvider = (*taiwanGeopoliticalGatewayAdapter)(nil)
 )
 
 // NewTaifexFetcher creates a fetcher for TAIFEX PCR and retail futures OI data.
@@ -582,7 +582,7 @@ func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
 // newGeopoliticalRiskFetcher creates a GeopoliticalRiskFetcher that normalizes
 // the narrative GeopoliticalRiskProvider output to [0, 1].
 // Prefers Taiwan-specific provider; falls back to global; returns 0 on any error.
-func newGeopoliticalRiskFetcher(global, taiwan narrative.GeopoliticalRiskProvider) apisystem.GeopoliticalRiskFetcher {
+func newGeopoliticalRiskFetcher(global, taiwan geopolitical.GeopoliticalRiskProvider) apisystem.GeopoliticalRiskFetcher {
 	return func(ctx context.Context) float64 {
 		if taiwan != nil {
 			if score, err := taiwan.FetchScore(ctx); err == nil && score.Intensity > 0 {

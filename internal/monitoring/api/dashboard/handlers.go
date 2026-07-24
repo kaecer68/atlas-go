@@ -15,6 +15,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/retail"
 )
@@ -31,8 +32,8 @@ type Handlers struct {
 	LedgerDir         string
 	Pool              *pgxpool.Pool
 	MacroIngestor     *narrative.MacroIngestor
-	GeoProvider       narrative.GeopoliticalRiskProvider
-	TaiwanGeoProvider narrative.GeopoliticalRiskProvider
+	GeoProvider       geopolitical.GeopoliticalRiskProvider
+	TaiwanGeoProvider geopolitical.GeopoliticalRiskProvider
 	JanusEngine       *janus.Engine
 	DrawdownProvider  DrawdownProvider
 	// RegisteredChannelIDs, when set, makes the data-channels page list every

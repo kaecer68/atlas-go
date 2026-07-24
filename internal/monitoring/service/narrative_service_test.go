@@ -8,6 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 type mockMacroProvider2 struct {
@@ -25,15 +26,15 @@ func (m *mockMacroProvider2) FetchSnapshot(ctx context.Context) (marketdata.Macr
 }
 
 type mockGeoProvider2 struct {
-	score narrative.GeopoliticalRiskScore
+	score geopolitical.GeopoliticalRiskScore
 	err   error
 }
 
 func (m *mockGeoProvider2) Name() string { return "mock-geo" }
 
-func (m *mockGeoProvider2) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+func (m *mockGeoProvider2) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	if m.err != nil {
-		return narrative.GeopoliticalRiskScore{}, m.err
+		return geopolitical.GeopoliticalRiskScore{}, m.err
 	}
 	return m.score, nil
 }
@@ -113,7 +114,7 @@ func TestNarrativeService_BuildMarketNarrativeData_WithGeoProvider(t *testing.T)
 		snap: marketdata.MacroDataSnapshot{RecordedAt: time.Now().Unix()},
 	})
 	svc.SetGeoProvider(&mockGeoProvider2{
-		score: narrative.GeopoliticalRiskScore{Intensity: 0.6},
+		score: geopolitical.GeopoliticalRiskScore{Intensity: 0.6},
 	})
 	data, err := svc.BuildMarketNarrativeData(context.Background())
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 func TestTaiwanStressCalculator_Calculate(t *testing.T) {
@@ -18,7 +19,7 @@ func TestTaiwanStressCalculator_Calculate(t *testing.T) {
 		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5},
 		RecordedAt:         1713000000,
 	}
-	geo := GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 
 	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 
@@ -43,17 +44,17 @@ func TestTaiwanStressCalculator_Calculate(t *testing.T) {
 
 type mockGeoProvider struct {
 	calls int
-	score GeopoliticalRiskScore
+	score geopolitical.GeopoliticalRiskScore
 }
 
 func (m *mockGeoProvider) Name() string { return "mock" }
-func (m *mockGeoProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
+func (m *mockGeoProvider) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	m.calls++
 	return m.score, nil
 }
 
 func TestTaiwanStressCalculator_CalculateFromSnapshot_CachesResult(t *testing.T) {
-	mock := &mockGeoProvider{score: GeopoliticalRiskScore{Intensity: 10}}
+	mock := &mockGeoProvider{score: geopolitical.GeopoliticalRiskScore{Intensity: 10}}
 	calc := NewTaiwanStressCalculator(mock, "")
 	calc.cacheTTL = 100 * time.Millisecond
 
@@ -125,7 +126,7 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		geo := GeopoliticalRiskScore{Intensity: tt.geo}
+		geo := geopolitical.GeopoliticalRiskScore{Intensity: tt.geo}
 		idx := calc.Calculate(tt.snap, marketdata.MacroDataSnapshot{}, geo)
 		if idx.Regime != tt.want {
 			t.Fatalf("%s: expected regime %q, got %q (score=%.1f)", tt.name, tt.want, idx.Regime, idx.Score)
@@ -161,7 +162,7 @@ func TestLoadWeightsConfigIntegratesWithCalculator(t *testing.T) {
 		US10Y: marketdata.MacroDataPoint{Value: 4.5},
 		VIX:   marketdata.MacroDataPoint{Value: 20},
 	}
-	geo := GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
 	if idx.Score < 0 {
 		t.Fatal("expected positive score with parameters config")
@@ -181,7 +182,7 @@ func TestGetCurrentStressIndex(t *testing.T) {
 		JPY:                marketdata.MacroDataPoint{ChangePct: -0.3},
 		RecordedAt:         time.Now().Unix(),
 	}
-	geo := GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 	eng.UpdateMacro(snap, geo)
 
 	idx := eng.GetCurrentStressIndex()
@@ -215,7 +216,7 @@ func TestGetStressIndexHistory(t *testing.T) {
 			ForeignInvestorNet: marketdata.MacroDataPoint{Value: -5 - float64(i)},
 			RecordedAt:         baseTime + i,
 		}
-		eng.UpdateMacro(snap, GeopoliticalRiskScore{Intensity: 30})
+		eng.UpdateMacro(snap, geopolitical.GeopoliticalRiskScore{Intensity: 30})
 		eng.RecordStressIndex(eng.GetCurrentStressIndex())
 	}
 
@@ -287,8 +288,8 @@ func TestCalculateFromSnapshotWithStore_FallbackToPersistedGeo(t *testing.T) {
 	calc := NewTaiwanStressCalculator(nil, "")
 
 	dir := t.TempDir()
-	store := NewGeopoliticalStore(dir)
-	if err := store.Save(GeopoliticalRiskScore{
+	store := geopolitical.NewGeopoliticalStore(dir)
+	if err := store.Save(geopolitical.GeopoliticalRiskScore{
 		Region:    "Global",
 		Intensity: 30,
 		Timestamp: time.Now(),
@@ -422,7 +423,7 @@ func TestCalculate_US10YHybridSignal_OnFlatDay(t *testing.T) {
 		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
 		RecordedAt: 1713000000,
 	}
-	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geopolitical.GeopoliticalRiskScore{})
 
 	us10yComponent, ok := idx.Components["us10y"]
 	if !ok {
@@ -458,8 +459,8 @@ func TestCalculate_US10YHybridSignal_CompareWithLegacy(t *testing.T) {
 		US10Y:      marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.8, ChangePct: 0},
 		RecordedAt: 1713000000,
 	}
-	legacyIdx := legacyCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
-	hybridIdx := hybridCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{})
+	legacyIdx := legacyCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, geopolitical.GeopoliticalRiskScore{})
+	hybridIdx := hybridCalc.Calculate(snap, marketdata.MacroDataSnapshot{}, geopolitical.GeopoliticalRiskScore{})
 
 	legacyUS10Y := legacyIdx.Components["us10y"]
 	hybridUS10Y := hybridIdx.Components["us10y"]

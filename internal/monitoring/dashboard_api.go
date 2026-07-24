@@ -50,6 +50,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 	"github.com/kaecer68/atlas-go/internal/orchestrator/composition"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -86,8 +87,8 @@ type DashboardAPI struct {
 	macroIngestor              *narrative.MacroIngestor
 	macroProvider              marketdata.MacroDataProvider
 	lifecycleMgr               *narrative.EventLifecycleManager
-	geoProvider                narrative.GeopoliticalRiskProvider
-	taiwanGeoProvider          narrative.GeopoliticalRiskProvider
+	geoProvider                geopolitical.GeopoliticalRiskProvider
+	taiwanGeoProvider          geopolitical.GeopoliticalRiskProvider
 	taiwanStressCalc           *narrative.TaiwanStressCalculator
 	reportGenerator            *narrative.ReportGenerator
 	pool                       *pgxpool.Pool
@@ -189,12 +190,12 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))
 	}
 	provider := marketdata.NewCompositeMacroProvider(providers...)
-	geoProvider := narrative.NewCompositeGeopoliticalProvider(
-		narrative.NewRSSGeopoliticalProvider(),
-		narrative.NewGDELTGeopoliticalProvider(),
+	geoProvider := geopolitical.NewCompositeGeopoliticalProvider(
+		geopolitical.NewRSSGeopoliticalProvider(),
+		geopolitical.NewGDELTGeopoliticalProvider(),
 	)
-	taiwanGeoProvider := narrative.NewCompositeTaiwanGeopoliticalProvider(
-		narrative.NewTaiwanRSSGeopoliticalProvider(),
+	taiwanGeoProvider := geopolitical.NewCompositeTaiwanGeopoliticalProvider(
+		geopolitical.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
 		metricsCollector = NewMetricsCollector()
@@ -561,7 +562,7 @@ func (a *DashboardAPI) IngestAndUpdateMacro(ctx context.Context) ([]narrative.Na
 // applyMacroUpdate routes the snapshot through narrativeEngine + both
 // ledgers in lockstep; shared by success and error-fallback paths so
 // stress_index_history.captured_at advances on every tick.
-func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.MacroDataSnapshot, geoScore narrative.GeopoliticalRiskScore) {
+func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.MacroDataSnapshot, geoScore geopolitical.GeopoliticalRiskScore) {
 	if a.narrativeEngine == nil {
 		return
 	}
@@ -606,7 +607,7 @@ func (a *DashboardAPI) persistStressIndex(ctx context.Context) {
 // finally to the on-disk geopolitical store. This prevents a transient live
 // fetch failure from producing a zero stress component while a stale-but-valid
 // historical score is available.
-func (a *DashboardAPI) resolveGeoScore(ctx context.Context) narrative.GeopoliticalRiskScore {
+func (a *DashboardAPI) resolveGeoScore(ctx context.Context) geopolitical.GeopoliticalRiskScore {
 	if a.geoProvider != nil {
 		geoCtx, geoCancel := context.WithTimeout(ctx, 15*time.Second)
 		defer geoCancel()
@@ -618,7 +619,7 @@ func (a *DashboardAPI) resolveGeoScore(ctx context.Context) narrative.Geopolitic
 	if a.historicalStore != nil {
 		rows, err := a.historicalStore.LoadGeopoliticalHistoryAll(ctx, 1)
 		if err == nil && len(rows) > 0 && rows[0].Intensity != 0 && !rows[0].CapturedAt.IsZero() {
-			return narrative.GeopoliticalRiskScore{
+			return geopolitical.GeopoliticalRiskScore{
 				Intensity: rows[0].Intensity,
 				Timestamp: rows[0].CapturedAt,
 				Sources:   rows[0].Sources,
@@ -626,11 +627,11 @@ func (a *DashboardAPI) resolveGeoScore(ctx context.Context) narrative.Geopolitic
 		}
 	}
 
-	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	store := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
 	if fallback, err := store.Load(); err == nil && fallback.Intensity != 0 && !fallback.Timestamp.IsZero() {
 		return fallback
 	}
-	return narrative.GeopoliticalRiskScore{}
+	return geopolitical.GeopoliticalRiskScore{}
 }
 
 // persistGeopolitical writes the latest geopolitical risk score to the ledger
@@ -639,7 +640,7 @@ func (a *DashboardAPI) resolveGeoScore(ctx context.Context) narrative.Geopolitic
 // It also mirrors the score to the on-disk geopolitical store so that the
 // on-demand /api/taiwan/stress-index calculator and the macro-ingest path use
 // the same fallback source.
-func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo narrative.GeopoliticalRiskScore) {
+func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo geopolitical.GeopoliticalRiskScore) {
 	if a.historicalStore == nil || geo.Timestamp.IsZero() {
 		return
 	}
@@ -658,7 +659,7 @@ func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo narrative.Ge
 		return
 	}
 
-	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	store := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
 	if err := store.Save(geo); err != nil {
 		logging.Warn("dashboard_api", "mirror_geopolitical_store_failed",
 			logging.FStr("date", row.Date),

@@ -19,6 +19,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/storage"
@@ -1125,7 +1126,7 @@ func TestDashboardAPI_PersistStressIndex_HappyPath(t *testing.T) {
 	d.WithHistoricalStore(store)
 
 	snap := validStressMacroSnapshot()
-	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 	d.NarrativeEngine().UpdateMacro(snap, geo)
 	d.persistStressIndex(context.Background())
 
@@ -1162,7 +1163,7 @@ func TestDashboardAPI_PersistRegimeHistory_HappyPath(t *testing.T) {
 	d.WithHistoricalStore(store)
 
 	snap := validStressMacroSnapshot()
-	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 	d.NarrativeEngine().UpdateMacro(snap, geo)
 	d.persistRegimeHistory(context.Background())
 
@@ -1193,7 +1194,7 @@ func TestDashboardAPI_PersistRegimeHistory_HappyPath(t *testing.T) {
 func TestDashboardAPI_PersistRegimeHistory_NilStore(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	snap := validStressMacroSnapshot()
-	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.NarrativeEngine().UpdateMacro(snap, geopolitical.GeopoliticalRiskScore{Intensity: 30})
 	d.persistRegimeHistory(context.Background())
 }
 
@@ -1210,7 +1211,7 @@ func TestDashboardAPI_PersistRegimeHistory_ZeroTimestamp(t *testing.T) {
 func TestDashboardAPI_PersistStressIndex_NilStore(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	snap := validStressMacroSnapshot()
-	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.NarrativeEngine().UpdateMacro(snap, geopolitical.GeopoliticalRiskScore{Intensity: 30})
 	d.persistStressIndex(context.Background())
 }
 
@@ -1229,7 +1230,7 @@ func TestDashboardAPI_PersistStressIndex_UpsertError(t *testing.T) {
 	store := &mockStressStore{returnErr: fmt.Errorf("db down")}
 	d.WithHistoricalStore(store)
 	snap := validStressMacroSnapshot()
-	d.NarrativeEngine().UpdateMacro(snap, narrative.GeopoliticalRiskScore{Intensity: 30})
+	d.NarrativeEngine().UpdateMacro(snap, geopolitical.GeopoliticalRiskScore{Intensity: 30})
 	d.persistStressIndex(context.Background())
 	if len(store.upserted) != 1 {
 		t.Errorf("expected 1 upsert attempt even on error, got %d", len(store.upserted))
@@ -1241,7 +1242,7 @@ func TestDashboardAPI_PersistGeopolitical_HappyPath(t *testing.T) {
 	store := &mockGeopoliticalStore{}
 	d.WithHistoricalStore(store)
 
-	geo := narrative.GeopoliticalRiskScore{
+	geo := geopolitical.GeopoliticalRiskScore{
 		Intensity: 42.5,
 		Sources:   []string{"gdelt", "fugle"},
 		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
@@ -1268,7 +1269,7 @@ func TestDashboardAPI_PersistGeopolitical_HappyPath(t *testing.T) {
 
 func TestDashboardAPI_PersistGeopolitical_NilStore(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
-	geo := narrative.GeopoliticalRiskScore{
+	geo := geopolitical.GeopoliticalRiskScore{
 		Intensity: 10,
 		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
 	}
@@ -1279,7 +1280,7 @@ func TestDashboardAPI_PersistGeopolitical_ZeroTimestamp(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	store := &mockGeopoliticalStore{}
 	d.WithHistoricalStore(store)
-	d.persistGeopolitical(context.Background(), narrative.GeopoliticalRiskScore{Intensity: 5})
+	d.persistGeopolitical(context.Background(), geopolitical.GeopoliticalRiskScore{Intensity: 5})
 	if len(store.upserted) != 0 {
 		t.Errorf("expected no upsert when timestamp is zero, got %d", len(store.upserted))
 	}
@@ -1289,7 +1290,7 @@ func TestDashboardAPI_PersistGeopolitical_UpsertError(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	store := &mockGeopoliticalStore{returnErr: fmt.Errorf("db down")}
 	d.WithHistoricalStore(store)
-	geo := narrative.GeopoliticalRiskScore{
+	geo := geopolitical.GeopoliticalRiskScore{
 		Intensity: 10,
 		Timestamp: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
 	}
@@ -1327,7 +1328,7 @@ func TestDashboardAPI_ApplyMacroUpdate_HappyPath(t *testing.T) {
 	d.WithHistoricalStore(store)
 
 	snap := validStressMacroSnapshot()
-	geo := narrative.GeopoliticalRiskScore{
+	geo := geopolitical.GeopoliticalRiskScore{
 		Intensity: 42,
 		Timestamp: time.Date(2026, 7, 20, 14, 0, 0, 0, time.UTC),
 	}
@@ -1371,7 +1372,7 @@ func TestDashboardAPI_ApplyMacroUpdate_NilNarrativeEngine(t *testing.T) {
 	d.narrativeEngine = nil
 
 	snap := validStressMacroSnapshot()
-	geo := narrative.GeopoliticalRiskScore{Intensity: 1}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 1}
 	d.applyMacroUpdate(context.Background(), snap, geo)
 
 	if len(store.upserted) != 0 || len(store.upsertedGeo) != 0 || len(store.upsertedRegime) != 0 {
@@ -1385,8 +1386,8 @@ type errGeoProvider struct{ err error }
 
 func (p *errGeoProvider) Name() string { return "errGeoProvider" }
 
-func (p *errGeoProvider) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
-	return narrative.GeopoliticalRiskScore{}, p.err
+func (p *errGeoProvider) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
+	return geopolitical.GeopoliticalRiskScore{}, p.err
 }
 
 // TestDashboardAPI_ResolveGeoScore_FallsBackToHistoricalStore covers E5:
@@ -1433,7 +1434,7 @@ func TestDashboardAPI_ResolveGeoScore_FallsBackToFileStore(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(geoFile), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	score := narrative.GeopoliticalRiskScore{
+	score := geopolitical.GeopoliticalRiskScore{
 		Intensity: 25.0,
 		Timestamp: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 	}

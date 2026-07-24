@@ -12,6 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 	"github.com/kaecer68/atlas-go/internal/recommender"
 	"github.com/kaecer68/atlas-go/internal/strategy"
 )
@@ -99,7 +100,7 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 	getStress := func() narrative.TaiwanStressIndex { return narrative.TaiwanStressIndex{} }
 	if in.MacroProvider != nil {
 		stressCalc := narrative.NewTaiwanStressCalculator(nil, in.WorkDir)
-		geoStore := narrative.NewGeopoliticalStore(filepath.Join(in.WorkDir, constants.StateGeopolitical))
+		geoStore := geopolitical.NewGeopoliticalStore(filepath.Join(in.WorkDir, constants.StateGeopolitical))
 		getStress = func() narrative.TaiwanStressIndex {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

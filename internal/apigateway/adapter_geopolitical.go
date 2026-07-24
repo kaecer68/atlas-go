@@ -11,15 +11,15 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // GeopoliticalChannelAdapter adapts narrative geopolitical providers to the DataProvider interface.
 type GeopoliticalChannelAdapter struct {
 	workDir        string
 	limiter        *rate.Limiter
-	globalProvider *narrative.CompositeGeopoliticalProvider
-	taiwanProvider *narrative.CompositeTaiwanGeopoliticalProvider
+	globalProvider *geopolitical.CompositeGeopoliticalProvider
+	taiwanProvider *geopolitical.CompositeTaiwanGeopoliticalProvider
 }
 
 // NewGeopoliticalChannelAdapter creates a new adapter for the geopolitical channel.
@@ -27,19 +27,19 @@ func NewGeopoliticalChannelAdapter(workDir string) *GeopoliticalChannelAdapter {
 	return &GeopoliticalChannelAdapter{
 		workDir:        workDir,
 		limiter:        rate.NewLimiter(rate.Every(time.Minute), 1),
-		globalProvider: narrative.NewCompositeGeopoliticalProvider(narrative.NewRSSGeopoliticalProvider(), narrative.NewGDELTGeopoliticalProvider()),
-		taiwanProvider: narrative.NewCompositeTaiwanGeopoliticalProvider(narrative.NewTaiwanRSSGeopoliticalProvider()),
+		globalProvider: geopolitical.NewCompositeGeopoliticalProvider(geopolitical.NewRSSGeopoliticalProvider(), geopolitical.NewGDELTGeopoliticalProvider()),
+		taiwanProvider: geopolitical.NewCompositeTaiwanGeopoliticalProvider(geopolitical.NewTaiwanRSSGeopoliticalProvider()),
 	}
 }
 
 // Fetch retrieves global and Taiwan geopolitical risk scores.
 func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	globalStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
-	taiwanStore := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical+"/taiwan"))
+	globalStore := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
+	taiwanStore := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical+"/taiwan"))
 
 	type geopoliticalResult struct {
-		Global *narrative.GeopoliticalRiskScore `json:"global,omitempty"`
-		Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan,omitempty"`
+		Global *geopolitical.GeopoliticalRiskScore `json:"global,omitempty"`
+		Taiwan *geopolitical.GeopoliticalRiskScore `json:"taiwan,omitempty"`
 	}
 
 	result := &geopoliticalResult{}

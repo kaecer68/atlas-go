@@ -12,7 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 func main() {
@@ -37,12 +37,12 @@ func main() {
 		}
 	}
 
-	provider := narrative.NewCompositeGeopoliticalProvider(
-		narrative.NewRSSGeopoliticalProvider(),
-		narrative.NewGDELTGeopoliticalProvider(),
+	provider := geopolitical.NewCompositeGeopoliticalProvider(
+		geopolitical.NewRSSGeopoliticalProvider(),
+		geopolitical.NewGDELTGeopoliticalProvider(),
 	)
 
-	store := narrative.NewGeopoliticalStore(geoDir)
+	store := geopolitical.NewGeopoliticalStore(geoDir)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 

@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // --- existing minimal tests (kept verbatim) -------------------------------
@@ -140,14 +140,14 @@ const gdeltInvalidJSON = `{"totalRecords": "not-a-number"}`
 func buildGeopoliticalAdapter(t *testing.T, transport *geopoliticalMockTransport) *GeopoliticalChannelAdapter {
 	t.Helper()
 
-	rss := narrative.NewRSSGeopoliticalProvider()
-	gdelt := narrative.NewGDELTGeopoliticalProvider()
-	twRss := narrative.NewTaiwanRSSGeopoliticalProvider()
+	rss := geopolitical.NewRSSGeopoliticalProvider()
+	gdelt := geopolitical.NewGDELTGeopoliticalProvider()
+	twRss := geopolitical.NewTaiwanRSSGeopoliticalProvider()
 
-	globalComp := narrative.NewCompositeGeopoliticalProvider(rss, gdelt)
+	globalComp := geopolitical.NewCompositeGeopoliticalProvider(rss, gdelt)
 	globalComp.SetHTTPClient(&http.Client{Transport: transport})
 
-	twComp := narrative.NewCompositeTaiwanGeopoliticalProvider(twRss)
+	twComp := geopolitical.NewCompositeTaiwanGeopoliticalProvider(twRss)
 	twComp.SetHTTPClient(&http.Client{Transport: transport})
 
 	return &GeopoliticalChannelAdapter{
@@ -160,13 +160,13 @@ func buildGeopoliticalAdapter(t *testing.T, transport *geopoliticalMockTransport
 
 // unmarshalGeopoliticalResult decodes the Fetch result's JSON payload.
 func unmarshalGeopoliticalResult(t *testing.T, data []byte) struct {
-	Global *narrative.GeopoliticalRiskScore `json:"global"`
-	Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan"`
+	Global *geopolitical.GeopoliticalRiskScore `json:"global"`
+	Taiwan *geopolitical.GeopoliticalRiskScore `json:"taiwan"`
 } {
 	t.Helper()
 	var parsed struct {
-		Global *narrative.GeopoliticalRiskScore `json:"global"`
-		Taiwan *narrative.GeopoliticalRiskScore `json:"taiwan"`
+		Global *geopolitical.GeopoliticalRiskScore `json:"global"`
+		Taiwan *geopolitical.GeopoliticalRiskScore `json:"taiwan"`
 	}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal geopolitical result: %v", err)

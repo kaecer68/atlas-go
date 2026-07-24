@@ -16,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // Error severity levels for frontend display.
@@ -118,8 +119,8 @@ type DataChannelService struct {
 	WorkDir           string
 	Pool              *pgxpool.Pool
 	MacroIngestor     *narrative.MacroIngestor
-	GeoProvider       narrative.GeopoliticalRiskProvider
-	TaiwanGeoProvider narrative.GeopoliticalRiskProvider
+	GeoProvider       geopolitical.GeopoliticalRiskProvider
+	TaiwanGeoProvider geopolitical.GeopoliticalRiskProvider
 	JanusEngine       *janus.Engine
 	FugleAPIKey       string
 	FubonAPIKey       string
@@ -288,7 +289,7 @@ func (s *channelHealthStore) saveLocked() error {
 	return os.Rename(tmp, s.path)
 }
 
-func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider narrative.GeopoliticalRiskProvider, taiwanGeoProvider narrative.GeopoliticalRiskProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
+func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider geopolitical.GeopoliticalRiskProvider, taiwanGeoProvider geopolitical.GeopoliticalRiskProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
 	return &DataChannelService{
 		WorkDir:           workDir,
 		Pool:              pool,
