@@ -1,23 +1,22 @@
 # Atlas 數據源憲法（Data Source Constitution）
 
-**版本**：v1.0  
-**生效日期**：2026-05-13  
-**適用範圍**：所有新增或修改外部數據源抓取的程式碼  
-**執行機制**：CI 自動檢查 + PR 人工審查  
+**版本**：v1.2
+**生效日期**：2026-05-13（初版）；2026-07-25（v1.2 修訂 — 通道清單全面更新）
+**適用範圍**：所有新增或修改外部數據源抓取的程式碼
+**執行機制**：CI 自動檢查 + PR 人工審查
 
 ---
 
 ## 前言
 
-本系統目前管理 **16 個信息通道**、**3 套健康檢查實作**、**9 個背景任務**，存在以下結構性問題：
+本系統目前管理 **37 個信息通道**（34 active + 1 orphan + 2 stub），存在以下結構性問題（截至 2026-07-25 審計）：
 
-- 7 個通道無 Rate Limiter，高頻調用時容易被封鎖
-- 3 套健康檢查實作導致兩頁面（總覽 vs 信息通道管理）顯示不一致
-- 8 個背景任務零協調（無抖動、無熔斷、無互斥）
-- FinMind 免費 API 已停用（402），需替代方案
-- 散落式 `os.Getenv` 和 `New*Provider()` 調用導致維護困難
-
-本憲法旨在建立統一規範，防止未來迭代時再次出現「AI 偷跑建立獨自數據源抓取」的情況。
+- 1 個通道無 Rate Limiter（government_flow，已修復於 #A02）
+- 3 個通道不在 `channelIDs()` 中，導致無 CircuitBreaker 與健康掃描遺漏（tw_vol, twse_sbl, tdcc_equity_dispersion，已修復於 #A01）
+- 多套健康檢查實作共存（UnifiedHealthStore + monitoring 自製 store + direct file readers）
+- 4 套互不連通的警報路徑（Prometheus/Alertmanager、Application Monitor、Alertmanager inbound webhook、MCP anomaly）
+- 12 個 Yahoo Finance 通道打同一 API 端點，極度碎片化
+- 15 個通道無獨立 auto-fetch 排程
 
 ---
 
@@ -476,30 +475,49 @@ echo "✅ os.Getenv 檢查通過"
 
 ---
 
-## 附錄 A：16 個通道規範
+## 附錄 A：37 個通道規範（v1.2 — 2026-07-25 審計更新）
 
 | 通道 ID | 限流策略 | 健康檢查模式 | 背景任務 | 熔斷啟用 |
 |---------|---------|-------------|---------|---------|
-| us_yahoo | 共享 1/s | Liveness | 否 | ✅ |
-| twse_replay | 不限流 | Readiness | ✅ (24h) | ❌ |
-| twse_capital_flow | 1/5s | Readiness | ✅ (30min) | ✅ |
-| fugle | 60/min | Liveness | 否 | ✅ |
-| fubon | Per-min | Liveness | 否 | ✅ |
-| finmind | 6/s (免費) | Liveness | 否 | ✅ |
-| frankfurter_fx | 1/10s (獨立) | Liveness | 否 | ✅ |
-| geopolitical | 1/min | Liveness | ✅ (6h) | ✅ |
-| twse_margin | 1/5s | Readiness | ✅ (30min) | ✅ |
-| export_statistics | 1/5s | Readiness | ✅ (12h) | ✅ |
-| tsmc_revenue | 繼承 FinMind | Liveness | ✅ (24h) | ✅ |
-| geopolitical_taiwan | 1/min | Liveness | ✅ (6h) | ✅ |
-| janus_regime | 不限流 | Computed | 否 | ❌ |
-| tej | Per-sec + daily | Liveness | 否 | ✅ |
-| exchange_rate | 1/5s | Liveness | 否 | ❌ |
-| sox_index | 1/5s | Liveness | 否 | ❌ |
-| sector_data | 不限流 | Readiness | 否 | ❌ |
-| government_flow | 2s/req（自訂） | Readiness | `government_flow_aggregate` (28h) | ❌ |
-| bdi | 1/5s | Liveness | 否 | ❌ |
+| us_yahoo | Yahoo Macro (5s/2b) | Liveness | us_market_refresh (5m) | ✅ |
+| twse_replay | 不限流 (rate.Inf) | Readiness | auto_backfill (24h) | ✅ |
+| twse_capital_flow | 1/5s | Readiness | auto_capital_flow (30m) | ✅ |
+| fugle | 60/min (1s/1b) | Liveness | channel_health_fugle (1h) | ✅ |
+| fubon | 60/min (1s/1b) | Liveness | channel_health_fubon (1h) | ✅ |
+| finmind | 6s/1b (免費) | Liveness | channel_health_finmind (1h) | ✅ |
+| frankfurter_fx | 10s/1b (獨立) | Liveness | — | ✅ |
+| geopolitical | 1min/1b | Liveness | auto_geopolitical (6h) | ✅ |
+| twse_margin | 1/5s | Readiness | auto_margin (30m) | ✅ |
+| export_statistics | 1/5s | Readiness | auto_export (12h) | ✅ |
+| tsmc_revenue | 2min/1b | Liveness | tsmc_revenue (24h) | ✅ |
+| geopolitical_taiwan | 1min/1b | Liveness | — | ✅ |
+| janus_regime | 不限流 (compute) | Computed | janus_regime_refresh (6h) | ✅ |
+| tej | 1s/1b + daily | Liveness | tej_refresh (1h) | ✅ |
+| exchange_rate | 1/5s | Liveness | — | ✅ |
+| sox_index | 1/5s | Liveness | — | ✅ |
+| dram_spot_price | 1/5s | Liveness | — | ✅ |
+| twse_sector_index | 1/5s | Readiness | — | ✅ |
+| sector_data | 不限流 (rate.Inf) | Readiness | — | ✅ |
+| day_trading | 1/5s | Liveness | — | ✅ |
+| bdi | 1/5s | Liveness | — | ✅ |
+| taifex_daily | 1/5s | Liveness | — | ✅ |
+| taifex_institutional | 1/5s | Liveness | auto_taifex_institutional (1h) | ✅ |
+| twse_oddlot | 1/5s | Liveness | — | ✅ |
+| government_flow | 不限流 (rate.Inf, file-backed) | Readiness | auto_government_flow (1h) | ✅ |
+| twse_etf | 1s/1b | Liveness | — | ✅ |
+| us_spx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| us_ndx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| us_dji | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| taiex_index | 5s/1b | Liveness | — | ✅ |
+| tw_vol | 1/5s | Liveness | — | ✅ |
+| us_nvda | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| us_aapl | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| us_msft | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| tsm_adr | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| twse_sbl | 2s/1b | Liveness (inactive stub) | auto_twse_sbl (1h) | ✅ |
+| tdcc_equity_dispersion | 5s/1b | Liveness (inactive stub) | — | ✅ |
 
+> **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。
 ## 附錄 B：違規處理流程
 
 1. **CI 階段**：自動檢查失敗 → PR 無法合併

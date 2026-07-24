@@ -65,6 +65,16 @@
 | `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | MCP roots 危險路徑驗證的 escape hatch（設為 `1` 時跳過 `/`、`/etc`、`/proc` 等系統根目錄拒絕邏輯；給理解風險的進階使用者使用，issue #903 引入） | 空（預設啟用驗證） |
 | `ATLAS_MCP_TRANSPORT` | MCP transport 選擇（`stdio` / `sse` / `streamable-http`；CLI flag `-transport` 優先，env 為 fallback；PR #912 引入） | `stdio` |
 | `ATLAS_MCP_ADDR` | MCP sse/streamable-http listen 位址（CLI flag `-addr` 優先，env 為 fallback；PR #912 引入；server.go 強制 127.0.0.1 prefix） | `127.0.0.1:9090` |
+| `ATLAS_MCP_AUDIT_RETENTION_DAYS` | MCP audit log 保留天數 | `90` |
+| `ATLAS_MCP_RATE_LIMIT_PER_MINUTE` | MCP per-tenant 每分鐘請求上限 | `30` |
+| `ATLAS_MCP_RATE_LIMIT_BURST` | MCP per-tenant burst 上限 | `5` |
+| `ATLAS_MCP_SAMPLING_ENABLED` | MCP sampling capability 開關 | `false` |
+| `ATLAS_MCP_ELICITATION_ENABLED` | MCP elicitation capability 開關 | `false` |
+| `ATLAS_MCP_ROOTS_READ_SIZE_CAP` | MCP roots 單次讀取上限（bytes） | `1048576` |
+| `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | MCP roots 變更時觸發 alert | `false` |
+| `FUBON_PROXY_PYTHON` | Fubon proxy Python binary 路徑 | `python3` |
+| `ATLAS_L2_4_AUTO_CRON_ENABLED` | L2.4 auto-cron feature flag | `false` |
+| `LLM_ANNOTATOR_API_KEY` | LLM annotator API key（local/CI 測試用；production 必須走 gateway） | 空 |
 
 ---
 
@@ -106,6 +116,10 @@
 ---
 
 ## 資料源 API Key（僅限 `internal/config/config.go` 透過 `config.GetSecret()` 讀取）
+| `FUBON_DMA_PERSONAL_ID` | Fubon DMA 個人 ID | 空 |
+| `FUBON_DMA_API_KEY` | Fubon DMA API 金鑰 | 空 |
+| `FUBON_DMA_SCRIPT_PATH` | Fubon DMA Python script 路徑 | 空 |
+| `FUBON_DMA_PYTHON_PATH` | Fubon DMA Python interpreter 路徑 | `python3` |
 
 以下變數**禁止在任何業務邏輯中直接 `os.Getenv`**，必須透過 `config.GetSecret()` 讀取：
 
