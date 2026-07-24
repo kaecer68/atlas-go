@@ -31,5 +31,11 @@
 // EnrichEvent only enriches payloads of type map[string]any; other payload
 // types only get the base description in event metadata.
 //
+// Package independence: This package is a pure pub/sub infrastructure layer
+// and is NOT related to eventdriven (capital-flow prediction) or eventquality
+// (event data validation) despite the shared "event" prefix. New code should
+// not import eventdriven or eventquality via eventbus; the three packages have
+// disjoint responsibilities and no shared types.
+//
 // Maturity: stable
 package eventbus
