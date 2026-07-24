@@ -13,7 +13,7 @@
 import type { Page, BrowserContext } from '@playwright/test';
 
 const AUTH_MOCKS: Array<[string, unknown]> = [
-  ['**/api/user/profile', {}],
+  ['**/api/user/profile', { email: 'test@example.com', tier: 'registered' }],
   ['**/api/auth/whoami', {}],
 ];
 
