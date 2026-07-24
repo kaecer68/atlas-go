@@ -6,8 +6,8 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"

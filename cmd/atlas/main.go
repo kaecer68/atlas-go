@@ -703,6 +703,9 @@ func run(args []string, deps appDeps) error {
 		}
 		if qs, err := ledger.NewQuoteStore(cfg); err == nil {
 			stockDeps.QuoteStore = qs
+			if dashboard != nil {
+				dashboard.SetQuoteStore(qs)
+			}
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)
 		}
