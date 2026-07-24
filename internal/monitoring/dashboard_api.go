@@ -797,7 +797,7 @@ func (a *DashboardAPI) warmupQuotes() {
 		logging.Warn("dashboard_api", "quote_warmup_fetch_failed", logging.Err(err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Data []struct {
