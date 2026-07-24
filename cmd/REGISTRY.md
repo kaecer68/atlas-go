@@ -129,7 +129,7 @@
 | `cmd/validate-parameters` | 參數 JSON schema 驗證 | config, constants | ✅ Utility |
 | `cmd/realtime-quote` | 即時報價串流（Fugle → Redis pub/sub） | realtime, domain | ⚠️ Utility |
 | `cmd/fubon-dma` | 富邦 DMA 券商介面 CLI（login/submit/cancel/query/logout） | domain, live | ⚠️ Utility |
-| `cmd/stress-test` | 壓力測試情境執行（market_crash/sector_rotation/liquidity_crisis） | risktest | ⚠️ Experimental |
+| `cmd/stress-test` | 壓力測試情境執行（market_crash/sector_rotation/liquidity_crisis） | stress-test/internal/risktest | ⚠️ Experimental |
 
 ---
 

@@ -6,7 +6,7 @@
 // downstream risk evaluation. Scenarios are configurable via the
 // StressScenario struct (magnitude, duration, recovery shape).
 //
-// Differences from internal/risktest:
+// Differences from cmd/stress-test/internal/risktest:
 //   - risktest: multi-scenario batch execution via cmd/stress-test
 //   - stress: single-scenario runtime API used by live risk evaluation
 //
