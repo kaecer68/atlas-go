@@ -14,7 +14,7 @@
 | **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 只被 `strategy_ranker/` import，無獨立邊界 | 結構碎片 | merge → `strategy_ranker/`（`strategy_techniques/` 和 `strategy/` 的 `Registry` 命名衝突，保留分離） | P1 |
 | **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: 拆為子套件 | P1 |
 | **F-03** | `system.go` / `system_dispatcher.go` 7 處重複 Publish | PublishSimulationStart/RegimeChange/Recommendation/GuardOutcomes/DarwinianClamping/SimulationComplete — 兩個檔案中幾乎相同的 7 段程式碼 | 重複碼 | extract: 抽取共用方法 | P1 |
-| **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套完全獨立的實作，共享 EventBus/domain 但不共享執行抽象 | 協調斷裂 | design: 抽取 SessionRunner 介面 | P2 |
+| **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套獨立但互補的實作，共享 EventBus/domain 但執行模型不同；已透過 `orchestrator.AdapterProducer` 復用模擬 `ExecuteWithContext` 作為 live 建議來源 | 設計意圖（非斷裂） | ✅ won't fix：記錄為雙引擎架構決策，補 doc.go 說明 | P2 |
 | **F-05** | eventbus 孤兒事件 | 詳見 `docs/manifests/2026-07-24-eventbus-orphan-audit.md` — 10 事件分類，7 已修復，3 backlog | 事件缺口 | ✅ 大部分已修復 | — |
 | **F-06** | 微套件過多 | `paramcheck/`, `portprobe/`, `robustness/`, `risktest/`, `forecast/` + `forecast_bridge/` — 功能單一但獨佔套件 | 結構碎片 | merge: 合併到消費套件 | P2 |
 | **F-07** | 事件驅動相關套件分裂 | `eventbus/`, `eventdriven/`, `eventquality/` — 三個套件名稱暗示相關但無明確依賴邊界文件 | 命名誤導 | ✅ document: 三者獨立，補 doc.go 邊界說明 | P2 |
@@ -60,6 +60,23 @@
 
 ---
 
+### 雙引擎設計說明（F-04 won't fix 記錄）
+
+| 維度 | `orchestrator.System` | `live.Orchestrator` |
+|---|---|---|
+| 目的 | 研究/學習：批次評估策略對歷史資料的表現 | 執行：實際下單、管理即時部位 |
+| 觸發 | 離線批次：每日一次 `RunDailySimulation` | 事件驅動：market open / intraday cycle / market close |
+| 速度要求 | 可花數分鐘（factor engine + PRISM + JANUS） | 5 分鐘 intraday cycle 必須完成 |
+| 狀態模型 | 完整歷史軌跡（portfolioHistory、returnHistory） | 當前狀態（positions、cash、dayPnL） |
+| 訂單執行 | 無，僅產生 `SimulationResult` | 有，Broker / OrderManager / RiskGate |
+| 協調橋樑 | `orchestrator.AdapterProducer` 將 `ExecuteWithContext(...)` 的輸出轉為 `domain.ExecutionInput` 餵給 live 路徑 | |
+
+**判斷**：兩者並非重複實作，而是互補引擎。模擬路徑的輸出已經作為 live 路徑的建議輸入，不存在執行邏輯斷裂。強制抽取 `SessionRunner` 介面會讓 live 路徑拖帶研究型元件，或讓模擬路徑放棄學習 pipeline，因此維持分離。
+
+**未來仍應注意**：若新增第三條執行路徑（例如 paper trading 或回測 replay），才需要重新評估是否引入共用執行抽象。
+
+---
+
 ## Phase Tracker
 
 ### Phase A — Audit (read-only) ✅ DONE
@@ -79,7 +96,7 @@
 | F-01 | merge `strategy*` → `strategy/` | 4 套件無循環依賴、無獨立公開 API 消費者 |
 | F-02 | split `narrative/` → 4 子套件 | 凝聚力最低，detector/calibration/seasonal/geopolitical 獨立 |
 | F-03 | extract `publishSessionEvents()` | system.go:369,479,530,555,661,673 集中到一個方法 |
-| F-04 | defer P2 | 需要設計 SessionRunner 介面，影響兩條執行路徑 |
+| F-04 | ✅ won't fix | 雙引擎是設計意圖：orchestrator.System 負責批次研究/學習，live.Orchestrator 負責事件驅動執行；bridge 為 `orchestrator.AdapterProducer` |
 | F-06 | merge 微套件 | `paramcheck`→`config`, `portprobe`→刪除, `robustness`→`portfolio` |
 | F-07/F-08 | document | 補 doc.go，不改變程式碼 |
 
@@ -98,7 +115,7 @@
 
 | ID | Problem | Proposed Round |
 |---|---|---|
-| F-04 | live/orchestrator 雙引擎共用抽象 | Phase 2 |
+| F-04 | ✅ closed: live/orchestrator 雙引擎為設計意圖，已補 doc.go 與介面清理 | — |
 | F-07 | eventbus/eventdriven/eventquality doc.go | Phase 2 |
 | F-08 | llm/llm_annotator doc.go | Phase 2 |
 

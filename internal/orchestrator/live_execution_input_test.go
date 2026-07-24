@@ -1,13 +1,14 @@
 package orchestrator
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-func TestLiveExecutionInputProvider_Interface(t *testing.T) {
-	var _ LiveExecutionInputProvider = (*liveExecutionInputProvider)(nil)
+func TestAdapterProducer_ImplementsInterface(t *testing.T) {
+	var _ LiveExecutionInputProvider = (*AdapterProducer)(nil)
 }
 
 func TestAdapterProducer_ProducesDomainInput(t *testing.T) {
@@ -38,5 +39,13 @@ func TestExecutionInputFields(t *testing.T) {
 	}
 	if input.DeterminedBy != "test" {
 		t.Errorf("expected DeterminedBy=test, got %v", input.DeterminedBy)
+	}
+}
+
+func TestAdapterProducer_Produce_SystemNotInitialized(t *testing.T) {
+	p := &AdapterProducer{marketData: nil, system: nil}
+	_, err := p.Produce(context.Background(), nil)
+	if err != ErrSystemNotInitialized {
+		t.Errorf("expected ErrSystemNotInitialized, got %v", err)
 	}
 }
