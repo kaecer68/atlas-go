@@ -411,10 +411,40 @@ func (s *System) publishSessionClose(
 	go s.Risk().eventBus.PublishSimulationComplete(sessionID, portfolioValue, orderCount, positionCount)
 }
 
-func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)
+// publishSimulationStart emits the simulation-start lifecycle event.
+func (s *System) publishSimulationStart(sessionID string, asOf time.Time) {
+	if s.Risk().eventBus == nil {
+		return
 	}
+	go s.Risk().eventBus.PublishSimulationStart(sessionID, asOf)
+}
+
+// publishRegimeChange emits the regime-change event and syncs the factor weight
+// engine so it observes the new regime even if the async subscriber path is not
+// yet wired.
+func (s *System) publishRegimeChange(oldRegime, newRegime domain.Regime, confidence float64, source string) {
+	if s.Risk().eventBus == nil {
+		return
+	}
+	go s.Risk().eventBus.PublishRegimeChange(oldRegime, newRegime, confidence, source)
+	// Sync regime to factor weight engine (event subscriber handles async path).
+	if s.Port().factorWeightEngine != nil {
+		s.Port().factorWeightEngine.SetRegime(string(newRegime))
+		s.Port().factorWeightEngine.OnRegimeChange(string(oldRegime), string(newRegime), confidence)
+	}
+}
+
+// publishRecommendation emits the final recommendations after guard filters
+// and host processing.
+func (s *System) publishRecommendation(source string, recs []domain.Recommendation) {
+	if s.Risk().eventBus == nil {
+		return
+	}
+	go s.Risk().eventBus.PublishRecommendation(source, recs)
+}
+
+func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
+	s.publishSimulationStart(s.Sim().session.ID, asOf)
 
 	if sessionDate, ok := s.resolveReplayDate(); ok && s.Sim().replay != nil {
 		return s.runReplaySimulation(sessionDate)
@@ -522,14 +552,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
 	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
-		// Sync regime to factor weight engine (event subscriber handles async path).
-		if s.Port().factorWeightEngine != nil {
-			s.Port().factorWeightEngine.SetRegime(string(regime))
-			s.Port().factorWeightEngine.OnRegimeChange(string(oldRegime), string(regime), 0.0)
-		}
-	}
+	s.publishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 
 	vix := vixFromQuotes(quotes)
 	if s.strat.strategyAllocator != nil {
@@ -573,9 +596,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
+	s.publishRecommendation("orchestrator", finalRecs)
+
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {

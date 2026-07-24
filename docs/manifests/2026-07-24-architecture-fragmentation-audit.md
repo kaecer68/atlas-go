@@ -13,7 +13,7 @@
 | ID | 問題 | 證據 | 分類 | 決策 | 優先級 |
 | **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 只被 `strategy_ranker/` import，無獨立邊界 | 結構碎片 | merge → `strategy_ranker/`（`strategy_techniques/` 和 `strategy/` 的 `Registry` 命名衝突，保留分離） | P1 |
 | **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: 拆為子套件 | P1 |
-| **F-03** | `system.go` / `system_dispatcher.go` 7 處重複 Publish | PublishSimulationStart/RegimeChange/Recommendation/GuardOutcomes/DarwinianClamping/SimulationComplete — 兩個檔案中幾乎相同的 7 段程式碼 | 重複碼 | extract: 抽取共用方法 | P1 |
+| **F-03** | `system.go` / `system_dispatcher.go` Publish 重複 | `PublishSimulationStart`、`PublishRegimeChange`（含 factor engine sync）、`PublishRecommendation` 在 `RunDailySimulation` 與 `runReplaySimulation` 中重複；`publishSessionClose` 已抽但還有 3 組 | 重複碼 | ✅ extract: 抽取 `publishSimulationStart` / `publishRegimeChange` / `publishRecommendation` | P1 |
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套獨立但互補的實作，共享 EventBus/domain 但執行模型不同；已透過 `orchestrator.AdapterProducer` 復用模擬 `ExecuteWithContext` 作為 live 建議來源 | 設計意圖（非斷裂） | ✅ won't fix：記錄為雙引擎架構決策，補 doc.go 說明 | P2 |
 | **F-05** | eventbus 孤兒事件 | 詳見 `docs/manifests/2026-07-24-eventbus-orphan-audit.md` — 10 事件分類，7 已修復，3 backlog | 事件缺口 | ✅ 大部分已修復 | — |
 | **F-06** | 微套件過多 | `paramcheck/`, `portprobe/`, `robustness/`, `risktest/`, `forecast/` + `forecast_bridge/` — 功能單一但獨佔套件 | 結構碎片 | merge: 合併到消費套件 | P2 |
@@ -95,7 +95,7 @@
 |---|---|---|
 | F-01 | merge `strategy*` → `strategy/` | 4 套件無循環依賴、無獨立公開 API 消費者 |
 | F-02 | split `narrative/` → 4 子套件 | 凝聚力最低，detector/calibration/seasonal/geopolitical 獨立 |
-| F-03 | extract `publishSessionEvents()` | system.go:369,479,530,555,661,673 集中到一個方法 |
+| F-03 | ✅ extract | 抽取 `publishSimulationStart`、`publishRegimeChange`（含 factor engine sync）、`publishRecommendation` 到 `system.go`；兩條執行路徑共用 |
 | F-04 | ✅ won't fix | 雙引擎是設計意圖：orchestrator.System 負責批次研究/學習，live.Orchestrator 負責事件驅動執行；bridge 為 `orchestrator.AdapterProducer` |
 | F-06 | merge 微套件 | `paramcheck`→`config`, `portprobe`→刪除, `robustness`→`portfolio` |
 | F-07/F-08 | document | 補 doc.go，不改變程式碼 |
@@ -115,7 +115,7 @@
 
 | ID | Problem | Proposed Round |
 |---|---|---|
-| F-04 | ✅ closed: live/orchestrator 雙引擎為設計意圖，已補 doc.go 與介面清理 | — |
+| F-03 | ✅ closed: Publish 重複區塊已抽取為 System helper methods | — |
 | F-07 | eventbus/eventdriven/eventquality doc.go | Phase 2 |
 | F-08 | llm/llm_annotator doc.go | Phase 2 |
 
