@@ -71,8 +71,8 @@ type CausalChain struct {
 	FavoredSectors  []string     `json:"favored_sectors"`  // sectors with net positive impact
 	AvoidedSectors  []string     `json:"avoided_sectors"`  // sectors with net negative impact
 	Steps           []CausalStep `json:"steps"`
-	Score           float64      `json:"score"`            // combined confidence * historical hit rate
-	DetectedAt      time.Time    `json:"detected_at"`      // when the trigger event was detected
+	Score           float64      `json:"score"`       // combined confidence * historical hit rate
+	DetectedAt      time.Time    `json:"detected_at"` // when the trigger event was detected
 }
 
 // InvestmentModel represents a narrative-driven investment hypothesis.

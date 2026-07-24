@@ -507,6 +507,7 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, snap
 }
+
 // --- Sector taxonomy handlers (E-06: HTTP proxy for MCP-in-memory tools) ---
 
 // HandleSectorList returns the full 20-sector taxonomy.
