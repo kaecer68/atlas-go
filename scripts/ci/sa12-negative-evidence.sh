@@ -54,7 +54,7 @@ neg "05 second normalizeAllocations"              'normalizeAllocations' 1   # r
 neg "06 direct base_weights merge in rotator"     'BaseWeights\[.*BaseAllocations'
 neg "07 string-as-receipt"                        'receipt.*=.*"applied"'
 neg "08 unversioned CapitalFlowAction"            'CapitalFlowActionRiskOn' 2   # projector.go (def) + action_mapper.go (mapper)
-neg "09 synthetic ranking literal"                '"synthetic"' 1   # paramcheck calibration source, not strategy ranking
+neg "09 synthetic ranking literal"                '"synthetic"' 1   # config parameter metadata calibration source, not strategy ranking
 neg "10 non-canonical L1 base_allocations"        'base_allocations.*semiconductor'
 neg "11 live sector mutation path"                'live.*ApplySectorRotation\|ApplySectorRotation.*live'
 

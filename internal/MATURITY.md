@@ -119,14 +119,13 @@
 
 ---
 
-## U · Utility（輔助工具）— 7 packages
+## U · Utility（輔助工具）— 6 packages
 
 CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
 | Package | 描述 | 關聯 CLI 入口 | 備註 |
 |---------|------|--------------|------|
 | `importer` | CSV → JSONL 資料匯入 — TWSE、FinMind | `cmd/import-replay` | — |
-| `paramcheck` | 驗證 JSON 參數樹中的 ParameterMetadata 校正證據 | `cmd/validate-parameters` | 由 cmd/validate-parameters 使用，非 runtime |
 | `taskexec` | 非同步任務執行器 — `Manager`、`Cancel/Subscribe` | — | **v0.0.0.38 維持 U**：進入 bootstrap + monitoring，但屬輔助基礎設施 |
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷 | `cmd/calibrate-parameters` | 工具層，非 runtime |
 | `risktest` | 風險測試場景 — `RunScenario()` | `cmd/stress-test` | 由 orchestrator 測試使用 |

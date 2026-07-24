@@ -1,4 +1,6 @@
-package paramcheck
+// SPDX-License-Identifier: AGPL-3.0
+
+package config
 
 import (
 	"fmt"
@@ -6,15 +8,15 @@ import (
 	"strings"
 )
 
-// CountSections returns the total number of ParameterMetadata sections found
-// anywhere inside the JSON config tree.
-func CountSections(config map[string]any) int {
+// CountParameterMetadataSections returns the total number of ParameterMetadata
+// sections found anywhere inside the JSON config tree.
+func CountParameterMetadataSections(config map[string]any) int {
 	count := 0
 	var walk func(v any)
 	walk = func(v any) {
 		switch obj := v.(type) {
 		case map[string]any:
-			if isParamMetadata(obj) {
+			if isParameterMetadataSection(obj) {
 				count++
 			}
 			for _, val := range obj {
@@ -30,8 +32,8 @@ func CountSections(config map[string]any) int {
 	return count
 }
 
-// isParamMetadata decides whether an object is a ParameterMetadata section.
-func isParamMetadata(obj map[string]any) bool {
+// isParameterMetadataSection decides whether an object is a ParameterMetadata section.
+func isParameterMetadataSection(obj map[string]any) bool {
 	// Skip citation sub-objects — they're part of ParameterMetadata,
 	// not standalone sections. Citations can have calibration_method
 	// (set by calibrators) but the timestamp belongs to the parent.
@@ -57,14 +59,14 @@ func isParamMetadata(obj map[string]any) bool {
 	return false
 }
 
-// WalkTree recursively walks a JSON config tree and validates every
-// ParameterMetadata section it finds.
-func WalkTree(v any, path string, strict bool) (warnings, errors []string) {
+// WalkParameterMetadataTree recursively walks a JSON config tree and validates
+// every ParameterMetadata section it finds.
+func WalkParameterMetadataTree(v any, path string, strict bool) (warnings, errors []string) {
 	switch obj := v.(type) {
 	case map[string]any:
 		// Check if this object is a ParameterMetadata
-		if isParamMetadata(obj) {
-			w, e := CheckSection(obj, path, strict)
+		if isParameterMetadataSection(obj) {
+			w, e := CheckParameterMetadataSection(obj, path, strict)
 			warnings = append(warnings, w...)
 			errors = append(errors, e...)
 		}
@@ -76,7 +78,7 @@ func WalkTree(v any, path string, strict bool) (warnings, errors []string) {
 			} else {
 				childPath = childPath + "." + key
 			}
-			w, e := WalkTree(val, childPath, strict)
+			w, e := WalkParameterMetadataTree(val, childPath, strict)
 			warnings = append(warnings, w...)
 			errors = append(errors, e...)
 		}
@@ -84,7 +86,7 @@ func WalkTree(v any, path string, strict bool) (warnings, errors []string) {
 	case []any:
 		for i, val := range obj {
 			childPath := fmt.Sprintf("%s[%d]", path, i)
-			w, e := WalkTree(val, childPath, strict)
+			w, e := WalkParameterMetadataTree(val, childPath, strict)
 			warnings = append(warnings, w...)
 			errors = append(errors, e...)
 		}
@@ -92,8 +94,8 @@ func WalkTree(v any, path string, strict bool) (warnings, errors []string) {
 	return warnings, errors
 }
 
-// CheckSection validates a single ParameterMetadata object.
-func CheckSection(obj map[string]any, path string, strict bool) (warnings, errors []string) {
+// CheckParameterMetadataSection validates a single ParameterMetadata object.
+func CheckParameterMetadataSection(obj map[string]any, path string, strict bool) (warnings, errors []string) {
 	cite, hasCite := obj["citation"].(map[string]any)
 	eq := ""
 	var citeRef string
@@ -162,8 +164,11 @@ func CheckSection(obj map[string]any, path string, strict bool) (warnings, error
 	return warnings, errors
 }
 
-func ValidateAndReport(config map[string]any, path string, strict bool, stdout, stderr io.Writer) int {
-	warnings, errors := WalkTree(config, "", strict)
+// ValidateAndReportParameterMetadata walks the raw JSON config tree, validates
+// every ParameterMetadata section, and writes warnings/errors to the provided
+// writers. It returns the exit code for the validate-parameters command.
+func ValidateAndReportParameterMetadata(config map[string]any, path string, strict bool, stdout, stderr io.Writer) int {
+	warnings, errors := WalkParameterMetadataTree(config, "", strict)
 	for _, w := range warnings {
 		_, _ = fmt.Fprintf(stderr, "WARN: %s\n", w)
 	}
@@ -178,6 +183,6 @@ func ValidateAndReport(config map[string]any, path string, strict bool, stdout, 
 		_, _ = fmt.Fprintf(stdout, "\n%d warning(s) (strict mode)\n", len(warnings))
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "OK: %s is valid (%d sections checked)\n", path, CountSections(config))
+	_, _ = fmt.Fprintf(stdout, "OK: %s is valid (%d sections checked)\n", path, CountParameterMetadataSections(config))
 	return 0
 }

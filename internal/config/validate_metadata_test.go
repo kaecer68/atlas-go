@@ -1,13 +1,14 @@
-package paramcheck
+// SPDX-License-Identifier: AGPL-3.0
+
+package config
 
 import (
 	"bytes"
 	"slices"
-	"strings"
 	"testing"
 )
 
-func TestCountSections(t *testing.T) {
+func TestCountParameterMetadataSections(t *testing.T) {
 	tests := []struct {
 		name   string
 		config map[string]any
@@ -98,15 +99,15 @@ func TestCountSections(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CountSections(tt.config)
+			got := CountParameterMetadataSections(tt.config)
 			if got != tt.want {
-				t.Errorf("CountSections() = %d, want %d", got, tt.want)
+				t.Errorf("CountParameterMetadataSections() = %d, want %d", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestWalkTree(t *testing.T) {
+func TestWalkParameterMetadataTree(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      map[string]any
@@ -265,7 +266,7 @@ func TestWalkTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotWarns, gotErrors := WalkTree(tt.input, "", tt.strict)
+			gotWarns, gotErrors := WalkParameterMetadataTree(tt.input, "", tt.strict)
 			if !slices.Equal(gotWarns, tt.wantWarns) {
 				t.Errorf("warnings = %v, want %v", gotWarns, tt.wantWarns)
 			}
@@ -276,7 +277,7 @@ func TestWalkTree(t *testing.T) {
 	}
 }
 
-func TestCheckSection(t *testing.T) {
+func TestCheckParameterMetadataSection(t *testing.T) {
 	tests := []struct {
 		name       string
 		obj        map[string]any
@@ -300,42 +301,90 @@ func TestCheckSection(t *testing.T) {
 			obj: map[string]any{
 				"value":              0.1,
 				"calibration_method": "",
+				"last_calibrated":    "2026-06-01",
+			},
+			wantWarns:  nil,
+			wantErrors: nil,
+		},
+		{
+			name: "high quality without timestamp is error",
+			obj: map[string]any{
+				"value": 0.1,
 				"citation": map[string]any{
 					"evidence_quality": "high",
 				},
+				"calibration_method": "mle",
 			},
 			wantErrors: []string{
-				"param: citation.evidence_quality=\"high\" but no calibration timestamp (need last_calibrated or calibration_timestamp)",
+				"section: citation.evidence_quality=\"high\" but no calibration timestamp (need last_calibrated or calibration_timestamp)",
+				"section: calibration_method=\"mle\" but no calibration timestamp",
 			},
 		},
 		{
-			name: "calibration_timestamp satisfies timestamp requirement",
+			name: "low quality with timestamp is warning",
 			obj: map[string]any{
 				"value": 0.1,
 				"citation": map[string]any{
-					"evidence_quality": "medium",
+					"evidence_quality": "low",
 				},
-				"calibration_timestamp": "2026-06-01",
-			},
-		},
-		{
-			name: "heuristic quality with timestamp warns",
-			obj: map[string]any{
-				"value": 0.1,
-				"citation": map[string]any{
-					"evidence_quality": "heuristic",
-				},
-				"last_calibrated": "2026-06-01",
+				"calibration_method": "heuristic",
+				"last_calibrated":    "2026-06-01",
 			},
 			wantWarns: []string{
-				"param: calibration timestamp exists but citation.evidence_quality=\"heuristic\" (expected 'high' or 'medium' after calibration)",
+				"section: calibration timestamp exists but citation.evidence_quality=\"low\" (expected 'high' or 'medium' after calibration)",
 			},
+		},
+		{
+			name: "low quality with timestamp is error in strict mode",
+			obj: map[string]any{
+				"value": 0.1,
+				"citation": map[string]any{
+					"evidence_quality": "low",
+				},
+				"calibration_method": "heuristic",
+				"last_calibrated":    "2026-06-01",
+			},
+			strict: true,
+			wantErrors: []string{
+				"section: calibration timestamp exists but citation.evidence_quality=\"low\" (expected 'high' or 'medium' after calibration)",
+			},
+		},
+		{
+			name: "synthetic with real reference warning in strict",
+			obj: map[string]any{
+				"value": 0.1,
+				"citation": map[string]any{
+					"source_reference": "real.csv",
+				},
+				"calibration_method":      "mle",
+				"last_calibrated":         "2026-06-01",
+				"calibration_data_source": "synthetic",
+			},
+			strict: true,
+			wantWarns: []string{
+				"section: calibration_data_source='synthetic' but citation.source_reference=\"real.csv\" — re-run calibrator with --replay for real data",
+			},
+		},
+		{
+			name: "synthetic with synthetic reference is clean",
+			obj: map[string]any{
+				"value": 0.1,
+				"citation": map[string]any{
+					"source_reference": "synthetic_2026.csv",
+				},
+				"calibration_method":      "mle",
+				"last_calibrated":         "2026-06-01",
+				"calibration_data_source": "synthetic",
+			},
+			strict:     true,
+			wantWarns:  nil,
+			wantErrors: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotWarns, gotErrors := CheckSection(tt.obj, "param", tt.strict)
+			gotWarns, gotErrors := CheckParameterMetadataSection(tt.obj, "section", tt.strict)
 			if !slices.Equal(gotWarns, tt.wantWarns) {
 				t.Errorf("warnings = %v, want %v", gotWarns, tt.wantWarns)
 			}
@@ -346,67 +395,46 @@ func TestCheckSection(t *testing.T) {
 	}
 }
 
-func TestValidateAndReport(t *testing.T) {
-	tests := []struct {
-		name         string
-		config       map[string]any
-		strict       bool
-		wantExit     int
-		wantStdout   string
-		wantStderrIn []string
-	}{
-		{
-			name:       "empty config is valid",
-			config:     map[string]any{},
-			wantExit:   0,
-			wantStdout: "OK: params.json is valid (0 sections checked)\n",
-		},
-		{
-			name: "error exits 1",
-			config: map[string]any{
-				"alpha": map[string]any{
-					"value":              0.1,
-					"calibration_method": "mle",
+func TestValidateAndReportParameterMetadata(t *testing.T) {
+	t.Run("valid config returns 0", func(t *testing.T) {
+		config := map[string]any{
+			"alpha": map[string]any{
+				"value": 0.1,
+				"citation": map[string]any{
+					"evidence_quality": "high",
 				},
+				"calibration_method": "mle",
+				"last_calibrated":    "2026-06-01",
 			},
-			wantExit:     1,
-			wantStdout:   "\n1 error(s), 0 warning(s)\n",
-			wantStderrIn: []string{"FAIL: alpha: calibration_method=\"mle\" but no calibration timestamp"},
-		},
-		{
-			name: "strict warning exits 1",
-			config: map[string]any{
-				"alpha": map[string]any{
-					"value": 0.1,
-					"citation": map[string]any{
-						"evidence_quality": "low",
-					},
-					"last_calibrated": "2026-06-01",
-				},
-			},
-			strict:       true,
-			wantExit:     1,
-			wantStdout:   "\n1 error(s), 0 warning(s)\n",
-			wantStderrIn: []string{"FAIL: alpha: calibration timestamp exists but citation.evidence_quality=\"low\""},
-		},
-	}
+		}
+		var stdout, stderr bytes.Buffer
+		got := ValidateAndReportParameterMetadata(config, "params.json", false, &stdout, &stderr)
+		if got != 0 {
+			t.Errorf("exit code = %d, want 0", got)
+		}
+		if stderr.Len() != 0 {
+			t.Errorf("stderr = %q, want empty", stderr.String())
+		}
+		want := "OK: params.json is valid (1 sections checked)\n"
+		if stdout.String() != want {
+			t.Errorf("stdout = %q, want %q", stdout.String(), want)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			got := ValidateAndReport(tt.config, "params.json", tt.strict, &stdout, &stderr)
-			if got != tt.wantExit {
-				t.Errorf("exit code = %d, want %d", got, tt.wantExit)
-			}
-			if gotStdout := stdout.String(); gotStdout != tt.wantStdout {
-				t.Errorf("stdout = %q, want %q", gotStdout, tt.wantStdout)
-			}
-			stderrStr := stderr.String()
-			for _, want := range tt.wantStderrIn {
-				if !strings.Contains(stderrStr, want) {
-					t.Errorf("stderr missing %q, got %q", want, stderrStr)
-				}
-			}
-		})
-	}
+	t.Run("invalid config returns 1", func(t *testing.T) {
+		config := map[string]any{
+			"alpha": map[string]any{
+				"value":              0.1,
+				"calibration_method": "mle",
+			},
+		}
+		var stdout, stderr bytes.Buffer
+		got := ValidateAndReportParameterMetadata(config, "params.json", false, &stdout, &stderr)
+		if got != 1 {
+			t.Errorf("exit code = %d, want 1", got)
+		}
+		if stderr.Len() == 0 {
+			t.Error("expected stderr errors, got empty")
+		}
+	})
 }

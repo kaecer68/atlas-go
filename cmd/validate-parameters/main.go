@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
-	"github.com/kaecer68/atlas-go/internal/paramcheck"
 )
 
 func main() {
@@ -23,10 +23,10 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "FAIL: cannot read %s: %v\n", path, err)
 		os.Exit(1)
 	}
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "FAIL: invalid JSON in %s: %v\n", path, err)
 		os.Exit(1)
 	}
-	os.Exit(paramcheck.ValidateAndReport(config, path, strict, os.Stdout, os.Stderr))
+	os.Exit(config.ValidateAndReportParameterMetadata(cfg, path, strict, os.Stdout, os.Stderr))
 }
