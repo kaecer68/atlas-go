@@ -18,7 +18,6 @@ type EventType string
 const (
 	// 市场数据事件
 	EventMarketSnapshot EventType = "market.snapshot"
-	EventMarketTick     EventType = "market.tick"
 	EventMarketOpen     EventType = "market.open"
 	EventMarketClose    EventType = "market.close"
 
@@ -439,7 +438,6 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventPositionUpdate:             {"投資組合部位已更新", "info"},
 	EventPortfolioPnL:               {"投資組合損益更新", "info"},
 	EventMarketSnapshot:             {"市場快照已擷取", "info"},
-	EventMarketTick:                 {"市場即時報價更新", "info"},
 	EventMarketOpen:                 {"市場開盤，開始接收即時報價", "info"},
 	EventMarketClose:                {"市場收盤，停止即時交易", "info"},
 	EventExperimentInsufficientData: {"實驗數據不足，無法進行統計比較", "warning"},

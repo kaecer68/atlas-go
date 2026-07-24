@@ -27,7 +27,6 @@ type (
 
 const (
 	EventMarketSnapshot             = eventbus.EventMarketSnapshot
-	EventMarketTick                 = eventbus.EventMarketTick
 	EventMarketOpen                 = eventbus.EventMarketOpen
 	EventMarketClose                = eventbus.EventMarketClose
 	EventRegimeChange               = eventbus.EventRegimeChange

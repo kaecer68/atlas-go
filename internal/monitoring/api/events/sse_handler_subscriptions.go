@@ -6,7 +6,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 )
 
-// RegisterDashboardBufferSubs subscribes the 14 dashboard buffer hooks to the
+// RegisterDashboardBufferSubs subscribes the 16 dashboard buffer hooks to the
 // given bus so that SSE reconnecting clients can receive a catchup of recent
 // events for each monitored event type.
 //
@@ -86,6 +86,10 @@ func RegisterDashboardBufferSubs(bus eventbus.EventBus) {
 	})
 	bus.Subscribe(eventbus.EventIngestionLagSpike, func(_ context.Context, ev eventbus.BusEvent) error {
 		BufferIngestionLagSpikeEvent(ev)
+		return nil
+	})
+	bus.Subscribe(eventbus.EventAgentHealthChange, func(_ context.Context, ev eventbus.BusEvent) error {
+		BufferAgentHealthChangeEvent(ev)
 		return nil
 	})
 }

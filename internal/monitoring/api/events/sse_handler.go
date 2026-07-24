@@ -343,6 +343,19 @@ var (
 	lastIngestionLagSpikeMutex sync.RWMutex
 )
 
+// BufferedAgentHealthChangeEvent holds a published agent-health-change event for SSE catchup.
+type BufferedAgentHealthChangeEvent struct {
+	Event      eventbus.BusEvent
+	ReceivedAt time.Time
+}
+
+const maxBufferedAgentHealthChangeEvents = 50
+
+var (
+	agentHealthChangeBuffer    []BufferedAgentHealthChangeEvent
+	lastAgentHealthChangeMutex sync.RWMutex
+)
+
 const defaultMaxSSEClients = 20
 
 // BufferNarrativeEvent stores a narrative event for catchup by new SSE clients.
@@ -572,6 +585,35 @@ func resetIngestionLagSpikeBuffer() {
 	ingestionLagSpikeBuffer = nil
 }
 
+// BufferAgentHealthChangeEvent stores an agent-health-change event for catchup by new SSE clients.
+func BufferAgentHealthChangeEvent(event eventbus.BusEvent) {
+	lastAgentHealthChangeMutex.Lock()
+	defer lastAgentHealthChangeMutex.Unlock()
+	agentHealthChangeBuffer = append(agentHealthChangeBuffer, BufferedAgentHealthChangeEvent{
+		Event:      event,
+		ReceivedAt: time.Now(),
+	})
+	if len(agentHealthChangeBuffer) > maxBufferedAgentHealthChangeEvents {
+		agentHealthChangeBuffer = agentHealthChangeBuffer[len(agentHealthChangeBuffer)-maxBufferedAgentHealthChangeEvents:]
+	}
+}
+
+// GetBufferedAgentHealthChangeEvents returns a snapshot of buffered agent-health-change events for SSE catchup.
+func GetBufferedAgentHealthChangeEvents() []BufferedAgentHealthChangeEvent {
+	lastAgentHealthChangeMutex.RLock()
+	defer lastAgentHealthChangeMutex.RUnlock()
+	out := make([]BufferedAgentHealthChangeEvent, len(agentHealthChangeBuffer))
+	copy(out, agentHealthChangeBuffer)
+	return out
+}
+
+// resetAgentHealthChangeBuffer clears the agent-health-change buffer. Test-only helper.
+func resetAgentHealthChangeBuffer() {
+	lastAgentHealthChangeMutex.Lock()
+	defer lastAgentHealthChangeMutex.Unlock()
+	agentHealthChangeBuffer = nil
+}
+
 // NewSSEHandler creates a new SSE handler.
 func NewSSEHandler(eventBus *eventbus.ChannelEventBus) *SSEHandler {
 	return &SSEHandler{
@@ -793,6 +835,17 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	lastAgentHealthChangeMutex.RLock()
+	agentHealthChangeBuffered := agentHealthChangeBuffer
+	lastAgentHealthChangeMutex.RUnlock()
+	for _, b := range agentHealthChangeBuffered {
+		data, err := json.Marshal(b.Event)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", b.Event.Type, data)
+		flusher.Flush()
+	}
 	// Subscribe to EventBus and forward events to this client.
 	sub := h.eventBus.SubscribeAll(func(ctx context.Context, event eventbus.BusEvent) error {
 		if !h.matchesFilter(client, event.Type) {
