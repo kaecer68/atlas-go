@@ -16,7 +16,7 @@
 | **F-03** | `system.go` / `system_dispatcher.go` Publish 重複 | `PublishSimulationStart`、`PublishRegimeChange`（含 factor engine sync）、`PublishRecommendation` 在 `RunDailySimulation` 與 `runReplaySimulation` 中重複；`publishSessionClose` 已抽但還有 3 組 | 重複碼 | ✅ extract: 抽取 `publishSimulationStart` / `publishRegimeChange` / `publishRecommendation` | P1 |
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套獨立但互補的實作，共享 EventBus/domain 但執行模型不同；已透過 `orchestrator.AdapterProducer` 復用模擬 `ExecuteWithContext` 作為 live 建議來源 | 設計意圖（非斷裂） | ✅ won't fix：記錄為雙引擎架構決策，補 doc.go 說明 | P2 |
 | **F-05** | eventbus 孤兒事件 | 詳見 `docs/manifests/2026-07-24-eventbus-orphan-audit.md` — 10 事件分類，7 已修復，3 backlog | 事件缺口 | ✅ 大部分已修復 | — |
-| **F-06** | 微套件過多 | `paramcheck/`, `portprobe/`, `robustness/`, `risktest/`, `forecast/` + `forecast_bridge/` — 功能單一但獨佔套件 | 結構碎片 | merge: 合併到消費套件 | P2 |
+| **F-06** | 微套件過多 | `paramcheck/` (only `cmd/validate-parameters`), `risktest/` (only `cmd/stress-test`) 仍為單一消費者微套件；`robustness/`、`forecast_bridge/` 已於 PR #1311 移除；`portprobe/` 被 5+ 套件共用、`forecast/` 被 orchestrator + strategy 共用，非碎片 | 結構碎片 | merge: 可合併 `paramcheck` → `cmd/validate-parameters`、`risktest` → `cmd/stress-test`；`portprobe`/`forecast` 建議保留 | P2 |
 | **F-07** | 事件驅動相關套件分裂 | `eventbus/`, `eventdriven/`, `eventquality/` — 三個套件名稱暗示相關但無明確依賴邊界文件 | 命名誤導 | ✅ document: 三者獨立，補 doc.go 邊界說明 | P2 |
 | **F-08** | `llm/` + `llm_annotator/` 關係不明 | 兩個 LLM 套件無共用介面或依賴圖 | 結構碎片 | ✅ document: `llm/adapters/` → `llm_annotator`，補 sub-packages 說明 | P2 |
 
@@ -97,17 +97,19 @@
 | F-02 | split `narrative/` → 4 子套件 | 凝聚力最低，detector/calibration/seasonal/geopolitical 獨立 |
 | F-03 | ✅ extract | 抽取 `publishSimulationStart`、`publishRegimeChange`（含 factor engine sync）、`publishRecommendation` 到 `system.go`；兩條執行路徑共用 |
 | F-04 | ✅ won't fix | 雙引擎是設計意圖：orchestrator.System 負責批次研究/學習，live.Orchestrator 負責事件驅動執行；bridge 為 `orchestrator.AdapterProducer` |
-| F-06 | merge 微套件 | `paramcheck`→`config`, `portprobe`→刪除, `robustness`→`portfolio` |
+| F-06 | merge 微套件（重新評估） | `robustness`/`forecast_bridge` 已移除（PR #1311）；`paramcheck` → `cmd/validate-parameters`、`risktest` → `cmd/stress-test` 可合併；`portprobe` 被 5+ 套件共用應保留、`forecast` 為核心應保留 |
 | F-07/F-08 | document | 補 doc.go，不改變程式碼 |
 
 ### Phase C — Implement
 
 | PR | IDs | Scope | Status |
 |---|---|---|---|
-| PR #1 | F-01 | 合併 `strategy_ranker/validator/techniques` → `strategy/` | pending |
-| PR #2 | F-03 | 抽取 `publishSessionEvents()` 消除 system.go/system_dispatcher.go 重複 | pending |
-| PR #3 | F-02 | 拆分 `narrative/` → 子套件 | pending |
-| PR #4 | F-06 | 合併微套件 | pending |
+| PR #1311 | F-06 部分 | 已移除 dead packages `robustness/`, `forecast_bridge/` | ✅ merged |
+| PR #1315 | — | `cmd/backtest-window` SQLite 測試 hermetic | ✅ merged |
+| PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
+| PR #? | F-01 | 合併 `strategy_ranker/validator/techniques` → `strategy/` | pending |
+| PR #? | F-02 | 拆分 `narrative/` → 子套件 | pending |
+| PR #? | F-06 剩餘 | 合併 `paramcheck`/`risktest` 到各自 cmd | pending |
 
 ---
 
