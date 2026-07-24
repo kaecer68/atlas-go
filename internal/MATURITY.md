@@ -100,7 +100,7 @@
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | **v0.0.0.38 維持 X**：被 orchestrator runtime 使用但無 AGENTS.md，需補文件 |
-| `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，零 runtime 依賴 |
+| `reflexivity` | 自反性價格動態引擎 | `Engine` | **v0.0.0.38 維持 X**：被 orchestrator + sim runtime 使用但無 AGENTS.md，需補文件 |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈，健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Wave 11 L2.1：effective routing chain 為 3 層（Primary → Backup1 → LastResort）；`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作（Issue #720）。**Phase 2 canonical 介面（Issue #722）**：Phase 2 canonical 介面已就緒（`adapters` + `capabilities`），承接 `llm_annotator` 的角色。詳見 `docs/llm-integration-strategy-framework.md` |
 | `llm/schemas` | LLM 能力輸入/輸出結構合約 — 9 個 capability 的 typed I/O 結構，JSON 序列化 | `RationaleGenerationResponse`, `StrategySummaryResponse`, `PromptLintResponse`, `ScenarioSimulationResponse`, `RiskSurfaceExtractionResponse`, `RegimeExplanationResponse`, `PerformanceForensicsResponse`, `CodeReviewAnnotationResponse`, `SentimentExplanationResponse` | Phase 2 為 9 個 capability handlers 提供型別安全 contract；handler 端用 `json.Marshal/Unmarshal` 對接 Router |
