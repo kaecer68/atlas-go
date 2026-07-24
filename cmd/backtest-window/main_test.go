@@ -14,15 +14,19 @@ import (
 func TestRunBacktestWindow(t *testing.T) {
 	origReplay := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 	origLedger := os.Getenv("ATLAS_LEDGER_DIR")
+	origSQLite := os.Getenv("ATLAS_SQLITE_PATH")
 	defer func() {
 		os.Setenv("ATLAS_REPLAY_DATA_PATH", origReplay)
 		os.Setenv("ATLAS_LEDGER_DIR", origLedger)
+		os.Setenv("ATLAS_SQLITE_PATH", origSQLite)
 	}()
 
 	// Use sample replay data
 	os.Setenv("ATLAS_REPLAY_DATA_PATH", filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv"))
 	dir := t.TempDir()
 	os.Setenv("ATLAS_LEDGER_DIR", dir)
+	// Keep the test hermetic when the host environment defaults to sqlite.
+	os.Setenv("ATLAS_SQLITE_PATH", filepath.Join(dir, "atlas.db"))
 
 	if err := run([]string{"-start", "2026-03-26", "-end", "2026-03-27"}); err != nil {
 		t.Fatalf("run backtest-window: %v", err)
@@ -176,14 +180,18 @@ func TestMaterializeParamConfig_OverriddenValuesWritten(t *testing.T) {
 func TestRunWithParamOverride(t *testing.T) {
 	origReplay := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 	origLedger := os.Getenv("ATLAS_LEDGER_DIR")
+	origSQLite := os.Getenv("ATLAS_SQLITE_PATH")
 	defer func() {
 		os.Setenv("ATLAS_REPLAY_DATA_PATH", origReplay)
 		os.Setenv("ATLAS_LEDGER_DIR", origLedger)
+		os.Setenv("ATLAS_SQLITE_PATH", origSQLite)
 	}()
 
 	os.Setenv("ATLAS_REPLAY_DATA_PATH", filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv"))
 	dir := t.TempDir()
 	os.Setenv("ATLAS_LEDGER_DIR", dir)
+	// Keep the test hermetic when the host environment defaults to sqlite.
+	os.Setenv("ATLAS_SQLITE_PATH", filepath.Join(dir, "atlas.db"))
 
 	err := run([]string{
 		"-start", "2026-03-26",
