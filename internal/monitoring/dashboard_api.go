@@ -110,6 +110,7 @@ type DashboardAPI struct {
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
 	historicalStore            ledger.HistoricalStore
+	quoteStore                ledger.QuoteStore
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -760,6 +761,8 @@ func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *Dashboard
 	// API returns data immediately after a cold start / rebuild instead
 	// of waiting for live macro_ingest ticks to accumulate.
 	go a.warmupRegimeHistory()
+	// E04: warm up stock quotes from Fugle for technical indicators.
+	go a.warmupQuotes()
 	return a
 }
 
@@ -1571,4 +1574,75 @@ func configHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
+}
+
+// warmupQuotes fetches historical daily bars from Fugle and inserts them
+// into the quotes table. Called once on startup via WithHistoricalStore.
+func (a *DashboardAPI) warmupQuotes() {
+	if a.quoteStore == nil {
+		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "quote store nil")
+		return
+	}
+	fugleKey := os.Getenv("FUGLE_API_KEY")
+	if fugleKey == "" {
+		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FUGLE_API_KEY not set")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	url := "https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/2330?from=2026-01-01&to=2026-07-24&fields=open,high,low,close,volume"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_req_failed", logging.Err(err))
+		return
+	}
+	req.Header.Set("X-API-KEY", fugleKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_fetch_failed", logging.Err(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Date   string  `json:"date"`
+			Open   float64 `json:"open"`
+			High   float64 `json:"high"`
+			Low    float64 `json:"low"`
+			Close  float64 `json:"close"`
+			Volume int64   `json:"volume"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_decode_failed", logging.Err(err))
+		return
+	}
+	inserted := 0
+	for _, bar := range result.Data {
+		d, err := time.Parse("2006-01-02", bar.Date)
+		if err != nil {
+			continue
+		}
+		if err := a.quoteStore.RecordQuotes([]domain.DailyBar{{
+			Symbol: "2330.TW",
+			Date:   d,
+			Open:   bar.Open,
+			High:   bar.High,
+			Low:    bar.Low,
+			Close:  bar.Close,
+			Volume: bar.Volume,
+			Source: "fugle_warmup",
+		}}); err != nil {
+			continue
+		}
+		inserted++
+	}
+	logging.Info("dashboard_api", "quote_warmup_complete", "rows", inserted)
+}
+
+// SetQuoteStore injects the QuoteStore for stock quote warmup.
+func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
+	a.quoteStore = qs
 }
