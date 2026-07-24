@@ -391,6 +391,7 @@ export async function renderHomeTierSections() {
       return card;
     });
     var section = buildTierSection('未來 5 日資金流向預測', [buildMetricGrid(5, preds)]);
+    section.id = 'home-capital-prediction-card';
     var hint = document.createElement('p');
     hint.className = 'home-section__hint';
     hint.style.cssText = 'font-size:11px;opacity:.65;margin:6px 0 0';
@@ -402,6 +403,7 @@ export async function renderHomeTierSections() {
   if (eventsCal && Array.isArray(eventsCal.events) && eventsCal.events.length > 0) {
     var list = document.createElement('div');
     list.className = 'event-list';
+    list.id = 'home-event-calendar';
     eventsCal.events.slice(0, 5).forEach(function (e) {
       list.appendChild(buildEventCard(e));
     });
