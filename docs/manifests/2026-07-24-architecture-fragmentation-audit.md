@@ -11,8 +11,7 @@
 ## Invariant Table
 
 | ID | 問題 | 證據 | 分類 | 決策 | 優先級 |
-|---|---|---|---|---|---|
-| **F-01** | `strategy*` 4 套件碎片化 | `strategy/`, `strategy_ranker/`, `strategy_techniques/`, `strategy_validator/` — 無循環依賴但無獨立邊界理由 | 結構碎片 | merge: 合併回 `strategy/` | P1 |
+| **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 只被 `strategy_ranker/` import，無獨立邊界 | 結構碎片 | merge → `strategy_ranker/`（`strategy_techniques/` 和 `strategy/` 的 `Registry` 命名衝突，保留分離） | P1 |
 | **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: 拆為子套件 | P1 |
 | **F-03** | `system.go` / `system_dispatcher.go` 7 處重複 Publish | PublishSimulationStart/RegimeChange/Recommendation/GuardOutcomes/DarwinianClamping/SimulationComplete — 兩個檔案中幾乎相同的 7 段程式碼 | 重複碼 | extract: 抽取共用方法 | P1 |
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套完全獨立的實作，共享 EventBus/domain 但不共享執行抽象 | 協調斷裂 | design: 抽取 SessionRunner 介面 | P2 |

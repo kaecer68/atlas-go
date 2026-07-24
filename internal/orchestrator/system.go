@@ -410,7 +410,6 @@ func (s *System) publishSessionClose(
 
 	go s.Risk().eventBus.PublishSimulationComplete(sessionID, portfolioValue, orderCount, positionCount)
 }
-
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	if s.Risk().eventBus != nil {
 		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, asOf)

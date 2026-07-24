@@ -11,6 +11,8 @@
 // Maturity: experimental
 package strategy_ranker
 
+import ()
+
 // Ranker 為策略排名的統一入口。
 type Ranker struct{}
 
