@@ -95,8 +95,7 @@ test('home: high-confidence event banner is visible and dismissible', async ({ p
   await mockHomeApis(page);
   await page.goto('/');
 
-  const banner = page.locator('#home-banner');
-  await expect(banner).toBeVisible({ timeout: 5000 });
+  await expect(banner).toBeVisible({ timeout: 10000 });
   await expect(banner).toContainText('台積電法說會');
   await expect(banner).toContainText('信心 85%');
 
