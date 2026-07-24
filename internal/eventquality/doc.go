@@ -14,4 +14,9 @@
 //   - QualityLog — JSONL file recording all rejected events
 //   - CrossSourceStore — in-memory cross-source verification tracker
 //   - SanitizeTitle — title quality checks (HTML, length, all-digits)
+//
+// Package independence: This package is NOT related to eventbus or eventdriven
+// despite the shared \"event\" prefix. It is a data quality gate consumed solely
+// by industry.EventCalendar. eventbus is pub/sub infrastructure; eventdriven
+// is capital-flow prediction.
 package eventquality

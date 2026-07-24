@@ -17,8 +17,8 @@
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套完全獨立的實作，共享 EventBus/domain 但不共享執行抽象 | 協調斷裂 | design: 抽取 SessionRunner 介面 | P2 |
 | **F-05** | eventbus 孤兒事件 | 詳見 `docs/manifests/2026-07-24-eventbus-orphan-audit.md` — 10 事件分類，7 已修復，3 backlog | 事件缺口 | ✅ 大部分已修復 | — |
 | **F-06** | 微套件過多 | `paramcheck/`, `portprobe/`, `robustness/`, `risktest/`, `forecast/` + `forecast_bridge/` — 功能單一但獨佔套件 | 結構碎片 | merge: 合併到消費套件 | P2 |
-| **F-07** | 事件驅動相關套件分裂 | `eventbus/`, `eventdriven/`, `eventquality/` — 三個套件名稱暗示相關但無明確依賴邊界文件 | 結構碎片 | document: 補 doc.go 說明依賴關係 | P2 |
-| **F-08** | `llm/` + `llm_annotator/` 關係不明 | 兩個 LLM 套件無共用介面或依賴圖 | 結構碎片 | document: 補 doc.go | P2 |
+| **F-07** | 事件驅動相關套件分裂 | `eventbus/`, `eventdriven/`, `eventquality/` — 三個套件名稱暗示相關但無明確依賴邊界文件 | 命名誤導 | ✅ document: 三者獨立，補 doc.go 邊界說明 | P2 |
+| **F-08** | `llm/` + `llm_annotator/` 關係不明 | 兩個 LLM 套件無共用介面或依賴圖 | 結構碎片 | ✅ document: `llm/adapters/` → `llm_annotator`，補 sub-packages 說明 | P2 |
 
 ---
 
@@ -117,4 +117,5 @@
 - **Done this session**: Phase A (audit), Phase B (plan), 兩份 manifest 建立完成
 - **Remaining**: Phase C (implement F-01/F-02/F-03/F-06)
 - **Next action**: F-01 — 合併 strategy* 套件
-- **Branch / PR**: `fix/eventbus-orphan-audit` → PR #1310
+- **Uncommitted code**: yes (manifests + eventbus payloads/publish methods + SSE buffers/subscriptions)
+- **Branch / PR**: TBD
