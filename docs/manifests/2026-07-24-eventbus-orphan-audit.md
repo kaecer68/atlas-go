@@ -113,13 +113,15 @@ EventDriftDetected, EventIngestionLagSpike
 
 ---
 
-- **Done this session**: Phase A (audit), Phase B (plan), Phase C (implement), Phase D (close out)
-- **Remaining**: none（eventbus orphan 部分）
-- **Next action**: 架構碎片化 manifest Phase C（F-01~F-06）
-- **Uncommitted code**: no
-- **Branch / PR**: `fix/eventbus-orphan-audit` → PR #1310
-- **Binary freshness**: ⚠️ `make check-binaries` → 7 STALE（pre-existing drift）
-- **Final change summary**:
-  - Removed: EventMarketTick（不適用於日級模擬系統）
-  - Added: AgentHealthChange SSE（唯一無替代 API 的孤兒事件）
-  - Evaluated & excluded: MarketOpen/Close/Snapshot/StopLoss/TakeProfit/MCPAnomaly/PortfolioPnL/AgentEvaluation（均有既有 API/MCP tool 覆蓋）
+- **Done this session**: Phase A (audit), Phase B (plan), PR #1-#4 (O-01/O-02/O-04/O-05/O-06/O-10 → 5 events wired + 1 removed), PR #5 (O-07 MCP anomaly wired)
+- **Remaining**: Backlog (O-03/O-08/O-09)
+- **Next action**: Backlog design + PR for remaining 3 items
+- **Uncommitted code**: yes
+  - `internal/monitoring/api/events/sse_handler.go` — 6 new buffer types, 6×3 buffer/getter/reset functions, 6 catchup blocks
+  - `internal/monitoring/api/events/sse_handler_subscriptions.go` — 6 new subscriptions (hooks: 15→20)
+  - `internal/eventbus/eventbus.go` — removed EventMarketTick constant + Descriptions entry
+  - `internal/live/eventbus.go` — removed EventMarketTick alias
+  - `internal/eventbus/eventbus_test.go` — updated Unsubscribe test + const list
+  - `internal/live/eventbus_publish_test.go` — updated Unsubscribe test
+- **Branch / PR**: TBD
+- **Binary freshness**: ⚠️ `make check-binaries` → 7 STALE (pre-existing drift, not caused by this session). Run `make rebuild-all` before next deploy.
