@@ -1,4 +1,4 @@
-// Package main provides a thin CLI wrapper around the internal/risktest
+// Package main provides a thin CLI wrapper around the cmd/stress-test/internal/risktest
 // stress-test scenario package.
 package main
 
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kaecer68/atlas-go/internal/risktest"
+	"github.com/kaecer68/atlas-go/cmd/stress-test/internal/risktest"
 )
 
 func main() {
