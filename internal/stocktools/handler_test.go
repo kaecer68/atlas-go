@@ -189,11 +189,11 @@ func TestHandleTechnical(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewJSONLQuoteStore(dir)
 	bars := []domain.DailyBar{
-		{Date: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), Symbol: "2330", Close: 650, Volume: 1000},
-		{Date: time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC), Symbol: "2330", Close: 660, Volume: 1100},
-		{Date: time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC), Symbol: "2330", Close: 670, Volume: 1200},
-		{Date: time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC), Symbol: "2330", Close: 680, Volume: 1300},
-		{Date: time.Date(2026, 7, 7, 0, 0, 0, 0, time.UTC), Symbol: "2330", Close: 690, Volume: 1400},
+		{Date: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 650, Volume: 1000},
+		{Date: time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 660, Volume: 1100},
+		{Date: time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 670, Volume: 1200},
+		{Date: time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 680, Volume: 1300},
+		{Date: time.Date(2026, 7, 7, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 690, Volume: 1400},
 	}
 	if err := store.RecordQuotes(bars); err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ func TestComputeTechnical(t *testing.T) {
 	for i := 0; i < 25; i++ {
 		bars[i] = domain.DailyBar{
 			Date:   time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i),
-			Symbol: "2330",
+			Symbol: "2330.TW",
 			Close:  float64(10 + i),
 		}
 	}
