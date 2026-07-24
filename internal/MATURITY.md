@@ -79,8 +79,7 @@
 | `sim` | 模擬引擎 — 部位狀態轉換、`Engine.RunSymbol()` | `Engine` | 核心模組，indirect import |
 | `spawning` | Agent 生成管理 — `SpawningManager`、`PerformSpawningCycle()` | `SpawningManager` | 核心模組，indirect import |
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
-| `strategy_ranker` | 策略排名與分層 — 依 backtest 績效對 5 策略排名並分配 public/paid tier | `Ranker`, `RankedStrategy` | **v0.0.0.38 升級**：Wave 11 新增；消費 strategy_validator；產出供 recommender 使用 |
-| `strategy_validator` | 策略歷史回測驗證 — Sharpe/最大回撤/勝率/TAIEX 相關係數、排名與分層 | `Validator`, `StrategyReport`, `BatchReport` | **v0.0.0.38 升級**：Wave 11 新增；消費 backtest + strategy；產出供 strategy_ranker 使用 |
+| `strategy_ranker` | 策略排名、回測驗證與分層 — Sharpe/最大回撤/勝率/TAIEX 相關係數計算 + 排名 + tier 分配 | `Ranker`, `Validator`, `RankedReport`, `StrategyReport` | **v0.0.0.38 升級**：Wave 11 新增；產出供 recommender 使用 |
 | `scheduler` | ML 模型重訓排程 — auto_calibration、auto_rollback、seasonal_task、l2_4_auto_cron、system_health 定時任務 | `Manager`, `Dispatcher` | **v0.0.0.38 新增**：scheduler 為獨立 orchestrator pipeline 步驟，產出供 strategy_evolver 與 prism retrain 消費 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | **v0.0.0.38 升級**：進入 orchestrator SystemCore live risk evaluation |
 | `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | **v0.0.0.38 升級**：Wave 11 新增；進入 MCP auth + recommender runtime |
