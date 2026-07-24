@@ -18,22 +18,14 @@ func registerOpsForTest(mgr *apigateway.BackgroundTaskManager, janusEngine *janu
 	})
 }
 
-func TestRegisterOperationsTasks_JanusRefreshRegistered(t *testing.T) {
+func TestRegisterOperationsTasks_JanusRefreshNotRegistered(t *testing.T) {
+	// janus_regime_refresh is now registered in main.go (Issue #1086),
+	// not in operations_tasks.go. This test confirms the migration.
 	mgr := apigateway.NewBackgroundTaskManager(nil)
 	registerOpsForTest(mgr, janus.NewEngine())
 
-	task, ok := mgr.Get("janus_regime_refresh")
-	if !ok {
-		t.Fatal("janus_regime_refresh must be registered when janusEngine is non-nil")
-	}
-	if task.Interval.Hours() != 6 {
-		t.Errorf("janus_regime_refresh interval = %v, want 6h", task.Interval)
-	}
-	if !task.Enabled {
-		t.Error("janus_regime_refresh must be Enabled by default")
-	}
-	if task.Task == nil {
-		t.Fatal("janus_regime_refresh Task func must not be nil")
+	if _, ok := mgr.Get("janus_regime_refresh"); ok {
+		t.Fatal("janus_regime_refresh must NOT be registered by operations_tasks — migrated to main.go (Issue #1086)")
 	}
 }
 

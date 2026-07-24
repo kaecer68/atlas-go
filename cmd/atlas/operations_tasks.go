@@ -379,18 +379,10 @@ func registerOperationsTasks(d operationsDeps) {
 		log.Printf("[Gateway] registered capital_flow_refresh background task (5m interval)")
 	}
 
-	if d.janusEngine != nil {
-		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-			Name:     "janus_regime_refresh",
-			Interval: 6 * time.Hour,
-			Enabled:  true,
-			Task: func(_ context.Context) error {
-				d.janusEngine.Update()
-				return nil
-			},
-		})
-		log.Printf("[Gateway] registered janus_regime_refresh background task (6h interval)")
-	}
+	// janus_regime_refresh is registered in main.go (Issue #1086) —
+	// that version fetches via Gateway for proper health tracking.
+	// Duplicate registration here would silently overwrite it per
+	// BackgroundTaskManager.Register contract (Constitution §4.5.5).
 
 	if d.prismMgr != nil && d.janusEngine != nil {
 		// Event-driven: feed completed results to JANUS immediately instead of
