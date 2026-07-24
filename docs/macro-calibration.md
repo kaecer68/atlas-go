@@ -143,15 +143,19 @@
 
 | 檔案 | 角色 |
 |------|------|
-| `internal/narrative/calibration_baseline.go` | FactorBaseline + ComputeBaselines + Hybrid signal |
-| `internal/narrative/calibration_baseline_test.go` | 8 個單元測試 |
-| `internal/narrative/calibration_scales.go` | ScaleCalibrator + AutoCalibrateScales |
-| `internal/narrative/calibration_scales_test.go` | 6 個單元測試 |
-| `internal/narrative/calibration_regime.go` | MarketRegime + ClassifyRegime + RegimeCalibrator |
-| `internal/narrative/calibration_regime_test.go` | 8 個單元測試 |
-| `internal/narrative/calibration_validation.go` | ValidateCalibration 獨立函式 |
-| `internal/narrative/calibration_validation_test.go` | 5 個單元測試 |
-| `internal/narrative/weight_calibration.go` | CalibrationTask + 既有 engine |
+| `internal/narrative/calibration/calibration_baseline.go` | FactorBaseline + ComputeBaselines + Hybrid signal |
+| `internal/narrative/calibration/calibration_baseline_test.go` | 8 個單元測試 |
+| `internal/narrative/calibration/calibration_scales.go` | ScaleCalibrator + AutoCalibrateScales |
+| `internal/narrative/calibration/calibration_scales_test.go` | 6 個單元測試 |
+| `internal/narrative/calibration/calibration_regime.go` | MarketRegime + ClassifyRegime + RegimeCalibrator |
+| `internal/narrative/calibration/calibration_regime_test.go` | 8 個單元測試 |
+| `internal/narrative/calibration/calibration_validation.go` | ValidateCalibration 獨立函式 |
+| `internal/narrative/calibration/calibration_validation_test.go` | 5 個單元測試 |
+| `internal/narrative/calibration/weight_calibration.go` | CalibrationTask + 既有 engine |
+| `internal/narrative/calibration/stress_index_config.go` | StressIndexWeights/Scaling/Thresholds 型別與常數（新集中定義） |
+| `internal/narrative/calibration/load_weights_config.go` | 從參數系統載入 stress-index 權重 |
+| `internal/narrative/calibration/helpers.go` | calibration 子套件內部 helper（e.g. `mean`） |
+| `internal/narrative/calibration_facade.go` | 重新匯出 calibration 公開 API，維持舊 import 路徑相容 |
 | `internal/narrative/taiwan_stress_index.go` | 整合所有 layers 的 orchestrator |
 | `internal/scheduler/auto_calibration.go` | BackgroundCalibrationScheduler（maturity-gated） |
 | `internal/config/parameters.go` | 5 個 `ParameterMetadata[T]` 欄位 |
