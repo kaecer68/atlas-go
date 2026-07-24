@@ -125,12 +125,12 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 	defer bus.Close()
 
 	var received atomic.Int32
-	sub := bus.Subscribe(EventMarketTick, func(ctx context.Context, event BusEvent) error {
+	sub := bus.Subscribe(EventMarketSnapshot, func(ctx context.Context, event BusEvent) error {
 		received.Add(1)
 		return nil
 	})
 
-	bus.Publish(BusEvent{ID: "1", Type: EventMarketTick, Timestamp: time.Now()})
+	bus.Publish(BusEvent{ID: "1", Type: EventMarketSnapshot, Timestamp: time.Now()})
 	time.Sleep(50 * time.Millisecond)
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 event before unsubscribe, got %d", received.Load())
@@ -138,7 +138,7 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 
 	sub.Cancel()
 
-	bus.Publish(BusEvent{ID: "2", Type: EventMarketTick, Timestamp: time.Now()})
+	bus.Publish(BusEvent{ID: "2", Type: EventMarketSnapshot, Timestamp: time.Now()})
 	time.Sleep(50 * time.Millisecond)
 	if received.Load() != 1 {
 		t.Fatalf("expected no additional events after unsubscribe, got %d", received.Load())
@@ -267,7 +267,7 @@ func TestEnrichEvent_AllKnownTypes(t *testing.T) {
 		EventGuardOutcome, EventDarwinianClamping, EventConvictionClamping,
 		EventOrderPlaced, EventOrderFilled, EventOrderRejected, EventOrderError,
 		EventStopLossTriggered, EventTakeProfitTriggered, EventRiskAlert,
-		EventPositionUpdate, EventPortfolioPnL, EventMarketSnapshot, EventMarketTick,
+		EventPositionUpdate, EventPortfolioPnL, EventMarketSnapshot,
 		EventMarketOpen, EventMarketClose,
 		EventExperimentInsufficientData, EventNarrative, EventHealthAlert,
 	}

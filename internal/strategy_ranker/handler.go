@@ -5,7 +5,6 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
-	"github.com/kaecer68/atlas-go/internal/strategy_validator"
 )
 
 // Handler serves the strategy ranking HTTP API.
@@ -30,12 +29,12 @@ func (h *Handler) HandleRank(r *http.Request) (int, any) {
 		return http.StatusServiceUnavailable, map[string]string{"error": "strategy registry not initialized"}
 	}
 	frames := h.registry.All()
-	reports := make([]*strategy_validator.StrategyReport, 0, len(frames))
+	reports := make([]*StrategyReport, 0, len(frames))
 	for _, f := range frames {
 		if f.Status != strategy_techniques.StatusActive {
 			continue
 		}
-		reports = append(reports, &strategy_validator.StrategyReport{
+		reports = append(reports, &StrategyReport{
 			StrategyID:   f.ID,
 			StrategyName: f.Name,
 			WinRate:      f.HitRate,
@@ -43,7 +42,7 @@ func (h *Handler) HandleRank(r *http.Request) (int, any) {
 		})
 	}
 	if len(reports) == 0 {
-		return http.StatusOK, []strategy_validator.RankedReport{}
+		return http.StatusOK, []RankedReport{}
 	}
 	ranker := New()
 	ranked := ranker.RankAndTier(reports)

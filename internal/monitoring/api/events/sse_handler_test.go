@@ -766,3 +766,36 @@ func TestSSEHandler_BufferIngestionLagSpikeEvent(t *testing.T) {
 		t.Errorf("expected type %s, got %s", eventbus.EventIngestionLagSpike, buffered[0].Event.Type)
 	}
 }
+
+func TestBufferAgentHealthChangeEvent_AppendsToBuffer(t *testing.T) {
+	resetAgentHealthChangeBuffer()
+
+	event := eventbus.BusEvent{
+		ID:        "evt-ahc-1",
+		Type:      eventbus.EventAgentHealthChange,
+		Timestamp: time.Now(),
+		Payload: eventbus.AgentHealthChangeEventPayload{
+			AgentID:   "agent-1",
+			OldStatus: "healthy",
+			NewStatus: "degraded",
+			Reason:    "low_sharpe",
+		},
+	}
+
+	BufferAgentHealthChangeEvent(event)
+
+	read := GetBufferedAgentHealthChangeEvents()
+	if len(read) != 1 {
+		t.Fatalf("expected 1 buffered event, got %d", len(read))
+	}
+	if read[0].Event.ID != "evt-ahc-1" {
+		t.Errorf("expected ID 'evt-ahc-1', got %q", read[0].Event.ID)
+	}
+	payload, ok := read[0].Event.Payload.(eventbus.AgentHealthChangeEventPayload)
+	if !ok {
+		t.Fatalf("expected AgentHealthChangeEventPayload, got %T", read[0].Event.Payload)
+	}
+	if payload.AgentID != "agent-1" || payload.NewStatus != "degraded" {
+		t.Errorf("unexpected payload: %+v", payload)
+	}
+}

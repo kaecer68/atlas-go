@@ -2,13 +2,11 @@ package strategy_ranker
 
 import (
 	"testing"
-
-	"github.com/kaecer68/atlas-go/internal/strategy_validator"
 )
 
 func TestRankAndTier(t *testing.T) {
 	r := New()
-	reports := []*strategy_validator.StrategyReport{
+	reports := []*StrategyReport{
 		{StrategyID: "momentum", StrategyName: "純動能", SharpeRatio: 0.8, WinRate: 0.55, AlphaScore: 5, MaxDrawdown: 25},
 		{StrategyID: "defensive", StrategyName: "防禦型", SharpeRatio: 1.2, WinRate: 0.65, AlphaScore: -2, MaxDrawdown: 10},
 	}
@@ -24,7 +22,7 @@ func TestRankAndTier(t *testing.T) {
 
 func TestFreePremiumFilters(t *testing.T) {
 	r := New()
-	reports := []*strategy_validator.StrategyReport{
+	reports := []*StrategyReport{
 		{StrategyID: "a", StrategyName: "A", SharpeRatio: 1.5, WinRate: 0.7, AlphaScore: 10, MaxDrawdown: 5},
 		{StrategyID: "b", StrategyName: "B", SharpeRatio: 1.0, WinRate: 0.6, AlphaScore: 5, MaxDrawdown: 10},
 		{StrategyID: "c", StrategyName: "C", SharpeRatio: 0.8, WinRate: 0.55, AlphaScore: 3, MaxDrawdown: 15},

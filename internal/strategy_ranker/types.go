@@ -1,4 +1,4 @@
-package strategy_validator
+package strategy_ranker
 
 // StrategyReport 為單一策略的完整回測驗證績效報告。
 type StrategyReport struct {

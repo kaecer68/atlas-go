@@ -1,4 +1,4 @@
-package strategy_validator
+package strategy_ranker
 
 import (
 	"math"
