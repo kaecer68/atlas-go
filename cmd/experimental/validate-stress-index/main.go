@@ -12,6 +12,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 func main() {
@@ -69,7 +70,7 @@ func main() {
 	}
 
 	calc := narrative.NewTaiwanStressCalculator(nil, "")
-	geo := narrative.GeopoliticalRiskScore{Intensity: 30}
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 30}
 
 	type result struct {
 		date   time.Time

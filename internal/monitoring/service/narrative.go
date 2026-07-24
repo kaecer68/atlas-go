@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 type NarrativeService struct {
@@ -18,7 +19,7 @@ type NarrativeService struct {
 	NarrativeEngine *narrative.NarrativeEngine
 	ReportGenerator *narrative.ReportGenerator
 	macroProvider   marketdata.MacroDataProvider
-	geoProvider     narrative.GeopoliticalRiskProvider
+	geoProvider     geopolitical.GeopoliticalRiskProvider
 	historicalStore ledger.HistoricalStore
 }
 
@@ -41,7 +42,7 @@ func (s *NarrativeService) SetMacroProvider(p marketdata.MacroDataProvider) {
 	s.macroProvider = p
 }
 
-func (s *NarrativeService) SetGeoProvider(p narrative.GeopoliticalRiskProvider) {
+func (s *NarrativeService) SetGeoProvider(p geopolitical.GeopoliticalRiskProvider) {
 	s.geoProvider = p
 }
 

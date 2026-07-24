@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // --- existing minimal tests (kept verbatim) -------------------------------
@@ -66,8 +66,8 @@ const taiwanRSSXML = `<?xml version="1.0" encoding="UTF-8"?>
 func buildTaiwanGeoAdapter(t *testing.T, transport *geopoliticalMockTransport) *TaiwanGeopoliticalChannelAdapter {
 	t.Helper()
 
-	twRss := narrative.NewTaiwanRSSGeopoliticalProvider()
-	twComp := narrative.NewCompositeTaiwanGeopoliticalProvider(twRss)
+	twRss := geopolitical.NewTaiwanRSSGeopoliticalProvider()
+	twComp := geopolitical.NewCompositeTaiwanGeopoliticalProvider(twRss)
 	twComp.SetHTTPClient(&http.Client{Transport: transport})
 
 	return &TaiwanGeopoliticalChannelAdapter{
@@ -115,7 +115,7 @@ func TestTaiwanGeopoliticalChannelAdapter_Fetch_Success(t *testing.T) {
 		t.Fatal("Fetch returned nil Data")
 	}
 
-	var score narrative.GeopoliticalRiskScore
+	var score geopolitical.GeopoliticalRiskScore
 	if err := json.Unmarshal(result.Data, &score); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestTaiwanGeopoliticalChannelAdapter_Fetch_Degraded(t *testing.T) {
 		t.Fatalf("Fetch returned error: %v", err)
 	}
 
-	var score narrative.GeopoliticalRiskScore
+	var score geopolitical.GeopoliticalRiskScore
 	if err := json.Unmarshal(result.Data, &score); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

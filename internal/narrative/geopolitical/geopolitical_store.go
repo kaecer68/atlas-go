@@ -1,4 +1,4 @@
-package narrative
+package geopolitical
 
 import (
 	"encoding/json"

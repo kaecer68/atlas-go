@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // StressEventTestCase describes a historical market stress scenario.
@@ -128,7 +129,7 @@ func ValidateAgainstCases(calc *TaiwanStressCalculator, cases []StressEventTestC
 
 	report := &ValidationReport{Results: make([]CaseValidationResult, 0, len(cases))}
 	for _, tc := range cases {
-		idx := calc.Calculate(caseSnapshot(tc), marketdata.MacroDataSnapshot{}, GeopoliticalRiskScore{Intensity: tc.Geopolitical, Timestamp: caseTime(tc)})
+		idx := calc.Calculate(caseSnapshot(tc), marketdata.MacroDataSnapshot{}, geopolitical.GeopoliticalRiskScore{Intensity: tc.Geopolitical, Timestamp: caseTime(tc)})
 		passed := idx.Regime == tc.ExpectedRegime
 		result := CaseValidationResult{
 			CaseName:       tc.Name,

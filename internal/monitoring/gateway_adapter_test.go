@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // Helper: creates a fresh adapter and snapshot for each test.
@@ -828,8 +828,8 @@ func TestNewETFFetcher(t *testing.T) {
 
 func TestNewGeopoliticalRiskFetcher(t *testing.T) {
 	t.Run("prefers taiwan", func(t *testing.T) {
-		global := &mockGeoProvider{score: narrative.GeopoliticalRiskScore{Intensity: 50}}
-		taiwan := &mockGeoProvider{score: narrative.GeopoliticalRiskScore{Intensity: 70}}
+		global := &mockGeoProvider{score: geopolitical.GeopoliticalRiskScore{Intensity: 50}}
+		taiwan := &mockGeoProvider{score: geopolitical.GeopoliticalRiskScore{Intensity: 70}}
 		f := newGeopoliticalRiskFetcher(global, taiwan)
 		if got := f(context.Background()); got != 0.7 {
 			t.Errorf("intensity = %v, want 0.7", got)
@@ -837,7 +837,7 @@ func TestNewGeopoliticalRiskFetcher(t *testing.T) {
 	})
 
 	t.Run("falls back to global", func(t *testing.T) {
-		global := &mockGeoProvider{score: narrative.GeopoliticalRiskScore{Intensity: 50}}
+		global := &mockGeoProvider{score: geopolitical.GeopoliticalRiskScore{Intensity: 50}}
 		f := newGeopoliticalRiskFetcher(global, nil)
 		if got := f(context.Background()); got != 0.5 {
 			t.Errorf("intensity = %v, want 0.5", got)
@@ -854,7 +854,7 @@ func TestNewGeopoliticalRiskFetcher(t *testing.T) {
 	})
 
 	t.Run("returns zero when intensity zero", func(t *testing.T) {
-		global := &mockGeoProvider{score: narrative.GeopoliticalRiskScore{Intensity: 0}}
+		global := &mockGeoProvider{score: geopolitical.GeopoliticalRiskScore{Intensity: 0}}
 		f := newGeopoliticalRiskFetcher(global, nil)
 		if got := f(context.Background()); got != 0 {
 			t.Errorf("intensity = %v, want 0", got)
@@ -863,11 +863,11 @@ func TestNewGeopoliticalRiskFetcher(t *testing.T) {
 }
 
 type mockGeoProvider struct {
-	score narrative.GeopoliticalRiskScore
+	score geopolitical.GeopoliticalRiskScore
 	err   error
 }
 
 func (m *mockGeoProvider) Name() string { return "mock" }
-func (m *mockGeoProvider) FetchScore(ctx context.Context) (narrative.GeopoliticalRiskScore, error) {
+func (m *mockGeoProvider) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	return m.score, m.err
 }

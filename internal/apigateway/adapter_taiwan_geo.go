@@ -10,12 +10,12 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
-	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
 // TaiwanGeopoliticalChannelAdapter adapts Taiwan RSS geopolitical provider.
 type TaiwanGeopoliticalChannelAdapter struct {
-	provider *narrative.TaiwanRSSGeopoliticalProvider
+	provider *geopolitical.TaiwanRSSGeopoliticalProvider
 	workDir  string
 	limiter  *rate.Limiter
 }
@@ -23,7 +23,7 @@ type TaiwanGeopoliticalChannelAdapter struct {
 // NewTaiwanGeopoliticalChannelAdapter creates a new adapter.
 func NewTaiwanGeopoliticalChannelAdapter(workDir string) *TaiwanGeopoliticalChannelAdapter {
 	return &TaiwanGeopoliticalChannelAdapter{
-		provider: narrative.NewTaiwanRSSGeopoliticalProvider(),
+		provider: geopolitical.NewTaiwanRSSGeopoliticalProvider(),
 		workDir:  workDir,
 		limiter:  rate.NewLimiter(rate.Every(time.Minute), 1),
 	}
@@ -38,7 +38,7 @@ func (a *TaiwanGeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchRes
 		return nil, fmt.Errorf("taiwan_geopolitical fetch: %w", err)
 	}
 	score.Timestamp = time.Now()
-	store := narrative.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
+	store := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, "data/state/geopolitical/taiwan"))
 	if err := store.Save(score); err != nil {
 		logging.Error("apigateway", "taiwan_geopolitical_save_failed", "err", err)
 	}
