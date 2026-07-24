@@ -136,6 +136,7 @@ func (kb *KnowledgeBase) MatchChains(event NarrativeEvent) []CausalChain {
 			AvoidedSectors:  avoided,
 			Steps:           steps,
 			Score:           score,
+			DetectedAt:      event.Timestamp,
 		})
 	}
 	return chains

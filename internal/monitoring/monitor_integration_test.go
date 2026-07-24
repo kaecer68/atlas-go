@@ -102,7 +102,20 @@ func TestMonitor_MultipleNotifiersAllDispatched(t *testing.T) {
 	m.AddNotifier(NewWebhookNotifier(server.URL, nil))
 
 	m.Alert(AlertLevelWarning, "cat", "msg", nil)
-	time.Sleep(100 * time.Millisecond)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		if count == 2 {
+			mu.Unlock()
+			break
+		}
+		mu.Unlock()
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	mu.Lock()
 	defer mu.Unlock()

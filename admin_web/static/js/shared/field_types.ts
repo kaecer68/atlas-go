@@ -377,6 +377,7 @@ export interface CausalChain {
   avoided_sectors: string[];
   steps: CausalStep[];
   score: number;
+  detected_at: string;
 }
 
 export interface CausalStep {

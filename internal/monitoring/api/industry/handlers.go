@@ -2,10 +2,12 @@ package industry
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	ind "github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
@@ -42,6 +44,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// Deprecated: internal correlation loader; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-correlation-loader", shared.Get(h.HandleCorrelationLoader))
 	mux.Handle("GET /api/dashboard/sector-allocation-plan", shared.Get(h.HandleSectorAllocationPlan))
+	mux.Handle("GET /api/industry/sectors", shared.Get(h.HandleSectorList))
+	mux.Handle("GET /api/industry/sector-lookup", shared.Get(h.HandleSectorLookup))
 }
 
 func (h *Handlers) HandleIndustryClassification(r *http.Request) (int, any) {
@@ -502,4 +506,70 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 		}
 	}
 	return http.StatusOK, snap
+}
+
+// --- Sector taxonomy handlers (E-06: HTTP proxy for MCP-in-memory tools) ---
+
+// HandleSectorList returns the full 20-sector taxonomy.
+// Mirrors the MCP industry_sector_list tool.
+func (h *Handlers) HandleSectorList(r *http.Request) (int, any) {
+	all := ind.AllSectors()
+	repr := ind.DefaultRepresentativeStocks()
+	sectors := make([]map[string]any, 0, len(all))
+	for _, id := range all {
+		syms := repr[id]
+		if syms == nil {
+			syms = []string{}
+		}
+		sectors = append(sectors, map[string]any{
+			"id":            string(id),
+			"display_zh":    ind.DisplayZH(id),
+			"stock_symbols": syms,
+		})
+	}
+	return http.StatusOK, map[string]any{"sectors": sectors}
+}
+
+// HandleSectorLookup looks up a sector by symbol or sector name/alias.
+// Mirrors the MCP industry_sector_lookup tool.
+func (h *Handlers) HandleSectorLookup(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	sector := r.URL.Query().Get("sector")
+
+	if symbol == "" && sector == "" {
+		return http.StatusBadRequest, map[string]string{"error": "provide either symbol or sector query parameter"}
+	}
+
+	var secID ind.SectorID
+	if symbol != "" {
+		secID = ind.ClassifyBySymbol(symbol)
+		if secID == "" {
+			return http.StatusOK, map[string]any{
+				"found":   false,
+				"warning": fmt.Sprintf("symbol %q not found in representative stocks", symbol),
+			}
+		}
+	} else {
+		var ok bool
+		secID, ok = ind.SectorIDFromString(sector)
+		if !ok {
+			return http.StatusOK, map[string]any{
+				"found":   false,
+				"warning": fmt.Sprintf("sector %q not recognized", sector),
+			}
+		}
+	}
+
+	syms := ind.DefaultRepresentativeStocks()[secID]
+	if syms == nil {
+		syms = []string{}
+	}
+	return http.StatusOK, map[string]any{
+		"found": true,
+		"sector": map[string]any{
+			"id":            string(secID),
+			"display_zh":    ind.DisplayZH(secID),
+			"stock_symbols": syms,
+		},
+	}
 }
