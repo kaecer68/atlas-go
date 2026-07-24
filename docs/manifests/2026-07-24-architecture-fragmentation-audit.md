@@ -12,7 +12,7 @@
 
 | ID | 問題 | 證據 | 分類 | 決策 | 優先級 |
 | **F-01** | `strategy_validator` 獨立套件無必要 | `strategy_validator/` 已於 PR #1311 合併至 `strategy_ranker/`（validator.go/validator_test.go/validator_doc.go 已搬移）；殘留文件引用待清理 | 結構碎片 | ✅ closed: 合併已完成，文件引用已清理 | P1 |
-| **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: 拆為子套件 | P1 |
+| **F-02** | `narrative/` 65 檔案單一套件 | Leiden 叢集 #139 凝聚力 0.783（全專案最低）；detector/calibration/seasonal/geopolitical 混合 | 結構碎片（過大） | split: `detector`→`narrative/detector` ✅ safe；`calibration`→`narrative/calibration` ✅ safe；`seasonal` ❌ blocked（非連貫分界：SeasonalBridge 依賴 NarrativeEngine/industry，SeasonalAnalyzer 僅 40 行純數學，lifecycle 屬事件狀態而非季節） | P1 |
 | **F-03** | `system.go` / `system_dispatcher.go` Publish 重複 | `PublishSimulationStart`、`PublishRegimeChange`（含 factor engine sync）、`PublishRecommendation` 在 `RunDailySimulation` 與 `runReplaySimulation` 中重複；`publishSessionClose` 已抽但還有 3 組 | 重複碼 | ✅ extract: 抽取 `publishSimulationStart` / `publishRegimeChange` / `publishRecommendation` | P1 |
 | **F-04** | `live/` 與 `orchestrator/` 雙重執行引擎 | live.Orchestrator 和 orchestrator.System 是兩套獨立但互補的實作，共享 EventBus/domain 但執行模型不同；已透過 `orchestrator.AdapterProducer` 復用模擬 `ExecuteWithContext` 作為 live 建議來源 | 設計意圖（非斷裂） | ✅ won't fix：記錄為雙引擎架構決策，補 doc.go 說明 | P2 |
 | **F-05** | eventbus 孤兒事件 | 詳見 `docs/manifests/2026-07-24-eventbus-orphan-audit.md` — 10 事件分類，7 已修復，3 backlog | 事件缺口 | ✅ 大部分已修復 | — |
@@ -77,6 +77,31 @@
 
 ---
 
+## F-02 Narrative 子套件拆分決策證據
+
+> 基於 codegraph + 手動 import 追蹤的實證分析。
+
+### 現狀
+
+- `internal/narrative` 共 65 檔案，為全專案 Leiden 叢集凝聚力最低（0.783）。
+- 已存在成功先例：`internal/narrative/geopolitical` 為獨立 leaf sub-package，無反向依賴 narrative root。
+
+### 評估結果
+
+| 子套件 | 狀態 | 檔案 | 依賴證據 |
+|---|---|---|---|
+| `narrative/calibration` | ✅ DONE | `weight_calibration.go`, `calibration_baseline.go`, `calibration_scales.go`, `calibration_regime.go`, `calibration_validation.go`, `incremental_validation.go` 與對應 tests；新設 `load_weights_config.go`, `stress_index_config.go`, `helpers.go` | 不引用 `NarrativeEvent` / `NarrativeEngine`；`StressIndexWeightsConfig` 等型別遷入 `narrative/calibration`；`taiwan_stress_index.go` 透過 `calibration_facade.go` 正向 import；無 circular import |
+| `narrative/detector` | ❌ BLOCKED | `detector.go`, `detector_impls.go`, 對應 tests | `DetectorInput` 引用 `MarketNarrativeData`（定義於 `narrative_detectors.go`），且 `DetectionResult.ToNarrativeEvent()` 引用 `NarrativeEvent`。若要將 detector 抽為子套件，必須同時遷移 `MarketNarrativeData` 與 detect 函式本體，觸及 narrative 核心 pipeline，風險大於收益 |
+| `narrative/seasonal` | ❌ BLOCKED | `seasonal_bridge.go`, `seasonal_analyzer.go`, `lifecycle.go` | 非連貫分界：`seasonal_bridge` 是 narrative→industry 的橋接器；`seasonal_analyzer` 僅 40 行純數學；`lifecycle` 屬事件狀態管理；合併拆分會造成單檔微套件或反向依賴 |
+
+### 實作策略（已修訂）
+
+1. **calibration 已拆**：將 calibration 相關檔案遷入 `internal/narrative/calibration/`，並以 `internal/narrative/calibration_facade.go` 保持 narrative 套件對外公開 API 不變。`LoadWeightsConfig`、`LoadBaselines`、`DefaultRegimeConfig` 等型別與函數維持可透過 narrative 套件存取，避免大規模更新消費者。
+2. **detector 不拆**：經實證檢查，`detector.go` 與 `detector_impls.go` 並非只依賴 `marketdata`；它們透過 `DetectorInput.MarketData` 與 `narrativeEventToResult()` 緊密耦合 `MarketNarrativeData` / `NarrativeEvent`。強行拆分會導致 narrative↔detector circular import，或需遷移 detect 函式本體（核心 pipeline），超出本次重構範圍。
+3. **seasonal 不拆**：理由同前。
+
+---
+
 ## Phase Tracker
 
 ### Phase A — Audit (read-only) ✅ DONE
@@ -94,7 +119,7 @@
 | ID | 決策 | 理由 |
 |---|---|---|
 | F-01 | ✅ closed | `strategy_validator` 已於 PR #1311 合併至 `strategy_ranker`（validator.go/validator_test.go/validator_doc.go 搬移）；`strategy_techniques` 與 `strategy` 的 `Registry` 命名衝突保留分離 |
-| F-02 | split `narrative/` → 4 子套件 | 凝聚力最低，detector/calibration/seasonal/geopolitical 獨立 |
+| F-02 | calibration → `narrative/calibration` ✅ DONE；detector / seasonal 暫不拆分（見 F-02 證據區） | 凝聚力最低；`geopolitical/` 已獨立；calibration 依賴鏈單向、無 circular import；detector 實際耦合 `MarketNarrativeData` / `NarrativeEvent`，強拆會造成 cycle；seasonal 非連貫分界 |
 | F-03 | ✅ extract | 抽取 `publishSimulationStart`、`publishRegimeChange`（含 factor engine sync）、`publishRecommendation` 到 `system.go`；兩條執行路徑共用 |
 | F-04 | ✅ won't fix | 雙引擎是設計意圖：orchestrator.System 負責批次研究/學習，live.Orchestrator 負責事件驅動執行；bridge 為 `orchestrator.AdapterProducer` |
 | F-06 | ✅ closed | `robustness`/`forecast_bridge` 已移除（PR #1311）；`paramcheck` 併入 `config`（PR #1318）；`risktest` 搬到 `cmd/stress-test/internal/risktest`（PR #1319） |
@@ -107,8 +132,8 @@
 | PR #1311 | F-06 部分 | 已移除 dead packages `robustness/`, `forecast_bridge/` | ✅ merged |
 | PR #1315 | — | `cmd/backtest-window` SQLite 測試 hermetic | ✅ merged |
 | PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
-| PR #? | F-01 | 清理 `strategy_validator` 殘留文件引用 | pending |
-| PR #? | F-02 | 拆分 `narrative/` → 子套件 | pending |
+| PR #1320 | F-01 | 清理 `strategy_validator` 殘留文件引用 | ✅ merged |
+| PR #? | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | in progress |
 | PR #1318 | F-06 paramcheck | 合併 `internal/paramcheck` → `internal/config` | ✅ merged |
 | PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | ✅ merged |
 
@@ -134,8 +159,8 @@
 
 ## Session-End State
 
-- **Done this session**: Phase A (audit), Phase B (plan), 兩份 manifest 建立完成
-- **Remaining**: Phase C (implement F-01/F-02/F-03/F-06)
-- **Next action**: F-01 — 合併 strategy* 套件
-- **Uncommitted code**: yes (manifests + eventbus payloads/publish methods + SSE buffers/subscriptions)
-- **Branch / PR**: TBD
+- **Done this session**: `narrative/calibration` 子套件拆分完成，透過 `narrative/calibration_facade.go` 維持公開 API 相容；detector / seasonal 經實證判定為 blocked
+- **Remaining**: Phase C 收尾（gofmt / go test / check-binaries / commit / PR）；F-07/F-08 doc.go 補充留待 Phase 2
+- **Next action**: 提交 F-02 PR
+- **Uncommitted code**: yes (`internal/narrative/calibration/` + `calibration_facade.go` + manifest 更新)
+- **Branch / PR**: `fix/f02-narrative-detector-calibration-split` / TBD

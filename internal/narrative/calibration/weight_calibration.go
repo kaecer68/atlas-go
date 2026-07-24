@@ -1,4 +1,4 @@
-package narrative
+package calibration
 
 import (
 	"encoding/json"
@@ -170,7 +170,7 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 	factors := []string{"dxy", "us10y", "foreign_flow", "vix", "jpy", "geopolitical", "oil", "gold"}
 	weights := StressIndexWeights{}
 	if len(accuracies) == 0 {
-		return defaultCalibrationWeights()
+		return DefaultCalibrationWeights()
 	}
 
 	raw := make(map[string]float64, len(factors))
@@ -186,13 +186,13 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 		}
 	}
 	if total == 0 {
-		return defaultCalibrationWeights()
+		return DefaultCalibrationWeights()
 	}
 
 	floor := 0.05
 	remaining := 1.0 - floor*float64(len(factors))
 	if remaining < 0 {
-		return defaultCalibrationWeights()
+		return DefaultCalibrationWeights()
 	}
 	var sumAboveFloor float64
 	for _, factor := range factors {
@@ -201,7 +201,7 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 		}
 	}
 	if sumAboveFloor == 0 {
-		return defaultCalibrationWeights()
+		return DefaultCalibrationWeights()
 	}
 
 	for _, factor := range factors {
@@ -234,7 +234,7 @@ func (e *WeightCalibrationEngine) CalibrateWeights(accuracies map[string]float64
 func (e *WeightCalibrationEngine) ExportConfig(workDir string, weights StressIndexWeights, scaling StressIndexScaling, thresholds StressIndexThresholds) error {
 	weights = normalizeWeights(weights)
 	cfg := StressIndexWeightsConfig{Scaling: scaling, Weights: weights, Thresholds: thresholds}
-	if !cfg.isValid() {
+	if !cfg.IsValid() {
 		return fmt.Errorf("export config: invalid weights config")
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -300,7 +300,7 @@ func sameDirection(a, b float64) bool {
 	return (a >= 0 && b >= 0) || (a <= 0 && b <= 0)
 }
 
-func defaultCalibrationWeights() StressIndexWeights {
+func DefaultCalibrationWeights() StressIndexWeights {
 	return StressIndexWeights{DXY: 0.13, US10Y: 0.18, ForeignFlow: 0.22, VIX: 0.13, JPY: 0.08, Geopolitical: 0.13, Oil: 0.07, Gold: 0.06}
 }
 

@@ -1,4 +1,4 @@
-package narrative
+package calibration
 
 import (
 	"os"
@@ -52,7 +52,7 @@ func TestWeightCalibrationEngine_ExportConfigWritesValidFile(t *testing.T) {
 	if cfg == nil {
 		t.Fatalf("expected config to load, got nil: %s", string(data))
 	}
-	if !cfg.isValid() {
+	if !cfg.IsValid() {
 		t.Fatalf("expected valid config, got %+v", cfg)
 	}
 }

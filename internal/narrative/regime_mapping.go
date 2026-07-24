@@ -6,7 +6,7 @@ package narrative
 //
 //   - "Stress vocabulary" (live TaiwanStressCalculator): low / alert / high / crisis
 //     — written by TaiwanStressCalculator.Calculate() based on the composite score's
-//     relation to configurable thresholds (stressThresholdAlert/High/Crisis).
+//     relation to configurable thresholds (calibration.StressThresholdAlert/High/Crisis).
 //
 //   - "Regime vocabulary" (Janus multi-factor engine): RISK_ON / RISK_OFF / NEUTRAL /
 //     TRANSITIONAL — written by report_generator.go and janus regime detection,

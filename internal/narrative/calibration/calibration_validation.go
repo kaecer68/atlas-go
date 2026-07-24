@@ -1,4 +1,4 @@
-package narrative
+package calibration
 
 import (
 	"math"
