@@ -133,7 +133,7 @@
 | PR #1315 | — | `cmd/backtest-window` SQLite 測試 hermetic | ✅ merged |
 | PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
 | PR #1320 | F-01 | 清理 `strategy_validator` 殘留文件引用 | ✅ merged |
-| PR #1321 | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | ✅ opened |
+| PR #1321 | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | ✅ merged |
 | PR #1318 | F-06 paramcheck | 合併 `internal/paramcheck` → `internal/config` | ✅ merged |
 | PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | ✅ merged |
 
@@ -143,6 +143,7 @@
 
 | ID | Problem | Proposed Round |
 |---|---|---|
+| F-02 follow-up | `narrative/detector` + `narrative/seasonal` 拆分仍 blocked | issue #1322 |
 | F-03 | ✅ closed: Publish 重複區塊已抽取為 System helper methods | — |
 | F-07 | eventbus/eventdriven/eventquality doc.go | Phase 2 |
 | F-08 | llm/llm_annotator doc.go | Phase 2 |
