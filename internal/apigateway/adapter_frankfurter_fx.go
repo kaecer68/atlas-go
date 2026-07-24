@@ -29,6 +29,7 @@ func NewFrankfurterFXChannelAdapter(provider *marketdata.FrankfurterFXProvider) 
 
 // Fetch retrieves the latest USD/JPY exchange rate.
 func (a *FrankfurterFXChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("frankfurter_fx fetch: %w", err)
@@ -43,6 +44,7 @@ func (a *FrankfurterFXChannelAdapter) Fetch(ctx context.Context) (*FetchResult, 
 			ChannelID:          "frankfurter_fx",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
+			LatencyMs:          time.Since(start).Milliseconds(),
 		},
 	}, nil
 }

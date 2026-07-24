@@ -27,9 +27,9 @@ func NewTEJChannelAdapter(client *marketdata.TEJClient) *TEJChannelAdapter {
 
 // Fetch pings the TEJ API and fetches 2330 daily price as a representative sample.
 func (a *TEJChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
-	now := time.Now()
-	startDate := now.AddDate(0, 0, -5).Format("2006-01-02")
-	endDate := now.Format("2006-01-02")
+	start := time.Now()
+	startDate := start.AddDate(0, 0, -5).Format("2006-01-02")
+	endDate := start.Format("2006-01-02")
 	rows, err := a.client.GetStockPriceDaily(ctx, "2330", startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("tej fetch: %w", err)
@@ -44,6 +44,7 @@ func (a *TEJChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 			ChannelID:          "tej",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
+			LatencyMs:   time.Since(start).Milliseconds(),
 		},
 	}, nil
 }

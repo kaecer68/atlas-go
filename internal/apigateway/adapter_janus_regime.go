@@ -25,8 +25,8 @@ func NewJANUSRegimeChannelAdapter(engine *janus.Engine) *JANUSRegimeChannelAdapt
 	}
 }
 
-// Fetch retrieves the current JANUS regime status (computed, not fetched).
 func (a *JANUSRegimeChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	if a.engine == nil {
 		return nil, fmt.Errorf("janus_regime: engine not initialized")
 	}
@@ -41,6 +41,7 @@ func (a *JANUSRegimeChannelAdapter) Fetch(ctx context.Context) (*FetchResult, er
 			ChannelID:          "janus_regime",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
+			LatencyMs:          time.Since(start).Milliseconds(),
 		},
 	}, nil
 }
