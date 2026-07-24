@@ -133,7 +133,7 @@
 | PR #1315 | — | `cmd/backtest-window` SQLite 測試 hermetic | ✅ merged |
 | PR #1316 | F-03 | 抽取 `publishSimulationStart`/`publishRegimeChange`/`publishRecommendation` | ✅ merged |
 | PR #1320 | F-01 | 清理 `strategy_validator` 殘留文件引用 | ✅ merged |
-| PR #? | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | in progress |
+| PR #1321 | F-02 | 拆分 `narrative/calibration` → 新子套件；`narrative/detector` 與 `narrative/seasonal` 維持原狀 | ✅ opened |
 | PR #1318 | F-06 paramcheck | 合併 `internal/paramcheck` → `internal/config` | ✅ merged |
 | PR #1319 | F-06 risktest | 搬移 `internal/risktest` → `cmd/stress-test/internal/risktest` | ✅ merged |
 
