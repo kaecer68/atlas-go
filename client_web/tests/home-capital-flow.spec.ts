@@ -83,7 +83,8 @@ async function mockHomeApis(page) {
   await page.route('**/api/dashboard/recommendation-pipeline', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/narrative/bundle', route => route.fulfill({ json: { events: [], chains: [], models: [], templates: [] } }));
   await page.route('**/api/dashboard/portfolio-state', route => route.fulfill({ json: { positions: [] } }));
-  await page.route('**/api/dashboard/calendar-events', route => route.fulfill({ json: CALENDAR_EVENTS }));
+  await page.route('**/api/user/profile', route => route.fulfill({ json: { email: 'test@example.com', tier: 'registered' } }));
+  await page.route('**/api/events/calendar', route => route.fulfill({ json: CALENDAR_EVENTS }));
   await page.route('**/api/events/prediction', route => route.fulfill({ json: PREDICTION }));
 }
 
@@ -96,9 +97,9 @@ async function bypassOnboarding(page) {
 }
 
 test.skip('home: high-confidence event banner is visible and dismissible', async ({ page }) => {
+  await mockHomeApis(page);
   await installAuthMocks(page);
   await bypassOnboarding(page);
-  await mockHomeApis(page);
   await page.goto('/');
 
   const banner = page.locator('#home-banner');
@@ -114,9 +115,9 @@ test.skip('home: high-confidence event banner is visible and dismissible', async
 });
 
 test('home: market calendar renders events and impact badges', async ({ page }) => {
+  await mockHomeApis(page);
   await installAuthMocks(page);
   await bypassOnboarding(page);
-  await mockHomeApis(page);
   await page.goto('/');
 
   const calendar = page.locator('#home-event-calendar');
@@ -133,9 +134,9 @@ test('home: market calendar renders events and impact badges', async ({ page }) 
 });
 
 test('home: 5-day capital flow prediction card renders 5 dates with bars', async ({ page }) => {
+  await mockHomeApis(page);
   await installAuthMocks(page);
   await bypassOnboarding(page);
-  await mockHomeApis(page);
   await page.goto('/');
 
   const card = page.locator('#home-capital-prediction-card');
