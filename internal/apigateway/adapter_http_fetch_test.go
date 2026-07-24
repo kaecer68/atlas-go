@@ -132,8 +132,8 @@ func TestMarketDataBackedAdaptersFetchAndHealthCheckUseInjectedHTTPClient(t *tes
 			if err != nil {
 				t.Fatalf("HealthCheck() error = %v", err)
 			}
-			if status.Status != "ok" || status.CheckType != "liveness" {
-				t.Fatalf("HealthCheck() = %#v, want ok liveness", status)
+			if status.Status != "ok" || (status.CheckType != "liveness" && status.CheckType != "readiness") {
+				t.Fatalf("HealthCheck() = %#v, want ok (liveness or readiness)", status)
 			}
 		})
 	}

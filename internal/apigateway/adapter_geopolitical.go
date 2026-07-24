@@ -118,9 +118,9 @@ func (a *GeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
 		ChannelID:  "geopolitical",
 		Country:    "全球",
-		Platform:   "GDELT + RSS (BBC/Al Jazeera)",
-		APIFormat:  "JSON / GDELT API + RSS XML",
-		Path:       "api.gdeltproject.org / bbc.com / aljazeera.com",
+		Platform:   "RSS + GDELT",
+		APIFormat:  "Composite",
+		Path:       "geopolitical",
 		HasLimiter: true,
 	}
 }
