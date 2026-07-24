@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 	"strconv"
 	"time"
 
@@ -184,7 +185,12 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	}
 	end := time.Now()
 	start := end.AddDate(0, 0, -days)
-	bars, err := h.deps.QuoteStore.LoadQuotes(symbol, start, end)
+	// Normalize: QuoteStore uses ".TW" suffix; API input is bare symbol.
+	qsSymbol := symbol
+	if !strings.Contains(symbol, ".") {
+		qsSymbol = symbol + ".TW"
+	}
+	bars, err := h.deps.QuoteStore.LoadQuotes(qsSymbol, start, end)
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
 	}

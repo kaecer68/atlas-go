@@ -756,7 +756,83 @@ func (a *DashboardAPI) SetContext(ctx context.Context) {
 // nil-default behavior (see CL-3 A03 docs/manifests/2026-07-20-cl3-regime-history.md).
 func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *DashboardAPI {
 	a.historicalStore = hs
+	// E09: warm up regime_history from persisted macro snapshots so the
+	// API returns data immediately after a cold start / rebuild instead
+	// of waiting for live macro_ingest ticks to accumulate.
+	go a.warmupRegimeHistory()
 	return a
+}
+
+// warmupRegimeHistory reads daily macro snapshots from disk, derives a
+// regime from the VIX value, and upserts into regime_history. It is
+// called once on startup via WithHistoricalStore and is safe to run
+// concurrently with live macro_ingest (ON CONFLICT DO UPDATE).
+func (a *DashboardAPI) warmupRegimeHistory() {
+	if a.historicalStore == nil {
+		return
+	}
+	snapshotDir := filepath.Join(a.workDir, "data", "state", "macro")
+	entries, err := os.ReadDir(snapshotDir)
+	if err != nil {
+		logging.Warn("dashboard_api", "regime_warmup_readdir_failed", logging.Err(err))
+		return
+	}
+	ctx := context.Background()
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if entry.Name() == "latest.json" || entry.Name() == "previous.json" || entry.Name() == "_metadata.json" {
+			continue
+		}
+		dateStr := strings.TrimSuffix(entry.Name(), ".json")
+		data, err := os.ReadFile(filepath.Join(snapshotDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var snap marketdata.MacroDataSnapshot
+		if err := json.Unmarshal(data, &snap); err != nil {
+			continue
+		}
+		vix := snap.VIX.Value
+		if vix == 0 {
+			continue
+		}
+		regime := narrative.NormalizeRegime(classifyRegimeFromVIX(vix))
+		row := ledger.RegimeRow{
+			Date:            dateStr,
+			Regime:          regime,
+			Source:          "snapshot_backfill",
+			RecordedAt:      time.Unix(snap.RecordedAt, 0).UTC(),
+			CapturedAt:      time.Now().UTC(),
+			IsSynthetic:     0,
+			SourceSessionID: "warmup:" + dateStr,
+		}
+		if err := a.historicalStore.UpsertRegime(ctx, row); err != nil {
+			logging.Warn("dashboard_api", "regime_warmup_upsert_failed",
+				logging.FStr("date", dateStr), logging.Err(err))
+			continue
+		}
+		count++
+	}
+	logging.Info("dashboard_api", "regime_warmup_complete",
+		"rows", count)
+}
+
+// classifyRegimeFromVIX maps VIX to a human-readable regime string.
+// Mirrors narrative/calibration_regime.go:classifyRegime.
+func classifyRegimeFromVIX(vix float64) string {
+	switch {
+	case vix < 15:
+		return "RISK_ON"
+	case vix < 25:
+		return "NEUTRAL"
+	case vix < 35:
+		return "RISK_OFF"
+	default:
+		return "CRISIS"
+	}
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
