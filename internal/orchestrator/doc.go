@@ -9,11 +9,17 @@
 //	PluginHost          — Plugin lifecycle management (attach / before-sim / after-sim)
 //	Registry            — Agent registry loading from configs/agents.json
 //	Executor interfaces — RegimeExecutor, AgentExecutor, ControlExecutor
+//	AdapterProducer     — Bridge from the simulation pipeline to the live
+//	                      trading engine (implements LiveExecutionInputProvider)
 //
 // Architecture:
 //
 //	Market Data → Orchestrator (context → screener → sector/style → control)
 //	              → Simulator → Ledger
+//
+// The same recommendation pipeline is reused by live trading: AdapterProducer
+// runs ExecuteWithContext and emits a domain.ExecutionInput that is consumed by
+// live.Orchestrator. See internal/live/doc.go for the dual-engine rationale.
 //
 // Each executor implements a small, focused interface: Supports() check + one
 // operation method. The registry iterates executors in order; first match wins

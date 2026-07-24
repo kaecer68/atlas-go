@@ -11,6 +11,7 @@ import (
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
 type Orchestrator struct {
@@ -21,10 +22,8 @@ type Orchestrator struct {
 	orderMgr               *OrderManager
 	riskGate               *RiskGate
 	registry               domain.AgentRegistry
-	executionInputProvider interface {
-		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
-	}
-	circuitBreaker *CircuitBreaker
+	executionInputProvider orchestrator.LiveExecutionInputProvider
+	circuitBreaker         *CircuitBreaker
 
 	config OrchestratorConfig
 
@@ -132,9 +131,7 @@ func NewOrchestrator(
 	eventBus *ChannelEventBus,
 	marketData marketdata.Provider,
 	registry domain.AgentRegistry,
-	inputProvider interface {
-		Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
-	},
+	inputProvider orchestrator.LiveExecutionInputProvider,
 	config OrchestratorConfig,
 ) *Orchestrator {
 	ctx, cancel := context.WithCancel(ctx)

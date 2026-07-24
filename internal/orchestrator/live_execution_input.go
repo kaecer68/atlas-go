@@ -8,58 +8,32 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
+// ErrSystemNotInitialized is returned when an AdapterProducer is used before
+// its backing System is built.
 var ErrSystemNotInitialized = errors.New("system not initialized")
 
+// LiveExecutionInputProvider bridges the simulation recommendation pipeline to
+// the live trading engine. It is implemented by AdapterProducer, which reuses
+// ExecuteWithContext (screening → recommendation → guard filters) and emits
+// a domain.ExecutionInput for the live Orchestrator to execute.
 type LiveExecutionInputProvider interface {
 	Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error)
 }
 
-type liveExecutionInputProvider struct {
-	system *System
-}
-
-func NewLiveExecutionInputProvider(system *System) *liveExecutionInputProvider {
-	return &liveExecutionInputProvider{system: system}
-}
-
-func (p *liveExecutionInputProvider) Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error) {
-	if p.system == nil {
-		return nil, ErrSystemNotInitialized
-	}
-
-	var quotes []domain.Quote
-	if p.system.Sim().provider != nil {
-		var err error
-		quotes, err = p.system.Sim().provider.GetQuotes(ctx, p.system.Sim().session.SessionDate, symbols)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	result := ExecuteWithContext(ExecutionContext{
-		Registry:      p.system.Sim().registry,
-		Quotes:        quotes,
-		Policy:        p.system.Sim().policy.ExecutionPolicy,
-		Plugins:       p.system.plugins,
-		SessionID:     p.system.Sim().session.ID,
-		WeightManager: p.system.Port().darwinian,
-		Context:       ctx,
-	})
-
-	return &domain.ExecutionInput{
-		Regime:               result.Regime,
-		RawRecommendations:   result.RawRecommendations,
-		FinalRecommendations: result.FinalRecommendations,
-		GuardOutcomes:        result.GuardOutcomes,
-		DeterminedBy:         "orchestrator-pipeline",
-	}, nil
-}
-
+// AdapterProducer adapts an orchestrator.System so the live trading engine can
+// consume the same recommendation pipeline used by batch simulations.
+//
+// This is the intentional bridge between the two execution engines: the
+// simulation engine (orchestrator.System) produces screened recommendations,
+// and the live engine (live.Orchestrator) executes them through a broker.
 type AdapterProducer struct {
 	marketData marketdata.Provider
 	system     *System
 }
 
+// NewAdapterProducer creates a producer that fetches quotes from the given
+// market-data provider and runs the full ExecuteWithContext pipeline on the
+// provided system.
 func NewAdapterProducer(marketData marketdata.Provider, system *System) *AdapterProducer {
 	return &AdapterProducer{
 		marketData: marketData,
@@ -67,6 +41,7 @@ func NewAdapterProducer(marketData marketdata.Provider, system *System) *Adapter
 	}
 }
 
+// Produce implements LiveExecutionInputProvider.
 func (a *AdapterProducer) Produce(ctx context.Context, symbols []string) (*domain.ExecutionInput, error) {
 	if a.system == nil {
 		return nil, ErrSystemNotInitialized
@@ -91,13 +66,11 @@ func (a *AdapterProducer) Produce(ctx context.Context, symbols []string) (*domai
 		Context:       ctx,
 	})
 
-	input := &domain.ExecutionInput{
+	return &domain.ExecutionInput{
 		Regime:               result.Regime,
 		RawRecommendations:   result.RawRecommendations,
 		FinalRecommendations: result.FinalRecommendations,
 		GuardOutcomes:        result.GuardOutcomes,
 		DeterminedBy:         "adapter-producer-v1",
-	}
-
-	return input, nil
+	}, nil
 }
