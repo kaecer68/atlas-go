@@ -707,6 +707,7 @@ func run(args []string, deps appDeps) error {
 			stockDeps.QuoteStore = qs
 			if dashboard != nil {
 				dashboard.SetQuoteStore(qs)
+				dashboard.SetFugleAPIKey(cfg.FugleAPIKey)
 			}
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)

@@ -112,6 +112,9 @@ type DashboardAPI struct {
 	strategyTechniquesHandlers *apistrategies.Handlers
 	historicalStore            ledger.HistoricalStore
 	quoteStore                 ledger.QuoteStore
+	quoteStoreMu               sync.RWMutex
+	fugleAPIKey                string
+	fugleAPIKeyMu              sync.RWMutex
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -765,7 +768,17 @@ func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *Dashboard
 
 // SetQuoteStore injects the QuoteStore for stock quote warmup.
 func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
+	a.quoteStoreMu.Lock()
+	defer a.quoteStoreMu.Unlock()
 	a.quoteStore = qs
+}
+
+// SetFugleAPIKey injects the Fugle API key so warmup can fetch candles
+// from the same config source as the rest of the application.
+func (a *DashboardAPI) SetFugleAPIKey(key string) {
+	a.fugleAPIKeyMu.Lock()
+	defer a.fugleAPIKeyMu.Unlock()
+	a.fugleAPIKey = key
 }
 
 // warmupQuotes fetches historical daily bars from Fugle for all representative
@@ -777,11 +790,17 @@ func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
 // 2-second delay between symbols to stay under the limit. Timeout is 300s
 // for the full warmup (~96 symbols * ~2s).
 func (a *DashboardAPI) warmupQuotes() {
-	if a.quoteStore == nil {
+	a.quoteStoreMu.RLock()
+	qs := a.quoteStore
+	a.quoteStoreMu.RUnlock()
+	if qs == nil {
 		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "quote store nil")
 		return
 	}
-	fugleKey := os.Getenv("FUGLE_API_KEY")
+
+	a.fugleAPIKeyMu.RLock()
+	fugleKey := a.fugleAPIKey
+	a.fugleAPIKeyMu.RUnlock()
 	if fugleKey == "" {
 		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FUGLE_API_KEY not set")
 		return
@@ -799,9 +818,6 @@ func (a *DashboardAPI) warmupQuotes() {
 		symbols = append(symbols, s)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-
 	from := "2026-01-01"
 	to := time.Now().Format("2006-01-02")
 	totalBars := 0
@@ -809,14 +825,7 @@ func (a *DashboardAPI) warmupQuotes() {
 	failed := 0
 
 	for _, sym := range symbols {
-		select {
-		case <-ctx.Done():
-			logging.Warn("dashboard_api", "quote_warmup_timeout", "fetched", fetched, "failed", failed)
-			return
-		default:
-		}
-
-		bars, err := a.fetchFugleCandles(ctx, fugleKey, sym, from, to)
+		bars, err := a.fetchFugleCandles(context.Background(), fugleKey, sym, from, to)
 		if err != nil {
 			failed++
 			continue
@@ -825,7 +834,7 @@ func (a *DashboardAPI) warmupQuotes() {
 			continue
 		}
 
-		if err := a.quoteStore.RecordQuotes(bars); err != nil {
+		if err := qs.RecordQuotes(bars); err != nil {
 			logging.Warn("dashboard_api", "quote_warmup_insert_failed", "symbol", sym, logging.Err(err))
 			failed++
 			continue
@@ -845,7 +854,11 @@ func (a *DashboardAPI) warmupQuotes() {
 }
 
 // fetchFugleCandles fetches historical daily candles for a single symbol from Fugle.
+// It enforces a per-symbol timeout independent of the overall warmup loop.
 func (a *DashboardAPI) fetchFugleCandles(ctx context.Context, apiKey, symbol, from, to string) ([]domain.DailyBar, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	url := fmt.Sprintf(
 		"https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/%s?from=%s&to=%s&fields=open,high,low,close,volume",
 		symbol, from, to,
@@ -884,6 +897,7 @@ func (a *DashboardAPI) fetchFugleCandles(ctx context.Context, apiKey, symbol, fr
 	for _, bar := range result.Data {
 		d, err := time.Parse("2006-01-02", bar.Date)
 		if err != nil {
+			logging.Warn("dashboard_api", "quote_warmup_date_parse_failed", "symbol", symbol, "date", bar.Date, logging.Err(err))
 			continue
 		}
 		bars = append(bars, domain.DailyBar{
