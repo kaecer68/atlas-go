@@ -44,9 +44,17 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		"range":    taiwanVolatilityRange,
 	}
 
-	body, err := s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
-	if err != nil {
-		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
+	// Check shared cache first (P1 B03: avoids duplicate ^TWII fetch)
+	var body []byte
+	if cached := twiiCache.get(params["interval"], params["range"]); cached != nil {
+		body = cached
+	} else {
+		var err error
+		body, err = s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
+		if err != nil {
+			return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
+		}
+		twiiCache.set(body, params["interval"], params["range"])
 	}
 
 	chartResp, err := UnmarshalYahooChart(body)
