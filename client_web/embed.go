@@ -1,5 +1,3 @@
-//go:build embed_dist
-
 package client_web
 
 import (
