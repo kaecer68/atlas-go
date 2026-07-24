@@ -1,3 +1,5 @@
+//go:build embed_dist
+
 package admin_web
 
 import "embed"
