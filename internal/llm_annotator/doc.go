@@ -3,6 +3,15 @@
 // "llm_annotated" arm of the hybrid self-correction pipeline
 // (rule_based + llm_annotated, see strategy_techniques.AttributionMode).
 //
+// Status: archived / retained for backward compatibility. New code should use
+// internal/llm/capabilities/failure_attribution via the llm.Router instead.
+// The canonical failure-attribution capability lives in the llm/capabilities
+// sub-package and is the owner of record for Wave 12+. See
+// internal/MATURITY.md:118 and Issue #731 for the CircuitBreaker unification
+// follow-up. This package is still imported by production wiring during the
+// deprecation window; callers may continue to use it, but new capabilities
+// should be added to internal/llm rather than here.
+//
 // The Annotator interface decouples the LLM provider from the consumer so
 // production code can swap between Kimi (Moonshot API) and a test mock
 // without touching the registry. Failure attribution is the only supported
