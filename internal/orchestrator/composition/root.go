@@ -12,12 +12,14 @@
 package composition
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
@@ -114,8 +116,6 @@ func (r *Root) InjectSectorDeps(sys *orchestrator.System) {
 // NewDefaultEngineWithProjector (SA04 path). Adapters are extracted from the
 // industry service infrastructure (cycle/seasonal/linkage); narrative/macro/factor
 // use nil until SA08 completes the full adapter wiring.
-// Returns nil if prior cannot be loaded (pre-SA02 config), in which case callers
-// that require a functional engine will receive nil and degrade gracefully.
 func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 	params := config.GetParametersConfig()
 
@@ -145,6 +145,55 @@ func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 	weightMin := params.Darwinian.WeightMin.Value
 	weightMax := params.Darwinian.WeightMax.Value
 
+	// narrative adapter — NarrativeEngine is a stateless factory, construct directly.
+	// Uses the same hardcoded theme→bias map as dashboard_api.go:416-440.
+	narrativeEngine := narrative.NewNarrativeEngine()
+	narrativeThemeMap := map[string]map[string]float64{
+		"US_rates_up":             {"financials": 0.05, "semiconductor": -0.04, "electronics": -0.03},
+		"US_rates_down":           {"financials": -0.05, "semiconductor": 0.04, "electronics": 0.03},
+		"USD_strengther":          {"semiconductor": -0.04, "electronics": -0.03, "tourism": -0.03},
+		"USD_weaker":              {"semiconductor": 0.03, "electronics": 0.03, "tourism": 0.03},
+		"risk_on":                 {"semiconductor": 0.05, "electronics": 0.04, "financials": 0.03},
+		"risk_off":                {"semiconductor": -0.05, "electronics": -0.04, "financials": -0.03},
+		"JPY_carry_unwind":        {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
+		"geopolitical_risk_spike": {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
+		"oil_price_shock":         {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
+		"semiconductor_downturn":  {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
+	}
+	narrativeAdapter := sectorallocation.NewNarrativeAdapter(
+		func(_ context.Context, industryID string) (float64, float64, string, error) {
+			events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
+			var totalBias float64
+			var maxConf float64
+			activeTheme := ""
+			for _, e := range events {
+				if industryBiases, ok := narrativeThemeMap[e.Theme]; ok {
+					if bias, ok := industryBiases[industryID]; ok {
+						totalBias += bias * e.Confidence * e.HitRate
+						if e.Confidence*e.HitRate > maxConf {
+							maxConf = e.Confidence * e.HitRate
+							activeTheme = e.Theme
+						}
+					}
+				}
+			}
+			return totalBias, maxConf, activeTheme, nil
+		},
+	)
+	// macro adapter — no-op until macro pipeline provides MacroDataSnapshot (future).
+	macroAdapter := sectorallocation.MacroProviderFunc(
+		func(_ context.Context, industryID, _, _ string) (float64, error) {
+			return 0.0, nil
+		},
+	)
+
+	// factor adapter — no-op until factor provider is wired (future).
+	factorAdapter := sectorallocation.FactorProviderFunc(
+		func(_ context.Context, _ string) (float64, error) {
+			return 0.0, nil
+		},
+	)
+
 	return sectorallocation.NewDefaultEngineWithProjector(
 		params.SectorAllocation,
 		prior,
@@ -152,9 +201,9 @@ func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 		sectorallocation.NewCycleAdapter(cycleTracker),
 		sectorallocation.NewSeasonalAdapter(seasonalEngine),
 		sectorallocation.NewLinkageAdapter(linkageAnalyzer, nil),
-		nil, // narrative — nil until narrative engine is wired into Root (future)
-		nil, // macro    — nil until macro provider is wired into Root (future)
-		nil, // factor   — nil until factor provider is wired into Root (future)
+		narrativeAdapter,
+		macroAdapter,
+		factorAdapter,
 		weightMin,
 		weightMax,
 	)

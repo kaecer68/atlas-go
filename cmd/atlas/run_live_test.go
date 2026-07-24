@@ -31,7 +31,7 @@ func TestRunLiveTrading_NilDepsPanicsAtProviderSetup(t *testing.T) {
 		t.Logf("confirmed: runLiveTrading panics with nil deps (panic: %v)", r)
 	}()
 
-	_ = runLiveTrading(configStub(t), appDeps{}, nil, nil, baseline.NewManager(""), "127.0.0.1:0", false)
+	_ = runLiveTrading(configStub(t), nil, appDeps{}, nil, nil, baseline.NewManager(""), "127.0.0.1:0", false)
 }
 
 // TestRunLiveTrading_SharesBaselineManager verifies that runLiveTrading wires
@@ -49,5 +49,5 @@ func TestRunLiveTrading_SharesBaselineManager(t *testing.T) {
 	}()
 
 	mgr := baseline.NewManager("")
-	_ = runLiveTrading(configStub(t), appDeps{}, nil, nil, mgr, "127.0.0.1:0", false)
+	_ = runLiveTrading(configStub(t), nil, appDeps{}, nil, nil, mgr, "127.0.0.1:0", false)
 }
