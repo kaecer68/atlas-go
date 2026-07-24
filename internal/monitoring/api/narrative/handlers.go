@@ -101,7 +101,13 @@ func (h *Handlers) HandleNarrativeEvents(r *http.Request) (int, any) {
 func (h *Handlers) HandleNarrativeChains(r *http.Request) (int, any) {
 	data := h.buildNarrativeData(r.Context(), r)
 	events := h.Svc.DetectEvents(data)
-	return http.StatusOK, map[string]any{"chains": h.Svc.MatchChains(events)}
+	chains := h.Svc.MatchChains(events)
+	return http.StatusOK, map[string]any{
+		"chains":       chains,
+		"generated_at": time.Now().UTC().Format(time.RFC3339),
+		"events_count": len(events),
+		"chains_count": len(chains),
+	}
 }
 
 func (h *Handlers) HandleNarrativeModels(r *http.Request) (int, any) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -116,7 +117,11 @@ func (h *Handler) HandleFundamentals(r *http.Request) (int, any) {
 	if h.deps.Fundamentals == nil || !h.deps.Fundamentals.HasData() {
 		return http.StatusServiceUnavailable, map[string]string{"error": "fundamentals data not loaded"}
 	}
-	return http.StatusOK, h.deps.Fundamentals.Get(normalizeFundamentalsSymbol(symbol))
+	data := h.deps.Fundamentals.Get(normalizeFundamentalsSymbol(symbol))
+	if data.Sector == "" {
+		data.Sector = string(industry.ClassifyBySymbol(symbol))
+	}
+	return http.StatusOK, data
 }
 
 // HandleChips returns institutional investor flow for a single symbol.

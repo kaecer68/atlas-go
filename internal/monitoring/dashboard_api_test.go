@@ -79,7 +79,7 @@ func TestNewWiredIndustryServiceWithoutReplay(t *testing.T) {
 	t.Setenv("ATLAS_REPLAY_DATA_PATH", "")
 
 	eng := narrative.NewNarrativeEngine()
-	svc := newWiredIndustryService(eng, nil)
+	svc := newWiredIndustryService(eng, nil, os.TempDir())
 	if svc == nil {
 		t.Fatal("expected non-nil industry service")
 	}
@@ -106,7 +106,7 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 	t.Setenv("ATLAS_REPLAY_DATA_PATH", replayCSV)
 
 	eng := narrative.NewNarrativeEngine()
-	svc := newWiredIndustryService(eng, nil)
+	svc := newWiredIndustryService(eng, nil, os.TempDir())
 	if svc == nil {
 		t.Fatal("expected non-nil industry service")
 	}
