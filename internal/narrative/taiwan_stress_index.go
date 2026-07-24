@@ -26,7 +26,7 @@ type TaiwanStressIndex struct {
 	Components map[string]float64 `json:"components"`
 	Timestamp  int64              `json:"timestamp"`        // captured_at in epoch seconds (may not equal Date)
 	Date       string             `json:"date,omitempty"`   // YYYY-MM-DD; empty for in-memory Calculate() rows
-	Source     string             `json:"source,omitempty"` // "macro_ingest" for live rows, "backfill" for legacy rows; empty for in-memory Calculate() rows
+	Source     string             `json:"source,omitempty"` // "macro_ingest" for live pipeline, "snapshot_backfill" for daily backfill, "synthetic" for stage-4 seed/SQLite DEFAULT; empty for in-memory Calculate() rows
 }
 
 // TaiwanStressCalculator computes the stress index from macro and capital flow data.

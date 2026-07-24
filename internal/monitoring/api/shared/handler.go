@@ -58,6 +58,7 @@ var authFreePrefixPaths = []string{
 	"/api/detector/",
 	"/api/capital-flow/",
 	"/api/events/",
+	"/api/industry/",
 	"/api/stock/",
 	"/api/janus/",
 	"/api/strategies/",
