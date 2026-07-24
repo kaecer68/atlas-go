@@ -126,7 +126,7 @@
 | `cmd/check-persistence-format` | 掃描 data/state 持久性格式分類 | domain | ✅ Utility |
 | `cmd/cleanup-channel-health` | 清理過期 alerts | domain, monitoring | ✅ Utility |
 | `cmd/parameter-health-check` | 參數品質報告（citation/todo/calibrated/evidence 等級） | —（stdlib only） | ✅ Utility |
-| `cmd/validate-parameters` | 參數 JSON schema 驗證 | paramcheck, constants | ✅ Utility |
+| `cmd/validate-parameters` | 參數 JSON schema 驗證 | config, constants | ✅ Utility |
 | `cmd/realtime-quote` | 即時報價串流（Fugle → Redis pub/sub） | realtime, domain | ⚠️ Utility |
 | `cmd/fubon-dma` | 富邦 DMA 券商介面 CLI（login/submit/cancel/query/logout） | domain, live | ⚠️ Utility |
 | `cmd/stress-test` | 壓力測試情境執行（market_crash/sector_rotation/liquidity_crisis） | risktest | ⚠️ Experimental |
