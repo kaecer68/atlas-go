@@ -45,8 +45,6 @@ jobs:
             - 'Makefile'
             - 'scripts/**'
             - '.github/workflows/**'
-            - '!docs/**'
-            - '!*.md'
 
   # Frontend build (reusable) — builds admin_web + client_web once,
   # uploads dist artifacts. Downstream jobs download instead of rebuilding.

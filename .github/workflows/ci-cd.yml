@@ -399,8 +399,6 @@ jobs:
             - 'Makefile'
             - 'scripts/**'
             - '.github/workflows/**'
-            - '!docs/**'
-            - '!*.md'
           docs_only:
             - 'docs/**'
             - '*.md'
