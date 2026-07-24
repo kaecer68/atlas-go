@@ -56,6 +56,7 @@ func (a *GovernmentFlowAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		Meta: FetchMetadata{
 			ChannelID: "government_flow",
 			LatencyMs: time.Since(start).Milliseconds(),
+			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp: time.Now(),
 		},
 	}

@@ -38,6 +38,7 @@ func (a *SectorDataChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
 		ChannelID: "sector_data", LatencyMs: time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
 		Timestamp: time.Now(),
 	}}, nil
 }
