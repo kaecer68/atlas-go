@@ -50,3 +50,10 @@ func (c *usMarketCache) set(symbol string, data []byte) {
 		expires: time.Now().Add(usCacheTTL),
 	}
 }
+
+// reset clears all cached entries. Used by tests to ensure isolation.
+func (c *usMarketCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make(map[string]usMarketCacheEntry)
+}

@@ -47,3 +47,13 @@ func (c *taiwanIndexCache) set(data []byte, interval, rng string) {
 	c.rng = rng
 	c.expires = time.Now().Add(twiiCacheTTL)
 }
+
+// reset clears cached data. Used by tests to ensure isolation.
+func (c *taiwanIndexCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data = nil
+	c.interval = ""
+	c.rng = ""
+	c.expires = time.Time{}
+}

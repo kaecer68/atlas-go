@@ -424,4 +424,9 @@ func SetYahooSessionClient(client *http.Client) {
 	s.crumb = "test-crumb"
 	s.cookie = "test-cookie=1"
 	s.lastFetch = time.Now()
+
+	// Reset shared caches so each mock-server test starts from a clean
+	// state and does not observe data from a prior test/subtest.
+	usCache.reset()
+	twiiCache.reset()
 }
