@@ -38,8 +38,10 @@ func (a *BDIChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 		return nil, fmt.Errorf("bdi marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "bdi", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "bdi",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

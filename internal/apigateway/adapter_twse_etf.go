@@ -46,8 +46,10 @@ func (a *TWSEETFChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		return nil, fmt.Errorf("twse etf marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "twse_etf", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "twse_etf",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

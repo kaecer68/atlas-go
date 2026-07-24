@@ -531,6 +531,7 @@ echo "✅ os.Getenv 檢查通過"
 |------|------|---------|
 | v1.0 | 2026-05-13 | 初版，經 Oracle 審核後發布 |
 | v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
+| v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 docs/manifests/2026-07-25-channel-architecture-audit.md |
 
 ## 附錄 D：Roots Sanctioned Exception（MCP Server 客戶端宣告檔案根目錄之唯讀例外）
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"time"
 
@@ -31,6 +32,7 @@ func NewTaiwanGeopoliticalChannelAdapter(workDir string) *TaiwanGeopoliticalChan
 
 // Fetch retrieves the Taiwan-specific geopolitical score.
 func (a *TaiwanGeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	score, err := a.provider.FetchScore(bgCtx)
@@ -50,6 +52,7 @@ func (a *TaiwanGeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchRes
 		Data: data,
 		Meta: FetchMetadata{
 			ChannelID:          "geopolitical_taiwan",
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},
@@ -88,5 +91,11 @@ func (a *TaiwanGeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 		APIFormat:  "RSS XML",
 		Path:       "www.cna.com.tw / news.ltn.com.tw / news.tvbs.com.tw",
 		HasLimiter: true,
+	}
+}
+// SetHTTPClient sets a custom HTTP client for the underlying provider.
+func (a *TaiwanGeopoliticalChannelAdapter) SetHTTPClient(client *http.Client) {
+	if a.provider != nil {
+		a.provider.SetHTTPClient(client)
 	}
 }

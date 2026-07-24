@@ -42,8 +42,10 @@ func (a *USSPXIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		return nil, fmt.Errorf("us_spx marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "us_spx", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "us_spx",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 
@@ -101,7 +103,8 @@ func (a *USNDXIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
 		ChannelID: "us_ndx", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 
@@ -158,8 +161,10 @@ func (a *USDJIIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		return nil, fmt.Errorf("us_dji marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "us_dji", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "us_dji",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

@@ -42,8 +42,10 @@ func (a *USNVDAChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) 
 		return nil, fmt.Errorf("us_nvda marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "us_nvda", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "us_nvda",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 
@@ -101,7 +103,8 @@ func (a *USAAPLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) 
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
 		ChannelID: "us_aapl", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 
@@ -158,8 +161,10 @@ func (a *USMSFTChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) 
 		return nil, fmt.Errorf("us_msft marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "us_msft", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "us_msft",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

@@ -37,8 +37,10 @@ func (a *DRAMSpotPriceChannelAdapter) Fetch(ctx context.Context) (*FetchResult, 
 		return nil, fmt.Errorf("dram spot price marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "dram_spot_price", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "dram_spot_price",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

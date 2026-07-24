@@ -37,8 +37,10 @@ func (a *ExchangeRateChannelAdapter) Fetch(ctx context.Context) (*FetchResult, e
 		return nil, fmt.Errorf("exchange rate marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "exchange_rate", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "exchange_rate",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

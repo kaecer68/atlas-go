@@ -24,6 +24,7 @@ func NewFugleChannelAdapter(client *marketdata.FugleClient) *FugleChannelAdapter
 // Fetch retrieves a quote for 1476 (聚亨, Fugle test symbol) as a health check sample.
 // Uses the same symbol as HealthCheck() for API key compatibility.
 func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	quote, err := a.client.GetQuote(ctx, "1476")
 	if err != nil {
 		return nil, fmt.Errorf("fugle fetch: %w", err)
@@ -38,7 +39,7 @@ func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 		Data: data,
 		Meta: FetchMetadata{
 			ChannelID:          "fugle",
-			LatencyMs:          0, // caller should measure
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},
