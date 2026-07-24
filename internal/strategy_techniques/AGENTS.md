@@ -1,6 +1,8 @@
 # AGENTS.md — strategy cluster
 
-> 合併 `strategy` / `strategy_ranker` / `strategy_validator` / `strategy_techniques` 的模組陷阱。完整架構與流程見 `docs/`。
+> 合併 `strategy` / `strategy_ranker` / `strategy_techniques` 的模組陷阱。
+> `strategy_validator` 已於 PR #1311 合併至 `strategy_ranker`（`validator.go` / `validator_test.go` / `validator_doc.go`）。
+> 完整架構與流程見 `docs/`。
 
 ---
 
@@ -31,33 +33,24 @@
 
 ---
 
-## strategy_ranker（回測排名）
+## strategy_ranker（回測驗證 + 排名 + tier）
 
-模組職責：策略回測結果排名 + tier 標記（free/registered/premium）。
+模組職責：策略歷史回測驗證、績效指標計算、排名與分層（free/registered/premium）。
+`strategy_validator` 已合併於此包，驗證邏輯位於 `validator.go`。
 
 | 陷阱 | 說明 |
 |------|------|
 | **非即時推薦入口** | 此模組處理**回測結果排名**，不是 `/api/recommendations` 的修復點；即時建議應呼叫 `strategy.ComparisonEngine.GetScore()`。 |
-| **Tier 判定在 validator** | 任何 tier 規則變更需修 `internal/strategy_validator/assign_tiers.go`，非本模組。 |
+| **Tier 判定在 ranker 內部** | 任何 tier 規則變更需修 `internal/strategy_ranker`（原 `assign_tiers.go` 邏輯現位於 `validator.go`），非 `strategy_techniques` 或其他模組。 |
 | **空輸入回傳空陣列** | `RankAndTier` 期望 `[]StrategyReport`；input 空時回傳空陣列，caller 需檢查。 |
-
----
-
-## strategy_validator（回測驗證）
-
-模組職責：策略歷史回測驗證、績效指標計算、排名與分層。
-
-| 陷阱 | 說明 |
-|------|------|
 | **Sharpe 計算委託 shared** | 不自行實作年化 Sharpe，統一用 `internal/domain/shared.ComputeSharpe`，避免不同模組產出不同 Sharpe。 |
 | **TAIEX 相關係數可能 NaN** | Pearson 相關係數在樣本不足或 TAIEX 持平時可能為 NaN，程式碼已防禦為 0。 |
-| **排名邏輯在本包內** | `Rank()` 與 `AssignTiers()` 操作 `StrategyReport` 欄位，因此位於 validator 包內；外部透過 `strategy_ranker.Ranker` 呼叫。 |
+| **排名邏輯在 ranker 包內** | `Rank()` 與 `AssignTiers()` 操作 `StrategyReport` 欄位，位於 `strategy_ranker` 包內；外部透過 `strategy_ranker.Ranker` 呼叫。 |
 
 ---
 
 ## 測試
 
 - `strategy`：Registry CRUD、Selector 切換邏輯、Allocator 風險平價、ComparisonEngine 分數。
-- `strategy_ranker`：`ranker_test.go` 的 TestRankAndTier / TestFreePremiumFilters。
-- `strategy_validator`：totalReturnPct、maxDrawdownPct、winRate、pearsonCorrelation、Validate 端到端、Rank/AssignTiers。
+- `strategy_ranker`：`ranker_test.go` 的 TestRankAndTier / TestFreePremiumFilters；`validator_test.go` 的 totalReturnPct、maxDrawdownPct、winRate、pearsonCorrelation、Validate 端到端、Rank/AssignTiers。
 - `strategy_techniques`：`go test ./internal/strategy_techniques/...`。

@@ -87,10 +87,10 @@ Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「�
 
 | 模組 | 角色 | 消費 | 產出 |
 |------|------|------|------|
-| `internal/strategy_validator` | 策略驗證器 | backtest 引擎 | Sharpe/最大回撤/勝率/TAIEX 相關係數 + 排名分層 |
+| `internal/strategy_ranker` | 策略驗證與排名 | backtest 引擎 | Sharpe/最大回撤/勝率/TAIEX 相關係數 + 排名分層 + tier 標籤 |
 | `internal/capitalflow` | 資金流向分析 | MacroDataSnapshot (7 勢力原始值) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
 | `internal/eventdriven` | 事件預測 | `industry.EventCalendar` + `capitalflow` 品質分數 | 5 日 forward 預測 + ETF 規模×權重預估 + 營收驚喜 |
-| `internal/strategy_ranker` | 策略排名 | `strategy_validator` 輸出 | ranked strategies + tier (public/paid) |
+| `internal/strategy_ranker` | 策略排名 | `strategy_ranker` 內部驗證結果 | ranked strategies + tier (public/paid) |
 | `internal/subscription` | 使用者訂閱 | — | SQLite users + JWT + 3-tier middleware |
 | `internal/recommender` | 推薦分層 | `subscription` user tier + `strategy_ranker` | tier-gated 策略推薦 + 市場燈號 |
 | `internal/dailyreport` | 每日報告 | `capitalflow` + `eventdriven` + macro | JSON + Markdown 報告 |
@@ -116,7 +116,7 @@ Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「�
               └──────────────────────────────────────────────────┘
 
               ┌──────────────────────────────────────────────────┐
-              │ backtest 引擎 → strategy_validator               │
+              │ backtest 引擎 → strategy_ranker（驗證 + 排名 + tier） │
               └────────────────────┬─────────────────────────────┘
                                    │
               ┌────────────────────▼─────────────────────────────┐
@@ -302,7 +302,7 @@ Multi-phase industry cycle tracking:
 |------|------|------|------|
 | **流向層**（決定方向） | `internal/capitalflow` | `MacroDataSnapshot` (7 勢力) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
 | **事件層**（決定節奏） | `internal/eventdriven` | `industry.EventCalendar` + 流向品質分數 | 5 日 forward 預測 + ETF 規模預估 + 營收驚喜 |
-| **推薦層**（決定強度） | `internal/strategy_validator` + `strategy_ranker` + `recommender` | 回測歷史 + 流向 + 事件 + user tier | 三層策略訊號 (public/registered/premium) |
+| **推薦層**（決定強度） | `strategy_ranker` + `recommender` | 回測歷史 + 流向 + 事件 + user tier | 三層策略訊號 (public/registered/premium) |
 
 ### API 端點（新增）
 

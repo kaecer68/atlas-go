@@ -2,8 +2,8 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：61 個模組（24 S / 27 E / 6 X / 1 A / 3 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
-> **v0.0.0.38 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/strategy_validator/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
+> **總計**：60 個模組（24 S / 26 E / 6 X / 1 A / 3 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **v0.0.0.38 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
@@ -38,7 +38,7 @@
 | `strategy_techniques` | 投資心法庫 — 5 層框架 + 4 核心指標 + 自我修正 |
 | `tax` | 台灣稅務計算 |
 
-### E · Evolving（演進中，27 個）
+### E · Evolving（演進中，26 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -65,7 +65,6 @@
 | `scheduler` | ML 模型重訓排程 |
 | `strategy` | 策略選擇器與登錄 |
 | `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
-| `strategy_validator` | **v0.0.0.32 新 / 保留 AGENTS.md** — 策略啟用前驗證器（invariant/constraint 校驗） |
 | `stress` | 壓力測試場景（進入 orchestrator SystemCore live risk evaluation） |
 | `subscription` | **v0.0.0.32 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
 | `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**112 tools**（預設；sampling/elicitation feature-gated 全開 114）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 112–114 |
@@ -111,7 +110,7 @@
 | `internal/marketdata/` | marketdata | Provider抽象、DecodeJSON、fubon URL guard |
 | `internal/monitoring/` | monitoring + api/shared | Dashboard API、auth whitelist、Wave 9 |
 | `internal/orchestrator/` | orchestrator | Executor路由、PluginHost、ANTIPATTERNS |
-| `internal/strategy_techniques/` | strategy + strategy_ranker + strategy_validator + strategy_techniques | 策略集群（選擇/排名/驗證/心法） |
+| `internal/strategy_techniques/` | strategy + strategy_ranker + strategy_techniques | 策略集群（選擇/排名/心法） |
 | `admin_web/` | admin_web | 行事曆組件、參考檔案 |
 | `client_web/` | client_web | API field contract、shared_web fallback |
 | `cmd/experimental/` | cmd/experimental | dry-run禁令、dummy mode、live broker |
@@ -138,8 +137,7 @@
 | 升級 | `capitalflow` | X → E（12 個 runtime 檔引用，Wave 11 shipped） |
 | 升級 | `forecast` | X → E（Phase 3.5 M4 shipped，被 orchestrator 引用） |
 | 升級 | `retail` | X → E（進入 portfolio factor bridge + monitoring API） |
-| 升級 | `strategy_ranker` | X → E（Wave 11 shipped，完整 runtime 整合） |
-| 升級 | `strategy_validator` | X → E（Wave 11 shipped，上游已升級） |
+| 升級 | `strategy_ranker` | X → E（Wave 11 shipped，驗證與排名邏輯合併於此包） |
 | 升級 | `stress` | X → E（進入 orchestrator SystemCore live risk evaluation） |
 | 封存 | `swarm` | X → A（目錄已刪除，PR #963） |
 | 新增 | `sectorallocation` | 加入 X-tier（產業權重單一權威，多因子引擎） |
