@@ -33,12 +33,20 @@ func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 
 	params := map[string]string{
 		"interval": "1d",
-		"range":    "1mo",
+		"range":    "3mo", // P1 B03: extended from 1mo to share cache with tw_vol
 	}
 
-	body, err := p.session.fetchWithFallback(ctx, "^TWII", params)
-	if err != nil {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: %w", err)
+	// Check shared cache first (P1 B03: avoids duplicate ^TWII fetch)
+	var body []byte
+	if cached := twiiCache.get(params["interval"], params["range"]); cached != nil {
+		body = cached
+	} else {
+		var err error
+		body, err = p.session.fetchWithFallback(ctx, "^TWII", params)
+		if err != nil {
+			return MacroDataSnapshot{}, fmt.Errorf("taiex_index: %w", err)
+		}
+		twiiCache.set(body, params["interval"], params["range"])
 	}
 
 	chartResp, err := UnmarshalYahooChart(body)

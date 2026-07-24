@@ -43,11 +43,18 @@ func (p *DRAMSpotPriceProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 		"range":    "2d",
 	}
 
-	body, err := p.session.fetchWithFallback(ctx, "MU", params)
-	if err != nil {
-		return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: %w", err)
+	// Check shared US market cache (P1 B04)
+	var body []byte
+	if cached := usCache.get("MU"); cached != nil {
+		body = cached
+	} else {
+		var err error
+		body, err = p.session.fetchWithFallback(ctx, "MU", params)
+		if err != nil {
+			return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: %w", err)
+		}
+		usCache.set("MU", body)
 	}
-
 	chartResp, err := UnmarshalYahooChart(body)
 	if err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: %w", err)
