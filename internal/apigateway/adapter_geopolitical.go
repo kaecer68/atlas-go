@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"time"
 
@@ -28,12 +29,15 @@ func NewGeopoliticalChannelAdapter(workDir string) *GeopoliticalChannelAdapter {
 		workDir:        workDir,
 		limiter:        rate.NewLimiter(rate.Every(time.Minute), 1),
 		globalProvider: geopolitical.NewCompositeGeopoliticalProvider(geopolitical.NewRSSGeopoliticalProvider(), geopolitical.NewGDELTGeopoliticalProvider()),
-		taiwanProvider: geopolitical.NewCompositeTaiwanGeopoliticalProvider(geopolitical.NewTaiwanRSSGeopoliticalProvider()),
+		taiwanProvider: geopolitical.NewCompositeTaiwanGeopoliticalProvider(
+			geopolitical.NewTaiwanRSSGeopoliticalProvider(),
+		),
 	}
 }
 
 // Fetch retrieves global and Taiwan geopolitical risk scores.
 func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	globalStore := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical))
 	taiwanStore := geopolitical.NewGeopoliticalStore(filepath.Join(a.workDir, constants.StateGeopolitical+"/taiwan"))
 
@@ -79,6 +83,7 @@ func (a *GeopoliticalChannelAdapter) Fetch(ctx context.Context) (*FetchResult, e
 		Data: data,
 		Meta: FetchMetadata{
 			ChannelID:          "geopolitical",
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},
@@ -117,5 +122,15 @@ func (a *GeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 		APIFormat:  "Composite",
 		Path:       "geopolitical",
 		HasLimiter: true,
+	}
+}
+
+// SetHTTPClient sets a custom HTTP client for all underlying providers.
+func (a *GeopoliticalChannelAdapter) SetHTTPClient(client *http.Client) {
+	if a.globalProvider != nil {
+		a.globalProvider.SetHTTPClient(client)
+	}
+	if a.taiwanProvider != nil {
+		a.taiwanProvider.SetHTTPClient(client)
 	}
 }

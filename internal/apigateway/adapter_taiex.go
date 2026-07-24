@@ -39,8 +39,10 @@ func (a *TAIEXIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		return nil, fmt.Errorf("taiex index marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "taiex_index", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "taiex_index",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

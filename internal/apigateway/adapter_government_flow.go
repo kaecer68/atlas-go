@@ -17,11 +17,16 @@ import (
 // broker-branch aggregation channel — BK-13 — is built).
 type GovernmentFlowAdapter struct {
 	provider *marketdata.GovernmentFlowProvider
+	limiter  *rate.Limiter
 }
 
 // NewGovernmentFlowAdapter creates a new adapter.
+// File-backed provider — uses rate.Inf limiter (no upstream HTTP) per Constitution Art.2.
 func NewGovernmentFlowAdapter(provider *marketdata.GovernmentFlowProvider) *GovernmentFlowAdapter {
-	return &GovernmentFlowAdapter{provider: provider}
+	return &GovernmentFlowAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(rate.Inf, 0),
+	}
 }
 
 type governmentFlowData struct {
@@ -49,9 +54,10 @@ func (a *GovernmentFlowAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 	res := &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
-			ChannelID: "government_flow",
-			LatencyMs: time.Since(start).Milliseconds(),
-			Timestamp: time.Now(),
+			ChannelID:          "government_flow",
+			LatencyMs:          time.Since(start).Milliseconds(),
+			RateLimitRemaining: int(a.limiter.Tokens()),
+			Timestamp:          time.Now(),
 		},
 	}
 	if !ok {
@@ -69,7 +75,7 @@ func (a *GovernmentFlowAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	status := "ok"
@@ -80,21 +86,22 @@ func (a *GovernmentFlowAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 	return HealthStatus{
 		Status:    status,
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+		CheckType: "readiness",
 	}, nil
 }
 
-// RateLimit returns nil — file-backed provider has no upstream limiter.
-func (a *GovernmentFlowAdapter) RateLimit() *rate.Limiter { return nil }
+// RateLimit returns the limiter for file-read rate control.
+func (a *GovernmentFlowAdapter) RateLimit() *rate.Limiter { return a.limiter }
 
 // Metadata returns static channel metadata for 官股行庫 readings.
 func (a *GovernmentFlowAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{
 		ChannelID:  "government_flow",
 		Country:    "台灣",
-		Platform:   "operator-imported state files",
-		APIFormat:  "filesystem JSON",
-		Path:       "data/state/government_flow/YYYYMMDD.json",
-		HasLimiter: false,
+		Platform:   "TWSE",
+		APIFormat:  "operator-imported",
+		Path:       "data/state/government_flow/",
+		Storage:    "directory",
+		HasLimiter: true,
 	}
 }

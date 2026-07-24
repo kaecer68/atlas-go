@@ -38,7 +38,8 @@ func (a *SectorDataChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
 		ChannelID: "sector_data", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 
@@ -49,13 +50,13 @@ func (a *SectorDataChannelAdapter) HealthCheck(ctx context.Context) (HealthStatu
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	return HealthStatus{
 		Status:    "ok",
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+		CheckType: "readiness",
 	}, nil
 }
 

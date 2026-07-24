@@ -26,8 +26,8 @@ route:
       repeat_interval: 12h
 
     - receiver: atlas-webhook
-      match:
-        service: atlas
+      match_re:
+        service: atlas.*
       repeat_interval: 1m
 
 receivers:
@@ -81,7 +81,7 @@ receivers:
 
   - name: atlas-webhook
     webhook_configs:
-      - url: 'http://localhost:18080/api/v1/alerts'
+      - url: 'http://atlas:18080/api/v1/alerts'
         send_resolved: true
 
 inhibit_rules:

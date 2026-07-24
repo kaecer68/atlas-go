@@ -165,6 +165,22 @@ func (g *Gateway) ChannelIDs() []string {
 	return channelIDs()
 }
 
+// channelIDs returns the canonical list of all 37 known channels.
+// This is the static registry used by:
+//   - NewGateway (CircuitBreakerManager initialization)
+//   - UnifiedHealthStore.CheckHealth (full health scan)
+//   - Gateway.Summary / ChannelIDs (API responses)
+//
+// NOTE: At runtime, RegisterChannelAdapters may skip channels whose
+// API keys are not configured (fugle, fubon, finmind, tej) or whose
+// feature flags are disabled (YahooEnabled=false skips 10 channels,
+// janusEngine=nil skips janus_regime). The static 37-count list is
+// intentional — it ensures circuit breakers and health slots exist
+// even when a channel is temporarily unavailable, and it keeps the
+// dashboard aware of channels that exist but are not yet live.
+//
+// Actual runtime registration count is typically 22-33 depending on
+// environment configuration. See register_adapters.go for conditions.
 func channelIDs() []string {
 	return []string{
 		"us_yahoo",
@@ -190,13 +206,16 @@ func channelIDs() []string {
 		"bdi",
 		"taifex_daily",
 		"taifex_institutional",
+		"tdcc_equity_dispersion",
 		"twse_oddlot",
+		"twse_sbl",
 		"government_flow",
 		"twse_etf",
 		"us_spx",
 		"us_ndx",
 		"us_dji",
 		"taiex_index",
+		"tw_vol",
 		"us_nvda",
 		"us_aapl",
 		"us_msft",

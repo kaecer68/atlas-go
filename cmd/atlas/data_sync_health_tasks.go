@@ -83,6 +83,50 @@ func registerDataSyncAndHealthTasks(
 	})
 	log.Printf("[Gateway] registered us_market_refresh background task (5m interval)")
 
+	// P2 C05: Register auto-fetch tasks for channels without periodic refresh.
+	// These channels were identified in the 2026-07-25 architecture audit as
+	// lacking automated data ingestion.
+
+	// taiex_index — Taiwan weighted index (daily, after TW market close ~14:00 UTC+8).
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_taiex_index",
+		ChannelID: "taiex_index",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task:      gatewayChannelFetch(gateway, "taiex_index"),
+	})
+	log.Printf("[Gateway] registered auto_taiex_index background task (1h interval)")
+
+	// exchange_rate — USD/TWD and other FX rates (1h, low volatility).
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_exchange_rate",
+		ChannelID: "exchange_rate",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task:      gatewayChannelFetch(gateway, "exchange_rate"),
+	})
+	log.Printf("[Gateway] registered auto_exchange_rate background task (1h interval)")
+
+	// geopolitical_taiwan — Taiwan news RSS (6h, same as geopolitical).
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_geopolitical_taiwan",
+		ChannelID: "geopolitical_taiwan",
+		Interval:  6 * time.Hour,
+		Enabled:   true,
+		Task:      gatewayChannelFetch(gateway, "geopolitical_taiwan"),
+	})
+	log.Printf("[Gateway] registered auto_geopolitical_taiwan background task (6h interval)")
+
+	// taifex_daily — Taiwan futures market data (1h, after market hours).
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_taifex_daily",
+		ChannelID: "taifex_daily",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task:      gatewayChannelFetch(gateway, "taifex_daily"),
+	})
+	log.Printf("[Gateway] registered auto_taifex_daily background task (1h interval)")
+
 	// Register seasonal_calibration background task. Guard: skip silently if
 	// the calibrate-seasonal binary is not co-located with the current binary
 	// (production deploys without it stay clean; no live-trading impact).
@@ -266,4 +310,14 @@ func registerDataSyncAndHealthTasks(
 		},
 	})
 	log.Printf("[Gateway] registered sa11_dark_launch_check background task (24h interval)")
+}
+
+// gatewayChannelFetch returns a BackgroundTaskFunc that calls gateway.Fetch
+// for the given channel. Used by P2 C05 auto-fetch tasks to avoid repeating
+// the same closure pattern for each channel.
+func gatewayChannelFetch(g *apigateway.Gateway, channelID string) apigateway.BackgroundTaskFunc {
+	return func(ctx context.Context) error {
+		_, err := g.Fetch(ctx, channelID)
+		return err
+	}
 }

@@ -37,8 +37,10 @@ func (a *SOXIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error
 		return nil, fmt.Errorf("sox index marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "sox_index", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "sox_index",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

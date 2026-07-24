@@ -39,8 +39,10 @@ func (a *DayTradingChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		return nil, fmt.Errorf("day trading marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "day_trading", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "day_trading",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

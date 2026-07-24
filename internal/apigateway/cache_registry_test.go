@@ -428,8 +428,8 @@ func TestFetchResult_JSONMarshal_OmitsEmptyFallbackAndLastError(t *testing.T) {
 
 func TestChannelIDs(t *testing.T) {
 	ids := channelIDs()
-	if len(ids) != 34 {
-		t.Fatalf("expected 34 channel IDs, got %d", len(ids))
+	if len(ids) != 37 {
+		t.Fatalf("expected 37 channel IDs, got %d", len(ids))
 	}
 
 	expected := []string{
@@ -438,9 +438,10 @@ func TestChannelIDs(t *testing.T) {
 		"export_statistics", "tsmc_revenue", "geopolitical_taiwan",
 		"janus_regime", "tej", "exchange_rate", "sox_index",
 		"dram_spot_price", "twse_sector_index", "sector_data", "day_trading",
-		"twse_etf", "taifex_daily", "taifex_institutional", "twse_oddlot",
-		"government_flow", "bdi",
-		"us_spx", "us_ndx", "us_dji", "taiex_index", "us_nvda", "us_aapl", "us_msft", "tsm_adr",
+		"twse_etf", "taifex_daily", "taifex_institutional", "tdcc_equity_dispersion",
+		"twse_oddlot", "twse_sbl", "government_flow", "bdi",
+		"us_spx", "us_ndx", "us_dji", "taiex_index", "tw_vol",
+		"us_nvda", "us_aapl", "us_msft", "tsm_adr",
 	}
 	seen := make(map[string]bool)
 	for _, id := range ids {

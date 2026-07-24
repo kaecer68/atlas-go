@@ -35,8 +35,8 @@ func yesterday() string {
 	return t.Format("2006-01-02")
 }
 
-// Fetch retrieves a quote for 2330 (台積電) from yesterday as a sample.
 func (a *FinMindChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	quote, err := a.client.GetStockPrice(ctx, "2330", yesterday())
 	if err != nil {
 		return nil, fmt.Errorf("finmind fetch: %w", err)
@@ -51,6 +51,7 @@ func (a *FinMindChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		Data: data,
 		Meta: FetchMetadata{
 			ChannelID:          "finmind",
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},

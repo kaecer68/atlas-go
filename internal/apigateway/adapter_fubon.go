@@ -25,8 +25,8 @@ func NewFubonChannelAdapter(client *marketdata.FubonClient) *FubonChannelAdapter
 	}
 }
 
-// Fetch retrieves quotes for 2330 (台積電) and 0050 as representative samples.
 func (a *FubonChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	if !a.client.IsHealthy() {
 		return nil, fmt.Errorf("fubon proxy: health probe reports unhealthy, skipping fetch")
 	}
@@ -44,6 +44,7 @@ func (a *FubonChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 		Data: data,
 		Meta: FetchMetadata{
 			ChannelID:          "fubon",
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
 		},

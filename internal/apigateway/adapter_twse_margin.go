@@ -60,13 +60,13 @@ func (a *TWSEMarginChannelAdapter) HealthCheck(ctx context.Context) (HealthStatu
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	return HealthStatus{
 		Status:    "ok",
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+		CheckType: "readiness",
 	}, nil
 }
 

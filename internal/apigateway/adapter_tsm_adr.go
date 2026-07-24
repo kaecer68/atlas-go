@@ -41,8 +41,10 @@ func (a *TSMADRChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) 
 		return nil, fmt.Errorf("tsm_adr marshal: %w", err)
 	}
 	return &FetchResult{Data: data, Meta: FetchMetadata{
-		ChannelID: "tsm_adr", LatencyMs: time.Since(start).Milliseconds(),
-		Timestamp: time.Now(),
+		ChannelID:          "tsm_adr",
+		LatencyMs:          time.Since(start).Milliseconds(),
+		RateLimitRemaining: int(a.limiter.Tokens()),
+		Timestamp:          time.Now(),
 	}}, nil
 }
 

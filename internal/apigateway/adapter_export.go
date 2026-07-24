@@ -27,6 +27,7 @@ func NewExportStatisticsChannelAdapter(provider *marketdata.ExportStatisticsProv
 
 // Fetch retrieves the latest export statistics snapshot.
 func (a *ExportStatisticsChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
+	start := time.Now()
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("export fetch: %w", err)
@@ -41,6 +42,7 @@ func (a *ExportStatisticsChannelAdapter) Fetch(ctx context.Context) (*FetchResul
 			ChannelID:          "export_statistics",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
+			LatencyMs:          time.Since(start).Milliseconds(),
 		},
 	}, nil
 }
@@ -53,13 +55,13 @@ func (a *ExportStatisticsChannelAdapter) HealthCheck(ctx context.Context) (Healt
 			Status:    "error",
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "liveness",
+			CheckType: "readiness",
 		}, err
 	}
 	return HealthStatus{
 		Status:    "ok",
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		CheckType: "liveness",
+		CheckType: "readiness",
 	}, nil
 }
 
