@@ -259,7 +259,7 @@ FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"`
 | 原始來源 | TWSE `bsr.twse.com.tw` — 券商分點買賣超日報表（公開資料，非 API） |
 | 取得方式 | HTTP GET → HTML parse / CSV fallback |
 | 頻率 | 每日 T+1（盤後公布，次日排程抓取） |
-| 速率限制 | **Gateway channel：無**（`adapter_government_flow.go:87` `RateLimit() *rate.Limiter { return nil }`，`HasLimiter=false`；檔案型 provider 不發出 HTTP）。**TWSE 網頁爬蟲：2 秒/請求**（由 `GovernmentBrokerAggregator` 端自訂，影響 Producer 排程，非 gateway 層 limiter） |
+| 速率限制 | **Gateway channel：`rate.Inf`**（`adapter_government_flow.go` `RateLimit()` 回傳 `rate.NewLimiter(rate.Inf, 0)`，`HasLimiter=true`；檔案型 provider 不發出 HTTP，但符合 Constitution Art.2 強制限流）。**TWSE 網頁爬蟲：2 秒/請求**（由 `GovernmentBrokerAggregator` 端自訂，影響 Producer 排程，非 gateway 層 limiter） |
 | 範圍 | TW50 成份股（50 檔權值股） |
 | Channel ID | `government_flow` |
 | Provider | `GovernmentFlowProvider`（唯讀消費端） |
