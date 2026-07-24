@@ -757,8 +757,13 @@ func (a *DashboardAPI) SetContext(ctx context.Context) {
 // nil-default behavior (see CL-3 A03 docs/manifests/2026-07-20-cl3-regime-history.md).
 func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *DashboardAPI {
 	a.historicalStore = hs
+	// E04: warm up stock quotes from Fugle for technical indicators.
+	go a.warmupQuotes()
 	return a
 }
+
+// Mirrors narrative/calibration_regime.go:classifyRegime.
+
 
 // SetQuoteStore injects the QuoteStore for stock quote warmup.
 func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
