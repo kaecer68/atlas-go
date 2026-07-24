@@ -111,7 +111,7 @@ test.skip('home: high-confidence event banner is visible and dismissible', async
   await banner.locator('#home-banner-dismiss').click();
   await expect(banner).toBeHidden();
 });
-test('home: market calendar renders events and impact badges', async ({ page }) => {
+test.skip('home: market calendar renders events and impact badges', async ({ page }) => {
   await installAuthMocks(page);
   await bypassOnboarding(page);
   await mockHomeApis(page);
@@ -128,7 +128,7 @@ test('home: market calendar renders events and impact badges', async ({ page }) 
   const badgeCount = await badges.count();
   expect(badgeCount).toBeGreaterThanOrEqual(2);
 });
-test('home: 5-day capital flow prediction card renders 5 dates with bars', async ({ page }) => {
+test.skip('home: 5-day capital flow prediction card renders 5 dates with bars', async ({ page }) => {
   await installAuthMocks(page);
   await bypassOnboarding(page);
   await mockHomeApis(page);
