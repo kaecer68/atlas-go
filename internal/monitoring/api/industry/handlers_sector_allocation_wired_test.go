@@ -58,3 +58,28 @@ func TestHandleSectorAllocationPlan_SnapshotWiredReturns200(t *testing.T) {
 		t.Error("target weights must be non-empty")
 	}
 }
+
+// TestHandleSectorAllocationPlan_WiredNoSnapshotReturns200 verifies that when a
+// SnapshotReader is wired but returns nil (no simulation session has closed yet),
+// the handler returns 200 with an empty plan + fallback_reason, not 503.
+func TestHandleSectorAllocationPlan_WiredNoSnapshotReturns200(t *testing.T) {
+	h := setupIndustryHandlers()
+
+	// Wire the reader but have it return nil — cold-start scenario.
+	h.Svc.WithSnapshotReader(&mockSnapshotReader{snap: nil})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sector-allocation-plan", nil)
+	status, body := h.HandleSectorAllocationPlan(req)
+
+	if status != http.StatusOK {
+		t.Fatalf("expected 200 (reader wired, no snapshot yet), got %d: %v", status, body)
+	}
+
+	resp, ok := body.(sectorallocation.SectorAllocationSnapshot)
+	if !ok {
+		t.Fatalf("expected SectorAllocationSnapshot, got %T", body)
+	}
+	if resp.FallbackReason != "no_simulation_session" {
+		t.Errorf("expected fallback_reason=no_simulation_session, got %q", resp.FallbackReason)
+	}
+}

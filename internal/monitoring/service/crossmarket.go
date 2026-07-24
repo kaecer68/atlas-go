@@ -209,6 +209,16 @@ func (s *CrossMarketService) UpdateCorrelation(spxReturn, soxReturn float64) {
 	s.rollingSPXTWSE.Update(spxReturn, soxReturn)
 }
 
+// SeedSpXTWSE pre-fills the legacy SPX→SOX correlation engine with historical
+// daily return pairs. Call before any UpdateCorrelation to eliminate the
+// cold-start fallback period (normally 20 trading days).
+func (s *CrossMarketService) SeedSpXTWSE(spxReturns, soxReturns []float64) {
+	if s == nil || s.rollingSPXTWSE == nil {
+		return
+	}
+	s.rollingSPXTWSE.SeedWith(spxReturns, soxReturns)
+}
+
 // getCachedSnapshot returns the cached snapshot + its degraded-status
 // metadata. Concurrent callers that arrive during a stale cache each
 // fetch independently (no coalescing), but subsequent requests within

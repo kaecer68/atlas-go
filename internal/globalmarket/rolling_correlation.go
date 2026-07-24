@@ -32,6 +32,21 @@ func NewRollingCorrelation(window int) *RollingCorrelation {
 	}
 }
 
+// SeedWith pre-fills the correlation buffer with historical paired returns.
+// Each pair (xs[i], ys[i]) is pushed into the ring buffer as if Update had
+// been called sequentially, oldest first. The buffer wraps if len(xs) > window.
+// If the arrays are unequal length, only min(len(xs), len(ys)) pairs are used.
+// After seeding, the caller can call Update normally for live data.
+func (rc *RollingCorrelation) SeedWith(xs, ys []float64) {
+	if len(xs) == 0 || len(ys) == 0 {
+		return
+	}
+	n := min(len(xs), len(ys))
+	for i := range n {
+		rc.Update(xs[i], ys[i])
+	}
+}
+
 // Update pushes a new observation pair and recomputes the correlation.
 // The isFallback and fallbackReason fields are set so callers can
 // distinguish real Pearson rho from sentinel values without reverse-

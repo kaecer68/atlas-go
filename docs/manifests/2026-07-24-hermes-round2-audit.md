@@ -57,19 +57,18 @@ if data.Sector == "" {
 
 ---
 
-### E-05：crossmarket correlation is_fallback（🟡 cold-start）
+### E-05：crossmarket correlation is_fallback（🟡 cold-start → 🔧 seed-ready）
 
 **程式碼位置**：`internal/globalmarket/rolling_correlation.go:49-91`
 
 **真相**：`RollingCorrelation.Update()` 在以下情況觸發 fallback：
-1. `n < 3` → `insufficient_samples`（目前 8 筆，已通過）
+1. `n < 3` → `insufficient_samples`
 2. `denX <= 0 || denY <= 0` → `zero_variance`（台股/美股 return 全為 0）
 3. `isNaN(rho) || isInf(rho)` → `non_finite`
 
-目前 `window_size=20`，`observations=5~8`。`zero_variance` 最常發生在台股週末+美股假日的 misalignment 窗口。隨著數據累積超過 20 筆，此問題會自動消失。若要加速，可 seed `RollingCorrelation` 引擎從 historical CSV 預填。
+目前 `window_size=20`，`observations=5~8`。隨著數據累積超過 20 筆，此問題會自動消失。
 
-**依賴**：需要 ≥20 個交易日的 pair data。
-
+**已實作**：`RollingCorrelation.SeedWith(xs, ys)` 方法（2026-07-24）+ `CrossMarketService.SeedSpXTWSE()`。初始化時傳入 TWSE/SPX 歷史日回報即可跳過冷啟動。歷史數據可從 Yahoo Finance 或 TWSE OpenAPI 拉取。
 ---
 
 ### E-06：industry_sector_list/lookup 無 HTTP route（🔵 設計）
@@ -94,25 +93,15 @@ if data.Sector == "" {
 
 ---
 
-### E-09：regime history 只有 3 天 7/21-7/23（🟡 歷史真空）
+### E-09：regime history 只有 3 天 7/21-7/23（🟡 歷史真空 → ✅ 已自動解決）
 
 **程式碼位置**：
 - Schema: `internal/ledger/sqlite_core.go:151` — `regime_history(date TEXT PRIMARY KEY, ...)`
-- Upsert: `internal/ledger/historical_store.go:157-180` — `ON CONFLICT(date) DO UPDATE`（每日一筆，最後寫入者勝出）
-- Backfill: `cmd/atlas-stage4-loader/main.go:380` — 從 `regime_history_90d.jsonl` 寫入 4/01-6/29（90 筆）
-- Live writer: PR #1248（commit `cc2bea86`, 2026-07-21 merge）— `DashboardAPI.applyMacroUpdate → persistRegimeHistory`
+- Upsert: `internal/ledger/historical_store.go:157-180` — `ON CONFLICT(date) DO UPDATE`
+- Backfill: `cmd/atlas-stage4-loader/main.go:380` — 從 `regime_history_90d.jsonl` 寫入 4/01-6/29
+- Live writer: PR #1248 — `DashboardAPI.applyMacroUpdate → persistRegimeHistory`（2026-07-21 merge）
 
-**真相**：6/30-7/20 是 **backfill 結束點與 live writer 開始點之間的真空**。backfill 只覆蓋到 6/29（session 目錄只有到該日），live pipeline 的寫入邏輯直到 PR #1248 才加進來。這不是程式碼 bug — pipeline 現在正常運行，只是中間 20 天沒有生產者。可以 backfill 這段真空期。
-
----
-
-### E-10：stress history 早期為 synthetic（🟡 歷史真空）
-
-**程式碼位置**：
-- `internal/narrative/taiwan_stress_index.go:29` — `Source string \`json:"source,omitempty"\``（"macro_ingest" / "backfill" / "synthetic"）
-- `internal/ledger/sqlite_core.go:265` — `ALTER TABLE regime_history ADD COLUMN source TEXT DEFAULT 'synthetic'`
-
-**真相**：PR #1248 才加了 `source` 欄。DEFAULT `'synthetic'` 對所有已存在的 rows 生效。6/24-6/29 及早期 backfill rows 因此標記為 `synthetic`。7/20 後 live macro_ingest 寫入的 rows 才是 `source=macro_ingest`。**不是資料造假** — 只是分類標籤區分資料來源。synthetic 代表「生成自 stage-4 loader 的 session summary」，不是「亂數產生」。
+**真相**：6/30-7/20 是 backfill 結束點與 live writer 開始點之間的真空。**目前已自動解決** — `snapshot_backfill` 程序已填補此真空，SQLite 驗證有從 6/16 起的連續 regime 資料（端午節 6/24-25 休市除外）。
 
 ---
 
@@ -136,19 +125,19 @@ if data.Sector == "" {
 
 ## 優先序 Manifest
 
-| 優先級 | ID | 行動 | 依賴 | 預估 |
-|---|---|---|---|---|
-| **P0** | E-01 | 修正 `GetLatestSectorAllocation` 的錯誤訊息：區分「reader nil」vs「no snapshot yet」，或回 200 + `{}` 降級 | 無（sectorallocation/policy.go + service/industry.go） | 30 min |
-| **P1** | E-09 | backfill regime_history 6/30-7/20 真空期 | TWSE 歷史 data source（calendar_dates.csv 或 Fugle）| 2 hr |
-| **P1** | E-05 | seed `RollingCorrelation` 引擎：從 replay CSV 預填 20+ 筆 historical returns | replay data pipeline (TWSE + SPX 日線) | 2 hr |
-| **P2** | E-10 | API docs 加上 `source` 欄位說明（synthetic vs macro_ingest vs backfill 的語意） | 無（文件） | 15 min |
-| **P2** | E-06 | 評估是否加 HTTP proxy route 給 industry_sector_lookup | 無（文件 + 設計） | 30 min |
-| **P2** | E-07 | 跑 `hermes mcp list` 對齊 README/memory/實際值 | atlas-mcp server 在線 | 10 min |
-| **P3** | E-11 | `CausalChain` 加 `detected_at` + bundle response 暴露 per-chain 時間戳 | 無（API schema） | 30 min |
-| **N/A** | E-02 | ✅ operator 已修復 | — | — |
-| **N/A** | E-03 | 🟢 burn_in 設計（再等 38 天）| — | — |
-| **N/A** | E-08 | 🔵 設計選擇（免 auth 公開 endpoint）| — | — |
-| **N/A** | E-12 | 🟡 執行一次 simulation 即解決 | — | — |
+| 優先級 | ID | 行動 | 狀態 |
+|---|---|---|---|
+| **P0** | E-01 | 修正 `GetLatestSectorAllocation` 區分「reader nil」vs「no snapshot」+ handler 回 200 | ✅ 已修復 (2026-07-24) |
+| **P1** | E-05 | `RollingCorrelation.SeedWith()` + `CrossMarketService.SeedSpXTWSE()` 供歷史預填 | ✅ 已實作 (2026-07-24) |
+| **P1** | E-09 | regime_history 6/30-7/20 真空 | ✅ 已自動解決 (snapshot_backfill) |
+| **P2** | E-10 | API docs 加上 `source` 欄位說明 | pending |
+| **P2** | E-06 | 評估是否加 HTTP proxy route 給 industry_sector_lookup | pending |
+| **P2** | E-07 | 跑 `hermes mcp list` 對齊 README/memory/實際值 | pending |
+| **P3** | E-11 | `CausalChain` 加 `detected_at` + bundle response 暴露 | pending |
+| N/A | E-02 | ✅ operator 已修復 fundamentals.json | — |
+| N/A | E-03 | 🟢 burn_in 設計（90d MinSamples）| — |
+| N/A | E-08 | 🔵 設計選擇（public path whitelist）| — |
+| N/A | E-12 | 🟡 執行一次 simulation 即解決 | — |
 
 ## 架構拓撲圖
 

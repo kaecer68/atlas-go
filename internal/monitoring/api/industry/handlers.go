@@ -494,10 +494,11 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 		}
 	}
 	if snap == nil {
-		return http.StatusServiceUnavailable, map[string]any{
-			"error":           "snapshot_unavailable",
-			"message":         "no sector allocation snapshot available",
-			"fallback_reason": "snapshot_unavailable",
+		// No simulation session has closed yet — this is expected in
+		// staging/dev with no replay data. Return an empty plan with
+		// fallback_reason so the frontend can show a meaningful state.
+		return http.StatusOK, sectorallocation.SectorAllocationSnapshot{
+			FallbackReason: "no_simulation_session",
 		}
 	}
 	return http.StatusOK, snap
