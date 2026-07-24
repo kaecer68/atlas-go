@@ -110,7 +110,7 @@ type DashboardAPI struct {
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
 	historicalStore            ledger.HistoricalStore
-	quoteStore                ledger.QuoteStore
+	quoteStore                 ledger.QuoteStore
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -757,85 +757,81 @@ func (a *DashboardAPI) SetContext(ctx context.Context) {
 // nil-default behavior (see CL-3 A03 docs/manifests/2026-07-20-cl3-regime-history.md).
 func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *DashboardAPI {
 	a.historicalStore = hs
-	// E09: warm up regime_history from persisted macro snapshots so the
-	// API returns data immediately after a cold start / rebuild instead
-	// of waiting for live macro_ingest ticks to accumulate.
-	go a.warmupRegimeHistory()
-	// E04: warm up stock quotes from Fugle for technical indicators.
-	go a.warmupQuotes()
 	return a
 }
 
-// warmupRegimeHistory reads daily macro snapshots from disk, derives a
-// regime from the VIX value, and upserts into regime_history. It is
-// called once on startup via WithHistoricalStore and is safe to run
-// concurrently with live macro_ingest (ON CONFLICT DO UPDATE).
-func (a *DashboardAPI) warmupRegimeHistory() {
-	if a.historicalStore == nil {
+// SetQuoteStore injects the QuoteStore for stock quote warmup.
+func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
+	a.quoteStore = qs
+}
+
+// warmupQuotes fetches historical daily bars from Fugle in a single
+// batch and inserts them into the quotes table. Called once on startup
+// via WithHistoricalStore to ensure technical indicators work immediately.
+func (a *DashboardAPI) warmupQuotes() {
+	if a.quoteStore == nil {
+		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "quote store nil")
 		return
 	}
-	snapshotDir := filepath.Join(a.workDir, "data", "state", "macro")
-	entries, err := os.ReadDir(snapshotDir)
+	fugleKey := os.Getenv("FUGLE_API_KEY")
+	if fugleKey == "" {
+		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FUGLE_API_KEY not set")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	url := "https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/2330?from=2026-01-01&to=2026-07-24&fields=open,high,low,close,volume"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		logging.Warn("dashboard_api", "regime_warmup_readdir_failed", logging.Err(err))
+		logging.Warn("dashboard_api", "quote_warmup_req_failed", logging.Err(err))
 		return
 	}
-	ctx := context.Background()
-	count := 0
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		if entry.Name() == "latest.json" || entry.Name() == "previous.json" || entry.Name() == "_metadata.json" {
-			continue
-		}
-		dateStr := strings.TrimSuffix(entry.Name(), ".json")
-		data, err := os.ReadFile(filepath.Join(snapshotDir, entry.Name()))
+	req.Header.Set("X-API-KEY", fugleKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_fetch_failed", logging.Err(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			Date   string  `json:"date"`
+			Open   float64 `json:"open"`
+			High   float64 `json:"high"`
+			Low    float64 `json:"low"`
+			Close  float64 `json:"close"`
+			Volume int64   `json:"volume"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_decode_failed", logging.Err(err))
+		return
+	}
+
+	bars := make([]domain.DailyBar, 0, len(result.Data))
+	for _, bar := range result.Data {
+		d, err := time.Parse("2006-01-02", bar.Date)
 		if err != nil {
 			continue
 		}
-		var snap marketdata.MacroDataSnapshot
-		if err := json.Unmarshal(data, &snap); err != nil {
-			continue
-		}
-		vix := snap.VIX.Value
-		if vix == 0 {
-			continue
-		}
-		regime := narrative.NormalizeRegime(classifyRegimeFromVIX(vix))
-		row := ledger.RegimeRow{
-			Date:            dateStr,
-			Regime:          regime,
-			Source:          "snapshot_backfill",
-			RecordedAt:      time.Unix(snap.RecordedAt, 0).UTC(),
-			CapturedAt:      time.Now().UTC(),
-			IsSynthetic:     0,
-			SourceSessionID: "warmup:" + dateStr,
-		}
-		if err := a.historicalStore.UpsertRegime(ctx, row); err != nil {
-			logging.Warn("dashboard_api", "regime_warmup_upsert_failed",
-				logging.FStr("date", dateStr), logging.Err(err))
-			continue
-		}
-		count++
+		bars = append(bars, domain.DailyBar{
+			Symbol: "2330.TW",
+			Date:   d,
+			Open:   bar.Open,
+			High:   bar.High,
+			Low:    bar.Low,
+			Close:  bar.Close,
+			Volume: bar.Volume,
+			Source: "fugle_warmup",
+		})
 	}
-	logging.Info("dashboard_api", "regime_warmup_complete",
-		"rows", count)
-}
-
-// classifyRegimeFromVIX maps VIX to a human-readable regime string.
-// Mirrors narrative/calibration_regime.go:classifyRegime.
-func classifyRegimeFromVIX(vix float64) string {
-	switch {
-	case vix < 15:
-		return "RISK_ON"
-	case vix < 25:
-		return "NEUTRAL"
-	case vix < 35:
-		return "RISK_OFF"
-	default:
-		return "CRISIS"
+	if err := a.quoteStore.RecordQuotes(bars); err != nil {
+		logging.Warn("dashboard_api", "quote_warmup_insert_failed", logging.Err(err))
+		return
 	}
+	logging.Info("dashboard_api", "quote_warmup_complete", "rows", len(bars))
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
@@ -1574,75 +1570,4 @@ func configHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
-}
-
-// warmupQuotes fetches historical daily bars from Fugle and inserts them
-// into the quotes table. Called once on startup via WithHistoricalStore.
-func (a *DashboardAPI) warmupQuotes() {
-	if a.quoteStore == nil {
-		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "quote store nil")
-		return
-	}
-	fugleKey := os.Getenv("FUGLE_API_KEY")
-	if fugleKey == "" {
-		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FUGLE_API_KEY not set")
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	url := "https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/2330?from=2026-01-01&to=2026-07-24&fields=open,high,low,close,volume"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		logging.Warn("dashboard_api", "quote_warmup_req_failed", logging.Err(err))
-		return
-	}
-	req.Header.Set("X-API-KEY", fugleKey)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logging.Warn("dashboard_api", "quote_warmup_fetch_failed", logging.Err(err))
-		return
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []struct {
-			Date   string  `json:"date"`
-			Open   float64 `json:"open"`
-			High   float64 `json:"high"`
-			Low    float64 `json:"low"`
-			Close  float64 `json:"close"`
-			Volume int64   `json:"volume"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		logging.Warn("dashboard_api", "quote_warmup_decode_failed", logging.Err(err))
-		return
-	}
-	inserted := 0
-	for _, bar := range result.Data {
-		d, err := time.Parse("2006-01-02", bar.Date)
-		if err != nil {
-			continue
-		}
-		if err := a.quoteStore.RecordQuotes([]domain.DailyBar{{
-			Symbol: "2330.TW",
-			Date:   d,
-			Open:   bar.Open,
-			High:   bar.High,
-			Low:    bar.Low,
-			Close:  bar.Close,
-			Volume: bar.Volume,
-			Source: "fugle_warmup",
-		}}); err != nil {
-			continue
-		}
-		inserted++
-	}
-	logging.Info("dashboard_api", "quote_warmup_complete", "rows", inserted)
-}
-
-// SetQuoteStore injects the QuoteStore for stock quote warmup.
-func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
-	a.quoteStore = qs
 }
