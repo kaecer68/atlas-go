@@ -54,10 +54,10 @@ func (a *GovernmentFlowAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 	res := &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{
-			ChannelID: "government_flow",
-			LatencyMs: time.Since(start).Milliseconds(),
+			ChannelID:          "government_flow",
+			LatencyMs:          time.Since(start).Milliseconds(),
 			RateLimitRemaining: int(a.limiter.Tokens()),
-			Timestamp: time.Now(),
+			Timestamp:          time.Now(),
 		},
 	}
 	if !ok {
@@ -86,9 +86,10 @@ func (a *GovernmentFlowAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 	return HealthStatus{
 		Status:    status,
 		UpdatedAt: time.Now().Format(time.RFC3339),
-			CheckType: "readiness",
+		CheckType: "readiness",
 	}, nil
 }
+
 // RateLimit returns the limiter for file-read rate control.
 func (a *GovernmentFlowAdapter) RateLimit() *rate.Limiter { return a.limiter }
 

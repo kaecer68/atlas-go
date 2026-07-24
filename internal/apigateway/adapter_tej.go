@@ -44,7 +44,7 @@ func (a *TEJChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 			ChannelID:          "tej",
 			RateLimitRemaining: int(a.limiter.Tokens()),
 			Timestamp:          time.Now(),
-			LatencyMs:   time.Since(start).Milliseconds(),
+			LatencyMs:          time.Since(start).Milliseconds(),
 		},
 	}, nil
 }

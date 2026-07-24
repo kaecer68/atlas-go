@@ -93,6 +93,7 @@ func (a *TaiwanGeopoliticalChannelAdapter) Metadata() ChannelMetadata {
 		HasLimiter: true,
 	}
 }
+
 // SetHTTPClient sets a custom HTTP client for the underlying provider.
 func (a *TaiwanGeopoliticalChannelAdapter) SetHTTPClient(client *http.Client) {
 	if a.provider != nil {
