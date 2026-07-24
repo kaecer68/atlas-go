@@ -135,14 +135,14 @@ func TestTaiwanStressCalculator_RegimeThresholds(t *testing.T) {
 }
 
 func TestLoadWeightsConfigFromParameters(t *testing.T) {
-	cfg := loadWeightsFromParameters()
+	cfg := LoadWeightsConfig("")
 	if cfg == nil {
 		t.Fatal("expected non-nil config from parameters system")
 	}
-	if !cfg.isValid() {
+	if !cfg.IsValid() {
 		t.Fatal("expected valid config (weights sum to 1.0)")
 	}
-	expected := defaultCalibrationWeights()
+	expected := DefaultCalibrationWeights()
 	if cfg.Weights != expected {
 		t.Fatalf("weights mismatch: got %+v, want %+v", cfg.Weights, expected)
 	}

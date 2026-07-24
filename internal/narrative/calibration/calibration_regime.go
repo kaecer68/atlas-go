@@ -1,4 +1,4 @@
-package narrative
+package calibration
 
 // MarketRegime classifies market conditions based on VIX levels.
 // Each regime corresponds to a range of market volatility that
@@ -44,12 +44,12 @@ func NewRegimeAwareCalibrator() *RegimeAwareCalibrator {
 	}
 }
 
-// classifyRegime determines the market regime from VIX value.
+// ClassifyRegime determines the market regime from VIX value.
 //   - VIX < 15: Bull
 //   - VIX [15, 25): Normal
 //   - VIX [25, 35): Bear
 //   - VIX >= 35: Crisis
-func classifyRegime(vix float64) MarketRegime {
+func ClassifyRegime(vix float64) MarketRegime {
 	if vix < 15 {
 		return RegimeBull
 	}
@@ -67,21 +67,21 @@ func classifyRegime(vix float64) MarketRegime {
 func DefaultRegimeConfig() *RegimeCalibratedConfig {
 	defaultCfg := StressIndexWeightsConfig{
 		Scaling: StressIndexScaling{
-			DXY: stressScaleDXY, US10Y: stressScaleUS10Y,
-			ForeignFlow: stressScaleForeignFlow, VIX: stressScaleVIX,
-			JPY: stressScaleJPY, Geopolitical: stressScaleGeopolitical,
-			Oil: stressScaleOil, Gold: stressScaleGold,
+			DXY: StressScaleDXY, US10Y: StressScaleUS10Y,
+			ForeignFlow: StressScaleForeignFlow, VIX: StressScaleVIX,
+			JPY: StressScaleJPY, Geopolitical: StressScaleGeopolitical,
+			Oil: StressScaleOil, Gold: StressScaleGold,
 		},
 		Weights: StressIndexWeights{
-			DXY: stressWeightDXY, US10Y: stressWeightUS10Y,
-			ForeignFlow: stressWeightForeignFlow, VIX: stressWeightVIX,
-			JPY: stressWeightJPY, Geopolitical: stressWeightGeopolitical,
-			Oil: stressWeightOil, Gold: stressWeightGold,
+			DXY: StressWeightDXY, US10Y: StressWeightUS10Y,
+			ForeignFlow: StressWeightForeignFlow, VIX: StressWeightVIX,
+			JPY: StressWeightJPY, Geopolitical: StressWeightGeopolitical,
+			Oil: StressWeightOil, Gold: StressWeightGold,
 		},
 		Thresholds: StressIndexThresholds{
-			Crisis: stressThresholdCrisis,
-			High:   stressThresholdHigh,
-			Alert:  stressThresholdAlert,
+			Crisis: StressThresholdCrisis,
+			High:   StressThresholdHigh,
+			Alert:  StressThresholdAlert,
 		},
 	}
 	return &RegimeCalibratedConfig{
@@ -286,7 +286,7 @@ func DefaultRegimeCorrelation() RegimeCorrelation {
 }
 
 // GetRegimeCorrelation returns the appropriate correlation coefficient for the
-// current VIX level. The mapping uses the same VIX thresholds as classifyRegime:
+// current VIX level. The mapping uses the same VIX thresholds as ClassifyRegime:
 //
 //	VIX < 15          → Calm (0.375)
 //	VIX [15, 25)      → AIBoom (0.625)
@@ -298,7 +298,7 @@ func DefaultRegimeCorrelation() RegimeCorrelation {
 // NVDA earnings season, TSMC capex announcements).
 func GetRegimeCorrelation(vix float64, aiBoomOverride bool) float64 {
 	rc := DefaultRegimeCorrelation()
-	regime := classifyRegime(vix)
+	regime := ClassifyRegime(vix)
 	switch regime {
 	case RegimeBull:
 		if aiBoomOverride {
@@ -324,7 +324,7 @@ func GetRegimeCorrelation(vix float64, aiBoomOverride bool) float64 {
 func filterByRegime(records []CalibrationRecord, regime MarketRegime) []CalibrationRecord {
 	filtered := make([]CalibrationRecord, 0)
 	for _, r := range records {
-		if classifyRegime(r.Snapshot.VIX.Value) == regime {
+		if ClassifyRegime(r.Snapshot.VIX.Value) == regime {
 			filtered = append(filtered, r)
 		}
 	}

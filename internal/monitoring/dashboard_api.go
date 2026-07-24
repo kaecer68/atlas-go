@@ -763,8 +763,6 @@ func (a *DashboardAPI) WithHistoricalStore(hs ledger.HistoricalStore) *Dashboard
 	return a
 }
 
-// Mirrors narrative/calibration_regime.go:classifyRegime.
-
 // SetQuoteStore injects the QuoteStore for stock quote warmup.
 func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
 	a.quoteStore = qs

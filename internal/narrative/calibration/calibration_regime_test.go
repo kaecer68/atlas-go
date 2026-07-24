@@ -1,4 +1,4 @@
-package narrative
+package calibration
 
 import (
 	"math"
@@ -28,28 +28,28 @@ func syntheticRegimeRecord(vix, foreignNet float64) CalibrationRecord {
 
 func TestClassifyRegime_Bull(t *testing.T) {
 	t.Parallel()
-	if r := classifyRegime(12); r != RegimeBull {
+	if r := ClassifyRegime(12); r != RegimeBull {
 		t.Fatalf("VIX=12: expected bull, got %s", r)
 	}
 }
 
 func TestClassifyRegime_Normal(t *testing.T) {
 	t.Parallel()
-	if r := classifyRegime(20); r != RegimeNormal {
+	if r := ClassifyRegime(20); r != RegimeNormal {
 		t.Fatalf("VIX=20: expected normal, got %s", r)
 	}
 }
 
 func TestClassifyRegime_Bear(t *testing.T) {
 	t.Parallel()
-	if r := classifyRegime(30); r != RegimeBear {
+	if r := ClassifyRegime(30); r != RegimeBear {
 		t.Fatalf("VIX=30: expected bear, got %s", r)
 	}
 }
 
 func TestClassifyRegime_Crisis(t *testing.T) {
 	t.Parallel()
-	if r := classifyRegime(40); r != RegimeCrisis {
+	if r := ClassifyRegime(40); r != RegimeCrisis {
 		t.Fatalf("VIX=40: expected crisis, got %s", r)
 	}
 }
@@ -70,7 +70,7 @@ func TestClassifyRegime_Boundaries(t *testing.T) {
 		{100, RegimeCrisis},
 	}
 	for _, tt := range tests {
-		if r := classifyRegime(tt.vix); r != tt.want {
+		if r := ClassifyRegime(tt.vix); r != tt.want {
 			t.Errorf("VIX=%.1f: expected %s, got %s", tt.vix, tt.want, r)
 		}
 	}
@@ -96,7 +96,7 @@ func TestDefaultRegimeConfig(t *testing.T) {
 		case "crisis":
 			w = cfg.Crisis.Weights
 		}
-		if w.DXY != stressWeightDXY || w.VIX != stressWeightVIX || w.ForeignFlow != stressWeightForeignFlow {
+		if w.DXY != StressWeightDXY || w.VIX != StressWeightVIX || w.ForeignFlow != StressWeightForeignFlow {
 			t.Fatalf("%s: expected compile-time default weights, got DXY=%.3f VIX=%.3f Flow=%.3f",
 				name, w.DXY, w.VIX, w.ForeignFlow)
 		}
@@ -186,7 +186,7 @@ func TestSelectConfig_NilReceiver(t *testing.T) {
 	var cfg *RegimeCalibratedConfig
 	got := cfg.SelectConfig(RegimeBull)
 	// Should return defaults
-	if got.Weights.DXY != stressWeightDXY {
+	if got.Weights.DXY != StressWeightDXY {
 		t.Fatalf("nil receiver should return defaults, got DXY=%.4f", got.Weights.DXY)
 	}
 }
@@ -280,7 +280,7 @@ func TestCalibrateWeightsByRegime_InsufficientRecords(t *testing.T) {
 	}
 
 	// Bull should fall back to defaults (insufficient records)
-	if cfg.Bull.Weights.DXY != stressWeightDXY {
+	if cfg.Bull.Weights.DXY != StressWeightDXY {
 		t.Fatalf("insufficient bull records should use defaults, got DXY=%.4f", cfg.Bull.Weights.DXY)
 	}
 }
@@ -293,7 +293,7 @@ func TestCalibrateWeightsByRegime_EmptyRecords(t *testing.T) {
 		t.Fatal("expected non-nil config for empty records")
 	}
 	// All regimes should be defaults
-	if cfg.Bull.Weights.DXY != stressWeightDXY {
+	if cfg.Bull.Weights.DXY != StressWeightDXY {
 		t.Fatalf("empty records should produce defaults, got DXY=%.4f", cfg.Bull.Weights.DXY)
 	}
 }
