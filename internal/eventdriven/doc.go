@@ -17,7 +17,6 @@
 //   - GET /api/events/prediction — 5-day capital flow prediction
 //   - GET /api/events/calendar — upcoming event list (wraps EventCalendar)
 //
-//
 // Package independence: This package is NOT related to eventbus or eventquality
 // despite the shared \"event\" prefix. eventbus is a pub/sub infrastructure layer;
 // eventquality validates event data quality for industry.EventCalendar.
