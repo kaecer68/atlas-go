@@ -22,7 +22,10 @@ permissions:
 jobs:
   # Frontend build (reusable) — builds admin_web + client_web once,
   # uploads dist artifacts. Downstream jobs download instead of rebuilding.
+  # Skipped for documentation-only changes.
   frontend-build:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/_frontend-build.yml
     permissions:
       contents: read
@@ -30,7 +33,8 @@ jobs:
 
   # Build and Test
   build:
-    needs: frontend-build
+    needs: [frontend-build, changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -89,7 +93,8 @@ jobs:
   # cmd/atlas tests spin up full SystemCore with real providers (TWSE, GDELT, etc.)
   # — needs 20min timeout, no -race (race detector makes goroutine cleanup stall)
   test-cmd-atlas:
-    needs: frontend-build
+    needs: [frontend-build, changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -128,7 +133,8 @@ jobs:
 
   # Lint
   lint:
-    needs: frontend-build
+    needs: [frontend-build, changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -161,8 +167,10 @@ jobs:
   # Runs go generate for both gentags (field_types.ts / valid_fields.json)
   # and atlas-mcp descgen (auto-desc.gen.json / auto-desc.gen.go).
   # If generation produces a diff, the job fails to signal drift.
+  # Skipped for documentation-only changes.
   generate:
-    needs: frontend-build
+    needs: [frontend-build, changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -213,6 +221,8 @@ jobs:
 
   # Security Scan
   security:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -232,6 +242,43 @@ jobs:
       continue-on-error: true
       with:
         sarif_file: results.sarif
+
+  # Docs-only gate — aggregates the CI checks that must pass for documentation
+  # and manifest-only PRs where heavy build/test/lint jobs are skipped.
+  # Branch protection should require this job instead of (or in addition to)
+  # the individual heavy jobs.
+  docs-only-gate:
+    runs-on: ubuntu-latest
+    needs: [release-check, commitlint, governance, operations, agents-md-drift, security, routes, contracts]
+    if: always()
+    steps:
+    - name: Gate decision
+      run: |
+        # Skipped is acceptable for docs-only PRs; only failure/cancelled blocks.
+        RESULTS=(
+          "release-check:${{ needs.release-check.result }}"
+          "commitlint:${{ needs.commitlint.result }}"
+          "governance:${{ needs.governance.result }}"
+          "operations:${{ needs.operations.result }}"
+          "agents-md-drift:${{ needs.agents-md-drift.result }}"
+          "security:${{ needs.security.result }}"
+          "routes:${{ needs.routes.result }}"
+          "contracts:${{ needs.contracts.result }}"
+        )
+        FAILED=0
+        for entry in "${RESULTS[@]}"; do
+          job="${entry%%:*}"
+          result="${entry##*:}"
+          if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+            echo "::error::$job result=$result"
+            FAILED=1
+          fi
+        done
+        if [ "$FAILED" -ne 0 ]; then
+          echo "❌ Docs-only gate: BLOCKED"
+          exit 1
+        fi
+        echo "✅ Docs-only gate: PASSED"
 
   # Build Docker Image
   docker:
@@ -318,13 +365,16 @@ jobs:
 
   # Integration Tests
   # Use paths-filter to skip heavy service containers (postgres+redis) for
-  # PRs that don't touch the database layer.
+  # PRs that don't touch the database layer, and to skip heavy build/test/lint
+  # jobs for PRs that only touch documentation/markdown.
   changes:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs_only: ${{ steps.filter.outputs.docs_only }}
       integration: ${{ steps.filter.outputs.integration }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -332,6 +382,29 @@ jobs:
       id: filter
       with:
         filters: |
+          code:
+            - '**/*.go'
+            - 'go.mod'
+            - 'go.sum'
+            - '**/*.ts'
+            - '**/*.tsx'
+            - '**/*.js'
+            - 'cmd/**'
+            - 'internal/**'
+            - 'pkg/**'
+            - 'migrations/**'
+            - '**/*.sql'
+            - 'Dockerfile*'
+            - 'docker-compose*'
+            - 'Makefile'
+            - 'scripts/**'
+            - '.github/workflows/**'
+            - '!docs/**'
+            - '!*.md'
+          docs_only:
+            - 'docs/**'
+            - '*.md'
+            - '.github/**/*.md'
           integration:
             - 'internal/db/**'
             - 'internal/repository/**'
@@ -342,7 +415,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     needs: [build, frontend-build, changes]
-    if: needs.changes.outputs.integration == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.integration == 'true'
     services:
       redis:
         image: redis:7-alpine
@@ -439,7 +512,8 @@ jobs:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - name: Validate MCP tool contracts
       run: python3 scripts/gen-contracts.py --validate
-  # Release gate — aggregates all CI-safe checks into one pass/fail signal
+  # Release gate — aggregates all CI-safe checks into one pass/fail signal.
+  # Treats skipped jobs as acceptable, which happens for documentation-only PRs.
   release-check:
     runs-on: ubuntu-latest
     needs: [routes, contracts, build, lint, test-cmd-atlas]
@@ -447,27 +521,35 @@ jobs:
     steps:
     - name: Gate decision
       run: |
-        if [ "${{ needs.routes.result }}" = "success" ] && \
-           [ "${{ needs.contracts.result }}" = "success" ] && \
-           [ "${{ needs.build.result }}" = "success" ] && \
-           [ "${{ needs.lint.result }}" = "success" ] && \
-           [ "${{ needs.test-cmd-atlas.result }}" = "success" ]; then
-          echo "✅ Release gate: ALL PASSED"
-        else
+        # Any needed job that failed or was cancelled blocks the gate.
+        # Skipped is allowed (e.g., docs-only PRs where build/lint/test do not run).
+        RESULTS=(
+          "routes:${{ needs.routes.result }}"
+          "contracts:${{ needs.contracts.result }}"
+          "build:${{ needs.build.result }}"
+          "lint:${{ needs.lint.result }}"
+          "test-cmd-atlas:${{ needs.test-cmd-atlas.result }}"
+        )
+        FAILED=0
+        for entry in "${RESULTS[@]}"; do
+          job="${entry%%:*}"
+          result="${entry##*:}"
+          if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+            echo "::error::$job result=$result"
+            FAILED=1
+          fi
+        done
+        if [ "$FAILED" -ne 0 ]; then
           echo "❌ Release gate: BLOCKED"
-          echo "  routes:       ${{ needs.routes.result }}"
-          echo "  contracts:    ${{ needs.contracts.result }}"
-          echo "  build:        ${{ needs.build.result }}"
-          echo "  lint:         ${{ needs.lint.result }}"
-          echo "  test:         ${{ needs.test-cmd-atlas.result }}"
           exit 1
         fi
+        echo "✅ Release gate: PASSED"
 
   # Consumer smoke test — runs against live docker-compose on main pushes
   hermes-smoke:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: [release-check]
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    needs: [release-check, changes]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
@@ -494,8 +576,8 @@ jobs:
   # Runtime canary — exercises all read-only MCP tools against live atlas-go
   canary-test:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: [release-check]
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    needs: [release-check, changes]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
@@ -521,6 +603,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes, contracts, release-check]
+    if: always() && github.event_name == 'pull_request'
     permissions:
       pull-requests: write
     steps:
@@ -528,8 +611,19 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        # Skipped is acceptable for docs-only PRs; only failure/cancelled is red.
+        is_bad() {
+          case "$1" in
+            failure|cancelled) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
         STATUS_FLAG=":white_check_mark:"
-        if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test-cmd-atlas.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.generate.result }}" != "success" ] || [ "${{ needs.agents-md-drift.result }}" != "success" ]; then
+        if is_bad "${{ needs.build.result }}" || \
+           is_bad "${{ needs.test-cmd-atlas.result }}" || \
+           is_bad "${{ needs.lint.result }}" || \
+           is_bad "${{ needs.generate.result }}" || \
+           is_bad "${{ needs.agents-md-drift.result }}"; then
           STATUS_FLAG=":x:"
         fi
         cat <<EOF | gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file -

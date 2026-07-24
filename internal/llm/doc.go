@@ -9,11 +9,19 @@
 //
 // Design source: docs/llm-integration-strategy-framework.md
 // Sub-packages:
-//   - adapters/ — adapter layer consuming llm_annotator for strategy failure
-//     attribution (the \"llm_annotated\" arm of the hybrid pipeline)
+//   - adapters/ — adapter layer consuming the archived llm_annotator package
+//     for strategy failure attribution during the deprecation window. New
+//     failure-attribution callers should use capabilities/failure_attribution
+//     directly via the Router; llm_annotator is retained only for backward
+//     compatibility.
 //   - capabilities/ — typed capability handlers (10 handlers)
 //   - clients/ — HTTP client implementations (DeepSeek, MiniMax)
 //   - schemas/ — typed I/O contracts for each capability
+//
+// Relationship to llm_annotator: llm_annotator is the archived legacy package
+// for failure attribution. It is wrapped by adapters/ and will be removed once
+// all production wiring migrates to llm.Router + capabilities/failure_attribution.
+// See internal/llm_annotator/doc.go and internal/MATURITY.md:118.
 //
 //
 // Maturity rules: internal/MATURITY.md:75-89
