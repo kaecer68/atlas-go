@@ -8,6 +8,13 @@
 // with built-in health-aware fallback and async-safe hot-path guards.
 //
 // Design source: docs/llm-integration-strategy-framework.md
+// Sub-packages:
+//   - adapters/ — adapter layer consuming llm_annotator for strategy failure
+//     attribution (the \"llm_annotated\" arm of the hybrid pipeline)
+//   - capabilities/ — typed capability handlers (10 handlers)
+//   - clients/ — HTTP client implementations (DeepSeek, MiniMax)
+//   - schemas/ — typed I/O contracts for each capability
+//
 //
 // Maturity rules: internal/MATURITY.md:75-89
 //
