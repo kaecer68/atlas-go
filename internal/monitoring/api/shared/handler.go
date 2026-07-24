@@ -28,6 +28,7 @@ var authFreeExactPaths = map[string]bool{
 	"/client":                       true,
 	"/api/llm/health":               true,
 	"/api/health/aggregate":         true, // Stage 6 PR#1: 4-tier health aggregation for frontend banner
+	"/api/v1/alerts":                true, // Alertmanager webhook inbound
 	"/api/alerts":                   true,
 	"/api/stock":                    true,
 	"/api/recommendations":          true,

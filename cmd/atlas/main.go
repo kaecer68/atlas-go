@@ -151,6 +151,7 @@ func isPublicPath(p string) bool {
 	case p == "/api/health" || p == "/api/health/":
 		return true
 	case p == "/api/llm/health":
+	case p == "/api/v1/alerts": // Alertmanager webhook inbound — only POST from Alertmanager container
 		return true
 	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
 		return true
