@@ -118,5 +118,4 @@
 - **Done this session**: Phase A (audit), Phase B (plan), 兩份 manifest 建立完成
 - **Remaining**: Phase C (implement F-01/F-02/F-03/F-06)
 - **Next action**: F-01 — 合併 strategy* 套件
-- **Uncommitted code**: yes (manifests + eventbus payloads/publish methods + SSE buffers/subscriptions)
-- **Branch / PR**: TBD
+- **Branch / PR**: `fix/eventbus-orphan-audit` → PR #1310
