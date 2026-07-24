@@ -1448,3 +1448,58 @@ func TestDashboardAPI_ResolveGeoScore_FallsBackToFileStore(t *testing.T) {
 		t.Errorf("Intensity = %v, want 25.0 (file fallback)", got.Intensity)
 	}
 }
+
+// mockQuoteStore is a minimal QuoteStore for testing warmup paths.
+type mockQuoteStore struct {
+	recorded []domain.DailyBar
+	err      error
+}
+
+func (m *mockQuoteStore) RecordQuotes(quotes []domain.DailyBar) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.recorded = append(m.recorded, quotes...)
+	return nil
+}
+
+func (m *mockQuoteStore) LoadQuotes(symbol string, start, end time.Time) ([]domain.DailyBar, error) {
+	return nil, nil
+}
+
+func (m *mockQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain.DailyBar, error) {
+	return nil, nil
+}
+
+func TestDashboardAPI_SetQuoteStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	qs := &mockQuoteStore{}
+	d.SetQuoteStore(qs)
+	d.quoteStoreMu.RLock()
+	if d.quoteStore != qs {
+		t.Error("SetQuoteStore did not set quoteStore")
+	}
+	d.quoteStoreMu.RUnlock()
+}
+
+func TestDashboardAPI_SetFugleAPIKey(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	d.SetFugleAPIKey("secret")
+	d.fugleAPIKeyMu.RLock()
+	if d.fugleAPIKey != "secret" {
+		t.Errorf("SetFugleAPIKey = %q, want secret", d.fugleAPIKey)
+	}
+	d.fugleAPIKeyMu.RUnlock()
+}
+
+func TestDashboardAPI_WarmupQuotes_NoQuoteStore(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	d.SetFugleAPIKey("secret")
+	d.warmupQuotes() // should not panic
+}
+
+func TestDashboardAPI_WarmupQuotes_NoFugleKey(t *testing.T) {
+	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
+	d.SetQuoteStore(&mockQuoteStore{})
+	d.warmupQuotes() // should not panic
+}
