@@ -25,9 +25,7 @@ import (
 // dispatch path — but were historically scattered across system.go.
 
 func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationResult, error) {
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishSimulationStart(s.Sim().session.ID, sessionDate)
-	}
+	s.publishSimulationStart(s.Sim().session.ID, sessionDate)
 
 	tw := NewSimTraceWriter(s.Sim().cfg.LedgerDir, sessionDate.Format("20060102"), s.traceVerbose)
 	defer func() { _, _ = tw.ExportJSONL() }()
@@ -115,14 +113,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	outcomeFinalRecs := append([]domain.Recommendation(nil), finalRecs...)
 	oldRegime := regime
 	regime = AdjustRegimeFromNarrative(regime, events)
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
-		// Sync regime to factor weight engine (event subscriber handles async path).
-		if s.Port().factorWeightEngine != nil {
-			s.Port().factorWeightEngine.SetRegime(string(regime))
-			s.Port().factorWeightEngine.OnRegimeChange(string(oldRegime), string(regime), 0.0)
-		}
-	}
+	s.publishRegimeChange(oldRegime, regime, 0.0, "orchestrator")
 
 	vix := vixFromQuotes(quotes)
 	if s.strat.strategyAllocator != nil {
@@ -166,9 +157,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	alphaRecs := s.applyAlphaDiscovery(quotes, rawRecs)
 	finalRecs = append(finalRecs, alphaRecs...)
 	finalRecs = s.host.ProcessRecommendations(regime, finalRecs)
-	if s.Risk().eventBus != nil {
-		go s.Risk().eventBus.PublishRecommendation("orchestrator", finalRecs)
-	}
+	s.publishRecommendation("orchestrator", finalRecs)
+
 	tw.Record(6, "sim_exec", "START", nil)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
