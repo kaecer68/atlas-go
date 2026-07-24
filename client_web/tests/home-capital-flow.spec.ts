@@ -88,10 +88,9 @@ async function mockHomeApis(page) {
 }
 
 async function bypassOnboarding(page) {
-  // localStorage is only available on app origin, not about:blank.
-  // Navigate first, then set the flag.
-  await page.goto('/');
-  await page.evaluate(() => {
+  // Use addInitScript so localStorage is populated before the app reads it,
+  // even though the current page is still about:blank.
+  await page.context().addInitScript(() => {
     localStorage.setItem('atlas-onboarded', '1');
   });
 }
