@@ -56,7 +56,7 @@ type TradeSignal struct {
 }
 ```
 
-`TradeSignal` 由 `forecast_bridge` 的 `Adapter.ToTradeSignal` 從 `ForecastResult` 轉換而來，**不是由 forecast 模組直接產生**。
+`TradeSignal` 由 `strategy.DirectionalTradeLayer` 從 `ForecastResult` 轉換而來，**不是由 forecast 模組直接產生**。
 
 ---
 
@@ -159,12 +159,10 @@ func TodayDate() string
 | 陷阱 | 說明 |
 |------|------|
 | **ForecastEngine 是 stub** | `Predict` 目前永遠回 `DirectionHold/Conviction=50`；真實邏輯在 `ForeignForecast.Score`。 |
-| **上下游關係：forecast → forecast_bridge** | `forecast` 輸出 `ForecastResult`/`TradeSignal`；`forecast_bridge` 的 `Adapter` 負責依 conviction thresholds（70/30）轉換為可下單的 `TradeSignal.Action`。兩者必須同步變更。 |
 | **ForeignForecast.Score 是封閉式規則** | 所有係數和 scale 均 hardcoded 在 `Score` 函式內（見 `foreign_forecast.go`），**不從參數系統讀取**。調整權重需改 code 並重新校準。 |
 | **USD/TWD 符號反轉** | `Score` 內 `-in.USDTWDChangePct`（line 70）；台幣升值（正）為多頭訊號。 |
 | **VIX 恐慌閾值** | VIX > 25 才觸發 penalty；≤ 25 不加分也不扣分。 |
 | **Calibration 需要 90 天 warm-up** | Ledger 累積 < 90 樣本前，`Calibrate` 永遠回 `Calibrated: false`。 |
-| **ForecastEngine 無 circuit breaker** | 目前 `ForecastEngine` 本身沒有熔斷機制；如需熔斷，應由 `forecast_bridge` 或 caller 實作。 |
 | **SignificanceThresholdTWD 只影響 Judge** | 30 億台幣門檻定義在 `SignificanceThresholdTWD`，但 `Score` 本身不檢查這個值；`Judge` 填入 `ActualOutcome` 時才使用。 |
 
 ---
@@ -173,7 +171,6 @@ func TodayDate() string
 
 ```
 forecast
-├── forecast_bridge   // 消費 ForecastResult → TradeSignal
 │   └── adapter.go: Adapter.ToTradeSignal
 ├── orchestrator      // ForecastBridgeStrategy
 │   └── executor_strategies.go: PredictAll([]forecast.TradeSignal, error)

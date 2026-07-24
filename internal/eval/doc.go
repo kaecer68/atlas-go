@@ -8,7 +8,6 @@
 //   - CheckSLRLAlignment — detects supervised/reinforcement learning reward mismatch (SK-28)
 //
 // Pitfall: new metrics MUST align with Fin-Skills specification numbering (SK-12~15, SK-28).
-// Used by internal/robustness — changing public signatures requires coordinated update.
 //
 // Maturity: evolving
 package eval

@@ -59,11 +59,11 @@
 | `capitalflow` | 七維錢潮雷達（3+2+2 分層）分解與共振分析 — 官方actor（外資/投信/自營商）T86 + 行為代理（官股/散戶）proxy + 領先／跨市場訊號（期貨 OI / TSM ADR）Z-score、共振係數、品質分數；`docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport`, `CapitalFlowAssessment` | **v0.0.0.38 升級**：Wave 11 shipped；被 eventdriven/recommender/marketexplain 廣泛使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
 | `domain/shared` | 跨模組純計算函式（Sharpe、Sortino、頻率常數）— canonical 位置，呼叫模組以 type alias re-export 維持向後相容 | `ComputeSharpe`, `ComputeSortino`, `Frequency` | 由 `domain/AGENTS.md:30` 規範；`portfolio`/`reporting` 為薄 wrapper |
-| `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | 由 robustness 使用，Fin-Skills 驅動 |
+| `eval` | 模型評估指標與可解釋性工具（SK-12~15） — OOS R²、Sharpe、PermutationImportance、PDP | `EvalResult`, `Predictor` | Fin-Skills 驅動，無 runtime 依賴 |
 | `eventdriven` | 事件驅動資金流預測 — 事件日曆→資金流方向 + ETF 規模×權重預估 + 營收驚喜 | `Predictor`, `FlowPrediction`, `ETFEstimate`, `RevenueSurprise` | Wave 11 新增；消費 industry.EventCalendar + capitalflow |
 | `eventquality` | 事件資料品質閘門 — 5 rules validator、quality log、cross-source verify、sanitize | `EventValidator`, `QualityLog`, `CrossSourceStore`, `SanitizeTitle` | Stage 2 新增，evolving |
 | `feature` | 命名特徵萃取（close, volume, return_1d/5d, hl_ratio, ma_ratio, volume_ratio） — 由 `cmd/backtest-pipeline` 和 `internal/experiment` 共用 | `Registry`, `MakeExtractor`, `ForwardReturnLabel` | 由 backtest-pipeline CLI 和 Judge 重要性運算使用 |
-| `forecast` | 個股方向性預測 — per-symbol forecast（directional bias、confidence、severity），給 Phase 3.5 M4 forecast-bridge 消費 | `ForecastResult`, `ForecastEngine`, `TradeSignal` | **v0.0.0.38 升級**：Phase 3.5 M4 ✅ shipped（2026-07-02）；預測模型標記 experimental，infra 完整 |
+| `forecast` | 個股方向性預測 — per-symbol forecast（directional bias、confidence、severity） | `ForecastResult`, `ForecastEngine`, `TradeSignal` | **v0.0.0.38 升級**：Phase 3.5 M4 ✅ shipped（2026-07-02）；預測模型標記 experimental |
 | `fubonproxy` | Fubon-proxy 生命週期管理 — 自動啟動/停止/監控 Python FastAPI 微服務 | `ProcessManager`, `Start()`, `Stop()` | 由 cmd/atlas API 模式使用，非致命失敗 |
 | `globalmarket` | 全球總經資料管理 | `Manager` | 由 narrative/industry 使用 |
 | `metalearning` | 元學習協調器 — `MetaLearner`、策略選擇優化 | `MetaLearner` | 研究階段，可能晉升 |
@@ -100,8 +100,6 @@
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | **v0.0.0.38 維持 X**：被 orchestrator runtime 使用但無 AGENTS.md，需補文件 |
-| `forecast_bridge` | Forecast → TradeSignal 轉換層 — 依 conviction thresholds 將 `forecast.ForecastResult` 升級為可下單的 `TradeSignal` | `Adapter`, `CircuitBreaker`, `TradeSignal` | Phase 3.5 M4 ✅ shipped（2026-07-02）；尚無 runtime 引用 |
-| `reflexivity` | 自反性價格動態引擎 | `Engine` | **v0.0.0.38 維持 X**：被 orchestrator + sim runtime 使用但無 AGENTS.md，需補文件 |
 | `robustness` | 穩健性與敏感度測試（SK-20~22） — SizeGroup、PennyExclusion、Ablation | `Model`, `SizeGroupReport` | Fin-Skills 驅動，零 runtime 依賴 |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |
 | `llm` | LLM 多 Provider 統一介面 — 路由器、能力調度、DataClass 閘門、備援鏈，健康端點 | `ProviderImpl`, `DefaultRouter`, `Capability`, `DataClass` | Wave 11 L2.1：effective routing chain 為 3 層（Primary → Backup1 → LastResort）；`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作（Issue #720）。**Phase 2 canonical 介面（Issue #722）**：Phase 2 canonical 介面已就緒（`adapters` + `capabilities`），承接 `llm_annotator` 的角色。詳見 `docs/llm-integration-strategy-framework.md` |
