@@ -21,6 +21,7 @@
 | F08 | 🔴 | AI push 後未自動 gh pr create | AGENTS.md:64 加入明確步驟 | ✅ done |
 | F09 | 🔴 | 分支命名無日期前綴，易混淆 | AGENTS.md:64 加入 YYYYMMDD 規範 | ✅ done |
 | F10 | 🟡 | VERSION sync 機制存在但 CI 未接入，版本 drift 無人發現 | check_versions.sh 接入 quality.yml | ✅ done |
+| F11 | 🔴 | 測試未隨 code 同步更新，導致 CI 反覆往返 | AGENTS.md:65 加入測試同步紀律（MUST 同 commit 更新 *_test.go） | ✅ done |
 
 ---
 
@@ -49,3 +50,4 @@
 | 2026-07-26 | 1.0 | 初始審計，F01-F07 |
 | 2026-07-26 | 2.0 | F08-F09（AI 紀律），F01-F07 執行 |
 | 2026-07-26 | 3.0 | F10（VERSION sync CI 接上），Q&A 記錄 |
+| 2026-07-26 | 4.0 | F11（測試同步紀律），修復 sync-version.sh skip rule bug |

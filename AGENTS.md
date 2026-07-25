@@ -62,6 +62,7 @@
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 - **Multi-CLI 與合併後清理**：[`docs/multi-cli-protocol.md`](docs/multi-cli-protocol.md)（worktree 隔離、PR merge 後自動刪除分支、planning artifacts 清理）
 - **分支與 PR 工作流（強制）**：任何程式碼變更 MUST 走分支 → push → PR → merge 流程。禁止直接 push 到 `main`。分支命名慣例：`fix/YYYYMMDD-<desc>` / `feat/YYYYMMDD-<desc>`（日期前綴防止與其他工作區分支混淆）。push 後 MUST 立即執行 `gh pr create`，PR body 必含 Summary / Root Cause / Verification 三段；不可停留在「compare & pull request」未完成狀態。
+- **測試同步紀律（強制）**：修改任何 `.go` 檔案的行為時，MUST 在同一個 commit 中更新對應的 `*_test.go`。不可「先 commit 功能，測試晚點補」— 這是 CI 反覆往返的根因。改 code 前先跑受影響的測試確認 baseline，改完立刻跑測試確認紅燈，修正 assertion 後一起 commit。
 
 ## 高頻陷阱速查
 
