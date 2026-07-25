@@ -100,7 +100,9 @@ func RegisterRoutesWithDetectors(mux *http.ServeMux, cal *industry.EventCalendar
 	return h
 }
 
-// HandleCalendar returns the upcoming event timeline.
+// HandleCalendar returns the upcoming event timeline with full calendar metadata.
+// Since P2 cleanup (2026-07-26), this is the canonical event calendar endpoint
+// replacing the duplicate /api/dashboard/calendar-events.
 func (h *Handler) HandleCalendar(r *http.Request) (int, any) {
 	now := time.Now()
 	timeline := h.eventCal.GetEventTimeline(now, 14)
@@ -111,14 +113,25 @@ func (h *Handler) HandleCalendar(r *http.Request) (int, any) {
 	items := make([]EventCalendarItem, 0, len(timeline))
 	for _, e := range timeline {
 		items = append(items, EventCalendarItem{
-			Name:               e.Name,
-			EventType:          e.EventType,
-			Direction:          e.Direction,
-			StartDate:          e.StartDate,
-			EndDate:            e.EndDate,
-			AffectedIndustries: e.AffectedIndustries,
-			ExpectedFlowImpact: expectedFlow(e.EventType),
-			Confidence:         e.BaseWeight,
+			ID:                  e.ID,
+			Name:                e.Name,
+			NameEN:              e.NameEN,
+			EventType:           e.EventType,
+			Description:         e.Description,
+			Direction:           e.Direction,
+			StartDate:           e.StartDate,
+			EndDate:             e.EndDate,
+			PeakDate:            e.PeakDate,
+			DecayDays:           e.DecayDays,
+			AffectedIndustries:  e.AffectedIndustries,
+			ExpectedFlowImpact:  expectedFlow(e.EventType),
+			Confidence:          e.BaseWeight,
+			SentimentAdjustment: e.SentimentAdjustment,
+			DataSource:          string(e.DataSource),
+			EvidenceQuality:     string(e.EvidenceQuality),
+			Backfilled:          e.Backfilled,
+			CrossSourceStatus:   e.CrossSourceStatus,
+			GeneratedAt:         e.GeneratedAt,
 		})
 	}
 

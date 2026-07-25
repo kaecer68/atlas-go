@@ -20,6 +20,7 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
+.PHONY: ci-gate ci-full
 
 # 前端目錄列表(若有新增,加在這裡)
 FRONTENDS := admin_web client_web

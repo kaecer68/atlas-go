@@ -41,8 +41,9 @@ type RiskExposureOutput struct {
 
 func (s *server) handleCalendarEvents(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, CalendarEventsOutput, error) {
 	var out CalendarEventsOutput
+	// DEPRECATED backend endpoint; now proxied to canonical /api/events/calendar
 	if err := s.withAudit(ctx, "calendar_events", nil, func() error {
-		return s.cli.Get(ctx, "/api/dashboard/calendar-events", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/events/calendar", nil, &out.Result)
 	}); err != nil {
 		return nil, CalendarEventsOutput{}, err
 	}

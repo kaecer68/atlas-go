@@ -21,7 +21,7 @@ func (h *Handlers) HandleDrawdown(r *http.Request) (int, any) {
 	if result == nil {
 		return http.StatusOK, DrawdownResponse{
 			Status:    "not_available",
-			Message:   "no drawdown simulation available yet",
+			Message:   "風險引擎尚未完成第一輪模擬；drawdown 數據將在 stress_test_daily 排程首次完成後自動產生（通常需 ≥1 個交易日）",
 			Generated: time.Now().Format(time.RFC3339),
 		}
 	}

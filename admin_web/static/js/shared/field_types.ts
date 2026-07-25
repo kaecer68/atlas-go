@@ -1118,16 +1118,25 @@ export interface EventBlock {
 }
 
 export interface EventCalendarItem {
+  id: string;
   name: string;
+  name_en?: string;
   event_type: string;
+  description?: string;
   direction: string;
   start_date: string;
   end_date: string;
+  peak_date?: string;
+  decay_days: number;
   affected_industries?: string[];
   expected_flow_impact: string;
   confidence: number;
+  sentiment_adjustment: number;
+  data_source?: string;
+  evidence_quality?: string;
   backfilled: boolean;
   cross_source_status?: string;
+  generated_at?: string;
 }
 
 export interface EventCalendarRule {
