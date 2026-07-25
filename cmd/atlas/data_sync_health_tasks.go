@@ -5,16 +5,16 @@ package main
 // Tasks here are periodic data fetches / health probes that run independently
 // of the realtime / live trading paths.
 //
-// Tasks (9 total):
+// Tasks (9 + 8 total):
 //   1. channel_health_sync    — sync in-memory channel health to Postgres (5m)
-//   2. us_market_refresh      — batch-refresh 7 US market channels (5m)
-//   3. seasonal_calibration   — optional seasonal binary (7d, binary-presence-gated)
-//   4. health_check           — HealthChecker.RunOnce (30s)
-//   5. channel_health_fugle   — third-party health probe (1h)
-//   6. channel_health_fubon   — third-party health probe (1h)
-//   7. channel_health_finmind — third-party health probe (1h)
-//   8. channel_health_twse_replay — always-on local CSV probe (1h)
-//   9. tsmc_revenue           — Gateway.Fetch tsmc_revenue (24h)
+//   2-9. us_market_refresh_<ch> — per-channel US market refresh (5m) for each USMarketChannels()
+//   10. seasonal_calibration   — optional seasonal binary (7d, binary-presence-gated)
+//   11. health_check           — HealthChecker.RunOnce (30s)
+//   12. channel_health_fugle   — third-party health probe (1h)
+//   13. channel_health_fubon   — third-party health probe (1h)
+//   14. channel_health_finmind — third-party health probe (1h)
+//   15. channel_health_twse_replay — always-on local CSV probe (1h)
+//   16. tsmc_revenue           — Gateway.Fetch tsmc_revenue (24h)
 //
 // Note: calibration_cycle (narrative weight calibration, 24h, maturity-gated)
 // belongs to PR10b and stays in main.go between seasonal_calibration and
@@ -69,19 +69,24 @@ func registerDataSyncAndHealthTasks(
 		log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
 	}
 
-	// Register us_market_refresh — batch-refresh 7 US market channels
-	// (spx, ndx, dji, nvda, aapl, msft, tsm_adr) every 5 minutes.
-	// These channels share yahooSharedLimiter; Gateway.Fetch handles
-	// both rate limiting and circuit breaking per channel. Per-channel
-	// errors are logged but do not fail the batch (transient errors on
-	// one channel should not block the others).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
-		Name:     "us_market_refresh",
-		Interval: 5 * time.Minute,
-		Enabled:  true,
-		Task:     apigateway.NewUSMarketRefreshTask(gateway),
-	})
-	log.Printf("[Gateway] registered us_market_refresh background task (5m interval)")
+	// Register per-channel US market refresh tasks instead of a single batch
+	// closure so each Yahoo-backed channel has its own ChannelID, failure
+	// isolation, and BTM failure telemetry. The shared Yahoo limiters
+	// (yahooIndexLimiter / yahooTechLimiter / ExportStatisticsRate) inside
+	// Gateway.Fetch serialize requests to the same endpoint group, so launching
+	// concurrently does not violate rate limits.
+	for _, ch := range apigateway.USMarketChannels() {
+		ch := ch
+		_ = taskMgr.Register(&apigateway.ScheduledTask{
+			Name:      "us_market_refresh_" + ch,
+			ChannelID: ch,
+			Interval:  5 * time.Minute,
+			Enabled:   true,
+			Jitter:    5 * time.Second,
+			Task:      gatewayChannelFetch(gateway, ch),
+		})
+	}
+	log.Printf("[Gateway] registered %d per-channel US market refresh tasks (5m interval)", len(apigateway.USMarketChannels()))
 
 	// P2 C05: Register auto-fetch tasks for channels without periodic refresh.
 	// These channels were identified in the 2026-07-25 architecture audit as

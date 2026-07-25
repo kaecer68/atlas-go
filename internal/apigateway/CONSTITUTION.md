@@ -479,7 +479,7 @@ echo "✅ os.Getenv 檢查通過"
 
 | 通道 ID | 限流策略 | 健康檢查模式 | 背景任務 | 熔斷啟用 |
 |---------|---------|-------------|---------|---------|
-| us_yahoo | Yahoo Macro (5s/2b) | Liveness | us_market_refresh (5m) | ✅ |
+| `us_yahoo` | Yahoo Macro (5s/2b) | Liveness | `us_market_refresh_us_yahoo` (5m) | ✅ |
 | twse_replay | 不限流 (rate.Inf) | Readiness | auto_backfill (24h) | ✅ |
 | twse_capital_flow | 1/5s | Readiness | auto_capital_flow (30m) | ✅ |
 | fugle | 60/min (1s/1b) | Liveness | channel_health_fugle (1h) | ✅ |
@@ -505,25 +505,24 @@ echo "✅ os.Getenv 檢查通過"
 | twse_oddlot | 1/5s | Liveness | — | ✅ |
 | government_flow | 不限流 (rate.Inf, file-backed) | Readiness | auto_government_flow (1h) | ✅ |
 | twse_etf | 1s/1b | Liveness | — | ✅ |
-| us_spx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| us_ndx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| us_dji | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| `us_spx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_spx` (5m) | ✅ |
+| `us_ndx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_ndx` (5m) | ✅ |
+| `us_dji` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_dji` (5m) | ✅ |
 | taiex_index | 5s/1b | Liveness | auto_taiex_index (1h) | ✅ |
 | tw_vol | 1/5s | Liveness | — | ✅ |
-| us_nvda | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| us_aapl | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| us_msft | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| tsm_adr | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
+| `us_nvda` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_nvda` (5m) | ✅ |
+| `us_aapl` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_aapl` (5m) | ✅ |
+| `us_msft` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_msft` (5m) | ✅ |
+| `tsm_adr` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_tsm_adr` (5m) | ✅ |
 | twse_sbl | 2s/1b | Liveness (inactive stub) | auto_twse_sbl (1h) | ✅ |
 | tdcc_equity_dispersion | 5s/1b | Liveness (inactive stub) | — | ✅ |
 
 > **背景任務說明**：
 > - 「—」表示通道無獨立 BTM 任務。這些通道的資料擷取依賴：
->   - `macro_ingest` 閉包內部批次呼叫（sox_index, dram_spot_price, bdi, tw_vol, frankfurter_fx, sector_data）
->   - `us_market_refresh` 批次處理（us_yahoo, us_spx, us_ndx, us_dji, us_nvda, us_aapl, us_msft, tsm_adr）
+>   - `us_market_refresh_<ch>` 獨立任務處理（us_yahoo, us_spx, us_ndx, us_dji, us_nvda, us_aapl, us_msft, tsm_adr），共享 Yahoo limiters。`macro_ingest` 閉包內部批次呼叫（sox_index, dram_spot_price, bdi, tw_vol, frankfurter_fx, sector_data）
 >   - 檔案驅動，無 HTTP fetch（sector_data, government_flow）
 >   - 無實作（twse_sbl stub, tdcc_equity_dispersion stub, twse_sector_index, day_trading, twse_oddlot, twse_etf）
-> - 12 個 Yahoo Finance 通道共享 `us_market_refresh`（5m）單一任務，共用同一 HTTP API 端點（query1.finance.yahoo.com）。
+> - 12 個 Yahoo Finance 通道現已由獨立的 `us_market_refresh_<ch>` BTM 任務個別刷新（5m），共用同一 HTTP API 端點（query1.finance.yahoo.com），透過 shared limiters 避免違反速率限制。
 > - 各通道的完整 BTM 任務清單與排程細節見 `cmd/atlas/*_tasks.go` 及審計 manifest `docs/manifests/2026-07-25-channel-architecture-audit/`。
 > - **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。
 ## 附錄 B：違規處理流程
