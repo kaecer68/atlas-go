@@ -99,8 +99,12 @@ func TestHandleSectorList_L2FallBackToID(t *testing.T) {
 			continue
 		}
 		l2Count++
-		if sec.DisplayZH != sec.ID {
-			t.Fatalf("L2 sector %s: expected DisplayZH to fall back to ID, got %q", sec.ID, sec.DisplayZH)
+		// P3-2: L2 sub-industries now have Chinese labels — verify non-empty, non-ID
+		if sec.DisplayZH == "" {
+			t.Fatalf("L2 sector %s: DisplayZH is empty", sec.ID)
+		}
+		if sec.DisplayZH == sec.ID {
+			t.Fatalf("L2 sector %s: DisplayZH should be Chinese label, got raw ID %q", sec.ID, sec.DisplayZH)
 		}
 	}
 	if l2Count != 18 {
