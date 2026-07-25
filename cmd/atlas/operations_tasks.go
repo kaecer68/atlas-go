@@ -432,9 +432,10 @@ func registerOperationsTasks(d operationsDeps) {
 	// GovernmentFlowProvider (28h interval to avoid overlap).
 	if d.governmentFlowDir != "" {
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-			Name:     "government_flow_aggregate",
-			Interval: 28 * time.Hour,
-			Enabled:  true,
+			Name:      "government_flow_aggregate",
+			ChannelID: "government_broker",
+			Interval:  28 * time.Hour,
+			Enabled:   true,
 			Task: func(ctx context.Context) error {
 				if d.gateway == nil {
 					return fmt.Errorf("government_flow_aggregate skipped: no gateway")
