@@ -971,7 +971,7 @@ func run(args []string, deps appDeps) error {
 				logging.Warn("admin", "record_session_failed", "err", recErr.Error())
 			}
 			if len(result.Orders) == 0 && monitor != nil {
-				monitor.Alert(monitoring.AlertLevelWarning, "simulation",
+				monitor.Alert(monitoring.AlertLevelInfo, "simulation",
 					fmt.Sprintf("手動觸發場次 %s 產生 0 筆訂單（regime=%s）",
 						system.Session().ID, result.Regime),
 					map[string]any{
@@ -1219,7 +1219,7 @@ func run(args []string, deps appDeps) error {
 					)
 					// Quality alerts
 					if len(result.Orders) == 0 {
-						monitor.Alert(monitoring.AlertLevelWarning, "simulation",
+						monitor.Alert(monitoring.AlertLevelInfo, "simulation",
 							fmt.Sprintf("場次 %s 產生 0 筆訂單（regime=%s, positions=%d）",
 								system.Session().ID, result.Regime, len(result.Positions)),
 							map[string]any{
