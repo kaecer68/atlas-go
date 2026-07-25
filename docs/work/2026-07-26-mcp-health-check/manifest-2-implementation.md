@@ -141,17 +141,19 @@
 
 ## 🟠 P2 — 數據品質修復
 
-### P2-1: Alert noise → 降低重複告警
-- **狀態**: ⬜
+### P2-1: Alert noise → 降低重複告警（dedup race fix）
+- **修正**: `dedup.Track()` 從 async goroutine 移至 sync（`Check()` 後立即呼叫）
+- **PR**: #1357
+- **狀態**: ✔️
 
 ### P2-2: `risk_get_drawdown` not available → 明確狀態
-- **狀態**: ⬜
 
 ### P2-3: Channel unknown → 標記 disabled
-- **狀態**: ⬜
+- **修正**: 未接 static builder 的 registry channel 從 `status: "unknown"` 改為 `status: "inactive"`
+- **位置**: `internal/monitoring/service/data_channels.go:376-386`
+- **PR**: #1357
+- **狀態**: ✔️
 
-### P2-4: Simulation 0 訂單 spam → 降級
-- **狀態**: ⬜
 
 ### P2-5: Scheduler summary → 摘要
 - **狀態**: ⬜
