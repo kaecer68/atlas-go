@@ -141,8 +141,10 @@
 
 ## 🟠 P2 — 數據品質修復
 
-### P2-1: Alert noise → 降低重複告警
-- **狀態**: ⬜
+### P2-1: Alert noise → 降低重複告警（dedup race fix）
+- **修正**: `dedup.Track()` 從 async goroutine 移至 sync（`Check()` 後立即呼叫）
+- **PR**: #1357
+- **狀態**: ✔️
 
 ### P2-2: `risk_get_drawdown` not available → 明確狀態
 - **狀態**: ⬜
