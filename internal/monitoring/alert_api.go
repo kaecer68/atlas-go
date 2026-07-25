@@ -15,11 +15,30 @@ import (
 )
 
 type AlertAPI struct {
-	store *AlertStore
+	store        *AlertStore
+	multiScanner *alertscanner.MultiScanner // optional cross-source aggregation
 }
 
 func NewAlertAPI(store *AlertStore) *AlertAPI {
 	return &AlertAPI{store: store}
+}
+
+// WithAlertSources enables cross-source alert aggregation. When set,
+// /api/alerts/active merges results from the AlertStore AND the
+// provided sources (e.g. Prometheus Alertmanager webhook, Wave9 events).
+// Sources should be started before the first request (e.g. Wave9Source
+// needs Start() to subscribe to the eventbus).
+func (a *AlertAPI) WithAlertSources(sources ...alertscanner.AlertSource) *AlertAPI {
+	a.multiScanner = alertscanner.NewMultiScanner(
+		alertscanner.NewStoreAdapter(a.store),
+	)
+	// Append additional sources after the store adapter.
+	for _, src := range sources {
+		a.multiScanner = alertscanner.NewMultiScanner(
+			append(a.multiScanner.Sources(), src)...,
+		)
+	}
+	return a
 }
 
 func (a *AlertAPI) RegisterRoutes(mux *http.ServeMux) {
@@ -147,18 +166,20 @@ func (a *AlertAPI) handleUnacknowledged(w http.ResponseWriter, r *http.Request) 
 	shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
 }
 
-// handleActiveSnapshot returns a unified snapshot of in-flight alerts from the
-// persistence store, including severity counts and blocker status. This is the
-// endpoint consumed by the alert_scan MCP tool so AI agents can discover
-// active alerts at session start.
 func (a *AlertAPI) handleActiveSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	scanner := alertscanner.New(a.store)
-	snap, err := scanner.Snapshot(r.Context())
+	var snap *alertscanner.Snapshot
+	var err error
+	if a.multiScanner != nil {
+		snap, err = a.multiScanner.Snapshot(r.Context())
+	} else {
+		scanner := alertscanner.New(a.store)
+		snap, err = scanner.Snapshot(r.Context())
+	}
 	if err != nil {
 		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("scan active alerts: %v", err))
 		return
