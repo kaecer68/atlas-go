@@ -244,7 +244,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 **陷阱**：`followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。AI agent（包括未來的我）容易把它們當成不可挑戰的權威來引用。
 
 **失敗案例**（2026-07-08 L2.4 prep session）：
-- `docs/operations/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
+- `docs/archive/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
 - 我把這個「否」當成 hard rule 來擋 T13 main 的實作，連續 7+ 次拒絕
 - 實際上這個決策本身**就是 AI 寫的**，應該被視為 proposal 而非 gospel
 - User 提醒後我才修正：**followup.md 都是 AI coding 的時候，agent 寫的，所以正確與否若有問題，你可以及時討論**

@@ -1,6 +1,6 @@
 # 前端架構
 
-> 從 `README.md` 精簡時移出的前端架構詳細內容。與 `CLAUDE.md` §「前端架構」互補。
+> 從 `README.md` 與 `CLAUDE.md` 合併。前端架構的單一權威來源。
 
 ## 目錄職責
 
@@ -46,19 +46,26 @@ shared_web/static/css/
 
 ## JavaScript 模組
 
-| 檔案 | 用途 |
+### 入口檔職責
+
+| 檔案 | 職責 |
 |------|------|
-| `main.js`（per app） | SPA router（`switchPage()`）、導航、auto-refresh |
-| `bootstrap-utils.js` | 工具 import 與 `window.*` assignments |
-| `component-init.js`（admin） | CircuitBreaker、PerformanceReport、SimHealth panel 初始化 |
-| `event-listeners.js`（admin） | `DOMContentLoaded` 事件綁定（~80 handlers） |
-| `pages/*.js` | 頁面特定資料載入模組 |
-| `pages/stock-quote.js` + `services/stock-api-client.js` | 個股快查：4 API 並發 |
-| `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 page shell |
+| `main.js` | 全域狀態、頁面切換(`switchPage`)、動態 import pages、執行各頁 init |
+| `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
+| `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
+| `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
+| `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section |
+| `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 page shell（tier 認證 + MCP 頁 + 404 fallback）|
 | `services/auth.js` | JWT + tier 解析 |
 | `components/home-tier-sections.js` | tier-gated home dashboard 渲染 |
-| `shared/color-tokens.js` | `financialColor()` / `regimeColor()` / `severityColor()` / `confidenceColor()` |
 
+Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接。
+
+### 路由 + 後端整合
+
+- `cmd/atlas/api_routes.go`:`/admin/` 與 `/client/` 分別掛載 `admin_web.DistFS` 與 `client_web.DistFS`;root `/` 301 導向 `/client/`
+- API 端點統一前綴 `/api/...`
+- 靜態資源經 Go `embed.FS` 嵌入 binary,Docker image 由 multi-stage Dockerfile 重新 `npm run build` 產出 dist
 Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接。
 
 ## esbuild plugin fallback
@@ -89,6 +96,5 @@ Canvas 繪圖色彩用 `getThemeColor()` + `hexToRgba()` 橋接。
 
 ## 相關文件
 
-- `CLAUDE.md` §「前端架構」— Claude Code 專屬前端規範
-- `shared_web/static/css/base/variables.css` — CSS 變數 canonical source
-- `shared_web/static/js/shared/color-tokens.js` — JS 色彩邏輯 single source of truth
+- `docs/guides/frontend-architecture.md` — 本文件（前端架構單一權威來源）
+- `CLAUDE.md` §「快速路由」— Claude Code 前端修改時的入口指向

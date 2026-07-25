@@ -34,7 +34,7 @@ Read these in order before designing any new launch gate:
 2. **`cmd/experimental/l2-4-preflight/main.go`** — Manual path (operator runs before flipping flag)
 3. **`internal/scheduler/l2_4_auto_cron.go`** — Automated path (scheduler gates cron trigger)
 4. **`docs/operations/l2-4-runbook.md`** — Operator-facing procedure
-5. **`docs/operations/l2-4-followup.md`** — Open follow-up issues + promotion plan
+5. **`docs/archive/l2-4-followup.md`** — Open follow-up issues + promotion plan
 
 ## Pattern Summary
 
@@ -170,4 +170,4 @@ The only existing instance is L2.4:
 - **Auto-cron**: `internal/scheduler/l2_4_auto_cron.go` (PR #1029)
 - **Spec**: `docs/specs/l2-4-observation-spec.md` (metric schema only — operational concerns in runbook)
 - **Runbook**: `docs/operations/l2-4-runbook.md`
-- **Followup**: `docs/operations/l2-4-followup.md`
+- **Followup**: `docs/archive/l2-4-followup.md`

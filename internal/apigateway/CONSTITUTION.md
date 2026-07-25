@@ -542,7 +542,7 @@ echo "✅ os.Getenv 檢查通過"
 | v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
 | v1.4 | 2026-07-25 | P0 修復：補回 tw_vol 至 macroDataGatewayAdapter 通道列表。tw_vol 背景任務從「—」更正為 macro_ingest (5m)。 |
 | v1.5 | 2026-07-25 | macro_ingest 批次閉包補充：新增 6 個 macro_cache_<ch> BTM 任務（dram_spot_price、tw_vol、bdi、frankfurter_fx、sector_data、twse_sector_index）。macroDataGatewayAdapter 的 23 個通道中，21 個已具備獨立排程（us_yahoo 與其他已由其他任務覆蓋的通道除外）。 |
-| v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 docs/manifests/2026-07-25-channel-architecture-audit.md |
+| v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 .omo/manifests/2026-07-25-channel-architecture-audit.md |
 
 ## 附錄 D：Roots Sanctioned Exception（MCP Server 客戶端宣告檔案根目錄之唯讀例外）
 

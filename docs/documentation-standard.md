@@ -227,7 +227,7 @@ Wave 完成 → 文件分類 →
 - wave 目錄在 `.omo/` 下（非 `docs/`），避免規範目錄被暫存內容污染
 - 每個 wave 目錄應有 README 標註狀態（PLANNED / IN PROGRESS / COMPLETED）
 
-> 歷史參考：`docs/wave-11/`（2026-06-28 解散）— L2.4 規劃 → PR #824 永久化為 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/operations/l2-4-followup.md`（見該 PR 的 work report 與 commits）。
+> 歷史參考：`docs/wave-11/`（2026-06-28 解散）— L2.4 規劃 → PR #824 永久化為 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/archive/l2-4-followup.md`（見該 PR 的 work report 與 commits）。
 
 ### 判斷流程：放 `docs/` 還是 `.omo/`？
 

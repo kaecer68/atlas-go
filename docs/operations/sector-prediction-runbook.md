@@ -2,7 +2,7 @@
 
 > **對應 spec**：`docs/specs/sector-dimension-prediction-spec.md` v1.1
 > **對應 invariant tracker**：``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）`
-> **對應觀察記錄**：`docs/operations/sector-prediction-observation-log.md`
+> **對應觀察記錄**：`docs/archive/sector-prediction-observation-log.md`
 > **範圍**：Wave 11 C07 — `/api/events/prediction` 新增 `sector_predictions`（L1 板塊 5 日方向預測）上線後 2 週觀察期
 > **Issue**: PR #1200 + Issue #1193
 > **啟動日期**：PR merge 後 T+0 起算,預估 14 天
@@ -34,7 +34,7 @@
 
 ### 2.1 指標收集
 
-從 `curl /api/events/prediction` 拉出下列欄位,彙整至觀察記錄(`docs/operations/sector-prediction-observation-log.md`):
+從 `curl /api/events/prediction` 拉出下列欄位,彙整至觀察記錄(`docs/archive/sector-prediction-observation-log.md`):
 
 | 指標 | 來源 | 計算 |
 |------|------|------|
@@ -120,7 +120,7 @@
    - JSON 模式：將 `orchestrator.sector_prediction_enabled.value` 由 `true` 改回 `false`。
 2. **重啟服務**: `docker compose restart atlas`。無熱載入,必須重啟。
 3. **驗證切換**: 觀察下一個 `/api/events/prediction` 請求,確認 `sector_predictions` 為空 slice 或欄位缺失(`cmd/atlas/main.go:708-712` 的守衛邏輯)。
-4. **記錄異常**: 在觀察記錄(`docs/operations/sector-prediction-observation-log.md`)標註 rollback 時間與觸發條件。
+4. **記錄異常**: 在觀察記錄(`docs/archive/sector-prediction-observation-log.md`)標註 rollback 時間與觸發條件。
 5. **File follow-up issue**: 根因分析(prior 太強? cycle shift 過大? JSD threshold 過嚴?),**未解決前不可重新啟用**。
 
 Rollback 不應影響整體預測:因 sector predictions 為純附加欄位,handler 仍可服務 `PredictionReport` 其餘內容。
@@ -135,7 +135,7 @@ Day 14 acceptance 全部通過後,執行下列步驟(每步獨立 PR):
 - [ ] **Top-tier hit rate Δ ≥ -3%**: 對比觀察窗口內每日 top-tier sector 方向命中率 vs 上個月 baseline。使用 `c07-day-evaluator --day 14` 確認 exit code = 0
 - [ ] **Driver 可解釋性**: 累計 spot-check ≥ 20 筆,每筆至少引用 1 個 macro/cycle/event 來源
 - [ ] **Rollback 驗證通過**: 至少一次手動測試 (見 §5.2)
-- [ ] **邀請至少一位 team member 審閱觀察記錄** (`docs/operations/sector-prediction-observation-log.md`),確認無遺漏 edge case
+- [ ] **邀請至少一位 team member 審閱觀察記錄** (`docs/archive/sector-prediction-observation-log.md`),確認無遺漏 edge case
 - [ ] **Invariant 確認**: 運行 ``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）` 中所有 automated checks
 
 ### 5.2 Rollback Verification Procedure
@@ -172,7 +172,7 @@ Promotion PR 應包含:
 - `internal/config/parameters.go`: 新增常數化參數 (若需 JSON 治理)
 - `cmd/atlas/main.go`: 翻 `SECTOR_PREDICTION_ENABLED` default 為 true (獨立 PR)
 - `docs/operations/sector-prediction-runbook.md`: 更新 Pre-flight flag 說明為「預設啟用」
-- `docs/operations/sector-prediction-observation-log.md`: 附上完整觀察記錄總結
+- `docs/archive/sector-prediction-observation-log.md`: 附上完整觀察記錄總結
 - `shared_web/static/js/...`: 如有關閉 sector predictions 的 frontend fallback 變更
 
 > Step 1 與 Step 2 為**獨立 PR**,不可合併在同一個 commit。這確保 rollback 時可以精確控制只回退 flag 翻轉而不影響參數定義。
@@ -207,7 +207,7 @@ Promotion PR 應包含:
 
 - Spec: `docs/specs/sector-dimension-prediction-spec.md`
 - Invariant Tracker: ``.omo/manifests/sector-dimension-prediction-invariant-manifest.md`（內部，gitignored）`
-- 觀察記錄: `docs/operations/sector-prediction-observation-log.md`
+- 觀察記錄: `docs/archive/sector-prediction-observation-log.md`
 - 實作:
   - Backend: `internal/eventdriven/sector_predictor.go` + `predictor.go` + `handler.go` + `types.go`
   - Frontend: `shared_web/static/js/pages/capital_predictions.js` + `components/` + `__tests__/sector_predictions.test.mjs`

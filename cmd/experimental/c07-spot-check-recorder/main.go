@@ -49,7 +49,7 @@ var operatorFlag = flag.String("operator", "OPERATOR", "operator identity (recor
 
 const (
 	defaultAtlasURL = "http://localhost:18080"
-	defaultObsLog   = "docs/operations/sector-prediction-observation-log.md"
+	defaultObsLog   = "docs/archive/sector-prediction-observation-log.md"
 	httpTimeout     = 10 * time.Second
 )
 

@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	defaultObsLog   = "docs/operations/sector-prediction-observation-log.md"
+	defaultObsLog   = "docs/archive/sector-prediction-observation-log.md"
 	defaultBaseline = 0.55
 )
 

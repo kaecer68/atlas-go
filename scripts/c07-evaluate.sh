@@ -26,7 +26,7 @@
 
 set -uo pipefail
 
-C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/operations/sector-prediction-observation-log.md}"
+C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/archive/sector-prediction-observation-log.md}"
 C07_REPORT_DIR="${C07_REPORT_DIR:-/app/reports/c07-evaluation}"
 TZ="${C07_TZ:-Asia/Taipei}"
 export TZ

@@ -1,7 +1,7 @@
 # L2.4 Unblocking Roadmap
 
 > **Status**: Roadmap document. Captures dependency graph + unblock conditions for L2.4 follow-on work that is operationally blocked (not code-blocked).
-> **對應**: `docs/operations/l2-4-followup.md` §1 + §3 + Issues #825 / #826
+> **對應**: `docs/archive/l2-4-followup.md` §1 + §3 + Issues #825 / #826
 
 ---
 
@@ -99,7 +99,7 @@ After Step 1:
 - `LLM_SECTOR_AGENTS_ENABLED=true` env var
 - `docker compose restart atlas`
 - Verify `/admin/#page-synergy` L2.4 schedule panel
-- First week: log to `docs/operations/l2-4-observation-log.md` per runbook §2
+- First week: log to `docs/archive/l2-4-observation-log.md` per runbook §2
 
 **Time**: 14 days (operator attention daily per runbook §2 daily review)
 
@@ -195,10 +195,10 @@ When picking up this work next session, **start at Step 1 (T15 user decision)**.
 
 ## References
 
-- `docs/operations/l2-4-followup.md` §1 (T13 main prereqs)
-- `docs/operations/l2-4-followup.md` §3 (T14 promotion 4-step)
+- `docs/archive/l2-4-followup.md` §1 (T13 main prereqs)
+- `docs/archive/l2-4-followup.md` §3 (T14 promotion 4-step)
 - `docs/operations/l2-4-runbook.md` §1, §2, §3 (manual flow)
-- `docs/operations/l2-4-observation-log.md` (Week 0-4 template)
+- `docs/archive/l2-4-observation-log.md` (Week 0-4 template)
 - `l2-4-fault-tolerance-design.md` (PR #1023, in docs/operations/)
 - （內部審計，`.omo/audit/`）(PR #1024)
 - `internal/orchestrator/sector_agent_llm.go:76-83` (LLMDriver definition, target of T14-3c)

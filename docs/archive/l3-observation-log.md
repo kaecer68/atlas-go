@@ -162,6 +162,6 @@ Expected output（**先跑這些，再回來補 Day 1 entry**）：
 - Wave 11 scheduling 設計: PR #1127 (merge commit `a535a8c8`)
 - Stage 3.1 hotfix: PR #1128 (merge commit `30f0df82`) — Items 1-6 + CI flakes (analogue→analog + WaitGroup)
 - Stage 3.1 follow-up: PR #1129 (merge commit `54af456c`) — L3 runbook + TRAPS rows + race/retry/BTM tests
-- L2.4 predecessor observation-log 範本(只看結構,不複製 LLM-driven metric query): [`docs/operations/l2-4-observation-log.md`](./l2-4-observation-log.md)
+- L2.4 predecessor observation-log 範本(只看結構,不複製 LLM-driven metric query): [`docs/archive/l2-4-observation-log.md`](./l2-4-observation-log.md)
 - Wave 9 metric 命名規約來源: PR #926 + Issue #927(`docs/reference/traps.md` §Prometheus)
 - 通訊管道: Slack `#atlas-ops`(緊急 alert storm / panic / 大規模 task 失敗)

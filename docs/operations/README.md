@@ -6,14 +6,14 @@
 
 ## 稽核與盤查報告 (Audits)
 
-稽核報告為內部文件（`.omo/audit/`）。本目錄保留操作 runbook 與事件追蹤文件：
+稽核報告為內部文件（`.omo/audit/`）。歷史 verification 報告已移至 archive：
 
-| 檔案 | 主題 | 對應 PR |
-|------|------|---------|
-| [tier-boundary.md](tier-boundary.md) | MCP tool / HTTP 端點 / Web UI 三層對照表 + Tier 3 Deprecated 標記彙整 | [#1041](https://github.com/kaecer68/atlas-go/pull/1041) |
-| [stock-mcp-query-templates.md](stock-mcp-query-templates.md) | 投資人透過 OpenClaw/Hermes bot 查詢 stock_get_* 工具的查詢模板 | [#1039](https://github.com/kaecer68/atlas-go/pull/1039) |
-| [v2-alert-redesign-verification-report.md](v2-alert-redesign-verification-report.md) | V2 警報改版驗證報告 | — |
-| [frontend-refactor-recovery-verification-report.md](frontend-refactor-recovery-verification-report.md) | 前端 refactor 後 recovery 驗證報告 | — |
+| 檔案 | 主題 |
+|------|------|
+| [tier-boundary.md](tier-boundary.md) | MCP tool / HTTP 端點 / Web UI 三層對照表 + Tier 3 Deprecated 標記彙整 |
+| [stock-mcp-query-templates.md](stock-mcp-query-templates.md) | 投資人透過 OpenClaw/Hermes bot 查詢 stock_get_* 工具的查詢模板 |
+
+> 已移至 archive: `v2-alert-redesign-verification-report.md`、`frontend-refactor-recovery-verification-report.md` → [`../archive/`](../archive/)
 
 > 稽核報告為內部文件（.omo/audit/，gitignored）。
 
@@ -24,9 +24,9 @@
 | [l2-4-runbook.md](l2-4-runbook.md) | L2.4 觀察窗口操作手冊 |
 | [l2-4-fault-tolerance-design.md](l2-4-fault-tolerance-design.md) | L2.4 容錯設計 |
 | [l2-4-unblocking-roadmap.md](l2-4-unblocking-roadmap.md) | L2.4 解阻 roadmap |
-| [l2-4-observation-log.md](l2-4-observation-log.md) | L2.4 觀察記錄 |
-| [l2-4-followup.md](l2-4-followup.md) | L2.4 後續工作 |
 | [wave9-runbook.md](wave9-runbook.md) | Wave 9 observability 系統 runbook |
+
+> 已移至 archive: `l2-4-observation-log.md`、`l2-4-followup.md` → [`../archive/`](../archive/)
 | [mcp-deploy.md](mcp-deploy.md) | atlas-mcp server 部署手冊 |
 | [loki-deployment.md](loki-deployment.md) | Loki 部署手冊 |
 | [sprint3-rollout-runbook.md](sprint3-rollout-runbook.md) | Sprint 3 上線 runbook |
