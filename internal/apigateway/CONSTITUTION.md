@@ -509,7 +509,7 @@ echo "✅ os.Getenv 檢查通過"
 | `us_ndx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_ndx` (5m) | ✅ |
 | `us_dji` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_dji` (5m) | ✅ |
 | taiex_index | 5s/1b | Liveness | auto_taiex_index (1h) | ✅ |
-| tw_vol | 1/5s | Liveness | — | ✅ |
+| tw_vol | 1/5s | Liveness | macro_ingest (5m) | ✅ |
 | `us_nvda` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_nvda` (5m) | ✅ |
 | `us_aapl` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_aapl` (5m) | ✅ |
 | `us_msft` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_msft` (5m) | ✅ |
@@ -539,6 +539,7 @@ echo "✅ os.Getenv 檢查通過"
 | v1.3 | 2026-07-25 | Route A 審計修復：附錄 A 補足缺失的通道任務（auto_geopolitical_taiwan, auto_exchange_rate, auto_taifex_daily, auto_taiex_index）；新增背景任務腳註說明無獨立排程的通道類別；強化 check_constitution.sh exit code（gateway+background 違規納入 exit non-zero） |
 | v1.0 | 2026-05-13 | 初版，經 Oracle 審核後發布 |
 | v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
+| v1.4 | 2026-07-25 | P0 修復：補回 tw_vol 至 macroDataGatewayAdapter 通道列表。tw_vol 背景任務從「—」更正為 macro_ingest (5m)。 |
 | v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 docs/manifests/2026-07-25-channel-architecture-audit.md |
 
 ## 附錄 D：Roots Sanctioned Exception（MCP Server 客戶端宣告檔案根目錄之唯讀例外）

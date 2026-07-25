@@ -82,6 +82,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "us_msft", apply: a.applyUSMSFT},
 		{channelID: "tsm_adr", apply: a.applyTSMADR},
 		{channelID: "taiex_index", apply: a.applyTAIEX},
+		{channelID: "tw_vol", apply: a.applyTWVol},
 		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 	}
@@ -389,6 +390,16 @@ func (a *macroDataGatewayAdapter) applyTAIEX(snap *marketdata.MacroDataSnapshot,
 	}
 	if s.TAIEX.Symbol != "" {
 		snap.TAIEX = s.TAIEX
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyTWVol(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.HistoricalVolatility.Symbol != "" {
+		snap.HistoricalVolatility = s.HistoricalVolatility
 	}
 }
 
