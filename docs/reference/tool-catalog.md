@@ -30,7 +30,7 @@
 |------|------|
 | `capital_flow_daily` | 台股每日七維錢潮雷達（3+2+2 分層）分解 + 共振強度：官方法人（外資 / 投信 / 自營商）+ 行為代理（官股 / 散戶）+ 領先／跨市場訊號（期貨 / TSM ADR）。actor 共識僅計入官方actor 層；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `capital_flow_summary` | 資金流向摘要（適合晨報）；摘要敘事來自 official_actor 共識＋行為／訊號層支援 |
-| `explain_market_move` | 「為什麼漲跌」市場解說（繁體中文）。回傳大盤表現、資金面、國際環境與風險提示，適合散戶快速理解市場變動。Hermes/OpenClaw 可用此工具生成白話市場解讀 |
+| `explain_market_move` | 「為什麼漲跌」市場解說（繁體中文）。支援 `format=emoji`（預設）或 `format=plain` 控制表情符號。回傳大盤表現、資金面、國際環境與風險提示 |
 
 ### Crossmarket（3 個）
 | Tool | 用途 |
@@ -126,7 +126,7 @@
 ### Scheduler / Task（4 個 — PR #1277 scheduler health split）
 | Tool | 用途 |
 |------|------|
-| `scheduler_get_status` | 背景排程器狀態（含 `data_health` 欄位：channel freshness、ingestion lag；與 `system_health` 分離，PR #1277） |
+| `scheduler_get_status` | 背景排程器狀態（含 `data_health` 欄位：channel freshness、ingestion lag；`summary` 計算各 status count；與 `system_health` 分離，PR #1277 + #1354） |
 | `task_list` | 背景任務清單 |
 | `task_get` | 單筆任務 |
 | `task_get_events` | 任務 lifecycle events |

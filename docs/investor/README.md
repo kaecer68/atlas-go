@@ -5,7 +5,7 @@ atlas-go 是給**台灣散戶**的模擬交易暨投資策略觀測輔助平台�
 兩種使用方式，建議順序：
 
 1. **網頁（先用，免設定）**——打開 `/client/` 儀表板：市場總覽、七維錢潮雷達（3+2+2 分層）看板、未來 5 日錢潮預測、產業地圖、投資心法與策略排名，全部白話呈現；七維語意以 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 為準。
-2. **AI agent（進階）**——把 **atlas-mcp** 接進 Hermes / OpenClaw / Claude Desktop，讓 agent 用 110 個工具回答網頁上說不清楚的問題（例如「今天為什麼跌」「外資最近連買幾天」）。
+2. **AI agent（進階）**——把 **atlas-mcp** 接進 Hermes / OpenClaw / Claude Desktop，讓 agent 用 116 個工具回答網頁上說不清楚的問題（例如「今天為什麼跌」「外資最近連買幾天」）。
 
 ## 8 Use Cases — Pick Yours
 
@@ -47,5 +47,5 @@ make verify-mcp-setup  # 驗證 116 tools 連線成功
 
 ## Full Reference
 
-- [`reference/tool-catalog.md`](../reference/tool-catalog.md) — 112 tool 完整 catalog
+- [`reference/tool-catalog.md`](../reference/tool-catalog.md) — 116 tool 完整 catalog
 - [`query-examples.md`](query-examples.md) — 自然語言 → tool 對照 (~25 高頻範本)

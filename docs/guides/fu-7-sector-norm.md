@@ -112,10 +112,10 @@ FU-7 把散落在 ~290 個 backend Go 檔與 ~13 個 frontend JS 檔的「Taiwan
         │                                        ▼
         │                              subIndustryIDs (runtime set)
         │                                        │
-        └────────► Layer() returns "L1" / "L2" / "unknown"
+        └────────► Layer() returns "L1" / "L2"
                                             │
                                             ▼
-                            DisplayZH(L2) returns ID string passthrough
+                            DisplayZH(L2) returns Chinese label
 ```
 
 ### Helper API 一覽
@@ -127,7 +127,7 @@ FU-7 把散落在 ~290 個 backend Go 檔與 ~13 個 frontend JS 檔的「Taiwan
 | `SectorID.IsL1()` / `SectorID.IsL2()` | `bool` | `Layer()` 的 shorthand |
 | `SectorIDFromString(s)` | `(SectorID, bool)` | 解析任意輸入 (canonical ID / 中文 full label / legacy alias),miss 回 `("", false)` |
 | `AllSectors()` | `[]SectorID` | 列出所有 canonical ID (L1 + L2),sorted ascending |
-| `DisplayZH(id)` | `string` | L1 回中文 full label;L2 回 ID 字串 (passthrough) |
+| `DisplayZH(id)` | `string` | L1 回中文 full label;L2 回中文 label（原為 ID passthrough，P3-2 補齊中文映射） |
 | `DisplayZHTw[id]` | `string` | L1 繁中 label 對映 (read-only map) |
 | `DisplayZHAliases[alias]` | `SectorID` | Legacy alias 反查 (read-only map) |
 
