@@ -278,17 +278,24 @@ Because these changes touch many files, split into focused PRs:
 
 ---
 
-## 7. Verification Checklist
+
+## 7. Verification Checklist (2026-07-25 最終狀態)
 
 - [x] `check_constitution.sh` exits non-zero on new violations.
-- [~] `/api/dashboard/channel-health` surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, etc.); full merge of `/api/health/aggregate` + `/api/dashboard/system-health` remains future work.
-- [x] `us_market_refresh` batch closure split into 8 per-channel BTM tasks (`us_market_refresh_<ch>`), each with `ChannelID`, using shared Yahoo limiters. `macro_ingest` remains the only documented batch closure for multiple macro channels.
-- [~] `alert_scan` MCP tool returns a unified `alertscanner.Snapshot` from the persistence AlertStore (`/api/alerts/active`), including severity counts and blocker status. Prometheus Alertmanager + Wave9 webhook aggregation remain future work.
+- [x] `/api/dashboard/channel-health` surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, symbols_processed, errors). Full merge of `/api/health/aggregate` + `/api/dashboard/system-health` remains future work.
+- [x] `us_market_refresh` batch closure split into 8 per-channel BTM tasks (`us_market_refresh_<ch>`), each with `ChannelID`, using shared Yahoo limiters.
+- [x] `macro_ingest` batch closure supplemented: 6 `macro_cache_<ch>` BTM tasks added for channels previously without independent scheduling (dram_spot_price, tw_vol, bdi, frankfurter_fx, sector_data, twse_sector_index). 21 of 23 macro channels now have independent scheduling.
+- [x] `alert_scan` MCP tool returns a unified `alertscanner.Snapshot` from three sources: AlertStore (`/api/alerts/active`), Prometheus Alertmanager webhook (`WebhookSource`), and Wave9 eventbus (`Wave9Source`), including severity counts and blocker status.
 - [x] Proposed channel-index document is CI-enforced (`scripts/ci/check_channel_index.py` validates a1-channels.json against `gateway.go` channelIDs and `register_adapters.go` runtime registrations).
-- [x] Gap-detection backfill task `auto_gap_detection` is registered via BTM and scans daily-file channels (`capital_flow`, `margin`, `government_flow`) plus latest-file channels, writing `data/state/gap_report.json` and emitting `monitor.Alert` records for missing coverage.
+- [x] Gap-detection backfill task `auto_gap_detection` is registered via BTM and scans daily-file channels, writing `data/state/gap_report.json` and emitting `monitor.Alert` records for missing coverage.
 - [x] Per-channel latency/staleness Prometheus metrics are exported by `channel_health_metrics_export` BTM task and alerted by `monitoring/rules/channel_health_latent_staleness.yml`.
 - [x] No disabled Prometheus rule references a missing metric.
 - [x] `backfill-replay` binary/image references removed from `Dockerfile.cron`/`docker-compose.yml` (only `cmd/REGISTRY.md` lists it historically).
+- [x] `AlertScanner` multi-source aggregation integrated into `cmd/atlas/main.go`: API server mode wires `WebhookSource` (Prometheus Alertmanager); live trading mode wires `Wave9Source` (eventbus).
+- [x] Two dead code items removed: `OTCIndexProvider` (unwired, corrupted TAIEX field) and `sortStrings` helper.
+- [x] `TAIEXReturnCalculator` refactored from 2 Yahoo calls to 1 + `twiiCache` integration.
+- [x] `usCache` upgraded from symbol-only to param-keyed composite key `(symbol, interval, range)`, aligned with `twiiCache`.
+- [ ] `AlertScanner` wiring in `cmd/atlas/main.go` requires follow-up: the `AlertAPI.WithAlertSources()` call for API server mode and live trading mode was added, but the `Wave9Source.Start()`/`Stop()` lifecycle management in live trading mode needs verification.
 
 ---
 
