@@ -144,9 +144,9 @@ check_gateway_registration() {
   if [ "$found_any" -eq 0 ]; then
     log_pass "未發現繞過 Gateway 的 Provider 直接建立"
   else
-    log_info "以上為潛在違規，請手動確認是否應透過 gateway.Fetch() 調用"
+    log_info "以上為潛在違規，請確認是否應改用 gateway.Fetch(channelID)"
   fi
-  return 0
+  return $found_any
 }
 
 # =============================================================================
@@ -224,7 +224,7 @@ check_background_tasks() {
   else
     log_info "以上為潛在違規，請確認是否應改用 taskMgr.Register()"
   fi
-  return 0
+  return $found_any
 }
 
 # =============================================================================
@@ -233,43 +233,52 @@ check_background_tasks() {
 main() {
   printf "Atlas 數據源憲法合規檢查\n==========================\n\n"
 
-  local env_result=0 rate_result=0
+  local env_result=0 gw_result=0 rate_result=0 bg_result=0
 
-  check_env_vars || env_result=$?
-  check_gateway_registration || true
-  check_rate_limits || rate_result=$?
-  check_background_tasks || true
+  set +e
+  check_env_vars; env_result=$?
+  check_gateway_registration; gw_result=$?
+  check_rate_limits; rate_result=$?
+  check_background_tasks; bg_result=$?
+  set -e
 
   printf "\n═══════════════════════════════════════\n"
+
+  local checks_passed=0
+  [ "$env_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
+  [ "$gw_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
+  [ "$rate_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
+  [ "$bg_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
 
   if [ "$OUTPUT_MODE" = "json" ]; then
     if command -v jq >/dev/null 2>&1; then
       jq -n \
         --argjson violations "${JSON_VIOLATIONS:-[]}" \
         --argjson total "$VIOLATIONS" \
-        --argjson passed "$((4 - (env_result>0?1:0) - (rate_result>0?1:0)))" \
-        '{status:(if $total > 0 then "violations_found" else "passed" end),total_violations:$total,checks_passed:$passed,checks_total:4}'
+        --argjson passed "$checks_passed" \
+        --argjson env_ok "$([ "$env_result" -eq 0 ] && echo true || echo false)" \
+        --argjson gw_ok "$([ "$gw_result" -eq 0 ] && echo true || echo false)" \
+        --argjson rate_ok "$([ "$rate_result" -eq 0 ] && echo true || echo false)" \
+        --argjson bg_ok "$([ "$bg_result" -eq 0 ] && echo true || echo false)" \
+        '{status:(if $total > 0 then "violations_found" else "passed" end),total_violations:$total,checks_passed:$passed,checks_total:4,checks:{env_vars:$env_ok,gateway_registration:$gw_ok,rate_limits:$rate_ok,background_tasks:$bg_ok},violations:$violations}'
     else
       printf '{"status":"ok","note":"jq not available for detailed output"}\n'
     fi
   else
-    local checks_passed=0
-    [ "$env_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
-    [ "$rate_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
-
-    printf "檢查結果: %d/4 通過 (強制: env + rate_limit)\n" "$checks_passed"
+    printf "檢查結果: %d/4 通過 (env + gateway + rate_limit + background)\n" "$checks_passed"
     if [ "$VIOLATIONS" -gt 0 ]; then
       printf "${RED}發現 %d 處違規${NC}\n\n" "$VIOLATIONS"
       printf "修復建議:\n"
       printf "  1. os.Getenv 違規 → 改用 config.GetSecret() 或移至 config.go\n"
       printf "  2. Provider 直接建立 → 改用 gateway.Fetch(channelID)\n"
-      printf "  3. 背景 goroutine → 改用 taskMgr.Register()\n"
+      printf "  3. Rate limiter 缺失 → 在 limits.go 補上限流設定\n"
+      printf "  4. 背景 goroutine → 改用 taskMgr.Register()\n"
     else
       printf "${GREEN}所有檢查通過${NC}\n"
     fi
   fi
 
-  if [ "$env_result" -ne 0 ] || [ "$rate_result" -ne 0 ]; then
+  if [ "$env_result" -ne 0 ] || [ "$gw_result" -ne 0 ] || [ "$rate_result" -ne 0 ] || [ "$bg_result" -ne 0 ]; then
     exit 1
   fi
   exit 0

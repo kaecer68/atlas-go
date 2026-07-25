@@ -1,7 +1,7 @@
 # Atlas 數據源憲法（Data Source Constitution）
 
-**版本**：v1.2
-**生效日期**：2026-05-13（初版）；2026-07-25（v1.2 修訂 — 通道清單全面更新）
+**版本**：v1.3
+**生效日期**：2026-05-13（初版）；2026-07-25（v1.3 修訂 — 通道任務補足 + CI 強化）
 **適用範圍**：所有新增或修改外部數據源抓取的程式碼
 **執行機制**：CI 自動檢查 + PR 人工審查
 
@@ -490,17 +490,17 @@ echo "✅ os.Getenv 檢查通過"
 | twse_margin | 1/5s | Readiness | auto_margin (30m) | ✅ |
 | export_statistics | 1/5s | Readiness | auto_export (12h) | ✅ |
 | tsmc_revenue | 2min/1b | Liveness | tsmc_revenue (24h) | ✅ |
-| geopolitical_taiwan | 1min/1b | Liveness | — | ✅ |
+| geopolitical_taiwan | 1min/1b | Liveness | auto_geopolitical_taiwan (6h) | ✅ |
 | janus_regime | 不限流 (compute) | Computed | janus_regime_refresh (6h) | ✅ |
 | tej | 1s/1b + daily | Liveness | tej_refresh (1h) | ✅ |
-| exchange_rate | 1/5s | Liveness | — | ✅ |
+| exchange_rate | 1/5s | Liveness | auto_exchange_rate (1h) | ✅ |
 | sox_index | 1/5s | Liveness | — | ✅ |
 | dram_spot_price | 1/5s | Liveness | — | ✅ |
 | twse_sector_index | 1/5s | Readiness | — | ✅ |
 | sector_data | 不限流 (rate.Inf) | Readiness | — | ✅ |
 | day_trading | 1/5s | Liveness | — | ✅ |
 | bdi | 1/5s | Liveness | — | ✅ |
-| taifex_daily | 1/5s | Liveness | — | ✅ |
+| taifex_daily | 1/5s | Liveness | auto_taifex_daily (1h) | ✅ |
 | taifex_institutional | 1/5s | Liveness | auto_taifex_institutional (1h) | ✅ |
 | twse_oddlot | 1/5s | Liveness | — | ✅ |
 | government_flow | 不限流 (rate.Inf, file-backed) | Readiness | auto_government_flow (1h) | ✅ |
@@ -508,7 +508,7 @@ echo "✅ os.Getenv 檢查通過"
 | us_spx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
 | us_ndx | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
 | us_dji | Yahoo Index (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
-| taiex_index | 5s/1b | Liveness | — | ✅ |
+| taiex_index | 5s/1b | Liveness | auto_taiex_index (1h) | ✅ |
 | tw_vol | 1/5s | Liveness | — | ✅ |
 | us_nvda | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
 | us_aapl | Yahoo Tech (1.5s/1b) | Liveness | us_market_refresh (5m) | ✅ |
@@ -517,7 +517,15 @@ echo "✅ os.Getenv 檢查通過"
 | twse_sbl | 2s/1b | Liveness (inactive stub) | auto_twse_sbl (1h) | ✅ |
 | tdcc_equity_dispersion | 5s/1b | Liveness (inactive stub) | — | ✅ |
 
-> **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。
+> **背景任務說明**：
+> - 「—」表示通道無獨立 BTM 任務。這些通道的資料擷取依賴：
+>   - `macro_ingest` 閉包內部批次呼叫（sox_index, dram_spot_price, bdi, tw_vol, frankfurter_fx, sector_data）
+>   - `us_market_refresh` 批次處理（us_yahoo, us_spx, us_ndx, us_dji, us_nvda, us_aapl, us_msft, tsm_adr）
+>   - 檔案驅動，無 HTTP fetch（sector_data, government_flow）
+>   - 無實作（twse_sbl stub, tdcc_equity_dispersion stub, twse_sector_index, day_trading, twse_oddlot, twse_etf）
+> - 12 個 Yahoo Finance 通道共享 `us_market_refresh`（5m）單一任務，共用同一 HTTP API 端點（query1.finance.yahoo.com）。
+> - 各通道的完整 BTM 任務清單與排程細節見 `cmd/atlas/*_tasks.go` 及審計 manifest `docs/manifests/2026-07-25-channel-architecture-audit/`。
+> - **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。
 ## 附錄 B：違規處理流程
 
 1. **CI 階段**：自動檢查失敗 → PR 無法合併
@@ -529,6 +537,7 @@ echo "✅ os.Getenv 檢查通過"
 
 | 版本 | 日期 | 修訂內容 |
 |------|------|---------|
+| v1.3 | 2026-07-25 | Route A 審計修復：附錄 A 補足缺失的通道任務（auto_geopolitical_taiwan, auto_exchange_rate, auto_taifex_daily, auto_taiex_index）；新增背景任務腳註說明無獨立排程的通道類別；強化 check_constitution.sh exit code（gateway+background 違規納入 exit non-zero） |
 | v1.0 | 2026-05-13 | 初版，經 Oracle 審核後發布 |
 | v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
 | v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 docs/manifests/2026-07-25-channel-architecture-audit.md |
