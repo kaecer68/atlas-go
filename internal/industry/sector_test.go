@@ -273,12 +273,12 @@ func Test_IsL2_L1ReturnsFalse(t *testing.T) {
 	}
 }
 
-func Test_DisplayZH_L2Fallback_SnakeCaseReturned(t *testing.T) {
-	if got := DisplayZH(SubIndustryAISupplyChain); got != string(SubIndustryAISupplyChain) {
-		t.Errorf("DisplayZH(ai_supply_chain) = %q, want %q", got, string(SubIndustryAISupplyChain))
+func Test_DisplayZH_L2HasChineseLabel(t *testing.T) {
+	if got := DisplayZH(SubIndustryAISupplyChain); got != "AI供應鏈" {
+		t.Errorf("DisplayZH(ai_supply_chain) = %q, want AI供應鏈", got)
 	}
-	if got := DisplayZH(SubIndustryFoundry); got != string(SubIndustryFoundry) {
-		t.Errorf("DisplayZH(foundry) = %q, want %q", got, string(SubIndustryFoundry))
+	if got := DisplayZH(SubIndustryFoundry); got != "晶圓代工" {
+		t.Errorf("DisplayZH(foundry) = %q, want 晶圓代工", got)
 	}
 }
 
