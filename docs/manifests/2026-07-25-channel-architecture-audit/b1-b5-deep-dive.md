@@ -70,7 +70,7 @@
 | 14 Yahoo-derived channels have no dedicated BTM task | `a2-tasks.md` §8 | Data only fetched when `macro_ingest` happens to include them; no explicit schedule per channel |
 | Stub channels (`twse_sbl`, `tdcc_equity_dispersion`) registered but never fetch | `a1-channels.json` | Health shows `inactive` permanently; consumes registry/health scan overhead |
 | 75 one-shot CLIs are not scheduled | `a2-tasks.json` | Historical backfills require manual or external cron orchestration |
-| `backfill-replay` built but not scheduled | `a2-tasks.md` §3 | Dead artifact in `Dockerfile.cron` |
+| `backfill-replay` built but not scheduled | `a2-tasks.md` §3 | **RESOLVED 2026-07-25:** binary and all image references removed; only `cmd/REGISTRY.md` still lists it (see Route D cleanup). |
 
 ### Monitoring Gaps
 
@@ -98,9 +98,9 @@
 ### Why Alerts Are "Never Found or Managed"
 
 1. **Auto-ack for INFO.** `AutoHandler` immediately acknowledges INFO-level alerts, so they never appear in `/api/alerts/unacknowledged`.
-2. **No startup rescan.** After a process restart, existing triggered alerts are not reloaded. New alerts only appear when emitted again.
+2. **Startup rescan implemented.** `alert_scan` MCP tool and `internal/monitoring/alertscanner` (PR #1337) reload unacknowledged alerts from `AlertStore` at startup; however Prometheus Alertmanager and inbound webhook ring buffer are still not aggregated.
 3. **MCP is read-only Phase 1.** `alert_acknowledge` / `alert_resolve` / `alert_silence` exist as HTTP APIs but not as MCP tools, so AI agents cannot manage them through the canonical interface.
-4. **Silence endpoint is a stub.** `POST /api/alerts/silence` returns `silenced_until` but does not persist it.
+4. **Silence endpoint persists.** `POST /api/alerts/silence` now sets `status=SILENCED`, persists `SilencedUntil`, and returns affected count (PR #1337).
 5. **Dead rules are never pruned.** Disabled rules reference metrics that are not emitted; they accumulated under `monitoring/rules/disabled/` without removal plan until removed 2026-07-25.
 
 ---
