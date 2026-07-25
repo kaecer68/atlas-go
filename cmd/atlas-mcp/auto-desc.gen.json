@@ -1,4 +1,24 @@
 {
+  "alert_acknowledge": {
+    "name": "alert_acknowledge",
+    "description": "Acknowledge an alert by id. Side-effect: persists acknowledged status to alert store.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "the alert id to acknowledge",
+          "type": "string"
+        },
+        "user": {
+          "description": "who is acknowledging (optional)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
   "alert_get_rules": {
     "name": "alert_get_rules",
     "description": "Configured alert rules (severity, threshold, channels).",
@@ -24,6 +44,58 @@
     "name": "alert_list_unacknowledged",
     "description": "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope).",
     "inputSchema": {
+      "type": "object"
+    }
+  },
+  "alert_resolve": {
+    "name": "alert_resolve",
+    "description": "Resolve an alert by id. Side-effect: persists resolved status to alert store.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "the alert id to resolve",
+          "type": "string"
+        },
+        "user": {
+          "description": "who is resolving (optional)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "alert_scan": {
+    "name": "alert_scan",
+    "description": "Scan for all unacknowledged alerts (startup rescan). Returns active alert counts and blocker status.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  "alert_silence": {
+    "name": "alert_silence",
+    "description": "Silence all non-resolved alerts matching a rule for a duration. Side-effect: persists silenced status.",
+    "inputSchema": {
+      "properties": {
+        "duration_minutes": {
+          "description": "how long to silence (minutes)",
+          "type": "integer"
+        },
+        "reason": {
+          "description": "why silencing (optional)",
+          "type": "string"
+        },
+        "rule": {
+          "description": "the alert rule to silence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "duration_minutes"
+      ],
       "type": "object"
     }
   },

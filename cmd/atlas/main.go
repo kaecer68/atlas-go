@@ -48,6 +48,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/marketexplain"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
+	"github.com/kaecer68/atlas-go/internal/monitoring/alertscanner"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
 	llmHealth "github.com/kaecer68/atlas-go/internal/monitoring/api/llm"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
@@ -737,6 +738,16 @@ func run(args []string, deps appDeps) error {
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.RegisterRoutes(mux)
+
+			// Route C: scan for in-flight alerts after process restart.
+			scanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			scanner := alertscanner.New(alertStore)
+			if alerts, err := scanner.Scan(scanCtx); err != nil {
+				log.Printf("[AlertScanner] startup scan failed: %v", err)
+			} else if len(alerts) > 0 {
+				log.Printf("[AlertScanner] %d unacknowledged alerts loaded from store", len(alerts))
+			}
 		}
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
@@ -2278,6 +2289,15 @@ func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, col
 	} else {
 		alertAPI := monitoring.NewAlertAPI(alertStore)
 		alertAPI.RegisterRoutes(mux)
+		// Route C: scan for in-flight alerts after process restart.
+		scanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		scanner := alertscanner.New(alertStore)
+		if alerts, err := scanner.Scan(scanCtx); err != nil {
+			log.Printf("[AlertScanner] startup scan failed: %v", err)
+		} else if len(alerts) > 0 {
+			log.Printf("[AlertScanner] %d unacknowledged alerts loaded from store", len(alerts))
+		}
 		monitor.SetAlertStore(alertStore)
 		// Phase 2A: dedup, auto-handler, console output
 		alertDeduplicator := monitoring.NewAlertDeduplicator(5*time.Minute, alertStore)

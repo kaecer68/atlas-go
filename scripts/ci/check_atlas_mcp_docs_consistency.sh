@@ -102,7 +102,7 @@ fi
 
 # 3. 檢查 112 tool 散佈在至少 3 個檔案(2026-07-21 文件盤查後 tool 總數更新為 112)
 echo ""
-echo "  → Checking tool count 112 propagates to ≥ $TOOL_COUNT_MIN files..."
+echo "  → Checking tool count 116 propagates to ≥ $TOOL_COUNT_MIN files..."
 files_with_110=0
 for file in "${AUTHORITATIVE_FILES[@]}"; do
     if [ -f "$file" ] && grep -qE "112 (個 tool|tools|tool |個 tool| tool)" "$file"; then
@@ -110,10 +110,10 @@ for file in "${AUTHORITATIVE_FILES[@]}"; do
     fi
 done
 if [ "$files_with_110" -lt "$TOOL_COUNT_MIN" ]; then
-    echo "    ❌ '112 tools' only appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
+    echo "    ❌ '116 tools.*appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-    echo "    ✓ '112 tools' appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
+    echo "    ✓ '116 tools.*appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
 fi
 
 # 總結

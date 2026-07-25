@@ -14,7 +14,7 @@ atlas-go 的對外介面分為 4 個 tier（與 401 攔截器的 `excludedPages`
 |------|------|----------|--------|-----|------|
 | **Public** | 不需登入 | 訪客、未登入用戶 | ✅ | ✅ (部分) | `/health`, `/api/macro/snapshot/latest` |
 | **Free** | JWT (free tier) | 註冊但未付費用戶 | ✅ | ✅ | `/api/dashboard/system-health`, `/api/narrative/bundle` |
-| **Premium** | JWT (premium) | 付費訂閱用戶 | ✅ | ✅ (全 112 tools) | `/api/recommendations`, `/api/stock/*` |
+| **Premium** | JWT (premium) | 付費訂閱用戶 | ✅ | ✅ (全 116 tools) | `/api/recommendations`, `/api/stock/*` |
 | **Admin** | JWT (admin role) | 開發者、營運、admin_web 用戶 | ✅ (admin_web) | ✅ (token_admin) | `/api/control/*`, `/api/parameters/*` |
 
 > **設計原則**：每個 HTTP 端點只能服務 **1 個 tier**；跨 tier 的資料需求透過「在 handler 內組合多個資料源」實作，而不是開放多個 tier 都能呼叫的端點。
