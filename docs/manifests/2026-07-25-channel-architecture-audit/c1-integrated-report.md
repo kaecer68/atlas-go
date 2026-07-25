@@ -104,7 +104,7 @@ See §3 below.
 | 5 | ~~Convert 4 FinMind rogue backfills into BTM tasks or delete if FinMind is dead~~ | `cmd/backfill-*` | Already resolved: the four FinMind backfill CLIs (`backfill-financial-statements`, `backfill-institutional-investors`, `backfill-month-revenue`, `backfill-taifex-oi`) no longer exist in the repository. Remaining one-shot backfills (`backfill-fundamentals-ps-sector`, `backfill-industry-tree`, `backfill-quotes`, `backfill-summaries`) are local-file / TWSE-client tools with no direct API-key env access. |
 | 6 | Add `ChannelID` to the 64 BTM tasks that currently fetch via closure | `cmd/atlas/*_tasks.go` | All data-fetching tasks go through `gateway.Fetch` |
 | 7 | ~~Create a gap-detection backfill task~~ | `cmd/atlas/backfill_tasks.go` | Implemented: `auto_gap_detection` scans daily-file channels and writes `data/state/gap_report.json`; emits `monitor.Alert` for missing coverage. |
-| 8 | Unify health endpoints | `internal/monitoring/` | Single `/api/health` backed by `ChannelHealthStore` + portprobe |
+| 8 | Unify health endpoints | `internal/monitoring/` | `/api/dashboard/channel-health` now surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, etc.); remaining work is merging `/api/health/aggregate` with `/api/dashboard/system-health` behind `ChannelHealthStore`. |
 | 9 | ~~Add per-channel latency/staleness Prometheus rules~~ | `monitoring/rules/channel_health_latent_staleness.yml` + `cmd/atlas/channel_health_metrics_task.go` | Implemented: `channel_health_metrics_export` BTM task emits `atlas_channel_data_staleness_seconds`, `atlas_channel_fetch_latency_seconds`, and `atlas_channel_health_status` gauges; alert rules fire on stale (>24h), high latency (>30s), and error status. |
 
 ### P2 — Documentation & hygiene
@@ -281,7 +281,7 @@ Because these changes touch many files, split into focused PRs:
 ## 7. Verification Checklist
 
 - [x] `check_constitution.sh` exits non-zero on new violations.
-- [x] `/api/health` returns same data as `/health` or redirects.
+- [~] `/api/dashboard/channel-health` surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, etc.); full merge of `/api/health/aggregate` + `/api/dashboard/system-health` remains future work.
 - [~] All external-fetch BTM tasks either set `ChannelID` or are documented batch closures (`us_market_refresh`, `macro_ingest`) in `CONSTITUTION.md` Appendix A. Full per-channel split of Yahoo/macro batches remains future work.
 - [~] `alert_scan` MCP tool returns a unified `alertscanner.Snapshot` from the persistence AlertStore (`/api/alerts/active`), including severity counts and blocker status. Prometheus Alertmanager + Wave9 webhook aggregation remain future work.
 - [x] Proposed channel-index document is CI-enforced (`scripts/ci/check_channel_index.py` validates a1-channels.json against `gateway.go` channelIDs and `register_adapters.go` runtime registrations).
