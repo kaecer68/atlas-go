@@ -289,6 +289,39 @@ func registerOperationsTasks(d operationsDeps) {
 		log.Printf("[Gateway] registered macro_ingest background task (5m interval)")
 	}
 
+	// Per-channel cache-warm tasks for channels bundled inside macro_ingest.
+	// These tasks independently call Gateway.Fetch so the channel adapter's
+	// provider cache (usCache, etc.) is populated before macroDataGatewayAdapter
+	// runs its batch merge. Each task has its own ChannelID, Jitter, and
+	// failure isolation — matching the us_market_refresh_<ch> pattern.
+	//
+	// Channels already covered by other BTM tasks are NOT duplicated here
+	// (e.g. taiex_index → auto_taiex_index; us_spx → us_market_refresh_us_spx).
+	if d.gateway != nil {
+		macroCacheChannels := []struct {
+			channelID string
+			interval  time.Duration
+		}{
+			{"dram_spot_price", 5 * time.Minute},
+			{"tw_vol", 5 * time.Minute},
+			{"bdi", 5 * time.Minute},
+			{"frankfurter_fx", 10 * time.Minute},
+			{"sector_data", 15 * time.Minute},
+			{"twse_sector_index", 15 * time.Minute},
+		}
+		for _, ch := range macroCacheChannels {
+			_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "macro_cache_" + ch.channelID,
+				ChannelID: ch.channelID,
+				Interval:  ch.interval,
+				Jitter:    30 * time.Second,
+				Enabled:   true,
+				Task:      gatewayChannelFetch(d.gateway, ch.channelID),
+			})
+			log.Printf("[Gateway] registered macro_cache_%s background task (%v interval)", ch.channelID, ch.interval)
+		}
+	}
+
 	// RealTimeAdapter feed: periodically ingest market data points from
 	// the latest macro snapshot for sub-second regime detection.
 	if d.realtimeAdapter != nil {
