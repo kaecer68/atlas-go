@@ -1,5 +1,5 @@
 {
-  "canonical_channel_count": 37,
+  "canonical_channel_count": 38,
   "registered_channels": [
     {"id": "us_yahoo", "source": "query1.finance.yahoo.com", "status": "conditional (YahooEnabled)"},
     {"id": "twse_replay", "source": "TWSE", "status": "registered"},
@@ -28,6 +28,7 @@
     {"id": "twse_oddlot", "source": "TWSE", "status": "registered"},
     {"id": "twse_sbl", "source": "stub", "status": "stub"},
     {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
+    {"id": "government_broker", "source": "TWSE broker-level aggregate", "status": "registered"},
     {"id": "twse_etf", "source": "TWSE", "status": "registered"},
     {"id": "us_spx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
     {"id": "us_ndx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
@@ -39,54 +40,16 @@
     {"id": "us_msft", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
     {"id": "tsm_adr", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"}
   ],
-  "rogue_channels": [
-    {
-      "name": "backfill-financial-statements",
-      "env_var": "FINMIND_API_KEY",
-      "files": ["cmd/backfill-financial-statements/main.go"],
-      "line_numbers": [43, 55, 66],
-      "duplicates_registered_channel": "finmind",
-      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockFinancialStatements"
-    },
-    {
-      "name": "backfill-institutional-investors",
-      "env_var": "FINMIND_API_KEY",
-      "files": ["cmd/backfill-institutional-investors/main.go"],
-      "line_numbers": [51, 70, 80],
-      "duplicates_registered_channel": "finmind",
-      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockInstitutionalInvestorsBuySell"
-    },
-    {
-      "name": "backfill-month-revenue",
-      "env_var": "FINMIND_API_KEY",
-      "files": ["cmd/backfill-month-revenue/main.go"],
-      "line_numbers": [55, 67, 77],
-      "duplicates_registered_channel": "finmind",
-      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockMonthRevenue"
-    },
-    {
-      "name": "backfill-taifex-oi",
-      "env_var": "FINMIND_API_KEY",
-      "files": ["cmd/backfill-taifex-oi/main.go"],
-      "line_numbers": [59, 79, 126, 129],
-      "duplicates_registered_channel": "taifex_institutional (domain) / finmind (backend)",
-      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanFuturesInstitutionalTraders"
-    }
-  ],
-  "additional_bypass_candidates": [
-    {
-      "name": "backfill-replay",
-      "files": ["cmd/backfill-replay/main.go"],
-      "line_numbers": [126, 242, 250],
-      "reason": "raw http.Client without os.Getenv API key in same file; broader bypass if it fetches remote data"
-    }
-  ],
+  "rogue_channels": [],
+  "rogue_channels_note": "RESOLVED 2026-07-25: the four FinMind backfill CLIs (backfill-financial-statements, backfill-institutional-investors, backfill-month-revenue, backfill-taifex-oi) were removed in PR #1338. check_constitution.sh now blocks new raw-http + os.Getenv violations.",
+  "additional_bypass_candidates": [],
+  "additional_bypass_candidates_note": "RESOLVED 2026-07-25: cmd/backfill-replay was removed; no remaining raw-http bypass candidates in cmd/backfill-*.",
   "constitution_baseline": {
-    "claimed_channels": 16,
-    "actual_canonical_ids": 37,
-    "claimed_no_rate_limiter": 7,
-    "claimed_yahoo_fragmentation": 12,
-    "claimed_no_auto_fetch_schedule": 15
+    "document_version": "v1.3",
+    "document_date": "2026-07-25",
+    "document_claimed_channels": 38,
+    "actual_canonical_ids": 38,
+    "actual_runtime_registrations": "22-33 depending on API keys and feature flags"
   },
-  "notes": "37 canonical IDs live in internal/apigateway/gateway.go:168-210. Registration in register_adapters.go is conditional on keys and feature flags. Four cmd/backfill-* tools violate Article 1 by creating raw HTTP clients with FINMIND_API_KEY. Constitution.md's own counts (16 channels, 9 tasks) are outdated; a5-violations.json confirms reality is 37 channels / 60 tasks."
+  "notes": "38 canonical IDs live in internal/apigateway/gateway.go (channelIDs). Runtime registration in register_adapters.go is conditional on keys and feature flags. CI check scripts/ci/check_channel_index.py ensures the JSON manifest stays synchronized with the Go canonical list."
 }

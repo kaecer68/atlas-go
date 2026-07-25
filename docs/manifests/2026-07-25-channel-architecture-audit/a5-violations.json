@@ -454,11 +454,11 @@
   ],
 
   "constitution_claims_vs_reality": {
-    "claimed_channels": 37,
-    "claimed_channels_source": "CONSTITUTION.md §前言 '37 個信息通道（34 active + 1 orphan + 2 stub）' + 附錄 A 列 37 channels",
-    "actual_registered": 37,
-    "actual_registered_detail": "internal/apigateway/register_adapters.go 共 37 unique channel IDs；fugle / fubon / finmind / tej 受 cfg.APIKey gate；us_yahoo / taiex_index / tw_vol / us_spx / us_ndx / us_dji / us_nvda / us_aapl / us_msft / tsm_adr 受 cfg.YahooEnabled gate；janus_regime 受 janusEngine != nil gate",
-    "actual_total_at_runtime_maximum": 37,
+    "claimed_channels": 38,
+    "claimed_channels_source": "CONSTITUTION.md §前言 '38 個信息通道（35 active + 1 orphan + 2 stub）' + 附錄 A 列 38 channels (updated 2026-07-25 to include government_broker)",
+    "actual_registered": 38,
+    "actual_registered_detail": "internal/apigateway/register_adapters.go 共 38 unique channel IDs (37 original + government_broker); fugle / fubon / finmind / tej 受 cfg.APIKey gate；us_yahoo / taiex_index / tw_vol / us_spx / us_ndx / us_dji / us_nvda / us_aapl / us_msft / tsm_adr 受 cfg.YahooEnabled gate；janus_regime 受 janusEngine != nil gate",
+    "actual_total_at_runtime_maximum": 38,
     "actual_total_at_runtime_minimum": "23 (no API keys + YahooEnabled=false + janusEngine=nil → 僅 23 通道)",
     "claimed_tasks": 9,
     "claimed_tasks_source": "[INFERENCE] CONSTITUTION.md 附錄 A 列 22 tasks 背景任務（與 §前言 '15 個通道無獨立 auto-fetch 排程' 不一致，9 應指 scheduled tasks 主要類別或早期版本）",
@@ -468,7 +468,7 @@
     "actual_total_at_runtime_minimum": "~50 (no API keys, no Postgres)",
     "actual_total_registered_with_dedup_check": 60,
     "actual_total_with_duplicate_warnings": "60 (janus_regime_refresh 在 main.go:1545 與 operations_tasks.go:1543 雙重註冊，後者覆蓋前者)",
-    "gap_summary": "憲法前言聲稱 16 channels / 9 tasks (v1.0/v1.1 時代) → v1.2 更新為 37 channels；background tasks 從 ~9 個 (auto_*) 膨脹至 60 個實際註冊；附錄 A 仍標 '背景任務' 欄位但僅列 22 個，與實際 60 有 38 個 gap。CONSTITUTION.md 內部對 channel/task 數字本身自相矛盾：§前言 '37 個信息通道' vs 附錄 A 表格實際列 37 (一致) vs 早期 manifest 描述 16 通道 (已修訂)。"
+    "gap_summary": "憲法前言 v1.0/v1.1 聲稱 16 channels / 9 tasks → v1.2 更新為 37 channels → v1.3 修正為 38 channels (補上 runtime-registered 但 canonical list 遺漏的 government_broker)。background tasks 從 ~9 個 (auto_*) 膨脹至 60 個實際註冊；附錄 A 仍標 '背景任務' 欄位但僅列 22 個，與實際 60 有 38 個 gap。CONSTITUTION.md 內部對 channel/task 數字本身已於 v1.3 修訂一致。"
   },
 
   "notes": [
@@ -477,8 +477,8 @@
     "Article 4 共發現 17 個 rogue ticker goroutines，13 個高/中嚴重度。最嚴重者為 internal/prism/prism_manager.go:563 (autoBalancer, 5min ticker)、internal/realtime/regime_adapter.go:265、internal/metalearning/metalearner.go:286 — 三者皆 Start/Stop 配對 + 固定間隔，依 §4.5.2 例外原則明確應走 BackgroundTaskManager。",
     "Article 5 circuit breaker 一致性：tsmc_revenue 自訂 5 次 threshold (gateway.go:39) 偏離 §5.1 '3 次失敗'；provider 層若被任何 rogue goroutine 直接呼叫（見 Article 4），breaker 完全不生效 — 兩條 violations 互相耦合。",
     "Appendix D MCP roots：主要問題為 §D.1 條件 7 capability-miss explicit error 未實作 (回傳 'unsupported' content 而非 errors.New)；其餘 D.1.1-6 條件大致合規 (EvalSymlinks 在 prefix check 前、O_NOFOLLOW Unix、io.LimitReader、Info.Mode().IsRegular、audit JSONL、bind 127.0.0.1)。",
-    "Counts gap：CONSTITUTION.md 自我聲稱 16→37 channels (v1.2) 與 9 tasks (v1.0/v1.1 時代) 已過時 — 實際 code-level 註冊 37 channels / 60 background tasks。附錄 A 任務欄位僅列 22，與實際 60 差 38。",
-    "[INFERENCE] 'claimed_tasks=9' 對應 §前言 '15 個通道無獨立 auto-fetch 排程' 的對偶數字；CONSTITUTION.md 並無單一處明確說 '9 個任務'，可能為 v1.0/v1.1 時代殘留數字，未於 v1.2 修訂歷史中更新。",
-    "CI 治理：scripts/ci/check_constitution.sh gateway/background check 僅 echo WARN 不 exit 1 → PR 不會被阻擋；建議立即修為 non-zero exit 並將 violations 寫入 GitHub step summary。"
+    "Counts gap: CONSTITUTION.md 自我聲稱 16→37→38 channels (v1.3) 與 9 tasks (v1.0/v1.1 時代) 已過時 — 實際 code-level 註冊 38 channels / 60 background tasks。附錄 A 任務欄位僅列 22，與實際 60 差 38。",
+    "[INFERENCE] 'claimed_tasks=9' 對應 §前言 '15 個通道無獨立 auto-fetch 排程' 的對偶數字；CONSTITUTION.md 並無單一處明確說 '9 個任務'，可能為 v1.0/v1.1 時代殘留數字，未於 v1.2/v1.3 修訂歷史中更新。",
+    "CI 治理：scripts/ci/check_constitution.sh gateway/background check 已於 2026-07-25 修正為 violation 時 exit 1 並寫入 GitHub step summary；新增 scripts/ci/check_channel_index.py 驗證 a1-channels.json 與 gateway.go channelIDs 同步。"
   ]
 }
