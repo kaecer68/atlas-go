@@ -737,8 +737,13 @@ func run(args []string, deps appDeps) error {
 		dashboard.RegisterAllRoutes(mux, monitoring.RouteOptions{IncludeBacktest: true, IncludeSwagger: *swaggerMode})
 		apipipeline.RegisterL24Routes(mux, apipipeline.L24RouteDeps{Manager: l24Mgr, GetParam: config.GetL2_4Schedule})
 
+		alertWebhook := alerting.NewAlertWebhookHandler(1000)
+		mux.Handle("/api/v1/alerts", alertWebhook)
+		log.Printf("[Alerting] registered /api/v1/alerts webhook handler (cap=1000)")
+
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
+			alertAPI.WithAlertSources(alertscanner.NewWebhookSource(alertWebhook))
 			alertAPI.RegisterRoutes(mux)
 
 			// Route C: scan for in-flight alerts after process restart.
@@ -900,10 +905,6 @@ func run(args []string, deps appDeps) error {
 		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)
 		log.Printf("[DailyReport] registered /api/reports/* routes")
-
-		alertWebhook := alerting.NewAlertWebhookHandler(1000)
-		mux.Handle("/api/v1/alerts", alertWebhook)
-		log.Printf("[Alerting] registered /api/v1/alerts webhook handler (cap=1000)")
 
 		if taskManager != nil {
 			dashboard.SetTaskManager(taskManager)
@@ -2277,6 +2278,11 @@ func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, col
 		log.Printf("[Alerts] failed to create alert store: %v", err)
 	} else {
 		alertAPI := monitoring.NewAlertAPI(alertStore)
+		wave9Src := alertscanner.NewWave9Source(eventBus, 256)
+		if err := wave9Src.Start(); err != nil {
+			log.Printf("[AlertScanner] wave9 source start failed: %v", err)
+		}
+		alertAPI.WithAlertSources(wave9Src)
 		alertAPI.RegisterRoutes(mux)
 		// Route C: scan for in-flight alerts after process restart.
 		scanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
