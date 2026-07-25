@@ -257,9 +257,9 @@ This index should be generated from code annotations (e.g., `// ChannelID: finmi
 
 1. **CI gate**: `check_constitution.sh` must exit non-zero on new violations.
 2. **Mandatory `ChannelID`**: Every BTM task that fetches data must set `ChannelID`.
-3. **One backfill task**: Replace 4 FinMind rogues + 75 one-shot CLIs with a single `auto_backfill_gap` BTM task driven by `channel-index.md` backfill status.
+3. **One backfill task**: Replace 4 FinMind rogues + 75 one-shot CLIs with a single `auto_backfill_gap` BTM task driven by the proposed channel-index backfill status.
 4. **Alert lifecycle completion**: Implement ack/resolve/silence MCP tools and startup rescan.
-5. **Document-first**: Update `CONSTITUTION.md` and `channel-index.md` before adding new channels/tasks.
+5. **Document-first**: Update `CONSTITUTION.md` and the proposed channel-index before adding new channels/tasks.
 
 ---
 
@@ -274,7 +274,7 @@ Because these changes touch many files, split into focused PRs:
 | `refactor/finmind-rogue-backfills` | Convert/delete FinMind backfills | `cmd/backfill-*` | Medium |
 | `feat/channel-id-tasks` | Add ChannelID to 64 closure-fetched tasks | `cmd/atlas/*_tasks.go` | Medium |
 | `feat/alert-scanner` | Add `alertscanner` package + startup rescan + MCP tools | `internal/monitoring/alertscanner/`, `cmd/atlas/main.go`, `cmd/atlas-mcp/server/tools_risk_alert.go` | Medium-High |
-| `docs/channel-index` | Generate `docs/reference/channel-index.md` | New file + CI generator | Low |
+| `docs/channel-index` | Generate proposed channel-index document | New file + CI generator | Low |
 
 ---
 
@@ -284,7 +284,7 @@ Because these changes touch many files, split into focused PRs:
 - [ ] `/api/health` returns same data as `/health` or redirects.
 - [ ] All BTM data-fetch tasks have `ChannelID`.
 - [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines.
-- [ ] `docs/reference/channel-index.md` is auto-generated and CI-enforced.
+- [ ] Proposed channel-index document is auto-generated and CI-enforced.
 - [ ] No disabled Prometheus rule references a missing metric.
 - [ ] `backfill-replay` is either scheduled or removed from `Dockerfile.cron`.
 

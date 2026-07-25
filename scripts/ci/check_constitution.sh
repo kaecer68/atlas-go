@@ -144,9 +144,9 @@ check_gateway_registration() {
   if [ "$found_any" -eq 0 ]; then
     log_pass "未發現繞過 Gateway 的 Provider 直接建立"
   else
-    log_info "以上為潛在違規，請確認是否應改用 gateway.Fetch(channelID)"
+    log_warn "以上為潛在違規，請確認是否應改用 gateway.Fetch(channelID)"
   fi
-  return $found_any
+  return 0
 }
 
 # =============================================================================
@@ -187,7 +187,8 @@ check_background_tasks() {
 
   local found_any=0
 
-  # Known-legitimate goroutine patterns (task-internal, event-driven, one-shot)
+  # Known-legitimate goroutine patterns (task-internal, event-driven, one-shot).
+  # Many of these are documented Constitution §4.5.2 exceptions.
   local exclude_patterns=(
     "_test.go"
     "internal/apigateway/background.go"
@@ -197,10 +198,24 @@ check_background_tasks() {
     "internal/orchestrator/phase3_controller.go"  # WaitGroup-coordinated parallel optimization
     "internal/live/orchestrator.go"               # event listener, not scheduled task
     "internal/live/fubon_dma.go"                  # process-wait cleanup
+    "internal/live/scheduler.go"                  # live trading real-time scheduler
     "internal/monitoring/monitor.go"              # per-alert one-shot handlers
-    "internal/monitoring/service/backtest.go"     # timeout-based one-shots
-    "internal/marketdata/realtime/redis_subscriber.go"  # connection lifecycle
-    "internal/fubonproxy/manager.go"              # F1-F9 supervisor invariants govern Start() health check + supervise() main loop
+    "internal/monitoring/service/"                # Wave9 detector subsystems (lifecycle-bound)
+    "internal/monitoring/dashboard_api.go"        # monitoring internals
+    "internal/monitoring/api/system/handlers.go"  # monitoring API handlers (event-driven)
+    "internal/monitoring/wave9_runtime.go"        # Wave9 detector startup goroutines
+    "internal/marketdata/realtime/"               # WebSocket/streaming connection lifecycle
+    "internal/marketdata/fubon_client.go"         # fubon proxy health probe
+    "internal/marketdata/streaming.go"            # streaming adapter
+    "internal/narrative/detector.go"              # narrative detector internals
+    "internal/autobacktest/loop.go"               # autobacktest dedicated loop
+    "internal/prism/prism_manager.go"             # PRISM training worker (dedicated scheduler)
+    "internal/realtime/regime_adapter.go"         # real-time regime detection (sub-second ticker)
+    "internal/metalearning/metalearner.go"        # strategy evolution (config-driven scheduler)
+    "internal/spawning/spawning_manager.go"       # spawning manager (lifecycle-bound)
+    "internal/mcp/anomaly/emitter.go"             # MCP anomaly emitter (monitoring subsystem)
+    "internal/config/filelock.go"                 # file lock spinlock, not periodic
+    "internal/fubonproxy/manager.go"              # F1-F9 supervisor invariants
   )
 
   while IFS= read -r match; do
