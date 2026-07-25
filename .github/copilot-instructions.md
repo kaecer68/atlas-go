@@ -4,6 +4,8 @@ description: |
   Central hub for understanding the codebase, conventions, workflows, and safe practices.
 ---
 
+@CLAUDE.md
+
 # atlas-go AI Instruction Hub
 
 Welcome to atlas-go! This is a **simulation-first, audit-driven investment research system** for Taiwan equities.
