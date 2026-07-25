@@ -1,5 +1,30 @@
 {
-  "consts": null,
+  "consts": [
+    {
+      "name": "CoverageDailyFiles",
+      "value": "\"daily_files\""
+    },
+    {
+      "name": "CoverageLatestFile",
+      "value": "\"latest_file\""
+    },
+    {
+      "name": "CoverageNone",
+      "value": "\"none\""
+    },
+    {
+      "name": "MetricChannelDataStalenessSeconds",
+      "value": "\"atlas_channel_data_staleness_seconds\""
+    },
+    {
+      "name": "MetricChannelFetchLatencySeconds",
+      "value": "\"atlas_channel_fetch_latency_seconds\""
+    },
+    {
+      "name": "MetricChannelHealthStatus",
+      "value": "\"atlas_channel_health_status\""
+    }
+  ],
   "funcs": [
     {
       "name": "RegisterAdminRoutes",
@@ -55,6 +80,37 @@
   ],
   "package": "main",
   "types": [
+    {
+      "fields": [
+        "ChannelID string",
+        "CoverageType string",
+        "FilePattern string",
+        "LookbackDays int",
+        "Enabled bool"
+      ],
+      "kind": "struct",
+      "name": "ChannelCoverageExpectation"
+    },
+    {
+      "fields": [
+        "ChannelID string",
+        "ExpectedCount int",
+        "MissingCount int",
+        "MissingDates []string",
+        "LatestDate string",
+        "Error string"
+      ],
+      "kind": "struct",
+      "name": "ChannelGapReport"
+    },
+    {
+      "fields": [
+        "GeneratedAt time.Time",
+        "Channels []ChannelGapReport"
+      ],
+      "kind": "struct",
+      "name": "GapReport"
+    },
     {
       "fields": [
         "WorkDir string",

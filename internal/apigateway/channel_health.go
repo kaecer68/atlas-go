@@ -308,6 +308,22 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 	return nil
 }
 
+// All returns a shallow copy of every recorded channel health record. The
+// returned map keys are channel IDs; values are copies of the stored records.
+func (s *ChannelHealthStore) All() map[string]ChannelHealthRecord {
+	_ = s.load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]ChannelHealthRecord, len(s.data))
+	for k, v := range s.data {
+		if v == nil {
+			continue
+		}
+		out[k] = *v
+	}
+	return out
+}
+
 // Get retrieves the health record for a channel (nil if missing).
 func (s *ChannelHealthStore) Get(channelID string) *ChannelHealthRecord {
 	_ = s.load()

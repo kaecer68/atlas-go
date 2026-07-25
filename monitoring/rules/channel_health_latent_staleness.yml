@@ -1,0 +1,47 @@
+groups:
+  - name: channel_health_latent_staleness
+    rules:
+      - alert: ChannelDataStale
+        expr: atlas_channel_data_staleness_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+          service: atlas-monitoring
+          wave: "9.2"
+          enabled: "true"
+        annotations:
+          summary: "通道數據過於老舊"
+          description: |
+            Channel {{ $labels.channel }} data is {{ $value | humanizeDuration }} old.
+            建議檢查該通道的自動排程是否仍在運行，或資料源是否中斷。
+          runbook_url: "https://wiki.internal/runbooks/channel-data-stale"
+
+      - alert: ChannelFetchLatencyHigh
+        expr: atlas_channel_fetch_latency_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: atlas-monitoring
+          wave: "9.2"
+          enabled: "true"
+        annotations:
+          summary: "通道抓取延遲過高"
+          description: |
+            Channel {{ $labels.channel }} last fetch latency was {{ $value }} seconds.
+            可能原因：上游 API 回應變慢、rate limit、或網路不穩。
+          runbook_url: "https://wiki.internal/runbooks/channel-fetch-latency-high"
+
+      - alert: ChannelHealthStatusError
+        expr: atlas_channel_health_status == 2
+        for: 0m
+        labels:
+          severity: error
+          service: atlas-monitoring
+          wave: "9.2"
+          enabled: "true"
+        annotations:
+          summary: "通道健康狀態為 error"
+          description: |
+            Channel {{ $labels.channel }} health status is error.
+            請檢查 channel_health.json 中的 last_error 與 AlertStore 中的 data_gap / channel_health 警報。
+          runbook_url: "https://wiki.internal/runbooks/channel-health-status-error"
