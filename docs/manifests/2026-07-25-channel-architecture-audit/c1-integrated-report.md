@@ -71,7 +71,7 @@ Plus one broader bypass candidate: `cmd/backfill-replay/main.go`.
 
 ### Q6. Fragmented alert system?
 
-**Yes — HIGH fragmentation.** Three independent pipelines with different naming, storage, and lifecycle. Dead rules in `monitoring/rules/disabled/`. No startup rescan. MCP Phase 1 is read-only.
+**Yes — HIGH fragmentation.** Three independent pipelines with different naming, storage, and lifecycle. Dead rules were removed 2026-07-25. No startup rescan. MCP Phase 1 is read-only.
 
 ### Q7. Why is historical data still missing after 6 months?
 
@@ -285,7 +285,7 @@ Because these changes touch many files, split into focused PRs:
 - [~] All BTM data-fetch tasks have `ChannelID`. (`government_flow_aggregate` fixed; remaining tasks are pure orchestration/calibration and legitimately omit `ChannelID`).
 - [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines.
 - [ ] Proposed channel-index document is auto-generated and CI-enforced.
-- [ ] No disabled Prometheus rule references a missing metric.
+- [x] No disabled Prometheus rule references a missing metric.
 - [ ] `backfill-replay` is either scheduled or removed from `Dockerfile.cron`.
 
 ---

@@ -44,8 +44,7 @@ FactorWeightRegressionDetector 訂閱 `EventRegimeChange`，當 regime 變化時
 
 ## 對應 Alert Rule
 
-- `monitoring/rules/wave9_factor_weight_regression.yml`：當 `factor_weight_regression_score > 0.5` 持續 1 分鐘觸發 warning
-- 預設 `enabled: false`（PD-W9-1）
+- 對應 Prometheus rule 檔案已於 2026-07-25 移除：原 `monitoring/rules/disabled/wave9_factor_weight_regression.yml` 引用 `factor_weight_regression_score` 但該 metric 從未 emit；`EventFactorWeightRegression` 仍透過 eventbus 發布，未來若實作 metric emit 應連同 rule 重新建立。
 
 ## 對應 Service
 

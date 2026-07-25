@@ -278,7 +278,7 @@ groups:
 | 1 Panic | panic/fatal 1m 內 | critical | 服務幾乎確定已 crash,需立即介入 |
 | 2 High Error | ERROR > 5/sec 5m | warning | 異常累積但未崩潰,留時間 debug |
 | 3 Service Unavailable | "service unavailable" > 1/5m | warning | 對應 apigateway/CONSTITUTION 的 circuit breaker 行為 |
-| 4 5xx Spike | 5xx HTTP log > 10/5m | warning | 與 `wave9_factor_weight_regression` 等業務 alert 互補 |
+| 4 5xx Spike | 5xx HTTP log > 10/5m | warning | 與業務 event-driven alert 互補 |
 
 ---
 

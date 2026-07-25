@@ -243,18 +243,12 @@ docker logs atlas-go --since 10m > /tmp/atlas-incident.log
 | Rule | Metric | Severity | 當前狀態 | 啟用條件 |
 |------|--------|----------|---------|---------|
 | `wave9_channel_individual_health` | `atlas_channel_health_errors_total` | warning | `enabled: false`（PD-W9-1 placeholder） | Wave 9.1 `EventChannelIndividualHealth` emit 確認後手動啟用 |
-| `wave9_factor_weight_regression` | —（event-driven） | warning | `enabled: false` | `FactorWeightRegressionDetector` emit 驗證完成 |
-| `wave9_drift_detected` | —（event-driven） | warning | `enabled: false` | `DriftDetector` v2 target drift 驗證完成 |
-| `wave9_regime_change_confirmed` | —（event-driven） | warning | `enabled: false` | `RegimeDebouncer` confirm 邏輯驗證完成 |
-| `wave9_ingestion_lag_spike` | —（event-driven） | warning | `enabled: false` | `IngestionLagMonitor` 30min lag threshold 確認有效觸發 |
+
+`wave9_factor_weight_regression`、`wave9_drift_detected`、`wave9_regime_change_confirmed`、`wave9_ingestion_lag_spike` 四個 placeholder rule 檔案已於 2026-07-25 移除：它們引用從未 emit 的 metric，且 Prometheus 的 `rule_files: ["rules/*.yml"]`  glob 根本不會載入 `rules/disabled/` 子目錄。若未來實作對應 metric emit，應連同 rule 一起重新建立。
 
 ### 啟用順序建議
 
 1. **`channel_individual_health`**（優先啟動）— 此 metric 已在 PR #926/PR #948 完成 emit，對應 8 個 Yahoo 通道的錯誤計數。low-noise、可量化、false-positive 極低。
-2. **`ingestion_lag_spike`** — 已有 `IngestionLagMonitor`，不依賴市場事件。確認 30min threshold 在正常運作下不會誤觸。
-3. **`factor_weight_regression`** — 依賴 event-driven，需觀察 histogram baseline。
-4. **`drift_detected`** — v2 target drift 需更多 replay 驗證。
-5. **`regime_change_confirmed`** — regime shift 為低頻事件，驗證週期較長。
 
 ### 啟用流程（SOP）
 

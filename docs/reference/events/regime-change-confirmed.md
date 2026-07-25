@@ -47,8 +47,7 @@ RegimeDebouncer 訂閱 `EventRegimeChange`（eventbus event），內部 state ma
 
 ## 對應 Alert Rule
 
-- `monitoring/rules/wave9_regime_change_confirmed.yml`：當 10 分鐘內 regime_change_confirmed 事件 > 3 次時觸發 warning（市場反覆震盪偵測）
-- 預設 `enabled: false`（PD-W9-1）
+- 對應 Prometheus rule 檔案已於 2026-07-25 移除：原 `monitoring/rules/disabled/wave9_regime_change_confirmed.yml` 引用 `regime_change_confirmed_total` 但該 metric 從未 emit；`EventRegimeChangeConfirmed` 仍透過 eventbus 發布，未來若實作 metric emit 應連同 rule 重新建立。
 
 ## 對應 Service
 
