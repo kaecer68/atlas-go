@@ -373,13 +373,15 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 		if seen[id] {
 			continue
 		}
+		// P2-3: channels in the registry without a static builder are
+		// "inactive" (no active health probe), not "unknown".
 		c := DataChannel{
 			ChannelID: id,
 			Country:   "台灣",
 			Platform:  "registered channel",
-			APIFormat: "unknown",
+			APIFormat: "n/a",
 			Path:      "(see ChannelRegistry)",
-			Status:    "unknown",
+			Status:    "inactive",
 			Enabled:   true,
 		}
 		channels = append(channels, mergeEnabled(c))
