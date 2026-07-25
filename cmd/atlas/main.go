@@ -1899,8 +1899,29 @@ func run(args []string, deps appDeps) error {
 		}
 		// /api/health as alias for /health (public, no auth)
 		// Used by external probes that expect /api/ prefix.
-		mux.Handle("GET /api/health", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// C02 follow-up: actually reflect Gateway channel health instead of
+		// a hardcoded {"status":"ok"}. When no gateway is running (live/sim
+		// mode) fall back to the legacy simple payload.
+		mux.Handle("GET /api/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
+			if gateway != nil {
+				store := gateway.Health()
+				if store != nil {
+					summary := store.StatusSummary()
+					overall := "ok"
+					for _, s := range summary {
+						if s.Status == "error" || s.Status == "stale" {
+							overall = "degraded"
+							break
+						}
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"status":   overall,
+						"channels": summary,
+					})
+					return
+				}
+			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
 		}))

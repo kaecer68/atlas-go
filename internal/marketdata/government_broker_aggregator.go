@@ -34,6 +34,8 @@ type GovernmentBrokerAggregator struct {
 	client    *http.Client
 	limiter   *rate.Limiter
 	outputDir string
+	baseURL   string
+	symbols   []string
 }
 
 // coreBankBranches maps the 5 core government banks to their TWSE head-office
@@ -67,7 +69,24 @@ func NewGovernmentBrokerAggregator(outputDir string) *GovernmentBrokerAggregator
 		client:    httpclient.NewFactory().NewClient(30 * time.Second),
 		limiter:   rate.NewLimiter(rate.Every(2*time.Second), 1),
 		outputDir: outputDir,
+		baseURL:   "https://bsr.twse.com.tw/bshtm",
+		symbols:   tw50Symbols,
 	}
+}
+
+// SetHTTPClient overrides the HTTP client (tests only).
+func (a *GovernmentBrokerAggregator) SetHTTPClient(client *http.Client) {
+	a.client = client
+}
+
+// SetBaseURL overrides the TWSE base URL (tests only).
+func (a *GovernmentBrokerAggregator) SetBaseURL(baseURL string) {
+	a.baseURL = baseURL
+}
+
+// SetSymbols overrides the symbol list (tests only).
+func (a *GovernmentBrokerAggregator) SetSymbols(symbols []string) {
+	a.symbols = symbols
 }
 
 // AggregateDate fetches broker data for the given trading date, aggregates net
@@ -79,7 +98,7 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 	var totalNet int64
 	var stocksProcessed int
 
-	for _, symbol := range tw50Symbols {
+	for _, symbol := range a.symbols {
 		if err := a.limiter.Wait(ctx); err != nil {
 			return nil, fmt.Errorf("rate limit: %w", err)
 		}
@@ -115,7 +134,8 @@ func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, sy
 	rocDate := fmt.Sprintf("%d/%02d/%02d", date.Year()-1911, date.Month(), date.Day())
 
 	url := fmt.Sprintf(
-		"https://bsr.twse.com.tw/bshtm/bsContent.aspx?v=VOLUME&p=%s_%s",
+		"%s/bsContent.aspx?v=VOLUME&p=%s_%s",
+		a.baseURL,
 		symbol, strings.ReplaceAll(rocDate, "/", ""),
 	)
 
@@ -142,6 +162,11 @@ func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, sy
 	}
 
 	return a.parseBrokerTable(symbol, body)
+}
+
+// DataDir returns the directory where daily readings are written.
+func (a *GovernmentBrokerAggregator) DataDir() string {
+	return a.outputDir
 }
 
 // brokerRowRegex matches broker rows: code name buy sell net ...
