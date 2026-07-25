@@ -3,6 +3,7 @@ package stocktools
 
 import (
 	"context"
+	"log/slog"
 	"math"
 	"net/http"
 	"sort"
@@ -62,8 +63,9 @@ func normalizeFundamentalsSymbol(s string) string {
 	return s + ".TW"
 }
 
-// HandleQuote returns the latest intraday quote for a single symbol, with
-// TWSE OpenAPI fallback when Fugle is unavailable.
+// HandleQuote returns the latest intraday quote for a single symbol.
+// It tries Fugle first (5s timeout), then falls back to TWSE OpenAPI (5s timeout).
+// P0-1 fix (2026-07-26): separate timeout budgets + log failures + source annotation.
 func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	symbol := r.URL.Query().Get("symbol")
 	if symbol == "" {
@@ -72,17 +74,30 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	if h.deps.FugleClient == nil && h.deps.TWSEQuote == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "quote provider not configured"}
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 
+	// Attempt Fugle with a short timeout first.
 	if h.deps.FugleClient != nil {
-		if q, err := h.deps.FugleClient.GetQuote(ctx, symbol); err == nil {
+		fugleCtx, fugleCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer fugleCancel()
+		q, err := h.deps.FugleClient.GetQuote(fugleCtx, symbol)
+		if err == nil {
 			return http.StatusOK, q
 		}
+		// Log the failure so it's observable (previously silently discarded).
+		slog.Warn("stocktools: fugle quote failed, falling back to TWSE",
+			"symbol", symbol,
+			"err", err)
 	}
+
+	// Fallback: TWSE OpenAPI with its own timeout budget.
 	if h.deps.TWSEQuote != nil {
-		quotes, err := h.deps.TWSEQuote.GetQuotes(ctx, time.Now(), []string{symbol})
+		twseCtx, twseCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer twseCancel()
+		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, time.Now(), []string{symbol})
 		if err != nil {
+			slog.Error("stocktools: TWSE quote fallback failed",
+				"symbol", symbol,
+				"err", err)
 			return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
 		}
 		if len(quotes) == 0 {

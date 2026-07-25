@@ -55,11 +55,14 @@ func HandleDegraded(dm *DegradedMetrics) http.HandlerFunc {
 
 // HandleCost returns an HTTP handler that exposes a KimiClient's CostReport
 // as JSON. costPer1kTokens is the USD price per 1,000 tokens (e.g. 0.001
-// = $0.001/1k). Pass 0 to compute token counts without a USD total. The
-// handler returns 503 if client is nil so a non-KimiClient wiring degrades
-// gracefully instead of 500ing.
-func HandleCost(client *llm_annotator.KimiClient, costPer1kTokens float64) http.HandlerFunc {
+// = $0.001/1k). Pass 0 to compute token counts without a USD total.
+//
+// getClient is a late-binding getter so the handler always dereferences
+// the latest value — this avoids the nil-closure trap when routes are
+// registered before the KimiClient is injected (see P0-2, 2026-07-26).
+func HandleCost(getClient func() *llm_annotator.KimiClient, costPer1kTokens float64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		client := getClient()
 		if client == nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
