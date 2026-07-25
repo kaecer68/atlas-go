@@ -415,8 +415,14 @@
   },
   "explain_market_move": {
     "name": "explain_market_move",
-    "description": "提供繁體中文的「為什麼漲跌」市場解說 (HTTP: GET /api/market/explain)。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。",
+    "description": "提供繁體中文的「為什麼漲跌」市場解說 (HTTP: GET /api/market/explain)。回傳今日台股漲跌原因，包含大盤表現、資金面、國際環境與風險提示。接受 optional format=plain 以移除 emoji。",
     "inputSchema": {
+      "properties": {
+        "format": {
+          "description": "output format: emoji (default) or plain (no emoji)",
+          "type": "string"
+        }
+      },
       "type": "object"
     }
   },
@@ -772,7 +778,7 @@
   },
   "parameters_get": {
     "name": "parameters_get",
-    "description": "Current parameters (flat key → type map, e.g. {\\\"alert.sla_warning_sec\\\":\\\"int\\\"}). Mirrors dashboard parameters page.",
+    "description": "Current parameters (flat key→type map). For structured access, prefer parameters_get_categories (category breakdown) or parameters_get_metadata (provenance, rationale, citation).",
     "inputSchema": {
       "type": "object"
     }

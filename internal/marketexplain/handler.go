@@ -47,9 +47,12 @@ func NewHandler(provider marketdata.MacroDataProvider, cf *capitalflow.Service) 
 }
 
 // HandleExplain responds to GET /api/market/explain.
+// Accepts optional ?format=plain to suppress emoji in the response.
 func (h *Handler) HandleExplain(r *http.Request) (int, any) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+
+	format := r.URL.Query().Get("format")
 
 	// Fetch market data.
 	snap, err := h.provider.FetchSnapshot(ctx)
@@ -66,16 +69,16 @@ func (h *Handler) HandleExplain(r *http.Request) (int, any) {
 		logging.Warn("marketexplain", "capitalflow_failed", "err", cfErr.Error())
 	}
 
-	explanation := compose(snap, cfSummary)
+	explanation := compose(snap, cfSummary, format)
 	return http.StatusOK, explanation
 }
 
 // compose builds a rule-based explanation from available data.
-func compose(snap marketdata.MacroDataSnapshot, cfSummary capitalflow.SummaryReport) Explanation {
+func compose(snap marketdata.MacroDataSnapshot, cfSummary capitalflow.SummaryReport, format string) Explanation {
 	sections := make([]Section, 0, 4)
 
 	// 1. 大盤表現
-	taiexSection := buildTAIEXSection(snap)
+	taiexSection := buildTAIEXSection(snap, format)
 	sections = append(sections, taiexSection)
 
 	// 2. 資金面
@@ -120,7 +123,7 @@ func sectionBodies(secs []Section) []string {
 // Section builders
 // ---------------------------------------------------------------------------
 
-func buildTAIEXSection(snap marketdata.MacroDataSnapshot) Section {
+func buildTAIEXSection(snap marketdata.MacroDataSnapshot, format string) Section {
 	chg := snap.TAIEX.ChangePct
 	taiwanSemi := snap.TaiwanSemiIndex
 	dir := "上漲"
@@ -129,12 +132,18 @@ func buildTAIEXSection(snap marketdata.MacroDataSnapshot) Section {
 		dir = "下跌"
 		emoji = "📉"
 	}
+	if format == "plain" {
+		emoji = ""
+	}
 	absChg := chg
 	if absChg < 0 {
 		absChg = -absChg
 	}
 
-	body := fmt.Sprintf("今日加權指數%s %.2f%%，%s", dir, chg, emoji)
+	body := fmt.Sprintf("今日加權指數%s %.2f%%", dir, chg)
+	if emoji != "" {
+		body += " " + emoji
+	}
 
 	if absChg >= 2.0 {
 		body += "漲跌幅較大，市場情緒明顯波動"
