@@ -1095,6 +1095,14 @@ func run(args []string, deps appDeps) error {
 				capitalFlow:       capitalFlowService,
 			})
 
+			registerBackfillTasks(backfillDeps{
+				taskMgr:   taskMgr,
+				cfg:       cfg,
+				monitor:   monitor,
+				calendar:  eventCalendar,
+				collector: collector,
+			})
+
 			// Schedule daily report generation after market close (14:00–14:59
 			// Taipei), once per day; other ticks skip via ErrTaskSkipped so the
 			// failure counter is untouched (fix manifest #B10).
