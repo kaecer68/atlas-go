@@ -138,7 +138,7 @@ func checkEnvironment(baseURL string) checkResult {
 	}
 }
 
-// checkObservationLog: verify docs/operations/sector-prediction-observation-log.md
+// checkObservationLog: verify docs/archive/sector-prediction-observation-log.md
 // exists and has placeholder for Day 1 baseline record.
 //
 // Pre-flight assumes operator is ABOUT TO flip flag to true. Day 1 placeholder
