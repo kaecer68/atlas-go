@@ -36,16 +36,19 @@ type schedulerTaskBaseOutput struct {
 	Result *map[string]any `json:"result"`
 }
 
-// schedulerStatusOutput decodes the JSON array returned by
-// GET /api/scheduler/status (internal/monitoring/api/scheduler/handlers.go
-// HandleStatus). Items stay as map[string]any to keep MCP schema decoupled
-// from apigateway.TaskStatus.
+// schedulerStatusOutput wraps the raw task array with computed summary.
 type schedulerStatusOutput struct {
-	Tasks []map[string]any `json:"tasks"`
+	Tasks   []map[string]any `json:"tasks"`
+	Summary struct {
+		Total    int `json:"total"`
+		Enabled  int `json:"enabled"`
+		Disabled int `json:"disabled"`
+		Pending  int `json:"pending"`  // enabled but never started (next_run is zero)
+		Errored  int `json:"errored"`  // consecutive_failures > 0
+	} `json:"summary"`
 }
 
-// taskListOutput decodes the JSON array returned by GET /api/tasks
-// (internal/monitoring/api/taskexec/handlers.go HandleListTasks).
+// taskListOutput decodes the JSON array returned by GET /api/tasks.
 type taskListOutput struct {
 	Tasks []map[string]any `json:"tasks"`
 }
@@ -60,6 +63,28 @@ func (s *server) handleSchedulerGetStatus(ctx context.Context, _ *mcp.CallToolRe
 		return s.cli.Get(ctx, "/api/scheduler/status", nil, &out.Tasks)
 	}); err != nil {
 		return nil, schedulerStatusOutput{}, err
+	}
+	// Compute summary from raw task data for agent-friendly overview.
+	out.Summary.Total = len(out.Tasks)
+	for _, t := range out.Tasks {
+		enabled, _ := t["enabled"].(bool)
+		failures, _ := t["consecutive_failures"].(float64)
+		nextRun, _ := t["next_run"].(string)
+		lastRun, _ := t["last_run"].(string)
+
+		if !enabled {
+			out.Summary.Disabled++
+			continue
+		}
+		out.Summary.Enabled++
+		if nextRun == "" || nextRun == "0001-01-01T00:00:00Z" || nextRun[0:4] == "0001" {
+			if lastRun == "" || lastRun == "0001-01-01T00:00:00Z" || lastRun[0:4] == "0001" {
+				out.Summary.Pending++
+			}
+		}
+		if failures > 0 {
+			out.Summary.Errored++
+		}
 	}
 	return nil, out, nil
 }
