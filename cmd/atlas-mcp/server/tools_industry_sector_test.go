@@ -83,7 +83,7 @@ func TestHandleSectorList_L1HaveChineseDisplay(t *testing.T) {
 	}
 }
 
-func TestHandleSectorList_L2FallBackToID(t *testing.T) {
+func TestHandleSectorList_L2HasChineseLabel(t *testing.T) {
 	s, done := newSectorTestServer(t)
 	defer done()
 
