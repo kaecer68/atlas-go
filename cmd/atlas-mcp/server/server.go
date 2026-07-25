@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -175,9 +176,10 @@ func Run(ctx context.Context, cfg Config) error {
 	// registerTools (called just above): 103 business tools (incl. roots 2) +
 	// template_detector 2 + sector (industry_sector_list + industry_sector_lookup) 2 +
 	// 0-2 sampling/elicitation (feature-gated, default off) = 107..109 tools.
-	// registerAuditTools: +4 (separate, not in registerTools).
 	// Total at this point: 115-118 (both on, post-CL-4).
-	if n := RegisteredToolCount; n < 115-118 {
+	n := RegisteredToolCount
+	log.Printf("atlas-mcp: registered %d tools", n)
+	if n < 115 || n > 118 {
 		return fmt.Errorf("server: tool count drift: got %d, expected 115-118", n)
 	}
 

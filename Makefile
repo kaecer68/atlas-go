@@ -214,23 +214,24 @@ setup-mcp-agent:
 		echo "❌ atlas-mcp binary not found at $$ATLAS_MCP_BIN"; \
 		echo "   跑: make install-atlas-mcp-from-release"; \
 		exit 1; \
-	fi
-	@if [ ! -f "$(HOME)/.config/atlas-go/.env" ]; then \
+	fi; \
+	if [ ! -f "$(HOME)/.config/atlas-go/.env" ]; then \
 		echo "⚠️  $(HOME)/.config/atlas-go/.env not found"; \
 		echo "   安裝時不帶 ATLAS_API_KEY（只能跑 public tier tools）"; \
-		ENV_VARS=""; \
 	else \
 		echo "✓ 從 $(HOME)/.config/atlas-go/.env 讀取 ATLAS_* 環境變數"; \
-		ENV_VARS=$$(grep -E '^ATLAS_' $(HOME)/.config/atlas-go/.env | sed 's/^/--env /' | tr '\n' ' '); \
-	fi
-	@echo "🚀 hermes mcp add atlas-mcp (command: $$ATLAS_MCP_BIN)..."
-	@printf "Y\n" | hermes mcp add atlas-mcp \
+		set -a && . $(HOME)/.config/atlas-go/.env && set +a; \
+	fi; \
+	echo "🚀 hermes mcp add atlas-mcp (command: $$ATLAS_MCP_BIN)..."; \
+	printf "Y\n" | hermes mcp add atlas-mcp \
 		--command $$ATLAS_MCP_BIN \
-		$$ENV_VARS \
-		--connect-timeout 30
-	@hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true
-	@echo ""
-	@echo "✅ Done. Verify with: make verify-mcp-setup"
+		$$( [ -n "$${ATLAS_BASE_URL:-}" ] && echo "--env ATLAS_BASE_URL=$$ATLAS_BASE_URL" ) \
+		$$( [ -n "$${ATLAS_API_KEY:-}" ] && echo "--env ATLAS_API_KEY=$$ATLAS_API_KEY" ) \
+		$$( [ -n "$${ATLAS_MCP_AUDIT_LOG:-}" ] && echo "--env ATLAS_MCP_AUDIT_LOG=$$ATLAS_MCP_AUDIT_LOG" ) \
+		--connect-timeout 30; \
+	hermes mcp configure atlas-mcp --enable-all 2>/dev/null || true; \
+	echo ""; \
+	echo "✅ Done. Verify with: make verify-mcp-setup"
 
 # 驗證 hermes 真的能用 atlas-mcp（hermes agent 自己跑這個檢查）
 verify-mcp-setup:
