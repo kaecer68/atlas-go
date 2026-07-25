@@ -1,7 +1,7 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`documentation-standard.md`](documentation-standard.md) 配套使用。
-> **最後驗證**：2026-07-18（新增 sector-allocation simulation-closure canonical spec 索引）
+> **最後驗證**：2026-07-26（operations/ 清理 + CLAUDE.md 精簡）
 > **原則**：每個路徑均為相對於 repo root 的**完整路徑**；檔案必須可被驗證存在。
 
 ---
@@ -11,8 +11,8 @@
 | 檔案 | 用途 |
 |------|------|
 | `README.md` | 專案快速入口（~100 行 gateway） |
-| `AGENTS.md` | 跨工具 AI 共用指引（77 行，≤ 155 行警告線） |
-| `CLAUDE.md` | Claude Code 專屬設定（前端架構、部署、token 效率） |
+| `AGENTS.md` | 跨工具 AI 共用指引（80 行，≤ 155 行警告線） |
+| `CLAUDE.md` | Claude Code 專屬設定（80 行，精簡路由表） |
 | `CHANGELOG.md` | 版本變更記錄 |
 | `LICENSE`, `NOTICE` | 法務文件 |
 | `SECURITY.md` | 資安政策 |
@@ -42,7 +42,7 @@
 | `docs/documentation-map.md` | 本文件 | ✅ |
 | `docs/conventions-checklist.md` | 慣例檢查清單 | ✅ |
 | `docs/reference/workflow-map.md` | 42 條 workflow 盤查（WA-001–WA-701） | ✅ |
-| `docs/reference/tool-catalog.md` | atlas-mcp 116 tools 完整 catalog | ✅ |
+| `docs/reference/tool-catalog.md` | atlas-mcp 115-118 tools 完整 catalog | ✅ |
 
 ### 🏗️ 架構 / 領域知識
 
@@ -92,26 +92,23 @@
 | `docs/operations/version-bumping.md` | Version bump SOP | ✅ |
 | `docs/operations/wave9-runbook.md` | Wave 9 Observability 操作手冊 | ✅ |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊 | ✅ |
-| `docs/operations/l2-4-followup.md` | L2.4 後續工作報告 | ✅ |
-| `docs/operations/l2-4-observation-log.md` | L2.4 觀察日誌 | ✅ |
 | `docs/operations/l2-4-fault-tolerance-design.md` | L2.4 容錯設計 | ✅ |
 | `docs/operations/l2-4-unblocking-roadmap.md` | L2.4 解鎖路線圖 | ✅ |
+| `docs/operations/l3-runbook.md` | L3 操作手冊 | ✅ |
 | `docs/operations/loki-deployment.md` | Loki 集中式 log 部署 | ✅ |
 | `docs/operations/mcp-deploy.md` | MCP 部署指南 | ✅ |
+| `docs/operations/local-deploy.md` | 本機 Docker 部署設定（從 CLAUDE.md 移出） | ✅ |
 | `docs/operations/cmd-atlas-coverage-policy.md` | cmd/atlas 覆蓋率政策 | ✅ |
 | `docs/operations/tier-boundary.md` | Tier 邊界定義 | ✅ |
 | `docs/operations/stock-mcp-query-templates.md` | 個股 MCP 查詢範本 | ✅ |
 | `docs/operations/sprint3-rollout-runbook.md` | Sprint 3 部署手冊 | ✅ |
-| `docs/operations/sector-allocation-closure-verification-report.md` | Sector Allocation Closure 驗證報告（SA12.D） | ✅ |
 | `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊 | ✅ |
-| `docs/operations/sector-allocation-closure-observation-log.md` | Sector Allocation Closure 觀察日誌 | ✅ |
-| `docs/operations/sector-allocation-closure-rollback-drills.md` | Sector Allocation Closure Rollback Drills | ✅ |
+| `docs/operations/sector-prediction-runbook.md` | Sector 預測操作手冊 | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
-| `docs/operations/frontend-refactor-recovery-verification-report.md` | 前端重構恢復驗證報告 | ✅ |
-| `docs/operations/v2-alert-redesign-verification-report.md` | v2 警報重設計驗證報告 | ✅ |
-| `docs/operations/2026-07-15-staging-soak-test.md` | 2026-07-15 staging 7-day soak 計畫文件 | ✅ |
-| `docs/operations/soak-day-counter.md` | Staging 7-Day Soak Day Counter（Day-by-day 進度） | ✅ |
-| `docs/operations/production-rollout-runbook.md` | Production Rollout Runbook（Day 8 起 SOP） | ✅ |
+| `docs/operations/production-rollout-runbook.md` | Production Rollout Runbook | ✅ |
+| `docs/operations/commercial-flow-scope-2026-07-22.md` | 商業化流程 scope 定義 | ✅ |
+
+> **2026-07-26 清理**：6 個檔案移至 archive/（有教學價值）、8 個 transient 檔案刪除。詳見 PR #1359。
 
 ### 📐 Specs（技術規格）
 
@@ -201,7 +198,7 @@
 
 | 目錄 | 用途 |
 |------|------|
-| `docs/archive/` | 歷史歸檔（20 個檔案，見 archive/README.md） |
+| `docs/archive/` | 歷史歸檔（26+ 檔案，見 archive/README.md） |
 | `docs/manifests/` | Manifest 治理模板（README.md + TEMPLATE.md）；個別 manifest 已移至 .omo/manifests/
 | `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
 
@@ -230,7 +227,7 @@
 | 檔案 | 用途 |
 |------|------|
 | `docs/reference/workflow-map.md` | 42 條 workflow 盤查（WA-001–WA-701） |
-| `docs/reference/tool-catalog.md` | atlas-mcp 116 tools 完整 catalog |
+| `docs/reference/tool-catalog.md` | atlas-mcp 115-118 tools 完整 catalog |
 | `docs/reference/processes.yaml` | 結構化 workflow metadata |
 | `cmd/atlas-mcp/README.md` | MCP 給 agent 的唯一入口 |
 | `docs/investor/README.md` | 投資人 5 分鐘入門 |
@@ -239,6 +236,6 @@
 
 ---
 
-> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-21。
+> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-26。
 >
-> **本次更新**：補 docs/operations/ 3 個新索引（soak-day-counter、production-rollout-runbook、2026-07-15-staging-soak-test）、.omo/audit/（gitignored）、docs/specs 31→47、docs/guides 8→9、AGENTS.md 72 行→77 行。詳見 `.omo/audit/2026-07-15-capital-flow-audit-followup.md（內部文件）`（Stage 7 follow-up）。
+> **本次更新**：operations/ 清理（6→archive + 8 刪除 transient）、CLAUDE.md 精簡 222→80 行、local-deploy.md 新建、guidelines-index.md 重建、tool 數量統一 115-118。
