@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -435,22 +436,20 @@ func registerOperationsTasks(d operationsDeps) {
 			Interval: 28 * time.Hour,
 			Enabled:  true,
 			Task: func(ctx context.Context) error {
-				agg := marketdata.NewGovernmentBrokerAggregator(d.governmentFlowDir)
-				today := time.Now()
-				// TWSE data is available T+1
-				yesterday := today.AddDate(0, 0, -1)
-				// Skip weekends
-				if yesterday.Weekday() == time.Saturday {
-					yesterday = yesterday.AddDate(0, 0, -1)
-				} else if yesterday.Weekday() == time.Sunday {
-					yesterday = yesterday.AddDate(0, 0, -2)
+				if d.gateway == nil {
+					return fmt.Errorf("government_flow_aggregate skipped: no gateway")
 				}
-				_, err := agg.AggregateDate(ctx, yesterday)
+				res, err := d.gateway.Fetch(ctx, "government_broker")
 				if err != nil {
 					logging.Warn("main", "government_flow_aggregate_failed", "err", err)
 					return err
 				}
-				logging.Info("main", "government_flow_aggregate_ok", "date", yesterday.Format("20060102"))
+				var reading marketdata.GovernmentFlowReading
+				if err := json.Unmarshal(res.Data, &reading); err != nil {
+					logging.Warn("main", "government_flow_aggregate_decode_failed", "err", err)
+					return err
+				}
+				logging.Info("main", "government_flow_aggregate_ok", "date", reading.Date)
 				return nil
 			},
 		})

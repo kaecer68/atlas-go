@@ -266,6 +266,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("government_flow", govAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "government_flow")
 
+	// --- Government Broker Aggregate (TWSE broker-level fetcher; C06) ---
+	brokerProvider := marketdata.NewGovernmentBrokerAggregator(filepath.Join(workDir, "data/state/government_flow"))
+	brokerAdapter := NewGovernmentBrokerChannelAdapter(brokerProvider)
+	g.registry.Register("government_broker", brokerAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "government_broker")
+
 	// --- TWSE Odd-Lot Trading (no API key required) ---
 	oddlotAdapter := NewTWSEOddLotChannelAdapter()
 	g.registry.Register("twse_oddlot", oddlotAdapter)
