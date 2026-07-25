@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -84,7 +85,7 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_list_unacknowledged",
-		Description: autoDescOr("alert_list_unacknowledged", "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope)."),
+		Description: autoDescOr("alert_list_unacknowledged", "List unacknowledged alerts with optional filtering by severity (WARNING/ERROR/CRITICAL/INFO) and rule (simulation/experiment/etf_nav). Omit both params to list all. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertListUnacknowledged)
 
@@ -246,13 +247,27 @@ func (s *server) handleExperimentJudge(ctx context.Context, _ *mcp.CallToolReque
 	return nil, out, nil
 }
 
-func (s *server) handleAlertListUnacknowledged(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AlertListUnacknowledgedOutput, error) {
+// alertListInput holds optional filter criteria for alert_list_unacknowledged.
+type alertListInput struct {
+	Severity string `json:"severity,omitempty" jsonschema:"filter by severity: WARNING, ERROR, CRITICAL, INFO"`
+	Rule     string `json:"rule,omitempty" jsonschema:"filter by alert rule name, e.g. simulation, experiment, etf_nav"`
+}
+
+func (s *server) handleAlertListUnacknowledged(ctx context.Context, _ *mcp.CallToolRequest, in alertListInput) (*mcp.CallToolResult, AlertListUnacknowledgedOutput, error) {
 	var out AlertListUnacknowledgedOutput
+	query := url.Values{}
+	query.Set("status", "triggered") // unacknowledged = triggered status
+	if in.Severity != "" {
+		query.Set("severity", in.Severity)
+	}
+	if in.Rule != "" {
+		query.Set("rule", in.Rule)
+	}
 	if err := s.withAudit(ctx, "alert_list_unacknowledged", nil, func() error {
 		var wrapper struct {
 			Alerts []map[string]any `json:"alerts"`
 		}
-		if err := s.cli.Get(ctx, "/api/alerts/unacknowledged", nil, &wrapper); err != nil {
+		if err := s.cli.Get(ctx, "/api/alerts", query, &wrapper); err != nil {
 			return err
 		}
 		out.Alerts = wrapper.Alerts

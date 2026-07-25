@@ -42,8 +42,18 @@
   },
   "alert_list_unacknowledged": {
     "name": "alert_list_unacknowledged",
-    "description": "List all unacknowledged alerts. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope).",
+    "description": "List unacknowledged alerts with optional filtering by severity (WARNING/ERROR/CRITICAL/INFO) and rule (simulation/experiment/etf_nav). Omit both params to list all. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope).",
     "inputSchema": {
+      "properties": {
+        "rule": {
+          "description": "filter by alert rule name, e.g. simulation, experiment, etf_nav",
+          "type": "string"
+        },
+        "severity": {
+          "description": "filter by severity: WARNING, ERROR, CRITICAL, INFO",
+          "type": "string"
+        }
+      },
       "type": "object"
     }
   },

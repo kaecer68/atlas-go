@@ -248,12 +248,12 @@ func TestHandleAlertListUnacknowledged(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{"alerts":[]}`)
-	_, _, err := s.handleAlertListUnacknowledged(context.Background(), nil, struct{}{})
+	_, _, err := s.handleAlertListUnacknowledged(context.Background(), nil, alertListInput{})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/alerts/unacknowledged" {
-		t.Fatalf("path=%s", rec.path)
+	if rec.path != "/api/alerts" {
+		t.Fatalf("path=%s, want=/api/alerts", rec.path)
 	}
 }
 

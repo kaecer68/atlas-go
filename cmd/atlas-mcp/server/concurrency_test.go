@@ -167,7 +167,7 @@ func TestWithAudit_ConcurrentMix(t *testing.T) {
 				rec.SetResponseBody([]byte(`{}`))
 				_, _, _ = s.handleExperimentJudge(context.Background(), nil, ExperimentJudgeInput{ExperimentID: "e"})
 			case 3:
-				_, _, _ = s.handleAlertListUnacknowledged(context.Background(), nil, struct{}{})
+				_, _, _ = s.handleAlertListUnacknowledged(context.Background(), nil, alertListInput{})
 			case 4:
 				rec.SetResponseBody([]byte(`{"status":"ok"}`))
 				_, _, _ = s.handleSystemGetHealth(context.Background(), nil, struct{}{})

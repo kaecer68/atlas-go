@@ -604,3 +604,122 @@ rebuild-cron: rebuild-cron-bins
 rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
 	@echo "✓ rebuilt all binaries"
 	@$(MAKE) check-binaries
+
+# ============================================================================
+# CI preflight / full suite（2026-07-26，解決 PR-CI 往返耗時問題）
+# ============================================================================
+#
+# 設計目標：
+#   ci-gate — push 前必跑，< 30s，攔截 90% 的 CI 失敗（fmt/build/vet/generate/quick scripts）
+#   ci-full — PR 前跑，~5-8 min，覆蓋 GitHub CI quality.yml + ci-cd.yml 所有可本地化的檢查
+#
+# 與 GitHub CI 對應關係：
+#   ci-gate     → fmt + build + generate + naming + frontend-imports + field-contract +
+#                  agent-prompts + constitution + channel-index + agents-md-drift
+#   ci-full     → ci-gate + lint (golangci-lint) + staticcheck + test + race + coverage +
+#                  cmd/atlas integration + ci (all scripts) + ci-slow + orphan check
+#
+# 不可本地化的 CI job（仍須 GitHub 驗證）：
+#   Docker build/push (multi-platform)、deploy、gosec SARIF upload、
+#   跨 repo contract check (routes/contracts)
+
+.PHONY: ci-gate
+ci-gate:
+	@echo "🛡️  CI pre-push gate (fast, <30s)..."
+	@echo ""
+	@echo "  → gofmt check"
+	@test -z "$$(gofmt -l .)" || { \
+		echo "    ❌ gofmt 格式不符。執行: gofmt -w ."; \
+		gofmt -l . | head -10; \
+		exit 1; \
+	}
+	@echo "    ✅"
+	@echo "  → go build ./..."
+	@go build ./...
+	@echo "    ✅"
+	@echo "  → go vet ./..."
+	@go vet ./...
+	@echo "    ✅"
+	@echo "  → go generate (drift check)"
+	@go generate ./...
+	@git diff --exit-code -- '*.go' '*.ts' '*.json' 2>/dev/null || { \
+		echo "    ❌ 生成檔案過期。執行: go generate ./... 然後 commit"; \
+		git diff --stat -- '*.go' '*.ts' '*.json'; \
+		exit 1; \
+	}
+	@echo "    ✅"
+	@echo "  → fast CI scripts"
+	@$(MAKE) --no-print-directory ci-quick
+	@echo ""
+	@echo "✅ ci-gate passed — 可以 push"
+
+.PHONY: ci-full
+ci-full: ci-gate
+	@echo ""
+	@echo "🧪 CI full suite (local, ~5-8 min)..."
+	@echo ""
+	@echo "  → golangci-lint (v2.12.2)"
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "    ❌ golangci-lint 未安裝。brew install golangci-lint"; \
+		exit 1; \
+	}
+	@golangci-lint run --timeout=5m
+	@echo "    ✅"
+	@echo "  → standalone staticcheck"
+	@command -v staticcheck >/dev/null 2>&1 || { \
+		echo "    ❌ staticcheck 未安裝。go install honnef.co/go/tools/cmd/staticcheck@latest"; \
+		exit 1; \
+	}
+	@staticcheck ./...
+	@echo "    ✅"
+	@echo "  → go test (excluding cmd/atlas heavy)"
+	@go test -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
+	@echo "    ✅"
+	@echo "  → go test -race (excluding cmd/atlas)"
+	@go test -race -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
+	@echo "    ✅"
+	@echo "  → cmd/atlas integration tests"
+	@go test -count=1 -timeout=10m ./cmd/atlas/...
+	@echo "    ✅"
+	@echo "  → cmd/atlas-mcp-setup integration tests"
+	@go test -tags=integration -count=1 -timeout=60s ./cmd/atlas-mcp-setup/
+	@echo "    ✅"
+	@echo "  → CI scripts (all)"
+	@$(MAKE) --no-print-directory ci
+	@$(MAKE) --no-print-directory ci-slow
+	@echo "    ✅"
+	@echo "  → coverage threshold (≥60%)"
+	@go test -coverprofile=/tmp/atlas-ci-full-coverage.out $$(go list ./... | grep -v '/cmd/atlas$$') > /dev/null 2>&1; \
+	COVERAGE=$$(go tool cover -func=/tmp/atlas-ci-full-coverage.out | awk '/^total:/ {print $$3}' | tr -d '\r' | sed 's/%//'); \
+	echo "    Total coverage: $${COVERAGE}%"; \
+	if echo "$$COVERAGE 60" | awk '{exit !($$1 < $$2)}'; then \
+		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
+		rm -f /tmp/atlas-ci-full-coverage.out; \
+		exit 1; \
+	fi; \
+	rm -f /tmp/atlas-ci-full-coverage.out
+	@echo "    ✅"
+	@echo "  → orphan artifact check"
+	@ORPHANS=""; \
+	for f in $$(git ls-files); do \
+		[ -f "$$f" ] || continue; \
+		ft=$$(file "$$f" 2>/dev/null); \
+		case "$$ft" in \
+			*"Mach-O"*|*"ELF"*) ORPHANS="$$ORPHANS  [BINARY] $$f";; \
+		esac; \
+	done; \
+	for f in $$(git ls-files '*.pid'); do \
+		ORPHANS="$$ORPHANS  [PID] $$f"; \
+	done; \
+	for f in $$(git ls-files '*.out'); do \
+		ORPHANS="$$ORPHANS  [COVERAGE] $$f"; \
+	done; \
+	if [ -n "$$ORPHANS" ]; then \
+		echo "❌ 發現 orphan artifacts:"; \
+		echo "$$ORPHANS"; \
+		echo "執行: git rm --cached <file>（保留本地檔案）"; \
+		exit 1; \
+	fi
+	@echo "    ✅"
+	@echo ""
+	@echo "✅ ci-full passed — 可以建立 PR，CI 基本一次過"
