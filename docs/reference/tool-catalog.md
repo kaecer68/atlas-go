@@ -194,7 +194,7 @@
 ### Industry Extension（5 個 — PR 2 新增）
 | Tool | 用途 |
 |------|------|
-| `calendar_events` | 14 天事件日曆（ETF rebalances、MSCI、營收、股東會、window dressing、holiday）|
+| `calendar_events` | ⚠️ **DEPRECATED**: 使用 `event_calendar` 替代。14 天事件日曆（ETF rebalances、MSCI、營收、股東會、window dressing、holiday）|
 | `sector_allocation_plan` | 產業配置計畫（base_weight、adjusted_weight、derivation_factors）|
 | `channel_health` | 通道健康（channel_id、status、updated_at）|
 | `taiwan_stress_index` | 台灣壓力指數（score、regime、components）|

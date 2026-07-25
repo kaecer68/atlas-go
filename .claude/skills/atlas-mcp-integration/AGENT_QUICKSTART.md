@@ -151,12 +151,33 @@ mcp_servers:
 
 # Step 2: 確認 atlas-go backend 健康
 curl -fsS http://127.0.0.1:18080/health
-
 # Step 3: 確認 MCP 連線（從 client 端）
-hermes mcp test atlas-go          # 應列出 116 個 tool
+hermes mcp test atlas-mcp         # 應列出 116 個 tool
 # 或在 Claude Desktop / Cursor 內嘗試調用任一 tool
 ```
 
+# Step 4: 確認 admin tools 可用（需要 ATLAS_API_KEY）
+hermes mcp call atlas-mcp llm_get_cost  # 若 503 = KimiClient 未啟動（正常，dev 環境）
+
+
+## 4.5 First Contact SOP（首次接入後必跑 3 call）
+
+```bash
+# 1. 確認系統健康
+hermes mcp call atlas-mcp system_get_health
+
+# 2. 取得今日市場速覽
+hermes mcp call atlas-mcp mcp_quickstart
+
+# 3. 看今天為什麼漲跌
+hermes mcp call atlas-mcp explain_market_move
+```
+
+這三步確認連通後，即可開始查詢：
+- **趨勢方向**：`regime_get_history` → `capital_flow_daily`
+- **個股資訊**：`stock_get_quote` / `stock_get_fundamentals` / `stock_get_chips` / `stock_get_technical`
+- **事件預測**：`event_flow_prediction`
+- **策略建議**：`get_recommendations` → `strategy_ranker`
 ## 5. 進階設定
 
 - **TLS / Reverse proxy**：見 `cmd/atlas-mcp/README.md` §安全提醒

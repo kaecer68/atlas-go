@@ -61,6 +61,7 @@
 - **除錯 / 審計 / 修復 workflow**：[`.claude/skills/atlas-audit-manifest-protocol/SKILL.md`](.claude/skills/atlas-audit-manifest-protocol/SKILL.md)（審計 → manifest → invariant tracker → commit → PR）
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 - **Multi-CLI 與合併後清理**：[`docs/multi-cli-protocol.md`](docs/multi-cli-protocol.md)（worktree 隔離、PR merge 後自動刪除分支、planning artifacts 清理）
+- **分支與 PR 工作流（強制）**：任何程式碼變更 MUST 走 `feature/fix/*` 分支 → push → PR → merge 流程。禁止直接 push 到 `main`。分支命名慣例：`fix/<short-description>` / `feat/<short-description>`。commit 後用 `gh pr create` 建立 PR，PR description 必含 Summary / Root Cause / Verification 三段。
 
 ## 高頻陷阱速查
 

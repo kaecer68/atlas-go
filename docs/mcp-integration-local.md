@@ -189,9 +189,9 @@ ls -lh bin/atlas-mcp
 # 2. backend 在跑
 curl -fsS http://127.0.0.1:18080/health
 
-# 3. MCP server 啟動時 tool count ∈ [108, 110]
+# 3. MCP server 啟動時印出 tool count
 bin/atlas-mcp 2>&1 | head -3
-# 預期: 看到 "registered N tools" 且 N 在 108-110 之間
+# 預期: 看到 "atlas-mcp: registered N tools" 且 N ∈ [115, 118]
 ```
 
 ---

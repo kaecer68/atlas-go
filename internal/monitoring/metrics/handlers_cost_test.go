@@ -12,7 +12,7 @@ import (
 )
 
 func TestHandleCost_NilClientReturns503(t *testing.T) {
-	handler := HandleCost(nil, 0.001)
+	handler := HandleCost(func() *llm_annotator.KimiClient { return nil }, 0.001)
 
 	req := httptest.NewRequest(http.MethodGet, "/llm_annotator/cost", nil)
 	rr := httptest.NewRecorder()
@@ -41,7 +41,7 @@ func TestHandleCost_EmptyClientReturns200WithZeros(t *testing.T) {
 		t.Fatalf("NewKimiClient: %v", err)
 	}
 
-	handler := HandleCost(client, 0.5)
+	handler := HandleCost(func() *llm_annotator.KimiClient { return client }, 0.5)
 
 	req := httptest.NewRequest(http.MethodGet, "/llm_annotator/cost", nil)
 	rr := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestHandleCost_PopulatedClientReturnsPerFeatureBreakdown(t *testing.T) {
 		}
 	}
 
-	handler := HandleCost(client, 0.01) // $0.01 per 1k tokens
+	handler := HandleCost(func() *llm_annotator.KimiClient { return client }, 0.01) // $0.01 per 1k tokens
 
 	req := httptest.NewRequest(http.MethodGet, "/llm_annotator/cost", nil)
 	rr := httptest.NewRecorder()

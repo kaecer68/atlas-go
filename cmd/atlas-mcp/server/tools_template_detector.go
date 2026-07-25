@@ -30,21 +30,36 @@ func (s *server) handleTemplateDetectorStatus(ctx context.Context, _ *mcp.CallTo
 	if in.Limit > 0 {
 		path = fmt.Sprintf("%s?limit=%d", path, in.Limit)
 	}
-	var out map[string]any
+	// Backend returns top-level JSON array; decode into slice then wrap.
+	type scanRow struct {
+		ScanID      int64   `json:"scan_id"`
+		ScanBatchID string  `json:"scan_batch_id"`
+		Theme       string  `json:"theme"`
+		Severity    string  `json:"severity"`
+		Confidence  float64 `json:"confidence"`
+		DetectedAt  string  `json:"detected_at"`
+		Source      string  `json:"source"`
+	}
+	var rows []scanRow
 	if err := s.withAudit(ctx, "template_detector_status", []string{"limit"}, func() error {
-		return s.cli.Get(ctx, path, nil, &out)
+		return s.cli.Get(ctx, path, nil, &rows)
 	}); err != nil {
 		return nil, nil, err
 	}
-	return nil, out, nil
+	return nil, map[string]any{"scans": rows, "total": len(rows)}, nil
 }
 
 func (s *server) handleDetectorRegistryList(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
-	var out map[string]any
+	// Backend returns top-level JSON array; decode into slice then wrap.
+	type detectorEntry struct {
+		Theme   string `json:"theme"`
+		Enabled bool   `json:"enabled"`
+	}
+	var detectors []detectorEntry
 	if err := s.withAudit(ctx, "detector_registry_list", nil, func() error {
-		return s.cli.Get(ctx, "/api/detector/registry/list", nil, &out)
+		return s.cli.Get(ctx, "/api/detector/registry/list", nil, &detectors)
 	}); err != nil {
 		return nil, nil, err
 	}
-	return nil, out, nil
+	return nil, map[string]any{"detectors": detectors, "total": len(detectors)}, nil
 }

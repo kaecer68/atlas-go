@@ -115,7 +115,7 @@
   },
   "calendar_events": {
     "name": "calendar_events",
-    "description": "Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events. Alternative: event_calendar, event_flow_prediction.",
+    "description": "DEPRECATED: use event_calendar instead. Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events.",
     "inputSchema": {
       "type": "object"
     }

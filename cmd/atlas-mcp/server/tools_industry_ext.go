@@ -92,7 +92,7 @@ func (s *server) handleRiskExposure(ctx context.Context, _ *mcp.CallToolRequest,
 func registerIndustryExtTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "calendar_events",
-		Description: autoDescOr("calendar_events", "Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events. Alternative: event_calendar, event_flow_prediction."),
+		Description: autoDescOr("calendar_events", "DEPRECATED: use event_calendar instead. Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleCalendarEvents)
 
