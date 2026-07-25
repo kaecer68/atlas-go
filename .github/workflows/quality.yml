@@ -264,6 +264,18 @@ jobs:
     - name: Check maturity label consistency
       run: bash scripts/ci/check_maturity.sh
 
+  # Version consistency — verifies VERSION file matches hardcoded
+  # version strings in TARGETS files (AGENTS.md, AGENTS_INDEX.md,
+  # MATURITY.md, fubonproxy/AGENTS.md, cmd/atlas-mcp/server/AGENTS.md).
+  # Prevents the "multiple version numbers out of sync" problem.
+  check-versions:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check version consistency
+      run: bash scripts/ci/check_versions.sh
+
   # Agent prompt files — ensures every enabled agent in agents.json
   # has a corresponding prompt file under prompts/agents/.
   agent-prompts:
