@@ -1,0 +1,92 @@
+{
+  "canonical_channel_count": 37,
+  "registered_channels": [
+    {"id": "us_yahoo", "source": "query1.finance.yahoo.com", "status": "conditional (YahooEnabled)"},
+    {"id": "twse_replay", "source": "TWSE", "status": "registered"},
+    {"id": "twse_capital_flow", "source": "TWSE / T86", "status": "registered"},
+    {"id": "fugle", "source": "api.fugle.tw", "status": "conditional (FUGLE_API_KEY)"},
+    {"id": "fubon", "source": "api.fubon.com.tw via proxy", "status": "conditional (proxy reachable)"},
+    {"id": "finmind", "source": "api.finmindtrade.com", "status": "conditional (FINMIND_API_KEY)"},
+    {"id": "frankfurter_fx", "source": "api.frankfurter.app", "status": "registered"},
+    {"id": "geopolitical", "source": "RSS / GDELT composite", "status": "registered"},
+    {"id": "twse_margin", "source": "TWSE", "status": "registered"},
+    {"id": "export_statistics", "source": "opendata.customs.gov.tw", "status": "registered"},
+    {"id": "tsmc_revenue", "source": "TWSE / investor", "status": "registered"},
+    {"id": "geopolitical_taiwan", "source": "CNA/LTN/TVBS RSS", "status": "registered"},
+    {"id": "janus_regime", "source": "computed internally", "status": "conditional (janusEngine)"},
+    {"id": "tej", "source": "TEJ", "status": "registered"},
+    {"id": "exchange_rate", "source": "api.frankfurter.dev / ECB", "status": "registered"},
+    {"id": "sox_index", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "dram_spot_price", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "twse_sector_index", "source": "TWSE", "status": "registered"},
+    {"id": "sector_data", "source": "state dir (operator imported)", "status": "file-backed"},
+    {"id": "day_trading", "source": "www.twse.com.tw/exchangeReport/TWTB4U", "status": "registered"},
+    {"id": "bdi", "source": "quote.cnbc.com", "status": "registered"},
+    {"id": "taifex_daily", "source": "openapi.taifex.com.tw", "status": "registered"},
+    {"id": "taifex_institutional", "source": "openapi.taifex.com.tw", "status": "registered"},
+    {"id": "tdcc_equity_dispersion", "source": "stub /v1/equity-dispersion", "status": "stub"},
+    {"id": "twse_oddlot", "source": "TWSE", "status": "registered"},
+    {"id": "twse_sbl", "source": "stub", "status": "stub"},
+    {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
+    {"id": "twse_etf", "source": "TWSE", "status": "registered"},
+    {"id": "us_spx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "us_ndx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "us_dji", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "taiex_index", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "tw_vol", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "us_nvda", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "us_aapl", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "us_msft", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
+    {"id": "tsm_adr", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"}
+  ],
+  "rogue_channels": [
+    {
+      "name": "backfill-financial-statements",
+      "env_var": "FINMIND_API_KEY",
+      "files": ["cmd/backfill-financial-statements/main.go"],
+      "line_numbers": [43, 55, 66],
+      "duplicates_registered_channel": "finmind",
+      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockFinancialStatements"
+    },
+    {
+      "name": "backfill-institutional-investors",
+      "env_var": "FINMIND_API_KEY",
+      "files": ["cmd/backfill-institutional-investors/main.go"],
+      "line_numbers": [51, 70, 80],
+      "duplicates_registered_channel": "finmind",
+      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockInstitutionalInvestorsBuySell"
+    },
+    {
+      "name": "backfill-month-revenue",
+      "env_var": "FINMIND_API_KEY",
+      "files": ["cmd/backfill-month-revenue/main.go"],
+      "line_numbers": [55, 67, 77],
+      "duplicates_registered_channel": "finmind",
+      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanStockMonthRevenue"
+    },
+    {
+      "name": "backfill-taifex-oi",
+      "env_var": "FINMIND_API_KEY",
+      "files": ["cmd/backfill-taifex-oi/main.go"],
+      "line_numbers": [59, 79, 126, 129],
+      "duplicates_registered_channel": "taifex_institutional (domain) / finmind (backend)",
+      "reason": "raw http.Client + os.Getenv FINMIND_API_KEY; dataset TaiwanFuturesInstitutionalTraders"
+    }
+  ],
+  "additional_bypass_candidates": [
+    {
+      "name": "backfill-replay",
+      "files": ["cmd/backfill-replay/main.go"],
+      "line_numbers": [126, 242, 250],
+      "reason": "raw http.Client without os.Getenv API key in same file; broader bypass if it fetches remote data"
+    }
+  ],
+  "constitution_baseline": {
+    "claimed_channels": 16,
+    "actual_canonical_ids": 37,
+    "claimed_no_rate_limiter": 7,
+    "claimed_yahoo_fragmentation": 12,
+    "claimed_no_auto_fetch_schedule": 15
+  },
+  "notes": "37 canonical IDs live in internal/apigateway/gateway.go:168-210. Registration in register_adapters.go is conditional on keys and feature flags. Four cmd/backfill-* tools violate Article 1 by creating raw HTTP clients with FINMIND_API_KEY. Constitution.md's own counts (16 channels, 9 tasks) are outdated; a5-violations.json confirms reality is 37 channels / 60 tasks."
+}

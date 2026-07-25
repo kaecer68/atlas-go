@@ -93,6 +93,49 @@ func TestNewHealthHandler_ForeignOccupant_EmitsPIDAndCommand(t *testing.T) {
 	}
 }
 
+func TestNewHealthHandler_SelfAddrSkipProbe(t *testing.T) {
+	probeCalled := 0
+	probe := func(addr string) portHealthReport {
+		probeCalled++
+		return portHealthReport{Addr: addr, State: "free"}
+	}
+	h := newHealthHandler(healthConfig{Probe: probe, SelfAddr: ":18080"})
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var body healthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body.Ports["atlas_http"].State != "healthy" {
+		t.Errorf("atlas_http state = %q, want healthy (self-addr skip)", body.Ports["atlas_http"].State)
+	}
+	if probeCalled != 1 {
+		t.Errorf("probe called %d times, want 1 (fubon_proxy only)", probeCalled)
+	}
+}
+
+func TestAddrPortsMatch(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{":18080", "127.0.0.1:18080", true},
+		{":18080", "0.0.0.0:18080", true},
+		{":18080", "127.0.0.1:18081", false},
+		{"127.0.0.1:18080", "[::]:18080", true},
+		{"bad", "127.0.0.1:18080", false},
+	}
+	for _, tc := range cases {
+		if got := addrPortsMatch(tc.a, tc.b); got != tc.want {
+			t.Errorf("addrPortsMatch(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
 func TestReportPort_ErrorsSurfacedAsUnknown(t *testing.T) {
 	// Malformed address should not panic; reportPort should return
 	// State="unknown" with the parse error in the Error field.

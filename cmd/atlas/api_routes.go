@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,8 +39,11 @@ type healthResponse struct {
 
 // healthConfig parameterises newHealthHandler. Probe is the function used
 // to inspect each port; tests override it to avoid binding real sockets.
+// SelfAddr is the address the caller's HTTP server is listening on; the
+// handler skips probing its own port to avoid recursive /health requests.
 type healthConfig struct {
-	Probe func(addr string) portHealthReport
+	Probe    func(addr string) portHealthReport
+	SelfAddr string
 }
 
 func reportPort(addr string) portHealthReport {
@@ -57,13 +62,35 @@ func reportPort(addr string) portHealthReport {
 	return portHealthReport{Addr: addr, State: "unknown"}
 }
 
+func addrPortsMatch(a, b string) bool {
+	if strings.HasPrefix(a, ":") {
+		a = "127.0.0.1" + a
+	}
+	if strings.HasPrefix(b, ":") {
+		b = "127.0.0.1" + b
+	}
+	_, portA, errA := net.SplitHostPort(a)
+	_, portB, errB := net.SplitHostPort(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return portA == portB
+}
+
 // newHealthHandler returns the JSON /health endpoint that mirrors the
 // legacy "ok" payload while also reporting occupancy of atlas_http and
 // fubon_proxy via portprobe.Probe. Values sourced from internal/constants.
 func newHealthHandler(cfg healthConfig) http.Handler {
-	probe := cfg.Probe
-	if probe == nil {
-		probe = reportPort
+	baseProbe := cfg.Probe
+	if baseProbe == nil {
+		baseProbe = reportPort
+	}
+	selfAddr := cfg.SelfAddr
+	probe := func(addr string) portHealthReport {
+		if selfAddr != "" && addrPortsMatch(addr, selfAddr) {
+			return portHealthReport{Addr: addr, State: "healthy"}
+		}
+		return baseProbe(addr)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := healthResponse{
@@ -88,9 +115,9 @@ func newHealthHandler(cfg healthConfig) http.Handler {
 //
 // All routes are best-effort and unconditional — they must not block
 // startup if any of them fails to install.
-func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS, rc readyChecker) {
+func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS, rc readyChecker, selfAddr string) {
 	mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
-	mux.Handle("/health", newHealthHandler(healthConfig{}))
+	mux.Handle("/health", newHealthHandler(healthConfig{SelfAddr: selfAddr}))
 	mux.Handle("/ready", newReadyHandler(rc))
 
 	// Redirect root to the client-facing UI. Bare /admin and /client are

@@ -688,7 +688,7 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Fatalf("failed to get client dist sub FS: %v", err)
 		}
-		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
+		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc, *apiAddr)
 
 		// Per-symbol stock endpoints for atlas-mcp.
 		stockDeps := stocktools.Deps{}
@@ -2290,7 +2290,7 @@ func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, col
 		replayPath:  config.GetReplayDataPath(cfg.WorkDir),
 		skipGateway: true, // live mode does not initialize apigateway.Gateway
 	}
-	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc)
+	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc, apiAddr)
 	srv := &http.Server{
 		Addr:              apiAddr,
 		Handler:           mux,

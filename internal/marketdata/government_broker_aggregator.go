@@ -17,6 +17,8 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
 
 // GovernmentBrokerAggregator fetches daily broker-level trading data from TWSE
@@ -58,11 +60,11 @@ var tw50Symbols = []string{
 }
 
 // NewGovernmentBrokerAggregator creates an aggregator that writes to outputDir.
+// Uses the shared httpclient factory (C06: replaces raw &http.Client{} to
+// remove the last direct HTTP client creation outside Gateway/ProviderRegistry).
 func NewGovernmentBrokerAggregator(outputDir string) *GovernmentBrokerAggregator {
 	return &GovernmentBrokerAggregator{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:    httpclient.NewFactory().NewClient(30 * time.Second),
 		limiter:   rate.NewLimiter(rate.Every(2*time.Second), 1),
 		outputDir: outputDir,
 	}
