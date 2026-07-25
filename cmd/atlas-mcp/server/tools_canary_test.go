@@ -70,7 +70,7 @@ var canaryRoutes = map[string]canaryTest{
 	"narrative_stress_index_thresholds": {Path: "/api/narrative/stress-index/thresholds"},
 	"event_calendar":                    {Path: "/api/events/calendar"},
 	"event_flow_prediction":             {Path: "/api/events/prediction"},
-	"calendar_events":                   {Path: "/api/dashboard/calendar-events"},
+	"calendar_events":                   {Path: "/api/events/calendar"}, // redirected to canonical endpoint
 	"template_detector_status":          {Path: "/api/detector/scan/status"},
 	"risk_get_metrics":                  {Path: "/api/dashboard/risk"},
 	"risk_get_calibration":              {Path: "/api/dashboard/risk-calibration"},

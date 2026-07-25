@@ -34,7 +34,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/cycle-status-card", shared.Get(h.HandleCycleStatusCard))
 	// Deprecated: internal calibration; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-calibration", shared.Get(h.HandleIndustryCalibration))
-	mux.Handle("GET /api/dashboard/calendar-events", shared.Get(h.HandleCalendarEvents))
+	mux.Handle("GET /api/dashboard/calendar-events", shared.Get(h.HandleCalendarEvents)) // DEPRECATED: use /api/events/calendar
 	// Deprecated: internal ODM channel data; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-odm-channel", shared.Get(h.HandleODMChannel))
 	// Deprecated: internal data aggregator; not for web UI or MCP.

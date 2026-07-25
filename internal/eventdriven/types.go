@@ -20,18 +20,27 @@ type FlowPrediction struct {
 	PredictedForces []string               `json:"predicted_forces"` // which forces likely to move
 }
 
-// EventCalendarItem is a simplified view of an upcoming event.
+// EventCalendarItem is a view of an upcoming event, sourced from industry.CalendarEvent.
 type EventCalendarItem struct {
-	Name               string    `json:"name"`
-	EventType          string    `json:"event_type"`
-	Direction          string    `json:"direction"`
-	StartDate          time.Time `json:"start_date"`
-	EndDate            time.Time `json:"end_date"`
-	AffectedIndustries []string  `json:"affected_industries,omitempty"`
-	ExpectedFlowImpact string    `json:"expected_flow_impact"` // "bullish", "bearish", "neutral"
-	Confidence         float64   `json:"confidence"`
-	Backfilled         bool      `json:"backfilled"`
-	CrossSourceStatus  string    `json:"cross_source_status,omitempty"`
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	NameEN              string    `json:"name_en,omitempty"`
+	EventType           string    `json:"event_type"`
+	Description         string    `json:"description,omitempty"`
+	Direction           string    `json:"direction"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	PeakDate            time.Time `json:"peak_date,omitempty"`
+	DecayDays           int       `json:"decay_days"`
+	AffectedIndustries  []string  `json:"affected_industries,omitempty"`
+	ExpectedFlowImpact  string    `json:"expected_flow_impact"`
+	Confidence          float64   `json:"confidence"`
+	SentimentAdjustment float64   `json:"sentiment_adjustment"`
+	DataSource          string    `json:"data_source,omitempty"`
+	EvidenceQuality     string    `json:"evidence_quality,omitempty"`
+	Backfilled          bool      `json:"backfilled"`
+	CrossSourceStatus   string    `json:"cross_source_status,omitempty"`
+	GeneratedAt         time.Time `json:"generated_at,omitempty"`
 }
 
 // ETFEstimate represents the predicted capital flow from an ETF rebalance event.
