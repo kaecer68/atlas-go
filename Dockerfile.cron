@@ -24,7 +24,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o backfill-replay ./cmd/backfill-replay
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
@@ -39,17 +38,14 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o backfill-month-revenue ./cmd/backfill-month-revenue
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o backfill-financial-statements ./cmd/backfill-financial-statements
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -o backfill-institutional-investors ./cmd/backfill-institutional-investors
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT:-unknown} \
@@ -84,12 +80,8 @@ RUN chmod +x /app/scripts/*.sh
 
 # Copy Go binaries from builder
 COPY --from=builder /build/daily-replay-sync /app/
-COPY --from=builder /build/backfill-replay /app/
 COPY --from=builder /build/macro-ingest /app/
 COPY --from=builder /build/geo-ingest /app/
-COPY --from=builder /build/backfill-month-revenue /app/
-COPY --from=builder /build/backfill-financial-statements /app/
-COPY --from=builder /build/backfill-institutional-investors /app/
 COPY --from=builder /build/cron-quote-backfill /app/
 
 # C07 sector prediction observation window binaries (PR #1201)

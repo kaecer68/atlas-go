@@ -551,15 +551,14 @@ rebuild-host-bin:
 	@echo "  building host bin/atlas-mcp (commit=$(GIT_COMMIT))"
 	@$(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o bin/atlas-mcp ./cmd/atlas-mcp
 
-# Rebuild the 5 atlas-atlas binaries on host (for sandbox use with Dockerfile.atlas.local).
-# .build-atlas/ is gitignored. atlas-go/atlas-mcp/daily-replay-sync/backfill-replay/calibrate-seasonal.
+# Rebuild the 4 atlas-atlas binaries on host (for sandbox use with Dockerfile.atlas.local).
+# .build-atlas/ is gitignored. atlas-go/atlas-mcp/daily-replay-sync/calibrate-seasonal.
 .build-atlas: ; @mkdir -p $@
 rebuild-atlas-bins: | .build-atlas
-	@echo "  building 5 atlas-atlas binaries on host"
+	@echo "  building 4 atlas-atlas binaries on host"
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-go ./cmd/atlas
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
-	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/backfill-replay ./cmd/backfill-replay
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
 
 # Rebuild atlas-atlas image from host-built binaries + restart container.
@@ -568,30 +567,26 @@ rebuild-atlas: rebuild-atlas-bins
 	@docker tag atlas-atlas:local atlas-atlas:latest
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d atlas
 
-# Rebuild the 10 cron binaries on host.
-# daily-replay-sync/backfill-replay/macro-ingest/geo-ingest/backfill-month-revenue/
-# backfill-financial-statements/backfill-institutional-investors/cron-quote-backfill/
+# Rebuild the 6 cron binaries on host.
+# daily-replay-sync/macro-ingest/geo-ingest/
+# cron-quote-backfill/
 # c07-obs-collector/c07-day-evaluator.
 .build-cron: ; @mkdir -p $@
 rebuild-cron-bins: | .build-cron
-	@echo "  building 10 cron binaries on host"
+	@echo "  building 6 cron binaries on host"
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/daily-replay-sync ./cmd/daily-replay-sync
-	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-replay ./cmd/backfill-replay
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/macro-ingest ./cmd/macro-ingest
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/geo-ingest ./cmd/geo-ingest
-	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-month-revenue ./cmd/backfill-month-revenue
-	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-financial-statements ./cmd/backfill-financial-statements
-	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/backfill-institutional-investors ./cmd/backfill-institutional-investors
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/cron-quote-backfill ./cmd/cron-quote-backfill
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-obs-collector ./cmd/experimental/c07-obs-collector
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-day-evaluator ./cmd/experimental/c07-day-evaluator
 
-# Rebuild cron image + force-recreate all 10 cron containers.
-CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest atlas-cron-backfill-month-revenue:latest \
+# Rebuild cron image + force-recreate all 6 cron containers.
+CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest \
                    atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest \
-                   atlas-cron-replay-sync:latest atlas-cron-backfill-institutional-investors:latest \
+                   atlas-cron-replay-sync:latest \
                    atlas-atlas-cron-c07-evaluate:latest atlas-cron-darwinian:latest \
-                   atlas-cron-backfill-financial-statements:latest atlas-cron-macro-ingest:latest
+                   atlas-cron-macro-ingest:latest
 DOCKER_BIN ?= docker
 
 .PHONY: retag-cron-images
@@ -601,7 +596,7 @@ retag-cron-images:
 rebuild-cron: rebuild-cron-bins
 	@$(DOCKER_BIN) build -t atlas-cron-rebuilt:local -f Dockerfile.cron.local .
 	@$(MAKE) retag-cron-images
-	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-backfill-financial-statements cron-backfill-month-revenue cron-darwinian cron-geo-ingest atlas-cron-c07-collect cron-backfill-institutional-investors
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-darwinian cron-geo-ingest atlas-cron-c07-collect 
 
 # Full rebuild: host bin + atlas image + cron images.
 rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron

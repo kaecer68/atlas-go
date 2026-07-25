@@ -164,8 +164,8 @@ func TestAtlasMCP_EndToEnd(t *testing.T) {
 
 	// 7. Assert tool count
 	got := len(tools)
-	if got < 109 || got > 113 {
-		t.Errorf("expected 109-113 tools, got %d", got)
+	if got < 116 || got > 118 {
+		t.Errorf("expected 116-118 tools, got %d", got)
 	}
 	t.Logf("atlas-mcp served %d tools over JSON-RPC", got)
 

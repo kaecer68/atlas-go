@@ -81,8 +81,6 @@ check_image_binary "atlas-atlas:latest" /app/atlas-mcp \
     "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
     "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
-check_image_binary "atlas-atlas:latest" /app/backfill-replay \
-    "atlas-atlas image → /app/backfill-replay" "$FRESHNESS_TMPDIR/.backfill-replay-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
     "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
 check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \

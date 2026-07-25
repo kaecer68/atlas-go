@@ -183,7 +183,7 @@ func registerOperationsTasks(d operationsDeps) {
 			ageDays := int(time.Since(info.ModTime()).Hours() / 24)
 			if ageDays > 90 {
 				d.monitor.Alert(monitoring.AlertLevelWarning, "data_staleness",
-					fmt.Sprintf("fundamentals.json is %d days old — run: go run ./cmd/backfill-financial-statements", ageDays),
+					fmt.Sprintf("fundamentals.json is %d days old — check registered finmind channel health and auto_backfill task", ageDays),
 					map[string]any{"file": path, "age_days": ageDays})
 			}
 			return nil

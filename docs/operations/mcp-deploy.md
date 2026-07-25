@@ -62,7 +62,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o atlas-go \
     ./cmd/atlas
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o daily-replay-sync ./cmd/daily-replay-sync
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o backfill-replay ./cmd/backfill-replay
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o atlas-mcp ./cmd/atlas-mcp
 ```
 
