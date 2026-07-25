@@ -386,80 +386,10 @@ services:
       disable: true
 
   # Monthly cron job for month revenue backfill (1st of each month)
-  cron-backfill-month-revenue:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-      args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
-    container_name: atlas-cron-backfill-month-revenue
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 0 1 * *
-      - CRON_COMMAND=/app/backfill-month-revenue -start $$(date -d '2 months ago' +%Y-%m-01) -end $$(date -d 'last month' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-    healthcheck:
-      disable: true
 
   # Monthly cron job for financial statements backfill (1st of each month)
-  cron-backfill-financial-statements:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-      args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
-    container_name: atlas-cron-backfill-financial-statements
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 0 1 * *
-      - CRON_COMMAND=/app/backfill-financial-statements -start $$(date -d '2 months ago' +%Y-%m-01) -end $$(date -d 'last month' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-    healthcheck:
-      disable: true
 
   # Daily cron job for institutional investors backfill (nightly 2am)
-  cron-backfill-institutional-investors:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-      args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
-    container_name: atlas-cron-backfill-institutional-investors
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 2 * * *
-      - CRON_COMMAND=/app/backfill-institutional-investors -date $$(date -d 'yesterday' +%Y-%m-%d)
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
-      - FINMIND_API_KEY=${FINMIND_API_KEY}
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-    healthcheck:
-      disable: true
 
   # Daily cron job for stock quote backfill (nightly 3am)
   cron-quote-backfill:

@@ -153,7 +153,7 @@ mcp_servers:
 curl -fsS http://127.0.0.1:18080/health
 
 # Step 3: 確認 MCP 連線（從 client 端）
-hermes mcp test atlas-go          # 應列出 112 個 tool
+hermes mcp test atlas-go          # 應列出 116 個 tool
 # 或在 Claude Desktop / Cursor 內嘗試調用任一 tool
 ```
 
@@ -170,7 +170,7 @@ hermes mcp test atlas-go          # 應列出 112 個 tool
 |------|------|------|
 | `command not found` | binary path 錯誤 | 確認 `/absolute/path/to/bin/atlas-mcp` 存在且有執行權限 |
 | 連線 401 | `ATLAS_API_KEY` 錯誤 | 跟管理員確認 admin key |
-| 看不到 112 個 tool | client 還在用舊 config | 編輯 config 後**重啟 client**（Hermes 可用 `/reload-mcp`） |
+| 看不到 116 個 tool | client 還在用舊 config | 編輯 config 後**重啟 client**（Hermes 可用 `/reload-mcp`） |
 | tool 呼叫 timeout | atlas-go backend 沒啟動 | `curl http://127.0.0.1:18080/health` 確認 |
 
 ## 7. 互動式 Wizard（推薦）

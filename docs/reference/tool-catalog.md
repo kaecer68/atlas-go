@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **113+ tools**（預設啟用；sampling/elicitation feature-gated 全開時 115+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **118 tools**（預設啟用；sampling/elicitation feature-gated 全開時 118+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 107+ + template_detector 2 + audit 5 = 114+（**基礎 114+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 116+；啟動期 assert ∈ [111, 114]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + Phase 2 alert lifecycle 4 = 114+（**基礎 116+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 118+；啟動期 assert ∈ [115, 118]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（116 個 tool 槽位，其中 114+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（118 個 tool 槽位，其中 116+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）

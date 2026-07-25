@@ -68,9 +68,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o daily-replay-sync ./cmd/daily-replay-sync
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
-    -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
-    -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=${BUILDTIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
-    -o backfill-replay ./cmd/backfill-replay
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.buildTime=${BUILDTIME:-$(date -u +%Y%m%d%H%M%S)} \
     -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=${VERSION:-dev} \
@@ -100,7 +97,6 @@ WORKDIR /app
 # Copy binaries from builder
 COPY --from=builder /build/atlas-go /app/
 COPY --from=builder /build/daily-replay-sync /app/
-COPY --from=builder /build/backfill-replay /app/
 COPY --from=builder /build/atlas-mcp /app/
 COPY --from=builder /build/calibrate-seasonal /app/
 
