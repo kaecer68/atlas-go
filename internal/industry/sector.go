@@ -170,7 +170,6 @@ var DisplayZHAliases = map[string]SectorID{
 	"能源":     SectorEnergy,
 }
 
-
 // subIndustryIDs is the canonical ID set used by IsValid / AllSectors for
 // O(1) L2 lookups. Declared as a runtime set because Go does not have const
 var subIndustryIDs = func() map[SectorID]struct{} {
