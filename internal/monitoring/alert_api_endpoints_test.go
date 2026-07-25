@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
+	"github.com/kaecer68/atlas-go/internal/monitoring/alertscanner"
 )
 
 // helper: build a store with N alerts for testing.
@@ -35,6 +36,44 @@ func buildAlertsForAPI(t *testing.T, api *AlertAPI) []domain.AlertRecord {
 	return records
 }
 
+func TestAlertAPI_HandleActiveSnapshot(t *testing.T) {
+	api := &AlertAPI{}
+	buildAlertsForAPI(t, api)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/active", nil)
+	rec := httptest.NewRecorder()
+	api.handleActiveSnapshot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp alertscanner.Snapshot
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", rec.Body.String())
+	}
+	if resp.Total != 3 {
+		t.Errorf("expected total=3, got %d", resp.Total)
+	}
+	if !resp.Blocked {
+		t.Errorf("expected blocked=true because critical/error alerts exist")
+	}
+	if resp.BySeverity["critical"] != 1 || resp.BySeverity["error"] != 1 || resp.BySeverity["warning"] != 1 {
+		t.Errorf("unexpected severity counts: %+v", resp.BySeverity)
+	}
+	if len(resp.Alerts) != 3 {
+		t.Errorf("expected 3 alerts, got %d", len(resp.Alerts))
+	}
+}
+
+func TestAlertAPI_HandleActiveSnapshot_MethodNotAllowed(t *testing.T) {
+	api := &AlertAPI{}
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/active", strings.NewReader("{}"))
+	rec := httptest.NewRecorder()
+	api.handleActiveSnapshot(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", rec.Code)
+	}
+}
 func TestAlertAPI_HandleListAlerts_SortTimestampDesc(t *testing.T) {
 	api := &AlertAPI{}
 	buildAlertsForAPI(t, api)

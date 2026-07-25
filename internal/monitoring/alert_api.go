@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/monitoring/alertscanner"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
@@ -24,6 +25,7 @@ func NewAlertAPI(store *AlertStore) *AlertAPI {
 func (a *AlertAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/alerts", a.handleListAlerts)
 	mux.HandleFunc("/api/alerts/unacknowledged", a.handleUnacknowledged)
+	mux.HandleFunc("/api/alerts/active", a.handleActiveSnapshot)
 	mux.HandleFunc("/api/alerts/stats", a.handleStats)
 	mux.HandleFunc("/api/alerts/rules", a.handleRules)
 	mux.Handle("POST /api/alerts/acknowledge", shared.Post(a.handleAcknowledge))
@@ -143,6 +145,25 @@ func (a *AlertAPI) handleUnacknowledged(w http.ResponseWriter, r *http.Request) 
 		records = []domain.AlertRecord{}
 	}
 	shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": records, "total": len(records)})
+}
+
+// handleActiveSnapshot returns a unified snapshot of in-flight alerts from the
+// persistence store, including severity counts and blocker status. This is the
+// endpoint consumed by the alert_scan MCP tool so AI agents can discover
+// active alerts at session start.
+func (a *AlertAPI) handleActiveSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	scanner := alertscanner.New(a.store)
+	snap, err := scanner.Snapshot(r.Context())
+	if err != nil {
+		shared.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("scan active alerts: %v", err))
+		return
+	}
+	shared.WriteJSON(w, http.StatusOK, snap)
 }
 
 func (a *AlertAPI) handleStats(w http.ResponseWriter, r *http.Request) {

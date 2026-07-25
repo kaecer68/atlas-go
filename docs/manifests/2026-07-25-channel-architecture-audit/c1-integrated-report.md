@@ -101,7 +101,7 @@ See §3 below.
 
 | # | Action | File / Area | Acceptance |
 |---|--------|-------------|------------|
-| 5 | Convert 4 FinMind rogue backfills into BTM tasks or delete if FinMind is dead | `cmd/backfill-*` | Use `gateway.Fetch("finmind")` / `gateway.Fetch("taifex_institutional")` or remove |
+| 5 | ~~Convert 4 FinMind rogue backfills into BTM tasks or delete if FinMind is dead~~ | `cmd/backfill-*` | Already resolved: the four FinMind backfill CLIs (`backfill-financial-statements`, `backfill-institutional-investors`, `backfill-month-revenue`, `backfill-taifex-oi`) no longer exist in the repository. Remaining one-shot backfills (`backfill-fundamentals-ps-sector`, `backfill-industry-tree`, `backfill-quotes`, `backfill-summaries`) are local-file / TWSE-client tools with no direct API-key env access. |
 | 6 | Add `ChannelID` to the 64 BTM tasks that currently fetch via closure | `cmd/atlas/*_tasks.go` | All data-fetching tasks go through `gateway.Fetch` |
 | 7 | ~~Create a gap-detection backfill task~~ | `cmd/atlas/backfill_tasks.go` | Implemented: `auto_gap_detection` scans daily-file channels and writes `data/state/gap_report.json`; emits `monitor.Alert` for missing coverage. |
 | 8 | Unify health endpoints | `internal/monitoring/` | Single `/api/health` backed by `ChannelHealthStore` + portprobe |
@@ -283,7 +283,7 @@ Because these changes touch many files, split into focused PRs:
 - [x] `check_constitution.sh` exits non-zero on new violations.
 - [x] `/api/health` returns same data as `/health` or redirects.
 - [~] All BTM data-fetch tasks have `ChannelID`. (`government_flow_aggregate` fixed; remaining tasks are pure orchestration/calibration and legitimately omit `ChannelID`).
-- [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines (currently only in-process `AlertStore`; Prometheus Alertmanager + webhook ring buffer not yet aggregated).
+- [~] `alert_scan` MCP tool returns a unified `alertscanner.Snapshot` from the persistence AlertStore (`/api/alerts/active`), including severity counts and blocker status. Prometheus Alertmanager + Wave9 webhook aggregation remain future work.
 - [x] Proposed channel-index document is CI-enforced (`scripts/ci/check_channel_index.py` validates a1-channels.json against `gateway.go` channelIDs and `register_adapters.go` runtime registrations).
 - [x] Gap-detection backfill task `auto_gap_detection` is registered via BTM and scans daily-file channels (`capital_flow`, `margin`, `government_flow`) plus latest-file channels, writing `data/state/gap_report.json` and emitting `monitor.Alert` records for missing coverage.
 - [x] Per-channel latency/staleness Prometheus metrics are exported by `channel_health_metrics_export` BTM task and alerted by `monitoring/rules/channel_health_latent_staleness.yml`.

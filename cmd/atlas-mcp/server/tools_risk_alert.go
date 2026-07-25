@@ -59,7 +59,7 @@ func registerRiskAlertTools(mcpSrv *mcp.Server, s *server) {
 	// Phase 2 (Route C): write-capable alert lifecycle tools.
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_scan",
-		Description: autoDescOr("alert_scan", "Scan for all unacknowledged alerts (startup rescan). Returns active alert counts and blocker status."),
+		Description: autoDescOr("alert_scan", "Scan for active in-flight alerts. Returns severity counts, blocker status, and the alert list. Use at session start to discover unresolved alerts before making changes."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleAlertScan)
 
@@ -218,7 +218,7 @@ type AlertSilenceOutput struct {
 func (s *server) handleAlertScan(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AlertScanOutput, error) {
 	var out AlertScanOutput
 	if err := s.withAudit(ctx, "alert_scan", nil, func() error {
-		return s.cli.Get(ctx, "/api/alerts/unacknowledged", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/alerts/active", nil, &out.Result)
 	}); err != nil {
 		return nil, AlertScanOutput{}, err
 	}
