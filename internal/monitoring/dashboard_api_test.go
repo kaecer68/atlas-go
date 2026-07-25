@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -790,9 +791,106 @@ func TestDashboardAPI_CalibrateNarrative_NoEngine(t *testing.T) {
 	}
 }
 
-// TestHandleAgentNames verifies the /api/dashboard/agent-names endpoint returns
-// the agent registry from configs/agents.json with id/name/skill/layer fields,
-// and gracefully returns an empty array when the file is missing.
+// TestDashboardAPI_ChannelHealthEndpoint_SurfacesFullRecord verifies that
+// /api/dashboard/channel-health returns the full ChannelHealthRecord surface
+// (latency, last_error, records_fetched, etc.) instead of just channel_id/status.
+func TestDashboardAPI_ChannelHealthEndpoint_SurfacesFullRecord(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "data/state"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	now := time.Now().UTC().Round(time.Second)
+	payload := map[string]any{
+		"channels": map[string]any{
+			"twse_capital_flow": map[string]any{
+				"status":               "error",
+				"last_fetch_at":        now.Format(time.RFC3339),
+				"last_data_at":         now.Add(-time.Hour).Format(time.RFC3339),
+				"last_error":           "rate limit exceeded",
+				"last_success_at":      now.Add(-2 * time.Hour).Format(time.RFC3339),
+				"latency_ms":           int64(1234),
+				"rate_limit_remaining": 0,
+				"records_fetched":      42,
+				"symbols_processed":    150,
+				"errors":               []string{"timeout", "rate limit exceeded"},
+			},
+			"fugle": map[string]any{
+				"status":        "ok",
+				"last_fetch_at": now.Format(time.RFC3339),
+				"latency_ms":    int64(56),
+			},
+		},
+		"updated_at": now.Format(time.RFC3339),
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "data/state", "channel_health.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	d := NewDashboardAPIWithGateway(tmpDir, tmpDir, nil, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/channel-health", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Channels  []map[string]any `json:"channels"`
+		UpdatedAt string           `json:"updated_at"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Channels) != 2 {
+		t.Fatalf("expected 2 channels, got %d", len(resp.Channels))
+	}
+
+	var twse map[string]any
+	for _, ch := range resp.Channels {
+		if ch["channel_id"] == "twse_capital_flow" {
+			twse = ch
+			break
+		}
+	}
+	if twse == nil {
+		t.Fatal("twse_capital_flow channel not found")
+	}
+	for _, key := range []string{"last_error", "latency_ms", "records_fetched", "symbols_processed", "errors"} {
+		if _, ok := twse[key]; !ok {
+			t.Errorf("expected %s in response", key)
+		}
+	}
+	if twse["last_error"] != "rate limit exceeded" {
+		t.Errorf("expected last_error=rate limit exceeded, got %v", twse["last_error"])
+	}
+}
+
+func TestDashboardAPI_ChannelHealthEndpoint_MissingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	d := NewDashboardAPIWithGateway(tmpDir, tmpDir, nil, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/channel-health", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"channels":[]`) {
+		t.Errorf("expected empty channels array, got %s", body)
+	}
+}
 func TestHandleAgentNames(t *testing.T) {
 	tmpDir := t.TempDir()
 	configsDir := filepath.Join(tmpDir, "configs")

@@ -20,7 +20,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -262,7 +261,7 @@ func registerBackfillTasks(d backfillDeps) {
 			for _, ch := range report.Channels {
 				totalMissing += ch.MissingCount
 				if ch.MissingCount > 0 {
-					sb.WriteString(fmt.Sprintf(" %s:%d", ch.ChannelID, ch.MissingCount))
+					fmt.Fprintf(&sb, " %s:%d", ch.ChannelID, ch.MissingCount)
 				}
 			}
 			if totalMissing > 0 {
@@ -276,10 +275,4 @@ func registerBackfillTasks(d backfillDeps) {
 	log.Printf("[Gateway] registered auto_gap_detection background task (24h interval)")
 
 	registerChannelHealthMetricsTask(d)
-}
-
-// sortStrings sorts a slice in place and returns it (helper for tests).
-func sortStrings(s []string) []string {
-	sort.Strings(s)
-	return s
 }

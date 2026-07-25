@@ -95,26 +95,26 @@ See §3 below.
 | 1 | Fix `scripts/ci/check_constitution.sh` to exit non-zero on violations and emit GitHub step summary | `scripts/ci/check_constitution.sh` | CI blocks PRs with new Article 1/4 violations |
 | 2 | Resolve `janus_regime_refresh` double registration | `cmd/atlas/operations_tasks.go` + `cmd/atlas/main.go` | Both registrations visible or one removed |
 | 3 | Remove or fix `/api/health` hardcoded duplicate | `cmd/atlas/main.go` | `GET /api/health` returns `301` to `/health` |
-| 4 | Make `/api/alerts/silence` persist `SilencedUntil` | `internal/monitoring/alert_api.go` | Silenced alerts reflect in unacknowledged list until expiry |
+| 4 | ~~Make `/api/alerts/silence` persist `SilencedUntil`~~ | `internal/monitoring/alert_api.go` | Already implemented: `handleSilence` updates each matching alert via `store.Update`, setting `Status=SILENCED` and `SilencedUntil`. `TestAlertAPI_HandleSilence` passes. |
 
 ### P1 — High impact, medium effort
 
 | # | Action | File / Area | Acceptance |
 |---|--------|-------------|------------|
-| 5 | Convert 4 FinMind rogue backfills into BTM tasks or delete if FinMind is dead | `cmd/backfill-*` | Use `gateway.Fetch("finmind")` / `gateway.Fetch("taifex_institutional")` or remove |
-| 6 | Add `ChannelID` to the 64 BTM tasks that currently fetch via closure | `cmd/atlas/*_tasks.go` | All data-fetching tasks go through `gateway.Fetch` |
+| 5 | ~~Convert 4 FinMind rogue backfills into BTM tasks or delete if FinMind is dead~~ | `cmd/backfill-*` | Already resolved: the four FinMind backfill CLIs (`backfill-financial-statements`, `backfill-institutional-investors`, `backfill-month-revenue`, `backfill-taifex-oi`) no longer exist in the repository. Remaining one-shot backfills (`backfill-fundamentals-ps-sector`, `backfill-industry-tree`, `backfill-quotes`, `backfill-summaries`) are local-file / TWSE-client tools with no direct API-key env access. |
+| 6 | ~~Add `ChannelID` to the 64 BTM tasks that currently fetch via closure~~ | `cmd/atlas/*_tasks.go` | Resolved for Yahoo US market channels: split `us_market_refresh` batch into 8 per-channel BTM tasks (`us_market_refresh_<ch>`), each with `ChannelID`. `macro_ingest` remains the only documented batch closure (multiple macro channels via `IngestAndUpdateMacro`). |
 | 7 | ~~Create a gap-detection backfill task~~ | `cmd/atlas/backfill_tasks.go` | Implemented: `auto_gap_detection` scans daily-file channels and writes `data/state/gap_report.json`; emits `monitor.Alert` for missing coverage. |
-| 8 | Unify health endpoints | `internal/monitoring/` | Single `/api/health` backed by `ChannelHealthStore` + portprobe |
+| 8 | Unify health endpoints | `internal/monitoring/` | `/api/dashboard/channel-health` now surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, etc.); remaining work is merging `/api/health/aggregate` with `/api/dashboard/system-health` behind `ChannelHealthStore`. |
 | 9 | ~~Add per-channel latency/staleness Prometheus rules~~ | `monitoring/rules/channel_health_latent_staleness.yml` + `cmd/atlas/channel_health_metrics_task.go` | Implemented: `channel_health_metrics_export` BTM task emits `atlas_channel_data_staleness_seconds`, `atlas_channel_fetch_latency_seconds`, and `atlas_channel_health_status` gauges; alert rules fire on stale (>24h), high latency (>30s), and error status. |
 
 ### P2 — Documentation & hygiene
 
 | # | Action | File / Area | Acceptance |
 |---|--------|-------------|------------|
-| 10 | Update `CONSTITUTION.md` task count from 9 to actual 60+ and expand Appendix A | `internal/apigateway/CONSTITUTION.md` | Document matches code |
-| 11 | Update `configs/allowed_env_vars.md` | `configs/allowed_env_vars.md` | Includes all 2026-07-25 keys |
-| 12 | Remove dead Prometheus rules or implement their metrics | `monitoring/rules/disabled/` | No disabled rule references missing metric |
-| 13 | Delete `backfill-replay` from `Dockerfile.cron` or add a cron container | `Dockerfile.cron`, `docker-compose.yml` | No unused binaries |
+| 10 | ~~Update `CONSTITUTION.md` task count from 9 to actual 60+ and expand Appendix A~~ | `internal/apigateway/CONSTITUTION.md` | Already updated to v1.3: documents 38 canonical channels, known batch closures, and CI-hardened checks. |
+| 11 | ~~Update `configs/allowed_env_vars.md`~~ | `configs/allowed_env_vars.md` | Already updated to v1.5 (2026-07-25): covers infrastructure, broker, TWSE, data-source, and MCP env vars. |
+| 12 | ~~Remove dead Prometheus rules or implement their metrics~~ | `monitoring/rules/disabled/` | No `disabled/` directory exists; current rules (`channel_health_latent_staleness.yml`, `wave9_channel_individual_health.yml`, `atlas_startup_anomaly_alerts.yml`, `llm_annotator_alerts.yml`, `llm_annotator_recording.yml`) reference existing metrics. |
+| 13 | ~~Delete `backfill-replay` from `Dockerfile.cron` or add a cron container~~ | `Dockerfile.cron`, `docker-compose.yml` | Already resolved: binary and image references removed from `Dockerfile.cron`/`docker-compose.yml`; `cmd/REGISTRY.md` still lists it as historical registry entry only. |
 
 ---
 
@@ -281,14 +281,14 @@ Because these changes touch many files, split into focused PRs:
 ## 7. Verification Checklist
 
 - [x] `check_constitution.sh` exits non-zero on new violations.
-- [x] `/api/health` returns same data as `/health` or redirects.
-- [~] All BTM data-fetch tasks have `ChannelID`. (`government_flow_aggregate` fixed; remaining tasks are pure orchestration/calibration and legitimately omit `ChannelID`).
-- [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines (currently only in-process `AlertStore`; Prometheus Alertmanager + webhook ring buffer not yet aggregated).
+- [~] `/api/dashboard/channel-health` surfaces full `ChannelHealthRecord` fields (latency, last_error, records_fetched, etc.); full merge of `/api/health/aggregate` + `/api/dashboard/system-health` remains future work.
+- [x] `us_market_refresh` batch closure split into 8 per-channel BTM tasks (`us_market_refresh_<ch>`), each with `ChannelID`, using shared Yahoo limiters. `macro_ingest` remains the only documented batch closure for multiple macro channels.
+- [~] `alert_scan` MCP tool returns a unified `alertscanner.Snapshot` from the persistence AlertStore (`/api/alerts/active`), including severity counts and blocker status. Prometheus Alertmanager + Wave9 webhook aggregation remain future work.
 - [x] Proposed channel-index document is CI-enforced (`scripts/ci/check_channel_index.py` validates a1-channels.json against `gateway.go` channelIDs and `register_adapters.go` runtime registrations).
 - [x] Gap-detection backfill task `auto_gap_detection` is registered via BTM and scans daily-file channels (`capital_flow`, `margin`, `government_flow`) plus latest-file channels, writing `data/state/gap_report.json` and emitting `monitor.Alert` records for missing coverage.
 - [x] Per-channel latency/staleness Prometheus metrics are exported by `channel_health_metrics_export` BTM task and alerted by `monitoring/rules/channel_health_latent_staleness.yml`.
 - [x] No disabled Prometheus rule references a missing metric.
-- [x] `backfill-replay` is either scheduled or removed from `Dockerfile.cron` (binary and image references removed; only `cmd/REGISTRY.md` still lists it).
+- [x] `backfill-replay` binary/image references removed from `Dockerfile.cron`/`docker-compose.yml` (only `cmd/REGISTRY.md` lists it historically).
 
 ---
 

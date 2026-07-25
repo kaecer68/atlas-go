@@ -1162,18 +1162,36 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "channel_health_parse_failed", fmt.Sprintf("parse channel health: %v", err))
 			return
 		}
-		// Build channels array for frontend
+		// Build channels array for frontend. Mirrors apigateway.ChannelHealthRecord
+		// fields so the dashboard can surface latency, last error, and data freshness
+		// without a second call to channel_fetch_log.json.
 		type channelHealthResp struct {
-			ChannelID string `json:"channel_id"`
-			Status    string `json:"status"`
-			UpdatedAt string `json:"updated_at,omitempty"`
+			ChannelID          string   `json:"channel_id"`
+			Status             string   `json:"status"`
+			UpdatedAt          string   `json:"updated_at,omitempty"`
+			LastDataAt         string   `json:"last_data_at,omitempty"`
+			LastError          string   `json:"last_error,omitempty"`
+			LastSuccessAt      string   `json:"last_success_at,omitempty"`
+			LatencyMs          int64    `json:"latency_ms,omitempty"`
+			RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+			RecordsFetched     int      `json:"records_fetched,omitempty"`
+			SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+			Errors             []string `json:"errors,omitempty"`
 		}
 		var channels []channelHealthResp
 		for id, rec := range wrapper.Channels {
 			channels = append(channels, channelHealthResp{
-				ChannelID: id,
-				Status:    rec.Status,
-				UpdatedAt: rec.LastFetchAt,
+				ChannelID:          id,
+				Status:             rec.Status,
+				UpdatedAt:          rec.LastFetchAt,
+				LastDataAt:         rec.LastDataAt,
+				LastError:          rec.LastError,
+				LastSuccessAt:      rec.LastSuccessAt,
+				LatencyMs:          rec.LatencyMs,
+				RateLimitRemaining: rec.RateLimitRemaining,
+				RecordsFetched:     rec.RecordsFetched,
+				SymbolsProcessed:   rec.SymbolsProcessed,
+				Errors:             rec.Errors,
 			})
 		}
 		w.Header().Set("Content-Type", "application/json")
