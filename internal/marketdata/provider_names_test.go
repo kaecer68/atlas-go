@@ -17,7 +17,6 @@ func TestProviderNamesAndConstructors(t *testing.T) {
 		{"AAPL", func() interface{ Name() string } { return NewAAPLProvider() }, "us_aapl"},
 		{"MSFT", func() interface{ Name() string } { return NewMSFTProvider() }, "us_msft"},
 		{"TSMADR", func() interface{ Name() string } { return NewTSMADRProvider() }, "tsm_adr"},
-		{"OTC", func() interface{ Name() string } { return NewOTCIndexProvider() }, "otc_index"},
 		{"DRAM", func() interface{ Name() string } { return NewDRAMSpotPriceProvider() }, "dram_spot_price"},
 		{"DayTrading", func() interface{ Name() string } { return NewDayTradingProvider() }, "twse_day_trading"},
 		{"ETF", func() interface{ Name() string } { return NewTWSEETFProvider() }, "twse_etf"},

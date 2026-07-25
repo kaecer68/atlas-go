@@ -12,48 +12,52 @@ import (
 // call per refresh cycle regardless of how many adapters consume ^TWII.
 //
 // P1 B03: taiex_index + tw_vol channel consolidation.
-type taiwanIndexCache struct {
-	mu       sync.RWMutex
-	data     []byte
-	expires  time.Time
-	interval string // e.g. "1d"
-	rng      string // e.g. "3mo"
+type taiwanIndexCacheEntry struct {
+	data    []byte
+	expires time.Time
 }
 
-var twiiCache = &taiwanIndexCache{}
+type taiwanIndexCache struct {
+	mu    sync.RWMutex
+	items map[string]taiwanIndexCacheEntry // key: "interval|range"
+}
+
+var twiiCache = &taiwanIndexCache{
+	items: make(map[string]taiwanIndexCacheEntry),
+}
 
 const twiiCacheTTL = 60 * time.Second
+
+// key builds a composite key from interval and range.
+func twiiKey(interval, rng string) string {
+	return interval + "|" + rng
+}
 
 // get returns cached data if still valid for the given interval/range.
 // Returns nil if cache is empty or expired.
 func (c *taiwanIndexCache) get(interval, rng string) []byte {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.data == nil || time.Now().After(c.expires) {
+	entry, ok := c.items[twiiKey(interval, rng)]
+	if !ok || time.Now().After(entry.expires) {
 		return nil
 	}
-	if c.interval != interval || c.rng != rng {
-		return nil
-	}
-	return c.data
+	return entry.data
 }
 
 // set stores data with a TTL expiration.
 func (c *taiwanIndexCache) set(data []byte, interval, rng string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.data = data
-	c.interval = interval
-	c.rng = rng
-	c.expires = time.Now().Add(twiiCacheTTL)
+	c.items[twiiKey(interval, rng)] = taiwanIndexCacheEntry{
+		data:    data,
+		expires: time.Now().Add(twiiCacheTTL),
+	}
 }
 
-// reset clears cached data. Used by tests to ensure isolation.
+// reset clears all cached data. Used by tests to ensure isolation.
 func (c *taiwanIndexCache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.data = nil
-	c.interval = ""
-	c.rng = ""
-	c.expires = time.Time{}
+	c.items = make(map[string]taiwanIndexCacheEntry)
 }
