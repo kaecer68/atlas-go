@@ -49,12 +49,12 @@ Plus one broader bypass candidate: `cmd/backfill-replay/main.go`.
 
 ### Q4. Is `/api/health` the health monitoring module? Any overlap/conflict?
 
-**`/api/health` is a hardcoded duplicate of `/health`.**
+**`/api/health` now redirects to `/health`.**
 
 | Endpoint | Behavior |
 |----------|----------|
 | `/health` | Returns `status=ok` + port occupancy for `atlas_http` and `fubon_proxy` (the real liveness probe) |
-| `/api/health` | Returns hardcoded `{"status":"ok"}` with no probes |
+| `/api/health` | `301 Moved Permanently` to `/health` (external probes with `/api/` prefix still work) |
 | `/api/health/aggregate` | Four-tier aggregate but always 200; checks file mtime, not real channel state |
 | `/api/dashboard/system-health` | Hand-coded channel list; may diverge from canonical 37 IDs |
 | `/api/dashboard/channel-health` | Reads `channel_health.json`; drops `last_error` and latency |
@@ -94,7 +94,7 @@ See §3 below.
 |---|--------|-------------|------------|
 | 1 | Fix `scripts/ci/check_constitution.sh` to exit non-zero on violations and emit GitHub step summary | `scripts/ci/check_constitution.sh` | CI blocks PRs with new Article 1/4 violations |
 | 2 | Resolve `janus_regime_refresh` double registration | `cmd/atlas/operations_tasks.go` + `cmd/atlas/main.go` | Both registrations visible or one removed |
-| 3 | Remove or fix `/api/health` hardcoded duplicate | `cmd/atlas/main.go` | `/api/health` returns same shape as `/health` or redirects |
+| 3 | Remove or fix `/api/health` hardcoded duplicate | `cmd/atlas/main.go` | `GET /api/health` returns `301` to `/health` |
 | 4 | Make `/api/alerts/silence` persist `SilencedUntil` | `internal/monitoring/alert_api.go` | Silenced alerts reflect in unacknowledged list until expiry |
 
 ### P1 — High impact, medium effort

@@ -150,6 +150,8 @@ func isPublicPath(p string) bool {
 	case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
 		return true
 	case p == "/api/health" || p == "/api/health/":
+		// Kept public: external probes may hit the /api/ prefix; handler is a
+		// redirect to the canonical /health endpoint.
 		return true
 	case p == "/api/llm/health", p == "/api/v1/alerts": // Alertmanager webhook inbound — only POST from Alertmanager container
 		return true
@@ -1908,38 +1910,17 @@ func run(args []string, deps appDeps) error {
 			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
 			log.Printf("[Gateway] scheduler API routes registered")
 		}
-		// /api/health as alias for /health (public, no auth)
-		// Used by external probes that expect /api/ prefix.
-		// C02 follow-up: actually reflect Gateway channel health instead of
-		// a hardcoded {"status":"ok"}. When no gateway is running (live/sim
-		// mode) fall back to the legacy simple payload.
-		mux.Handle("GET /api/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			if gateway != nil {
-				store := gateway.Health()
-				if store != nil {
-					summary := store.StatusSummary()
-					overall := "ok"
-					for _, s := range summary {
-						if s.Status == "error" || s.Status == "stale" {
-							overall = "degraded"
-							break
-						}
-					}
-					_ = json.NewEncoder(w).Encode(map[string]any{
-						"status":   overall,
-						"channels": summary,
-					})
-					return
-				}
-			}
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		}))
+		// /api/health is kept as an alias for /health so external probes that
+		// expect an /api/ prefix still succeed. It does not reimplement a
+		// separate health schema: the canonical implementation lives at /health
+		// in cmd/atlas/api_routes.go (newHealthHandler). The legacy dual
+		// implementation (C02 follow-up) and the silent 200-on-degraded behavior
+		// have been removed.
+		mux.Handle("GET /api/health", http.RedirectHandler("/health", http.StatusMovedPermanently))
 		// F-02: API route discovery — serve known endpoint mappings as JSON.
 		// This is a curated list of top-level routes; for the full MCP tool
 		// inventory, connect via MCP protocol (atlas-mcp stdio server).
-		routesJSON := `{"routes":[{"pattern":"GET /api/routes","description":"This route list","auth_required":false},{"pattern":"GET /api/health","description":"Simple health check","auth_required":false},{"pattern":"GET /health","description":"Detailed health with port probes","auth_required":false},{"pattern":"GET /api/market/explain","description":"今日台股解說","auth_required":true},{"pattern":"GET /api/capital-flow/daily","description":"七維錢潮雷達 daily","auth_required":false},{"pattern":"GET /api/capital-flow/summary","description":"錢潮摘要","auth_required":false},{"pattern":"GET /api/capital-flow/history","description":"歷史資金流向","auth_required":false},{"pattern":"GET /api/regime/history","description":"市場體質歷史","auth_required":false},{"pattern":"GET /api/dashboard/system-health","description":"完整系統健康","auth_required":false},{"pattern":"GET /api/narrative/stress-index/current","description":"壓力指數","auth_required":false},{"pattern":"GET /api/taiwan/stress-index","description":"壓力指數（前端用）","auth_required":false},{"pattern":"GET /api/cross-market/status","description":"跨市場狀態","auth_required":false},{"pattern":"GET /api/dashboard/risk","description":"風險指標 VaR","auth_required":false},{"pattern":"MCP tools (97 total)","description":"使用 MCP 協定連接 atlas-mcp stdio server","auth_required":true}],"count":14}`
+		routesJSON := `{"routes":[{"pattern":"GET /api/routes","description":"This route list","auth_required":false},{"pattern":"GET /api/health","description":"Alias for /health (redirects)","auth_required":false},{"pattern":"GET /health","description":"Detailed health with port probes","auth_required":false},{"pattern":"GET /api/market/explain","description":"今日台股解說","auth_required":true},{"pattern":"GET /api/capital-flow/daily","description":"七維錢潮雷達 daily","auth_required":false},{"pattern":"GET /api/capital-flow/summary","description":"錢潮摘要","auth_required":false},{"pattern":"GET /api/capital-flow/history","description":"歷史資金流向","auth_required":false},{"pattern":"GET /api/regime/history","description":"市場體質歷史","auth_required":false},{"pattern":"GET /api/dashboard/system-health","description":"完整系統健康","auth_required":false},{"pattern":"GET /api/narrative/stress-index/current","description":"壓力指數","auth_required":false},{"pattern":"GET /api/taiwan/stress-index","description":"壓力指數（前端用）","auth_required":false},{"pattern":"GET /api/cross-market/status","description":"跨市場狀態","auth_required":false},{"pattern":"GET /api/dashboard/risk","description":"風險指標 VaR","auth_required":false},{"pattern":"MCP tools (97 total)","description":"使用 MCP 協定連接 atlas-mcp stdio server","auth_required":true}],"count":14}`
 		mux.Handle("GET /api/routes", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(routesJSON))

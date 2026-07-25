@@ -1100,3 +1100,53 @@ func TestIsPublicPath(t *testing.T) {
 		})
 	}
 }
+
+// TestAPIModeApiHealthRedirectsToHealth verifies that GET /api/health returns
+// a 301 redirect to /health and does not reimplement a separate schema.
+func TestAPIModeApiHealthRedirectsToHealth(t *testing.T) {
+	ledgerDir := t.TempDir()
+	shutdown := make(chan struct{})
+	listenDone := make(chan struct{})
+	var gotHandler http.Handler
+
+	deps := appDeps{
+		loadConfig: func() config.Config {
+			return config.Config{LedgerDir: ledgerDir}
+		},
+		dataFetcher: monitoring.NoopFetcher(),
+		newDashboardAPI: func(workDir, dir string, collector *monitoring.MetricsCollector) *monitoring.DashboardAPI {
+			return monitoring.NewDashboardAPIWithGateway(workDir, dir, collector, monitoring.NoopFetcher())
+		},
+		listenAndServe: func(srv *http.Server) error {
+			gotHandler = srv.Handler
+			close(listenDone)
+			<-shutdown
+			return nil
+		},
+		shutdown: shutdown,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(shutdown)
+	}()
+
+	if err := run([]string{"-api", "-addr", ":0"}, deps); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	<-listenDone
+	if gotHandler == nil {
+		t.Fatalf("expected http handler to be registered")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	gotHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /api/health status = %d, want %d", rec.Code, http.StatusMovedPermanently)
+	}
+	loc := rec.Header().Get("Location")
+	if loc != "/health" {
+		t.Fatalf("GET /api/health Location = %q, want %q", loc, "/health")
+	}
+}
