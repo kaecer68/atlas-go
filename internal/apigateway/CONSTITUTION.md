@@ -9,7 +9,7 @@
 
 ## 前言
 
-本系統目前管理 **37 個信息通道**（34 active + 1 orphan + 2 stub），存在以下結構性問題（截至 2026-07-25 審計）：
+本系統目前管理 **38 個信息通道**（35 active + 1 orphan + 2 stub），存在以下結構性問題（截至 2026-07-25 審計）：
 
 - 1 個通道無 Rate Limiter（government_flow，已修復於 #A02）
 - 3 個通道不在 `channelIDs()` 中，導致無 CircuitBreaker 與健康掃描遺漏（tw_vol, twse_sbl, tdcc_equity_dispersion，已修復於 #A01）

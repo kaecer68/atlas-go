@@ -165,7 +165,7 @@ func (g *Gateway) ChannelIDs() []string {
 	return channelIDs()
 }
 
-// channelIDs returns the canonical list of all 37 known channels.
+// channelIDs returns the canonical list of all 38 known channels.
 // This is the static registry used by:
 //   - NewGateway (CircuitBreakerManager initialization)
 //   - UnifiedHealthStore.CheckHealth (full health scan)
@@ -174,7 +174,7 @@ func (g *Gateway) ChannelIDs() []string {
 // NOTE: At runtime, RegisterChannelAdapters may skip channels whose
 // API keys are not configured (fugle, fubon, finmind, tej) or whose
 // feature flags are disabled (YahooEnabled=false skips 10 channels,
-// janusEngine=nil skips janus_regime). The static 37-count list is
+// janusEngine=nil skips janus_regime). The static 38-count list is
 // intentional — it ensures circuit breakers and health slots exist
 // even when a channel is temporarily unavailable, and it keeps the
 // dashboard aware of channels that exist but are not yet live.
@@ -210,6 +210,7 @@ func channelIDs() []string {
 		"twse_oddlot",
 		"twse_sbl",
 		"government_flow",
+		"government_broker",
 		"twse_etf",
 		"us_spx",
 		"us_ndx",
