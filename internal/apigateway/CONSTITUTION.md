@@ -485,7 +485,7 @@ echo "✅ os.Getenv 檢查通過"
 | fugle | 60/min (1s/1b) | Liveness | channel_health_fugle (1h) | ✅ |
 | fubon | 60/min (1s/1b) | Liveness | channel_health_fubon (1h) | ✅ |
 | finmind | 6s/1b (免費) | Liveness | channel_health_finmind (1h) | ✅ |
-| frankfurter_fx | 10s/1b (獨立) | Liveness | — | ✅ |
+| frankfurter_fx | 10s/1b (獨立) | Liveness | `macro_cache_frankfurter_fx` (10m) | ✅ |
 | geopolitical | 1min/1b | Liveness | auto_geopolitical (6h) | ✅ |
 | twse_margin | 1/5s | Readiness | auto_margin (30m) | ✅ |
 | export_statistics | 1/5s | Readiness | auto_export (12h) | ✅ |
@@ -494,12 +494,12 @@ echo "✅ os.Getenv 檢查通過"
 | janus_regime | 不限流 (compute) | Computed | janus_regime_refresh (6h) | ✅ |
 | tej | 1s/1b + daily | Liveness | tej_refresh (1h) | ✅ |
 | exchange_rate | 1/5s | Liveness | auto_exchange_rate (1h) | ✅ |
-| sox_index | 1/5s | Liveness | — | ✅ |
-| dram_spot_price | 1/5s | Liveness | — | ✅ |
-| twse_sector_index | 1/5s | Readiness | — | ✅ |
-| sector_data | 不限流 (rate.Inf) | Readiness | — | ✅ |
+| sox_index | 1/5s | Liveness | `us_market_refresh_sox_index` (5m) | ✅ |
+| dram_spot_price | 1/5s | Liveness | `macro_cache_dram_spot_price` (5m) | ✅ |
+| twse_sector_index | 1/5s | Readiness | `macro_cache_twse_sector_index` (15m) | ✅ |
+| sector_data | 不限流 (rate.Inf) | Readiness | `macro_cache_sector_data` (15m) | ✅ |
 | day_trading | 1/5s | Liveness | — | ✅ |
-| bdi | 1/5s | Liveness | — | ✅ |
+| bdi | 1/5s | Liveness | `macro_cache_bdi` (5m) | ✅ |
 | taifex_daily | 1/5s | Liveness | auto_taifex_daily (1h) | ✅ |
 | taifex_institutional | 1/5s | Liveness | auto_taifex_institutional (1h) | ✅ |
 | twse_oddlot | 1/5s | Liveness | — | ✅ |
@@ -509,7 +509,7 @@ echo "✅ os.Getenv 檢查通過"
 | `us_ndx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_ndx` (5m) | ✅ |
 | `us_dji` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_dji` (5m) | ✅ |
 | taiex_index | 5s/1b | Liveness | auto_taiex_index (1h) | ✅ |
-| tw_vol | 1/5s | Liveness | macro_ingest (5m) | ✅ |
+| tw_vol | 1/5s | Liveness | `macro_cache_tw_vol` (5m) | ✅ |
 | `us_nvda` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_nvda` (5m) | ✅ |
 | `us_aapl` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_aapl` (5m) | ✅ |
 | `us_msft` | Yahoo Tech (1.5s/1b) | Liveness | `us_market_refresh_us_msft` (5m) | ✅ |
@@ -525,6 +525,7 @@ echo "✅ os.Getenv 檢查通過"
 > - 12 個 Yahoo Finance 通道現已由獨立的 `us_market_refresh_<ch>` BTM 任務個別刷新（5m），共用同一 HTTP API 端點（query1.finance.yahoo.com），透過 shared limiters 避免違反速率限制。
 > - 各通道的完整 BTM 任務清單與排程細節見 `cmd/atlas/*_tasks.go` 及審計 manifest `docs/manifests/2026-07-25-channel-architecture-audit/`。
 > - **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。
+> - `macro_cache_<ch>` 任務（5-15m）：為 `macro_ingest` 批次閉包中的通道提供獨立 BTM 任務，預先填充 provider cache（usCache/twiiCache 等），使 `macroDataGatewayAdapter.FetchSnapshot` 取得 cache hit 而非每次都重新 fetch。涵蓋 dram_spot_price、tw_vol、bdi、frankfurter_fx、sector_data、twse_sector_index。
 ## 附錄 B：違規處理流程
 
 1. **CI 階段**：自動檢查失敗 → PR 無法合併
@@ -540,6 +541,7 @@ echo "✅ os.Getenv 檢查通過"
 | v1.0 | 2026-05-13 | 初版，經 Oracle 審核後發布 |
 | v1.1 | 2026-07-01 | 新增附錄 D：Roots Sanctioned Exception（Phase 4 Direction B — MCP Protocol Extensions） |
 | v1.4 | 2026-07-25 | P0 修復：補回 tw_vol 至 macroDataGatewayAdapter 通道列表。tw_vol 背景任務從「—」更正為 macro_ingest (5m)。 |
+| v1.5 | 2026-07-25 | macro_ingest 批次閉包補充：新增 6 個 macro_cache_<ch> BTM 任務（dram_spot_price、tw_vol、bdi、frankfurter_fx、sector_data、twse_sector_index）。macroDataGatewayAdapter 的 23 個通道中，21 個已具備獨立排程（us_yahoo 與其他已由其他任務覆蓋的通道除外）。 |
 | v1.2 | 2026-07-25 | 全面審計更新：前言通道數 16→37；附錄 A 擴展至 37 通道（含 tw_vol, twse_sbl, tdcc_equity_dispersion 及 15 個新通道）；更新健康檢查模式規範；修正 Constitution 對實際架構的描述落差。詳見 docs/manifests/2026-07-25-channel-architecture-audit.md |
 
 ## 附錄 D：Roots Sanctioned Exception（MCP Server 客戶端宣告檔案根目錄之唯讀例外）
