@@ -102,6 +102,30 @@ var DisplayZHTw = map[SectorID]string{
 	SectorEnergy:           "油電燃氣",
 }
 
+// Sub-industries (L2) — Phase F sector extension.
+// P3-2 (2026-07-26): Chinese labels added so Hermes/OpenClaw agents display
+// human-readable names instead of snake_case IDs.
+var SubIndustryDisplayZHTw = map[SectorID]string{
+	SubIndustryAISupplyChain:      "AI供應鏈",
+	SubIndustryRobotics:           "機器人",
+	SubIndustryConsumer:           "消費",
+	SubIndustryIndustrial:         "工業",
+	SubIndustryFoundry:            "晶圓代工",
+	SubIndustryServerAssembly:     "伺服器組裝",
+	SubIndustryCooling:            "散熱",
+	SubIndustryLEOSatellite:       "低軌衛星",
+	SubIndustrySatelliteRF:        "衛星射頻元件",
+	SubIndustrySatellitePCB:       "衛星PCB",
+	SubIndustryGroundEquipment:    "地面設備",
+	SubIndustryLaserCommunication: "雷射通訊",
+	SubIndustryMining:             "礦業",
+	SubIndustryPreciousMetals:     "貴金屬回收",
+	SubIndustryCopper:             "銅產業",
+	SubIndustryRareEarth:          "稀土特化",
+	SubIndustryMetalProcessing:    "金屬加工",
+	SubIndustryETFRotation:        "ETF輪動",
+}
+
 // DisplayZHAliases maps legacy Chinese aliases to canonical SectorIDs.
 // Used by SectorIDFromString to consume data sources that emit non-canonical
 // Chinese labels (e.g. truncated "金融" or TWSE index-style "金融保險類"
@@ -145,15 +169,6 @@ var DisplayZHAliases = map[string]SectorID{
 	"油電燃氣":   SectorEnergy,
 	"能源":     SectorEnergy,
 }
-
-// SubIndustryDisplayZHTw maps L2 sub-industry canonical IDs to their
-// preferred display labels. Unlike DisplayZHTw where every L1 has a
-// full Chinese name, most L2 entries intentionally pass through (val == ""):
-// their canonical English snake_case name IS the display label. Override
-// only when a sub-industry has a well-known Chinese alias (rare). Most
-// L2 IDs in cycle.go defaultSeedMetrics don't have localized display
-// labels and use the ID directly via DisplayZH's L2 fallback below.
-var SubIndustryDisplayZHTw = map[SectorID]string{}
 
 // subIndustryIDs is the canonical ID set used by IsValid / AllSectors for
 // O(1) L2 lookups. Declared as a runtime set because Go does not have const
@@ -265,11 +280,11 @@ func DisplayZH(id SectorID) string {
 	if label, ok := DisplayZHTw[id]; ok {
 		return label
 	}
-	if _, ok := subIndustryIDs[id]; ok {
-		return string(id)
-	}
 	if label, ok := SubIndustryDisplayZHTw[id]; ok && label != "" {
 		return label
+	}
+	if _, ok := subIndustryIDs[id]; ok {
+		return string(id)
 	}
 	return ""
 }

@@ -3,7 +3,7 @@
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
 > **總計**：60 個模組（24 S / 26 E / 6 X / 1 A / 3 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
-> **v0.0.0.38 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
+> **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
@@ -67,7 +67,7 @@
 | `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
 | `stress` | 壓力測試場景（進入 orchestrator SystemCore live risk evaluation） |
 | `subscription` | **v0.0.0.32 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
-| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**116 tools**（預設；sampling/elicitation feature-gated 全開 114）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 116–118 |
+| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（tool 數量詳見 [`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions |
 
 > 註：24 個 S-tier + 27 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
@@ -127,7 +127,7 @@
 - `utility` — CLI 工具、測試輔助或非 runtime 一部分
 - `archived` — 已被 Phase 2 canonical 取代；API frozen，僅接受 bug fix；新程式碼禁止依賴
 
-## v0.0.0.38 變更摘要（2026-07-24 成熟度重分組）
+## v0.0.2.0 變更摘要（2026-07-24 成熟度重分組）
 
 | 變更 | 模組 | 說明 |
 |------|------|------|

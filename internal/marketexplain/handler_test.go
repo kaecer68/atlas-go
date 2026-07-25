@@ -84,7 +84,7 @@ func TestBuildTAIEXSection_quietDay(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
 		s.TAIEX = marketdata.MacroDataPoint{Value: 17000, ChangePct: 0}
 	})
-	got := buildTAIEXSection(s)
+	got := buildTAIEXSection(s, "emoji")
 	if got.Title != "大盤表現" {
 		t.Errorf("title = %q, want 大盤表現", got.Title)
 	}
@@ -100,7 +100,7 @@ func TestBuildTAIEXSection_bigMove(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
 		s.TAIEX = marketdata.MacroDataPoint{Value: 17000, ChangePct: 2.5}
 	})
-	got := buildTAIEXSection(s)
+	got := buildTAIEXSection(s, "emoji")
 	if !strings.Contains(got.Body, "漲跌幅較大") {
 		t.Errorf("big-move body should flag 漲跌幅較大, got: %q", got.Body)
 	}
@@ -113,7 +113,7 @@ func TestBuildTAIEXSection_downDay(t *testing.T) {
 	s := makeSnapshot(func(s *marketdata.MacroDataSnapshot) {
 		s.TAIEX = marketdata.MacroDataPoint{Value: 16500, ChangePct: -1.2}
 	})
-	got := buildTAIEXSection(s)
+	got := buildTAIEXSection(s, "emoji")
 	if !strings.Contains(got.Body, "下跌") {
 		t.Errorf("down day should say 下跌, got: %q", got.Body)
 	}
@@ -128,7 +128,7 @@ func TestBuildTAIEXSection_semiAlignment(t *testing.T) {
 		s.TAIEX = marketdata.MacroDataPoint{Value: 17000, ChangePct: 0.8}
 		s.TaiwanSemiIndex = marketdata.MacroDataPoint{Value: 500, ChangePct: 1.2}
 	})
-	got := buildTAIEXSection(s)
+	got := buildTAIEXSection(s, "emoji")
 	if !strings.Contains(got.Body, "方向一致") {
 		t.Errorf("aligned semis should say 方向一致, got: %q", got.Body)
 	}
@@ -138,7 +138,7 @@ func TestBuildTAIEXSection_semiAlignment(t *testing.T) {
 		s.TAIEX = marketdata.MacroDataPoint{Value: 17000, ChangePct: 0.8}
 		s.TaiwanSemiIndex = marketdata.MacroDataPoint{Value: 500, ChangePct: -0.5}
 	})
-	got = buildTAIEXSection(s)
+	got = buildTAIEXSection(s, "emoji")
 	if !strings.Contains(got.Body, "分歧") {
 		t.Errorf("divergent semis should say 分歧, got: %q", got.Body)
 	}
@@ -377,7 +377,7 @@ func TestCompose_happyPath(t *testing.T) {
 			makeForce(capitalflow.ForceForeign, "subject", "bullish", 1.2, 60),
 		},
 	}
-	got := compose(s, cf)
+	got := compose(s, cf, "emoji")
 
 	if got.Source != "rule_based" {
 		t.Errorf("source = %q, want rule_based", got.Source)
@@ -408,7 +408,7 @@ func TestCompose_happyPath(t *testing.T) {
 // design principle says "always return a usable explanation, even
 // when channels are degraded" (marketexplain/doc.go).
 func TestCompose_emptyData(t *testing.T) {
-	got := compose(marketdata.MacroDataSnapshot{}, capitalflow.SummaryReport{})
+	got := compose(marketdata.MacroDataSnapshot{}, capitalflow.SummaryReport{}, "emoji")
 	if got.Source != "rule_based" {
 		t.Errorf("source = %q, want rule_based", got.Source)
 	}

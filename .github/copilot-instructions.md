@@ -4,6 +4,8 @@ description: |
   Central hub for understanding the codebase, conventions, workflows, and safe practices.
 ---
 
+@CLAUDE.md
+
 # atlas-go AI Instruction Hub
 
 Welcome to atlas-go! This is a **simulation-first, audit-driven investment research system** for Taiwan equities.
@@ -26,27 +28,16 @@ Welcome to atlas-go! This is a **simulation-first, audit-driven investment resea
 
 > Full file routing and rule hierarchy → **[AGENTS.md §文件路由](../AGENTS.md)** and **[docs/reference/guidelines-index.md](../docs/reference/guidelines-index.md)**.
 
-## ⚙️ Build & Test Quick Reference
+## ⚙️ Build & Test
+
+完整指令與規範見 [`.github/instructions/go-core.instructions.md`](./instructions/go-core.instructions.md) §驗證清單。
 
 ```bash
-# Format check (CI blocker)
-test -z "$(gofmt -l .)"
-gofmt -w .
-
-# Build & test
-go build ./...
-go test ./...
-
-# Focused iteration
-go test ./internal/<package>/...
-
-# Quality checks
-go vet ./...
-staticcheck ./...
-
-# Coverage
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | tail -n 1
+make build     # Go + frontend
+make test      # Go tests
+make lint      # golangci-lint
+make ci-gate   # pre-push fast gate
+make ci-full   # pre-PR complete check
 ```
 
 ## 🔗 Additional Resources

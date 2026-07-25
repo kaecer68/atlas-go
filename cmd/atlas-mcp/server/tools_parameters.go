@@ -110,7 +110,7 @@ func (s *server) handleParametersGetSnapshots(ctx context.Context, _ *mcp.CallTo
 func registerParametersTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get",
-		Description: autoDescOr("parameters_get", "Current parameters (flat key → type map, e.g. {\"alert.sla_warning_sec\":\"int\"}). Mirrors dashboard parameters page."),
+		Description: autoDescOr("parameters_get", "Current parameters (flat key→type map). For structured access, prefer parameters_get_categories (category breakdown) or parameters_get_metadata (provenance, rationale, citation)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleParametersGet)
 
