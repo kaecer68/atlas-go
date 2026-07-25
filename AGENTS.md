@@ -2,14 +2,14 @@
 
 > **文件角色**：跨工具 AI 共用指引（OpenCode CLI / Claude Code / Kimi Code / GitHub Copilot）。
 > 遵循 [AGENTS.md v1.0.0 規範](https://agents.md)：純 Markdown、無必須欄位。
-> 通用規則（語言、ACI、workspace close）見 `~/.config/opencode/AGENTS.md`。
+> 通用規則（語言、ACI、workspace close）見 `~/.agents/AGENTS.md`。
 > Claude Code 專屬設定請見 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 專案快照
 
-- **Wave**：Wave 11+ + Phase 0-7 UX Redesign
-- **最後更新**：2026-07-12
-- **對應版本**：v0.0.0.37+
+- **Wave**：Wave 11+（L2.4 shipped, PRISM active）
+- **最後更新**：2026-07-26
+- **對應版本**：v0.0.2.0+
 - **語言**：繁體中文（參照全域 `AGENTS.md`）
 - **技術棧**：Go 1.26，**DB**：PostgreSQL 15 + Redis 8
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
@@ -51,17 +51,17 @@
 
 ## ACI 工具與 Agent 操作入口
 
-通用 ACI 規則見全域 `~/.config/opencode/AGENTS.md`。
+通用 ACI 規則見全域 `~/.agents/AGENTS.md`。
 
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
-- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)（**113+ tools**，預設啟用；啟動期 assert ∈ [111, 114]）
+- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md) — 所有 MCP tool 的權威清單與數量
 - **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
 - **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)
 - **除錯 / 審計 / 修復 workflow**：[`.claude/skills/atlas-audit-manifest-protocol/SKILL.md`](.claude/skills/atlas-audit-manifest-protocol/SKILL.md)（審計 → manifest → invariant tracker → commit → PR）
 - **FactorType 變更協議**：[`.claude/skills/atlas-factor-change-protocol/SKILL.md`](.claude/skills/atlas-factor-change-protocol/SKILL.md)
 - **Multi-CLI 與合併後清理**：[`docs/multi-cli-protocol.md`](docs/multi-cli-protocol.md)（worktree 隔離、PR merge 後自動刪除分支、planning artifacts 清理）
-- **分支與 PR 工作流（強制）**：任何程式碼變更 MUST 走 `feature/fix/*` 分支 → push → PR → merge 流程。禁止直接 push 到 `main`。分支命名慣例：`fix/<short-description>` / `feat/<short-description>`。commit 後用 `gh pr create` 建立 PR，PR description 必含 Summary / Root Cause / Verification 三段。
+- **分支與 PR 工作流（強制）**：任何程式碼變更 MUST 走分支 → push → PR → merge 流程。禁止直接 push 到 `main`。分支命名慣例：`fix/YYYYMMDD-<desc>` / `feat/YYYYMMDD-<desc>`（日期前綴防止與其他工作區分支混淆）。push 後 MUST 立即執行 `gh pr create`，PR body 必含 Summary / Root Cause / Verification 三段；不可停留在「compare & pull request」未完成狀態。
 
 ## 高頻陷阱速查
 

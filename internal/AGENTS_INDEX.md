@@ -67,7 +67,7 @@
 | `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
 | `stress` | 壓力測試場景（進入 orchestrator SystemCore live risk evaluation） |
 | `subscription` | **v0.0.0.32 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
-| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（**116 tools**（預設；sampling/elicitation feature-gated 全開 114）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions）。範圍 assert 116–118 |
+| `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（tool 數量詳見 [`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions |
 
 > 註：24 個 S-tier + 27 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 

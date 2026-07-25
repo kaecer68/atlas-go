@@ -1,7 +1,7 @@
 # AGENTS.md — atlas-mcp/server
 
 > 本模組為 MCP stdio server 實作，負責把 atlas-go HTTP API 包裝成 MCP tool。
-> 通用規則（語言、ACI、workspace close）見專案根目錄 `AGENTS.md` 與全域 `~/.config/opencode/AGENTS.md`。
+> 通用規則（語言、ACI、workspace close）見專案根目錄 `AGENTS.md` 與全域 `~/.agents/AGENTS.md`。
 
 ## 快速路由
 
@@ -25,13 +25,11 @@
 
 ## 工具計數
 
-> **權威來源**：[`docs/reference/tool-catalog.md`](/docs/reference/tool-catalog.md) 記錄最終對 agent 暴露的 tool 名稱與分類；本節只保留實作層面的計數規則。
+> **權威來源**：[`docs/reference/tool-catalog.md`](/docs/reference/tool-catalog.md) — 所有數量的 single source of truth。本節僅保留實作層面的計數規則。
 
-- 目前 `registerTools()` 內掛載的業務 tool handler 數量為 **106 個**（sampling / elicitation 兩個 feature-gated tool 關閉時）；`SamplingEnabled` / `ElicitationEnabled` 各再 +1，最高 **108 個**。
-- `registerAuditTools()` 另外掛載 **4 個**自我觀測 tool，不計入 `registerTools()` 的範圍。
-- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在 **112–114** 範圍內；**若不在範圍內直接 return error 阻止啟動**，防止文件↔程式碼漂移。此範圍對應 `docs/reference/tool-catalog.md` 所列對 agent 暴露的 tool 總數。
+- `server.Run()` 在所有 tool 註冊完成後 assert `RegisteredToolCount` 在文件聲明範圍內；若不在範圍內直接 return error 阻止啟動。
 - `countedAddTool[In, Out any]()` 是 `mcp.AddTool` 的泛型包裝，自動累加 `RegisteredToolCount`；所有 tool 註冊都必須經過它。
-- 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應同步更新 `server.go` 與 `tools_transport_sse_test.go` 的上下界，並確認 `docs/reference/tool-catalog.md` 已納入新 tool。
+- 新增 tool 時：`countedAddTool()` 會自動遞增計數器，但仍應同步更新 `server.go` 的上下界，並確認 `docs/reference/tool-catalog.md` 已納入新 tool。
 - `registerTokenAdminTools`（admin.go）不計入，因為它用獨立的 `mcp.Server` 實例。
 
 ## 命名陷阱

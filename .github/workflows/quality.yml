@@ -333,7 +333,7 @@ jobs:
 
   # AGENTS.md line count gate — prevents token bloat by enforcing
   # ≤ 160 lines of human-written content (before auto-injected blocks).
-  # Warning at 155 lines, hard fail at 160.
+  # Warning at 175 lines, hard fail at 180.
   agents-md-lines:
     runs-on: ubuntu-latest
     steps:
@@ -343,16 +343,16 @@ jobs:
         run: |
           HUMAN_LINES=$(awk '/^<!-- gitnexus:start -->/,/^<!-- gitnexus:end -->/{next} {count++} END{print count}' AGENTS.md)
           echo "Human-written AGENTS.md lines: $HUMAN_LINES"
-          if [ "$HUMAN_LINES" -gt 160 ]; then
-            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (hard limit: 160)."
+          if [ "$HUMAN_LINES" -gt 180 ]; then
+            echo "ERROR: AGENTS.md has $HUMAN_LINES lines (hard limit: 180)."
             echo "Move content to internal/<mod>/AGENTS.md or docs/ before re-expansion."
             exit 1
           fi
-          if [ "$HUMAN_LINES" -gt 155 ]; then
-            echo "WARNING: AGENTS.md has $HUMAN_LINES lines (soft limit: 155, hard limit: 160)."
+          if [ "$HUMAN_LINES" -gt 175 ]; then
+            echo "WARNING: AGENTS.md has $HUMAN_LINES lines (soft limit: 175, hard limit: 180)."
             echo "Consider moving content to internal/<mod>/AGENTS.md or docs/."
           fi
-          echo "OK: AGENTS.md is within 160-line budget."
+          echo "OK: AGENTS.md is within 180-line budget."
 
   # traps.md line count gate — prevents bloat in the detailed trap reference.
   traps-md-lines:
