@@ -61,14 +61,16 @@ curl -fsS https://atlas.example.com/api/llm/health
 
 ### 4.1 文件歸檔
 
+> 檔案已於 PR #1359 移至 `docs/archive/`：
+> - `2026-07-15-staging-soak-test.md` → `docs/archive/`
+> - `soak-day-counter.md` → `docs/archive/`
+>
+> 此節保留為歷史參考，operator 不需再手動搬移。
+
 ```bash
-# 歸檔 soak test plan 到 archive
-mkdir -p docs/operations/archive/2026-07-15/
-mv docs/operations/2026-07-15-staging-soak-test.md \
-   docs/operations/archive/2026-07-15/
-mv docs/operations/soak-day-counter.md \
-   docs/operations/archive/2026-07-15/
-# 加 "Completed YYYY-MM-DD" header
+# (已自動完成 — PR #1359)
+# mkdir -p docs/operations/archive/2026-07-15/
+# mv docs/operations/2026-07-15-staging-soak-test.md ...
 ```
 
 ### 4.2 Script 改名 + 推廣

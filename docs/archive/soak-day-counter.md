@@ -26,7 +26,7 @@
 2. 確認 `overall: "pass"`（不是 fail）
 3. 確認 5 個 check 都有具體 reason（不是空字串）
 4. 記錄到本文件 Day 行（`✅ done` + overall 狀態）
-5. 如 fail：照 `docs/operations/2026-07-15-staging-soak-test.md` 的 Rollback 程序
+5. 如 fail：照 `docs/archive/2026-07-15-staging-soak-test.md` 的 Rollback 程序
 
 ## 6 個 check 速查（含 G-08 fix 後新加的第 6 個）
 
@@ -64,7 +64,7 @@
 
 ## 失敗後動作（任一 Day fail）
 
-照 `docs/operations/2026-07-15-staging-soak-test.md` §4 Rollback 程序：
+照 `docs/archive/2026-07-15-staging-soak-test.md` §4 Rollback 程序：
 1. `docker compose down`
 2. `git checkout <pre-audit-followup-commit-sha>`
 3. `docker compose build atlas && up -d`

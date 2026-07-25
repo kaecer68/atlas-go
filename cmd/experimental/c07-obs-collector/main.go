@@ -41,7 +41,7 @@ import (
 
 const (
 	defaultAtlasURL  = "http://localhost:18080"
-	defaultObsLog    = "docs/operations/sector-prediction-observation-log.md"
+	defaultObsLog    = "docs/archive/sector-prediction-observation-log.md"
 	defaultAlertDir  = "data/state/alerts"
 	httpTimeout      = 30 * time.Second
 	jsdThreshold     = 0.25

@@ -25,7 +25,7 @@
 set -uo pipefail
 
 ATLAS_BASE_URL="${ATLAS_BASE_URL:-http://atlas:18080}"
-C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/operations/sector-prediction-observation-log.md}"
+C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/archive/sector-prediction-observation-log.md}"
 C07_ALERT_DIR="${C07_ALERT_DIR:-/app/data/state/alerts}"
 TZ="${C07_TZ:-Asia/Taipei}"
 export TZ

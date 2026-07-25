@@ -1,8 +1,8 @@
 # L2.4 Cron Trigger — Fault Tolerance Design
 
-> **Status**: Design document. **Not implemented yet** (per `docs/operations/l2-4-followup.md` §1 — auto-cron is graduation, not v1).
+> **Status**: Design document. **Not implemented yet** (per `docs/archive/l2-4-followup.md` §1 — auto-cron is graduation, not v1).
 > **Prerequisite**: `followup.md` §1 item 3 — "排程 fault tolerance: 設計降級策略 (trigger 失敗時 log warning 不 panic、scheduler 重啟後恢復 in-flight window)"
-> **對應**: `docs/operations/l2-4-followup.md` §1 (Issue #825) + `docs/operations/l2-4-runbook.md` §1
+> **對應**: `docs/archive/l2-4-followup.md` §1 (Issue #825) + `docs/operations/l2-4-runbook.md` §1
 
 ---
 
@@ -138,7 +138,7 @@ When followup.md §1 prerequisites are met, the implementer must:
 
 ## References
 
-- `docs/operations/l2-4-followup.md` §1 (Issue #825)
+- `docs/archive/l2-4-followup.md` §1 (Issue #825)
 - `docs/operations/l2-4-runbook.md` §1 (Pre-flight)
 - `internal/apigateway/background.go` — BackgroundTaskManager + fault tolerance primitives
 - `internal/apigateway/AGENTS.md` — overlap protection + jitter contract

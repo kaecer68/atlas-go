@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.2.0+。L2.3 設計見 [`docs/specs/llm-sector-agent-spec.md`](docs/specs/llm-sector-agent-spec.md)、[`docs/specs/agent-loop-state-machine-spec.md`](docs/specs/agent-loop-state-machine-spec.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship（PR #821 merged 2026-06-29），文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md) + [`docs/operations/l2-4-followup.md`](docs/operations/l2-4-followup.md)（後續工作報告）。`UseLLMSectorAgents` flag 預設 off。
+> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.2.0+。L2.3 設計見 [`docs/specs/llm-sector-agent-spec.md`](docs/specs/llm-sector-agent-spec.md)、[`docs/specs/agent-loop-state-machine-spec.md`](docs/specs/agent-loop-state-machine-spec.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship（PR #821 merged 2026-06-29），文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md) + [`docs/archive/l2-4-followup.md`](docs/archive/l2-4-followup.md)（後續工作報告）。`UseLLMSectorAgents` flag 預設 off。
 
 ## 語言強制規範
 
@@ -17,14 +17,12 @@
 | Token 效率規則 | `## Token Efficiency Rules`（下方） |
 | PR 驗證清單 | `## PR 驗證清單`（下方） |
 
-## Health Check
+## Health Check → [`docs/operations/local-deploy.md`](docs/operations/local-deploy.md) §部署驗證
 
 ```bash
 curl -fsS http://localhost:18080/health          # Liveness
-curl -fsS http://localhost:18080/api/llm/health   # LLM Readiness（含 Provider 狀態）
+curl -fsS http://localhost:18080/api/llm/health   # LLM Readiness
 ```
-
-預期：`/health` → `{"status":"ok",...}`；`/api/llm/health` → `{"providers":{...},"router_version":"v2.1"}`。
 
 ## Token Efficiency Rules
 

@@ -157,7 +157,7 @@ CI warning 而非 hard fail,理由:
 ## 相關文件
 
 - `docs/operations/l2-4-runbook.md` — L2.4 preflight 操作手冊
-- `docs/operations/l2-4-followup.md` — L2.4 follow-up issues 鏡像
+- `docs/archive/l2-4-followup.md` — L2.4 follow-up issues 鏡像
 - `docs/specs/l2-4-observation-spec.md` — L2.4 metric schema spec
 - `.claude/skills/atlas-experimental-feature-launch-gate/SKILL.md` — Agent skill 教學
 - `scripts/ci/check_no_duplicate_preflight.sh` — CI 防護腳本

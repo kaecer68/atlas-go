@@ -31,7 +31,7 @@ const (
 	defaultAtlasURL     = "http://localhost:18080"
 	httpTimeout         = 5 * time.Second
 	expectedSectorCount = 20
-	observationLogPath  = "docs/operations/sector-prediction-observation-log.md"
+	observationLogPath  = "docs/archive/sector-prediction-observation-log.md"
 )
 
 type checkResult struct {

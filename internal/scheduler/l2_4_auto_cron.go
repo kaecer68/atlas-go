@@ -52,7 +52,7 @@ const (
 
 	// L24AutoCronDefaultObservationLogPath is the default location
 	// for the operator's manual observation log.
-	L24AutoCronDefaultObservationLogPath = "docs/operations/l2-4-observation-log.md"
+	L24AutoCronDefaultObservationLogPath = "docs/archive/l2-4-observation-log.md"
 
 	// L24AutoCronDefaultCronWindow is the default firing window
 	// (weekdays 09:00-09:30 UTC, ~30 min buffer for trading-day open).

@@ -263,7 +263,7 @@ func checkSynergyPanel(baseURL string) checkResult {
 // checkObservationLog: verify docs/operations/l2-4-observation-log.md exists
 // and has Week 0 Baseline entry.
 func checkObservationLog() checkResult {
-	path := "docs/operations/l2-4-observation-log.md"
+	path := "docs/archive/l2-4-observation-log.md"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return checkResult{
