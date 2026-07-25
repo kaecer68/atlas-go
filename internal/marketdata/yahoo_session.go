@@ -63,7 +63,7 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 
 	// Check shared US market cache (P1 B01+B02: deduplicate across 7 channels)
 	var body []byte
-	if cached := usCache.get(p.ticker); cached != nil {
+	if cached := usCache.get(p.ticker, params["interval"], params["range"]); cached != nil {
 		body = cached
 	} else {
 		var err error
@@ -71,7 +71,7 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 		if err != nil {
 			return MacroDataSnapshot{}, fmt.Errorf("%s: %w", p.channelID, err)
 		}
-		usCache.set(p.ticker, body)
+		usCache.set(p.ticker, params["interval"], params["range"], body)
 	}
 
 	chartResp, err := UnmarshalYahooChart(body)

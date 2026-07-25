@@ -45,7 +45,7 @@ func (p *DRAMSpotPriceProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 
 	// Check shared US market cache (P1 B04)
 	var body []byte
-	if cached := usCache.get("MU"); cached != nil {
+	if cached := usCache.get("MU", params["interval"], params["range"]); cached != nil {
 		body = cached
 	} else {
 		var err error
@@ -53,7 +53,7 @@ func (p *DRAMSpotPriceProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 		if err != nil {
 			return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: %w", err)
 		}
-		usCache.set("MU", body)
+		usCache.set("MU", params["interval"], params["range"], body)
 	}
 	chartResp, err := UnmarshalYahooChart(body)
 	if err != nil {
