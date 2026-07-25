@@ -153,6 +153,11 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 			}
 			return
 		}
+		// Track immediately to close the race window: previously
+		// Track was called async (in the save goroutine), so two
+		// concurrent calls could both pass Check before either
+		// goroutine ran Track.
+		dedup.Track(record.DedupKey)
 	}
 
 	if store != nil {
@@ -160,9 +165,6 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 			if err := store.Save(record); err != nil {
 				logging.Warn("monitor", "alert_save_failed", logging.Err(err))
 				return
-			}
-			if dedup != nil && record.DedupKey != "" {
-				dedup.Track(record.DedupKey)
 			}
 			// Auto-handler MUST run AFTER save completes, otherwise
 			// auto-acknowledge will race with the save goroutine.
