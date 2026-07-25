@@ -136,9 +136,17 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 		"range": "1mo",
 	}
 
-	body, err := y.session.fetchWithFallback(ctx, ticker, params)
-	if err != nil {
-		return MacroDataPoint{}, err
+	// Check shared US market cache (P2: integrates with Yahoo fetch cache layer).
+	var body []byte
+	if cached := usCache.get(ticker, params["interval"], params["range"]); cached != nil {
+		body = cached
+	} else {
+		var err error
+		body, err = y.session.fetchWithFallback(ctx, ticker, params)
+		if err != nil {
+			return MacroDataPoint{}, err
+		}
+		usCache.set(ticker, params["interval"], params["range"], body)
 	}
 
 	chartResp, err := UnmarshalYahooChart(body)
