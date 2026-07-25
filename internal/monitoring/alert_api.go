@@ -270,10 +270,10 @@ func (a *AlertAPI) handleAcknowledgeBulk(r *http.Request) (int, any) {
 	}
 }
 
-// handleSilence silences a rule for a duration. Per alert-redesign-v2.md
-// Part 6.4. The silenced_until time is computed and returned; the actual
-// suppression is wired via suppress_categories in parameters.json (separate
-// PR scope). This endpoint is the API surface; production wiring follows.
+// handleSilence silences all non-resolved alerts matching a rule for the
+// requested duration. Each matching alert's status is set to SILENCED and
+// SilencedUntil is persisted. Returns the silenced_until timestamp and
+// count of affected alerts.
 func (a *AlertAPI) handleSilence(r *http.Request) (int, any) {
 	var req struct {
 		Rule        string `json:"rule"`
@@ -290,10 +290,36 @@ func (a *AlertAPI) handleSilence(r *http.Request) (int, any) {
 		return http.StatusBadRequest, map[string]string{"error": "duration_minutes must be > 0"}
 	}
 	silencedUntil := time.Now().Add(time.Duration(req.DurationMin) * time.Minute)
+
+	// Find and silence matching non-resolved alerts.
+	all, err := a.store.LoadAll()
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load alerts: %v", err)}
+	}
+	var silenced int
+	for _, rec := range all {
+		if rec.Rule != req.Rule {
+			continue
+		}
+		if rec.Status == domain.AlertStatusResolved {
+			continue
+		}
+		if err := a.store.Update(rec.ID, func(r *domain.AlertRecord) {
+			r.Status = domain.AlertStatusSilenced
+			silencedCopy := silencedUntil
+			r.SilencedUntil = &silencedCopy
+		}); err != nil {
+			// Continue silencing other alerts even if one fails.
+			continue
+		}
+		silenced++
+	}
+
 	return http.StatusOK, map[string]any{
 		"rule":           req.Rule,
 		"silenced_until": silencedUntil.UTC().Format(time.RFC3339),
 		"reason":         req.Reason,
+		"silenced_count": silenced,
 	}
 }
 
