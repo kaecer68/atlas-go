@@ -67,7 +67,7 @@
 | Binary | 用途 | 主要 internal 依賴 | 狀態 |
 |--------|------|---------------------|------|
 | `cmd/backfill-quotes` | TWSE quotes 增量回填（JSONL + SQLite 雙寫） | replay, domain, ledger | ✅ Utility |
-| `cmd/backfill-replay` | TWSE FinMind quotes 歷史回填 | constants, db, monitoring | ⚠️ Utility |
+| `cmd/backfill-replay` | TWSE FinMind quotes 歷史回填（**已移除 2026-07-25**；binary / Dockerfile 引用已清理，FinMind API 402） | constants, db, monitoring | ❌ Removed |
 | `cmd/backfill-taifex-oi` | TAIFEX 外資期貨未平倉 90 天歷史 | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-institutional-investors` | 三大法人日成交明細回填 | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-month-revenue` | 月營收回填（FinMind） | marketdata, constants, monitoring | ✅ Utility |

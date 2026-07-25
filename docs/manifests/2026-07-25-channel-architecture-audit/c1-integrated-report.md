@@ -280,13 +280,13 @@ Because these changes touch many files, split into focused PRs:
 
 ## 7. Verification Checklist
 
-- [ ] `check_constitution.sh` exits non-zero on new violations.
+- [x] `check_constitution.sh` exits non-zero on new violations.
 - [x] `/api/health` returns same data as `/health` or redirects.
 - [~] All BTM data-fetch tasks have `ChannelID`. (`government_flow_aggregate` fixed; remaining tasks are pure orchestration/calibration and legitimately omit `ChannelID`).
-- [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines.
+- [ ] `alert_scan` MCP tool returns alerts from all 3 pipelines (currently only in-process `AlertStore`; Prometheus Alertmanager + webhook ring buffer not yet aggregated).
 - [ ] Proposed channel-index document is auto-generated and CI-enforced.
 - [x] No disabled Prometheus rule references a missing metric.
-- [ ] `backfill-replay` is either scheduled or removed from `Dockerfile.cron`.
+- [x] `backfill-replay` is either scheduled or removed from `Dockerfile.cron` (binary and image references removed; only `cmd/REGISTRY.md` still lists it).
 
 ---
 

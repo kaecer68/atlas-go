@@ -59,7 +59,7 @@ Transitions reachable via HTTP (`internal/monitoring/alert_api.go`):
 - `POST /api/alerts/acknowledge` → `Acknowledged` (sets `AcknowledgedAt`, `AcknowledgedBy`, `AcknowledgedWithinSec`).
 - `POST /api/alerts/acknowledge-bulk` → bulk ack.
 - `POST /api/alerts/resolve` → `Resolved` (sets `ResolvedAt`, `ResolvedBy`).
-- `POST /api/alerts/silence` → returns `silenced_until` but does NOT mutate the store (acknowledged gap — see "dead" section).
+- `POST /api/alerts/silence` → `Silenced` (sets `SilencedUntil`, persists status; PR #1337).
 
 `AutoHandler.Recover(category)` (`internal/monitoring/autohandler.go:54`) bulk-resolves triggered alerts in a category when called.
 
@@ -88,8 +88,8 @@ If the corresponding Wave 9 detector metrics are implemented in the future, the 
 ### Stage 3 alerts
 The 6 Stage 3 rule IDs emit through `Monitor.Alert` (in-process), but `atlas_stage3_alerts_fired_total` (counter, `internal/monitoring/startup_metrics.go:37`) is emitted by `RecordStage3AlertFired` with no Prometheus rule consuming it. The Stage3AlertDeps wiring in `cmd/atlas/operations_tasks.go` and `cmd/atlas/main.go` looks complete; the metric is observed but no alert fires on it.
 
-### `/api/alerts/silence` returns but does not persist
-`internal/monitoring/alert_api.go` `handleSilence` computes `silenced_until` and returns it, but the implementation does not persist a suppression or update `AlertRecord.SilencedUntil`. Docstring acknowledges: "The actual suppression is wired via suppress_categories in parameters.json (separate PR scope)."
+### `/api/alerts/silence` persists `SilencedUntil` (RESOLVED 2026-07-25)
+`internal/monitoring/alert_api.go` `handleSilence` now loads matching non-resolved alerts, sets `status=SILENCED`, persists `SilencedUntil`, and returns the affected count. The historical stub behavior (returning `silenced_until` without mutating the store) was fixed in PR #1337.
 
 ### MCP `alert_list_unacknowledged`
 Documented in the harness as `mcp__atlas_mcp_alert_list_unacknowledged` and referenced from `auto-desc.gen.go` (e.g. `alert_list` description: "Companion to alert_list_unacknowledged (Phase 1) which is unack-only"). **Not registered** in `cmd/atlas-mcp/server/tools_risk_alert.go` — only `alert_list`, `alert_get_stats`, `alert_get_rules` are present. Handler `handleAlertUnacknowledged` is absent.
