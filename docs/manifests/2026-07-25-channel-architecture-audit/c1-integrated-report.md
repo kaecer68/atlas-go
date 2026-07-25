@@ -241,7 +241,7 @@ Or an MCP tool call at session start.
 
 To prevent future AI agents from "reinventing the wheel," create a single source-of-truth index:
 
-**`docs/reference/channel-index.md`** (to be created in Route C)
+**proposed channel-index reference document** (to be created in Route C)
 
 | ChannelID | Source URL | Data Types | Owner Task | Schedule | Health Endpoint | Alert Rule | Backfill Status |
 |-----------|------------|------------|------------|----------|-----------------|------------|-----------------|

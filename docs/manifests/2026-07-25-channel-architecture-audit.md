@@ -44,7 +44,7 @@
 ## Phase C: Integrated Diagnosis & Recommendations
 
 - Consolidated report with concrete counts, names, and file references.
-- Proposed `docs/reference/channel-index.md` schema (to be created in Route C).
+- Proposed channel-index reference document schema (to be created in Route C).
 - Proposed agent-startup alert-scanning mechanism.
 - Prioritized remediation plan.
 
