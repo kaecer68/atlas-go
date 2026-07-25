@@ -1,0 +1,207 @@
+{
+  "alert_sources": [
+    {
+      "source": "prometheus_rule:ChannelHighErrorRatePerChannel",
+      "type": "prometheus_rule",
+      "location": "monitoring/rules/wave9_channel_individual_health.yml",
+      "line": 4,
+      "alert_count_or_names": ["ChannelHighErrorRatePerChannel"]
+    },
+    {
+      "source": "prometheus_rule:AtlasDBInitFailure",
+      "type": "prometheus_rule",
+      "location": "monitoring/rules/atlas_startup_anomaly_alerts.yml",
+      "line": 26,
+      "alert_count_or_names": ["AtlasDBInitFailure", "AtlasChannelUsYahooErrorSustained"]
+    },
+    {
+      "source": "prometheus_rule:LLMAnnotator suite",
+      "type": "prometheus_rule",
+      "location": "monitoring/rules/llm_annotator_alerts.yml",
+      "line": 1,
+      "alert_count_or_names": [
+        "LLMAnnotatorHighErrorRateFastBurn",
+        "LLMAnnotatorHighErrorRateMediumBurn",
+        "LLMAnnotatorHighErrorRateSlowBurn",
+        "LLMAnnotatorCircuitBreakerOpen",
+        "LLMAnnotatorRateLimited",
+        "LLMAnnotatorTransportErrors",
+        "LLMAnnotatorProtocolErrors",
+        "LLMAnnotatorRetryExhausted",
+        "LLMAnnotatorNoTraffic"
+      ]
+    },
+    {
+      "source": "prometheus_rule:Wave9 disabled rules",
+      "type": "prometheus_rule",
+      "location": "monitoring/rules/disabled/",
+      "line": 1,
+      "alert_count_or_names": [
+        "RegimeChangeConfirmedSpike",
+        "FactorWeightRegressionHigh",
+        "PortfolioConcentrationDrift",
+        "PortfolioTurnoverDrift",
+        "IngestionLagP99High"
+      ]
+    },
+    {
+      "source": "monitor.Monitor.Alert (central in-process emitter)",
+      "type": "go_code",
+      "location": "internal/monitoring/monitor.go",
+      "line": 84,
+      "alert_count_or_names": [
+        "Monitor.Alert",
+        "Monitor.Info",
+        "Monitor.Warning",
+        "Monitor.Error",
+        "Monitor.Critical",
+        "Monitor.AlertWithBreakdown",
+        "CompositeMonitor.Alert/Info/Warning/Error/Critical"
+      ]
+    },
+    {
+      "source": "Stage3AlertEvaluator (data-quality rules)",
+      "type": "go_code",
+      "location": "internal/monitoring/stage3_rules.go",
+      "line": 84,
+      "alert_count_or_names": [
+        "data-staleness-critical",
+        "data-staleness-warning",
+        "event-calendar-sparse",
+        "model-confidence-degraded",
+        "prediction-drift",
+        "prediction-drift-insufficient-history"
+      ]
+    },
+    {
+      "source": "HealthChecker.checkGateway (per-channel counter emit, no Alert)",
+      "type": "go_code",
+      "location": "internal/monitoring/health.go",
+      "line": 70,
+      "alert_count_or_names": ["RecordChannelHealthError(atlas_channel_health_errors_total)"]
+    },
+    {
+      "source": "bootstrap.RecordDBInitFailure (startup counter)",
+      "type": "go_code",
+      "location": "internal/bootstrap/bootstrapper.go",
+      "line": 47,
+      "alert_count_or_names": ["RecordDBInitFailure(atlas_db_init_failures_total)"]
+    },
+    {
+      "source": "monitoring/RecordStage3AlertFired (counter emit)",
+      "type": "go_code",
+      "location": "internal/monitoring/startup_metrics.go",
+      "line": 80,
+      "alert_count_or_names": ["RecordStage3AlertFired(atlas_stage3_alerts_fired_total)"]
+    },
+    {
+      "source": "BackgroundTaskManager failure handler",
+      "type": "go_code",
+      "location": "cmd/atlas/background_tasks.go",
+      "line": 28,
+      "alert_count_or_names": ["background_task"]
+    },
+    {
+      "source": "operations_tasks data_staleness task",
+      "type": "go_code",
+      "location": "cmd/atlas/operations_tasks.go",
+      "line": 177,
+      "alert_count_or_names": ["data_staleness"]
+    },
+    {
+      "source": "main.go simulation / etf_nav / crossmarket / universe_coverage / universe_watchlist alerts",
+      "type": "go_code",
+      "location": "cmd/atlas/main.go",
+      "line": 960,
+      "alert_count_or_names": [
+        "simulation",
+        "crossmarket",
+        "etf_nav",
+        "universe_coverage",
+        "universe_watchlist"
+      ]
+    },
+    {
+      "source": "alerting.WebhookPublisher (outbound → Alertmanager)",
+      "type": "go_code",
+      "location": "internal/alerting/webhook_publisher.go",
+      "line": 49,
+      "alert_count_or_names": ["Publisher.Publish", "AnomalyPublisher.PublishAnomaly (label: mcp_anomaly_detected)"]
+    },
+    {
+      "source": "alerting.AlertWebhookHandler (inbound from Alertmanager)",
+      "type": "go_code",
+      "location": "internal/alerting/webhook_handler.go",
+      "line": 56,
+      "alert_count_or_names": ["AlertWebhookHandler.Recent/Len", "Route: /api/v1/alerts"]
+    },
+    {
+      "source": "MCP alert tools (read-only Phase 1)",
+      "type": "mcp",
+      "location": "cmd/atlas-mcp/server/tools_risk_alert.go",
+      "line": 59,
+      "alert_count_or_names": ["alert_list", "alert_get_stats", "alert_get_rules"]
+    }
+  ],
+  "storage": {
+    "type": "jsonl_or_postgres_or_inmemory_or_alertmanager",
+    "tables_or_files": [
+      "JSONL file: ${WorkDir}/data/state/alerts/alerts.jsonl (AlertStore)",
+      "Postgres table: alerts (PostgresRepository / DualWriteRepository fallback)",
+      "In-memory ring buffer cap 1000: alerting.AlertWebhookHandler.store",
+      "External: Alertmanager (outbound webhook target via WebhookPublisher; inbound via AlertWebhookHandler)",
+      "Optional outbound Notifier sinks: WebhookNotifier, TelegramNotifier, EmailNotifier, MultiNotifier"
+    ],
+    "lifecycle": "ack-resolved",
+    "notes": "Lifespan path: triggered (on emit) -> acknowledged (POST /api/alerts/acknowledge or auto-handler for INFO) -> resolved (POST /api/alerts/resolve) -> silenced (POST /api/alerts/silence returns silenced_until but does not yet mutate AlertStore). Status enum: triggered | acknowledged | resolved | silenced (domain.AlertStatus*). AutoHandler.Recover transitions triggered -> resolved on recovery signals. Unacknowledged alerts surface at /api/alerts/unacknowledged."
+  },
+  "dead_or_dangling_alerts": [
+    {
+      "name": "RegimeChangeConfirmedSpike",
+      "rule_file": "monitoring/rules/disabled/wave9_regime_change_confirmed.yml",
+      "metric_missing_or_stale": "rule is in monitoring/rules/disabled/ (enabled=false). Metric regime_change_confirmed_total is never emitted anywhere in the repo (grep returned zero matches)."
+    },
+    {
+      "name": "FactorWeightRegressionHigh",
+      "rule_file": "monitoring/rules/disabled/wave9_factor_weight_regression.yml",
+      "metric_missing_or_stale": "rule disabled. Metric factor_weight_regression_score never emitted (grep returned zero matches); FactorWeightRegressionDetector service exists but no Prometheus counter/gauge is wired."
+    },
+    {
+      "name": "PortfolioConcentrationDrift",
+      "rule_file": "monitoring/rules/disabled/wave9_drift_detected.yml",
+      "metric_missing_or_stale": "rule disabled. Metric portfolio_max_concentration never emitted (grep returned zero matches)."
+    },
+    {
+      "name": "PortfolioTurnoverDrift",
+      "rule_file": "monitoring/rules/disabled/wave9_drift_detected.yml",
+      "metric_missing_or_stale": "rule disabled. Metric portfolio_turnover_5m never emitted (grep returned zero matches)."
+    },
+    {
+      "name": "IngestionLagP99High",
+      "rule_file": "monitoring/rules/disabled/wave9_ingestion_lag_spike.yml",
+      "metric_missing_or_stale": "rule disabled. Metric ingestion_latency_seconds_bucket never emitted (grep returned zero matches)."
+    },
+    {
+      "name": "LLMAnnotatorHighErrorRateFastBurn / MediumBurn / SlowBurn / CircuitBreakerOpen / RateLimited / TransportErrors / ProtocolErrors / RetryExhausted / NoTraffic",
+      "rule_file": "monitoring/rules/llm_annotator_alerts.yml",
+      "metric_missing_or_stale": "rules rely on llm_annotator_requests_total{outcome=...}; no Go code in this repo emits that counter (zero matches across internal/ and cmd/). The counter is expected to come from the LLM annotator (separate service), so this is integration-dependent and not strictly dangling."
+    },
+    {
+      "name": "Stage3AlertEvaluator rules (data-staleness-critical, prediction-drift, model-confidence-degraded, event-calendar-sparse, prediction-drift-insufficient-history, data-staleness-warning)",
+      "rule_file": "internal/monitoring/stage3_rules.go",
+      "metric_missing_or_stale": "Rules emit through the in-process Monitor (not Prometheus). Counter atlas_stage3_alerts_fired_total is emitted by RecordStage3AlertFired but no Prometheus alert rule consumes it. The Stage3AlertDeps wiring appears complete (cmd/atlas/main.go / cmd/atlas/operations_tasks.go)."
+    },
+    {
+      "name": "/api/alerts/silence",
+      "rule_file": "internal/monitoring/alert_api.go (handleSilence)",
+      "metric_missing_or_stale": "Endpoint computes silenced_until and returns it but does not persist SuppressRule nor update AlertRecord.SilencedUntil. Per the docstring: 'The actual suppression is wired via suppress_categories in parameters.json (separate PR scope).'"
+    },
+    {
+      "name": "alert_list_unacknowledged (MCP)",
+      "rule_file": "cmd/atlas-mcp/server/tools_risk_alert.go",
+      "metric_missing_or_stale": "Tool name appears in descriptions (e.g. 'alert_list', 'alert_get_stats', 'alert_get_rules') and is documented in the harness tool table as 'mcp__atlas_mcp_alert_list_unacknowledged' but is NOT registered in tools_risk_alert.go. handleAlertUnacknowledged is missing. Phase 1 partial: only read-only list/stats/rules are exposed; ack/resolve/silence are absent at MCP layer."
+    }
+  ],
+  "fragmentation_score": "high",
+  "notes": "There are three largely independent alert pipelines with overlapping scope and inconsistent naming: (1) Prometheus rules under monitoring/rules/ (consumed externally by Prometheus/Alertmanager), (2) in-process Monitor.Alert → AlertStore (JSONL/Postgres) + optional Notifier fan-out, and (3) Alertmanager webhook handlers in internal/alerting/. Naming is not unified: Go rule IDs use snake_case (data-staleness-critical, prediction-drift, simulation, etf_nav, background_task) while Prometheus alert names use CamelCase (ChannelHighErrorRatePerChannel, AtlasDBInitFailure, LLMAnnotatorHighErrorRateFastBurn). Stages use category-as-rule-string for deduplication key (\"category:LEVEL\"); Prometheus uses alertname label. The MCP layer is Phase 1 partial — only 3 read-only tools (alert_list, alert_get_stats, alert_get_rules) are registered; ack/resolve/silence/silence-bulk are only on the HTTP API (internal/monitoring/alert_api.go) and have no MCP counterparts. AutoHandler in production auto-acknowledges INFO alerts immediately (autohandler.go Handle step 1) so they never surface in /api/alerts/unacknowledged — lifecycle is ack-resolved for non-INFO but effective fire-and-forget for INFO. No agent-startup alert-scanning mechanism exists: there is no equivalent of 'on boot, load all triggered alerts from store and re-surfaced through MCP/HTTP' — alerts only enter the AlertStore via live emit. DualWriteRepository.LoadAllAlerts / LoadUnacknowledgedAlerts exist but no caller in cmd/atlas wires them to a startup rescan (zero matches for ScanAlertsOnStartup / RecoverAlerts / ResurrectAlerts in cmd/atlas/main.go and related files)."
+}
