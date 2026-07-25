@@ -101,7 +101,7 @@
 2. **No startup rescan.** After a process restart, existing triggered alerts are not reloaded. New alerts only appear when emitted again.
 3. **MCP is read-only Phase 1.** `alert_acknowledge` / `alert_resolve` / `alert_silence` exist as HTTP APIs but not as MCP tools, so AI agents cannot manage them through the canonical interface.
 4. **Silence endpoint is a stub.** `POST /api/alerts/silence` returns `silenced_until` but does not persist it.
-5. **Dead rules are never pruned.** Disabled rules reference metrics that are not emitted; they accumulate under `monitoring/rules/disabled/` without removal plan.
+5. **Dead rules are never pruned.** Disabled rules reference metrics that are not emitted; they accumulated under `monitoring/rules/disabled/` without removal plan until removed 2026-07-25.
 
 ---
 

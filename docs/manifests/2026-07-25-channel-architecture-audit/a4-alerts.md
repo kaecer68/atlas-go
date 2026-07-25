@@ -67,16 +67,20 @@ Effective lifecycle: **ack-resolved for non-INFO** (with auto-ack for INFO). Fir
 
 ## 4. Dead / dangling alerts
 
-### Disabled Prometheus rules referencing never-emitted metrics
-All five rules under `monitoring/rules/disabled/` reference metrics that are not emitted anywhere in the repo (grep across `internal/` and `cmd/` returned 0 matches):
+### Disabled Prometheus rules referencing never-emitted metrics (RESOLVED 2026-07-25)
+Four placeholder rule files under `monitoring/rules/disabled/` previously referenced metrics that were never emitted anywhere in the repo (grep across `internal/` and `cmd/` returned 0 matches). They were removed in PR #TBD because Prometheus `rule_files: ["rules/*.yml"]` glob also never loaded the `disabled/` subdirectory.
 
-| Alert name | Rule file | Metric missing |
+Original alerts:
+
+| Alert name | Rule file (removed) | Metric missing |
 |---|---|---|
 | `RegimeChangeConfirmedSpike` | `disabled/wave9_regime_change_confirmed.yml` | `regime_change_confirmed_total` |
 | `FactorWeightRegressionHigh` | `disabled/wave9_factor_weight_regression.yml` | `factor_weight_regression_score` |
 | `PortfolioConcentrationDrift` | `disabled/wave9_drift_detected.yml` | `portfolio_max_concentration` |
 | `PortfolioTurnoverDrift` | `disabled/wave9_drift_detected.yml` | `portfolio_turnover_5m` |
 | `IngestionLagP99High` | `disabled/wave9_ingestion_lag_spike.yml` | `ingestion_latency_seconds_bucket` |
+
+If the corresponding Wave 9 detector metrics are implemented in the future, the rules should be recreated alongside the metric emit code.
 
 ### LLM Annotator rule suite
 `monitoring/rules/llm_annotator_alerts.yml` references `llm_annotator_requests_total{outcome=...}` which is **never emitted in this repo** (zero matches). It is expected to come from the external LLM annotator service. Strictly speaking integration-dependent rather than dangling — but if that service is not deployed, all 9 LLM rules are dead.

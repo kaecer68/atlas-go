@@ -75,10 +75,7 @@ DriftDetector 訂閱 `EventPositionUpdate` 與 `EventRegimeChangeConfirmed`（v2
 
 ## 對應 Alert Rule
 
-- `monitoring/rules/wave9_drift_detected.yml`（2 個規則）：
-  - `PortfolioConcentrationDrift`：max_concentration > 0.25 持續 5 分鐘 → warning
-  - `PortfolioTurnoverDrift`：5m turnover > 0.15 持續 5 分鐘 → info
-- 預設 `enabled: false`（PD-W9-1）
+- 對應 Prometheus rule 檔案已於 2026-07-25 移除：原 `monitoring/rules/disabled/wave9_drift_detected.yml` 引用 `portfolio_max_concentration` 與 `portfolio_turnover_5m`，但這兩個 metrics 從未 emit；`EventDriftDetected` 仍透過 eventbus 發布，未來若實作 metric emit 應連同 rule 重新建立。
 
 ## 對應 Service
 

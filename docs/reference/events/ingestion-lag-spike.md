@@ -44,8 +44,7 @@ IngestionLagMonitor 透過 constructor DI 注入的 `IngestionLagProvider` 讀�
 
 ## 對應 Alert Rule
 
-- `monitoring/rules/wave9_ingestion_lag_spike.yml`：當 `histogram_quantile(0.99, rate(ingestion_latency_seconds_bucket[5m])) > 5` 持續 5 分鐘觸發 warning
-- 預設 `enabled: false`（PD-W9-1）
+- 對應 Prometheus rule 檔案已於 2026-07-25 移除：原 `monitoring/rules/disabled/wave9_ingestion_lag_spike.yml` 引用 `ingestion_latency_seconds_bucket` 但該 histogram metric 從未 emit；`EventIngestionLagSpike` 仍透過 eventbus 發布，未來若實作 metric emit 應連同 rule 重新建立。
 
 ## 對應 Service
 
