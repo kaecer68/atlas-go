@@ -288,7 +288,7 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 		{"calendar_events", func(s *server) error {
 			_, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{})
 			return e
-		}, "/api/dashboard/calendar-events"},
+		}, "/api/events/calendar"}, // redirected to canonical endpoint
 		{"sector_allocation_plan", func(s *server) error {
 			_, _, e := s.handleSectorAllocationPlan(context.Background(), nil, struct{}{})
 			return e
