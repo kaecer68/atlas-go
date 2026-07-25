@@ -41,7 +41,7 @@ make verify-mcp-setup
 # 1. 讀 dev key 進當前 shell
 set -a; . ~/.config/atlas-go/.env; set +a
 
-# 2. 一條龍加入 hermes（自動 enable 全部 89 tools）
+# 2. 一條龍加入 hermes（自動 enable 全部 tools）
 printf "Y\n" | hermes mcp add atlas-mcp \
   --command "$(command -v atlas-mcp)" \
   --env ATLAS_BASE_URL="${ATLAS_BASE_URL:-http://127.0.0.1:18080}" \
@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **112 個 tool**（預設啟用；sampling/elicitation feature-gated 全開時 114；啟動期 assert ∈ [111, 114]；權威清單與分類見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
+| MCP Tools | **115-118 個 tool**（116 預設 + 2 feature-gated；啟動期 assert [115, 118]；權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
@@ -278,10 +278,10 @@ cd ~/workspace/atlas && make build-mcp
 hermes mcp restart atlas-mcp
 
 # 3. 驗證
-hermes mcp list  # 確認 tool 數量無異常變化（91±2）
+hermes mcp list  # 確認 tool 數量在 tool-catalog 範圍內
 ```
 
-> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [116, 118]` assert 強制；目前 **116 tools** 預設啟用，sampling/elicitation feature-gated 全開才 +2 達 114）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
+> 預期：若改了 `cmd/atlas-mcp/`，tool 數量或 signature 可能微調（啟動期 `RegisteredToolCount ∈ [115, 118]` assert 強制；詳見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)）。重啟 hermes session 後才會看到新 tool。若 binary 與 source 對不上（`stat bin/atlas-mcp mtime < git log -1 -- cmd/atlas-mcp/`），重啟前先 `make build-mcp`。
 
 ## License
 
