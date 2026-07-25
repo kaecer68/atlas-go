@@ -43,8 +43,8 @@ type schedulerStatusOutput struct {
 		Total    int `json:"total"`
 		Enabled  int `json:"enabled"`
 		Disabled int `json:"disabled"`
-		Pending  int `json:"pending"`  // enabled but never started (next_run is zero)
-		Errored  int `json:"errored"`  // consecutive_failures > 0
+		Pending  int `json:"pending"` // enabled but never started (next_run is zero)
+		Errored  int `json:"errored"` // consecutive_failures > 0
 	} `json:"summary"`
 }
 
