@@ -104,11 +104,11 @@ func (s *Scanner) HasBlockers(ctx context.Context) (bool, error) {
 // Snapshot bundles scan results with metadata for delivery to an
 // AI agent context or monitoring endpoint.
 type Snapshot struct {
-	ScannedAt    time.Time             `json:"scanned_at"`
-	Total        int                   `json:"total"`
-	BySeverity   map[string]int        `json:"by_severity"`
-	Blocked      bool                  `json:"blocked"` // HasBlockers result
-	Alerts       []domain.AlertRecord  `json:"alerts,omitempty"`
+	ScannedAt  time.Time            `json:"scanned_at"`
+	Total      int                  `json:"total"`
+	BySeverity map[string]int       `json:"by_severity"`
+	Blocked    bool                 `json:"blocked"` // HasBlockers result
+	Alerts     []domain.AlertRecord `json:"alerts,omitempty"`
 }
 
 // Snapshot runs Scan + CountBySeverity + HasBlockers and returns a
