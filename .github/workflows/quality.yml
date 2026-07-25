@@ -344,7 +344,7 @@ jobs:
         run: bash scripts/ci/check_atlas_mcp_docs_consistency.sh
 
   # AGENTS.md line count gate — prevents token bloat by enforcing
-  # ≤ 160 lines of human-written content (before auto-injected blocks).
+  # ≤ 180 lines of human-written content (before auto-injected blocks).
   # Warning at 175 lines, hard fail at 180.
   agents-md-lines:
     runs-on: ubuntu-latest

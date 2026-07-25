@@ -79,10 +79,10 @@
 | `sim` | 模擬引擎 — 部位狀態轉換、`Engine.RunSymbol()` | `Engine` | 核心模組，indirect import |
 | `spawning` | Agent 生成管理 — `SpawningManager`、`PerformSpawningCycle()` | `SpawningManager` | 核心模組，indirect import |
 | `strategy` | 策略選擇器與登錄 | `Selector` | 由 orchestrator 使用 |
-| `strategy_ranker` | 策略排名、回測驗證與分層 — Sharpe/最大回撤/勝率/TAIEX 相關係數計算 + 排名 + tier 分配 | `Ranker`, `Validator`, `RankedReport`, `StrategyReport` | **v0.0.0.38 升級**：Wave 11 新增；產出供 recommender 使用 |
-| `scheduler` | ML 模型重訓排程 — auto_calibration、auto_rollback、seasonal_task、l2_4_auto_cron、system_health 定時任務 | `Manager`, `Dispatcher` | **v0.0.0.38 新增**：scheduler 為獨立 orchestrator pipeline 步驟，產出供 strategy_evolver 與 prism retrain 消費 |
+| `strategy_ranker` | 策略排名、回測驗證與分層 — Sharpe/最大回撤/勝率/TAIEX 相關係數計算 + 排名 + tier 分配 | `Ranker`, `Validator`, `RankedReport`, `StrategyReport` | **v0.0.2.0 升級**：Wave 11 新增；產出供 recommender 使用 |
+| `scheduler` | ML 模型重訓排程 — auto_calibration、auto_rollback、seasonal_task、l2_4_auto_cron、system_health 定時任務 | `Manager`, `Dispatcher` | **v0.0.2.0 新增**：scheduler 為獨立 orchestrator pipeline 步驟，產出供 strategy_evolver 與 prism retrain 消費 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | **v0.0.2.0 升級**：進入 orchestrator SystemCore live risk evaluation |
-| `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | **v0.0.0.38 升級**：Wave 11 新增；進入 MCP auth + recommender runtime |
+| `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | **v0.0.2.0 升級**：Wave 11 新增；進入 MCP auth + recommender runtime |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
 | `acceptance` | Acceptance gate pluggable 框架 — `Evaluator`/`Pipeline`/`Registry` 介面，給 `experiment/judge.go` 從 hard-coded switch 漸進遷移（bridge feature flag） | `Evaluator`, `Pipeline`, `Registry`, `FuncEvaluator` | Wave 10 L2.2，evolving |
 | `acceptance/builtin` | 17 個 acceptance gate evaluators 實作 — `ImproveSharpeLike`/`PreserveDownsideProtection`/`NoDrawdownSpike`/`FactorWeightStability`/`RetailSentimentFilter`/`NoMaterialDrawdownDegradation`/`NoConstraintBypass`/`MaintainSharpeLike`/`ReduceConcentrationRisk`/`FactorQuality`/`ReduceFalsePositiveRate`/`MaintainCROAuthority`/`ReduceSectorBlindspots`/`MaintainIndustryCoverage`/`ReduceStyleDrift`/`MaintainMomentumCatch`/`RespectHoldingPeriod` | ... | Wave 10 L2.2，evolving，17/17 gates ported |
