@@ -806,17 +806,23 @@ func windowSummaryPath(resultPath, windowID string) string {
 // sets result.RegimeDistribution for use by the regime_diversified gate.
 func (j *Judge) addRegimeConditionalChecks(result *domain.PromptExperimentResult) {
 	ctx := context.Background()
-	// Load a generous limit to cover the entire experiment window.
-	rows, err := j.historicalStore.LoadRegimeHistoryAll(ctx, 365)
+
+	start := result.Experiment.WindowStart
+	end := result.Experiment.WindowEnd
+
+	// Compute a dynamic limit: max(90, days in window * 2) to avoid loading
+	// unnecessary history for short experiment windows.
+	windowDays := int(end.Sub(start).Hours()/24) + 1
+	limit := windowDays * 2
+	if limit < 90 {
+		limit = 90
+	}
+	rows, err := j.historicalStore.LoadRegimeHistoryAll(ctx, limit)
 	if err != nil {
 		result.JudgeChecks = append(result.JudgeChecks,
 			fmt.Sprintf("regime: failed to load history: %v", err))
 		return
 	}
-
-	start := result.Experiment.WindowStart
-	end := result.Experiment.WindowEnd
-
 	// Build a map from date to regime for the experiment window.
 	regimeCounts := make(map[string]int)
 	regimeByDate := make(map[string]string)
