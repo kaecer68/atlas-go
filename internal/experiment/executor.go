@@ -435,6 +435,7 @@ func mutatePipelineStageCandidate(source string, brief domain.MutationBrief) str
 	writeGuidanceAndPolicy(&b, brief)
 	return b.String()
 }
+
 func loadBrief(path string) (domain.MutationBrief, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
