@@ -228,18 +228,35 @@ func (a *macroDataGatewayAdapter) applySOXIndex(snap *marketdata.MacroDataSnapsh
 }
 
 func (a *macroDataGatewayAdapter) applyCapitalFlow(snap *marketdata.MacroDataSnapshot, data []byte) {
+	// The gateway channel adapter normally returns a full MacroDataSnapshot.
 	var s marketdata.MacroDataSnapshot
-	if err := json.Unmarshal(data, &s); err != nil {
+	if err := json.Unmarshal(data, &s); err == nil {
+		if s.ForeignInvestorNet.Symbol != "" {
+			snap.ForeignInvestorNet = s.ForeignInvestorNet
+		}
+		if s.DomesticFundNet.Symbol != "" {
+			snap.DomesticFundNet = s.DomesticFundNet
+		}
+		if s.DealerNet.Symbol != "" {
+			snap.DealerNet = s.DealerNet
+		}
 		return
 	}
-	if s.ForeignInvestorNet.Symbol != "" {
-		snap.ForeignInvestorNet = s.ForeignInvestorNet
+
+	// Fallback: older/persisted files may contain the raw TWSECapitalFlow shape.
+	var flow marketdata.TWSECapitalFlow
+	if err := json.Unmarshal(data, &flow); err != nil {
+		return
 	}
-	if s.DomesticFundNet.Symbol != "" {
-		snap.DomesticFundNet = s.DomesticFundNet
+	if flow.Date == "" {
+		return
 	}
-	if s.DealerNet.Symbol != "" {
-		snap.DealerNet = s.DealerNet
+	flowTime, _ := time.Parse("20060102", flow.Date)
+	ts := flowTime.Unix()
+	if flow.ForeignInvestorNet != 0 || flow.DomesticFundNet != 0 || flow.DealerNet != 0 {
+		snap.ForeignInvestorNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet, Timestamp: ts}
+		snap.DomesticFundNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet, Timestamp: ts}
+		snap.DealerNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: ts}
 	}
 }
 

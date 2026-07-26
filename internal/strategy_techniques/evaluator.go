@@ -17,6 +17,7 @@ package strategy_techniques
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -41,6 +42,53 @@ type ConditionEvaluator struct{}
 // NewConditionEvaluator returns a ready-to-use evaluator.
 func NewConditionEvaluator() *ConditionEvaluator {
 	return &ConditionEvaluator{}
+}
+
+// EvaluateReturns evaluates a StrategyFrame against historical macro snapshots and
+// returns the strategy return series, the corresponding TAIEX return series, and
+// the total number of trigger days. Strategy return is derived from forward
+// TAIEX return adjusted by the frame's expected direction (up/down/volatile).
+// Returns empty slices when there are insufficient snapshots or no triggers.
+func (e *ConditionEvaluator) EvaluateReturns(
+	frame StrategyFrame,
+	snapshots []marketdata.MacroDataSnapshot,
+	forwardLookback int,
+) (strategyReturns, taiexReturns []float64, totalTests int) {
+	if len(snapshots) < forwardLookback+1 {
+		return nil, nil, 0
+	}
+
+	maxIdx := len(snapshots) - forwardLookback
+	for i := range maxIdx {
+		if !e.matchesAll(frame.Conditions, snapshots[i]) {
+			continue
+		}
+		totalTests++
+
+		current := snapshots[i].TAIEX.Value
+		forward := snapshots[i+forwardLookback].TAIEX.Value
+		if current == 0 || forward == 0 {
+			continue
+		}
+
+		marketReturn := (forward - current) / current
+		var strategyReturn float64
+		switch frame.Direction {
+		case DirectionUp:
+			strategyReturn = marketReturn
+		case DirectionDown:
+			strategyReturn = -marketReturn
+		case DirectionVolatile:
+			strategyReturn = math.Abs(marketReturn)
+		default:
+			strategyReturn = marketReturn
+		}
+
+		strategyReturns = append(strategyReturns, strategyReturn)
+		taiexReturns = append(taiexReturns, marketReturn)
+	}
+
+	return strategyReturns, taiexReturns, totalTests
 }
 
 // Evaluate checks all conditions of a strategy against each historical
@@ -72,7 +120,7 @@ func (e *ConditionEvaluator) Evaluate(
 	}
 
 	maxIdx := len(snapshots) - forwardLookback
-	for i := 0; i < maxIdx; i++ {
+	for i := range maxIdx {
 		current := snapshots[i]
 		if !e.matchesAll(frame.Conditions, current) {
 			continue
@@ -181,6 +229,12 @@ func resolveField(snap marketdata.MacroDataSnapshot, field string) (float64, boo
 		return snap.RetailShortBalance.Value, snap.RetailShortBalance.Symbol != ""
 	case "TSMCRevenue":
 		return snap.TSMCRevenue.Value, snap.TSMCRevenue.Symbol != ""
+	case "SPXIndex", "SPX":
+		return snap.SPXIndex.Value, snap.SPXIndex.Symbol != ""
+	case "NDXIndex", "NDX":
+		return snap.NDXIndex.Value, snap.NDXIndex.Symbol != ""
+	case "DJIIndex", "DJI":
+		return snap.DJIIndex.Value, snap.DJIIndex.Symbol != ""
 	case "SOXIndex", "SOX":
 		return snap.SOXIndex.Value, snap.SOXIndex.Symbol != ""
 	case "DRAMSpotPrice":
@@ -201,12 +255,6 @@ func resolveField(snap marketdata.MacroDataSnapshot, field string) (float64, boo
 		return snap.Copper.Value, snap.Copper.Symbol != ""
 	case "TSMADR":
 		return snap.TSMADR.Value, snap.TSMADR.Symbol != ""
-	case "SPXIndex":
-		return snap.SPXIndex.Value, snap.SPXIndex.Symbol != ""
-	case "NDXIndex":
-		return snap.NDXIndex.Value, snap.NDXIndex.Symbol != ""
-	case "DJIIndex":
-		return snap.DJIIndex.Value, snap.DJIIndex.Symbol != ""
 	case "NVDA":
 		return snap.NVDA.Value, snap.NVDA.Symbol != ""
 	case "AAPL":

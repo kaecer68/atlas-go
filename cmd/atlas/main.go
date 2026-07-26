@@ -485,6 +485,7 @@ func run(args []string, deps appDeps) error {
 		var lifecycleMgr *storage.LifecycleManager
 
 		var stRegistry *strategy_techniques.Registry
+		var stHandlers *apistrategies.Handlers
 		var stSeedsPath string
 
 		// Exclusive atlas-http claim always runs first so a healthy Docker
@@ -1615,7 +1616,7 @@ func run(args []string, deps appDeps) error {
 				stRegistry = stReg
 				// Manifest #F07: persist validate-API results so hit_rate
 				// accumulates across backtest runs.
-				stHandlers := apistrategies.NewHandlers(stRegistry,
+				stHandlers = apistrategies.NewHandlers(stRegistry,
 					apistrategies.NewFeedbackStore(filepath.Join(cfg.LedgerDir, "strategy_feedback")))
 				dashboard.SetStrategiesHandlers(stHandlers)
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
@@ -1623,8 +1624,8 @@ func run(args []string, deps appDeps) error {
 				// so the original call encountered a nil handler. nil-safe.
 				dashboard.RegisterStrategiesRoutes(mux)
 				logging.Info("main", "strategy_techniques_loaded", "count", stRegistry.Count(), "path", stSeedsPath)
-				strategyRanker.RegisterRoutes(mux, stRegistry)
-				log.Printf("[StrategyRanker] registered /api/strategy-ranker/* routes")
+				strategyRanker.RegisterRoutesWithMetrics(mux, stRegistry, filepath.Join(cfg.WorkDir, "data/state/macro"))
+				log.Printf("[StrategyRanker] registered /api/strategy-ranker/* routes with metrics")
 			} else {
 				logging.Warn("main", "strategy_techniques_load_failed", "path", stSeedsPath, "err", err.Error())
 			}
@@ -1863,6 +1864,12 @@ func run(args []string, deps appDeps) error {
 				} else if len(snapshots) > 0 {
 					evaluator := strategy_techniques.NewMacroSnapshotEvaluator(snapshots, 1)
 					btRunner.WithConditionEvaluator(evaluator)
+					// Also wire the evaluator into the strategies API so
+					// GET /api/strategies reflects current backtest logic
+					// rather than stale seed values.
+					if stHandlers != nil {
+						stHandlers.SnapshotEvaluator = evaluator
+					}
 					log.Printf("[AutoBacktest] condition evaluator wired with %d snapshots", len(snapshots))
 				} else {
 					log.Printf("[AutoBacktest] condition evaluator skipped: no dated snapshots in %s", snapDir)

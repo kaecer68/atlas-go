@@ -32,9 +32,18 @@ func (a *TWSECapitalFlowChannelAdapter) Fetch(ctx context.Context) (*FetchResult
 	if err != nil {
 		// Non-trading days or holidays: TWSE returns no data for the past 7 days,
 		// which is expected behavior. Return a stale result instead of an error
-		// to avoid triggering the circuit breaker.
+		// to avoid triggering the circuit breaker. If a persisted daily flow file
+		// exists, serve it so downstream consumers still see usable numbers.
 		if strings.Contains(err.Error(), "no TWSE") || strings.Contains(err.Error(), "no data") {
-			return &FetchResult{Stale: true, Meta: FetchMetadata{ChannelID: "twse_capital_flow", Timestamp: time.Now()}}, nil
+			meta := FetchMetadata{ChannelID: "twse_capital_flow", Timestamp: time.Now()}
+			fallbackSnap, fallbackErr := a.provider.LatestSavedSnapshot(ctx)
+			if fallbackErr == nil {
+				data, marshalErr := json.Marshal(fallbackSnap)
+				if marshalErr == nil {
+					return &FetchResult{Data: data, Stale: true, Meta: meta}, nil
+				}
+			}
+			return &FetchResult{Stale: true, Meta: meta}, nil
 		}
 		return nil, fmt.Errorf("capital_flow fetch: %w", err)
 	}

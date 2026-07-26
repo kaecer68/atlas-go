@@ -176,7 +176,7 @@ function renderStrategiesPanel(data) {
   const ci = data && data.core_indicators;
   const ciStrip = ci ? `
     <div class="dc-section" style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 8px;background:var(--surface-2);border-radius:4px;margin-bottom:6px">
-      <span class="badge ${isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd > 0 ? 'up' : isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd < 0 ? 'down' : 'muted'}" title="外資現貨 (TWD 億)">外資 ${isNum(ci.foreign_capital_net_twd) ? fmtSafeSigned(ci.foreign_capital_net_twd / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) : '—'}</span>
+      <span class="badge ${isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd > 0 ? 'up' : isNum(ci.foreign_capital_net_twd) && ci.foreign_capital_net_twd < 0 ? 'down' : 'muted'}" title="外資現貨 (TWD 億)">外資 ${isNum(ci.foreign_capital_net_twd) ? fmtSafeSigned(ci.foreign_capital_net_twd, { decimals: 1, suffix: ' 億', forceSign: true }) : '—'}</span>
       <span class="badge ${isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct > 0 ? 'up' : isNum(ci.tsm_adr_pct) && ci.tsm_adr_pct < 0 ? 'down' : 'muted'}" title="TSM ADR (%)">TSM ${isNum(ci.tsm_adr_pct) ? fmtSafeSignedPct(ci.tsm_adr_pct) : '—'}</span>
       <span class="badge ${isNum(ci.nvda_pct) && ci.nvda_pct > 0 ? 'up' : isNum(ci.nvda_pct) && ci.nvda_pct < 0 ? 'down' : 'muted'}" title="NVDA (%)">NVDA ${isNum(ci.nvda_pct) ? fmtSafeSignedPct(ci.nvda_pct) : '—'}</span>
       <span class="badge ${isNum(ci.dxy_pct) && ci.dxy_pct < 0 ? 'up' : isNum(ci.dxy_pct) && ci.dxy_pct > 0 ? 'down' : 'muted'}" title="DXY (% change, 跌=資金回流)">DXY ${isNum(ci.dxy_pct) ? fmtSafeSignedPct(ci.dxy_pct) : '—'}</span>

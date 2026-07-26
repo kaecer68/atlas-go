@@ -124,8 +124,11 @@ func TestValidateBasic(t *testing.T) {
 	if report.WinRate < 0 || report.WinRate > 1 {
 		t.Errorf("WinRate = %v, expected 0~1", report.WinRate)
 	}
-	if report.TaiexCorrelation < -1 || report.TaiexCorrelation > 1 {
-		t.Errorf("TaiexCorrelation = %v, expected -1~1", report.TaiexCorrelation)
+	if report.TaiexCorrelation != nil && (*report.TaiexCorrelation < -1 || *report.TaiexCorrelation > 1) {
+		t.Errorf("TaiexCorrelation = %v, expected -1~1", *report.TaiexCorrelation)
+	}
+	if report.AnnualizedReturn == nil || report.TotalReturn == nil || report.MaxDrawdown == nil || report.AlphaScore == nil {
+		t.Error("Validate() should populate all non-Sharpe metrics for sufficient samples")
 	}
 }
 
@@ -139,11 +142,11 @@ func TestValidateMismatchedLengths(t *testing.T) {
 
 func TestRank(t *testing.T) {
 	reports := []*StrategyReport{
-		{StrategyID: "momentum", StrategyName: "純動能", SharpeRatio: 0.8, WinRate: 0.55, AlphaScore: 5, MaxDrawdown: 25},
-		{StrategyID: "defensive", StrategyName: "防禦型", SharpeRatio: 1.2, WinRate: 0.65, AlphaScore: -2, MaxDrawdown: 10},
-		{StrategyID: "growth", StrategyName: "成長動能", SharpeRatio: 0.9, WinRate: 0.60, AlphaScore: 8, MaxDrawdown: 30},
-		{StrategyID: "value", StrategyName: "價值投資", SharpeRatio: 1.0, WinRate: 0.58, AlphaScore: 3, MaxDrawdown: 18},
-		{StrategyID: "all_weather", StrategyName: "全天候", SharpeRatio: 0.7, WinRate: 0.52, AlphaScore: 0, MaxDrawdown: 15},
+		{StrategyID: "momentum", StrategyName: "純動能", SharpeRatio: new(0.8), WinRate: 0.55, AlphaScore: new(5.0), MaxDrawdown: new(25.0)},
+		{StrategyID: "defensive", StrategyName: "防禦型", SharpeRatio: new(1.2), WinRate: 0.65, AlphaScore: new(-2.0), MaxDrawdown: new(10.0)},
+		{StrategyID: "growth", StrategyName: "成長動能", SharpeRatio: new(0.9), WinRate: 0.60, AlphaScore: new(8.0), MaxDrawdown: new(30.0)},
+		{StrategyID: "value", StrategyName: "價值投資", SharpeRatio: new(1.0), WinRate: 0.58, AlphaScore: new(3.0), MaxDrawdown: new(18.0)},
+		{StrategyID: "all_weather", StrategyName: "全天候", SharpeRatio: new(0.7), WinRate: 0.52, AlphaScore: new(0.0), MaxDrawdown: new(15.0)},
 	}
 
 	ranked := Rank(reports)

@@ -5,17 +5,17 @@ type StrategyReport struct {
 	StrategyID   string `json:"strategy_id"`
 	StrategyName string `json:"strategy_name"`
 
-	// 核心績效指標
-	AnnualizedReturn float64 `json:"annualized_return"` // 年化報酬（%）
-	MaxDrawdown      float64 `json:"max_drawdown"`      // 最大回撤（%）
-	SharpeRatio      float64 `json:"sharpe_ratio"`      // 年化 Sharpe（TWSE 交易日頻率）
-	WinRate          float64 `json:"win_rate"`          // 勝率（0~1）
-	TaiexCorrelation float64 `json:"taiex_correlation"` // 與加權指數的 Pearson 相關係數
+	// 核心績效指標；無法計算時以 nil 輸出 null，避免前端把 0 誤判為真實數值。
+	AnnualizedReturn *float64 `json:"annualized_return,omitempty"` // 年化報酬（%）
+	MaxDrawdown      *float64 `json:"max_drawdown,omitempty"`      // 最大回撤（%）
+	SharpeRatio      *float64 `json:"sharpe_ratio,omitempty"`      // 年化 Sharpe（TWSE 交易日頻率）
+	WinRate          float64  `json:"win_rate"`                    // 勝率（0~1）
+	TaiexCorrelation *float64 `json:"taiex_correlation,omitempty"` // 與加權指數的 Pearson 相關係數
 
 	// 輔助資訊
-	TotalReturn float64 `json:"total_return"` // 總累積報酬（%）
-	SampleDays  int     `json:"sample_days"`  // 樣本交易日數
-	AlphaScore  float64 `json:"alpha_score"`  // Alpha 近似值：年化報酬 − 加權指數年化報酬
+	TotalReturn *float64 `json:"total_return,omitempty"` // 總累積報酬（%）
+	SampleDays  int      `json:"sample_days"`            // 樣本交易日數
+	AlphaScore  *float64 `json:"alpha_score,omitempty"`  // Alpha 近似值：年化報酬 − 加權指數年化報酬
 }
 
 // ValidationConfig 為驗證器的可配置參數。

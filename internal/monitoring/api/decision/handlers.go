@@ -5,7 +5,10 @@ package decision
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -83,6 +86,7 @@ type Handlers struct {
 	IndustrySvc      *service.IndustryService
 	PipelineSvc      *service.PipelineService
 	MacroProvider    marketdata.MacroDataProvider
+	MacroIngestor    *narrative.MacroIngestor
 	WorkDir          string
 	LedgerDir        string
 	StrategyRegistry *strategy_techniques.Registry
@@ -462,16 +466,57 @@ func (h *Handlers) buildStrategiesSummary() []StrategyFrameSummary {
 // buildCoreIndicators exposes the 4 leading indicators (ForeignInvestorNet,
 // TSMADR, NVDA, DXY) used by the strategy_techniques seeds. Frontend can
 // highlight them as a "core 4" strip on the strategy techniques dashboard.
-// Returns nil when the macro snapshot is unavailable so the frontend can show
-// a missing-data state instead of zeros.
+// Missing individual indicators serialize as null instead of zero so the UI
+// shows "—" rather than a misleading 0.00.
 func (h *Handlers) buildCoreIndicators(snap *marketdata.MacroDataSnapshot) *CoreIndicators {
+	// Prefer the canonical macro ingestor snapshot if available; it survives
+	// transient live-provider failures (e.g., TWSE closed on weekends) and is
+	// the same source used by /api/macro/capital-flow/latest.
+	if h.MacroIngestor != nil {
+		path := filepath.Join(h.MacroIngestor.SnapshotDir(), "latest.json")
+		if data, err := os.ReadFile(path); err == nil {
+			var ingestorSnap marketdata.MacroDataSnapshot
+			if err := json.Unmarshal(data, &ingestorSnap); err == nil {
+				indicators := &CoreIndicators{}
+				if ingestorSnap.ForeignInvestorNet.Symbol != "" {
+					indicators.ForeignCapitalNetTWD = &ingestorSnap.ForeignInvestorNet.Value
+				}
+				if ingestorSnap.TSMADR.Symbol != "" {
+					indicators.TSMADRpct = &ingestorSnap.TSMADR.ChangePct
+				}
+				if ingestorSnap.NVDA.Symbol != "" {
+					indicators.NVDApct = &ingestorSnap.NVDA.ChangePct
+				}
+				if ingestorSnap.DXY.Symbol != "" {
+					indicators.DXYpct = &ingestorSnap.DXY.ChangePct
+				}
+				if indicators.ForeignCapitalNetTWD != nil || indicators.TSMADRpct != nil ||
+					indicators.NVDApct != nil || indicators.DXYpct != nil {
+					return indicators
+				}
+			}
+		}
+	}
+
 	if snap == nil {
 		return nil
 	}
-	return &CoreIndicators{
-		ForeignCapitalNetTWD: &snap.ForeignInvestorNet.Value,
-		TSMADRpct:            &snap.TSMADR.ChangePct,
-		NVDApct:              &snap.NVDA.ChangePct,
-		DXYpct:               &snap.DXY.ChangePct,
+	indicators := &CoreIndicators{}
+	if snap.ForeignInvestorNet.Symbol != "" {
+		indicators.ForeignCapitalNetTWD = &snap.ForeignInvestorNet.Value
 	}
+	if snap.TSMADR.Symbol != "" {
+		indicators.TSMADRpct = &snap.TSMADR.ChangePct
+	}
+	if snap.NVDA.Symbol != "" {
+		indicators.NVDApct = &snap.NVDA.ChangePct
+	}
+	if snap.DXY.Symbol != "" {
+		indicators.DXYpct = &snap.DXY.ChangePct
+	}
+	if indicators.ForeignCapitalNetTWD == nil && indicators.TSMADRpct == nil &&
+		indicators.NVDApct == nil && indicators.DXYpct == nil {
+		return nil
+	}
+	return indicators
 }

@@ -1,6 +1,6 @@
 # L3 Stage 3 Scheduling + Alerting — Observation Log
 
-> **對應 runbook**：[`docs/operations/l3-runbook.md`](./l3-runbook.md)
+> **對應 runbook**：[`docs/operations/l3-runbook.md`](../operations/l3-runbook.md)
 > **範圍**：Stage 3 排程 + 報警(permanently operational, daily check-in forever — 不是 L2.4 的 14 天時限觀察)
 > **啟動日期**：(TBD，第一次在 production 跑 `sync-events-daily` 06:00 Asia/Taipei 後填寫)
 > **觀察對象**：5 個 periodic tasks(`sync-events-daily` / `sync-macro-daily` / `sync-capital-daily` / `sync-regime-weekly` / `recalibrate-templates-monthly`) + 3 個 alert evaluator wrappers(`stage3-alert-staleness` / `stage3-alert-daily` / `stage3-alert-market-close`)
@@ -158,7 +158,7 @@ Expected output（**先跑這些，再回來補 Day 1 entry**）：
 
 ## References
 
-- Runbook: [`docs/operations/l3-runbook.md`](./l3-runbook.md)
+- Runbook: [`docs/operations/l3-runbook.md`](../operations/l3-runbook.md)
 - Wave 11 scheduling 設計: PR #1127 (merge commit `a535a8c8`)
 - Stage 3.1 hotfix: PR #1128 (merge commit `30f0df82`) — Items 1-6 + CI flakes (analogue→analog + WaitGroup)
 - Stage 3.1 follow-up: PR #1129 (merge commit `54af456c`) — L3 runbook + TRAPS rows + race/retry/BTM tests

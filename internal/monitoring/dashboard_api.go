@@ -1037,6 +1037,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		IndustrySvc:   a.industryService,
 		PipelineSvc:   pipelineSvc,
 		MacroProvider: a.macroProvider,
+		MacroIngestor: a.macroIngestor,
 		WorkDir:       a.workDir,
 		LedgerDir:     a.ledgerDir,
 	}

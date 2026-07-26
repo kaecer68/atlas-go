@@ -3,20 +3,15 @@
 // This shell provides the dynamic content area and wires event listeners.
 
 export const template = `
-  <div id="ev-root" class="evolution-root">
-    <div id="ev-toolbar" class="ev-toolbar">
-      <div class="ev-title-row">
-        <h2>策略演化</h2>
-        <div class="ev-view-toggle">
-          <button id="evView-compact" class="ev-view-btn active">精簡</button>
-          <button id="evView-full" class="ev-view-btn">完整</button>
-        </div>
-      </div>
-    </div>
-    <div id="ev-content" class="ev-content">
-      <div id="ev-placeholder" class="ev-loading">載入策略演化資料…</div>
+  <div class="panel wide mb-12">
+    <div class="evo-views-row" id="evolutionViews">
+      <span class="evo-views-label">視覺圖：</span>
+      <button class="view-btn active" id="evView-compact">精簡</button>
+      <button class="view-btn" id="evView-full">完整</button>
     </div>
   </div>
+  <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>
+  <div id="evolutionContent" class="empty loading">載入策略演化資料…</div>
 `;
 
 export async function init() {
