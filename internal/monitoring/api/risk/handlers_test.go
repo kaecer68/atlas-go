@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -177,17 +178,40 @@ func TestHandleRiskCalibration_WithRiskGate(t *testing.T) {
 }
 
 func TestIndustryLabel(t *testing.T) {
+	tree := industry.NewClassificationTree()
+	tree.AddSegment(&industry.IndustrySegment{ID: "ai_supply_chain", Name: "AI 供應鏈"})
+	tree.AddSegment(&industry.IndustrySegment{ID: "defensive", Name: "防禦型"})
+	h := NewHandlers(t.TempDir()).WithClassificationTree(tree)
+
 	cases := map[string]string{
-		"semiconductor":    "半導體",
-		"ai_supply_chain":  "AI 供應鏈",
-		"robotics":         "機器人",
-		"unknown_industry": "unknown_industry",
+		"ai_supply_chain": "AI 供應鏈",
+		"defensive":       "防禦型",
 	}
 	for id, want := range cases {
-		got := industryLabel(id)
+		got := h.industryLabel(id)
 		if got != want {
 			t.Errorf("industryLabel(%q) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestIndustryLabel_LegacyFallback(t *testing.T) {
+	tree := industry.NewClassificationTree()
+	tree.AddSegment(&industry.IndustrySegment{ID: "ai_supply_chain", Name: "AI 供應鏈"})
+	h := NewHandlers(t.TempDir()).WithClassificationTree(tree)
+
+	if got := h.industryLabel("semiconductor"); got != "半導體" {
+		t.Errorf("industryLabel(semiconductor) = %q, want 半導體", got)
+	}
+	if got := h.industryLabel("unknown"); got != "unknown" {
+		t.Errorf("industryLabel(unknown) = %q, want unknown", got)
+	}
+}
+
+func TestIndustryLabel_NilTree(t *testing.T) {
+	h := NewHandlers(t.TempDir())
+	if got := h.industryLabel("ai_supply_chain"); got != "ai_supply_chain" {
+		t.Errorf("industryLabel(ai_supply_chain) with nil tree = %q, want ai_supply_chain", got)
 	}
 }
 

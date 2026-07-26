@@ -115,3 +115,22 @@
 | curl 驗證 us10y 有值 | pending | - |
 | curl 驗證 labels 全中文 | pending | - |
 | ci-gate 通過 | pending | - |
+
+---
+
+## Phase D — Verify (Outcome)
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| us10y / vix 通道 | ✅ 修復 | curl /api/cross-market/status → us10y: ^TNX=4.679, vix: ^VIX=18.58, status:ok, failed:None |
+| 產業標籤中文化 | ✅ 20/20 | curl /api/dashboard/correlation-matrix labels 全為中文: AI 供應鏈, 消費零售, 防禦型產業, 電子零組件, 能源電力, ETF 輪動, 金融保險, 晶圓代工, 高股息, 傳產機械, 低軌衛星, 採礦與基本金屬, 印刷電路板, 機器人產業, 半導體產業, 伺服器組裝, 航運產業, 中小型股, 科技業, 散熱 |
+| unit tests | ✅ PASS | go test ./internal/apigateway/... ./internal/marketdata/... ./internal/monitoring/api/risk/... ./internal/industry/... ./internal/config/... |
+| ci-gate | ✅ PASS | make ci-gate exit 0 |
+| PR | ✅ 1363 | https://github.com/kaecer68/atlas-go/pull/1363 |
+| 視覺驗證 (frontend) | ⚠️ blocked | client_web dist 缺(需 `make build-frontend`);前端 CSS/JS 改動在 PR 中可由 reviewer 以 build-frontend 後驗證 |
+
+## 根因再驗證(非猜測)
+
+docker logs atlas-go 顯示 2026-07-26T07:42:26:
+  partial_fetch_failures errors="[HG=F: zero latest price ... CL=F ... GC=F ... SI=F ... DX-Y.NYB ...]"
+此時 5/9 巨集指標回傳 0,觸發 errors.Join,adapter 將其視為整體失敗 → gateway 計入 CB 失敗 → 3 次後 us_yahoo CB 開啟 → 5 分鐘內 us10y/vix/dxy 等都無法取得。修正在 adapter 區分「有 RecordedAt 資料 = 部分成功 = 不應計入 CB」。
