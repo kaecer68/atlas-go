@@ -1207,6 +1207,8 @@
   "phase_start_date",
   "philadelphia_sox_index_yoy",
   "pid",
+  "pipeline_action",
+  "pipeline_stage",
   "platform",
   "pnl_pct",
   "policy_checks",

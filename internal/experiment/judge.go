@@ -248,6 +248,7 @@ type judgeCheckFunc func(lower string, result domain.PromptExperimentResult) []s
 var judgeCheckStrategies = map[string]judgeCheckFunc{
 	"risk_rule_change":              riskRuleJudgeChecks,
 	"portfolio_constraint_revision": portfolioConstraintJudgeChecks,
+	"pipeline_stage_toggle":         pipelineStageToggleJudgeChecks,
 }
 
 func judgeReplayChecks(candidatePrompt string, result domain.PromptExperimentResult) []string {
@@ -351,6 +352,32 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 		}
 		if strings.Contains(lower, "reject setups") {
 			checks = append(checks, "contains explicit rejection filter")
+		}
+	}
+	return checks
+}
+
+func pipelineStageToggleJudgeChecks(lower string, brief domain.PromptExperimentResult) []string {
+	checks := make([]string, 0)
+	if strings.Contains(lower, "pipeline_stage_toggle:") {
+		checks = append(checks, "contains pipeline stage toggle config patch")
+	}
+	if strings.Contains(lower, "stage:") && strings.Contains(lower, "action:") {
+		checks = append(checks, "contains structured stage + action fields")
+	}
+	// Architecture mutations must require multi-regime validation
+	if len(brief.Experiment.AcceptanceGates) > 0 {
+		hasRegimeGate := false
+		for _, g := range brief.Experiment.AcceptanceGates {
+			if g == "regime_diversified" {
+				hasRegimeGate = true
+				break
+			}
+		}
+		if hasRegimeGate {
+			checks = append(checks, "regime_diversified gate required for architecture mutation")
+		} else {
+			checks = append(checks, "WARNING: architecture mutation should include regime_diversified gate")
 		}
 	}
 	return checks
@@ -674,6 +701,18 @@ func positiveReturnRatio(returns []float64) float64 {
 	return float64(n) / float64(len(returns))
 }
 
+func (j *Judge) requiredImprovementForProfile(mutationType string) float64 {
+	base := j.params.Experiment.ImprovementThreshold.Value
+	switch mutationType {
+	case "risk_rule_change", "portfolio_constraint_revision":
+		return base * 2
+	case "pipeline_stage_toggle":
+		return base * 3 // architecture mutations need strongest evidence
+	default:
+		return base
+	}
+}
+
 func negativeReturnRatio(returns []float64) float64 {
 	if len(returns) == 0 {
 		return 0
@@ -685,16 +724,6 @@ func negativeReturnRatio(returns []float64) float64 {
 		}
 	}
 	return float64(n) / float64(len(returns))
-}
-
-func (j *Judge) requiredImprovementForProfile(mutationType string) float64 {
-	base := j.params.Experiment.ImprovementThreshold.Value
-	switch mutationType {
-	case "risk_rule_change", "portfolio_constraint_revision":
-		return base * 2
-	default:
-		return base
-	}
 }
 
 func (j *Judge) requiredCheckCountForProfile(maturity, mutationType string) int {

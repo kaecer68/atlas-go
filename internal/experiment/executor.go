@@ -132,6 +132,8 @@ func mutateCandidate(source string, brief domain.MutationBrief, base domain.Simu
 		return mutateRiskRuleCandidate(source, brief, base)
 	case "portfolio_constraint_revision":
 		return mutatePortfolioConstraintCandidate(source, brief, base)
+	case "pipeline_stage_toggle":
+		return mutatePipelineStageCandidate(source, brief)
 	default:
 		return mutatePromptCandidate(source, brief)
 	}
@@ -405,6 +407,34 @@ func policyChecks(candidate string, brief domain.MutationBrief) []string {
 	return checks
 }
 
+// mutatePipelineStageCandidate generates an architecture mutation artifact
+// for pipeline stage toggling. Unlike prompt mutations, this produces a
+// structured config proposal rather than a prompt file.
+func mutatePipelineStageCandidate(source string, brief domain.MutationBrief) string {
+	var b strings.Builder
+	b.WriteString("# Pipeline Stage Toggle Proposal\n\n")
+	b.WriteString("This artifact proposes toggling a pipeline stage on/off.\n\n")
+	b.WriteString("## Hypothesis\n\n")
+	b.WriteString(brief.Hypothesis)
+	b.WriteString("\n\n")
+	b.WriteString("## Proposed Change\n\n")
+	fmt.Fprintf(&b, "- **Stage**: `%s`\n", brief.PipelineStage)
+	fmt.Fprintf(&b, "- **Action**: `%s`\n", brief.PipelineAction)
+	b.WriteString("\n## Baseline Context\n\n```text\n")
+	b.WriteString(strings.TrimSpace(source))
+	b.WriteString("\n```\n\n")
+	b.WriteString("## Candidate Config Patch\n\n```yaml\n")
+	b.WriteString("pipeline_stage_toggle:\n")
+	fmt.Fprintf(&b, "  stage: %s\n", brief.PipelineStage)
+	fmt.Fprintf(&b, "  action: %s\n", brief.PipelineAction)
+	b.WriteString("```\n\n")
+	b.WriteString("## Guardrails\n\n")
+	b.WriteString("- Must not toggle critical safety stages (ControlLayer)\n")
+	b.WriteString("- Must be validated on multi-regime replay window\n")
+	b.WriteString("- Requires 2x improvement threshold vs standard mutations\n")
+	writeGuidanceAndPolicy(&b, brief)
+	return b.String()
+}
 func loadBrief(path string) (domain.MutationBrief, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {

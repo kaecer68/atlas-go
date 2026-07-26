@@ -2255,6 +2255,8 @@ export interface MutationBrief {
   recommended_window: string;
   rsi_tw_score?: number;
   generated_at: string;
+  pipeline_stage?: string;
+  pipeline_action?: string;
 }
 
 export interface NarrativeAdjustment {
