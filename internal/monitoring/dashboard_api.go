@@ -1217,8 +1217,19 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if a.riskGate != nil {
 		riskHandlers.WithRiskGate(a.riskGate)
 	}
-	if a.industryService != nil && a.industryService.LinkageAnalyzer != nil {
-		riskHandlers.WithCorrelationMatrix(a.industryService.LinkageAnalyzer.GetCorrelationMatrix())
+	if a.industryService != nil {
+		if a.industryService.LinkageAnalyzer != nil {
+			riskHandlers.WithCorrelationMatrix(a.industryService.LinkageAnalyzer.GetCorrelationMatrix())
+		}
+		if a.industryService.Classifier != nil {
+			// Inject the canonical industry classification tree so the
+			// /api/dashboard/correlation-matrix labels resolve to the
+			// Chinese `name` field from configs/parameters.json rather
+			// than the legacy 13-entry hardcoded map (PR fix: crossmarket
+			// matrix showed English IDs for newer sectors like defensive,
+			// high_dividend, leo_satellite, etf_rotation, pcb, etc.).
+			riskHandlers.WithClassificationTree(a.industryService.Classifier)
+		}
 	}
 	a.riskHandlers = riskHandlers
 	riskHandlers.RegisterRoutes(mux)

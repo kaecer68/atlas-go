@@ -213,9 +213,10 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 // MockMacroProvider returns deterministic mock data for tests.
 type MockMacroProvider struct {
 	Snapshot MacroDataSnapshot
+	Err      error
 }
 
 func (m *MockMacroProvider) Name() string { return "mock" }
 func (m *MockMacroProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	return m.Snapshot, nil
+	return m.Snapshot, m.Err
 }
