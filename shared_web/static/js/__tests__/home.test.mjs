@@ -109,7 +109,7 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
     'renderHomePage must not throw when all dashboard APIs fail'
   );
 
-  assert.ok(container.innerHTML.includes('載入市場摘要'), 'hero section should render');
+  assert.ok(container.innerHTML.includes('市場脈動'), 'market pulse section should render');
 
   const marketGrid = elements.get('home-market-grid');
   assert.ok(marketGrid, 'market pulse grid should exist');
@@ -118,20 +118,14 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
     'market pulse should render fallback values when data is unavailable'
   );
 
-  const recContent = elements.get('home-rec-content');
-  assert.ok(recContent, 'recommendation content should exist inside hero');
-  assert.ok(
-    recContent.innerHTML.includes('觀望'),
-    'recommendation should default to 觀望 when pipeline data is unavailable'
-  );
+  const predictionsContent = elements.get('home-predictions-content');
+  assert.ok(predictionsContent, 'predictions content should exist');
 
-  const portfolioContent = elements.get('home-portfolio-content');
-  assert.ok(portfolioContent, 'portfolio snapshot container should exist');
-  assert.ok(
-    portfolioContent.innerHTML.includes('尚無投資組合資料') ||
-      portfolioContent.innerHTML.includes('示範總市值'),
-    'portfolio snapshot should render demo or empty-state fallback'
-  );
+  const sevenForceContent = elements.get('home-seven-force-content');
+  assert.ok(sevenForceContent, 'seven-force content should exist');
+
+  const calendarContent = elements.get('home-calendar-content');
+  assert.ok(calendarContent, 'calendar content should exist');
 
   const trustFooter = elements.get('home-trust-footer');
   assert.ok(trustFooter, 'trust footer container should exist');
@@ -141,26 +135,17 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
   );
 });
 
-test('renderHomePage: hero has exactly 1 primary CTA', async () => {
+test('renderHomePage: new home sections render after redesign', async () => {
   const container = { innerHTML: '' };
   await renderHomePage(container);
 
-  // Primary CTA button must exist and be registered
-  const marketBtn = elements.get('home-view-market');
-  assert.ok(marketBtn, 'primary CTA button must exist');
-  assert.ok(marketBtn._listeners.some(l => l.type === 'click'), 'primary CTA must have click listener');
+  assert.ok(container.innerHTML.includes('市場脈動'), 'market pulse section should render');
+  assert.ok(container.innerHTML.includes('未來 5 日錢潮預測'), 'predictions section should render');
+  assert.ok(container.innerHTML.includes('七維錢潮雷達'), 'seven-force section should render');
+  assert.ok(container.innerHTML.includes('市場行事曆'), 'calendar section should render');
 
-  // Exactly 1 CTA button in today-summary actions
-  const actionsMatch = container.innerHTML.match(/class="home-today-summary__actions"([\s\S]*?)<\/div>/);
-  assert.ok(actionsMatch, 'today-summary actions section must exist');
-  const btnCount = (actionsMatch[1].match(/<button/g) || []).length;
-  assert.strictEqual(btnCount, 1, 'hero must have exactly 1 CTA button');
-
-  // Remaining CTA is 查看市場詳情 linking to crossmarket
-  assert.ok(
-    container.innerHTML.includes('查看市場詳情') && container.innerHTML.includes('home-view-market'),
-    'primary CTA text must be 查看市場詳情'
-  );
+  const marketGrid = elements.get('home-market-grid');
+  assert.ok(marketGrid, 'market pulse grid should exist');
 });
 
 test('renderHomePage: renders trust footer after unexpected synchronous error', async () => {
@@ -209,16 +194,15 @@ test('mockData: macro field names must match what page code expects (contract)',
   await renderHomePage(container);
   global.localStorage = realLocalStorage;
 
-  // The indicators section must show real numbers, not "—" fallback.
+  // The market pulse grid must show real numbers from mockData, not "—" fallback.
   // If mockData() field names are correct, TAIEX shows a number.
   // If field names are wrong (MarketIndex instead of taiex), pointValue→null→"—".
-  const indicatorsEl = elements.get('home-today-indicators');
-  assert.ok(indicatorsEl, 'today-indicators must exist');
-  const html = indicatorsEl.innerHTML;
+  const marketGrid = elements.get('home-market-grid');
+  assert.ok(marketGrid, 'market pulse grid must exist');
+  const html = marketGrid.innerHTML;
 
-  // Assert correct behavior: TAIEX must show a real number
-  assert.match(html, /加權.*\d+/,
+  assert.match(html, /大盤[\s\S]*\d+/,
     'contract: taiex must render (mockData must use "taiex" not "MarketIndex")');
-  assert.ok(!html.includes('加權 —'),
+  assert.ok(!html.includes('大盤 —'),
     'contract: taiex must NOT fallback to "—" (indicates wrong field name in mockData)');
 });

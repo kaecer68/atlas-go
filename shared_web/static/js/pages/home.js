@@ -235,6 +235,7 @@ async function loadHomeData() {
       renderPredictionsCard(m.narrative);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), m.portfolio);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), m.portfolio);
+      const calContainer = document.getElementById('home-calendar-content');
       renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, m.narrative);
 
       renderTrustFooter(['Fugle', 'TWSE', 'FRED']);
