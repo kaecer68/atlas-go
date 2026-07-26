@@ -69,7 +69,7 @@ func TestSectorRotator_GeneratePlan(t *testing.T) {
 				"cash":            0.10,
 			}
 
-			plan := rotator.GeneratePlan(macroAssessment, currentAllocations)
+			plan := rotator.GeneratePlan(macroAssessment, currentAllocations, nil)
 
 			if len(plan.Allocations) < tt.wantMinSectors {
 				t.Errorf("Allocation count = %d, want at least %d", len(plan.Allocations), tt.wantMinSectors)
@@ -163,7 +163,7 @@ func TestSectorRotator_GeneratePlan_ConfigSource(t *testing.T) {
 		Level:       narrative.MacroRiskGreen,
 		PrimaryFlow: "risk_on",
 	}
-	plan := rotator.GeneratePlan(assessment, nil)
+	plan := rotator.GeneratePlan(assessment, nil, nil)
 	if plan.ConfigSource == "" {
 		t.Error("expected ConfigSource to be non-empty on generated plan")
 	}

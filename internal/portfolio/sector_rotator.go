@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -23,11 +24,12 @@ type SectorAllocation struct {
 
 // SectorRotationPlan represents the plan for rotating between sectors
 type SectorRotationPlan struct {
-	Allocations  []SectorAllocation `json:"allocations"`
-	PrimaryFlow  string             `json:"primary_flow"`
-	Rationale    string             `json:"rationale"`
-	Timestamp    time.Time          `json:"timestamp"`
-	ConfigSource string             `json:"config_source,omitempty"`
+	Allocations           []SectorAllocation                 `json:"allocations"`
+	PrimaryFlow           string                             `json:"primary_flow"`
+	CapitalFlowAssessment *capitalflow.CapitalFlowAssessment `json:"capital_flow_assessment,omitempty"`
+	Rationale             string                             `json:"rationale"`
+	Timestamp             time.Time                          `json:"timestamp"`
+	ConfigSource          string                             `json:"config_source,omitempty"`
 }
 
 // SectorRotator executes sector rotation based on macro conditions.
@@ -75,16 +77,16 @@ func NewSectorRotatorWithConfig(cfg config.SectorRotationConfig) *SectorRotator 
 		rebalanceThreshold: cfg.RebalanceThreshold,
 	}
 }
-
-// GeneratePlan creates a sector rotation plan based on macro assessment
 func (r *SectorRotator) GeneratePlan(
 	macroAssessment *narrative.MacroRiskAssessment,
 	currentAllocations map[string]float64,
+	capitalFlowAssessment *capitalflow.CapitalFlowAssessment,
 ) *SectorRotationPlan {
 	plan := &SectorRotationPlan{
-		PrimaryFlow:  macroAssessment.PrimaryFlow,
-		Timestamp:    time.Now(),
-		ConfigSource: sectorRotationConfigSource(),
+		PrimaryFlow:           macroAssessment.PrimaryFlow,
+		CapitalFlowAssessment: capitalFlowAssessment,
+		Timestamp:             time.Now(),
+		ConfigSource:          sectorRotationConfigSource(),
 	}
 
 	// Start with base allocations
