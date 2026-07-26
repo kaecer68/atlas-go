@@ -408,3 +408,56 @@
 
 > **最後更新**: 2026-07-27
 > **維護責任**: 任何修改策略邏輯或新增市場指標的 PR，必須檢查本文件是否需要同步更新。
+
+## 附錄 D：憲章審計追蹤表
+
+> **審計報告**: `docs/ATLAS_CONSTITUTION_AUDIT.md`（2026-07-27）
+> **更新規則**: 每次修復一個審計項目後，將狀態從 ⬜ 改為 ✅，並標註 PR 編號。
+
+### P0 — 會產生錯誤信號
+
+| # | 項目 | 狀態 | PR |
+|---|------|------|-----|
+| A1 | 七時期判斷邏輯（DetectDetailed） | ⬜ | — |
+| A2 | 七時期→三態向下相容映射 | ⬜ | — |
+| A3 | 三套 regime 系統統一 | ⬜ | — |
+| B1 | 管線順序重排（MacroFlow 移到推薦之前） | ⬜ | — |
+| B4 | VIX key mismatch 修復 + macro evidence 注入 | ⬜ | — |
+| C1 | 壽險/銀行 + 公司派/內部人 數據源 | ⬜ | — |
+| C2 | 公股行庫自動化數據通道 | ⬜ | — |
+| C3 | orchestrator PrimaryFlow 改用 capitalflow | ⬜ | — |
+| D1 | detector 時期敏感度（5 個 × 7 時期） | ⬜ | — |
+| D2 | YAML consumer：MethodologyAdvisor | ⬜ | — |
+| D3 | 推薦引擎按時期過濾策略（GetApplicableStrategies） | ⬜ | — |
+| D5 | RegimeAllocator 擴展為六策略×七時期 | ⬜ | — |
+| E1 | YAML config loader（JSON→YAML 擴展） | ⬜ | — |
+| E2 | 七時期閾值參數化（進入 ParametersConfig） | ⬜ | — |
+| E3 | API 輸出時期結構化欄位 | ⬜ | — |
+
+### P1 — 信號不完整
+
+| # | 項目 | 狀態 | PR |
+|---|------|------|-----|
+| A4 | macroflow RiskLevel 自動推導（多指標複合） | ⬜ | — |
+| B3 | MacroDataSnapshot 補漏指標（8 項） | ⬜ | — |
+| B5 | Causal chain tracing（layer-0...layer-7 ID） | ⬜ | — |
+| C4 | capitalflow 4-layer Assessment 消費鏈 | ⬜ | — |
+| C6 | 散戶反向指標統一口徑（RSI-Tw vs capitalflow） | ⬜ | — |
+| D4 | Narrative 19/24 themes 進入 regime inference | ⬜ | — |
+| E4 | 前端七時期 UI 卡片 | ⬜ | — |
+| E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | — |
+
+### P2 — 工程品質
+
+| # | 項目 | 狀態 | PR |
+|---|------|------|-----|
+| C5-p2 | cfScore 常數權重→動態權重 | ⬜ | — |
+
+### 已對齊（無需修改）
+
+| # | 項目 |
+|---|------|
+| ✅ | macroflow/rules.go 6 組規則數值 |
+| ✅ | QualityScore 公式 = F+Inst–Retail |
+| ✅ | capitalflow 七大 ForceName 定義 |
+| ✅ | 部分 stress/VIX 參數可配置（ParametersConfig） |
