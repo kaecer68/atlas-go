@@ -74,6 +74,7 @@ func (h *Handler) buildReport(frame strategy_techniques.StrategyFrame, snapshots
 		StrategyName: frame.Name,
 		WinRate:      frame.HitRate,
 		SampleDays:   frame.TotalTests,
+		Direction:    string(frame.Direction),
 	}
 
 	if len(snapshots) == 0 {
