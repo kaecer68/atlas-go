@@ -16,7 +16,7 @@ type Scheduler struct {
 	config         OrchestratorConfig
 	eventBus       *ChannelEventBus
 	stateStore     *livestore.StateStore
-	circuitBreaker *CircuitBreaker
+	circuitBreaker CircuitBreakerOps
 	metrics        MetricsRecorder
 	system         interface {
 		Registry() domain.AgentRegistry
@@ -53,18 +53,18 @@ func NewScheduler(
 	ctx context.Context,
 	marketData marketdata.Provider,
 	stateStore *livestore.StateStore,
-	circuitBreaker *CircuitBreaker,
+	circuitBreaker CircuitBreakerOps,
 	config OrchestratorConfig,
 	effectiveBrokerMode string,
 ) *Scheduler {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx2, cancel := context.WithCancel(ctx)
 	return &Scheduler{
 		marketData:          marketData,
 		stateStore:          stateStore,
 		circuitBreaker:      circuitBreaker,
 		config:              config,
 		effectiveBrokerMode: effectiveBrokerMode,
-		ctx:                 ctx,
+		ctx:                 ctx2,
 		cancel:              cancel,
 		nowFunc:             time.Now,
 		checkInterval:       time.Minute,
