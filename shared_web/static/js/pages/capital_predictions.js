@@ -112,6 +112,7 @@ let _etfEstimates = [];
 let _sectorPredictions = [];
 let _activeDir = 'all';
 let _lastError = false;
+let _summary = '';
 
 let _sectorPredictionsExpanded = false;
 let _showAllSectors = false;
@@ -169,7 +170,11 @@ function renderStatus() {
     if (btn) btn.addEventListener('click', loadPredictions);
     return;
   }
-  host.innerHTML = '';
+  if (_summary) {
+    host.innerHTML = '<div style="padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.6;color:var(--text);margin-bottom:10px;">' + escapeHtml(_summary) + '</div>';
+  } else {
+    host.innerHTML = '';
+  }
 }
 
 function renderPredictionsCard() {
@@ -483,13 +488,14 @@ function renderSectorDetail(dateStr, cellData) {
 
 export const MUST_WATCH_SECTORS = ['semiconductor', 'electronics', 'financials', 'shipping', 'steel'];
 
-export function _setStateForTest(allPreds, actEvents, secPreds, lastErr, showAll, expanded) {
+export function _setStateForTest(allPreds, actEvents, secPreds, lastErr, showAll, expanded, summary) {
   _allPredictions = allPreds;
   _activeEvents = actEvents;
   _sectorPredictions = secPreds;
   _lastError = lastErr;
   _showAllSectors = showAll;
   _sectorPredictionsExpanded = expanded;
+  _summary = summary || '';
 }
 
 export function renderSectorPredictions() {
@@ -685,6 +691,7 @@ async function loadPredictions() {
   _activeEvents = (data && Array.isArray(data.active_events)) ? data.active_events : [];
   _etfEstimates = (data && Array.isArray(data.etf_estimates)) ? data.etf_estimates : [];
   _sectorPredictions = (data && Array.isArray(data.sector_predictions)) ? data.sector_predictions : [];
+  _summary = (data && typeof data.summary === 'string') ? data.summary : '';
   renderAll();
 }
 
