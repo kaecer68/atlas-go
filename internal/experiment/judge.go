@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -32,6 +33,7 @@ type Judge struct {
 	maturityTracker       *domain.MaturityTracker
 	useAcceptancePipeline bool
 	lifecyclePublisher    *LifecyclePublisher
+	historicalStore       ledger.HistoricalStore // optional: enables regime-conditional evaluation
 }
 
 func NewJudge(store ledger.ExperimentStore, replayDataPath, baselinePath string) *Judge {
@@ -154,6 +156,13 @@ func (j *Judge) Evaluate(resultPath string) (domain.PromptExperimentResult, erro
 			CumReturn: eval.CumulativeReturn(result.CandidateReturns),
 			MaxDD:     eval.MaxDrawdown(result.CandidateReturns),
 		}
+	}
+
+	// Regime-conditional evaluation: when HistoricalStore is wired, split
+	// performance by market regime to prevent promoting strategies that only
+	// work in a single regime.
+	if j.historicalStore != nil && len(result.CandidateReturns) > 0 {
+		j.addRegimeConditionalChecks(&result)
 	}
 
 	// Load parameter snapshot and perform sensitivity analysis
@@ -355,9 +364,16 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 	}
 	return checks
 }
-
 func (j *Judge) WithAcceptancePipeline(enabled bool) *Judge {
 	j.useAcceptancePipeline = enabled
+	return j
+}
+
+// WithHistoricalStore injects a HistoricalStore for regime-conditional evaluation.
+// When wired, Evaluate splits performance metrics by market regime and adds a
+// regime_diversified acceptance gate. nil means no per-regime split (backward compatible).
+func (j *Judge) WithHistoricalStore(hs ledger.HistoricalStore) *Judge {
+	j.historicalStore = hs
 	return j
 }
 
@@ -464,6 +480,14 @@ func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptByt
 		case "no_drawdown_spike":
 			if result.OOSResult != nil && !result.OOSResult.Passed {
 				return false, fmt.Sprintf("rejected: OOS validation failed: %s", result.OOSResult.Reason)
+			}
+		case "regime_diversified":
+			if j.historicalStore == nil {
+				continue
+			}
+			regimePassed, regimeMsg := j.checkRegimeDiversified(result)
+			if !regimePassed {
+				return false, regimeMsg
 			}
 		case "preserve_downside_protection":
 			baselineDD := eval.MaxDrawdown(result.BaselineReturns)
@@ -775,6 +799,100 @@ func loadWindowSummary(path string) (domain.BacktestWindowSummary, error) {
 func windowSummaryPath(resultPath, windowID string) string {
 	base := filepath.Dir(filepath.Dir(resultPath))
 	return filepath.Join(base, "windows", windowID+".json")
+}
+
+// addRegimeConditionalChecks loads regime history for the experiment window
+// and appends per-regime distribution information to the JudgeChecks. It also
+// sets result.RegimeDistribution for use by the regime_diversified gate.
+func (j *Judge) addRegimeConditionalChecks(result *domain.PromptExperimentResult) {
+	ctx := context.Background()
+	// Load a generous limit to cover the entire experiment window.
+	rows, err := j.historicalStore.LoadRegimeHistoryAll(ctx, 365)
+	if err != nil {
+		result.JudgeChecks = append(result.JudgeChecks,
+			fmt.Sprintf("regime: failed to load history: %v", err))
+		return
+	}
+
+	start := result.Experiment.WindowStart
+	end := result.Experiment.WindowEnd
+
+	// Build a map from date to regime for the experiment window.
+	regimeCounts := make(map[string]int)
+	regimeByDate := make(map[string]string)
+	for _, row := range rows {
+		d, parseErr := time.Parse("2006-01-02", row.Date)
+		if parseErr != nil {
+			continue
+		}
+		if (d.Equal(start) || d.After(start)) && (d.Equal(end) || d.Before(end)) {
+			regimeByDate[row.Date] = row.Regime
+			regimeCounts[row.Regime]++
+		}
+	}
+
+	totalDays := 0
+	for _, c := range regimeCounts {
+		totalDays += c
+	}
+
+	if totalDays == 0 {
+		result.JudgeChecks = append(result.JudgeChecks,
+			"regime: no regime data available for experiment window (gate skipped)")
+		return
+	}
+
+	// Build regime distribution report.
+	var distParts []string
+	regimes := []string{"RISK_ON", "NEUTRAL", "RISK_OFF", "TRANSITIONAL"}
+	result.RegimeCounts = make(map[string]int)
+	for _, r := range regimes {
+		if c, ok := regimeCounts[r]; ok {
+			result.RegimeCounts[r] = c
+			pct := float64(c) / float64(totalDays) * 100
+			distParts = append(distParts, fmt.Sprintf("%s=%d(%.0f%%)", r, c, pct))
+		}
+	}
+	result.RegimeTotalDays = totalDays
+
+	result.JudgeChecks = append(result.JudgeChecks,
+		fmt.Sprintf("regime distribution: %s", strings.Join(distParts, " ")))
+
+	// Warn if single-regime window.
+	if len(result.RegimeCounts) == 1 {
+		for r := range result.RegimeCounts {
+			result.JudgeChecks = append(result.JudgeChecks,
+				fmt.Sprintf("WARNING: experiment window is single-regime (%s); results may not generalize", r))
+		}
+	}
+}
+
+// checkRegimeDiversified evaluates the regime_diversified acceptance gate.
+// It passes when the experiment window contains at least 2 distinct regimes
+// each with ≥10% of trading days. A single-regime window is rejected.
+func (j *Judge) checkRegimeDiversified(result domain.PromptExperimentResult) (bool, string) {
+	if result.RegimeTotalDays == 0 {
+		return true, "regime gate skipped: no regime data"
+	}
+
+	regimeCounts := result.RegimeCounts
+	if len(regimeCounts) < 2 {
+		return false, fmt.Sprintf("rejected: single-regime window (%d days total)", result.RegimeTotalDays)
+	}
+
+	// Count regimes with ≥10% representation.
+	significantRegimes := 0
+	for _, c := range regimeCounts {
+		if float64(c)/float64(result.RegimeTotalDays) >= 0.10 {
+			significantRegimes++
+		}
+	}
+
+	if significantRegimes < 2 {
+		return false, fmt.Sprintf("rejected: only %d regimes with ≥10%% representation (need ≥2)", significantRegimes)
+	}
+
+	return true, fmt.Sprintf("regime_diversified: %d significant regimes across %d days", significantRegimes, result.RegimeTotalDays)
 }
 
 // testJudge returns a Judge with default parameters for testing purposes.
