@@ -67,6 +67,9 @@ type MutationBrief struct {
 	RecommendedWindow   string            `json:"recommended_window"`
 	RSITwScore          float64           `json:"rsi_tw_score,omitempty"`
 	GeneratedAt         time.Time         `json:"generated_at"`
+	// Architecture mutation fields (mutation_type: pipeline_stage_toggle)
+	PipelineStage  string `json:"pipeline_stage,omitempty"`
+	PipelineAction string `json:"pipeline_action,omitempty"` // "enable" or "disable"
 }
 
 // ReplayDataMetadata describes a replay dataset for experiment validation.
