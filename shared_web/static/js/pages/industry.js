@@ -143,8 +143,8 @@ export function renderIndustryMap(data) {
     const entries = Object.entries(data.target)
       .map(function (_a) {
         var id = _a[0], targetW = _a[1];
-        var currentW = (data.current && data.current[id]) || null;
-        var deltaW = (data.delta && data.delta[id]) || null;
+        var currentW = data.current && data.current[id] != null ? data.current[id] : null;
+        var deltaW = data.delta && data.delta[id] != null ? data.delta[id] : null;
         return { id: id, target: targetW, current: currentW, delta: deltaW };
       })
       .sort(function (a, b) { return (b.target || 0) - (a.target || 0); });

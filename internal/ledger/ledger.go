@@ -133,7 +133,7 @@ func (s *Store) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, erro
 		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "session-") {
 			continue
 		}
-		outcomePath := filepath.Join(s.baseDir, entry.Name(), "recommendation_outcomes.jsonl")
+		outcomePath := filepath.Join(s.baseDir, "sessions", entry.Name(), "recommendation_outcomes.jsonl")
 		f, err := os.Open(outcomePath)
 		if err != nil {
 			continue
