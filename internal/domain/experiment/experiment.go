@@ -120,4 +120,6 @@ type PromptExperimentResult struct {
 	CandidateMonetaryNTD   float64                `json:"candidate_monetary_ntd,omitempty"`
 	EvalMetrics            *eval.EvalResult       `json:"eval_metrics,omitempty"`
 	ImportanceResult       *eval.ImportanceResult `json:"importance_result,omitempty"`
+	RegimeCounts           map[string]int         `json:"regime_counts,omitempty"`
+	RegimeTotalDays        int                    `json:"regime_total_days,omitempty"`
 }
