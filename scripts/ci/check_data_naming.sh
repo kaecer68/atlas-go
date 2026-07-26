@@ -100,6 +100,19 @@ is_exception() {
 }
 
 # =============================================================================
+# Helper: keep only paths that are not ignored by git
+# Used to skip runtime/generated artifacts under data/ that are not meant to be
+# committed. See data-naming-convention.md and .gitignore.
+# =============================================================================
+filter_not_ignored() {
+  if command -v git >/dev/null 2>&1; then
+    git check-ignore --verbose --non-matching --stdin 2>/dev/null | awk -F'\t' '/^::\t/{print $2}'
+  else
+    cat
+  fi
+}
+
+# =============================================================================
 # 檢查 1: 目錄命名必須是 snake_case（禁止 kebab-case）
 # R1: snake_case, R8: 禁止 kebab-case. See data-naming-convention.md §2.
 # =============================================================================
@@ -128,11 +141,11 @@ check_dir_naming() {
     fi
 
     # R9: no kebab-case period
-  done < <(find data/ -type d 2>/dev/null | sort)
+  done < <(find data/ -type d 2>/dev/null | filter_not_ignored | sort)
 
   if [ "$found_any" -eq 0 ]; then
     local count
-    count=$(find data/ -type d 2>/dev/null | wc -l | tr -d ' ')
+    count=$(find data/ -type d 2>/dev/null | filter_not_ignored | wc -l | tr -d ' ')
     log_pass "所有 ${count} 個目錄命名符合 snake_case (R1, R8)"
   fi
   return $found_any
@@ -177,7 +190,7 @@ check_daily_file_format() {
         add_json_violation "daily_nonstandard" "$file" "non-standard daily file name: '$fname'"
         found_any=1
       fi
-    done < <(find "$dir" -maxdepth 1 -type f \( -name "*.json" -o -name "*.jsonl" \) 2>/dev/null | sort)
+    done < <(find "$dir" -maxdepth 1 -type f \( -name "*.json" -o -name "*.jsonl" \) 2>/dev/null | filter_not_ignored | sort)
   done
 
   if [ "$found_any" -eq 0 ]; then
@@ -228,7 +241,7 @@ check_jsonl_extension() {
          -path 'data/state/live/state' -o \
          -path 'data/state/experiments/archive' -o \
          -path 'data/state-archive' \) -prune -o \
-      -type f \( -name "*.json" -o -name "*.jsonl" \) -print 2>/dev/null | sort)
+      -type f \( -name "*.json" -o -name "*.jsonl" \) -print 2>/dev/null | filter_not_ignored | sort)
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "所有 JSONL 檔案使用正確的 .jsonl 副檔名"
@@ -256,7 +269,7 @@ check_state_flat_files() {
     log_warn "$file — data/state/ 下的平面檔案，應遷移至子目錄 (§3.2 R1)"
     add_json_violation "state_flat_file" "$file" "flat file in data/state/, should be in subdirectory (P3.0)"
     found_any=1
-  done < <(find data/state/ -maxdepth 1 -type f 2>/dev/null | sort)
+  done < <(find data/state/ -maxdepth 1 -type f 2>/dev/null | filter_not_ignored | sort)
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "data/state/ 下沒有平面檔案"
@@ -287,7 +300,7 @@ check_backup_files() {
       add_json_violation "backup_in_main" "$file" "backup file should be in data/archive/, not main directories"
       found_any=1
     fi
-  done < <(find data/ -type f -name "*.backup.*" 2>/dev/null | sort)
+  done < <(find data/ -type f -name "*.backup.*" 2>/dev/null | filter_not_ignored | sort)
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "主目錄中沒有備份檔案"
