@@ -18,9 +18,10 @@ import (
 )
 
 type Handlers struct {
-	LedgerDir         string
-	correlationMatrix *industry.CorrelationMatrix
-	RiskGate          *risk.RiskGate // optional, set via WithRiskGate()
+	LedgerDir          string
+	correlationMatrix  *industry.CorrelationMatrix
+	classificationTree *industry.ClassificationTree
+	RiskGate           *risk.RiskGate // optional, set via WithRiskGate()
 }
 
 func NewHandlers(ledgerDir string) *Handlers {
@@ -31,6 +32,13 @@ func NewHandlers(ledgerDir string) *Handlers {
 // When nil, HandleCorrelationMatrix falls back to DefaultCorrelationMatrix().
 func (h *Handlers) WithCorrelationMatrix(cm *industry.CorrelationMatrix) *Handlers {
 	h.correlationMatrix = cm
+	return h
+}
+
+// WithClassificationTree sets an optional classification tree for industry label lookup.
+// When nil, industryLabel returns raw IDs.
+func (h *Handlers) WithClassificationTree(ct *industry.ClassificationTree) *Handlers {
+	h.classificationTree = ct
 	return h
 }
 
@@ -190,7 +198,7 @@ func (h *Handlers) HandleCorrelationMatrix(r *http.Request) (int, any) {
 
 	labels := make([]string, n)
 	for i, s := range symbols {
-		labels[i] = industryLabel(s)
+		labels[i] = h.industryLabel(s)
 	}
 
 	return http.StatusOK, CorrelationMatrixResponse{
@@ -252,24 +260,30 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	}
 }
 
-func industryLabel(id string) string {
-	m := map[string]string{
-		"semiconductor":   "半導體",
-		"ai_supply_chain": "AI 供應鏈",
-		"robotics":        "機器人",
-		"foundry":         "晶圓代工",
-		"electronics":     "電子零組件",
-		"shipping":        "航運",
-		"financials":      "金融",
-		"energy":          "能源",
-		"industrial":      "工業",
-		"consumer":        "消費",
-		"cooling":         "散熱",
-		"server_assembly": "伺服器組裝",
-		"mining":          "礦業/貴金屬",
-	}
-	if l, ok := m[id]; ok {
-		return l
+var legacyIndustryLabels = map[string]string{
+	"semiconductor":   "半導體",
+	"ai_supply_chain": "AI 供應鏈",
+	"robotics":        "機器人",
+	"foundry":         "晶圓代工",
+	"electronics":     "電子零組件",
+	"shipping":        "航運",
+	"financials":      "金融",
+	"energy":          "能源",
+	"industrial":      "工業",
+	"consumer":        "消費",
+	"cooling":         "散熱",
+	"server_assembly": "伺服器組裝",
+	"mining":          "礦業/貴金屬",
+}
+
+func (h *Handlers) industryLabel(id string) string {
+	if h.classificationTree != nil {
+		if seg, ok := h.classificationTree.GetSegment(id); ok {
+			return seg.Name
+		}
+		if l, ok := legacyIndustryLabels[id]; ok {
+			return l
+		}
 	}
 	return id
 }

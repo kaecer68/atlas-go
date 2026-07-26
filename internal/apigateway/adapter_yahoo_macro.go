@@ -8,17 +8,18 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// YahooMacroChannelAdapter adapts a YahooFinanceMacroProvider to the DataProvider interface.
+// YahooMacroChannelAdapter adapts a MacroDataProvider to the DataProvider interface.
 type YahooMacroChannelAdapter struct {
-	provider *marketdata.YahooFinanceMacroProvider
+	provider marketdata.MacroDataProvider
 	limiter  *rate.Limiter
 }
 
 // NewYahooMacroChannelAdapter creates a new adapter for the Yahoo Finance macro channel.
-func NewYahooMacroChannelAdapter(provider *marketdata.YahooFinanceMacroProvider) *YahooMacroChannelAdapter {
+func NewYahooMacroChannelAdapter(provider marketdata.MacroDataProvider) *YahooMacroChannelAdapter {
 	return &YahooMacroChannelAdapter{
 		provider: provider,
 		limiter:  rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst),
@@ -29,7 +30,17 @@ func NewYahooMacroChannelAdapter(provider *marketdata.YahooFinanceMacroProvider)
 func (a *YahooMacroChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("yahoo macro fetch: %w", err)
+		// Partial failure is acceptable — at least some indicators came back.
+		// Only treat a total failure (no recorded data) as a channel error so
+		// the circuit breaker does not open for transient off-hours gaps.
+		if snap.RecordedAt > 0 {
+			logging.Warn("apigateway", "yahoo_macro_partial_fetch",
+				"error", err.Error(),
+				"recorded_at", snap.RecordedAt,
+			)
+		} else {
+			return nil, fmt.Errorf("yahoo macro fetch: %w", err)
+		}
 	}
 	data, err := json.Marshal(snap)
 	if err != nil {

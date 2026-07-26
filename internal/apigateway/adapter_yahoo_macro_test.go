@@ -2,7 +2,10 @@ package apigateway
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -83,5 +86,43 @@ func TestYahooMacroChannelAdapter_HealthCheck_Partial(t *testing.T) {
 	}
 	if status.Status != "ok" && status.Status != "warn" {
 		t.Errorf("Status = %q, want ok or warn", status.Status)
+	}
+}
+
+func TestYahooMacroChannelAdapter_Fetch_PartialSuccess(t *testing.T) {
+	mock := &marketdata.MockMacroProvider{
+		Snapshot: marketdata.MacroDataSnapshot{
+			RecordedAt: time.Now().Unix(),
+			US10Y: marketdata.MacroDataPoint{
+				Symbol:    "^TNX",
+				Value:     4.25,
+				ChangePct: 0.5,
+				Timestamp: time.Now().Unix(),
+			},
+		},
+		Err: errors.New("partial indicator failures"),
+	}
+
+	a := NewYahooMacroChannelAdapter(mock)
+	res, err := a.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() error = %v, want nil for partial success", err)
+	}
+	if res == nil || len(res.Data) == 0 {
+		t.Fatal("Fetch() returned empty data")
+	}
+
+	var got marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(res.Data, &got); err != nil {
+		t.Fatalf("Unmarshal snapshot: %v", err)
+	}
+	if got.RecordedAt == 0 {
+		t.Error("Expected RecordedAt > 0, got 0")
+	}
+	if got.US10Y.Symbol != "^TNX" {
+		t.Errorf("US10Y.Symbol = %q, want ^TNX", got.US10Y.Symbol)
+	}
+	if res.Meta.ChannelID != "us_yahoo" {
+		t.Errorf("ChannelID = %q, want us_yahoo", res.Meta.ChannelID)
 	}
 }

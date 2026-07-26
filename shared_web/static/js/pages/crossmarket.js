@@ -174,6 +174,7 @@ function renderCorrelationMatrix(matrixData) {
   const labels = matrixData.labels || symbols;
   const matrix = matrixData.matrix;
   const n = symbols.length;
+  const labelStyle = 'font-family:var(--font-base);font-size:var(--text-sm);font-weight:600;letter-spacing:0.02em';
 
   function corrColor(v) {
     if (v == null || isNaN(v)) return 'var(--panel-l2)';
@@ -187,13 +188,13 @@ function renderCorrelationMatrix(matrixData) {
     return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
   }
 
-  let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3)">產業</th>';
+  let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3);' + labelStyle + '">產業</th>';
   for (let i = 0; i < n; i++) {
-    html += '<th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--panel-l3);white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);min-width:32px">' + escapeHtml(labels[i] || symbols[i]) + '</th>';
+    html += '<th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--panel-l3);white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);min-width:32px;' + labelStyle + '">' + escapeHtml(labels[i] || symbols[i]) + '</th>';
   }
   html += '</tr></thead><tbody>';
   for (let i = 0; i < n; i++) {
-    html += '<tr><td style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;border-bottom:1px solid var(--panel-l3);white-space:nowrap;font-weight:600">' + escapeHtml(labels[i] || symbols[i]) + '</td>';
+    html += '<tr><td style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;border-bottom:1px solid var(--panel-l3);white-space:nowrap;' + labelStyle + '">' + escapeHtml(labels[i] || symbols[i]) + '</td>';
     for (let j = 0; j < n; j++) {
       const v = matrix[i] ? matrix[i][j] : null;
       const bg = corrColor(v);
@@ -205,7 +206,7 @@ function renderCorrelationMatrix(matrixData) {
     html += '</tr>';
   }
   html += '</tbody></table></div>';
-  html += '<div style="margin-top:var(--space-sm);font-size:var(--text-xs);color:var(--muted)">色階：|ρ| ≥ 0.7 深色（強相關）、0.3–0.7 淡色（中等相關）、< 0.3 灰色（弱相關）。正相關偏紅，負相關偏綠。</div>';
+  html += '<div style="margin-top:var(--space-sm);font-size:var(--text-sm);color:var(--text)">色階：|ρ| ≥ 0.7 深色（強相關）、0.3–0.7 淡色（中等相關）、< 0.3 灰色（弱相關）。正相關偏紅，負相關偏綠。</div>';
   el.innerHTML = html;
 }
 
