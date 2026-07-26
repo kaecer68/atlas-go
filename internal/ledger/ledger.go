@@ -124,7 +124,7 @@ func (s *Store) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOu
 func (s *Store) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	entries, err := os.ReadDir(s.baseDir)
+	entries, err := os.ReadDir(filepath.Join(s.baseDir, "sessions"))
 	if err != nil {
 		return nil, fmt.Errorf("read sessions dir: %w", err)
 	}

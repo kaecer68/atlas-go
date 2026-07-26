@@ -462,7 +462,7 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		params.Darwinian.WeightMax.Value,
 	)
 
-	svc.WithSnapshotReader(sectorallocation.NewFileClosureStore(filepath.Join(workDir, "data/state")))
+	svc.WithSnapshotReader(sectorallocation.NewFileClosureStore(filepath.Join(workDir, "sector", "allocation")))
 
 	return svc
 }

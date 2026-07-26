@@ -50,6 +50,7 @@ type OutcomeStore interface {
 	RecordOutcomes(outcomes []domain.RecommendationOutcome) error
 	RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error
 	LoadOutcomes() ([]domain.RecommendationOutcome, error)
+	LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error)
 	LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
 
 	RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error
@@ -313,8 +314,7 @@ func (r *DualWriteRepository) QueryTopSymbols(ctx context.Context, limit int, st
 }
 
 func (r *DualWriteRepository) QueryAllOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
-	// PostgreSQL does not have a dedicated "query all" method; fallback to JSONL.
-	return r.jsonl.outcomeStore.LoadOutcomes()
+	return r.jsonl.outcomeStore.LoadOutcomesFromSessions()
 }
 
 func (r *DualWriteRepository) QueryAllSessionScorecards(ctx context.Context) ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
