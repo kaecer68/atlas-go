@@ -12,7 +12,7 @@ import (
 type ExecutionManager struct {
 	broker         Broker
 	orderMgr       *OrderManager
-	circuitBreaker *CircuitBreaker
+	circuitBreaker CircuitBreakerOps
 	config         OrchestratorConfig
 	metrics        MetricsRecorder
 	eventBus       *ChannelEventBus
@@ -20,13 +20,13 @@ type ExecutionManager struct {
 
 func NewExecutionManager(
 	broker Broker,
-	circuitBreaker *CircuitBreaker,
+	cb CircuitBreakerOps,
 	config OrchestratorConfig,
 	metrics MetricsRecorder,
 ) *ExecutionManager {
 	return &ExecutionManager{
 		broker:         broker,
-		circuitBreaker: circuitBreaker,
+		circuitBreaker: cb,
 		config:         config,
 		metrics:        metrics,
 	}
@@ -53,6 +53,9 @@ func (e *ExecutionManager) SimulateExecution() {
 }
 
 func (e *ExecutionManager) ExecuteOrder(ctx context.Context, order domain.Order) error {
+	if e.circuitBreaker == nil {
+		return fmt.Errorf("execution manager: circuit breaker not initialized")
+	}
 	if !e.circuitBreaker.CanPlaceOrder(order.Side) {
 		if e.metrics != nil {
 			e.metrics.RecordCounter("orders_blocked_total", 1, map[string]string{
