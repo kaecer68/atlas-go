@@ -48,9 +48,9 @@ test('home page renders without developer-facing strings', async ({ page }) => {
 
   await page.goto('/client/home');
   // Wait for home.js to render the page-root with real content (not just the
-  // empty <div id="home-root"> placeholder). The home summary title is one of
-  // the first elements home.js injects.
-  await expect(page.locator('#home-summary')).toBeVisible({ timeout: 15000 });
+  // empty <div id="home-root"> placeholder). The market pulse section is one of
+  // the first elements home.js injects after the redesign.
+  await expect(page.locator('#home-market-pulse')).toBeVisible({ timeout: 15000 });
 
   const bodyText = await page.locator('body').innerText();
   for (const forbidden of FORBIDDEN_UI_STRINGS) {
@@ -63,30 +63,35 @@ test('home page renders without developer-facing strings', async ({ page }) => {
   // No admin role link in the investor portal
   expect(bodyText).not.toContain('管理者');
 
-  // Core sections are rendered by home.js
-  await expect(page.locator('#home-signal-strip')).toBeAttached();
-  await expect(page.locator('#home-portfolio-snapshot')).toBeAttached();
-  await expect(page.locator('#home-market-pulse')).toBeAttached();
+  // Core sections are rendered by home.js after the redesign
+  await expect(page.locator('#home-predictions')).toBeAttached();
+  await expect(page.locator('#home-seven-force')).toBeAttached();
+  await expect(page.locator('#home-event-calendar')).toBeAttached();
 });
 
-test('home portfolio snapshot hides max-drawdown on the hero', async ({ page }) => {
+test('home market pulse renders without developer-facing strings', async ({ page }) => {
   await page.route('**/api/user/profile', r => r.fulfill({ json: {} }));
-  await page.route('**/api/system/status', r => r.fulfill({ json: { status: 'ok' } }));
-  await page.route('**/api/dashboard/snapshot', r => r.fulfill({ json: {} }));
-  await page.route('**/api/dashboard/portfolio-state', r => r.fulfill({ json: {} }));
+  await page.route('**/api/dashboard/system-health', r => r.fulfill({ json: { status: 'ok' } }));
+  await page.route('**/api/macro/snapshot/latest', r => r.fulfill({ json: {} }));
+  await page.route('**/api/taiwan/stress-index', r => r.fulfill({ json: {} }));
+  await page.route('**/api/narrative/bundle', r => r.fulfill({ json: { events: [], chains: [], models: [], templates: [], seasonal: null } }));
+  await page.route('**/api/dashboard/calendar-events', r => r.fulfill({ json: { events: [] } }));
+  await page.route('**/api/events/prediction', r => r.fulfill({ json: {} }));
+  await page.route('**/api/capital-flow/summary', r => r.fulfill({ json: {} }));
 
   await page.goto('/client/home');
-  await expect(page.locator('#home-portfolio-snapshot')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('#home-market-pulse')).toBeVisible({ timeout: 15000 });
 
-  // Wait for the portfolio snapshot to finish loading (real or empty state).
-  await expect(page.locator('#home-portfolio-content')).not.toContainText('載入中…', { timeout: 20000 });
+  // Wait for the market pulse grid to finish loading (real or fallback state).
+  await expect(page.locator('#home-market-grid')).not.toContainText('載入中…', { timeout: 20000 });
 
-  const portfolioText = await page.locator('#home-portfolio-content').innerText();
-  // Portfolio may be empty (no live account linked), so we assert the safe
-  // absence of the scary max-drawdown metric rather than specific numeric KPIs.
-  expect(portfolioText).not.toContain('最大回撤');
-  // The section explains itself to investors even when no portfolio is loaded.
-  expect(portfolioText).toMatch(/AI 策略績效|示範數據|尚無投資組合資料/);
+  const marketPulseText = await page.locator('#home-market-pulse').innerText();
+  // Core labels should be visible to investors.
+  expect(marketPulseText).toMatch(/大盤|外資|TSM ADR/);
+  // No developer-facing strings in the market pulse section.
+  for (const forbidden of FORBIDDEN_UI_STRINGS) {
+    expect(marketPulseText, `forbidden string "${forbidden}" leaked into market pulse`).not.toContain(forbidden);
+  }
 });
 
 test('capital board renders translated sector labels and no snake_case', async ({ page }) => {
