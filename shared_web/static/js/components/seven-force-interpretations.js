@@ -97,7 +97,7 @@ export function renderSevenForceInterpretations(container, summary) {
   if (!container) return;
   const forces = summary && Array.isArray(summary.forces) ? summary.forces : [];
   if (!forces.length) {
-    container.innerHTML = '<div class="home-loading-card">尚無七維錢潮雷達解讀</div>';
+    container.innerHTML = '';
     return;
   }
 

@@ -40,18 +40,15 @@ function buildTierCTA() {
   var sub = document.createElement('span');
   sub.className = 'home-section__subtitle';
   sub.textContent = '註冊獲取「機器人輔助（atlas-mcp）」密鑰';
-  header.appendChild(h2);
-  header.appendChild(sub);
-  section.appendChild(header);
-  var actions = document.createElement('div');
-  actions.className = 'tier-cta__actions';
   var btn = document.createElement('button');
   btn.className = 'btn btn--primary tier-cta__btn';
   btn.type = 'button';
   btn.textContent = '免費註冊';
   btn.addEventListener('click', function () { window.switchPage('register'); });
-  actions.appendChild(btn);
-  section.appendChild(actions);
+  header.appendChild(h2);
+  header.appendChild(sub);
+  header.appendChild(btn);
+  section.appendChild(header);
   return section;
 }
 

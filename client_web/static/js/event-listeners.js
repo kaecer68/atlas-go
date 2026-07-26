@@ -48,11 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // === Page: evolution_panel ===
   // Buttons live in the dynamically injected shell, so use delegation.
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('#evView-compact, #evView-full');
+    const btn = e.target.closest('#evView-compact, #evView-ai-analysis');
     if (!btn) return;
     e.preventDefault();
     if (btn.id === 'evView-compact') window._evSwitch('compact');
-    if (btn.id === 'evView-full') window._evSwitch('full');
+    if (btn.id === 'evView-ai-analysis') window._evSwitch('ai-analysis');
   });
   
   // === Page: industry ===
