@@ -22,6 +22,10 @@ type Handlers struct {
 	registry       *strategy_techniques.Registry
 	annotator      llm_annotator.Annotator
 	summaryHandler *llmcapabilities.StrategySummaryHandler
+	// SnapshotEvaluator recomputes hit_rate from dated macro snapshots
+	// so GET /api/strategies always reflects the current evaluator logic
+	// rather than stale seed values (manifest #1259).
+	SnapshotEvaluator *strategy_techniques.MacroSnapshotEvaluator
 	// FeedbackStore persists validate-API results so hit_rate accumulates
 	// across backtest runs (manifest #F07).
 	FeedbackStore *FeedbackStore
@@ -126,13 +130,25 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 			if !rec.UpdatedAt.IsZero() {
 				s.LastBacktestDate = rec.UpdatedAt.Format("2006-01-02")
 			}
-			// Surface cumulative hit_rate/total_tests so consumers
-			// see the real aggregate even if the seed still has 0s.
-			if rec.TotalTests > 0 {
+			// Surface cumulative hit_rate/total_tests only when no
+			// fresh snapshot evaluator is wired; otherwise the live
+			// evaluator is the source of truth and stale feedback
+			// records (e.g., computed before a bug fix) are ignored.
+			if h.SnapshotEvaluator == nil && rec.TotalTests > 0 {
 				s.HitRate = rec.HitRate
 				s.TotalTests = rec.TotalTests
 				s.TotalHits = rec.TotalHits
 			}
+		}
+	}
+	// Recompute hit_rate from historical macro snapshots when available.
+	// This fixes stale seed values and stale feedback records caused by
+	// evaluator bugs or missing data.
+	if h.SnapshotEvaluator != nil {
+		if result := h.SnapshotEvaluator.Evaluate(f); result != nil && result.TotalTests > 0 {
+			s.HitRate = result.HitRate
+			s.TotalTests = result.TotalTests
+			s.TotalHits = result.TotalHits
 		}
 	}
 	return s

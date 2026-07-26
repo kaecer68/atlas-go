@@ -130,7 +130,7 @@ export function switchView(mode) {
   if (catEl) catEl.style.display = 'none';
 
   if (currentView === 'compact') renderCompact();
-  else if (currentView === 'ai-analysis') renderAiAnalysis();
+  else renderAiAnalysis();
 }
 
 function getData() {

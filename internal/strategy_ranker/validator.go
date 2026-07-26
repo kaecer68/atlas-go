@@ -49,21 +49,31 @@ func (v *Validator) Validate(strategyID, strategyName string, dailyReturns, taie
 		StrategyID:   strategyID,
 		StrategyName: strategyName,
 		SampleDays:   n,
+		WinRate:      winRate(dailyReturns),
 	}
 
-	report.TotalReturn = totalReturnPct(dailyReturns)
-	report.AnnualizedReturn = annualizeReturn(dailyReturns)
-	report.MaxDrawdown = maxDrawdownPct(dailyReturns)
-	report.WinRate = winRate(dailyReturns)
-	report.TaiexCorrelation = pearsonCorrelation(dailyReturns, taiexReturns)
-	report.AlphaScore = report.AnnualizedReturn - annualizeReturn(taiexReturns)
+	tr := totalReturnPct(dailyReturns)
+	report.TotalReturn = &tr
+
+	ar := annualizeReturn(dailyReturns)
+	report.AnnualizedReturn = &ar
+
+	md := maxDrawdownPct(dailyReturns)
+	report.MaxDrawdown = &md
+
+	c := pearsonCorrelation(dailyReturns, taiexReturns)
+	report.TaiexCorrelation = &c
+
+	alpha := ar - annualizeReturn(taiexReturns)
+	report.AlphaScore = &alpha
 
 	if n >= v.cfg.MinSamples {
-		report.SharpeRatio = shared.ComputeSharpe(dailyReturns, shared.SharpeConfig{
+		sharpe := shared.ComputeSharpe(dailyReturns, shared.SharpeConfig{
 			Frequency:    shared.FrequencyTWSE,
 			RiskFreeRate: v.cfg.RiskFreeRate / float64(tradingDaysTWSE),
 			MinSamples:   v.cfg.MinSamples,
 		})
+		report.SharpeRatio = &sharpe
 	}
 
 	return report
@@ -166,24 +176,38 @@ func Rank(reports []*StrategyReport) []RankedReport {
 	maxAbsAlpha := 1.0
 	maxDD := 1.0
 	for _, r := range reports {
-		if abs(r.AlphaScore) > maxAbsAlpha {
-			maxAbsAlpha = abs(r.AlphaScore)
+		if r.AlphaScore != nil && abs(*r.AlphaScore) > maxAbsAlpha {
+			maxAbsAlpha = abs(*r.AlphaScore)
 		}
-		if r.MaxDrawdown > maxDD {
-			maxDD = r.MaxDrawdown
+		if r.MaxDrawdown != nil && *r.MaxDrawdown > maxDD {
+			maxDD = *r.MaxDrawdown
 		}
 	}
 
 	ranked := make([]RankedReport, len(reports))
 	for i, r := range reports {
+		// 指標可能為 nil（樣本不足），以 0 參與計分。
+		sharpe := 0.0
+		if r.SharpeRatio != nil {
+			sharpe = *r.SharpeRatio
+		}
+		alpha := 0.0
+		if r.AlphaScore != nil {
+			alpha = *r.AlphaScore
+		}
+		dd := 0.0
+		if r.MaxDrawdown != nil {
+			dd = *r.MaxDrawdown
+		}
+
 		// Sharpe 分數：負值轉正規化
-		sharpeScore := math.Max(0, math.Min(1, (r.SharpeRatio+2)/6))
+		sharpeScore := math.Max(0, math.Min(1, (sharpe+2)/6))
 		// Alpha 分數
-		alphaScore := math.Max(0, math.Min(1, (r.AlphaScore+maxAbsAlpha)/(2*maxAbsAlpha)))
+		alphaScore := math.Max(0, math.Min(1, (alpha+maxAbsAlpha)/(2*maxAbsAlpha)))
 		// 回撤分數：低回撤高分
 		ddScore := 1.0
 		if maxDD > 0 {
-			ddScore = math.Max(0, 1-(r.MaxDrawdown/maxDD))
+			ddScore = math.Max(0, 1-(dd/maxDD))
 		}
 
 		score := sharpeScore*35 + alphaScore*25 + r.WinRate*20 + ddScore*20

@@ -38,6 +38,7 @@ var authFreeExactPaths = map[string]bool{
 	"/api/control/active-overrides": true,
 	"/api/experiment/history":       true,
 	"/api/experiment/diff":          true,
+	"/api/strategies":               true,
 }
 
 // Per internal/monitoring/AGENTS.md, these prefix lists must mirror

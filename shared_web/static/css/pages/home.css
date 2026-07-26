@@ -547,6 +547,11 @@
 
 /* CTA banner (free tier) */
 .tier-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-md);
   text-align: center;
   padding: var(--space-xl) var(--space-lg);
   background: linear-gradient(135deg, var(--editorial-surface), color-mix(in srgb, var(--editorial-accent) 5%, var(--editorial-surface)));
@@ -554,16 +559,25 @@
   border-radius: var(--editorial-radius-lg);
 }
 .tier-cta .home-section__header {
-  margin-bottom: var(--space-md);
+  margin-bottom: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
 }
 .tier-cta .home-section__subtitle {
-  display: block;
+  display: inline;
   color: var(--editorial-muted);
   font-size: 0.9rem;
-  margin-top: var(--space-xs);
+  margin-top: 0;
 }
 .tier-cta__actions {
-  margin-top: var(--space-lg);
+  margin-top: 0;
+}
+.tier-cta__btn {
+  padding: var(--space-xs) var(--space-md);
+  font-size: calc(var(--text-sm) * 0.85);
 }
 
 .home-section--banner {
