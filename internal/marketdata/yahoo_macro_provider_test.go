@@ -202,3 +202,58 @@ func TestYahooFetchFromHost_InvalidJSON(t *testing.T) {
 		t.Errorf("expected unmarshal error, got: %v", err)
 	}
 }
+
+func TestFindLastValidClose_AllValid(t *testing.T) {
+	closes := []float64{100.0, 101.0, 102.5}
+	latest, prev := findLastValidClose(closes)
+	if latest != 102.5 {
+		t.Errorf("latest = %v, want 102.5", latest)
+	}
+	if prev != 101.0 {
+		t.Errorf("prev = %v, want 101.0", prev)
+	}
+}
+
+func TestFindLastValidClose_TrailingZeros(t *testing.T) {
+	// Simulates Yahoo off-hours: [valid, ..., valid, 0.0, 0.0]
+	closes := []float64{100.0, 101.0, 0.0, 0.0}
+	latest, prev := findLastValidClose(closes)
+	if latest != 101.0 {
+		t.Errorf("latest = %v, want 101.0", latest)
+	}
+	if prev != 100.0 {
+		t.Errorf("prev = %v, want 100.0", prev)
+	}
+}
+
+func TestFindLastValidClose_AllZeros(t *testing.T) {
+	closes := []float64{0.0, 0.0, 0.0}
+	latest, prev := findLastValidClose(closes)
+	if latest != 0 || prev != 0 {
+		t.Errorf("latest=%v, prev=%v, want 0,0", latest, prev)
+	}
+}
+
+func TestFindLastValidClose_SingleValid(t *testing.T) {
+	// Only one non-zero value — prev should be 0 (no second valid close)
+	closes := []float64{0.0, 0.0, 100.0}
+	latest, prev := findLastValidClose(closes)
+	if latest != 100.0 {
+		t.Errorf("latest = %v, want 100.0", latest)
+	}
+	if prev != 0 {
+		t.Errorf("prev = %v, want 0 (only one valid close)", prev)
+	}
+}
+
+func TestFindLastValidClose_MidZeros(t *testing.T) {
+	// Zeros in the middle, valid on both ends
+	closes := []float64{50.0, 0.0, 0.0, 51.0, 0.0, 52.0}
+	latest, prev := findLastValidClose(closes)
+	if latest != 52.0 {
+		t.Errorf("latest = %v, want 52.0", latest)
+	}
+	if prev != 51.0 {
+		t.Errorf("prev = %v, want 51.0", prev)
+	}
+}
