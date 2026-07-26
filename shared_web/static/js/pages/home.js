@@ -271,7 +271,7 @@ async function loadHomeData() {
           console.warn('[home] calendar render failed:', err));
       }
 
-      renderHomeBanner(lastCalendarEvents);
+      // Portfolio snapshot / banner removed from home per UI refresh request.
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
       renderMarketPulse(null, null);
