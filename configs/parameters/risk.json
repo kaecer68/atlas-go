@@ -1,0 +1,234 @@
+{
+  "var_confidence_level": {
+    "value": 0.95,
+    "rationale": "95% VaR confidence level (primary)",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Risk management",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "var_secondary_confidence": {
+    "value": 0.99,
+    "rationale": "99% VaR confidence level (secondary/tail risk)",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Risk management",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "var_alert_threshold": {
+    "value": 0.02,
+    "rationale": "2% portfolio value at risk triggers alert",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "var_critical_threshold": {
+    "value": 0.05,
+    "rationale": "5% portfolio value at risk is critical",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "consecutive_loss_limit": {
+    "value": 5,
+    "rationale": "5 consecutive losses triggers capital phase review",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_constraints_risk_off": {
+    "value": {
+      "ai_supply_chain": 0.3,
+      "emerging_market": 0.1,
+      "gold": 1.5,
+      "small_cap": 0.2,
+      "utilities": 1.2
+    },
+    "rationale": "Reduce risk assets, increase defensive assets during risk_off",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_constraints_carry_trade_unwind": {
+    "value": {
+      "all_equities": 0.1,
+      "cash": 2,
+      "financials": 0.1,
+      "tech": 0.05
+    },
+    "rationale": "Exit equities, move to cash/bonds during carry trade unwind",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_constraints_sector_rotation": {
+    "value": {
+      "energy": 1.8,
+      "high_valuation_tech": 0.3,
+      "oil_services": 1.5,
+      "rate_sensitive": 0.4
+    },
+    "rationale": "Rotate to energy, reduce tech during sector rotation",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_drawdown_pct": {
+    "value": 0.08,
+    "rationale": "8% max portfolio drawdown",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_position_size": {
+    "value": 9.140396100157428e-06,
+    "rationale": "15% max single position size",
+    "source": "literature",
+    "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
+    "calibration_timestamp": "2026-07-06T00:11:32.773444+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Risk management",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_daily_loss_pct": {
+    "value": 1.8280792200314869e-06,
+    "rationale": "3% max daily loss",
+    "source": "heuristic",
+    "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
+    "calibration_timestamp": "2026-07-06T00:11:32.773444+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "stop_loss": {
+    "value": -0.05,
+    "rationale": "5% stop loss triggers alert",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "take_profit": {
+    "value": 0.2,
+    "rationale": "20% take profit triggers alert",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_loss_per_trade": {
+    "value": 0.02,
+    "rationale": "2% max loss per trade for Kelly calculation",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Risk management",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_total_exposure": {
+    "value": 0.8,
+    "rationale": "80% max total exposure",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Risk management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

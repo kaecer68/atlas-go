@@ -1,0 +1,325 @@
+{
+  "weight_min": {
+    "value": 0.3,
+    "rationale": "Whisper level: agent influence reduced to 30%",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341874"
+    }
+  },
+  "weight_max": {
+    "value": 2.5,
+    "rationale": "Shout level: agent influence amplified to 250%",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341891"
+    }
+  },
+  "weight_neutral": {
+    "value": 1,
+    "rationale": "Baseline: no adjustment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "top_quartile_multiplier": {
+    "value": 1.15,
+    "rationale": "5% daily boost for top performers",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via literature_review during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "literature_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341896"
+    }
+  },
+  "bottom_quartile_multiplier": {
+    "value": 0.85,
+    "rationale": "5% daily cut for bottom performers",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_method": "sharpe_ratio_based",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341901"
+    }
+  },
+  "daily_adjustment_cooldown": {
+    "value": "20h",
+    "rationale": "Slightly less than 24h for daily trading frequency",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "lookback_days": {
+    "value": 20,
+    "rationale": "One trading month (approx 20 business days)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via literature_review during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "literature_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341905"
+    }
+  },
+  "ema_alpha": {
+    "value": 0.3,
+    "rationale": "Standard EMA smoothing factor",
+    "source": "literature",
+    "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_method": "autocorrelation_based",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sharpe_normalize_denom": {
+    "value": 1.5,
+    "rationale": "Sigmoid normalization knee: Sharpe/(Sharpe+1.5). Calibrated to top-quartile agent Sharpe for better middle-range discrimination. Maps Sharpe=0.5→0.25, Sharpe=1.0→0.40, Sharpe=2.0→0.57",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Calibrated: denom reduced from 2.0→1.5 based on TW systematic strategy Sharpe distribution (median≈0.5, top-quartile≈1.5); validated against agent performance scatter",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341909"
+    }
+  },
+  "max_performance_bonus_pct": {
+    "value": 0.21440618888014207,
+    "rationale": "Cap performance bonus at +20%",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341911"
+    }
+  },
+  "volatility_penalty_threshold": {
+    "value": 0.3,
+    "rationale": "5% daily volatility (~79% annualized) is high for TW market",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "volatility_penalty_multiplier": {
+    "value": 0.7836597396533899,
+    "rationale": "5% penalty for high volatility agents",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "risk_volatility_threshold": {
+    "value": 1.3551911193487005,
+    "rationale": "8% daily volatility is extreme; extra penalty warranted",
+    "source": "empirical",
+    "last_calibrated": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_timestamp": "2026-06-13T00:30:48.122543+08:00",
+    "calibration_method": "percentile_based",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "risk_multiplier": {
+    "value": 0.9,
+    "rationale": "Extra 10% cut for extreme volatility",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "hit_rate_high_threshold": {
+    "value": 0.7251908396946565,
+    "rationale": "60% hit rate is good in TW equity market",
+    "source": "calibrated",
+    "last_calibrated": "2026-07-06T01:43:01.149253+08:00",
+    "calibration_timestamp": "2026-07-06T01:43:01.149253+08:00",
+    "calibration_method": "percentile_based",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "hit_rate_low_threshold": {
+    "value": 0.5838323353293413,
+    "rationale": "40% hit rate is poor and warrants reduction",
+    "source": "calibrated",
+    "last_calibrated": "2026-07-06T01:43:01.149254+08:00",
+    "calibration_timestamp": "2026-07-06T01:43:01.149254+08:00",
+    "calibration_method": "percentile_based",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "middle_tier_boost_multiplier": {
+    "value": 1.005,
+    "rationale": "2% mild boost for middle tier with good hit rate",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "middle_tier_cut_multiplier": {
+    "value": 0.995,
+    "rationale": "2% mild cut for middle tier with poor hit rate",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sharpe_min_sample_size": {
+    "value": 5,
+    "rationale": "Minimum observations for Sharpe calculation",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Parameter validated via literature_review during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "literature_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341921"
+    }
+  },
+  "stddev_mean_ratio_threshold": {
+    "value": 0.001,
+    "rationale": "Guard against IEEE 754 precision edge case for identical returns",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "code_review",
+      "dependencies": [],
+      "last_validated": "2026-05-15T12:08:16.000000"
+    }
+  },
+  "conviction_clamp_min": {
+    "value": 1,
+    "rationale": "Minimum conviction after weight scaling",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "conviction_clamp_max": {
+    "value": 250,
+    "rationale": "Maximum conviction after weight scaling (100 * 2.5)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent weight system calibration",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

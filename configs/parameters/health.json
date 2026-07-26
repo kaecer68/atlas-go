@@ -1,0 +1,156 @@
+{
+  "mute_threshold": {
+    "value": 5,
+    "rationale": "5 consecutive losses triggers mute",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "unmute_threshold": {
+    "value": 3,
+    "rationale": "3 consecutive wins triggers recovery",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "auto_recover_days": {
+    "value": 7,
+    "rationale": "Auto-recover after 7 days muted",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "min_sample_size": {
+    "value": 10,
+    "rationale": "Minimum 10 observations for health assessment",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Parameter assigned literature_review validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "literature_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342011"
+    }
+  },
+  "negative_sharpe_threshold": {
+    "value": -0.5,
+    "rationale": "Sharpe below -0.5 indicates severe underperformance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sharpe_weight": {
+    "value": 0.4,
+    "rationale": "Sharpe contributes 40% to composite score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342015"
+    }
+  },
+  "hit_rate_weight": {
+    "value": 0.3,
+    "rationale": "Hit rate contributes 30% to composite score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "streak_weight": {
+    "value": 0.3,
+    "rationale": "Streak contributes 30% to composite score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_sharpe": {
+    "value": 5,
+    "rationale": "Cap Sharpe at 5.0 for normalization",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned literature_review validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "literature_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342020"
+    }
+  },
+  "min_sharpe": {
+    "value": -5,
+    "rationale": "Floor Sharpe at -5.0 for normalization",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "streak_max": {
+    "value": 10,
+    "rationale": "10 consecutive wins = full streak score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Agent health management",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "dividend_tax_rate": {
+    "value": 0.28,
+    "rationale": "Taiwan individual income tax rate on dividend income (28% bracket)",
+    "source": "literature"
+  },
+  "transaction_tax_rate": {
+    "value": 0.003,
+    "rationale": "Taiwan securities transaction tax (0.3%, sell-side only)",
+    "source": "literature"
+  },
+  "nhi_surcharge_rate": {
+    "value": 0.0211,
+    "rationale": "Taiwan NHI supplementary premium (二代健保補充保費) rate 2.11% effective 2021",
+    "source": "literature"
+  }
+}

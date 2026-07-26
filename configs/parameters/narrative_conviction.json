@@ -1,0 +1,50 @@
+{
+  "theme_hit_rates": {
+    "value": {
+      "AI_capex_surge": 0.81,
+      "JPY_carry_unwind": 0.68,
+      "US_rates_down": 0.7,
+      "US_rates_up": 0.72,
+      "dividend_season": 0.65,
+      "geopolitical_risk_spike": 0.65,
+      "oil_price_shock": 0.58
+    },
+    "rationale": "Historical hit rates for narrative themes; AI_capex_surge highest (0.81), oil_price_shock lowest (0.58) due to TW semiconductor hedging",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  },
+  "skill_to_theme": {
+    "value": {
+      "ai_infrastructure": "AI_capex_surge",
+      "commodity_research": "oil_price_shock",
+      "cross_asset": "JPY_carry_unwind",
+      "currency_desk": "JPY_carry_unwind",
+      "defense_industrial": "geopolitical_risk_spike",
+      "dividend_analyst": "dividend_season",
+      "fixed_income": "US_rates_up",
+      "macro_research": "US_rates_up",
+      "rates_desk": "US_rates_down",
+      "risk_analytics": "geopolitical_risk_spike",
+      "semiconductor_desk": "AI_capex_surge"
+    },
+    "rationale": "Maps research agent skills to narrative themes; semiconductor/ai_infrastructure → AI_capex_surge, macro/fixed_income → US_rates_up, currency/cross_asset → JPY_carry_unwind, risk/defense → geopolitical_risk_spike, commodity → oil_price_shock",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  }
+}

@@ -1,0 +1,325 @@
+{
+  "rationale": "Multi-factor sector weight model: base × cycle × seasonal × linkage × narrative × macro × factor. Replaces three independent hard-coded weight sources (industry.calculateWeightDerivation, portfolio.sector_weights, orchestrator.base_allocations) with one auditable pipeline.",
+  "source": "heuristic",
+  "citation": {
+    "source_type": "heuristic",
+    "source_reference": "internal/sectorallocation/ + internal/industry/ + internal/portfolio/ unification",
+    "evidence_quality": "medium",
+    "update_policy": "recalibrate when backtest drift > 5% over 20 sessions",
+    "validation_method": "Compare adjusted weights against historical regime accuracy (n>=30 sessions)",
+    "dependencies": [
+      "darwinian.weight_min/max",
+      "engine.sector_rotation.base_allocations"
+    ],
+    "last_validated": "2026-06-14"
+  },
+  "base_weights": {
+    "_cash_reserve": 0.02,
+    "consumer": 0.06,
+    "electronics": 0.1,
+    "energy": 0.05,
+    "financials": 0.14,
+    "healthcare": 0.05,
+    "industrials": 0.07,
+    "materials": 0.08,
+    "real_estate": 0.04,
+    "semiconductor": 0.3,
+    "telecom": 0.05,
+    "utilities": 0.04
+  },
+  "derivation_factors": {
+    "consumer": [
+      {
+        "factor": "內需景氣",
+        "weight": 0.4,
+        "source": "台灣零售 / 餐飲營收",
+        "evidence": "可支配所得 / 消費信心"
+      },
+      {
+        "factor": "觀光復甦",
+        "weight": 0.25,
+        "source": "來台旅客",
+        "evidence": "跨境消費回升"
+      },
+      {
+        "factor": "電商 / 跨境",
+        "weight": 0.2,
+        "source": "momo / PChome / 蝦皮",
+        "evidence": "滲透率提升"
+      },
+      {
+        "factor": "薪資成長",
+        "weight": 0.15,
+        "source": "主計處經常性薪資",
+        "evidence": "基本工資調升"
+      }
+    ],
+    "electronics": [
+      {
+        "factor": "消費電子循環",
+        "weight": 0.35,
+        "source": "全球 PMI / 手機出貨",
+        "evidence": "iPhone / 筆電 / 平板"
+      },
+      {
+        "factor": "車用電子",
+        "weight": 0.3,
+        "source": "EV 滲透率 / Tier1 訂單",
+        "evidence": "ADAS / 車載娛樂"
+      },
+      {
+        "factor": "伺服器 / 資料中心",
+        "weight": 0.25,
+        "source": "雲端資本支出",
+        "evidence": "Hyperscaler capex 成長"
+      },
+      {
+        "factor": "存儲 / 被動元件",
+        "weight": 0.1,
+        "source": "DRAM / MLCC 報價",
+        "evidence": "週期性觸底回升"
+      }
+    ],
+    "energy": [
+      {
+        "factor": "國際油價",
+        "weight": 0.4,
+        "source": "Brent / WTI",
+        "evidence": "OPEC+ 產量政策"
+      },
+      {
+        "factor": "綠能轉型",
+        "weight": 0.3,
+        "source": "離岸風電 / 太陽能裝置量",
+        "evidence": "RE100 企業需求"
+      },
+      {
+        "factor": "地緣政治",
+        "weight": 0.2,
+        "source": "中東局勢 / 俄烏",
+        "evidence": "能源安全溢價"
+      },
+      {
+        "factor": "碳權 / 碳交易",
+        "weight": 0.1,
+        "source": "國際碳價",
+        "evidence": "減碳成本內部化"
+      }
+    ],
+    "financials": [
+      {
+        "factor": "升息循環",
+        "weight": 0.4,
+        "source": "Fed 政策利率 / 台灣央行",
+        "evidence": "淨利差擴張"
+      },
+      {
+        "factor": "信用品質",
+        "weight": 0.3,
+        "source": "金管會逾放比",
+        "evidence": "M2 / 房貸 / 企業債"
+      },
+      {
+        "factor": "保險需求",
+        "weight": 0.2,
+        "source": "保發中心",
+        "evidence": "高利率保單吸引力回升"
+      },
+      {
+        "factor": "台股量能",
+        "weight": 0.1,
+        "source": "TWSE 月成交",
+        "evidence": "經紀/手續費收入"
+      }
+    ],
+    "healthcare": [
+      {
+        "factor": "人口老化",
+        "weight": 0.35,
+        "source": "國發會人口推估",
+        "evidence": "65+ 比例突破 20%"
+      },
+      {
+        "factor": "新藥 / CDMO",
+        "weight": 0.3,
+        "source": "TFDA / FDA 核准",
+        "evidence": "海外授權金收入"
+      },
+      {
+        "factor": "醫材出口",
+        "weight": 0.2,
+        "source": "醫材公會",
+        "evidence": "高值化醫材成長"
+      },
+      {
+        "factor": "健保政策",
+        "weight": 0.15,
+        "source": "健保署",
+        "evidence": "給付 / 核價制度"
+      }
+    ],
+    "industrials": [
+      {
+        "factor": "資本支出循環",
+        "weight": 0.35,
+        "source": "全球半導體 capex",
+        "evidence": "廠房 / 設備 / 自動化"
+      },
+      {
+        "factor": "自動化需求",
+        "weight": 0.25,
+        "source": "工業機器人出貨",
+        "evidence": "缺工 + 智慧製造"
+      },
+      {
+        "factor": "航運 / 物流",
+        "weight": 0.25,
+        "source": "SCFI / BDI / 運價",
+        "evidence": "全球貿易量"
+      },
+      {
+        "factor": "軍工 / 政府支出",
+        "weight": 0.15,
+        "source": "國防預算",
+        "evidence": "地緣政治升溫"
+      }
+    ],
+    "materials": [
+      {
+        "factor": "原物料價格",
+        "weight": 0.4,
+        "source": "CRB / LME / 鋼鐵指數",
+        "evidence": "鐵礦 / 銅 / 鋁"
+      },
+      {
+        "factor": "中國需求",
+        "weight": 0.3,
+        "source": "中國 PMI / 地產",
+        "evidence": "基礎建設 + 房地產"
+      },
+      {
+        "factor": "匯率",
+        "weight": 0.2,
+        "source": "TWD/USD",
+        "evidence": "出口競爭力"
+      },
+      {
+        "factor": "ESG / 碳關稅",
+        "weight": 0.1,
+        "source": "CBAM 進度",
+        "evidence": "高碳排產業成本上升"
+      }
+    ],
+    "real_estate": [
+      {
+        "factor": "利率敏感度",
+        "weight": 0.4,
+        "source": "央行利率 / 房貸",
+        "evidence": "房貸利率 >2.5% 衝擊"
+      },
+      {
+        "factor": "政策調控",
+        "weight": 0.25,
+        "source": "信用管制 / 囤房稅",
+        "evidence": "選擇性信用管制"
+      },
+      {
+        "factor": "供需結構",
+        "weight": 0.2,
+        "source": "使照 / 開工",
+        "evidence": "人口集中度"
+      },
+      {
+        "factor": "商辦 / 廠辦",
+        "weight": 0.15,
+        "source": "空置率 / 租金",
+        "evidence": "科技業擴廠需求"
+      }
+    ],
+    "semiconductor": [
+      {
+        "factor": "出口比重",
+        "weight": 0.35,
+        "source": "財政部海關統計",
+        "evidence": "佔台灣總出口 35%+，晶片法案受惠"
+      },
+      {
+        "factor": "景氣循環",
+        "weight": 0.25,
+        "source": "國發會景氣對策信號",
+        "evidence": "與全球半導體銷售週期同步"
+      },
+      {
+        "factor": "AI需求",
+        "weight": 0.2,
+        "source": "Gartner / TSMA 預估",
+        "evidence": "AI 加速器 2025-2027 CAGR >40%"
+      },
+      {
+        "factor": "地緣政治",
+        "weight": 0.2,
+        "source": "美中科技戰 / 出口管制",
+        "evidence": "CHIPS Act + 台灣風險溢價"
+      }
+    ],
+    "telecom": [
+      {
+        "factor": "5G / 寬頻滲透",
+        "weight": 0.4,
+        "source": "NCC",
+        "evidence": "FTTH / 行動上網"
+      },
+      {
+        "factor": "資費競爭",
+        "weight": 0.25,
+        "source": "NCC 資費審查",
+        "evidence": "ARPU 變化"
+      },
+      {
+        "factor": "企業專網 / IDC",
+        "weight": 0.2,
+        "source": "企業用戶",
+        "evidence": "AI / 雲端需求"
+      },
+      {
+        "factor": "股利穩定度",
+        "weight": 0.15,
+        "source": "現金股利殖利率",
+        "evidence": "防禦性配置"
+      }
+    ],
+    "utilities": [
+      {
+        "factor": "電價 / 費率",
+        "weight": 0.4,
+        "source": "經濟部電價審議",
+        "evidence": "成本反映機制"
+      },
+      {
+        "factor": "綠能投資",
+        "weight": 0.25,
+        "source": "再生能源占比",
+        "evidence": "2025 再生能源 20% 目標"
+      },
+      {
+        "factor": "資本支出",
+        "weight": 0.2,
+        "source": "台電 / 民營電廠",
+        "evidence": "電網強韌 + 儲能"
+      },
+      {
+        "factor": "防禦性需求",
+        "weight": 0.15,
+        "source": "高股息 / 低波動",
+        "evidence": "退休 / 收益型配置"
+      }
+    ]
+  },
+  "cycle_weight": 1,
+  "seasonal_weight": 1,
+  "linkage_weight": 1,
+  "narrative_weight": 1,
+  "macro_weight": 1,
+  "factor_weight": 1,
+  "weight_floor": 0.01
+}

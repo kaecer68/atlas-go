@@ -1,0 +1,198 @@
+{
+  "short_window_days": {
+    "value": 5,
+    "rationale": "Short lookback window (~1 trading week) for cohort performance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342105"
+    }
+  },
+  "medium_window_days": {
+    "value": 20,
+    "rationale": "Medium lookback window (~1 trading month) for cohort performance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342108"
+    }
+  },
+  "long_window_days": {
+    "value": 60,
+    "rationale": "Long lookback window (~1 trading quarter) for cohort performance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342111"
+    }
+  },
+  "max_history_days": {
+    "value": 90,
+    "rationale": "Maximum rolling history per cohort; must cover longest window comfortably",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Cross-cohort regime detection",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "min_weight": {
+    "value": 0.05,
+    "rationale": "Floor for any cohort weight; prevents total elimination",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342115"
+    }
+  },
+  "max_weight": {
+    "value": 0.6,
+    "rationale": "Ceiling for any cohort weight; prevents single-cohort dominance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342117"
+    }
+  },
+  "novel_threshold": {
+    "value": 0.15,
+    "rationale": "Weight delta threshold for NOVEL_REGIME detection; short-window winner surges past long-window standing",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342120"
+    }
+  },
+  "historical_threshold": {
+    "value": 0.15,
+    "rationale": "Weight delta threshold for HISTORICAL_REGIME detection; long-window winner maintains stable lead",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342122"
+    }
+  },
+  "epsilon_weight": {
+    "value": 0.02,
+    "rationale": "Minimal weight assigned to negative-Sharpe cohorts when others are positive",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342125"
+    }
+  },
+  "short_window_blend": {
+    "value": 0.5,
+    "rationale": "50% weight on short-window Sharpe in blended score; emphasizes recent accuracy",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342128"
+    }
+  },
+  "medium_window_blend": {
+    "value": 0.3,
+    "rationale": "30% weight on medium-window Sharpe in blended score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342131"
+    }
+  },
+  "long_window_blend": {
+    "value": 0.2,
+    "rationale": "20% weight on long-window Sharpe in blended score; retains long-term memory",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342134"
+    }
+  },
+  "health_stale_hours": {
+    "value": 168,
+    "rationale": "Hours before JANUS data is considered stale (7 days); triggers error-level health alert",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Cross-cohort regime detection",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "health_warn_hours": {
+    "value": 48,
+    "rationale": "Hours before JANUS data triggers warning-level health alert (2 days)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Cross-cohort regime detection",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

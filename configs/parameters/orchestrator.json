@@ -1,0 +1,373 @@
+{
+  "conviction_floor_default": {
+    "value": 50,
+    "rationale": "Default conviction floor when not set by policy",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "superinvestor_min_conviction": {
+    "value": 65,
+    "rationale": "Higher bar for superinvestor recommendations",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "superinvestor_conviction_base": {
+    "value": 60,
+    "rationale": "Base conviction for superinvestor Recommend() — above sector default (~55), allows keyword boosts of +8 to reach ~68",
+    "source": "heuristic",
+    "todo": "Calibrate from backtest comparing superinvestor hit rate vs sector agents"
+  },
+  "cro_zscore_threshold": {
+    "value": -1.5,
+    "rationale": "Z-score threshold for CRO conviction normalization filter",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_concentration_threshold": {
+    "value": 0.4,
+    "rationale": "Sector concentration threshold (< 10 recommendations)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_concentration_threshold_high": {
+    "value": 0.35,
+    "rationale": "Sector concentration threshold (>= 10 recommendations)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_conviction_multiplier": {
+    "value": 0.7,
+    "rationale": "Conviction multiplier when sector is overcrowded",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "crowded_conviction_multiplier": {
+    "value": 0.7,
+    "rationale": "Conviction multiplier when 3+ agents recommend same symbol",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weight_momentum": {
+    "value": 0.3,
+    "rationale": "Momentum factor weight in total score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weight_value": {
+    "value": 0.25,
+    "rationale": "Value factor weight in total score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weight_quality": {
+    "value": 0.25,
+    "rationale": "Quality factor weight in total score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weight_agent": {
+    "value": 0.2,
+    "rationale": "Agent factor weight in total score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "prism_boost_multiplier": {
+    "value": 20,
+    "rationale": "Multiplier for PRISM Sharpe to conviction boost",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "prism_boost_min": {
+    "value": -10,
+    "rationale": "Minimum PRISM conviction boost",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "prism_boost_max": {
+    "value": 15,
+    "rationale": "Maximum PRISM conviction boost",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "promotion_min_observations": {
+    "value": 10,
+    "rationale": "Minimum observations before auto-promotion consideration",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "promotion_sharpe_threshold": {
+    "value": 0.5,
+    "rationale": "Sharpe threshold for auto-promotion",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "promotion_hitrate_threshold": {
+    "value": 0.45,
+    "rationale": "Hit rate threshold for auto-promotion",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "rejection_sharpe_threshold": {
+    "value": 0,
+    "rationale": "Sharpe threshold for auto-rejection",
+    "source": "heuristic"
+  },
+  "rejection_hitrate_threshold": {
+    "value": 0.3,
+    "rationale": "Hit rate threshold for auto-rejection",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sector_rotation_macro_adjustments": {
+    "value": {
+      "high_risk": {
+        "cash": 0.1,
+        "defensive": 0.08,
+        "gold": 0.05,
+        "value": 0.03
+      },
+      "low_risk": {
+        "defensive": -0.04,
+        "growth": 0.08,
+        "momentum": 0.05
+      },
+      "moderate_risk": {
+        "cash": -0.03,
+        "growth": 0.04,
+        "value": 0.03
+      }
+    },
+    "rationale": "Macro risk level → sector allocation adjustments; de-risk to gold/cash/defensive in high risk, rotate to growth in low risk",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  },
+  "sector_rotation_flow_adjustments": {
+    "value": {
+      "cash_surge": {
+        "cash": 0.3,
+        "short_term": 0.15
+      },
+      "defensive_flight": {
+        "defensive": 0.08,
+        "growth": -0.05,
+        "staples": 0.05,
+        "utilities": 0.05
+      },
+      "gold_surge": {
+        "defensive": 0.03,
+        "gold": 0.1,
+        "mining": 0.05
+      },
+      "tech_exodus": {
+        "ai_supply_chain": -0.05,
+        "semiconductor": -0.08
+      }
+    },
+    "rationale": "Capital flow patterns → sector allocation adjustments; gold/cash surges trigger defensive rotation, tech exodus reduces semiconductor exposure, defensive flight shifts to utilities/staples",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Orchestrator control layer",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  },
+  "use_ml_scoring": {
+    "value": false,
+    "rationale": "Enable ML-based factor scoring from internal/ml models",
+    "source": "experimental",
+    "todo": "Validate with A/B backtest before enabling"
+  },
+  "use_llm_sector_agents": {
+    "value": false,
+    "rationale": "Gate L2.3 PoC SemiconductorLLMAgent behind a flag; keep deterministic SemiconductorExecutor as default until L2.4 observation window validates LLM behavior.",
+    "source": "experimental"
+  },
+  "l2_4_schedule": {
+    "default_start_time": {
+      "value": "13:45",
+      "rationale": "L2.4 observation default start time (after Taiwan market close). Manual buttons only in this round (user decision 3A); auto cron deferred.",
+      "source": "experimental",
+      "todo": "L2.4 manual controls only — auto cron deferred"
+    },
+    "default_period_days": {
+      "value": 7,
+      "rationale": "L2.4 observation default period (matches Day 7 acceptance gate).",
+      "source": "experimental",
+      "todo": "L2.4 manual controls only — auto cron deferred"
+    },
+    "override_start_time": {
+      "value": "",
+      "rationale": "Operator override for start time (empty = use default).",
+      "source": "experimental",
+      "todo": "L2.4 manual controls only — auto cron deferred"
+    },
+    "override_period_days": {
+      "value": 0,
+      "rationale": "Operator override for period in days (0 = use default). Range [1, 30] enforced at API layer.",
+      "source": "experimental",
+      "todo": "L2.4 manual controls only — auto cron deferred"
+    },
+    "auto_enabled": {
+      "value": false,
+      "rationale": "L2.4 auto-cron disabled in this round; manual buttons only.",
+      "source": "experimental",
+      "todo": "Auto cron to be added in a follow-up round"
+    }
+  }
+}

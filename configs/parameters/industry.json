@@ -1,0 +1,2147 @@
+{
+  "cycle_thresholds": {
+    "value": {
+      "ai_supply_chain": {
+        "expansion_revenue_pct": 0.35,
+        "expansion_profit_pct": 0.4,
+        "recovery_revenue_pct": 0.2,
+        "recovery_profit_pct": 0.25,
+        "mature_revenue_pct": 0.1,
+        "mature_profit_pct": 0.15
+      },
+      "consumer": {
+        "expansion_revenue_pct": 0.08,
+        "expansion_profit_pct": 0.1,
+        "recovery_revenue_pct": 0.03,
+        "recovery_profit_pct": 0.05,
+        "mature_revenue_pct": 0.01,
+        "mature_profit_pct": 0.02
+      },
+      "electronics": {
+        "expansion_revenue_pct": 0.15,
+        "expansion_profit_pct": 0.18,
+        "recovery_revenue_pct": 0.08,
+        "recovery_profit_pct": 0.1,
+        "mature_revenue_pct": 0.03,
+        "mature_profit_pct": 0.05
+      },
+      "energy": {
+        "expansion_revenue_pct": 0.12,
+        "expansion_profit_pct": 0.15,
+        "recovery_revenue_pct": 0.05,
+        "recovery_profit_pct": 0.08,
+        "mature_revenue_pct": 0.02,
+        "mature_profit_pct": 0.03
+      },
+      "financials": {
+        "expansion_revenue_pct": 0.1,
+        "expansion_profit_pct": 0.15,
+        "recovery_revenue_pct": 0.05,
+        "recovery_profit_pct": 0.08,
+        "mature_revenue_pct": 0.02,
+        "mature_profit_pct": 0.05
+      },
+      "industrial": {
+        "expansion_revenue_pct": 0.1,
+        "expansion_profit_pct": 0.12,
+        "recovery_revenue_pct": 0.05,
+        "recovery_profit_pct": 0.06,
+        "mature_revenue_pct": 0.02,
+        "mature_profit_pct": 0.03
+      },
+      "mining": {
+        "expansion_revenue_pct": 0.12,
+        "expansion_profit_pct": 0.15,
+        "recovery_revenue_pct": 0.06,
+        "recovery_profit_pct": 0.08,
+        "mature_revenue_pct": 0.02,
+        "mature_profit_pct": 0.04
+      },
+      "robotics": {
+        "expansion_revenue_pct": 0.18,
+        "expansion_profit_pct": 0.2,
+        "recovery_revenue_pct": 0.1,
+        "recovery_profit_pct": 0.12,
+        "mature_revenue_pct": 0.05,
+        "mature_profit_pct": 0.06
+      },
+      "semiconductor": {
+        "expansion_revenue_pct": 0.2,
+        "expansion_profit_pct": 0.25,
+        "recovery_revenue_pct": 0.1,
+        "recovery_profit_pct": 0.15,
+        "mature_revenue_pct": 0.05,
+        "mature_profit_pct": 0.08
+      },
+      "shipping": {
+        "expansion_revenue_pct": 0.3,
+        "expansion_profit_pct": 0.35,
+        "recovery_revenue_pct": 0.15,
+        "recovery_profit_pct": 0.2,
+        "mature_revenue_pct": 0.05,
+        "mature_profit_pct": 0.1
+      }
+    },
+    "rationale": "Per-industry business cycle thresholds; all 11 Level-1 industries configured. AI supply chain highest growth, consumer most defensive, shipping most cyclical, mining commodity-driven",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342242"
+    }
+  },
+  "inventory_cycle_thresholds": {
+    "value": {
+      "active_restocking_inventory_min": 6,
+      "active_restocking_capacity_min": 0.8,
+      "passive_restocking_inventory_min": 4,
+      "passive_restocking_capacity_min": 0.7,
+      "active_destocking_inventory_max": 3,
+      "active_destocking_capacity_max": 0.6
+    },
+    "rationale": "Inventory cycle detection thresholds: high turnover + high capacity = active restocking; low turnover + low capacity = active destocking",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342258"
+    }
+  },
+  "capex_cycle_thresholds": {
+    "value": {
+      "expansion_capacity_min": 0.85,
+      "expansion_revenue_min": 0.15,
+      "maintenance_capacity_min": 0.7,
+      "maintenance_revenue_min": 0.05
+    },
+    "rationale": "Capex cycle detection thresholds: high capacity + high revenue growth = expansion; moderate capacity + positive growth = maintenance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342262"
+    }
+  },
+  "concentration_risk_enabled": {
+    "value": true,
+    "rationale": "Enable customer concentration risk scoring for supply chain analysis",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry analysis",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "news_latency_risk_enabled": {
+    "value": true,
+    "rationale": "Enable news latency risk scoring for event-driven positions",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry analysis",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "asymmetric_risk_enabled": {
+    "value": true,
+    "rationale": "Enable asymmetric downside risk scoring (tail risk analysis)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry analysis",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "customer_concentration_limit": {
+    "value": 0.4,
+    "rationale": "Flag customer concentration >40% as high risk; TSMC Apple exposure ~25% is acceptable",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342269"
+    }
+  },
+  "geographic_exposure_limit": {
+    "value": 0.6,
+    "rationale": "Flag geographic revenue concentration >60% as high risk; China exposure threshold",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342272"
+    }
+  },
+  "customer_share_threshold_1": {
+    "value": 30,
+    "rationale": "First tier customer concentration threshold (30%); triggers initial risk score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "customer_share_threshold_2": {
+    "value": 50,
+    "rationale": "Second tier customer concentration threshold (50%); triggers higher risk score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "us_exposure_threshold_1": {
+    "value": 50,
+    "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "us_exposure_threshold_2": {
+    "value": 70,
+    "rationale": "High US geographic exposure threshold (70%); triggers higher risk score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "risk_score_weight_1": {
+    "value": 0.4,
+    "rationale": "Risk score weight for first tier customer concentration",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "risk_score_weight_2": {
+    "value": 0.3,
+    "rationale": "Risk score weight for second tier customer concentration",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "risk_score_weight_3": {
+    "value": 0.2,
+    "rationale": "Risk score weight for first tier US exposure",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "risk_score_weight_4": {
+    "value": 0.1,
+    "rationale": "Risk score weight for second tier US exposure",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "severity_threshold_medium": {
+    "value": 0.4,
+    "rationale": "Risk score threshold for medium severity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "severity_threshold_high": {
+    "value": 0.6,
+    "rationale": "Risk score threshold for high severity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "severity_threshold_critical": {
+    "value": 0.8,
+    "rationale": "Risk score threshold for critical severity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "impact_multiplier": {
+    "value": 0.15,
+    "rationale": "Multiplier for estimated price impact from risk score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "risk_confidence": {
+    "value": 0.85,
+    "rationale": "Confidence level for risk assessment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "confidence_signal": {
+    "value": {
+      "signal_base": 0.3,
+      "revenue_norm_denom": 0.5,
+      "revenue_weight": 0.25,
+      "profit_norm_denom": 0.5,
+      "profit_weight": 0.25,
+      "inventory_norm_denom": 10,
+      "inventory_weight": 0.1,
+      "utilization_weight": 0.15,
+      "signal_boundary_mix": 0.6,
+      "boundary_denom_factor": 0.3,
+      "confidence_floor": 0.1,
+      "confidence_ceiling": 1,
+      "revenue_trend_threshold": 0.1,
+      "revenue_indicator_weight": 0.3,
+      "inventory_trend_threshold": 4,
+      "inventory_indicator_weight": 0.25,
+      "profit_trend_threshold": 0.1,
+      "profit_indicator_weight": 0.35,
+      "capacity_trend_threshold": 0.75,
+      "capacity_indicator_weight": 0.3,
+      "trend_up_multiplier": 1.1,
+      "trend_down_multiplier": 0.9,
+      "threshold_range_fallback": 0.25
+    },
+    "rationale": "Signal weights derived from relative informativeness of each metric; boundary denom based on threshold spread; mix ratio balances data amplitude vs phase clarity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "confidence_mix": {
+    "value": {
+      "weight_boundary": 0.45,
+      "weight_freshness": 0.2,
+      "weight_seasonal": 0.15,
+      "weight_linkage": 0.1,
+      "weight_narrative": 0.1,
+      "favorable_confidence_min": 0.4
+    },
+    "rationale": "Boundary is primary signal; freshness penalizes stale data; seasonal adds 0.15 from pattern accuracy; linkage at 0 pending supply-chain correlation recalibration; narrative placeholder for future macro event integration",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T00:00:00.000000"
+    }
+  },
+  "seasonal_patterns": {
+    "value": [
+      {
+        "id": "spring_festival",
+        "name": "春節行情",
+        "name_en": "Spring Festival Rally",
+        "start_month": 1,
+        "start_day": 15,
+        "end_month": 2,
+        "end_day": 15,
+        "favored_industries": [
+          "financials",
+          "consumer",
+          "defensive"
+        ],
+        "avoided_industries": [
+          "semiconductor",
+          "electronics"
+        ],
+        "adjustment_factor": 0.44399012341608945,
+        "historical_accuracy": 0.4,
+        "avg_market_return": -0.0008906518974233703,
+        "description": "年前資金回籠，高股息與金融股受追捧；電子股進入淡季"
+      },
+      {
+        "id": "earnings_window",
+        "name": "季報空窗期",
+        "name_en": "Earnings Report Window",
+        "start_month": 3,
+        "start_day": 1,
+        "end_month": 4,
+        "end_day": 15,
+        "favored_industries": [
+          "ai_supply_chain",
+          "semiconductor"
+        ],
+        "avoided_industries": [
+          "consumer",
+          "shipping"
+        ],
+        "adjustment_factor": 0.6763862717880589,
+        "historical_accuracy": 0.6,
+        "avg_market_return": 0.05551236919993856,
+        "description": "季報空窗期，成長股與AI供應鏈有表現空間"
+      },
+      {
+        "id": "dividend_season",
+        "name": "除權除息季",
+        "name_en": "Dividend Season",
+        "start_month": 5,
+        "start_day": 1,
+        "end_month": 6,
+        "end_day": 30,
+        "favored_industries": [
+          "financials",
+          "consumer"
+        ],
+        "avoided_industries": [
+          "semiconductor",
+          "ai_supply_chain"
+        ],
+        "adjustment_factor": -0.2634376289519962,
+        "historical_accuracy": 0.4,
+        "avg_market_return": -0.0003826577806334154,
+        "description": "除權除息旺季，高股息股與金融股表現較佳；科技股相對弱勢"
+      },
+      {
+        "id": "tech_peak_season",
+        "name": "科技旺季",
+        "name_en": "Technology Peak Season",
+        "start_month": 7,
+        "start_day": 1,
+        "end_month": 9,
+        "end_day": 15,
+        "favored_industries": [
+          "semiconductor",
+          "ai_supply_chain"
+        ],
+        "avoided_industries": [
+          "consumer"
+        ],
+        "adjustment_factor": 2.424901710785858,
+        "historical_accuracy": 0.8,
+        "avg_market_return": 0.0005628465432415168,
+        "description": "蘋果新機拉貨、AI晶片需求高峰，科技股表現最強"
+      },
+      {
+        "id": "earnings_verification",
+        "name": "季報驗證期",
+        "name_en": "Earnings Verification",
+        "start_month": 9,
+        "start_day": 15,
+        "end_month": 10,
+        "end_day": 31,
+        "favored_industries": [
+          "semiconductor",
+          "ai_supply_chain",
+          "tech"
+        ],
+        "avoided_industries": [
+          "consumer",
+          "shipping",
+          "defensive"
+        ],
+        "adjustment_factor": 0.7710853540169781,
+        "historical_accuracy": 0.6,
+        "avg_market_return": -0.035613380616200965,
+        "description": "季報公布，獲利優於預期股受追捧，低於預期股遭拋售"
+      },
+      {
+        "id": "year_end_rally",
+        "name": "年底作帳",
+        "name_en": "Year-End Window Dressing",
+        "start_month": 11,
+        "start_day": 1,
+        "end_month": 12,
+        "end_day": 31,
+        "favored_industries": [
+          "tech",
+          "semiconductor",
+          "financials",
+          "etf_rotation"
+        ],
+        "avoided_industries": [
+          "small_cap"
+        ],
+        "adjustment_factor": 2.4971633556924697,
+        "historical_accuracy": 0.8,
+        "avg_market_return": 0.46055789366344885,
+        "description": "[已棄用] 由年底法人作帳取代"
+      },
+      {
+        "id": "summer_electricity",
+        "name": "夏季用電高峰",
+        "name_en": "Summer Electricity Peak",
+        "start_month": 6,
+        "start_day": 1,
+        "end_month": 8,
+        "end_day": 31,
+        "favored_industries": [
+          "energy"
+        ],
+        "avoided_industries": [
+          "semiconductor"
+        ],
+        "adjustment_factor": -0.2883015395477875,
+        "historical_accuracy": 0.4,
+        "avg_market_return": -0.000795142392082031,
+        "description": "夏季用電高峰，能源與公用事業相對強勢；高耗電製造業成本上升"
+      },
+      {
+        "id": "semiconductor_peak",
+        "name": "半導體旺季",
+        "name_en": "",
+        "start_month": 7,
+        "start_day": 1,
+        "end_month": 11,
+        "end_day": 30,
+        "favored_industries": [
+          "semiconductor",
+          "foundry"
+        ],
+        "avoided_industries": [
+          "consumer",
+          "shipping"
+        ],
+        "adjustment_factor": 2.2338961696284536,
+        "historical_accuracy": 0.8,
+        "avg_market_return": 0.0014494034888542684,
+        "description": "Q3-Q4為半導體傳統旺季"
+      },
+      {
+        "id": "ai_infrastructure_buildout",
+        "name": "AI基礎建設佈建期",
+        "name_en": "",
+        "start_month": 1,
+        "start_day": 1,
+        "end_month": 6,
+        "end_day": 30,
+        "favored_industries": [
+          "ai_supply_chain",
+          "server_assembly",
+          "cooling"
+        ],
+        "avoided_industries": [
+          "consumer",
+          "financials"
+        ],
+        "adjustment_factor": 2.555461115152644,
+        "historical_accuracy": 0.6,
+        "avg_market_return": 0.0017225752557071111,
+        "description": "Q1-Q2 CSP資本支出公告期"
+      },
+      {
+        "id": "electronics_peak",
+        "name": "電子零組件旺季",
+        "name_en": "",
+        "start_month": 8,
+        "start_day": 1,
+        "end_month": 11,
+        "end_day": 30,
+        "favored_industries": [
+          "electronics",
+          "pcb"
+        ],
+        "avoided_industries": [
+          "shipping",
+          "consumer"
+        ],
+        "adjustment_factor": 0.3398095414927984,
+        "historical_accuracy": 0.6,
+        "avg_market_return": 0.08285334538400109,
+        "description": "Q3被動元件與PCB旺季"
+      },
+      {
+        "id": "year_end_positioning",
+        "name": "年底法人作帳",
+        "name_en": "",
+        "start_month": 11,
+        "start_day": 15,
+        "end_month": 12,
+        "end_day": 31,
+        "favored_industries": [
+          "small_cap",
+          "semiconductor",
+          "ai_supply_chain"
+        ],
+        "avoided_industries": [
+          "consumer",
+          "defensive"
+        ],
+        "adjustment_factor": 3.44143401207912,
+        "historical_accuracy": 1,
+        "avg_market_return": 0.0022324430826447224,
+        "description": "11-12月小型股與科技股領漲，消費防禦類相對弱勢"
+      },
+      {
+        "id": "election_local",
+        "name": "地方選舉行情",
+        "name_en": "Local Election Rally",
+        "start_month": 11,
+        "start_day": 1,
+        "end_month": 12,
+        "end_day": 5,
+        "favored_industries": [
+          "financials",
+          "construction",
+          "consumer"
+        ],
+        "avoided_industries": [
+          "semiconductor",
+          "electronics"
+        ],
+        "adjustment_factor": 1.1,
+        "historical_accuracy": 0.6,
+        "avg_market_return": 0.02,
+        "description": "地方選舉選前政策護盤，金融營建內需股受惠；科技股相對觀望。證據強度：地方選舉選前 40-20 日上漲機率 86%（富邦研究）"
+      },
+      {
+        "id": "election_presidential",
+        "name": "總統大選行情",
+        "name_en": "Presidential Election Rally",
+        "start_month": 1,
+        "start_day": 1,
+        "end_month": 2,
+        "end_day": 15,
+        "favored_industries": [
+          "financials",
+          "consumer",
+          "defensive"
+        ],
+        "avoided_industries": [
+          "semiconductor",
+          "electronics"
+        ],
+        "adjustment_factor": 1.08,
+        "historical_accuracy": 0.55,
+        "avg_market_return": 0.015,
+        "description": "總統大選前後政策不確定性，內需防禦型受追捧；科技出口股觀望。證據強度：總統大選前後報酬不一致（MacroMicro），國際情勢影響大於選舉本身"
+      }
+    ],
+    "rationale": "7 canonical Taiwan seasonal patterns calibrated against 5-year FinMind data (2020-2024)",
+    "source": "empirical_calibration",
+    "last_calibrated": "2026-07-04T02:32:48Z",
+    "calibration_timestamp": "2026-07-04T02:32:48Z",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "FinMind TaiwanStockPrice 5-year (2020-2024), data/replay/finmind_2020_2024.jsonl",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [
+        "data/replay/finmind_2020_2024.jsonl",
+        "configs/sector_symbols.json"
+      ],
+      "last_validated": "2026-05-16T00:00:00Z"
+    }
+  },
+  "asymmetric_risk": {
+    "value": {
+      "bad_news_threshold": -0.03,
+      "good_news_threshold": 0.05,
+      "reaction_time_minutes": 30,
+      "volume_spike_multiplier": 2
+    },
+    "rationale": "Asymmetric risk detection: 3% drop triggers bad news; 5% rise for good news; 30min reaction window; 2x volume spike confirms",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded AsymmetricRiskConfig in risk.go",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T11:48:43.000000"
+    }
+  },
+  "news_latency_risk": {
+    "value": {
+      "max_latency_hours": 24,
+      "severity_critical_min": 0.8,
+      "severity_high_min": 0.5,
+      "impact_multiplier": 0.05,
+      "drop_critical_threshold": 0.1,
+      "drop_high_threshold": 0.07,
+      "drop_medium_threshold": 0.05,
+      "confidence_divisor": 3
+    },
+    "rationale": "News latency risk: 24h max latency gap; severity bands at 0.5/0.8; drop thresholds at 5%/7%/10%; confidence = volMultiplier/divisor",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded thresholds in risk.go CalculateNewsLatencyRisk + CalculateAsymmetricRisk",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T11:48:43.000000"
+    }
+  },
+  "asymmetric_drop_critical": {
+    "value": 0.1,
+    "rationale": "10% price drop triggers critical asymmetric risk severity; aligns with historical TW stock tail-event thresholds where >10% single-day drops correlate with structural deterioration",
+    "source": "heuristic",
+    "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (99th percentile)"
+  },
+  "asymmetric_drop_high": {
+    "value": 0.07,
+    "rationale": "7% price drop triggers high asymmetric risk severity; captures significant but non-extreme downside moves (e.g., sector-wide selloffs, geopolitical events)",
+    "source": "heuristic",
+    "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (95th percentile)"
+  },
+  "asymmetric_drop_medium": {
+    "value": 0.05,
+    "rationale": "5% price drop triggers medium asymmetric risk severity; captures moderate downside moves that still warrant stop-loss monitoring",
+    "source": "heuristic",
+    "todo": "Calibrate: derive from TWSE historical single-day drawdown distribution (90th percentile)"
+  },
+  "news_impact_multiplier": {
+    "value": 0.05,
+    "rationale": "5% estimated price impact multiplier for news latency risk scoring; represents conservative estimate of information disadvantage cost for TW investors vs US Tier-1 sources",
+    "source": "heuristic",
+    "todo": "Calibrate: derive from TW stock price response to delayed news versus US peers (event study methodology)"
+  },
+  "boundary_fallback": {
+    "value": 0.25,
+    "rationale": "Fallback threshold range width (25%) when cycle phase thresholds (expansion - mature) produce a non-positive range; prevents division-by-zero in boundary confidence calculation",
+    "source": "heuristic",
+    "todo": "Audit: verify this fallback is rarely triggered once per-industry thresholds are properly calibrated"
+  },
+  "adjustment_floor": {
+    "value": 0.01,
+    "rationale": "Minimum seasonal adjustment floor (1% of baseline); prevents complete elimination of industry weighting when combined adjustments drop below zero",
+    "source": "heuristic",
+    "todo": "Calibrate: test [0.005, 0.02] range for floor impact on portfolio stability"
+  },
+  "freshness_scores": {
+    "value": {
+      "score_live": 1,
+      "score_recent": 0.8,
+      "score_stale": 0.4,
+      "score_fallback": 0.2,
+      "score_default": 0.3
+    },
+    "rationale": "Maps DataFreshness enum to confidence weights; live=1.0, recent=0.8, stale=0.4, fallback=0.2, default=0.3",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded freshnessFactor() in cycle.go",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T11:48:43.000000"
+    }
+  },
+  "phase_scores": {
+    "value": {
+      "score_expansion": 1,
+      "score_recovery": 0.5,
+      "score_mature": 0,
+      "score_recession": -1
+    },
+    "rationale": "Cycle phase scores: Expansion=1.0 (strongest bullish), Recovery=0.5, Mature=0.0 (neutral), Recession=-1.0 (bearish)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded GetPhaseScore() in cycle.go",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T11:48:43.000000"
+    }
+  },
+  "skill_to_industry": {
+    "value": {
+      "ai_infrastructure": "ai_supply_chain",
+      "consumer_analyst": "traditional",
+      "defense_industrial": "ai_supply_chain",
+      "energy_analyst": "renewable_energy",
+      "macro_research": "financials",
+      "semiconductor_desk": "semiconductor",
+      "shipping_analyst": "shipping"
+    },
+    "rationale": "Maps agent skills to industry sectors for cycle-aware conviction adjustments",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  },
+  "skill_to_industries": {
+    "value": null,
+    "rationale": "Mapping of agent skills to industry sectors for sector-aware routing; null = not yet configured",
+    "source": "heuristic"
+  },
+  "cycle_transitions": {
+    "value": [
+      {
+        "from_phase": "recession",
+        "to_phase": "recovery",
+        "triggers": [
+          "inventory_depletion",
+          "demand_stabilization"
+        ],
+        "probability": 0.7,
+        "typical_duration_days": 180
+      },
+      {
+        "from_phase": "recovery",
+        "to_phase": "expansion",
+        "triggers": [
+          "revenue_acceleration",
+          "capex_increase"
+        ],
+        "probability": 0.8,
+        "typical_duration_days": 270
+      },
+      {
+        "from_phase": "expansion",
+        "to_phase": "mature",
+        "triggers": [
+          "growth_deceleration",
+          "margin_compression"
+        ],
+        "probability": 0.6,
+        "typical_duration_days": 360
+      },
+      {
+        "from_phase": "mature",
+        "to_phase": "recession",
+        "triggers": [
+          "demand_destruction",
+          "overcapacity"
+        ],
+        "probability": 0.5,
+        "typical_duration_days": 180
+      }
+    ],
+    "rationale": "TW market cycle transition probabilities and durations; recovery→expansion strongest (0.8), mature→recession weakest (0.5)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded GetTypicalTransitions() in cycle.go",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T11:48:43.000000"
+    }
+  },
+  "cycle_weight_multipliers": {
+    "value": {
+      "expansion_multiplier": 1.2,
+      "recovery_multiplier": 1.1,
+      "mature_multiplier": 1,
+      "recession_multiplier": 0.7
+    },
+    "rationale": "Cycle phase weight multipliers for industry map: expansion +20%, recovery +10%, mature neutral, recession -30%",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry map weight integration",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-16T00:00:00.000000"
+    }
+  },
+  "linkage_weight_impact": {
+    "value": 0.2,
+    "rationale": "Linkage systemic importance deviation scaling: ±20% max impact on weight",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry map weight integration",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-16T00:00:00.000000"
+    }
+  },
+  "weight_floor": {
+    "value": 0.03,
+    "rationale": "Minimum 3% weight per industry after normalization to prevent elimination",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry map weight integration",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-16T00:00:00.000000"
+    }
+  },
+  "max_daily_weight_change": {
+    "value": 0.05,
+    "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Industry map weight integration",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-16T00:00:00.000000"
+    }
+  },
+  "linkage_params": {
+    "value": {
+      "downstream_decay_factor": 0.8,
+      "upstream_decay_factor": 0.6,
+      "seasonal_decay_factor": 0.3,
+      "default_correlation": 0.5,
+      "systemic_importance_divisor": 10,
+      "min_correlation_threshold": 0.3,
+      "correlation_window_days": 30,
+      "correlation_matrix": {
+        "ai_supply_chain↔electronics": 0.65,
+        "ai_supply_chain↔energy": 0.12,
+        "ai_supply_chain↔financials": 0.2,
+        "ai_supply_chain↔robotics": 0.55,
+        "ai_supply_chain↔shipping": 0.05,
+        "consumer↔energy": 0.15,
+        "consumer↔industrial": 0.2,
+        "cooling↔ai_supply_chain": 0.6,
+        "cooling↔consumer": 0.05,
+        "cooling↔electronics": 0.45,
+        "cooling↔energy": 0.25,
+        "cooling↔financials": 0.1,
+        "cooling↔industrial": 0.25,
+        "cooling↔robotics": 0.15,
+        "cooling↔semiconductor": 0.5,
+        "cooling↔server_assembly": 0.7,
+        "cooling↔shipping": -0.05,
+        "electronics↔energy": 0.1,
+        "electronics↔financials": 0.12,
+        "electronics↔shipping": 0.05,
+        "energy↔financials": 0.08,
+        "energy↔industrial": 0.45,
+        "energy↔robotics": 0.3,
+        "financials↔consumer": 0.35,
+        "financials↔industrial": 0.25,
+        "financials↔shipping": 0.05,
+        "foundry↔ai_supply_chain": 0.82,
+        "foundry↔consumer": 0.05,
+        "foundry↔cooling": 0.25,
+        "foundry↔electronics": 0.6,
+        "foundry↔energy": 0.05,
+        "foundry↔financials": 0.12,
+        "foundry↔industrial": 0.35,
+        "foundry↔robotics": 0.4,
+        "foundry↔semiconductor": 0.88,
+        "foundry↔server_assembly": 0.78,
+        "foundry↔shipping": -0.08,
+        "robotics↔consumer": 0.25,
+        "robotics↔electronics": 0.48,
+        "robotics↔financials": 0.1,
+        "robotics↔industrial": 0.6,
+        "robotics↔shipping": 0.1,
+        "semiconductor↔ai_supply_chain": 0.85,
+        "semiconductor↔electronics": 0.72,
+        "semiconductor↔energy": 0.05,
+        "semiconductor↔financials": 0.15,
+        "semiconductor↔robotics": 0.45,
+        "semiconductor↔shipping": -0.1,
+        "server_assembly↔ai_supply_chain": 0.8,
+        "server_assembly↔consumer": 0.05,
+        "server_assembly↔electronics": 0.55,
+        "server_assembly↔energy": 0.2,
+        "server_assembly↔financials": 0.15,
+        "server_assembly↔industrial": 0.3,
+        "server_assembly↔robotics": 0.45,
+        "server_assembly↔semiconductor": 0.75,
+        "server_assembly↔shipping": -0.02,
+        "shipping↔energy": 0.4,
+        "shipping↔industrial": 0.3
+      },
+      "recession_correlation_boost": 0.3,
+      "recession_shock_amplifier": 1.042857142857143
+    },
+    "rationale": "Downstream decay (0.80) > upstream (0.60) reflects asymmetric shock propagation; systemic divisor (10.0) normalizes connection count to 0-1; min threshold (0.30) filters noise",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "configs/supply_chain_graph.json (auto-synced)",
+      "evidence_quality": "heuristic_awaiting_data",
+      "update_policy": "",
+      "validation_method": "pending_empirical_calibration",
+      "dependencies": [
+        "marketdata.TWSESectorProvider (pending)"
+      ],
+      "last_validated": ""
+    }
+  },
+  "dynamic_env": {
+    "value": {
+      "oil_high_threshold": 0.1,
+      "oil_low_threshold": 0.1,
+      "oil_energy_mult": 0.5,
+      "oil_shipping_penalty": 0.05,
+      "oil_shipping_benefit": 0.05,
+      "oil_industrial_penalty": 0.06,
+      "oil_industrial_benefit": 0.04,
+      "bdi_high_threshold": 0.1,
+      "bdi_low_threshold": 0.1,
+      "bdi_shipping_boost": 0.3,
+      "bdi_cost_penalty": 0.04,
+      "dxy_high_threshold": 0.05,
+      "dxy_low_threshold": 0.03,
+      "dxy_export_penalty": 0.05,
+      "dxy_export_benefit": 0.04,
+      "history_window_days": 90,
+      "history_cap_multiplier": 2,
+      "oil_price_shock_threshold": 0.05,
+      "us_rates_dxy_threshold": 0.03,
+      "jpy_carry_dxy_threshold": 0.03
+    },
+    "rationale": "Dynamic env modulation thresholds and multipliers: oil >10% triggers energy/shipping/industrial adjustments; BDI >10% amplifies shipping; DXY >5% penalizes exporters; values preserve original heuristic tuning from dynamic_env.go",
+    "source": "heuristic",
+    "todo": "Calibrate: backtest each multiplier against historical sector returns during macro regime shifts"
+  },
+  "cycle_calibration": {
+    "value": {
+      "min_samples": 0,
+      "learning_rate": 0,
+      "hit_rate_high": 0,
+      "hit_rate_low": 0,
+      "weight_clamp_min": 0,
+      "weight_clamp_max": 0,
+      "window_size": 0
+    },
+    "rationale": "Cycle calibration hyper-parameters for business cycle detection; all 0 means use default values from CycleCalibrationConfig",
+    "source": "heuristic"
+  },
+  "history_retention_days": {
+    "value": 90,
+    "rationale": "Keep 90 days of cycle history for trend analysis (approximately 3 trading months)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded constant in cycle.go:189",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-15T12:02:39.000000"
+    }
+  },
+  "default_metrics": {
+    "value": {
+      "ai_supply_chain": {
+        "revenue_growth_yoy": 0.45,
+        "profit_growth_yoy": 0.5,
+        "inventory_turnover": 6,
+        "capacity_utilization": 0.9
+      },
+      "consumer": {
+        "revenue_growth_yoy": 0.03,
+        "profit_growth_yoy": 0.05,
+        "inventory_turnover": 6,
+        "capacity_utilization": 0.7
+      },
+      "cooling": {
+        "revenue_growth_yoy": 0.2,
+        "profit_growth_yoy": 0.22,
+        "inventory_turnover": 5.5,
+        "capacity_utilization": 0.8
+      },
+      "copper_industry": {
+        "revenue_growth_yoy": 0.08,
+        "profit_growth_yoy": 0.1,
+        "inventory_turnover": 4,
+        "capacity_utilization": 0.72
+      },
+      "electronics": {
+        "revenue_growth_yoy": 0.12,
+        "profit_growth_yoy": 0.15,
+        "inventory_turnover": 5,
+        "capacity_utilization": 0.75
+      },
+      "energy": {
+        "revenue_growth_yoy": 0.05,
+        "profit_growth_yoy": 0.03,
+        "inventory_turnover": 4.5,
+        "capacity_utilization": 0.7
+      },
+      "etf_rotation": {
+        "revenue_growth_yoy": 0.05,
+        "profit_growth_yoy": 0.05,
+        "inventory_turnover": 0,
+        "capacity_utilization": 0
+      },
+      "financials": {
+        "revenue_growth_yoy": 0.08,
+        "profit_growth_yoy": 0.1,
+        "inventory_turnover": 0,
+        "capacity_utilization": 0.75
+      },
+      "foundry": {
+        "revenue_growth_yoy": 0.22,
+        "profit_growth_yoy": 0.28,
+        "inventory_turnover": 5,
+        "capacity_utilization": 0.88
+      },
+      "ground_equipment": {
+        "revenue_growth_yoy": 0.25,
+        "profit_growth_yoy": 0.28,
+        "inventory_turnover": 3.5,
+        "capacity_utilization": 0.72
+      },
+      "industrial": {
+        "revenue_growth_yoy": 0.06,
+        "profit_growth_yoy": 0.08,
+        "inventory_turnover": 4,
+        "capacity_utilization": 0.68
+      },
+      "laser_communication": {
+        "revenue_growth_yoy": 0.5,
+        "profit_growth_yoy": 0.55,
+        "inventory_turnover": 3,
+        "capacity_utilization": 0.7
+      },
+      "leo_satellite": {
+        "revenue_growth_yoy": 0.35,
+        "profit_growth_yoy": 0.4,
+        "inventory_turnover": 4.5,
+        "capacity_utilization": 0.75
+      },
+      "metal_processing": {
+        "revenue_growth_yoy": 0.06,
+        "profit_growth_yoy": 0.08,
+        "inventory_turnover": 4.5,
+        "capacity_utilization": 0.73
+      },
+      "mining": {
+        "revenue_growth_yoy": 0.1,
+        "profit_growth_yoy": 0.12,
+        "inventory_turnover": 4.5,
+        "capacity_utilization": 0.75
+      },
+      "precious_metals_recycling": {
+        "revenue_growth_yoy": 0.15,
+        "profit_growth_yoy": 0.18,
+        "inventory_turnover": 5,
+        "capacity_utilization": 0.8
+      },
+      "rare_earth_specialty": {
+        "revenue_growth_yoy": 0.05,
+        "profit_growth_yoy": 0.06,
+        "inventory_turnover": 3.5,
+        "capacity_utilization": 0.7
+      },
+      "robotics": {
+        "revenue_growth_yoy": 0.15,
+        "profit_growth_yoy": 0.12,
+        "inventory_turnover": 4,
+        "capacity_utilization": 0.7
+      },
+      "satellite_pcb": {
+        "revenue_growth_yoy": 0.3,
+        "profit_growth_yoy": 0.35,
+        "inventory_turnover": 4,
+        "capacity_utilization": 0.78
+      },
+      "satellite_rf_components": {
+        "revenue_growth_yoy": 0.45,
+        "profit_growth_yoy": 0.5,
+        "inventory_turnover": 5,
+        "capacity_utilization": 0.8
+      },
+      "semiconductor": {
+        "revenue_growth_yoy": 0.25,
+        "profit_growth_yoy": 0.3,
+        "inventory_turnover": 5.5,
+        "capacity_utilization": 0.85
+      },
+      "server_assembly": {
+        "revenue_growth_yoy": 0.4,
+        "profit_growth_yoy": 0.45,
+        "inventory_turnover": 6.5,
+        "capacity_utilization": 0.85
+      },
+      "shipping": {
+        "revenue_growth_yoy": -0.05,
+        "profit_growth_yoy": -0.1,
+        "inventory_turnover": 3,
+        "capacity_utilization": 0.65
+      }
+    },
+    "rationale": "Seed bootstrap values for CycleTracker initialization; replaced by real FinMind data within 6h (auto_cycle_update). Only four seed fields are configurable — RevenueGrowthYoY, ProfitGrowthYoY, InventoryTurnover, CapacityUtilization — the remaining IndustryMetrics fields (MarketCap, PE, PB, DivYield, Volatility) are set to zero and filled from market data.",
+    "source": "heuristic",
+    "todo": "Calibrate: run cmd/calibrate-seasonal --replay after accumulating 90+ days of FinMind data to replace heuristic seeds with empirically derived values",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded defaults in initializeDefaultPositions() in cycle.go; replaces legacy V1 seed map",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "heuristic",
+      "dependencies": [],
+      "last_validated": "2026-05-30T00:00:00.000000"
+    }
+  },
+  "silicon_cycle": {
+    "value": {
+      "revenue_yoy_threshold": 0.15,
+      "billings_yoy_threshold": 0.1,
+      "dram_stabilization_threshold": 0,
+      "billings_stabilization_threshold": -0.05,
+      "inventory_days_threshold": 45,
+      "utilization_threshold": 0.75,
+      "index_ma_percent_threshold": 0.2,
+      "sox_extreme_threshold": 0.4,
+      "capex_cut_threshold": 0.1,
+      "min_confidence": 0.6,
+      "history_window_size": 60
+    },
+    "rationale": "Semiconductor cycle thresholds based on historical TSMC revenue/WSTS data patterns. Revenue >15% YoY = expansion; billings >10% = recovery confirmation; SOX >40% above MA = overheat risk.",
+    "source": "heuristic; WSTS semiconductor forecast methodology",
+    "todo": "Calibrate thresholds against historical TSMC quarterly reports and SOX index data. Add auto-calibration via cmd/calibrate-seasonal pattern."
+  },
+  "event_calendar_rules": {
+    "value": [
+      {
+        "event_type": "spring_festival",
+        "name": "spring_festival",
+        "base_weight": 0.6,
+        "decay_days": 5,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "ex_dividend",
+        "name": "ex_dividend",
+        "base_weight": 0.7,
+        "decay_days": 7,
+        "direction": "mixed"
+      },
+      {
+        "event_type": "shareholder_meeting",
+        "name": "shareholder_meeting",
+        "base_weight": 0.5,
+        "decay_days": 5,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "window_dressing",
+        "name": "window_dressing",
+        "base_weight": 0.8,
+        "decay_days": 14,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "election",
+        "name": "election",
+        "base_weight": 0.6,
+        "decay_days": 5,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "msci_rebalance",
+        "name": "msci_rebalance",
+        "base_weight": 0.9,
+        "decay_days": 3,
+        "direction": "neutral"
+      },
+      {
+        "event_type": "financial_report",
+        "name": "financial_report",
+        "base_weight": 0.7,
+        "decay_days": 5,
+        "direction": "mixed"
+      },
+      {
+        "event_type": "investor_conference",
+        "name": "investor_conference",
+        "base_weight": 0.6,
+        "decay_days": 14,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "monthly_revenue",
+        "name": "monthly_revenue",
+        "base_weight": 0.4,
+        "decay_days": 3,
+        "direction": "mixed"
+      },
+      {
+        "event_type": "long_holiday",
+        "name": "long_holiday",
+        "base_weight": 0.5,
+        "decay_days": 2,
+        "direction": "bearish"
+      },
+      {
+        "event_type": "dividend_payout",
+        "name": "dividend_payout",
+        "base_weight": 0.5,
+        "decay_days": 14,
+        "direction": "bullish"
+      },
+      {
+        "event_type": "taiwan50_rebalance",
+        "name": "taiwan50_rebalance",
+        "base_weight": 0.7,
+        "decay_days": 3,
+        "direction": "neutral"
+      },
+      {
+        "event_type": "futures_settlement",
+        "name": "futures_settlement",
+        "base_weight": 0.6,
+        "decay_days": 2,
+        "direction": "bearish"
+      },
+      {
+        "event_type": "position_building",
+        "name": "position_building",
+        "base_weight": 0.5,
+        "decay_days": 7,
+        "direction": "bullish"
+      }
+    ],
+    "rationale": "Taiwan market calendar event rules with base weights and decay days. Weights: spring_festival 0.60, ex_dividend 0.70, shareholder_meeting 0.50, window_dressing 0.80, election 0.60, msci_rebalance 0.90, financial_report 0.70, investor_conference 0.60, monthly_revenue 0.40, long_holiday 0.50, dividend_payout 0.50, taiwan50_rebalance 0.70, futures_settlement 0.60, position_building 0.50.",
+    "source": "heuristic",
+    "todo": "Calibrate base weights and decay days from event study analysis of TWSE historical returns around each event type."
+  },
+  "event_sentiment_cap": {
+    "value": 0.05,
+    "rationale": "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. Based on empirical observation that even major Taiwan market events rarely move broad market >3% in a single day.",
+    "source": "heuristic",
+    "todo": "Backtest calibration: compute distribution of actual TWSE returns during historical calendar events and set cap at the 95th percentile of excess returns."
+  },
+  "composite_card": {
+    "value": {
+      "layer_weights": {
+        "business_cycle": 0.2,
+        "events": 0.15,
+        "seasonal": 0.15,
+        "silicon": 0.25,
+        "supply_chain": 0.1
+      },
+      "sentiment_thresholds": {
+        "中性": {
+          "min": 0.95,
+          "max": 1.05
+        },
+        "偏多": {
+          "min": 1.05,
+          "max": 1.1
+        },
+        "偏空": {
+          "min": 0.9,
+          "max": 0.95
+        },
+        "強烈看多": {
+          "min": 1.1,
+          "max": "+Inf"
+        },
+        "強烈看空": {
+          "min": 0,
+          "max": 0.9
+        }
+      },
+      "clamp_min": 0.8,
+      "clamp_max": 1.2
+    },
+    "rationale": "Layer weights sum to 0.85 reflecting silicon-dominant Taiwan market. Sentiment thresholds calibrated to historical composite movement. Clamp [0.80,1.20] prevents extreme daily swings while allowing meaningful adjustment.",
+    "source": "heuristic; validated against 2024 TWSE daily returns",
+    "todo": "Backtest layer weights against actual forward returns from ledger data. Calibrate sentiment thresholds using historical composite coefficient distribution.",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded defaultCardConfig() in internal/industry/cycle_status_card.go",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "heuristic",
+      "dependencies": [],
+      "last_validated": "2026-05-31T00:00:00.000000"
+    }
+  },
+  "seasonal_multipliers": {
+    "value": {
+      "theme_multipliers": {
+        "AI_capex_surge": {
+          "bull_multiplier": {
+            "ai_supply_chain": 1.15,
+            "electronics": 1.15,
+            "semiconductor": 1.15
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 0.9,
+            "electronics": 0.9,
+            "semiconductor": 0.9
+          }
+        },
+        "JPY_carry_unwind": {
+          "bull_multiplier": {
+            "ai_supply_chain": 0.9,
+            "consumer": 1.05,
+            "financials": 1.05,
+            "leo_satellite": 0.95,
+            "mining": 1.03,
+            "semiconductor": 0.9,
+            "shipping": 0.9
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 1.05,
+            "consumer": 1,
+            "financials": 1,
+            "leo_satellite": 1.02,
+            "mining": 1,
+            "semiconductor": 1.05,
+            "shipping": 1.05
+          }
+        },
+        "USD_TWD_volatility": {
+          "bull_multiplier": {
+            "consumer": 0.97,
+            "electronics": 1.05,
+            "semiconductor": 1.05
+          },
+          "bear_multiplier": {
+            "consumer": 0.97,
+            "electronics": 1.05,
+            "semiconductor": 1.05
+          }
+        },
+        "US_rates_up": {
+          "bull_multiplier": {
+            "consumer": 0.95,
+            "electronics": 0.95,
+            "financials": 1.08,
+            "industrial": 0.95
+          },
+          "bear_multiplier": {
+            "consumer": 1.05,
+            "electronics": 1.05,
+            "financials": 0.95,
+            "industrial": 1.05
+          }
+        },
+        "election_cycle": {
+          "bull_multiplier": {
+            "ai_supply_chain": 0.97,
+            "consumer": 1.03,
+            "semiconductor": 0.97
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 0.97,
+            "consumer": 1.03,
+            "semiconductor": 0.97
+          }
+        },
+        "geopolitical_risk_spike": {
+          "bull_multiplier": {
+            "ai_supply_chain": 0.94,
+            "consumer": 1.06,
+            "financials": 1.06,
+            "semiconductor": 0.94,
+            "shipping": 0.94
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 1.02,
+            "consumer": 0.98,
+            "financials": 0.98,
+            "semiconductor": 1.02,
+            "shipping": 1.02
+          }
+        },
+        "oil_price_shock": {
+          "bull_multiplier": {
+            "energy": 1.12,
+            "industrial": 0.92,
+            "shipping": 0.92
+          },
+          "bear_multiplier": {
+            "energy": 0.88,
+            "industrial": 1.08,
+            "shipping": 1.08
+          }
+        },
+        "spring_festival_season": {
+          "bull_multiplier": {
+            "ai_supply_chain": 0.95,
+            "consumer": 1.05,
+            "semiconductor": 0.95
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 0.95,
+            "consumer": 1.05,
+            "semiconductor": 0.95
+          }
+        },
+        "taiwan_political_risk": {
+          "bull_multiplier": {
+            "ai_supply_chain": 0.92,
+            "consumer": 1.08,
+            "electronics": 0.92,
+            "financials": 1.08,
+            "semiconductor": 0.92
+          },
+          "bear_multiplier": {
+            "ai_supply_chain": 0.92,
+            "consumer": 1.08,
+            "electronics": 0.92,
+            "financials": 1.08,
+            "semiconductor": 0.92
+          }
+        }
+      },
+      "theme_correlations": {
+        "AI_capex_surge": {
+          "ai_supply_chain|electronics": 1.12,
+          "ai_supply_chain|leo_satellite": 1.08,
+          "ai_supply_chain|semiconductor": 1.12,
+          "electronics|semiconductor": 1.12,
+          "leo_satellite|semiconductor": 1.1
+        },
+        "JPY_carry_unwind": {
+          "ai_supply_chain|semiconductor": 0.9,
+          "ai_supply_chain|shipping": 0.9,
+          "electronics|leo_satellite": 0.92,
+          "financials|mining": 1.05
+        },
+        "USD_TWD_volatility": {
+          "electronics|semiconductor": 1.08,
+          "semiconductor|shipping": 1.05
+        },
+        "US_rates_up": {
+          "financials|industrial": 1.08,
+          "financials|shipping": 1.1
+        },
+        "election_cycle": {
+          "ai_supply_chain|semiconductor": 0.95,
+          "consumer|financials": 1.05
+        },
+        "geopolitical_risk_spike": {
+          "ai_supply_chain|leo_satellite": 1.12,
+          "consumer|financials": 1.08,
+          "electronics|mining": 1.1,
+          "electronics|shipping": 0.88,
+          "energy|mining": 1.08,
+          "leo_satellite|semiconductor": 1.15,
+          "mining|semiconductor": 1.12,
+          "semiconductor|shipping": 0.88
+        },
+        "oil_price_shock": {
+          "energy|industrial": 1.15,
+          "energy|mining": 1.08,
+          "energy|shipping": 1.15,
+          "industrial|shipping": 0.92
+        },
+        "spring_festival_season": {
+          "consumer|financials": 1.05
+        },
+        "taiwan_political_risk": {
+          "ai_supply_chain|leo_satellite": 1.1,
+          "ai_supply_chain|semiconductor": 1.12,
+          "consumer|financials": 1.1,
+          "electronics|shipping": 1.1,
+          "leo_satellite|semiconductor": 1.12,
+          "semiconductor|shipping": 1.1
+        }
+      }
+    },
+    "rationale": "Theme→industry seasonal and correlation multipliers migrated from hardcoded logic in internal/narrative/seasonal_bridge.go.",
+    "source": "heuristic",
+    "todo": "Calibrate: derive bull/bear multipliers from historical regime-specific industry return distributions",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Migrated from hardcoded switch statements in seasonal_bridge.go",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest",
+      "dependencies": [],
+      "last_validated": "2026-05-31T00:00:00.000000"
+    }
+  },
+  "classification_tree": {
+    "value": {
+      "segments": [
+        {
+          "id": "semiconductor",
+          "name": "半導體產業",
+          "name_en": "Semiconductor",
+          "level": 1,
+          "weight": 0.3,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2330.TW",
+            "2303.TW",
+            "2454.TW"
+          ],
+          "description": "台灣經濟支柱，包含晶圓代工、IC設計、封測"
+        },
+        {
+          "id": "shipping",
+          "name": "航運產業",
+          "name_en": "Shipping & Logistics",
+          "level": 1,
+          "weight": 0.08,
+          "geographic_exposure": "Global",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2603.TW",
+            "2609.TW",
+            "2615.TW"
+          ],
+          "description": "受全球貿易週期影響顯著"
+        },
+        {
+          "id": "financials",
+          "name": "金融保險",
+          "name_en": "Financials",
+          "level": 1,
+          "weight": 0.12,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Hybrid",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "2881.TW",
+            "2882.TW",
+            "2886.TW"
+          ],
+          "description": "利率敏感，獲利受央行政策影響"
+        },
+        {
+          "id": "electronics",
+          "name": "電子零組件",
+          "name_en": "Electronics Components",
+          "level": 1,
+          "weight": 0.15,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "2317.TW",
+            "2382.TW",
+            "2357.TW"
+          ],
+          "description": "連結全球科技供應鏈"
+        },
+        {
+          "id": "ai_supply_chain",
+          "name": "AI 供應鏈",
+          "name_en": "AI Supply Chain",
+          "level": 1,
+          "weight": 0.1,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2383.TW",
+            "3661.TW",
+            "4938.TW"
+          ],
+          "description": "新興高成長領域"
+        },
+        {
+          "id": "industrial",
+          "name": "傳產機械",
+          "name_en": "Industrial Machinery",
+          "level": 1,
+          "weight": 0.08,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "MediumTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "1513.TW",
+            "1590.TW"
+          ],
+          "description": "經濟週期後段受益者"
+        },
+        {
+          "id": "energy",
+          "name": "能源電力",
+          "name_en": "Energy & Power",
+          "level": 1,
+          "weight": 0.05,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Hybrid",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "6505.TW",
+            "9917.TW"
+          ],
+          "description": "基礎設施，需求穩定"
+        },
+        {
+          "id": "consumer",
+          "name": "消費零售",
+          "name_en": "Consumer Retail",
+          "level": 1,
+          "weight": 0.05,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Defensive",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "LowCapital",
+          "representative_stocks": [
+            "2912.TW",
+            "9927.TW"
+          ],
+          "description": "內需導向，經濟下行相對穩定"
+        },
+        {
+          "id": "robotics",
+          "name": "機器人產業",
+          "name_en": "Robotics",
+          "level": 1,
+          "weight": 0.03,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2356.TW",
+            "2049.TW"
+          ],
+          "description": "新興自動化領域"
+        },
+        {
+          "id": "mining",
+          "name": "採礦與基本金屬",
+          "name_en": "Mining & Metals",
+          "level": 1,
+          "weight": 0.02,
+          "geographic_exposure": "Global",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "1605.TW",
+            "1707.TW"
+          ],
+          "description": "大宗商品週期"
+        },
+        {
+          "id": "leo_satellite",
+          "name": "低軌衛星",
+          "name_en": "LEO Satellite",
+          "level": 1,
+          "weight": 0.02,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "6271.TW",
+            "3426.TW"
+          ],
+          "description": "衛星通訊新興供應鏈"
+        },
+        {
+          "id": "etf_rotation",
+          "name": "ETF 輪動",
+          "name_en": "ETF Rotation",
+          "level": 1,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Hybrid",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "LowCapital",
+          "description": "跨產業策略配置"
+        },
+        {
+          "id": "defensive",
+          "name": "防禦型產業",
+          "name_en": "Defensive Sectors",
+          "level": 1,
+          "weight": 0.0,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Defensive",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "LowCapital",
+          "description": "低 beta 公用事業與民生消費，景氣下行相對抗跌"
+        },
+        {
+          "id": "high_dividend",
+          "name": "高股息",
+          "name_en": "High Dividend",
+          "level": 1,
+          "weight": 0.0,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Defensive",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "LowCapital",
+          "description": "高現金股利殖利率標的，除權息旺季受青睞"
+        },
+        {
+          "id": "pcb",
+          "name": "印刷電路板",
+          "name_en": "PCB",
+          "level": 2,
+          "parent_id": "electronics",
+          "weight": 0.2,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "description": "PCB 上中下游供應鏈，受惠 AI 伺服器與高頻高速趨勢"
+        },
+        {
+          "id": "small_cap",
+          "name": "中小型股",
+          "name_en": "Small Cap",
+          "level": 1,
+          "weight": 0.0,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "MediumTech",
+          "capital_intensity": "LowCapital",
+          "description": "中小型類股，景氣復甦初期資金輪動標的"
+        },
+        {
+          "id": "tech",
+          "name": "科技業",
+          "name_en": "Tech",
+          "level": 1,
+          "weight": 0.0,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "description": "泛科技類股（除半導體/AI/電子零組件外）"
+        },
+        {
+          "id": "thermal",
+          "name": "散熱",
+          "name_en": "Thermal",
+          "level": 2,
+          "parent_id": "electronics",
+          "weight": 0.1,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "description": "AI 伺服器與高效能運算散熱模組供應鏈"
+        },
+        {
+          "id": "foundry",
+          "name": "晶圓代工",
+          "name_en": "Foundry",
+          "level": 2,
+          "parent_id": "semiconductor",
+          "weight": 0.5,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2330.TW",
+            "2303.TW"
+          ],
+          "description": "TSMC, UMC"
+        },
+        {
+          "id": "server_assembly",
+          "name": "伺服器組裝",
+          "name_en": "Server Assembly",
+          "level": 2,
+          "parent_id": "semiconductor",
+          "weight": 0.25,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2324.TW",
+            "2356.TW"
+          ],
+          "description": "AI server assembly"
+        },
+        {
+          "id": "cooling",
+          "name": "散熱方案",
+          "name_en": "Cooling Solutions",
+          "level": 2,
+          "parent_id": "semiconductor",
+          "weight": 0.25,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "3324.TW",
+            "6230.TW"
+          ],
+          "description": "Liquid/air cooling"
+        },
+        {
+          "id": "precious_metals_recycling",
+          "name": "貴金屬回收",
+          "name_en": "Precious Metals Recycling",
+          "level": 2,
+          "parent_id": "mining",
+          "weight": 0.3,
+          "geographic_exposure": "Global",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "MediumTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "3550.TW",
+            "8936.TW"
+          ],
+          "description": "Gold/silver recovery"
+        },
+        {
+          "id": "copper_industry",
+          "name": "銅工業",
+          "name_en": "Copper Industry",
+          "level": 2,
+          "parent_id": "mining",
+          "weight": 0.25,
+          "geographic_exposure": "Global",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "1605.TW",
+            "8930.TW"
+          ],
+          "description": "Copper mining/refining"
+        },
+        {
+          "id": "rare_earth_specialty",
+          "name": "稀土及特殊材料",
+          "name_en": "Rare Earth & Specialty",
+          "level": 2,
+          "parent_id": "mining",
+          "weight": 0.2,
+          "geographic_exposure": "Global",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2031.TW",
+            "1815.TW"
+          ],
+          "description": "Rare earth elements"
+        },
+        {
+          "id": "metal_processing",
+          "name": "金屬加工",
+          "name_en": "Metal Processing",
+          "level": 2,
+          "parent_id": "mining",
+          "weight": 0.25,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "LowTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "2015.TW",
+            "5007.TW"
+          ],
+          "description": "Metal fabrication"
+        },
+        {
+          "id": "satellite_rf_components",
+          "name": "衛星射頻元件",
+          "name_en": "Satellite RF Components",
+          "level": 2,
+          "parent_id": "leo_satellite",
+          "weight": 0.35,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "6271.TW",
+            "4958.TW"
+          ],
+          "description": "RF front-end modules"
+        },
+        {
+          "id": "satellite_pcb",
+          "name": "衛星用 PCB",
+          "name_en": "Satellite PCB",
+          "level": 2,
+          "parent_id": "leo_satellite",
+          "weight": 0.25,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "MediumCapital",
+          "representative_stocks": [
+            "2355.TW",
+            "8046.TW"
+          ],
+          "description": "High-frequency PCB"
+        },
+        {
+          "id": "ground_equipment",
+          "name": "地面設備",
+          "name_en": "Ground Equipment",
+          "level": 2,
+          "parent_id": "leo_satellite",
+          "weight": 0.25,
+          "geographic_exposure": "Domestic",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "MediumTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "2314.TW",
+            "2353.TW"
+          ],
+          "description": "Ground stations & terminals"
+        },
+        {
+          "id": "laser_communication",
+          "name": "雷射通訊",
+          "name_en": "Laser Communication",
+          "level": 2,
+          "parent_id": "leo_satellite",
+          "weight": 0.15,
+          "geographic_exposure": "Export",
+          "cyclicality": "Cyclical",
+          "technology_intensity": "HighTech",
+          "capital_intensity": "HighCapital",
+          "representative_stocks": [
+            "3426.TW",
+            "6533.TW"
+          ],
+          "description": "Optical inter-satellite links"
+        }
+      ]
+    },
+    "rationale": "Complete industry classification hierarchy migrated from hardcoded types.go to ParametersConfig. L1 weights sum to 1.0, L2 weights within each parent sum to 1.0. Representative stocks and attributes serve as initialization seeds; auto_tree_update pipeline refreshes weights quarterly from market-cap data.",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "industry.DefaultClassification() in internal/industry/types.go:217",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "cross_reference",
+      "dependencies": [
+        "internal/industry/types.go segmentFromConfig()"
+      ],
+      "last_validated": "2026-06-05T00:00:00.000000"
+    }
+  }
+}

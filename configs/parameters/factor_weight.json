@@ -1,0 +1,439 @@
+{
+  "base_weights": {
+    "value": {
+      "agent": 0.15,
+      "industry_cycle": 0,
+      "inst_sent": 0.1,
+      "liquidity": 0.05,
+      "momentum": 0.25,
+      "narrative": 0.05,
+      "quality": 0.2,
+      "value": 0.2
+    },
+    "rationale": "Eight-factor weight distribution; momentum, value, quality as primary factors (65% combined), agent/inst_sent as secondary, liquidity/narrative as tertiary, industry_cycle as placeholder",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bull_momentum": {
+    "value": 0.05,
+    "rationale": "Bull regime: shift toward momentum (+5%) to capture trend continuation",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bull_quality": {
+    "value": -0.03,
+    "rationale": "Bull regime: reduce quality (-3%) — defensive quality underperforms in strong rallies",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bull_value": {
+    "value": -0.02,
+    "rationale": "Bull regime: reduce value (-2%) — value lags in momentum-driven bull markets",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bear_quality": {
+    "value": 0.05,
+    "rationale": "Bear regime: shift toward quality (+5%) for defensive positioning",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bear_value": {
+    "value": 0.03,
+    "rationale": "Bear regime: shift toward value (+3%) — value provides relative downside protection",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_bear_momentum": {
+    "value": -0.05,
+    "rationale": "Bear regime: reduce momentum (-5%) — momentum strategies suffer in reversals",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_high_vol_liquidity": {
+    "value": 0.05,
+    "rationale": "High volatility regime: rotate to liquidity (+5%) for stability",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_high_vol_momentum": {
+    "value": -0.03,
+    "rationale": "High volatility regime: reduce momentum (-3%) — momentum fragile in volatile markets",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "regime_high_vol_inst_sent": {
+    "value": -0.02,
+    "rationale": "High volatility regime: reduce institutional sentiment (-2%) — lagging indicator in fast markets",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "severity_critical": {
+    "value": 0.1,
+    "rationale": "Critical event: ±10% delta for severe market-moving events",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "severity_high": {
+    "value": 0.05,
+    "rationale": "High event: ±5% delta for significant events",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "severity_medium": {
+    "value": 0.02,
+    "rationale": "Medium event: ±2% delta for moderate events",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "severity_low": {
+    "value": 0.01,
+    "rationale": "Low event: ±1% delta for minor events",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "clamp_min": {
+    "value": 0.02,
+    "rationale": "Minimum factor weight floor (2%) prevents any factor from being eliminated",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "clamp_max": {
+    "value": 0.5,
+    "rationale": "Maximum factor weight ceiling (50%) prevents single-factor dominance",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "risk_on_momentum": {
+    "value": 0.02142857142857142,
+    "rationale": "RISK_ON mode: boost momentum (+5%) — risk appetite favors trend",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "risk_on_quality": {
+    "value": 0.02142857142857142,
+    "rationale": "RISK_ON mode: reduce quality (-3%) — quality premium compresses in risk-on",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "risk_off_momentum": {
+    "value": 0.02142857142857142,
+    "rationale": "RISK_OFF mode: reduce momentum (-5%) — momentum crashes in risk-off",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "risk_off_quality": {
+    "value": 0.02142857142857142,
+    "rationale": "RISK_OFF mode: boost quality (+5%) — flight to quality",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "risk_off_liquidity": {
+    "value": 0.02142857142857142,
+    "rationale": "RISK_OFF mode: boost liquidity (+3%) — liquidity premium in stress",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "conservative_value": {
+    "value": 0.02142857142857142,
+    "rationale": "Conservative strategy: boost value (+5%) — value orientation for safety",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "conservative_quality": {
+    "value": 0.02142857142857142,
+    "rationale": "Conservative strategy: boost quality (+5%) — quality orientation for safety",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "conservative_momentum": {
+    "value": 0.02142857142857142,
+    "rationale": "Conservative strategy: reduce momentum (-5%) — dampen trend-chasing in defensive mode",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "aggressive_momentum": {
+    "value": 0.02142857142857142,
+    "rationale": "Aggressive strategy: boost momentum (+5%) — capitalize on trends",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "aggressive_inst_sent": {
+    "value": 0.02142857142857142,
+    "rationale": "Aggressive strategy: boost institutional sentiment (+3%) — follow smart money",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "aggressive_value": {
+    "value": 0.02142857142857142,
+    "rationale": "Aggressive strategy: reduce value (-3%) — value underperforms in aggressive markets",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  },
+  "aggressive_quality": {
+    "value": 0.02142857142857142,
+    "rationale": "Aggressive strategy: reduce quality (-3%) — quality premium unnecessary in strong uptrend",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_timestamp": "2026-05-29T01:15:33.277506+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342058"
+    }
+  }
+}

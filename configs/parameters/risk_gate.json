@@ -1,0 +1,103 @@
+{
+  "pre_trade": {
+    "max_position_pct": {
+      "value": 0.15,
+      "rationale": "單一持股最大曝險 15%",
+      "source": "literature"
+    },
+    "max_sector_exposure_pct": {
+      "value": 0.4,
+      "rationale": "單一產業最大曝險 40%",
+      "source": "heuristic"
+    },
+    "var_confidence_level": {
+      "value": 0.95,
+      "rationale": "VaR 信賴水準 95%",
+      "source": "literature"
+    },
+    "var_limit_pct": {
+      "value": 0.02,
+      "rationale": "VaR 不得超過組合價值 2%",
+      "source": "heuristic"
+    },
+    "min_cash_buffer_pct": {
+      "value": 0.05,
+      "rationale": "至少保留 5% 現金緩衝",
+      "source": "heuristic"
+    },
+    "max_correlation": {
+      "value": 0.7,
+      "rationale": "與現有持倉相關性 > 0.7 則降低權重",
+      "source": "heuristic"
+    },
+    "min_adv_ratio": {
+      "value": 0.01,
+      "rationale": "下單量不得超過日均量 1%",
+      "source": "literature"
+    },
+    "max_open_positions": {
+      "value": 5,
+      "rationale": "最多同時持有 5 檔標的，控制集中度風險",
+      "source": "heuristic"
+    }
+  },
+  "in_trade": {
+    "monitor_interval_sec": {
+      "value": 30,
+      "rationale": "每 30 秒檢查一次持倉狀態",
+      "source": "heuristic"
+    },
+    "stop_loss_pct": {
+      "value": -0.1,
+      "rationale": "個股虧損達 10% 即止損",
+      "source": "heuristic"
+    },
+    "take_profit_pct": {
+      "value": 0.3,
+      "rationale": "個股獲利達 30% 考慮部分獲利了結",
+      "source": "heuristic"
+    },
+    "trailing_stop_atr_mult": {
+      "value": 2,
+      "rationale": "2x ATR trailing stop",
+      "source": "literature"
+    },
+    "volatility_spike_mult": {
+      "value": 3,
+      "rationale": "波動率超過 3 倍歷史均值 → 減碼",
+      "source": "empirical"
+    },
+    "circuit_breaker_daily_loss_pct": {
+      "value": -0.05,
+      "rationale": "單日組合虧損 5% → 暫停交易",
+      "source": "heuristic"
+    }
+  },
+  "post_trade": {
+    "max_drawdown_halt_pct": {
+      "value": 0.2,
+      "rationale": "最大回撤 20% → SUSPENDED",
+      "source": "heuristic"
+    },
+    "max_drawdown_defensive_pct": {
+      "value": 0.1,
+      "rationale": "最大回撤 10% → DEFENSIVE（減半倉）",
+      "source": "heuristic"
+    },
+    "min_rolling_sharpe": {
+      "value": 0,
+      "rationale": "滾動 Sharpe < 0 → CAUTIOUS",
+      "source": "literature"
+    },
+    "consecutive_loss_days": {
+      "value": 5,
+      "rationale": "連續虧損 5 天 → mute agent",
+      "source": "heuristic"
+    },
+    "evaluation_interval_hours": {
+      "value": 24,
+      "rationale": "每日盤後評估一次",
+      "source": "heuristic"
+    }
+  }
+}

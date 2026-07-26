@@ -1,0 +1,207 @@
+{
+  "omega": {
+    "value": 1e-06,
+    "rationale": "GARCH(1,1) omega: long-run variance component",
+    "source": "literature",
+    "last_calibrated": "2026-05-14T23:51:04Z",
+    "calibration_timestamp": "2026-05-14T23:51:04Z",
+    "calibration_method": "MLE_grid_search",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342026"
+    }
+  },
+  "alpha": {
+    "value": 0.1,
+    "rationale": "GARCH(1,1) alpha: shock persistence",
+    "source": "literature",
+    "last_calibrated": "2026-05-14T23:51:04Z",
+    "calibration_timestamp": "2026-05-14T23:51:04Z",
+    "calibration_method": "MLE_grid_search",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342029"
+    }
+  },
+  "beta": {
+    "value": 0.85,
+    "rationale": "GARCH(1,1) beta: variance persistence",
+    "source": "literature",
+    "last_calibrated": "2026-05-14T23:51:04Z",
+    "calibration_timestamp": "2026-05-14T23:51:04Z",
+    "calibration_method": "MLE_grid_search",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342032"
+    }
+  },
+  "max_history": {
+    "value": 252,
+    "rationale": "One year of trading days",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "correlation_min_days": {
+    "value": 30,
+    "rationale": "Minimum 30 days for correlation calculation",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "smoothing_factor": {
+    "value": 0.3,
+    "rationale": "EMA smoothing factor for volatility",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "rebalance_threshold": {
+    "value": 0.05,
+    "rationale": "5% deviation threshold for rebalancing",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "min_forecast_days": {
+    "value": 100,
+    "rationale": "Minimum 100 days for GARCH forecast",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_history_points": {
+    "value": 1000,
+    "rationale": "Maximum volatility history points to retain",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "high_vol_threshold": {
+    "value": 1.5,
+    "rationale": "Asset vol > target*1.5 triggers reduction",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "low_vol_threshold": {
+    "value": 0.7,
+    "rationale": "Current vol < target*0.7 triggers increase",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "reduce_magnitude": {
+    "value": 0.5,
+    "rationale": "Reduce by 50% for high vol assets",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "increase_magnitude": {
+    "value": 0.2,
+    "rationale": "Increase by 20% for low vol assets",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "weekly_rebalance_days": {
+    "value": 7,
+    "rationale": "Weekly rebalancing interval",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "GARCH volatility model",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

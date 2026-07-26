@@ -1,0 +1,97 @@
+{
+  "top_n": {
+    "value": 150,
+    "rationale": "Default universe size of 150 names; Oracle recommends 120-180 dynamic range, with bear-market override to 100-120",
+    "source": "heuristic"
+  },
+  "pe_weight": {
+    "value": 0.15,
+    "rationale": "Oracle-calibrated weight for valuation factor; retained despite Taiwan PE distortion from semiconductors",
+    "source": "calibrated"
+  },
+  "pb_weight": {
+    "value": 0.1,
+    "rationale": "Oracle-calibrated weight for book-value factor; important for financials screening",
+    "source": "calibrated"
+  },
+  "volume_weight": {
+    "value": 0.15,
+    "rationale": "Oracle-calibrated weight reduced from 0.20 to 0.15 to make room for the foreign-flow factor",
+    "source": "calibrated"
+  },
+  "momentum_weight": {
+    "value": 0.15,
+    "rationale": "Oracle-calibrated weight reduced sharply from 0.30 to 0.15 because Taiwan momentum reverses quickly",
+    "source": "calibrated"
+  },
+  "quality_weight": {
+    "value": 0.2,
+    "rationale": "Oracle-calibrated weight combining ROE, ROA and accruals quality",
+    "source": "calibrated"
+  },
+  "foreign_flow_weight": {
+    "value": 0.2,
+    "rationale": "Oracle-calibrated new foreign-investor flow factor; core driver for Taiwan equities",
+    "source": "calibrated"
+  },
+  "volume_floor_twd": {
+    "value": 10000000,
+    "rationale": "Minimum daily turnover of NT$10M replaces share-count floor to avoid low-priced stocks passing a 100-lot screen",
+    "source": "heuristic"
+  },
+  "min_daily_amount_twd": {
+    "value": 5000000,
+    "rationale": "Relaxed Layer-2.5 re-check floor of NT$5M for liquidity verification before final inclusion",
+    "source": "heuristic"
+  },
+  "max_industry_concentration": {
+    "value": 0.4,
+    "rationale": "Oracle-recommended 40% cap to avoid semiconductor over-concentration in the universe",
+    "source": "heuristic"
+  },
+  "price_minimum": {
+    "value": 10,
+    "rationale": "Minimum stock price of NT$10 for universe eligibility",
+    "source": "heuristic"
+  },
+  "factor_score_max_age_days": {
+    "value": 30,
+    "rationale": "Factor scores older than 30 days are downgraded to avoid stale inputs",
+    "source": "heuristic"
+  },
+  "d6_expiry_trading_days": {
+    "value": 60,
+    "rationale": "Unselected Layer-2 candidates remain on the D6 watchlist for 60 trading days before expiry",
+    "source": "heuristic"
+  },
+  "var_contribution_multiplier": {
+    "value": 2,
+    "rationale": "Exclude names with VaR contribution above 2x the portfolio average",
+    "source": "heuristic"
+  },
+  "volatility_multiplier": {
+    "value": 2,
+    "rationale": "Exclude names with 30-day realized volatility above 2x the median",
+    "source": "heuristic"
+  },
+  "drawdown_window": {
+    "value": 60,
+    "rationale": "60-day window for drawdown flagging",
+    "source": "heuristic"
+  },
+  "drawdown_threshold": {
+    "value": 0.3,
+    "rationale": "30% drawdown threshold for risk flag (flag only, not exclusion)",
+    "source": "heuristic"
+  },
+  "confidence_threshold": {
+    "value": 3,
+    "rationale": "Minimum of 3 supporting signals or confidence points required for inclusion",
+    "source": "heuristic"
+  },
+  "supply_chain_expand_depth": {
+    "value": 2,
+    "rationale": "Expand supply-chain mapping up to 2 hops when building representative stock sets",
+    "source": "heuristic"
+  }
+}
