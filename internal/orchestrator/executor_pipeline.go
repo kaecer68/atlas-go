@@ -75,46 +75,53 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	registry := ctx.MutedAgentFilter.Filter(ctx.Registry, ctx.Plugins)
 
+	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
+	// Must run BEFORE regime inference so macro conditions inform the
+	// regime verdict rather than only scaling post-hoc convictions.
+	var macroFlowResult *macroflow.AdjustmentResult
+	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
+		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(domain.RegimeNeutral))
+	}
+
 	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
 	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
+	// Recompute macro adjustment with actual regime now available (post-regime inference).
+	// The pre-regime call used Neutral; this one uses the detected regime for accurate
+	// risk-level→adjustment mapping.
+	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
+		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
+	}
+
+	if macroFlowResult != nil && ctx.Scratchpad != nil {
+		ctx.Scratchpad.Record(ReasoningTrace{
+			SessionID: ctx.SessionID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhaseMacroFlow,
+			Step:      6,
+			Component: "macroflow",
+			Action:    "macro_flow.applied",
+			Reasoning: fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
+				macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
+				macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash),
+			Data: map[string]any{
+				"risk_level": string(macroFlowResult.RiskLevel),
+				"is_stress":  macroFlowResult.IsStress,
+				"defensive":  macroFlowResult.Adjustment.Defensive,
+				"aggressive": macroFlowResult.Adjustment.Aggressive,
+				"cash":       macroFlowResult.Adjustment.Cash,
+				"reasoning":  macroFlowResult.Reasoning,
+			},
+			Confidence: -1,
+		})
+	}
+
 	// Stage gating: skip momentum crash protection during RISK_OFF regime.
-	// When the market is already crashing, further reducing positions via
-	// momentum crash protection is counterproductive — it amplifies drawdown
-	// rather than protecting against it.
 	if regime != domain.RegimeRiskOff {
 		raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
 	}
 
 	controlInput, weightData := ctx.WeightApplication.ApplyWeights(raw, ctx.WeightManager, ctx.ConvictionClampingCallback)
-
-	var macroFlowResult *macroflow.AdjustmentResult
-	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
-		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
-
-		if macroFlowResult != nil && ctx.Scratchpad != nil {
-			ctx.Scratchpad.Record(ReasoningTrace{
-				SessionID: ctx.SessionID,
-				Timestamp: time.Now().UTC(),
-				Phase:     PhaseMacroFlow,
-				Step:      6,
-				Component: "macroflow",
-				Action:    "macro_flow.applied",
-				Reasoning: fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
-					macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
-					macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash),
-				Data: map[string]any{
-					"risk_level": string(macroFlowResult.RiskLevel),
-					"is_stress":  macroFlowResult.IsStress,
-					"defensive":  macroFlowResult.Adjustment.Defensive,
-					"aggressive": macroFlowResult.Adjustment.Aggressive,
-					"cash":       macroFlowResult.Adjustment.Cash,
-					"reasoning":  macroFlowResult.Reasoning,
-				},
-				Confidence: -1,
-			})
-		}
-	}
 
 	if ctx.ForecastBridge != nil && ctx.DirectionalTradeLayer != nil {
 		symbols := make([]string, 0, len(ctx.Quotes))

@@ -29,7 +29,14 @@ func (s *MacroEvidenceSource) Evidence(quotes map[string]domain.Quote, events []
 	score := 0.0
 	confidence := 0.3
 
-	if vix, ok := quotes["$VIX"]; ok {
+	// VIX may appear under "VIX" or "^VIX" in the quotes map, depending
+	// on the provider (Yahoo uses ^VIX, synthetic data uses VIX).
+	// The map key is the Quote.Symbol field, not a prefixed format.
+	vix, ok := quotes["VIX"]
+	if !ok {
+		vix, ok = quotes["^VIX"]
+	}
+	if ok {
 		if vix.Last > volThreshold*1.5 {
 			score = -0.8
 			confidence = 0.7
