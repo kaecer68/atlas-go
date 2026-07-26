@@ -359,7 +359,7 @@ export async function renderStrategiesPage(root) {
     const isValid = v => typeof v === 'number' && Number.isFinite(v);
     const items = [
       { label: '外資現貨 (TWD 億)', key: 'foreign_capital_net_twd',
-        fmt: v => fmtSafeSigned(v / 1e8, { decimals: 1, suffix: ' 億', forceSign: true }) },
+        fmt: v => fmtSafeSigned(v, { decimals: 1, suffix: ' 億', forceSign: true }) },
       { label: 'TSM ADR (%)',   key: 'tsm_adr_pct',  fmt: v => fmtSafeSignedPct(v, 2) },
       { label: 'NVDA (%)',      key: 'nvda_pct',     fmt: v => fmtSafeSignedPct(v, 2) },
       { label: 'DXY (%)',       key: 'dxy_pct',      fmt: v => fmtSafeSignedPct(v, 2) },

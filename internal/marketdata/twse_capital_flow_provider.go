@@ -79,6 +79,11 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 		logging.Warn("twse_capital_flow_provider", "save_flow_warning", logging.Err(err))
 	}
 
+	return t.buildSnapshotFromFlow(flow), nil
+}
+
+// buildSnapshotFromFlow converts a TWSECapitalFlow into a MacroDataSnapshot.
+func (t *TWSECapitalFlowProvider) buildSnapshotFromFlow(flow TWSECapitalFlow) MacroDataSnapshot {
 	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))
 	flowTs := flowTime.Unix()
 
@@ -102,7 +107,51 @@ func (t *TWSECapitalFlowProvider) FetchSnapshot(ctx context.Context) (MacroDataS
 		ChangePct: percentChange(flow.DealerNet, prev.DealerNet),
 		Timestamp: flowTs,
 	}
-	return snap, nil
+	return snap
+}
+
+// LatestSavedSnapshot returns a MacroDataSnapshot built from the most recent
+// persisted daily flow file. It is intended as a fallback for the gateway
+// channel adapter when the live TWSE API has no data (holidays/weekends).
+func (t *TWSECapitalFlowProvider) LatestSavedSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	entries, err := os.ReadDir(t.storageDir)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("read storage dir: %w", err)
+	}
+	const suffix = "_capital_flow.json"
+	var latestDate string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, suffix) {
+			continue
+		}
+		datePart := strings.TrimSuffix(name, suffix)
+		if len(datePart) != 8 {
+			continue
+		}
+		if datePart > latestDate {
+			latestDate = datePart
+		}
+	}
+	if latestDate == "" {
+		return MacroDataSnapshot{}, fmt.Errorf("no saved capital flow snapshot")
+	}
+	path := filepath.Join(t.storageDir, latestDate+suffix)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("read saved flow: %w", err)
+	}
+	var flow TWSECapitalFlow
+	if err := json.Unmarshal(data, &flow); err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("decode saved flow: %w", err)
+	}
+	if flow.Date == "" {
+		flow.Date = latestDate
+	}
+	return t.buildSnapshotFromFlow(flow), nil
 }
 
 func (t *TWSECapitalFlowProvider) loadPreviousFlow(currentDate string) (TWSECapitalFlow, error) {
