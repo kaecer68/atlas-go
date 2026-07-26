@@ -16,6 +16,9 @@ type StrategyReport struct {
 	TotalReturn *float64 `json:"total_return,omitempty"` // 總累積報酬（%）
 	SampleDays  int      `json:"sample_days"`            // 樣本交易日數
 	AlphaScore  *float64 `json:"alpha_score,omitempty"`  // Alpha 近似值：年化報酬 − 加權指數年化報酬
+
+	// 策略方向（來自 StrategyFrame.Direction），用於資金流共鳴偏置
+	Direction string `json:"direction,omitempty"`
 }
 
 // ValidationConfig 為驗證器的可配置參數。

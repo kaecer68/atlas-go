@@ -248,7 +248,8 @@
         "GuardOutcomes []domain.GuardOutcome",
         "ScreeningRejects []domain.ScreeningReject",
         "DarwinianWeights []*portfolio.DarwinianAgentWeight",
-        "MacroFlowAdjustment *macroflow.AdjustmentResult"
+        "MacroFlowAdjustment *macroflow.AdjustmentResult",
+        "TraceSessionID string"
       ],
       "kind": "struct",
       "name": "ResearchResult"

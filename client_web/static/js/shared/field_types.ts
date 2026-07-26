@@ -2811,6 +2811,8 @@ export interface PromptExperimentResult {
   candidate_monetary_ntd?: number;
   eval_metrics?: string | null;
   importance_result?: string | null;
+  regime_counts?: Record<string, number>;
+  regime_total_days?: number;
 }
 
 export interface ProviderStatus {
