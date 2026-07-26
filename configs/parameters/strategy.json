@@ -1,0 +1,58 @@
+{
+  "min_switch_interval_days": {
+    "value": 7,
+    "rationale": "Minimum days between strategy switches; prevents whipsaw",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342275"
+    }
+  },
+  "switch_threshold": {
+    "value": 0.1,
+    "rationale": "Minimum score advantage (10%) required to switch strategies",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342278"
+    }
+  },
+  "score_lookback_days": {
+    "value": 30,
+    "rationale": "Days of historical performance to evaluate when scoring strategies",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342281"
+    }
+  },
+  "fallback_strategy": {
+    "value": "momentum",
+    "rationale": "Default strategy when no clear winner; momentum has broad applicability",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned code_review validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "code_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342284"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "resonance_coefficient_max": {
+    "value": 1.5,
+    "rationale": "Resonance coefficient upper bound: 1.5 = 三勢力全對齊 (foreign + institutional + government all aligned). Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
+    "source": "heuristic"
+  },
+  "resonance_coefficient_min": {
+    "value": 0.5,
+    "rationale": "Resonance coefficient lower bound: 0.5 = foreign vs government 對立. Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
+    "source": "heuristic"
+  }
+}

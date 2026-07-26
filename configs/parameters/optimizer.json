@@ -1,0 +1,133 @@
+{
+  "max_position_pct": {
+    "value": 0.15,
+    "rationale": "15% max single position for diversification",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Portfolio optimization",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_sector_pct": {
+    "value": 0.4,
+    "rationale": "40% max single sector concentration",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Portfolio optimization",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_turnover_daily": {
+    "value": 0.2,
+    "rationale": "20% daily turnover limit",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341958"
+    }
+  },
+  "target_beta": {
+    "value": 1,
+    "rationale": "Market-neutral target beta",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341961"
+    }
+  },
+  "beta_range_min": {
+    "value": 0.8,
+    "rationale": "Minimum portfolio beta",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341964"
+    }
+  },
+  "beta_range_max": {
+    "value": 1.2,
+    "rationale": "Maximum portfolio beta",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341966"
+    }
+  },
+  "min_trade_size": {
+    "value": 1,
+    "rationale": "Minimum 1 share",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: policy changed frozen→auto; low quality but can evolve via backtest",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341968"
+    }
+  },
+  "cash_reserve": {
+    "value": 0.05,
+    "rationale": "5% cash reserve for liquidity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Portfolio optimization",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weights": {
+    "value": {
+      "agent": 0.2,
+      "momentum": 0.2,
+      "quality": 0.15,
+      "value": 0.15
+    },
+    "rationale": "Matched to agents.md: Momentum 0.20, Value 0.15, Quality 0.15, Agent 0.20. InstitutionalSentiment and Liquidity are handled separately in their respective factor calculations.",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via documentation_aligned during calibration audit",
+      "evidence_quality": "high",
+      "update_policy": "manual",
+      "validation_method": "documentation_aligned",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341972"
+    }
+  }
+}

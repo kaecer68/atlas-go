@@ -1733,12 +1733,14 @@ func (p *ParametersConfig) validateEngine() error {
 }
 
 var (
-	parametersConfig *ParametersConfig
-	parametersPath   = envOr("ATLAS_PARAMETERS_CONFIG", "configs/parameters.json")
+	parametersConfig    *ParametersConfig
+	parametersPath      = envOr("ATLAS_PARAMETERS_CONFIG", "configs/parameters.json")
+	parametersConfigDir string // set when loaded from directory, used by Save
 )
 
 func ResetParametersConfig() {
 	parametersConfig = nil
+	parametersConfigDir = ""
 }
 
 func SetParametersConfigPath(path string) {
@@ -1842,9 +1844,18 @@ func (p *ParametersConfig) Save(path string) error {
 }
 
 // SaveWithRollback atomically writes the configuration with automatic rollback.
-// Write pattern: .tmp → fsync → rename existing → .bak → rename .tmp → target.
-// If any step after the .bak fails, the original file is restored from .bak.
+// If loaded from a directory (parametersConfigDir is set), writes per-category
+// JSON files. Otherwise writes a single JSON file (legacy mode).
 func (p *ParametersConfig) SaveWithRollback(path string) error {
+	// Directory mode: write per-category files.
+	if parametersConfigDir != "" && path == parametersConfigDir {
+		return p.saveToDir(path)
+	}
+	return p.saveWithRollbackSingle(path)
+}
+
+// saveWithRollbackSingle writes to a single JSON file with rollback.
+func (p *ParametersConfig) saveWithRollbackSingle(path string) error {
 	tmpPath := path + ".tmp"
 	bakPath := path + ".bak"
 
@@ -1887,11 +1898,78 @@ func (p *ParametersConfig) SaveWithRollback(path string) error {
 	return nil
 }
 
-func (p *ParametersConfig) LockedSaveWithRollback(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create parent dir for parameters config: %w", err)
+// saveToDir writes each category as an individual JSON file under dir.
+// Uses atomic write per file (.tmp → rename) to prevent partial updates.
+func (p *ParametersConfig) saveToDir(dir string) error {
+	configAccessMu.Lock()
+	defer configAccessMu.Unlock()
+	p.UpdatedAt = time.Now()
+
+	// Marshal the full struct once, then extract per-category from the JSON.
+	full, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal parameters config: %w", err)
 	}
-	locker := GetFileLocker(path)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(full, &raw); err != nil {
+		return fmt.Errorf("unmarshal for split: %w", err)
+	}
+
+	// Write _meta.json (version + updated_at).
+	meta := map[string]any{
+		"version":    raw["version"],
+		"updated_at": raw["updated_at"],
+	}
+	if err := writeJSONFile(filepath.Join(dir, "_meta.json"), meta); err != nil {
+		return fmt.Errorf("write _meta.json: %w", err)
+	}
+
+	// Write each category file.
+	metaKeys := map[string]bool{"version": true, "updated_at": true}
+	for key, val := range raw {
+		if metaKeys[key] {
+			continue
+		}
+		// Unmarshal and re-marshal for clean indented output.
+		var obj any
+		if err := json.Unmarshal(val, &obj); err != nil {
+			return fmt.Errorf("unmarshal category %s: %w", key, err)
+		}
+		if err := writeJSONFile(filepath.Join(dir, key+".json"), obj); err != nil {
+			return fmt.Errorf("write %s.json: %w", key, err)
+		}
+	}
+
+	return nil
+}
+
+// writeJSONFile atomically writes a JSON value to path using .tmp → rename.
+func writeJSONFile(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+func (p *ParametersConfig) LockedSaveWithRollback(path string) error {
+	lockPath := path
+	if parametersConfigDir != "" && path == parametersConfigDir {
+		// In directory mode, lock on _meta.json to serialize writes.
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return fmt.Errorf("create parameters dir: %w", err)
+		}
+		lockPath = filepath.Join(path, "_meta.json")
+	} else {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("create parent dir for parameters config: %w", err)
+		}
+	}
+	locker := GetFileLocker(lockPath)
 	unlock := locker.Lock()
 	defer unlock()
 	return p.SaveWithRollback(path)

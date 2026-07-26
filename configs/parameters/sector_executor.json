@@ -1,0 +1,450 @@
+{
+  "leo_satellite": {
+    "conviction_base": {
+      "value": 60,
+      "rationale": "Base conviction for LEOSatelliteExecutor; matches sector consensus used by SemiconductorExecutor and AISupplyChainExecutor",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: compare hit rates at base 50/60/70 across all sector executors"
+    },
+    "price_penalty_delta": {
+      "value": -5,
+      "rationale": "Intraday weakness penalty: reduces conviction when last < open; mirrors SemiconductorExecutor pattern",
+      "source": "heuristic",
+      "todo": "Test asymmetric penalty levels (-3/-5/-8) via cross-executor backtest sweep"
+    },
+    "launch_boost_delta": {
+      "value": 10,
+      "rationale": "Launch keyword signal boost: +10 conviction when prompt mentions launch and price is up; captures LEO satellite launch catalyst events",
+      "source": "heuristic",
+      "todo": "Validate with domain expert: verify launch keyword precision/recall against Starlink/Kuiper deployment news"
+    },
+    "deployment_boost_delta": {
+      "value": 8,
+      "rationale": "Deployment keyword signal boost: +8 conviction when prompt mentions deployment and price is up; captures constellation deployment cadence",
+      "source": "heuristic",
+      "todo": "Validate: compare deployment boost hit rate vs launch boost hit rate; consider merging if statistically similar"
+    },
+    "downgrade_penalty_delta": {
+      "value": -10,
+      "rationale": "Downgrade signal penalty: -10 conviction when prompt mentions downgrade and last < high*0.99; matches AISupplyChainExecutor pattern",
+      "source": "heuristic",
+      "todo": "Calibrate: sweep -8/-10/-12 penalty levels to find optimal precision-recall tradeoff"
+    },
+    "target_price_multiplier": {
+      "value": 1.08,
+      "rationale": "8% upside target from entry price; matches AISupplyChainExecutor target multiplier reflecting growth-sector premium",
+      "source": "heuristic",
+      "todo": "Validate: compare 1.08 target vs realized-forward-returns for LEO satellite names over 20-day horizon"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss below entry price; matches SemiconductorExecutor and AISupplyChainExecutor; standard high-volatility sector stop",
+      "source": "heuristic",
+      "todo": "Calibrate: test 0.93/0.95/0.97 stop levels for LEO satellite names given sector volatility profile"
+    }
+  },
+  "financials": {
+    "dividend_boost": {
+      "value": 8,
+      "rationale": "Rewards dividend-signaling financials where intraday price confirms distribution capacity; TW banks with >3% yield historically outperform sector by 4-6% annually",
+      "source": "heuristic",
+      "todo": "Calibrate [5,8,12] against TW financials dividend backtest 2020-2026"
+    },
+    "balance_sheet_penalty": {
+      "value": 6,
+      "rationale": "Penalizes financials flagged for balance-sheet weakness when intraday low drops 1.5%+ below open, indicating market concern over asset quality or leverage ratios",
+      "source": "heuristic",
+      "todo": "Backtest 4/6/8 against TW bank NPL ratio regime shifts"
+    },
+    "credit_quality_boost": {
+      "value": 2,
+      "rationale": "Small boost for credit-quality-gate financials with positive intraday price action; conservative magnitude reflects noisy credit-quality signal in short-term price data",
+      "source": "heuristic",
+      "todo": "Validate SNR against TW insurer credit-rating upgrade events"
+    },
+    "credit_quality_penalty": {
+      "value": 6,
+      "rationale": "Penalizes financials with deteriorating credit metrics confirmed by negative intraday drift; larger magnitude than boost reflects asymmetric tail risk in credit events",
+      "source": "heuristic",
+      "todo": "Calibrate 4/6/8 against TW financial credit downgrade history"
+    },
+    "spread_sensitivity_boost": {
+      "value": 2,
+      "rationale": "Modest boost when spread-sensitive financials trade near session high, signaling resilience to yield-curve widening; small magnitude due to indirect spread proxy via price",
+      "source": "heuristic",
+      "todo": "Monitor precision against TW bank NIM expansion quarters"
+    },
+    "spread_sensitivity_penalty": {
+      "value": 4,
+      "rationale": "Penalizes spread-sensitive financials failing to hold near highs, suggesting spread compression pressure; asymmetric to boost reflecting convex downside in NIM contraction",
+      "source": "heuristic",
+      "todo": "Backtest 3/4/5 against TW yield-curve inversion periods"
+    },
+    "capital_adequacy_boost": {
+      "value": 3,
+      "rationale": "Boosts well-capitalized financials requiring double price confirmation (last>=open AND near high); high selectivity bar ensures only strongest capital adequacy signals are rewarded",
+      "source": "heuristic",
+      "todo": "Validate against TW FSC capital adequacy ratio filings for banks and insurers"
+    },
+    "price_to_open_threshold": {
+      "value": 0.985,
+      "rationale": "1.5% intraday drop threshold for balance-sheet penalty trigger; balances sensitivity to genuine distress signals versus normal TW financial sector intraday volatility of 1.0-1.2%",
+      "source": "heuristic",
+      "todo": "Calibrate 0.980/0.985/0.990 against TW financials intraday range distribution"
+    },
+    "price_to_high_threshold": {
+      "value": 0.995,
+      "rationale": "Near-high threshold (0.5% from session peak) for spread and capital adequacy confirmation; tight bar ensures price strength is sustained, not just gap-up noise",
+      "source": "heuristic",
+      "todo": "Validate sensitivity against TW financials close-to-high ratio distribution"
+    }
+  },
+  "shipping": {
+    "tactical_boost": {
+      "value": 10,
+      "rationale": "Rewards tactical BDI/container-rate cycle entry when intraday price confirms bullish momentum; high magnitude reflects shipping's high-beta cyclicality and strong regime-dependent edge",
+      "source": "heuristic",
+      "todo": "Calibrate vs BDI lead-lag correlation with TW shipping names 2020-2026"
+    },
+    "weak_close_penalty": {
+      "value": 12,
+      "rationale": "Heavy penalty for session-end weakness in shipping names, which historically signals freight-rate deterioration or charterer pullback ahead of visible data",
+      "source": "heuristic",
+      "todo": "Backtest 10/12/14 against TW shipping close-to-high ratio vs next-week returns"
+    },
+    "weak_close_threshold": {
+      "value": 0.992,
+      "rationale": "0.8% below-session-high threshold for weak-close detection; shipping's intraday range is wider than average, requiring slightly looser threshold to avoid false positives",
+      "source": "heuristic",
+      "todo": "Calibrate 0.988/0.992/0.995 against TW shipping intraday volatility profile"
+    }
+  },
+  "value_yield": {
+    "cash_flow_boost": {
+      "value": 10,
+      "rationale": "High conviction boost for free-cash-flow yield signal confirmed by intraday price strength; TW value stocks with FCF yield > 8% and positive price confirmation show 12-18% annual outperformance historically",
+      "source": "heuristic",
+      "todo": "Backtest against TWSE FCF-yield sorted quintile returns 2020-2026 to validate boost magnitude"
+    },
+    "yield_trap_penalty": {
+      "value": 10,
+      "rationale": "Penalizes suspiciously high dividend yield (>8%) when accompanied by negative intraday price action; flags potential yield traps where high yield masks deteriorating fundamentals in TW cyclical names",
+      "source": "heuristic",
+      "todo": "Calibrate 8/10/12 against TWSE high-yield trap false-positive rate using forward-return analysis"
+    }
+  },
+  "earnings_quality": {
+    "repeatable_boost": {
+      "value": 9,
+      "rationale": "Strong conviction boost for companies showing 3+ consecutive quarters of positive earnings surprise exceeding analyst consensus; TW firms with repeatable earnings beat patterns sustain momentum for 6-9 months",
+      "source": "heuristic",
+      "todo": "Validate against TWSE earnings-surprise persistence study: compare 1Q/3Q/5Q streak forward returns"
+    },
+    "guidance_penalty": {
+      "value": 8,
+      "rationale": "Penalizes stocks where management guidance revision is downward and confirmed by intraday sell pressure; TW companies issuing negative guidance after hours typically gap down 2-3% next session",
+      "source": "heuristic",
+      "todo": "Backtest penalty accuracy against TWSE post-guidance-revision return distribution 2022-2026"
+    },
+    "guidance_threshold": {
+      "value": 0.99,
+      "rationale": "1% below session high triggers guidance penalty; TW stocks failing to hold within 99% of highs after guidance events indicate market skepticism about management outlook",
+      "source": "heuristic",
+      "todo": "Calibrate 0.985/0.990/0.995 against TWSE guidance-event intraday range patterns"
+    }
+  },
+  "technical_breakout": {
+    "default_volume_floor": {
+      "value": 5000000,
+      "rationale": "5M shares is the baseline liquidity threshold for TWSE breakout candidates; filters out thin retail-driven names that lack institutional participation for conviction reliability",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize floor across 3M/5M/7M"
+    },
+    "strict_volume_floor": {
+      "value": 7000000,
+      "rationale": "Surge-signal validation requires 40% higher volume than default (7M vs 5M) to confirm genuine institutional buying pressure on TWSE, avoiding false breakouts from retail momentum traps",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize surge floor"
+    },
+    "relaxed_volume_floor": {
+      "value": 0,
+      "rationale": "Coverage expansion regime disables volume floor (zero) to permit scanning mid-cap and small-cap TWSE names that exhibit breakout structure but trade below standard liquidity thresholds",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to assess expansion quality"
+    },
+    "low_volume_floor": {
+      "value": 3000000,
+      "rationale": "3M shares lower bound for low-volume participation acceptance; identifies TWSE stocks with meaningful but sub-standard liquidity that still warrant a modest conviction boost for thin-liquidity alpha",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize low-vol band"
+    },
+    "low_volume_boost": {
+      "value": 3,
+      "rationale": "Small +3 conviction boost compensates for the information disadvantage of thin-liquidity TWSE stocks (3M-5M volume) by recognizing that even modest volume participation signals emerging interest in neglected names",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate precision of low-vol boost"
+    },
+    "reject_low_volume_floor": {
+      "value": 5000000,
+      "rationale": "Hard rejection threshold at 5M shares for breakout candidates with 'reject low volume' prompt; prevents low-liquidity TWSE names from entering the pipeline when structure-first filtering is required",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to calibrate false-breakout rejection rate"
+    },
+    "volume_boost": {
+      "value": 8,
+      "rationale": "+8 conviction boost when volume meets the 5M default floor and prompt requests volume confirmation; rewards TWSE breakouts backed by sufficient participation, distinguishing genuine institutional interest from noise",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 6/8/10 values"
+    },
+    "close_strength_penalty": {
+      "value": 1,
+      "rationale": "Small -1 conviction penalty for weak close (last < high×0.985) to mildly flag TWSE intraday reversals where breakout fails to hold near highs, indicating potential distribution rather than accumulation",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate magnitude"
+    },
+    "close_strength_threshold": {
+      "value": 0.985,
+      "rationale": "1.5% below intraday high (last < high×0.985) triggers weak-close penalty; calibrated to TWSE typical intraday range where a close below 98.5% of high suggests selling pressure overwhelmed breakout momentum",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.980/0.985/0.990"
+    },
+    "close_strength_tolerance": {
+      "value": 0.98,
+      "rationale": "2% tolerance band (last >= high×0.98) exempts close from penalty when tolerance is enabled; prevents over-penalizing TWSE stocks that close modestly below highs but still within acceptable reversal range",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize tolerance band"
+    },
+    "surge_boost": {
+      "value": 4,
+      "rationale": "+4 conviction boost when volume meets the strict surge floor (7M+); confirms that TWSE breakout is backed by abnormally high participation, signaling strong institutional conviction in the move",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 3/4/5 values"
+    },
+    "surge_penalty": {
+      "value": 4,
+      "rationale": "-4 conviction penalty when volume fails to meet strict surge floor despite surge requirement; flags TWSE breakouts that lack the expected institutional volume, indicating potential bull trap",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to calibrate false-surge penalty"
+    },
+    "open_rejection_penalty": {
+      "value": 10,
+      "rationale": "-10 conviction penalty when last < open under structure-first breakout filter; a strong TWSE intraday reversal below opening price indicates selling dominated the session, invalidating the breakout thesis",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to validate false-breakout rate"
+    },
+    "late_breakout_penalty": {
+      "value": 8,
+      "rationale": "-8 conviction penalty for late-session breakout fade (last < high×0.998); TWSE late-day reversals suggest exhaustion or program selling rather than sustained buying, reducing breakout credibility",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 6/8/10 values"
+    },
+    "late_breakout_threshold": {
+      "value": 0.998,
+      "rationale": "0.2% below intraday high (last < high×0.998) triggers late-breakout penalty; TWSE closing within 0.2% of high is acceptable, but failure to hold this level signals intraday distribution",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 0.995/0.998/0.999"
+    },
+    "confirmation_boost": {
+      "value": 12,
+      "rationale": "+12 conviction boost for confirmed breakout (last >= high×0.998 AND volume >= 5M); dual-confirmation of price holding near highs with institutional volume is the strongest TWSE breakout signal",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 10/12/14 values"
+    },
+    "confirmation_threshold": {
+      "value": 0.998,
+      "rationale": "99.8% of intraday high required for confirmation boost; ensures TWSE close is essentially at or above the session high, validating that breakout momentum persisted through the close",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize confirmation quality"
+    },
+    "catch_up_boost": {
+      "value": 6,
+      "rationale": "+6 conviction boost for catch-up momentum (last in 0.993-0.998×high range, above open); identifies TWSE stocks mounting an intraday recovery that hasn't yet reached full breakout, offering early entry opportunity",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) across 4/6/8 values"
+    },
+    "catch_up_lower_threshold": {
+      "value": 0.993,
+      "rationale": "0.7% below high (last >= high×0.993) is the lower bound for catch-up momentum detection; TWSE stocks recovering to within 0.7% of highs show meaningful buying interest resuming after a pullback",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone"
+    },
+    "catch_up_upper_threshold": {
+      "value": 0.998,
+      "rationale": "0.2% below high (last < high×0.998) is the upper bound for catch-up zone; stocks above this level are classified as confirmed breakouts rather than catch-up candidates, avoiding overlap with ConfirmationBoost",
+      "source": "heuristic",
+      "todo": "Calibrate: backtest against TWSE historical breakout patterns (2024-2026 daily data) to optimize catch-up zone"
+    }
+  },
+  "growth_momentum": {
+    "conviction_base": {
+      "value": 45,
+      "rationale": "Moderate starting conviction for growth-momentum style; lower than sector base (60) because growth picks carry higher earnings-volatility risk requiring more confirmatory signals before full confidence",
+      "source": "heuristic",
+      "todo": "Calibrate from backtest: compare hit rates at base 40/45/50 across growth-momentum picks"
+    },
+    "price_penalty": {
+      "value": 8,
+      "rationale": "Intraday weakness penalty: when last < open the closing buyer lost control, signalling potential distribution in growth names that rely on sustained buying pressure",
+      "source": "heuristic",
+      "todo": "Calibrate 6/8/10 via cross-executor backtest sweep comparing forward returns on penalized vs non-penalized picks"
+    },
+    "trend_confirmation_penalty": {
+      "value": 15,
+      "rationale": "Heavy penalty when prompt demands trend confirmation but price closes below open, indicating the trend hypothesis is contradicted by intraday price action",
+      "source": "heuristic",
+      "todo": "Backtest 12/15/18 to measure false-trend-filter precision at each penalty level"
+    },
+    "downgrade_price_penalty": {
+      "value": 12,
+      "rationale": "Price-based downgrade penalty: when last falls below high×threshold (0.995), the stock failed to hold its peak, signalling potential reversal from a downgrade event",
+      "source": "heuristic",
+      "todo": "Calibrate 10/12/14: compare downgrade penalty hit rate against post-downgrade 5-day forward returns"
+    },
+    "downgrade_open_penalty": {
+      "value": 8,
+      "rationale": "Open-based downgrade penalty: when last < open alongside downgrade signals, intraday selling pressure compounds the downgrade thesis with visible bearish conviction",
+      "source": "heuristic",
+      "todo": "Backtest 6/8/10: measure whether open-penalty adds discriminative value beyond price-penalty alone"
+    },
+    "exploratory_price_penalty": {
+      "value": 6,
+      "rationale": "Reduced price penalty for exploratory-mode picks (6 vs standard 12); exploratory signals have wider hypothesis space so equal-weighting full downgrade penalty would over-penalize novel growth candidates",
+      "source": "heuristic",
+      "todo": "Monitor exploratory vs standard penalty hit rates separately; merge if statistically indistinguishable"
+    },
+    "exploratory_open_penalty": {
+      "value": 4,
+      "rationale": "Reduced open penalty for exploratory mode (4 vs standard 8); acknowledges higher uncertainty tolerance when probing nascent growth themes before trend is established",
+      "source": "heuristic",
+      "todo": "Track exploratory-penalty cohort performance vs standard cohort to calibrate optimal discount factor"
+    },
+    "downgrade_threshold": {
+      "value": 0.995,
+      "rationale": "Downgrade trigger threshold: last < high×0.995 means a 0.5% drop from session high, sensitive enough to catch early distribution in high-momentum names without false-triggering on noise",
+      "source": "heuristic",
+      "todo": "Calibrate 0.990/0.995/0.998: measure false-positive rate at each threshold on growth-momentum backtest universe"
+    }
+  },
+  "factor_conviction": {
+    "momentum_high_threshold": {
+      "value": 0.4,
+      "rationale": "Momentum factor score ≥0.4 triggers high-conviction delta (+8); top 20% of TWSE momentum distribution, used by TechnicalBreakout for breakout-confirmed momentum picks",
+      "source": "heuristic",
+      "todo": "Calibrate 0.3/0.4/0.5 against TWSE momentum-quintile forward returns; higher threshold increases selectivity"
+    },
+    "momentum_high_delta": {
+      "value": 8,
+      "rationale": "+8 conviction boost for strong momentum (>0.4); magnitude reflects momentum factor's historical 60-65% hit rate on TWSE mid/large-cap universe over 20-day forward window",
+      "source": "heuristic",
+      "todo": "Calibrate 6/8/10: measure hit-rate uplift per delta increment on backtest"
+    },
+    "momentum_mod_threshold": {
+      "value": 0.15,
+      "rationale": "Momentum score ≥0.15 triggers moderate delta (+4); captures above-median momentum stocks (40th-80th percentile), used by TechnicalBreakout for standard picks and Shipping for BDI-cycle entries",
+      "source": "heuristic",
+      "todo": "Calibrate 0.10/0.15/0.20 against TWSE momentum moderate-tier hit rate and false-positive rate"
+    },
+    "momentum_mod_delta": {
+      "value": 4,
+      "rationale": "+4 conviction boost for moderate momentum; conservative half-weighting relative to high tier reflects lower signal strength at median momentum levels where noise increases",
+      "source": "heuristic",
+      "todo": "Calibrate 3/4/5: verify linearity of delta-to-forward-return relationship"
+    },
+    "momentum_weak_threshold": {
+      "value": -0.1,
+      "rationale": "Momentum score ≤-0.1 triggers penalty (-4); identifies negative-momentum TWSE stocks where trend has reversed, protecting against value-trap entries in declining names",
+      "source": "heuristic",
+      "todo": "Calibrate -0.15/-0.10/-0.05: compare penalty-hit rate against subsequent drawdown severity"
+    },
+    "momentum_weak_delta": {
+      "value": -4,
+      "rationale": "-4 conviction penalty for weak/negative momentum; symmetric to moderate delta (+4) reflecting equal conviction adjustment magnitude in both directions",
+      "source": "heuristic",
+      "todo": "Calibrate -5/-4/-3: validate symmetry assumption against TWSE bear-regime momentum patterns"
+    },
+    "value_high_threshold": {
+      "value": 0.3,
+      "rationale": "Value factor score ≥0.3 triggers high-conviction delta (+8); captured by ValueYield executor for deep-value picks with strong P/B and P/E discounts on TWSE",
+      "source": "heuristic",
+      "todo": "Calibrate 0.25/0.30/0.40 against TWSE value-quintile forward returns and value-premium persistence"
+    },
+    "value_high_delta": {
+      "value": 8,
+      "rationale": "+8 conviction boost for deep value (>0.3); TW value premium averages 3-5% annual excess return in top value quintile, warranting conviction proportional to momentum boost",
+      "source": "heuristic",
+      "todo": "Calibrate 6/8/10: measure hit-rate uplift and alpha contribution per delta increment"
+    },
+    "value_mod_threshold": {
+      "value": 0.1,
+      "rationale": "Value score ≥0.1 triggers moderate delta (+4); above-median value used by Financials (bank valuations) and ValueYield (broad value screening) for moderate conviction",
+      "source": "heuristic",
+      "todo": "Calibrate 0.05/0.10/0.15 against TWSE value moderate-tier forward returns; optimize for Sharpe improvement"
+    },
+    "value_mod_delta": {
+      "value": 4,
+      "rationale": "+4 conviction boost for moderate value; consistent with momentum moderate delta, maintaining factor-weight symmetry across the multi-factor scoring framework",
+      "source": "heuristic",
+      "todo": "Calibrate 3/4/5: validate cross-factor delta consistency improves overall portfolio Sharpe"
+    },
+    "value_weak_threshold": {
+      "value": -0.2,
+      "rationale": "Value score ≤-0.2 triggers penalty (-5); flags overvalued stocks (negative value factor) where premium valuations lack fundamental support, common in TW growth-bubble names",
+      "source": "heuristic",
+      "todo": "Calibrate -0.25/-0.20/-0.15: compare penalty-hit rate against value-trap false-positive rate"
+    },
+    "value_weak_delta": {
+      "value": -5,
+      "rationale": "-5 conviction penalty for negative value factor; slightly larger magnitude than momentum weak (-4) because value-factor reversals tend to be more persistent in TW market",
+      "source": "heuristic",
+      "todo": "Calibrate -6/-5/-4: verify value-penalty asymmetry improves risk-adjusted returns vs symmetric approach"
+    },
+    "quality_threshold": {
+      "value": 0.2,
+      "rationale": "Quality factor score ≥0.2 triggers +4 delta; captures firms with strong ROE, low accruals, and stable margins — used by ValueYield, EarningsQuality, and Financials executors",
+      "source": "heuristic",
+      "todo": "Calibrate 0.15/0.20/0.30 against quality-quintile forward returns on TWSE; higher threshold increases purity"
+    },
+    "quality_delta": {
+      "value": 4,
+      "rationale": "+4 conviction boost for quality; matches moderate-tier delta convention across all factors, ensuring uniform factor-weight contribution scaling",
+      "source": "heuristic",
+      "todo": "Calibrate 3/4/5: validate hit-rate improvement per delta increment in quality-sorted TWSE backtest"
+    },
+    "liquidity_high_threshold": {
+      "value": 0.5,
+      "rationale": "Liquidity score ≥0.5 triggers +5 delta; identifies highly liquid TWSE stocks (top quartile turnover, tight spreads) where execution risk is minimal — used by TechnicalBreakout for volume-confirmed entries",
+      "source": "heuristic",
+      "todo": "Calibrate 0.4/0.5/0.6 against liquidity-quartile execution slippage and fill-rate data"
+    },
+    "liquidity_high_delta": {
+      "value": 5,
+      "rationale": "+5 conviction boost for high liquidity; slightly higher than standard moderate delta (+4) because liquidity directly reduces execution costs, providing a tangible alpha enhancement",
+      "source": "heuristic",
+      "todo": "Calibrate 4/5/6: measure alpha contribution of liquidity boost vs execution-cost savings"
+    },
+    "liquidity_good_threshold": {
+      "value": 0.2,
+      "rationale": "Liquidity score ≥0.2 triggers +3 delta; adequate liquidity for institutional-sized TWSE orders without significant market impact — used by TechnicalBreakout and ETFRotation executors",
+      "source": "heuristic",
+      "todo": "Calibrate 0.15/0.20/0.30 against TWSE institutional order market-impact models"
+    },
+    "liquidity_good_delta": {
+      "value": 3,
+      "rationale": "+3 conviction boost for adequate liquidity; modest delta reflecting that good liquidity enables but doesn't generate alpha — it removes a constraint rather than adding edge",
+      "source": "heuristic",
+      "todo": "Calibrate 2/3/4: verify marginal benefit of liquidity boost beyond execution-cost reduction"
+    },
+    "liquidity_low_threshold": {
+      "value": -0.3,
+      "rationale": "Liquidity score ≤-0.3 triggers -5 penalty; identifies stocks where bid-ask spreads and turnover indicate prohibitive execution costs (>50bp estimated slippage) for institutional positions",
+      "source": "heuristic",
+      "todo": "Calibrate -0.35/-0.30/-0.20 against TWSE low-liquidity stock execution-cost and fill-failure data"
+    },
+    "liquidity_low_delta": {
+      "value": -5,
+      "rationale": "-5 conviction penalty for insufficient liquidity; magnitude reflects that poor liquidity can turn a good signal into a losing trade through slippage, making it a first-order risk factor",
+      "source": "heuristic",
+      "todo": "Calibrate -6/-5/-4: validate penalty magnitude against actual TWSE slippage costs in low-liquidity regime"
+    }
+  }
+}

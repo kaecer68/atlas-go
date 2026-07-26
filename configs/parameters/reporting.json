@@ -1,0 +1,12 @@
+{
+  "win_rate_threshold": {
+    "value": 0.002,
+    "rationale": "0.2% cost-adjusted threshold for win-rate classification. Covers transaction cost (~0.15% in TW market) + slippage buffer. ForwardReturn must exceed this to count as a win.",
+    "source": "heuristic"
+  },
+  "sharpe_min_samples": {
+    "value": 5,
+    "rationale": "Minimum 5 per-agent forward-return samples before SharpeLike is reported. Below this, statistical significance is poor and the value is shown as N/A on the frontend.",
+    "source": "heuristic"
+  }
+}

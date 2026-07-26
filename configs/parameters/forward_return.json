@@ -1,0 +1,22 @@
+{
+  "risk_on_mean": {
+    "value": 0.0008,
+    "rationale": "Risk-on regime expected positive daily drift on TWSE; long-term equity premium",
+    "source": "heuristic"
+  },
+  "risk_off_mean": {
+    "value": 0.0001,
+    "rationale": "Risk-off regime near-zero drift reflects defensive positioning",
+    "source": "heuristic"
+  },
+  "risk_on_std_dev": {
+    "value": 0.015,
+    "rationale": "Risk-on regime 1.5% daily vol matches typical TWSE large-cap",
+    "source": "heuristic"
+  },
+  "risk_off_std_dev": {
+    "value": 0.008,
+    "rationale": "Risk-off regime 0.8% daily vol reflects compressed trading ranges",
+    "source": "heuristic"
+  }
+}

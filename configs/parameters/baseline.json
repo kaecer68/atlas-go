@@ -1,0 +1,144 @@
+{
+  "starting_cash": {
+    "value": 3000000,
+    "rationale": "3M TWD starting capital for simulation",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_position_weight": {
+    "value": 0.18,
+    "rationale": "18% max position weight for diversification",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_open_positions": {
+    "value": 5,
+    "rationale": "Maximum 5 open positions for focus",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "min_tradable_volume": {
+    "value": 1000000,
+    "rationale": "1M TWD minimum daily volume for liquidity",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "min_recommendation_conviction": {
+    "value": 60,
+    "rationale": "Minimum 60 conviction for recommendations to pass CRO",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "require_cro_pass": {
+    "value": true,
+    "rationale": "Require CRO approval before execution",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "transaction_cost_bps": {
+    "value": 14.25,
+    "rationale": "TW stock minimum brokerage fee: 0.1425% = 14.25 bps (tax calculated separately via computeTaxAdjustedResults)",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "TWSE regulated minimum brokerage fee (Article 3, TWSE Brokerage Fee Standards)",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "discounted_commission_bps": {
+    "value": 8.5,
+    "rationale": "Discounted electronic trading commission rate: 0.085% = 8.5 bps",
+    "source": "empirical"
+  },
+  "commission_discount_threshold": {
+    "value": 500000,
+    "rationale": "Minimum order notional (NTD) to qualify for discounted commission rate",
+    "source": "heuristic"
+  },
+  "slippage_bps": {
+    "value": 4,
+    "rationale": "4 bps estimated slippage for market orders",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "avg_trading_cost": {
+    "value": 0.00654,
+    "rationale": "Aggregate round-trip trading cost for Taiwan equities: commission (0.1425% × broker discount ~0.6 × 2 sides) + slippage (0.1% × 2 sides) + market impact. Calibrated from TWSE empirical data.",
+    "source": "empirical",
+    "todo": "Recalibrate against rolling 12-month TWSE trading cost distribution"
+  },
+  "reserve_cash_fraction": {
+    "value": 0.1,
+    "rationale": "10% cash reserve for liquidity and opportunities",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Baseline policy",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  }
+}

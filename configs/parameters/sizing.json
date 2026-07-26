@@ -1,0 +1,288 @@
+{
+  "kelly_fraction": {
+    "value": 0.25,
+    "rationale": "Half-Kelly for safety; literature recommends 0.2-0.5",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "vol_lookback_days": {
+    "value": 20,
+    "rationale": "20-day volatility lookback",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_position_by_adv": {
+    "value": 0.01,
+    "rationale": "1% of average daily volume",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_drawdown_limit": {
+    "value": 0.15,
+    "rationale": "15% max drawdown limit (aligned with professional fund risk controls: 15-25% range)",
+    "source": "heuristic",
+    "last_calibrated": "2026-05-14T23:51:04Z",
+    "calibration_timestamp": "2026-05-14T23:51:04Z",
+    "calibration_method": "VaR_inference",
+    "citation": {
+      "source_type": "calibrated",
+      "source_reference": "Professional fund risk management guidelines; UCITS/ESMA best practices",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "not_applicable",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341979"
+    }
+  },
+  "atr_multiplier": {
+    "value": 2,
+    "rationale": "2x ATR stop-loss is standard",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "correlation_penalty": {
+    "value": 0.5,
+    "rationale": "50% correlation penalty scaling",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341983"
+    }
+  },
+  "correlation_threshold": {
+    "value": 0.7,
+    "rationale": "70% correlation is high and warrants penalty",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "default_win_rate": {
+    "value": 0.5,
+    "rationale": "Neutral prior: 50% win rate",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned backtest_optimization validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341988"
+    }
+  },
+  "default_payoff_ratio": {
+    "value": 1,
+    "rationale": "Neutral prior: 1:1 payoff ratio",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned backtest_optimization validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341991"
+    }
+  },
+  "target_volatility": {
+    "value": 0.2,
+    "rationale": "20% annual target volatility",
+    "source": "literature",
+    "last_calibrated": "2026-05-04T00:00:00Z",
+    "calibration_timestamp": "2026-05-04T00:00:00Z",
+    "calibration_method": "VaR_inference",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "vol_adjustment_min": {
+    "value": 0.25,
+    "rationale": "Minimum 0.25x size adjustment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "vol_adjustment_max": {
+    "value": 2,
+    "rationale": "Maximum 2.0x size adjustment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "atr_target_risk": {
+    "value": 0.02,
+    "rationale": "2% risk per trade",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "atr_adjustment_min": {
+    "value": 0.25,
+    "rationale": "Minimum 0.25x ATR adjustment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "atr_adjustment_max": {
+    "value": 2,
+    "rationale": "Maximum 2.0x ATR adjustment",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "correlation_penalty_factor": {
+    "value": 0.7,
+    "rationale": "70% of correlation used as penalty",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341998"
+    }
+  },
+  "max_correlation_penalty": {
+    "value": 0.7,
+    "rationale": "Maximum 70% correlation penalty",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "default_volatility": {
+    "value": 0.25,
+    "rationale": "25% annualized default volatility",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "default_adv": {
+    "value": 100000000,
+    "rationale": "100M TWD default average daily volume",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Position sizing methodology",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "default_atr": {
+    "value": 0.02,
+    "rationale": "2% of price as reasonable default. WARNING: 0 default causes ATR adjustment to be skipped entirely, leading to dangerous position sizing with no volatility adjustment.",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via expert_review during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "expert_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342004"
+    }
+  }
+}

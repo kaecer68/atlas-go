@@ -1,0 +1,134 @@
+{
+  "_default": {
+    "target_multiplier": {
+      "value": 1.05,
+      "rationale": "5% default upside target",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% default stop-loss",
+      "source": "heuristic"
+    }
+  },
+  "ai_supply_chain_desk": {
+    "target_multiplier": {
+      "value": 1.08,
+      "rationale": "8% upside target for AI supply chain",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss for AI supply chain",
+      "source": "heuristic"
+    }
+  },
+  "alpha_discovery": {
+    "target_multiplier": {
+      "value": 1.06,
+      "rationale": "6% upside target for alpha discovery",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss for alpha discovery",
+      "source": "heuristic"
+    }
+  },
+  "earnings_quality": {
+    "target_multiplier": {
+      "value": 1.06,
+      "rationale": "6% upside target for earnings quality",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss for earnings quality",
+      "source": "heuristic"
+    }
+  },
+  "etf_rotation_desk": {
+    "target_multiplier": {
+      "value": 1.04,
+      "rationale": "4% upside target for ETF rotation",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.97,
+      "rationale": "3% stop-loss for ETF rotation",
+      "source": "heuristic"
+    }
+  },
+  "financials_desk": {
+    "target_multiplier": {
+      "value": 1.05,
+      "rationale": "5% upside target for financials",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.96,
+      "rationale": "4% stop-loss for financials",
+      "source": "heuristic"
+    }
+  },
+  "growth_momentum": {
+    "target_multiplier": {
+      "value": 1.08,
+      "rationale": "8% upside target for growth momentum",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss for growth momentum",
+      "source": "heuristic"
+    }
+  },
+  "semiconductor_desk": {
+    "target_multiplier": {
+      "value": 1.06,
+      "rationale": "6% upside target for semiconductor sector",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.95,
+      "rationale": "5% stop-loss for semiconductor sector",
+      "source": "heuristic"
+    }
+  },
+  "shipping_desk": {
+    "target_multiplier": {
+      "value": 1.07,
+      "rationale": "7% upside target for shipping sector",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.94,
+      "rationale": "6% stop-loss for shipping sector",
+      "source": "heuristic"
+    }
+  },
+  "technical_breakout": {
+    "target_multiplier": {
+      "value": 1.1,
+      "rationale": "10% upside target for technical breakout",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.94,
+      "rationale": "6% stop-loss for technical breakout",
+      "source": "heuristic"
+    }
+  },
+  "value_yield": {
+    "target_multiplier": {
+      "value": 1.05,
+      "rationale": "5% upside target for value/yield",
+      "source": "heuristic"
+    },
+    "stop_loss_multiplier": {
+      "value": 0.96,
+      "rationale": "4% stop-loss for value/yield",
+      "source": "heuristic"
+    }
+  }
+}

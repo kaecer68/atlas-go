@@ -1,0 +1,360 @@
+{
+  "macro_risk": {
+    "carry_trade_unwind_threshold": {
+      "value": 144.8405265842659,
+      "rationale": "JPY/USD above 145 triggers carry trade unwind concern; TW market foreign outflow accelerates above this threshold",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Recalibrate with 2024-2026 JPY-TWSE correlation data"
+    },
+    "vix_threshold": {
+      "value": 28.57142857142857,
+      "rationale": "VIX above 30 indicates global fear regime triggering TW foreign capital outflow",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Recalibrate with 2025-2026 VIX-TAIEX correlation"
+    },
+    "us10y_threshold": {
+      "value": 4.357142857142857,
+      "rationale": "US 10Y above 4.5% signals rate-driven capital reallocation from EM equities; TW market shows sensitivity at this level",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "oil_shock_threshold_pct": {
+      "value": 11.142857142857142,
+      "rationale": "10% oil price surge triggers supply-chain cost shock for TW manufacturing; historical shocks: 2022 Ukraine (+30%), 2023 OPEC cut (+8%)",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "gold_surge_threshold_pct": {
+      "value": 5.428571428571429,
+      "rationale": "5% gold surge signals risk-off flight to safety, correlating with TW equity outflows",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Validate against gold-USD-TWD correlation during 2022-2026 risk events"
+    },
+    "dxy_surge_threshold_pct": {
+      "value": 1.5714285714285714,
+      "rationale": "1.5% DXY surge signals USD strength that pressures EM currencies including TWD; TW exporters face FX headwind",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "twd_stress_threshold_pct": {
+      "value": 2.2857142857142856,
+      "rationale": "2% TWD depreciation in a session signals capital flight; TW central bank typically intervenes at this level",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "outflow_prob_base": {
+      "value": 37.14285714285714,
+      "rationale": "35% baseline foreign outflow probability under normal conditions; calibrated from TWSE foreign flow data 2020-2025",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "outflow_prob_max": {
+      "value": 75,
+      "rationale": "80% max outflow probability under extreme conditions; upper bound observed during 2020 COVID and 2022 rate shock",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_timestamp": "2026-06-03T12:38:36.805956+08:00",
+      "calibration_method": "bayesian_optimization"
+    }
+  },
+  "structural_trend": {
+    "min_trend_strength": {
+      "value": 0.47010489901763036,
+      "rationale": "Minimum 0.7 trend strength for structural classification; below this threshold trends are considered noise",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Calibrate against TW structural trend detection accuracy 2020-2026"
+    },
+    "min_confidence": {
+      "value": 0.9245870725774641,
+      "rationale": "75% minimum confidence for structural trend signal; balances false positive rate vs early detection",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "min_hit_rate": {
+      "value": 0.8698221784014772,
+      "rationale": "70% minimum historical hit rate for narrative events to be considered valid structural trends",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Validate against narrative event hit rate distribution"
+    },
+    "override_threshold": {
+      "value": 0.8002610304160651,
+      "rationale": "0.65 threshold for structural trend to override cyclical signals; must be lower than MinConfidence to prioritize structure",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "ai_revenue_growth_threshold": {
+      "value": 52.52541850263379,
+      "rationale": "50% YoY AI revenue growth threshold flags structural AI capex surge; TSMC AI revenue grew ~50% in 2024-2025",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "cowos_utilization_threshold": {
+      "value": 75.05446346221828,
+      "rationale": "85% CoWoS utilization signals near-capacity AI packaging demand; TSMC CoWoS utilization tracked at 90%+ in 2025",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "capex_growth_threshold": {
+      "value": 42.00341894803648,
+      "rationale": "40% YoY capex growth flags structural capacity expansion; TSMC capex grew ~34% in 2024, ~40% planned for 2025",
+      "source": "empirical",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization"
+    },
+    "semiconductor_index_threshold": {
+      "value": 0,
+      "rationale": "Placeholder for semiconductor index trend threshold; pending index construction",
+      "source": "heuristic",
+      "last_calibrated": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_timestamp": "2026-06-03T12:24:22.314694+08:00",
+      "calibration_method": "bayesian_optimization",
+      "todo": "Define once TW semiconductor composite index is built"
+    }
+  },
+  "drawdown": {
+    "levels": {
+      "value": {
+        "emergency": {
+          "percentage": 0.9,
+          "max_exposure": 0.1
+        },
+        "light": {
+          "percentage": 0.15,
+          "max_exposure": 0.85
+        },
+        "moderate": {
+          "percentage": 0.35,
+          "max_exposure": 0.65
+        },
+        "none": {
+          "percentage": 0,
+          "max_exposure": 1
+        },
+        "severe": {
+          "percentage": 0.6,
+          "max_exposure": 0.4
+        }
+      },
+      "rationale": "Five-tier drawdown risk framework: none (0%), light (15%), moderate (35%), severe (60%), emergency (90%); calibrated to TW market correction patterns",
+      "source": "heuristic",
+      "todo": "Validate drawdown level thresholds against 2020-2026 TWSE drawdown distribution"
+    },
+    "orange_override_min_score": {
+      "value": 0.55,
+      "rationale": "Minimum composite score for orange (moderate) drawdown override of agent recommendations",
+      "source": "heuristic"
+    },
+    "red_override_min_score": {
+      "value": 0.75,
+      "rationale": "Minimum composite score for red (severe/emergency) drawdown override; must be > OrangeOverrideMinScore",
+      "source": "heuristic"
+    },
+    "sector_constraints_risk_off": {
+      "value": {
+        "ai_supply_chain": 0.3,
+        "emerging_market": 0.1,
+        "gold": 1.5,
+        "small_cap": 0.2,
+        "utilities": 1.2
+      },
+      "rationale": "Risk-off sector constraints: AI supply chain cut to 30% of normal, small cap/EM near-zero; gold/utilities boosted as defensive rotation",
+      "source": "heuristic"
+    },
+    "sector_constraints_carry_trade_unwind": {
+      "value": {
+        "all_equities": 0.1,
+        "cash": 2,
+        "financials": 0.1,
+        "tech": 0.05
+      },
+      "rationale": "Carry trade unwind constraints: equities severely curtailed (5-10%), cash doubled; based on 2024 JPY carry unwind impact on TW markets",
+      "source": "empirical"
+    },
+    "sector_constraints_sector_rotation": {
+      "value": {
+        "energy": 1.8,
+        "high_valuation_tech": 0.3,
+        "oil_services": 1.5,
+        "rate_sensitive": 0.4
+      },
+      "rationale": "Sector rotation constraints: energy/oil services boosted 1.5-1.8x on commodity surge; high-valuation tech and rate-sensitives cut to 30-40%",
+      "source": "heuristic"
+    }
+  },
+  "sector_rotation": {
+    "base_allocations": {
+      "value": {
+        "ai_supply_chain": 0.15,
+        "cash": 0.1,
+        "consumer": 0.04,
+        "defensive": 0.1,
+        "electronics": 0.05,
+        "energy": 0.04,
+        "financials": 0.11,
+        "industrial": 0.04,
+        "leo_satellite": 0.05,
+        "robotics": 0.06,
+        "semiconductor": 0.19,
+        "shipping": 0.07
+      },
+      "rationale": "TW market sector allocation: semiconductor (19%) + AI supply chain (15%) dominate (34% combined); defensive+cash (20%) reserve; all sectors sum to 100%",
+      "source": "heuristic",
+      "todo": "Calibrate sector weights against TWSE sector index market cap weights 2025-2026"
+    },
+    "min_allocation": {
+      "value": 0.02,
+      "rationale": "Minimum 2% sector allocation prevents zero-weight exclusion of small sectors",
+      "source": "heuristic"
+    },
+    "max_allocation": {
+      "value": 0.4,
+      "rationale": "Maximum 40% single-sector allocation prevents over-concentration; ~2x semiconductor base weight (19%) allows tactical overweight",
+      "source": "heuristic"
+    },
+    "rebalance_threshold": {
+      "value": 0.01,
+      "rationale": "1% rebalance threshold avoids excessive trading; sector weight deviation must exceed 1% to trigger rebalance",
+      "source": "heuristic"
+    }
+  },
+  "strategy_evolution": {
+    "cooldown_period_hours": {
+      "value": 24,
+      "rationale": "24-hour cooldown between strategy switches prevents whipsaw during volatile regime transitions",
+      "source": "heuristic",
+      "todo": "Test 24h vs 48h vs 72h cooldown impact on strategy stability"
+    },
+    "configs": {
+      "value": {
+        "cautious": {
+          "max_position_size": 0.12,
+          "max_sector_exposure": 0.25,
+          "min_cash_reserve": 0.1,
+          "hedge_ratio": 0.1,
+          "allow_new_positions": true,
+          "allow_concentration": false
+        },
+        "defensive": {
+          "max_position_size": 0.08,
+          "max_sector_exposure": 0.2,
+          "min_cash_reserve": 0.2,
+          "hedge_ratio": 0.2,
+          "allow_new_positions": false,
+          "allow_concentration": false
+        },
+        "hedged": {
+          "max_position_size": 0.1,
+          "max_sector_exposure": 0.25,
+          "min_cash_reserve": 0.15,
+          "hedge_ratio": 0.3,
+          "allow_new_positions": true,
+          "allow_concentration": false
+        },
+        "normal": {
+          "max_position_size": 0.15,
+          "max_sector_exposure": 0.3,
+          "min_cash_reserve": 0.05,
+          "hedge_ratio": 0,
+          "allow_new_positions": true,
+          "allow_concentration": true
+        },
+        "suspended": {
+          "max_position_size": 0,
+          "max_sector_exposure": 0,
+          "min_cash_reserve": 1,
+          "hedge_ratio": 0,
+          "allow_new_positions": false,
+          "allow_concentration": false
+        }
+      },
+      "rationale": "Five strategy states from normal (full risk) to suspended (no positions); progressive de-risking: cautious → defensive → hedged → suspended",
+      "source": "heuristic",
+      "todo": "Validate strategy state transitions with backtest across 2022 (bear), 2023-2024 (bull), 2025 (mixed) cycles"
+    }
+  },
+  "executors": {
+    "vix_momentum_crash_threshold": {
+      "value": 30,
+      "rationale": "VIX above 30 signals momentum crash regime; TW market foreign flow sensitivity increases ~3x above this level",
+      "source": "empirical"
+    },
+    "crowding_penalty_agents_3": {
+      "value": 0.75,
+      "rationale": "When 3 agents crowd same stock, conviction reduced to 75% to prevent herding; based on Kelly criterion adjustment for correlated bets",
+      "source": "heuristic"
+    },
+    "crowding_penalty_agents_4": {
+      "value": 0.6,
+      "rationale": "When 4+ agents crowd same stock, conviction reduced to 60%; exponential penalty as crowding increases",
+      "source": "heuristic"
+    },
+    "min_trade_amount": {
+      "value": 100000,
+      "rationale": "100K TWD minimum trade amount filters out uneconomically small orders; ~$3K USD at current FX",
+      "source": "heuristic"
+    },
+    "max_stocks_default": {
+      "value": 8,
+      "rationale": "Default 8 stocks max per session balances diversification with position concentration; aligned with baseline MaxOpenPositions (5) + buffer",
+      "source": "heuristic"
+    },
+    "max_stocks_min": {
+      "value": 5,
+      "rationale": "Minimum 5 stocks ensures basic sector diversification across semiconductor, AI, financials, shipping, and one defensive",
+      "source": "heuristic"
+    },
+    "max_stocks_max": {
+      "value": 12,
+      "rationale": "Maximum 12 stocks prevents over-diversification diluting alpha; above 12, marginal diversification benefit < transaction cost",
+      "source": "literature"
+    },
+    "conviction_floor_default": {
+      "value": 50,
+      "rationale": "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+      "source": "heuristic",
+      "todo": "Calibrate floor against executor historical precision-recall curve"
+    }
+  },
+  "simulation": {
+    "neutral_regime_sizing_factor": {
+      "value": 0.85,
+      "rationale": "85% position sizing in neutral regime reduces max position from full weight to 85%; provides 15% buffer for regime uncertainty",
+      "source": "heuristic",
+      "todo": "Calibrate sizing factor [0.70-1.00] via walk-forward backtest per regime"
+    }
+  }
+}

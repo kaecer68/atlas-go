@@ -1,0 +1,230 @@
+{
+  "momentum_lookback_days": {
+    "value": 20,
+    "rationale": "Standard 20-day momentum window",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "momentum_stddev_divisor": {
+    "value": 0.3,
+    "rationale": "30% return = full score; most TW stocks score below 0.3",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341929"
+    }
+  },
+  "momentum_intraday_discount": {
+    "value": 0.5,
+    "rationale": "50% discount for intraday returns when historical data unavailable",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned cross_reference validation via code audit",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "cross_reference",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341932"
+    }
+  },
+  "momentum_intraday_threshold": {
+    "value": 0.1,
+    "rationale": "10% intraday return = full score",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_pe_range_center": {
+    "value": 5,
+    "rationale": "P/E=5 is cheap; P/E=50 is expensive",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_pe_range_width": {
+    "value": 45,
+    "rationale": "Range [5, 50] covers most TW stocks",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_pb_range_center": {
+    "value": 0.5,
+    "rationale": "P/B=0.5 is cheap",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_pb_range_width": {
+    "value": 4.5,
+    "rationale": "Range [0.5, 5.0]",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_ps_range_center": {
+    "value": 0.5,
+    "rationale": "P/S=0.5 is cheap",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_ps_range_width": {
+    "value": 9.5,
+    "rationale": "Range [0.5, 10.0]",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "quality_dividend_yield_cap": {
+    "value": 5,
+    "rationale": "5% dividend yield is excellent for TW market",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "high",
+      "update_policy": "auto",
+      "validation_method": "TWSE historical data validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "quality_volatility_std": {
+    "value": 0.02,
+    "rationale": "2% daily volatility benchmark based on TW market empirical data (TW stocks typically exhibit 1-3% daily volatility)",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Parameter validated via expert_review during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "expert_review",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341942"
+    }
+  },
+  "quality_fallback_score": {
+    "value": 0.05,
+    "rationale": "Low fallback score when data unavailable",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Factor scoring for TW market",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "value_fallback_score": {
+    "value": 0.05,
+    "rationale": "Conservative fallback score when data unavailable (harmonized with QualityFallbackScore)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Harmonized with QualityFallbackScore (0.05); ensures consistent conservative fallback behavior",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "cross_reference",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341946"
+    }
+  },
+  "institutional_sentiment_weights": {
+    "value": {
+      "domestic": 0.3,
+      "foreign": 0.5,
+      "margin": 0.2
+    },
+    "rationale": "Foreign flow 50%, domestic 30%, margin balance 20%",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341950"
+    }
+  },
+  "fallback_weight_reduction": {
+    "value": 0.5,
+    "rationale": "50% weight reduction for fallback estimates",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.341954"
+    }
+  }
+}

@@ -1,0 +1,231 @@
+{
+  "a1_weight": {
+    "value": 0.25,
+    "rationale": "Margin Balance Δ Z-score contributes 25% to Part A score",
+    "source": "heuristic",
+    "todo": "Calibrate from historical margin balance vs. forward return IC"
+  },
+  "a2_weight": {
+    "value": 0.2,
+    "rationale": "Day Trading Ratio contributes 20% to Part A score",
+    "source": "heuristic"
+  },
+  "a3_weight": {
+    "value": 0.2,
+    "rationale": "Margin Maintenance Proxy contributes 20% to Part A score",
+    "source": "heuristic"
+  },
+  "a4_weight": {
+    "value": 0.15,
+    "rationale": "VIX Nonlinear Mapping contributes 15% to Part A score",
+    "source": "literature"
+  },
+  "a5_weight": {
+    "value": 0.1,
+    "rationale": "Weekly PCR Proxy contributes 10% to Part A score",
+    "source": "heuristic"
+  },
+  "a6_weight": {
+    "value": 0.1,
+    "rationale": "Odd-Lot Trading contributes 10% to Part A score",
+    "source": "heuristic"
+  },
+  "a_part_weight": {
+    "value": 0.4,
+    "rationale": "Part A contributes 40% to final RSI-tw score",
+    "source": "heuristic",
+    "todo": "Calibrate optimal A/C split via walk-forward"
+  },
+  "c_part_weight": {
+    "value": 0.25,
+    "rationale": "Part C contributes 25% to final RSI-tw score",
+    "source": "heuristic",
+    "todo": "Calibrate optimal A/C split via walk-forward"
+  },
+  "a3_midpoint": {
+    "value": 0.5,
+    "rationale": "50th percentile is the neutral midpoint for maintenance ratio",
+    "source": "heuristic"
+  },
+  "a3_scale": {
+    "value": 2,
+    "rationale": "Scale factor transforms percentile deviation to Z-score in [-1, 1]",
+    "source": "heuristic"
+  },
+  "a4_vix_thresholds": {
+    "value": [
+      15,
+      20,
+      25,
+      30,
+      35
+    ],
+    "rationale": "Standard VIX ranges: calm (<15), low (15-20), moderate (20-25), elevated (25-30), high (30-35), extreme (>35)",
+    "source": "literature",
+    "todo": "Validate thresholds against Taiwan VIX equivalent (TVIX) distribution"
+  },
+  "a4_vix_scores": {
+    "value": [
+      0.1,
+      0.3,
+      0.5,
+      0.7,
+      0.85,
+      1
+    ],
+    "rationale": "Monotonic mapping: lower VIX → bullish sentiment, higher VIX → bearish (1.0 = max fear)",
+    "source": "heuristic",
+    "todo": "Calibrate scores from historical VIX vs. TWSE forward return"
+  },
+  "a5_pcr_thresholds": {
+    "value": [
+      1.5,
+      1,
+      0.8
+    ],
+    "rationale": "Standard PCR interpretation: >1.5 very bearish, >1.0 bearish, >0.8 neutral, <0.8 bullish",
+    "source": "heuristic",
+    "todo": "Calibrate against TAIFEX PCR historical distribution"
+  },
+  "a5_pcr_scores": {
+    "value": [
+      0.9,
+      0.7,
+      0.5,
+      0.1
+    ],
+    "rationale": "Score mapping for PCR: very bearish (0.9) → bearish (0.7) → neutral (0.5) → bullish (0.1)",
+    "source": "heuristic"
+  },
+  "a5_pcr_fallback": {
+    "value": 0.5,
+    "rationale": "Neutral score when PCR data is unavailable (0)",
+    "source": "heuristic"
+  },
+  "a6_oddlot_thresholds": {
+    "value": [
+      0.2,
+      0.1,
+      -0.1,
+      -0.2
+    ],
+    "rationale": "Odd-lot imbalance ranges: heavy retail buying (>0.2), moderate (>0.1), neutral (-0.1 to 0.1), selling (<-0.1), heavy selling (<-0.2)",
+    "source": "heuristic",
+    "todo": "Calibrate thresholds from TWSE odd-lot historical distribution"
+  },
+  "a6_oddlot_scores": {
+    "value": [
+      0.85,
+      0.65,
+      0.5,
+      0.35,
+      0.15
+    ],
+    "rationale": "Score mapping: heavy buying (0.85 bearish) → heavy selling (0.15 bullish)",
+    "source": "heuristic"
+  },
+  "a6_oddlot_fallback": {
+    "value": 0.5,
+    "rationale": "Neutral score when odd-lot data is unavailable (0)",
+    "source": "heuristic"
+  },
+  "c1_weight": {
+    "value": 0.4,
+    "rationale": "Small TAIEX Futures OI contributes 40% to Part C score",
+    "source": "heuristic",
+    "todo": "Calibrate from historical futures OI vs. forward return IC"
+  },
+  "c2_weight": {
+    "value": 0.35,
+    "rationale": "Foreign/Inst Net Flow contributes 35% to Part C score",
+    "source": "heuristic",
+    "todo": "Calibrate from historical institutional flow vs. forward return IC"
+  },
+  "c3_weight": {
+    "value": 0.25,
+    "rationale": "ETF Net Subscription contributes 25% to Part C score",
+    "source": "heuristic",
+    "todo": "Calibrate from historical ETF flow vs. forward return IC"
+  },
+  "c1_very_bullish_threshold": {
+    "value": 20,
+    "rationale": "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",
+    "source": "heuristic",
+    "todo": "Calibrate from 2Y historical futures OI distribution"
+  },
+  "c1_bullish_threshold": {
+    "value": 10,
+    "rationale": "Small TAIEX futures OI pct above 10 → retail moderately long (0.7)",
+    "source": "heuristic"
+  },
+  "c1_bearish_threshold": {
+    "value": -10,
+    "rationale": "Small TAIEX futures OI pct below -10 → retail moderately short (0.5 neutral)",
+    "source": "heuristic"
+  },
+  "c1_very_bearish_threshold": {
+    "value": -20,
+    "rationale": "Small TAIEX futures OI pct below -20 → retail heavily short (0.25 bullish)",
+    "source": "heuristic"
+  },
+  "c2_neutral_midpoint": {
+    "value": 0.5,
+    "rationale": "Institutional net flow ≈ 0 → neutral midpoint 0.5",
+    "source": "heuristic",
+    "todo": "Calibrate from 2Y foreign/domestic fund net flow distribution"
+  },
+  "c2_netflow_scaling_factor": {
+    "value": 1000000000,
+    "rationale": "Net flow divided by 1B TWD to get deviation from neutral; score clamped [0.1, 0.9]",
+    "source": "heuristic",
+    "todo": "Learn optimal scaling factor from historical flow distributions"
+  },
+  "c3_very_bullish_threshold": {
+    "value": 1000000000,
+    "rationale": "ETF net subscription above 1B TWD → heavy retail inflow (0.9 bearish)",
+    "source": "heuristic"
+  },
+  "c3_bullish_threshold": {
+    "value": 100000000,
+    "rationale": "ETF net subscription above 100M TWD → moderate inflow (0.7)",
+    "source": "heuristic"
+  },
+  "c3_bearish_threshold": {
+    "value": -100000000,
+    "rationale": "ETF net subscription below -100M TWD → outflow (0.45)",
+    "source": "heuristic"
+  },
+  "d_geopolitical_risk_threshold": {
+    "value": 0.5,
+    "rationale": "Geopolitical risk index above 0.5 → apply 0.85x multiplier",
+    "source": "heuristic"
+  },
+  "d_geopolitical_risk_multiplier": {
+    "value": 0.85,
+    "rationale": "15% sentiment reduction during elevated geopolitical risk",
+    "source": "heuristic",
+    "todo": "Calibrate against actual market drawdowns during geopolitical events"
+  },
+  "d_vix_spike_threshold": {
+    "value": 30,
+    "rationale": "VIX above 30 → spike regime, apply 0.90x multiplier",
+    "source": "literature",
+    "todo": "Validate with Taiwan VIX equivalent (TVIX or VIX futures)"
+  },
+  "d_vix_spike_multiplier": {
+    "value": 0.9,
+    "rationale": "10% sentiment reduction during VIX spike >30",
+    "source": "heuristic"
+  },
+  "d_credit_tightening_multiplier": {
+    "value": 0.8,
+    "rationale": "20% sentiment reduction when credit tightening signal active",
+    "source": "heuristic",
+    "todo": "Wire credit tightening signal to actual central bank / margin rate data"
+  },
+  "last_calibrated_score": {
+    "value": 0,
+    "rationale": "Stored score from last calibration run; 0 = calibration not yet performed",
+    "source": "heuristic"
+  }
+}

@@ -1,0 +1,616 @@
+{
+  "min_trend_strength": {
+    "value": 0.7,
+    "rationale": "Minimum trend strength (0-1) to be considered significant for structural override",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342138"
+    }
+  },
+  "min_confidence": {
+    "value": 0.75,
+    "rationale": "Minimum confidence level for structural trend detection",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342140"
+    }
+  },
+  "min_hit_rate": {
+    "value": 0.7,
+    "rationale": "Minimum historical hit rate for structural trend validity",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342143"
+    }
+  },
+  "override_threshold": {
+    "value": 0.65,
+    "rationale": "Score threshold for structural trends to override macro risk signals",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342145"
+    }
+  },
+  "ai_revenue_growth_threshold": {
+    "value": 39.285714285714285,
+    "rationale": "AI revenue YoY growth % threshold to detect AI capex surge (TSMC revenue proxy)",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342147"
+    }
+  },
+  "cowos_utilization_threshold": {
+    "value": 78,
+    "rationale": "CoWoS capacity utilization % threshold indicating structural AI demand",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342150"
+    }
+  },
+  "capex_growth_threshold": {
+    "value": 21.428571428571427,
+    "rationale": "25% YoY capex growth threshold for AI infrastructure expansion detection (captures early-cycle signals; 40% only in peak buildout phases)",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Audited: lowered from 40 to 25 to capture early-cycle capex expansion; cloud provider quarterly earnings data",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342153"
+    }
+  },
+  "us10y_change_bps_threshold": {
+    "value": 9.285714285714285,
+    "rationale": "US 10Y yield change in basis points to trigger US_rates_up event",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342155"
+    }
+  },
+  "dxy_change_pct_threshold": {
+    "value": 1.5,
+    "rationale": "DXY change % threshold to trigger US_rates_up event alongside yield move",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342158"
+    }
+  },
+  "geopolitical_gpr_threshold": {
+    "value": 120,
+    "rationale": "Geopolitical risk index (GPR) threshold to trigger geopolitical_risk_spike event",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342161"
+    }
+  },
+  "oil_change_pct_threshold": {
+    "value": 4.857142857142857,
+    "rationale": "Oil price change % threshold (absolute) to trigger oil_price_shock event",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342163"
+    }
+  },
+  "jpy_change_pct_threshold": {
+    "value": 1.7857142857142856,
+    "rationale": "JPY change % threshold to trigger JPY_carry_unwind event",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342165"
+    }
+  },
+  "vix_level_threshold": {
+    "value": 22.142857142857142,
+    "rationale": "VIX level threshold to trigger JPY_carry_unwind and geopolitical events",
+    "source": "heuristic",
+    "last_calibrated": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_timestamp": "2026-06-09T00:07:14.987093+08:00",
+    "calibration_method": "bayesian_optimization",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342167"
+    }
+  },
+  "gold_change_pct_threshold": {
+    "value": 2,
+    "rationale": "Gold price change % threshold for geopolitical risk detection; gold traditionally serves as safe-haven proxy",
+    "source": "heuristic",
+    "todo": "Calibrate from historical gold volatility around geopolitical events"
+  },
+  "usdtwd_change_pct_threshold": {
+    "value": 1,
+    "rationale": "USD/TWD daily change % threshold for FX volatility event; 1% daily move is significant for managed-float TWD",
+    "source": "heuristic",
+    "todo": "Calibrate from historical USD/TWD daily volatility distribution"
+  },
+  "semiconductor_export_drop_threshold": {
+    "value": -5,
+    "rationale": "Semiconductor export change % threshold for downturn detection; -5% MoM decline signals demand weakening",
+    "source": "heuristic",
+    "todo": "Calibrate from historical Taiwan electronics export cycles"
+  },
+  "retail_margin_zscore_threshold": {
+    "value": 1.5,
+    "rationale": "Margin balance z-score threshold for retail divergence event; z>1.5 indicates extreme positioning",
+    "source": "heuristic",
+    "todo": "Calibrate from historical margin balance distribution"
+  },
+  "ai_capex_sentiment_threshold": {
+    "value": 0.5,
+    "rationale": "AI capex sentiment score threshold for AI_capex_surge event; >0.5 indicates bullish capex outlook",
+    "source": "heuristic",
+    "todo": "Calibrate from TSMC capex guidance vs forward returns"
+  },
+  "tsmc_revenue_yoy_threshold": {
+    "value": 10,
+    "rationale": "TSMC revenue YoY growth % threshold for AI sentiment computation; >10% indicates strong AI demand",
+    "source": "heuristic",
+    "todo": "Calibrate from TSMC quarterly revenue cycles"
+  },
+  "taiwan_stress_usdtwd_threshold": {
+    "value": 1,
+    "rationale": "USD/TWD change % threshold for Taiwan stress signal in geopolitical detection; 1% depreciation signals capital outflow",
+    "source": "heuristic",
+    "todo": "Calibrate from historical TWD depreciation episodes"
+  },
+  "retail_institutional_divergence_threshold": {
+    "value": 0,
+    "rationale": "Retail-institutional divergence threshold; divergence > 0 means retail is more bullish than institutions",
+    "source": "heuristic",
+    "todo": "Calibrate from divergence index backtest"
+  },
+  "ai_capex_negative_sentiment_threshold": {
+    "value": -0.3,
+    "rationale": "AI capex sentiment threshold for semiconductor downturn detection; <-0.3 indicates bearish outlook",
+    "source": "heuristic",
+    "todo": "Calibrate from historical sentiment floor levels"
+  },
+  "ai_capex_fallback_sentiment": {
+    "value": -0.3,
+    "rationale": "Fallback AI capex sentiment when TSMC revenue YoY is not positive; conservative bearish default",
+    "source": "heuristic",
+    "todo": "Calibrate from historical TSMC revenue-to-sentiment mapping"
+  },
+  "tsmc_revenue_positive_threshold": {
+    "value": 0,
+    "rationale": "TSMC revenue YoY threshold for positive growth; >0%% triggers moderate bullish sentiment",
+    "source": "heuristic",
+    "todo": "Calibrate from TSMC revenue growth distribution"
+  },
+  "confidence_base_us_rates": {
+    "value": 0.75,
+    "rationale": "Base confidence for US rates event; derived from historical predictability of yield-driven episodes",
+    "source": "empirical"
+  },
+  "confidence_base_jpy_carry": {
+    "value": 0.65,
+    "rationale": "Base confidence for JPY carry unwind event; derived from carry trade unwinding historical patterns",
+    "source": "empirical"
+  },
+  "confidence_base_geopolitical": {
+    "value": 0.65,
+    "rationale": "Base confidence for geopolitical risk event; derived from GPR index historical correlations",
+    "source": "empirical"
+  },
+  "confidence_base_oil_shock": {
+    "value": 0.6,
+    "rationale": "Base confidence for oil price shock event; derived from Hamilton-type oil shock literature",
+    "source": "empirical"
+  },
+  "confidence_base_ai_capex": {
+    "value": 0.7,
+    "rationale": "Base confidence for AI capex event; derived from TSMC capex guidance vs semiconductor cycle correlation",
+    "source": "empirical"
+  },
+  "confidence_base_tsmc_revenue": {
+    "value": 0.7,
+    "rationale": "Base confidence for TSMC revenue-based events; derived from WSTS semiconductor forecast accuracy",
+    "source": "empirical"
+  },
+  "confidence_base_taiwan_stress": {
+    "value": 0.6,
+    "rationale": "Base confidence for Taiwan stress index-based events; conservative heuristic default",
+    "source": "heuristic"
+  },
+  "confidence_deviation_ceiling": {
+    "value": 0.95,
+    "rationale": "Upper bound for deviation-based dynamic confidence; prevents perfect certainty (1.0) for any single indicator",
+    "source": "heuristic",
+    "todo": "Backtest optimal ceiling against forward returns; consider per-theme ceilings"
+  },
+  "sox_index_drop_threshold": {
+    "value": -5,
+    "rationale": "SOX index change % threshold for semiconductor stress detection; -5% is significant drawdown",
+    "source": "empirical"
+  },
+  "taiwan_stress_dxy_weight": {
+    "value": 0.13,
+    "rationale": "DXY component weight in Taiwan stress index (15%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342170"
+    }
+  },
+  "taiwan_stress_us10y_weight": {
+    "value": 0.17,
+    "rationale": "US 10Y yield component weight in Taiwan stress index (20%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342173"
+    }
+  },
+  "taiwan_stress_foreign_weight": {
+    "value": 0.22,
+    "rationale": "Foreign investor net flow component weight in Taiwan stress index (25%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342177"
+    }
+  },
+  "taiwan_stress_vix_weight": {
+    "value": 0.13,
+    "rationale": "VIX component weight in Taiwan stress index (15%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342179"
+    }
+  },
+  "taiwan_stress_jpy_weight": {
+    "value": 0.09,
+    "rationale": "JPY component weight in Taiwan stress index (10%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342182"
+    }
+  },
+  "taiwan_stress_geo_weight": {
+    "value": 0.13,
+    "rationale": "Geopolitical risk component weight in Taiwan stress index (15%)",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342185"
+    }
+  },
+  "taiwan_stress_oil_weight": {
+    "value": 0.07,
+    "rationale": "Oil price shock impact on energy-import-dependent Taiwan manufacturing economy (97% energy imports); oil spikes compress margins → foreign analyst downgrades → capital outflows from Taiwan tech/manufacturing equities. Supplementary indicator: contributes 7% to stress index.",
+    "source": "empirical_observation"
+  },
+  "taiwan_stress_gold_weight": {
+    "value": 0.06,
+    "rationale": "Gold safe-haven demand as leading indicator of foreign capital outflow from Taiwan equities. Gold spikes precede foreign TAIEX selling by 1-5 trading days during Taiwan Strait tensions. Captures geopolitical risk not reflected in DXY/US10Y.",
+    "source": "empirical_observation"
+  },
+  "taiwan_stress_dxy_scale": {
+    "value": 5,
+    "rationale": "DXY change (%) scaling: 1% change = 5 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_us10y_scale": {
+    "value": 2,
+    "rationale": "US10Y yield scaling: 1% yield = 2 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_foreign_scale": {
+    "value": 10,
+    "rationale": "Foreign flow scaling: 1B TWD outflow = 10 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_vix_scale": {
+    "value": 2.5,
+    "rationale": "VIX scaling: VIX=40 maps to 100 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_jpy_scale": {
+    "value": 10,
+    "rationale": "JPY change (%) scaling: 1% change = 10 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_geo_scale": {
+    "value": 1,
+    "rationale": "Geopolitical score scaling: direct pass-through (already 0-100)",
+    "source": "heuristic"
+  },
+  "taiwan_stress_oil_scale": {
+    "value": 2,
+    "rationale": "Oil change (%) scaling: 1% change = 2 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_gold_scale": {
+    "value": 2,
+    "rationale": "Gold change (%) scaling: 1% change = 2 stress points",
+    "source": "heuristic"
+  },
+  "taiwan_stress_crisis_threshold": {
+    "value": 70,
+    "rationale": "Crisis regime threshold (red alert)",
+    "source": "heuristic"
+  },
+  "taiwan_stress_high_threshold": {
+    "value": 50,
+    "rationale": "High stress regime threshold (orange alert)",
+    "source": "heuristic"
+  },
+  "taiwan_stress_alert_threshold": {
+    "value": 30,
+    "rationale": "Alert regime threshold (yellow alert)",
+    "source": "heuristic"
+  },
+  "calibration_baseline_window": {
+    "value": 60,
+    "rationale": "60 trading days ≈ 3 calendar months for rolling baseline; long enough to span a full seasonal cycle, short enough to remain market-relevant",
+    "source": "heuristic",
+    "todo": "re-evaluate window after 6 months of live calibration data"
+  },
+  "calibration_target_median": {
+    "value": 20,
+    "rationale": "target 20 points per factor under normal conditions; keeps the Taiwan Stress Index within the 0-100 range while allowing headroom for stress spikes",
+    "source": "heuristic"
+  },
+  "calibration_validation_pct": {
+    "value": 0.2,
+    "rationale": "standard 80/20 train/validation split; validation set is used to detect out-of-sample degradation before export",
+    "source": "heuristic"
+  },
+  "calibration_min_records": {
+    "value": 10,
+    "rationale": "minimum 10 historical records to attempt calibration; below this, statistical significance is too low to trust the new config",
+    "source": "heuristic"
+  },
+  "calibration_enabled": {
+    "value": false,
+    "rationale": "disabled by default; enable after initial validation confirms improvement over hand-tuned config",
+    "source": "heuristic"
+  },
+  "event_ttl_multiplier": {
+    "value": {
+      "AI_capex_surge": 90,
+      "Fed_emergency_cut": 3,
+      "JPY_carry_unwind": 14,
+      "US_rates_down": 7,
+      "US_rates_up": 7,
+      "dividend_season": 30,
+      "earnings_surprise": 10,
+      "geopolitical_risk_spike": 30,
+      "oil_price_shock": 15
+    },
+    "rationale": "Event TTL in days per theme: AI capex 90d (structural), rates 7d (transient), carry unwind 14d, geopolitical 30d, oil 15d, Fed emergency 3d, earnings 10d",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342187"
+    }
+  },
+  "model_lookback_days": {
+    "value": 10,
+    "rationale": "Lookback window in trading days for model evaluation",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342191"
+    }
+  },
+  "model_hold_window_days": {
+    "value": 5,
+    "rationale": "Forward hold window in trading days for model evaluation",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via backtest_sweep during calibration audit",
+      "evidence_quality": "medium",
+      "update_policy": "auto",
+      "validation_method": "backtest_sweep",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342194"
+    }
+  },
+  "retail_frenzy_percentile_threshold": {
+    "value": 90,
+    "rationale": "Margin balance percentile threshold for retail frenzy event; >=90th percentile indicates extreme retail buying",
+    "source": "heuristic",
+    "todo": "Calibrate from historical margin balance distribution during retail-driven rallies"
+  },
+  "retail_fear_percentile_threshold": {
+    "value": 10,
+    "rationale": "Margin balance percentile threshold for retail fear event; <=10th percentile indicates extreme retail selling",
+    "source": "heuristic",
+    "todo": "Calibrate from historical margin balance distribution during retail-driven selloffs"
+  },
+  "retail_acceleration_window_days": {
+    "value": 5,
+    "rationale": "Rolling acceleration window in trading days for retail margin velocity confirmation",
+    "source": "heuristic",
+    "todo": "Calibrate from backtest: test [3, 10] range for optimal retail momentum detection"
+  },
+  "inflation_estimate": {
+    "value": 2.5,
+    "rationale": "long-run US inflation target used as fallback when live CPI data is unavailable",
+    "source": "heuristic",
+    "todo": "replace with live CPI from FRED API when available"
+  },
+  "spring_festival_confidence": {
+    "value": 0.65,
+    "rationale": "Confidence for spring festival seasonal event (Jan 15 - Feb 15); based on historical TWSE pre/post-CNY rally probability ~70%",
+    "source": "heuristic",
+    "todo": "Calibrate from TWSE historical CNY window returns and hit rate"
+  },
+  "election_cycle_confidence": {
+    "value": 0.6,
+    "rationale": "Confidence for election cycle seasonal event (late Dec - mid Jan); based on pre-election uncertainty premium",
+    "source": "heuristic",
+    "todo": "Calibrate from TWSE historical election cycle returns"
+  },
+  "earnings_blackout_confidence": {
+    "value": 0.55,
+    "rationale": "Confidence for earnings blackout seasonal event (Mar 1 - Apr 15); moderate pre-earnings positioning signal",
+    "source": "heuristic",
+    "todo": "Calibrate from TWSE historical blackout period returns"
+  },
+  "tech_peak_season_confidence": {
+    "value": 0.75,
+    "rationale": "Confidence for tech peak season event (Jul 1 - Sep 15); strong historical signal driven by back-to-school and holiday demand",
+    "source": "heuristic",
+    "todo": "Calibrate from TWSE historical Q3 tech sector returns"
+  },
+  "year_end_window_dressing_confidence": {
+    "value": 0.58,
+    "rationale": "Confidence for year-end window dressing event (Nov - Dec); institutional rebalancing effect",
+    "source": "heuristic",
+    "todo": "Calibrate from TWSE historical year-end returns and institutional flow patterns"
+  },
+  "earnings_surprise_confidence": {
+    "value": 0.65,
+    "rationale": "Confidence baseline for externally-triggered earnings surprise events (consumed by ingestor/swarm detectors, not calendar-based); default before empirical calibration",
+    "source": "heuristic",
+    "todo": "Calibrate from earnings surprise frequency and market reaction data"
+  },
+  "earnings_surprise_threshold": {
+    "value": 15,
+    "rationale": "TSMC revenue YoY change %% threshold to trigger earnings_surprise event; 15%% represents 2+ standard deviations above mean quarterly revenue growth",
+    "source": "heuristic",
+    "todo": "Calibrate from TSMC historical quarterly revenue surprise distribution"
+  }
+}

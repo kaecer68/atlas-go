@@ -1,0 +1,181 @@
+{
+  "twse_api_rate_limit": {
+    "value": 0.6,
+    "rationale": "TWSE OpenAPI rate limit: 3 requests per 5 seconds = 0.6 req/s",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342197"
+    }
+  },
+  "twse_api_rate_burst": {
+    "value": 3,
+    "rationale": "TWSE OpenAPI burst limit: 3 requests per 5-second window",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342201"
+    }
+  },
+  "twse_api_timeout_sec": {
+    "value": 15,
+    "rationale": "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342204"
+    }
+  },
+  "fubon_intraday_limit": {
+    "value": 30,
+    "rationale": "Fubon intraday API burst limit; prevents overwhelming the proxy",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342207"
+    }
+  },
+  "fubon_historical_limit": {
+    "value": 60,
+    "rationale": "Fubon historical data API rate limit; conservative to avoid throttling",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342210"
+    }
+  },
+  "fubon_api_timeout_sec": {
+    "value": 10,
+    "rationale": "HTTP timeout for Fubon API calls; proxy adds latency, keep short",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342213"
+    }
+  },
+  "tej_calls_per_second": {
+    "value": 5,
+    "rationale": "TEJ free tier rate limit: 500 calls/day, burst at 5 calls/second",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342216"
+    }
+  },
+  "tej_api_timeout_sec": {
+    "value": 30,
+    "rationale": "HTTP timeout for TEJ API; historical queries can be slow",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342218"
+    }
+  },
+  "fugle_rate_limit": {
+    "value": 60,
+    "rationale": "Fugle API free tier: 60 req/min. Developer tier: 600/min. Advanced: 2000/min. Adjust via env var FUGLE_TIER",
+    "source": "empirical",
+    "citation": {
+      "source_type": "empirical",
+      "source_reference": "Parameter assigned empirical_calibration validation via code audit",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342222"
+    }
+  },
+  "fugle_api_timeout_sec": {
+    "value": 10,
+    "rationale": "HTTP timeout for Fugle API; premium service, expect fast responses",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342224"
+    }
+  },
+  "bdi_api_timeout_sec": {
+    "value": 10,
+    "rationale": "HTTP timeout for CNBC BDI API; public free endpoint, accept slower response",
+    "source": "heuristic",
+    "todo": "Calibrate: test [5, 15] range based on observed CNBC latency"
+  },
+  "bdi_endpoint": {
+    "value": "https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json",
+    "rationale": "CNBC free REST JSON API for Baltic Dry Index; no API key required, /BADI symbol includes change_pct and last_time_msec",
+    "source": "empirical"
+  },
+  "max_retry_attempts": {
+    "value": 3,
+    "rationale": "Maximum retry attempts for transient failures; exponential backoff",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342227"
+    }
+  },
+  "retry_backoff_ms": {
+    "value": 1000,
+    "rationale": "Base backoff between retries in milliseconds; doubles each attempt",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342230"
+    }
+  }
+}

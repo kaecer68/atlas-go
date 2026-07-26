@@ -1,0 +1,153 @@
+{
+  "maturity_level1_observations": {
+    "value": 3,
+    "rationale": "Minimum 3 observations for exploratory experiments",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter assigned backtest_optimization validation via code audit",
+      "evidence_quality": "low",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342045"
+    }
+  },
+  "maturity_level2_observations": {
+    "value": 8,
+    "rationale": "Minimum 8 observations for window-validated experiments",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "maturity_level3_observations": {
+    "value": 12,
+    "rationale": "Minimum 12 observations for regime-aware experiments",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "improvement_threshold": {
+    "value": 0.0005,
+    "rationale": "0.05% minimum improvement over baseline",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Parameter validated via empirical_calibration during calibration audit",
+      "evidence_quality": "low",
+      "update_policy": "auto",
+      "validation_method": "empirical_calibration",
+      "dependencies": [],
+      "last_validated": "2026-05-14T23:51:04.342050"
+    }
+  },
+  "welch_t_test_threshold": {
+    "value": 2,
+    "rationale": "|t| >= 2.0 corresponds to ~95% confidence",
+    "source": "literature",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "high",
+      "update_policy": "frozen",
+      "validation_method": "Literature validation",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "drawdown_protection_ratio": {
+    "value": 0.8,
+    "rationale": "Candidate drawdown must be >= 80% of baseline",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "volatility_tolerance_ratio": {
+    "value": 1.5,
+    "rationale": "Candidate volatility <= 150% of baseline",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "oos_window_days": {
+    "value": 30,
+    "rationale": "30-day out-of-sample validation window",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "sharpe_stability_threshold": {
+    "value": 0.5,
+    "rationale": "Sharpe stability: stderr < 0.5 AND |mean|/stddev >= 0.5",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "max_fallback_ratio": {
+    "value": 0.6,
+    "rationale": "Maximum 60% fallback factors allowed in experiment evaluation; exceeding rejects candidate",
+    "source": "heuristic",
+    "citation": {
+      "source_type": "heuristic",
+      "source_reference": "Experiment evaluation",
+      "evidence_quality": "medium",
+      "update_policy": "manual",
+      "validation_method": "backtest_optimization",
+      "dependencies": [],
+      "last_validated": "2026-05-04T00:00:00Z"
+    }
+  },
+  "factor_weight_drift_threshold": {
+    "value": 0.15,
+    "rationale": "Maximum allowed factor weight drift (15%) before rejecting experiment as regime-confounded",
+    "source": "heuristic"
+  },
+  "walk_forward_embargo_days": {
+    "value": 5,
+    "rationale": "5-trading-day embargo gap between walk-forward train/test folds and between primary training window and OOS window. Prevents data leakage from corporate-event reorgs and event-driven labeling lag.",
+    "source": "heuristic",
+    "todo": "Calibrate from leakage-sensitive backtest: test [3, 7, 10] range vs hit rate stability"
+  }
+}

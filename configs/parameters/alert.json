@@ -1,0 +1,105 @@
+{
+  "min_cash_threshold": {
+    "value": 100000,
+    "rationale": "Minimum cash reserve before triggering low-cash warning",
+    "source": "heuristic"
+  },
+  "max_positions_count": {
+    "value": 20,
+    "rationale": "Maximum number of open positions before concentration warning",
+    "source": "heuristic"
+  },
+  "max_position_weight_pct": {
+    "value": 0.15,
+    "rationale": "Maximum single position weight (15%) before error alert",
+    "source": "heuristic"
+  },
+  "max_unrealized_loss_pct": {
+    "value": -0.05,
+    "rationale": "Unrealized loss threshold (-5%) before position warning",
+    "source": "heuristic"
+  },
+  "daily_loss_warning_pct": {
+    "value": -0.015,
+    "rationale": "Daily PnL warning threshold (-1.5%)",
+    "source": "heuristic"
+  },
+  "daily_loss_critical_pct": {
+    "value": -0.02,
+    "rationale": "Daily PnL critical threshold (-2%)",
+    "source": "heuristic"
+  },
+  "rule_engine_interval_sec": {
+    "value": 30,
+    "rationale": "Rule engine evaluation interval (30 seconds)",
+    "source": "heuristic"
+  },
+  "rule_engine_cooldown_sec": {
+    "value": 300,
+    "rationale": "Default rule cooldown (5 minutes)",
+    "source": "heuristic"
+  },
+  "slippage_error_bps": {
+    "value": 100,
+    "rationale": "Trade slippage error threshold (100 BPS = 1.0%) — emits ERROR severity alert",
+    "source": "heuristic"
+  },
+  "slippage_warning_bps": {
+    "value": 50,
+    "rationale": "Trade slippage warning threshold (50 BPS = 0.5%) — emits WARNING severity alert",
+    "source": "heuristic"
+  },
+  "system_metrics_interval_sec": {
+    "value": 30,
+    "rationale": "System metrics collection interval (30 seconds)",
+    "source": "heuristic"
+  },
+  "min_screening_rate": {
+    "value": 0.1,
+    "rationale": "Minimum screening rate (10%) before warning",
+    "source": "heuristic"
+  },
+  "max_alert_trigger_rate": {
+    "value": 100,
+    "rationale": "Maximum alert trigger rate per hour before critical",
+    "source": "heuristic"
+  },
+  "max_unacknowledged_alerts": {
+    "value": 10,
+    "rationale": "Maximum unacknowledged alerts before warning",
+    "source": "heuristic"
+  },
+  "suppress_categories": {
+    "value": [
+      "gateway",
+      "simulation:risk_off"
+    ],
+    "rationale": "Alert categories that should be auto-suppressed (not saved to alert stream). Gateway heartbeat and simulation RISK_OFF are expected behavior.",
+    "source": "heuristic"
+  },
+  "heartbeat_ttl_minutes": {
+    "value": 5,
+    "rationale": "Decision 1 (alert-redesign-v2.md Part 3.1): channel heartbeat staleness threshold (5 min default); channel health summaries older than this are considered 'down'",
+    "source": "heuristic"
+  },
+  "alert_sla_critical_sec": {
+    "value": 1800,
+    "rationale": "Decision 9 (alert-redesign-v2.md Part 3.7): CRITICAL alert must be acknowledged within 30 min; otherwise emits a meta-alert",
+    "source": "heuristic"
+  },
+  "alert_sla_error_sec": {
+    "value": 7200,
+    "rationale": "Decision 9: ERROR alert must be acknowledged within 2 hours",
+    "source": "heuristic"
+  },
+  "alert_sla_warning_sec": {
+    "value": 86400,
+    "rationale": "Decision 9: WARNING alert must be acknowledged within 24 hours",
+    "source": "heuristic"
+  },
+  "sla_violation_meta_alert": {
+    "value": true,
+    "rationale": "Decision 9: when enabled, SLA violations emit a CRITICAL meta-alert for visibility",
+    "source": "heuristic"
+  }
+}

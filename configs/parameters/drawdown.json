@@ -1,0 +1,98 @@
+{
+  "none_percentage": {
+    "value": 0,
+    "rationale": "No drawdown reduction at green macro risk; full exposure maintained (intentional zero)",
+    "source": "heuristic"
+  },
+  "none_max_exposure": {
+    "value": 1,
+    "rationale": "100% exposure allowed when no macro risk detected",
+    "source": "heuristic"
+  },
+  "light_percentage": {
+    "value": 0.15,
+    "rationale": "15% reduction for yellow macro risk level (elevated but manageable)",
+    "source": "heuristic"
+  },
+  "light_max_exposure": {
+    "value": 0.85,
+    "rationale": "85% max exposure for light drawdown; allows most positions intact",
+    "source": "heuristic"
+  },
+  "moderate_percentage": {
+    "value": 0.35,
+    "rationale": "35% reduction for orange macro risk (significant outflow concerns)",
+    "source": "heuristic"
+  },
+  "moderate_max_exposure": {
+    "value": 0.65,
+    "rationale": "65% max exposure for moderate drawdown; significant position trimming",
+    "source": "heuristic"
+  },
+  "severe_percentage": {
+    "value": 0.6,
+    "rationale": "60% reduction for red macro risk (crisis-level threat)",
+    "source": "heuristic"
+  },
+  "severe_max_exposure": {
+    "value": 0.4,
+    "rationale": "40% max exposure for severe drawdown; only conviction positions survive",
+    "source": "heuristic"
+  },
+  "emergency_percentage": {
+    "value": 0.9,
+    "rationale": "90% reduction for emergency drawdown; near-total liquidation",
+    "source": "heuristic"
+  },
+  "emergency_max_exposure": {
+    "value": 0.1,
+    "rationale": "10% max exposure for emergency drawdown; minimum viable positions only",
+    "source": "heuristic"
+  },
+  "orange_override_min_score": {
+    "value": 0.55,
+    "rationale": "Minimum structural trend override score needed to withstand orange macro risk",
+    "source": "heuristic",
+    "todo": "Calibrate: test [0.50, 0.65] range against historical orange-regime drawdown outcomes"
+  },
+  "red_override_min_score": {
+    "value": 0.75,
+    "rationale": "Minimum structural trend override score needed to withstand red macro risk",
+    "source": "heuristic",
+    "todo": "Calibrate: test [0.70, 0.85] range against historical red-regime drawdown outcomes"
+  },
+  "sector_constraints_risk_off": {
+    "value": {
+      "ai_supply_chain": 0.3,
+      "emerging_market": 0.1,
+      "gold": 1.5,
+      "small_cap": 0.2,
+      "utilities": 1.2
+    },
+    "rationale": "Risk-off flow: reduce growth/risk assets, rotate to defensive",
+    "source": "heuristic",
+    "todo": "Calibrate: derive multipliers from risk-off regime sector return analysis"
+  },
+  "sector_constraints_carry_trade_unwind": {
+    "value": {
+      "all_equities": 0.1,
+      "cash": 2,
+      "financials": 0.1,
+      "tech": 0.05
+    },
+    "rationale": "Carry trade unwind: exit equities, minimal tech/financials, maximum cash",
+    "source": "heuristic",
+    "todo": "Calibrate: derive multipliers from carry trade unwind episodes (2024/8, 2008/10, 1998/10)"
+  },
+  "sector_constraints_sector_rotation": {
+    "value": {
+      "energy": 1.8,
+      "high_valuation_tech": 0.3,
+      "oil_services": 1.5,
+      "rate_sensitive": 0.4
+    },
+    "rationale": "Sector rotation flow: overweight energy and oil services, reduce high-valuation tech and rate-sensitive",
+    "source": "heuristic",
+    "todo": "Calibrate: derive multipliers from sector rotation episode return analysis"
+  }
+}

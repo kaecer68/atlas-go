@@ -1,0 +1,41 @@
+{
+  "central_bank_buying_trend": {
+    "value": "stable",
+    "rationale": "WGC quarterly CB gold buying trend: accelerating, stable, or decelerating",
+    "source": "literature",
+    "todo": "Update quarterly from WGC Gold Demand Trends report",
+    "citation": {
+      "source_type": "literature",
+      "source_reference": "World Gold Council, Gold Demand Trends Q1 2026",
+      "evidence_quality": "medium",
+      "update_policy": "quarterly",
+      "validation_method": "code_review",
+      "dependencies": [],
+      "last_validated": "2026-05-01T00:00:00Z"
+    }
+  },
+  "central_bank_net_buy": {
+    "value": 800,
+    "rationale": "Annualized central bank net gold purchases in tonnes (~800t in 2025)",
+    "source": "literature",
+    "todo": "Update from WGC quarterly report"
+  },
+  "india_gold_imports_yoy": {
+    "value": 0,
+    "rationale": "India gold imports YoY % change; 0 means no change from prior year",
+    "source": "literature",
+    "todo": "Update monthly from India Ministry of Commerce data"
+  },
+  "china_gold_imports_yoy": {
+    "value": 0,
+    "rationale": "China SGE withdrawal YoY % change; 0 means no change from prior year",
+    "source": "literature",
+    "todo": "Update monthly from Shanghai Gold Exchange data"
+  },
+  "comex_default_net_long": {
+    "value": 150000,
+    "rationale": "CFTC COT managed money net long default (typical mid-cycle level)",
+    "source": "empirical",
+    "todo": "Update weekly from CFTC Commitment of Traders report"
+  }
+}
