@@ -7,7 +7,7 @@ export const template = `
     <div class="evo-views-row" id="evolutionViews">
       <span class="evo-views-label">視覺圖：</span>
       <button class="view-btn active" id="evView-compact">精簡</button>
-      <button class="view-btn" id="evView-full">完整</button>
+      <button class="view-btn" id="evView-ai-analysis">完整</button>
     </div>
   </div>
   <div id="evolutionCatContent" style="display:none;margin-top:12px"></div>

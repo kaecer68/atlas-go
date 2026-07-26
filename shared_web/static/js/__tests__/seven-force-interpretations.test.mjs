@@ -58,20 +58,19 @@ test('container=null → silently no-op', () => {
   assert.doesNotThrow(() => renderSevenForceInterpretations(undefined, null));
 });
 
-test('summary=null → 「尚無資料」placeholder', () => {
+test('summary=null → 不顯示重複占位（七維卡片已負責空狀態）', () => {
   const html = renderToString(null);
-  assert.match(html, /尚無|資料載入|七維錢潮/);
-  assert.match(html, /home-loading-card/);
+  assert.equal(html, '');
 });
 
-test('summary.forces=[] → placeholder', () => {
+test('summary.forces=[] → 不顯示重複占位', () => {
   const html = renderToString({ forces: [] });
-  assert.match(html, /尚無|資料載入|七維錢潮/);
+  assert.equal(html, '');
 });
 
-test('summary.forces 不是 array → placeholder', () => {
+test('summary.forces 不是 array → 不顯示重複占位', () => {
   const html = renderToString({ forces: 'broken' });
-  assert.match(html, /尚無|資料載入|七維錢潮/);
+  assert.equal(html, '');
 });
 
 // ---- 新 contract：3+2+2 共識，無「七大勢力全面偏多/偏空」 ----
