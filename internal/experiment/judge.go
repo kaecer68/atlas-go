@@ -364,6 +364,17 @@ func pipelineStageToggleJudgeChecks(lower string, brief domain.PromptExperimentR
 	}
 	if strings.Contains(lower, "stage:") && strings.Contains(lower, "action:") {
 		checks = append(checks, "contains structured stage + action fields")
+		// Whitelist check: only known toggleable stages are allowed.
+		allowedStages := map[string]bool{
+			"momentum_crash_protection": true,
+		}
+		stage, action := extractPipelineStageAction(lower)
+		if stage != "" && !allowedStages[stage] {
+			checks = append(checks, fmt.Sprintf("REJECT: unknown pipeline_stage '%s' — only %v are toggleable", stage, mapKeys(allowedStages)))
+		}
+		if action != "" && action != "enable" && action != "disable" {
+			checks = append(checks, fmt.Sprintf("REJECT: invalid pipeline_action '%s' — must be 'enable' or 'disable'", action))
+		}
 	}
 	// Architecture mutations must require multi-regime validation
 	if len(brief.Experiment.AcceptanceGates) > 0 {
@@ -899,4 +910,29 @@ func promptMentionsHoldingPeriod(prompt string) bool {
 		strings.Contains(lower, "holding days") ||
 		strings.Contains(lower, "max holding") ||
 		strings.Contains(lower, "exit_rule")
+}
+
+// extractPipelineStageAction extracts the stage and action values from a
+// pipeline_stage_toggle config patch YAML artifact.
+func extractPipelineStageAction(artifact string) (stage, action string) {
+	for _, line := range strings.Split(artifact, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "stage:") {
+			stage = strings.TrimSpace(strings.TrimPrefix(line, "stage:"))
+		}
+		if strings.HasPrefix(line, "action:") {
+			action = strings.TrimSpace(strings.TrimPrefix(line, "action:"))
+		}
+	}
+	return
+}
+
+// mapKeys returns the keys of a string→bool map as a sorted slice.
+func mapKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
