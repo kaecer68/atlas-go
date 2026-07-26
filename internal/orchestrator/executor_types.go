@@ -99,5 +99,6 @@ type ResearchResult struct {
 	GuardOutcomes        []domain.GuardOutcome
 	ScreeningRejects     []domain.ScreeningReject
 	DarwinianWeights     []*portfolio.DarwinianAgentWeight
-	MacroFlowAdjustment  *macroflow.AdjustmentResult // non-nil when both MacroFlow and MacroDataSnapshot were set and compute succeeded
+	MacroFlowAdjustment  *macroflow.AdjustmentResult
+	TraceSessionID       string // links to Scratchpad trace for decision provenance
 }

@@ -78,7 +78,13 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
 	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
-	raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
+	// Stage gating: skip momentum crash protection during RISK_OFF regime.
+	// When the market is already crashing, further reducing positions via
+	// momentum crash protection is counterproductive — it amplifies drawdown
+	// rather than protecting against it.
+	if regime != domain.RegimeRiskOff {
+		raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
+	}
 
 	controlInput, weightData := ctx.WeightApplication.ApplyWeights(raw, ctx.WeightManager, ctx.ConvictionClampingCallback)
 
@@ -123,7 +129,6 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 
 	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, ctx.Scratchpad, ctx.SessionID, macroFlowResult)
-
 	return ResearchResult{
 		MacroFlowAdjustment:  macroFlowResult,
 		Regime:               regime,
@@ -132,6 +137,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		GuardOutcomes:        guardOutcomes,
 		ScreeningRejects:     rejects,
 		DarwinianWeights:     weightData,
+		TraceSessionID:       ctx.SessionID,
 	}
 }
 
