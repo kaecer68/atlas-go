@@ -167,12 +167,14 @@ func (s *System) WithSectorExposureCalculator(c *portfolio.SectorExposureCalcula
 	return s
 }
 
-// WithSectorWeightEngine injects the sector WeightEngine (SA06 plumbing).
-// SA08 consumer (currentSectorAllocations → StrategyEvolver) is pending
-// Layer 3-4 wiring completion. The field is intentionally write-only until
-// the StrategyEvolver's closureStore/sessionResolver/weightEngine are injected.
+// WithSectorWeightEngine injects the sector WeightEngine into both the System
+// and its StrategyEvolver (SA06→SA08 wiring). The StrategyEvolver uses it in
+// ApplySectorRotation to compute projected targets from the weight engine.
 func (s *System) WithSectorWeightEngine(eng sectorallocation.WeightEngine) *System {
 	s.sectorWeightEngine = eng
+	if evolver := s.GetStrategyEvolver(); evolver != nil {
+		evolver.WithSectorWeightEngine(eng)
+	}
 	return s
 }
 
