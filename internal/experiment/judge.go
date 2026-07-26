@@ -364,6 +364,7 @@ func promptTighteningJudgeChecks(lower string, result domain.PromptExperimentRes
 	}
 	return checks
 }
+
 func (j *Judge) WithAcceptancePipeline(enabled bool) *Judge {
 	j.useAcceptancePipeline = enabled
 	return j
