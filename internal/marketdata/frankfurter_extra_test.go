@@ -165,7 +165,7 @@ func TestPreviousBusinessDay(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := previousBusinessDay(tt.now, tt.daysBack)
+			got := PreviousTradingDay(tt.now, tt.daysBack)
 			if got.Format("2006-01-02") != tt.wantYMD {
 				t.Errorf("got %s, want %s", got.Format("2006-01-02"), tt.wantYMD)
 			}

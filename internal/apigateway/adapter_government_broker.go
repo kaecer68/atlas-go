@@ -39,7 +39,7 @@ func NewGovernmentBrokerChannelAdapter(aggregator *marketdata.GovernmentBrokerAg
 // the FetchResult payload.
 func (a *GovernmentBrokerChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
-	date := previousTradingDay(time.Now())
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
 	reading, err := a.aggregator.AggregateDate(ctx, date)
 	if err != nil {
 		return nil, fmt.Errorf("government_broker aggregate %s: %w", date.Format("20060102"), err)
@@ -63,7 +63,7 @@ func (a *GovernmentBrokerChannelAdapter) Fetch(ctx context.Context) (*FetchResul
 // fresh enough (within 48h). This avoids the expensive 50-symbol fetch on every
 // health probe.
 func (a *GovernmentBrokerChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	date := previousTradingDay(time.Now())
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
 	file := filepath.Join(a.aggregator.DataDir(), date.Format("20060102")+".json")
 	info, err := os.Stat(file)
 	if err != nil {
@@ -100,20 +100,5 @@ func (a *GovernmentBrokerChannelAdapter) Metadata() ChannelMetadata {
 		APIFormat:  "html/csv",
 		Path:       "https://bsr.twse.com.tw/bshtm/bsContent.aspx",
 		HasLimiter: true,
-	}
-}
-
-// previousTradingDay returns the most recent trading day relative to now,
-// rolling back over weekends. This matches the logic previously inline in
-// operations_tasks.go.
-func previousTradingDay(now time.Time) time.Time {
-	d := now.AddDate(0, 0, -1)
-	switch d.Weekday() {
-	case time.Saturday:
-		return d.AddDate(0, 0, -1)
-	case time.Sunday:
-		return d.AddDate(0, 0, -2)
-	default:
-		return d
 	}
 }

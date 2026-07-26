@@ -118,7 +118,7 @@ func (f *FrankfurterFXProvider) fetchPreviousBusinessDayRate(ctx context.Context
 	var firstRate float64
 	var firstDate string
 	for i := 1; i <= 7; i++ {
-		date := previousBusinessDay(time.Now(), i)
+		date := PreviousTradingDay(time.Now(), i)
 		url := fmt.Sprintf("%s/%s?from=USD&to=JPY", f.baseURL, date.Format("2006-01-02"))
 		rate, err := f.fetchRate(ctx, url)
 		if err != nil {
@@ -136,14 +136,6 @@ func (f *FrankfurterFXProvider) fetchPreviousBusinessDayRate(ctx context.Context
 		return firstRate, firstDate, nil
 	}
 	return 0, "", fmt.Errorf("no historical rate found in past 7 days")
-}
-
-func previousBusinessDay(now time.Time, daysBack int) time.Time {
-	d := now.AddDate(0, 0, -daysBack)
-	for d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
-		d = d.AddDate(0, 0, -1)
-	}
-	return d
 }
 
 type frankfurterResponse struct {

@@ -30,13 +30,13 @@ func NewYahooMacroChannelAdapter(provider marketdata.MacroDataProvider) *YahooMa
 func (a *YahooMacroChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
-		// Partial failure is acceptable — at least some indicators came back.
-		// Only treat a total failure (no recorded data) as a channel error so
-		// the circuit breaker does not open for transient off-hours gaps.
-		if snap.RecordedAt > 0 {
+		// Partial failure is acceptable — at least one macro indicator has
+		// valid data (non-empty Symbol). Only treat a total failure (no
+		// indicator produced data) as a channel error so the circuit breaker
+		// does not open for transient off-hours gaps.
+		if snapshotHasAnySymbol(snap) {
 			logging.Warn("apigateway", "yahoo_macro_partial_fetch",
 				"error", err.Error(),
-				"recorded_at", snap.RecordedAt,
 			)
 		} else {
 			return nil, fmt.Errorf("yahoo macro fetch: %w", err)
@@ -54,6 +54,17 @@ func (a *YahooMacroChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 			Timestamp:          time.Now(),
 		},
 	}, nil
+}
+
+// snapshotHasAnySymbol returns true if at least one macro indicator in the
+// snapshot has a non-empty Symbol (meaning real data was fetched). This
+// distinguishes partial success from total failure more accurately than
+// checking RecordedAt (which is set before any fetches start).
+func snapshotHasAnySymbol(snap marketdata.MacroDataSnapshot) bool {
+	return snap.US10Y.Symbol != "" || snap.DXY.Symbol != "" ||
+		snap.VIX.Symbol != "" || snap.Oil.Symbol != "" ||
+		snap.Gold.Symbol != "" || snap.USD_TWD.Symbol != "" ||
+		snap.Silver.Symbol != "" || snap.Copper.Symbol != ""
 }
 
 // HealthCheck verifies connectivity by attempting a snapshot fetch.

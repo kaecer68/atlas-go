@@ -69,7 +69,7 @@ func TestGovernmentBrokerChannelAdapter_HealthCheck_OK(t *testing.T) {
 	dir := t.TempDir()
 
 	// Write a recent reading file.
-	date := previousTradingDay(time.Now())
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
 	path := filepath.Join(dir, date.Format("20060102")+".json")
 	if err := os.WriteFile(path, []byte(`{"date":"`+date.Format("20060102")+`","total_net":1234}`), 0o644); err != nil {
 		t.Fatalf("write test file: %v", err)

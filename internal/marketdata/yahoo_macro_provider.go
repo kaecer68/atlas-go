@@ -168,20 +168,28 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 	if math.IsNaN(latest) || math.IsInf(latest, 0) {
 		return MacroDataPoint{}, fmt.Errorf("invalid latest price for %s: %v", ticker, latest)
 	}
-	// 零值防禦: 巨集指標 (US10Y, DXY, VIX, Oil, Gold, USDTWD, Silver, Copper)
-	// 在真實市場中絕對不會等於 0。Yahoo Finance 在休市 / 解析異常時
-	// 可能回傳 closes: [0.0, 0.0, ...],若不擋下會污染下游
-	// narrative/stress index/risk 等計算 (例如 yield spread, US-TW 利差)。
-	// 與 NaN/Inf 視為同等資料錯誤,直接 reject。
-	if latest == 0 {
-		return MacroDataPoint{}, fmt.Errorf("zero latest price for %s (likely off-hours or parse error)", ticker)
-	}
 
-	prev := latest
-	if len(closes) > 1 {
-		candidate := closes[len(closes)-2]
-		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
-			prev = candidate
+	var prev float64
+	// 零值防禦 v2: 零值不再是錯誤 — 改從 closes 陣列末尾往回找上一個非零值。
+	// Yahoo Finance 在非 US 交易時段對 forex/commodity tickers
+	// (DX-Y.NYB, CL=F, GC=F, etc.) 可能回傳 closes: [0.0, ..., 0.0]，
+	// 但更早的歷史資料中仍有上一個交易日的有效收盤價(range=1mo)。
+	// 只有當 closes 陣列中完全沒有非零值時才拒絕。
+	if latest == 0 {
+		latest, prev = findLastValidClose(closes)
+		if latest == 0 {
+			return MacroDataPoint{}, fmt.Errorf("zero latest price for %s (all closes zero)", ticker)
+		}
+		logging.Warn("yahoo_macro_provider", "zero_fallback",
+			"ticker", ticker,
+			"fallback_value", fmt.Sprintf("%.4f", latest))
+	} else {
+		prev = latest
+		if len(closes) > 1 {
+			candidate := closes[len(closes)-2]
+			if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+				prev = candidate
+			}
 		}
 	}
 
@@ -202,12 +210,30 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 
 	point := MacroDataPoint{
 		Symbol:    ticker,
-		Value:     latest,
-		ChangePct: changePct,
 		Timestamp: result[0].Meta.RegularMarketTime,
 	}
 
 	return point, nil
+}
+
+// findLastValidClose walks backwards through closes to find the last two
+// non-zero, non-NaN values. Returns (0, 0) if none found. This is used when
+// the latest close is zero (Yahoo Finance off-hours) — we fall back to the
+// most recent valid trading-day close from the historical data (range=1mo).
+func findLastValidClose(closes []float64) (latest, prev float64) {
+	for i := len(closes) - 1; i >= 0; i-- {
+		v := closes[i]
+		if math.IsNaN(v) || math.IsInf(v, 0) || v == 0 {
+			continue
+		}
+		if latest == 0 {
+			latest = v
+		} else {
+			prev = v
+			return
+		}
+	}
+	return
 }
 
 // MockMacroProvider returns deterministic mock data for tests.

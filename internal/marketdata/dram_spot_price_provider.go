@@ -71,15 +71,22 @@ func (p *DRAMSpotPriceProvider) FetchSnapshot(ctx context.Context) (MacroDataSna
 	}
 
 	latest := closes[len(closes)-1]
-	if math.IsNaN(latest) || math.IsInf(latest, 0) || latest == 0 {
+	if math.IsNaN(latest) || math.IsInf(latest, 0) {
 		return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: invalid latest price: %v", latest)
 	}
-
-	prev := latest
-	if len(closes) > 1 {
-		candidate := closes[len(closes)-2]
-		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
-			prev = candidate
+	var prev float64
+	if latest == 0 {
+		latest, prev = findLastValidClose(closes)
+		if latest == 0 {
+			return MacroDataSnapshot{}, fmt.Errorf("dram_spot_price: all closes zero")
+		}
+	} else {
+		prev = latest
+		if len(closes) > 1 {
+			candidate := closes[len(closes)-2]
+			if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
+				prev = candidate
+			}
 		}
 	}
 
