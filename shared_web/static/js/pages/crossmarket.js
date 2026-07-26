@@ -33,9 +33,10 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
   return `<div class="kpi-card${clickable}" style="${borderStyle}"><div class="kpi-label">${label}${symbolHtml}</div><div class="kpi-value" style="color:${c}">${display}</div></div>`;
 }
 
-function fmtRate(v) {
-  return fmtSafePct(v, 2);
+function fmtYield(v) {
+  return fmtSafeNumber(v, { decimals: 3, useGrouping: false });
 }
+
 
 function fmtPrice(v) {
   return fmtSafeNumber(v, { decimals: 2, useGrouping: true });
@@ -129,7 +130,7 @@ function renderMacro(status) {
     kpiCard('VIX 恐慌指數', vix.value, fmtPrice, null, null, vix.symbol, 'cm_vix', vix.failed) +
     kpiCard('DXY 美元指數', dxy.value, fmtPrice, null, null, dxy.symbol, 'cm_dxy', dxy.failed) +
     kpiCard('USD/TWD 匯率', usdTwd.value, fmtPrice, null, null, usdTwd.symbol, 'cm_usd_twd', usdTwd.failed) +
-    kpiCard('US 10Y 殖利率', us10y.value, fmtRate, null, null, us10y.symbol, 'cm_us10y', us10y.failed);
+    kpiCard('US 10Y 殖利率', us10y.value, fmtYield, null, null, us10y.symbol, 'cm_us10y', us10y.failed);
 }
 
 function renderCorrelation(correlation, status) {
@@ -190,7 +191,7 @@ function renderCorrelationMatrix(matrixData) {
 
   let html = '<div style="overflow-x:auto"><table style="font-size:var(--text-sm);border-collapse:collapse;min-width:100%"><thead><tr><th style="position:sticky;left:0;background:var(--panel-l1);padding:6px 8px;text-align:left;border-bottom:1px solid var(--panel-l3);' + labelStyle + '">產業</th>';
   for (let i = 0; i < n; i++) {
-    html += '<th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--panel-l3);white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);min-width:32px;' + labelStyle + '">' + escapeHtml(labels[i] || symbols[i]) + '</th>';
+    html += '<th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--panel-l3);white-space:nowrap;writing-mode:vertical-lr;min-width:32px;' + labelStyle + '">' + escapeHtml(labels[i] || symbols[i]) + '</th>';
   }
   html += '</tr></thead><tbody>';
   for (let i = 0; i < n; i++) {
