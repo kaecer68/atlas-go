@@ -208,6 +208,10 @@ client_web/web/
 .screenshots/
 *.snapshot.bak
 
+# Local editor configs
+.vscode/
+.idea/
+
 # L2.4 pre-flight validator build artifact (cmd/experimental/l2-4-preflight/main.go)
 # Build via: go run ./cmd/experimental/l2-4-preflight
 l2-4-preflight
