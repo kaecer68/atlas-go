@@ -1955,6 +1955,7 @@ func writeJSONFile(path string, v any) error {
 	}
 	return os.Rename(tmpPath, path)
 }
+
 func (p *ParametersConfig) LockedSaveWithRollback(path string) error {
 	lockPath := path
 	if parametersConfigDir != "" && path == parametersConfigDir {
