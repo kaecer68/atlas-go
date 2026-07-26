@@ -23,7 +23,7 @@ type Orchestrator struct {
 	riskGate               *RiskGate
 	registry               domain.AgentRegistry
 	executionInputProvider orchestrator.LiveExecutionInputProvider
-	circuitBreaker         *CircuitBreaker
+	circuitBreaker         CircuitBreakerOps
 
 	config OrchestratorConfig
 
