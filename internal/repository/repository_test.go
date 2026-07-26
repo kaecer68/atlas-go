@@ -105,6 +105,10 @@ func (m *mockOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error
 	return m.outcomes, nil
 }
 
+func (m *mockOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return m.outcomes, nil
+}
+
 func (m *mockOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
 	var result []domain.RecommendationOutcome
 	for _, o := range m.outcomes {

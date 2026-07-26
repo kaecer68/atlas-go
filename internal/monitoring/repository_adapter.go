@@ -123,6 +123,10 @@ func (a *OutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, er
 	return a.store.LoadOutcomes()
 }
 
+func (a *OutcomeStoreAdapter) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return a.store.LoadOutcomesFromSessions()
+}
+
 func (a *OutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	return a.store.RecordSessionOutcomes(session, outcomes)
 }

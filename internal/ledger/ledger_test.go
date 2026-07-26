@@ -594,8 +594,9 @@ func TestLoadExperiments_NotExist(t *testing.T) {
 
 func TestLoadOutcomesFromSessions(t *testing.T) {
 	dir := t.TempDir()
-	// LoadOutcomesFromSessions reads session dirs directly from baseDir (not sessions/ subdir)
-	sessionDir := filepath.Join(dir, "session-1")
+	// LoadOutcomesFromSessions reads session dirs from baseDir/sessions/
+	sessionsDir := filepath.Join(dir, "sessions")
+	sessionDir := filepath.Join(sessionsDir, "session-1")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -620,8 +621,11 @@ func TestLoadOutcomesFromSessions(t *testing.T) {
 
 func TestLoadOutcomesFromSessions_NoSessions(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0o755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
 	store := NewStore(dir).(*Store)
-	// Empty dir returns nil, nil (not an error)
+	// Empty sessions dir returns nil, nil (not an error)
 	loaded, err := store.LoadOutcomesFromSessions()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -633,8 +637,9 @@ func TestLoadOutcomesFromSessions_NoSessions(t *testing.T) {
 
 func TestLoadOutcomesFromSessions_SkipsNonSessions(t *testing.T) {
 	dir := t.TempDir()
+	sessionsDir := filepath.Join(dir, "sessions")
 	// Create a non-session directory that should be skipped
-	otherDir := filepath.Join(dir, "not-a-session")
+	otherDir := filepath.Join(sessionsDir, "not-a-session")
 	if err := os.MkdirAll(otherDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

@@ -131,30 +131,73 @@ function bindSectorRefreshButton() {
 export function renderIndustryMap(data) {
   const el = document.getElementById("industryMap");
   if (!el) return;
-  if (!data || !data.industries) {
+  if (!data) {
+    el.innerHTML = renderEmptyState("尚無產業資料", "");
+    el.classList.remove("loading");
+    return;
+  }
+  // SA08/SA09: new SectorAllocationSnapshot shape with target/current/delta maps.
+  // Backward compat: also accept legacy { industries: [...] } shape.
+  if (data.target && typeof data.target === "object") {
+    el.classList.remove("loading");
+    const entries = Object.entries(data.target)
+      .map(function (_a) {
+        var id = _a[0], targetW = _a[1];
+        var currentW = data.current && data.current[id] != null ? data.current[id] : null;
+        var deltaW = data.delta && data.delta[id] != null ? data.delta[id] : null;
+        return { id: id, target: targetW, current: currentW, delta: deltaW };
+      })
+      .sort(function (a, b) { return (b.target || 0) - (a.target || 0); });
+    if (!entries.length) {
+      el.innerHTML = renderEmptyState(data.fallback_reason
+        ? "產業配置" + data.fallback_reason
+        : "尚無產業配置", "");
+      return;
+    }
+    var html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+    entries.forEach(function (ind) {
+      var name = sectorName(ind.id) || ind.id;
+      var targetPct = ind.target != null ? Math.round(ind.target * 100) : null;
+      var currentPct = ind.current != null ? Math.round(ind.current * 100) : null;
+      var deltaPct = ind.delta != null ? Math.round(ind.delta * 100) : null;
+      var deltaSign = deltaPct != null ? (deltaPct >= 0 ? "+" : "") : "";
+      html += '<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">';
+      html += '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + name + '</div>';
+      html += '<div style="font-size:12px;font-family:var(--font-mono)">目標 ' + (targetPct != null ? targetPct + "%" : "—") + '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">當前 ' + (currentPct != null ? currentPct + "%" : "—") + ' <span style="color:' + (deltaPct != null && deltaPct > 0 ? 'var(--pnl-profit)' : deltaPct != null && deltaPct < 0 ? 'var(--pnl-loss)' : 'var(--muted)') + '">' + (deltaSign + (deltaPct != null ? deltaPct + "%" : "—")) + '</span></div>';
+      html += '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:2px">';
+      html += '<div style="width:' + Math.min((targetPct || 0) * 3, 100) + '%;height:100%;background:var(--accent)"></div></div>';
+      html += '</div>';
+    });
+    html += "</div>";
+    el.innerHTML = html;
+    return;
+  }
+  // Legacy shape: data.industries array
+  if (!data.industries) {
     el.innerHTML = renderEmptyState("尚無產業資料", "");
     el.classList.remove("loading");
     return;
   }
   el.classList.remove("loading");
-  const industries = data.industries;
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
-  industries.forEach((ind) => {
-    const weightValue = typeof ind.adjusted_weight === "number"
+  var industries = data.industries;
+  var html2 = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  industries.forEach(function (ind) {
+    var weightValue = typeof ind.adjusted_weight === "number"
       ? ind.adjusted_weight
       : typeof ind.base_weight === "number"
         ? ind.base_weight
         : null;
-    const weightPct = weightValue != null ? Math.round(weightValue * 100) : null;
-    html += `<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail('${ind.id}')">`;
-    html += `<div style="font-weight:700;font-size:14px;margin-bottom:4px">${ind.name || ind.id}</div>`;
-    html += `<div style="font-size:12px;color:var(--muted)">權重 ${weightPct != null ? weightPct + "%" : "—"}</div>`;
-    html += `<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">`;
-    html += `<div style="width:${weightPct != null ? weightPct : 0}%;height:100%;background:var(--accent)"></div></div>`;
-    html += `</div>`;
+    var weightPct = weightValue != null ? Math.round(weightValue * 100) : null;
+    html2 += '<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail(\'' + ind.id + '\')">';
+    html2 += '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + (ind.name || ind.id) + '</div>';
+    html2 += '<div style="font-size:12px;color:var(--muted)">權重 ' + (weightPct != null ? weightPct + "%" : "—") + '</div>';
+    html2 += '<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">';
+    html2 += '<div style="width:' + (weightPct != null ? weightPct : 0) + '%;height:100%;background:var(--accent)"></div></div>';
+    html2 += '</div>';
   });
-  html += "</div>";
-  el.innerHTML = html;
+  html2 += "</div>";
+  el.innerHTML = html2;
 }
 
 function confidenceColor(hex, confidence) {
