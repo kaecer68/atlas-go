@@ -144,8 +144,7 @@ func CalibrateDarwinian(ie *config.InferenceEngine, n int, cfg *config.Parameter
 	res := CalibrationResult{Module: "darwinian"}
 
 	workDir, _ := os.Getwd()
-	sessionsDir := filepath.Join(workDir, "data", "state", "sessions")
-	ledgerStore := ledger.NewStore(sessionsDir)
+	ledgerStore := ledger.NewStore(filepath.Join(workDir, "data", "state"))
 	outcomes, err := ledgerStore.LoadOutcomesFromSessions()
 	if err != nil {
 		outcomes = nil
