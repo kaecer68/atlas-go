@@ -70,7 +70,7 @@ test('summary.forces=[] → 不顯示重複占位', () => {
 
 test('summary.forces 不是 array → 不顯示重複占位', () => {
   const html = renderToString({ forces: 'broken' });
-  assert.match(html, /尚無|資料載入|七維錢潮/);
+  assert.equal(html, '');
 });
 
 // ---- 新 contract：3+2+2 共識，無「七大勢力全面偏多/偏空」 ----
