@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -55,16 +57,17 @@ type CapitalFlowDetail struct {
 
 // Handler serves tier-based recommendations.
 type Handler struct {
-	subStore       subscription.Store
-	jwtMgr         *subscription.JWTManager
-	narrative      NarrativeProvider
-	capitalFlow    CapitalFlowProvider
-	eventPredictor EventPredictor
-	strategyComp   ComparisonEngine
-	regimeListener RegimeChangeListener
-	lastSeenRegime string
-	devMode        bool
-	regimeMu       sync.Mutex
+	subStore           subscription.Store
+	jwtMgr             *subscription.JWTManager
+	narrative          NarrativeProvider
+	capitalFlow        CapitalFlowProvider
+	eventPredictor     EventPredictor
+	strategyComp       ComparisonEngine
+	methodologyAdvisor *methodology.Advisor
+	regimeListener     RegimeChangeListener
+	lastSeenRegime     string
+	devMode            bool
+	regimeMu           sync.Mutex
 }
 
 // NewHandler creates a recommendation handler with optional JWT verification.
@@ -78,7 +81,6 @@ func (h *Handler) WithDevMode(enabled bool) *Handler {
 }
 
 // NewHandlerWithServices constructs a Handler with all Sprint 2 T8-T9 service deps.
-// All services may be nil (graceful fallback to hardcoded values).
 func NewHandlerWithServices(
 	store subscription.Store,
 	jwtMgr *subscription.JWTManager,
@@ -86,14 +88,16 @@ func NewHandlerWithServices(
 	capitalFlow CapitalFlowProvider,
 	eventPredictor EventPredictor,
 	strategy ComparisonEngine,
+	methodologyAdvisor *methodology.Advisor,
 ) *Handler {
 	return &Handler{
-		subStore:       store,
-		jwtMgr:         jwtMgr,
-		narrative:      narrative,
-		capitalFlow:    capitalFlow,
-		eventPredictor: eventPredictor,
-		strategyComp:   strategy,
+		subStore:           store,
+		jwtMgr:             jwtMgr,
+		narrative:          narrative,
+		capitalFlow:        capitalFlow,
+		eventPredictor:     eventPredictor,
+		strategyComp:       strategy,
+		methodologyAdvisor: methodologyAdvisor,
 	}
 }
 
@@ -178,7 +182,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 		return http.StatusOK, rec
 
 	case subscription.TierPremium:
-		rec.Strategies = buildPremiumStrategy(h.strategyComp, &warnings)
+		rec.Strategies = buildPremiumStrategy(h.strategyComp, rec.Market.Regime, h.methodologyAdvisor, &warnings)
 		applyWarning(&rec, &warnings)
 		return http.StatusOK, rec
 
@@ -198,12 +202,12 @@ func applyWarning(rec *TierRecommendation, warnings *[]string) {
 // RegisterRoutes registers recommendation endpoints with optional JWT verification.
 // HandlerDeps groups optional service dependencies for /api/recommendations.
 // Any nil field falls back to a hardcoded safe default at request time
-// (see helpers in this file). Production wiring happens via main.go.
 type HandlerDeps struct {
-	Narrative      NarrativeProvider
-	CapitalFlow    CapitalFlowProvider
-	EventPredictor EventPredictor
-	StrategyComp   ComparisonEngine
+	Narrative          NarrativeProvider
+	CapitalFlow        CapitalFlowProvider
+	EventPredictor     EventPredictor
+	StrategyComp       ComparisonEngine
+	MethodologyAdvisor *methodology.Advisor
 }
 
 // RegisterRoutes wires /api/recommendations via NewHandler (no services).
@@ -229,6 +233,7 @@ func RegisterRoutesWithDeps(
 		store, jwtMgr,
 		deps.Narrative, deps.CapitalFlow,
 		deps.EventPredictor, deps.StrategyComp,
+		deps.MethodologyAdvisor,
 	).WithDevMode(devMode)
 	mux.HandleFunc("GET /api/recommendations", func(w http.ResponseWriter, r *http.Request) {
 		code, data := h.HandleRecommendations(r)
@@ -332,15 +337,36 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 }
 
 // buildPremiumStrategy composes the StrategyRecommendation for premium tier
-// from real ComparisonEngine score (Score) + risk_signal.go derived Entry/Stop.
+// from real ComparisonEngine score + methodology regime filtering.
 //
-// The EntrySignal/StopLoss derivation is deferred to risk_signal.go (Commit #4.5).
-// For now, fallback strings are returned when strategyComp is nil.
-func buildPremiumStrategy(e ComparisonEngine, w *[]string) *StrategyRecommendation {
+// When methodologyAdvisor is non-nil, ranked strategies are filtered to only
+// those allowed in the current regime (per methodology_rules.yaml). The
+// regime string is mapped to a MarketPeriod via methodology.RegimeToPeriod.
+func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodology.Advisor, w *[]string) *StrategyRecommendation {
+	// Determine the allowed strategy set for this regime.
+	var allowedSet map[string]bool
+	if advisor != nil {
+		period := methodology.RegimeToPeriod(domainRegimeFromString(regime))
+		allowed := advisor.AllowedStrategies(period)
+		if len(allowed) > 0 {
+			allowedSet = make(map[string]bool, len(allowed))
+			for _, id := range allowed {
+				allowedSet[id] = true
+			}
+		}
+	}
+
 	if e == nil {
+		ranked := []string{"growth", "momentum", "all_weather", "value", "defensive"}
+		if allowedSet != nil {
+			ranked = filterRanked(ranked, allowedSet)
+			if len(ranked) == 0 {
+				ranked = []string{"all_weather"} // safe fallback
+			}
+		}
 		return &StrategyRecommendation{
-			Active:      "growth",
-			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+			Active:      ranked[0],
+			Ranked:      ranked,
 			EntrySignal: "等待回測支撐區間",
 			StopLoss:    "-5%",
 		}
@@ -349,13 +375,27 @@ func buildPremiumStrategy(e ComparisonEngine, w *[]string) *StrategyRecommendati
 	ranked, err := e.RankedStrategies()
 	if err != nil || len(ranked) == 0 {
 		*w = append(*w, "ranking_warming_up")
-		// Fallback to score-based for active strategy.
 		score, _ := e.GetScore("growth")
+		ranked = []string{"growth", "momentum", "all_weather", "value", "defensive"}
+		if allowedSet != nil {
+			ranked = filterRanked(ranked, allowedSet)
+			if len(ranked) == 0 {
+				ranked = []string{"all_weather"}
+			}
+		}
 		return &StrategyRecommendation{
-			Active:      "growth",
-			Ranked:      []string{"growth", "momentum", "all_weather", "value", "defensive"},
+			Active:      ranked[0],
+			Ranked:      ranked,
 			EntrySignal: fmt.Sprintf("排名暖機中 (%.2f)", score),
 			StopLoss:    "-5%",
+		}
+	}
+	// Filter ranked strategies to only those allowed in current regime.
+	if allowedSet != nil {
+		ranked = filterRanked(ranked, allowedSet)
+		if len(ranked) == 0 {
+			*w = append(*w, "no_strategies_allowed_in_regime")
+			ranked = []string{"all_weather"}
 		}
 	}
 	active := ranked[0]
@@ -368,6 +408,30 @@ func buildPremiumStrategy(e ComparisonEngine, w *[]string) *StrategyRecommendati
 		Ranked:      ranked,
 		EntrySignal: fmt.Sprintf("Score=%.2f — 排名第1", score),
 		StopLoss:    "-5%",
+	}
+}
+
+// filterRanked keeps only IDs present in allowedSet, preserving order.
+func filterRanked(ids []string, allowed map[string]bool) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if allowed[id] {
+			result = append(result, id)
+		}
+	}
+	return result
+}
+
+// domainRegimeFromString converts a regime string (RISK_ON/RISK_OFF/NEUTRAL)
+// to a domain.Regime for use with methodology.RegimeToPeriod.
+func domainRegimeFromString(s string) domain.Regime {
+	switch s {
+	case "RISK_ON":
+		return domain.RegimeRiskOn
+	case "RISK_OFF":
+		return domain.RegimeRiskOff
+	default:
+		return domain.RegimeNeutral
 	}
 }
 

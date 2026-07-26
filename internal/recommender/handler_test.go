@@ -131,7 +131,7 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 	mock := &mockNarrative{stress: 15.5, regime: "RISK_ON"}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -197,7 +197,7 @@ func TestHandleRecommendations_CapitalFlowUsesOneDailyFetchAndWarnsWhileCalibrat
 			CalibrationStatus: capitalflow.CalibrationCalibrating,
 		},
 	}
-	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil)
+	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -249,7 +249,7 @@ func TestHandleRecommendations_CapitalFlowFromService(t *testing.T) {
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 	mock := &mockCapitalFlow{summary: "外資連續買超 3 日，共振 0.85"}
-	h := NewHandlerWithServices(*store, nil, nil, mock, nil, nil)
+	h := NewHandlerWithServices(*store, nil, nil, mock, nil, nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -282,7 +282,7 @@ func TestHandleRecommendations_EventsFromPredictor(t *testing.T) {
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 	mock := &mockEventPredictor{direction: "inflow"}
-	h := NewHandlerWithServices(*store, nil, nil, nil, mock, nil)
+	h := NewHandlerWithServices(*store, nil, nil, nil, mock, nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	code, data := h.HandleRecommendations(req)
@@ -317,7 +317,7 @@ func TestHandleRecommendations_EntrySignalFromComparisonEngine(t *testing.T) {
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
 	mock := &mockComparisonEngine{score: 0.85}
-	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock).WithDevMode(true)
+	h := NewHandlerWithServices(*store, nil, nil, nil, nil, mock, nil).WithDevMode(true)
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
@@ -344,7 +344,7 @@ func TestHandleRecommendations_ServiceFailure_AddsWarning(t *testing.T) {
 	store, _ := subscription.NewStore(dir)
 	store.Register("premium@test.com", "pass")
 	mock := &failingNarrative{err: errors.New("taiwan_stress_calc transient failure")}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil, nil).WithDevMode(true)
 	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
 	req.Header.Set("X-User-Email", "premium@test.com")
 	code, data := h.HandleRecommendations(req)
@@ -378,7 +378,7 @@ func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {
 	}
 
 	mock := &mockNarrative{stress: 20.0, regime: "RISK_OFF"}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).WithDevMode(true).WithRegimeListener(listener)
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil, nil).WithDevMode(true).WithRegimeListener(listener)
 
 	t.Setenv("ATLAS_DEV_MODE", "true")
 	store.Register("free@test.com", "pass")
@@ -406,7 +406,7 @@ func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
 	}
 
 	mock := &mockNarrative{stress: 20.0, regime: "RISK_ON"}
-	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil).
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil, nil).
 		WithRegimeListener(listener).
 		WithDevMode(true)
 	store.Register("free@test.com", "pass")
@@ -449,7 +449,7 @@ func TestHandlerRecommendations_AssessmentUnchanged(t *testing.T) {
 
 	store, _ := subscription.NewStore(dir)
 	cf := &mockCapitalFlow{summary: "外資連三買超 800 億"}
-	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil).WithDevMode(true)
+	h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil, nil).WithDevMode(true)
 
 	// Sanity: the mock's direct assessment path returns the Go zero value,
 	// whose empty CalibrationStatus keeps EligibleForAutomation closed.
