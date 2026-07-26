@@ -210,6 +210,8 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 
 	point := MacroDataPoint{
 		Symbol:    ticker,
+		Value:     latest,
+		ChangePct: changePct,
 		Timestamp: result[0].Meta.RegularMarketTime,
 	}
 
