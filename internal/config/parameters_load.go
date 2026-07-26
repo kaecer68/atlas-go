@@ -22,8 +22,10 @@ func LoadParametersConfig(path string) (*ParametersConfig, error) {
 	}
 
 	if info.IsDir() {
+		parametersConfigDir = path
 		return loadParametersDir(path)
 	}
+	parametersConfigDir = "" // not in directory mode
 	return loadParametersFile(path)
 }
 
