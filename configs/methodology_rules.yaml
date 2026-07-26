@@ -1,0 +1,503 @@
+# ATLAS 方法論規則配置
+# ======================
+# 版本：v1.0
+# 用途：定義七個市場時期的判斷條件，以及時期到策略的自動映射。
+# 消費方：internal/portfolio/regime.go (RegimeDetector)、internal/orchestrator/executor_pipeline.go
+# 權威來源：docs/ATLAS_METHODOLOGY.md
+#
+# 設計原則：
+# - 每個時期有多個 indicator（AND 或 OR 組合），滿足 threshold 個即觸發
+# - strategies 欄位控制該時期允許的推薦策略（前端依此過濾）
+# - macroflow 欄位對應 internal/macroflow/ 的 RiskLevel + stress 判斷
+# - 時期判斷順序很重要：先判斷極端狀態（黑天鵝→低迷→轉折），再判斷常態
+
+# ---------------------------------------------------------------------------
+# 時期判斷優先級（數字越小越優先判斷）
+# ---------------------------------------------------------------------------
+detection_order:
+  - black_swan       # 最優先：極端事件覆蓋所有信號
+  - turnaround_down  # 轉折先於常態
+  - downturn
+  - turnaround_up
+  - bull
+  - plateau
+  - consolidation
+
+# ---------------------------------------------------------------------------
+# 七個市場時期定義
+# ---------------------------------------------------------------------------
+regimes:
+  - id: downturn
+    name: 低迷
+    name_en: Downturn
+    description: 恐慌已釋放但信心未恢復；價格不再創新低，但上漲意願薄弱
+    trigger_logic: all  # 所有 indicator 必須同時滿足
+    indicators:
+      - id: foreign_sell_slowing
+        field: foreign_investor_net
+        description: 外資賣超幅度顯著縮小（連續5日賣超均值 < 前波峰值的30%）
+        type: threshold
+        params:
+          window_days: 5
+          ratio_to_peak: 0.3
+      - id: margin_reduction
+        field: margin_balance
+        description: 融資餘額較高點減少 > 15%
+        type: threshold
+        params:
+          reduction_pct: 0.15
+      - id: public_bank_buy
+        field: public_bank_net
+        description: 公股券商連續買超 > 5日
+        type: consecutive
+        params:
+          min_days: 5
+          direction: buy
+      - id: vix_plateau
+        field: vix
+        description: VIX > 25 但近5日高點不再創高
+        type: threshold
+        params:
+          min: 25
+          no_new_high_days: 5
+    strategies:
+      primary:
+        - all_weather
+      secondary:
+        - value
+    macroflow:
+      risk_level: orange
+      stress_trigger_vix: 30
+    cash_reserve_pct: 45
+    styling:
+      color: "#64748B"       # 灰色
+      icon: "trending_flat"
+
+  - id: turnaround_up
+    name: 轉折開高
+    name_en: Turnaround Up
+    description: 聰明錢率先進場；外資突然轉買，匯率急升，美股科技突破關鍵均線
+    trigger_logic: any  # 任一條件滿足即觸發，最少需要 threshold 個
+    trigger_threshold: 2
+    indicators:
+      - id: foreign_sudden_buy
+        field: foreign_investor_net
+        description: 外資單日買超 > 100億 或連續3日買超
+        type: composite
+        params:
+          single_day_min: 10_000_000_000   # 100億 (單位：元)
+          consecutive_days: 3
+      - id: twd_surge
+        field: usd_twd
+        description: 新台幣單日升值 > 0.3% 或3日累積升值 > 0.5%
+        type: composite
+        params:
+          single_day_pct: -0.3
+          cumulative_3day_pct: -0.5
+      - id: sox_breakout
+        field: sox_index
+        description: 費半指數突破50日線
+        type: ma_crossover
+        params:
+          ma: 50
+          direction: above
+      - id: tsm_adr_breakout
+        field: tsm_adr
+        description: 台積電ADR單日漲幅 > 2% 且收盤高於前5日高點
+        type: composite
+        params:
+          single_day_pct: 2.0
+          above_5day_high: true
+      - id: foreign_futures_increase
+        field: foreign_futures_oi
+        description: 外資期貨未平倉多單增加 > 3000口
+        type: threshold
+        params:
+          increase_contracts: 3000
+    strategies:
+      primary:
+        - growth
+      secondary:
+        - momentum
+        - event_arbitrage
+    macroflow:
+      risk_level: yellow
+      stress_trigger_vix: 30
+    cash_reserve_pct: 15
+    styling:
+      color: "#F59E0B"       # 琥珀色
+      icon: "trending_up"
+
+  - id: bull
+    name: 上升／多頭
+    name_en: Bull Market
+    description: 趨勢確立，資金持續流入，散戶開始跟進
+    trigger_logic: all
+    indicators:
+      - id: foreign_continuous_buy
+        field: foreign_investor_net
+        description: 外資連續買超（過去10日 > 7日買超）
+        type: ratio
+        params:
+          window_days: 10
+          min_buy_ratio: 0.7
+      - id: foreign_futures_high
+        field: foreign_futures_oi
+        description: 外資期貨未平倉多單 > 30000口
+        type: threshold
+        params:
+          min_contracts: 30000
+      - id: margin_mild
+        field: margin_balance
+        description: 融資溫和增加（日均增幅 < 1%）
+        type: threshold
+        params:
+          max_daily_pct: 1.0
+      - id: twii_above_ma20
+        field: taiex_index
+        description: 加權指數站穩20日線且20日線斜率向上
+        type: ma_crossover
+        params:
+          ma: 20
+          direction: above
+          slope_positive: true
+    strategies:
+      primary:
+        - momentum
+      secondary:
+        - growth
+        - event_arbitrage
+    macroflow:
+      risk_level: yellow
+      stress_trigger_vix: 30
+    cash_reserve_pct: 7
+    styling:
+      color: "#10B981"       # 綠色
+      icon: "arrow_upward"
+
+  - id: plateau
+    name: 高原
+    name_en: Plateau
+    description: 漲勢停滯但未反轉；外資買盤減弱，當沖佔比升高，類股輪動加快
+    trigger_logic: all
+    indicators:
+      - id: foreign_buy_slowing
+        field: foreign_investor_net
+        description: 外資買超幅度顯著縮小（3日均值 < 前10日均值的50%）
+        type: threshold
+        params:
+          short_window: 3
+          long_window: 10
+          ratio_max: 0.5
+      - id: foreign_futures_declining
+        field: foreign_futures_oi
+        description: 外資期貨未平倉多單連續3日減少
+        type: consecutive
+        params:
+          min_days: 3
+          direction: decrease
+      - id: day_trade_high
+        field: day_trade_ratio
+        description: 當沖佔比 > 35%
+        type: threshold
+        params:
+          min_pct: 35.0
+      - id: sector_rotation
+        field: sector_rotation_index
+        description: 近5日漲幅前3名類股與前5日不同（輪動指標）
+        type: custom
+        params:
+          lookback_days: 5
+          top_n: 3
+    strategies:
+      primary:
+        - event_arbitrage
+      secondary:
+        - value
+        - all_weather
+    macroflow:
+      risk_level: yellow
+      stress_trigger_vix: 30
+    cash_reserve_pct: 25
+    styling:
+      color: "#F97316"       # 橘色
+      icon: "remove"
+
+  - id: consolidation
+    name: 盤整
+    name_en: Consolidation
+    description: 方向不明，外資忽買忽賣，匯率區間震盪
+    trigger_logic: all
+    indicators:
+      - id: foreign_mixed
+        field: foreign_investor_net
+        description: 外資買賣交錯（近10日買超日與賣超日各 > 3日）
+        type: ratio
+        params:
+          window_days: 10
+          min_buy_days: 3
+          min_sell_days: 3
+      - id: twd_range
+        field: usd_twd
+        description: 新台幣在月線上下0.5%內震盪
+        type: threshold
+        params:
+          ma: 20
+          band_pct: 0.5
+      - id: no_leader
+        field: sector_leader_days
+        description: 無持續領漲類股（單一類股連續領漲 < 3日）
+        type: threshold
+        params:
+          max_consecutive_days: 3
+      - id: volume_contracting
+        field: market_volume
+        description: 成交量萎縮至20日均量的70%-100%
+        type: threshold
+        params:
+          ma: 20
+          min_ratio: 0.7
+          max_ratio: 1.0
+      - id: twii_range_tight
+        field: taiex_index
+        description: 加權指數在明確區間內波動（區間振幅 < 5%）
+        type: threshold
+        params:
+          range_pct: 5.0
+    strategies:
+      primary:
+        - event_arbitrage
+      secondary:
+        - all_weather
+    macroflow:
+      risk_level: yellow
+      stress_trigger_vix: 30
+    cash_reserve_pct: 35
+    styling:
+      color: "#3B82F6"       # 藍色
+      icon: "swap_horiz"
+
+  - id: turnaround_down
+    name: 轉折下壓
+    name_en: Turnaround Down
+    description: 聰明錢率先離場；外資連續大賣，新台幣貶破月線，融資開始斷頭
+    trigger_logic: all
+    indicators:
+      - id: foreign_heavy_sell
+        field: foreign_investor_net
+        description: 連續3日賣超且至少一次單日賣超 > 150億
+        type: composite
+        params:
+          consecutive_days: 3
+          single_day_min: -15_000_000_000
+      - id: twd_breakdown
+        field: usd_twd
+        description: 新台幣貶破月線且貶值加速
+        type: ma_crossover
+        params:
+          ma: 20
+          direction: below
+          accelerating: true
+      - id: margin_call
+        field: margin_maintenance_ratio
+        description: 融資維持率降至150%以下
+        type: threshold
+        params:
+          max_pct: 150.0
+      - id: sox_breakdown
+        field: sox_index
+        description: 費半指數跌破50日線
+        type: ma_crossover
+        params:
+          ma: 50
+          direction: below
+      - id: foreign_futures_short
+        field: foreign_futures_oi
+        description: 外資期貨轉為淨空單或淨多單大幅減少 > 10000口
+        type: threshold
+        params:
+          max_contracts: 0
+          decrease_contracts: 10000
+    strategies:
+      primary:
+        - all_weather
+    macroflow:
+      risk_level: orange
+      stress_trigger_vix: 30
+    cash_reserve_pct: 60
+    styling:
+      color: "#EF4444"       # 紅色
+      icon: "trending_down"
+
+  - id: black_swan
+    name: 黑天鵝
+    name_en: Black Swan
+    description: 無差別拋售，流動性枯竭，政府宣布干預
+    trigger_logic: any
+    trigger_threshold: 1   # 任一條件即觸發
+    indicators:
+      - id: foreign_panic_sell
+        field: foreign_investor_net
+        description: 外資單日賣超 > 500億 或連續巨量賣超
+        type: composite
+        params:
+          single_day_max: -50_000_000_000
+          consecutive_heavy_days: 3
+      - id: vix_spike
+        field: vix
+        description: VIX > 35（macroflow.isStressful 觸發條件）
+        type: threshold
+        params:
+          min: 35
+      - id: twii_crash
+        field: taiex_index
+        description: 單日跌幅 > 5% 或連續累積跌 > 10%
+        type: composite
+        params:
+          single_day_pct: -5.0
+          cumulative_pct: -10.0
+      - id: national_fund
+        field: national_stabilization_fund
+        description: 國安基金宣布進場護盤
+        type: event
+      - id: twd_panic
+        field: usd_twd
+        description: 新台幣單日重貶 > 0.5%
+        type: threshold
+        params:
+          single_day_pct: 0.5
+    strategies:
+      primary:
+        - all_weather
+      secondary:
+        - cash_only
+    macroflow:
+      risk_level: red
+      stress_trigger_vix: 35
+    cash_reserve_pct: 90
+    styling:
+      color: "#7C3AED"       # 紫色
+      icon: "warning"
+
+# ---------------------------------------------------------------------------
+# 策略定義
+# ---------------------------------------------------------------------------
+strategies:
+  - id: all_weather
+    name: 全天候防禦
+    name_en: All Weather
+    description: 風險平價，防禦為先 — 低 beta、高股息、低波動標的
+    applicable_regimes:
+      - downturn
+      - plateau
+      - consolidation
+      - turnaround_down
+      - black_swan
+    factor_weights:
+      quality: 0.40
+      value: 0.35
+      momentum: 0.15
+      growth: 0.10
+    max_exposure_pct: 0.50
+    category: defensive
+
+  - id: value
+    name: 價值投資
+    name_en: Value
+    description: 尋找低估標的 — 低本益比、低股價淨值比、穩定獲利
+    applicable_regimes:
+      - downturn
+      - plateau
+    factor_weights:
+      value: 0.45
+      quality: 0.30
+      momentum: 0.15
+      growth: 0.10
+    max_exposure_pct: 0.60
+    category: defensive
+
+  - id: growth
+    name: 成長動能
+    name_en: Growth
+    description: 跟隨聰明錢啟動 — 高營收成長、產業前景佳
+    applicable_regimes:
+      - turnaround_up
+      - bull
+    factor_weights:
+      growth: 0.40
+      momentum: 0.35
+      quality: 0.15
+      value: 0.10
+    max_exposure_pct: 0.90
+    category: aggressive
+
+  - id: momentum
+    name: 動能追蹤
+    name_en: Momentum
+    description: 跟隨趨勢 — 強勢股追價，弱勢股避開
+    applicable_regimes:
+      - turnaround_up
+      - bull
+    factor_weights:
+      momentum: 0.50
+      growth: 0.25
+      quality: 0.15
+      value: 0.10
+    max_exposure_pct: 0.85
+    category: aggressive
+
+  - id: event_arbitrage
+    name: 事件套利
+    name_en: Event Arbitrage
+    description: 利用可預測事件創造的短期錯價 — ETF調整、MSCI、營收公告、除權息
+    applicable_regimes:
+      - turnaround_up
+      - bull
+      - plateau
+      - consolidation
+    factor_weights:
+      momentum: 0.30
+      growth: 0.25
+      quality: 0.25
+      value: 0.20
+    max_exposure_pct: 0.40
+    category: tactical
+    constraints:
+      max_holding_days: 5
+      max_single_event_exposure_pct: 10
+
+  - id: cash_only
+    name: 現金為主
+    name_en: Cash Only
+    description: 極端狀況下保持現金，不出手也是一種策略
+    applicable_regimes:
+      - black_swan
+    factor_weights:
+      quality: 0.50
+      value: 0.50
+      momentum: 0.00
+      growth: 0.00
+    max_exposure_pct: 0.10
+    category: defensive
+
+# ---------------------------------------------------------------------------
+# 時期轉換矩陣（供驗證用）
+# ---------------------------------------------------------------------------
+transitions:
+  - from: downturn
+    to: [turnaround_up]
+  - from: turnaround_up
+    to: [bull, downturn, turnaround_down]
+    notes: 假突破回歸(downturn)或假突破後反殺(turnaround_down)
+  - from: bull
+    to: [plateau]
+  - from: plateau
+    to: [bull, consolidation, turnaround_down]
+    notes: 突破續漲(bull)、頭部確立(turnaround_down)
+  - from: consolidation
+    to: [turnaround_up, turnaround_down]
+    notes: 整理後突破或整理後破底
+  - from: turnaround_down
+    to: [downturn, black_swan]
+  - from: black_swan
+    to: [downturn]
