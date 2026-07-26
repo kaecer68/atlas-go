@@ -126,3 +126,19 @@ func TestYahooMacroChannelAdapter_Fetch_PartialSuccess(t *testing.T) {
 		t.Errorf("ChannelID = %q, want us_yahoo", res.Meta.ChannelID)
 	}
 }
+
+func TestYahooMacroChannelAdapter_Fetch_AllIndicatorsFailed(t *testing.T) {
+	mock := &marketdata.MockMacroProvider{
+		Snapshot: marketdata.MacroDataSnapshot{
+			// Even RecordedAt > 0, no indicator has data
+			RecordedAt: time.Now().Unix(),
+		},
+		Err: errors.New("all indicators failed"),
+	}
+
+	a := NewYahooMacroChannelAdapter(mock)
+	_, err := a.Fetch(context.Background())
+	if err == nil {
+		t.Fatal("Fetch() should return error when no indicator has data")
+	}
+}
