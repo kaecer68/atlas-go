@@ -393,7 +393,7 @@ function renderPeriodCard(host, report, isPremium, error) {
   const label = PERIOD_LABEL[periodId] || { zh: periodId || '—', en: '' };
   const status = STATUS_TO_BADGE[report.global && report.global.status] || null;
   const cash = isNum(p.cash_reserve) ? Number(p.cash_reserve) : null;
-  const cashPct = cash == null ? null : Math.max(0, Math.min(100, Math.round(cash * 100)));
+  const cashPct = cash == null ? null : Math.max(0, Math.min(100, Math.round(cash)));
   const summary = (report.global && report.global.summary) || (report.summary) || '—';
 
   host.dataset.period = periodId;
