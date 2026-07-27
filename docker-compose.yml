@@ -32,7 +32,7 @@ services:
       # here, which silently broke all local dev since the shell
       # var is unset. Removed in favor of env_file-only path.
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -126,12 +126,12 @@ services:
 
   # TimescaleDB for persistent storage and time-series data
   postgres:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb:2.14.2-pg15
     container_name: atlas-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_USER=atlas
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-atlas}
       - POSTGRES_DB=atlas
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4
@@ -235,7 +235,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -260,7 +260,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -285,7 +285,7 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -310,7 +310,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 9 * * *
       - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -433,7 +433,7 @@ services:
     environment:
       - ATLAS_ENV=production
       - ATLAS_WORKER_TYPE=prism
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD}@postgres:5432/atlas?sslmode=prefer
+      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
