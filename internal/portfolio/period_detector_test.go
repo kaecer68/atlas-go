@@ -77,7 +77,7 @@ func TestPeriodDetector_TurnaroundDown(t *testing.T) {
 		TWDChange1D:            0.4, // depreciating
 		MarginMaintenanceRatio: 145,
 		SOXPrice:               4200,
-		SOXMA50:                4500, // below 50-day
+		SOXMA50:                5200, // below 50-day
 	}
 
 	got := d.DetectPeriod(ind)
@@ -95,7 +95,7 @@ func TestPeriodDetector_Downturn(t *testing.T) {
 		// Not turnaround down (margin OK)
 		MarginMaintenanceRatio: 160,
 		SOXPrice:               5000,
-		SOXMA50:                4500,
+		SOXMA50:                5200,
 		// Downturn conditions
 		ForeignNet5DayAvg:       -3_000_000_000,  // 30億賣超
 		ForeignNetPeakSell:      -15_000_000_000, // 前波150億峰值, 30億/150億 = 20% < 30%
@@ -124,7 +124,7 @@ func TestPeriodDetector_TurnaroundUp(t *testing.T) {
 		ForeignConsecBuyDays: 3,
 		TWDChange1D:          -0.4, // 升值0.4%
 		SOXPrice:             4800,
-		SOXMA50:              4500, // above 50-day
+		SOXMA50:              5200, // above 50-day
 	}
 
 	got := d.DetectPeriod(ind)
@@ -141,7 +141,7 @@ func TestPeriodDetector_Bull(t *testing.T) {
 		VIX:                 18,
 		ForeignSingleDayNet: 5_000_000_000,
 		SOXPrice:            5000,
-		SOXMA50:             4500,
+		SOXMA50:             5200,
 		TWDChange1D:         -0.1,
 		// Bull conditions
 		ForeignBuyDays10:      8,

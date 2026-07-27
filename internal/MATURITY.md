@@ -67,6 +67,7 @@
 | `fubonproxy` | Fubon-proxy 生命週期管理 — 自動啟動/停止/監控 Python FastAPI 微服務 | `ProcessManager`, `Start()`, `Stop()` | 由 cmd/atlas API 模式使用，非致命失敗 |
 | `globalmarket` | 全球總經資料管理 | `Manager` | 由 narrative/industry 使用 |
 | `metalearning` | 元學習協調器 — `MetaLearner`、策略選擇優化 | `MetaLearner` | 研究階段，可能晉升 |
+| `methodology` | 方法論顧問層 — 根據 YAML 配置將市場 regime 映射至投資方法論規則 | `Advisor`, `RegimeToPeriod` | Wave 11 新增；由 recommender handler 消費 |
 | `ml` | 監督式學習模型 — OLS、ElasticNet、PCR、PLS 實作（SK-05~09） | `Model`, `Trainer` | 由 Fin-Skills 規範驅動，供 factor/research 使用 |
 | `observability` | OpenTelemetry 追蹤基礎設施 — 父 package，下含 `otel` 子 package（OTel SDK init + span helpers） | `TracerName`（re-exported from `otel`） | Wave 10 L2.1，evolving，OTLP exporter 待 production 評估 |
 | `observability/otel` | OpenTelemetry trace 初始化 — stdout exporter、parent/child span helpers，給 `llm.router.Call` 與 `llm/clients.DoRequest` 加 span | `Init()`, `StartSpan()`, `TracerName` | Wave 10 L2.1，evolving，OTLP exporter 待 production 評估 |

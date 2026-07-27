@@ -176,7 +176,8 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 }
 
 // fetchMaintenanceRatio fetches the aggregate margin maintenance ratio from TWSE.
-// Uses selectType=ALL to get Table 1 (維持率) from the MI_MARGN endpoint.
+//
+//lint:ignore U1000 P0-7 TODO: re-enable when TWSE MI_MARGN is stable
 func (t *TWSEMarginBalanceProvider) fetchMaintenanceRatio(ctx context.Context, dateStr string) (float64, error) {
 	if err := t.rateLimiter.Wait(ctx); err != nil {
 		return 0, fmt.Errorf("rate limit wait: %w", err)
