@@ -21,7 +21,7 @@ func TestRegimeToRiskLevel(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := regimeToRiskLevel(tc.in)
+			got := regimeToRiskLevel(tc.in, nil)
 			if got != tc.want {
 				t.Errorf("regimeToRiskLevel(%q) = %q, want %q", tc.in, got, tc.want)
 			}
