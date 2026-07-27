@@ -85,6 +85,9 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "tw_vol", apply: a.applyTWVol},
 		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
+		{channelID: "twse_insider", apply: a.applyInsiderTrading},
+		{channelID: "market_volume", apply: a.applyMarketVolume},
+		{channelID: "day_trade_ratio", apply: a.applyDayTradeRatio},
 	}
 
 	var (
@@ -442,8 +445,9 @@ func (a *macroDataGatewayAdapter) applyTaifexInstitutional(snap *marketdata.Macr
 
 func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroDataSnapshot, data []byte) {
 	var payload struct {
-		Available bool                              `json:"available"`
-		Reading   *marketdata.GovernmentFlowReading `json:"reading"`
+		Available        bool                              `json:"available"`
+		Reading          *marketdata.GovernmentFlowReading `json:"reading"`
+		InsuranceReading *marketdata.GovernmentFlowReading `json:"insurance_reading"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return
@@ -452,12 +456,37 @@ func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroData
 		return
 	}
 	ts, _ := time.Parse("20060102", payload.Reading.Date)
-	// TWD value is large; convert to 億元 (1e8) so the Z-score window stays
-	// in a sane numeric range alongside the other forces (which are
-	// typically expressed in billions NTD or percentage points).
 	v := float64(payload.Reading.TotalNet) / 1e8
 	snap.GovernmentNet = marketdata.MacroDataPoint{
 		Symbol:    "GOV_FLOW_NET",
+		Value:     v,
+		Timestamp: ts.Unix(),
+	}
+	// Best-effort: insurance flow.
+	if payload.InsuranceReading != nil && payload.InsuranceReading.Date != "" {
+		insTs, _ := time.Parse("20060102", payload.InsuranceReading.Date)
+		insV := float64(payload.InsuranceReading.TotalNet) / 1e8
+		snap.InsuranceNet = marketdata.MacroDataPoint{
+			Symbol:    "INS_FLOW_NET",
+			Value:     insV,
+			Timestamp: insTs.Unix(),
+		}
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyInsiderTrading(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var agg marketdata.InsiderAggregate
+	if err := json.Unmarshal(data, &agg); err != nil {
+		return
+	}
+	if agg.Date == "" {
+		return
+	}
+	ts, _ := time.Parse("20060102", agg.Date)
+	// TotalDeclared scales total declared transfer shares for Z-score range.
+	v := float64(agg.TotalDeclared) / 1e5
+	snap.InsiderNet = marketdata.MacroDataPoint{
+		Symbol:    "INSIDER_DECLARED",
 		Value:     v,
 		Timestamp: ts.Unix(),
 	}
@@ -623,5 +652,51 @@ func newGeopoliticalRiskFetcher(global, taiwan geopolitical.GeopoliticalRiskProv
 			}
 		}
 		return 0
+	}
+}
+
+// ─── P1 B3: 補漏憲章指標 apply 函數 ───
+
+// applyMarketVolume extracts 集中市場成交量 from TWSE market stats data.
+// Data source: TWSE OpenAPI (待接入: /opendata/t187ap03_L 大盤統計資訊).
+// Field: MarketVolume (億).
+func (a *macroDataGatewayAdapter) applyMarketVolume(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		MarketVolume float64 `json:"market_volume"`
+		Date         string  `json:"date"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if payload.Date == "" || payload.MarketVolume <= 0 {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Date)
+	snap.MarketVolume = marketdata.MacroDataPoint{
+		Symbol:    "TSE_VOLUME",
+		Value:     payload.MarketVolume,
+		Timestamp: ts.Unix(),
+	}
+}
+
+// applyDayTradeRatio extracts 當沖交易佔比 from TWSE day-trading stats.
+// Data source: TWSE OpenAPI (待接入: /opendata/t187ap05_L 當日沖銷交易統計).
+// Field: DayTradeRatio (%, 0-100).
+func (a *macroDataGatewayAdapter) applyDayTradeRatio(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		DayTradeRatio float64 `json:"day_trade_ratio"`
+		Date          string  `json:"date"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if payload.Date == "" || payload.DayTradeRatio < 0 {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Date)
+	snap.DayTradeRatio = marketdata.MacroDataPoint{
+		Symbol:    "TSE_DAYTRADE",
+		Value:     payload.DayTradeRatio,
+		Timestamp: ts.Unix(),
 	}
 }

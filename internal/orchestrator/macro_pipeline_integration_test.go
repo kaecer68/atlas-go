@@ -176,7 +176,7 @@ func TestMacroAwareDrawdownPipeline_Integration(t *testing.T) {
 			t.Logf("Phase 4b - Can Rotate: %v (%s)", canRotate, rotateReason)
 
 			if canRotate {
-				rotationPlan := sectorRotator.GeneratePlan(macroAssessment, tt.currentAlloc)
+				rotationPlan := sectorRotator.GeneratePlan(macroAssessment, tt.currentAlloc, nil)
 				trades := sectorRotator.GetRebalancingTrades(rotationPlan, tt.portfolioValue)
 
 				t.Logf("Phase 4b - Rotation Plan: %s", rotationPlan.Rationale)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
@@ -16,9 +17,10 @@ type minimalDetector struct {
 	enabled bool
 }
 
-func (d *minimalDetector) Theme() string     { return d.theme }
-func (d *minimalDetector) Enabled() bool     { return d.enabled }
-func (d *minimalDetector) SetEnabled(b bool) { d.enabled = b }
+func (d *minimalDetector) Theme() string                                   { return d.theme }
+func (d *minimalDetector) Enabled() bool                                   { return d.enabled }
+func (d *minimalDetector) SetEnabled(b bool)                               { d.enabled = b }
+func (d *minimalDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.0 }
 func (d *minimalDetector) Detect(_ context.Context, _ narrative.DetectorInput) (*narrative.DetectionResult, error) {
 	return nil, nil
 }

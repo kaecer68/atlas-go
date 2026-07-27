@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -63,6 +64,7 @@ type DetectorInput struct {
 	MarketData    MarketNarrativeData
 	MacroSnapshot marketdata.MacroDataSnapshot
 	Now           time.Time
+	CurrentPeriod domain.MarketPeriod // zero = unknown (backward compatible)
 }
 
 // DetectionResult is the unified output of any Detector.
@@ -124,13 +126,17 @@ func numericMetadata(m map[string]any) map[string]float64 {
 //     registry honors this flag in ListEnabled() and RunAll().
 //   - Detect(ctx, in) returns (nil, nil) when no trigger fired. Errors are
 //     reserved for genuine failures (bad config, internal panic, ctx.Err()).
-//     A returning (nil, error) does NOT mean "no trigger"; callers must
-//     distinguish via err != nil.
 type Detector interface {
 	Theme() string
 	Enabled() bool
 	SetEnabled(enabled bool)
 	Detect(ctx context.Context, in DetectorInput) (*DetectionResult, error)
+	// PeriodWeight returns a multiplier for this detector's confidence
+	// in the given market period. Default is 1.0 (no adjustment).
+	// Per ATLAS_METHODOLOGY.md appendix B, certain detectors have
+	// elevated sensitivity in specific periods (e.g., US_rates_up ×2
+	// during plateau/turnaround_down).
+	PeriodWeight(period domain.MarketPeriod) float64
 }
 
 // DetectorRegistry holds all registered Detectors keyed by trigger_theme.
@@ -254,12 +260,6 @@ func (r *DetectorRegistry) Len() int {
 
 // RunAll executes every enabled Detector in parallel and returns:
 //   - results: DetectionResult slice (nil entries filtered out)
-//   - errs:    per-detector errors (a single failing detector does NOT abort
-//     the scan; callers decide whether to log-and-continue or escalate).
-//
-// Parallelism note: we spawn one goroutine per enabled detector. For 24
-// detectors this is fine; if the count grows significantly (hundreds) we
-// should switch to a worker pool — but that's out of scope for Stage 5.
 func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]DetectionResult, []error) {
 	detectors := r.ListEnabled()
 	if len(detectors) == 0 {
@@ -270,6 +270,7 @@ func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]Dete
 		theme  string
 		result *DetectionResult
 		err    error
+		d      Detector
 	}
 	ch := make(chan out, len(detectors))
 
@@ -277,7 +278,7 @@ func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]Dete
 		d := d // capture
 		go func() {
 			res, err := d.Detect(ctx, in)
-			ch <- out{theme: d.Theme(), result: res, err: err}
+			ch <- out{theme: d.Theme(), result: res, err: err, d: d}
 		}()
 	}
 
@@ -290,6 +291,16 @@ func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]Dete
 			continue
 		}
 		if o.result != nil {
+			// Apply period sensitivity weight (ATLAS_METHODOLOGY.md Appendix B).
+			if in.CurrentPeriod != "" {
+				w := o.d.PeriodWeight(in.CurrentPeriod)
+				if w != 1.0 {
+					o.result.Confidence *= w
+					if o.result.Confidence > 1.0 {
+						o.result.Confidence = 1.0
+					}
+				}
+			}
 			results = append(results, *o.result)
 		}
 	}

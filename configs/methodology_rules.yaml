@@ -31,7 +31,7 @@ regimes:
     name: 低迷
     name_en: Downturn
     description: 恐慌已釋放但信心未恢復；價格不再創新低，但上漲意願薄弱
-    trigger_logic: all  # 所有 indicator 必須同時滿足
+    trigger_logic: any_3  # 任意 3 個以上的條件同時滿足即觸發
     indicators:
       - id: foreign_sell_slowing
         field: foreign_investor_net
@@ -132,7 +132,7 @@ regimes:
     name: 上升／多頭
     name_en: Bull Market
     description: 趨勢確立，資金持續流入，散戶開始跟進
-    trigger_logic: all
+    trigger_logic: any_3
     indicators:
       - id: foreign_continuous_buy
         field: foreign_investor_net
@@ -179,7 +179,7 @@ regimes:
     name: 高原
     name_en: Plateau
     description: 漲勢停滯但未反轉；外資買盤減弱，當沖佔比升高，類股輪動加快
-    trigger_logic: all
+    trigger_logic: any_3
     indicators:
       - id: foreign_buy_slowing
         field: foreign_investor_net
@@ -227,7 +227,7 @@ regimes:
     name: 盤整
     name_en: Consolidation
     description: 方向不明，外資忽買忽賣，匯率區間震盪
-    trigger_logic: all
+    trigger_logic: any_3
     indicators:
       - id: foreign_mixed
         field: foreign_investor_net
@@ -281,7 +281,7 @@ regimes:
     name: 轉折下壓
     name_en: Turnaround Down
     description: 聰明錢率先離場；外資連續大賣，新台幣貶破月線，融資開始斷頭
-    trigger_logic: all
+    trigger_logic: any_3
     indicators:
       - id: foreign_heavy_sell
         field: foreign_investor_net

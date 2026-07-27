@@ -14,6 +14,22 @@ const (
 	RegimeNeutral Regime = "NEUTRAL"
 )
 
+// MarketPeriod represents the seven-phase market cycle defined in
+// docs/ATLAS_METHODOLOGY.md §3. This is the methodology-level classification
+// that sits above the three-state domain.Regime (RISK_ON/RISK_OFF/NEUTRAL).
+// Use PeriodToRegime() to map a MarketPeriod to the compatible Regime.
+type MarketPeriod string
+
+const (
+	PeriodDownturn       MarketPeriod = "downturn"        // 低迷
+	PeriodTurnaroundUp   MarketPeriod = "turnaround_up"   // 轉折開高
+	PeriodBull           MarketPeriod = "bull"            // 上升／多頭
+	PeriodPlateau        MarketPeriod = "plateau"         // 高原
+	PeriodConsolidation  MarketPeriod = "consolidation"   // 盤整
+	PeriodTurnaroundDown MarketPeriod = "turnaround_down" // 轉折下壓
+	PeriodBlackSwan      MarketPeriod = "black_swan"      // 黑天鵝
+)
+
 // Side represents a trade direction.
 type Side string
 

@@ -20,41 +20,49 @@ type MacroDataPoint struct {
 
 // MacroDataSnapshot holds the latest readings for all tracked indicators.
 type MacroDataSnapshot struct {
-	US10Y                MacroDataPoint `json:"us10y"`
-	DXY                  MacroDataPoint `json:"dxy"`
-	VIX                  MacroDataPoint `json:"vix"`
-	USD_TWD              MacroDataPoint `json:"usd_twd"`
-	Oil                  MacroDataPoint `json:"oil"`
-	Gold                 MacroDataPoint `json:"gold"`
-	JPY                  MacroDataPoint `json:"jpy"`
-	ForeignInvestorNet   MacroDataPoint `json:"foreign_investor_net"`
-	DomesticFundNet      MacroDataPoint `json:"domestic_fund_net"`
-	DealerNet            MacroDataPoint `json:"dealer_net"`
-	ForeignFuturesOINet  MacroDataPoint `json:"foreign_futures_oi_net"`
-	GovernmentNet        MacroDataPoint `json:"government_net"`
-	ExportElectronics    MacroDataPoint `json:"export_electronics"`
-	RetailMarginBalance  MacroDataPoint `json:"retail_margin_balance"`
-	RetailShortBalance   MacroDataPoint `json:"retail_short_balance"`
-	TSMCRevenue          MacroDataPoint `json:"tsmc_revenue"`
-	SOXIndex             MacroDataPoint `json:"sox_index"`
-	DRAMSpotPrice        MacroDataPoint `json:"dram_spot_price"`
-	TaiwanSemiIndex      MacroDataPoint `json:"taiwan_semi_index"`
-	CoWoSUtilization     MacroDataPoint `json:"cowos_utilization"`
-	CapexGrowth          MacroDataPoint `json:"capex_growth"`
-	CPIYoY               MacroDataPoint `json:"cpi_yoy"`
-	Bdi                  MacroDataPoint `json:"bdi"`
-	Silver               MacroDataPoint `json:"silver"`
-	Copper               MacroDataPoint `json:"copper"`
-	TSMADR               MacroDataPoint `json:"tsm_adr"`
-	SPXIndex             MacroDataPoint `json:"spx_index"`
-	NDXIndex             MacroDataPoint `json:"ndx_index"`
-	DJIIndex             MacroDataPoint `json:"dji_index"`
-	NVDA                 MacroDataPoint `json:"nvda"`
-	AAPL                 MacroDataPoint `json:"aapl"`
-	MSFT                 MacroDataPoint `json:"msft"`
-	TAIEX                MacroDataPoint `json:"taiex"`
-	HistoricalVolatility MacroDataPoint `json:"historical_volatility"`
-	DataStatus           string         `json:"data_status,omitempty"` // "ok" | "degraded" | "stale"
+	US10Y                  MacroDataPoint `json:"us10y"`
+	DXY                    MacroDataPoint `json:"dxy"`
+	VIX                    MacroDataPoint `json:"vix"`
+	USD_TWD                MacroDataPoint `json:"usd_twd"`
+	Oil                    MacroDataPoint `json:"oil"`
+	Gold                   MacroDataPoint `json:"gold"`
+	JPY                    MacroDataPoint `json:"jpy"`
+	ForeignInvestorNet     MacroDataPoint `json:"foreign_investor_net"`
+	DomesticFundNet        MacroDataPoint `json:"domestic_fund_net"`
+	DealerNet              MacroDataPoint `json:"dealer_net"`
+	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
+	GovernmentNet          MacroDataPoint `json:"government_net"`
+	InsuranceNet           MacroDataPoint `json:"insurance_net"`
+	InsiderNet             MacroDataPoint `json:"insider_net"`
+	ExportElectronics      MacroDataPoint `json:"export_electronics"`
+	RetailMarginBalance    MacroDataPoint `json:"retail_margin_balance"`
+	RetailShortBalance     MacroDataPoint `json:"retail_short_balance"`
+	MarginMaintenanceRatio MacroDataPoint `json:"margin_maintenance_ratio"`
+	TSMCRevenue            MacroDataPoint `json:"tsmc_revenue"`
+	SOXIndex               MacroDataPoint `json:"sox_index"`
+	DRAMSpotPrice          MacroDataPoint `json:"dram_spot_price"`
+	TaiwanSemiIndex        MacroDataPoint `json:"taiwan_semi_index"`
+	CoWoSUtilization       MacroDataPoint `json:"cowos_utilization"`
+	CapexGrowth            MacroDataPoint `json:"capex_growth"`
+	CPIYoY                 MacroDataPoint `json:"cpi_yoy"`
+	Bdi                    MacroDataPoint `json:"bdi"`
+	Silver                 MacroDataPoint `json:"silver"`
+	Copper                 MacroDataPoint `json:"copper"`
+	TSMADR                 MacroDataPoint `json:"tsm_adr"`
+	SPXIndex               MacroDataPoint `json:"spx_index"`
+	NDXIndex               MacroDataPoint `json:"ndx_index"`
+	DJIIndex               MacroDataPoint `json:"dji_index"`
+	NVDA                   MacroDataPoint `json:"nvda"`
+	AAPL                   MacroDataPoint `json:"aapl"`
+	MSFT                   MacroDataPoint `json:"msft"`
+	TAIEX                  MacroDataPoint `json:"taiex"`
+	HistoricalVolatility   MacroDataPoint `json:"historical_volatility"`
+	// P1 B3: 補漏憲章指標
+	MarketVolume         MacroDataPoint `json:"market_volume"`          // 集中市場成交量（億）
+	DayTradeRatio        MacroDataPoint `json:"day_trade_ratio"`        // 當沖交易佔比（%）
+	FedRateExpectations  MacroDataPoint `json:"fed_rate_expectations"`  // Fed 利率預期（CME FedWatch 機率）
+	SemiEquipmentImports MacroDataPoint `json:"semi_equipment_imports"` // 半導體設備進口（億美元）
+	DataStatus           string         `json:"data_status,omitempty"`  // "ok" | "degraded" | "stale"
 	FailedChannels       []string       `json:"failed_channels,omitempty"`
 	StaleChannels        []string       `json:"stale_channels,omitempty"`
 	RecordedAt           int64          `json:"recorded_at"`
@@ -109,6 +117,10 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 		MSFT                 *MacroDataPoint `json:"msft,omitempty"`
 		TAIEX                *MacroDataPoint `json:"taiex,omitempty"`
 		HistoricalVolatility *MacroDataPoint `json:"historical_volatility,omitempty"`
+		MarketVolume         *MacroDataPoint `json:"market_volume,omitempty"`
+		DayTradeRatio        *MacroDataPoint `json:"day_trade_ratio,omitempty"`
+		FedRateExpectations  *MacroDataPoint `json:"fed_rate_expectations,omitempty"`
+		SemiEquipmentImports *MacroDataPoint `json:"semi_equipment_imports,omitempty"`
 	}{
 		Alias: (*Alias)(&s),
 	}
@@ -214,6 +226,18 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 	}
 	if s.HistoricalVolatility.Symbol != "" {
 		aux.HistoricalVolatility = &s.HistoricalVolatility
+	}
+	if s.MarketVolume.Symbol != "" {
+		aux.MarketVolume = &s.MarketVolume
+	}
+	if s.DayTradeRatio.Symbol != "" {
+		aux.DayTradeRatio = &s.DayTradeRatio
+	}
+	if s.FedRateExpectations.Symbol != "" {
+		aux.FedRateExpectations = &s.FedRateExpectations
+	}
+	if s.SemiEquipmentImports.Symbol != "" {
+		aux.SemiEquipmentImports = &s.SemiEquipmentImports
 	}
 
 	return json.Marshal(aux)

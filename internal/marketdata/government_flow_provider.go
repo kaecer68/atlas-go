@@ -86,6 +86,49 @@ func (p *GovernmentFlowProvider) Latest() (GovernmentFlowReading, bool, error) {
 	return r, true, nil
 }
 
+// LatestInsurance returns the most recent insurance company flow reading,
+// or (zero, false, nil) if no insurance data exists. Follows the same
+// pattern as Latest() but reads <date>_insurance.json files.
+func (p *GovernmentFlowProvider) LatestInsurance() (GovernmentFlowReading, bool, error) {
+	entries, err := os.ReadDir(p.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return GovernmentFlowReading{}, false, nil
+		}
+		return GovernmentFlowReading{}, false, fmt.Errorf("insurance_flow read dir: %w", err)
+	}
+	dates := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, "_insurance.json") {
+			continue
+		}
+		date := strings.TrimSuffix(name, "_insurance.json")
+		if !isDateYYYYMMDD(date) {
+			continue
+		}
+		dates = append(dates, date)
+	}
+	if len(dates) == 0 {
+		return GovernmentFlowReading{}, false, nil
+	}
+	sort.Strings(dates)
+	latest := dates[len(dates)-1]
+
+	raw, err := os.ReadFile(filepath.Join(p.dir, latest+"_insurance.json"))
+	if err != nil {
+		return GovernmentFlowReading{}, false, fmt.Errorf("insurance_flow read %s: %w", latest, err)
+	}
+	var r GovernmentFlowReading
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return GovernmentFlowReading{}, false, fmt.Errorf("insurance_flow decode %s: %w", latest, err)
+	}
+	if r.Date == "" {
+		r.Date = latest
+	}
+	return r, true, nil
+}
+
 func isDateYYYYMMDD(s string) bool {
 	if len(s) != 8 {
 		return false

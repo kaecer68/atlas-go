@@ -132,6 +132,16 @@ func registerDataSyncAndHealthTasks(
 	})
 	log.Printf("[Gateway] registered auto_taifex_daily background task (1h interval)")
 
+	// twse_insider — TWSE OpenAPI 內部人持股轉讓 (daily after market close ~18:00).
+	_ = taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_twse_insider",
+		ChannelID: "twse_insider",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task:      gatewayChannelFetch(gateway, "twse_insider"),
+	})
+	log.Printf("[Gateway] registered auto_twse_insider background task (1h interval)")
+
 	// Register seasonal_calibration background task. Guard: skip silently if
 	// the calibrate-seasonal binary is not co-located with the current binary
 	// (production deploys without it stay clean; no live-trading impact).

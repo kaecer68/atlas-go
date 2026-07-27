@@ -216,7 +216,10 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 			rotator := portfolio.NewSectorRotator()
 			sessionDate := domain.SessionDateFromID(s.Sim().session.ID)
 			currentAllocs := s.currentSectorAllocations(result.Positions, s.Sim().lastQuotes, sessionDate)
-			plan := rotator.GeneratePlan(macroAssessment, currentAllocs)
+			// Phase 3 (TODO): pass a real CapitalFlowAssessment from the session's
+			// capital-flow service instead of nil to enable institutional+behavioral
+			// consensus → CapitalFlowAction derivation (P0-3).
+			plan := rotator.GeneratePlan(macroAssessment, currentAllocs, nil)
 
 			// F04: apply event-driven prediction tilt when enabled and predictor is wired.
 			if s.eventPredictor != nil {

@@ -735,6 +735,9 @@ export interface DailySummaryReport {
   top_picks: Recommendation[];
   risk_level: string;
   narrative_count: number;
+  market_period?: string;
+  period_confidence?: number;
+  period_cash_level?: number;
 }
 
 export interface DarwinianAgentInfo {
@@ -1858,6 +1861,26 @@ export interface IndustrySegmentConfig {
   description?: string;
 }
 
+export interface InsiderAggregate {
+  date: string;
+  total_declared: number;
+  total_stocks: number;
+  total_insiders: number;
+  net_sentiment: number;
+  dominant_role: string;
+}
+
+export interface InsiderReading {
+  date: string;
+  stock_id: string;
+  company_name: string;
+  role: string;
+  name: string;
+  transfer_type: string;
+  shares: number;
+  held_shares: number;
+}
+
 export interface InstitutionalFuturesDaily {
   date: string;
   foreign: TraderSide;
@@ -2071,9 +2094,12 @@ export interface MacroDataSnapshot {
   dealer_net: MacroDataPoint;
   foreign_futures_oi_net: MacroDataPoint;
   government_net: MacroDataPoint;
+  insurance_net: MacroDataPoint;
+  insider_net: MacroDataPoint;
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;
+  margin_maintenance_ratio: MacroDataPoint;
   tsmc_revenue: MacroDataPoint;
   sox_index: MacroDataPoint;
   dram_spot_price: MacroDataPoint;
@@ -2093,6 +2119,10 @@ export interface MacroDataSnapshot {
   msft: MacroDataPoint;
   taiex: MacroDataPoint;
   historical_volatility: MacroDataPoint;
+  market_volume: MacroDataPoint;
+  day_trade_ratio: MacroDataPoint;
+  fed_rate_expectations: MacroDataPoint;
+  semi_equipment_imports: MacroDataPoint;
   data_status?: string;
   failed_channels?: string[];
   stale_channels?: string[];
@@ -4227,6 +4257,20 @@ export interface fugleWSUnsubscribe {
 export interface healthResponse {
   status: string;
   ports: Record<string, portHealthReport>;
+}
+
+export interface insiderJSONRow {
+  出表日期: string;
+  公司代號: string;
+  公司名稱: string;
+  申報人身分: string;
+  姓名: string;
+  預定轉讓方式及股數-轉讓方式: string;
+  預定轉讓方式及股數-轉讓股數: string;
+  每日於盤中交易最大得轉讓股數: string;
+  受讓人: string;
+  目前持有股數-自有持股: string;
+  目前持有股數-保留運用決定權信託股數: string;
 }
 
 export interface llmReadyDetail {

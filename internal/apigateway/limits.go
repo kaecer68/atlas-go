@@ -131,6 +131,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"twse_oddlot":            rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_etf":               rate.NewLimiter(rate.Every(1*time.Second), 1), // adapter ground truth
 			"twse_sbl":               rate.NewLimiter(rate.Every(2*time.Second), 1), // G02: TWSE SBL daily
+			"twse_insider":           rate.NewLimiter(rate.Every(5*time.Second), 1), // TWSE OpenAPI t187ap12_L
 			"tdcc_equity_dispersion": rate.NewLimiter(rate.Every(5*time.Second), 1), // G01: TDCC weekly
 			"government_flow":        rate.NewLimiter(rate.Inf, 0),                  // file-backed, no upstream HTTP
 			// US indexes + tech stocks + TSM ADR each use a group-scoped limiter

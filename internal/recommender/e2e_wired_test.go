@@ -136,7 +136,7 @@ func TestE2E_RecommendationsWiredFlow(t *testing.T) {
 
 	narrative, capflow, evts, strategy := realWiredDeps(t)
 
-	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy).WithDevMode(true)
+	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy, nil).WithDevMode(true)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/recommendations", func(w http.ResponseWriter, r *http.Request) {

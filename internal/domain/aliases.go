@@ -16,6 +16,18 @@ const (
 	RegimeNeutral = shared.RegimeNeutral
 )
 
+type MarketPeriod = shared.MarketPeriod
+
+const (
+	PeriodDownturn       = shared.PeriodDownturn
+	PeriodTurnaroundUp   = shared.PeriodTurnaroundUp
+	PeriodBull           = shared.PeriodBull
+	PeriodPlateau        = shared.PeriodPlateau
+	PeriodConsolidation  = shared.PeriodConsolidation
+	PeriodTurnaroundDown = shared.PeriodTurnaroundDown
+	PeriodBlackSwan      = shared.PeriodBlackSwan
+)
+
 type Side = shared.Side
 
 const (

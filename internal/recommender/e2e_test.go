@@ -33,7 +33,7 @@ func TestE2E_RecommendationsEndpoint(t *testing.T) {
 	evts := &mockEventPredictor{direction: "MSCI 調整"}
 	strategy := &mockComparisonEngine{score: 0.85}
 
-	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy).WithDevMode(true)
+	handler := NewHandlerWithServices(*store, nil, narrative, capflow, evts, strategy, nil).WithDevMode(true)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/recommendations", func(w http.ResponseWriter, r *http.Request) {

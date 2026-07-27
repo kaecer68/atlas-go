@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,7 +71,7 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 				logging.Warn("twse_margin_provider", "save_margin_warning", logging.Err(err))
 			}
 			ts := time.Now().Unix()
-			return MacroDataSnapshot{
+			snap := MacroDataSnapshot{
 				RetailMarginBalance: MacroDataPoint{
 					Symbol:    "TAIWAN_MARGIN_BALANCE",
 					Value:     balance,
@@ -84,7 +85,15 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 					Timestamp: ts,
 				},
 				RecordedAt: ts,
-			}, nil
+			}
+			// P0-7 TODO: fetchMaintenanceRatio is disabled — TWSE MI_MARGN?selectType=ALL
+			// returns 信用交易統計 + 個股明細 but NOT maintenance ratio.
+			// The maintenance ratio is published via a different TWSE report endpoint
+			// (待確認: 信用交易維持率). Snapshot field exists, data source pending.
+			// if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
+			// 	snap.MarginMaintenanceRatio = MacroDataPoint{...}
+			// }
+			return snap, nil
 		}
 	}
 	return MacroDataSnapshot{}, fmt.Errorf("no TWSE margin balance data available in the last 7 days")
@@ -164,6 +173,57 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 	}
 
 	return balance, shortBalance, changePct, shortChangePct, nil
+}
+
+// fetchMaintenanceRatio fetches the aggregate margin maintenance ratio from TWSE.
+//
+//lint:ignore U1000 P0-7 TODO: re-enable when TWSE MI_MARGN is stable
+func (t *TWSEMarginBalanceProvider) fetchMaintenanceRatio(ctx context.Context, dateStr string) (float64, error) {
+	if err := t.rateLimiter.Wait(ctx); err != nil {
+		return 0, fmt.Errorf("rate limit wait: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/zh/exchangeReport/MI_MARGN?response=json&date=%s&selectType=ALL", t.baseURL, dateStr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("http request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read body: %w", err)
+	}
+
+	var apiResp twseMarginResponse
+	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
+		return 0, fmt.Errorf("decode response: %w", err)
+	}
+
+	if apiResp.Stat != "OK" || len(apiResp.Tables) < 2 {
+		return 0, fmt.Errorf("TWSE maintenance ratio unavailable: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
+	}
+
+	// Table 1 is the maintenance ratio table.
+	// Columns: [日期, 維持率(%)]
+	table := apiResp.Tables[1]
+	if len(table.Data) == 0 || len(table.Data[0]) < 2 {
+		return 0, fmt.Errorf("TWSE maintenance ratio table empty")
+	}
+
+	ratioStr := table.Data[0][1]
+	ratio, err := strconv.ParseFloat(strings.TrimSpace(ratioStr), 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse maintenance ratio %q: %w", ratioStr, err)
+	}
+
+	return ratio, nil
 }
 
 func (t *TWSEMarginBalanceProvider) saveMargin(dateStr string, balance, shortBalance, changePct, shortChangePct float64) error {

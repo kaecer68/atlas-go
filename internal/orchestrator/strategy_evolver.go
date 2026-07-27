@@ -353,11 +353,11 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		Applied:           false,
 		Current:           convertStringMapToSectorIDs(currentAllocs),
 	}
-
 	// Compute projected target from WeightEngine (SA04 single source).
 	if e.weightEngine != nil {
+		cfAction := capitalFlowActionFromPlan(plan)
 		drivers := sectorallocation.DriverInputs{
-			CapitalFlowAction: sectorallocation.CapitalFlowAction(plan.PrimaryFlow),
+			CapitalFlowAction: cfAction,
 		}
 		target, cerr := e.weightEngine.ComputeProjectedTarget(context.TODO(), drivers)
 		if cerr != nil {
@@ -408,4 +408,38 @@ func (e *StrategyEvolver) Reset() {
 	e.history = make([]StrategyEvolution, 0)
 	e.currentState = StrategyNormal
 	e.lastEvolutionTime = time.Time{}
+}
+
+// capitalFlowActionFromPlan derives a CapitalFlowAction from the plan's
+// CapitalFlowAssessment when available and eligible for automation.
+// Falls back to the legacy macro PrimaryFlow mapping when assessment
+// data is unavailable or not yet eligible.
+//
+// Phase 3 (TODO): wire CapitalFlowAssessment from the session's capital-flow
+// service so the institutional+behavioral consensus can drive the action
+// rather than always falling through to the legacy PrimaryFlow path.
+// Derivation rules (E07 assessment):
+//   - Institutional + Behavioral both bullish → risk_on
+//   - Institutional + Behavioral both bearish → risk_off
+//   - Otherwise → neutral
+func capitalFlowActionFromPlan(plan *portfolio.SectorRotationPlan) sectorallocation.CapitalFlowAction {
+	if plan.CapitalFlowAssessment == nil || !plan.CapitalFlowAssessment.EligibleForAutomation() {
+		// Fall back to legacy macro PrimaryFlow mapping.
+		return sectorallocation.CapitalFlowAction(plan.PrimaryFlow)
+	}
+
+	a := plan.CapitalFlowAssessment
+
+	// Derive consensus from Institutional + Behavioral layers.
+	instDir := a.Institutional.Direction
+	behDir := a.Behavioral.Direction
+
+	if instDir == "bullish" && behDir == "bullish" {
+		return sectorallocation.CapitalFlowActionRiskOn
+	}
+	if instDir == "bearish" && behDir == "bearish" {
+		return sectorallocation.CapitalFlowActionRiskOff
+	}
+
+	return sectorallocation.CapitalFlowActionNeutral
 }

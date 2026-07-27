@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -38,9 +39,10 @@ type baseDetector struct {
 	enabled bool
 }
 
-func (d *baseDetector) Theme() string     { return d.theme }
-func (d *baseDetector) Enabled() bool     { return d.enabled }
-func (d *baseDetector) SetEnabled(b bool) { d.enabled = b }
+func (d *baseDetector) Theme() string                                   { return d.theme }
+func (d *baseDetector) Enabled() bool                                   { return d.enabled }
+func (d *baseDetector) SetEnabled(b bool)                               { d.enabled = b }
+func (d *baseDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.0 }
 
 // narrativeEventToResult projects a *NarrativeEvent from the legacy detect
 // functions into the new DetectionResult shape. Returns nil for nil input
@@ -106,6 +108,16 @@ func (d *usRatesUpDetector) Detect(_ context.Context, in DetectorInput) (*Detect
 	return narrativeEventToResult(detectUSRatesEvent(in.MarketData), d.source), nil
 }
 
+// PeriodWeight: US_rates_up ×2 during plateau and turnaround_down.
+func (d *usRatesUpDetector) PeriodWeight(period domain.MarketPeriod) float64 {
+	switch period {
+	case domain.PeriodPlateau, domain.PeriodTurnaroundDown:
+		return 2.0
+	default:
+		return 1.0
+	}
+}
+
 type usRatesDownDetector struct{ baseDetector }
 
 func newUSRatesDownDetector() *usRatesDownDetector {
@@ -114,6 +126,16 @@ func newUSRatesDownDetector() *usRatesDownDetector {
 
 func (d *usRatesDownDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
 	return narrativeEventToResult(detectUSRatesDownEvent(in.MarketData), d.source), nil
+}
+
+// PeriodWeight: JPY_carry_unwind ×2 during bull and black_swan.
+func (d *jpyCarryUnwindDetector) PeriodWeight(period domain.MarketPeriod) float64 {
+	switch period {
+	case domain.PeriodBull, domain.PeriodBlackSwan:
+		return 2.0
+	default:
+		return 1.0
+	}
 }
 
 type jpyCarryUnwindDetector struct{ baseDetector }
@@ -134,6 +156,16 @@ func newAICapexSurgeDetector() *aiCapexSurgeDetector {
 
 func (d *aiCapexSurgeDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
 	return narrativeEventToResult(detectAICapexEvent(in.MarketData), d.source), nil
+}
+
+// PeriodWeight: AI_capex_surge ×2 during bull and turnaround_up.
+func (d *aiCapexSurgeDetector) PeriodWeight(period domain.MarketPeriod) float64 {
+	switch period {
+	case domain.PeriodBull, domain.PeriodTurnaroundUp:
+		return 2.0
+	default:
+		return 1.0
+	}
 }
 
 type geopoliticalRiskDetector struct{ baseDetector }
@@ -291,6 +323,17 @@ func (d *seasonalThemeDetector) Detect(_ context.Context, _ DetectorInput) (*Det
 	return narrativeEventToResult(evt, d.source), nil
 }
 
+// PeriodWeight for seasonal detectors: earnings_blackout ×2 during plateau and consolidation.
+func (d *seasonalThemeDetector) PeriodWeight(period domain.MarketPeriod) float64 {
+	if d.theme == "earnings_blackout" {
+		switch period {
+		case domain.PeriodPlateau, domain.PeriodConsolidation:
+			return 2.0
+		}
+	}
+	return 1.0
+}
+
 func newSpringFestivalSeasonDetector() Detector {
 	return &seasonalThemeDetector{*newSeasonalDetector("spring_festival_season")}
 }
@@ -337,6 +380,10 @@ func (d *tariffShockDetector) Detect(_ context.Context, in DetectorInput) (*Dete
 	evt := detectTariffShockEventFromSnapshot(snap.VIX, snap.DXY, snap.SPXIndex, detectNow(in))
 	return narrativeEventToResult(evt, d.source), nil
 }
+
+// PeriodWeight: tariff_shock is universally important (1.5×) — can trigger
+// direct transition to turnaround_down or black_swan in any period.
+func (d *tariffShockDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.5 }
 
 // ----------------------------------------------------------------------------
 // Public constructor — registers all 24 detectors, default-enabled.
