@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestChannelHealthStoreAdapter_PassesOptionsAndSingleton(t *testing.T) {
+func TestChannelHealthStore_PassesOptionsAndPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	adapter := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
 	stamp := time.Date(2026, 5, 13, 10, 11, 12, 0, time.UTC)
@@ -332,7 +332,7 @@ func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) 
 // MarkDegraded tests
 // =============================================================================
 
-func TestChannelHealthStoreAdapter_MarkDegraded(t *testing.T) {
+func TestChannelHealthStore_RecordDegraded(t *testing.T) {
 	tmpDir := t.TempDir()
 	adapter := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
 	if err := adapter.Record("tsmc_revenue", "degraded", "cache_fallback"); err != nil {
