@@ -54,53 +54,6 @@ func newMacroServiceWithSnapshot(t *testing.T, snap marketdata.MacroDataSnapshot
 	return service.NewMacroService(t.TempDir(), ingestor, narrative.NewTaiwanStressCalculator(nil, ""))
 }
 
-func newMacroServiceWithNoData(t *testing.T) *service.MacroService {
-	t.Helper()
-	snapDir := t.TempDir()
-	ingestor := narrative.NewMacroIngestor(okProvider{}, snapDir)
-	return service.NewMacroService(t.TempDir(), ingestor, narrative.NewTaiwanStressCalculator(nil, ""))
-}
-
-func TestMacroHandlers_NoDataSnapshotAndHealth(t *testing.T) {
-	h := &Handlers{Service: newMacroServiceWithNoData(t)}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/macro/snapshot/latest", nil)
-	status, body := h.HandleMacroSnapshotLatest(req)
-	if status != http.StatusOK {
-		t.Fatalf("snapshot latest status = %d, want 200 (body=%v)", status, body)
-	}
-	resp, ok := body.(map[string]any)
-	if !ok {
-		t.Fatalf("expected map response, got %T", body)
-	}
-	if resp["snapshot"] != nil {
-		t.Errorf("snapshot = %v, want nil", resp["snapshot"])
-	}
-	if resp["note"] == "" {
-		t.Errorf("expected note field when no snapshot available")
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/dashboard/macro-data-health", nil)
-	status, body = h.HandleMacroDataHealth(req)
-	if status != http.StatusOK {
-		t.Fatalf("macro data health status = %d, want 200 (body=%v)", status, body)
-	}
-	resp, ok = body.(map[string]any)
-	if !ok {
-		t.Fatalf("expected map response, got %T", body)
-	}
-	indicators, ok := resp["indicators"].([]interface{})
-	if !ok {
-		t.Fatalf("expected []interface{} indicators, got %T", resp["indicators"])
-	}
-	if len(indicators) != 0 {
-		t.Errorf("indicators length = %d, want 0", len(indicators))
-	}
-	if resp["note"] == "" {
-		t.Errorf("expected note field when no health data available")
-	}
-}
-
 func testMacroSnapshot() marketdata.MacroDataSnapshot {
 	now := time.Now().Unix()
 	return marketdata.MacroDataSnapshot{

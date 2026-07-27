@@ -58,10 +58,6 @@ func (a *AlertAPI) handleListAlerts(w http.ResponseWriter, r *http.Request) {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if a.store == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": []domain.AlertRecord{}, "page": 1, "page_size": 50, "total": 0})
-		return
-	}
 
 	records, err := a.store.LoadAll()
 	if err != nil {
@@ -158,10 +154,6 @@ func (a *AlertAPI) handleUnacknowledged(w http.ResponseWriter, r *http.Request) 
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if a.store == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{"alerts": []domain.AlertRecord{}})
-		return
-	}
 
 	records, err := a.store.LoadUnacknowledged()
 	if err != nil {
@@ -177,10 +169,6 @@ func (a *AlertAPI) handleUnacknowledged(w http.ResponseWriter, r *http.Request) 
 func (a *AlertAPI) handleActiveSnapshot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if a.store == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{"active": []interface{}{}})
 		return
 	}
 
@@ -202,21 +190,6 @@ func (a *AlertAPI) handleActiveSnapshot(w http.ResponseWriter, r *http.Request) 
 func (a *AlertAPI) handleStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if a.store == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{
-			"total":        0,
-			"triggered":    0,
-			"acknowledged": 0,
-			"resolved":     0,
-			"silenced":     0,
-			"info":         0,
-			"warning":      0,
-			"error":        0,
-			"critical":     0,
-			"last_24h":     0,
-		})
 		return
 	}
 
@@ -398,10 +371,6 @@ func (a *AlertAPI) handleSilence(r *http.Request) (int, any) {
 func (a *AlertAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		shared.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if a.store == nil {
-		shared.WriteJSON(w, http.StatusOK, map[string]any{"rules": []interface{}{}})
 		return
 	}
 

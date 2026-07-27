@@ -3,7 +3,6 @@ package stocktools
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -192,11 +191,7 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
 	if h.deps.QuoteStore == nil {
-		return http.StatusOK, map[string]any{
-			"symbol":     symbol,
-			"indicators": []interface{}{},
-			"note":       "quote store not configured — no technical data available",
-		}
+		return http.StatusServiceUnavailable, map[string]string{"error": "quote store not configured"}
 	}
 	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
 	if days <= 0 {
@@ -214,11 +209,7 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	}
 	bars, err := h.deps.QuoteStore.LoadQuotes(qsSymbol, start, end)
 	if err != nil {
-		return http.StatusOK, map[string]any{
-			"symbol":     symbol,
-			"indicators": []interface{}{},
-			"note":       fmt.Sprintf("quote store unavailable: %v", err),
-		}
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
 	}
 	if len(bars) < 2 {
 		// On-demand fallback: try Fugle historical candles.

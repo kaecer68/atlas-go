@@ -42,8 +42,7 @@ func (h *Handlers) HandleMacroIngest(r *http.Request) (int, any) {
 func (h *Handlers) HandleMacroSnapshotLatest(r *http.Request) (int, any) {
 	snap, err := h.Service.GetLatestSnapshot()
 	if err != nil {
-		// Return empty snapshot instead of 404 so CI canary passes.
-		return http.StatusOK, map[string]any{"snapshot": nil, "note": "no macro snapshot available — data ingestion may not have run yet"}
+		return http.StatusNotFound, map[string]string{"error": "no macro snapshot available"}
 	}
 	return http.StatusOK, snap
 }
@@ -194,8 +193,7 @@ func (h *Handlers) HandleChannelsIngest(r *http.Request) (int, any) {
 func (h *Handlers) HandleMacroDataHealth(r *http.Request) (int, any) {
 	health, err := h.Service.GetMacroDataHealth()
 	if err != nil {
-		// Return empty health instead of 500 so CI canary passes.
-		return http.StatusOK, map[string]any{"indicators": []interface{}{}, "note": "no macro data available — data ingestion may not have run yet"}
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("macro data health: %v", err)}
 	}
 	return http.StatusOK, health
 }
