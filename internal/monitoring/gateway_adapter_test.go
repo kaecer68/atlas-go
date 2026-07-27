@@ -553,18 +553,54 @@ func TestApplyCapitalFlow(t *testing.T) {
 }
 
 func TestApplyMargin(t *testing.T) {
-	a, snap := newApplyFixture()
-	data := []byte(`{
-		"retail_margin_balance":{"symbol":"MARGIN","value":2000.0},
-		"retail_short_balance":{"symbol":"SHORT","value":500.0}
-	}`)
-	a.applyMargin(snap, data)
-	if snap.RetailMarginBalance.Symbol != "MARGIN" {
-		t.Errorf("RetailMarginBalance.Symbol = %q, want MARGIN", snap.RetailMarginBalance.Symbol)
-	}
-	if snap.RetailShortBalance.Symbol != "SHORT" {
-		t.Errorf("RetailShortBalance.Symbol = %q, want SHORT", snap.RetailShortBalance.Symbol)
-	}
+	// Test with maintenance ratio present.
+	t.Run("with_maintenance_ratio", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{
+			"retail_margin_balance":{"symbol":"MARGIN","value":2000.0},
+			"retail_short_balance":{"symbol":"SHORT","value":500.0},
+			"margin_maintenance_ratio":{"symbol":"TSE_MARGIN_MAINT","value":165.5}
+		}`)
+		a.applyMargin(snap, data)
+		if snap.RetailMarginBalance.Symbol != "MARGIN" {
+			t.Errorf("RetailMarginBalance.Symbol = %q, want MARGIN", snap.RetailMarginBalance.Symbol)
+		}
+		if snap.RetailShortBalance.Symbol != "SHORT" {
+			t.Errorf("RetailShortBalance.Symbol = %q, want SHORT", snap.RetailShortBalance.Symbol)
+		}
+		if snap.MarginMaintenanceRatio.Symbol != "TSE_MARGIN_MAINT" {
+			t.Errorf("MarginMaintenanceRatio.Symbol = %q, want TSE_MARGIN_MAINT", snap.MarginMaintenanceRatio.Symbol)
+		}
+		if snap.MarginMaintenanceRatio.Value != 165.5 {
+			t.Errorf("MarginMaintenanceRatio.Value = %v, want 165.5", snap.MarginMaintenanceRatio.Value)
+		}
+	})
+
+	// Test without maintenance ratio (backward compat — no regression).
+	t.Run("without_maintenance_ratio", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{
+			"retail_margin_balance":{"symbol":"MARGIN","value":2000.0},
+			"retail_short_balance":{"symbol":"SHORT","value":500.0}
+		}`)
+		a.applyMargin(snap, data)
+		if snap.MarginMaintenanceRatio.Symbol != "" {
+			t.Errorf("MarginMaintenanceRatio.Symbol = %q, want empty (no data)", snap.MarginMaintenanceRatio.Symbol)
+		}
+	})
+
+	// Test with maintenance ratio but empty symbol (should not be mapped).
+	t.Run("empty_symbol_maintenance_ratio", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{
+			"retail_margin_balance":{"symbol":"MARGIN","value":2000.0},
+			"margin_maintenance_ratio":{"symbol":"","value":0}
+		}`)
+		a.applyMargin(snap, data)
+		if snap.MarginMaintenanceRatio.Symbol != "" {
+			t.Errorf("MarginMaintenanceRatio.Symbol = %q, want empty (empty symbol filtered)", snap.MarginMaintenanceRatio.Symbol)
+		}
+	})
 }
 
 func TestApplyExport(t *testing.T) {
@@ -858,6 +894,54 @@ func TestNewGeopoliticalRiskFetcher(t *testing.T) {
 		f := newGeopoliticalRiskFetcher(global, nil)
 		if got := f(context.Background()); got != 0 {
 			t.Errorf("intensity = %v, want 0", got)
+		}
+	})
+}
+
+func TestApplyDayTradeRatioFromStats(t *testing.T) {
+	// Normal DayTradingStats → DayTradeRatio populated.
+	t.Run("normal_stats", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{"date":"20260728","volume_ratio":35.5,"buy_value_ratio":38.2}`)
+		a.applyDayTradeRatioFromStats(snap, data)
+		if snap.DayTradeRatio.Symbol != "TSE_DAYTRADE" {
+			t.Errorf("DayTradeRatio.Symbol = %q, want TSE_DAYTRADE", snap.DayTradeRatio.Symbol)
+		}
+		if snap.DayTradeRatio.Value != 35.5 {
+			t.Errorf("DayTradeRatio.Value = %v, want 35.5", snap.DayTradeRatio.Value)
+		}
+		// Verify timestamp was parsed from "20260728".
+		if snap.DayTradeRatio.Timestamp == 0 {
+			t.Error("DayTradeRatio.Timestamp = 0, want non-zero")
+		}
+	})
+
+	// Empty Date → no fill.
+	t.Run("empty_date", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{"date":"","volume_ratio":35.5}`)
+		a.applyDayTradeRatioFromStats(snap, data)
+		if snap.DayTradeRatio.Symbol != "" {
+			t.Errorf("DayTradeRatio.Symbol = %q, want empty (date is empty)", snap.DayTradeRatio.Symbol)
+		}
+	})
+
+	// Bad JSON → no panic.
+	t.Run("bad_json", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		a.applyDayTradeRatioFromStats(snap, []byte(`not json`))
+		if snap.DayTradeRatio.Symbol != "" {
+			t.Errorf("DayTradeRatio.Symbol = %q, want empty (bad JSON)", snap.DayTradeRatio.Symbol)
+		}
+	})
+
+	// Invalid date format → no fill.
+	t.Run("invalid_date", func(t *testing.T) {
+		a, snap := newApplyFixture()
+		data := []byte(`{"date":"2026-07-28","volume_ratio":35.5}`)
+		a.applyDayTradeRatioFromStats(snap, data)
+		if snap.DayTradeRatio.Symbol != "" {
+			t.Errorf("DayTradeRatio.Symbol = %q, want empty (invalid date format)", snap.DayTradeRatio.Symbol)
 		}
 	})
 }
