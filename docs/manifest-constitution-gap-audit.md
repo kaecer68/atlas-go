@@ -13,9 +13,9 @@
 | 指標 | 數值 |
 |------|------|
 | 審計項目 | **25 項** |
-| 已完成 | **17 項** |
-| 部分完成 | **1 項** |
-| 待啟動 | **7 項** |
+| 已完成 | **18 項** |
+| 部分完成 | **1 項** (C4) |
+| 待啟動 | **6 項** |
 | 分類數 | 6 類（A–F） |
 
 ---
@@ -45,8 +45,7 @@
 | C1 | 七大勢力完整數據源 | ✅ | #1372 — 壽險/銀行、公司派/內部人、散戶維度補齊 |
 | C2 | 公股行庫自動化數據通道 | ✅ | #1372 — 自動化分點加總 seam |
 | C3 | capitalflow 輸出進入主決策鏈 | ✅ | #1372 — orchestrator 改取 capitalflow.PrimaryFlow |
-| C4 | capitalflow 4-layer Assessment 消費者 | ✅ | #1378 — Assessor 接線完成 |
-| C6 | 散戶反向指標統一口徑 | ✅ | #1372 — RSI-Tw 與 capitalflow 對齊 |
+| C4 | capitalflow 4-layer Assessment 消費者 | ⚠️ | #1378 介面+欄位就緒；`WithCapitalFlowAssessmentProvider` 無 production caller（Assessor 與 capitalflow.Service 在不同 goroutine scope） |
 
 ## D. 敘事引擎與策略映射
 
@@ -61,9 +60,9 @@
 
 | # | 項目 | 狀態 | 備註 / PR |
 |---|------|------|-----------|
-| E3 | API 輸出時期結構化欄位 | ⚠️ | struct exists，API builder 尚未接線 → T04/T05 |
-| E4 | 前端七時期 UI 卡片 | ⬜ | 待 Phase 4 啟動 |
-| E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | 待 Phase 4 啟動 |
+| E3 | API 輸出時期結構化欄位 | ✅ | PR #1388 — DailySummaryReport + dailyreport.Report period section |
+| E4 | 前端七時期 UI 卡片 | ⬜ | 前端另開 CLI |
+| E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | 前端另開 CLI |
 
 ## F. 方法論新增覆核
 
@@ -73,7 +72,7 @@
 | F2 | 自營商大小分流（大型可納宏觀，小型用 AI 分點） | ⬜ | 第四層與第五層行為差異 |
 | F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | 第五層資金性質區分 |
 | F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | 數據源 fallback |
-| F5 | 選股層策略庫設計（Phase 4） | ⬜ | 憲章目前僅組合層 |
+| F5 | 選股層策略庫設計（Phase 4） | ✅ | PR #1388 — `docs/design/stock-picking-layer.md` |
 
 ---
 
@@ -83,12 +82,11 @@
 |------|------|--------|--------|----------|
 | A. 時期判斷 | 4 | 4 | 0 | 0 |
 | B. 因果傳導 | 4 | 4 | 0 | 0 |
-| C. 資金流向 | 5 | 5 | 0 | 0 |
+| C. 資金流向 | 5 | 4 | 1 | 0 |
 | D. 敘事策略 | 4 | 4 | 0 | 0 |
-| E. 前端配置 | 3 | 0 | 1 | 2 |
-| F. 方法論新增 | 5 | 0 | 0 | 5 |
-| **合計** | **25** | **17** | **1** | **7** |
-
+| E. 前端配置 | 3 | 1 | 0 | 2 |
+| F. 方法論新增 | 5 | 1 | 0 | 4 |
+| **合計** | **25** | **18** | **1** | **6** |
 ---
 
 ## 版本歷史

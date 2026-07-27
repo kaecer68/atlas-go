@@ -104,7 +104,7 @@ flowchart TD
 |------|------|------|------|-------------|
 | T21 | YAML config loader | 擴展 `internal/config/parameters_load.go` 支援 YAML parser/loader | ✅ | #1372 |
 | T22 | 七時期閾值參數化 | 將外資買賣超金額、連續天數、融資、當沖、SOX、TSM ADR、期貨未平倉等閾值納入 `ParametersConfig` | ✅ | #1372 |
-| T23 | API 時期結構化欄位 | `/api/dashboard/daily-summary` 與 `/api/reports/latest` 輸出 period id/name、觸發指標、cash reserve、allowed strategies | ⚠️ | struct exists，API builder 未接線 |
+| T23 | API 時期結構化欄位 | `/api/dashboard/daily-summary` 與 `/api/reports/latest` 輸出 period id/name、觸發指標、cash reserve、allowed strategies | ✅ | PR #1388 |
 | T24 | 前端七時期 UI 卡片 | 新增七時期專用元件、轉換矩陣、指標明細、策略映射 | ⬜ | — |
 | T25 | 策略類別三分類 | `home-tier-sections.js` 按 defensive/aggressive/tactical 分類，並依 YAML primary/secondary 過濾 | ⬜ | — |
 
@@ -133,16 +133,15 @@ flowchart TD
 ---
 
 ## 進度統計
-
 | Phase | 總計 | ✅ 完成 | ⚠️ 部分 | ⬜ 待啟動 |
 |-------|------|--------|--------|----------|
 | Phase 0 — 時期判斷 | 4 | 4 | 0 | 0 |
 | Phase 1 — 因果傳導 | 5 | 5 | 0 | 0 |
 | Phase 2 — 資金流向 | 6 | 6 | 0 | 0 |
 | Phase 3 — 敘事策略 | 5 | 5 | 0 | 0 |
-| Phase 4 — 前端配置 | 5 | 2 | 1 | 2 |
+| Phase 4 — 前端配置 | 5 | 3 | 0 | 2 |
 | Phase 5 — 方法論新增 | 2 | 0 | 0 | 2 |
-| **合計** | **27** | **22** | **1** | **4** |
+| **合計** | **27** | **23** | **0** | **4** |
 
 ---
 
