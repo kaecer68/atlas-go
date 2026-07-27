@@ -9,7 +9,7 @@
 
 | Category | Channels | Condition |
 |----------|----------|-----------|
-| TWSE official | `twse_replay`, `twse_capital_flow`, `twse_margin`, `twse_sector_index`, `twse_oddlot`, `twse_etf` | always registered |
+| TWSE official | `twse_replay`, `twse_capital_flow`, `twse_margin`, `twse_sector_index`, `twse_oddlot`, `twse_etf`, `twse_insider` | always registered |
 | TAIFEX official | `taifex_daily`, `taifex_institutional` | always registered |
 | Yahoo Finance | `us_yahoo`, `sox_index`, `dram_spot_price`, `us_spx`, `us_ndx`, `us_dji`, `taiex_index`, `tw_vol`, `us_nvda`, `us_aapl`, `us_msft`, `tsm_adr` | `YahooEnabled` |
 | FinMind | `finmind` | `FINMIND_API_KEY` |
