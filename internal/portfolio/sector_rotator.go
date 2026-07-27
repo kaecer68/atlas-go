@@ -77,6 +77,7 @@ func NewSectorRotatorWithConfig(cfg config.SectorRotationConfig) *SectorRotator 
 		rebalanceThreshold: cfg.RebalanceThreshold,
 	}
 }
+
 func (r *SectorRotator) GeneratePlan(
 	macroAssessment *narrative.MacroRiskAssessment,
 	currentAllocations map[string]float64,
