@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -1062,7 +1063,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		a.baselinePath,
 		outcomeStore,
 		a.janusEngine,
-		service.NewChannelHealthStoreAdapter(filepath.Join(a.workDir, "data/state"), a.pool),
+		apigateway.NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool),
 	)
 	if a.industryService != nil {
 		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
