@@ -3,8 +3,6 @@ package capitalflow
 import (
 	"strings"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // ---------------------------------------------------------------------------
@@ -81,39 +79,6 @@ func computeQualityScore(forces []ForceScore) float64 {
 		}
 	}
 	return foreignZ + instZ - retailZ
-}
-
-// computeQualityScoreWithPeriod = wF·Foreign(Z) + wI·Institutional(Z) − wR·Retail(Z)
-// Weights adapt to the market period per 憲章 §4 "外資權威":
-//
-//	Bull / TurnaroundUp → wF=1.3 (foreign leads the trend)
-//	Downturn / TurnaroundDown → wI=1.3, wF=0.7 (foreign panics)
-//	BlackSwan → wR=1.5 (retail reverse indicator amplified)
-//	Default / nil → wF=wI=wR=1.0 (equal weights)
-func computeQualityScoreWithPeriod(forces []ForceScore, period *domain.MarketPeriod) float64 {
-	wF, wI, wR := 1.0, 1.0, 1.0
-	if period != nil {
-		switch *period {
-		case domain.PeriodBull, domain.PeriodTurnaroundUp:
-			wF, wI, wR = 1.3, 1.0, 1.0
-		case domain.PeriodDownturn, domain.PeriodTurnaroundDown:
-			wF, wI, wR = 0.7, 1.3, 1.0
-		case domain.PeriodBlackSwan:
-			wF, wI, wR = 1.0, 1.0, 1.5
-		}
-	}
-	var foreignZ, instZ, retailZ float64
-	for _, f := range forces {
-		switch f.Force {
-		case ForceForeign:
-			foreignZ = f.ZScore
-		case ForceInstitutional:
-			instZ = f.ZScore
-		case ForceRetail:
-			retailZ = f.ZScore
-		}
-	}
-	return wF*foreignZ + wI*instZ - wR*retailZ
 }
 
 func qualityLabel(score float64) string {
