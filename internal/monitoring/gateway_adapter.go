@@ -67,7 +67,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "exchange_rate", apply: a.applyExchangeRate},
 		{channelID: "sox_index", apply: a.applySOXIndex},
 		{channelID: "twse_capital_flow", apply: a.applyCapitalFlow},
-		{channelID: "twse_margin", apply: a.applyMargin},
+		{channelID: "twse_etf", apply: a.applyETF},
 		{channelID: "export_statistics", apply: a.applyExport},
 		{channelID: "tsmc_revenue", apply: a.applyTSMCRevenue},
 		{channelID: "sector_data", apply: a.applySectorData},
@@ -272,6 +272,23 @@ func (a *macroDataGatewayAdapter) applyCapitalFlow(snap *marketdata.MacroDataSna
 		snap.DealerNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: ts}
 		snap.DealerSelfNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_SELF", Value: flow.DealerSelfNet, Timestamp: ts}
 		snap.DealerHedgingNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_HEDGING", Value: flow.DealerHedgingNet, Timestamp: ts}
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyETF(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var stats marketdata.ETFStats
+	if err := json.Unmarshal(data, &stats); err != nil {
+		return
+	}
+	if stats.Date == "" {
+		return
+	}
+	etfTime, _ := time.Parse("20060102", stats.Date)
+	ts := etfTime.Unix()
+	snap.ETFNetSubscription = marketdata.MacroDataPoint{
+		Symbol:    "TAIWAN_ETF",
+		Value:     float64(stats.NetSubscription),
+		Timestamp: ts,
 	}
 }
 

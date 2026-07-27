@@ -2089,6 +2089,7 @@ export interface MacroDataSnapshot {
   dealer_net: MacroDataPoint;
   dealer_self_net: MacroDataPoint;
   dealer_hedging_net: MacroDataPoint;
+  etf_net_subscription: MacroDataPoint;
   foreign_futures_oi_net: MacroDataPoint;
   government_net: MacroDataPoint;
   insurance_net: MacroDataPoint;
