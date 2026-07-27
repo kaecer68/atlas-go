@@ -157,9 +157,9 @@
 | 8 | B5: Causal chain layer tracing | P1 | ✅ 完成 | #1372 |
 | 9 | C1+C2: 壽險/公司派/散戶數據缺口 | P0 | ✅ 完成 | #1372 |
 | 10 | C3: capitalflow 進入主決策鏈 | P0 | ✅ 完成 | #1372 |
-| 11 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ✅ 完成 | `11347d5d` (cfAssessor wiring) |
-| 12 | C5: QualityScore 公式 + cfScore 權重 | 已對齊/P2 | ⏳ 動態權重未實作 | P2 待排 |
-| 13 | C6: 散戶反向指標統一口徑 | P1 | ⏳ 未啟動 | — |
+| 11 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ⚡ infrastructure-only | `11347d5d` — 介面+欄位就緒，生產環境接線 pending（Assessor 與 capitalflow.Service 在不同 goroutine scope） |
+| 12 | C5: QualityScore 公式 + cfScore 權重 | P2 | ✅ 完成 | `68552dbc` — computeQualityScoreWithPeriod 動態權重 |
+| 13 | C6: 散戶反向指標統一口徑 | P1 | ✅ 完成 | `0ee9e612` |
 | 14 | D1: detector 時期敏感度 | P0 | ✅ 完成 | #1372 |
 | 15 | D2+D3: YAML consumer + 策略過濾 | P0 | ✅ 完成 | #1372 |
 | 16 | D4: Narrative 24 themes 全進 regime | P1 | ✅ 完成 | #1372 |
@@ -174,8 +174,8 @@
 | 等級 | 總計 | ✅ 完成 | ⏳ 未完成 |
 |------|------|--------|----------|
 | P0 | 13 | 12 | 1 (B2) |
-| P1 | 6 | 4 | 2 (C6, E4, E5) |
-| P2 | 1 | 0 | 1 (C5) |
+| P1 | 6 | 5 | 1 (E4, E5) |
+| P2 | 1 | 1 | 0 |
 | 已對齊 | 2 | 2 | 0 |
 | **合計** | **22** | **18** | **4** |
 

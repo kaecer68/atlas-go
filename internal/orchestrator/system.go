@@ -199,9 +199,13 @@ func (s *System) WithEventPredictor(p EventFlowPredictor) *System {
 }
 
 // CapitalFlowAssessmentProvider supplies the E07 4-layer capital-flow assessment
-// to the orchestrator's sector rotation path. When nil, the legacy PrimaryFlow fallback
-// is used — no assessment → no institutional+behavioral consensus.
-// Implementations should gate on EligibleForAutomation() before downstream usage.
+// to the orchestrator's sector rotation path (C4 P1). When nil, the legacy
+// PrimaryFlow fallback is used — no assessment → no institutional+behavioral consensus.
+//
+// NOTE: infrastructure-only in this PR. Production wiring (injecting *capitalflow.Service
+// via WithCapitalFlowAssessmentProvider) is deferred to a follow-up PR because the
+// capitalflow service is constructed in a different goroutine scope (HTTP server) than
+// the simulation loop (RunDailySimulation). See docs/ATLAS_CONSTITUTION_AUDIT.md 附錄D.
 type CapitalFlowAssessmentProvider interface {
 	LatestAssessment(ctx context.Context) (*capitalflow.CapitalFlowAssessment, error)
 }

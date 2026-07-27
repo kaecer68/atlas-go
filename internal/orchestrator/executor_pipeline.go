@@ -231,7 +231,12 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
 
 // snapshotToPeriodIndicators converts a marketdata.MacroDataSnapshot to the
 // portfolio.PeriodIndicators format expected by PeriodDetector.DetectPeriod.
-// Fields not present in the macro snapshot default to zero (unavailable).
+//
+// Currently maps 12 of ~30 indicator fields. The 12 mapped fields cover the
+// most critical single-day signals. Fields requiring historical time-series
+// (MA50/MA20/5-day avg/consecutive days/futures delta/TWD change) are left
+// at zero — the PeriodDetector treats zero-valued indicators as "unavailable".
+// Full coverage needs a MultiDayPeriodSnapshot (planned as follow-up PR-2).
 func snapshotToPeriodIndicators(snapshot marketdata.MacroDataSnapshot) portfolio.PeriodIndicators {
 	return portfolio.PeriodIndicators{
 		VIX:                    snapshot.VIX.Value,
