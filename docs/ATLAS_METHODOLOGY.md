@@ -15,8 +15,8 @@
 |-----------|-----------|---------------|
 | 七時期判斷 | `internal/portfolio/period_detector.go` | `PeriodDetector.DetectPeriod()` → `MarketPeriod` |
 | 時期→三態映射 | `internal/portfolio/period_detector.go` | `PeriodToRegime(MarketPeriod)` → `Regime` |
-| 時期→風險層級 | `internal/macroflow/risk_mapping.go` | `RiskLevelFromPeriod(MarketPeriod)` → `RiskLevel` |
-| 策略時期過濾 | `internal/orchestrator/strategy_filter.go` | `GetApplicableStrategies(MarketPeriod)` → `[]Strategy` |
+| 時期→風險層級 | `internal/portfolio/period_detector.go` | `PeriodToRiskLevel(MarketPeriod)` → `macroflow.RiskLevel` |
+| 策略時期過濾 | `internal/methodology/advisor.go` | `Advisor.AllowedStrategies(MarketPeriod)` / `Advisor.FilterStrategies(MarketPeriod, []string)` |
 | 市場狀態判定（向下相容） | `internal/domain/shared/shared.go` | `Regime`（`RISK_ON` / `RISK_OFF` / `NEUTRAL`）|
 | 狀態配置映射 | `internal/portfolio/regime.go` | `RegimeAllocator`、`DefaultRegimeConfigs()`、`RegimeDetector.Detect()` |
 | 即時微觀狀態 | `internal/realtime/regime_adapter.go` | `RegimeDetector`（7 種微觀狀態：calm/volatile/trending_up/trending_down/reversing/breakout/breakdown） |
@@ -32,8 +32,8 @@
 
 **關鍵觀察**：
 - `PeriodDetector.DetectPeriod()` 已實作七時期判斷（低迷／轉折開高／上升／高原／盤整／轉折下壓／黑天鵝），並透過 `PeriodToRegime()` 向下相容映射到三態 `Regime`。
-- `macroflow.RiskLevel` 與七時期存在自然映射關係（見第五節），已由 `RiskLevelFromPeriod()` 提供自動推導。
-- `GetApplicableStrategies()` 已按當前時期過濾策略，確保 RISK_OFF 時期不推薦 growth/momentum。
+- `macroflow.RiskLevel` 與七時期存在自然映射關係（見第五節），已由 `PeriodToRiskLevel()` 提供自動推導。
+- `Advisor.AllowedStrategies()` / `Advisor.FilterStrategies()` 已按當前時期過濾策略，確保 RISK_OFF 時期不推薦 growth/momentum。
 - 壓力指數已有 VIX/DXY/US10Y 三元件，符合本憲章「美台資金開關」觀測框架。
 
 ---

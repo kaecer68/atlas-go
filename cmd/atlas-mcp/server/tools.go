@@ -122,6 +122,7 @@ type RegimeGetHistoryOutput struct {
 	CurrentRegimeScore    *float64            `json:"current_regime_score,omitempty"`
 	CurrentScoreSource    string              `json:"current_score_source,omitempty"`
 	CurrentScoreSynthetic bool                `json:"current_score_synthetic,omitempty"`
+	CurrentPeriod         string              `json:"current_period,omitempty"`
 	DataQuality           *domain.DataQuality `json:"data_quality,omitempty"`
 }
 
@@ -190,6 +191,8 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 			out.CurrentScoreSource = "janus_composite"
 			out.CurrentScoreSynthetic = isSynthetic
 		}
+
+		out.CurrentPeriod = raw.CurrentPeriod
 
 		// Data quality envelope (#1265).
 		out.DataQuality = &domain.DataQuality{

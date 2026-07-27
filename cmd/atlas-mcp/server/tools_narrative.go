@@ -64,7 +64,8 @@ func (s *server) handleNarrativeGetEvents(ctx context.Context, _ *mcp.CallToolRe
 			if period, nameZH := s.fetchCurrentPeriod(ctx); period != "" {
 				(*out.Result)["current_period"] = period
 				(*out.Result)["current_period_name_zh"] = nameZH
-				(*out.Result)["period_weight_note"] = "detector confidence multiplied by PeriodWeight(period); see ATLAS_METHODOLOGY.md appendix B"
+				(*out.Result)["period_weight_applied"] = true
+				(*out.Result)["period_weight_note"] = "探測器信心度乘以 PeriodWeight(period) 時期權重；詳見 ATLAS_METHODOLOGY.md 附錄 B"
 			}
 		}
 		return nil

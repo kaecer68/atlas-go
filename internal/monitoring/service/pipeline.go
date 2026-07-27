@@ -1290,13 +1290,19 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, row := range rows {
-		period := methodology.RegimeToPeriod(domain.Regime(row.Regime))
+		var period domain.MarketPeriod
+		var periodStr, periodZH string
+		if row.Regime != "" {
+			period = methodology.RegimeToPeriod(domain.Regime(row.Regime))
+			periodStr = string(period)
+			periodZH = period.PeriodNameZH()
+		}
 		sessions[i] = RegimeSessionEntry{
 			SessionID:    row.Date,
 			Date:         row.Date,
 			Regime:       row.Regime,
-			Period:       string(period),
-			PeriodNameZH: period.PeriodNameZH(),
+			Period:       periodStr,
+			PeriodNameZH: periodZH,
 			RecordedAt:   row.RecordedAt.UTC().Format(time.RFC3339),
 			Source:       row.Source,
 		}
@@ -1313,7 +1319,9 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 	currentPeriod := ""
 	if len(rows) > 0 {
 		current = rows[0].Regime
-		currentPeriod = string(methodology.RegimeToPeriod(domain.Regime(current)))
+		if current != "" {
+			currentPeriod = string(methodology.RegimeToPeriod(domain.Regime(current)))
+		}
 	}
 	return &RegimeHistoryData{
 		Sessions:      sessions,
@@ -1340,13 +1348,19 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, sum := range summaries {
-		period := methodology.RegimeToPeriod(sum.Regime)
+		var period domain.MarketPeriod
+		var periodStr, periodZH string
+		if sum.Regime != "" {
+			period = methodology.RegimeToPeriod(sum.Regime)
+			periodStr = string(period)
+			periodZH = period.PeriodNameZH()
+		}
 		sessions[i] = RegimeSessionEntry{
 			SessionID:    sum.SessionID,
 			Date:         sum.RecordedAt.UTC().Format("2006-01-02"),
 			Regime:       string(sum.Regime),
-			Period:       string(period),
-			PeriodNameZH: period.PeriodNameZH(),
+			Period:       periodStr,
+			PeriodNameZH: periodZH,
 			RecordedAt:   sum.RecordedAt.UTC().Format(time.RFC3339),
 		}
 		if i > 0 && string(sum.Regime) != prevRegime {
@@ -1363,7 +1377,9 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 	if len(summaries) > 0 {
 		last := summaries[len(summaries)-1]
 		current = string(last.Regime)
-		currentPeriod = string(methodology.RegimeToPeriod(last.Regime))
+		if last.Regime != "" {
+			currentPeriod = string(methodology.RegimeToPeriod(last.Regime))
+		}
 	}
 	return &RegimeHistoryData{
 		Sessions:      sessions,
