@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # .githooks/pre-push — Block redundant pushes before they reach the remote
 #
-# Catches two failure modes that previously caused wasted CI runs:
-#   1. Local branch HEAD == origin/main  → nothing meaningful to push
-#   2. Zero file diff vs origin/main       → PR will be closed as redundant
+# Catches these failure modes:
+#   1. CI gate (`make ci-gate`) — catches 90% of CI failures before push
+#   2. Local branch HEAD == origin/main  → nothing meaningful to push
+#   3. Zero file diff vs origin/main       → PR will be closed as redundant
 #      (this is the exact failure mode that produced PR #799 — branch had
 #       no unique work vs main, but was pushed and PR'd anyway)
 #
@@ -21,16 +22,29 @@ if [ "$remote" != "origin" ]; then
   exit 0
 fi
 
+# ── Gate 1: CI preflight ──────────────────────────────────────────
+# make ci-gate covers: gofmt, go build, go vet, go generate drift,
+# and fast CI scripts. ~30s, catches 90% of CI failures.
+if ! make ci-gate 2>&1; then
+  echo ""
+  echo "❌ pre-push: make ci-gate FAILED."
+  echo "   Fix the issues above before pushing."
+  echo "   Bypass with: git push --no-verify"
+  echo ""
+  exit 1
+fi
+
+# ── Gate 2: HEAD already on main ──────────────────────────────────
+local_sha=$(git rev-parse HEAD)
+
 # Fast-fetch origin/main so diffs are accurate.
 if ! git fetch origin main --quiet 2>/dev/null; then
-  echo "⚠️  pre-push: cannot fetch origin/main — skipping checks"
+  echo "⚠️  pre-push: cannot fetch origin/main — skipping redundancy checks"
   exit 0
 fi
 
-local_sha=$(git rev-parse HEAD)
 main_sha=$(git rev-parse origin/main)
 
-# Case 1: HEAD already on main — nothing to push.
 if [ "$local_sha" = "$main_sha" ]; then
   echo ""
   echo "❌ pre-push: HEAD is already on origin/main."
@@ -40,7 +54,7 @@ if [ "$local_sha" = "$main_sha" ]; then
   exit 1
 fi
 
-# Case 2: zero diff vs origin/main (branch unique content = empty).
+# ── Gate 3: zero diff vs origin/main ──────────────────────────────
 diff_count=$(git diff --name-only origin/main...HEAD 2>/dev/null | wc -l | tr -d ' ')
 if [ "$diff_count" -eq 0 ]; then
   echo ""
@@ -52,5 +66,5 @@ if [ "$diff_count" -eq 0 ]; then
   exit 1
 fi
 
-echo "✅ pre-push: $diff_count file(s) differ from origin/main — push allowed"
+echo "✅ pre-push: ci-gate passed, $diff_count file(s) differ from origin/main — push allowed"
 exit 0
