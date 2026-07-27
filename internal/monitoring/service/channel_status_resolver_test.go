@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"testing"
 	"time"
 )
@@ -21,7 +22,7 @@ func TestResolveChannelStatusFromStore_NilStore(t *testing.T) {
 }
 
 func TestResolveChannelStatusFromStore_NoRecord(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	status, updated, lastErr := resolveChannelStatusFromStore(store, "unrecorded", "warn", "fallback")
 	if status != "warn" {
 		t.Fatalf("expected fileStatus to pass through, got %q", status)
@@ -39,7 +40,7 @@ func TestResolveChannelStatusFromStore_NoRecord(t *testing.T) {
 // regardless of file age (this is the bug fix — without store override,
 // weekend file mtime would falsely report "待更新").
 func TestResolveChannelStatusFromStore_Ok(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("twse_capital_flow", "ok", ""); err != nil {
 		t.Fatalf("record ok: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestResolveChannelStatusFromStore_Ok(t *testing.T) {
 }
 
 func TestResolveChannelStatusFromStore_Error(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("twse_capital_flow", "error", "rate limit exceeded"); err != nil {
 		t.Fatalf("record error: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestResolveChannelStatusFromStore_Error(t *testing.T) {
 // (e.g. partial / transient). FileStatus should pass through, but
 // LastError from the record should be attached for visibility.
 func TestResolveChannelStatusFromStore_OtherStatus(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("ch-warn", "warn", "degraded"); err != nil {
 		t.Fatalf("record warn: %v", err)
 	}
@@ -99,8 +100,8 @@ func TestResolveChannelStatusFromStore_OtherStatus(t *testing.T) {
 // the store recorded a degraded fetch (live API failed, cache served).
 // The resolver must show "degraded" — between ok and error.
 func TestResolveChannelStatusFromStore_Degraded(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
-	if err := store.MarkDegraded("tsmc_revenue", "cache_fallback"); err != nil {
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	if err := store.Record("tsmc_revenue", "degraded", "cache_fallback"); err != nil {
 		t.Fatalf("mark degraded: %v", err)
 	}
 	status, updated, lastErr := resolveChannelStatusFromStore(store, "tsmc_revenue", "ok", "20260611")
@@ -119,7 +120,7 @@ func TestResolveChannelStatusFromStore_Degraded(t *testing.T) {
 // the original bug: the file mtime is 2 days old (would be "warn") but the
 // Gateway recorded a successful fetch today. The resolver must report "ok".
 func TestResolveChannelStatusFromStore_OkFromOldFile(t *testing.T) {
-	store := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("twse_capital_flow", "ok", "", WithLastDataAt(time.Now().Add(-2*24*time.Hour))); err != nil {
 		t.Fatalf("record: %v", err)
 	}

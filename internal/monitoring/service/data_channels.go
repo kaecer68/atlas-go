@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -89,47 +89,30 @@ type ChannelAlert struct {
 	Error     string `json:"error"`
 }
 
-type ChannelHealthRecord struct {
-	Status             string   `json:"status"`
-	LastFetchAt        string   `json:"last_fetch_at"`
-	LastDataAt         string   `json:"last_data_at,omitempty"`
-	LastError          string   `json:"last_error,omitempty"`
-	LastSuccessAt      string   `json:"last_success_at,omitempty"`
-	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
-	LatencyMs          int64    `json:"latency_ms,omitempty"`
-	RecordsFetched     int      `json:"records_fetched,omitempty"`
-	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
-	Errors             []string `json:"errors,omitempty"`
-}
+// ChannelHealthRecord aliases the canonical apigateway definition.
+type ChannelHealthRecord = apigateway.ChannelHealthRecord
 
-// RecordOption configures optional fields on a ChannelHealthRecord.
-type RecordOption func(*ChannelHealthRecord)
+// RecordOption aliases the canonical apigateway definition.
+type RecordOption = apigateway.RecordOption
 
-// WithLastDataAt sets the last data timestamp.
-func WithLastDataAt(t time.Time) RecordOption {
-	return func(r *ChannelHealthRecord) { r.LastDataAt = t.Format(time.RFC3339) }
-}
+// WithLastDataAt wraps apigateway.WithLastDataAt.
+func WithLastDataAt(t time.Time) RecordOption { return apigateway.WithLastDataAt(t) }
 
-// WithLatencyMs sets the latency in milliseconds.
-func WithLatencyMs(ms int64) RecordOption {
-	return func(r *ChannelHealthRecord) { r.LatencyMs = ms }
-}
+// WithLatencyMs wraps apigateway.WithLatencyMs.
+func WithLatencyMs(ms int64) RecordOption { return apigateway.WithLatencyMs(ms) }
 
 type DataChannelService struct {
-	WorkDir           string
-	Pool              *pgxpool.Pool
-	MacroIngestor     *narrative.MacroIngestor
-	GeoProvider       geopolitical.GeopoliticalRiskProvider
-	TaiwanGeoProvider geopolitical.GeopoliticalRiskProvider
-	JanusEngine       *janus.Engine
-	FugleAPIKey       string
-	FubonAPIKey       string
-	FinMindAPIKey     string
-	TejAPIKey         string
-	healthStore       *ChannelHealthStoreAdapter
-	// RegisteredChannelIDs, when set, makes the admin channel page dynamic:
-	// any ID not in the static list below appears as a fallback "channel"
-	// entry so operators see every registered channel (manifest #G05).
+	WorkDir              string
+	Pool                 *pgxpool.Pool
+	MacroIngestor        *narrative.MacroIngestor
+	GeoProvider          geopolitical.GeopoliticalRiskProvider
+	TaiwanGeoProvider    geopolitical.GeopoliticalRiskProvider
+	JanusEngine          *janus.Engine
+	FugleAPIKey          string
+	FubonAPIKey          string
+	FinMindAPIKey        string
+	TejAPIKey            string
+	healthStore          *apigateway.ChannelHealthStore
 	RegisteredChannelIDs []string
 }
 
@@ -161,134 +144,6 @@ func (s *DataChannelService) getCachedFinMindHealth() (status, updated, lastErro
 	return s.getHealthFromStore("finmind", s.FinMindAPIKey)
 }
 
-type ChannelHealthStoreAdapter struct {
-	pool  *pgxpool.Pool
-	dir   string
-	store *channelHealthStore
-	once  sync.Once
-}
-
-func NewChannelHealthStoreAdapter(dir string, pool *pgxpool.Pool) *ChannelHealthStoreAdapter {
-	return &ChannelHealthStoreAdapter{pool: pool, dir: dir}
-}
-
-func (a *ChannelHealthStoreAdapter) Get(channelID string) *ChannelHealthRecord {
-	a.once.Do(func() {
-		a.store = newChannelHealthStore(a.dir, a.pool)
-	})
-	return a.store.Get(channelID)
-}
-
-// MarkDegraded sets a channel's health status to "degraded" without clearing
-// LastError. "degraded" means the channel is serving cached data because the
-// live API fetch failed — data exists but is stale. This is less severe than
-// "error" (no data) but worse than "ok" (live data).
-func (a *ChannelHealthStoreAdapter) MarkDegraded(channelID, reason string) error {
-	a.once.Do(func() {
-		a.store = newChannelHealthStore(a.dir, a.pool)
-	})
-	return a.store.Record(channelID, "degraded", reason)
-}
-
-func (a *ChannelHealthStoreAdapter) Record(channelID, status, errMsg string, opts ...RecordOption) error {
-	a.once.Do(func() {
-		a.store = newChannelHealthStore(a.dir, a.pool)
-	})
-	return a.store.Record(channelID, status, errMsg, opts...)
-}
-
-func newChannelHealthStore(dir string, pool *pgxpool.Pool) *channelHealthStore {
-	return &channelHealthStore{
-		path: filepath.Join(dir, "channel_health.json"),
-		data: make(map[string]*ChannelHealthRecord),
-		pool: pool,
-	}
-}
-
-type channelHealthStore struct {
-	path string
-	data map[string]*ChannelHealthRecord
-	pool *pgxpool.Pool
-	mu   sync.RWMutex
-}
-
-func (s *channelHealthStore) Get(channelID string) *ChannelHealthRecord {
-	_ = s.load()
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if rec, ok := s.data[channelID]; ok {
-		cp := *rec
-		return &cp
-	}
-	return nil
-}
-
-func (s *channelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
-	_ = s.load()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	rec := s.data[channelID]
-	if rec == nil {
-		rec = &ChannelHealthRecord{}
-		s.data[channelID] = rec
-	}
-	rec.Status = status
-	rec.LastFetchAt = time.Now().Format(time.RFC3339)
-	if status == "ok" {
-		rec.LastError = ""
-		rec.LastSuccessAt = rec.LastFetchAt
-	} else {
-		rec.LastError = errMsg
-	}
-	for _, opt := range opts {
-		opt(rec)
-	}
-	return s.saveLocked()
-}
-
-func (s *channelHealthStore) load() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.loadLocked()
-}
-
-func (s *channelHealthStore) loadLocked() error {
-	s.data = make(map[string]*ChannelHealthRecord)
-	data, err := os.ReadFile(s.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read channel health file: %w", err)
-	}
-	var wrapper struct {
-		Channels map[string]*ChannelHealthRecord `json:"channels"`
-	}
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return fmt.Errorf("unmarshal channel health: %w", err)
-	}
-	if wrapper.Channels != nil {
-		s.data = wrapper.Channels
-	}
-	return nil
-}
-
-func (s *channelHealthStore) saveLocked() error {
-	wrapper := struct {
-		Channels map[string]*ChannelHealthRecord `json:"channels"`
-	}{Channels: s.data}
-	b, err := json.MarshalIndent(wrapper, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal channel health: %w", err)
-	}
-	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	return os.Rename(tmp, s.path)
-}
-
 func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *narrative.MacroIngestor, geoProvider geopolitical.GeopoliticalRiskProvider, taiwanGeoProvider geopolitical.GeopoliticalRiskProvider, janusEngine *janus.Engine, fugleAPIKey, fubonAPIKey, finmindAPIKey, tejAPIKey string) *DataChannelService {
 	return &DataChannelService{
 		WorkDir:           workDir,
@@ -301,7 +156,7 @@ func NewDataChannelService(workDir string, pool *pgxpool.Pool, macroIngestor *na
 		FubonAPIKey:       fubonAPIKey,
 		FinMindAPIKey:     finmindAPIKey,
 		TejAPIKey:         tejAPIKey,
-		healthStore:       NewChannelHealthStoreAdapter(filepath.Join(workDir, "data/state"), pool),
+		healthStore:       apigateway.NewChannelHealthStoreWithPool(filepath.Join(workDir, "data/state"), pool),
 	}
 }
 
