@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -28,10 +29,11 @@ type Report struct {
 }
 
 type PeriodSection struct {
-	MarketPeriod      string   `json:"market_period"`
-	PeriodNameZH      string   `json:"period_name_zh"`
-	CashReserve       float64  `json:"cash_reserve"`
-	AllowedStrategies []string `json:"allowed_strategies"`
+	MarketPeriod      string                 `json:"market_period"`
+	PeriodNameZH      string                 `json:"period_name_zh"`
+	CashReserve       float64                `json:"cash_reserve"`
+	AllowedStrategies []string               `json:"allowed_strategies"`
+	StrategiesDetail  []config.StrategyBrief `json:"strategies_detail,omitempty"`
 }
 
 type GlobalOverview struct {
@@ -98,6 +100,7 @@ type PeriodInfo struct {
 	PeriodNameZH      string
 	CashLevel         float64
 	AllowedStrategies []string
+	StrategiesDetail  []config.StrategyBrief
 }
 
 // PeriodProvider returns the current period section when available.
@@ -191,6 +194,7 @@ func (g *Generator) Generate() *Report {
 				PeriodNameZH:      info.PeriodNameZH,
 				CashReserve:       info.CashLevel,
 				AllowedStrategies: info.AllowedStrategies,
+				StrategiesDetail:  info.StrategiesDetail,
 			}
 		}
 	}

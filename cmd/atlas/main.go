@@ -933,6 +933,7 @@ func run(args []string, deps appDeps) error {
 				PeriodNameZH:      period.PeriodNameZH(),
 				CashLevel:         advisor.CashReserve(period),
 				AllowedStrategies: advisor.AllowedStrategies(period),
+				StrategiesDetail:  advisor.StrategiesWithCategory(period),
 			}
 		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)

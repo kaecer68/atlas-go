@@ -57,6 +57,12 @@ func (a *Advisor) StrategyCategory(strategyID string) string {
 	return a.rules.GetStrategyCategory(strategyID)
 }
 
+// StrategiesWithCategory returns the ordered primary + secondary strategies for
+// a market period, annotated with name, category and priority.
+func (a *Advisor) StrategiesWithCategory(period domain.MarketPeriod) []config.StrategyBrief {
+	return a.rules.GetStrategiesWithCategory(string(period))
+}
+
 // FilterStrategies filters a list of strategy IDs, keeping only those
 // allowed in the given period. Order is preserved.
 func (a *Advisor) FilterStrategies(period domain.MarketPeriod, strategyIDs []string) []string {
