@@ -102,6 +102,7 @@ export async function renderHomePage(container) {
         <h2>未來 5 日錢潮預測</h2>
         <span class="home-section__subtitle">事件驅動的資金流向預測</span>
         <span class="home-section__data-badge" id="predictions-data-badge"></span>
+        <a class="home-section__nav-link" href="javascript:void(0)" onclick="switchPage('capital_predictions')">完整預測 →</a>
       </div>
       <div id="home-predictions-content" class="home-predictions__content">
         <div class="home-loading-card">載入中…</div>
@@ -117,6 +118,7 @@ export async function renderHomePage(container) {
         <h2>七維錢潮雷達（3+2+2 分層）</h2>
         <span class="home-section__subtitle">官方法人 / 行為代理 / 領先＋跨市場訊號；語意見 <code>docs/specs/capital-flow-seven-dimension-spec.md</code> §4 D-CF-04</span>
         <span class="home-section__data-badge" id="seven-force-data-badge"></span>
+        <a class="home-section__nav-link" href="javascript:void(0)" onclick="switchPage('capital_board')">完整看板 →</a>
       </div>
       <div id="home-seven-force-content">
         <div class="home-loading-card">載入中…</div>
@@ -126,7 +128,7 @@ export async function renderHomePage(container) {
 
     <section class="home-section" id="home-event-calendar">
       <div class="home-section__header">
-        <h2>市場行事曆</h2>
+        <h2>市場行事曆（全年事件）</h2>
         <span class="home-section__subtitle">近期除權息、法說會、財報等重要事件</span>
         <span class="home-section__data-badge" id="calendar-data-badge"></span>
       </div>

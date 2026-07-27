@@ -99,11 +99,11 @@
   <nav role="navigation" aria-label="主要導航">
     <div class="nav-section">
       <span class="nav-group-label">市場</span>
-      <a data-page="home" href="/client/home" class="active">市場總覽</a>
-      <a data-page="capital_predictions" href="/client/capital_predictions">錢潮預測</a>
-      <a data-page="capital_board" href="/client/capital_board">錢潮看板</a>
+      <a data-page="home" href="/client/home" class="active">今日判讀</a>
+      <a data-page="capital_predictions" href="/client/capital_predictions">未來 5 日資金</a>
+      <a data-page="capital_board" href="/client/capital_board">七大勢力看板</a>
       <a data-page="stock-quote" href="/client/stock-quote">個股快查</a>
-      <a data-page="narrative" href="/client/narrative">宏觀視野</a>
+      <a data-page="narrative" href="/client/narrative">全球宏觀</a>
       <a data-page="crossmarket" href="/client/crossmarket">美台連動</a>
       <a data-page="industry" href="/client/industry">產業地圖</a>
     </div>
@@ -115,14 +115,16 @@
     <div class="nav-section">
       <span class="nav-group-label">更多</span>
       <a data-page="strategies" href="/client/strategies">投資心法</a>
-      <a data-page="methodology" href="/client/methodology">方法論</a>
+      <a data-page="methodology" href="/client/methodology">方法論：為什麼</a>
       <a data-page="evolution_panel" href="/client/evolution_panel">策略演化</a>
+      <a data-page="decision-chain" href="/client/decision-chain">決策鏈</a>
+      <a data-page="mcp" href="/client/mcp">MCP 整合</a>
+      <a data-page="performance-report" href="/client/performance-report">績效報告</a>
     </div>
     <div class="nav-section" id="navAccountSection">
       <span class="nav-group-label">帳戶</span>
       <a data-page="login" href="/client/login" class="nav-auth-item nav-guest">登入</a>
       <a data-page="register" href="/client/register" class="nav-auth-item nav-guest">註冊</a>
-      <a data-page="home" href="/client/home" class="nav-auth-item nav-user hidden">個人檔案</a>
       <a data-page="premium" href="/client/premium" class="nav-auth-item nav-user hidden">升級 <span id="navTierBadge" class="tier-badge tier-free">免費</span></a>
       <button type="button" id="navLogoutBtn" class="nav-auth-item nav-user hidden">登出</button>
     </div>
@@ -162,6 +164,7 @@
     <div class="page" id="page-decision-chain" data-page-src="decision-chain"></div>
     <div class="page" id="page-mcp" data-page-src="mcp"></div>
     <div class="page" id="page-methodology" data-page-src="methodology"></div>
+    <div class="page" id="page-performance-report" data-page-src="performance-report"></div>
     <div class="page" id="page-errors/404" data-page-src="errors/404"></div>
   </div>
   <button class="refresh" title="手動重新整理">重新整理</button>

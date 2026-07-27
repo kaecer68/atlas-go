@@ -274,128 +274,16 @@ export async function renderHomeTierSections() {
     return;
   }
 
-  // P1: parallelize all 5 independent API calls via Promise.all (saves ~4 RTT).
+  // E6a: 移除重複的 /api/capital-flow/summary 與 /api/events/prediction（主軌已處理）
   var reportsFetch = tier === 'premium' ? silentGetJSON('/api/reports/latest') : Promise.resolve(null);
   var responses = await Promise.all([
-    silentGetJSON('/api/capital-flow/summary'),
-    silentGetJSON('/api/events/prediction'),
     silentGetJSON('/api/events/calendar'),
     silentGetJSON('/api/recommendations'),
     reportsFetch,
   ]);
-  var capitalFlow = responses[0];
-  var events = responses[1];
-  var eventsCal = responses[2];
-  var recs = responses[3];
-  var report = responses[4];
-
-  if (capitalFlow && Array.isArray(capitalFlow.forces) && capitalFlow.forces.length > 0) {
-    var cards = capitalFlow.forces.slice(0, 4).map(function (f) {
-      var val = typeof f.z_score === 'number' ? fmtSignedPct(f.z_score / 10) : '—';
-      var cls = f.z_score > 0.5 ? 'trend-bullish' : f.z_score < -0.5 ? 'trend-bearish' : '';
-      var label = FORCE_LABEL[f.force] || f.force || '—';
-      return metricCard({ label: label, value: val, trend: cls, sub: f.direction || '' });
-    });
-    var flowSection = buildTierSection('資金流向', []);
-    flowSection.appendChild(buildMetricGrid(4, cards));
-    var expandBtn = document.createElement('button');
-    expandBtn.type = 'button';
-    expandBtn.className = 'btn btn--ghost btn--sm';
-    expandBtn.textContent = '展開 7 勢力明細';
-    expandBtn.setAttribute('aria-expanded', 'false');
-    expandBtn.addEventListener('click', function () {
-      var detailHost = flowSection.querySelector('.capital-flow-detail');
-      if (!detailHost) {
-        detailHost = document.createElement('div');
-        detailHost.className = 'capital-flow-detail';
-        flowSection.appendChild(detailHost);
-        expandBtn.disabled = true;
-        expandBtn.textContent = '載入中…';
-        renderCapitalFlowDetail(detailHost, expandBtn);
-      } else {
-        var visible = detailHost.style.display !== 'none';
-        detailHost.style.display = visible ? 'none' : '';
-        expandBtn.textContent = visible ? '展開 7 勢力明細' : '收合明細';
-        expandBtn.setAttribute('aria-expanded', visible ? 'false' : 'true');
-      }
-    });
-    flowSection.appendChild(expandBtn);
-
-    // H03: "為什麼漲跌？" button — fetches /api/market/explain.
-    var explainBtn = document.createElement('button');
-    explainBtn.type = 'button';
-    explainBtn.className = 'btn btn--ghost btn--sm';
-    explainBtn.style.marginLeft = '8px';
-    explainBtn.textContent = '💡 為什麼漲跌？';
-    explainBtn.addEventListener('click', function () {
-      var explainHost = flowSection.querySelector('.market-explain');
-      if (explainHost) {
-        explainHost.style.display = explainHost.style.display === 'none' ? '' : 'none';
-        return;
-      }
-      explainHost = document.createElement('div');
-      explainHost.className = 'market-explain panel';
-      explainHost.style.cssText = 'margin-top:12px;padding:16px;line-height:1.7;';
-      explainHost.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;color:var(--muted);margin-top:8px">正在分析市場…</p>';
-      flowSection.appendChild(explainHost);
-      explainBtn.disabled = true;
-      explainBtn.textContent = '⏳ 分析中…';
-      fetch('/api/market/explain', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (exp) {
-          var html = '';
-          if (exp.headline) {
-            html += '<p style="font-size:1.1rem;font-weight:600;margin-bottom:12px">' + escapeHtml(exp.headline) + '</p>';
-          }
-          if (exp.detail) {
-            html += '<p style="white-space:pre-wrap;margin-bottom:12px">' + escapeHtml(exp.detail) + '</p>';
-          }
-          if (Array.isArray(exp.sections)) {
-            exp.sections.forEach(function (sec) {
-              html += '<details style="margin-bottom:8px" open><summary style="font-weight:600;cursor:pointer">' + escapeHtml(sec.title) + '</summary><p style="margin-top:4px;white-space:pre-wrap">' + escapeHtml(sec.body) + '</p></details>';
-            });
-          }
-          html += '<p style="font-size:11px;color:var(--muted);margin-top:8px">來源：' + escapeHtml(exp.source || 'rule_based') + '｜' + escapeHtml(exp.generated_at || '') + '</p>';
-          explainHost.innerHTML = html;
-          explainBtn.disabled = false;
-          explainBtn.textContent = '💡 為什麼漲跌？';
-        })
-        .catch(function (err) {
-          explainHost.innerHTML = '<p style="color:var(--trend-bearish)">⚠ 分析失敗：' + escapeHtml(err.message || String(err)) + '</p>';
-          explainBtn.disabled = false;
-          explainBtn.textContent = '🔄 重試';
-        });
-    });
-    flowSection.appendChild(explainBtn);
-    root.appendChild(flowSection);
-  }
-
-  if (events && Array.isArray(events.predictions) && events.predictions.length > 0) {
-    var preds = events.predictions.slice(0, 5).map(function (p) {
-      var cls = p.direction === 'inflow' ? 'trend-bullish' : p.direction === 'outflow' ? 'trend-bearish' : '';
-      var label = p.direction === 'inflow' ? '流入' : p.direction === 'outflow' ? '流出' : '中性';
-      var conf = typeof p.confidence === 'number' ? p.confidence : null;
-      var pct = conf !== null ? Math.round(conf * 100) + '%' : '—';
-      var heat = conf !== null ? ' style="background:linear-gradient(180deg, rgba(255,165,0,' + (conf * 0.45).toFixed(3) + ') 0%, rgba(255,165,0,' + (conf * 0.12).toFixed(3) + ') 100%);border-radius:6px"' : '';
-      var sub = (p.date ? '<div style="font-size:11px;opacity:.7;margin-top:2px">' + escapeHtml(p.date) + '</div>' : '');
-      var card = metricCard({ label: label, value: pct, trend: cls, sub: '' });
-      if (heat) card.setAttribute('style', heat.substring(7, heat.length - 1) + ';border-radius:6px');
-      if (sub) {
-        var subEl = document.createElement('div');
-        subEl.innerHTML = sub;
-        card.appendChild(subEl.firstChild);
-      }
-      return card;
-    });
-    var section = buildTierSection('未來 5 日資金流向預測', [buildMetricGrid(5, preds)]);
-    section.id = 'home-capital-prediction-card';
-    var hint = document.createElement('p');
-    hint.className = 'home-section__hint';
-    hint.style.cssText = 'font-size:11px;opacity:.65;margin:6px 0 0';
-    hint.textContent = '信心分數熱度圖：數值越高背景漸層越深，方向色條區分流入 / 流出 / 中性。';
-    section.appendChild(hint);
-    root.appendChild(section);
-  }
+  var eventsCal = responses[0];
+  var recs = responses[1];
+  var report = responses[2];
 
   if (eventsCal && Array.isArray(eventsCal.events) && eventsCal.events.length > 0) {
     var list = document.createElement('div');

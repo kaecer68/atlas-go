@@ -1044,3 +1044,18 @@
   left: 0;
   color: var(--editorial-muted);
 }
+
+/* E6a: section-header navigation link to dedicated page */
+.home-section__nav-link {
+  font-size: var(--text-sm);
+  color: var(--editorial-muted);
+  text-decoration: none;
+  margin-left: auto;
+  padding-left: var(--space-sm);
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.home-section__nav-link:hover,
+.home-section__nav-link:focus-visible {
+  color: var(--editorial-accent);
+}
