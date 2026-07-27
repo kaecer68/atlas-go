@@ -81,18 +81,61 @@ func DefaultRegimeConfigs() map[domain.Regime]RegimeConfig {
 	}
 }
 
+// DefaultPeriodConfigs returns six-strategy allocation configs for each
+// of the seven market periods per ATLAS_METHODOLOGY.md §5.
+func DefaultPeriodConfigs() map[domain.MarketPeriod]RegimeConfig {
+	return map[domain.MarketPeriod]RegimeConfig{
+		domain.PeriodBull: {
+			Allocation:  StyleAllocation{Growth: 0.40, Momentum: 0.35, Quality: 0.15, Value: 0.10},
+			MaxExposure: 0.95, CashReserve: 0.05, RiskOn: true,
+			Description: "多頭 — 跟隨聰明錢，偏好成長+動能",
+		},
+		domain.PeriodTurnaroundUp: {
+			Allocation:  StyleAllocation{Growth: 0.40, Momentum: 0.30, Quality: 0.15, Value: 0.15},
+			MaxExposure: 0.85, CashReserve: 0.15, RiskOn: true,
+			Description: "轉折開高 — 聰明錢進場，成長為主、動能輔助",
+		},
+		domain.PeriodPlateau: {
+			Allocation:  StyleAllocation{Growth: 0.20, Value: 0.30, Quality: 0.25, Momentum: 0.25},
+			MaxExposure: 0.75, CashReserve: 0.25, RiskOn: false,
+			Description: "高原 — 事件套利為主，降低攻擊部位",
+		},
+		domain.PeriodConsolidation: {
+			Allocation:  StyleAllocation{Growth: 0.20, Value: 0.30, Quality: 0.30, Momentum: 0.20},
+			MaxExposure: 0.65, CashReserve: 0.35, RiskOn: false,
+			Description: "盤整 — 防禦+事件套利，保留現金",
+		},
+		domain.PeriodDownturn: {
+			Allocation:  StyleAllocation{Growth: 0.10, Value: 0.45, Quality: 0.35, Momentum: 0.10},
+			MaxExposure: 0.55, CashReserve: 0.45, RiskOn: false,
+			Description: "低迷 — 跟隨公股布局，偏好價值+品質",
+		},
+		domain.PeriodTurnaroundDown: {
+			Allocation:  StyleAllocation{Growth: 0.05, Value: 0.35, Quality: 0.50, Momentum: 0.10},
+			MaxExposure: 0.40, CashReserve: 0.60, RiskOn: false,
+			Description: "轉折下壓 — 全面防禦，現金為主",
+		},
+		domain.PeriodBlackSwan: {
+			Allocation:  StyleAllocation{Growth: 0.00, Value: 0.30, Quality: 0.70, Momentum: 0.00},
+			MaxExposure: 0.10, CashReserve: 0.90, RiskOn: false,
+			Description: "黑天鵝 — 現金為王，僅保留極防禦部位",
+		},
+	}
+}
+
 // RegimeAllocator 市场状态配置器
 type RegimeAllocator struct {
 	currentRegime domain.Regime
 	configs       map[domain.Regime]RegimeConfig
+	periodConfigs map[domain.MarketPeriod]RegimeConfig
 	mu            sync.RWMutex
 }
 
-// NewRegimeAllocator 创建配置器
 func NewRegimeAllocator() *RegimeAllocator {
 	return &RegimeAllocator{
 		currentRegime: domain.RegimeNeutral,
 		configs:       DefaultRegimeConfigs(),
+		periodConfigs: DefaultPeriodConfigs(),
 	}
 }
 
@@ -132,6 +175,18 @@ func (r *RegimeAllocator) GetRegimeConfig(regime domain.Regime) RegimeConfig {
 		return config
 	}
 
+	return r.configs[domain.RegimeNeutral]
+}
+
+// GetPeriodConfig returns the allocation config for a given market period.
+// Falls back to the Neutral config for unknown periods.
+func (r *RegimeAllocator) GetPeriodConfig(period domain.MarketPeriod) RegimeConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if config, ok := r.periodConfigs[period]; ok {
+		return config
+	}
 	return r.configs[domain.RegimeNeutral]
 }
 
