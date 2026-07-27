@@ -951,7 +951,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor)
+			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1181,7 +1181,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1299,7 +1299,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1337,7 +1337,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -2560,7 +2560,8 @@ func buildSystemOrFallback(
 	cfg config.Config,
 	eventBus *eventbus.ChannelEventBus,
 	janusEngine *janus.Engine,
-	eventPredictor orchestrator.EventFlowPredictor, // F04
+	eventPredictor orchestrator.EventFlowPredictor,
+	capitalFlowService *capitalflow.Service,
 ) (*orchestrator.System, error) {
 	var sys *orchestrator.System
 	var err error
@@ -2574,6 +2575,9 @@ func buildSystemOrFallback(
 	}
 	if eventPredictor != nil {
 		sys.WithEventPredictor(eventPredictor)
+	}
+	if capitalFlowService != nil {
+		sys.WithCapitalFlowAssessmentProvider(orchestrator.NewCapitalFlowServiceAdapter(capitalFlowService))
 	}
 	return sys, nil
 }

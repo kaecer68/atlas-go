@@ -218,7 +218,29 @@ func (s *System) WithCapitalFlowAssessmentProvider(p CapitalFlowAssessmentProvid
 	return s
 }
 
-// SystemOption configures optional subsystems during System construction.
+// CapitalFlowServiceAdapter wraps a *capitalflow.Service to satisfy
+// CapitalFlowAssessmentProvider, bridging the value/pointer return mismatch.
+type CapitalFlowServiceAdapter struct {
+	svc *capitalflow.Service
+}
+
+// NewCapitalFlowServiceAdapter creates an adapter from a capitalflow service.
+func NewCapitalFlowServiceAdapter(svc *capitalflow.Service) *CapitalFlowServiceAdapter {
+	return &CapitalFlowServiceAdapter{svc: svc}
+}
+
+// LatestAssessment delegates to the underlying service and returns a pointer.
+func (a *CapitalFlowServiceAdapter) LatestAssessment(ctx context.Context) (*capitalflow.CapitalFlowAssessment, error) {
+	if a.svc == nil {
+		return nil, fmt.Errorf("capitalflow service not available")
+	}
+	assessment, err := a.svc.LatestAssessment(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &assessment, nil
+}
+
 // Use the With* functions to create options.
 type SystemOption func(*systemOptions)
 
