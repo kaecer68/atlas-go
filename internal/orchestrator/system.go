@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
@@ -136,6 +137,9 @@ type System struct {
 
 	// F04: event-driven prediction for simulation tilt.
 	eventPredictor EventFlowPredictor
+
+	// C4 P1: E07 capital-flow assessment for sector rotation.
+	cfAssessor CapitalFlowAssessmentProvider
 }
 
 // Phase3Controller returns the Phase 3 optimization controller, if attached.
@@ -191,6 +195,26 @@ type EventFlowPredictor interface {
 // false, prediction tilt is skipped.
 func (s *System) WithEventPredictor(p EventFlowPredictor) *System {
 	s.eventPredictor = p
+	return s
+}
+
+// CapitalFlowAssessmentProvider supplies the E07 4-layer capital-flow assessment
+// to the orchestrator's sector rotation path (C4 P1). When nil, the legacy
+// PrimaryFlow fallback is used — no assessment → no institutional+behavioral consensus.
+//
+// NOTE: infrastructure-only in this PR. Production wiring (injecting *capitalflow.Service
+// via WithCapitalFlowAssessmentProvider) is deferred to a follow-up PR because the
+// capitalflow service is constructed in a different goroutine scope (HTTP server) than
+// the simulation loop (RunDailySimulation). See docs/ATLAS_CONSTITUTION_AUDIT.md 附錄D.
+type CapitalFlowAssessmentProvider interface {
+	LatestAssessment(ctx context.Context) (*capitalflow.CapitalFlowAssessment, error)
+}
+
+// WithCapitalFlowAssessmentProvider injects a capital-flow assessment provider.
+// When non-nil and the assessment is eligible for automation, the sector rotation
+// plan uses institutional+behavioral consensus to derive CapitalFlowAction (C4 P1).
+func (s *System) WithCapitalFlowAssessmentProvider(p CapitalFlowAssessmentProvider) *System {
+	s.cfAssessor = p
 	return s
 }
 

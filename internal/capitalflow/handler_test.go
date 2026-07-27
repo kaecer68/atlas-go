@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
@@ -711,4 +712,47 @@ func newHandlerWithSelectiveStore(t *testing.T, populated []ForceName) *Handler 
 		}
 	}
 	return NewHandlerWithStore(&mockProvider{snap: testSnapshot()}, store, nil)
+}
+
+func TestComputeQualityScoreWithPeriod(t *testing.T) {
+	forces := []ForceScore{
+		{Force: ForceForeign, ZScore: 2.0},
+		{Force: ForceInstitutional, ZScore: 1.0},
+		{Force: ForceRetail, ZScore: 0.5},
+	}
+
+	t.Run("nil period uses default equal weights", func(t *testing.T) {
+		got := computeQualityScoreWithPeriod(forces, nil)
+		want := 2.0 + 1.0 - 0.5 // = 2.5
+		if got != want {
+			t.Errorf("nil period: got %.4f, want %.4f", got, want)
+		}
+	})
+
+	t.Run("bull weights foreign higher", func(t *testing.T) {
+		bull := domain.PeriodBull
+		got := computeQualityScoreWithPeriod(forces, &bull)
+		want := 1.3*2.0 + 1.0*1.0 - 1.0*0.5 // = 2.6 + 1.0 - 0.5 = 3.1
+		if got != want {
+			t.Errorf("bull: got %.4f, want %.4f", got, want)
+		}
+	})
+
+	t.Run("downturn weights institutional higher", func(t *testing.T) {
+		downturn := domain.PeriodDownturn
+		got := computeQualityScoreWithPeriod(forces, &downturn)
+		want := 0.7*2.0 + 1.3*1.0 - 1.0*0.5 // = 1.4 + 1.3 - 0.5 = 2.2
+		if got != want {
+			t.Errorf("downturn: got %.4f, want %.4f", got, want)
+		}
+	})
+
+	t.Run("black swan amplifies retail reverse", func(t *testing.T) {
+		bs := domain.PeriodBlackSwan
+		got := computeQualityScoreWithPeriod(forces, &bs)
+		want := 1.0*2.0 + 1.0*1.0 - 1.5*0.5 // = 2.0 + 1.0 - 0.75 = 2.25
+		if got != want {
+			t.Errorf("black swan: got %.4f, want %.4f", got, want)
+		}
+	})
 }

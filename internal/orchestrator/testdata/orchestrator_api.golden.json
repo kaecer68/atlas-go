@@ -207,6 +207,8 @@
         "ControlLayer ControlLayerStrategy",
         "ForecastBridge ForecastBridgeStrategy",
         "DirectionalTradeLayer DirectionalTradeWeightProvider",
+        "Period *domain.MarketPeriod",
+        "PeriodDetector *portfolio.PeriodDetector",
         "MacroDataSnapshot *marketdata.MacroDataSnapshot"
       ],
       "kind": "struct",

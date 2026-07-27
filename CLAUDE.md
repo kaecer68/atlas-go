@@ -8,6 +8,19 @@
 
 見 [`AGENTS.md`](AGENTS.md)（跨工具權威來源）。本檔案為 Claude Code 專屬設定入口。
 
+## Session 開工自檢
+
+開始任何程式碼變更前，MUST 執行：
+
+```bash
+git branch --show-current
+```
+
+- 若結果為 `main`：**立刻 `git checkout -b feat/<feature-name>` 開新分支**，絕不在 main 上直接改 code。
+- 若已在 feature branch 上：可繼續工作。
+
+**違反此規則 = 繞過 PR review / CI 追蹤，不可接受。**
+
 ## 快速路由
 
 | 需求 | 參考位置 |

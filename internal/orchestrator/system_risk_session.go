@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -216,10 +217,16 @@ func (s *System) updateCapitalMetrics(ctx context.Context, result domain.Simulat
 			rotator := portfolio.NewSectorRotator()
 			sessionDate := domain.SessionDateFromID(s.Sim().session.ID)
 			currentAllocs := s.currentSectorAllocations(result.Positions, s.Sim().lastQuotes, sessionDate)
-			// Phase 3 (TODO): pass a real CapitalFlowAssessment from the session's
-			// capital-flow service instead of nil to enable institutional+behavioral
-			// consensus → CapitalFlowAction derivation (P0-3).
-			plan := rotator.GeneratePlan(macroAssessment, currentAllocs, nil)
+			// C4 P1: fetch E07 4-layer capital-flow assessment.
+			// When cfAssessor is wired and eligible, institutional+behavioral
+			// consensus drives CapitalFlowAction derivation.
+			var cfAssessment *capitalflow.CapitalFlowAssessment
+			if s.cfAssessor != nil {
+				if a, err := s.cfAssessor.LatestAssessment(ctx); err == nil {
+					cfAssessment = a
+				}
+			}
+			plan := rotator.GeneratePlan(macroAssessment, currentAllocs, cfAssessment)
 
 			// F04: apply event-driven prediction tilt when enabled and predictor is wired.
 			if s.eventPredictor != nil {
