@@ -133,10 +133,9 @@
 
 ## 下一步建議
 
-1. **完成剩餘 P1 項目（E3/E4/E5）** — 參見 `docs/manifest-constitution-implementation.md` Phase 4（T23–T25）
-2. **啟動 DeepSeek 方法論覆核（F1–F5）** — 參見 `docs/manifest-constitution-implementation.md` Phase 5（T26–T27）
-3. **建立 MCP 工具對齊與憲章強制執行機制（M1–M6 / X1–X3）** — 參見 `docs/manifest-constitution-gap-audit.md` §憲章審計外新增項目
-4. **所有新實作必須同步更新三本文件**：`docs/ATLAS_METHODOLOGY.md`、`docs/ATLAS_CONSTITUTION_AUDIT.md`、`docs/manifest-constitution-gap-audit.md`
+1. **優先執行 P0-1（七時期判斷）** — 這是所有其他工作的前提
+2. **P0-2~P0-8 可以部分平行** — 但 P0-1 的 `DetectDetailed()` interface 需要先定義，其他模組才能消費
+3. **建議建立 `docs/ATLAS_METHODOLOGY.md#附錄 D：審計追蹤表`** — 將本報告的 18 個項目納入憲章文件，每次修復後更新狀態
 
 ---
 
@@ -146,76 +145,38 @@
 ---
 ## 附錄 D：審計追蹤表（2026-07-27 更新）
 
-> **實施總表**: `docs/manifest-constitution-implementation.md`
-> **差距審計**: `docs/manifest-constitution-gap-audit.md`
-
 | # | 項目 | 等級 | 狀態 | 修復 PR/Commit |
 |---|------|------|------|----------------|
-| 1 | A1: 七時期判斷（DetectPeriod） | P0 | ✅ 完成 | #1372 |
-| 2 | A2: 七時期→三態向下相容 | P0 | ✅ 完成 | #1372 |
-| 3 | A3: 三套 regime 系統統一 | P0 | ✅ 完成 | #1372 (PeriodToRegime 映射) |
-| 4 | B1: 管線重排（MacroFlow 前置） | P0 | ✅ 完成 | #1372 |
-| 5 | B2: 每層輸出強制影響下一層 | P0 | ✅ 完成 | #1381 |
-| 6 | B4: VIX key 修復 + macro evidence 注入 | P0 | ✅ 完成 | #1372 |
-| 7 | C1: 七大勢力數據源（壽險/公司派/散戶） | P0 | ✅ 完成 | #1372 |
-| 8 | C2: 公股行庫自動化通道 | P0 | ✅ 完成 | #1372 |
-| 9 | C3: orchestrator PrimaryFlow 改用 capitalflow | P0 | ✅ 完成 | #1372 |
-| 10 | D1: detector 時期敏感度 | P0 | ✅ 完成 | #1372 |
-| 11 | D2: YAML consumer | P0 | ✅ 完成 | #1372 |
-| 12 | D3: 推薦引擎按時期過濾 | P0 | ✅ 完成 | #1372 |
-| 13 | D5: RegimeAllocator 六策略×七時期 | P0 | ✅ 完成 | #1372 |
-| 14 | A4: macroflow RiskLevel 自動推導 | P1 | ✅ 完成 | #1372 |
-| 15 | B3: MacroDataSnapshot 補漏指標 | P1 | ✅ 完成 | #1372 |
-| 16 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ✅ 完成 | #1378 |
-| 17 | E3: API 輸出時期結構化欄位 | P1 | ⚠️ partial | struct exists, API builder not wired → T04/T05 |
-| 18 | E4: 前端七時期 UI 卡片 | P1 | ⬜ 未啟動 | — |
-| 19 | E5: 策略類別三分類 | P1 | ⬜ 未啟動 | — |
-| 20 | C5: QualityScore 公式 + cfScore 動態權重 | P2 | ✅ 完成 | #1372 |
-| 21 | B5: Causal chain tracing | 已對齊 | ✅ 完成 | #1372 |
-| 22 | C6: 散戶反向指標統一口徑 | 已對齊 | ✅ 完成 | #1372 |
+| 1 | A1+A2: 七時期判斷 + 向下相容 | P0 | ✅ 完成 | #1372 |
+| 2 | A3: 三套 regime 系統統一 | P0 | ✅ 完成 | #1372 (PeriodToRegime 映射) |
+| 3 | A4: macroflow RiskLevel 自動推導 | P1 | ✅ 完成 | `1c60cbaf` (regimeToRiskLevel 支援 7 時期) |
+| 4 | A5: macroflow 權重數值 | — | ✅ 已對齊 | — |
+| 5 | B1+B4: 管線重排 + VIX key 修復 | P0 | ✅ 完成 | #1372 |
+| 6 | B2: 每層輸出強制影響下一層 | P0 | ⏳ 未啟動 | 架構級變更，需獨立設計 |
+| 7 | B3: MacroDataSnapshot 補漏指標 | P1 | ✅ 完成 | #1372 |
+| 8 | B5: Causal chain layer tracing | P1 | ✅ 完成 | #1372 |
+| 9 | C1+C2: 壽險/公司派/散戶數據缺口 | P0 | ✅ 完成 | #1372 |
+| 10 | C3: capitalflow 進入主決策鏈 | P0 | ✅ 完成 | #1372 |
+| 11 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ⚡ infrastructure-only | `11347d5d` — 介面+欄位就緒，生產環境接線 pending（Assessor 與 capitalflow.Service 在不同 goroutine scope） |
+| 12 | C5: QualityScore 公式 + cfScore 權重 | P2 | ✅ 完成 | `68552dbc` — computeQualityScoreWithPeriod 動態權重 |
+| 13 | C6: 散戶反向指標統一口徑 | P1 | ✅ 完成 | `0ee9e612` |
+| 14 | D1: detector 時期敏感度 | P0 | ✅ 完成 | #1372 |
+| 15 | D2+D3: YAML consumer + 策略過濾 | P0 | ✅ 完成 | #1372 |
+| 16 | D4: Narrative 24 themes 全進 regime | P1 | ✅ 完成 | #1372 |
+| 17 | D5: RegimeAllocator 六策略×七時期 | P0 | ✅ 完成 | #1372 |
+| 18 | E1+E2: YAML loader + 參數可配置 | P0 | ✅ 完成 | #1372 |
+| 19 | E3: API 輸出時期結構化欄位 | P1 | ✅ 完成 | #1372 (DailySummaryReport) |
+| 20 | E4: 前端七時期 UI 卡片 | P1 | ⏳ 未啟動 | — |
+| 21 | E5: 策略類別三分類 | P1 | ⏳ 未啟動 | — |
 
 ### 進度統計
 
-| 等級 | 總計 | ✅ 完成 | ⚠️ 部分 | ⬜ 未完成 |
-|------|------|--------|--------|----------|
-| P0 | 13 | 13 | 0 | 0 |
-| P1 | 6 | 3 | 1 | 2 |
-| P2 | 1 | 1 | 0 | 0 |
-| 已對齊 | 2 | 2 | 0 | 0 |
-| **合計** | **22** | **19** | **1** | **2** |
+| 等級 | 總計 | ✅ 完成 | ⏳ 未完成 |
+|------|------|--------|----------|
+| P0 | 13 | 12 | 1 (B2) |
+| P1 | 6 | 5 | 1 (E4, E5) |
+| P2 | 1 | 1 | 0 |
+| 已對齊 | 2 | 2 | 0 |
+| **合計** | **22** | **18** | **4** |
 
-> 最後更新：2026-07-27，commit `47ebdecf`
-
-### 憲章審計外新增項目
-
-下列項目不在原始憲章審計範圍內，但為後續方法論落地所需：
-
-#### DeepSeek 方法論覆核（F1–F5）
-
-| # | 項目 | 狀態 | 備註 |
-|---|------|------|------|
-| F1 | 外資雙重動機模型（結構性 vs 投機性分流） | ⬜ | 參見 `docs/ATLAS_METHODOLOGY.md` 第三層 |
-| F2 | 自營商大小分流（大型可納宏觀，小型用 AI 分點） | ⬜ | 第四層與第五層行為差異 |
-| F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | 第五層資金性質區分 |
-| F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | 數據源 fallback |
-| F5 | 選股層策略庫設計（Phase 4） | ⬜ | 憲章目前僅組合層 |
-
-#### MCP 工具對齊（M1–M6）
-
-| # | 項目 | 狀態 | 備註 |
-|---|------|------|------|
-| M1 | 時期判斷 MCP 工具公開 | ⬜ | `PeriodDetector.DetectPeriod()` |
-| M2 | 資金流品質分數 MCP 工具公開 | ⬜ | `capitalflow.QualityScore` |
-| M3 | 因果鏈 tracing MCP 工具公開 | ⬜ | `narrative.ChainTrace` |
-| M4 | 策略適用時期 MCP 工具公開 | ⬜ | `GetApplicableStrategies()` |
-| M5 | 壓力指數元件 MCP 工具公開 | ⬜ | `TaiwanStressCalculator` |
-| M6 | 審計狀態 MCP 工具公開 | ⬜ | 即時追蹤表狀態 |
-
-#### 憲章強制執行機制（X1–X3）
-
-| # | 項目 | 狀態 | 備註 |
-|---|------|------|------|
-| X1 | PR 合併前憲章對齊檢查（CI gate） | ⬜ | 阻擋未更新追蹤表的 PR |
-| X2 | 方法論變更強制更新追蹤表 | ⬜ | PR template 檢查 |
-| X3 | 憲章漂移自動警報（nightly scan） | ⬜ | 掃描 code 與憲章差異 |
-
+> 最後更新：2026-07-27，commit `1c60cbaf`

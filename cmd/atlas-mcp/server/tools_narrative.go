@@ -57,17 +57,7 @@ type narrativeBaseOutput struct {
 func (s *server) handleNarrativeGetEvents(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
 	var out narrativeBaseOutput
 	if err := s.withAudit(ctx, "narrative_get_events", nil, func() error {
-		if err := s.cli.Get(ctx, "/api/narrative/events", nil, &out.Result); err != nil {
-			return err
-		}
-		if out.Result != nil && *out.Result != nil {
-			if period, nameZH := s.fetchCurrentPeriod(ctx); period != "" {
-				(*out.Result)["current_period"] = period
-				(*out.Result)["current_period_name_zh"] = nameZH
-				(*out.Result)["period_weight_note"] = "detector confidence multiplied by PeriodWeight(period); see ATLAS_METHODOLOGY.md appendix B"
-			}
-		}
-		return nil
+		return s.cli.Get(ctx, "/api/narrative/events", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
 	}

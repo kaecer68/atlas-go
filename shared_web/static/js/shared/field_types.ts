@@ -3064,7 +3064,6 @@ export interface RegimeHistoryData {
   sessions: RegimeSessionEntry[];
   transitions: RegimeTransition[];
   current_regime: string;
-  current_period?: string;
 }
 
 export interface RegimePerformance {
@@ -3079,8 +3078,6 @@ export interface RegimeSessionEntry {
   session_id: string;
   date: string;
   regime: string;
-  period?: string;
-  period_name_zh?: string;
   recorded_at: string;
   source?: string;
 }

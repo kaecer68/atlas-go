@@ -25,7 +25,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
-	"github.com/kaecer68/atlas-go/internal/methodology"
 	apibacktest "github.com/kaecer68/atlas-go/internal/monitoring/api/backtest"
 	apicircuitbreaker "github.com/kaecer68/atlas-go/internal/monitoring/api/circuitbreaker"
 	apicontrol "github.com/kaecer68/atlas-go/internal/monitoring/api/control"
@@ -999,21 +998,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	decisionHandlers.RegisterRoutes(mux)
 
 	reportSvc := service.NewReportService(a.workDir, a.ledgerDir, outcomeStore)
-	if a.macroProvider != nil {
-		detector := portfolio.NewPeriodDetectorWithDefaults()
-		advisor := methodology.NewAdvisor(nil)
-		reportSvc.SetPeriodProvider(func() *service.PeriodInfo {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			snap, err := a.macroProvider.FetchSnapshot(ctx)
-			if err != nil {
-				return nil
-			}
-			ind := SnapshotToPeriodIndicators(snap)
-			period := detector.DetectPeriod(ind)
-			return &service.PeriodInfo{MarketPeriod: string(period), CashLevel: advisor.CashReserve(period)}
-		})
-	}
 	reportHandlers := apipipeline.NewReportHandlers(reportSvc)
 	reportHandlers.RegisterRoutes(mux)
 
@@ -1634,23 +1618,4 @@ func configHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(cfg)
 	})
-}
-
-// SnapshotToPeriodIndicators maps a raw macro snapshot to the indicator set
-// consumed by the seven-period detector.
-func SnapshotToPeriodIndicators(snap marketdata.MacroDataSnapshot) portfolio.PeriodIndicators {
-	return portfolio.PeriodIndicators{
-		VIX:                    snap.VIX.Value,
-		DXY:                    snap.DXY.Value,
-		US10Y:                  snap.US10Y.Value,
-		SOXPrice:               snap.SOXIndex.Value,
-		TSMADRPrice:            snap.TSMADR.Value,
-		TAIEXPrice:             snap.TAIEX.Value,
-		ForeignSingleDayNet:    snap.ForeignInvestorNet.Value,
-		ForeignFuturesOI:       snap.ForeignFuturesOINet.Value,
-		MarginBalance:          snap.RetailMarginBalance.Value,
-		MarginMaintenanceRatio: snap.MarginMaintenanceRatio.Value,
-		MarketVolume:           snap.MarketVolume.Value,
-		DayTradeRatio:          snap.DayTradeRatio.Value,
-	}
 }

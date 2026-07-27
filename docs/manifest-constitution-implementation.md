@@ -1,171 +1,180 @@
-# 憲章對齊實施總表
+# 憲章對齊 — 實作任務清單（Implementation Manifest）
 
 > **版本**: v1.0
-> **產出日期**: 2026-07-27
-> **對應差距審計**: `docs/manifest-constitution-gap-audit.md` v1.2
-> **對應方法論**: `docs/ATLAS_METHODOLOGY.md`
-> **對應審計報告**: `docs/ATLAS_CONSTITUTION_AUDIT.md`
+> **建立日期**: 2026-07-27
+> **用途**: 依賴順序編排的實作任務；最後一項強制交叉驗收問題盤查清單
+> **對應問題**: `docs/manifest-constitution-gap-audit.md`
+> **總計**: 6 個 phase，22 個任務
 
 ---
 
-## 實施原則
+## Phase 0：文件體系修復（先決條件）
 
-1. **Phase 為邊界，Task 為可交付單元**：每個 Task 必須對應單一 PR 或單一 commit。
-2. **下游依賴上游**：時期判斷（Phase 0）是所有後續階段的前置；Phase 5 的 DeepSeek 覆核需等所有實作穩定後再啟動。
-3. **T27 交叉驗證**：所有 26 個實作任務完成後，由 T27 進行回測與憲章一致性驗證。
-4. **文件同步**：任何 Task 完成時，必須同步更新 `docs/manifest-constitution-gap-audit.md` 與 `docs/ATLAS_METHODOLOGY.md` 附錄 D。
+> 先讓文件說實話，後續工作才有可信基礎。
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T01 | 更新 `ATLAS_METHODOLOGY.md` 附錄 D — 將 #1372/#1378/#1381 已完成項目標 ✅ | C1 | `docs/ATLAS_METHODOLOGY.md` | 所有已完成的 P0/P1/P2 項目標 ✅，未完成項保持 ⬜ | 0.5h |
+| T02 | 更新 `ATLAS_METHODOLOGY.md` §現狀報告表格 — 加入 PeriodDetector / MethodologyAdvisor / MarketPeriod | C3 | `docs/ATLAS_METHODOLOGY.md:14-27` | 表格反映七時期架構，非僅舊三態 | 0.5h |
+| T03 | 更新 `ATLAS_CONSTITUTION_AUDIT.md` 附錄 D — 反映 #1378(B2/C4) / #1381 修復狀態 | C2 | `docs/ATLAS_CONSTITUTION_AUDIT.md` | B2→✅, C4→✅, commit ref 更新至 HEAD | 0.3h |
 
 ---
 
-## 依賴圖
+## Phase 1：API 時期輸出（MCP + 前端的前置依賴）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T04 | 在 daily_summary builder 中調用 PeriodDetector 並填充 `MarketPeriod` 欄位 | A1 | `internal/orchestrator/` (daily_summary builder) | `GET /api/reports/latest` 回應含 `market_period` 欄位 | 1h |
+| T05 | 在 `report_api.go` 加入 period→allowed_strategies + cash_reserve 輸出 | A1 | `internal/apigateway/report_api.go` | API 輸出含 `allowed_strategies`(依時期過濾) + `cash_reserve`(依時期建議) | 1h |
+| T06 | `regime_get_history` API 擴展為輸出七時期歷史（非僅三態） | B3 | `internal/apigateway/` (regime history handler) | `GET /api/regime/history` 回應含 `periods[]` 陣列，每項有 period_id + detected_at + indicators | 2h |
+
+---
+
+## Phase 2：MCP 工具對齊（6 項）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T07 | `daily_report` MCP 工具加入 `market_period` / `allowed_strategies` / `cash_reserve` 欄位 | B1 | `cmd/atlas-mcp/server/tools_report.go` | MCP `daily_report` 回應含憲章時期資訊 | 1h |
+| T08 | `macro_get_snapshot_latest` MCP 工具加入當前時期 ID + 名稱 | B2 | `cmd/atlas-mcp/server/tools_macro.go` | 回應含 `period` 物件 `{id, name_zh}` | 0.5h |
+| T09 | `get_recommendations` MCP 工具加入 `MethodologyAdvisor.FilterStrategies()` 時期過濾 | B4 | `cmd/atlas-mcp/server/tools_recommend.go` | RISK_OFF 時期不再推薦 growth/momentum | 1h |
+| T10 | `regime_get_history` MCP 工具輸出七時期歷史（與 T06 共用後端） | B3 | `cmd/atlas-mcp/server/tools_regime.go` | MCP 回應含七時期歷史 | 1h |
+| T11 | `narrative_get_events` MCP 工具加入 `period_weight` 欄位 | B5 | `cmd/atlas-mcp/server/tools_narrative.go` | 每個 detector 輸出含當時期敏感度權重 | 1h |
+| T12 | `explain_market_move` MCP 工具加入憲章因果鏈標註（layer-0...layer-7） | B6 | `cmd/atlas-mcp/server/tools_market.go` | 回應含 `causal_chain` 陣列，每層有 layer_id + conclusion | 1.5h |
+
+---
+
+## Phase 3：前端對齊（2 項）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T13 | 實作「當前市場時期卡片」UI 元件 — 七時期名稱 + 觸發指標 + 現金建議 + 允許策略 | A2 | `frontend/src/` | 前端可見七時期卡片，含憲章定義的所有資訊 | 3h |
+| T14 | 實作策略類別三分類 — defensive/aggressive/tactical 替換 free/registered/premium gating | A3 | `frontend/src/` | `home-tier-sections.js` 按憲章三分類做內容過濾 | 2h |
+
+---
+
+## Phase 4：憲章強制執行機制（4 項）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T15 | CI: 加入 `make ci-constitution` target — 驗證 `methodology_rules.yaml` ↔ `MethodologyAdvisor` 策略矩陣一致 | D1, D2 | `Makefile` + `scripts/check-constitution.sh` | `make ci-full` 失敗若 YAML 與程式碼策略映射不一致 | 2h |
+| T16 | CI: 加入策略路徑稽核 — 掃描所有 `buildPremiumStrategy`/`GetRecommendations` 呼叫點，確保經過 `MethodologyAdvisor.FilterStrategies` | D1, D3 | `scripts/check-strategy-path.sh` | 任何繞過 MethodologyAdvisor 的推薦路徑 → CI 失敗 | 1.5h |
+| T17 | pre-commit: 檢查新增 domain struct 欄位是否在憲章文件中有對應描述 | D4 | `scripts/check-constitution-drift.sh` + `.githooks/` | 新欄位無憲章對應 → commit 被阻擋並提示 | 1.5h |
+| T18 | CI: `make ci-constitution` 整合進 `make ci-full` | D1 | `Makefile` | `make ci-full` 包含憲章驗證 | 0.5h |
+
+---
+
+## Phase 5：隱性風險 + DeepSeek（8 項）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| T19 | 掃描全部 production code path，確保 `PeriodToRegime()` 在所有需要 regime 判斷的入口被調用 | E1 | `internal/` | grep 確認無直接 hardcode 三態而繞過 PeriodDetector 的路徑 | 1h |
+| T20 | 統一套利計算口徑：`portfolio.factor_engine_institutional` 改用 `capitalflow.ForceRetail` | E3 | `internal/portfolio/` | 僅一套散戶反向指標來源 | 1.5h |
+| T21 | 前端策略類別命名改為憲章三分類 | E2 | `frontend/src/` | 無遺留 free/registered/premium 命名（或建立 mapping） | 1h |
+| T22 | 外資雙重動機模型：`MacroDataSnapshot` 加入 structural_vs_speculative 標記欄位 | F1 | `internal/domain/types.go` + `internal/marketdata/` | 外資流向可區分結構性 vs 投機性 | 3h |
+| T23 | 自營商大小分流：大型自營商行為納入 macro evidence | F2 | `internal/portfolio/` + `internal/marketdata/` | 大型自營商操作可作為 macro 信號來源 | 2h |
+| T24 | 投信主動 vs 被動分流：ETF 規模變化與主動基金操作分開追蹤 | F3 | `internal/marketdata/` | 投信維度可區分被動（ETF）與主動（基金經理人判斷） | 2h |
+| T25 | 公股分點追蹤：自建證交所分點加總作為 BK-13 替代方案 | F4 | `internal/marketdata/` | 公股行庫操作有自動化數據來源 | 5h |
+| T26 | 選股層策略庫設計（Phase 4 規劃文件） | F5 | `docs/` | 選股層策略庫設計文件，含憲章對齊 | 2h |
+
+---
+
+## Phase 6：交叉驗收（強制）
+
+| # | 任務 | 對應問題 | 對象 | 驗收標準 | 估計 |
+|---|------|---------|------|---------|------|
+| **T27** | **交叉驗收：逐項檢查 `manifest-constitution-gap-audit.md` 全部 25 項，確認每項有對應實作且通過驗收標準** | 全部 | `docs/manifest-constitution-gap-audit.md` | 25 項全部打 ✅；若有未覆蓋項 → 退回對應 Phase 補做 | 2h |
+
+> **T27 為強制最後一步** — 任何未通過的項目必須回溯修復，不可跳過。
+
+---
+
+## 依賴關係圖
 
 ```mermaid
-flowchart TD
-    P0[A. 時期判斷系統<br/>T01-T04] --> P1[B. 因果傳導鏈<br/>T05-T09]
-    P1 --> P2[C. 資金流向與勢力分析<br/>T10-T15]
-    P2 --> P3[D. 敘事引擎與策略映射<br/>T16-T20]
-    P3 --> P4[E. 前端與配置<br/>T21-T25]
-    P4 --> P5[F. 方法論新增覆核<br/>T26-T27]
-    P0 --> P3
-    P2 --> P4
+graph TD
+    subgraph Phase0[Phase 0: 文件修復]
+        T01[T01: 更新 METHODOLOGY 附錄 D]
+        T02[T02: 更新現狀報告]
+        T03[T03: 更新 AUDIT 附錄 D]
+    end
+
+    subgraph Phase1[Phase 1: API 時期輸出]
+        T04[T04: daily_summary 填充 MarketPeriod]
+        T05[T05: report_api 時期策略輸出]
+        T06[T06: regime history 七時期]
+    end
+
+    subgraph Phase2[Phase 2: MCP 對齊]
+        T07[T07: daily_report MCP]
+        T08[T08: macro snapshot MCP]
+        T09[T09: recommendations MCP]
+        T10[T10: regime history MCP]
+        T11[T11: narrative events MCP]
+        T12[T12: explain market MCP]
+    end
+
+    subgraph Phase3[Phase 3: 前端]
+        T13[T13: 七時期卡片]
+        T14[T14: 策略三分類]
+    end
+
+    subgraph Phase4[Phase 4: 強制執行]
+        T15[T15: CI constitution check]
+        T16[T16: CI strategy path audit]
+        T17[T17: pre-commit drift check]
+        T18[T18: CI integration]
+    end
+
+    subgraph Phase5[Phase 5: 風險+DeepSeek]
+        T19[T19: regime 路徑掃描]
+        T20[T20: 散戶口徑統一]
+        T21[T21: 前端命名對齊]
+        T22[T22: 外資雙重動機]
+        T23[T23: 自營商分流]
+        T24[T24: 投信分流]
+        T25[T25: 公股分點]
+        T26[T26: 選股策略庫]
+    end
+
+    subgraph Phase6[Phase 6: 驗收]
+        T27[T27: 交叉驗收 25 項]
+    end
+
+    Phase0 --> Phase1
+    Phase1 --> Phase2
+    Phase1 --> Phase3
+    Phase2 --> Phase6
+    Phase3 --> Phase6
+    Phase0 --> Phase4
+    Phase4 --> Phase6
+    Phase0 --> Phase5
+    Phase5 --> Phase6
+
+    T04 --> T07
+    T04 --> T08
+    T05 --> T09
+    T06 --> T10
 ```
 
 ---
 
-## Phase 0：A. 時期判斷系統（T01–T04）
+## 估計總工時
 
-**目標**：建立七時期判斷與向下相容映射，作為全憲章實作的基礎。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T01 | 七時期判斷器 | 實作 `PeriodDetector.DetectPeriod()`，輸出 `MarketPeriod`（低迷/轉折開高/上升/高原/盤整/轉折下壓/黑天鵝） | ✅ | #1372 |
-| T02 | 時期→三態映射 | 實作 `PeriodToRegime(MarketPeriod) → Regime`，確保既有三態 consumer 不受影響 | ✅ | #1372 |
-| T03 | 三套 regime 統一 | 對齊 `domain.Regime`、`realtime.RegimeType`、`sim.RegimeType` 的命名空間與映射 | ✅ | #1372 |
-| T04 | RiskLevel 自動推導 | 依據七時期 + 壓力指標自動推導 `macroflow.RiskLevel` | ✅ | #1372 |
-
-**驗收**：`/api/period/current` 或等價 API 可回傳時期名稱、對應三態、RiskLevel。
-
----
-
-## Phase 1：B. 因果傳導鏈（T05–T09）
-
-**目標**：調整管線順序並建立層級依賴，使憲章第〇至七層因果鏈可追蹤。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T05 | 管線順序重排 | 將 `MacroFlow` 移至推薦與權重應用之前；順序符合「由上而下、由外而內」 | ✅ | #1372 |
-| T06 | 層級依賴強制 | 每層輸出 struct 成為下一層輸入，禁止反向推導；新增 layer-0..7 parent reference | ✅ | #1381 |
-| T07 | MacroDataSnapshot 補漏 | 補齊 Fed 預期、半導體設備進口、集中市場成交量、當沖佔比、壽險/銀行、公司派/內部人、散戶買賣超/融資維持率/Google Trends、事件鏈接 | ✅ | #1372 |
-| T08 | macro data 注入 regime | 修復 VIX key mismatch（`^VIX` vs `$VIX`），將 US10Y/DXY/SOX/TSM ADR/NVDA 等快照欄位注入 regime inference | ✅ | #1372 |
-| T09 | Causal chain tracing | 每個推薦可追溯到 layer-0..7 ID、每層輸入快照、輸出結論、parent reference | ✅ | #1372 |
-
-**驗收**：`ExecuteWithContext()` 的 trace 輸出包含 layer 0..7 的輸入/輸出/結論。
+| Phase | 項目數 | 估計 |
+|-------|--------|------|
+| Phase 0: 文件修復 | 3 | 1.3h |
+| Phase 1: API | 3 | 4h |
+| Phase 2: MCP | 6 | 6h |
+| Phase 3: 前端 | 2 | 5h |
+| Phase 4: 強制執行 | 4 | 5.5h |
+| Phase 5: 風險+DeepSeek | 8 | 17.5h |
+| Phase 6: 驗收 | 1 | 2h |
+| **合計** | **27** | **~41h** |
 
 ---
 
-## Phase 2：C. 資金流向與勢力分析（T10–T15）
-
-**目標**：補齊七大勢力數據、修復 capitalflow 權威斷點、統一散戶反向指標。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T10 | 七大勢力數據源 | 新增壽險/銀行、公司派/內部人 provider/adapter/dimension；補齊散戶融資維持率/當沖佔比/券商分行/Google Trends | ✅ | #1372 |
-| T11 | 公股行庫自動化 | 建立自動化分點加總通道，取代手動 JSON dump | ✅ | #1372 |
-| T12 | capitalflow 進主決策鏈 | orchestrator 改讀 `capitalflow.CapitalFlowAssessment.PrimaryFlow`，消除同名異物 | ✅ | #1372 |
-| T13 | 4-layer Assessment 消費者 | 將 `DominantActor`/`DominantSignal`/`Resonance` 等欄位接入 `eventdriven.Predictor` 與權重調整 | ✅ | #1378 |
-| T14 | QualityScore 動態權重 | `cfScore` 從常數權重改為依據外資權威動態調整 | ✅ | #1372 |
-| T15 | 散戶反向指標統一 | 將 `portfolio.factor_engine_institutional` 的散戶計算統一為 `capitalflow.ForceRetail` 口徑 | ✅ | #1372 |
-
-**驗收**：`CapitalFlowAssessment` 被 orchestrator 與 eventdriven 實際消費，且 QualityScore 與憲章公式一致。
-
----
-
-## Phase 3：D. 敘事引擎與策略映射（T16–T20）
-
-**目標**：讓 detector 隨時期調整敏感度，並讓策略選擇自動對齊憲章策略矩陣。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T16 | detector 時期敏感度 | 為 5 個關鍵 detector（US_rates_up、JPY_carry_unwind、tariff_shock、AI_capex_surge、earnings_blackout）實作 7 時期差異化權重 | ✅ | #1372 |
-| T17 | 時期→策略自動選擇 | 實作 `MethodologyAdvisor` 消費 `configs/methodology_rules.yaml` | ✅ | #1372 |
-| T18 | 推薦引擎按時期過濾 | `buildPremiumStrategy()` 與 `TierRegistered` 改呼叫 `GetApplicableStrategies(regime)` | ✅ | #1372 |
-| T19 | Narrative 全 themes 進 regime | 將 24 個 detector themes 全部納入 `NarrativeEvidenceSource`，權重隨時期調整 | ✅ | #1372 |
-| T20 | 六策略×七時期配置 | `RegimeAllocator` 擴展為 all_weather/value/growth/momentum/event_arbitrage/cash_only 六策略 | ✅ | #1372 |
-
-**驗收**：給定任意時期，系統可輸出適用策略清單與現金部位建議，且與憲章第五節矩陣一致。
-
----
-
-## Phase 4：E. 前端與配置（T21–T25）
-
-**目標**：將時期資訊暴露到 API 與前端，並讓 tier gating 與策略類別一致。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T21 | YAML config loader | 擴展 `internal/config/parameters_load.go` 支援 YAML parser/loader | ✅ | #1372 |
-| T22 | 七時期閾值參數化 | 將外資買賣超金額、連續天數、融資、當沖、SOX、TSM ADR、期貨未平倉等閾值納入 `ParametersConfig` | ✅ | #1372 |
-| T23 | API 時期結構化欄位 | `/api/dashboard/daily-summary` 與 `/api/reports/latest` 輸出 period id/name、觸發指標、cash reserve、allowed strategies | ⚠️ | struct exists，API builder 未接線 |
-| T24 | 前端七時期 UI 卡片 | 新增七時期專用元件、轉換矩陣、指標明細、策略映射 | ⬜ | — |
-| T25 | 策略類別三分類 | `home-tier-sections.js` 按 defensive/aggressive/tactical 分類，並依 YAML primary/secondary 過濾 | ⬜ | — |
-
-**驗收**：前端用戶可看到當前時期卡片、適用策略與現金部位建議；未登入 tier 僅顯示 defensive 策略。
-
----
-
-## Phase 5：F. 方法論新增覆核（T26–T27）
-
-**目標**：DeepSeek 方法論覆核與選股層策略庫設計；T27 執行全階段交叉驗證。
-
-| Task | 標題 | 內容 | 狀態 | PR / Commit |
-|------|------|------|------|-------------|
-| T26 | DeepSeek 方法論覆核 | 覆核外資雙重動機、自營商大小分流、投信主被動分流、公股分點追蹤，產出設計文件 | ⬜ | — |
-| T27 | 選股層策略庫 + 交叉驗證 | 設計 Phase 4 選股層策略庫；並對 T01–T26 進行歷史回測與憲章一致性驗證 | ⬜ | — |
-
-**驗收**：
-- T26：完成 F1–F4 設計文件，並決定是否納入下一輪實作。
-- T27：
-  1. 選定一段歷史 replay 數據（建議 2023-01 至 2026-06）。
-  2. 比對 `PeriodDetector` 分類結果與憲章時期定義的吻合度。
-  3. 驗證 `GetApplicableStrategies()` 在每個時期推薦的策略與憲章策略矩陣一致。
-  4. 檢查 `CapitalFlowAssessment` 在關鍵轉折點是否正確識別聰明錢方向。
-  5. 輸出交叉驗證報告，並決定是否調整閾值或策略權重。
-
----
-
-## 進度統計
-
-| Phase | 總計 | ✅ 完成 | ⚠️ 部分 | ⬜ 待啟動 |
-|-------|------|--------|--------|----------|
-| Phase 0 — 時期判斷 | 4 | 4 | 0 | 0 |
-| Phase 1 — 因果傳導 | 5 | 5 | 0 | 0 |
-| Phase 2 — 資金流向 | 6 | 6 | 0 | 0 |
-| Phase 3 — 敘事策略 | 5 | 5 | 0 | 0 |
-| Phase 4 — 前端配置 | 5 | 2 | 1 | 2 |
-| Phase 5 — 方法論新增 | 2 | 0 | 0 | 2 |
-| **合計** | **27** | **22** | **1** | **4** |
-
----
-
-## 與差距審計對照
-
-| 差距審計 | 實施任務 | 備註 |
-|----------|---------|------|
-| A1–A4 | T01–T04 | Phase 0 |
-| B1–B4 | T05–T09 | B4 含原 B5 causal tracing |
-| C1–C4, C6 | T10–T13, T15 | C5 對應 T14 |
-| D1–D4 | T16–T19 | D5 對應 T20 |
-| E3–E5 | T23–T25 | E1/E2 對應 T21/T22 |
-| F1–F5 | T26–T27 | T26 含 F1–F4，T27 含 F5 + 交叉驗證 |
-
----
-
-## 版本歷史
-
-| 版本 | 日期 | 變更摘要 |
-|------|------|---------|
-| v1.0 | 2026-07-27 | 恢復 Phase 0–2 憲章對齊實施總表，定義 27 個 tasks、6 個 phases、T27 交叉驗證 |
-
----
-
-> **最後更新**: 2026-07-27，commit `47ebdecf`
-> **維護責任**: 任何修改方法論實作的 PR，必須同步更新本文件、`docs/manifest-constitution-gap-audit.md` 與 `docs/ATLAS_METHODOLOGY.md` 附錄 D。
+> **執行規則**:
+> - Phase 內任務可平行（無相依關係）
+> - Phase 間必須依序（Phase N 完成後才能進入 Phase N+1）
+> - T27 為強制最終步驟，未通過則退回修復
+> - 每個任務完成後，在 `manifest-constitution-gap-audit.md` 對應項目打 ✅

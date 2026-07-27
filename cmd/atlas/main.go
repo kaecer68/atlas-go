@@ -47,7 +47,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/marketexplain"
-	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/monitoring/alertscanner"
 	apievents "github.com/kaecer68/atlas-go/internal/monitoring/api/events"
@@ -914,26 +913,6 @@ func run(args []string, deps appDeps) error {
 				return summary.Regime
 			}
 			return domain.RegimeNeutral
-		})
-		dailyRptGen.SetPeriodProvider(func() *dailyreport.PeriodInfo {
-			if macroProvider == nil {
-				return nil
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			snap, err := macroProvider.FetchSnapshot(ctx)
-			if err != nil {
-				return nil
-			}
-			ind := monitoring.SnapshotToPeriodIndicators(snap)
-			period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
-			advisor := methodology.NewAdvisor(nil)
-			return &dailyreport.PeriodInfo{
-				MarketPeriod:      string(period),
-				PeriodNameZH:      period.PeriodNameZH(),
-				CashLevel:         advisor.CashReserve(period),
-				AllowedStrategies: advisor.AllowedStrategies(period),
-			}
 		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)
 		log.Printf("[DailyReport] registered /api/reports/* routes")

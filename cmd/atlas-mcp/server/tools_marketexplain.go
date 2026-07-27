@@ -26,14 +26,7 @@ func (s *server) handleExplainMarketMove(ctx context.Context, _ *mcp.CallToolReq
 		q = url.Values{"format": {in.Format}}
 	}
 	if err := s.withAudit(ctx, "explain_market_move", nil, func() error {
-		if err := s.cli.Get(ctx, "/api/market/explain", q, &out); err != nil {
-			return err
-		}
-		var chains map[string]any
-		if err := s.cli.Get(ctx, "/api/narrative/chains", nil, &chains); err == nil {
-			out["causal_chains"] = chains
-		}
-		return nil
+		return s.cli.Get(ctx, "/api/market/explain", q, &out)
 	}); err != nil {
 		return nil, nil, err
 	}
