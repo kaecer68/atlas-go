@@ -2084,8 +2084,11 @@ export interface MacroDataSnapshot {
   gold: MacroDataPoint;
   jpy: MacroDataPoint;
   foreign_investor_net: MacroDataPoint;
+  foreign_dealer_net: MacroDataPoint;
   domestic_fund_net: MacroDataPoint;
   dealer_net: MacroDataPoint;
+  dealer_self_net: MacroDataPoint;
+  dealer_hedging_net: MacroDataPoint;
   foreign_futures_oi_net: MacroDataPoint;
   government_net: MacroDataPoint;
   insurance_net: MacroDataPoint;
@@ -3884,8 +3887,11 @@ export interface TEJStockPriceRow {
 export interface TWSECapitalFlow {
   date: string;
   foreign_investor_net: number;
+  foreign_dealer_net: number;
   domestic_fund_net: number;
   dealer_net: number;
+  dealer_self_net: number;
+  dealer_hedging_net: number;
   total_net: number;
 }
 
