@@ -2071,6 +2071,7 @@ export interface MacroDataSnapshot {
   dealer_net: MacroDataPoint;
   foreign_futures_oi_net: MacroDataPoint;
   government_net: MacroDataPoint;
+  insurance_net: MacroDataPoint;
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;

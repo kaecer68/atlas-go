@@ -442,8 +442,9 @@ func (a *macroDataGatewayAdapter) applyTaifexInstitutional(snap *marketdata.Macr
 
 func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroDataSnapshot, data []byte) {
 	var payload struct {
-		Available bool                              `json:"available"`
-		Reading   *marketdata.GovernmentFlowReading `json:"reading"`
+		Available        bool                              `json:"available"`
+		Reading          *marketdata.GovernmentFlowReading `json:"reading"`
+		InsuranceReading *marketdata.GovernmentFlowReading `json:"insurance_reading"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return
@@ -452,14 +453,21 @@ func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroData
 		return
 	}
 	ts, _ := time.Parse("20060102", payload.Reading.Date)
-	// TWD value is large; convert to 億元 (1e8) so the Z-score window stays
-	// in a sane numeric range alongside the other forces (which are
-	// typically expressed in billions NTD or percentage points).
 	v := float64(payload.Reading.TotalNet) / 1e8
 	snap.GovernmentNet = marketdata.MacroDataPoint{
 		Symbol:    "GOV_FLOW_NET",
 		Value:     v,
 		Timestamp: ts.Unix(),
+	}
+	// Best-effort: insurance flow.
+	if payload.InsuranceReading != nil && payload.InsuranceReading.Date != "" {
+		insTs, _ := time.Parse("20060102", payload.InsuranceReading.Date)
+		insV := float64(payload.InsuranceReading.TotalNet) / 1e8
+		snap.InsuranceNet = marketdata.MacroDataPoint{
+			Symbol:    "INS_FLOW_NET",
+			Value:     insV,
+			Timestamp: insTs.Unix(),
+		}
 	}
 }
 

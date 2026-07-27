@@ -30,8 +30,9 @@ func NewGovernmentFlowAdapter(provider *marketdata.GovernmentFlowProvider) *Gove
 }
 
 type governmentFlowData struct {
-	Available bool                              `json:"available"`
-	Reading   *marketdata.GovernmentFlowReading `json:"reading,omitempty"`
+	Available        bool                              `json:"available"`
+	Reading          *marketdata.GovernmentFlowReading `json:"reading,omitempty"`
+	InsuranceReading *marketdata.GovernmentFlowReading `json:"insurance_reading,omitempty"`
 }
 
 // Fetch returns the latest available 官股行庫 reading. A missing/empty
@@ -46,6 +47,10 @@ func (a *GovernmentFlowAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 	payload := governmentFlowData{Available: ok}
 	if ok {
 		payload.Reading = &reading
+	}
+	// Best-effort: also fetch insurance company flow.
+	if insReading, insOK, insErr := a.provider.LatestInsurance(); insErr == nil && insOK {
+		payload.InsuranceReading = &insReading
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {

@@ -49,6 +49,18 @@ var coreBankBranches = map[string]string{
 	"8064": "彰化銀行",
 }
 
+// insuranceBrokerCodes maps major Taiwan life insurance companies' affiliated
+// securities firms (used as proxy for insurance capital flow).
+// Note: Insurance companies trade through their securities arms or dedicated
+// brokers; these codes represent the primary trading desks.
+var insuranceBrokerCodes = map[string]string{
+	"8880": "國泰證券(國泰人壽)",
+	"9600": "富邦證券(富邦人壽)",
+	"8560": "新光證券(新光人壽)",
+	"8840": "凱基證券(中國人壽/凱基人壽)",
+	"9200": "群益證券(南山人壽主要券商)",
+}
+
 // tw50Symbols is the list of TWSE Taiwan 50 constituent stock symbols
 // whose broker data is aggregated for the government flow proxy.
 var tw50Symbols = []string{
@@ -95,7 +107,7 @@ func (a *GovernmentBrokerAggregator) SetSymbols(symbols []string) {
 func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
 	dateStr := date.Format("20060102")
 
-	var totalNet int64
+	var totalGovNet, totalInsNet int64
 	var stocksProcessed int
 
 	for _, symbol := range a.symbols {
@@ -103,11 +115,12 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 			return nil, fmt.Errorf("rate limit: %w", err)
 		}
 
-		net, err := a.fetchStockBrokerNet(ctx, symbol, date)
+		govNet, insNet, err := a.fetchStockBrokerNet(ctx, symbol, date)
 		if err != nil {
-			continue // individual failures non-fatal
+			continue
 		}
-		totalNet += net
+		totalGovNet += govNet
+		totalInsNet += insNet
 		stocksProcessed++
 	}
 
@@ -115,22 +128,34 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		return nil, fmt.Errorf("government_broker: no stocks processed for %s", dateStr)
 	}
 
-	reading := &GovernmentFlowReading{
+	// Write government bank reading (existing format).
+	govReading := &GovernmentFlowReading{
 		Date:     dateStr,
-		TotalNet: totalNet,
+		TotalNet: totalGovNet,
 		Source:   "broker-aggregate",
 		RawURL:   "https://bsr.twse.com.tw/bshtm/bsMenu.aspx",
 	}
-
-	if err := a.writeReading(*reading); err != nil {
+	if err := a.writeReading(*govReading); err != nil {
 		return nil, fmt.Errorf("government_broker write: %w", err)
 	}
 
-	return reading, nil
+	// Write insurance company reading (new: suffixed with _insurance).
+	insReading := &GovernmentFlowReading{
+		Date:     dateStr,
+		TotalNet: totalInsNet,
+		Source:   "broker-aggregate",
+		RawURL:   "https://bsr.twse.com.tw/bshtm/bsMenu.aspx",
+	}
+	if err := a.writeInsuranceReading(*insReading); err != nil {
+		return nil, fmt.Errorf("insurance_broker write: %w", err)
+	}
+
+	return govReading, nil
 }
 
-// fetchStockBrokerNet fetches the broker trading report for a single stock.
-func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, symbol string, date time.Time) (int64, error) {
+// fetchStockBrokerNet fetches the broker trading report for a single stock
+// and returns both government bank net and insurance company net.
+func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, symbol string, date time.Time) (govNet, insNet int64, err error) {
 	rocDate := fmt.Sprintf("%d/%02d/%02d", date.Year()-1911, date.Month(), date.Day())
 
 	url := fmt.Sprintf(
@@ -141,24 +166,24 @@ func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, sy
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, fmt.Errorf("request: %w", err)
+		return 0, 0, fmt.Errorf("request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; atlas-go/1.0)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("fetch %s: %w", symbol, err)
+		return 0, 0, fmt.Errorf("fetch %s: %w", symbol, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("fetch %s: HTTP %d", symbol, resp.StatusCode)
+		return 0, 0, fmt.Errorf("fetch %s: HTTP %d", symbol, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
-		return 0, fmt.Errorf("read %s: %w", symbol, err)
+		return 0, 0, fmt.Errorf("read %s: %w", symbol, err)
 	}
 
 	return a.parseBrokerTable(symbol, body)
@@ -169,19 +194,36 @@ func (a *GovernmentBrokerAggregator) DataDir() string {
 	return a.outputDir
 }
 
+// writeInsuranceReading writes a GovernmentFlowReading to a suffixed file
+// (<date>_insurance.json) so GovernmentFlowProvider can distinguish
+// insurance company flow from government bank flow.
+func (a *GovernmentBrokerAggregator) writeInsuranceReading(r GovernmentFlowReading) error {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return fmt.Errorf("marshal insurance: %w", err)
+	}
+	path := filepath.Join(a.outputDir, r.Date+"_insurance.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
+}
+
 // brokerRowRegex matches broker rows: code name buy sell net ...
 var brokerRowRegex = regexp.MustCompile(`(\d{4}[A-Za-z]?\d*)\s+(\S+)\s+([\d,]+)\s+([\d,]+)\s+([\d,-]+)`)
 
-func (a *GovernmentBrokerAggregator) parseBrokerTable(symbol string, body []byte) (int64, error) {
-	// Try CSV first if the response looks like CSV
-	if strings.HasPrefix(string(body), `"`) || strings.Contains(strings.ToLower(string(body)), "text/csv") {
-		return a.parseBrokerCSV(symbol, body)
-	}
-
-	// HTML parsing
+func (a *GovernmentBrokerAggregator) parseBrokerTable(symbol string, body []byte) (govNet, insNet int64, err error) {
 	doc, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
-		return 0, fmt.Errorf("parse HTML: %w", err)
+		return 0, 0, fmt.Errorf("parse HTML: %w", err)
 	}
 
 	var textBuf bytes.Buffer
@@ -202,28 +244,29 @@ func (a *GovernmentBrokerAggregator) parseBrokerTable(symbol string, body []byte
 		return a.parseBrokerCSV(symbol, body)
 	}
 
-	var totalNet int64
 	for _, m := range matches {
 		brokerID := strings.TrimSpace(m[1])
-		if _, ok := coreBankBranches[brokerID[:4]]; !ok {
-			continue
-		}
+		code := brokerID[:4]
 		netStr := strings.ReplaceAll(strings.TrimSpace(m[5]), ",", "")
 		net, err := strconv.ParseInt(netStr, 10, 64)
 		if err != nil {
 			continue
 		}
-		totalNet += net
+		if _, ok := coreBankBranches[code]; ok {
+			govNet += net
+		}
+		if _, ok := insuranceBrokerCodes[code]; ok {
+			insNet += net
+		}
 	}
 
-	return totalNet, nil
+	return govNet, insNet, nil
 }
 
-func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) (int64, error) {
+func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) (govNet, insNet int64, err error) {
 	reader := csv.NewReader(bytes.NewReader(body))
 	reader.FieldsPerRecord = -1
 
-	var totalNet int64
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -236,9 +279,7 @@ func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) 
 		if len(brokerID) < 4 {
 			continue
 		}
-		if _, ok := coreBankBranches[brokerID[:4]]; !ok {
-			continue
-		}
+		code := brokerID[:4]
 		netStr := ""
 		if len(record) >= 5 {
 			netStr = record[4]
@@ -250,12 +291,16 @@ func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) 
 		if err != nil {
 			continue
 		}
-		totalNet += net
+		if _, ok := coreBankBranches[code]; ok {
+			govNet += net
+		}
+		if _, ok := insuranceBrokerCodes[code]; ok {
+			insNet += net
+		}
 	}
 
-	return totalNet, nil
+	return govNet, insNet, nil
 }
-
 func (a *GovernmentBrokerAggregator) writeReading(r GovernmentFlowReading) error {
 	data, err := json.Marshal(r)
 	if err != nil {

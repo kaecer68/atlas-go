@@ -32,6 +32,7 @@ type MacroDataSnapshot struct {
 	DealerNet              MacroDataPoint `json:"dealer_net"`
 	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
 	GovernmentNet          MacroDataPoint `json:"government_net"`
+	InsuranceNet           MacroDataPoint `json:"insurance_net"`
 	ExportElectronics      MacroDataPoint `json:"export_electronics"`
 	RetailMarginBalance    MacroDataPoint `json:"retail_margin_balance"`
 	RetailShortBalance     MacroDataPoint `json:"retail_short_balance"`
