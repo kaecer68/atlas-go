@@ -10,10 +10,16 @@ type RegimeEvidence struct {
 	Score      float64
 	Confidence float64
 	Source     string
+	// LayerID identifies the constitutional causal chain layer (§二).
+	LayerID string
+	// LayerParentID references the prior layer's trace (set by inferRegime).
+	LayerParentID string
 }
 
 type RegimeEvidenceSource interface {
 	Evidence(quotes map[string]domain.Quote, events []narrative.NarrativeEvent) RegimeEvidence
+	// LayerID returns the constitutional layer this source represents (§二 因果傳導鏈).
+	LayerID() string
 }
 
 type MacroEvidenceSource struct{}
@@ -49,8 +55,10 @@ func (s *MacroEvidenceSource) Evidence(quotes map[string]domain.Quote, events []
 		}
 	}
 
-	return RegimeEvidence{Score: score, Confidence: confidence, Source: "macro"}
+	return RegimeEvidence{Score: score, Confidence: confidence, Source: "macro", LayerID: "layer_0"}
 }
+
+func (s *MacroEvidenceSource) LayerID() string { return "layer_0" }
 
 type TechnicalEvidenceSource struct{}
 
@@ -72,8 +80,10 @@ func (s *TechnicalEvidenceSource) Evidence(quotes map[string]domain.Quote, event
 		}
 	}
 
-	return RegimeEvidence{Score: score, Confidence: confidence, Source: "technical"}
+	return RegimeEvidence{Score: score, Confidence: confidence, Source: "technical", LayerID: "layer_4"}
 }
+
+func (s *TechnicalEvidenceSource) LayerID() string { return "layer_4" }
 
 type NarrativeEvidenceSource struct{}
 
@@ -83,7 +93,7 @@ func NewNarrativeEvidenceSource() *NarrativeEvidenceSource {
 
 func (s *NarrativeEvidenceSource) Evidence(quotes map[string]domain.Quote, events []narrative.NarrativeEvent) RegimeEvidence {
 	if len(events) == 0 {
-		return RegimeEvidence{Score: 0, Confidence: 0, Source: "narrative"}
+		return RegimeEvidence{Score: 0, Confidence: 0, Source: "narrative", LayerID: "layer_7"}
 	}
 
 	var totalScore float64
@@ -101,8 +111,10 @@ func (s *NarrativeEvidenceSource) Evidence(quotes map[string]domain.Quote, event
 	}
 
 	avgConfidence := totalConfidence / float64(len(events))
-	return RegimeEvidence{Score: totalScore, Confidence: avgConfidence, Source: "narrative"}
+	return RegimeEvidence{Score: totalScore, Confidence: avgConfidence, Source: "narrative", LayerID: "layer_7"}
 }
+
+func (s *NarrativeEvidenceSource) LayerID() string { return "layer_7" }
 
 // narrativeThemeScore maps a narrative theme to its regime evidence contribution.
 // Negative = risk-off pressure, positive = risk-on support.
@@ -166,5 +178,7 @@ func (s *AgentSignalEvidenceSource) Evidence(quotes map[string]domain.Quote, eve
 		regimeScore = -0.5
 	}
 
-	return RegimeEvidence{Score: regimeScore, Confidence: 0.3, Source: "agent_signal"}
+	return RegimeEvidence{Score: regimeScore, Confidence: 0.3, Source: "agent_signal", LayerID: "layer_root"}
 }
+
+func (s *AgentSignalEvidenceSource) LayerID() string { return "layer_root" }
