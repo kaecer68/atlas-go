@@ -62,7 +62,7 @@ func TestGetStrategiesWithCategory_AllPeriods(t *testing.T) {
 func TestGetStrategiesWithCategory_UnknownPeriod(t *testing.T) {
 	rules := TryLoadMethodologyRules("../../configs/methodology_rules.yaml")
 	got := rules.GetStrategiesWithCategory("not_a_period")
-	if got != nil && len(got) != 0 {
+	if len(got) != 0 {
 		t.Errorf("unknown period should return empty slice, got %v", got)
 	}
 }
