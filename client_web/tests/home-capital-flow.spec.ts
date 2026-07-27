@@ -128,19 +128,3 @@ test.skip('home: market calendar renders events and impact badges', async ({ pag
   const badgeCount = await badges.count();
   expect(badgeCount).toBeGreaterThanOrEqual(2);
 });
-test.skip('home: 5-day capital flow prediction card renders 5 dates with bars', async ({ page }) => {
-  await installAuthMocks(page);
-  await bypassOnboarding(page);
-  await mockHomeApis(page);
-
-  const card = page.locator('#home-capital-prediction-card');
-  await expect(card).toBeVisible({ timeout: 5000 });
-  await expect(card).toContainText('未來 5 日資金流向預測');
-
-  const metricCards = card.locator('.metric-card');
-  const cardCount = await metricCards.count();
-  expect(cardCount).toBeGreaterThanOrEqual(3);
-
-  const notEmpty = await card.textContent();
-  expect(notEmpty.length).toBeGreaterThan(20);
-});

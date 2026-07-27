@@ -90,15 +90,16 @@ export async function switchPage(id, silent) {
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
   const titles = {
-    home: '市場總覽', narrative: '宏觀視野', live: '風險總覽',
+    home: '今日判讀', narrative: '全球宏觀', live: '風險總覽',
     crossmarket: '美台連動', industry: '產業地圖',
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
     evolution_panel: '策略演化', strategies: '投資心法',
-    capital_predictions: '錢潮預測', capital_board: '錢潮看板',
+    capital_predictions: '未來 5 日資金', capital_board: '七大勢力看板',
+    'decision-chain': '決策鏈',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
-      methodology: '方法論'
+      methodology: '方法論：為什麼'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
