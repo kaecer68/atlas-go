@@ -24,13 +24,23 @@ type TierRecommendation struct {
 	Warning    string                  `json:"warning,omitempty"`
 }
 
+// RankedBriefEntry carries a strategy identity and category for the
+// RankedBrief payload. This is a local type intentionally separate
+// from config.RankedBriefEntry so the recommender and config packages
+// evolve independently (E5a vs E5b).
+type RankedBriefEntry struct {
+	ID       string `json:"id"`
+	Category string `json:"category"`
+}
+
 // StrategyRecommendation is the structured strategies payload.
 type StrategyRecommendation struct {
-	Active      string   `json:"active,omitempty"`
-	Available   []string `json:"available,omitempty"`
-	Ranked      []string `json:"ranked,omitempty"`
-	EntrySignal string   `json:"entry_signal,omitempty"`
-	StopLoss    string   `json:"stop_loss,omitempty"`
+	Active      string             `json:"active,omitempty"`
+	Available   []string           `json:"available,omitempty"`
+	Ranked      []string           `json:"ranked,omitempty"`
+	RankedBrief []RankedBriefEntry `json:"ranked_brief,omitempty"`
+	EntrySignal string             `json:"entry_signal,omitempty"`
+	StopLoss    string             `json:"stop_loss,omitempty"`
 }
 
 // MarketLight is the free/public tier market overview.
@@ -362,7 +372,9 @@ func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodolog
 	}
 
 	if e == nil {
-		ranked := []string{"growth", "momentum", "all_weather", "value", "defensive"}
+		// fallback 僅得含 YAML 六策略 id；"defensive" 屬 strategy registry
+		// 宇宙，主路徑 filteredRank 會由 allowedSet 濾除，移除對齊兩路徑行為。
+		ranked := []string{"growth", "momentum", "all_weather", "value"}
 		if allowedSet != nil {
 			ranked = filterRanked(ranked, allowedSet)
 			if len(ranked) == 0 {
@@ -372,6 +384,7 @@ func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodolog
 		return &StrategyRecommendation{
 			Active:      ranked[0],
 			Ranked:      ranked,
+			RankedBrief: buildRankedBrief(ranked, advisor),
 			EntrySignal: "等待回測支撐區間",
 			StopLoss:    "-5%",
 		}
@@ -381,7 +394,9 @@ func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodolog
 	if err != nil || len(ranked) == 0 {
 		*w = append(*w, "ranking_warming_up")
 		score, _ := e.GetScore("growth")
-		ranked = []string{"growth", "momentum", "all_weather", "value", "defensive"}
+		// fallback 僅得含 YAML 六策略 id；"defensive" 屬 strategy registry
+		// 宇宙，主路徑 filteredRank 會由 allowedSet 濾除，移除對齊兩路徑行為。
+		ranked = []string{"growth", "momentum", "all_weather", "value"}
 		if allowedSet != nil {
 			ranked = filterRanked(ranked, allowedSet)
 			if len(ranked) == 0 {
@@ -391,6 +406,7 @@ func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodolog
 		return &StrategyRecommendation{
 			Active:      ranked[0],
 			Ranked:      ranked,
+			RankedBrief: buildRankedBrief(ranked, advisor),
 			EntrySignal: fmt.Sprintf("排名暖機中 (%.2f)", score),
 			StopLoss:    "-5%",
 		}
@@ -411,9 +427,24 @@ func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodolog
 	return &StrategyRecommendation{
 		Active:      active,
 		Ranked:      ranked,
+		RankedBrief: buildRankedBrief(ranked, advisor),
 		EntrySignal: fmt.Sprintf("Score=%.2f — 排名第1", score),
 		StopLoss:    "-5%",
 	}
+}
+
+// buildRankedBrief maps ranked strategy IDs to StrategyBrief entries.
+// advisor=nil or unknown IDs produce Category="" without skipping.
+func buildRankedBrief(ranked []string, advisor *methodology.Advisor) []RankedBriefEntry {
+	briefs := make([]RankedBriefEntry, len(ranked))
+	for i, id := range ranked {
+		cat := ""
+		if advisor != nil {
+			cat = advisor.StrategyCategory(id)
+		}
+		briefs[i] = RankedBriefEntry{ID: id, Category: cat}
+	}
+	return briefs
 }
 
 // filterRanked keeps only IDs present in allowedSet, preserving order.

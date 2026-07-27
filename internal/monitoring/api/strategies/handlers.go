@@ -13,15 +13,17 @@ import (
 	llmcapabilities "github.com/kaecer68/atlas-go/internal/llm/capabilities"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
 // Handlers serves the strategies API.
 type Handlers struct {
-	registry       *strategy_techniques.Registry
-	annotator      llm_annotator.Annotator
-	summaryHandler *llmcapabilities.StrategySummaryHandler
+	registry           *strategy_techniques.Registry
+	annotator          llm_annotator.Annotator
+	summaryHandler     *llmcapabilities.StrategySummaryHandler
+	methodologyAdvisor *methodology.Advisor
 	// SnapshotEvaluator recomputes hit_rate from dated macro snapshots
 	// so GET /api/strategies always reflects the current evaluator logic
 	// rather than stale seed values (manifest #1259).
@@ -58,6 +60,13 @@ func (h *Handlers) SetAnnotator(a llm_annotator.Annotator) {
 // return 503 until a real handler is wired in.
 func (h *Handlers) SetSummaryHandler(sh *llmcapabilities.StrategySummaryHandler) {
 	h.summaryHandler = sh
+}
+
+// SetMethodologyAdvisor wires the methodology advisor for category lookups
+// in StrategyFrameSummary. nil is permitted; strategies with unknown IDs
+// will have an empty category.
+func (h *Handlers) SetMethodologyAdvisor(a *methodology.Advisor) {
+	h.methodologyAdvisor = a
 }
 
 // RegisterRoutes attaches the strategies routes to mux.
@@ -99,6 +108,7 @@ type StrategyFrameSummary struct {
 	// real backtest data (manifest #F07 / #1259).
 	Measured         bool   `json:"measured"`
 	LastBacktestDate string `json:"last_backtest_date,omitempty"` // ISO date of latest attribution
+	Category         string `json:"category,omitempty"`
 }
 
 func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {
@@ -119,6 +129,10 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 		Sectors:     f.Sectors,
 		Regimes:     f.Regimes,
 		Attribution: f.Attribution,
+	}
+	// Fill category from methodology advisor (E5b).
+	if h.methodologyAdvisor != nil {
+		s.Category = h.methodologyAdvisor.StrategyCategory(f.ID)
 	}
 	// Enrich with measured state from the FeedbackStore (#1259).
 	// Without this, consumers cannot distinguish 'zero from real

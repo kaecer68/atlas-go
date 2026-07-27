@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -527,4 +529,66 @@ func recommendationsDeepEqual(a, b TierRecommendation) bool {
 		}
 	}
 	return true
+}
+
+// TestBuildRankedBrief verifies that RankedBrief preserves ranked order,
+// maps YAML strategy IDs to correct categories (defensive/aggressive/tactical),
+// and leaves non-YAML IDs with an empty category.
+func TestBuildRankedBrief(t *testing.T) {
+	rules := config.TryLoadMethodologyRules("../../configs/methodology_rules.yaml")
+	advisor := methodology.NewAdvisor(rules)
+
+	// "growth" is YAML (aggressive), "defensive" is NOT a YAML strategy
+	// (it lives in strategy/registry.go, not methodology_rules.yaml).
+	ranked := []string{"growth", "defensive"}
+
+	briefs := buildRankedBrief(ranked, advisor)
+
+	if len(briefs) != len(ranked) {
+		t.Fatalf("len(RankedBrief) = %d, want %d", len(briefs), len(ranked))
+	}
+
+	// Order must match.
+	if briefs[0].ID != "growth" {
+		t.Errorf("RankedBrief[0].ID = %q, want growth", briefs[0].ID)
+	}
+	if briefs[0].Category != "aggressive" {
+		t.Errorf("RankedBrief[0].Category = %q, want aggressive", briefs[0].Category)
+	}
+
+	if briefs[1].ID != "defensive" {
+		t.Errorf("RankedBrief[1].ID = %q, want defensive", briefs[1].ID)
+	}
+	if briefs[1].Category != "" {
+		t.Errorf("RankedBrief[1].Category = %q, want empty (not in YAML)", briefs[1].Category)
+	}
+}
+
+// TestBuildRankedBrief_NilAdvisor verifies that a nil advisor produces
+// empty categories for all entries (no panic).
+func TestBuildRankedBrief_NilAdvisor(t *testing.T) {
+	ranked := []string{"growth", "momentum"}
+	briefs := buildRankedBrief(ranked, nil)
+
+	if len(briefs) != 2 {
+		t.Fatalf("len(RankedBrief) = %d, want 2", len(briefs))
+	}
+	for i, b := range briefs {
+		if b.Category != "" {
+			t.Errorf("RankedBrief[%d].Category = %q with nil advisor, want empty", i, b.Category)
+		}
+	}
+}
+
+// TestBuildRankedBrief_DefensiveNotInFallback verifies the ghost-id fix:
+// "defensive" is NOT in the YAML six-strategy set and must not appear
+// in fallback ranked lists.
+func TestBuildRankedBrief_DefensiveNotInYAML(t *testing.T) {
+	rules := config.TryLoadMethodologyRules("../../configs/methodology_rules.yaml")
+	advisor := methodology.NewAdvisor(rules)
+
+	cat := advisor.StrategyCategory("defensive")
+	if cat != "" {
+		t.Errorf("StrategyCategory(defensive) = %q, want empty — defensive is NOT a YAML six-strategy ID", cat)
+	}
 }

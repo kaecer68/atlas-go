@@ -48,6 +48,12 @@ const STATUS_BADGE = {
   expired:  { class: 'err',   label: '過期' },
 };
 
+const CATEGORY_BADGE = {
+  defensive:  { class: 'ok',   label: '防禦型' },
+  aggressive: { class: 'warn', label: '攻擊型' },
+  tactical:   { class: 'info', label: '事件型' },
+};
+
 const DIRECTION_GLYPH = {
   up:       { class: 'text-up',   label: '↑' },
   down:     { class: 'text-down', label: '↓' },
@@ -415,6 +421,7 @@ export async function renderStrategiesPage(root) {
     const status = STATUS_BADGE[s.status] || { class: '', label: s.status };
     const risk = RISK_BADGE[s.risk] || { class: '', label: s.risk };
     const dir = DIRECTION_GLYPH[s.direction] || { class: '', label: s.direction };
+    const cat = CATEGORY_BADGE[s.category] || null;
     const themes = (s.themes || []).map(t => `<span class="badge ok">${escapeHtml(t)}</span>`).join(' ');
     const sectors = (s.affected_sectors || []).map(t =>
       `<span class="text-xs-muted">${escapeHtml(t)}</span>`).join(' · ');
@@ -426,6 +433,7 @@ export async function renderStrategiesPage(root) {
           <div>
             <span class="text-xs-muted">${escapeHtml(layer.name)}</span>
             ${status ? `<span class="badge ${status.class}">${escapeHtml(status.label)}</span>` : ''}
+            ${cat ? `<span class="badge ${cat.class}">${escapeHtml(cat.label)}</span>` : ''}
           </div>
           <span class="${dir.class}">${escapeHtml(dir.label)}</span>
         </div>

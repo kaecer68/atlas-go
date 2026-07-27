@@ -1310,6 +1310,7 @@
   "quality_weight",
   "quantity",
   "ranked",
+  "ranked_brief",
   "rates",
   "rationale",
   "raw_data",

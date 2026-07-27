@@ -1260,6 +1260,14 @@ func (a *DashboardAPI) SetStrategiesSummaryHandler(sh *llmcapabilities.StrategyS
 	}
 }
 
+// SetStrategiesMethodologyAdvisor wires the methodology advisor into the
+// strategies API so StrategyFrameSummary can include category badges (E5b).
+func (a *DashboardAPI) SetStrategiesMethodologyAdvisor(advisor *methodology.Advisor) {
+	if a.strategyTechniquesHandlers != nil {
+		a.strategyTechniquesHandlers.SetMethodologyAdvisor(advisor)
+	}
+}
+
 func (a *DashboardAPI) RegisterStrategiesRoutes(mux *http.ServeMux) {
 	if a.strategyTechniquesHandlers != nil {
 		a.strategyTechniquesHandlers.RegisterRoutes(mux)
