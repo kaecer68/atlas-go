@@ -1,5 +1,5 @@
 {
-  "canonical_channel_count": 38,
+  "canonical_channel_count": 39,
   "registered_channels": [
     {"id": "us_yahoo", "source": "query1.finance.yahoo.com", "status": "conditional (YahooEnabled)"},
     {"id": "twse_replay", "source": "TWSE", "status": "registered"},
