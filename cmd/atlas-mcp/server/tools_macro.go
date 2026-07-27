@@ -71,6 +71,10 @@ func (s *server) handleMacroGetSnapshotLatest(ctx context.Context, _ *mcp.CallTo
 		if dq := dataQualityFromIngestStatus(*out.Result, "macro_get_snapshot_latest"); dq != nil {
 			(*out.Result)["data_quality"] = dq.ToMap()
 		}
+		if period, nameZH := s.fetchCurrentPeriod(ctx); period != "" {
+			(*out.Result)["current_period"] = period
+			(*out.Result)["current_period_name_zh"] = nameZH
+		}
 	}
 	return nil, out, nil
 }
@@ -139,4 +143,21 @@ func (s *server) handleMacroGetIngestStatus(ctx context.Context, _ *mcp.CallTool
 		return nil, macroBaseOutput{}, err
 	}
 	return nil, out, nil
+}
+
+func (s *server) fetchCurrentPeriod(ctx context.Context) (string, string) {
+	var raw struct {
+		CurrentPeriod string `json:"current_period"`
+		Sessions      []struct {
+			PeriodNameZH string `json:"period_name_zh"`
+		} `json:"sessions"`
+	}
+	if err := s.cli.Get(ctx, "/api/regime/history?limit=1", nil, &raw); err != nil {
+		return "", ""
+	}
+	nameZH := ""
+	if len(raw.Sessions) > 0 {
+		nameZH = raw.Sessions[0].PeriodNameZH
+	}
+	return raw.CurrentPeriod, nameZH
 }

@@ -345,6 +345,9 @@ ci-quick:
 	              scripts/ci/check_commit_messages.sh \
 	              scripts/ci/check_frontend_imports.sh \
 	              scripts/ci/check_constitution.sh \
+	              scripts/ci/check_methodology_constitution.sh \
+	              scripts/ci/check_strategy_path.sh \
+	              scripts/ci/check_constitution_drift.sh \
 	              scripts/ci/check_data_catalog.sh \
 	              scripts/ci/check_field_contract.sh; do \
 		if [ -f "$$script" ]; then \
@@ -653,9 +656,16 @@ ci-gate:
 	@echo ""
 	@echo "✅ ci-gate passed — 可以 push"
 
+.PHONY: ci-constitution
+ci-constitution:
+	@echo "📜 方法論憲章合規檢查..."
+	@bash scripts/ci/check_methodology_constitution.sh
+	@bash scripts/ci/check_strategy_path.sh
+	@bash scripts/ci/check_constitution_drift.sh
+	@echo "✅ ci-constitution passed"
+
 .PHONY: ci-full
-ci-full: ci-gate
-	@echo ""
+ci-full: ci-gate ci-constitution
 	@echo "🧪 CI full suite (local, ~5-8 min)..."
 	@echo ""
 	@echo "  → golangci-lint (v2.12.2)"

@@ -110,9 +110,11 @@ type RegimeGetHistoryInput struct {
 // The current composite score is carried separately in the output envelope
 // (CurrentRegimeScore), NOT cloned into every historical row.
 type RegimePoint struct {
-	Date   string   `json:"date"`
-	Regime string   `json:"regime"`
-	Score  *float64 `json:"score,omitempty"`
+	Date         string   `json:"date"`
+	Regime       string   `json:"regime"`
+	Period       string   `json:"period,omitempty"`
+	PeriodNameZH string   `json:"period_name_zh,omitempty"`
+	Score        *float64 `json:"score,omitempty"`
 }
 
 type RegimeGetHistoryOutput struct {
@@ -160,11 +162,14 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 	if err := s.withAudit(ctx, "regime_get_history", []string{"days"}, func() error {
 		var raw struct {
 			Sessions []struct {
-				SessionID  string `json:"session_id"`
-				Regime     string `json:"regime"`
-				RecordedAt string `json:"recorded_at"`
+				SessionID    string `json:"session_id"`
+				Regime       string `json:"regime"`
+				Period       string `json:"period,omitempty"`
+				PeriodNameZH string `json:"period_name_zh,omitempty"`
+				RecordedAt   string `json:"recorded_at"`
 			} `json:"sessions"`
-			Current string `json:"current_regime"`
+			Current       string `json:"current_regime"`
+			CurrentPeriod string `json:"current_period,omitempty"`
 		}
 		if err := s.cli.Get(ctx, "/api/regime/history", urlValues(q), &raw); err != nil {
 			return err
@@ -172,14 +177,11 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 		out.Regimes = make([]RegimePoint, len(raw.Sessions))
 		for i, sess := range raw.Sessions {
 			out.Regimes[i] = RegimePoint{
-				Date:   sess.RecordedAt,
-				Regime: sess.Regime,
+				Date:         sess.RecordedAt,
+				Regime:       sess.Regime,
+				Period:       sess.Period,
+				PeriodNameZH: sess.PeriodNameZH,
 			}
-			// Score intentionally left nil — historical scores are not
-			// yet persisted (regime_history table has no score column).
-			// When they become available, each row will carry its own
-			// historical Score. Until then, consumers should use
-			// CurrentRegimeScore for the latest composite snapshot.
 		}
 		// Current composite score from /api/janus/regime-score, reported
 		// once at the output envelope level — NOT cloned into every row.
