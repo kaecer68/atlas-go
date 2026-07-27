@@ -219,7 +219,6 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 
 // ─── Downturn Detection ───
 func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
-
 	passed := 0
 
 	// 1. Foreign sell slowing: 5-day avg < 30% of peak sell
@@ -300,7 +299,6 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 // ─── Bull Detection ───
 
 func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
-
 	passed := 0
 
 	// 1. Foreign continuous buy: 7+ of last 10 days
@@ -331,7 +329,6 @@ func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
 // ─── Plateau Detection ───
 
 func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
-
 	passed := 0
 
 	// 1. Foreign buy slowing: 3-day avg < 50% of 10-day avg
@@ -370,7 +367,6 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 // ─── Consolidation Detection ───
 
 func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
-
 	passed := 0
 
 	// 1. Foreign mixed: both buy and sell days > 3 in 10 days
@@ -379,7 +375,7 @@ func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
 	}
 
 	// 2. TWD range-bound near monthly MA (±0.5%)
-	if ind.TWDMA20 > 0 && ind.TWDChange5D > -(d.cfg.ConsolidationTWDBandPct) && ind.TWDChange5D < d.cfg.ConsolidationTWDBandPct {
+	if ind.TWDMA20 > 0 && ind.TWDChange5D > -d.cfg.ConsolidationTWDBandPct && ind.TWDChange5D < d.cfg.ConsolidationTWDBandPct {
 		passed++
 	}
 
