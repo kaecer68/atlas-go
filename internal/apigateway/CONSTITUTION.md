@@ -1,11 +1,16 @@
 # Atlas 數據源憲法（Data Source Constitution）
 
-**版本**：v1.3
-**生效日期**：2026-05-13（初版）；2026-07-25（v1.3 修訂 — 通道任務補足 + CI 強化）
+> **TL;DR for AI agents** — 新增任何數據抓取前必讀：
+> 1. 資料源優先級：**TWSE → Fubon → FinMind → Fugle**（先查高優先級是否有等價能力）
+> 2. 所有 HTTP 呼叫必須走 `apigateway.Fetch(channelID)`，禁止裸 `http.Client`
+> 3. 所有週期性任務必須註冊 `BackgroundTaskManager`，命名 `snake_case`、前綴 `auto_`
+> 4. 所有通道必須有 Rate Limiter + CircuitBreaker + 健康檢查
+> 5. 參數一律走 `ParametersConfig`，禁止 hardcode
+
+**版本**：v1.4
+**生效日期**：2026-05-13（初版）；2026-07-27（v1.4 — 新增 AI TL;DR 摘要 + 資料源優先級明確化）
 **適用範圍**：所有新增或修改外部數據源抓取的程式碼
 **執行機制**：CI 自動檢查 + PR 人工審查
-
----
 
 ## 前言
 

@@ -4211,6 +4211,10 @@ export interface frankfurterResponse {
   rates: Record<string, number>;
 }
 
+export interface fugleCandlesResponse {
+  data: string[];
+}
+
 export interface fugleWSAuth {
   event: string;
   data: string;

@@ -51,6 +51,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
+	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/orchestrator/composition"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -115,6 +116,7 @@ type DashboardAPI struct {
 	quoteStoreMu               sync.RWMutex
 	fugleAPIKey                string
 	fugleAPIKeyMu              sync.RWMutex
+	fugleClient                *marketdata.FugleClient
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -773,12 +775,22 @@ func (a *DashboardAPI) SetQuoteStore(qs ledger.QuoteStore) {
 	a.quoteStore = qs
 }
 
+// SetFugleClient injects the shared FugleClient so warmup and on-demand
+// fetches use the singleton rate limiter instead of raw HTTP calls.
+func (a *DashboardAPI) SetFugleClient(c *marketdata.FugleClient) {
+	a.fugleClient = c
+}
+
 // SetFugleAPIKey injects the Fugle API key so warmup can fetch candles
 // from the same config source as the rest of the application.
 func (a *DashboardAPI) SetFugleAPIKey(key string) {
 	a.fugleAPIKeyMu.Lock()
 	defer a.fugleAPIKeyMu.Unlock()
 	a.fugleAPIKey = key
+	// Also create a FugleClient from the key if one wasn't injected directly.
+	if a.fugleClient == nil && key != "" {
+		a.fugleClient = marketdata.NewFugleClient(key)
+	}
 }
 
 // warmupQuotes fetches historical daily bars from Fugle for all representative
@@ -798,20 +810,22 @@ func (a *DashboardAPI) warmupQuotes() {
 		return
 	}
 
-	a.fugleAPIKeyMu.RLock()
-	fugleKey := a.fugleAPIKey
-	a.fugleAPIKeyMu.RUnlock()
-	if fugleKey == "" {
-		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FUGLE_API_KEY not set")
+	if a.fugleClient == nil {
+		logging.Warn("dashboard_api", "quote_warmup_skipped", "reason", "FugleClient not configured")
 		return
 	}
-
-	// Collect unique symbols from DefaultRepresentativeStocks.
+	// Collect unique symbols from DefaultRepresentativeStocks and DefaultSymbols.
+	// DefaultSymbols includes ETFs (0050, 0056, etc.) not covered by the
+	// industry-sector representative list.
 	symbolSet := make(map[string]struct{})
 	for _, stocks := range industry.DefaultRepresentativeStocks() {
 		for _, s := range stocks {
 			symbolSet[s] = struct{}{}
 		}
+	}
+	for _, s := range orchestrator.DefaultSymbols() {
+		// DefaultSymbols uses ".TW" suffix; Fugle API uses bare symbols.
+		symbolSet[strings.TrimSuffix(s, ".TW")] = struct{}{}
 	}
 	symbols := make([]string, 0, len(symbolSet))
 	for s := range symbolSet {
@@ -820,12 +834,13 @@ func (a *DashboardAPI) warmupQuotes() {
 
 	from := "2026-01-01"
 	to := time.Now().Format("2006-01-02")
+	ctx := context.Background()
 	totalBars := 0
 	fetched := 0
 	failed := 0
 
 	for _, sym := range symbols {
-		bars, err := a.fetchFugleCandles(context.Background(), fugleKey, sym, from, to)
+		bars, err := a.fugleClient.GetHistoricalCandles(ctx, sym, from, to)
 		if err != nil {
 			failed++
 			continue
@@ -841,9 +856,6 @@ func (a *DashboardAPI) warmupQuotes() {
 		}
 		totalBars += len(bars)
 		fetched++
-
-		// Rate-limit: ~2s between symbols to stay under Fugle free tier limits.
-		time.Sleep(2 * time.Second)
 	}
 
 	logging.Info("dashboard_api", "quote_warmup_complete",
@@ -851,67 +863,6 @@ func (a *DashboardAPI) warmupQuotes() {
 		"symbols_failed", failed,
 		"total_bars", totalBars,
 	)
-}
-
-// fetchFugleCandles fetches historical daily candles for a single symbol from Fugle.
-// It enforces a per-symbol timeout independent of the overall warmup loop.
-func (a *DashboardAPI) fetchFugleCandles(ctx context.Context, apiKey, symbol, from, to string) ([]domain.DailyBar, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	url := fmt.Sprintf(
-		"https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/%s?from=%s&to=%s&fields=open,high,low,close,volume",
-		symbol, from, to,
-	)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-API-KEY", apiKey)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fugle %s returned %d", symbol, resp.StatusCode)
-	}
-
-	var result struct {
-		Data []struct {
-			Date   string  `json:"date"`
-			Open   float64 `json:"open"`
-			High   float64 `json:"high"`
-			Low    float64 `json:"low"`
-			Close  float64 `json:"close"`
-			Volume int64   `json:"volume"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	bars := make([]domain.DailyBar, 0, len(result.Data))
-	for _, bar := range result.Data {
-		d, err := time.Parse("2006-01-02", bar.Date)
-		if err != nil {
-			logging.Warn("dashboard_api", "quote_warmup_date_parse_failed", "symbol", symbol, "date", bar.Date, logging.Err(err))
-			continue
-		}
-		bars = append(bars, domain.DailyBar{
-			Symbol: symbol + ".TW",
-			Date:   d,
-			Open:   bar.Open,
-			High:   bar.High,
-			Low:    bar.Low,
-			Close:  bar.Close,
-			Volume: bar.Volume,
-			Source: "fugle_warmup",
-		})
-	}
-	return bars, nil
 }
 
 func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
