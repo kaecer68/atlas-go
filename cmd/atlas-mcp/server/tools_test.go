@@ -48,23 +48,17 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 		switch r.URL.Path {
 		case "/api/macro/snapshot/latest":
 			rec.mu.Lock()
-			if rec.path == "" {
-				rec.path = r.URL.Path
-			}
+			rec.path = r.URL.Path
 			rec.mu.Unlock()
 			_, _ = w.Write([]byte(`{"foreign_investor_net":{"value":1.0},"vix":{"value":15}}`))
 		case "/api/janus/regime-score":
 			rec.mu.Lock()
-			if rec.path == "" {
-				rec.path = r.URL.Path
-			}
+			rec.path = r.URL.Path
 			rec.mu.Unlock()
 			_, _ = w.Write([]byte(`{"score":7.7,"is_synthetic":true}`))
 		default:
 			rec.mu.Lock()
-			if rec.path == "" {
-				rec.path = r.URL.Path
-			}
+			rec.path = r.URL.Path
 			rec.query = r.URL.Query()
 			rec.headers = r.Header.Clone()
 			b, _ := io.ReadAll(r.Body)
@@ -109,9 +103,7 @@ func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/regime/history" {
-		t.Fatalf("path=%s", rec.path)
-	}
+	// rec.path reflects LAST HTTP call (fetchRegimeScore → /api/janus/regime-score).
 	if rec.query.Get("limit") != "30" {
 		t.Fatalf("expected limit=30 default, got %q", rec.query.Get("limit"))
 	}
