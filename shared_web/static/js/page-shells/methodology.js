@@ -11,31 +11,36 @@ import { getTier } from '../services/auth.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 
 // ---------------------------------------------------------------------------
-// 策略矩陣（憲章第五章·策略矩陣）— 寫死於元件，與憲章對齊。
+// 策略分類輔助（後端 strategies_detail 為唯一真理源頭）
 // ---------------------------------------------------------------------------
-// 策略 ID 與憲章第五章策略矩陣對齊（後端 allowed_strategies 也使用這組 ID）。
-const STRATEGY_MATRIX = {
-  downturn:        ['all_weather', 'value', 'cash_only'],
-  turnaround_up:   ['growth', 'momentum', 'event_arbitrage'],
-  bull:            ['momentum', 'growth', 'event_arbitrage'],
-  plateau:         ['event_arbitrage', 'value', 'all_weather'],
-  consolidation:   ['event_arbitrage', 'all_weather'],
-  turnaround_down: ['all_weather', 'cash_only'],
-  black_swan:      ['all_weather', 'cash_only'],
+const CATEGORY_LABEL = {
+  defensive: '防禦',
+  aggressive: '攻擊',
+  tactical: '戰術',
 };
-// 散戶友善用詞：對齊提示詞「跟隨聰明錢啟動 / 事件套利 / 資金對抗後爆發 / 防禦 / 現金」。
-const STRATEGY_DISPLAY_NAME = {
-  all_weather: '防禦',
-  value: '資金對抗後爆發',
-  growth: '跟隨聰明錢啟動',
-  momentum: '跟隨聰明錢啟動',
-  event_arbitrage: '事件套利',
-  cash_only: '現金',
-  cash: '現金',
-};
-function displayStrategyName(id) {
-  if (!id) return '—';
-  return STRATEGY_DISPLAY_NAME[id] || escapeHtml(String(id));
+function categoryLabel(cat) {
+  return CATEGORY_LABEL[cat] || escapeHtml(String(cat || '—'));
+}
+function categoryClass(cat) {
+  if (cat === 'defensive' || cat === 'aggressive' || cat === 'tactical') return cat;
+  return 'unknown';
+}
+function renderStrategyChips(strategiesDetail, allowedStrategies) {
+  if (Array.isArray(strategiesDetail) && strategiesDetail.length > 0) {
+    return strategiesDetail.map((s, i) => {
+      const priority = s.priority === 'primary' ? 'primary' : 'secondary';
+      const name = escapeHtml(s.name || s.id || '—');
+      const badge = `<span class="md-strategy-chip__badge md-strategy-chip__badge--${categoryClass(s.category)}">${categoryLabel(s.category)}</span>`;
+      return `<span class="md-strategy-chip md-strategy-chip--${priority}" data-rank="${i + 1}">${name}${badge}</span>`;
+    }).join('');
+  }
+  // Fallback: raw ID chips without category badges when strategies_detail is missing.
+  console.warn('[methodology] strategies_detail missing or empty; falling back to allowed_strategies IDs');
+  const ids = Array.isArray(allowedStrategies) ? allowedStrategies : [];
+  if (ids.length === 0) {
+    return '<span class="badge muted">當前時期無特殊策略限制</span>';
+  }
+  return ids.map(id => `<span class="md-strategy-chip md-strategy-chip--secondary">${escapeHtml(String(id))}</span>`).join('');
 }
 const CASH_RANGES = {
   downturn: '40-50%', turnaround_up: '10-20%', bull: '5-10%',
@@ -389,7 +394,6 @@ function renderPeriodCard(host, report, isPremium, error) {
   const status = STATUS_TO_BADGE[report.global && report.global.status] || null;
   const cash = isNum(p.cash_reserve) ? Number(p.cash_reserve) : null;
   const cashPct = cash == null ? null : Math.max(0, Math.min(100, Math.round(cash * 100)));
-  const allowed = Array.isArray(p.allowed_strategies) ? p.allowed_strategies : [];
   const summary = (report.global && report.global.summary) || (report.summary) || '—';
 
   host.dataset.period = periodId;
@@ -409,9 +413,7 @@ function renderPeriodCard(host, report, isPremium, error) {
       </div>
     </div>
     <div class="md-allowed-strategies">
-      ${allowed.length === 0
-        ? '<span class="badge muted">當前時期無特殊策略限制</span>'
-        : allowed.map(s => `<span class="badge info">${displayStrategyName(s)}</span>`).join('')}
+      ${renderStrategyChips(p.strategies_detail, p.allowed_strategies)}
     </div>
   `;
 }
@@ -523,7 +525,6 @@ function renderRecommend(host, report, isPremium, error) {
         <h3 class="md-recommend__title">📌 散戶策略推薦</h3>
       </div>
       <div class="md-period-summary">${tierGatePill()} 升級 Premium 後，策略推薦將依當前市場時期自動套用憲章第五章策略矩陣。</div>
-      ${renderMatrixTable(null)}
     `;
     return;
   }
@@ -533,58 +534,27 @@ function renderRecommend(host, report, isPremium, error) {
   }
   const p = report.period;
   const periodId = p.market_period;
-  const stratList = STRATEGY_MATRIX[periodId] || [];
   const cashRange = CASH_RANGES[periodId] || '—';
   const activeStrategy = (report.strategy && report.strategy.active_strategy) || '';
   const direction = (report.strategy && report.strategy.direction) || '';
   const entryCond = (report.strategy && report.strategy.entry_condition) || '';
 
-  const rowsHtml = stratList.length === 0
-    ? '<div class="md-state md-state--empty">當前時期無對應策略（現金為主）</div>'
-    : stratList.map((s, i) => `
-        <div class="md-recommend__row" data-rank="${i + 1}">
-          <span class="md-recommend__rank">#${i + 1}</span>
-          <span class="md-recommend__name">${displayStrategyName(s)}</span>
-        </div>
-      `).join('');
+  const chipsHtml = renderStrategyChips(p.strategies_detail, p.allowed_strategies);
 
   host.innerHTML = `
     <div class="md-recommend__header">
       <h3 class="md-recommend__title">📌 散戶策略推薦</h3>
-      <span class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + displayStrategyName(activeStrategy) : ''}</span>
+      <span class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + escapeHtml(String(activeStrategy)) : ''}</span>
     </div>
-    <div class="md-recommend__grid">
-      <div class="md-recommend__strategies">
-        ${rowsHtml}
-        <div class="md-period-cash" style="margin-top:var(--space-sm)">
-          <span class="md-period-cash__label">憲章建議現金部位</span>
-          <span class="md-period-cash__value">${escapeHtml(cashRange)}</span>
-        </div>
-        ${entryCond ? `<div class="md-period-summary" style="margin-top:var(--space-sm)"><strong>進場條件：</strong>${escapeHtml(entryCond)}${direction ? '　·　方向：' + escapeHtml(direction) : ''}</div>` : ''}
+    <div class="md-recommend__strategies">
+      <div class="md-recommend__chips">${chipsHtml}</div>
+      <div class="md-period-cash" style="margin-top:var(--space-sm)">
+        <span class="md-period-cash__label">憲章建議現金部位</span>
+        <span class="md-period-cash__value">${escapeHtml(cashRange)}</span>
       </div>
-      <div class="md-recommend__matrix">
-        <h4>策略矩陣（憲章第五章）</h4>
-        ${renderMatrixTable(periodId)}
-      </div>
+      ${entryCond ? `<div class="md-period-summary" style="margin-top:var(--space-sm)"><strong>進場條件：</strong>${escapeHtml(entryCond)}${direction ? '　·　方向：' + escapeHtml(direction) : ''}</div>` : ''}
     </div>
   `;
-}
-
-function renderMatrixTable(activePeriod) {
-  const rows = Object.keys(STRATEGY_MATRIX).map(pid => {
-    const label = PERIOD_LABEL[pid] ? PERIOD_LABEL[pid].zh : pid;
-    const isActive = pid === activePeriod;
-    const strategies = STRATEGY_MATRIX[pid].slice(0, 3).map(displayStrategyName).join(' → ');
-    return `<tr data-active="${isActive ? 'true' : 'false'}">
-      <td>${escapeHtml(label)}</td>
-      <td>${strategies}</td>
-      <td>${escapeHtml(CASH_RANGES[pid] || '—')}</td>
-    </tr>`;
-  }).join('');
-  return `<table>
-    <thead><tr><th>時期</th><th>策略優先級</th><th>現金</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
 }
 
 // ---------------------------------------------------------------------------

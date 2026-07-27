@@ -78,6 +78,17 @@ type TransitionRule struct {
 	Notes string   `yaml:"notes,omitempty"`
 }
 
+// StrategyBrief carries a strategy's identity, display name, category and
+// priority for a specific market period. It is serialized to the frontend
+// so the methodology page can render category badges without maintaining
+// its own lookup tables.
+type StrategyBrief struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Priority string `json:"priority"` // "primary" | "secondary"
+}
+
 // ─── Loader ───────────────────────────────────────────────────────────
 
 // LoadMethodologyRules reads and validates a methodology_rules.yaml file.
@@ -169,6 +180,41 @@ func (r *MethodologyRules) GetAllowedStrategies(periodID string) []string {
 			result = append(result, regime.Strategies.Primary...)
 			result = append(result, regime.Strategies.Secondary...)
 			return result
+		}
+	}
+	return nil
+}
+
+// GetStrategiesWithCategory returns the ordered primary + secondary strategies
+// for a period, annotated with name, category and priority. Returns an empty
+// slice if the period is unknown.
+func (r *MethodologyRules) GetStrategiesWithCategory(periodID string) []StrategyBrief {
+	for _, regime := range r.Regimes {
+		if regime.ID != periodID {
+			continue
+		}
+		cap := len(regime.Strategies.Primary) + len(regime.Strategies.Secondary)
+		result := make([]StrategyBrief, 0, cap)
+		for _, id := range regime.Strategies.Primary {
+			if s := r.findStrategy(id); s != nil {
+				result = append(result, StrategyBrief{ID: s.ID, Name: s.Name, Category: s.Category, Priority: "primary"})
+			}
+		}
+		for _, id := range regime.Strategies.Secondary {
+			if s := r.findStrategy(id); s != nil {
+				result = append(result, StrategyBrief{ID: s.ID, Name: s.Name, Category: s.Category, Priority: "secondary"})
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// findStrategy returns the strategy definition for the given ID, or nil.
+func (r *MethodologyRules) findStrategy(id string) *StrategyRule {
+	for i := range r.Strategies {
+		if r.Strategies[i].ID == id {
+			return &r.Strategies[i]
 		}
 	}
 	return nil

@@ -2647,6 +2647,7 @@ export interface PeriodSection {
   period_name_zh: string;
   cash_reserve: number;
   allowed_strategies: string[];
+  strategies_detail?: StrategyBrief[];
 }
 
 export interface PhaseScoresConfig {
@@ -3724,6 +3725,13 @@ export interface StockInfo {
 export interface StrategiesListResponse {
   strategies: StrategyFrameSummary[];
   total: number;
+}
+
+export interface StrategyBrief {
+  id: string;
+  name: string;
+  category: string;
+  priority: string;
 }
 
 export interface StrategyEvolutionConfig {
