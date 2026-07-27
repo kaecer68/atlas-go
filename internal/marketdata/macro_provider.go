@@ -20,44 +20,45 @@ type MacroDataPoint struct {
 
 // MacroDataSnapshot holds the latest readings for all tracked indicators.
 type MacroDataSnapshot struct {
-	US10Y                MacroDataPoint `json:"us10y"`
-	DXY                  MacroDataPoint `json:"dxy"`
-	VIX                  MacroDataPoint `json:"vix"`
-	USD_TWD              MacroDataPoint `json:"usd_twd"`
-	Oil                  MacroDataPoint `json:"oil"`
-	Gold                 MacroDataPoint `json:"gold"`
-	JPY                  MacroDataPoint `json:"jpy"`
-	ForeignInvestorNet   MacroDataPoint `json:"foreign_investor_net"`
-	DomesticFundNet      MacroDataPoint `json:"domestic_fund_net"`
-	DealerNet            MacroDataPoint `json:"dealer_net"`
-	ForeignFuturesOINet  MacroDataPoint `json:"foreign_futures_oi_net"`
-	GovernmentNet        MacroDataPoint `json:"government_net"`
-	ExportElectronics    MacroDataPoint `json:"export_electronics"`
-	RetailMarginBalance  MacroDataPoint `json:"retail_margin_balance"`
-	RetailShortBalance   MacroDataPoint `json:"retail_short_balance"`
-	TSMCRevenue          MacroDataPoint `json:"tsmc_revenue"`
-	SOXIndex             MacroDataPoint `json:"sox_index"`
-	DRAMSpotPrice        MacroDataPoint `json:"dram_spot_price"`
-	TaiwanSemiIndex      MacroDataPoint `json:"taiwan_semi_index"`
-	CoWoSUtilization     MacroDataPoint `json:"cowos_utilization"`
-	CapexGrowth          MacroDataPoint `json:"capex_growth"`
-	CPIYoY               MacroDataPoint `json:"cpi_yoy"`
-	Bdi                  MacroDataPoint `json:"bdi"`
-	Silver               MacroDataPoint `json:"silver"`
-	Copper               MacroDataPoint `json:"copper"`
-	TSMADR               MacroDataPoint `json:"tsm_adr"`
-	SPXIndex             MacroDataPoint `json:"spx_index"`
-	NDXIndex             MacroDataPoint `json:"ndx_index"`
-	DJIIndex             MacroDataPoint `json:"dji_index"`
-	NVDA                 MacroDataPoint `json:"nvda"`
-	AAPL                 MacroDataPoint `json:"aapl"`
-	MSFT                 MacroDataPoint `json:"msft"`
-	TAIEX                MacroDataPoint `json:"taiex"`
-	HistoricalVolatility MacroDataPoint `json:"historical_volatility"`
-	DataStatus           string         `json:"data_status,omitempty"` // "ok" | "degraded" | "stale"
-	FailedChannels       []string       `json:"failed_channels,omitempty"`
-	StaleChannels        []string       `json:"stale_channels,omitempty"`
-	RecordedAt           int64          `json:"recorded_at"`
+	US10Y                  MacroDataPoint `json:"us10y"`
+	DXY                    MacroDataPoint `json:"dxy"`
+	VIX                    MacroDataPoint `json:"vix"`
+	USD_TWD                MacroDataPoint `json:"usd_twd"`
+	Oil                    MacroDataPoint `json:"oil"`
+	Gold                   MacroDataPoint `json:"gold"`
+	JPY                    MacroDataPoint `json:"jpy"`
+	ForeignInvestorNet     MacroDataPoint `json:"foreign_investor_net"`
+	DomesticFundNet        MacroDataPoint `json:"domestic_fund_net"`
+	DealerNet              MacroDataPoint `json:"dealer_net"`
+	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
+	GovernmentNet          MacroDataPoint `json:"government_net"`
+	ExportElectronics      MacroDataPoint `json:"export_electronics"`
+	RetailMarginBalance    MacroDataPoint `json:"retail_margin_balance"`
+	RetailShortBalance     MacroDataPoint `json:"retail_short_balance"`
+	MarginMaintenanceRatio MacroDataPoint `json:"margin_maintenance_ratio"`
+	TSMCRevenue            MacroDataPoint `json:"tsmc_revenue"`
+	SOXIndex               MacroDataPoint `json:"sox_index"`
+	DRAMSpotPrice          MacroDataPoint `json:"dram_spot_price"`
+	TaiwanSemiIndex        MacroDataPoint `json:"taiwan_semi_index"`
+	CoWoSUtilization       MacroDataPoint `json:"cowos_utilization"`
+	CapexGrowth            MacroDataPoint `json:"capex_growth"`
+	CPIYoY                 MacroDataPoint `json:"cpi_yoy"`
+	Bdi                    MacroDataPoint `json:"bdi"`
+	Silver                 MacroDataPoint `json:"silver"`
+	Copper                 MacroDataPoint `json:"copper"`
+	TSMADR                 MacroDataPoint `json:"tsm_adr"`
+	SPXIndex               MacroDataPoint `json:"spx_index"`
+	NDXIndex               MacroDataPoint `json:"ndx_index"`
+	DJIIndex               MacroDataPoint `json:"dji_index"`
+	NVDA                   MacroDataPoint `json:"nvda"`
+	AAPL                   MacroDataPoint `json:"aapl"`
+	MSFT                   MacroDataPoint `json:"msft"`
+	TAIEX                  MacroDataPoint `json:"taiex"`
+	HistoricalVolatility   MacroDataPoint `json:"historical_volatility"`
+	DataStatus             string         `json:"data_status,omitempty"` // "ok" | "degraded" | "stale"
+	FailedChannels         []string       `json:"failed_channels,omitempty"`
+	StaleChannels          []string       `json:"stale_channels,omitempty"`
+	RecordedAt             int64          `json:"recorded_at"`
 
 	// VIXBaseline is the 252-day rolling VIX median used by
 	// janus.Engine.synthesizeCompositeScore as the panic threshold.

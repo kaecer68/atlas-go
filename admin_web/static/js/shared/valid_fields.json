@@ -936,6 +936,7 @@
   "margin_balance",
   "margin_balance_z",
   "margin_change_pct",
+  "margin_maintenance_ratio",
   "margin_maintenance_z",
   "margin_percentile",
   "market",

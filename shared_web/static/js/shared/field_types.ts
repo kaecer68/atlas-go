@@ -2074,6 +2074,7 @@ export interface MacroDataSnapshot {
   export_electronics: MacroDataPoint;
   retail_margin_balance: MacroDataPoint;
   retail_short_balance: MacroDataPoint;
+  margin_maintenance_ratio: MacroDataPoint;
   tsmc_revenue: MacroDataPoint;
   sox_index: MacroDataPoint;
   dram_spot_price: MacroDataPoint;
