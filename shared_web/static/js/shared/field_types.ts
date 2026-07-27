@@ -4265,12 +4265,12 @@ export interface insiderJSONRow {
   公司名稱: string;
   申報人身分: string;
   姓名: string;
-  預定轉讓方式及股數-轉讓方式: string;
-  預定轉讓方式及股數-轉讓股數: string;
+  "預定轉讓方式及股數-轉讓方式": string;
+  "預定轉讓方式及股數-轉讓股數": string;
   每日於盤中交易最大得轉讓股數: string;
   受讓人: string;
-  目前持有股數-自有持股: string;
-  目前持有股數-保留運用決定權信託股數: string;
+  "目前持有股數-自有持股": string;
+  "目前持有股數-保留運用決定權信託股數": string;
 }
 
 export interface llmReadyDetail {
@@ -4332,12 +4332,12 @@ export interface rawInstitutionalTrader {
   Date: string;
   ContractCode: string;
   Item: string;
-  TradingVolume(Long): string;
-  TradingVolume(Short): string;
-  TradingVolume(Net): string;
-  OpenInterest(Long): string;
-  OpenInterest(Short): string;
-  OpenInterest(Net): string;
+  "TradingVolume(Long)": string;
+  "TradingVolume(Short)": string;
+  "TradingVolume(Net)": string;
+  "OpenInterest(Long)": string;
+  "OpenInterest(Short)": string;
+  "OpenInterest(Net)": string;
 }
 
 export interface rawOutcome {
@@ -4420,10 +4420,10 @@ export interface taifexPCRRaw {
   Date: string;
   PutVolume: string;
   CallVolume: string;
-  PutCallVolumeRatio%: string;
+  "PutCallVolumeRatio%": string;
   PutOI: string;
   CallOI: string;
-  PutCallOIRatio%: string;
+  "PutCallOIRatio%": string;
 }
 
 export interface tejResponse {

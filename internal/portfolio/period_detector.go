@@ -155,16 +155,16 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 	if ind.VIX > d.cfg.BlackSwanVIX {
 		triggers++
 	}
-	// TAIEX crash: single day > -5%
 	if ind.TAIEXMA20 > 0 && ind.TAIEXPrice > 0 {
-		// Simplified: use price relative to MA20 as crash proxy
-		// Full implementation needs daily change data
+		// TAIEX deviation proxy: price relative to 20-day MA (< -5%).
+		// NOTE: Uses MA20 deviation as proxy for single-day crash. Known biases:
+		// (a) false-positive on slow multi-day declines, (b) false-negative when
+		// crash occurs from a price well above MA20. Full fix needs TAIEXChange1D.
 		decline := (ind.TAIEXPrice - ind.TAIEXMA20) / ind.TAIEXMA20
 		if decline < -(d.cfg.BlackSwanTAIEXDeclinePct / 100) {
 			triggers++
 		}
 	}
-	// National fund intervention
 	if ind.NationalFundActive {
 		triggers++
 	}
@@ -180,7 +180,7 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 
 func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	// All conditions required
-	checks := 0
+
 	passed := 0
 
 	// 1. Foreign consecutive heavy sell: 3+ days with at least one > 150億.
@@ -191,40 +191,35 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 		(ind.ForeignSingleDayNet < heavyThreshold || ind.ForeignNetPeakSell < heavyThreshold) {
 		passed++
 	}
-	checks++
 
 	// 2. TWD breaks below monthly MA, depreciating fast
 	if ind.TWDMA20 > 0 && ind.TWDChange1D > 0 {
 		// Simplified: TWD weaker than MA20 and still weakening
 		passed++
 	}
-	checks++
 
 	// 3. Margin maintenance ratio < 150%
 	if ind.MarginMaintenanceRatio > 0 && ind.MarginMaintenanceRatio < d.cfg.TurnDownMarginMaintRatio {
 		passed++
 	}
-	checks++
 
 	// 4. SOX below 50-day MA
 	if ind.SOXPrice > 0 && ind.SOXMA50 > 0 && ind.SOXPrice < ind.SOXMA50 {
 		passed++
 	}
-	checks++
 
 	// 5. Foreign futures turning short or large reduction (contracts, OI delta)
 	futuresDelta := ind.ForeignFuturesOI - ind.ForeignFuturesOIPrev
 	if futuresDelta < -float64(d.cfg.TurnDownFuturesOIDecrease) || ind.ForeignFuturesOI < 0 {
 		passed++
 	}
-	checks++
 
-	return checks >= 3 && passed >= 3
+	return passed >= 3
 }
 
 // ─── Downturn Detection ───
 func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
-	checks := 0
+
 	passed := 0
 
 	// 1. Foreign sell slowing: 5-day avg < 30% of peak sell
@@ -233,7 +228,6 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
 	// 2. Margin balance down > 15% from peak
 	if ind.MarginBalancePeak > 0 && ind.MarginBalance > 0 {
@@ -241,19 +235,16 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
 	// 3. Public bank buying 5+ consecutive days
 	if ind.PublicBankConsecBuyDays >= d.cfg.DownturnPublicBankBuyDays {
 		passed++
 	}
-	checks++
 
 	// 4. VIX > threshold but not making new highs
 	if ind.VIX > d.cfg.DownturnVIXMin {
 		passed++
 	}
-	checks++
 
 	// 5. TAIEX above 5-day MA but below 20-day MA
 	if ind.TAIEXPrice > 0 && ind.TAIEXMA5 > 0 && ind.TAIEXMA20 > 0 {
@@ -261,9 +252,8 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
-	return checks >= 3 && passed >= 3
+	return passed >= 3
 }
 
 // ─── Turnaround Up Detection ───
@@ -310,26 +300,23 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 // ─── Bull Detection ───
 
 func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
-	checks := 0
+
 	passed := 0
 
 	// 1. Foreign continuous buy: 7+ of last 10 days
 	if ind.ForeignBuyDays10 >= int(d.cfg.BullForeignBuyRatio10*10) {
 		passed++
 	}
-	checks++
 
 	// 2. Foreign futures OI high: > 30000
 	if ind.ForeignFuturesOI > float64(d.cfg.BullFuturesOIMin) {
 		passed++
 	}
-	checks++
 
 	// 3. Margin mild increase: < 1% daily
 	if ind.MarginBalanceChange5D > 0 && ind.MarginBalanceChange5D < d.cfg.BullMarginDailyMaxPct*5 {
 		passed++
 	}
-	checks++
 
 	// 4. TAIEX above 20-day MA with positive slope
 	if ind.TAIEXPrice > 0 && ind.TAIEXMA20 > 0 {
@@ -337,15 +324,14 @@ func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
-	return checks >= 3 && passed >= 3
+	return passed >= 3
 }
 
 // ─── Plateau Detection ───
 
 func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
-	checks := 0
+
 	passed := 0
 
 	// 1. Foreign buy slowing: 3-day avg < 50% of 10-day avg
@@ -354,19 +340,16 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
 	// 2. Foreign futures declining 3+ days
 	if ind.ForeignFuturesOIDelta3 < 0 && ind.ForeignFuturesOIDelta3 <= -3 {
 		passed++
 	}
-	checks++
 
 	// 3. Day trade ratio > 35%
 	if ind.DayTradeRatio > d.cfg.PlateauDayTradeMinPct {
 		passed++
 	}
-	checks++
 
 	// 4. TAIEX near 20-day MA (±2%)
 	if ind.TAIEXPrice > 0 && ind.TAIEXMA20 > 0 {
@@ -375,40 +358,35 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
 	// 5. Sector rotation active
 	if ind.SectorRotationFlag {
 		passed++
 	}
-	checks++
 
-	return checks >= 3 && passed >= 3
+	return passed >= 3
 }
 
 // ─── Consolidation Detection ───
 
 func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
-	checks := 0
+
 	passed := 0
 
 	// 1. Foreign mixed: both buy and sell days > 3 in 10 days
 	if ind.ForeignBuyDays10 > d.cfg.ConsolidationBuyDaysMin && ind.ForeignSellDays10 > d.cfg.ConsolidationSellDaysMin {
 		passed++
 	}
-	checks++
 
 	// 2. TWD range-bound near monthly MA (±0.5%)
 	if ind.TWDMA20 > 0 && ind.TWDChange5D > -(d.cfg.ConsolidationTWDBandPct) && ind.TWDChange5D < d.cfg.ConsolidationTWDBandPct {
 		passed++
 	}
-	checks++
 
 	// 3. No sector leader (rotation flag)
 	if ind.SectorRotationFlag {
 		passed++
 	}
-	checks++
 
 	// 4. Volume contracting to 70%-100% of 20-day MA
 	if ind.MarketVolume > 0 && ind.MarketVolumeMA20 > 0 {
@@ -417,9 +395,8 @@ func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
 			passed++
 		}
 	}
-	checks++
 
-	return checks >= 3 && passed >= 3
+	return passed >= 3
 }
 
 // ─── Downward Compatibility Mappings ───
