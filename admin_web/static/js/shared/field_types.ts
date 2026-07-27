@@ -403,17 +403,11 @@ export interface ChannelAlert {
   error: string;
 }
 
-export interface ChannelHealthRecord {
+export interface ChannelHealthJSONRecord {
   status: string;
   last_fetch_at: string;
-  last_data_at?: string;
+  last_success_at: string;
   last_error?: string;
-  last_success_at?: string;
-  rate_limit_remaining?: number;
-  latency_ms?: number;
-  records_fetched?: number;
-  symbols_processed?: number;
-  errors?: string[];
 }
 
 export interface CircuitBreakerStateResponse {

@@ -3,15 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func TestChannelHealthStoreAdapter_PassesOptionsAndSingleton(t *testing.T) {
+func TestChannelHealthStore_PassesOptionsAndPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
-	adapter := NewChannelHealthStoreAdapter(tmpDir, nil)
+	adapter := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
 	stamp := time.Date(2026, 5, 13, 10, 11, 12, 0, time.UTC)
 
 	if err := adapter.Record("adapter_channel", "warn", "slow", WithLastDataAt(stamp), WithLatencyMs(1234)); err != nil {
@@ -28,12 +29,6 @@ func TestChannelHealthStoreAdapter_PassesOptionsAndSingleton(t *testing.T) {
 	if rec.LatencyMs != 1234 {
 		t.Fatalf("expected latency_ms 1234, got %d", rec.LatencyMs)
 	}
-	if adapter.store == nil {
-		t.Fatal("expected singleton store to be initialized")
-	}
-	if got := filepath.Base(adapter.store.path); got != "channel_health.json" {
-		t.Fatalf("expected channel_health.json, got %s", got)
-	}
 	if adapter.Get("adapter_channel") == nil {
 		t.Fatal("expected singleton store to remain usable")
 	}
@@ -44,7 +39,7 @@ func TestChannelHealthStoreAdapter_PassesOptionsAndSingleton(t *testing.T) {
 // =============================================================================
 
 func TestChannelHealthStore_Record_NewChannel(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	err := store.Record("ch-new", "ok", "")
 	if err != nil {
 		t.Fatalf("Record failed: %v", err)
@@ -65,7 +60,7 @@ func TestChannelHealthStore_Record_NewChannel(t *testing.T) {
 }
 
 func TestChannelHealthStore_Record_UpdateClearsErrorOnOk(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	// Record error first
 	if err := store.Record("ch-errclr", "error", "something broke"); err != nil {
 		t.Fatalf("record error: %v", err)
@@ -91,7 +86,7 @@ func TestChannelHealthStore_Record_UpdateClearsErrorOnOk(t *testing.T) {
 }
 
 func TestChannelHealthStore_Record_WithOptions(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	stamp := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC)
 	err := store.Record(
 		"ch-opts", "ok", "",
@@ -114,7 +109,7 @@ func TestChannelHealthStore_Record_WithOptions(t *testing.T) {
 }
 
 func TestChannelHealthStore_Get_UnrecordedChannel(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	rec := store.Get("no-such-channel")
 	if rec != nil {
 		t.Fatalf("expected nil for unrecorded channel, got %+v", rec)
@@ -122,7 +117,7 @@ func TestChannelHealthStore_Get_UnrecordedChannel(t *testing.T) {
 }
 
 func TestChannelHealthStore_Get_ReturnsCopyNotPointerToInternalData(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("ch-copy", "ok", ""); err != nil {
 		t.Fatalf("Record failed: %v", err)
 	}
@@ -154,7 +149,7 @@ func TestChannelHealthStore_PersistenceRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create store, record two channels — data saved to channel_health.json on disk
-	store1 := newChannelHealthStore(tmpDir, nil)
+	store1 := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
 	if err := store1.Record("ch-a", "ok", ""); err != nil {
 		t.Fatalf("store1 record ch-a: %v", err)
 	}
@@ -163,7 +158,7 @@ func TestChannelHealthStore_PersistenceRoundTrip(t *testing.T) {
 	}
 
 	// Create a new store pointing at the same directory — must load data from file
-	store2 := newChannelHealthStore(tmpDir, nil)
+	store2 := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
 	recA := store2.Get("ch-a")
 	if recA == nil {
 		t.Fatal("store2: expected ch-a loaded from persisted file")
@@ -205,7 +200,7 @@ func TestRecordOption_WithLatencyMs(t *testing.T) {
 }
 
 func TestChannelHealthStore_Record_EmptyChannelID(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	if err := store.Record("", "warn", ""); err != nil {
 		t.Fatalf("Record with empty channelID should not error: %v", err)
 	}
@@ -219,7 +214,7 @@ func TestChannelHealthStore_Record_EmptyChannelID(t *testing.T) {
 }
 
 func TestChannelHealthStore_Record_MultipleChannelsAllStored(t *testing.T) {
-	store := newChannelHealthStore(t.TempDir(), nil)
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	entries := map[string]string{
 		"alpha":   "ok",
 		"beta":    "warn",
@@ -305,7 +300,7 @@ func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+			adapter := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 			if tt.seedRecord {
 				if err := adapter.Record("fugle", "ok", ""); err != nil {
 					t.Fatalf("seed record: %v", err)
@@ -337,14 +332,12 @@ func TestDataChannelService_getHealthFromStore_NilRecordFallbacks(t *testing.T) 
 // MarkDegraded tests
 // =============================================================================
 
-func TestChannelHealthStoreAdapter_MarkDegraded(t *testing.T) {
+func TestChannelHealthStore_RecordDegraded(t *testing.T) {
 	tmpDir := t.TempDir()
-	adapter := NewChannelHealthStoreAdapter(tmpDir, nil)
-
-	if err := adapter.MarkDegraded("tsmc_revenue", "cache_fallback"); err != nil {
+	adapter := apigateway.NewChannelHealthStoreWithPool(tmpDir, nil)
+	if err := adapter.Record("tsmc_revenue", "degraded", "cache_fallback"); err != nil {
 		t.Fatalf("MarkDegraded: %v", err)
 	}
-
 	rec := adapter.Get("tsmc_revenue")
 	if rec == nil {
 		t.Fatal("expected record after MarkDegraded")
@@ -441,7 +434,7 @@ func TestGetAlerts_NoAlerts(t *testing.T) {
 }
 
 func TestGetAlerts_WithErrorChannel(t *testing.T) {
-	adapter := NewChannelHealthStoreAdapter(t.TempDir(), nil)
+	adapter := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
 	_ = adapter.Record("fugle", "error", "connection refused")
 	svc := &DataChannelService{
 		WorkDir:     "/tmp/workdir",

@@ -1,5 +1,7 @@
 package service
 
+import "github.com/kaecer68/atlas-go/internal/apigateway"
+
 // resolveChannelStatusFromStore merges the Gateway health store record with a
 // file-age-based health check. The health store takes priority because it
 // reflects the actual result of the last fetch attempt. File-age alone can
@@ -17,7 +19,7 @@ package service
 //   - record.Status == "error" → returns "error" with formatted LastError
 //   - any other record.Status (e.g. "warn") → returns fileStatus with record.LastError attached
 func resolveChannelStatusFromStore(
-	healthStore *ChannelHealthStoreAdapter,
+	healthStore *apigateway.ChannelHealthStore,
 	channelID string,
 	fileStatus string,
 	fileUpdated string,

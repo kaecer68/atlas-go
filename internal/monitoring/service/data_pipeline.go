@@ -24,6 +24,16 @@ type PipelineSourceStatus struct {
 }
 
 // DataPipelineService tracks data freshness across all sources.
+// ChannelHealthJSONRecord is the on-disk shape of channel_health.json
+// (subset of apigateway.ChannelHealthRecord used by data_pipeline). Exported
+// so gentags collects it for the JS field contract.
+type ChannelHealthJSONRecord struct {
+	Status        string    `json:"status"`
+	LastFetchAt   time.Time `json:"last_fetch_at"`
+	LastSuccessAt time.Time `json:"last_success_at"`
+	LastError     string    `json:"last_error,omitempty"`
+}
+
 type DataPipelineService struct {
 	WorkDir   string
 	LedgerDir string
@@ -58,17 +68,11 @@ func (s *DataPipelineService) GetPipelineStatus() ([]PipelineSourceStatus, error
 	}
 
 	// Read channel_health.json for last_produced times
-	type healthRecord struct {
-		Status        string    `json:"status"`
-		LastFetchAt   time.Time `json:"last_fetch_at"`
-		LastSuccessAt time.Time `json:"last_success_at"`
-		LastError     string    `json:"last_error,omitempty"`
-	}
-	channelHealth := make(map[string]healthRecord)
+	channelHealth := make(map[string]ChannelHealthJSONRecord)
 	healthPath := filepath.Join(s.WorkDir, "data", "state", "channel_health.json")
 	if data, err := os.ReadFile(healthPath); err == nil {
 		var wrapper struct {
-			Channels map[string]healthRecord `json:"channels"`
+			Channels map[string]ChannelHealthJSONRecord `json:"channels"`
 		}
 		if err := json.Unmarshal(data, &wrapper); err == nil {
 			channelHealth = wrapper.Channels

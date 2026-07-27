@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/autobacktest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/buildinfo"
@@ -33,7 +34,7 @@ type SystemService struct {
 	LedgerDir    string
 	BaselinePath string
 	store        ledger.OutcomeStore
-	healthStore  *ChannelHealthStoreAdapter
+	healthStore  *apigateway.ChannelHealthStore
 	JanusEngine  *janus.Engine
 	CycleTracker *industry.CycleTracker
 }
@@ -42,7 +43,7 @@ type SystemService struct {
 // healthStore is used to merge Gateway-managed channel health into the system
 // health snapshot so the home page and the data channels page agree on
 // channel status (see resolveChannelStatusFromStore).
-func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore, janusEngine *janus.Engine, healthStore *ChannelHealthStoreAdapter) *SystemService {
+func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.OutcomeStore, janusEngine *janus.Engine, healthStore *apigateway.ChannelHealthStore) *SystemService {
 	return &SystemService{
 		WorkDir:      workDir,
 		LedgerDir:    ledgerDir,
@@ -238,7 +239,7 @@ func degradedFrom(channels []DataChannelInfo) []string {
 	return d
 }
 
-func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time, healthStore *ChannelHealthStoreAdapter) DataChannelInfo {
+func buildChannelInfo(id, label string, checker func(string, time.Time) (string, string), path string, now time.Time, healthStore *apigateway.ChannelHealthStore) DataChannelInfo {
 	fileStatus, fileUpdated := checker(path, now)
 	status, updated, _ := resolveChannelStatusFromStore(healthStore, id, fileStatus, fileUpdated)
 	return DataChannelInfo{
@@ -250,7 +251,7 @@ func buildChannelInfo(id, label string, checker func(string, time.Time) (string,
 	}
 }
 
-func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string, healthStore *ChannelHealthStoreAdapter) DataChannelInfo {
+func buildAPIKeyChannel(id, label, primaryKey, fallbackKey string, healthStore *apigateway.ChannelHealthStore) DataChannelInfo {
 	key := config.GetSecret(primaryKey)
 	if key == "" && fallbackKey != "" {
 		key = config.GetSecret(fallbackKey)
