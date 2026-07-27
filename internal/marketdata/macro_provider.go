@@ -31,8 +31,9 @@ type MacroDataSnapshot struct {
 	ForeignDealerNet       MacroDataPoint `json:"foreign_dealer_net"` // F1: 外資自營商(投機性)
 	DomesticFundNet        MacroDataPoint `json:"domestic_fund_net"`
 	DealerNet              MacroDataPoint `json:"dealer_net"`
-	DealerSelfNet          MacroDataPoint `json:"dealer_self_net"`    // F2: 自營商自行買賣(大型)
-	DealerHedgingNet       MacroDataPoint `json:"dealer_hedging_net"` // F2: 自營商避險(投機)
+	DealerSelfNet          MacroDataPoint `json:"dealer_self_net"`      // F2: 自營商自行買賣(大型)
+	DealerHedgingNet       MacroDataPoint `json:"dealer_hedging_net"`   // F2: 自營商避險(投機)
+	ETFNetSubscription     MacroDataPoint `json:"etf_net_subscription"` // F3: ETF 申購贖回淨額(被動資金)
 	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
 	GovernmentNet          MacroDataPoint `json:"government_net"`
 	InsuranceNet           MacroDataPoint `json:"insurance_net"`
