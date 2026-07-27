@@ -1,7 +1,7 @@
 # E4 方法論頁面審查與修復紀錄
 
 > **審查對象**: PR #1397 `feat(methodology): add 七時期 UI + 因果傳導鏈頁面 (E4)`
-> **審查依據**: `/Users/kaecer/Downloads/E4_方法論頁面_實作提示詞_v3.md`、`docs/ATLAS_METHODOLOGY.md`
+> **審查依據**: 本地提示詞 `E4_方法論頁面_實作提示詞_v3.md`（位於 `/Users/kaecer/Downloads/`）、`docs/ATLAS_METHODOLOGY.md`
 > **審查分支**: `fix/20260727-methodology-review`
 > **審查日期**: 2026-07-27
 
