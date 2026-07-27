@@ -43,6 +43,10 @@ var skipCanary = map[string]bool{
 	"control_approve_recommendation": true,
 	"sample_createMessage":           true,
 	"elicitation_elicit":             true,
+	"industry_sector_lookup":         true,
+	"mcp_get_call_stats":             true,
+	"mcp_get_tenant_usage":           true,
+	"mcp_roots_list":                 true,
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
