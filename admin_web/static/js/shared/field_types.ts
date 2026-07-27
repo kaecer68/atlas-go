@@ -735,6 +735,9 @@ export interface DailySummaryReport {
   top_picks: Recommendation[];
   risk_level: string;
   narrative_count: number;
+  market_period?: string;
+  period_confidence?: number;
+  period_cash_level?: number;
 }
 
 export interface DarwinianAgentInfo {
@@ -2116,6 +2119,10 @@ export interface MacroDataSnapshot {
   msft: MacroDataPoint;
   taiex: MacroDataPoint;
   historical_volatility: MacroDataPoint;
+  market_volume: MacroDataPoint;
+  day_trade_ratio: MacroDataPoint;
+  fed_rate_expectations: MacroDataPoint;
+  semi_equipment_imports: MacroDataPoint;
   data_status?: string;
   failed_channels?: string[];
   stale_channels?: string[];

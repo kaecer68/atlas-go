@@ -527,6 +527,11 @@
       "results": "(DarwinianConfig)"
     },
     {
+      "name": "DefaultPeriodConfigs",
+      "params": "",
+      "results": "(map[domain.MarketPeriod]RegimeConfig)"
+    },
+    {
       "name": "DefaultRegimeConfigs",
       "params": "",
       "results": "(map[domain.Regime]RegimeConfig)"
@@ -1326,6 +1331,12 @@
       "results": "(float64)"
     },
     {
+      "name": "GetPeriodConfig",
+      "params": "(period domain.MarketPeriod)",
+      "receiver": "RegimeAllocator",
+      "results": "(RegimeConfig)"
+    },
+    {
       "name": "GetRegimeConfig",
       "params": "(regime domain.Regime)",
       "receiver": "RegimeAllocator",
@@ -1453,7 +1464,7 @@
     },
     {
       "name": "GeneratePlan",
-      "params": "(macroAssessment *narrative.MacroRiskAssessment, currentAllocations map[string]float64)",
+      "params": "(macroAssessment *narrative.MacroRiskAssessment, currentAllocations map[string]float64, capitalFlowAssessment *capitalflow.CapitalFlowAssessment)",
       "receiver": "SectorRotator",
       "results": "(*SectorRotationPlan)"
     },
@@ -2336,6 +2347,7 @@
       "fields": [
         "currentRegime domain.Regime",
         "configs map[domain.Regime]RegimeConfig",
+        "periodConfigs map[domain.MarketPeriod]RegimeConfig",
         "mu sync.RWMutex"
       ],
       "kind": "struct",
@@ -2724,6 +2736,7 @@
       "fields": [
         "Allocations []SectorAllocation",
         "PrimaryFlow string",
+        "CapitalFlowAssessment *capitalflow.CapitalFlowAssessment",
         "Rationale string",
         "Timestamp time.Time",
         "ConfigSource string"

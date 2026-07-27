@@ -82,6 +82,11 @@ type DailySummaryReport struct {
 	TopPicks       []Recommendation `json:"top_picks"`
 	RiskLevel      string           `json:"risk_level"`
 	NarrativeCount int              `json:"narrative_count"`
+
+	// E3 P1: 七時期結構化欄位（PeriodDetector 接入後填充）
+	MarketPeriod     string  `json:"market_period,omitempty"`     // period id: downturn/bull/plateau/...
+	PeriodConfidence float64 `json:"period_confidence,omitempty"` // 0-1 detection confidence
+	PeriodCashLevel  float64 `json:"period_cash_level,omitempty"` // recommended cash reserve (0-1)
 }
 
 type TaxSnapshot struct {

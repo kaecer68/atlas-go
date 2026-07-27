@@ -19,7 +19,6 @@ type mockDetector struct {
 	result  *DetectionResult
 	err     error
 	delay   time.Duration
-	callCnt int32
 	mu      sync.Mutex
 	lastIn  DetectorInput
 }

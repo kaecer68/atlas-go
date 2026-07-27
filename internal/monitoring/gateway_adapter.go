@@ -86,6 +86,8 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 		{channelID: "twse_insider", apply: a.applyInsiderTrading},
+		{channelID: "market_volume", apply: a.applyMarketVolume},
+		{channelID: "day_trade_ratio", apply: a.applyDayTradeRatio},
 	}
 
 	var (
@@ -651,5 +653,51 @@ func newGeopoliticalRiskFetcher(global, taiwan geopolitical.GeopoliticalRiskProv
 			}
 		}
 		return 0
+	}
+}
+
+// ─── P1 B3: 補漏憲章指標 apply 函數 ───
+
+// applyMarketVolume extracts 集中市場成交量 from TWSE market stats data.
+// Data source: TWSE OpenAPI (待接入: /opendata/t187ap03_L 大盤統計資訊).
+// Field: MarketVolume (億).
+func (a *macroDataGatewayAdapter) applyMarketVolume(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		MarketVolume float64 `json:"market_volume"`
+		Date         string  `json:"date"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if payload.Date == "" || payload.MarketVolume <= 0 {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Date)
+	snap.MarketVolume = marketdata.MacroDataPoint{
+		Symbol:    "TSE_VOLUME",
+		Value:     payload.MarketVolume,
+		Timestamp: ts.Unix(),
+	}
+}
+
+// applyDayTradeRatio extracts 當沖交易佔比 from TWSE day-trading stats.
+// Data source: TWSE OpenAPI (待接入: /opendata/t187ap05_L 當日沖銷交易統計).
+// Field: DayTradeRatio (%, 0-100).
+func (a *macroDataGatewayAdapter) applyDayTradeRatio(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var payload struct {
+		DayTradeRatio float64 `json:"day_trade_ratio"`
+		Date          string  `json:"date"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+	if payload.Date == "" || payload.DayTradeRatio < 0 {
+		return
+	}
+	ts, _ := time.Parse("20060102", payload.Date)
+	snap.DayTradeRatio = marketdata.MacroDataPoint{
+		Symbol:    "TSE_DAYTRADE",
+		Value:     payload.DayTradeRatio,
+		Timestamp: ts.Unix(),
 	}
 }

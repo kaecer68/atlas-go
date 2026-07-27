@@ -106,6 +106,9 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 				"reasoning":  macroFlowResult.Reasoning,
 			},
 			Confidence: -1,
+			// B5 P1: causal chain layer tracing
+			LayerID:       "layer_0", // 全球資金總開關
+			LayerParentID: "layer_root",
 		})
 	}
 

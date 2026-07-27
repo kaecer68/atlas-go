@@ -90,16 +90,7 @@ func (s *NarrativeEvidenceSource) Evidence(quotes map[string]domain.Quote, event
 	var totalConfidence float64
 
 	for _, e := range events {
-		var evScore float64
-		switch e.Theme {
-		case "US_rates_up", "geopolitical_risk_spike", "oil_price_shock", "JPY_carry_unwind":
-			evScore = -0.5
-		case "AI_capex_surge":
-			evScore = 0.5
-		default:
-			evScore = 0
-		}
-
+		evScore := narrativeThemeScore(e.Theme)
 		weight := e.Confidence * e.HitRate
 		totalScore += evScore * weight
 		totalConfidence += weight
@@ -111,6 +102,37 @@ func (s *NarrativeEvidenceSource) Evidence(quotes map[string]domain.Quote, event
 
 	avgConfidence := totalConfidence / float64(len(events))
 	return RegimeEvidence{Score: totalScore, Confidence: avgConfidence, Source: "narrative"}
+}
+
+// narrativeThemeScore maps a narrative theme to its regime evidence contribution.
+// Negative = risk-off pressure, positive = risk-on support.
+// D4 P1: expanded from 5 to all 24 detector themes.
+func narrativeThemeScore(theme string) float64 {
+	switch theme {
+	// ── Risk-off themes (negative contribution) ──
+	case "US_rates_up", "geopolitical_risk_spike", "oil_price_shock",
+		"JPY_carry_unwind", "taiwan_political_risk", "semiconductor_downturn",
+		"tariff_shock":
+		return -0.5
+
+	case "USD_TWD_volatility", "retail_institutional_divergence",
+		"gold_rally", "dollar_surge", "inflation_spike",
+		"shipping_rate_spike", "china_slowdown":
+		return -0.3
+
+	// ── Risk-on themes (positive contribution) ──
+	case "AI_capex_surge", "US_rates_down", "taiwan_export_boom",
+		"earnings_surprise":
+		return +0.5
+
+	// ── Seasonal themes — weight by period sensitivity ──
+	case "spring_festival_season", "election_cycle", "earnings_blackout",
+		"tech_peak_season", "year_end_window_dressing", "dividend_season":
+		return +0.1 // muted: seasonal effects are time-boxed
+
+	default:
+		return 0
+	}
 }
 
 type AgentSignalEvidenceSource struct {

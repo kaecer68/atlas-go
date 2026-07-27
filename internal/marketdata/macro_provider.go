@@ -57,10 +57,15 @@ type MacroDataSnapshot struct {
 	MSFT                   MacroDataPoint `json:"msft"`
 	TAIEX                  MacroDataPoint `json:"taiex"`
 	HistoricalVolatility   MacroDataPoint `json:"historical_volatility"`
-	DataStatus             string         `json:"data_status,omitempty"` // "ok" | "degraded" | "stale"
-	FailedChannels         []string       `json:"failed_channels,omitempty"`
-	StaleChannels          []string       `json:"stale_channels,omitempty"`
-	RecordedAt             int64          `json:"recorded_at"`
+	// P1 B3: 補漏憲章指標
+	MarketVolume         MacroDataPoint `json:"market_volume"`          // 集中市場成交量（億）
+	DayTradeRatio        MacroDataPoint `json:"day_trade_ratio"`        // 當沖交易佔比（%）
+	FedRateExpectations  MacroDataPoint `json:"fed_rate_expectations"`  // Fed 利率預期（CME FedWatch 機率）
+	SemiEquipmentImports MacroDataPoint `json:"semi_equipment_imports"` // 半導體設備進口（億美元）
+	DataStatus           string         `json:"data_status,omitempty"`  // "ok" | "degraded" | "stale"
+	FailedChannels       []string       `json:"failed_channels,omitempty"`
+	StaleChannels        []string       `json:"stale_channels,omitempty"`
+	RecordedAt           int64          `json:"recorded_at"`
 
 	// VIXBaseline is the 252-day rolling VIX median used by
 	// janus.Engine.synthesizeCompositeScore as the panic threshold.
@@ -112,6 +117,10 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 		MSFT                 *MacroDataPoint `json:"msft,omitempty"`
 		TAIEX                *MacroDataPoint `json:"taiex,omitempty"`
 		HistoricalVolatility *MacroDataPoint `json:"historical_volatility,omitempty"`
+		MarketVolume         *MacroDataPoint `json:"market_volume,omitempty"`
+		DayTradeRatio        *MacroDataPoint `json:"day_trade_ratio,omitempty"`
+		FedRateExpectations  *MacroDataPoint `json:"fed_rate_expectations,omitempty"`
+		SemiEquipmentImports *MacroDataPoint `json:"semi_equipment_imports,omitempty"`
 	}{
 		Alias: (*Alias)(&s),
 	}
@@ -217,6 +226,18 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 	}
 	if s.HistoricalVolatility.Symbol != "" {
 		aux.HistoricalVolatility = &s.HistoricalVolatility
+	}
+	if s.MarketVolume.Symbol != "" {
+		aux.MarketVolume = &s.MarketVolume
+	}
+	if s.DayTradeRatio.Symbol != "" {
+		aux.DayTradeRatio = &s.DayTradeRatio
+	}
+	if s.FedRateExpectations.Symbol != "" {
+		aux.FedRateExpectations = &s.FedRateExpectations
+	}
+	if s.SemiEquipmentImports.Symbol != "" {
+		aux.SemiEquipmentImports = &s.SemiEquipmentImports
 	}
 
 	return json.Marshal(aux)
