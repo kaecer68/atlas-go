@@ -85,6 +85,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "tw_vol", apply: a.applyTWVol},
 		{channelID: "taifex_institutional", apply: a.applyTaifexInstitutional},
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
+		{channelID: "twse_insider", apply: a.applyInsiderTrading},
 	}
 
 	var (
@@ -468,6 +469,25 @@ func (a *macroDataGatewayAdapter) applyGovernmentFlow(snap *marketdata.MacroData
 			Value:     insV,
 			Timestamp: insTs.Unix(),
 		}
+	}
+}
+
+func (a *macroDataGatewayAdapter) applyInsiderTrading(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var agg marketdata.InsiderAggregate
+	if err := json.Unmarshal(data, &agg); err != nil {
+		return
+	}
+	if agg.Date == "" {
+		return
+	}
+	ts, _ := time.Parse("20060102", agg.Date)
+	// NetSentiment: negative = net selling (bearish), positive = net buying (bullish).
+	// Scale: total declared shares / 1e5 for reasonable Z-score range alongside other forces.
+	v := float64(agg.TotalDeclared) / 1e5
+	snap.InsiderNet = marketdata.MacroDataPoint{
+		Symbol:    "INSIDER_NET",
+		Value:     v,
+		Timestamp: ts.Unix(),
 	}
 }
 

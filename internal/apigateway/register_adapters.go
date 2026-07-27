@@ -302,6 +302,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("tdcc_equity_dispersion", tdccAdapter)
 	logging.Warn("apigateway", "stub_adapter_registered", "channel", "tdcc_equity_dispersion", "gate", "G01")
 
+	// TwseInsider — TWSE OpenAPI 內部人持股轉讓 (t187ap12_L).
+	insiderAdapter := NewTWSEInsiderChannelAdapter(filepath.Join(workDir, "data/state/insider_flow"))
+	g.registry.Register("twse_insider", insiderAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_insider")
+
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {
 		janusAdapter := NewJANUSRegimeChannelAdapter(janusEngine)
