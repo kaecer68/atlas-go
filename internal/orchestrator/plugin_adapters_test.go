@@ -53,8 +53,9 @@ func productionSystemConfig(t *testing.T) config.Config {
 		t.Fatal("resolve test file path")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	cfg := config.Normalize(config.Load())
+	cfg := config.Load()
 	cfg.WorkDir = root
+	cfg = config.Normalize(cfg)
 	cfg.AgentRegistryPath = filepath.Join(root, "configs", "agents.json")
 	cfg.BaselinePolicyPath = filepath.Join(root, "data", "state", "baseline_policy.json")
 	cfg.ParametersConfigPath = filepath.Join(root, "configs", "parameters.json")

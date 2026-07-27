@@ -461,7 +461,7 @@
 | C4 | capitalflow 4-layer Assessment 消費鏈 | ✅ | #1378 |
 | C6 | 散戶反向指標統一口徑（RSI-Tw vs capitalflow） | ✅ | #1372 |
 | D4 | Narrative 19/24 themes 進入 regime inference | ✅ | #1372 |
-| E4 | 前端七時期 UI 卡片 | ⬜ | — |
+| E4 | 前端七時期 UI 卡片 | ✅ | TBD |
 | E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | — |
 
 ### P2 — 工程品質

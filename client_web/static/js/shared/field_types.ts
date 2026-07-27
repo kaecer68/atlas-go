@@ -342,6 +342,16 @@ export interface CapitalPhaseConfig {
   max_consecutive_losses: number;
 }
 
+export interface CapitalSection {
+  foreign: string;
+  institutional: string;
+  dealer: string;
+  government: string;
+  retail: string;
+  resonance: number;
+  quality: string;
+}
+
 export interface CapitalSnapshot {
   phase: string;
   phase_start_date: string;
@@ -1144,6 +1154,12 @@ export interface EventCalendarRule {
   direction: string;
 }
 
+export interface EventsSection {
+  tomorrow: string[];
+  this_week: string[];
+  count: number;
+}
+
 export interface ExecutionPolicy {
   conviction_floor: number;
   require_cro_pass: boolean;
@@ -1566,6 +1582,15 @@ export interface GeopoliticalRiskScore {
   shipping_impact: number;
   sources: string[];
   timestamp: string;
+}
+
+export interface GlobalOverview {
+  bond_yield: string;
+  usd_index: string;
+  jpy: string;
+  vix: string;
+  status: string;
+  summary: string;
 }
 
 export interface GovernmentFlowReading {
@@ -2617,6 +2642,13 @@ export interface PerformanceReport {
   generated_at: string;
 }
 
+export interface PeriodSection {
+  market_period: string;
+  period_name_zh: string;
+  cash_reserve: number;
+  allowed_strategies: string[];
+}
+
 export interface PhaseScoresConfig {
   score_expansion: number;
   score_recovery: number;
@@ -3105,6 +3137,18 @@ export interface ReplayDataMetadata {
   record_count: number;
 }
 
+export interface Report {
+  date: string;
+  generated_at: string;
+  summary: string;
+  global: GlobalOverview;
+  capital: CapitalSection;
+  events: EventsSection;
+  strategy: StrategySection;
+  risk: RiskSection;
+  period?: PeriodSection | null;
+}
+
 export interface ReportEntry {
   filename: string;
   path: string;
@@ -3250,6 +3294,13 @@ export interface RiskProfile {
   asymmetric_risk: number;
   supply_chain_depth: number;
   key_customers?: string[];
+}
+
+export interface RiskSection {
+  stress_index: number;
+  drawdown_alert: boolean;
+  risk_level: string;
+  warning?: string;
 }
 
 export interface RiskSnapshot {
@@ -3714,6 +3765,12 @@ export interface StrategyRecommendation {
   ranked?: string[];
   entry_signal?: string;
   stop_loss?: string;
+}
+
+export interface StrategySection {
+  active_strategy: string;
+  entry_condition: string;
+  direction: string;
 }
 
 export interface StrategyStateConfig {

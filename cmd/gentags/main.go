@@ -5,6 +5,7 @@
 // Reads:
 //
 //	internal/domain/**/*.go             — domain types (Scorecard, GuardOutcome, Regime, ...)
+//	internal/dailyreport/**/*.go        — daily report response types (Report, GlobalOverview, ...)
 //	internal/monitoring/api/**/*.go     — API response types (AgentObservatoryResponse, ...)
 //	internal/monitoring/service/**/*.go — service response types (SystemHealthResponse, ...)
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
@@ -56,6 +57,7 @@ func main() {
 
 	// Scan domain types first (foundational), then API response types (depend on domain types).
 	structs := parseStructs(domainDir)
+	dailyreportDir := findDailyReportDir(rootDir)
 	apiDir := findMonitoringAPIDir(rootDir)
 	svcDir := findMonitoringServiceDir(rootDir)
 	reportDir := findReportingDir(rootDir)
@@ -68,16 +70,26 @@ func main() {
 	eventdrivenDir := findEventDrivenDir(rootDir)
 	recommenderDir := findRecommenderDir(rootDir)
 	subscriptionDir := findSubscriptionDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" {
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" || dailyreportDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
+		for _, d := range []string{dailyreportDir, apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
 			if d == "" {
 				continue
 			}
 			for k := range preScanStructNames(d) {
 				allNames[k] = true
+			}
+		}
+		// Merge dailyreport structs (e.g. Report, GlobalOverview, PeriodSection).
+		if dailyreportDir != "" {
+			drStructs := parseStructsWithNames(dailyreportDir, allNames)
+			for k, v := range drStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and dailyreport; using dailyreport version\n", k)
+				}
+				structs[k] = v
 			}
 		}
 		// Merge API structs.
@@ -229,6 +241,14 @@ func findDomainDir() string {
 		cwd = parent
 	}
 	return "internal/domain"
+}
+
+func findDailyReportDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "dailyreport")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
 }
 
 func findMonitoringAPIDir(rootDir string) string {

@@ -112,8 +112,18 @@ func copyFile(src, dst string) error {
 }
 
 func runPhase2(reg *strategy_techniques.Registry, savePath string) (*orchestrator.System, error) {
-	cfg := config.Load()
+	cfg := config.Normalize(config.Load())
 	cfg.BrokerMode = "paper"
+	// Ensure WorkDir is the project root so relative paths (SQLite, replay data)
+	// resolve correctly when this command is invoked from a package subdirectory.
+	if cfg.WorkDir == "." || cfg.WorkDir == "" {
+		_, file, _, ok := runtime.Caller(0)
+		if ok {
+			root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
+			cfg.WorkDir = root
+			cfg = config.Normalize(cfg)
+		}
+	}
 
 	system, err := orchestrator.NewProductionSystem(cfg)
 	if err != nil {
