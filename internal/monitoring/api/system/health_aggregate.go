@@ -77,7 +77,7 @@ func (h *HealthHandlers) handleHealthAggregate(r *http.Request) (int, any) {
 	resp := aggregateResponse{
 		Tiers: map[string]tierReport{
 			"liveness":       h.runTier(h.checkLiveness),
-			"channel_health": h.runTier(h.checkChannelHealthFile),
+			"channel_health": h.runTier(h.checkChannelHealth),
 			"llm_ready":      h.runTier(h.checkLLMReady),
 			"auth_posture":   h.runTier(h.checkAuthPosture),
 		},
@@ -134,34 +134,44 @@ func (h *HealthHandlers) checkLiveness() (bool, string, any) {
 	return true, "", detail
 }
 
-// ---- Tier 2: channel_health（讀 on-disk channel_health.json）----
+// ---- Tier 2: channel_health (uses ChannelHealthStore) ----
 
-type channelHealthFileMeta struct {
-	Path       string `json:"path"`
-	Exists     bool   `json:"exists"`
-	SizeBytes  int64  `json:"size_bytes,omitempty"`
-	ModifiedAt string `json:"modified_at,omitempty"`
+type channelHealthDetail struct {
+	Total    int `json:"total"`
+	OK       int `json:"ok"`
+	Warn     int `json:"warn"`
+	Error    int `json:"error"`
+	Degraded int `json:"degraded"`
+	Inactive int `json:"inactive"`
+	Other    int `json:"other"`
 }
 
-func (h *HealthHandlers) checkChannelHealthFile() (bool, string, any) {
-	// 路徑與 apigateway/channel_health.go 的寫入路徑一致。
-	path := "data/state/channel_health.json"
-	meta := channelHealthFileMeta{Path: path, Exists: false}
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, "channel_health.json 不存在（atlas-go 尚未寫過資料）", meta
+func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
+	if h.ChannelHealth == nil {
+		return true, "", channelHealthDetail{}
+	}
+	all := h.ChannelHealth.All()
+	detail := channelHealthDetail{Total: len(all)}
+	for _, rec := range all {
+		switch rec.Status {
+		case "ok":
+			detail.OK++
+		case "warn":
+			detail.Warn++
+		case "error":
+			detail.Error++
+		case "degraded":
+			detail.Degraded++
+		case "inactive":
+			detail.Inactive++
+		default:
+			detail.Other++
 		}
-		return false, "channel_health.json 不可讀: " + err.Error(), meta
 	}
-	meta.Exists = true
-	meta.SizeBytes = info.Size()
-	meta.ModifiedAt = info.ModTime().UTC().Format(time.RFC3339)
-	// 2 小時沒更新 → warning（Stage 3 alert 規則）。前端需在 renderer 自行判斷新鮮度。
-	if age := time.Since(info.ModTime()); age > 6*time.Hour {
-		return false, "channel_health.json 超過 6 小時未更新", meta
+	if detail.Error > 0 {
+		return false, "some channels in error state", detail
 	}
-	return true, "", meta
+	return true, "", detail
 }
 
 // ---- Tier 3: llm_ready（檔案存在檢查，因為 router 在 cmd/atlas 注入；這層

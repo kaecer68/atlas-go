@@ -4157,11 +4157,14 @@ export interface authPostureDetail {
   status: string;
 }
 
-export interface channelHealthFileMeta {
-  path: string;
-  exists: boolean;
-  size_bytes?: number;
-  modified_at?: string;
+export interface channelHealthDetail {
+  total: number;
+  ok: number;
+  warn: number;
+  error: number;
+  degraded: number;
+  inactive: number;
+  other: number;
 }
 
 export interface channelState {

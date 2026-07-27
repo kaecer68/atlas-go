@@ -14,12 +14,11 @@
 package system
 
 import (
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
 // ---- summarizeOverall ----
@@ -109,67 +108,75 @@ func TestCheckLiveness_NeverPanics(t *testing.T) {
 	}
 }
 
-// ---- Tier 2: channel_health ----
+// ---- Tier 2: channel_health (uses ChannelHealthStore) ----
 //
-// checkChannelHealthFile 讀相對路徑 "data/state/channel_health.json"。
-// 用 t.Chdir 切到 tempdir 確保測試隔離。
+// checkChannelHealth 透過 ChannelHealthStore.All() 取得所有通道狀態，
+// 按 status 欄位分類計數（ok/warn/error/stale），error > 0 時回報 unhealthy。
 
-func TestCheckChannelHealthFile_NoFile(t *testing.T) {
-	h := &HealthHandlers{}
-	t.Chdir(t.TempDir())
-	ok, reason, details := h.checkChannelHealthFile()
-	if ok {
-		t.Errorf("expected ok=false when channel_health.json 不存在")
-	}
-	if reason == "" {
-		t.Errorf("expected non-empty reason when 不存在")
-	}
-	meta, ok2 := details.(channelHealthFileMeta)
-	if !ok2 {
-		t.Fatalf("details type = %T, want channelHealthFileMeta", details)
-	}
-	if meta.Exists {
-		t.Errorf("meta.Exists = true, want false")
-	}
-}
-
-func TestCheckChannelHealthFile_FreshFilePasses(t *testing.T) {
-	h := &HealthHandlers{}
-	tmpDir := t.TempDir()
-	if err := os.MkdirAll(tmpDir+"/data/state", 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(tmpDir+"/data/state/channel_health.json", []byte("{}"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	t.Chdir(tmpDir)
-	ok, reason, _ := h.checkChannelHealthFile()
+func TestCheckChannelHealth_NoStoreWired(t *testing.T) {
+	h := &HealthHandlers{} // ChannelHealth nil
+	ok, reason, details := h.checkChannelHealth()
 	if !ok {
-		t.Errorf("ok = false, reason = %q; want true (剛寫入的 file 必 fresh)", reason)
+		t.Errorf("ok = false, want true (nil store = not wired, not unhealthy)")
+	}
+	if reason != "" {
+		t.Errorf("reason = %q, want empty", reason)
+	}
+	detail, ok2 := details.(channelHealthDetail)
+	if !ok2 {
+		t.Fatalf("details type = %T, want channelHealthDetail", details)
+	}
+	if detail.Total != 0 {
+		t.Errorf("detail.Total = %d, want 0", detail.Total)
 	}
 }
 
-func TestCheckChannelHealthFile_StaleFails(t *testing.T) {
-	h := &HealthHandlers{}
+func TestCheckChannelHealth_EmptyStore(t *testing.T) {
+	store := apigateway.NewChannelHealthStore(t.TempDir())
+	h := &HealthHandlers{ChannelHealth: store}
+	ok, reason, details := h.checkChannelHealth()
+	if !ok {
+		t.Errorf("ok = false, reason = %q; want true (空 store = 無錯誤)", reason)
+	}
+	detail := details.(channelHealthDetail)
+	if detail.Total != 0 {
+		t.Errorf("detail.Total = %d, want 0", detail.Total)
+	}
+}
+
+func TestCheckChannelHealth_WithRecords(t *testing.T) {
 	tmpDir := t.TempDir()
-	path := tmpDir + "/data/state/channel_health.json"
-	if err := os.MkdirAll(tmpDir+"/data/state", 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+	store := apigateway.NewChannelHealthStore(tmpDir)
+	// 寫入三筆紀錄：ok, warn, error 各一
+	for _, ch := range []struct {
+		id     string
+		status string
+	}{
+		{"fugle", "ok"},
+		{"twse", "warn"},
+		{"yahoo", "error"},
+	} {
+		if err := store.Record(ch.id, ch.status, ""); err != nil {
+			t.Fatalf("Record(%s, %s): %v", ch.id, ch.status, err)
+		}
 	}
-	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	past := time.Now().Add(-7 * time.Hour)
-	if err := os.Chtimes(path, past, past); err != nil {
-		t.Fatalf("chtimes: %v", err)
-	}
-	t.Chdir(tmpDir)
-	ok, reason, _ := h.checkChannelHealthFile()
+	h := &HealthHandlers{ChannelHealth: store}
+	ok, _, details := h.checkChannelHealth()
 	if ok {
-		t.Errorf("ok = true, want false (檔案 mtime 超過 6h 應視為 stale)")
+		t.Errorf("ok = true, want false (有一筆 error)")
 	}
-	if !strings.Contains(reason, "超過") {
-		t.Errorf("reason = %q, want substring '超過' (zh-TW human readable)", reason)
+	detail := details.(channelHealthDetail)
+	if detail.Total != 3 {
+		t.Errorf("detail.Total = %d, want 3", detail.Total)
+	}
+	if detail.OK != 1 {
+		t.Errorf("detail.OK = %d, want 1", detail.OK)
+	}
+	if detail.Warn != 1 {
+		t.Errorf("detail.Warn = %d, want 1", detail.Warn)
+	}
+	if detail.Error != 1 {
+		t.Errorf("detail.Error = %d, want 1", detail.Error)
 	}
 }
 

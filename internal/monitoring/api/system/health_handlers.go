@@ -3,6 +3,7 @@ package system
 import (
 	"net/http"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
@@ -26,12 +27,12 @@ type healthResponse struct {
 	Ports  map[string]portHealthReport `json:"ports"`
 }
 
-// HealthHandlers provides the /health endpoint.
-// APIAddr and FubonAddr may be left empty to use the defaults
-// from internal/constants (AdminHTTPAddr and FubonProxyAddr).
+// HealthHandlers provides the /health endpoint and /api/health/aggregate Tier 2.
+// ChannelHealth is used by checkChannelHealth() for freshness-aware channel status.
 type HealthHandlers struct {
-	APIAddr   string
-	FubonAddr string
+	APIAddr       string
+	FubonAddr     string
+	ChannelHealth *apigateway.ChannelHealthStore
 }
 
 func (h *HealthHandlers) RegisterRoutes(mux *http.ServeMux) {
