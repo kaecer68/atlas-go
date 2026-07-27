@@ -13,7 +13,11 @@
 
 | 方法論層級 | 程式碼對應 | 關鍵類型／函數 |
 |-----------|-----------|---------------|
-| 市場狀態判定 | `internal/domain/shared/shared.go` | `Regime`（`RISK_ON` / `RISK_OFF` / `NEUTRAL`）|
+| 七時期判斷 | `internal/portfolio/period_detector.go` | `PeriodDetector.DetectPeriod()` → `MarketPeriod` |
+| 時期→三態映射 | `internal/portfolio/period_detector.go` | `PeriodToRegime(MarketPeriod)` → `Regime` |
+| 時期→風險層級 | `internal/portfolio/period_detector.go` | `PeriodToRiskLevel(MarketPeriod)` → `macroflow.RiskLevel` |
+| 策略時期過濾 | `internal/methodology/advisor.go` | `Advisor.AllowedStrategies(MarketPeriod)` / `Advisor.FilterStrategies(MarketPeriod, []string)` |
+| 市場狀態判定（向下相容） | `internal/domain/shared/shared.go` | `Regime`（`RISK_ON` / `RISK_OFF` / `NEUTRAL`）|
 | 狀態配置映射 | `internal/portfolio/regime.go` | `RegimeAllocator`、`DefaultRegimeConfigs()`、`RegimeDetector.Detect()` |
 | 即時微觀狀態 | `internal/realtime/regime_adapter.go` | `RegimeDetector`（7 種微觀狀態：calm/volatile/trending_up/trending_down/reversing/breakout/breakdown） |
 | 模擬動態閾值 | `internal/sim/dynamic_threshold.go` | `DynamicThresholdEngine`（bull/bear/neutral/highvol）+ `RegimeFromDomain()` |
@@ -27,8 +31,9 @@
 | 策略執行管線 | `internal/orchestrator/executor_pipeline.go` | `ExecuteWithContext()`（RegimeInference → Collection → MomentumCrashProtection → WeightApplication → MacroFlow → ControlLayer） |
 
 **關鍵觀察**：
-- 現有 `Regime` 為三態（RISK_ON / RISK_OFF / NEUTRAL），本憲章的七時期模型為其上層方法論框架，後續可在 `regime.go` 中擴展 `RegimeDetector.Detect()` 使用多指標複合判斷。
-- `macroflow.RiskLevel`（yellow/orange/red）與七時期存在自然映射關係（見第五節）。
+- `PeriodDetector.DetectPeriod()` 已實作七時期判斷（低迷／轉折開高／上升／高原／盤整／轉折下壓／黑天鵝），並透過 `PeriodToRegime()` 向下相容映射到三態 `Regime`。
+- `macroflow.RiskLevel` 與七時期存在自然映射關係（見第五節），已由 `PeriodToRiskLevel()` 提供自動推導。
+- `Advisor.AllowedStrategies()` / `Advisor.FilterStrategies()` 已按當前時期過濾策略，確保 RISK_OFF 時期不推薦 growth/momentum。
 - 壓力指數已有 VIX/DXY/US10Y 三元件，符合本憲章「美台資金開關」觀測框架。
 
 ---
@@ -420,6 +425,8 @@
 
 ## 附錄 D：憲章審計追蹤表
 
+> **實施總表**: `docs/manifest-constitution-implementation.md`
+> **差距審計**: `docs/manifest-constitution-gap-audit.md`
 > **審計報告**: `docs/ATLAS_CONSTITUTION_AUDIT.md`（2026-07-27）
 > **更新規則**: 每次修復一個審計項目後，將狀態從 ⬜ 改為 ✅，並標註 PR 編號。
 
@@ -427,32 +434,33 @@
 
 | # | 項目 | 狀態 | PR |
 |---|------|------|-----|
-| A1 | 七時期判斷邏輯（DetectDetailed） | ⬜ | — |
-| A2 | 七時期→三態向下相容映射 | ⬜ | — |
-| A3 | 三套 regime 系統統一 | ⬜ | — |
-| B1 | 管線順序重排（MacroFlow 移到推薦之前） | ⬜ | — |
-| B4 | VIX key mismatch 修復 + macro evidence 注入 | ⬜ | — |
-| C1 | 壽險/銀行 + 公司派/內部人 數據源 | ⬜ | — |
-| C2 | 公股行庫自動化數據通道 | ⬜ | — |
-| C3 | orchestrator PrimaryFlow 改用 capitalflow | ⬜ | — |
-| D1 | detector 時期敏感度（5 個 × 7 時期） | ⬜ | — |
-| D2 | YAML consumer：MethodologyAdvisor | ⬜ | — |
-| D3 | 推薦引擎按時期過濾策略（GetApplicableStrategies） | ⬜ | — |
-| D5 | RegimeAllocator 擴展為六策略×七時期 | ⬜ | — |
-| E1 | YAML config loader（JSON→YAML 擴展） | ⬜ | — |
-| E2 | 七時期閾值參數化（進入 ParametersConfig） | ⬜ | — |
-| E3 | API 輸出時期結構化欄位 | ⬜ | — |
+| A1 | 七時期判斷邏輯（DetectPeriod） | ✅ | #1372 |
+| A2 | 七時期→三態向下相容映射 | ✅ | #1372 |
+| A3 | 三套 regime 系統統一 | ✅ | #1372 |
+| B1 | 管線順序重排（MacroFlow 移到推薦之前） | ✅ | #1372 |
+| B2 | 每層輸出強制影響下一層 | ✅ | #1381 |
+| B4 | VIX key mismatch 修復 + macro evidence 注入 | ✅ | #1372 |
+| C1 | 壽險/銀行 + 公司派/內部人 數據源 | ✅ | #1372 |
+| C2 | 公股行庫自動化數據通道 | ✅ | #1372 |
+| C3 | orchestrator PrimaryFlow 改用 capitalflow | ✅ | #1372 |
+| D1 | detector 時期敏感度（5 個 × 7 時期） | ✅ | #1372 |
+| D2 | YAML consumer：MethodologyAdvisor | ✅ | #1372 |
+| D3 | 推薦引擎按時期過濾策略（GetApplicableStrategies） | ✅ | #1372 |
+| D5 | RegimeAllocator 擴展為六策略×七時期 | ✅ | #1372 |
+| E1 | YAML config loader（JSON→YAML 擴展） | ✅ | #1372 |
+| E2 | 七時期閾值參數化（進入 ParametersConfig） | ✅ | #1372 |
+| E3 | API 輸出時期結構化欄位 | ⚠️ | partial — struct exists, API builder not wired |
 
 ### P1 — 信號不完整
 
 | # | 項目 | 狀態 | PR |
 |---|------|------|-----|
-| A4 | macroflow RiskLevel 自動推導（多指標複合） | ⬜ | — |
-| B3 | MacroDataSnapshot 補漏指標（8 項） | ⬜ | — |
-| B5 | Causal chain tracing（layer-0...layer-7 ID） | ⬜ | — |
-| C4 | capitalflow 4-layer Assessment 消費鏈 | ⬜ | — |
-| C6 | 散戶反向指標統一口徑（RSI-Tw vs capitalflow） | ⬜ | — |
-| D4 | Narrative 19/24 themes 進入 regime inference | ⬜ | — |
+| A4 | macroflow RiskLevel 自動推導（多指標複合） | ✅ | #1372 |
+| B3 | MacroDataSnapshot 補漏指標（8 項） | ✅ | #1372 |
+| B5 | Causal chain tracing（layer-0...layer-7 ID） | ✅ | #1372 |
+| C4 | capitalflow 4-layer Assessment 消費鏈 | ✅ | #1378 |
+| C6 | 散戶反向指標統一口徑（RSI-Tw vs capitalflow） | ✅ | #1372 |
+| D4 | Narrative 19/24 themes 進入 regime inference | ✅ | #1372 |
 | E4 | 前端七時期 UI 卡片 | ⬜ | — |
 | E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | — |
 
@@ -460,7 +468,7 @@
 
 | # | 項目 | 狀態 | PR |
 |---|------|------|-----|
-| C5-p2 | cfScore 常數權重→動態權重 | ⬜ | — |
+| C5-p2 | cfScore 常數權重→動態權重 | ✅ | #1372 |
 
 ### 已對齊（無需修改）
 
@@ -480,3 +488,22 @@
 | F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | — |
 | F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | — |
 | F5 | 選股層策略庫設計（Phase 4，憲章目前僅組合層） | ⬜ | — |
+
+### MCP 工具對齊（2026-07-27）
+
+| # | 項目 | 狀態 | PR |
+|---|------|------|-----|
+| M1 | 時期判斷 MCP 工具公開 | ⬜ | — |
+| M2 | 資金流品質分數 MCP 工具公開 | ⬜ | — |
+| M3 | 因果鏈 tracing MCP 工具公開 | ⬜ | — |
+| M4 | 策略適用時期 MCP 工具公開 | ⬜ | — |
+| M5 | 壓力指數元件 MCP 工具公開 | ⬜ | — |
+| M6 | 審計狀態 MCP 工具公開 | ⬜ | — |
+
+### 憲章強制執行機制（2026-07-27）
+
+| # | 項目 | 狀態 | PR |
+|---|------|------|-----|
+| X1 | PR 合併前憲章對齊檢查（CI gate） | ⬜ | — |
+| X2 | 方法論變更強制更新追蹤表 | ⬜ | — |
+| X3 | 憲章漂移自動警報（nightly scan） | ⬜ | — |

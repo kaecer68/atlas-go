@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"net/url"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -26,7 +27,18 @@ func (s *server) handleExplainMarketMove(ctx context.Context, _ *mcp.CallToolReq
 		q = url.Values{"format": {in.Format}}
 	}
 	if err := s.withAudit(ctx, "explain_market_move", nil, func() error {
-		return s.cli.Get(ctx, "/api/market/explain", q, &out)
+		if err := s.cli.Get(ctx, "/api/market/explain", q, &out); err != nil {
+			return err
+		}
+		// Enrich with causal chains for constitution traceability.
+		// Failure is non-fatal: the explanation still works without chains.
+		var chains map[string]any
+		if err := s.cli.Get(ctx, "/api/narrative/chains", nil, &chains); err != nil {
+			log.Printf("[explain_market_move] causal_chains fetch failed (degraded): %v", err)
+		} else {
+			out["causal_chains"] = chains
+		}
+		return nil
 	}); err != nil {
 		return nil, nil, err
 	}

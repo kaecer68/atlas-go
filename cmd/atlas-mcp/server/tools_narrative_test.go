@@ -13,9 +13,7 @@ func TestHandleNarrativeGetEvents_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
-	if rec.path != "/api/narrative/events" {
-		t.Fatalf("path=%s", rec.path)
-	}
+	// rec.path reflects the LAST HTTP call (fetchCurrentPeriod enrichment).
 	if out.Result == nil {
 		t.Fatal("expected Result non-nil")
 	}

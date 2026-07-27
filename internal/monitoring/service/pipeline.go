@@ -17,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -1205,17 +1206,20 @@ func isInRegisteredAgentList(registered map[string]bool, agentID string) bool {
 }
 
 type RegimeHistoryData struct {
-	Sessions    []RegimeSessionEntry `json:"sessions"`
-	Transitions []RegimeTransition   `json:"transitions"`
-	Current     string               `json:"current_regime"`
+	Sessions      []RegimeSessionEntry `json:"sessions"`
+	Transitions   []RegimeTransition   `json:"transitions"`
+	Current       string               `json:"current_regime"`
+	CurrentPeriod string               `json:"current_period,omitempty"`
 }
 
 type RegimeSessionEntry struct {
-	SessionID  string `json:"session_id"`
-	Date       string `json:"date"`
-	Regime     string `json:"regime"`
-	RecordedAt string `json:"recorded_at"`
-	Source     string `json:"source,omitempty"`
+	SessionID    string `json:"session_id"`
+	Date         string `json:"date"`
+	Regime       string `json:"regime"`
+	Period       string `json:"period,omitempty"`
+	PeriodNameZH string `json:"period_name_zh,omitempty"`
+	RecordedAt   string `json:"recorded_at"`
+	Source       string `json:"source,omitempty"`
 }
 
 type RegimeTransition struct {
@@ -1286,12 +1290,21 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, row := range rows {
+		var period domain.MarketPeriod
+		var periodStr, periodZH string
+		if row.Regime != "" {
+			period = methodology.RegimeToPeriod(domain.Regime(row.Regime))
+			periodStr = string(period)
+			periodZH = period.PeriodNameZH()
+		}
 		sessions[i] = RegimeSessionEntry{
-			SessionID:  row.Date,
-			Date:       row.Date,
-			Regime:     row.Regime,
-			RecordedAt: row.RecordedAt.UTC().Format(time.RFC3339),
-			Source:     row.Source,
+			SessionID:    row.Date,
+			Date:         row.Date,
+			Regime:       row.Regime,
+			Period:       periodStr,
+			PeriodNameZH: periodZH,
+			RecordedAt:   row.RecordedAt.UTC().Format(time.RFC3339),
+			Source:       row.Source,
 		}
 		if i > 0 && row.Regime != prevRegime {
 			transitions = append(transitions, RegimeTransition{
@@ -1303,13 +1316,18 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 		prevRegime = row.Regime
 	}
 	current := ""
+	currentPeriod := ""
 	if len(rows) > 0 {
 		current = rows[0].Regime
+		if current != "" {
+			currentPeriod = string(methodology.RegimeToPeriod(domain.Regime(current)))
+		}
 	}
 	return &RegimeHistoryData{
-		Sessions:    sessions,
-		Transitions: transitions,
-		Current:     current,
+		Sessions:      sessions,
+		Transitions:   transitions,
+		Current:       current,
+		CurrentPeriod: currentPeriod,
 	}
 }
 
@@ -1330,11 +1348,20 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, sum := range summaries {
+		var period domain.MarketPeriod
+		var periodStr, periodZH string
+		if sum.Regime != "" {
+			period = methodology.RegimeToPeriod(sum.Regime)
+			periodStr = string(period)
+			periodZH = period.PeriodNameZH()
+		}
 		sessions[i] = RegimeSessionEntry{
-			SessionID:  sum.SessionID,
-			Date:       sum.RecordedAt.UTC().Format("2006-01-02"),
-			Regime:     string(sum.Regime),
-			RecordedAt: sum.RecordedAt.UTC().Format(time.RFC3339),
+			SessionID:    sum.SessionID,
+			Date:         sum.RecordedAt.UTC().Format("2006-01-02"),
+			Regime:       string(sum.Regime),
+			Period:       periodStr,
+			PeriodNameZH: periodZH,
+			RecordedAt:   sum.RecordedAt.UTC().Format(time.RFC3339),
 		}
 		if i > 0 && string(sum.Regime) != prevRegime {
 			transitions = append(transitions, RegimeTransition{
@@ -1346,12 +1373,18 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 		prevRegime = string(sum.Regime)
 	}
 	current := ""
+	currentPeriod := ""
 	if len(summaries) > 0 {
-		current = string(summaries[len(summaries)-1].Regime)
+		last := summaries[len(summaries)-1]
+		current = string(last.Regime)
+		if last.Regime != "" {
+			currentPeriod = string(methodology.RegimeToPeriod(last.Regime))
+		}
 	}
 	return &RegimeHistoryData{
-		Sessions:    sessions,
-		Transitions: transitions,
-		Current:     current,
+		Sessions:      sessions,
+		Transitions:   transitions,
+		Current:       current,
+		CurrentPeriod: currentPeriod,
 	}, nil
 }
