@@ -283,6 +283,75 @@ func (c *FugleClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 	return !meta.Data.Meta.IsSuspended && !meta.Data.Meta.IsDelisted, nil
 }
 
+// fugleCandlesResponse is the JSON shape returned by Fugle's historical candles endpoint.
+type fugleCandlesResponse struct {
+	Data []struct {
+		Date   string  `json:"date"`
+		Open   float64 `json:"open"`
+		High   float64 `json:"high"`
+		Low    float64 `json:"low"`
+		Close  float64 `json:"close"`
+		Volume int64   `json:"volume"`
+	} `json:"data"`
+}
+
+// GetHistoricalCandles fetches daily candlestick data from Fugle for a single symbol
+// over the given date range (inclusive, YYYY-MM-DD). Returns bars with ".TW"-suffixed
+// symbols. Respects the FugleClient rate limiter.
+func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to string) ([]domain.DailyBar, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("fugle rate limit: %w", err)
+	}
+
+	fugleURL := fmt.Sprintf(
+		"https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/%s?from=%s&to=%s&fields=open,high,low,close,volume",
+		symbol, from, to,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fugleURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fugle candles request: %w", err)
+	}
+	req.Header.Set("X-API-KEY", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fugle candles fetch: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fugle candles %s returned %d", symbol, resp.StatusCode)
+	}
+
+	var result fugleCandlesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("fugle candles decode: %w", err)
+	}
+
+	bars := make([]domain.DailyBar, 0, len(result.Data))
+	for _, bar := range result.Data {
+		d, err := time.Parse("2006-01-02", bar.Date)
+		if err != nil {
+			logging.Warn("marketdata", "fugle_candles_date_parse", "symbol", symbol, "date", bar.Date, logging.Err(err))
+			continue
+		}
+		bars = append(bars, domain.DailyBar{
+			Symbol: symbol + ".TW",
+			Date:   d,
+			Open:   bar.Open,
+			High:   bar.High,
+			Low:    bar.Low,
+			Close:  bar.Close,
+			Volume: bar.Volume,
+			Source: "fugle_candles",
+		})
+	}
+	return bars, nil
+}
+
 // FugleProvider 实现 marketdata.Provider 接口
 type FugleProvider struct {
 	client *FugleClient
