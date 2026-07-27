@@ -183,6 +183,8 @@ func (h *Handler) fetchLatestSymbolFlow(ctx context.Context, symbol, dateStr str
 }
 
 // HandleTechnical returns simple technical indicators for a single symbol.
+// When the quote store has insufficient data, it falls back to fetching
+// historical candles from Fugle on-demand, then caches the result.
 func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	symbol := r.URL.Query().Get("symbol")
 	if symbol == "" {
@@ -208,6 +210,21 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	bars, err := h.deps.QuoteStore.LoadQuotes(qsSymbol, start, end)
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	if len(bars) < 2 {
+		// On-demand fallback: try Fugle historical candles.
+		if h.deps.FugleClient != nil {
+			from := start.Format("2006-01-02")
+			to := end.Format("2006-01-02")
+			fetched, fetchErr := h.deps.FugleClient.GetHistoricalCandles(r.Context(), symbol, from, to)
+			if fetchErr == nil && len(fetched) >= 2 {
+				// Cache for future requests.
+				if recErr := h.deps.QuoteStore.RecordQuotes(fetched); recErr != nil {
+					slog.Warn("stocktools: on-demand quote cache failed", "symbol", symbol, "err", recErr)
+				}
+				bars = fetched
+			}
+		}
 	}
 	if len(bars) < 2 {
 		return http.StatusServiceUnavailable, map[string]string{"error": "insufficient historical quote data"}
