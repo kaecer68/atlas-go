@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -24,9 +25,10 @@ type stubDetector struct {
 	lastIn narrative.DetectorInput
 }
 
-func (d *stubDetector) Theme() string   { return d.theme }
-func (d *stubDetector) Enabled() bool   { return true }
-func (d *stubDetector) SetEnabled(bool) {}
+func (d *stubDetector) Theme() string                                   { return d.theme }
+func (d *stubDetector) Enabled() bool                                   { return true }
+func (d *stubDetector) SetEnabled(bool)                                 {}
+func (d *stubDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.0 }
 func (d *stubDetector) Detect(_ context.Context, in narrative.DetectorInput) (*narrative.DetectionResult, error) {
 	d.calls.Add(1)
 	d.lastIn = in
