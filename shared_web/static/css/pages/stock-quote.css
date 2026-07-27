@@ -29,7 +29,7 @@
   width: 100%;
   max-width: 480px;
   padding: 5px 9px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -44,7 +44,7 @@
 
 .sq-search-btn {
   padding: 5px 9px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--accent);
   color: #fff;

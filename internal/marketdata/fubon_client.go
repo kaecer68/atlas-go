@@ -323,8 +323,8 @@ func (c *FubonClient) IsHealthy() bool {
 }
 
 func (c *FubonClient) runHealthProbe(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	backoff := interval
+	maxBackoff := 5 * time.Minute
 	var failures atomic.Int32
 	probe := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -333,13 +333,20 @@ func (c *FubonClient) runHealthProbe(interval time.Duration) {
 			n := failures.Add(1)
 			if n >= healthProbeConsecutiveFailures {
 				c.healthy.Store(false)
+				// Exponential backoff: double wait each failure, capped at 5 min.
+				backoff = time.Duration(1<<min(int(n), 8)) * interval / 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
 			}
 			logging.Warn("fubon_client", "health_probe_failed",
 				logging.Err(err),
-				logging.FInt("consecutive_failures", int(n)))
+				logging.FInt("consecutive_failures", int(n)),
+				logging.FFloat64("backoff_sec", backoff.Seconds()))
 		} else {
 			failures.Store(0)
 			c.healthy.Store(true)
+			backoff = interval
 		}
 	}
 	probe()
@@ -347,7 +354,7 @@ func (c *FubonClient) runHealthProbe(interval time.Duration) {
 		select {
 		case <-c.healthStop:
 			return
-		case <-ticker.C:
+		case <-time.After(backoff):
 			probe()
 		}
 	}

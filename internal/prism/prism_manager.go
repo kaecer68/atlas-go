@@ -298,6 +298,7 @@ type PRISMManager struct {
 	mu        sync.RWMutex
 	isRunning bool
 	stopCh    chan struct{}
+	wg        sync.WaitGroup
 	config    PRISMConfig
 	executor  TrainingExecutor
 
@@ -377,23 +378,24 @@ func (pm *PRISMManager) Start() {
 
 	pm.isRunning = true
 	pm.stopCh = make(chan struct{})
-
-	// Start worker goroutines for each queue
+	// Start worker goroutines for each queue (tracked by WaitGroup).
 	for i := range int(RegimeCount) {
 		for j := 0; j < pm.config.WorkersPerQueue; j++ {
+			pm.wg.Add(1)
 			go pm.worker(pm.queues[i], pm.stopCh)
 		}
 	}
 
-	// Start auto-balancer if enabled
+	// Start auto-balancer if enabled (tracked by WaitGroup).
 	if pm.config.AutoBalance {
+		pm.wg.Add(1)
 		go pm.autoBalancer(pm.stopCh)
 	}
 
 	logging.Info("prism_manager", "started", "regime_queues", 5)
 }
 
-// Stop halts all queue processing
+// Stop halts all queue processing and waits for goroutines to finish.
 func (pm *PRISMManager) Stop() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -404,6 +406,7 @@ func (pm *PRISMManager) Stop() {
 
 	pm.isRunning = false
 	close(pm.stopCh)
+	pm.wg.Wait()
 
 	logging.Info("prism_manager", "stopped")
 }
@@ -506,6 +509,7 @@ func (pm *PRISMManager) Rebalance() {
 
 // worker processes tasks from a single queue
 func (pm *PRISMManager) worker(queue *TrainingQueue, stopCh <-chan struct{}) {
+	defer pm.wg.Done()
 	for {
 		select {
 		case <-stopCh:
@@ -561,6 +565,7 @@ func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
 
 // autoBalancer periodically rebalances queues
 func (pm *PRISMManager) autoBalancer(stopCh <-chan struct{}) {
+	defer pm.wg.Done()
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 

@@ -858,7 +858,8 @@ func (a *DashboardAPI) warmupQuotes() {
 		fetched++
 	}
 
-	logging.Info("dashboard_api", "quote_warmup_complete",
+	logging.Info(
+		"dashboard_api", "quote_warmup_complete",
 		"symbols_fetched", fetched,
 		"symbols_failed", failed,
 		"total_bars", totalBars,

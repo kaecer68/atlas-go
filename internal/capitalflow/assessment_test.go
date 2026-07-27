@@ -518,5 +518,7 @@ func TestHandleDaily_ResponseCarriesAssessmentSubLayers(t *testing.T) {
 // ===========================================================================
 
 // ensure testSnapshot's mock provider is exercised in the harness above.
-var _ = testSnapshot
-var _ = marketdata.MacroDataSnapshot{}
+var (
+	_ = testSnapshot
+	_ = marketdata.MacroDataSnapshot{}
+)

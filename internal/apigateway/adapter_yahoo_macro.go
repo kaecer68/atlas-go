@@ -35,7 +35,8 @@ func (a *YahooMacroChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		// indicator produced data) as a channel error so the circuit breaker
 		// does not open for transient off-hours gaps.
 		if snapshotHasAnySymbol(snap) {
-			logging.Warn("apigateway", "yahoo_macro_partial_fetch",
+			logging.Warn(
+				"apigateway", "yahoo_macro_partial_fetch",
 				"error", err.Error(),
 			)
 		} else {
@@ -73,8 +74,9 @@ func snapshotHasAnySymbol(snap marketdata.MacroDataSnapshot) bool {
 func (a *YahooMacroChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	snap, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
-		// Partial failure is acceptable — at least some data came back.
-		if snap.RecordedAt > 0 {
+		// snapshotHasAnySymbol distinguishes partial failure (some indicators
+		// loaded) from total failure, unlike RecordedAt which is always >0.
+		if snapshotHasAnySymbol(snap) {
 			return HealthStatus{
 				Status:    "warn",
 				LastError: err.Error(),

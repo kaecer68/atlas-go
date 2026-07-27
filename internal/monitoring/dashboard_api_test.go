@@ -891,6 +891,7 @@ func TestDashboardAPI_ChannelHealthEndpoint_MissingFile(t *testing.T) {
 		t.Errorf("expected empty channels array, got %s", body)
 	}
 }
+
 func TestHandleAgentNames(t *testing.T) {
 	tmpDir := t.TempDir()
 	configsDir := filepath.Join(tmpDir, "configs")
@@ -1048,74 +1049,97 @@ func (m *mockStressStore) UpsertRegime(ctx context.Context, row ledger.RegimeRow
 	m.upsertedRegime = append(m.upsertedRegime, row)
 	return nil
 }
+
 func (m *mockStressStore) LoadRegimeByDate(ctx context.Context, date string) (ledger.RegimeRow, bool, error) {
 	return ledger.RegimeRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadRegimeByDateAll(ctx context.Context, date string) (ledger.RegimeRow, bool, error) {
 	return ledger.RegimeRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadRegimeHistory(ctx context.Context, limit int) ([]ledger.RegimeRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadRegimeHistoryAll(ctx context.Context, limit int) ([]ledger.RegimeRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) UpsertStress(ctx context.Context, row ledger.StressRow) error {
 	m.upserted = append(m.upserted, row)
 	return m.returnErr
 }
+
 func (m *mockStressStore) LoadStressByDate(ctx context.Context, date string) (ledger.StressRow, bool, error) {
 	return ledger.StressRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadStressByDateAll(ctx context.Context, date string) (ledger.StressRow, bool, error) {
 	return ledger.StressRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadStressHistory(ctx context.Context, limit int) ([]ledger.StressRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadStressHistoryAll(ctx context.Context, limit int) ([]ledger.StressRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) UpsertEventCalendar(ctx context.Context, row ledger.EventCalendarRow) error {
 	return nil
 }
+
 func (m *mockStressStore) LoadEventCalendarByDate(ctx context.Context, date string) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadEventCalendarByDateAll(ctx context.Context, date string) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadEventCalendarRange(ctx context.Context, startDate, endDate string, limit int) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadEventCalendarRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) UpsertPredictionBacktest(ctx context.Context, row ledger.PredictionBacktestRow) error {
 	return nil
 }
+
 func (m *mockStressStore) LoadPredictionBacktestRange(ctx context.Context, startDate, endDate string, limit int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadPredictionBacktestRangeAll(ctx context.Context, startDate, endDate string, limit int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) UpsertGeopolitical(ctx context.Context, row ledger.GeopoliticalRow) error {
 	m.upsertedGeo = append(m.upsertedGeo, row)
 	return nil
 }
+
 func (m *mockStressStore) LoadGeopoliticalByDate(ctx context.Context, date string) (ledger.GeopoliticalRow, bool, error) {
 	return ledger.GeopoliticalRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadGeopoliticalByDateAll(ctx context.Context, date string) (ledger.GeopoliticalRow, bool, error) {
 	return ledger.GeopoliticalRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadGeopoliticalHistory(ctx context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadGeopoliticalHistoryAll(ctx context.Context, limit int) ([]ledger.GeopoliticalRow, error) {
 	return m.geoRows, nil
 }
+
 func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
 	return nil, nil
 }
@@ -1129,69 +1153,91 @@ func (m *mockGeopoliticalStore) UpsertGeopolitical(_ context.Context, row ledger
 	m.upserted = append(m.upserted, row)
 	return m.returnErr
 }
+
 func (m *mockGeopoliticalStore) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
 	return ledger.GeopoliticalRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
 	return ledger.GeopoliticalRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadGeopoliticalHistory(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
 	return nil, nil
 }
 
 func (m *mockGeopoliticalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error { return nil }
+
 func (m *mockGeopoliticalStore) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
 	return ledger.RegimeRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
 	return ledger.RegimeRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadRegimeHistory(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) UpsertStress(_ context.Context, _ ledger.StressRow) error { return nil }
+
 func (m *mockGeopoliticalStore) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
 	return ledger.StressRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
 	return ledger.StressRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
 	return nil
 }
+
 func (m *mockGeopoliticalStore) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
 	return nil
 }
+
 func (m *mockGeopoliticalStore) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
 	return nil, nil
 }

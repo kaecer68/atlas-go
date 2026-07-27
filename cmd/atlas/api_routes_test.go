@@ -136,6 +136,7 @@ func TestAddrPortsMatch(t *testing.T) {
 		}
 	}
 }
+
 func TestReportPort_ErrorsSurfacedAsUnknown(t *testing.T) {
 	// Malformed address should not panic; reportPort should return
 	// State="unknown" with the parse error in the Error field.
