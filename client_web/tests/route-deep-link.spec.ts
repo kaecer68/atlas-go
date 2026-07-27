@@ -24,10 +24,10 @@ test.describe.configure({ mode: 'parallel' });
 
 const PAGES = [
   { id: 'evolution_panel',     title: '策略演化' },
-  { id: 'capital_board',       title: '錢潮看板' },
+  { id: 'capital_board',       title: '七大勢力看板' },
   { id: 'stock-quote',         title: '個股快查' },
   { id: 'strategies',          title: '投資心法' },
-  { id: 'capital_predictions', title: '錢潮預測' },
+  { id: 'capital_predictions', title: '未來 5 日資金' },
 ];
 
 for (const { id, title } of PAGES) {
@@ -58,5 +58,5 @@ test('sidebar nav click routes to correct page', async ({ page }) => {
   await page.goto('/client/evolution_panel');
   await expect(page.locator('#pageTitle')).toHaveText('策略演化', { timeout: 15000 });
   await page.goto('/client/capital_board');
-  await expect(page.locator('#pageTitle')).toHaveText('錢潮看板', { timeout: 15000 });
+  await expect(page.locator('#pageTitle')).toHaveText('七大勢力看板', { timeout: 15000 });
 });
