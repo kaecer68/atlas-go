@@ -752,11 +752,13 @@ func run(args []string, deps appDeps) error {
 		mux.Handle("/api/v1/alerts", alertWebhook)
 		log.Printf("[Alerting] registered /api/v1/alerts webhook handler (cap=1000)")
 
+		// Always register alert routes, even without a store.
+		alertAPI := monitoring.NewAlertAPI(alertStore)
 		if alertStore != nil {
-			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.WithAlertSources(alertscanner.NewWebhookSource(alertWebhook))
-			alertAPI.RegisterRoutes(mux)
-
+		}
+		alertAPI.RegisterRoutes(mux)
+		if alertStore != nil {
 			// Route C: scan for in-flight alerts after process restart.
 			scanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
