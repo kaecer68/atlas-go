@@ -635,6 +635,12 @@
       "results": ""
     },
     {
+      "name": "SetForceRetailZScore",
+      "params": "(z float64)",
+      "receiver": "FactorBridge",
+      "results": ""
+    },
+    {
       "name": "CalculateAllScores",
       "params": "(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64, factorWeights map[FactorType]float64, bridgeInputs ...FactorBridgeInput)",
       "receiver": "FactorEngine",
@@ -2060,6 +2066,7 @@
         "marginAvg float64",
         "marginStd float64",
         "calculator *retail.Calculator",
+        "forceRetailZScore float64",
         "stressIndex *StressIndex"
       ],
       "kind": "struct",

@@ -18,12 +18,13 @@ type FactorBridgeInput struct {
 
 // FactorBridge converts raw MacroDataSnapshot into standardized factor inputs.
 type FactorBridge struct {
-	foreignFlowAvg float64
-	foreignFlowStd float64
-	marginAvg      float64
-	marginStd      float64
-	calculator     *retail.Calculator // optional RSI-tw calculator for retail sentiment
-	stressIndex    *StressIndex       // config-driven Taiwan Stress Index
+	foreignFlowAvg    float64
+	foreignFlowStd    float64
+	marginAvg         float64
+	marginStd         float64
+	calculator        *retail.Calculator // optional RSI-tw calculator for retail sentiment
+	forceRetailZScore float64            // C6 P1: ForceRetail Z-score from capitalflow (0 = not set)
+	stressIndex       *StressIndex       // config-driven Taiwan Stress Index
 }
 
 // NewFactorBridge creates a FactorBridge with default calibration values.
@@ -41,6 +42,14 @@ func NewFactorBridge() *FactorBridge {
 // When nil (default), computeRetailSentiment falls back to naive margin change % logic.
 func (fb *FactorBridge) SetCalculator(c *retail.Calculator) {
 	fb.calculator = c
+}
+
+// SetForceRetailZScore sets the capitalflow ForceRetail Z-score for retail
+// sentiment computation (C6 P1). When non-zero, it takes priority over
+// the RSI-tw Calculator and the margin-change fallback. This unifies
+// the retail reverse indicator across the capitalflow and portfolio modules.
+func (fb *FactorBridge) SetForceRetailZScore(z float64) {
+	fb.forceRetailZScore = z
 }
 
 // Convert transforms a MacroDataSnapshot into a FactorBridgeInput.
@@ -71,9 +80,28 @@ func (fb *FactorBridge) standardize(value, avg, std float64) float64 {
 	return z
 }
 
-// computeRetailSentiment derives retail sentiment from margin balance changes,
-// or from the attached RSI-tw Calculator when available.
+// computeRetailSentiment derives retail sentiment from:
+//  1. capitalflow ForceRetail Z-score (C6 P1) — canonical, unified source
+//  2. attached RSI-tw Calculator (legacy)
+//  3. naive margin balance change percentage (fallback)
+//
+// Returns a value in [-1, 1] where positive = retail bullish (contrarian:
+// high retail bullishness is a sell signal, handled by negative weight in
+// the institutional sentiment formula).
 func (fb *FactorBridge) computeRetailSentiment(snap MacroDataSnapshot) float64 {
+	// C6 P1: capitalflow ForceRetail Z-score (range ~[-3, 3]) as canonical source.
+	if fb.forceRetailZScore != 0 {
+		// Normalize Z-score to [-1, 1]; clamp at outlier boundaries.
+		normalized := fb.forceRetailZScore / 3.0
+		if normalized > 1.0 {
+			normalized = 1.0
+		}
+		if normalized < -1.0 {
+			normalized = -1.0
+		}
+		return normalized
+	}
+
 	if fb.calculator != nil {
 		input := retail.RSITwInput{
 			VIXLevel:           snap.VIX.Value,

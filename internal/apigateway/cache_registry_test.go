@@ -442,7 +442,7 @@ func TestChannelIDs(t *testing.T) {
 		"twse_insider",
 		"twse_oddlot", "twse_sbl", "government_flow", "government_broker", "bdi",
 		"us_spx", "us_ndx", "us_dji", "taiex_index", "tw_vol",
-		"us_nvda", "us_aapl", "us_msft", "tsm_adr",
+		"us_nvda", "us_aapl", "us_msft", "tsm_adr", "twse_insider",
 	}
 	seen := make(map[string]bool)
 	for _, id := range ids {
