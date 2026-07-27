@@ -24,6 +24,14 @@ type Report struct {
 	Events    EventsSection   `json:"events"`
 	Strategy  StrategySection `json:"strategy"`
 	Risk      RiskSection     `json:"risk"`
+	Period    *PeriodSection  `json:"period,omitempty"`
+}
+
+type PeriodSection struct {
+	MarketPeriod      string   `json:"market_period"`
+	PeriodNameZH      string   `json:"period_name_zh"`
+	CashReserve       float64  `json:"cash_reserve"`
+	AllowedStrategies []string `json:"allowed_strategies"`
 }
 
 type GlobalOverview struct {
@@ -75,12 +83,30 @@ type DataProvider interface {
 
 // Generator produces daily reports.
 type Generator struct {
-	mu           sync.RWMutex
-	latest       *Report
-	archive      map[string]*Report
-	workDir      string
-	provider     DataProvider
-	regimeGetter func() domain.Regime
+	mu             sync.RWMutex
+	latest         *Report
+	archive        map[string]*Report
+	workDir        string
+	provider       DataProvider
+	regimeGetter   func() domain.Regime
+	periodProvider PeriodProvider
+}
+
+// PeriodInfo carries the seven-period classification for a daily report.
+type PeriodInfo struct {
+	MarketPeriod      string
+	PeriodNameZH      string
+	CashLevel         float64
+	AllowedStrategies []string
+}
+
+// PeriodProvider returns the current period section when available.
+type PeriodProvider func() *PeriodInfo
+
+// SetPeriodProvider sets a callback that supplies the current seven-period
+// classification and its methodology-derived recommendations.
+func (g *Generator) SetPeriodProvider(fn PeriodProvider) {
+	g.periodProvider = fn
 }
 
 // NewGenerator creates a daily report generator.
@@ -156,6 +182,17 @@ func (g *Generator) Generate() *Report {
 			DrawdownAlert: false,
 			RiskLevel:     "moderate",
 		},
+	}
+
+	if g.periodProvider != nil {
+		if info := g.periodProvider(); info != nil {
+			r.Period = &PeriodSection{
+				MarketPeriod:      info.MarketPeriod,
+				PeriodNameZH:      info.PeriodNameZH,
+				CashReserve:       info.CashLevel,
+				AllowedStrategies: info.AllowedStrategies,
+			}
+		}
 	}
 
 	g.mu.Lock()
