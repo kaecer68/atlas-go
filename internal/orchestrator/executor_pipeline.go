@@ -8,9 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/macroflow"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/ml"
-	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 // ExecuteWithContext executes registry research using a unified context.
@@ -83,20 +81,9 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
 	// Computed post-regime inference so risk-level→adjustment mapping matches
 	// the detected regime. ApplyControl consumes the result later in the pipeline.
-	// ── A4 P1: Period detection from MacroDataSnapshot ──
-	// When a PeriodDetector is wired and macro snapshot has enough indicators,
-	// compute the 7-period classification before macro flow adjustment so
-	// PeriodToRiskLevel can provide finer-grained RiskLevel than the legacy
-	// 3-regime mapping.
-	if ctx.PeriodDetector != nil && ctx.MacroDataSnapshot != nil {
-		ind := snapshotToPeriodIndicators(*ctx.MacroDataSnapshot)
-		period := ctx.PeriodDetector.DetectPeriod(ind)
-		ctx.Period = &period
-	}
-
 	var macroFlowResult *macroflow.AdjustmentResult
 	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
-		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime, ctx.Period))
+		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
 	}
 
 	if macroFlowResult != nil && ctx.Scratchpad != nil {
@@ -157,13 +144,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 }
 
-// regimeToRiskLevel maps a regime to macroflow risk level, using the 7-period
-// classification (via PeriodToRiskLevel) when available. Falls back to the
-// legacy 3-regime mapping when period is unknown.
-func regimeToRiskLevel(regime domain.Regime, period *domain.MarketPeriod) macroflow.RiskLevel {
-	if period != nil {
-		return portfolio.PeriodToRiskLevel(*period)
-	}
+func regimeToRiskLevel(regime domain.Regime) macroflow.RiskLevel {
 	switch regime {
 	case domain.RegimeRiskOff:
 		return macroflow.RiskRed
@@ -227,24 +208,4 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
 		Plugins:   plugins,
 	})
 	return result.Regime, result.RawRecommendations, result.FinalRecommendations, result.GuardOutcomes
-}
-
-// snapshotToPeriodIndicators converts a marketdata.MacroDataSnapshot to the
-// portfolio.PeriodIndicators format expected by PeriodDetector.DetectPeriod.
-// Fields not present in the macro snapshot default to zero (unavailable).
-func snapshotToPeriodIndicators(snapshot marketdata.MacroDataSnapshot) portfolio.PeriodIndicators {
-	return portfolio.PeriodIndicators{
-		VIX:                    snapshot.VIX.Value,
-		DXY:                    snapshot.DXY.Value,
-		US10Y:                  snapshot.US10Y.Value,
-		SOXPrice:               snapshot.SOXIndex.Value,
-		TSMADRPrice:            snapshot.TSMADR.Value,
-		TAIEXPrice:             snapshot.TAIEX.Value,
-		ForeignSingleDayNet:    snapshot.ForeignInvestorNet.Value,
-		ForeignFuturesOI:       snapshot.ForeignFuturesOINet.Value,
-		MarginBalance:          snapshot.RetailMarginBalance.Value,
-		MarginMaintenanceRatio: snapshot.MarginMaintenanceRatio.Value,
-		MarketVolume:           snapshot.MarketVolume.Value,
-		DayTradeRatio:          snapshot.DayTradeRatio.Value,
-	}
 }

@@ -85,15 +85,6 @@ type ExecutionContext struct {
 	ControlLayer             ControlLayerStrategy
 	ForecastBridge           ForecastBridgeStrategy         // nil → skip forecast bridge step
 	DirectionalTradeLayer    DirectionalTradeWeightProvider // nil → signals not recorded
-	// Period is the 7-period market classification (A4 P1). When non-nil,
-	// regimeToRiskLevel uses PeriodToRiskLevel for finer-grained RiskLevel
-	// than the legacy 3-regime mapping.
-	Period *domain.MarketPeriod
-
-	// PeriodDetector is the optional 7-period market cycle classifier (A4 P1).
-	// When non-nil and MacroDataSnapshot has sufficient indicators, the period
-	// is computed before macro flow adjustment and stored in ctx.Period.
-	PeriodDetector *portfolio.PeriodDetector
 
 	// MacroDataSnapshot is the latest macro snapshot for macro flow adjustment.
 	// When non-nil, the MacroFlowStrategy can use it to compute allocation-tier deltas.
