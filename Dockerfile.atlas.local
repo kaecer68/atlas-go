@@ -1,0 +1,33 @@
+# Sandbox/local variant of Dockerfile: copies host-built Linux binaries
+# instead of compiling inside the image. Used by `make rebuild-atlas`.
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates tzdata curl
+
+RUN addgroup -g 1000 atlas && \
+    adduser -u 1000 -G atlas -s /bin/sh -D atlas
+
+WORKDIR /app
+
+COPY .build-atlas/atlas-go /app/
+COPY .build-atlas/daily-replay-sync /app/
+COPY .build-atlas/atlas-mcp /app/
+COPY .build-atlas/calibrate-seasonal /app/
+
+COPY configs /app/configs
+COPY prompts /app/prompts
+COPY scripts /app/scripts
+COPY sql /app/sql
+
+RUN mkdir -p /app/data /app/reports /app/logs && \
+    chown -R atlas:atlas /app
+
+USER atlas
+
+EXPOSE 18080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:18080/health || exit 1
+
+ENTRYPOINT ["/app/atlas-go"]
+CMD ["-api"]

@@ -1,0 +1,26 @@
+# Sandbox/local variant of Dockerfile.cron: copies host-built Linux binaries
+# instead of compiling inside the image. Used by `make rebuild-cron`.
+FROM alpine:latest
+
+RUN apk add --no-cache curl bash
+
+WORKDIR /app
+
+COPY scripts/ /app/scripts/
+RUN chmod +x /app/scripts/*.sh
+
+COPY .build-cron/daily-replay-sync /app/
+COPY .build-cron/macro-ingest /app/
+COPY .build-cron/geo-ingest /app/
+COPY .build-cron/cron-quote-backfill /app/
+COPY .build-cron/c07-obs-collector /app/
+COPY .build-cron/c07-day-evaluator /app/
+
+COPY sql /app/sql
+
+COPY scripts/cron-entrypoint.sh /app/cron-entrypoint.sh
+RUN chmod +x /app/cron-entrypoint.sh
+
+RUN mkdir -p /var/log/cron
+
+CMD ["/app/cron-entrypoint.sh"]

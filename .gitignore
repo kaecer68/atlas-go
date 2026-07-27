@@ -228,7 +228,3 @@ internal/narrative/testdata/*.actual.json
 # Binary freshness protocol (2026-07-21): host-built binaries for sandbox rebuilds
 .build-atlas/
 .build-cron/
-
-# Local Dockerfile variants for sandbox environments (no proxy.golang.org)
-Dockerfile.atlas.local
-Dockerfile.cron.local
