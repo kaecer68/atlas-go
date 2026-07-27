@@ -24,6 +24,7 @@ find . \
     -not -path './vendor/*' \
     -not -path './.gocache/*' \
     -not -path './.opencode/*' \
+    -not -path '*/.worktrees/*' \
     -not -path './.gstack/*' \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
