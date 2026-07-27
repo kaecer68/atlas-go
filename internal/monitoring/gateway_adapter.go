@@ -237,11 +237,20 @@ func (a *macroDataGatewayAdapter) applyCapitalFlow(snap *marketdata.MacroDataSna
 		if s.ForeignInvestorNet.Symbol != "" {
 			snap.ForeignInvestorNet = s.ForeignInvestorNet
 		}
+		if s.ForeignDealerNet.Symbol != "" {
+			snap.ForeignDealerNet = s.ForeignDealerNet
+		}
 		if s.DomesticFundNet.Symbol != "" {
 			snap.DomesticFundNet = s.DomesticFundNet
 		}
 		if s.DealerNet.Symbol != "" {
 			snap.DealerNet = s.DealerNet
+		}
+		if s.DealerSelfNet.Symbol != "" {
+			snap.DealerSelfNet = s.DealerSelfNet
+		}
+		if s.DealerHedgingNet.Symbol != "" {
+			snap.DealerHedgingNet = s.DealerHedgingNet
 		}
 		return
 	}
@@ -258,8 +267,11 @@ func (a *macroDataGatewayAdapter) applyCapitalFlow(snap *marketdata.MacroDataSna
 	ts := flowTime.Unix()
 	if flow.ForeignInvestorNet != 0 || flow.DomesticFundNet != 0 || flow.DealerNet != 0 {
 		snap.ForeignInvestorNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet, Timestamp: ts}
+		snap.ForeignDealerNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN_DEALER", Value: flow.ForeignDealerNet, Timestamp: ts}
 		snap.DomesticFundNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: flow.DomesticFundNet, Timestamp: ts}
 		snap.DealerNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: ts}
+		snap.DealerSelfNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_SELF", Value: flow.DealerSelfNet, Timestamp: ts}
+		snap.DealerHedgingNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_HEDGING", Value: flow.DealerHedgingNet, Timestamp: ts}
 	}
 }
 

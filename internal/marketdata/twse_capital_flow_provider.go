@@ -20,12 +20,16 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
-// TWSECapitalFlow holds daily net buy/sell for the three major investor types.
+// TWSECapitalFlow holds daily net buy/sell for the three major investor types,
+// with sub-type splits for foreign and dealer per TWSE T86 column schema.
 type TWSECapitalFlow struct {
 	Date               string  `json:"date"`
-	ForeignInvestorNet float64 `json:"foreign_investor_net"` // 外資及陸資買賣超
-	DomesticFundNet    float64 `json:"domestic_fund_net"`    // 投信買賣超
-	DealerNet          float64 `json:"dealer_net"`           // 自營商買賣超
+	ForeignInvestorNet float64 `json:"foreign_investor_net"` // 外陸資買賣超(不含外資自營商) — column 4
+	ForeignDealerNet   float64 `json:"foreign_dealer_net"`   // 外資自營商買賣超 — column 7
+	DomesticFundNet    float64 `json:"domestic_fund_net"`    // 投信買賣超 — column 10
+	DealerNet          float64 `json:"dealer_net"`           // 自營商合計(自行+避險) — column 11
+	DealerSelfNet      float64 `json:"dealer_self_net"`      // 自營商自行買賣 — column 14
+	DealerHedgingNet   float64 `json:"dealer_hedging_net"`   // 自營商避險 — column 17
 	TotalNet           float64 `json:"total_net"`
 }
 
@@ -87,14 +91,16 @@ func (t *TWSECapitalFlowProvider) buildSnapshotFromFlow(flow TWSECapitalFlow) Ma
 	flowTime, _ := time.ParseInLocation("20060102", flow.Date, time.FixedZone("CST", 8*60*60))
 	flowTs := flowTime.Unix()
 
+	snap := MacroDataSnapshot{RecordedAt: flowTs}
 	prev, _ := t.loadPreviousFlow(flow.Date)
-
-	snap := MacroDataSnapshot{
-		RecordedAt: flowTs,
-	}
 	snap.ForeignInvestorNet = MacroDataPoint{
 		Symbol: "TAIWAN_FOREIGN", Value: flow.ForeignInvestorNet,
 		ChangePct: percentChange(flow.ForeignInvestorNet, prev.ForeignInvestorNet),
+		Timestamp: flowTs,
+	}
+	snap.ForeignDealerNet = MacroDataPoint{
+		Symbol: "TAIWAN_FOREIGN_DEALER", Value: flow.ForeignDealerNet,
+		ChangePct: percentChange(flow.ForeignDealerNet, prev.ForeignDealerNet),
 		Timestamp: flowTs,
 	}
 	snap.DomesticFundNet = MacroDataPoint{
@@ -105,6 +111,16 @@ func (t *TWSECapitalFlowProvider) buildSnapshotFromFlow(flow TWSECapitalFlow) Ma
 	snap.DealerNet = MacroDataPoint{
 		Symbol: "TAIWAN_DEALER", Value: flow.DealerNet,
 		ChangePct: percentChange(flow.DealerNet, prev.DealerNet),
+		Timestamp: flowTs,
+	}
+	snap.DealerSelfNet = MacroDataPoint{
+		Symbol: "TAIWAN_DEALER_SELF", Value: flow.DealerSelfNet,
+		ChangePct: percentChange(flow.DealerSelfNet, prev.DealerSelfNet),
+		Timestamp: flowTs,
+	}
+	snap.DealerHedgingNet = MacroDataPoint{
+		Symbol: "TAIWAN_DEALER_HEDGING", Value: flow.DealerHedgingNet,
+		ChangePct: percentChange(flow.DealerHedgingNet, prev.DealerHedgingNet),
 		Timestamp: flowTs,
 	}
 	return snap
@@ -216,10 +232,9 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 	if err != nil {
 		return TWSECapitalFlow{}, err
 	}
-
-	var totalForeign, totalDomestic, totalDealer float64
+	var totalForeign, totalForeignDealer, totalDomestic, totalDealer, totalDealerSelf, totalDealerHedging float64
 	for _, row := range rows {
-		if len(row) < 12 {
+		if len(row) < 18 {
 			continue
 		}
 		// Column mapping based on TWSE T86 schema (19 columns as of 2026):
@@ -230,20 +245,23 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 		// 11: 自營商買賣超股數(含自行+避險), 12: 自營商買進股數(自行買賣), 13: 自營商賣出股數(自行買賣), 14: 自營商買賣超股數(自行買賣),
 		// 15: 自營商買進股數(避險), 16: 自營商賣出股數(避險), 17: 自營商買賣超股數(避險),
 		// 18: 三大法人買賣超股數
-		foreign := parseTWDVolume(row[4])
-		domestic := parseTWDVolume(row[10])
-		dealer := parseTWDVolume(row[11])
-		totalForeign += foreign
-		totalDomestic += domestic
-		totalDealer += dealer
+		totalForeign += parseTWDVolume(row[4])
+		totalForeignDealer += parseTWDVolume(row[7])
+		totalDomestic += parseTWDVolume(row[10])
+		totalDealer += parseTWDVolume(row[11])
+		totalDealerSelf += parseTWDVolume(row[14])
+		totalDealerHedging += parseTWDVolume(row[17])
 	}
 
 	flow := TWSECapitalFlow{
 		Date:               dateStr,
-		ForeignInvestorNet: totalForeign / 1e8, // convert shares to rough proxy (simplified)
+		ForeignInvestorNet: totalForeign / 1e8,
+		ForeignDealerNet:   totalForeignDealer / 1e8,
 		DomesticFundNet:    totalDomestic / 1e8,
 		DealerNet:          totalDealer / 1e8,
-		TotalNet:           (totalForeign + totalDomestic + totalDealer) / 1e8,
+		DealerSelfNet:      totalDealerSelf / 1e8,
+		DealerHedgingNet:   totalDealerHedging / 1e8,
+		TotalNet:           (totalForeign + totalForeignDealer + totalDomestic + totalDealer) / 1e8,
 	}
 	return flow, nil
 }
