@@ -695,9 +695,16 @@ func run(args []string, deps appDeps) error {
 		registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc, *apiAddr)
 
 		// Per-symbol stock endpoints for atlas-mcp.
+		var quoteStore ledger.QuoteStore
+		var fugleClient *marketdata.FugleClient
+		var finmindClient *marketdata.FinMindClient
 		stockDeps := stocktools.Deps{}
 		if cfg.FugleAPIKey != "" {
-			stockDeps.FugleClient = marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
+			fugleClient = marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
+			stockDeps.FugleClient = fugleClient
+		}
+		if cfg.FinMindAPIKey != "" {
+			finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		}
 		if fp := portfolio.NewFundamentalProvider(); true {
 			fundamentalsPath := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
@@ -708,10 +715,13 @@ func run(args []string, deps appDeps) error {
 			}
 		}
 		if qs, err := ledger.NewQuoteStore(cfg); err == nil {
+			quoteStore = qs
 			stockDeps.QuoteStore = qs
 			if dashboard != nil {
 				dashboard.SetQuoteStore(qs)
-				dashboard.SetFugleAPIKey(cfg.FugleAPIKey)
+				if fugleClient != nil {
+					dashboard.SetFugleClient(fugleClient)
+				}
 			}
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)
@@ -1529,6 +1539,29 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered universe_coverage_check background task (1m interval, 06:00 TW trigger)")
+
+			// Register auto_quote_backfill — daily incremental backfill of historical
+			// daily bars for all stocks in fundamentals.json with PE>0. Stocks already
+			// covered (≥90 days) are skipped. Uses FinMind (per-day TaiwanStockPrice)
+			// to preserve Fugle free-tier quota for on-demand queries.
+			//
+			// Data source priority: TWSE → Fubon → FinMind → Fugle.
+			// TWSE/Fubon lack historical range APIs; FinMind is used for background
+			// (tolerates per-day latency); Fugle is reserved for on-demand fallback.
+			if quoteStore != nil && finmindClient != nil {
+				backfillDeps := monitoring.QuoteBackfillDeps{
+					FinMindClient: finmindClient,
+					QuoteStore:    quoteStore,
+					WorkDir:       cfg.WorkDir,
+				}
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "auto_quote_backfill",
+					Interval: 24 * time.Hour,
+					Enabled:  true,
+					Task:     monitoring.NewQuoteBackfillRunner(backfillDeps),
+				})
+				log.Printf("[Gateway] registered auto_quote_backfill background task (24h, FinMind)")
+			}
 
 			// Register tej_refresh — daily TEJ data refresh after market close (15:00 TW).
 			// Issue #1086: TEJ channel data was stale for 66 days because no periodic fetch existed.

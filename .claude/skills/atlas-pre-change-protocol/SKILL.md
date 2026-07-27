@@ -207,15 +207,22 @@ Read the target module's local AGENTS.md and maturity tier:
 
 ### Step 3: DATA SOURCE TRACING
 
-Before claiming "data is insufficient" or modifying data paths:
+Before adding a new data-fetching method, claiming data is insufficient,
+or modifying data paths:
 
 ```
-1. Check internal/marketdata/provider.go for registered providers
+1. Check internal/marketdata/ for existing providers (Fubon, FinMind, Fugle, TWSE, Hybrid)
 2. Verify data availability in priority order:
-   TWSE OpenAPI (primary) → FinMind (historical) → Fubon (real-time) → Fugle (paid)
-3. NEVER claim "data insufficient" without checking ALL providers in priority order
-4. NEVER create a bare HTTP client — use gateway.Fetch(channelID) or marketdata.Provider
-5. If touching data fetching: read internal/apigateway/CONSTITUTION.md first
+   TWSE OpenAPI (primary) → Fubon (broker-direct) → FinMind (historical) → Fugle (paid)
+3. CAPABILITY COMPARISON (NEW): Before adding a new data-fetching method to any provider,
+   check whether a higher-priority provider already offers an equivalent capability:
+   □ Does Fubon already have this? → If yes, use Fubon.
+   □ Does FinMind already have this? → If yes, use FinMind.
+   □ Only if neither has it → use Fugle (or add new method there).
+   □ Document the decision in the method's doc comment (which providers were checked).
+4. NEVER claim "data insufficient" without checking ALL providers in priority order
+5. NEVER create a bare HTTP client — use gateway.Fetch(channelID) or marketdata.Provider
+6. If touching data fetching: read internal/apigateway/CONSTITUTION.md first
 ```
 
 ### Step 4: CONSTITUTION CHECK
@@ -378,7 +385,7 @@ gitnexus_query({query: "<concept>"}) → find related execution flows
 ### Step I-3: Data Source Tracing
 ```
 For ANY question about data availability:
-→ Check all providers in priority order: TWSE → FinMind → Fubon → Fugle
+→ Check all providers in priority order: TWSE → Fubon → FinMind → Fugle
 → Check if the data type exists in MacroDataSnapshot or domain types
 → Check if a provider fills the field (trace from interface to implementation)
 → NEVER claim "data insufficient" without checking ALL providers
