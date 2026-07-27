@@ -168,8 +168,8 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 	if ind.NationalFundActive {
 		triggers++
 	}
-	// TWD panic: single day depreciation > 0.5%
-	if ind.TWDChange1D > 0.5 {
+	// TWD panic: single day depreciation > threshold (%)
+	if ind.TWDChange1D > d.cfg.BlackSwanTWDDepreciationPct {
 		triggers++
 	}
 
@@ -212,8 +212,9 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	}
 	checks++
 
-	// 5. Foreign futures turning short or large reduction
-	if ind.ForeignFuturesOIDelta3 < -d.cfg.TurnDownFuturesOIDecrease || ind.ForeignFuturesOI < 0 {
+	// 5. Foreign futures turning short or large reduction (contracts, OI delta)
+	futuresDelta := ind.ForeignFuturesOI - ind.ForeignFuturesOIPrev
+	if futuresDelta < -float64(d.cfg.TurnDownFuturesOIDecrease) || ind.ForeignFuturesOI < 0 {
 		passed++
 	}
 	checks++
@@ -298,7 +299,8 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 	}
 
 	// 5. Foreign futures OI increase > 3000 contracts
-	if ind.ForeignFuturesOIDelta3 > d.cfg.TurnUpFuturesOIIncrease {
+	futuresDelta := ind.ForeignFuturesOI - ind.ForeignFuturesOIPrev
+	if futuresDelta > float64(d.cfg.TurnUpFuturesOIIncrease) {
 		hits++
 	}
 

@@ -60,6 +60,7 @@ func TestPortfolio_PublicAPI(t *testing.T) {
 		"optimizer_math.go",
 		"optimizer_pipeline.go",
 		"oscillation_detector.go",
+		"period_detector.go",
 		"parameter_runtime.go",
 		"regime.go",
 		"risk_adjuster.go",

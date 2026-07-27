@@ -483,11 +483,10 @@ func (a *macroDataGatewayAdapter) applyInsiderTrading(snap *marketdata.MacroData
 		return
 	}
 	ts, _ := time.Parse("20060102", agg.Date)
-	// NetSentiment: negative = net selling (bearish), positive = net buying (bullish).
-	// Scale: total declared shares / 1e5 for reasonable Z-score range alongside other forces.
+	// TotalDeclared scales total declared transfer shares for Z-score range.
 	v := float64(agg.TotalDeclared) / 1e5
 	snap.InsiderNet = marketdata.MacroDataPoint{
-		Symbol:    "INSIDER_NET",
+		Symbol:    "INSIDER_DECLARED",
 		Value:     v,
 		Timestamp: ts.Unix(),
 	}

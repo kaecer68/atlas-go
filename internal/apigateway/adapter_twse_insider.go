@@ -32,7 +32,7 @@ func (a *TWSEInsiderChannelAdapter) SetProvider(p *marketdata.TWSEInsiderProvide
 
 func (a *TWSEInsiderChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
-	if err := a.limiter.Wait(ctx); err != nil {
+	if err := waitForLimiter(ctx, a.limiter); err != nil {
 		return nil, fmt.Errorf("twse_insider rate limit: %w", err)
 	}
 

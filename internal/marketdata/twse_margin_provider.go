@@ -86,14 +86,13 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 				},
 				RecordedAt: ts,
 			}
-			// Best-effort: fetch maintenance ratio (separate API call).
-			if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
-				snap.MarginMaintenanceRatio = MacroDataPoint{
-					Symbol:    "TAIWAN_MAINTENANCE_RATIO",
-					Value:     ratio,
-					Timestamp: ts,
-				}
-			}
+			// P0-7 TODO: fetchMaintenanceRatio is disabled — TWSE MI_MARGN?selectType=ALL
+			// returns 信用交易統計 + 個股明細 but NOT maintenance ratio.
+			// The maintenance ratio is published via a different TWSE report endpoint
+			// (待確認: 信用交易維持率). Snapshot field exists, data source pending.
+			// if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
+			// 	snap.MarginMaintenanceRatio = MacroDataPoint{...}
+			// }
 			return snap, nil
 		}
 	}
