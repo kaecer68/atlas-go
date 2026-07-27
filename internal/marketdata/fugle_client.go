@@ -298,6 +298,12 @@ type fugleCandlesResponse struct {
 // GetHistoricalCandles fetches daily candlestick data from Fugle for a single symbol
 // over the given date range (inclusive, YYYY-MM-DD). Returns bars with ".TW"-suffixed
 // symbols. Respects the FugleClient rate limiter.
+//
+// Data source priority (CONSTITUTION.md):
+//  1. TWSE OpenAPI — no historical range API (intraday quotes only)
+//  2. Fubon — no historical candles API (intraday quotes only)
+//  3. FinMind — per-day GetStockPrice (too slow for on-demand; used in BTM backfill)
+//  4. Fugle — THIS method (one call covers full date range; used for on-demand + warmup)
 func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to string) ([]domain.DailyBar, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()

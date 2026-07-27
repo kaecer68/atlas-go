@@ -697,10 +697,14 @@ func run(args []string, deps appDeps) error {
 		// Per-symbol stock endpoints for atlas-mcp.
 		var quoteStore ledger.QuoteStore
 		var fugleClient *marketdata.FugleClient
+		var finmindClient *marketdata.FinMindClient
 		stockDeps := stocktools.Deps{}
 		if cfg.FugleAPIKey != "" {
 			fugleClient = marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
 			stockDeps.FugleClient = fugleClient
+		}
+		if cfg.FinMindAPIKey != "" {
+			finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
 		}
 		if fp := portfolio.NewFundamentalProvider(); true {
 			fundamentalsPath := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
@@ -1538,12 +1542,17 @@ func run(args []string, deps appDeps) error {
 
 			// Register auto_quote_backfill — daily incremental backfill of historical
 			// daily bars for all stocks in fundamentals.json with PE>0. Stocks already
-			// covered (≥90 days) are skipped. Uses FugleClient rate limiter.
-			if quoteStore != nil && fugleClient != nil {
+			// covered (≥90 days) are skipped. Uses FinMind (per-day TaiwanStockPrice)
+			// to preserve Fugle free-tier quota for on-demand queries.
+			//
+			// Data source priority: TWSE → Fubon → FinMind → Fugle.
+			// TWSE/Fubon lack historical range APIs; FinMind is used for background
+			// (tolerates per-day latency); Fugle is reserved for on-demand fallback.
+			if quoteStore != nil && finmindClient != nil {
 				backfillDeps := monitoring.QuoteBackfillDeps{
-					FugleClient: fugleClient,
-					QuoteStore:  quoteStore,
-					WorkDir:     cfg.WorkDir,
+					FinMindClient: finmindClient,
+					QuoteStore:    quoteStore,
+					WorkDir:       cfg.WorkDir,
 				}
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_quote_backfill",
@@ -1551,7 +1560,7 @@ func run(args []string, deps appDeps) error {
 					Enabled:  true,
 					Task:     monitoring.NewQuoteBackfillRunner(backfillDeps),
 				})
-				log.Printf("[Gateway] registered auto_quote_backfill background task (24h interval)")
+				log.Printf("[Gateway] registered auto_quote_backfill background task (24h, FinMind)")
 			}
 
 			// Register tej_refresh — daily TEJ data refresh after market close (15:00 TW).
