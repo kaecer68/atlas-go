@@ -10,6 +10,7 @@
 package portfolio
 
 import (
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/macroflow"
 )
@@ -77,13 +78,20 @@ type PeriodIndicators struct {
 }
 
 // PeriodDetector implements seven-period market cycle detection per
-// ATLAS_METHODOLOGY.md §3. Zero-value on creation is valid; thresholds
-// are hardcoded per the constitution and will move to config in Phase 4.
-type PeriodDetector struct{}
+// ATLAS_METHODOLOGY.md §3. Thresholds are driven by config.PeriodDetectionConfig;
+// use NewPeriodDetector(config) or NewPeriodDetectorWithDefaults().
+type PeriodDetector struct {
+	cfg config.PeriodDetectionConfig
+}
 
-// NewPeriodDetector creates a detector with constitution-defined thresholds.
-func NewPeriodDetector() *PeriodDetector {
-	return &PeriodDetector{}
+// NewPeriodDetector creates a detector with the given threshold config.
+func NewPeriodDetector(cfg config.PeriodDetectionConfig) *PeriodDetector {
+	return &PeriodDetector{cfg: cfg}
+}
+
+// NewPeriodDetectorWithDefaults creates a detector with constitution defaults.
+func NewPeriodDetectorWithDefaults() *PeriodDetector {
+	return &PeriodDetector{cfg: config.DefaultPeriodDetectionConfig()}
 }
 
 // DetectPeriod classifies the current market into one of seven periods.
@@ -140,11 +148,11 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 	triggers := 0
 
 	// Foreign panic sell: single day > 500億 (50 billion NTD)
-	if ind.ForeignSingleDayNet < -50_000_000_000 {
+	if ind.ForeignSingleDayNet < -(d.cfg.BlackSwanForeignSellBillion * 1_000_000_00) {
 		triggers++
 	}
 	// VIX spike: > 35
-	if ind.VIX > 35 && ind.VIX > 0 {
+	if ind.VIX > d.cfg.BlackSwanVIX {
 		triggers++
 	}
 	// TAIEX crash: single day > -5%
@@ -152,7 +160,7 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 		// Simplified: use price relative to MA20 as crash proxy
 		// Full implementation needs daily change data
 		decline := (ind.TAIEXPrice - ind.TAIEXMA20) / ind.TAIEXMA20
-		if decline < -0.05 {
+		if decline < -(d.cfg.BlackSwanTAIEXDeclinePct / 100) {
 			triggers++
 		}
 	}
@@ -176,7 +184,7 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	passed := 0
 
 	// 1. Foreign consecutive heavy sell: 3+ days with at least one > 150億
-	if ind.ForeignConsecSellDays >= 3 && ind.ForeignSingleDayNet < -15_000_000_000 {
+	if ind.ForeignConsecSellDays >= d.cfg.TurnDownConsecSellDays && ind.ForeignSingleDayNet < -(d.cfg.TurnDownSingleSellBillion*1_000_000_00) {
 		passed++
 	}
 	checks++
@@ -189,7 +197,7 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	checks++
 
 	// 3. Margin maintenance ratio < 150%
-	if ind.MarginMaintenanceRatio > 0 && ind.MarginMaintenanceRatio < 150 {
+	if ind.MarginMaintenanceRatio > 0 && ind.MarginMaintenanceRatio < d.cfg.TurnDownMarginMaintRatio {
 		passed++
 	}
 	checks++
@@ -201,7 +209,7 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	checks++
 
 	// 5. Foreign futures turning short or large reduction
-	if ind.ForeignFuturesOIDelta3 < -10000 || ind.ForeignFuturesOI < 0 {
+	if ind.ForeignFuturesOIDelta3 < -d.cfg.TurnDownFuturesOIDecrease || ind.ForeignFuturesOI < 0 {
 		passed++
 	}
 	checks++
@@ -217,7 +225,7 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 
 	// 1. Foreign sell slowing: 5-day avg < 30% of peak sell
 	if ind.ForeignNetPeakSell < 0 && ind.ForeignNet5DayAvg < 0 {
-		if ind.ForeignNet5DayAvg/ind.ForeignNetPeakSell < 0.3 {
+		if ind.ForeignNet5DayAvg/ind.ForeignNetPeakSell < d.cfg.DownturnSellRatioToPeak {
 			passed++
 		}
 	}
@@ -225,20 +233,20 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 
 	// 2. Margin balance down > 15% from peak
 	if ind.MarginBalancePeak > 0 && ind.MarginBalance > 0 {
-		if (ind.MarginBalancePeak-ind.MarginBalance)/ind.MarginBalancePeak > 0.15 {
+		if (ind.MarginBalancePeak-ind.MarginBalance)/ind.MarginBalancePeak > d.cfg.DownturnMarginReductionPct {
 			passed++
 		}
 	}
 	checks++
 
 	// 3. Public bank buying 5+ consecutive days
-	if ind.PublicBankConsecBuyDays >= 5 {
+	if ind.PublicBankConsecBuyDays >= d.cfg.DownturnPublicBankBuyDays {
 		passed++
 	}
 	checks++
 
-	// 4. VIX > 25 but not making new highs (simplified: just VIX > 25 check)
-	if ind.VIX > 25 {
+	// 4. VIX > threshold but not making new highs
+	if ind.VIX > d.cfg.DownturnVIXMin {
 		passed++
 	}
 	checks++
@@ -260,12 +268,12 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 	hits := 0
 
 	// 1. Foreign sudden buy: single day > 100億 or 3 consecutive buy days
-	if ind.ForeignSingleDayNet > 10_000_000_000 || ind.ForeignConsecBuyDays >= 3 {
+	if ind.ForeignSingleDayNet > (d.cfg.TurnUpSingleBuyBillion*1_000_000_00) || ind.ForeignConsecBuyDays >= d.cfg.TurnUpConsecBuyDays {
 		hits++
 	}
 
 	// 2. TWD surging: 1D > 0.3% appreciation or 3D > 0.5%
-	if ind.TWDChange1D < -0.3 || ind.TWDChange3D < -0.5 {
+	if ind.TWDChange1D < d.cfg.TurnUpTWDApprec1DPct || ind.TWDChange3D < d.cfg.TurnUpTWDApprec3DPct {
 		hits++
 	}
 
@@ -281,13 +289,13 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 	// 4. TSM ADR surge: > 2% day, above 5-day high
 	if ind.TSMADRPrice > 0 && ind.TSMADRHigh5 > 0 {
 		// Simplified: check if current > 5-day high
-		if ind.TSMADRPrice > ind.TSMADRHigh5 {
+		if ind.TSMADRPrice > ind.TSMADRHigh5 && (ind.TSMADRPrice-ind.TSMADRHigh5)/ind.TSMADRHigh5*100 > d.cfg.TurnUpTSMADRPct {
 			hits++
 		}
 	}
 
 	// 5. Foreign futures OI increase > 3000 contracts
-	if ind.ForeignFuturesOIDelta3 > 3000 {
+	if ind.ForeignFuturesOIDelta3 > d.cfg.TurnUpFuturesOIIncrease {
 		hits++
 	}
 
@@ -301,19 +309,19 @@ func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
 	passed := 0
 
 	// 1. Foreign continuous buy: 7+ of last 10 days
-	if ind.ForeignBuyDays10 >= 7 {
+	if ind.ForeignBuyDays10 >= int(d.cfg.BullForeignBuyRatio10*10) {
 		passed++
 	}
 	checks++
 
 	// 2. Foreign futures OI high: > 30000
-	if ind.ForeignFuturesOI > 30000 {
+	if ind.ForeignFuturesOI > float64(d.cfg.BullFuturesOIMin) {
 		passed++
 	}
 	checks++
 
 	// 3. Margin mild increase: < 1% daily
-	if ind.MarginBalanceChange5D > 0 && ind.MarginBalanceChange5D < 5.0 {
+	if ind.MarginBalanceChange5D > 0 && ind.MarginBalanceChange5D < d.cfg.BullMarginDailyMaxPct*5 {
 		passed++
 	}
 	checks++
@@ -337,7 +345,7 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 
 	// 1. Foreign buy slowing: 3-day avg < 50% of 10-day avg
 	if ind.ForeignNet10DayAvg > 0 && ind.ForeignNet5DayAvg > 0 {
-		if ind.ForeignNet5DayAvg/ind.ForeignNet10DayAvg < 0.5 {
+		if ind.ForeignNet5DayAvg/ind.ForeignNet10DayAvg < d.cfg.PlateauBuyRatio3to10 {
 			passed++
 		}
 	}
@@ -350,7 +358,7 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 	checks++
 
 	// 3. Day trade ratio > 35%
-	if ind.DayTradeRatio > 35 {
+	if ind.DayTradeRatio > d.cfg.PlateauDayTradeMinPct {
 		passed++
 	}
 	checks++
@@ -358,7 +366,7 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 	// 4. TAIEX near 20-day MA (±2%)
 	if ind.TAIEXPrice > 0 && ind.TAIEXMA20 > 0 {
 		deviation := (ind.TAIEXPrice - ind.TAIEXMA20) / ind.TAIEXMA20
-		if deviation > -0.02 && deviation < 0.02 {
+		if deviation > -(d.cfg.PlateauTAIEXDeviationPct/100) && deviation < (d.cfg.PlateauTAIEXDeviationPct/100) {
 			passed++
 		}
 	}
@@ -380,13 +388,13 @@ func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
 	passed := 0
 
 	// 1. Foreign mixed: both buy and sell days > 3 in 10 days
-	if ind.ForeignBuyDays10 > 3 && ind.ForeignSellDays10 > 3 {
+	if ind.ForeignBuyDays10 > d.cfg.ConsolidationBuyDaysMin && ind.ForeignSellDays10 > d.cfg.ConsolidationSellDaysMin {
 		passed++
 	}
 	checks++
 
 	// 2. TWD range-bound near monthly MA (±0.5%)
-	if ind.TWDMA20 > 0 && ind.TWDChange5D > -0.5 && ind.TWDChange5D < 0.5 {
+	if ind.TWDMA20 > 0 && ind.TWDChange5D > -(d.cfg.ConsolidationTWDBandPct) && ind.TWDChange5D < d.cfg.ConsolidationTWDBandPct {
 		passed++
 	}
 	checks++
@@ -400,7 +408,7 @@ func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
 	// 4. Volume contracting to 70%-100% of 20-day MA
 	if ind.MarketVolume > 0 && ind.MarketVolumeMA20 > 0 {
 		ratio := ind.MarketVolume / ind.MarketVolumeMA20
-		if ratio >= 0.7 && ratio <= 1.0 {
+		if ratio >= d.cfg.ConsolidationVolRatioMin && ratio <= d.cfg.ConsolidationVolRatioMax {
 			passed++
 		}
 	}

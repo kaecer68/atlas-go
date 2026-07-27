@@ -8,7 +8,7 @@ import (
 )
 
 func TestPeriodDetector_BlackSwan(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	tests := []struct {
 		name string
@@ -65,7 +65,7 @@ func TestPeriodDetector_BlackSwan(t *testing.T) {
 }
 
 func TestPeriodDetector_TurnaroundDown(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not black swan (VIX below 35)
@@ -87,7 +87,7 @@ func TestPeriodDetector_TurnaroundDown(t *testing.T) {
 }
 
 func TestPeriodDetector_Downturn(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not black swan
@@ -114,7 +114,7 @@ func TestPeriodDetector_Downturn(t *testing.T) {
 }
 
 func TestPeriodDetector_TurnaroundUp(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not extreme states
@@ -134,7 +134,7 @@ func TestPeriodDetector_TurnaroundUp(t *testing.T) {
 }
 
 func TestPeriodDetector_Bull(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not extreme/transition states
@@ -159,7 +159,7 @@ func TestPeriodDetector_Bull(t *testing.T) {
 }
 
 func TestPeriodDetector_Plateau(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not bull (foreign buy ratio too low)
@@ -186,7 +186,7 @@ func TestPeriodDetector_Plateau(t *testing.T) {
 }
 
 func TestPeriodDetector_Consolidation(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	ind := PeriodIndicators{
 		// Not plateau (day trade low)
@@ -209,7 +209,7 @@ func TestPeriodDetector_Consolidation(t *testing.T) {
 }
 
 func TestPeriodDetector_DefaultFallback(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	// All zero — insufficient data
 	ind := PeriodIndicators{}
@@ -285,7 +285,7 @@ func TestPeriodToRegime_AllPeriodsCovered(t *testing.T) {
 }
 
 func TestDetectionPriority_BlackSwanOverridesAll(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	// Indicators that would normally be bull market
 	ind := PeriodIndicators{
@@ -305,7 +305,7 @@ func TestDetectionPriority_BlackSwanOverridesAll(t *testing.T) {
 }
 
 func TestDetectionPriority_TurnaroundDownOverDownturn(t *testing.T) {
-	d := NewPeriodDetector()
+	d := NewPeriodDetectorWithDefaults()
 
 	// Indicators that satisfy both turnaround_down and downturn
 	ind := PeriodIndicators{
