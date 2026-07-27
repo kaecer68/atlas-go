@@ -635,12 +635,6 @@
       "results": ""
     },
     {
-      "name": "SetForceRetailZScore",
-      "params": "(z float64)",
-      "receiver": "FactorBridge",
-      "results": ""
-    },
-    {
       "name": "CalculateAllScores",
       "params": "(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64, factorWeights map[FactorType]float64, bridgeInputs ...FactorBridgeInput)",
       "receiver": "FactorEngine",
@@ -1032,6 +1026,16 @@
       "results": "(*Optimizer)"
     },
     {
+      "name": "NewPeriodDetector",
+      "params": "(cfg config.PeriodDetectionConfig)",
+      "results": "(*PeriodDetector)"
+    },
+    {
+      "name": "NewPeriodDetectorWithDefaults",
+      "params": "",
+      "results": "(*PeriodDetector)"
+    },
+    {
       "name": "NewPortfolioRiskAdjuster",
       "params": "(engine *risk.MacroAwareDrawdownEngine)",
       "results": "(*PortfolioRiskAdjuster)"
@@ -1215,6 +1219,22 @@
       "params": "(hp *HistoricalPrices)",
       "receiver": "Optimizer",
       "results": "(*Optimizer)"
+    },
+    {
+      "name": "DetectPeriod",
+      "params": "(ind PeriodIndicators)",
+      "receiver": "PeriodDetector",
+      "results": "(domain.MarketPeriod)"
+    },
+    {
+      "name": "PeriodToRegime",
+      "params": "(p domain.MarketPeriod)",
+      "results": "(domain.Regime)"
+    },
+    {
+      "name": "PeriodToRiskLevel",
+      "params": "(p domain.MarketPeriod)",
+      "results": "(macroflow.RiskLevel)"
     },
     {
       "name": "AdjustWeights",
@@ -2040,7 +2060,6 @@
         "marginAvg float64",
         "marginStd float64",
         "calculator *retail.Calculator",
-        "forceRetailZScore float64",
         "stressIndex *StressIndex"
       ],
       "kind": "struct",
@@ -2257,6 +2276,56 @@
       ],
       "kind": "struct",
       "name": "PerformanceMetrics"
+    },
+    {
+      "fields": [
+        "cfg config.PeriodDetectionConfig"
+      ],
+      "kind": "struct",
+      "name": "PeriodDetector"
+    },
+    {
+      "fields": [
+        "VIX float64",
+        "DXY float64",
+        "US10Y float64",
+        "SOXPrice float64",
+        "SOXMA50 float64",
+        "SOXMA20 float64",
+        "TSMADRPrice float64",
+        "TSMADRHigh5 float64",
+        "ForeignNet5DayAvg float64",
+        "ForeignNet10DayAvg float64",
+        "ForeignNetPeakSell float64",
+        "ForeignBuyDays10 int",
+        "ForeignSellDays10 int",
+        "ForeignConsecBuyDays int",
+        "ForeignConsecSellDays int",
+        "ForeignSingleDayNet float64",
+        "ForeignFuturesOI float64",
+        "ForeignFuturesOIPrev float64",
+        "ForeignFuturesOIDelta3 int",
+        "TWDChange1D float64",
+        "TWDChange3D float64",
+        "TWDChange5D float64",
+        "TWDMA20 float64",
+        "TAIEXPrice float64",
+        "TAIEXMA5 float64",
+        "TAIEXMA20 float64",
+        "TAIEXMA20Slope float64",
+        "MarketVolume float64",
+        "MarketVolumeMA20 float64",
+        "DayTradeRatio float64",
+        "MarginBalance float64",
+        "MarginBalancePeak float64",
+        "MarginBalanceChange5D float64",
+        "MarginMaintenanceRatio float64",
+        "PublicBankConsecBuyDays int",
+        "SectorRotationFlag bool",
+        "NationalFundActive bool"
+      ],
+      "kind": "struct",
+      "name": "PeriodIndicators"
     },
     {
       "fields": [

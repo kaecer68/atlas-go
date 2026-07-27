@@ -24,4 +24,8 @@ type ReasoningTrace struct {
 	Data       any       `json:"data,omitempty"`
 	Confidence float64   `json:"confidence"`
 	IsFallback bool      `json:"is_fallback"`
+
+	// B5 P1: causal chain layer tracing (per ATLAS_METHODOLOGY.md §2 layers 0-7).
+	LayerID       string `json:"layer_id,omitempty"`        // e.g. "layer_0".."layer_7"
+	LayerParentID string `json:"layer_parent_id,omitempty"` // upstream layer trace reference
 }

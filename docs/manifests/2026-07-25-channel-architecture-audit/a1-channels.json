@@ -30,6 +30,7 @@
     {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
     {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
     {"id": "government_broker", "source": "TWSE broker-level aggregate", "status": "registered"},
+    {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
     {"id": "twse_etf", "source": "TWSE", "status": "registered"},
     {"id": "us_spx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
     {"id": "us_ndx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
@@ -48,9 +49,9 @@
   "constitution_baseline": {
     "document_version": "v1.3",
     "document_date": "2026-07-25",
-    "document_claimed_channels": 38,
-    "actual_canonical_ids": 38,
+    "document_claimed_channels": 39,
+    "actual_canonical_ids": 39,
     "actual_runtime_registrations": "22-33 depending on API keys and feature flags"
   },
-  "notes": "38 canonical IDs live in internal/apigateway/gateway.go (channelIDs). Runtime registration in register_adapters.go is conditional on keys and feature flags. CI check scripts/ci/check_channel_index.py ensures the JSON manifest stays synchronized with the Go canonical list."
+  "notes": "39 canonical IDs live in internal/apigateway/gateway.go (channelIDs). Runtime registration in register_adapters.go is conditional on keys and feature flags. CI check scripts/ci/check_channel_index.py ensures the JSON manifest stays synchronized with the Go canonical list."
 }

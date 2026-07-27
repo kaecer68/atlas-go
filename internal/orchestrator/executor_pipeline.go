@@ -106,6 +106,9 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 				"reasoning":  macroFlowResult.Reasoning,
 			},
 			Confidence: -1,
+			// B5 P1: causal chain layer tracing
+			LayerID:       "layer_0", // 全球資金總開關
+			LayerParentID: "layer_root",
 		})
 	}
 
@@ -141,9 +144,6 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 }
 
-// regimeToRiskLevel maps domain.Regime to macroflow.RiskLevel.
-// BlackSwan is handled by PeriodDetector → PeriodToRegime(PeriodBlackSwan) → RegimeRiskOff → RiskRed.
-// The 7-period model's PeriodToRegime mapping is the single source of truth for regime classification.
 func regimeToRiskLevel(regime domain.Regime) macroflow.RiskLevel {
 	switch regime {
 	case domain.RegimeRiskOff:

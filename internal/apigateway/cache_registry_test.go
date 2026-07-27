@@ -439,6 +439,7 @@ func TestChannelIDs(t *testing.T) {
 		"janus_regime", "tej", "exchange_rate", "sox_index",
 		"dram_spot_price", "twse_sector_index", "sector_data", "day_trading",
 		"twse_etf", "taifex_daily", "taifex_institutional", "tdcc_equity_dispersion",
+		"twse_insider",
 		"twse_oddlot", "twse_sbl", "government_flow", "government_broker", "bdi",
 		"us_spx", "us_ndx", "us_dji", "taiex_index", "tw_vol",
 		"us_nvda", "us_aapl", "us_msft", "tsm_adr", "twse_insider",

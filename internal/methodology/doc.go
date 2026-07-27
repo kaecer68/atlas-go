@@ -1,6 +1,7 @@
-// Package methodology bridges the ATLAS_METHODOLOGY.md constitution with
-// runtime strategy selection. The Advisor loads methodology_rules.yaml and
-// answers period→strategy mapping queries.
+// Package methodology implements the methodology advisor layer that maps market
+// regimes to investment methodology rules defined in YAML configuration.
 //
 // Maturity: evolving
+//
+// Depends-on: internal/config, internal/domain
 package methodology

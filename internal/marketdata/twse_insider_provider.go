@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,7 +148,10 @@ func parseInsiderJSON(body []byte) ([]InsiderReading, error) {
 	// TWSE OpenAPI returns either a JSON array or a JSON object with a data array.
 	// Try array first.
 	var rows []insiderJSONRow
-	if err := json.Unmarshal(body, &rows); err == nil && len(rows) > 0 {
+	if err := json.Unmarshal(body, &rows); err == nil {
+		if len(rows) == 0 {
+			return nil, nil // legitimate: no filings today
+		}
 		return convertInsiderRows(rows), nil
 	}
 
@@ -171,7 +175,7 @@ func convertInsiderRows(rows []insiderJSONRow) []InsiderReading {
 			continue // skip rows with no data
 		}
 		records = append(records, InsiderReading{
-			Date:         strings.TrimSpace(r.Date),
+			Date:         normalizeROCYearDate(strings.TrimSpace(r.Date)),
 			StockID:      strings.TrimSpace(r.StockID),
 			CompanyName:  strings.TrimSpace(r.Company),
 			Role:         strings.TrimSpace(r.Role),
@@ -182,6 +186,21 @@ func convertInsiderRows(rows []insiderJSONRow) []InsiderReading {
 		})
 	}
 	return records
+}
+
+// normalizeROCYearDate converts a TWSE ROC year date string (YYYMMDD, e.g. "1150724")
+// to Gregorian year YYYYMMDD (e.g. "20260724"). Returns the input unchanged if
+// it doesn't match the 7-digit ROC pattern.
+func normalizeROCYearDate(roc string) string {
+	s := strings.TrimSpace(roc)
+	if len(s) != 7 {
+		return s // already gregorian or malformed, pass through
+	}
+	rocYear, err := strconv.Atoi(s[:3])
+	if err != nil {
+		return s
+	}
+	return fmt.Sprintf("%04d%s", rocYear+1911, s[3:])
 }
 
 // ─── Aggregation ───────────────────────────────────────────────────────

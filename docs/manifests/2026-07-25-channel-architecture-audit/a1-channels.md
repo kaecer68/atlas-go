@@ -2,7 +2,7 @@
 
 ## Canonical Count
 
-- **38 channel IDs** are defined in `internal/apigateway/gateway.go` (`channelIDs`) (canonical list for circuit breaker / health scan / summary API).
+- **39 channel IDs** are defined in `internal/apigateway/gateway.go` (`channelIDs`) (canonical list for circuit breaker / health scan / summary API).
 - Actual runtime registration is conditional on API keys / feature flags in `internal/apigateway/register_adapters.go:17-315`.
 
 ## Registered Channel Categories
@@ -29,4 +29,4 @@
 
 ## Constitution Baseline
 
-`internal/apigateway/CONSTITUTION.md` was revised to **v1.3** on 2026-07-25 and states **38 channels**. The `a1-channels.json` / `a2-tasks.json` artifacts in this manifest are the source of truth for the canonical channel list and task registry. `scripts/ci/check_channel_index.py` (wired to CI) verifies that the JSON channel count and IDs stay synchronized with `internal/apigateway/gateway.go`. If a developer adds a runtime channel registration without updating the canonical list or this manifest, CI will fail.
+`internal/apigateway/CONSTITUTION.md` was revised to **v1.3** on 2026-07-25 and states **39 channels**. The `a1-channels.json` / `a2-tasks.json` artifacts in this manifest are the source of truth for the canonical channel list and task registry. `scripts/ci/check_channel_index.py` (wired to CI) verifies that the JSON channel count and IDs stay synchronized with `internal/apigateway/gateway.go`. If a developer adds a runtime channel registration without updating the canonical list or this manifest, CI will fail.
