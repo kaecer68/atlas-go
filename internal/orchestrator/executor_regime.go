@@ -45,7 +45,7 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 			}
 		}
 
-		parentID := "layer_root"
+		parentID := "layer_origin"
 		if len(snapshots) > 0 {
 			parentID = snapshots[len(snapshots)-1].layerID
 		}

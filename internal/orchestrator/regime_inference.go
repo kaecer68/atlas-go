@@ -12,8 +12,6 @@ type RegimeEvidence struct {
 	Source     string
 	// LayerID identifies the constitutional causal chain layer (§二).
 	LayerID string
-	// LayerParentID references the prior layer's trace (set by inferRegime).
-	LayerParentID string
 }
 
 type RegimeEvidenceSource interface {

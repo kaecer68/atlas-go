@@ -49,9 +49,12 @@ func TestSequentialRegime_CounterExampleC(t *testing.T) {
 		"^VIX": {Symbol: "^VIX", Last: 18},
 	}
 	events := []narrative.NarrativeEvent{
-		{Theme: "geopolitical_crisis", Severity: "high"},
+		{Theme: "geopolitical_risk_spike", Severity: "high", Confidence: 0.6, HitRate: 0.8},
 	}
 	regime := inferRegime(emptyRegistry(), quotes, nil, nil, events, nil, "")
+	if regime != domain.RegimeRiskOff && regime != domain.RegimeNeutral {
+		t.Errorf("counter-C: got %s, want RISK_OFF or NEUTRAL (geopolitical risk)", regime)
+	}
 	t.Logf("counter-C: regime=%s", regime)
 }
 
@@ -82,8 +85,10 @@ func TestSequentialRegime_LayerIDTraces(t *testing.T) {
 		layersFound[tr.LayerID] = true
 		t.Logf("  layer=%s parent=%s conf=%.3f", tr.LayerID, tr.LayerParentID, tr.Confidence)
 	}
-	if !layersFound["layer_0"] {
-		t.Error("layer_0 (macro) not found in traces")
+	for _, want := range []string{"layer_0", "layer_4", "layer_7", "layer_root"} {
+		if !layersFound[want] {
+			t.Errorf("%s not found in traces", want)
+		}
 	}
 }
 
