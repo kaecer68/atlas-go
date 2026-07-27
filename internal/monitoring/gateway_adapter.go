@@ -87,7 +87,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 		{channelID: "twse_insider", apply: a.applyInsiderTrading},
 		{channelID: "market_volume", apply: a.applyMarketVolume},
-		{channelID: "day_trade_ratio", apply: a.applyDayTradeRatio},
+		{channelID: "day_trading", apply: a.applyDayTradeRatioFromStats},
 	}
 
 	var (
@@ -302,6 +302,9 @@ func (a *macroDataGatewayAdapter) applyMargin(snap *marketdata.MacroDataSnapshot
 	}
 	if s.RetailShortBalance.Symbol != "" {
 		snap.RetailShortBalance = s.RetailShortBalance
+	}
+	if s.MarginMaintenanceRatio.Symbol != "" {
+		snap.MarginMaintenanceRatio = s.MarginMaintenanceRatio
 	}
 }
 
@@ -708,24 +711,24 @@ func (a *macroDataGatewayAdapter) applyMarketVolume(snap *marketdata.MacroDataSn
 	}
 }
 
-// applyDayTradeRatio extracts 當沖交易佔比 from TWSE day-trading stats.
-// Data source: TWSE OpenAPI (待接入: /opendata/t187ap05_L 當日沖銷交易統計).
-// Field: DayTradeRatio (%, 0-100).
-func (a *macroDataGatewayAdapter) applyDayTradeRatio(snap *marketdata.MacroDataSnapshot, data []byte) {
-	var payload struct {
-		DayTradeRatio float64 `json:"day_trade_ratio"`
-		Date          string  `json:"date"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
+// applyDayTradeRatioFromStats extracts 當沖交易佔比 from DayTradingStats.
+// Maps DayTradingStats.VolumeRatio → snap.DayTradeRatio.
+// Date must be present and parseable as "20060102"; missing/invalid → no fill.
+func (a *macroDataGatewayAdapter) applyDayTradeRatioFromStats(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var stats marketdata.DayTradingStats
+	if err := json.Unmarshal(data, &stats); err != nil {
 		return
 	}
-	if payload.Date == "" || payload.DayTradeRatio < 0 {
+	if stats.Date == "" {
 		return
 	}
-	ts, _ := time.Parse("20060102", payload.Date)
+	ts, err := time.Parse("20060102", stats.Date)
+	if err != nil {
+		return
+	}
 	snap.DayTradeRatio = marketdata.MacroDataPoint{
 		Symbol:    "TSE_DAYTRADE",
-		Value:     payload.DayTradeRatio,
+		Value:     stats.VolumeRatio,
 		Timestamp: ts.Unix(),
 	}
 }
