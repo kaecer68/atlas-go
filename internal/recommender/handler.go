@@ -343,10 +343,15 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 // those allowed in the current regime (per methodology_rules.yaml). The
 // regime string is mapped to a MarketPeriod via methodology.RegimeToPeriod.
 func buildPremiumStrategy(e ComparisonEngine, regime string, advisor *methodology.Advisor, w *[]string) *StrategyRecommendation {
+	// Normalize regime string to the canonical vocabulary (RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL).
+	// This handles both stress-index vocabulary (low/alert/high/crisis) and
+	// regime-detector vocabulary transparently.
+	normalized := narrative.NormalizeRegime(regime)
+
 	// Determine the allowed strategy set for this regime.
 	var allowedSet map[string]bool
 	if advisor != nil {
-		period := methodology.RegimeToPeriod(domainRegimeFromString(regime))
+		period := methodology.RegimeToPeriod(domainRegimeFromString(normalized))
 		allowed := advisor.AllowedStrategies(period)
 		if len(allowed) > 0 {
 			allowedSet = make(map[string]bool, len(allowed))

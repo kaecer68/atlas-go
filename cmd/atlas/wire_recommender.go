@@ -10,6 +10,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
@@ -121,12 +122,17 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 			narrativeSvc.BuildMarketNarrativeData,
 		)
 	}
-
 	// 4. comparison engine: use file-backed store for persistence across restarts (F06).
 	store := strategy.NewFileComparisonStore(filepath.Join(in.WorkDir, "data", "state", "comparison_days.json"), 60)
 	cmpEng := strategy.NewComparisonEngine(30, store)
 	if cmpEng != nil {
 		deps.StrategyComp = recommender.NewComparisonEngineAdapter(cmpEng)
+	}
+
+	// 5. methodology advisor: period→strategy filter (D3 P0-2).
+	adv := methodology.NewAdvisorFromPath(filepath.Join(in.WorkDir, "configs/methodology_rules.yaml"))
+	if adv != nil {
+		deps.MethodologyAdvisor = adv
 	}
 
 	return deps, cfsvc
