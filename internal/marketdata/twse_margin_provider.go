@@ -86,13 +86,15 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 				},
 				RecordedAt: ts,
 			}
-			// P0-7 TODO: fetchMaintenanceRatio is disabled — TWSE MI_MARGN?selectType=ALL
-			// returns 信用交易統計 + 個股明細 but NOT maintenance ratio.
-			// The maintenance ratio is published via a different TWSE report endpoint
-			// (待確認: 信用交易維持率). Snapshot field exists, data source pending.
-			// if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
-			// 	snap.MarginMaintenanceRatio = MacroDataPoint{...}
-			// }
+			// Fetch maintenance ratio (best-effort: TWSE endpoint may be unavailable;
+			// leave the field empty on failure so the snapshot flow never breaks).
+			if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
+				snap.MarginMaintenanceRatio = MacroDataPoint{
+					Symbol:    "TSE_MARGIN_MAINT",
+					Value:     ratio,
+					Timestamp: ts,
+				}
+			}
 			return snap, nil
 		}
 	}
@@ -177,7 +179,8 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 
 // fetchMaintenanceRatio fetches the aggregate margin maintenance ratio from TWSE.
 //
-//lint:ignore U1000 P0-7 TODO: re-enable when TWSE MI_MARGN is stable
+// Endpoint: TWSE MI_MARGN?selectType=ALL.
+// Returns the aggregate maintenance ratio (%) for the given date.
 func (t *TWSEMarginBalanceProvider) fetchMaintenanceRatio(ctx context.Context, dateStr string) (float64, error) {
 	if err := t.rateLimiter.Wait(ctx); err != nil {
 		return 0, fmt.Errorf("rate limit wait: %w", err)
