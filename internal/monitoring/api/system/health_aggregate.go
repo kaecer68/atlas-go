@@ -137,11 +137,13 @@ func (h *HealthHandlers) checkLiveness() (bool, string, any) {
 // ---- Tier 2: channel_health (uses ChannelHealthStore) ----
 
 type channelHealthDetail struct {
-	Total int `json:"total"`
-	OK    int `json:"ok"`
-	Warn  int `json:"warn"`
-	Error int `json:"error"`
-	Stale int `json:"stale"`
+	Total    int `json:"total"`
+	OK       int `json:"ok"`
+	Warn     int `json:"warn"`
+	Error    int `json:"error"`
+	Degraded int `json:"degraded"`
+	Inactive int `json:"inactive"`
+	Other    int `json:"other"`
 }
 
 func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
@@ -158,8 +160,12 @@ func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
 			detail.Warn++
 		case "error":
 			detail.Error++
-		case "stale":
-			detail.Stale++
+		case "degraded":
+			detail.Degraded++
+		case "inactive":
+			detail.Inactive++
+		default:
+			detail.Other++
 		}
 	}
 	if detail.Error > 0 {

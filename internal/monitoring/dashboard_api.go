@@ -1114,8 +1114,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
 			Errors             []string `json:"errors,omitempty"`
 		}
-		store := apigateway.NewChannelHealthStore(filepath.Join(a.workDir, "data/state"))
-		allRecs := store.All()
+		allRecs := healthStore.All()
 		channels := make([]channelHealthResp, 0, len(allRecs))
 		for id, rec := range allRecs {
 			channels = append(channels, channelHealthResp{

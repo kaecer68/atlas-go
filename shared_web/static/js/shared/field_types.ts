@@ -4168,7 +4168,9 @@ export interface channelHealthDetail {
   ok: number;
   warn: number;
   error: number;
-  stale: number;
+  degraded: number;
+  inactive: number;
+  other: number;
 }
 
 export interface channelState {
