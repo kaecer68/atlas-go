@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // mockDetector is a test-only Detector that records calls and returns
@@ -27,12 +28,12 @@ func newMockDetector(theme string, enabled bool, res *DetectionResult, err error
 	return &mockDetector{theme: theme, enabled: enabled, result: res, err: err}
 }
 
-func (m *mockDetector) Theme() string     { return m.theme }
-func (m *mockDetector) Enabled() bool     { return m.enabled }
-func (m *mockDetector) SetEnabled(b bool) { m.enabled = b }
+func (m *mockDetector) Theme() string                                   { return m.theme }
+func (m *mockDetector) Enabled() bool                                   { return m.enabled }
+func (m *mockDetector) SetEnabled(b bool)                               { m.enabled = b }
+func (m *mockDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.0 }
 
 func (m *mockDetector) Detect(ctx context.Context, in DetectorInput) (*DetectionResult, error) {
-	atomic.AddInt32(&m.callCnt, 1)
 	if m.delay > 0 {
 		select {
 		case <-ctx.Done():
@@ -56,9 +57,10 @@ func (m *mockDetector) Detect(ctx context.Context, in DetectorInput) (*Detection
 // "passes lock by value" warning.
 type emptyThemeDetector struct{}
 
-func (*emptyThemeDetector) Theme() string   { return "" }
-func (*emptyThemeDetector) Enabled() bool   { return false }
-func (*emptyThemeDetector) SetEnabled(bool) {}
+func (*emptyThemeDetector) Theme() string                                   { return "" }
+func (*emptyThemeDetector) Enabled() bool                                   { return false }
+func (*emptyThemeDetector) SetEnabled(bool)                                 {}
+func (*emptyThemeDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.0 }
 func (*emptyThemeDetector) Detect(context.Context, DetectorInput) (*DetectionResult, error) {
 	return nil, nil
 }
