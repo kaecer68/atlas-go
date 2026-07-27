@@ -47,6 +47,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"tw_vol":                 false, // ^TWII 3mo bars → volatility_20d
 		"twse_sbl":               false, // G02
 		"tdcc_equity_dispersion": false, // G01
+		"twse_insider":           false, // TWSE OpenAPI t187ap12_L
 	}
 
 	for id := range m.limiters {

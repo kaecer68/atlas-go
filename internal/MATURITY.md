@@ -91,6 +91,7 @@
 | `marketexplain` | 「為什麼漲跌」散戶市場解說 — 規則式 compose endpoint，彙整 TAIEX、資金流向、國際環境、風險提示 | `Handler`, `Explanation` | H03 新增；API: /api/market/explain |
 | `macroflow` | 宏觀 regime → factor weight 調整引擎 — 6 rules（Yellow/Orange/Red × Calm/Stress）+ 7d max-stale + VIX stress 偵測 | `Engine`, `AdjustmentResult`, `RiskLevel` | Wave 11 L2.4 orchestrator integration；`MacroFlowStrategy` 為 orchestrator pipeline 第 7 步，consumed by `internal/orchestrator`，API 可能依 follow-up 整合演進 |
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（base × cycle × seasonal × linkage × narrative × macro × factor） | `WeightEngine`, `ComputeWeights()`, `ComputeWeight()`, 6 `InputProvider` adapters | SA08 完成：defaultEngine 建構、FileClosureStore 實作、6 個 adapter 工廠、composition.BuildSystem 延遲建構、StrategyEvolver 注入；**v0.0.2.0 晉升 E** |
+| `methodology` | ATLAS_METHODOLOGY 憲章→runtime 橋接 — YAML rules loader, Advisor 過濾期別×策略匹配 | `Advisor`, `MethodologyRules` | Wave 11 P0-2 新增；configs/methodology_rules.yaml 為單一來源 |
 ---
 
 ## X · Experimental（實驗中）— 11 packages
