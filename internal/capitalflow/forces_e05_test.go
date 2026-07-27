@@ -230,8 +230,10 @@ func TestForceScore_ProvenanceAndRuntimeFields(t *testing.T) {
 	}
 	history := map[ForceName][]RollingSample{
 		ForceFutures: {
-			{RawValue: -50000}, {RawValue: -60000},
-			{RawValue: -70000}, {RawValue: -80000},
+			{RawValue: -50000},
+			{RawValue: -60000},
+			{RawValue: -70000},
+			{RawValue: -80000},
 			{RawValue: -90000},
 		},
 	}

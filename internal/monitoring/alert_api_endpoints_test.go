@@ -74,6 +74,7 @@ func TestAlertAPI_HandleActiveSnapshot_MethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", rec.Code)
 	}
 }
+
 func TestAlertAPI_HandleListAlerts_SortTimestampDesc(t *testing.T) {
 	api := &AlertAPI{}
 	buildAlertsForAPI(t, api)

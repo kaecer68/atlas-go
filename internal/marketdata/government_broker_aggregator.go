@@ -301,6 +301,7 @@ func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) 
 
 	return govNet, insNet, nil
 }
+
 func (a *GovernmentBrokerAggregator) writeReading(r GovernmentFlowReading) error {
 	data, err := json.Marshal(r)
 	if err != nil {
