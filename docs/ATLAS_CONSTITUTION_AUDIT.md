@@ -141,3 +141,42 @@
 
 > **審計工具**: 5 個平行 CodeGraph/Codebase Memory scout agent
 > **審計覆蓋**: 40+ 檔案，包含所有 `internal/` 模組、前端、配置
+
+---
+## 附錄 D：審計追蹤表（2026-07-27 更新）
+
+| # | 項目 | 等級 | 狀態 | 修復 PR/Commit |
+|---|------|------|------|----------------|
+| 1 | A1+A2: 七時期判斷 + 向下相容 | P0 | ✅ 完成 | #1372 |
+| 2 | A3: 三套 regime 系統統一 | P0 | ✅ 完成 | #1372 (PeriodToRegime 映射) |
+| 3 | A4: macroflow RiskLevel 自動推導 | P1 | ✅ 完成 | `1c60cbaf` (regimeToRiskLevel 支援 7 時期) |
+| 4 | A5: macroflow 權重數值 | — | ✅ 已對齊 | — |
+| 5 | B1+B4: 管線重排 + VIX key 修復 | P0 | ✅ 完成 | #1372 |
+| 6 | B2: 每層輸出強制影響下一層 | P0 | ⏳ 未啟動 | 架構級變更，需獨立設計 |
+| 7 | B3: MacroDataSnapshot 補漏指標 | P1 | ✅ 完成 | #1372 |
+| 8 | B5: Causal chain layer tracing | P1 | ✅ 完成 | #1372 |
+| 9 | C1+C2: 壽險/公司派/散戶數據缺口 | P0 | ✅ 完成 | #1372 |
+| 10 | C3: capitalflow 進入主決策鏈 | P0 | ✅ 完成 | #1372 |
+| 11 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ✅ 完成 | `11347d5d` (cfAssessor wiring) |
+| 12 | C5: QualityScore 公式 + cfScore 權重 | 已對齊/P2 | ⏳ 動態權重未實作 | P2 待排 |
+| 13 | C6: 散戶反向指標統一口徑 | P1 | ⏳ 未啟動 | — |
+| 14 | D1: detector 時期敏感度 | P0 | ✅ 完成 | #1372 |
+| 15 | D2+D3: YAML consumer + 策略過濾 | P0 | ✅ 完成 | #1372 |
+| 16 | D4: Narrative 24 themes 全進 regime | P1 | ✅ 完成 | #1372 |
+| 17 | D5: RegimeAllocator 六策略×七時期 | P0 | ✅ 完成 | #1372 |
+| 18 | E1+E2: YAML loader + 參數可配置 | P0 | ✅ 完成 | #1372 |
+| 19 | E3: API 輸出時期結構化欄位 | P1 | ✅ 完成 | #1372 (DailySummaryReport) |
+| 20 | E4: 前端七時期 UI 卡片 | P1 | ⏳ 未啟動 | — |
+| 21 | E5: 策略類別三分類 | P1 | ⏳ 未啟動 | — |
+
+### 進度統計
+
+| 等級 | 總計 | ✅ 完成 | ⏳ 未完成 |
+|------|------|--------|----------|
+| P0 | 13 | 12 | 1 (B2) |
+| P1 | 6 | 4 | 2 (C6, E4, E5) |
+| P2 | 1 | 0 | 1 (C5) |
+| 已對齊 | 2 | 2 | 0 |
+| **合計** | **22** | **18** | **4** |
+
+> 最後更新：2026-07-27，commit `1c60cbaf`
