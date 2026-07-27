@@ -13,8 +13,8 @@
 | 指標 | 數值 |
 |------|------|
 | 審計項目 | **25 項** |
-| 已完成 | **18 項** |
-| 部分完成 | **1 項** (C4) |
+| 已完成 | **19 項** |
+| 部分完成 | **0 項** |
 | 待啟動 | **6 項** |
 | 分類數 | 6 類（A–F） |
 
@@ -45,7 +45,7 @@
 | C1 | 七大勢力完整數據源 | ✅ | #1372 — 壽險/銀行、公司派/內部人、散戶維度補齊 |
 | C2 | 公股行庫自動化數據通道 | ✅ | #1372 — 自動化分點加總 seam |
 | C3 | capitalflow 輸出進入主決策鏈 | ✅ | #1372 — orchestrator 改取 capitalflow.PrimaryFlow |
-| C4 | capitalflow 4-layer Assessment 消費者 | ⚠️ | #1378 介面+欄位就緒；`WithCapitalFlowAssessmentProvider` 無 production caller（Assessor 與 capitalflow.Service 在不同 goroutine scope） |
+| C4 | capitalflow 4-layer Assessment 消費者 | ✅ | #1392 — CapitalFlowServiceAdapter + buildSystemOrFallback wiring |
 
 ## D. 敘事引擎與策略映射
 
@@ -82,11 +82,11 @@
 |------|------|--------|--------|----------|
 | A. 時期判斷 | 4 | 4 | 0 | 0 |
 | B. 因果傳導 | 4 | 4 | 0 | 0 |
-| C. 資金流向 | 5 | 4 | 1 | 0 |
+| C. 資金流向 | 5 | 5 | 0 | 0 |
 | D. 敘事策略 | 4 | 4 | 0 | 0 |
 | E. 前端配置 | 3 | 1 | 0 | 2 |
 | F. 方法論新增 | 5 | 1 | 0 | 4 |
-| **合計** | **25** | **18** | **1** | **6** |
+| **合計** | **25** | **19** | **0** | **6** |
 ---
 
 ## 版本歷史
