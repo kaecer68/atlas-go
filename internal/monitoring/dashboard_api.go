@@ -1081,7 +1081,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	}
 	systemHandlers.RegisterRoutes(mux)
 
-	handlers := &apisystem.HealthHandlers{}
+	healthStore := apigateway.NewChannelHealthStore(filepath.Join(a.workDir, "data/state"))
+	handlers := &apisystem.HealthHandlers{
+		ChannelHealth: healthStore,
+	}
 	if a.apiAddr != "" {
 		handlers.APIAddr = a.apiAddr
 	}
