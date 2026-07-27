@@ -24,12 +24,27 @@ type ReportEntry struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// ReportService encapsulates backtest report loading operations.
+// PeriodInfo carries the seven-period classification result for daily summary reports.
+type PeriodInfo struct {
+	MarketPeriod string
+	Confidence   float64
+	CashLevel    float64
+}
+
+// PeriodProvider returns the current period classification when available.
+type PeriodProvider func() *PeriodInfo
+
 type ReportService struct {
 	workDir         string
 	ledgerDir       string
 	reportGenerator *narrative.ReportGenerator
 	store           ledger.OutcomeStore
+	periodProvider  PeriodProvider
+}
+
+// SetPeriodProvider sets an optional callback for period-enriched daily summaries.
+func (s *ReportService) SetPeriodProvider(p PeriodProvider) {
+	s.periodProvider = p
 }
 
 // NewReportService creates a new ReportService.
@@ -113,6 +128,15 @@ func (s *ReportService) LoadDailySummary(date string) (*domain.DailySummaryRepor
 	riskSnap := s.loadRiskSnapshot()
 
 	report := s.reportGenerator.GenerateDailySummary(date, events, recs, riskSnap)
+
+	if s.periodProvider != nil {
+		if info := s.periodProvider(); info != nil {
+			report.MarketPeriod = info.MarketPeriod
+			report.PeriodConfidence = info.Confidence
+			report.PeriodCashLevel = info.CashLevel
+		}
+	}
+
 	return report, nil
 }
 

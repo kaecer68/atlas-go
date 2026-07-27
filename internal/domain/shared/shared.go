@@ -30,6 +30,28 @@ const (
 	PeriodBlackSwan      MarketPeriod = "black_swan"      // 黑天鵝
 )
 
+// PeriodNameZH returns the Traditional Chinese label for a MarketPeriod.
+func (p MarketPeriod) PeriodNameZH() string {
+	switch p {
+	case PeriodDownturn:
+		return "低迷"
+	case PeriodTurnaroundUp:
+		return "轉折開高"
+	case PeriodBull:
+		return "上升（多頭）"
+	case PeriodPlateau:
+		return "高原"
+	case PeriodConsolidation:
+		return "盤整"
+	case PeriodTurnaroundDown:
+		return "轉折下壓"
+	case PeriodBlackSwan:
+		return "黑天鵝"
+	default:
+		return string(p)
+	}
+}
+
 // Side represents a trade direction.
 type Side string
 
