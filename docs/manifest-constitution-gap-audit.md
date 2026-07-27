@@ -61,7 +61,7 @@
 | # | 項目 | 狀態 | 備註 / PR |
 |---|------|------|-----------|
 | E3 | API 輸出時期結構化欄位 | ✅ | PR #1388 — DailySummaryReport + dailyreport.Report period section |
-| E4 | 前端七時期 UI 卡片 | ⬜ | 前端另開 CLI |
+| E4 | 前端七時期 UI 卡片 | ✅ | PR #1397 + fix/20260727-methodology-review — 七時期卡片、三態色帶、八層因果鏈、策略矩陣；已知限制見 `docs/manifest-methodology-e4-review.md` |
 | E5 | 策略類別三分類（defensive/aggressive/tactical） | ⬜ | 前端另開 CLI |
 
 ## F. 方法論新增覆核

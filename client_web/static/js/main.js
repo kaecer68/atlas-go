@@ -420,6 +420,16 @@ async function loadPageData(pageId) {
   else if (pageId === 'strategies') {
     try { if (m.strategies && m.strategies.renderStrategiesPage) m.strategies.renderStrategiesPage(document.getElementById('page-strategies')); } catch(e) { console.warn(e); }
   }
+
+  else if (pageId === 'methodology') {
+    try {
+      import('./page-shells/methodology.js').then(function(mod) {
+        if (mod.loadMethodologyData) mod.loadMethodologyData();
+      }).catch(function(err) {
+        console.warn('[Dynamic import] methodology module load failed:', err);
+      });
+    } catch(e) { console.warn(e); }
+  }
   
   else if (pageId === 'crossmarket') {
     try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.warn(e); }

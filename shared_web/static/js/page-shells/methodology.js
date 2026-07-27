@@ -13,15 +13,30 @@ import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 // ---------------------------------------------------------------------------
 // 策略矩陣（憲章第五章·策略矩陣）— 寫死於元件，與憲章對齊。
 // ---------------------------------------------------------------------------
+// 策略 ID 與憲章第五章策略矩陣對齊（後端 allowed_strategies 也使用這組 ID）。
 const STRATEGY_MATRIX = {
-  downturn:        ['防禦 all_weather', '價值 value', '現金'],
-  turnaround_up:   ['成長 growth', '動能 momentum', '事件套利'],
-  bull:            ['動能 momentum', '成長 growth', '事件套利'],
-  plateau:         ['事件套利', '價值 value', '防禦 all_weather'],
-  consolidation:   ['事件套利', '防禦 all_weather'],
-  turnaround_down: ['防禦 all_weather', '現金'],
-  black_swan:      ['防禦 all_weather', '現金'],
+  downturn:        ['all_weather', 'value', 'cash_only'],
+  turnaround_up:   ['growth', 'momentum', 'event_arbitrage'],
+  bull:            ['momentum', 'growth', 'event_arbitrage'],
+  plateau:         ['event_arbitrage', 'value', 'all_weather'],
+  consolidation:   ['event_arbitrage', 'all_weather'],
+  turnaround_down: ['all_weather', 'cash_only'],
+  black_swan:      ['all_weather', 'cash_only'],
 };
+// 散戶友善用詞：對齊提示詞「跟隨聰明錢啟動 / 事件套利 / 資金對抗後爆發 / 防禦 / 現金」。
+const STRATEGY_DISPLAY_NAME = {
+  all_weather: '防禦',
+  value: '資金對抗後爆發',
+  growth: '跟隨聰明錢啟動',
+  momentum: '跟隨聰明錢啟動',
+  event_arbitrage: '事件套利',
+  cash_only: '現金',
+  cash: '現金',
+};
+function displayStrategyName(id) {
+  if (!id) return '—';
+  return STRATEGY_DISPLAY_NAME[id] || escapeHtml(String(id));
+}
 const CASH_RANGES = {
   downturn: '40-50%', turnaround_up: '10-20%', bull: '5-10%',
   plateau: '20-30%', consolidation: '30-40%', turnaround_down: '50-70%', black_swan: '80-100%',
@@ -152,8 +167,8 @@ const LAYER_IMPLICATION = {
 export const template = `
   <div class="md-page">
     <div class="md-page-header">
-      <h2>方法論</h2>
-      <p>因果傳導鏈 + 策略矩陣 — 對齊 <code>docs/ATLAS_METHODOLOGY.md</code> 憲章第二章與第五章。</p>
+      <h2>ATLAS 方法論：因果傳導鏈</h2>
+      <p>八層由上而下、由外而內的資金傳導鏈，對齊 <code>docs/ATLAS_METHODOLOGY.md</code> 憲章第二章與第五章策略矩陣。</p>
     </div>
 
     <details class="md-helper">
@@ -234,8 +249,10 @@ function getCrossField(cross, key) {
   if (!cross) return { value: null, changePct: null, available: false };
   const raw = cross[key];
   if (raw && typeof raw === 'object') {
-    const failed = !raw.symbol || raw.symbol === '' || (raw.value != null && Number(raw.value) <= 0 && key !== 'vix' && key !== 'usd_twd');
-    return { value: raw.value, changePct: raw.change_pct, available: !failed };
+    // 僅以 value 是否有效作為可用性判斷；symbol 只作 debug 提示，不阻塞顯示。
+    const value = raw.value;
+    const available = value != null && !Number.isNaN(Number(value));
+    return { value, changePct: raw.change_pct, available };
   }
   if (isNum(raw) || typeof raw === 'string') {
     return { value: raw, changePct: null, available: true };
@@ -394,7 +411,7 @@ function renderPeriodCard(host, report, isPremium, error) {
     <div class="md-allowed-strategies">
       ${allowed.length === 0
         ? '<span class="badge muted">當前時期無特殊策略限制</span>'
-        : allowed.map(s => `<span class="badge info">${escapeHtml(s)}</span>`).join('')}
+        : allowed.map(s => `<span class="badge info">${displayStrategyName(s)}</span>`).join('')}
     </div>
   `;
 }
@@ -404,25 +421,20 @@ function renderPeriodCard(host, report, isPremium, error) {
 // ---------------------------------------------------------------------------
 function renderRegimeHistory(host, data, error) {
   if (error) {
+    host.style.display = '';
     host.innerHTML = renderError('三態歷史紀錄', 'regime');
     return rebindRetry('md-regime-host', 'regime');
   }
-  if (!data) {
-    host.innerHTML = renderEmpty('無法取得 regime 歷史紀錄（API 回傳 null）。');
+  // 無資料時整區塊隱藏（提示詞 empty 態），禁止畫假色帶；error 態仍顯示重試。
+  const sessions = data && Array.isArray(data) ? data
+                 : (data && Array.isArray(data.sessions) ? data.sessions
+                 : (data && Array.isArray(data.Sessions) ? data.Sessions : null));
+  if (!sessions || sessions.length === 0) {
+    host.style.display = 'none';
+    host.innerHTML = '';
     return;
   }
-  // data 可能是 {sessions: [...]} 或直接的 sessions 物件陣列
-  const sessions = Array.isArray(data) ? data
-                 : (Array.isArray(data.sessions) ? data.sessions
-                 : (Array.isArray(data.Sessions) ? data.Sessions : null));
-  if (!sessions) {
-    host.innerHTML = renderEmpty('API 回傳格式無法解析（預期 sessions / Sessions 陣列）。');
-    return;
-  }
-  if (sessions.length === 0) {
-    host.innerHTML = renderEmpty('regime 歷史尚無資料。');
-    return;
-  }
+  host.style.display = '';
   const cells = sessions.map(s => {
     const regime = s.regime || s.Regime || '';
     const date = s.date || s.Date || s.recorded_at || '';
@@ -532,14 +544,14 @@ function renderRecommend(host, report, isPremium, error) {
     : stratList.map((s, i) => `
         <div class="md-recommend__row" data-rank="${i + 1}">
           <span class="md-recommend__rank">#${i + 1}</span>
-          <span class="md-recommend__name">${escapeHtml(s)}</span>
+          <span class="md-recommend__name">${displayStrategyName(s)}</span>
         </div>
       `).join('');
 
   host.innerHTML = `
     <div class="md-recommend__header">
       <h3 class="md-recommend__title">📌 散戶策略推薦</h3>
-      <span class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + escapeHtml(activeStrategy) : ''}</span>
+      <span class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + displayStrategyName(activeStrategy) : ''}</span>
     </div>
     <div class="md-recommend__grid">
       <div class="md-recommend__strategies">
@@ -562,9 +574,10 @@ function renderMatrixTable(activePeriod) {
   const rows = Object.keys(STRATEGY_MATRIX).map(pid => {
     const label = PERIOD_LABEL[pid] ? PERIOD_LABEL[pid].zh : pid;
     const isActive = pid === activePeriod;
+    const strategies = STRATEGY_MATRIX[pid].slice(0, 3).map(displayStrategyName).join(' → ');
     return `<tr data-active="${isActive ? 'true' : 'false'}">
       <td>${escapeHtml(label)}</td>
-      <td>${escapeHtml(STRATEGY_MATRIX[pid].slice(0, 3).join(' → '))}</td>
+      <td>${strategies}</td>
       <td>${escapeHtml(CASH_RANGES[pid] || '—')}</td>
     </tr>`;
   }).join('');
@@ -608,6 +621,10 @@ function openLayerModal(card) {
       <div class="md-modal__section">
         <h4>白話說明（憲章原文）</h4>
         <p>${escapeHtml(layer.oneliner)}</p>
+      </div>
+
+      <div class="md-modal__section">
+        <h4>對決策的含義（憲章原文）</h4>
         <p>${escapeHtml(LAYER_IMPLICATION[layer.num] || '—')}</p>
       </div>
 
@@ -706,13 +723,13 @@ async function reloadSection(section, isPremium) {
 }
 
 // ---------------------------------------------------------------------------
-// init（esbuild SHELL_LOADERS 入口）
+// 資料載入與渲染（供 init 與 main.js 的 auto-refresh / 頁面切換重用）
 // ---------------------------------------------------------------------------
-export async function init() {
+export async function loadMethodologyData() {
   const tier = await getTier();
   const isPremium = tier === 'premium';
 
-  // 四個獨立 API；任一失敗不拖垮其他
+  // 四個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
   const [report, regime, cross, capital] = await Promise.all([
     isPremium ? silentGetJSON('/api/reports/latest') : Promise.resolve(null),
     silentGetJSON('/api/regime/history'),
@@ -759,4 +776,11 @@ export async function init() {
   // 4. 策略推薦
   const recHost = document.getElementById('md-recommend-host');
   if (recHost) renderRecommend(recHost, report, isPremium, isPremium && !report);
+}
+
+// ---------------------------------------------------------------------------
+// init（esbuild SHELL_LOADERS 入口）
+// ---------------------------------------------------------------------------
+export async function init() {
+  await loadMethodologyData();
 }
