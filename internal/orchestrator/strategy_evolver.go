@@ -415,6 +415,9 @@ func (e *StrategyEvolver) Reset() {
 // Falls back to the legacy macro PrimaryFlow mapping when assessment
 // data is unavailable or not yet eligible.
 //
+// Phase 3 (TODO): wire CapitalFlowAssessment from the session's capital-flow
+// service so the institutional+behavioral consensus can drive the action
+// rather than always falling through to the legacy PrimaryFlow path.
 // Derivation rules (E07 assessment):
 //   - Institutional + Behavioral both bullish → risk_on
 //   - Institutional + Behavioral both bearish → risk_off

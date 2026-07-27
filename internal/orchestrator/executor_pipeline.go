@@ -75,20 +75,13 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	registry := ctx.MutedAgentFilter.Filter(ctx.Registry, ctx.Plugins)
 
-	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
-	// Must run BEFORE regime inference so macro conditions inform the
-	// regime verdict rather than only scaling post-hoc convictions.
-	var macroFlowResult *macroflow.AdjustmentResult
-	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
-		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(domain.RegimeNeutral))
-	}
-
 	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
 	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
 
-	// Recompute macro adjustment with actual regime now available (post-regime inference).
-	// The pre-regime call used Neutral; this one uses the detected regime for accurate
-	// risk-level→adjustment mapping.
+	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
+	// Computed post-regime inference so risk-level→adjustment mapping matches
+	// the detected regime. ApplyControl consumes the result later in the pipeline.
+	var macroFlowResult *macroflow.AdjustmentResult
 	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
 		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime))
 	}

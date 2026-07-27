@@ -108,12 +108,12 @@ func (d *PeriodDetector) DetectPeriod(ind PeriodIndicators) domain.MarketPeriod 
 		return domain.PeriodBlackSwan
 	}
 
-	// 2. Turnaround Down — all conditions must be met
+	// 2. Turnaround Down — any 3 conditions must be met
 	if d.isTurnaroundDown(ind) {
 		return domain.PeriodTurnaroundDown
 	}
 
-	// 3. Downturn — all conditions must be met
+	// 3. Downturn — any 3 conditions must be met
 	if d.isDownturn(ind) {
 		return domain.PeriodDownturn
 	}
@@ -123,17 +123,17 @@ func (d *PeriodDetector) DetectPeriod(ind PeriodIndicators) domain.MarketPeriod 
 		return domain.PeriodTurnaroundUp
 	}
 
-	// 5. Bull — all conditions must be met
+	// 5. Bull — any 3 conditions must be met
 	if d.isBull(ind) {
 		return domain.PeriodBull
 	}
 
-	// 6. Plateau — all conditions must be met
+	// 6. Plateau — any 3 conditions must be met
 	if d.isPlateau(ind) {
 		return domain.PeriodPlateau
 	}
 
-	// 7. Consolidation — all conditions must be met
+	// 7. Consolidation — any 3 conditions must be met
 	if d.isConsolidation(ind) {
 		return domain.PeriodConsolidation
 	}
@@ -183,8 +183,12 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	checks := 0
 	passed := 0
 
-	// 1. Foreign consecutive heavy sell: 3+ days with at least one > 150億
-	if ind.ForeignConsecSellDays >= d.cfg.TurnDownConsecSellDays && ind.ForeignSingleDayNet < -(d.cfg.TurnDownSingleSellBillion*1_000_000_00) {
+	// 1. Foreign consecutive heavy sell: 3+ days with at least one > 150億.
+	// Uses ForeignNetPeakSell (max sell in window) as secondary check to
+	// cover the case where the heaviest sell was not the most recent day.
+	heavyThreshold := -(d.cfg.TurnDownSingleSellBillion * 1_000_000_00)
+	if ind.ForeignConsecSellDays >= d.cfg.TurnDownConsecSellDays &&
+		(ind.ForeignSingleDayNet < heavyThreshold || ind.ForeignNetPeakSell < heavyThreshold) {
 		passed++
 	}
 	checks++
@@ -218,7 +222,6 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 }
 
 // ─── Downturn Detection ───
-
 func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 	checks := 0
 	passed := 0
