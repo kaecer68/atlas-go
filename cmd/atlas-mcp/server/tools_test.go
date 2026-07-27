@@ -70,11 +70,13 @@ func newTestHarness(t *testing.T) (*server, *reqRecorder, func()) {
 			_, _ = w.Write([]byte(`{"current_period":"T01","sessions":[{"period_name_zh":"第一期"}]}`))
 		default:
 			rec.mu.Lock()
-			rec.path = r.URL.Path
-			rec.query = r.URL.Query()
-			rec.headers = r.Header.Clone()
-			b, _ := io.ReadAll(r.Body)
-			rec.body = b
+			if rec.path == "" {
+				rec.path = r.URL.Path
+				rec.query = r.URL.Query()
+				rec.headers = r.Header.Clone()
+				b, _ := io.ReadAll(r.Body)
+				rec.body = b
+			}
 			rec.mu.Unlock()
 			_, _ = w.Write(rec.getResponseBody())
 		}
