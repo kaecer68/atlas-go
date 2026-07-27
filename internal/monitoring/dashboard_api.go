@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -1095,29 +1096,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	handlers.RegisterAggregateRoute(mux)
 	// Channel health summary endpoint for the alerts page dashboard.
 	mux.HandleFunc("/api/dashboard/channel-health", func(w http.ResponseWriter, r *http.Request) {
-		healthPath := filepath.Join(a.workDir, "data/state", "channel_health.json")
-		b, err := os.ReadFile(healthPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(`{"channels":[],"updated_at":""}`))
-				return
-			}
-			apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "channel_health_read_failed", fmt.Sprintf("read channel health: %v", err))
-			return
-		}
-		var wrapper struct {
-			Channels  map[string]*ChannelHealthRecord `json:"channels"`
-			UpdatedAt string                          `json:"updated_at,omitempty"`
-		}
-		if err := json.Unmarshal(b, &wrapper); err != nil {
-			apishared.WriteJSONErrorEx(w, http.StatusInternalServerError, "channel_health_parse_failed", fmt.Sprintf("parse channel health: %v", err))
-			return
-		}
-		// Build channels array for frontend. Mirrors apigateway.ChannelHealthRecord
-		// fields so the dashboard can surface latency, last error, and data freshness
-		// without a second call to channel_fetch_log.json.
+		// Uses ChannelHealthStore (same source as /api/health/aggregate Tier 2)
+		// for freshness-aware status, instead of reading channel_health.json directly.
 		type channelHealthResp struct {
 			ChannelID          string   `json:"channel_id"`
 			Status             string   `json:"status"`
@@ -1131,8 +1111,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
 			Errors             []string `json:"errors,omitempty"`
 		}
-		var channels []channelHealthResp
-		for id, rec := range wrapper.Channels {
+		store := apigateway.NewChannelHealthStore(filepath.Join(a.workDir, "data/state"))
+		allRecs := store.All()
+		channels := make([]channelHealthResp, 0, len(allRecs))
+		for id, rec := range allRecs {
 			channels = append(channels, channelHealthResp{
 				ChannelID:          id,
 				Status:             rec.Status,
@@ -1151,7 +1133,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"channels":   channels,
-			"updated_at": wrapper.UpdatedAt,
+			"updated_at": "", // no longer file-based
 		})
 	})
 
