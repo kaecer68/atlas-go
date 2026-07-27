@@ -38,6 +38,7 @@ const SHELL_LOADERS = {
   evolution_panel: () => import('./page-shells/evolution_panel.js'),
   'stock-quote': () => import('./page-shells/stock-quote.js'),
   'performance-report': () => import('./page-shells/performance-report.js'),
+  methodology: () => import('./page-shells/methodology.js'),
   'errors/404': () => import('./page-shells/errors/404.js')
 };
 const _shellsLoaded = new Set();
@@ -96,7 +97,8 @@ export async function switchPage(id, silent) {
     evolution_panel: '策略演化', strategies: '投資心法',
     capital_predictions: '錢潮預測', capital_board: '錢潮看板',
       login: '登入', register: '註冊', premium: '升級 Premium',
-      mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查'
+      mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
+      methodology: '方法論'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');

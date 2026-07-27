@@ -82,6 +82,9 @@
 @import url("pages/crossmarket.css");
 @import url("pages/datachannels.css");
 
+/* Pages - Methodology (E4) */
+@import url("pages/methodology.css");
+
 /* Existing standalone modules (backward compatibility) */
 @import url("components/circuit-breaker.css");
 @import url("components/performance-report.css");

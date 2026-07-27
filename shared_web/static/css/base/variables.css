@@ -137,6 +137,24 @@
   --surface-warning: rgba(245, 158, 11, 0.06);
   --surface-success: rgba(var(--color-success-rgb), 0.1);
   --surface-info: rgba(var(--color-info-rgb), 0.1);
+
+  /* 七時期 Regime Tokens — 方法論頁（E4）專用
+     色票與對應 RGB 三元組嚴格對齊 docs/ATLAS_METHODOLOGY.md 實作提示詞 v3；
+     淺色主題見 :root[data-theme="light"]。 */
+  --regime-downturn: #4A5568;        /* 低迷 */
+  --regime-downturn-rgb: 74, 85, 104;
+  --regime-turnaround-up: #48BB78;   /* 轉折開高 */
+  --regime-turnaround-up-rgb: 72, 187, 120;
+  --regime-bull: #38A169;            /* 上升 */
+  --regime-bull-rgb: 56, 161, 105;
+  --regime-plateau: #ECC94B;         /* 高原 */
+  --regime-plateau-rgb: 236, 201, 75;
+  --regime-consolidation: #ED8936;   /* 盤整 */
+  --regime-consolidation-rgb: 237, 137, 54;
+  --regime-turnaround-down: #E53E3E; /* 轉折下壓 */
+  --regime-turnaround-down-rgb: 229, 62, 62;
+  --regime-black-swan: #9B2C2C;      /* 黑天鵝 */
+  --regime-black-swan-rgb: 155, 44, 44;
 }
 :root[data-theme="light"] {
   --bg: #f5f5f5; --panel: #ffffff; --border: #e0e0e0; --text: #1a1a1a; --muted: #666666;
@@ -146,4 +164,19 @@
   --up: var(--bullish); --down: var(--bearish); --warn: var(--color-warning);
   --primary: #1976d2; --danger: #d32f2f;
   --color-success: #16a34a; --color-danger: #dc2626; --color-warning: #ea580c; --color-info: #2563eb; --color-danger-rgb: 220,38,38;
+  /* Light theme 七時期色票 — 與深色主題一致，僅在必要時微调可读性 */
+  --regime-downturn: #4A5568;
+  --regime-downturn-rgb: 74, 85, 104;
+  --regime-turnaround-up: #48BB78;
+  --regime-turnaround-up-rgb: 72, 187, 120;
+  --regime-bull: #38A169;
+  --regime-bull-rgb: 56, 161, 105;
+  --regime-plateau: #D69E2E;
+  --regime-plateau-rgb: 214, 158, 46;
+  --regime-consolidation: #DD6B20;
+  --regime-consolidation-rgb: 221, 107, 32;
+  --regime-turnaround-down: #E53E3E;
+  --regime-turnaround-down-rgb: 229, 62, 62;
+  --regime-black-swan: #9B2C2C;
+  --regime-black-swan-rgb: 155, 44, 44;
 }

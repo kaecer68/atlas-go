@@ -21,6 +21,23 @@ if [ ! -f "$VALID_FIELDS" ]; then
   exit 1
 fi
 
+# Wait for valid_fields.json to be fully written by go generate (race robustness).
+# go generate may leave the file empty/truncated for a brief moment.
+MAX_WAIT=10
+WAITED=0
+while [ $WAITED -lt $MAX_WAIT ]; do
+  if [ -s "$VALID_FIELDS" ] && jq -e '.' "$VALID_FIELDS" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.2
+  WAITED=$((WAITED + 1))
+done
+if [ $WAITED -eq $MAX_WAIT ]; then
+  echo "ERROR: valid_fields.json is missing, empty, or truncated after ${MAX_WAIT} retries."
+  ls -la "$VALID_FIELDS" || true
+  exit 1
+fi
+
 # Build allowlist from valid_fields.json (extract JSON array to grep-friendly list)
 ALLOWLIST=$(mktemp)
 jq -r '.[]' "$VALID_FIELDS" > "$ALLOWLIST"
@@ -97,6 +114,9 @@ FOUND_COUNT=$(wc -l < "$FOUND_FIELDS" | tr -d ' ')
 # Check each found field against allowlist
 UNKNOWN=$(mktemp)
 while IFS= read -r field; do
+  if [ -z "$field" ]; then
+    continue
+  fi
   if ! grep -qxF "$field" "$ALLOWLIST"; then
     echo "$field" >> "$UNKNOWN"
   fi
@@ -115,9 +135,12 @@ if [ "$UNKNOWN_COUNT" -gt 0 ]; then
     echo "  $field — used in:"
     for D in "${JS_DIRS[@]}"; do
       [ ! -d "$D" ] && continue
-      grep -rn "\.${field}[^a-zA-Z0-9_]" "$D" 2>/dev/null | head -3 | while IFS= read -r match; do
-        echo "    $match"
-      done
+      matches=$(grep -rn "\.${field}[^a-zA-Z0-9_]" "$D" 2>/dev/null | head -3 || true)
+      if [ -n "$matches" ]; then
+        echo "$matches" | while IFS= read -r match; do
+          echo "    $match"
+        done
+      fi
     done
     echo ""
   done < "$UNKNOWN"

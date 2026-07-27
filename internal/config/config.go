@@ -150,6 +150,11 @@ func Normalize(cfg Config) Config {
 	if cfg.ReplayDataPath == "samples/replay/twse_stock_day_all_sample.csv" {
 		cfg.ReplayDataPath = constants.ReplayCSVPath
 	}
+	// Resolve relative SQLitePath against WorkDir so tests and subcommands
+	// invoked from non-root directories still find the database.
+	if cfg.SQLitePath != "" && !filepath.IsAbs(cfg.SQLitePath) && cfg.WorkDir != "" {
+		cfg.SQLitePath = filepath.Join(cfg.WorkDir, cfg.SQLitePath)
+	}
 	return cfg
 }
 
