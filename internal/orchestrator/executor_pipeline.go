@@ -141,6 +141,9 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 }
 
+// regimeToRiskLevel maps domain.Regime to macroflow.RiskLevel.
+// BlackSwan is handled by PeriodDetector → PeriodToRegime(PeriodBlackSwan) → RegimeRiskOff → RiskRed.
+// The 7-period model's PeriodToRegime mapping is the single source of truth for regime classification.
 func regimeToRiskLevel(regime domain.Regime) macroflow.RiskLevel {
 	switch regime {
 	case domain.RegimeRiskOff:
