@@ -36,10 +36,10 @@ func (c *assessmentCapitalFlow) LatestAssessment(context.Context) (capitalflow.C
 	return c.assessment, c.assessmentErr
 }
 
-func TestPredict_CapitalFlowAssessmentGatesLegacyQualityScore(t *testing.T) {
+func TestPredict_CapitalFlowBaselineUsedWithCalibrationAwareness(t *testing.T) {
 	now := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
 
-	t.Run("calibrating ignores non-zero legacy score", func(t *testing.T) {
+	t.Run("calibrating still consumes baseline with reduced weight and capped confidence", func(t *testing.T) {
 		cf := &assessmentCapitalFlow{
 			score: 1,
 			assessment: capitalflow.CapitalFlowAssessment{
@@ -53,15 +53,23 @@ func TestPredict_CapitalFlowAssessmentGatesLegacyQualityScore(t *testing.T) {
 		if cf.assessmentCalls != 1 {
 			t.Errorf("LatestAssessment calls = %d, want 1", cf.assessmentCalls)
 		}
-		if cf.qualityCalls != 0 {
-			t.Errorf("QualityScore calls = %d, want 0 while assessment is calibrating", cf.qualityCalls)
+		if cf.qualityCalls != 1 {
+			t.Errorf("QualityScore calls = %d, want 1 so baseline is available", cf.qualityCalls)
 		}
-		if strings.Contains(report.Summary, "當前資金品質偏多") {
-			t.Errorf("calibrating legacy score leaked into prediction summary: %q", report.Summary)
+		if !strings.Contains(report.Summary, "當前資金品質偏多") {
+			t.Errorf("calibrating baseline missing from prediction summary: %q", report.Summary)
+		}
+		if !strings.Contains(report.Summary, "校準中") {
+			t.Errorf("calibrating uncertainty note missing from summary: %q", report.Summary)
+		}
+		for _, pred := range report.Predictions {
+			if pred.Confidence > calibratingConfidenceCap {
+				t.Errorf("calibrating prediction confidence %.4f exceeds cap %.4f", pred.Confidence, calibratingConfidenceCap)
+			}
 		}
 	})
 
-	t.Run("eligible assessment permits legacy fallback score", func(t *testing.T) {
+	t.Run("eligible assessment permits full baseline weight", func(t *testing.T) {
 		cf := &assessmentCapitalFlow{
 			score: 1,
 			assessment: capitalflow.CapitalFlowAssessment{
@@ -79,7 +87,7 @@ func TestPredict_CapitalFlowAssessmentGatesLegacyQualityScore(t *testing.T) {
 			t.Errorf("QualityScore calls = %d, want 1 after assessment becomes eligible", cf.qualityCalls)
 		}
 		if !strings.Contains(report.Summary, "當前資金品質偏多") {
-			t.Errorf("eligible legacy fallback score missing from prediction summary: %q", report.Summary)
+			t.Errorf("eligible baseline missing from prediction summary: %q", report.Summary)
 		}
 	})
 }
@@ -102,7 +110,7 @@ func Test_PredictDay_BullishDrivers_ReturnsInflow(t *testing.T) {
 		},
 	}
 
-	dir, conf, drivers := p.predictDay(day, timeline, 0)
+	dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 
 	if dir != "inflow" {
 		t.Errorf("expected inflow, got %s", dir)
@@ -133,7 +141,7 @@ func Test_PredictDay_BearishDrivers_ReturnsOutflow(t *testing.T) {
 		},
 	}
 
-	dir, conf, drivers := p.predictDay(day, timeline, 0)
+	dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 
 	if dir != "outflow" {
 		t.Errorf("expected outflow, got %s", dir)
@@ -164,7 +172,7 @@ func Test_PredictDay_NeutralNet_ReturnsNeutral(t *testing.T) {
 		},
 	}
 
-	dir, conf, drivers := p.predictDay(day, timeline, 0)
+	dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 
 	if dir != "neutral" {
 		t.Errorf("expected neutral, got %s", dir)
@@ -189,7 +197,7 @@ func Test_PredictDay_MixedDirectionEvent_ReducesWeight(t *testing.T) {
 		},
 	}
 
-	dir, conf, drivers := p.predictDay(day, timeline, 0)
+	dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 
 	// mixed: bullishWeight += 1.0*0.3 = 0.3, bearishWeight += 0.3
 	// net = 0.3 - 0.3 = 0 → neutral
@@ -218,7 +226,7 @@ func Test_PredictDay_DayOutOfRange_NoDrivers(t *testing.T) {
 
 	t.Run("before_start", func(t *testing.T) {
 		day := time.Date(2025, 7, 5, 0, 0, 0, 0, time.UTC)
-		dir, conf, drivers := p.predictDay(day, timeline, 0)
+		dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 		if dir != "neutral" {
 			t.Errorf("expected neutral before event, got %s", dir)
 		}
@@ -232,7 +240,7 @@ func Test_PredictDay_DayOutOfRange_NoDrivers(t *testing.T) {
 
 	t.Run("after_end", func(t *testing.T) {
 		day := time.Date(2025, 7, 25, 0, 0, 0, 0, time.UTC)
-		dir, conf, drivers := p.predictDay(day, timeline, 0)
+		dir, conf, drivers := p.predictDay(day, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 		if dir != "neutral" {
 			t.Errorf("expected neutral after event, got %s", dir)
 		}
@@ -258,14 +266,14 @@ func Test_PredictDay_CFScoreTiltsDirection(t *testing.T) {
 	}
 
 	t.Run("neutral_without_cf", func(t *testing.T) {
-		dir, _, _ := p.predictDay(day, barelyBullish, 0)
+		dir, _, _ := p.predictDay(day, barelyBullish, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 		if dir != "neutral" {
 			t.Errorf("expected neutral without cfScore, got %s", dir)
 		}
 	})
 
 	t.Run("inflow_with_positive_cf", func(t *testing.T) {
-		dir, _, _ := p.predictDay(day, barelyBullish, 0.5)
+		dir, _, _ := p.predictDay(day, barelyBullish, scaleQualityScoreToBaseline(0.5), capitalflow.CalibrationEligible, 0)
 		if dir != "inflow" {
 			t.Errorf("expected inflow with cfScore=0.5, got %s", dir)
 		}
@@ -280,7 +288,7 @@ func Test_PredictDay_CFScoreTiltsDirection(t *testing.T) {
 				EndDate:   time.Date(2025, 6, 20, 0, 0, 0, 0, time.UTC),
 			},
 		}
-		dir, _, _ := p.predictDay(day, barelyBearish, -0.5)
+		dir, _, _ := p.predictDay(day, barelyBearish, scaleQualityScoreToBaseline(-0.5), capitalflow.CalibrationEligible, 0)
 		if dir != "outflow" {
 			t.Errorf("expected outflow with cfScore=-0.5, got %s", dir)
 		}
@@ -289,11 +297,70 @@ func Test_PredictDay_CFScoreTiltsDirection(t *testing.T) {
 	t.Run("via_SetCapitalFlow", func(t *testing.T) {
 		cf := &staticCF{score: 0.6, label: "mild_inflow"}
 		p.SetCapitalFlow(cf)
-		dir, _, _ := p.predictDay(day, barelyBullish, cf.QualityScore())
+		dir, _, _ := p.predictDay(day, barelyBullish, scaleQualityScoreToBaseline(cf.QualityScore()), capitalflow.CalibrationEligible, 0)
 		if dir != "inflow" {
 			t.Errorf("expected inflow after SetCapitalFlow(0.6), got %s", dir)
 		}
 	})
+}
+
+func TestPredict_CalibratingBaselineConflictsWithEvents(t *testing.T) {
+	now := time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC)
+	cal := industry.NewEventCalendar()
+	cal.RefreshEvents(now)
+
+	cf := &assessmentCapitalFlow{
+		score: -1.32,
+		assessment: capitalflow.CapitalFlowAssessment{
+			CalibrationStatus: capitalflow.CalibrationCalibrating,
+		},
+	}
+	p := testPredictor()
+	p.SetCapitalFlow(cf)
+	report := p.Predict(now)
+
+	// Confidence must be capped while calibrating.
+	for _, pred := range report.Predictions {
+		if pred.Confidence > calibratingConfidenceCap {
+			t.Errorf("calibrating prediction confidence %.4f exceeds cap %.4f", pred.Confidence, calibratingConfidenceCap)
+		}
+	}
+
+	// Summary must surface the current capital-flow direction and uncertainty.
+	if !strings.Contains(report.Summary, "偏空") {
+		t.Errorf("summary missing bearish baseline note: %q", report.Summary)
+	}
+	if !strings.Contains(report.Summary, "校準中") {
+		t.Errorf("summary missing calibration uncertainty note: %q", report.Summary)
+	}
+}
+
+func TestPredict_EligibleBaselineCanFlipWeakEvents(t *testing.T) {
+	now := time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC)
+	cal := industry.NewEventCalendar()
+	cal.RefreshEvents(now)
+
+	cf := &assessmentCapitalFlow{
+		score: -3.0,
+		assessment: capitalflow.CapitalFlowAssessment{
+			CalibrationStatus: capitalflow.CalibrationEligible,
+		},
+	}
+	p := testPredictor()
+	p.SetCapitalFlow(cf)
+	report := p.Predict(now)
+
+	outflowDays := 0
+	for _, pred := range report.Predictions {
+		if pred.Direction == "outflow" {
+			outflowDays++
+		}
+	}
+	// With a strong eligible bearish baseline, at least the near-term day(s)
+	// should reflect selling pressure even when the calendar is bullish.
+	if outflowDays == 0 {
+		t.Errorf("eligible strong bearish baseline produced no outflow days; directions=%v", report.Predictions)
+	}
 }
 
 func Test_ForcesForDirection_VariousKeywords(t *testing.T) {
@@ -640,6 +707,7 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 		predictions []FlowPrediction
 		active      []industry.CalendarEvent
 		cfScore     float64
+		cfStatus    string
 		wantWords   []string
 	}{
 		{
@@ -653,6 +721,7 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 			},
 			active:    []industry.CalendarEvent{{Name: "MSCI調整"}},
 			cfScore:   0.6,
+			cfStatus:  capitalflow.CalibrationEligible,
 			wantWords: []string{"偏流入", "MSCI調整", "偏多"},
 		},
 		{
@@ -666,6 +735,7 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 			},
 			active:    []industry.CalendarEvent{{Name: "外資賣超"}},
 			cfScore:   -0.6,
+			cfStatus:  capitalflow.CalibrationEligible,
 			wantWords: []string{"偏流出", "外資賣超", "偏空"},
 		},
 		{
@@ -679,6 +749,7 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 			},
 			active:    nil,
 			cfScore:   0,
+			cfStatus:  capitalflow.CalibrationEligible,
 			wantWords: []string{"分歧"},
 		},
 		{
@@ -692,12 +763,27 @@ func Test_BuildPredictionSummary_AllBranches(t *testing.T) {
 			},
 			active:    nil,
 			cfScore:   0,
+			cfStatus:  capitalflow.CalibrationEligible,
 			wantWords: []string{"偏流入"},
+		},
+		{
+			name: "calibrating_shows_uncertainty",
+			predictions: []FlowPrediction{
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+				{Direction: "inflow"},
+			},
+			active:    nil,
+			cfScore:   0.6,
+			cfStatus:  capitalflow.CalibrationCalibrating,
+			wantWords: []string{"校準中", "不確定性"},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildPredictionSummary(tc.predictions, tc.active, tc.cfScore)
+			got := buildPredictionSummary(tc.predictions, tc.active, scaleQualityScoreToBaseline(tc.cfScore), tc.cfStatus)
 			for _, w := range tc.wantWords {
 				if !stringsContains(got, w) {
 					t.Errorf("buildPredictionSummary() = %q, want it to contain %q", got, w)
@@ -857,7 +943,7 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 		},
 	}
 
-	dir, conf, drivers := p.predictDay(now, timeline, 0)
+	dir, conf, drivers := p.predictDay(now, timeline, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 	if len(drivers) != 2 {
 		t.Errorf("expected 2 drivers, got %d: %v", len(drivers), drivers)
 	}
@@ -872,7 +958,7 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 			StartDate: now, EndDate: end, Backfilled: true,
 		},
 	}
-	dirBF, confBF, _ := p.predictDay(now, timelineBackfilledOnly, 0)
+	dirBF, confBF, _ := p.predictDay(now, timelineBackfilledOnly, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 	_ = dirBF
 	if confBF >= conf {
 		t.Errorf("backfilled-only confidence (%f) should be lower than mixed confidence (%f)", confBF, conf)
@@ -884,7 +970,7 @@ func TestPredictDay_BackfilledBullishDriver_NetHalfOfNonBackfilled(t *testing.T)
 			StartDate: now, EndDate: end, Backfilled: false,
 		},
 	}
-	_, confNB, _ := p.predictDay(now, timelineNonBackfilledOnly, 0)
+	_, confNB, _ := p.predictDay(now, timelineNonBackfilledOnly, scaleQualityScoreToBaseline(0), capitalflow.CalibrationEligible, 0)
 	if confBF*1.5 < confNB {
 		t.Errorf("expected backfilled confidence (%f) to be roughly 0.7x non-backfilled (%f)", confBF, confNB)
 	}

@@ -91,8 +91,11 @@ func TestRegisterRoutesWithCapitalFlow_BearishTilt(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "分歧") && !strings.Contains(body, "流出") {
-		t.Errorf("bearish cf should tilt summary toward 分歧/流出, body=%s", body)
+	// The bearish baseline is now surfaced in the summary even when
+	// calendar events remain bullish; the summary must mention the
+	// current capital-flow quality, not necessarily flip the whole window.
+	if !strings.Contains(body, "偏空") && !strings.Contains(body, "流出") && !strings.Contains(body, "分歧") {
+		t.Errorf("bearish cf should be visible in summary as 偏空/流出/分歧, body=%s", body)
 	}
 }
 

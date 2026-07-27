@@ -41,8 +41,10 @@ type DetectorScanStore interface {
 }
 
 // CapitalFlowProvider exposes the legacy quality view plus the structured E07
-// assessment gate. Predict must not consume QualityScore while the assessment
-// is calibrating or degraded.
+// assessment. Predict uses QualityScore as a baseline drift signal, weighted by
+// calibration status and decayed over the 5-day window. It is no longer gated
+// to zero while calibrating; instead the predictor expresses higher
+// uncertainty when the assessment is not eligible.
 type CapitalFlowProvider interface {
 	QualityScore() float64
 	QualityLabel() string
@@ -147,18 +149,24 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		})
 	}
 
-	// E07 deliberately has no uncalibrated overall score (spec §9.5).
-	// Keep the legacy QualityScore as a compatibility fallback, but only
-	// behind the canonical assessment gate; calibrating/degraded/error paths
-	// contribute zero tilt and never invoke QualityScore.
+	// Use QualityScore as the current capital-flow baseline (baseline drift /
+	// momentum). The legacy composite is sufficient for display/explanation;
+	// calibration status controls how much weight we give it and caps
+	// confidence when the score is not yet eligible for automation.
 	cfScore := 0.0
-	if assessment, err := p.capitalFlow.LatestAssessment(context.Background()); err == nil && assessment.EligibleForAutomation() {
+	cfStatus := capitalflow.CalibrationCalibrating
+	if p.capitalFlow != nil {
+		if assessment, err := p.capitalFlow.LatestAssessment(context.Background()); err == nil {
+			cfStatus = assessment.CalibrationStatus
+		}
 		cfScore = p.capitalFlow.QualityScore()
 	}
+	baseline := scaleQualityScoreToBaseline(cfScore)
+
 	predictions := make([]FlowPrediction, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		day := now.AddDate(0, 0, i+1)
-		dir, conf, drivers := p.predictDay(day, timeline, cfScore)
+		dir, conf, drivers := p.predictDay(day, timeline, baseline, cfStatus, i)
 		predictions[i] = FlowPrediction{
 			Date:            day,
 			Direction:       dir,
@@ -176,7 +184,7 @@ func (p *Predictor) Predict(now time.Time) PredictionReport {
 		ActiveEvents:     items,
 		ETFEstimates:     p.buildETFEstimates(timeline),
 		RevenueSurprises: p.buildRevenueSurprises(timeline),
-		Summary:          buildPredictionSummary(predictions, active, cfScore),
+		Summary:          buildPredictionSummary(predictions, active, baseline, cfStatus),
 	}
 	if p.sectorPredictor != nil {
 		report.SectorPredictions = p.sectorPredictor.Predict(predictions, items)
@@ -249,7 +257,11 @@ func themeIntersects(themes []string, set map[string]struct{}) bool {
 }
 
 // predictDay computes the predicted flow for a specific day.
-func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent, cfScore float64) (dir string, conf float64, drivers []string) {
+//
+// baseline is a direction-and-strength score in [-0.8, 0.8] derived from the
+// current observed capital flow (legacy QualityScore). It is blended with
+// calendar-event weights using a day-decayed, calibration-discounted weight.
+func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent, baseline float64, cfStatus string, dayIndex int) (dir string, conf float64, drivers []string) {
 	var bullishWeight, bearishWeight float64
 	drivers = make([]string, 0)
 
@@ -274,9 +286,18 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 		}
 	}
 
-	// Tilt direction by capital quality score
-	bullishWeight += cfScore * 0.3
-	bearishWeight -= cfScore * 0.3
+	// Blend in the current capital-flow baseline with decay and calibration
+	// uncertainty. Near-term days keep more of today's flow signal;
+	// far-term days are driven more by events.
+	if baseline != 0 {
+		w := baselineWeightForDay(dayIndex, cfStatus)
+		if baseline > 0 {
+			bullishWeight += baseline * w
+		} else {
+			bearishWeight -= baseline * w
+		}
+		drivers = append([]string{formatBaselineDriver(cfStatus)}, drivers...)
+	}
 
 	narrativeThemes := activeTriggerThemesForDay(p.narrativeRegistry)
 	themeSet := make(map[string]struct{}, len(narrativeThemes))
@@ -301,6 +322,7 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 
 	// Confidence: sigmoid of net weight scaled by number of drivers
 	conf = sigmoid(math.Abs(net) * float64(len(drivers)+1))
+	conf = capConfidenceByCalibration(conf, cfStatus)
 	conf = math.Round(conf*100) / 100
 
 	return dir, conf, drivers
@@ -382,6 +404,82 @@ func forcesForDirection(drivers []string) []string {
 
 const backfillDiscountFactor = 0.7
 
+// Baseline drift parameters for blending the current observed capital flow
+// (legacy QualityScore) into the event-driven prediction.
+//
+// QualityScore is typically a z-score-like composite in roughly [-3, 3].
+// We scale it to the same event-weight range so it competes with calendar
+// event weights on a comparable scale.
+const (
+	baselineWeightNearDay       = 0.7  // day 1 weight for current-flow signal
+	baselineWeightFarDay        = 0.2  // day 5 weight for current-flow signal
+	baselineDecayFactor         = 0.75 // per-day decay
+	baselineQualityScaleDivisor = 1.5  // scales QualityScore into [-0.8, 0.8]
+	calibratingBaselineDiscount = 0.5  // weight discount when not yet eligible
+	degradedBaselineDiscount    = 0.2  // weight discount when degraded/error
+	calibratingConfidenceCap    = 0.6  // cap confidence when calibrating
+	degradedConfidenceCap       = 0.55 // cap confidence when degraded
+)
+
+// scaleQualityScoreToBaseline maps the legacy QualityScore to a directional
+// baseline in [-0.8, 0.8] so it can be blended with event weights.
+func scaleQualityScoreToBaseline(qs float64) float64 {
+	if qs == 0 {
+		return 0
+	}
+	scaled := qs / baselineQualityScaleDivisor
+	if scaled > 1 {
+		scaled = 1
+	} else if scaled < -1 {
+		scaled = -1
+	}
+	return scaled * 0.8
+}
+
+// baselineWeightForDay returns the effective weight of the current capital-flow
+// baseline for a given forecast day. Near-term days keep more of today's flow
+// signal; far-term days are driven more by calendar events. Calibration status
+// discounts the weight to reflect data trustworthiness.
+func baselineWeightForDay(dayIndex int, cfStatus string) float64 {
+	w := baselineWeightFarDay + (baselineWeightNearDay-baselineWeightFarDay)*math.Pow(baselineDecayFactor, float64(dayIndex))
+	switch cfStatus {
+	case capitalflow.CalibrationEligible:
+		return w
+	case capitalflow.CalibrationCalibrating:
+		return w * calibratingBaselineDiscount
+	default: // degraded or empty/unknown
+		return w * degradedBaselineDiscount
+	}
+}
+
+// capConfidenceByCalibration reduces peak confidence when the capital-flow
+// baseline is not fully trusted.
+func capConfidenceByCalibration(conf float64, cfStatus string) float64 {
+	switch cfStatus {
+	case capitalflow.CalibrationEligible:
+		return conf
+	case capitalflow.CalibrationCalibrating:
+		if conf > calibratingConfidenceCap {
+			return calibratingConfidenceCap
+		}
+		return conf
+	default:
+		if conf > degradedConfidenceCap {
+			return degradedConfidenceCap
+		}
+		return conf
+	}
+}
+
+// formatBaselineDriver returns a human-readable driver label for the current
+// capital-flow baseline so the UI can surface it alongside event drivers.
+func formatBaselineDriver(cfStatus string) string {
+	if cfStatus == capitalflow.CalibrationCalibrating {
+		return "當前資金流向（校準中）"
+	}
+	return "當前資金流向"
+}
+
 func effectiveConfidence(e industry.CalendarEvent) float64 {
 	if e.Backfilled {
 		return e.BaseWeight * backfillDiscountFactor
@@ -399,7 +497,7 @@ func sigmoid(x float64) float64 {
 	return 1 / (1 + math.Exp(-x))
 }
 
-func buildPredictionSummary(predictions []FlowPrediction, active []industry.CalendarEvent, cfScore float64) string {
+func buildPredictionSummary(predictions []FlowPrediction, active []industry.CalendarEvent, baseline float64, cfStatus string) string {
 	var parts []string
 
 	// Count direction
@@ -424,6 +522,20 @@ func buildPredictionSummary(predictions []FlowPrediction, active []industry.Cale
 		parts = append(parts, "未來 5 天資金流向分歧")
 	}
 
+	// Current capital-flow baseline
+	if baseline != 0 {
+		if baseline > 0 {
+			parts = append(parts, "當前資金品質偏多")
+		} else {
+			parts = append(parts, "當前資金品質偏空")
+		}
+	}
+	if cfStatus == capitalflow.CalibrationCalibrating {
+		parts = append(parts, "資金流評估處於校準中，預測不確定性較高")
+	} else if cfStatus != capitalflow.CalibrationEligible && baseline != 0 {
+		parts = append(parts, "資金流評估狀態異常，預測參考性下降")
+	}
+
 	// Events driving
 	if len(active) > 0 {
 		names := make([]string, 0, len(active))
@@ -431,13 +543,6 @@ func buildPredictionSummary(predictions []FlowPrediction, active []industry.Cale
 			names = append(names, e.Name)
 		}
 		parts = append(parts, fmt.Sprintf("關鍵事件：%s", strings.Join(names, "、")))
-	}
-
-	// Quality score
-	if cfScore > 0.5 {
-		parts = append(parts, "當前資金品質偏多")
-	} else if cfScore < -0.5 {
-		parts = append(parts, "當前資金品質偏空")
 	}
 
 	return strings.Join(parts, "。") + "。"
