@@ -871,12 +871,14 @@
   "last_computed",
   "last_consumed",
   "last_error",
+  "last_fetch_at",
   "last_modified",
   "last_order_date",
   "last_produced",
   "last_reset",
   "last_seen",
   "last_success",
+  "last_success_at",
   "last_time_msec",
   "last_updated",
   "last_updated_at",
@@ -1976,6 +1978,5 @@
   "目前持有股數-保留運用決定權信託股數",
   "目前持有股數-自有持股",
   "預定轉讓方式及股數-轉讓方式",
-  "預定轉讓方式及股數-轉讓股數",
-  "last_fetch_at"
+  "預定轉讓方式及股數-轉讓股數"
 ]
