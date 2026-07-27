@@ -27,7 +27,6 @@
     {"id": "tdcc_equity_dispersion", "source": "stub /v1/equity-dispersion", "status": "stub"},
     {"id": "twse_oddlot", "source": "TWSE", "status": "registered"},
     {"id": "twse_sbl", "source": "stub", "status": "stub"},
-    {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
     {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
     {"id": "government_broker", "source": "TWSE broker-level aggregate", "status": "registered"},
     {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
