@@ -520,3 +520,40 @@ func TestAlertAPI_ListAlerts_InvalidPageSize(t *testing.T) {
 		t.Errorf("page_size = %d, want 50 (default)", resp.PageSize)
 	}
 }
+
+func TestAlertAPI_NilStore_GetHandlersReturnEmpty(t *testing.T) {
+	api := NewAlertAPI(nil)
+
+	cases := []struct {
+		name     string
+		path     string
+		handler  func(http.ResponseWriter, *http.Request)
+		wantKey  string
+		wantCode int
+	}{
+		{"list", "/api/alerts", api.handleListAlerts, "alerts", http.StatusOK},
+		{"unacknowledged", "/api/alerts/unacknowledged", api.handleUnacknowledged, "alerts", http.StatusOK},
+		{"active", "/api/alerts/active", api.handleActiveSnapshot, "active", http.StatusOK},
+		{"stats", "/api/alerts/stats", api.handleStats, "total", http.StatusOK},
+		{"rules", "/api/alerts/rules", api.handleRules, "rules", http.StatusOK},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			tc.handler(rec, req)
+
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantCode)
+			}
+			var resp map[string]any
+			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if _, ok := resp[tc.wantKey]; !ok {
+				t.Errorf("missing key %q in response", tc.wantKey)
+			}
+		})
+	}
+}
