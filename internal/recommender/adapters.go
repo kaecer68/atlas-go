@@ -2,6 +2,7 @@ package recommender
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
@@ -136,13 +137,19 @@ func NewEventPredictorAdapter(predictor eventDrivenPredictorProvider) EventPredi
 
 type eventPredictorAdapter struct {
 	predictor eventDrivenPredictorProvider
+	cacheMu   sync.RWMutex
+	cacheKey  string // "YYYY-MM-DD"
+	cacheRep  *eventdriven.PredictionReport
+	cacheAt   time.Time
 }
+
+const predictTodayCacheTTL = 60 * time.Second
 
 func (a *eventPredictorAdapter) PredictToday() (eventdriven.FlowPrediction, error) {
 	if a.predictor == nil {
 		return eventdriven.FlowPrediction{}, nil
 	}
-	report := a.predictor.Predict(time.Now())
+	report := a.cachedReport()
 	if len(report.Predictions) == 0 {
 		return eventdriven.FlowPrediction{}, nil
 	}
@@ -153,11 +160,34 @@ func (a *eventPredictorAdapter) NextNDays(n int) ([]eventdriven.FlowPrediction, 
 	if a.predictor == nil {
 		return nil, nil
 	}
-	report := a.predictor.Predict(time.Now())
+	report := a.cachedReport()
 	if n > len(report.Predictions) {
 		n = len(report.Predictions)
 	}
 	return report.Predictions[:n], nil
+}
+
+// cachedReport returns a PredictionReport, caching by date within predictTodayCacheTTL.
+func (a *eventPredictorAdapter) cachedReport() eventdriven.PredictionReport {
+	now := time.Now()
+	key := now.Format("2006-01-02")
+
+	a.cacheMu.RLock()
+	if a.cacheRep != nil && a.cacheKey == key && time.Since(a.cacheAt) < predictTodayCacheTTL {
+		rep := *a.cacheRep
+		a.cacheMu.RUnlock()
+		return rep
+	}
+	a.cacheMu.RUnlock()
+
+	report := a.predictor.Predict(now)
+
+	a.cacheMu.Lock()
+	a.cacheRep = &report
+	a.cacheKey = key
+	a.cacheAt = time.Now()
+	a.cacheMu.Unlock()
+	return report
 }
 
 // =====================================================================

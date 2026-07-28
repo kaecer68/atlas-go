@@ -218,7 +218,11 @@
         "lastMacro marketdata.MacroDataSnapshot",
         "prevMacro marketdata.MacroDataSnapshot",
         "lastGeo geopolitical.GeopoliticalRiskScore",
-        "weightHook WeightAuditHook"
+        "weightHook WeightAuditHook",
+        "evalMu sync.Mutex",
+        "evalPath string",
+        "evalModTime time.Time",
+        "evalDone bool"
       ],
       "kind": "struct",
       "name": "NarrativeEngine"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -15,9 +16,22 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
+// BundleCacheTTL controls how long /api/narrative/bundle responses are
+// cached. 30s aligns with the frontend auto-refresh interval so the
+// vast majority of requests hit the warm cache.
+const BundleCacheTTL = 30 * time.Second
+
 type Handlers struct {
 	Svc             *service.NarrativeService
 	IndustryService *service.IndustryService
+
+	bundleMu    sync.RWMutex
+	bundleCache *bundleCacheEntry
+}
+
+type bundleCacheEntry struct {
+	data     map[string]any
+	cachedAt time.Time
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -201,6 +215,15 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 // seasonal analysis into a single response. Events are computed first (needed
 // by chains/models), then the dependent calls run in parallel via errgroup.
 func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
+	// Fast path: cache hit under read lock.
+	h.bundleMu.RLock()
+	if h.bundleCache != nil && time.Since(h.bundleCache.cachedAt) < BundleCacheTTL {
+		data := h.bundleCache.data
+		h.bundleMu.RUnlock()
+		return http.StatusOK, data
+	}
+	h.bundleMu.RUnlock()
+
 	data := h.buildNarrativeData(r.Context(), r)
 
 	// Compute events first — needed by chains and models.
@@ -281,13 +304,19 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 
 	_ = g.Wait()
 
-	return http.StatusOK, map[string]any{
+	result := map[string]any{
 		"events":    events,
 		"chains":    chains,
 		"models":    models,
 		"templates": templates,
 		"seasonal":  seasonal,
 	}
+
+	h.bundleMu.Lock()
+	h.bundleCache = &bundleCacheEntry{data: result, cachedAt: time.Now()}
+	h.bundleMu.Unlock()
+
+	return http.StatusOK, result
 }
 
 func (h *Handlers) HandleStressIndexCurrent(r *http.Request) (int, any) {

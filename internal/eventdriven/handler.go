@@ -3,6 +3,7 @@ package eventdriven
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
@@ -11,11 +12,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 )
 
+// PredictionCacheTTL controls how long /api/events/prediction responses
+// are cached in memory. Set to 60s so the frontend auto-refresh (30s)
+// usually hits the warm cache, while stale data never exceeds 1 minute.
+const PredictionCacheTTL = 60 * time.Second
+
 // Handler serves event-driven prediction endpoints.
 type Handler struct {
 	eventCal      *industry.EventCalendar
 	predictor     *Predictor
 	macroProvider marketdata.MacroDataProvider
+
+	cacheMu      sync.RWMutex
+	cachedReport *PredictionReport
+	cachedKey    string // "YYYY-MM-DD"
+	cachedAt     time.Time
 }
 
 // NewHandler creates an event-driven flow prediction handler.
@@ -141,10 +152,35 @@ func (h *Handler) HandleCalendar(r *http.Request) (int, any) {
 	}
 }
 
+// predictionCacheKey returns the cache key for the given time.
+func predictionCacheKey(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
 // HandlePrediction returns the 5-day event-driven capital flow prediction.
 func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	now := time.Now()
+	key := predictionCacheKey(now)
 
+	h.cacheMu.RLock()
+	if h.cachedReport != nil && h.cachedKey == key && time.Since(h.cachedAt) < PredictionCacheTTL {
+		report := *h.cachedReport
+		h.cacheMu.RUnlock()
+		return http.StatusOK, report
+	}
+	h.cacheMu.RUnlock()
+
+	h.cacheMu.Lock()
+	if h.cachedReport != nil && h.cachedKey == key && time.Since(h.cachedAt) < PredictionCacheTTL {
+		report := *h.cachedReport
+		h.cacheMu.Unlock()
+		return http.StatusOK, report
+	}
+	h.cacheMu.Unlock()
+
+	// Cache miss: rebuild sector predictor if macro provider is wired.
+	// FetchSnapshot is now backed by MacroSnapshotCacheTTL so this
+	// call is fast when the snapshot is warm.
 	if h.macroProvider != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
@@ -155,6 +191,12 @@ func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	}
 
 	report := h.predictor.Predict(now)
+
+	h.cacheMu.Lock()
+	h.cachedReport = &report
+	h.cachedKey = key
+	h.cachedAt = time.Now()
+	h.cacheMu.Unlock()
 
 	logging.Info("eventdriven", "prediction_generated",
 		"events", len(report.ActiveEvents),

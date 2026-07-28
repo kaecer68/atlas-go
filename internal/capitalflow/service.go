@@ -27,6 +27,10 @@ const QualityCacheTTL = 60 * time.Second
 // for and stays in sync via CF-INV-15.
 const defaultHistoryLimit = 252
 
+// LatestDailyCacheTTL controls how long LatestDaily results are cached.
+// Set to 30s to stay aligned with the frontend auto-refresh interval.
+const LatestDailyCacheTTL = 30 * time.Second
+
 // Service exposes capital-flow aggregation as a callable interface
 // so downstream consumers (e.g. internal/recommender,
 // internal/eventdriven) can reuse the same pipeline the HTTP
@@ -56,6 +60,10 @@ type Service struct {
 	mu              sync.RWMutex
 	cachedResonance ResonanceResult
 	cachedAt        time.Time
+
+	reportMu       sync.RWMutex
+	cachedReport   *DailyReport
+	reportCachedAt time.Time
 }
 
 // NewService constructs a Service backed by the given macrodata
@@ -278,6 +286,14 @@ func (s *Service) Refresh(ctx context.Context) error {
 // This method never calls UpsertDay: it is a pure read, satisfying
 // spec §8.1 / CF-INV-04. The only writer is Refresh.
 func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
+	s.reportMu.RLock()
+	if s.cachedReport != nil && time.Since(s.reportCachedAt) < LatestDailyCacheTTL {
+		report := *s.cachedReport
+		s.reportMu.RUnlock()
+		return report, nil
+	}
+	s.reportMu.RUnlock()
+
 	cctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -292,7 +308,13 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 	}
 	date := time.Unix(snap.RecordedAt, 0)
 	resonance := ComputeResonance(forces)
-	return GenerateDailyReport(date, forces, resonance), nil
+	report := GenerateDailyReport(date, forces, resonance)
+
+	s.reportMu.Lock()
+	s.cachedReport = &report
+	s.reportCachedAt = time.Now()
+	s.reportMu.Unlock()
+	return report, nil
 }
 
 // extractAsOf builds the rolling-history map for every capital
