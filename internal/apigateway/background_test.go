@@ -1347,7 +1347,8 @@ func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 	}
 
 	// ── Phase A: 首次執行 ──
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancelA := context.WithCancel(context.Background())
+	defer cancelA()
 	startTime := time.Now()
 	m.Start(ctx)
 
@@ -1362,18 +1363,18 @@ func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 		t.Fatal("timeout: task did not execute within 2s")
 	}
 	m.Stop()
+	cancelA()
 
 	// ── Phase B: 模擬後續週期（LastRun 非零值 → 應套用抖動）──
-	task.SetLastRun(time.Now().Add(-2 * time.Hour)) // 設為非零值，觸發 jitter
-	cancel = nil                                    // nolint
-	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
+	task.SetLastRun(time.Now().Add(-2 * time.Hour))
+	ctxB, cancelB := context.WithCancel(context.Background())
+	defer cancelB()
 	m2 := NewBackgroundTaskManager(nil)
 	if err := m2.Register(task); err != nil {
 		t.Fatalf("Register phase B: %v", err)
 	}
 	startTime = time.Now()
-	m2.Start(ctx)
+	m2.Start(ctxB)
 	defer m2.Stop()
 
 	select {
