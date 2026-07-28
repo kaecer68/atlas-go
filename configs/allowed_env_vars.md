@@ -75,6 +75,7 @@
 | `FUBON_PROXY_PYTHON` | Fubon proxy Python binary 路徑 | `python3` |
 | `ATLAS_L2_4_AUTO_CRON_ENABLED` | L2.4 auto-cron feature flag | `false` |
 | `LLM_ANNOTATOR_API_KEY` | LLM annotator API key（local/CI 測試用；production 必須走 gateway） | 空 |
+| `ATLAS_WARMUP` | 開機熱機開關（設為 `0` 停用） | 空（預設啟用） |
 
 ---
 
@@ -158,3 +159,4 @@ grep -r "os.Getenv" --include="*.go" . \
 | v1.3 | 2026-07-01 | 新增 `ATLAS_MCP_ROOTS_ALLOWED`（Phase 4 B — protocol extensions roots 白名單） |
 | v1.4 | 2026-07-01 | 新增 `ATLAS_SKIP_PORT_PREFLIGHT`（測試環境 escape hatch，配套 Phase C T-104） |
 | v1.5 | 2026-07-02 | 新增 `ATLAS_MCP_ROOTS_ALLOW_UNSAFE`（issue #903 — MCP roots 危險路徑驗證 escape hatch） |
+| v1.6 | 2026-07-28 | 新增 `ATLAS_WARMUP`（啟動 eager warmup 開關，PR #1411） |

@@ -1147,12 +1147,15 @@ func (m *mockStressStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) er
 func (m *mockStressStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
 	return ledger.PeriodRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
 	return ledger.PeriodRow{}, false, nil
 }
+
 func (m *mockStressStore) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
 	return nil, nil
 }
+
 func (m *mockStressStore) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
 	return nil, nil
 }
@@ -1184,16 +1187,21 @@ func (m *mockGeopoliticalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ 
 }
 
 func (m *mockGeopoliticalStore) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error { return nil }
+
 func (m *mockGeopoliticalStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error { return nil }
+
 func (m *mockGeopoliticalStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
 	return ledger.PeriodRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
 	return ledger.PeriodRow{}, false, nil
 }
+
 func (m *mockGeopoliticalStore) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
 	return nil, nil
 }
+
 func (m *mockGeopoliticalStore) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
 	return nil, nil
 }

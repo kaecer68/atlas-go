@@ -14,11 +14,12 @@
 package system
 
 import (
-	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
 
 // ---- summarizeOverall ----

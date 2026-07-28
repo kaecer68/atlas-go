@@ -211,22 +211,10 @@ func (h *Handlers) HandleSeasonalAnalysis(r *http.Request) (int, any) {
 	}
 }
 
-// HandleNarrativeBundle aggregates events, chains, models, templates, and
-// seasonal analysis into a single response. Events are computed first (needed
-// by chains/models), then the dependent calls run in parallel via errgroup.
-func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
-	// Fast path: cache hit under read lock.
-	h.bundleMu.RLock()
-	if h.bundleCache != nil && time.Since(h.bundleCache.cachedAt) < BundleCacheTTL {
-		data := h.bundleCache.data
-		h.bundleMu.RUnlock()
-		return http.StatusOK, data
-	}
-	h.bundleMu.RUnlock()
-
-	data := h.buildNarrativeData(r.Context(), r)
-
-	// Compute events first — needed by chains and models.
+// BuildBundle assembles the full narrative bundle from pre-computed
+// MarketNarrativeData. Events are computed first (needed by chains/models),
+// then the dependent calls run in parallel via errgroup.
+func (h *Handlers) BuildBundle(ctx context.Context, data narrative.MarketNarrativeData) (map[string]any, error) {
 	events := h.Svc.DetectEvents(data)
 	themes := make([]string, len(events))
 	for i, e := range events {
@@ -240,30 +228,26 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 		seasonal  map[string]any
 	)
 
-	g, ctx := errgroup.WithContext(r.Context())
+	g, gctx := errgroup.WithContext(ctx)
 
-	// Chains: depends on events.
 	g.Go(func() error {
-		_ = ctx
+		_ = gctx
 		chains = h.Svc.MatchChains(events)
 		return nil
 	})
 
-	// Models: depends on themes derived from events.
 	g.Go(func() error {
-		_ = ctx
+		_ = gctx
 		models = h.Svc.GetActiveModels(themes)
 		return nil
 	})
 
-	// Templates: no dependency on events.
 	g.Go(func() error {
-		_ = ctx
+		_ = gctx
 		templates = h.Svc.GetTemplates()
 		return nil
 	})
 
-	// Seasonal: independent computation.
 	g.Go(func() error {
 		now := time.Now()
 		if h.IndustryService != nil {
@@ -271,7 +255,7 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 			calc := marketdata.NewTAIEXReturnCalculator()
 			expectations := make([]SeasonalExpectation, len(active))
 			for i, p := range active {
-				currentReturn := getPatternReturn(ctx, calc, p)
+				currentReturn := getPatternReturn(gctx, calc, p)
 				var gap float64
 				pricedIn := false
 				if currentReturn != nil {
@@ -304,12 +288,33 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 
 	_ = g.Wait()
 
-	result := map[string]any{
+	return map[string]any{
 		"events":    events,
 		"chains":    chains,
 		"models":    models,
 		"templates": templates,
 		"seasonal":  seasonal,
+	}, nil
+}
+
+// HandleNarrativeBundle aggregates events, chains, models, templates, and
+// seasonal analysis into a single response. Uses TTL cache (BundleCacheTTL)
+// and delegates the core assembly to BuildBundle (shared with warmup).
+func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
+	// Fast path: cache hit under read lock.
+	h.bundleMu.RLock()
+	if h.bundleCache != nil && time.Since(h.bundleCache.cachedAt) < BundleCacheTTL {
+		data := h.bundleCache.data
+		h.bundleMu.RUnlock()
+		return http.StatusOK, data
+	}
+	h.bundleMu.RUnlock()
+
+	data := h.buildNarrativeData(r.Context(), r)
+
+	result, err := h.BuildBundle(r.Context(), data)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
 	}
 
 	h.bundleMu.Lock()
@@ -317,6 +322,20 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 	h.bundleMu.Unlock()
 
 	return http.StatusOK, result
+}
+
+// PrimeBundleCache warms the narrative bundle TTL cache by calling BuildBundle
+// and storing the result. Warmup uses this to avoid a cold cache miss on the
+// first HTTP request to /api/narrative/bundle.
+func (h *Handlers) PrimeBundleCache(ctx context.Context, data narrative.MarketNarrativeData) {
+	result, err := h.BuildBundle(ctx, data)
+	if err != nil {
+		logging.Warn("narrative_handlers", "prime_bundle_cache_failed", logging.Err(err))
+		return
+	}
+	h.bundleMu.Lock()
+	h.bundleCache = &bundleCacheEntry{data: result, cachedAt: time.Now()}
+	h.bundleMu.Unlock()
 }
 
 func (h *Handlers) HandleStressIndexCurrent(r *http.Request) (int, any) {

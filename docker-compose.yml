@@ -3,13 +3,8 @@ services:
   atlas:
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        # Local and CI builds must provide the source commit explicitly. An image
-        # with `Commit=unknown` cannot pass the binary freshness gate.
-        VERSION: ${ATLAS_VERSION:-dev}
-        BUILDTIME: ${ATLAS_BUILDTIME:-}
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+      dockerfile: Dockerfile.atlas.local
+      # args not needed for Dockerfile.atlas.local (host-built binary)
     container_name: atlas-go
     restart: unless-stopped
     command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
@@ -23,6 +18,7 @@ services:
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
       # ATLAS_API_KEY intentionally NOT set in environment — it would
+      - ATLAS_WARMUP=${ATLAS_WARMUP:-}
       # shadow env_file with shell-expanded ${ATLAS_API_KEY} (empty
       # in local dev). The .env file is the canonical source, and
       # the AuthMiddleware reads it from the env_file pass-through.

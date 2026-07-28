@@ -16,7 +16,12 @@ func TestMarketVolumeProvider_ParseNormalData(t *testing.T) {
 		Stat: "OK",
 		Date: "20260725",
 		Tables: []twseMITable{
-			{}, {}, {}, {}, {}, {},
+			{},
+			{},
+			{},
+			{},
+			{},
+			{},
 			{
 				Title:  "大盤統計資訊",
 				Fields: []string{"成交統計", "成交金額(元)", "成交股數(股)", "成交筆數"},
@@ -56,13 +61,19 @@ func TestMarketVolumeProvider_ParseNormalData(t *testing.T) {
 		t.Errorf("Date = %q, want %s", result.Date, today)
 	}
 }
+
 func TestMarketVolumeProvider_EmptyTable(t *testing.T) {
 	// 休市日：tables 存在但 data 為空
 	twseResp := twseMIIndexResponse{
 		Stat: "OK",
 		Date: "20260726",
 		Tables: []twseMITable{
-			{}, {}, {}, {}, {}, {},
+			{},
+			{},
+			{},
+			{},
+			{},
+			{},
 			{
 				Title:  "大盤統計資訊",
 				Fields: []string{"成交統計", "成交金額(元)", "成交股數(股)", "成交筆數"},
@@ -142,7 +153,12 @@ func TestMarketVolumeProvider_InvalidAmountRow(t *testing.T) {
 		Stat: "OK",
 		Date: "20260725",
 		Tables: []twseMITable{
-			{}, {}, {}, {}, {}, {},
+			{},
+			{},
+			{},
+			{},
+			{},
+			{},
 			{
 				Title:  "大盤統計資訊",
 				Fields: []string{"成交統計", "成交金額(元)", "成交股數(股)", "成交筆數"},
