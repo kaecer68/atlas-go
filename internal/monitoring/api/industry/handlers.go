@@ -35,12 +35,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// Deprecated: internal calibration; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-calibration", shared.Get(h.HandleIndustryCalibration))
 	// DEPRECATED: use /api/events/calendar (canonical). Redirected for backward compatibility.
+	//nolint:gosec // G710: target is hardcoded same-origin path, not user-controlled
 	mux.HandleFunc("GET /api/dashboard/calendar-events", func(w http.ResponseWriter, r *http.Request) {
-		target := "/api/events/calendar"
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, target, http.StatusPermanentRedirect)
+		http.Redirect(w, r, "/api/events/calendar", http.StatusPermanentRedirect)
 	})
 	// Deprecated: internal ODM channel data; not for web UI or MCP.
 	mux.Handle("GET /api/dashboard/industry-odm-channel", shared.Get(h.HandleODMChannel))
