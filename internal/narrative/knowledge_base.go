@@ -32,6 +32,11 @@ type NarrativeEngine struct {
 	prevMacro     marketdata.MacroDataSnapshot
 	lastGeo       geopolitical.GeopoliticalRiskScore
 	weightHook    WeightAuditHook
+
+	evalMu      sync.Mutex
+	evalPath    string
+	evalModTime time.Time
+	evalDone    bool
 }
 
 // KnowledgeBase returns the underlying template knowledge base.
@@ -332,7 +337,21 @@ func (ne *NarrativeEngine) UpdateModelWeights() {
 
 // EvaluateModels computes RecentError for each model by comparing favored vs
 // avoided sector forward returns over the last lookback days in the replay dataset.
+// Results are memoized: if the replay CSV has not changed (same path and
+// modification time) since the last call, the computation is skipped.
 func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
+	// Check memoization: skip when the CSV has not changed.
+	ne.evalMu.Lock()
+	if stat, err := os.Stat(replayPath); err == nil && ne.evalDone && ne.evalPath == replayPath && stat.ModTime().Equal(ne.evalModTime) {
+		ne.evalMu.Unlock()
+		return nil
+	}
+	if stat, err := os.Stat(replayPath); err == nil {
+		ne.evalModTime = stat.ModTime()
+	}
+	ne.evalPath = replayPath
+	ne.evalMu.Unlock()
+
 	ds, err := replay.LoadTWSEOpenDataCSV(replayPath)
 	if err != nil {
 		return fmt.Errorf("load replay: %w", err)
@@ -426,6 +445,9 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 
 	ne.UpdateModelWeights()
 	ne.updateTemplateHitRates()
+	ne.evalMu.Lock()
+	ne.evalDone = true
+	ne.evalMu.Unlock()
 	return nil
 }
 

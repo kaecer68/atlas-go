@@ -92,7 +92,7 @@ func (s *NarrativeService) GetActiveModels(themes []string) []narrative.Investme
 }
 
 func (s *NarrativeService) GetTemplates() []narrative.CausalTemplate {
-	kb := narrative.NewKnowledgeBase()
+	kb := s.NarrativeEngine.KnowledgeBase()
 	return kb.ListTemplates()
 }
 

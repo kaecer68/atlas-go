@@ -146,7 +146,7 @@ func (h *Handler) handleProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.store.GetByEmail(claims.Email)
 	if err != nil || user == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user lookup failed"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "user lookup failed"})
 		return
 	}
 	writeJSON(w, http.StatusOK, ProfileResponse{
@@ -176,7 +176,7 @@ func (h *Handler) handleSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.store.GetByEmail(claims.Email)
 	if err != nil || user == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user lookup failed"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "user lookup failed"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

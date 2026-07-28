@@ -13,12 +13,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
 
+// MacroSnapshotCacheTTL controls how long FetchSnapshot results are cached
+// in memory. Set to 60s to balance freshness (browser auto-refresh every 30s)
+// against fan-out cost (~15s for 28 gateway channels). Matches the TTL used
+// by the dailyreport layer for consistency.
+const MacroSnapshotCacheTTL = 60 * time.Second
+
 // macroDataGatewayAdapter implements marketdata.MacroDataProvider using DataFetcher.
 // Replaces the CompositeMacroProvider + 9 individual provider pattern in NewDashboardAPI.
 type macroDataGatewayAdapter struct {
-	fetcher    DataFetcher
-	mu         sync.Mutex
-	lastErrors map[string]string // channelID → last error message (Layer 2 of data-visibility)
+	fetcher        DataFetcher
+	mu             sync.Mutex
+	lastErrors     map[string]string // channelID → last error message (Layer 2 of data-visibility)
+	cacheMu        sync.RWMutex
+	cachedSnapshot *marketdata.MacroDataSnapshot
+	cachedAt       time.Time
 }
 
 // NewMacroDataGatewayAdapter creates a MacroDataProvider backed by the Gateway.
@@ -53,9 +62,48 @@ func (a *macroDataGatewayAdapter) Name() string {
 	return "gateway_macro"
 }
 
-// FetchSnapshot fetches from all macro-related Gateway channels and merges results.
-// Maps each channel to the corresponding MacroDataSnapshot field.
+// FetchSnapshot returns the latest macro data snapshot with TTL caching.
+// Cache hit (within MacroSnapshotCacheTTL) returns the cached value without
+// fan-out. Cache miss triggers the full 28-channel gateway fan-out; a
+// double-checked locking pattern prevents duplicate fan-outs when multiple
+// callers arrive simultaneously.
 func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
+	// Fast path: cache hit under read lock.
+	a.cacheMu.RLock()
+	if a.cachedSnapshot != nil && time.Since(a.cachedAt) < MacroSnapshotCacheTTL {
+		snap := *a.cachedSnapshot
+		a.cacheMu.RUnlock()
+		return snap, nil
+	}
+	a.cacheMu.RUnlock()
+
+	// Double-check under write lock: if another goroutine filled the cache
+	// between our RUnlock and Lock, return the warm value.
+	a.cacheMu.Lock()
+	if a.cachedSnapshot != nil && time.Since(a.cachedAt) < MacroSnapshotCacheTTL {
+		snap := *a.cachedSnapshot
+		a.cacheMu.Unlock()
+		return snap, nil
+	}
+	a.cacheMu.Unlock()
+
+	// Cache miss: do the actual fan-out. Runs outside the lock so concurrent
+	// cache readers (including the first fast-path check) are not blocked by
+	// a slow 15s fetch.
+	snap, err := a.fetchFresh(ctx)
+	if err == nil {
+		a.cacheMu.Lock()
+		a.cachedSnapshot = &snap
+		a.cachedAt = time.Now()
+		a.cacheMu.Unlock()
+	}
+	return snap, err
+}
+
+// fetchFresh performs the actual 28-channel gateway fan-out without caching.
+// Errors are recorded per-channel in lastErrors; a single non-stale error
+// does not fail the entire fetch.
+func (a *macroDataGatewayAdapter) fetchFresh(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
 	type channelMapping struct {
 		channelID string
 		apply     func(snap *marketdata.MacroDataSnapshot, data []byte)
@@ -128,10 +176,6 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 	}
 
 	a.mu.Lock()
-	// Count "real" errors only (exclude stale: channels, which still
-	// returned usable cached data). Without this filter, a CB-open
-	// across all channels would be misclassified as "all failed"
-	// even though stale data is still populated.
 	realErrCount := 0
 	errMsgs := make([]string, 0, len(a.lastErrors))
 	for ch, e := range a.lastErrors {
