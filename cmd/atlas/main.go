@@ -951,14 +951,26 @@ func run(args []string, deps appDeps) error {
 				return nil
 			}
 			ind := monitoring.SnapshotToPeriodIndicators(snap)
-			period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
+			assessment, _ := portfolio.NewPeriodDetectorWithDefaults().DetectAssessment(ind)
+			period := assessment.MarketPeriod
 			advisor := methodology.NewAdvisor(nil)
+			indicators := make([]dailyreport.IndicatorHit, len(assessment.TriggeredIndicators))
+			for i, ti := range assessment.TriggeredIndicators {
+				indicators[i] = dailyreport.IndicatorHit{
+					Name: ti.Name, Value: ti.Value, Threshold: ti.Threshold,
+					Relation: ti.Relation, Hit: ti.Hit, InputAvailable: ti.InputAvailable,
+				}
+			}
 			return &dailyreport.PeriodInfo{
-				MarketPeriod:      string(period),
-				PeriodNameZH:      period.PeriodNameZH(),
-				CashLevel:         advisor.CashReserve(period),
-				AllowedStrategies: advisor.AllowedStrategies(period),
-				StrategiesDetail:  advisor.StrategiesWithCategory(period),
+				MarketPeriod:        string(period),
+				PeriodNameZH:        period.PeriodNameZH(),
+				CashLevel:           advisor.CashReserve(period),
+				AllowedStrategies:   advisor.AllowedStrategies(period),
+				StrategiesDetail:    advisor.StrategiesWithCategory(period),
+				Confidence:          assessment.Confidence,
+				ConditionsHit:       assessment.ConditionsHit,
+				ConditionsTotal:     assessment.ConditionsTotal,
+				TriggeredIndicators: indicators,
 			}
 		})
 		dailyreport.RegisterRoutes(mux, dailyRptGen)

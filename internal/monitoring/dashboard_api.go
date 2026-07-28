@@ -1042,8 +1042,22 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				return nil
 			}
 			ind := SnapshotToPeriodIndicators(snap)
-			period := detector.DetectPeriod(ind)
-			return &service.PeriodInfo{MarketPeriod: string(period), CashLevel: advisor.CashReserve(period)}
+			assessment, _ := detector.DetectAssessment(ind)
+			indicators := make([]service.IndicatorHit, len(assessment.TriggeredIndicators))
+			for i, ti := range assessment.TriggeredIndicators {
+				indicators[i] = service.IndicatorHit{
+					Name: ti.Name, Value: ti.Value, Threshold: ti.Threshold,
+					Relation: ti.Relation, Hit: ti.Hit, InputAvailable: ti.InputAvailable,
+				}
+			}
+			return &service.PeriodInfo{
+				MarketPeriod:        string(assessment.MarketPeriod),
+				CashLevel:           advisor.CashReserve(assessment.MarketPeriod),
+				Confidence:          assessment.Confidence,
+				ConditionsHit:       assessment.ConditionsHit,
+				ConditionsTotal:     assessment.ConditionsTotal,
+				TriggeredIndicators: indicators,
+			}
 		})
 	}
 	reportHandlers := apipipeline.NewReportHandlers(reportSvc)

@@ -425,8 +425,13 @@ function renderPeriodCard(host, report, isPremium, error) {
   const label = PERIOD_LABEL[periodId] || { zh: periodId || '—', en: '' };
   const status = STATUS_TO_BADGE[report.global && report.global.status] || null;
   const cash = isNum(p.cash_reserve) ? Number(p.cash_reserve) : null;
-  const cashPct = cash == null ? null : Math.max(0, Math.min(100, Math.round(cash)));
+  const cashPct = cash == null ? null : Math.max(0, Math.min(100, Math.round(cash * 100)));
   const summary = (report.global && report.global.summary) || (report.summary) || '—';
+  const condHit = isNum(p.conditions_hit) ? Number(p.conditions_hit) : 0;
+  const condTotal = isNum(p.conditions_total) ? Number(p.conditions_total) : 0;
+  const confidence = isNum(p.confidence) ? Number(p.confidence) : null;
+  const confPct = confidence == null ? null : Math.round(confidence * 100);
+  const indicators = Array.isArray(p.triggered_indicators) ? p.triggered_indicators : [];
 
   host.dataset.period = periodId;
   host.innerHTML = `
@@ -443,10 +448,16 @@ function renderPeriodCard(host, report, isPremium, error) {
         <div class="md-period-cash__bar"><div class="md-period-cash__fill" style="width:${cash == null ? 0 : cashPct}%"></div></div>
         <div class="md-period-cash__hint">${periodId && CASH_RANGES[periodId] ? '憲章建議區間：' + escapeHtml(CASH_RANGES[periodId]) : ''}</div>
       </div>
+      ${condTotal > 0 ? `
+      <div class="md-period-confidence">
+        <span class="md-period-confidence__label">信心度</span>
+        <span class="md-period-confidence__value">${condHit}/${condTotal}${confPct != null ? ' (' + confPct + '%)' : ''}</span>
+      </div>` : ''}
     </div>
     <div class="md-allowed-strategies">
       ${renderStrategyChips(p.strategies_detail, p.allowed_strategies)}
     </div>
+    ${indicators.length > 0 ? renderIndicatorPanel(indicators) : ''}
   `;
 }
 
@@ -634,6 +645,40 @@ function renderRecommend(host, report, isPremium, error) {
     </div>
   `;
 }
+
+
+// renderIndicatorPanel returns an HTML panel showing each period-detection
+// condition's status. Unavailable inputs are dimmed and labeled.
+function renderIndicatorPanel(indicators) {
+  if (!indicators || indicators.length === 0) return '';
+  const rows = indicators.map(ind => {
+    const avail = ind.input_available !== false;
+    const hit = !!ind.hit;
+    const rowCls = !avail ? 'md-indicator--unavailable'
+                : hit ? 'md-indicator--hit'
+                : 'md-indicator--miss';
+    const statusLabel = !avail ? '（資料未接入）'
+                      : hit ? '✓'
+                      : '✗';
+    return `<tr class="${rowCls}">
+      <td class="md-indicator__name">${escapeHtml(ind.name || '')}</td>
+      <td class="md-indicator__value">${fmtSafeNumber(ind.value, {decimals: 2})}</td>
+      <td class="md-indicator__relation">${escapeHtml(ind.relation || '')}</td>
+      <td class="md-indicator__threshold">${fmtSafeNumber(ind.threshold, {decimals: 2})}</td>
+      <td class="md-indicator__status">${statusLabel}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="md-indicator-panel">
+    <div class="md-indicator-panel__title">觸發指標</div>
+    <table class="md-indicator-table">
+      <thead><tr>
+        <th>指標</th><th>數值</th><th>關係</th><th>閾值</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 
 // ---------------------------------------------------------------------------
 // Modal（本頁自管）
