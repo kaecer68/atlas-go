@@ -876,7 +876,6 @@ func (d *PeriodDetector) assessConsolidation(ind PeriodIndicators) (hit bool, co
 // Detection order follows the priority chain; the first matching period wins.
 // Falls back to PeriodConsolidation when no period matches.
 func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessment, error) {
-	// Track which assess function matched
 	var assessment PeriodAssessment
 
 	// ─── Detection Order ───
@@ -929,22 +928,14 @@ func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessmen
 			ConditionsTotal:     condTotal,
 			TriggeredIndicators: indicators,
 		}
-	} else if hit, condHit, condTotal, indicators := d.assessConsolidation(ind); hit {
-		// 7. Consolidation
+	} else {
+		// 7. Consolidation (last in chain — always evaluate)
+		_, condHit, condTotal, indicators := d.assessConsolidation(ind)
 		assessment = PeriodAssessment{
 			MarketPeriod:        domain.PeriodConsolidation,
 			ConditionsHit:       condHit,
 			ConditionsTotal:     condTotal,
 			TriggeredIndicators: indicators,
-		}
-	} else {
-		// Fallback
-		assessment = PeriodAssessment{
-			MarketPeriod:        domain.PeriodConsolidation,
-			ConditionsHit:       0,
-			ConditionsTotal:     4, // consolidation's total
-			TriggeredIndicators: nil,
-			IsFallback:          true,
 		}
 	}
 
