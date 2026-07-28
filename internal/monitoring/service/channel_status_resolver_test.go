@@ -1,9 +1,10 @@
 package service
 
 import (
-	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
 
 // TestResolveChannelStatusFromStore_NilStore covers the case where the caller

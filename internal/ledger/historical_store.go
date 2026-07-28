@@ -328,7 +328,8 @@ func (s *SQLiteHistoricalStore) loadPeriodByDate(ctx context.Context, date strin
 	err := s.db.QueryRowContext(ctx,
 		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
 		FROM period_history WHERE date = ?`+filter, date).Scan(
-		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source)
+		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source,
+	)
 	if err == sql.ErrNoRows {
 		return r, false, nil
 	}

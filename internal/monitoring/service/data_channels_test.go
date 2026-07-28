@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
 
 func TestChannelHealthStore_PassesOptionsAndPersistence(t *testing.T) {
