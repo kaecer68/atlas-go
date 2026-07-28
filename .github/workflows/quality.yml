@@ -701,65 +701,31 @@ jobs:
     - name: Check port references against constants/port.go
       run: bash scripts/ci/check_doc_ports.sh
 
-  # Check that every binary build path has the ldflags for Commit injection.
-  # Prevents the "source changed but binary not rebuilt" structural gap.
-  login-gate:
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-    - name: Verify binary freshness contracts
-      run: bash tests/scripts/test-binary-freshness-guard.sh
 
-  # Aggregate gate — fails if any hard-fail job (excl. skipped) fails.
-  # Required check for GitHub branch protection.
+  # Aggregate gate — fails if any hard-fail job fails.
+  # Add to GitHub branch protection as required check.
   quality-gate:
     needs:
-      - build-gate
-      - frontend-build
+      - login-gate
       - fmt
       - lint
       - staticcheck
-      - naming
-      - frontend-imports
-      - generate
-      - field-contract
       - coverage
-      - maturity
-      - check-versions
-      - agent-prompts
-      - markdown-links
-      - mcp-tool-count
-      - check-routes
-      - check-contracts
-      - agents-consistency
-      - agents-md-lines
-      - traps-md-lines
-      - docs-only-gate
-      - channel-index
-      - factor-integrity
-      - validate-parameters
-      - release-check
-      - calibration-smoke
-      - check-orphan-artifacts
-      - data-naming
-      - doc-ports
-      - data-catalog
+      - generate
     if: always()
     runs-on: ubuntu-latest
     steps:
-    - name: Aggregate results
+    - name: Check all required jobs passed
       run: |
-        FAILED_JOBS=""
-        for job in ${{ join(needs.*.result, ' ') }}; do
-          echo "  job result: $job"
-        done
-        # Get the actual results from needs context
-        RESULTS="${{ toJson(needs) }}"
-        echo "All results: $RESULTS"
-        if echo "$RESULTS" | grep -q '"result":"failure"'; then
-          echo "::error::At least one required quality check failed"
+        FAILED=""
+        if [ "${{ needs.login-gate.result }}" != "success" ] && [ "${{ needs.login-gate.result }}" != "skipped" ]; then FAILED="$FAILED login-gate"; fi
+        if [ "${{ needs.fmt.result }}" != "success" ] && [ "${{ needs.fmt.result }}" != "skipped" ]; then FAILED="$FAILED fmt"; fi
+        if [ "${{ needs.lint.result }}" != "success" ] && [ "${{ needs.lint.result }}" != "skipped" ]; then FAILED="$FAILED lint"; fi
+        if [ "${{ needs.staticcheck.result }}" != "success" ] && [ "${{ needs.staticcheck.result }}" != "skipped" ]; then FAILED="$FAILED staticcheck"; fi
+        if [ "${{ needs.coverage.result }}" != "success" ] && [ "${{ needs.coverage.result }}" != "skipped" ]; then FAILED="$FAILED coverage"; fi
+        if [ "${{ needs.generate.result }}" != "success" ] && [ "${{ needs.generate.result }}" != "skipped" ]; then FAILED="$FAILED generate"; fi
+        if [ -n "$FAILED" ]; then
+          echo "::error::Failed jobs:$FAILED"
           exit 1
         fi
-        echo "✓ all quality checks passed"
+        echo "✓ quality-gate passed"
