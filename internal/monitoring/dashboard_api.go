@@ -732,6 +732,7 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 			logging.Err(err))
 	}
 }
+
 func stressComponentsToMap(comps map[string]float64) map[string]interface{} {
 	if comps == nil {
 		return nil

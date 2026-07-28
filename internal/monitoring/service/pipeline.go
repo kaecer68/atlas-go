@@ -1285,6 +1285,7 @@ func (s *PipelineService) loadRegimeHistoryFromStoreDays(days int) (*RegimeHisto
 	}
 	return buildRegimeHistoryData(filtered, s.historicalStore), nil
 }
+
 func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) *RegimeHistoryData {
 	// Build a date→period map from period_history when available.
 	periodByDate := map[string]ledger.PeriodRow{}
