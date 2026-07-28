@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -1618,6 +1620,15 @@ func (a *DashboardAPI) GetLatestDrawdown() *portfolio.DrawdownResult {
 
 func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
 	return a.industryService
+}
+
+// HandleVersion serves the build info as JSON at GET /api/version.
+func (a *DashboardAPI) HandleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(buildinfo.Current()); err != nil {
+		log.Printf("[api/version] encode error: %v", err)
+	}
 }
 
 // RecordCycleCalibrationOutcome stores a calibration data point for the

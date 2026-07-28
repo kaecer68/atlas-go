@@ -24,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
+	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -158,6 +159,8 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
 		return true
+	case p == "/api/version":
+		return true
 	case strings.HasPrefix(p, "/api/routes"):
 		return true
 	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
@@ -263,6 +266,7 @@ func run(args []string, deps appDeps) error {
 	brokerMaxClockSkew := flags.Int("broker-max-clock-skew-sec", -1, "override broker max clock skew seconds (>=0, 0 disables check)")
 	brokerNonceTTL := flags.Int("broker-nonce-ttl-sec", -1, "override broker nonce replay ttl seconds (>=1)")
 	brokerNonceStore := flags.String("broker-nonce-store", "", "override nonce replay store: memory|file|redis")
+	versionFlag := flags.Bool("version", false, "print version and exit")
 	brokerNonceStorePath := flags.String("broker-nonce-store-path", "", "override nonce replay file store path (required when store=file)")
 	brokerNonceRedisURL := flags.String("broker-nonce-redis-url", "", "override nonce replay redis url (required when store=redis)")
 	brokerNonceRedisKeyPrefix := flags.String("broker-nonce-redis-key-prefix", "", "override nonce replay redis key prefix")
@@ -281,6 +285,11 @@ func run(args []string, deps appDeps) error {
 	fubonProxyPort := flags.Int("fubon-port", constants.FubonProxyPort, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
+	}
+	if *versionFlag {
+		info := buildinfo.Current()
+		fmt.Printf("atlas %s (commit %s, built %s, %s)\n", info.Version, info.Commit, info.BuildTime, info.GoVersion)
+		return nil
 	}
 	// -fubon-port flag 注入 fubonproxy 內部 listen port(單一真相來源);
 	// PR #837 user prompt A1 root cause:之前 marketdata 與 fubonproxy 各自有
@@ -2004,9 +2013,11 @@ func run(args []string, deps appDeps) error {
 		// expect an /api/ prefix still succeed. It does not reimplement a
 		// separate health schema: the canonical implementation lives at /health
 		// in cmd/atlas/api_routes.go (newHealthHandler). The legacy dual
+
 		// implementation (C02 follow-up) and the silent 200-on-degraded behavior
 		// have been removed.
 		mux.Handle("GET /api/health", http.RedirectHandler("/health", http.StatusMovedPermanently))
+		mux.Handle("GET /api/version", http.HandlerFunc(dashboard.HandleVersion))
 		// F-02: API route discovery — serve known endpoint mappings as JSON.
 		// This is a curated list of top-level routes; for the full MCP tool
 		// inventory, connect via MCP protocol (atlas-mcp stdio server).
