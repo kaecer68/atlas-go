@@ -85,6 +85,7 @@ export async function renderHomePage(container) {
       <div class="home-section__header">
         <h2>市場脈動</h2>
         <span class="home-section__subtitle">核心觀察指標</span>
+        <span class="home-section__period-badge" id="home-period-badge" style="display:none"></span>
         <span class="home-section__data-badge" id="market-pulse-data-badge"></span>
       </div>
       <div class="home-grid home-grid--4" id="home-market-grid" data-disclosure-section="market-pulse" data-disclosure-state="collapsed">
@@ -255,6 +256,29 @@ async function loadHomeData() {
         getJSONWithTimeout('/api/events/prediction', 5000),
         getJSONWithTimeout('/api/capital-flow/summary', 5000),
       ]);
+
+      // 市場時期 badge（/api/regime/history 無 tier gate，所有人可見）
+      try {
+        const regimeData = await silentGetJSON('/api/regime/history');
+        const sessions = regimeData && (Array.isArray(regimeData) ? regimeData
+          : (regimeData.sessions || regimeData.Sessions || null));
+        const periodBadge = document.getElementById('home-period-badge');
+        if (periodBadge && sessions && sessions.length > 0) {
+          const latest = sessions[sessions.length - 1];
+          const mp = latest.market_period;
+          if (mp) {
+            const PERIOD_LABEL = {
+              downturn: { zh: '低迷' }, turnaround_up: { zh: '轉折開高' },
+              bull: { zh: '上升' }, plateau: { zh: '高原' },
+              consolidation: { zh: '盤整' }, turnaround_down: { zh: '轉折下壓' },
+              black_swan: { zh: '黑天鵝' },
+            };
+            const zh = (PERIOD_LABEL[mp] && PERIOD_LABEL[mp].zh) || mp;
+            periodBadge.style.display = '';
+            periodBadge.innerHTML = `<a class="home-period-chip" data-period="${escapeHtml(mp)}" href="javascript:void(0)" onclick="switchPage('methodology')" title="目前市場時期：${escapeHtml(zh)}，點擊查看方法論">時期：${escapeHtml(zh)} →</a>`;
+          }
+        }
+      } catch (_) { /* 不影響首頁主流程 */ }
 
       const events = bundle && bundle.events ? bundle.events : [];
       _homeChannelMap = buildChannelMap(health && Array.isArray(health.data_channels) ? health.data_channels : null);

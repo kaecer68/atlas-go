@@ -893,6 +893,45 @@
   margin-left: auto;
 }
 
+/* E6b: 市場時期 badge chip（首頁頂部，點擊跳轉方法論頁） */
+.home-section__period-badge {
+  display: inline-flex;
+  align-items: center;
+}
+.home-period-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  color: #fff;
+  transition: opacity 0.2s;
+}
+.home-period-chip:hover,
+.home-period-chip:focus-visible {
+  opacity: 0.85;
+}
+/* 七時期色票（與 methodology.css 的 data-period 色票一致） */
+.home-period-chip[data-period="downturn"] { background: var(--regime-downturn); }
+.home-period-chip[data-period="turnaround_up"] { background: var(--regime-turnaround-up); }
+.home-period-chip[data-period="bull"] { background: var(--regime-bull); }
+.home-period-chip[data-period="plateau"] { background: var(--regime-plateau); }
+.home-period-chip[data-period="consolidation"] { background: var(--regime-consolidation); }
+.home-period-chip[data-period="turnaround_down"] { background: var(--regime-turnaround-down); }
+.home-period-chip[data-period="black_swan"] { background: var(--regime-black-swan); }
+
+/* mobile: badge 換行不破版 */
+@media (max-width: 900px) {
+  .home-section__period-badge {
+    order: 10;
+    width: 100%;
+    margin-top: 4px;
+  }
+}
+
 .home-today-summary__top .data-quality-badge {
   margin-left: 8px;
 }
