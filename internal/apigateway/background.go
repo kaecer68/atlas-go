@@ -298,7 +298,11 @@ func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask
 	}()
 
 	// Apply startup jitter to prevent thundering herd
-	if task.Jitter > 0 {
+	// Apply startup jitter to prevent thundering herd, but ONLY after
+	// the first execution (the initial run fires immediately so that
+	// long-interval tasks like government_flow_aggregate don't sit
+	// idle for hours on a fresh deploy).
+	if !task.LastRun().IsZero() && task.Jitter > 0 {
 		jitter := time.Duration(rand.Int63n(int64(task.Jitter)))
 		select {
 		case <-ctx.Done():
@@ -306,8 +310,8 @@ func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask
 		case <-time.After(jitter):
 		}
 	}
-
 	ticker := time.NewTicker(task.Interval)
+	logging.Info("background_task", "task_started", "name", task.Name)
 	defer ticker.Stop()
 
 	// Execute immediately on start

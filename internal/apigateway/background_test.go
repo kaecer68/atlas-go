@@ -1301,46 +1301,43 @@ func TestExecuteTask_HalfOpenTransition(t *testing.T) {
 // =========================================================================
 // BackgroundTaskManager — 啟動抖動（Startup Jitter）回歸測試
 //
-// 設計目的：當多個 process 同時啟動（rolling deploy / 災難切換），每個
-// process 內 BackgroundTaskManager 的所有 task 若同時執行首次呼叫，會
-// 對上游 provider 造成 thundering herd。runTask 內的
-// `time.Duration(rand.Int63n(int64(task.Jitter)))` 抖動是唯一的去同步
-// 屏障，必須驗證：
-//   1. 抖動真的有被套用（首次執行時間 ≥ 抖動下界）
-//   2. 多個 task 之間的首次執行時間是分散的（不會全部擠在 t=0）
+// 設計目的：fresh deploy 時所有 task 的首次執行應立即啟動（不套用抖動），
+// 避免長週期任務（如 government_flow_aggregate 28h）在新部署上閒置數小時。
+// 後續週期（LastRun 非零值）仍套用 Jitter 以防止多 process 同時重啟時
+// 的 thundering herd。
 //
-// 若未來有人誤刪 `if task.Jitter > 0 { ... }` 或將 `rand.Int63n` 改成
-// 固定值，這兩個測試會立即失敗。
+// 若未來有人誤刪 `!task.LastRun().IsZero()` 條件，這兩個測試會立即失敗。
 // =========================================================================
 
 // TestBackgroundTaskManager_RunTask_AppliesStartupJitter 驗證 runTask
-// 在首次執行前確實等待了 Jitter 設定的時間。
+// 的抖動行為分兩階段：
+//  1. 首次執行（LastRun==零值）→ 不套用抖動，近乎立即執行。
+//  2. 後續週期 → 套用 Jitter 抖動。
 //
 // 測試技巧（統計式容錯）：
-//   - Jitter=500ms，rand.Int63n(500ms) 抽樣分佈為 [0, 500ms)。
-//   - 下界 1ms：若 runTask 完全沒套用抖動（regression：刪掉
-//     `if task.Jitter > 0` 區塊或將 rand 換成 0），首次執行會在
-//     t≈0（純 Go 排程誤差 < 0.5ms），測試會失敗。
-//   - 上界 700ms：容納 rand 抽到接近 500ms + Go runtime 排程誤差。
-//   - 偽陽性率：P(rand 抽到 < 1ms) = 1/500 ≈ 0.2%，可接受。
+//   - 首次執行應在 50ms 內（Go 排程誤差）。
+//   - 設定 LastRun 後再次 Start → 新週期首次應有 Jitter。
 func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 	const (
 		targetJitter = 500 * time.Millisecond
+		firstMax     = 50 * time.Millisecond
 		minElapsed   = 1 * time.Millisecond
 		maxElapsed   = 700 * time.Millisecond
 	)
 	m := NewBackgroundTaskManager(nil)
 
-	firstRun := make(chan time.Time, 1)
+	firstRun := make(chan time.Time, 2)
+	runCount := 0
 	task := &ScheduledTask{
 		Name:     "startup-jitter-task",
-		Interval: 1 * time.Hour, // 大 interval 避免 ticker 干擾
+		Interval: 1 * time.Hour,
 		Jitter:   targetJitter,
 		Task: func(ctx context.Context) error {
 			select {
 			case firstRun <- time.Now():
 			default:
 			}
+			runCount++
 			return nil
 		},
 	}
@@ -1349,47 +1346,67 @@ func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// ── Phase A: 首次執行 ──
+	ctx, cancelA := context.WithCancel(context.Background())
+	defer cancelA()
 	startTime := time.Now()
 	m.Start(ctx)
-	defer m.Stop()
 
 	select {
 	case execTime := <-firstRun:
 		elapsed := execTime.Sub(startTime)
-		// 下界：若 runTask 沒套用抖動，首次執行會在 t≈0。
-		// 1ms 下界足以抓出此 regression（純排程誤差 < 0.5ms）。
-		if elapsed < minElapsed {
-			t.Errorf("first execution happened too early: elapsed=%v, expected >= %v (jitter=%v). "+
-				"This suggests the startup jitter was not applied — possible regression in runTask.",
-				elapsed, minElapsed, targetJitter)
-		}
-		// 上界：容納 rand 抽到接近 500ms + Go runtime 排程誤差。
-		if elapsed > maxElapsed {
-			t.Errorf("first execution happened too late: elapsed=%v, expected within %v (jitter=%v). "+
-				"This suggests an unintended delay or ticker misconfiguration.",
-				elapsed, maxElapsed, targetJitter)
+		if elapsed > firstMax {
+			t.Errorf("first run (no previous LastRun): elapsed=%v, expected ≤ %v. "+
+				"First execution should bypass jitter.", elapsed, firstMax)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout: task did not execute within 2s — runTask may be stuck or jitter misconfigured")
+		t.Fatal("timeout: task did not execute within 2s")
+	}
+	m.Stop()
+	cancelA()
+
+	// ── Phase B: 模擬後續週期（LastRun 非零值 → 應套用抖動）──
+	task.SetLastRun(time.Now().Add(-2 * time.Hour))
+	ctxB, cancelB := context.WithCancel(context.Background())
+	defer cancelB()
+	m2 := NewBackgroundTaskManager(nil)
+	if err := m2.Register(task); err != nil {
+		t.Fatalf("Register phase B: %v", err)
+	}
+	startTime = time.Now()
+	m2.Start(ctxB)
+	defer m2.Stop()
+
+	select {
+	case execTime := <-firstRun:
+		elapsed := execTime.Sub(startTime)
+		if elapsed < minElapsed {
+			t.Errorf("subsequent run (LastRun non-zero): elapsed=%v, expected ≥ %v. "+
+				"Jitter should be applied.", elapsed, minElapsed)
+		}
+		if elapsed > maxElapsed {
+			t.Errorf("subsequent run too late: elapsed=%v, expected within %v",
+				elapsed, maxElapsed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: task did not execute within 2s")
 	}
 }
 
 // TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks 驗證
-// 多個 task 的首次執行時間是分散的，不會全部擠在 t=0。
+// 後續週期中（LastRun 非零值），多個 task 的執行時間因 Jitter 而分散。
 //
-// 測試技巧：建立 5 個 task，全部用 300ms Jitter。若 runTask 真的套用
-// 隨機抖動，5 個 task 的首次執行時間應該分散在 [0, 300ms) 區間，
-// 最晚與最早之間的差距應該至少 50ms（避免 5 個全擠在一起的極端情況）。
+// 測試技巧：為每個 task 設 SetLastRun(time.Now()) 模擬後續週期，
+// 全部用 300ms Jitter。若 runTask 套用隨機抖動，10 個 task 的
+// 執行時間應分散在 [0, 300ms) 區間，最晚與最早的差距 ≥ 50ms。
 //
-// 若未來有人將 `rand.Int63n(int64(task.Jitter))` 改成固定值（如 0），
-// 所有 task 會在 t=0 同時執行，差距趨近於 0，本測試會失敗。
+// 若未來有人誤刪 `!task.LastRun().IsZero()` 條件或將 rand 改成固定值，
+// 所有 task 會在 t≈0 同時執行，差距趨近於 0，本測試會失敗。
 func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T) {
 	const (
 		numTasks     = 10
 		targetJitter = 300 * time.Millisecond
-		minSpread    = 50 * time.Millisecond // 最晚 - 最早 的最小期望值
+		minSpread    = 50 * time.Millisecond
 	)
 	m := NewBackgroundTaskManager(nil)
 
@@ -1414,6 +1431,8 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 			},
 		}
 		task.SetEnabled(true)
+		// 模擬後續週期：設 LastRun 為非零值以觸發 jitter
+		task.SetLastRun(time.Now().Add(-2 * time.Hour))
 		if err := m.Register(task); err != nil {
 			t.Fatalf("Register task %d: %v", i, err)
 		}
@@ -1425,17 +1444,15 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 	m.Start(ctx)
 	defer m.Stop()
 
-	// 等待所有 task 首次執行（或 timeout）
 	for received := 0; received < numTasks; {
 		select {
 		case <-doneCh:
 			received++
 		case <-time.After(2 * time.Second):
-			t.Fatalf("timeout: only %d/%d tasks executed first run within 2s", received, numTasks)
+			t.Fatalf("timeout: only %d/%d tasks executed within 2s", received, numTasks)
 		}
 	}
 
-	// 計算首次執行時間的 spread
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -1445,7 +1462,7 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 			t.Fatalf("task %d first run time not recorded", i)
 		}
 		rel := ft.Sub(startTime)
-		t.Logf("task %d first execution at +%v (relative to Start)", i, rel)
+		t.Logf("task %d execution at +%v (relative to Start)", i, rel)
 		if earliest.IsZero() || rel < earliest.Sub(startTime) {
 			earliest = ft
 		}
@@ -1456,22 +1473,17 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 
 	spread := latest.Sub(earliest)
 	if spread < minSpread {
-		t.Errorf("tasks are not desynchronized: first-run spread = %v, expected at least %v "+
-			"(jitter=%v, numTasks=%d). All tasks clustered near t=0 indicates the random "+
-			"jitter was replaced with a constant or zero value.", spread, minSpread, targetJitter, numTasks)
+		t.Errorf("tasks are not desynchronized: spread = %v, expected ≥ %v "+
+			"(jitter=%v, numTasks=%d). All tasks clustered near t=0 indicates "+
+			"the jitter was replaced with a constant or zero value.", spread, minSpread, targetJitter, numTasks)
 	}
 
-	// 額外邊界：最晚執行的 task 應該不超過 Jitter 上界 + 排程誤差
 	maxAllowed := targetJitter + 200*time.Millisecond
 	if latest.Sub(startTime) > maxAllowed {
 		t.Errorf("latest task execution too late: %v after Start, expected within %v",
 			latest.Sub(startTime), maxAllowed)
 	}
 }
-
-// =========================================================================
-// executeTask — skip sentinel / last_error / overlap tolerance (fix B01/B02)
-// =========================================================================
 
 func TestExecuteTask_SkippedPreservesFailures(t *testing.T) {
 	m := NewBackgroundTaskManager(nil)
