@@ -285,6 +285,21 @@ func (m *mockStressHistoricalStore) LoadGeopoliticalHistory(_ context.Context, _
 func (m *mockStressHistoricalStore) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
 	return nil, nil
 }
+func (m *mockStressHistoricalStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error {
+	return nil
+}
+func (m *mockStressHistoricalStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *mockStressHistoricalStore) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
+func (m *mockStressHistoricalStore) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
 
 func (m *mockStressHistoricalStore) CountSynthetic(_ context.Context) (map[string]int64, error) {
 	return nil, nil
@@ -400,6 +415,21 @@ func (m *mockGeoHistoricalStore) LoadStressByDateAll(_ context.Context, _ string
 	panic("not implemented")
 }
 
+func (m *mockGeoHistoricalStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error {
+	return nil
+}
+func (m *mockGeoHistoricalStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *mockGeoHistoricalStore) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *mockGeoHistoricalStore) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
+func (m *mockGeoHistoricalStore) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
 func (m *mockGeoHistoricalStore) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
 	panic("not implemented")
 }

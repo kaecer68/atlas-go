@@ -544,7 +544,7 @@ func TestSchemaConstants_Recognised(t *testing.T) {
 		}
 	}
 	sort.Strings(got)
-	want := []string{"event_calendar_history", "geopolitical_history", "prediction_backtest", "regime_history", "stress_index_history"}
+	want := []string{"event_calendar_history", "geopolitical_history", "period_history", "prediction_backtest", "regime_history", "stress_index_history"}
 	for i, name := range want {
 		if i >= len(got) || got[i] != name {
 			t.Errorf("HasTables = %v, want %v", got, want)

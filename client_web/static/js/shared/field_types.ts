@@ -3127,6 +3127,7 @@ export interface RegimeSessionEntry {
   date: string;
   regime: string;
   period?: string;
+  market_period?: string;
   period_name_zh?: string;
   recorded_at: string;
   source?: string;

@@ -576,6 +576,7 @@ func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.Mac
 	a.narrativeEngine.UpdateMacro(snap, geoScore)
 	a.persistStressIndex(ctx)
 	a.persistGeopolitical(ctx, geoScore)
+	a.persistPeriodHistory(ctx, snap)
 	a.persistRegimeHistory(ctx)
 }
 
@@ -704,6 +705,33 @@ func (a *DashboardAPI) persistRegimeHistory(ctx context.Context) {
 	}
 }
 
+// persistPeriodHistory derives the current seven-period classification from
+// the macro snapshot via PeriodDetector and upserts it into period_history.
+func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata.MacroDataSnapshot) {
+	if a.historicalStore == nil {
+		return
+	}
+	date := time.Now().UTC().Format("2006-01-02")
+	if snap.RecordedAt > 0 {
+		date = time.Unix(snap.RecordedAt, 0).UTC().Format("2006-01-02")
+	}
+	ind := SnapshotToPeriodIndicators(snap)
+	period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
+	now := time.Now().UTC()
+	row := ledger.PeriodRow{
+		Date:        date,
+		Period:      string(period),
+		RecordedAt:  now,
+		CapturedAt:  now,
+		IsSynthetic: 0,
+		Source:      "macro_ingest",
+	}
+	if err := a.historicalStore.UpsertPeriod(ctx, row); err != nil {
+		logging.Warn("dashboard_api", "persist_period_history_failed",
+			logging.FStr("date", row.Date),
+			logging.Err(err))
+	}
+}
 func stressComponentsToMap(comps map[string]float64) map[string]interface{} {
 	if comps == nil {
 		return nil

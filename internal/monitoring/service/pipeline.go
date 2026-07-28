@@ -1217,6 +1217,7 @@ type RegimeSessionEntry struct {
 	Date         string `json:"date"`
 	Regime       string `json:"regime"`
 	Period       string `json:"period,omitempty"`
+	MarketPeriod string `json:"market_period,omitempty"` // detected period from period_history
 	PeriodNameZH string `json:"period_name_zh,omitempty"`
 	RecordedAt   string `json:"recorded_at"`
 	Source       string `json:"source,omitempty"`
@@ -1259,7 +1260,7 @@ func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryD
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)
 	}
-	return buildRegimeHistoryData(rows), nil
+	return buildRegimeHistoryData(rows, s.historicalStore), nil
 }
 
 // loadRegimeHistoryFromStoreDays is the calendar-window variant of
@@ -1282,10 +1283,23 @@ func (s *PipelineService) loadRegimeHistoryFromStoreDays(days int) (*RegimeHisto
 			filtered = append(filtered, r)
 		}
 	}
-	return buildRegimeHistoryData(filtered), nil
+	return buildRegimeHistoryData(filtered, s.historicalStore), nil
 }
+func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) *RegimeHistoryData {
+	// Build a date→period map from period_history when available.
+	periodByDate := map[string]ledger.PeriodRow{}
+	if hs != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if periodRows, err := hs.LoadPeriodHistoryAll(ctx, 365); err == nil {
+			for _, p := range periodRows {
+				periodByDate[p.Date] = p
+			}
+		} else {
+			logging.Warn("pipeline", "load_period_history_failed", logging.Err(err))
+		}
+	}
 
-func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 	sessions := make([]RegimeSessionEntry, len(rows))
 	var transitions []RegimeTransition
 	var prevRegime string
@@ -1297,7 +1311,7 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 			periodStr = string(period)
 			periodZH = period.PeriodNameZH()
 		}
-		sessions[i] = RegimeSessionEntry{
+		entry := RegimeSessionEntry{
 			SessionID:    row.Date,
 			Date:         row.Date,
 			Regime:       row.Regime,
@@ -1306,6 +1320,11 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow) *RegimeHistoryData {
 			RecordedAt:   row.RecordedAt.UTC().Format(time.RFC3339),
 			Source:       row.Source,
 		}
+		// Join period_history: set market_period when available.
+		if p, ok := periodByDate[row.Date]; ok && p.Period != "" {
+			entry.MarketPeriod = p.Period
+		}
+		sessions[i] = entry
 		if i > 0 && row.Regime != prevRegime {
 			transitions = append(transitions, RegimeTransition{
 				From:      prevRegime,

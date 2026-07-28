@@ -90,6 +90,18 @@ type PredictionBacktestRow struct {
 	IsSynthetic           uint8     `json:"is_synthetic"`
 }
 
+// PeriodRow is one row from period_history (one period per date).
+// Populated by the live ingest pipeline (applyMacroUpdate).
+type PeriodRow struct {
+	Date       string    `json:"date"`
+	Period     string    `json:"period"`
+	RecordedAt time.Time `json:"recorded_at,omitempty"`
+	CapturedAt time.Time `json:"captured_at"`
+	// IsSynthetic is 1 when backfilled, 0 when written by live ingest.
+	IsSynthetic uint8    `json:"is_synthetic"`
+	Source      string `json:"source"`
+}
+
 // ------------------------------------------------------------------
 // Store interface + SQLite implementation.
 // ------------------------------------------------------------------
@@ -112,6 +124,13 @@ type HistoricalStore interface {
 	LoadStressHistoryAll(ctx context.Context, limit int) ([]StressRow, error)
 
 	// Geopolitical
+
+	// Period (seven-period market cycle classification)
+	UpsertPeriod(ctx context.Context, row PeriodRow) error
+	LoadPeriodByDate(ctx context.Context, date string) (PeriodRow, bool, error)
+	LoadPeriodByDateAll(ctx context.Context, date string) (PeriodRow, bool, error)
+	LoadPeriodHistory(ctx context.Context, limit int) ([]PeriodRow, error)
+	LoadPeriodHistoryAll(ctx context.Context, limit int) ([]PeriodRow, error)
 	UpsertGeopolitical(ctx context.Context, row GeopoliticalRow) error
 	LoadGeopoliticalByDate(ctx context.Context, date string) (GeopoliticalRow, bool, error)
 	LoadGeopoliticalByDateAll(ctx context.Context, date string) (GeopoliticalRow, bool, error)
@@ -255,6 +274,114 @@ func (s *SQLiteHistoricalStore) loadRegimeHistory(ctx context.Context, limit int
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("regime rows: %w", err)
+	}
+	return out, nil
+}
+
+// ------------------------------------------------------------------
+// Period (seven-period market cycle)
+// ------------------------------------------------------------------
+
+// UpsertPeriod inserts or updates a period_history row. Date is the
+// trading day (YYYY-MM-DD). The ON CONFLICT(date) DO UPDATE makes
+// repeated writes from the live ingest pipeline idempotent.
+func (s *SQLiteHistoricalStore) UpsertPeriod(ctx context.Context, row PeriodRow) error {
+	if row.Date == "" {
+		return fmt.Errorf("period date is empty")
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source)
+		VALUES (?, ?, ?, ?, ?, COALESCE(?, 'macro_ingest'))
+		ON CONFLICT(date) DO UPDATE SET
+			period = excluded.period,
+			recorded_at = excluded.recorded_at,
+			captured_at = excluded.captured_at,
+			is_synthetic = excluded.is_synthetic,
+			source = excluded.source
+	`, row.Date, row.Period, nullTime(row.RecordedAt), nullTime(row.CapturedAt),
+		row.IsSynthetic, emptyAsNil(row.Source))
+	if err != nil {
+		return fmt.Errorf("upsert period %s: %w", row.Date, err)
+	}
+	return nil
+}
+
+// LoadPeriodByDate returns the period row for a date, excluding
+// synthetic rows.
+func (s *SQLiteHistoricalStore) LoadPeriodByDate(ctx context.Context, date string) (PeriodRow, bool, error) {
+	return s.loadPeriodByDate(ctx, date, FilterSynthetic)
+}
+
+// LoadPeriodByDateAll returns the period row for a date including
+// synthetic rows.
+func (s *SQLiteHistoricalStore) LoadPeriodByDateAll(ctx context.Context, date string) (PeriodRow, bool, error) {
+	return s.loadPeriodByDate(ctx, date, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadPeriodByDate(ctx context.Context, date string, filterSynthetic bool) (PeriodRow, bool, error) {
+	filter := ""
+	if filterSynthetic {
+		filter = " AND is_synthetic = 0"
+	}
+	var r PeriodRow
+	var recordedAtStr, capturedAtStr sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		FROM period_history WHERE date = ?`+filter, date).Scan(
+		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source)
+	if err == sql.ErrNoRows {
+		return r, false, nil
+	}
+	if err != nil {
+		return r, false, fmt.Errorf("load period by date %s: %w", date, err)
+	}
+	r.RecordedAt = parseTimeColumn(recordedAtStr)
+	r.CapturedAt = parseTimeColumn(capturedAtStr)
+	return r, true, nil
+}
+
+// LoadPeriodHistory returns period rows ordered by date DESC (newest
+// first), excluding synthetic rows.
+func (s *SQLiteHistoricalStore) LoadPeriodHistory(ctx context.Context, limit int) ([]PeriodRow, error) {
+	return s.loadPeriodHistory(ctx, limit, FilterSynthetic)
+}
+
+// LoadPeriodHistoryAll returns period rows including synthetic rows.
+func (s *SQLiteHistoricalStore) LoadPeriodHistoryAll(ctx context.Context, limit int) ([]PeriodRow, error) {
+	return s.loadPeriodHistory(ctx, limit, IncludeSynthetic)
+}
+
+func (s *SQLiteHistoricalStore) loadPeriodHistory(ctx context.Context, limit int, filterSynthetic bool) ([]PeriodRow, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+	if limit > 365 {
+		limit = 365
+	}
+	filter := ""
+	if filterSynthetic {
+		filter = " WHERE is_synthetic = 0"
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		FROM period_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("load period history: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []PeriodRow
+	for rows.Next() {
+		var r PeriodRow
+		var recordedAtStr, capturedAtStr sql.NullString
+		if err := rows.Scan(&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source); err != nil {
+			return nil, fmt.Errorf("period row scan: %w", err)
+		}
+		r.RecordedAt = parseTimeColumn(recordedAtStr)
+		r.CapturedAt = parseTimeColumn(capturedAtStr)
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("period rows: %w", err)
 	}
 	return out, nil
 }
@@ -711,6 +838,7 @@ func (s *SQLiteHistoricalStore) HasTables(ctx context.Context) (map[string]bool,
 	want := []string{
 		"regime_history",
 		"stress_index_history",
+		"period_history",
 		"geopolitical_history",
 		"event_calendar_history",
 		"prediction_backtest",
@@ -736,6 +864,7 @@ func (s *SQLiteHistoricalStore) CountSynthetic(ctx context.Context) (map[string]
 		"regime_history",
 		"stress_index_history",
 		"geopolitical_history",
+		"period_history",
 		"event_calendar_history",
 		"prediction_backtest",
 	}
