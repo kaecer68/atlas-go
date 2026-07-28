@@ -504,6 +504,7 @@ echo "✅ os.Getenv 檢查通過"
 | twse_sector_index | 1/5s | Readiness | `macro_cache_twse_sector_index` (15m) | ✅ |
 | sector_data | 不限流 (rate.Inf) | Readiness | `macro_cache_sector_data` (15m) | ✅ |
 | day_trading | 1/5s | Liveness | — | ✅ |
+| market_volume | 1/5s | Liveness | — | ✅ |
 | bdi | 1/5s | Liveness | `macro_cache_bdi` (5m) | ✅ |
 | taifex_daily | 1/5s | Liveness | auto_taifex_daily (1h) | ✅ |
 | taifex_institutional | 1/5s | Liveness | auto_taifex_institutional (1h) | ✅ |

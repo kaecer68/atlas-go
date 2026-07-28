@@ -30,6 +30,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"twse_sector_index":      false,
 		"sector_data":            false,
 		"day_trading":            false,
+		"market_volume":          false,
 		"government_flow":        false,
 		"twse_etf":               false,
 		"twse_insider":           false,
@@ -93,7 +94,7 @@ func TestNewRateLimitManager_NonInfiniteRateChannels(t *testing.T) {
 		"us_yahoo", "frankfurter_fx", "twse_capital_flow", "fugle", "fubon",
 		"finmind", "geopolitical", "geopolitical_taiwan", "twse_margin",
 		"export_statistics", "tsmc_revenue", "tej", "exchange_rate",
-		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "twse_etf", "taifex_daily", "twse_oddlot", "bdi",
+		"sox_index", "dram_spot_price", "twse_sector_index", "day_trading", "market_volume", "twse_etf", "taifex_daily", "twse_oddlot", "bdi",
 		"us_spx", "us_ndx", "us_dji", "us_nvda", "us_aapl", "us_msft", "tsm_adr",
 	}
 	for _, channel := range nonInfiniteChannels {
@@ -418,6 +419,7 @@ func TestStatus_BurstMatchesConfig(t *testing.T) {
 		{"sox_index", ExportStatisticsBurst},
 		{"sector_data", 0},
 		{"day_trading", TWSEMarginBurst},
+		{"market_volume", TWSEMarginBurst},
 		{"dram_spot_price", ExportStatisticsBurst},
 		{"twse_sector_index", ExportStatisticsBurst},
 		{"bdi", ExportStatisticsBurst},
