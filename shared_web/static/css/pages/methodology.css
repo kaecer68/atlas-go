@@ -249,10 +249,20 @@
   transform: scaleY(1.15);
   z-index: 2;
 }
+/* 三態色塊（無 market_period 的舊日） */
 .md-regime-cell[data-regime="RISK_ON"] { background: var(--color-success); }
 .md-regime-cell[data-regime="RISK_OFF"] { background: var(--color-danger); }
 .md-regime-cell[data-regime="NEUTRAL"] { background: var(--color-warning); }
 .md-regime-cell[data-regime="TRANSITIONAL"] { background: var(--accent); }
+
+/* 七時期色塊（有 market_period 的日） */
+.md-regime-cell[data-period="downturn"] { background: var(--regime-downturn); }
+.md-regime-cell[data-period="turnaround_up"] { background: var(--regime-turnaround-up); }
+.md-regime-cell[data-period="bull"] { background: var(--regime-bull); }
+.md-regime-cell[data-period="plateau"] { background: var(--regime-plateau); }
+.md-regime-cell[data-period="consolidation"] { background: var(--regime-consolidation); }
+.md-regime-cell[data-period="turnaround_down"] { background: var(--regime-turnaround-down); }
+.md-regime-cell[data-period="black_swan"] { background: var(--regime-black-swan); }
 .md-regime-legend {
   display: flex;
   flex-wrap: wrap;
@@ -265,6 +275,29 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* 七時期 legend swatch */
+.md-regime-legend__swatch--period[data-period="downturn"] { background: var(--regime-downturn); }
+.md-regime-legend__swatch--period[data-period="turnaround_up"] { background: var(--regime-turnaround-up); }
+.md-regime-legend__swatch--period[data-period="bull"] { background: var(--regime-bull); }
+.md-regime-legend__swatch--period[data-period="plateau"] { background: var(--regime-plateau); }
+.md-regime-legend__swatch--period[data-period="consolidation"] { background: var(--regime-consolidation); }
+.md-regime-legend__swatch--period[data-period="turnaround_down"] { background: var(--regime-turnaround-down); }
+.md-regime-legend__swatch--period[data-period="black_swan"] { background: var(--regime-black-swan); }
+
+/* 七時期 legend：換行 flex-wrap */
+.md-regime-legend--periods {
+  flex-wrap: wrap;
+}
+
+/* legend separator */
+.md-regime-legend__sep {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin: 0 var(--space-xs);
+  line-height: 1;
+  align-self: center;
 }
 .md-regime-legend__swatch {
   width: 12px;
@@ -388,6 +421,22 @@
   padding: 1px 4px;
   border-radius: 3px;
 }
+
+/* ====================================================================
+   Sparkline（資金勢力 inline SVG 微走勢）
+   ==================================================================== */
+.md-metric__sparkline {
+  margin-bottom: 2px;
+  line-height: 0;
+}
+.md-sparkline {
+  display: inline-block;
+  vertical-align: middle;
+}
+/* 紅漲綠跌 — 台股慣例 */
+.md-sparkline--up { color: var(--bullish); }
+.md-sparkline--down { color: var(--bearish); }
+.md-sparkline--flat { color: var(--muted); }
 .md-metric__value {
   font-size: var(--text-base);
   font-weight: var(--font-semibold);

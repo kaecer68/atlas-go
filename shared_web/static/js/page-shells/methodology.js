@@ -272,8 +272,31 @@ function getForce(capital, name) {
   return arr.find(f => f && f.force === name) || null;
 }
 
-// 渲染單一 metric cell
-function renderMetricCell(metric, report, cross, capital, isPremium) {
+// ---------------------------------------------------------------------------
+// Inline SVG sparkline（用於資金勢力歷史走勢）
+// 傳入數值陣列，回傳 inline SVG 字串（寬 80px / 高 30px）
+// ---------------------------------------------------------------------------
+function renderSparkline(values) {
+  if (!values || values.length < 2) return null; // 少於 2 點不畫
+  const W = 80, H = 30, PAD = 2;
+  const nums = values.filter(v => typeof v === 'number' && Number.isFinite(v));
+  if (nums.length < 2) return null;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = max - min || 1; // 避免除以零
+  const points = nums.map((v, i) => {
+    const x = PAD + (i / (nums.length - 1)) * (W - 2 * PAD);
+    const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  // 末端方向：紅漲綠跌
+  const first = nums[0];
+  const last = nums[nums.length - 1];
+  const dirCls = last > first ? 'md-sparkline--up' : last < first ? 'md-sparkline--down' : 'md-sparkline--flat';
+  return `<svg class="md-sparkline ${dirCls}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, isPremium) {
   if (metric.available === false) {
     return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
       <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
@@ -287,10 +310,17 @@ function renderMetricCell(metric, report, cross, capital, isPremium) {
   let isGated = false;
   let extraBadge = '';
   const src = metric.source || '';
+  let sparklineHtml = '';
   if (metric.kind === 'force') {
     // 來自 /api/capital-flow/summary 或 /api/capital-flow/daily
     const forceName = src.slice('capital.forces.'.length);
     const f = getForce(capital, forceName);
+    // sparkline（所有 tier 可見，因為 /api/capital-flow/history 無 tier gate）
+    if (capitalFlowHistory && capitalFlowHistory[forceName]) {
+      const rawVals = capitalFlowHistory[forceName].map(e => e.raw_value);
+      const svg = renderSparkline(rawVals);
+      if (svg) sparklineHtml = svg;
+    }
     if (!isPremium) {
       isGated = true;
     } else if (!f || f.data_available === false) {
@@ -326,6 +356,7 @@ function renderMetricCell(metric, report, cross, capital, isPremium) {
   if (isGated) {
     return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
       <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
+      ${sparklineHtml ? `<div class="md-metric__sparkline">${sparklineHtml}</div>` : ''}
       <div class="md-metric__value md-metric__value--muted">${tierGatePill()}</div>
     </div>`;
   }
@@ -350,6 +381,7 @@ function renderMetricCell(metric, report, cross, capital, isPremium) {
   }
   return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
     <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code>${extraBadge}</div>
+    ${sparklineHtml ? `<div class="md-metric__sparkline">${sparklineHtml}</div>` : ''}
     <div class="md-metric__value">${display}</div>
   </div>`;
 }
@@ -424,10 +456,9 @@ function renderPeriodCard(host, report, isPremium, error) {
 function renderRegimeHistory(host, data, error) {
   if (error) {
     host.style.display = '';
-    host.innerHTML = renderError('三態歷史紀錄', 'regime');
+    host.innerHTML = renderError('歷史紀錄', 'regime');
     return rebindRetry('md-regime-host', 'regime');
   }
-  // 無資料時整區塊隱藏（提示詞 empty 態），禁止畫假色帶；error 態仍顯示重試。
   const sessions = data && Array.isArray(data) ? data
                  : (data && Array.isArray(data.sessions) ? data.sessions
                  : (data && Array.isArray(data.Sessions) ? data.Sessions : null));
@@ -437,31 +468,78 @@ function renderRegimeHistory(host, data, error) {
     return;
   }
   host.style.display = '';
+
+  // 檢查是否有任何 session 帶 market_period（七時期軸啟用條件）
+  const hasPeriodData = sessions.some(s => s.market_period);
+  let earliestPeriodDate = '';
+  if (hasPeriodData) {
+    // 找最早帶 market_period 的日期
+    const periodDates = sessions
+      .filter(s => s.market_period)
+      .map(s => s.date || s.Date || s.recorded_at || '');
+    earliestPeriodDate = periodDates.sort()[0] || '';
+  }
+
   const cells = sessions.map(s => {
-    const regime = s.regime || s.Regime || '';
     const date = s.date || s.Date || s.recorded_at || '';
+    if (s.market_period) {
+      const mp = s.market_period;
+      const zh = (PERIOD_LABEL[mp] && PERIOD_LABEL[mp].zh) || mp;
+      return `<div class="md-regime-cell md-regime-cell--period" data-period="${escapeHtml(mp)}" title="${escapeHtml(date)} · ${escapeHtml(zh)}"></div>`;
+    }
+    const regime = s.regime || s.Regime || '';
     return `<div class="md-regime-cell" data-regime="${escapeHtml(regime)}" title="${escapeHtml(date)} · ${escapeHtml(regime)}"></div>`;
   }).join('');
-  host.innerHTML = `
-    <h3>📊 風險狀態（三態）歷史</h3>
-    <div class="md-regime-band" aria-label="regime 歷史色帶">${cells}</div>
-    <p class="md-history-card__hint">七時期歷史軸待後端 <code>period_history</code> 提供（API 目前僅回傳三態）。</p>
-    <div class="md-regime-legend">
+
+  let hint = '';
+  if (hasPeriodData) {
+    hint = `<p class="md-history-card__hint">七時期自 ${escapeHtml(earliestPeriodDate)} 起累積；更早日維持三態色。</p>`;
+  } else {
+    hint = `<p class="md-history-card__hint">七時期歷史軸待後端 <code>period_history</code> 提供（API 目前僅回傳三態）。</p>`;
+  }
+
+  const titleHtml = hasPeriodData
+    ? '<h3>市場時期走勢</h3>'
+    : '<h3>📊 風險狀態（三態）歷史</h3>';
+
+  let legend = '';
+  if (hasPeriodData) {
+    const periodKeys = ['downturn','turnaround_up','bull','plateau','consolidation','turnaround_down','black_swan'];
+    legend = `<div class="md-regime-legend md-regime-legend--periods">
+      ${periodKeys.map(pk => {
+        const zh = (PERIOD_LABEL[pk] && PERIOD_LABEL[pk].zh) || pk;
+        return `<span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--period" data-period="${escapeHtml(pk)}"></span>${escapeHtml(zh)}</span>`;
+      }).join('')}
+      <span class="md-regime-legend__sep">│ 更早</span>
       <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--risk-on"></span>RISK_ON</span>
       <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--risk-off"></span>RISK_OFF</span>
       <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--neutral"></span>NEUTRAL</span>
       <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--transitional"></span>TRANSITIONAL</span>
-    </div>
+    </div>`;
+  } else {
+    legend = `<div class="md-regime-legend">
+      <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--risk-on"></span>RISK_ON</span>
+      <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--risk-off"></span>RISK_OFF</span>
+      <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--neutral"></span>NEUTRAL</span>
+      <span class="md-regime-legend__item"><span class="md-regime-legend__swatch md-regime-legend__swatch--transitional"></span>TRANSITIONAL</span>
+    </div>`;
+  }
+
+  host.innerHTML = `
+    ${titleHtml}
+    <div class="md-regime-band" aria-label="${hasPeriodData ? '市場時期歷史色帶（七時期 + 三態）' : 'regime 歷史色帶'}">${cells}</div>
+    ${hint}
+    ${legend}
   `;
 }
 
 // ---------------------------------------------------------------------------
 // 渲染：3. 鏈圖（8 層）
 // ---------------------------------------------------------------------------
-function renderChain(host, report, cross, capital, isPremium) {
+function renderChain(host, report, cross, capital, capitalFlowHistory, isPremium) {
   const layerHtml = LAYERS.map((layer, idx) => {
     const isLast = idx === LAYERS.length - 1;
-    const cards = layer.metrics.map(m => renderMetricCell(m, report, cross, capital, isPremium)).join('');
+    const cards = layer.metrics.map(m => renderMetricCell(m, report, cross, capital, capitalFlowHistory, isPremium)).join('');
     const resonance = layer.resonance ? renderResonance(report, isPremium) : '';
     return `
       <div class="md-layer-card" data-layer-num="${escapeHtml(layer.num)}" tabindex="0" role="button" aria-label="展開 ${escapeHtml(layer.title)} 詳細">
@@ -664,7 +742,7 @@ async function reloadSection(section, isPremium) {
     // 連動更新 chain，因為 chain 的 force metric 來自 capital-flow
     const chainHost = document.getElementById('md-chain-host');
     const cross = await silentGetJSON('/api/cross-market/status');
-    if (chainHost) renderChain(chainHost, r, cross, capitalData, true);
+    if (chainHost) renderChain(chainHost, r, cross, capitalData, null, true);
     if (section === 'period') {
       const host = document.getElementById('md-period-host');
       if (host) renderPeriodCard(host, r, true, !r);
@@ -699,12 +777,13 @@ export async function loadMethodologyData() {
   const tier = await getTier();
   const isPremium = tier === 'premium';
 
-  // 四個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
-  const [report, regime, cross, capital] = await Promise.all([
+  // 五個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
+  const [report, regime, cross, capital, capitalFlowHistory] = await Promise.all([
     isPremium ? silentGetJSON('/api/reports/latest') : Promise.resolve(null),
     silentGetJSON('/api/regime/history'),
     silentGetJSON('/api/cross-market/status'),
     isPremium ? silentGetJSON('/api/capital-flow/summary') : Promise.resolve(null),
+    silentGetJSON('/api/capital-flow/history?days=20'), // sparkline 用，無 tier gate
   ]);
 
   // capital-flow fallback：summary 若無 forces，嘗試 daily
@@ -741,7 +820,7 @@ export async function loadMethodologyData() {
 
   // 3. 鏈圖（結構全 tier 可見；數值區獨立 error/empty/tier-gate）
   const chainHost = document.getElementById('md-chain-host');
-  if (chainHost) renderChain(chainHost, report, cross, capitalData, isPremium);
+  if (chainHost) renderChain(chainHost, report, cross, capitalData, capitalFlowHistory, isPremium);
 
   // 4. 策略推薦
   const recHost = document.getElementById('md-recommend-host');
