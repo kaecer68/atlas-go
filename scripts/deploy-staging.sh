@@ -27,6 +27,18 @@ echo "[1/4] git pull --ff-only"
 git pull --ff-only
 
 echo "[2/4] docker compose build && up -d"
+
+# Binary freshness gate: refuse to deploy if binaries are stale vs HEAD.
+echo "[Gate] checking binary freshness..."
+if ! make -s check-binaries; then
+	echo ""
+	echo "ERROR: at least one deployed binary is stale (binary Commit != git HEAD)."
+	echo "  Fix: make rebuild-all"
+	echo ""
+	exit 1
+fi
+
+
 ( cd "$COMPOSE_DIR" && ATLAS_GIT_COMMIT="$(git rev-parse HEAD)" docker compose build atlas && ATLAS_GIT_COMMIT="$(git rev-parse HEAD)" docker compose up -d )
 
 # Step 3: wait for /health endpoint (max 60s)

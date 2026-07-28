@@ -700,3 +700,66 @@ jobs:
 
     - name: Check port references against constants/port.go
       run: bash scripts/ci/check_doc_ports.sh
+
+  # Check that every binary build path has the ldflags for Commit injection.
+  # Prevents the "source changed but binary not rebuilt" structural gap.
+  login-gate:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - name: Verify binary freshness contracts
+      run: bash tests/scripts/test-binary-freshness-guard.sh
+
+  # Aggregate gate — fails if any hard-fail job (excl. skipped) fails.
+  # Required check for GitHub branch protection.
+  quality-gate:
+    needs:
+      - build-gate
+      - frontend-build
+      - fmt
+      - lint
+      - staticcheck
+      - naming
+      - frontend-imports
+      - generate
+      - field-contract
+      - coverage
+      - maturity
+      - check-versions
+      - agent-prompts
+      - markdown-links
+      - mcp-tool-count
+      - check-routes
+      - check-contracts
+      - agents-consistency
+      - agents-md-lines
+      - traps-md-lines
+      - docs-only-gate
+      - channel-index
+      - factor-integrity
+      - validate-parameters
+      - release-check
+      - calibration-smoke
+      - check-orphan-artifacts
+      - data-naming
+      - doc-ports
+      - data-catalog
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Aggregate results
+      run: |
+        FAILED_JOBS=""
+        for job in ${{ join(needs.*.result, ' ') }}; do
+          echo "  job result: $job"
+        done
+        # Get the actual results from needs context
+        RESULTS="${{ toJson(needs) }}"
+        echo "All results: $RESULTS"
+        if echo "$RESULTS" | grep -q '"result":"failure"'; then
+          echo "::error::At least one required quality check failed"
+          exit 1
+        fi
+        echo "✓ all quality checks passed"

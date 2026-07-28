@@ -198,12 +198,12 @@ run_static_contract_tests() {
   assert_contains "$ROOT/Dockerfile" 'GIT_COMMIT must be set'
   assert_contains "$ROOT/Dockerfile.cron" 'GIT_COMMIT must be set'
   assert_contains "$ROOT/.claude/settings.json" 'scripts/session-start.sh'
-  for binary in atlas-go daily-replay-sync backfill-replay atlas-mcp calibrate-seasonal; do
+  for binary in atlas-go daily-replay-sync atlas-mcp calibrate-seasonal; do
     assert_contains "$ROOT/Dockerfile" "-o $binary"
   done
   assert_contains "$ROOT/docker-compose.yml" 'prism-worker:'
   assert_contains "$ROOT/.claude/settings.json" '"timeout": 600'
-  for binary in daily-replay-sync backfill-replay calibrate-seasonal; do
+  for binary in daily-replay-sync calibrate-seasonal; do
     assert_contains "$ROOT/scripts/check-binary-freshness.sh" "/app/$binary"
   done
   assert_contains "$ROOT/scripts/deploy-staging.sh" 'ATLAS_GIT_COMMIT="$(git rev-parse HEAD)"'

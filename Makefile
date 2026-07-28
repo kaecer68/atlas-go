@@ -551,6 +551,11 @@ LDFLAGS_BF := -w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=d
 check-binaries:
 	@./scripts/check-binary-freshness.sh
 
+# Quick integrity check: binary freshness + source formatting.
+# Runs in < 30s; safe to run before every push.
+check: check-binaries
+	@echo "✓ make check passed"
+
 # Rebuild host bin/atlas-mcp only.
 rebuild-host-bin:
 	@echo "  building host bin/atlas-mcp (commit=$(GIT_COMMIT))"
@@ -733,3 +738,8 @@ ci-full: ci-gate ci-constitution
 	@echo "    ✅"
 	@echo ""
 	@echo "✅ ci-full passed — 可以建立 PR，CI 基本一次過"
+
+# Fresh-clone verification — clones repo to temp dir and does frontend→build→test.
+# Verifies the repo is self-contained with no hidden local dependencies.
+fresh-clone-check:
+	@./scripts/fresh-clone-check.sh

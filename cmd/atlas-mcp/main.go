@@ -39,6 +39,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ import (
 	"strings"
 
 	"github.com/kaecer68/atlas-go/cmd/atlas-mcp/server"
+	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/db"
 )
@@ -59,11 +61,18 @@ func main() {
 		"MCP transport: stdio | sse | streamable-http (CLI > env ATLAS_MCP_TRANSPORT > stdio)")
 	addrFlag := fs.String("addr", "",
 		"listen address for sse/streamable-http (CLI > env ATLAS_MCP_ADDR > 127.0.0.1:9090)")
+	versionFlag := fs.Bool("version", false, "print version and exit")
+
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		// ExitOnError already exits; this branch is defensive.
 		log.Fatalf("atlas-mcp: parse flags: %v", err)
 	}
 
+	if *versionFlag {
+		info := buildinfo.Current()
+		fmt.Printf("atlas-mcp %s (commit %s, built %s, %s)\n", info.Version, info.Commit, info.BuildTime, info.GoVersion)
+		return
+	}
 	adminToken := os.Getenv("ATLAS_MCP_ADMIN_TOKEN")
 	adminAddr := os.Getenv("ATLAS_MCP_ADMIN_ADDR")
 	if adminToken != "" && adminAddr == "" {

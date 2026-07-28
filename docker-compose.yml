@@ -3,8 +3,16 @@ services:
   atlas:
     build:
       context: .
+      # Use Dockerfile.atlas.local by default (host pre-built binary).
+      # Switch to Dockerfile for pure-Docker CI builds.
       dockerfile: Dockerfile.atlas.local
-      # args not needed for Dockerfile.atlas.local (host-built binary)
+      args:
+        # Local and CI builds must provide the source commit explicitly. An image
+        # with `Commit=unknown` cannot pass the binary freshness gate.
+        VERSION: ${ATLAS_VERSION:-dev}
+        GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        # Pass through ATLAS_WARMUP; unset = default enabled.
+        WARMUP: ${ATLAS_WARMUP:-}
     container_name: atlas-go
     restart: unless-stopped
     command: ["-api", "-live", "-addr", ":18080", "-fubon-port", "18081"]  
@@ -28,6 +36,7 @@ services:
       # here, which silently broke all local dev since the shell
       # var is unset. Removed in favor of env_file-only path.
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - ATLAS_WARMUP=${ATLAS_WARMUP:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
