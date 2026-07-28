@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1625,7 +1626,9 @@ func (a *DashboardAPI) GetIndustryService() *service.IndustryService {
 func (a *DashboardAPI) HandleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	json.NewEncoder(w).Encode(buildinfo.Current())
+	if err := json.NewEncoder(w).Encode(buildinfo.Current()); err != nil {
+		log.Printf("[api/version] encode error: %v", err)
+	}
 }
 
 // RecordCycleCalibrationOutcome stores a calibration data point for the
