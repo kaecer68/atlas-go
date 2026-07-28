@@ -62,14 +62,19 @@ func (p *liveDailyReportProvider) FetchCapital() (dailyreport.CapitalSection, er
 		switch f.Force {
 		case capitalflow.ForceForeign:
 			sec.Foreign = capitalTrendLabel(f.Trend)
+			sec.ForeignValue = f.RawValue
 		case capitalflow.ForceInstitutional:
 			sec.Institutional = capitalTrendLabel(f.Trend)
+			sec.InstitutionalValue = f.RawValue
 		case capitalflow.ForceDealer:
 			sec.Dealer = capitalTrendLabel(f.Trend)
+			sec.DealerValue = f.RawValue
 		case capitalflow.ForceGovernment:
 			sec.Government = capitalTrendLabel(f.Trend)
+			sec.GovernmentValue = f.RawValue
 		case capitalflow.ForceRetail:
 			sec.Retail = capitalTrendLabel(f.Trend)
+			sec.RetailValue = f.RawValue
 		}
 	}
 	return sec, nil
