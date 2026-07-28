@@ -2,14 +2,14 @@
 
 ## Canonical Count
 
-- **39 channel IDs** are defined in `internal/apigateway/gateway.go` (`channelIDs`) (canonical list for circuit breaker / health scan / summary API).
+- **40 channel IDs** are defined in `internal/apigateway/gateway.go` (`channelIDs`) (canonical list for circuit breaker / health scan / summary API).
 - Actual runtime registration is conditional on API keys / feature flags in `internal/apigateway/register_adapters.go:17-315`.
 
 ## Registered Channel Categories
 
 | Category | Channels | Condition |
 |----------|----------|-----------|
-| TWSE official | `twse_replay`, `twse_capital_flow`, `twse_margin`, `twse_sector_index`, `twse_oddlot`, `twse_etf`, `twse_insider` | always registered |
+| TWSE official | `twse_replay`, `twse_capital_flow`, `twse_margin`, `twse_sector_index`, `twse_oddlot`, `twse_etf`, `twse_insider`, `market_volume` | always registered |
 | TAIFEX official | `taifex_daily`, `taifex_institutional` | always registered |
 | Yahoo Finance | `us_yahoo`, `sox_index`, `dram_spot_price`, `us_spx`, `us_ndx`, `us_dji`, `taiex_index`, `tw_vol`, `us_nvda`, `us_aapl`, `us_msft`, `tsm_adr` | `YahooEnabled` |
 | FinMind | `finmind` | `FINMIND_API_KEY` |
@@ -29,4 +29,4 @@
 
 ## Constitution Baseline
 
-`internal/apigateway/CONSTITUTION.md` was revised to **v1.3** on 2026-07-25 and states **39 channels**. The `a1-channels.json` / `a2-tasks.json` artifacts in this manifest are the source of truth for the canonical channel list and task registry. `scripts/ci/check_channel_index.py` (wired to CI) verifies that the JSON channel count and IDs stay synchronized with `internal/apigateway/gateway.go`. If a developer adds a runtime channel registration without updating the canonical list or this manifest, CI will fail.
+`internal/apigateway/CONSTITUTION.md` was revised to **v1.3** on 2026-07-25 and states **40 channels**. The `a1-channels.json` / `a2-tasks.json` artifacts in this manifest are the source of truth for the canonical channel list and task registry. `scripts/ci/check_channel_index.py` (wired to CI) verifies that the JSON channel count and IDs stay synchronized with `internal/apigateway/gateway.go`. If a developer adds a runtime channel registration without updating the canonical list or this manifest, CI will fail.

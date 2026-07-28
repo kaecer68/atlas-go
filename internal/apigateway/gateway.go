@@ -203,6 +203,7 @@ func channelIDs() []string {
 		"twse_sector_index",
 		"sector_data",
 		"day_trading",
+		"market_volume",
 		"bdi",
 		"taifex_daily",
 		"taifex_institutional",

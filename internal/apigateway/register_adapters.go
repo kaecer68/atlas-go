@@ -250,6 +250,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("day_trading", dayTradingAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "day_trading")
 
+	// --- TWSE Market Volume (集中市場成交金額, no API key required) ---
+	marketVolumeAdapter := NewMarketVolumeChannelAdapter()
+	g.registry.Register("market_volume", marketVolumeAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "market_volume")
+
 	// --- TAIFEX Daily (PCR, retail futures OI — no API key required) ---
 	taifexAdapter := NewTaifexChannelAdapter()
 	g.registry.Register("taifex_daily", taifexAdapter)

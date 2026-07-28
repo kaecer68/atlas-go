@@ -1,5 +1,5 @@
 {
-  "canonical_channel_count": 39,
+  "canonical_channel_count": 40,
   "registered_channels": [
     {"id": "us_yahoo", "source": "query1.finance.yahoo.com", "status": "conditional (YahooEnabled)"},
     {"id": "twse_replay", "source": "TWSE", "status": "registered"},
@@ -21,6 +21,7 @@
     {"id": "twse_sector_index", "source": "TWSE", "status": "registered"},
     {"id": "sector_data", "source": "state dir (operator imported)", "status": "file-backed"},
     {"id": "day_trading", "source": "www.twse.com.tw/exchangeReport/TWTB4U", "status": "registered"},
+    {"id": "market_volume", "source": "www.twse.com.tw/exchangeReport/MI_INDEX?type=MS", "status": "registered"},
     {"id": "bdi", "source": "quote.cnbc.com", "status": "registered"},
     {"id": "taifex_daily", "source": "openapi.taifex.com.tw", "status": "registered"},
     {"id": "taifex_institutional", "source": "openapi.taifex.com.tw", "status": "registered"},
@@ -48,8 +49,8 @@
   "constitution_baseline": {
     "document_version": "v1.3",
     "document_date": "2026-07-25",
-    "document_claimed_channels": 39,
-    "actual_canonical_ids": 39,
+    "document_claimed_channels": 40,
+    "actual_canonical_ids": 40,
     "actual_runtime_registrations": "22-33 depending on API keys and feature flags"
   },
   "notes": "39 canonical IDs live in internal/apigateway/gateway.go (channelIDs). Runtime registration in register_adapters.go is conditional on keys and feature flags. CI check scripts/ci/check_channel_index.py ensures the JSON manifest stays synchronized with the Go canonical list."
