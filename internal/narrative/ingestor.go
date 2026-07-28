@@ -196,6 +196,9 @@ func mergeWithPrev(curr, prev marketdata.MacroDataSnapshot) marketdata.MacroData
 	if curr.RetailMarginBalance.Symbol == "" {
 		curr.RetailMarginBalance = prev.RetailMarginBalance
 	}
+	if curr.MarginMaintenanceRatio.Symbol == "" {
+		curr.MarginMaintenanceRatio = prev.MarginMaintenanceRatio
+	}
 	if curr.TSMCRevenue.Symbol == "" {
 		curr.TSMCRevenue = prev.TSMCRevenue
 	}

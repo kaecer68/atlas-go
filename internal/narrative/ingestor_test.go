@@ -325,6 +325,25 @@ func TestMergeWithPrev_BDI(t *testing.T) {
 	}
 }
 
+func TestMergeWithPrev_MarginMaintenanceRatio(t *testing.T) {
+	// Test 1: prev MarginMaintenanceRatio propagates when curr empty
+	prev := marketdata.MacroDataSnapshot{
+		MarginMaintenanceRatio: marketdata.MacroDataPoint{Symbol: "TSE_MARGIN_MAINT", Value: 165.5},
+	}
+	curr := marketdata.MacroDataSnapshot{}
+	result := mergeWithPrev(curr, prev)
+	if result.MarginMaintenanceRatio.Symbol != "TSE_MARGIN_MAINT" || result.MarginMaintenanceRatio.Value != 165.5 {
+		t.Errorf("mergeWithPrev: expected MarginMaintenanceRatio 165.5 from prev, got %+v", result.MarginMaintenanceRatio)
+	}
+
+	// Test 2: curr MarginMaintenanceRatio takes precedence over prev
+	curr.MarginMaintenanceRatio = marketdata.MacroDataPoint{Symbol: "TSE_MARGIN_MAINT", Value: 170.0}
+	result = mergeWithPrev(curr, prev)
+	if result.MarginMaintenanceRatio.Value != 170.0 {
+		t.Errorf("mergeWithPrev: expected curr MarginMaintenanceRatio 170.0 to override, got %+v", result.MarginMaintenanceRatio)
+	}
+}
+
 func TestSnapshotDirAccessor(t *testing.T) {
 	dir := t.TempDir()
 	ingestor := NewMacroIngestor(&marketdata.MockMacroProvider{}, dir)

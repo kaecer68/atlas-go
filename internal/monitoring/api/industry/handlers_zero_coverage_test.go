@@ -236,54 +236,41 @@ func TestHandleIndustryCalibration_NotCalibrated(t *testing.T) {
 }
 
 // =====================================================================
-// HandleCalendarEvents
+// /api/dashboard/calendar-events → 308 redirect to /api/events/calendar
 // =====================================================================
 
-// Service is nil → 500.
-func TestHandleCalendarEvents_ServiceNil(t *testing.T) {
-	h := &Handlers{Svc: nil}
-	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/calendar-events", nil)
+func TestCalendarEventsRedirect_PreservesQuery(t *testing.T) {
+	mux := http.NewServeMux()
+	(&Handlers{}).RegisterRoutes(mux)
 
-	status, body := h.HandleCalendarEvents(req)
-	if status != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %v", status, body)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/calendar-events?start=2026-07-01&end=2026-07-31", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusPermanentRedirect {
+		t.Fatalf("expected 308, got %d", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	expected := "/api/events/calendar?start=2026-07-01&end=2026-07-31"
+	if loc != expected {
+		t.Fatalf("expected Location %q, got %q", expected, loc)
 	}
 }
 
-// Service present but EventCalendar is nil → 500.
-func TestHandleCalendarEvents_CalendarNil(t *testing.T) {
-	h := setupIndustryHandlers()
-	h.Svc.EventCalendar = nil
+func TestCalendarEventsRedirect_NoQuery(t *testing.T) {
+	mux := http.NewServeMux()
+	(&Handlers{}).RegisterRoutes(mux)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/calendar-events", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
 
-	status, body := h.HandleCalendarEvents(req)
-	if status != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %v", status, body)
+	if w.Code != http.StatusPermanentRedirect {
+		t.Fatalf("expected 308, got %d", w.Code)
 	}
-}
-
-// Normal path: returns events list.
-func TestHandleCalendarEvents_Happy(t *testing.T) {
-	h := setupIndustryHandlers()
-	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/calendar-events", nil)
-
-	status, body := h.HandleCalendarEvents(req)
-	if status != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %v", status, body)
-	}
-	resp, ok := body.(map[string]any)
-	if !ok {
-		t.Fatalf("expected map, got %T", body)
-	}
-	if resp["events"] == nil {
-		t.Fatal("expected non-nil events")
-	}
-	count, ok := resp["count"].(int)
-	if !ok {
-		t.Fatal("expected count int")
-	}
-	if count < 0 {
-		t.Errorf("expected non-negative count, got %d", count)
+	loc := w.Header().Get("Location")
+	if loc != "/api/events/calendar" {
+		t.Fatalf("expected Location %q, got %q", "/api/events/calendar", loc)
 	}
 }
 
