@@ -344,10 +344,15 @@ export interface CapitalPhaseConfig {
 
 export interface CapitalSection {
   foreign: string;
+  foreign_value?: number;
   institutional: string;
+  institutional_value?: number;
   dealer: string;
+  dealer_value?: number;
   government: string;
+  government_value?: number;
   retail: string;
+  retail_value?: number;
   resonance: number;
   quality: string;
 }
@@ -3127,6 +3132,7 @@ export interface RegimeSessionEntry {
   date: string;
   regime: string;
   period?: string;
+  market_period?: string;
   period_name_zh?: string;
   recorded_at: string;
   source?: string;

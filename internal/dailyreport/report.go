@@ -46,13 +46,18 @@ type GlobalOverview struct {
 }
 
 type CapitalSection struct {
-	Foreign       string  `json:"foreign"`
-	Institutional string  `json:"institutional"`
-	Dealer        string  `json:"dealer"`
-	Government    string  `json:"government"`
-	Retail        string  `json:"retail"`
-	Resonance     float64 `json:"resonance"`
-	Quality       string  `json:"quality"`
+	Foreign            string  `json:"foreign"`
+	ForeignValue       float64 `json:"foreign_value,omitempty"`
+	Institutional      string  `json:"institutional"`
+	InstitutionalValue float64 `json:"institutional_value,omitempty"`
+	Dealer             string  `json:"dealer"`
+	DealerValue        float64 `json:"dealer_value,omitempty"`
+	Government         string  `json:"government"`
+	GovernmentValue    float64 `json:"government_value,omitempty"`
+	Retail             string  `json:"retail"`
+	RetailValue        float64 `json:"retail_value,omitempty"`
+	Resonance          float64 `json:"resonance"`
+	Quality            string  `json:"quality"`
 }
 
 type EventsSection struct {

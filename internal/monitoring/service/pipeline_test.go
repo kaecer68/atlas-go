@@ -923,6 +923,26 @@ func (m *mockHistoricalStore) CountSynthetic(_ context.Context) (map[string]int6
 	return map[string]int64{}, nil
 }
 
+func (m *mockHistoricalStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error {
+	return nil
+}
+
+func (m *mockHistoricalStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+
+func (m *mockHistoricalStore) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+
+func (m *mockHistoricalStore) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
+
+func (m *mockHistoricalStore) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return nil, nil
+}
+
 func (m *mockHistoricalStore) Close() error {
 	return nil
 }
