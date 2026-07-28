@@ -488,6 +488,7 @@ func run(args []string, deps appDeps) error {
 		var stRegistry *strategy_techniques.Registry
 		var stHandlers *apistrategies.Handlers
 		var stSeedsPath string
+		var methodologyAdvisor *methodology.Advisor
 
 		// Exclusive atlas-http claim always runs first so a healthy Docker
 		// (or leftover native) instance fails fast before expensive bootstrap.
@@ -903,6 +904,7 @@ func run(args []string, deps appDeps) error {
 				EventCalendar:    eventCalendar,
 				CapitalFlowStore: capitalFlowStore,
 			})
+			methodologyAdvisor = deps.MethodologyAdvisor
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
 			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
 				anyDepsWired(deps))
@@ -1674,6 +1676,9 @@ func run(args []string, deps appDeps) error {
 				stHandlers = apistrategies.NewHandlers(stRegistry,
 					apistrategies.NewFeedbackStore(filepath.Join(cfg.LedgerDir, "strategy_feedback")))
 				dashboard.SetStrategiesHandlers(stHandlers)
+				if methodologyAdvisor != nil {
+					dashboard.SetStrategiesMethodologyAdvisor(methodologyAdvisor)
+				}
 				// Re-register: RegisterAllRoutes ran before SetStrategiesHandlers,
 				strategyFeedbackStore = stHandlers.FeedbackStore
 				// so the original call encountered a nil handler. nil-safe.

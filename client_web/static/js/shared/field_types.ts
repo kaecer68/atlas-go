@@ -2980,6 +2980,11 @@ export interface RangeFilter {
   max?: number | null;
 }
 
+export interface RankedBriefEntry {
+  id: string;
+  category: string;
+}
+
 export interface RealtimeParameters {
   volatility_threshold: string;
   volume_spike_threshold: string;
@@ -3758,6 +3763,7 @@ export interface StrategyFrameSummary {
   attribution: string[];
   measured: boolean;
   last_backtest_date?: string;
+  category?: string;
 }
 
 export interface StrategyParameters {
@@ -3771,6 +3777,7 @@ export interface StrategyRecommendation {
   active?: string;
   available?: string[];
   ranked?: string[];
+  ranked_brief?: RankedBriefEntry[];
   entry_signal?: string;
   stop_loss?: string;
 }
