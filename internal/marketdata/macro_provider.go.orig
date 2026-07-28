@@ -101,7 +101,6 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 		GovernmentNet        *MacroDataPoint `json:"government_net,omitempty"`
 		ExportElectronics    *MacroDataPoint `json:"export_electronics,omitempty"`
 		RetailMarginBalance  *MacroDataPoint `json:"retail_margin_balance,omitempty"`
-		MarginMaintenanceRatio *MacroDataPoint `json:"margin_maintenance_ratio,omitempty"`
 		RetailShortBalance   *MacroDataPoint `json:"retail_short_balance,omitempty"`
 		TSMCRevenue          *MacroDataPoint `json:"tsmc_revenue,omitempty"`
 		SOXIndex             *MacroDataPoint `json:"sox_index,omitempty"`
@@ -171,9 +170,6 @@ func (s MacroDataSnapshot) MarshalJSON() ([]byte, error) {
 	}
 	if s.RetailMarginBalance.Symbol != "" {
 		aux.RetailMarginBalance = &s.RetailMarginBalance
-	}
-	if s.MarginMaintenanceRatio.Symbol != "" {
-		aux.MarginMaintenanceRatio = &s.MarginMaintenanceRatio
 	}
 	if s.RetailShortBalance.Symbol != "" {
 		aux.RetailShortBalance = &s.RetailShortBalance
@@ -378,9 +374,6 @@ func mergeSnapshot(dst *MacroDataSnapshot, src MacroDataSnapshot) {
 	}
 	if src.RetailMarginBalance.Symbol != "" {
 		dst.RetailMarginBalance = src.RetailMarginBalance
-	}
-	if src.MarginMaintenanceRatio.Symbol != "" {
-		dst.MarginMaintenanceRatio = src.MarginMaintenanceRatio
 	}
 	if src.RetailShortBalance.Symbol != "" {
 		dst.RetailShortBalance = src.RetailShortBalance
