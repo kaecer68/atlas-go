@@ -788,6 +788,8 @@ func run(args []string, deps appDeps) error {
 		// gateway is unavailable; operations_tasks gates the refresh
 		// task registration on this being non-nil.
 		var capitalFlowService *capitalflow.Service
+		var edHandler *eventdriven.Handler
+		var recommenderEventPredictor recommender.EventPredictor
 
 		if gatewayFetcher != nil {
 			macroProvider = monitoring.NewMacroDataGatewayAdapter(gatewayFetcher)
@@ -858,7 +860,7 @@ func run(args []string, deps appDeps) error {
 			// below this line — duplicate mux.Handle will panic on startup.
 			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
 			// All event/* routes are owned by RegisterRoutesWithDetectors.
-			edHandler := eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			edHandler = eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
@@ -904,11 +906,23 @@ func run(args []string, deps appDeps) error {
 				EventCalendar:    eventCalendar,
 				CapitalFlowStore: capitalFlowStore,
 			})
+			recommenderEventPredictor = deps.EventPredictor
 			methodologyAdvisor = deps.MethodologyAdvisor
 			recommender.RegisterRoutesWithDeps(mux, *subStore, jwtMgr, deps, devMode)
 			log.Printf("[Recommender] registered /api/recommendations route (real services: %v)",
 				anyDepsWired(deps))
 		}
+
+		// Startup eager warmup: fill TTL caches before the first user request
+		// arrives. Runs in a background goroutine; does NOT block server listen.
+		// Set ATLAS_WARMUP=0 to disable.
+		go monitoring.RunWarmup(monitoring.WarmupDeps{
+			MacroProvider:    macroProvider,
+			CapitalFlowSvc:   capitalFlowService,
+			EventHandler:     edHandler,
+			NarrativeHandler: dashboard.NarrativeHandlers(),
+			EventPredictor:   recommenderEventPredictor,
+		})
 
 		dailyRptGen.SetRegimeProvider(func() domain.Regime {
 			summary, _ := monitoringservice.FindLatestSessionSummary(ledger.NewStore(cfg.LedgerDir), cfg.LedgerDir)

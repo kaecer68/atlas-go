@@ -130,6 +130,7 @@ type DashboardAPI struct {
 	crisisModeSetter     func(active bool) // callback: VIX>=35 → optimizer crisis mode
 	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
 	crossMarketSvc       *service.CrossMarketService
+	narrativeHandlers    *apinarrative.Handlers
 }
 
 // SetCompositionRoot wires the dashboard's shared WeightEngine into the
@@ -1331,12 +1332,17 @@ func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	svc := service.NewNarrativeService(a.workDir, a.narrativeEngine, a.reportGenerator).
 		WithHistoricalStore(a.historicalStore)
 	svc.SetMacroProvider(a.macroProvider)
-	svc.SetGeoProvider(a.geoProvider)
-	handlers := &apinarrative.Handlers{
+	a.narrativeHandlers = &apinarrative.Handlers{
 		Svc:             svc,
 		IndustryService: a.industryService,
 	}
-	handlers.RegisterRoutes(mux)
+	a.narrativeHandlers.RegisterRoutes(mux)
+}
+
+// NarrativeHandlers returns the narrative API handlers so warmup can call
+// BuildBundle directly through the same code path as the HTTP handler.
+func (a *DashboardAPI) NarrativeHandlers() *apinarrative.Handlers {
+	return a.narrativeHandlers
 }
 
 func (a *DashboardAPI) RegisterControlRoutes(mux *http.ServeMux) {
