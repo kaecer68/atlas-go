@@ -201,6 +201,7 @@ var (
 	_ DataProvider = (*TWSEMarginChannelAdapter)(nil)
 	_ DataProvider = (*TWSEETFChannelAdapter)(nil)
 	_ DataProvider = (*TWSEOddLotChannelAdapter)(nil)
+	_ DataProvider = (*MarketVolumeChannelAdapter)(nil)
 	_ DataProvider = (*TWSESectorIndexChannelAdapter)(nil)
 )
 

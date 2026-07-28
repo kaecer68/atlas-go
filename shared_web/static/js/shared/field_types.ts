@@ -2222,6 +2222,11 @@ export interface MarketLight {
   events_today: string[];
 }
 
+export interface MarketVolumeResult {
+  market_volume: number;
+  date: string;
+}
+
 export interface MarketdataParameters {
   twse_api_rate_limit: string;
   twse_api_rate_burst: string;
@@ -4567,6 +4572,19 @@ export interface twseIndexItem {
   漲跌: string;
   漲跌點數: string;
   漲跌百分比: string;
+}
+
+export interface twseMIIndexResponse {
+  stat: string;
+  date: string;
+  tables: twseMITable[];
+}
+
+export interface twseMITable {
+  title: string;
+  fields: string[];
+  data: string[][];
+  notes: string[];
 }
 
 export interface twseMarginResponse {
