@@ -87,6 +87,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 		{channelID: "government_flow", apply: a.applyGovernmentFlow},
 		{channelID: "twse_insider", apply: a.applyInsiderTrading},
 		{channelID: "market_volume", apply: a.applyMarketVolume},
+		{channelID: "twse_margin", apply: a.applyMargin},
 		{channelID: "day_trading", apply: a.applyDayTradeRatioFromStats},
 	}
 

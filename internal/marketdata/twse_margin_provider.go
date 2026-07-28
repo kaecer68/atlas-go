@@ -86,14 +86,18 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 				},
 				RecordedAt: ts,
 			}
-			// Fetch maintenance ratio (best-effort: TWSE endpoint may be unavailable;
-			// leave the field empty on failure so the snapshot flow never breaks).
+			// Fetch maintenance ratio (best-effort: TWSE endpoint MI_MARGN does not
+			// return the aggregate maintenance ratio; this field is expected to be
+			// empty until a suitable data source is found).
 			if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
 				snap.MarginMaintenanceRatio = MacroDataPoint{
 					Symbol:    "TSE_MARGIN_MAINT",
 					Value:     ratio,
 					Timestamp: ts,
 				}
+			} else {
+				logging.Warn("twse_margin_provider", "maintenance_ratio_fetch_failed",
+					logging.Err(rerr), logging.FStr("date", dateStr))
 			}
 			return snap, nil
 		}
@@ -180,6 +184,11 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 // fetchMaintenanceRatio fetches the aggregate margin maintenance ratio from TWSE.
 //
 // Endpoint: TWSE MI_MARGN?selectType=ALL.
+// NOTE: As of 2026-07-28 investigation (B4c), TWSE MI_MARGN does NOT return a
+// maintenance ratio table — the actual response only contains margin balance
+// and per-stock detail tables. The aggregate maintenance ratio is not available
+// from this endpoint or the TWSE OpenAPI. This field is expected to remain
+// empty until a suitable data source is identified.
 // Returns the aggregate maintenance ratio (%) for the given date.
 func (t *TWSEMarginBalanceProvider) fetchMaintenanceRatio(ctx context.Context, dateStr string) (float64, error) {
 	if err := t.rateLimiter.Wait(ctx); err != nil {

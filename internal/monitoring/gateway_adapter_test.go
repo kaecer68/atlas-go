@@ -654,6 +654,36 @@ func TestApplyBDI(t *testing.T) {
 	}
 }
 
+func TestMacroDataGatewayAdapter_FetchSnapshotIncludesMargin(t *testing.T) {
+	marginFetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		if channelID == "twse_margin" {
+			snap := marketdata.MacroDataSnapshot{
+				RetailMarginBalance:    marketdata.MacroDataPoint{Symbol: "MARGIN", Value: 2000.0},
+				RetailShortBalance:     marketdata.MacroDataPoint{Symbol: "SHORT", Value: 500.0},
+				MarginMaintenanceRatio: marketdata.MacroDataPoint{Symbol: "TSE_MARGIN_MAINT", Value: 165.5},
+			}
+			b, _ := json.Marshal(snap)
+			return b, FetchMeta{}, nil
+		}
+		return nil, FetchMeta{Stale: true}, nil
+	}
+
+	gw := NewMacroDataGatewayAdapter(marginFetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot failed: %v", err)
+	}
+	if snap.RetailMarginBalance.Symbol != "MARGIN" || snap.RetailMarginBalance.Value != 2000.0 {
+		t.Errorf("expected RetailMarginBalance 2000, got %+v", snap.RetailMarginBalance)
+	}
+	if snap.RetailShortBalance.Symbol != "SHORT" || snap.RetailShortBalance.Value != 500.0 {
+		t.Errorf("expected RetailShortBalance 500, got %+v", snap.RetailShortBalance)
+	}
+	if snap.MarginMaintenanceRatio.Symbol != "TSE_MARGIN_MAINT" || snap.MarginMaintenanceRatio.Value != 165.5 {
+		t.Errorf("expected MarginMaintenanceRatio 165.5, got %+v", snap.MarginMaintenanceRatio)
+	}
+}
+
 func TestApplySectorData(t *testing.T) {
 	a, snap := newApplyFixture()
 	a.applySectorData(snap, []byte(`{"anything":true}`))
