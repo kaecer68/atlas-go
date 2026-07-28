@@ -324,6 +324,20 @@ func (h *Handlers) HandleNarrativeBundle(r *http.Request) (int, any) {
 	return http.StatusOK, result
 }
 
+// PrimeBundleCache warms the narrative bundle TTL cache by calling BuildBundle
+// and storing the result. Warmup uses this to avoid a cold cache miss on the
+// first HTTP request to /api/narrative/bundle.
+func (h *Handlers) PrimeBundleCache(ctx context.Context, data narrative.MarketNarrativeData) {
+	result, err := h.BuildBundle(ctx, data)
+	if err != nil {
+		logging.Warn("narrative_handlers", "prime_bundle_cache_failed", logging.Err(err))
+		return
+	}
+	h.bundleMu.Lock()
+	h.bundleCache = &bundleCacheEntry{data: result, cachedAt: time.Now()}
+	h.bundleMu.Unlock()
+}
+
 func (h *Handlers) HandleStressIndexCurrent(r *http.Request) (int, any) {
 	idx := h.Svc.GetCurrentStressIndex()
 	date := ""

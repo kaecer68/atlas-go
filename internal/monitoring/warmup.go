@@ -7,7 +7,7 @@
 // P0 single-flight 保證：熱機期間的請求與熱機共用同一個 gateway/macro
 // cache 的 double-check locking（不會重複 fan-out）。capitalflow Summary
 // 共用同一個 in-memory cachedReport。事件預測共用 Handler 的 60s TTL
-// cache。narrative bundle 共用 Handlers 的 BuildBundle。recommender
+// cache。narrative bundle 共用 Handlers 的 BundleCache。recommender
 // PredictToday 共用 eventPredictorAdapter 的 60s TTL cache。
 package monitoring
 
@@ -43,7 +43,7 @@ type WarmupDeps struct {
 	// EventHandler for HandlePrediction (60s PredictionCacheTTL).
 	EventHandler *eventdriven.Handler
 
-	// NarrativeHandler for BuildBundle (narrative events + chains + models).
+	// NarrativeHandler for PrimeBundleCache (fills HTTP-level bundle TTL).
 	NarrativeHandler *apinarrative.Handlers
 
 	// EventPredictor for PredictToday (60s predictTodayCacheTTL in eventPredictorAdapter).
@@ -100,9 +100,11 @@ func RunWarmup(deps WarmupDeps) {
 			if deps.NarrativeHandler == nil {
 				return fmt.Errorf("skipped: NarrativeHandler is nil")
 			}
-			// Zero data for warmup — no query-param overrides in this path.
-			_, err := deps.NarrativeHandler.BuildBundle(ctx, narrativepkg.MarketNarrativeData{})
-			return err
+			// PrimeBundleCache fills the HTTP-level bundle TTL cache
+			// (30s BundleCacheTTL) so the first request hits cache,
+			// not the full assembly cold path.
+			deps.NarrativeHandler.PrimeBundleCache(ctx, narrativepkg.MarketNarrativeData{})
+			return nil
 		}},
 		{"recommender_predict_today", func(ctx context.Context) error {
 			if deps.EventPredictor == nil {
