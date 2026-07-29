@@ -101,3 +101,15 @@
   - Dashboard API adapter 接入（`persistPeriodHistory` + `RegisterRoutes`）
   - 2026-07-28 黑天鵝事件正確改判（TAIEXMA20 由零 → 可用，consolidation → black_swan）
   - 偵測邏輯（`period_detector.go`）零改動
+
+## B5-2 — PeriodIndicators Batch 2（進行中 — 待 PR 審查）
+
+- **分支**：`fix/20260729-b5-batch2-chipstats-fill`
+- **涵蓋**：
+  - W1: `input_available` 語義升級（窗口統計改為有效非零點數守門，附誠實降級）
+  - W2: 外資多日統計填充（7 欄位：Net5DayAvg, Net10DayAvg, NetPeakSell, BuyDays10, SellDays10, ConsecBuyDays, ConsecSellDays）
+  - W3: 期貨統計填充（2 欄位：FuturesOIPrev, FuturesOIDelta3）
+  - W4: 融資統計填充（2 欄位：MarginBalancePeak, MarginBalanceChange5D）
+  - W5: 黃金測試（84 snapshot 回測，b5-batch2-backtest.txt）
+  - 35 個單元測試（涵蓋 Batch 1+2 正常/降級/確定性）
+  - `period_detector.go` / `period_history` / ledger 寫入路徑零改動

@@ -185,10 +185,33 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 // ── helpers ──
 
 func findWorkDir() string {
-	// Walk up from cwd to find go.mod.
+	// Walk up from cwd to find go.mod then check for data/state/macro.
+	// In a git worktree, the data directory (gitignored) lives next door
+	// to the wip worktree, not inside it. We probe for an actual dated
+	// snapshot file (not just _metadata.json) to distinguish worktree vs main.
 	dir, _ := os.Getwd()
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			// Check if a real snapshot file exists in this worktree
+			if entries, err := os.ReadDir(filepath.Join(dir, "data", "state", "macro")); err == nil {
+				for _, e := range entries {
+					name := e.Name()
+					if strings.HasPrefix(name, "20") && strings.HasSuffix(name, ".json") {
+						return dir
+					}
+				}
+			}
+			// Try sibling dir (worktree sibling, e.g. ~/workspace/atlas)
+			sibling := filepath.Dir(dir)
+			if entries, err := os.ReadDir(filepath.Join(sibling, "data", "state", "macro")); err == nil {
+				for _, e := range entries {
+					name := e.Name()
+					if strings.HasPrefix(name, "20") && strings.HasSuffix(name, ".json") {
+						return sibling
+					}
+				}
+			}
+			// Fallback: return the go.mod dir
 			return dir
 		}
 		parent := filepath.Dir(dir)
@@ -248,4 +271,176 @@ func loadPeriodHistory(t *testing.T, db *sql.DB) map[string]string {
 		result[date] = period
 	}
 	return result
+}
+
+// loadMarginHistoryForGolden loads margin history entries for golden test.
+func loadMarginHistoryForGolden(t *testing.T, marginDir string) ([]MarginEntry, error) {
+	t.Helper()
+	entries, err := os.ReadDir(marginDir)
+	if err != nil {
+		return nil, err
+	}
+
+	type marginFile struct {
+		Date          string  `json:"date"`
+		MarginBalance float64 `json:"margin_balance"`
+	}
+
+	var result []MarginEntry
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, "_margin.json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(marginDir, name))
+		if err != nil {
+			continue
+		}
+		var mf marginFile
+		if err := json.Unmarshal(data, &mf); err != nil {
+			continue
+		}
+		result = append(result, MarginEntry{Date: mf.Date, MarginBalance: mf.MarginBalance})
+	}
+
+	// Sort by date ascending
+	sort.Slice(result, func(i, j int) bool { return result[i].Date < result[j].Date })
+	return result, nil
+}
+
+// TestGolden_B5Batch2 runs the Batch 2 golden test — same as Batch 1 but
+// also loads margin history and includes the new Batch 2 indicator fields.
+//
+// Run with: go test -tags=golden -run TestGoldenB5B2 -v ./internal/portfolio/
+func TestGolden_B5Batch2(t *testing.T) {
+	workDir := findWorkDir()
+	snapshotDir := filepath.Join(workDir, "data", "state", "macro")
+	marginDir := filepath.Join(workDir, "data", "state", "margin")
+
+	if _, err := os.Stat(snapshotDir); err != nil {
+		t.Skipf("snapshot dir not found: %s", snapshotDir)
+	}
+
+	snapshots := loadSnapshots(t, snapshotDir)
+	if len(snapshots) == 0 {
+		t.Fatal("no snapshots found")
+	}
+	t.Logf("loaded %d snapshots", len(snapshots))
+
+	// Load margin history
+	marginHistory, _ := loadMarginHistoryForGolden(t, marginDir)
+	t.Logf("loaded %d margin entries", len(marginHistory))
+
+	calc := NewCalculator()
+	detector := NewPeriodDetectorWithDefaults()
+
+	type result struct {
+		Date      string
+		NewPeriod domain.MarketPeriod
+		Changed   bool
+		NewFields string
+	}
+
+	var results []result
+	var w1Changes, fieldChanges int
+
+	dates := make([]string, 0, len(snapshots))
+	for d := range snapshots {
+		dates = append(dates, d)
+	}
+	sort.Strings(dates)
+
+	for _, date := range dates {
+		snap := snapshots[date]
+
+		ind := PeriodIndicators{
+			VIX:                    snap.VIX.Value,
+			DXY:                    snap.DXY.Value,
+			US10Y:                  snap.US10Y.Value,
+			SOXPrice:               snap.SOXIndex.Value,
+			TSMADRPrice:            snap.TSMADR.Value,
+			TAIEXPrice:             snap.TAIEX.Value,
+			ForeignSingleDayNet:    snap.ForeignInvestorNet.Value,
+			ForeignFuturesOI:       snap.ForeignFuturesOINet.Value,
+			MarginBalance:          snap.RetailMarginBalance.Value,
+			MarginMaintenanceRatio: snap.MarginMaintenanceRatio.Value,
+			MarketVolume:           snap.MarketVolume.Value,
+			DayTradeRatio:          snap.DayTradeRatio.Value,
+		}
+
+		if err := calc.EnrichFromDir(&ind, date, snapshotDir); err != nil {
+			t.Logf("  warn: enrich %s: %v", date, err)
+		}
+		if len(marginHistory) > 0 {
+			calc.EnrichMargin(&ind, marginHistory)
+		}
+
+		newPeriod := detector.DetectPeriod(ind)
+
+		r := result{
+			Date:      date,
+			NewPeriod: newPeriod,
+		}
+
+		// Check for changes: if any B5-1/B5-2 indicator is non-zero,
+		// this date's output was affected by our work.
+		hasBatch1Fields := ind.TAIEXMA5 != 0 || ind.TAIEXMA20 != 0 || ind.SOXMA20 != 0 || ind.SOXMA50 != 0 ||
+			ind.TSMADRHigh5 != 0 || ind.MarketVolumeMA20 != 0 || ind.TWDMA20 != 0 || ind.TWDChange1D != 0
+		hasBatch2Fields := ind.ForeignNet5DayAvg != 0 || ind.ForeignNet10DayAvg != 0 || ind.ForeignNetPeakSell != 0 ||
+			ind.ForeignBuyDays10 != 0 || ind.ForeignConsecBuyDays != 0 || ind.ForeignConsecSellDays != 0 ||
+			ind.ForeignFuturesOIPrev != 0 || ind.ForeignFuturesOIDelta3 != 0 ||
+			ind.MarginBalancePeak != 0 || ind.MarginBalanceChange5D != 0
+
+		if hasBatch1Fields || hasBatch2Fields {
+			r.NewFields = fmt.Sprintf("B1:MA5=%.0f MA20=%.0f|B2:F5D=%.0f F10D=%.0f ConB=%d ConS=%d FutP=%.0f FutD=%d MPk=%.0f MC5=%.2f",
+				ind.TAIEXMA5, ind.TAIEXMA20,
+				ind.ForeignNet5DayAvg, ind.ForeignNet10DayAvg,
+				ind.ForeignConsecBuyDays, ind.ForeignConsecSellDays,
+				ind.ForeignFuturesOIPrev, ind.ForeignFuturesOIDelta3,
+				ind.MarginBalancePeak, ind.MarginBalanceChange5D)
+		}
+
+		results = append(results, r)
+	}
+
+	fmt.Printf("\n========== B5 Batch 2 Golden Test ==========\n")
+	fmt.Printf("Total dates: %d\n", len(results))
+	fmt.Printf("W1 degradations (sparse): %d, New field activations: %d\n\n", w1Changes, fieldChanges)
+
+	// Print dates with new Batch 2 fields active
+	fmt.Printf("%-12s %-16s %s\n", "Date", "Period", "Key Indicators")
+	fmt.Printf("%-12s %-16s %s\n", "----", "------", "--------------")
+	for _, r := range results {
+		hasB2 := false
+		snap := snapshots[r.Date]
+		_ = snap
+		for _, res := range results {
+			if res.Date == r.Date && res.NewFields != "" &&
+				(strings.Contains(res.NewFields, "B2:") || strings.Contains(res.NewFields, "B1:")) {
+				hasB2 = true
+				break
+			}
+		}
+		if hasB2 || true { // show all dates
+			fmt.Printf("%-12s %-16s %s\n", r.Date, r.NewPeriod, r.NewFields)
+		}
+	}
+
+	// Save
+	outDir := filepath.Join(workDir, "data", "golden")
+	os.MkdirAll(outDir, 0o755)
+	outPath := filepath.Join(outDir, "b5-batch2-backtest.txt")
+	f, err := os.Create(outPath)
+	if err == nil {
+		defer f.Close()
+		fmt.Fprintf(f, "B5 Batch 2 Golden Test Results\n")
+		fmt.Fprintf(f, "==============================\n\n")
+		fmt.Fprintf(f, "Total dates: %d\n\n", len(results))
+		for _, r := range results {
+			fmt.Fprintf(f, "%s | %s | %s\n", r.Date, r.NewPeriod, r.NewFields)
+		}
+		t.Logf("saved results to %s", outPath)
+	}
+
+	t.Logf("done: %d total, W1 deg=%d, new field activations=%d", len(results), w1Changes, fieldChanges)
 }
