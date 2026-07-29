@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	fieldTAIEX = "taiex"
+	fieldTAIEX  = "taiex"
 	taiexSymbol = "^TWII"
 )
 
