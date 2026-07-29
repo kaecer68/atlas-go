@@ -102,8 +102,9 @@
   - 2026-07-28 黑天鵝事件正確改判（TAIEXMA20 由零 → 可用，consolidation → black_swan）
   - 偵測邏輯（`period_detector.go`）零改動
 
-## B5-2 — PeriodIndicators Batch 2（進行中 — 待 PR 審查）
+## B5-2 — PeriodIndicators Batch 2（已完成）
 
+- **PR #1416**（合併日期：2026-07-29）
 - **分支**：`fix/20260729-b5-batch2-chipstats-fill`
 - **涵蓋**：
   - W1: `input_available` 語義升級（窗口統計改為有效非零點數守門，附誠實降級）
@@ -113,3 +114,11 @@
   - W5: 黃金測試（84 snapshot 回測，b5-batch2-backtest.txt）
   - 35 個單元測試（涵蓋 Batch 1+2 正常/降級/確定性）
   - `period_detector.go` / `period_history` / ledger 寫入路徑零改動
+
+### 歸因（與 period_history DB 比較）
+| 類別 | 數量 | 說明 |
+|------|------|------|
+| (a) B5-1 only | 2 | 7/28→turnaround_down, 7/29→turnaround_down |
+| (b) W1 degradation | 6 | 7/24-7/29 TAIEXMA20 非零→零（誠實降級） |
+| (c) B5-2 only | 0 | 無新增改判 |
+| (d) W1+B5-2 combined | 0 | — |
