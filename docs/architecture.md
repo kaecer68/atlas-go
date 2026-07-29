@@ -24,8 +24,8 @@
 | `us_aapl` | Apple Inc | `AAPL` | `us_market_refresh_us_aapl` (5m) |
 | `us_msft` | Microsoft Corp | `MSFT` | `us_market_refresh_us_msft` (5m) |
 | `tsm_adr` | TSMC ADR (NYSE) | `TSMADR` | `us_market_refresh_tsm_adr` (5m) |
-| `taiex_index` | 台灣加權指數 | `TAIEX` | `auto_taiex_index` (1h) |
-| `tw_vol` | 20 日年化波動率 (^TWII) | `HistoricalVolatility` | `macro_cache_tw_vol` (5m) |
+| `taiex_index` | 台灣加權指數（Yahoo `^TWII` → TWSE OpenAPI `MI_INDEX?type=IND` fallback） | `TAIEX` | `auto_taiex_index` (1h) |
+| `tw_vol` | 20 日年化波動率（`^TWII` 快取；cache 陳舊時拒絕計算） | `HistoricalVolatility` | `macro_cache_tw_vol` (5m) |
 
 **限流架構**：3 組 shared limiter —
 - `yahooMacroLimiter`（5s/2b）：僅 `us_yahoo`
@@ -189,7 +189,24 @@
 | L3：Disk snapshot | `data/state/<channelID>/latest.json` | 永久（覆寫） | `saveSnapshot()` 於 adapter 寫入 |
 | L4：DB history 表 | PostgreSQL（`regime_history`, `stress_index_history` 等） | 永久 | 歷史紀錄，見 §3 寫入路徑 |
 
-### 2.2 核心資料流路徑
+### 2.3 TAIEX / `historical_volatility` 韌性語義
+
+1. **`taiex_index` 雙源鏈路**：
+   - 主源：Yahoo Finance `^TWII` chart（3 個月日線）。
+   - 備援：TWSE OpenAPI `exchangeReport/MI_INDEX?type=IND`，僅在 Yahoo 失敗時啟動。
+   - 備援回應須與請求交易日一致；週末/休市/日期不符者一律拒絕，不寫入陳舊值。
+   - 兩路皆敗時，`TAIEX` 欄位為零值，`taiex_index` 進入 `FailedChannels`。
+
+2. **`tw_vol` 陳舊快取守門**：
+   - 與 `taiex_index` 共用 `twiiCache`（60s TTL）。
+   - cache hit 時檢查 `^TWII` 資料時間戳是否為**當前交易日**；若為前一日或更舊，視為失敗，不會用舊收盤價計算 20 日年化波動率。
+
+3. **snapshot 層級狀態**：
+   - `MacroDataSnapshot.DataStatus` 由 `macroDataGatewayAdapter.fetchFresh` 綜合：
+     - `ok`：全部 channel 成功。
+     - `degraded`：有 channel hard-fail（`FailedChannels` 非空）。
+     - `stale`：僅有 stale-only channel（`StaleChannels` 非空，無 hard-fail）。
+   - 這些欄位會隨 snapshot 寫入 `latest.json`，API 與 dashboard 可見。
 
 1. **macro_ingest**（5m）：`BackgroundTaskManager` → `DashboardAPI.IngestAndUpdateMacro()` →
    逐 channel 呼叫 `gateway.Fetch()` → merge 為 `MacroDataSnapshot` →

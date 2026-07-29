@@ -51,6 +51,26 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 
 ---
 
+## TAIEX 與 `historical_volatility` 韌性與失敗記錄語義
+
+- **`taiex_index` fallback 鏈路**：
+  - 主源為 Yahoo Finance `^TWII`；當 Yahoo 失敗（network、HTTP 非 2xx、空 chart result、無有效 TAIEX 列）時，自動 fallback 至 **TWSE OpenAPI** `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=YYYYMMDD&type=IND`。
+  - TWSE 回應的 `title` 日期必須與請求日期一致；週末/休市/前一日資料會被拒絕，避免寫入非當日官方值。
+  - 若主源與備援皆失敗，`taiex` 鍵為零值，且 `taiex_index` 會出現在 `MacroDataSnapshot.FailedChannels` 中。
+
+- **`historical_volatility` 陳舊快取誠實化**：
+  - 該欄位由 `TaiwanVolatilityProvider` 從 `^TWII` 20 個交易日收盤價計算，並與 `taiex_index` 共用 `twiiCache`（60s TTL）。
+  - 當 cache hit 時，provider 會檢查快取資料時間戳是否為**當前交易日**；若為前一交易日或更舊，回傳 error，拒絕以陳舊收盤價產出波動率。
+  - 此設計確保不會再出現「snapshot 有 `historical_volatility` 但底層是昨日 TAIEX」的靜默錯誤。
+
+- **snapshot 層級狀態欄位**：
+  - `DataStatus`：`ok` / `degraded` / `stale`。
+  - `FailedChannels`：hard-fail 的 channel ID 列表（如 `taiex_index`、`tw_vol`）。
+  - `StaleChannels`：僅取得 stale/cached 資料的 channel ID 列表（circuit-breaker open 或 fallback 標記 stale）。
+  - 這些欄位由 `macroDataGatewayAdapter.fetchFresh` 在合併所有 channel 後統一設定，並寫入 `data/state/macro/YYYY-MM-DD.json`（見 `macro_ingest` 排程）。
+
+---
+
 ## 資料儲存層索引
 
 | 層級 | 路徑 | 類型 | 成熟度 | 詳細說明 |
