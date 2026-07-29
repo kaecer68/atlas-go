@@ -35,14 +35,35 @@ log_fail()  { printf "${RED}[FAIL]${NC} %s\n" "$1"; }
 log_warn()  { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_info()  { printf "       %s\n" "$1"; }
 
+# =============================================================================
+# JSON violation accumulator — pure bash array, no processes per violation
+# =============================================================================
+VIOLATION_ENTRIES=()
+
 add_json_violation() {
   local check="$1" file="$2" line="$3" detail="$4"
   VIOLATIONS=$((VIOLATIONS + 1))
-  if command -v jq >/dev/null 2>&1; then
-    JSON_VIOLATIONS=$(echo "$JSON_VIOLATIONS" | jq \
-      --arg check "$check" --arg file "$file" --arg line "$line" --arg detail "$detail" \
-      '. + [{"check":$check,"file":$file,"line":$line,"detail":$detail}]')
+  VIOLATION_ENTRIES+=("$check|$file|$line|$detail")
+}
+
+build_json_output() {
+  if [ "${#VIOLATION_ENTRIES[@]}" -eq 0 ]; then
+    JSON_VIOLATIONS='[]'
+    return
   fi
+  local first=1
+  local json='['
+  for entry in "${VIOLATION_ENTRIES[@]}"; do
+    IFS='|' read -r check file line detail <<< "$entry"
+    if [ "$first" -eq 1 ]; then
+      first=0
+    else
+      json+=','
+    fi
+    json+='{"check":"'"$check"'","file":"'"$file"'","line":"'"$line"'","detail":"'"$detail"'"}'
+  done
+  json+=']'
+  JSON_VIOLATIONS="$json"
 }
 
 # macOS-compatible: extract variable name from os.Getenv("VAR") line
@@ -86,8 +107,11 @@ TMPDIR"
     [[ "$file" == *"internal/config/config.go" ]] && continue
     [[ "$file" == *"check_constitution.sh" ]] && continue
 
-    local var_name
-    var_name=$(extract_env_var "$content")
+    local var_name=""
+    local re='os\.Getenv\("([^"]+)"\)'
+    if [[ "$content" =~ $re ]]; then
+      var_name="${BASH_REMATCH[1]}"
+    fi
 
     if [ -z "$var_name" ]; then
       continue
@@ -124,19 +148,23 @@ check_gateway_registration() {
   fi
 
   local found_any=0
+  local provider_name=""
+  local re='(New[A-Z][a-zA-Z]*(Provider|Client))[(]'
 
   # Scan for New*Provider or New*Client patterns outside apigateway/
   while IFS=: read -r file line content; do
     [[ "$file" == *"internal/apigateway/"* ]] && continue
     [[ "$file" == *_test.go ]] && continue
 
-    # Extract constructor name with sed (not grep -P)
-    local provider_name
-    provider_name=$(echo "$content" | sed -n 's/.*\(New[A-Z][a-zA-Z]*\(Provider\|Client\)\)(.*/\1/p' | head -1)
+    # Extract constructor name with bash ERE
+    provider_name=""
+    if [[ "$content" =~ $re ]]; then
+      provider_name="${BASH_REMATCH[1]-}"
+    fi
 
-    if [ -n "$provider_name" ]; then
-      log_warn "$file:$line — 直接建立 $provider_name，確認是否已透過 Gateway 註冊"
-      add_json_violation "gateway_registration" "$file" "$line" "direct provider instantiation: $provider_name"
+    if [ -n "${provider_name-}" ]; then
+      log_warn "$file:$line — 直接建立 ${provider_name-}，確認是否已透過 Gateway 註冊"
+      add_json_violation "gateway_registration" "$file" "$line" "direct provider instantiation: ${provider_name-}"
       found_any=1
     fi
   done < <(grep -rn 'New[A-Z][a-zA-Z]*\(Provider\|Client\)(' --include="*.go" . | grep -v '_test.go' | grep -v 'internal/apigateway/')
@@ -164,9 +192,13 @@ check_rate_limits() {
 
 	local known_channels=("us_yahoo" "frankfurter_fx" "twse_replay" "twse_capital_flow" "fugle" "fubon" "finmind" "geopolitical" "geopolitical_taiwan" "twse_margin" "export_statistics" "tsmc_revenue" "janus_regime" "tej" "exchange_rate" "sox_index" "sector_data" "dram_spot_price" "twse_sector_index" "day_trading" "bdi" "taifex_daily" "taifex_institutional" "twse_oddlot" "government_flow" "twse_etf" "us_spx" "us_ndx" "us_dji" "taiex_index" "tw_vol" "us_nvda" "us_aapl" "us_msft" "tsm_adr" "twse_sbl" "tdcc_equity_dispersion")
 
+  # Single-pass: extract all channel identifiers from limits.go, then check known list
+  local configured_channels
+  configured_channels=$(grep -oE '"[a-z_]+"' "$limits_file" | tr -d '"' | sort -u)
+
   local missing=0
   for ch in "${known_channels[@]}"; do
-    if ! grep -q "\"$ch\"" "$limits_file"; then
+    if ! grep -qF "$ch" <<< "$configured_channels"; then
       log_fail "通道 '$ch' 在 limits.go 中無限流設定"
       add_json_violation "rate_limits" "$limits_file" "0" "channel '$ch' missing rate limiter"
       missing=1
@@ -218,21 +250,29 @@ check_background_tasks() {
     "internal/fubonproxy/manager.go"              # F1-F9 supervisor invariants
   )
 
+  # Build single-pass exclusion alternation for grep -vE
+  local alt_pat=""
+  local first=1
+  for pat in "${exclude_patterns[@]}"; do
+    # Escape '.' to '\\.' for literal regex matching
+    local escaped="${pat//./\\.}"
+    if [ "$first" -eq 1 ]; then
+      alt_pat="$escaped"
+      first=0
+    else
+      alt_pat="$alt_pat|$escaped"
+    fi
+  done
+
   while IFS= read -r match; do
     local file line
-    file=$(echo "$match" | cut -d: -f1)
-    line=$(echo "$match" | cut -d: -f2)
-
-    local skip=0
-    for pat in "${exclude_patterns[@]}"; do
-      [[ "$file" == *"$pat"* ]] && { skip=1; break; }
-    done
-    [ "$skip" -eq 1 ] && continue
+    file="${match%%:*}"
+    line="${match#*:}"; line="${line%%:*}"
 
     log_warn "$file:$line — 可能繞過 BackgroundTaskManager 的獨立 goroutine"
     add_json_violation "background_tasks" "$file" "$line" "potential unregistered background goroutine"
     found_any=1
-  done < <(grep -rn 'go func()' --include="*.go" internal/)
+  done < <(grep -rn 'go func()' --include="*.go" internal/ | grep -vE "$alt_pat")
 
   if [ "$found_any" -eq 0 ]; then
     log_pass "未發現繞過 BackgroundTaskManager 的背景 goroutine"
@@ -266,6 +306,7 @@ main() {
   [ "$bg_result" -eq 0 ] && checks_passed=$((checks_passed + 1))
 
   if [ "$OUTPUT_MODE" = "json" ]; then
+    build_json_output
     if command -v jq >/dev/null 2>&1; then
       jq -n \
         --argjson violations "${JSON_VIOLATIONS:-[]}" \
