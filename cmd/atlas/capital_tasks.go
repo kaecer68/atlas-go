@@ -6,14 +6,15 @@ package main
 // background work that runs independently of the realtime / live trading
 // paths.
 //
-// Tasks (7 total):
+// Tasks (8 total):
 //   1. auto_rollback          — autoRollback.RunDaily (24h)
 //   2. auto_judge_promoter    — experiment promotion (24h)
 //   3. auto_capital_flow      — gateway.Fetch twse_capital_flow (30m, market hours)
 //   4. auto_margin            — gateway.Fetch twse_margin (30m, market hours)
 //   5. margin_history_backfill — narrative.NewMarginHistoryBackfiller (24h)
 //   6. auto_export            — gateway.Fetch export_statistics (12h)
-//   7. auto_geopolitical      — gateway.Fetch geopolitical (6h)
+//   7. auto_government_flow   — gateway.Fetch government_flow (24h, weekday 15:00+ Taipei; fix/20260731-govflow-cadence)
+//   8. auto_geopolitical      — gateway.Fetch geopolitical (6h)
 
 import (
 	"context"
@@ -27,7 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 )
 
-// capitalDeps groups the dependencies needed by all 7 capital tasks.
+// capitalDeps groups the dependencies needed by all 8 capital tasks.
 // Passed as a struct so the function signature stays compact as new
 // tasks are added.
 type capitalDeps struct {
@@ -194,19 +195,45 @@ func registerCapitalTasks(d capitalDeps) {
 
 	// Register auto_government_flow — daily refresh of operator-imported
 	// 官股行庫 readings (manifest #E04). No upstream HTTP — just reads the
-	// state directory, so 1h tick is plenty; weekend gate removed (operator
-	// may backfill on Saturday).
+	// state directory that the BTM government_flow_aggregate task writes
+	// to (fix/20260731-govflow-cadence).
+	//
+	// Cadence policy: 24h with weekday 15:00+ Taipei gate. The 1h tick
+	// pre-PR was always wasteful: the underlying state file only changes
+	// once per trading day (post-15:00), and downstream consumers (CAPM
+	// heatmap, regime detector cache) do not need 24 updates per day of
+	// identical bytes. 24h with the same weekday + post-close gate that
+	// auto_taifex_institutional uses keeps the cache fresh without
+	// spending ticks on weekends or pre-15:00.
+	//
+	// No captchaCooldown here: this task does not hit upstream (TWSE
+	// bsr). The cooldown lives on the BTM task, which is the one that
+	// actually fetches from upstream.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_government_flow",
 		ChannelID: "government_flow",
-		Interval:  1 * time.Hour,
+		Interval:  24 * time.Hour,
 		Enabled:   true,
 		Task: func(ctx context.Context) error {
+			// Weekday + 15:00+ Taipei gate (matches auto_taifex_institutional
+			// at line 154 of this file). The BTM government_flow_aggregate
+			// task gates on the same boundary, so a successful upstream
+			// fetch and a state-dir re-read happen on the same day.
+			now := time.Now()
+			if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+				now = now.In(tz)
+			}
+			if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
+				return nil
+			}
+			if now.Hour() < 15 {
+				return nil
+			}
 			_, err := d.gateway.Fetch(ctx, "government_flow")
 			return err
 		},
 	})
-	log.Printf("[Gateway] registered auto_government_flow background task (1h interval)")
+	log.Printf("[Gateway] registered auto_government_flow background task (24h interval, weekday 15:00+ Taipei)")
 
 	// Register auto_geopolitical via Gateway.
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{

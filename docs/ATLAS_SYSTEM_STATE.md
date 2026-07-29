@@ -1,6 +1,6 @@
 # ATLAS 系統狀態快照
 
-> 最後更新：2026-07-31（B5-3 PR-B calculator 填充）
+> 最後更新：2026-07-31（公股節律修復：BTM 24h + CAPTCHA 24h cooldown）
 > 維護紀律：每次 feature wave 合併後更新，維持現狀可追蹤性。
 
 ## 活躍工作區
@@ -37,6 +37,7 @@
 | B5-3 PR-B | PeriodIndicators Batch 3 calculator 填充（類股輪動 + 公股連買） | ✅ 已完成 | #1422 | 2026-07-31 |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 | B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
+| 公股節律 | government_flow 28h→24h + weekday 15:00+ gate + CAPTCHA 24h cooldown | ✅ 已完成 | — | 2026-07-31 |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -202,7 +203,41 @@
 
 ---
 
-## B5-3 PR-B — PeriodIndicators Batch 3 calculator 填充（已完成）
+## 公股節律修復（已完成）
+
+- **分支**：`fix/20260731-govflow-cadence`（worktree：`~/workspace/atlas-govflow-cadence`）
+- **根因**：PR #1421 已讓公股通道誠實報錯（靜默寫零 → 明確 CAPTCHA 錯誤），但 BTM `government_flow_aggregate` 仍以 28h 週期抓取 TWSE bsr.twse.com.tw CAPTCHA 頁面；高頻輪詢等於邀請封鎖，阻斷公股欄位復活路徑。
+- **修復內容**：
+  - **W1（抓取節律下調）**：
+    - BTM `government_flow_aggregate`（`cmd/atlas/operations_tasks.go`）：28h → **24h**，加上 weekday 15:00+ Taipei gate（沿用 `auto_taifex_institutional` 模式，TWSE 收盤 13:30 + 2h 結算）。每交易日收盤後最多 1 次。
+    - Gateway `auto_government_flow`（`cmd/atlas/capital_tasks.go`）：1h → **24h**，加上相同 weekday 15:00+ gate。1h tick 過去純屬浪費（底層 state 檔每天只變一次）；現在跟 BTM 路徑同節律。
+    - **兩條路徑維持分工**，不整併：BTM 是 upstream fetcher（會打 TWSE），gateway 是 local state 重新讀取（無 upstream）。節律對齊 = 兩者同日同一窗口運作。
+  - **W2（CAPTCHA 退避）**：
+    - 新增 `internal/marketdata/captcha_cooldown.go`：`CaptchaCooldown` 結構，per-channel 進程內記憶體、預設 24h cooldown。process restart = reset（刻意：保護對象是上游的 bot 偵測視角，不是本機 retry 歷史）。
+    - 新增 `marketdata.ErrCaptchaRequired` typed sentinel，aggregator 內 2 個 `captcha required` 錯誤路徑 wrap 此 sentinel（`fmt.Errorf("%w ...", ErrCaptchaRequired, ...)`），`errors.Is` 為唯一偵測介面。
+    - BTM task body 接入：fetch 前 `cd.ShouldSkip` 查 cooldown、fetch 失敗時 `IsCaptchaErr` 觸發 `RecordCaptcha`、成功時 `RecordSuccess` 立即清 cooldown。Gateway 路徑不接 cooldown（無 upstream 觸點）。
+  - **W3（測試 + 文件）**：
+    - 7 個 `CaptchaCooldown` 單元測試（含**連續 CAPTCHA → 跳過後續嘗試**案例、RecordSuccess 立即清除、ChannelIsolation、NilSafe、IsCaptchaErr 對 wrapped sentinel 匹配、-race 併發安全）。
+    - 4 個 `registerOperationsTasks` 整合測試（cadence 24h、CAPTCHA cooldown 跳過 fetch、連續 CAPTCHA、weekday gate）。
+    - `docs/data-architecture.md` 同步更新。
+- **涉及檔案**：
+  - `cmd/atlas/operations_tasks.go`（BTM 24h + 5 種 gate/captcha 邏輯；operationsDeps 新增 `captchaCooldown` 欄位）
+  - `cmd/atlas/capital_tasks.go`（gateway 1h → 24h + weekday gate；file header 任務數 7→8）
+  - `cmd/atlas/main.go`（注入 `marketdata.NewCaptchaCooldown()` 單例）
+  - `cmd/atlas/operations_tasks_test.go`（新增 helper + 4 個 W1/W2 測試）
+  - `internal/marketdata/government_broker_aggregator.go`（`ErrCaptchaRequired` sentinel + 2 處錯誤 wrap）
+  - `internal/marketdata/captcha_cooldown.go`（新檔，CaptchaCooldown 實作）
+  - `internal/marketdata/captcha_cooldown_test.go`（新檔，7 個單元測試）
+  - `docs/data-architecture.md`（表格更新）
+- **不動範圍**：`period_detector.go`、`period_calculator.go`、`PeriodIndicators` struct、`period_history` 寫入路徑、所有 `YYYYMMDD.json` / `_brokers.json` / `_insurance.json` 資料檔格式、`MacroDataPoint` schema。
+- **預期影響**：
+  - 短期（CAPTCHA 仍啟用）：BTM 每日 1 次 + 24h cooldown → 上游 24h 內最多收到 1 個請求，給 CAPTCHA 機制「冷卻」機會。
+  - 長期（CAPTCHA 解封）：cooldown 從未被觸發，行為等同每日 1 次穩定抓取；公股欄位 `PublicBankConsecBuyDays` 開始有真實資料。
+  - 與 PR #1422 黃金測試零差異：BTM 排程改變不影響 `period_calculator` / `period_detector` 邏輯；calculator 端拿到的 `PublicBankConsecBuyDays` 仍依既有 0/84 顯示（CAPTCHA 解封前本就無法產出有效資料日）。
+
+---
+
+
 
 - **PR #1422**（合併日期：2026-07-31）
 - **前導 PR-A（#1421）**：SectorIndexReader、GovernmentBrokerAggregator（per-broker 輸出）

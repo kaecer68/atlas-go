@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,6 +110,18 @@ type GovernmentBrokerDailyResult struct {
 	Gov    []BrokerBranchNet
 	Ins    []BrokerBranchNet
 }
+
+// ErrCaptchaRequired (fix/20260731-govflow-cadence) is the typed sentinel
+// returned when the upstream TWSE bsr endpoint serves a CAPTCHA page. It
+// is wrapped by every "captcha required" error path inside this file and
+// is detected by marketdata.CaptchaCooldown.IsCaptchaErr to drive the
+// per-channel cooldown timer.
+//
+// Use errors.Is(err, marketdata.ErrCaptchaRequired) at call sites that
+// need a stable signal — string-matching the message is brittle across
+// refactors and is exactly the failure mode that motivated this typed
+// sentinel.
+var ErrCaptchaRequired = errors.New("captcha required for government broker")
 
 // detailKey is the merge key for aggregating broker details across stocks.
 type detailKey struct {
@@ -248,7 +261,7 @@ func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, sy
 	}
 
 	if hasCaptcha(body) {
-		return nil, fmt.Errorf("captcha required for %s/%s", symbol, dateStr)
+		return nil, fmt.Errorf("%w %s/%s", ErrCaptchaRequired, symbol, dateStr)
 	}
 
 	res, err := a.parseBrokerTableHTML(symbol, body)
@@ -436,7 +449,7 @@ func extractToken(re *regexp.Regexp, body []byte) string {
 // position-based parsing for simple test fixtures.
 func (a *GovernmentBrokerAggregator) parseBrokerTableHTML(symbol string, body []byte) (*GovernmentBrokerDailyResult, error) {
 	if hasCaptcha(body) {
-		return nil, fmt.Errorf("captcha required for %s", symbol)
+		return nil, fmt.Errorf("%w %s", ErrCaptchaRequired, symbol)
 	}
 
 	doc, err := html.Parse(bytes.NewReader(body))

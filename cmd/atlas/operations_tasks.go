@@ -66,6 +66,13 @@ type operationsDeps struct {
 	janusEngine        *janus.Engine
 	prismMgr           *prism.PRISMManager
 	vixBaselineTracker *marketdata.VIXBaselineTracker
+	// captchaCooldown (fix/20260731-govflow-cadence) gates the
+	// government_broker upstream fetch: when the TWSE CAPTCHA page is
+	// hit, this per-channel in-memory timer suppresses the next attempt
+	// for CaptchaCooldownDuration (default 24h). nil is allowed and
+	// disables the gate — matches the pattern in main.go where new
+	// optional deps stay nil-safe.
+	captchaCooldown *marketdata.CaptchaCooldown
 	// governmentFlowDir is the directory where GovernmentBrokerAggregator
 	// writes daily readings consumed by GovernmentFlowProvider (BK-13).
 	governmentFlowDir string
@@ -460,23 +467,69 @@ func registerOperationsTasks(d operationsDeps) {
 		log.Printf("[Gateway] registered prism_training background task (6h interval)")
 	}
 
-	// BK-13: Government flow aggregation — daily fetch of 5 core bank
-	// broker data from TWSE, written to the directory read by
-	// GovernmentFlowProvider (28h interval to avoid overlap).
+	// BK-13: Government flow aggregation — daily fetch of 8 core bank broker
+	// data from TWSE, written to the directory read by GovernmentFlowProvider.
+	//
+	// Cadence policy (fix/20260731-govflow-cadence): 24h base interval with
+	// weekday 15:00+ Taipei gate. The TWSE bsr endpoint now serves a CAPTCHA
+	// page, so we no longer poll every 28h (which was always >1 hit per
+	// trading day once a 28h tick drifted onto two consecutive weekdays) nor
+	// rely on high-frequency ticks. One fetch per trading day, after market
+	// close + 2h settlement, gives the upstream time to forget any
+	// bot-shaped traffic between atlas restarts.
+	//
+	// CAPTCHA cooldown is enforced by marketdata.CaptchaCooldown (see
+	// captcha_cooldown.go) — consecutive CAPTCHA responses silence the
+	// channel for CaptchaCooldownDuration (default 24h) before the next
+	// attempt, so a single 24h tick is a hard upper bound, not a guarantee
+	// of daily fetch.
 	if d.governmentFlowDir != "" {
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:      "government_flow_aggregate",
 			ChannelID: "government_broker",
-			Interval:  28 * time.Hour,
+			Interval:  24 * time.Hour,
 			Enabled:   true,
 			Task: func(ctx context.Context) error {
+				// Weekday + 15:00+ Taipei gate (matches the
+				// auto_taifex_institutional pattern in capital_tasks.go:
+				// TWSE close 13:30 + 2h settlement). Returns nil silently
+				// so BackgroundTaskManager does not count the tick as a
+				// failure and trigger failureHandler / alert spam.
+				now := time.Now()
+				if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
+					now = now.In(tz)
+				}
+				if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
+					return nil
+				}
+				if now.Hour() < 15 {
+					return nil
+				}
 				if d.gateway == nil {
 					return fmt.Errorf("government_flow_aggregate skipped: no gateway")
 				}
+				// CAPTCHA cooldown gate: if the previous tick(s) hit a
+				// CAPTCHA page, skip this tick and let the cooldown timer
+				// expire. nil captchaCooldown disables the gate.
+				if cd := d.captchaCooldown; cd != nil && cd.ShouldSkip("government_broker") {
+					logging.Warn("main", "government_flow_aggregate_captcha_cooldown", "until", cd.Until("government_broker").UTC().Format(time.RFC3339))
+					return nil
+				}
 				res, err := d.gateway.Fetch(ctx, "government_broker")
 				if err != nil {
-					logging.Warn("main", "government_flow_aggregate_failed", "err", err)
+					if d.captchaCooldown != nil && d.captchaCooldown.IsCaptchaErr(err) {
+						d.captchaCooldown.RecordCaptcha("government_broker")
+						logging.Warn("main", "government_flow_aggregate_captcha_detected", "cooldown_until", d.captchaCooldown.Until("government_broker").UTC().Format(time.RFC3339))
+					} else {
+						logging.Warn("main", "government_flow_aggregate_failed", "err", err)
+					}
 					return err
+				}
+				// Successful fetch — any prior CAPTCHA cooldown for this
+				// channel is cleared so a recovery path is one successful
+				// tick. RecordSuccess is a no-op if no cooldown was active.
+				if d.captchaCooldown != nil {
+					d.captchaCooldown.RecordSuccess("government_broker")
 				}
 				var reading marketdata.GovernmentFlowReading
 				if err := json.Unmarshal(res.Data, &reading); err != nil {
@@ -487,7 +540,7 @@ func registerOperationsTasks(d operationsDeps) {
 				return nil
 			},
 		})
-		log.Printf("[Gateway] registered government_flow_aggregate task (28h interval, BK-13)")
+		log.Printf("[Gateway] registered government_flow_aggregate task (24h interval, weekday 15:00+ Taipei, BK-13)")
 	}
 }
 
