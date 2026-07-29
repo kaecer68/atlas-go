@@ -108,6 +108,20 @@ type PeriodDetector struct {
 	cfg config.PeriodDetectionConfig
 }
 
+// package-level reference: keep isXxx methods alive for backward compatibility
+// and golden test validation. These are intentionally retained alongside their
+// assessXxx counterparts; both linters (golangci-lint unused, staticcheck U1000)
+// would otherwise flag them as dead code.
+var _ = [...]func(*PeriodDetector, PeriodIndicators) bool{
+	(*PeriodDetector).isBlackSwan,
+	(*PeriodDetector).isTurnaroundDown,
+	(*PeriodDetector).isDownturn,
+	(*PeriodDetector).isTurnaroundUp,
+	(*PeriodDetector).isBull,
+	(*PeriodDetector).isPlateau,
+	(*PeriodDetector).isConsolidation,
+}
+
 // NewPeriodDetector creates a detector with the given threshold config.
 func NewPeriodDetector(cfg config.PeriodDetectionConfig) *PeriodDetector {
 	return &PeriodDetector{cfg: cfg}
