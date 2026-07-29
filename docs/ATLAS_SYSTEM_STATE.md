@@ -10,7 +10,7 @@
 | `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`a335abc9` (B5-2 merge) |
 | `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併，本 worktree 將於 session close 時移除 |
 | `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | ⚪ 待清理 | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
-| `~/workspace/atlas/MoneyTrend-TAIEX-Fix` | `fix/20260730-taiex-resilience` | 🟡 進行中 | B5-R TAIEX 抓取韌性修復（fallback + 失敗可見化 + 陳舊快取誠實化） |
+| `~/workspace/atlas/MoneyTrend-TAIEX-Fix` | `fix/20260730-taiex-resilience` | 🟢 已完成 | B5-R TAIEX 抓取韌性修復已合併 |
 
 ## Feature Wave 進度
 
@@ -32,7 +32,7 @@
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
 | B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
-| B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | 🟡 進行中 | — | 2026-07-30 |
+| B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -154,7 +154,7 @@
   - `MacroDataPoint` schema
   - `period_history` 寫入與 `period_detector.go` 零改動
 
-## B5-R — TAIEX 抓取韌性修復（進行中）
+## B5-R — TAIEX 抓取韌性修復（已完成）
 
 - **分支**：`fix/20260730-taiex-resilience`（worktree：`~/workspace/atlas/MoneyTrend-TAIEX-Fix`）
 - **根因**：Yahoo Finance `^TWII` 間歇性失敗時，`TAIEXIndexProvider` 無替代來源，導致 `taiex` 鍵整欄缺失；`TaiwanVolatilityProvider` 與 `TAIEXIndexProvider` 共用 `twiiCache`，Yahoo 失敗後 cache 中的陳舊值被用來計算 `historical_volatility`，產生「有值但已過時」的靜默污染。
