@@ -1,0 +1,14 @@
+=== 7/28 改判日對照（回補後） — 5 條件明細 ===
+
+Date: 2026-07-28
+TAIEXPrice: 41603.36
+TAIEXMA20: 44167.17
+Period: black_swan
+Confidence: 0.20 (hits 1/5)
+
+Hit  Name                         Value          Threshold      Relation   InputAvail
+     外資單日賣超金額                     0.0000         -50000000000.0000 lt         true
+     VIX 恐慌指數                     18.6700        35.0000        gt         true
+YES  大盤偏離月線跌幅                     0.0000         -0.0500        lt         true
+     國安基金進場                       0.0000         0.0000         eq         true
+     台幣單日貶值幅度                     0.3159         0.5000         gt         true

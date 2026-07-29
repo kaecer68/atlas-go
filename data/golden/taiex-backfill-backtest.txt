@@ -1,0 +1,23 @@
+=== RUN   TestGolden_BacktestAllDates
+    period_calculator_golden_test.go:43: loaded 84 snapshots
+    period_calculator_golden_test.go:53: loaded 2 period_history rows
+
+========== B5 Batch 1 Golden Test ==========
+Total dates: 84
+Changed: 1, Unknown (no history): 82, Unchanged: 1
+
+Date         Old Period       New Period       Indicators
+----         ----------       ----------       ----------
+2026-07-28   consolidation    black_swan       MA5=43240 MA20=44167 S20=12179 S50=12871 THigh5=403.4 VMA20=0 TWDMA20=32.26 TWD1D=0.32 TWD5D=0.32
+
+--- Last 5 Dates (Spot Check) ---
+  2026-07-25  old=(none)        new=consolidation
+  2026-07-26  old=(none)        new=consolidation
+  2026-07-27  old=(none)        new=consolidation
+  2026-07-28  old=consolidation  new=black_swan   ** CHANGED **
+  2026-07-29  old=black_swan    new=black_swan  
+    period_calculator_golden_test.go:179: saved results to /Users/kaecer/workspace/atlas/data/golden/b5-batch1-backtest.txt
+    period_calculator_golden_test.go:182: done: 84 total, 1 changed, 82 unknown
+--- PASS: TestGolden_BacktestAllDates (0.15s)
+PASS
+ok  	github.com/kaecer68/atlas-go/internal/portfolio	0.428s
