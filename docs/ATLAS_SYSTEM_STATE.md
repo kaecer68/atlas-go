@@ -1,17 +1,17 @@
 # ATLAS 系統狀態快照
 
-> 最後更新：2026-07-30（B5-R TAIEX 抓取韌性修復）
+> 最後更新：2026-07-31（B5-3 PR-B calculator 填充）
 > 維護紀律：每次 feature wave 合併後更新，維持現狀可追蹤性。
 
 ## 活躍工作區
 
 | 工作區 | Branch | 狀態 | 說明 |
 |--------|--------|------|------|
-| `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`a335abc9` (B5-2 merge) |
+| `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區 |
 | `~/workspace/atlas/feat-20260730-b3-data-infra` | `feat/20260730-b3-data-infra` | 🟡 進行中 | B5-3 PR-A：公股資料基礎設施（parser/8 行庫/per-broker/sector reader），未合併 |
-| `~/workspace/atlas/MoneyTrend-B5-Batch-3` | `kaecer68/MoneyTrend-B5-Batch-3` | ⚪ 待清理 | B5-3 偵察工作區，本 worktree 將於 session close 時移除 |
-| `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併，本 worktree 將於 session close 時移除 |
-| `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | ⚪ 待清理 | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
+| `~/workspace/atlas/MoneyTrend-B5-Batch-3` | `kaecer68/MoneyTrend-B5-Batch-3` | ⚪ 待清理 | B5-3 偵察工作區 |
+| `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併 |
+| `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | ⚪ 待清理 | B5-T TAIEX 快照回補 |
 | `~/workspace/atlas/MoneyTrend-TAIEX-Fix` | `fix/20260730-taiex-resilience` | 🟢 已完成 | B5-R TAIEX 抓取韌性修復已合併 |
 
 ## Feature Wave 進度
@@ -33,7 +33,8 @@
 | BG | Background 首次執行跳過 startup jitter | ✅ 已完成 | #1409 | 2026-07-28 |
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
 | B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
-| B5-3 PR-A | PeriodIndicators Batch 3 資料基礎設施（公股 parser/8 行庫/per-broker/sector reader） | 🟡 進行中 | — | — |
+| B5-3 PR-A | PeriodIndicators Batch 3 資料基礎設施（公股 parser/8 行庫/per-broker/sector reader） | ✅ 已完成 | #1421 | 2026-07-29 |
+| B5-3 PR-B | PeriodIndicators Batch 3 calculator 填充（類股輪動 + 公股連買） | ✅ 已完成 | #1422 | 2026-07-31 |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 | B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 
@@ -181,7 +182,7 @@
 
 ---
 
-## B5-3 PR-A — PeriodIndicators Batch 3 資料基礎設施（進行中）
+## B5-3 PR-A — PeriodIndicators Batch 3 資料基礎設施（已完成）
 
 - **分支**：`feat/20260730-b3-data-infra`（worktree：`~/workspace/atlas/feat-20260730-b3-data-infra`）
 - **目標**：修復公股資料取得、擴充行庫名單至 8 家、新增 per-broker 明細輸出、提供 sector_index 公共讀取器。本 PR-A **不改變任何時期判定**（detector/calculator/struct 零改動）。
@@ -198,3 +199,25 @@
   - `docs/data-sources.md`、`docs/data-architecture.md`（本文件）
 - **不動範圍**：`period_detector.go`、`period_calculator.go`、`PeriodIndicators` struct、`period_history` 寫入路徑、既有 6 個全零 `government_flow` 歷史檔。
 - **已知限制**：TWSE `bsr.twse.com.tw` 目前已啟用 CAPTCHA，自動抓取將回傳錯誤；需等待官方移除 CAPTCHA、導入官方 API，或經人工/授權管道匯入資料後，parser 才能產出非零資料。
+
+---
+
+## B5-3 PR-B — PeriodIndicators Batch 3 calculator 填充（已完成）
+
+- **PR #1422**（合併日期：2026-07-31）
+- **前導 PR-A（#1421）**：SectorIndexReader、GovernmentBrokerAggregator（per-broker 輸出）
+- **本支範圍**：把 sector_index（去程）與 government_flow（回程）兩路資料接入 calculator，產生 SectorRotationFlag 與 PublicBankConsecBuyDays 兩欄位。
+- **W1（來源優先序）**：`SectorIndexReader.ReadRange()` 改寫為兩段掃描—載入時依 18 產業 batch 檔的原生 key 數≥18 分為 native/legacy；Phase 1 填 native 純覆蓋，Phase 2 僅補 native 未覆蓋的 (date,industry) 組合。解決 PR-A 遺留的 cross-schema averaging 問題（7/1 electronics 從跨檔平均 3.55 還原為 18 產業原生 3.15）。
+- **W2（EnrichSectorRotation）**：用 SectorIndexReader 取近 5 日 vs 前 5 日 industry 累積 return 的 top 3，比較兩 window 集合是否相同（同→false；不同→true，表示類股輪動）。MinDays=10。
+- **W3（EnrichGovernmentBroker）**：P0-3 規則—`YYYYMMDD.json` 必須有同名 `_brokers.json` 才算有效資料日，否則排除。legacy 零檔全部被排除，預期 0 個有效日直到 CAPTCHA 解決。MinDays=5。
+- **W4（dashboard API 掛載）**：`dashboard_api.go` 兩處（`persistPeriodHistory` 中呼叫 `EnrichBatch3`；`PeriodProvider` 路由 handler 中掛載）。`executor_pipeline.go` 不接（無 ExecutionContext sector/gov 注入機制，進 backlog）。
+- **P0-1 可用性銜接（honest degradation）**：`SectorRotationFlag` 僅在≥10 個 sector index 交易日才計算，`PublicBankConsecBuyDays` 僅在≥5 個政府資金資料日才計算。不足時欄位=0（=unavailable per detector contract）。
+- **P0-2 schema 策略（18 產業優先）**：18 產業 batch 檔（key≥18）為 native source，8 產業單日檔為 legacy fallback。8→18 映射規則：ai_supply_chain→electronics, robotics→machinery, 其餘 6 個 1:1。reader 保留原有平均邏輯（僅用於同一檔案內多筆 entry）。
+- **P0-3 資料日有效性**：`_brokers.json` 存在才認證。6 個 legacy 零政府資金檔（無 _brokers.json）被排除。
+- **黃金測試結果**：84 dates / 1 changed / 82 unknown / 1 unchanged。唯一改判 7/28 consolidation→black_swan（TAIEX=41603.36 vs MA20=44167.17，偏離 -5.93% < -5% threshold），與 B5-T 同筆。SectorRotationFlag 對 7/28 改判無貢獻（black_swan 只由 twii_crash 條件 1-5 決定，SRot 僅用於其它 5 時期判定）。
+- **新測試 15 個**：
+  - sector rotation: 正常 6 個（不含輪動、含輪動、資料缺口、空目錄、空字串、確定性測試）
+  - gov broker: 5 個（legacy 零檔、連買、中斷、不足、空目錄）
+  - availability semantic: 2 個（sector rotation 不足、gov broker 不足→ zero 代表 unavailable）
+  - W1: 2 個 (source priority 18 wins / no average)
+- **不動範圍**：`period_detector.go`、`PeriodIndicators` struct、`period_history` 寫入路徑、legacy 零政府資金檔。
