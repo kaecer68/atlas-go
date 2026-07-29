@@ -740,6 +740,11 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 			}
 			calc.EnrichMargin(&ind, pmEntries)
 		}
+
+		// B5 Batch 3: sector rotation + public-bank consecutive buy
+		sectorIndexDir := filepath.Join(a.workDir, "data", "state", "sector_index")
+		govFlowDir := filepath.Join(a.workDir, "data", "state", "government_flow")
+		calc.EnrichBatch3(&ind, date, sectorIndexDir, govFlowDir)
 	}
 	period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
 	now := time.Now().UTC()
@@ -1068,6 +1073,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			if a.macroIngestor != nil {
 				calc := portfolio.NewCalculator()
 				_ = calc.EnrichFromDir(&ind, time.Now().UTC().Format("2006-01-02"), a.macroIngestor.SnapshotDir())
+				// B5 Batch 3: sector rotation + public-bank consecutive buy
+				sectorIndexDir := filepath.Join(a.workDir, "data", "state", "sector_index")
+				govFlowDir := filepath.Join(a.workDir, "data", "state", "government_flow")
+				calc.EnrichBatch3(&ind, time.Now().UTC().Format("2006-01-02"), sectorIndexDir, govFlowDir)
 			}
 			assessment, _ := detector.DetectAssessment(ind)
 			indicators := make([]service.IndicatorHit, len(assessment.TriggeredIndicators))

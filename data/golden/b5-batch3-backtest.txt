@@ -1,4 +1,4 @@
-B5 Batch 1 Golden Test Results
+B5 Batch 3 Golden Test Results (PR-B)
 ==============================
 
 Total dates: 84

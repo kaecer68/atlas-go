@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -39,6 +40,10 @@ const (
 	// B5 Batch 2: margin
 	MinDaysMarginBalancePeak     = 30 // need 30 days of margin history for meaningful peak
 	MinDaysMarginBalanceChange5D = 6  // need today + 5 prior days
+
+	// B5 Batch 3: sector rotation + public bank
+	MinDaysSectorRotationFlag      = 10 // need 10 days of sector index history (5d for current + 5d for prior)
+	MinDaysPublicBankConsecBuyDays = 5  // need 5 days of public-bank history for meaningful consecutive-buy signal
 )
 
 // PeriodIndicatorsCalculator enriches a base PeriodIndicators (already
@@ -238,6 +243,7 @@ func maxRequiredDays() int {
 		MinDaysForeignConsecDays, MinDaysForeignFuturesOIPrev,
 		MinDaysForeignFuturesDelta3,
 		MinDaysMarginBalancePeak, MinDaysMarginBalanceChange5D,
+		MinDaysSectorRotationFlag, MinDaysPublicBankConsecBuyDays,
 	} {
 		if d > max {
 			max = d
@@ -539,4 +545,228 @@ func computeSlope(entries []SnapshotEntry, start int, fn func(SnapshotEntry) flo
 		return 0
 	}
 	return (n*sumXY - sumX*sumY) / denom
+}
+
+// ── B5 Batch 3: Sector rotation + Public bank consecutive buy ──
+
+// SectorTopN returns the top-N industries by cumulative return over the
+// given return map (industry -> return_pct), sorted descending. Ties are
+// broken by industry name (alphabetical) for determinism.
+func sectorTopN(returns map[string]float64, n int) []string {
+	type kv struct {
+		k string
+		v float64
+	}
+	var arr []kv
+	for k, v := range returns {
+		arr = append(arr, kv{k, v})
+	}
+	sort.Slice(arr, func(i, j int) bool {
+		if arr[i].v != arr[j].v {
+			return arr[i].v > arr[j].v
+		}
+		return arr[i].k < arr[j].k
+	})
+	if len(arr) < n {
+		n = len(arr)
+	}
+	out := make([]string, n)
+	for i := 0; i < n; i++ {
+		out[i] = arr[i].k
+	}
+	return out
+}
+
+// setsEqual returns true if two string sets contain the same elements
+// (order-insensitive). Empty sets are equal.
+func setsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		m[s] = struct{}{}
+	}
+	for _, s := range b {
+		if _, ok := m[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// EnrichSectorRotation computes the SectorRotationFlag from sector index history.
+// It calls sectorIndexReader for two windows: the most-recent 5 trading days
+// (current top 3) vs the prior 5 trading days (prior top 3). If the two sets
+// differ, rotation is considered active.
+//
+// Honesty rule (P0-1c): the indicator is filled ONLY when the reader reports
+// >= MinDaysSectorRotationFlag effective dates; otherwise the field stays at
+// its zero value (false = unavailable per detector contract).
+//
+// A non-empty but insufficient window (< MinDays) results in zero + Warn log.
+func (c *PeriodIndicatorsCalculator) EnrichSectorRotation(ind *PeriodIndicators, tradingDate string, sectorIndexDir string) {
+	if sectorIndexDir == "" {
+		return
+	}
+	reader := marketdata.NewSectorIndexReader(sectorIndexDir)
+	dates, err := reader.AvailableDates()
+	if err != nil {
+		log.Printf("warn: sector index reader failed: %v", err)
+		return
+	}
+	// Filter dates <= tradingDate, sorted ascending.
+	filtered := make([]string, 0, len(dates))
+	for _, d := range dates {
+		if d <= tradingDate {
+			filtered = append(filtered, d)
+		}
+	}
+	if len(filtered) < MinDaysSectorRotationFlag {
+		log.Printf("warn: sector rotation insufficient dates=%d need=%d (tradingDate=%s)", len(filtered), MinDaysSectorRotationFlag, tradingDate)
+		return
+	}
+	// Use the most recent 5 dates for current window, prior 5 for baseline.
+	// Requires at least 10 effective dates to avoid double-counting.
+	currentWindow := filtered[len(filtered)-5:]
+	priorWindow := filtered[len(filtered)-10 : len(filtered)-5]
+	curReturns, err := sumReturnsInWindow(reader, currentWindow)
+	if err != nil {
+		log.Printf("warn: sector rotation current window read failed: %v", err)
+		return
+	}
+	priorReturns, err := sumReturnsInWindow(reader, priorWindow)
+	if err != nil {
+		log.Printf("warn: sector rotation prior window read failed: %v", err)
+		return
+	}
+	curTop := sectorTopN(curReturns, 3)
+	priorTop := sectorTopN(priorReturns, 3)
+	ind.SectorRotationFlag = !setsEqual(curTop, priorTop)
+}
+
+// sumReturnsInWindow sums per-industry return_pct over the given date window.
+func sumReturnsInWindow(reader *marketdata.SectorIndexReader, dates []string) (map[string]float64, error) {
+	out := make(map[string]float64)
+	for _, d := range dates {
+		returns, ok, err := reader.Get(d)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		for industry, ret := range returns {
+			out[industry] += ret
+		}
+	}
+	return out, nil
+}
+
+// isValidGovernmentFlowDate returns true if the date has both the legacy
+// YYYYMMDD.json total file and the new-format YYYYMMDD_brokers.json per-broker
+// detail file (P0-3 rule: legacy zero-files from the broken parser era are
+// excluded as valid data days).
+func isValidGovernmentFlowDate(date, flowDir string) bool {
+	dateCompact := strings.ReplaceAll(date, "-", "")
+	legacyPath := filepath.Join(flowDir, dateCompact+".json")
+	brokersPath := filepath.Join(flowDir, dateCompact+"_brokers.json")
+	if _, err := os.Stat(legacyPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(brokersPath); err != nil {
+		return false
+	}
+	return true
+}
+
+// EnrichGovernmentBroker computes the consecutive-buy-day count for the
+// public-bank (government) broker channel. It reads both the legacy
+// YYYYMMDD.json and the per-broker YYYYMMDD_brokers.json files in
+// flowDir; per P0-3, a date is only valid if BOTH files exist (legacy-only
+// zero files from the broken parser era are excluded).
+//
+// Honesty rule (P0-1c): the indicator is filled ONLY when at least
+// MinDaysPublicBankConsecBuyDays valid dates are present; otherwise the
+// field stays at its zero value (= unavailable per detector contract).
+//
+// A non-empty but insufficient window results in zero + Warn log.
+func (c *PeriodIndicatorsCalculator) EnrichGovernmentBroker(ind *PeriodIndicators, tradingDate string, flowDir string) {
+	if flowDir == "" {
+		return
+	}
+	entries, err := os.ReadDir(flowDir)
+	if err != nil {
+		log.Printf("warn: government flow dir not accessible: %v", err)
+		return
+	}
+	// Collect valid dates <= tradingDate, sorted ascending.
+	var validDates []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		if !strings.HasSuffix(name, "_brokers.json") {
+			continue
+		}
+		// Extract YYYYMMDD from name.
+		base := strings.TrimSuffix(name, "_brokers.json")
+		if len(base) != 8 {
+			continue
+		}
+		dateCanonical := base[:4] + "-" + base[4:6] + "-" + base[6:8]
+		if dateCanonical > tradingDate {
+			continue
+		}
+		if isValidGovernmentFlowDate(dateCanonical, flowDir) {
+			validDates = append(validDates, dateCanonical)
+		}
+	}
+	sort.Strings(validDates)
+	if len(validDates) < MinDaysPublicBankConsecBuyDays {
+		log.Printf("warn: government broker insufficient valid dates=%d need=%d (tradingDate=%s)", len(validDates), MinDaysPublicBankConsecBuyDays, tradingDate)
+		return
+	}
+	// Read net flow per date from per-broker files; use total if per-broker
+	// is not granular, or sum public-bank rows if structured. We use the
+	// legacy total_net for simplicity (the public-bank net is the total of
+	// all public banks; both formats expose the same scalar).
+	streak := 0
+	consecutiveBuy := true
+	// Walk from most recent backward; count consecutive buy days.
+	for i := len(validDates) - 1; i >= 0; i-- {
+		dateCanonical := validDates[i]
+		dateCompact := strings.ReplaceAll(dateCanonical, "-", "")
+		legacyPath := filepath.Join(flowDir, dateCompact+".json")
+		data, err := os.ReadFile(legacyPath)
+		if err != nil {
+			// Missing legacy file: stop the streak.
+			consecutiveBuy = false
+			break
+		}
+		var legacy struct {
+			TotalNet float64 `json:"total_net"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			consecutiveBuy = false
+			break
+		}
+		if legacy.TotalNet > 0 && consecutiveBuy {
+			streak++
+		} else {
+			consecutiveBuy = false
+			break
+		}
+	}
+	ind.PublicBankConsecBuyDays = streak
+}
+
+// EnrichBatch3 wires EnrichSectorRotation + EnrichGovernmentBroker onto an
+// already-Enriched PeriodIndicators. Pass empty strings to skip either
+// source. All operations are best-effort: failures or insufficient data
+// leave the field at its zero value (= unavailable per detector contract).
+func (c *PeriodIndicatorsCalculator) EnrichBatch3(ind *PeriodIndicators, tradingDate, sectorIndexDir, govFlowDir string) {
+	c.EnrichSectorRotation(ind, tradingDate, sectorIndexDir)
+	c.EnrichGovernmentBroker(ind, tradingDate, govFlowDir)
 }

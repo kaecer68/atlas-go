@@ -99,6 +99,11 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 			t.Logf("  warn: enrich %s: %v", date, err)
 		}
 
+		// B5 Batch 3: sector rotation + public-bank consecutive buy
+		sectorIndexDir := filepath.Join(workDir, "data", "state", "sector_index")
+		govFlowDir := filepath.Join(workDir, "data", "state", "government_flow")
+		calc.EnrichBatch3(&ind, date, sectorIndexDir, govFlowDir)
+
 		// Detect period.
 		newPeriod := detector.DetectPeriod(ind)
 
@@ -114,10 +119,11 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 		if hasOld && oldPeriod != "" && string(newPeriod) != oldPeriod {
 			r.Changed = true
 			changeCount++
-			r.NewFields = fmt.Sprintf("MA5=%.0f MA20=%.0f S20=%.0f S50=%.0f THigh5=%.1f VMA20=%.0f TWDMA20=%.2f TWD1D=%.2f TWD5D=%.2f",
+			r.NewFields = fmt.Sprintf("MA5=%.0f MA20=%.0f S20=%.0f S50=%.0f THigh5=%.1f VMA20=%.0f TWDMA20=%.2f TWD1D=%.2f TWD5D=%.2f|SRot=%t PBBuy=%d",
 				ind.TAIEXMA5, ind.TAIEXMA20, ind.SOXMA20, ind.SOXMA50,
 				ind.TSMADRHigh5, ind.MarketVolumeMA20, ind.TWDMA20,
-				ind.TWDChange1D, ind.TWDChange5D)
+				ind.TWDChange1D, ind.TWDChange5D,
+				ind.SectorRotationFlag, ind.PublicBankConsecBuyDays)
 		}
 		if !hasOld || oldPeriod == "" {
 			unknownCount++
