@@ -72,9 +72,14 @@ Gated by `ATLAS_YAHOO_ENABLED` env var (default **`true`** as of 2026-06; explic
 | Rate Limit | 1 req / 2s, burst 5 |
 | Coverage | 11 Taiwan ETFs (0050, 0056, 00878, 006208, 00692, 00713, 00881, 00891, 00919, 00929, 00940) |
 
-### TWSE Sector Indices (`internal/marketdata/twse_sector_index_provider.go`)
+### TWSE Sector Indices (`internal/marketdata/twse_sector_index_provider.go` + `SectorIndexReader`)
 
-Fetches TWSE industry index data for 8 sectors (semiconductor, ai_supply_chain, electronics, shipping, financials, energy, robotics). Used by `RecalculateFromReturns()` for empirical correlation matrix computation.
+Fetches TWSE industry index data from `openapi.twse.com.tw/v1/exchangeReport/MI_INDEX?type=MS` and caches it to `data/state/sector_index/sector_indices_YYYYMMDD_YYYYMMDD.json`. Two schemas coexist:
+
+- **8-industry schema**（早期單日檔）：`semiconductor`, `ai_supply_chain`, `electronics`, `shipping`, `financials`, `energy`, `robotics`, `other_electronics`。
+- **18-industry schema**（批次檔與後期）：`auto`, `biotech`, `cement`, `construction`, `electronics`, `energy`, `financials`, `food`, `machinery`, `optoelectronics`, `other_electronics`, `plastics`, `retail`, `semiconductor`, `shipping`, `steel`, `telecom`, `textiles`。
+
+`SectorIndexReader`（`internal/marketdata/sector_index_reader.go`）提供統一讀取介面：讀取單日/批次檔，將 8/18 產業 schema 統一為 canonical 18 產業 return map，並以缺檔日期（如 2026-06-24）留空、不零填充。下游 `period_calculator` 將使用此 reader 計算 `SectorRotationFlag`（PR-B）。
 
 ### Sector Data (`internal/marketdata/sector_data_provider.go`)
 
@@ -257,14 +262,14 @@ FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"`
 | 屬性 | 內容 |
 |------|------|
 | 原始來源 | TWSE `bsr.twse.com.tw` — 券商分點買賣超日報表（公開資料，非 API） |
-| 取得方式 | HTTP GET → HTML parse / CSV fallback |
+| 取得方式 | HTTP POST 通過 ASP.NET 表單（`bsMenu.aspx`）→ HTML parse / CSV fallback；CAPTCHA 頁面會觸發錯誤而非寫入零值 |
 | 頻率 | 每日 T+1（盤後公布，次日排程抓取） |
 | 速率限制 | **Gateway channel：`rate.Inf`**（`adapter_government_flow.go` `RateLimit()` 回傳 `rate.NewLimiter(rate.Inf, 0)`，`HasLimiter=true`；檔案型 provider 不發出 HTTP，但符合 Constitution Art.2 強制限流）。**TWSE 網頁爬蟲：2 秒/請求**（由 `GovernmentBrokerAggregator` 端自訂，影響 Producer 排程，非 gateway 層 limiter） |
 | 範圍 | TW50 成份股（50 檔權值股） |
-| Channel ID | `government_flow` |
+| Channel ID | `government_flow` / `government_broker`（Producer 端） |
 | Provider | `GovernmentFlowProvider`（唯讀消費端） |
 | Producer | `GovernmentBrokerAggregator`（BK-13 寫入端） |
-| 儲存格式 | `data/state/government_flow/YYYYMMDD.json` — flat JSON 檔案 |
+| 儲存格式 | `data/state/government_flow/YYYYMMDD.json` — flat JSON 檔案（總計）；`data/state/government_flow/YYYYMMDD_brokers.json` — 各券商當日買/賣/淨買明細（PR-A 新增） |
 | Source 標籤 | `broker-aggregate` |
 
 ### 與其他通道的關鍵差異
@@ -279,14 +284,15 @@ FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"`
 
 ### 方法論（BK-13）
 
-**為何不用全體券商，而要篩選 5 家核心行庫？**
+**為何不用全體券商，而要篩選 8 家核心行庫？**
 
 TWSE 不公布「官股行庫」整體買賣超（它不是三大法人中的獨立類別）。但實務上可透過券商分點資料間接觀測：
 
-1. **篩選 5 家核心行庫**（非 8 家）：合庫(8060)、土銀(8030)、臺灣銀(8040)、台企銀(8010)、彰化(8064)
-   — 這 5 家的一般散戶開戶數極低，分點進出更能反映政府基金動向
+1. **篩選 8 家核心行庫**（依 `docs/specs/government-force-proxy-spec.md`）：
+   合庫(8060)、土銀(8030)、臺灣銀(8040)、台企銀(8010)、彰化(8064)、兆豐(8061)、第一金(8011)、華南永昌(8080)
+   — 皆為泛公股行庫旗下券商，總公司分點進出較能反映政府基金動向
 2. **僅取總公司分點**（非所有分行）：減少雜訊
-3. **僅觀察權值股**（TW50 成份股）：政府護盤只買大盤影響力高的股票
+3. **僅觀察權值股**（TW50 成份股）：政府護盤主要影響大盤權值股
 4. **T+1 聚合**：TWSE 盤後公布，次日排程自動抓取
 
 參考文獻：YOTTA 友讀〈看懂「八大行庫買賣超」，了解政府如何操作股市？〉
@@ -295,8 +301,9 @@ TWSE 不公布「官股行庫」整體買賣超（它不是三大法人中的獨
 
 ```
 GovernmentBrokerAggregator（Producer，28h 排程）
-  → TW50 成份股 × 5 家行庫總公司分點
-  → 加總淨買賣超 → 寫入 data/state/government_flow/YYYYMMDD.json
+  → TW50 成份股 × 8 家行庫總公司分點（PR-A 由 5 家擴充為 8 家）
+  → 加總淨買賣超 → 寫入 `data/state/government_flow/YYYYMMDD.json`
+  → 同時寫入 `data/state/government_flow/YYYYMMDD_brokers.json`（各券商買/賣/淨買明細，PR-A 新增）
   → GovernmentFlowProvider.Latest() 自動讀取
   → GovernmentFlowAdapter → gateway channel
   → MacroDataSnapshot.GovernmentNet

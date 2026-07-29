@@ -82,7 +82,9 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 | 5 | `data/state/macro/` | 總經數據 | E | 原油/BDI/DXY/台幣/加權/VIX。回補記錄見 `backfill_log.jsonl`（每行一筆，欄位：`date` / `field` / `value` / `change_pct` / `source_url` / `source_fetched_at` / `backfilled_at` / `baseline_date` / `baseline_value`）。`latest.json` / `previous.json` 不參與回補。 |
 | 6 | `data/state/margin/` | 融資融券 | E | TWSE API，市場情緒維度 |
 | 7 | `data/state/capital_flow/` | 資金流向 | E | 主力/法人流向，產業輪動 |
-| 8 | `data/state/experiments*` | 實驗記錄 | S/E/U | experiments.jsonl + 實驗目錄 + 突變提案 |
+| 8 | `data/state/government_flow/` | 官股行庫代理 | E | `YYYYMMDD.json`（總計）、`YYYYMMDD_brokers.json`（per-broker 明細，PR-A）、`YYYYMMDD_insurance.json`（保險券商）；來源 `bsr.twse.com.tw` |
+| 9 | `data/state/sector_index/` | 產業指數報酬 | E | `sector_indices_YYYYMMDD_YYYYMMDD.json`；8/18 產業 schema；`SectorIndexReader` 統一讀取（PR-A） |
+| 10 | `data/state/experiments*` | 實驗記錄 | S/E/U | experiments.jsonl + 實驗目錄 + 突變提案 |
 | 9 | `data/state/human_interventions*` | 人工干預 | S | 稽核軌跡，放行/否決/補追 |
 | 10 | `data/state/swarm*` | Swarm 狀態（模擬已降級） | E | 歷史 snapshot 與訓練記錄（不再產生新資料，PR #963） |
 | 11 | `data/state/traces/`, `strategy_techniques/` | 追蹤與心法 | U/S | 決策鏈追蹤 + 投資心法狀態 |
