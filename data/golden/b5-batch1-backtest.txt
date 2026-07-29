@@ -2,6 +2,8 @@ B5 Batch 1 Golden Test Results
 ==============================
 
 Total dates: 84
-Changed: 0
-Unknown: 84
+Changed: 1
+Unknown: 82
 
+Detail: 2026-07-28 consolidation → black_swan (MA5=43240 MA20=44167 deviation -5.93% < -5%)
+Source: PR #1417 (B5-T) 補入 2026-07-24/27 TAIEX 後 7/28 黑天鵝條件可評估
