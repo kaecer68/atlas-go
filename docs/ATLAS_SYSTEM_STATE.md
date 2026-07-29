@@ -256,3 +256,31 @@
   - availability semantic: 2 個（sector rotation 不足、gov broker 不足→ zero 代表 unavailable）
   - W1: 2 個 (source priority 18 wins / no average)
 - **不動範圍**：`period_detector.go`、`PeriodIndicators` struct、`period_history` 寫入路徑、legacy 零政府資金檔。
+
+
+---
+
+## Hermes MCP — 對外 period 欄位接源修復（已完成）
+
+- **分支**：`fix/20260730-mcp-period-source-of-truth`
+- **根因**：`buildRegimeHistoryData()`（`internal/monitoring/service/pipeline.go`）在計算對外 `period` 欄位時，並未讀取 `period_history`（PeriodDetector 真值），而是以三態 `regime` 為輸入呼叫 `methodology.RegimeToPeriod()` 反向推導：`RISK_ON → bull`、`RISK_OFF → downturn`、`NEUTRAL → consolidation`。但同一週期內七時期分類可為 `bull / turnaround_up / plateau / black_swan / consolidation` 等多種真值，反向推導必然失真。
+  - 典型受污染日：**2026-07-29** regime_history=`RISK_ON`（推導 `bull`） vs period_history=`consolidation`（真值）。外部 hermes agent 依「period=bull」做決策即誤判。
+- **修復內容**：
+  - **W1（接源修復）**：`buildRegimeHistoryData()` 的 `period` / `period_name_zh` / `current_period` 改讀 `period_history`（與 `market_period` 同源），不再用 `RegimeToPeriod()` 推導。
+  - **W2（缺值誠實）**：period_history 缺該日資料時，`period` 留空（`omitempty`），**不** fallback 回 `RegimeToPeriod` 推導（那就是假資料）。`regime` 欄位語意不變（三態向下相容層，下游在消費）。
+  - **W3（source 語意拆開）**：原本單一 `Source` 欄位永遠是 `macro_ingest`（regime_history 寫入端），語意只涵蓋 regime。改源後拆成 `regime_source`（regime_history row source）+ `period_source`（`period_history` 或空），外部 agent 不再誤判。
+  - **W4（向下相容）**：`market_period` 保留為 `period` 的 deprecated alias，兩值同源。新對外回應同時帶三個欄位：`period`（新真值）+ `market_period`（deprecated alias）+ `period_source`（來源標記）。
+- **涉及檔案**：
+  - `internal/monitoring/service/pipeline.go`（`RegimeSessionEntry` struct 拆欄位、`buildRegimeHistoryData` 接源、`loadRegimeHistoryFromSessions` 走 legacy 時 period 留空）
+  - `internal/monitoring/service/pipeline_test.go`（4 個新測試：period 接源正確、缺值誠實空字串、period_history store 錯誤仍誠實、legacy 路徑 period 留空）
+  - `client_web` / `admin_web` / `shared_web`：`static/js/shared/field_types.ts` 的 `RegimeSessionEntry` TS interface 同步更新欄位
+- **新測試 4 個**：
+  - `TestBuildRegimeHistoryData_PeriodFromHistory`：seed 7/29 period=consolidation + regime=RISK_ON，斷言 `Period == "consolidation"`（接源正確的直接證明）
+  - `TestBuildRegimeHistoryData_PeriodMissingIsEmpty`：period_history 缺該日 → `Period == ""`
+  - `TestBuildRegimeHistoryData_PeriodStoreErrorIsEmpty`：period_history load 失敗 → `Period == ""`
+  - `TestLoadRegimeHistoryFromSessions_PeriodEmpty`：legacy 路徑無 HistoricalStore → `Period == ""`
+- **不動範圍**：`period_detector.go`、PeriodIndicators struct、`period_history` 寫入端、RegimeToPeriod 函式（仍用於 `internal/recommender/handler.go` 的策略白名單查詢，與對外 MCP 欄位無關）、legacy 零政府資金檔、黃金測試 fixtures。
+- **預期影響（API 行為變更，外部 agent 須知）**：
+  - **對外 `period` 欄位**：以前是 `RegimeToPeriod(regime)` 推導的近似值，現在是 `period_history` 真值。當兩者不一致時，外部 agent 會看到新值（這是目的）。
+  - **對外 `market_period` 欄位**：保留以維持向後相容；值等同 `period` 同源。
+  - **對外 `source` 欄位**：已移除。新讀者請改用 `regime_source` / `period_source`。
