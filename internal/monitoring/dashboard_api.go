@@ -719,6 +719,13 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 		date = time.Unix(snap.RecordedAt, 0).UTC().Format("2006-01-02")
 	}
 	ind := SnapshotToPeriodIndicators(snap)
+	// B5 Batch 1: enrich with MA/change fields from historical snapshots.
+	// Errors are swallowed — if historical data is unavailable, indicators
+	// stay at zero (honest degradation, detector guards handle it).
+	if a.macroIngestor != nil {
+		calc := portfolio.NewCalculator()
+		_ = calc.EnrichFromDir(&ind, date, a.macroIngestor.SnapshotDir())
+	}
 	period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
 	now := time.Now().UTC()
 	row := ledger.PeriodRow{
@@ -1042,6 +1049,11 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				return nil
 			}
 			ind := SnapshotToPeriodIndicators(snap)
+			// B5 Batch 1: enrich with historical MA/change fields.
+			if a.macroIngestor != nil {
+				calc := portfolio.NewCalculator()
+				_ = calc.EnrichFromDir(&ind, time.Now().UTC().Format("2006-01-02"), a.macroIngestor.SnapshotDir())
+			}
 			assessment, _ := detector.DetectAssessment(ind)
 			indicators := make([]service.IndicatorHit, len(assessment.TriggeredIndicators))
 			for i, ti := range assessment.TriggeredIndicators {
