@@ -747,6 +747,8 @@ export interface DailySummaryReport {
   market_period?: string;
   period_confidence?: number;
   period_cash_level?: number;
+  period_cond_hit?: number;
+  period_cond_total?: number;
 }
 
 export interface DarwinianAgentInfo {
@@ -1694,6 +1696,15 @@ export interface Indicator {
   is_leading: boolean;
   weight: number;
   last_updated: string;
+}
+
+export interface IndicatorHit {
+  name: string;
+  value: number;
+  threshold: number;
+  relation: string;
+  hit: boolean;
+  input_available: boolean;
 }
 
 export interface IndustryClassification {
@@ -2658,6 +2669,10 @@ export interface PeriodSection {
   cash_reserve: number;
   allowed_strategies: string[];
   strategies_detail?: StrategyBrief[];
+  confidence: number;
+  conditions_hit: number;
+  conditions_total: number;
+  triggered_indicators?: IndicatorHit[];
 }
 
 export interface PhaseScoresConfig {

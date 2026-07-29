@@ -77,11 +77,49 @@ type PeriodIndicators struct {
 	NationalFundActive bool // 國安基金宣布進場
 }
 
+// TriggeredIndicator captures the evaluation outcome of a single period-detection
+// condition. It is purely observational metadata — it MUST NOT influence
+// detection logic.
+type TriggeredIndicator struct {
+	Name           string  `json:"name"`            // 指標名（與 ATLAS_METHODOLOGY.md §3 一致）
+	Value          float64 `json:"value"`           // 實際值
+	Threshold      float64 `json:"threshold"`       // 閾值
+	Relation       string  `json:"relation"`        // "gt" | "lt" | "gte" | "lte"
+	Hit            bool    `json:"hit"`             // 是否觸發
+	InputAvailable bool    `json:"input_available"` // 輸入欄位是否接入（非零/非空）
+}
+
+// PeriodAssessment is the full classification output including observability
+// metadata. DetectAssessment returns this; DetectPeriod delegates to it and
+// returns only the MarketPeriod.
+type PeriodAssessment struct {
+	MarketPeriod        domain.MarketPeriod  `json:"market_period"`
+	Confidence          float64              `json:"confidence"`
+	ConditionsHit       int                  `json:"conditions_hit"`
+	ConditionsTotal     int                  `json:"conditions_total"`
+	TriggeredIndicators []TriggeredIndicator `json:"triggered_indicators"`
+	IsFallback          bool                 `json:"is_fallback"`
+}
+
 // PeriodDetector implements seven-period market cycle detection per
 // ATLAS_METHODOLOGY.md §3. Thresholds are driven by config.PeriodDetectionConfig;
 // use NewPeriodDetector(config) or NewPeriodDetectorWithDefaults().
 type PeriodDetector struct {
 	cfg config.PeriodDetectionConfig
+}
+
+// package-level reference: keep isXxx methods alive for backward compatibility
+// and golden test validation. These are intentionally retained alongside their
+// assessXxx counterparts; both linters (golangci-lint unused, staticcheck U1000)
+// would otherwise flag them as dead code.
+var _ = [...]func(*PeriodDetector, PeriodIndicators) bool{
+	(*PeriodDetector).isBlackSwan,
+	(*PeriodDetector).isTurnaroundDown,
+	(*PeriodDetector).isDownturn,
+	(*PeriodDetector).isTurnaroundUp,
+	(*PeriodDetector).isBull,
+	(*PeriodDetector).isPlateau,
+	(*PeriodDetector).isConsolidation,
 }
 
 // NewPeriodDetector creates a detector with the given threshold config.
@@ -101,45 +139,8 @@ func NewPeriodDetectorWithDefaults() *PeriodDetector {
 // Returns PeriodConsolidation as the default fallback when insufficient
 // data is available to classify.
 func (d *PeriodDetector) DetectPeriod(ind PeriodIndicators) domain.MarketPeriod {
-	// ─── Detection Order (per constitution detection_order) ───
-
-	// 1. Black Swan — any single trigger fires
-	if d.isBlackSwan(ind) {
-		return domain.PeriodBlackSwan
-	}
-
-	// 2. Turnaround Down — any 3 conditions must be met
-	if d.isTurnaroundDown(ind) {
-		return domain.PeriodTurnaroundDown
-	}
-
-	// 3. Downturn — any 3 conditions must be met
-	if d.isDownturn(ind) {
-		return domain.PeriodDownturn
-	}
-
-	// 4. Turnaround Up — any 2 of 5 conditions
-	if d.isTurnaroundUp(ind) {
-		return domain.PeriodTurnaroundUp
-	}
-
-	// 5. Bull — any 3 conditions must be met
-	if d.isBull(ind) {
-		return domain.PeriodBull
-	}
-
-	// 6. Plateau — any 3 conditions must be met
-	if d.isPlateau(ind) {
-		return domain.PeriodPlateau
-	}
-
-	// 7. Consolidation — any 3 conditions must be met
-	if d.isConsolidation(ind) {
-		return domain.PeriodConsolidation
-	}
-
-	// Fallback: insufficient data to classify
-	return domain.PeriodConsolidation
+	assessment, _ := d.DetectAssessment(ind)
+	return assessment.MarketPeriod
 }
 
 // ─── Black Swan Detection ───
@@ -174,6 +175,78 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 	}
 
 	return triggers >= 1
+}
+
+// assessBlackSwan evaluates each black-swan condition independently and
+// returns the assessment metadata alongside the boolean result. The boolean
+// result is guaranteed identical to isBlackSwan(ind) for the same input.
+func (d *PeriodDetector) assessBlackSwan(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 5
+
+	// 1. Foreign panic sell: single day > 500億
+	thr1 := -(d.cfg.BlackSwanForeignSellBillion * 1_000_000_00)
+	hit1 := ind.ForeignSingleDayNet < thr1
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資單日賣超金額", Value: ind.ForeignSingleDayNet,
+		Threshold: thr1, Relation: "lt",
+		Hit: hit1, InputAvailable: true,
+	})
+	if hit1 {
+		condHit++
+	}
+
+	// 2. VIX spike
+	avail2 := ind.VIX != 0
+	hit2 := ind.VIX > d.cfg.BlackSwanVIX
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "VIX 恐慌指數", Value: ind.VIX,
+		Threshold: d.cfg.BlackSwanVIX, Relation: "gt",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. TAIEX deviation from 20-day MA
+	avail3 := ind.TAIEXMA20 > 0 && ind.TAIEXPrice > 0
+	hit3 := false
+	if avail3 {
+		decline := (ind.TAIEXPrice - ind.TAIEXMA20) / ind.TAIEXMA20
+		hit3 = decline < -(d.cfg.BlackSwanTAIEXDeclinePct / 100)
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "大盤偏離月線跌幅", Value: 0,
+		Threshold: -(d.cfg.BlackSwanTAIEXDeclinePct / 100), Relation: "lt",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. National fund intervention
+	hit4 := ind.NationalFundActive
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "國安基金進場", Value: 0,
+		Threshold: 0, Relation: "eq",
+		Hit: hit4, InputAvailable: true,
+	})
+	if hit4 {
+		condHit++
+	}
+
+	// 5. TWD panic depreciation
+	avail5 := ind.TWDChange1D != 0
+	hit5 := ind.TWDChange1D > d.cfg.BlackSwanTWDDepreciationPct
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "台幣單日貶值幅度", Value: ind.TWDChange1D,
+		Threshold: d.cfg.BlackSwanTWDDepreciationPct, Relation: "gt",
+		Hit: hit5, InputAvailable: avail5,
+	})
+	if avail5 && hit5 {
+		condHit++
+	}
+
+	return condHit >= 1, condHit, condTotal, indicators
 }
 
 // ─── Turnaround Down Detection ───
@@ -217,6 +290,78 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	return passed >= 3
 }
 
+// assessTurnaroundDown evaluates each turnaround-down condition and returns
+// assessment metadata. The boolean result is guaranteed identical to
+// isTurnaroundDown(ind) for the same input.
+func (d *PeriodDetector) assessTurnaroundDown(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 5
+	heavyThreshold := -(d.cfg.TurnDownSingleSellBillion * 1_000_000_00)
+
+	// 1. Foreign consecutive heavy sell
+	avail1 := ind.ForeignConsecSellDays != 0 || ind.ForeignSingleDayNet != 0 || ind.ForeignNetPeakSell != 0
+	hit1 := ind.ForeignConsecSellDays >= d.cfg.TurnDownConsecSellDays &&
+		(ind.ForeignSingleDayNet < heavyThreshold || ind.ForeignNetPeakSell < heavyThreshold)
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資連續重賣", Value: float64(ind.ForeignConsecSellDays),
+		Threshold: float64(d.cfg.TurnDownConsecSellDays), Relation: "gte",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. TWD breaks below monthly MA
+	avail2 := ind.TWDMA20 > 0 && ind.TWDChange1D != 0
+	hit2 := ind.TWDMA20 > 0 && ind.TWDChange1D > 0
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "台幣跌破月線且續貶", Value: ind.TWDChange1D,
+		Threshold: 0, Relation: "gt",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. Margin maintenance ratio < threshold
+	avail3 := ind.MarginMaintenanceRatio > 0
+	hit3 := ind.MarginMaintenanceRatio > 0 && ind.MarginMaintenanceRatio < d.cfg.TurnDownMarginMaintRatio
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "融資維持率", Value: ind.MarginMaintenanceRatio,
+		Threshold: d.cfg.TurnDownMarginMaintRatio, Relation: "lt",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. SOX below 50-day MA
+	avail4 := ind.SOXPrice > 0 && ind.SOXMA50 > 0
+	hit4 := ind.SOXPrice > 0 && ind.SOXMA50 > 0 && ind.SOXPrice < ind.SOXMA50
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "SOX 跌破季線", Value: ind.SOXPrice,
+		Threshold: ind.SOXMA50, Relation: "lt",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	// 5. Foreign futures turning short
+	futuresDelta := ind.ForeignFuturesOI - ind.ForeignFuturesOIPrev
+	avail5 := ind.ForeignFuturesOI != 0 || ind.ForeignFuturesOIPrev != 0
+	hit5 := futuresDelta < -float64(d.cfg.TurnDownFuturesOIDecrease) || ind.ForeignFuturesOI < 0
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資期貨轉空", Value: futuresDelta,
+		Threshold: -float64(d.cfg.TurnDownFuturesOIDecrease), Relation: "lt",
+		Hit: hit5, InputAvailable: avail5,
+	})
+	if avail5 && hit5 {
+		condHit++
+	}
+
+	return condHit >= 3, condHit, condTotal, indicators
+}
+
 // ─── Downturn Detection ───
 func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 	passed := 0
@@ -253,6 +398,86 @@ func (d *PeriodDetector) isDownturn(ind PeriodIndicators) bool {
 	}
 
 	return passed >= 3
+}
+
+// assessDownturn evaluates each downturn condition and returns assessment
+// metadata. The boolean result is guaranteed identical to isDownturn(ind).
+func (d *PeriodDetector) assessDownturn(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 5
+
+	// 1. Foreign sell slowing
+	avail1 := ind.ForeignNetPeakSell < 0 && ind.ForeignNet5DayAvg < 0
+	hit1 := false
+	if avail1 {
+		hit1 = ind.ForeignNet5DayAvg/ind.ForeignNetPeakSell < d.cfg.DownturnSellRatioToPeak
+	}
+	ratio := 0.0
+	if ind.ForeignNetPeakSell != 0 {
+		ratio = ind.ForeignNet5DayAvg / ind.ForeignNetPeakSell
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資賣壓趨緩(5日均/峰值)", Value: ratio,
+		Threshold: d.cfg.DownturnSellRatioToPeak, Relation: "lt",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. Margin balance reduction
+	avail2 := ind.MarginBalancePeak > 0 && ind.MarginBalance > 0
+	hit2 := false
+	reduction := 0.0
+	if avail2 {
+		reduction = (ind.MarginBalancePeak - ind.MarginBalance) / ind.MarginBalancePeak
+		hit2 = reduction > d.cfg.DownturnMarginReductionPct
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "融資餘額降幅", Value: reduction,
+		Threshold: d.cfg.DownturnMarginReductionPct, Relation: "gt",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. Public bank buying
+	avail3 := ind.PublicBankConsecBuyDays != 0
+	hit3 := ind.PublicBankConsecBuyDays >= d.cfg.DownturnPublicBankBuyDays
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "公股連續買超天數", Value: float64(ind.PublicBankConsecBuyDays),
+		Threshold: float64(d.cfg.DownturnPublicBankBuyDays), Relation: "gte",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. VIX elevated
+	avail4 := ind.VIX != 0
+	hit4 := ind.VIX > d.cfg.DownturnVIXMin
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "VIX 維持高檔", Value: ind.VIX,
+		Threshold: d.cfg.DownturnVIXMin, Relation: "gt",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	// 5. TAIEX between MA5 and MA20
+	avail5 := ind.TAIEXPrice > 0 && ind.TAIEXMA5 > 0 && ind.TAIEXMA20 > 0
+	hit5 := avail5 && ind.TAIEXPrice > ind.TAIEXMA5 && ind.TAIEXPrice < ind.TAIEXMA20
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "大盤介於5日與月線間", Value: ind.TAIEXPrice,
+		Threshold: ind.TAIEXMA20, Relation: "lt",
+		Hit: hit5, InputAvailable: avail5,
+	})
+	if avail5 && hit5 {
+		condHit++
+	}
+
+	return condHit >= 3, condHit, condTotal, indicators
 }
 
 // ─── Turnaround Up Detection ───
@@ -296,6 +521,78 @@ func (d *PeriodDetector) isTurnaroundUp(ind PeriodIndicators) bool {
 	return hits >= 2
 }
 
+// assessTurnaroundUp evaluates each turnaround-up condition and returns
+// assessment metadata. Identical boolean result to isTurnaroundUp(ind).
+func (d *PeriodDetector) assessTurnaroundUp(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 5
+
+	// 1. Foreign sudden buy
+	avail1 := ind.ForeignSingleDayNet != 0 || ind.ForeignConsecBuyDays != 0
+	hit1 := ind.ForeignSingleDayNet > (d.cfg.TurnUpSingleBuyBillion*1_000_000_00) || ind.ForeignConsecBuyDays >= d.cfg.TurnUpConsecBuyDays
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資突擊買超", Value: ind.ForeignSingleDayNet,
+		Threshold: d.cfg.TurnUpSingleBuyBillion * 1_000_000_00, Relation: "gt",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. TWD appreciation
+	avail2 := ind.TWDChange1D != 0 || ind.TWDChange3D != 0
+	hit2 := ind.TWDChange1D < d.cfg.TurnUpTWDApprec1DPct || ind.TWDChange3D < d.cfg.TurnUpTWDApprec3DPct
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "台幣急升", Value: ind.TWDChange1D,
+		Threshold: d.cfg.TurnUpTWDApprec1DPct, Relation: "lt",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. SOX break above 50-day MA
+	avail3 := ind.SOXPrice > 0 && ind.SOXMA50 > 0
+	hit3 := avail3 && (ind.SOXPrice > ind.SOXMA50 || (ind.SOXMA20 > 0 && ind.SOXMA20 > ind.SOXMA50))
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "SOX 突破季線", Value: ind.SOXPrice,
+		Threshold: ind.SOXMA50, Relation: "gt",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. TSM ADR surge
+	avail4 := ind.TSMADRPrice > 0 && ind.TSMADRHigh5 > 0
+	hit4 := false
+	if avail4 {
+		hit4 = ind.TSMADRPrice > ind.TSMADRHigh5 && (ind.TSMADRPrice-ind.TSMADRHigh5)/ind.TSMADRHigh5*100 > d.cfg.TurnUpTSMADRPct
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "TSM ADR 突破5日高", Value: ind.TSMADRPrice,
+		Threshold: ind.TSMADRHigh5, Relation: "gt",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	// 5. Futures OI increase
+	futuresDelta := ind.ForeignFuturesOI - ind.ForeignFuturesOIPrev
+	avail5 := ind.ForeignFuturesOI != 0 || ind.ForeignFuturesOIPrev != 0
+	hit5 := futuresDelta > float64(d.cfg.TurnUpFuturesOIIncrease)
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資期貨OI增幅", Value: futuresDelta,
+		Threshold: float64(d.cfg.TurnUpFuturesOIIncrease), Relation: "gt",
+		Hit: hit5, InputAvailable: avail5,
+	})
+	if avail5 && hit5 {
+		condHit++
+	}
+
+	return condHit >= 2, condHit, condTotal, indicators
+}
+
 // ─── Bull Detection ───
 
 func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
@@ -324,6 +621,62 @@ func (d *PeriodDetector) isBull(ind PeriodIndicators) bool {
 	}
 
 	return passed >= 3
+}
+
+// assessBull evaluates each bull-market condition and returns assessment
+// metadata. Identical boolean result to isBull(ind).
+func (d *PeriodDetector) assessBull(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 4
+
+	// 1. Foreign continuous buy
+	avail1 := ind.ForeignBuyDays10 != 0
+	hit1 := ind.ForeignBuyDays10 >= int(d.cfg.BullForeignBuyRatio10*10)
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資10日買超天數", Value: float64(ind.ForeignBuyDays10),
+		Threshold: d.cfg.BullForeignBuyRatio10 * 10, Relation: "gte",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. Futures OI high
+	avail2 := ind.ForeignFuturesOI != 0
+	hit2 := ind.ForeignFuturesOI > float64(d.cfg.BullFuturesOIMin)
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資期貨OI水位", Value: ind.ForeignFuturesOI,
+		Threshold: float64(d.cfg.BullFuturesOIMin), Relation: "gt",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. Margin mild increase
+	avail3 := ind.MarginBalanceChange5D > 0
+	hit3 := ind.MarginBalanceChange5D > 0 && ind.MarginBalanceChange5D < d.cfg.BullMarginDailyMaxPct*5
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "融資溫和增加", Value: ind.MarginBalanceChange5D,
+		Threshold: d.cfg.BullMarginDailyMaxPct * 5, Relation: "lt",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. TAIEX above MA20 with positive slope
+	avail4 := ind.TAIEXPrice > 0 && ind.TAIEXMA20 > 0
+	hit4 := avail4 && ind.TAIEXPrice > ind.TAIEXMA20 && ind.TAIEXMA20Slope > 0
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "大盤站穩月線且斜率向上", Value: ind.TAIEXPrice,
+		Threshold: ind.TAIEXMA20, Relation: "gt",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	return condHit >= 3, condHit, condTotal, indicators
 }
 
 // ─── Plateau Detection ───
@@ -364,6 +717,83 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 	return passed >= 3
 }
 
+// assessPlateau evaluates each plateau condition and returns assessment
+// metadata. Identical boolean result to isPlateau(ind).
+func (d *PeriodDetector) assessPlateau(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 5
+
+	// 1. Foreign buy slowing
+	avail1 := ind.ForeignNet10DayAvg > 0 && ind.ForeignNet5DayAvg > 0
+	hit1 := false
+	ratio1 := 0.0
+	if avail1 {
+		ratio1 = ind.ForeignNet5DayAvg / ind.ForeignNet10DayAvg
+		hit1 = ratio1 < d.cfg.PlateauBuyRatio3to10
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資買超趨緩(5日/10日)", Value: ratio1,
+		Threshold: d.cfg.PlateauBuyRatio3to10, Relation: "lt",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. Futures declining
+	avail2 := ind.ForeignFuturesOIDelta3 < 0
+	hit2 := ind.ForeignFuturesOIDelta3 < 0 && ind.ForeignFuturesOIDelta3 <= -3
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資期貨連減天數", Value: float64(ind.ForeignFuturesOIDelta3),
+		Threshold: -3, Relation: "lte",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. Day trade ratio
+	avail3 := ind.DayTradeRatio > 0
+	hit3 := ind.DayTradeRatio > d.cfg.PlateauDayTradeMinPct
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "當沖佔比", Value: ind.DayTradeRatio,
+		Threshold: d.cfg.PlateauDayTradeMinPct, Relation: "gt",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. TAIEX near MA20
+	avail4 := ind.TAIEXPrice > 0 && ind.TAIEXMA20 > 0
+	hit4 := false
+	if avail4 {
+		deviation := (ind.TAIEXPrice - ind.TAIEXMA20) / ind.TAIEXMA20
+		hit4 = deviation > -(d.cfg.PlateauTAIEXDeviationPct/100) && deviation < (d.cfg.PlateauTAIEXDeviationPct/100)
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "大盤貼近月線", Value: ind.TAIEXPrice,
+		Threshold: ind.TAIEXMA20, Relation: "near",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	// 5. Sector rotation
+	avail5 := ind.SectorRotationFlag
+	hit5 := ind.SectorRotationFlag
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "類股輪動", Value: 0,
+		Threshold: 0, Relation: "eq",
+		Hit: hit5, InputAvailable: avail5,
+	})
+	if avail5 && hit5 {
+		condHit++
+	}
+
+	return condHit >= 3, condHit, condTotal, indicators
+}
+
 // ─── Consolidation Detection ───
 
 func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
@@ -393,6 +823,142 @@ func (d *PeriodDetector) isConsolidation(ind PeriodIndicators) bool {
 	}
 
 	return passed >= 3
+}
+
+// assessConsolidation evaluates each consolidation condition and returns
+// assessment metadata. Identical boolean result to isConsolidation(ind).
+func (d *PeriodDetector) assessConsolidation(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
+	condTotal = 4
+
+	// 1. Foreign mixed buy/sell
+	avail1 := ind.ForeignBuyDays10 > 0 || ind.ForeignSellDays10 > 0
+	hit1 := ind.ForeignBuyDays10 > d.cfg.ConsolidationBuyDaysMin && ind.ForeignSellDays10 > d.cfg.ConsolidationSellDaysMin
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "外資買賣天數交錯", Value: float64(ind.ForeignBuyDays10),
+		Threshold: float64(d.cfg.ConsolidationBuyDaysMin), Relation: "gt",
+		Hit: hit1, InputAvailable: avail1,
+	})
+	if avail1 && hit1 {
+		condHit++
+	}
+
+	// 2. TWD range-bound
+	avail2 := ind.TWDMA20 > 0 && ind.TWDChange5D != 0
+	hit2 := ind.TWDMA20 > 0 && ind.TWDChange5D > -d.cfg.ConsolidationTWDBandPct && ind.TWDChange5D < d.cfg.ConsolidationTWDBandPct
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "台幣區間整理", Value: ind.TWDChange5D,
+		Threshold: d.cfg.ConsolidationTWDBandPct, Relation: "between",
+		Hit: hit2, InputAvailable: avail2,
+	})
+	if avail2 && hit2 {
+		condHit++
+	}
+
+	// 3. No sector leader
+	avail3 := ind.SectorRotationFlag
+	hit3 := ind.SectorRotationFlag
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "無領導類股", Value: 0,
+		Threshold: 0, Relation: "eq",
+		Hit: hit3, InputAvailable: avail3,
+	})
+	if avail3 && hit3 {
+		condHit++
+	}
+
+	// 4. Volume contraction
+	avail4 := ind.MarketVolume > 0 && ind.MarketVolumeMA20 > 0
+	hit4 := false
+	if avail4 {
+		ratio := ind.MarketVolume / ind.MarketVolumeMA20
+		hit4 = ratio >= d.cfg.ConsolidationVolRatioMin && ratio <= d.cfg.ConsolidationVolRatioMax
+	}
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "成交量收縮", Value: ind.MarketVolume,
+		Threshold: ind.MarketVolumeMA20, Relation: "between",
+		Hit: hit4, InputAvailable: avail4,
+	})
+	if avail4 && hit4 {
+		condHit++
+	}
+
+	return condHit >= 3, condHit, condTotal, indicators
+}
+
+// DetectAssessment classifies the current market into one of seven periods
+// and returns the full assessment including confidence and triggered indicators.
+// Detection order follows the priority chain; the first matching period wins.
+// Falls back to PeriodConsolidation when no period matches.
+func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessment, error) {
+	var assessment PeriodAssessment
+
+	// ─── Detection Order ───
+
+	// 1. Black Swan
+	if hit, condHit, condTotal, indicators := d.assessBlackSwan(ind); hit {
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodBlackSwan,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else if hit, condHit, condTotal, indicators := d.assessTurnaroundDown(ind); hit {
+		// 2. Turnaround Down
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodTurnaroundDown,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else if hit, condHit, condTotal, indicators := d.assessDownturn(ind); hit {
+		// 3. Downturn
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodDownturn,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else if hit, condHit, condTotal, indicators := d.assessTurnaroundUp(ind); hit {
+		// 4. Turnaround Up
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodTurnaroundUp,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else if hit, condHit, condTotal, indicators := d.assessBull(ind); hit {
+		// 5. Bull
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodBull,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else if hit, condHit, condTotal, indicators := d.assessPlateau(ind); hit {
+		// 6. Plateau
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodPlateau,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	} else {
+		// 7. Consolidation (last in chain — always evaluate)
+		_, condHit, condTotal, indicators := d.assessConsolidation(ind)
+		assessment = PeriodAssessment{
+			MarketPeriod:        domain.PeriodConsolidation,
+			ConditionsHit:       condHit,
+			ConditionsTotal:     condTotal,
+			TriggeredIndicators: indicators,
+		}
+	}
+
+	// Compute confidence = conditions_hit / conditions_total (Formula A)
+	if assessment.ConditionsTotal > 0 {
+		assessment.Confidence = float64(assessment.ConditionsHit) / float64(assessment.ConditionsTotal)
+	}
+
+	return assessment, nil
 }
 
 // ─── Downward Compatibility Mappings ───

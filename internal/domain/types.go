@@ -87,6 +87,8 @@ type DailySummaryReport struct {
 	MarketPeriod     string  `json:"market_period,omitempty"`     // period id: downturn/bull/plateau/...
 	PeriodConfidence float64 `json:"period_confidence,omitempty"` // 0-1 detection confidence
 	PeriodCashLevel  float64 `json:"period_cash_level,omitempty"` // recommended cash reserve (0-1)
+	PeriodCondHit    int     `json:"period_cond_hit,omitempty"`   // conditions that actually triggered
+	PeriodCondTotal  int     `json:"period_cond_total,omitempty"` // total conditions for this period
 }
 
 type TaxSnapshot struct {

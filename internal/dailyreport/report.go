@@ -34,6 +34,22 @@ type PeriodSection struct {
 	CashReserve       float64                `json:"cash_reserve"`
 	AllowedStrategies []string               `json:"allowed_strategies"`
 	StrategiesDetail  []config.StrategyBrief `json:"strategies_detail,omitempty"`
+	Confidence        float64                `json:"confidence"`
+	ConditionsHit     int                    `json:"conditions_hit"`
+	ConditionsTotal   int                    `json:"conditions_total"`
+	// TriggeredIndicators lists each condition evaluated, including unavailable inputs.
+	TriggeredIndicators []IndicatorHit `json:"triggered_indicators,omitempty"`
+}
+
+// IndicatorHit records the outcome of a single period-detection condition.
+// Mirrors portfolio.TriggeredIndicator at the report DTO layer.
+type IndicatorHit struct {
+	Name           string  `json:"name"`
+	Value          float64 `json:"value"`
+	Threshold      float64 `json:"threshold"`
+	Relation       string  `json:"relation"`
+	Hit            bool    `json:"hit"`
+	InputAvailable bool    `json:"input_available"`
 }
 
 type GlobalOverview struct {
@@ -101,11 +117,15 @@ type Generator struct {
 
 // PeriodInfo carries the seven-period classification for a daily report.
 type PeriodInfo struct {
-	MarketPeriod      string
-	PeriodNameZH      string
-	CashLevel         float64
-	AllowedStrategies []string
-	StrategiesDetail  []config.StrategyBrief
+	MarketPeriod        string
+	PeriodNameZH        string
+	CashLevel           float64
+	AllowedStrategies   []string
+	StrategiesDetail    []config.StrategyBrief
+	Confidence          float64
+	ConditionsHit       int
+	ConditionsTotal     int
+	TriggeredIndicators []IndicatorHit
 }
 
 // PeriodProvider returns the current period section when available.
@@ -195,11 +215,15 @@ func (g *Generator) Generate() *Report {
 	if g.periodProvider != nil {
 		if info := g.periodProvider(); info != nil {
 			r.Period = &PeriodSection{
-				MarketPeriod:      info.MarketPeriod,
-				PeriodNameZH:      info.PeriodNameZH,
-				CashReserve:       info.CashLevel,
-				AllowedStrategies: info.AllowedStrategies,
-				StrategiesDetail:  info.StrategiesDetail,
+				MarketPeriod:        info.MarketPeriod,
+				PeriodNameZH:        info.PeriodNameZH,
+				CashReserve:         info.CashLevel,
+				AllowedStrategies:   info.AllowedStrategies,
+				StrategiesDetail:    info.StrategiesDetail,
+				Confidence:          info.Confidence,
+				ConditionsHit:       info.ConditionsHit,
+				ConditionsTotal:     info.ConditionsTotal,
+				TriggeredIndicators: info.TriggeredIndicators,
 			}
 		}
 	}

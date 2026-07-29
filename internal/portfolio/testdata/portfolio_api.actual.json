@@ -635,6 +635,12 @@
       "results": ""
     },
     {
+      "name": "SetForceRetailZScore",
+      "params": "(z float64)",
+      "receiver": "FactorBridge",
+      "results": ""
+    },
+    {
       "name": "CalculateAllScores",
       "params": "(symbol string, quotes map[string]domain.Quote, agentRecs []domain.Recommendation, agentWeights map[string]float64, factorWeights map[FactorType]float64, bridgeInputs ...FactorBridgeInput)",
       "receiver": "FactorEngine",
@@ -1219,6 +1225,12 @@
       "params": "(hp *HistoricalPrices)",
       "receiver": "Optimizer",
       "results": "(*Optimizer)"
+    },
+    {
+      "name": "DetectAssessment",
+      "params": "(ind PeriodIndicators)",
+      "receiver": "PeriodDetector",
+      "results": "(PeriodAssessment, error)"
     },
     {
       "name": "DetectPeriod",
@@ -2060,6 +2072,7 @@
         "marginAvg float64",
         "marginStd float64",
         "calculator *retail.Calculator",
+        "forceRetailZScore float64",
         "stressIndex *StressIndex"
       ],
       "kind": "struct",
@@ -2276,6 +2289,18 @@
       ],
       "kind": "struct",
       "name": "PerformanceMetrics"
+    },
+    {
+      "fields": [
+        "MarketPeriod domain.MarketPeriod",
+        "Confidence float64",
+        "ConditionsHit int",
+        "ConditionsTotal int",
+        "TriggeredIndicators []TriggeredIndicator",
+        "IsFallback bool"
+      ],
+      "kind": "struct",
+      "name": "PeriodAssessment"
     },
     {
       "fields": [
@@ -2970,6 +2995,18 @@
       ],
       "kind": "struct",
       "name": "TradeRecord"
+    },
+    {
+      "fields": [
+        "Name string",
+        "Value float64",
+        "Threshold float64",
+        "Relation string",
+        "Hit bool",
+        "InputAvailable bool"
+      ],
+      "kind": "struct",
+      "name": "TriggeredIndicator"
     },
     {
       "fields": [

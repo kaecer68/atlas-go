@@ -70,6 +70,7 @@ go build -ldflags="-w -s" ./cmd/atlas ./cmd/atlas-mcp || {
 }
 
 echo "[4/4] running tests (excluding cmd/atlas integration)"
+# shellcheck disable=SC2046 # intentional word splitting: go test expects separate package args
 go test -count=1 -timeout="${CLONE_TIMEOUT}s" $(go list ./... | grep -v '/cmd/atlas$') || {
   echo "WARNING: some tests failed — check output above"
   exit 1

@@ -26,9 +26,22 @@ type ReportEntry struct {
 
 // PeriodInfo carries the seven-period classification result for daily summary reports.
 type PeriodInfo struct {
-	MarketPeriod string
-	Confidence   float64
-	CashLevel    float64
+	MarketPeriod        string
+	Confidence          float64
+	CashLevel           float64
+	ConditionsHit       int
+	ConditionsTotal     int
+	TriggeredIndicators []IndicatorHit
+}
+
+// IndicatorHit mirrors the portfolio.TriggeredIndicator at the report-service DTO layer.
+type IndicatorHit struct {
+	Name           string  `json:"name"`
+	Value          float64 `json:"value"`
+	Threshold      float64 `json:"threshold"`
+	Relation       string  `json:"relation"`
+	Hit            bool    `json:"hit"`
+	InputAvailable bool    `json:"input_available"`
 }
 
 // PeriodProvider returns the current period classification when available.
@@ -134,6 +147,8 @@ func (s *ReportService) LoadDailySummary(date string) (*domain.DailySummaryRepor
 			report.MarketPeriod = info.MarketPeriod
 			report.PeriodConfidence = info.Confidence
 			report.PeriodCashLevel = info.CashLevel
+			report.PeriodCondHit = info.ConditionsHit
+			report.PeriodCondTotal = info.ConditionsTotal
 		}
 	}
 

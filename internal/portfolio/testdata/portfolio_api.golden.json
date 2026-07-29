@@ -1227,6 +1227,12 @@
       "results": "(*Optimizer)"
     },
     {
+      "name": "DetectAssessment",
+      "params": "(ind PeriodIndicators)",
+      "receiver": "PeriodDetector",
+      "results": "(PeriodAssessment, error)"
+    },
+    {
       "name": "DetectPeriod",
       "params": "(ind PeriodIndicators)",
       "receiver": "PeriodDetector",
@@ -2286,6 +2292,18 @@
     },
     {
       "fields": [
+        "MarketPeriod domain.MarketPeriod",
+        "Confidence float64",
+        "ConditionsHit int",
+        "ConditionsTotal int",
+        "TriggeredIndicators []TriggeredIndicator",
+        "IsFallback bool"
+      ],
+      "kind": "struct",
+      "name": "PeriodAssessment"
+    },
+    {
+      "fields": [
         "cfg config.PeriodDetectionConfig"
       ],
       "kind": "struct",
@@ -2977,6 +2995,18 @@
       ],
       "kind": "struct",
       "name": "TradeRecord"
+    },
+    {
+      "fields": [
+        "Name string",
+        "Value float64",
+        "Threshold float64",
+        "Relation string",
+        "Hit bool",
+        "InputAvailable bool"
+      ],
+      "kind": "struct",
+      "name": "TriggeredIndicator"
     },
     {
       "fields": [
