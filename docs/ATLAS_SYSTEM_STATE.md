@@ -124,11 +124,12 @@
 | (a) B5-1 only | 2 | 7/28→turnaround_down, 7/29→turnaround_down |
 | (b) W1 degradation | 6 | 7/24-7/29 TAIEXMA20 非零→零（誠實降級） |
 | (c) B5-2 only | 0 | 無新增改判 |
-| (d) W1+B5-2 combined | 0 | — |
+| (d) W1+B5-2 combined | 2 | 7/24 與 7/27 W1 input 降級 + B5-2 chip 統計添加後，2 筆額外改判（7/24 與 7/27 由 B5-1 W1 缺失 → B5-2 補 chip 後觸發額外差異） |
 
 ## B5-T — TAIEX 7/24、7/27 快照回補（已完成）
 
-- **分支**：`fix/20260729-taiex-backfill`（worktree：`~/workspace/atlas-taiex-backfill`，待 review）
+- **PR #1417**（合併日期：2026-07-29）
+- **分支**：`fix/20260729-taiex-backfill`（worktree：`~/workspace/atlas-taiex-backfill`）
 - **根因**：Yahoo Finance `^TWII` 在 7/24 與 7/27 兩天 fetch 間歇性失敗，造成 `MacroDataSnapshot` 中 `taiex` 鍵整欄缺失（其他欄位如 `foreign_investor_net`、`retail_margin_balance` 仍正常寫入）。同期 `historical_volatility` 雖有值但為共用 `^TWII` 快取，已在另一個問題上跟進。
 - **回補來源**：TWSE OpenAPI `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=YYYYMMDD&type=IND`（即時拉取，無硬編碼）
 - **回補工具**：`cmd/macrobackfill/`（獨立 commit，11 個單元測試全綠）
