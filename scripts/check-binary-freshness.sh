@@ -24,6 +24,10 @@ cleanup() {
     for container in "${TEMP_CONTAINERS[@]}"; do
         "$DOCKER_BIN" rm -f "$container" >/dev/null 2>&1
     done
+    # Belt-and-suspenders: catch any atlas.binary-freshness-labeled container
+    # the explicit rm loop may have missed (daemon hiccup, race, etc).
+    # Runs regardless of TEMP_CONTAINERS contents.
+    "$DOCKER_BIN" container prune -f --filter "label=atlas.binary-freshness=true" >/dev/null 2>&1 || true
     exit "$status"
 }
 trap cleanup EXIT
