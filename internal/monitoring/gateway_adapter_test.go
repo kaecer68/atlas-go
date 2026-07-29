@@ -797,6 +797,10 @@ func TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusDegraded(t *testing.T) 
 		}
 		t.Errorf("missing expected failed channels: %v", remaining)
 	}
+	// E2: end-to-end evidence — Yahoo down for TAIEX should leave the field
+	// zero and record the channel in FailedChannels.
+	t.Logf("E2 snapshot TAIEX: %+v", snap.TAIEX)
+	t.Logf("E2 snapshot FailedChannels: %v", snap.FailedChannels)
 }
 
 // TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusStale verifies that when
