@@ -1,334 +1,548 @@
-# Architecture
+# Atlas 系統架構活地圖
 
-## Product Intent
-
-`atlas-go` is a simulation-first investment research system for Taiwan stocks. The system is built to let OpenClaw run strategy experiments, evaluate agent performance, and iterate prompts or rules without placing real orders.
-
-## L2.3 PoC — LLM-driven sector agents (Wave 11)
-
-L2.3 introduces an opt-in LLM-driven sector agent that drives a `plan → tool_call → reflect` loop via a `SectorAgentLLM` + `DriverAdapter`. Flag-gated behind `UseLLMSectorAgents` (default **off**) so the deterministic sector agents remain the production path until L2.4 observation validates LLM behavior.
-
-**Components**:
-- `internal/orchestrator/semiconductor_llm_agent.go` — `SemiconductorLLMAgent` (gate mechanism, deterministic fallback)
-- `internal/orchestrator/llm_driver_adapter.go` — `DriverAdapter` (LLM call + response parsing)
-- `internal/llm/prompts/{plan,reflect}.go` — Prompt templates with embedded JSON spec
-- `internal/llm/test_tools.go` — `TestTools()` (3 mock tools: factor weight, regime, liquidity)
-- `internal/orchestrator/sector_agent_llm_test_helpers.go` — `MockLLMDriver` (test-only)
-
-**Documentation**: [`docs/specs/llm-sector-agent-spec.md`](specs/llm-sector-agent-spec.md) (moved from `wave-11/L2_3_PLAN_REFLECT.md`), [`docs/guides/adding-sector-agents.md`](guides/adding-sector-agents.md) (moved from `wave-11/SEMICONDUCTOR_EXECUTOR.md`), [`docs/specs/agent-loop-state-machine-spec.md`](specs/agent-loop-state-machine-spec.md) (moved from `wave-11/AGENT_LOOP_STATE_MACHINE.md`). L2.4 觀察期文件見 [`docs/operations/l2-4-runbook.md`](operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](specs/l2-4-observation-spec.md)（PR #821 / PR #824 永久化）。
-
-**Tag**: `v0.0.0.37` (PR5b). Plan: `.omo/plans/wave10-l2.3-execution.md`.
-
-## Core Principles
-
-- Simulation before execution
-- Audit trail over intuition
-- Structured messages between layers
-- Replaceable data providers
-- Risk controls at the engine layer, not only in prompts
-
-## Layered Agent Model
-
-### Layer 1: Taiwan Market Context
-
-Purpose: determine regime, risk budget, and sector bias.
-
-Initial agents:
-
-- 台灣總經
-- 外資流向
-- TWD / USD FX
-- US Tech Spillover
-- Semiconductor Cycle
-- Index Breadth
-- Futures and Options Sentiment
-
-### Layer 2: Sector Desks
-
-Purpose: select opportunities inside Taiwan-specific sectors.
-
-Initial desks:
-
-- 半導體產業桌
-- AI 供應鏈產業桌
-- PCB and Thermal
-- 金融產業桌
-- 航運產業桌
-- Consumer and Tourism
-- High Dividend and ETF Rotation
-- Small Cap Momentum
-
-### Layer 3: Style Filters
-
-Purpose: filter raw ideas using style-specific lenses.
-
-Initial styles:
-
-- 成長動能
-- 價值股息
-- 獲利品質
-- 技術突破
-- Chip and Flow Confirmation
-
-### Layer 4: Decision Layer
-
-Purpose: enforce risk, simulate execution, and record final actions.
-
-Decision agents:
-
-- 風控長
-- Execution Simulator
-- 投資長
-- Research Auditor
-
-## Wave 11 投資核心框架（v0.0.0.37）
-
-Layer 1-Layer 4 的決策鏈之上，Wave 11 引入 7 個新模組，圍繞「全球資金流向決定方向，資金勢力共鳴決定強度，事件驅動資金流決定節奏」的投資邏輯：
-
-| 模組 | 角色 | 消費 | 產出 |
-|------|------|------|------|
-| `internal/strategy_ranker` | 策略驗證與排名 | backtest 引擎 | Sharpe/最大回撤/勝率/TAIEX 相關係數 + 排名分層 + tier 標籤 |
-| `internal/capitalflow` | 資金流向分析 | MacroDataSnapshot (7 勢力原始值) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
-| `internal/eventdriven` | 事件預測 | `industry.EventCalendar` + `capitalflow` 品質分數 | 5 日 forward 預測 + ETF 規模×權重預估 + 營收驚喜 |
-| `internal/strategy_ranker` | 策略排名 | `strategy_ranker` 內部驗證結果 | ranked strategies + tier (public/paid) |
-| `internal/subscription` | 使用者訂閱 | — | SQLite users + JWT + 3-tier middleware |
-| `internal/recommender` | 推薦分層 | `subscription` user tier + `strategy_ranker` | tier-gated 策略推薦 + 市場燈號 |
-| `internal/dailyreport` | 每日報告 | `capitalflow` + `eventdriven` + macro | JSON + Markdown 報告 |
-
-**模組關係圖**（從數據到推薦）：
-
-```text
-              ┌──────────────────────────────────────────────────┐
-              │ Market Data → MacroDataSnapshot                 │
-              │ (TWSE, Fugle, FinMind, Fubon, Yahoo, TAIFEX...) │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ capitalflow：7 勢力 Z-score + 共振 + 品質分數       │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ eventdriven：5 日預測 + ETF 預估 + 營收驚喜        │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ dailyreport：每日 JSON + Markdown 報告             │
-              └──────────────────────────────────────────────────┘
-
-              ┌──────────────────────────────────────────────────┐
-              │ backtest 引擎 → strategy_ranker（驗證 + 排名 + tier） │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ strategy_ranker：排名 + tier 標籤                  │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ subscription：3-tier + JWT auth + 7 天試用         │
-              └────────────────────┬─────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────────────────┐
-              │ recommender：tier-gated 推薦（Phase B 渲染）     │
-              └──────────────────────────────────────────────────┘
-```
-
-**API 端點**（v0.0.0.37 新增）：
-- `/api/capital-flow/{daily,summary,history}` — `capitalflow`（history 為 PR #1228 新增，days 預設 252）
-- `/api/events/{calendar,prediction}` — `eventdriven`
-- `/api/recommendations` — `recommender`（需 JWT）
-- `/api/reports/{latest,archive,subscribe}` — `dailyreport`
-- `/api/auth/{register,login}` + `/api/user/{profile,subscription}` — `subscription`
-
-**前端整合**（Phase A/B/C）：
-- `shared_web/static/js/services/auth.js`（client-web 透過 esbuild `shared-static-fallback` plugin 在 build 時解析至此路徑）— JWT + tier 解析
-- `client_web/static/js/components/home-tier-sections.js` — 依 tier 渲染 dashboard（`renderHomeTierSections()`，4 個 API 平行呼叫）
-- `client_web/static/js/page-shells/{login,register,premium,mcp,errors/404}.js` — 認證、MCP 整合、404 fallback
-
-## Data Flow
-
-```text
-Market Data -> Layer 1 -> Screener -> Layer 2 -> Layer 3 -> 風控長 -> 投資長 -> Simulation Engine -> Scorecard
-```
-
-**Screener** (`internal/screener/`) runs before Layer 2/3 executors generate recommendations. It filters symbols using declarative criteria (P/E, P/B, dividend yield, momentum, volume, and total factor score) so that only qualifying stocks reach the sector desks and style filters.
-
-### 決策鏈透明度（Audit Trail）
-
-系統同時輸出完整的計算過程供人工稽核：
-
-1. **個股因子** → `FactorScores` 含四因子（動能/價值/品質/Agent）與總分，每因子含公式、原始輸入、是否 fallback
-2. **信念增減** → `ConvictionBreakdown` 含 base/floor/final 與每步 rule/delta/reason
-3. **宏觀事件** → `NarrativeEvent` 含 `confidence_source` 與 `historical_hit_rate`
-
-前端 `client_web/static/index.html` 的「決策鏈」頁面以五層卡片呈現（宏觀→行業→個股篩選→控制→績效），每層皆可展開查看計算明細。共享頁面邏輯位於 `shared_web/static/js/pages/decision-chain.js`；client-web 端另有 `client_web/static/js/page-shells/decision-chain.js` 作為 entry。
-
-## Modes
-
-### Daily Replay
-
-- Uses daily bars
-- End-of-day decision
-- Next-session simulated fill
-- Best first target for MVP
-
-### Intraday Replay
-
-- Uses minute bars or snapshots
-- Event-driven decision points
-- Requires more robust data and clock simulation
-
-### Near-Real-Time Paper Trading
-
-- Uses live snapshots or websockets
-- No real orders
-- Full audit trail required
-
-## Simulation Constraints
-
-- long-only for first release
-- per-position max allocation
-- portfolio gross exposure cap
-- minimum liquidity filter
-- transaction cost and slippage model
-- cooldown after stop exit
-
-## Autoresearch Loop
-
-The system should eventually:
-
-1. score each agent's recommendations
-2. identify weak agents by rolling metrics
-3. propose one prompt or rule change
-4. replay on unseen periods
-5. keep or discard the change by objective performance
-
-## Go Package Intent
-
-- `internal/domain`: canonical types
-- `internal/marketdata`: provider abstraction and adapters
-- `internal/orchestrator`: layered workflow
-- `internal/screener`: declarative stock screening (fundamentals + technicals)
-- `internal/portfolio`: Darwinian weights and multi-factor engine
-- `internal/sim`: portfolio and execution engine
-- `internal/config`: runtime configuration
-- `internal/industry`: industry ecosystem analysis (supply chain linkage, seasonal patterns, business cycle compass)
-- `internal/narrative`: macro narrative event detection, causal chains, and SeasonalBridge for industry correlation modulation
-- `internal/llm`: capability-based multi-provider LLM router with DataClass governance gate (see [LLM Framework](#llm-framework))
-- `internal/replay`: historical market data loading and forward return calculation
-- `internal/reporting`: Markdown report generation and performance tables
-- `cmd/atlas`: entrypoint for local simulation runs
-- `cmd/calibrate-seasonal`: CLI for calibrating seasonal patterns from replay data
-
-## LLM Framework
-
-`internal/llm/` 提供 capability-based 多 Provider 路由層，支援 4 層 fallback chain 與 DataClass 治理閘門，定位為**非同步附掛**而非 hot-path 依賴。
-
-### 分層
-
-| 層 | 檔案 | 職責 |
-|---|------|------|
-| 介面 | `provider.go` | `ProviderImpl` 介面、`Capability`（12 種）、`DataClass`（4 階敏感度）、`RoutingChain` |
-| 路由 | `router.go` | `DefaultRouter` 實作 Primary → Backup1 → Backup2 → LastResort；DataClass 閘門（ADR-010）。**Wave 11 L2.1 doc audit（Issue #720）**：實作上等於 3 層 fallback，因為 `defaultRoutingTable()` 與 `configs/llm_router.yaml` 預設把 Backup2 設為空字串。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 為 `[PLANNED]` 常數，無 client 實作 |
-| 設定 | `config.go` | `LoadRouterConfig()` 載入 `configs/llm_router.yaml`；`TryLoadRouterConfig()` 錯誤時 fallback 預設表 |
-| 健康 | `health.go` | Provider 健康聚合 + circuit breaker 狀態 |
-| 客戶端 | `clients/` | 3 個 Provider HTTP client（DeepSeek V4 / MiniMax M3 / Kimi K2.7）+ 共享 `BaseClient` |
-| 能力 | `capabilities/` | 12 個 capability handler（typed payload → Router → typed response） |
-| 契約 | `schemas/` | 9 個 typed I/O schema（JSON-serialized, Zod-compatible JSON Schema） |
-| 整合 | `adapters/` | Annotator / Router 整合層 |
-
-### 12 個 Capability
-
-`CapabilityFailureAttribution`（strategy.failure_attribution）· `CapabilityCodeReviewAnnotation`（dev.code_review_annotation）· `CapabilityPromptLint`（dev.prompt_lint）· `CapabilityRationaleGeneration`（narrative.rationale_translation_fallback）· `CapabilityStrategySummary`（strategy.frame_summary）· `CapabilityRiskSurfaceExtraction`（spawning.gap_description_enrichment）· `CapabilityRegimeExplanation`（narrative.event_headline）· `CapabilityPerformanceForensics`（risk.confidence_calibration_commentary）· `CapabilityScenarioSimulation`（orchestrator.prism_cohort_insight）· `CapabilitySentimentExplanation`（narrative.sentiment_explanation）· `CapabilityContraAttribution`（Phase 2 擴充）· `CapabilityConfidenceCommentary`（Phase 3.3 非阻塞 bypass）
-
-### 治理閘門（ADR-010）
-
-`MiniMax M3` 對 `DataClass ≥ Regulated` 的請求會在 `router.shouldGateProvider()` 強制 skip（中國管轄資料主權考量）。`ForceProvider` 設為 `ProviderMiniMax` 配合 `DataClass=Regulated` 也會回 `ErrProviderDisabled`，這是**有意設計**，不可繞過。
-
-### 熱路徑護欄
-
-`internal/sim/` 與 `internal/experiment/`（S/E-level）不可 import `internal/llm` 做同步 LLM 呼叫。理由：
-
-- 模擬執行被 LLM 網路延遲拖慢
-- replay 可重現性破壞（同一 replay 應得到相同結果）
-
-觀察窗口內，**S/E 模組必須使用 deterministic 預設值**；`SectorAgentLLM.LLM == nil` 時 runner 回 `ErrNotImplemented`，由 `UseLLMSectorAgents` feature flag 控制是否啟用。
-
-### 設定與監控
-
-- **Routing table**：`configs/llm_router.yaml`（runtime 來源），載入失敗 fallback `router.go:defaultRoutingTable()`
-- **Effective 3-tier fallback** (Wave 11 L2.1 doc audit, Issue #720): 雖然 `RoutingChain` 結構保留 4 層（Primary/Backup1/Backup2/LastResort），預設 `Backup2` 是空字串，等效於 Primary → Backup1 → LastResort。`ProviderOpenCodeGo`/`ProviderOpenCodeZen` 標記為 `[PLANNED]`，等未來 client 實作後可重用
-- **新增 capability 必同步 4 處**：`provider.go` 常數 + `router.go:defaultRoutingTable()` + `config.go:isKnownCapability()` + `configs/llm_router.yaml`
-- **健康端點**：`GET /api/llm/health` 暴露 Provider 狀態與 circuit breaker
-
-> 設計權威：`docs/llm-integration-strategy-framework.md` · `internal/llm/AGENTS.md`
-
-## Industry Ecosystem
-
-### Supply Chain Linkage (`internal/industry/linkage.go`)
-
-Models upstream/downstream relationships between Taiwan industries with configurable correlation matrices:
-- `CorrelationMatrix` supports three initialization modes: hardcoded defaults, config-driven (parameters.json), and empirical recalculation from returns
-- `ShockPropagation` propagates impact through the supply chain with narrative-aware correlation multipliers
-- `LinkageAnalyzer` exposes scores, graphs, and shock simulation via `GET /api/industry/linkage`
-- Graph topology is defined in `configs/supply_chain_graph.json` (hot-reloadable)
-- Narrative themes from `SeasonalBridge` dynamically adjust pairwise correlations
-
-### Seasonal Patterns (`internal/industry/seasonality.go`)
-
-Calendar effect detection and calibration:
-- `SeasonalEngine` manages per-industry patterns with start/end months and adjustment factors
-- `cmd/calibrate-seasonal` CLI supports synthetic data, replay-based calibration, and automatic parameter update
-- Evidence quality badges (`heuristic_awaiting_data` / `low` / `medium` / `high`) displayed in frontend
-- `GetAdjustmentBreakdown()` provides four-layer decomposition: seasonal x narrative x cycle x environment
-
-### Business Cycle Compass (`internal/industry/cycle.go`)
-
-Multi-phase industry cycle tracking:
-- `CycleTracker` manages five phases (expansion/recovery/mature/recession) with confidence scoring
-- `DynamicEnvModulator` ingests macro data (oil, BDI, DXY) for real-time cycle adjustment
-- External validators integrate seasonal engine and linkage analyzer for multi-dimensional confidence
+> 最後更新：2026-07-29
+> 維護紀律：每支 PR 完成後同步更新本圖涉及區域（見 `docs/ATLAS_SYSTEM_STATE.md` 尾行）。
 
 ---
 
-## Wave 11 投資核心框架（v0.0.0.37 PR #972）
+## 1. 資料通道總覽（38 通道）
 
-在 L1-L4 決策鏈之上新增**「資金流向 → 事件 → 推薦」**三層投資邏輯框架。設計哲學：
+**註冊位置**：`internal/apigateway/gateway.go:channelIDs()`（靜態列舉） +
+`internal/apigateway/register_adapters.go:RegisterChannelAdapters()`（運行時 instantiate）。
 
-> 全球資金流向**決定方向**、資金勢力共鳴**決定強度**、事件驅動資金流**決定節奏**。
+> 38 為靜態上限（含 2 個 inactive stub）。實際 runtime 註冊數 22–33 個，取決於 API key 配置與 `YahooEnabled` 旗標。
 
-### 三層次關係
+### 1.1 YH — Yahoo Finance（10 通道）
 
-| 層次 | 模組 | 輸入 | 輸出 |
+| channelID | 指標 | MacroDataSnapshot 欄位 | BTM 任務 |
+|-----------|------|-----------------------|----------|
+| `us_yahoo` | 9 合 1 批次：VIX/DXY/US10Y/USD_TWD/Oil/Gold/Silver/Copper/JPY | 多欄位（見 §1.6） | `macro_ingest` fan-out (5m)† |
+| `us_spx` | S&P 500 指數 | `SPXIndex` | `us_market_refresh_us_spx` (5m) |
+| `us_ndx` | Nasdaq Composite | `NDXIndex` | `us_market_refresh_us_ndx` (5m) |
+| `us_dji` | Dow Jones Industrial | `DJIIndex` | `us_market_refresh_us_dji` (5m) |
+| `us_nvda` | NVIDIA Corp | `NVDA` | `us_market_refresh_us_nvda` (5m) |
+| `us_aapl` | Apple Inc | `AAPL` | `us_market_refresh_us_aapl` (5m) |
+| `us_msft` | Microsoft Corp | `MSFT` | `us_market_refresh_us_msft` (5m) |
+| `tsm_adr` | TSMC ADR (NYSE) | `TSMADR` | `us_market_refresh_tsm_adr` (5m) |
+| `taiex_index` | 台灣加權指數 | `TAIEX` | `auto_taiex_index` (1h) |
+| `tw_vol` | 20 日年化波動率 (^TWII) | `HistoricalVolatility` | `macro_cache_tw_vol` (5m) |
+
+**限流架構**：3 組 shared limiter —
+- `yahooMacroLimiter`（5s/2b）：僅 `us_yahoo`
+- `yahooIndexLimiter`（1.5s/1b）：`us_spx`, `us_ndx`, `us_dji`
+- `yahooTechLimiter`（1.5s/1b）：`us_nvda`, `us_aapl`, `us_msft`, `tsm_adr`
+- `taiexIndexLimiter`（5s/1b）：`taiex_index`
+- `ExportStatisticsRate`（5s/2b）：`tw_vol`
+
+> † `us_yahoo` 不在 `USMarketChannels()` 中（該函數僅含 8 個 index/tech channel），
+> 實際由 `macro_ingest` 每 5 分鐘的 27-channel fan-out 間接 fetch。CONSTITUTION.md 附錄 A
+> 列有 `us_market_refresh_us_yahoo` 實際上不存在。已知落差，勿新增同名 BTM 任務。
+
+### 1.2 TW — TWSE / 台灣官方（11 通道）
+
+| channelID | 資料內容 | Provider | 限流 | BTM 任務 |
+|-----------|---------|----------|------|----------|
+| `twse_replay` | 歷史 replay 資料（file-backed） | `GetSharedTWSEClient` | `rate.Inf` | `auto_backfill` (24h) |
+| `twse_capital_flow` | 三大法人買賣超 | `TWSECapitalFlowProvider` | 5s/1b | `auto_capital_flow` (30m) |
+| `twse_margin` | 融資融券餘額 | `TWSEMarginBalanceProvider` | 5s/1b | `auto_margin` (30m) |
+| `twse_sector_index` | 台灣半導體指數（TAISEMI proxy） | `TWSESectorIndexProvider` | 5s/2b | `macro_cache_twse_sector_index` (15m) |
+| `day_trading` | 當沖交易統計 | `DayTradingChannelAdapter` | 5s/1b | — |
+| `market_volume` | 集中市場成交金額（億） | `MarketVolumeChannelAdapter` | 5s/1b | — |
+| `twse_oddlot` | 零股交易 | `TWSEOddLotChannelAdapter` | 5s/2b | — |
+| `twse_etf` | ETF 申購贖回淨額 | `TWSEETFChannelAdapter` | 1s/1b | — |
+| `twse_insider` | 內部人持股轉讓 | `TWSEInsiderChannelAdapter` | 5s/1b | `auto_twse_insider` (1h) |
+| `twse_sbl` | 借券賣出餘額（**STUB**，G02） | `TWSESBLChannelAdapter` | 2s/1b | `auto_twse_sbl` (1h, disabled) |
+| `export_statistics` | 海關進出口統計 | `ExportStatisticsProvider` | 5s/2b | `auto_export` (12h) |
+
+### 1.3 TW — 其他台灣資料源（8 通道）
+
+| channelID | Provider | 平台 | 限流 | BTM 任務 |
+|-----------|----------|------|------|----------|
+| `fugle` | `GetSharedFugleClient` | 富果 API | 1s/1b | `channel_health_fugle` (1h) |
+| `fubon` | `GetSharedFubonClient` | 富邦證券 proxy | 1s/1b | `channel_health_fubon` (1h) |
+| `finmind` | `GetSharedFinMindClient` | FinMind | 6s/1b（免費） | `channel_health_finmind` (1h) |
+| `tej` | `GetSharedTEJClient` | TEJ | 1s/1b | `tej_refresh` (1h) |
+| `taifex_daily` | `TaifexChannelAdapter` | 期交所 | 5s/2b | `auto_taifex_daily` (1h) |
+| `taifex_institutional` | `TaifexInstitutionalAdapter` | 期交所 法人 OI | 5s/2b | `auto_taifex_institutional` (1h) |
+| `tdcc_equity_dispersion` | `TDCClientChannelAdapter`（**STUB**，G01） | 集保 | 5s/1b | — |
+| `government_flow` | `GovernmentFlowProvider`（file-backed） | 官股行庫 | `rate.Inf` | `auto_government_flow` (1h) |
+
+> **STUB 說明**：`twse_sbl` (G02) 和 `tdcc_equity_dispersion` (G01) 的 provider 尚未實作，僅註冊 channel 占位
+> 供 dashboard 顯示「not yet live」。`Metadata().Stub=true`，`HealthCheck` 回傳 `inactive`，
+> 因此 alerting path 不會觸發警報。詳見 `internal/apigateway/stub_adapter_test.go`。
+
+### 1.4 GL — 全球/商品（6 通道）
+
+| channelID | 指標 | Provider | 限流 | BTM 任務 |
+|-----------|------|----------|------|----------|
+| `sox_index` | SOX 費半指數 | `SOXIndexProvider` | 5s/2b | `us_market_refresh_sox_index` (5m) |
+| `dram_spot_price` | DRAM 現貨價（MU 代理） | `DRAMSpotPriceProvider` | 5s/2b | `macro_cache_dram_spot_price` (5m) |
+| `bdi` | 波羅的海乾散貨指數 | `BDIProvider` (CNBC) | 5s/2b | `macro_cache_bdi` (5m) |
+| `frankfurter_fx` | USD/JPY 匯率 | `FrankfurterFXProvider` | 10s/1b | `macro_cache_frankfurter_fx` (10m) |
+| `exchange_rate` | USD/TWD 等匯率 | `ExchangeRateProvider` | 5s/2b | `auto_exchange_rate` (1h) |
+| `tsmc_revenue` | 台積電月營收 | `TSMCRevenueProvider` (FinMind) | 2m/1b | `tsmc_revenue` (24h) |
+
+### 1.5 NT — 內部計算/文本（3 通道）
+
+| channelID | 類型 | Provider | 限流 | BTM 任務 |
+|-----------|------|----------|------|----------|
+| `geopolitical` | GDELT + RSS 全球地緣風險 | `GeopoliticalChannelAdapter` | 1m/1b | `auto_geopolitical` (6h) |
+| `geopolitical_taiwan` | CNA/自由/TVBS RSS | `TaiwanGeopoliticalChannelAdapter` | 1m/1b | `auto_geopolitical_taiwan` (6h) |
+| `janus_regime` | JANUS 市場體制（內部計算） | `JANUSRegimeChannelAdapter` (Compute) | `rate.Inf` | `janus_regime_refresh` (6h) |
+
+### 1.6 通道 → MacroDataSnapshot 欄位對照
+
+`MacroDataSnapshot`（`internal/marketdata/macro_provider.go`）為系統核心資料結構，含 65 欄位。
+主要通道對應：
+
+| 通道 | 寫入快照欄位 |
+|------|------------|
+| `us_yahoo`（批次） | `US10Y`, `DXY`, `VIX`, `USD_TWD`, `Oil`, `Gold`, `Silver`, `Copper`, `JPY` |
+| `us_spx` | `SPXIndex` |
+| `us_ndx` | `NDXIndex` |
+| `us_dji` | `DJIIndex` |
+| `us_nvda` | `NVDA` |
+| `us_aapl` | `AAPL` |
+| `us_msft` | `MSFT` |
+| `tsm_adr` | `TSMADR` |
+| `taiex_index` | `TAIEX` |
+| `tw_vol` | `HistoricalVolatility` |
+| `sox_index` | `SOXIndex` |
+| `dram_spot_price` | `DRAMSpotPrice` |
+| `bdi` | `Bdi` |
+| `exchange_rate` | `USD_TWD`（輔助） |
+| `twse_capital_flow` | `ForeignInvestorNet`, `ForeignDealerNet`, `DomesticFundNet`, `DealerNet`, `DealerSelfNet`, `DealerHedgingNet` |
+| `twse_margin` | `RetailMarginBalance`, `RetailShortBalance`, `MarginMaintenanceRatio` |
+| `twse_etf` | `ETFNetSubscription` |
+| `twse_insider` | `InsiderNet` |
+| `government_flow` | `GovernmentNet`, `InsuranceNet` |
+| `export_statistics` | `ExportElectronics` |
+| `market_volume` | `MarketVolume` |
+| `day_trading` | `DayTradeRatio` |
+| `taifex_daily` / `taifex_institutional` | `ForeignFuturesOINet` |
+| `twse_sector_index` | `TaiwanSemiIndex` |
+| `tsmc_revenue` | `TSMCRevenue` |
+
+---
+
+## 2. 資料流圖
+
+```
+┌─────────────────┐    gateway.Fetch()     ┌──────────────────┐
+│  External APIs  │───────────────────────→│  Channel Adapter │
+│  (Yahoo, TWSE,  │    HTTP / RSS / File   │  (DataProvider)  │
+│   Fugle, etc.)   │                        └────────┬─────────┘
+└─────────────────┘                                  │
+                                                     ▼
+                                         ┌───────────────────────┐
+                                         │       Gateway          │
+                                         │  · RateLimiter         │
+                                         │  · CircuitBreaker      │
+                                         │  · UnifiedHealthStore  │
+                                         │  · CacheLayer (5m TTL) │  ← 記憶體快取
+                                         └───────────┬───────────┘
+                                                     │
+                            ┌────────────────────────┼────────────────────┐
+                            │                        │                    │
+                            ▼                        ▼                    ▼
+                  ┌──────────────────┐   ┌──────────────────┐   ┌────────────────┐
+                  │ BackgroundTasks  │   │  CompositeMacro  │   │  Direct API    │
+                  │ · macro_ingest   │   │    Provider      │   │  Consumers     │
+                  │   (5m)           │   │ (mergeSnapshot)  │   │ · capital_flow │
+                  │ · us_market      │   └────────┬─────────┘   │ · explain      │
+                  │   _refresh_*     │            │             │ · stock_quote  │
+                  │   (5m per ch)    │            ▼             └────────┬───────┘
+                  │ · auto_* tasks   │   ┌──────────────────┐            │
+                  └────────┬─────────┘   │ MacroDataSnapshot│            │
+                           │             │  (65 fields)     │            │
+                           ▼             └────────┬─────────┘            │
+                  ┌──────────────────┐            │                      │
+                  │ disk cache       │            │                      │
+                  │ data/state/<ch>/ │            │                      │
+                  │ latest.json      │            │                      │
+                  └──────────────────┘            │                      │
+                                                  ▼                      ▼
+                                         ┌──────────────────────────────────┐
+                                         │         HTTP API Layer           │
+                                         │  GET /api/macro/snapshot/latest  │
+                                         │  GET /api/capital-flow/daily     │
+                                         │  GET /api/dashboard/us-indices   │
+                                         │  GET /api/narrative/*            │
+                                         │  GET /api/market/explain         │
+                                         │  ... (50+ endpoints)             │
+                                         └──────────────┬───────────────────┘
+                                                        │
+                                                        ▼
+                                         ┌──────────────────────────────────┐
+                                         │         Frontend SPA             │
+                                         │  client_web / admin_web          │
+                                         │  (page-shell pattern, 30s refresh)│
+                                         └──────────────────────────────────┘
+```
+
+### 2.1 快取層次
+
+| 層級 | 位置 | TTL | 機制 |
+|------|------|-----|------|
+| L1：Gateway in-memory | `CacheLayer`（`cache_registry.go`） | 5 min | `Fetch()` 自動讀寫 |
+| L2：Provider local cache | 各 adapter 內部（如 `usCache`, `twiiCache`） | 隨 provider | 減少同 channel 重複 HTTP fetch |
+| L3：Disk snapshot | `data/state/<channelID>/latest.json` | 永久（覆寫） | `saveSnapshot()` 於 adapter 寫入 |
+| L4：DB history 表 | PostgreSQL（`regime_history`, `stress_index_history` 等） | 永久 | 歷史紀錄，見 §3 寫入路徑 |
+
+### 2.2 核心資料流路徑
+
+1. **macro_ingest**（5m）：`BackgroundTaskManager` → `DashboardAPI.IngestAndUpdateMacro()` →
+   逐 channel 呼叫 `gateway.Fetch()` → merge 為 `MacroDataSnapshot` →
+   更新 JANUS regime engine + 寫入 `regime_history`/`period_history` DB
+
+2. **us_market_refresh_***（5m per ch，共 8 個 Yahoo）：獨立 BTM 任務，各自 `gateway.Fetch()` →
+   provider cache populated → `macro_ingest` 取用時 cache hit
+
+3. **macro_cache_***（5-15m，6 個）：為 `macro_ingest` 批次閉包中無獨立 BTM 的通道
+   提供預先 cache warm，涵蓋 dram_spot_price、tw_vol、bdi、frankfurter_fx、
+   sector_data、twse_sector_index
+
+4. **auto_capital_flow / auto_margin**（30m）：交易時段內透過 `gateway.Fetch()` 更新
+   資金流向與融資融券資料，寫入 `data/state/` disk cache
+
+---
+
+## 3. 寫入路徑清單
+
+> 所有會寫入 DB / event store / disk state 的入口。此清單用於防止 warmup 類副作用事故。
+
+### 3.1 持久化架構總覽
+
+atlas-go 有三類持久化後端：
+
+| 後端 | 位置 | 說明 |
+|------|------|------|
+| **PostgreSQL** | `internal/repository/`（`DualWriteRepository` 門面） | 生產 DB：alerts、metrics、outcomes、sessions、capital flow、task executions |
+| **SQLite Ledger** | `internal/ledger/`（`getSharedSQLiteDB`） | 19 張表的本地 ledger：simulation/experiment 完整記錄 |
+| **File Ledger / JSONL** | `{ledgerDir}/`、`data/state/`、`configs/` | 檔案型備援（JSONL session records、baseline JSON、parameter snapshots） |
+
+**雙寫邊界**：`DualWriteRepository`（`internal/repository/dual_write.go`）先寫 JSONL/file store，
+PG 可用時再寫 PG。**不完全雙寫**：`RecordSessionOutcomes`、`RecordExperiment`、
+`RecordSessionExperiment` 目前只走 JSONL ledger，不寫 PG。
+
+### 3.2 PostgreSQL 寫入（`internal/repository/`）
+
+| 寫入路徑 | 檔案 | 表 | 操作 |
+|---------|------|-----|------|
+| Alert | `postgres_alerts.go` | `alerts` | UPSERT / UPDATE ack/resolve |
+| Screening rejects | `postgres_audit.go` | `screening_rejects` | batch INSERT |
+| Session summary | `postgres_audit.go` | `session_summaries` | UPSERT |
+| Human intervention | `postgres_audit.go` | `human_interventions` | INSERT（衝突忽略） |
+| Metrics | `postgres_metrics.go` | `metrics` | INSERT per indicator |
+| Outcomes | `postgres_outcomes.go` | `recommendation_outcomes` | batch INSERT |
+| Capital flow | `postgres_others.go` | `capital_flow` | INSERT |
+| Export statistics | `postgres_others.go` | `export_statistics` | DELETE year/month + INSERT replacements（同一 transaction） |
+| Task execution | `postgres_task_execution.go` | `task_executions`, `task_execution_events` | INSERT / UPDATE / batch metric_trends |
+| Experiment lineage | `postgres_task_execution.go` | `experiment_lineage` | UPSERT |
+| Baseline history | `postgres_task_execution.go` | `baseline_history` | INSERT |
+| Channel health | `internal/apigateway/channel_health.go` | `channel_health` | UPSERT |
+
+### 3.3 SQLite Ledger 寫入（`internal/ledger/`）
+
+| 寫入路徑 | 檔案 | 表 | 操作 |
+|---------|------|-----|------|
+| Outcomes | `outcome_store_sqlite.go` | `outcomes` | transaction batch INSERT |
+| Screening rejects | `outcome_store_sqlite.go` | `screening_rejects` | transaction batch INSERT |
+| Trades | `outcome_store_sqlite.go` | `trades` | transaction batch INSERT |
+| Experiments | `outcome_store_sqlite.go` | `experiments` | INSERT（global 或 session-scoped） |
+| Session summaries | `outcome_store_sqlite.go` / `session_store_sqlite.go` | `session_summaries` | UPSERT |
+| Human interventions | `outcome_store_sqlite.go` | `human_interventions` | INSERT |
+| Quotes | `quote_store_sqlite.go` | `quotes` | `INSERT OR REPLACE` |
+| Regime history | `historical_store.go` | `regime_history` | UPSERT（`ON CONFLICT(date) DO UPDATE`） |
+| Period history | `historical_store.go` | `period_history` | UPSERT |
+| Stress index history | `historical_store.go` | `stress_index_history` | UPSERT |
+| Geopolitical history | `historical_store.go` | `geopolitical_history` | UPSERT |
+| Event calendar history | `historical_store.go` | `event_calendar_history` | UPSERT（`ON CONFLICT(date, event_id)`） |
+| Prediction backtest | `historical_store.go` | `prediction_backtest` | UPSERT |
+| Detector scan log | `detector_scan_store.go` | `detector_scan_log` | transaction INSERT |
+| Spawn records | `store_factory.go` | `spawn_records` | INSERT |
+| Prompt experiment results | `store_factory.go` | `prompt_experiment_results` | INSERT / UPSERT |
+| Window summaries | `store_factory.go` | `window_summaries` | INSERT |
+| Mutation briefs | `store_factory.go` | `mutation_briefs` | INSERT |
+
+### 3.4 事件持久化
+
+系統中**沒有名為 `EventStore` 或 `event_store` 的 production 型別/資料表**。
+事件持久化實作於兩處：
+
+| 路徑 | 機制 | 格式 |
+|------|------|------|
+| `{ledgerDir}/events.jsonl` | Global event bus audit subscriber | JSONL append |
+| PG `task_execution_events` | `TaskExecutionStore.AppendEvent` | INSERT per event |
+
+`ChannelEventBus.Publish` 本身僅進記憶體 channel；只有啟用 audit subscriber 才落盤。
+
+### 3.5 檔案型 State 寫入
+
+| 入口 | 路徑 | 內容 |
+|------|------|------|
+| `saveSnapshot()` | `data/state/<channelID>/latest.json` | 各 channel 最新 fetch 結果 |
+| `TWSECapitalFlowProvider` | `data/state/capital_flow/` | 資金流向 JSONL |
+| `TWSEMarginBalanceProvider` | `data/state/margin/` | 融資融券 JSONL |
+| `SectorDataProvider` | `data/state/sector_data/` | 產業分類 |
+| `GovernmentFlowProvider` | `data/state/government_flow/` | 官股行庫 CSV |
+| `ExportStatisticsProvider` | `data/state/export/` | 出口統計 |
+| Replay data | `data/replay/` | 歷史 replay JSONL |
+| Baseline policy | `configs/baseline_policy.json` | baseline 配置 atomic write（lock + rollback） |
+| Darwinian weights | `data/state/darwinian_weights.json` | 演化權重 snapshot |
+| Parameter snapshots | `configs/parameters_snapshots/` | 參數歷史快照 |
+
+### 3.6 Experiment / Baseline / Simulation 寫入
+
+| 寫入 | 檔案 | 說明 |
+|------|------|------|
+| Candidate prompt | `internal/experiment/executor.go` | 產生 experiment prompt 檔案 |
+| Experiment record | `internal/experiment/executor.go` → ledger | 寫 `ExperimentRecord` + `PromptExperimentResult` |
+| Auto brief | `internal/experiment/auto.go` | append-only JSON brief |
+| TTL expired | `internal/experiment/ttl.go` | 直接覆寫過期 experiment result JSON |
+| Judge/Promote | `internal/experiment/auto_judge_promoter.go` | 暫存 result JSON → promote 後移除 |
+| Baseline policy | `internal/baseline/policy.go` → `SaveWithLock` | locked atomic write + rollback |
+| Simulation traces | `internal/orchestrator/` | `Scratchpad.Record` WAL + `SimTraceWriter.ExportJSONL` |
+
+### 3.7 Control Override 寫入（admin API）
+
+Control override **不直接修改 mutable table**，而是 append-only human intervention：
+
+1. 所有 control mutation（pause/resume/weight/ban/approve/reject）建立 `HumanIntervention`
+2. 經 `ControlService.RecordIntervention` → `ledger.OutcomeStore.RecordHumanIntervention`
+3. SQLite: INSERT `human_interventions`；JSONL: append intervention record
+4. `GetActiveOverrides` 每次重播 intervention ledger，依 pause/resume、ban/unban、expiry 計算當前狀態
+
+| Endpoint | 檔案 |
+|---------|------|
+| `POST /api/control/pause-agent` | `internal/monitoring/api/control/handlers.go` |
+| `POST /api/control/resume-agent` | 同上 |
+| `POST /api/control/set-model-weight` | 同上 |
+| `POST /api/control/sector-ban` | 同上 |
+| `POST /api/experiment/promote` | `internal/monitoring/api/experiment/handlers.go` |
+| `POST /api/experiment/revert` | 同上 |
+| `POST /api/experiment/judge` | 同上 |
+| `POST /admin/trigger-simulation` | `cmd/atlas/main.go` |
+
+### 3.8 Subscription Store（獨立 SQLite）
+
+| 寫入 | 檔案 | 說明 |
+|------|------|------|
+| User register | `internal/subscription/store.go` | INSERT `users` + INSERT `subscription_events` (registered/trial) |
+| Login | 同上 | INSERT `subscription_events` (login) |
+| SetTier | 同上 | UPDATE `users` tier + INSERT `subscription_events` |
+
+使用獨立 SQLite `users.db`（非 ledger DB）。`recordEvent` 刻意忽略寫入錯誤。
+
+### 3.9 Bootstrap / Warmup 寫入
+
+> 啟動時以下操作會寫入 DB/disk，非純讀：
+
+| 步驟 | 寫入目標 | 說明 |
+|------|---------|------|
+| `bootstrap.InitDatabase` | PostgreSQL（全部 pending migration） | golang-migrate |
+| LEDGER SQLite init | SQLite（`CREATE TABLE IF NOT EXISTS` + additive `ALTER TABLE`） | schema migration |
+| Alert cleanup | File alert store | 清除舊 gateway heartbeat alerts |
+| `dashboard.IngestAndUpdateMacro` | Ledger（regime_history, period_history 等）+ channel state | 首次 macro ingest |
+| Darwinian weights init | `data/state/darwinian_weights.json` | `Save()` on init |
+| Event bus bootstrap events | `events.jsonl`（若 audit subscriber 啟用） | 發布後落盤 |
+---
+
+## 4. 前端架構
+
+### 4.1 三前端主從架構
+
+```
+client_web/                  admin_web/                  shared_web/
+├── static/                  ├── static/                  └── static/
+│   ├── index.html           │   ├── index.html               ├── js/
+│   └── js/                  │   └── js/                      │   ├── pages/     ← 共 29 頁面
+│       ├── main.js   ← SPA  │       └── main.js   ← SPA      │   ├── page-shells/ ← 10 shells
+│       ├── page-shells/     │                                 │   ├── components/ ← 共用元件
+│       │   ├── evolution_panel.js│                            │   ├── services/   ← API client
+│       │   ├── stock-quote.js    │                            │   ├── shared/     ← utils/tokens
+│       │   ├── strategies.js     │                            │   └── modals/
+│       │   └── ...               │                            └── css/
+│       └── components/           │                                ├── base/
+│           └── home-tier-sections.js│                            │   └── variables.css ← 設計 tokens
+│                                  │                                ├── pages/
+└── embed.go                      └── embed.go                     ├── components/
+    (Go embed FS)                     (Go embed FS)                 └── layout/
+                                                                       ├── page-shell.css
+                                                                       ├── sidebar.css
+                                                                       └── responsive.css
+```
+
+**原則**：
+- `shared_web/` 為所有前端共享的頁面、元件、CSS 和工具函數。
+- `client_web/` 為投資人端 SPA，含專屬 page-shell（stock-quote, strategies 等）。
+- `admin_web/` 為管理端 SPA，僅含管理專屬頁面。
+- 兩個端點各有專屬 `embed.go`，在 Go binary 中透過 `embed.FS` 靜態內嵌。
+
+### 4.2 Page-Shell 模式
+
+`client_web/static/js/main.js` 中的 `SHELL_LOADERS` 定義每個 page 的 shell loader：
+
+```js
+// client_web/static/js/main.js
+const SHELL_LOADERS = {
+  'home':             () => import('../../../shared_web/static/js/pages/home.js'),
+  'strategies':       () => import('./page-shells/strategies.js'),
+  'performance-report': () => import('./page-shells/performance-report.js'),
+  'stock-quote':      () => import('./page-shells/stock-quote.js'),
+  'methodology':      () => import('../../../shared_web/static/js/page-shells/methodology.js'),
+  'narrative':        () => import('../../../shared_web/static/js/page-shells/narrative.js'),
+  // ...
+};
+```
+
+- **Page** = 共享頁面（`shared_web/static/js/pages/` 或 page-shells）
+- **Shell** = 頁面骨架（`shared_web/static/js/page-shells/`），含 layout 與導航
+- **component** = 可重用 UI 區塊（如 `seven-force-board.js`, `event-calendar.js`）
+- **路由**：基於 `data-page` 屬性的 SPA 內部路由，無 URL hash 切換
+
+`shared_web/static/css/layout/page-shell.css` 定義統一的 `.page` / `.page.active` 切換動畫。
+
+### 4.3 設計 Tokens
+
+- **位置**：`shared_web/static/css/base/variables.css`
+- **內容**：CSS custom properties（`--text`, `--muted`, `--bg`, `--accent`, `--font-display`, `--space-lg` 等）
+- **color-tokens.js**：JS 端 token 存取（`shared_web/static/js/shared/color-tokens.js`），供圖表使用
+
+### 4.4 建置流程
+
+- **Bundler**：`esbuild`（`client_web/esbuild.config.mjs`, `admin_web/esbuild.config.mjs`）
+- **Shared plugin**：`shared_web/esbuild-shared-plugin.mjs` 處理跨 app 的 import paths
+- **測試**：Playwright（`client_web/playwright.config.ts`, `admin_web/playwright.config.ts`）
+- **嵌入**：`//go:embed static/*` 在 `client_web/embed.go` 和 `admin_web/embed.go`
+
+### 4.5 自動刷新
+
+`client_web/static/js/main.js` 每 30 秒呼叫 `loadAll()` 刷新首頁資料。
+連續失敗 3 次後顯示 error banner；成功後自動恢復。
+
+---
+
+## 5. 架構化石區
+
+> **勿踩**：以下區域為已知死碼/未接線引擎/stub——修改前需確認不影響現有行為。
+
+| 化石 | 位置 | 說明 | 風險 |
 |------|------|------|------|
-| **流向層**（決定方向） | `internal/capitalflow` | `MacroDataSnapshot` (7 勢力) | Z-score + 共振係數 (1.5/0.5) + 品質分數 |
-| **事件層**（決定節奏） | `internal/eventdriven` | `industry.EventCalendar` + 流向品質分數 | 5 日 forward 預測 + ETF 規模預估 + 營收驚喜 |
-| **推薦層**（決定強度） | `strategy_ranker` + `recommender` | 回測歷史 + 流向 + 事件 + user tier | 三層策略訊號 (public/registered/premium) |
+| `twse_sbl` (G02) | `internal/marketdata/twse_sbl_provider.go` | STUB provider，回傳「endpoint not yet confirmed」 | 移除會讓 dashboard 消失此 channel |
+| `tdcc_equity_dispersion` (G01) | `internal/marketdata/tdcc_provider.go` | STUB provider，回傳「API access not yet configured」 | 同上 |
+| Unused parameters | `internal/config/defaults_portfolio.go` | `BetaRangeMin`, `BetaRangeMax`, `MinTradeSize`, `MinPositionSize`, `TargetBeta` 標示 unused | 可能未來實作 beta constraint |
+| `boolParamAccessor` | `internal/config/param_table.go` | 未使用的 scaffolding，預留 bool 參數支援 | 無消費者 |
+| Legacy health paths | `internal/monitoring/` vs `internal/apigateway/health.go` | 兩套健康檢查共存（UnifiedHealthStore + monitoring 自製 store） | 合併時注意兩者消費者 |
+| `adversarial.GetVulnerabilities` | `internal/adversarial/AGENTS.md` | 明確標示「simplified stub」，不走真實 replay | 勿依賴其結果 |
+| Deprecated `POST /api/macro/ingest` | `internal/monitoring/api/macro/handlers.go` | 手動 ingest trigger，已被 BTM 取代 | 僅保留相容性 |
+| Orphan summaries | `internal/backfill/summaries.go` | 無 `summary.json` 的 session 重建工具 | 離線使用，非 hot path |
+| `SignalEngine` (F08) | `internal/autobacktest/loop.go` | 原為 orphan，現由 autobacktest 消費 | 勿刪 |
+| `NarrativeEngine` x2 | `cmd/atlas/main.go` vs `internal/monitoring/dashboard_api.go` | Dashboard 與 eventdriven detector 使用兩個不同的 engine instance | 模型/權重/即時 macro state 可能分岔 |
 
-### API 端點（新增）
+### 5.1 未接線通道（無獨立 BTM 排程）
 
-| Path | Module | 用途 |
-|------|--------|------|
-| `GET /api/capital-flow/daily` | `capitalflow` | 七維錢潮雷達（3+2+2 分層）：官方法人 / 行為代理 / 領先＋跨市場訊號；actor 共識只看官方actor 層 — `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
-| `GET /api/capital-flow/summary` | `capitalflow` | 摘要（品質分數 + 主力方向）|
-| `GET /api/events/calendar` | `eventdriven` | 未來 14 天事件 + 預估方向 |
-| `GET /api/events/prediction` | `eventdriven` | 5 日 forward 預測 + ETF 預估 |
-| `GET /api/recommendations` | `recommender` | 依 user tier 返回分層推薦 |
-| `POST /api/auth/{register,login}` | `subscription` | JWT 認證 + 7 天免費試用 |
-| `GET /api/user/{profile,subscription}` | `subscription` | 使用者資訊查詢 |
-| `GET /api/reports/latest` | `dailyreport` | 最新每日市場報告 (JSON+MD) |
-| `GET /api/reports/archive` | `dailyreport` | 歷史報告查詢 |
-| `POST /api/reports/subscribe` | `dailyreport` | 郵件訂閱 |
+以下通道無自動排程任務，資料更新依賴外部系統或手動觸發：
 
-### 前端整合（`client_web/` Phase A0/A/B/C）
+| channelID | 目前觸發方式 |
+|-----------|------------|
+| `day_trading` | 無 BTM 任務，可能依賴 `macro_ingest` 內部批次 |
+| `market_volume` | 同 `day_trading` |
+| `twse_oddlot` | 無 BTM 任務 |
+| `twse_etf` | 無 BTM 任務 |
+| `tdcc_equity_dispersion` | STUB，無排程 |
+| `sector_data` | `macro_cache_sector_data` (15m) |
 
-| 檔案 | 角色 |
-|------|------|
-| `services/auth.js` | JWT + tier 解析、`getTier()` 給 Phase B 渲染依據 |
-| `page-shells/{login,register,premium}.js` | Phase A0 認證 page shells |
-| `page-shells/{mcp,errors/404}.js` | Phase C 整合 + 404 fallback |
-| `components/home-tier-sections.js` | Phase B tier-gated dashboard 渲染 |
+---
 
-### Maturity Tag
+## 6. API 路由全覽
 
-全部新模組標記為 **experimental**（X-tier），依照內部 SPEC 規範使用 `cmd/gentags/main.go` 自動產生 `field_types.ts` 與 `valid_fields.json`，搭配 CI `field-contract` 強制對齊 frontend/backend 欄位名稱。
+### 6.1 公開端點（無需認證）
 
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/health` | 系統健康檢查（含 port probe） |
+| `GET` | `/api/health` | → 308 redirect to `/health` |
+| `GET` | `/api/routes` | API 路由清單（curated） |
+| `GET` | `/api/capital-flow/daily` | 七維錢潮雷達 daily |
+| `GET` | `/api/capital-flow/summary` | 錢潮摘要 |
+| `GET` | `/api/capital-flow/history` | 錢潮歷史 |
+| `GET` | `/api/capital-flow/historical-snapshot/{date}` | 指定日期快照 |
+| `GET` | `/api/market/explain` | 今日台股解說（需 auth） |
+| `GET` | `/api/macro/snapshot/latest` | 最新宏觀快照 |
+| `GET` | `/api/macro/snapshot/timeline` | 歷史宏觀快照 |
+| `GET` | `/api/narrative/*` | 敘事事件/鏈/模型 |
+| `GET` | `/api/dashboard/us-indices` | 美股即時指數 |
+| `GET` | `/api/dashboard/data-channels` | 資料通道狀態 |
+| `GET` | `/api/dashboard/system-health` | 系統健康 |
+| `GET` | `/api/dashboard/risk-exposure` | 風險暴露 |
+| `GET` | `/api/dashboard/performance-report` | 績效報告 |
+| `GET` | `/api/dashboard/calendar-events` | → 308 redirect to `/api/events/calendar` |
+| `GET` | `/api/events/calendar` | 事件日曆 |
+| `GET` | `/api/events/predictions` | 未來 5 日資金預測 |
+| `GET` | `/api/regime/history` | 市場體制歷史（含 `market_period`） |
+| `GET` | `/api/taiwan/stress-index` | TRJ 壓力指數 |
+| `GET` | `/api/janus/regime-score` | JANUS 體制評分 |
+| `GET` | `/api/strategies/{id}` | 策略詳情 |
+| `GET` | `/api/strategies/{id}/attribution` | 策略歸因 |
+| `GET` | `/api/strategies/{id}/summary` | 策略摘要 |
+| `GET` | `/api/reports/latest` | 最新每日報告 |
+| `GET` | `/api/stock/quote` | 個股報價（需 Fugle key） |
+| `GET` | `/api/stock/technical` | 技術指標 |
+| `GET` | `/api/stock/chips` | 籌碼資料 |
+| `GET` | `/api/stock/fundamentals` | 基本面 |
+
+### 6.2 管理端點（需 admin auth）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/backtest/run` | 觸發回測 |
+| `POST` | `/api/control/pause-agent` | 暫停 agent |
+| `POST` | `/api/control/resume-agent` | 恢復 agent |
+| `POST` | `/api/control/set-model-weight` | 調整策略權重 |
+| `POST` | `/api/control/sector-ban` | 禁止產業 |
+| `POST` | `/api/experiment/promote` | 提升實驗 |
+| `POST` | `/api/experiment/revert` | 回退實驗 |
+| `POST` | `/api/experiment/judge` | 評分實驗 |
+| `POST` | `/api/dashboard/channels/` | 通道管理 |
+| `POST` | `/api/dashboard/api-keys/update` | API key 更新 |
+| `POST` | `/api/macro/ingest` | 手動觸發宏觀攝取（deprecated） |
+
+### 6.3 MCP Server（atlas-mcp, stdio mode）
+
+`cmd/atlas-mcp/` 透過 MCP protocol 暴露 80+ tools 給外部 AI agent，
+涵蓋市場資料、策略、風險、實驗、控制、事件等全量功能。
+
+---
+
+## 7. 背景任務全覽
+
+> 所有透過 `BackgroundTaskManager.Register()` 註冊的任務，含 channel 綁定與排程間隔。
+
+完整任務清單分散於 `cmd/atlas/*_tasks.go`。主要類別：
+
+| 類別 | 任務範例 | 間隔 |
+|------|---------|------|
+| **資料擷取** | `us_market_refresh_*`（8 個）、`auto_capital_flow`、`auto_margin` | 5m / 30m |
+| **快取預熱** | `macro_cache_*`（6 個） | 5-15m |
+| **宏觀攝取** | `macro_ingest` | 5m |
+| **通道健康** | `channel_health_sync`、`channel_health_*`（6 個） | 5m / 1h |
+| **校準** | `risk_gate_calibrate`、`factor_weight_calibrate`、`auto_calibrate` 等 | 24h / 7d |
+| **模擬** | `auto_daily_simulation`、`auto_experiment`、`auto_propose` | 24h / 7d |
+| **回測** | `window_backtest`、`autobacktest_daily` | 7d / 1h |
+| **維護** | `storage_cleanup`、`fundamentals_staleness_check` | 24h |
+| **事件** | `auto_calendar_refresh`、`sync-events-daily` | 24h / 1m |
+| **即時** | `realtime_feed` | 30s |
+| **進化** | `auto_strategy_evolution`、`auto_judge_promoter` | 24h |
+
+---
+
+## 8. 快速參考
+
+- **新增資料通道 SOP**：`internal/apigateway/CONSTITUTION.md`（6 條憲法）
+- **通道註冊兩處**：`limits.go`（限流）+ `gateway.go:channelIDs()`（列舉）
+- **Adapter 模式**：`DataProvider` interface → HTTP / File / Compute 三種實作
+- **熔斷參數**：3 次連續失敗 → 5 分鐘 Open → 2 次 HalfOpen 探測 → Close
+- **快取 TTL**：Gateway in-memory 5 min（`CacheLayer`）
+- **API 架構**：`internal/monitoring/api/<domain>/handlers.go` 各子包 RegisterRoutes 模式
+- **前端路由**：`data-page` attribute → `switchPage()` → 動態 import shell loader
