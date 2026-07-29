@@ -46,6 +46,13 @@ func (t *TWSEMarginBalanceProvider) SetHTTPClient(client *http.Client) {
 	}
 }
 
+// SetRateLimiter sets a custom rate limiter for tests.
+func (t *TWSEMarginBalanceProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		t.rateLimiter = l
+	}
+}
+
 // Name returns the provider name.
 func (t *TWSEMarginBalanceProvider) Name() string {
 	return "twse_margin_balance"

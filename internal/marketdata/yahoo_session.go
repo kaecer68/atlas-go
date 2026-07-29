@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
@@ -429,4 +431,8 @@ func SetYahooSessionClient(client *http.Client) {
 	// state and does not observe data from a prior test/subtest.
 	usCache.reset()
 	twiiCache.reset()
+
+	// Replace the shared rate limiter with an unlimited one so mock-based
+	// tests do not accumulate artificial wait time.
+	yahooSharedLimiter = rate.NewLimiter(rate.Inf, 0)
 }
