@@ -25,7 +25,7 @@ func setupTWSEStub(t *testing.T, wantStatus int, body string) {
 
 func writeSnap(t *testing.T, dir, name, body string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

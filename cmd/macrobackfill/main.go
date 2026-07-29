@@ -38,16 +38,6 @@ type macroDataPoint struct {
 type snapshot map[string]json.RawMessage
 
 // twseIndexRow is one row in the TWSE MI_INDEX IND table. We model it
-// positionally via the fields array because the API returns the row as
-// a JSON array (not an object) in some endpoints; we re-parse positionally
-// in fetchTWSEClosingIndex. The struct below is only used when the
-// `data` array is an array of objects keyed by the Chinese field names.
-type twseIndexRow struct {
-	Index     string `json:"指數"`
-	Closing   string `json:"收盤指數"`
-	Change    string `json:"漲跌點數"`
-	ChangePct string `json:"漲跌百分比(%)"`
-}
 
 type twseResponse struct {
 	Stat   string `json:"stat"`
@@ -178,7 +168,7 @@ func run(a args) error {
 
 	// 7. Write back atomically
 	tmp := snapPath + ".tmp"
-	if err := os.WriteFile(tmp, merged, 0644); err != nil {
+	if err := os.WriteFile(tmp, merged, 0o644); err != nil {
 		return fmt.Errorf("write tmp %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, snapPath); err != nil {
@@ -267,7 +257,7 @@ func fetchTWSEClosingIndex(target time.Time) (float64, int64, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("GET %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, 0, fmt.Errorf("read body: %w", err)
@@ -416,11 +406,11 @@ func detectIndent(raw []byte) string {
 
 func appendLog(dir string, entry backfillLogEntry) error {
 	logPath := filepath.Join(dir, "backfill_log.jsonl")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := json.NewEncoder(f)
 	return enc.Encode(entry)
 }
