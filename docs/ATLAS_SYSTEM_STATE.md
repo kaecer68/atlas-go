@@ -27,6 +27,7 @@
 | B2 | 時期信心度 + 觸發指標（Period Assessment 可解釋性） | ✅ 已完成 | #1413 | 2026-07-29 |
 | Docs | ARCHITECTURE.md 架構活地圖（38 channel + 資料流） | ✅ 已完成 | #1414 | 2026-07-29 |
 | BG | Background 首次執行跳過 startup jitter | ✅ 已完成 | #1409 | 2026-07-28 |
+| B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | 🟡 進行中 | TBD | — |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -89,3 +90,14 @@
 
 - **PR #1414**
 - **涵蓋**：38 channel 盤點、完整資料流圖、寫入路徑、前端架構、化石區
+
+## B5-1 — PeriodIndicators Batch 1（進行中）
+
+- **分支**：`fix/20260729-b5-batch1-ma-fill`
+- **涵蓋**：
+  - 新建 `PeriodIndicatorsCalculator`（11 計算函式，附 minDays 誠實降級）
+  - 19 個單元測試（含邊界天數、不足降級、確定性）
+  - Dashboard API adapter 接入（`persistPeriodHistory` + `RegisterRoutes`）
+  - executor pipeline 後續再接（ExecutionContext 尚未有 SnapshotDir）
+  - 待完成：黃金測試工具、已知事件驗證、不變性測試
+  - 偵測邏輯（`period_detector.go`）零改動
