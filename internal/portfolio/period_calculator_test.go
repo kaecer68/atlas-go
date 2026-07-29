@@ -18,6 +18,22 @@ func entry(taiex, sox, tsmadr, usdtwd, vol float64) SnapshotEntry {
 	}
 }
 
+func entryFull(taiex, sox, tsmadr, usdtwd, vol, foreignNet, futuresOI float64) SnapshotEntry {
+	return SnapshotEntry{
+		TAIEX:               taiex,
+		SOX:                 sox,
+		TSMADR:              tsmadr,
+		USDTWD:              usdtwd,
+		MarketVolume:        vol,
+		ForeignInvestorNet:  foreignNet,
+		ForeignFuturesOINet: futuresOI,
+	}
+}
+
+func marginEntry(balance float64) MarginEntry {
+	return MarginEntry{MarginBalance: balance}
+}
+
 func makeEntries(vals []float64, fn func(v float64) SnapshotEntry) []SnapshotEntry {
 	out := make([]SnapshotEntry, len(vals))
 	for i, v := range vals {
@@ -427,5 +443,288 @@ func TestCalculator_Determinism(t *testing.T) {
 		if fields1[i] != fields2[i] || fields2[i] != fields3[i] {
 			t.Errorf("non-deterministic result at field index %d: %v, %v, %v", i, fields1[i], fields2[i], fields3[i])
 		}
+	}
+}
+
+// ── W1: Sparse history (input_available semantics) ──
+
+func TestCalculator_SparseMarketVolume_ZeroWhenInsufficient(t *testing.T) {
+	c := NewCalculator()
+	// 20 entries total, but only 3 non-zero volume values
+	entries := make([]SnapshotEntry, 20)
+	for i := range 20 {
+		if i%7 == 0 { // indices 0, 7, 14 = 3 non-zero
+			entries[i] = entry(20000, 5000, 150, 32, 3000+float64(i)*50)
+		} else {
+			entries[i] = entry(20000, 5000, 150, 32, 0) // zero volume
+		}
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+
+	// Non-zero count (3) < MinDaysMarketVolumeMA20 (20) → must stay 0
+	if ind.MarketVolumeMA20 != 0 {
+		t.Errorf("MarketVolumeMA20 should be 0 with only 3 non-zero points in 20-day window, got %v", ind.MarketVolumeMA20)
+	}
+}
+
+func TestCalculator_SparseMarketVolume_ExactlyMinDays(t *testing.T) {
+	c := NewCalculator()
+	vals := make([]float64, 20)
+	for i := range vals {
+		vals[i] = 3000 + float64(i)*50
+	}
+	entries := makeEntries(vals, func(v float64) SnapshotEntry {
+		return entry(20000, 5000, 150, 32, v)
+	})
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+
+	// All 20 non-zero → should compute MA20 normally
+	if ind.MarketVolumeMA20 == 0 {
+		t.Errorf("MarketVolumeMA20 should be computed with 20 non-zero points, got 0")
+	}
+	expected := float64(3000+3950) / 2.0 // (first + last) / 2 for arithmetic progression
+	if !floatEq(ind.MarketVolumeMA20, expected, 0.01) {
+		t.Errorf("MarketVolumeMA20 = %v, want %v", ind.MarketVolumeMA20, expected)
+	}
+}
+
+func TestCalculator_SparseTAIEX_ZeroWhenInsufficient(t *testing.T) {
+	c := NewCalculator()
+	// 20 entries, only 5 non-zero TAIEX values
+	entries := make([]SnapshotEntry, 20)
+	for i := range 20 {
+		if i%4 == 0 { // indices 0,4,8,12,16 = 5 non-zero
+			entries[i] = entry(20000+float64(i)*10, 5000, 150, 32, 3000)
+		} else {
+			entries[i] = entry(0, 5000, 150, 32, 3000) // zero TAIEX
+		}
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+
+	// Non-zero count (5) < MinDaysTAIEXMA20 (20) → must stay 0
+	if ind.TAIEXMA20 != 0 {
+		t.Errorf("TAIEXMA20 should be 0 with only 5 non-zero points, got %v", ind.TAIEXMA20)
+	}
+	// TAIEXMA5 window is indices 15..19: only 1 non-zero (index 16) → < 5 → 0
+	if ind.TAIEXMA5 != 0 {
+		t.Errorf("TAIEXMA5 should be 0 with insufficient non-zero points, got %v", ind.TAIEXMA5)
+	}
+}
+
+func TestCalculator_SparseTAIEX_ExactlyMinDays(t *testing.T) {
+	c := NewCalculator()
+	// 5 entries all non-zero
+	entries := makeEntries([]float64{100, 102, 104, 106, 108}, func(v float64) SnapshotEntry {
+		return entry(v, 0, 0, 0, 0)
+	})
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+
+	// All 5 non-zero → should compute MA5
+	if ind.TAIEXMA5 == 0 {
+		t.Errorf("TAIEXMA5 should be computed with 5 non-zero points, got 0")
+	}
+	expected := float64(100+102+104+106+108) / 5.0
+	if !floatEq(ind.TAIEXMA5, expected, 0.01) {
+		t.Errorf("TAIEXMA5 = %v, want %v", ind.TAIEXMA5, expected)
+	}
+}
+
+// ── B5 Batch 2: Foreign capital ──
+
+func TestCalculator_ForeignNet5DayAvg(t *testing.T) {
+	c := NewCalculator()
+	// 5 days: +100, -50, +200, -30, +80 → avg = 60
+	entries := make([]SnapshotEntry, 5)
+	vals := []float64{100, -50, 200, -30, 80}
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, v, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	if !floatEq(ind.ForeignNet5DayAvg, 60, 0.01) {
+		t.Errorf("ForeignNet5DayAvg = %v, want 60", ind.ForeignNet5DayAvg)
+	}
+}
+
+func TestCalculator_ForeignNet5DayAvg_Insufficient(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 4)
+	for i := range 4 {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, 100, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	if ind.ForeignNet5DayAvg != 0 {
+		t.Errorf("ForeignNet5DayAvg should be 0 with 4 entries, got %v", ind.ForeignNet5DayAvg)
+	}
+}
+
+func TestCalculator_ForeignBuySellDays10(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 10)
+	vals := []float64{100, -50, 200, -30, 80, -10, 0, 60, -90, 40}
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, v, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	if ind.ForeignBuyDays10 != 5 {
+		t.Errorf("ForeignBuyDays10 = %d, want 5 (values >0: 100,200,80,60,40)", ind.ForeignBuyDays10)
+	}
+	if ind.ForeignSellDays10 != 4 {
+		t.Errorf("ForeignSellDays10 = %d, want 4 (values <0: -50,-30,-10,-90)", ind.ForeignSellDays10)
+	}
+}
+
+func TestCalculator_ForeignConsecDays(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 10)
+	// Last 4 entries positive: 80, 60, 40, 20 → ConsecBuy = 4
+	vals := []float64{-100, 50, -200, 30, -10, -5, 80, 60, 40, 20}
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, v, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	if ind.ForeignConsecBuyDays != 4 {
+		t.Errorf("ForeignConsecBuyDays = %d, want 4", ind.ForeignConsecBuyDays)
+	}
+	if ind.ForeignConsecSellDays != 0 {
+		t.Errorf("ForeignConsecSellDays = %d, want 0 (last is positive)", ind.ForeignConsecSellDays)
+	}
+}
+
+func TestCalculator_ForeignConsecSellDays(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 10)
+	// Last 5 entries negative: -80, -60, -40, -20, -10
+	vals := []float64{100, -50, 200, -30, 9999, -80, -60, -40, -20, -10}
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, v, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	if ind.ForeignConsecSellDays != 5 {
+		t.Errorf("ForeignConsecSellDays = %d, want 5", ind.ForeignConsecSellDays)
+	}
+	if ind.ForeignConsecBuyDays != 0 {
+		t.Errorf("ForeignConsecBuyDays = %d, want 0 (last is negative)", ind.ForeignConsecBuyDays)
+	}
+}
+
+func TestCalculator_ForeignNetPeakSell(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 10)
+	vals := []float64{-100, 50, -400, 30, -200, -10, 80, 60, 40, 20}
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, v, 5000)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	// Most negative = -400
+	if !floatEq(ind.ForeignNetPeakSell, -400, 0.01) {
+		t.Errorf("ForeignNetPeakSell = %v, want -400", ind.ForeignNetPeakSell)
+	}
+}
+
+// ── B5 Batch 2: Futures ──
+
+func TestCalculator_FuturesOIPrev(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 2)
+	entries[0] = entryFull(20000, 5000, 150, 32, 3000, 100, 5000)
+	entries[1] = entryFull(20000, 5000, 150, 32, 3000, -50, 4800)
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	// Prev = entries[0].ForeignFuturesOINet = 5000
+	if !floatEq(ind.ForeignFuturesOIPrev, 5000, 0.01) {
+		t.Errorf("ForeignFuturesOIPrev = %v, want 5000", ind.ForeignFuturesOIPrev)
+	}
+}
+
+func TestCalculator_FuturesOIDelta3(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 4)
+	vals := []float64{5000, 5100, 5050, 5150} // +100, -50, +100 → net direction = 2 increases - 1 decrease = 1
+	for i, v := range vals {
+		entries[i] = entryFull(20000, 5000, 150, 32, 3000, 100, v)
+	}
+	ind := &PeriodIndicators{}
+	c.Enrich(ind, entries)
+	// delta: day2-day1=+100→+1, day3-day2=-50→-1, day4-day3=+100→+1 → total = 1
+	if ind.ForeignFuturesOIDelta3 != 1 {
+		t.Errorf("ForeignFuturesOIDelta3 = %d, want 1", ind.ForeignFuturesOIDelta3)
+	}
+}
+
+// ── B5 Batch 2: Margin ──
+
+func TestCalculator_MarginBalancePeak(t *testing.T) {
+	c := NewCalculator()
+	history := make([]MarginEntry, 30)
+	for i := range 30 {
+		history[i] = marginEntry(2000 + float64(i)*10) // peaks at 2290
+	}
+	ind := &PeriodIndicators{}
+	c.EnrichMargin(ind, history)
+	if !floatEq(ind.MarginBalancePeak, 2290, 0.01) {
+		t.Errorf("MarginBalancePeak = %v, want 2290", ind.MarginBalancePeak)
+	}
+}
+
+func TestCalculator_MarginBalanceChange5D(t *testing.T) {
+	c := NewCalculator()
+	history := make([]MarginEntry, 6)
+	// Balance goes from 2000 to 2100 over 5 days → change = (2100-2000)/2000*100 = 5%
+	history[0] = marginEntry(2000)
+	history[1] = marginEntry(2020)
+	history[2] = marginEntry(2040)
+	history[3] = marginEntry(2060)
+	history[4] = marginEntry(2080)
+	history[5] = marginEntry(2100)
+	ind := &PeriodIndicators{}
+	c.EnrichMargin(ind, history)
+	if !floatEq(ind.MarginBalanceChange5D, 5.0, 0.01) {
+		t.Errorf("MarginBalanceChange5D = %v, want 5.0", ind.MarginBalanceChange5D)
+	}
+}
+
+func TestCalculator_MarginInsufficientHistory_Peak(t *testing.T) {
+	c := NewCalculator()
+	history := make([]MarginEntry, 10) // only 10 entries, needs 30
+	for i := range 10 {
+		history[i] = marginEntry(2000 + float64(i)*10)
+	}
+	ind := &PeriodIndicators{}
+	c.EnrichMargin(ind, history)
+	if ind.MarginBalancePeak != 0 {
+		t.Errorf("MarginBalancePeak should be 0 with only 10 entries, got %v", ind.MarginBalancePeak)
+	}
+}
+
+func TestCalculator_ForeignDeterminism(t *testing.T) {
+	c := NewCalculator()
+	entries := make([]SnapshotEntry, 10)
+	for i := range 10 {
+		entries[i] = entryFull(20000+float64(i)*10, 5000, 150, 32, 3000, float64(100-i*10), 5000+float64(i)*10)
+	}
+
+	ind1 := &PeriodIndicators{}
+	c.Enrich(ind1, entries)
+	ind2 := &PeriodIndicators{}
+	c.Enrich(ind2, entries)
+
+	if ind1.ForeignNet5DayAvg != ind2.ForeignNet5DayAvg {
+		t.Errorf("ForeignNet5DayAvg non-deterministic: %v vs %v", ind1.ForeignNet5DayAvg, ind2.ForeignNet5DayAvg)
+	}
+	if ind1.ForeignBuyDays10 != ind2.ForeignBuyDays10 {
+		t.Errorf("ForeignBuyDays10 non-deterministic: %d vs %d", ind1.ForeignBuyDays10, ind2.ForeignBuyDays10)
+	}
+	if ind1.ForeignConsecBuyDays != ind2.ForeignConsecBuyDays {
+		t.Errorf("ForeignConsecBuyDays non-deterministic: %d vs %d", ind1.ForeignConsecBuyDays, ind2.ForeignConsecBuyDays)
 	}
 }

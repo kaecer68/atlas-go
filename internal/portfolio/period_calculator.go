@@ -26,6 +26,19 @@ const (
 	MinDaysTWDChange1D      = 2 // need today + yesterday to compute 1-day change
 	MinDaysTWDChange3D      = 4 // need today + 3 prior days
 	MinDaysTWDChange5D      = 6 // need today + 5 prior days
+
+	// B5 Batch 2: foreign capital
+	MinDaysForeignNet5DayAvg    = 5
+	MinDaysForeignNet10DayAvg   = 10
+	MinDaysForeignNetPeakSell   = 10 // need at least 10 days for meaningful peak sell
+	MinDaysForeignBuySellDays   = 10
+	MinDaysForeignConsecDays    = 10 // need 10 days to establish consecutive buy/sell
+	MinDaysForeignFuturesOIPrev = 2  // need today + yesterday
+	MinDaysForeignFuturesDelta3 = 4  // need today + 3 prior days
+
+	// B5 Batch 2: margin
+	MinDaysMarginBalancePeak     = 30 // need 30 days of margin history for meaningful peak
+	MinDaysMarginBalanceChange5D = 6  // need today + 5 prior days
 )
 
 // PeriodIndicatorsCalculator enriches a base PeriodIndicators (already
@@ -44,14 +57,22 @@ func NewCalculator() *PeriodIndicatorsCalculator {
 }
 
 // SnapshotEntry is a minimal view of a historical macro snapshot for
-// calculator consumption. It carries only the fields needed by Batch 1.
+// calculator consumption. It carries fields needed by Batch 1 and Batch 2.
 type SnapshotEntry struct {
-	TradingDate  string
-	TAIEX        float64
-	SOX          float64
-	TSMADR       float64
-	USDTWD       float64
-	MarketVolume float64
+	TradingDate         string
+	TAIEX               float64
+	SOX                 float64
+	TSMADR              float64
+	USDTWD              float64
+	MarketVolume        float64
+	ForeignInvestorNet  float64 // B5-2: 外資現貨買賣超
+	ForeignFuturesOINet float64 // B5-2: 外資期貨未平倉淨額
+}
+
+// MarginEntry is a simplified margin history entry for calculator consumption.
+type MarginEntry struct {
+	Date          string
+	MarginBalance float64
 }
 
 // EntriesFromSnapshots extracts the minimal fields from a slice of
@@ -61,17 +82,19 @@ func EntriesFromSnapshots(snapshots []marketdata.MacroDataSnapshot) []SnapshotEn
 	entries := make([]SnapshotEntry, len(snapshots))
 	for i, s := range snapshots {
 		entries[i] = SnapshotEntry{
-			TAIEX:        s.TAIEX.Value,
-			SOX:          s.SOXIndex.Value,
-			TSMADR:       s.TSMADR.Value,
-			USDTWD:       s.USD_TWD.Value,
-			MarketVolume: s.MarketVolume.Value,
+			TAIEX:               s.TAIEX.Value,
+			SOX:                 s.SOXIndex.Value,
+			TSMADR:              s.TSMADR.Value,
+			USDTWD:              s.USD_TWD.Value,
+			MarketVolume:        s.MarketVolume.Value,
+			ForeignInvestorNet:  s.ForeignInvestorNet.Value,
+			ForeignFuturesOINet: s.ForeignFuturesOINet.Value,
 		}
 	}
 	return entries
 }
 
-// Enrich fills Batch 1 computed fields on the PeriodIndicators using
+// Enrich fills computed fields on the PeriodIndicators using
 // historical entries. `entries` must be sorted trading date ascending
 // with the current day as the last element.
 //
@@ -81,10 +104,10 @@ func (c *PeriodIndicatorsCalculator) Enrich(ind *PeriodIndicators, entries []Sna
 
 	// TAIEX moving averages
 	if n >= MinDaysTAIEXMA5 {
-		ind.TAIEXMA5 = computeSMA(entries, n-MinDaysTAIEXMA5, n-1, func(e SnapshotEntry) float64 { return e.TAIEX })
+		ind.TAIEXMA5 = computeSMA(entries, n-MinDaysTAIEXMA5, n-1, MinDaysTAIEXMA5, func(e SnapshotEntry) float64 { return e.TAIEX })
 	}
 	if n >= MinDaysTAIEXMA20 {
-		ind.TAIEXMA20 = computeSMA(entries, n-MinDaysTAIEXMA20, n-1, func(e SnapshotEntry) float64 { return e.TAIEX })
+		ind.TAIEXMA20 = computeSMA(entries, n-MinDaysTAIEXMA20, n-1, MinDaysTAIEXMA20, func(e SnapshotEntry) float64 { return e.TAIEX })
 	}
 	// TAIEXMA20Slope: linear regression of MA20 values over the last 5 days
 	if n >= MinDaysTAIEXMA20Slope {
@@ -93,36 +116,92 @@ func (c *PeriodIndicatorsCalculator) Enrich(ind *PeriodIndicators, entries []Sna
 
 	// SOX moving averages
 	if n >= MinDaysSOXMA20 {
-		ind.SOXMA20 = computeSMA(entries, n-MinDaysSOXMA20, n-1, func(e SnapshotEntry) float64 { return e.SOX })
+		ind.SOXMA20 = computeSMA(entries, n-MinDaysSOXMA20, n-1, MinDaysSOXMA20, func(e SnapshotEntry) float64 { return e.SOX })
 	}
 	if n >= MinDaysSOXMA50 {
-		ind.SOXMA50 = computeSMA(entries, n-MinDaysSOXMA50, n-1, func(e SnapshotEntry) float64 { return e.SOX })
+		ind.SOXMA50 = computeSMA(entries, n-MinDaysSOXMA50, n-1, MinDaysSOXMA50, func(e SnapshotEntry) float64 { return e.SOX })
 	}
 
 	// TSM ADR 5-day high
 	if n >= MinDaysTSMADRHigh5 {
-		ind.TSMADRHigh5 = computeMax(entries, n-MinDaysTSMADRHigh5, n-1, func(e SnapshotEntry) float64 { return e.TSMADR })
+		ind.TSMADRHigh5 = computeMax(entries, n-MinDaysTSMADRHigh5, n-1, MinDaysTSMADRHigh5, func(e SnapshotEntry) float64 { return e.TSMADR })
 	}
 
 	// Market volume 20-day MA
 	if n >= MinDaysMarketVolumeMA20 {
-		ind.MarketVolumeMA20 = computeSMA(entries, n-MinDaysMarketVolumeMA20, n-1, func(e SnapshotEntry) float64 { return e.MarketVolume })
+		ind.MarketVolumeMA20 = computeSMA(entries, n-MinDaysMarketVolumeMA20, n-1, MinDaysMarketVolumeMA20, func(e SnapshotEntry) float64 { return e.MarketVolume })
 	}
 
 	// TWD moving average
 	if n >= MinDaysTWDMA20 {
-		ind.TWDMA20 = computeSMA(entries, n-MinDaysTWDMA20, n-1, func(e SnapshotEntry) float64 { return e.USDTWD })
+		ind.TWDMA20 = computeSMA(entries, n-MinDaysTWDMA20, n-1, MinDaysTWDMA20, func(e SnapshotEntry) float64 { return e.USDTWD })
 	}
 
 	// TWD changes: (today - N ago) / N ago * 100; positive = depreciation
 	if n >= MinDaysTWDChange1D {
-		ind.TWDChange1D = computeChangePct(entries, n-MinDaysTWDChange1D, n-1, func(e SnapshotEntry) float64 { return e.USDTWD })
+		ind.TWDChange1D = computeChangePct(entries, n-MinDaysTWDChange1D, n-1, MinDaysTWDChange1D, func(e SnapshotEntry) float64 { return e.USDTWD })
 	}
 	if n >= MinDaysTWDChange3D {
-		ind.TWDChange3D = computeChangePct(entries, n-MinDaysTWDChange3D, n-1, func(e SnapshotEntry) float64 { return e.USDTWD })
+		ind.TWDChange3D = computeChangePct(entries, n-MinDaysTWDChange3D, n-1, MinDaysTWDChange3D, func(e SnapshotEntry) float64 { return e.USDTWD })
 	}
 	if n >= MinDaysTWDChange5D {
-		ind.TWDChange5D = computeChangePct(entries, n-MinDaysTWDChange5D, n-1, func(e SnapshotEntry) float64 { return e.USDTWD })
+		ind.TWDChange5D = computeChangePct(entries, n-MinDaysTWDChange5D, n-1, MinDaysTWDChange5D, func(e SnapshotEntry) float64 { return e.USDTWD })
+	}
+
+	// ── B5 Batch 2: Foreign capital ──
+	if n >= MinDaysForeignNet5DayAvg {
+		ind.ForeignNet5DayAvg = computeSMA(entries, n-MinDaysForeignNet5DayAvg, n-1, MinDaysForeignNet5DayAvg,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+	}
+	if n >= MinDaysForeignNet10DayAvg {
+		ind.ForeignNet10DayAvg = computeSMA(entries, n-MinDaysForeignNet10DayAvg, n-1, MinDaysForeignNet10DayAvg,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+	}
+	if n >= MinDaysForeignNetPeakSell {
+		// Peak sell = most negative net value (minimum) in the window.
+		// computeMinSell returns the minimum (most negative) ForeignInvestorNet.
+		ind.ForeignNetPeakSell = computeMinSell(entries, n-MinDaysForeignNetPeakSell, n-1, MinDaysForeignNetPeakSell,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+	}
+	if n >= MinDaysForeignBuySellDays {
+		ind.ForeignBuyDays10 = computePositiveDays(entries, n-MinDaysForeignBuySellDays, n-1,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+		ind.ForeignSellDays10 = computeNegativeDays(entries, n-MinDaysForeignBuySellDays, n-1,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+	}
+	if n >= MinDaysForeignConsecDays {
+		ind.ForeignConsecBuyDays = computeConsecutiveDays(entries, n-MinDaysForeignConsecDays, n-1, true,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+		ind.ForeignConsecSellDays = computeConsecutiveDays(entries, n-MinDaysForeignConsecDays, n-1, false,
+			func(e SnapshotEntry) float64 { return e.ForeignInvestorNet })
+	}
+
+	// ── B5 Batch 2: Futures ──
+	if n >= MinDaysForeignFuturesOIPrev && n >= 2 {
+		// Previous day futures OI = entry at n-2
+		//nolint:gosec // n>=2 guaranteed by guard above (MinDaysForeignFuturesOIPrev=2)
+		ind.ForeignFuturesOIPrev = entries[n-2].ForeignFuturesOINet
+	}
+	if n >= MinDaysForeignFuturesDelta3 {
+		// OI delta direction over 3 days (count day-over-day increases minus decreases)
+		ind.ForeignFuturesOIDelta3 = computeFuturesDeltaDirection(entries, n-MinDaysForeignFuturesDelta3, n-1)
+	}
+}
+
+// EnrichMargin computes margin-related indicators from margin history entries.
+// marginEntries must be sorted by date ascending, with the current day as the
+// last element.
+//
+// Fields not computable due to insufficient history are left at zero.
+func (c *PeriodIndicatorsCalculator) EnrichMargin(ind *PeriodIndicators, marginEntries []MarginEntry) {
+	n := len(marginEntries)
+
+	// ── B5 Batch 2: Margin ──
+	if n >= MinDaysMarginBalancePeak {
+		ind.MarginBalancePeak = computeMarginPeak(marginEntries, n-MinDaysMarginBalancePeak, n-1, MinDaysMarginBalancePeak)
+	}
+	if n >= MinDaysMarginBalanceChange5D {
+		ind.MarginBalanceChange5D = computeMarginChangePct(marginEntries, n-MinDaysMarginBalanceChange5D, n-1, MinDaysMarginBalanceChange5D)
 	}
 }
 
@@ -154,6 +233,11 @@ func maxRequiredDays() int {
 		MinDaysMarketVolumeMA20,
 		MinDaysTWDMA20,
 		MinDaysTWDChange1D, MinDaysTWDChange3D, MinDaysTWDChange5D,
+		MinDaysForeignNet5DayAvg, MinDaysForeignNet10DayAvg,
+		MinDaysForeignNetPeakSell, MinDaysForeignBuySellDays,
+		MinDaysForeignConsecDays, MinDaysForeignFuturesOIPrev,
+		MinDaysForeignFuturesDelta3,
+		MinDaysMarginBalancePeak, MinDaysMarginBalanceChange5D,
 	} {
 		if d > max {
 			max = d
@@ -217,12 +301,14 @@ func loadRecentSnapshots(snapshotDir, tradingDate string, maxFiles int) ([]Snaps
 			continue
 		}
 		result = append(result, SnapshotEntry{
-			TradingDate:  date,
-			TAIEX:        snap.TAIEX.Value,
-			SOX:          snap.SOXIndex.Value,
-			TSMADR:       snap.TSMADR.Value,
-			USDTWD:       snap.USD_TWD.Value,
-			MarketVolume: snap.MarketVolume.Value,
+			TradingDate:         date,
+			TAIEX:               snap.TAIEX.Value,
+			SOX:                 snap.SOXIndex.Value,
+			TSMADR:              snap.TSMADR.Value,
+			USDTWD:              snap.USD_TWD.Value,
+			MarketVolume:        snap.MarketVolume.Value,
+			ForeignInvestorNet:  snap.ForeignInvestorNet.Value,
+			ForeignFuturesOINet: snap.ForeignFuturesOINet.Value,
 		})
 	}
 	return result, nil
@@ -231,8 +317,9 @@ func loadRecentSnapshots(snapshotDir, tradingDate string, maxFiles int) ([]Snaps
 // ── internal helpers ──
 
 // computeSMA returns the simple moving average of values extracted from
-// entries[start..end] (inclusive).
-func computeSMA(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) float64) float64 {
+// entries[start..end] (inclusive). Returns 0 if the number of non-zero
+// values in the window is less than minNonZero (W1 honest degradation).
+func computeSMA(entries []SnapshotEntry, start, end int, minNonZero int, fn func(SnapshotEntry) float64) float64 {
 	sum := 0.0
 	count := 0
 	for i := start; i <= end; i++ {
@@ -243,27 +330,46 @@ func computeSMA(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) 
 		sum += v
 		count++
 	}
-	if count == 0 {
+	if count < minNonZero {
 		return 0
 	}
 	return sum / float64(count)
 }
 
 // computeMax returns the maximum value extracted from entries[start..end] (inclusive).
-func computeMax(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) float64) float64 {
+// Returns 0 if the number of non-zero values in the window is less than minNonZero.
+func computeMax(entries []SnapshotEntry, start, end int, minNonZero int, fn func(SnapshotEntry) float64) float64 {
+	count := 0
 	maxVal := 0.0
 	for i := start; i <= end; i++ {
 		v := fn(entries[i])
+		if v == 0 {
+			continue
+		}
+		count++
 		if v > maxVal {
 			maxVal = v
 		}
+	}
+	if count < minNonZero {
+		return 0
 	}
 	return maxVal
 }
 
 // computeChangePct returns (value at end - value at start) / value at start * 100.
-// Returns 0 if either value is zero.
-func computeChangePct(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) float64) float64 {
+// Returns 0 if any value is zero or if the non-zero count < minNonZero.
+func computeChangePct(entries []SnapshotEntry, start, end int, minNonZero int, fn func(SnapshotEntry) float64) float64 {
+	// Count non-zero values in the range
+	count := 0
+	for i := start; i <= end; i++ {
+		if fn(entries[i]) != 0 {
+			count++
+		}
+	}
+	if count < minNonZero {
+		return 0
+	}
 	old := fn(entries[start])
 	new := fn(entries[end])
 	if old == 0 || new == 0 {
@@ -280,13 +386,137 @@ func computeChangePct(entries []SnapshotEntry, start, end int, fn func(SnapshotE
 // This is a simplified approach: we extract 5 MA20 data points from the
 // window and run linear regression. Each MA20 point requires 20 days, and
 // we need 5 such points → 24 days total (20 + 4 forward offsets).
+// ── B5 Batch 2 helpers ──
+
+// computeMinSell returns the minimum (most negative) value in entries[start..end].
+// Returns 0 if the number of non-zero values is less than minNonZero.
+func computeMinSell(entries []SnapshotEntry, start, end int, minNonZero int, fn func(SnapshotEntry) float64) float64 {
+	count := 0
+	minVal := 0.0
+	for i := start; i <= end; i++ {
+		v := fn(entries[i])
+		if v == 0 {
+			continue
+		}
+		count++
+		if v < minVal {
+			minVal = v
+		}
+	}
+	if count < minNonZero {
+		return 0
+	}
+	return minVal
+}
+
+// computePositiveDays counts the number of entries in entries[start..end] where fn > 0.
+func computePositiveDays(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) float64) int {
+	count := 0
+	for i := start; i <= end; i++ {
+		v := fn(entries[i])
+		if v > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// computeNegativeDays counts the number of entries in entries[start..end] where fn < 0.
+func computeNegativeDays(entries []SnapshotEntry, start, end int, fn func(SnapshotEntry) float64) int {
+	count := 0
+	for i := start; i <= end; i++ {
+		v := fn(entries[i])
+		if v < 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// computeConsecutiveDays counts consecutive days from the end of the range
+// where fn values are positive (if wantPositive=true) or negative (if false).
+func computeConsecutiveDays(entries []SnapshotEntry, start, end int, wantPositive bool, fn func(SnapshotEntry) float64) int {
+	count := 0
+	for i := end; i >= start; i-- {
+		v := fn(entries[i])
+		if v == 0 {
+			break // zero breaks the chain
+		}
+		if wantPositive && v > 0 {
+			count++
+		} else if !wantPositive && v < 0 {
+			count++
+		} else {
+			break
+		}
+	}
+	return count
+}
+
+// computeFuturesDeltaDirection counts the net change direction of ForeignFuturesOINet.
+// Iterates from end backwards, counting day-over-day increases minus decreases.
+func computeFuturesDeltaDirection(entries []SnapshotEntry, start, end int) int {
+	delta := 0
+	for i := end; i > start; i-- {
+		diff := entries[i].ForeignFuturesOINet - entries[i-1].ForeignFuturesOINet
+		if diff > 0 {
+			delta++
+		} else if diff < 0 {
+			delta--
+		}
+	}
+	return delta
+}
+
+// computeMarginPeak returns the maximum margin balance in entries[start..end].
+// Returns 0 if the non-zero count < minNonZero.
+func computeMarginPeak(entries []MarginEntry, start, end int, minNonZero int) float64 {
+	count := 0
+	maxVal := 0.0
+	for i := start; i <= end; i++ {
+		v := entries[i].MarginBalance
+		if v == 0 {
+			continue
+		}
+		count++
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	if count < minNonZero {
+		return 0
+	}
+	return maxVal
+}
+
+// computeMarginChangePct returns (value at end - value at start) / value at start * 100.
+// Returns 0 if non-zero count < minNonZero or either endpoint is zero.
+func computeMarginChangePct(entries []MarginEntry, start, end int, minNonZero int) float64 {
+	count := 0
+	for i := start; i <= end; i++ {
+		if entries[i].MarginBalance != 0 {
+			count++
+		}
+	}
+	if count < minNonZero {
+		return 0
+	}
+	old := entries[start].MarginBalance
+	new := entries[end].MarginBalance
+	if old == 0 || new == 0 {
+		return 0
+	}
+	return (new - old) / old * 100
+}
+
 func computeSlope(entries []SnapshotEntry, start int, fn func(SnapshotEntry) float64) float64 {
 	// We have at least MinDaysTAIEXMA20Slope (24) entries.
 	// MA20 for day 19 (index start+19) uses days start+0..start+19
 	// MA20 for day 20 uses start+1..start+20, ..., day 23 uses start+4..start+23 (=end)
 	ma20vals := make([]float64, 5)
 	for i := 0; i < 5; i++ {
-		ma20vals[i] = computeSMA(entries, start+i, start+i+19, fn)
+		// Each MA20 requires 20 non-zero entries in its 20-day window.
+		ma20vals[i] = computeSMA(entries, start+i, start+i+19, 20, fn)
 	}
 
 	// Linear regression: x = [0,1,2,3,4], y = ma20vals

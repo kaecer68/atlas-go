@@ -719,12 +719,27 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 		date = time.Unix(snap.RecordedAt, 0).UTC().Format("2006-01-02")
 	}
 	ind := SnapshotToPeriodIndicators(snap)
-	// B5 Batch 1: enrich with MA/change fields from historical snapshots.
+	// B5 Batch 1 & 2: enrich with computed fields from historical snapshots.
 	// Errors are swallowed — if historical data is unavailable, indicators
 	// stay at zero (honest degradation, detector guards handle it).
 	if a.macroIngestor != nil {
 		calc := portfolio.NewCalculator()
 		_ = calc.EnrichFromDir(&ind, date, a.macroIngestor.SnapshotDir())
+
+		// B5 Batch 2: margin history enrichment
+		marginDir := filepath.Join(a.workDir, "data", "state", "margin")
+		marginEntries, err := narrative.LoadMarginHistory(marginDir)
+		if err == nil && len(marginEntries) > 0 {
+			// Convert narrative.MarginHistoryEntry → portfolio.MarginEntry
+			pmEntries := make([]portfolio.MarginEntry, len(marginEntries))
+			for i, me := range marginEntries {
+				pmEntries[i] = portfolio.MarginEntry{
+					Date:          me.Date,
+					MarginBalance: me.MarginBalance,
+				}
+			}
+			calc.EnrichMargin(&ind, pmEntries)
+		}
 	}
 	period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
 	now := time.Now().UTC()
