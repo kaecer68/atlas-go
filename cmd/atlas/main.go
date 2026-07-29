@@ -1145,6 +1145,15 @@ func run(args []string, deps appDeps) error {
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
 			}
+			// fix/20260731-govflow-cadence: shared in-memory CAPTCHA
+			// cooldown. One instance per process, injected into the
+			// two gov-related background tasks (BTM aggregate +
+			// gateway read-refresh). Process restart resets the
+			// cooldown — intentional, the upstream's view of
+			// bot-shaped traffic is what we are protecting, not
+			// our own retry history.
+			govCaptchaCooldown := marketdata.NewCaptchaCooldown()
+
 			registerOperationsTasks(operationsDeps{
 				taskMgr:         taskMgr,
 				cfg:             cfg,
@@ -1164,6 +1173,7 @@ func run(args []string, deps appDeps) error {
 				// rolling store built above.
 				governmentFlowDir: filepath.Join(cfg.WorkDir, "data/state/government_flow"),
 				capitalFlow:       capitalFlowService,
+				captchaCooldown:   govCaptchaCooldown,
 			})
 
 			registerBackfillTasks(backfillDeps{
