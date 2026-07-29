@@ -70,6 +70,14 @@ func NewSectorIndexReader(dir string) *SectorIndexReader {
 // ReadRange returns a date-keyed map of canonical industry daily returns for
 // all dates in [startDate, endDate] that have data. Missing dates are omitted
 // (not zero-filled), so callers can distinguish "no data" from "return = 0".
+//
+// W1 (B5 Batch 3): source-priority policy — when both the 18-industry native
+// schema and the 8-industry legacy schema are present for the same date and
+// canonical industry, the 18-industry value wins. The 8-industry value is
+// used only to fill canonical IDs not covered by the 18-industry data.
+//
+// Files are classified by their parsed key count: 18 keys -> 18-industry
+// native (priority); otherwise -> 8-industry legacy (fallback).
 func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]map[string]float64, error) {
 	entries, err := os.ReadDir(r.dir)
 	if err != nil {
@@ -80,6 +88,14 @@ func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]
 	endStr := endDate.Format("2006-01-02")
 	result := make(map[string]map[string]float64)
 
+	// Pre-load all files; classify into native (18-industry) vs legacy (other).
+	type loaded struct {
+		path     string
+		isNative bool
+		data     map[string][]SectorIndexData
+	}
+	var natives []loaded
+	var legacys []loaded
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -88,16 +104,21 @@ func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]
 		if !strings.HasPrefix(name, "sector_indices_") || !strings.HasSuffix(name, ".json") {
 			continue
 		}
-
 		path := filepath.Join(r.dir, name)
 		data, err := loadSectorIndexFile(path)
 		if err != nil {
-			// Logically skip unreadable files; a single corrupt file should not
-			// block the rest of the history.
 			continue
 		}
+		if len(data) >= 18 {
+			natives = append(natives, loaded{path, true, data})
+		} else {
+			legacys = append(legacys, loaded{path, false, data})
+		}
+	}
 
-		for rawIndustry, series := range data {
+	// Phase 1: fill from native (18-industry) sources.
+	for _, src := range natives {
+		for rawIndustry, series := range src.data {
 			industry := canonicalSectorID(rawIndustry)
 			if industry == "" {
 				continue
@@ -109,14 +130,32 @@ func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]
 				if result[item.Date] == nil {
 					result[item.Date] = make(map[string]float64)
 				}
-				// When two raw industries map to the same canonical ID on the same
-				// date (e.g. 8-industry schema has both ai_supply_chain and
-				// electronics mapping to electronics), average the returns.
-				if existing, ok := result[item.Date][industry]; ok {
-					result[item.Date][industry] = (existing + item.ReturnPct) / 2
-				} else {
-					result[item.Date][industry] = item.ReturnPct
+				result[item.Date][industry] = item.ReturnPct
+			}
+		}
+	}
+
+	// Phase 2: fill from legacy (8-industry) sources, but only for canonical
+	// IDs NOT already covered by native data on that date.
+	for _, src := range legacys {
+		for rawIndustry, series := range src.data {
+			industry := canonicalSectorID(rawIndustry)
+			if industry == "" {
+				continue
+			}
+			for _, item := range series {
+				if item.Date < startStr || item.Date > endStr {
+					continue
 				}
+				if result[item.Date] == nil {
+					result[item.Date] = make(map[string]float64)
+				}
+				if _, alreadyCovered := result[item.Date][industry]; alreadyCovered {
+					// Source-priority: 18-industry native data already
+					// provides a value for this (date, industry); skip.
+					continue
+				}
+				result[item.Date][industry] = item.ReturnPct
 			}
 		}
 	}
