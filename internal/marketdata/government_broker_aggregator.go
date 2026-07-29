@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,14 +23,19 @@ import (
 )
 
 // GovernmentBrokerAggregator fetches daily broker-level trading data from TWSE
-// (bsr.twse.com.tw) and aggregates net buy/sell for the 5 core government banks'
+// (bsr.twse.com.tw) and aggregates net buy/sell for the 8 core government banks'
 // head offices, writing the result to the GovernmentFlowProvider's flat directory.
 //
 // Methodology (per docs/specs/government-force-proxy-spec.md and community practice):
-//   - 5 core banks: 合庫(8060), 土銀(8030), 臺灣銀(8040), 台企銀(8010), 彰化(8064)
+//   - 8 core banks: 合庫(8060), 土銀(8030), 臺灣銀(8040), 台企銀(8010), 彰化(8064),
+//     兆豐(8061), 第一金(8011), 華南永昌(8080)
 //   - Head office branch codes only (not all branches)
 //   - Aggregated across the top N weighted stocks (TW50 constituents)
 //   - Source: TWSE bsr.twse.com.tw — Open Data, publicly accessible
+//
+// Note: bsr.twse.com.tw added a CAPTCHA to the query flow. The aggregator now
+// posts through the ASP.NET form and reports a clear error when the CAPTCHA is
+// presented, instead of silently writing a zero reading.
 type GovernmentBrokerAggregator struct {
 	client    *http.Client
 	limiter   *rate.Limiter
@@ -38,15 +44,18 @@ type GovernmentBrokerAggregator struct {
 	symbols   []string
 }
 
-// coreBankBranches maps the 5 core government banks to their TWSE head-office
-// branch codes. These are the head office (總公司) codes sourced from TWSE
-// broker code registry.
+// coreBankBranches maps the 8 government-controlled banks to their TWSE head-office
+// branch codes per docs/specs/government-force-proxy-spec.md. Definition updated
+// from 5 to 8 banks in this PR; see commit message for the mapping rationale.
 var coreBankBranches = map[string]string{
 	"8060": "合作金庫",
 	"8030": "土地銀行",
 	"8040": "臺灣銀行",
 	"8010": "臺灣企銀",
 	"8064": "彰化銀行",
+	"8061": "兆豐證券",
+	"8011": "第一金證券",
+	"8080": "華南永昌證券",
 }
 
 // insuranceBrokerCodes maps major Taiwan life insurance companies' affiliated
@@ -71,6 +80,52 @@ var tw50Symbols = []string{
 	"2615", "2609", "2610", "5871", "5876", "2883", "2801", "2887",
 	"2890", "2357", "2327", "3231", "2379", "2383", "2345", "3037",
 	"3443", "5269",
+}
+
+// BrokerBranchNet records a single broker branch's daily trading on one stock.
+type BrokerBranchNet struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Buy  int64  `json:"buy"`
+	Sell int64  `json:"sell"`
+	Net  int64  `json:"net"`
+}
+
+// BrokerDailyDetail accumulates a broker's totals across all queried stocks
+// for one trading day. It is the row shape written to YYYYMMDD_brokers.json.
+type BrokerDailyDetail struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "gov" or "ins"
+	Buy  int64  `json:"buy"`
+	Sell int64  `json:"sell"`
+	Net  int64  `json:"net"`
+}
+
+// GovernmentBrokerDailyResult is the parsed outcome for one stock on one day.
+type GovernmentBrokerDailyResult struct {
+	GovNet int64
+	InsNet int64
+	Gov    []BrokerBranchNet
+	Ins    []BrokerBranchNet
+}
+
+// detailKey is the merge key for aggregating broker details across stocks.
+type detailKey struct {
+	Code string
+	Name string
+	Type string
+}
+
+// detailAccumulator is used internally by AggregateDate to merge per-stock
+// broker rows into a single daily file.
+type detailAccumulator struct {
+	Code string
+	Name string
+	Type string
+	Buy  int64
+	Sell int64
+	Net  int64
 }
 
 // NewGovernmentBrokerAggregator creates an aggregator that writes to outputDir.
@@ -102,26 +157,30 @@ func (a *GovernmentBrokerAggregator) SetSymbols(symbols []string) {
 }
 
 // AggregateDate fetches broker data for the given trading date, aggregates net
-// buy/sell for the 5 core banks across TW50 stocks, and writes the result as
-// a GovernmentFlowReading JSON file.
+// buy/sell for the 8 core government banks across TW50 stocks, and writes the
+// result as both a GovernmentFlowReading JSON file and a per-broker detail file.
 func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
 	dateStr := date.Format("20060102")
 
 	var totalGovNet, totalInsNet int64
 	var stocksProcessed int
+	details := make(map[detailKey]*detailAccumulator)
 
 	for _, symbol := range a.symbols {
 		if err := a.limiter.Wait(ctx); err != nil {
 			return nil, fmt.Errorf("rate limit: %w", err)
 		}
 
-		govNet, insNet, err := a.fetchStockBrokerNet(ctx, symbol, date)
+		res, err := a.fetchStockBrokerNet(ctx, symbol, date)
 		if err != nil {
 			continue
 		}
-		totalGovNet += govNet
-		totalInsNet += insNet
+		totalGovNet += res.GovNet
+		totalInsNet += res.InsNet
 		stocksProcessed++
+
+		mergeBrokerDetails(details, res.Gov, "gov")
+		mergeBrokerDetails(details, res.Ins, "ins")
 	}
 
 	if stocksProcessed == 0 {
@@ -139,7 +198,7 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		return nil, fmt.Errorf("government_broker write: %w", err)
 	}
 
-	// Write insurance company reading (new: suffixed with _insurance).
+	// Write insurance company reading (existing format).
 	insReading := &GovernmentFlowReading{
 		Date:     dateStr,
 		TotalNet: totalInsNet,
@@ -150,43 +209,130 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		return nil, fmt.Errorf("insurance_broker write: %w", err)
 	}
 
+	// Write per-broker detail file (new: PR-A).
+	if err := a.writeBrokerDetails(dateStr, details); err != nil {
+		return nil, fmt.Errorf("broker_details write: %w", err)
+	}
+
 	return govReading, nil
 }
 
-// fetchStockBrokerNet fetches the broker trading report for a single stock
-// and returns both government bank net and insurance company net.
-func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, symbol string, date time.Time) (govNet, insNet int64, err error) {
-	rocDate := fmt.Sprintf("%d/%02d/%02d", date.Year()-1911, date.Month(), date.Day())
-
-	url := fmt.Sprintf(
-		"%s/bsContent.aspx?v=VOLUME&p=%s_%s",
-		a.baseURL,
-		symbol, strings.ReplaceAll(rocDate, "/", ""),
-	)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return 0, 0, fmt.Errorf("request: %w", err)
+// mergeBrokerDetails merges per-stock broker rows into the daily accumulator.
+func mergeBrokerDetails(details map[detailKey]*detailAccumulator, rows []BrokerBranchNet, typ string) {
+	for _, r := range rows {
+		key := detailKey{Code: r.Code, Name: r.Name, Type: typ}
+		acc, ok := details[key]
+		if !ok {
+			acc = &detailAccumulator{Code: r.Code, Name: r.Name, Type: typ}
+			details[key] = acc
+		}
+		acc.Buy += r.Buy
+		acc.Sell += r.Sell
+		acc.Net += r.Net
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; atlas-go/1.0)")
+}
+
+// fetchStockBrokerNet fetches the broker trading report for a single stock
+// and returns both government bank and insurance company details.
+func (a *GovernmentBrokerAggregator) fetchStockBrokerNet(ctx context.Context, symbol string, date time.Time) (*GovernmentBrokerDailyResult, error) {
+	dateStr := date.Format("20060102")
+
+	menuURL, vs, vg, ev, err := a.fetchMenuTokens(ctx, symbol, dateStr)
+	if err != nil {
+		return nil, fmt.Errorf("fetch menu tokens %s/%s: %w", symbol, dateStr, err)
+	}
+
+	body, err := a.postMenuQuery(ctx, menuURL, vs, vg, ev, symbol)
+	if err != nil {
+		return nil, fmt.Errorf("post menu query %s/%s: %w", symbol, dateStr, err)
+	}
+
+	if hasCaptcha(body) {
+		return nil, fmt.Errorf("captcha required for %s/%s", symbol, dateStr)
+	}
+
+	res, err := a.parseBrokerTableHTML(symbol, body)
+	if err != nil {
+		return nil, fmt.Errorf("parse broker table %s/%s: %w", symbol, dateStr, err)
+	}
+	return res, nil
+}
+
+// fetchMenuTokens performs the initial GET to bsMenu.aspx and extracts the
+// ASP.NET form tokens needed for the POST query. The date-symbol pair is
+// encoded in the query string so the server knows which trading day to serve.
+func (a *GovernmentBrokerAggregator) fetchMenuTokens(ctx context.Context, symbol, dateStr string) (string, string, string, string, error) {
+	menuURL := fmt.Sprintf("%s/bsMenu.aspx?p=%s_%s", a.baseURL, dateStr, symbol)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, menuURL, nil)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return 0, 0, fmt.Errorf("fetch %s: %w", symbol, err)
+		return "", "", "", "", fmt.Errorf("fetch: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("fetch %s: HTTP %d", symbol, resp.StatusCode)
+		return "", "", "", "", fmt.Errorf("fetch: HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
-		return 0, 0, fmt.Errorf("read %s: %w", symbol, err)
+		return "", "", "", "", fmt.Errorf("read: %w", err)
 	}
 
-	return a.parseBrokerTable(symbol, body)
+	vs, vg, ev, err := extractFormTokens(body)
+	if err != nil {
+		return "", "", "", "", err
+	}
+
+	return menuURL, vs, vg, ev, nil
+}
+
+// postMenuQuery submits the ASP.NET form that triggers the broker table response.
+func (a *GovernmentBrokerAggregator) postMenuQuery(ctx context.Context, menuURL, vs, vg, ev, symbol string) ([]byte, error) {
+	form := url.Values{}
+	form.Set("__VIEWSTATE", vs)
+	form.Set("__VIEWSTATEGENERATOR", vg)
+	form.Set("__EVENTVALIDATION", ev)
+	form.Set("TextBox_Stkno", symbol)
+	form.Set("RadioButton_Normal", "RadioButton_Normal")
+	form.Set("btnOK", "查詢")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, menuURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("post: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("post: HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read: %w", err)
+	}
+	return body, nil
+}
+
+// hasCaptcha detects whether the TWSE response is asking for a CAPTCHA.
+func hasCaptcha(body []byte) bool {
+	return bytes.Contains(body, []byte("CaptchaImage.aspx")) ||
+		bytes.Contains(body, []byte("CaptchaControl1"))
 }
 
 // DataDir returns the directory where daily readings are written.
@@ -217,52 +363,311 @@ func (a *GovernmentBrokerAggregator) writeInsuranceReading(r GovernmentFlowReadi
 	return nil
 }
 
-// brokerRowRegex matches broker rows: code name buy sell net ...
-var brokerRowRegex = regexp.MustCompile(`(\d{4}[A-Za-z]?\d*)\s+(\S+)\s+([\d,]+)\s+([\d,]+)\s+([\d,-]+)`)
+// writeBrokerDetails writes the daily per-broker detail file.
+func (a *GovernmentBrokerAggregator) writeBrokerDetails(dateStr string, details map[detailKey]*detailAccumulator) error {
+	rows := make([]BrokerDailyDetail, 0, len(details))
+	for _, acc := range details {
+		rows = append(rows, BrokerDailyDetail{
+			Code: acc.Code,
+			Name: acc.Name,
+			Type: acc.Type,
+			Buy:  acc.Buy,
+			Sell: acc.Sell,
+			Net:  acc.Net,
+		})
+	}
 
-func (a *GovernmentBrokerAggregator) parseBrokerTable(symbol string, body []byte) (govNet, insNet int64, err error) {
+	payload := struct {
+		Date    string              `json:"date"`
+		Source  string              `json:"source"`
+		Brokers []BrokerDailyDetail `json:"brokers"`
+	}{
+		Date:    dateStr,
+		Source:  "broker-aggregate",
+		Brokers: rows,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal broker details: %w", err)
+	}
+	path := filepath.Join(a.outputDir, dateStr+"_brokers.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
+}
+
+var (
+	viewStateRegex       = regexp.MustCompile(`id="__VIEWSTATE"\s+value="([^"]+)"`)
+	viewStateGenRegex    = regexp.MustCompile(`id="__VIEWSTATEGENERATOR"\s+value="([^"]+)"`)
+	eventValidationRegex = regexp.MustCompile(`id="__EVENTVALIDATION"\s+value="([^"]+)"`)
+)
+
+// extractFormTokens pulls the ASP.NET hidden fields from the menu page.
+func extractFormTokens(body []byte) (string, string, string, error) {
+	vs := extractToken(viewStateRegex, body)
+	vg := extractToken(viewStateGenRegex, body)
+	ev := extractToken(eventValidationRegex, body)
+	if vs == "" || vg == "" || ev == "" {
+		return "", "", "", fmt.Errorf("missing form token: viewstate=%t generator=%t eventvalidation=%t", vs != "", vg != "", ev != "")
+	}
+	return vs, vg, ev, nil
+}
+
+func extractToken(re *regexp.Regexp, body []byte) string {
+	m := re.FindSubmatch(body)
+	if len(m) < 2 {
+		return ""
+	}
+	return string(m[1])
+}
+
+// parseBrokerTableHTML parses the first HTML table that looks like a broker
+// branch table. It supports header-driven column mapping and falls back to
+// position-based parsing for simple test fixtures.
+func (a *GovernmentBrokerAggregator) parseBrokerTableHTML(symbol string, body []byte) (*GovernmentBrokerDailyResult, error) {
+	if hasCaptcha(body) {
+		return nil, fmt.Errorf("captcha required for %s", symbol)
+	}
+
 	doc, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
-		return 0, 0, fmt.Errorf("parse HTML: %w", err)
+		return nil, fmt.Errorf("parse HTML: %w", err)
 	}
 
-	var textBuf bytes.Buffer
-	var extractText func(*html.Node)
-	extractText = func(n *html.Node) {
-		if n.Type == html.TextNode {
-			textBuf.WriteString(n.Data)
-			textBuf.WriteByte(' ')
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			extractText(c)
-		}
-	}
-	extractText(doc)
-
-	matches := brokerRowRegex.FindAllStringSubmatch(textBuf.String(), -1)
-	if len(matches) == 0 {
-		return a.parseBrokerCSV(symbol, body)
-	}
-
-	for _, m := range matches {
-		brokerID := strings.TrimSpace(m[1])
-		code := brokerID[:4]
-		netStr := strings.ReplaceAll(strings.TrimSpace(m[5]), ",", "")
-		net, err := strconv.ParseInt(netStr, 10, 64)
+	rows := findBrokerTableRows(doc)
+	if len(rows) < 2 {
+		// Fallback to CSV parser for plain CSV responses.
+		govNet, insNet, err := a.parseBrokerCSV(symbol, body)
 		if err != nil {
+			return nil, fmt.Errorf("no broker table for %s", symbol)
+		}
+		return &GovernmentBrokerDailyResult{GovNet: govNet, InsNet: insNet}, nil
+	}
+
+	colMap := mapBrokerColumns(rows[0])
+	result := &GovernmentBrokerDailyResult{}
+	for _, row := range rows[1:] {
+		cells := extractCells(row)
+		if len(cells) < 3 {
+			continue
+		}
+		code, name, buy, sell, net, ok := parseBrokerCells(cells, colMap)
+		if !ok {
 			continue
 		}
 		if _, ok := coreBankBranches[code]; ok {
-			govNet += net
+			result.GovNet += net
+			result.Gov = append(result.Gov, BrokerBranchNet{Code: code, Name: name, Buy: buy, Sell: sell, Net: net})
 		}
 		if _, ok := insuranceBrokerCodes[code]; ok {
-			insNet += net
+			result.InsNet += net
+			result.Ins = append(result.Ins, BrokerBranchNet{Code: code, Name: name, Buy: buy, Sell: sell, Net: net})
 		}
 	}
 
-	return govNet, insNet, nil
+	return result, nil
 }
 
+// findBrokerTableRows walks the HTML document and returns the rows of the first
+// table that looks like a broker table (header contains "券商" or rows begin
+// with 4-digit broker codes).
+func findBrokerTableRows(doc *html.Node) []*html.Node {
+	var bestRows []*html.Node
+	var bestScore int
+
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "table" {
+			rows := tableRows(n)
+			if len(rows) < 2 {
+				return
+			}
+			score := brokerTableScore(rows)
+			if score > bestScore {
+				bestScore = score
+				bestRows = rows
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return bestRows
+}
+
+func tableRows(table *html.Node) []*html.Node {
+	var rows []*html.Node
+	for c := table.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && c.Data == "tr" {
+			rows = append(rows, c)
+		}
+		// Also recurse into tbody/thead/tfoot.
+		if c.Type == html.ElementNode && (c.Data == "tbody" || c.Data == "thead" || c.Data == "tfoot") {
+			for cc := c.FirstChild; cc != nil; cc = cc.NextSibling {
+				if cc.Type == html.ElementNode && cc.Data == "tr" {
+					rows = append(rows, cc)
+				}
+			}
+		}
+	}
+	return rows
+}
+
+func brokerTableScore(rows []*html.Node) int {
+	if len(rows) == 0 {
+		return 0
+	}
+	score := 0
+	headerText := strings.Join(extractCells(rows[0]), " ")
+	if strings.Contains(headerText, "券商") {
+		score += 10
+	}
+	if strings.Contains(headerText, "買進") || strings.Contains(headerText, "賣出") || strings.Contains(headerText, "淨買") {
+		score += 5
+	}
+	for _, row := range rows[1:] {
+		cells := extractCells(row)
+		if len(cells) > 0 && isBrokerCode(cells[0]) {
+			score += 1
+		}
+	}
+	return score
+}
+
+func isBrokerCode(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) < 4 {
+		return false
+	}
+	prefix := s[:4]
+	_, err := strconv.Atoi(prefix)
+	return err == nil
+}
+
+// columnMapping holds the indices of the columns we care about.
+type columnMapping struct {
+	Code  int
+	Name  int
+	Buy   int
+	Sell  int
+	Net   int
+	Found bool
+}
+
+// mapBrokerColumns maps header keywords to column indices. If no header is
+// recognized, it returns an empty mapping and the caller falls back to position
+// parsing.
+func mapBrokerColumns(header *html.Node) columnMapping {
+	cells := extractCells(header)
+	m := columnMapping{Code: -1, Name: -1, Buy: -1, Sell: -1, Net: -1}
+	for i, cell := range cells {
+		text := strings.TrimSpace(cell)
+		switch {
+		case strings.Contains(text, "代號") && m.Code < 0:
+			m.Code = i
+		case strings.Contains(text, "名稱") || strings.Contains(text, "券商") && m.Name < 0:
+			m.Name = i
+		case strings.Contains(text, "買進") && m.Buy < 0:
+			m.Buy = i
+		case strings.Contains(text, "賣出") && m.Sell < 0:
+			m.Sell = i
+		case strings.Contains(text, "淨買") && m.Net < 0:
+			m.Net = i
+		}
+	}
+	if m.Code >= 0 && m.Name >= 0 && m.Buy >= 0 && m.Sell >= 0 && m.Net >= 0 {
+		m.Found = true
+	}
+	return m
+}
+
+func extractCells(row *html.Node) []string {
+	var cells []string
+	for c := row.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && (c.Data == "td" || c.Data == "th") {
+			cells = append(cells, nodeText(c))
+		}
+	}
+	return cells
+}
+
+func nodeText(n *html.Node) string {
+	var buf strings.Builder
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			buf.WriteString(n.Data)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return strings.TrimSpace(buf.String())
+}
+
+func parseBrokerCells(cells []string, m columnMapping) (code, name string, buy, sell, net int64, ok bool) {
+	idx := func(i int) string {
+		if i < 0 || i >= len(cells) {
+			return ""
+		}
+		return strings.TrimSpace(cells[i])
+	}
+
+	if m.Found {
+		code = idx(m.Code)
+		name = idx(m.Name)
+		buy = parseAmount(idx(m.Buy))
+		sell = parseAmount(idx(m.Sell))
+		net = parseAmount(idx(m.Net))
+	} else {
+		// Position-based fallback: code, name, buy, sell, net.
+		if len(cells) < 5 {
+			return "", "", 0, 0, 0, false
+		}
+		code = strings.TrimSpace(cells[0])
+		name = strings.TrimSpace(cells[1])
+		buy = parseAmount(cells[2])
+		sell = parseAmount(cells[3])
+		net = parseAmount(cells[4])
+	}
+
+	code = strings.TrimSpace(code)
+	if len(code) < 4 {
+		return "", "", 0, 0, 0, false
+	}
+	code = code[:4]
+	if buy == 0 && sell == 0 && net == 0 {
+		// Still valid if the row is a zero row; keep the code.
+	}
+	return code, name, buy, sell, net, true
+}
+
+func parseAmount(s string) int64 {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
+	s = strings.ReplaceAll(s, "+", "")
+	s = strings.ReplaceAll(s, " ", "")
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+// parseBrokerCSV parses a plain CSV body that contains broker rows. It is a
+// fallback used when the upstream returns a CSV payload instead of an HTML table.
 func (a *GovernmentBrokerAggregator) parseBrokerCSV(symbol string, body []byte) (govNet, insNet int64, err error) {
 	reader := csv.NewReader(bytes.NewReader(body))
 	reader.FieldsPerRecord = -1

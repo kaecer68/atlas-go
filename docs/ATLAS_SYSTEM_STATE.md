@@ -8,6 +8,8 @@
 | 工作區 | Branch | 狀態 | 說明 |
 |--------|--------|------|------|
 | `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`a335abc9` (B5-2 merge) |
+| `~/workspace/atlas/feat-20260730-b3-data-infra` | `feat/20260730-b3-data-infra` | 🟡 進行中 | B5-3 PR-A：公股資料基礎設施（parser/8 行庫/per-broker/sector reader），未合併 |
+| `~/workspace/atlas/MoneyTrend-B5-Batch-3` | `kaecer68/MoneyTrend-B5-Batch-3` | ⚪ 待清理 | B5-3 偵察工作區，本 worktree 將於 session close 時移除 |
 | `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併，本 worktree 將於 session close 時移除 |
 | `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | ⚪ 待清理 | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
 | `~/workspace/atlas/MoneyTrend-TAIEX-Fix` | `fix/20260730-taiex-resilience` | 🟢 已完成 | B5-R TAIEX 抓取韌性修復已合併 |
@@ -31,6 +33,7 @@
 | BG | Background 首次執行跳過 startup jitter | ✅ 已完成 | #1409 | 2026-07-28 |
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
 | B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
+| B5-3 PR-A | PeriodIndicators Batch 3 資料基礎設施（公股 parser/8 行庫/per-broker/sector reader） | 🟡 進行中 | — | — |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 | B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 
@@ -175,3 +178,23 @@
   - `docs/data-architecture.md`、`docs/architecture.md`（本文件）
 - **不動範圍**：`period_detector.go`、所有 detector / calculator / period_history 寫入路徑、`MacroDataPoint` schema、既有 snapshot 歷史檔。
 - **預期影響**：日後 Yahoo 間歇性失敗時，`taiex` 鍵由官方 TWSE 回填；若兩路皆敗，`DataStatus` 與 `FailedChannels` 會如實反映，不會再出現「有值但非當日」的靜默錯誤。
+
+---
+
+## B5-3 PR-A — PeriodIndicators Batch 3 資料基礎設施（進行中）
+
+- **分支**：`feat/20260730-b3-data-infra`（worktree：`~/workspace/atlas/feat-20260730-b3-data-infra`）
+- **目標**：修復公股資料取得、擴充行庫名單至 8 家、新增 per-broker 明細輸出、提供 sector_index 公共讀取器。本 PR-A **不改變任何時期判定**（detector/calculator/struct 零改動）。
+- **W1（公股 parser 修復）**：`GovernmentBrokerAggregator` 改走 TWSE `bsMenu.aspx` ASP.NET 表單流程（GET 取 token → POST 查詢），並偵測 CAPTCHA 頁面，遇 captcha 時回傳錯誤而非靜默寫入 `total_net=0`。
+- **W2（行庫名單對齊）**：`coreBankBranches` 由 5 家擴充為 8 家：合庫(8060)、土銀(8030)、臺灣銀(8040)、台企銀(8010)、彰化(8064)、兆豐(8061)、第一金(8011)、華南永昌(8080)。
+- **W3（per-broker 明細）**：`AggregateDate` 在寫入 `YYYYMMDD.json` 與 `YYYYMMDD_insurance.json` 之外，新增 `YYYYMMDD_brokers.json`，含各券商當日買/賣/淨買。
+- **W4（sector_index 公共讀取器）**：新增 `SectorIndexReader`（`internal/marketdata/sector_index_reader.go`），統一讀取 `data/state/sector_index/` 下的單日/批次檔，將 8 產業與 18 產業 schema 映射為 canonical 18 產業 return map，缺檔日期（如 2026-06-24）留空、不零填充。
+- **涉及檔案**：
+  - `internal/marketdata/government_broker_aggregator.go`（重寫 parser/8 行庫/per-broker）
+  - `internal/marketdata/government_broker_aggregator_test.go`（新增）
+  - `internal/apigateway/adapter_government_broker_test.go`（stub 改為 POST 流程）
+  - `internal/marketdata/sector_index_reader.go`（新增）
+  - `internal/marketdata/sector_index_reader_test.go`（新增）
+  - `docs/data-sources.md`、`docs/data-architecture.md`（本文件）
+- **不動範圍**：`period_detector.go`、`period_calculator.go`、`PeriodIndicators` struct、`period_history` 寫入路徑、既有 6 個全零 `government_flow` 歷史檔。
+- **已知限制**：TWSE `bsr.twse.com.tw` 目前已啟用 CAPTCHA，自動抓取將回傳錯誤；需等待官方移除 CAPTCHA、導入官方 API，或經人工/授權管道匯入資料後，parser 才能產出非零資料。

@@ -13,16 +13,29 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// newStubTWSEServer returns a minimal TWSE broker table response that contains
-// one matching government-bank branch code.
+// newStubTWSEServer returns a minimal TWSE broker-table response that
+// simulates the real ASP.NET form flow: GET bsMenu.aspx returns the form
+// with viewstate tokens, and POST bsMenu.aspx returns the broker table.
 func newStubTWSEServer(t *testing.T, branchCode string) *httptest.Server {
 	t.Helper()
+	formHTML := "<html><body><form><input id=\"__VIEWSTATE\" value=\"%2FwEPDwUKLTgxNDI2MzM4MGRk\">" +
+		"<input id=\"__VIEWSTATEGENERATOR\" value=\"AA1F01CB\">" +
+		"<input id=\"__EVENTVALIDATION\" value=\"%2FwEWAwKz\"></form></body></html>"
+	tableHTML := "<html><body><table><tr>" +
+		"<th>券商代號</th><th>券商名稱</th><th>買進</th><th>賣出</th><th>淨買</th>" +
+		"</tr><tr>" +
+		"<td>" + branchCode + "</td><td>HeadOffice</td><td>1000</td><td>0</td><td>1000</td>" +
+		"</tr></table></body></html>"
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// The parser expects rows of: code name buy sell net
-		_, _ = w.Write([]byte("<html><body><table><tr>" +
-			"<td>" + branchCode + "</td><td>HeadOffice</td><td>1000</td><td>0</td><td>1000</td>" +
-			"</tr></table></body></html>"))
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(formHTML))
+		case http.MethodPost:
+			_, _ = w.Write([]byte(tableHTML))
+		default:
+			_, _ = w.Write([]byte(tableHTML))
+		}
 	}))
 }
 
@@ -62,6 +75,36 @@ func TestGovernmentBrokerChannelAdapter_Fetch(t *testing.T) {
 	}
 	if reading.Source != "broker-aggregate" {
 		t.Errorf("Source = %q, want broker-aggregate", reading.Source)
+	}
+
+	// Verify the per-broker detail file is also written (PR-A).
+	detailPath := filepath.Join(dir, reading.Date+"_brokers.json")
+	detailBytes, err := os.ReadFile(detailPath)
+	if err != nil {
+		t.Fatalf("Read detail file: %v", err)
+	}
+	var detail struct {
+		Date    string                         `json:"date"`
+		Source  string                         `json:"source"`
+		Brokers []marketdata.BrokerDailyDetail `json:"brokers"`
+	}
+	if err := json.Unmarshal(detailBytes, &detail); err != nil {
+		t.Fatalf("Unmarshal detail file: %v", err)
+	}
+	if len(detail.Brokers) == 0 {
+		t.Error("Detail file should contain at least one broker")
+	}
+	found8060 := false
+	for _, b := range detail.Brokers {
+		if b.Code == "8060" && b.Type == "gov" {
+			found8060 = true
+			if b.Net != reading.TotalNet {
+				t.Errorf("Detail net %d != aggregate total %d", b.Net, reading.TotalNet)
+			}
+		}
+	}
+	if !found8060 {
+		t.Errorf("Expected broker 8060 in detail file, got %+v", detail.Brokers)
 	}
 }
 

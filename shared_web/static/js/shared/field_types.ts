@@ -215,6 +215,23 @@ export interface BenchmarkPoint {
   outperf: number;
 }
 
+export interface BrokerBranchNet {
+  code: string;
+  name: string;
+  buy: number;
+  sell: number;
+  net: number;
+}
+
+export interface BrokerDailyDetail {
+  code: string;
+  name: string;
+  type: string;
+  buy: number;
+  sell: number;
+  net: number;
+}
+
 export interface BrokerRuntimeAudit {
   mode: string;
   adapter: string;
