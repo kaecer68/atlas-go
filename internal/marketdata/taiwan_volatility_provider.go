@@ -46,8 +46,10 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 
 	// Check shared cache first (P1 B03: avoids duplicate ^TWII fetch)
 	var body []byte
+	fromCache := false
 	if cached := twiiCache.get(params["interval"], params["range"]); cached != nil {
 		body = cached
+		fromCache = true
 	} else {
 		var err error
 		body, err = s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
@@ -86,13 +88,18 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 	}
 
 	// Compute annualized 20-day volatility: std(log_returns) * sqrt(252)
+	latest := validCloses[len(validCloses)-1]
+	timestamp := result[0].Meta.RegularMarketTime
+
+	if fromCache && !twiiCacheTimestampIsCurrentTradingDay(timestamp) {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: cached ^TWII data is stale (timestamp %d, not current trading day); refusing to compute historical volatility from stale cache",
+			taiwanVolatilityChannel, timestamp)
+	}
+
 	vol := computeAnnualizedVolatility20D(validCloses)
 	if math.IsNaN(vol) || math.IsInf(vol, 0) {
 		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid volatility result: %v", taiwanVolatilityChannel, vol)
 	}
-
-	latest := validCloses[len(validCloses)-1]
-	timestamp := result[0].Meta.RegularMarketTime
 
 	return MacroDataSnapshot{
 		RecordedAt: time.Now().Unix(),
