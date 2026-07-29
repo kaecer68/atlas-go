@@ -1,14 +1,15 @@
 # ATLAS 系統狀態快照
 
-> 最後更新：2026-07-29（B2 時期信心度 + 觸發指標合併）
+> 最後更新：2026-07-29（B5-T TAIEX 快照回補）
 > 維護紀律：每次 feature wave 合併後更新，維持現狀可追蹤性。
 
 ## 活躍工作區
 
 | 工作區 | Branch | 狀態 | 說明 |
 |--------|--------|------|------|
-| `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`2a4ae0ba` (B2 merge) |
-| `~/workspace/atlas/MoneyTrend-E6b` | `feat/20260729-b2-period-confidence` | ⚪ 待清理 | B2 已完成合併，本 worktree 將於 session close 時移除 |
+| `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`a335abc9` (B5-2 merge) |
+| `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併，本 worktree 將於 session close 時移除 |
+| `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | 🟡 待 review | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
 
 ## Feature Wave 進度
 
@@ -28,6 +29,8 @@
 | Docs | ARCHITECTURE.md 架構活地圖（38 channel + 資料流） | ✅ 已完成 | #1414 | 2026-07-29 |
 | BG | Background 首次執行跳過 startup jitter | ✅ 已完成 | #1409 | 2026-07-28 |
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
+| B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
+| B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -122,3 +125,28 @@
 | (b) W1 degradation | 6 | 7/24-7/29 TAIEXMA20 非零→零（誠實降級） |
 | (c) B5-2 only | 0 | 無新增改判 |
 | (d) W1+B5-2 combined | 0 | — |
+
+## B5-T — TAIEX 7/24、7/27 快照回補（已完成）
+
+- **分支**：`fix/20260729-taiex-backfill`（worktree：`~/workspace/atlas-taiex-backfill`，待 review）
+- **根因**：Yahoo Finance `^TWII` 在 7/24 與 7/27 兩天 fetch 間歇性失敗，造成 `MacroDataSnapshot` 中 `taiex` 鍵整欄缺失（其他欄位如 `foreign_investor_net`、`retail_margin_balance` 仍正常寫入）。同期 `historical_volatility` 雖有值但為共用 `^TWII` 快取，已在另一個問題上跟進。
+- **回補來源**：TWSE OpenAPI `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=YYYYMMDD&type=IND`（即時拉取，無硬編碼）
+- **回補工具**：`cmd/macrobackfill/`（獨立 commit，11 個單元測試全綠）
+  - 拒絕覆寫既有 `taiex` 鍵
+  - 拒絕週末日期
+  - 從最接近的前一交易日計算 `change_pct` 基準
+  - 每筆回補以 JSONL 寫入 `<dir>/backfill_log.jsonl`（欄位：`date` / `field` / `value` / `change_pct` / `source_url` / `source_fetched_at` / `backfilled_at` / `baseline_date` / `baseline_value`）
+- **回補結果**（gitignored 資料檔，已在 main repo 落盤並由工具驗證）：
+  - `2026-07-24` TAIEX = 43654.84，change_pct = -2.6122%（基準 2026-07-23=44825.78）
+  - `2026-07-27` TAIEX = 43634.19，change_pct = -0.0473%（基準 2026-07-26=43654.84）
+- **驗證**：
+  - 黃金測試重跑（`go test -tags=golden -run TestGolden_BacktestAllDates`）→ 84 snapshot，1 筆改判
+  - **2026-07-28：consolidation → black_swan**（TAIEX 偏離 MA20 -5.93% < -5%）
+  - 5 個 black_swan 條件逐條比對，僅「大盤偏離月線跌幅」一條命中
+- **回補日誌位置**：`data/state/macro/backfill_log.jsonl`（gitignored，依部署環境落盤）
+- **範圍外（未動）**：
+  - `historical_volatility` 7/27 過時值 43654.84（屬另一個快取陳舊問題，進 backlog）
+  - `latest.json` / `previous.json`
+  - `market_volume` 歷史（屬 Batch 後續決定）
+  - `MacroDataPoint` schema
+  - `period_history` 寫入與 `period_detector.go` 零改動

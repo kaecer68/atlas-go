@@ -59,7 +59,7 @@ domain.Recommendation{Symbol, Agent, Conviction, Reason, ...}
 | 2 | `data/state/recommendation_outcomes.jsonl` | 全域聚合 | S | O_APPEND 累積，快速查詢 |
 | 3 | PostgreSQL | 查詢層 | S | TimescaleDB hypertable，90 天 retention |
 | 4 | `data/state/darwinian_weights.json` | 狀態層 | S | 權重範圍 [0.3, 2.5]，超界靜默正規化 |
-| 5 | `data/state/macro/` | 總經數據 | E | 原油/BDI/DXY/台幣/加權/VIX |
+| 5 | `data/state/macro/` | 總經數據 | E | 原油/BDI/DXY/台幣/加權/VIX。回補記錄見 `backfill_log.jsonl`（每行一筆，欄位：`date` / `field` / `value` / `change_pct` / `source_url` / `source_fetched_at` / `backfilled_at` / `baseline_date` / `baseline_value`）。`latest.json` / `previous.json` 不參與回補。 |
 | 6 | `data/state/margin/` | 融資融券 | E | TWSE API，市場情緒維度 |
 | 7 | `data/state/capital_flow/` | 資金流向 | E | 主力/法人流向，產業輪動 |
 | 8 | `data/state/experiments*` | 實驗記錄 | S/E/U | experiments.jsonl + 實驗目錄 + 突變提案 |

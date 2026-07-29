@@ -1,0 +1,29 @@
+=== B5-T: 7/22-7/29 TAIEXMA5/MA20 回補前後對照 ===
+
+【回補前】（從 /tmp/taiex-backup/*.json.orig 還原 7/24、7/27 缺失 taiex，其他日期保持原樣）
+Date         TAIEXPrice   TAIEXMA5     TAIEXMA20    Period
+----         ----------   --------     ---------    ------
+2026-07-22   44825.78     43370.18     45021.37     consolidation
+2026-07-23   44825.78     43801.08     44923.63     turnaround_up
+2026-07-24   0.00         0.00         0.00         consolidation
+2026-07-25   43654.84     0.00         0.00         consolidation
+2026-07-26   43654.84     0.00         0.00         consolidation
+2026-07-27   0.00         0.00         0.00         consolidation
+2026-07-28   41603.36     0.00         0.00         consolidation
+2026-07-29   40039.18     0.00         0.00         consolidation
+
+差異說明：7/24-7/29 全部窗口含零 → B5-2 誠實降級為 0，導致 7/28 判為 consolidation（無法觸發 twii_crash）。
+
+【回補後】（執行 macrobackfill 補入 7/24=43654.84、7/27=43634.19）
+Date         TAIEXPrice   TAIEXMA5     TAIEXMA20    Period
+----         ----------   --------     ---------    ------
+2026-07-22   44825.78     43370.18     45021.37     consolidation
+2026-07-23   44825.78     43801.08     44923.63     turnaround_up
+2026-07-24   43654.84     43997.79     44767.34     consolidation
+2026-07-25   43654.84     44238.82     44611.05     consolidation
+2026-07-26   43654.84     44123.22     44465.97     consolidation
+2026-07-27   43634.19     43884.90     44373.73     consolidation
+2026-07-28   41603.36     43240.41     44167.17     black_swan
+2026-07-29   40039.18     42517.28     43901.40     black_swan
+
+差異說明：窗口全有效 → TAIEXMA5/MA20 為非零正確值；7/28 TAIEX 偏離 MA20 達 -5.93% → 觸發 twii_crash → consolidation → black_swan。
