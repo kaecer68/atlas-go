@@ -86,4 +86,4 @@
 | capital_board | 錢潮看板 | 七大勢力看板 |
 | narrative | 宏觀視野 | 全球宏觀 |
 | methodology | 方法論 | 方法論：為什麼 |
-每支 PR 完成後同步更新 [ARCHITECTURE.md](ARCHITECTURE.md) 中本圖涉及區域。
+每支 PR 完成後同步更新 [architecture.md](architecture.md) 中本圖涉及區域。
