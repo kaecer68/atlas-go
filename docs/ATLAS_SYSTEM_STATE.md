@@ -33,7 +33,8 @@
 | BG | Background 首次執行跳過 startup jitter | ✅ 已完成 | #1409 | 2026-07-28 |
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
 | B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
-| B5-3 PR-A | PeriodIndicators Batch 3 資料基礎設施（公股 parser/8 行庫/per-broker/sector reader） | 🟡 進行中 | — | — |
+| B5-3 PR-A | PeriodIndicators Batch 3 資料基礎設施（公股 parser/8 行庫/per-broker/sector reader） | ✅ 已完成 | #1421 | 2026-07-29 |
+| B5-3 PR-B | PeriodIndicators Batch 3 calculator 填充（類股輪動 + 公股連買） | 🟡 進行中 | TBD | — |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 | B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 
@@ -130,6 +131,20 @@
 | (b) W1 degradation | 6 | 7/24-7/29 TAIEXMA20 非零→零（誠實降級） |
 | (c) B5-2 only | 0 | 無新增改判 |
 | (d) W1+B5-2 combined | 2 | 7/24 與 7/27 W1 input 降級 + B5-2 chip 統計添加後，2 筆額外改判（7/24 與 7/27 由 B5-1 W1 缺失 → B5-2 補 chip 後觸發額外差異） |
+
+## B5-3 PR-B — calculator 填充（進行中）
+
+- **分支**：（worktree：）
+- **前導 PR-A（#1421）**：SectorIndexReader、GovernmentBrokerAggregator（per-broker 輸出）
+- **本支範圍**：把  與  填進 
+- **新方法**：
+  - ：用 sector index 5+5 日窗口判定輪動
+  - ：P0-3 規則（ 存在才算有效）取公股連買天數
+  - ：合併呼叫點
+- **紅線**： /  struct /  寫入路徑零改動
+- **可用性**： 84 天全部 available（sector_index 6/3-7/29 跨 56 個交易日）； 0 個 available（CAPTCHA 未解，無  姊妹檔）
+- **黃金測試**：1 筆改判（7/28，與 B5-1 同筆），2 欄位各自貢獻獨立
+- **executor_pipeline 接入**：本支不接入（ 無 sector/gov dir injection 機制）— backlog
 
 ## B5-T — TAIEX 7/24、7/27 快照回補（已完成）
 
