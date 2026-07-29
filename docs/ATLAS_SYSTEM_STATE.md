@@ -1,6 +1,6 @@
 # ATLAS 系統狀態快照
 
-> 最後更新：2026-07-29（B5-T TAIEX 快照回補）
+> 最後更新：2026-07-30（B5-R TAIEX 抓取韌性修復）
 > 維護紀律：每次 feature wave 合併後更新，維持現狀可追蹤性。
 
 ## 活躍工作區
@@ -9,7 +9,8 @@
 |--------|--------|------|------|
 | `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD=`a335abc9` (B5-2 merge) |
 | `~/workspace/atlas/MoneyTrend-B5-Batch-2` | `kaecer68/MoneyTrend-B5-Batch-2` | ⚪ 待清理 | B5-2 已完成合併，本 worktree 將於 session close 時移除 |
-| `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | 🟡 待 review | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
+| `~/workspace/atlas-taiex-backfill` | `fix/20260729-taiex-backfill` | ⚪ 待清理 | B5-T TAIEX 7/24、7/27 快照回補工具與回補結果 |
+| `~/workspace/atlas/MoneyTrend-TAIEX-Fix` | `fix/20260730-taiex-resilience` | 🟢 已完成 | B5-R TAIEX 抓取韌性修復已合併 |
 
 ## Feature Wave 進度
 
@@ -31,6 +32,7 @@
 | B5-1 | PeriodIndicators Batch 1 — 指數/匯率/量能均線補齊 | ✅ 已完成 | #1415 | 2026-07-29 |
 | B5-2 | PeriodIndicators Batch 2 — 法人/期貨/融資 chip 統計 | ✅ 已完成 | #1416 | 2026-07-29 |
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
+| B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -151,3 +153,25 @@
   - `market_volume` 歷史（屬 Batch 後續決定）
   - `MacroDataPoint` schema
   - `period_history` 寫入與 `period_detector.go` 零改動
+
+## B5-R — TAIEX 抓取韌性修復（已完成）
+
+- **分支**：`fix/20260730-taiex-resilience`（worktree：`~/workspace/atlas/MoneyTrend-TAIEX-Fix`）
+- **根因**：Yahoo Finance `^TWII` 間歇性失敗時，`TAIEXIndexProvider` 無替代來源，導致 `taiex` 鍵整欄缺失；`TaiwanVolatilityProvider` 與 `TAIEXIndexProvider` 共用 `twiiCache`，Yahoo 失敗後 cache 中的陳舊值被用來計算 `historical_volatility`，產生「有值但已過時」的靜默污染。
+- **修復內容**：
+  - **W1（TAIEX fallback）**：`TAIEXIndexProvider.FetchSnapshot` 在 Yahoo 失敗（網路、非 2xx、空 chart、無有效 TAIEX 列）時，自動 fallback 至 TWSE OpenAPI `MI_INDEX?type=IND`；回應日期與請求日期不符（含週末/休市）時拒絕寫入。
+  - **W2（失敗可見化）**：`macroDataGatewayAdapter.fetchFresh` 在合併 snapshot 時，將 hard-failed channels 寫入 `FailedChannels`、stale-only channels 寫入 `StaleChannels`，並更新頂層 `DataStatus`（`ok`/`degraded`/`stale`）。
+  - **W3（陳舊快取誠實化）**：`TaiwanVolatilityProvider` 在 cache hit 時檢查 `^TWII` 資料時間戳是否為當前交易日；若為陳舊快取則回傳 error，拒絕以舊值計算 20 日年化波動率。
+  - **W4（測試）**：新增 7 個單元測試，涵蓋 TWSE fallback 成功、日期不符拒絕、雙路皆敗、陳舊快取拒絕、新鮮快取接受、snapshot `DataStatus=degraded/stale`。
+- **涉及檔案**：
+  - `internal/marketdata/taiex_twse_fallback.go`（新增）
+  - `internal/marketdata/taiex_index_provider.go`
+  - `internal/marketdata/taiwan_index_cache.go`
+  - `internal/marketdata/taiwan_volatility_provider.go`
+  - `internal/marketdata/taiex_index_provider_test.go`
+  - `internal/marketdata/taiwan_volatility_provider_test.go`（新增）
+  - `internal/monitoring/gateway_adapter.go`
+  - `internal/monitoring/gateway_adapter_test.go`
+  - `docs/data-architecture.md`、`docs/architecture.md`（本文件）
+- **不動範圍**：`period_detector.go`、所有 detector / calculator / period_history 寫入路徑、`MacroDataPoint` schema、既有 snapshot 歷史檔。
+- **預期影響**：日後 Yahoo 間歇性失敗時，`taiex` 鍵由官方 TWSE 回填；若兩路皆敗，`DataStatus` 與 `FailedChannels` 會如實反映，不會再出現「有值但非當日」的靜默錯誤。

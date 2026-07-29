@@ -6,7 +6,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func resetTAIEXTwseTargetDate(t *testing.T) {
+	t.Helper()
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 9, 0, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+}
 
 func TestTAIEXIndexProvider_Name(t *testing.T) {
 	if got := NewTAIEXIndexProvider().Name(); got != "taiex_index" {
@@ -59,20 +67,171 @@ func TestTAIEXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 	}
 }
 
-func TestTAIEXIndexProvider_FetchSnapshot_NoChartResult(t *testing.T) {
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestTAIEXIndexProvider_FetchSnapshot_NoChartResult_FallsBackThenFails(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+	resetTAIEXTwseTargetDate(t)
+
+	// Yahoo returns an empty chart result.
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"chart":{"result":[]}}`))
 	}))
-	defer server.Close()
+	defer yahooSrv.Close()
+
+	// TWSE fallback also fails, so the provider must return an error.
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
 
 	origHosts := yahooHosts
-	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
 	defer func() { yahooHosts = origHosts }()
-	SetYahooSessionClient(server.Client())
+	SetYahooSessionClient(yahooSrv.Client())
 
 	_, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
 	if err == nil {
-		t.Fatal("FetchSnapshot() expected error for empty chart result")
+		t.Fatal("FetchSnapshot() expected error when both Yahoo and TWSE fallback fail")
+	}
+}
+
+func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackSuccess(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+	resetTAIEXTwseTargetDate(t)
+
+	// Yahoo server always fails.
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("yahoo down"))
+	}))
+	defer yahooSrv.Close()
+
+	// TWSE server returns the requested date (2026-07-29, ROC 115/07/29).
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月29日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","<p style ='color:green'>-</p>","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	snap, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot() error = %v", err)
+	}
+	if snap.TAIEX.Symbol != "^TWII" {
+		t.Errorf("Symbol = %q, want ^TWII", snap.TAIEX.Symbol)
+	}
+	if snap.TAIEX.Value != 43654.84 {
+		t.Errorf("Value = %v, want 43654.84", snap.TAIEX.Value)
+	}
+	if snap.TAIEX.ChangePct != -2.67 {
+		t.Errorf("ChangePct = %v, want -2.67", snap.TAIEX.ChangePct)
+	}
+}
+
+func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackRejectsStaleDate(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+	resetTAIEXTwseTargetDate(t)
+
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	// TWSE response title date (2026-07-24) does not match requested date (2026-07-29).
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月24日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	_, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error when TWSE fallback returns stale date")
+	}
+	if !strings.Contains(err.Error(), "stale") && !strings.Contains(err.Error(), "reported date") {
+		t.Fatalf("expected stale/reported-date error, got %v", err)
+	}
+}
+
+func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+	resetTAIEXTwseTargetDate(t)
+
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	_, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error when both Yahoo and TWSE fail")
+	}
+	if !strings.Contains(err.Error(), "taiex_index") {
+		t.Errorf("expected wrapped taiex_index error, got %v", err)
+	}
+}
+
+func TestFetchTWSETAIEXFallback_RejectsMismatchedDate(t *testing.T) {
+	resetTAIEXTwseTargetDate(t)
+
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月24日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	_, err := fetchTWSETAIEXFallback(context.Background())
+	if err == nil {
+		t.Fatal("expected error for mismatched date")
+	}
+	if !strings.Contains(err.Error(), "reported date") {
+		t.Fatalf("expected reported-date mismatch error, got %v", err)
 	}
 }

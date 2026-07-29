@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -26,6 +27,9 @@ func (p *TAIEXIndexProvider) Name() string {
 }
 
 // FetchSnapshot retrieves the latest ^TWII value and change percentage.
+// If Yahoo Finance fails, it falls back to the TWSE OpenAPI MI_INDEX endpoint.
+// The TWSE response date is validated against the requested date so that
+// previous-day data is never written as today's value.
 func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("taiex_index rate limit: %w", err)
@@ -44,29 +48,43 @@ func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 		var err error
 		body, err = p.session.fetchWithFallback(ctx, "^TWII", params)
 		if err != nil {
-			return MacroDataSnapshot{}, fmt.Errorf("taiex_index: %w", err)
+			// Primary source failed: fall back to TWSE official source.
+			return p.fetchFallback(ctx, err)
 		}
 		twiiCache.set(body, params["interval"], params["range"])
 	}
 
+	pt, err := p.parseYahooTAIEX(body)
+	if err != nil {
+		return p.fetchFallback(ctx, err)
+	}
+
+	return MacroDataSnapshot{
+		TAIEX:      pt,
+		RecordedAt: time.Now().Unix(),
+	}, nil
+}
+
+// parseYahooTAIEX extracts the TAIEX MacroDataPoint from a Yahoo chart response.
+func (p *TAIEXIndexProvider) parseYahooTAIEX(body []byte) (MacroDataPoint, error) {
 	chartResp, err := UnmarshalYahooChart(body)
 	if err != nil {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: %w", err)
+		return MacroDataPoint{}, err
 	}
 
 	result := chartResp.Chart.Result
 	if len(result) == 0 {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: no chart result")
+		return MacroDataPoint{}, errors.New("no chart result")
 	}
 
 	closes := result[0].Indicators.Quote[0].Close
 	if len(closes) == 0 {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: no close prices")
+		return MacroDataPoint{}, errors.New("no close prices")
 	}
 
 	latest := closes[len(closes)-1]
 	if math.IsNaN(latest) || math.IsInf(latest, 0) || latest == 0 {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: invalid latest price: %v", latest)
+		return MacroDataPoint{}, fmt.Errorf("invalid latest price: %v", latest)
 	}
 
 	prev := latest
@@ -83,16 +101,25 @@ func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 	}
 
 	if math.IsNaN(changePct) || math.IsInf(changePct, 0) {
-		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: invalid change percentage: %v", changePct)
+		return MacroDataPoint{}, fmt.Errorf("invalid change percentage: %v", changePct)
 	}
 
+	return MacroDataPoint{
+		Symbol:    "^TWII",
+		Value:     latest,
+		ChangePct: math.Round(changePct*100) / 100,
+		Timestamp: result[0].Meta.RegularMarketTime,
+	}, nil
+}
+
+// fetchFallback attempts the TWSE official source and wraps both errors for visibility.
+func (p *TAIEXIndexProvider) fetchFallback(ctx context.Context, yahooErr error) (MacroDataSnapshot, error) {
+	pt, err := fetchTWSETAIEXFallback(ctx)
+	if err != nil {
+		return MacroDataSnapshot{}, fmt.Errorf("taiex_index: yahoo failed (%w) and twse fallback failed: %w", yahooErr, err)
+	}
 	return MacroDataSnapshot{
-		TAIEX: MacroDataPoint{
-			Symbol:    "^TWII",
-			Value:     latest,
-			ChangePct: math.Round(changePct*100) / 100,
-			Timestamp: result[0].Meta.RegularMarketTime,
-		},
+		TAIEX:      pt,
 		RecordedAt: time.Now().Unix(),
 	}, nil
 }

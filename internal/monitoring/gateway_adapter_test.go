@@ -756,6 +756,92 @@ func TestMacroDataGatewayAdapter_FreshDataUnaffected(t *testing.T) {
 	}
 }
 
+// TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusDegraded verifies that
+// the snapshot-level DataStatus/FailedChannels fields are populated when one
+// or more channels fail. This closes the gap where L2 ChannelErrors() existed
+// but the returned MacroDataSnapshot itself stayed silent.
+func TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusDegraded(t *testing.T) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		switch channelID {
+		case "us_spx":
+			snap := marketdata.MacroDataSnapshot{
+				SPXIndex: marketdata.MacroDataPoint{Symbol: "SPX", Value: 5432.10, ChangePct: 0.5, Timestamp: 1700000000},
+			}
+			b, _ := json.Marshal(snap)
+			return b, FetchMeta{}, nil
+		case "taiex_index":
+			return nil, FetchMeta{}, errors.New("taiex yahoo down")
+		case "tw_vol":
+			return nil, FetchMeta{}, errors.New("tw_vol cache stale")
+		default:
+			return nil, FetchMeta{}, errors.New("simulated failure")
+		}
+	}
+
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("expected partial success, got error: %v", err)
+	}
+	if snap.DataStatus != "degraded" {
+		t.Errorf("DataStatus = %q, want degraded", snap.DataStatus)
+	}
+	wantFailed := map[string]bool{"taiex_index": true, "tw_vol": true}
+	for _, ch := range snap.FailedChannels {
+		delete(wantFailed, ch)
+	}
+	if len(wantFailed) > 0 {
+		remaining := make([]string, 0, len(wantFailed))
+		for ch := range wantFailed {
+			remaining = append(remaining, ch)
+		}
+		t.Errorf("missing expected failed channels: %v", remaining)
+	}
+	// E2: end-to-end evidence — Yahoo down for TAIEX should leave the field
+	// zero and record the channel in FailedChannels.
+	t.Logf("E2 snapshot TAIEX: %+v", snap.TAIEX)
+	t.Logf("E2 snapshot FailedChannels: %v", snap.FailedChannels)
+}
+
+// TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusStale verifies that when
+// channels return data marked Stale (CB-open / fallback) but no hard errors,
+// the snapshot reports DataStatus="stale" and StaleChannels is populated.
+func TestMacroDataGatewayAdapter_FetchSnapshot_DataStatusStale(t *testing.T) {
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		switch channelID {
+		case "us_spx":
+			snap := marketdata.MacroDataSnapshot{
+				SPXIndex: marketdata.MacroDataPoint{Symbol: "SPX", Value: 5432.10, ChangePct: 0.5, Timestamp: 1700000000},
+			}
+			b, _ := json.Marshal(snap)
+			return b, FetchMeta{Stale: true, LastError: "circuit breaker open"}, nil
+		default:
+			return []byte("{}"), FetchMeta{Stale: true, LastError: "circuit breaker open"}, nil
+		}
+	}
+
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("expected partial success, got error: %v", err)
+	}
+	if snap.DataStatus != "stale" {
+		t.Errorf("DataStatus = %q, want stale", snap.DataStatus)
+	}
+	if len(snap.FailedChannels) != 0 {
+		t.Errorf("expected no hard-failed channels, got %v", snap.FailedChannels)
+	}
+	found := false
+	for _, ch := range snap.StaleChannels {
+		if ch == "us_spx" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected us_spx in StaleChannels, got %v", snap.StaleChannels)
+	}
+}
+
 func TestNewDayTradingFetcher(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {

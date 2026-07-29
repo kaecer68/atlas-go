@@ -4641,6 +4641,11 @@ export interface twseT86Response {
   data: string[][];
 }
 
+export interface twseTAIEXResponse {
+  stat: string;
+  tables: string[];
+}
+
 export interface waitlistEntry {
   email: string;
   source: string;

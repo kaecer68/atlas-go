@@ -176,16 +176,30 @@ func (a *macroDataGatewayAdapter) fetchFresh(ctx context.Context) (marketdata.Ma
 	}
 
 	a.mu.Lock()
-	realErrCount := 0
-	errMsgs := make([]string, 0, len(a.lastErrors))
+	var failedChannels, staleChannels []string
+	var errMsgs []string
 	for ch, e := range a.lastErrors {
 		if len(e) >= 6 && e[:6] == "stale:" {
-			continue
+			staleChannels = append(staleChannels, ch)
+		} else {
+			failedChannels = append(failedChannels, ch)
+			errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", ch, e))
 		}
-		realErrCount++
-		errMsgs = append(errMsgs, fmt.Sprintf("%s: %s", ch, e))
 	}
-	allFailed := realErrCount > 0 && realErrCount == len(channels)
+
+	merged.FailedChannels = failedChannels
+	merged.StaleChannels = staleChannels
+	switch {
+	case len(failedChannels) == 0 && len(staleChannels) == 0:
+		merged.DataStatus = "ok"
+	case len(failedChannels) > 0 && len(failedChannels) == len(channels):
+		merged.DataStatus = "stale"
+	case len(failedChannels) > 0:
+		merged.DataStatus = "degraded"
+	default:
+		merged.DataStatus = "stale"
+	}
+	allFailed := len(failedChannels) > 0 && len(failedChannels) == len(channels)
 	a.mu.Unlock()
 
 	if allFailed {

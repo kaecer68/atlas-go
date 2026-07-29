@@ -28,6 +28,33 @@ var twiiCache = &taiwanIndexCache{
 
 const twiiCacheTTL = 60 * time.Second
 
+// twiiNowFunc is overridable in tests so cache-freshness checks can be
+// deterministic regardless of the wall clock.
+var twiiNowFunc = time.Now
+
+// twiiCacheTimestampIsCurrentTradingDay reports whether a cached Yahoo ^TWII
+// response timestamp corresponds to the current Taiwan trading day.
+// On weekends/holidays the expectation rewinds to the most recent trading day
+// using the package's existing isTaiwanTradingDay helper (currently weekends only).
+func twiiCacheTimestampIsCurrentTradingDay(ts int64) bool {
+	dataDate := time.Unix(ts, 0).In(twseLocation).Truncate(24 * time.Hour)
+	expected := latestTaiwanTradingDay(twiiNowFunc().In(twseLocation))
+	return sameDate(dataDate, expected)
+}
+
+// latestTaiwanTradingDay returns the most recent Taiwan trading day on or before t.
+func latestTaiwanTradingDay(t time.Time) time.Time {
+	for !isTaiwanTradingDay(t) {
+		t = t.AddDate(0, 0, -1)
+	}
+	return t
+}
+
+// sameDate reports whether two times represent the same calendar date in twseLocation.
+func sameDate(a, b time.Time) bool {
+	return a.In(twseLocation).Format("20060102") == b.In(twseLocation).Format("20060102")
+}
+
 // key builds a composite key from interval and range.
 func twiiKey(interval, rng string) string {
 	return interval + "|" + rng
