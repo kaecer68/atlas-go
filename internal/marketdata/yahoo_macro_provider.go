@@ -28,6 +28,14 @@ var modernUserAgents = []string{
 
 var yahooSharedLimiter = rate.NewLimiter(rate.Every(100*time.Millisecond), 5)
 
+// SetYahooLimiterForTest replaces the shared Yahoo rate limiter for tests.
+// Returns the previous limiter for caller to restore with defer/Cleanup.
+func SetYahooLimiterForTest(l *rate.Limiter) *rate.Limiter {
+	old := yahooSharedLimiter
+	yahooSharedLimiter = l
+	return old
+}
+
 // YahooFinanceMacroProvider fetches macro indicators from Yahoo Finance.
 type YahooFinanceMacroProvider struct {
 	session *yahooSession

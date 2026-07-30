@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/time/rate"
 )
 
 func TestBDIProvider_Name(t *testing.T) {
@@ -24,6 +27,9 @@ func TestBDIProvider_FetchSnapshot_Success(t *testing.T) {
 		w.Write([]byte(mockResponse))
 	}))
 	defer server.Close()
+
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
 
 	p := NewBDIProvider()
 	p.endpoint = server.URL
@@ -57,6 +63,8 @@ func TestBDIProvider_FetchSnapshot_NegativeChangePct(t *testing.T) {
 		w.Write([]byte(mockResponse))
 	}))
 	defer server.Close()
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
 
 	p := NewBDIProvider()
 	p.endpoint = server.URL
@@ -86,6 +94,9 @@ func TestBDIProvider_FetchSnapshot_EmptyQuote(t *testing.T) {
 	defer server.Close()
 
 	p := NewBDIProvider()
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
+
 	p.endpoint = server.URL
 
 	ctx := context.Background()
@@ -106,6 +117,9 @@ func TestBDIProvider_FetchSnapshot_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
+
 	p := NewBDIProvider()
 	p.endpoint = server.URL
 
@@ -124,6 +138,9 @@ func TestBDIProvider_FetchSnapshot_HTTPError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
+
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
 
 	p := NewBDIProvider()
 	p.endpoint = server.URL
@@ -147,6 +164,9 @@ func TestBDIProvider_FetchSnapshot_MissingLastField(t *testing.T) {
 		w.Write([]byte(mockResponse))
 	}))
 	defer server.Close()
+
+	SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { SetBDILimiterForTest(rate.NewLimiter(rate.Every(5*time.Second), 1)) })
 
 	p := NewBDIProvider()
 	p.endpoint = server.URL

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/time/rate"
 )
 
 func TestNewTWSEMarginBalanceProvider(t *testing.T) {
@@ -90,6 +92,7 @@ func TestTWSEMarginBalanceProvider_FetchDateExpanded(t *testing.T) {
 	p := NewTWSEMarginBalanceProvider("")
 	p.baseURL = server.URL
 	p.client = server.Client()
+	p.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
 
 	margin, short, marginChange, shortChange, err := p.fetchDateExpanded(context.Background(), "20260513")
 	if err != nil {
@@ -137,6 +140,7 @@ func TestTWSEMarginBalanceProvider_FetchSnapshotIncludesShortBalance(t *testing.
 	p := NewTWSEMarginBalanceProvider("")
 	p.baseURL = server.URL
 	p.client = server.Client()
+	p.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
 
 	snap, err := p.FetchSnapshot(context.Background())
 	if err != nil {

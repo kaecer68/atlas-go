@@ -95,6 +95,15 @@ var (
 	taiexIndexLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 )
 
+// ResetYahooTestLimiters replaces the three Yahoo group limiters with fresh
+// instances (same rate/burst config). Only used in tests that depend on
+// clean burst-token state (e.g., TestNewRateLimitManager_YahooGroupsDrainIndependently).
+func ResetYahooTestLimiters() {
+	yahooMacroLimiter = rate.NewLimiter(YahooFinanceRate, YahooFinanceBurst)
+	yahooIndexLimiter = rate.NewLimiter(YahooIndexRate, YahooIndexBurst)
+	yahooTechLimiter = rate.NewLimiter(YahooTechRate, YahooTechBurst)
+}
+
 // RateLimitManager manages all channel rate limiters.
 type RateLimitManager struct {
 	limiters map[string]*rate.Limiter

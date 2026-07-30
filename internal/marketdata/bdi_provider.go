@@ -17,6 +17,14 @@ import (
 
 var bdiSharedLimiter = rate.NewLimiter(rate.Every(5*time.Second), 1)
 
+// SetBDILimiterForTest replaces the shared BDI rate limiter for tests.
+// Returns the previous limiter for caller to restore with defer/Cleanup.
+func SetBDILimiterForTest(l *rate.Limiter) *rate.Limiter {
+	old := bdiSharedLimiter
+	bdiSharedLimiter = l
+	return old
+}
+
 // BDIProvider fetches the Baltic Dry Index from CNBC.
 type BDIProvider struct {
 	client   *http.Client
