@@ -1647,3 +1647,295 @@ func TestPipelineService_LoadUniverseOverlap_RegistryError_FallsBackToSeed(t *te
 		t.Fatal("expected non-empty agents from SeedRegistry fallback")
 	}
 }
+
+// =============================================================================
+// LoadRegimeHistory: period sourced from period_history (Hermes MCP fix)
+// =============================================================================
+//
+// These tests guard the contract change: buildRegimeHistoryData reads
+// period/period_name_zh from period_history (PeriodDetector truth), NOT
+// from RegimeToPeriod(regime). The previous behavior produced fabricated
+// values whenever regime and period disagreed (e.g. 2026-07-29: regime=
+// RISK_ON, real period=consolidation). The new contract:
+//   - period_history has a row for date D     → Period = p.Period
+//   - period_history missing D                → Period = "" (no fallback)
+//   - current_period for the latest row      → same rule as above
+//   - market_period mirrors period (deprecated alias)
+//   - source is split into regime_source + period_source (no conflation)
+
+// stubHistoricalStoreWithPeriod is a ledger.HistoricalStore stub that
+// serves both regime_history and period_history from in-memory slices.
+// All other methods panic — the code under test only uses LoadRegimeHistory
+// / LoadRegimeHistoryAll and LoadPeriodHistoryAll.
+type stubHistoricalStoreWithPeriod struct {
+	regimeRows []ledger.RegimeRow
+	periodRows []ledger.PeriodRow
+	periodErr  error
+	regimeErr  error
+}
+
+func (m *stubHistoricalStoreWithPeriod) UpsertRegime(_ context.Context, _ ledger.RegimeRow) error {
+	panic("stubHistoricalStoreWithPeriod: UpsertRegime not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadRegimeByDate(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("stubHistoricalStoreWithPeriod: LoadRegimeByDate not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadRegimeByDateAll(_ context.Context, _ string) (ledger.RegimeRow, bool, error) {
+	panic("stubHistoricalStoreWithPeriod: LoadRegimeByDateAll not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadRegimeHistory(_ context.Context, limit int) ([]ledger.RegimeRow, error) {
+	if m.regimeErr != nil {
+		return nil, m.regimeErr
+	}
+	if limit > 0 && len(m.regimeRows) > limit {
+		return m.regimeRows[:limit], nil
+	}
+	return m.regimeRows, nil
+}
+func (m *stubHistoricalStoreWithPeriod) LoadRegimeHistoryAll(_ context.Context, _ int) ([]ledger.RegimeRow, error) {
+	if m.regimeErr != nil {
+		return nil, m.regimeErr
+	}
+	return m.regimeRows, nil
+}
+func (m *stubHistoricalStoreWithPeriod) UpsertStress(_ context.Context, _ ledger.StressRow) error {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadStressByDate(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadStressByDateAll(_ context.Context, _ string) (ledger.StressRow, bool, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadStressHistory(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadStressHistoryAll(_ context.Context, _ int) ([]ledger.StressRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) UpsertGeopolitical(_ context.Context, _ ledger.GeopoliticalRow) error {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadGeopoliticalByDate(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadGeopoliticalByDateAll(_ context.Context, _ string) (ledger.GeopoliticalRow, bool, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadGeopoliticalHistory(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadGeopoliticalHistoryAll(_ context.Context, _ int) ([]ledger.GeopoliticalRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) UpsertEventCalendar(_ context.Context, _ ledger.EventCalendarRow) error {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadEventCalendarByDate(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadEventCalendarByDateAll(_ context.Context, _ string) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadEventCalendarRange(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadEventCalendarRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.EventCalendarRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) UpsertPredictionBacktest(_ context.Context, _ ledger.PredictionBacktestRow) error {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPredictionBacktestRange(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPredictionBacktestRangeAll(_ context.Context, _, _ string, _ int) ([]ledger.PredictionBacktestRow, error) {
+	panic("not implemented")
+}
+func (m *stubHistoricalStoreWithPeriod) CountSynthetic(_ context.Context) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
+func (m *stubHistoricalStoreWithPeriod) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error {
+	return nil
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPeriodByDateAll(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
+	return ledger.PeriodRow{}, false, nil
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPeriodHistory(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	return m.periodRows, nil
+}
+func (m *stubHistoricalStoreWithPeriod) LoadPeriodHistoryAll(_ context.Context, _ int) ([]ledger.PeriodRow, error) {
+	if m.periodErr != nil {
+		return nil, m.periodErr
+	}
+	return m.periodRows, nil
+}
+func (m *stubHistoricalStoreWithPeriod) Close() error {
+	return nil
+}
+
+// TestBuildRegimeHistoryData_PeriodFromHistory proves the bug fix:
+// when period_history has consolidation for 2026-07-29 but
+// regime_history says RISK_ON, the public Period field MUST read
+// "consolidation" (PeriodDetector truth) and NOT "bull" (which is
+// what RegimeToPeriod(RISK_ON) would yield). This is the canonical
+// reproduction of the Hermes MCP confusion.
+func TestBuildRegimeHistoryData_PeriodFromHistory(t *testing.T) {
+	rows := []ledger.RegimeRow{
+		{Date: "2026-07-29", Regime: "RISK_ON", Source: "macro_ingest", RecordedAt: time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)},
+		{Date: "2026-07-28", Regime: "NEUTRAL", Source: "macro_ingest", RecordedAt: time.Date(2026, 7, 28, 6, 0, 0, 0, time.UTC)},
+	}
+	periods := []ledger.PeriodRow{
+		{Date: "2026-07-29", Period: "consolidation", Source: "period_detector"},
+		{Date: "2026-07-28", Period: "black_swan", Source: "period_detector"},
+	}
+	store := &stubHistoricalStoreWithPeriod{regimeRows: rows, periodRows: periods}
+	svc := NewPipelineService("/tmp", "/tmp", nil).WithHistoricalStore(store)
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 2 {
+		t.Fatalf("Sessions len = %d, want 2", len(data.Sessions))
+	}
+	// rows are newest-first, so index 0 is 2026-07-29.
+	if data.Sessions[0].Period != "consolidation" {
+		t.Errorf("Sessions[0].Period = %q, want %q (PeriodDetector truth, not RegimeToPeriod(RISK_ON)=bull)",
+			data.Sessions[0].Period, "consolidation")
+	}
+	if data.Sessions[0].PeriodNameZH != "盤整" {
+		t.Errorf("Sessions[0].PeriodNameZH = %q, want %q",
+			data.Sessions[0].PeriodNameZH, "盤整")
+	}
+	// market_period is the deprecated alias and must mirror Period.
+	if data.Sessions[0].MarketPeriod != "consolidation" {
+		t.Errorf("Sessions[0].MarketPeriod = %q, want %q (deprecated alias must equal Period)",
+			data.Sessions[0].MarketPeriod, "consolidation")
+	}
+	// Source split: regime_source from regime_history, period_source from period_history.
+	if data.Sessions[0].RegimeSource != "macro_ingest" {
+		t.Errorf("Sessions[0].RegimeSource = %q, want %q",
+			data.Sessions[0].RegimeSource, "macro_ingest")
+	}
+	if data.Sessions[0].PeriodSource != "period_history" {
+		t.Errorf("Sessions[0].PeriodSource = %q, want %q",
+			data.Sessions[0].PeriodSource, "period_history")
+	}
+	// second row: 2026-07-28 with black_swan (this date is the post-
+	// TAIEX backfill black_swan day, so we know the PeriodNameZH mapping).
+	if data.Sessions[1].Period != "black_swan" {
+		t.Errorf("Sessions[1].Period = %q, want %q", data.Sessions[1].Period, "black_swan")
+	}
+	if data.Sessions[1].PeriodNameZH != "黑天鵝" {
+		t.Errorf("Sessions[1].PeriodNameZH = %q, want %q", data.Sessions[1].PeriodNameZH, "黑天鵝")
+	}
+	// regime remains authoritative for the 3-state contract.
+	if data.Sessions[0].Regime != "RISK_ON" {
+		t.Errorf("Sessions[0].Regime = %q, want RISK_ON (regime untouched)", data.Sessions[0].Regime)
+	}
+	// current_period follows the same rule.
+	if data.CurrentPeriod != "consolidation" {
+		t.Errorf("CurrentPeriod = %q, want %q (latest row = 2026-07-29 = consolidation)",
+			data.CurrentPeriod, "consolidation")
+	}
+}
+
+// TestBuildRegimeHistoryData_PeriodMissingIsEmpty proves the honest-
+// degradation contract: when period_history has no row for a regime
+// date, Period stays empty. We MUST NOT see a RegimeToPeriod-fabricated
+// value (e.g. RISK_ON → bull). This guards against the regression that
+// motivated the fix.
+func TestBuildRegimeHistoryData_PeriodMissingIsEmpty(t *testing.T) {
+	rows := []ledger.RegimeRow{
+		{Date: "2026-07-29", Regime: "RISK_ON", Source: "macro_ingest", RecordedAt: time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)},
+	}
+	// periodByDate is intentionally empty: the date has no period_history row.
+	store := &stubHistoricalStoreWithPeriod{regimeRows: rows}
+	svc := NewPipelineService("/tmp", "/tmp", nil).WithHistoricalStore(store)
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 1 {
+		t.Fatalf("Sessions len = %d, want 1", len(data.Sessions))
+	}
+	if data.Sessions[0].Period != "" {
+		t.Errorf("Sessions[0].Period = %q, want \"\" (no period_history row — must NOT fallback to RegimeToPeriod)",
+			data.Sessions[0].Period)
+	}
+	if data.Sessions[0].PeriodNameZH != "" {
+		t.Errorf("Sessions[0].PeriodNameZH = %q, want \"\"", data.Sessions[0].PeriodNameZH)
+	}
+	if data.Sessions[0].MarketPeriod != "" {
+		t.Errorf("Sessions[0].MarketPeriod = %q, want \"\" (deprecated alias must equal Period)", data.Sessions[0].MarketPeriod)
+	}
+	if data.Sessions[0].PeriodSource != "" {
+		t.Errorf("Sessions[0].PeriodSource = %q, want \"\" (no period → no period_source claim)", data.Sessions[0].PeriodSource)
+	}
+	// regime must still be the truthful RISK_ON — 3-state contract preserved.
+	if data.Sessions[0].Regime != "RISK_ON" {
+		t.Errorf("Sessions[0].Regime = %q, want RISK_ON", data.Sessions[0].Regime)
+	}
+	// current_period follows the same empty-when-missing rule.
+	if data.CurrentPeriod != "" {
+		t.Errorf("CurrentPeriod = %q, want \"\" (no period_history row for latest date)", data.CurrentPeriod)
+	}
+}
+
+// TestBuildRegimeHistoryData_PeriodStoreErrorIsEmpty ensures that a
+// failing period_history load also degrades honestly (period = "").
+// This is the no-PostgreSQL / transient-error scenario.
+func TestBuildRegimeHistoryData_PeriodStoreErrorIsEmpty(t *testing.T) {
+	rows := []ledger.RegimeRow{
+		{Date: "2026-07-29", Regime: "RISK_ON", Source: "macro_ingest", RecordedAt: time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)},
+	}
+	store := &stubHistoricalStoreWithPeriod{regimeRows: rows, periodErr: errors.New("sqlite busy")}
+	svc := NewPipelineService("/tmp", "/tmp", nil).WithHistoricalStore(store)
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory must not error on period_history failure, got: %v", err)
+	}
+	if len(data.Sessions) != 1 {
+		t.Fatalf("Sessions len = %d, want 1", len(data.Sessions))
+	}
+	if data.Sessions[0].Period != "" {
+		t.Errorf("Sessions[0].Period = %q, want \"\" (period_history error → honest empty)", data.Sessions[0].Period)
+	}
+	if data.CurrentPeriod != "" {
+		t.Errorf("CurrentPeriod = %q, want \"\"", data.CurrentPeriod)
+	}
+}
+
+// TestLoadRegimeHistoryFromSessions_PeriodEmpty proves the legacy path
+// (no HistoricalStore) reports empty period fields instead of falling
+// back to RegimeToPeriod. This matches the honest-degradation
+// contract for callers still on the simulation-summary path.
+func TestLoadRegimeHistoryFromSessions_PeriodEmpty(t *testing.T) {
+	now := time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260729", Regime: domain.RegimeRiskOn, RecordedAt: now},
+	}
+	svc := NewPipelineService("/tmp", "/tmp", &mockOutcomeStore{summaries: summaries})
+	data, err := svc.LoadRegimeHistory(10)
+	if err != nil {
+		t.Fatalf("LoadRegimeHistory: %v", err)
+	}
+	if len(data.Sessions) != 1 {
+		t.Fatalf("Sessions len = %d, want 1", len(data.Sessions))
+	}
+	if data.Sessions[0].Regime != "RISK_ON" {
+		t.Errorf("Sessions[0].Regime = %q, want RISK_ON (3-state preserved on legacy path)", data.Sessions[0].Regime)
+	}
+	if data.Sessions[0].Period != "" {
+		t.Errorf("Sessions[0].Period = %q, want \"\" (no HistoricalStore → no period → no fabricated fallback)", data.Sessions[0].Period)
+	}
+	if data.Sessions[0].PeriodNameZH != "" {
+		t.Errorf("Sessions[0].PeriodNameZH = %q, want \"\"", data.Sessions[0].PeriodNameZH)
+	}
+	if data.CurrentPeriod != "" {
+		t.Errorf("CurrentPeriod = %q, want \"\"", data.CurrentPeriod)
+	}
+}

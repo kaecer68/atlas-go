@@ -15,9 +15,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
-	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
@@ -1212,15 +1212,31 @@ type RegimeHistoryData struct {
 	CurrentPeriod string               `json:"current_period,omitempty"`
 }
 
+// RegimeSessionEntry is the per-day public response row.
+//
+// Period is sourced from period_history (PeriodDetector truth). When the
+// date has no period_history row, Period is empty (honest-degradation,
+// NOT RegimeToPeriod fallback).
+//
+// MarketPeriod is a deprecated alias of Period, kept for backward
+// compatibility with external consumers that still read it. It carries
+// the same value as Period (including the same empty string when no
+// period is available). New code should read Period.
+//
+// RegimeSource / PeriodSource were added together to disambiguate the
+// two streams that previously shared a single Source field (which was
+// always sourced from regime_history). New code should read these
+// explicit fields.
 type RegimeSessionEntry struct {
 	SessionID    string `json:"session_id"`
 	Date         string `json:"date"`
 	Regime       string `json:"regime"`
 	Period       string `json:"period,omitempty"`
-	MarketPeriod string `json:"market_period,omitempty"` // detected period from period_history
+	MarketPeriod string `json:"market_period,omitempty"` // deprecated alias of Period; see field comment
 	PeriodNameZH string `json:"period_name_zh,omitempty"`
 	RecordedAt   string `json:"recorded_at"`
-	Source       string `json:"source,omitempty"`
+	RegimeSource string `json:"regime_source,omitempty"`
+	PeriodSource string `json:"period_source,omitempty"`
 }
 
 type RegimeTransition struct {
@@ -1286,6 +1302,37 @@ func (s *PipelineService) loadRegimeHistoryFromStoreDays(days int) (*RegimeHisto
 	return buildRegimeHistoryData(filtered, s.historicalStore), nil
 }
 
+// buildRegimeHistoryData projects regime_history rows + the per-date
+// period_history lookup into the public RegimeHistoryData shape.
+//
+// period / period_name_zh / current_period are now read directly from
+// period_history (PeriodDetector truth) — they are NOT derived from
+// the three-state regime via RegimeToPeriod. The previous bridge was
+// lossy: RISK_ON could map to bull / turnaround_up / plateau etc., so
+// external agents saw fabricated values whenever regime and period
+// disagreed (e.g. 2026-07-29: regime_history=RISK_ON, period_history=
+// consolidation).
+//
+// Honest-degradation contract: when period_history is empty (legacy
+// store, ingest not yet started, the row for that date is missing),
+// period / period_name_zh / current_period are left as empty strings.
+// They are NOT silently back-filled by RegimeToPeriod — that would
+// reproduce the bug this function exists to fix.
+//
+// market_period is preserved as a deprecated alias of period. Both
+// fields are sourced from the same period_history row, so external
+// consumers reading either see identical values; downstream code may
+// keep reading market_period for backward compat.
+//
+// Source semantics (2026-07-30 fix): the legacy single Source field
+// always came from regime_history (e.g. "macro_ingest") and conflated
+// the two streams. We split it into two fields:
+//   - regime_source: the row.Source of the regime_history row
+//   - period_source: "period_history" when period came from
+//     HistoricalStore, "" when no period is available
+//
+// External agents that previously read Source should now read the
+// stream they care about explicitly.
 func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) *RegimeHistoryData {
 	// Build a date→period map from period_history when available.
 	periodByDate := map[string]ledger.PeriodRow{}
@@ -1305,25 +1352,25 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) 
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, row := range rows {
-		var period domain.MarketPeriod
+		// Source period from period_history (PeriodDetector truth). When the
+		// date is missing from period_history we leave the period fields
+		// empty — the absence is informative (no PeriodDetector data) and
+		// must not be hidden by a RegimeToPeriod fallback.
 		var periodStr, periodZH string
-		if row.Regime != "" {
-			period = methodology.RegimeToPeriod(domain.Regime(row.Regime))
-			periodStr = string(period)
-			periodZH = period.PeriodNameZH()
+		if p, ok := periodByDate[row.Date]; ok && p.Period != "" {
+			periodStr = p.Period
+			periodZH = shared.MarketPeriod(p.Period).PeriodNameZH()
 		}
 		entry := RegimeSessionEntry{
 			SessionID:    row.Date,
 			Date:         row.Date,
 			Regime:       row.Regime,
 			Period:       periodStr,
+			MarketPeriod: periodStr, // deprecated alias of Period; same value
 			PeriodNameZH: periodZH,
 			RecordedAt:   row.RecordedAt.UTC().Format(time.RFC3339),
-			Source:       row.Source,
-		}
-		// Join period_history: set market_period when available.
-		if p, ok := periodByDate[row.Date]; ok && p.Period != "" {
-			entry.MarketPeriod = p.Period
+			RegimeSource: row.Source,
+			PeriodSource: periodSourceFor(periodStr),
 		}
 		sessions[i] = entry
 		if i > 0 && row.Regime != prevRegime {
@@ -1339,8 +1386,11 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) 
 	currentPeriod := ""
 	if len(rows) > 0 {
 		current = rows[0].Regime
-		if current != "" {
-			currentPeriod = string(methodology.RegimeToPeriod(domain.Regime(current)))
+		// current_period follows the same honest-degradation rule as
+		// per-row period: empty when period_history has no row for the
+		// latest date.
+		if p, ok := periodByDate[rows[0].Date]; ok && p.Period != "" {
+			currentPeriod = p.Period
 		}
 	}
 	return &RegimeHistoryData{
@@ -1351,10 +1401,25 @@ func buildRegimeHistoryData(rows []ledger.RegimeRow, hs ledger.HistoricalStore) 
 	}
 }
 
+// periodSourceFor returns the period_source label for a given period value.
+// Empty input => empty source (no claim about origin).
+func periodSourceFor(period string) string {
+	if period == "" {
+		return ""
+	}
+	return "period_history"
+}
+
 // loadRegimeHistoryFromSessions is the legacy fallback that reads simulation
 // session summaries from the filesystem. Preserved for backward compatibility
 // with the 43 test callers that don't inject HistoricalStore; production
 // paths go through loadRegimeHistoryFromStore (see spec §18.6.2).
+//
+// Honest-degradation: this path has no HistoricalStore and therefore no
+// access to period_history. The per-row Period / PeriodNameZH and
+// CurrentPeriod are left empty rather than computed via RegimeToPeriod
+// (the bug this function exists to fix). Regime remains a faithful
+// three-state read.
 func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHistoryData, error) {
 	store := s.store
 	summaries, err := store.LoadSessionSummaries()
@@ -1368,20 +1433,14 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 	var transitions []RegimeTransition
 	var prevRegime string
 	for i, sum := range summaries {
-		var period domain.MarketPeriod
-		var periodStr, periodZH string
-		if sum.Regime != "" {
-			period = methodology.RegimeToPeriod(sum.Regime)
-			periodStr = string(period)
-			periodZH = period.PeriodNameZH()
-		}
+		// period / period_name_zh stay empty: no period_history source on
+		// this legacy path. Regime is still authoritative for the 3-state
+		// contract.
 		sessions[i] = RegimeSessionEntry{
-			SessionID:    sum.SessionID,
-			Date:         sum.RecordedAt.UTC().Format("2006-01-02"),
-			Regime:       string(sum.Regime),
-			Period:       periodStr,
-			PeriodNameZH: periodZH,
-			RecordedAt:   sum.RecordedAt.UTC().Format(time.RFC3339),
+			SessionID:  sum.SessionID,
+			Date:       sum.RecordedAt.UTC().Format("2006-01-02"),
+			Regime:     string(sum.Regime),
+			RecordedAt: sum.RecordedAt.UTC().Format(time.RFC3339),
 		}
 		if i > 0 && string(sum.Regime) != prevRegime {
 			transitions = append(transitions, RegimeTransition{
@@ -1393,18 +1452,14 @@ func (s *PipelineService) loadRegimeHistoryFromSessions(limit int) (*RegimeHisto
 		prevRegime = string(sum.Regime)
 	}
 	current := ""
-	currentPeriod := ""
 	if len(summaries) > 0 {
 		last := summaries[len(summaries)-1]
 		current = string(last.Regime)
-		if last.Regime != "" {
-			currentPeriod = string(methodology.RegimeToPeriod(last.Regime))
-		}
 	}
 	return &RegimeHistoryData{
-		Sessions:      sessions,
-		Transitions:   transitions,
-		Current:       current,
-		CurrentPeriod: currentPeriod,
+		Sessions:    sessions,
+		Transitions: transitions,
+		Current:     current,
+		// CurrentPeriod intentionally empty: see honest-degradation comment.
 	}, nil
 }
