@@ -62,6 +62,11 @@ type StrategyEvolver struct {
 	closureStore    sectorallocation.ClosureStore
 	sessionResolver TradingSessionResolver
 	weightEngine    sectorallocation.WeightEngine
+
+	// SA11.A: closure state manager. When non-nil, every successful
+	// ApplySectorRotation also bumps the persistent session counter
+	// (required for the Gate 5 promotion check).
+	closureStateMgr *sectorallocation.SACClosureStateManager
 }
 
 // NewStrategyEvolver creates a new strategy evolver
@@ -93,6 +98,14 @@ func (e *StrategyEvolver) WithSessionResolver(resolver TradingSessionResolver) *
 // WithSectorWeightEngine sets the WeightEngine for computing projected targets (SA08).
 func (e *StrategyEvolver) WithSectorWeightEngine(engine sectorallocation.WeightEngine) *StrategyEvolver {
 	e.weightEngine = engine
+	return e
+}
+
+// WithSACClosureStateManager sets the closure state manager used to track
+// the observation window required for the Gate 5 promotion check.
+// Optional: nil disables the counter bump but does not affect Store.
+func (e *StrategyEvolver) WithSACClosureStateManager(mgr *sectorallocation.SACClosureStateManager) *StrategyEvolver {
+	e.closureStateMgr = mgr
 	return e
 }
 
@@ -385,6 +398,15 @@ func (e *StrategyEvolver) ApplySectorRotation(
 	storedReceipt, err := e.closureStore.Store(snap)
 	if err != nil {
 		return nil, false, fmt.Sprintf("store failed: %v", err)
+	}
+
+	// SA11.A: bump the observation counter. Failures here are warnings
+	// (the snapshot is already durably persisted) and do not roll back
+	// the applied rotation.
+	if e.closureStateMgr != nil {
+		if recErr := e.closureStateMgr.RecordSession(storedReceipt.ReceiptID); recErr != nil {
+			return storedReceipt, true, fmt.Sprintf("applied (record_session warning: %v)", recErr)
+		}
 	}
 
 	return storedReceipt, true, "applied"

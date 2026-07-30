@@ -61,6 +61,9 @@ type Root struct {
 	// Set via WithClosureStore / WithSessionResolver before BuildSystem.
 	closureStore    sectorallocation.ClosureStore
 	sessionResolver orchestrator.TradingSessionResolver
+
+	// SA11.A: closure state manager for the observation window counter.
+	closureStateMgr *sectorallocation.SACClosureStateManager
 }
 
 // NewRoot constructs the shared dependency root.
@@ -102,6 +105,13 @@ func (r *Root) WithClosureStore(store sectorallocation.ClosureStore) *Root {
 // WithSessionResolver sets the trading session resolver for SA08 StrategyEvolver wiring.
 func (r *Root) WithSessionResolver(resolver orchestrator.TradingSessionResolver) *Root {
 	r.sessionResolver = resolver
+	return r
+}
+
+// WithSACClosureStateManager sets the closure state manager used to track
+// the observation window required for the Gate 5 promotion check.
+func (r *Root) WithSACClosureStateManager(mgr *sectorallocation.SACClosureStateManager) *Root {
+	r.closureStateMgr = mgr
 	return r
 }
 
@@ -251,7 +261,8 @@ func (r *Root) BuildSystem(
 	if evolver := system.GetStrategyEvolver(); evolver != nil {
 		evolver.WithClosureStore(r.closureStore).
 			WithSessionResolver(r.sessionResolver).
-			WithSectorWeightEngine(r.weightEngine)
+			WithSectorWeightEngine(r.weightEngine).
+			WithSACClosureStateManager(r.closureStateMgr)
 	}
 
 	return system, nil

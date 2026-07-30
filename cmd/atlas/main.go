@@ -307,18 +307,40 @@ func run(args []string, deps appDeps) error {
 	if err != nil {
 		log.Printf("[Composition] failed to create root: %v", err)
 	} else {
-		// SA08 Gap D: wire closure store and session resolver for StrategyEvolver.
-		// FileClosureStore persists sector allocation snapshots as JSONL.
-		// NoOpNextSessionResolver is used for non-replay paths; the replay
-		// path will supply a real resolver via a future buildSystemOrFallback
-		// overload.
+		// SA08 Gap D: wire closure store, session resolver, and
+		// SAC closure state manager for StrategyEvolver.
+		//
+		// The closure store is rooted under <WorkDir>/data/sector/allocation
+		// so it lives in the same persistent mount as the rest of the
+		// data/state tree (data/state/atlas.db, data/state/...). Without
+		// the "data" prefix the file would land in the container's
+		// /app/sector/allocation, which is not mounted from host and
+		// vanishes on container restart.
+		//
+		// The session resolver prefers the replay CSV (deterministic,
+		// fail-closed per spec §8.2). When the CSV is missing or
+		// unparseable we fall back to NoOpNextSessionResolver so the
+		// production container never blocks on a missing dataset.
 		closureStore := sectorallocation.NewFileClosureStore(
-			filepath.Join(cfg.WorkDir, "sector", "allocation"),
+			filepath.Join(cfg.WorkDir, "data", "sector", "allocation"),
 		)
-		sessionResolver := &orchestrator.NoOpNextSessionResolver{}
+		replayPath := os.Getenv("ATLAS_REPLAY_DATA_PATH")
+		if replayPath == "" {
+			replayPath = filepath.Join(cfg.WorkDir, "data", "replay", "tw_extended_90days.csv")
+		}
+		sessionResolver, resolverErr := orchestrator.NewReplaySessionResolverFromCSV(replayPath)
+		if resolverErr != nil {
+			log.Printf("[Composition] replay session resolver unavailable: %v — falling back to NoOp (spec §8.2 fail-closed)", resolverErr)
+			sessionResolver = &orchestrator.NoOpNextSessionResolver{}
+		}
+		// SA11.A: closure state manager tracks the observation window
+		// (session count, invariant violations) required for the
+		// Gate 5 promotion check.
+		closureStateMgr := sectorallocation.NewSACClosureStateManager(cfg.WorkDir)
 		compositionRoot.
 			WithClosureStore(closureStore).
-			WithSessionResolver(sessionResolver)
+			WithSessionResolver(sessionResolver).
+			WithSACClosureStateManager(closureStateMgr)
 	}
 
 	// --use-llm-sector-agents CLI override (delivered scaffold via PR #828,
