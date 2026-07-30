@@ -152,6 +152,44 @@ func TestSectorIndexReader_AvailableDates(t *testing.T) {
 	}
 }
 
+func TestSectorIndexReader_ReadRange_LegacyCollisionUsesArithmeticMean(t *testing.T) {
+	dir := t.TempDir()
+	writeSectorIndexFixture(t, dir, "sector_indices_20260603_20260603.json", map[string][]SectorIndexData{
+		"ai_supply_chain": {{Date: "2026-06-03", ReturnPct: 3.0}},
+		"electronics":     {{Date: "2026-06-03", ReturnPct: -2.0}, {Date: "2026-06-03", ReturnPct: 5.0}},
+	})
+
+	reader := NewSectorIndexReader(dir)
+	date, _ := time.Parse("2006-01-02", "2026-06-03")
+	data, err := reader.ReadRange(date, date)
+	if err != nil {
+		t.Fatalf("ReadRange error = %v", err)
+	}
+	if got := data["2026-06-03"]["electronics"]; got != 2.0 {
+		t.Errorf("electronics return = %v, want 2 (average of 3, -2, and 5)", got)
+	}
+}
+
+func TestSectorIndexReader_ReadRange_LegacyFilesKeepFirstFileValue(t *testing.T) {
+	dir := t.TempDir()
+	writeSectorIndexFixture(t, dir, "sector_indices_20260603_20260603.json", map[string][]SectorIndexData{
+		"electronics": {{Date: "2026-06-03", ReturnPct: 4.0}},
+	})
+	writeSectorIndexFixture(t, dir, "sector_indices_20260603_20260604.json", map[string][]SectorIndexData{
+		"electronics": {{Date: "2026-06-03", ReturnPct: 8.0}},
+	})
+
+	reader := NewSectorIndexReader(dir)
+	date, _ := time.Parse("2006-01-02", "2026-06-03")
+	data, err := reader.ReadRange(date, date)
+	if err != nil {
+		t.Fatalf("ReadRange error = %v", err)
+	}
+	if got := data["2026-06-03"]["electronics"]; got != 4.0 {
+		t.Errorf("electronics return = %v, want 4 from first legacy file", got)
+	}
+}
+
 func TestSectorIndexReader_ReadRange_RealFixture(t *testing.T) {
 	// This test reads the actual state directory if it exists. It is gated so
 	// it does not fail in environments without the data directory.

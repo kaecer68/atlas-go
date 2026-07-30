@@ -135,9 +135,14 @@ func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]
 		}
 	}
 
-	// Phase 2: fill from legacy (8-industry) sources, but only for canonical
-	// IDs NOT already covered by native data on that date.
+	// Phase 2: aggregate canonical collisions within each legacy file, then fill
+	// only IDs not already covered by native data or an earlier legacy file.
+	type aggregate struct {
+		sum   float64
+		count int
+	}
 	for _, src := range legacys {
+		fileAggregates := make(map[string]map[string]aggregate)
 		for rawIndustry, series := range src.data {
 			industry := canonicalSectorID(rawIndustry)
 			if industry == "" {
@@ -147,15 +152,25 @@ func (r *SectorIndexReader) ReadRange(startDate, endDate time.Time) (map[string]
 				if item.Date < startStr || item.Date > endStr {
 					continue
 				}
-				if result[item.Date] == nil {
-					result[item.Date] = make(map[string]float64)
+				if fileAggregates[item.Date] == nil {
+					fileAggregates[item.Date] = make(map[string]aggregate)
 				}
-				if _, alreadyCovered := result[item.Date][industry]; alreadyCovered {
-					// Source-priority: 18-industry native data already
-					// provides a value for this (date, industry); skip.
+				value := fileAggregates[item.Date][industry]
+				value.sum += item.ReturnPct
+				value.count++
+				fileAggregates[item.Date][industry] = value
+			}
+		}
+
+		for date, industries := range fileAggregates {
+			if result[date] == nil {
+				result[date] = make(map[string]float64)
+			}
+			for industry, value := range industries {
+				if _, alreadyCovered := result[date][industry]; alreadyCovered {
 					continue
 				}
-				result[item.Date][industry] = item.ReturnPct
+				result[date][industry] = value.sum / float64(value.count)
 			}
 		}
 	}

@@ -742,20 +742,17 @@ func (c *PeriodIndicatorsCalculator) EnrichGovernmentBroker(ind *PeriodIndicator
 		data, err := os.ReadFile(legacyPath)
 		if err != nil {
 			// Missing legacy file: stop the streak.
-			consecutiveBuy = false
 			break
 		}
 		var legacy struct {
 			TotalNet float64 `json:"total_net"`
 		}
 		if err := json.Unmarshal(data, &legacy); err != nil {
-			consecutiveBuy = false
 			break
 		}
 		if legacy.TotalNet > 0 && consecutiveBuy {
 			streak++
 		} else {
-			consecutiveBuy = false
 			break
 		}
 	}
