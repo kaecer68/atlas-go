@@ -784,6 +784,13 @@ func (s *Store) sessionDir(sessionID string) string {
 }
 
 // LoadSessionSummaries reads all session summaries stored in the ledger.
+//
+// Summaries whose SessionID decodes to the empty string are skipped with a
+// warning. This guards against corrupted summary.json files that were written
+// with the wrong JSON key casing (e.g. legacy PascalCase before the
+// snake_case struct tags landed). Such files decode to all-zero values, and
+// would otherwise sort first (empty string < any real SessionID) and pollute
+// start_date / starting_value for period=all reports.
 func (s *Store) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -812,6 +819,14 @@ func (s *Store) LoadSessionSummaries() ([]domain.SessionSummary, error) {
 		var summary domain.SessionSummary
 		if err := json.Unmarshal(data, &summary); err != nil {
 			return nil, fmt.Errorf("decode summary %s: %w", path, err)
+		}
+		if summary.SessionID == "" {
+			logging.Warn(
+				"ledger", "session_summary_skipped",
+				"path", path,
+				"reason", "empty_session_id_after_decode",
+			)
+			continue
 		}
 		summaries = append(summaries, summary)
 	}
