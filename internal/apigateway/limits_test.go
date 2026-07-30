@@ -185,6 +185,7 @@ func TestNewRateLimitManager_YahooGroupSplit(t *testing.T) {
 // TestNewRateLimitManager_YahooGroupsDrainIndependently verifies that
 // draining one Yahoo group does not block traffic on a different group.
 func TestNewRateLimitManager_YahooGroupsDrainIndependently(t *testing.T) {
+	ResetYahooTestLimiters()
 	m := NewRateLimitManager()
 
 	indexLim, _ := m.Get("us_spx")
