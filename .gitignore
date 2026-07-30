@@ -23,6 +23,9 @@
 # fundamentals.json is reference/seed data (manually maintained).
 /data/replay/*.csv
 /data/replay/*.jsonl
+# sector_closure_policy.jsonl is a simulation output (writer at
+# internal/sectorallocation/policy.go:88); treat as derived runtime data.
+/data/sector/
 /prompts/experiments/
 /internal/experiment/prompts/
 /janus-backtest
