@@ -128,6 +128,24 @@ function bindSectorRefreshButton() {
   });
 }
 
+// Friendly labels for SA08/SA09 SectorAllocationSnapshot.fallback_reason.
+// Surfaces the *why* in the empty state so the page does not look broken
+// when the upstream pipeline has not yet emitted its first closure snapshot
+// (no_simulation_session) or the FileClosureStore has not been seeded.
+const SECTOR_FALLBACK_HINTS = {
+  no_simulation_session: "等待首次模擬收盤產生產業配置",
+  snapshot_unavailable: "產業配置服務暫時無法取得快照",
+};
+
+function formatSectorAllocationEmpty(data) {
+  var reason = data && data.fallback_reason;
+  var hint = reason ? SECTOR_FALLBACK_HINTS[reason] : null;
+  var msg = hint
+    ? "產業配置尚未就緒"
+    : (data && data.industries ? "尚無產業配置" : "尚無產業資料");
+  return renderEmptyState(msg, hint || "");
+}
+
 export function renderIndustryMap(data) {
   const el = document.getElementById("industryMap");
   if (!el) return;
@@ -149,9 +167,7 @@ export function renderIndustryMap(data) {
       })
       .sort(function (a, b) { return (b.target || 0) - (a.target || 0); });
     if (!entries.length) {
-      el.innerHTML = renderEmptyState(data.fallback_reason
-        ? "產業配置" + data.fallback_reason
-        : "尚無產業配置", "");
+      el.innerHTML = formatSectorAllocationEmpty(data);
       return;
     }
     var html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
@@ -173,9 +189,10 @@ export function renderIndustryMap(data) {
     el.innerHTML = html;
     return;
   }
-  // Legacy shape: data.industries array
+  // Legacy shape: data.industries array. Empty payload with a fallback_reason
+  // is treated as a graceful empty state, not a broken page.
   if (!data.industries) {
-    el.innerHTML = renderEmptyState("尚無產業資料", "");
+    el.innerHTML = formatSectorAllocationEmpty(data);
     el.classList.remove("loading");
     return;
   }
