@@ -22,6 +22,8 @@ PR 經 GitHub UI merge 後，**AI 必須自行執行以下 5 步**，不要等�
 4. 若使用獨立 worktree：`git worktree remove <path>`
 5. **Planning artifacts 清理**：`rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md`（若該 PR 對應的規劃 .md 已 ship）。**有長期保存價值的內容不要留整份 .md** — 先萃取到 `docs/specs/`、`docs/operations/` 等正式位置,或歸檔到 `docs/archive/<feature>-<date>.md`。`.omo/` 是 gitignored working area,不是 archive。
 
+> 本清單不含任何 docker／rebuild 操作；docker 部署由 kaecer 在主 worktree 手動執行（見 `~/.agents/AGENTS.md` § Docker／正式服務禁令）。
+
 完整 SOP 見 `docs/quickstart.md` § Git 工作流 §4。批次清理（超過 5 個
 stale branch）見 `.omo/branch-hygiene/`（內部，gitignored）。
 

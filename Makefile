@@ -573,6 +573,9 @@ rebuild-atlas-bins: | .build-atlas
 
 # Rebuild atlas-atlas image from host-built binaries + restart container.
 rebuild-atlas: rebuild-atlas-bins
+	@if [ "$$(git rev-parse --git-dir)" != "$$(git rev-parse --git-common-dir)" ]; then \
+		echo "❌ 含 docker 的 rebuild 只能在主 worktree 執行（linked worktree 拒絕）"; exit 1; \
+	fi
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker build -t atlas-atlas:local -f Dockerfile.atlas.local .
 	@docker tag atlas-atlas:local atlas-atlas:latest
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d atlas
@@ -604,6 +607,9 @@ retag-cron-images:
 	@for image in $(CRON_IMAGE_TAGS); do $(DOCKER_BIN) tag atlas-cron-rebuilt:local $$image; done
 
 rebuild-cron: rebuild-cron-bins
+	@if [ "$$(git rev-parse --git-dir)" != "$$(git rev-parse --git-common-dir)" ]; then \
+		echo "❌ 含 docker 的 rebuild 只能在主 worktree 執行（linked worktree 拒絕）"; exit 1; \
+	fi
 	@$(DOCKER_BIN) build -t atlas-cron-rebuilt:local -f Dockerfile.cron.local .
 	@$(MAKE) retag-cron-images
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-darwinian cron-geo-ingest atlas-cron-c07-collect 
