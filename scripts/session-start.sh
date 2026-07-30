@@ -19,6 +19,9 @@ cd "$ROOT"
 if "$MAKE_BIN" check-binaries; then
     exit 0
 fi
-
-"$MAKE_BIN" rebuild-all
-"$MAKE_BIN" check-binaries
+"$MAKE_BIN" rebuild-host-bin rebuild-atlas-bins rebuild-cron-bins
+if ! "$MAKE_BIN" check-binaries; then
+    echo "⚠️  docker images 與 HEAD 不齊。AI 已用純 go build 對齊 host binaries；"
+    echo "    docker 部署請 kaecer 在主 worktree 手動執行 make rebuild-all。"
+fi
+exit 0
