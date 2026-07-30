@@ -112,11 +112,23 @@ func TestRegisterRoutesWithNarrative_AppliesModelTilt(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+	body := rec.Body.String()
+	// #1384 calibration-aware baseline: nil cf keeps the default staticCF which
+	// is permanently CalibrationCalibrating. The strong bull narrative theme
+	// boosts day-level weight but does not flip the 5-day summary verdict
+	// (event mix stays symmetric), so the summary must surface 分歧 + 校準中,
+	// NOT 偏流入 and NOT a baseline drift note (cfScore=0).
+	mustContain := []string{"未來 5 天資金流向分歧", "校準中", "關鍵事件"}
+	for _, s := range mustContain {
+		if !strings.Contains(body, s) {
+			t.Errorf("narrative tilt summary missing %q, body=%s", s, body)
+		}
 	}
-	if got := rec.Body.String(); !strings.Contains(got, "偏流入") {
-		t.Errorf("strong bull narrative should yield inflow-dominant summary, body=%s", got)
+	if strings.Contains(body, "偏流入") {
+		t.Errorf("narrative tilt must not yield 偏流入 verdict, body=%s", body)
+	}
+	if strings.Contains(body, "當前資金品質偏多") || strings.Contains(body, "當前資金品質偏空") {
+		t.Errorf("narrative tilt with nil cf has zero baseline; baseline drift note must not appear, body=%s", body)
 	}
 }
 
