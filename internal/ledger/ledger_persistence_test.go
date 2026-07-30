@@ -257,6 +257,71 @@ func TestLoadSessionSummariesMissingReturnsNil(t *testing.T) {
 	}
 }
 
+// TestLoadSessionSummariesSkipsCorruptedPascalCase verifies the load guard
+// that drops summary.json files whose JSON casing does not match the
+// domain.SessionSummary snake_case struct tags. Such files silently decode
+// to all zero values (SessionID="", PortfolioValue=0, …). Without the guard
+// they would sort first (empty < "session-…") and break the
+// reporting.GenerateReport period=all branch (start_date=0001-01-01,
+// starting_value=0).
+//
+// We simulate the corruption by writing the summary with PascalCase keys,
+// mirroring the historical encoding that was used before PR #681
+// (postgres_audit.go) added struct tag alignment to the audit path.
+func TestLoadSessionSummariesSkipsCorruptedPascalCase(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir).(*Store)
+
+	// 1) One healthy session — written via the normal RecordSessionSummary
+	//    path so the struct tags produce the canonical snake_case JSON.
+	good := domain.ReplaySession{ID: "session-20260601-daily"}
+	if err := store.RecordSessionSummary(good, domain.SessionSummary{
+		SessionID:      good.ID,
+		Regime:         domain.RegimeRiskOn,
+		PortfolioValue: 2_500_000,
+		EndingCash:     500_000,
+		OutcomeCount:   10,
+		TotalTaxPaid:   1500,
+		RecordedAt:     time.Now(),
+	}); err != nil {
+		t.Fatalf("record healthy summary: %v", err)
+	}
+
+	// 2) One corrupted session — hand-written with PascalCase keys. The
+	//    decoder silently drops every key, leaving SessionID="".
+	corruptDir := filepath.Join(dir, "sessions", "session-20260326-daily")
+	if err := os.MkdirAll(corruptDir, 0o755); err != nil {
+		t.Fatalf("mkdir corrupt session: %v", err)
+	}
+	pascalJSON := []byte(`{
+  "SessionID": "session-20260326-daily",
+  "Regime": "NEUTRAL",
+  "OrderCount": 0,
+  "PositionCount": 0,
+  "EndingCash": 0,
+  "PortfolioValue": 0,
+  "OutcomeCount": 0,
+  "RecordedAt": "2026-06-27T22:25:54Z"
+}`)
+	if err := os.WriteFile(filepath.Join(corruptDir, "summary.json"), pascalJSON, 0o644); err != nil {
+		t.Fatalf("write corrupt summary: %v", err)
+	}
+
+	summaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		t.Fatalf("load summaries: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 summary (corrupted one skipped), got %d: %+v", len(summaries), summaries)
+	}
+	if summaries[0].SessionID != good.ID {
+		t.Fatalf("expected only healthy summary %q, got %q", good.ID, summaries[0].SessionID)
+	}
+	if summaries[0].PortfolioValue != 2_500_000 {
+		t.Fatalf("expected healthy portfolio value 2,500,000, got %f", summaries[0].PortfolioValue)
+	}
+}
+
 func TestLoadOutcomeFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "outcomes.jsonl")

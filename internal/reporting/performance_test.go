@@ -406,6 +406,178 @@ func TestCalculateTopAgents_SharpeMinSamples5(t *testing.T) {
 	}
 }
 
+// TestFilterSummariesByDate_AllPeriodDropsUnparseable verifies the
+// defensive guard in filterSummariesByDate that drops summaries with an
+// unparseable SessionID (e.g. a corrupted summary.json that decodes to
+// SessionID=""). Without it, period=all would sort the empty SessionID
+// first and surface start_date=0001-01-01 / starting_value=0.
+//
+// The caller (GenerateReport) runs slices.SortFunc on SessionID before
+// invoking the filter, so the input here is pre-sorted to mirror that
+// call-site contract. The function itself is not responsible for sorting.
+func TestFilterSummariesByDate_AllPeriodDropsUnparseable(t *testing.T) {
+	now := time.Now()
+
+	summaries := []domain.SessionSummary{
+		// First in the slice (would be the corrupted entry in real life,
+		// because an empty SessionID sorts to the very front of the slice
+		// and then survives into the period=all branch). The guard must
+		// drop it regardless of its position.
+		{SessionID: "", PortfolioValue: 0, RecordedAt: time.Time{}},
+		// Healthy entries, pre-sorted by SessionID (the real call site
+		// guarantees this via slices.SortFunc before invoking the filter).
+		{SessionID: "session-20260101-daily", PortfolioValue: 1_000_000, RecordedAt: now},
+		{SessionID: "session-20260601-daily", PortfolioValue: 1_100_000, RecordedAt: now},
+	}
+
+	got := filterSummariesByDate(summaries, time.Time{})
+	if len(got) != 2 {
+		t.Fatalf("expected 2 summaries (corrupted dropped), got %d: %+v", len(got), got)
+	}
+	// Even though the corrupted entry was first in the input slice, the
+	// guard must remove it before anything else touches it.
+	if got[0].SessionID != "session-20260101-daily" {
+		t.Errorf("expected first survivor session-20260101-daily, got %q", got[0].SessionID)
+	}
+	if got[1].SessionID != "session-20260601-daily" {
+		t.Errorf("expected second survivor session-20260601-daily, got %q", got[1].SessionID)
+	}
+	for _, s := range got {
+		if s.SessionID == "" {
+			t.Errorf("unparseable summary slipped through: %+v", s)
+		}
+	}
+}
+
+// TestFilterSummariesByDate_CutoffDropsCorrupted verifies that for
+// time-bounded periods (30d/90d/1y) the date filter is still applied and
+// unparseable SessionIDs are also dropped.
+func TestFilterSummariesByDate_CutoffDropsCorrupted(t *testing.T) {
+	now := time.Now()
+	oldDate := now.AddDate(0, 0, -60)
+	recentDate := now.AddDate(0, 0, -5)
+
+	summaries := []domain.SessionSummary{
+		// Corrupted: empty SessionID — must be dropped regardless of cutoff.
+		{SessionID: ""},
+		// Old but parseable — must be dropped by 30d cutoff.
+		{SessionID: "session-" + oldDate.Format("20060102") + "-daily"},
+		// Recent and parseable — must be kept.
+		{SessionID: "session-" + recentDate.Format("20060102") + "-daily"},
+	}
+
+	got := filterSummariesByDate(summaries, now.AddDate(0, 0, -30))
+	if len(got) != 1 {
+		t.Fatalf("expected 1 survivor, got %d: %+v", len(got), got)
+	}
+	if got[0].SessionID != "session-"+recentDate.Format("20060102")+"-daily" {
+		t.Errorf("expected recent session, got %q", got[0].SessionID)
+	}
+}
+
+// TestGenerateReport_CorruptedSummaryInAllPeriod is the end-to-end
+// regression test for the bug discovered on 2026-07-30:
+// session-20260326-daily/summary.json was written with PascalCase keys,
+// leaving every domain.SessionSummary field at its zero value. With the
+// defensive guards in Store.LoadSessionSummaries and
+// filterSummariesByDate, the corrupted entry is dropped and the report
+// falls back to the next parseable session instead of surfacing
+// start_date=0001-01-01 and starting_value=0.
+func TestGenerateReport_CorruptedSummaryInAllPeriod(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1) Corrupted PascalCase summary (mimics the production bug).
+	corruptDir := filepath.Join(tmpDir, "sessions", "session-20260326-daily")
+	if err := os.MkdirAll(corruptDir, 0o755); err != nil {
+		t.Fatalf("mkdir corrupt: %v", err)
+	}
+	pascalJSON := []byte(`{
+  "SessionID": "session-20260326-daily",
+  "Regime": "NEUTRAL",
+  "PortfolioValue": 0,
+  "EndingCash": 0,
+  "OutcomeCount": 0,
+  "RecordedAt": "2026-06-27T22:25:54Z"
+}`)
+	if err := os.WriteFile(filepath.Join(corruptDir, "summary.json"), pascalJSON, 0o644); err != nil {
+		t.Fatalf("write corrupt: %v", err)
+	}
+
+	// 2) Two healthy sessions so the report has real start/end anchors.
+	writeSession(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 0, 0)
+	writeSession(t, tmpDir, "session-20260102-daily", 1_050_000, 100_000, 1, 100)
+
+	report, err := GenerateReport(tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.StartDate.IsZero() {
+		t.Errorf("expected non-zero start_date, got zero (corrupted summary was used as filtered[0])")
+	}
+	expectedStart := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if !report.StartDate.Equal(expectedStart) {
+		t.Errorf("expected start_date 2026-01-01, got %s", report.StartDate.Format("2006-01-02"))
+	}
+	if report.StartingValue != 1_000_000 {
+		t.Errorf("expected starting_value 1,000,000, got %f", report.StartingValue)
+	}
+	if report.EndingValue != 1_050_000 {
+		t.Errorf("expected ending_value 1,050,000, got %f", report.EndingValue)
+	}
+}
+
+// writeSession is a small helper that creates a session-* directory with a
+// snake_case summary.json and a recommendation_outcomes.jsonl containing a
+// single outcome. Used by TestGenerateReport_CorruptedSummaryInAllPeriod.
+func writeSession(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash float64, outcomeCount int, totalTaxPaid float64) {
+	t.Helper()
+	sessDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", sessionID, err)
+	}
+	summary := domain.SessionSummary{
+		SessionID:      sessionID,
+		Regime:         domain.RegimeRiskOn,
+		PortfolioValue: portfolioValue,
+		EndingCash:     endingCash,
+		OutcomeCount:   outcomeCount,
+		TotalTaxPaid:   totalTaxPaid,
+		RecordedAt:     time.Now(),
+	}
+	summaryData, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", sessionID, err)
+	}
+	if err := os.WriteFile(filepath.Join(sessDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary %s: %v", sessionID, err)
+	}
+	if outcomeCount > 0 {
+		outcome := domain.RecommendationOutcome{
+			AgentID:       "agent-a",
+			Skill:         "tech",
+			Layer:         domain.AgentLayer("sector"),
+			Symbol:        "2330",
+			Side:          "buy",
+			Window:        sessionID,
+			ForwardReturn: 0.05,
+			Hit:           true,
+			PassedGuards:  true,
+		}
+		f, err := os.Create(filepath.Join(sessDir, "recommendation_outcomes.jsonl"))
+		if err != nil {
+			t.Fatalf("create outcomes %s: %v", sessionID, err)
+		}
+		if err := json.NewEncoder(f).Encode(outcome); err != nil {
+			_ = f.Close()
+			t.Fatalf("encode outcome %s: %v", sessionID, err)
+		}
+		_ = f.Close()
+	}
+}
+
 func TestFindRegimeForWindow_DateMatch(t *testing.T) {
 	summaries := []domain.SessionSummary{
 		{SessionID: "session-20260101-daily", Regime: domain.RegimeRiskOn},

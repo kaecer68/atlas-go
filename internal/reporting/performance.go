@@ -330,16 +330,23 @@ func computeCutoff(period string) time.Time {
 	}
 }
 
+// filterSummariesByDate returns the subset of summaries whose SessionID
+// parses to a date on or after cutoff. When cutoff is the zero time (the
+// "all" period), no date bound is applied — but summaries with an
+// unparseable SessionID are still dropped, because they would otherwise
+// surface as the first entry (empty < "session-…") and pollute start_date /
+// starting_value with a Go zero time.
 func filterSummariesByDate(summaries []domain.SessionSummary, cutoff time.Time) []domain.SessionSummary {
-	if cutoff.IsZero() {
-		return summaries
-	}
 	var filtered []domain.SessionSummary
 	for _, s := range summaries {
 		d := domain.SessionDateFromID(s.SessionID)
-		if !d.IsZero() && !d.Before(cutoff) {
-			filtered = append(filtered, s)
+		if d.IsZero() {
+			continue
 		}
+		if !cutoff.IsZero() && d.Before(cutoff) {
+			continue
+		}
+		filtered = append(filtered, s)
 	}
 	return filtered
 }
