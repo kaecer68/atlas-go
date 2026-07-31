@@ -97,6 +97,7 @@
 | `docs/operations/l3-runbook.md` | L3 操作手冊 | ✅ |
 | `docs/operations/loki-deployment.md` | Loki 集中式 log 部署 | ✅ |
 | `docs/operations/mcp-deploy.md` | MCP 部署指南 | ✅ |
+| `docs/operations/mcp-2026-07-28-migration-roadmap.md` | MCP 對外整合修正 + 2026-07-28 規格遷移路線圖 | ✅ |
 | `docs/operations/local-deploy.md` | 本機 Docker 部署設定（從 CLAUDE.md 移出） | ✅ |
 | `docs/operations/cmd-atlas-coverage-policy.md` | cmd/atlas 覆蓋率政策 | ✅ |
 | `docs/operations/tier-boundary.md` | Tier 邊界定義 | ✅ |
