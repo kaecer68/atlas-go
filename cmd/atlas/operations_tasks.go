@@ -484,25 +484,22 @@ func registerOperationsTasks(d operationsDeps) {
 	// attempt, so a single 24h tick is a hard upper bound, not a guarantee
 	// of daily fetch.
 	if d.governmentFlowDir != "" {
+		// daily-once guard: in-memory, captured by the Task closure. See
+		// the matching note on auto_government_flow (capital_tasks.go):
+		// a successful fetch writes today's Asia/Taipei date; subsequent
+		// ticks that day short-circuit. The two gov tasks have independent
+		// guards — NOT shared.
+		var lastSuccessDate string
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:      "government_flow_aggregate",
 			ChannelID: "government_broker",
-			Interval:  24 * time.Hour,
+			Interval:  1 * time.Hour,
 			Enabled:   true,
 			Task: func(ctx context.Context) error {
-				// Weekday + 15:00+ Taipei gate (matches the
-				// auto_taifex_institutional pattern in capital_tasks.go:
-				// TWSE close 13:30 + 2h settlement). Returns nil silently
-				// so BackgroundTaskManager does not count the tick as a
-				// failure and trigger failureHandler / alert spam.
 				now := time.Now()
-				if tz, err := time.LoadLocation("Asia/Taipei"); err == nil {
-					now = now.In(tz)
-				}
-				if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
-					return nil
-				}
-				if now.Hour() < 15 {
+				if !shouldRunGovFlow(now, lastSuccessDate) {
+					reason := classifyGateSkip(now, lastSuccessDate)
+					logging.Info("main", "government_flow_aggregate_skipped", "reason", string(reason))
 					return nil
 				}
 				if d.gateway == nil {
@@ -537,10 +534,11 @@ func registerOperationsTasks(d operationsDeps) {
 					return err
 				}
 				logging.Info("main", "government_flow_aggregate_ok", "date", reading.Date)
+				lastSuccessDate = taipeiDateString(now)
 				return nil
 			},
 		})
-		log.Printf("[Gateway] registered government_flow_aggregate task (24h interval, weekday 15:00+ Taipei, BK-13)")
+		log.Printf("[Gateway] registered government_flow_aggregate task (1h interval, weekday 15:00+ Taipei, daily-once guard, BK-13)")
 	}
 }
 
