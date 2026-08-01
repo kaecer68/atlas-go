@@ -143,7 +143,12 @@ func TestCurrentTaipeiTradingDate(t *testing.T) {
 // =========================================================================
 
 // TestRegisterOperationsTasks_GovernmentFlowAggregate_Cadence
-// 驗證 W1.a 排程下調：BTM government_flow_aggregate 從 28h 改為 24h。
+// 驗證 W1.a 排程下調：BTM government_flow_aggregate 從 24h 改為 1h
+// (fix/20260801-govflow-cadence)。先前 fix/20260731-govflow-cadence 從
+// 28h 降到 24h，但仍受 time.NewTicker 開機錨點 + weekday 15:00+ Taipei
+// 閘門永久性卡住；本 PR 進一步縮短到 1h，搭配 in-memory daily-once
+// guard 確保每交易日最多跑 1 次。
+//
 // 紅線 1：期間檔 + PeriodIndicators 結構零改動，本測試只檢查
 // BackgroundTaskManager 註冊的 Interval 值。
 func TestRegisterOperationsTasks_GovernmentFlowAggregate_Cadence(t *testing.T) {
@@ -154,8 +159,8 @@ func TestRegisterOperationsTasks_GovernmentFlowAggregate_Cadence(t *testing.T) {
 	if !ok {
 		t.Fatal("government_flow_aggregate must be registered when governmentFlowDir is set")
 	}
-	if task.Interval != 24*time.Hour {
-		t.Errorf("government_flow_aggregate Interval = %v, want 24h (was 28h pre-PR)", task.Interval)
+	if task.Interval != 1*time.Hour {
+		t.Errorf("government_flow_aggregate Interval = %v, want 1h (was 24h pre-fix/20260801-govflow-cadence)", task.Interval)
 	}
 	if task.ChannelID != "government_broker" {
 		t.Errorf("ChannelID = %q, want government_broker", task.ChannelID)
