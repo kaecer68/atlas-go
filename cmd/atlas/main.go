@@ -1658,30 +1658,43 @@ func run(args []string, deps appDeps) error {
 			// Issue #1086: TEJ channel data was stale for 66 days because no periodic fetch existed.
 			// Fires every hour but only executes at 15:00 TW to avoid daily API quota exhaustion.
 			// Reference: daily_report_generate pattern (lines ~1047) for time-gated ErrTaskSkipped.
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:      "tej_refresh",
-				ChannelID: "tej",
-				Interval:  1 * time.Hour,
-				Enabled:   true,
-				Task: func(ctx context.Context) error {
-					taipei, err := time.LoadLocation("Asia/Taipei")
-					if err != nil {
-						taipei = time.FixedZone("CST", 8*3600)
-					}
-					now := time.Now().In(taipei)
-					// Only fetch at 15:00 TW to avoid quota exhaustion.
-					if now.Hour() != 15 {
-						return apigateway.ErrTaskSkipped
-					}
-					_, fetchErr := gateway.Fetch(ctx, "tej")
-					if fetchErr != nil {
-						return fmt.Errorf("tej_refresh fetch: %w", fetchErr)
-					}
-					logging.Info("tej_refresh", "completed", "channel", "tej")
-					return nil
-				},
-			})
-			log.Printf("[Gateway] registered tej_refresh background task (1h interval, 15:00 TW trigger)")
+			//
+			// DISABLED 2026-08-03 — TEJ free trial API key (AAA003) expired on 2026-07-31.
+			// Source-layer audit (PR chore/20260803-disable-tej) confirmed no mission-required
+			// endpoint consumes TEJ data; the system has been running with tej dead for days.
+			// Scheduler registration is gated on the same TEJ_API_KEY secret that gates
+			// channel registration in internal/apigateway/register_adapters.go (~L122) so
+			// channel and scheduler stay in lock-step (T3-A47 fix). To re-enable, set
+			// TEJ_API_KEY (and TEJ_TIER=paid if upgraded) in the atlas env — the channel
+			// adapter and tej_refresh scheduler will both come back online.
+			if tejAPIKey := config.GetSecret("TEJ_API_KEY"); tejAPIKey != "" {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:      "tej_refresh",
+					ChannelID: "tej",
+					Interval:  1 * time.Hour,
+					Enabled:   true,
+					Task: func(ctx context.Context) error {
+						taipei, err := time.LoadLocation("Asia/Taipei")
+						if err != nil {
+							taipei = time.FixedZone("CST", 8*3600)
+						}
+						now := time.Now().In(taipei)
+						// Only fetch at 15:00 TW to avoid quota exhaustion.
+						if now.Hour() != 15 {
+							return apigateway.ErrTaskSkipped
+						}
+						_, fetchErr := gateway.Fetch(ctx, "tej")
+						if fetchErr != nil {
+							return fmt.Errorf("tej_refresh fetch: %w", fetchErr)
+						}
+						logging.Info("tej_refresh", "completed", "channel", "tej")
+						return nil
+					},
+				})
+				log.Printf("[Gateway] registered tej_refresh background task (1h interval, 15:00 TW trigger)")
+			} else {
+				log.Printf("[Gateway] tej_refresh SKIPPED: TEJ_API_KEY not configured (channel disabled; see PR chore/20260803-disable-tej)")
+			}
 
 			// Register janus_regime_refresh — periodic JANUS regime data refresh (6h interval).
 			// Issue #1086: janus_regime channel data was stale because no periodic fetch existed.

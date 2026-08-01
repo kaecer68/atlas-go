@@ -120,6 +120,13 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "export_statistics")
 
 	// --- TEJ ---
+	// DISABLED 2026-08-03 — TEJ free trial API key (AAA003) expired on 2026-07-31.
+	// Source-layer audit (PR chore/20260803-disable-tej) confirmed no mission-required
+	// endpoint consumes TEJ data. Channel registration is gated on TEJ_API_KEY so the
+	// adapter only joins the registry when a valid key is configured. The matching
+	// tej_refresh scheduler in cmd/atlas/main.go reads the same secret, keeping
+	// channel + scheduler in lock-step (T3-A47 fix). To re-enable, set TEJ_API_KEY
+	// (and TEJ_TIER=paid if upgraded) in the atlas env.
 	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" {
 		tejClient := marketdata.GetSharedTEJClient(tejKey)
 		tejAdapter := NewTEJChannelAdapter(tejClient)
