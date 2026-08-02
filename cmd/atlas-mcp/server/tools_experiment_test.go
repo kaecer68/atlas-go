@@ -18,8 +18,26 @@ func TestHandleExperimentDiff_OK(t *testing.T) {
 	if rec.path != "/api/experiment/diff" {
 		t.Fatalf("path=%s", rec.path)
 	}
+	if got := rec.query.Get("experiment_id"); got != "exp-42" {
+		t.Fatalf("experiment_id query not propagated, got=%q", got)
+	}
 	if out.Result == nil {
 		t.Fatal("expected Result non-nil")
+	}
+}
+
+func TestHandleExperimentDiff_EmptyID(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+
+	_, _, err := s.handleExperimentDiff(context.Background(), nil, experimentIDInput{
+		ExperimentID: "",
+	})
+	if err == nil {
+		t.Fatal("expected error for empty experiment_id")
+	}
+	if !strings.Contains(err.Error(), "experiment_id is required") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

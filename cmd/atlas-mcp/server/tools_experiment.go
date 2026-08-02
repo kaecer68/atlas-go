@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"net/url"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -42,9 +43,14 @@ type experimentBaseOutput struct {
 }
 
 func (s *server) handleExperimentDiff(ctx context.Context, _ *mcp.CallToolRequest, in experimentIDInput) (*mcp.CallToolResult, experimentBaseOutput, error) {
+	if in.ExperimentID == "" {
+		return nil, experimentBaseOutput{}, errors.New("experiment_diff: experiment_id is required")
+	}
 	var out experimentBaseOutput
+	query := url.Values{}
+	query.Set("experiment_id", in.ExperimentID)
 	if err := s.withAudit(ctx, "experiment_diff", []string{"experiment_id"}, func() error {
-		return s.cli.Get(ctx, "/api/experiment/diff", nil, &out.Result)
+		return s.cli.Get(ctx, "/api/experiment/diff", query, &out.Result)
 	}); err != nil {
 		return nil, experimentBaseOutput{}, err
 	}
