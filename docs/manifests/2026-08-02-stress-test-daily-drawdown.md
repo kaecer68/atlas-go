@@ -9,7 +9,7 @@
 > - Out: 改 `RunDailySimulation` 錯誤處理(選項 C 職責混淆)
 > - Out: 改 `docker-compose.yml` / `Dockerfile` / 部署層
 > **Created**: 2026-08-02
-> **Status**: in-progress
+> **Status**: done
 
 ---
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | Bug 點 1 | `internal/orchestrator/system.go:1159-1209` `RunDailyStressTests` | 跑完 5 個 stress scenarios 構造 `stress.Report`(含 `WorstDrawdown` / `WorstVaR`),**log `stress_test_daily_completed`** 後直接 `return nil` — 沒有任何 reporter / portfolio update / dashboard 寫入 |
 | 唯一 reporter 寫入點 | `internal/orchestrator/system.go:658-668`(在 `RunDailySimulation` 內) | 只有當 `s.Sim().engine.Optimizer() != nil` 時,`SimulateDrawdownForMonitoring` → `drawdownReporter(ddResult)` 才會被呼叫 |
-| 為何 `RunDailySimulation` 失敗 | `cmd/atlas/main.go:1393-1395` | `system.RunDailySimulation(time.Now())` 失敗只 `logging.Warn`,然後仍跑 `system.RunDailyStressTests()`(line 1396)— 失敗也跑 stress 測試 |
+| A01 | `RunDailyStressTests` 跑完後未呼叫 `drawdownReporter`,dashboard drawdown 永遠 nil | `system.go:1202-1208` 結尾只 log 不送 reporter | `internal/orchestrator/system.go:1202-1208`(在 `stress_test_daily_completed` log 之後,`return nil` 之前) | 1) `system.go:1208` 前加 reporter 呼叫區塊,2) 新 unit test 驗證 reporter 收到 `DrawdownResult` 且 `MaxDrawdown == report.WorstDrawdown` / `VaR95 == report.WorstVaR`,3) 既有 `system_coverage_test.go:100` 不受影響 | done | none | TDD:RED→GREEN;commit 3feb25dd;PR #1440 |
 | 為何 stress 測試路徑無 optimizer | `internal/orchestrator/composition/root.go:231-269` `BuildSystem(PathStressTestDaily)` | 路徑建構時不注入 optimizer — 所以即使 reporter 邏輯想用 `SimulateDrawdownForMonitoring`,也沒 optimizer 可用 |
 | Reporter 注入點(對照用) | `cmd/atlas/main.go:1382-1386` | `system.SetDrawdownReporter(func(d portfolio.DrawdownResult) { dashboard.SetLatestDrawdown(&d) })` — 確實有注入 |
 | Reporter 接收端 | `internal/monitoring/dashboard_api.go:1591-1596` | `SetLatestDrawdown` 寫入 `latestDrawdown` 欄位,`GetLatestDrawdown` 讀取 — 鏈路完整 |
@@ -105,11 +105,11 @@
 
 ## Session-End State
 
-- **Done this session**: -
-- **Remaining**: A01
-- **Next action**: 寫 RED unit test,確認 fail,再實作 reporter 呼叫
+- **Done this session**: A01
+- **Remaining**: -
+- **Next action**: 等 PR #1440 CI 過 + kaecer merge
 - **Uncommitted code**: no
-- **Branch / PR**: `fix/20260802-stress-test-daily-drawdown-reporter` / -
+- **Branch / PR**: `fix/20260802-stress-test-daily-drawdown-reporter` / #1440
 - **Paused because**: -
 
 ---
@@ -119,3 +119,4 @@
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-08-02 | 1.0 | Initial manifest | assistant |
+| 2026-08-02 | 1.1 | A01 implementation done, PR #1440 opened | assistant |
