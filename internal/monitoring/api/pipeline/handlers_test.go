@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -89,6 +90,74 @@ func TestHandleSessions_IncludesTopStrategies(t *testing.T) {
 	last := strategies[2].(map[string]any)
 	if last["agent_id"] != "agent-low" || last["conviction"].(float64) != 50 {
 		t.Errorf("top[2] = %v, want agent-low/50", last)
+	}
+}
+
+// TestHandleSessions_RespectsLimit exercises the ?limit= query param
+// (SK-22 audit v3): /api/dashboard/sessions must return at most `limit`
+// sessions (newest first), while limit=0 keeps the legacy all-sessions
+// behavior. Guards the unbounded LoadSessionsWithTopStrategies growth.
+func TestHandleSessions_RespectsLimit(t *testing.T) {
+	ledgerDir := t.TempDir()
+	store := ledger.NewStore(ledgerDir)
+
+	// Three sessions on consecutive days; LoadSessions sorts newest first.
+	for _, day := range []int{3, 2, 1} {
+		sessionID := fmt.Sprintf("session-2026010%d-daily", day)
+		sessionDir := filepath.Join(ledgerDir, "sessions", sessionID)
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", sessionID, err)
+		}
+		summary := domain.SessionSummary{
+			SessionID:    sessionID,
+			Regime:       "RISK_ON",
+			OutcomeCount: 1,
+			RecordedAt:   time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC),
+		}
+		summaryData, _ := json.Marshal(summary)
+		if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), summaryData, 0o644); err != nil {
+			t.Fatalf("write summary %s: %v", sessionID, err)
+		}
+	}
+
+	h := NewHandlers(service.NewPipelineService(ledgerDir, ledgerDir, store))
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// limit=2 → only the two newest sessions.
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/sessions?limit=2", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%s)", rr.Code, rr.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	sessions, _ := doc["sessions"].([]any)
+	if len(sessions) != 2 {
+		t.Fatalf("limit=2: expected 2 sessions, got %d", len(sessions))
+	}
+	first := sessions[0].(map[string]any)
+	if first["session_id"] != "session-20260103-daily" {
+		t.Errorf("newest session first: got %v, want session-20260103-daily", first["session_id"])
+	}
+
+	// limit=0 → all sessions (legacy behavior preserved).
+	reqAll := httptest.NewRequest(http.MethodGet, "/api/dashboard/sessions?limit=0", nil)
+	rrAll := httptest.NewRecorder()
+	mux.ServeHTTP(rrAll, reqAll)
+	if rrAll.Code != http.StatusOK {
+		t.Fatalf("limit=0 status = %d, want 200", rrAll.Code)
+	}
+	var docAll map[string]any
+	if err := json.Unmarshal(rrAll.Body.Bytes(), &docAll); err != nil {
+		t.Fatalf("unmarshal all: %v", err)
+	}
+	allSessions, _ := docAll["sessions"].([]any)
+	if len(allSessions) != 3 {
+		t.Fatalf("limit=0: expected 3 sessions, got %d", len(allSessions))
 	}
 }
 

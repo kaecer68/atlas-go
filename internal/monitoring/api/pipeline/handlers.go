@@ -399,7 +399,16 @@ type RecommendationPipelineResponse struct {
 // Conviction DESC. This is additive — existing clients that only read
 // the original 4 fields are unaffected.
 func (h *Handlers) HandleSessions(r *http.Request) (int, any) {
-	sessions, err := h.Svc.LoadSessionsWithTopStrategies(3)
+	// ?limit= caps the number of sessions returned (newest first).
+	// Default 90; limit=0 keeps legacy all-sessions behavior. Guards
+	// unbounded LoadSessionsWithTopStrategies growth (SK-22 audit v3).
+	limit := 90
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			limit = n
+		}
+	}
+	sessions, err := h.Svc.LoadSessionsWithTopStrategies(3, limit)
 	if err != nil {
 		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("load sessions: %v", err)}
 	}
