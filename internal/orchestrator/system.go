@@ -1205,6 +1205,19 @@ func (s *System) RunDailyStressTests() error {
 		logging.FFloat64("worst_var95", report.WorstVaR),
 		logging.FFloat64("avg_return", report.AvgReturn))
 
+	// SK-29: forward the worst-case drawdown / VaR to the registered
+	// reporter so the dashboard's /api/dashboard/drawdown endpoint reflects
+	// stress_test_daily results (mirrors the RunDailySimulation reporter
+	// pattern at system.go:664-668).
+	s.drawdownMu.RLock()
+	if s.drawdownReporter != nil {
+		s.drawdownReporter(portfolio.DrawdownResult{
+			MaxDrawdown: report.WorstDrawdown,
+			VaR95:       report.WorstVaR,
+		})
+	}
+	s.drawdownMu.RUnlock()
+
 	return nil
 }
 
