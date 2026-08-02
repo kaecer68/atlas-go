@@ -5,6 +5,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
 func TestAdjustRegimeFromNarrative_NoEvents(t *testing.T) {
@@ -104,4 +105,64 @@ func TestBuildParameterSnapshot(t *testing.T) {
 	}
 	t.Logf("Snapshot: version=%s, weights=%d, hitrates=%d, phases=%d",
 		snap.ConfigVersion, len(snap.FactorWeights), len(snap.NarrativeHitRates), len(snap.IndustryPhaseScores))
+}
+
+// TestRunDailyStressTests_CallsReporter verifies that RunDailyStressTests
+// invokes the registered drawdown reporter exactly once with a DrawdownResult
+// whose MaxDrawdown / VaR95 match the worst-case values across all stress
+// scenarios. Regression test for SK-29: dashboard drawdown endpoint
+// returned not_available because stress_test_daily never wrote back.
+func TestRunDailyStressTests_CallsReporter(t *testing.T) {
+	sys := newTestSystemFull(t)
+
+	// Seed lastQuotes so RunDailyStressTests can build a stress report.
+	sys.Sim().lastQuotes = []domain.Quote{
+		{Symbol: "2330.TW", Open: 590, High: 600, Low: 580, Last: 595, Volume: 1_000_000, IsTradable: true},
+		{Symbol: "2317.TW", Open: 155, High: 158, Low: 152, Last: 156, Volume: 800_000, IsTradable: true},
+		{Symbol: "2881.TW", Open: 68, High: 69, Low: 67, Last: 68.5, Volume: 6_000_000, IsTradable: true},
+	}
+
+	var (
+		calls     int
+		received  portfolio.DrawdownResult
+		received2 bool
+	)
+	sys.SetDrawdownReporter(func(d portfolio.DrawdownResult) {
+		calls++
+		received = d
+		received2 = true
+	})
+
+	if err := sys.RunDailyStressTests(); err != nil {
+		t.Fatalf("RunDailyStressTests returned error: %v", err)
+	}
+
+	if calls != 1 {
+		t.Fatalf("drawdownReporter call count = %d, want 1", calls)
+	}
+	if !received2 {
+		t.Fatal("drawdownReporter was not invoked")
+	}
+	// With 3 tradable quotes, scenarios must produce a non-zero MaxDrawdown.
+	if received.MaxDrawdown == 0 {
+		t.Errorf("DrawdownResult.MaxDrawdown = 0, want non-zero (at least one scenario produced a drawdown)")
+	}
+}
+
+// TestRunDailyStressTests_NoQuotes_NoReporterCall verifies the guard path:
+// when lastQuotes is empty, the function returns early without invoking
+// the reporter (preserves existing early-return behavior on line 1161-1163).
+func TestRunDailyStressTests_NoQuotes_NoReporterCall(t *testing.T) {
+	sys := newTestSystemFull(t)
+	sys.Sim().lastQuotes = nil
+
+	calls := 0
+	sys.SetDrawdownReporter(func(d portfolio.DrawdownResult) { calls++ })
+
+	if err := sys.RunDailyStressTests(); err == nil {
+		t.Fatal("expected error when no quotes available, got nil")
+	}
+	if calls != 0 {
+		t.Errorf("drawdownReporter call count = %d, want 0 when no quotes", calls)
+	}
 }
