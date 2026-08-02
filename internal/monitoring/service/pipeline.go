@@ -740,6 +740,17 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 					meta.Regime = string(summary.Regime)
 				}
 				meta.OutcomeCount = summary.OutcomeCount
+				// Data-loss monitor (SK-22 audit v3): a session that ran
+				// (summary.RecordedAt set) but recorded zero outcomes and has
+				// an empty outcomes jsonl is the 6/6-6/7 signature — flag it
+				// so silent outcome loss is observable.
+				if !summary.RecordedAt.IsZero() && summary.OutcomeCount == 0 {
+					if count := countNonEmptyLines(filepath.Join(sessionsDir, sessionID, "recommendation_outcomes.jsonl")); count == 0 {
+						logging.Warn("pipeline_service", "session_zero_outcomes",
+							logging.FStr("session_id", sessionID),
+							logging.FStr("recorded_at", summary.RecordedAt.Format(time.RFC3339)))
+					}
+				}
 			} else {
 				logging.Warn("pipeline_service", "parse_session_summary_failed", logging.Err(err))
 			}
@@ -795,7 +806,10 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 // layer is the primary deliverable.
 //
 // topN must be positive; values <=0 are clamped to 3.
-func (s *PipelineService) LoadSessionsWithTopStrategies(topN int) ([]SessionMeta, error) {
+// limit <= 0 means no limit (load all sessions) — legacy behavior.
+// Positive limit returns at most `limit` sessions (newest first, since
+// LoadSessions already sorts by trading date descending).
+func (s *PipelineService) LoadSessionsWithTopStrategies(topN int, limit int) ([]SessionMeta, error) {
 	if topN <= 0 {
 		topN = 3
 	}
@@ -803,6 +817,9 @@ func (s *PipelineService) LoadSessionsWithTopStrategies(topN int) ([]SessionMeta
 	sessions, err := s.LoadSessions()
 	if err != nil {
 		return nil, fmt.Errorf("load sessions: %w", err)
+	}
+	if limit > 0 && len(sessions) > limit {
+		sessions = sessions[:limit]
 	}
 	if s.store == nil {
 		return sessions, nil
