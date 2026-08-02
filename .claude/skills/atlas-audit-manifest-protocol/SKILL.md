@@ -115,6 +115,8 @@ Before ending any session that used this protocol:
 □ Backlog populated with any new issues found
 □ Branch pushed or PR opened (if any code was changed)
 □ If session must pause with uncommitted code: run context-save
+□ If todo list was used this session: verify each item is a standalone string
+  (run view after init; expected count = number of tasks, not 1 array-as-string)
 □ Run ./scripts/check-binary-freshness.sh — exit 0 REQUIRED（先跑 make rebuild-host-bin rebuild-atlas-bins rebuild-cron-bins 純 go build；docker images 仍 stale 則回報 kaecer，禁止自行執行含 docker 的 target）。
   See ~/.agents/AGENTS.md "Binary freshness gate" and "Docker／正式服務禁令" for full procedure.
 ```
