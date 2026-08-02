@@ -250,12 +250,22 @@ func (h *Handlers) HandleDiff(r *http.Request) (int, any) {
 		return http.StatusInternalServerError, map[string]string{"error": "cannot read candidate prompt"}
 	}
 
-	return http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"baseline_prompt":  baselinePrompt,
 		"candidate_prompt": string(candidateBytes),
 		"target_agent_id":  result.Experiment.TargetAgentID,
 		"skill":            result.Experiment.Skill,
+		// SK-22: judge-collected metrics are already stored in the same ledger
+		// JSON; expose them so the endpoint matches its "metrics comparison"
+		// contract instead of returning a prompt-only diff.
+		"acceptance_metric": result.Experiment.AcceptanceMetric,
+		"baseline_value":    result.Experiment.BaselineValue,
+		"candidate_value":   result.Experiment.CandidateValue,
 	}
+	if result.EvalMetrics != nil {
+		resp["eval_metrics"] = result.EvalMetrics
+	}
+	return http.StatusOK, resp
 }
 
 // HandleInbox returns the experiment inbox with pending judges, promotes, and recent history.
