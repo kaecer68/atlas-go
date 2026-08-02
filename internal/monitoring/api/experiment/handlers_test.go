@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/experiment"
+	"github.com/kaecer68/atlas-go/internal/eval"
 )
 
 func newTestHandlers(t *testing.T) *Handlers {
@@ -86,13 +87,14 @@ func writeExperimentResult(t *testing.T, dir string, id string, status domain.Ex
 	t.Helper()
 	result := experiment.PromptExperimentResult{
 		Experiment: domain.ExperimentRecord{
-			ID:             id,
-			TargetAgentID:  "growth-01",
-			Skill:          "growth",
-			MutationType:   "prompt",
-			Status:         status,
-			BaselineValue:  0.5,
-			CandidateValue: 0.8,
+			ID:               id,
+			TargetAgentID:    "growth-01",
+			Skill:            "growth",
+			MutationType:     "prompt",
+			Status:           status,
+			AcceptanceMetric: "sharpe_like",
+			BaselineValue:    0.5,
+			CandidateValue:   0.8,
 		},
 		Brief: domain.MutationBrief{
 			TargetAgentID: "growth-01",
@@ -102,6 +104,12 @@ func writeExperimentResult(t *testing.T, dir string, id string, status domain.Ex
 		},
 		CandidatePrompt: candidatePrompt,
 		RecordedAt:      time.Now(),
+		EvalMetrics: &eval.EvalResult{
+			R2OOS:     0.3,
+			Sharpe:    1.5,
+			CumReturn: 0.1,
+			MaxDD:     -0.05,
+		},
 	}
 	b, err := json.Marshal(result)
 	if err != nil {
@@ -322,9 +330,23 @@ func TestHandleDiff_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/experiment/diff?experiment_id=exp-diff", nil)
 	status, body := h.HandleDiff(req)
 	assertStatus(t, status, http.StatusOK)
-	assertJSONKey(t, body, "baseline_prompt")
+	m := assertJSONKey(t, body, "baseline_prompt")
 	assertJSONKey(t, body, "candidate_prompt")
 	assertJSONKey(t, body, "target_agent_id")
+	// SK-22: judge-collected metrics are exposed alongside the prompt diff.
+	assertJSONKey(t, body, "acceptance_metric")
+	assertJSONKey(t, body, "baseline_value")
+	assertJSONKey(t, body, "candidate_value")
+	assertJSONKey(t, body, "eval_metrics")
+	if got := m["baseline_value"]; got != 0.5 {
+		t.Errorf("baseline_value = %v, want 0.5", got)
+	}
+	if got := m["candidate_value"]; got != 0.8 {
+		t.Errorf("candidate_value = %v, want 0.8", got)
+	}
+	if got := m["acceptance_metric"]; got != "sharpe_like" {
+		t.Errorf("acceptance_metric = %v, want sharpe_like", got)
+	}
 }
 
 func TestHandleHistory_Success(t *testing.T) {
