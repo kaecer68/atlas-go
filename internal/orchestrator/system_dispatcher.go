@@ -252,7 +252,9 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 	switch cfg.MarketDataProvider {
 	case "fugle":
 		if cfg.FugleAPIKey != "" {
-			return marketdata.NewFugleProviderWithAPIKey(cfg.FugleAPIKey)
+			// Shared singleton client: one rate limiter across all Fugle call
+			// sites (hybrid provider, stocktools, gateway channel, warmup).
+			return marketdata.NewFugleProviderWithClient(marketdata.GetSharedFugleClient(cfg.FugleAPIKey))
 		}
 		logging.Warn("system", "Fugle API key not configured, falling back to mock provider. DO NOT USE IN PRODUCTION.")
 		return marketdata.NewMockProvider()

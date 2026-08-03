@@ -39,6 +39,12 @@ var authFreeExactPaths = map[string]bool{
 	"/api/experiment/history":       true,
 	"/api/experiment/diff":          true,
 	"/api/strategies":               true,
+	// /api/parameters (no trailing slash) — mirror of main.go isPublicPath
+	// :198. authFreePrefixPaths has the "/api/parameters/" prefix, but
+	// HasPrefix("/api/parameters", "/api/parameters/") is false, so the
+	// exact path leaked 401 from the Adapt-internal AuthMiddleware even
+	// though isPublicPath allows it (SK-22 endpoint-2 audit).
+	"/api/parameters": true,
 }
 
 // Per internal/monitoring/AGENTS.md, these prefix lists must mirror

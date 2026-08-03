@@ -11,6 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata/realtime"
 )
@@ -24,7 +25,10 @@ var (
 func main() {
 	flag.Parse()
 
-	apiKey := os.Getenv("FUGLE_API_KEY")
+	// config.GetSecret reads env then Keychain (envOrKeychain). Fixes the
+	// constitution Article 1 violation of reading FUGLE_API_KEY via raw
+	// os.Getenv (a5-violations.json:138-140).
+	apiKey := config.GetSecret("FUGLE_API_KEY")
 	if apiKey == "" {
 		fmt.Fprintf(os.Stderr, "FUGLE_API_KEY not set\n")
 		os.Exit(1)

@@ -77,7 +77,11 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 
 	var fugleProvider *FugleProvider
 	if fugleAPIKey != "" {
-		fugleProvider = NewFugleProviderWithAPIKey(fugleAPIKey)
+		// Shared singleton client: one rate limiter enforces the Fugle tier
+		// limit across hybrid provider, stocktools, gateway channel, and
+		// warmup. A per-instance client would give each its own 60/min
+		// budget and blow past the free-tier limit (SK-22 Fugle audit).
+		fugleProvider = NewFugleProviderWithClient(GetSharedFugleClient(fugleAPIKey))
 	}
 
 	breakers := map[string]*providerBreaker{
