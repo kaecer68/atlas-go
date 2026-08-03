@@ -1579,7 +1579,6 @@ export interface FugleMetaResponse {
 }
 
 export interface FugleQuoteResponse {
-  apiVersion: string;
   date: string;
   type: string;
   exchange: string;
