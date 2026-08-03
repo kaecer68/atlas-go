@@ -38,13 +38,12 @@ type FugleClient struct {
 // FugleQuoteResponse Fugle v1.0 行情响应（扁平結構）
 // 對照 v0.3 巢狀 data.quote.* 結構，v1.0 將欄位提升到頂層。
 type FugleQuoteResponse struct {
-	APIVersion string `json:"apiVersion"`
-	Date       string `json:"date"`
-	Type       string `json:"type"`
-	Exchange   string `json:"exchange"`
-	Market     string `json:"market"`
-	Symbol     string `json:"symbol"`
-	Name       string `json:"name"`
+	Date     string `json:"date"`
+	Type     string `json:"type"`
+	Exchange string `json:"exchange"`
+	Market   string `json:"market"`
+	Symbol   string `json:"symbol"`
+	Name     string `json:"name"`
 
 	ClosePrice float64 `json:"closePrice"`
 	OpenPrice  float64 `json:"openPrice"`
@@ -260,8 +259,10 @@ func (c *FugleClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 	}
 
 	// v1.0: 檢查 securityStatus 而非 v0.3 的 isSuspended/isDelisted
-	// NORMAL = 正常交易；TERMINATED/SUSPENDED = 不可交易
-	return meta.SecurityStatus == "NORMAL" || meta.SecurityStatus == "", nil
+	// NORMAL = 正常交易；TERMINATED/SUSPENDED = 不可交易。
+	// 實測（2026-08-03）正常股票回 "NORMAL"；空字串代表回應異常/缺失，
+	// 保守視為不可交易（fail-closed）。
+	return meta.SecurityStatus == "NORMAL", nil
 }
 
 // fugleCandlesResponse is the JSON shape returned by Fugle's historical candles endpoint.

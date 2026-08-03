@@ -116,6 +116,36 @@ func TestFugleClient_CheckMarketStatus_Suspended(t *testing.T) {
 	}
 }
 
+// TestFugleClient_CheckMarketStatus_EmptyStatusFailClosed verifies that an
+// empty/missing securityStatus (abnormal response) is treated as not-open
+// (fail-closed) rather than open — a correction from the initial migration
+// which treated "" as open (2026-08-03 live verification: NORMAL is the
+// documented open value).
+func TestFugleClient_CheckMarketStatus_EmptyStatusFailClosed(t *testing.T) {
+	payload := FugleMetaResponse{
+		Symbol: "0050",
+	}
+	body, _ := json.Marshal(payload)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	c := NewFugleClient("test-key")
+	c.baseURL = srv.URL
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
+
+	open, err := c.CheckMarketStatus(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if open {
+		t.Error("expected market not open when securityStatus is empty (fail-closed)")
+	}
+}
+
 func TestNewFugleProviderWithClient(t *testing.T) {
 	c := NewFugleClient("test-key")
 	p := NewFugleProviderWithClient(c)
