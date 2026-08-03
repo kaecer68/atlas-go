@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -109,11 +110,19 @@ func newFugleClient(apiKey string) *FugleClient {
 	}
 	logging.Info("fugle", "client_initialized", "tier", config.GetSecret("FUGLE_TIER"), "rate_limit", limit)
 	timeout := time.Duration(params.Marketdata.FugleAPITimeoutSec.Value) * time.Second
+	// Burst is deliberately conservative: a burst == limit (e.g. 60) lets a
+	// single caller fire 60 requests instantly, which the Fugle sliding
+	// window rejects well before 60 (measured 429 at ~39 live calls,
+	// 2026-08-03). Keep burst small so the limiter actually throttles.
+	burst := 5
+	if limit < burst {
+		burst = limit
+	}
 	return &FugleClient{
 		apiKey:      apiKey,
 		httpClient:  httpclient.NewFactory().NewClient(timeout),
 		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), limit),
+		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), burst),
 	}
 }
 
@@ -128,34 +137,72 @@ func (c *FugleClient) RateLimiter() *rate.Limiter {
 }
 
 // GetQuote 获取单个股票行情（v1.0 API）
-func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
-	// 等待速率限制
-	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
-	}
+// doGet performs a GET against the v1.0 API with rate-limit (429) retry.
+// The free tier (60/min) is enforced by the shared limiter, but Fugle's
+// sliding window can 429 before the token bucket drains — honor
+// Retry-After (or a conservative backoff) instead of failing immediately.
+// Mirrors finmind_backfill.go FetchWithRetry's 429 handling.
+func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error) {
+	const maxRetries = 3
+	for attempt := 0; ; attempt++ {
+		if err := c.rateLimiter.Wait(ctx); err != nil {
+			return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
+		}
 
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("X-API-KEY", c.apiKey)
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("http request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			// 429: Fugle sliding-window exceeded. Sleep Retry-After if present,
+			// else conservative backoff; then retry.
+			_ = resp.Body.Close()
+			wait := time.Duration(1<<attempt) * time.Second
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if secs, parseErr := strconv.Atoi(ra); parseErr == nil && secs > 0 {
+					wait = time.Duration(secs) * time.Second
+				}
+			}
+			logging.Warn("fugle", "rate_limit_429", "endpoint", endpoint, "retry_in_s", int(wait.Seconds()))
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(wait):
+			}
+			if attempt >= maxRetries {
+				return nil, fmt.Errorf("fugle: rate limited after %d retries", maxRetries)
+			}
+			continue
+		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
+		}
+		return body, readErr
+	}
+}
+
+// GetQuote 获取单个股票行情（v1.0 API）
+func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	// v1.0: symbol 在 URL path，key 在 X-API-KEY header（非 query param）
 	endpoint := fmt.Sprintf("%s/intraday/quote/%s", c.baseURL, url.PathEscape(symbol))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.doGet(ctx, endpoint)
 	if err != nil {
-		return domain.Quote{}, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("X-API-KEY", c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return domain.Quote{}, fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
+		return domain.Quote{}, err
 	}
 
 	// 解析响应
 	var fugleResp FugleQuoteResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fugleResp); err != nil {
+	if err := json.Unmarshal(body, &fugleResp); err != nil {
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -200,30 +247,14 @@ func (c *FugleClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 // GetMeta 获取股票元数据（v1.0: GET /intraday/ticker/{symbol}）
 // v0.3 Meta → v1.0 Ticker（官方 migration-guide）
 func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaResponse, error) {
-	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
-	}
-
 	endpoint := fmt.Sprintf("%s/intraday/ticker/%s", c.baseURL, url.PathEscape(symbol))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.doGet(ctx, endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("X-API-KEY", c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, err
 	}
 
 	var metaResp FugleMetaResponse
-	if err := json.NewDecoder(resp.Body).Decode(&metaResp); err != nil {
+	if err := json.Unmarshal(body, &metaResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
