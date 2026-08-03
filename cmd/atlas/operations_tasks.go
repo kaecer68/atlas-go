@@ -502,15 +502,17 @@ func registerOperationsTasks(d operationsDeps) {
 					logging.Info("main", "government_flow_aggregate_skipped", "reason", string(reason))
 					return nil
 				}
-				if d.gateway == nil {
-					return fmt.Errorf("government_flow_aggregate skipped: no gateway")
-				}
 				// CAPTCHA cooldown gate: if the previous tick(s) hit a
 				// CAPTCHA page, skip this tick and let the cooldown timer
-				// expire. nil captchaCooldown disables the gate.
+				// expire. nil captchaCooldown disables the gate. Checked
+				// before the gateway nil check so a cooldown-active tick
+				// never touches upstream (W2 semantics, fix/20260731-govflow).
 				if cd := d.captchaCooldown; cd != nil && cd.ShouldSkip("government_broker") {
 					logging.Warn("main", "government_flow_aggregate_captcha_cooldown", "until", cd.Until("government_broker").UTC().Format(time.RFC3339))
 					return nil
+				}
+				if d.gateway == nil {
+					return fmt.Errorf("government_flow_aggregate skipped: no gateway")
 				}
 				res, err := d.gateway.Fetch(ctx, "government_broker")
 				if err != nil {

@@ -22,7 +22,7 @@ import (
 // Deps holds the data providers required by the stocktools handlers.
 type Deps struct {
 	FugleClient  *marketdata.FugleClient
-	TWSEQuote    *marketdata.TWSEOpenAPIProvider
+	TWSEQuote    marketdata.Provider // *TWSEOpenAPIProvider; interface for test injection
 	Fundamentals *portfolio.FundamentalProvider
 	CapitalFlow  *marketdata.TWSECapitalFlowProvider
 	QuoteStore   ledger.QuoteStore
@@ -91,7 +91,12 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 
 	// Fallback: TWSE OpenAPI with its own timeout budget.
 	if h.deps.TWSEQuote != nil {
-		twseCtx, twseCancel := context.WithTimeout(r.Context(), 5*time.Second)
+		// Independent 5s budget for the fallback: context.WithoutCancel drops
+		// the parent request deadline (which Fugle may have already consumed)
+		// while preserving request cancellation propagation. Without this, a
+		// slow Fugle response eats the fallback's time and TWSE fails with
+		// context deadline exceeded (SK-22 endpoint-2 audit).
+		twseCtx, twseCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 		defer twseCancel()
 		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, time.Now(), []string{symbol})
 		if err != nil {

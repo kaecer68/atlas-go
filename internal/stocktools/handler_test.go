@@ -1,6 +1,8 @@
 package stocktools
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -52,6 +54,71 @@ func TestHandleQuote(t *testing.T) {
 	body := rec.Body.String()
 	if !contains(body, `"symbol":"2330"`) {
 		t.Fatalf("expected symbol in response: %s", body)
+	}
+}
+
+// mockTWSEProvider is a marketdata.Provider that records the context it
+// received and returns a canned quote. Used to verify the TWSE fallback
+// receives an independent timeout budget (not the parent request deadline
+// that Fugle already consumed).
+type mockTWSEProvider struct {
+	gotCtx context.Context
+}
+
+func (m *mockTWSEProvider) Name() string { return "mock-twse" }
+
+func (m *mockTWSEProvider) GetQuotes(ctx context.Context, _ time.Time, symbols []string) ([]domain.Quote, error) {
+	m.gotCtx = ctx
+	if len(symbols) == 0 {
+		return nil, errors.New("no symbols")
+	}
+	// Mimic a real HTTP-backed provider: if the context is already expired
+	// (e.g. an inherited parent deadline that Fugle consumed), the upstream
+	// call fails with context deadline exceeded — exactly what happened in
+	// the SK-22 endpoint-2 audit.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return []domain.Quote{{Symbol: symbols[0], Last: 680, Market: "TW", Source: "twse"}}, nil
+}
+
+// TestHandleQuote_TWSEFallbackGetsIndependentTimeoutBudget verifies the
+// SK-22 endpoint-2 fix: when Fugle fails and the parent request deadline is
+// already exhausted, the TWSE fallback must still receive its own 5s budget
+// (context.WithoutCancel) instead of inheriting the expired parent deadline.
+// Without the fix, TWSE fails with context deadline exceeded before it can
+// contact the upstream.
+func TestHandleQuote_TWSEFallbackGetsIndependentTimeoutBudget(t *testing.T) {
+	// Fugle always fails (HTTP 500) so the handler falls back to TWSE.
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+
+	// Parent request deadline expires in 10ms; we sleep past it before serving
+	// so the deadline is already exhausted when the handler runs. If the TWSE
+	// fallback inherits this expired deadline (old behavior) it fails with
+	// context deadline exceeded before reaching the provider.
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	time.Sleep(20 * time.Millisecond)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (TWSE fallback got full budget), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if mockTWSE.gotCtx == nil {
+		t.Fatal("TWSE provider was not called")
 	}
 }
 
@@ -188,12 +255,17 @@ func TestHandleChips(t *testing.T) {
 func TestHandleTechnical(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewJSONLQuoteStore(dir)
+	// Relative dates: bars are created at (now - i) days so they always fall
+	// inside the handler's 30-day window regardless of when the test runs.
+	// Fixed July dates broke after ~Aug (window start moved past them) — the
+	// date.Before(start) filter dropped all but one bar → 503 (SK-22 fix).
+	now := time.Now()
 	bars := []domain.DailyBar{
-		{Date: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 650, Volume: 1000},
-		{Date: time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 660, Volume: 1100},
-		{Date: time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 670, Volume: 1200},
-		{Date: time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 680, Volume: 1300},
-		{Date: time.Date(2026, 7, 7, 0, 0, 0, 0, time.UTC), Symbol: "2330.TW", Close: 690, Volume: 1400},
+		{Date: now.AddDate(0, 0, -4), Symbol: "2330.TW", Close: 650, Volume: 1000},
+		{Date: now.AddDate(0, 0, -3), Symbol: "2330.TW", Close: 660, Volume: 1100},
+		{Date: now.AddDate(0, 0, -2), Symbol: "2330.TW", Close: 670, Volume: 1200},
+		{Date: now.AddDate(0, 0, -1), Symbol: "2330.TW", Close: 680, Volume: 1300},
+		{Date: now, Symbol: "2330.TW", Close: 690, Volume: 1400},
 	}
 	if err := store.RecordQuotes(bars); err != nil {
 		t.Fatal(err)
