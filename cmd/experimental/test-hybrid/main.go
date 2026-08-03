@@ -77,8 +77,8 @@ func main() {
 		}
 	}
 
-	// 測試 4: 測試單獨獲取 1476（Fugle demo 支持的股票）
-	fmt.Println("\n📡 測試獲取 1476 (Fugle demo key 支持)...")
+	// 測試 4: 測試單獨獲取 1476（v1.0 全市場可查任意 symbol；1476 為範例）
+	fmt.Println("\n📡 測試獲取 1476 (v1.0 Fugle API, 全市場)...")
 	provider.UseFugle() // 強制使用 Fugle
 	quotes1476, err := provider.GetQuotes(ctx, time.Now(), []string{"1476"})
 	if err != nil {

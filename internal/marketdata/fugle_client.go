@@ -20,8 +20,10 @@ import (
 
 const (
 	// v1.0 marketdata API (2026-08-03 migration). The legacy realtime/v0.3
-	// endpoint is retired and v0.3 keys are rejected by v1.0 — see
-	// developer.fugle.tw/docs/data/migration-guide/.
+	// endpoint is retired — see developer.fugle.tw/docs/data/migration-guide/.
+	// The API key itself is version-agnostic (base64 in .env); only the
+	// endpoint changed. Verified live 2026-08-03: stock_get_quote 2330/2317/
+	// 0050 all return 200 via Fugle v1.0 with the existing key.
 	fugleAPIBaseURL = "https://api.fugle.tw/marketdata/v1.0/stock"
 )
 
