@@ -35,7 +35,9 @@ func InitMetrics() *monitoring.MetricsCollector {
 }
 
 func InitDatabase(ctx context.Context, cfg Config, collector *monitoring.MetricsCollector) (*pgxpool.Pool, error) {
-	dsn := os.Getenv("DATABASE_URL")
+	// config.GetSecret reads env then Keychain (envOrKeychain); raw os.Getenv
+	// here violated constitution Article 1 (a5-violations.json:66-69).
+	dsn := config.GetSecret("DATABASE_URL")
 	if dsn == "" {
 		return nil, nil
 	}
@@ -68,10 +70,14 @@ func InitStores(cfg Config) (Stores, error) {
 	if err != nil {
 		logging.Warn("bootstrap", "metrics_store_init_warning", "err", err)
 	}
+	// Read via config.GetSecret (envOrKeychain) instead of raw os.Getenv —
+	// fixes the constitution Article 1 violation flagged in
+	// a5-violations.json:66-69. Unlike config.Load(), no default is applied:
+	// when unset the store falls back to jsonl (legacy behavior preserved).
 	fullCfg := config.Config{
 		LedgerDir:    cfg.LedgerDir,
-		StoreBackend: os.Getenv("ATLAS_STORE_BACKEND"),
-		SQLitePath:   os.Getenv("ATLAS_SQLITE_PATH"),
+		StoreBackend: config.GetSecret("ATLAS_STORE_BACKEND"),
+		SQLitePath:   config.GetSecret("ATLAS_SQLITE_PATH"),
 	}
 	outcomeStore, err := ledger.NewOutcomeStore(fullCfg)
 	if err != nil {

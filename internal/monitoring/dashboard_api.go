@@ -848,9 +848,11 @@ func (a *DashboardAPI) SetFugleAPIKey(key string) {
 	a.fugleAPIKeyMu.Lock()
 	defer a.fugleAPIKeyMu.Unlock()
 	a.fugleAPIKey = key
-	// Also create a FugleClient from the key if one wasn't injected directly.
+	// Also use the shared singleton client so warmup shares one rate limiter
+	// with the rest of the app. Fallback only for tests/direct callers that
+	// never injected a client.
 	if a.fugleClient == nil && key != "" {
-		a.fugleClient = marketdata.NewFugleClient(key)
+		a.fugleClient = marketdata.GetSharedFugleClient(key)
 	}
 }
 

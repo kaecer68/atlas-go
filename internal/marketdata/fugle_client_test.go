@@ -132,3 +132,39 @@ func TestResetSharedFugleClient(t *testing.T) {
 		t.Error("expected different shared client instances after reset")
 	}
 }
+
+// TestGetSharedFugleClient_SameInstance verifies the singleton returns the
+// same *FugleClient (and thus the same rate limiter) across repeated calls —
+// the invariant that keeps all Fugle call sites under one 60/min budget
+// instead of each site minting its own limiter and blowing past the free
+// tier (SK-22 Fugle audit).
+func TestGetSharedFugleClient_SameInstance(t *testing.T) {
+	ResetSharedFugleClient()
+	defer ResetSharedFugleClient()
+	c1 := GetSharedFugleClient("test-key")
+	c2 := GetSharedFugleClient("test-key")
+	if c1 != c2 {
+		t.Fatal("GetSharedFugleClient must return the same instance across calls")
+	}
+	if c1.RateLimiter() != c2.RateLimiter() {
+		t.Fatal("both calls must share the same rate limiter")
+	}
+}
+
+// TestHybridProvider_UsesSharedFugleClient verifies NewHybridProvider wires
+// the Fugle provider through the shared singleton client — one limiter for
+// all Fugle call sites — rather than a per-instance NewFugleClient with its
+// own token bucket (SK-22 Fugle audit regression guard).
+func TestHybridProvider_UsesSharedFugleClient(t *testing.T) {
+	ResetSharedFugleClient()
+	defer ResetSharedFugleClient()
+	p := NewHybridProvider("", "test-key")
+	if p.fugleProvider == nil {
+		t.Skip("fugle provider not configured (fubon proxy reachable?)")
+	}
+	got := p.fugleProvider.GetClient()
+	shared := GetSharedFugleClient("test-key")
+	if got != shared {
+		t.Fatal("hybrid provider Fugle client must be the shared singleton")
+	}
+}

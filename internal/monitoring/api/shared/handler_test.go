@@ -501,3 +501,21 @@ func TestAdminPost_RequiresPostAndAdmin(t *testing.T) {
 		t.Fatalf("authorized status = %d, want 200", authorized.Code)
 	}
 }
+
+// TestIsAuthFreePath_ParametersNoSlash is a regression guard for the SK-22
+// endpoint-2 audit: /api/parameters (no trailing slash) must be auth-free.
+// The authFreePrefixPaths entry "/api/parameters/" does not match the exact
+// path via HasPrefix, so the exact path must live in authFreeExactPaths.
+func TestIsAuthFreePath_ParametersNoSlash(t *testing.T) {
+	if !isAuthFreePath("/api/parameters") {
+		t.Fatal("isAuthFreePath(/api/parameters) = false, want true (exact path)")
+	}
+	if !isAuthFreePath("/api/parameters/metadata") {
+		t.Fatal("isAuthFreePath(/api/parameters/metadata) = false, want true (prefix)")
+	}
+	// Guard against over-broadening: exact-path check must not match a
+	// different top-level endpoint.
+	if isAuthFreePath("/api/parametersx") {
+		t.Fatal("isAuthFreePath(/api/parametersx) = true, want false")
+	}
+}
