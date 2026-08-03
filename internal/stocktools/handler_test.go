@@ -33,8 +33,12 @@ func (rt *redirectRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 func TestHandleQuote(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-KEY") != "test-key" {
+			t.Errorf("X-API-KEY header missing or wrong: %q", r.Header.Get("X-API-KEY"))
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"apiVersion":"v0.3","data":{"info":{"symbol":"2330","name":"台積電","date":"2026-07-07","time":"14:30:00","countryCode":"TW","timeZone":"Asia/Taipei"},"quote":{"trade":{"price":680},"priceOpen":{"price":670},"priceHigh":{"price":685},"priceLow":{"price":668},"total":{"tradeVolume":12345}}}}`))
+		// v1.0 扁平結構（2026-08-03 遷移）
+		w.Write([]byte(`{"date":"2026-07-07","type":"EQUITY","exchange":"TWSE","market":"TSE","symbol":"2330","name":"台積電","closePrice":680,"openPrice":670,"highPrice":685,"lowPrice":668,"lastPrice":680,"total":{"tradeVolume":12345}}`))
 	}))
 	defer server.Close()
 

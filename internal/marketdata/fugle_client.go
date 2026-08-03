@@ -19,7 +19,10 @@ import (
 )
 
 const (
-	fugleAPIBaseURL = "https://api.fugle.tw/realtime/v0.3"
+	// v1.0 marketdata API (2026-08-03 migration). The legacy realtime/v0.3
+	// endpoint is retired and v0.3 keys are rejected by v1.0 — see
+	// developer.fugle.tw/docs/data/migration-guide/.
+	fugleAPIBaseURL = "https://api.fugle.tw/marketdata/v1.0/stock"
 )
 
 // FugleClient Fugle API 客户端
@@ -30,36 +33,26 @@ type FugleClient struct {
 	rateLimiter *rate.Limiter
 }
 
-// FugleQuoteResponse Fugle 行情响应
+// FugleQuoteResponse Fugle v1.0 行情响应（扁平結構）
+// 對照 v0.3 巢狀 data.quote.* 結構，v1.0 將欄位提升到頂層。
 type FugleQuoteResponse struct {
 	APIVersion string `json:"apiVersion"`
-	Data       struct {
-		Info struct {
-			Date        string `json:"date"`
-			Time        string `json:"time"`
-			Symbol      string `json:"symbol"`
-			Name        string `json:"name"`
-			CountryCode string `json:"countryCode"`
-			TimeZone    string `json:"timeZone"`
-		} `json:"info"`
-		Quote struct {
-			Trade struct {
-				Price float64 `json:"price"`
-			} `json:"trade"`
-			PriceOpen struct {
-				Price float64 `json:"price"`
-			} `json:"priceOpen"`
-			PriceHigh struct {
-				Price float64 `json:"price"`
-			} `json:"priceHigh"`
-			PriceLow struct {
-				Price float64 `json:"price"`
-			} `json:"priceLow"`
-			Total struct {
-				TradeVolume int64 `json:"tradeVolume"`
-			} `json:"total"`
-		} `json:"quote"`
-	} `json:"data"`
+	Date       string `json:"date"`
+	Type       string `json:"type"`
+	Exchange   string `json:"exchange"`
+	Market     string `json:"market"`
+	Symbol     string `json:"symbol"`
+	Name       string `json:"name"`
+
+	ClosePrice float64 `json:"closePrice"`
+	OpenPrice  float64 `json:"openPrice"`
+	HighPrice  float64 `json:"highPrice"`
+	LowPrice   float64 `json:"lowPrice"`
+	LastPrice  float64 `json:"lastPrice"`
+
+	Total struct {
+		TradeVolume int64 `json:"tradeVolume"`
+	} `json:"total"`
 }
 
 // getFugleRateLimit returns the rate limit based on FUGLE_TIER env var.
@@ -133,26 +126,20 @@ func (c *FugleClient) RateLimiter() *rate.Limiter {
 	return c.rateLimiter
 }
 
-// GetQuote 获取单个股票行情
+// GetQuote 获取单个股票行情（v1.0 API）
 func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
 	// 等待速率限制
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return domain.Quote{}, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
-	// 构建 URL
-	endpoint := fmt.Sprintf("%s/intraday/quote", c.baseURL)
-	params := url.Values{}
-	params.Set("symbolId", symbol)
-	params.Set("apiToken", c.apiKey)
-
-	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
-
-	// 发送请求
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	// v1.0: symbol 在 URL path，key 在 X-API-KEY header（非 query param）
+	endpoint := fmt.Sprintf("%s/intraday/quote/%s", c.baseURL, url.PathEscape(symbol))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return domain.Quote{}, fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("X-API-KEY", c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -171,14 +158,18 @@ func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 
-	// 转换为 domain.Quote
+	// v1.0 扁平欄位 → domain.Quote（lastPrice 優先，fallback closePrice）
+	last := fugleResp.LastPrice
+	if last == 0 {
+		last = fugleResp.ClosePrice
+	}
 	quote := domain.Quote{
 		Symbol:     symbol,
-		Last:       fugleResp.Data.Quote.Trade.Price,
-		Open:       fugleResp.Data.Quote.PriceOpen.Price,
-		High:       fugleResp.Data.Quote.PriceHigh.Price,
-		Low:        fugleResp.Data.Quote.PriceLow.Price,
-		Volume:     fugleResp.Data.Quote.Total.TradeVolume,
+		Last:       last,
+		Open:       fugleResp.OpenPrice,
+		High:       fugleResp.HighPrice,
+		Low:        fugleResp.LowPrice,
+		Volume:     fugleResp.Total.TradeVolume,
 		Market:     "TW",
 		AsOf:       time.Now(),
 		IsTradable: true,
@@ -205,23 +196,19 @@ func (c *FugleClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 	return quotes, nil
 }
 
-// GetMeta 获取股票元数据
+// GetMeta 获取股票元数据（v1.0: GET /intraday/ticker/{symbol}）
+// v0.3 Meta → v1.0 Ticker（官方 migration-guide）
 func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaResponse, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
 	}
 
-	endpoint := fmt.Sprintf("%s/intraday/meta", c.baseURL)
-	params := url.Values{}
-	params.Set("symbolId", symbol)
-	params.Set("apiToken", c.apiKey)
-
-	reqURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	endpoint := fmt.Sprintf("%s/intraday/ticker/%s", c.baseURL, url.PathEscape(symbol))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("X-API-KEY", c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -244,31 +231,22 @@ func (c *FugleClient) GetMeta(ctx context.Context, symbol string) (*FugleMetaRes
 
 // FugleMetaResponse 元数据响应
 type FugleMetaResponse struct {
-	APIVersion string `json:"apiVersion"`
-	Data       struct {
-		Info struct {
-			Date        string `json:"date"`
-			Time        string `json:"time"`
-			Symbol      string `json:"symbol"`
-			Name        string `json:"name"`
-			CountryCode string `json:"countryCode"`
-			TimeZone    string `json:"timeZone"`
-		} `json:"info"`
-		Meta struct {
-			Market         string  `json:"market"`
-			NameZhTW       string  `json:"nameZhTw"`
-			IndustryZhTW   string  `json:"industryZhTw"`
-			TypeZhTW       string  `json:"typeZhTw"`
-			IsIndex        bool    `json:"isIndex"`
-			IsWarrant      bool    `json:"isWarrant"`
-			IsSuspended    bool    `json:"isSuspended"`
-			IsDelisted     bool    `json:"isDelisted"`
-			ReferencePrice float64 `json:"referencePrice"`
-			LimitUpPrice   float64 `json:"limitUpPrice"`
-			LimitDownPrice float64 `json:"limitDownPrice"`
-			PreviousClose  float64 `json:"previousClose"`
-		} `json:"meta"`
-	} `json:"data"`
+	Date         string `json:"date"`
+	Type         string `json:"type"`
+	Exchange     string `json:"exchange"`
+	Market       string `json:"market"`
+	Symbol       string `json:"symbol"`
+	Name         string `json:"name"`
+	Industry     string `json:"industry"`
+	SecurityType string `json:"securityType"`
+
+	// v1.0: securityStatus 取代 v0.3 的 isSuspended/isDelisted
+	SecurityStatus string `json:"securityStatus"` // NORMAL | TERMINATED | SUSPENDED
+
+	ReferencePrice float64 `json:"referencePrice"`
+	LimitUpPrice   float64 `json:"limitUpPrice"`
+	LimitDownPrice float64 `json:"limitDownPrice"`
+	PreviousClose  float64 `json:"previousClose"`
 }
 
 // CheckMarketStatus 检查市场状态
@@ -279,8 +257,9 @@ func (c *FugleClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	// 检查是否为交易日且未停牌
-	return !meta.Data.Meta.IsSuspended && !meta.Data.Meta.IsDelisted, nil
+	// v1.0: 檢查 securityStatus 而非 v0.3 的 isSuspended/isDelisted
+	// NORMAL = 正常交易；TERMINATED/SUSPENDED = 不可交易
+	return meta.SecurityStatus == "NORMAL" || meta.SecurityStatus == "", nil
 }
 
 // fugleCandlesResponse is the JSON shape returned by Fugle's historical candles endpoint.

@@ -1563,13 +1563,35 @@ export interface FubonQuoteResponse {
 }
 
 export interface FugleMetaResponse {
-  apiVersion: string;
-  data: string;
+  date: string;
+  type: string;
+  exchange: string;
+  market: string;
+  symbol: string;
+  name: string;
+  industry: string;
+  securityType: string;
+  securityStatus: string;
+  referencePrice: number;
+  limitUpPrice: number;
+  limitDownPrice: number;
+  previousClose: number;
 }
 
 export interface FugleQuoteResponse {
   apiVersion: string;
-  data: string;
+  date: string;
+  type: string;
+  exchange: string;
+  market: string;
+  symbol: string;
+  name: string;
+  closePrice: number;
+  openPrice: number;
+  highPrice: number;
+  lowPrice: number;
+  lastPrice: number;
+  total: string;
 }
 
 export interface GARCHParameters {

@@ -34,13 +34,14 @@ func TestFugleChannelAdapter_Metadata(t *testing.T) {
 }
 
 func TestFugleChannelAdapter_Fetch(t *testing.T) {
-	payload := marketdata.FugleQuoteResponse{APIVersion: "v0.3"}
-	payload.Data.Info.Symbol = "1476"
-	payload.Data.Quote.Trade.Price = 42.0
-	payload.Data.Quote.PriceOpen.Price = 41.0
-	payload.Data.Quote.PriceHigh.Price = 43.0
-	payload.Data.Quote.PriceLow.Price = 40.0
-	payload.Data.Quote.Total.TradeVolume = 1000
+	payload := marketdata.FugleQuoteResponse{
+		Symbol:     "1476",
+		ClosePrice: 42.0,
+		OpenPrice:  41.0,
+		HighPrice:  43.0,
+		LowPrice:   40.0,
+	}
+	payload.Total.TradeVolume = 1000
 	body, _ := json.Marshal(payload)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,9 +69,10 @@ func TestFugleChannelAdapter_Fetch(t *testing.T) {
 }
 
 func TestFugleChannelAdapter_HealthCheck(t *testing.T) {
-	payload := marketdata.FugleQuoteResponse{APIVersion: "v0.3"}
-	payload.Data.Info.Symbol = "1476"
-	payload.Data.Quote.Trade.Price = 42.0
+	payload := marketdata.FugleQuoteResponse{
+		Symbol:     "1476",
+		ClosePrice: 42.0,
+	}
 	body, _ := json.Marshal(payload)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

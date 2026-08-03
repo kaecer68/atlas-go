@@ -34,16 +34,17 @@ func TestGetFugleRateLimit(t *testing.T) {
 
 func TestFugleClient_GetMeta_Success(t *testing.T) {
 	payload := FugleMetaResponse{
-		APIVersion: "v0.3",
+		Symbol: "0050",
+		Name:   "元大台灣50",
 	}
-	payload.Data.Info.Symbol = "0050"
-	payload.Data.Meta.IsSuspended = false
-	payload.Data.Meta.IsDelisted = false
 	body, _ := json.Marshal(payload)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/intraday/meta" {
+		if r.URL.Path != "/intraday/ticker/0050" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Header.Get("X-API-KEY") != "test-key" {
+			t.Errorf("X-API-KEY header missing or wrong")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(body)
@@ -58,16 +59,16 @@ func TestFugleClient_GetMeta_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if meta.Data.Info.Symbol != "0050" {
-		t.Errorf("Symbol = %q, want 0050", meta.Data.Info.Symbol)
+	if meta.Symbol != "0050" {
+		t.Errorf("Symbol = %q, want 0050", meta.Symbol)
 	}
 }
 
 func TestFugleClient_CheckMarketStatus_Open(t *testing.T) {
-	payload := FugleMetaResponse{}
-	payload.Data.Info.Symbol = "0050"
-	payload.Data.Meta.IsSuspended = false
-	payload.Data.Meta.IsDelisted = false
+	payload := FugleMetaResponse{
+		Symbol:         "0050",
+		SecurityStatus: "NORMAL",
+	}
 	body, _ := json.Marshal(payload)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,10 +91,10 @@ func TestFugleClient_CheckMarketStatus_Open(t *testing.T) {
 }
 
 func TestFugleClient_CheckMarketStatus_Suspended(t *testing.T) {
-	payload := FugleMetaResponse{}
-	payload.Data.Info.Symbol = "0050"
-	payload.Data.Meta.IsSuspended = true
-	payload.Data.Meta.IsDelisted = false
+	payload := FugleMetaResponse{
+		Symbol:         "0050",
+		SecurityStatus: "SUSPENDED",
+	}
 	body, _ := json.Marshal(payload)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
