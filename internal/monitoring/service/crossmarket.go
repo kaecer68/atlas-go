@@ -258,15 +258,24 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	// Without this, the callback fires on EVERY cache refresh
 	// (~30s) while the snapshot is degraded — producing duplicate
 	// health.Record() calls and alert spam.
+	//
+	// Recovery path (2026-08-04): when status flips back to "ok" from a
+	// previously non-ok state, fire the callback so the dashboard can
+	// clear the per-channel "degraded" health records (us10y / vix were
+	// stuck on "degraded" for 9 days because no recovery path existed —
+	// the snapshot became healthy again but the channel-health page
+	// never knew). The callback in cmd/atlas/main.go:1106 handles
+	// recovery by recording status="ok" on the same channels that were
+	// previously flagged.
 	s.callbackMu.Lock()
 	cb := s.degradedCallback
 	prevStatus := s.lastDegradedStatus
 	prevFailed := s.lastFailedChannels
 	prevStale := s.lastStaleChannels
 	changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed) || !stringSlicesEqual(stale, prevStale)
-	// Fire when status leaves "ok" (covers both "stale" and "degraded") so the
-	// monitor.Warning() path is taken for CB-open serving cached data too.
-	shouldFire := cb != nil && status != "ok" && (changed || prevStatus == "")
+	// Fire on transition INTO degraded (covers both "stale" and "degraded")
+	// AND on transition back TO ok from a non-ok state (recovery path).
+	shouldFire := cb != nil && changed && (status != prevStatus) && ((status != "ok") || (prevStatus != "" && prevStatus != "ok"))
 	if changed || prevStatus == "" {
 		s.lastDegradedStatus = status
 		s.lastFailedChannels = failed

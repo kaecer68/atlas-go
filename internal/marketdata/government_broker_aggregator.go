@@ -196,10 +196,16 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		mergeBrokerDetails(details, res.Ins, "ins")
 	}
 
+	// No stocks processed for this date is not an error: it can happen on
+	// non-trading days (Taiwanese national holidays), after-hours runs, or
+	// when the upstream TWSE broker page is temporarily unavailable but
+	// didn't return a hard error. We return (nil, nil) so the caller can
+	// distinguish "no data" from "real failure" and avoid surfacing a false
+	// channel error on the dashboard (regression: 2026-08-03 channel-health
+	// "no stocks processed for 20260803" — was a holiday, not a fault).
 	if stocksProcessed == 0 {
-		return nil, fmt.Errorf("government_broker: no stocks processed for %s", dateStr)
+		return nil, nil
 	}
-
 	// Write government bank reading (existing format).
 	govReading := &GovernmentFlowReading{
 		Date:     dateStr,

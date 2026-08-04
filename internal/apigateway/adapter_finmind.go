@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,11 +60,20 @@ func (a *FinMindChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 }
 
 // HealthCheck verifies connectivity by fetching 2330 from yesterday.
+//
+// Daily-quota exhaustion is surfaced as "warn" (not "error") because the
+// underlying channel is healthy — the budget just ran out for the day.
+// On-call should not be paged for this; the dashboard surfaces it via
+// the channel-health page and the budget auto-resets at 00:00 TW.
 func (a *FinMindChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.client.GetStockPrice(ctx, "2330", yesterday())
 	if err != nil {
+		status := "error"
+		if errors.Is(err, marketdata.ErrQuotaExhausted) {
+			status = "warn"
+		}
 		return HealthStatus{
-			Status:    "error",
+			Status:    status,
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
 			CheckType: "liveness",

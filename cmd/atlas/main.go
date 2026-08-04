@@ -737,7 +737,7 @@ func run(args []string, deps appDeps) error {
 			stockDeps.FugleClient = fugleClient
 		}
 		if cfg.FinMindAPIKey != "" {
-			finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
+			finmindClient = marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey, cfg.WorkDir)
 		}
 		if fp := portfolio.NewFundamentalProvider(); true {
 			fundamentalsPath := filepath.Join(cfg.WorkDir, "data", "fundamentals.json")
@@ -1104,22 +1104,35 @@ func run(args []string, deps appDeps) error {
 		if gateway != nil && monitor != nil {
 			if svc := dashboard.GetCrossMarketService(); svc != nil {
 				svc.SetDegradedCallback(func(status string, failed []string) {
-					if status != "degraded" || len(failed) == 0 {
-						return // recovery or false alarm; no action needed
+					if status == "degraded" || status == "stale" {
+						if len(failed) == 0 {
+							return
+						}
+						// Record per-channel degraded status in the same
+						// UnifiedHealthStore used by Gateway.Fetch.
+						for _, ch := range failed {
+							_ = gateway.Health().Record(ch, "degraded",
+								"detectDegradedUSStatus: data missing or zero-value in macro snapshot")
+						}
+						// Surface as user-visible alert.
+						monitor.Warning("crossmarket",
+							fmt.Sprintf("美台連動數據降級: %d 個通道失敗 (%v)", len(failed), failed),
+							map[string]any{
+								"data_status":     status,
+								"failed_channels": failed,
+							})
+						return
 					}
-					// Record per-channel degraded status in the same
-					// UnifiedHealthStore used by Gateway.Fetch.
+					// Recovery path (2026-08-04): when status is "ok", clear any
+					// previously-recorded degraded status for the channels
+					// that were failing. Without this, us10y / vix stayed
+					// flagged as degraded for 9 days even after the macro
+					// snapshot recovered. The callback in crossmarket.go
+					// service only fires on transitions now (the snapshot
+					// status going from non-ok to ok triggers this branch).
 					for _, ch := range failed {
-						_ = gateway.Health().Record(ch, "degraded",
-							"detectDegradedUSStatus: data missing or zero-value in macro snapshot")
+						_ = gateway.Health().Record(ch, "ok", "crossmarket snapshot recovered")
 					}
-					// Surface as user-visible alert.
-					monitor.Warning("crossmarket",
-						fmt.Sprintf("美台連動數據降級: %d 個通道失敗 (%v)", len(failed), failed),
-						map[string]any{
-							"data_status":     status,
-							"failed_channels": failed,
-						})
 				})
 				log.Printf("[CrossMarket] degraded-data callback wired to UnifiedHealthStore + Monitor")
 			}

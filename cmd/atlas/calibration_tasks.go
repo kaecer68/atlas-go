@@ -172,7 +172,7 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 	}
 	finmindClient := d.FinMindClient
 	if finmindClient == nil && d.Cfg.FinMindAPIKey != "" {
-		finmindClient = marketdata.GetSharedFinMindClient(d.Cfg.FinMindAPIKey)
+		finmindClient = marketdata.GetSharedFinMindClient(d.Cfg.FinMindAPIKey, d.Cfg.WorkDir)
 	}
 	cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{

@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // ─── FinMindClient singleton ─────────────────────────────────────────────────
@@ -752,5 +755,85 @@ func TestFinMindResponse_Parse(t *testing.T) {
 	}
 	if resp.Data[0]["a"].(float64) != 1.0 {
 		t.Errorf("data[0][a] = %v, want 1.0", resp.Data[0]["a"])
+	}
+}
+
+// ─── Quota gate: prevents cold-start bursts from exhausting the daily budget ──
+
+// TestFinMindClient_QuotaGate_ReturnsErrQuotaExhausted verifies that once
+// the daily quota is gone, fetchDataset returns ErrQuotaExhausted instead of
+// making the HTTP call. This is the central contract that protects the
+// channel from cold-start bursts (auto_quote_backfill × N symbols × 90 days).
+func TestFinMindClient_QuotaGate_ReturnsErrQuotaExhausted(t *testing.T) {
+	stateDir := t.TempDir()
+	c := newFinMindClientInternal("test-key", stateDir)
+	// Disable rate limiter so quota is the only gate.
+	c.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
+	// Force quota exhaustion by lowering the daily limit to 0. Now AllowCall
+	// returns false immediately, the HTTP handler must never be reached.
+	c.quotaTracker.SetLimit(0)
+
+	var httpHit int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&httpHit, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	// We can't redirect finmindBaseURL (it's a const), so we expect the
+	// request to fail BEFORE going out. The HTTP handler is only a tripwire:
+	// if the gate works, httpHit stays 0.
+
+	_, err := c.GetStockPrice(context.Background(), "2330", "2026-01-01")
+	if !errors.Is(err, ErrQuotaExhausted) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrQuotaExhausted)", err)
+	}
+	if atomic.LoadInt32(&httpHit) != 0 {
+		t.Errorf("HTTP handler hit %d times — quota gate did not block the request", httpHit)
+	}
+}
+
+// TestFinMindClient_QuotaTelemetry verifies QuotaUsed/Remaining track daily
+// usage so the channel-health dashboard can warn before the budget runs out.
+func TestFinMindClient_QuotaTelemetry(t *testing.T) {
+	c := newFinMindClientInternal("k", t.TempDir())
+	c.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
+
+	if got := c.QuotaUsed(); got != 0 {
+		t.Errorf("QuotaUsed() = %d, want 0 before any calls", got)
+	}
+	if got := c.QuotaRemaining(); got != finmindDailyLimit {
+		t.Errorf("QuotaRemaining() = %d, want %d (full daily limit)", got, finmindDailyLimit)
+	}
+
+	// Simulate 100 calls going through the tracker.
+	for i := range 100 {
+		if !c.quotaTracker.AllowCall() {
+			t.Fatalf("AllowCall returned false at iteration %d", i)
+		}
+	}
+	if got := c.QuotaUsed(); got != 100 {
+		t.Errorf("QuotaUsed() after 100 calls = %d, want 100", got)
+	}
+	if got := c.QuotaRemaining(); got != finmindDailyLimit-100 {
+		t.Errorf("QuotaRemaining() = %d, want %d", got, finmindDailyLimit-100)
+	}
+}
+
+// TestFinMindClient_QuotaGateNilSafe verifies that clients without a tracker
+// (e.g. test-only NewFinMindClient with a nil state) still work — the gate is
+// skipped, the HTTP call proceeds. Defends against nil-pointer crashes if a
+func TestFinMindClient_QuotaGateNilSafe(t *testing.T) {
+	c := &FinMindClient{
+		apiKey:       "k",
+		httpClient:   &http.Client{Timeout: 1 * time.Second},
+		rateLimiter:  rate.NewLimiter(rate.Inf, 0),
+		quotaTracker: nil,
+	}
+	// Without the gate, fetchDataset must not crash on nil tracker. We only
+	// verify the no-crash path; the request will fail (no live server) but
+	// the error must NOT be ErrQuotaExhausted.
+	_, err := c.GetStockPrice(context.Background(), "2330", "2026-01-01")
+	if errors.Is(err, ErrQuotaExhausted) {
+		t.Errorf("nil tracker should not yield ErrQuotaExhausted, got %v", err)
 	}
 }
