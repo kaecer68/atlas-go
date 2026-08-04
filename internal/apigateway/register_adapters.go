@@ -132,6 +132,17 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		tejAdapter := NewTEJChannelAdapter(tejClient)
 		g.registry.Register("tej", tejAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tej")
+	} else {
+		// Mark TEJ as inactive so dashboard + Alerts() stop reporting the
+		// stale AAA003 error from before the 2026-08-03 disable. The status
+		// "inactive" is filtered by UnifiedHealthStore.Alerts() (status != "ok"
+		// && status != "inactive"), keeping this from generating false alerts,
+		// and renders as "未啟用" via monitoring/service/session.go StatusText.
+		// Pair with the tej_refresh scheduler gate in cmd/atlas/main.go:1670
+		// so channel + scheduler + health record all stay in lock-step.
+		if err := g.Health().Record("tej", "inactive", "TEJ_API_KEY not configured (PR chore/20260803-disable-tej)"); err != nil {
+			logging.Warn("apigateway", "tej_inactive_record_failed", "err", err.Error())
+		}
 	}
 
 	// --- Geopolitical (RSS + GDELT) ---

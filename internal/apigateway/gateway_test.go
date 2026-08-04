@@ -119,6 +119,70 @@ func TestRegisterChannelAdapters_EmptyConfig(t *testing.T) {
 	}
 }
 
+// TestRegisterChannelAdapters_TEJDisabledWritesInactiveHealth verifies that
+// when TEJ_API_KEY is unset, RegisterChannelAdapters writes a status="inactive"
+// health record for the "tej" channel. This stops dashboard + Alerts() from
+// surfacing the stale AAA003 "api_key已過期" error left over from before the
+// 2026-08-03 TEJ disable (PR chore/20260803-disable-tej).
+//
+// Pair invariant: register_adapters.go and cmd/atlas/main.go:1670 both gate on
+// the same TEJ_API_KEY secret. The scheduler branch in main.go intentionally
+// does NOT write health records (see comment block above line 1670) — channel
+// + health record writes are centralized here to avoid double-writes.
+func TestRegisterChannelAdapters_TEJDisabledWritesInactiveHealth(t *testing.T) {
+	t.Setenv("TEJ_API_KEY", "")
+	g := newTestGateway(t)
+	cfg := config.Config{}
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+		t.Fatalf("RegisterChannelAdapters failed: %v", err)
+	}
+
+	if g.HasChannel("tej") {
+		t.Error("tej channel should NOT be registered when TEJ_API_KEY is unset")
+	}
+
+	rec := g.Health().Get("tej")
+	if rec == nil {
+		t.Fatal("expected health record for tej after RegisterChannelAdapters, got nil")
+	}
+	if rec.Status != "inactive" {
+		t.Errorf("tej health status = %q, want %q (Alert() filters inactive, so dashboard stops showing stale error)", rec.Status, "inactive")
+	}
+	if rec.LastError == "" {
+		t.Error("tej inactive record should carry the PR-anchor reason in LastError for auditability")
+	}
+
+	// Critical contract: "inactive" must NOT show up in Alerts() — this is what
+	// suppresses the stale AAA003 error from the dashboard.
+	for _, alert := range g.Health().Alerts() {
+		if alert.ChannelID == "tej" {
+			t.Errorf("tej should not appear in Alerts() when status=inactive, got %+v", alert)
+		}
+	}
+}
+
+// TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive verifies the
+// opposite direction: when TEJ_API_KEY is configured, the adapter is registered
+// AND no pre-emptive inactive health record is left behind (which would mask
+// the first real Fetch() outcome).
+func TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive(t *testing.T) {
+	t.Setenv("TEJ_API_KEY", "test-paid-key-not-real")
+	g := newTestGateway(t)
+	cfg := config.Config{}
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+		t.Fatalf("RegisterChannelAdapters failed: %v", err)
+	}
+
+	if !g.HasChannel("tej") {
+		t.Error("tej channel should be registered when TEJ_API_KEY is set")
+	}
+	// Health record is allowed to be absent (channel hasn't fetched yet) OR
+	// non-inactive — what matters is that we did NOT poison it with status=inactive.
+	if rec := g.Health().Get("tej"); rec != nil && rec.Status == "inactive" {
+		t.Errorf("tej health should not be pre-marked inactive when API key is set, got %+v", rec)
+	}
+}
+
 func TestRegisterChannelAdapters_WithJanusEngine(t *testing.T) {
 	g := newTestGateway(t)
 	cfg := config.Config{}
