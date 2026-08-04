@@ -1658,7 +1658,6 @@ func run(args []string, deps appDeps) error {
 			// Issue #1086: TEJ channel data was stale for 66 days because no periodic fetch existed.
 			// Fires every hour but only executes at 15:00 TW to avoid daily API quota exhaustion.
 			// Reference: daily_report_generate pattern (lines ~1047) for time-gated ErrTaskSkipped.
-			//
 			// DISABLED 2026-08-03 — TEJ free trial API key (AAA003) expired on 2026-07-31.
 			// Source-layer audit (PR chore/20260803-disable-tej) confirmed no mission-required
 			// endpoint consumes TEJ data; the system has been running with tej dead for days.
@@ -1667,6 +1666,12 @@ func run(args []string, deps appDeps) error {
 			// channel and scheduler stay in lock-step (T3-A47 fix). To re-enable, set
 			// TEJ_API_KEY (and TEJ_TIER=paid if upgraded) in the atlas env — the channel
 			// adapter and tej_refresh scheduler will both come back online.
+			//
+			// Health-record side effect: when TEJ_API_KEY is unset, register_adapters.go
+			// writes status="inactive" so dashboard + Alerts() stop surfacing the stale
+			// AAA003 error. This scheduler branch is intentionally a no-op (log only) —
+			// the health-record write is centralized in the adapter layer to avoid
+			// double-writes between the two gate sites.
 			if tejAPIKey := config.GetSecret("TEJ_API_KEY"); tejAPIKey != "" {
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tej_refresh",
