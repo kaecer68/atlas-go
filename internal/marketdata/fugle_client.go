@@ -28,12 +28,28 @@ const (
 	fugleAPIBaseURL = "https://api.fugle.tw/marketdata/v1.0/stock"
 )
 
+// fugleDailyLimit is the daily quota ceiling for the Fugle free tier.
+// 60/min × 60 min × 24 hr = 86,400/day. The per-second rate limiter
+// (newFugleClient) enforces the burst limit; the daily tracker enforces
+// the cumulative ceiling — together they prevent cold-start bursts from
+// exhausting the day's budget. The free tier's actual published cap may
+// be lower; this is a conservative upper bound that triggers ErrQuotaExhausted
+// before the upstream rejects.
+const fugleDailyLimit = 86400
+
+// ErrFugleQuotaExhausted is returned by FugleClient.doGet when the daily
+// quota is gone. Mirrors marketdata.ErrQuotaExhausted (FinMind) so callers
+// can `errors.Is` either one to detect "budget ran out" without coupling
+// to the specific provider. The shared QuotaRegistry surfaces both.
+var ErrFugleQuotaExhausted = fmt.Errorf("fugle: daily quota exhausted")
+
 // FugleClient Fugle API 客户端
 type FugleClient struct {
-	apiKey      string
-	httpClient  *http.Client
-	baseURL     string
-	rateLimiter *rate.Limiter
+	apiKey       string
+	httpClient   *http.Client
+	baseURL      string
+	rateLimiter  *rate.Limiter
+	quotaTracker *DailyQuotaTracker
 }
 
 // FugleQuoteResponse Fugle v1.0 行情响应（扁平結構）
@@ -79,9 +95,15 @@ var (
 // GetSharedFugleClient returns a singleton FugleClient shared across all
 // components (gateway channel, hybrid provider). Using one client ensures
 // a single rate limiter enforces the Fugle API tier limit globally.
-func GetSharedFugleClient(apiKey string) *FugleClient {
+// stateDir is captured once for the shared DailyQuotaTracker; callers
+// that need a different state directory should use NewFugleClient directly.
+func GetSharedFugleClient(apiKey string, stateDir ...string) *FugleClient {
+	dir := "data/state"
+	if len(stateDir) > 0 && stateDir[0] != "" {
+		dir = stateDir[0]
+	}
 	sharedFugleClientOnce.Do(func() {
-		sharedFugleClient = newFugleClient(apiKey)
+		sharedFugleClient = newFugleClient(apiKey, dir)
 	})
 	return sharedFugleClient
 }
@@ -98,13 +120,11 @@ func ResetSharedFugleClient() {
 // Prefer GetSharedFugleClient in production to avoid multiple independent
 // rate limiter token buckets.
 func NewFugleClient(apiKey string) *FugleClient {
-	return newFugleClient(apiKey)
+	return newFugleClient(apiKey, "data/state")
 }
-
-func newFugleClient(apiKey string) *FugleClient {
+func newFugleClient(apiKey string, stateDir string) *FugleClient {
 	params := config.GetParametersConfig()
 	limit := getFugleRateLimit()
-	// Override with parameters config if explicitly set higher than default free tier
 	if params.Marketdata.FugleRateLimit.Value > 60 {
 		limit = params.Marketdata.FugleRateLimit.Value
 	}
@@ -118,12 +138,37 @@ func newFugleClient(apiKey string) *FugleClient {
 	if limit < burst {
 		burst = limit
 	}
+	tracker := NewDailyQuotaTracker("fugle", stateDir, fugleDailyLimit)
+	// Register the tracker with the global QuotaRegistry so the dashboard
+	// sees Fugle alongside FinMind in one Snapshot(). Pairs with the
+	// FinMind gate in finmind_client.go:131 so neither provider can silently
+	// starve the other when their quota changes.
+	GlobalQuotaRegistry().Register("fugle", tracker)
 	return &FugleClient{
-		apiKey:      apiKey,
-		httpClient:  httpclient.NewFactory().NewClient(timeout),
-		baseURL:     fugleAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), burst),
+		apiKey:       apiKey,
+		httpClient:   httpclient.NewFactory().NewClient(timeout),
+		baseURL:      fugleAPIBaseURL,
+		rateLimiter:  rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), burst),
+		quotaTracker: tracker,
 	}
+}
+
+// QuotaUsed returns today's Fugle API call count (across all callers sharing
+// the DailyQuotaTracker). Surfaced by the channel-health page so the
+// dashboard can warn before the daily budget is gone.
+func (c *FugleClient) QuotaUsed() int {
+	if c.quotaTracker == nil {
+		return 0
+	}
+	return c.quotaTracker.CallsToday()
+}
+
+// QuotaRemaining returns the unused portion of today's Fugle budget.
+func (c *FugleClient) QuotaRemaining() int {
+	if c.quotaTracker == nil {
+		return fugleDailyLimit
+	}
+	return c.quotaTracker.Remaining()
 }
 
 // SetHTTPClient 设置自定义 HTTP 客户端
@@ -137,7 +182,6 @@ func (c *FugleClient) RateLimiter() *rate.Limiter {
 }
 
 // GetQuote 获取单个股票行情（v1.0 API）
-// doGet performs a GET against the v1.0 API with rate-limit (429) retry.
 // The free tier (60/min) is enforced by the shared limiter, but Fugle's
 // sliding window can 429 before the token bucket drains — honor
 // Retry-After (or a conservative backoff) instead of failing immediately.
@@ -147,6 +191,13 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 	for attempt := 0; ; attempt++ {
 		if err := c.rateLimiter.Wait(ctx); err != nil {
 			return nil, fmt.Errorf("rate limit wait: %w", ErrRateLimited)
+		}
+		// Daily-quota gate: mirrors the FinMind gate so the channel-health
+		// page and shared QuotaRegistry see one consistent view across
+		// providers. Without it, a cold-start burst from any caller can
+		// burn the day's Fugle budget in seconds (60/min × 1440 = 86,400).
+		if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+			return nil, fmt.Errorf("fugle: %w (used=%d, remaining=%d)", ErrFugleQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)

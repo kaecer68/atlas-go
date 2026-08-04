@@ -1280,7 +1280,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if cfg.FinMindAPIKey != "" {
 		// FinMind dividend provider is tax-utility, not a data channel.
 		// Gateway migration deferred — see docs/archive/2026-06-26-gateway-migration-tracking.md.
-		finMindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
+		finMindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey, a.workDir)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)
 	}

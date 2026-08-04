@@ -28,10 +28,28 @@ const (
 	finmindBurst     = 60
 )
 
+// finmindDailyLimit is the daily quota ceiling for the FinMind free tier.
+// 600/hr × 24 = 14,400/day. We track this with DailyQuotaTracker so concurrent
+// callers (auto_cycle_update, auto_quote_backfill, channel_health_finmind,
+// tsmc_revenue, ad-hoc lookups) don't collectively exceed it. Without the
+// tracker, cold-start backfill of N symbols × 90 days can blow the daily
+// quota in a single scheduled run, leaving the channel dead for the rest of
+// the day (regression: commit 35642c13 switched auto_quote_backfill from Fugle
+// to FinMind, multiplying the call volume against this single channel).
+const finmindDailyLimit = 14400
+
+// ErrQuotaExhausted is returned by fetchDataset when the daily quota is gone.
+// Callers should treat this as a transient, scheduled-skippable condition —
+// distinct from API auth/quota errors that need human intervention. The
+// channel adapter maps this to a "warn" status (not "error") so on-call
+// doesn't get paged just because the daily budget ran out.
+var ErrQuotaExhausted = fmt.Errorf("finmind: daily quota exhausted")
+
 type FinMindClient struct {
-	apiKey      string
-	httpClient  *http.Client
-	rateLimiter *rate.Limiter
+	apiKey       string
+	httpClient   *http.Client
+	rateLimiter  *rate.Limiter
+	quotaTracker *DailyQuotaTracker
 }
 
 type FinMindResponse struct {
@@ -56,14 +74,16 @@ var (
 // GetSharedFinMindClient returns a singleton FinMindClient that all components
 // share. Using a single client ensures one token bucket enforces the 600 req/hr
 // limit across all call sites (gateway channels, TSMC revenue, cycle aggregator).
-// The apiKey is used only on first call; subsequent calls ignore it.
-func GetSharedFinMindClient(apiKey string) *FinMindClient {
+// The apiKey is used only on first call; subsequent calls ignore it. The
+// stateDir is also captured once for the shared DailyQuotaTracker; callers
+// that need a different state directory should use NewFinMindClient directly.
+func GetSharedFinMindClient(apiKey string, stateDir ...string) *FinMindClient {
+	dir := "data/state"
+	if len(stateDir) > 0 && stateDir[0] != "" {
+		dir = stateDir[0]
+	}
 	sharedFinMindClientOnce.Do(func() {
-		sharedFinMindClient = &FinMindClient{
-			apiKey:      apiKey,
-			httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
-			rateLimiter: rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
-		}
+		sharedFinMindClient = newFinMindClientInternal(apiKey, dir)
 	})
 	return sharedFinMindClient
 }
@@ -90,13 +110,26 @@ func ResetSharedFinMindClient() {
 // Prefer GetSharedFinMindClient in production to avoid multiple independent
 // token buckets that can collectively exceed the free-tier limit.
 func NewFinMindClient(apiKey string) *FinMindClient {
-	return &FinMindClient{
-		apiKey:      apiKey,
-		httpClient:  httpclient.NewFactory().NewClient(30 * time.Second),
-		rateLimiter: rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
-	}
+	return newFinMindClientInternal(apiKey, "data/state")
 }
 
+// newFinMindClientInternal is the shared constructor used by both the
+// singleton accessor and the standalone constructor. It wires the shared
+// DailyQuotaTracker so all call sites share one daily counter.
+func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
+	tracker := NewDailyQuotaTracker("finmind", stateDir, finmindDailyLimit)
+	// Register the tracker with the global QuotaRegistry so the dashboard's
+	// channel-health page and the future /api/dashboard/quota endpoint see
+	// FinMind alongside Fugle in one Snapshot() — addressing kaecer's
+	// 2026-08-04 feedback to manage FinMind + Fugle together.
+	GlobalQuotaRegistry().Register("finmind", tracker)
+	return &FinMindClient{
+		apiKey:       apiKey,
+		httpClient:   httpclient.NewFactory().NewClient(30 * time.Second),
+		rateLimiter:  rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
+		quotaTracker: tracker,
+	}
+}
 func (c *FinMindClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
@@ -111,9 +144,37 @@ func (c *FinMindClient) RateLimiter() *rate.Limiter {
 	return c.rateLimiter
 }
 
+// QuotaUsed returns the number of FinMind API calls made today (across all
+// callers sharing the DailyQuotaTracker). Surfaced by the channel adapter
+// health record so the dashboard can warn before the budget runs out.
+func (c *FinMindClient) QuotaUsed() int {
+	if c.quotaTracker == nil {
+		return 0
+	}
+	return c.quotaTracker.CallsToday()
+}
+
+// QuotaRemaining returns the unused portion of today's FinMind budget.
+// Returns the full daily limit when no tracker is configured.
+func (c *FinMindClient) QuotaRemaining() int {
+	if c.quotaTracker == nil {
+		return finmindDailyLimit
+	}
+	return c.quotaTracker.Remaining()
+}
+
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)
+	}
+	// Daily-quota gate: every call site funnels through fetchDataset, so a
+	// single AllowCall check protects the whole channel from cold-start
+	// bursts (commit 35642c13 switched auto_quote_backfill to FinMind, which
+	// can hit 1000s of calls per cycle without this gate). When the daily
+	// budget is gone we return ErrQuotaExhausted rather than letting the
+	// HTTP request fail with a misleading 400 status.
+	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+		return nil, fmt.Errorf("finmind: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)

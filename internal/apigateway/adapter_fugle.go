@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,11 +48,21 @@ func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 }
 
 // HealthCheck verifies connectivity by fetching 1476 (Fugle test symbol).
+//
+// Daily-quota exhaustion is surfaced as "warn" (not "error") because the
+// channel itself is healthy — the budget just ran out for the day. Mirrors
+// the FinMind adapter's warn mapping so the channel-health page presents
+// a single, consistent view across both providers (see kaecer feedback
+// 2026-08-04: don't fix one provider's quota gate while breaking another's).
 func (a *FugleChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.client.GetQuote(ctx, "1476")
 	if err != nil {
+		status := "error"
+		if errors.Is(err, marketdata.ErrFugleQuotaExhausted) {
+			status = "warn"
+		}
 		return HealthStatus{
-			Status:    "error",
+			Status:    status,
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
 			CheckType: "liveness",

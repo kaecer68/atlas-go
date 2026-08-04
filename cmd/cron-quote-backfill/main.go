@@ -70,7 +70,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := marketdata.GetSharedFinMindClient(finmindKey)
+	client := marketdata.GetSharedFinMindClient(finmindKey, *workDir)
 	store := ledger.NewJSONLQuoteStore(filepath.Join(*workDir, "data", "state", "quotes"))
 
 	conc := *concurrency

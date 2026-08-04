@@ -909,6 +909,51 @@ func TestSetDegradedCallback_NotInvokedWhenOK(t *testing.T) {
 	}
 }
 
+// TestSetDegradedCallback_RecoveryFiresOnOK verifies the recovery path added
+// 2026-08-04: when the snapshot transitions from degraded/stale back to
+// ok, the callback must fire so the dashboard can clear per-channel
+// "degraded" health records (regression: us10y / vix were stuck on
+// "degraded" for 9 days because no recovery path existed).
+func TestSetDegradedCallback_RecoveryFiresOnOK(t *testing.T) {
+	// Phase 1: degraded snapshot → callback fires once.
+	degradedProv := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{}}
+	svc := NewCrossMarketService(degradedProv)
+	var fired []string
+	svc.SetDegradedCallback(func(status string, failed []string) {
+		fired = append(fired, status)
+	})
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("phase 1 GetStatus: %v", err)
+	}
+	if len(fired) != 1 || fired[0] == "ok" {
+		t.Fatalf("phase 1: expected degraded callback fire, got %v", fired)
+	}
+
+	// Phase 2: healthy snapshot → recovery callback fires (status="ok").
+	// Force the cache to expire so the new provider is actually queried.
+	healthyProv := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}}
+	svc.provider = healthyProv // swap provider — same service, new snapshot
+	svc.cachedSnapshot = nil   // bypass the 30s cache so the new snapshot is fetched
+	svc.cachedStatusMeta = nil
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("phase 2 GetStatus: %v", err)
+	}
+	if len(fired) != 2 || fired[1] != "ok" {
+		t.Fatalf("phase 2: expected recovery callback fire with status='ok', got %v", fired)
+	}
+}
+
 // TestDegradedCallbackCount_InvokedOnDegradation verifies that the
 // DegradedCallbackCount counter increments with the expected labels when the
 // degraded callback fires.

@@ -108,6 +108,53 @@ func TestGovernmentBrokerChannelAdapter_Fetch(t *testing.T) {
 	}
 }
 
+// TestGovernmentBrokerChannelAdapter_Fetch_NoStocksOk verifies the contract
+// for non-trading-day outcomes: when the upstream TWSE page returns no
+// broker data (holiday, weekend, upstream temporarily empty), the adapter
+// must NOT surface an error — it returns a stub payload with status="no_data"
+// so the dashboard sees a successful fetch and the channel-health page
+// does not page on-call (regression: 2026-08-03 "no stocks processed"
+// false-positive error in channel_health.govbroker).
+func TestGovernmentBrokerChannelAdapter_Fetch_NoStocksOk(t *testing.T) {
+	dir := t.TempDir()
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	agg.SetSymbols([]string{"2330"})
+
+	// Server returns 500 on GET so fetchMenuTokens fails — simulating an
+	// upstream TWSE outage where the page is unreachable but no broker data
+	// was returned. AggregateDate should treat this as "no stocks processed"
+	// (nil, nil) rather than an error.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	agg.SetHTTPClient(server.Client())
+	agg.SetBaseURL(server.URL)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	res, err := adapter.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch() should NOT error on no-data (was a regression for 2026-08-03), got: %v", err)
+	}
+	if res == nil {
+		t.Fatal("Fetch() returned nil result — expected stub no_data payload")
+	}
+	var payload struct {
+		Date   string `json:"date"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(res.Data, &payload); err != nil {
+		t.Fatalf("Unmarshal stub payload: %v", err)
+	}
+	if payload.Status != "no_data" {
+		t.Errorf("payload.Status = %q, want no_data", payload.Status)
+	}
+	if res.Meta.ChannelID != "government_broker" {
+		t.Errorf("Meta.ChannelID = %q, want government_broker", res.Meta.ChannelID)
+	}
+}
+
 func TestGovernmentBrokerChannelAdapter_HealthCheck_OK(t *testing.T) {
 	dir := t.TempDir()
 

@@ -3,9 +3,12 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -266,5 +269,80 @@ func TestFugleClient_GetMeta_429Retry(t *testing.T) {
 	}
 	if meta.SecurityStatus != "NORMAL" {
 		t.Errorf("SecurityStatus = %q, want NORMAL", meta.SecurityStatus)
+	}
+}
+
+// ─── Daily-quota gate (mirrors the FinMind gate) ────────────────────────────
+
+// TestFugleClient_QuotaGate_ReturnsErrFugleQuotaExhausted verifies that once
+// the Fugle daily quota is gone, doGet short-circuits with ErrFugleQuotaExhausted
+// before making any HTTP request. This is the symmetric counterpart to the
+// FinMind quota gate; together they let the channel-health dashboard present
+// a unified "which providers are out of budget today" view.
+func TestFugleClient_QuotaGate_ReturnsErrFugleQuotaExhausted(t *testing.T) {
+	c := newFugleClient("test-key", t.TempDir())
+	// Disable rate limiter so the quota gate is the only block.
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 0)
+	// Force the daily limit to 0 so AllowCall returns false immediately.
+	c.quotaTracker.SetLimit(0)
+
+	var httpHit int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&httpHit, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c.baseURL = srv.URL
+
+	_, err := c.GetQuote(context.Background(), "2330")
+	if !errors.Is(err, ErrFugleQuotaExhausted) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrFugleQuotaExhausted)", err)
+	}
+	if atomic.LoadInt32(&httpHit) != 0 {
+		t.Errorf("HTTP handler hit %d times — quota gate did not block the request", httpHit)
+	}
+}
+
+// TestFugleClient_QuotaTelemetry verifies the QuotaUsed/Remaining accessors
+// expose the same counter as the FinMind ones, so a future /api/dashboard/quota
+// endpoint can render both providers from one Snapshot() call.
+func TestFugleClient_QuotaTelemetry(t *testing.T) {
+	c := newFugleClient("k", t.TempDir())
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 0)
+
+	if got := c.QuotaUsed(); got != 0 {
+		t.Errorf("QuotaUsed() = %d, want 0 before any calls", got)
+	}
+	if got := c.QuotaRemaining(); got != fugleDailyLimit {
+		t.Errorf("QuotaRemaining() = %d, want %d (full daily limit)", got, fugleDailyLimit)
+	}
+
+	for i := range 100 {
+		if !c.quotaTracker.AllowCall() {
+			t.Fatalf("AllowCall returned false at iteration %d", i)
+		}
+	}
+	if got := c.QuotaUsed(); got != 100 {
+		t.Errorf("QuotaUsed() after 100 calls = %d, want 100", got)
+	}
+	if got := c.QuotaRemaining(); got != fugleDailyLimit-100 {
+		t.Errorf("QuotaRemaining() = %d, want %d", got, fugleDailyLimit-100)
+	}
+}
+
+// TestFugleClient_QuotaGateNilSafe mirrors the FinMind test: clients without
+// a tracker (nil state) must not crash. Defends against future refactors
+// that might forget to wire the tracker.
+func TestFugleClient_QuotaGateNilSafe(t *testing.T) {
+	c := &FugleClient{
+		apiKey:       "k",
+		httpClient:   &http.Client{Timeout: 1 * time.Second},
+		rateLimiter:  rate.NewLimiter(rate.Inf, 0),
+		quotaTracker: nil,
+	}
+	// Without the gate, doGet must not crash on nil tracker.
+	_, err := c.GetQuote(context.Background(), "2330")
+	if errors.Is(err, ErrFugleQuotaExhausted) {
+		t.Errorf("nil tracker should not yield ErrFugleQuotaExhausted, got %v", err)
 	}
 }

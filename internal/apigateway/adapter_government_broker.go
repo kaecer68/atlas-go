@@ -44,6 +44,28 @@ func (a *GovernmentBrokerChannelAdapter) Fetch(ctx context.Context) (*FetchResul
 	if err != nil {
 		return nil, fmt.Errorf("government_broker aggregate %s: %w", date.Format("20060102"), err)
 	}
+	// reading == nil with err == nil means "no stocks processed for the
+	// requested date" (a normal non-trading-day outcome). Surface a stub
+	// empty payload so the dashboard sees a successful fetch and the
+	// channel-health page does NOT flag it as error.
+	if reading == nil {
+		data, marshalErr := json.Marshal(struct {
+			Date   string `json:"date"`
+			Status string `json:"status"`
+		}{Date: date.Format("20060102"), Status: "no_data"})
+		if marshalErr != nil {
+			return nil, fmt.Errorf("government_broker marshal no_data: %w", marshalErr)
+		}
+		return &FetchResult{
+			Data: data,
+			Meta: FetchMetadata{
+				ChannelID:          a.Metadata().ChannelID,
+				Timestamp:          time.Now(),
+				LatencyMs:          time.Since(start).Milliseconds(),
+				RateLimitRemaining: int(a.limiter.Tokens()),
+			},
+		}, nil
+	}
 	data, err := json.Marshal(reading)
 	if err != nil {
 		return nil, fmt.Errorf("government_broker marshal: %w", err)

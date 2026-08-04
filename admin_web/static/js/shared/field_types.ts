@@ -2949,6 +2949,21 @@ export interface ProviderStatus {
   last_error?: string;
 }
 
+export interface QuotaEntry {
+  provider: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  state_file?: string;
+  updated_at: string;
+  exhausted: boolean;
+}
+
+export interface QuotaSnapshot {
+  generated_at: string;
+  entries: QuotaEntry[];
+}
+
 export interface QuotaState {
   calls_today: number;
   last_reset: string;
