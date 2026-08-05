@@ -879,9 +879,15 @@ func TestSetDegradedCallback_NilCallbackNoPanic(t *testing.T) {
 	// If we reach here without panic, the test passes.
 }
 
-// TestSetDegradedCallback_NotInvokedWhenOK verifies that the callback is
-// NOT called when all 10 channels are healthy.
-func TestSetDegradedCallback_NotInvokedWhenOK(t *testing.T) {
+// TestSetDegradedCallback_NotInvokedWhenOKAfterFirst verifies that the
+// first-OK recovery callback (PR-F) does NOT re-fire on every cache hit.
+//
+// The first observation of "ok" fires the callback (so the gateway can
+// clear stale degraded records from a previous process). After that,
+// subsequent calls within the 30s cache window hit the cache at L233
+// and never re-enter L253, so the callback is not re-invoked. This
+// protects against alert spam.
+func TestSetDegradedCallback_NotInvokedWhenOKAfterFirst(t *testing.T) {
 	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{
 		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
 		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
@@ -896,16 +902,23 @@ func TestSetDegradedCallback_NotInvokedWhenOK(t *testing.T) {
 	}}
 	svc := NewCrossMarketService(prov)
 
-	called := false
-	svc.SetDegradedCallback(func(string, []string) { called = true })
+	callCount := 0
+	svc.SetDegradedCallback(func(string, []string) { callCount++ })
 
-	_, err := svc.GetStatus(context.Background())
-	if err != nil {
-		t.Fatalf("GetStatus: %v", err)
+	// First call: should fire the recovery callback (first-OK path, PR-F).
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("first GetStatus: %v", err)
+	}
+	if callCount != 1 {
+		t.Errorf("first-OK should fire callback exactly once, got %d", callCount)
 	}
 
-	if called {
-		t.Error("callback must NOT be invoked when all channels are healthy")
+	// Second call within cache window: should NOT re-fire.
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("second GetStatus: %v", err)
+	}
+	if callCount != 1 {
+		t.Errorf("cached OK snapshot should NOT re-fire callback, got %d calls", callCount)
 	}
 }
 
@@ -951,6 +964,63 @@ func TestSetDegradedCallback_RecoveryFiresOnOK(t *testing.T) {
 	}
 	if len(fired) != 2 || fired[1] != "ok" {
 		t.Fatalf("phase 2: expected recovery callback fire with status='ok', got %v", fired)
+	}
+}
+
+// TestSetDegradedCallback_FirstSnapshotOK_StillAllowsRecovery reproduces
+// the bug that kept us10y / vix stuck on "degraded" for 9+ days
+// (PR-F kaecer 2026-08-05):
+//
+//  1. Container restart → process loads channel_health.json from disk
+//     → still has stale "degraded" records for us10y / vix from the
+//     previous process.
+//  2. The very first snapshot the new process fetches is already
+//     healthy (us10y val=4.25, vix val=18.0 are non-zero).
+//  3. shouldFire condition (crossmarket.go L278) requires
+//     prevStatus != "" for the recovery path, so the first call
+//     with prevStatus="" never fires the recovery callback.
+//  4. Subsequent calls hit the 30s cache (L233-242) so L278 is
+//     never re-evaluated; the stale "degraded" records persist
+//     indefinitely.
+//
+// The fix is to fire the callback on first-OK observation so the
+// gateway can clear any stale "degraded" health records. PR-F
+// does NOT widen the union-list (nothing to union with on first
+// call) — the gateway-side main.go:1133 fix is responsible for
+// knowing which channels to clear on a first-OK observation.
+func TestSetDegradedCallback_FirstSnapshotOK_StillAllowsRecovery(t *testing.T) {
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{
+		SPXIndex: marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 5234.5},
+		NDXIndex: marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 18432.1},
+		DJIIndex: marketdata.MacroDataPoint{Symbol: "^DJI", Value: 39850.0},
+		SOXIndex: marketdata.MacroDataPoint{Symbol: "^SOX", Value: 4890.0},
+		NVDA:     marketdata.MacroDataPoint{Symbol: "NVDA", Value: 950.0},
+		AAPL:     marketdata.MacroDataPoint{Symbol: "AAPL", Value: 220.0},
+		MSFT:     marketdata.MacroDataPoint{Symbol: "MSFT", Value: 415.0},
+		TSMADR:   marketdata.MacroDataPoint{Symbol: "TSM", Value: 180.0},
+		US10Y:    marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.25},
+		VIX:      marketdata.MacroDataPoint{Symbol: "^VIX", Value: 18.0},
+	}}
+	svc := NewCrossMarketService(prov)
+
+	var firedStatuses []string
+	svc.SetDegradedCallback(func(status string, failed []string) {
+		firedStatuses = append(firedStatuses, status)
+	})
+
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+
+	// PR-F: first-OK observation must fire the callback so the gateway
+	// can clear any stale "degraded" health records from a previous
+	// process. Without this, us10y / vix stay flagged degraded forever
+	// after the upstream data recovers.
+	if len(firedStatuses) == 0 {
+		t.Fatalf("first-snapshot-OK did not fire callback — gateway cannot clear stale degraded records from previous process (regression: us10y/vix stuck 9+ days)")
+	}
+	if firedStatuses[0] != "ok" {
+		t.Errorf("expected first callback status=\"ok\", got %q", firedStatuses[0])
 	}
 }
 
@@ -1006,5 +1076,56 @@ func TestDegradedCallbackCount_NotInvokedWhenOK(t *testing.T) {
 	got := m.DegradedCallbackCount.WithLabelValues("crossmarket", "missing_us_index_data", "degraded").Value()
 	if got != 0 {
 		t.Errorf("DegradedCallbackCount = %v, want 0", got)
+	}
+}
+
+// TestUSMacroFields_MatchesDetectorChannels pins the USMacroFields
+// slice to the same 10 channel IDs that detectDegradedUSStatus
+// monitors. PR-F (kaecer 2026-08-05) introduced this slice so the
+// main.go recovery callback can iterate it to clear stale "degraded"
+// records when the snapshot is healthy. If a future commit adds a
+// channel to detectDegradedUSStatus without updating USMacroFields,
+// stale degraded records will accumulate again — this test catches
+// that drift.
+func TestUSMacroFields_MatchesDetectorChannels(t *testing.T) {
+	// Provoke the detector by giving it an all-empty snapshot. All 10
+	// fields will be marked failed, so we can compare the set of failed
+	// channel IDs against USMacroFields.
+	prov := &fakeMacroProvider{snap: marketdata.MacroDataSnapshot{}}
+	svc := NewCrossMarketService(prov)
+
+	var failedChannels []string
+	svc.SetDegradedCallback(func(status string, failed []string) {
+		if status == "degraded" {
+			failedChannels = failed
+		}
+	})
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if len(failedChannels) != len(USMacroFields) {
+		t.Fatalf("detector marked %d channels failed, but USMacroFields has %d entries: detector=%v macrofields=%v",
+			len(failedChannels), len(USMacroFields), failedChannels, USMacroFields)
+	}
+	detected := make(map[string]bool, len(failedChannels))
+	for _, ch := range failedChannels {
+		detected[ch] = true
+	}
+	for _, ch := range USMacroFields {
+		if !detected[ch] {
+			t.Errorf("USMacroFields entry %q is not monitored by detectDegradedUSStatus — stale records for this channel will never be cleared by the recovery callback", ch)
+		}
+	}
+	for ch := range detected {
+		found := false
+		for _, m := range USMacroFields {
+			if m == ch {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("detectDegradedUSStatus marks %q as failed but USMacroFields does not list it — main.go recovery loop will not clear this channel", ch)
+		}
 	}
 }

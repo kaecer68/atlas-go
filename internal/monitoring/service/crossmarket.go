@@ -192,6 +192,30 @@ func NewCrossMarketService(provider marketdata.MacroDataProvider) *CrossMarketSe
 	}
 }
 
+// USMacroFields is the canonical list of macro-snapshot channel IDs that
+// detectDegradedUSStatus monitors. Exported so cmd/atlas/main.go can
+// iterate the same set when wiring the recovery callback into the
+// UnifiedHealthStore (PR-F, kaecer 2026-08-05). Keeping a single source
+// of truth prevents the recovery loop from drifting out of sync with
+// the detector (a previous code review found the detector added a
+// channel but the main.go recovery loop was never updated, leaving the
+// new channel stuck on "degraded" forever).
+//
+// Order matches the field order in MacroDataSnapshot and the check
+// order in detectDegradedUSStatus.
+var USMacroFields = []string{
+	"us_spx",
+	"us_ndx",
+	"us_dji",
+	"sox_index",
+	"us_nvda",
+	"us_aapl",
+	"us_msft",
+	"tsm_adr",
+	"us10y",
+	"vix",
+}
+
 // UpdateCorrelation pushes a new daily return pair (SPX, TWSE proxy = SOX)
 // into the legacy SPX-TWSE rolling correlation engine. Preserved for
 // WarmupFromHistory feeds historical snapshots into all rolling correlation
@@ -275,7 +299,17 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	changed := status != prevStatus || !stringSlicesEqual(failed, prevFailed) || !stringSlicesEqual(stale, prevStale)
 	// Fire on transition INTO degraded (covers both "stale" and "degraded")
 	// AND on transition back TO ok from a non-ok state (recovery path).
-	shouldFire := cb != nil && changed && (status != prevStatus) && ((status != "ok") || (prevStatus != "" && prevStatus != "ok"))
+	//
+	// PR-F (kaecer 2026-08-05): also fire on the very first observation
+	// when the snapshot is "ok" and prevStatus is "" (process just
+	// started). Without this, the recovery callback never runs for a
+	// fresh process, so any "degraded" health records left over from
+	// the previous process (e.g. us10y / vix stuck for 9+ days) are
+	// never cleared — the channel_health.json file persists across
+	// restarts, but the in-memory lastDegradedStatus resets to "".
+	// The callback in main.go now ignores the empty "failed" list and
+	// iterates USMacroFields directly to clear every monitored channel.
+	shouldFire := cb != nil && changed && (status != prevStatus) && ((status != "ok") || (prevStatus != "" && prevStatus != "ok") || (status == "ok" && prevStatus == ""))
 	if changed || prevStatus == "" {
 		s.lastDegradedStatus = status
 		s.lastFailedChannels = failed
