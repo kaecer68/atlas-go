@@ -2,6 +2,20 @@
 
 <!-- 1-3 句話描述這個 PR 做了什麼、為什麼。 -->
 
+## Root Cause
+
+<!-- 為什麼需要這個 PR（事實為本,不是猜測）。若有對應的 issue / discussion / 監控告警,link 到來源。Bug fix PR 必填（事實 + log/source code 佐證）。Feature / Refactor / Docs / Chore 可填「N/A」並簡述動機。詳見 docs/operations/pr-lifecycle.md §2.3。 -->
+
+對應 issue / discussion:
+<!-- 範例: Fixes #1457, Related #1460 -->
+
+## Verification
+
+<!-- 跑了什麼 test,結果是什麼。`make ci-full` 結果必填（見 docs/operations/pr-lifecycle.md §2.1.2）。Bug fix PR 必含「重現步驟 + 修後驗證」。Code PR 必含「make ci-gate 過 / make ci-full 過」證據。 -->
+
+`make ci-gate` 結果:（過 / 失敗 — 附 log 截圖或最後 10 行）
+`make ci-full` 結果:（過 / 失敗 — 附 log 截圖或最後 10 行 / KNOWN: 跳過,原因）
+
 ## Type of change
 
 <!-- 勾選所有適用項 -->

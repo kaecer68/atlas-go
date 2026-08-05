@@ -43,10 +43,10 @@ git push -u origin <branch>
 gh pr create --title "<type>(<scope>): <subject>" --body-file /tmp/pr-body-<N>.md
 ```
 
-PR body **MUST 含三段**：
+PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summary / Root Cause / Verification 段）：
 - **Summary** — 修了什麼 / 加了什麼
-- **Root Cause** — 為什麼壞（事實為本,不是猜測）
-- **Verification** — 跑了什麼 test,結果是什麼（含 ci-full 結果）
+- **Root Cause** — 為什麼壞（事實為本,不是猜測,link 到 issue / log / source code）
+- **Verification** — 跑了什麼 test,結果是什麼（含 `make ci-full` 結果 + production 驗收 checklist 適用時）
 
 ## 3. PR-Review — Reviewer 檢查
 
@@ -75,6 +75,13 @@ PR body **MUST 含三段**：
 gh pr merge <N> --squash --delete-branch --admin
 ```
 
+> **⚠️ `--admin` 繞過 GitHub branch protection 的必要審查批准**。**僅在以下三項全部滿足後**才可使用：
+> 1. `make ci-gate` 過（§2.1.1）
+> 2. `make ci-full` 過（§2.1.2）
+> 3. Reviewer approve（§3.2,human reviewer 已明確 approve comment）
+>
+> 若有 1-2 項未滿足但仍要 merge,改用 `gh pr merge <N> --squash --delete-branch`（不帶 `--admin`）,會觸發 branch protection 要求 review。**不可靜默繞過審查**。
+
 ### 4.2 合併後 git state
 
 ```bash
@@ -84,11 +91,34 @@ git pull --ff-only
 git log --oneline -3  # 確認 HEAD 是新 merge
 ```
 
-### 4.3 刪除本地 branch（multi-cli protocol 規範）
+### 4.3 刪除本地 branch + worktree（multi-cli protocol 規範）
+
+**若用 worktree 開發**（multi-cli protocol 默認）：
+
+```bash
+# 1. 確認當前在 worktree 路徑
+pwd  # 應在 /Users/kaecer/workspace/<slug>,非 main
+
+# 2. 切回 main worktree
+cd /Users/kaecer/workspace/atlas
+
+# 3. 移除 worktree（force 必要時）
+git worktree remove --force /Users/kaecer/workspace/<slug>
+
+# 4. 刪除本地 branch（已被 --delete-branch 從 remote 刪）
+git branch -d <branch>
+
+# 5. 清理 stale worktree reference
+git worktree prune
+```
+
+**若直接在 main worktree 開發**（不推薦）：
 
 ```bash
 git branch -d <branch>
 ```
+
+完整 checklist 見 `docs/multi-cli-protocol.md` §Post-merge cleanup。
 
 ## 5. Post-Merge — Production 驗收（**最容易漏的步驟**）
 
