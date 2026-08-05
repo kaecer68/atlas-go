@@ -40,6 +40,15 @@ type KnownIssue struct {
 // the bar for declaring a "known issue" should be high — it requires
 // explicit human sign-off, not a runtime heuristic.
 var knownIssues = map[string]KnownIssue{
+	// Note (PR-D, 2026-08-05): some channel_health records come in with
+	// dash-separated IDs (e.g. "twse-oddlot", "twse-etf") instead of
+	// underscore-separated ones (e.g. "twse_oddlot", "twse_etf"). Both
+	// refer to the same upstream TWSE issue, so we register both forms
+	// with the same description. The dash-separated form is the
+	// runtime-observed ID; the underscore-separated form is the
+	// provider-returned ID (see internal/marketdata/twse_*_provider.go).
+	// A separate issue should investigate why the runtime pipeline
+	// produces two different IDs for the same logical channel.
 	"twse_etf": {
 		Key:          "twse_etf_upstream_60d",
 		Title:        "TWSE ETF subscription data: upstream unresponsive",
@@ -47,11 +56,29 @@ var knownIssues = map[string]KnownIssue{
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
 	},
+	// dash alias of twse_etf — same upstream issue, different channel
+	// ID observed at runtime. See note above.
+	"twse-etf": {
+		Key:          "twse_etf_upstream_60d_dash_alias",
+		Title:        "TWSE ETF subscription data: upstream unresponsive (dash alias)",
+		Description:  "Same upstream issue as twse_etf. The runtime channel_health record carries the channel ID \"twse-etf\" (dash-separated) instead of \"twse_etf\" (underscore-separated). This alias exists so the dashboard can render the known-issue badge on both forms until the channel-ID naming inconsistency is investigated and unified upstream.",
+		DocumentedAt: "2026-08-05T01:00:00Z",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
+	},
 	"twse_oddlot": {
 		Key:          "twse_oddlot_upstream_60d",
 		Title:        "TWSE odd-lot trading data: upstream schema changed",
 		Description:  "TWSE's odd-lot trading data endpoint (www.twse.com.tw / oddlot) silently changed its response schema in 2026-Q2. Our parser at internal/marketdata/twse_oddlot_provider.go expects the legacy shape and returns zero rows. Workaround: odd-lot flow is excluded from retail signal calculations; primary flow data uses the twse_capital_flow channel which is healthy.",
 		DocumentedAt: "2026-08-05T00:00:00Z",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
+	},
+	// dash alias of twse_oddlot — same upstream issue, different channel
+	// ID observed at runtime. See note above.
+	"twse-oddlot": {
+		Key:          "twse_oddlot_upstream_60d_dash_alias",
+		Title:        "TWSE odd-lot trading data: upstream schema changed (dash alias)",
+		Description:  "Same upstream issue as twse_oddlot. The runtime channel_health record carries the channel ID \"twse-oddlot\" (dash-separated) instead of \"twse_oddlot\" (underscore-separated). This alias exists so the dashboard can render the known-issue badge on both forms until the channel-ID naming inconsistency is investigated and unified upstream.",
+		DocumentedAt: "2026-08-05T01:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
 	},
 }
