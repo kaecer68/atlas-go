@@ -21,6 +21,7 @@
 | 知識類型 | 歸屬位置 |
 |----------|---------|
 | 跨模組全域規則 | [`docs/reference/traps.md`](docs/reference/traps.md) |
+| PR lifecycle（改 code → ci-full → gh pr create → merge → production 驗收 → done） | [`docs/operations/pr-lifecycle.md`](docs/operations/pr-lifecycle.md) |
 | 模組內部陷阱/API/流程 | `internal/<mod>/AGENTS.md`（15 個保留位置，見 `internal/AGENTS_INDEX.md`） |
 | 模組技術規格 | `docs/specs/<topic>.md` |
 | 金融工程 / 操作 playbook | `docs/guides/<topic>.md` |
