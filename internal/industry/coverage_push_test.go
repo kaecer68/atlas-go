@@ -760,6 +760,9 @@ func TestClassifyFinMindError_NoDataPattern(t *testing.T) {
 	cases := []struct{ msg, want string }{
 		{"finmind: no month revenue data for 6271.TW 2026-08", "no_data"},
 		{"finmind revenue: no data for 6271.TW in last 3 months", "no_data"},
+		// AggregateIndustry 自己的彙總 error (production 觀察到的 last_error pattern)
+		// 修法: 在 classifyFinMindError 加 "no valid data" substring 匹配 (commit fixup)
+		{"data_aggregator: no valid data for industry \"leo_satellite\"", "no_data"},
 	}
 	for _, tc := range cases {
 		if got := classifyFinMindError(fmt.Errorf("%s", tc.msg)); got != tc.want {

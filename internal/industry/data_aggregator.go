@@ -357,7 +357,7 @@ func writeCalibratedConfig(configPath string, results []CalibrationResult) error
 // 判斷順序（最具體到最廣）：
 //  1. errors.Is(err, marketdata.ErrQuotaExhausted) → "quota"
 //  2. errors.Is(err, marketdata.ErrRateLimited)    → "rate_limited"
-//  3. 字串匹配 "no month revenue data" / "no data" → "no_data"
+//  3. 字串匹配 "no month revenue data" / "no data" / "no valid data" → "no_data"
 //  4. 字串匹配 "cannot parse" / "decode"            → "parse_error"
 //  5. 字串匹配 "http request" / "i/o timeout" / "context deadline"
 //     / "connection refused" / "no such host"      → "transport"
@@ -378,7 +378,8 @@ func classifyFinMindError(err error) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "no month revenue data"),
-		strings.Contains(msg, "no data"):
+		strings.Contains(msg, "no data"),
+		strings.Contains(msg, "no valid data"):
 		return "no_data"
 	case strings.Contains(msg, "cannot parse"),
 		strings.Contains(msg, "decode"):
