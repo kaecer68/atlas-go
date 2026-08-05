@@ -33,6 +33,16 @@ func NewTaiwanVolatilityProvider() *TaiwanVolatilityProvider {
 func (p *TaiwanVolatilityProvider) Name() string { return taiwanVolatilityChannel }
 
 // FetchSnapshot fetches ^TWII daily bars from Yahoo and computes historical volatility.
+//
+// PR-B (kaecer 2026-08-05): handles the "stale cache, fresh data available" race
+// where the 60s TTL is still valid but RegularMarketTime is from a previous
+// trading day. In that case the stale entry is invalidated and a single refetch
+// is attempted. If the refetched response is also stale (Yahoo itself lagging,
+// or upstream broken), the error is reported with a clear message identifying
+// both the cache and refetch failure modes.
+//
+// Refetched-but-stale data is NEVER written back to the cache, so the next
+// FetchSnapshot call gets a clean state (cache miss → fresh fetch → success).
 func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
 	s := getYahooSession()
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
@@ -44,31 +54,65 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		"range":    taiwanVolatilityRange,
 	}
 
-	// Check shared cache first (P1 B03: avoids duplicate ^TWII fetch)
-	var body []byte
-	fromCache := false
-	if cached := twiiCache.get(params["interval"], params["range"]); cached != nil {
-		body = cached
-		fromCache = true
-	} else {
-		var err error
-		body, err = s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
+	var (
+		body      []byte
+		fromCache bool
+		refetched bool
+	)
+
+	// Loop bounded to 2 iterations: initial fetch + (optional) one refetch
+	// after stale-cache invalidation. A refetch that is also stale returns
+	// the error directly, so the loop never spins.
+	for {
+		body = nil
+		fromCache = false
+		if cached := twiiCache.get(params["interval"], params["range"]); cached != nil {
+			body = cached
+			fromCache = true
+		} else {
+			fetched, err := s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
+			if err != nil {
+				return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
+			}
+			body = fetched
+		}
+
+		chartResp, err := UnmarshalYahooChart(body)
 		if err != nil {
 			return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
 		}
-		twiiCache.set(body, params["interval"], params["range"])
+
+		result := chartResp.Chart.Result
+		if len(result) == 0 {
+			return MacroDataSnapshot{}, fmt.Errorf("%s: no chart result", taiwanVolatilityChannel)
+		}
+
+		timestamp := result[0].Meta.RegularMarketTime
+		if twiiCacheTimestampIsCurrentTradingDay(timestamp) {
+			// Acceptable. Write to cache only if we fetched it; never
+			// overwrite with stale data.
+			if !fromCache {
+				twiiCache.set(body, params["interval"], params["range"])
+			}
+			break
+		}
+
+		// Stale timestamp. If we've already refetched once, both cache
+		// and refetch are stale — surface the error so the channel
+		// health reflects the real upstream problem.
+		if refetched {
+			return MacroDataSnapshot{}, fmt.Errorf("%s: cached and refetched ^TWII both carry stale timestamp %d; refusing to compute historical volatility from stale data",
+				taiwanVolatilityChannel, timestamp)
+		}
+
+		// First attempt: invalidate the stale entry and refetch once.
+		twiiCache.invalidate(params["interval"], params["range"])
+		refetched = true
 	}
 
-	chartResp, err := UnmarshalYahooChart(body)
-	if err != nil {
-		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
-	}
-
+	// `body` is acceptable from this point forward.
+	chartResp, _ := UnmarshalYahooChart(body)
 	result := chartResp.Chart.Result
-	if len(result) == 0 {
-		return MacroDataSnapshot{}, fmt.Errorf("%s: no chart result", taiwanVolatilityChannel)
-	}
-
 	closes := result[0].Indicators.Quote[0].Close
 	if len(closes) < 21 {
 		return MacroDataSnapshot{}, fmt.Errorf("%s: insufficient bars (%d, need >=21) for volatility_20d",
@@ -90,11 +134,6 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 	// Compute annualized 20-day volatility: std(log_returns) * sqrt(252)
 	latest := validCloses[len(validCloses)-1]
 	timestamp := result[0].Meta.RegularMarketTime
-
-	if fromCache && !twiiCacheTimestampIsCurrentTradingDay(timestamp) {
-		return MacroDataSnapshot{}, fmt.Errorf("%s: cached ^TWII data is stale (timestamp %d, not current trading day); refusing to compute historical volatility from stale cache",
-			taiwanVolatilityChannel, timestamp)
-	}
 
 	vol := computeAnnualizedVolatility20D(validCloses)
 	if math.IsNaN(vol) || math.IsInf(vol, 0) {
