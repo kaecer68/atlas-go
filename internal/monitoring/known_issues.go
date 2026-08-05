@@ -81,6 +81,29 @@ var knownIssues = map[string]KnownIssue{
 		DocumentedAt: "2026-08-05T01:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
 	},
+
+	// PR-G (kaecer 2026-08-05). The runtime channel_health record
+	// \"taifex-daily\" (dash-separated) is a dead alias — it has not been
+	// the canonical channel ID since taifex_daily was registered with the
+	// underscore form in apigateway/register_adapters.go. No atlas code
+	// path writes to \"taifex-daily\" today, so its last_success timestamp
+	// is frozen at 2026-06-04 (when the alias was last touched) and the
+	// record stays at status=\"error\" with a stale \"i/o timeout\" DNS
+	// error message even though openapi.taifex.com.tw resolves and
+	// responds 200 from inside the atlas container.
+	//
+	// This entry is the dead-alias counterpart of the twse-etf / twse-oddlot
+	// entries above: the underlying taifex_daily channel is healthy (last
+	// success 2026-08-05 03:54 UTC), so the dashboard badge exists to
+	// mark the dead alias as a non-actionable stale record rather than a
+	// real upstream failure.
+	"taifex-daily": {
+		Key:          "taifex_daily_dead_alias",
+		Title:        "TAIFEX daily (dash alias): dead channel ID",
+		Description:  "The channel ID \"taifex-daily\" (dash-separated) is a dead alias — atlas registered the canonical channel as \"taifex_daily\" (underscore-separated) in apigateway/register_adapters.go and no code path writes to the dash form. The last_success timestamp is frozen at 2026-06-04 with a stale \"i/o timeout\" DNS error, but openapi.taifex.com.tw currently resolves and returns 200 from inside the atlas container. The canonical taifex_daily channel is healthy. This entry exists so the dashboard renders a known-issue badge on the dead alias instead of a confusing red error. The root cause of the dead alias should be investigated separately (likely an early-version registration that was never cleaned up when the channel was renamed).",
+		DocumentedAt: "2026-08-05T03:50:00Z",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+taifex_daily_alias",
+	},
 }
 
 // LookupKnownIssue returns the KnownIssue for the given channelID, or
