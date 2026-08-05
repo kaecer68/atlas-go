@@ -239,9 +239,25 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	return finmindResp.Data, nil
 }
 
+// lastDayOfMonth returns the last calendar day of (year, month) — 28/29/30/31
+// depending on the month and leap year. Uses Go's time.Date normalisation:
+// time.Date(y, m+1, 0, ...) is the idiomatic way to get the last day of
+// month m in year y.
+//
+// PR-E (kaecer 2026-08-05 dispatch). This replaces the previous hardcoded
+// "31" in endDate construction, which caused FinMind to return
+// "parameter YYYY-MM-31 is illegal" errors for any month with 30 or
+// fewer days (Feb/Apr/Jun/Sep/Nov). The 80+ day auto_cycle_update stale
+// issue documented in v3.0 §A 問題 5 is rooted in this bug, not in
+// upstream TWSE as the v3.0 report assumed. See post-restart-e2e-
+// verification-2026-08-05.md §3 for the full log evidence.
+func lastDayOfMonth(year int, month time.Month) int {
+	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+}
+
 func (c *FinMindClient) GetMonthRevenue(ctx context.Context, symbol string, year int, month int) (float64, error) {
 	startDate := fmt.Sprintf("%d-%02d-01", year, month)
-	endDate := fmt.Sprintf("%d-%02d-31", year, month)
+	endDate := fmt.Sprintf("%d-%02d-%02d", year, month, lastDayOfMonth(year, time.Month(month)))
 
 	data, err := c.fetchDataset(ctx, "TaiwanStockMonthRevenue", symbol, startDate, endDate)
 	if err != nil {
@@ -262,7 +278,7 @@ func (c *FinMindClient) GetMonthRevenue(ctx context.Context, symbol string, year
 
 func (c *FinMindClient) GetFinancialStatements(ctx context.Context, symbol string, year int, quarter int) (map[string]float64, error) {
 	startDate := fmt.Sprintf("%d-01-01", year)
-	endDate := fmt.Sprintf("%d-12-31", year)
+	endDate := fmt.Sprintf("%d-12-%02d", year, lastDayOfMonth(year, time.December))
 
 	data, err := c.fetchDataset(ctx, "TaiwanStockFinancialStatements", symbol, startDate, endDate)
 	if err != nil {

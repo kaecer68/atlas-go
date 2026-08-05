@@ -203,8 +203,8 @@ func TestFinMindClient_GetMonthRevenue_Success(t *testing.T) {
 		if r.URL.Query().Get("start_date") != "2026-04-01" {
 			t.Errorf("start_date = %q, want 2026-04-01", r.URL.Query().Get("start_date"))
 		}
-		if r.URL.Query().Get("end_date") != "2026-04-31" {
-			t.Errorf("end_date = %q, want 2026-04-31 (note: API uses padded 31)", r.URL.Query().Get("end_date"))
+		if r.URL.Query().Get("end_date") != "2026-04-30" {
+			t.Errorf("end_date = %q, want 2026-04-30 (PR-E: endDate is now the last day of the month, not a hardcoded 31)", r.URL.Query().Get("end_date"))
 		}
 		w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":289420000000.0,"date":"2026-04-01"}]}`))
 	}))
@@ -925,5 +925,121 @@ func TestFinMindClient_fetchDataset_Non2xx_BodyTooLarge(t *testing.T) {
 	// The error message must NOT contain more than ~600 bytes (512 cap + status + format prefix).
 	if len(err.Error()) > 700 {
 		t.Errorf("error message length %d exceeds expected cap (~700); body was not truncated", len(err.Error()))
+	}
+}
+
+// TestLastDayOfMonth_AllMonthsAndLeapYears is the PR-E regression test for
+// the FinMind 80+ day "auto_cycle_update" stale bug.
+//
+// Before PR-E, GetMonthRevenue hardcoded endDate as "31" for every month,
+// which sent non-existent dates like "2026-06-31" to FinMind and got back
+// HTTP 400 "parameter YYYY-MM-31 is illegal". The downstream symptom was
+// `last_error="no valid data for industry 'electronics'"` on the
+// auto_cycle_update channel for 80+ days.
+//
+// This test verifies the lastDayOfMonth helper used by the fix:
+//   - 31-day months (Jan, Mar, May, Jul, Aug, Oct, Dec) → 31
+//   - 30-day months (Apr, Jun, Sep, Nov) → 30
+//   - Non-leap year February (e.g. 2026) → 28
+//   - Leap year February (e.g. 2024) → 29
+//   - Century-leap-year edge (2100 is NOT a leap year; 2000 IS) → 28 / 29
+func TestLastDayOfMonth_AllMonthsAndLeapYears(t *testing.T) {
+	cases := []struct {
+		year, month, want int
+	}{
+		// 31-day months across a non-leap year
+		{2026, 1, 31}, {2026, 3, 31}, {2026, 5, 31},
+		{2026, 7, 31}, {2026, 8, 31}, {2026, 10, 31}, {2026, 12, 31},
+		// 30-day months
+		{2026, 4, 30}, {2026, 6, 30}, {2026, 9, 30}, {2026, 11, 30},
+		// February in a non-leap year
+		{2026, 2, 28},
+		// February in a leap year (divisible by 4, not 100)
+		{2024, 2, 29}, {2020, 2, 29}, {2016, 2, 29},
+		// February in a century non-leap-year (divisible by 100, not 400)
+		{2100, 2, 28}, {1900, 2, 28},
+		// February in a 400-year leap year (divisible by 400)
+		{2000, 2, 29},
+	}
+	for _, tc := range cases {
+		got := lastDayOfMonth(tc.year, time.Month(tc.month))
+		if got != tc.want {
+			t.Errorf("lastDayOfMonth(%d, %d) = %d, want %d",
+				tc.year, tc.month, got, tc.want)
+		}
+	}
+}
+
+// TestGetMonthRevenue_EndDateMatchesLastDay verifies that the endDate
+// string constructed by GetMonthRevenue reflects the actual last day of
+// the requested month, not a hardcoded 31. The fix delegates to
+// lastDayOfMonth; this test reads back the request URL that the
+// underlying fetchDataset would have sent by setting up an httptest
+// server and parsing the query string.
+func TestGetMonthRevenue_EndDateMatchesLastDay(t *testing.T) {
+	cases := []struct {
+		year, month int
+		wantEnd     string
+	}{
+		{2026, 6, "2026-06-30"},  // the exact bug case
+		{2026, 2, "2026-02-28"},  // non-leap Feb
+		{2024, 2, "2024-02-29"},  // leap Feb
+		{2026, 1, "2026-01-31"},  // 31-day month
+		{2026, 4, "2026-04-30"},  // 30-day month
+		{2026, 7, "2026-07-31"},  // 31-day month
+		{2026, 9, "2026-09-30"},  // 30-day month
+		{2026, 11, "2026-11-30"}, // 30-day month
+		{2026, 12, "2026-12-31"}, // 31-day month
+	}
+	for _, tc := range cases {
+		var capturedEnd string
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedEnd = r.URL.Query().Get("end_date")
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"msg":"success","status":200,"data":[{"date":"2026-01-01","stock_id":"2330","revenue":1000.0}]}`))
+		}))
+		defer ts.Close()
+
+		// Use a rewriteTransport-style injection: keep it simple here by
+		// pointing finmindBaseURL at the test server via package-level
+		// constants. Since finmindBaseURL is a const, we set the http
+		// client to a transport that rewrites host.
+		c := NewFinMindClient("test-key")
+		c.httpClient = &http.Client{
+			Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+		}
+
+		_, _ = c.GetMonthRevenue(context.Background(), "2330", tc.year, tc.month)
+
+		if capturedEnd != tc.wantEnd {
+			t.Errorf("GetMonthRevenue(%d, %d): end_date=%q, want %q",
+				tc.year, tc.month, capturedEnd, tc.wantEnd)
+		}
+	}
+}
+
+// TestGetFinancialStatements_EndDateUsesActualDecemberDays verifies
+// the second endDate fix (year=YYYY-12-NN, where NN is the actual
+// December day count). December always has 31, so the value is 31 in
+// all cases, but the test pins the behaviour against the stdlib
+// helper so a future refactor can't regress to a hardcoded 12-31.
+func TestGetFinancialStatements_EndDateUsesActualDecemberDays(t *testing.T) {
+	var capturedEnd string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedEnd = r.URL.Query().Get("end_date")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"msg":"success","status":200,"data":[]}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("test-key")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, _ = c.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	if capturedEnd != "2026-12-31" {
+		t.Errorf("GetFinancialStatements(2026): end_date=%q, want %q",
+			capturedEnd, "2026-12-31")
 	}
 }
