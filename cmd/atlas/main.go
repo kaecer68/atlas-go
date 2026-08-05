@@ -1123,16 +1123,27 @@ func run(args []string, deps appDeps) error {
 							})
 						return
 					}
-					// Recovery path (2026-08-04): when status is "ok", clear any
-					// previously-recorded degraded status for the channels
-					// that were failing. Without this, us10y / vix stayed
-					// flagged as degraded for 9 days even after the macro
-					// snapshot recovered. The callback in crossmarket.go
-					// service only fires on transitions now (the snapshot
-					// status going from non-ok to ok triggers this branch).
-					for _, ch := range failed {
+					// Recovery path (PR-F, kaecer 2026-08-05): when status is
+					// "ok", clear any previously-recorded "degraded" status
+					// for the macro channels. The original 2026-08-04 code
+					// iterated the callback's `failed` parameter, but on
+					// recovery that list is empty (snapshot is healthy, so
+					// no channels are currently failing) — the loop was a
+					// no-op and us10y / vix stayed flagged degraded for 9
+					// days even after the upstream data recovered.
+					//
+					// PR-F fix: iterate USMacroFields (the canonical
+					// detector list) directly, so EVERY monitored channel
+					// is cleared regardless of what `failed` contains.
+					// This also handles the first-OK-after-restart case
+					// where the process is loading stale "degraded"
+					// records from channel_health.json.
+					cleared := 0
+					for _, ch := range monitoringservice.USMacroFields {
 						_ = gateway.Health().Record(ch, "ok", "crossmarket snapshot recovered")
+						cleared++
 					}
+					log.Printf("[CrossMarket] recovery: cleared %d macro channels (status=ok)", cleared)
 				})
 				log.Printf("[CrossMarket] degraded-data callback wired to UnifiedHealthStore + Monitor")
 			}
