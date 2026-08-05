@@ -72,6 +72,19 @@ func (c *taiwanIndexCache) get(interval, rng string) []byte {
 	return entry.data
 }
 
+// invalidate removes the cached entry for the given interval/range.
+// Used by TaiwanVolatilityProvider when it sees the cached Yahoo ^TWII
+// response carries a RegularMarketTime from a previous trading day (e.g.
+// Monday's close cached at 9:00, re-read at 9:01 on Tuesday still hits
+// the 60s TTL but the data is no longer current). Without invalidate,
+// every FetchSnapshot in the next 60s returns the stale error from
+// twiiCacheTimestampIsCurrentTradingDay.
+func (c *taiwanIndexCache) invalidate(interval, rng string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.items, twiiKey(interval, rng))
+}
+
 // set stores data with a TTL expiration.
 func (c *taiwanIndexCache) set(data []byte, interval, rng string) {
 	c.mu.Lock()
