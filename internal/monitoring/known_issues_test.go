@@ -20,7 +20,7 @@ import (
 // the dashboard renders the known-issue badge regardless of which form
 // the runtime channel_health record carries.
 func TestLookupKnownIssue_ReturnsRegisteredEntry(t *testing.T) {
-	for _, id := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot"} {
+	for _, id := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot", "taifex-daily"} {
 		issue := LookupKnownIssue(id)
 		if issue == nil {
 			t.Errorf("%q should have a known issue (PR-C + PR-D), got nil", id)
