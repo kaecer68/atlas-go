@@ -2087,6 +2087,7 @@ func run(args []string, deps appDeps) error {
 				FinMindClient:   nil,
 				MaturityTracker: maturityTracker,
 				CalProvider:     monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state")),
+				Collector:       collector,
 			})
 
 			taskMgr.Start(sysCtx)

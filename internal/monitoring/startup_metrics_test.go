@@ -290,3 +290,66 @@ func TestRecordStage3LedgerRecords_NilCollectorAndNilStoreAreSafe(t *testing.T) 
 	RecordStage3LedgerRecords(NewMetricsCollector(), nil)
 	RecordStage3LedgerRecords(nil, ledger.NewJSONLEventFlowPredictionStore(t.TempDir()))
 }
+
+// TestRecordDataAggregatorFailure_IncrementsCounter 驗證 RecordDataAggregatorFailure
+// 會建立 atlas_data_aggregator_failures_total counter,帶 industry × kind label。
+// 用 kind="no_data" 模擬「FinMind 月營收回空 array」這個 auto_cycle_update 最常見的失敗模式。
+func TestRecordDataAggregatorFailure_IncrementsCounter(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordDataAggregatorFailure(c, "electronics", "no_data")
+
+	m, ok := c.GetMetric(MetricDataAggregatorFailures, map[string]string{
+		"industry": "electronics",
+		"kind":     "no_data",
+	})
+	if !ok {
+		t.Fatalf("expected metric %q to be recorded with industry=electronics, kind=no_data", MetricDataAggregatorFailures)
+	}
+	if m.Value != 1 {
+		t.Errorf("expected value 1, got %v", m.Value)
+	}
+	if m.Type != MetricTypeCounter {
+		t.Errorf("expected counter type, got %q", m.Type)
+	}
+}
+
+// TestRecordDataAggregatorFailure_DifferentKindsAreSeparateLabels 驗證不同 kind 不會互相覆蓋,
+// 而是各自獨立 counter entry（否則就丟失根因分佈的可觀察性）。
+func TestRecordDataAggregatorFailure_DifferentKindsAreSeparateLabels(t *testing.T) {
+	c := NewMetricsCollector()
+	RecordDataAggregatorFailure(c, "leo_satellite", "no_data")
+	RecordDataAggregatorFailure(c, "leo_satellite", "no_data")
+	RecordDataAggregatorFailure(c, "leo_satellite", "quota")
+
+	for _, tc := range []struct {
+		kind string
+		want float64
+	}{
+		{"no_data", 2},
+		{"quota", 1},
+	} {
+		m, ok := c.GetMetric(MetricDataAggregatorFailures, map[string]string{
+			"industry": "leo_satellite",
+			"kind":     tc.kind,
+		})
+		if !ok {
+			t.Fatalf("expected metric for kind=%q", tc.kind)
+		}
+		if m.Value != tc.want {
+			t.Errorf("kind=%q: expected %v, got %v", tc.kind, tc.want, m.Value)
+		}
+	}
+}
+
+// TestRecordDataAggregatorFailure_NilCollectorAndEmptyInputs 驗證 nil collector 跟空字串輸入都安全。
+// nil collector 是 bootstrap 早期或 test 的合理輸入；空字串則會建立 label="" 的孤立 Prometheus entry,必須拒絕。
+func TestRecordDataAggregatorFailure_NilCollectorAndEmptyInputs(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("RecordDataAggregatorFailure panicked: %v", r)
+		}
+	}()
+	RecordDataAggregatorFailure(nil, "electronics", "no_data")            // nil collector
+	RecordDataAggregatorFailure(NewMetricsCollector(), "", "no_data")     // empty industry
+	RecordDataAggregatorFailure(NewMetricsCollector(), "electronics", "") // empty kind
+}

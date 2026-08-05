@@ -566,6 +566,12 @@ export interface CorrelationResponse {
   fallback_reason?: string;
 }
 
+export interface CoverageReport {
+  updated_at: string;
+  finmind_size: number;
+  industries: Record<string, IndustryCover>;
+}
+
 export interface CrossFootCheck {
   is_balanced: boolean;
   portfolio_unrealized: number;
@@ -1759,6 +1765,14 @@ export interface IndustryContextItem {
   cycle_confidence: number;
   seasonal_multiplier: number;
   systemic_importance: number;
+}
+
+export interface IndustryCover {
+  industry_id: string;
+  total_stocks: number;
+  covered_stocks: string[];
+  missing_stocks: string[];
+  coverage_ratio: number;
 }
 
 export interface IndustryCycleFactorScore {

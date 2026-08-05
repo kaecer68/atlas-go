@@ -3,6 +3,7 @@ package industry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func TestDataAggregator_NilFinMind(t *testing.T) {
 	tracker := NewCycleTracker()
 	tree := DefaultClassification()
 
-	a := NewDataAggregator(tracker, tree, nil)
+	a := NewDataAggregator(tracker, tree, nil, nil)
 	if a == nil {
 		t.Fatal("NewDataAggregator returned nil")
 	}
@@ -727,4 +728,112 @@ func TestCycleStatusCard_GlobalCalibrationAndSupplyChainSignal(t *testing.T) {
 
 	score := builder.cyclePositionScore("semiconductor")
 	_ = score // value is delegated to cycleTracker.GetContinuousPhaseScore; not bounded here
+}
+
+// ---------------------------------------------------------------------------
+// classifyFinMindError — DataAggregator 失敗 metric kind 分類
+// ---------------------------------------------------------------------------
+
+// TestClassifyFinMindError_QuotaExhausted 驗證 marketdata.ErrQuotaExhausted sentinel
+// (即使被 fmt.Errorf("finmind: %w", ErrQuotaExhausted) wrap) 仍能被 errors.Is 識別為 "quota"。
+// 這是 PR-F 區分「quota 真的打爆」vs「symbol 沒資料」的關鍵判斷。
+func TestClassifyFinMindError_QuotaExhausted(t *testing.T) {
+	wrapped := fmt.Errorf("finmind: %w (used=14400, remaining=0)", marketdata.ErrQuotaExhausted)
+	if got := classifyFinMindError(wrapped); got != "quota" {
+		t.Errorf("wrapped ErrQuotaExhausted: got %q, want %q", got, "quota")
+	}
+	if got := classifyFinMindError(marketdata.ErrQuotaExhausted); got != "quota" {
+		t.Errorf("bare ErrQuotaExhausted: got %q, want %q", got, "quota")
+	}
+}
+
+// TestClassifyFinMindError_RateLimited 驗證 ErrRateLimited 走 "rate_limited"。
+func TestClassifyFinMindError_RateLimited(t *testing.T) {
+	if got := classifyFinMindError(marketdata.ErrRateLimited); got != "rate_limited" {
+		t.Errorf("got %q, want %q", got, "rate_limited")
+	}
+}
+
+// TestClassifyFinMindError_NoDataPattern 驗證「symbol 沒資料」訊息被分到 "no_data"。
+// production `auto_cycle_update` 的 last_error 訊息正是這個 pattern。
+func TestClassifyFinMindError_NoDataPattern(t *testing.T) {
+	cases := []struct{ msg, want string }{
+		{"finmind: no month revenue data for 6271.TW 2026-08", "no_data"},
+		{"finmind revenue: no data for 6271.TW in last 3 months", "no_data"},
+	}
+	for _, tc := range cases {
+		if got := classifyFinMindError(fmt.Errorf("%s", tc.msg)); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.msg, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyFinMindError_TransportPattern 驗證 transport-level 錯誤 (HTTP timeout、DNS 等) 被分到 "transport"。
+func TestClassifyFinMindError_TransportPattern(t *testing.T) {
+	cases := []struct{ msg, want string }{
+		{"finmind: http request: Get \"https://api.finmindtrade.com/...\": context deadline exceeded", "transport"},
+		{"finmind: http request: dial tcp: lookup api.finmindtrade.com: no such host", "transport"},
+		{"finmind: http request: dial tcp: connection refused", "transport"},
+		{"finmind: http request: Get \"https://x\": i/o timeout", "transport"},
+	}
+	for _, tc := range cases {
+		if got := classifyFinMindError(fmt.Errorf("%s", tc.msg)); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.msg, got, tc.want)
+		}
+	}
+}
+
+// TestClassifyFinMindError_ParseErrorPattern 驗證 parse/decode error 被分到 "parse_error"。
+func TestClassifyFinMindError_ParseErrorPattern(t *testing.T) {
+	if got := classifyFinMindError(fmt.Errorf("finmind: cannot parse revenue from response")); got != "parse_error" {
+		t.Errorf("got %q, want %q", got, "parse_error")
+	}
+	if got := classifyFinMindError(fmt.Errorf("finmind: decode response: invalid character")); got != "parse_error" {
+		t.Errorf("got %q, want %q", got, "parse_error")
+	}
+}
+
+// TestClassifyFinMindError_UnknownFallback 驗證無法分類的 error 走 "unknown"（避免 silent drop）。
+func TestClassifyFinMindError_UnknownFallback(t *testing.T) {
+	if got := classifyFinMindError(fmt.Errorf("some completely unrelated error")); got != "unknown" {
+		t.Errorf("got %q, want %q", got, "unknown")
+	}
+	// nil 也應回 "unknown" 而非 panic
+	if got := classifyFinMindError(nil); got != "unknown" {
+		t.Errorf("nil err: got %q, want %q", got, "unknown")
+	}
+}
+
+// TestDataAggregator_RecordFailureCallback 驗證 AggregateIndustry 失敗時會呼叫 recordFailure callback
+// 並傳入正確的 industryID + 對應的 kind。這是「metric 是否真的會被 emit」的唯一整合測試點。
+func TestDataAggregator_RecordFailureCallback(t *testing.T) {
+	tracker := NewCycleTracker()
+	tree := DefaultClassification()
+
+	var captured []struct{ industry, kind string }
+	record := func(industryID, kind string) {
+		captured = append(captured, struct{ industry, kind string }{industryID, kind})
+	}
+
+	a := NewDataAggregator(tracker, tree, nil, record)
+	ctx := context.Background()
+
+	// finmind=nil 會在 AggregateIndustry 開頭就回 error (「no FinMind client」),
+	// 但此 error 不會觸發 recordFailure — 因為 AggregateAllIndustries 在 finmind=nil 時 no-op return。
+	// 所以這個測試主要驗證 callback 不會被 nil-finmind 路徑誤觸發。
+	if err := a.AggregateIndustry(ctx, "semiconductor"); err == nil {
+		t.Fatal("expected error with nil finmind")
+	}
+	if len(captured) != 0 {
+		t.Errorf("nil-finmind path should not invoke recordFailure, got %v", captured)
+	}
+
+	// 直接測 recordIndustryFailure 用 wrapped quota error,確認 classifyFinMindError 路徑串通。
+	a.recordIndustryFailure("test_industry", fmt.Errorf("finmind: %w", marketdata.ErrQuotaExhausted))
+	if len(captured) != 1 {
+		t.Fatalf("expected 1 capture, got %d", len(captured))
+	}
+	if captured[0].industry != "test_industry" || captured[0].kind != "quota" {
+		t.Errorf("got (%q,%q), want (%q,%q)", captured[0].industry, captured[0].kind, "test_industry", "quota")
+	}
 }
