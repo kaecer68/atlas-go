@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -835,5 +836,94 @@ func TestFinMindClient_QuotaGateNilSafe(t *testing.T) {
 	_, err := c.GetStockPrice(context.Background(), "2330", "2026-01-01")
 	if errors.Is(err, ErrQuotaExhausted) {
 		t.Errorf("nil tracker should not yield ErrQuotaExhausted, got %v", err)
+	}
+}
+
+// TestFinMindClient_fetchDataset_Non2xx_CapturesBody is the regression test
+// for PR-A (kaecer 2026-08-04 dispatch). Before PR-A, FinMind errors like
+// "Token is illegal" / "no data" were dropped — fetchDataset only logged
+// the status code, so channel_health showed "finmind: status 400" with
+// no operator-actionable info. After PR-A, the body (up to 512 bytes)
+// is included in both the WARN log and the returned error.
+//
+// This test simulates the actual production scenario: a stale or
+// misconfigured FINMIND_API_KEY env causes FinMind to return 400 with
+// body {"msg":"Token is illegal.","status":400,"token_tail":"...key"}.
+func TestFinMindClient_fetchDataset_Non2xx_CapturesBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"msg":"Token is illegal.","status":400,"token_tail":"...stale-key"}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("stale-key")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockPrice", "2330", "2026-08-04", "2026-08-04")
+	if err == nil {
+		t.Fatal("expected error for 400 response with body")
+	}
+	if !strings.Contains(err.Error(), "Token is illegal") {
+		t.Errorf("error %q must contain the real FinMind reason 'Token is illegal' so operators can diagnose without re-reading logs", err.Error())
+	}
+	if !strings.Contains(err.Error(), "stale-key") {
+		t.Errorf("error %q must include the token_tail hint so we can see WHICH env key is broken", err.Error())
+	}
+}
+
+// TestFinMindClient_fetchDataset_Non2xx_EmptyBody still produces a clear
+// error when FinMind returns a non-2xx with no body (e.g. nginx 502 during
+// an upstream outage). The error must NOT be empty / ambiguous — it must
+// at minimum show the status code and the placeholder "(empty body)".
+func TestFinMindClient_fetchDataset_Non2xx_EmptyBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockPrice", "2330", "2026-08-04", "2026-08-04")
+	if err == nil {
+		t.Fatal("expected error for 502 response")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("error %q must include the status code", err.Error())
+	}
+	if !strings.Contains(err.Error(), "(empty body)") {
+		t.Errorf("error %q must indicate the body was empty so operators don't mistake it for a real FinMind API message", err.Error())
+	}
+}
+
+// TestFinMindClient_fetchDataset_Non2xx_BodyTooLarge verifies the 512-byte
+// read cap protects against a malicious / oversized body. We send 2KB
+// of garbage and expect the error message to contain a truncated hint
+// (the body cap stops at 512 bytes), not the full body.
+func TestFinMindClient_fetchDataset_Non2xx_BodyTooLarge(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		// 2KB of garbage; the LimitReader should cap at 512 bytes.
+		w.Write(bytes.Repeat([]byte("X"), 2048))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockPrice", "2330", "2026-08-04", "2026-08-04")
+	if err == nil {
+		t.Fatal("expected error for 400 response with oversized body")
+	}
+	// The error message must NOT contain more than ~600 bytes (512 cap + status + format prefix).
+	if len(err.Error()) > 700 {
+		t.Errorf("error message length %d exceeds expected cap (~700); body was not truncated", len(err.Error()))
 	}
 }
