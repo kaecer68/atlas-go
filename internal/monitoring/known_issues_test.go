@@ -6,26 +6,32 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
 
 // lookup returns the right entry for channels that have a known issue
 // declared (currently twse_etf and twse_oddlot per the v3.0 dispatch).
+// TestLookupKnownIssue_ReturnsRegisteredEntry covers both the canonical
+// underscore-separated channel IDs (twse_etf, twse_oddlot) AND the
+// dash-separated runtime aliases (twse-etf, twse-oddlot). The dash
+// variants are the same upstream issue observed at runtime via a
+// different naming convention; PR-D (2026-08-05) registered both so
+// the dashboard renders the known-issue badge regardless of which form
+// the runtime channel_health record carries.
 func TestLookupKnownIssue_ReturnsRegisteredEntry(t *testing.T) {
-	issue := LookupKnownIssue("twse_etf")
-	if issue == nil {
-		t.Fatal("twse_etf should have a known issue, got nil")
-	}
-	if issue.Key == "" {
-		t.Errorf("KnownIssue.Key must be non-empty")
-	}
-	if !strings.Contains(strings.ToLower(issue.Title), "etf") {
-		t.Errorf("title should mention ETF, got %q", issue.Title)
-	}
-	if issue.DocumentedAt == "" {
-		t.Errorf("KnownIssue.DocumentedAt must be non-empty (UI shows 'known for X days')")
+	for _, id := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot"} {
+		issue := LookupKnownIssue(id)
+		if issue == nil {
+			t.Errorf("%q should have a known issue (PR-C + PR-D), got nil", id)
+			continue
+		}
+		if issue.Key == "" {
+			t.Errorf("%q: KnownIssue.Key must be non-empty", id)
+		}
+		if issue.DocumentedAt == "" {
+			t.Errorf("%q: KnownIssue.DocumentedAt must be non-empty (UI shows 'known for X days')", id)
+		}
 	}
 }
 
@@ -75,7 +81,10 @@ func TestKnownIssueChannelIDs(t *testing.T) {
 	for _, id := range ids {
 		got[id] = true
 	}
-	for _, required := range []string{"twse_etf", "twse_oddlot"} {
+	// PR-D (2026-08-05) added the dash-separated aliases twse-etf and
+	// twse-oddlot so the dashboard renders known-issue badges on both
+	// the canonical (underscore) and runtime-observed (dash) forms.
+	for _, required := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot"} {
 		if !got[required] {
 			t.Errorf("required known-issue channel %q not in registry", required)
 		}
