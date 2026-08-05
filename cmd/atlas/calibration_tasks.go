@@ -69,6 +69,10 @@ type calibrationDeps struct {
 	FinMindClient   *marketdata.FinMindClient
 	MaturityTracker *domain.MaturityTracker
 	CalProvider     risk.CalibrationProvider
+	// Collector is the Prometheus MetricsCollector used by auto_cycle_update
+	// to emit per-failure-kind metrics (monitoring.RecordDataAggregatorFailure).
+	// nil = no telemetry (acceptable in tests / early bootstrap).
+	Collector *monitoring.MetricsCollector
 }
 
 // registerCalibrationTasks wires 18 calibration background tasks into the
@@ -174,7 +178,13 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 	if finmindClient == nil && d.Cfg.FinMindAPIKey != "" {
 		finmindClient = marketdata.GetSharedFinMindClient(d.Cfg.FinMindAPIKey, d.Cfg.WorkDir)
 	}
-	cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient)
+	// Wire failure telemetry: 把 AggregateIndustry 失敗按根因 kind 分類,emit Prometheus metric。
+	// collector 為 nil (bootstrap 早期) 時 silent no-op — monitoring.RecordDataAggregatorFailure 內部已處理。
+	collector := d.Collector
+	recordFailure := func(industryID, kind string) {
+		monitoring.RecordDataAggregatorFailure(collector, industryID, kind)
+	}
+	cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient, recordFailure)
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "auto_cycle_update",
 		Interval: 6 * time.Hour,

@@ -42,6 +42,14 @@ const MetricStage3AlertsFired = "atlas_stage3_alerts_fired_total"
 // 由 cmd/atlas/stage3_tasks.go 的 OnTaskComplete callback 觸發更新,典型 cadence 是 daily。
 const MetricStage3LedgerRecords = "atlas_stage3_ledger_records"
 
+// MetricDataAggregatorFailures 統計 DataAggregator.AggregateIndustry 失敗次數
+// (per industry × kind label)。用途：把 `auto_cycle_update` channel 持續 error
+// 拆成可區分的根因 (quota / rate_limited / no_data / parse_error / transport / unknown)，
+// 取代只看 `last_error` 字串的 single-string 監控。詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
+// Label industry 值域為已知 L1 industry ID (semiconductor/electronics/leo_satellite/...)；
+// kind ∈ {"quota","rate_limited","no_data","parse_error","transport","unknown"}，值域受限避免 cardinality 爆炸。
+const MetricDataAggregatorFailures = "atlas_data_aggregator_failures_total"
+
 // RecordDBInitFailure increment db_init failure counter。
 // nil collector 安全（bootstrap 早期 collector 可能尚未建立）。
 func RecordDBInitFailure(c *MetricsCollector) {
@@ -96,5 +104,27 @@ func RecordStage3LedgerRecords(c *MetricsCollector, store ledger.EventFlowPredic
 	}
 	c.RecordGauge(MetricStage3LedgerRecords, float64(store.Len()), map[string]string{
 		"ledger": "event_flow_prediction",
+	})
+}
+
+// RecordDataAggregatorFailure increment DataAggregator.AggregateIndustry 失敗次數。
+// 用途：把 `auto_cycle_update` channel 持續 error 的根因拆成可監控的 kind label，
+// 取代只看 channel_health.json 上一筆 frozen last_error 的盲點。
+// kind 值域固定為 {"quota","rate_limited","no_data","parse_error","transport","unknown"}：
+//   - quota:        FinMind 回 402 或 DailyQuotaTracker 觸發 ErrQuotaExhausted
+//   - rate_limited: FinMind 回 429 或 ErrRateLimited
+//   - no_data:      FinMind 回 200 但 data array 為空（symbol 沒收錄或月營收尚未 publish）
+//   - parse_error:  FinMind 回 200 但欄位 parse 失敗（schema 變更）
+//   - transport:    HTTP timeout / DNS / connection refused（網路問題）
+//   - unknown:      其他未分類 error
+//
+// 空 industry / kind 視為無效輸入不寫入；nil collector 安全。
+func RecordDataAggregatorFailure(c *MetricsCollector, industry, kind string) {
+	if c == nil || industry == "" || kind == "" {
+		return
+	}
+	c.RecordCounter(MetricDataAggregatorFailures, 1, map[string]string{
+		"industry": industry,
+		"kind":     kind,
 	})
 }

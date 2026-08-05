@@ -3,9 +3,11 @@ package industry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	configpkg "github.com/kaecer68/atlas-go/internal/config"
@@ -13,21 +15,47 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
+// DefaultFetchFallbackAttempts 是 fetchRevenueYoY / fetchProfitYoY 月份/季度 fallback 的
+// 最大嘗試次數。從當前月/季度往前 fallback 直到找到 valid (current, prev year) 對。
+//
+// 為何預設 3：
+//   - 涵蓋台灣月營收 publish lag（TWSE 月營收通常次月 10 號前 publish）— 8 月初跑會抓 7 月，7 月初跑會抓 6 月
+//   - 涵蓋 quarterly financial statement filing lag (45 days after quarter end)
+//   - 對 FinMind daily quota 用量：每 +1 attempt × 2 calls × 35 stocks = +70 calls per run
+//     (4 runs/day → +280 calls/day，佔 14400 daily quota 約 2%)
+//
+// 若要拉長到 4-6 個月應對邊緣 publish 延遲，需先驗證：
+//  1. production 的 "no_data" kind metric 是否在月初高峰（1-10 號）顯著上升
+//  2. FinMind daily quota tracker 是否有餘裕
+//
+// 詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
+const DefaultFetchFallbackAttempts = 3
+
 // DataAggregator fetches per-stock financial metrics from FinMind and
 // computes industry-level weighted averages to feed CycleTracker.
 type DataAggregator struct {
-	tracker *CycleTracker
-	tree    *ClassificationTree
-	finmind *marketdata.FinMindClient
+	tracker       *CycleTracker
+	tree          *ClassificationTree
+	finmind       *marketdata.FinMindClient
+	recordFailure func(industryID, kind string)
 }
 
 // NewDataAggregator creates a DataAggregator. Pass nil for finmindClient if
 // FinMind is unavailable; AggregateAllIndustries will be a no-op.
-func NewDataAggregator(tracker *CycleTracker, tree *ClassificationTree, finmind *marketdata.FinMindClient) *DataAggregator {
+//
+// recordFailure is called once per AggregateIndustry failure (per industry).
+// It receives a stable industry ID and a `kind` value (see monitoring.MetricDataAggregatorFailures
+// for the closed enum). Pass nil to disable failure telemetry — useful in tests and
+// in the early-bootstrap path where the Prometheus collector has not yet been built.
+// The dependency is injected as a function (rather than a *monitoring.MetricsCollector)
+// to avoid an import cycle: `internal/monitoring` already imports `internal/industry`,
+// so importing the other direction would deadlock the Go build.
+func NewDataAggregator(tracker *CycleTracker, tree *ClassificationTree, finmind *marketdata.FinMindClient, recordFailure func(industryID, kind string)) *DataAggregator {
 	return &DataAggregator{
-		tracker: tracker,
-		tree:    tree,
-		finmind: finmind,
+		tracker:       tracker,
+		tree:          tree,
+		finmind:       finmind,
+		recordFailure: recordFailure,
 	}
 }
 
@@ -112,7 +140,7 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	}
 
 	if revCount == 0 && profitCount == 0 {
-		return fmt.Errorf("data_aggregator: no valid data for industry %q", industryID)
+		return a.recordIndustryFailure(industryID, fmt.Errorf("data_aggregator: no valid data for industry %q", industryID))
 	}
 
 	metrics := IndustryMetrics{
@@ -137,10 +165,21 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	return nil
 }
 
+// recordIndustryFailure 統一處理 AggregateIndustry 的失敗：log warning、emit metric、return error。
+// recordFailure callback 為 nil 時（test / bootstrap 早期）只 log 不 emit。
+func (a *DataAggregator) recordIndustryFailure(industryID string, err error) error {
+	kind := classifyFinMindError(err)
+	logging.Warn("data_aggregator", "industry_aggregate_failed",
+		"industry", industryID, "kind", kind, "err", err)
+	if a.recordFailure != nil {
+		a.recordFailure(industryID, kind)
+	}
+	return err
+}
+
 // fetchRevenueYoY tries to compute YoY revenue growth from the most recent
 // available monthly data. It starts with the current month and falls back up to
-// 3 months to handle the publication lag (TWSE monthly revenue typically
-// published by the 10th of the following month).
+// DefaultFetchFallbackAttempts months to handle the publication lag.
 func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -148,7 +187,7 @@ func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now
 	year := now.Year()
 	month := int(now.Month())
 
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
 		current, err := a.finmind.GetMonthRevenue(ctx, symbol, year, month)
 		if err != nil {
 			// Try previous month
@@ -184,13 +223,11 @@ func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now
 		return clampGrowth(growth), nil
 	}
 
-	return 0, fmt.Errorf("finmind revenue: no data for %s in last 3 months", symbol)
+	return 0, fmt.Errorf("finmind revenue: no data for %s in last %d months", symbol, DefaultFetchFallbackAttempts)
 }
 
 // fetchProfitYoY tries to compute YoY profit growth from the most recent
-// available quarterly financial statements. It starts with the current quarter
-// and falls back up to 3 quarters to handle the publication lag (Taiwan
-// financial statements filed 45 days after quarter end).
+// available quarterly financial statements.
 func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -199,7 +236,7 @@ func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now 
 	quarter := ((int(now.Month()) - 1) / 3) + 1
 	year := now.Year()
 
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
 		currentData, err := a.finmind.GetFinancialStatements(ctx, symbol, year, quarter)
 		if err != nil {
 			quarter--
@@ -236,7 +273,7 @@ func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now 
 		return clampGrowth(growth), nil
 	}
 
-	return 0, fmt.Errorf("finmind profit: no data for %s in last 3 quarters", symbol)
+	return 0, fmt.Errorf("finmind profit: no data for %s in last %d quarters", symbol, DefaultFetchFallbackAttempts)
 }
 
 func clampGrowth(v float64) float64 {
@@ -250,8 +287,8 @@ func clampGrowth(v float64) float64 {
 }
 
 func extractProfit(data map[string]float64) float64 {
-	for _, key := range []string{"本期淨利", "本期稅後淨利", "net_profit", "NetIncome"} {
-		if v, ok := data[key]; ok && v != 0 {
+	for _, k := range []string{"本期淨利", "NetIncome", "NetIncomeLoss"} {
+		if v, ok := data[k]; ok {
 			return v
 		}
 	}
@@ -312,4 +349,47 @@ func writeCalibratedConfig(configPath string, results []CalibrationResult) error
 	}
 	out = append(out, '\n')
 	return configpkg.LockedWriteFileWithRollback(configPath, out)
+}
+
+// classifyFinMindError 把 FinMind API / transport error 分類到 monitoring.MetricDataAggregatorFailures 的
+// kind label 值域。值域固定（quota/rate_limited/no_data/parse_error/transport/unknown）以避免 cardinality 爆炸。
+//
+// 判斷順序（最具體到最廣）：
+//  1. errors.Is(err, marketdata.ErrQuotaExhausted) → "quota"
+//  2. errors.Is(err, marketdata.ErrRateLimited)    → "rate_limited"
+//  3. 字串匹配 "no month revenue data" / "no data" → "no_data"
+//  4. 字串匹配 "cannot parse" / "decode"            → "parse_error"
+//  5. 字串匹配 "http request" / "i/o timeout" / "context deadline"
+//     / "connection refused" / "no such host"      → "transport"
+//  6. 其餘 → "unknown"
+//
+// 為何優先 errors.Is：marketdata.FinMindClient.fetchDataset 用 fmt.Errorf("finmind: %w", ErrQuotaExhausted)
+// 包裝 sentinel error（finmind_client.go:179），errors.Is 可穿透 wrap chain 識別。
+func classifyFinMindError(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+	if errors.Is(err, marketdata.ErrQuotaExhausted) {
+		return "quota"
+	}
+	if errors.Is(err, marketdata.ErrRateLimited) {
+		return "rate_limited"
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "no month revenue data"),
+		strings.Contains(msg, "no data"):
+		return "no_data"
+	case strings.Contains(msg, "cannot parse"),
+		strings.Contains(msg, "decode"):
+		return "parse_error"
+	case strings.Contains(msg, "http request"),
+		strings.Contains(msg, "i/o timeout"),
+		strings.Contains(msg, "context deadline"),
+		strings.Contains(msg, "connection refused"),
+		strings.Contains(msg, "no such host"):
+		return "transport"
+	default:
+		return "unknown"
+	}
 }
