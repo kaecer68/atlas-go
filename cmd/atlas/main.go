@@ -1104,7 +1104,7 @@ func run(args []string, deps appDeps) error {
 		if gateway != nil && monitor != nil {
 			if svc := dashboard.GetCrossMarketService(); svc != nil {
 				svc.SetDegradedCallback(func(status string, failed []string) {
-					if status == "degraded" || status == "stale" {
+					if status == "degraded" {
 						if len(failed) == 0 {
 							return
 						}
@@ -1123,6 +1123,15 @@ func run(args []string, deps appDeps) error {
 							})
 						return
 					}
+					// status == "stale" or status == "ok": both mean no
+					// channel is currently failing (failed list is empty).
+					// PR-F2 (kaecer 2026-08-05 production verification):
+					// extend the recovery path to cover "stale" too. The
+					// original PR-F (4251d7f8) only handled "ok", which
+					// was insufficient for the actual production case
+					// where the macro snapshot was stuck at "stale" with
+					// an empty failed list — us10y / vix stayed degraded
+					// for 9 days because the recovery never fired.
 					// Recovery path (PR-F, kaecer 2026-08-05): when status is
 					// "ok", clear any previously-recorded "degraded" status
 					// for the macro channels. The original 2026-08-04 code
