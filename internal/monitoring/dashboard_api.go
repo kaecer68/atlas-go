@@ -1201,18 +1201,25 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/dashboard/channel-health", func(w http.ResponseWriter, r *http.Request) {
 		// Uses ChannelHealthStore (same source as /api/health/aggregate Tier 2)
 		// for freshness-aware status, instead of reading channel_health.json directly.
+		//
+		// PR-C: each channel response also includes a `known_issue` field
+		// (populated from the static registry in known_issues.go) so the
+		// dashboard UI can distinguish "atlas broke" (red error) from
+		// "we know about this, it's an external problem" (gray known-issue
+		// badge with link to the tracking issue).
 		type channelHealthResp struct {
-			ChannelID          string   `json:"channel_id"`
-			Status             string   `json:"status"`
-			UpdatedAt          string   `json:"updated_at,omitempty"`
-			LastDataAt         string   `json:"last_data_at,omitempty"`
-			LastError          string   `json:"last_error,omitempty"`
-			LastSuccessAt      string   `json:"last_success_at,omitempty"`
-			LatencyMs          int64    `json:"latency_ms,omitempty"`
-			RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
-			RecordsFetched     int      `json:"records_fetched,omitempty"`
-			SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
-			Errors             []string `json:"errors,omitempty"`
+			ChannelID          string      `json:"channel_id"`
+			Status             string      `json:"status"`
+			UpdatedAt          string      `json:"updated_at,omitempty"`
+			LastDataAt         string      `json:"last_data_at,omitempty"`
+			LastError          string      `json:"last_error,omitempty"`
+			LastSuccessAt      string      `json:"last_success_at,omitempty"`
+			LatencyMs          int64       `json:"latency_ms,omitempty"`
+			RateLimitRemaining int         `json:"rate_limit_remaining,omitempty"`
+			RecordsFetched     int         `json:"records_fetched,omitempty"`
+			SymbolsProcessed   int         `json:"symbols_processed,omitempty"`
+			Errors             []string    `json:"errors,omitempty"`
+			KnownIssue         *KnownIssue `json:"known_issue,omitempty"`
 		}
 		allRecs := healthStore.All()
 		channels := make([]channelHealthResp, 0, len(allRecs))
@@ -1229,6 +1236,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				RecordsFetched:     rec.RecordsFetched,
 				SymbolsProcessed:   rec.SymbolsProcessed,
 				Errors:             rec.Errors,
+				KnownIssue:         LookupKnownIssue(id),
 			})
 		}
 		w.Header().Set("Content-Type", "application/json")
