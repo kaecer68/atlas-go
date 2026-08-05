@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -202,8 +204,27 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Capture response body on non-200 so channel_health surfaces the real
+	// reason. Without this, the FinMind API's "Token is illegal" / "no
+	// data" / "rate limit exceeded" messages get dropped, and operators
+	// only see "finmind: status 400" — which forced hermes + this agent to
+	// debug in circles before realising the real issue (FINMIND_API_KEY
+	// env mismatch, NOT quota exhaustion, on 2026-08-04).
+	// Limit read to 512 bytes: enough for FinMind's JSON error envelope,
+	// bounded so a malicious / oversized body can't blow memory.
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("finmind: status %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		logging.Warn("finmind", "fetch_non_2xx",
+			"status", resp.StatusCode,
+			"body", bodyStr,
+			"dataset", dataset,
+			"data_id", dataId,
+		)
+		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var finmindResp FinMindResponse
