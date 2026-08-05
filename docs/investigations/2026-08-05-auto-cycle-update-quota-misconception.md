@@ -1,5 +1,7 @@
 # 2026-08-05: `auto_cycle_update` 80+ 日卡 error — quota 結構性問題假設被推翻
 
+> **給 AI agent 的導引**：本檔原本在 `docs/reference/traps.md` 第 21 行有同主題速查 entry，**該 entry 在 2026-08-05 commit 35f7054 已刪除**（traps.md 300 行上限預算），請直接讀本檔。Investigation doc 比 traps.md entry 詳盡且不易過時 — 任何針對 `auto_cycle_update` 失敗的「quota 結構性問題」假設，在動工前**必須**先讀本檔的「驗證 2：5/14 error 根因」與「驗證 3：quota 月初瓶頸」段。
+
 > **結論先行**：「`auto_cycle_update` 卡 80+ 日是 quota + 月初結構性問題」這個假設**沒有任何 runtime 證據支持**。真實根因更可能是 (a) FinMind 對特定 symbol 沒月營收資料 / (b) 月初月營收尚未 publish。**PR-E（commit `2d90a401`）已修的 `endDate=31` bug 對 5 月（31 天）沒影響**，與 5/14 起持續出現的 error 不對應。
 >
 > **下一個 agent 請勿**僅憑 `finmind_client.go:35-48` 註解或 PR-E commit message 就推導出「quota 月初打爆」的結論。
