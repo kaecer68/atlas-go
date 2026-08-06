@@ -152,14 +152,14 @@ make ci-full
 
 ### 7.2 驗收 (對第一份 manifest)
 逐項核對 `docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md` §6 AC-1..AC-8:
-- [ ] AC-1: issue 已關閉 + comment 含 manifest 連結
-- [ ] AC-2: ShouldL24AutoCronFire 處置有 ACI 證據
-- [ ] AC-3: LLMDriver 處置有 ACI 證據
-- [ ] AC-4: 文件對齊
-- [ ] AC-5: 新 issue 建立
-- [ ] AC-6: make ci-full 通過
-- [ ] AC-7: working tree clean
-- [ ] AC-8: 發現 F1-F7 與最終 code 一致
+- [x] AC-1: issue 已關閉 + comment 含 manifest 連結 — #825/#826 `state=CLOSED` (2026-08-06),comment 引用 audit manifest
+- [x] AC-2: ShouldL24AutoCronFire 處置有 ACI 證據 — gitnexus impact 0 affected processes;Option A (deprecate) 已執行,檔頭註記指向 C07
+- [x] AC-3: LLMDriver 處置有 ACI 證據 — 22 direct importers / 0 affected processes;Option B (移除) 已執行,interface 與 deprecated test 皆刪除
+- [x] AC-4: 文件對齊 — followup / runbook / roadmap / observation-log / fault-tolerance-design + AGENTS.md 皆更新 (PR #1467 modified 清單)
+- [x] AC-5: 新 issue 建立 — Issue #1466 OPEN,body 含缺口 A/E 分析 + T15 決策
+- [x] AC-6: make ci-full 通過 — §7.1 記錄 coverage 67.8%,全測試 green
+- [x] AC-7: working tree clean — 合併時無 L2.4 變更殘留;僅餘測試產生的 runtime state (`cmd/cron-quote-backfill/data/`,非本軌道產物)
+- [x] AC-8: 發現 F1-F7 與最終 code 一致 — dead code 已標註/移除,文件反映 issue 已關閉 + C07 平行軌道
 
 ### 7.3 Push + PR
 ```bash
