@@ -190,6 +190,13 @@ func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now
 	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
 		current, err := a.finmind.GetMonthRevenue(ctx, symbol, year, month)
 		if err != nil {
+			// Rate-limit (local 5s ctx vs 6s token) or server 402 are
+			// NOT "no data" — propagate so the metric classifies
+			// correctly instead of falling back into a misleading
+			// "no data in last N months" (Issue #1465 finding 2).
+			if isFinMindQuotaOrRateLimited(err) {
+				return 0, err
+			}
 			// Try previous month
 			month--
 			if month == 0 {
@@ -239,6 +246,12 @@ func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now 
 	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
 		currentData, err := a.finmind.GetFinancialStatements(ctx, symbol, year, quarter)
 		if err != nil {
+			// Propagate quota/rate-limit errors instead of swallowing into
+			// "no data" fallback (Issue #1465 finding 2) — same as
+			// fetchRevenueYoY.
+			if isFinMindQuotaOrRateLimited(err) {
+				return 0, err
+			}
 			quarter--
 			if quarter == 0 {
 				quarter = 4
@@ -365,6 +378,26 @@ func writeCalibratedConfig(configPath string, results []CalibrationResult) error
 //
 // 為何優先 errors.Is：marketdata.FinMindClient.fetchDataset 用 fmt.Errorf("finmind: %w", ErrQuotaExhausted)
 // 包裝 sentinel error（finmind_client.go:179），errors.Is 可穿透 wrap chain 識別。
+// isFinMindQuotaOrRateLimited reports whether err is a quota/rate-limit
+// condition that must NOT be treated as "no data":
+//   - local rate limiter Wait failure (ErrRateLimited, 5s ctx vs 6s token)
+//   - server-side 402 (finmind_client.go fetchDataset non-2xx body)
+//
+// Issue #1465 P1.10: without this, both conditions were swallowed by the
+// month/quarter fallback loop and surfaced as misleading
+// "no data in last N months" → metric kind=no_data.
+func isFinMindQuotaOrRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, marketdata.ErrRateLimited) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Requests reach the upper limit") ||
+		strings.Contains(msg, "status 402")
+}
+
 func classifyFinMindError(err error) string {
 	if err == nil {
 		return "unknown"
@@ -374,6 +407,12 @@ func classifyFinMindError(err error) string {
 	}
 	if errors.Is(err, marketdata.ErrRateLimited) {
 		return "rate_limited"
+	}
+	// Server-side 402 (Requests reach the upper limit) is a quota
+	// condition — classify as quota so alert rules can share the bucket
+	// with ErrQuotaExhausted (Issue #1465 HF-1b).
+	if isFinMindQuotaOrRateLimited(err) {
+		return "quota"
 	}
 	msg := err.Error()
 	switch {
