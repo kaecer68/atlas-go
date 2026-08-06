@@ -180,8 +180,14 @@ func (a *DataAggregator) recordIndustryFailure(industryID string, err error) err
 // fetchRevenueYoY tries to compute YoY revenue growth from the most recent
 // available monthly data. It starts with the current month and falls back up to
 // DefaultFetchFallbackAttempts months to handle the publication lag.
+//
+// Context timeout is 10s (not 5s): the shared FinMind rate limiter grants one
+// token every 6s (600/hr). With a 5s ctx, rateLimiter.Wait(ctx) always fails
+// once the burst is exhausted (Issue #1465 P1.10 — the 02:16 UTC 8/6 round
+// failed 11 industries with 0 server 402s for exactly this reason). 10s
+// covers one token interval plus request latency.
 func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	year := now.Year()
@@ -236,7 +242,7 @@ func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now
 // fetchProfitYoY tries to compute YoY profit growth from the most recent
 // available quarterly financial statements.
 func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now time.Time) (float64, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// Q1=(1,2,3), Q2=(4,5,6), Q3=(7,8,9), Q4=(10,11,12)
