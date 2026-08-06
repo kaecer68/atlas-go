@@ -168,3 +168,47 @@ if data.Sector == "" {
 Frontend changes were committed in `793fc79c` and verified via static `node --input-type=module -e` imports earlier; live browser-render verification (sq-scope-notice badge appearing for 3131/3587) requires a frontend-deploy step that is outside this commit's automation.
 3. **資料源**：新增 TPEX T86 等價端點 + 把不涵蓋 symbol 列入 `data/fundamentals.json` snapshot。最大工程、改動多個 pipeline。
 
+
+## 8. External-verified affirmation: 3131/3587/6187 are TPEX-listed
+
+Post-merge third-party web check (2026-08-06) reconfirms the
+core scope decision that drove this fix. Each of the three
+symbols raised in §1 is **TPEX 上櫃** (Taipei Exchange over-the-counter),
+not TWSE 上市 (Taiwan Stock Exchange-listed). Sources:
+
+| Symbol | Company | Listing | Verification sources |
+| --- | --- | --- | --- |
+| 3131 | 弘塑科技 (Hsiang-Hong Tech) | **TPEX 上櫃**, 半導體設備業 | TPEX 官網「最近上櫃公司」(`/mainboard/listed/latest/detail.html?code=3131`) 上櫃日期 100/01/17; twstockmeow 標示「台股上櫃半導體業」; HiStock/cnyes 都列為 `.TWO` |
+| 3587 | 閎康 (Materials Analysis Tech) | **TPEX 上櫃**, 測試分析服務業 | TPEX 官網「上櫃公司詳細資料」(`/mainboard/listed/company-detail.html?3587`); cnyes 標「上櫃(櫃買中心)」; finlab 3587 「每月處理超過 24,000 件檢測服務」 |
+| 6187 | 萬潤 (All Ring Tech) | **TPEX 上櫃**, 機械設備製造業 | Yahoo 股市「6187.TWO」; cnyes 「台股 上櫃、機械設備製造業」 |
+
+This corroborates the design boundary locked in by PR #1477
+(commit `045aca0b`, merged 2026-08-06 14:32:31Z) and §3 of this
+report: atlas stocktools data pipeline covers only TWSE-listed
+common stocks (~1070 names from `data/fundamentals.json`); TPEX
+symbols are out of scope by design, not by accident. A user
+querying 3131/3587/6187 against the 4 stocktools endpoints will
+correctly receive a structured 200 + `coverage_note: NOT_COVERED`
+response (verified live post-deploy; see §7).
+
+### 8.1 Note on the "3587 萬潤" symbol-recall slip
+
+§1 listed "3587 萬潤" as a target of investigation. Web verification
+and TPEX official records confirm **symbol 3587 belongs to 閎康
+(Materials Analysis), not 萬潤 (All Ring Tech). 萬潤's actual
+symbol is 6187.** Both companies are TPEX 上櫃 and both are correctly
+excluded from this fix's scope. §1 entry is preserved as a verbatim
+record of the original user input (which appears to have been a
+symbol-recall slip rather than a trading intent), not as a
+substantive claim.
+
+## 9. Session closure
+
+This document, `2026-08-06-equipment-stocks-chips-gaps-research.md`,
+and the design manifest `2026-08-06-stock-coverage-notice.md` together
+form a complete scope/state record as of main `045aca0b`. The fix is
+live in production (`atlas-go` container running binary built from
+`Commit=045aca0b7da27cc17f6cfdcc728873083ff78563`); live curl
+verification confirms 3131/3587 return `coverage_note: NOT_COVERED`
+in ~3ms (vs. the pre-fix 14.93s 503 on the chips path). Further
+follow-ups tracked separately; nothing remains open in this session.
