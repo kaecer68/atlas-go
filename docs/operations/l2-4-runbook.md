@@ -1,6 +1,6 @@
 # L2.4 Observation Window — Operations Runbook
 
-> **Status**: PR #821 merged 2026-06-29 (commit `f69b3551`). Manual L2.4 observation infrastructure shipped.
+> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);Issue #825 / #826 已關閉 (依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md))。本 runbook 保留供未來若重啟 L2.4 觀察期使用;`LLMDriver` deprecated alias 已於 2026-08-06 移除 (§5 step 3 已不適用)。
 > **對象**: ops / on-call engineering
 > **範圍**: Wave 11 L2.4 — `UseLLMSectorAgents` 啟用後 7-14 天觀察期
 > **Issue**: [#742](https://github.com/kaecer68/atlas-go/issues/742)
@@ -104,7 +104,7 @@ Day 14 acceptance 全部通過後,依序執行(每步獨立 PR):
 
 1. **Source 升級**: 在 `configs/parameters.json` 把 `orchestrator.use_llm_sector_agents.source` 從 `experimental` 改為 `empirical`(`value` 暫不動)。
 2. **翻 default 為 true(獨立 PR)**: 將 `use_llm_sector_agents.value` 改為 `true`,並同步新增 `use_llm_sector_agents_deprecated` 旗標供暫時 opt-out。**這是獨立 PR**,不在本次 runbook PR 範圍。
-3. **移除 deprecated alias**: 刪除 `internal/orchestrator/sector_agent_llm.go` 中的 `LLMDriver` 別名(向後相容已無必要)。
+3. **移除 deprecated alias**: ~~刪除 `internal/orchestrator/sector_agent_llm.go` 中的 `LLMDriver` 別名(向後相容已無必要)~~ — **✅ 已於 2026-08-06 完成**(Issue #826 關閉時清理)。
 4. **Tag 版本**: 上述變更合併後,標記 `v0.0.0.22`(具體版本號依當時累積變更決定,參考 `CHANGELOG.md`)。
 
 > 設計保持簡單:promotion 流程不引入新 CLI flag,僅翻 default + 刪 alias。

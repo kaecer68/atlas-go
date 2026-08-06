@@ -7,6 +7,14 @@
 
 ## Current state (post-session)
 
+### ⛔ 2026-08-06 — 軌道收尾 (Issue #825 + #826 CLOSED)
+
+> 依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md) 盤查決策:
+> - **#825 (auto-cron) 關閉**:`ShouldL24AutoCronFire` 0 production callers (dead code, 已加 deprecation 註記);自動化缺口由 C07 平行軌道 (c07-obs-collector / c07-day-evaluator / c07-preflight) 填補。
+> - **#826 (promotion) 關閉**:Day 14 觀察 gate 未通過且短期無法滿足;3c (LLMDriver alias 移除) 已於本收尾完成。
+> - L2.4 觀察期未啟動 (`use_llm_sector_agents.value=false` 28+ 天),無 baseline 可驗證 promotion。
+> - 剩餘真實缺口 (其他 sector LLM 變體 + generic LLM framework) 另開 issue 追蹤。
+
 ### Shipped (7 PRs as of 2026-07-08)
 
 | PR | Title | Followup.md item | Type |
@@ -19,16 +27,16 @@
 | #1025 | SemiconductorLLMAgent 嵌入重構 | §3c NEW prereq (not in original followup.md) | Refactor |
 | #1022 | risk/AGENTS.md RiskGate omission | Drift fix (T16) | Doc |
 
-### Pending (6 sub-items, all operationally blocked)
+### Pending → 已關閉 (2026-08-06)
 
-| ID | Item | Blocker(s) | Code-blocked? |
-|---|---|---|---|
-| T13 main | Auto-cron scheduler (Issue #825) | Manual observation success + AutoEnabled test in staging | ❌ No |
-| T14-3a | Source upgrade `experimental` → `empirical` | Day 14 acceptance gate pass | ❌ No |
-| T14-3b | Default flip to `true` + opt-out | T14-3a done + Day 14 success + deprecation flag review | ❌ No |
-| T14-3c | Delete `LLMDriver` interface | Day 14 success + T14-3a + T14-3b (embedding refactor DONE) | ⚠️ 1 of 2 blockers removed |
-| T14-3d | Version tag | T14-3a + 3b + 3c all merged | ❌ No |
-| T15 main | L2.4 actual start in staging | USER DECISION (env + observer + start date) | ❌ No |
+| ID | Item | 處置 |
+|---|---|---|
+| T13 main | Auto-cron scheduler (Issue #825) | ❌ **CLOSED** — 0 callers dead code, C07 已覆蓋 |
+| T14-3a | Source upgrade `experimental` → `empirical` | ❌ **CLOSED** — Day 14 gate 未通過 |
+| T14-3b | Default flip to `true` + opt-out | ❌ **CLOSED** — 依賴 3a |
+| T14-3c | Delete `LLMDriver` interface | ✅ **DONE (2026-08-06)** — alias 移除,0 production usages |
+| T14-3d | Version tag | ❌ **CLOSED** — 依賴 3a/3b |
+| T15 main | L2.4 actual start in staging | ❌ **CLOSED** — 28+ 天無 USER DECISION,軌道收尾 |
 
 ---
 
@@ -82,6 +90,8 @@
 ---
 
 ## Unblock action sequence
+
+> **⛔ 2026-08-06 — 本序列已失效**:#825 / #826 已關閉,Step 1-5 (T15 / 觀察 / Day 14 / 3a / 3b) 與 Step 8 (3d) 不再執行;Step 6 (auto-cron) 關閉;Step 7 (3c) 已完成。保留本序列供未來若重啟 L2.4 觀察期的流程參考。
 
 ### Step 1: User picks staging env (T15)
 
@@ -138,11 +148,10 @@ Per followup.md §3b:
 
 **Time**: 1-2 days, 1 PR.
 
-### Step 6: T13 main (auto-cron implementation)
+### Step 6: T13 main (auto-cron implementation) — ⛔ CLOSED (2026-08-06)
 
-After T14-3b done + production 7+ days:
+> #825 已關閉。`ShouldL24AutoCronFire` 0 production callers,gate 未 wire-up;C07 平行軌道已填補自動化缺口。原始指令保留供參考:
 - Use design from PR #1023 (fault tolerance)
-- Use updated runbook §2 from PR #1019 (auto-triggered window review)
 - Implement `internal/scheduler/l2_4.go` per design doc
 - Wire registration in `cmd/atlas/main.go`
 - Add observability (`l2_4_cron.fired/skipped/failed` events)
@@ -150,13 +159,13 @@ After T14-3b done + production 7+ days:
 
 **Time**: 1 PR, medium size.
 
-### Step 7: T14-3c (Delete LLMDriver interface)
+### Step 7: T14-3c (Delete LLMDriver interface) — ✅ DONE (2026-08-06)
 
-After T14-3b done + T13 main running:
+> 已於 2026-08-06 完成 (Issue #826 關閉時清理):
 - SemiconductorLLMAgent embedding refactor ✅ DONE (PR #1025)
-- Remaining: just delete the interface definition at `internal/orchestrator/sector_agent_llm.go:76-83`
-- Update `sector_agent_llm_test.go` to drop `stubLLMDriver` + `TestSectorAgentLLM_LLMDriver_DeprecatedAlias`
-- Update `orchestrator/AGENTS.md` to remove "不可用 LLMDriver" warning (no longer applicable)
+- ✅ `internal/orchestrator/sector_agent_llm.go` 的 `LLMDriver` 介面已刪除 (原 :76-83)
+- ✅ `sector_agent_llm_test.go` 已 drop `TestSectorAgentLLM_LLMDriver_DeprecatedAlias`
+- ✅ `orchestrator/AGENTS.md` 已移除「不可用 LLMDriver」warning
 
 **Time**: 0.5 day, 1 PR.
 
