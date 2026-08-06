@@ -206,6 +206,26 @@ func TestPRISMManagerStartStop(t *testing.T) {
 	})
 }
 
+// TestAutoBalanceEnabled verifies the BTM migration gate (Issue #1447):
+// AutoBalanceEnabled must reflect the config so cmd/atlas only registers the
+// prism_auto_balancer BackgroundTaskManager task when rebalancing is on.
+func TestAutoBalanceEnabled(t *testing.T) {
+	t.Run("default_config_enables_autobalance", func(t *testing.T) {
+		pm := NewPRISMManager(DefaultPRISMConfig())
+		if !pm.AutoBalanceEnabled() {
+			t.Fatalf("DefaultPRISMConfig AutoBalance=true, AutoBalanceEnabled() = false")
+		}
+	})
+	t.Run("disabled_config_reports_false", func(t *testing.T) {
+		cfg := DefaultPRISMConfig()
+		cfg.AutoBalance = false
+		pm := NewPRISMManager(cfg)
+		if pm.AutoBalanceEnabled() {
+			t.Fatalf("AutoBalance=false, AutoBalanceEnabled() = true")
+		}
+	})
+}
+
 func TestPRISMManagerGetTask(t *testing.T) {
 	pm := NewPRISMManager(DefaultPRISMConfig())
 	agent := domain.AgentSpec{ID: "agt", Skill: "s", Layer: domain.LayerSector}
