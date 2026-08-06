@@ -1,5 +1,22 @@
 // Package scheduler — L2.4 observation auto-cron safety gate.
 //
+// DEPRECATED (2026-08-06, Issue #825 closed):
+//   - ShouldL24AutoCronFire has ZERO production callers (only test calls it).
+//     gitnexus_impact: 0 affected processes — pure function library, never
+//     wired into BackgroundTaskManager.Register().
+//   - The automation gap this gate addressed is now covered by the C07
+//     sector-prediction parallel track (cmd/experimental/c07-obs-collector
+//   - c07-day-evaluator + c07-preflight, production-deployed with cron
+//     entrypoint) and the canonical launch-gate pattern in
+//     internal/startup/preflight.go (PR #1037).
+//   - L2.4 observation itself never started (use_llm_sector_agents.value
+//     still false), so no baseline exists to validate an auto-cron.
+//   - This file is KEPT (not removed) because the 5-condition gate logic is
+//     a tested, self-contained safety net that can be reused if L2.4 is ever
+//     restarted. Do NOT wire it into production without re-opening Issue #825.
+//
+// Original intent (PR #1029, 2026-07-08):
+//
 // This file ships the gate logic for followup.md §1 prereq #3
 // (Issue #825 auto-cron scheduler) — but DEFAULT-DISABLED.
 //
