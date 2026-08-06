@@ -28,7 +28,7 @@ bash .agent-hooks/install.sh
 3. 印使用說明
 
 > `aci-read-prompt.sh` 預設 **不啟用** — 它必須透過 `.claude/settings.local.json` 註冊才會被 Claude Code 呼叫。
-> 安裝腳本**不會**自動寫 `.claude/settings.local.json`;這是 per-user 選擇,參考 [`docs/operations/aci-hook-usage.md`](../../docs/operations/aci-hook-usage.md)。
+> 安裝腳本**不會**自動寫 `.claude/settings.local.json`;這是 per-user 選擇,參考 [`docs/operations/aci-hook-usage.md`](../docs/operations/aci-hook-usage.md)。
 
 ## 依賴
 
@@ -53,7 +53,7 @@ bash .agent-hooks/install.sh
 
 ## 文件
 
-- 使用說明:[`docs/operations/aci-hook-usage.md`](../../docs/operations/aci-hook-usage.md)
-- 設計 plan:[`.omo/plans/2026-08-06-aci-pretooluse-prompt.md`](../../.omo/plans/2026-08-06-aci-pretooluse-prompt.md)
-- 已知陷阱:[`.claude/agent-memory/footguns/agent-skips-aci-routing.md`](../agent-memory/footguns/agent-skips-aci-routing.md)
-- 設計決策:[`.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md`](../agent-memory/decisions/aci-enforcement-via-local-hook.md)
+- 使用說明:[`docs/operations/aci-hook-usage.md`](../docs/operations/aci-hook-usage.md)
+- 設計 plan:[`.omo/plans/2026-08-06-aci-pretooluse-prompt.md`](../docs/archive/2026-08-06-aci-pretooluse-prompt-plan.md)
+- 已知陷阱:[`.claude/agent-memory/footguns/agent-skips-aci-routing.md`](../.claude/agent-memory/footguns/agent-skips-aci-routing.md)
+- 設計決策:[`.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md`](../.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md)

@@ -5,7 +5,7 @@
 >
 > **來源 PR**: `feat/20260806-aci-pretooluse-prompt`(`aci-read-prompt.sh` + agent-memory + `.gitignore` 補完)
 >
-> **設計文件**: [`.omo/plans/2026-08-06-aci-pretooluse-prompt.md`](../../.omo/plans/2026-08-06-aci-pretooluse-prompt.md)
+> **設計文件**: [`.omo/plans/2026-08-06-aci-pretooluse-prompt.md`](../archive/2026-08-06-aci-pretooluse-prompt-plan.md)
 >
 > **設計決策**: [`.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md`](../../.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md)
 
