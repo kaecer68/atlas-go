@@ -33,8 +33,7 @@ func toolNames(tools []llm.Tool) []string {
 // Issue #711 #10: the LLM dependency is split into two embedded
 // interfaces — PlanDriver and ReflectDriver — so an implementation
 // can supply just the planning half, just the reflection half, or
-// both. Use the LLMDriver deprecated alias for the combined
-// "both" case.
+// both (embed both to cover the combined case).
 type SectorAgentLLM struct {
 	*AgentLoop
 	// Skill is the agent layer / skill this represents (e.g. "semiconductor").
@@ -71,18 +70,6 @@ type PlanDriver interface {
 type ReflectDriver interface {
 	// ReflectComplete sends a reflection prompt after a tool result.
 	ReflectComplete(ctx context.Context, skill, symbol, toolResult string) (Reflection, error)
-}
-
-// LLMDriver is the combined contract for an LLM backend that drives
-// both the Plan and Reflect phases.
-//
-// Deprecated: use PlanDriver and ReflectDriver separately so an
-// implementation can supply just the phase it supports. LLMDriver
-// remains as a convenience alias (= PlanDriver + ReflectDriver) for
-// backward compatibility with code written before the split.
-type LLMDriver interface {
-	PlanDriver
-	ReflectDriver
 }
 
 // ErrNotImplemented is returned by SectorAgentLLM runner methods when

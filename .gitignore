@@ -233,3 +233,6 @@ internal/narrative/testdata/*.actual.json
 # Binary freshness protocol (2026-07-21): host-built binaries for sandbox rebuilds
 .build-atlas/
 .build-cron/
+
+# FinMind daily quota runtime state (written by daily_quota.go during tests/integration)
+/cmd/cron-quote-backfill/data/

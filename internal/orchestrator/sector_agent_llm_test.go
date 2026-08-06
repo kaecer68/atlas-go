@@ -103,19 +103,6 @@ func TestRunToolCall_LLMWiredWithTools_NotImpl(t *testing.T) {
 	}
 }
 
-// TestSectorAgentLLM_LLMDriver_DeprecatedAlias verifies the Issue #711
-// #10 backward-compat guarantee: the deprecated LLMDriver interface
-// is still the intersection of PlanDriver + ReflectDriver, so existing
-// implementations that satisfy both halves (like stubLLMDriver) can
-// still be assigned to a single LLMDriver-typed variable.
-//
-// The assignment itself is the test: if this line compiles,
-// stubLLMDriver satisfies LLMDriver. A nil check is dead code
-// (SA4023) because stubLLMDriver{} is a non-nil struct value.
-func TestSectorAgentLLM_LLMDriver_DeprecatedAlias(t *testing.T) {
-	var _ LLMDriver = stubLLMDriver{}
-}
-
 // TestPlanStep_NoPlanDriver_ReturnsErrNotImplemented verifies that
 // PlanStep returns ErrNotImplemented when PlanDriver is nil even if
 // ReflectDriver is wired. Issue #711 #10: each driver is independent.

@@ -1,6 +1,6 @@
 # L2.4 Cron Trigger — Fault Tolerance Design
 
-> **Status**: Design document. **Not implemented yet** (per `docs/archive/l2-4-followup.md` §1 — auto-cron is graduation, not v1).
+> **Status**: Design document. **Not implemented** (per `docs/archive/l2-4-followup.md` §1 — auto-cron is graduation, not v1). ⛔ **2026-08-06: Issue #825 CLOSED**,本設計未實作;自動化缺口由 C07 平行軌道填補。本文件保留作為未來若重啟 L2.4 auto-cron 的設計參考。
 > **Prerequisite**: `followup.md` §1 item 3 — "排程 fault tolerance: 設計降級策略 (trigger 失敗時 log warning 不 panic、scheduler 重啟後恢復 in-flight window)"
 > **對應**: `docs/archive/l2-4-followup.md` §1 (Issue #825) + `docs/operations/l2-4-runbook.md` §1
 

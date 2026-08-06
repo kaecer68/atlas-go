@@ -1,9 +1,9 @@
 # L2.4 Follow-up Work Report
 
-> **Status**: PR #821 merged 2026-06-29 (commit `f69b3551`). Manual L2.4 observation infrastructure shipped.
+> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);後續 #825 / #826 已關閉,依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md) 盤查決策。
 > **Scope**: Items deferred from PR #821 that require follow-up work, plus the scope of the docs-migration PR.
 > **Audience**: atlas-go ops, on-call engineering, future maintainers.
-> **Tracking**: Issue #742 (L2.4 runbook), Issue #740 (L2.4 observation metrics), Issue #711 (Wave 10 L2.3 plan), Issue #825 (Auto-cron Scheduler), Issue #826 (L2.4 Promotion Procedure).
+> **Tracking**: Issue #742 (L2.4 runbook), Issue #740 (L2.4 observation metrics), Issue #711 (Wave 10 L2.3 plan), Issue #825 (Auto-cron Scheduler — **CLOSED 2026-08-06**), Issue #826 (L2.4 Promotion Procedure — **CLOSED 2026-08-06**).
 >
 > **NOTE**: 本文件為上述 GitHub Issues 的鏡像文件(mirror),以 **GitHub Issue 為唯一權威來源**(single source of truth)。若兩者內容衝突,以 Issue 為準並請更新本文。
 
@@ -21,6 +21,8 @@ This report covers 4 categories of follow-up work:
 ### 實作內容
 
 **Status (2026-07-08)**: PR #1029 ships the **defensive 5-condition gate** (`internal/scheduler/l2_4_auto_cron.go`). Cron will NOT fire unless ALL of: (1) env var `L2_4_AUTO_CRON_ENABLED=true`, (2) `parameters.AutoEnabled=true`, (3) observation log exists, (4) Day 7+ entry exists in log, (5) current time in cron window. Default-disabled in every respect. **Gate ships; actual `BackgroundTaskManager.Register()` + `l24Mgr.Start/Stop()` wiring deliberately deferred per prereq #1 + #2** (see 「是否現在可以開始實作？」 below).
+
+**Status (2026-08-06)**: ⛔ **Issue #825 CLOSED**。`ShouldL24AutoCronFire` 0 production callers (僅 test 呼叫),gate 從未 wire-up 到 `BackgroundTaskManager`;C07 平行軌道 (c07-obs-collector / c07-day-evaluator / c07-preflight) 已提供同類自動化。檔頭已加 DEPRECATED 註記 (保留 code 供未來 L2.4 重啟復用)。
 
 Original spec for full implementation (not yet shipped):
 
@@ -153,12 +155,14 @@ PR #821 已經把 L2.4 從「設計階段」推進到「可手動啟用階段」
 
 ---
 
-### 3c. LLMDriver Deprecated Alias 移除
+### 3c. LLMDriver Deprecated Alias 移除 — ✅ DONE (2026-08-06)
+
+> **Status**: 已於 2026-08-06 收尾完成 (Issue #826 關閉前的清理)。`LLMDriver` alias 移除,0 production usages,AGENTS.md 警告同步清理。
 
 **實作內容**:
-- 從 `internal/orchestrator/sector_agent_llm.go` 刪除 `LLMDriver` 單一介面 deprecated alias
-- 確認所有呼叫端都改用 `SectorAgentLLMDriver`(包 `PlanDriver` + `ReflectDriver`)
-- 更新 `internal/orchestrator/AGENTS.md` 移除相關 warning
+- 從 `internal/orchestrator/sector_agent_llm.go` 刪除 `LLMDriver` 單一介面 deprecated alias ✅
+- 確認所有呼叫端都改用 `SectorAgentLLMDriver`(包 `PlanDriver` + `ReflectDriver`)✅
+- 更新 `internal/orchestrator/AGENTS.md` 移除相關 warning ✅
 
 **目標**: 清理 deprecated code,讓 `SectorAgentLLMAgent` 結構的 LLM 介面字段明確為 `PlanDriver` + `ReflectDriver`(非 deprecated `LLMDriver`)。
 
@@ -177,7 +181,7 @@ PR #821 已經把 L2.4 從「設計階段」推進到「可手動啟用階段」
 
 **預估時程**: 0.5 天工作量,純 refactor(無行為變更),需要完整 test 驗證無 regression
 
-**Note**: PR #1025 已 ship 介面 split,但 `LLMDriver` deprecated alias 仍在(向後相容);正式移除要等 3b 後 production 跑 7+ 天無 regression。
+**Note**: PR #1025 已 ship 介面 split;2026-08-06 收尾時 `LLMDriver` deprecated alias 已移除 (0 production usages,僅 test 斷言),不需要等 3b (3b 已隨 #826 關閉)。
 
 ---
 
@@ -247,17 +251,19 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 
 ## 5. 總時程與優先序
 
-| 項目 | 預估工時 | 優先序 | 阻塞 | 狀態 (2026-07-08) |
+> **2026-08-06 更新**:#825 / #826 已關閉,下列表格除「已 ship」外全部標記 CLOSED。
+
+| 項目 | 預估工時 | 優先序 | 阻塞 | 狀態 |
 |------|---------|--------|------|------|
 | This PR (docs 遷移) | 1-2 hours | **現在** | 無 | ✅ 已 ship |
 | CLI flag wiring | 0.5 day | 下一個 sprint | 無 | ✅ Shipped ([PR #1021](https://github.com/kaecer68/atlas-go/pull/1021)) |
-| Auto-cron scheduler | 2-3 days | Day 14 之後 | 觀察期成功 1 次 | 🟡 Defensive gate shipped ([PR #1029](https://github.com/kaecer68/atlas-go/pull/1029));full impl 等 prereq #1+#2 |
-| Source 升級 (3a) | 10 min | Day 14 之後 | Day 14 通過 | ⏳ 未啟動 |
-| Default flip (3b) | 1-2 days | 3a 之後 | 3a | ⏳ 未啟動 |
-| LLMDriver 移除 (3c) | 0.5 day | 3b 之後 7+ 天 | 3b + production 7+ 天 | 🟡 Split done ([PR #1025](https://github.com/kaecer68/atlas-go/pull/1025));deprecated alias 仍保留(向後相容),等 3b |
-| Version tag (3d) | 30 min | 3a/3b/3c 都完成 | 3a/3b/3c | ⏳ 未啟動 |
+| Auto-cron scheduler | 2-3 days | Day 14 之後 | 觀察期成功 1 次 | ⛔ **CLOSED (#825)** — 0 callers dead code, C07 覆蓋 |
+| Source 升級 (3a) | 10 min | Day 14 之後 | Day 14 通過 | ⛔ **CLOSED (#826)** — Day 14 gate 未通過 |
+| Default flip (3b) | 1-2 days | 3a 之後 | 3a | ⛔ **CLOSED (#826)** — 依賴 3a |
+| LLMDriver 移除 (3c) | 0.5 day | 3b 之後 7+ 天 | 3b + production 7+ 天 | ✅ **DONE (2026-08-06)** — alias 移除,0 production usages |
+| Version tag (3d) | 30 min | 3a/3b/3c 都完成 | 3a/3b/3c | ⛔ **CLOSED (#826)** — 依賴 3a/3b |
 
-**Note**: 此表反映 2026-07-08 實際 ship 狀態。後續 prereq 達成後逐項更新。
+**Note**: 此表反映 2026-08-06 收尾狀態。詳細盤查依據見 `docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`。
 
 ## 6. References
 
