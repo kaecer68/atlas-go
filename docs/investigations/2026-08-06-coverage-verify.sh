@@ -19,17 +19,17 @@ make rebuild-atlas-bins
 echo "[2/6] Rebuild host bin/atlas-mcp ..."
 make rebuild-host-bin
 
-echo "[3/6] Rebuild the `atlas` docker image (service name) ..."
+echo "[3/6] Rebuild the 'atlas' docker image (service name) ..."
 docker compose build atlas
 
 echo "[4/6] Restart atlas-go container (container_name) ..."
 docker compose up -d atlas
 
 echo "[5/6] Wait for HTTP readiness on :18080 ..."
-for i in {1..30}; do
-  if curl -sS -o /dev/null -w '%{http_code}' http://localhost:18080/api/health/live 2>/dev/null \
-       | grep -q '^2'; then
-    echo "  atlas-go ready after ${i}s"
+for i in {1..60}; do
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:18080/api/health/aggregate" 2>/dev/null || echo 000)
+  if [[ "$code" == 2* ]]; then
+    echo "  atlas-go ready after ${i}s (health=$code)"
     break
   fi
   sleep 1
