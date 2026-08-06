@@ -4,7 +4,7 @@
 **作者**: AI session (kaecer 主導)
 **Branch**: `feat/20260806-aci-pretooluse-prompt`
 **PR**: [#1464](https://github.com/kaecer68/atlas-go/pull/1464)
-**狀態**: Merged
+**狀態**: Plan reviewed, awaiting PR #1464 merge
 **詳細 PR body 對照**: [`2026-08-06-aci-hook-pr-1464-body.md`](2026-08-06-aci-hook-pr-1464-body.md)
 
 ---
