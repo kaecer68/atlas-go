@@ -51,7 +51,7 @@
 
 **深入 git 歷史查證後的修正**:
 - `internal/forecast/foreign_forecast.go` 來自 commit `9f71933e` — **「feat(forecast): 外資方向推估 v1 scorecard + ledger + 校準門檻 — #E03」**
-- 對應 spec: `docs/specs/foreign-flow-forecast-spec.md` §6 明確寫「**首次啟用後至少需連續運行 90 個交易日才能驗證**」、§9 寫「**累積 ≥ 90 個交易日後,啟用對外展示**」
+- 對應 spec: `docs/specs/foreign-flow-forecast-spec.md` §6 + §8 (line 89) 明確寫「**首次啟用後至少需連續運行 90 個交易日才能驗證**」、§9 (line 94) 寫「**累積 ≥ 90 個交易日後,啟用對外展示**」(P3 修正: 原引用為 §6,實證查證「90 個交易日才能驗證」一句位於 §8 line 89,§6/§8/§9 規範於多處出現)
 - `internal/forecast/AGENTS.md` 完整記錄此設計意圖,且**未標示為 deprecated**
 - 對比: `internal/forecast_bridge/` (外部套件) 已在 commit `3e5808f4` 移除,理由是「Phase 3.5 M4 PoC shipped but never consumed by runtime. TradeSignal conversion now handled by `strategy.DirectionalTradeLayer` directly」
 

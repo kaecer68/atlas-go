@@ -9,7 +9,7 @@
 
 ## 1. 背景
 
-`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md` §7 指出「L2.4 觀察期從未啟動」「觀察 log 僅為範本(無真實 Day N entry)」。
+`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md` §1 (line 18) 指出「L2.4 觀察期從未啟動」「觀察 log 僅為範本(無真實 Day N entry)」(P3 修正: 原引用 §7,實證查證該句位於 §1 §「現況發現」,§7 為 Backlog)
 
 問題:
 - `forecast` (experimental) 是否有任何 spot-check log 累積?
@@ -99,7 +99,7 @@
 
 ## 5. 修正 manifest §7 F5 文字建議
 
-F5 原文:「C07 ... 有 docker 部署 + **28 天 spot-check log 累積**」
+F5 文字參考(P3 修正):「28 天 spot-check log 累積」實質引自 l2-4 audit manifest §1 line 22,C07 段落位於該行附近;F5 evidence 表本身(line 76)未直接寫「28 天」字樣。為求精確,以下修正文字主要對齊 §1 line 22 原文:
 
 **修正為**:「C07 有 docker 部署 + **7 個工作日的 obs log + 20 個 spot-check markers + 2 份 Day 7/14 評估報告(8/9 MUST PASS);C07 觀察期於 2026-07-22 因 rollback verified FAIL 提前收尾**」
 

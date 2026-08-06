@@ -29,12 +29,12 @@
 
 #### client_web 前端
 
-- `client_web/static/js/main.js:24-44` SHELL_LOADERS:19 個 page id,**0 個**與追蹤/紀律相關
+- `client_web/static/js/main.js:24-44` SHELL_LOADERS:**18** 個 page id (narrative…errors/404),**0 個**與追蹤/紀律相關 (P3 修正: 原寫 19,實證查證 main branch 為 18)
 - `client_web/static/js/main.js:160-175` loadModules 12 個 import,**無** `./pages/alerts.js`
 - `client_web/static/js/main.js:204-208` `modules.alerts` 永遠 undefined (死碼)
-- `client_web/static/index.html:99-130` sidebar nav 16 個連結,**0 個**對應追蹤/紀律
+- `client_web/static/index.html:99-130` sidebar nav:**18** 個連結 (市場 7 + 策略 2 + 更多 6 + 帳戶 3),**0 個**對應追蹤/紀律 (P3 修正: 原寫 16,實證查證為 18)
 - `client_web/static/index.html:171` notification-center 容器存在,無 JS 注入
-- `client_web/static/js/main.js:354-372` live page 載入 11 個 API,**未抓** user_state/preference
+- `client_web/static/js/main.js:354-372` live page Promise.all:**10** 個 getJSONWithTimeout API 呼叫,**未抓** user_state/preference (P3 修正: 原寫 11,實證查證為 10)
 
 #### 內部系統皆為運維語意,不可複用為散戶功能
 
