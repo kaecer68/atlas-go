@@ -57,30 +57,32 @@
 
 **§4.5.2 例外原則**：若該 goroutine 在 `Start()` 時啟動、在 `Stop()` 時結束、且有明確的排程間隔 → **必須使用 TaskManager**。明文例外僅：HTTP server、WaitGroup 一次性並行、事件監聽、context-with-timeout、WS ping/pong、test、autobacktest 專用 loop、live ruleEngine、DI 元件、simulation 路徑、F1-F9 supervisor。
 
-### 2.1 高嚴重（6 項 — 明確應走 BTM）
+> **2026-08-06 同步 (Issue #1447)**: 本節 17 個 ticker 經 2026-08-06 評估, 在憲章 §4.5.2 既有例外框架下 15 個屬例外、1 個已遷 (PR #1471)、1 個 dead code (待 deprecation)。詳見 `docs/manifests/2026-08-06-btm-ticker-batch2-3-plan.md` 與 `CONSTITUTION.md` line 261-265 例外清單。**Article 4 違規實際需遷移 = 0**, 議題 #1447 走 closure 方向 (文件同步)。
 
-| 檔案 | 行號 | Goroutine |
-|---|---|---|
-| `internal/marketdata/fubon_client.go` | 311 | `go c.runHealthProbe(interval)` — ticker 排程 fubon-proxy 健康 |
-| `internal/marketdata/streaming.go` | 26 | `PollingAdapter.Subscribe` — ticker 重複 GetQuotes |
-| `internal/metalearning/metalearner.go` | 292 | `MetaLearner.adaptationLoop` — ticker + wg |
-| `internal/prism/prism_manager.go` | 564 | `PRISMManager.autoBalancer` — 5 min ticker |
-| `internal/realtime/regime_adapter.go` | 268 | `RealTimeAdapter.Start` — ticker regime 更新 |
-| `cmd/atlas/main.go:1545` + `cmd/atlas/operations_tasks.go:1543` | — | **Name collision**: `janus_regime_refresh` 雙重註冊；後者靜默覆蓋前者，破壞 channelID 掛勾 |
+### 2.1 高嚴重（6 項 — 2026-08-06 重新分類）
 
-### 2.2 中嚴重（9 項 — 需判斷 lifecycle 邊界或補列例外）
+| 檔案 | 行號 | Goroutine | 2026-08-06 狀態 |
+|---|---|---|---|
+| `internal/marketdata/fubon_client.go` | 311 | `go c.runHealthProbe(interval)` — exponential backoff 狀態機 | **憲章 §4.5.2 例外 (Wave9 supervisor 模式 / F1-F9 supervisor)** — 保留原生命週期, 不遷移 |
+| `internal/marketdata/streaming.go` | 26 | `PollingAdapter.Subscribe` — ticker 重複 GetQuotes | **不遷移** — 改 BTM 需改 `StreamingProvider` interface 語意 (Subscribe 立即 return), 影響 9 個 callers, 需 RFC |
+| `internal/metalearning/metalearner.go` | 292 | `MetaLearner.adaptationLoop` — ticker + wg | **production dead code** — `SetMetaLearner` 0 non-test caller (2026-08-06 grep 驗證), 待 deprecation 註解 |
+| `internal/prism/prism_manager.go` | 564 | `PRISMManager.autoBalancer` — 5 min ticker | ✅ **已遷移** — PR #1471 merge (commit 7cc83475), `RegisterAutoBalancer` BTM task |
+| `internal/realtime/regime_adapter.go` | 268 | `RealTimeAdapter.Start` — 100ms sub-second ticker | **憲章 §4.5.2 例外 (live ruleEngine)** — 100ms sub-second + `-allow-realtime` flag gate, BTM 固定 interval 不適用 |
+| `cmd/atlas/main.go:1545` + `cmd/atlas/operations_tasks.go:1543` | — | **Name collision**: `janus_regime_refresh` 雙重註冊 | ✅ **已修** — Issue #1086 fix: main.go:1752 註冊, operations_tasks.go:423 標記不再註冊, operations_tasks_test.go:48 驗證 |
 
-| 檔案 | 行號 | Goroutine |
-|---|---|---|
-| `internal/marketdata/realtime/router.go` | 232 | `RealtimeRouter.healthCheckLoop` ticker |
-| `internal/marketdata/realtime/router.go` | 104 | `RealtimeRouter.failoverLoop` 啟動 |
-| `internal/mcp/anomaly/emitter.go` | 118 | `AnomalyEmitter.Run` ticker |
-| `internal/monitoring/service/channel_health_synthesizer.go` | 65 | `channelHealthSynthesizer.run` ticker |
-| `internal/monitoring/service/drift_detector.go` | 104 | `driftDetector.run` ticker |
-| `internal/monitoring/service/ingestion_lag_monitor.go` | 66 | `ingestionLagMonitor.checkLoop` ticker |
-| `internal/monitoring/service/regime_debouncer.go` | 80 | `regimeDebouncer.run` ticker |
-| `internal/spawning/spawning_manager.go` | 105 | `SpawningManager.runLoop` ticker |
-| `internal/live/scheduler.go` | 117, 120, 173 | `Scheduler.quotePoller / marketTimeScheduler / intradayProcessor` — 三個 lifecycle-bound ticker |
+### 2.2 中嚴重（9 項 — 2026-08-06 重新分類）
+
+| 檔案 | 行號 | Goroutine | 2026-08-06 狀態 |
+|---|---|---|---|
+| `internal/marketdata/realtime/router.go` | 232 | `RealtimeRouter.healthCheckLoop` ticker | **憲章 §4.5.2 例外 (事件監聽 / 共享 cancelCtx)** — 與 `failoverLoop` 共用 `r.cancelCtx` (router.go:87-89), 拆 BTM 破壞單一 cancel 語意 |
+| `internal/marketdata/realtime/router.go` | 104 | `RealtimeRouter.failoverLoop` 啟動 | 同上 (router.go:248 共用 `r.cancelCtx`) |
+| `internal/mcp/anomaly/emitter.go` | 118 | `AnomalyEmitter.Run` ticker | **憲章 §4.5.2 例外 (DI 元件)** — `cmd/atlas-mcp` binary 無 BTM 架構, 引入整套 BTM 違反例外精神 |
+| `internal/monitoring/service/channel_health_synthesizer.go` | 65 | `channelHealthSynthesizer.run` ticker | **憲章 §4.5.2 例外 (Wave9 supervisor)** — `wave9_runtime.go:183-187` 統一 lifecycle (LIFO Stop) |
+| `internal/monitoring/service/drift_detector.go` | 104 | `driftDetector.run` ticker | 同上 (`wave9_runtime.go:241-246`) |
+| `internal/monitoring/service/ingestion_lag_monitor.go` | 66 | `ingestionLagMonitor.checkLoop` ticker | 同上 (`wave9_runtime.go:193-201`) |
+| `internal/monitoring/service/regime_debouncer.go` | 80 | `regimeDebouncer.run` ticker | 同上 (`wave9_runtime.go:183-187`) |
+| `internal/spawning/spawning_manager.go` | 105 | `SpawningManager.runLoop` ticker | **憲章 §4.5.2 例外 (spawning 路徑)** — CONSTITUTION.md §4.5.2 例外清單明文列 |
+| `internal/live/scheduler.go` | 117, 120, 173 | `Scheduler.quotePoller / marketTimeScheduler / intradayProcessor` | **憲章 §4.5.2 例外 (live ruleEngine + 動態 ticker)** — `marketTimeScheduler` (line 142-195) 依 inMarketHours 動態建/銷 ticker, BTM 固定 interval 不適用 |
 
 ### 2.3 CI 治理 false-negative
 
@@ -157,7 +159,7 @@
 ### 6.2 P1 — 高嚴重違規
 4. **`cmd/backfill-*/main.go` + `cmd/realtime-quote/main.go`** — 改用 `config.GetSecret("FINMIND_API_KEY")` / `config.GetSecret("FUGLE_API_KEY")`
 5. **`internal/marketdata/{yahoo_macro,finmind_client,fugle_client,fubon_client}.go`** — 移除 rogue ticker，全部走 `gateway.Fetch()` 或顯式註冊到 BTM
-6. **`internal/realtime/regime_adapter.go:265` + `internal/metalearning/metalearner.go:286` + `internal/prism/prism_manager.go:563`** — 改註冊到 BackgroundTaskManager
+6. ~~**`internal/realtime/regime_adapter.go:265` + `internal/metalearning/metalearner.go:286` + `internal/prism/prism_manager.go:563`** — 改註冊到 BackgroundTaskManager~~ — **2026-08-06 結案 (Issue #1447)**: prism autoBalancer 已遷 (PR #1471, line 564), regime_adapter 屬憲章 §4.5.2 例外 (line 268), metalearner 屬 production dead code (line 292)。詳見 §2.1 重新分類表。
 7. **`internal/apigateway/gateway.go:39`** — 將 `tsmc_revenue: 5` 改回預設 3（§5.1）或在附錄 A 明文特化說明
 
 ### 6.3 P2 — 中嚴重 / 文件同步
