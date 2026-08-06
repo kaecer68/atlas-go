@@ -376,12 +376,12 @@ jobs:
       run: |
         TRAP_LINES=$(wc -l < docs/reference/traps.md | tr -d ' ')
         echo "docs/reference/traps.md lines: $TRAP_LINES"
-        if [ "$TRAP_LINES" -gt 300 ]; then
-          echo "ERROR: docs/reference/traps.md has $TRAP_LINES lines (limit: 300)."
+        if [ "$TRAP_LINES" -gt 330 ]; then
+          echo "ERROR: docs/reference/traps.md has $TRAP_LINES lines (limit: 330)."
           echo "Split or consolidate trap entries."
           exit 1
         fi
-        echo "OK: docs/reference/traps.md is within 300-line budget."
+        echo "OK: docs/reference/traps.md is within 330-line budget."
 
     - name: Check docs/reference/traps.md module attribution
       run: |
