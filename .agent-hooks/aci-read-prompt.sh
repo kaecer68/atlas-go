@@ -31,7 +31,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# .agent-hooks/ is directly under the repo root, so one level up is the root.
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # ─── 1. Read JSON input from stdin ─────────────────────────────
 INPUT="$(cat)"
@@ -40,6 +41,14 @@ INPUT="$(cat)"
 # crash the agent session — the existing session-start.sh handles other
 # prerequisite checks; we mirror its graceful-degradation pattern.
 if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Guard non-JSON stdin: with `set -euo pipefail`, a malformed payload
+# would make the jq calls below abort this hook (non-blocking, but it
+# surfaces a hook-error notice on every matched call). Validate first so
+# the documented no-crash/no-noise behavior is unconditional.
+if ! printf '%s' "$INPUT" | jq -e . >/dev/null 2>&1; then
   exit 0
 fi
 
@@ -58,8 +67,12 @@ case "$TOOL_NAME" in
     # tool_input.file_path is the canonical field; .path is a fallback
     # for some tool variants. Both Read and Edit/Write use file_path.
     FILE_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // ""')"
-    # Normalize: strip leading ./ if any
+    # Normalize: strip leading ./ and repo-root prefix if any.
+    # Claude Code PreToolUse always passes ABSOLUTE paths, so a bare
+    # relative pattern (internal/*.go) would never match in a real
+    # session. Strip ${REPO_ROOT}/ first, then match repo-relative.
     FILE_PATH="${FILE_PATH#./}"
+    FILE_PATH="${FILE_PATH#$REPO_ROOT/}"
     # Must end in .go and live under internal/ or cmd/ at the repo root.
     case "$FILE_PATH" in
       internal/*.go|cmd/*.go)
@@ -75,8 +88,11 @@ case "$TOOL_NAME" in
     # common anti-pattern this hook addresses).
     GREP_PATH="$(printf '%s' "$INPUT" | jq -r '.tool_input.path // ""')"
     GREP_PATH="${GREP_PATH#./}"
+    GREP_PATH="${GREP_PATH#$REPO_ROOT/}"
     case "$GREP_PATH" in
-      internal/*|cmd/*)
+      # Accept bare internal|cmd (no trailing slash), repo-relative paths,
+      # and semicolon-delimited lists like "internal; cmd".
+      internal*|cmd*)
         HIT=1
         FILE_KEY="$TOOL_NAME:$GREP_PATH"
         ;;
@@ -92,7 +108,7 @@ case "$TOOL_NAME" in
     #   (b) bare directory path (grep -r foo internal/orchestrator/) → broad
     # We dedup by whichever matched first; the dedup table scopes by
     # session so cross-call frequency is bounded.
-    MATCHED_PATH="$(printf '%s' "$CMD" | grep -oE '\b(internal|cmd)/[A-Za-z0-9_./-]*' | head -n 1 || true)"
+    MATCHED_PATH="$(printf '%s' "$CMD" | grep -oE '\b(internal|cmd)(/[A-Za-z0-9_./-]*)?' | head -n 1 || true)"
     if [ -n "$MATCHED_PATH" ] && printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(grep|rg|find)[[:space:]]'; then
       HIT=1
       FILE_KEY="$TOOL_NAME:$MATCHED_PATH"
@@ -146,7 +162,7 @@ CONTEXT_TEXT='AC: atlas-go ACI routing — 你正要讀/改/搜 hot-path Go 檔(
   Step 1.5 (source context): 要看 caller source code?
                             → codebase-memory_explore(query="<symbol>")
 
-  hot-path 模組 (有 internal/<mod>/AGENTS.md): apigateway / capitalflow / fubonproxy / live / llm / marketdata / monitoring / orchestrator / strategy_techniques / admin_web / client_web / cmd/atlas-mcp / cmd/experimental — 先讀該 AGENTS.md 再改。
+  hot-path 模組 (有 AGENTS.md): root / apigateway / capitalflow / fubonproxy / live / llm / marketdata / monitoring / orchestrator / strategy_techniques / admin_web / client_web / cmd/experimental / cmd/atlas-mcp/server / scripts/openclaw — 先讀該 AGENTS.md 再改。
 
   完整 8 步(必跑): 載入 atlas-pre-change-protocol skill。
 
