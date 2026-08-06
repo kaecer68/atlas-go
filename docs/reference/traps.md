@@ -1,6 +1,14 @@
+---
+title: traps.md — 高危陷阱參考
+updated: 2026-08-06
+status: active
+referenced_by: 15+ 份文件 (docs/specs, docs/operations, docs/investigations)
+---
+
 # traps.md — 高危陷阱參考
 
 > 此文件為 `AGENTS.md` 陷阱節的詳細擴充。根 AGENTS.md 僅保留最關鍵的跨模組陷阱；模組特定陷阱請見 `internal/*/AGENTS.md`。
+> 新增 trap 前請確認無重複 (grep 既有條目);新增後更新本檔 `updated` 欄位。
 
 ---
 
@@ -19,6 +27,16 @@
 | **`CalendarEvent.EventType` 必須 set 不可省** | industry / data | `buildEventFromRule` (L971)、`buildHolidayEvent` (L1027)、`buildPositionBuildingEvent` (L1049)、`buildElectionEvent`、`buildMSCIEvent`、`buildTW50Event` 等每個 `CalendarEvent` constructor **都必須 set `EventType: rule.EventType`**。下游 `IsTaiwanTradingDay` 在 PR #1128 commit `0dcd159b` 起改用 `evt.EventType == string(EventLongHoliday)` typeFilter(取代先前 `strings.HasPrefix(..., "連假 - ")` 名稱前綴)。**任何**新增的 `build*Event` helper 若忘記設 EventType,**`IsTaiwanTradingDay` 會 silently 漏判** — 連假不再被識別為非交易日,`event-calendar-sparse` alert 會因春節/228/國慶連假誤觸發。防護:每新增一個 `build*Event`,新增一個對應的 unit test 驗證 `EventType` 欄位非空。 |
 | **MCP tool response 必須包裝在 `domain.DataQuality` envelope** | mcp / domain | 每個 MCP tool 回傳值應嵌入 `internal/domain/types.go:DataQuality`（`Available`/`Source`/`AsOf`/`SampleCount`/`SampleUnit`/`IsFallback`/`FallbackReason`/`Provenance`）。**當 `Available == false`，response value 是語意 zero,呼叫端 MUST NOT 解讀為真實資料**。PR #1278 統一 envelope 設計並 wire 進 5 個高影響 tool（`macro_get_snapshot_latest`/`capital_flow_daily`/`crossmarket_get_correlation`/`risk_get_metrics`/`regime_get_history`）。其餘 tool 應透過 `cmd/atlas-mcp/server/tools_data_quality.go:injectDataQuality()` / `dataQualityFromIngestStatus()` helper 漸進採用。
 | **`AuditWriter.Cleanup()` 失敗時須保留後續可寫性** | mcp / audit | `cmd/atlas-mcp/server/audit.go:AuditWriter.Cleanup()` 若因檔案鎖或 Permission 錯誤 reopen 失敗,**不可**在 `w.f = nil` 後直接 return — 這會把 writer 永久 poison 成無法再用。PR #1272 修法：failing reopen 走 `reopenForAppend()` 重試 3 次 (backoff 50/100/200ms);任何 read/scan/write/rename 失敗後都應嘗試 reopen 保持 writer 可用;新增 `Healthy() bool` 供 `system_get_health` 注入 `audit.healthy` 信號(不再只信賴 atlas upstream `/health`);`RunRetentionLoop` 失敗重試間隔從 24h 縮短為 1h。 |
+
+### FinMind / Quota [NEW — 2026-08-06]
+
+> 來源: `docs/investigations/2026-08-06-finmind-quota-collision.md` — 20+ 次 FinMind 修補循環 (PR #1451~#1463) 未被 trap 框架吸收,2026-08-06 盤查後補記。
+
+| 陷阱 | 所屬模組 | 說明 |
+|------|---------|------|
+| **FinMind server 402 ≠ `ErrQuotaExhausted`** | marketdata / industry | server-side 402 (`{"msg":"Requests reach the upper limit"}`) 與本地 `marketdata.ErrQuotaExhausted` (14400/day tracker) 是**兩個不同 error**。`fetchDataset` 對 402 只回 `fmt.Errorf("finmind: status 402, body: ...")` 不 wrap sentinel。診斷「FinMind 撞牆」必須看 `fetch_non_2xx status=402` log,不能只看 quota counter。 |
+| **rate limiter 本地失敗會被 fallback 吞掉** | industry / marketdata | `fetchRevenueYoY`/`fetchProfitYoY` 的月份/季度 fallback loop 曾把 `ErrRateLimited` (5s ctx vs 6s token) 吞成「no data in last 3 months」→ metric 誤報 `no_data`。2026-08-06 HF-1 修復 (透傳 + 10s ctx)。**教訓**: fallback loop 吞 error 前必須判斷是否 quota/rate-limit 類 — 見 `isFinMindQuotaOrRateLimited()`。 |
+| **排程器 24h 整點多 task 同步觸發** | scheduler / apigateway | `auto_cycle_update` (6h) + `auto_quote_backfill` (24h) + `channel_health_finmind` (1h) 在整點同時觸發會瞬間耗盡 rate limiter burst (60)。修排程錯開前,任何新增的固定間隔 FinMind caller 都應檢查是否與既有 task 整點對齊。 |
 
 ### Orchestrator / Control
 
