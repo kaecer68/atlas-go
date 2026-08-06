@@ -386,11 +386,10 @@ func (pm *PRISMManager) Start() {
 		}
 	}
 
-	// Start auto-balancer if enabled (tracked by WaitGroup).
-	if pm.config.AutoBalance {
-		pm.wg.Add(1)
-		go pm.autoBalancer(pm.stopCh)
-	}
+	// Note: the 5-min auto-rebalancer was migrated to BackgroundTaskManager
+	// (Issue #1447) — callers must wire it via RegisterAutoBalancer task
+	// registration in cmd/atlas (prism_auto_balancer). See
+	// docs/manifests/2026-08-06-btm-ticker-migration.md.
 
 	logging.Info("prism_manager", "started", "regime_queues", 5)
 }
@@ -563,20 +562,13 @@ func (pm *PRISMManager) executeTraining(task *TrainingTask) *TrainingResult {
 	}
 }
 
-// autoBalancer periodically rebalances queues
-func (pm *PRISMManager) autoBalancer(stopCh <-chan struct{}) {
-	defer pm.wg.Done()
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			pm.Rebalance()
-		}
-	}
+// AutoBalanceEnabled reports whether the queue auto-rebalancer is enabled.
+// Callers (cmd/atlas) use this to decide whether to register the
+// prism_auto_balancer BackgroundTaskManager task (Issue #1447).
+func (pm *PRISMManager) AutoBalanceEnabled() bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.config.AutoBalance
 }
 
 // classifyRegime resolves the regime for a training window.
