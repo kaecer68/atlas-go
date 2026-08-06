@@ -1,12 +1,14 @@
 # ATLAS 系統狀態快照
 
-> 最後更新：2026-07-31（公股節律修復：BTM 24h + CAPTCHA 24h cooldown）
+> **最後更新**: 2026-07-31（公股節律修復：BTM 24h + CAPTCHA 24h cooldown）
+> **本版追加**: 2026-08-07（新增附錄：55 個 7/30 → 8/7 期間合併 PR 摘要），對應 HEAD `0f8667a6`
 > 維護紀律：每次 feature wave 合併後更新，維持現狀可追蹤性。
 
 ## 活躍工作區
 
 | 工作區 | Branch | 狀態 | 說明 |
 |--------|--------|------|------|
+
 | `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區 |
 | `~/workspace/atlas/feat-20260730-b3-data-infra` | `feat/20260730-b3-data-infra` | 🟡 進行中 | B5-3 PR-A：公股資料基礎設施（parser/8 行庫/per-broker/sector reader），未合併 |
 | `~/workspace/atlas/MoneyTrend-B5-Batch-3` | `kaecer68/MoneyTrend-B5-Batch-3` | ⚪ 待清理 | B5-3 偵察工作區 |
@@ -284,3 +286,86 @@
   - **對外 `period` 欄位**：以前是 `RegimeToPeriod(regime)` 推導的近似值，現在是 `period_history` 真值。當兩者不一致時，外部 agent 會看到新值（這是目的）。
   - **對外 `market_period` 欄位**：保留以維持向後相容；值等同 `period` 同源。
   - **對外 `source` 欄位**：已移除。新讀者請改用 `regime_source` / `period_source`。
+
+
+## 附錄：2026-07-30 → 2026-08-07 期間合併 PR 摘要（55 個 feature wave + docs）
+
+> **本版更新**: 2026-08-07，對應 HEAD `0f8667a6`
+>
+> 本附錄列出 2026-07-30 → 8/7 期間合併進 main 的 PR；對應憲章治理更新見 `docs/ATLAS_CONSTITUTION_AUDIT.md` 附錄 D / E / F。
+
+### Feature wave 表（最新在前）
+
+| Wave | 範圍 | PR | 合併日期 | 摘要 |
+|------|------|----|----------|------|
+| Stock coverage notice | stocktools | #1477 | 2026-08-06 | out-of-scope TWSE symbols coverage notice |
+| TPEX scope §8 | investigation | #1478 | 2026-08-06 | industry §8 external-verified affirmation |
+| Traps index M1 | docs (traps) | #1474 | 2026-08-06 | traps.md frontmatter + FinMind/Quota trap 群組（行數 300→330） |
+| FinMind HF-1c | industry | #1473 | 2026-08-06 | fetch ctx 5s→10s 對齊 rate limiter 6s token |
+| FinMind HF-1a+b | industry | #1472 | 2026-08-06 | 透傳 rate-limit/402 error + classify 402→quota |
+| PRISM #1447 closure | prism | #1471 | 2026-08-06 | autoBalancer 從 rogue ticker 遷移至 BTM |
+| BTM ticker closure | docs (manifest) | #1475 | 2026-08-06 | 17 ticker 重新分類：15 例外合法 / 1 已遷 / 1 dead code |
+| L2.4 cleanup | chore | #1467 | 2026-08-06 | close #825 #826 — dead code cleanup + docs alignment |
+| L2.4 cleanup checklist | docs (manifest) | #1468, #1469 | 2026-08-06 | §3.0/§4.0/§5.0 ACI 盤查 + §7.2 AC-1..AC-8 驗收清單 |
+| ACI hook | feat | #1464 | 2026-08-06 | PreToolUse soft reminder for hot-path Go access |
+| Industry symbol coverage | industry (test) | #1463 | 2026-08-06 | live FinMind symbol coverage 驗證（build tag `livefinmind`） |
+| Industry FinMind classifier | industry | #1462 | 2026-08-05 | `classifyFinMindError` 識別「no valid data for industry X」彙總錯誤 |
+| Industry observability | industry | #1461 | 2026-08-05 | auto_cycle_update 失敗 metric + symbol coverage validator |
+| Operations PR lifecycle | docs | #1460 | 2026-08-05 | consolidate PR lifecycle spec + AGENTS.md reference |
+| Crossmarket recovery | monitoring | #1459 | 2026-08-05 | 擴充 crossmarket recovery 路徑含 stale status |
+| taifex-daily badge | monitoring | #1458 | 2026-08-05 | 為 dead `taifex-daily` alias 註冊 known-issue badge |
+| Crossmarket stale clear | monitoring | #1457 | 2026-08-05 | 復原時清空 stale crossmarket degraded records |
+| FinMind endDate | marketdata | #1456 | 2026-08-05 | 改由實際 last day of month 推算 |
+| Channel alias | monitoring | #1455 | 2026-08-05 | 註冊 dash-separated runtime aliases |
+| Long-stale badge | monitoring | #1454 | 2026-08-05 | 為 long-stale channels 浮現 known-issue badge |
+| tw_vol auto-refetch | marketdata | #1453 | 2026-08-05 | tw_vol stale cache 在 trading day rollover 自動 refetch |
+| FinMind error body | marketdata | #1452 | 2026-08-05 | channel health 內 capture FinMind API error body |
+| Unified quota | apigateway+marketdata+monitoring | #1451 | 2026-08-05 | 三層 unified quota management |
+| TEJ inactive health | apigateway | #1450 | 2026-08-04 | `TEJ_API_KEY` 未設置時寫 inactive health record |
+| Fugle v1.0 migration | marketdata | #1448 | 2026-08-04 | migrate Fugle quote/meta from retired v0.3 → v1.0 API |
+| Fugle docs | docs (marketdata) | #1449 | 2026-08-04 | 校正 Fugle key misconceptions in comments |
+| Fugle rate limiter | marketdata | #1446 | 2026-08-03 | unify Fugle clients onto shared rate limiter + constitution cleanup |
+| TWSE quote fallback | stocktools | #1445 | 2026-08-03 | TWSE quote fallback 給予獨立 timeout budget |
+| Sessions pagination | pipeline | #1444 | 2026-08-02 | paginate sessions endpoint + zero-outcome data-loss monitor |
+| experiment_diff metrics | experiment | #1443 | 2026-08-02 | expose judge-collected metrics |
+| atlas-mcp experiment_id | atlas-mcp | #1441 | 2026-08-02 | experiment_diff 補上 experiment_id |
+| stress_test_daily | orchestrator | #1440 | 2026-08-02 | RunDailyStressTests 跑完後呼叫 drawdownReporter 更新 dashboard |
+| TEJ disable | chore | #1439 | 2026-08-01 | disable TEJ channel + scheduler, fix T3-A47 enable inconsistency |
+| Govflow daily-once guard | govflow | #1437 | 2026-08-01 | BTM 1h + daily-once guard，修復 24h 排程餓死 |
+| Eventdriven baseline | test | #1436 | 2026-08-01 | time-anchored calendar + saturated bullish baseline |
+| MCP migration roadmap | docs (operations) | #1435 | 2026-08-01 | MCP 2026-07-28 migration roadmap |
+| Sector gitignore | chore | #1434 | 2026-07-30 | ignore `data/sector/` (simulation closure output) |
+| Sector allocation reader | sectorallocation | #1433 | 2026-07-30 | 對齊 API reader path 與 writer |
+| Sectorallocation SA08 | sectorallocation | #1432 | 2026-07-30 | close SA08 closure writer loop |
+| Reporting corrupted | reporting | #1431 | 2026-07-30 | drop corrupted session summaries from performance report |
+| Industry fallback_reason | industry | #1430 | 2026-07-30 | industry-map empty state 浮現 fallback_reason |
+| Docker 禁令落地 | cleanup | #1429 | 2026-07-30 | Makefile 防呆 + 文件改寫，禁止 AI 重建容器 |
+| CI test isolation | test | #1428 | 2026-07-30 | ResetYahooTestLimiters + injectable rate limiters |
+| Main 修復列車 | ci | #1427 | 2026-07-30 | sector 映射平均 + ineffassign + eventdriven 校準斷言 |
+| Hermes MCP period | mcp | #1426 | 2026-07-30 | period 欄位接 period_history 而非 RegimeToPeriod 推導 |
+| Constitution check speedup | ci | #1423 | 2026-07-30 | 憲章檢查腳本提速 25×（BSD sed 修正） |
+| Govflow cadence | govflow | #1424 | 2026-07-30 | BTM 28h→24h + weekday 15:00+ + CAPTCHA 24h cooldown |
+| skills todo schema | docs (skills) | #1442 | 2026-08-02 | todo schema discipline 加 Session-End Checklist |
+| gitnexus SKILL align | docs (skills) | #1438 | 2026-08-01 | 對齊 gitnexus SKILL.md with project-local runner |
+
+### 活躍工作區（2026-08-07 現況）
+
+| 工作區 | Branch | 狀態 | 說明 |
+|--------|--------|------|------|
+| `~/workspace/atlas` | `main` | 🟢 基準 | 主工作區，HEAD `0f8667a6` (2026-08-06) |
+| `~/workspace/atlas-forecast-ledger-wireup` | `feat/20260806-forecast-ledger-wireup` | 🟡 進行中 | forecast ledger wireup：3 issue + 4 candidate gap 盤查（b55aa5a4），尚未合併 |
+| `~/workspace/atlas/monthly-revenue-endpoint` | `kaecer68/monthly-revenue-endpoint` | 🟡 進行中 | monthly revenue endpoint：新增 `internal/marketdata/revenue_provider.go`（untracked），尚未合併 |
+
+### 重大事件摘要
+
+1. **Hermes MCP period 欄位接源（#1426）**：原對外 `period` 用 `RegimeToPeriod(regime)` 反推會失真（典型：2026-07-29 regime=`RISK_ON` 推導 `bull` vs period_history 真值 `consolidation`）。修後對外回應拆 `regime_source` / `period_source`，`market_period` 保留為 deprecated alias。詳見上文 §Hermes MCP 段。
+2. **FinMind 600/hr server-side quota 撞牆（#1446→#1474 共 19 個 PR）**：從 rate limiter unification → unified quota → error body capture → long-stale badge → endDate 修復 → HF-1 hotfix → traps.md 索引。完整 14+ 循環沉澱為 traps 知識庫。
+3. **PRISM autoBalancer §4.5.2 違規 closure（#1447）**：`prism_manager.go:564` 從 rogue ticker 改成 BTM 任務排程（#1471）；剩 17 ticker 評估：15 例外合法 / 1 已遷 / 1 dead code（#1475）。
+4. **Govflow 排程餓死修復（#1424 + #1437）**：BTM 24h + CAPTCHA cooldown 仍會在冷重啟卡 24h；#1437 加 1h tick + daily-once guard，不違反 #1424 節律。
+5. **stress_test_daily dashboard latestDrawdown 修復（#1440）**：`RunDailyStressTests` 跑完後呼叫 `drawdownReporter`，dashboard 不再永遠 nil。
+6. **Stock coverage notice（#1477 + #1478）**：`stock_get_*` MCP 工具以 TWSE 上市普通股為主（≈1070 names），新增 coverage notice + TPEX scope external verification 防誤用。
+7. **L2.4 cleanup & ACI hook（#1464, #1467-#1470）**：把憲章追蹤表從「無驗收」改為「驗收清單導向」（§3.0/§4.0/§5.0/§7.2 補 ACI 盤查 + AC 驗收清單）；PreToolUse soft reminder 補強 hot-path Go access 治理。
+
+### 不變的歷史段落提醒
+
+§E4 / §E5a / §E6a / §E6b / §B1+B3 / §B4b / §B4c / §C1 / §Warmup / §B2 / §Docs / §B5-1 / §B5-2 / §B5-T / §B5-R / §B5-3 PR-A / §公股節律 / §B5-3 PR-B / §Hermes MCP 等**已合併**段落保留（7/31 之前）。本附錄僅追加 7/30 → 8/7 之間的新事件；對應憲章治理表更新見 `docs/ATLAS_CONSTITUTION_AUDIT.md` 附錄 D / E / F。
