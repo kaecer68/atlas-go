@@ -2,7 +2,11 @@
 
 > **給 AI agent 的導引**：本檔延續 `2026-08-05-auto-cycle-update-quota-misconception.md` 的盤查。該 doc 在 2026-08-05 PR-#1461 階段推翻「quota 結構性問題」假設,提出「個別 symbol 沒月營收資料」為更真實根因。本檔**進一步**盤查 2026-08-05 14:16:20 UTC production 觀察到的第二條真實根因:**FinMind server-side 402 quota 撞牆**,且**仍然沒被 trap 框架吸收**。
 >
-> **結論先行**：「`auto_cycle_update` 14:16:20 UTC 失敗 11 個 industries 真實根因是 FinMind server-side 402 「Requests reach the upper limit」,**不是** symbol 沒被 FinMind 收錄、**不是** 8 月月營收沒 publish、**不是** endDate 31 號 bug。**這條根因 20+ 次 FinMind PR 修補循環從未被識別**。
+> **結論先行 (2026-08-06 amended)**: 「`auto_cycle_update` 失敗」有**兩個獨立根因**:
+> 1. **8/5 14:16:20 UTC 那輪**: FinMind server-side 402 「Requests reach the upper limit」 — 3 task 同步 + auto_quote_backfill 首次 backfill 搶 token
+> 2. **8/5 20:16:20 與 8/6 02:16:20 兩輪 (0 個 402)**: **本地 rate limiter 設計缺陷** — `fetchRevenueYoY` 5s ctx timeout < rate limiter 6s token interval, token 耗盡後 `Wait` 必失敗;error 兩層被吞 (`fetchRevenueYoY` fallback → `AggregateIndustry` 合成 error),metric 顯示 `no_data` 無法區分 (見 §5.1.1 P1.10 實證)
+>
+> 原稿僅歸因 402, 經 8 個 reviewer findings + P1.10 production 驗證修正為雙根因。**這條根因 20+ 次 FinMind PR 修補循環從未被識別**。
 >
 > **下一個 agent 必須**先讀本檔再對 `auto_cycle_update` 失敗做診斷,並把本檔連結加進 `docs/reference/traps.md` 的「FinMind 相關」trap 群組。
 
@@ -33,15 +37,18 @@ PR-#1462 hotfix (merge 2026-08-05 14:09 UTC) 把 metric label 從 `kind=unknown`
 | 14:16:25.550 | 第一個 `revenue_fetch_failed` (2383.TW, kind=no_data) |
 | 14:16:25.943 | 11 個 industry 全部 `industry_aggregate_failed` |
 
-**8/5 09:16:20 UTC 跟 04:16:20 UTC 之前 24h 內 0 個 402**。**只在 14:16:20-25 5 秒內爆發 87 個 402**。
+**8/5 02:16:20 UTC 跟 08:16:20 UTC 之前 24h 內 0 個 402**。**只在 14:16:20-25 5 秒內爆發 87 個 402**。
 
 ### 對比 02:16:20 跟 08:16:20 UTC 兩輪
 
 - 02:16:20 UTC 8/5 (= 10:16 local) — `auto_cycle_update` 跑過, 沒 402
 - 08:16:20 UTC 8/5 (= 16:16 local) — `auto_cycle_update` 跑過, 沒 402
 - 14:16:20 UTC 8/5 (= 22:16 local) — **撞 402** (本檔分析)
+- 20:16:20 UTC 8/5 (= 04:16 local 8/6) — **0 個 402, 但仍 fail 11 industry (kind=no_data)** — finding 4 + P1.10 實證
 
 **14:16:20 唯一不同**:`auto_quote_backfill` 24h 排程**首次重 backfill** (上次跑是 8/4 14:16:20)。**3 個 task 同步觸發搶 token 是撞牆的引爆點**。
+
+**但 (reviewer finding 4 + 5.1.1)「3 task 同步觸發」不是唯一根因**: 20:16:20 與 02:16:20 兩輪無 402 仍 fail 11 — 持續性根因是本地 rate limiter 5s ctx vs 6s token 錯配 (詳見 §5.1.1)。
 
 ---
 
@@ -98,9 +105,11 @@ default: return "unknown"
 
 `fetchDataset` 內 `logging.Warn("finmind", "fetch_non_2xx", "status", 402, "body", "Requests reach the upper limit...")` 印 warning,不進 metric pipeline。
 
-但 `data_aggregator.go:124` `revenue_fetch_failed` warning 印 raw err.Error() = 完整 402 訊息 string — 在 worker log 看到。
+但 **`data_aggregator.go:121-126` `revenue_fetch_failed` warning 印的不是 raw 402** — 它印的是 `fetchRevenueYoY` 內 fallback 迴圈吞掉底層 error 後合成的 `"finmind revenue: no data for %s in last %d months"` (data_aggregator.go:226)。402 原始 error 在 `fetchRevenueYoY` 的 `if err != nil { month--; continue }` 處被丟棄,**從未到達 `revenue_fetch_failed`**。
 
-**fetchDataset 內 402 走 `fetch_non_2xx` warning,**沒 Prometheus metric**。**這是 402 不可見的真實路徑**。
+**修正 (reviewer finding 1)**: 原稿寫「revenue_fetch_failed 印 raw err.Error() = 完整 402 訊息 string」是**錯誤描述** — 實證 (8/5 20:16:20 與 8/6 02:16:20 兩輪 production log) 顯示 `revenue_fetch_failed` 的 err 恆為 `"finmind revenue: no data for X in last 3 months"` 合成字串,**即使底層是 rate limit 或 402**。
+
+**真實路徑**: 402 → `fetchRevenueYoY` fallback 吞掉 → 合成「no data」error → `revenue_fetch_failed` 印合成字串 → `AggregateIndustry` revCount==0 → `recordIndustryFailure` 收「no valid data for industry」→ `classifyFinMindError` 分類 `no_data`。**402 與 rate limit 對 metric 完全不可見,且原始 error 在兩層被吞**。
 
 ---
 
@@ -115,11 +124,15 @@ default: return "unknown"
 
 ### 2.2 真實數字
 
-`DefaultClassification()` 內 12 個 L1 industries:
-- 11 個有 representative stocks (ai_supply_chain / consumer / electronics / energy / financials / industrial / leo_satellite / mining / robotics / semiconductor / shipping)
-- 1 個 `etf_rotation` 沒 stocks (TotalStocks=0)
+**修正 (reviewer finding 3)**: 原稿寫「12 個 L1 industries」是**錯誤**。實際 `configs/parameters.json` `industry.classification_tree.value.segments` 是 **29 個 segments = 16 L1 + 13 L2**:
 
-Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
+16 個 L1 industries:
+- **11 個有 representative_stocks**: ai_supply_chain / consumer / electronics / energy / financials / industrial / leo_satellite / mining / robotics / semiconductor / shipping
+- **5 個無 stocks (TotalStocks=0)**: etf_rotation / defensive / high_dividend / small_cap / tech
+
+13 個 L2 (有 parent, 全部無 stocks): pcb / thermal (→electronics), foundry / server_assembly / cooling (→semiconductor), precious_metals_recycling / copper_industry / rare_earth_specialty / metal_processing (→mining), satellite_rf_components / satellite_pcb / ground_equipment / laser_communication (→leo_satellite)
+
+Production 14:16:25 UTC 11 個有 stocks 的 L1 全部 fail (5 個無 stocks + 13 個 L2 不參與 auto_cycle_update)。
 
 **真實 fail 數 = 11**,**不是 14**。
 
@@ -134,13 +147,13 @@ Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
 
 ### 2.4 給下一個 agent 的警示
 
-**禁止** 僅憑 PR-#1461 / #1462 任何 commit message 內的「14」來推導 fail industry 數。**驗證方法**: `docker logs atlas-go --since 1h | grep "industry_aggregate_failed" | awk -F'industry=' '{print $2}' | awk '{print $1}' | sort -u` 應得 11 個 unique industry。
+**禁止** 僅憑 PR-#1461 / #1462 任何 commit message 內的「14」來推導 fail industry 數。**驗證方法**: `docker logs atlas-go --since 1h | grep "industry_aggregate_failed" | awk -F'industry=' '{print $2}' | awk '{print $1}' | sort -u` 應得 11 個 unique industry。**數字校驗**: 16 L1 中 11 個有 stocks (auto_cycle_update 只跑有 stocks 的 L1), 5 個無 stocks (etf_rotation / defensive / high_dividend / small_cap / tech) 不參與。
 
 ---
 
 ## 3. PR history 完整路徑 (todo 3.2)
 
-20+ 個 FinMind 相關 PR (`gh pr list --search "finmind" --state all --limit 50`):
+50+ 個 FinMind 相關 PR (`gh pr list --search "finmind" --state all --limit 50` — 2026-08-06 實查 50 個被 limit 截斷,表格列直接相關者;reviewer finding 8 補 #1290/#1094/#955):
 
 | # | PR | 標題 | 修什麼 / 沒修什麼 |
 |---|-----|------|-------------------|
@@ -155,11 +168,14 @@ Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
 | #1458 | MERGED | fix(monitoring): known-issue badge for dead taifex-daily | 沒修 FinMind |
 | #1338 | MERGED | refactor(backfill): remove rogue FinMind backfill CLIs | 移除 rogue CLIs, **沒解 quota 機制問題** |
 | #1344 | MERGED | feat(route-e): gap-detection metrics | 改 metrics, 沒修 FinMind |
+| #1290 | CLOSED | feat(channel): register tw_vol — TAIEX 20d volatility | 提 FinMind 為 quote 備援原則, 沒修 FinMind (reviewer finding 8 補) |
 | #1225 | MERGED | fix: background task health + BK-12 BK-14 | 修排程器, 沒修 FinMind |
 | #1114 | MERGED | fix(mcp): prefers real engine over synthesized fallback | 沒修 FinMind |
+| #1094 | MERGED | refactor(docs): normalize 11 docs filenames (含 finmind_alternatives) | 文件重命名, 沒修 (reviewer finding 8 補) |
 | #1061 | MERGED | fix(cron-quote-backfill): shared rate-limit | 改 cron rate-limit, 沒修 402 撞牆 |
 | #1059 | MERGED | chore(deploy): cron-quote-backfill docker service | 部署, 沒修 |
 | #1051 | MERGED | feat(cron): cron-quote-backfill binary | 加 binary, 沒修 |
+| #955 | MERGED | refactor(constants): add paths.go + urls.go — 集中 FinMind URL | 消除重複 const, 沒修 quota (reviewer finding 8 補) |
 | #678 | MERGED | fix(marketdata): P1 FinMind trading-day guard | 改週末 guard, 沒修 402 |
 | #654 | MERGED | refactor(cmd/atlas): extract data-sync tasks | 沒修 FinMind |
 | #630 | MERGED | feat(monitoring): SmartUniverseBuilder + finmind infrastructure | 加基礎, 沒修 402 |
@@ -241,26 +257,41 @@ Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
 
 ### 5.1 還沒驗證的問題
 
-- [ ] 02:16:20 UTC 8/6 (= 10:16 local) auto_cycle_update 那一輪是否恢復?
+- [x] **02:16:20 UTC 8/6 (= 10:16 local) auto_cycle_update 那一輪是否恢復?** — **沒有 402,但仍然 fail 11 industry (kind=no_data)**。P1.10 實證 (2026-08-06 05:10 UTC 檢查): 02:16:20.667-.669 全部 symbol `revenue_fetch_failed err="finmind revenue: no data for X in last 3 months"`,0 個 `fetch_non_2xx status=402`,quota counter 3080/14400 未撞牆。**證實「402 撞牆不是 fail 的必要條件」** — 02:16:20 那輪的 fail 是 **rate limiter Wait 本地失敗** (tsmc_revenue_provider 02:15:37 同輪 log `fetch_failed_falling_back_to_cache err="finmind: rate limit wait: rate limited"` 佐證)。
 - [ ] `*FinMindClient.GetStockInfo` 是否還在 production 跑? (理論上 auto_quote_backfill 24h 撞牆後不再跑)
 - [ ] 8/5 整天 `finmind_daily_quota.json` 累積真實數字? (docker 內 json 顯示 153 跟 14400 矛盾, 推測 concurrent write race)
 - [ ] `DailyQuotaTracker.AllowCall()` 跟 `save()` 之間是否有 lock? (line 47-67 看起來用 `t.mu.Lock()` 但 save 跟 AllowCall 是同一個 lock 內的整段, 應該沒 race。但若 t.callsToday 過期重置跟 save 跨 process 則有 race)
 - [ ] `finmindDailyLimit` 14400 跟 server 600/hr 為什麼會對應一致? (其實是巧合, 14400/day = 600/hr × 24h, 但 server 應該不是這麼算)
 
+### 5.1.1 P1.10 驗證發現的更深根因 (2026-08-06 05:10 UTC)
+
+**02:16:20 UTC 8/6 那輪的 fail 根因是 `rateLimiter.Wait(ctx)` 本地失敗,不是 server 402**:
+
+- `finmind_client.go:131`: `rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst)` = **600/hr = 每 6s 1 token**, burst 60
+- `data_aggregator.go:184`: `fetchRevenueYoY` 用 `context.WithTimeout(ctx, 5*time.Second)`
+- **5s ctx timeout < 6s token interval** → burst 耗盡後 (`channel_health_finmind` 1h + `tsmc_revenue_provider` + `auto_quote_backfill` 24h 同步搶 token),`rateLimiter.Wait(ctx)` 在 5s 內等不到 token → 回 `ErrRateLimited`
+- `fetchRevenueYoY` 把這個 error 當作「該月沒資料」**吞掉 fallback 到下個月** (data_aggregator.go:191-197 `if err != nil { month--; continue }`) → 3 個月全被 rate limit → 合成 `"no data in last 3 months"`
+- **result**: metric kind=no_data,完全看不出是 rate limit。**rate limiter 本地失敗與 server 402 在 metric 層無法區分**。
+
+**這改寫本 doc 的核心結論**: 14:16:20 那輪是 server 402 撞牆 (有 87 個 402 log 為證);但 20:16:20 與 02:16:20 兩輪 (0 個 402) 的 fail 是 **本地 rate limiter 設計缺陷** — 6s token interval 對 5s ctx timeout 的錯配,加上 error 被兩層吞掉。**「3 task 同步觸發」只是加速 token 耗盡的催化劑,不是唯一根因**。
+
 ### 5.2 候選 hotfix (待 Phase 4 完整 plan)
+
+> **reviewer finding 5 (2026-08-06)**: Phase 4/5 plan 檔案位於 `/tmp/phase4-hotfix-plan-2026-08-06.md` 與 `/tmp/phase5-index-mockup-2026-08-06.md` — **ephemeral staging, 不進 source tree**。本 doc 不內嵌其內容, 僅列候選方向; 實際方案以 repo 內 design doc 為準。
 
 (這段**不**給 PR body, 只列候選方向)
 
-1. **修 classifyFinMindError 對 402 識別** — 加 `strings.Contains(msg, "Requests reach the upper limit")` 進入 `quota` 分類
-2. **修 fetchRevenueYoY / fetchProfitYoY 對 402 早 abort** — 撞 402 不再 fallback 3 個月
+1. **修 classifyFinMindError 對 402 識別** — 加 `strings.Contains(msg, "Requests reach the upper limit")` 進入 `quota` 分類。**但 (reviewer finding 2) 這單獨無效**: `recordIndustryFailure` (data_aggregator.go:170) 收到的 err 是 `AggregateIndustry` 合成的 `"data_aggregator: no valid data for industry X"` (data_aggregator.go:143),不是底層 402/rate-limit error — **原始 error 在 fetchRevenueYoY 就被吞**。需先修 error 傳遞 (見 5.1.1)。
+2. **修 fetchRevenueYoY / fetchProfitYoY 對 402/rate-limit 早 abort** — 撞 402 或 `ErrRateLimited` 不再 fallback 3 個月,直接透傳 error (不吞)。**這是 finding 2 的前置**。
 3. **修 fetchDataset 內 402 上 metric** — 新增 `atlas_finmind_quota_402_total` counter
 4. **修 DailyQuotaTracker save() 加 atomic rename** — 避免 concurrent write race
-5. **修排程器錯開 auto_cycle_update / auto_quote_backfill / channel_health_finmind 同時 trigger** — 14:16:20 巧合同步應避免
+5. **修排程器錯開 auto_cycle_update / auto_quote_backfill / channel_health_finmind 同時 trigger** — 14:16:20 巧合同步應避免;**且 5.1.1 證明非唯一根因**
 6. **修 finmindDailyLimit 細粒度** — 改成 600/hr 跟 server 對應, 或加 token-bucket 600/hr 內部 token bucket
+7. **[新] 修 5s ctx vs 6s token 錯配** — `fetchRevenueYoY`/`fetchProfitYoY` 的 ctx timeout 需 ≥ rate limiter interval (或 rate limiter 改用較小粒度),否則 token 耗盡後 Wait 必然失敗 (5.1.1 根因)
 
 ### 5.3 給 reviewer (kaecer) 的問題
 
-- 5.2 這 6 個 hotfix 方向, 哪幾個走 PR? 哪幾個單獨 PR?
+- 5.2 這 7 個 hotfix 方向, 哪幾個走 PR? 哪幾個單獨 PR?
 - 5.1 5 個開放問題, 哪些需要先驗證才能動 5.2?
 - 之前 PR-#1451 的「unified quota」PR body 寫了什麼? 為什麼沒對應 server 600/hr 細粒度?
 
@@ -272,31 +303,34 @@ Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
 
 | Surface evidence | 為何誤導 |
 |---|---|
-| `data_aggregator.go:115` `no valid data for industry` | 觸發條件是「每個 stock 都拿不到資料」, 沒區分 402 撞牆 vs 沒 publish |
+| `data_aggregator.go:115` `no valid data for industry` | 觸發條件是「每個 stock 都拿不到資料」, 沒區分 402 撞牆 vs 沒 publish vs **本地 rate limit** |
 | `finmind_daily_quota.json` 顯示 1 call (= host stale json) | 這是 host 測試用的 stale 檔, 真的 counter 在 docker 內 |
-| PR-#1462 commit message 提「14 個 industries」 | 14 是歷史污染, 真實 11 個 (etf_rotation 沒 stocks) |
+| PR-#1462 commit message 提「14 個 industries」 | 14 是歷史污染, 真實 11 個 (16 L1 中 5 個無 stocks 不參與) |
 | `fetchDataset` 印 `fetch_non_2xx status=402` | 402 沒上 metric, 從 metric 看不出有 402 撞牆 |
-| `auto_cycle_update` task **continues to run** | task 沒卡, 但每 6h 撞 402, 持續累積 consecutive_failures |
+| **`revenue_fetch_failed err="no data in last 3 months"`** | **最誤導**: 這可能是 402、本地 rate limit、或真的沒 publish — 原始 error 在 `fetchRevenueYoY` fallback 被吞, 合成字串無法區分 (5.1.1 實證) |
+| `auto_cycle_update` task **continues to run** | task 沒卡, 但每 6h fail, 持續累積 consecutive_failures (02:16/08:16 兩輪 0 個 402 仍 fail 11) |
 
 **正確診斷流程**:
-1. 看 `docker logs atlas-go --since 1h | grep "fetch_non_2xx status=402"` 確認 402 是否有
-2. 看 `*ErrQuotaExhausted` log 確認是否撞本地 14400
-3. 從 `docker exec atlas-go cat /app/data/state/finmind_daily_quota.json` 確認真實 counter (非 host 檔)
-4. 從 `cmd/atlas/main.go` 註冊 tasks 確認哪幾個 14:16:20-25 同步觸發
-5. 對 production 14:16:20-25 5 秒 sort by timestamp, 確認 402 撞牆順序
+1. 看 `docker logs atlas-go --since 1h | grep "fetch_non_2xx status=402"` 確認 402 是否有 (0 個 ≠ 沒問題, 見 5.1.1 rate limit 路徑)
+2. 看 `docker logs atlas-go --since 1h | grep "rate limit wait"` 確認是否本地 rate limiter 撞牆 (tsmc_revenue_provider 02:15:37 有前例)
+3. 看 `*ErrQuotaExhausted` log 確認是否撞本地 14400
+4. 從 `docker exec atlas-go cat /app/data/state/finmind_daily_quota.json` 確認真實 counter (非 host 檔)
+5. 從 `cmd/atlas/main.go` 註冊 tasks 確認哪幾個 14:16:20-25 同步觸發
+6. 對 production 14:16:20-25 5 秒 sort by timestamp, 確認 402 撞牆順序
 
 ---
 
 ## 7. 對 traps.md 的影響
 
-**必須新增**:
-- 「FinMind server 402 ≠ `ErrQuotaExhausted`」 — 這跟 line 18 (JSONL ledger mutex) 同 mental model
-- 「fallback 應該對 402 早 abort」 — 跟 line 67 (Dockerfile healthcheck 繼承) 同「避免 silent failure」主題
+**必須新增 (traps.md 目前無任何 FinMind trap — grep finmind 0 結果)**:
+- 「FinMind server 402 ≠ `ErrQuotaExhausted`」 — 跟 line 18 (JSONL ledger mutex) 同 mental model
+- 「rate limiter 本地失敗會被 fallback 吞掉」 — 5.1.1 根因: 5s ctx < 6s token, error 兩層被吞, metric 顯示 no_data (跟 line 67 Dockerfile healthcheck 同「避免 silent failure」主題)
 - 「排程器 24h 整點多 task 同步觸發」 — 跟 line 41 (BackgroundTaskManager 唯一註冊) 互補
 
-**現有 traps.md 引用本檔**:
+**現有 traps.md 與本檔的關聯 (reviewer finding 7 修正)**:
 - line 18 (JSONL ledger append mutex) — 補: DailyQuotaTracker 雖然有 lock, 但跨 process 寫沒 lock
 - line 41 (BackgroundTaskManager) — 補: 子任務 interval 對齊時, burst 會撞牆
+- **原稿寫「現有 traps.md 引用本檔」是錯誤** — traps.md 目前**沒有**引用本檔, 需要**新增** FinMind trap 群組而非「引用現有」
 
 **本檔應該**:
 - 加連結 `> 2026-08-06-finmind-quota-collision.md` 在 `traps.md` 開頭索引
@@ -311,16 +345,17 @@ Production 14:16:25 UTC 11 個 industry 全部 fail (扣掉 etf_rotation)。
 **本檔進一步說明**:
 - 14:16:20-25 真正撞牆是 **server-side 402** (不是 quota 結構性)
 - 14:16:20 之前 02:16 + 08:16 兩輪沒撞 — 14:16 唯一不同是 `auto_quote_backfill` 24h 整點 first run
-- 「個別 symbol 沒資料」這條是次要問題, 真實主要問題是 402 撞牆
+- **但 20:16:20 (8/5) 與 02:16:20 (8/6) 兩輪 0 個 402 仍 fail 11** (P1.10 實證) — fail 的**持續性根因是本地 rate limiter 5s ctx vs 6s token 錯配**, 402 只是 14:16 那一輪的疊加因素
+- 「個別 symbol 沒資料」這條是次要問題, 真實主要問題是 402 撞牆 + rate limiter 錯配雙軌
 
 **任何對「auto_cycle_update 失敗」做診斷的 agent 必須讀兩個 doc**:
 1. `2026-08-05-auto-cycle-update-quota-misconception.md` — 學「不要僅憑 doc 內所有 surface evidence 推導結論」
-2. `2026-08-06-finmind-quota-collision.md` (本檔) — 學「402 撞牆是獨立根因, 跟 quota 假設沒關」
+2. `2026-08-06-finmind-quota-collision.md` (本檔) — 學「402 撞牆 + rate limiter 錯配是兩個獨立根因, 且 error 兩層被吞」
 
 ---
 
 ## 9. 寫作時間
 
 盤查 + 寫: 2026-08-06 (~03:00-08:00 UTC)
-驗證 02:16:20 UTC 8/6 那一輪: 待補
-狀態: **partial**, 等 02:16:20 UTC 跑完補 last_error sample
+驗證 02:16:20 UTC 8/6 那一輪: **✅ 已驗證 (2026-08-06 05:10 UTC)** — 0 個 402, quota 3080/14400, fail 11 industry, 根因 = rate limiter Wait 本地失敗 (詳見 5.1.1)
+狀態: **✅ amended 2026-08-06 (8 個 reviewer findings 已逐項驗證修正 + P1.10 完成)**
