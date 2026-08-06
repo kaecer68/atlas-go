@@ -1166,6 +1166,21 @@ func run(args []string, deps appDeps) error {
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var realtimeAdapter *realtime.RealTimeAdapter
 		taskMgr := setupBackgroundTaskManager(gateway, monitor, autoHandler)
+		// PRISM 5-min queue rebalancer: migrated from rogue ticker goroutine to
+		// BTM (Issue #1447, docs/manifests/2026-08-06-btm-ticker-migration.md).
+		// prismMgr is only non-nil in apiMode; AutoBalanceEnabled gates the task.
+		if prismMgr.AutoBalanceEnabled() {
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:     "prism_auto_balancer",
+				Interval: 5 * time.Minute,
+				Enabled:  true,
+				Task: func(ctx context.Context) error {
+					prismMgr.Rebalance()
+					return nil
+				},
+			})
+			log.Printf("[Gateway] registered prism_auto_balancer background task (5m interval)")
+		}
 		if gateway != nil {
 
 			// RealTimeAdapter: sub-second regime detection and agent weight

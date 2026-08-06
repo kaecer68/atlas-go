@@ -37,43 +37,69 @@
 | `internal/config/filelock.go:61` (10ms) | lock wait spin,非固定間隔業務任務 |
 | `internal/apigateway/background.go:313` | BTM 自身實作 |
 | `internal/marketdata/realtime/fugle_ws.go:409` (pingPeriod) | WebSocket 協議 keepalive,非背景任務 |
+| `internal/metalearning/metalearner.go:292` | **production dead code** — `NewMetaLearner` 0 個非 test 呼叫端 (2026-08-06 grep 驗證)。遷移 dead code = 把未實作功能接上 BTM,不做。|
+| `internal/marketdata/fubon_client.go:308` | **exponential backoff 狀態機** (runHealthProbe 有 backoff/failure tracking) — BTM 固定 interval 不匹配。保留原生命週期。|
+| `internal/realtime/regime_adapter.go:268` | **100ms sub-second 即時迴圈** (processUpdate) — BTM 固定 interval + health 追蹤不適合高頻;且受 `-allow-realtime` flag gate。保留。|
 
 ### 1.3 關鍵: BTM 是否支援 Start/Stop 動態生命週期
 
 `internal/apigateway/background.go`:
 - `ScheduledTask{Name, Interval, Task BackgroundTaskFunc, Enabled}` — 固定間隔
+- `BackgroundTaskFunc = func(ctx context.Context) error` — **已 ctx-aware** (2026-08-06 驗證, 方案原稿 §2.2 疑慮解除)
 - `Register()` / `Start(ctx)` / `Stop()` — 全域管理
-- **限制**: ScheduledTask 只有 `BackgroundTaskFunc` (無 ctx 參數), 每個 task 單一 Interval。**不支援 on-demand Start/Stop 語意** — 遷移時需評估:
-  - 純固定間隔任務 (7,8,9,10,13,15,16,17): 直接遷移 ✅
-  - 需動態啟停的 (1,2,3,4,5,6,11,12,14): 需在 Task func 內自行判 skip,或用 `Enabled` 動態翻轉
+- **限制**: 每個 task 單一 Interval, 無 on-demand Start/Stop 語意 — 需動態啟停的任務在 Task func 內自行判 skip, 或用 `Enabled` 動態翻轉
+
+**審計決策 (2026-08-06, kaecer 授權)**: 首批遷移 **`internal/prism/prism_manager.go:569` autoBalancer (5min)** — active + 固定間隔 + `Rebalance()` 現成 runOnce。其餘 16 個依 §1.2 排除或後續批次。
 
 ---
 
 ## 2. 遷移模式 (Design)
 
-### 2.1 標準模式 (純固定間隔)
+### 2.1 標準模式 (純固定間隔) — prism autoBalancer 實作案例
 
+**遷移前** (prism_manager.go):
 ```go
-// 遷移前
-go func() {
-    ticker := time.NewTicker(interval)
-    defer ticker.Stop()
-    for range ticker.C { run() }
-}()
+// Start 內
+if pm.config.AutoBalance {
+    pm.wg.Add(1)
+    go pm.autoBalancer(pm.stopCh)
+}
 
-// 遷移後 — 在 service 初始化處
-taskMgr.Register(&apigateway.ScheduledTask{
-    Name:     "drift_detector",
-    ChannelID: "internal",
-    Interval: DriftCheckInterval,
-    Enabled:  true,
-    Task: func() error {
-        return d.runOnce()  // run 改為 single-shot
-    },
-})
+// autoBalancer (5min)
+func (pm *PRISMManager) autoBalancer(stopCh <-chan struct{}) {
+    defer pm.wg.Done()
+    ticker := time.NewTicker(5 * time.Minute)
+    defer ticker.Stop()
+    for {
+        select {
+        case <-stopCh: return
+        case <-ticker.C: pm.Rebalance()
+        }
+    }
+}
 ```
 
-**原則**: 每個 ticker loop 拆成 `runOnce() error` (可測試), loop 由 BTM 驅動。
+**遷移後** (prism_manager.go):
+- `Start()` 移除 autoBalancer goroutine 啟動
+- 新增 `RegisterAutoBalancer(taskMgr)`:
+```go
+// RegisterAutoBalancer wires the 5-min queue rebalancer into the
+// BackgroundTaskManager (Issue #1447). Previously a rogue ticker
+// goroutine; now lifecycle-managed by BTM.
+func (pm *PRISMManager) RegisterAutoBalancer(taskMgr *apigateway.BackgroundTaskManager) {
+    if !pm.config.AutoBalance { return }
+    _ = taskMgr.Register(&apigateway.ScheduledTask{
+        Name:     "prism_auto_balancer",
+        Interval: 5 * time.Minute,
+        Enabled:  true,
+        Task: func(ctx context.Context) error {
+            pm.Rebalance()
+            return nil
+        },
+    })
+}
+```
+- 呼叫端 (cmd/atlas/main.go): `prismMgr.RegisterAutoBalancer(taskMgr)` 取代 `go pm.autoBalancer()`
 
 ### 2.2 動態啟停任務 (需 ctx / 條件 skip)
 
