@@ -67,10 +67,10 @@
 ## 3. M2 — ShouldL24AutoCronFire dead code 處置
 
 ### 3.0 ACI 盤查 (動工前必做)
-- [ ] `gitnexus_impact({target: "ShouldL24AutoCronFire", direction: "upstream"})` — 已知 0 affected processes
-- [ ] `codebase-memory_search_graph({query: "auto cron observation window"})` — 確認 C07 已覆蓋
-- [ ] `gitnexus_context({name: "ShouldL24AutoCronFire"})` — 確認 callers
-- [ ] `grep` (輔助) — scripts/check_no_duplicate_preflight.sh:33 有引用 `internal/scheduler/l2_4_auto_cron.go`(會影響 M2 處置)
+- [x] `gitnexus_impact({target: "ShouldL24AutoCronFire", direction: "upstream"})` — 結果 0 affected processes (見 §3.2 證據)
+- [x] `codebase-memory_search_graph({query: "auto cron observation window"})` — C07 obs-collector/day-evaluator 已覆蓋自動化缺口
+- [x] `gitnexus_context({name: "ShouldL24AutoCronFire"})` — 確認僅 test 呼叫,production 0 caller
+- [x] `grep` (輔助) — scripts/check_no_duplicate_preflight.sh:33 有引用 `internal/scheduler/l2_4_auto_cron.go`(Option A 保留檔案,該引用無需變更)
 
 ### 3.1 處置選項 (依 ACI 結果選擇)
 - **Option A (deprecate)**:在檔頭加 deprecation 註記,指向 C07 自動化。保留 code 與 test。
@@ -87,10 +87,10 @@
 ## 4. M3 — LLMDriver deprecated alias 處置
 
 ### 4.0 ACI 盤查 (動工前必做)
-- [ ] `gitnexus_impact({target: "LLMDriver", direction: "upstream"})` — 已知 22 direct importers,0 affected processes
-- [ ] `codebase-memory_search_graph({query: "PlanDriver ReflectDriver SectorAgentLLMDriver"})` — 確認新介面已存在
-- [ ] `read internal/orchestrator/sector_agent_llm.go:76-116` — 看 alias 定義 + callers
-- [ ] `grep -rn "LLMDriver" --include="*.go" internal/` — 列全部引用點
+- [x] `gitnexus_impact({target: "LLMDriver", direction: "upstream"})` — 結果 22 direct importers (package 級) / 0 affected processes (見 §4.2 證據)
+- [x] `codebase-memory_search_graph({query: "PlanDriver ReflectDriver SectorAgentLLMDriver"})` — 新介面已存在 (plugin_adapters.go:227)
+- [x] `read internal/orchestrator/sector_agent_llm.go:76-116` — alias 定義 + callers 已確認
+- [x] `grep -rn "LLMDriver" --include="*.go" internal/` — 全引用點已列出 (production 僅定義 + test 斷言)
 
 ### 4.1 處置選項
 - **Option A (保留)**:deprecated alias 保留,加更強註記。理由:promotion 未完成,移除需動 22 個 importers。
@@ -106,8 +106,8 @@
 ## 5. M4 — L2.4 文件對齊真實狀態
 
 ### 5.0 ACI 盤查 (動工前必做)
-- [ ] `codebase-memory_search_graph({query: "l2-4 followup runbook roadmap"})` — 找出所有引用 L2.4 的文件
-- [ ] read 下列文件確認現況:
+- [x] `codebase-memory_search_graph({query: "l2-4 followup runbook roadmap"})` — 找出 5 份引用 L2.4 的文件 (見 §5.2)
+- [x] read 下列文件確認現況:
   - `docs/archive/l2-4-followup.md`
   - `docs/operations/l2-4-runbook.md`
   - `docs/operations/l2-4-unblocking-roadmap.md`
