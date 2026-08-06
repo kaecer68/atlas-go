@@ -337,3 +337,142 @@ func TestRSIBugRegression(t *testing.T) {
 		t.Fatalf("rsi(equal gains/losses) = %v, want 50 (standard formula)", got)
 	}
 }
+
+// Helpers for the coverage-guard tests below. Duplicated from
+// coverage_test.go intentionally to keep handler_test.go self-contained
+// (no exported test-helpers across this package's two _test.go files).
+func writeSnapshotHandlerTest(t *testing.T, entries string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fundamentals.json")
+	if err := os.WriteFile(path, []byte(entries), 0o644); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+	return path
+}
+
+func loadFundamentalsForTest(t *testing.T, entries string) *portfolio.FundamentalProvider {
+	t.Helper()
+	path := writeSnapshotHandlerTest(t, entries)
+	fp := portfolio.NewFundamentalProvider()
+	if err := fp.LoadFromJSON(path); err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+	return fp
+}
+
+// TestHandleFundamentals_OutOfScopeReturns200WithNote verifies that an
+// out-of-scope symbol (e.g. 3131 上櫃) gets a 200 response carrying a
+// `coverage_note` field instead of the misleading 200 with all-zero
+// data seen before this PR. Frontend/MCP callers branch on this field.
+func TestHandleFundamentals_OutOfScopeReturns200WithNote(t *testing.T) {
+	fp := loadFundamentalsForTest(t, `{"6641.TW":{"PE":39.67,"PB":0.45,"DividendYield":2.19}}`)
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Fundamentals: fp})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/fundamentals?symbol=3131", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !contains(rec.Body.String(), `"coverage_note":"NOT_COVERED"`) {
+		t.Fatalf("expected NOT_COVERED note in body, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleChips_OutOfScopeShortCircuits verifies that the chips guard
+// returns 200 + coverage_note BEFORE invoking the CapitalFlow provider's
+// 7-day fallback loop. This prevents the 15s context budget collision we
+// observed for 3131/3587 chips (see docs/manifests/2026-08-06-stock-coverage-notice.md).
+func TestHandleChips_OutOfScopeShortCircuits(t *testing.T) {
+	fp := loadFundamentalsForTest(t, `{"6641.TW":{"PE":39.67}}`)
+	mux := http.NewServeMux()
+	// CapitalFlow intentionally NOT provided — guard short-circuits before
+	// the CapitalFlow nil-check fires, so we see coverage_note, not 503.
+	RegisterRoutes(mux, Deps{Fundamentals: fp})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/chips?symbol=3131", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (guard short-circuits), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"coverage_note":"NOT_COVERED"`) {
+		t.Fatalf("expected coverage_note, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleChips_InScopeStillReachesCapitalFlow regression guard — an
+// in-scope symbol must still reach the CapitalFlow provider and produce
+// the existing JSON shape with no coverage_note leakage.
+func TestHandleChips_InScopeStillReachesCapitalFlow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"stat":"OK","data":[["6641","基士德-KY","17000","5000","12000","0","0","0","0","0","0","-5106","0","5106","-5106","0","0","0","6894"]]}`))
+	}))
+	defer server.Close()
+
+	cf := marketdata.NewTWSECapitalFlowProvider("")
+	cf.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: server.URL}})
+	fp := loadFundamentalsForTest(t, `{"6641.TW":{"PE":39.67}}`)
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{CapitalFlow: cf, Fundamentals: fp})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/chips?symbol=6641", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if contains(rec.Body.String(), `"coverage_note"`) {
+		t.Fatalf("in-scope chips should not carry coverage_note, got: %s", rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"symbol":"6641"`) {
+		t.Fatalf("expected existing chips body shape, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleFundamentals_InScopeKeepsExistingFormat regression guard:
+// in-scope symbols continue to return the FundamentalData shape unchanged.
+func TestHandleFundamentals_InScopeKeepsExistingFormat(t *testing.T) {
+	fp := loadFundamentalsForTest(t, `{"2330.TW":{"PE":25,"PB":6,"PS":8,"DividendYield":1.5,"Sector":"semiconductor"}}`)
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Fundamentals: fp})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/fundamentals?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if contains(rec.Body.String(), `"coverage_note"`) {
+		t.Fatalf("in-scope fundamentals should not carry coverage_note, got: %s", rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"PE":25`) {
+		t.Fatalf("expected PE=25 in body, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleChips_NoFundamentalsLoadSkipsGuard confirms the guard is
+// fully transparent when Fundamentals is nil — preserves the existing
+// TestHandleChips fixture (Deps{CapitalFlow: cf}, no Fundamentals).
+func TestHandleChips_NoFundamentalsLoadSkipsGuard(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"stat":"OK","data":[["2330","台積電","1000","500","500","0","0","0","800","300","500","400","0","0","0","0","0","0","1400"]]}`))
+	}))
+	defer server.Close()
+
+	cf := marketdata.NewTWSECapitalFlowProvider("")
+	cf.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: server.URL}})
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{CapitalFlow: cf}) // intentionally no Fundamentals
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/chips?symbol=2330&date=20260701", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (guard skipped), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"symbol":"2330"`) {
+		t.Fatalf("expected existing chips body shape, got: %s", rec.Body.String())
+	}
+}

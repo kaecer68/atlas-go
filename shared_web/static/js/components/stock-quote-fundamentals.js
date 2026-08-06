@@ -1,9 +1,17 @@
 import { escapeHtml, renderEmptyState, renderSkeleton } from '../shared/app-utils.js';
 import { fmtSafeNumber } from '../shared/format-metric.js';
 
-export function renderFundamentals(state, fundResult) {
+export function renderFundamentals(state, fundResult, coverage) {
   if (state === 'loading') {
     return `<div class="sq-card"><h3 class="sq-card__title">基本面</h3>${renderSkeleton(4)}</div>`;
+  }
+  // Out-of-scope: render a neutral scope badge instead of an error
+  // banner so users understand that the symbol is not in coverage
+  // (rather than seeing misleading "暫時無法取得" copy).
+  if (coverage && !coverage.covered) {
+    return `<div class="sq-card"><h3 class="sq-card__title">基本面</h3>
+      <div class="sq-scope-notice">此股票代號不在本系統基本面涵蓋範圍（涵蓋 TWSE 上市普通股，約 1070 隻）<br><small>${escapeHtml(coverage.reason || '')}</small></div>
+    </div>`;
   }
   if (state === 'error' || fundResult.status === 'error') {
     return `<div class="sq-error-box">基本面資料暫時無法取得</div>`;

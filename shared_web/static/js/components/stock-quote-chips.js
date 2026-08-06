@@ -27,9 +27,19 @@ function renderBar(label, value, maxAbs) {
   `;
 }
 
-export function renderChips(state, chipsResult) {
+export function renderChips(state, chipsResult, coverage) {
   if (state === 'loading') {
     return `<div class="sq-card"><h3 class="sq-card__title">籌碼</h3>${renderSkeleton(4)}</div>`;
+  }
+  // Out-of-scope: chips/fundamentals/technical for TPEX symbols return
+  // 200 + coverage_note via the stocktools backend (see
+  // docs/manifests/2026-08-06-stock-coverage-notice.md). Show a neutral
+  // badge — NOT an error banner — so investors immediately understand
+  // that quote works but the other axes do not.
+  if (coverage && !coverage.covered) {
+    return `<div class="sq-card"><h3 class="sq-card__title">籌碼</h3>
+      <div class="sq-scope-notice">此股票代號不在本系統 chips 涵蓋範圍（涵蓋 TWSE 上市普通股，約 1070 隻）<br><small>${escapeHtml(coverage.reason || '')}</small></div>
+    </div>`;
   }
   if (state === 'error' || chipsResult.status === 'error') {
     return `<div class="sq-error-box">籌碼資料當日無更新，請稍後再試</div>`;

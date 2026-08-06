@@ -5,9 +5,17 @@ function isValidNumber(v) {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
-export function renderTechnical(state, techResult) {
+export function renderTechnical(state, techResult, coverage) {
   if (state === 'loading') {
     return `<div class="sq-card"><h3 class="sq-card__title">技術指標（90 日）</h3>${renderSkeleton(3)}</div>`;
+  }
+  // Out-of-scope: render neutral scope notice instead of misleading
+  // "資料尚未回填" copy that confuses users into thinking the system
+  // is broken. See docs/manifests/2026-08-06-stock-coverage-notice.md.
+  if (coverage && !coverage.covered) {
+    return `<div class="sq-card"><h3 class="sq-card__title">技術指標（90 日）</h3>
+      <div class="sq-scope-notice">此股票代號不在本系統技術指標涵蓋範圍（涵蓋 TWSE 上市普通股，約 1070 隻）<br><small>${escapeHtml(coverage.reason || '')}</small></div>
+    </div>`;
   }
   if (state === 'error' || techResult.status === 'error') {
     const isDataMissing = techResult.error && /insufficient historical quote data/i.test(techResult.error);
