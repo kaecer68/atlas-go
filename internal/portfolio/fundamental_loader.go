@@ -62,6 +62,20 @@ func (fp *FundamentalProvider) Get(symbol string) FundamentalData {
 	return fp.data[symbol]
 }
 
+// HasSymbol returns true if the snapshot contains the canonical symbol
+// (with `.TW` suffix normalized). Unlike Get(), which returns the zero
+// value for both missing and all-zero entries, HasSymbol disambiguates
+// presence vs data absence — essential for the stocktools coverage
+// guard (See docs/manifests/2026-08-06-stock-coverage-notice.md).
+// Safe on a nil receiver: returns false.
+func (fp *FundamentalProvider) HasSymbol(canonical string) bool {
+	if fp == nil {
+		return false
+	}
+	_, ok := fp.data[canonical]
+	return ok
+}
+
 // HasData returns true if any fundamentals were loaded.
 func (fp *FundamentalProvider) HasData() bool {
 	return len(fp.data) > 0

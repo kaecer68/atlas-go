@@ -1,13 +1,21 @@
 import { escapeHtml, renderSkeleton } from '../shared/app-utils.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 
-export function renderHeader(state, quoteResult, chipsResult) {
+export function renderHeader(state, quoteResult, chipsResult, coverage) {
   if (state === 'loading') {
     return `<div class="sq-header">${renderSkeleton(3)}</div>`;
   }
   if (state === 'error' || quoteResult.status === 'error' || !quoteResult.data) {
     return `<div class="sq-error-box">報價功能未啟用或暫時無法取得，請洽管理員 (${escapeHtml(quoteResult?.error || '')})</div>`;
   }
+
+
+  // Out-of-scope: still render the quote (Fugle covers TPEX quotes)
+  // but append a small scope badge so users understand chips/fundamentals
+  // are not in coverage for this symbol.
+  const scopeBadge = coverage && !coverage.covered
+    ? `<div class="sq-scope-notice sq-scope-notice--inline">本系統僅涵蓋 TWSE 上市普通股；此代號不在範圍</div>`
+    : '';
 
   const quote = quoteResult.data;
   const symbol = quote.symbol;
@@ -51,6 +59,7 @@ export function renderHeader(state, quoteResult, chipsResult) {
         <span>量 ${volumeLots !== null ? volumeLots.toLocaleString() + ' 張' : '—'}</span>
       </div>
       <div class="sq-header-source">資料來源：Fugle 即時（秒級延遲）</div>
+      ${scopeBadge}
     </div>
   `;
 }

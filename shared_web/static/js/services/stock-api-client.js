@@ -101,3 +101,35 @@ export async function fetchStockBundle(symbol) {
 export async function fetchSectorMedianPE(sector) {
   return fetchCached('sector-median-pe', sector, `/api/stock/sector-median-pe?sector=${encodeURIComponent(sector)}`);
 }
+
+
+// fetchStockCoverage calls GET /api/stock/coverage?symbol=X to discover
+// whether the 4 stocktools endpoints (quote/fundamentals/chips/technical)
+// will return real data for this symbol. Out-of-scope symbols return
+// 200 + covered=false (not 404 — coverage is informational, not an error).
+// See docs/manifests/2026-08-06-stock-coverage-notice.md.
+export async function fetchStockCoverage(symbol) {
+  try {
+    return await fetchWithAuth(`/api/stock/coverage?symbol=${encodeURIComponent(symbol)}`);
+  } catch (e) {
+    // Coverage lookup is best-effort; fail open so a coverage outage
+    // doesn't break the entire stock-quote page.
+    return { symbol, covered: true, listing: 'UNKNOWN', quote_covered: true, reason: '' };
+  }
+}
+
+// fetchStockBundleWithCoverage runs the existing 4-endpoint bundle AND
+// a parallel coverage lookup. When the symbol is out-of-scope, attaches
+// the coverage context to the bundle so render components can detect
+// `bundle.coverage.covered === false` and show a scope badge instead of
+// an error banner.
+export async function fetchStockBundleWithCoverage(symbol) {
+  const [coverage, bundle] = await Promise.all([
+    fetchStockCoverage(symbol),
+    fetchStockBundle(symbol)
+  ]);
+  if (coverage && !coverage.covered) {
+    bundle.coverage = coverage;
+  }
+  return bundle;
+}

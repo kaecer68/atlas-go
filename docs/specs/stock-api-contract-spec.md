@@ -1,8 +1,7 @@
 # Atlas Stock API Contract（前端單一權威來源）
 
 > **文件角色**：定義 `/api/stock/*` 5 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用。
-> **狀態**：v1.3（2026-07-12 P2-3 更新：新增 `/api/stock/sector-median-pe`、統一缺失資料語義、修正認證說明）
-> **關聯**：[`docs/specs/stock-quote-page-spec.md`](stock-quote-page-spec.md) — 前端個股頁 wireframe
+> **狀態**：v1.4（2026-08-06 新增 §1.5 Coverage Scope、§1.6 Coverage Endpoint、§1.7 變更助記）
 > **Source-of-truth**：handler 源碼 `internal/stocktools/handler.go` + 各資料源 struct
 
 ---
@@ -23,7 +22,55 @@
 | `/api/stock/quote` | 直接傳給 FugleClient / TWSE OpenAPI（純數字） | `2330` |
 | `/api/stock/fundamentals` | `normalizeFundamentalsSymbol()` 自動補 `.TW` | `2330` 或 `2330.TW` 都接受 |
 | `/api/stock/chips` | 直接傳給 TWSE T86（純數字） | `2330` |
-| `/api/stock/technical` | 直接傳給 ledger QuoteStore（純數字） | `2330` |
+
+### 1.5 Coverage Scope（2026-08-06 v1.4 新增）
+
+stocktools 4 個 endpoint 的涵蓋範圍如下：
+
+| 端點 | 資料源 | Scope 範圍 |
+| --- | --- | --- |
+| `/api/stock/quote` | Fugle（必要時 fallback TWSE OpenAPI） | Fugle 涵蓋較廣（含上櫃、興櫃）；TWSE fallback 涵蓋上市 |
+| `/api/stock/fundamentals` | `data/fundamentals.json` snapshot | 純 `.TW` 後綴，~1070 隻 TWSE 上市普通股 |
+| `/api/stock/chips` | TWSE T86（`selectType=ALLBUT0999`，排除 99xx） | ~1231 隻上市普通股（不含 ETF/權證） |
+| `/api/stock/technical` | ledger QuoteStore 或 Fugle on-demand | QuoteStore 涵蓋 + Fugle 補抓 |
+
+**不涵蓋之 symbol**（如上櫃、興櫃、ETF）仍可被呼叫，但 handler 會在每個 endpoint response 內附加結構化欄位：
+
+| 欄位 | 型別 | 說明 |
+| --- | --- | --- |
+| `coverage_note` | string | 固定值 `"NOT_COVERED"`，作為 out-of-scope 的結構化標記 |
+| `covered` | bool | `false` 表示 stocktools 取不到 chips/fundamentals/technical |
+| `listing` | string | stable tag：`TWSE`（在範圍內）或 `UNKNOWN`（不在範圍內） |
+| `quote_covered` | bool | `true` 表示 Fugle 仍能用，前端可決定是否 render quote header |
+| `reason` | string | 人可讀中文說明（如「本系統 chips/fundamentals 涵蓋台灣上市普通股」） |
+
+不涵蓋時 handler 仍回 HTTP 200 + 上述結構化欄位（**不是** 503 也不是全 0 數據）。理由：
+
+1. 對 LLM agent / MCP caller / 前端而言，503 易被誤判為 server failure。
+2. 200 + `coverage_note` 是結構化資料，前端可據此顯示徽章、CLI 可正常解析。
+3. 既有「API 真實失敗」路徑（provider 未配置、上游 API 失敗等）保持 503 / 4xx 不變，不被 coverage guard 覆蓋。
+
+### 1.6 Coverage Endpoint（前端預攔）
+
+`GET /api/stock/coverage?symbol=X` 是專為前端預攔設計的獨立 endpoint：
+
+- HTTP 200 always，即使 symbol 不存在或為空字串（空字串回 400）。
+- Response body：`{symbol, covered, listing, quote_covered, reason}`。
+- 與 4 個 stocktools endpoint 共用同一個 LookupCoverage 函式（`internal/stocktools/coverage.go`）— 單一 source of truth。
+
+### 1.7 變更助記（v1.3 → v1.4 不相容點）
+
+| 變更 | 影響 |
+| --- | --- |
+| 新增 `coverage_note` field | 既有 caller 應忽略未知 field，相容；新 caller 可用於分支 |
+| 新增 `/api/stock/coverage` endpoint | 純增量，不影響既有 endpoint |
+| 4 個 stocktools endpoint 對 out-of-scope symbol 改回 200 + `coverage_note`（舊：503 或全 0） | **不相容**：依賴「全 0 = 找不到」的 caller 須改用 `coverage_note` 判斷 |
+| MCP tool description 補 coverage 提示 | 純文本變更，不影響協議 |
+| Portfolio `FundamentalProvider` 新增 `HasSymbol(canonical) bool` method | 純增量，不影響既有 `Get` 等 |
+
+關聯文件：[`docs/manifests/2026-08-06-stock-coverage-notice.md`](../../manifests/2026-08-06-stock-coverage-notice.md)
+
+
 | `/api/stock/sector-median-pe` | 以 `sector` 查詢 fundamentals JSON | `sector=semiconductor` |
 
 **邊緣情況**（`normalizeFundamentalsSymbol`）：

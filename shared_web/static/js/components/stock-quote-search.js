@@ -20,8 +20,10 @@ export function renderSearch(onSearch, initialSymbol = '') {
       <span class="sq-search-pills__label">熱門</span>
       <span class="sq-search-tag" data-symbol="2330">2330 台積電</span>
       <span class="sq-search-tag" data-symbol="2454">2454 聯發科</span>
-      <span class="sq-search-tag" data-symbol="2317">2317 鴻海</span>
       <span class="sq-search-tag" data-symbol="0050">0050 台灣50</span>
+    </div>
+    <div class="sq-scope-hint" aria-live="polite">
+      本系統涵蓋臺灣上市普通股（約 1070 隻）；上櫃股的部分資料可能無法顯示。
     </div>
     ${recentSearches.length > 0 ? `
     <div class="sq-search-pills">

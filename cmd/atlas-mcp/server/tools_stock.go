@@ -12,25 +12,25 @@ import (
 func registerStockTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_get_quote",
-		Description: autoDescOr("stock_get_quote", "Return the latest intraday quote for a Taiwan stock symbol. Requires FUGLE_API_KEY to be configured on the atlas server.  HTTP: GET /api/stock/quote. Alternative: stock_get_technical, stock_get_chips."),
+		Description: autoDescOr("stock_get_quote", "Return the latest intraday quote for a Taiwan stock symbol. Coverage: TWSE-listed common stocks primarily; Fugle may also return quotes for some non-listed symbols. Out-of-scope chips/fundamentals surface as `coverage_note: NOT_COVERED`. HTTP: GET /api/stock/quote. Alternative: stock_get_technical, stock_get_chips."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStockGetQuote)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_get_fundamentals",
-		Description: autoDescOr("stock_get_fundamentals", "Return fundamental metrics (PE, PB, PS, dividend yield, sector) for a symbol.  HTTP: GET /api/stock/fundamentals. Alternative: stock_get_quote, stock_get_technical."),
+		Description: autoDescOr("stock_get_fundamentals", "Return fundamental metrics (PE, PB, PS, dividend yield, sector) for a Taiwan-listed symbol. Coverage: TWSE-listed common stocks (~1070 names) backed by data/fundamentals.json; out-of-scope symbols return 200 with `coverage_note: NOT_COVERED` instead of zero data. HTTP: GET /api/stock/fundamentals. Alternative: stock_get_quote, stock_get_technical."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStockGetFundamentals)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_get_chips",
-		Description: autoDescOr("stock_get_chips", "Return institutional investor flow (foreign, domestic fund, dealer net buy/sell) for a symbol on a given trading day.  HTTP: GET /api/stock/chips. Alternative: stock_get_quote, stock_get_fundamentals."),
+		Description: autoDescOr("stock_get_chips", "Return institutional investor flow (foreign, domestic fund, dealer net buy/sell) for a Taiwan-listed symbol on a given trading day. Coverage: TWSE-listed common stocks (sourced via TWSE T86 ~1231 names; ETFs excluded). Out-of-scope symbols return 200 with `coverage_note: NOT_COVERED` (no upstream 7-day fallback wait). HTTP: GET /api/stock/chips. Alternative: stock_get_quote, stock_get_fundamentals."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStockGetChips)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_get_technical",
-		Description: autoDescOr("stock_get_technical", "Return simple technical indicators (SMA20, SMA50, RSI14) for a symbol over the last N days.  HTTP: GET /api/stock/technical. Alternative: stock_get_quote, stock_get_fundamentals."),
+		Description: autoDescOr("stock_get_technical", "Return simple technical indicators (SMA20, SMA50, RSI14) for a Taiwan-listed symbol over the last N days. Coverage: TWSE-listed common stocks whose bars exist in QuoteStore or are fetchable via Fugle. Out-of-scope symbols return 200 with `coverage_note: NOT_COVERED`. HTTP: GET /api/stock/technical. Alternative: stock_get_quote, stock_get_fundamentals."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStockGetTechnical)
 }

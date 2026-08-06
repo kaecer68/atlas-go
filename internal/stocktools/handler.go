@@ -46,6 +46,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/chips", shared.Get(h.HandleChips))
 	mux.Handle("GET /api/stock/technical", shared.Get(h.HandleTechnical))
 	mux.Handle("GET /api/stock/sector-median-pe", shared.Get(h.HandleSectorMedianPE))
+	mux.Handle("GET /api/stock/coverage", shared.Get(h.HandleCoverage))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -71,6 +72,13 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	if symbol == "" {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
+	// Quote handler is intentionally NOT short-circuited by the coverage
+	// guard: Fugle covers OTC quotes in real-world production even when
+	// the TWSE fundamentals snapshot has no entry. Frontend and MCP
+	// callers discover out-of-scope for chips/fundamentals through the
+	// dedicated `GET /api/stock/coverage?symbol=X` endpoint or the
+	// 200 + `coverage_note` field returned by the other 3 handlers.
+
 	if h.deps.FugleClient == nil && h.deps.TWSEQuote == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "quote provider not configured"}
 	}
@@ -135,6 +143,13 @@ func (h *Handler) HandleFundamentals(r *http.Request) (int, any) {
 	if symbol == "" {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
+	if h.deps.Fundamentals != nil && h.deps.Fundamentals.HasData() {
+		cov := LookupCoverage(symbol, h.deps.Fundamentals)
+		if !cov.Covered {
+			return notCoveredResponse(symbol, cov, nil)
+		}
+	}
+
 	if h.deps.Fundamentals == nil || !h.deps.Fundamentals.HasData() {
 		return http.StatusServiceUnavailable, map[string]string{"error": "fundamentals data not loaded"}
 	}
@@ -151,6 +166,15 @@ func (h *Handler) HandleChips(r *http.Request) (int, any) {
 	if symbol == "" {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
+	if h.deps.Fundamentals != nil && h.deps.Fundamentals.HasData() {
+		cov := LookupCoverage(symbol, h.deps.Fundamentals)
+		if !cov.Covered {
+			// Short-circuit out-of-scope to avoid the upstream 7-day fallback
+			// loop colliding with the handler's 15s context deadline (P0-1.
+			return notCoveredResponse(symbol, cov, nil)
+		}
+	}
+
 	if h.deps.CapitalFlow == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "capital flow provider not configured"}
 	}
@@ -195,6 +219,13 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	if symbol == "" {
 		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
 	}
+	if h.deps.Fundamentals != nil && h.deps.Fundamentals.HasData() {
+		cov := LookupCoverage(symbol, h.deps.Fundamentals)
+		if !cov.Covered {
+			return notCoveredResponse(symbol, cov, map[string]any{"technical": map[string]any{"empty": true}})
+		}
+	}
+
 	if h.deps.QuoteStore == nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": "quote store not configured"}
 	}

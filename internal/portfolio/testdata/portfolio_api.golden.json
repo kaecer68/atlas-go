@@ -869,6 +869,12 @@
       "results": "(bool)"
     },
     {
+      "name": "HasSymbol",
+      "params": "(canonical string)",
+      "receiver": "FundamentalProvider",
+      "results": "(bool)"
+    },
+    {
       "name": "LoadFromJSON",
       "params": "(path string)",
       "receiver": "FundamentalProvider",

@@ -1,4 +1,4 @@
-import { fetchStockBundle } from '../services/stock-api-client.js';
+import { fetchStockBundle, fetchStockBundleWithCoverage } from '../services/stock-api-client.js';
 import { renderMissingState } from '../shared/app-utils.js';
 import { renderSearch } from '../components/stock-quote-search.js';
 import { renderHeader } from '../components/stock-quote-header.js';
@@ -46,11 +46,11 @@ function renderContent() {
     // loading or loaded
     const res = state.results || {};
     contentHtml = `
-      ${renderHeader(state.status, res.quote, res.chips)}
+      ${renderHeader(state.status, res.quote, res.chips, res.coverage)}
       <div class="stock-quote-grid">
-        ${renderFundamentals(state.status, res.fundamentals)}
-        ${renderChips(state.status, res.chips)}
-        ${renderTechnical(state.status, res.technical)}
+        ${renderFundamentals(state.status, res.fundamentals, res.coverage)}
+        ${renderChips(state.status, res.chips, res.coverage)}
+        ${renderTechnical(state.status, res.technical, res.coverage)}
       </div>
     `;
   }
@@ -72,10 +72,8 @@ async function doSearch(symbol) {
   state.status = 'loading';
   state.results = null;
   updateSearchInput(symbol);
-  renderContent();
-
   try {
-    const results = await fetchStockBundle(symbol);
+    const results = await fetchStockBundleWithCoverage(symbol);
     state.status = 'loaded';
     state.results = results;
   } catch (e) {
