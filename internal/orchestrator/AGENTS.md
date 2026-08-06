@@ -28,12 +28,11 @@
 - 推薦進入控制層前須經 `CalculateFactorScoresWithBreakdown`。
 - `System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
 - `LLMSectorAgentsEnabled=true` 但 driver 為 `nil` 時 plugin 為 no-op。
-- `SectorAgentLLMDriver` 必須包裝 `PlanDriver` + `ReflectDriver`；不可用已 deprecated 的 `LLMDriver`。
+- `SectorAgentLLMDriver` 必須包裝 `PlanDriver` + `ReflectDriver`。
 
 ## 陷阱與反模式
 
 - 禁止跨層直接讀取 `SystemCore` 私有欄位，應透過傳入的 `registry` 或 `quotes`。
 - CIO aggregator 會覆寫 `finalRecs[].Agent`，但 `PassedGuards` 查核改用 symbol-only key。
 - 靜默過濾：標的不符合 `Screener` 門檻將不進入 `Recommend`，「推薦消失」時優先檢查 `agents.json`。
-- 不要混用 `LLMDriver`（deprecated）與 `PlanDriver`+`ReflectDriver`。
 - 修改 `AgentRegistry` 後，確認 `ExecuteRegistryResearch` 路由邏輯能匹配新 Layer。
