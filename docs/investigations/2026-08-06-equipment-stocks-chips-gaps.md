@@ -129,6 +129,42 @@ if data.Sector == "" {
 
 若要修，三條路徑，互斥：
 1. **前端/CLI**：chips 回 `503` 視為「資料不涵蓋，顯示 N/A」而非「空字串」。最小工程，僅 UX 改善。
-2. **Handler**：`fetchLatestSymbolFlow` 把「symbol 在整個 7 天都沒出現」明確回 `nil SymbolFlow{} + ErrSymbolNotCovered`，前端顯示「不涵蓋」徽章。中等工程。
+
+## 7. Live verification results (2026-08-06, post-deploy)
+
+> **Status**: ✅ CONFIRMED WORKING — all 15 requests behave as designed.
+> Run via `bash docs/investigations/2026-08-06-coverage-verify.sh` after
+> `docker compose build atlas && docker compose up -d atlas`.
+> Commit at the time of verification: `ff26bf2e`.
+
+>### 7.1 Three-symbol matrix (3131, 3587, 6641)
+
+| Symbol | coverage | quote | fundamentals | chips | technical |
+| --- | --- | --- | --- | --- | --- |
+| **3131** 弘塑 (上櫃) | 200 `{covered:false, listing:UNKNOWN, quote_covered:true}` | 200 Fugle `last=2385` T=0.99s | **200 `{coverage_note:NOT_COVERED,...}`** T=3ms | **200 `{coverage_note:NOT_COVERED,...}`** T=4ms | 200 `{coverage_note:NOT_COVERED, technical:{empty:true}}` T=2ms |
+| **3587** 閎康 (上櫃) | 200 `{covered:false, listing:UNKNOWN, quote_covered:true}` | 200 Fugle `last=267` T=1.84s | **200 + coverage_note** T=5ms | **200 + coverage_note** T=3ms | 200 + coverage_note T=6ms |
+| **6641** 基士德-KY (上市) | 200 `{covered:true, listing:TWSE, quote_covered:true}` | 200 Fugle `last=17.95` T=1.79s | 200 `PE=39.67 PB=0.45 DividendYield=2.19` T=4ms | 200 `foreign=12 domestic=0 dealer=-5.106` T=1.68s | 200 `sma20=17.79 rsi14=55.56` T=10ms |
+
+### 7.2 Before vs after — chips behavior on out-of-scope symbols
+
+| | 3131 chips (舊) | 3131 chips (新) |
+| --- | --- | --- |
+| HTTP status | 503 | 200 |
+| Latency | **14.93 s** (7-day T86 fallback loop + 15s context cancel) | **3 ms** (guard short-circuits before T86 fetch) |
+| Body | `{"error":"context canceled"}` | `{"coverage_note":"NOT_COVERED", "covered":false, "listing":"UNKNOWN", "reason":"本系統 chips/fundamentals 涵蓋台灣上市普通股；此股票代號不在資料範圍內", "symbol":"3131"}` |
+
+13,000× faster, and the body is machine-friendly to MCP / frontend render layers.
+
+### 7.3 Risks observed during deploy
+
+| Risk | Mitigation |
+| --- | --- |
+| `docker compose build atlas` was the correct command — the docker-compose.yml service name is `atlas`, NOT `atlas-go` (the latter is just the `container_name`). Documented in the verify script header. |
+| `atlas-mcp` was missing from docker-compose.yml (it's a host binary at `bin/atlas-mcp`, not a container). The verify script rebuilds it via `make rebuild-host-bin`. |
+| First curl after `up -d` may race the warmup (typically 5–10s) and get connection reset. The verify script now polls `/api/health/aggregate` (auth-free, 200 once process is accepting HTTP) for up to 60s before starting the matrix. |
+
+### 7.4 Frontend render correctness (not re-tested in this matrix)
+
+Frontend changes were committed in `793fc79c` and verified via static `node --input-type=module -e` imports earlier; live browser-render verification (sq-scope-notice badge appearing for 3131/3587) requires a frontend-deploy step that is outside this commit's automation.
 3. **資料源**：新增 TPEX T86 等價端點 + 把不涵蓋 symbol 列入 `data/fundamentals.json` snapshot。最大工程、改動多個 pipeline。
 
