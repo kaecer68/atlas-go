@@ -8,27 +8,26 @@
 # Run in MAIN WORKTREE only — invokes docker compose which the AI may not.
 #
 # pipeline:
-#   (1) frontend build (client_web + shared_web + admin_web → dist/)
-#   (2) host binaries rebuilt (Go picks up the new dist via //go:embed)
+#
+#   (1) frontend build: cd client_web && npm run build + cd admin_web &&
+#       npm run build. Both esbuild configs bundle shared_web/static/ via
+#       createSharedPlugin — no separate shared_web build needed (and
+#       shared_web has no package.json).
+#   (2) make rebuild-atlas-bins — Go picks up the new client_web/dist/
+#       via //go:embed in client_web/embed.go.
 #   (3) docker image built (image bakes the new binary into atlas-atlas)
 #   (4) atlas-go container restarted with the new image
 #   (5) host bin/atlas-mcp rebuilt and restarted (stdio MCP, not a container)
 
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
-
-echo "[1/5] Frontend build (client_web + shared_web + admin_web) ..."
 pushd client_web >/dev/null
-npm run build
-popd >/dev/null
-
-pushd shared_web >/dev/null
 npm run build
 popd >/dev/null
 
 pushd admin_web >/dev/null
 npm run build
 popd >/dev/null
+
 
 echo "[2/5] Rebuild host binaries (atlas-go + crons) ..."
 make rebuild-atlas-bins
