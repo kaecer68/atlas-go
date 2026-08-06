@@ -197,9 +197,11 @@ shared_web/dist/
 
 # compiled go binaries in repo root
 /validate-parameters
-.gstack/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+# Per-user Claude Code settings (e.g. PreToolUse hook registration).
+# Convention: settings.json is team-shared; settings.local.json is per-user.
+.claude/settings.local.json
 configs/*.lock
 cmd/cleanup-channel-health/cleanup-channel-health
 internal/risk/configs/
