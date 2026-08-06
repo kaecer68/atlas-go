@@ -1,9 +1,11 @@
 # L2.4 Cleanup Implementation Manifest
 
-> **Phase**: B (Plan) → C (Implement) → D (Close-out)
+> **Phase**: B (Plan) → C (Implement) → D (Close-out) — **全部完成 2026-08-06**
 > **Trigger**: User decision — 關閉 Issue #825 + #826,依第一份 manifest (`2026-08-06-l2-4-issue-alignment-audit.md`) 驗收
 > **Branch**: feat/20260806-l2-4-issue-close (worktree: issue-fix-L2.4)
 > **Date**: 2026-08-06
+> **Commits**: 2fc7ce56 (manifests) / 74e5830e (M2) / c99e531d (M3) / d6cffd11 (M4) / 1f28afa5 (gitignore)
+> **CI**: `make ci-full` 通過 (coverage 67.8%, 全測試 green)
 
 ---
 
@@ -56,7 +58,9 @@
 - comment 存在且含 manifest 連結
 
 ### 2.3 驗證輸出
-(填)
+- ✅ #825 CLOSED (2026-08-06),comment 含 manifest 連結
+- ✅ #826 CLOSED (2026-08-06),comment 含 manifest 連結
+- `gh issue view 825/826 --json state` → CLOSED
 
 ---
 
@@ -74,9 +78,9 @@
 - **Option C (wire-up)**:把 gate 接到 `BackgroundTaskManager` — **不建議**,因 issue 已關閉,觀察期未啟動,C07 已覆蓋。
 
 ### 3.2 Acceptance
-- 處置決定有 ACI 證據 (affected_processes 數 + C07 覆蓋證據)
-- code 或文件反映處置 (deprecate 註記 / 檔案移除 + script 更新)
-- `make ci-full` 通過
+- ✅ 處置決定有 ACI 證據:`ShouldL24AutoCronFire` gitnexus impact = **0 affected processes**;grep 確認 production 0 caller (僅 test)
+- ✅ **Option A (deprecate) 執行**:檔頭加 DEPRECATED 註記 (指向 C07 覆蓋 + issue 關閉),保留 code + test 供未來復用
+- ✅ `go test ./internal/scheduler/` pass;ci-gate pass (commit 74e5830e)
 
 ---
 
@@ -93,9 +97,9 @@
 - **Option B (移除)**:刪 alias + 更新 22 個 importers 用 `SectorAgentLLMDriver` + 刪 test `TestSectorAgentLLM_LLMDriver_DeprecatedAlias` + 更新 AGENTS.md。
 
 ### 4.2 Acceptance
-- 處置決定有 ACI 證據 (22 importers / 0 processes)
-- 若移除:全部 22 個 importers 遷移,無殘留 `LLMDriver` 引用 (grep 驗證)
-- `make ci-full` 通過
+- ✅ 處置決定有 ACI 證據:`LLMDriver` gitnexus impact = 22 direct importers (package 級) / **0 affected processes**;grep 確認 production 0 type usage (僅定義 + test 斷言)
+- ✅ **Option B (移除) 執行**:刪 interface (sector_agent_llm.go) + 刪 test `TestSectorAgentLLM_LLMDriver_DeprecatedAlias` + 清 AGENTS.md 2 條警告
+- ✅ 移除後 grep 驗證無 `LLMDriver` type 殘留;`go test ./internal/orchestrator/` pass;ci-gate pass (commit c99e531d)
 
 ---
 
@@ -116,23 +120,23 @@
 - 移除或標記過時的「auto cron deferred」等敘述
 
 ### 5.2 Acceptance
-- 上述文件與真實 code 狀態一致 (issue 已關閉、C07 已運轉、gate 未 wire-up)
-- 無「BLOCKED on T15」「等待 Day 14」等過時 claim
-- markdown link check 通過
+- ✅ 5 份 L2.4 文件更新:followup (status + §1 + §3c + §5 表)、unblocking-roadmap (狀態表 + Step 6/7 + banner)、observation-log (範本標記)、runbook (status + §5 step 3)、fault-tolerance-design (closure note)
+- ✅ 無「BLOCKED on T15」「等 3b」「deprecated alias 仍在」等過時 claim (grep 驗證)
+- ✅ ci-gate pass (commit d6cffd11)
 
 ---
 
 ## 6. M5 — 真實缺口 (A/E) 開新 issue
 
 ### 6.0 ACI 盤查
-- [ ] 用第一份 manifest §7 Backlog (B-1/B-2/B-3) 作為新 issue 內容來源
-- [ ] 確認無重複 issue (gh issue list 搜尋)
+- [x] 用第一份 manifest §7 Backlog (B-1/B-2/B-3) 作為新 issue 內容來源
+- [x] 確認無重複 issue (gh issue list 搜尋) — 無重複
 
 ### 6.1 動作
-- `gh issue create` 開 1 個 umbrella issue: 「L2.4 軌道收尾後的真實缺口:A (其他 sector LLM 變體) + E (generic LLM framework) + T15 決策」
+- ✅ `gh issue create` → **Issue #1466**: 「[gap] L2.4 收尾後的真實缺口:A (其他 sector LLM 變體) + E (generic LLM framework) + T15 決策」
 
 ### 6.2 Acceptance
-- 新 issue 存在,body 含缺口分析 + 引用本 manifest
+- ✅ Issue #1466 存在 (OPEN),body 含缺口分析 + 引用 manifest
 
 ---
 
@@ -143,6 +147,8 @@
 make ci-full
 ```
 涵蓋:gofmt → build → vet → generate drift → golangci-lint → staticcheck → go test → go test -race → cmd/atlas 整合測試 → shell script 檢查 → coverage ≥ 60% → orphan artifact 檢查
+
+**Result (2026-08-06)**: ✅ **全部通過** — coverage 67.8% (≥60%),go test / race / lint / staticcheck / integration / layer3-snap / markdown links / orphan check 全 green。
 
 ### 7.2 驗收 (對第一份 manifest)
 逐項核對 `docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md` §6 AC-1..AC-8:
