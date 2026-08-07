@@ -24,9 +24,10 @@ package server
 import (
 	"context"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // StrategyForPeriodInput 是 strategy_for_period 工具的請求 schema。
