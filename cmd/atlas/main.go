@@ -77,6 +77,7 @@ import (
 	strategyRanker "github.com/kaecer68/atlas-go/internal/strategy_ranker"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 	"github.com/kaecer68/atlas-go/internal/subscription"
+	"github.com/kaecer68/atlas-go/internal/userstate"
 )
 
 // predictionHistoryAdapter bridges ledger.EventFlowPredictionStore to the
@@ -1020,6 +1021,15 @@ func run(args []string, deps appDeps) error {
 			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
 			subHandler.RegisterRoutes(mux, allowGuest)
 			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
+
+			// Gap 3-R3: per-user signal-state HTTP API. Reuses the same
+			// JWT manager + allowGuest flag so R3 auth mirrors the rest of
+			// /api/user/*. nil StoreInit → endpoint stays un-registered
+			// (defensive: a misconfigured process never exposes the endpoint
+			// without a backing store).
+			userSignalStore := userstate.NewJSONLStore(filepath.Join(cfg.WorkDir, "data/state"))
+			userstate.NewHandler(userSignalStore).RegisterRoutes(mux, subscription.NewAuthMiddleware(jwtMgr, allowGuest))
+			log.Printf("[UserState] registered /api/user/signals/* routes (guest=%v)", allowGuest)
 			devMode := config.GetSecret("ATLAS_DEV_MODE") == "true"
 			deps := WireRecommenderDeps(WireDeps{
 				WorkDir:          cfg.WorkDir,
