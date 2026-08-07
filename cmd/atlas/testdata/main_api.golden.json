@@ -66,6 +66,24 @@
       "results": "(dailyreport.GlobalOverview, error)"
     },
     {
+      "name": "AppendPrediction",
+      "params": "(rec eventdriven.PredictionRecord)",
+      "receiver": "predictionHistoryAdapter",
+      "results": "(error)"
+    },
+    {
+      "name": "HasPredictionOn",
+      "params": "(t time.Time)",
+      "receiver": "predictionHistoryAdapter",
+      "results": "(bool, error)"
+    },
+    {
+      "name": "LoadRecentPredictions",
+      "params": "(limit int)",
+      "receiver": "predictionHistoryAdapter",
+      "results": "([]eventdriven.PredictionRecord, error)"
+    },
+    {
       "name": "LoadRecentScans",
       "params": "(ctx context.Context, limit int)",
       "receiver": "scanStoreAdapter",

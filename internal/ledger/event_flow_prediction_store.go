@@ -3,6 +3,7 @@ package ledger
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,17 @@ type EventFlowPredictionRecord struct {
 	DirectionSign float64   `json:"direction_sign"`
 	Confidence    float64   `json:"confidence"`
 	Direction     string    `json:"direction"`
+
+	// ActualSign is the realized capital-flow direction as a signed magnitude
+	// (same encoding as DirectionSign: inflow → +, outflow → −, neutral → 0).
+	// Filled on T+1 by the prev-day reconcile task. Zero until then.
+	ActualSign float64 `json:"actual_sign,omitempty"`
+	// ActualSource records where the realized value came from (e.g. "twse_t86").
+	ActualSource string `json:"actual_source,omitempty"`
+	// ActualCapturedAt records when the actual was captured. nil = not yet
+	// reconciled (distinct from a zero value, which would be ambiguous with
+	// "not filled"). Pointer keeps the JSON field omitted until T+1.
+	ActualCapturedAt *time.Time `json:"actual_captured_at,omitempty"`
 }
 
 // EventFlowPredictionStore persists event-driven capital-flow predictions so
@@ -36,6 +48,14 @@ type EventFlowPredictionStore interface {
 	LoadRecentPredictions(limit int) ([]EventFlowPredictionRecord, error)
 	Len() int
 	Size() int64
+	// UpdateActual fills in the realized T+1 outcome for the prediction made
+	// at predictedAt. No-op with error when no matching prediction exists.
+	UpdateActual(predictedAt time.Time, actualSign float64, source string) error
+	// LoadByDate returns the prediction captured on the Taipei calendar date
+	// of the passed time (any time-of-day works — the date component in
+	// Asia/Taipei is the match key, NOT the UTC date). Returns
+	// ErrPredictionNotFound when no record matches that date.
+	LoadByDate(date time.Time) (EventFlowPredictionRecord, error)
 }
 
 // defaultEventFlowPredictionCap bounds the JSONL file size. At ~1
@@ -162,6 +182,71 @@ func writePredictionJSONL(path string, records []EventFlowPredictionRecord) erro
 
 func directionSign(direction string, confidence float64) float64 {
 	return DirectionSign(direction, confidence)
+}
+
+// ErrPredictionNotFound is returned by LoadByDate/UpdateActual when no
+// prediction record matches the requested date.
+var ErrPredictionNotFound = errors.New("ledger: prediction not found")
+
+// samePredictionDate reports whether the record's PredictedAt corresponds to
+// the given calendar date. Predictions are captured around market close
+// (13:45 Taipei) so comparing on the date component in Asia/Taipei is the
+// stable key; timestamps stored in UTC are converted back for comparison.
+func samePredictionDate(rec EventFlowPredictionRecord, date time.Time) bool {
+	taipei := time.FixedZone("Asia/Taipei", 8*3600)
+	a := rec.PredictedAt.In(taipei)
+	b := date.In(taipei)
+	return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+}
+
+// UpdateActual fills in the realized T+1 outcome for the prediction made at
+// predictedAt (matched by Taipei date). read-modify-write under the store
+// mutex, consistent with AppendPrediction. Returns ErrPredictionNotFound when
+// no matching prediction exists.
+func (s *JSONLEventFlowPredictionStore) UpdateActual(predictedAt time.Time, actualSign float64, source string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.baseDir, "event_flow_predictions.jsonl")
+	records, err := readPredictionJSONL(path)
+	if err != nil {
+		return fmt.Errorf("update actual read: %w", err)
+	}
+	updated := false
+	now := time.Now().UTC()
+	// Update every record on the same Taipei date — if a duplicate prediction
+	// exists (retry/restart double-append), both get reconciled rather than
+	// silently dropping one from the hit-rate sample (P3).
+	for i := range records {
+		if !samePredictionDate(records[i], predictedAt) {
+			continue
+		}
+		records[i].ActualSign = actualSign
+		records[i].ActualSource = source
+		records[i].ActualCapturedAt = &now
+		updated = true
+	}
+	if !updated {
+		return ErrPredictionNotFound
+	}
+	return writePredictionJSONL(path, records)
+}
+
+// LoadByDate returns the prediction captured at date (matched by Taipei date
+// component). Returns ErrPredictionNotFound when no record matches.
+func (s *JSONLEventFlowPredictionStore) LoadByDate(date time.Time) (EventFlowPredictionRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.baseDir, "event_flow_predictions.jsonl")
+	records, err := readPredictionJSONL(path)
+	if err != nil {
+		return EventFlowPredictionRecord{}, fmt.Errorf("load by date read: %w", err)
+	}
+	for _, rec := range records {
+		if samePredictionDate(rec, date) {
+			return rec, nil
+		}
+	}
+	return EventFlowPredictionRecord{}, ErrPredictionNotFound
 }
 
 // DirectionSign encodes a predicted capital-flow direction as a signed magnitude:

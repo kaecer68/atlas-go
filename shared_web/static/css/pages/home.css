@@ -697,6 +697,27 @@
   gap: var(--space-md);
 }
 
+/* 歷史命中率徽章 (product positioning §9 誠實聲明) */
+.pred-hitrate {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--editorial-radius-sm);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-xs);
+  align-self: flex-start;
+}
+.pred-hitrate--calibrated {
+  background: color-mix(in srgb, var(--editorial-bullish) 12%, transparent);
+  color: var(--editorial-bullish);
+  border: 1px solid color-mix(in srgb, var(--editorial-bullish) 30%, transparent);
+}
+.pred-hitrate--calibrating {
+  background: color-mix(in srgb, var(--editorial-muted) 10%, transparent);
+  color: var(--editorial-muted);
+  border: 1px solid var(--editorial-border);
+}
+
 .pred-row {
   padding: var(--space-sm) var(--space-md);
   background: var(--editorial-surface);

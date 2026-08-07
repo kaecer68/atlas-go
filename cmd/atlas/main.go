@@ -79,6 +79,78 @@ import (
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
+// predictionHistoryAdapter bridges ledger.EventFlowPredictionStore to the
+// local eventdriven.PredictionHistoryStore interface so the prediction
+// handler can persist predictions and compute a realized hit rate without
+// importing ledger.
+type predictionHistoryAdapter struct {
+	inner ledger.EventFlowPredictionStore
+}
+
+func (a *predictionHistoryAdapter) AppendPrediction(rec eventdriven.PredictionRecord) error {
+	if a == nil || a.inner == nil {
+		return nil
+	}
+	return a.inner.AppendPrediction(ledger.EventFlowPredictionRecord{
+		PredictedAt:   rec.PredictedAt,
+		DirectionSign: rec.DirectionSign,
+		Confidence:    abs(rec.DirectionSign),
+		Direction:     directionFromSign(rec.DirectionSign),
+	})
+}
+
+func (a *predictionHistoryAdapter) HasPredictionOn(t time.Time) (bool, error) {
+	if a == nil || a.inner == nil {
+		return false, nil
+	}
+	_, err := a.inner.LoadByDate(t)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, ledger.ErrPredictionNotFound) {
+		return false, nil
+	}
+	return false, err
+}
+
+func (a *predictionHistoryAdapter) LoadRecentPredictions(limit int) ([]eventdriven.PredictionRecord, error) {
+	if a == nil || a.inner == nil {
+		return nil, nil
+	}
+	rows, err := a.inner.LoadRecentPredictions(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]eventdriven.PredictionRecord, len(rows))
+	for i, r := range rows {
+		out[i] = eventdriven.PredictionRecord{
+			PredictedAt:      r.PredictedAt,
+			DirectionSign:    r.DirectionSign,
+			ActualSign:       r.ActualSign,
+			ActualCapturedAt: r.ActualCapturedAt,
+		}
+	}
+	return out, nil
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func directionFromSign(sign float64) string {
+	switch {
+	case sign > 0:
+		return "inflow"
+	case sign < 0:
+		return "outflow"
+	default:
+		return "neutral"
+	}
+}
+
 // scanStoreAdapter bridges ledger.DetectorScanStore to the local
 // eventdriven.DetectorScanStore interface, avoiding a direct import of
 // ledger (which would create a package dependency cycle through
@@ -892,6 +964,12 @@ func run(args []string, deps appDeps) error {
 			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
 			// All event/* routes are owned by RegisterRoutesWithDetectors.
 			edHandler = eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			// Wire the prediction history store so /api/events/prediction
+			// surfaces historical_hit_rate (product positioning §6/§9: show
+			// realized accuracy alongside the forecast, "校準中" until enough
+			// T+1 samples). The adapter bridges ledger's record type to the
+			// handler's local PredictionRecord projection.
+			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
@@ -1200,6 +1278,8 @@ func run(args []string, deps appDeps) error {
 				gateway:           gateway,
 				autoRollback:      autoRollback,
 				autoJudgePromoter: autoJudgePromoter,
+				predictionLedger:  ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir),
+				capitalFlowStore:  capitalFlowStore,
 			})
 
 			if detectorRegistry != nil && detectorScanStore != nil {
