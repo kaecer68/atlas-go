@@ -95,17 +95,23 @@ func (h *Handler) SetPredictionStore(ps PredictionHistoryStore) {
 	h.predictionStore = ps
 }
 
-// computeHistoricalHitRate reads up to limit recent predictions from the
-// store, keeps those with a reconciled actual (ActualSign != 0), and counts
-// directional hits: predicted sign and actual sign must agree in sign
+// hitRateWindowBounds the number of recent predictions read from the store
+// when computing the realized hit rate. The store FIFO keeps ~3 years so a
+// 60-day window is a safe bounded read while still spanning enough trading
+// days to reach MinHitSamples.
+const hitRateWindow = 60
+
+// computeHistoricalHitRate reads the recent hitRateWindow predictions from
+// the store, keeps those with a reconciled actual (ActualSign != 0), and
+// counts directional hits: predicted sign and actual sign must agree in sign
 // (both positive = inflow hit, both negative = outflow hit; neutral
 // predictions with a non-zero actual count as a miss). Returns nil when the
 // store is unwired or fewer than MinHitSamples are reconciled.
-func (h *Handler) computeHistoricalHitRate(limit int) *HistoricalHitRate {
+func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 	if h.predictionStore == nil {
 		return nil
 	}
-	records, err := h.predictionStore.LoadRecentPredictions(limit)
+	records, err := h.predictionStore.LoadRecentPredictions(hitRateWindow)
 	if err != nil || len(records) == 0 {
 		return nil
 	}
@@ -120,11 +126,11 @@ func (h *Handler) computeHistoricalHitRate(limit int) *HistoricalHitRate {
 		}
 	}
 	if samples == 0 {
-		return &HistoricalHitRate{WindowDays: limit / 2, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: "校準中（樣本 0/30）"}
+		return &HistoricalHitRate{WindowDays: hitRateWindow, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: "校準中（樣本 0/30）"}
 	}
 	hr := float64(hits) / float64(samples)
 	out := &HistoricalHitRate{
-		WindowDays: limit / 2,
+		WindowDays: hitRateWindow,
 		Samples:    samples,
 		Hits:       hits,
 		HitRate:    hr,
@@ -263,9 +269,9 @@ func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	report := h.predictor.Predict(now)
 
 	// Attach the realized hit rate from the prediction store (T+1-reconciled
-	// history). 60-day window matches the prediction cap semantics; the
-	// store FIFO keeps ~3 years so 60 is a safe bounded read.
-	report.HistoricalHitRate = h.computeHistoricalHitRate(60)
+	// history). Window is hitRateWindow (60) — bounded read, spans enough
+	// trading days to reach MinHitSamples.
+	report.HistoricalHitRate = h.computeHistoricalHitRate()
 
 	h.cacheMu.Lock()
 	h.cachedReport = &report

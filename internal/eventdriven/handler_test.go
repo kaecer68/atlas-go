@@ -28,7 +28,7 @@ func (f *fakePredictionStore) LoadRecentPredictions(limit int) ([]PredictionReco
 
 func TestComputeHistoricalHitRate_UnwiredStoreReturnsNil(t *testing.T) {
 	h := NewHandler(industry.NewEventCalendar())
-	if got := h.computeHistoricalHitRate(60); got != nil {
+	if got := h.computeHistoricalHitRate(); got != nil {
 		t.Fatalf("expected nil when store not wired, got %+v", got)
 	}
 }
@@ -42,7 +42,7 @@ func TestComputeHistoricalHitRate_CountsDirectionalHits(t *testing.T) {
 		{DirectionSign: 0, ActualSign: 0},       // unreconciled — skipped
 	}})
 
-	got := h.computeHistoricalHitRate(60)
+	got := h.computeHistoricalHitRate()
 	if got == nil {
 		t.Fatal("expected non-nil hit rate")
 	}
@@ -71,7 +71,7 @@ func TestComputeHistoricalHitRate_CalibratedAtEnoughSamples(t *testing.T) {
 	}
 	h.SetPredictionStore(&fakePredictionStore{records: records})
 
-	got := h.computeHistoricalHitRate(60)
+	got := h.computeHistoricalHitRate()
 	if got == nil {
 		t.Fatal("expected non-nil hit rate")
 	}
@@ -92,7 +92,7 @@ func TestComputeHistoricalHitRate_ZeroSamples(t *testing.T) {
 		{DirectionSign: 0.5, ActualSign: 0}, // no actual yet
 	}})
 
-	got := h.computeHistoricalHitRate(60)
+	got := h.computeHistoricalHitRate()
 	if got == nil {
 		t.Fatal("expected non-nil (calibrating) hit rate")
 	}
