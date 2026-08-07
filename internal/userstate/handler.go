@@ -60,7 +60,7 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, map[string]any{
 		"signals": records,
 		"count":   len(records),
 	})
@@ -83,7 +83,7 @@ func (h *Handler) handleAck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, state)
 }
 
 // handleDismiss marks the (user, signal) as dismissed — the user does not
@@ -103,7 +103,7 @@ func (h *Handler) handleDismiss(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, state)
 }
 
 // handleDelete removes the (user, signal) record — the dashboard then
@@ -130,7 +130,7 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, state)
 }
 
 // upsertFromRequest reads an optional body, falls back to defaults, and
@@ -167,9 +167,9 @@ func requireSignalKey(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return key, true
 }
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
+func writeJSON(w http.ResponseWriter, body any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(body)
 }
 
