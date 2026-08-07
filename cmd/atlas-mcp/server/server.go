@@ -179,11 +179,12 @@ func Run(ctx context.Context, cfg Config) error {
 	// template_detector 2 + sector (industry_sector_list + industry_sector_lookup) 2 +
 	// 0-2 sampling/elicitation (feature-gated, default off) = 107..109 tools.
 	// registerAuditStateTool (audit_state) + registerStrategyForPeriodTool
-	// (strategy_for_period) add 2 → 116-120.
+	// (strategy_for_period) + stock_get_monthly_revenue (monthly_revenue,
+	// in registerTools) add 3 → 117-121.
 	n := RegisteredToolCount
 	log.Printf("atlas-mcp: registered %d tools", n)
-	if n < 115 || n > 120 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 115-120", n)
+	if n < 115 || n > 121 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 115-121", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for

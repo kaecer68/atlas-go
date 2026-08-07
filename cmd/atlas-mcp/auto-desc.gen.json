@@ -970,6 +970,30 @@
       "type": "object"
     }
   },
+  "stock_get_monthly_revenue": {
+    "name": "stock_get_monthly_revenue",
+    "description": "Return the most recent published monthly revenue for a Taiwan stock symbol along with YoY% (change_pct, vs same month prior year) and MoM%. Coverage: TWSE 上市 + TPEX 上櫃 + 興櫃 via FinMind TaiwanStockMonthRevenue — broader than the 4 stocktools endpoints which are TWSE-scoped per PR #1477, so TPEX symbols like 3131/3587/6640 return data here even though stock_get_chips/fundamentals mark them NOT_COVERED. HTTP: GET /api/stock/monthly_revenue. Alternative: stock_get_quote, stock_get_chips.",
+    "inputSchema": {
+      "properties": {
+        "month": {
+          "description": "reporting month 1-12; default = most recent closed month",
+          "type": "integer"
+        },
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330 / 3131 / 6640 (TWSE 上市 + TPEX 上櫃 + 興櫃)",
+          "type": "string"
+        },
+        "year": {
+          "description": "reporting year, e.g. 2026; default = most recent closed month",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
   "stock_get_quote": {
     "name": "stock_get_quote",
     "description": "Return the latest intraday quote for a Taiwan stock symbol. Coverage: TWSE-listed common stocks primarily; Fugle may also return quotes for some non-listed symbols. Out-of-scope chips/fundamentals surface as `coverage_note: NOT_COVERED`. HTTP: GET /api/stock/quote. Alternative: stock_get_technical, stock_get_chips.",

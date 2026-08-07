@@ -33,6 +33,12 @@ func registerStockTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("stock_get_technical", "Return simple technical indicators (SMA20, SMA50, RSI14) for a Taiwan-listed symbol over the last N days. Coverage: TWSE-listed common stocks whose bars exist in QuoteStore or are fetchable via Fugle. Out-of-scope symbols return 200 with `coverage_note: NOT_COVERED`. HTTP: GET /api/stock/technical. Alternative: stock_get_quote, stock_get_fundamentals."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleStockGetTechnical)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "stock_get_monthly_revenue",
+		Description: autoDescOr("stock_get_monthly_revenue", "Return the most recent published monthly revenue for a Taiwan stock symbol along with YoY% (change_pct, vs same month prior year) and MoM%. Coverage: TWSE 上市 + TPEX 上櫃 + 興櫃 via FinMind TaiwanStockMonthRevenue — broader than the 4 stocktools endpoints which are TWSE-scoped per PR #1477, so TPEX symbols like 3131/3587/6640 return data here even though stock_get_chips/fundamentals mark them NOT_COVERED. HTTP: GET /api/stock/monthly_revenue. Alternative: stock_get_quote, stock_get_chips."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleStockGetMonthlyRevenue)
 }
 
 type stockSymbolInput struct {
@@ -47,6 +53,12 @@ type stockTechnicalInput struct {
 type stockChipsInput struct {
 	Symbol string `json:"symbol" jsonschema:"the Taiwan stock symbol, e.g. 2330"`
 	Date   string `json:"date,omitempty" jsonschema:"trading day in YYYYMMDD; defaults to the most recent trading day with data"`
+}
+
+type stockMonthlyRevenueInput struct {
+	Symbol string `json:"symbol" jsonschema:"the Taiwan stock symbol, e.g. 2330 / 3131 / 6640 (TWSE 上市 + TPEX 上櫃 + 興櫃)"`
+	Year   int    `json:"year,omitempty" jsonschema:"reporting year, e.g. 2026; default = most recent closed month"`
+	Month  int    `json:"month,omitempty" jsonschema:"reporting month 1-12; default = most recent closed month"`
 }
 
 type stockBaseOutput struct {
@@ -92,6 +104,26 @@ func (s *server) handleStockGetChips(ctx context.Context, _ *mcp.CallToolRequest
 	}
 	if err := s.withAudit(ctx, "stock_get_chips", []string{"symbol", "date"}, func() error {
 		return s.cli.Get(ctx, "/api/stock/chips", q, &out.Result)
+	}); err != nil {
+		return nil, stockBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleStockGetMonthlyRevenue(ctx context.Context, _ *mcp.CallToolRequest, in stockMonthlyRevenueInput) (*mcp.CallToolResult, stockBaseOutput, error) {
+	if in.Symbol == "" {
+		return nil, stockBaseOutput{}, fmt.Errorf("stock_get_monthly_revenue: symbol is required")
+	}
+	var out stockBaseOutput
+	q := url.Values{"symbol": {in.Symbol}}
+	if in.Year > 0 {
+		q.Set("year", strconv.Itoa(in.Year))
+	}
+	if in.Month > 0 {
+		q.Set("month", strconv.Itoa(in.Month))
+	}
+	if err := s.withAudit(ctx, "stock_get_monthly_revenue", []string{"symbol", "year", "month"}, func() error {
+		return s.cli.Get(ctx, "/api/stock/monthly_revenue", q, &out.Result)
 	}); err != nil {
 		return nil, stockBaseOutput{}, err
 	}

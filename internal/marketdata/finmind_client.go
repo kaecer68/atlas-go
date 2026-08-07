@@ -115,6 +115,16 @@ func NewFinMindClient(apiKey string) *FinMindClient {
 	return newFinMindClientInternal(apiKey, "data/state")
 }
 
+// NewFinMindClientWithStateDir creates a standalone FinMindClient whose
+// DailyQuotaTracker persists under the given stateDir instead of the
+// default "data/state". Test-only convenience — production callers
+// should use GetSharedFinMindClient (which routes through
+// newFinMindClientInternal with the configured WorkDir) so the quota
+// state file lives next to the other runtime state.
+func NewFinMindClientWithStateDir(apiKey, stateDir string) *FinMindClient {
+	return newFinMindClientInternal(apiKey, stateDir)
+}
+
 // newFinMindClientInternal is the shared constructor used by both the
 // singleton accessor and the standalone constructor. It wires the shared
 // DailyQuotaTracker so all call sites share one daily counter.
