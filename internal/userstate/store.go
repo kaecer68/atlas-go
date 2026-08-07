@@ -32,9 +32,10 @@ const defaultSignalStateCap = 1000
 // connection. The store reads the entire file on every write (FIFO 1000
 // records ≈ a few hundred KB at typical scale — sub-millisecond parse).
 type SignalStateStore interface {
-	// Upsert inserts or updates the (UserID, SignalKey) record with the given
-	// payload. AcknowledgedAt and Dismissed are merged from the new state;
-	// other fields are stored verbatim.
+	// Upsert inserts or replaces the (UserID, SignalKey) record verbatim
+	// with the given payload — callers must supply the full state (the
+	// store does not merge partial records). UpdatedAt is always set by
+	// the store, overriding any caller-supplied value.
 	Upsert(state UserSignalState) error
 	// LoadByUser returns all records for the given user, ordered by
 	// UpdatedAt DESC. Used by the dashboard to render per-signal badges.
