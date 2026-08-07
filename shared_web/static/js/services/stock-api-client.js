@@ -119,7 +119,14 @@ export async function fetchStockMonthlyRevenue(symbol, year, month) {
   let path = `/api/stock/monthly_revenue?symbol=${encodeURIComponent(symbol)}`;
   if (year) path += `&year=${encodeURIComponent(year)}`;
   if (month) path += `&month=${encodeURIComponent(month)}`;
-  return fetchCached('monthly-revenue', symbol, path);
+  // Cache key must include the (year, month) variant — otherwise queries
+  // for different reporting months would share the same 7-day cache entry
+  // (e.g. 2026-07 vs 2026-08 would return the same revenue). 'latest' is
+  // used when no explicit month is requested (server default = last
+  // closed month), which changes over time and should not be pinned by
+  // a stale cache entry across a month boundary either.
+  const variant = year ? `${year}-${month || ''}` : 'latest';
+  return fetchCached('monthly-revenue', `${symbol}::${variant}`, path);
 }
 
 

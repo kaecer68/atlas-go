@@ -85,13 +85,28 @@ test('fetchStockMonthlyRevenue 503（quota exhausted）時 reject 帶 message', 
   );
 });
 
+test('不同 year/month 用不同 cache key（避免跨月份共享快取）', async () => {
+  clearStorage();
+  let calls = 0;
+  setFetch(async () => {
+    calls++;
+    return okJsonResponse({ symbol: '2330.TW', revenue: 100, yoy_pct: 1 });
+  });
+  await fetchStockMonthlyRevenue('2330', 2026, 7);
+  await fetchStockMonthlyRevenue('2330', 2026, 8);
+  // 兩個不同月份必須各打一次 API（cache key 不同），不能共享。
+  assert.equal(calls, 2);
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}monthly-revenue::2330::2026-7`));
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}monthly-revenue::2330::2026-8`));
+});
+
 test('monthly-revenue TTL 是 7 天（對位 TTL_MS 設計）', () => {
   // 直接驗證 localStorage cache 的 expiresAt 是 7 天後
   clearStorage();
   const ttlMs = 7 * 24 * 60 * 60 * 1000;
-  setFetch(async () => okJsonResponse({ symbol: '2330.TW', value: 1 }));
+  setFetch(async () => okJsonResponse({ symbol: '2330.TW', revenue: 1 }));
   return fetchStockMonthlyRevenue('2330').then(() => {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}monthly-revenue::2330`);
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}monthly-revenue::2330::latest`);
     assert.ok(raw, 'cache entry should exist');
     const entry = JSON.parse(raw);
     const expectedExpiry = Date.now() + ttlMs;
