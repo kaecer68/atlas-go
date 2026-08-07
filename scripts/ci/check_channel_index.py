@@ -22,9 +22,8 @@ REGISTER_ADAPTERS_GO = REPO_ROOT / "internal" / "apigateway" / "register_adapter
 CHANNEL_INDEX_JSON = (
     REPO_ROOT
     / "docs"
-    / "manifests"
-    / "2026-07-25-channel-architecture-audit"
-    / "a1-channels.json"
+    / "contracts"
+    / "channel-index.json"
 )
 
 
