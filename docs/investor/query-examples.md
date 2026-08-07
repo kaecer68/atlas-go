@@ -266,7 +266,9 @@ capital_flow_summary { period: "last_5d" }
 narrative_get_bundle
 ```
 
-**回傳**：`{ date, market_summary, top_events, alerts, watchlist }`
+**回傳**：`{ date, market_summary, top_events, alerts }`
+
+> ⚠️ **2026-08-07 註記**: 早期 spec 曾列出 `watchlist` 欄位, 但 `narrative_get_bundle` **未實作**該欄位 (見 `.omo/audit/2026-08-06-gap3-capital-flow-to-action.md` §2.1 — 0 命中 user-side watchlist 端點)。投資人側的「追蹤/紀律」機制 (watchlist / 已讀 / 提醒) 屬 product positioning §9「追蹤 → 紀律」承諾缺口, 尚未實作; 此處移除假欄位避免誤導。
 
 **顯示範例**：
 ```
@@ -274,7 +276,6 @@ narrative_get_bundle
 市場: 大盤 +0.3% (半導體領漲)
 重點事件: 2330 法說會 / 美股 ADR 變化
 警報: 1 未確認 (alert_xyz)
-關注: 半導體 / 金融
 ```
 
 ### "有什麼警報？"
