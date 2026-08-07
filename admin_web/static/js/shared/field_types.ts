@@ -4303,6 +4303,29 @@ export interface User {
   created_at: string;
 }
 
+export interface UserJournal {
+  user_id: number;
+  entry_id: string;
+  signal_key?: string;
+  note: string;
+  created_at: string;
+}
+
+export interface UserSignalState {
+  user_id: number;
+  signal_key: string;
+  acknowledged_at?: string | null;
+  dismissed: boolean;
+  updated_at: string;
+}
+
+export interface UserWatchlist {
+  user_id: number;
+  symbols: string[];
+  signal_key: string;
+  created_at: string;
+}
+
 export interface ValidateRequest {
   total_tests: number;
   total_hits: number;

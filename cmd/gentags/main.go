@@ -11,6 +11,7 @@
 //	internal/reporting/**/*.go          — performance report types (PerformanceReport, AgentPerformance, ...)
 //	internal/industry/**/*.go           — industry types (CycleStatusCard, CalendarEvent, SupplyChainGraph, ...)
 //	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
+//	internal/userstate/**/*.go        — per-user signal state types (UserSignalState, ...)
 //	internal/marketdata/**/*.go         — market data types (MacroDataPoint, MacroDataSnapshot, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
@@ -70,11 +71,12 @@ func main() {
 	eventdrivenDir := findEventDrivenDir(rootDir)
 	recommenderDir := findRecommenderDir(rootDir)
 	subscriptionDir := findSubscriptionDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" || dailyreportDir != "" {
+	userstateDir := findUserStateDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" || userstateDir != "" || dailyreportDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{dailyreportDir, apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir} {
+		for _, d := range []string{dailyreportDir, apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir, userstateDir} {
 			if d == "" {
 				continue
 			}
@@ -205,6 +207,16 @@ func main() {
 			for k, v := range subStructs {
 				if _, exists := structs[k]; exists {
 					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and subscription; using subscription version\n", k)
+				}
+				structs[k] = v
+			}
+		}
+		// Merge userstate structs (e.g. UserSignalState — Gap 3-R3/R4).
+		if userstateDir != "" {
+			usStructs := parseStructsWithNames(userstateDir, allNames)
+			for k, v := range usStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and userstate; using userstate version\n", k)
 				}
 				structs[k] = v
 			}
@@ -341,6 +353,14 @@ func findRecommenderDir(rootDir string) string {
 
 func findSubscriptionDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "subscription")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findUserStateDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "userstate")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
