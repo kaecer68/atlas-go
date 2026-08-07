@@ -1,9 +1,9 @@
 {
   "$schema": "https://atlas-go.dev/contracts/v1/mcp-tools.schema.json",
   "version": "1",
-  "generated_at": "2026-07-22T23:00:15.731068+00:00",
+  "generated_at": "2026-08-07T05:40:54.640732+00:00",
   "source": "cmd/atlas-mcp/server/tools_canary_test.go",
-  "total_tools": 97,
+  "total_tools": 95,
   "tools": {
     "alert_get_rules": {
       "method": "GET",
@@ -45,13 +45,6 @@
     "backtest_status": {
       "method": "GET",
       "path": "/api/backtest/status",
-      "auth": "optional",
-      "consumer_facing": true,
-      "consumer_note": ""
-    },
-    "calendar_events": {
-      "method": "GET",
-      "path": "/api/dashboard/calendar-events",
       "auth": "optional",
       "consumer_facing": true,
       "consumer_note": ""
@@ -665,13 +658,6 @@
     "system_get_thresholds": {
       "method": "GET",
       "path": "/api/dashboard/metrics/thresholds",
-      "auth": "optional",
-      "consumer_facing": true,
-      "consumer_note": ""
-    },
-    "taiwan_stress_index": {
-      "method": "GET",
-      "path": "/api/taiwan/stress-index",
       "auth": "optional",
       "consumer_facing": true,
       "consumer_note": ""
