@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **118 tools**（預設啟用；sampling/elicitation feature-gated 全開時 118+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **119 tools**（預設啟用；sampling/elicitation feature-gated 全開時 119+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 110+ + template_detector 2 + audit 4 + Phase 2 alert lifecycle 4 = 114+（**基礎 116+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 118+；啟動期 assert ∈ [115, 118]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + audit_state 1 + Phase 2 alert lifecycle 4 = 115+（**基礎 117+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 119+；啟動期 assert ∈ [115, 119]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（118 個 tool 槽位，其中 116+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（119 個 tool 槽位，其中 117+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -239,7 +239,7 @@
 
 > 安全邊界：`mcp_roots_read_file` 強制 O_RDONLY、TOCTOU 防護、size cap、AllowedRoots 檢查；詳見 [spec Phase 4 B](../specs/agent-mcp-server-spec.md)。
 
-### MCP Audit / Observability（6 個 — agent 自我觀測）
+### MCP Audit / Observability（7 個 — agent 自我觀測）
 
 | Tool | 用途 |
 |------|------|
@@ -249,6 +249,7 @@
 | `mcp_get_top_slow_tools` | 最慢的 N 個 tool（延遲排行） |
 | `mcp_anomaly_get_recent` | 近期異常事件（error spike、延遲飆升） |
 | `mcp_anomaly_ack` | 標記異常為已確認 |
+| `audit_state` | 憲章審計追蹤表快照（§附錄 D 22 項 + §附錄 F 14 行 + 統計）；供 agent self-audit 憲章對齊狀態 |
 
 > 這些 tool 屬於 atlas-mcp 的自我觀測層，供 agent 了解自己的呼叫模式與系統健康。
 
