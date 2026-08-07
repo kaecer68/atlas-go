@@ -1,6 +1,6 @@
 # L2.4 Observation Window — Observation Log
 
-> **⛔ 2026-08-06 狀態**:本檔為**範本**,L2.4 觀察期**從未啟動** (`use_llm_sector_agents.value=false` 自 PR #821 至今未變)。Issue #825 / #826 已關閉 (依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md)),本檔保留作為未來若重啟觀察期的範本。下方所有「Week N 範例 entry」皆為示意資料,非真實觀察紀錄。
+> **⛔ 2026-08-06 狀態**:本檔為**範本**,L2.4 觀察期**從未啟動** (`use_llm_sector_agents.value=false` 自 PR #821 至今未變)。Issue #825 / #826 已關閉 (依 `.omo/manifests/2026-08-06-l2-4-issue-alignment-audit.md`（harness 私有，不入 repo）),本檔保留作為未來若重啟觀察期的範本。下方所有「Week N 範例 entry」皆為示意資料,非真實觀察紀錄。
 
 > **對應 runbook**：`docs/operations/l2-4-runbook.md`
 > **對應 spec**：`docs/specs/l2-4-observation-spec.md`

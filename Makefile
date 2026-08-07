@@ -349,7 +349,8 @@ ci-quick:
 	              scripts/ci/check_strategy_path.sh \
 	              scripts/ci/check_constitution_drift.sh \
 	              scripts/ci/check_data_catalog.sh \
-	              scripts/ci/check_field_contract.sh; do \
+	              scripts/ci/check_field_contract.sh \
+	              scripts/ci/check_docs_governance.sh; do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 10 bash $$script > /dev/null 2>&1; then \

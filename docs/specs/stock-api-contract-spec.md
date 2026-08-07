@@ -68,7 +68,7 @@ stocktools 4 個 endpoint 的涵蓋範圍如下：
 | MCP tool description 補 coverage 提示 | 純文本變更，不影響協議 |
 | Portfolio `FundamentalProvider` 新增 `HasSymbol(canonical) bool` method | 純增量，不影響既有 `Get` 等 |
 
-關聯文件：[`docs/manifests/2026-08-06-stock-coverage-notice.md`](../manifests/2026-08-06-stock-coverage-notice.md)
+關聯文件：`.omo/manifests/2026-08-06-stock-coverage-notice.md`（harness 私有，不入 repo）
 
 
 | `/api/stock/sector-median-pe` | 以 `sector` 查詢 fundamentals JSON | `sector=semiconductor` |
