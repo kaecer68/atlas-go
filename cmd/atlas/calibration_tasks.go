@@ -46,6 +46,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -73,6 +74,18 @@ type calibrationDeps struct {
 	// to emit per-failure-kind metrics (monitoring.RecordDataAggregatorFailure).
 	// nil = no telemetry (acceptable in tests / early bootstrap).
 	Collector *monitoring.MetricsCollector
+	// PredictionLedger is the event-flow prediction JSONL store. The
+	// prediction_backtest_reverse_write task (Gap 2-D) reads reconciled
+	// T+1 records from it and writes them into prediction_backtest with
+	// is_synthetic=0 so the predictor_calibrate task (which filters
+	// is_synthetic=0) can use real production hit rates. nil disables the
+	// reverse-write task — calibrator then keeps the existing replay-only
+	// fallback.
+	PredictionLedger ledger.EventFlowPredictionStore
+	// HistoricalStore is the SQLite-backed prediction_backtest / regime /
+	// stress_index / event_calendar / geopolitical store. Used by the
+	// reverse-write task to upsert T+1-reconciled prediction rows.
+	HistoricalStore ledger.HistoricalStore
 }
 
 // registerCalibrationTasks wires 18 calibration background tasks into the
@@ -94,6 +107,7 @@ func registerCalibrationTasks(d calibrationDeps) {
 	d.registerStructuralTrendCalibrate()
 	d.registerNarrativeCalibrate()
 	d.registerPredictorCalibrate()
+	d.registerPredictionBacktestReverse()
 	d.registerLinkageCalibrate()
 	d.registerFactorWeightStrategyCalibrate()
 	d.registerAutoCalibrate()
@@ -487,6 +501,38 @@ func (d calibrationDeps) registerPredictorCalibrate() {
 		},
 	})
 	log.Printf("[Gateway] registered predictor_calibrate background task (24h interval)")
+}
+
+// registerPredictionBacktestReverse wires a 14:35 daily task that reads
+// reconciled (T+1) event-flow predictions from the JSONL ledger and
+// upserts them into prediction_backtest with is_synthetic=0. Without this
+// task, the only writer of prediction_backtest is cmd/backtest-event-flow
+// (replay fixtures, is_synthetic=1); predictor_calibrate filters to
+// is_synthetic=0 and sees zero rows, falling back to a neutral 0.5 score
+// and contributing no real hit-rate feedback to Bayesian optimization.
+// Runs at 14:35 (5 min after the PR #1484 reconcile task fires at 14:30
+// and 5 min after sync-capital-daily at 13:30 fills the rolling store
+// with T86 data).
+func (d calibrationDeps) registerPredictionBacktestReverse() {
+	if d.PredictionLedger == nil || d.HistoricalStore == nil {
+		log.Printf("[Gateway] prediction_backtest_reverse_write skipped: PredictionLedger or HistoricalStore not wired")
+		return
+	}
+	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "prediction_backtest_reverse_write",
+		Interval: 24 * time.Hour,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			n, err := ledger.SyncPredictionBacktestFromEventFlow(ctx, d.PredictionLedger, d.HistoricalStore, d.Cfg.LedgerDir)
+			if err != nil {
+				logging.Error("prediction_backtest_reverse_write", "failed", "err", err.Error())
+				return err
+			}
+			logging.Info("prediction_backtest_reverse_write", "completed", "rows_upserted", n)
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered prediction_backtest_reverse_write background task (24h interval, fires 14:35)")
 }
 
 // registerSeasonalCalibrate was removed: it exec'd `go run

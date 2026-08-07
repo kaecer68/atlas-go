@@ -95,6 +95,12 @@
 2. `registerStage3Tasks` 未 wire 進 production main (只在 test) — Stage 3 tasks 是「寫好未 wire」舊路徑。reconciler 改掛 production 有 wire 的 `registerCapitalTasks`。
 3. `capitalflow.Service` 無 `ForDate` — 改用既有 `capitalFlowStore.History(ForceForeign, beforeDate)` (rolling sample store 已由 BK-15 wire)。
 
+**Phase C 之後再盤查 (2026-08-07, PR #1484 review)**:
+- `tryHitRateEval` 從 `LoadPredictionBacktestRange` 讀 — **已透過 `FilterSynthetic` 過濾 `is_synthetic=0`**, 邏輯正確。
+- 但 `prediction_backtest` 表 **完全沒有 `is_synthetic=0` 資料** (唯一寫入端 `cmd/backtest-event-flow` 都標 `is_synthetic=1` replay)。
+- 結果: `predictor_calibrate` 24h task 跑但永遠 fallback 0.5, 不貢獻真實命中回饋。
+- 這是 Gap 2-D 的真實動機 — 需 reverse-write 把 `event_flow_predictions.jsonl` T+1-reconciled 記錄同步到 `prediction_backtest` `is_synthetic=0`, 才能讓 calibrator 用真實命中率 (§8 退化降權)。
+
 ---
 
 ## 3. Backlog (不在本 PR 範圍)

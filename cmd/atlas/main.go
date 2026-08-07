@@ -374,6 +374,10 @@ func run(args []string, deps appDeps) error {
 	// SA06: composition root for shared dependency wiring.
 	// Elevated to run() level so it is visible to -live/-simulate paths.
 	var compositionRoot *composition.Root
+	// historicalStore is elevated to run() scope so registerCalibrationTasks
+	// (line ~2175) can pass it to a prediction_backtest reverse-write task
+	// (Gap 2-D) without opening a second SQLite connection.
+	var historicalStore ledger.HistoricalStore
 	var err error
 	compositionRoot, err = composition.NewRoot(cfg)
 	if err != nil {
@@ -831,7 +835,7 @@ func run(args []string, deps appDeps) error {
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)
 		}
-		if historicalStore, err := ledger.NewHistoricalStore(cfg); err == nil {
+		if historicalStore, err = ledger.NewHistoricalStore(cfg); err == nil {
 			log.Printf("[HistoricalStore] initialized")
 			// CL-3 A03: wire into DashboardAPI so /api/dashboard/regime-history
 			// reads the regime_history SQLite table (true time-series) instead
@@ -2173,16 +2177,18 @@ func run(args []string, deps appDeps) error {
 			log.Printf("[Gateway] registered autobacktest_daily background task (1h interval)")
 
 			registerCalibrationTasks(calibrationDeps{
-				TaskMgr:         taskMgr,
-				Cfg:             cfg,
-				ParamsCfg:       paramsCfg,
-				RiskGate:        riskGate,
-				JanusEngine:     janusEngine,
-				Dashboard:       dashboard,
-				FinMindClient:   nil,
-				MaturityTracker: maturityTracker,
-				CalProvider:     monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state")),
-				Collector:       collector,
+				TaskMgr:          taskMgr,
+				Cfg:              cfg,
+				ParamsCfg:        paramsCfg,
+				RiskGate:         riskGate,
+				JanusEngine:      janusEngine,
+				Dashboard:        dashboard,
+				FinMindClient:    nil,
+				MaturityTracker:  maturityTracker,
+				CalProvider:      monitoring.NewSessionCalibrationProvider(filepath.Join(cfg.WorkDir, "data/state")),
+				Collector:        collector,
+				PredictionLedger: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir),
+				HistoricalStore:  historicalStore,
 			})
 
 			taskMgr.Start(sysCtx)
