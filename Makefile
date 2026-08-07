@@ -662,6 +662,10 @@ ci-gate:
 		exit 1; \
 	}
 	@echo "    ✅"
+	@echo "  → docs 同步檢查（AGENTS.md line drift + 斷鏈）"
+	@bash scripts/ci/check_agents_md_drift.sh
+	@bash scripts/ci/check_doc_links.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""

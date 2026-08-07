@@ -130,13 +130,6 @@
       "type": "object"
     }
   },
-  "calendar_events": {
-    "name": "calendar_events",
-    "description": "DEPRECATED: use event_calendar instead. Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events.",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
   "capital_flow_daily": {
     "name": "capital_flow_daily",
     "description": "Full daily Taiwan stock market capital flow report (HTTP: GET /api/capital-flow/daily): 七維錢潮雷達（3+2+2 分層）— three official actor forces (foreign / institutional / dealer, T86 first-party), two behavioral proxies (government / retail) and two leading / cross-market signals (foreign futures OI / TSM ADR). Each dimension carries role, source, unit and availability flags; the resonance model only votes on the official_actor tier.",
@@ -337,7 +330,7 @@
   },
   "event_calendar": {
     "name": "event_calendar",
-    "description": "Upcoming Taiwan market events calendar (ETF rebalances, MSCI adjustments, revenue announcements, window dressing, holidays). 14-day forward look.  HTTP: GET /api/events/calendar. Alternative: calendar_events, event_flow_prediction.",
+    "description": "Upcoming Taiwan market events calendar (ETF rebalances, MSCI adjustments, revenue announcements, window dressing, holidays). 14-day forward look.  HTTP: GET /api/events/calendar. Alternative: event_flow_prediction.",
     "inputSchema": {
       "type": "object"
     }
@@ -514,14 +507,14 @@
   },
   "macro_get_stress_index_current": {
     "name": "macro_get_stress_index_current",
-    "description": "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.  HTTP: GET /api/narrative/stress-index/current. Alternative: taiwan_stress_index, narrative_stress_index_thresholds.",
+    "description": "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.  HTTP: GET /api/narrative/stress-index/current. Alternative: narrative_stress_index_thresholds.",
     "inputSchema": {
       "type": "object"
     }
   },
   "macro_get_stress_index_history": {
     "name": "macro_get_stress_index_history",
-    "description": "Stress index history over the last N days.  HTTP: GET /api/narrative/stress-index/history. Alternative: taiwan_stress_index, regime_get_history.",
+    "description": "Stress index history over the last N days.  HTTP: GET /api/narrative/stress-index/history. Alternative: regime_get_history.",
     "inputSchema": {
       "properties": {
         "days": {
@@ -1181,13 +1174,6 @@
   "system_get_thresholds": {
     "name": "system_get_thresholds",
     "description": "Configured SLO thresholds (latency, error rate, saturation).",
-    "inputSchema": {
-      "type": "object"
-    }
-  },
-  "taiwan_stress_index": {
-    "name": "taiwan_stress_index",
-    "description": "Taiwan market stress index (TRJ narrative) — score, regime, components by source. Use for risk appetite assessment.  HTTP: GET /api/taiwan/stress-index. Alternative: macro_get_stress_index_current, narrative_stress_index_thresholds.",
     "inputSchema": {
       "type": "object"
     }
