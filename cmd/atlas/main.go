@@ -846,6 +846,14 @@ func run(args []string, deps appDeps) error {
 		stockDeps.CapitalFlow = marketdata.NewTWSECapitalFlowProvider(filepath.Join(cfg.WorkDir, constants.StateCapitalFlow))
 
 		stockDeps.TWSEQuote = marketdata.NewTWSEOpenAPIProvider()
+		// Monthly revenue endpoint (stock_get_monthly_revenue MCP tool) —
+		// reuse the same TSMCRevenueProvider used by the tsmc_revenue
+		// macro channel (register_adapters.go:163) so both share the
+		// FinMind singleton client + 14400/day QuotaRegistry tracker.
+		// Without this wiring the endpoint 503s in production.
+		if cfg.FinMindAPIKey != "" {
+			stockDeps.Revenue = marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"))
+		}
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
 

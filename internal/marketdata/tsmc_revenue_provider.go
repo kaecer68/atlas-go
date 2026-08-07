@@ -151,6 +151,83 @@ func (p *TSMCRevenueProvider) QuotaRemaining() int {
 	return p.client.QuotaRemaining()
 }
 
+// MonthlyRevenuePoint is the response shape for the stocktools
+// /api/stock/monthly_revenue endpoint. Deliberately NOT
+// MacroDataSnapshot.TSMCRevenue — the macro point has no MoM field and
+// is shared with silicon_cycle.go:408, so stuffing mom_pct into it would
+// change the macro snapshot contract. This struct is stocktools-specific.
+type MonthlyRevenuePoint struct {
+	Symbol    string  `json:"symbol"`
+	Year      int     `json:"year"`
+	Month     int     `json:"month"`
+	Revenue   float64 `json:"revenue"`
+	YoYPct    float64 `json:"yoy_pct"`
+	MoMPct    float64 `json:"mom_pct"`
+	Timestamp int64   `json:"timestamp"`
+	Source    string  `json:"source"`
+}
+
+// FetchMonthlyRevenue returns the (year, month) revenue reading for a
+// symbol with YoY% (vs same month prior year) and MoM% (vs prior month).
+// This is the primary call for the stocktools handler.
+//
+// FinMind call count: 2 when month==1 (current + year-ago), 3 otherwise
+// (+ month-ago). Callers MUST check QuotaRemaining() >= 3 before calling
+// to avoid exhausting the daily budget mid-lookup.
+//
+// YoY/MoM are best-effort: a missing year-ago or month-ago reading
+// (e.g. recently listed symbol) yields 0 for that percentage, not an
+// error — the handler returns 200 with the data it has.
+func (p *TSMCRevenueProvider) FetchMonthlyRevenue(ctx context.Context, symbol string, year, month int) (MonthlyRevenuePoint, error) {
+	if symbol == "" {
+		return MonthlyRevenuePoint{}, fmt.Errorf("revenue: symbol is required")
+	}
+	if year < 1990 || year > 2100 || month < 1 || month > 12 {
+		return MonthlyRevenuePoint{}, fmt.Errorf("revenue: invalid date %d-%02d", year, month)
+	}
+	current, err := p.client.GetMonthRevenue(ctx, symbol, year, month)
+	if err != nil {
+		return MonthlyRevenuePoint{}, fmt.Errorf("current month: %w", err)
+	}
+
+	var yoyPct, momPct float64
+	if prior, err := p.client.GetMonthRevenue(ctx, symbol, year-1, month); err == nil && prior != 0 {
+		yoyPct = (current - prior) / prior * 100
+	} else if err != nil {
+		logging.Warn("tsmc_revenue_provider", "yoy_missing",
+			"symbol", symbol, "year", year, "month", month, logging.Err(err))
+	}
+	if month > 1 {
+		if prev, err := p.client.GetMonthRevenue(ctx, symbol, year, month-1); err == nil && prev != 0 {
+			momPct = (current - prev) / prev * 100
+		} else if err != nil {
+			logging.Warn("tsmc_revenue_provider", "mom_missing",
+				"symbol", symbol, "year", year, "month", month, logging.Err(err))
+		}
+	}
+
+	pt := MonthlyRevenuePoint{
+		Symbol:    symbol + ".TW",
+		Year:      year,
+		Month:     month,
+		Revenue:   current,
+		YoYPct:    yoyPct,
+		MoMPct:    momPct,
+		Timestamp: time.Now().Unix(),
+		Source:    "finmind",
+	}
+
+	if p.storageDir != "" {
+		rocYear := year - 1911
+		rocMonth := fmt.Sprintf("%03d%02d", rocYear, month)
+		if err := p.saveRevenueForSymbol(symbol, rocMonth, current, yoyPct); err != nil {
+			logging.Warn("tsmc_revenue_provider", "save_failed",
+				"symbol", symbol, logging.Err(err))
+		}
+	}
+	return pt, nil
+}
+
 // FetchSnapshotForSymbolAt is like FetchSnapshotForSymbol but the caller
 // supplies an explicit reporting (year, month) instead of "now - 1 month".
 // Used by the stocktools handler which parses the year/month query

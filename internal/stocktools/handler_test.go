@@ -522,7 +522,7 @@ func TestHandleMonthlyRevenue_TWSEHappyPath(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := marketdata.NewFinMindClient("k")
+	client := marketdata.NewFinMindClientWithStateDir("k", t.TempDir())
 	client.SetHTTPClient(&http.Client{Transport: &revenueLocalTransport{target: ts.URL}})
 	rp := marketdata.NewTSMCRevenueProviderWithClient(client)
 
@@ -540,12 +540,16 @@ func TestHandleMonthlyRevenue_TWSEHappyPath(t *testing.T) {
 	if !contains(body, `"symbol":"2330.TW"`) {
 		t.Errorf("2330 body missing symbol: %s", body)
 	}
-	if !contains(body, `"value":400000000000`) {
+	if !contains(body, `"revenue":400000000000`) {
 		t.Errorf("2330 body missing revenue: %s", body)
 	}
 	// 400 vs 300 → +33.33% YoY.
-	if !contains(body, `"change_pct":33.33333333333333`) && !contains(body, `"change_pct":33.3333`) {
-		t.Errorf("2330 body missing change_pct ≈ 33.33: %s", body)
+	if !contains(body, `"yoy_pct":33.33333333333333`) && !contains(body, `"yoy_pct":33.3333`) {
+		t.Errorf("2330 body missing yoy_pct ≈ 33.33: %s", body)
+	}
+	// 400 vs 350 → +14.29% MoM.
+	if !contains(body, `"mom_pct":14.285714285714285`) && !contains(body, `"mom_pct":14.2857`) {
+		t.Errorf("2330 body missing mom_pct ≈ 14.29: %s", body)
 	}
 }
 
@@ -574,7 +578,7 @@ func TestHandleMonthlyRevenue_TPEXSymbolBypassesCoverageGuard(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := marketdata.NewFinMindClient("k")
+	client := marketdata.NewFinMindClientWithStateDir("k", t.TempDir())
 	client.SetHTTPClient(&http.Client{Transport: &revenueLocalTransport{target: ts.URL}})
 	rp := marketdata.NewTSMCRevenueProviderWithClient(client)
 
@@ -593,7 +597,7 @@ func TestHandleMonthlyRevenue_TPEXSymbolBypassesCoverageGuard(t *testing.T) {
 	if !contains(rec.Body.String(), `"symbol":"3131.TW"`) {
 		t.Errorf("3131 body missing symbol: %s", rec.Body.String())
 	}
-	if !contains(rec.Body.String(), `"value":631051000`) {
+	if !contains(rec.Body.String(), `"revenue":631051000`) {
 		t.Errorf("3131 body missing revenue: %s", rec.Body.String())
 	}
 	// 631 vs 560 → +12.7% YoY (assert the body actually carries the data,
@@ -665,9 +669,9 @@ type fakeMonthlyRevenueProvider struct {
 	hitFetch       bool
 }
 
-func (f *fakeMonthlyRevenueProvider) FetchSnapshotForSymbolAt(_ context.Context, _ string, _, _ int) (marketdata.MacroDataSnapshot, error) {
+func (f *fakeMonthlyRevenueProvider) FetchMonthlyRevenue(_ context.Context, _ string, _, _ int) (marketdata.MonthlyRevenuePoint, error) {
 	f.hitFetch = true
-	return marketdata.MacroDataSnapshot{}, nil
+	return marketdata.MonthlyRevenuePoint{}, nil
 }
 
 func (f *fakeMonthlyRevenueProvider) QuotaRemaining() int {

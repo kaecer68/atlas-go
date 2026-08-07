@@ -58,10 +58,9 @@ type Deps struct {
 // 503 path (which a real provider cannot reach from outside the
 // marketdata package).
 type MonthlyRevenueProvider interface {
-	// FetchSnapshotForSymbolAt returns the (year, month) revenue reading
-	// for a single symbol as a MacroDataSnapshot whose TSMCRevenue
-	// slot carries that symbol's data.
-	FetchSnapshotForSymbolAt(ctx context.Context, symbol string, year, month int) (marketdata.MacroDataSnapshot, error)
+	// FetchMonthlyRevenue returns the (year, month) revenue reading for a
+	// symbol with YoY% and MoM%.
+	FetchMonthlyRevenue(ctx context.Context, symbol string, year, month int) (marketdata.MonthlyRevenuePoint, error)
 	// QuotaRemaining returns the number of FinMind API calls remaining
 	// today (0 when no tracker configured).
 	QuotaRemaining() int
@@ -402,11 +401,11 @@ func (h *Handler) HandleMonthlyRevenue(r *http.Request) (int, any) {
 	// provider's FetchSnapshotForSymbol takes a bare 4–6 digit code.
 	symbol = strings.TrimSuffix(strings.TrimSuffix(symbol, ".TW"), ".TWO")
 
-	// Fail-soft quota check before any FinMind call. The provider's
-	// underlying fetchWithFallback may issue 1–3 FinMind requests
-	// (current + year-ago for YoY, optionally month-ago for MoM).
-	// We require at least monthlyRevenueMinQuota remaining to avoid
-	// running out mid-handler.
+	// Fail-soft quota check before any FinMind call. FetchMonthlyRevenue
+	// issues up to 3 FinMind requests (current + year-ago for YoY +
+	// month-ago for MoM). Requiring at least monthlyRevenueMinQuota
+	// remaining avoids running out mid-lookup and returning a partial
+	// response.
 	if remaining := h.deps.Revenue.QuotaRemaining(); remaining < monthlyRevenueMinQuota {
 		return http.StatusServiceUnavailable, map[string]any{
 			"error":              "finmind daily quota nearly exhausted, retry tomorrow",
@@ -423,19 +422,18 @@ func (h *Handler) HandleMonthlyRevenue(r *http.Request) (int, any) {
 	// Use a dedicated 15s context so a slow FinMind response cannot
 	// block the handler beyond the existing stocktools 15s budget
 	// used by chips (handler.go:185). The provider's underlying
-	// fetchWithFallback also has a FinMind 30s client timeout
-	// (finmind_client.go:130) but that's a safety net — 15s aligns
-	// with the stocktools convention.
+	// FinMind client has a 30s timeout (finmind_client.go:130) but
+	// that's a safety net — 15s aligns with the stocktools convention.
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	snap, err := h.deps.Revenue.FetchSnapshotForSymbolAt(ctx, symbol, year, month)
+	pt, err := h.deps.Revenue.FetchMonthlyRevenue(ctx, symbol, year, month)
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]string{
 			"error":  err.Error(),
 			"symbol": symbol,
 		}
 	}
-	return http.StatusOK, snap.TSMCRevenue
+	return http.StatusOK, pt
 }
 
 func parseRevenueYearMonth(r *http.Request, now time.Time) (int, int, error) {

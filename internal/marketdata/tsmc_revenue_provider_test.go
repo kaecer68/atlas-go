@@ -341,3 +341,104 @@ func TestTSMCRevenueProvider_QuotaRemaining(t *testing.T) {
 		t.Errorf("QuotaRemaining() with nil client = %d, want 0", got)
 	}
 }
+
+// TestTSMCRevenueProvider_FetchMonthlyRevenue_YoYAndMoM verifies the
+// stocktools-facing method computes both YoY% (vs year-ago) and MoM%
+// (vs prior month) from the 3-period FinMind response.
+func TestTSMCRevenueProvider_FetchMonthlyRevenue_YoYAndMoM(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sym := r.URL.Query().Get("data_id")
+		start := r.URL.Query().Get("start_date")
+		var body string
+		switch {
+		case sym == "3131" && start == "2026-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":631051000.0,"date":"2026-07-01"}]}`
+		case sym == "3131" && start == "2025-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":560000000.0,"date":"2025-07-01"}]}`
+		case sym == "3131" && start == "2026-06-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":653000000.0,"date":"2026-06-01"}]}`
+		default:
+			body = `{"msg":"success","status":200,"data":[]}`
+		}
+		w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	client := NewFinMindClientWithStateDir("test-key", t.TempDir())
+	transport := &mockFinMindTransport{serverURL: strings.TrimPrefix(ts.URL, "http://")}
+	client.SetHTTPClient(&http.Client{Transport: transport})
+
+	p := &TSMCRevenueProvider{client: client, storageDir: t.TempDir()}
+	pt, err := p.FetchMonthlyRevenue(context.Background(), "3131", 2026, 7)
+	if err != nil {
+		t.Fatalf("FetchMonthlyRevenue error: %v", err)
+	}
+	// 631 vs 560 → +12.68% YoY.
+	if pt.Revenue != 631051000.0 {
+		t.Errorf("Revenue = %v, want 631051000", pt.Revenue)
+	}
+	if got := pt.YoYPct; got < 12.6 || got > 12.7 {
+		t.Errorf("YoYPct = %v, want ≈ 12.68 (560→631)", got)
+	}
+	// 631 vs 653 → −3.36% MoM.
+	if got := pt.MoMPct; got > -3.3 || got < -3.5 {
+		t.Errorf("MoMPct = %v, want ≈ −3.36 (653→631)", got)
+	}
+	if pt.Month != 7 || pt.Year != 2026 {
+		t.Errorf("Year/Month = %d/%d, want 2026/7", pt.Year, pt.Month)
+	}
+}
+
+// TestTSMCRevenueProvider_FetchMonthlyRevenue_JanuarySkipsMoM verifies
+// that requesting month=1 issues only 2 FinMind calls (current + year-ago)
+// and MoMPct stays 0.
+func TestTSMCRevenueProvider_FetchMonthlyRevenue_JanuarySkipsMoM(t *testing.T) {
+	var callCount int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		start := r.URL.Query().Get("start_date")
+		var body string
+		switch start {
+		case "2026-01-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":300000000000.0,"date":"2026-01-01"}]}`
+		case "2025-01-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":250000000000.0,"date":"2025-01-01"}]}`
+		default:
+			t.Errorf("unexpected start_date %q for January request", start)
+			body = `{"msg":"success","status":200,"data":[]}`
+		}
+		w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	client := NewFinMindClientWithStateDir("test-key", t.TempDir())
+	transport := &mockFinMindTransport{serverURL: strings.TrimPrefix(ts.URL, "http://")}
+	client.SetHTTPClient(&http.Client{Transport: transport})
+
+	p := &TSMCRevenueProvider{client: client}
+	pt, err := p.FetchMonthlyRevenue(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("FetchMonthlyRevenue error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 FinMind calls for January, got %d", callCount)
+	}
+	if pt.MoMPct != 0 {
+		t.Errorf("MoMPct for January = %v, want 0", pt.MoMPct)
+	}
+}
+
+// TestTSMCRevenueProvider_FetchMonthlyRevenue_RejectsBadInputs locks in
+// the input validation contract for the stocktools-facing method.
+func TestTSMCRevenueProvider_FetchMonthlyRevenue_RejectsBadInputs(t *testing.T) {
+	p := &TSMCRevenueProvider{client: NewFinMindClientWithStateDir("k", t.TempDir())}
+	if _, err := p.FetchMonthlyRevenue(context.Background(), "", 2026, 7); err == nil {
+		t.Error("empty symbol: expected error, got nil")
+	}
+	if _, err := p.FetchMonthlyRevenue(context.Background(), "2330", 0, 7); err == nil {
+		t.Error("year=0: expected error, got nil")
+	}
+	if _, err := p.FetchMonthlyRevenue(context.Background(), "2330", 2026, 13); err == nil {
+		t.Error("month=13: expected error, got nil")
+	}
+}

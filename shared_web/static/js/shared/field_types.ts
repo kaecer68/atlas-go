@@ -2369,6 +2369,17 @@ export interface MonthlyReturn {
   label: string;
 }
 
+export interface MonthlyRevenuePoint {
+  symbol: string;
+  year: number;
+  month: number;
+  revenue: number;
+  yoy_pct: number;
+  mom_pct: number;
+  timestamp: number;
+  source: string;
+}
+
 export interface MutationBrief {
   contract_version?: number;
   proposal_id?: string;
