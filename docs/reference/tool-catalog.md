@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **119 tools**（預設啟用；sampling/elicitation feature-gated 全開時 119+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **120 tools**（預設啟用；sampling/elicitation feature-gated 全開時 120+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 110+ + template_detector 2 + audit 4 + audit_state 1 + Phase 2 alert lifecycle 4 = 115+（**基礎 117+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 119+；啟動期 assert ∈ [115, 119]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + Phase 2 alert lifecycle 4 = 116+（**基礎 118+**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 120+；啟動期 assert ∈ [115, 120]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（119 個 tool 槽位，其中 117+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（120 個 tool 槽位，其中 118+ 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -79,7 +79,7 @@
 | `alert_get_stats` | 警報統計 |
 | `alert_get_rules` | 警報規則配置 |
 
-### Strategy（6 個：1 Phase 1 + 5 Phase 2.2）
+### Strategy（7 個：1 Phase 1 + 5 Phase 2.2 + 1 M4）
 | Tool | 用途 |
 |------|------|
 | `strategy_list_active` | Production 線上策略（Phase 1）|
@@ -88,6 +88,7 @@
 | `strategy_get_attribution` | 績效歸因 |
 | `strategy_get_summary` | 策略摘要 |
 | `strategy_ranker` | 依勝率排序的策略排名（free / registered / premium tier）|
+| `strategy_for_period` | 給定市場時期（downturn/turnaround_up/bull/plateau/consolidation/turnaround_down/black_swan）回傳適用策略清單（含 category/priority）；讀 `configs/methodology_rules.yaml` 同源 MethodologyAdvisor（M4）|
 
 ### Recommendation（1 個）
 | Tool | 用途 |
