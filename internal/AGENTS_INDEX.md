@@ -2,14 +2,15 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：60 個模組（24 S / 26 E / 6 X / 1 A / 3 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：76 個模組（28 S / 32 E / 8 X / 1 A / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
+> **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
 > **與 MATURITY.md 的差異**：AGENTS_INDEX 計算頂層模組（59 個）；`internal/MATURITY.md` 計算所有 Go packages（含 sub-packages 如 `domain/shared`、`llm/clients`，約 80 個）。兩者 scope 不同，數字差異是正常的。
 
 ## 索引（按成熟度分組）
 
-### S · Stable（穩定生產，24 個）
+### S · Stable（穩定生產，28 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -37,8 +38,12 @@
 | `storage` | 檔案儲存抽象、原子寫入 |
 | `strategy_techniques` | 投資心法庫 — 5 層框架 + 4 核心指標 + 自我修正 |
 | `tax` | 台灣稅務計算 |
+| `constants` | 集中式預設值（跨 binaries/config 共用）|
+| `experiment` | 突變生命週期 — Propose → Execute → Judge → Promote（evolution loop）|
+| `janus` | JANUS meta-layer — cross-cohort regime 偵測 + PRISM 訓練動態加權 |
+| `live` | **AGENTS.md** — live trading 協調、broker execution、order management、circuit breaking、state 管理 |
 
-### E · Evolving（演進中，26 個）
+### E · Evolving（演進中，32 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -67,12 +72,18 @@
 | `strategy_ranker` | **v0.0.0.32 新** — 策略表現排名引擎（`strategy_ranker` MCP tool 來源，按 tier 標 free/registered/premium） |
 | `stress` | 壓力測試場景（進入 orchestrator SystemCore live risk evaluation） |
 | `subscription` | **v0.0.0.32 新** — JWT tier 認證 + 使用者訂閱狀態解析（`/api/auth/*` + `/api/user/profile` 來源） |
+| `acceptance` | experiment acceptance gate 框架 — 可插拔 Evaluator（judge 前閘門）|
+| `eventquality` | 事件資料品質 gate — event driven 資金流輸入校驗 |
+| `marketexplain` | 「為什麼漲跌」compose endpoint（`explain_market_move` MCP tool 來源）|
+| `methodology` | 方法論顧問層 — market regime → methodology rules 映射（E4 七時期）|
+| `observability` | OpenTelemetry tracing 初始化與 runtime observability helpers |
+| `userstate` | per-user 行為狀態實體（product positioning 支撐）|
 | `cmd/atlas-mcp/server` | **AGENTS.md** — MCP server（tool 數量詳見 [`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md)）、stdio/SSE/streamable-HTTP transport、auth/audit/anomaly、descgen、5 protocol extensions |
 
 > 註：24 個 S-tier + 27 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
 
-### X · Experimental（實驗中，4 個）
+### X · Experimental（實驗中，8 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -80,6 +91,10 @@
 | `reflexivity` | 自反性價格動態引擎（⚠️ 被 orchestrator + sim runtime 使用但無 AGENTS.md）|
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A，僅供 atlas-mcp 消費）|
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（`docs/specs/sector-allocation-simulation-closure-spec.md`）|
+| `alerting` | Alertmanager webhook 接收（observability 堆疊警報）|
+| `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、DataClass gate）|
+| `llm_annotator` | LLM 自然語言註解 — strategy_techniques 的 LLM 註解路徑 |
+| `stocktools` | per-symbol 台股查詢端點（quote/fundamentals/chips/technical）|
 
 ### A · Archived（封存，1 個）
 
@@ -87,13 +102,15 @@
 |------|------|
 | `swarm` | 目錄已刪除（PR #963）；模擬引擎已降級為 pass-through；保留條目供歷史參考 |
 
-### U · Utility（輔助工具，3 個）
+### U · Utility（輔助工具，5 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
 | `importer` | CSV → JSONL 資料匯入 |
 | `taskexec` | 非同步任務執行 Manager |
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷（`cmd/calibrate-parameters`）|
+| `backfill` | ledger 狀態一次性修復工具（drift from canonical）|
+| `buildinfo` | runtime metadata — version/commit hash/build time |
 
 ## 15 個保留 AGENTS.md（2026-07-11 從 27 合併精簡）
 
