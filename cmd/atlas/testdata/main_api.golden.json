@@ -66,6 +66,12 @@
       "results": "(dailyreport.GlobalOverview, error)"
     },
     {
+      "name": "LoadRecentPredictions",
+      "params": "(limit int)",
+      "receiver": "predictionHistoryAdapter",
+      "results": "([]eventdriven.PredictionRecord, error)"
+    },
+    {
       "name": "LoadRecentScans",
       "params": "(ctx context.Context, limit int)",
       "receiver": "scanStoreAdapter",
