@@ -109,6 +109,13 @@
       "type": "object"
     }
   },
+  "audit_state": {
+    "name": "audit_state",
+    "description": "Return the constitution audit tracking snapshot (ATLAS_CONSTITUTION_AUDIT.md §附錄 D + §附錄 F). Use to self-audit 憲章對齊狀態: 22 audit items + F1-F5/M1-M6/X1-X3 governance progress, with P0/P1/P2 stats. Read-only; no side effects.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "backtest_signals": {
     "name": "backtest_signals",
     "description": "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct) HTTP: GET /api/backtest/signals. Alternative: backtest_status, prism_get_training_results.",
