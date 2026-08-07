@@ -60,6 +60,7 @@ SAFE_SESSION="$(printf '%s' "$SESSION_ID" | tr -c '[:alnum:]._-' '_')"
 
 # ─── 2. Decide whether the call touches a hot-path Go file ─────
 HIT=0
+METHODOLOGY_HIT=0
 FILE_KEY=""
 
 case "$TOOL_NAME" in
@@ -78,6 +79,18 @@ case "$TOOL_NAME" in
       internal/*.go|cmd/*.go)
         HIT=1
         FILE_KEY="$TOOL_NAME:$FILE_PATH"
+        ;;
+    esac
+
+    # ── Methodology files: also remind to sync §附錄 F ──────────
+    # X2 (憲章治理 X2): when the agent edits methodology source files,
+    # inject a separate reminder to update docs/ATLAS_CONSTITUTION_AUDIT.md
+    # §附錄 F tracking table. Independent from the ACI routing hit above
+    # (separate FILE_KEY namespace so both can fire in one session).
+    case "$FILE_PATH" in
+      configs/methodology_rules.yaml|docs/ATLAS_METHODOLOGY.md|docs/ATLAS_CONSTITUTION_AUDIT.md|internal/config/period_detection_config.go|internal/marketdata/macro_provider.go|internal/capitalflow/forces.go)
+        METHODOLOGY_HIT=1
+        FILE_KEY="$TOOL_NAME:methodology:$FILE_PATH"
         ;;
     esac
     ;;
@@ -116,7 +129,7 @@ case "$TOOL_NAME" in
     ;;
 esac
 
-if [ "$HIT" -ne 1 ]; then
+if [ "$HIT" -ne 1 ] && [ "$METHODOLOGY_HIT" -ne 1 ]; then
   exit 0
 fi
 
@@ -150,7 +163,26 @@ fi
 #   - internal/AGENTS_INDEX.md (15 hot-path modules with AGENTS.md)
 # No new conventions are introduced; this is curation, not invention.
 
-CONTEXT_TEXT='AC: atlas-go ACI routing — 你正要讀/改/搜 hot-path Go 檔(屬 internal/ 或 cmd/)。先想一下:
+if [ "$METHODOLOGY_HIT" -eq 1 ]; then
+  # X2 reminder: methodology source file changed → sync §附錄 F.
+  # Soft (additionalContext only), deduped per file per session like the
+  # ACI routing reminder above.
+  CONTEXT_TEXT='AC: atlas-go 方法論變更 — 你正要改方法論/憲章來源檔。依憲章治理 X2:
+
+  §附錄 F 追蹤表 (docs/ATLAS_CONSTITUTION_AUDIT.md) 是方法論對齊狀態的
+  single source of truth。此變更若影響:
+    - 時期判定 / 策略適用 (configs/methodology_rules.yaml,
+      internal/config/period_detection_config.go)
+    - 資金流評分欄位 (internal/marketdata/macro_provider.go,
+      internal/capitalflow/forces.go)
+  → 必須同步更新 §附錄 F 對應列 (F1-F5 / M1-M6 / X1-X3) 的狀態與備註。
+
+  判斷原則: 改「方法論內容」→ 更新追蹤表; 純 refactor/測試 → 不需更新。
+  不確定時在 PR body 的 Constitution compliance 區塊勾選說明即可。
+
+  本提醒每檔每 session 只一次,不會再打擾。'
+else
+  CONTEXT_TEXT='AC: atlas-go ACI routing — 你正要讀/改/搜 hot-path Go 檔(屬 internal/ 或 cmd/)。先想一下:
 
   Step 0 (overlap):  已有對等實作嗎?
                      → gitnexus_query(query="<concept>")
@@ -167,6 +199,7 @@ CONTEXT_TEXT='AC: atlas-go ACI routing — 你正要讀/改/搜 hot-path Go 檔(
   完整 8 步(必跑): 載入 atlas-pre-change-protocol skill。
 
   本提醒每檔每 session 只一次,不會再打擾。'
+fi
 
 jq -n --arg ctx "$CONTEXT_TEXT" \
   '{ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: $ctx } }'

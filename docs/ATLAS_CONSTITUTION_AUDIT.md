@@ -293,7 +293,7 @@
 
 ---
 
-## 附錄 F：憲章治理追蹤表（M1–M6 / F1–F5 / X1–X3，v1.1a 更新）
+## 附錄 F：憲章治理追蹤表（M1–M6 / F1–F5 / X1–X3，v1.1c 更新）
 
 > 對應 `docs/manifest-constitution-gap-audit.md` §憲章審計外新增項目。本附錄把 v1.0 的 ⬜ 全部走查 7/27 → 8/7 進展。
 
@@ -301,10 +301,10 @@
 
 | # | 項目 | v1.0 | v1.1 | 備註 |
 |---|------|------|------|------|
-| F1 | 外資雙重動機模型（結構性 vs 投機性分流） | ⬜ | ⬜ | 仍在 backlog；期間無相關 PR |
-| F2 | 自營商大小分流（大型可納宏觀，小型用 AI 分點） | ⬜ | ⬜ | 同上 |
-| F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | ⬜ | 同上 |
-| F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | ⬜ **降級風險→ 啟動為 C2 平行方案** | 因 TWSE CAPTCHA 啟用，F4 由 fallback 升級為**主要**方案；#1421 parser 仍可走 CAPTCHA 解封路徑 |
+| F1 | 外資雙重動機模型（結構性 vs 投機性分流） | ⬜ | ✅ 已覆核 | `ForeignInvestorNet` + `ForeignDealerNet` 欄位已存在（macro_provider.go）；`scoreForeign` 未消費投機性欄位（gap 已文件化，落地待回測驗證）|
+| F2 | 自營商大小分流（大型可納宏觀，小型用 AI 分點） | ⬜ | ✅ 已覆核 | `DealerSelfNet` + `DealerHedgingNet` 欄位已存在；`scoreDealer` 只用合計（gap 已文件化，AI 分點待資料源）|
+| F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | ✅ 已覆核 | `ETFNetSubscription` 已有消費者（rsi_tw_calculator）；淨化主動訊號列低優先（見 gap-analysis）|
+| F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | ✅ 已覆核 | `GovernmentNet` 已由 `scoreGovernment` 消費（每日總額形式）；分點層級待 BK-13/14 資料源（seam 已備，非程式 gap）|
 | F5 | 選股層策略庫設計（Phase 4） | ⬜ | ⬜ | 仍待 T27 |
 
 ### M1–M6：MCP 工具對齊（部分已實現）
@@ -325,30 +325,30 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 | # | 項目 | v1.0 | v1.1 | 備註 |
 |---|------|------|------|------|
 | X1 | PR 合併前憲章對齊檢查（CI gate） | ⬜ | ✅ 已實現 | `check_constitution.sh`（數據源）+ `check_methodology_constitution.sh`（方法論）+ `check_constitution_drift.sh`（漂移）三個都在 `make ci-gate`（pre-push 強制）與 GitHub `constitution.yml` job |
-| X2 | 方法論變更強制更新追蹤表 | ⬜ | ⚠️ partial | **#1464 ACI hook**：PreToolUse soft reminder for hot-path Go access——會輕推 agent 在改憲章相關 hot-path 時同步更新追蹤表。**未升級為 PR template 強制檢查** |
+| X2 | 方法論變更強制更新追蹤表 | ⬜ | ✅ 已實現 | PR template 加「方法論變更 → 同步 §附錄 F」checkbox + #1464 ACI hook 擴充（Edit/Write 命中方法論來源檔時注入同步 reminder；soft，不 block）|
 | X3 | 憲章漂移自動警報 | ⬜ | ✅ 已實現（pre-push 形式） | `check_constitution_drift.sh` 已在每次 `make ci-gate`（pre-push）執行（比 nightly 更頻繁）：偵測 domain struct 新增欄位 / MarketPeriod 常數變更 / methodology_rules.yaml 變更是否同步憲章文件。殘留：無獨立 nightly schedule job（可選，非阻塞） |
 
 ### v1.1 統計
 
-| 群組 | v1.0 ⬜ | v1.1b ⬜ | ✅ | ⚠️ partial |
+| 群組 | v1.0 ⬜ | v1.1c ⬜ | ✅ | ⚠️ partial |
 |------|--------|---------|----|-----------|
-| F1–F5 | 5 | 4 (F1/F2/F3/F5) | 0 | 1 (F4 升級為主要方案) |
+| F1–F5 | 5 | 1 (F5) | 4 (F1/F2/F3/F4 已覆核) | 0 |
 | M1–M6 | 6 | 0 | 6 (M1/M2/M3/M4/M5/M6) | 0 |
-| X1–X3 | 3 | 0 | 2 (X1/X3) | 1 (X2) |
-| **總計** | **14** | **4** | **8** | **2** |
+| X1–X3 | 3 | 0 | 3 (X1/X2/X3) | 0 |
+| **總計** | **14** | **1** | **13** | **0** |
 
-> v1.1b ⬜ = 4 + 0 + 0 = 4；⚠️ partial = 1 + 0 + 1 = 2；✅ = 0 + 6 + 2 = 8。
-> v1.1（8/7 上午）：⬜5/✅3/⚠️6 → v1.1a（PR #1482 + #1487）：⬜4/✅7/⚠️3 → v1.1b（PR #1488，M4 完成）：⬜4/✅8/⚠️2。
-> **M1 由 `macro_get_snapshot_latest.current_period` 覆蓋（#1488 註記）；M2/M3/M4/M5/M6 均已完成。剩餘：X2（PR template 強制）為唯一 partial；F1-F5 全數仍待啟動（DeepSeek 覆核）。**
+> v1.1c ⬜ = 1 + 0 + 0 = 1（F5，待 T27）；✅ = 4 + 6 + 3 = 13。
+> v1.1（8/7 上午）：⬜5/✅3/⚠️6 → v1.1a（#1482 + #1487）：⬜4/✅7/⚠️3 → v1.1b（#1488）：⬜4/✅8/⚠️2 → **v1.1c（#1490）**：⬜1/✅13/⚠️0。
+> **F1–F4 覆核完成（`docs/specs/institutional-flow-split-gap-analysis.md`，欄位存在、消費者 gap 已文件化、落地建議已列）；X2 完成（PR template checkbox + ACI hook 擴充）。唯一剩餘：F5（選股層策略庫，待 T27）。**
 
 
-1. **已完成**：X1 在 ci-gate 強制（#1423）；M6 `audit_state`（#1482）；M4 `strategy_for_period`（#1488）；M1 由 snapshot 欄位覆蓋。
-2. **下個 sprint**：X2（PR template 強制更新追蹤表）— 唯一剩餘 partial 的強制機制。
-3. **可選**：獨立 nightly X3 job（目前 pre-push drift scan 已覆蓋）。
-4. **2026-Q3 wave**：啟動 F1–F4 DeepSeek 覆核；F5 仍待 T27 選股層策略庫。
+1. **已完成**：X1/X3 ci-gate + pre-push drift；M1–M6 全數對齊；X2 PR template + ACI hook（#1490）；F1–F4 覆核完成（gap-analysis 文件）。
+2. **下次審計 (v1.2)**：以回測驗證 F1（外資投機性 sub-signal）與 F2（自營商避險/自行分流）的獨立預測力，再決定是否落地雙軌評分。
+3. **低優先**：F3 主動訊號淨化（投信買賣超 − ETF 被動成分）。
+4. **長期**：F5 選股層策略庫（T27）；F4 分點層級（BK-13/14 資料源）。
 
 ---
 
-> **v1.1b 最後更新**：2026-08-07 深夜，commit `9d5cd0cf`（PR #1488）後
-> **v1.1b 變更**：M4 ✅（#1488 `strategy_for_period`）、M1 ✅（snapshot 欄位覆蓋）；統計 ⬜4/✅8/⚠️2
+> **v1.1c 最後更新**：2026-08-07，commit `main HEAD`（PR #1490）後
+> **v1.1c 變更**：F1–F4 ✅ 已覆核（gap-analysis 文件）、X2 ✅（PR template + ACI hook）；統計 ⬜1/✅13/⚠️0
 > **下一次審計 (v1.2)** 預計在 F1–F4 啟動後
