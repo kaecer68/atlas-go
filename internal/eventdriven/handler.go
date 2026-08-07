@@ -2,6 +2,7 @@ package eventdriven
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -17,11 +18,31 @@ import (
 // usually hits the warm cache, while stale data never exceeds 1 minute.
 const PredictionCacheTTL = 60 * time.Second
 
+// PredictionHistoryStore is the subset of ledger.EventFlowPredictionStore
+// the handler needs to surface a realized hit rate. Defined locally so the
+// eventdriven package stays decoupled from ledger (mirrors the predictor's
+// dependency-cycle-avoidance comment in predictor.go — ledger imports
+// narrative, narrative imports eventdriven).
+type PredictionHistoryStore interface {
+	LoadRecentPredictions(limit int) ([]PredictionRecord, error)
+}
+
+// PredictionRecord is the minimal projection of a stored prediction that the
+// hit-rate computation consumes: the predicted direction sign and the
+// T+1-reconciled actual sign (0 = not yet reconciled).
+type PredictionRecord struct {
+	DirectionSign float64
+	ActualSign    float64
+}
+
 // Handler serves event-driven prediction endpoints.
 type Handler struct {
 	eventCal      *industry.EventCalendar
 	predictor     *Predictor
 	macroProvider marketdata.MacroDataProvider
+
+	// predictionStore backs HistoricalHitRate; nil disables the field.
+	predictionStore PredictionHistoryStore
 
 	cacheMu      sync.RWMutex
 	cachedReport *PredictionReport
@@ -66,6 +87,55 @@ func (h *Handler) SetSectorPredictor(sp *SectorPredictor) {
 // themes are considered alongside event-calendar data.
 func (h *Handler) SetScanStore(ss DetectorScanStore) {
 	h.predictor.SetScanStore(ss)
+}
+
+// SetPredictionStore wires the prediction history store used to compute
+// HistoricalHitRate. nil disables the field (frontend shows no badge).
+func (h *Handler) SetPredictionStore(ps PredictionHistoryStore) {
+	h.predictionStore = ps
+}
+
+// computeHistoricalHitRate reads up to limit recent predictions from the
+// store, keeps those with a reconciled actual (ActualSign != 0), and counts
+// directional hits: predicted sign and actual sign must agree in sign
+// (both positive = inflow hit, both negative = outflow hit; neutral
+// predictions with a non-zero actual count as a miss). Returns nil when the
+// store is unwired or fewer than MinHitSamples are reconciled.
+func (h *Handler) computeHistoricalHitRate(limit int) *HistoricalHitRate {
+	if h.predictionStore == nil {
+		return nil
+	}
+	records, err := h.predictionStore.LoadRecentPredictions(limit)
+	if err != nil || len(records) == 0 {
+		return nil
+	}
+	samples, hits := 0, 0
+	for _, r := range records {
+		if r.ActualSign == 0 {
+			continue // not yet T+1-reconciled
+		}
+		samples++
+		if (r.DirectionSign > 0 && r.ActualSign > 0) || (r.DirectionSign < 0 && r.ActualSign < 0) {
+			hits++
+		}
+	}
+	if samples == 0 {
+		return &HistoricalHitRate{WindowDays: limit / 2, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: "校準中（樣本 0/30）"}
+	}
+	hr := float64(hits) / float64(samples)
+	out := &HistoricalHitRate{
+		WindowDays: limit / 2,
+		Samples:    samples,
+		Hits:       hits,
+		HitRate:    hr,
+	}
+	if samples < MinHitSamples {
+		out.Calibrated = false
+		out.Reason = fmt.Sprintf("校準中（樣本 %d/%d）", samples, MinHitSamples)
+	} else {
+		out.Calibrated = true
+	}
+	return out
 }
 
 // Predictor returns the underlying Predictor for external wiring (F04).
@@ -191,6 +261,11 @@ func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	}
 
 	report := h.predictor.Predict(now)
+
+	// Attach the realized hit rate from the prediction store (T+1-reconciled
+	// history). 60-day window matches the prediction cap semantics; the
+	// store FIFO keeps ~3 years so 60 is a safe bounded read.
+	report.HistoricalHitRate = h.computeHistoricalHitRate(60)
 
 	h.cacheMu.Lock()
 	h.cachedReport = &report

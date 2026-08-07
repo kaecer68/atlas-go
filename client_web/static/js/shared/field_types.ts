@@ -1706,6 +1706,15 @@ export interface HeatmapEntry {
   reasons: string[];
 }
 
+export interface HistoricalHitRate {
+  window_days: number;
+  samples: number;
+  hits: number;
+  hit_rate: number;
+  calibrated: boolean;
+  reason?: string;
+}
+
 export interface HumanIntervention {
   id: string;
   type: string;
@@ -2895,6 +2904,7 @@ export interface PredictionReport {
   revenue_surprises: RevenueSurprise[];
   sector_predictions: SectorDayPrediction[];
   summary: string;
+  historical_hit_rate?: HistoricalHitRate | null;
 }
 
 export interface PremarketData {

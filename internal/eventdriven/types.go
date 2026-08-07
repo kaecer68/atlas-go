@@ -2,6 +2,12 @@ package eventdriven
 
 import "time"
 
+// MinHitSamples is the minimum number of T+1-reconciled predictions before
+// a historical hit rate is shown as calibrated. Aligned with product
+// positioning §6 "校準中" semantics — below this the frontend shows a
+// calibrating badge instead of a misleading percentage.
+const MinHitSamples = 30
+
 // PredictionDistribution is the probability mass across the three possible
 // capital-flow directions for a single day.
 type PredictionDistribution struct {
@@ -94,4 +100,24 @@ type PredictionReport struct {
 	RevenueSurprises  []RevenueSurprise     `json:"revenue_surprises"`
 	SectorPredictions []SectorDayPrediction `json:"sector_predictions"`
 	Summary           string                `json:"summary"`
+
+	// HistoricalHitRate is the realized directional hit rate over the
+	// recent window of completed (T+1-reconciled) predictions. nil when
+	// the prediction store is not wired or fewer than MinHitSamples
+	// predictions have been reconciled (product positioning §6: 預測可信
+	// 三要件 — 誤差回饋)。Frontend renders "校準中" in that case rather
+	// than a misleading percentage.
+	HistoricalHitRate *HistoricalHitRate `json:"historical_hit_rate,omitempty"`
+}
+
+// HistoricalHitRate summarizes realized prediction accuracy over a window.
+// Hits compare the predicted direction sign against the reconciled actual
+// sign (same-unit, §6). Calibrated is false until MinHitSamples are met.
+type HistoricalHitRate struct {
+	WindowDays int     `json:"window_days"`
+	Samples    int     `json:"samples"`
+	Hits       int     `json:"hits"`
+	HitRate    float64 `json:"hit_rate"` // 0..1; 0 when Samples==0
+	Calibrated bool    `json:"calibrated"`
+	Reason     string  `json:"reason,omitempty"`
 }

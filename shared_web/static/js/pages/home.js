@@ -420,7 +420,32 @@ function renderPredictionsCard(data) {
     `;
   }).join('');
 
-  container.innerHTML = `<div class="pred-card">${rows}</div>`;
+  // 誠實聲明 (product positioning §9): 預測是機率性陳述, 呈現時附歷史命中率
+  // 而非確定承諾。樣本不足時顯示「校準中」, 不顯示誤導的百分比。
+  const hitRateBadge = renderHitRateBadge(data && data.historical_hit_rate);
+
+  container.innerHTML = `<div class="pred-card">${hitRateBadge}${rows}</div>`;
+}
+
+/**
+ * 渲染歷史命中率徽章。輸入為 /api/events/prediction 的 historical_hit_rate
+ * 欄位 (可能為 null):
+ *   - null / undefined → 無 store (不顯示, 保持舊 UI)
+ *   - calibrated=true   → 「過去 N 天命中率 X% (H/T)」
+ *   - calibrated=false  → 「校準中 (樣本 S/30)」 — 對齊 §6 校準語意
+ */
+function renderHitRateBadge(hhr) {
+  if (!hhr || typeof hhr !== 'object') return '';
+  const samples = typeof hhr.samples === 'number' ? hhr.samples : 0;
+  const hits = typeof hhr.hits === 'number' ? hhr.hits : 0;
+  if (samples === 0) {
+    return `<div class="pred-hitrate pred-hitrate--calibrating" role="status">校準中（樣本 0/30）</div>`;
+  }
+  const pct = typeof hhr.hit_rate === 'number' ? Math.round(hhr.hit_rate * 100) : 0;
+  if (hhr.calibrated === true) {
+    return `<div class="pred-hitrate pred-hitrate--calibrated" role="status">過去 ${hhr.window_days || 60} 天命中率 ${pct}%（${hits}/${samples}）</div>`;
+  }
+  return `<div class="pred-hitrate pred-hitrate--calibrating" role="status">校準中（樣本 ${samples}/30）</div>`;
 }
 
 function isValidMacroPoint(v) {

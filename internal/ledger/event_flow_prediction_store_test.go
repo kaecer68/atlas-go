@@ -248,3 +248,121 @@ func TestJSONLEventFlowPredictionStore_ConcurrentAppendsNoLoss(t *testing.T) {
 		seen[r.PredictedAt] = struct{}{}
 	}
 }
+
+func TestJSONLEventFlowPredictionStore_UpdateActualFillsT1Outcome(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	// Predicted at 13:45 Taipei (=05:45 UTC) on a given date.
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+	if err := store.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	// T+1 reconcile: actual realized as outflow (negative).
+	if err := store.UpdateActual(predictedAt, -0.4, "twse_t86"); err != nil {
+		t.Fatalf("UpdateActual: %v", err)
+	}
+
+	got, err := store.LoadRecentPredictions(10)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(got))
+	}
+	if got[0].ActualSign != -0.4 {
+		t.Errorf("ActualSign = %v, want -0.4", got[0].ActualSign)
+	}
+	if got[0].ActualSource != "twse_t86" {
+		t.Errorf("ActualSource = %q, want twse_t86", got[0].ActualSource)
+	}
+	if got[0].ActualCapturedAt == nil {
+		t.Fatal("ActualCapturedAt = nil, want set after reconcile")
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_UpdateActualNoMatchReturnsErr(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	// One record on 8/6; try to reconcile a different date.
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+	if err := store.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	otherDate := time.Date(2026, 8, 5, 5, 45, 0, 0, time.UTC)
+	err := store.UpdateActual(otherDate, -0.4, "twse_t86")
+	if err != ErrPredictionNotFound {
+		t.Fatalf("UpdateActual wrong date: err = %v, want ErrPredictionNotFound", err)
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_LoadByDateRoundTrip(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+	if err := store.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	// Lookup by the same Taipei calendar date (any time-of-day works).
+	got, err := store.LoadByDate(time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("LoadByDate: %v", err)
+	}
+	if got.PredictedAt.Unix() != predictedAt.Unix() {
+		t.Errorf("LoadByDate returned PredictedAt %v, want %v", got.PredictedAt, predictedAt)
+	}
+
+	// Miss: different date.
+	if _, err := store.LoadByDate(time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC)); err != ErrPredictionNotFound {
+		t.Fatalf("LoadByDate miss: err = %v, want ErrPredictionNotFound", err)
+	}
+}
+
+func TestJSONLEventFlowPredictionStore_ActualPersistsAcrossInstances(t *testing.T) {
+	baseDir := t.TempDir()
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+
+	// Write + reconcile on one instance.
+	s1 := NewJSONLEventFlowPredictionStore(baseDir)
+	if err := s1.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+	if err := s1.UpdateActual(predictedAt, -0.4, "twse_t86"); err != nil {
+		t.Fatalf("UpdateActual: %v", err)
+	}
+
+	// Read on a fresh instance — actual must survive the JSONL round-trip.
+	s2 := NewJSONLEventFlowPredictionStore(baseDir)
+	got, err := s2.LoadByDate(predictedAt)
+	if err != nil {
+		t.Fatalf("LoadByDate on fresh instance: %v", err)
+	}
+	if got.ActualSign != -0.4 || got.ActualSource != "twse_t86" {
+		t.Errorf("fresh instance ActualSign/Source = %v/%q, want -0.4/twse_t86", got.ActualSign, got.ActualSource)
+	}
+	if got.ActualCapturedAt == nil {
+		t.Fatal("ActualCapturedAt = nil after reload, want set")
+	}
+}

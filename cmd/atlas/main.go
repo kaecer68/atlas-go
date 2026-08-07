@@ -79,6 +79,31 @@ import (
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
 
+// predictionHistoryAdapter bridges ledger.EventFlowPredictionStore to the
+// local eventdriven.PredictionHistoryStore interface so the prediction
+// handler can compute a realized hit rate without importing ledger.
+type predictionHistoryAdapter struct {
+	inner ledger.EventFlowPredictionStore
+}
+
+func (a *predictionHistoryAdapter) LoadRecentPredictions(limit int) ([]eventdriven.PredictionRecord, error) {
+	if a == nil || a.inner == nil {
+		return nil, nil
+	}
+	rows, err := a.inner.LoadRecentPredictions(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]eventdriven.PredictionRecord, len(rows))
+	for i, r := range rows {
+		out[i] = eventdriven.PredictionRecord{
+			DirectionSign: r.DirectionSign,
+			ActualSign:    r.ActualSign,
+		}
+	}
+	return out, nil
+}
+
 // scanStoreAdapter bridges ledger.DetectorScanStore to the local
 // eventdriven.DetectorScanStore interface, avoiding a direct import of
 // ledger (which would create a package dependency cycle through
@@ -892,6 +917,12 @@ func run(args []string, deps appDeps) error {
 			// See PR #1173 (commit 7d93e754) for the bug this comment prevents.
 			// All event/* routes are owned by RegisterRoutesWithDetectors.
 			edHandler = eventdriven.RegisterRoutesWithDetectors(mux, eventCalendar, capitalflow.ServiceFromHandler(cfHandler), narrativeAdapter, eventScanStore)
+			// Wire the prediction history store so /api/events/prediction
+			// surfaces historical_hit_rate (product positioning §6/§9: show
+			// realized accuracy alongside the forecast, "校準中" until enough
+			// T+1 samples). The adapter bridges ledger's record type to the
+			// handler's local PredictionRecord projection.
+			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
@@ -1200,6 +1231,8 @@ func run(args []string, deps appDeps) error {
 				gateway:           gateway,
 				autoRollback:      autoRollback,
 				autoJudgePromoter: autoJudgePromoter,
+				predictionLedger:  ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir),
+				capitalFlowStore:  capitalFlowStore,
 			})
 
 			if detectorRegistry != nil && detectorScanStore != nil {

@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 // fixedTimeZone provides a deterministic timezone for tests.
@@ -374,5 +376,118 @@ func TestRecalibrateTemplatesMonthlyTaskFunc_ExecutesAtWindow(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("expected 1 hit-rate recalculation, got %d", calls.Load())
+	}
+}
+
+func TestReconcilePrevDayPredictionTaskFunc_ReconcilesWhenBothSidesAvailable(t *testing.T) {
+	loc := fixedTimeZone(t)
+	oldTimeNow := timeNow
+	defer func() { timeNow = oldTimeNow }()
+	timeNow = func() time.Time { return time.Date(2026, 7, 13, 14, 30, 0, 0, loc) }
+
+	var updates atomic.Int32
+	predAt := time.Date(2026, 7, 10, 5, 45, 0, 0, time.UTC)
+	deps := Stage3TaskDeps{
+		TimeZone: loc,
+		LoadPrevDayPrediction: func() (ledger.EventFlowPredictionRecord, bool) {
+			return ledger.EventFlowPredictionRecord{PredictedAt: predAt, DirectionSign: 0.5, Direction: "inflow"}, true
+		},
+		LoadPrevDayActual: func() (float64, bool) {
+			return -0.3, true // outflow realized
+		},
+		UpdatePrevDayActual: func(predictedAt time.Time, actualSign float64, source string) error {
+			if !predictedAt.Equal(predAt) {
+				t.Fatalf("expected predictedAt %v, got %v", predAt, predictedAt)
+			}
+			if actualSign != -0.3 {
+				t.Fatalf("expected actualSign -0.3, got %v", actualSign)
+			}
+			if source != "twse_t86" {
+				t.Fatalf("expected source twse_t86, got %q", source)
+			}
+			updates.Add(1)
+			return nil
+		},
+	}
+
+	task := ReconcilePrevDayPredictionTaskFunc(deps)
+	if err := task(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if updates.Load() != 1 {
+		t.Fatalf("expected 1 UpdatePrevDayActual call, got %d", updates.Load())
+	}
+}
+
+func TestReconcilePrevDayPredictionTaskFunc_SkipsWhenNoPrediction(t *testing.T) {
+	loc := fixedTimeZone(t)
+	oldTimeNow := timeNow
+	defer func() { timeNow = oldTimeNow }()
+	timeNow = func() time.Time { return time.Date(2026, 7, 13, 14, 30, 0, 0, loc) }
+
+	deps := Stage3TaskDeps{
+		TimeZone: loc,
+		LoadPrevDayPrediction: func() (ledger.EventFlowPredictionRecord, bool) {
+			return ledger.EventFlowPredictionRecord{}, false
+		},
+		LoadPrevDayActual: func() (float64, bool) {
+			t.Fatal("LoadPrevDayActual should not be called when no prediction exists")
+			return 0, false
+		},
+		UpdatePrevDayActual: func(time.Time, float64, string) error {
+			t.Fatal("UpdatePrevDayActual should not be called when no prediction exists")
+			return nil
+		},
+	}
+
+	task := ReconcilePrevDayPredictionTaskFunc(deps)
+	if err := task(context.Background()); err != nil {
+		t.Fatalf("expected no error for missing prediction, got %v", err)
+	}
+}
+
+func TestReconcilePrevDayPredictionTaskFunc_SkipsWhenActualUnavailable(t *testing.T) {
+	loc := fixedTimeZone(t)
+	oldTimeNow := timeNow
+	defer func() { timeNow = oldTimeNow }()
+	timeNow = func() time.Time { return time.Date(2026, 7, 13, 14, 30, 0, 0, loc) }
+
+	deps := Stage3TaskDeps{
+		TimeZone: loc,
+		LoadPrevDayPrediction: func() (ledger.EventFlowPredictionRecord, bool) {
+			return ledger.EventFlowPredictionRecord{PredictedAt: time.Now()}, true
+		},
+		LoadPrevDayActual: func() (float64, bool) {
+			return 0, false
+		},
+		UpdatePrevDayActual: func(time.Time, float64, string) error {
+			t.Fatal("UpdatePrevDayActual should not be called when actual is unavailable")
+			return nil
+		},
+	}
+
+	task := ReconcilePrevDayPredictionTaskFunc(deps)
+	if err := task(context.Background()); err != nil {
+		t.Fatalf("expected no error for unavailable actual, got %v", err)
+	}
+}
+
+func TestReconcilePrevDayPredictionTaskFunc_DoesNotFireOutsideWindow(t *testing.T) {
+	loc := fixedTimeZone(t)
+	oldTimeNow := timeNow
+	defer func() { timeNow = oldTimeNow }()
+	timeNow = func() time.Time { return time.Date(2026, 7, 13, 13, 30, 0, 0, loc) } // wrong hour
+
+	deps := Stage3TaskDeps{
+		TimeZone: loc,
+		LoadPrevDayPrediction: func() (ledger.EventFlowPredictionRecord, bool) {
+			t.Fatal("LoadPrevDayPrediction should not fire outside 14:30 window")
+			return ledger.EventFlowPredictionRecord{}, false
+		},
+	}
+
+	task := ReconcilePrevDayPredictionTaskFunc(deps)
+	if err := task(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -22,8 +22,10 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/experiment"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -38,6 +40,14 @@ type capitalDeps struct {
 	gateway           *apigateway.Gateway
 	autoRollback      *scheduler.AutoRollback
 	autoJudgePromoter *experiment.AutoJudgePromoter
+
+	// predictionLedger stores event-flow predictions so the prev-day
+	// reconciler can fill T+1 actual onto prior predictions. May be nil
+	// when the ledger is not wired (then the reconcile task is skipped).
+	predictionLedger ledger.EventFlowPredictionStore
+	// capitalFlowStore backs the prev-day actual lookup (ForeignInvestorNet
+	// from T86). May be nil when the capital-flow pipeline is not wired.
+	capitalFlowStore capitalflow.RollingSampleStore
 }
 
 // registerCapitalTasks wires the capital-flow / margin / export / judge
@@ -255,4 +265,42 @@ func registerCapitalTasks(d capitalDeps) {
 		},
 	})
 	log.Printf("[Gateway] registered auto_geopolitical background task (6h interval)")
+
+	// Register reconcile-prev-day-prediction: fills the previous trading
+	// day's event-flow prediction with the realized T+1 actual (product
+	// positioning §6 "prediction vs actual same-unit error tracking").
+	// Only registered when both the prediction ledger and the capital-flow
+	// store are wired — otherwise the task would be a silent no-op.
+	if d.predictionLedger != nil && d.capitalFlowStore != nil {
+		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+			Name:     "reconcile-prev-day-prediction",
+			Interval: 1 * time.Minute,
+			Enabled:  true,
+			Task: scheduler.ReconcilePrevDayPredictionTaskFunc(scheduler.Stage3TaskDeps{
+				TimeZone:       taipeiLocation(),
+				OncestampStore: nil, // 14:30 daily guard is in-memory; fine for reconciliation idempotency
+				LoadPrevDayPrediction: func() (ledger.EventFlowPredictionRecord, bool) {
+					rec, err := d.predictionLedger.LoadByDate(time.Now().In(taipeiLocation()).AddDate(0, 0, -1))
+					if err != nil {
+						return ledger.EventFlowPredictionRecord{}, false
+					}
+					return rec, true
+				},
+				LoadPrevDayActual: func() (float64, bool) {
+					beforeDate := time.Now().In(taipeiLocation()).AddDate(0, 0, -1).Format("2006-01-02")
+					samples, err := d.capitalFlowStore.History(context.Background(), capitalflow.ForceForeign, beforeDate, 1)
+					if err != nil || len(samples) == 0 {
+						return 0, false
+					}
+					return samples[len(samples)-1].RawValue, true
+				},
+				UpdatePrevDayActual: func(predictedAt time.Time, actualSign float64, source string) error {
+					return d.predictionLedger.UpdateActual(predictedAt, actualSign, source)
+				},
+			}),
+		})
+		log.Printf("[Gateway] registered reconcile-prev-day-prediction background task (1m interval, fires 14:30; fills T+1 actual onto prior-day prediction)")
+	} else {
+		log.Printf("[Gateway] reconcile-prev-day-prediction skipped: predictionLedger or capitalFlowStore not wired")
+	}
 }

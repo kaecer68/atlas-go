@@ -10,6 +10,100 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
+// fakePredictionStore is a test double for PredictionHistoryStore.
+type fakePredictionStore struct {
+	records []PredictionRecord
+	err     error
+}
+
+func (f *fakePredictionStore) LoadRecentPredictions(limit int) ([]PredictionRecord, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if limit > 0 && len(f.records) > limit {
+		return f.records[len(f.records)-limit:], nil
+	}
+	return f.records, nil
+}
+
+func TestComputeHistoricalHitRate_UnwiredStoreReturnsNil(t *testing.T) {
+	h := NewHandler(industry.NewEventCalendar())
+	if got := h.computeHistoricalHitRate(60); got != nil {
+		t.Fatalf("expected nil when store not wired, got %+v", got)
+	}
+}
+
+func TestComputeHistoricalHitRate_CountsDirectionalHits(t *testing.T) {
+	h := NewHandler(industry.NewEventCalendar())
+	h.SetPredictionStore(&fakePredictionStore{records: []PredictionRecord{
+		{DirectionSign: 0.5, ActualSign: 0.6},   // inflow hit
+		{DirectionSign: -0.5, ActualSign: -0.4}, // outflow hit
+		{DirectionSign: 0.5, ActualSign: -0.2},  // miss
+		{DirectionSign: 0, ActualSign: 0},       // unreconciled — skipped
+	}})
+
+	got := h.computeHistoricalHitRate(60)
+	if got == nil {
+		t.Fatal("expected non-nil hit rate")
+	}
+	if got.Samples != 3 {
+		t.Fatalf("expected 3 reconciled samples, got %d", got.Samples)
+	}
+	if got.Hits != 2 {
+		t.Fatalf("expected 2 hits, got %d", got.Hits)
+	}
+	if got.HitRate != 2.0/3.0 {
+		t.Fatalf("expected hit rate 2/3, got %v", got.HitRate)
+	}
+	if got.Calibrated {
+		t.Fatal("expected not calibrated below MinHitSamples")
+	}
+	if got.Reason == "" {
+		t.Fatal("expected calibrating reason when below MinHitSamples")
+	}
+}
+
+func TestComputeHistoricalHitRate_CalibratedAtEnoughSamples(t *testing.T) {
+	h := NewHandler(industry.NewEventCalendar())
+	records := make([]PredictionRecord, 0, MinHitSamples)
+	for range MinHitSamples {
+		records = append(records, PredictionRecord{DirectionSign: 0.5, ActualSign: 0.6})
+	}
+	h.SetPredictionStore(&fakePredictionStore{records: records})
+
+	got := h.computeHistoricalHitRate(60)
+	if got == nil {
+		t.Fatal("expected non-nil hit rate")
+	}
+	if got.Samples != MinHitSamples {
+		t.Fatalf("expected %d samples, got %d", MinHitSamples, got.Samples)
+	}
+	if !got.Calibrated {
+		t.Fatal("expected calibrated at MinHitSamples")
+	}
+	if got.HitRate != 1.0 {
+		t.Fatalf("expected hit rate 1.0, got %v", got.HitRate)
+	}
+}
+
+func TestComputeHistoricalHitRate_ZeroSamples(t *testing.T) {
+	h := NewHandler(industry.NewEventCalendar())
+	h.SetPredictionStore(&fakePredictionStore{records: []PredictionRecord{
+		{DirectionSign: 0.5, ActualSign: 0}, // no actual yet
+	}})
+
+	got := h.computeHistoricalHitRate(60)
+	if got == nil {
+		t.Fatal("expected non-nil (calibrating) hit rate")
+	}
+	if got.Samples != 0 {
+		t.Fatalf("expected 0 samples, got %d", got.Samples)
+	}
+	if got.Calibrated {
+		t.Fatal("expected not calibrated with 0 samples")
+	}
+}
+
 func TestPredictEmptyCalendar(t *testing.T) {
 	cal := industry.NewEventCalendar()
 	p := NewPredictor(cal)

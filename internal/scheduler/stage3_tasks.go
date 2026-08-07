@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
@@ -56,6 +57,21 @@ type Stage3TaskDeps struct {
 
 	// RecalculateTemplateHitRates recalculates narrative template hit rates.
 	RecalculateTemplateHitRates func() error
+
+	// LoadPrevDayPrediction returns the event-flow prediction captured for the
+	// previous trading day. Returns false when no prediction exists (e.g. the
+	// prediction store is empty or the previous day had no prediction).
+	LoadPrevDayPrediction func() (ledger.EventFlowPredictionRecord, bool)
+
+	// LoadPrevDayActual returns the realized foreign net buy/sell (T86) for the
+	// previous trading day as a signed magnitude in hundred-million shares
+	// (positive = foreign net buy). Returns false when the actual is not yet
+	// available.
+	LoadPrevDayActual func() (float64, bool)
+
+	// UpdatePrevDayActual persists the realized actual onto the prediction
+	// record captured at predictedAt (matched by Taipei date).
+	UpdatePrevDayActual func(predictedAt time.Time, actualSign float64, source string) error
 }
 
 // SyncEventsDailyTaskFunc returns a BackgroundTaskManager-compatible task that
@@ -165,6 +181,49 @@ func RecalibrateTemplatesMonthlyTaskFunc(deps Stage3TaskDeps) func(context.Conte
 				return fmt.Errorf("RecalculateTemplateHitRates dependency is nil")
 			}
 			return deps.RecalculateTemplateHitRates()
+		})
+		if deps.OnTaskComplete != nil {
+			deps.OnTaskComplete(taskID, err)
+		}
+		return err
+	}
+}
+
+// ReconcilePrevDayPredictionTaskFunc returns a BackgroundTaskManager-compatible
+// task that fills the previous trading day's event-flow prediction with the
+// realized T+1 capital-flow actual. Runs at 14:30 local time (after TWSE T86
+// publish, which lands ~14:00). It is a no-op (no error) when:
+//   - the previous day had no prediction (LoadPrevDayPrediction=false), or
+//   - the actual is not yet available (LoadPrevDayActual=false).
+//
+// The task only writes via UpdateActual when both sides exist, matching the
+// "prediction → actual → hit" loop described in product positioning §6
+// (T+1 same-unit error tracking).
+func ReconcilePrevDayPredictionTaskFunc(deps Stage3TaskDeps) func(context.Context) error {
+	const taskID = "reconcile-prev-day-prediction"
+	shouldRun := dailyGuardFor(deps, 14, 30)
+	return func(ctx context.Context) error {
+		if !shouldRun() {
+			return nil
+		}
+		err := runWithRetryAndAudit(ctx, taskID, func() error {
+			if deps.LoadPrevDayPrediction == nil || deps.LoadPrevDayActual == nil {
+				return fmt.Errorf("LoadPrevDayPrediction/LoadPrevDayActual dependency is nil")
+			}
+			rec, ok := deps.LoadPrevDayPrediction()
+			if !ok {
+				logging.Info("scheduler", "reconcile_prev_day_no_prediction")
+				return nil
+			}
+			actual, ok := deps.LoadPrevDayActual()
+			if !ok {
+				logging.Info("scheduler", "reconcile_prev_day_actual_unavailable")
+				return nil
+			}
+			if deps.UpdatePrevDayActual == nil {
+				return fmt.Errorf("UpdatePrevDayActual dependency is nil")
+			}
+			return deps.UpdatePrevDayActual(rec.PredictedAt, actual, "twse_t86")
 		})
 		if deps.OnTaskComplete != nil {
 			deps.OnTaskComplete(taskID, err)
