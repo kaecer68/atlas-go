@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/subscription"
 )
@@ -67,7 +68,9 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAck marks the (user, signal) as acknowledged — sets AcknowledgedAt
-// to now (if not already set) and refreshes UpdatedAt.
+// to now (preserving an earlier acknowledgement timestamp) and refreshes
+// UpdatedAt. The store replaces records verbatim, so the full state must be
+// constructed here (never passed as a zero-value state).
 func (h *Handler) handleAck(w http.ResponseWriter, r *http.Request) {
 	signalKey, ok := requireSignalKey(w, r)
 	if !ok {
@@ -78,8 +81,20 @@ func (h *Handler) handleAck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	state, err := h.upsertFromRequest(r, claims.UserID, signalKey, false /* not dismiss */)
-	if err != nil {
+	now := time.Now().UTC()
+	state := UserSignalState{
+		UserID:    claims.UserID,
+		SignalKey: signalKey,
+	}
+	// Preserve the first acknowledgement timestamp across repeated acks
+	// (idempotent "read" — re-reading does not move the ack time).
+	if existing, err := h.store.LoadByUserAndSignal(claims.UserID, signalKey); err == nil && existing.AcknowledgedAt != nil {
+		state.AcknowledgedAt = existing.AcknowledgedAt
+	} else {
+		state.AcknowledgedAt = &now
+	}
+	state.UpdatedAt = now
+	if err := h.store.Upsert(state); err != nil {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
@@ -87,7 +102,8 @@ func (h *Handler) handleAck(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDismiss marks the (user, signal) as dismissed — the user does not
-// want to see this signal at all.
+// want to see this signal at all. Dismissing also acknowledges (the user
+// has clearly seen the signal).
 func (h *Handler) handleDismiss(w http.ResponseWriter, r *http.Request) {
 	signalKey, ok := requireSignalKey(w, r)
 	if !ok {
@@ -98,8 +114,15 @@ func (h *Handler) handleDismiss(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	state, err := h.upsertFromRequest(r, claims.UserID, signalKey, true /* dismiss */)
-	if err != nil {
+	now := time.Now().UTC()
+	state := UserSignalState{
+		UserID:         claims.UserID,
+		SignalKey:      signalKey,
+		AcknowledgedAt: &now,
+		Dismissed:      true,
+		UpdatedAt:      now,
+	}
+	if err := h.store.Upsert(state); err != nil {
 		http.Error(w, errJSON(err), http.StatusInternalServerError)
 		return
 	}
@@ -131,29 +154,6 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, state)
-}
-
-// upsertFromRequest reads an optional body, falls back to defaults, and
-// upserts. The body is currently unused (clients just hit the endpoint
-// to mark ack/dismiss) but kept open for future extensions (e.g. note,
-// custom AcknowledgedAt).
-func (h *Handler) upsertFromRequest(r *http.Request, userID int64, signalKey string, dismiss bool) (UserSignalState, error) {
-	state := UserSignalState{
-		UserID:    userID,
-		SignalKey: signalKey,
-		Dismissed: dismiss,
-	}
-	// Set AcknowledgedAt when not dismissing — the user explicitly
-	// acknowledged the signal (and the act of dismissing is itself an
-	// acknowledgement of "I don't want to see this").
-	if !dismiss {
-		_ = r // body currently ignored
-	}
-	if err := h.store.Upsert(state); err != nil {
-		return UserSignalState{}, err
-	}
-	// Read back to return the canonical record (with store-set UpdatedAt).
-	return h.store.LoadByUserAndSignal(userID, signalKey)
 }
 
 // requireSignalKey extracts {signalKey} from the path and rejects empty

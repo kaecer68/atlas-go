@@ -113,6 +113,9 @@ func TestHandler_AckThenListReturnsRecord(t *testing.T) {
 	if ackState.Dismissed {
 		t.Error("Dismissed = true after ack, want false")
 	}
+	if ackState.AcknowledgedAt == nil {
+		t.Error("AcknowledgedAt = nil after ack — the 'read' badge never gets set")
+	}
 
 	// 2. List returns the one record.
 	listReq := httptest.NewRequest("GET", "/api/user/signals", nil)
@@ -146,6 +149,9 @@ func TestHandler_DismissSetsDismissedTrue(t *testing.T) {
 	_ = json.NewDecoder(rec.Body).Decode(&s)
 	if !s.Dismissed {
 		t.Errorf("Dismissed = false after /dismiss, want true (got %+v)", s)
+	}
+	if s.AcknowledgedAt == nil {
+		t.Error("AcknowledgedAt = nil after dismiss — dismissing should also acknowledge")
 	}
 }
 
