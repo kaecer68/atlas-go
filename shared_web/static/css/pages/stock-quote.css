@@ -347,3 +347,29 @@
   text-align: center;
   font-size: var(--text-sm);
 }
+
+/* Monthly revenue section (2026-08-07) */
+.sq-revenue-badge {
+  display: inline-block;
+  margin-left: var(--spacing-2);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.sq-revenue-badge--signal {
+  background: var(--pnl-profit);
+  color: #fff;
+}
+
+.sq-revenue-note {
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: color-mix(in srgb, var(--pnl-profit) 10%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

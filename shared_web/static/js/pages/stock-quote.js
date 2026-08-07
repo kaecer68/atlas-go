@@ -1,10 +1,11 @@
-import { fetchStockBundle, fetchStockBundleWithCoverage } from '../services/stock-api-client.js';
+import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue } from '../services/stock-api-client.js';
 import { renderMissingState } from '../shared/app-utils.js';
 import { renderSearch } from '../components/stock-quote-search.js';
 import { renderHeader } from '../components/stock-quote-header.js';
 import { renderFundamentals } from '../components/stock-quote-fundamentals.js';
 import { renderChips } from '../components/stock-quote-chips.js';
 import { renderTechnical } from '../components/stock-quote-technical.js';
+import { renderRevenue } from '../components/stock-quote-revenue.js';
 
 let state = {
   currentSymbol: null,
@@ -51,6 +52,7 @@ function renderContent() {
         ${renderFundamentals(state.status, res.fundamentals, res.coverage)}
         ${renderChips(state.status, res.chips, res.coverage)}
         ${renderTechnical(state.status, res.technical, res.coverage)}
+        ${renderRevenue(state.status, res.monthlyRevenue)}
       </div>
     `;
   }
@@ -79,6 +81,32 @@ async function doSearch(symbol) {
   } catch (e) {
     state.status = 'error';
     state.results = null;
+  }
+
+  // Monthly revenue is fetched independently (NOT part of the 4-endpoint
+  // bundle): it hits the FinMind-backed /api/stock/monthly_revenue endpoint
+  // which has a quota-aware 503 path, and its 7-day TTL differs from the
+  // bundle's per-endpoint TTLs. The section degrades gracefully to a
+  // "暫時無法取得" box on 503 so the page doesn't look broken.
+  // Only runs when the bundle succeeded — on bundle failure the whole
+  // page is in error state and the revenue section isn't rendered anyway.
+  if (state.status === 'loaded' && state.results) {
+    const revenueState = {
+      status: 'loading',
+      data: null,
+      error: null
+    };
+    state.results.monthlyRevenue = revenueState;
+    renderContent();
+    try {
+      const revenue = await fetchStockMonthlyRevenue(symbol);
+      revenueState.status = 'loaded';
+      revenueState.data = revenue;
+    } catch (e) {
+      revenueState.status = 'error';
+      revenueState.error = e.message;
+    }
+    renderContent();
   }
 
   // Update URL if supported
