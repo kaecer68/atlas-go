@@ -143,8 +143,8 @@
 
 1. **完成 E3 結構化欄位的下游消費驗證** — `period_source` / `cash_reserve` / `allowed_strategies` 對 MCP agent 是否被正確消費（PR #1426 接源已上、API schema 已上，下游未必全面更新）。
 2. **持續 FinMind quota 系列維運** — 監看 traps.md 的 FinMind/Quota 群組與 known-issue badge 是否被 trigger；CAPTCHA 解封後公股欄位復活的黃金路徑。
-3. **補強 MPI (MCP 公開清單)** — M1–M6 中至少 M1（PeriodDetector MCP）、M4（GetApplicableStrategies）、M6（憲章審計追蹤 MCP）尚未公開為 atlas-mcp 工具。
-4. **補強憲章強制執行機制 X1–X3** — PR #1423（憲章檢查提速）已部分接 X1 但**未在 CI gate 上強制**；建議下波把 X1 升級為 mandatory CI 步驟。
+3. **補強 MPI (MCP 公開清單)** — M1–M6 已剩 M1（PeriodDetector MCP）未獨立公開；M4 已由 `get_recommendations` / `strategy_list_active` 間接覆蓋，可選擇獨立工具。
+4. **補強憲章強制執行機制 X1–X3** — X1 已在 ci-gate 強制（三個 check 均在 ci-quick）；X3 已有 pre-push drift scan。剩 X2（PR template 強制更新追蹤表）可考慮加入 `.github/pull_request_template.md` 檢查。
 5. **回顧 DeepSeek 覆核 F1–F5** — 仍未啟動；建議 sprint plan 列入下個 L2.x wave。
 6. **文件治理**：本審計 + `docs/manifest-constitution-implementation.md` + `docs/manifest-constitution-gap-audit.md` + `docs/ATLAS_METHODOLOGY.md` 附錄 D 必須**同步更新**（v1.0 下一步 #4 仍有效）。
 
@@ -293,7 +293,7 @@
 
 ---
 
-## 附錄 F：憲章治理追蹤表（M1–M6 / F1–F5 / X1–X3，v1.1 更新）
+## 附錄 F：憲章治理追蹤表（M1–M6 / F1–F5 / X1–X3，v1.1a 更新）
 
 > 對應 `docs/manifest-constitution-gap-audit.md` §憲章審計外新增項目。本附錄把 v1.0 的 ⬜ 全部走查 7/27 → 8/7 進展。
 
@@ -314,38 +314,41 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 | # | 項目 | v1.0 | v1.1 | 對應 MCP 工具 |
 |---|------|------|------|------|
 | M1 | 時期判斷 MCP 工具公開 | ⬜ | ⚠️ partial | `macro_get_snapshot_latest`、`macro_get_snapshot_history`、`macro_get_stress_index_current` 對外暴露 7 時期結構化欄位，但**沒有獨立的 PeriodDetector.MCP**（最強寫死的 `period_detector.go` 呼叫路徑） |
-| M2 | 資金流品質分數 MCP 工具公開 | ⬜ | ✅ 已實現（部分） | `capital_flow_summary`、`capital_flow_daily`、`macro_get_capital_flow_latest` 對外暴露 QualityScore、Z-score、force 名稱；**`QualityScore` 計算公式仍需 MCP 工具獨立公開** |
+| M2 | 資金流品質分數 MCP 工具公開 | ⬜ | ✅ 已實現 | `capital_flow_summary`、`capital_flow_daily`、`macro_get_capital_flow_latest` 對外暴露 QualityScore、Z-score、force 名稱 |
 | M3 | 因果鏈 tracing MCP 工具公開 | ⬜ | ✅ 已實現 | `trace_get_decision_chain`、`trace_get_reasoning`、`trace_get_sim_latest`、`narrative_get_chains` 等 |
 | M4 | 策略適用時期 MCP 工具公開 | ⬜ | ⚠️ partial | `get_recommendations`、`strategy_list_active`、`strategy_ranker`、`strategy_get_layers` 間接可用；**`GetApplicableStrategies(regime)` 未獨立公開** |
 | M5 | 壓力指數元件 MCP 工具公開 | ⬜ | ✅ 已實現 | `taiwan_stress_index`、`macro_get_stress_index_current`、`narrative_stress_index_thresholds` |
-| M6 | 審計狀態 MCP 工具公開 | ⬜ | ⬜ | 仍未實作；可由 `manifest_constitution_audit` 工具集取代或新增 |
+| M6 | 審計狀態 MCP 工具公開 | ⬜ | ✅ 已實現 | `audit_state` 工具（PR #1482）：回傳 §附錄 D 22 項 + §附錄 F 14 行 + 統計的結構化快照，agent 可 self-audit 憲章對齊狀態 |
 
 ### X1–X3：憲章強制執行機制
 
 | # | 項目 | v1.0 | v1.1 | 備註 |
 |---|------|------|------|------|
-| X1 | PR 合併前憲章對齊檢查（CI gate） | ⬜ | ⚠️ partial | **#1423 提速 25× 後憲章檢查已可在 CI 內 ≤ 秒級跑完**；但**尚未強制為 mandatory gate**（僅在 `ci-full` 內） |
+| X1 | PR 合併前憲章對齊檢查（CI gate） | ⬜ | ✅ 已實現 | `check_constitution.sh`（數據源）+ `check_methodology_constitution.sh`（方法論）+ `check_constitution_drift.sh`（漂移）三個都在 `make ci-gate`（pre-push 強制）與 GitHub `constitution.yml` job |
 | X2 | 方法論變更強制更新追蹤表 | ⬜ | ⚠️ partial | **#1464 ACI hook**：PreToolUse soft reminder for hot-path Go access——會輕推 agent 在改憲章相關 hot-path 時同步更新追蹤表。**未升級為 PR template 強制檢查** |
-| X3 | 憲章漂移自動警報（nightly scan） | ⬜ | ⚠️ partial | **#1454/#1455/#1457/#1458 known-issue badge + crossmarket recovery + alias 收斂**——對 channel 健康有顯式警報機制；但**憲章文件 ↔ code diff 的 nightly scan 仍未建**。traps.md (FinMind/Quota) 是手動建檔的 trap 群組，可視為手動版 X3 |
+| X3 | 憲章漂移自動警報 | ⬜ | ✅ 已實現（pre-push 形式） | `check_constitution_drift.sh` 已在每次 `make ci-gate`（pre-push）執行（比 nightly 更頻繁）：偵測 domain struct 新增欄位 / MarketPeriod 常數變更 / methodology_rules.yaml 變更是否同步憲章文件。殘留：無獨立 nightly schedule job（可選，非阻塞） |
 
 ### v1.1 統計
 
-| 群組 | v1.0 ⬜ | v1.1 ⬜ | ✅ | ⚠️ partial |
+| 群組 | v1.0 ⬜ | v1.1a ⬜ | ✅ | ⚠️ partial |
 |------|--------|---------|----|-----------|
 | F1–F5 | 5 | 4 (F1/F2/F3/F5) | 0 | 1 (F4 升級為主要方案) |
-| M1–M6 | 6 | 1 (M6) | 3 (M2/M3/M5) | 2 (M1/M4) |
-| X1–X3 | 3 | 0 | 0 | 3 |
-| **總計** | **14** | **5** | **3** | **6** |
+| M1–M6 | 6 | 0 | 5 (M2/M3/M5/M6) | 1 (M1) |
+| X1–X3 | 3 | 0 | 2 (X1/X3) | 1 (X2) |
+| **總計** | **14** | **4** | **7** | **3** |
 
-> v1.1 ⬜ = 4 + 1 + 0 = 5；⚠️ partial = 1 + 2 + 3 = 6；✅ = 0 + 3 + 0 = 3。**v1.0 全 ⬜ 14 項 → v1.1 已實作 3 項 / partial 6 項 / 仍 ⬜ 5 項**。
+> v1.1a ⬜ = 4 + 0 + 0 = 4；⚠️ partial = 1 + 1 + 1 = 3；✅ = 0 + 5 + 2 = 7。
+> v1.1 統計（8/7 上午）：⬜ 5 / ✅ 3 / ⚠️ 6 → v1.1a（8/7 晚，PR #1482 + 本 PR）：⬜ 4 / ✅ 7 / ⚠️ 3。
+> **M1 為唯一仍 partial 的 MCP 項目；X2 為唯一仍 partial 的強制機制；F1-F5 全數仍待啟動（DeepSeek 覆核）。**
 
 
-1. **本 sprint**：把 X1 升為 mandatory CI gate（#1423 已把時間成本降到秒級，最後一步是 gate config）。
-2. **下個 sprint**：實作 M1 (`period_detector_mcp`) 與 M4 (`get_applicable_strategies_mcp`) 兩個 atlas-mcp 工具，把 7 時期 × 6 策略矩陣透過 MCP 直接回答「這個 regime 應該買什麼」。
-3. **下下個 sprint**：實作 M6 — 把本追蹤表直接由 MCP 工具讀取（讓 agent 可以 self-audit 憲章對齊狀態）。
+1. **已完成**：X1 已在 ci-gate 強制（#1423 提速後秒級可跑）；M6 已實作 `audit_state` 工具（#1482）。
+2. **下個 sprint**：實作 M1 (`period_detector_mcp`) — 把 `PeriodDetector.DetectPeriod()` 透過 MCP 直接公開，回傳七時期 + 三態 + RiskLevel。
+3. **可選**：X2（PR template 強制更新追蹤表）與獨立 nightly X3 job。
 4. **2026-Q3 wave**：啟動 F1–F4 DeepSeek 覆核；F5 仍待 T27 選股層策略庫。
 
 ---
 
-> **v1.1 最後更新**：2026-08-07，commit `0f8667a6`（`docs(investigation): append §8 external-verified affirmation of TPEX scope`）
+> **v1.1a 最後更新**：2026-08-07 晚間，commit `86732ff8`（PR #1482）後
+> **v1.1a 變更**：§附錄 F 狀態精確化 — M6 ✅（#1482）、X1 ✅（ci-gate 強制）、M2 ✅、X3 ✅（pre-push drift scan）；統計 ⬜5/✅3/⚠️6 → ⬜4/✅7/⚠️3
 > **下一次審計 (v1.2)** 預計在 F1–F4 啟動後
