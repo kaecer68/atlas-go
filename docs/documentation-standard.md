@@ -115,7 +115,18 @@ Manifest done →
 ```bash
 # 檢查 .omo/manifests/ 內是否有 7 天以上未更新的 done manifest
 ./scripts/cleanup-manifests.sh --stale-days 7
+
+# CI 強制（ci-quick 掛載）— 防止 agent 偷跑將 manifest 寫入 docs/
+bash scripts/ci/check_docs_governance.sh
 ```
+
+**CI 強制防護（2026-08-07 建立）**：`scripts/ci/check_docs_governance.sh` 已掛載 `make ci-quick`，push 前強制檢查：
+
+1. `docs/manifests/` 只允許 `README.md` + `TEMPLATE.md`，任何個別 manifest / 子目錄 → **push 被擋**
+2. `docs/` 下禁止 `plans/`、`wave-N/`、`superpowers/` 違規目錄 → **push 被擋**
+3. `docs/` 根目錄新增未追蹤 `.md` → **push 被擋**
+
+> 本機過去違規的 manifest（2026-07-25 ~ 2026-08-07 共 16 項）已於 2026-08-07 搬移至 `.omo/manifests/`（git rm + 磁碟保留）。archive/specs 中的引用已同步改為 `.omo/manifests/` 路徑或標註已刪除。
 
 **禁止**：
 

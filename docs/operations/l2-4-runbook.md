@@ -1,6 +1,6 @@
 # L2.4 Observation Window — Operations Runbook
 
-> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);Issue #825 / #826 已關閉 (依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md))。本 runbook 保留供未來若重啟 L2.4 觀察期使用;`LLMDriver` deprecated alias 已於 2026-08-06 移除 (§5 step 3 已不適用)。
+> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);Issue #825 / #826 已關閉 (依 `.omo/manifests/2026-08-06-l2-4-issue-alignment-audit.md`（harness 私有，不入 repo）)。本 runbook 保留供未來若重啟 L2.4 觀察期使用;`LLMDriver` deprecated alias 已於 2026-08-06 移除 (§5 step 3 已不適用)。
 > **對象**: ops / on-call engineering
 > **範圍**: Wave 11 L2.4 — `UseLLMSectorAgents` 啟用後 7-14 天觀察期
 > **Issue**: [#742](https://github.com/kaecer68/atlas-go/issues/742)

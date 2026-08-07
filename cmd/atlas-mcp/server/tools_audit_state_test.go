@@ -17,8 +17,8 @@ func TestAuditState_ReturnsSnapshot(t *testing.T) {
 		t.Fatalf("handleAuditState: %v", err)
 	}
 
-	if out.DocVersion != "v1.1c" {
-		t.Errorf("doc_version = %q, want v1.1c", out.DocVersion)
+	if out.DocVersion != "v1.1" {
+		t.Errorf("doc_version = %q, want v1.1", out.DocVersion)
 	}
 	if out.HeadCommit == "" {
 		t.Error("head_commit empty")
@@ -98,14 +98,14 @@ func TestAuditState_GovernanceGroups(t *testing.T) {
 	}
 
 	// 統計欄位
-	if out.Stats.GovernanceDone != 13 {
-		t.Errorf("governance done = %d, want 13 (F1-F4/M1-M6/X1-X3)", out.Stats.GovernanceDone)
+	if out.Stats.GovernanceDone != 3 {
+		t.Errorf("governance done = %d, want 3 (M2/M3/M5)", out.Stats.GovernanceDone)
 	}
-	if out.Stats.GovernancePartial != 0 {
-		t.Errorf("governance partial = %d, want 0", out.Stats.GovernancePartial)
+	if out.Stats.GovernancePartial != 6 {
+		t.Errorf("governance partial = %d, want 6", out.Stats.GovernancePartial)
 	}
-	if out.Stats.GovernanceNotStart != 1 {
-		t.Errorf("governance not_start = %d, want 1 (F5)", out.Stats.GovernanceNotStart)
+	if out.Stats.GovernanceNotStart != 5 {
+		t.Errorf("governance not_start = %d, want 5", out.Stats.GovernanceNotStart)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestAuditState_JSONSerializable(t *testing.T) {
 	if err := json.Unmarshal(raw, &roundTrip); err != nil {
 		t.Fatalf("unmarshal audit_state: %v", err)
 	}
-	if roundTrip["doc_version"] != "v1.1c" {
-		t.Errorf("round-trip doc_version = %v, want v1.1c", roundTrip["doc_version"])
+	if roundTrip["doc_version"] != "v1.1" {
+		t.Errorf("round-trip doc_version = %v, want v1.1", roundTrip["doc_version"])
 	}
 }

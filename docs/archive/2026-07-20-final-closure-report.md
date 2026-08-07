@@ -47,17 +47,17 @@
 
 ### 4.1 新檔（5 份 manifest）
 
-- `docs/manifests/2026-07-20-document-drift-audit.md`（4 文件 drift 完整盤查）
-- `docs/manifests/2026-07-20-handoff-out.md`（接手 → 交付完整報告）
-- `docs/manifests/2026-07-20-validation-drill-root-causes.md`（5 findings 根因分析）
-- `docs/manifests/2026-07-20-f2-autobacktest-observation.md`（F2 observation plan）
+- `docs/manifests/2026-07-20-document-drift-audit.md`（已刪除，無長期價值）（4 文件 drift 完整盤查）
+- `docs/manifests/2026-07-20-handoff-out.md`（已刪除，無長期價值）（接手 → 交付完整報告）
+- ``.omo/manifests/2026-07-20-validation-drill-root-causes.md`（harness 私有）（5 findings 根因分析）
+- `docs/manifests/2026-07-20-f2-autobacktest-observation.md`（已刪除，無長期價值）（F2 observation plan）
 - `docs/manifests/2026-07-20-final-closure-report.md`（本檔）
 
 ### 4.2 修改檔
 
 - `CHANGELOG.md`（prepend v0.0.0.36 + v0.0.0.37）
 - `docs/specs/capital-flow-seven-dimension-spec.md`（§18.3.2 標題改「已實作」）
-- `docs/manifests/2026-07-20-capital-flow-history-audit.md`（Phase D pending→done）
+- ``.omo/manifests/2026-07-20-capital-flow-history-audit.md`（harness 私有）（Phase D pending→done）
 - 4 manifest frontmatter 加 hermes 私域絕對路徑說明
 - `cmd/atlas/main.go`（F1：isPublicPath 加 `/api/detector/`）
 - `internal/monitoring/api/shared/handler.go`（F1：authFreePrefixPaths 加 `/api/detector/`）
@@ -114,10 +114,10 @@ Working tree 100% clean。
 
 | 文件 | 用途 |
 |---|---|
-| `docs/manifests/2026-07-20-document-drift-audit.md` | 文件 drift 完整盤查 |
-| `docs/manifests/2026-07-20-handoff-out.md` | 接手 → 交付報告 |
-| `docs/manifests/2026-07-20-validation-drill-root-causes.md` | 5 findings 根因 + 修法建議 |
-| `docs/manifests/2026-07-20-f2-autobacktest-observation.md` | F2 observation plan + 48hr 監看 |
+| `docs/manifests/2026-07-20-document-drift-audit.md`（已刪除，無長期價值） | 文件 drift 完整盤查 |
+| `docs/manifests/2026-07-20-handoff-out.md`（已刪除，無長期價值） | 接手 → 交付報告 |
+| ``.omo/manifests/2026-07-20-validation-drill-root-causes.md`（harness 私有） | 5 findings 根因 + 修法建議 |
+| `docs/manifests/2026-07-20-f2-autobacktest-observation.md`（已刪除，無長期價值） | F2 observation plan + 48hr 監看 |
 | `internal/monitoring/AGENTS.md` | 公開端點白名單 invariant |
 | `internal/autobacktest/loop.go` + `runner.go` | autobacktest 邏輯 |
 | `internal/buildinfo/info.go` | Current() 函式 |

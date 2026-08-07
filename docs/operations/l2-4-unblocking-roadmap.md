@@ -9,7 +9,7 @@
 
 ### ⛔ 2026-08-06 — 軌道收尾 (Issue #825 + #826 CLOSED)
 
-> 依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md) 盤查決策:
+> 依 `.omo/manifests/2026-08-06-l2-4-issue-alignment-audit.md`（harness 私有，不入 repo） 盤查決策:
 > - **#825 (auto-cron) 關閉**:`ShouldL24AutoCronFire` 0 production callers (dead code, 已加 deprecation 註記);自動化缺口由 C07 平行軌道 (c07-obs-collector / c07-day-evaluator / c07-preflight) 填補。
 > - **#826 (promotion) 關閉**:Day 14 觀察 gate 未通過且短期無法滿足;3c (LLMDriver alias 移除) 已於本收尾完成。
 > - L2.4 觀察期未啟動 (`use_llm_sector_agents.value=false` 28+ 天),無 baseline 可驗證 promotion。

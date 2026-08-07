@@ -1,6 +1,6 @@
 # L2.4 Follow-up Work Report
 
-> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);後續 #825 / #826 已關閉,依 [`docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`](../manifests/2026-08-06-l2-4-issue-alignment-audit.md) 盤查決策。
+> **Status**: ⛔ **2026-08-06 — 軌道收尾**。PR #821 merged 2026-06-29 (commit `f69b3551`);後續 #825 / #826 已關閉,依 `.omo/manifests/2026-08-06-l2-4-issue-alignment-audit.md`（harness 私有，不入 repo） 盤查決策。
 > **Scope**: Items deferred from PR #821 that require follow-up work, plus the scope of the docs-migration PR.
 > **Audience**: atlas-go ops, on-call engineering, future maintainers.
 > **Tracking**: Issue #742 (L2.4 runbook), Issue #740 (L2.4 observation metrics), Issue #711 (Wave 10 L2.3 plan), Issue #825 (Auto-cron Scheduler — **CLOSED 2026-08-06**), Issue #826 (L2.4 Promotion Procedure — **CLOSED 2026-08-06**).
@@ -263,7 +263,7 @@ This PR 把原本位於 `.omo/wave-11-l2-4/`(gitignored,本地工作目錄)的�
 | LLMDriver 移除 (3c) | 0.5 day | 3b 之後 7+ 天 | 3b + production 7+ 天 | ✅ **DONE (2026-08-06)** — alias 移除,0 production usages |
 | Version tag (3d) | 30 min | 3a/3b/3c 都完成 | 3a/3b/3c | ⛔ **CLOSED (#826)** — 依賴 3a/3b |
 
-**Note**: 此表反映 2026-08-06 收尾狀態。詳細盤查依據見 `docs/manifests/2026-08-06-l2-4-issue-alignment-audit.md`。
+**Note**: 此表反映 2026-08-06 收尾狀態。詳細盤查依據見 `.omo/manifests/2026-08-06-l2-4-issue-alignment-audit.md`（harness 私有）。
 
 ## 6. References
 

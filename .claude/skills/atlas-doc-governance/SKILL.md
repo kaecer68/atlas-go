@@ -86,3 +86,17 @@ grep -A20 "完整子目錄白名單" docs/documentation-standard.md
 - 權威規範：`docs/documentation-standard.md`
 - 文件地圖：`docs/documentation-map.md`
 - 清理腳本：`scripts/cleanup-manifests.sh`
+
+## CI 強制防護（2026-08-07 起，不可繞過）
+
+`scripts/ci/check_docs_governance.sh` 已掛載 `make ci-quick`，**push 前硬性檢查**：
+
+| 檢查 | 違規例 | 結果 |
+|------|--------|------|
+| `docs/manifests/` 只准 `README.md` + `TEMPLATE.md` | 把個別 manifest 寫進 `docs/manifests/` | ❌ push 被擋 |
+| `docs/` 禁止 `plans/`、`wave-N/`、`superpowers/` 目錄 | 在 `docs/` 下新建 plan | ❌ push 被擋 |
+| `docs/` 根目錄禁止新增未追蹤 `.md` | 直接在根目錄放報告 | ❌ push 被擋 |
+
+**建立 manifest 的正確位置只有一個：`.omo/manifests/YYYY-MM-DD-slug.md`**（gitignored，不進 repo）。`docs/manifests/` 只是模板來源（README + TEMPLATE），不是存放處。
+
+寫入 `docs/` 任何位置前，先問：「這個內容是 transient 還是永久？」transient（manifest、plan、審計追蹤、交接）→ `.omo/`；永久（spec、runbook、架構）→ `docs/`。不確定 → 先放 `.omo/`。
