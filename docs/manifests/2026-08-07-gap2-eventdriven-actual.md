@@ -2,7 +2,7 @@
 
 > **Trigger**: User asked 「建立 worktree 執行 C」, 依 .omo/manifests/2026-08-06-gap-audit-summary.md §0.2 推薦選項 B (Gap 2-A1)
 > **Reference**: .omo/audit/2026-08-06-gap2-prediction-vs-actual-loop.md §5 建議 A 範圍
-> **Phase**: A (Audit) + B (Plan) 完成, C 實作進行中
+> **Phase**: A (Audit) + B (Plan) + C (Implement) + D (Review) 完成, 等待 merge
 > **2026-08-07 盤查更新**: 驗證投資人呈現面 — `shared_web/static/js/pages/home.js:101-112` 首頁「未來 5 日錢潮預測」區塊 + `home.js:391-411` renderPredictionsCard 渲染 date/direction/confidence/distribution/driving_events, **無命中率**; `internal/eventdriven/types.go:88` `PredictionReport` 無 `hit`/`historical_hit_rate` 欄位。`/api/dashboard/forecast-vs-reality` (pipeline/handlers.go:33) 是 admin 個股層預測 (SymbolPredictions, is_synthetic replay), 非錢潮層。C07 day-evaluator 命中率是 placeholder (main.go:249 明寫)。**結論**: 投資人唯一可見預測零命中率, 違反 §9 誠實聲明; 需資料層 (B01-B03) + 閉環 (B04-B05) + 呈現端 (B08-B09) 一次到位。
 > **Branch**: `feat/20260806-gap2-eventdriven-actual` (worktree: `atlas-gap2-eventdriven-actual`)
 > **Date**: 2026-08-07
@@ -79,8 +79,16 @@
 ### Phase D — Close out
 - [x] `make ci-gate` 通過 (需 commit 後才全綠,見下)
 - [x] 全部受影響 package test 通過 (ledger / eventdriven / scheduler)
-- [ ] commit + push + PR
-- [ ] ci-full 通過後 merge
+- [x] commit + push + PR #1484 建立
+- [x] PR review (4 reviewers) — 3 個 P1 已修 (production writer F1 / LoadPrevDayActual 日期錯位 F2 / neutral-actual 誤判 F3) + P2/P3 修正
+- [ ] ci-full 通過後 merge (fubonproxy flaky 為 pre-existing, 非本 PR)
+
+**PR review 修正 (2026-08-07, 4 reviewers 並行)**:
+- **F1 (P1)**: production 無 prediction writer — `AppendPrediction` 唯一 call site 在未 wire 的 registerStage3AlertTasks。修: `HandlePrediction` 加 `persistTodayPrediction` (每日 once via HasPredictionOn), adapter 實作 AppendPrediction。
+- **F2 (P1)**: `LoadPrevDayActual` 用 `History(beforeDate=yesterday)` 錯一天 (附上前一交易日 actual)。修: `beforeDate=today` (TradingDate < today = 前一個交易日 = 預測當日)。
+- **F3 (P1→P3)**: `ActualSign` 有 omitempty, neutral actual (0.0) JSON 缺席 → handler 用 `ActualSign==0` 判斷未 reconcile 誤判。修: projection 加 `ActualCapturedAt`, 以 nil 判斷; 新增 reconciled-neutral-actual test。
+- **F4 (P2)**: `window_days` 誤導 (60 records ≈ 60 交易日, 非 60 天)。修: 改名 `window_records`, 前端標「近 N 筆預測」。
+- **P2/P3 其餘**: 跨午夜 Taipei-date boundary test; UpdateActual 更新所有同日 records; re-update idempotent test; unreconciled nil-after-reload test; docs 措辭修正; manifest 狀態行。
 
 **Phase C 期間發現並修正的真相**:
 1. `NewJSONLEventFlowPredictionStore` production 從未建立 — 原 audit「Predictor.Predict() 寫入 store」是錯的 (store nil, Append 是 no-op)。本 PR wire 進 main。
@@ -109,7 +117,7 @@
 
 ## 5. Session-end state
 
-- **Done**: Phase A (audit) + Phase B (plan) 完成, manifest 寫好, 等 user 確認
-- **Next**: 跑 `make ci-gate` (確認 worktree 環境健康) → 開始 Phase C B01-B03
-- **未做**: 任何 code 變更
-- **依賴**: user 對 §1 design 決策確認 (特別是 14:30 時間點)
+- **Done**: Phase A (audit) + B (plan) + C (implement) + D (review 修正) 全部完成
+- **產出**: PR #1484 (18 files +862), 含 production writer (F1) / reconciler (14:30) / 命中率呈現 (B08-B09) / 12+ 新 test
+- **未做**: ci-full 全綠 (fubonproxy flaky pre-existing, 非本 PR); merge
+- **依賴**: user review PR #1484 + #1486 (Gap 3)

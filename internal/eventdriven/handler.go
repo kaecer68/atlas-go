@@ -19,20 +19,34 @@ import (
 const PredictionCacheTTL = 60 * time.Second
 
 // PredictionHistoryStore is the subset of ledger.EventFlowPredictionStore
-// the handler needs to surface a realized hit rate. Defined locally so the
-// eventdriven package stays decoupled from ledger (mirrors the predictor's
-// dependency-cycle-avoidance comment in predictor.go — ledger imports
-// narrative, narrative imports eventdriven).
+// the handler needs to (a) persist each day's prediction and (b) surface a
+// realized hit rate. Defined locally so the eventdriven package stays
+// decoupled from ledger (mirrors the predictor's dependency-cycle-avoidance
+// comment in predictor.go — ledger imports narrative, narrative imports
+// eventdriven).
 type PredictionHistoryStore interface {
+	// AppendPrediction persists a prediction record (the production writer
+	// for the ledger — see F1).
+	AppendPrediction(rec PredictionRecord) error
+	// HasPredictionOn reports whether a prediction already exists for the
+	// Taipei calendar date of the given time. Used to append at most once
+	// per day even when /api/events/prediction is hit many times.
+	HasPredictionOn(t time.Time) (bool, error)
+	// LoadRecentPredictions returns the most recent up-to-limit records.
 	LoadRecentPredictions(limit int) ([]PredictionRecord, error)
 }
 
-// PredictionRecord is the minimal projection of a stored prediction that the
-// hit-rate computation consumes: the predicted direction sign and the
-// T+1-reconciled actual sign (0 = not yet reconciled).
+// PredictionRecord is the projection of a stored prediction used by the
+// handler: PredictedAt is the capture timestamp (day key), DirectionSign the
+// predicted flow sign, ActualSign the T+1-reconciled sign (meaningful only
+// when ActualCapturedAt != nil), and ActualCapturedAt the reconcile marker
+// (nil = not yet reconciled — do NOT infer from ActualSign==0, since a
+// realized neutral flow legitimately reconciles to 0.0).
 type PredictionRecord struct {
-	DirectionSign float64
-	ActualSign    float64
+	PredictedAt      time.Time
+	DirectionSign    float64
+	ActualSign       float64
+	ActualCapturedAt *time.Time
 }
 
 // Handler serves event-driven prediction endpoints.
@@ -101,12 +115,56 @@ func (h *Handler) SetPredictionStore(ps PredictionHistoryStore) {
 // days to reach MinHitSamples.
 const hitRateWindow = 60
 
+// persistTodayPrediction appends the day-1 prediction to the ledger at most
+// once per Taipei calendar day. Errors are logged but never fail the HTTP
+// response — a write failure degrades the hit-rate feature, not the forecast
+// itself.
+func (h *Handler) persistTodayPrediction(report PredictionReport) {
+	if h.predictionStore == nil {
+		return
+	}
+	if len(report.Predictions) == 0 {
+		return
+	}
+	day1 := report.Predictions[0]
+	exists, err := h.predictionStore.HasPredictionOn(day1.Date)
+	if err != nil {
+		logging.Warn("eventdriven", "prediction_persist_check_failed", logging.Err(err))
+		return
+	}
+	if exists {
+		return // already appended today
+	}
+	if err := h.predictionStore.AppendPrediction(PredictionRecord{
+		PredictedAt:   day1.Date,
+		DirectionSign: eventFlowDirectionSign(day1.Direction, day1.Confidence),
+	}); err != nil {
+		logging.Warn("eventdriven", "prediction_persist_failed", logging.Err(err))
+	}
+}
+
+// eventFlowDirectionSign encodes a capital-flow direction as a signed
+// magnitude, mirroring ledger.DirectionSign ("inflow" → +confidence,
+// "outflow" → −confidence, anything else → 0) without importing ledger.
+func eventFlowDirectionSign(direction string, confidence float64) float64 {
+	switch direction {
+	case "inflow":
+		return confidence
+	case "outflow":
+		return -confidence
+	default:
+		return 0
+	}
+}
+
 // computeHistoricalHitRate reads the recent hitRateWindow predictions from
-// the store, keeps those with a reconciled actual (ActualSign != 0), and
-// counts directional hits: predicted sign and actual sign must agree in sign
-// (both positive = inflow hit, both negative = outflow hit; neutral
-// predictions with a non-zero actual count as a miss). Returns nil when the
-// store is unwired or fewer than MinHitSamples are reconciled.
+// the store, keeps those with a reconciled actual (ActualCapturedAt != nil —
+// never ActualSign != 0, since a realized neutral flow reconciles to 0.0),
+// and counts directional hits: predicted sign and actual sign must agree in
+// sign (both positive = inflow hit, both negative = outflow hit; a neutral
+// prediction with a non-zero actual counts as a miss). Returns nil when the
+// store is unwired or no records are available; below MinHitSamples it
+// returns a Calibrated=false struct ("校準中") rather than nil.
 func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 	if h.predictionStore == nil {
 		return nil
@@ -117,7 +175,7 @@ func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 	}
 	samples, hits := 0, 0
 	for _, r := range records {
-		if r.ActualSign == 0 {
+		if r.ActualCapturedAt == nil {
 			continue // not yet T+1-reconciled
 		}
 		samples++
@@ -126,14 +184,14 @@ func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 		}
 	}
 	if samples == 0 {
-		return &HistoricalHitRate{WindowDays: hitRateWindow, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: "校準中（樣本 0/30）"}
+		return &HistoricalHitRate{WindowRecords: hitRateWindow, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: fmt.Sprintf("校準中（樣本 0/%d）", MinHitSamples)}
 	}
 	hr := float64(hits) / float64(samples)
 	out := &HistoricalHitRate{
-		WindowDays: hitRateWindow,
-		Samples:    samples,
-		Hits:       hits,
-		HitRate:    hr,
+		WindowRecords: hitRateWindow,
+		Samples:       samples,
+		Hits:          hits,
+		HitRate:       hr,
 	}
 	if samples < MinHitSamples {
 		out.Calibrated = false
@@ -268,9 +326,15 @@ func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 
 	report := h.predictor.Predict(now)
 
+	// Persist today's prediction to the ledger (the production writer —
+	// F1). At most once per Taipei day: check-then-append guards against
+	// duplicate rows when /api/events/prediction is hit many times. Day-1
+	// prediction (Predictions[0]) is what T+1 reconciler will judge.
+	h.persistTodayPrediction(report)
+
 	// Attach the realized hit rate from the prediction store (T+1-reconciled
-	// history). Window is hitRateWindow (60) — bounded read, spans enough
-	// trading days to reach MinHitSamples.
+	// history). Window is hitRateWindow (60 records ≈ 60 trading days) —
+	// bounded read, spans enough trading days to reach MinHitSamples.
 	report.HistoricalHitRate = h.computeHistoricalHitRate()
 
 	h.cacheMu.Lock()

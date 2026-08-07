@@ -113,11 +113,14 @@ type PredictionReport struct {
 // HistoricalHitRate summarizes realized prediction accuracy over a window.
 // Hits compare the predicted direction sign against the reconciled actual
 // sign (same-unit, §6). Calibrated is false until MinHitSamples are met.
+// WindowRecords is the number of recent prediction records read (one per
+// trading day ≈ 60 trading days, NOT 60 calendar days) — frontend must
+// label it as a record span, not a day span, to stay honest (§9).
 type HistoricalHitRate struct {
-	WindowDays int     `json:"window_days"`
-	Samples    int     `json:"samples"`
-	Hits       int     `json:"hits"`
-	HitRate    float64 `json:"hit_rate"` // 0..1; 0 when Samples==0
-	Calibrated bool    `json:"calibrated"`
-	Reason     string  `json:"reason,omitempty"`
+	WindowRecords int     `json:"window_records"`
+	Samples       int     `json:"samples"`
+	Hits          int     `json:"hits"`
+	HitRate       float64 `json:"hit_rate"` // 0..1; 0 when Samples==0
+	Calibrated    bool    `json:"calibrated"`
+	Reason        string  `json:"reason,omitempty"`
 }

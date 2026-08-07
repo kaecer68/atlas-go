@@ -1707,7 +1707,7 @@ export interface HeatmapEntry {
 }
 
 export interface HistoricalHitRate {
-  window_days: number;
+  window_records: number;
   samples: number;
   hits: number;
   hit_rate: number;

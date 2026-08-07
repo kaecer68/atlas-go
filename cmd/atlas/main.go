@@ -81,9 +81,36 @@ import (
 
 // predictionHistoryAdapter bridges ledger.EventFlowPredictionStore to the
 // local eventdriven.PredictionHistoryStore interface so the prediction
-// handler can compute a realized hit rate without importing ledger.
+// handler can persist predictions and compute a realized hit rate without
+// importing ledger.
 type predictionHistoryAdapter struct {
 	inner ledger.EventFlowPredictionStore
+}
+
+func (a *predictionHistoryAdapter) AppendPrediction(rec eventdriven.PredictionRecord) error {
+	if a == nil || a.inner == nil {
+		return nil
+	}
+	return a.inner.AppendPrediction(ledger.EventFlowPredictionRecord{
+		PredictedAt:   rec.PredictedAt,
+		DirectionSign: rec.DirectionSign,
+		Confidence:    abs(rec.DirectionSign),
+		Direction:     directionFromSign(rec.DirectionSign),
+	})
+}
+
+func (a *predictionHistoryAdapter) HasPredictionOn(t time.Time) (bool, error) {
+	if a == nil || a.inner == nil {
+		return false, nil
+	}
+	_, err := a.inner.LoadByDate(t)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, ledger.ErrPredictionNotFound) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (a *predictionHistoryAdapter) LoadRecentPredictions(limit int) ([]eventdriven.PredictionRecord, error) {
@@ -97,11 +124,31 @@ func (a *predictionHistoryAdapter) LoadRecentPredictions(limit int) ([]eventdriv
 	out := make([]eventdriven.PredictionRecord, len(rows))
 	for i, r := range rows {
 		out[i] = eventdriven.PredictionRecord{
-			DirectionSign: r.DirectionSign,
-			ActualSign:    r.ActualSign,
+			PredictedAt:      r.PredictedAt,
+			DirectionSign:    r.DirectionSign,
+			ActualSign:       r.ActualSign,
+			ActualCapturedAt: r.ActualCapturedAt,
 		}
 	}
 	return out, nil
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func directionFromSign(sign float64) string {
+	switch {
+	case sign > 0:
+		return "inflow"
+	case sign < 0:
+		return "outflow"
+	default:
+		return "neutral"
+	}
 }
 
 // scanStoreAdapter bridges ledger.DetectorScanStore to the local

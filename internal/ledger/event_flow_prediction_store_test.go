@@ -335,6 +335,113 @@ func TestJSONLEventFlowPredictionStore_LoadByDateRoundTrip(t *testing.T) {
 	}
 }
 
+// TestJSONLEventFlowPredictionStore_TaipeiDateAcrossUTCMidnight guards the
+// samePredictionDate contract: records are matched by their Taipei calendar
+// date, so a record captured at 2026-08-05T20:00:00Z (== 2026-08-06 04:00
+// Taipei) must be found by LoadByDate(2026-08-06) and must NOT match
+// 2026-08-05 — the exact cross-midnight boundary the T+1 reconciler depends
+// on (reconciler runs 14:30 Taipei, prediction captured 13:45 Taipei).
+func TestJSONLEventFlowPredictionStore_TaipeiDateAcrossUTCMidnight(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+
+	// 2026-08-05T20:00Z == 2026-08-06 04:00 Taipei — Taipei date is 8/6.
+	predictedAt := time.Date(2026, 8, 5, 20, 0, 0, 0, time.UTC)
+	if err := store.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	// Must match Taipei 8/6 (UTC 2026-08-06T00:00Z is within Taipei 8/6).
+	got, err := store.LoadByDate(time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("LoadByDate(Taipei 8/6): %v", err)
+	}
+	if got.PredictedAt.Unix() != predictedAt.Unix() {
+		t.Errorf("expected record %v, got %v", predictedAt, got.PredictedAt)
+	}
+
+	// Must NOT match Taipei 8/5 — the UTC date differs from Taipei date.
+	if _, err := store.LoadByDate(time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)); err != ErrPredictionNotFound {
+		t.Fatalf("LoadByDate(Taipei 8/5) = %v, want ErrPredictionNotFound (Taipei date 8/6)", err)
+	}
+	// UpdateActual must also target the Taipei 8/6 record.
+	if err := store.UpdateActual(time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC), -0.4, "twse_t86"); err != nil {
+		t.Fatalf("UpdateActual(Taipei 8/6): %v", err)
+	}
+	got2, _ := store.LoadByDate(predictedAt)
+	if got2.ActualSign != -0.4 {
+		t.Fatalf("reconciled ActualSign = %v, want -0.4", got2.ActualSign)
+	}
+}
+
+// TestJSONLEventFlowPredictionStore_UpdateActualIdempotent guards that a
+// second UpdateActual for the same date overwrites in place and does NOT
+// duplicate the record (append is daily-once via handler, but a retry of the
+// reconciler must stay idempotent).
+func TestJSONLEventFlowPredictionStore_UpdateActualIdempotent(t *testing.T) {
+	store := NewJSONLEventFlowPredictionStore(t.TempDir())
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+	if err := store.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	if err := store.UpdateActual(predictedAt, -0.4, "twse_t86"); err != nil {
+		t.Fatalf("UpdateActual #1: %v", err)
+	}
+	if err := store.UpdateActual(predictedAt, 0.3, "twse_t86"); err != nil {
+		t.Fatalf("UpdateActual #2: %v", err)
+	}
+
+	records, err := store.LoadRecentPredictions(10)
+	if err != nil {
+		t.Fatalf("LoadRecentPredictions: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record after re-update, got %d", len(records))
+	}
+	if records[0].ActualSign != 0.3 {
+		t.Fatalf("ActualSign = %v after re-update, want 0.3 (overwrite in place)", records[0].ActualSign)
+	}
+}
+
+// TestJSONLEventFlowPredictionStore_UnreconciledNilAfterReload guards the
+// pointer distinction: an unreconciled record reloads with ActualCapturedAt
+// == nil (JSON omits it), never a zero timestamp.
+func TestJSONLEventFlowPredictionStore_UnreconciledNilAfterReload(t *testing.T) {
+	baseDir := t.TempDir()
+	s1 := NewJSONLEventFlowPredictionStore(baseDir)
+	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)
+	if err := s1.AppendPrediction(EventFlowPredictionRecord{
+		PredictedAt:   predictedAt,
+		DirectionSign: 0.6,
+		Confidence:    0.6,
+		Direction:     "inflow",
+	}); err != nil {
+		t.Fatalf("AppendPrediction: %v", err)
+	}
+
+	s2 := NewJSONLEventFlowPredictionStore(baseDir)
+	got, err := s2.LoadByDate(predictedAt)
+	if err != nil {
+		t.Fatalf("LoadByDate: %v", err)
+	}
+	if got.ActualCapturedAt != nil {
+		t.Fatalf("unreconciled ActualCapturedAt = %v, want nil", got.ActualCapturedAt)
+	}
+	if got.ActualSign != 0 || got.ActualSource != "" {
+		t.Fatalf("unreconciled record should have zero actual fields, got sign=%v source=%q", got.ActualSign, got.ActualSource)
+	}
+}
+
 func TestJSONLEventFlowPredictionStore_ActualPersistsAcrossInstances(t *testing.T) {
 	baseDir := t.TempDir()
 	predictedAt := time.Date(2026, 8, 6, 5, 45, 0, 0, time.UTC)

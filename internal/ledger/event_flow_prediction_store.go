@@ -51,8 +51,10 @@ type EventFlowPredictionStore interface {
 	// UpdateActual fills in the realized T+1 outcome for the prediction made
 	// at predictedAt. No-op with error when no matching prediction exists.
 	UpdateActual(predictedAt time.Time, actualSign float64, source string) error
-	// LoadByDate returns the prediction captured at date (T0 midnight UTC).
-	// Returns ErrPredictionNotFound when no record matches that timestamp.
+	// LoadByDate returns the prediction captured on the Taipei calendar date
+	// of the passed time (any time-of-day works — the date component in
+	// Asia/Taipei is the match key, NOT the UTC date). Returns
+	// ErrPredictionNotFound when no record matches that date.
 	LoadByDate(date time.Time) (EventFlowPredictionRecord, error)
 }
 
@@ -186,7 +188,7 @@ func directionSign(direction string, confidence float64) float64 {
 // prediction record matches the requested date.
 var ErrPredictionNotFound = errors.New("ledger: prediction not found")
 
-// loadByDateMatches reports whether the record's PredictedAt corresponds to
+// samePredictionDate reports whether the record's PredictedAt corresponds to
 // the given calendar date. Predictions are captured around market close
 // (13:45 Taipei) so comparing on the date component in Asia/Taipei is the
 // stable key; timestamps stored in UTC are converted back for comparison.
@@ -210,16 +212,18 @@ func (s *JSONLEventFlowPredictionStore) UpdateActual(predictedAt time.Time, actu
 		return fmt.Errorf("update actual read: %w", err)
 	}
 	updated := false
+	now := time.Now().UTC()
+	// Update every record on the same Taipei date — if a duplicate prediction
+	// exists (retry/restart double-append), both get reconciled rather than
+	// silently dropping one from the hit-rate sample (P3).
 	for i := range records {
 		if !samePredictionDate(records[i], predictedAt) {
 			continue
 		}
 		records[i].ActualSign = actualSign
 		records[i].ActualSource = source
-		now := time.Now().UTC()
 		records[i].ActualCapturedAt = &now
 		updated = true
-		break
 	}
 	if !updated {
 		return ErrPredictionNotFound

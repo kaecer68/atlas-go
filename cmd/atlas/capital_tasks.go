@@ -287,7 +287,13 @@ func registerCapitalTasks(d capitalDeps) {
 					return rec, true
 				},
 				LoadPrevDayActual: func() (float64, bool) {
-					beforeDate := time.Now().In(taipeiLocation()).AddDate(0, 0, -1).Format("2006-01-02")
+					// History returns samples with TradingDate strictly < beforeDate.
+					// Reconciling yesterday's prediction (T-1) needs the actual for
+					// T-1, which is the latest sample strictly before TODAY (not
+					// before yesterday — that would attach the trading day before
+					// the prediction's day). Example: Tuesday 14:30, prediction was
+					// Monday → History(beforeDate=Tuesday) returns Monday's actual.
+					beforeDate := time.Now().In(taipeiLocation()).Format("2006-01-02")
 					samples, err := d.capitalFlowStore.History(context.Background(), capitalflow.ForceForeign, beforeDate, 1)
 					if err != nil || len(samples) == 0 {
 						return 0, false
