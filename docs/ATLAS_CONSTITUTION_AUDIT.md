@@ -313,10 +313,10 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 
 | # | 項目 | v1.0 | v1.1 | 對應 MCP 工具 |
 |---|------|------|------|------|
-| M1 | 時期判斷 MCP 工具公開 | ⬜ | ⚠️ partial | `macro_get_snapshot_latest`、`macro_get_snapshot_history`、`macro_get_stress_index_current` 對外暴露 7 時期結構化欄位，但**沒有獨立的 PeriodDetector.MCP**（最強寫死的 `period_detector.go` 呼叫路徑） |
+| M1 | 時期判斷 MCP 工具公開 | ⬜ | ✅ 已覆蓋 | `macro_get_snapshot_latest.current_period` + `current_period_name_zh` 已公開七時期欄位；#1488 註記不重複實作獨立 PeriodDetector 工具（避免 API 冗餘） |
 | M2 | 資金流品質分數 MCP 工具公開 | ⬜ | ✅ 已實現 | `capital_flow_summary`、`capital_flow_daily`、`macro_get_capital_flow_latest` 對外暴露 QualityScore、Z-score、force 名稱 |
 | M3 | 因果鏈 tracing MCP 工具公開 | ⬜ | ✅ 已實現 | `trace_get_decision_chain`、`trace_get_reasoning`、`trace_get_sim_latest`、`narrative_get_chains` 等 |
-| M4 | 策略適用時期 MCP 工具公開 | ⬜ | ⚠️ partial | `get_recommendations`、`strategy_list_active`、`strategy_ranker`、`strategy_get_layers` 間接可用；**`GetApplicableStrategies(regime)` 未獨立公開** |
+| M4 | 策略適用時期 MCP 工具公開 | ⬜ | ✅ 已實現 | `strategy_for_period` 工具（PR #1488）：輸入 market period ID，回傳 allowed strategies + brief（category/priority）；讀 `configs/methodology_rules.yaml` 同源 MethodologyAdvisor |
 | M5 | 壓力指數元件 MCP 工具公開 | ⬜ | ✅ 已實現 | `taiwan_stress_index`、`macro_get_stress_index_current`、`narrative_stress_index_thresholds` |
 | M6 | 審計狀態 MCP 工具公開 | ⬜ | ✅ 已實現 | `audit_state` 工具（PR #1482）：回傳 §附錄 D 22 項 + §附錄 F 14 行 + 統計的結構化快照，agent 可 self-audit 憲章對齊狀態 |
 
@@ -330,25 +330,25 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 
 ### v1.1 統計
 
-| 群組 | v1.0 ⬜ | v1.1a ⬜ | ✅ | ⚠️ partial |
+| 群組 | v1.0 ⬜ | v1.1b ⬜ | ✅ | ⚠️ partial |
 |------|--------|---------|----|-----------|
 | F1–F5 | 5 | 4 (F1/F2/F3/F5) | 0 | 1 (F4 升級為主要方案) |
-| M1–M6 | 6 | 0 | 5 (M2/M3/M5/M6) | 1 (M1) |
+| M1–M6 | 6 | 0 | 6 (M1/M2/M3/M4/M5/M6) | 0 |
 | X1–X3 | 3 | 0 | 2 (X1/X3) | 1 (X2) |
-| **總計** | **14** | **4** | **7** | **3** |
+| **總計** | **14** | **4** | **8** | **2** |
 
-> v1.1a ⬜ = 4 + 0 + 0 = 4；⚠️ partial = 1 + 1 + 1 = 3；✅ = 0 + 5 + 2 = 7。
-> v1.1 統計（8/7 上午）：⬜ 5 / ✅ 3 / ⚠️ 6 → v1.1a（8/7 晚，PR #1482 + 本 PR）：⬜ 4 / ✅ 7 / ⚠️ 3。
-> **M1 為唯一仍 partial 的 MCP 項目；X2 為唯一仍 partial 的強制機制；F1-F5 全數仍待啟動（DeepSeek 覆核）。**
+> v1.1b ⬜ = 4 + 0 + 0 = 4；⚠️ partial = 1 + 0 + 1 = 2；✅ = 0 + 6 + 2 = 8。
+> v1.1（8/7 上午）：⬜5/✅3/⚠️6 → v1.1a（PR #1482 + #1487）：⬜4/✅7/⚠️3 → v1.1b（PR #1488，M4 完成）：⬜4/✅8/⚠️2。
+> **M1 由 `macro_get_snapshot_latest.current_period` 覆蓋（#1488 註記）；M2/M3/M4/M5/M6 均已完成。剩餘：X2（PR template 強制）為唯一 partial；F1-F5 全數仍待啟動（DeepSeek 覆核）。**
 
 
-1. **已完成**：X1 已在 ci-gate 強制（#1423 提速後秒級可跑）；M6 已實作 `audit_state` 工具（#1482）。
-2. **下個 sprint**：實作 M1 (`period_detector_mcp`) — 把 `PeriodDetector.DetectPeriod()` 透過 MCP 直接公開，回傳七時期 + 三態 + RiskLevel。
-3. **可選**：X2（PR template 強制更新追蹤表）與獨立 nightly X3 job。
+1. **已完成**：X1 在 ci-gate 強制（#1423）；M6 `audit_state`（#1482）；M4 `strategy_for_period`（#1488）；M1 由 snapshot 欄位覆蓋。
+2. **下個 sprint**：X2（PR template 強制更新追蹤表）— 唯一剩餘 partial 的強制機制。
+3. **可選**：獨立 nightly X3 job（目前 pre-push drift scan 已覆蓋）。
 4. **2026-Q3 wave**：啟動 F1–F4 DeepSeek 覆核；F5 仍待 T27 選股層策略庫。
 
 ---
 
-> **v1.1a 最後更新**：2026-08-07 晚間，commit `86732ff8`（PR #1482）後
-> **v1.1a 變更**：§附錄 F 狀態精確化 — M6 ✅（#1482）、X1 ✅（ci-gate 強制）、M2 ✅、X3 ✅（pre-push drift scan）；統計 ⬜5/✅3/⚠️6 → ⬜4/✅7/⚠️3
+> **v1.1b 最後更新**：2026-08-07 深夜，commit `9d5cd0cf`（PR #1488）後
+> **v1.1b 變更**：M4 ✅（#1488 `strategy_for_period`）、M1 ✅（snapshot 欄位覆蓋）；統計 ⬜4/✅8/⚠️2
 > **下一次審計 (v1.2)** 預計在 F1–F4 啟動後
