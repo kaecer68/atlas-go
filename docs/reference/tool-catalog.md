@@ -1,6 +1,6 @@
 # atlas-mcp Tool Catalog
 
-> **121 tools**（預設啟用；sampling/elicitation feature-gated 全開時 121+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **119 tools**（預設啟用；sampling/elicitation feature-gated 全開時 119+）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
@@ -192,16 +192,15 @@
 | `backtest_status` | 回測執行狀態摘要（最後一次自動回測日期與 portfolio 值）|
 | `backtest_signals` | 當前 auto-backtest 訊號（active_signals、VaR、Sharpe、drawdown）|
 
-### Industry Extension（5 個 — PR 2 新增）
+### Industry Extension（3 個 — PR 2 新增）
 | Tool | 用途 |
 |------|------|
-| `calendar_events` | ⚠️ **DEPRECATED**: 使用 `event_calendar` 替代。14 天事件日曆（ETF rebalances、MSCI、營收、股東會、window dressing、holiday）|
 | `sector_allocation_plan` | 產業配置計畫（base_weight、adjusted_weight、derivation_factors）|
 | `channel_health` | 通道健康（channel_id、status、updated_at）|
-| `taiwan_stress_index` | 台灣壓力指數（score、regime、components）|
 | `risk_exposure` | 投資組合風險敞口（VaR/CVaR、sector/factor/concentration breakdown）|
 
-> 這 5 個 tool 提供 MCP 對 frontend `industry.js`、`pipeline.js`、`risk.js` 等頁面所需資料的鏡像存取。
+> 這 3 個 tool 提供 MCP 對 frontend `industry.js`、`pipeline.js`、`risk.js` 等頁面所需資料的鏡像存取。
+> 註：`calendar_events`（deprecated）與 `taiwan_stress_index`（與 `macro_get_stress_index_current` 重複）已於 2026-08-07 移除。
 
 ### Sector Canonical（2 個 — FU-7 Phase F 新增）
 | Tool | 用途 |
