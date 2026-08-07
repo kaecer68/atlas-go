@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -474,5 +475,249 @@ func TestHandleChips_NoFundamentalsLoadSkipsGuard(t *testing.T) {
 	}
 	if !contains(rec.Body.String(), `"symbol":"2330"`) {
 		t.Fatalf("expected existing chips body shape, got: %s", rec.Body.String())
+	}
+}
+
+// ─── monthly_revenue handler tests ──────────────────────────────────────────
+//
+// These test the /api/stock/monthly_revenue endpoint added 2026-08-07
+// (hermes v4.0 dispatch #1). The handler uses the existing
+// TSMCRevenueProvider via Deps.Revenue — NOT a new provider type. The
+// FinMind HTTP client is replaced with a local httptest server via
+// revenueLocalTransport (defined below) which only intercepts
+// api.finmindtrade.com traffic, mirroring marketdata's rewriteTransport.
+
+type revenueLocalTransport struct {
+	target string
+}
+
+func (t *revenueLocalTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host != "api.finmindtrade.com" {
+		return http.DefaultTransport.RoundTrip(req)
+	}
+	req.URL.Scheme = "http"
+	req.URL.Host = strings.TrimPrefix(t.target, "http://")
+	req.Host = ""
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// TestHandleMonthlyRevenue_TWSEHappyPath verifies the happy path for a
+// TWSE-listed symbol (2330) with explicit year/month query params.
+func TestHandleMonthlyRevenue_TWSEHappyPath(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sym := r.URL.Query().Get("data_id")
+		start := r.URL.Query().Get("start_date")
+		var body string
+		switch {
+		case sym == "2330" && start == "2026-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":400000000000.0,"date":"2026-07-01"}]}`
+		case sym == "2330" && start == "2025-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":300000000000.0,"date":"2025-07-01"}]}`
+		case sym == "2330" && start == "2026-06-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":350000000000.0,"date":"2026-06-01"}]}`
+		default:
+			body = `{"msg":"success","status":200,"data":[]}`
+		}
+		w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	client := marketdata.NewFinMindClient("k")
+	client.SetHTTPClient(&http.Client{Transport: &revenueLocalTransport{target: ts.URL}})
+	rp := marketdata.NewTSMCRevenueProviderWithClient(client)
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Revenue: rp})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/stock/monthly_revenue?symbol=2330&year=2026&month=7", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("2330: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !contains(body, `"symbol":"2330.TW"`) {
+		t.Errorf("2330 body missing symbol: %s", body)
+	}
+	if !contains(body, `"value":400000000000`) {
+		t.Errorf("2330 body missing revenue: %s", body)
+	}
+	// 400 vs 300 → +33.33% YoY.
+	if !contains(body, `"change_pct":33.33333333333333`) && !contains(body, `"change_pct":33.3333`) {
+		t.Errorf("2330 body missing change_pct ≈ 33.33: %s", body)
+	}
+}
+
+// TestHandleMonthlyRevenue_TPEXSymbolBypassesCoverageGuard is the key
+// regression guard: a TPEX-listed symbol (3131 弘塑) is out-of-scope for
+// the other 4 stocktools endpoints (PR #1477 marks it NOT_COVERED via
+// LookupCoverage), but monthly_revenue MUST still return 200 because
+// FinMind TaiwanStockMonthRevenue covers TPEX. The handler intentionally
+// does NOT consult LookupCoverage.
+func TestHandleMonthlyRevenue_TPEXSymbolBypassesCoverageGuard(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sym := r.URL.Query().Get("data_id")
+		start := r.URL.Query().Get("start_date")
+		var body string
+		switch {
+		case sym == "3131" && start == "2026-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":631051000.0,"date":"2026-07-01"}]}`
+		case sym == "3131" && start == "2025-07-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":560000000.0,"date":"2025-07-01"}]}`
+		case sym == "3131" && start == "2026-06-01":
+			body = `{"msg":"success","status":200,"data":[{"revenue":653000000.0,"date":"2026-06-01"}]}`
+		default:
+			body = `{"msg":"success","status":200,"data":[]}`
+		}
+		w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	client := marketdata.NewFinMindClient("k")
+	client.SetHTTPClient(&http.Client{Transport: &revenueLocalTransport{target: ts.URL}})
+	rp := marketdata.NewTSMCRevenueProviderWithClient(client)
+
+	mux := http.NewServeMux()
+	// No Fundamentals provider — confirms the handler doesn't short-circuit
+	// on the coverage guard even when Fundamentals data is loaded.
+	RegisterRoutes(mux, Deps{Revenue: rp})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/stock/monthly_revenue?symbol=3131&year=2026&month=7", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("3131 (TPEX): expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"symbol":"3131.TW"`) {
+		t.Errorf("3131 body missing symbol: %s", rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"value":631051000`) {
+		t.Errorf("3131 body missing revenue: %s", rec.Body.String())
+	}
+	// 631 vs 560 → +12.7% YoY (assert the body actually carries the data,
+	// not a coverage_note).
+	if contains(rec.Body.String(), `"coverage_note"`) {
+		t.Errorf("3131 monthly_revenue must NOT carry coverage_note: %s", rec.Body.String())
+	}
+}
+
+// TestHandleMonthlyRevenue_RejectsEmptySymbol locks in 400 for missing
+// symbol — same contract as the other 4 stocktools endpoints.
+func TestHandleMonthlyRevenue_RejectsEmptySymbol(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Revenue: marketdata.NewTSMCRevenueProvider("k")})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/monthly_revenue", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing symbol, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandleMonthlyRevenue_NoProviderReturns503 — handler must surface
+// 503 when Deps.Revenue is nil so callers can distinguish "service not
+// configured" from "symbol not found".
+func TestHandleMonthlyRevenue_NoProviderReturns503(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{}) // intentionally no Revenue
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/monthly_revenue?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandleMonthlyRevenue_RejectsBadYearMonth verifies the year/month
+// query-parameter validation.
+func TestHandleMonthlyRevenue_RejectsBadYearMonth(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Revenue: marketdata.NewTSMCRevenueProvider("k")})
+
+	cases := []struct {
+		query string
+		want  int
+	}{
+		{"/api/stock/monthly_revenue?symbol=2330&year=abc&month=7", http.StatusBadRequest},
+		{"/api/stock/monthly_revenue?symbol=2330&year=2026&month=0", http.StatusBadRequest},
+		{"/api/stock/monthly_revenue?symbol=2330&year=2026&month=13", http.StatusBadRequest},
+		{"/api/stock/monthly_revenue?symbol=2330&year=1800&month=7", http.StatusBadRequest},
+		{"/api/stock/monthly_revenue?symbol=2330&year=2200&month=7", http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.query, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("%s: expected %d, got %d: %s", tc.query, tc.want, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// fakeMonthlyRevenueProvider is a test double satisfying
+// MonthlyRevenueProvider with a forced QuotaRemaining value. Used to
+// exercise the quota-exhausted 503 path without reaching into
+// marketdata unexported fields.
+type fakeMonthlyRevenueProvider struct {
+	quotaRemaining int
+	hitFetch       bool
+}
+
+func (f *fakeMonthlyRevenueProvider) FetchSnapshotForSymbolAt(_ context.Context, _ string, _, _ int) (marketdata.MacroDataSnapshot, error) {
+	f.hitFetch = true
+	return marketdata.MacroDataSnapshot{}, nil
+}
+
+func (f *fakeMonthlyRevenueProvider) QuotaRemaining() int {
+	return f.quotaRemaining
+}
+
+// TestHandleMonthlyRevenue_QuotaExhaustedReturns503 verifies the fail-soft
+// quota guard: when FinMind has fewer than monthlyRevenueMinQuota calls
+// remaining, the handler returns 503 BEFORE issuing any FinMind request
+// (the fake provider's FetchSnapshotForSymbolAt must NOT be called).
+func TestHandleMonthlyRevenue_QuotaExhaustedReturns503(t *testing.T) {
+	fake := &fakeMonthlyRevenueProvider{quotaRemaining: monthlyRevenueMinQuota - 1}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Revenue: fake})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/stock/monthly_revenue?symbol=3131&year=2026&month=7", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 on quota exhaustion, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if fake.hitFetch {
+		t.Error("handler must NOT issue FinMind request when quota below threshold")
+	}
+	if !contains(rec.Body.String(), "quota") {
+		t.Errorf("503 body should mention quota, got: %s", rec.Body.String())
+	}
+}
+
+// TestHandleMonthlyRevenue_QuotaSufficientReachesProvider verifies that
+// with sufficient quota the handler proceeds to the provider (the 200
+// happy paths above already exercise this with the real provider; this
+// pins the boundary with the fake so the quota guard can't accidentally
+// block a legitimate request).
+func TestHandleMonthlyRevenue_QuotaSufficientReachesProvider(t *testing.T) {
+	fake := &fakeMonthlyRevenueProvider{quotaRemaining: monthlyRevenueMinQuota}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{Revenue: fake})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/stock/monthly_revenue?symbol=3131&year=2026&month=7", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	// fake returns empty snapshot without error → handler returns 200 with
+	// zero-value TSMCRevenue.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with sufficient quota, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !fake.hitFetch {
+		t.Error("handler should reach the provider when quota is sufficient")
 	}
 }

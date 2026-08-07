@@ -3,6 +3,7 @@ package stocktools
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -26,6 +27,44 @@ type Deps struct {
 	Fundamentals *portfolio.FundamentalProvider
 	CapitalFlow  *marketdata.TWSECapitalFlowProvider
 	QuoteStore   ledger.QuoteStore
+	// Revenue is the per-symbol monthly revenue provider. Optional —
+	// when nil, GET /api/stock/monthly_revenue returns 503. Production
+	// injects *marketdata.TSMCRevenueProvider (the same provider used by
+	// the macro channel — it now exposes FetchSnapshotForSymbolAt /
+	// QuotaRemaining; see internal/marketdata/tsmc_revenue_provider.go).
+	// Reusing the existing provider avoids adding a second FinMind
+	// client, preserves the 14400/day QuotaRegistry, and keeps the macro
+	// channel's FetchSnapshot behavior unchanged (regression test in
+	// tsmc_revenue_provider_test.go).
+	//
+	// Declared as an interface (not the concrete type) for testability,
+	// mirroring the existing `TWSEQuote marketdata.Provider` pattern in
+	// this struct — the quota-exhausted 503 path is only reachable via
+	// a fake provider from the stocktools test package.
+	//
+	// Coverage: stocktools Fundamentals-based coverage guard is NOT
+	// consulted for this endpoint (PR #1477 scope is chips/fundamentals/
+	// technical/quote, not monthly_revenue). FinMind's
+	// TaiwanStockMonthRevenue dataset covers TWSE 上市 + TPEX 上櫃 + 興櫃,
+	// so the handler returns 200 + revenue for symbols like 3131 / 3587
+	// / 6640 even though the other 4 stocktools endpoints correctly mark
+	// them as NOT_COVERED. This is an intentional scope exception.
+	Revenue MonthlyRevenueProvider
+}
+
+// MonthlyRevenueProvider is the minimal interface the
+// /api/stock/monthly_revenue handler depends on. *TSMCRevenueProvider
+// satisfies it; tests may inject a fake to exercise the quota-exhausted
+// 503 path (which a real provider cannot reach from outside the
+// marketdata package).
+type MonthlyRevenueProvider interface {
+	// FetchSnapshotForSymbolAt returns the (year, month) revenue reading
+	// for a single symbol as a MacroDataSnapshot whose TSMCRevenue
+	// slot carries that symbol's data.
+	FetchSnapshotForSymbolAt(ctx context.Context, symbol string, year, month int) (marketdata.MacroDataSnapshot, error)
+	// QuotaRemaining returns the number of FinMind API calls remaining
+	// today (0 when no tracker configured).
+	QuotaRemaining() int
 }
 
 // Handler serves per-symbol Taiwan stock endpoints.
@@ -38,7 +77,6 @@ func NewHandler(deps Deps) *Handler {
 	return &Handler{deps: deps}
 }
 
-// RegisterRoutes attaches /api/stock/* routes to mux.
 func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	h := NewHandler(deps)
 	mux.Handle("GET /api/stock/quote", shared.Get(h.HandleQuote))
@@ -47,6 +85,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/technical", shared.Get(h.HandleTechnical))
 	mux.Handle("GET /api/stock/sector-median-pe", shared.Get(h.HandleSectorMedianPE))
 	mux.Handle("GET /api/stock/coverage", shared.Get(h.HandleCoverage))
+	mux.Handle("GET /api/stock/monthly_revenue", shared.Get(h.HandleMonthlyRevenue))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -320,4 +359,105 @@ func rsi(values []float64, n int) float64 {
 	}
 	rs := gains / losses
 	return math.Round((100-100/(1+rs))*100) / 100
+}
+
+// monthlyRevenueMinQuota is the minimum remaining FinMind daily quota
+// required before HandleMonthlyRevenue will attempt a per-symbol lookup.
+// A single FetchSnapshotForSymbol call may issue up to 3 FinMind requests
+// (current month + same month prior year + same month prior month for
+// MoM), so the handler fails-soft at 3 to avoid returning a partial
+// response mid-quota. Tuned against finmindDailyLimit=14400 in
+// internal/marketdata/finmind_client.go:41.
+const monthlyRevenueMinQuota = 3
+
+// HandleMonthlyRevenue returns the most recent published monthly revenue
+// for a single symbol along with YoY% and MoM%. Query parameters:
+//
+//	symbol (required)         — 4–6 digit Taiwan code, e.g. 2330 / 3131 / 6640
+//	year  (optional)          — reporting year, default = most recent closed month
+//	month (optional)          — reporting month 1–12, default = most recent closed month
+//
+// The default (year, month) is computed as "last month" relative to now
+// because TWSE/TPEX publish prior-month revenue around the 10th of the
+// next month.
+//
+// Quota-aware: 503 with explicit error message when the FinMind daily
+// budget is below monthlyRevenueMinQuota remaining. This is fail-soft
+// to prevent the handler from issuing up to 3 calls and partially
+// exhausting the budget (causing later requests to fail with the
+// generic 14400/day exhausted error).
+func (h *Handler) HandleMonthlyRevenue(r *http.Request) (int, any) {
+	if h.deps.Revenue == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "monthly revenue provider not configured",
+		}
+	}
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{
+			"error": "symbol is required",
+		}
+	}
+	// Strip suffix variants the caller may pass (.TW / .TWO) — the
+	// provider's FetchSnapshotForSymbol takes a bare 4–6 digit code.
+	symbol = strings.TrimSuffix(strings.TrimSuffix(symbol, ".TW"), ".TWO")
+
+	// Fail-soft quota check before any FinMind call. The provider's
+	// underlying fetchWithFallback may issue 1–3 FinMind requests
+	// (current + year-ago for YoY, optionally month-ago for MoM).
+	// We require at least monthlyRevenueMinQuota remaining to avoid
+	// running out mid-handler.
+	if remaining := h.deps.Revenue.QuotaRemaining(); remaining < monthlyRevenueMinQuota {
+		return http.StatusServiceUnavailable, map[string]any{
+			"error":              "finmind daily quota nearly exhausted, retry tomorrow",
+			"quota_remaining":    remaining,
+			"quota_min_required": monthlyRevenueMinQuota,
+			"symbol":             symbol,
+		}
+	}
+
+	year, month, err := parseRevenueYearMonth(r, time.Now())
+	if err != nil {
+		return http.StatusBadRequest, map[string]string{"error": err.Error()}
+	}
+	// Use a dedicated 15s context so a slow FinMind response cannot
+	// block the handler beyond the existing stocktools 15s budget
+	// used by chips (handler.go:185). The provider's underlying
+	// fetchWithFallback also has a FinMind 30s client timeout
+	// (finmind_client.go:130) but that's a safety net — 15s aligns
+	// with the stocktools convention.
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	snap, err := h.deps.Revenue.FetchSnapshotForSymbolAt(ctx, symbol, year, month)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error":  err.Error(),
+			"symbol": symbol,
+		}
+	}
+	return http.StatusOK, snap.TSMCRevenue
+}
+
+func parseRevenueYearMonth(r *http.Request, now time.Time) (int, int, error) {
+	yearStr := r.URL.Query().Get("year")
+	monthStr := r.URL.Query().Get("month")
+
+	if yearStr == "" && monthStr == "" {
+		// Default: most recent closed month. If today is in the first
+		// 10 days of a month, TWSE/TPEX may not have published prior
+		// month yet (FinMind may still have it cached from previous
+		// run); callers can pass year=YYYY&month=MM to override.
+		last := now.AddDate(0, -1, 0)
+		return last.Year(), int(last.Month()), nil
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil || year < 1990 || year > 2100 {
+		return 0, 0, fmt.Errorf("invalid year %q (expected 1990-2100)", yearStr)
+	}
+	month, err := strconv.Atoi(monthStr)
+	if err != nil || month < 1 || month > 12 {
+		return 0, 0, fmt.Errorf("invalid month %q (expected 1-12)", monthStr)
+	}
+	return year, month, nil
 }
