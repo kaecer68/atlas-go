@@ -9,7 +9,7 @@ import (
 func registerEventTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "event_calendar",
-		Description: autoDescOr("event_calendar", "Upcoming Taiwan market events calendar (ETF rebalances, MSCI adjustments, revenue announcements, window dressing, holidays). 14-day forward look.  HTTP: GET /api/events/calendar. Alternative: calendar_events, event_flow_prediction."),
+		Description: autoDescOr("event_calendar", "Upcoming Taiwan market events calendar (ETF rebalances, MSCI adjustments, revenue announcements, window dressing, holidays). 14-day forward look.  HTTP: GET /api/events/calendar. Alternative: event_flow_prediction."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleEventCalendar)
 

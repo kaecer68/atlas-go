@@ -144,7 +144,7 @@ var auditSnapshot = ConstitutionAuditState{
 		{ID: "M2", Group: "mcp", Title: "資金流品質分數 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Note: "capital_flow_summary / capital_flow_daily / macro_get_capital_flow_latest 暴露 QualityScore", Related: "capital_flow_summary / capital_flow_daily"},
 		{ID: "M3", Group: "mcp", Title: "因果鏈 tracing MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Related: "trace_get_decision_chain / trace_get_reasoning / trace_get_sim_latest / narrative_get_chains"},
 		{ID: "M4", Group: "mcp", Title: "策略適用時期 MCP 工具公開", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "get_recommendations 間接可用，但 GetApplicableStrategies(regime) 未獨立公開", Related: "get_recommendations / strategy_list_active / strategy_ranker"},
-		{ID: "M5", Group: "mcp", Title: "壓力指數元件 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Related: "taiwan_stress_index / macro_get_stress_index_current / narrative_stress_index_thresholds"},
+		{ID: "M5", Group: "mcp", Title: "壓力指數元件 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Related: "macro_get_stress_index_current / narrative_stress_index_thresholds"},
 		{ID: "M6", Group: "mcp", Title: "審計狀態 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅（本工具）", Note: "audit_state 工具（本 PR 實作）", Related: "audit_state"},
 		// X1-X3 憲章強制執行機制（群組 enforce）
 		{ID: "X1", Group: "enforce", Title: "PR 合併前憲章對齊檢查（CI gate）", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "#1423 提速 25× 後秒級可跑，但尚未強制為 mandatory gate", Related: "make ci-gate / check_constitution.sh"},

@@ -19,10 +19,6 @@ import (
 // All handlers are read-only and return *map[string]any passthrough
 // so the same wire format is preserved end-to-end.
 
-type CalendarEventsOutput struct {
-	Result *map[string]any `json:"result"`
-}
-
 type SectorAllocationPlanOutput struct {
 	Result *map[string]any `json:"result"`
 }
@@ -31,23 +27,8 @@ type ChannelHealthOutput struct {
 	Result *map[string]any `json:"result"`
 }
 
-type TaiwanStressIndexOutput struct {
-	Result *map[string]any `json:"result"`
-}
-
 type RiskExposureOutput struct {
 	Result *map[string]any `json:"result"`
-}
-
-func (s *server) handleCalendarEvents(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, CalendarEventsOutput, error) {
-	var out CalendarEventsOutput
-	// DEPRECATED backend endpoint; now proxied to canonical /api/events/calendar
-	if err := s.withAudit(ctx, "calendar_events", nil, func() error {
-		return s.cli.Get(ctx, "/api/events/calendar", nil, &out.Result)
-	}); err != nil {
-		return nil, CalendarEventsOutput{}, err
-	}
-	return nil, out, nil
 }
 
 func (s *server) handleSectorAllocationPlan(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, SectorAllocationPlanOutput, error) {
@@ -70,16 +51,6 @@ func (s *server) handleChannelHealth(ctx context.Context, _ *mcp.CallToolRequest
 	return nil, out, nil
 }
 
-func (s *server) handleTaiwanStressIndex(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, TaiwanStressIndexOutput, error) {
-	var out TaiwanStressIndexOutput
-	if err := s.withAudit(ctx, "taiwan_stress_index", nil, func() error {
-		return s.cli.Get(ctx, "/api/taiwan/stress-index", nil, &out.Result)
-	}); err != nil {
-		return nil, TaiwanStressIndexOutput{}, err
-	}
-	return nil, out, nil
-}
-
 func (s *server) handleRiskExposure(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, RiskExposureOutput, error) {
 	var out RiskExposureOutput
 	if err := s.withAudit(ctx, "risk_exposure", nil, func() error {
@@ -92,12 +63,6 @@ func (s *server) handleRiskExposure(ctx context.Context, _ *mcp.CallToolRequest,
 
 func registerIndustryExtTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
-		Name:        "calendar_events",
-		Description: autoDescOr("calendar_events", "DEPRECATED: use event_calendar instead. Industry / market calendar events (ETF rebalances, MSCI, revenue, shareholder meetings, window dressing, holidays). 14-day forward window.  HTTP: GET /api/dashboard/calendar-events."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, s.handleCalendarEvents)
-
-	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "sector_allocation_plan",
 		Description: autoDescOr("sector_allocation_plan", "Latest persisted simulation sector-allocation snapshot, including target/current/delta, provenance, fallback status, mutation receipt, and next-session consumption evidence.  HTTP: GET /api/dashboard/sector-allocation-plan. Alternative: industry_sector_list, industry_sector_lookup."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
@@ -108,12 +73,6 @@ func registerIndustryExtTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("channel_health", "Channel-level health summary (channel_id, status, updated_at) for the data ingestion pipeline.  HTTP: GET /api/dashboard/channel-health. Alternative: system_get_data_pipeline, macro_get_ingest_status."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleChannelHealth)
-
-	countedAddTool(mcpSrv, &mcp.Tool{
-		Name:        "taiwan_stress_index",
-		Description: autoDescOr("taiwan_stress_index", "Taiwan market stress index (TRJ narrative) — score, regime, components by source. Use for risk appetite assessment.  HTTP: GET /api/taiwan/stress-index. Alternative: macro_get_stress_index_current, narrative_stress_index_thresholds."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, s.handleTaiwanStressIndex)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "risk_exposure",

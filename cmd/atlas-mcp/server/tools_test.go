@@ -279,10 +279,6 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: 0})
 			return e
 		}, "/api/parameters/snapshots"},
-		{"calendar_events", func(s *server) error {
-			_, _, e := s.handleCalendarEvents(context.Background(), nil, struct{}{})
-			return e
-		}, "/api/events/calendar"}, // redirected to canonical endpoint
 		{"sector_allocation_plan", func(s *server) error {
 			_, _, e := s.handleSectorAllocationPlan(context.Background(), nil, struct{}{})
 			return e
@@ -291,10 +287,6 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 			_, _, e := s.handleChannelHealth(context.Background(), nil, struct{}{})
 			return e
 		}, "/api/dashboard/channel-health"},
-		{"taiwan_stress_index", func(s *server) error {
-			_, _, e := s.handleTaiwanStressIndex(context.Background(), nil, struct{}{})
-			return e
-		}, "/api/taiwan/stress-index"},
 		{"risk_exposure", func(s *server) error {
 			_, _, e := s.handleRiskExposure(context.Background(), nil, struct{}{})
 			return e

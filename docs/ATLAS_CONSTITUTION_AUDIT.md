@@ -317,7 +317,7 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 | M2 | 資金流品質分數 MCP 工具公開 | ⬜ | ✅ 已實現 | `capital_flow_summary`、`capital_flow_daily`、`macro_get_capital_flow_latest` 對外暴露 QualityScore、Z-score、force 名稱 |
 | M3 | 因果鏈 tracing MCP 工具公開 | ⬜ | ✅ 已實現 | `trace_get_decision_chain`、`trace_get_reasoning`、`trace_get_sim_latest`、`narrative_get_chains` 等 |
 | M4 | 策略適用時期 MCP 工具公開 | ⬜ | ✅ 已實現 | `strategy_for_period` 工具（PR #1488）：輸入 market period ID，回傳 allowed strategies + brief（category/priority）；讀 `configs/methodology_rules.yaml` 同源 MethodologyAdvisor |
-| M5 | 壓力指數元件 MCP 工具公開 | ⬜ | ✅ 已實現 | `taiwan_stress_index`、`macro_get_stress_index_current`、`narrative_stress_index_thresholds` |
+| M5 | 壓力指數元件 MCP 工具公開 | ⬜ | ✅ 已實現 | `macro_get_stress_index_current`、`narrative_stress_index_thresholds`（`taiwan_stress_index` 已於 2026-08-07 移除，與前者重複） |
 | M6 | 審計狀態 MCP 工具公開 | ⬜ | ✅ 已實現 | `audit_state` 工具（PR #1482）：回傳 §附錄 D 22 項 + §附錄 F 14 行 + 統計的結構化快照，agent 可 self-audit 憲章對齊狀態 |
 
 ### X1–X3：憲章強制執行機制

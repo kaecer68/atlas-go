@@ -23,13 +23,13 @@ func registerMacroTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_current",
-		Description: autoDescOr("macro_get_stress_index_current", "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.  HTTP: GET /api/narrative/stress-index/current. Alternative: taiwan_stress_index, narrative_stress_index_thresholds."),
+		Description: autoDescOr("macro_get_stress_index_current", "Current Taiwan stress index (TRJ narrative). Use to assess market risk appetite.  HTTP: GET /api/narrative/stress-index/current. Alternative: narrative_stress_index_thresholds."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexCurrent)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "macro_get_stress_index_history",
-		Description: autoDescOr("macro_get_stress_index_history", "Stress index history over the last N days.  HTTP: GET /api/narrative/stress-index/history. Alternative: taiwan_stress_index, regime_get_history."),
+		Description: autoDescOr("macro_get_stress_index_history", "Stress index history over the last N days.  HTTP: GET /api/narrative/stress-index/history. Alternative: regime_get_history."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleMacroGetStressIndexHistory)
 

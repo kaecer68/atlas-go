@@ -70,7 +70,6 @@ var canaryRoutes = map[string]canaryTest{
 	"narrative_stress_index_thresholds": {Path: "/api/narrative/stress-index/thresholds"},
 	"event_calendar":                    {Path: "/api/events/calendar"},
 	"event_flow_prediction":             {Path: "/api/events/prediction"},
-	"calendar_events":                   {Path: "/api/events/calendar"}, // redirected to canonical endpoint
 	"template_detector_status":          {Path: "/api/detector/scan/status"},
 	"risk_get_metrics":                  {Path: "/api/dashboard/risk"},
 	"risk_get_calibration":              {Path: "/api/dashboard/risk-calibration"},
@@ -121,7 +120,6 @@ var canaryRoutes = map[string]canaryTest{
 	"prism_get_training_results":        {Path: "/api/prism/training-results"},
 	"backtest_status":                   {Path: "/api/backtest/status"},
 	"backtest_signals":                  {Path: "/api/backtest/signals"},
-	"taiwan_stress_index":               {Path: "/api/taiwan/stress-index"},
 	"mcp_anomaly_get_recent":            {Path: "/api/mcp/anomalies/recent"},
 	"sector_allocation_plan":            {Path: "/api/dashboard/sector-allocation-plan"},
 	"industry_sector_list":              {Path: "/api/industry/sectors"},
