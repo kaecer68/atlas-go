@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 38 packages
+## E · Evolving（演進中）— 39 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -84,6 +84,7 @@
 | `scheduler` | ML 模型重訓排程 — auto_calibration、auto_rollback、seasonal_task、l2_4_auto_cron、system_health 定時任務 | `Manager`, `Dispatcher` | **v0.0.2.0 新增**：scheduler 為獨立 orchestrator pipeline 步驟，產出供 strategy_evolver 與 prism retrain 消費 |
 | `stress` | 壓力測試場景 — `RunScenario()` | — | **v0.0.2.0 升級**：進入 orchestrator SystemCore live risk evaluation |
 | `subscription` | 使用者訂閱與認證 — SQLite store、JWT auth、3-tier 權限系統、7 天免費試用 | `Store`, `JWTManager`, `ValidateTier` | **v0.0.2.0 升級**：Wave 11 新增；進入 MCP auth + recommender runtime |
+| `userstate` | 使用者行為狀態實體 — signal 已讀/追蹤清單/紀律日誌 (§9 追蹤→紀律 資料模型骨架) | `UserSignalState`, `UserWatchlist`, `UserJournal` | Gap 3 R1 新增 (2026-08-07)；僅實體型別，storage/API 為後續 R2-R4；`UserID` 對齊 `subscription.User.ID` |
 | `tax` | 台灣稅務計算 — `TaiwanTaxCalculator` | `TaiwanTaxCalculator` | 由 sim 使用 |
 | `acceptance` | Acceptance gate pluggable 框架 — `Evaluator`/`Pipeline`/`Registry` 介面，給 `experiment/judge.go` 從 hard-coded switch 漸進遷移（bridge feature flag） | `Evaluator`, `Pipeline`, `Registry`, `FuncEvaluator` | Wave 10 L2.2，evolving |
 | `acceptance/builtin` | 17 個 acceptance gate evaluators 實作 — `ImproveSharpeLike`/`PreserveDownsideProtection`/`NoDrawdownSpike`/`FactorWeightStability`/`RetailSentimentFilter`/`NoMaterialDrawdownDegradation`/`NoConstraintBypass`/`MaintainSharpeLike`/`ReduceConcentrationRisk`/`FactorQuality`/`ReduceFalsePositiveRate`/`MaintainCROAuthority`/`ReduceSectorBlindspots`/`MaintainIndustryCoverage`/`ReduceStyleDrift`/`MaintainMomentumCatch`/`RespectHoldingPeriod` | ... | Wave 10 L2.2，evolving，17/17 gates ported |
