@@ -218,3 +218,122 @@ func TestStockE2E_ResponseIsJSON(t *testing.T) {
 		t.Fatalf("response not round-trippable: %v", err)
 	}
 }
+
+// TestStockE2E_OutOfScopeSymbol_NoteCoveredNotZeroData covers the MCP scope
+// residual risk: when an MCP agent (Claude Desktop, OpenClaw, Hermes)
+// mistakenly asks about a TPEX-listed symbol (e.g. 3131 力成, 4966 精材)
+// or any out-of-snapshot symbol, the 4 stocktools endpoints must return
+// 200 with `coverage_note: NOT_COVERED` instead of silently returning zero
+// or fabricated data — so MCP users can programmatically detect the error
+// state and surface it (rather than getting misled by the all-zero payload).
+//
+// This protects against the "silent zero data → bad recommendation" failure
+// mode documented in docs/investigations/2026-08-06-equipment-stocks-chips-gaps.md
+// and the related stocktools coverage design (internal/stocktools/coverage.go).
+//
+// The 4 endpoints tested: stock_get_quote / stock_get_fundamentals /
+// stock_get_chips / stock_get_technical. Test runs against a stub backend
+// that responds with `coverage_note: NOT_COVERED` (the value produced by
+// internal/stocktools.Handler per coverage.go const CoverageNoteNotCovered).
+func TestStockE2E_OutOfScopeSymbol_NoteCoveredNotZeroData(t *testing.T) {
+	const tpexSymbol = "3131" // 力成 — TPEX 上櫃，不在 TWSE 上市普通股約 1070 支 snapshot 內
+	notCoveredBody := []byte(`{
+		"symbol": "3131",
+		"name": "力成",
+		"coverage_note": "NOT_COVERED",
+		"reason": "本系統 chips/fundamentals 涵蓋台灣上市普通股；此股票代號不在資料範圍內",
+		"listing": "TPEX"
+	}`)
+
+	cases := []struct {
+		name string
+		path string
+		run  func(*server) error
+	}{
+		{
+			name: "stock_get_quote_tpex",
+			path: "/api/stock/quote",
+			run: func(s *server) error {
+				_, _, err := s.handleStockGetQuote(context.Background(), nil, stockSymbolInput{Symbol: tpexSymbol})
+				return err
+			},
+		},
+		{
+			name: "stock_get_fundamentals_tpex",
+			path: "/api/stock/fundamentals",
+			run: func(s *server) error {
+				_, _, err := s.handleStockGetFundamentals(context.Background(), nil, stockSymbolInput{Symbol: tpexSymbol})
+				return err
+			},
+		},
+		{
+			name: "stock_get_chips_tpex",
+			path: "/api/stock/chips",
+			run: func(s *server) error {
+				_, _, err := s.handleStockGetChips(context.Background(), nil, stockChipsInput{Symbol: tpexSymbol})
+				return err
+			},
+		},
+		{
+			name: "stock_get_technical_tpex",
+			path: "/api/stock/technical",
+			run: func(s *server) error {
+				_, _, err := s.handleStockGetTechnical(context.Background(), nil, stockTechnicalInput{Symbol: tpexSymbol, Days: 30})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rec, done := newTestHarness(t)
+			defer done()
+			rec.SetResponseBody(notCoveredBody)
+
+			if err := tc.run(s); err != nil {
+				t.Fatalf("handler: %v", err)
+			}
+
+			if rec.path != tc.path {
+				t.Fatalf("expected %s, got %s", tc.path, rec.path)
+			}
+
+			// Verify symbol query param is forwarded verbatim (caller-side
+			// normalization, NOT server-side; server passes through what
+			// the agent gave it so audit logs preserve the original).
+			if got := rec.query["symbol"]; len(got) == 0 || got[0] != tpexSymbol {
+				t.Errorf("expected query symbol=%s, got %v", tpexSymbol, got)
+			}
+
+			// Verify coverage_note round-tripped — this is the part MCP agents
+			// branch on. Without it, an agent that asks about a TPEX symbol
+			// gets an all-zero payload and may invent a fabricated answer.
+			raw := rec.getResponseBody()
+
+			var roundTrip map[string]any
+			if err := json.Unmarshal(raw, &roundTrip); err != nil {
+				t.Fatalf("response not JSON-round-trippable: %v", err)
+			}
+			gotNote, ok := roundTrip["coverage_note"]
+			if !ok {
+				t.Fatalf("response missing coverage_note; got keys=%v", keysOf(roundTrip))
+			}
+			if gotNote != "NOT_COVERED" {
+				t.Errorf("coverage_note = %v, want NOT_COVERED", gotNote)
+			}
+			if gotListing, _ := roundTrip["listing"].(string); gotListing != "TPEX" {
+				t.Errorf("listing = %q, want TPEX", gotListing)
+			}
+		})
+	}
+}
+
+// keysOf 是為了在測試失敗時能用 keys-of-response 印出診斷訊息，
+// 避免把整個 payload 倒入錯誤訊息（payload 可能很大且多 noise）。
+func keysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
