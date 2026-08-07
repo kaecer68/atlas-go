@@ -11,3 +11,8 @@
 .badge.demo { background: rgba(139,92,246,.15); color: var(--color-info); border: 1px solid rgba(139,92,246,.35); }
 .ghost-agent { opacity: 0.6; }
 .ghost-agent .badge { font-style: italic; }
+
+/* Gap 3-R4: signal state badges (my-signals page) */
+.badge--new       { background: rgba(79,193,255,.15); color: var(--accent); border: 1px solid rgba(79,193,255,.35); }
+.badge--ack       { background: rgba(38,161,123,.18); color: var(--color-success); border: 1px solid rgba(38,161,123,.4); }
+.badge--dismissed { background: rgba(156,163,175,.12); color: var(--muted); border: 1px solid rgba(156,163,175,.25); }

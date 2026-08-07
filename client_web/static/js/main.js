@@ -39,6 +39,7 @@ const SHELL_LOADERS = {
   'stock-quote': () => import('./page-shells/stock-quote.js'),
   'performance-report': () => import('./page-shells/performance-report.js'),
   methodology: () => import('./page-shells/methodology.js'),
+  'my-signals': () => import('./pages/my-signals.js'),
   'errors/404': () => import('./page-shells/errors/404.js')
 };
 const _shellsLoaded = new Set();
@@ -99,7 +100,7 @@ export async function switchPage(id, silent) {
     'decision-chain': '決策鏈',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
-      methodology: '方法論：為什麼'
+      methodology: '方法論：為什麼', 'my-signals': '我的追蹤'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');

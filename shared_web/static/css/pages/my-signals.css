@@ -1,0 +1,10 @@
+/* my-signals page — 「我的追蹤」(Gap 3-R4)
+   Lists per-user signal states with ack/dismiss/reset actions. */
+.ms-list { margin-top: 16px; }
+.signal-table { width: 100%; border-collapse: collapse; }
+.signal-table th,
+.signal-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.signal-table th { font-size: var(--text-xs); color: var(--muted); font-weight: var(--font-medium); }
+.signal-key { font-family: var(--mono, monospace); font-size: 13px; word-break: break-all; }
+.signal-actions { white-space: nowrap; }
+.signal-actions .btn + .btn { margin-left: 8px; }
