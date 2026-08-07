@@ -17,6 +17,7 @@
 //   - Signal keys follow the strategy_techniques signal naming (e.g.
 //     "foreign-3day-inflow") so read-state can join with signal metadata.
 //
-// Maturity: evolving (skeleton — no production consumers yet; API may adjust
-// once R2 storage lands)
+// Maturity: evolving
+// Skeleton — no production consumers yet; API may adjust once R2 storage
+// lands.
 package userstate
