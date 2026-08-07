@@ -5,7 +5,11 @@ const TTL_MS = {
   fundamentals: 24 * 60 * 60 * 1000,
   chips: 24 * 60 * 60 * 1000,
   technical: 5 * 60 * 1000,
-  'sector-median-pe': 60 * 60 * 1000
+  'sector-median-pe': 60 * 60 * 1000,
+  // Monthly revenue is published ~10th of each month; 7-day TTL keeps
+  // the section fresh across the mid-month publish without hammering
+  // the FinMind-backed endpoint (which has a daily quota budget).
+  'monthly-revenue': 7 * 24 * 60 * 60 * 1000
 };
 
 const STORAGE_PREFIX = 'atlas_stock_cache::';
@@ -100,6 +104,22 @@ export async function fetchStockBundle(symbol) {
 
 export async function fetchSectorMedianPE(sector) {
   return fetchCached('sector-median-pe', sector, `/api/stock/sector-median-pe?sector=${encodeURIComponent(sector)}`);
+}
+
+// fetchStockMonthlyRevenue calls GET /api/stock/monthly_revenue?symbol=X
+// (optionally year/month). Returns the most recent published monthly
+// revenue plus YoY% (change_pct) and MoM%. Coverage is broader than the
+// 4 stocktools endpoints: FinMind TaiwanStockMonthRevenue covers TWSE
+// 上市 + TPEX 上櫃 + 興櫃, so TPEX symbols like 3131/3587/6640 return
+// data here even though chips/fundamentals mark them NOT_COVERED.
+// The endpoint 503s when the FinMind daily quota is nearly exhausted
+// (see handler.go monthlyRevenueMinQuota) — the caller treats that as a
+// non-fatal missing section.
+export async function fetchStockMonthlyRevenue(symbol, year, month) {
+  let path = `/api/stock/monthly_revenue?symbol=${encodeURIComponent(symbol)}`;
+  if (year) path += `&year=${encodeURIComponent(year)}`;
+  if (month) path += `&month=${encodeURIComponent(month)}`;
+  return fetchCached('monthly-revenue', symbol, path);
 }
 
 
