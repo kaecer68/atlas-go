@@ -79,6 +79,7 @@
 - [ ] Does not bypass `marketdata.Provider` abstraction
 - [ ] Schema changes registered in `configs/agents.json` (if applicable)
 - [ ] Cross-module traps checked (see `docs/reference/traps.md`)
+- [ ] 方法論變更（methodology_rules.yaml / period config / MacroDataSnapshot 欄位 / capitalflow 評分）→ 已同步 `docs/ATLAS_CONSTITUTION_AUDIT.md` §附錄 F 追蹤表（X2）
 
 ## Pre-merge checklist
 
