@@ -99,14 +99,14 @@ func (s *server) handleAuditState(ctx context.Context, _ *mcp.CallToolRequest, _
 }
 
 // auditSnapshot 是憲章審計追蹤表的 embedded 快照。
-// 資料來源：docs/ATLAS_CONSTITUTION_AUDIT.md（v1.1, 2026-08-07, commit fb25ecca）
+// 資料來源：docs/ATLAS_CONSTITUTION_AUDIT.md（v1.1c, 2026-08-07, commit 9dbfe78d）
 //
 // 更新紀律：修改憲章審計文件時同步更新此處；或在 PR 中跑
 // `go generate ./cmd/atlas-mcp/...` 檢查 drift。
 var auditSnapshot = ConstitutionAuditState{
-	DocVersion: "v1.1",
+	DocVersion: "v1.1c",
 	UpdatedAt:  "2026-08-07",
-	HeadCommit: "fb25ecca",
+	HeadCommit: "9dbfe78d",
 	Source:     "docs/ATLAS_CONSTITUTION_AUDIT.md",
 	AuditItems: []AuditItem{
 		{ID: "A1", Title: "七時期判斷（DetectPeriod）", Level: "P0", Status: AuditStatusDone, PRs: "#1372"},
@@ -134,22 +134,22 @@ var auditSnapshot = ConstitutionAuditState{
 	},
 	Governance: []GovernanceItem{
 		// F1-F5 DeepSeek 方法論覆核（群組 fmx）
-		{ID: "F1", Group: "fmx", Title: "外資雙重動機模型（結構性 vs 投機性分流）", Status: AuditStatusNotStart, Versioned: "⬜ → ⬜", Note: "仍在 backlog；期間無相關 PR"},
-		{ID: "F2", Group: "fmx", Title: "自營商大小分流（大型可納宏觀，小型用 AI 分點）", Status: AuditStatusNotStart, Versioned: "⬜ → ⬜", Note: "同上"},
-		{ID: "F3", Group: "fmx", Title: "投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金）", Status: AuditStatusNotStart, Versioned: "⬜ → ⬜", Note: "同上"},
-		{ID: "F4", Group: "fmx", Title: "公股分點追蹤作為 BK-13 替代方案", Status: AuditStatusPartial, Versioned: "⬜ → 啟動為主要方案", Note: "TWSE CAPTCHA 啟用，F4 由 fallback 升級為主要方案"},
+		{ID: "F1", Group: "fmx", Title: "外資雙重動機模型（結構性 vs 投機性分流）", Status: AuditStatusDone, Versioned: "⬜ → ✅ 已覆核", Note: "ForeignInvestorNet + ForeignDealerNet 欄位已存在；scoreForeign 未消費投機性（gap-analysis 文件化，落地待回測）"},
+		{ID: "F2", Group: "fmx", Title: "自營商大小分流（大型可納宏觀，小型用 AI 分點）", Status: AuditStatusDone, Versioned: "⬜ → ✅ 已覆核", Note: "DealerSelfNet + DealerHedgingNet 欄位已存在；scoreDealer 只用合計（gap-analysis 文件化）"},
+		{ID: "F3", Group: "fmx", Title: "投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金）", Status: AuditStatusDone, Versioned: "⬜ → ✅ 已覆核", Note: "ETFNetSubscription 已有消費者（rsi_tw_calculator）；淨化主動訊號列低優先"},
+		{ID: "F4", Group: "fmx", Title: "公股分點追蹤作為 BK-13 替代方案", Status: AuditStatusDone, Versioned: "⬜ → ✅ 已覆核", Note: "GovernmentNet 已由 scoreGovernment 消費（每日總額）；分點層級待 BK-13/14 資料源"},
 		{ID: "F5", Group: "fmx", Title: "選股層策略庫設計（Phase 4）", Status: AuditStatusNotStart, Versioned: "⬜ → ⬜", Note: "仍待 T27"},
 		// M1-M6 MCP 工具對齊（群組 mcp）
-		{ID: "M1", Group: "mcp", Title: "時期判斷 MCP 工具公開", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "macro_get_snapshot_latest 等已暴露 7 時期欄位，但無獨立 PeriodDetector MCP", Related: "macro_get_snapshot_latest / macro_get_snapshot_history / macro_get_stress_index_current"},
+		{ID: "M1", Group: "mcp", Title: "時期判斷 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅ 已覆蓋", Note: "macro_get_snapshot_latest.current_period + current_period_name_zh 已公開七時期欄位（#1488 註記不重複實作）", Related: "macro_get_snapshot_latest / macro_get_snapshot_history / macro_get_stress_index_current"},
 		{ID: "M2", Group: "mcp", Title: "資金流品質分數 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Note: "capital_flow_summary / capital_flow_daily / macro_get_capital_flow_latest 暴露 QualityScore", Related: "capital_flow_summary / capital_flow_daily"},
 		{ID: "M3", Group: "mcp", Title: "因果鏈 tracing MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Related: "trace_get_decision_chain / trace_get_reasoning / trace_get_sim_latest / narrative_get_chains"},
-		{ID: "M4", Group: "mcp", Title: "策略適用時期 MCP 工具公開", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "get_recommendations 間接可用，但 GetApplicableStrategies(regime) 未獨立公開", Related: "get_recommendations / strategy_list_active / strategy_ranker"},
+		{ID: "M4", Group: "mcp", Title: "策略適用時期 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Note: "strategy_for_period 工具（#1488）讀 methodology_rules.yaml 同源 MethodologyAdvisor", Related: "strategy_for_period / get_recommendations / strategy_list_active"},
 		{ID: "M5", Group: "mcp", Title: "壓力指數元件 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅", Related: "macro_get_stress_index_current / narrative_stress_index_thresholds"},
 		{ID: "M6", Group: "mcp", Title: "審計狀態 MCP 工具公開", Status: AuditStatusDone, Versioned: "⬜ → ✅（本工具）", Note: "audit_state 工具（本 PR 實作）", Related: "audit_state"},
 		// X1-X3 憲章強制執行機制（群組 enforce）
-		{ID: "X1", Group: "enforce", Title: "PR 合併前憲章對齊檢查（CI gate）", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "#1423 提速 25× 後秒級可跑，但尚未強制為 mandatory gate", Related: "make ci-gate / check_constitution.sh"},
-		{ID: "X2", Group: "enforce", Title: "方法論變更強制更新追蹤表", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "#1464 ACI hook soft reminder，未升級為 PR template 強制檢查", Related: "PreToolUse soft reminder"},
-		{ID: "X3", Group: "enforce", Title: "憲章漂移自動警報（nightly scan）", Status: AuditStatusPartial, Versioned: "⬜ → ⚠️ partial", Note: "known-issue badge + traps.md 為手動版；nightly scan 未建", Related: "traps.md / known-issue badge"},
+		{ID: "X1", Group: "enforce", Title: "PR 合併前憲章對齊檢查（CI gate）", Status: AuditStatusDone, Versioned: "⬜ → ✅", Note: "三 check（constitution / methodology_constitution / drift）都在 make ci-gate 與 GitHub constitution.yml", Related: "make ci-gate / check_constitution.sh"},
+		{ID: "X2", Group: "enforce", Title: "方法論變更強制更新追蹤表", Status: AuditStatusDone, Versioned: "⬜ → ✅", Note: "PR template checkbox + ACI hook 擴充（#1496），soft 不 block", Related: "PR template / .agent-hooks/aci-read-prompt.sh"},
+		{ID: "X3", Group: "enforce", Title: "憲章漂移自動警報（nightly scan）", Status: AuditStatusDone, Versioned: "⬜ → ✅（pre-push 形式）", Note: "check_constitution_drift.sh 每次 ci-gate 執行；nightly job 可選", Related: "check_constitution_drift.sh"},
 	},
 	Stats: AuditStats{
 		Total:              22,
@@ -159,8 +159,8 @@ var auditSnapshot = ConstitutionAuditState{
 		Aligned:            2,
 		P0Done:             13,
 		P0Total:            13,
-		GovernanceDone:     3,
-		GovernancePartial:  6,
-		GovernanceNotStart: 5,
+		GovernanceDone:     13,
+		GovernancePartial:  0,
+		GovernanceNotStart: 1,
 	},
 }
