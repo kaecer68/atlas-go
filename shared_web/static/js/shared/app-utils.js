@@ -109,6 +109,10 @@ export async function putJSON(url, body, options) {
   return fetchWithRetry('PUT', url, body, options);
 }
 
+export async function delJSON(url, options) {
+  return fetchWithRetry('DELETE', url, undefined, options);
+}
+
 export function notify(msg, type) { console.log('[' + (type || 'info') + '] ' + msg); }
 
 export { escapeHtml };

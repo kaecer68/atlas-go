@@ -85,6 +85,9 @@
 /* Pages - Methodology (E4) */
 @import url("pages/methodology.css");
 
+/* Pages - My Signals (Gap 3-R4) */
+@import url("pages/my-signals.css");
+
 /* Existing standalone modules (backward compatibility) */
 @import url("components/circuit-breaker.css");
 @import url("components/performance-report.css");

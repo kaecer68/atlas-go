@@ -4,3 +4,23 @@
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }
+
+/* Gap 3-R4: notify-item toast — the #notificationCenter shell now gets
+   real content via services/notify.js (showNotification). */
+.notify-item {
+  background: var(--panel, #fff);
+  color: var(--text, #222);
+  border: 1px solid var(--border, #ddd);
+  border-left: 4px solid var(--color-info, #3b82f6);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+  line-height: 1.5;
+  animation: notifyIn 0.25s ease-out;
+  max-width: 100%;
+}
+.notify-item--success { border-left-color: var(--color-success, #16a34a); }
+.notify-item--error   { border-left-color: var(--color-danger, #dc2626); }
+.notify-item--leaving { opacity: 0; transform: translateX(20px); transition: opacity 0.3s ease, transform 0.3s ease; }
