@@ -349,6 +349,6 @@ atlas-mcp 在 v1.1 期間已公開 80+ 工具（見 `cmd/atlas-mcp/server/tools*
 
 ---
 
-> **v1.1c 最後更新**：2026-08-07，commit `main HEAD`（PR #1490）後
+> **v1.1c 最後更新**：2026-08-07，commit `eccf8806`（PR #1496）後
 > **v1.1c 變更**：F1–F4 ✅ 已覆核（gap-analysis 文件）、X2 ✅（PR template + ACI hook）；統計 ⬜1/✅13/⚠️0
 > **下一次審計 (v1.2)** 預計在 F1–F4 啟動後
