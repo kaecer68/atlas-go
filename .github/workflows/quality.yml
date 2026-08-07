@@ -22,12 +22,14 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      ci: ${{ steps.filter.outputs.ci }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
     - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
       id: filter
       with:
         filters: |
+          # Code-only changes — trigger heavy Go/frontend checks.
           code:
             - '**/*.go'
             - 'go.mod'
@@ -42,8 +44,12 @@ jobs:
             - '**/*.sql'
             - 'Dockerfile*'
             - 'docker-compose*'
-            - 'Makefile'
+          # CI/scripts changes — trigger the script-validating jobs (which
+          # run unconditionally below) but NOT the heavy code checks.
+          # Keeps a one-line script fix from paying for full lint+coverage.
+          ci:
             - 'scripts/**'
+            - 'Makefile'
             - '.github/workflows/**'
 
   # Frontend build (reusable) — builds admin_web + client_web once,
@@ -440,6 +446,17 @@ jobs:
             exit 1
           fi
           echo "All AGENTS.md references are consistent."
+
+  # AGENTS_INDEX vs actual modules — prevents index drift when a new
+  # internal/ module is added but not registered in AGENTS_INDEX.md.
+  # Model reads the index to route work; a missing entry = hallucination source.
+  agents-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check AGENTS_INDEX.md matches actual modules
+        run: bash scripts/ci/check_agents_index.sh
 
   # License check
   license:

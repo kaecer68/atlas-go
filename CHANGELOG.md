@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased] - 2026-08-07
+
+> 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
+
+### Gap 3 — 散戶追蹤/紀律（manifest 系列）
+- **#Gap3-R4 我的追蹤頁**：notification-center 復活 + signal 已讀按鈕（#1494）
+- **#Gap3-R3 userstate HTTP API**：4 條 per-user signal-state 端點（#1493）
+- **#Gap3-R2 userstate storage**：JSONL store for UserSignalState（#1491）
+- **#Gap3-R1+R5 散戶追蹤/紀律資料模型骨架** + query-examples 修正（#1486）
+
+### Gap 2 — 預測閉環（manifest 系列）
+- **#Gap2-A1 錢潮預測命中率**：T+1 actual 補入 + reconciler + 投資人呈現（#1484）
+- **#Gap2-D prediction_backtest reverse-write**：讓 calibrator 收到真實 hit rate（#1490）
+
+### MCP 工具擴充
+- **M6 audit_state**：憲章審計狀態 MCP 公開（#1482）
+- **M4 strategy_for_period**：策略適用時期 MCP 公開（#1488）
+- **stock_get_monthly_revenue endpoint**：月營收查詢（hermes v4.0 dispatch #1，#1483）
+- audit_state snapshot 同步 §附錄 F v1.1c（#1498）
+
+### 方法論與時期（E4/E5/B2）
+- 七時期 UI + 因果傳導鏈頁面（E4，#1397）
+- E5a strategy three-category classification wired to frontend
+- B2 sequential evidence pipeline — 憲章因果傳導鏈（#1381）
+- 7-period classification 接入 macroflow RiskLevel derivation（A4）
+
+### 資金流（C4/C5）
+- capitalflow 4-layer Assessment 接入 orchestrator（C4，#1392）
+- period-aware QualityScore with dynamic weights（C5）
+- 外資/自營分流（F1F2，#1394）、ETF 淨申購（F3，#1395）
+
+### 觀測與部署
+- **C1 部署完整性閘門**：binary/source sync + version stamp + CI gate（#1412）
+- **開機熱機**：五層 cache 暖場消滅冷路徑（#1411）
+- alertscanner 多來源聚合：Prometheus Alertmanager + Wave9 eventbus（#1351）
+- known-issue badge for long-stale channels（#1454）
+- market_volume channel（集中市場成交金額，#1405）
+
+### 系統健壯性
+- ACI PreToolUse soft reminder for hot-path Go access（#1464）
+- experiment_diff 暴露 judge-collected metrics（#1443）
+- sessions endpoint 分頁 + zero-outcome data-loss monitor（#1444）
+- X2 方法論追蹤表強制 + F1-F4 覆核文件（#1496）
+
 ## [0.0.2.0] - 2026-07-22
 
 ### Fixed
