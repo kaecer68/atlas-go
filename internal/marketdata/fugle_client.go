@@ -51,6 +51,13 @@ var ErrFugleQuotaExhausted = fmt.Errorf("fugle: daily quota exhausted")
 // key can never masquerade as "Fugle is fine, we fell back to TWSE".
 var ErrFugleUnauthorized = fmt.Errorf("fugle: unauthorized (quota locked or invalid key)")
 
+// ErrFugleBreakerOpen is returned by FugleClient.doGet when the client-level
+// breaker is open (consecutive upstream failures, manifest Phase D). The
+// breaker lives on the shared singleton client, so every consumer layer
+// (gateway channel, stocktools, hybrid provider, warmup) short-circuits
+// together instead of hammering the upstream per-layer.
+var ErrFugleBreakerOpen = fmt.Errorf("fugle: circuit breaker open")
+
 // FugleClient Fugle API 客户端
 type FugleClient struct {
 	apiKey       string
@@ -58,6 +65,10 @@ type FugleClient struct {
 	baseURL      string
 	rateLimiter  *rate.Limiter
 	quotaTracker *DailyQuotaTracker
+	// breaker 是 client 級熔斷器（manifest Phase D）：單一 shared client
+	// 讓所有消費層（gateway/stocktools/hybrid/warmup）共享同一 breaker —
+	// 連續失敗後統一短路，不再逐層重試上游。
+	breaker *providerBreaker
 }
 
 // FugleQuoteResponse Fugle v1.0 行情响应（扁平結構）
@@ -159,6 +170,7 @@ func newFugleClient(apiKey string, stateDir string) *FugleClient {
 		baseURL:      fugleAPIBaseURL,
 		rateLimiter:  rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), burst),
 		quotaTracker: tracker,
+		breaker:      newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
 	}
 }
 
@@ -196,6 +208,11 @@ func (c *FugleClient) RateLimiter() *rate.Limiter {
 // Retry-After (or a conservative backoff) instead of failing immediately.
 // Mirrors finmind_backfill.go FetchWithRetry's 429 handling.
 func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error) {
+	// Phase D：client 級 breaker 短路 — open 時不發 HTTP，直接回
+	// ErrFugleBreakerOpen（所有消費層共享此 client → 統一熔斷）。
+	if c.breaker != nil && !c.breaker.shouldTry() {
+		return nil, fmt.Errorf("fugle: %w", ErrFugleBreakerOpen)
+	}
 	const maxRetries = 3
 	for attempt := 0; ; attempt++ {
 		if err := c.rateLimiter.Wait(ctx); err != nil {
@@ -204,8 +221,9 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 		// Daily-quota gate: mirrors the FinMind gate so the channel-health
 		// page and shared QuotaRegistry see one consistent view across
 		// providers. Without it, a cold-start burst from any caller can
-		// burn the day's Fugle budget in seconds (60/min × 1440 = 86,400).
+		// burn the day's Fugle budget in seconds (30/min × 1440 = 43,200).
 		if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+			c.breakerRecordFailure()
 			return nil, fmt.Errorf("fugle: %w (used=%d, remaining=%d)", ErrFugleQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 		}
 
@@ -217,6 +235,7 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			c.breakerRecordFailure()
 			return nil, fmt.Errorf("http request: %w", err)
 		}
 
@@ -237,6 +256,7 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 			case <-time.After(wait):
 			}
 			if attempt >= maxRetries {
+				c.breakerRecordFailure()
 				return nil, fmt.Errorf("fugle: rate limited after %d retries", maxRetries)
 			}
 			continue
@@ -252,10 +272,13 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 				logging.Warn("fugle", "rate_limit_401",
 					"endpoint", endpoint,
 					"note", "free-tier quota lock or invalid key; treating as quota event")
+				c.breakerRecordFailure()
 				return nil, fmt.Errorf("fugle: %w", ErrFugleUnauthorized)
 			}
+			c.breakerRecordFailure()
 			return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 		}
+		c.breakerRecordSuccess()
 		return body, readErr
 	}
 }
@@ -390,6 +413,17 @@ func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	// Phase D：candles 路徑（warmup/technical on-demand）與 doGet 統一
+	// breaker + quota gate — 此前只有 rateLimiter，warmup 32 calls 不受
+	// 日額度 gate 保護（manifest D 缺口）。
+	if c.breaker != nil && !c.breaker.shouldTry() {
+		return nil, fmt.Errorf("fugle: %w", ErrFugleBreakerOpen)
+	}
+	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+		c.breakerRecordFailure()
+		return nil, fmt.Errorf("fugle: %w (used=%d, remaining=%d)", ErrFugleQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
+	}
+
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("fugle rate limit: %w", err)
 	}
@@ -406,13 +440,22 @@ func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("fugle candles fetch: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breakerRecordFailure()
+		if resp.StatusCode == http.StatusUnauthorized {
+			logging.Warn("fugle", "rate_limit_401",
+				"endpoint", fugleURL,
+				"note", "free-tier quota lock or invalid key; treating as quota event")
+			return nil, fmt.Errorf("fugle: %w", ErrFugleUnauthorized)
+		}
 		return nil, fmt.Errorf("fugle candles %s returned %d", symbol, resp.StatusCode)
 	}
+	c.breakerRecordSuccess()
 
 	var result fugleCandlesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -470,4 +513,19 @@ func (p *FugleProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols [
 // GetClient 获取底层客户端
 func (p *FugleProvider) GetClient() *FugleClient {
 	return p.client
+}
+
+// breakerRecordFailure / breakerRecordSuccess 是 breaker 記錄的 nil-safe
+// 包裝（部分測試與未來 refactor 可能以裸 struct 建 FugleClient，breaker
+// 為 nil 時不得 panic）。
+func (c *FugleClient) breakerRecordFailure() {
+	if c.breaker != nil {
+		c.breaker.recordFailure()
+	}
+}
+
+func (c *FugleClient) breakerRecordSuccess() {
+	if c.breaker != nil {
+		c.breaker.recordSuccess()
+	}
 }
