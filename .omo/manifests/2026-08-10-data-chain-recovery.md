@@ -69,10 +69,22 @@
 |----|---------|---------------|----------------|
 | B01 | CycleTracker 無持久化，restart 後退回 heuristic seeds | 2026-08-10 | 與 B02 共用 history store 設計 |
 | B02 | tw_vol 無 TWSE/歷史 fallback | 2026-08-10 | 需 TAIEX daily history store |
-| B03 | twse_etf 無持久化 daily store / backfill / 替代源 | 2026-08-10 | 需先 upstream 實測（容器內 curl TWT44U） |
 | B06 | 資料通道 breaker（apigateway.CircuitBreakerManager）無 HTTP/MCP 暴露 | 2026-08-10（B04 實作中發現） | observability 增強，另案 |
 
-> **已完成 backlog 項**：B05（國定假日判定，PR #1503）、B04（circuit-breaker MCP 描述修正，PR #1503）。
+> **已完成 backlog 項**：B05（國定假日判定，PR #1503）、B04（circuit-breaker MCP 描述修正，PR #1503）、B03（TWT44U 實測定案 + ETF 因子停用，PR #1504）。
+
+## B03 實測記錄（2026-08-10，容器內 curl）
+
+| 檢查 | 結果 |
+|------|------|
+| `TWT44U?response=json&date=20260810` | **HTTP 307 → page-not-found.html (404)** |
+| `TWT44U` 其他日期/無參數/CSV | 同樣 307 → 404 |
+| 對照組 `STOCK_DAY_ALL` | **HTTP 200 CSV**（出站 IP 正常 → 非 rate-limit） |
+| 替代候選 TWT85U/TWT84U/TWTB7U | 200 JSON 但內容是變更交易/升降幅度/面額，非 ETF 申贖 |
+| FinMind dataset enum | 僅 `TaiwanStockActiveETFInfo/Holding`（ETF 持股），**無申購贖回** |
+| 2026 ETF 申贖平台 | 證交所改版為投信/參與券商內部作業平台（工商時報 2026-07-16） |
+
+**結論**：TWT44U endpoint 永久移除，無公開替代源。known_issues 舊「403/likely IP rate-limit」描述為錯誤推測，已更新。ETFNetSubscription 因子正式停用（subC3 資料缺失不貢獻）。
 
 ---
 
@@ -103,3 +115,4 @@
 | 2026-08-10 | 1.0 | Initial manifest（A01-A05 from audit） | agent |
 | 2026-08-10 | 1.1 | A01-A05 全部實作 + commit 7daee92e..4b3eb9b9 + PR #1502 | agent |
 | 2026-08-10 | 1.2 | B05+B04 實作（PR #1503）；B06 加入 backlog | agent |
+| 2026-08-10 | 1.3 | B03 實測定案（TWT44U 移除）+ ETF 因子停用（PR #1504） | agent |
