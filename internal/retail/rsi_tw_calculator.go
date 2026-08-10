@@ -360,10 +360,17 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator, par
 func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	w := params.C3Weight.Value
 	netSub := data.ETFNetSubscription
-	var score float64
+	// B03（2026-08-10 audit）：ETF 申購贖回資料源（TWSE TWT44U）已永久失效 —
+	// 容器內實測 HTTP 307 → page-not-found.html（2026 年 ETF 申贖平台改版為
+	// 投信/參與券商內部作業平台），且無公開替代源（FinMind 無此 dataset）。
+	// netSub==0（資料不可用）時不貢獻 Part C，與 subC2 的 IsFallback pattern
+	// 一致 — 資料缺失反映為「該維度無訊號」而非舊的 0.5 中性假裝。
 	if netSub == 0 {
-		score = 0.5
-	} else if netSub > params.C3VeryBullishThreshold.Value {
+		subs["c3_etf_sub"] = RSISubIndicator{Value: 0, Weight: w, ZScore: 0, IsFallback: true}
+		return 0
+	}
+	var score float64
+	if netSub > params.C3VeryBullishThreshold.Value {
 		score = 0.9
 	} else if netSub > params.C3BullishThreshold.Value {
 		score = 0.7
@@ -374,7 +381,7 @@ func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, par
 	} else {
 		score = 0.2
 	}
-	ind := RSISubIndicator{Value: netSub, Weight: w, ZScore: score, IsFallback: netSub == 0}
+	ind := RSISubIndicator{Value: netSub, Weight: w, ZScore: score, IsFallback: false}
 	subs["c3_etf_sub"] = ind
 	return score * w
 }
