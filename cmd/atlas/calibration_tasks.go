@@ -229,6 +229,13 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 			// LastNewSamples = 成功聚合的 industry 數（= 寫入 CycleTracker 的
 			// UpdatePosition 次數）；LastDataAsOf = 本次聚合完成時間。
 			task.SetDataHealth(report.UpdatedAt, report.Succeeded, time.Now(), noProgress)
+			// B01：有產業成功聚合 → 持久化 cycle state（restart 後載入恢復
+			// empirical 資料，不退回 heuristic seeds）。
+			if report.Succeeded > 0 && svc.CycleTracker != nil {
+				if err := svc.CycleTracker.SaveToFile(filepath.Join(d.Cfg.WorkDir, "data/state", "cycle_tracker.json")); err != nil {
+					logging.Warn("auto_cycle_update", "cycle_state_save_failed", "err", err.Error())
+				}
+			}
 			return aggErr
 		},
 	}

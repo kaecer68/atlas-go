@@ -24,11 +24,26 @@ const (
 )
 
 // TaiwanVolatilityProvider implements MacroDataProvider for TAIEX historical volatility.
-type TaiwanVolatilityProvider struct{}
+type TaiwanVolatilityProvider struct {
+	// history 是 TAIEX 每日 close 的 file-backed store（B02）。Yahoo 成功時
+	// 寫入當日 close；Yahoo transport error 時 fallback 用 store 的 closes
+	// 計算 20 日波動率（資料時間戳較舊但非 transport failure）。nil 時無
+	// fallback（測試/未接線路徑，行為與舊版一致）。
+	history *TaiwanIndexHistoryStore
+}
 
-// NewTaiwanVolatilityProvider creates a TAIEX volatility data provider.
+// NewTaiwanVolatilityProvider creates a TAIEX volatility data provider
+// without history fallback.
 func NewTaiwanVolatilityProvider() *TaiwanVolatilityProvider {
 	return &TaiwanVolatilityProvider{}
+}
+
+// NewTaiwanVolatilityProviderWithStore creates a provider wired to a
+// TaiwanIndexHistoryStore at path for Yahoo-failure fallback (B02).
+func NewTaiwanVolatilityProviderWithStore(path string) *TaiwanVolatilityProvider {
+	return &TaiwanVolatilityProvider{
+		history: NewTaiwanIndexHistoryStore(path),
+	}
 }
 
 // Name returns the data channel identifier.
@@ -74,7 +89,10 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		} else {
 			fetched, err := s.fetchWithFallback(ctx, taiwanVolatilitySymbol, params)
 			if err != nil {
-				return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, err)
+				// B02：Yahoo transport error → 嘗試從 history store fallback
+				// （資料時間戳較舊但非 transport failure；store 無足夠資料
+				// 或未接線時回原 error）。
+				return p.fallbackFromHistory(err)
 			}
 			body = fetched
 		}
@@ -149,6 +167,12 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid volatility result: %v", taiwanVolatilityChannel, vol)
 	}
 
+	// B02：Yahoo 資料可用時寫入 history store（同交易日覆寫），供未來
+	// Yahoo 失效時 fallback。timestamp 為 Yahoo RegularMarketTime（UTC）。
+	if p.history != nil {
+		p.history.Append(time.Unix(timestamp, 0), latest)
+	}
+
 	return MacroDataSnapshot{
 		RecordedAt: time.Now().Unix(),
 		HistoricalVolatility: MacroDataPoint{
@@ -156,6 +180,42 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 			Value:     latest,
 			ChangePct: vol,
 			Timestamp: timestamp,
+		},
+	}, nil
+}
+
+// fallbackFromHistory 在 Yahoo transport error 時用 history store 的 TAIEX
+// daily closes 計算 20 日波動率（B02）。store 未接線或 closes < 21 筆時回
+// 原 error。Timestamp 標記為最後一筆 store 資料的日期（非當前），下游可見
+// 資料時間戳較舊。
+func (p *TaiwanVolatilityProvider) fallbackFromHistory(upstreamErr error) (MacroDataSnapshot, error) {
+	if p.history == nil {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, upstreamErr)
+	}
+	closes := p.history.RecentCloses(21)
+	if len(closes) < 21 {
+		logging.Warn(taiwanVolatilityChannel, "history_fallback_insufficient",
+			"closes", len(closes), "need", 21)
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, upstreamErr)
+	}
+	vol := computeAnnualizedVolatility20D(closes)
+	if math.IsNaN(vol) || math.IsInf(vol, 0) {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, upstreamErr)
+	}
+	lastDate, ok := p.history.LastDate()
+	if !ok {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: %w", taiwanVolatilityChannel, upstreamErr)
+	}
+	logging.Warn(taiwanVolatilityChannel, "history_fallback_used",
+		"note", "Yahoo down; computed from persisted TAIEX closes",
+		"last_date", lastDate.Format("2006-01-02"))
+	return MacroDataSnapshot{
+		RecordedAt: time.Now().Unix(),
+		HistoricalVolatility: MacroDataPoint{
+			Symbol:    taiwanVolatilitySymbol,
+			Value:     closes[len(closes)-1],
+			ChangePct: vol,
+			Timestamp: lastDate.Unix(),
 		},
 	}, nil
 }

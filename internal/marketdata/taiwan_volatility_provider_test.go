@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -198,5 +199,75 @@ func TestTaiwanVolatilityProvider_FetchSnapshot_FreshCacheAccepts(t *testing.T) 
 	}
 	if snap.HistoricalVolatility.ChangePct <= 0 || math.IsNaN(snap.HistoricalVolatility.ChangePct) {
 		t.Errorf("expected positive volatility, got %v", snap.HistoricalVolatility.ChangePct)
+	}
+}
+
+// B02：Yahoo transport error 時用 history store fallback 計算波動率。
+func TestTaiwanVolatilityProvider_YahooDown_FallbackFromHistory(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	// Yahoo 全部失敗（500）
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	t.Cleanup(func() { yahooHosts = origHosts })
+	SetYahooSessionClient(server.Client())
+
+	// 預填 history store：25 筆升序 closes
+	storePath := filepath.Join(t.TempDir(), "twii_history.json")
+	p := NewTaiwanVolatilityProviderWithStore(storePath)
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, twseLocation)
+	for i := 0; i < 25; i++ {
+		p.history.Append(base.AddDate(0, 0, i), 23000.0+float64(i)*10)
+	}
+
+	snap, err := p.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("expected history fallback success, got error: %v", err)
+	}
+	if snap.HistoricalVolatility.Symbol != "^TWII" {
+		t.Errorf("Symbol = %q, want ^TWII", snap.HistoricalVolatility.Symbol)
+	}
+	if snap.HistoricalVolatility.ChangePct <= 0 || math.IsNaN(snap.HistoricalVolatility.ChangePct) {
+		t.Errorf("expected positive volatility from history fallback, got %v", snap.HistoricalVolatility.ChangePct)
+	}
+	// Timestamp 應為 store 最後一筆日期（7/25）
+	wantTs := base.AddDate(0, 0, 24).Unix()
+	if snap.HistoricalVolatility.Timestamp != wantTs {
+		t.Errorf("Timestamp = %d, want %d (last history date)", snap.HistoricalVolatility.Timestamp, wantTs)
+	}
+}
+
+// B02：Yahoo down 且 history 不足 21 筆 → 回原 error（fallback 不偽造資料）。
+func TestTaiwanVolatilityProvider_YahooDown_HistoryInsufficient(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(server.URL, "https://")}
+	t.Cleanup(func() { yahooHosts = origHosts })
+	SetYahooSessionClient(server.Client())
+
+	p := NewTaiwanVolatilityProviderWithStore(filepath.Join(t.TempDir(), "empty.json"))
+	// 只放 5 筆
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, twseLocation)
+	for i := 0; i < 5; i++ {
+		p.history.Append(base.AddDate(0, 0, i), 23000.0)
+	}
+
+	_, err := p.FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error when history has <21 closes")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("err = %v, want upstream error preserved", err)
 	}
 }

@@ -1,13 +1,17 @@
 package industry
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // CyclePhase represents the current phase of an industry business cycle.
@@ -242,6 +246,75 @@ func (ct *CycleTracker) GetAllPositions() map[string]*CyclePosition {
 // GetHistory returns the historical cycle positions for an industry.
 func (ct *CycleTracker) GetHistory(industryID string) []CyclePosition {
 	return ct.history[industryID]
+}
+
+// cycleTrackerSnapshot 是 CycleTracker 的持久化格式（B01）。
+type cycleTrackerSnapshot struct {
+	SavedAt   time.Time                       `json:"saved_at"`
+	Positions map[string]*CyclePosition        `json:"positions"`
+	History   map[string][]CyclePosition       `json:"history"`
+}
+
+// SaveToFile 持久化 cycle positions + history 到 JSON 檔（B01）。
+// restart 後 LoadFromFile 恢復 empirical 資料，不再退回 heuristic seeds。
+func (ct *CycleTracker) SaveToFile(path string) error {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+
+	snap := cycleTrackerSnapshot{
+		SavedAt:   time.Now(),
+		Positions: make(map[string]*CyclePosition, len(ct.positions)),
+		History:   make(map[string][]CyclePosition, len(ct.history)),
+	}
+	for id, pos := range ct.positions {
+		snap.Positions[id] = pos
+	}
+	for id, hist := range ct.history {
+		cp := make([]CyclePosition, len(hist))
+		copy(cp, hist)
+		snap.History[id] = cp
+	}
+
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal cycle tracker: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create cycle state dir: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write cycle tracker: %w", err)
+	}
+	return nil
+}
+
+// LoadFromFile 載入 cycle positions + history（B01）。檔案不存在或解析
+// 失敗時為 no-op（保留 seeds），不 error — 首次啟動無歷史屬正常。
+func (ct *CycleTracker) LoadFromFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read cycle tracker: %w", err)
+	}
+
+	var snap cycleTrackerSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		logging.Warn("cycle_tracker", "load_failed",
+			"err", err.Error(), "note", "ignoring corrupt state; using seeds")
+		return nil
+	}
+
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if snap.Positions != nil {
+		ct.positions = snap.Positions
+	}
+	if snap.History != nil {
+		ct.history = snap.History
+	}
+	return nil
 }
 
 // detectCyclePosition determines the cycle phase based on industry metrics.
