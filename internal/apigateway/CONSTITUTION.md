@@ -55,6 +55,18 @@ resp, _ := client.Get("https://api.finmindtrade.com/...")
 result, meta, err := gateway.Fetch(ctx, "finmind")
 ```
 
+### 1.4 已知例外（2026-08-10 定案，見 docs/reference/data-source-architecture.md）
+
+以下路徑直接呼叫 provider client（非經 `apigateway.Fetch`），為**設計決策**而非違規：
+
+| 路徑 | 理由 | 治理覆蓋 |
+|------|------|---------|
+| stocktools `HandleQuote` / `HandleTechnical`（per-symbol 即時需求）| Fugle 是唯一免費即時盤中報價源；`/api/stock/quote` **Fugle 優先**（資料源優先級例外，TWSE OpenAPI 僅盤後資料）| 共用 `GetSharedFugleClient` → rate/quota/breaker 統一（見 §2 文件）|
+| quote warmup（`dashboard_api.go`）| 啟動預熱 ~32 symbols | 同上 |
+| hybrid provider（live/simulation）| 有自己的 providerBreaker + fallback 鏈 | 同上 |
+
+> **防範規則**：任何直接呼叫 provider 的路徑必須使用 `GetSharedFugleClient`（共享 rate/quota/breaker），禁止 `NewFugleClient` 自行建立（歷史教訓：per-instance client 各自 60/min → 破表，SK-22 Fugle audit）。Fugle 401 = 免費破表鎖定（非 429），見 `fugle_client.go` `ErrFugleUnauthorized`。
+
 ### 1.4 CI 檢查
 
 ```bash
@@ -99,8 +111,10 @@ const (
     FinMindFreeRate = rate.Every(6 * time.Second)
     FinMindPaidRate = rate.Every(1 * time.Second + 800*time.Millisecond)
     
-    // Fugle: 60/min (Basic)
-    FugleBasicRate = rate.Every(time.Second)
+    // Fugle: 30/min (Basic — 保守，低於實測 ~39/min 破表點；manifest
+    // fugle-unified-access F2/A2。免費破表鎖定回 401 非 429，見
+    // internal/marketdata/fugle_client.go ErrFugleUnauthorized)
+    FugleBasicRate = rate.Every(2 * time.Second)
     
     // Geopolitical: RSS 源
     GeopoliticalRate = rate.Every(10 * time.Second)
@@ -487,7 +501,7 @@ echo "✅ os.Getenv 檢查通過"
 | `us_yahoo` | Yahoo Macro (5s/2b) | Liveness | `us_market_refresh_us_yahoo` (5m) | ✅ |
 | twse_replay | 不限流 (rate.Inf) | Readiness | auto_backfill (24h) | ✅ |
 | twse_capital_flow | 1/5s | Readiness | auto_capital_flow (30m) | ✅ |
-| fugle | 60/min (1s/1b) | Liveness | channel_health_fugle (1h) | ✅ |
+| fugle | 30/min (2s/1b) | Liveness | channel_health_fugle (1h) | ✅ |
 | fubon | 60/min (1s/1b) | Liveness | channel_health_fubon (1h) | ✅ |
 | finmind | 6s/1b (免費) | Liveness | channel_health_finmind (1h) | ✅ |
 | frankfurter_fx | 10s/1b (獨立) | Liveness | `macro_cache_frankfurter_fx` (10m) | ✅ |
