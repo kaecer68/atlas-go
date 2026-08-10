@@ -639,6 +639,7 @@ func run(args []string, deps appDeps) error {
 		var gateway *apigateway.Gateway
 		var detectorRegistry *narrative.DetectorRegistry
 		var detectorScanStore ledger.DetectorScanStore
+		var scanStoreErr error
 		var gatewayFetcher monitoring.DataFetcher
 		var narrativeEngine *narrative.NarrativeEngine
 		if deps.dataFetcher != nil {
@@ -961,7 +962,7 @@ func run(args []string, deps appDeps) error {
 			// so the scan store is available for injection.
 			detectorRegistry = narrative.NewDefaultDetectorRegistry()
 			narrativeEngine = narrative.NewNarrativeEngine()
-			detectorScanStore, scanStoreErr := ledger.NewDetectorScanStore(cfg)
+			detectorScanStore, scanStoreErr = ledger.NewDetectorScanStore(cfg)
 			if scanStoreErr != nil {
 				log.Printf("[TemplateDetector] scan store unavailable (%v); routes still registered for reachability", scanStoreErr)
 			}
