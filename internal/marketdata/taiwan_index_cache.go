@@ -33,14 +33,28 @@ const twiiCacheTTL = 60 * time.Second
 var twiiNowFunc = time.Now
 
 // twiiCacheTimestampIsCurrentTradingDay reports whether a cached Yahoo ^TWII
-// response timestamp corresponds to the current Taiwan trading day.
+// response timestamp corresponds to the expected latest Taiwan trading day.
 // On weekends/holidays the expectation rewinds to the most recent trading day
 // using the package's existing isTaiwanTradingDay helper (currently weekends only).
+//
+// A04（2026-08-10 audit）：交易日盤前（09:00 CST 開盤前）Yahoo 尚未產生當日
+// daily bar，最近有效資料是前一交易日。舊邏輯在平日 08:00 就要求當日 bar，
+// 把「資料時間戳是昨天」誤判為 stale，進而加速 circuit breaker 開啟。
+// 盤前容許前一交易日；盤中/盤後（09:00 之後）才要求當日 bar。
 func twiiCacheTimestampIsCurrentTradingDay(ts int64) bool {
 	dataDate := time.Unix(ts, 0).In(twseLocation).Truncate(24 * time.Hour)
-	expected := latestTaiwanTradingDay(twiiNowFunc().In(twseLocation))
+	now := twiiNowFunc().In(twseLocation)
+	expected := latestTaiwanTradingDay(now)
+	if isTaiwanTradingDay(now) && now.Hour() < twseMarketOpenHour {
+		// 盤前：最新已完成交易日是昨天（或上個交易日）
+		expected = latestTaiwanTradingDay(now.AddDate(0, 0, -1))
+	}
 	return sameDate(dataDate, expected)
 }
+
+// twseMarketOpenHour 是台灣集中市場開盤時間（09:00 CST）。盤前 Yahoo 的
+// ^TWII daily bar 仍是前一交易日的 close。
+const twseMarketOpenHour = 9
 
 // latestTaiwanTradingDay returns the most recent Taiwan trading day on or before t.
 func latestTaiwanTradingDay(t time.Time) time.Time {
