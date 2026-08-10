@@ -112,6 +112,69 @@ func TestFinMindClient_fetchDataset_Success(t *testing.T) {
 	}
 }
 
+// TestFinMindClient_fetchDataset_NormalizesDataID 驗證 .TW/.TWO suffix 的
+// data_id 會被正規化為裸股票代碼（A01：auto_cycle_update 全鏈失敗根因）。
+// ClassificationTree 的 RepresentativeStocks 是 "1513.TW" 形式，FinMind API
+// 只接受 "1513"。正規化在 fetchDataset 統一處理，覆蓋所有 Taiwan stock caller。
+func TestFinMindClient_fetchDataset_NormalizesDataID(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"bare_symbol", "1513", "1513"},
+		{"tw_suffix", "1513.TW", "1513"},
+		{"tw_suffix_lowercase", "1513.tw", "1513"},
+		{"two_suffix", "1513.TWO", "1513"},
+		{"two_suffix_lowercase", "1513.two", "1513"},
+		{"whitespace", " 1513.TW ", "1513"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotDataID string
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotDataID = r.URL.Query().Get("data_id")
+				w.Write([]byte(`{"msg":"success","status":200,"data":[{"revenue":100.0}]}`))
+			}))
+			defer ts.Close()
+
+			c := NewFinMindClient("k")
+			c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
+
+			if _, err := c.fetchDataset(context.Background(), "TaiwanStockMonthRevenue", tc.input, "2026-07-01", "2026-07-31"); err != nil {
+				t.Fatalf("fetchDataset error: %v", err)
+			}
+			if gotDataID != tc.want {
+				t.Errorf("data_id = %q, want %q (input %q)", gotDataID, tc.want, tc.input)
+			}
+		})
+	}
+}
+
+// TestQuarterOfDate 驗證 quarterOfDate 的正確季度計算（A02）。
+func TestQuarterOfDate(t *testing.T) {
+	cases := []struct {
+		date string
+		want int
+	}{
+		{"2026-01-15", 1},
+		{"2026-03-31", 1},
+		{"2026-04-01", 2},
+		{"2026-06-30", 2},
+		{"2026-07-01", 3},
+		{"2026-09-30", 3},
+		{"2026-10-01", 4},
+		{"2026-12-31", 4},
+		{"2026", 0},
+		{"garbage", 0},
+	}
+	for _, tc := range cases {
+		if got := quarterOfDate(tc.date); got != tc.want {
+			t.Errorf("quarterOfDate(%q) = %d, want %d", tc.date, got, tc.want)
+		}
+	}
+}
+
 func TestFinMindClient_fetchDataset_NoAPIKey(t *testing.T) {
 	var authReceived string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -258,10 +321,8 @@ func TestFinMindClient_GetMonthRevenue_NonFloatRevenue(t *testing.T) {
 // ─── FinMindClient.GetFinancialStatements ────────────────────────────────────
 
 func TestFinMindClient_GetFinancialStatements_FiltersByQuarter(t *testing.T) {
-	// Note: production code uses dateStr[5] - '0' to derive quarter, which is
-	// a heuristic not strictly month-aligned. For date "2026-03-31",
-	// dateStr[5] is '0' (leading zero of month), so quarter=0 matches. For
-	// date "2026-12-31", dateStr[5] is '1', so quarter=1 matches.
+	// A02 修正：quarter 由完整日期計算（3月→Q1、12月→Q4），
+	// 不再是 dateStr[5]（月份十位數）的錯誤 heuristic。
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{
 			"msg":"success","status":200,
@@ -277,19 +338,31 @@ func TestFinMindClient_GetFinancialStatements_FiltersByQuarter(t *testing.T) {
 	c := NewFinMindClient("k")
 	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
 
-	// quarter=1 matches December entries (dateStr[5]='1')
-	statements, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	// quarter=4 matches December entries（12 月 = Q4）
+	statements, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 4)
 	if err != nil {
 		t.Fatalf("GetFinancialStatements error: %v", err)
 	}
 	if len(statements) != 2 {
-		t.Fatalf("expected 2 statements for quarter=1, got %d", len(statements))
+		t.Fatalf("expected 2 statements for quarter=4, got %d", len(statements))
 	}
 	if statements["Revenue"] != 1750000.0 {
 		t.Errorf("Revenue = %v, want 1750000.0", statements["Revenue"])
 	}
 	if statements["NetIncome"] != 450000.0 {
 		t.Errorf("NetIncome = %v, want 450000.0", statements["NetIncome"])
+	}
+
+	// quarter=1 matches March entries（3 月 = Q1）
+	q1, err := c.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	if err != nil {
+		t.Fatalf("GetFinancialStatements Q1 error: %v", err)
+	}
+	if q1["Revenue"] != 1600000.0 {
+		t.Errorf("Q1 Revenue = %v, want 1600000.0", q1["Revenue"])
+	}
+	if _, exists := q1["NetIncome"]; exists {
+		t.Errorf("Q1 must not include December NetIncome (quarter filter broken)")
 	}
 }
 
@@ -612,7 +685,7 @@ func TestFinMindProvider_GetMonthRevenue_DelegatesToClient(t *testing.T) {
 
 func TestFinMindProvider_GetFinancialStatements_DelegatesToClient(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// date "2026-12-31" matches quarter=1 via the production dateStr[5] heuristic
+		// A02：2026-12-31 是 Q4（12 月），不是舊 heuristic 的 Q1
 		w.Write([]byte(`{"msg":"success","status":200,"data":[{"date":"2026-12-31","origin_name":"Revenue","value":2000.0}]}`))
 	}))
 	defer ts.Close()
@@ -621,7 +694,7 @@ func TestFinMindProvider_GetFinancialStatements_DelegatesToClient(t *testing.T) 
 	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
 
 	p := NewFinMindProviderWithClient(c)
-	statements, err := p.GetFinancialStatements(context.Background(), "2330", 2026, 1)
+	statements, err := p.GetFinancialStatements(context.Background(), "2330", 2026, 4)
 	if err != nil {
 		t.Fatalf("GetFinancialStatements error: %v", err)
 	}

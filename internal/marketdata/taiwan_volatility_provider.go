@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // TaiwanVolatilityProvider computes historical volatility (volatility_20d) for TAIEX.
@@ -98,11 +100,18 @@ func (p *TaiwanVolatilityProvider) FetchSnapshot(ctx context.Context) (MacroData
 		}
 
 		// Stale timestamp. If we've already refetched once, both cache
-		// and refetch are stale — surface the error so the channel
-		// health reflects the real upstream problem.
+		// and refetch are stale — the upstream has not yet published the
+		// latest trading day's bar (pre-market or upstream lag).
+		//
+		// A04（2026-08-10 audit）：此情況是「資料時間戳較舊」，不是 transport
+		// failure，不應觸發 circuit breaker。用最新可用 bars 計算波動率並
+		// 回傳，Timestamp 保留 Yahoo 的 RegularMarketTime 讓下游可見資料
+		// 時間；transport error（DNS/timeout/HTTP 5xx）仍走上方 error 分支。
 		if refetched {
-			return MacroDataSnapshot{}, fmt.Errorf("%s: cached and refetched ^TWII both carry stale timestamp %d; refusing to compute historical volatility from stale data",
-				taiwanVolatilityChannel, timestamp)
+			logging.Warn(taiwanVolatilityChannel, "stale_data_accepted",
+				"regular_market_time", timestamp,
+				"note", "refetch also stale; using latest available bars (not a transport failure)")
+			break
 		}
 
 		// First attempt: invalidate the stale entry and refetch once.

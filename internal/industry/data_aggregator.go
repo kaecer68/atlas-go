@@ -31,6 +31,25 @@ import (
 // 詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
 const DefaultFetchFallbackAttempts = 3
 
+// IndustryAggregateStatus 記錄單一 industry 的聚合結果，供排程任務回報
+// data-health（#A03）。Succeeded=false 時 Error 為失敗原因。
+type IndustryAggregateStatus struct {
+	IndustryID string `json:"industry_id"`
+	Succeeded  bool   `json:"succeeded"`
+	Error      string `json:"error,omitempty"`
+}
+
+// AggregateReport 記錄一次 AggregateAllIndustries 的整體結果，讓
+// auto_cycle_update 排程任務能填寫 ScheduledTask data-health 欄位
+// （LastDataAsOf / LastNewSamples / NoProgressReason），取代「只有
+// last_error 字串」的被動監控。
+type AggregateReport struct {
+	Attempted  int                       `json:"attempted"`
+	Succeeded  int                       `json:"succeeded"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+	Industries []IndustryAggregateStatus `json:"industries"`
+}
+
 // DataAggregator fetches per-stock financial metrics from FinMind and
 // computes industry-level weighted averages to feed CycleTracker.
 type DataAggregator struct {
@@ -61,40 +80,54 @@ func NewDataAggregator(tracker *CycleTracker, tree *ClassificationTree, finmind 
 
 // AggregateAllIndustries iterates over every Level-1 industry and calls
 // AggregateIndustry for each. Errors on individual industries are logged
-// and do not stop the rest.
+// and do not stop the rest. 僅在全部失敗時回傳 error（保留原簽名給既有
+// caller）；需要 per-industry 明細請用 AggregateAllIndustriesReport。
 func (a *DataAggregator) AggregateAllIndustries(ctx context.Context) error {
+	_, err := a.AggregateAllIndustriesReport(ctx)
+	return err
+}
+
+// AggregateAllIndustriesReport 與 AggregateAllIndustries 相同，但回傳
+// AggregateReport 記錄每個 industry 的成敗明細（#A03）。排程任務用它
+// 填寫 ScheduledTask data-health，讓 dashboard 能看到
+// 「成功 N/M industries、哪些失敗」而非只有一筆 last_error。
+func (a *DataAggregator) AggregateAllIndustriesReport(ctx context.Context) (*AggregateReport, error) {
+	report := &AggregateReport{UpdatedAt: time.Now()}
 	if a.finmind == nil {
 		logging.Warn("data_aggregator", "no_finmind_client", "err", "FinMind client is nil — skipping aggregation")
-		return nil
+		return report, nil
 	}
 
 	industries := a.tree.GetLevel1()
 	if len(industries) == 0 {
-		return fmt.Errorf("data_aggregator: no Level-1 industries in classification tree")
+		return report, fmt.Errorf("data_aggregator: no Level-1 industries in classification tree")
 	}
 
 	var aggregateErr error
-	succeeded := 0
-	attempted := 0
 	for _, seg := range industries {
 		if len(seg.RepresentativeStocks) == 0 {
 			continue
 		}
-		attempted++
+		report.Attempted++
+		status := IndustryAggregateStatus{IndustryID: seg.ID}
 		if err := a.AggregateIndustry(ctx, seg.ID); err != nil {
 			logging.Warn("data_aggregator", "industry_aggregate_failed",
 				"industry", seg.ID, "err", err)
+			status.Error = err.Error()
+			report.Industries = append(report.Industries, status)
 			aggregateErr = err
 			continue
 		}
-		succeeded++
+		status.Succeeded = true
+		report.Industries = append(report.Industries, status)
+		report.Succeeded++
 	}
 	// Partial failure (e.g. FinMind quota exhausted for some symbols) must not
 	// fail the whole scheduled task; only a total failure is an error.
-	if attempted > 0 && succeeded == 0 {
-		return aggregateErr
+	if report.Attempted > 0 && report.Succeeded == 0 {
+		return report, aggregateErr
 	}
-	return nil
+	return report, nil
 }
 
 // AggregateIndustry fetches financial data for a single industry's

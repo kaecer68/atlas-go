@@ -57,6 +57,13 @@ export interface AgentUniverseView {
   screening_criteria: ScreeningCriteria;
 }
 
+export interface AggregateReport {
+  attempted: number;
+  succeeded: number;
+  updated_at: string;
+  industries: IndustryAggregateStatus[];
+}
+
 export interface AlertBreakdown {
   rule: string;
   description: string;
@@ -1758,6 +1765,12 @@ export interface IndicatorHit {
   relation: string;
   hit: boolean;
   input_available: boolean;
+}
+
+export interface IndustryAggregateStatus {
+  industry_id: string;
+  succeeded: boolean;
+  error?: string;
 }
 
 export interface IndustryClassification {

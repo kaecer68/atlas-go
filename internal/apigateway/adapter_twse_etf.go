@@ -3,8 +3,8 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -33,10 +33,12 @@ func (a *TWSEETFChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 	}
 	stats, err := a.provider.FetchLatest(ctx)
 	if err != nil {
-		// Non-trading days or holidays: TWSE returns no data for the past 7 days,
-		// which is expected behavior. Return a stale result instead of an error
-		// to avoid triggering the circuit breaker.
-		if strings.Contains(err.Error(), "no TWSE") || strings.Contains(err.Error(), "no data") {
+		// A05（2026-08-10 audit）：只有 ErrETFNoTradingData（上游正常回覆
+		// 但最近 7 天無交易資料 = 假日/休市）才轉成 stale，避免觸發 circuit
+		// breaker。403/timeout（ErrETFUpstream）與 schema 改變
+		// （ErrETFSchema）是真實故障，必須以 error 回傳反映到 breaker —
+		// 舊邏輯用錯誤訊息 substring 判斷，把所有情況都偽裝成假日。
+		if errors.Is(err, marketdata.ErrETFNoTradingData) {
 			return &FetchResult{Stale: true, Meta: FetchMetadata{ChannelID: "twse_etf", Timestamp: time.Now()}}, nil
 		}
 		return nil, err

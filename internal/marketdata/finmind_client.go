@@ -192,7 +192,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)
 	params := url.Values{}
 	params.Set("dataset", dataset)
-	params.Set("data_id", dataId)
+	params.Set("data_id", normalizeFinMindStockID(dataId))
 	params.Set("start_date", startDate)
 	params.Set("end_date", endDate)
 
@@ -249,6 +249,33 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	return finmindResp.Data, nil
 }
 
+// normalizeFinMindStockID 將 FinMind Taiwan stock dataset 的 data_id 正規化為
+// 裸股票代碼（剝離 .TW / .TWO suffix，大小寫不敏感）。
+//
+// A01 修復（2026-08-10 audit）：ClassificationTree 的 RepresentativeStocks
+// 使用 "1513.TW" 形式，而 FinMind API 只接受裸碼 "1513"。在 fetchDataset
+// 統一正規化，讓所有 caller（auto_cycle_update、ODM provider、TSMC revenue、
+// quote backfill、dividend）共用同一契約，避免每個呼叫端各自 trim 造成分叉。
+// 對非股票 data_id（例如 "TSE_DAYTRADE"、ETF 代碼 "0050"）是 no-op。
+func normalizeFinMindStockID(dataID string) string {
+	id := strings.TrimSpace(dataID)
+	if len(id) > 3 && strings.EqualFold(id[len(id)-3:], ".TW") {
+		id = id[:len(id)-3]
+	} else if len(id) > 4 && strings.EqualFold(id[len(id)-4:], ".TWO") {
+		id = id[:len(id)-4]
+	}
+	return id
+}
+
+// quarterOfDate 回傳 dateStr（YYYY-MM-DD）對應的季度 (1-4)。解析失敗回傳 0。
+func quarterOfDate(dateStr string) int {
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return 0
+	}
+	return (int(t.Month())-1)/3 + 1
+}
+
 // lastDayOfMonth returns the last calendar day of (year, month) — 28/29/30/31
 // depending on the month and leap year. Uses Go's time.Date normalisation:
 // time.Date(y, m+1, 0, ...) is the idiomatic way to get the last day of
@@ -301,13 +328,13 @@ func (c *FinMindClient) GetFinancialStatements(ctx context.Context, symbol strin
 		if !ok {
 			continue
 		}
-		if len(dateStr) >= 7 {
-			q := int(dateStr[5] - '0')
-			if q == quarter {
-				if val, ok := item["value"].(float64); ok {
-					originName, _ := item["origin_name"].(string)
-					result[originName] = val
-				}
+		// A02 修復：quarter 由完整日期計算（3月→Q1、6月→Q2、9月→Q3、
+		// 12月→Q4），取代舊的 dateStr[5]（月份十位數）錯誤 heuristic —
+		// 舊邏輯把 2026-12-31 判成 Q1、2026-03-31 判成 Q0。
+		if q := quarterOfDate(dateStr); q == quarter {
+			if val, ok := item["value"].(float64); ok {
+				originName, _ := item["origin_name"].(string)
+				result[originName] = val
 			}
 		}
 	}
