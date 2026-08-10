@@ -318,7 +318,7 @@ lint: lint-backend
 ci:
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
-	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links' | sort); do \
+	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links|critical_tasks' | sort); do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 30 bash $$script > /dev/null 2>&1; then \
@@ -667,6 +667,9 @@ ci-gate:
 	@echo "  → docs 同步檢查（AGENTS.md line drift + 斷鏈）"
 	@bash scripts/ci/check_agents_md_drift.sh
 	@bash scripts/ci/check_doc_links.sh
+	@echo "    ✅"
+	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
+	@bash scripts/ci/check_critical_tasks.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
