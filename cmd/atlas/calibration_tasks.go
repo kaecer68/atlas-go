@@ -199,16 +199,40 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 		monitoring.RecordDataAggregatorFailure(collector, industryID, kind)
 	}
 	cycleAggregator := industry.NewDataAggregator(svc.CycleTracker, svc.Classifier, finmindClient, recordFailure)
-	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
+
+	// A03（2026-08-10 audit）：
+	//  1. 總 timeout 由 60s 提高到 30min。FinMind shared limiter 600/hr（每 6s 一個
+	//     token、burst 60），A01 修好 .TW 契約後典型批次 ~140 calls（35 symbols × 4）
+	//     需要 burst 耗盡後 ~8 分鐘，60s 必死；30min 容納典型批次 + 部分 fallback。
+	//  2. 透過 AggregateAllIndustriesReport 回填 ScheduledTask data-health
+	//     （LastDataAsOf / LastNewSamples / NoProgressReason），讓 dashboard
+	//     顯示「成功 N/M industries」而非只有一筆 last_error。
+	// 先宣告 task 再賦值：closure 內要引用 task.SetDataHealth，而
+	// `task := &ScheduledTask{...}` 的 RHS 中 closure 尚未在 task 的 scope 內。
+	var task *apigateway.ScheduledTask
+	task = &apigateway.ScheduledTask{
 		Name:     "auto_cycle_update",
 		Interval: 6 * time.Hour,
 		Enabled:  true,
 		Task: func(ctx context.Context) error {
-			bgCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			bgCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 			defer cancel()
-			return cycleAggregator.AggregateAllIndustries(bgCtx)
+			report, aggErr := cycleAggregator.AggregateAllIndustriesReport(bgCtx)
+			if report == nil {
+				return aggErr
+			}
+			noProgress := ""
+			if report.Attempted > 0 && report.Succeeded == 0 {
+				noProgress = fmt.Sprintf("0/%d industries aggregated; last: %s",
+					report.Attempted, aggErr)
+			}
+			// LastNewSamples = 成功聚合的 industry 數（= 寫入 CycleTracker 的
+			// UpdatePosition 次數）；LastDataAsOf = 本次聚合完成時間。
+			task.SetDataHealth(report.UpdatedAt, report.Succeeded, time.Now(), noProgress)
+			return aggErr
 		},
-	})
+	}
+	_ = d.TaskMgr.Register(task)
 	log.Printf("[Gateway] registered auto_cycle_update background task (6h interval)")
 }
 

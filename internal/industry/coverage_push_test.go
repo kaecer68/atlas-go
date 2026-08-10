@@ -39,6 +39,64 @@ func TestDataAggregator_NilFinMind(t *testing.T) {
 	}
 }
 
+// TestAggregateAllIndustriesReport_NilFinMind 驗證 Report 版對 nil finmind
+// 的 no-op 契約（#A03）：回非 nil report 且 attempted/succeeded 皆為 0。
+func TestAggregateAllIndustriesReport_NilFinMind(t *testing.T) {
+	tracker := NewCycleTracker()
+	tree := DefaultClassification()
+	a := NewDataAggregator(tracker, tree, nil, nil)
+
+	report, err := a.AggregateAllIndustriesReport(context.Background())
+	if err != nil {
+		t.Fatalf("nil-finmind should be no-op, got %v", err)
+	}
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.Attempted != 0 || report.Succeeded != 0 {
+		t.Errorf("nil-finmind report = %d/%d, want 0/0", report.Succeeded, report.Attempted)
+	}
+	if len(report.Industries) != 0 {
+		t.Errorf("nil-finmind report industries = %d, want 0", len(report.Industries))
+	}
+}
+
+// TestAggregateAllIndustriesReport_AllFail 驗證 Report 版全失敗路徑（#A03）：
+// 用 zero-rate limiter 讓每個 symbol 請求立即 ErrRateLimited → 所有 industry
+// 失敗 → 回 error 且 report 記錄 attempted>0 / succeeded=0 / per-industry 明細。
+func TestAggregateAllIndustriesReport_AllFail(t *testing.T) {
+	tracker := NewCycleTracker()
+	tree := DefaultClassification()
+	client := marketdata.NewFinMindClient("test-key")
+	client.SetRateLimiter(rate.NewLimiter(0, 1)) // 立即 rate-limited
+	a := NewDataAggregator(tracker, tree, client, nil)
+
+	report, err := a.AggregateAllIndustriesReport(context.Background())
+	if err == nil {
+		t.Fatal("expected error when all industries fail")
+	}
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.Attempted == 0 {
+		t.Error("expected attempted > 0 (classification tree has representative stocks)")
+	}
+	if report.Succeeded != 0 {
+		t.Errorf("expected 0 succeeded, got %d", report.Succeeded)
+	}
+	if len(report.Industries) != report.Attempted {
+		t.Errorf("industries detail = %d, want attempted %d", len(report.Industries), report.Attempted)
+	}
+	for _, st := range report.Industries {
+		if st.Succeeded {
+			t.Errorf("industry %q marked succeeded but all requests rate-limited", st.IndustryID)
+		}
+		if st.Error == "" {
+			t.Errorf("industry %q missing error detail", st.IndustryID)
+		}
+	}
+}
+
 func TestDataAggregator_ExtractProfitAndClampGrowth(t *testing.T) {
 	tests := []struct {
 		name string
