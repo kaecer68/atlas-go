@@ -250,9 +250,9 @@ func (ct *CycleTracker) GetHistory(industryID string) []CyclePosition {
 
 // cycleTrackerSnapshot 是 CycleTracker 的持久化格式（B01）。
 type cycleTrackerSnapshot struct {
-	SavedAt   time.Time                       `json:"saved_at"`
-	Positions map[string]*CyclePosition        `json:"positions"`
-	History   map[string][]CyclePosition       `json:"history"`
+	SavedAt   time.Time                  `json:"saved_at"`
+	Positions map[string]*CyclePosition  `json:"positions"`
+	History   map[string][]CyclePosition `json:"history"`
 }
 
 // SaveToFile 持久化 cycle positions + history 到 JSON 檔（B01）。
