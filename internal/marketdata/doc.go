@@ -9,7 +9,7 @@
 //
 // Production providers:
 //
-//	FugleProvider            — Real-time quotes (60 req/min, API key required)
+//	FugleProvider            — Real-time quotes (30 req/min — conservative free-tier limit, API key required)
 //	TWSEOpenAPIProvider       — Daily quotes (no key, rate-limited)
 //	HybridProvider            — Fugle primary, TWSE fallback on price=0 (default path)
 //	TWSECapitalFlowProvider   — Foreign investor net buy/sell from T86 report

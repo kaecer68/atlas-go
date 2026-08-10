@@ -30,7 +30,7 @@ const (
 
 // fugleDailyLimit is the daily quota ceiling enforced locally before any
 // request reaches the Fugle upstream (manifest F1/A1). The theoretical
-// free-tier ceiling (60/min × 1440 = 86,400) is useless as a gate — the
+// free-tier theoretical ceiling (60/min × 1440 = 86,400) is useless as a gate — the
 // upstream rejects long before it. 2000/day is a conservative bound:
 // normal usage (warmup ~32 candles + on-demand technical + quotes) is
 // well under 500/day, so 2000 only trips during runaway bursts, giving

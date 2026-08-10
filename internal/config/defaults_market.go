@@ -141,8 +141,8 @@ func defaultMarketdataParameters() MarketdataParameters {
 			Todo:      "Calibrate: test [20, 45] range",
 		},
 		FugleRateLimit: ParameterMetadata[int]{
-			Value:     60,
-			Rationale: "Fugle API free tier: 60 req/min. Developer: 600/min. Advanced: 2000/min",
+			Value:     30,
+			Rationale: "Fugle API free tier: 30 req/min (conservative, below measured ~39/min 429 point; manifest fugle-unified-access F2/A2). Developer: 600/min. Advanced: 2000/min",
 			Source:    SourceEmpirical,
 			Todo:      "Set FUGLE_TIER env var if using paid plan",
 		},

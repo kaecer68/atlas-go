@@ -832,3 +832,40 @@ func TestHandleQuote_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
 		t.Errorf("TradingDay = %v, want false (2026-08-09 is Sunday)", q.TradingDay)
 	}
 }
+
+// TestHandleTechnical_NonTradingDay_MarksTradingDayFalse verifies the
+// technical handler also surfaces the trading-day calendar (manifest
+// Phase C): on a weekend the response carries trading_day:false so SMA/RSI
+// are not misread as intraday signals.
+func TestHandleTechnical_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	now := time.Now()
+	bars := []domain.DailyBar{
+		{Date: now.AddDate(0, 0, -4), Symbol: "2330.TW", Close: 650, Volume: 1000},
+		{Date: now.AddDate(0, 0, -3), Symbol: "2330.TW", Close: 660, Volume: 1100},
+		{Date: now.AddDate(0, 0, -2), Symbol: "2330.TW", Close: 670, Volume: 1200},
+		{Date: now.AddDate(0, 0, -1), Symbol: "2330.TW", Close: 680, Volume: 1300},
+	}
+	if err := store.RecordQuotes(bars); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewHandler(Deps{QuoteStore: store})
+	// 2026-08-09 是週日（非交易日）
+	h.nowFunc = func() time.Time { return time.Date(2026, 8, 9, 12, 0, 0, 0, time.Local) }
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/technical?symbol=2330&days=30", nil)
+	code, resp := h.HandleTechnical(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %v", code, resp)
+	}
+	tech, ok := resp.(map[string]any)
+	if !ok {
+		t.Fatalf("resp type = %T, want map[string]any", resp)
+	}
+	if td, ok := tech["trading_day"]; !ok || td != false {
+		t.Errorf("trading_day = %v, want false (2026-08-09 is Sunday)", td)
+	}
+}
