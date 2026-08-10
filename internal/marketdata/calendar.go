@@ -39,10 +39,10 @@ type taiwanFixedHoliday struct {
 }
 
 var taiwanFixedHolidays = []taiwanFixedHoliday{
-	{time.January, 1},    // 元旦
-	{time.February, 28},  // 228 和平紀念日
-	{time.May, 1},        // 勞動節
-	{time.October, 10},   // 國慶日
+	{time.January, 1},   // 元旦
+	{time.February, 28}, // 228 和平紀念日
+	{time.May, 1},       // 勞動節
+	{time.October, 10},  // 國慶日
 }
 
 // taiwanLunarHolidays 是農曆/節氣假日（年份 → 日期列表）。
