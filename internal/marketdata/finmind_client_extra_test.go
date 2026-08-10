@@ -118,9 +118,9 @@ func TestFinMindClient_fetchDataset_Success(t *testing.T) {
 // 只接受 "1513"。正規化在 fetchDataset 統一處理，覆蓋所有 Taiwan stock caller。
 func TestFinMindClient_fetchDataset_NormalizesDataID(t *testing.T) {
 	cases := []struct {
-		name   string
-		input  string
-		want   string
+		name  string
+		input string
+		want  string
 	}{
 		{"bare_symbol", "1513", "1513"},
 		{"tw_suffix", "1513.TW", "1513"},
