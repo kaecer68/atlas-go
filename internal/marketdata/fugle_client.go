@@ -28,20 +28,28 @@ const (
 	fugleAPIBaseURL = "https://api.fugle.tw/marketdata/v1.0/stock"
 )
 
-// fugleDailyLimit is the daily quota ceiling for the Fugle free tier.
-// 60/min × 60 min × 24 hr = 86,400/day. The per-second rate limiter
-// (newFugleClient) enforces the burst limit; the daily tracker enforces
-// the cumulative ceiling — together they prevent cold-start bursts from
-// exhausting the day's budget. The free tier's actual published cap may
-// be lower; this is a conservative upper bound that triggers ErrQuotaExhausted
-// before the upstream rejects.
-const fugleDailyLimit = 86400
+// fugleDailyLimit is the daily quota ceiling enforced locally before any
+// request reaches the Fugle upstream (manifest F1/A1). The theoretical
+// free-tier ceiling (60/min × 1440 = 86,400) is useless as a gate — the
+// upstream rejects long before it. 2000/day is a conservative bound:
+// normal usage (warmup ~32 candles + on-demand technical + quotes) is
+// well under 500/day, so 2000 only trips during runaway bursts, giving
+// channel-health a warn signal instead of an invisible 401 lockout.
+// TODO(kaecler): confirm the actual free-tier daily cap and tune.
+const fugleDailyLimit = 2000
 
 // ErrFugleQuotaExhausted is returned by FugleClient.doGet when the daily
 // quota is gone. Mirrors marketdata.ErrQuotaExhausted (FinMind) so callers
 // can `errors.Is` either one to detect "budget ran out" without coupling
 // to the specific provider. The shared QuotaRegistry surfaces both.
 var ErrFugleQuotaExhausted = fmt.Errorf("fugle: daily quota exhausted")
+
+// ErrFugleUnauthorized is returned by FugleClient.doGet on HTTP 401.
+// The free tier surfaces both quota-lockout and invalid-key as 401
+// (manifest F3/D5) — it is treated as a quota/credential event (visible
+// warn + breaker trip) rather than a silent generic failure, so a locked
+// key can never masquerade as "Fugle is fine, we fell back to TWSE".
+var ErrFugleUnauthorized = fmt.Errorf("fugle: unauthorized (quota locked or invalid key)")
 
 // FugleClient Fugle API 客户端
 type FugleClient struct {
@@ -74,7 +82,8 @@ type FugleQuoteResponse struct {
 }
 
 // getFugleRateLimit returns the rate limit based on FUGLE_TIER env var.
-// free: 60/min (default), developer: 600/min, advanced: 2000/min
+// free: 30/min (default — conservative vs the measured ~39/min 429 point,
+// manifest F2/A2), developer: 600/min, advanced: 2000/min
 func getFugleRateLimit() int {
 	switch config.GetSecret("FUGLE_TIER") {
 	case "developer":
@@ -82,7 +91,7 @@ func getFugleRateLimit() int {
 	case "advanced":
 		return 2000
 	default:
-		return 60 // free tier
+		return 30 // free tier — deliberately below the measured 429 point
 	}
 }
 
@@ -133,8 +142,8 @@ func newFugleClient(apiKey string, stateDir string) *FugleClient {
 	// Burst is deliberately conservative: a burst == limit (e.g. 60) lets a
 	// single caller fire 60 requests instantly, which the Fugle sliding
 	// window rejects well before 60 (measured 429 at ~39 live calls,
-	// 2026-08-03). Keep burst small so the limiter actually throttles.
-	burst := 5
+	// 2026-08-03). Keep burst small (3) so the limiter actually throttles.
+	burst := 3
 	if limit < burst {
 		burst = limit
 	}
@@ -236,6 +245,15 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 		body, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			// 401: free tier 破表鎖定與 key 無效都表現為 401（manifest
+			// F3）。記錄 warn 讓鎖定可見（401 不走上方 429 retry 分支，
+			// 否則破表完全隱形）。
+			if resp.StatusCode == http.StatusUnauthorized {
+				logging.Warn("fugle", "rate_limit_401",
+					"endpoint", endpoint,
+					"note", "free-tier quota lock or invalid key; treating as quota event")
+				return nil, fmt.Errorf("fugle: %w", ErrFugleUnauthorized)
+			}
 			return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, string(body))
 		}
 		return body, readErr

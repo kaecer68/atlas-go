@@ -69,11 +69,22 @@ type MonthlyRevenueProvider interface {
 // Handler serves per-symbol Taiwan stock endpoints.
 type Handler struct {
 	deps Deps
+	// nowFunc 供 HandleQuote/HandleTechnical 判斷交易日；測試可注入
+	// 固定時間（manifest Phase C — 非交易日標記的確定性測試）。
+	nowFunc func() time.Time
 }
 
 // NewHandler creates a Handler from the given dependencies.
 func NewHandler(deps Deps) *Handler {
-	return &Handler{deps: deps}
+	return &Handler{deps: deps, nowFunc: time.Now}
+}
+
+// now 回傳注入的時鐘（預設 time.Now）。
+func (h *Handler) now() time.Time {
+	if h.nowFunc != nil {
+		return h.nowFunc()
+	}
+	return time.Now()
 }
 
 func RegisterRoutes(mux *http.ServeMux, deps Deps) {
@@ -105,6 +116,10 @@ func normalizeFundamentalsSymbol(s string) string {
 // HandleQuote returns the latest intraday quote for a single symbol.
 // It tries Fugle first (5s timeout), then falls back to TWSE OpenAPI (5s timeout).
 // P0-1 fix (2026-07-26): separate timeout budgets + log failures + source annotation.
+// Manifest Phase B2/C (2026-08-10): Fugle 200 但資料殘缺（closePrice-only）
+// 視為失敗 → fallback TWSE；全部 provider 殘缺 → 200 + complete:false 明確
+// 訊號（非「看似成功但殘缺的 200」）；非交易日 → trading_day:false 標記
+// （不再因 TWSE 空快照回誤導的 503）。
 func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 	symbol := r.URL.Query().Get("symbol")
 	if symbol == "" {
@@ -121,18 +136,29 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		return http.StatusServiceUnavailable, map[string]string{"error": "quote provider not configured"}
 	}
 
+	tradingDay := marketdata.IsTaiwanTradingDay(h.now())
+
 	// Attempt Fugle with a short timeout first.
 	if h.deps.FugleClient != nil {
 		fugleCtx, fugleCancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer fugleCancel()
 		q, err := h.deps.FugleClient.GetQuote(fugleCtx, symbol)
 		if err == nil {
-			return http.StatusOK, q
+			if marketdata.QuoteComplete(q) {
+				q.Complete = boolPtr(true)
+				q.TradingDay = boolPtr(tradingDay)
+				return http.StatusOK, q
+			}
+			// Manifest Phase B2: Fugle 200 但 OHLC 殘缺（closePrice-only）
+			// — 視為失敗 fallback，不靜默回傳殘缺 200。
+			slog.Warn("stocktools: fugle quote incomplete, falling back to TWSE",
+				"symbol", symbol)
+		} else {
+			// Log the failure so it's observable (previously silently discarded).
+			slog.Warn("stocktools: fugle quote failed, falling back to TWSE",
+				"symbol", symbol,
+				"err", err)
 		}
-		// Log the failure so it's observable (previously silently discarded).
-		slog.Warn("stocktools: fugle quote failed, falling back to TWSE",
-			"symbol", symbol,
-			"err", err)
 	}
 
 	// Fallback: TWSE OpenAPI with its own timeout budget.
@@ -144,7 +170,7 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		// context deadline exceeded (SK-22 endpoint-2 audit).
 		twseCtx, twseCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 		defer twseCancel()
-		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, time.Now(), []string{symbol})
+		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, h.now(), []string{symbol})
 		if err != nil {
 			slog.Error("stocktools: TWSE quote fallback failed",
 				"symbol", symbol,
@@ -154,10 +180,17 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		if len(quotes) == 0 {
 			return http.StatusNotFound, map[string]string{"error": "symbol not found"}
 		}
-		return http.StatusOK, quotes[0]
+		q := quotes[0]
+		q.Complete = boolPtr(marketdata.QuoteComplete(q))
+		q.TradingDay = boolPtr(tradingDay)
+		return http.StatusOK, q
 	}
 	return http.StatusServiceUnavailable, map[string]string{"error": "quote provider failed"}
 }
+
+// boolPtr 回傳指向 b 的指標（domain.Quote 的 Complete/TradingDay 標記用；
+// nil = 未評估，false 是明確訊號，故不能省略 false）。
+func boolPtr(b bool) *bool { return &b }
 
 // HandleSectorMedianPE returns the median P/E for a given sector; 0 if no data.
 func (h *Handler) HandleSectorMedianPE(r *http.Request) (int, any) {
@@ -274,7 +307,7 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	if days > 365 {
 		days = 365
 	}
-	end := time.Now()
+	end := h.now()
 	start := end.AddDate(0, 0, -days)
 	// Normalize: QuoteStore uses ".TW" suffix; API input is bare symbol.
 	qsSymbol := symbol
@@ -303,7 +336,13 @@ func (h *Handler) HandleTechnical(r *http.Request) (int, any) {
 	if len(bars) < 2 {
 		return http.StatusServiceUnavailable, map[string]string{"error": "insufficient historical quote data"}
 	}
-	return http.StatusOK, computeTechnical(bars)
+	tech := computeTechnical(bars)
+	// Manifest Phase C：非交易日明確標記（假日機制接入 technical 路徑），
+	// 避免 SMA/RSI 被誤讀為當日訊號。
+	if !marketdata.IsTaiwanTradingDay(h.now()) {
+		tech["trading_day"] = false
+	}
+	return http.StatusOK, tech
 }
 
 func computeTechnical(bars []domain.DailyBar) map[string]any {

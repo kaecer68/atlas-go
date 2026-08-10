@@ -200,7 +200,9 @@ func (p *HybridProvider) getQuotesFromTWSE(ctx context.Context, symbols []string
 
 func (p *HybridProvider) hasInvalidQuotes(quotes []domain.Quote) bool {
 	for _, q := range quotes {
-		if q.Last == 0 && q.Open == 0 && q.High == 0 && q.Low == 0 {
+		// 共用完整性判定（manifest Phase B1）：無資料（全 0）與
+		// closePrice-only 殘缺（Last>0 但 OHLC 全 0）都視為 invalid。
+		if !QuoteComplete(q) {
 			return true
 		}
 		if q.Last < 0 || q.Open < 0 || q.High < 0 || q.Low < 0 {

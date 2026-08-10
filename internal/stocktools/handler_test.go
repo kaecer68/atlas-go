@@ -68,6 +68,9 @@ func TestHandleQuote(t *testing.T) {
 // that Fugle already consumed).
 type mockTWSEProvider struct {
 	gotCtx context.Context
+	// incomplete=true 回傳 closePrice-only 殘缺 quote（manifest Phase B2
+	// 測試用：驗證「所有 provider 殘缺 → complete:false」）。
+	incomplete bool
 }
 
 func (m *mockTWSEProvider) Name() string { return "mock-twse" }
@@ -84,7 +87,10 @@ func (m *mockTWSEProvider) GetQuotes(ctx context.Context, _ time.Time, symbols [
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return []domain.Quote{{Symbol: symbols[0], Last: 680, Market: "TW", Source: "twse"}}, nil
+	if m.incomplete {
+		return []domain.Quote{{Symbol: symbols[0], Last: 680, Market: "TW", Source: "twse"}}, nil
+	}
+	return []domain.Quote{{Symbol: symbols[0], Last: 680, Open: 670, High: 685, Low: 668, Volume: 12345, Market: "TW", Source: "twse"}}, nil
 }
 
 // TestHandleQuote_TWSEFallbackGetsIndependentTimeoutBudget verifies the
@@ -723,5 +729,106 @@ func TestHandleMonthlyRevenue_QuotaSufficientReachesProvider(t *testing.T) {
 	}
 	if !fake.hitFetch {
 		t.Error("handler should reach the provider when quota is sufficient")
+	}
+}
+
+// ─── manifest Phase B2/C — quote 完整性與非交易日標記 ───────────────────────
+
+// TestHandleQuote_FugleIncomplete_FallsBackToTWSE verifies that a Fugle
+// 200 with closePrice-only data (Last>0, OHLC=0 — the "看似成功但殘缺"
+// pattern) is treated as a failure: the handler falls back to TWSE and
+// returns a complete quote, instead of silently forwarding the残缺 200.
+func TestHandleQuote_FugleIncomplete_FallsBackToTWSE(t *testing.T) {
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Fugle 200 + closePrice-only（無 open/high/low/volume）
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"symbol":"2330","closePrice":2395}`))
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{}
+	h := NewHandler(Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	code, resp := h.HandleQuote(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 from TWSE fallback, got %d: %v", code, resp)
+	}
+	q, ok := resp.(domain.Quote)
+	if !ok {
+		t.Fatalf("resp type = %T, want domain.Quote", resp)
+	}
+	if q.Source != "twse" {
+		t.Errorf("Source = %q, want twse (fell back from incomplete Fugle data)", q.Source)
+	}
+	if q.Complete == nil || !*q.Complete {
+		t.Errorf("Complete = %v, want true (TWSE quote is complete)", q.Complete)
+	}
+}
+
+// TestHandleQuote_BothProvidersIncomplete_MarksCompleteFalse verifies the
+// last-resort contract: when every provider returns incomplete data, the
+// handler still returns 200 but marks complete:false — an explicit
+// structural signal instead of a silent残缺 200.
+func TestHandleQuote_BothProvidersIncomplete_MarksCompleteFalse(t *testing.T) {
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"symbol":"2330","closePrice":2395}`))
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{incomplete: true}
+	h := NewHandler(Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	code, resp := h.HandleQuote(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 with complete:false, got %d: %v", code, resp)
+	}
+	q, ok := resp.(domain.Quote)
+	if !ok {
+		t.Fatalf("resp type = %T, want domain.Quote", resp)
+	}
+	if q.Complete == nil || *q.Complete {
+		t.Errorf("Complete = %v, want false (all providers incomplete)", q.Complete)
+	}
+}
+
+// TestHandleQuote_NonTradingDay_MarksTradingDayFalse verifies the quote
+// handler surfaces the trading-day calendar (manifest Phase C): on a
+// weekend, the response carries trading_day:false instead of failing with
+// a misleading 503 from the empty TWSE snapshot.
+func TestHandleQuote_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{}
+	h := NewHandler(Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+	// 2026-08-09 是週日（非交易日）
+	h.nowFunc = func() time.Time { return time.Date(2026, 8, 9, 12, 0, 0, 0, time.Local) }
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	code, resp := h.HandleQuote(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 with trading_day:false, got %d: %v", code, resp)
+	}
+	q, ok := resp.(domain.Quote)
+	if !ok {
+		t.Fatalf("resp type = %T, want domain.Quote", resp)
+	}
+	if q.TradingDay == nil || *q.TradingDay {
+		t.Errorf("TradingDay = %v, want false (2026-08-09 is Sunday)", q.TradingDay)
 	}
 }
