@@ -33,7 +33,7 @@ func registerSystemTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_circuit_breaker",
-		Description: autoDescOr("system_get_circuit_breaker", "Circuit-breaker state per external call site."),
+		Description: autoDescOr("system_get_circuit_breaker", "Live trading 風險熔斷器（daily loss / stop-loss circuit）狀態 — 含 state/consecutive_sl/cooldown/intraday_peak/day_start_value。注意：這是交易風控熔斷器，不是資料通道熔斷器；資料通道健康請用 data_get_channels 或 system_get_health。HTTP: GET /api/dashboard/circuit-breaker."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetCircuitBreaker)
 
