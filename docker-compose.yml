@@ -215,11 +215,16 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Fallback admin/admin when GRAFANA_USER/PASSWORD are unset (matches
-      # the DB_PASSWORD:-atlas pattern elsewhere in this file; compose warns
-      # on unset ${VAR} without a default). Only applies on first
-      # initialization — Grafana ignores admin env once the admin user
-      # exists in grafana-data.
+      # ── Grafana admin 憑證解析（2026-08-10 定案，AI agent 必讀）──
+      # 1. .env 定義 GRAFANA_USER / GRAFANA_PASSWORD → 優先於 fallback
+      # 2. 未定義 → fallback admin/admin（${VAR:-admin}，消除 compose
+      #    對未設 ${VAR} 的警告）
+      # 3. 此 env 僅在「首次初始化」生效：Grafana 對 grafana-data volume
+      #    已存在的 admin 用戶會忽略 env（admin/admin 登入 401 時，代表
+      #    volume 內是舊憑證，不是空值問題）
+      # 4. 更換現有 volume 的 admin 密碼：在 Grafana UI（Server Admin →
+      #    Users）內變更，或刪除 grafana-data volume 重設（會清空
+      #    dashboard/provisioning 狀態）；不要直接改 volume 檔案。
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
