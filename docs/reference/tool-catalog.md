@@ -141,7 +141,7 @@
 | `system_get_metrics_trend` | Metrics 趨勢 |
 | `system_get_thresholds` | SLO 門檻值 |
 | `system_get_data_pipeline` | Data pipeline 狀態 |
-| `system_get_circuit_breaker` | Circuit-breaker 狀態 |
+| `system_get_circuit_breaker` | Live 風險熔斷器狀態（非資料通道 breaker） |
 | `system_get_maturity` | 模組成熟度評分 |
 
 ### LLM（2 個）

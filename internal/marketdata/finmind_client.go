@@ -473,16 +473,8 @@ func (p *FinMindProvider) Name() string {
 	return "finmind"
 }
 
-// isTaiwanTradingDay 回傳 t 是否為台股交易日 (排除週末)。
-// FinMind 在週末/假日回傳空資料,GetQuotes 必須在呼叫 FinMind API
-// 之前先驗證 asOf 為交易日,否則會拿到空的 quotes 卻無明確錯誤,
-// 讓下游誤以為「當天無報價」而非「查詢日期非交易日」。
-// 國定假日清單暫不內建 (需每年維護),僅擋週末;後續可由
-// globalmarket.TradingSchedule.Holidays 注入或讀 configs 擴充。
-func isTaiwanTradingDay(t time.Time) bool {
-	w := t.Weekday()
-	return w != time.Saturday && w != time.Sunday
-}
+// isTaiwanTradingDay 已移至 calendar.go（B05：含國定假日判定）。
+// 定義位置：internal/marketdata/calendar.go。
 
 func (p *FinMindProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
 	if !isTaiwanTradingDay(asOf) {
