@@ -280,6 +280,11 @@ func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *Met
 func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroProvider marketdata.MacroDataProvider, workDir string) *service.IndustryService {
 	seasonalEngine := industry.NewSeasonalEngine()
 	cycleTracker := industry.NewCycleTracker()
+	// B01：載入持久化的 cycle positions/history（restart 後不退回 seeds）。
+	// 檔案不存在/損壞時為 no-op。
+	if err := cycleTracker.LoadFromFile(filepath.Join(workDir, "data/state", "cycle_tracker.json")); err != nil {
+		logging.Warn("industry_service", "cycle_state_load_failed", "err", err.Error())
+	}
 	linkageAnalyzer := industry.NewLinkageAnalyzer()
 
 	// Wire narrative provider

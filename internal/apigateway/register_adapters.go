@@ -196,7 +196,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		// Provides MacroDataSnapshot.HistoricalVolatility consumed by
 		// internal/strategy_techniques/evaluator.go (resolveField "HistoricalVolatility").
 		// See docs/data-sources.md §tw_vol for the ChangePct semantic caveat.
-		twVolProvider := marketdata.NewTaiwanVolatilityProvider()
+		twVolProvider := marketdata.NewTaiwanVolatilityProviderWithStore(filepath.Join(workDir, "data/state", "taiwan_index_history.json"))
 		twVolAdapter := NewTaiwanVolatilityChannelAdapter(twVolProvider)
 		g.registry.Register("tw_vol", twVolAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tw_vol")

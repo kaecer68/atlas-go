@@ -4416,6 +4416,12 @@ export interface cnbcQuickQuoteResponse {
   QuickQuoteResult: string;
 }
 
+export interface cycleTrackerSnapshot {
+  saved_at: string;
+  positions: Record<string, CyclePosition | null>;
+  history: Record<string, CyclePosition[]>;
+}
+
 export interface dailyRateSnapshot {
   date: string;
   usd_twd: number;

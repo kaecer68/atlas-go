@@ -2,6 +2,7 @@ package industry
 
 import (
 	"math"
+	"path/filepath"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -660,4 +661,63 @@ func TestDetectBusinessCycle_AllPhasesReachable(t *testing.T) {
 			t.Errorf("phase %s was not produced by any test case", p)
 		}
 	}
+}
+
+// B01：CycleTracker 持久化 round-trip — restart 後不退回 heuristic seeds。
+func TestCycleTracker_SaveLoad_RoundTrip(t *testing.T) {
+	ct := NewCycleTracker()
+	// 用真實資料更新 semiconductor（empirical tier：>1 history entries）
+	ct.UpdatePosition("semiconductor", IndustryMetrics{
+		IndustryID:          "semiconductor",
+		RevenueGrowthYoY:    0.33,
+		ProfitGrowthYoY:     0.45,
+		InventoryTurnover:   5.5,
+		CapacityUtilization: 0.88,
+	})
+	ct.UpdatePosition("semiconductor", IndustryMetrics{
+		IndustryID:          "semiconductor",
+		RevenueGrowthYoY:    0.35,
+		ProfitGrowthYoY:     0.47,
+		InventoryTurnover:   5.6,
+		CapacityUtilization: 0.89,
+	})
+
+	path := filepath.Join(t.TempDir(), "cycle_tracker.json")
+	if err := ct.SaveToFile(path); err != nil {
+		t.Fatalf("SaveToFile: %v", err)
+	}
+
+	// 新 tracker 載入
+	ct2 := NewCycleTracker()
+	if err := ct2.LoadFromFile(path); err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+
+	pos, ok := ct2.GetPosition("semiconductor")
+	if !ok {
+		t.Fatal("semiconductor position missing after load")
+	}
+	if pos.RevenueGrowthYoY != 0.35 {
+		t.Errorf("RevenueGrowthYoY = %v, want 0.35 (empirical value, not seed)", pos.RevenueGrowthYoY)
+	}
+	if ct2.EvidenceTier("semiconductor") != "empirical" {
+		t.Errorf("EvidenceTier = %q, want empirical (history preserved)", ct2.EvidenceTier("semiconductor"))
+	}
+	// 未更新的 industry 仍是 seed（estimated）
+	if ct2.EvidenceTier("financials") != "estimated" {
+		t.Errorf("financials EvidenceTier = %q, want estimated (seeded)", ct2.EvidenceTier("financials"))
+	}
+}
+
+// B01：檔案不存在時 LoadFromFile 為 no-op（不 error、不覆蓋 seeds）。
+func TestCycleTracker_LoadFromFile_MissingFile(t *testing.T) {
+	ct := NewCycleTracker()
+	if err := ct.LoadFromFile(filepath.Join(t.TempDir(), "nonexistent.json")); err != nil {
+		t.Fatalf("LoadFromFile on missing file should be no-op: %v", err)
+	}
+	pos, ok := ct.GetPosition("semiconductor")
+	if !ok {
+		t.Fatal("seeded position should remain after no-op load")
+	}
+	_ = pos
 }
