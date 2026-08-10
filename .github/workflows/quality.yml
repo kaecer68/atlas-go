@@ -270,6 +270,32 @@ jobs:
     - name: Check maturity label consistency
       run: bash scripts/ci/check_maturity.sh
 
+  # Critical background tasks must exist in the atlas binary — guards
+  # against silent compiler DCE removal (2026-08-10 template_detector_scan
+  # incident: a `:=` shadowing bug made `if x != nil && y != nil` provably
+  # false, so the whole registration block was dead-code-eliminated while
+  # compile-only CI stayed green).
+  critical-tasks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Check critical tasks in binary
+      run: bash scripts/ci/check_critical_tasks.sh
+
   # Version consistency — verifies VERSION file matches hardcoded
   # version strings in TARGETS files (AGENTS.md, AGENTS_INDEX.md,
   # MATURITY.md, fubonproxy/AGENTS.md, cmd/atlas-mcp/server/AGENTS.md).
