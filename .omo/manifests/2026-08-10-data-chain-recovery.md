@@ -71,6 +71,21 @@
 
 > **已完成**：A01-A05（#1502）、B05+B04（#1503）、B03（#1504）+ 表述修正（#1505）、B02+B01（#1506）。Backlog 核心項全數關閉。
 
+### B06 決策紀錄（2026-08-10 評估後：**不做，保留 backlog 觀察項**）
+
+**問題**：資料通道 breaker（`apigateway.CircuitBreakerManager`，38 通道）的 `Status()` 僅測試呼叫，無 HTTP/MCP 暴露；現有 `system_get_circuit_breaker` 是 **live 交易風控熔斷器**（daily loss），與資料通道無關（B04 已修正描述）。
+
+**評估（現有觀測已覆蓋所需缺口，effect 層）**：
+- breaker open 時 fetch 失敗即時寫入 channel health（`gateway.go:80-99`）→ `data_get_channels` / `/api/dashboard/channel-health` 可見 `warn`/`error`，且 **`last_error` 字串即為 `"circuit breaker open for channel X"`**（cause 直接可見，不需額外 API）
+- 有 stale cache 時回 `Stale/Fallback/LastError` 標記（4-layer data-visibility，PR #844）→ `system_get_data_pipeline` / MacroDataSnapshot 可見
+- wave9 聚合 health → `atlas_channel_health_errors_total` metrics → `system_get_health` / Prometheus
+
+**剩餘盲區（cause 層細節，非必要）**：failures 計數、half-open 狀態、recovery timeout 倒數 — 診斷加分資訊，非監控必要。
+
+**理由**：本 session 的 root-cause 修復（A04 stale-handling、A05 typed errors、B02 history fallback）已降低 breaker 誤開率與誤開後果；用戶方針「只改任務要求的程式碼，不添加推測性功能」；4-layer visibility 已達監控目的。成本雖低（`Gateway.BreakerStatus()` 已存在，補 HTTP+MCP 約 50-80 行），但無當前需要。
+
+**觸發條件（滿足任一再投入）**：出現「channel health 顯示 error 但 logs 不足以區分 breaker vs upstream」的實際案例；或需在 dashboard 即時呈現 breaker 狀態。若做，**只暴露只讀 GET（breaker 狀態快照），不暴露 ForceOpen/Reset 寫操作**（admin 動作，暴露有誤操作風險）。
+
 ## B03 實測記錄（2026-08-10，容器內 curl）
 
 | 檢查 | 結果 |
@@ -115,3 +130,4 @@
 | 2026-08-10 | 1.2 | B05+B04 實作（PR #1503）；B06 加入 backlog | agent |
 | 2026-08-10 | 1.3 | B03 實測定案（TWT44U 移除）+ ETF 因子停用（PR #1504） | agent |
 | 2026-08-10 | 1.4 | B03 表述修正（PR #1505）；B02+B01 history store（PR #1506）— backlog 核心項關閉 | agent |
+| 2026-08-10 | 1.5 | B06 評估後決定「不做」— 現有 channel health / 4-layer visibility / metrics 已覆蓋缺口；保留 backlog 觀察項並記觸發條件 | agent |
