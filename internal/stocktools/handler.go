@@ -3,6 +3,7 @@ package stocktools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -172,6 +173,17 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		defer twseCancel()
 		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, h.now(), []string{symbol})
 		if err != nil {
+			if errors.Is(err, marketdata.ErrTWSEQuoteNotFound) {
+				// 所有 provider 都無此 symbol → by-design 政策語義
+				//（文件問題 4 / 驗收 SOP 2）：200 + coverage_note，
+				// 客戶端可區分「不在資料範圍」與「atlas 壞了」。
+				return http.StatusOK, map[string]any{
+					"symbol":        symbol,
+					"last":          0,
+					"complete":      false,
+					"coverage_note": CoverageNoteNotCovered,
+				}
+			}
 			slog.Error("stocktools: TWSE quote fallback failed",
 				"symbol", symbol,
 				"err", err)

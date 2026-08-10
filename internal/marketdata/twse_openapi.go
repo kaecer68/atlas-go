@@ -192,7 +192,7 @@ func (c *TWSEClient) GetQuote(ctx context.Context, symbol string) (domain.Quote,
 		}
 	}
 
-	return domain.Quote{}, fmt.Errorf("symbol %s not found", symbol)
+	return domain.Quote{}, fmt.Errorf("%w: %s", ErrTWSEQuoteNotFound, symbol)
 }
 
 // GetQuotesBySymbols 获取指定股票列表的行情

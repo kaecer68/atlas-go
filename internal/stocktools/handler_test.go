@@ -3,6 +3,7 @@ package stocktools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -71,6 +72,8 @@ type mockTWSEProvider struct {
 	// incomplete=true 回傳 closePrice-only 殘缺 quote（manifest Phase B2
 	// 測試用：驗證「所有 provider 殘缺 → complete:false」）。
 	incomplete bool
+	// notFound=true 回傳 ErrTWSEQuoteNotFound（policy 語義測試用）。
+	notFound bool
 }
 
 func (m *mockTWSEProvider) Name() string { return "mock-twse" }
@@ -86,6 +89,9 @@ func (m *mockTWSEProvider) GetQuotes(ctx context.Context, _ time.Time, symbols [
 	// the SK-22 endpoint-2 audit.
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if m.notFound {
+		return nil, fmt.Errorf("%w: %s", marketdata.ErrTWSEQuoteNotFound, symbols[0])
 	}
 	if m.incomplete {
 		return []domain.Quote{{Symbol: symbols[0], Last: 680, Market: "TW", Source: "twse"}}, nil
@@ -867,5 +873,36 @@ func TestHandleTechnical_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
 	}
 	if td, ok := tech["trading_day"]; !ok || td != false {
 		t.Errorf("trading_day = %v, want false (2026-08-09 is Sunday)", td)
+	}
+}
+
+// TestHandleQuote_AllProvidersNoData_ReturnsCoverageNote verifies the
+// by-design policy signal (文件問題 4 / 驗收 SOP 2): when NO provider
+// has the symbol (Fugle fails + TWSE reports not-found), the handler
+// returns 200 + coverage_note instead of a misleading 503 — the client
+// can tell "out of scope by design" from "atlas is broken".
+func TestHandleQuote_AllProvidersNoData_ReturnsCoverageNote(t *testing.T) {
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{notFound: true}
+	h := NewHandler(Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=660", nil)
+	code, resp := h.HandleQuote(req)
+
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 with coverage_note, got %d: %v", code, resp)
+	}
+	body, ok := resp.(map[string]any)
+	if !ok {
+		t.Fatalf("resp type = %T, want map[string]any", resp)
+	}
+	if body["coverage_note"] != CoverageNoteNotCovered {
+		t.Errorf("coverage_note = %v, want %q", body["coverage_note"], CoverageNoteNotCovered)
 	}
 }
