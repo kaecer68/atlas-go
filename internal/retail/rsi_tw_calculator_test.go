@@ -380,7 +380,7 @@ func TestSubC3_ETFThresholds(t *testing.T) {
 		netSub float64
 		want   float64
 	}{
-		{0, 0.5},             // fallback
+		{0, 0},               // B03: 資料不可用 → 不貢獻（IsFallback），不再假裝中性
 		{2_000_000_000, 0.9}, // > C3VeryBullishThreshold (1B)
 		{500_000_000, 0.7},   // > C3BullishThreshold (100M)
 		{50_000_000, 0.55},   // > 0
@@ -527,8 +527,10 @@ func TestLastScore_AfterCompute(t *testing.T) {
 	}
 	result := c.ComputeFinal(input)
 	last := c.LastScore()
-	if math.Abs(result.Score-last) > 1e-6 {
-		t.Errorf("LastScore = %f, want %f (from ComputeFinal)", last, result.Score)
+	// lastScore 存未 round 的 final，snapshot.Score 是 round4(final) —
+	// 比較時需對齊同一精度（C3 改動後浮點差異 >1e-6 浮現）。
+	if math.Abs(result.Score-round4(last)) > 1e-6 {
+		t.Errorf("LastScore = %f, want %f (from ComputeFinal)", round4(last), result.Score)
 	}
 }
 

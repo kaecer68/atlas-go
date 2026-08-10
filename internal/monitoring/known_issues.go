@@ -50,9 +50,9 @@ var knownIssues = map[string]KnownIssue{
 	// A separate issue should investigate why the runtime pipeline
 	// produces two different IDs for the same logical channel.
 	"twse_etf": {
-		Key:          "twse_etf_upstream_60d",
-		Title:        "TWSE ETF subscription data: upstream unresponsive",
-		Description:  "TWSE's ETF subscription endpoint (www.twse.com.tw / ETF) has been returning 403/timeout for 60+ days. We are likely rate-limited at the IP level after a spike of backfill traffic. Workaround: skip ETF flow data in agent recommendations; the rest of the simulation pipeline operates without it.",
+		Key:   "twse_etf_upstream_60d",
+		Title: "TWSE ETF subscription data: endpoint removed (TWT44U → 404)",
+		Description: "TWSE's ETF subscription endpoint (www.twse.com.tw/exchangeReport/TWT44U) has been permanently removed. Container-probed on 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — so this is NOT an IP rate-limit (previous 403 hypothesis was wrong). The 2026 ETF subscription platform revamp (投信/參與券商內部作業平台) replaced the public endpoint, and no public alternative exists (FinMind lacks an ETF-subscription dataset). Impact: ETFNetSubscription (RSI-TW Part C subC3) is permanently unavailable; subC3 now returns IsFallback without contributing (B03, 2026-08-10).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
 	},
