@@ -318,7 +318,7 @@ lint: lint-backend
 ci:
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
-	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links' | sort); do \
+	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links|critical_tasks' | sort); do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 30 bash $$script > /dev/null 2>&1; then \

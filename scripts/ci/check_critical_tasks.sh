@@ -22,11 +22,16 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# 關鍵 BTM 任務名稱（新增關鍵背景任務時，若屬「無聲故障高風險」，加入此清單）
+# 關鍵 BTM 任務名稱（2026-08-10 code review 後收斂）：
+# 只保留「binary 中唯一 literal」的檢查項 — 若該 task 名同時出現在
+# 無關且恆可達的 code（log 字串 / DDL 預設值 / struct literal / 參數
+# rationale），grep -F 子字串比對永遠找到 → 檢查假 PASS（false green）。
+# 實證：macro_ingest 在 sqlite_core.go DDL、dashboard_api.go struct、
+# main.go log 共 11 處；auto_cycle_update 在 defaults_narrative.go 參數
+# rationale — 兩者註冊 block 被 DCE 移除也偵測不到。
+# 新增檢查項時：確認 task 名只在註冊點出現（grep -r '<name>' 全 repo）。
 CRITICAL_TASKS=(
-  "template_detector_scan" # 2026-08-10 DCE 事故（:= 遮蔽）；24 模板 detector 掃描
-  "auto_cycle_update"      # 產業 cycle 聚合（B01 CycleTracker 持久化依賴）
-  "macro_ingest"           # 總經批次 ingestion 核心
+  "template_detector_scan" # 2026-08-10 DCE 事故（:= 遮蔽）；binary 唯一 literal（實證 0→2）
 )
 
 BIN="$(mktemp)"
