@@ -215,8 +215,13 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      # Fallback admin/admin when GRAFANA_USER/PASSWORD are unset (matches
+      # the DB_PASSWORD:-atlas pattern elsewhere in this file; compose warns
+      # on unset ${VAR} without a default). Only applies on first
+      # initialization — Grafana ignores admin env once the admin user
+      # exists in grafana-data.
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
