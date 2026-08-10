@@ -1,3 +1,4 @@
+// CI verification marker: critical-tasks job validation (test PR, no behavior change).
 package shared
 
 import (
