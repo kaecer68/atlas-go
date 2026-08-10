@@ -67,10 +67,12 @@
 
 | ID | Problem | Discovery Time | Proposed Round |
 |----|---------|---------------|----------------|
-| B01 | CycleTracker 無持久化，restart 後退回 heuristic seeds | 2026-08-10 | 後續 PR |
-| B02 | tw_vol 無 TWSE/歷史 fallback | 2026-08-10 | 後續 PR |
-| B03 | twse_etf 無持久化 daily store / backfill / 替代源 | 2026-08-10 | 後續 PR（需先 upstream 實測） |
-| B04 | `system_get_circuit_breaker` 顯示 uninitialized 與 scheduler `circuit breaker open` 語意落差 | 2026-08-10 | 後續 PR |
+| B01 | CycleTracker 無持久化，restart 後退回 heuristic seeds | 2026-08-10 | 與 B02 共用 history store 設計 |
+| B02 | tw_vol 無 TWSE/歷史 fallback | 2026-08-10 | 需 TAIEX daily history store |
+| B03 | twse_etf 無持久化 daily store / backfill / 替代源 | 2026-08-10 | 需先 upstream 實測（容器內 curl TWT44U） |
+| B06 | 資料通道 breaker（apigateway.CircuitBreakerManager）無 HTTP/MCP 暴露 | 2026-08-10（B04 實作中發現） | observability 增強，另案 |
+
+> **已完成 backlog 項**：B05（國定假日判定，PR #1503）、B04（circuit-breaker MCP 描述修正，PR #1503）。
 
 ---
 
@@ -100,3 +102,4 @@
 |------|---------|--------|--------|
 | 2026-08-10 | 1.0 | Initial manifest（A01-A05 from audit） | agent |
 | 2026-08-10 | 1.1 | A01-A05 全部實作 + commit 7daee92e..4b3eb9b9 + PR #1502 | agent |
+| 2026-08-10 | 1.2 | B05+B04 實作（PR #1503）；B06 加入 backlog | agent |
