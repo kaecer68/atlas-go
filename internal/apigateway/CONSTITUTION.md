@@ -510,7 +510,7 @@ echo "✅ os.Getenv 檢查通過"
 | taifex_institutional | 1/5s | Liveness | auto_taifex_institutional (1h) | ✅ |
 | twse_oddlot | 1/5s | Liveness | — | ✅ |
 | government_flow | 不限流 (rate.Inf, file-backed) | Readiness | auto_government_flow (1h) | ✅ |
-| twse_etf | 1s/1b | Liveness | — | ✅ |
+| twse_etf | 1s/1b | Liveness | — | ✅ | ⚠️ 資料源已移除（TWT44U → 404，2026-08-10 實測，見 `known_issues.go`） |
 | `us_spx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_spx` (5m) | ✅ |
 | `us_ndx` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_ndx` (5m) | ✅ |
 | `us_dji` | Yahoo Index (1.5s/1b) | Liveness | `us_market_refresh_us_dji` (5m) | ✅ |
@@ -527,7 +527,7 @@ echo "✅ os.Getenv 檢查通過"
 > - 「—」表示通道無獨立 BTM 任務。這些通道的資料擷取依賴：
 >   - `us_market_refresh_<ch>` 獨立任務處理（us_yahoo, us_spx, us_ndx, us_dji, us_nvda, us_aapl, us_msft, tsm_adr），共享 Yahoo limiters。`macro_ingest` 閉包內部批次呼叫（sox_index, dram_spot_price, bdi, tw_vol, frankfurter_fx, sector_data）
 >   - 檔案驅動，無 HTTP fetch（sector_data, government_flow）
->   - 無實作（twse_sbl stub, tdcc_equity_dispersion stub, twse_sector_index, day_trading, twse_oddlot, twse_etf）
+>   - 無實作（twse_sbl stub, tdcc_equity_dispersion stub, twse_sector_index, day_trading, twse_oddlot, twse_etf）— twse_etf 為資料源已移除（TWT44U → 404），非單純未實作
 > - 12 個 Yahoo Finance 通道現已由獨立的 `us_market_refresh_<ch>` BTM 任務個別刷新（5m），共用同一 HTTP API 端點（query1.finance.yahoo.com），透過 shared limiters 避免違反速率限制。
 > - 各通道的完整 BTM 任務清單與排程細節見 `cmd/atlas/*_tasks.go` 及審計 manifest `docs/manifests/2026-07-25-channel-architecture-audit/`。
 > - **注意**：部分通道的 HealthCheck mode 與 Constitution §3.4 規範不完全一致（如 twse_replay/capital_flow/margin 實作為 liveness 但規範要求 readiness）。已知問題，追蹤於 manifest #A04。

@@ -49,7 +49,7 @@
 | `day_trading` | 當沖交易統計 | `DayTradingChannelAdapter` | 5s/1b | — |
 | `market_volume` | 集中市場成交金額（億） | `MarketVolumeChannelAdapter` | 5s/1b | — |
 | `twse_oddlot` | 零股交易 | `TWSEOddLotChannelAdapter` | 5s/2b | — |
-| `twse_etf` | ETF 申購贖回淨額 | `TWSEETFChannelAdapter` | 1s/1b | — |
+| `twse_etf` | ETF 申購贖回淨額（⚠️ 資料源已移除，見 `internal/monitoring/known_issues.go`） | `TWSEETFChannelAdapter` | 1s/1b | — |
 | `twse_insider` | 內部人持股轉讓 | `TWSEInsiderChannelAdapter` | 5s/1b | `auto_twse_insider` (1h) |
 | `twse_sbl` | 借券賣出餘額（**STUB**，G02） | `TWSESBLChannelAdapter` | 2s/1b | `auto_twse_sbl` (1h, disabled) |
 | `export_statistics` | 海關進出口統計 | `ExportStatisticsProvider` | 5s/2b | `auto_export` (12h) |
@@ -113,7 +113,7 @@
 | `exchange_rate` | `USD_TWD`（輔助） |
 | `twse_capital_flow` | `ForeignInvestorNet`, `ForeignDealerNet`, `DomesticFundNet`, `DealerNet`, `DealerSelfNet`, `DealerHedgingNet` |
 | `twse_margin` | `RetailMarginBalance`, `RetailShortBalance`, `MarginMaintenanceRatio` |
-| `twse_etf` | `ETFNetSubscription` |
+| `twse_etf` | `ETFNetSubscription`（⚠️ 資料源已移除，消費者 subC3 停用） |
 | `twse_insider` | `InsiderNet` |
 | `government_flow` | `GovernmentNet`, `InsuranceNet` |
 | `export_statistics` | `ExportElectronics` |
@@ -466,7 +466,7 @@ const SHELL_LOADERS = {
 | `day_trading` | 無 BTM 任務，可能依賴 `macro_ingest` 內部批次 |
 | `market_volume` | 同 `day_trading` |
 | `twse_oddlot` | 無 BTM 任務 |
-| `twse_etf` | 無 BTM 任務 |
+| `twse_etf` | 無 BTM 任務（⚠️ 資料源已移除，2026-08-10 實測 TWT44U → 404） |
 | `tdcc_equity_dispersion` | STUB，無排程 |
 | `sector_data` | `macro_cache_sector_data` (15m) |
 

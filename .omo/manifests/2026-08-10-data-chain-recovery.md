@@ -82,9 +82,9 @@
 | 對照組 `STOCK_DAY_ALL` | **HTTP 200 CSV**（出站 IP 正常 → 非 rate-limit） |
 | 替代候選 TWT85U/TWT84U/TWTB7U | 200 JSON 但內容是變更交易/升降幅度/面額，非 ETF 申贖 |
 | FinMind dataset enum | 僅 `TaiwanStockActiveETFInfo/Holding`（ETF 持股），**無申購贖回** |
-| 2026 ETF 申贖平台 | 證交所改版為投信/參與券商內部作業平台（工商時報 2026-07-16） |
+| 2026 ETF 申贖平台 | 2026-07 新增「整批上傳」功能優化（B2B 平台自 2004 年存在，非黑箱化）；ETFortune 仍公開 NAV/PCF/折溢價 |
 
-**結論**：TWT44U endpoint 永久移除，無公開替代源。known_issues 舊「403/likely IP rate-limit」描述為錯誤推測，已更新。ETFNetSubscription 因子正式停用（subC3 資料缺失不貢獻）。
+**結論**：TWT44U 彙總報表（全市場 ETF 申購贖回淨額）移除；ETF 投資人資訊（NAV/PCF/折溢價）仍公開於 ETFortune，但申購贖回淨額無等價公開替代（OpenAPI opendata 44 個無此項、FinMind 僅 ETF 持股）。known_issues 舊「403/likely IP rate-limit」描述為錯誤推測，已更新。ETFNetSubscription 因子停用（subC3 資料缺失不貢獻）— 因替代源語義不符（PCF/NAV ≠ 申贖淨額），功能決定維持。
 
 ---
 

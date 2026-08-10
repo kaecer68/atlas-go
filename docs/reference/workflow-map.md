@@ -262,7 +262,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 | Macro | `macro_provider.go`、`yahoo_macro_provider.go` |
 | Sector | `sector_data_provider.go`、`twse_sector_index_provider.go` |
 | Index | `sox_index_provider.go`、`bdi_provider.go`、`tsm_adr_*` |
-| ETF | `etf_nav_provider.go`、`twse_etf_provider.go` |
+| ETF | `etf_nav_provider.go`、`twse_etf_provider.go`（⚠️ 申贖資料源已移除，見 known_issues） |
 | Calendar / Microstructure | `calendar_provider.go`、`microstructure_provider.go` |
 
 所有 provider 都透過 **Gateway**（`internal/apigateway`）呼叫，受 6 條憲法管轄。

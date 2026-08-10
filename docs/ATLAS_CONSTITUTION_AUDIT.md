@@ -303,7 +303,7 @@
 |---|------|------|------|------|
 | F1 | 外資雙重動機模型（結構性 vs 投機性分流） | ⬜ | ✅ 已覆核 | `ForeignInvestorNet` + `ForeignDealerNet` 欄位已存在（macro_provider.go）；`scoreForeign` 未消費投機性欄位（gap 已文件化，落地待回測驗證）|
 | F2 | 自營商大小分流（大型可納宏觀，小型用 AI 分點） | ⬜ | ✅ 已覆核 | `DealerSelfNet` + `DealerHedgingNet` 欄位已存在；`scoreDealer` 只用合計（gap 已文件化，AI 分點待資料源）|
-| F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | ✅ 已覆核 | `ETFNetSubscription` 已有消費者（rsi_tw_calculator）；淨化主動訊號列低優先（見 gap-analysis）|
+| F3 | 投信主動 vs 被動分流（ETF 被動買盤 vs 主動基金） | ⬜ | ✅ 已覆核 | `ETFNetSubscription` 資料源已移除（TWT44U → 404，2026-08-10 實測）；被動資金觀測點失效，F3 淨化訊號暫不可行，見 `docs/specs/institutional-flow-split-gap-analysis.md` |
 | F4 | 公股分點追蹤作為 BK-13 替代方案 | ⬜ | ✅ 已覆核 | `GovernmentNet` 已由 `scoreGovernment` 消費（每日總額形式）；分點層級待 BK-13/14 資料源（seam 已備，非程式 gap）|
 | F5 | 選股層策略庫設計（Phase 4） | ⬜ | ⬜ | 仍待 T27 |
 

@@ -243,7 +243,7 @@ type RetailSentimentSnapshot struct {
 	MarginPercentile       float64             `json:"margin_percentile"`
 	Timestamp              time.Time           `json:"timestamp"`
 	RetailFuturesOI        float64             `json:"retail_futures_oi,omitempty"`        // 小台指散戶未平倉比例
-	ETINetSubscription     float64             `json:"etf_net_subscription,omitempty"`     // ETF 淨申購
+	ETINetSubscription     float64             `json:"etf_net_subscription,omitempty"`     // ETF 淨申購 — ⚠️ 資料源已移除(TWT44U→404)，恆為 0
 	CompositeSentiment     float64             `json:"composite_sentiment"`                // RSI-tw 綜合指數 -1.0 to 1.0
 	SentimentSubIndicators *RSITwSubIndicators `json:"sentiment_sub_indicators,omitempty"` // 子指標明細
 }
