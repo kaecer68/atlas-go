@@ -85,11 +85,11 @@
 
 ## Session-End State
 
-- **Done this session**: A01-A05 修復（依進度更新）
-- **Remaining**: -
-- **Next action**: impact 盤查 → PR1 實作
+- **Done this session**: A01+A02（FinMind 正規化 + quarter parser）、A03（批次容量 + data-health）、A04（tw_vol freshness + 分流）、A05（twse_etf typed error）— 全部 commit 並過 CI
+- **Remaining**: docker images 對齊（需 kaecer 主 worktree `make rebuild-all`）；B01-B05 backlog
+- **Next action**: PR #1502 review → merge → post-merge cleanup（branch 刪除）
 - **Uncommitted code**: 無（docs/archive 修改為既有遺留，非本 session 工作）
-- **Branch / PR**: fix/20260810-data-chain-recovery / -
+- **Branch / PR**: fix/20260810-data-chain-recovery / https://github.com/kaecer68/atlas-go/pull/1502
 - **Paused because**: -
 
 ---
@@ -99,3 +99,4 @@
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-08-10 | 1.0 | Initial manifest（A01-A05 from audit） | agent |
+| 2026-08-10 | 1.1 | A01-A05 全部實作 + commit 7daee92e..4b3eb9b9 + PR #1502 | agent |
