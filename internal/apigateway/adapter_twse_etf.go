@@ -13,6 +13,11 @@ import (
 )
 
 // TWSEETFChannelAdapter adapts the TWSE ETF provider.
+//
+// ⚠️ 資料源已移除（2026-08-10 實測 TWT44U → 307 → 404，非 IP rate-limit）。
+// A05 typed error 讓 ErrETFUpstream / ErrETFSchema 正確觸發 circuit breaker，
+// ErrETFNoTradingData 才轉 stale；實際運行會因 upstream 307 HTML 進入
+// ErrETFSchema error 路徑。見 known_issues `twse_etf_upstream_60d`。
 type TWSEETFChannelAdapter struct {
 	provider *marketdata.TWSEETFProvider
 	limiter  *rate.Limiter

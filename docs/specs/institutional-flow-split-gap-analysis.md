@@ -26,7 +26,7 @@
 |--------|-------------------|--------|----------|
 | F1 外資雙重動機 | `ForeignInvestorNet`（外陸資/結構性）、`ForeignDealerNet`（外資自營商/投機性） | `scoreForeign`（forces.go:126）只用 `ForeignInvestorNet` + `ForeignFuturesOINet`；`ForeignDealerNet` **零消費者** | ⚠️ 欄位在，評分未分流 |
 | F2 自營商分流 | `DealerNet`（合計）、`DealerSelfNet`（自行）、`DealerHedgingNet`（避險） | `scoreDealer`（forces.go:237）只用合計 `DealerNet`；分流欄位**零消費者** | ⚠️ 欄位在，評分未分流 |
-| F3 投信主動/被動 | `DomesticFundNet`（投信）、`ETFNetSubscription`（ETF 申贖/被動） | `scoreInstitutional`（forces.go:215）用 `DomesticFundNet`；`ETFNetSubscription` 由 `rsi_tw_calculator.go:362`（零售指標）消費 | ✅ 部分落地（被動資金未進投信評分，但已有獨立消費者） |
+| F3 投信主動/被動 | `DomesticFundNet`（投信）、`ETFNetSubscription`（ETF 申贖/被動） | `scoreInstitutional`（forces.go:215）用 `DomesticFundNet`；`ETFNetSubscription` 原由 `rsi_tw_calculator.go:362` 消費，**資料源已移除（TWT44U → 404，2026-08-10），subC3 停用** | ⚠️ 受阻（被動資金觀測點失效，淨化訊號暫不可行） |
 | F4 公股追蹤 | `GovernmentNet` | `scoreGovernment`（forces.go:266）已消費；`government_flow_provider.go` seam 提供 operator-imported 讀取 | ✅ 已落地（每日總額形式） |
 
 資料流旁證：`internal/monitoring/gateway_adapter.go:299-312` 將 `ForeignDealerNet` / `DealerSelfNet` / `DealerHedgingNet` 從上游傳入 snapshot —— 欄位在資料層完整流動，僅在**評分層**未被使用。
@@ -56,13 +56,13 @@
 
 ### F3 投信主動 vs 被動分流
 
-**現況**：`DomesticFundNet`（投信買賣超）進投信評分；`ETFNetSubscription` 已有獨立消費者（零售指標 `rsi_tw_calculator`）。**兩者未互相對照**——投信買賣超含 ETF 被動申贖成分，主動基金訊號被稀釋。
+**現況**：`DomesticFundNet`（投信買賣超）進投信評分。**`ETFNetSubscription` 資料源已移除**（TWSE TWT44U 彙總報表 → HTTP 307 → 404，2026-08-10 容器內實測）。ETF 投資人資訊（NAV/PCF/折溢價）仍公開於 ETFortune，但**申購贖回淨額**無等價公開替代（OpenAPI opendata 44 個 dataset 無此項、FinMind 僅 ETF 持股）。原消費者 `rsi_tw_calculator` subC3 已停用（回 0 + IsFallback）。
 
-**gap 評估**：被動資金已有觀測點，但未從投信主動訊號中扣除。屬「淨化訊號」而非「新增觀測」。
+**gap 評估**：被動資金觀測點失效，F3「投信買賣超 − ETF 被動成分」的淨化訊號**暫不可行**（需先恢復被動資金觀測，見 known_issues `twse_etf_upstream_60d`）。
 
-**落地建議**（低優先）：
-1. `scoreInstitutional` 以 `DomesticFundNet − ETF 被動成分` 為主動訊號。
-2. 需 ETF 申贖的每日對應（目前 `ETFNetSubscription` 為 snapshot 層欄位，確認資料源涵蓋範圍後再實作）。
+**落地建議**（受阻，解除條件）：
+1. 找到申購贖回淨額的公開替代資料源（TWSE OpenAPI opendata 目前 44 個 dataset 無此項；FinMind 僅 ETF 持股）。
+2. 恢復 `ETFNetSubscription` 填充後，`scoreInstitutional` 以 `DomesticFundNet − ETF 被動成分` 為主動訊號。
 
 ### F4 公股分點追蹤
 
@@ -82,7 +82,7 @@
 |----|------|------|
 | F1 | **暫緩落地**，維持欄位存在；下次方法論 wave 以回測驗證投機性 sub-signal 獨立預測力 | 改變評分行為需先有統計證據；`ForeignDealerNet` 資料已就緒，落地成本低但驗證成本高 |
 | F2 | **暫緩落地**；避險/自行分流併入 F1 同一回測 wave | 同上；AI 分點部分受資料源限制 |
-| F3 | **低優先**：以「投信買賣超 − ETF 被動成分」淨化主動訊號 | 需先確認 `ETFNetSubscription` 每日涵蓋；淨化屬增量改進 |
+| F3 | **受阻**：被動資金觀測點失效（TWT44U → 404），淨化訊號暫不可行 | 需先恢復 ETF 申贖資料源（見 known_issues `twse_etf_upstream_60d`）；屬增量改進 |
 | F4 | **維持現狀**（每日總額已落地）；分點層級待 BK-13/14 資料源 | seam 已備，缺資料非程式問題 |
 
 ## 5. 覆核結果（§附錄 F 對應更新）

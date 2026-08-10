@@ -51,8 +51,8 @@ var knownIssues = map[string]KnownIssue{
 	// produces two different IDs for the same logical channel.
 	"twse_etf": {
 		Key:          "twse_etf_upstream_60d",
-		Title:        "TWSE ETF subscription data: endpoint removed (TWT44U → 404)",
-		Description:  "TWSE's ETF subscription endpoint (www.twse.com.tw/exchangeReport/TWT44U) has been permanently removed. Container-probed on 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — so this is NOT an IP rate-limit (previous 403 hypothesis was wrong). The 2026 ETF subscription platform revamp (投信/參與券商內部作業平台) replaced the public endpoint, and no public alternative exists (FinMind lacks an ETF-subscription dataset). Impact: ETFNetSubscription (RSI-TW Part C subC3) is permanently unavailable; subC3 now returns IsFallback without contributing (B03, 2026-08-10).",
+		Title:        "TWSE ETF subscription aggregate report removed (TWT44U → 404)",
+		Description:  "TWSE's ETF net-subscription aggregate report (www.twse.com.tw/exchangeReport/TWT44U) was removed. Container-probed 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — NOT an IP block (the earlier 403/rate-limit hypothesis was wrong). No public equivalent for the 申購贖回淨額 aggregate exists as of 2026-08: TWSE OpenAPI opendata (44 datasets) has no ETF-subscription dataset; FinMind has only ETF holdings; the ETFortune portal publicizes NAV/PCF/premium-discount but not net-subscription statistics. NOTE: this is a gap in the aggregate statistic specifically — ETF investor information (NAV, PCF, premium/discount) remains public. Impact: ETFNetSubscription (RSI-TW Part C subC3) is permanently unavailable; subC3 returns IsFallback without contributing (B03, 2026-08-10).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
 	},

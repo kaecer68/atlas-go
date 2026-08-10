@@ -31,7 +31,7 @@
     {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
     {"id": "government_broker", "source": "TWSE broker-level aggregate", "status": "registered"},
     {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
-    {"id": "twse_etf", "source": "TWSE", "status": "registered"},
+    {"id": "twse_etf", "source": "TWSE", "status": "registered", "note": "endpoint removed 2026-08 (TWT44U → 404), see known_issues twse_etf_upstream_60d"},
     {"id": "us_spx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
     {"id": "us_ndx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
     {"id": "us_dji", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},

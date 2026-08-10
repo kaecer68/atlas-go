@@ -14,7 +14,7 @@ RSI-tw 由三個加權組件構成：
 | 組件 | 權重 | 子指標 | 資料來源 |
 |------|------|--------|----------|
 | **Part A** | 40% | A1 融資餘額 Z-score / A2 當沖比率 / A3 維持率代理 / A4 VIX 映射 / A5 週選擇權 PCR / A6 零股交易失衡 | MacroDataSnapshot + 滾動歷史 |
-| **Part C** | 25% | C1 散戶期貨 OI / C2 機構法人流向 / C3 ETF 申購贖回 | Gateway channels（taifex_daily, twse_oddlot, twse_etf） |
+| **Part C** | 25% | C1 散戶期貨 OI / C2 機構法人流向 / C3 ETF 申購贖回（⚠️ 資料源已移除 2026-08，subC3 停用回 0 + IsFallback） | Gateway channels（taifex_daily, twse_oddlot, twse_etf） |
 | **Part D** | 乘數 | D1 地緣政治風險 / D2 VIX 飆升 / D3 信貸緊縮 / D4 閃崩 | MacroDataSnapshot + Narrative events |
 
 **核心型別**：`RSITwInput`（handler 從 snapshot + fetcher 組裝）、`RSITwSnapshot`（Score / PartAScore / PartCScore / AdjustmentFactor / SubIndicators）、`RSISubIndicator`（Value / Weight / ZScore / IsFallback）、`Calculator`（Singleton，含 90 筆滾動歷史用於 Z-score）。
@@ -53,7 +53,7 @@ RSI-tw 由三個加權組件構成：
 | `PutCallRatio` | `TaifexFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
 | `OddLotImbalance` | `OddLotFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
 | `RetailFuturesPct` | `TaifexFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
-| `ETFNetSubscription` | `ETFFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
+| `ETFNetSubscription` | `ETFFetcher` → Gateway channel | ❌ 資料源已移除（TWT44U → 404，2026-08-10 實測）；subC3 停用，欄位恆為 nil |
 
 ---
 

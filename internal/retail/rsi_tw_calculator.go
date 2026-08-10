@@ -360,9 +360,10 @@ func (c *Calculator) subC2(data RSITwInput, subs map[string]RSISubIndicator, par
 func (c *Calculator) subC3(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	w := params.C3Weight.Value
 	netSub := data.ETFNetSubscription
-	// B03（2026-08-10 audit）：ETF 申購贖回資料源（TWSE TWT44U）已永久失效 —
-	// 容器內實測 HTTP 307 → page-not-found.html（2026 年 ETF 申贖平台改版為
-	// 投信/參與券商內部作業平台），且無公開替代源（FinMind 無此 dataset）。
+	// B03（2026-08-10 audit）：ETF 申購贖回淨額彙總報表（TWSE TWT44U）已移除 —
+	// 容器內實測 HTTP 307 → page-not-found.html。ETF 投資人資訊（NAV/PCF/
+	// 折溢價）仍公開於 ETFortune，但申購贖回淨額無等價公開替代（OpenAPI
+	// opendata 無此項、FinMind 僅 ETF 持股）。
 	// netSub==0（資料不可用）時不貢獻 Part C，與 subC2 的 IsFallback pattern
 	// 一致 — 資料缺失反映為「該維度無訊號」而非舊的 0.5 中性假裝。
 	if netSub == 0 {

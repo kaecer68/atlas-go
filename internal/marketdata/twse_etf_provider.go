@@ -39,6 +39,14 @@ var (
 )
 
 // TWSEETFProvider fetches Taiwan ETF net subscription data from TWSE.
+//
+// ⚠️ 資料源狀態（2026-08-10 實測）：`www.twse.com.tw/exchangeReport/TWT44U`
+// （全市場 ETF 申購贖回淨額彙總報表）已移除 — HTTP 307 → page-not-found.html
+// (404)，任何日期/參數皆同；對照組 STOCK_DAY_ALL 200 證明非 IP rate-limit。
+// ETF 投資人資訊（NAV/PCF/折溢價）仍公開於 ETFortune，但申購贖回淨額
+// 無等價公開替代（TWSE OpenAPI opendata 44 個 dataset 無此項、FinMind 僅
+// ETF 持股）。見 `internal/monitoring/known_issues.go` `twse_etf_upstream_60d`。
+// 消費者 `rsi_tw_calculator.subC3` 已停用（回 0 + IsFallback）。
 type TWSEETFProvider struct {
 	client      *http.Client
 	baseURL     string

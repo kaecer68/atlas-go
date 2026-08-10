@@ -33,7 +33,7 @@ type MacroDataSnapshot struct {
 	DealerNet              MacroDataPoint `json:"dealer_net"`
 	DealerSelfNet          MacroDataPoint `json:"dealer_self_net"`      // F2: 自營商自行買賣(大型)
 	DealerHedgingNet       MacroDataPoint `json:"dealer_hedging_net"`   // F2: 自營商避險(投機)
-	ETFNetSubscription     MacroDataPoint `json:"etf_net_subscription"` // F3: ETF 申購贖回淨額(被動資金)
+	ETFNetSubscription     MacroDataPoint `json:"etf_net_subscription"` // F3: ETF 申購贖回淨額(被動資金) — ⚠️ 資料源已移除(TWT44U→404)，恆為零
 	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
 	GovernmentNet          MacroDataPoint `json:"government_net"`
 	InsuranceNet           MacroDataPoint `json:"insurance_net"`

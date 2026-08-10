@@ -261,7 +261,7 @@
 | `score` / `composite_sentiment` | float64? | 綜合 RSI-tw 分數 |
 | `interpretation` | string | 人類可讀解讀（中文） |
 | `retail_futures_oi` | float64? | 小台指散戶未平倉多空差 |
-| `etf_net_subscription` | float64? | ETF 淨申購張數 |
+| `etf_net_subscription` | float64? | ETF 淨申購張數（⚠️ 資料源已移除，恆為 null） |
 | `sentiment_sub_indicators` | object | 子指標（category_a / category_c / category_d） |
 | `fetcher_status` | object | 各資料源狀態 `ok`/`error`/`not_available`/`no_data` |
 
