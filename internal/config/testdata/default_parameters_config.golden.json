@@ -2889,10 +2889,10 @@
       "value": 10
     },
     "fugle_rate_limit": {
-      "rationale": "Fugle API free tier: 60 req/min. Developer: 600/min. Advanced: 2000/min",
+      "rationale": "Fugle API free tier: 30 req/min (conservative, below measured ~39/min 429 point; manifest fugle-unified-access F2/A2). Developer: 600/min. Advanced: 2000/min",
       "source": "empirical",
       "todo": "Set FUGLE_TIER env var if using paid plan",
-      "value": 60
+      "value": 30
     },
     "max_retry_attempts": {
       "rationale": "Maximum retry attempts for transient failures; exponential backoff",
