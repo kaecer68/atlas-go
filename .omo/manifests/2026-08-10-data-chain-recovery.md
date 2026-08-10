@@ -67,11 +67,9 @@
 
 | ID | Problem | Discovery Time | Proposed Round |
 |----|---------|---------------|----------------|
-| B01 | CycleTracker 無持久化，restart 後退回 heuristic seeds | 2026-08-10 | 與 B02 共用 history store 設計 |
-| B02 | tw_vol 無 TWSE/歷史 fallback | 2026-08-10 | 需 TAIEX daily history store |
 | B06 | 資料通道 breaker（apigateway.CircuitBreakerManager）無 HTTP/MCP 暴露 | 2026-08-10（B04 實作中發現） | observability 增強，另案 |
 
-> **已完成 backlog 項**：B05（國定假日判定，PR #1503）、B04（circuit-breaker MCP 描述修正，PR #1503）、B03（TWT44U 實測定案 + ETF 因子停用，PR #1504）。
+> **已完成**：A01-A05（#1502）、B05+B04（#1503）、B03（#1504）+ 表述修正（#1505）、B02+B01（#1506）。Backlog 核心項全數關閉。
 
 ## B03 實測記錄（2026-08-10，容器內 curl）
 
@@ -116,3 +114,4 @@
 | 2026-08-10 | 1.1 | A01-A05 全部實作 + commit 7daee92e..4b3eb9b9 + PR #1502 | agent |
 | 2026-08-10 | 1.2 | B05+B04 實作（PR #1503）；B06 加入 backlog | agent |
 | 2026-08-10 | 1.3 | B03 實測定案（TWT44U 移除）+ ETF 因子停用（PR #1504） | agent |
+| 2026-08-10 | 1.4 | B03 表述修正（PR #1505）；B02+B01 history store（PR #1506）— backlog 核心項關閉 | agent |
