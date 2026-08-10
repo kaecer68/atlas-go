@@ -3,6 +3,7 @@ package marketdata
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,21 @@ type ETFStats struct {
 	TotalNAV        int64  `json:"total_nav"`
 	SubscriberCount int64  `json:"subscriber_count"`
 }
+
+// A05 typed errors（2026-08-10 audit）：adapter 需要區分「正常休市無資料」
+// 與「真實上游故障」，否則 403/timeout 會被 7 天 fallback 偽裝成假日 stale，
+// 永遠不觸發 circuit breaker。
+var (
+	// ErrETFNoTradingData：上游正常回覆但最近 7 天無交易資料（假日/休市）。
+	// adapter 允許轉成 stale，不觸發 circuit breaker。
+	ErrETFNoTradingData = errors.New("twse_etf: no trading data in last 7 days")
+	// ErrETFUpstream：transport/HTTP 層失敗（timeout、DNS、4xx/5xx）。
+	// 必須觸發 circuit breaker。
+	ErrETFUpstream = errors.New("twse_etf: upstream failure")
+	// ErrETFSchema：回應無法解析（WAF 頁面、schema 改變、非預期格式）。
+	// 必須觸發 circuit breaker。
+	ErrETFSchema = errors.New("twse_etf: schema mismatch")
+)
 
 // TWSEETFProvider fetches Taiwan ETF net subscription data from TWSE.
 type TWSEETFProvider struct {
@@ -45,12 +61,21 @@ func (p *TWSEETFProvider) SetHTTPClient(client *http.Client) {
 	}
 }
 
+// SetRateLimiter overrides the rate limiter (for testing).
+func (p *TWSEETFProvider) SetRateLimiter(lim *rate.Limiter) {
+	if lim != nil {
+		p.rateLimiter = lim
+	}
+}
+
 // Name returns the provider name.
 func (p *TWSEETFProvider) Name() string {
 	return "twse_etf"
 }
 
 // FetchLatest retrieves the most recent ETF net subscription statistics.
+// A05：7 天掃描遇到 hard error（upstream/schema）立即以該錯誤回傳（保真），
+// 只有全部日期都是「正常無資料」才回 ErrETFNoTradingData。
 func (p *TWSEETFProvider) FetchLatest(ctx context.Context) (*ETFStats, error) {
 	now := time.Now().UTC()
 	for i := range 7 {
@@ -59,8 +84,13 @@ func (p *TWSEETFProvider) FetchLatest(ctx context.Context) (*ETFStats, error) {
 		if err == nil {
 			return stats, nil
 		}
+		// 遇到 hard error 直接回傳，不繼續 fallback — 後續日期幾乎必然
+		// 得到相同結果，且 hard error 必須即時反映到 circuit breaker。
+		if !errors.Is(err, ErrETFNoTradingData) {
+			return nil, err
+		}
 	}
-	return nil, fmt.Errorf("no TWSE ETF data available in the last 7 days")
+	return nil, ErrETFNoTradingData
 }
 
 func (p *TWSEETFProvider) fetchDate(ctx context.Context, dateStr string) (*ETFStats, error) {
@@ -77,28 +107,35 @@ func (p *TWSEETFProvider) fetchDate(ctx context.Context, dateStr string) (*ETFSt
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
+		// transport failure：DNS/timeout/連線拒絕
+		return nil, fmt.Errorf("%w: http request: %v", ErrETFUpstream, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// 非 2xx：403/429/5xx 都是 upstream 問題（IP rate-limit 推測的實際情況）
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: http status %d", ErrETFUpstream, resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		return nil, fmt.Errorf("%w: read body: %v", ErrETFUpstream, err)
 	}
 
 	var apiResp twseETFResponse
 	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		return nil, fmt.Errorf("%w: decode response: %v", ErrETFSchema, err)
 	}
 
+	// stat!=OK 或無 tables = 該日無資料（假日/休市）→ ErrETFNoTradingData
 	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {
-		return nil, fmt.Errorf("TWSE API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
+		return nil, fmt.Errorf("%w: stat=%s tables=%d", ErrETFNoTradingData, apiResp.Stat, len(apiResp.Tables))
 	}
 
 	// ETF net subscription data is typically in the summary row of the first table.
 	marketTable := apiResp.Tables[0]
 	if len(marketTable.Data) == 0 {
-		return nil, fmt.Errorf("TWSE API returned empty ETF data")
+		return nil, fmt.Errorf("%w: empty ETF data", ErrETFNoTradingData)
 	}
 
 	// Aggregate across all ETF rows to compute totals.
