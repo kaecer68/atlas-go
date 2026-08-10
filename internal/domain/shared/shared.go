@@ -73,6 +73,13 @@ type Quote struct {
 	AsOf       time.Time `json:"as_of"`
 	IsTradable bool      `json:"is_tradable"`
 	Source     string    `json:"source"`
+	// Complete 表示 OHLC/volume 資料齊全（非殘缺）。nil = 未評估（向後
+	// 相容：舊 producer 不輸出此欄位）；false = 明確殘缺訊號
+	//（manifest Phase B3 — 修復「看似成功但殘缺的 200」）。
+	Complete *bool `json:"complete,omitempty"`
+	// TradingDay 表示 as_of 是否為台灣交易日（週末/假日排除）。nil =
+	// 未評估；false = 非交易日（前一交易日資料，非當日報價）。
+	TradingDay *bool `json:"trading_day,omitempty"`
 }
 
 type FactorScoreItem struct {

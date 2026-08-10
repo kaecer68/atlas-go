@@ -4007,7 +4007,7 @@
       }
     },
     "fugle_rate_limit": {
-      "value": 60,
+      "value": 30,
       "rationale": "Fugle API free tier: 60 req/min. Developer tier: 600/min. Advanced: 2000/min. Adjust via env var FUGLE_TIER",
       "source": "empirical",
       "citation": {

@@ -121,11 +121,19 @@ func isTaiwanHoliday(t time.Time) bool {
 //
 // B05：原本只排除週末；國定假日（春節/清明/端午/中秋/228/勞動節/國慶/元旦）
 // 現在也會被排除，使 tw_vol freshness 與 FinMind GetQuotes 在假日正確回退，
-// 不再把假日當交易日誤判 stale。
+// isTaiwanTradingDay 判斷 t（twseLocation）是否為台灣交易日
+// （週末 + 固定/農曆假日排除）。tw_vol freshness 與 FinMind provider 使用。
 func isTaiwanTradingDay(t time.Time) bool {
 	w := t.Weekday()
 	if w == time.Saturday || w == time.Sunday {
 		return false
 	}
 	return !isTaiwanHoliday(t)
+}
+
+// IsTaiwanTradingDay 是 isTaiwanTradingDay 的 exported 版本，供 stocktools
+// 等外部 package 使用（manifest Phase C — quote/technical 路徑非交易日
+// 標記）。twseLocation 時區判斷，呼叫端應傳入台灣本地時間。
+func IsTaiwanTradingDay(t time.Time) bool {
+	return isTaiwanTradingDay(t)
 }

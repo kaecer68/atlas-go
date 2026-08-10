@@ -29,9 +29,10 @@ func TestFugleClient_RateLimiter(t *testing.T) {
 }
 
 func TestGetFugleRateLimit(t *testing.T) {
-	// Default free tier
-	if got := getFugleRateLimit(); got != 60 {
-		t.Errorf("getFugleRateLimit() = %d, want 60", got)
+	// Default free tier — conservative 30/min (below the measured ~39/min
+	// 429 point, manifest F2/A2) instead of the published 60/min.
+	if got := getFugleRateLimit(); got != 30 {
+		t.Errorf("getFugleRateLimit() = %d, want 30", got)
 	}
 }
 
@@ -344,5 +345,27 @@ func TestFugleClient_QuotaGateNilSafe(t *testing.T) {
 	_, err := c.GetQuote(context.Background(), "2330")
 	if errors.Is(err, ErrFugleQuotaExhausted) {
 		t.Errorf("nil tracker should not yield ErrFugleQuotaExhausted, got %v", err)
+	}
+}
+
+// TestFugleClient_401_ReturnsErrFugleUnauthorized verifies that a 401
+// response maps to the typed ErrFugleUnauthorized (free-tier quota-lock
+// and invalid-key both surface as 401 — manifest F3/D5). Without the
+// typed mapping, HandleQuote treats it as a generic failure and the
+// quota-lock stays invisible in channel health.
+func TestFugleClient_401_ReturnsErrFugleUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"message":"Unauthorized","statusCode":401}`))
+	}))
+	defer srv.Close()
+
+	c := NewFugleClient("test-key")
+	c.baseURL = srv.URL
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
+
+	_, err := c.GetQuote(context.Background(), "2330")
+	if !errors.Is(err, ErrFugleUnauthorized) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrFugleUnauthorized)", err)
 	}
 }

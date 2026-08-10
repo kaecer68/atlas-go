@@ -3028,6 +3028,8 @@ export interface Quote {
   as_of: string;
   is_tradable: boolean;
   source: string;
+  complete?: boolean | null;
+  trading_day?: boolean | null;
 }
 
 export interface RSITwCategoryA {
