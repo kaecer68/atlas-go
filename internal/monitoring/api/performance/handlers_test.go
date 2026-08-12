@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
 func TestHandleReport_NoData(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/performance-report?period=all", nil)
@@ -36,7 +37,7 @@ func TestHandleReport_NoData(t *testing.T) {
 
 func TestHandleReport_SingleSession(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/performance-report?period=all", nil)
@@ -66,7 +67,7 @@ func TestHandleReport_SingleSession(t *testing.T) {
 
 func TestHandleReport_PeriodFiltering(t *testing.T) {
 	tmpDir := setupTestLedgerWithMultipleSessions(t)
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	periods := []string{"30d", "90d", "1y", "all"}
@@ -84,7 +85,7 @@ func TestHandleReport_PeriodFiltering(t *testing.T) {
 
 func TestHandleExport(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/performance-report/export?period=all", nil)
@@ -116,7 +117,7 @@ func TestHandleExport(t *testing.T) {
 
 func TestHandleReport_DefaultPeriod(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/performance-report", nil)
@@ -132,7 +133,7 @@ func TestHandleReport_DefaultPeriod(t *testing.T) {
 
 func TestHandleReport_SnakeCaseJSON(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	svc := service.NewPerformanceService(tmpDir)
+	svc := service.NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 	h := NewHandlers(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/performance-report?period=all", nil)

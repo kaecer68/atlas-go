@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -88,8 +87,7 @@ type PerformanceReport struct {
 
 // GenerateReport builds a PerformanceReport from ledger data for the given period.
 // Supported periods: "30d", "90d", "1y", "all".
-func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error) {
-	store := ledger.NewStore(ledgerPath)
+func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string) (*PerformanceReport, error) {
 	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
 		return nil, fmt.Errorf("load session summaries: %w", err)
@@ -162,7 +160,7 @@ func GenerateReport(ledgerPath string, period string) (*PerformanceReport, error
 
 	agentNames := loadAgentDisplayNames()
 
-	outcomes := loadAllOutcomes(ledgerPath, filtered)
+	outcomes := loadAllOutcomes(store, filtered)
 	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
 
 	topAgents := calculateTopAgents(outcomes, agentNames)
@@ -351,40 +349,16 @@ func filterSummariesByDate(summaries []domain.SessionSummary, cutoff time.Time) 
 	return filtered
 }
 
-func loadAllOutcomes(ledgerPath string, summaries []domain.SessionSummary) []domain.RecommendationOutcome {
+func loadAllOutcomes(store ledger.OutcomeStore, summaries []domain.SessionSummary) []domain.RecommendationOutcome {
 	var allOutcomes []domain.RecommendationOutcome
-	sessionsDir := filepath.Join(ledgerPath, "sessions")
 	for _, s := range summaries {
-		path := filepath.Join(sessionsDir, s.SessionID, "recommendation_outcomes.jsonl")
-		outcomes, err := loadOutcomeFile(path)
+		outcomes, err := store.LoadSessionOutcomes(s.SessionID)
 		if err != nil {
 			continue
 		}
 		allOutcomes = append(allOutcomes, outcomes...)
 	}
 	return allOutcomes
-}
-
-func loadOutcomeFile(path string) ([]domain.RecommendationOutcome, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
-	var outcomes []domain.RecommendationOutcome
-	decoder := json.NewDecoder(f)
-	for decoder.More() {
-		var outcome domain.RecommendationOutcome
-		if err := decoder.Decode(&outcome); err != nil {
-			break
-		}
-		outcomes = append(outcomes, outcome)
-	}
-	return outcomes, nil
 }
 
 // loadAgentDisplayNames loads the agent display name map from the registry.

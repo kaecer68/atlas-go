@@ -1524,7 +1524,13 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 }
 
 func (a *DashboardAPI) RegisterPerformanceRoutes(mux *http.ServeMux) {
-	svc := service.NewPerformanceService(a.ledgerDir)
+	cfg := config.Normalize(config.Load())
+	store, err := ledger.NewOutcomeStore(cfg)
+	if err != nil {
+		logging.Error("dashboard", "performance_store_init_failed", logging.Err(err))
+		store = ledger.NewStore(a.ledgerDir)
+	}
+	svc := service.NewPerformanceService(store, a.ledgerDir)
 	handlers := apiperformance.NewHandlers(svc)
 	handlers.RegisterRoutes(mux)
 }

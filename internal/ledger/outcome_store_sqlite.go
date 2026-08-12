@@ -422,21 +422,39 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 }
 
 // RecordSessionSummary persists a session summary.
+//
+// BL-01/BL-04 fix (perf-report-zero audit): this store is the sim's outcome
+// store when StoreBackend=sqlite, so the summary it writes must carry the full
+// SessionSummary (including PortfolioValue / PositionCount / OrderCount) that
+// the performance report consumes. Prior to the fix it wrote only the 5-column
+// projection (total_recs/passed_guards/rejected/timestamp), leaving
+// PortfolioValue zero and starving the report of equity data for 7/21+ sessions.
+// We now also persist summary_json (mirroring SQLiteSessionStore) and read it
+// back in LoadSessionSummaries so the report and the sim agree on one source.
 func (s *SQLiteOutcomeStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
-	_, err := s.db.Exec(
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("marshal session summary: %w", err)
+	}
+
+	_, _ = s.db.Exec(`ALTER TABLE session_summaries ADD COLUMN summary_json TEXT`) //nolint:errcheck
+
+	_, err = s.db.Exec(
 		`
-		INSERT INTO session_summaries (session_id, total_recs, passed_guards, rejected, timestamp)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO session_summaries (session_id, total_recs, passed_guards, rejected, timestamp, summary_json)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			total_recs = excluded.total_recs,
 			passed_guards = excluded.passed_guards,
 			rejected = excluded.rejected,
-			timestamp = excluded.timestamp`,
+			timestamp = excluded.timestamp,
+			summary_json = excluded.summary_json`,
 		session.ID,
 		summary.OutcomeCount,
 		countPassedGuards(summary.GuardOutcomes),
 		len(summary.GuardOutcomes)-countPassedGuards(summary.GuardOutcomes),
 		summary.RecordedAt.Format("2006-01-02T15:04:05Z07:00"),
+		string(summaryJSON),
 	)
 	if err != nil {
 		return fmt.Errorf("insert session summary: %w", err)
@@ -446,9 +464,17 @@ func (s *SQLiteOutcomeStore) RecordSessionSummary(session domain.ReplaySession, 
 }
 
 // LoadSessionSummaries reads all session summaries.
+//
+// BL-01 fix: prefer the full summary_json (written by RecordSessionSummary)
+// which carries PortfolioValue/PositionCount/OrderCount; fall back to the
+// legacy 5-column projection for rows written before the fix. This is what
+// lets the performance report see real equity data for StoreBackend=sqlite.
 func (s *SQLiteOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	// Ensure the summary_json column exists (idempotent; production DBs get it
+	// via ALTER in RecordSessionSummary, but an in-memory test schema may not).
+	_, _ = s.db.Exec(`ALTER TABLE session_summaries ADD COLUMN summary_json TEXT`) //nolint:errcheck
 	rows, err := s.db.Query(`
-		SELECT session_id, total_recs, passed_guards, rejected, timestamp
+		SELECT session_id, total_recs, passed_guards, rejected, timestamp, COALESCE(summary_json, '')
 		FROM session_summaries ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("query session summaries: %w", err)
@@ -459,9 +485,18 @@ func (s *SQLiteOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, er
 	for rows.Next() {
 		var sid string
 		var total, passed, rejected int
-		var ts string
-		if err := rows.Scan(&sid, &total, &passed, &rejected, &ts); err != nil {
+		var ts, summaryJSON string
+		if err := rows.Scan(&sid, &total, &passed, &rejected, &ts, &summaryJSON); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
+		}
+
+		if summaryJSON != "" {
+			var summary domain.SessionSummary
+			if err := json.Unmarshal([]byte(summaryJSON), &summary); err != nil {
+				return nil, fmt.Errorf("unmarshal session summary %s: %w", sid, err)
+			}
+			summaries = append(summaries, summary)
+			continue
 		}
 
 		summaries = append(summaries, domain.SessionSummary{
