@@ -139,7 +139,7 @@ func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommen
 	for _, rec := range recs {
 		entry, ok := bySymbol[rec.Symbol]
 		if !ok {
-			entry = &agg{reason: rec.Reason, skill: rec.Skill, targetPrice: rec.TargetPrice, stopLossPrice: rec.StopLossPrice, bestConviction: rec.Conviction, bestAgent: rec.Agent}
+			entry = &agg{reason: rec.Reason, skill: rec.Skill, targetPrice: rec.TargetPrice, stopLossPrice: rec.StopLossPrice, bestConviction: rec.Conviction, bestAgent: rec.Agent, bestSide: rec.Side}
 			bySymbol[rec.Symbol] = entry
 		}
 		entry.count++
@@ -470,14 +470,25 @@ func (SuperinvestorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 	}, true
 }
 
-// Apply implements ControlExecutor — quality gate that filters recommendations
-// by SuperinvestorMinConviction. This runs AFTER Darwinian weighting.
+// Apply implements ControlExecutor — quality gate that filters recommendations.
+//
+// B02 fix (perf-report-zero audit): the SuperinvestorMinConviction bar (65)
+// must only apply to recommendations that ORIGINATED from a superinvestor-layer
+// agent. The CIO aggregator rewrites rec.Layer to "control" and preserves the
+// original source in rec.Agent, so source is identified by the `super-` agent
+// id prefix (registry convention: super-dru-01 / super-asc-01 / super-bak-01 /
+// super-ack-01). Sector/ETF recs (e.g. etf-rotation-01 → 00713.TW at conv 40-60)
+// must only clear the baseline ConvictionFloor — gating them at 65 starves the
+// daily sim of every non-superinvestor rec, producing perpetual 0-order sessions.
 func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
 	params := config.GetParametersConfig().Orchestrator
-	minConviction := max(policy.ConvictionFloor, params.SuperinvestorMinConviction.Value)
 
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	for _, rec := range recs {
+		minConviction := policy.ConvictionFloor
+		if strings.HasPrefix(rec.Agent, "super-") {
+			minConviction = max(policy.ConvictionFloor, params.SuperinvestorMinConviction.Value)
+		}
 		if rec.Conviction >= minConviction {
 			rec.Reason = "[Superinvestor:" + agent.Skill + "] " + rec.Reason
 			filtered = append(filtered, rec)

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -147,6 +148,29 @@ func TestCIOPortfolioExecutorDeterministicTieBreak(t *testing.T) {
 	}
 }
 
+// TestCIOPortfolioExecutorPreservesSide verifies the B02 fix: the aggregator
+// must initialize bestSide from the first (highest-conviction) recommendation.
+// Prior to the fix, a single-rec aggregation left Side as the zero value "",
+// which made executeOptimizerBuys skip the order (order.Side != SideBuy) and
+// produced a perpetual empty daily sim (perf-report-zero audit #B02).
+func TestCIOPortfolioExecutorPreservesSide(t *testing.T) {
+	executor := CIOPortfolioExecutor{}
+	agent := domain.AgentSpec{ID: "cio-01", Skill: "cio_portfolio"}
+
+	// Single SELL rec: highest conviction is the first rec, so bestSide must
+	// come from initialization, not the strict `>` update.
+	recs := []domain.Recommendation{
+		{Agent: "etf-rotation-01", Skill: "etf_rotation_desk", Symbol: "00713.TW", Conviction: 61, Side: domain.SideSell, Reason: "rotation out"},
+	}
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	if len(out) != 1 {
+		t.Fatalf("expected 1 aggregated rec, got %d", len(out))
+	}
+	if out[0].Side != domain.SideSell {
+		t.Fatalf("expected Side preserved as SELL, got %q", out[0].Side)
+	}
+}
+
 func TestSuperinvestorExecutorApply(t *testing.T) {
 	executor := SuperinvestorExecutor{}
 	agent := domain.AgentSpec{ID: "si-01", Skill: "superinvestor_quality", Layer: domain.LayerSuperinvestor}
@@ -169,6 +193,41 @@ func TestSuperinvestorExecutorApply(t *testing.T) {
 	}
 	if !strings.Contains(out[0].Reason, "[Superinvestor:") {
 		t.Fatalf("expected reason to be tagged with [Superinvestor:...], got %q", out[0].Reason)
+	}
+}
+
+// TestSuperinvestorExecutorApply_NonSuperinvestorUsesFloor verifies the B02
+// fix: the superinvestor quality gate must only apply the higher
+// SuperinvestorMinConviction bar to recommendations that originated from a
+// superinvestor-layer agent. Sector/ETF recs (Agent != super-*), aggregated by
+// CIO, must only clear the baseline ConvictionFloor — otherwise a conv 40-60
+// ETF rec is starved and the daily sim is perpetually empty (perf-report-zero
+// audit #B02).
+func TestSuperinvestorExecutorApply_NonSuperinvestorUsesFloor(t *testing.T) {
+	executor := SuperinvestorExecutor{}
+	agent := domain.AgentSpec{ID: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor}
+
+	// Thresholds vary by environment (test default 50, production config 65), so
+	// derive values from the live config to keep the test environment-agnostic.
+	params := config.GetParametersConfig().Orchestrator
+	floor := 35
+	siMin := params.SuperinvestorMinConviction.Value
+
+	recs := []domain.Recommendation{
+		// Sector agent rec aggregated by CIO: Agent preserved as etf-rotation-01,
+		// conv just above floor but below SuperinvestorMinConviction. Must survive
+		// (floor-gated), even though it would fail the old max(floor, siMin) gate.
+		{Agent: "etf-rotation-01", Skill: "cio_portfolio", Layer: domain.LayerControl, Symbol: "00713.TW", Conviction: max(floor, siMin-1), Side: domain.SideBuy, Reason: "etf rotation"},
+		// True superinvestor self rec at same conviction: must be filtered (siMin gate).
+		{Agent: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor, Symbol: "2330.TW", Conviction: max(floor, siMin-1), Side: domain.SideBuy, Reason: "macro"},
+	}
+
+	out := executor.Apply(agent, recs, domain.ExecutionPolicy{ConvictionFloor: floor, RequireCROPass: true})
+	if len(out) != 1 {
+		t.Fatalf("expected only the sector rec (conv %d >= floor %d) to survive, got %d: %+v", max(floor, siMin-1), floor, len(out), out)
+	}
+	if out[0].Symbol != "00713.TW" {
+		t.Fatalf("expected 00713.TW (sector, floor-gated) to survive, got %s", out[0].Symbol)
 	}
 }
 
