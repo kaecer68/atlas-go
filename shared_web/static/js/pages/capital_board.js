@@ -100,18 +100,40 @@ function cbhRenderToggles(root) {
   });
 }
 
+// 4 個子圖（按單位分群），每個子圖自己的 Y 軸，避免不同單位的 dimension
+// 混在同一 Y 軸被壓縮到看不見。
+// 子圖 A: 官方三方（外資/投信/自營商，單位億股，共用 Y 軸）
+// 子圖 B: 散戶（融資餘額變化）
+// 子圖 C: 外資期貨 OI（口數）
+// 子圖 D: TSM ADR（百分比）
+const CBH_SUBPLOTS = [
+  { id: 'official', label: '官方三方（億股）', unit: '億股', keys: ['foreign', 'institutional', 'dealer'] },
+  { id: 'retail',   label: '散戶（融資餘額變化）', unit: '億',     keys: ['retail'] },
+  { id: 'futures',  label: '外資期貨 OI',       unit: '口',     keys: ['futures'] },
+  { id: 'tsm',      label: 'TSM ADR',           unit: '%',      keys: ['tsm_adr'] },
+];
+const CBH_SUBPLOT_HEIGHT = 110;
+const CBH_SUBPLOT_GAP = 8;
+
 function cbhRenderChart() {
   const canvas = document.getElementById('cbhCanvas');
   if (!canvas || !cbhState.data) return;
 
-  const datasets = [];
-  CBH_DIMENSIONS.forEach(function (d) {
-    if (!CBH_DEFAULT_VISIBLE.has(d.key)) return;
-    const samples = cbhState.data[d.key] || [];
-    if (samples.length < 2) return;
-    datasets.push({ key: d.key, label: d.label, color: d.color, samples: samples });
-  });
-  if (datasets.length === 0) {
+  // 收集每個子圖要畫的 datasets
+  const subplots = CBH_SUBPLOTS.map(function (sp) {
+    const datasets = [];
+    sp.keys.forEach(function (key) {
+      if (!CBH_DEFAULT_VISIBLE.has(key)) return;
+      const dim = CBH_DIMENSIONS.find(function (d) { return d.key === key; });
+      if (!dim) return;
+      const samples = cbhState.data[key] || [];
+      if (samples.length < 2) return;
+      datasets.push({ key: key, label: dim.label, color: dim.color, samples: samples });
+    });
+    return { id: sp.id, label: sp.label, unit: sp.unit, datasets: datasets };
+  }).filter(function (sp) { return sp.datasets.length > 0; });
+
+  if (subplots.length === 0) {
     canvas.style.display = 'none';
     return;
   }
@@ -121,19 +143,62 @@ function cbhRenderChart() {
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.parentElement;
   const W = parent.clientWidth;
-  const H = 320;
+  const totalH = 20 + subplots.length * CBH_SUBPLOT_HEIGHT + (subplots.length - 1) * CBH_SUBPLOT_GAP + 20;
   canvas.width = W * dpr;
-  canvas.height = H * dpr;
+  canvas.height = totalH * dpr;
   canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
+  canvas.style.height = totalH + 'px';
   ctx.scale(dpr, dpr);
 
-  const pad = { top: 20, right: 24, bottom: 40, left: 60 };
+  const pad = { top: 16, right: 16, bottom: 18, left: 56 };
   const chartW = W - pad.left - pad.right;
-  const chartH = H - pad.top - pad.bottom;
 
+  const bg = getThemeColor('--panel') || '#13161c';
+  const muted = getThemeColor('--muted') || '#b8c4d0';
+
+  ctx.clearRect(0, 0, W, totalH);
+
+  let yOffset = 10;
+  subplots.forEach(function (sp) {
+    cbhDrawSubplot(ctx, sp, {
+      x: pad.left,
+      y: yOffset,
+      w: chartW,
+      h: CBH_SUBPLOT_HEIGHT,
+      W: W,
+      bg: bg,
+      muted: muted,
+    });
+    yOffset += CBH_SUBPLOT_HEIGHT + CBH_SUBPLOT_GAP;
+  });
+}
+
+function cbhDrawSubplot(ctx, sp, layout) {
+  const pad = { top: 14, right: 8, bottom: 4, left: 8 };
+  const chartX = layout.x + pad.left;
+  const chartY = layout.y + pad.top;
+  const chartW = layout.w - pad.left - pad.right;
+  const chartH = layout.h - pad.top - pad.bottom;
+
+  // 子圖背景
+  ctx.fillStyle = hexToRgba(layout.bg, 0.4);
+  ctx.beginPath();
+  ctx.roundRect(layout.x, layout.y, layout.w, layout.h, 4);
+  ctx.fill();
+
+  // 子圖標題（左上：勢力名）+ 右上（單位）
+  const first = sp.datasets[0];
+  ctx.fillStyle = hexToRgba(layout.muted, 0.7);
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(sp.label, layout.x + 6, layout.y + 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(sp.unit, layout.x + layout.w - 6, layout.y + 4);
+
+  // 計算此子圖自己的 Y 軸範圍（只取 active datasets 的值）
   const allVals = [];
-  datasets.forEach(function (ds) {
+  sp.datasets.forEach(function (ds) {
     ds.samples.forEach(function (s) {
       if (Number.isFinite(s.raw_value)) allVals.push(s.raw_value);
     });
@@ -141,64 +206,76 @@ function cbhRenderChart() {
   if (allVals.length === 0) return;
   let minV = Math.min.apply(null, allVals);
   let maxV = Math.max.apply(null, allVals);
+  // 確保零線在範圍內（即使所有值都正或都負，零線仍有意義）
+  minV = Math.min(minV, 0);
+  maxV = Math.max(maxV, 0);
   const range = (maxV - minV) || 1;
-  minV = minV - range * 0.1;
-  maxV = maxV + range * 0.1;
+  minV = minV - range * 0.08;
+  maxV = maxV + range * 0.08;
   const vRange = maxV - minV || 1;
 
-  ctx.clearRect(0, 0, W, H);
-
-  const bg = getThemeColor('--panel') || '#13161c';
-  ctx.fillStyle = hexToRgba(bg, 0.4);
-  ctx.beginPath();
-  ctx.roundRect(pad.left, pad.top, chartW, chartH, 6);
-  ctx.fill();
-
-  const muted = getThemeColor('--muted') || '#b8c4d0';
-  ctx.strokeStyle = hexToRgba(muted, 0.08);
+  // Grid（2 條水平線）
+  ctx.strokeStyle = hexToRgba(layout.muted, 0.08);
   ctx.lineWidth = 0.5;
-  for (let i = 1; i <= 3; i++) {
-    const y = pad.top + (chartH / 4) * i;
+  for (let i = 1; i <= 2; i++) {
+    const y = chartY + (chartH / 3) * i;
     ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(pad.left + chartW, y);
+    ctx.moveTo(chartX, y);
+    ctx.lineTo(chartX + chartW, y);
     ctx.stroke();
   }
 
-  if (minV < 0 && maxV > 0) {
-    const zeroY = pad.top + (1 - (0 - minV) / vRange) * chartH;
-    ctx.strokeStyle = hexToRgba(muted, 0.25);
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pad.left, zeroY);
-    ctx.lineTo(pad.left + chartW, zeroY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // 零線
+  const zeroY = chartY + (1 - (0 - minV) / vRange) * chartH;
+  ctx.strokeStyle = hexToRgba(layout.muted, 0.25);
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(chartX, zeroY);
+  ctx.lineTo(chartX + chartW, zeroY);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  ctx.fillStyle = hexToRgba(muted, 0.6);
-  ctx.font = '10px system-ui';
+  // Y 軸標籤（3 個：min / 0 / max）
+  ctx.fillStyle = hexToRgba(layout.muted, 0.5);
+  ctx.font = '9px system-ui';
   ctx.textAlign = 'right';
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (chartH / 4) * i;
-    const val = maxV - (vRange / 4) * i;
-    ctx.fillText(fmtSafeNumber(val, { decimals: 0 }), pad.left - 8, y + 3);
-  }
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fmtSafeNumber(maxV, { decimals: 0 }), layout.x - 4, chartY + 2);
+  ctx.fillText(fmtSafeNumber((maxV + minV) / 2, { decimals: 0 }), layout.x - 4, chartY + chartH / 2);
+  ctx.fillText(fmtSafeNumber(minV, { decimals: 0 }), layout.x - 4, chartY + chartH - 2);
 
-  datasets.forEach(function (ds) {
+  // 用最長 dataset 算 X 軸 ticks
+  const longest = sp.datasets.reduce(function (a, b) {
+    return a.samples.length >= b.samples.length ? a : b;
+  });
+  const step = Math.max(1, Math.floor(longest.samples.length / 5));
+  ctx.fillStyle = hexToRgba(layout.muted, 0.45);
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  longest.samples.forEach(function (s, i) {
+    if (i % step === 0 || i === longest.samples.length - 1) {
+      const x = chartX + (i / Math.max(longest.samples.length - 1, 1)) * chartW;
+      const label = s.trading_date.length >= 10 ? s.trading_date.slice(5) : s.trading_date;
+      ctx.fillText(label, x, chartY + chartH + 2);
+    }
+  });
+
+  // 畫每條線
+  sp.datasets.forEach(function (ds) {
     if (ds.samples.length < 2) return;
     const pts = ds.samples.map(function (s, i) {
-      const x = pad.left + (i / Math.max(ds.samples.length - 1, 1)) * chartW;
-      const y = pad.top + (1 - (s.raw_value - minV) / vRange) * chartH;
-      return { x: x, y: y, label: s.trading_date, value: s.raw_value };
+      const x = chartX + (i / Math.max(ds.samples.length - 1, 1)) * chartW;
+      const y = chartY + (1 - (s.raw_value - minV) / vRange) * chartH;
+      return { x: x, y: y };
     });
 
     ctx.save();
-    ctx.shadowColor = hexToRgba(ds.color, 0.35);
-    ctx.shadowBlur = 5;
+    ctx.shadowColor = hexToRgba(ds.color, 0.3);
+    ctx.shadowBlur = 3;
     ctx.strokeStyle = ds.color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
     ctx.beginPath();
     pts.forEach(function (p, i) {
@@ -212,42 +289,30 @@ function cbhRenderChart() {
       ctx.fillStyle = ds.color;
       pts.forEach(function (p) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
         ctx.fill();
       });
     }
   });
 
-  const longest = datasets.reduce(function (a, b) {
-    return a.samples.length >= b.samples.length ? a : b;
-  });
-  ctx.fillStyle = hexToRgba(muted, 0.5);
-  ctx.font = '9px system-ui';
-  ctx.textAlign = 'center';
-  const step = Math.max(1, Math.floor(longest.samples.length / 6));
-  longest.samples.forEach(function (s, i) {
-    if (i % step === 0 || i === longest.samples.length - 1) {
-      const x = pad.left + (i / Math.max(longest.samples.length - 1, 1)) * chartW;
-      const label = s.trading_date.length >= 10 ? s.trading_date.slice(5) : s.trading_date;
-      ctx.fillText(label, x, pad.top + chartH + 16);
-    }
-  });
-
-  ctx.fillStyle = hexToRgba(muted, 0.4);
-  ctx.font = '9px system-ui';
-  ctx.textAlign = 'left';
-  ctx.fillText('億股／口數／%', pad.left, pad.top - 6);
-
-  ctx.font = '10px system-ui';
-  ctx.textAlign = 'left';
-  let lx = pad.left + 8;
-  datasets.forEach(function (ds) {
-    ctx.fillStyle = ds.color;
-    ctx.fillRect(lx, pad.top + chartH + 28, 10, 10);
-    ctx.fillStyle = hexToRgba(muted, 0.8);
-    ctx.fillText(ds.label, lx + 14, pad.top + chartH + 37);
-    lx += ctx.measureText(ds.label).width + 28;
-  });
+  // 子圖底部小圖例（最多 4 個 inline，超過截斷）
+  if (sp.datasets.length > 1) {
+    let lx = layout.x + 6;
+    const ly = layout.y + layout.h - 12;
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    sp.datasets.forEach(function (ds) {
+      ctx.fillStyle = ds.color;
+      ctx.fillRect(lx, ly, 8, 8);
+      ctx.fillStyle = hexToRgba(layout.muted, 0.85);
+      const txt = ds.label;
+      const w = ctx.measureText(txt).width;
+      if (lx + 12 + w > layout.x + layout.w - 6) return;
+      ctx.fillText(txt, lx + 12, ly + 4);
+      lx += 12 + w + 10;
+    });
+  }
 }
 
 const cbhState = { days: 60, data: null };
