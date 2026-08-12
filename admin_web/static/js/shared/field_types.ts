@@ -2023,6 +2023,7 @@ export interface InvestmentModel {
   recent_prediction: number;
   recent_error: number;
   hit_rate: number;
+  sample_count: number;
   weight: number;
 }
 

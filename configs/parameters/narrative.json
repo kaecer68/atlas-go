@@ -520,8 +520,8 @@
     }
   },
   "model_lookback_days": {
-    "value": 10,
-    "rationale": "Lookback window in trading days for model evaluation",
+    "value": 30,
+    "rationale": "30 trading days gives ≥20 effective samples after H2 stale filtering; satisfies Wilson 95% CI half-width ≤0.22",
     "source": "heuristic",
     "citation": {
       "source_type": "heuristic",

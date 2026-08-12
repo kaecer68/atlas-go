@@ -77,6 +77,9 @@ export function renderCapitalModels(data) {
       +     '<div class="cm-card__metric-value">' + lastSignal + '</div>'
       +   '</div>'
       + '</div>'
+      + (typeof m.sample_count === 'number' && m.sample_count < 20
+          ? '<div class="cm-card__badge">樣本不足（' + m.sample_count + ' 筆）</div>'
+          : '')
       + '<div class="cm-card__detail" id="cm-detail-' + idx + '">'
       +   '<div class="cm-card__rationale">' + escapeHtml(m.rationale || '尚無推理依據') + '</div>'
       +   (m.description ? '<div class="text-muted">' + escapeHtml(m.description) + '</div>' : '')

@@ -87,5 +87,6 @@ type InvestmentModel struct {
 	RecentPrediction float64  `json:"recent_prediction"`
 	RecentError      float64  `json:"recent_error"` // lower is better
 	HitRate          float64  `json:"hit_rate"`     // 1 - RecentError, clamped to [0, 1]
+	SampleCount      int      `json:"sample_count"` // valid favored-vs-avoided comparisons in the lookback window
 	Weight           float64  `json:"weight"`
 }

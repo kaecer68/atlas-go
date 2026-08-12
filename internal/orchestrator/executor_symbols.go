@@ -56,17 +56,28 @@ func DefaultSymbols() []string {
 	}
 
 	// Auto-sync: merge symbols from replay CSV if available
-	csvSymbols := loadSymbolsFromCSV(constants.ReplayCSVPath)
-	if len(csvSymbols) > 0 {
-		seen := make(map[string]bool)
-		for _, s := range base {
-			seen[s] = true
+	return mergeReplaySymbols(base, loadSymbolsFromCSV(constants.ReplayCSVPath))
+}
+
+// mergeReplaySymbols appends CSV symbols missing from base, normalizing
+// bare codes (e.g. "2330") to the ".TW"-suffixed form used across the
+// universe (same convention as replay.LoadTWSEOpenDataCSV) so the CSV
+// merge genuinely expands the symbol set instead of double-listing codes.
+func mergeReplaySymbols(base, csvSymbols []string) []string {
+	if len(csvSymbols) == 0 {
+		return base
+	}
+	seen := make(map[string]bool, len(base)+len(csvSymbols))
+	for _, s := range base {
+		seen[s] = true
+	}
+	for _, s := range csvSymbols {
+		if !strings.HasSuffix(s, ".TW") {
+			s += ".TW"
 		}
-		for _, s := range csvSymbols {
-			if !seen[s] {
-				base = append(base, s)
-				seen[s] = true
-			}
+		if !seen[s] {
+			base = append(base, s)
+			seen[s] = true
 		}
 	}
 	return base
@@ -83,10 +94,13 @@ func loadSymbolsFromCSV(path string) []string {
 	if err != nil {
 		return nil
 	}
-	// Find "symbol" column
+	// Find the symbol column: daily-replay-sync writes "Code", older
+	// replay CSVs used "symbol". Accepting both keeps DefaultSymbols
+	// expanding from the actual replay artifact (H4 remediation).
 	symIdx := -1
 	for i, col := range header {
-		if strings.EqualFold(strings.TrimSpace(col), "symbol") {
+		c := strings.TrimSpace(col)
+		if strings.EqualFold(c, "symbol") || strings.EqualFold(c, "code") {
 			symIdx = i
 			break
 		}

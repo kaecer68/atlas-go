@@ -77,6 +77,15 @@
   font-size: 13px;
 }
 
+.cm-card__badge {
+  margin-top: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--warning, #e6a23c);
+  background: rgba(230, 162, 60, 0.12);
+}
+
 .cm-card__detail {
   margin-top: 14px;
   padding-top: 14px;
