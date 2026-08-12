@@ -16,30 +16,76 @@ type stubNarrative struct {
 
 func (s *stubNarrative) ListModels() []ModelView { return s.models }
 
-func TestSetNarrativeProvider_CachesSnapshot(t *testing.T) {
+func TestSetNarrativeProvider_StoresProvider(t *testing.T) {
 	models := []ModelView{
 		{ID: "x", Name: "test", Weight: 0.5, Direction: "bullish", ActiveThemes: []string{"earnings_surprise"}},
 	}
 	h := newTestHandler()
-	h.SetNarrativeProvider(&stubNarrative{models: models})
+	stub := &stubNarrative{models: models}
+	h.SetNarrativeProvider(stub)
 
-	if len(h.predictor.narrativeModels) != 1 {
-		t.Fatalf("narrativeModels should cache 1 entry, got %d", len(h.predictor.narrativeModels))
+	if h.predictor.narrativeProvider == nil {
+		t.Fatal("SetNarrativeProvider must store the provider, not a snapshot")
 	}
-	if h.predictor.narrativeModels[0].ID != "x" {
-		t.Errorf("cached model ID mismatch: %s", h.predictor.narrativeModels[0].ID)
+	got := h.predictor.narrativeProvider.ListModels()
+	if len(got) != 1 || got[0].ID != "x" {
+		t.Fatalf("stored provider should expose wired models, got %v", got)
 	}
 }
 
-func TestSetNarrativeProvider_NilProviderClearsCache(t *testing.T) {
+func TestSetNarrativeProvider_NilProviderClearsProvider(t *testing.T) {
 	h := newTestHandler()
 	h.SetNarrativeProvider(&stubNarrative{models: []ModelView{{ID: "x", Weight: 0.5}}})
-	if len(h.predictor.narrativeModels) != 1 {
-		t.Fatalf("expected 1 cached model, got %d", len(h.predictor.narrativeModels))
+	if h.predictor.narrativeProvider == nil {
+		t.Fatal("expected provider to be stored")
 	}
 	h.SetNarrativeProvider(nil)
-	if h.predictor.narrativeModels != nil {
-		t.Errorf("nil provider must clear cache, got %v", h.predictor.narrativeModels)
+	if h.predictor.narrativeProvider != nil {
+		t.Errorf("nil provider must clear the provider, got %v", h.predictor.narrativeProvider)
+	}
+}
+
+// TestPredictor_RefreshesNarrativeModelsOnEachPredict verifies H1: the
+// predictor re-queries the provider on every Predict, so Darwinian weight
+// updates (hourly scheduler) flow into the narrative tilt instead of a
+// one-time wiring snapshot.
+func TestPredictor_RefreshesNarrativeModelsOnEachPredict(t *testing.T) {
+	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
+	cal := industry.NewEventCalendar()
+	p := NewPredictor(cal)
+
+	stub := &stubNarrative{models: []ModelView{
+		{
+			ID: "ai_supercycle", Weight: 1.0, Direction: "bullish",
+			ActiveThemes: []string{"AI_capex_surge", "earnings_surprise"},
+		},
+	}}
+	p.SetNarrativeProvider(stub)
+
+	report := p.Predict(now)
+	if len(report.Predictions) == 0 {
+		t.Fatal("expected predictions")
+	}
+	for _, pred := range report.Predictions {
+		if pred.Direction != "inflow" {
+			t.Errorf("single bullish model should drive inflow (got %s on %s)",
+				pred.Direction, pred.Date.Format("2006-01-02"))
+		}
+	}
+
+	// Simulate an hourly UpdateModelWeights outcome: a heavy bearish model
+	// joins the same theme set. The second Predict must observe it.
+	stub.models = append(stub.models, ModelView{
+		ID: "heavy_bear", Weight: 3.0, Direction: "bearish",
+		ActiveThemes: []string{"AI_capex_surge", "earnings_surprise"},
+	})
+
+	report = p.Predict(now)
+	for _, pred := range report.Predictions {
+		if pred.Direction != "outflow" {
+			t.Errorf("second predict must observe updated models (got %s on %s)",
+				pred.Direction, pred.Date.Format("2006-01-02"))
+		}
 	}
 }
 

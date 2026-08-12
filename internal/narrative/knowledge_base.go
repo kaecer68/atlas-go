@@ -143,10 +143,10 @@ func NewNarrativeEngine() *NarrativeEngine {
 				ID:             "ai_supercycle_model",
 				Name:           "AI 超級週期模型",
 				Description:    "假設 AI 資本支出週期凌駕總經逆風；偏好台灣科技供應鏈（AI供應鏈、半導體、PCB、散熱）。",
-				Rationale:      "AI 被視為繼智慧型手機之後最大的科技硬體週期。當輝達、微軟、Google、亞馬遜上修 AI 資本支出時，訂單幾乎100%落到台灣供應鏈——全球只有台積電能量產最先進 AI 晶片，只有台灣擁有完整 CoWoS 先進封裝、高階 PCB 與伺服器組裝產能。這是『結構性產能短缺』帶來的定價權轉移，應押注 AI 供應鏈、半導體、PCB、散熱；同時迴避消費、觀光——市場會持續汰弱留強，把資金從缺乏成長動能的傳產板塊撤出。",
+				Rationale:      "AI 被視為繼智慧型手機之後最大的科技硬體週期。當輝達、微軟、Google、亞馬遜上修 AI 資本支出時，訂單幾乎100%落到台灣供應鏈——全球只有台積電能量產最先進 AI 晶片，只有台灣擁有完整 CoWoS 先進封裝、高階 PCB 與伺服器組裝產能。這是『結構性產能短缺』帶來的定價權轉移，應押注 AI 供應鏈、半導體、PCB、散熱；同時迴避消費——市場會持續汰弱留強，把資金從缺乏成長動能的傳產板塊撤出。",
 				ActiveThemes:   []string{"AI_capex_surge"},
 				FavoredSectors: []string{"ai_supply_chain", "semiconductor", "pcb", "thermal"},
-				AvoidedSectors: []string{"consumer", "tourism"},
+				AvoidedSectors: []string{"consumer"},
 				RecentError:    0.19,
 				HitRate:        0.81,
 				Weight:         1.0,
@@ -405,6 +405,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 			}
 		}
 
+		m.SampleCount = total
 		if total > 0 {
 			m.RecentError = 1.0 - (float64(correct) / float64(total))
 			if !math.IsNaN(lastFavored) && !math.IsNaN(lastAvoided) {

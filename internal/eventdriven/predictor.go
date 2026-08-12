@@ -17,7 +17,7 @@ import (
 type Predictor struct {
 	calendar          *industry.EventCalendar
 	capitalFlow       CapitalFlowProvider
-	narrativeModels   []ModelView
+	narrativeProvider NarrativeModelProvider
 	scanStore         DetectorScanStore
 	narrativeRegistry *narrative.DetectorRegistry
 	sectorPredictor   *SectorPredictor
@@ -64,8 +64,9 @@ type ModelView struct {
 }
 
 // NarrativeModelProvider exposes Darwinian-evolved narrative models to
-// the predictor. ListModels is called once at wiring time; the
-// predictor caches the snapshot and filters by per-day active themes.
+// the predictor. ListModels is re-queried on every Predict so hourly
+// UpdateModelWeights changes flow into the narrative tilt instead of a
+// one-time wiring snapshot (H1 remediation).
 type NarrativeModelProvider interface {
 	ListModels() []ModelView
 }
@@ -105,14 +106,12 @@ func (p *Predictor) SetScanStore(s DetectorScanStore) {
 	p.scanStore = s
 }
 
-// SetNarrativeProvider caches a snapshot of Darwinian-evolved models.
-// nil provider clears the cache (reverts to event-only predictions).
+// SetNarrativeProvider wires a live narrative model provider whose
+// ListModels is re-queried on every Predict, so Darwinian weight updates
+// (hourly narrative_weight_update scheduler) reach the narrative tilt.
+// nil provider disables narrative tilt (reverts to event-only predictions).
 func (p *Predictor) SetNarrativeProvider(np NarrativeModelProvider) {
-	if np == nil {
-		p.narrativeModels = nil
-		return
-	}
-	p.narrativeModels = np.ListModels()
+	p.narrativeProvider = np
 }
 
 // SetNarrativeRegistry injects the DetectorRegistry whose registered
@@ -304,7 +303,10 @@ func (p *Predictor) predictDay(day time.Time, timeline []industry.CalendarEvent,
 	for _, t := range narrativeThemes {
 		themeSet[t] = struct{}{}
 	}
-	narrativeTilt := computeNarrativeTilt(p.narrativeModels, themeSet)
+	var narrativeTilt float64
+	if p.narrativeProvider != nil {
+		narrativeTilt = computeNarrativeTilt(p.narrativeProvider.ListModels(), themeSet)
+	}
 	// Apply scan-theme tilt (W4 consumption). Returns 0 when scanStore
 	// is nil or no recent scans pass recency/confidence/severity gates.
 	scanTilt, scanDrivers := p.applyScanThemes(context.Background(), day)
