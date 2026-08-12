@@ -901,6 +901,11 @@ func TestAPIModeRegistersNarrativeRoutes(t *testing.T) {
 		t.Fatalf("run returned error: %v", err)
 	}
 	<-listenDone
+	// run() returns as soon as listenAndServe's srvErr fires, but background
+	// goroutines (warmup, prism manager, capital_flow_refresh) may still be
+	// writing to t.TempDir(). Wait briefly so t.Cleanup's RemoveAll does not
+	// fail with "directory not empty" (flaky on slow CI runners).
+	time.Sleep(500 * time.Millisecond)
 	if gotHandler == nil {
 		t.Fatalf("expected http handler to be registered")
 	}

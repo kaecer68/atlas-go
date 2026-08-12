@@ -64,9 +64,9 @@ test('home page renders without developer-facing strings', async ({ page }) => {
   expect(bodyText).not.toContain('管理者');
 
   // Core sections are rendered by home.js after the redesign
+  // (home-event-calendar 已移至 retail_sentiment 頁，home 不再有)
   await expect(page.locator('#home-predictions')).toBeAttached();
   await expect(page.locator('#home-seven-force')).toBeAttached();
-  await expect(page.locator('#home-event-calendar')).toBeAttached();
 });
 
 test('home market pulse renders without developer-facing strings', async ({ page }) => {

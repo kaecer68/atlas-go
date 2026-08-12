@@ -1,19 +1,18 @@
 /**
  * Home page for retail investors.
  * Renders an editorial dashboard: market pulse, capital-flow radar,
- * event calendar, and trust elements.
+ * predictions, and trust elements.
  */
 
 import { getJSON, silentGetJSON, getJSONWithTimeout, escapeHtml, renderMissingState } from '../shared/app-utils.js';
 import { metricCard } from '../components/metric-card.js';
 import { trustFooter } from '../components/trust-footer.js';
-import { renderEventCalendar, gatherCalFilterOptions, EVENT_TYPE_LABELS } from '../components/event-calendar.js';
+
 import {
   riskLevelLabel,
   fmtSafeSigned, fmtSafeNumber, fmtSafeSignedPct, fmtSafeLargeNumber,
 } from '../shared/format-metric.js';
 import { getThemeLabel } from '../shared/theme-labels.js';
-import { displayZH as sectorLabel } from '../shared/sector-display.js';
 import { initOnboarding } from '../components/onboarding.js';
 import { scrollToSection } from '../shared/scroll-utils.js';
 import { getDisclosureState, setDisclosureState } from '../shared/disclosure-state.js';
@@ -30,7 +29,6 @@ const CHANNELS_BY_SECTION = {
   marketPulse: ['us_yahoo', 'us_spx', 'us_ndx', 'us_dji', 'sox_index', 'us_nvda', 'us_aapl', 'us_msft', 'tsm_adr', 'frankfurter_fx', 'twse_margin', 'taiex_index', 'tw_vol', 'export_statistics', 'twse_capital_flow'],
   predictions: ['twse_capital_flow', 'geopolitical', 'tsmc_revenue'],
   sevenForce: ['twse_capital_flow', 'frankfurter_fx', 'us_yahoo', 'tsm_adr'],
-  calendar: ['twse_replay', 'us_yahoo', 'tsmc_revenue'],
 };
 
 let _homeChannelMap = {};
@@ -44,15 +42,10 @@ function renderDataBadges() {
   set('market-pulse-data-badge', CHANNELS_BY_SECTION.marketPulse);
   set('predictions-data-badge', CHANNELS_BY_SECTION.predictions);
   set('seven-force-data-badge', CHANNELS_BY_SECTION.sevenForce);
-  set('calendar-data-badge', CHANNELS_BY_SECTION.calendar);
 }
 
 
 let homeLoaded = false;
-let calActiveCategories = [];
-let calActiveFilters = { triggerThemes: [], sectors: [] };
-let calDateRange = { start: '', end: '' };
-let lastCalendarEvents = [];
 
 function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -126,95 +119,10 @@ export async function renderHomePage(container) {
       <div id="home-seven-force-interpretations"></div>
     </section>
 
-    <section class="home-section" id="home-event-calendar">
-      <div class="home-section__header">
-        <h2>市場行事曆（全年事件）</h2>
-        <span class="home-section__subtitle">近期除權息、法說會、財報等重要事件</span>
-        <span class="home-section__data-badge" id="calendar-data-badge"></span>
-      </div>
-      <div class="cal-filter-bar" id="cal-filter-bar">
-        <button class="cal-filter-pill active" data-category="">全部</button>
-        <button class="cal-filter-pill" data-category="除權息">除權息</button>
-        <button class="cal-filter-pill" data-category="法說會/財報">法說會</button>
-        <button class="cal-filter-pill" data-category="總經事件">總經</button>
-        <select class="cal-filter-select" id="cal-filter-trigger-theme" data-filter-type="trigger_theme" aria-label="依事件類型篩選">
-          <option value="">所有事件類型</option>
-        </select>
-        <select class="cal-filter-select" id="cal-filter-sector" data-filter-type="sector" aria-label="依產業篩選">
-          <option value="">所有產業</option>
-        </select>
-        <label class="cal-filter-date">
-          <span>開始</span>
-          <input type="date" id="cal-filter-start" aria-label="開始日期">
-        </label>
-        <label class="cal-filter-date">
-          <span>結束</span>
-          <input type="date" id="cal-filter-end" aria-label="結束日期">
-        </label>
-      </div>
-      <div id="home-calendar-content">
-        <div class="home-loading-card">載入中…</div>
-      </div>
-    </section>
-
     <section class="home-section home-section--transparent" id="home-trust">
       <div id="home-trust-footer"></div>
     </section>
   `;
-
-  const calContainer = document.getElementById('home-calendar-content');
-  const filterBar = document.getElementById('cal-filter-bar');
-  const applyCalFiltersAndRender = () => {
-    if (!calContainer) return;
-    renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, lastCalendarEvents)
-      .catch(err => console.warn('[home] calendar render failed:', err));
-  };
-  if (filterBar && calContainer) {
-    filterBar.addEventListener('click', (e) => {
-      const pill = e.target.closest('.cal-filter-pill');
-      if (!pill) return;
-      const category = pill.dataset.category;
-      if (category === '') {
-        calActiveCategories = [];
-      } else {
-        const idx = calActiveCategories.indexOf(category);
-        if (idx >= 0) {
-          calActiveCategories.splice(idx, 1);
-        } else {
-          calActiveCategories.push(category);
-        }
-      }
-      document.querySelectorAll('#cal-filter-bar .cal-filter-pill').forEach(p => {
-        const c = p.dataset.category;
-        p.classList.toggle('active', c === '' ? calActiveCategories.length === 0 : calActiveCategories.includes(c));
-      });
-      applyCalFiltersAndRender();
-    });
-
-    document.querySelectorAll('#cal-filter-bar .cal-filter-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const key = sel.dataset.filterType === 'trigger_theme' ? 'triggerThemes' : 'sectors';
-        const value = sel.value;
-        calActiveFilters[key] = value ? [value] : [];
-        applyCalFiltersAndRender();
-      });
-    });
-
-    const startInput = document.getElementById('cal-filter-start');
-    const endInput = document.getElementById('cal-filter-end');
-    if (startInput) {
-      startInput.addEventListener('change', () => {
-        calDateRange.start = startInput.value;
-        applyCalFiltersAndRender();
-      });
-    }
-    if (endInput) {
-      endInput.addEventListener('change', () => {
-        calDateRange.end = endInput.value;
-        applyCalFiltersAndRender();
-      });
-    }
-  }
 
   bindPredictionsDisclosure();
 
@@ -237,21 +145,18 @@ async function loadHomeData() {
       renderPredictionsCard(m.narrative);
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), m.portfolio);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), m.portfolio);
-      const calContainer = document.getElementById('home-calendar-content');
-      renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, m.narrative);
 
       renderTrustFooter(['Fugle', 'TWSE', 'FRED']);
       return;
     }
 
     try {
-      const [health, macro, stress, pipeline, bundle, calData, predictionData, capitalFlowSummary] = await Promise.all([
+      const [health, macro, stress, pipeline, bundle, predictionData, capitalFlowSummary] = await Promise.all([
         getJSONWithTimeout('/api/dashboard/system-health', 5000),
         getJSONWithTimeout('/api/macro/snapshot/latest', 5000),
         getJSONWithTimeout('/api/taiwan/stress-index', 5000),
         getJSONWithTimeout('/api/dashboard/recommendation-pipeline', 5000),
         getJSONWithTimeout('/api/narrative/bundle', 5000),
-        getJSONWithTimeout('/api/dashboard/calendar-events', 5000),
         getJSONWithTimeout('/api/events/prediction', 5000),
         getJSONWithTimeout('/api/capital-flow/summary', 5000),
       ]);
@@ -288,15 +193,6 @@ async function loadHomeData() {
       renderSevenForceBoard(document.getElementById('home-seven-force-content'), capitalFlowSummary);
       renderSevenForceInterpretations(document.getElementById('home-seven-force-interpretations'), capitalFlowSummary);
 
-      // Event calendar — fetched once and shared with banner + filters
-      const calContainer = document.getElementById('home-calendar-content');
-      lastCalendarEvents = calData && Array.isArray(calData.events) ? calData.events : [];
-      populateCalFilterSelects(lastCalendarEvents);
-      if (calContainer) {
-        renderEventCalendar(calContainer, calActiveCategories, calActiveFilters, calDateRange, lastCalendarEvents).catch(err =>
-          console.warn('[home] calendar render failed:', err));
-      }
-
       // Portfolio snapshot / banner removed from home per UI refresh request.
     } catch (err) {
       console.warn('[home] failed to load dashboard data:', err);
@@ -313,29 +209,6 @@ async function loadHomeData() {
     console.error('[home] unexpected error loading home data:', err);
   } finally {
     renderTrustFooter();
-  }
-}
-
-function collectEventTypes(events) {
-  const set = new Set();
-  for (const evt of events) {
-    if (evt.event_type) set.add(evt.event_type);
-  }
-  return Array.from(set).sort();
-}
-
-function populateCalFilterSelects(events) {
-  const opts = gatherCalFilterOptions(events);
-  const themeSel = document.getElementById('cal-filter-trigger-theme');
-  const sectorSel = document.getElementById('cal-filter-sector');
-  const eventTypes = collectEventTypes(events);
-  if (themeSel) {
-    themeSel.innerHTML = '<option value="">所有事件類型</option>' +
-      eventTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(EVENT_TYPE_LABELS[t] || t)}</option>`).join('');
-  }
-  if (sectorSel && opts.sectors.length) {
-    sectorSel.innerHTML = '<option value="">所有產業</option>' +
-      opts.sectors.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(sectorLabel(s))}</option>`).join('');
   }
 }
 

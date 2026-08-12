@@ -4,3 +4,6 @@
 .two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
 .two-col-grid > * { min-width: 0; }
 @media (max-width: 1100px) { .two-col-grid { grid-template-columns: 1fr; } }
+.grid-3col-md { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-md); }
+.grid-3col-md > * { min-width: 0; }
+@media (max-width: 1100px) { .grid-3col-md { grid-template-columns: 1fr; } }
