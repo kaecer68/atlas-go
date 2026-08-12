@@ -26,11 +26,11 @@
 
 | ID | Problem | Root cause | Files | Acceptance | Status |
 |---|---|---|---|---|---|
-| F01 | client evolution_panel 頁面存在 | 已退役頁面（admin 亦有） | client_web index.html/main.js/event-listeners.js/page-shells | /client/evolution_panel → 404、sidebar 無入口 | 待辦 |
-| F02 | admin evolution_panel 頁面存在 | 同上 | admin_web index.html/main.js/event-listeners.js/smoke | /admin/evolution_panel → 404、sidebar 無入口 | 待辦 |
-| F03 | shared evolution 檔案/css 殘留 | 同頁面資源 | shared_web pages/evolution_panel.js、page-shells/evolution_panel.js、css/pages/evolution-panel.css | 檔案刪除、main.css import 移除 | 待辦 |
-| F04 | 交叉 link 導向已刪頁面 | footer/narrative/portfolio 引用 | trust-footer.js、narrative.js、portfolio.js | 改導 strategies 或移除 | 待辦 |
-| B01 | agent-observatory scorecards 全 0 | SQLiteOutcomeStore 截斷評估欄位 | outcome_store_sqlite.go | SQLite backend 下 LoadOutcomesFromSessions/LoadSessionOutcomes 回傳含 Hit/ForwardReturn 的 rich 資料（委派 JSONL） | 待辦 |
+| F01 | client evolution_panel 頁面存在 | 已退役頁面（admin 亦有） | client_web index.html/main.js/event-listeners.js/page-shells | /client/evolution_panel → 404、sidebar 無入口 | ✅ 完成 |
+| F02 | admin evolution_panel 頁面存在 | 同上 | admin_web index.html/main.js/event-listeners.js/smoke | /admin/evolution_panel → 404、sidebar 無入口 | ✅ 完成 |
+| F03 | shared evolution 檔案/css 殘留 | 同頁面資源 | shared_web pages/evolution_panel.js、page-shells/evolution_panel.js、css/pages/evolution-panel.css | 檔案刪除、main.css import 移除 | ✅ 完成 |
+| F04 | 交叉 link 導向已刪頁面 | footer/narrative/portfolio 引用 | trust-footer.js、narrative.js、portfolio.js | 改導 strategies 或移除 | ✅ 完成 |
+| B01 | agent-observatory scorecards 全 0 | SQLiteOutcomeStore 截斷評估欄位 | outcome_store_sqlite.go | SQLite backend 下 LoadOutcomesFromSessions/LoadSessionOutcomes 回傳含 Hit/ForwardReturn 的 rich 資料（委派 JSONL） | ✅ 完成（實機驗證 hit_rate 0.25~0.68） |
 
 ## Phase tracker
 
