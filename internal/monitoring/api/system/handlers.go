@@ -417,6 +417,17 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		AdjustmentFactor: result.AdjustmentFactor,
 		DMultiplier:      result.AdjustmentFactor,
 	}
+	// Audit A04 (2026-08-12): 填充 D 觸發事件 — 先前 active_events 永遠為 null，
+	// 前端固定顯示「無觸發事件」，與實際乘數（如 0.85 = D1 地緣政治觸發）矛盾。
+	if v, ok := subs["d1_geopolitical"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "地緣政治風險")
+	}
+	if v, ok := subs["d2_vix_spike"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "VIX 飆升")
+	}
+	if v, ok := subs["d3_credit_control"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "信貸緊縮")
+	}
 	if v, ok := subs["d1_geopolitical"]; ok && v.IsFallback {
 		catD.IsFallback = true
 	}
