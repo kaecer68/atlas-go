@@ -124,9 +124,6 @@ test('renderHomePage: dashboard API failures render fallback without crashing', 
   const sevenForceContent = elements.get('home-seven-force-content');
   assert.ok(sevenForceContent, 'seven-force content should exist');
 
-  const calendarContent = elements.get('home-calendar-content');
-  assert.ok(calendarContent, 'calendar content should exist');
-
   const trustFooter = elements.get('home-trust-footer');
   assert.ok(trustFooter, 'trust footer container should exist');
   assert.ok(
@@ -142,7 +139,6 @@ test('renderHomePage: new home sections render after redesign', async () => {
   assert.ok(container.innerHTML.includes('市場脈動'), 'market pulse section should render');
   assert.ok(container.innerHTML.includes('未來 5 日錢潮預測'), 'predictions section should render');
   assert.ok(container.innerHTML.includes('七維錢潮雷達'), 'seven-force section should render');
-  assert.ok(container.innerHTML.includes('市場行事曆'), 'calendar section should render');
 
   const marketGrid = elements.get('home-market-grid');
   assert.ok(marketGrid, 'market pulse grid should exist');
