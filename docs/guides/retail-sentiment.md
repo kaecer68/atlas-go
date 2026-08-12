@@ -25,16 +25,21 @@ RSI-tw 由三個加權組件構成：
 
 | 陷阱 | 說明 |
 |------|------|
-| **靜默 fallback 到 0.5** | 當 Gateway channel 回傳錯誤或 fetcher 為 nil 時，C1/C2/C3 子指標靜默 fallback 到 0.5 或 0。前端無從得知是否為真實數據。 |
-| **GeopoliticalRisk 硬編碼為 0** | `handlers.go:204` 直接寫 `GeopoliticalRisk: 0`，導致 Part D 地緣政治風險調整永遠不觸發。需從 Narrative provider 讀取真實值。 |
+| **靜默 fallback 到 0.5** | 當 Gateway channel 回傳錯誤或 fetcher 為 nil 時，C1/C2/C3 子指標靜默 fallback 到 0.5 或 0。前端於 Audit A01（2026-08-12）起對 `is_fallback` 子指標顯示「資料缺失」徽章。 |
+| **PCR 單位** | TAIFEX `PutCallVolumeRatio%` 為百分比（如 110.43 = 110.43%）。Audit A13（2026-08-12）修正：provider 除以 100 轉為比率（1.1043）後才進 threshold 比較。 |
+| **C2 單位** | `ForeignInvestorNet.Value` 單位為「億股」（T86 股數/1e8），非 TWD 元。Audit A07（2026-08-12）修正 `C2NetflowScalingFactor` 1e9 → 10，使淨買超產生鑑別力。前端標題正名為「外資+投信淨買超」。 |
+| **C1 量級** | `RetailFuturesPct = RetailLongPct - RetailShortPct` 實測量級約 ±10（前十大佔 OI 60-70%）。Audit A15（2026-08-12）修正 threshold 20/10/-10/-20 → 5/2/-2/-5。 |
+| **A4/A5 方向** | Audit A10（2026-08-12）修正：VIX 高、PCR 高 = 市場恐慌 → 散戶恐慌 → 推低分數（與 composite +frenzy/-fear 語義一致）。原 scores 把恐慌訊號推高狂熱分數。 |
+| **A3 命名** | 前端「維持率 Z-score」實際是「融資餘額歷史百分位」映射 `(percentile-0.5)*2`，非維持率（margin maintenance ratio）。Audit A11（2026-08-12）前端正名。`MarginMaintenanceRatio` 欄位存在但 TWSE MI_MARGN 不提供，維持為空。 |
+| **Part D 事件** | Audit A04（2026-08-12）修正：`convertRSITwSubIndicators` 現在填充 `active_events`（地緣政治/VIX 飆升/信貸緊縮），先前永遠 null → 前端顯示「無觸發事件」與實際乘數矛盾。 |
 | **Part A 權重寫死在程式碼** | `computePartA()` 及 subA1-A6 的權重（0.25, 0.20, 0.20, 0.15, 0.10, 0.10）為 literal constant，無法透過 `parameters.json` 調整。 |
 | **Part C 子權重亦寫死** | subC1 0.40、subC2 0.35、subC3 0.25 亦為 literal constant。 |
 | **vixMap / PCR / odd-lot 閾值不可配置** | VIX 閾值 `[15,20,25,30,35]`、PCR 閾值 `[1.5,1.0,0.8]`、odd-lot 閾值 `[0.2,0.1,-0.1,-0.2]` 全部寫死在對應 sub 函數中。 |
 | **無校準機制** | 所有 `RSITwParameters` 均為 `SourceHeuristic`，無 backtest pipeline、無 Bayesian optimization、無 autonomous recalibration。 |
-| **無下游消費** | RSI-tw 值僅在前端展示，未被 orchestrator、risk manager、factor engine 或任何 executor 使用。 |
+| **無下游消費** | RSI-tw 值僅在前端展示 + orchestrator conviction 微調，未被 risk manager、factor engine 或任何 executor 直接使用。 |
 | **滾動歷史上限固定** | `UpdateHistory()` 最多保留 90 筆，此值寫死在程式碼中。 |
 | **A3 Z-score formula 硬編碼** | `(percentile - 0.5) * 2` 的 midpoint 和 scaling factor 不可調整。 |
-| **缺乏測試** | 模組無任何測試檔案。 |
+| **零股 buy/sell heuristic** | `twse_oddlot_provider.go` 用 `close > open` 猜買賣方向（BFI84U 無買賣方向欄位）。Audit A14（2026-08-12）標記為已知限制；且 twse_oddlot channel schema changed（known_issue），目前 fetch error → fallback 0.5。 |
 
 ---
 
@@ -48,10 +53,10 @@ RSI-tw 由三個加權組件構成：
 | `VIXLevel` | `snap.VIX.Value` | ✅ 來自 macro snapshot |
 | `ForeignInvestorNet` | `snap.ForeignInvestorNet.Value` | ✅ 來自 macro snapshot |
 | `DomesticFundNet` | `snap.DomesticFundNet.Value` | ✅ 來自 macro snapshot |
-| `GeopoliticalRisk` | `0` (硬編碼) | ❌ 未接線 |
+| `GeopoliticalRisk` | `GeopoliticalRiskFetcher`（global/taiwan provider 正規化 [0,1]） | ✅ 已接線（Audit A06 修正舊文件） |
 | `CreditTightening` | — (未填充) | ❌ 未接線 |
-| `PutCallRatio` | `TaifexFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
-| `OddLotImbalance` | `OddLotFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
+| `PutCallRatio` | `TaifexFetcher` → Gateway channel（✅ A13：單位已修正，%→比率） | ⚠️ 已接線，但若失敗 fallback |
+| `OddLotImbalance` | `OddLotFetcher` → Gateway channel（⚠️ A14：buy/sell 為 close>open heuristic） | ⚠️ 已接線，但若失敗 fallback |
 | `RetailFuturesPct` | `TaifexFetcher` → Gateway channel | ⚠️ 已接線，但若失敗 fallback |
 | `ETFNetSubscription` | `ETFFetcher` → Gateway channel | ❌ 資料源已移除（TWT44U → 404，2026-08-10 實測）；subC3 停用，欄位恆為 nil |
 
