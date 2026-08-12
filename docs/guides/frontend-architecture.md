@@ -36,9 +36,8 @@ shared_web/static/css/
 │   ├── refresh, refresh-pill, sse-status, table-pagination
 │   ├── tabs, tool-events, utilities, view-controls, workflow
 └── pages/                  # 頁面特定樣式
-    ├── decision-chain.css, evolution-panel.css, industry.css
-    ├── overview.css, parameters.css
-```
+    ├── industry.css, overview.css, parameters.css
+    └── ...
 
 - 全部 CSS 變數定義於 `shared_web/static/css/base/variables.css`（canonical）
 - 顏色一律用 `var(--...)`，不寫死 hex/rgba
@@ -52,7 +51,7 @@ shared_web/static/css/
 |------|------|
 | `main.js` | 全域狀態、頁面切換(`switchPage`)、動態 import pages、執行各頁 init |
 | `component-init.js` | 共用 component 初始化(circuit-breaker、sim-health、performance-report) |
-| `event-listeners.js` | DOM event 綁定(sidebar nav、evView 按鈕、shock sim 互動、modal 關閉) |
+| `event-listeners.js` | DOM event 綁定(sidebar nav、shock sim 互動、modal 關閉) |
 | `pages/*.js` | 每個頁面的 render 函式,由 `main.js` 動態 import |
 | `pages/stock-quote.js` + `services/stock-api-client.js` | v0.0.0.32 個股快查(Issue #1038 / PR #1045)：4 API 並發 + 報價/基本面/籌碼/技術 4 section |
 | `page-shells/{login,register,premium,mcp,errors/404}.js` | v0.0.0.31 page shell（tier 認證 + MCP 頁 + 404 fallback）|

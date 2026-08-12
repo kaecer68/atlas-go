@@ -36,7 +36,7 @@ export function switchPage(id, silent) {
   if (btn) btn.classList.add('active');
   const titles = {
   home: '系統總覽', live: '風控營運台', alerts: '系統警報',
-  evolution_panel: '策略演化', experiments: '模擬交易',
+  experiments: '模擬交易',
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
   capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
@@ -200,13 +200,12 @@ async function loadModules() {
     import('./pages/datachannels.js'),
     import('./pages/parameters.js'),
     import('./pages/deploy-config.js'),
-    import('./pages/evolution_panel.js'),
     import('./pages/capital-models.js'),
     import('./pages/capital-causality.js'),
     import('./pages/capital-quality.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'evolution_panel', 'capitalModels', 'capitalCausality', 'capitalQuality'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -500,15 +499,6 @@ async function loadPageData(pageId) {
     try {
       var cfg = await silentGetJSON('/api/config');
       if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
-    } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'evolution_panel') {
-    try {
-      import('./pages/evolution_panel.js').then(function(evo) {
-        if (evo.loadEvolutionData) evo.loadEvolutionData();
-      }).catch(function(err) {
-        console.error('[Dynamic import] evolution_panel module load failed:', err);
-      });
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'prism') {

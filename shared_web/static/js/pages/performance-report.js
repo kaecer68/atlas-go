@@ -3,7 +3,7 @@
 // component, which fetches `/api/dashboard/performance-report` and renders the
 // KPI grid, top-agents, regime breakdown, and monthly returns tables.
 //
-// Pattern aligned with `pages/evolution_panel.js` (dynamic-import + thin init).
+// Pattern aligned with `pages/retail_sentiment.js` (dynamic-import + thin init).
 
 import { renderPerformanceReport } from '../components/performance-report.js';
 

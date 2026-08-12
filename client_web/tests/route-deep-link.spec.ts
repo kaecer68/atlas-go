@@ -5,7 +5,7 @@ import { installAuthMocks } from './auth-mock';
  * Route & deep-link regression tests for client_web.
  *
  * Verifies:
- *   - evolution_panel no longer falls to 404
+ *   - removed pages (evolution_panel) fall to 404
  *   - direct /client/<page> deep-links activate the correct page container
  *   - capital_board / stock-quote / strategies
  *     page containers are populated and title is correct
@@ -23,7 +23,6 @@ import { installAuthMocks } from './auth-mock';
 test.describe.configure({ mode: 'parallel' });
 
 const PAGES = [
-  { id: 'evolution_panel',     title: '策略演化' },
   { id: 'capital_board',       title: '七大勢力看板' },
   { id: 'stock-quote',         title: '個股快查' },
   { id: 'strategies',          title: '投資心法' },
@@ -41,12 +40,12 @@ for (const { id, title } of PAGES) {
   });
 }
 
-test('evolution_panel deep-link does NOT fall to 404', async ({ page }) => {
+test('removed evolution_panel deep-link falls to 404', async ({ page }) => {
   await installAuthMocks(page);
   await page.goto('/client/evolution_panel');
-  await expect(page.locator('#pageTitle')).toHaveText('策略演化', { timeout: 15000 });
+  await expect(page.locator('#pageTitle')).toHaveText('404', { timeout: 15000 });
   const body = await page.locator('body').innerText();
-  expect(body).not.toContain('找不到這個頁面');
+  expect(body).toContain('找不到這個頁面');
 });
 
 test('sidebar nav click routes to correct page', async ({ page }) => {
@@ -54,8 +53,8 @@ test('sidebar nav click routes to correct page', async ({ page }) => {
   // Direct deep-link is equivalent to sidebar click for SPA routing.
   // The click interaction requires full sidebar visibility which is
   // fragile in a headless static-only setup.
-  await page.goto('/client/evolution_panel');
-  await expect(page.locator('#pageTitle')).toHaveText('策略演化', { timeout: 15000 });
+  await page.goto('/client/strategies');
+  await expect(page.locator('#pageTitle')).toHaveText('投資心法', { timeout: 15000 });
   await page.goto('/client/capital_board');
   await expect(page.locator('#pageTitle')).toHaveText('七大勢力看板', { timeout: 15000 });
 });

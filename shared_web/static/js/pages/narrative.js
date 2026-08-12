@@ -447,7 +447,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (templatesEl) {
     templatesEl.classList.remove('loading');
     const items = (templates && templates.templates) || [];
-    if (!items.length) { templatesEl.innerHTML = renderActionEmptyState('無模板資料', '模板庫會隨著策略演化自動累積。', [{label: '查看策略演化', page: 'evolution_panel'}]); }
+    if (!items.length) { templatesEl.innerHTML = renderActionEmptyState('無模板資料', '模板庫會隨著策略演化自動累積。', [{label: '查看投資心法', page: 'strategies'}]); }
     else {
       templatesEl.innerHTML = `<table class="template-table">
         <thead><tr><th style="width:40%">模板名稱</th><th style="width:12%">歷史命中率</th><th style="width:36%">資料來源</th><th style="width:12%">操作</th></tr></thead>

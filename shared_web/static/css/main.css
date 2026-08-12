@@ -66,9 +66,6 @@
 @import url("components/empty-state.css");
 @import url("components/view-controls.css");
 
-/* Pages - Evolution Panel */
-@import url("pages/evolution-panel.css");
-
 /* Components - Live & SSE */
 @import url("components/sse-status.css");
 @import url("components/live-progress.css");

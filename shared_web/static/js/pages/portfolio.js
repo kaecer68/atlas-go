@@ -14,8 +14,8 @@ function isValidNumber(v) {
 
 function renderActionEmptyState(title, description, pageId, buttonText) {
   // Use data-page so the global click delegation in both app shells handles
-  // navigation. Fall back to the strategies page when the preferred target
-  // does not exist in the current shell (evolution_panel is admin-only).
+  // navigation. Falls back to the strategies page when the preferred target
+  // does not exist in the current shell.
   const target = document.getElementById('page-' + pageId) ? pageId : 'strategies';
   const label = target === pageId ? buttonText : '查看投資心法';
   return `
@@ -131,7 +131,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     renderDualEquityCurve(preTaxPoints, afterTaxPoints);
 
     if (!positions.length) {
-      tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'evolution_panel', '前往策略演化');
+      tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'strategies', '前往投資心法');
     } else {
       const fmtF = (v) => fmtSafeNumber(v, { decimals: 2 });
       const fmtI = (v) => isValidNumber(v) ? v.toLocaleString('en-US') : '—';

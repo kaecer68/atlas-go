@@ -154,15 +154,7 @@ func derivePageName(relFile string) string {
 	base := filepath.Base(relFile)
 	base = strings.TrimSuffix(base, ".js")
 	base = strings.ReplaceAll(base, "_", "-")
-
-	switch {
-	case strings.HasPrefix(base, "evolution-panel"):
-		return "evolution-panel"
-	case strings.HasPrefix(base, "evolution"):
-		return "evolution"
-	default:
-		return base
-	}
+	return base
 }
 
 // ---------------------------------------------------------------------------

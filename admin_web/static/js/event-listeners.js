@@ -31,10 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // === Page: reports (backtest) ===
   var qs___page_reports__primary_ = document.querySelector('#page-reports .primary'); if (qs___page_reports__primary_) qs___page_reports__primary_.addEventListener('click', () => window.runBacktest());
 
-  // === Page: evolution_panel ===
-    var el_evView_compact = document.getElementById('evView-compact'); if (el_evView_compact) el_evView_compact.addEventListener('click', () => window._evSwitch('compact'));
-    var el_evView_ai_analysis = document.getElementById('evView-ai-analysis'); if (el_evView_ai_analysis) el_evView_ai_analysis.addEventListener('click', () => window._evSwitch('ai-analysis'));
-
   // === Page: datachannels ===
   var el_btnIngestChannels = document.getElementById('btnIngestChannels'); if (el_btnIngestChannels) el_btnIngestChannels.addEventListener('click', () => window.triggerChannelsIngest());
   // safeCall bridges the race between DOMContentLoaded (when these listeners

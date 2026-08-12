@@ -225,7 +225,10 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 		if err != nil {
 			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
-		return NewSQLiteOutcomeStore(db), nil
+		// WithJSONLBaseDir: the SQLite outcomes table drops evaluation fields
+		// (Hit/ForwardReturn/Window) on write, so Load* delegates to the rich
+		// per-session JSONL source (LedgerDir) when available.
+		return NewSQLiteOutcomeStore(db).WithJSONLBaseDir(cfg.LedgerDir), nil
 	default:
 		return newStore(cfg.LedgerDir), nil
 	}

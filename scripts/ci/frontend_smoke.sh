@@ -71,9 +71,9 @@ CLIENT_PAGES=""
 
 if [[ -n "${SMOKE_FORCE_FRONTENDS:-}" ]]; then
   case "$SMOKE_FORCE_FRONTENDS" in
-    admin)  RUN_ADMIN=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config}" ;;
+    admin)  RUN_ADMIN=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,live,reports,experiments,parameters,alerts,datachannels,metrics,config}" ;;
     client) RUN_CLIENT=1; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
-    both|*) RUN_ADMIN=1; RUN_CLIENT=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config}"; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
+    both|*) RUN_ADMIN=1; RUN_CLIENT=1; ADMIN_PAGES="${SMOKE_FORCE_PAGES:-home,live,reports,experiments,parameters,alerts,datachannels,metrics,config}"; CLIENT_PAGES="${SMOKE_FORCE_PAGES:-home,crossmarket,industry,narrative,pipeline,portfolio,strategies}" ;;
   esac
   log "SMOKE_FORCE_FRONTENDS set, using override: admin=$RUN_ADMIN client=$RUN_CLIENT"
 elif [[ -n "${SMOKE_FORCE_PAGES:-}" ]]; then
@@ -87,7 +87,7 @@ else
     warn "Base ref $BASE_REF not found locally; falling back to full smoke"
     RUN_ADMIN=1
     RUN_CLIENT=1
-    ADMIN_PAGES="home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config"
+    ADMIN_PAGES="home,live,reports,experiments,parameters,alerts,datachannels,metrics,config"
     CLIENT_PAGES="home,crossmarket,industry,narrative,pipeline,portfolio,strategies"
   else
     CHANGED=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null || true)
@@ -99,9 +99,9 @@ else
 
       # admin_web 專用覆蓋表（與 admin_web/static/index.html 保留的頁面對齊）
       declare -A ADMIN_PATH_MAP=(
-        ["admin_web/"]="home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config"
-        ["shared_web/"]="home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config"
-        ["cmd/atlas/"]="home,live,reports,experiments,parameters,alerts,datachannels,evolution_panel,metrics,config"
+        ["admin_web/"]="home,live,reports,experiments,parameters,alerts,datachannels,metrics,config"
+        ["shared_web/"]="home,live,reports,experiments,parameters,alerts,datachannels,metrics,config"
+        ["cmd/atlas/"]="home,live,reports,experiments,parameters,alerts,datachannels,metrics,config"
       )
 
       # client_web 專用覆蓋表

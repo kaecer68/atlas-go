@@ -376,7 +376,6 @@ client_web/                  admin_web/                  shared_web/
 │   └── js/                  │   └── js/                      │   ├── pages/     ← 共 29 頁面
 │       ├── main.js   ← SPA  │       └── main.js   ← SPA      │   ├── page-shells/ ← 10 shells
 │       ├── page-shells/     │                                 │   ├── components/ ← 共用元件
-│       │   ├── evolution_panel.js│                            │   ├── services/   ← API client
 │       │   ├── stock-quote.js    │                            │   ├── shared/     ← utils/tokens
 │       │   ├── strategies.js     │                            │   └── modals/
 │       │   └── ...               │                            └── css/
