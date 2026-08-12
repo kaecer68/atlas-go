@@ -44,7 +44,6 @@ import (
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
-	apiprism "github.com/kaecer68/atlas-go/internal/monitoring/api/prism"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	apistrategies "github.com/kaecer68/atlas-go/internal/monitoring/api/strategies"
@@ -58,7 +57,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/orchestrator/composition"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
-	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/repository"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
@@ -111,7 +109,6 @@ type DashboardAPI struct {
 	dataFetcher                DataFetcher
 	riskGate                   *risk.RiskGate
 	riskHandlers               *apirisk.Handlers
-	prismMgr                   *prism.PRISMManager
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
@@ -1283,11 +1280,6 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	a.riskHandlers = riskHandlers
 	riskHandlers.RegisterRoutes(mux)
 
-	if a.prismMgr != nil {
-		prismHandlers := apiprism.NewHandlers(a.prismMgr)
-		prismHandlers.RegisterRoutes(mux)
-	}
-
 	var dividendProvider apitax.DividendProvider
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
@@ -1594,13 +1586,6 @@ func (a *DashboardAPI) SetRiskGate(g *risk.RiskGate) {
 	if a.riskHandlers != nil {
 		a.riskHandlers.WithRiskGate(g)
 	}
-}
-
-// WithPRISMManager injects a PRISMManager and returns the DashboardAPI for
-// chaining. When non-nil, RegisterRoutes mounts /api/prism/* endpoints.
-func (a *DashboardAPI) WithPRISMManager(pm *prism.PRISMManager) *DashboardAPI {
-	a.prismMgr = pm
-	return a
 }
 
 // SetLatestDrawdown stores the latest drawdown result.

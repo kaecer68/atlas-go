@@ -40,7 +40,7 @@ export function switchPage(id, silent) {
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
   capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
-  metrics: '指標監控', config: '部署配置', prism: 'PRISM 訓練'
+  metrics: '指標監控', config: '部署配置'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -500,35 +500,6 @@ async function loadPageData(pageId) {
       var cfg = await silentGetJSON('/api/config');
       if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
     } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'prism') {
-    try {
-      var prismData = await silentGetJSON('/api/prism/training-results');
-      var el = document.getElementById('prismContent');
-      if (!el) return;
-      el.classList.remove('loading');
-      if (!prismData || !Array.isArray(prismData) || prismData.length === 0) {
-        el.innerHTML = '<div class="empty">尚無 PRISM 訓練結果</div>';
-        return;
-      }
-      el.innerHTML = '<div class="prism-table-info">共 ' + prismData.length + ' 筆</div>';
-      prismData.forEach(function(cohort) {
-        var badge = '<span class="regime-badge">' + escapeHtml(cohort.regime || '') + '</span>';
-        var row = document.createElement('div');
-        row.className = 'prism-cohort-row';
-        var errHtml = cohort.result && cohort.result.error
-          ? '<span class="text-danger">' + escapeHtml(cohort.result.error) + '</span>'
-          : '';
-        var detailsHtml = '<details><summary>說明</summary><p>' + escapeHtml(cohort.result && cohort.result.explanation || '') + '</p></details>';
-        row.innerHTML = '<div class="prism-cohort-id">' + badge + ' ' + escapeHtml(cohort.agent_id || '') + '</div>' +
-          '<div class="prism-cohort-result">' + errHtml + ' ' + detailsHtml + '</div>';
-        el.appendChild(row);
-      });
-    } catch(e) {
-      var el2 = document.getElementById('prismContent');
-      if (el2) { el2.classList.remove('loading'); el2.innerHTML = '<div class="empty">載入失敗</div>'; }
-      console.error(e);
-    }
   }
 }
 

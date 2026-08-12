@@ -400,7 +400,6 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 		"/api/traces/sim-latest",
 		"/api/llm/cost",
 		"/api/llm_annotator/cost",
-		"/api/prism/training-results",
 		"/api/recommendations",
 		"/api/reports/latest",
 		"/api/strategy-ranker/rank",
