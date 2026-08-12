@@ -36,10 +36,45 @@ const CBH_DIMENSIONS = [
 const CBH_DEFAULT_VISIBLE = new Set(['foreign', 'institutional', 'dealer']);
 const CBH_RETRY_ID = 'cb-capital-history';
 
+function cbhUpdateAllChip(allChip) {
+  const allOn = CBH_DEFAULT_VISIBLE.size === CBH_DIMENSIONS.length;
+  if (allOn) {
+    allChip.classList.add('active');
+    allChip.style.color = 'var(--accent, #5b8def)';
+    allChip.style.borderColor = 'var(--accent, #5b8def)';
+  } else {
+    allChip.classList.remove('active');
+    allChip.style.color = '';
+    allChip.style.borderColor = '';
+  }
+}
+
 function cbhRenderToggles(root) {
   const toggles = root.querySelector('#cbhToggles');
   if (!toggles) return;
   toggles.innerHTML = '';
+
+  // 「全部」chip：點擊在「全亮」與「預設官方三方」之間切換
+  const allChip = document.createElement('span');
+  allChip.className = 'cbh-chip cbh-chip--all';
+  allChip.setAttribute('data-dim', '__all__');
+  allChip.textContent = '全部';
+  allChip.addEventListener('click', function () {
+    const allOn = CBH_DEFAULT_VISIBLE.size === CBH_DIMENSIONS.length;
+    CBH_DEFAULT_VISIBLE.clear();
+    if (!allOn) {
+      CBH_DIMENSIONS.forEach(function (d) { CBH_DEFAULT_VISIBLE.add(d.key); });
+    } else {
+      // 從全亮回到 admin 預設（官方三方）
+      ['foreign', 'institutional', 'dealer'].forEach(function (k) { CBH_DEFAULT_VISIBLE.add(k); });
+    }
+    // 重繪整排 chip
+    cbhRenderToggles(root);
+    cbhRenderChart();
+  });
+  toggles.appendChild(allChip);
+  cbhUpdateAllChip(allChip);
+
   CBH_DIMENSIONS.forEach(function (d) {
     const chip = document.createElement('span');
     const on = CBH_DEFAULT_VISIBLE.has(d.key);
@@ -58,6 +93,7 @@ function cbhRenderToggles(root) {
         chip.classList.add('active');
         chip.style.color = d.color;
       }
+      cbhUpdateAllChip(allChip);
       cbhRenderChart();
     });
     toggles.appendChild(chip);
