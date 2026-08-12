@@ -496,7 +496,7 @@ const SHELL_LOADERS = {
 | `GET` | `/api/dashboard/performance-report` | 績效報告 |
 | `GET` | `/api/dashboard/calendar-events` | → 308 redirect to `/api/events/calendar` |
 | `GET` | `/api/events/calendar` | 事件日曆 |
-| `GET` | `/api/events/predictions` | 未來 5 日資金預測 |
+| `GET` | `/api/events/predictions` | 未來 5 日資金預測（home 頁面用） |
 | `GET` | `/api/regime/history` | 市場體制歷史（含 `market_period`） |
 | `GET` | `/api/taiwan/stress-index` | TRJ 壓力指數 |
 | `GET` | `/api/janus/regime-score` | JANUS 體制評分 |

@@ -47,8 +47,7 @@ kill $MOCK_PID 2>/dev/null
 | 測試 | 頁面 | 驗證項目 | Mock API |
 |------|------|----------|----------|
 | Test 1 | `/admin/capital_models` | #capitalModelsContent 含 table row | `GET /api/narrative/models` |
-| Test 2 | `/client/capital_predictions` | .cp-cell 預測 heatmap 含 confidence > 70% | `GET /api/events/prediction` |
-| Test 3 | `/client/` | #home-tier-sections 含 .event-card | `GET /api/events/calendar` + `GET /api/capital-flow/summary` + `GET /api/recommendations` |
+| Test 2 | `/client/` | #home-tier-sections 含 .event-card | `GET /api/events/calendar` + `GET /api/capital-flow/summary` + `GET /api/recommendations` |
 
 ## 截圖
 
@@ -57,7 +56,6 @@ kill $MOCK_PID 2>/dev/null
 | 檔案 | 內容 |
 |------|------|
 | `admin-capital-models.png` | Admin 後台錢潮模型頁（含 3 個模型表格） |
-| `client-capital-predictions.png` | 投資人錢潮預測頁（含 5 日 heatmap） |
 | `client-home-events.png` | 投資人首頁 event cards（bonus） |
 
 ## 排查 Checklist
@@ -73,16 +71,15 @@ kill $MOCK_PID 2>/dev/null
 - [ ] Browser Console 中有無 404？測試腳本會列出 page error
 - [ ] `admin_web/dist/index.html` 中的 script path 是否正確？
 - [ ] `client_web/dist/index.html` 中的 script path 是否正確？
-- [ ] Chunk file 是否正常？`ls client_web/dist/js/capital_predictions-*.js`
+- [ ] Chunk file 是否正常？`ls client_web/dist/js/`
 
 ### SPA 路由問題
 - [ ] Mock server 是否對 `/admin/capital_models` 回傳 index.html 而非 404？
 - [ ] Client JS 的 `basePath` 計算是否正確？（/admin/ → basePath = /admin）
-- [ ] `capital_predictions` pageId 是否在 `SHELL_LOADERS` 與 `titles` 中？
+- [ ] 各 `pageId` 是否在 `SHELL_LOADERS` 與 `titles` 中？
 
 ### 資料格式不一致（常見原因）
 - [ ] Mock API 回的 field name 是否與 JS 預期一致？
-- [ ] `capital_predictions.js` 使用 `prediction.reasons` / `prediction.sectors` — 若 Go backend 回 `driving_events` / `predicted_forces`，mock server 需用前者
 
 ## 檔案結構
 

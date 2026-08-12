@@ -138,8 +138,8 @@ func main() {
 | Feature | Preflight | Auto-cron | Doc |
 |---------|-----------|-----------|-----|
 | **L2.4 sector agents** | `cmd/experimental/l2-4-preflight/main.go` (PR #1027) | `internal/scheduler/l2_4_auto_cron.go` (PR #1029) | `docs/operations/l2-4-runbook.md` + `l2-4-observation-spec.md` |
-| **C07 sector prediction** | `cmd/experimental/c07-preflight/main.go` (PR #1201) | `cmd/experimental/c07-obs-collector/main.go` + `cmd/experimental/c07-day-evaluator/main.go` (PR #1202) — no auto-cron (request-time computation, no scheduler trigger) | `docs/operations/sector-prediction-runbook.md` |
-| **C07 sector direction predictions** (rule-based) | `cmd/experimental/c07-preflight/main.go` (PR #1200+ follow-up) | (no auto-cron — request-time computation, no scheduler trigger) | `docs/operations/sector-prediction-runbook.md` + `docs/specs/sector-dimension-prediction-spec.md` |
+| **C07 sector prediction** | `cmd/experimental/c07-preflight/main.go` (PR #1201) | `cmd/experimental/c07-obs-collector/main.go` + `cmd/experimental/c07-day-evaluator/main.go` (PR #1202) — no auto-cron (request-time computation, no scheduler trigger) | `docs/archive/2026-08-12-sector-prediction-runbook.md` |
+| **C07 sector direction predictions** (rule-based) | `cmd/experimental/c07-preflight/main.go` (PR #1200+ follow-up) | (no auto-cron — request-time computation, no scheduler trigger) | `docs/archive/2026-08-12-sector-prediction-runbook.md` + `docs/archive/2026-08-12-sector-dimension-prediction-spec.md` |
 
 未來新增 launch gate 時,在此表加入 row。
 

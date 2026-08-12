@@ -1,3 +1,5 @@
+> ⚠️ **DEPRECATED 2026-08-12** — `/client/capital_predictions` 頁面已移除（PR #1523）。本 runbook 中針對 `capital_predictions.js` 摺疊區塊互動的指引不再適用。Sector predictor 邏輯本身（`internal/eventdriven/sector_predictor.go`）仍於 `/api/events/prediction` 服務，home 頁的「未來 5 日錢潮預測」section 仍使用此資料。如需恢復觀察期決策，請參考 git log。
+
 # C07 Sector Prediction — Operations Runbook
 
 > **對應 spec**：`docs/specs/sector-dimension-prediction-spec.md` v1.1
