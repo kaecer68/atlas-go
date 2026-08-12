@@ -116,6 +116,12 @@
       "results": ""
     },
     {
+      "name": "SectorBias",
+      "params": "(industryID string, events []NarrativeEvent)",
+      "receiver": "NarrativeEngine",
+      "results": "(float64)"
+    },
+    {
       "name": "SelfCalibrate",
       "params": "(replayPath string)",
       "receiver": "NarrativeEngine",
