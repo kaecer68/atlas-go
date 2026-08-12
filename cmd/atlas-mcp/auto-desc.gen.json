@@ -118,7 +118,7 @@
   },
   "backtest_signals": {
     "name": "backtest_signals",
-    "description": "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct) HTTP: GET /api/backtest/signals. Alternative: backtest_status, prism_get_training_results.",
+    "description": "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct) HTTP: GET /api/backtest/signals. Alternative: backtest_status.",
     "inputSchema": {
       "type": "object"
     }
@@ -817,13 +817,6 @@
       "required": [
         "days"
       ],
-      "type": "object"
-    }
-  },
-  "prism_get_training_results": {
-    "name": "prism_get_training_results",
-    "description": "Latest PRISM cohort training results (config + metrics per cohort) HTTP: GET /api/prism/training-results. Alternative: backtest_signals, strategy_get_attribution.",
-    "inputSchema": {
       "type": "object"
     }
   },

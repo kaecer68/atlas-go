@@ -40,6 +40,7 @@
 | B5-T | TAIEX 7/24、7/27 快照回補（TWSE 官方源） | ✅ 已完成 | — | 2026-07-29 |
 | B5-R | TAIEX 抓取韌性修復（Yahoo → TWSE fallback、失敗可見化、陳舊快取誠實化） | ✅ 已完成 | — | 2026-07-30 |
 | 公股節律 | government_flow 28h→24h + weekday 15:00+ gate + CAPTCHA 24h cooldown | ✅ 已完成 | — | 2026-07-31 |
+| PRISM 停用 | admin 頁面 + /api/prism/training-results + MCP tool 移除；prism_training BTM disabled（#1527） | ✅ 已完成（停用非刪核心） | #1527 | 2026-08-12 |
 
 ## E4 — 方法論頁面（已完成）
 
@@ -365,6 +366,7 @@
 5. **stress_test_daily dashboard latestDrawdown 修復（#1440）**：`RunDailyStressTests` 跑完後呼叫 `drawdownReporter`，dashboard 不再永遠 nil。
 6. **Stock coverage notice（#1477 + #1478）**：`stock_get_*` MCP 工具以 TWSE 上市普通股為主（≈1070 names），新增 coverage notice + TPEX scope external verification 防誤用。
 7. **L2.4 cleanup & ACI hook（#1464, #1467-#1470）**：把憲章追蹤表從「無驗收」改為「驗收清單導向」（§3.0/§4.0/§5.0/§7.2 補 ACI 盤查 + AC 驗收清單）；PreToolUse soft reminder 補強 hot-path Go access 治理。
+8. **PRISM 未啟用決策（#1527，2026-08-12）**：盤查結論 — 現有 Darwinian 權重（20 agent 動態 0.3~2.5）+ scorecards `regime_breakdown`（per-regime win_rate/session_count）已覆蓋「動態權重 + 歷史稽核」目標，PRISM/JANUS 無消費端且與 Darwinian 構成第三套平行權重。處置：刪 admin prism 頁面、刪 `/api/prism/training-results`、停用 `prism_training` BTM（`Enabled: false`）、移除 MCP tool `prism_get_training_results`。**以下皆為預期狀態，非 bug**：`/api/prism/training-results` 回 404；`scheduler_get_status` / `/api/scheduler/status` 顯示 `prism_training` disabled；MCP tool 清單無 prism 工具。`internal/prism/`、`internal/janus/`、`prismPlugin`（factory WithPRISM）、`ApplyPRISMWeights`（無資料時 no-op）保留 dormant，未來啟用可從 git history 恢復 API 層並將 BTM 設回 `Enabled: true`。
 
 ### 不變的歷史段落提醒
 

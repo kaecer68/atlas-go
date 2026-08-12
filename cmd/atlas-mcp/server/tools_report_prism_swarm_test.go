@@ -76,22 +76,5 @@ func TestHandleReportGetExportLink_OK(t *testing.T) {
 	}
 }
 
-func TestHandlePrismGetTrainingResults_OK(t *testing.T) {
-	s, rec, done := newTestHarness(t)
-	defer done()
-	// Backend returns a bare JSON array.
-	rec.responseBody = []byte(`[{"cohort":"c1","sharpe":1.2}]`)
-	_, out, err := s.handlePrismGetTrainingResults(context.Background(), nil, struct{}{})
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	if rec.path != "/api/prism/training-results" {
-		t.Fatalf("path=%s", rec.path)
-	}
-	if len(out.Results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(out.Results))
-	}
-}
-
 // Swarm handler tests removed — handlers deleted in swarm demotion (P1).
-// File kept for report/prism handler tests above.
+// File kept for report handler tests above.

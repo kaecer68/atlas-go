@@ -117,7 +117,6 @@ var canaryRoutes = map[string]canaryTest{
 	"report_get_performance":            {Path: "/api/dashboard/performance-report"},
 	"report_get_tax_snapshot":           {Path: "/api/dashboard/tax-snapshot"},
 	"report_get_export_link":            {Path: "/api/dashboard/performance-report/export"},
-	"prism_get_training_results":        {Path: "/api/prism/training-results"},
 	"backtest_status":                   {Path: "/api/backtest/status"},
 	"backtest_signals":                  {Path: "/api/backtest/signals"},
 	"mcp_anomaly_get_recent":            {Path: "/api/mcp/anomalies/recent"},

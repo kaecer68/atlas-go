@@ -205,6 +205,7 @@ bin/atlas-mcp 2>&1 | head -3
 | 401 Unauthorized | 設 `ATLAS_API_KEY` 或用免費 tier 工具（`mcp_quickstart`/`macro_*`/`event_*`） |
 | binary not found | 跑 `make build-mcp` |
 | 連線失敗 | `curl http://127.0.0.1:18080/health` 先確認 backend 通 |
+| 找不到 `prism_get_training_results` tool | **預期**（#1527，2026-08-12）— PRISM 未啟用，MCP 工具與 `/api/prism/training-results` 已移除；`scheduler_get_status` 中 `prism_training` disabled 亦為預期。詳見 `docs/ATLAS_SYSTEM_STATE.md` §重大事件摘要 8 |
 
 更多除錯：[`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md) §常見問題。
 

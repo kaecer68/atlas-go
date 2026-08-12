@@ -30,12 +30,6 @@ func registerReportPrismTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("report_get_export_link", "Signed export link for a report variant (expires after a short TTL) HTTP: GET /api/dashboard/performance-report/export. Alternative: report_get_performance, report_get_tax_snapshot."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleReportGetExportLink)
-
-	countedAddTool(mcpSrv, &mcp.Tool{
-		Name:        "prism_get_training_results",
-		Description: autoDescOr("prism_get_training_results", "Latest PRISM cohort training results (config + metrics per cohort) HTTP: GET /api/prism/training-results. Alternative: backtest_signals, strategy_get_attribution."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, s.handlePrismGetTrainingResults)
 }
 
 type reportPrismBaseOutput struct {

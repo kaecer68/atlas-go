@@ -253,10 +253,7 @@
 
 > 這些 tool 屬於 atlas-mcp 的自我觀測層，供 agent 了解自己的呼叫模式與系統健康。
 
-### Prism（1 個）
-| Tool | 用途 |
-|------|------|
-| `prism_get_training_results` | PRISM cohort 訓練結果 |
+> **Prism（移除）**：`prism_get_training_results` 已於 #1527（2026-08-12）移除 — PRISM 未啟用（見 `docs/ATLAS_SYSTEM_STATE.md` §重大事件摘要 8）。工具清單不再含 prism 工具屬預期。
 
 ---
 
