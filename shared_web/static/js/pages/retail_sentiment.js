@@ -14,7 +14,7 @@
  * 渲染邏輯抽到 shared/retail-sentiment-panel.js 與 narrative.js 共用。
  */
 
-import { silentGetJSON, renderMissingState, getJSONWithTimeout } from '../shared/app-utils.js';
+import { silentGetJSON, renderMissingState } from '../shared/app-utils.js';
 import { renderRetailSentimentPanel, RETRY_ID_CONST } from '../shared/retail-sentiment-panel.js';
 
 const RETRY_ID = 'retail-sentiment';
@@ -33,21 +33,19 @@ async function loadRetailSentiment() {
   if (!root) return;
   root.classList.add('loading');
   try {
-    const rs = await getJSONWithTimeout('/api/dashboard/retail-sentiment', 10000);
+    const rs = await silentGetJSON('/api/dashboard/retail-sentiment', { timeoutMs: 20000, retry: 0 });
     if (rs === null) {
       root.classList.remove('loading');
-      root.innerHTML = renderMissingState('散戶情緒指標', RETRY_ID);
-      const btn = root.querySelector('[data-retry="' + RETRY_ID + '"]');
-      if (btn) btn.addEventListener('click', loadRetailSentiment);
+      root.innerHTML = renderMissingState('散戶情緒指標', 'api-error');
+      root.querySelector('.retry-btn')?.addEventListener('click', loadRetailSentiment);
       return;
     }
     renderRetailSentimentPanel(root, rs);
   } catch (err) {
     console.error('[retail-sentiment] load failed', err);
     root.classList.remove('loading');
-    root.innerHTML = renderMissingState('散戶情緒指標', RETRY_ID);
-    const btn = root.querySelector('[data-retry="' + RETRY_ID + '"]');
-    if (btn) btn.addEventListener('click', loadRetailSentiment);
+    root.innerHTML = renderMissingState('散戶情緒指標', 'api-error');
+    root.querySelector('.retry-btn')?.addEventListener('click', loadRetailSentiment);
   }
 }
 
