@@ -465,7 +465,8 @@ Client 端（任意 SSE 相容 agent）：
 | Data | `data_get_channels`, `data_get_channel_detail`, `data_get_quality`, `data_get_field_contract` | 4 |
 | Universe | `universe_get_sessions`, `universe_get_universe_overlap` | 2 |
 | Report | `report_get_daily_summary`, `report_get_performance`, `report_get_tax_snapshot`, `report_get_export_link` | 4 |
-| Prism | `prism_get_training_results` | 1 |
+
+> **Prism（移除，2026-08-12）**：`prism_get_training_results` 已刪除（PRISM 未啟用 — 見 `docs/ATLAS_SYSTEM_STATE.md` §重大事件摘要 8）。tool 清單不含 prism 屬預期。
 
 ### Admin / destructive 排除清單（per §3.2）
 

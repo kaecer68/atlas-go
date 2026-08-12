@@ -1,6 +1,6 @@
 ---
 name: atlas-mcp-tool-tour
-description: "Navigable guide to atlas-go's 80 MCP tools — grouped by task domain, with entry-point tools, companion relationships, and common task combinations."
+description: "Navigable guide to atlas-go's MCP tools — grouped by task domain, with entry-point tools, companion relationships, and common task combinations."
 version: "1.0"
 category: "feature"
 auto_load: false
@@ -23,13 +23,13 @@ target_audience: "developer"
 
 - 當 agent 說「atlas 有哪些 tool」「我能用 atlas 做什麼」「有哪些 MCP tool 可用」
 - 當 agent 接入 atlas-mcp 後，需要快速定位「做 X 任務該用哪個 tool」
-- 當 agent 面對 112 個 tool 不知從何開始、需要導覽
+- 當 agent 面對 118 個 tool 不知從何開始、需要導覽
 - 當 agent 呼叫了一個 tool 但回傳結果不夠、想知道「下一步該用哪個 companion tool」
 
 ## 核心概念（Core Concepts）
 
 ### 任務群組（Task Domain）
-112 個 tool 依任務領域分為 16 個群組（從 26 個 `tools_*.go` 檔案 + `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
+118 個 tool 依任務領域分為 16 個群組（從 26 個 `tools_*.go` 檔案 + `tools.go` 核心 entry-point），每個群組有明確的 **entry-point tool**（第一個該呼叫的）和 **deep-dive tools**（深入查詢用）。
 
 | 群組 | Tool 數 | 入門 tool | 用途 |
 |------|--------|----------|------|
@@ -47,7 +47,6 @@ target_audience: "developer"
 | 系統健康（System/Health） | 9 | `system_get_health` | 整體健康、LLM router、資料品質、circuit breaker、anomaly 觀測 |
 | 資料源（Data） | 4 | `data_get_channels` | Channel 健康、pipeline 監控 |
 | LLM/Trace | 6 | `llm_get_health` | LLM router 健康、cost、推理追蹤 |
-| PRISM | 1 | `prism_get_training_results` | 訓練結果 (PRISM cohort) |
 | 報告/稅務 | 4 | `report_get_daily_summary` | 績效報告、稅務 snapshot |
 
 ### Companion Tool 關係
