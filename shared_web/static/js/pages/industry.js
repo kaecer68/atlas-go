@@ -7,6 +7,7 @@ import {
   renderEmptyState,
 } from "../shared/app-utils.js";
 import { renderIndustrySeasonality, renderSeasonalityList, renderSeasonalityCalendar } from '../shared/components/seasonality-panel.js';
+import { fetchDecisionChain, renderSectorHeatmap } from '../components/decision-panels.js';
 import { getThemeColor, fmtFloat } from "../shared/utils.js";
 import {
   fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned,
@@ -36,8 +37,8 @@ export async function loadIndustryData() {
   } catch (e) {
     console.error("loadIndustryData error:", e);
   }
-  await loadSectorAllocationPlan();
-  startSectorAllocationPolling();
+  await loadSectorHeatmap();
+  startSectorHeatmapPolling();
   bindSectorRefreshButton();
 }
 
@@ -48,26 +49,37 @@ let sectorIndicatorTimer = null;
 let lastSectorUpdate = null;
 let sectorFetchInFlight = false;
 
-export async function loadSectorAllocationPlan() {
+// 產業熱力圖 — 資料源為決策鏈聚合端點（/api/dashboard/decision-chain）的
+// sector_heatmap 區塊（取代舊的 sector-allocation-plan 權重卡片）。
+export async function loadSectorHeatmap() {
   if (sectorFetchInFlight) return;
   sectorFetchInFlight = true;
   setSectorRefreshSpinning(true);
   try {
-    const allocationPlan = await silentGetJSON("/api/dashboard/sector-allocation-plan");
-    renderIndustryMap(allocationPlan);
+    const data = await fetchDecisionChain();
+    const el = document.getElementById("industryMap");
+    if (el) {
+      el.classList.remove("loading");
+      el.innerHTML = renderSectorHeatmap(data);
+    }
     lastSectorUpdate = new Date();
     updateLastUpdatedIndicator();
   } catch (e) {
-    console.error("loadSectorAllocationPlan error:", e);
+    console.error("loadSectorHeatmap error:", e);
+    const el = document.getElementById("industryMap");
+    if (el) {
+      el.classList.remove("loading");
+      el.innerHTML = renderEmptyState("產業熱力圖載入失敗", "");
+    }
   } finally {
     sectorFetchInFlight = false;
     setSectorRefreshSpinning(false);
   }
 }
 
-function startSectorAllocationPolling() {
-  stopSectorAllocationPolling();
-  sectorPollTimer = setInterval(loadSectorAllocationPlan, SECTOR_POLL_INTERVAL_MS);
+function startSectorHeatmapPolling() {
+  stopSectorHeatmapPolling();
+  sectorPollTimer = setInterval(loadSectorHeatmap, SECTOR_POLL_INTERVAL_MS);
   if (sectorIndicatorTimer == null) {
     sectorIndicatorTimer = setInterval(updateLastUpdatedIndicator, SECTOR_INDICATOR_TICK_MS);
   }
@@ -77,7 +89,7 @@ function startSectorAllocationPolling() {
   }
 }
 
-function stopSectorAllocationPolling() {
+function stopSectorHeatmapPolling() {
   if (sectorPollTimer != null) {
     clearInterval(sectorPollTimer);
     sectorPollTimer = null;
@@ -87,10 +99,10 @@ function stopSectorAllocationPolling() {
 function handleSectorVisibilityChange() {
   if (typeof document === "undefined") return;
   if (document.hidden) {
-    stopSectorAllocationPolling();
+    stopSectorHeatmapPolling();
   } else {
-    loadSectorAllocationPlan();
-    startSectorAllocationPolling();
+    loadSectorHeatmap();
+    startSectorHeatmapPolling();
   }
 }
 
@@ -124,97 +136,8 @@ function bindSectorRefreshButton() {
   if (!btn || btn.__sectorBound) return;
   btn.__sectorBound = true;
   btn.addEventListener("click", () => {
-    loadSectorAllocationPlan();
+    loadSectorHeatmap();
   });
-}
-
-// Friendly labels for SA08/SA09 SectorAllocationSnapshot.fallback_reason.
-// Surfaces the *why* in the empty state so the page does not look broken
-// when the upstream pipeline has not yet emitted its first closure snapshot
-// (no_simulation_session) or the FileClosureStore has not been seeded.
-const SECTOR_FALLBACK_HINTS = {
-  no_simulation_session: "等待首次模擬收盤產生產業配置",
-  snapshot_unavailable: "產業配置服務暫時無法取得快照",
-};
-
-function formatSectorAllocationEmpty(data) {
-  var reason = data && data.fallback_reason;
-  var hint = reason ? SECTOR_FALLBACK_HINTS[reason] : null;
-  var msg = hint
-    ? "產業配置尚未就緒"
-    : (data && data.industries ? "尚無產業配置" : "尚無產業資料");
-  return renderEmptyState(msg, hint || "");
-}
-
-export function renderIndustryMap(data) {
-  const el = document.getElementById("industryMap");
-  if (!el) return;
-  if (!data) {
-    el.innerHTML = renderEmptyState("尚無產業資料", "");
-    el.classList.remove("loading");
-    return;
-  }
-  // SA08/SA09: new SectorAllocationSnapshot shape with target/current/delta maps.
-  // Backward compat: also accept legacy { industries: [...] } shape.
-  if (data.target && typeof data.target === "object") {
-    el.classList.remove("loading");
-    const entries = Object.entries(data.target)
-      .map(function (_a) {
-        var id = _a[0], targetW = _a[1];
-        var currentW = data.current && data.current[id] != null ? data.current[id] : null;
-        var deltaW = data.delta && data.delta[id] != null ? data.delta[id] : null;
-        return { id: id, target: targetW, current: currentW, delta: deltaW };
-      })
-      .sort(function (a, b) { return (b.target || 0) - (a.target || 0); });
-    if (!entries.length) {
-      el.innerHTML = formatSectorAllocationEmpty(data);
-      return;
-    }
-    var html = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
-    entries.forEach(function (ind) {
-      var name = sectorName(ind.id) || ind.id;
-      var targetPct = ind.target != null ? Math.round(ind.target * 100) : null;
-      var currentPct = ind.current != null ? Math.round(ind.current * 100) : null;
-      var deltaPct = ind.delta != null ? Math.round(ind.delta * 100) : null;
-      var deltaSign = deltaPct != null ? (deltaPct >= 0 ? "+" : "") : "";
-      html += '<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">';
-      html += '<div style="font-weight:700;font-size:14px;margin-bottom:2px">' + name + '</div>';
-      html += '<div style="font-size:12px;font-family:var(--font-mono)">目標 ' + (targetPct != null ? targetPct + "%" : "—") + '</div>';
-      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">當前 ' + (currentPct != null ? currentPct + "%" : "—") + ' <span style="color:' + (deltaPct != null && deltaPct > 0 ? 'var(--pnl-profit)' : deltaPct != null && deltaPct < 0 ? 'var(--pnl-loss)' : 'var(--muted)') + '">' + (deltaSign + (deltaPct != null ? deltaPct + "%" : "—")) + '</span></div>';
-      html += '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:2px">';
-      html += '<div style="width:' + Math.min((targetPct || 0) * 3, 100) + '%;height:100%;background:var(--accent)"></div></div>';
-      html += '</div>';
-    });
-    html += "</div>";
-    el.innerHTML = html;
-    return;
-  }
-  // Legacy shape: data.industries array. Empty payload with a fallback_reason
-  // is treated as a graceful empty state, not a broken page.
-  if (!data.industries) {
-    el.innerHTML = formatSectorAllocationEmpty(data);
-    el.classList.remove("loading");
-    return;
-  }
-  el.classList.remove("loading");
-  var industries = data.industries;
-  var html2 = '<div style="display:flex;flex-wrap:wrap;gap:10px">';
-  industries.forEach(function (ind) {
-    var weightValue = typeof ind.adjusted_weight === "number"
-      ? ind.adjusted_weight
-      : typeof ind.base_weight === "number"
-        ? ind.base_weight
-        : null;
-    var weightPct = weightValue != null ? Math.round(weightValue * 100) : null;
-    html2 += '<div style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="showIndustryDetail(\'' + ind.id + '\')">';
-    html2 += '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + (ind.name || ind.id) + '</div>';
-    html2 += '<div style="font-size:12px;color:var(--muted)">權重 ' + (weightPct != null ? weightPct + "%" : "—") + '</div>';
-    html2 += '<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">';
-    html2 += '<div style="width:' + (weightPct != null ? weightPct : 0) + '%;height:100%;background:var(--accent)"></div></div>';
-    html2 += '</div>';
-  });
-  html2 += "</div>";
-  el.innerHTML = html2;
 }
 
 function confidenceColor(hex, confidence) {

@@ -74,8 +74,8 @@
 @import url("components/live-progress.css");
 @import url("components/tool-events.css");
 
-/* Pages - Decision Chain & Parameters */
-@import url("pages/decision-chain.css");
+/* Pages - Decision Panels & Parameters */
+@import url("pages/decision-panels.css");
 @import url("pages/parameters.css");
 
 /* Pages - Cross-Market & Data Channels */

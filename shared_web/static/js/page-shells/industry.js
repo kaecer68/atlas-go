@@ -4,7 +4,7 @@ export const template = `
     點擊產業卡片可查看詳細的週期羅盤與衝擊傳導分析。
   </details>
   <div class="two-col-grid">
-    <div class="panel"><div class="panel-header"><h2>產業地圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
+    <div class="panel"><div class="panel-header"><h2>產業熱力圖</h2><div class="panel-header-actions"><span id="sectorLastUpdated" class="last-updated" title="最後更新時間">--</span><button type="button" id="sectorRefreshBtn" class="refresh-btn" title="手動刷新" aria-label="手動刷新">↻</button></div></div><div id="industryMap" class="empty loading">載入中…</div></div>
     <div class="panel"><h2>週期羅盤 <span class="cursor-pointer text-accent" data-open-modal="cycleLegend" title="週期燈號計算說明">ℹ️</span></h2><div id="industryCycle" class="empty loading">載入中…</div></div>
     <div class="panel"><h2>供應鏈連動</h2><div id="industryLinkage" class="empty loading">載入中…</div></div>
     <div class="panel"><h2>季節性模式</h2><div id="industrySeasonality" class="empty loading">載入中…</div></div>

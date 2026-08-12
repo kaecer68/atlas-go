@@ -28,7 +28,6 @@ const SHELL_LOADERS = {
   crossmarket: () => import('./page-shells/crossmarket.js'),
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
-  'decision-chain': () => import('./page-shells/decision-chain.js'),
   capital_board: () => import('./pages/capital_board.js'),
   login: () => import('./page-shells/login.js'),
   register: () => import('./page-shells/register.js'),
@@ -91,12 +90,11 @@ export async function switchPage(id, silent) {
   if (btn) btn.classList.add('active');
   const titles = {
     home: '今日判讀', narrative: '全球宏觀', live: '風險總覽',
-    crossmarket: '美台連動', industry: '產業地圖',
+    crossmarket: '美台連動', industry: '產業熱力圖',
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
     evolution_panel: '策略演化', strategies: '投資心法',
     capital_board: '七大勢力看板',
-    'decision-chain': '決策鏈',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
       methodology: '方法論：為什麼', 'my-signals': '我的追蹤',
@@ -169,12 +167,11 @@ async function loadModules() {
     import('./pages/experiments.js'),
     import('./pages/industry.js'),
     import('./pages/evolution_panel.js'),
-    import('./pages/decision-chain.js'),
     import('./pages/strategies.js'),
     import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'decision', 'strategies', 'crossmarket'];
+  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'strategies', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -302,31 +299,6 @@ async function loadPageData(pageId) {
         window.pipelineSessions = sessResp.sessions;
       }
       if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
-    } catch(e) { console.warn(e); }
-  }
-  else if (pageId === 'decision') {
-    try {
-      var decisionResults = await Promise.all([
-        silentGetJSON('/api/dashboard/experiment-inbox'),
-        silentGetJSON('/api/dashboard/phase3-status'),
-        silentGetJSON('/api/synergy/darwinian/status'),
-        silentGetJSON('/api/synergy/darwinian/trend'),
-        silentGetJSON('/api/dashboard/agent-observatory'),
-        silentGetJSON('/api/dashboard/macro-radar'),
-        silentGetJSON('/api/taiwan/stress-index'),
-      ]);
-      if (m.dash && m.dash.renderAIEvolution) {
-        m.dash.renderAIEvolution(
-          decisionResults[0],
-          decisionResults[1],
-          decisionResults[2],
-          decisionResults[3],
-          decisionResults[4],
-          decisionResults[5],
-          decisionResults[6],
-        );
-      }
-      if (m.decision && m.decision.loadDecisionChain) m.decision.loadDecisionChain();
     } catch(e) { console.warn(e); }
   }
   else if (pageId === 'reasoning-trace') {
