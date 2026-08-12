@@ -1,7 +1,9 @@
 package ledger
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -836,4 +838,140 @@ func TestSQLiteOutcomeStoreRoundTrip(t *testing.T) {
 	}
 
 	_ = os.Stdout
+}
+
+// writeSessionOutcomeJSONL writes a rich per-session outcome JSONL file with
+// full evaluation fields (Hit/ForwardReturn/Window) under baseDir, mirroring
+// what ledger.Store produces.
+func writeSessionOutcomeJSONL(t *testing.T, baseDir, sessionID string, outcomes []domain.RecommendationOutcome) {
+	t.Helper()
+	dir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir session dir: %v", err)
+	}
+	f, err := os.Create(filepath.Join(dir, "recommendation_outcomes.jsonl"))
+	if err != nil {
+		t.Fatalf("create jsonl: %v", err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, o := range outcomes {
+		if err := enc.Encode(o); err != nil {
+			t.Fatalf("encode outcome: %v", err)
+		}
+	}
+}
+
+func TestSQLiteOutcomeStoreLoadOutcomesFromSessions_RichJSONLDelegation(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB failed: %v", err)
+	}
+	defer db.Close()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema failed: %v", err)
+	}
+
+	baseDir := t.TempDir()
+	rich := []domain.RecommendationOutcome{
+		{
+			AgentID: "agent-1", Skill: "sector-tech", Layer: domain.LayerSector,
+			Symbol: "2330", Side: domain.SideBuy, Conviction: 80, Window: "2026-01-01",
+			ForwardReturn: 0.052, Hit: true, RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			AgentID: "agent-2", Skill: "style-growth", Layer: domain.LayerStyle,
+			Symbol: "2454", Side: domain.SideBuy, Conviction: 60, Window: "2026-01-02",
+			ForwardReturn: -0.021, Hit: false, RecordedAt: time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	writeSessionOutcomeJSONL(t, baseDir, "session-20260115-daily", rich)
+
+	// Truncated SQLite rows exist too — delegation must prefer JSONL.
+	store := NewSQLiteOutcomeStore(db).WithJSONLBaseDir(baseDir)
+	if err := store.RecordSessionOutcomes(domain.ReplaySession{ID: "session-20260115-daily"}, []domain.RecommendationOutcome{
+		{AgentID: "agent-1", Symbol: "2330", Side: domain.SideBuy, Conviction: 80, RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("RecordSessionOutcomes failed: %v", err)
+	}
+
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("LoadOutcomesFromSessions failed: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 rich outcomes from JSONL, got %d", len(loaded))
+	}
+	bySymbol := map[string]domain.RecommendationOutcome{}
+	for _, o := range loaded {
+		bySymbol[o.Symbol] = o
+	}
+	got := bySymbol["2330"]
+	if !got.Hit || got.ForwardReturn != 0.052 || got.Window != "2026-01-01" || got.Skill != "sector-tech" {
+		t.Errorf("2330 evaluation fields lost: Hit=%v ForwardReturn=%v Window=%q Skill=%q", got.Hit, got.ForwardReturn, got.Window, got.Skill)
+	}
+	got = bySymbol["2454"]
+	if got.Hit || got.ForwardReturn != -0.021 || got.Window != "2026-01-02" {
+		t.Errorf("2454 evaluation fields lost: Hit=%v ForwardReturn=%v Window=%q", got.Hit, got.ForwardReturn, got.Window)
+	}
+}
+
+func TestSQLiteOutcomeStoreLoadSessionOutcomes_RichJSONLDelegation(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB failed: %v", err)
+	}
+	defer db.Close()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema failed: %v", err)
+	}
+
+	baseDir := t.TempDir()
+	writeSessionOutcomeJSONL(t, baseDir, "session-20260115-daily", []domain.RecommendationOutcome{
+		{
+			AgentID: "agent-1", Symbol: "2330", Side: domain.SideBuy, Conviction: 80,
+			Window: "2026-01-01", ForwardReturn: 0.052, Hit: true,
+			RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		},
+	})
+
+	store := NewSQLiteOutcomeStore(db).WithJSONLBaseDir(baseDir)
+	loaded, err := store.LoadSessionOutcomes("session-20260115-daily")
+	if err != nil {
+		t.Fatalf("LoadSessionOutcomes failed: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 outcome, got %d", len(loaded))
+	}
+	if !loaded[0].Hit || loaded[0].ForwardReturn != 0.052 {
+		t.Errorf("evaluation fields lost: Hit=%v ForwardReturn=%v", loaded[0].Hit, loaded[0].ForwardReturn)
+	}
+}
+
+func TestSQLiteOutcomeStoreLoadOutcomesFromSessions_FallbackEmptyJSONL(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB failed: %v", err)
+	}
+	defer db.Close()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema failed: %v", err)
+	}
+
+	// baseDir with no sessions/ dir → JSONL delegation yields nothing,
+	// so SQLite rows must still be returned (truncated but present).
+	store := NewSQLiteOutcomeStore(db).WithJSONLBaseDir(t.TempDir())
+	if err := store.RecordSessionOutcomes(domain.ReplaySession{ID: "session-A"}, []domain.RecommendationOutcome{
+		{AgentID: "agent-a1", Symbol: "2330", Side: domain.SideBuy, Conviction: 80, RecordedAt: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("RecordSessionOutcomes failed: %v", err)
+	}
+
+	loaded, err := store.LoadOutcomesFromSessions()
+	if err != nil {
+		t.Fatalf("LoadOutcomesFromSessions failed: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Symbol != "2330" {
+		t.Fatalf("expected fallback to SQLite rows, got %+v", loaded)
+	}
 }

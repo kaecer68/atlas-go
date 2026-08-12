@@ -40,8 +40,7 @@ export class TrustFooter {
       <div class="trust-footer__disclaimer">${escapeHtml(disclaimer)}</div>
       <div class="trust-footer__links">
         <a href="https://github.com/kaecer68/atlas-go" target="_blank" rel="noopener noreferrer">GitHub</a> ·
-        <a href="/client/strategies">投資心法</a> ·
-        <a href="/client/evolution_panel">進階實驗室</a>
+        <a href="/client/strategies">投資心法</a>
       </div>
     </footer>`;
   }

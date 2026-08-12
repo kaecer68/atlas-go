@@ -131,7 +131,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     renderDualEquityCurve(preTaxPoints, afterTaxPoints);
 
     if (!positions.length) {
-      tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'evolution_panel', '前往策略演化');
+      tableEl.innerHTML = renderActionEmptyState('尚無持倉資料', '執行一次模擬交易以建立示範持倉', 'strategies', '前往投資心法');
     } else {
       const fmtF = (v) => fmtSafeNumber(v, { decimals: 2 });
       const fmtI = (v) => isValidNumber(v) ? v.toLocaleString('en-US') : '—';

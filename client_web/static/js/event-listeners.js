@@ -45,16 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
   var qs___filter_actions__primary_ = document.querySelector('.filter-actions .primary'); if (qs___filter_actions__primary_) qs___filter_actions__primary_.addEventListener('click', () => window.applyFilters());
   var qs___filter_actions__button_not_primary_ = document.querySelector('.filter-actions button:not(.primary)'); if (qs___filter_actions__button_not_primary_) qs___filter_actions__button_not_primary_.addEventListener('click', () => window.clearFilters());
 
-  // === Page: evolution_panel ===
-  // Buttons live in the dynamically injected shell, so use delegation.
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('#evView-compact, #evView-ai-analysis');
-    if (!btn) return;
-    e.preventDefault();
-    if (btn.id === 'evView-compact') window._evSwitch('compact');
-    if (btn.id === 'evView-ai-analysis') window._evSwitch('ai-analysis');
-  });
-  
   // === Page: industry ===
   var qs___page_industry__cursor_pointe = document.querySelector('#page-industry .cursor-pointer'); if (qs___page_industry__cursor_pointe) qs___page_industry__cursor_pointe.addEventListener('click', () => window.toggleCycleLegend());
   var el_btnRunShockSim = document.getElementById('btnRunShockSim'); if (el_btnRunShockSim) el_btnRunShockSim.addEventListener('click', () => window.runShockSimulation());

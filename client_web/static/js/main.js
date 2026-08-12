@@ -33,7 +33,6 @@ const SHELL_LOADERS = {
   register: () => import('./page-shells/register.js'),
   premium: () => import('./page-shells/premium.js'),
   mcp: () => import('./page-shells/mcp.js'),
-  evolution_panel: () => import('./page-shells/evolution_panel.js'),
   'stock-quote': () => import('./page-shells/stock-quote.js'),
   'performance-report': () => import('./page-shells/performance-report.js'),
   methodology: () => import('./page-shells/methodology.js'),
@@ -93,7 +92,7 @@ export async function switchPage(id, silent) {
     crossmarket: '美台連動', industry: '產業熱力圖',
     pipeline: '投資管線', portfolio: '組合持倉',
     'performance-report': '績效報告',
-    evolution_panel: '策略演化', strategies: '投資心法',
+    strategies: '投資心法',
     capital_board: '七大勢力看板',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
@@ -166,12 +165,11 @@ async function loadModules() {
     import('./pages/inbox.js'),
     import('./pages/experiments.js'),
     import('./pages/industry.js'),
-    import('./pages/evolution_panel.js'),
     import('./pages/strategies.js'),
     import('./pages/crossmarket.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'evolution_panel', 'strategies', 'crossmarket'];
+  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'strategies', 'crossmarket'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -404,15 +402,6 @@ async function loadPageData(pageId) {
     try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.warn(e); }
   }
   
-  else if (pageId === 'evolution_panel') {
-    try {
-      import('./pages/evolution_panel.js').then(function(evo) {
-        if (evo.loadEvolutionData) evo.loadEvolutionData();
-      }).catch(function(err) {
-        console.warn('[Dynamic import] evolution_panel module load failed:', err);
-      });
-    } catch(e) { console.warn(e); }
-  }
   else if (pageId === 'performance-report') {
     try {
       import('./pages/performance-report.js').then(function(mod) {

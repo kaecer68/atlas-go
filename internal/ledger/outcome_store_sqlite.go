@@ -10,8 +10,15 @@ import (
 )
 
 // SQLiteOutcomeStore implements OutcomeStore backed by SQLite.
+//
+// The outcomes table stores recommendation records only — evaluation fields
+// (Hit / ForwardReturn / Window / Skill / BenchmarkDelta) are NOT persisted
+// in the schema. WithJSONLBaseDir enables rich per-session JSONL reads so
+// Load* methods return full evaluation data (see ledger.Store), falling back
+// to the truncated SQLite rows when no JSONL data exists for a session.
 type SQLiteOutcomeStore struct {
-	db *sql.DB
+	db    *sql.DB
+	jsonl OutcomeStore // rich JSONL store (nil = SQLite-only reads)
 }
 
 var _ OutcomeStore = (*SQLiteOutcomeStore)(nil)
@@ -19,6 +26,16 @@ var _ OutcomeStore = (*SQLiteOutcomeStore)(nil)
 // NewSQLiteOutcomeStore creates a new SQLite-backed outcome store.
 func NewSQLiteOutcomeStore(db *sql.DB) *SQLiteOutcomeStore {
 	return &SQLiteOutcomeStore{db: db}
+}
+
+// WithJSONLBaseDir enables rich per-session JSONL reads rooted at baseDir
+// (typically cfg.LedgerDir). Without it, Load* methods read the truncated
+// SQLite table where evaluation fields are always zero.
+func (s *SQLiteOutcomeStore) WithJSONLBaseDir(baseDir string) *SQLiteOutcomeStore {
+	if baseDir != "" {
+		s.jsonl = NewStore(baseDir)
+	}
+	return s
 }
 
 // RecordOutcomes writes a batch of recommendation outcomes to the global outcomes table.
@@ -143,7 +160,16 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 // 與 LoadOutcomes()（僅 session_id = ”，稀疏的全域檔）不同，
 // 此方法符合 internal/ledger/AGENTS.md 規範：「richest data source with
 // per-agent, per-symbol forward returns」。
+//
+// 當 WithJSONLBaseDir 已啟用時，優先委派 per-session JSONL（唯一保存
+// Hit/ForwardReturn/Window 的 rich source）；JSONL 無資料時 fallback 到
+// SQLite 表（僅 recommendation 記錄，評估欄位為零）。
 func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	if s.jsonl != nil {
+		if outcomes, err := s.jsonl.LoadOutcomesFromSessions(); err == nil && len(outcomes) > 0 {
+			return outcomes, nil
+		}
+	}
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
@@ -172,7 +198,14 @@ func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, err
 }
 
 // LoadSessionOutcomes reads outcomes for a specific session.
+// With WithJSONLBaseDir enabled, reads the rich per-session JSONL first;
+// falls back to the truncated SQLite rows when no JSONL data exists.
 func (s *SQLiteOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	if s.jsonl != nil {
+		if outcomes, err := s.jsonl.LoadSessionOutcomes(sessionID); err == nil && len(outcomes) > 0 {
+			return outcomes, nil
+		}
+	}
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
