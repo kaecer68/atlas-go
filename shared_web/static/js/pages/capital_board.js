@@ -10,6 +10,354 @@ import { silentGetJSON, renderMissingState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 import { financialColor } from '../shared/color-tokens.js';
 
+// ============================================================
+// 近期歷史趨勢（client 專用，5 個 dimension，與 admin 的 7 個區隔）
+// ============================================================
+// 與 admin /admin/capital_history 共用 backend endpoint：
+//   GET /api/capital-flow/history?days=30|60
+// 與 admin 的差異：
+//   - 不含 `government` 維度（spec §6.1：公股口徑未定，operator-imported，
+//     畫出來是全 0 線，會誤導 client 用戶認為「無變化」實為「無資料」）
+//   - 共用 admin 既有圖表邏輯（Canvas 折線、零線、軸、圖例），
+//     state 全部 closure 化，與 admin 模組變數完全隔離
+
+import { getThemeColor } from '../shared/utils.js';
+import { hexToRgba } from '../shared/color-tokens.js';
+import { fmtSafeNumber } from '../shared/format-metric.js';
+
+const CBH_DIMENSIONS = [
+  { key: 'foreign',       label: '外資',       color: '#e74c3c' },
+  { key: 'institutional', label: '投信',       color: '#3498db' },
+  { key: 'dealer',        label: '自營商',     color: '#2ecc71' },
+  { key: 'retail',        label: '散戶',       color: '#9b59b6' },
+  { key: 'futures',       label: '外資期貨OI', color: '#1abc9c' },
+  { key: 'tsm_adr',       label: 'TSM ADR',    color: '#e67e22' },
+];
+const CBH_DEFAULT_VISIBLE = new Set(['foreign', 'institutional', 'dealer']);
+const CBH_RETRY_ID = 'cb-capital-history';
+
+function cbhUpdateAllChip(allChip) {
+  const allOn = CBH_DEFAULT_VISIBLE.size === CBH_DIMENSIONS.length;
+  if (allOn) {
+    allChip.classList.add('active');
+    allChip.style.color = 'var(--accent, #5b8def)';
+    allChip.style.borderColor = 'var(--accent, #5b8def)';
+  } else {
+    allChip.classList.remove('active');
+    allChip.style.color = '';
+    allChip.style.borderColor = '';
+  }
+}
+
+function cbhRenderToggles(root) {
+  const toggles = root.querySelector('#cbhToggles');
+  if (!toggles) return;
+  toggles.innerHTML = '';
+
+  // 「全部」chip：點擊在「全亮」與「預設官方三方」之間切換
+  const allChip = document.createElement('span');
+  allChip.className = 'cbh-chip cbh-chip--all';
+  allChip.setAttribute('data-dim', '__all__');
+  allChip.textContent = '全部';
+  allChip.addEventListener('click', function () {
+    const allOn = CBH_DEFAULT_VISIBLE.size === CBH_DIMENSIONS.length;
+    CBH_DEFAULT_VISIBLE.clear();
+    if (!allOn) {
+      CBH_DIMENSIONS.forEach(function (d) { CBH_DEFAULT_VISIBLE.add(d.key); });
+    } else {
+      // 從全亮回到 admin 預設（官方三方）
+      ['foreign', 'institutional', 'dealer'].forEach(function (k) { CBH_DEFAULT_VISIBLE.add(k); });
+    }
+    // 重繪整排 chip
+    cbhRenderToggles(root);
+    cbhRenderChart();
+  });
+  toggles.appendChild(allChip);
+  cbhUpdateAllChip(allChip);
+
+  CBH_DIMENSIONS.forEach(function (d) {
+    const chip = document.createElement('span');
+    const on = CBH_DEFAULT_VISIBLE.has(d.key);
+    chip.className = 'cbh-chip' + (on ? ' active' : '');
+    chip.style.borderColor = d.color;
+    chip.style.color = on ? d.color : '';
+    chip.textContent = d.label;
+    chip.setAttribute('data-dim', d.key);
+    chip.addEventListener('click', function () {
+      if (CBH_DEFAULT_VISIBLE.has(d.key)) {
+        CBH_DEFAULT_VISIBLE.delete(d.key);
+        chip.classList.remove('active');
+        chip.style.color = '';
+      } else {
+        CBH_DEFAULT_VISIBLE.add(d.key);
+        chip.classList.add('active');
+        chip.style.color = d.color;
+      }
+      cbhUpdateAllChip(allChip);
+      cbhRenderChart();
+    });
+    toggles.appendChild(chip);
+  });
+}
+
+// 4 個子圖（按單位分群），每個子圖自己的 Y 軸，避免不同單位的 dimension
+// 混在同一 Y 軸被壓縮到看不見。
+// 子圖 A: 官方三方（外資/投信/自營商，單位億股，共用 Y 軸）
+// 子圖 B: 散戶（融資餘額變化）
+// 子圖 C: 外資期貨 OI（口數）
+// 子圖 D: TSM ADR（百分比）
+const CBH_SUBPLOTS = [
+  { id: 'official', label: '官方三方（億股）', unit: '億股', keys: ['foreign', 'institutional', 'dealer'] },
+  { id: 'retail',   label: '散戶（融資餘額變化）', unit: '億',     keys: ['retail'] },
+  { id: 'futures',  label: '外資期貨 OI',       unit: '口',     keys: ['futures'] },
+  { id: 'tsm',      label: 'TSM ADR',           unit: '%',      keys: ['tsm_adr'] },
+];
+const CBH_SUBPLOT_HEIGHT = 110;
+const CBH_SUBPLOT_GAP = 8;
+
+function cbhRenderChart() {
+  const canvas = document.getElementById('cbhCanvas');
+  if (!canvas || !cbhState.data) return;
+
+  // 收集每個子圖要畫的 datasets
+  const subplots = CBH_SUBPLOTS.map(function (sp) {
+    const datasets = [];
+    sp.keys.forEach(function (key) {
+      if (!CBH_DEFAULT_VISIBLE.has(key)) return;
+      const dim = CBH_DIMENSIONS.find(function (d) { return d.key === key; });
+      if (!dim) return;
+      const samples = cbhState.data[key] || [];
+      if (samples.length < 2) return;
+      datasets.push({ key: key, label: dim.label, color: dim.color, samples: samples });
+    });
+    return { id: sp.id, label: sp.label, unit: sp.unit, datasets: datasets };
+  }).filter(function (sp) { return sp.datasets.length > 0; });
+
+  if (subplots.length === 0) {
+    canvas.style.display = 'none';
+    return;
+  }
+  canvas.style.display = '';
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const parent = canvas.parentElement;
+  const W = parent.clientWidth;
+  const totalH = 20 + subplots.length * CBH_SUBPLOT_HEIGHT + (subplots.length - 1) * CBH_SUBPLOT_GAP + 20;
+  canvas.width = W * dpr;
+  canvas.height = totalH * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = totalH + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 16, right: 16, bottom: 18, left: 56 };
+  const chartW = W - pad.left - pad.right;
+
+  const bg = getThemeColor('--panel') || '#13161c';
+  const muted = getThemeColor('--muted') || '#b8c4d0';
+
+  ctx.clearRect(0, 0, W, totalH);
+
+  let yOffset = 10;
+  subplots.forEach(function (sp) {
+    cbhDrawSubplot(ctx, sp, {
+      x: pad.left,
+      y: yOffset,
+      w: chartW,
+      h: CBH_SUBPLOT_HEIGHT,
+      W: W,
+      bg: bg,
+      muted: muted,
+    });
+    yOffset += CBH_SUBPLOT_HEIGHT + CBH_SUBPLOT_GAP;
+  });
+}
+
+function cbhDrawSubplot(ctx, sp, layout) {
+  const pad = { top: 14, right: 8, bottom: 4, left: 8 };
+  const chartX = layout.x + pad.left;
+  const chartY = layout.y + pad.top;
+  const chartW = layout.w - pad.left - pad.right;
+  const chartH = layout.h - pad.top - pad.bottom;
+
+  // 子圖背景
+  ctx.fillStyle = hexToRgba(layout.bg, 0.4);
+  ctx.beginPath();
+  ctx.roundRect(layout.x, layout.y, layout.w, layout.h, 4);
+  ctx.fill();
+
+  // 子圖標題（左上：勢力名）+ 右上（單位）
+  const first = sp.datasets[0];
+  ctx.fillStyle = hexToRgba(layout.muted, 0.7);
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(sp.label, layout.x + 6, layout.y + 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(sp.unit, layout.x + layout.w - 6, layout.y + 4);
+
+  // 計算此子圖自己的 Y 軸範圍（只取 active datasets 的值）
+  const allVals = [];
+  sp.datasets.forEach(function (ds) {
+    ds.samples.forEach(function (s) {
+      if (Number.isFinite(s.raw_value)) allVals.push(s.raw_value);
+    });
+  });
+  if (allVals.length === 0) return;
+  let minV = Math.min.apply(null, allVals);
+  let maxV = Math.max.apply(null, allVals);
+  // 確保零線在範圍內（即使所有值都正或都負，零線仍有意義）
+  minV = Math.min(minV, 0);
+  maxV = Math.max(maxV, 0);
+  const range = (maxV - minV) || 1;
+  minV = minV - range * 0.08;
+  maxV = maxV + range * 0.08;
+  const vRange = maxV - minV || 1;
+
+  // Grid（2 條水平線）
+  ctx.strokeStyle = hexToRgba(layout.muted, 0.08);
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i <= 2; i++) {
+    const y = chartY + (chartH / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(chartX, y);
+    ctx.lineTo(chartX + chartW, y);
+    ctx.stroke();
+  }
+
+  // 零線
+  const zeroY = chartY + (1 - (0 - minV) / vRange) * chartH;
+  ctx.strokeStyle = hexToRgba(layout.muted, 0.25);
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(chartX, zeroY);
+  ctx.lineTo(chartX + chartW, zeroY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Y 軸標籤（3 個：min / 0 / max）
+  ctx.fillStyle = hexToRgba(layout.muted, 0.5);
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fmtSafeNumber(maxV, { decimals: 0 }), layout.x - 4, chartY + 2);
+  ctx.fillText(fmtSafeNumber((maxV + minV) / 2, { decimals: 0 }), layout.x - 4, chartY + chartH / 2);
+  ctx.fillText(fmtSafeNumber(minV, { decimals: 0 }), layout.x - 4, chartY + chartH - 2);
+
+  // 用最長 dataset 算 X 軸 ticks
+  const longest = sp.datasets.reduce(function (a, b) {
+    return a.samples.length >= b.samples.length ? a : b;
+  });
+  const step = Math.max(1, Math.floor(longest.samples.length / 5));
+  ctx.fillStyle = hexToRgba(layout.muted, 0.45);
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  longest.samples.forEach(function (s, i) {
+    if (i % step === 0 || i === longest.samples.length - 1) {
+      const x = chartX + (i / Math.max(longest.samples.length - 1, 1)) * chartW;
+      const label = s.trading_date.length >= 10 ? s.trading_date.slice(5) : s.trading_date;
+      ctx.fillText(label, x, chartY + chartH + 2);
+    }
+  });
+
+  // 畫每條線
+  sp.datasets.forEach(function (ds) {
+    if (ds.samples.length < 2) return;
+    const pts = ds.samples.map(function (s, i) {
+      const x = chartX + (i / Math.max(ds.samples.length - 1, 1)) * chartW;
+      const y = chartY + (1 - (s.raw_value - minV) / vRange) * chartH;
+      return { x: x, y: y };
+    });
+
+    ctx.save();
+    ctx.shadowColor = hexToRgba(ds.color, 0.3);
+    ctx.shadowBlur = 3;
+    ctx.strokeStyle = ds.color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    pts.forEach(function (p, i) {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    if (pts.length <= 30) {
+      ctx.fillStyle = ds.color;
+      pts.forEach(function (p) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  });
+
+  // 子圖底部小圖例（最多 4 個 inline，超過截斷）
+  if (sp.datasets.length > 1) {
+    let lx = layout.x + 6;
+    const ly = layout.y + layout.h - 12;
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    sp.datasets.forEach(function (ds) {
+      ctx.fillStyle = ds.color;
+      ctx.fillRect(lx, ly, 8, 8);
+      ctx.fillStyle = hexToRgba(layout.muted, 0.85);
+      const txt = ds.label;
+      const w = ctx.measureText(txt).width;
+      if (lx + 12 + w > layout.x + layout.w - 6) return;
+      ctx.fillText(txt, lx + 12, ly + 4);
+      lx += 12 + w + 10;
+    });
+  }
+}
+
+const cbhState = { days: 60, data: null };
+
+async function cbhLoad() {
+  const root = document.getElementById('cbhRoot');
+  if (!root) return;
+  root.classList.add('loading');
+  try {
+    const data = await silentGetJSON('/api/capital-flow/history?days=' + cbhState.days);
+    if (data === null) {
+      root.classList.remove('loading');
+      root.innerHTML = renderMissingState('近期歷史趨勢', CBH_RETRY_ID);
+      const btn = root.querySelector('[data-retry="' + CBH_RETRY_ID + '"]');
+      if (btn) btn.addEventListener('click', cbhLoad);
+      return;
+    }
+    cbhState.data = data;
+    root.classList.remove('loading');
+    root.innerHTML =
+      '<div class="cbh-controls">' +
+        '<label>天數：' +
+          '<select id="cbhDays">' +
+            '<option value="30"' + (cbhState.days === 30 ? ' selected' : '') + '>30 天</option>' +
+            '<option value="60"' + (cbhState.days === 60 ? ' selected' : '') + '>60 天</option>' +
+          '</select>' +
+        '</label>' +
+        '<span class="cbh-toggles" id="cbhToggles"></span>' +
+      '</div>' +
+      '<div class="cbh-chart-wrap"><canvas id="cbhCanvas"></canvas></div>';
+    cbhRenderToggles(root);
+    cbhRenderChart();
+    const sel = document.getElementById('cbhDays');
+    if (sel) sel.addEventListener('change', function () {
+      cbhState.days = parseInt(this.value, 10);
+      cbhLoad();
+    });
+  } catch (err) {
+    console.error('[cbh] load failed', err);
+    root.classList.remove('loading');
+    root.innerHTML = renderMissingState('近期歷史趨勢', CBH_RETRY_ID);
+    const btn = root.querySelector('[data-retry="' + CBH_RETRY_ID + '"]');
+    if (btn) btn.addEventListener('click', cbhLoad);
+  }
+}
 const FORCE_LABEL = {
   foreign: '外資',
   futures: '外資期貨',
@@ -47,6 +395,10 @@ export const template = `
   Z-score 權重佔比，圓餅圖視覺化整體力道分佈；下方「錢潮看板」表格列出各勢力（外資、投信、自營商、
   散戶、跨市場訊號等）的 Z-score、原始值與趨勢，並標示主導勢力與市場品質分數。
 </details>
+<section id="cb-history" class="cb-history">
+  <h3 class="cb-board__title">近期歷史趨勢</h3>
+  <div id="cbhRoot" class="cbh-root">載入中…</div>
+</section>
 <section id="cb-summary" class="cb-summary" aria-live="polite"></section>
 <section id="cb-chart" class="cb-chart" aria-live="polite"></section>
 <section id="cb-grid" class="cb-board" aria-live="polite">載入中…</section>
@@ -55,7 +407,6 @@ export const template = `
 function aggregateForces(data) {
   const forces = Array.isArray(data && data.forces) ? data.forces : [];
   if (!forces.length) return null;
-
   const entries = forces.map(function (f) {
     const z = typeof f.z_score === 'number' ? f.z_score : 0;
     const trend = f.trend || (z > 0.5 ? 'bullish' : z < -0.5 ? 'bearish' : 'neutral');
@@ -66,8 +417,7 @@ function aggregateForces(data) {
       trend: trend,
       weight: Math.abs(z),
     };
-  });
-
+   });
   const counts = {
     bullish: entries.filter(function (e) { return e.trend === 'bullish'; }).length,
     bearish: entries.filter(function (e) { return e.trend === 'bearish'; }).length,
@@ -256,6 +606,8 @@ async function loadBoard() {
   summaryEl.innerHTML = '<h3 class="cb-board__title">模型資料</h3>' + renderModelMeta(summary, daily) + renderCounts(agg, summary || daily);
   chartEl.innerHTML = '<h3 class="cb-board__title">權重佔比圓餅圖</h3>' + renderPieChart(agg);
   gridEl.innerHTML = '<h3 class="cb-board__title">錢潮看板</h3>' + renderForceRows(agg.entries);
+  // 觸發近期歷史趨勢載入（不 await：與 summary/daily 並行，失敗不影響主面板）
+  cbhLoad();
 }
 
 export async function init() {

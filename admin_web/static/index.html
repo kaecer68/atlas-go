@@ -44,7 +44,6 @@
         <a data-page="capital_models">🧠 錢潮模型</a>
         <a data-page="capital_causality">🕸 錢潮因果</a>
         <a data-page="capital_quality">🔬 資料品質</a>
-        <a data-page="capital_history">📈 歷史趨勢</a>
   </nav>
   <div class="foot">
     <span class="text-muted">v8 · 統一介面</span>
@@ -493,15 +492,6 @@
         資料品質頁顯示 4 個 tier 的健康度（liveness / channel_health / llm_ready / auth_posture），以及各資料通道的最近 fetch 時間、stale alert。tier 失敗不會讓整頁崩潰，每個獨立顯示 ok / reason / latency。
       </details>
       <div id="capitalQualityContent" class="empty loading">載入中…</div>
-    </div>
-
-    <div class="page" id="page-capital_history">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        歷史趨勢頁顯示三大法人（及擴展勢力）每日買賣超的累積變化，預設顯示過去 60 天。可點擊上方標籤切換顯示特定勢力。<br>
-        <strong>Y 軸單位</strong>：外資/投信/自營/公股/散戶為「億股」；外資期貨 OI 為「口數」；TSM ADR 為「%」。<br>
-        <strong>零線</strong>（虛線）：上方為淨買超、下方為淨賣超。
-      </details>
-      <div id="capitalHistoryContent" class="empty loading">載入中…</div>
     </div>
 
   </div>
