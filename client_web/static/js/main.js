@@ -38,6 +38,7 @@ const SHELL_LOADERS = {
   methodology: () => import('./page-shells/methodology.js'),
   'my-signals': () => import('./pages/my-signals.js'),
   retail_sentiment: () => import('./pages/retail_sentiment.js'),
+  'errors/404': () => import('./page-shells/errors/404.js'),
 };
 const _shellsLoaded = new Set();
 
