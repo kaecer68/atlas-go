@@ -104,7 +104,7 @@
 | `docs/operations/stock-mcp-query-templates.md` | 個股 MCP 查詢範本 | ✅ |
 | `docs/operations/sprint3-rollout-runbook.md` | Sprint 3 部署手冊 | ✅ |
 | `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊 | ✅ |
-| `docs/operations/sector-prediction-runbook.md` | Sector 預測操作手冊 | ✅ |
+| `docs/archive/2026-08-12-sector-prediction-runbook.md` | Sector 預測操作手冊（DEPRECATED 2026-08-12，capital_predictions 頁面已移除） | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
 | `docs/operations/production-rollout-runbook.md` | Production Rollout Runbook | ✅ |
 | `docs/operations/commercial-flow-scope-2026-07-22.md` | 商業化流程 scope 定義 | ✅ |
