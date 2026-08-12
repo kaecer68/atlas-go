@@ -150,9 +150,9 @@ export function renderRetailSentimentPanel(container, retailSentiment) {
       '<div class="mt-sm" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">' +
         '<div id="subIndicatorToggle" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer;background:var(--bg);user-select:none" data-toggle="subIndicators">' +
           '<span style="font-size:12px;font-weight:600;color:var(--accent)">📊 子指標明細</span>' +
-          '<span id="subIndicatorArrow" style="font-size:11px;transition:transform 0.2s">▼</span>' +
+          '<span id="subIndicatorArrow" style="font-size:11px;transition:transform 0.2s">▲</span>' +
         '</div>' +
-        '<div id="subIndicatorBody" style="display:none;padding:10px 12px;border-top:1px solid var(--border)">' +
+        '<div id="subIndicatorBody" style="display:block;padding:10px 12px;border-top:1px solid var(--border)">' +
           '<div style="margin-bottom:10px">' +
             '<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--accent)">Part A（40%）— 散戶情緒 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">A Score: ' + fmtSafeNumber(ca.a_score, { decimals: 3 }) + '</span></div>' +
             '<table style="width:100%;border-collapse:collapse">' + aIndicatorRows + '</table>' +
