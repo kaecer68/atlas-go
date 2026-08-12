@@ -426,18 +426,14 @@ func registerOperationsTasks(d operationsDeps) {
 	// BackgroundTaskManager.Register contract (Constitution §4.5.5).
 
 	if d.prismMgr != nil && d.janusEngine != nil {
-		// Event-driven: feed completed results to JANUS immediately instead of
-		// waiting for the 6h cron. This propagates training improvements to
-		// regime detection in near-real-time.
-		d.prismMgr.SetOnCompleted(func(result prism.CompletedTrainingResult) {
-			if result.Result.Error == "" && !result.Result.Synthetic {
-				d.janusEngine.RecordTrainingResult(result.Regime, result.Result)
-			}
-		})
+		// PRISM 未啟用（2026-08-12 決策：現有 Darwinian 權重 + scorecards
+		// regime_breakdown 已覆蓋動態權重與歷史稽核目標）。訓練 executor 的
+		// replay 資料源為 1 天 sample CSV，任務必失敗且無消費者 — 保留骨架
+		// 供未來啟用，Enabled=false 停止每 6h 的無效排程。
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "prism_training",
 			Interval: 6 * time.Hour,
-			Enabled:  true,
+			Enabled:  false,
 			Task: func(_ context.Context) error {
 				if d.prismMgr == nil || d.janusEngine == nil {
 					return nil
@@ -464,7 +460,7 @@ func registerOperationsTasks(d operationsDeps) {
 				return nil
 			},
 		})
-		log.Printf("[Gateway] registered prism_training background task (6h interval)")
+		log.Printf("[Gateway] prism_training background task registered (disabled — PRISM 未啟用)")
 	}
 
 	// BK-13: Government flow aggregation — daily fetch of 8 core bank broker

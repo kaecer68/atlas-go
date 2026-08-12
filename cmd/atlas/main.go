@@ -698,7 +698,9 @@ func run(args []string, deps appDeps) error {
 		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
 		dashboard.SetHealthManager(agentHealthMgr)
 		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
-		dashboard.WithPRISMManager(prismMgr)
+		// PRISM 訓練結果 API 已移除（admin 頁面刪除，2026-08-12）。
+		// prismMgr 保留供 operations_tasks.go 的 prism_training BTM 使用
+		// （該 task 現為 disabled — 見 operations_tasks.go）。
 		// Start the PRISM training-queue workers. Previously the manager
 		// was created but never started, so tasks scheduled via the
 		// dashboard API would queue up without ever being processed.

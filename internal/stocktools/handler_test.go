@@ -846,20 +846,21 @@ func TestHandleQuote_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
 func TestHandleTechnical_NonTradingDay_MarksTradingDayFalse(t *testing.T) {
 	dir := t.TempDir()
 	store := ledger.NewJSONLQuoteStore(dir)
-	now := time.Now()
+	// 2026-08-09 是週日（非交易日）— bars 以固定基準日往前推，
+	// 與 nowFunc 對齊，避免 store 資料落在查詢窗口外觸發外部 fallback。
+	base := time.Date(2026, 8, 9, 12, 0, 0, 0, time.Local)
 	bars := []domain.DailyBar{
-		{Date: now.AddDate(0, 0, -4), Symbol: "2330.TW", Close: 650, Volume: 1000},
-		{Date: now.AddDate(0, 0, -3), Symbol: "2330.TW", Close: 660, Volume: 1100},
-		{Date: now.AddDate(0, 0, -2), Symbol: "2330.TW", Close: 670, Volume: 1200},
-		{Date: now.AddDate(0, 0, -1), Symbol: "2330.TW", Close: 680, Volume: 1300},
+		{Date: base.AddDate(0, 0, -4), Symbol: "2330.TW", Close: 650, Volume: 1000},
+		{Date: base.AddDate(0, 0, -3), Symbol: "2330.TW", Close: 660, Volume: 1100},
+		{Date: base.AddDate(0, 0, -2), Symbol: "2330.TW", Close: 670, Volume: 1200},
+		{Date: base.AddDate(0, 0, -1), Symbol: "2330.TW", Close: 680, Volume: 1300},
 	}
 	if err := store.RecordQuotes(bars); err != nil {
 		t.Fatal(err)
 	}
 
 	h := NewHandler(Deps{QuoteStore: store})
-	// 2026-08-09 是週日（非交易日）
-	h.nowFunc = func() time.Time { return time.Date(2026, 8, 9, 12, 0, 0, 0, time.Local) }
+	h.nowFunc = func() time.Time { return base }
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stock/technical?symbol=2330&days=30", nil)
 	code, resp := h.HandleTechnical(req)
