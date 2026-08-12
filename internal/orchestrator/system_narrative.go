@@ -33,31 +33,23 @@ func (s *System) applyNarrativeContextWithEvents(recs []domain.Recommendation, e
 	enriched := make([]domain.Recommendation, len(recs))
 	for i, rec := range recs {
 		enriched[i] = rec
-		// Attach narrative context to context and superinvestor layers.
-		var agentLayer string
-		for _, agent := range s.Sim().registry.Agents {
-			if agent.ID == rec.Agent {
-				agentLayer = string(agent.Layer)
-				break
+		// Attach narrative context to every recommendation layer so the
+		// pipeline UI and alerts can show why a rec was made.
+		enriched[i].SupportingEvents = make([]string, len(events))
+		for j, e := range events {
+			enriched[i].SupportingEvents[j] = e.ID
+		}
+		enriched[i].ReasoningChain = []string{}
+		for _, e := range events {
+			enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("%s (%s, confidence %.2f)", e.Theme, e.Region, e.Confidence))
+		}
+		for _, c := range chains {
+			if len(c.Steps) > 0 {
+				enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("Chain %s: %s", c.TemplateID, c.Steps[0].Description))
 			}
 		}
-		if agentLayer == "context" || agentLayer == "superinvestor" {
-			enriched[i].SupportingEvents = make([]string, len(events))
-			for j, e := range events {
-				enriched[i].SupportingEvents[j] = e.ID
-			}
-			enriched[i].ReasoningChain = []string{}
-			for _, e := range events {
-				enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("%s (%s, confidence %.2f)", e.Theme, e.Region, e.Confidence))
-			}
-			for _, c := range chains {
-				if len(c.Steps) > 0 {
-					enriched[i].ReasoningChain = append(enriched[i].ReasoningChain, fmt.Sprintf("Chain %s: %s", c.TemplateID, c.Steps[0].Description))
-				}
-			}
-			if enriched[i].Reason != "" {
-				enriched[i].Reason = fmt.Sprintf("%s | Narrative: %d event(s)", enriched[i].Reason, len(events))
-			}
+		if enriched[i].Reason != "" {
+			enriched[i].Reason = fmt.Sprintf("%s | Narrative: %d event(s)", enriched[i].Reason, len(events))
 		}
 	}
 	return enriched

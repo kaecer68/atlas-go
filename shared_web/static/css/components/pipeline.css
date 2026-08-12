@@ -13,3 +13,9 @@
 .factor-mini-val { font-size: var(--text-sm); min-width:28px; }
 .table-wrapper { overflow-x: auto; max-width: 100%; }
 .table-wrapper table { min-width: 640px; }
+/* Narrative attribution block (表裡閉環: 推薦附敘事歸因) */
+.pipeline-narrative { margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.7; }
+.pipeline-narrative-chain { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.pipeline-narrative-item { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+.pipeline-narrative-events { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.pipeline-narrative-event { font-size: 10px; padding: 1px 5px; background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.35); color: var(--color-info); }
