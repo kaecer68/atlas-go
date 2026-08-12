@@ -39,7 +39,7 @@ const SHELL_LOADERS = {
   'performance-report': () => import('./page-shells/performance-report.js'),
   methodology: () => import('./page-shells/methodology.js'),
   'my-signals': () => import('./pages/my-signals.js'),
-  'errors/404': () => import('./page-shells/errors/404.js')
+  retail_sentiment: () => import('./pages/retail_sentiment.js'),
 };
 const _shellsLoaded = new Set();
 
@@ -99,7 +99,8 @@ export async function switchPage(id, silent) {
     'decision-chain': '決策鏈',
       login: '登入', register: '註冊', premium: '升級 Premium',
       mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
-      methodology: '方法論：為什麼', 'my-signals': '我的追蹤'
+      methodology: '方法論：為什麼', 'my-signals': '我的追蹤',
+      retail_sentiment: '散戶情緒'
   };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -255,7 +256,7 @@ async function loadAll() {
     await loadModules();
     var m = modules;
     if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(events, stress, models, chains);
-    if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, null, seasonal);
+    if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(snapshot, stress, events, chains, models, templates, seasonal);
   } catch (e) {
     console.error(e);
     consecutiveFailures++;
@@ -283,13 +284,8 @@ async function loadPageData(pageId) {
         getJSONWithTimeout('/api/narrative/templates'),
         getJSONWithTimeout('/api/narrative/seasonal'),
       ]);
-      if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], null, results[6]);
+      if (m.narr.renderNarrativePage) m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], results[6]);
 
-      getJSONWithTimeout('/api/dashboard/retail-sentiment', 8000).then(function(rs) {
-        if (m.narr.renderNarrativePage && rs) {
-          m.narr.renderNarrativePage(results[0], results[1], results[2], results[3], results[4], results[5], rs, results[6]);
-        }
-      }).catch(function(e) { console.warn('[retail-sentiment] background load failed:', e); });
     } catch(e) { console.warn(e); }
   }
   else if (pageId === 'pipeline') {
