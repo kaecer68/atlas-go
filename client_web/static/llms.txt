@@ -3,7 +3,6 @@
 
 ## Site Map
 - /client/home — 市場總覽：建議方向、七維錢潮雷達（3+2+2 分層）看板、未來 5 日錢潮預測、市場脈動
-- /client/capital_predictions — 錢潮預測：5 日資金流向與板塊熱度圖
 - /client/capital_board — 錢潮看板：板塊多空彙總與模型權重
 - /client/stock-quote — 個股快查：報價、基本面、籌碼、技術面
 - /client/narrative — 宏觀視野：總經快照、散戶情緒、敘事事件與因果鏈

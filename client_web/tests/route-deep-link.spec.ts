@@ -7,7 +7,7 @@ import { installAuthMocks } from './auth-mock';
  * Verifies:
  *   - evolution_panel no longer falls to 404
  *   - direct /client/<page> deep-links activate the correct page container
- *   - capital_board / stock-quote / strategies / capital_predictions
+ *   - capital_board / stock-quote / strategies
  *     page containers are populated and title is correct
  *
  * We wait for #pageTitle (set inside the page shell's init()) rather than
@@ -27,7 +27,6 @@ const PAGES = [
   { id: 'capital_board',       title: '七大勢力看板' },
   { id: 'stock-quote',         title: '個股快查' },
   { id: 'strategies',          title: '投資心法' },
-  { id: 'capital_predictions', title: '未來 5 日資金' },
 ];
 
 for (const { id, title } of PAGES) {

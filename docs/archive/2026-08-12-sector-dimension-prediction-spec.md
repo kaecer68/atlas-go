@@ -1,3 +1,5 @@
+> ⚠️ **DEPRECATED 2026-08-12** — `/client/capital_predictions` 頁面已移除（PR #1523）。本 spec 描述的「板塊方向預測」前端區段（§6 「板塊方向預測」與 §3.2 「熱度圖」）不再有對應 UI。Sector predictor 邏輯本身（`internal/eventdriven/sector_predictor.go` + `/api/events/prediction`）仍於 home 頁的「未來 5 日錢潮預測」section 服務。如需恢復完整板塊方向預測 UI，請參考 git log 復活此 spec。
+
 # C07 — 板塊維度預測（Per-Sector Direction Prediction）
 
 > **狀態**：v1.1 — 因 Phase 0 發現歷史板塊日報酬無法回填，改採 rule-based / heuristic 實作，保留統計模型升級空間

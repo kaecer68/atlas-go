@@ -34,7 +34,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/client`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies,login,register,premium,stock-quote,capital_predictions,capital_board,decision-chain")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies,login,register,premium,stock-quote,capital_board,decision-chain")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -51,7 +51,6 @@ const PAGE_SELECTORS = {
   register: "#page-register",
   premium: "#page-premium",
   "stock-quote": "#page-stock-quote",
-  capital_predictions: "#page-capital_predictions",
   capital_board: "#page-capital_board",
   "decision-chain": "#page-decision-chain",
 };

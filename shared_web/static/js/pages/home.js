@@ -103,7 +103,6 @@ export async function renderHomePage(container) {
         <h2>未來 5 日錢潮預測</h2>
         <span class="home-section__subtitle">事件驅動的資金流向預測</span>
         <span class="home-section__data-badge" id="predictions-data-badge"></span>
-        <a class="home-section__nav-link" href="javascript:void(0)" onclick="switchPage('capital_predictions')">完整預測 →</a>
       </div>
       <div id="home-predictions-content" class="home-predictions__content">
         <div class="home-loading-card">載入中…</div>
