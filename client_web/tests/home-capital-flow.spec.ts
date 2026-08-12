@@ -111,20 +111,3 @@ test.skip('home: high-confidence event banner is visible and dismissible', async
   await banner.locator('#home-banner-dismiss').click();
   await expect(banner).toBeHidden();
 });
-test.skip('home: market calendar renders events and impact badges', async ({ page }) => {
-  await installAuthMocks(page);
-  await bypassOnboarding(page);
-  await mockHomeApis(page);
-
-  const calendar = page.locator('#home-event-calendar');
-  await expect(calendar).toBeVisible({ timeout: 5000 });
-  await expect(calendar).toContainText('台積電法說會');
-  await expect(calendar).toContainText('MSCI');
-
-  const eventCards = calendar.locator('.event-card');
-  await expect(eventCards).toHaveCount(2);
-
-  const badges = calendar.locator('.tier-badge');
-  const badgeCount = await badges.count();
-  expect(badgeCount).toBeGreaterThanOrEqual(2);
-});
