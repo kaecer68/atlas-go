@@ -402,13 +402,6 @@
       "consumer_facing": true,
       "consumer_note": ""
     },
-    "prism_get_training_results": {
-      "method": "GET",
-      "path": "/api/prism/training-results",
-      "auth": "optional",
-      "consumer_facing": true,
-      "consumer_note": ""
-    },
     "regime_get_history": {
       "method": "GET",
       "path": "/api/regime/history?days=7",
