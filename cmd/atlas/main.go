@@ -876,6 +876,13 @@ func run(args []string, deps appDeps) error {
 		if alertStore != nil {
 			alertAPI := monitoring.NewAlertAPI(alertStore)
 			alertAPI.WithAlertSources(alertscanner.NewWebhookSource(alertWebhook))
+			// Narrative source: surfaces macro narrative detections as
+			// alerts (表裡閉環 Wave 5).
+			narrativeSrc := alertscanner.NewNarrativeSource(dashEventBus, 256)
+			if err := narrativeSrc.Start(); err != nil {
+				log.Printf("[AlertScanner] narrative source start failed: %v", err)
+			}
+			alertAPI.WithAlertSources(narrativeSrc)
 			alertAPI.RegisterRoutes(mux)
 
 			// Route C: scan for in-flight alerts after process restart.
@@ -2593,6 +2600,13 @@ func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, col
 			log.Printf("[AlertScanner] wave9 source start failed: %v", err)
 		}
 		alertAPI.WithAlertSources(wave9Src)
+		// Narrative source: surfaces high-severity macro narrative detections
+		// as alerts so detected themes actively warn (表裡閉環 Wave 5).
+		narrativeSrc := alertscanner.NewNarrativeSource(eventBus, 256)
+		if err := narrativeSrc.Start(); err != nil {
+			log.Printf("[AlertScanner] narrative source start failed: %v", err)
+		}
+		alertAPI.WithAlertSources(narrativeSrc)
 		alertAPI.RegisterRoutes(mux)
 		// Route C: scan for in-flight alerts after process restart.
 		scanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
