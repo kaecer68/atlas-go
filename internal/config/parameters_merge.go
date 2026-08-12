@@ -617,6 +617,9 @@ func mergeRSITwDefaults(cfg *ParametersConfig) {
 	if r.C1VeryBearishThreshold.Value == 0 {
 		r.C1VeryBearishThreshold = def.C1VeryBearishThreshold
 	}
+	if r.C1FallbackScore.Value == 0 {
+		r.C1FallbackScore = def.C1FallbackScore
+	}
 	if r.C2NeutralMidpoint.Value == 0 {
 		r.C2NeutralMidpoint = def.C2NeutralMidpoint
 	}

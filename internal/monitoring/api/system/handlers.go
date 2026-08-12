@@ -360,36 +360,42 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		catA.MarginMaintenanceZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a3_margin_maint")
 		}
 	}
 	if v, ok := subs["a2_day_trading"]; ok {
 		catA.DayTradingZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a2_day_trading")
 		}
 	}
 	if v, ok := subs["a1_margin_z"]; ok {
 		catA.MarginBalanceZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a1_margin_z")
 		}
 	}
 	if v, ok := subs["a4_vix_map"]; ok {
 		catA.VIXRiskScore = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a4_vix_map")
 		}
 	}
 	if v, ok := subs["a5_pcr_proxy"]; ok {
 		catA.WeeklyPCR = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a5_pcr_proxy")
 		}
 	}
 	if v, ok := subs["a6_odd_lot"]; ok {
 		catA.OddLotImbalance = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a6_odd_lot")
 		}
 	}
 
@@ -398,24 +404,38 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		catC.FuturesRetailOI = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c1_futures_oi")
 		}
 	}
 	if v, ok := subs["c2_inst_flow"]; ok {
 		catC.BrokerFlowScore = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c2_inst_flow")
 		}
 	}
 	if v, ok := subs["c3_etf_sub"]; ok {
 		catC.ETFSubscriptionScore = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c3_etf_sub")
 		}
 	}
 
 	catD := &domain.RSITwCategoryD{
 		AdjustmentFactor: result.AdjustmentFactor,
 		DMultiplier:      result.AdjustmentFactor,
+	}
+	// Audit A04 (2026-08-12): 填充 D 觸發事件 — 先前 active_events 永遠為 null，
+	// 前端固定顯示「無觸發事件」，與實際乘數（如 0.85 = D1 地緣政治觸發）矛盾。
+	if v, ok := subs["d1_geopolitical"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "地緣政治風險")
+	}
+	if v, ok := subs["d2_vix_spike"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "VIX 飆升")
+	}
+	if v, ok := subs["d3_credit_control"]; ok && v.ZScore != 1.0 {
+		catD.ActiveEvents = append(catD.ActiveEvents, "信貸緊縮")
 	}
 	if v, ok := subs["d1_geopolitical"]; ok && v.IsFallback {
 		catD.IsFallback = true

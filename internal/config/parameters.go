@@ -1277,14 +1277,18 @@ type RSITwParameters struct {
 	A3Scale    ParameterMetadata[float64] `json:"a3_scale"`    // Z-score scaling factor (default 2.0)
 
 	// A4: VIX piecewise mapping — thresholds are lower bounds (exclusive), scores are the mapping result.
-	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=1.0 (vix>=35)
+	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=-1.0 (vix>=35)
+	// Audit A10 (2026-08-12): 高分 = 狂熱（frenzy），VIX 高 = 市場恐慌 → 散戶恐慌 → 應推低分數。
+	// 原 scores 全為正（VIX 高 → +1.0 推高狂熱），與 composite 語義矛盾。修正為負向：VIX 高 → 恐慌推低。
 	A4VixThresholds ParameterMetadata[[]float64] `json:"a4_vix_thresholds"` // [15, 20, 25, 30, 35]
-	A4VixScores     ParameterMetadata[[]float64] `json:"a4_vix_scores"`     // [0.1, 0.3, 0.5, 0.7, 0.85, 1.0]
+	A4VixScores     ParameterMetadata[[]float64] `json:"a4_vix_scores"`     // [0.1, 0.0, -0.3, -0.5, -0.7, -1.0]
 
 	// A5: PCR piecewise mapping — thresholds are compared with > (strict), scores in order
+	// Audit A10 (2026-08-12): PCR 高（賣權成交多）＝散戶避險/看空 → 恐慌 → 應推低分數。
+	// 原 scores [0.9,0.7,0.5,0.1] 把恐慌訊號推高狂熱分數，與 composite 語義矛盾。修正為負向。
 	A5PcrThresholds ParameterMetadata[[]float64] `json:"a5_pcr_thresholds"` // [1.5, 1.0, 0.8]
-	A5PcrScores     ParameterMetadata[[]float64] `json:"a5_pcr_scores"`     // [0.9, 0.7, 0.5, 0.1]
-	A5PcrFallback   ParameterMetadata[float64]   `json:"a5_pcr_fallback"`   // score when pcr==0 (default 0.5)
+	A5PcrScores     ParameterMetadata[[]float64] `json:"a5_pcr_scores"`     // [-0.9, -0.5, -0.2, 0.3]
+	A5PcrFallback   ParameterMetadata[float64]   `json:"a5_pcr_fallback"`   // score when pcr==0 (default 0.0)
 
 	// A6: Odd-lot imbalance mapping — thresholds with > (strict), scores in order
 	A6OddLotThresholds ParameterMetadata[[]float64] `json:"a6_oddlot_thresholds"` // [0.2, 0.1, -0.1, -0.2]
@@ -1299,6 +1303,7 @@ type RSITwParameters struct {
 	C1BullishThreshold     ParameterMetadata[float64] `json:"c1_bullish_threshold"`      // futures OI pct above this → 0.7
 	C1BearishThreshold     ParameterMetadata[float64] `json:"c1_bearish_threshold"`      // futures OI pct below this → 0.5
 	C1VeryBearishThreshold ParameterMetadata[float64] `json:"c1_very_bearish_threshold"` // futures OI pct below this → 0.25
+	C1FallbackScore        ParameterMetadata[float64] `json:"c1_fallback_score"`         // score when futures OI pct == 0 (default 0.5)
 	C2NeutralMidpoint      ParameterMetadata[float64] `json:"c2_neutral_midpoint"`       // base score when netFlow ≈ 0 (0.5)
 	C2NetflowScalingFactor ParameterMetadata[float64] `json:"c2_netflow_scaling_factor"` // divisor for continuous scoring
 	C3VeryBullishThreshold ParameterMetadata[float64] `json:"c3_very_bullish_threshold"` // ETF net sub above this → 0.9

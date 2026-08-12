@@ -117,29 +117,44 @@ export function renderRetailSentimentPanel(container, retailSentiment) {
     const cc = si.category_c || {};
     const cd = si.category_d || {};
 
+    // Audit A01 (2026-08-12): fallback 子指標顯示「資料缺失」標記，
+    // 不再把 fallback 值（0.5/0.0）冒充為真實數值。
+    // Review P1 (2026-08-12): 改用 per-sub-indicator fallback_fields 逐列判斷，
+    // 避免 category-level OR 旗標誤標真實子指標（如 c3_etf_sub 恆 fallback
+    // 拖垮整個 C 區）。fallback_fields 由後端 convertRSITwSubIndicators 填充。
+    const fallbackSetA = new Set(ca.fallback_fields || []);
+    const fallbackSetC = new Set(cc.fallback_fields || []);
+    const fallbackBadge = (isFallback) => {
+      if (isFallback) {
+        return ' <span class="badge" style="font-size:10px;padding:1px 6px" title="資料缺失，此數值為預設值">資料缺失</span>';
+      }
+      return '';
+    };
+
     const aIndicatorRows = [
-      ['維持率 Z-score', ca.margin_maintenance_z],
-      ['當沖 Z-score', ca.day_trading_z],
-      ['融資餘額 Z-score', ca.margin_balance_z],
-      ['VIX 風險分數', ca.vix_risk_score],
-      ['週選擇權 PCR', ca.weekly_pcr],
-      ['零股交易失衡', ca.odd_lot_imbalance]
+      ['融資餘額百分位', ca.margin_maintenance_z, fallbackSetA.has('a3_margin_maint')], // Audit A11: 原名「維持率 Z-score」誤導（實為融資餘額百分位映射）
+      ['當沖比率', ca.day_trading_z, fallbackSetA.has('a2_day_trading'), true],          // Audit A12: 原名「當沖 Z-score」（實為原始比率，顯示 ×100%）
+      ['融資餘額 Z-score', ca.margin_balance_z, fallbackSetA.has('a1_margin_z')],
+      ['VIX 風險分數', ca.vix_risk_score, fallbackSetA.has('a4_vix_map')],
+      ['週選擇權 PCR', ca.weekly_pcr, fallbackSetA.has('a5_pcr_proxy')],
+      ['零股交易失衡', ca.odd_lot_imbalance, fallbackSetA.has('a6_odd_lot')]
     ].map(r => {
       const raw = r[1];
-      const v = fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
+      const isPct = r[3] === true; // 當沖比率為原始比率，顯示時轉百分比
+      const v = fmtSafeNumber(isPct ? raw * 100 : raw, { decimals: isPct ? 1 : 2, useGrouping: true, suffix: isPct ? '%' : '' });
       const cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
-      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
+      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + fallbackBadge(r[2]) + '</td></tr>';
     }).join('');
 
     const cIndicatorRows = [
-      ['散戶期貨 OI', cc.futures_retail_oi],
-      ['券商分點流向', cc.broker_flow_score],
-      ['ETF 申購分數', cc.etf_subscription_score]
+      ['散戶期貨 OI', cc.futures_retail_oi, fallbackSetC.has('c1_futures_oi')],
+      ['外資+投信淨買超', cc.broker_flow_score, fallbackSetC.has('c2_inst_flow')], // Audit A07: 原名「券商分點流向」與實際（外資+投信）不符
+      ['ETF 申購分數', cc.etf_subscription_score, fallbackSetC.has('c3_etf_sub')]
     ].map(r => {
       const raw = r[1];
       const v = fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
       const cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
-      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + '</td></tr>';
+      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + fallbackBadge(r[2]) + '</td></tr>';
     }).join('');
 
     const dEvents = (cd.active_events && cd.active_events.length > 0) ? cd.active_events.join('、') : '無觸發事件';

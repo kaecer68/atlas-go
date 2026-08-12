@@ -113,10 +113,10 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 		Date:               raw.Date,
 		PutVolume:          parseInt64(raw.PutVolume),
 		CallVolume:         parseInt64(raw.CallVolume),
-		PutCallVolumeRatio: parseFloat64(raw.PutCallVolumeRatioPct),
+		PutCallVolumeRatio: parseFloat64(raw.PutCallVolumeRatioPct) / 100.0,
 		PutOI:              parseInt64(raw.PutOI),
 		CallOI:             parseInt64(raw.CallOI),
-		PutCallOIRatio:     parseFloat64(raw.PutCallOIRatioPct),
+		PutCallOIRatio:     parseFloat64(raw.PutCallOIRatioPct) / 100.0,
 	}
 
 	return stats, nil

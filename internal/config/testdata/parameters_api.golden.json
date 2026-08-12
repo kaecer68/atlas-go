@@ -1286,6 +1286,7 @@
         "C1BullishThreshold ParameterMetadata[float64]",
         "C1BearishThreshold ParameterMetadata[float64]",
         "C1VeryBearishThreshold ParameterMetadata[float64]",
+        "C1FallbackScore ParameterMetadata[float64]",
         "C2NeutralMidpoint ParameterMetadata[float64]",
         "C2NetflowScalingFactor ParameterMetadata[float64]",
         "C3VeryBullishThreshold ParameterMetadata[float64]",

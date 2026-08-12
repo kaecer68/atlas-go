@@ -217,12 +217,14 @@ func TestVixMap(t *testing.T) {
 		vix  float64
 		want float64
 	}{
+		// Audit A10 (2026-08-12): VIX 高 = 市場恐慌 → 散戶恐慌 → 推低分數。
+		// 低 VIX 輕微樂觀 (+0.1)，高 VIX 恐慌 (-1.0)。
 		{10, 0.1},
-		{17, 0.3},
-		{22, 0.5},
-		{27, 0.7},
-		{32, 0.85},
-		{40, 1.0},
+		{17, 0.0},
+		{22, -0.3},
+		{27, -0.5},
+		{32, -0.7},
+		{40, -1.0},
 	}
 	for _, tt := range tests {
 		got := vixMapParam(tt.vix, &params)
@@ -241,8 +243,8 @@ func TestSubA4_Fallback(t *testing.T) {
 	data := RSITwInput{VIXLevel: 0}
 	score := c.subA4(data, subs, &params)
 
-	if score != 0.5*0.15 { // fallback score * weight
-		t.Errorf("subA4 fallback expected %f, got %f", 0.5*0.15, score)
+	if score != 0 { // fallback: 資料缺失不貢獻
+		t.Errorf("subA4 fallback expected 0, got %f", score)
 	}
 	si := subs["a4_vix_map"]
 	if !si.IsFallback {
@@ -258,11 +260,13 @@ func TestSubA5_PCRThresholds(t *testing.T) {
 		pcr  float64
 		want float64
 	}{
-		{0, 0.5},   // fallback
-		{1.6, 0.9}, // > 1.5
-		{1.2, 0.7}, // > 1.0
-		{0.9, 0.5}, // > 0.8
-		{0.5, 0.1}, // else
+		// Audit A10 (2026-08-12): PCR 高（賣權成交多）= 散戶避險/看空 → 恐慌 → 推低分數；
+		// PCR 低（買權成交多）= 樂觀 → 推高。fallback 0 不貢獻。
+		{0, 0.0},    // fallback
+		{1.6, -0.9}, // > 1.5
+		{1.2, -0.5}, // > 1.0
+		{0.9, -0.2}, // > 0.8
+		{0.5, 0.3},  // else（樂觀）
 	}
 	for _, tt := range tests {
 		subs := make(map[string]RSISubIndicator)
@@ -313,12 +317,14 @@ func TestSubC1_FuturesOIThresholds(t *testing.T) {
 		pct  float64
 		want float64
 	}{
-		{0, 0.5},    // fallback
-		{25, 0.9},   // > C1VeryBullishThreshold (20)
-		{15, 0.7},   // > C1BullishThreshold (10)
-		{5, 0.5},    // > C1BearishThreshold (-10)
-		{-15, 0.25}, // > C1VeryBearishThreshold (-20)
-		{-25, 0.1},  // else
+		// Audit A15 (2026-08-12): threshold 由 20/10/-10/-20 修正為 5/2/-2/-5（匹配實測量級 ±10）。
+		// Audit A02 + Review P2: fallback 走 params.C1FallbackScore，預設 0（資料缺失不貢獻）。
+		{0, 0.0},   // fallback
+		{6, 0.9},   // > C1VeryBullishThreshold (5)
+		{3, 0.7},   // > C1BullishThreshold (2)
+		{1, 0.5},   // neutral band (-2..5, 非 fallback)
+		{-3, 0.25}, // > C1VeryBearishThreshold (-5)
+		{-6, 0.1},  // else
 	}
 	for _, tt := range tests {
 		subs := make(map[string]RSISubIndicator)
@@ -329,6 +335,28 @@ func TestSubC1_FuturesOIThresholds(t *testing.T) {
 		if math.Abs(score-expectedScore) > 0.001 {
 			t.Errorf("subC1(pct=%f) = %f, want %f", tt.pct, score, expectedScore)
 		}
+	}
+}
+
+// TestSubC1_FallbackScoreParametrized verifies C1FallbackScore is actually
+// read from params (Review P2): a custom value must change the fallback score.
+func TestSubC1_FallbackScoreParametrized(t *testing.T) {
+	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	params.C1FallbackScore = config.ParameterMetadata[float64]{Value: 0.2}
+	c.SetParams(params)
+
+	subs := make(map[string]RSISubIndicator)
+	data := RSITwInput{RetailFuturesPct: 0}
+	score := c.subC1(data, subs, &params)
+
+	want := 0.2 * 0.40
+	if math.Abs(score-want) > 0.001 {
+		t.Errorf("subC1 fallback with C1FallbackScore=0.2 = %f, want %f", score, want)
+	}
+	si := subs["c1_futures_oi"]
+	if !si.IsFallback {
+		t.Error("subC1 with pct==0 should be marked fallback")
 	}
 }
 
@@ -344,8 +372,10 @@ func TestSubC2_InstFlow(t *testing.T) {
 		wantFallback bool
 	}{
 		{"zero net flow", 0, 0, true},
-		{"positive net flow", 3_000_000_000, 1_000_000_000, false},
-		{"negative net flow", -2_000_000_000, 0, false},
+		// Audit A07 (2026-08-12): ForeignInvestorNet 單位為億股（T86 股數/1e8）。
+		// scaling 由 1e9（假設 TWD 元）修正為 10（億股量級）。
+		{"positive net flow 億股", 5, 3, false},
+		{"negative net flow 億股", -8, 0, false},
 	}
 
 	for _, tt := range tests {
@@ -366,6 +396,25 @@ func TestSubC2_InstFlow(t *testing.T) {
 			}
 			if !tt.wantFallback && (si.ZScore < 0.1 || si.ZScore > 0.9) {
 				t.Errorf("z-score %f out of range [0.1, 0.9]", si.ZScore)
+			}
+			// Audit A07: 淨買超 8 億股應產生明顯偏離 0.5 的分數（有鑑別力）
+			if tt.name == "positive net flow 億股" {
+				want := 0.5 + (5+3)/10.0
+				if want > 0.9 {
+					want = 0.9 // clamped upper bound
+				}
+				if math.Abs(si.ZScore-want) > 0.001 {
+					t.Errorf("positive flow z-score = %f, want %f", si.ZScore, want)
+				}
+			}
+			if tt.name == "negative net flow 億股" {
+				want := 0.5 + (-8)/10.0
+				if want < 0.1 {
+					want = 0.1
+				}
+				if math.Abs(si.ZScore-want) > 0.001 {
+					t.Errorf("negative flow z-score = %f, want %f", si.ZScore, want)
+				}
 			}
 		})
 	}
