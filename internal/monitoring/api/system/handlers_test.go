@@ -374,6 +374,107 @@ func TestHandleRetailSentiment_ActiveEvents(t *testing.T) {
 	}
 }
 
+// TestHandleRetailSentiment_NoActiveEvents verifies no D events are listed
+// when all D multipliers are at neutral (1.0) — regression guard for A04.
+func TestHandleRetailSentiment_NoActiveEvents(t *testing.T) {
+	h, workDir := newSystemHandlers(t)
+	macroDir := filepath.Join(workDir, constants.StateMacro)
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	snap := map[string]any{
+		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05, "symbol": "MARGIN"},
+		"vix":                   map[string]any{"value": 18.5},
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(macroDir, "latest.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Geopolitical risk below 0.5 threshold → no D1 trigger.
+	h.GeopoliticalRiskFetcher = func(ctx context.Context) float64 { return 0.2 }
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/retail-sentiment", nil)
+	status, body := h.HandleRetailSentiment(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	resp, ok := body.(RetailSentimentResponse)
+	if !ok {
+		t.Fatalf("body is %T", body)
+	}
+	if resp.SentimentSubIndicators == nil || resp.SentimentSubIndicators.CategoryD == nil {
+		t.Fatal("expected category_d in response")
+	}
+	cd := resp.SentimentSubIndicators.CategoryD
+	if cd.AdjustmentFactor != 1.0 {
+		t.Errorf("expected adjustment factor 1.0 with geopolitical risk 0.2, got %f", cd.AdjustmentFactor)
+	}
+	if len(cd.ActiveEvents) != 0 {
+		t.Errorf("expected no active_events, got %v", cd.ActiveEvents)
+	}
+}
+
+// TestHandleRetailSentiment_FallbackFields verifies per-sub-indicator
+// fallback_fields is populated (Review P1): only fallback sub-indicators are
+// listed, so the frontend can badge rows individually instead of using the
+// category-level OR flag.
+func TestHandleRetailSentiment_FallbackFields(t *testing.T) {
+	h, workDir := newSystemHandlers(t)
+	macroDir := filepath.Join(workDir, constants.StateMacro)
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	snap := map[string]any{
+		"retail_margin_balance": map[string]any{"value": 2500, "change_pct": 0.05, "symbol": "MARGIN"},
+		"vix":                   map[string]any{"value": 18.5},
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(macroDir, "latest.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// All fetchers fail → every sub-indicator is fallback; verify each key listed.
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/retail-sentiment", nil)
+	status, body := h.HandleRetailSentiment(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	resp, ok := body.(RetailSentimentResponse)
+	if !ok {
+		t.Fatalf("body is %T", body)
+	}
+	if resp.SentimentSubIndicators == nil {
+		t.Fatal("expected sentiment_sub_indicators")
+	}
+	catA := resp.SentimentSubIndicators.CategoryA
+	catC := resp.SentimentSubIndicators.CategoryC
+	if catA == nil || catC == nil {
+		t.Fatal("expected category_a and category_c")
+	}
+	// With no fetchers wired and zero margin history: a2/a4/a5/a6/a1 fallback,
+	// a3 (percentile-based) computes a value (not fallback).
+	hasA2 := false
+	for _, f := range catA.FallbackFields {
+		if f == "a2_day_trading" {
+			hasA2 = true
+		}
+	}
+	if !hasA2 {
+		t.Errorf("expected a2_day_trading in category_a.fallback_fields, got %v", catA.FallbackFields)
+	}
+	// c1/c2/c3 all fallback (taifex/oddlot/etf fetchers nil)
+	if len(catC.FallbackFields) != 3 {
+		t.Errorf("expected 3 fallback fields in category_c, got %v", catC.FallbackFields)
+	}
+}
+
 func TestHandleRetailSentiment_MissingShortBalance(t *testing.T) {
 	h, workDir := newSystemHandlers(t)
 	macroDir := filepath.Join(workDir, constants.StateMacro)

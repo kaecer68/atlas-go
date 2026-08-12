@@ -3041,6 +3041,7 @@ export interface RSITwCategoryA {
   odd_lot_imbalance: number;
   a_score: number;
   is_fallback: boolean;
+  fallback_fields: string[];
 }
 
 export interface RSITwCategoryC {
@@ -3049,6 +3050,7 @@ export interface RSITwCategoryC {
   etf_subscription_score: number;
   c_score: number;
   is_fallback: boolean;
+  fallback_fields: string[];
 }
 
 export interface RSITwCategoryD {

@@ -704,6 +704,7 @@
   "failed_channels",
   "failure_pattern",
   "fallback_events",
+  "fallback_fields",
   "fallback_message",
   "fallback_price_targets",
   "fallback_reason",

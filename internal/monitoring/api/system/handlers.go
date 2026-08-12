@@ -360,36 +360,42 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		catA.MarginMaintenanceZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a3_margin_maint")
 		}
 	}
 	if v, ok := subs["a2_day_trading"]; ok {
 		catA.DayTradingZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a2_day_trading")
 		}
 	}
 	if v, ok := subs["a1_margin_z"]; ok {
 		catA.MarginBalanceZ = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a1_margin_z")
 		}
 	}
 	if v, ok := subs["a4_vix_map"]; ok {
 		catA.VIXRiskScore = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a4_vix_map")
 		}
 	}
 	if v, ok := subs["a5_pcr_proxy"]; ok {
 		catA.WeeklyPCR = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a5_pcr_proxy")
 		}
 	}
 	if v, ok := subs["a6_odd_lot"]; ok {
 		catA.OddLotImbalance = v.ZScore
 		if v.IsFallback {
 			catA.IsFallback = true
+			catA.FallbackFields = append(catA.FallbackFields, "a6_odd_lot")
 		}
 	}
 
@@ -398,18 +404,21 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		catC.FuturesRetailOI = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c1_futures_oi")
 		}
 	}
 	if v, ok := subs["c2_inst_flow"]; ok {
 		catC.BrokerFlowScore = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c2_inst_flow")
 		}
 	}
 	if v, ok := subs["c3_etf_sub"]; ok {
 		catC.ETFSubscriptionScore = v.ZScore
 		if v.IsFallback {
 			catC.IsFallback = true
+			catC.FallbackFields = append(catC.FallbackFields, "c3_etf_sub")
 		}
 	}
 

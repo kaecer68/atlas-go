@@ -257,23 +257,25 @@ type RSITwSubIndicators struct {
 
 // RSITwCategoryA covers margin & market-sentiment proxies (40% weight).
 type RSITwCategoryA struct {
-	MarginMaintenanceZ float64 `json:"margin_maintenance_z"` // 維持率 Z-score
-	DayTradingZ        float64 `json:"day_trading_z"`        // 當沖 Z-score
-	MarginBalanceZ     float64 `json:"margin_balance_z"`     // 融資餘額 Z-score
-	VIXRiskScore       float64 `json:"vix_risk_score"`       // VIX 風險分數 0-1
-	WeeklyPCR          float64 `json:"weekly_pcr"`           // 週選擇權 PCR
-	OddLotImbalance    float64 `json:"odd_lot_imbalance"`    // 零股交易失衡
-	AScore             float64 `json:"a_score"`              // Part A 綜合分數
-	IsFallback         bool    `json:"is_fallback"`          // true if any sub-indicator is fallback
+	MarginMaintenanceZ float64  `json:"margin_maintenance_z"` // 維持率 Z-score
+	DayTradingZ        float64  `json:"day_trading_z"`        // 當沖 Z-score
+	MarginBalanceZ     float64  `json:"margin_balance_z"`     // 融資餘額 Z-score
+	VIXRiskScore       float64  `json:"vix_risk_score"`       // VIX 風險分數 0-1
+	WeeklyPCR          float64  `json:"weekly_pcr"`           // 週選擇權 PCR
+	OddLotImbalance    float64  `json:"odd_lot_imbalance"`    // 零股交易失衡
+	AScore             float64  `json:"a_score"`              // Part A 綜合分數
+	IsFallback         bool     `json:"is_fallback"`          // true if any sub-indicator is fallback
+	FallbackFields     []string `json:"fallback_fields"`      // per-sub-indicator fallback keys (a1_margin_z, a2_day_trading, ...)
 }
 
 // RSITwCategoryC covers institutional / futures / ETF flow proxies (25% weight).
 type RSITwCategoryC struct {
-	FuturesRetailOI      float64 `json:"futures_retail_oi"`      // 散戶期貨 OI
-	BrokerFlowScore      float64 `json:"broker_flow_score"`      // 券商分點流向
-	ETFSubscriptionScore float64 `json:"etf_subscription_score"` // ETF 申購分數
-	CScore               float64 `json:"c_score"`                // Part C 綜合分數
-	IsFallback           bool    `json:"is_fallback"`            // true if any sub-indicator is fallback
+	FuturesRetailOI      float64  `json:"futures_retail_oi"`      // 散戶期貨 OI
+	BrokerFlowScore      float64  `json:"broker_flow_score"`      // 券商分點流向
+	ETFSubscriptionScore float64  `json:"etf_subscription_score"` // ETF 申購分數
+	CScore               float64  `json:"c_score"`                // Part C 綜合分數
+	IsFallback           bool     `json:"is_fallback"`            // true if any sub-indicator is fallback
+	FallbackFields       []string `json:"fallback_fields"`        // per-sub-indicator fallback keys (c1_futures_oi, c2_inst_flow, c3_etf_sub)
 }
 
 // RSITwCategoryD captures the event-driven adjustment multiplier.
