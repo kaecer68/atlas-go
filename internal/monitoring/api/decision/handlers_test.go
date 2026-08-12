@@ -415,18 +415,17 @@ func TestComputeExitAlerts_WithPositions(t *testing.T) {
 	portData, _ := json.Marshal(portState)
 	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
 
-	// PnlPct = UnrealizedPnL / (Qty * AvgCost)
-	// Use Qty=1, Low avg cost, High UnrealizedPnL to get PnlPct > 5.0
-	// 2330.TW: cost=600, pnl=20400 → PnlPct=34 → 強烈建議獲利了結
-	// 2454.TW: cost=1200, pnl=13200 → PnlPct=11 → 部分獲利了結
+	// PnlPct (ratio) = UnrealizedPnL / (Qty * AvgCost) → ×100 = percentage points
+	// 2330.TW: cost=600, pnl=204 → ratio 0.34 → 34.0% → 強烈建議獲利了結
+	// 2454.TW: cost=1200, pnl=132 → ratio 0.11 → 11.0% → 部分獲利了結
 	positions := []map[string]any{
 		{
 			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 20400,
+			"current_price": 804.0, "market_value": 804, "unrealized_pnl": 204,
 		},
 		{
 			"symbol": "2454.TW", "quantity": 1, "average_cost": 1200.0,
-			"current_price": 1300.0, "market_value": 1300, "unrealized_pnl": 13200,
+			"current_price": 1332.0, "market_value": 1332, "unrealized_pnl": 132,
 		},
 	}
 	posData, _ := json.Marshal(positions)
@@ -461,11 +460,11 @@ func TestComputeExitAlerts_PositionsBelowThreshold(t *testing.T) {
 	portData, _ := json.Marshal(portState)
 	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
 
-	// PnlPct = 1800/600 = 3.0 < 5.0 → filtered out
+	// PnlPct (ratio) = 18/600 = 0.03 → 3.0% < 5.0% → filtered out
 	positions := []map[string]any{
 		{
 			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 618.0, "market_value": 618, "unrealized_pnl": 1800,
+			"current_price": 618.0, "market_value": 618, "unrealized_pnl": 18,
 		},
 	}
 	posData, _ := json.Marshal(positions)
@@ -488,11 +487,11 @@ func TestComputeExitAlerts_NegativePnl(t *testing.T) {
 	portData, _ := json.Marshal(portState)
 	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
 
-	// PnlPct = -7200/600 = -12 → absPnl=12 > 5, PnlPct <= -10 → 建議評估停損
+	// PnlPct (ratio) = -72/600 = -0.12 → -12.0% → absPnl=12 > 5, <= -10 → 建議評估停損
 	positions := []map[string]any{
 		{
 			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 528.0, "market_value": 528, "unrealized_pnl": -7200,
+			"current_price": 528.0, "market_value": 528, "unrealized_pnl": -72,
 		},
 	}
 	posData, _ := json.Marshal(positions)
@@ -518,11 +517,11 @@ func TestHandleDecisionChain_WithExitAlerts(t *testing.T) {
 	portData, _ := json.Marshal(portState)
 	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
 
-	// PnlPct = 30000/600 = 50 → 強烈建議獲利了結
+	// PnlPct (ratio) = 300/600 = 0.5 → 50.0% → 強烈建議獲利了結
 	positions := []map[string]any{
 		{
 			"symbol": "2330.TW", "quantity": 1, "average_cost": 600.0,
-			"current_price": 750.0, "market_value": 750, "unrealized_pnl": 30000,
+			"current_price": 900.0, "market_value": 900, "unrealized_pnl": 300,
 		},
 	}
 	posData, _ := json.Marshal(positions)

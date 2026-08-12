@@ -6,6 +6,7 @@ package decision
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -122,6 +123,9 @@ type CoreIndicators struct {
 }
 
 // ExitAlert represents a position that warrants an exit consideration.
+// PnlPct is in percentage points (15.0 = +15%), unlike PositionDTO.PnlPct
+// which is a ratio (0.15) — the exit-alert UI formats it directly with
+// fmtSafeSignedPct and compares against percentage thresholds.
 type ExitAlert struct {
 	Symbol     string   `json:"symbol"`
 	Name       string   `json:"name"`
@@ -400,27 +404,33 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 
 	var alerts []ExitAlert
 	for _, pos := range state.Positions {
-		absPnl := pos.PnlPct
-		if absPnl < 0 {
-			absPnl = -absPnl
-		}
-		if absPnl <= 5.0 {
+		// PositionDTO.PnlPct is a ratio (0.15 = +15%). The exit-alert
+		// contract (ExitAlert.PnlPct + frontend fmtSafeSignedPct threshold
+		// checks) uses percentage points (15.0), so convert before testing.
+		// Bug fix: previously the ratio was compared against percentage
+		// thresholds (absPnl <= 5.0 was always true for |ratio| < 5), which
+		// silently filtered out every position — the panel always rendered
+		// "目前沒有需要出場提醒的持倉".
+		pnlPct := pos.PnlPct * 100.0
+		if math.Abs(pnlPct) <= 5.0 {
 			continue
 		}
 
 		suggestion := ""
 		switch {
-		case pos.PnlPct >= 20:
+		case pnlPct >= 20:
 			suggestion = "強烈建議獲利了結"
-		case pos.PnlPct >= 10:
+		case pnlPct >= 10:
 			suggestion = "部分獲利了結"
-		case pos.PnlPct <= -10:
+		case pnlPct >= 5:
+			suggestion = "留意獲利回吐"
+		case pnlPct <= -10:
 			suggestion = "建議評估停損"
-		case pos.PnlPct <= -5:
+		case pnlPct <= -5:
 			suggestion = "注意虧損擴大"
 		}
 
-		pnl := pos.PnlPct
+		pnl := pnlPct
 		alerts = append(alerts, ExitAlert{
 			Symbol:     pos.Symbol,
 			Name:       resolveSymbolName(pos.Symbol),

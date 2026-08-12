@@ -1,0 +1,58 @@
+/* Atlas Dashboard - Decision Panels (shared components)
+   由舊 decision-chain 頁面樣式精簡而來；供產業熱力圖（industry）、
+   推薦標的 / 出場提醒（stock-quote）與 datachannels 頁面共用。 */
+.dc-section { padding: 4px 0; }
+.dc-heat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+}
+.dc-heat-badge {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  flex: 1 1 auto;
+  max-width: 240px;
+}
+.dc-table-wrap { overflow-x: auto; max-width: 100%; }
+.dc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.dc-table thead th {
+  background: var(--panel-l2);
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--border);
+}
+.dc-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.dc-exit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+.dc-exit-row:last-child { border-bottom: none; }
+.dc-empty {
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+  font-size: var(--text-sm);
+}

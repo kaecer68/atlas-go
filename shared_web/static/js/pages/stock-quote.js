@@ -1,5 +1,6 @@
 import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue } from '../services/stock-api-client.js';
 import { renderMissingState } from '../shared/app-utils.js';
+import { fetchDecisionChain, renderRecommendations, renderExitAlerts, emptyState } from '../components/decision-panels.js';
 import { renderSearch } from '../components/stock-quote-search.js';
 import { renderHeader } from '../components/stock-quote-header.js';
 import { renderFundamentals } from '../components/stock-quote-fundamentals.js';
@@ -139,17 +140,50 @@ function initPageStructure() {
   const pageWrapper = document.createElement('div');
   pageWrapper.className = 'stock-quote-page';
 
+  // 決策面板（推薦標的 + 出場提醒）— 資料來自共用聚合端點
+  // /api/dashboard/decision-chain；填補查詢區下方空白。
+  const decisionPanels = document.createElement('div');
+  decisionPanels.className = 'sq-decision-panels';
+  decisionPanels.innerHTML = `
+    <section class="sq-section sq-recommendations">
+      <h3>推薦標的</h3>
+      <div id="sq-recommendations" class="sq-placeholder">載入推薦標的…</div>
+    </section>
+    <section class="sq-section sq-exit-alerts">
+      <h3>出場提醒</h3>
+      <div id="sq-exit-alerts" class="sq-placeholder">載入出場提醒…</div>
+    </section>
+  `;
+
   pageWrapper.appendChild(searchSection);
   pageWrapper.appendChild(_contentWrapper);
+  pageWrapper.appendChild(decisionPanels);
   pageWrapper.appendChild(disclaimerWrapper);
 
   _container.appendChild(pageWrapper);
+}
+
+// 推薦標的 + 出場提醒：獨立於個股查詢流程載入（市場層級資料，不隨查詢重繪）。
+async function loadDecisionPanels() {
+  const recEl = document.getElementById('sq-recommendations');
+  const exitEl = document.getElementById('sq-exit-alerts');
+  if (!recEl || !exitEl) return;
+  try {
+    const data = await fetchDecisionChain();
+    recEl.innerHTML = renderRecommendations(data);
+    exitEl.innerHTML = renderExitAlerts(data);
+  } catch (e) {
+    console.warn('[stock-quote] decision panels load failed:', e);
+    recEl.innerHTML = emptyState('推薦標的載入失敗');
+    exitEl.innerHTML = emptyState('出場提醒載入失敗');
+  }
 }
 
 export async function renderPage(container) {
   _container = container;
 
   initPageStructure();
+  loadDecisionPanels();
 
   // Check URL params
   const urlParams = new URLSearchParams(window.location.search);
