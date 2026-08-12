@@ -233,6 +233,7 @@
   "by_month",
   "c1_bearish_threshold",
   "c1_bullish_threshold",
+  "c1_fallback_score",
   "c1_very_bearish_threshold",
   "c1_very_bullish_threshold",
   "c1_weight",

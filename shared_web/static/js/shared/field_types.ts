@@ -3084,6 +3084,7 @@ export interface RSITwParameters {
   c1_bullish_threshold: string;
   c1_bearish_threshold: string;
   c1_very_bearish_threshold: string;
+  c1_fallback_score: string;
   c2_neutral_midpoint: string;
   c2_netflow_scaling_factor: string;
   c3_very_bullish_threshold: string;

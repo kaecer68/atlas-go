@@ -247,10 +247,10 @@ func (c *Calculator) subA4(data RSITwInput, subs map[string]RSISubIndicator, par
 	ind := RSISubIndicator{Weight: w, Value: data.VIXLevel}
 
 	if data.VIXLevel <= 0 {
-		ind.ZScore = 0.5
+		ind.ZScore = 0
 		ind.IsFallback = true
 		subs["a4_vix_map"] = ind
-		return ind.ZScore * w
+		return 0
 	}
 
 	ind.ZScore = vixMapParam(data.VIXLevel, params)
@@ -316,13 +316,16 @@ func (c *Calculator) computePartC(data RSITwInput, subs map[string]RSISubIndicat
 	return clamp(total, -1.0, 1.0)
 }
 
-// C1: Small TAIEX Futures OI (weight 0.40)
+// C1: 非前十大交易人多空差（散戶期貨 OI proxy，weight 0.40）
+// Audit A15 (2026-08-12): RetailFuturesPct = RetailLongPct - RetailShortPct，
+// 實測量級約 ±10%（前十大佔 OI 60-70%）；threshold 已由 20/10/-10/-20 修正為 5/2/-2/-5。
+// Audit A02: pct==0 fallback 改走 params.C1FallbackScore（原 literal 0.5）。
 func (c *Calculator) subC1(data RSITwInput, subs map[string]RSISubIndicator, params *config.RSITwParameters) float64 {
 	w := params.C1Weight.Value
 	pct := data.RetailFuturesPct
 	var score float64
 	if pct == 0 {
-		score = 0.5
+		score = params.C1FallbackScore.Value
 	} else if pct > params.C1VeryBullishThreshold.Value {
 		score = 0.9
 	} else if pct > params.C1BullishThreshold.Value {

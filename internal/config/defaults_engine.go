@@ -1064,8 +1064,8 @@ func defaultRSITwParameters() RSITwParameters {
 			Source:    SourceLiterature, Todo: "Validate thresholds against Taiwan VIX equivalent (TVIX) distribution",
 		},
 		A4VixScores: ParameterMetadata[[]float64]{
-			Value:     []float64{0.1, 0.3, 0.5, 0.7, 0.85, 1.0},
-			Rationale: "Monotonic mapping: lower VIX → bullish sentiment, higher VIX → bearish (1.0 = max fear)",
+			Value:     []float64{0.1, 0.0, -0.3, -0.5, -0.7, -1.0},
+			Rationale: "Audit A10 (2026-08-12)：VIX 高 = 市場恐慌 → 散戶恐慌 → 推低分數（與 composite +frenzy/-fear 語義一致）。低 VIX 輕微樂觀 (+0.1)，高 VIX 恐慌 (-1.0)",
 			Source:    SourceHeuristic, Todo: "Calibrate scores from historical VIX vs. TWSE forward return",
 		},
 
@@ -1076,12 +1076,12 @@ func defaultRSITwParameters() RSITwParameters {
 			Source:    SourceHeuristic, Todo: "Calibrate against TAIFEX PCR historical distribution",
 		},
 		A5PcrScores: ParameterMetadata[[]float64]{
-			Value:     []float64{0.9, 0.7, 0.5, 0.1},
-			Rationale: "Score mapping for PCR: very bearish (0.9) → bearish (0.7) → neutral (0.5) → bullish (0.1)",
+			Value:     []float64{-0.9, -0.5, -0.2, 0.3},
+			Rationale: "Audit A10 (2026-08-12)：PCR 高（賣權成交多）= 散戶避險/看空 → 恐慌 → 推低分數；PCR 低（買權成交多）= 樂觀 → 推高。原 [0.9,0.7,0.5,0.1] 把恐慌訊號推高狂熱分數",
 			Source:    SourceHeuristic,
 		},
 		A5PcrFallback: ParameterMetadata[float64]{
-			Value: 0.5, Rationale: "Neutral score when PCR data is unavailable (0)",
+			Value: 0.0, Rationale: "Neutral score when PCR data is unavailable (0)——Audit A10：資料缺失不假裝中性 0.5，回 0 不貢獻",
 			Source: SourceHeuristic,
 		},
 
@@ -1115,24 +1115,29 @@ func defaultRSITwParameters() RSITwParameters {
 			Source: SourceHeuristic, Todo: "Calibrate from historical ETF flow vs. forward return IC",
 		},
 		C1VeryBullishThreshold: ParameterMetadata[float64]{
-			Value:     20,
-			Rationale: "Small TAIEX futures OI pct above 20 → retail heavily long (0.9 bearish score)",
+			Value:     5,
+			Rationale: "非前十大交易人多空差 pct above 5 → 散戶淨多頭明顯 (0.9 bearish score)。Audit A15 (2026-08-12)：RetailFuturesPct 實測量級約 ±10（前十大佔 OI 60-70%），原 20/10/-10/-20 threshold 幾乎永不觸發 → C1 恆等 0.5",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate from 2Y historical futures OI distribution",
 		},
 		C1BullishThreshold: ParameterMetadata[float64]{
-			Value:     10,
-			Rationale: "Small TAIEX futures OI pct above 10 → retail moderately long (0.7)",
+			Value:     2,
+			Rationale: "非前十大交易人多空差 pct above 2 → 散戶淨多 (0.7)",
 			Source:    SourceHeuristic,
 		},
 		C1BearishThreshold: ParameterMetadata[float64]{
-			Value:     -10,
-			Rationale: "Small TAIEX futures OI pct below -10 → retail moderately short (0.5 neutral)",
+			Value:     -2,
+			Rationale: "非前十大交易人多空差 pct below -2 → 散戶淨空 (0.5 neutral)",
 			Source:    SourceHeuristic,
 		},
 		C1VeryBearishThreshold: ParameterMetadata[float64]{
-			Value:     -20,
-			Rationale: "Small TAIEX futures OI pct below -20 → retail heavily short (0.25 bullish)",
+			Value:     -5,
+			Rationale: "非前十大交易人多空差 pct below -5 → 散戶淨空明顯 (0.25 bullish)",
+			Source:    SourceHeuristic,
+		},
+		C1FallbackScore: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "Neutral score when futures OI data is unavailable (0)。Audit A02 (2026-08-12)：原 literal 0.5 參數化",
 			Source:    SourceHeuristic,
 		},
 		C2NeutralMidpoint: ParameterMetadata[float64]{
@@ -1142,8 +1147,8 @@ func defaultRSITwParameters() RSITwParameters {
 			Todo:      "Calibrate from 2Y foreign/domestic fund net flow distribution",
 		},
 		C2NetflowScalingFactor: ParameterMetadata[float64]{
-			Value:     1e9,
-			Rationale: "Net flow divided by 1B TWD to get deviation from neutral; score clamped [0.1, 0.9]",
+			Value:     10,
+			Rationale: "Net flow (億股) divided by 10 to get deviation from neutral; score clamped [0.1, 0.9]。Audit A07 (2026-08-12)：ForeignInvestorNet.Value 單位為億股（T86 股數/1e8），原 scaling 1e9 假設 TWD 元 → netFlow 5.67 億股 ÷ 1e9 ≈ 0 → 恆等 0.5 無鑑別力",
 			Source:    SourceHeuristic,
 			Todo:      "Learn optimal scaling factor from historical flow distributions",
 		},
