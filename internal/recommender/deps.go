@@ -24,6 +24,10 @@ type NarrativeProvider interface {
 	// BuildMarketNarrativeData returns the snapshot of US/DXY/VIX/macro inputs.
 	// May return (zero, err) if macro provider is not wired.
 	BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error)
+	// DetectEventThemes returns the currently-detected narrative trigger
+	// themes (e.g. "AI_capex_surge") for narrative attribution on
+	// recommendations. Nil provider → empty slice.
+	DetectEventThemes(ctx context.Context) []string
 }
 
 // CapitalFlowProvider 供 recommender 查詢當日七維錢潮雷達（3+2+2 分層）summary。

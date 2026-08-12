@@ -34,6 +34,103 @@ func TestParseFloatQuery(t *testing.T) {
 	}
 }
 
+// stubCalendarProvider feeds fixed calendar events for the bridge test.
+type stubCalendarProvider struct {
+	events []marketdata.CalendarProviderData
+}
+
+func (s *stubCalendarProvider) Name() string { return "stub" }
+
+func (s *stubCalendarProvider) FetchEvents(_ context.Context, _ int) ([]marketdata.CalendarProviderData, error) {
+	return s.events, nil
+}
+
+// TestHandleNarrativeModels_CalendarThemes verifies the calendar bridge:
+// an upcoming spring-festival calendar event contributes its trigger theme
+// (spring_festival_season) to the active-model theme set, so seasonal_model
+// appears even without a live macro detector firing.
+func TestHandleNarrativeModels_CalendarThemes(t *testing.T) {
+	now := time.Now()
+	ec := industry.NewEventCalendar()
+	ec.RefreshEvents(now)
+	// Feed a spring festival event 3 days out (within the 14-day lookahead).
+	ec.UpdateFromProvider(context.Background(), &stubCalendarProvider{
+		events: []marketdata.CalendarProviderData{
+			{
+				Date:        now.AddDate(0, 0, 3).Format("2006-01-02"),
+				EventType:   "spring_festival",
+				Name:        "春節",
+				Direction:   "bullish",
+				Weight:      0.8,
+				Description: "spring festival test event",
+			},
+		},
+	})
+
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	h := &Handlers{Svc: svc, EventCalendar: ec}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/models", nil)
+	status, body := h.HandleNarrativeModels(req)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", status)
+	}
+	m, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map body, got %T", body)
+	}
+
+	ct, ok := m["calendar_themes"].([]string)
+	if !ok {
+		t.Fatalf("expected calendar_themes []string, got %T", m["calendar_themes"])
+	}
+	found := false
+	for _, theme := range ct {
+		if theme == "spring_festival_season" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected spring_festival_season in calendar_themes, got %v", ct)
+	}
+
+	models, ok := m["models"].([]narrative.InvestmentModel)
+	if !ok {
+		t.Fatalf("expected models []InvestmentModel, got %T", m["models"])
+	}
+	hasSeasonal := false
+	for _, model := range models {
+		if model.ID == "seasonal_model" {
+			hasSeasonal = true
+		}
+	}
+	if !hasSeasonal {
+		t.Fatalf("expected seasonal_model in active models via calendar bridge, got %+v", models)
+	}
+}
+
+// TestHandleNarrativeModels_NoCalendarIsSafe verifies nil EventCalendar
+// degrades gracefully (no panic, no calendar_themes).
+func TestHandleNarrativeModels_NoCalendarIsSafe(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/models", nil)
+	status, body := h.HandleNarrativeModels(req)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", status)
+	}
+	m, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map body, got %T", body)
+	}
+	if ct, ok := m["calendar_themes"].([]string); ok && len(ct) > 0 {
+		t.Fatalf("expected no calendar_themes without calendar, got %v", ct)
+	}
+}
+
 func TestApproxPatternDays_CrossYear(t *testing.T) {
 	p := service.SeasonalPattern{StartMonth: 12, StartDay: 20, EndMonth: 1, EndDay: 10}
 	if got := approxPatternDays(p); got != 25 {

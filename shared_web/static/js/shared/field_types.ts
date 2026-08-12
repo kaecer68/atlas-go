@@ -2311,6 +2311,7 @@ export interface MarketLight {
   capital_flow_summary: string;
   capital_flow_detail?: CapitalFlowDetail | null;
   events_today: string[];
+  active_narrative_themes?: string[];
 }
 
 export interface MarketVolumeResult {

@@ -1396,6 +1396,7 @@ func (a *DashboardAPI) RegisterNarrativeRoutes(mux *http.ServeMux) {
 	a.narrativeHandlers = &apinarrative.Handlers{
 		Svc:             svc,
 		IndustryService: a.industryService,
+		EventCalendar:   a.industryService.EventCalendar,
 	}
 	a.narrativeHandlers.RegisterRoutes(mux)
 }

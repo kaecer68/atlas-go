@@ -23,6 +23,7 @@ type mockNarrative struct {
 	stress float64
 	regime string
 	err    error
+	themes []string
 }
 
 func (m *mockNarrative) GetCurrentStressIndex() narrative.TaiwanStressIndex {
@@ -37,6 +38,10 @@ func (m *mockNarrative) GetCurrentStressIndex() narrative.TaiwanStressIndex {
 
 func (m *mockNarrative) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
 	return narrative.MarketNarrativeData{}, nil
+}
+
+func (m *mockNarrative) DetectEventThemes(ctx context.Context) []string {
+	return m.themes
 }
 
 func TestHandleRecommendations(t *testing.T) {
@@ -146,6 +151,27 @@ func TestHandleRecommendations_NarrativeIntegration_PopulatesStressIndex(t *test
 	}
 	if rec.Market.Regime != "RISK_ON" {
 		t.Errorf("Regime = %q, want %q (from narrative mock)", rec.Market.Regime, "RISK_ON")
+	}
+}
+
+func TestHandleRecommendations_ActiveNarrativeThemes(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "rec-test")
+	defer os.RemoveAll(dir)
+	store, _ := subscription.NewStore(dir)
+	mock := &mockNarrative{stress: 10.0, regime: "NEUTRAL", themes: []string{"AI_capex_surge", "US_rates_down"}}
+	h := NewHandlerWithServices(*store, nil, mock, nil, nil, nil, nil).WithDevMode(true)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+	code, data := h.HandleRecommendations(req)
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	rec := data.(TierRecommendation)
+	if len(rec.Market.ActiveNarrativeThemes) != 2 {
+		t.Fatalf("expected 2 active narrative themes, got %v", rec.Market.ActiveNarrativeThemes)
+	}
+	if rec.Market.ActiveNarrativeThemes[0] != "AI_capex_surge" {
+		t.Errorf("expected AI_capex_surge first, got %v", rec.Market.ActiveNarrativeThemes)
 	}
 }
 
@@ -367,6 +393,10 @@ func (f *failingNarrative) GetCurrentStressIndex() narrative.TaiwanStressIndex {
 
 func (f *failingNarrative) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
 	return narrative.MarketNarrativeData{}, f.err
+}
+
+func (f *failingNarrative) DetectEventThemes(ctx context.Context) []string {
+	return nil
 }
 
 func TestHandleRecommendations_RegimeChange_FiresListener(t *testing.T) {

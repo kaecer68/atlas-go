@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kaecer68/atlas-go/internal/eventdriven"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -24,6 +27,11 @@ const BundleCacheTTL = 30 * time.Second
 type Handlers struct {
 	Svc             *service.NarrativeService
 	IndustryService *service.IndustryService
+	// EventCalendar supplies upcoming Taiwan market calendar events whose
+	// trigger themes are merged into the active-model theme set, so
+	// scheduled events (e.g. spring festival) surface their models even
+	// before a macro detector fires. Optional; nil = calendar bridge off.
+	EventCalendar *industry.EventCalendar
 
 	bundleMu    sync.RWMutex
 	bundleCache *bundleCacheEntry
@@ -127,11 +135,51 @@ func (h *Handlers) HandleNarrativeChains(r *http.Request) (int, any) {
 func (h *Handlers) HandleNarrativeModels(r *http.Request) (int, any) {
 	data := h.buildNarrativeData(r.Context(), r)
 	events := h.Svc.DetectEvents(data)
-	themes := make([]string, len(events))
-	for i, e := range events {
-		themes[i] = e.Theme
+
+	// Detected-event themes first, then merge trigger themes from upcoming
+	// calendar events (scheduled events surface their models even without a
+	// live macro trigger). Dedup by lowercase theme.
+	themeSet := make(map[string]struct{})
+	for _, e := range events {
+		themeSet[strings.ToLower(e.Theme)] = struct{}{}
 	}
-	return http.StatusOK, map[string]any{"models": h.Svc.GetActiveModels(themes)}
+	calendarThemes := h.calendarTriggerThemes(time.Now())
+	for _, t := range calendarThemes {
+		themeSet[strings.ToLower(t)] = struct{}{}
+	}
+
+	themes := make([]string, 0, len(themeSet))
+	for t := range themeSet {
+		themes = append(themes, t)
+	}
+
+	return http.StatusOK, map[string]any{
+		"models":          h.Svc.GetActiveModels(themes),
+		"calendar_themes": calendarThemes,
+	}
+}
+
+// calendarTriggerThemes maps upcoming calendar events (within the lookahead
+// window) to their trigger themes via EventTypeToTriggerThemes. Returns an
+// empty slice when no calendar is wired or no event matches a theme.
+func (h *Handlers) calendarTriggerThemes(now time.Time) []string {
+	if h.EventCalendar == nil {
+		return nil
+	}
+	const lookaheadDays = 14
+	registry := narrative.NewDefaultDetectorRegistry()
+	seen := make(map[string]struct{})
+	var themes []string
+	for _, evt := range h.EventCalendar.GetEventTimeline(now, lookaheadDays) {
+		for _, t := range eventdriven.EventTypeToTriggerThemes(evt.EventType, registry) {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			themes = append(themes, t)
+		}
+	}
+	return themes
 }
 
 func (h *Handlers) HandleNarrativeTemplates(r *http.Request) (int, any) {
