@@ -4075,9 +4075,9 @@
       "value": 2
     },
     "c1_fallback_score": {
-      "rationale": "Neutral score when futures OI data is unavailable (0)。Audit A02 (2026-08-12)：原 literal 0.5 參數化",
+      "rationale": "Score when futures OI data is unavailable (0)——Audit A02 (2026-08-12)：原 literal 0.5 參數化；Review P2：預設改 0，與 A10「資料缺失回 0 不貢獻」原則一致，避免 Taifex 失敗日推高 Part C",
       "source": "heuristic",
-      "value": 0.5
+      "value": 0
     },
     "c1_very_bearish_threshold": {
       "rationale": "非前十大交易人多空差 pct below -5 → 散戶淨空明顯 (0.25 bullish)",

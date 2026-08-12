@@ -1277,7 +1277,7 @@ type RSITwParameters struct {
 	A3Scale    ParameterMetadata[float64] `json:"a3_scale"`    // Z-score scaling factor (default 2.0)
 
 	// A4: VIX piecewise mapping — thresholds are lower bounds (exclusive), scores are the mapping result.
-	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=1.0 (vix>=35)
+	// thresholds[0]=15, thresholds[1]=20, ...; scores[0]=0.1 (vix<15), scores[5]=-1.0 (vix>=35)
 	// Audit A10 (2026-08-12): 高分 = 狂熱（frenzy），VIX 高 = 市場恐慌 → 散戶恐慌 → 應推低分數。
 	// 原 scores 全為正（VIX 高 → +1.0 推高狂熱），與 composite 語義矛盾。修正為負向：VIX 高 → 恐慌推低。
 	A4VixThresholds ParameterMetadata[[]float64] `json:"a4_vix_thresholds"` // [15, 20, 25, 30, 35]

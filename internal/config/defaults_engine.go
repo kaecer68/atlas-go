@@ -1136,8 +1136,8 @@ func defaultRSITwParameters() RSITwParameters {
 			Source:    SourceHeuristic,
 		},
 		C1FallbackScore: ParameterMetadata[float64]{
-			Value:     0.5,
-			Rationale: "Neutral score when futures OI data is unavailable (0)。Audit A02 (2026-08-12)：原 literal 0.5 參數化",
+			Value:     0,
+			Rationale: "Score when futures OI data is unavailable (0)——Audit A02 (2026-08-12)：原 literal 0.5 參數化；Review P2：預設改 0，與 A10「資料缺失回 0 不貢獻」原則一致，避免 Taifex 失敗日推高 Part C",
 			Source:    SourceHeuristic,
 		},
 		C2NeutralMidpoint: ParameterMetadata[float64]{

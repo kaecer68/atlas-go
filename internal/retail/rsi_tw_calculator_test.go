@@ -318,11 +318,11 @@ func TestSubC1_FuturesOIThresholds(t *testing.T) {
 		want float64
 	}{
 		// Audit A15 (2026-08-12): threshold 由 20/10/-10/-20 修正為 5/2/-2/-5（匹配實測量級 ±10）。
-		// Audit A02: fallback 走 params.C1FallbackScore (0.5)。
-		{0, 0.5},   // fallback
+		// Audit A02 + Review P2: fallback 走 params.C1FallbackScore，預設 0（資料缺失不貢獻）。
+		{0, 0.0},   // fallback
 		{6, 0.9},   // > C1VeryBullishThreshold (5)
 		{3, 0.7},   // > C1BullishThreshold (2)
-		{0, 0.5},   // > C1BearishThreshold (-2)
+		{1, 0.5},   // neutral band (-2..5, 非 fallback)
 		{-3, 0.25}, // > C1VeryBearishThreshold (-5)
 		{-6, 0.1},  // else
 	}
@@ -335,6 +335,28 @@ func TestSubC1_FuturesOIThresholds(t *testing.T) {
 		if math.Abs(score-expectedScore) > 0.001 {
 			t.Errorf("subC1(pct=%f) = %f, want %f", tt.pct, score, expectedScore)
 		}
+	}
+}
+
+// TestSubC1_FallbackScoreParametrized verifies C1FallbackScore is actually
+// read from params (Review P2): a custom value must change the fallback score.
+func TestSubC1_FallbackScoreParametrized(t *testing.T) {
+	c := NewCalculator()
+	params := config.DefaultParametersConfig().RSITw
+	params.C1FallbackScore = config.ParameterMetadata[float64]{Value: 0.2}
+	c.SetParams(params)
+
+	subs := make(map[string]RSISubIndicator)
+	data := RSITwInput{RetailFuturesPct: 0}
+	score := c.subC1(data, subs, &params)
+
+	want := 0.2 * 0.40
+	if math.Abs(score-want) > 0.001 {
+		t.Errorf("subC1 fallback with C1FallbackScore=0.2 = %f, want %f", score, want)
+	}
+	si := subs["c1_futures_oi"]
+	if !si.IsFallback {
+		t.Error("subC1 with pct==0 should be marked fallback")
 	}
 }
 
