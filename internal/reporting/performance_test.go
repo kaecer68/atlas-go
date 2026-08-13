@@ -530,6 +530,56 @@ func TestGenerateReport_CorruptedSummaryInAllPeriod(t *testing.T) {
 	}
 }
 
+// TestGenerateReport_ZeroValueSessionExcluded verifies that a session with a
+// parseable SessionID but zero PortfolioValue/EndingCash (e.g. legacy SQLite
+// rows written before the summary_json backfill, perf-report-zero BL-01
+// follow-up) is excluded from the equity curve instead of becoming a 0-valued
+// starting point that collapses total_return to 0 and max_drawdown to 100%.
+func TestGenerateReport_ZeroValueSessionExcluded(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Healthy sessions anchor the window.
+	writeSession(t, tmpDir, "session-20260710-daily", 2_980_000, 2_950_000, 0, 0)
+	writeSession(t, tmpDir, "session-20260714-daily", 3_050_000, 2_900_000, 1, 100)
+
+	// Zero-value session with a PARSEABLE SessionID — must not become
+	// filtered[0] with pv=0.
+	zeroDir := filepath.Join(tmpDir, "sessions", "session-20260716-daily")
+	if err := os.MkdirAll(zeroDir, 0o755); err != nil {
+		t.Fatalf("mkdir zero-value session: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(zeroDir, "summary.json"), []byte(`{
+  "session_id": "session-20260716-daily",
+  "regime": "RISK_ON",
+  "portfolio_value": 0,
+  "ending_cash": 0,
+  "outcome_count": 0,
+  "recorded_at": "2026-07-16T13:30:00Z"
+}`), 0o644); err != nil {
+		t.Fatalf("write zero-value summary: %v", err)
+	}
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report == nil {
+		t.Fatal("expected non-nil report")
+	}
+	if report.StartingValue != 2_980_000 {
+		t.Errorf("expected starting_value 2,980,000 (zero-value session excluded), got %f", report.StartingValue)
+	}
+	if report.EndingValue != 3_050_000 {
+		t.Errorf("expected ending_value 3,050,000, got %f", report.EndingValue)
+	}
+	if report.TotalReturn <= 0 {
+		t.Errorf("expected positive total_return from healthy sessions, got %f", report.TotalReturn)
+	}
+	if report.MaxDrawdown >= 0.9 {
+		t.Errorf("expected max_drawdown well below 90%% (zero-value session polluted curve), got %f", report.MaxDrawdown)
+	}
+}
+
 // writeSession is a small helper that creates a session-* directory with a
 // snake_case summary.json and a recommendation_outcomes.jsonl containing a
 // single outcome. Used by TestGenerateReport_CorruptedSummaryInAllPeriod.
