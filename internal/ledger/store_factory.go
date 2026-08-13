@@ -58,6 +58,11 @@ func NewFullStore(cfg config.Config) (FullStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":
 		return newSQLiteFullStore(cfg.SQLitePath)
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("fullstore: postgres backend requires SetPostgresPool before NewFullStore")
+		}
+		return NewPostgresLedgerStore(postgresPool), nil
 	default:
 		return newStore(cfg.LedgerDir), nil
 	}
