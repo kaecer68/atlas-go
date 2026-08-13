@@ -241,6 +241,11 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 		// (Hit/ForwardReturn/Window) on write, so Load* delegates to the rich
 		// per-session JSONL source (LedgerDir) when available.
 		return NewSQLiteOutcomeStore(db).WithJSONLBaseDir(cfg.LedgerDir), nil
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("outcomes: postgres backend requires SetPostgresPool before NewOutcomeStore")
+		}
+		return NewPostgresLedgerStore(postgresPool), nil
 	default:
 		return newStore(cfg.LedgerDir), nil
 	}
@@ -254,6 +259,11 @@ func NewSessionStore(cfg config.Config) (SessionStore, error) {
 			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
 		return NewSQLiteSessionStore(db), nil
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("sessions: postgres backend requires SetPostgresPool before NewSessionStore")
+		}
+		return NewPostgresLedgerStore(postgresPool), nil
 	default:
 		return newStore(cfg.LedgerDir), nil
 	}

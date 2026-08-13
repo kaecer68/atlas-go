@@ -1,0 +1,550 @@
+// Package ledger — PostgresLedgerStore
+//
+// PostgreSQL mirror of the SQLite/JSONL ledger stores (OutcomeStore,
+// SessionStore; experiment/backtest/spawn surface added in a follow-up
+// PR). All data lives in the multi-process-friendly PostgreSQL database so
+// all containers share one consistent ledger.
+//
+// SQL mapping mirrors internal/repository/postgres_outcomes.go and
+// postgres_audit.go (the authoritative repository-side mapping); ledger
+// cannot import repository (repository imports ledger — cycle), so the SQL
+// is duplicated here by design.
+//
+// The OutcomeStore/SessionStore interfaces carry no ctx — internal methods
+// use context.Background().
+package ledger
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
+)
+
+// PostgresLedgerStore implements OutcomeStore + SessionStore on PostgreSQL.
+type PostgresLedgerStore struct {
+	pool *pgxpool.Pool
+}
+
+// NewPostgresLedgerStore binds the store to an already-opened pgxpool.
+func NewPostgresLedgerStore(pool *pgxpool.Pool) *PostgresLedgerStore {
+	return &PostgresLedgerStore{pool: pool}
+}
+
+// Compile-time assertions.
+var (
+	_ OutcomeStore = (*PostgresLedgerStore)(nil)
+	_ SessionStore = (*PostgresLedgerStore)(nil)
+)
+
+// ------------------------------------------------------------------
+// Outcomes
+// ------------------------------------------------------------------
+
+// RecordOutcomes writes a batch of outcomes. session_id stores o.Window
+// and metadata stores the full object JSON (mirror of
+// repository.postgres_outcomes.go RecordOutcomes); reading back
+// unmarshals metadata over the scanned columns.
+func (s *PostgresLedgerStore) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
+	if len(outcomes) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+
+	batch := &pgx.Batch{}
+	for _, o := range outcomes {
+		metadata, _ := json.Marshal(o)
+		ts := o.RecordedAt
+		if ts.IsZero() {
+			ts = time.Now()
+		}
+		batch.Queue(`
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, ts, o.Window, o.Symbol, o.AgentID, string(o.Layer),
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+	}
+
+	br := s.pool.SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	if _, err := br.Exec(); err != nil {
+		return fmt.Errorf("insert outcomes: %w", err)
+	}
+	return nil
+}
+
+// RecordSessionOutcomes writes outcomes for a session. session_id still
+// stores o.Window (repository semantics); a zero RecordedAt falls back to
+// the session date.
+func (s *PostgresLedgerStore) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
+	if len(outcomes) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+
+	batch := &pgx.Batch{}
+	for _, o := range outcomes {
+		metadata, _ := json.Marshal(o)
+		ts := o.RecordedAt
+		if ts.IsZero() {
+			ts = session.SessionDate
+		}
+		if ts.IsZero() {
+			ts = time.Now()
+		}
+		batch.Queue(`
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, ts, o.Window, o.Symbol, o.AgentID, string(o.Layer),
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+	}
+
+	br := s.pool.SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	if _, err := br.Exec(); err != nil {
+		return fmt.Errorf("insert session outcomes: %w", err)
+	}
+	return nil
+}
+
+// LoadOutcomes reads all outcomes, newest first.
+func (s *PostgresLedgerStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
+	return s.loadOutcomes("", "")
+}
+
+// LoadSessionOutcomes reads outcomes for one session.
+func (s *PostgresLedgerStore) LoadSessionOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	return s.loadOutcomes("WHERE session_id = $1", sessionID)
+}
+
+// LoadOutcomesFromSessions reads all outcomes — PostgreSQL is the complete
+// source, no JSONL delegation.
+func (s *PostgresLedgerStore) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return s.loadOutcomes("", "")
+}
+
+// loadOutcomes runs the outcome SELECT with an optional WHERE clause.
+func (s *PostgresLedgerStore) loadOutcomes(where string, arg string) ([]domain.RecommendationOutcome, error) {
+	ctx := context.Background()
+	query := `
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		FROM recommendation_outcomes `
+	if where != "" {
+		query += where + " "
+	}
+	query += "ORDER BY time DESC"
+
+	var rows pgx.Rows
+	var err error
+	if where != "" {
+		rows, err = s.pool.Query(ctx, query, arg)
+	} else {
+		rows, err = s.pool.Query(ctx, query)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	return scanPGOutcomes(rows)
+}
+
+// scanPGOutcomes rebuilds RecommendationOutcome rows, unmarshalling the
+// metadata JSON over the scanned columns (mirror of
+// repository.scanRecommendationOutcomes).
+func scanPGOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, error) {
+	var outcomes []domain.RecommendationOutcome
+	for rows.Next() {
+		var o domain.RecommendationOutcome
+		var t time.Time
+		var sessionID, agentLayer string
+		var metadata []byte
+		err := rows.Scan(
+			&t, &sessionID, &o.Symbol, &o.AgentID, &agentLayer,
+			&o.Conviction, &o.PassedGuards, &o.GuardReason, &o.Price,
+			&metadata,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan outcome row: %w", err)
+		}
+		o.RecordedAt = t
+		o.Window = sessionID
+		o.Layer = domain.AgentLayer(agentLayer)
+		if len(metadata) > 0 {
+			if err := json.Unmarshal(metadata, &o); err != nil {
+				return nil, fmt.Errorf("unmarshal outcome metadata: %w", err)
+			}
+		}
+		outcomes = append(outcomes, o)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("outcome rows: %w", rows.Err())
+	}
+	return outcomes, nil
+}
+
+// LoadAllSessionScorecards aggregates all outcomes into scorecards
+// (PostgreSQL is the complete source).
+func (s *PostgresLedgerStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	outcomes, err := s.LoadOutcomesFromSessions()
+	if err != nil {
+		return nil, nil, err
+	}
+	return BuildScorecards(outcomes), outcomes, nil
+}
+
+// ------------------------------------------------------------------
+// Screening rejects
+// ------------------------------------------------------------------
+
+// RecordSessionScreeningRejects persists screening rejects for a session.
+func (s *PostgresLedgerStore) RecordSessionScreeningRejects(sessionID string, rejects []domain.ScreeningReject) error {
+	if len(rejects) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+
+	batch := &pgx.Batch{}
+	for _, sr := range rejects {
+		factorScores, _ := json.Marshal(sr.FactorScores)
+		batch.Queue(`
+			INSERT INTO screening_rejects (time, session_id, symbol, agent_id, skill, criterion, criterion_label, threshold, actual_value, factor_scores)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, sr.RecordedAt, sr.SessionID, sr.Symbol, sr.AgentID, sr.Skill,
+			sr.Criterion, sr.CriterionLabel, sr.Threshold, sr.ActualValue, factorScores)
+	}
+
+	br := s.pool.SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	if _, err := br.Exec(); err != nil {
+		return fmt.Errorf("insert screening rejects: %w", err)
+	}
+	return nil
+}
+
+// LoadSessionScreeningRejects reads screening rejects for a session,
+// ordered by time then id for stable ordering.
+func (s *PostgresLedgerStore) LoadSessionScreeningRejects(sessionID string) ([]domain.ScreeningReject, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `
+		SELECT time, session_id, symbol, agent_id, skill, criterion, criterion_label, threshold, actual_value, factor_scores
+		FROM screening_rejects
+		WHERE session_id = $1
+		ORDER BY time, id
+	`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query screening rejects by session: %w", err)
+	}
+	defer rows.Close()
+
+	var rejects []domain.ScreeningReject
+	for rows.Next() {
+		var sr domain.ScreeningReject
+		var factorScores []byte
+		if err := rows.Scan(
+			&sr.RecordedAt, &sr.SessionID, &sr.Symbol, &sr.AgentID, &sr.Skill,
+			&sr.Criterion, &sr.CriterionLabel, &sr.Threshold, &sr.ActualValue, &factorScores,
+		); err != nil {
+			return nil, fmt.Errorf("scan screening reject: %w", err)
+		}
+		if len(factorScores) > 0 {
+			if err := json.Unmarshal(factorScores, &sr.FactorScores); err != nil {
+				return nil, fmt.Errorf("unmarshal factor_scores: %w", err)
+			}
+		}
+		rejects = append(rejects, sr)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("screening reject rows: %w", rows.Err())
+	}
+	return rejects, nil
+}
+
+// ------------------------------------------------------------------
+// Session summaries
+// ------------------------------------------------------------------
+
+// RecordSessionSummary upserts a session summary (mirror of
+// repository.postgres_audit.go SaveSessionSummary).
+func (s *PostgresLedgerStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	ctx := context.Background()
+
+	brokerRuntime, _ := json.Marshal(summary.BrokerRuntime)
+	guardOutcomes, _ := json.Marshal(summary.GuardOutcomes)
+	taxSnapshots, _ := json.Marshal(summary.TaxSnapshots)
+
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO session_summaries (time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, risk_commentary, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		ON CONFLICT (session_id) DO UPDATE SET
+			time = EXCLUDED.time,
+			regime = EXCLUDED.regime,
+			order_count = EXCLUDED.order_count,
+			position_count = EXCLUDED.position_count,
+			ending_cash = EXCLUDED.ending_cash,
+			portfolio_value = EXCLUDED.portfolio_value,
+			outcome_count = EXCLUDED.outcome_count,
+			broker_runtime = EXCLUDED.broker_runtime,
+			next_experiment_agent_id = EXCLUDED.next_experiment_agent_id,
+			proposal_id = EXCLUDED.proposal_id,
+			commit_id = EXCLUDED.commit_id,
+			approval_id = EXCLUDED.approval_id,
+			guard_outcomes = EXCLUDED.guard_outcomes,
+			risk_commentary = EXCLUDED.risk_commentary,
+			tax_snapshots = EXCLUDED.tax_snapshots,
+			after_tax_pnl = EXCLUDED.after_tax_pnl,
+			total_tax_paid = EXCLUDED.total_tax_paid,
+			parameters_version = EXCLUDED.parameters_version
+	`, summary.RecordedAt, summary.SessionID, string(summary.Regime), summary.OrderCount,
+		summary.PositionCount, summary.EndingCash, summary.PortfolioValue, summary.OutcomeCount,
+		brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
+		summary.ApprovalID, guardOutcomes, summary.RiskCommentary, taxSnapshots, summary.AfterTaxPnL, summary.TotalTaxPaid,
+		summary.ParametersVersion)
+	if err != nil {
+		return fmt.Errorf("save session summary: %w", err)
+	}
+	return nil
+}
+
+// LoadSessionSummaries reads all session summaries, newest first.
+func (s *PostgresLedgerStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `
+		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, risk_commentary, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version
+		FROM session_summaries
+		ORDER BY time DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("load all session summaries: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []domain.SessionSummary
+	for rows.Next() {
+		summary, err := scanPGSessionSummary(rows)
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, *summary)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("session summary rows: %w", rows.Err())
+	}
+	return summaries, nil
+}
+
+// scanPGSessionSummary scans one session_summaries row (mirror of
+// repository.postgres_audit.go LoadSessionSummary scan).
+func scanPGSessionSummary(rows pgx.Rows) (*domain.SessionSummary, error) {
+	var summary domain.SessionSummary
+	var regime string
+	var brokerRuntime, guardOutcomes, taxSnapshots []byte
+
+	err := rows.Scan(
+		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
+		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
+		&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
+		&summary.ApprovalID, &guardOutcomes, &summary.RiskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+		&summary.ParametersVersion,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan session summary: %w", err)
+	}
+
+	summary.Regime = domain.Regime(regime)
+	if len(brokerRuntime) > 0 {
+		if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
+			return nil, fmt.Errorf("unmarshal broker_runtime: %w", err)
+		}
+	}
+	if len(guardOutcomes) > 0 {
+		if err := json.Unmarshal(guardOutcomes, &summary.GuardOutcomes); err != nil {
+			return nil, fmt.Errorf("unmarshal guard_outcomes: %w", err)
+		}
+	}
+	if len(taxSnapshots) > 0 {
+		if err := json.Unmarshal(taxSnapshots, &summary.TaxSnapshots); err != nil {
+			return nil, fmt.Errorf("unmarshal tax_snapshots: %w", err)
+		}
+	}
+	return &summary, nil
+}
+
+// ------------------------------------------------------------------
+// Trades
+// ------------------------------------------------------------------
+
+// RecordSessionTrades persists trades for a session. timestamp is stored
+// as RFC3339 matching the SQLite format.
+func (s *PostgresLedgerStore) RecordSessionTrades(sessionID string, trades []domain.TradeRecord) error {
+	if len(trades) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+
+	batch := &pgx.Batch{}
+	for _, trade := range trades {
+		batch.Queue(`
+			INSERT INTO trades (trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, trade.TradeID, sessionID, trade.Symbol,
+			string(trade.Side), trade.Quantity, trade.Price, trade.Amount,
+			trade.Reason, trade.Timestamp.UTC().Format(time.RFC3339))
+	}
+
+	br := s.pool.SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	if _, err := br.Exec(); err != nil {
+		return fmt.Errorf("insert session trades: %w", err)
+	}
+	return nil
+}
+
+// LoadSessionTrades reads trades for a session, oldest first.
+func (s *PostgresLedgerStore) LoadSessionTrades(sessionID string) ([]domain.TradeRecord, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `
+		SELECT trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp
+		FROM trades WHERE session_id = $1 ORDER BY timestamp ASC
+	`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query session trades: %w", err)
+	}
+	defer rows.Close()
+	return scanPGTrades(rows)
+}
+
+// LoadAllSessionTrades reads all trades, newest first.
+func (s *PostgresLedgerStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `
+		SELECT trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp
+		FROM trades ORDER BY timestamp DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query all trades: %w", err)
+	}
+	defer rows.Close()
+	return scanPGTrades(rows)
+}
+
+// scanPGTrades rebuilds TradeRecord rows (RFC3339 timestamps).
+func scanPGTrades(rows pgx.Rows) ([]domain.TradeRecord, error) {
+	trades := make([]domain.TradeRecord, 0)
+	for rows.Next() {
+		var rec domain.TradeRecord
+		var side, ts string
+		if err := rows.Scan(&rec.TradeID, &rec.SessionID, &rec.Symbol, &side,
+			&rec.Quantity, &rec.Price, &rec.Amount, &rec.Reason, &ts); err != nil {
+			return nil, fmt.Errorf("scan trade row: %w", err)
+		}
+		rec.Side = domain.Side(side)
+		parsed, err := time.Parse(time.RFC3339, ts)
+		if err != nil {
+			return nil, fmt.Errorf("parse trade timestamp %q: %w", ts, err)
+		}
+		rec.Timestamp = parsed
+		trades = append(trades, rec)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("trade rows: %w", rows.Err())
+	}
+	return trades, nil
+}
+
+// ------------------------------------------------------------------
+// Experiment records (part of OutcomeStore; full ExperimentStore surface
+// lands in the follow-up PR with the experiments migration)
+// ------------------------------------------------------------------
+
+// RecordExperiment writes an experiment record to the global experiments table.
+func (s *PostgresLedgerStore) RecordExperiment(record domain.ExperimentRecord) error {
+	briefJSON, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal mutation brief: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
+		VALUES ($1, $2, $3, $4)
+	`, record.ID, string(briefJSON), record.Status == domain.ExperimentAccepted,
+		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
+	if err != nil {
+		return fmt.Errorf("insert experiment: %w", err)
+	}
+	return nil
+}
+
+// RecordSessionExperiment writes an experiment record for a specific session.
+func (s *PostgresLedgerStore) RecordSessionExperiment(session domain.ReplaySession, record domain.ExperimentRecord) error {
+	briefJSON, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal mutation brief: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
+		VALUES ($1, $2, $3, $4, $5)
+	`, record.ID, session.ID, string(briefJSON), record.Status == domain.ExperimentAccepted,
+		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
+	if err != nil {
+		return fmt.Errorf("insert session experiment: %w", err)
+	}
+	return nil
+}
+
+// ------------------------------------------------------------------
+// Human interventions
+// ------------------------------------------------------------------
+
+// RecordHumanIntervention persists a human intervention (mirror of
+// repository.postgres_audit.go RecordHumanIntervention).
+func (s *PostgresLedgerStore) RecordHumanIntervention(intervention domain.HumanIntervention) error {
+	ctx := context.Background()
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO human_interventions (time, intervention_id, type, target_agent_id, target_model_id, target_sector, target_symbol, value, reason, operator, session_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (intervention_id) DO NOTHING
+	`, intervention.RecordedAt, intervention.ID, intervention.Type, intervention.TargetAgentID,
+		intervention.TargetModelID, intervention.TargetSector, intervention.TargetSymbol,
+		intervention.Value, intervention.Reason, intervention.Operator, intervention.SessionID)
+	if err != nil {
+		return fmt.Errorf("record human intervention: %w", err)
+	}
+	return nil
+}
+
+// LoadHumanInterventions reads all human interventions, newest first.
+func (s *PostgresLedgerStore) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `
+		SELECT time, intervention_id, type, target_agent_id, target_model_id, target_sector, target_symbol, value, reason, operator, session_id
+		FROM human_interventions
+		ORDER BY time DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("load human interventions: %w", err)
+	}
+	defer rows.Close()
+
+	var interventions []domain.HumanIntervention
+	for rows.Next() {
+		var hi domain.HumanIntervention
+		if err := rows.Scan(
+			&hi.RecordedAt, &hi.ID, &hi.Type, &hi.TargetAgentID, &hi.TargetModelID,
+			&hi.TargetSector, &hi.TargetSymbol, &hi.Value, &hi.Reason, &hi.Operator, &hi.SessionID,
+		); err != nil {
+			return nil, fmt.Errorf("scan human intervention: %w", err)
+		}
+		interventions = append(interventions, hi)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("human intervention rows: %w", rows.Err())
+	}
+	return interventions, nil
+}
