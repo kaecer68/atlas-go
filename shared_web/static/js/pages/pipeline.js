@@ -160,6 +160,24 @@ export function passesFilter(item) {
   return true;
 }
 
+// renderPipelineNarrative builds the 敘事歸因 block for a pipeline item.
+// Renders the reasoning chain (theme/region/confidence strings) and the
+// supporting event badges when present; returns '' when neither exists
+// (no narrative attribution available — zero visual disruption).
+function renderPipelineNarrative(it) {
+  const chain = Array.isArray(it.reasoning_chain) ? it.reasoning_chain : [];
+  const events = Array.isArray(it.supporting_events) ? it.supporting_events : [];
+  if (!chain.length && !events.length) return '';
+
+  const chainHtml = chain.length
+    ? `<div class="pipeline-narrative-chain">${chain.map(c => `<span class="pipeline-narrative-item">${escapeHtml(c)}</span>`).join('')}</div>`
+    : '';
+  const eventsHtml = events.length
+    ? `<div class="pipeline-narrative-events">${events.map(e => `<span class="badge pipeline-narrative-event">${escapeHtml(e)}</span>`).join('')}</div>`
+    : '';
+  return `<div class="pipeline-narrative"><strong>敘事歸因：</strong>${chainHtml}${eventsHtml}</div>`;
+}
+
 export function renderPipeline(data, showAll, sessionId, showScreened) {
   if (showAll === undefined) showAll = false;
   if (showScreened === undefined) showScreened = false;
@@ -287,7 +305,8 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     const industryBadge = hasIndustry
       ? `<span class="badge" style="font-size:10px;padding:1px 5px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.4);color:var(--accent-secondary)">${escapeHtml(industryCtx.business_cycle)} ${industryCtx.cycle_confidence != null ? fmtSafeNumber(industryCtx.cycle_confidence, { percent: true, decimals: 0, suffix: '%' }) : ''}</span>`
       : '';
-    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${typeof it.forward_return === 'number' ? fmtSafeSignedPct(it.forward_return, 1) : '—'}</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}</td><td>${actionBtns}${actionHelp}</td></tr>`;
+    const narrativeAttribution = renderPipelineNarrative(it);
+    return `<tr class="pipeline-row ${cls}" style="${rowStyle}"><td>${escapeHtml(it.symbol)}</td><td>${escapeHtml(stockName(it.symbol)) || '-'}</td><td>${escapeHtml(agentName(it.agent_id))}（${escapeHtml(it.skill)}）</td><td>${escapeHtml(layerName)}</td><td>${sideLabel}</td><td>${priceLabel}</td><td>${targetPriceLabel}</td><td>${stopLossPriceLabel}</td><td>${it.conviction != null ? it.conviction : '-'}</td><td>${narrativeBadge}${industryBadge ? ' ' + industryBadge : ''}</td><td>${renderFactorMini(it.factor_scores)}</td><td style="${frCls}">${frIcon}${typeof it.forward_return === 'number' ? fmtSafeSignedPct(it.forward_return, 1) : '—'}</td><td><div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">${tags}</div>${badge}${it.reason ? escapeHtml(it.reason) : '-'}${it.guard_reason ? '<br><span class="text-muted text-xs">' + escapeHtml(it.guard_reason) + '</span>' : ''}${narrativeAttribution}</td><td>${actionBtns}${actionHelp}</td></tr>`;
   }).join('');
 
   const paginationControls = totalItems > PAGE_SIZE ? `

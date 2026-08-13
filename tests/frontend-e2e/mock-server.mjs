@@ -142,12 +142,45 @@ const MOCK_USER_PROFILE = {
   effective_tier: 'free',
 };
 
+const MOCK_PIPELINE = {
+  session_id: 'window-20260720-20260809',
+  recorded_at: '2026-08-09T22:00:00Z',
+  items: [
+    {
+      symbol: '2330',
+      agent_id: 'ai_supercycle_agent',
+      skill: 'ai_supercycle',
+      layer: 'sector',
+      side: 'BUY',
+      price: 1000,
+      target_price: 1100,
+      stop_loss_price: 950,
+      conviction: 8,
+      passed_guards: true,
+      forward_return: 0.012,
+      reason: 'AI 資本支出上修，訂單滿載',
+      reasoning_chain: ['AI_capex_surge (Global, confidence 0.80)', 'Chain ai_supercycle: 輝達上修 AI 資本支出'],
+      supporting_events: ['evt-ai-20260809'],
+      factor_scores: { momentum: 0.6, quality: 0.4 },
+    },
+  ],
+  guard_outcomes: [],
+};
+
+const MOCK_SESSIONS = {
+  sessions: [
+    { session_id: 'window-20260720-20260809', regime: 'RISK_ON', recorded_at: '2026-08-09T22:00:00Z' },
+  ],
+};
+
 function handleAPI(pathname, res) {
   if (pathname === '/api/narrative/models') return sendJSON(res, MOCK_MODELS);
   if (pathname === '/api/events/prediction') return sendJSON(res, MOCK_PREDICTIONS);
   if (pathname === '/api/events/calendar') return sendJSON(res, MOCK_CALENDAR);
   if (pathname === '/api/capital-flow/summary') return sendJSON(res, MOCK_CAPITAL_FLOW_SUMMARY);
   if (pathname === '/api/recommendations') return sendJSON(res, MOCK_RECOMMENDATIONS);
+  if (pathname === '/api/dashboard/recommendation-pipeline') return sendJSON(res, MOCK_PIPELINE);
+  if (pathname === '/api/dashboard/sessions') return sendJSON(res, MOCK_SESSIONS);
 
   if (pathname === '/api/user/profile') return sendJSON(res, MOCK_USER_PROFILE);
 
