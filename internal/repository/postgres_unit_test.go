@@ -747,6 +747,44 @@ func (s *recordingScreeningRejectStore) LoadSessionScreeningRejects(string) ([]d
 	return s.rejects, nil
 }
 
+// TestDualWriteRepository_PGUsableHealthProbe covers BL-06/Step2: pgUsable()
+// must perform a live SELECT 1 probe (not just check pool != nil), so a dead
+// PostgreSQL is surfaced instead of every dual-write call site silently
+// swallowing the failure.
+func TestDualWriteRepository_PGUsableHealthProbe(t *testing.T) {
+	// Healthy: SELECT 1 succeeds → pgUsable true.
+	healthy := &PostgresRepository{pool: &fakePGPool{
+		queryRowFunc: func(_ context.Context, _ string, _ ...any) pgx.Row {
+			return fakeRow{values: []any{int32(1)}}
+		},
+	}}
+	repoHealthy := &DualWriteRepository{pg: healthy}
+	if !repoHealthy.pgUsable() {
+		t.Errorf("expected pgUsable true for healthy PG")
+	}
+	// TTL cache: second call within TTL returns cached true without another probe.
+	if !repoHealthy.pgUsable() {
+		t.Errorf("expected cached pgUsable true")
+	}
+
+	// Dead: SELECT 1 fails → pgUsable false.
+	dead := &PostgresRepository{pool: &fakePGPool{
+		queryRowFunc: func(_ context.Context, _ string, _ ...any) pgx.Row {
+			return fakeRow{err: errors.New("timescaledb extension missing")}
+		},
+	}}
+	repoDead := &DualWriteRepository{pg: dead}
+	if repoDead.pgUsable() {
+		t.Errorf("expected pgUsable false for dead PG")
+	}
+
+	// Nil pool → false.
+	repoNil := &DualWriteRepository{pg: &PostgresRepository{pool: nil}}
+	if repoNil.pgUsable() {
+		t.Errorf("expected pgUsable false for nil pool")
+	}
+}
+
 type recordingHumanInterventionStore struct{ interventions []domain.HumanIntervention }
 
 func (s *recordingHumanInterventionStore) RecordHumanIntervention(intervention domain.HumanIntervention) error {
