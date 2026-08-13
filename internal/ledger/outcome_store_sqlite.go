@@ -49,8 +49,9 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 	stmt, err := tx.Prepare(`
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
 			stop_loss, conviction, regime, timestamp, passed_guards, guard_reason,
-			factor_scores_json, conviction_breakdown_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -58,7 +59,6 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 
 	for _, outcome := range outcomes {
 		action := string(outcome.Side)
-		regime := string(outcome.Layer)
 		ts := outcome.RecordedAt.Format("2006-01-02T15:04:05Z07:00")
 
 		factorJSON, err := json.Marshal(outcome.FactorScores)
@@ -82,12 +82,19 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 			outcome.TargetPrice,
 			outcome.StopLossPrice,
 			outcome.Conviction,
-			regime,
+			outcome.Regime,
 			ts,
 			outcome.PassedGuards,
 			outcome.GuardReason,
 			string(factorJSON),
 			string(convictionJSON),
+			string(outcome.Layer),
+			outcome.ForwardReturn,
+			outcome.Window,
+			boolToInt(outcome.Hit),
+			outcome.BenchmarkDelta,
+			boolToInt(outcome.IsSynthetic),
+			outcome.Regime,
 		)
 		if err != nil {
 			return fmt.Errorf("insert outcome: %w", err)
@@ -108,8 +115,9 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 	stmt, err := tx.Prepare(`
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
 			stop_loss, conviction, regime, timestamp, passed_guards, guard_reason,
-			factor_scores_json, conviction_breakdown_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -117,7 +125,6 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 
 	for _, outcome := range outcomes {
 		action := string(outcome.Side)
-		regime := string(outcome.Layer)
 		ts := outcome.RecordedAt.Format("2006-01-02T15:04:05Z07:00")
 
 		factorJSON, err := json.Marshal(outcome.FactorScores)
@@ -141,12 +148,19 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 			outcome.TargetPrice,
 			outcome.StopLossPrice,
 			outcome.Conviction,
-			regime,
+			outcome.Regime,
 			ts,
 			outcome.PassedGuards,
 			outcome.GuardReason,
 			string(factorJSON),
 			string(convictionJSON),
+			string(outcome.Layer),
+			outcome.ForwardReturn,
+			outcome.Window,
+			boolToInt(outcome.Hit),
+			outcome.BenchmarkDelta,
+			boolToInt(outcome.IsSynthetic),
+			outcome.Regime,
 		)
 		if err != nil {
 			return fmt.Errorf("insert outcome: %w", err)
@@ -172,7 +186,8 @@ func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.Recommendation
 	}
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
-			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
 		FROM outcomes WHERE session_id != '' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("query outcomes from sessions: %w", err)
@@ -187,7 +202,8 @@ func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.Recommendation
 func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
-			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
 		FROM outcomes WHERE session_id = '' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("query outcomes: %w", err)
@@ -208,7 +224,8 @@ func (s *SQLiteOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.Rec
 	}
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
-			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
 		FROM outcomes WHERE session_id = ? ORDER BY id`, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query session outcomes: %w", err)
@@ -518,7 +535,8 @@ func (s *SQLiteOutcomeStore) LoadSessionSummaries() ([]domain.SessionSummary, er
 func (s *SQLiteOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
-			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json
+			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
 		FROM outcomes WHERE session_id != '' ORDER BY id`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query outcomes for scorecards: %w", err)
@@ -587,16 +605,25 @@ func (s *SQLiteOutcomeStore) LoadHumanInterventions() ([]domain.HumanInterventio
 }
 
 // scanOutcomes scans outcome rows into RecommendationOutcome structs.
+// Reads the evaluation columns (layer/forward_return/window/hit/benchmark_delta/
+// is_synthetic/true_regime) added by BL-06. For rows written before the
+// migration, the new columns are NULL → zero values (Layer falls back to the
+// legacy regime column which historically stored the layer).
 func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 	var outcomes []domain.RecommendationOutcome
 	for rows.Next() {
 		var sym, agentID, action, regime, ts, guardReason, factorJSON, convictionJSON string
-		var targetPrice, stopLoss float64
+		var layer string
+		var window string
+		var trueRegime string
+		var targetPrice, stopLoss, forwardReturn, benchmarkDelta float64
 		var conviction int
 		var passedGuards bool
+		var hit, isSynthetic int
 
 		if err := rows.Scan(&sym, &agentID, &action, &targetPrice, &stopLoss, &conviction,
-			&regime, &ts, &passedGuards, &guardReason, &factorJSON, &convictionJSON); err != nil {
+			&regime, &ts, &passedGuards, &guardReason, &factorJSON, &convictionJSON,
+			&layer, &forwardReturn, &window, &hit, &benchmarkDelta, &isSynthetic, &trueRegime); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
@@ -616,6 +643,13 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 			cb = &breakdown
 		}
 
+		// BL-06: prefer the dedicated layer column; fall back to the legacy
+		// regime column (which historically stored the layer) for pre-migration rows.
+		effectiveLayer := layer
+		if effectiveLayer == "" {
+			effectiveLayer = regime
+		}
+
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:             agentID,
 			Symbol:              sym,
@@ -623,7 +657,13 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 			TargetPrice:         targetPrice,
 			StopLossPrice:       stopLoss,
 			Conviction:          conviction,
-			Layer:               domain.AgentLayer(regime),
+			Layer:               domain.AgentLayer(effectiveLayer),
+			Regime:              trueRegime,
+			Window:              window,
+			ForwardReturn:       forwardReturn,
+			BenchmarkDelta:      benchmarkDelta,
+			Hit:                 hit == 1,
+			IsSynthetic:         isSynthetic == 1,
 			RecordedAt:          parseTimestamp(ts),
 			PassedGuards:        passedGuards,
 			GuardReason:         guardReason,
@@ -637,6 +677,14 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 	}
 
 	return outcomes, nil
+}
+
+// boolToInt converts a bool to 0/1 for SQLite INTEGER columns.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // countPassedGuards counts guard outcomes that passed.

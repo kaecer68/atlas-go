@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -107,16 +108,20 @@ func TestSQLiteOutcomeStoreRecordSessionOutcomes(t *testing.T) {
 
 	outcomes := []domain.RecommendationOutcome{
 		{
-			AgentID:       "agent-1",
-			Symbol:        "2330",
-			Side:          domain.SideBuy,
-			Conviction:    80,
-			TargetPrice:   1100,
-			StopLossPrice: 1000,
-			Window:        "2026-01",
-			ForwardReturn: 0.05,
-			Hit:           true,
-			RecordedAt:    time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+			AgentID:        "agent-1",
+			Symbol:         "2330",
+			Side:           domain.SideBuy,
+			Conviction:     80,
+			TargetPrice:    1100,
+			StopLossPrice:  1000,
+			Window:         "2026-01",
+			ForwardReturn:  0.05,
+			Hit:            true,
+			Layer:          domain.AgentLayer("sector"),
+			Regime:         "RISK_ON",
+			IsSynthetic:    false,
+			BenchmarkDelta: 0.02,
+			RecordedAt:     time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -133,6 +138,28 @@ func TestSQLiteOutcomeStoreRecordSessionOutcomes(t *testing.T) {
 	}
 	if loaded[0].Symbol != "2330" {
 		t.Errorf("expected symbol 2330, got %s", loaded[0].Symbol)
+	}
+	// BL-06: evaluation fields must round-trip through SQLite (previously dropped).
+	if loaded[0].ForwardReturn != 0.05 {
+		t.Errorf("expected ForwardReturn 0.05, got %v", loaded[0].ForwardReturn)
+	}
+	if loaded[0].Window != "2026-01" {
+		t.Errorf("expected Window 2026-01, got %q", loaded[0].Window)
+	}
+	if !loaded[0].Hit {
+		t.Errorf("expected Hit true, got %v", loaded[0].Hit)
+	}
+	if string(loaded[0].Layer) != "sector" {
+		t.Errorf("expected Layer sector, got %q", loaded[0].Layer)
+	}
+	if loaded[0].Regime != "RISK_ON" {
+		t.Errorf("expected Regime RISK_ON, got %q", loaded[0].Regime)
+	}
+	if loaded[0].IsSynthetic {
+		t.Errorf("expected IsSynthetic false, got %v", loaded[0].IsSynthetic)
+	}
+	if loaded[0].BenchmarkDelta != 0.02 {
+		t.Errorf("expected BenchmarkDelta 0.02, got %v", loaded[0].BenchmarkDelta)
 	}
 }
 
@@ -762,6 +789,42 @@ func TestSQLiteOutcomeStoreLoadOutcomesEmpty(t *testing.T) {
 	}
 	if loaded != nil {
 		t.Fatalf("expected nil for empty outcomes, got %v", loaded)
+	}
+}
+
+// TestInitSchema_AddsOutcomesEvaluationColumns covers BL-06: a fresh database
+// initialized via InitSchema must include the evaluation columns on the
+// outcomes table (layer/forward_return/window/hit/benchmark_delta/is_synthetic/
+// true_regime) so RecordSessionOutcomes can persist them.
+func TestInitSchema_AddsOutcomesEvaluationColumns(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+
+	rows, err := db.Query(`PRAGMA table_info(outcomes)`)
+	if err != nil {
+		t.Fatalf("pragma table_info: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var cid, notnull, pk int
+	var name, ctype string
+	var dflt sql.NullString
+	cols := map[string]bool{}
+	for rows.Next() {
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatalf("scan pragma row: %v", err)
+		}
+		cols[name] = true
+	}
+	for _, want := range []string{"layer", "forward_return", "window", "hit", "benchmark_delta", "is_synthetic", "true_regime"} {
+		if !cols[want] {
+			t.Errorf("outcomes.%s column missing after InitSchema", want)
+		}
 	}
 }
 
