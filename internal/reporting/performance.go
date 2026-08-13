@@ -658,7 +658,15 @@ func findRegimeForWindow(summaries []domain.SessionSummary, window string) strin
 	if window == "" {
 		return ""
 	}
+	// RecommendationOutcome.Window is stored in ISO format ("2026-01-01"),
+	// not the "session-YYYYMMDD-..." session ID that SessionDateFromID parses.
+	// Resolve the window date from either format.
 	windowDate := domain.SessionDateFromID(window)
+	if windowDate.IsZero() {
+		if d, err := time.Parse("2006-01-02", window); err == nil {
+			windowDate = d
+		}
+	}
 	for _, s := range summaries {
 		sessionDate := domain.SessionDateFromID(s.SessionID)
 		if !windowDate.IsZero() && !sessionDate.IsZero() && windowDate.Equal(sessionDate) {

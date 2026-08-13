@@ -594,6 +594,14 @@ func TestFindRegimeForWindow_DateMatch(t *testing.T) {
 	if got := findRegimeForWindow(summaries, "session-20261231-daily"); got != "" {
 		t.Errorf("expected empty for unmatched window, got %s", got)
 	}
+	// ISO window format (2006-01-02) — RecommendationOutcome.Window is stored as
+	// "2026-01-01" (no session- prefix), so the regime lookup must also match it.
+	if got := findRegimeForWindow(summaries, "2026-01-01"); got != "RISK_ON" {
+		t.Errorf("expected ISO-format window match RISK_ON, got %s", got)
+	}
+	if got := findRegimeForWindow(summaries, "2026-01-02"); got != "RISK_OFF" {
+		t.Errorf("expected ISO-format window match RISK_OFF, got %s", got)
+	}
 }
 
 func setupTestLedger(t *testing.T) string {
