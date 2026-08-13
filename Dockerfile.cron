@@ -2,6 +2,11 @@
 FROM golang:1.26.4-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
+# GOPROXY is overridable at build time (e.g. GOPROXY=https://goproxy.cn,direct)
+# to work around transparent-proxy TLS MITM on proxy.golang.org (e.g. Hinet
+# safebrowsing cert interception). Default keeps the official proxy.
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 RUN go mod download
 COPY . .
 ARG TARGETARCH
