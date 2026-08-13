@@ -25,6 +25,15 @@ services:
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
+      # Postgres storage backend: all six ledger factories (FullStore /
+      # OutcomeStore / SessionStore / QuoteStore / DetectorScanStore /
+      # HistoricalStore) have postgres branches. This environment entry
+      # overrides the sqlite default in ~/.config/atlas-go/.env (compose
+      # environment wins over env_file). Migration: run cmd/migrate-data
+      # with -quotes -detector-scans -outcomes-sqlite -screening-sqlite
+      # -trades-sqlite -experiments-sqlite -summaries-sqlite -historical
+      # against the same DATABASE_URL before enabling this.
+      - ATLAS_STORE_BACKEND=postgres
       # ATLAS_API_KEY intentionally NOT set in environment — it would
       - ATLAS_WARMUP=${ATLAS_WARMUP:-}
       # shadow env_file with shell-expanded ${ATLAS_API_KEY} (empty
