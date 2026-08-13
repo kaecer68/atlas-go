@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,18 @@ func cleanupDetectorScanLog(t *testing.T, pool *pgxpool.Pool) {
 		ctx := context.Background()
 		_, _ = pool.Exec(ctx, "DELETE FROM detector_scan_log WHERE scan_batch_id LIKE 'pgsqltest-%'")
 	})
+}
+
+// testScansOnly filters ScanResultRow down to the pgsqltest- namespace so
+// assertions are immune to migrated production rows in the shared dev PG.
+func testScansOnly(scans []ScanResultRow) []ScanResultRow {
+	out := make([]ScanResultRow, 0, len(scans))
+	for _, s := range scans {
+		if strings.HasPrefix(s.ScanBatchID, "pgsqltest-") {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
@@ -67,13 +80,15 @@ func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
 		t.Fatalf("namespace batch2: %v", err)
 	}
 
-	// LoadRecentScans returns newest first, limit respected.
-	scans, err := store.LoadRecentScans(ctx, 2)
+	// LoadRecentScans returns newest first; filter to test namespace and
+	// verify both batches present (3 rows), newest first.
+	all, err := store.LoadRecentScans(ctx, 100)
 	if err != nil {
 		t.Fatalf("LoadRecentScans: %v", err)
 	}
-	if len(scans) != 2 {
-		t.Fatalf("expected 2 scans (limit), got %d", len(scans))
+	scans := testScansOnly(all)
+	if len(scans) != 3 {
+		t.Fatalf("expected 3 pgsqltest scans, got %d", len(scans))
 	}
 	// Newest first: theme-c from batch2 must be first.
 	if scans[0].Theme != "pgsqltest-theme-c" {
@@ -83,14 +98,9 @@ func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
 		t.Fatalf("scan fields mismatch: %+v", scans[0])
 	}
 
-	// Metadata round-trip from batch1's row (present in the limit-2 window? no —
-	// query all to check metadata unmarshal).
-	all, err := store.LoadRecentScans(ctx, 10)
-	if err != nil {
-		t.Fatalf("LoadRecentScans(all): %v", err)
-	}
+	// Metadata round-trip from batch1's theme-a row.
 	foundMeta := false
-	for _, s := range all {
+	for _, s := range scans {
 		if s.Theme == "pgsqltest-theme-a" {
 			foundMeta = true
 			if s.Metadata["k"] != "v" {
@@ -99,7 +109,7 @@ func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
 		}
 	}
 	if !foundMeta {
-		t.Fatalf("theme-a row not found in all scans")
+		t.Fatalf("theme-a row not found in scans")
 	}
 }
 
@@ -124,11 +134,11 @@ func TestPostgresDetectorScanStore_EmptyNoOp(t *testing.T) {
 		t.Fatalf("expected empty batch ID for no-op, got %q", batchID)
 	}
 
-	scans, err := store.LoadRecentScans(ctx, 10)
+	scans, err := store.LoadRecentScans(ctx, 100)
 	if err != nil {
 		t.Fatalf("LoadRecentScans: %v", err)
 	}
-	if len(scans) != 0 {
-		t.Fatalf("expected 0 scans after no-op, got %d", len(scans))
+	if got := testScansOnly(scans); len(got) != 0 {
+		t.Fatalf("expected 0 pgsqltest scans after no-op, got %d", len(got))
 	}
 }
