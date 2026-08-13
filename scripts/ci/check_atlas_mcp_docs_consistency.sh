@@ -100,20 +100,20 @@ if [ -f "AGENTS.md" ]; then
     fi
 fi
 
-# 3. 檢查 116 tool 散佈在至少 3 個檔案（2026-07-25 Route C 更新）
+# 3. 檢查 117 tool 散佈在至少 3 個檔案（2026-08-13 T-01 統一：117 預設 / 119 gated / assert [115,121]，以 server.go 為準）
 echo ""
-echo "  → Checking tool count 116 propagates to ≥ $TOOL_COUNT_MIN files..."
-files_with_110=0
+echo "  → Checking tool count 117 propagates to ≥ $TOOL_COUNT_MIN files..."
+files_with_117=0
 for file in "${AUTHORITATIVE_FILES[@]}"; do
-    if [ -f "$file" ] && grep -qE "116 (個 tool|tools|tool |個 tool| tool)" "$file"; then
-        files_with_110=$((files_with_110 + 1))
+    if [ -f "$file" ] && grep -qE "117 (個 tool|tools|tool | tool)" "$file"; then
+        files_with_117=$((files_with_117 + 1))
     fi
 done
-if [ "$files_with_110" -lt "$TOOL_COUNT_MIN" ]; then
-    echo "    ❌ '116 tools' appears in $files_with_110 files (need ≥ $TOOL_COUNT_MIN)"
+if [ "$files_with_117" -lt "$TOOL_COUNT_MIN" ]; then
+    echo "    ❌ '117 tools' appears in $files_with_117 files (need ≥ $TOOL_COUNT_MIN)"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-    echo "    ✓ '116 tools' appears in $files_with_110 files (≥ $TOOL_COUNT_MIN)"
+    echo "    ✓ '117 tools' appears in $files_with_117 files (≥ $TOOL_COUNT_MIN)"
 fi
 
 # 總結

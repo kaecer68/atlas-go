@@ -57,7 +57,7 @@
 - **MCP 入口**：[`cmd/atlas-mcp/README.md`](cmd/atlas-mcp/README.md)
 - **內部檢查（introspection）**：內部開發 agent 優先透過 atlas-mcp 的 resources/tools（`atlas://tools/catalog`、`atlas://workflows/catalog`、`audit_state`、`mcp_get_*`、`system_get_maturity`）掌握系統結構/工作流/用量，而非僅 grep
 - **設定與降級**：MCP 註冊範例與 backend 依賴說明見 [`.claude/skills/atlas-mcp-integration/SKILL.md`](.claude/skills/atlas-mcp-integration/SKILL.md) § 內部開發 agent 使用
-- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md) — 所有 MCP tool 的權威清單（116 tools）
+- **Tool catalog**：[`docs/reference/tool-catalog.md`](docs/reference/tool-catalog.md) — 所有 MCP tool 的權威清單（117 tools）
 - **Workflow map**：[`docs/reference/workflow-map.md`](docs/reference/workflow-map.md)
 - **Process 標註**：[`docs/reference/processes.yaml`](docs/reference/processes.yaml)、[`docs/process-annotation-sop.md`](docs/process-annotation-sop.md)
 - **修改程式碼前必跑**：[`.claude/skills/atlas-pre-change-protocol/SKILL.md`](.claude/skills/atlas-pre-change-protocol/SKILL.md)

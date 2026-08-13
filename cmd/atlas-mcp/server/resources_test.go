@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestHandleResourceConfigParameters_OK(t *testing.T) {
@@ -43,84 +45,96 @@ func TestHandleResourceConfigParameters_UpstreamError(t *testing.T) {
 	_ = done
 }
 
-func TestHandleResourceToolsCatalog_OK(t *testing.T) {
+// TestEmbeddedResources_AllHandlers 驗證全部 file-based（embedded）resources：
+// 每個 handler 都回傳非空內容、正確 URI/MIME，且不依賴 process CWD。
+func TestEmbeddedResources_AllHandlers(t *testing.T) {
 	s, _, done := newTestHarness(t)
 	defer done()
 
-	// Create a temp tool-catalog.md in docs/reference/ and chdir into it
-	tmp := t.TempDir()
-	refDir := filepath.Join(tmp, "docs", "reference")
-	if err := os.MkdirAll(refDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+	cases := []struct {
+		name   string
+		key    string
+		uri    string
+		mime   string
+		call   func(context.Context) (*mcp.ReadResourceResult, error)
+		needle string
+	}{
+		{"tools_catalog", "tools/catalog", "atlas://tools/catalog", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceToolsCatalog(ctx, nil)
+			}, "atlas-mcp Tool Catalog"},
+		{"workflows_catalog", "workflows/catalog", "atlas://workflows/catalog", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceWorkflowsCatalog(ctx, nil)
+			}, "WA-"},
+		{"reference_architecture", "reference/architecture", "atlas://reference/architecture", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceArchitecture(ctx, nil)
+			}, "atlas-go"},
+		{"reference_constitution", "reference/constitution", "atlas://reference/constitution", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceConstitution(ctx, nil)
+			}, "憲法"},
+		{"reference_traps", "reference/traps", "atlas://reference/traps", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) { return s.handleResourceTraps(ctx, nil) }, "陷阱"},
+		{"reference_parameter_system", "reference/parameter-system", "atlas://reference/parameter-system", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceParameterSystem(ctx, nil)
+			}, "parameter"},
+		{"processes_catalog", "processes/catalog", "atlas://processes/catalog", "text/yaml",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceProcessesCatalog(ctx, nil)
+			}, "process"},
+		{"docs_map", "docs/map", "atlas://docs/map", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) { return s.handleResourceDocsMap(ctx, nil) }, "documentation"},
+		{"modules_index", "modules/index", "atlas://modules/index", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceModulesIndex(ctx, nil)
+			}, "AGENTS"},
+		{"modules_maturity", "modules/maturity", "atlas://modules/maturity", "text/markdown",
+			func(ctx context.Context) (*mcp.ReadResourceResult, error) {
+				return s.handleResourceModulesMaturity(ctx, nil)
+			}, "Maturity"},
 	}
-	if err := os.WriteFile(filepath.Join(refDir, "tool-catalog.md"), []byte("# Test catalog\n"), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	origCwd, _ := os.Getwd()
-	os.Chdir(tmp)
-	defer os.Chdir(origCwd)
 
-	result, err := s.handleResourceToolsCatalog(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	if !strings.Contains(result.Contents[0].Text, "# Test catalog") {
-		t.Fatalf("missing catalog content: %q", result.Contents[0].Text)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tc.call(context.Background())
+			if err != nil {
+				t.Fatalf("handler: %v", err)
+			}
+			if result == nil || len(result.Contents) != 1 {
+				t.Fatalf("expected 1 content")
+			}
+			c := result.Contents[0]
+			if c.URI != tc.uri {
+				t.Fatalf("URI=%q want %q", c.URI, tc.uri)
+			}
+			if c.MIMEType != tc.mime {
+				t.Fatalf("MIMEType=%q want %q", c.MIMEType, tc.mime)
+			}
+			if len(c.Text) == 0 {
+				t.Fatal("empty content")
+			}
+			if tc.needle != "" && !strings.Contains(c.Text, tc.needle) {
+				t.Fatalf("missing %q in content (len=%d)", tc.needle, len(c.Text))
+			}
+		})
 	}
 }
 
-func TestHandleResourceToolsCatalog_MissingFile(t *testing.T) {
-	s, _, done := newTestHarness(t)
-	defer done()
-
-	tmp := t.TempDir()
-	origCwd, _ := os.Getwd()
-	os.Chdir(tmp)
-	defer os.Chdir(origCwd)
-
-	_, err := s.handleResourceToolsCatalog(context.Background(), nil)
-	if err == nil {
-		t.Fatal("expected error when docs/reference/tool-catalog.md missing")
+// TestEmbeddedDocs_KeysPresent 確保 resources.go 使用的 key 都在 generated map 內，
+// 防止 docsgen 與 resources.go 不同步（drift）。
+func TestEmbeddedDocs_KeysPresent(t *testing.T) {
+	required := []string{
+		"tools/catalog", "workflows/catalog",
+		"reference/architecture", "reference/constitution", "reference/traps", "reference/parameter-system",
+		"processes/catalog", "docs/map", "modules/index", "modules/maturity",
 	}
-}
-
-func TestHandleResourceWorkflowsCatalog_OK(t *testing.T) {
-	s, _, done := newTestHarness(t)
-	defer done()
-
-	tmp := t.TempDir()
-	wfDir := filepath.Join(tmp, "docs", "reference")
-	if err := os.MkdirAll(wfDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(wfDir, "workflow-map.md"), []byte("# Test workflow map\n"), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	origCwd, _ := os.Getwd()
-	os.Chdir(tmp)
-	defer os.Chdir(origCwd)
-
-	result, err := s.handleResourceWorkflowsCatalog(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	if !strings.Contains(result.Contents[0].Text, "Test workflow map") {
-		t.Fatalf("missing content: %q", result.Contents[0].Text)
-	}
-}
-
-func TestHandleResourceWorkflowsCatalog_MissingFile(t *testing.T) {
-	s, _, done := newTestHarness(t)
-	defer done()
-
-	tmp := t.TempDir()
-	origCwd, _ := os.Getwd()
-	os.Chdir(tmp)
-	defer os.Chdir(origCwd)
-
-	_, err := s.handleResourceWorkflowsCatalog(context.Background(), nil)
-	if err == nil {
-		t.Fatal("expected error when docs/reference/workflow-map.md missing")
+	for _, k := range required {
+		if _, ok := embeddedDocs[k]; !ok {
+			t.Errorf("embeddedDocs missing key %q (run go generate ./cmd/atlas-mcp/...)", k)
+		}
 	}
 }
 

@@ -1,3 +1,5 @@
+//go:generate go run ../docsgen
+
 package server
 
 import (
@@ -21,21 +23,78 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://tools/catalog",
 		Name:        "atlas-mcp Tool Catalog",
-		Description: "112 read-only MCP tools grouped by area. Source: docs/reference/tool-catalog.md on disk. Use to enumerate capabilities without tools/list round-trip.",
+		Description: "117 MCP tools grouped by area (119 with sampling/elicitation feature-gated on). Source: docs/reference/tool-catalog.md (embedded at build time). Use to enumerate capabilities without tools/list round-trip.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceToolsCatalog)
 
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://workflows/catalog",
 		Name:        "atlas-go Workflow Catalog",
-		Description: "42 WA-XXX workflows in 7 layers. Source: docs/reference/workflow-map.md on disk. Helps an agent decide which Tool maps to a given intent.",
+		Description: "42 WA-XXX workflows in 7 layers. Source: docs/reference/workflow-map.md (embedded at build time). Helps an agent decide which Tool maps to a given intent.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceWorkflowsCatalog)
+
+	// R-10: 內部開發知識資源（file-based，embedded，不需 backend）
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://reference/architecture",
+		Name:        "atlas-go Architecture",
+		Description: "docs/architecture.md — 分層架構活地圖（入口層/模組/eventbus/orchestrator）。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceArchitecture)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://reference/constitution",
+		Name:        "atlas-go Constitution",
+		Description: "docs/reference/constitution.md — 開發憲法。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceConstitution)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://reference/traps",
+		Name:        "atlas-go Traps Reference",
+		Description: "docs/reference/traps.md — 跨模組陷阱權威清單。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceTraps)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://reference/parameter-system",
+		Name:        "atlas-go Parameter System",
+		Description: "docs/reference/parameter-system.md — 參數系統設計。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceParameterSystem)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://processes/catalog",
+		Name:        "atlas-go Process Catalog",
+		Description: "docs/reference/processes.yaml — 結構化 workflow/process metadata。Internal introspection.",
+		MIMEType:    "text/yaml",
+	}, s.handleResourceProcessesCatalog)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://docs/map",
+		Name:        "atlas-go Documentation Map",
+		Description: "docs/documentation-map.md — 文件地圖。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceDocsMap)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://modules/index",
+		Name:        "atlas-go Module Index",
+		Description: "internal/AGENTS_INDEX.md — 59 模組索引與各模組 AGENTS.md 位置。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceModulesIndex)
+
+	mcpSrv.AddResource(&mcp.Resource{
+		URI:         "atlas://modules/maturity",
+		Name:        "atlas-go Module Maturity",
+		Description: "internal/MATURITY.md — 模組成熟度評級（S/E/X/U）。Internal introspection.",
+		MIMEType:    "text/markdown",
+	}, s.handleResourceModulesMaturity)
 
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://audit/recent",
 		Name:        "Recent Audit Log Entries",
-		Description: "Last 50 entries from the JSONL audit log (most recent first). Useful for debugging recent agent activity without a separate log query.",
+		Description: "Last 50 entries from the JSONL audit log (most recent first; subset fields ts/tool/status/duration_ms; source ATLAS_MCP_AUDIT_LOG). Useful for debugging recent agent activity without a separate log query.",
 		MIMEType:    "application/json",
 	}, s.handleResourceAuditRecent)
 
@@ -72,19 +131,61 @@ func (s *server) handleResourceConfigParameters(ctx context.Context, _ *mcp.Read
 }
 
 func (s *server) handleResourceToolsCatalog(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	raw, err := os.ReadFile("docs/reference/tool-catalog.md")
-	if err != nil {
-		return nil, fmt.Errorf("resource tools catalog (docs/reference/tool-catalog.md): %w", err)
-	}
-	return resourceText("atlas://tools/catalog", "text/markdown", string(raw)), nil
+	return embeddedResource("tools/catalog", "atlas://tools/catalog", "text/markdown")
 }
 
 func (s *server) handleResourceWorkflowsCatalog(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-	raw, err := os.ReadFile("docs/reference/workflow-map.md")
-	if err != nil {
-		return nil, fmt.Errorf("resource workflows catalog (docs/reference/workflow-map.md): %w", err)
+	return embeddedResource("workflows/catalog", "atlas://workflows/catalog", "text/markdown")
+}
+
+// handleResourceArchitecture 提供 docs/architecture.md（分層架構活地圖）。
+func (s *server) handleResourceArchitecture(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("reference/architecture", "atlas://reference/architecture", "text/markdown")
+}
+
+// handleResourceConstitution 提供 docs/reference/constitution.md（開發憲法）。
+func (s *server) handleResourceConstitution(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("reference/constitution", "atlas://reference/constitution", "text/markdown")
+}
+
+// handleResourceTraps 提供 docs/reference/traps.md（跨模組陷阱權威）。
+func (s *server) handleResourceTraps(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("reference/traps", "atlas://reference/traps", "text/markdown")
+}
+
+// handleResourceParameterSystem 提供 docs/reference/parameter-system.md（參數系統）。
+func (s *server) handleResourceParameterSystem(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("reference/parameter-system", "atlas://reference/parameter-system", "text/markdown")
+}
+
+// handleResourceProcessesCatalog 提供 docs/reference/processes.yaml（結構化 workflow metadata）。
+func (s *server) handleResourceProcessesCatalog(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("processes/catalog", "atlas://processes/catalog", "text/yaml")
+}
+
+// handleResourceDocsMap 提供 docs/documentation-map.md（文件地圖）。
+func (s *server) handleResourceDocsMap(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("docs/map", "atlas://docs/map", "text/markdown")
+}
+
+// handleResourceModulesIndex 提供 internal/AGENTS_INDEX.md（模組索引）。
+func (s *server) handleResourceModulesIndex(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("modules/index", "atlas://modules/index", "text/markdown")
+}
+
+// handleResourceModulesMaturity 提供 internal/MATURITY.md（模組成熟度評級）。
+func (s *server) handleResourceModulesMaturity(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return embeddedResource("modules/maturity", "atlas://modules/maturity", "text/markdown")
+}
+
+// embeddedResource 回傳 build-time 內嵌的文件快照（由 cmd/atlas-mcp/docsgen
+// 產生 resources_docs.gen.go）。不依賴 process CWD / 檔案系統。
+func embeddedResource(key, uri, mime string) (*mcp.ReadResourceResult, error) {
+	raw, ok := embeddedDocs[key]
+	if !ok {
+		return nil, fmt.Errorf("resource %s: embedded doc %q missing (run go generate ./cmd/atlas-mcp/...)", uri, key)
 	}
-	return resourceText("atlas://workflows/catalog", "text/markdown", string(raw)), nil
+	return resourceText(uri, mime, string(raw)), nil
 }
 
 func (s *server) handleResourceAuditRecent(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

@@ -129,7 +129,7 @@ target_audience: "developer"
 | `atlas-macro-narrative` | 宏觀敘事 tool 的金融背景 |
 | `atlas-strategy-evolution` | 策略/實驗 tool 的金融背景 |
 
-> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（116 tools × 16 種典型任務矩陣）。
+> **完整 catalog + 任務→工具反向索引** — 見 [`docs/reference/tool-catalog.md`](../../../docs/reference/tool-catalog.md)（117 tools × 16 種典型任務矩陣）。
 
 ## 版本歷史
 

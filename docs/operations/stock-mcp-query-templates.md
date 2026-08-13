@@ -2,7 +2,7 @@
 
 > 給 MCP bot prompt engineer 與外部 agent（OpenClaw / Hermes / Claude Desktop）使用。
 > 對應 MCP tools：`stock_get_quote` / `stock_get_fundamentals` / `stock_get_chips` / `stock_get_technical`。
-> 全部 tool 在 `atlas-mcp server`（116 tools）內，**需要付費 tier 或 dev mode** 才能呼叫。
+> 全部 tool 在 `atlas-mcp server`（117 tools）內，**需要付費 tier 或 dev mode** 才能呼叫。
 
 ## 工具能力總覽
 

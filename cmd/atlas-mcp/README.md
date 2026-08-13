@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **115-118 個 tool**（116 預設 + 2 feature-gated；啟動期 assert [115, 118]；權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
+| MCP Tools | **117 個 tool**（預設；+2 sampling/elicitation feature-gated 全開時 119；啟動期 assert [115, 121]；權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
