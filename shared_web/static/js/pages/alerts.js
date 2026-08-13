@@ -42,6 +42,17 @@ function formatTimeShort(ts) {
   return new Date(ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ── Rule display labels ──
+const RULE_LABELS = {
+  'narrative_theme_detected': '敘事主題警示',
+};
+
+// ruleLabel returns the Traditional-Chinese display label for an alert
+// rule id; unknown rules fall back to the raw id.
+function ruleLabel(rule) {
+  return RULE_LABELS[rule] || rule;
+}
+
 // ── Machine-recommended actions per rule ──
 function getMachineAdvice(alert) {
   const rule = alert.rule || '';
@@ -237,7 +248,7 @@ function renderAlertCard(a) {
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
             <span class="badge ${statusClass}" style="font-size:11px;padding:2px 7px">${escapeHtml(statusLabel)}</span>
             <span class="badge ${sevClass}" style="font-size:11px;padding:2px 7px">${escapeHtml(SEVERITY_MAP[a.severity]) || escapeHtml(a.severity)}</span>
-            <span style="font-size:12px;color:var(--muted)">${escapeHtml(a.rule)}</span>
+            <span style="font-size:12px;color:var(--muted)">${escapeHtml(ruleLabel(a.rule))}</span>
             ${a.count > 1 ? `<span class="badge warn" style="font-size:10px;padding:1px 5px">×${a.count}</span>` : ''}
           </div>
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">${escapeHtml(advice.problem)}</div>
