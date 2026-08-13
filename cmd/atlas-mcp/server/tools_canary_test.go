@@ -48,6 +48,19 @@ var skipCanary = map[string]bool{
 	// bare GET cannot provide — not route gaps.
 	"experiment_diff":             true,
 	"universe_get_session_detail": true,
+	// Destructive / write side effects.
+	"alert_acknowledge": true,
+	"alert_resolve":     true,
+	"alert_silence":     true,
+	"alert_scan":        true,
+	// Local-only (embedded snapshot / file access) — no upstream route.
+	"audit_state":         true,
+	"mcp_roots_read_file": true,
+	// Require a parameter (symbol / period / task id) a bare GET cannot supply.
+	"stock_get_monthly_revenue": true,
+	"strategy_for_period":       true,
+	"task_get":                  true,
+	"task_get_events":           true,
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
@@ -92,6 +105,9 @@ var canaryRoutes = map[string]canaryTest{
 	"stock_get_quote":                   {Path: "/api/stock/quote?symbol=2330"},
 	"stock_get_fundamentals":            {Path: "/api/stock/fundamentals?symbol=2330"},
 	"stock_get_technical":               {Path: "/api/stock/technical?symbol=2330&days=10"},
+	"channel_health":                    {Path: "/api/dashboard/channel-health"},
+	"control_get_audit_log":             {Path: "/api/control/audit-log"},
+	"control_get_active_overrides":      {Path: "/api/control/active-overrides"},
 	"stock_get_chips":                   {Path: "/api/stock/chips?symbol=2330"},
 	"get_recommendations":               {Path: "/api/recommendations"},
 	"strategy_ranker":                   {Path: "/api/strategy-ranker/rank"},

@@ -39,12 +39,13 @@
 | `crossmarket_get_correlation` | 台股 sector vs US indices 相關性 |
 | `crossmarket_get_us_indices` | S&P 500 / NASDAQ / Dow Jones / SOX / NVDA / AAPL / MSFT / TSM ADR 即時 snapshot（live-fetched from Yahoo Finance） |
 
-### Narrative（7 個）
+### Narrative（8 個）
 | Tool | 用途 |
 |------|------|
 | `narrative_get_events` | 最新敘事事件 |
 | `narrative_get_chains` | 因果鏈 |
 | `narrative_get_models` | 敘事模型清單 |
+| `narrative_get_model_inventory` | 敘事模型 inventory（detector/model 註冊狀態） |
 | `narrative_get_templates` | 因果模板 |
 | `narrative_get_seasonal` | 季節性敘事 |
 | `narrative_get_bundle` | 編譯好的 briefing bundle |
@@ -71,13 +72,17 @@
 | `risk_get_calibration` | 風險模型校準 |
 | `risk_get_commentary` | 風險敘事 |
 
-### Alert（4 個：1 Phase 1 + 3 Phase 2.2）
+### Alert（8 個：1 Phase 1 + 3 Phase 2.2 + 4 Phase 2.2 lifecycle）
 | Tool | 用途 |
 |------|------|
 | `alert_list_unacknowledged` | 未確認警報（Phase 1）|
 | `alert_list` | 所有警報 |
 | `alert_get_stats` | 警報統計 |
 | `alert_get_rules` | 警報規則配置 |
+| `alert_acknowledge` | 確認警報（side-effect：寫入 acknowledged 狀態）⚠️ |
+| `alert_resolve` | 解決警報（side-effect：寫入 resolved 狀態）⚠️ |
+| `alert_silence` | 靜音警報規則（side-effect）⚠️ |
+| `alert_scan` | 觸發警報掃描（side-effect：觸發 scan）⚠️ |
 
 ### Strategy（7 個：1 Phase 1 + 5 Phase 2.2 + 1 M4）
 | Tool | 用途 |
@@ -166,13 +171,14 @@
 | `data_get_quality` | 資料品質 metrics |
 | `data_get_field_contract` | Field contract schema |
 
-### Stock（4 個）
+### Stock（5 個）
 | Tool | 用途 |
 |------|------|
 | `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
 | `stock_get_fundamentals` | 個股基本面（PE、PB、PS、殖利率、sector 等） |
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
+| `stock_get_monthly_revenue` | 個股月營收（YoY/MoM，可選月份區間） |
 
 > **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract-spec.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
 > **Frontend 狀態**：client_web「個股快查」頁面（Issue #1038）已 ship — 後端 normalize（PR-A #1044）+ 前端 14 檔（PR-B #1045）+ 文件同步（PR-C #1046）+ RSI pre-existing bug fix（PR #1047）+ E2E unskip（PR #1274）。頁面路徑 `/client/quote?symbol=<4-6 digit symbol>`。
@@ -208,10 +214,11 @@
 | `industry_sector_list` | 列出所有 20 個 sector 的 canonical ID、中文標籤、代表股 |
 | `industry_sector_lookup` | 依股號（2330）或 sector 名稱（半導體 / semiconductor）查 sector 資訊 |
 
-### Universe（2 個）
+### Universe（3 個）
 | Tool | 用途 |
 |------|------|
 | `universe_get_sessions` | Simulation session 清單 |
+| `universe_get_session_detail` | 單一 simulation session 詳細資料（需 session id） |
 | `universe_get_universe_overlap` | Universe overlap 分析 |
 
 ### Report（4 個）

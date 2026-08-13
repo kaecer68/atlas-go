@@ -98,10 +98,14 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 
 func boolPtr(b bool) *bool { return &b }
 
+// intPtr returns a pointer to v. Used by input schemas so optional fields with
+// defaults are not marked required in the generated JSON Schema.
+func intPtr(v int) *int { return &v }
+
 // --- Input / Output schemas ---------------------------------------------------
 
 type RegimeGetHistoryInput struct {
-	Days int `json:"days" jsonschema:"how many days back; default 30, max 365"`
+	Days *int `json:"days,omitempty" jsonschema:"how many days back; default 30, max 365"`
 }
 
 // RegimePoint represents one session in regime_get_history output.
@@ -152,13 +156,14 @@ type SystemHealthOutput struct {
 // --- Handlers ----------------------------------------------------------------
 
 func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequest, in RegimeGetHistoryInput) (*mcp.CallToolResult, RegimeGetHistoryOutput, error) {
-	if in.Days <= 0 {
-		in.Days = 30
+	days := 30
+	if in.Days != nil && *in.Days > 0 {
+		days = *in.Days
 	}
-	if in.Days > 365 {
-		in.Days = 365
+	if days > 365 {
+		days = 365
 	}
-	q := map[string]string{"limit": fmt.Sprintf("%d", in.Days)}
+	q := map[string]string{"limit": fmt.Sprintf("%d", days)}
 	var out RegimeGetHistoryOutput
 	if err := s.withAudit(ctx, "regime_get_history", []string{"days"}, func() error {
 		var raw struct {
@@ -199,7 +204,7 @@ func (s *server) handleRegimeGetHistory(ctx context.Context, _ *mcp.CallToolRequ
 			Available:   true,
 			Source:      "regime_get_history",
 			Provenance:  "live",
-			SampleCount: in.Days,
+			SampleCount: days,
 			SampleUnit:  "days",
 		}
 
