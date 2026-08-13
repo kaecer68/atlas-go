@@ -3749,7 +3749,7 @@
       }
     },
     "model_lookback_days": {
-      "value": 10,
+      "value": 90,
       "rationale": "Lookback window in trading days for model evaluation",
       "source": "heuristic",
       "citation": {
