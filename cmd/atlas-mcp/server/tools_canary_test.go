@@ -29,8 +29,9 @@ type canaryTest struct {
 	Keys   []string // top-level JSON keys that must exist
 }
 
-// skipCanary lists tools that are destructive or require special
-// auth state. The canary cannot safely exercise these.
+// skipCanary lists tools that are destructive, require special auth
+// state, or require a parameter/real data that a bare GET canary cannot
+// supply. The canary cannot safely exercise these.
 var skipCanary = map[string]bool{
 	"experiment_judge":               true,
 	"experiment_promote":             true,
@@ -43,6 +44,10 @@ var skipCanary = map[string]bool{
 	"control_approve_recommendation": true,
 	"sample_createMessage":           true,
 	"elicitation_elicit":             true,
+	// Require a parameter (experiment_id) or live session data that a
+	// bare GET cannot provide — not route gaps.
+	"experiment_diff":             true,
+	"universe_get_session_detail": true,
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
@@ -122,7 +127,7 @@ var canaryRoutes = map[string]canaryTest{
 	"mcp_anomaly_get_recent":            {Path: "/api/mcp/anomalies/recent"},
 	"sector_allocation_plan":            {Path: "/api/dashboard/sector-allocation-plan"},
 	"industry_sector_list":              {Path: "/api/industry/sectors"},
-	"industry_sector_lookup":            {Path: "/api/industry/lookup?symbol=2330"},
+	"industry_sector_lookup":            {Path: "/api/industry/sector-lookup?symbol=2330"},
 	"scheduler_get_status":              {Path: "/api/scheduler/status"},
 	"task_list":                         {Path: "/api/tasks"},
 	"trace_get_sim_latest":              {Path: "/api/traces/sim-latest"},
