@@ -849,10 +849,10 @@ func TestCalculateRegimeBreakdown_CostAdjustedThreshold(t *testing.T) {
 		{SessionID: "2026-06-15-tw", Regime: domain.RegimeRiskOn},
 	}
 	outcomes := []domain.RecommendationOutcome{
-		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.005},
-		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.001},
-		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: -0.001},
-		{PassedGuards: true, Window: "2026-06-15-tw", ForwardReturn: 0.02},
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOn), Window: "2026-06-15-tw", ForwardReturn: 0.005},
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOn), Window: "2026-06-15-tw", ForwardReturn: 0.001},
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOn), Window: "2026-06-15-tw", ForwardReturn: -0.001},
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOn), Window: "2026-06-15-tw", ForwardReturn: 0.02},
 	}
 	breakdown := calculateRegimeBreakdown(summaries, outcomes)
 	regime, ok := breakdown.Regimes["RISK_ON"]
@@ -868,6 +868,62 @@ func TestCalculateRegimeBreakdown_CostAdjustedThreshold(t *testing.T) {
 	expected := 0.005 + 0.001 - 0.001 + 0.02
 	if math.Abs(regime.AggregateForwardReturn-expected) > 0.001 {
 		t.Errorf("expected aggregate %.3f, got %.3f", expected, regime.AggregateForwardReturn)
+	}
+}
+
+// TestCalculateTopAgents_ExcludesAllZeroForward verifies that an agent whose
+// real outcomes all carry a zero forward return (SQLite fallback signature)
+// is excluded from the contribution table — showing it as 0.00% would mislead.
+func TestCalculateTopAgents_ExcludesAllZeroForward(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		// agent-a: genuine nonzero forward returns → kept
+		{PassedGuards: true, AgentID: "agent-a", Skill: "tech", ForwardReturn: 0.01},
+		{PassedGuards: true, AgentID: "agent-a", Skill: "tech", ForwardReturn: 0.02},
+		// agent-b: all-zero forward returns (SQLite fallback signature) → dropped
+		{PassedGuards: true, AgentID: "agent-b", Skill: "sector", ForwardReturn: 0},
+		{PassedGuards: true, AgentID: "agent-b", Skill: "sector", ForwardReturn: 0},
+		{PassedGuards: true, AgentID: "agent-b", Skill: "sector", ForwardReturn: 0},
+	}
+	agents := calculateTopAgents(outcomes, nil)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent (all-zero excluded), got %d: %+v", len(agents), agents)
+	}
+	if agents[0].AgentID != "agent-a" {
+		t.Errorf("expected agent-a to be kept, got %s", agents[0].AgentID)
+	}
+}
+
+// TestCalculateRegimeBreakdown_UsesOutcomeRegime verifies that the regime
+// breakdown attributes each outcome to the regime recorded on the outcome
+// itself (oc.Regime) rather than reverse-looking-up by oc.Window. This is the
+// fix for the "market regime performance" gap: outcome.Window is the
+// evaluation window (e.g. 2026-07-14), not the session date, so the old
+// findRegimeForWindow lookup mis-attributed RISK_OFF sessions to "unknown".
+func TestCalculateRegimeBreakdown_UsesOutcomeRegime(t *testing.T) {
+	summaries := []domain.SessionSummary{
+		{SessionID: "session-20260718-daily", Regime: domain.RegimeRiskOff},
+	}
+	// Outcome carries its own regime; Window is an unrelated evaluation date
+	// (no matching session). The old code would fall to "unknown".
+	outcomes := []domain.RecommendationOutcome{
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOff), Window: "2026-07-14", ForwardReturn: 0.01497555},
+		{PassedGuards: true, Regime: string(domain.RegimeRiskOff), Window: "2026-07-14", ForwardReturn: 0.00263158},
+	}
+	breakdown := calculateRegimeBreakdown(summaries, outcomes)
+
+	if _, ok := breakdown.Regimes["unknown"]; ok {
+		t.Errorf("expected no 'unknown' regime bucket, got %v", breakdown.Regimes)
+	}
+	regime, ok := breakdown.Regimes["RISK_OFF"]
+	if !ok {
+		t.Fatalf("expected RISK_OFF regime, got %v", breakdown.Regimes)
+	}
+	expected := 0.01497555 + 0.00263158
+	if math.Abs(regime.AggregateForwardReturn-expected) > 0.0001 {
+		t.Errorf("expected aggregate %.5f, got %.5f", expected, regime.AggregateForwardReturn)
+	}
+	if regime.SessionCount != 1 {
+		t.Errorf("expected 1 session for RISK_OFF, got %d", regime.SessionCount)
 	}
 }
 
