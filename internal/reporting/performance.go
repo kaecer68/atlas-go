@@ -506,6 +506,15 @@ func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[
 			continue
 		}
 		realTrades := a.trades - a.syntheticCount
+		// Skip agents whose real outcomes all carry a zero forward return.
+		// This is the signature of a SQLite fallback read (the SQLite outcomes
+		// table drops evaluation fields), not a genuine flat return — showing
+		// such an agent as 0.00% misleads. Genuine forward returns are nonzero
+		// in practice (they track price moves), so all-zero here reliably means
+		// missing data rather than a real flat performance.
+		if realTrades > 0 && len(a.returns) == realTrades && allZero(a.returns) {
+			continue
+		}
 		var aggregateForwardReturn float64
 		for _, r := range a.returns {
 			aggregateForwardReturn += r
@@ -638,7 +647,13 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 		if oc.IsSynthetic {
 			continue
 		}
-		regime := findRegimeForWindow(summaries, oc.Window)
+		// Prefer the regime recorded on the outcome itself (rich JSONL source
+		// carries it). Fall back to the summary lookup only when the outcome
+		// has no regime field, then to "unknown" when neither resolves.
+		regime := oc.Regime
+		if regime == "" {
+			regime = findRegimeForWindow(summaries, oc.Window)
+		}
 		if regime == "" {
 			regime = "unknown"
 		}
@@ -753,6 +768,18 @@ func calculateMonthlyReturns(summaries []domain.SessionSummary, portfolioValues 
 	}
 
 	return monthlyReturns
+}
+
+// allZero reports whether every value in the slice is exactly zero.
+// Used to detect agents whose outcomes were read from a SQLite fallback
+// (which drops ForwardReturn), rather than a genuine flat performance.
+func allZero(values []float64) bool {
+	for _, v := range values {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // mean computes the arithmetic mean of a slice.
