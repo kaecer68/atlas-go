@@ -428,30 +428,32 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 	cal := industry.NewCycleCalibration(calCfg)
 	svc.SetCycleCalibration(cal)
 
-	narrativeThemeMap := map[string]map[string]float64{
-		"AI_capex_surge":          {"semiconductor": 0.08, "ai_supply_chain": 0.08, "electronics": 0.05},
-		"US_rates_up":             {"financials": -0.04},
-		"JPY_carry_unwind":        {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
-		"geopolitical_risk_spike": {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
-		"oil_price_shock":         {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
-		"semiconductor_downturn":  {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
-	}
-	narrativeFn := func(_ context.Context, industryID string) (float64, float64, string, error) {
-		events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
-		totalBias := 0.0
+	narrativeFn := func(ctx context.Context, industryID string) (float64, float64, string, error) {
+		// Use the real macro snapshot when available (single source of
+		// truth for sector bias = models' FavoredSectors/AvoidedSectors).
+		data := narrative.MarketNarrativeData{}
+		if macroProvider != nil {
+			if snap, err := macroProvider.FetchSnapshot(ctx); err == nil {
+				data = narrative.MarketNarrativeDataFromSnapshot(snap)
+			}
+		}
+		events := narrativeEngine.DetectEvents(data)
+		// Engine consumes narrative as a multiplicative factor (1.0 =
+		// neutral; safeGetNarrative clamps ≤0 to 1.0), so shift the
+		// signed bias into a multiplier ≥ 1.
+		multiplier := 1.0 + narrativeEngine.SectorBias(industryID, events)
+		if multiplier <= 0 {
+			multiplier = 1.0
+		}
 		maxConf := 0.0
 		activeTheme := ""
 		for _, e := range events {
-			if bias, ok := narrativeThemeMap[e.Theme][industryID]; ok {
-				weighted := bias * e.Confidence * e.HitRate
-				totalBias += weighted
-				if e.Confidence*e.HitRate > maxConf {
-					maxConf = e.Confidence * e.HitRate
-					activeTheme = e.Theme
-				}
+			if e.Confidence*e.HitRate > maxConf {
+				maxConf = e.Confidence * e.HitRate
+				activeTheme = e.Theme
 			}
 		}
-		return totalBias, maxConf, activeTheme, nil
+		return multiplier, maxConf, activeTheme, nil
 	}
 	macroFn := func(_ context.Context, industryID, _, _ string) (float64, error) {
 		return modulator.SeasonalModulation(industryID) - 1.0, nil

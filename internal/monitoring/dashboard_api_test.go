@@ -97,7 +97,7 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 	}
 	w := csv.NewWriter(f)
 	w.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		date := fmt.Sprintf("2026-01-%02d", 1+i)
 		w.Write([]string{date, "2330", "TSMC", "10000", "100", "105", "99", "104"})
 		w.Write([]string{date, "2303", "UMC", "5000", "50", "52", "49", "51"})
@@ -111,6 +111,77 @@ func TestNewWiredIndustryServiceWithReplay(t *testing.T) {
 	svc := newWiredIndustryService(eng, nil, os.TempDir())
 	if svc == nil {
 		t.Fatal("expected non-nil industry service")
+	}
+}
+
+// stubMacroProvider returns a fixed snapshot. Used to feed the narrative
+// adapter's real-data path in newWiredIndustryService.
+type stubMacroProvider struct {
+	snap marketdata.MacroDataSnapshot
+}
+
+func (s *stubMacroProvider) Name() string { return "stub" }
+
+func (s *stubMacroProvider) FetchSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
+	return s.snap, nil
+}
+
+// findLogEntry extracts a "name=value" entry from an adjustment log.
+func findLogEntry(log []string, name string) (float64, bool) {
+	for _, l := range log {
+		if strings.HasPrefix(l, name+"=") {
+			var v float64
+			if _, err := fmt.Sscanf(strings.TrimPrefix(l, name+"="), "%f", &v); err == nil {
+				return v, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// TestNewWiredIndustryService_NarrativeFnSectorBias verifies the dashboard
+// narrative adapter is driven by SectorBias over real macro data: with a
+// TSMC revenue surge snapshot, semiconductor gets a multiplier > 1 and an
+// uncovered sector stays neutral.
+func TestNewWiredIndustryService_NarrativeFnSectorBias(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	provider := &stubMacroProvider{
+		snap: marketdata.MacroDataSnapshot{
+			TSMCRevenue: marketdata.MacroDataPoint{
+				Symbol:    "2330",
+				Value:     100,
+				ChangePct: 50, // above TSMCRevenueYoYThreshold → AI_capex_surge
+			},
+		},
+	}
+	svc := newWiredIndustryService(eng, provider, os.TempDir())
+	if svc == nil || svc.WeightEngine == nil {
+		t.Fatal("expected non-nil industry service with weight engine")
+	}
+
+	sw, err := svc.WeightEngine.ComputeWeight(context.Background(), "semiconductor", time.Now())
+	if err != nil {
+		t.Fatalf("ComputeWeight: %v", err)
+	}
+	narrativeLog, ok := findLogEntry(sw.AdjustmentLog, "narrative")
+	if !ok {
+		t.Fatalf("expected narrative entry in adjustment log, got %v", sw.AdjustmentLog)
+	}
+	if narrativeLog <= 1.0 {
+		t.Fatalf("expected narrative multiplier > 1 for favored semiconductor, got %f", narrativeLog)
+	}
+
+	// Uncovered canonical sector stays neutral (safe no-op).
+	zero, err := svc.WeightEngine.ComputeWeight(context.Background(), "energy", time.Now())
+	if err != nil {
+		t.Fatalf("ComputeWeight(energy): %v", err)
+	}
+	tourismNarrative, ok := findLogEntry(zero.AdjustmentLog, "narrative")
+	if !ok {
+		t.Fatalf("expected narrative entry for energy, got %v", zero.AdjustmentLog)
+	}
+	if tourismNarrative != 1.0 {
+		t.Fatalf("expected neutral narrative multiplier for uncovered sector energy, got %f", tourismNarrative)
 	}
 }
 

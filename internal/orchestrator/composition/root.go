@@ -57,6 +57,15 @@ type Root struct {
 	// Nil until wired.
 	weightEngine sectorallocation.WeightEngine
 
+	// Narrative single source of truth for sector allocation. When set
+	// (production wiring), buildWeightEngine derives sector bias from
+	// active investment models via SectorBias; when nil (tests), it falls
+	// back to a fresh uncalibrated engine.
+	narrativeEngine *narrative.NarrativeEngine
+	// narrativeDataFn supplies the real macro snapshot used to detect
+	// narrative events. Nil → zero-value MarketNarrativeData (test-safe).
+	narrativeDataFn func() narrative.MarketNarrativeData
+
 	// SA08: closure store and session resolver for StrategyEvolver.
 	// Set via WithClosureStore / WithSessionResolver before BuildSystem.
 	closureStore    sectorallocation.ClosureStore
@@ -88,6 +97,23 @@ func NewRoot(cfg config.Config) (*Root, error) {
 // for wiring the appropriate providers before setting the engine.
 func (r *Root) WithWeightEngine(eng sectorallocation.WeightEngine) *Root {
 	r.weightEngine = eng
+	return r
+}
+
+// WithNarrativeEngine sets the production-calibrated narrative engine used
+// by buildWeightEngine's narrative adapter (single source of truth for
+// sector bias, replacing the hardcoded theme→bias maps). Nil in tests →
+// buildWeightEngine falls back to a fresh engine.
+func (r *Root) WithNarrativeEngine(eng *narrative.NarrativeEngine) *Root {
+	r.narrativeEngine = eng
+	return r
+}
+
+// WithNarrativeDataFn sets the supplier of the real macro snapshot used to
+// detect narrative events inside buildWeightEngine's narrative adapter.
+// Nil → zero-value MarketNarrativeData (test-safe no-op).
+func (r *Root) WithNarrativeDataFn(fn func() narrative.MarketNarrativeData) *Root {
+	r.narrativeDataFn = fn
 	return r
 }
 
@@ -155,39 +181,37 @@ func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 	weightMin := params.Darwinian.WeightMin.Value
 	weightMax := params.Darwinian.WeightMax.Value
 
-	// narrative adapter — NarrativeEngine is a stateless factory, construct directly.
-	// Uses the same hardcoded theme→bias map as dashboard_api.go:416-440.
-	narrativeEngine := narrative.NewNarrativeEngine()
-	narrativeThemeMap := map[string]map[string]float64{
-		"US_rates_up":             {"financials": 0.05, "semiconductor": -0.04, "electronics": -0.03},
-		"US_rates_down":           {"financials": -0.05, "semiconductor": 0.04, "electronics": 0.03},
-		"USD_strengther":          {"semiconductor": -0.04, "electronics": -0.03, "tourism": -0.03},
-		"USD_weaker":              {"semiconductor": 0.03, "electronics": 0.03, "tourism": 0.03},
-		"risk_on":                 {"semiconductor": 0.05, "electronics": 0.04, "financials": 0.03},
-		"risk_off":                {"semiconductor": -0.05, "electronics": -0.04, "financials": -0.03},
-		"JPY_carry_unwind":        {"financials": -0.03, "semiconductor": -0.05, "electronics": -0.03},
-		"geopolitical_risk_spike": {"shipping": -0.05, "energy": -0.05, "industrial": -0.03},
-		"oil_price_shock":         {"shipping": -0.04, "energy": -0.04, "industrial": -0.03},
-		"semiconductor_downturn":  {"semiconductor": -0.08, "ai_supply_chain": -0.06, "electronics": -0.06},
+	// narrative adapter — uses the production-calibrated engine injected via
+	// WithNarrativeEngine (single source of truth: models' FavoredSectors /
+	// AvoidedSectors × Darwinian Weight × event confidence×hit-rate). Tests
+	// that never wire an engine fall back to a fresh uncalibrated one.
+	ne := r.narrativeEngine
+	if ne == nil {
+		ne = narrative.NewNarrativeEngine()
 	}
 	narrativeAdapter := sectorallocation.NewNarrativeAdapter(
 		func(_ context.Context, industryID string) (float64, float64, string, error) {
-			events := narrativeEngine.DetectEvents(narrative.MarketNarrativeData{})
-			var totalBias float64
+			data := narrative.MarketNarrativeData{}
+			if r.narrativeDataFn != nil {
+				data = r.narrativeDataFn()
+			}
+			events := ne.DetectEvents(data)
+			// The engine consumes narrative as a multiplicative factor
+			// (1.0 = neutral; safeGetNarrative clamps ≤0 to 1.0), so the
+			// signed bias must be shifted to a multiplier ≥ 1.
+			multiplier := 1.0 + ne.SectorBias(industryID, events)
+			if multiplier <= 0 {
+				multiplier = 1.0
+			}
 			var maxConf float64
 			activeTheme := ""
 			for _, e := range events {
-				if industryBiases, ok := narrativeThemeMap[e.Theme]; ok {
-					if bias, ok := industryBiases[industryID]; ok {
-						totalBias += bias * e.Confidence * e.HitRate
-						if e.Confidence*e.HitRate > maxConf {
-							maxConf = e.Confidence * e.HitRate
-							activeTheme = e.Theme
-						}
-					}
+				if c := e.Confidence * e.HitRate; c > maxConf {
+					maxConf = c
+					activeTheme = e.Theme
 				}
 			}
-			return totalBias, maxConf, activeTheme, nil
+			return multiplier, maxConf, activeTheme, nil
 		},
 	)
 	// macro adapter — no-op until macro pipeline provides MacroDataSnapshot (future).

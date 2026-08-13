@@ -271,6 +271,48 @@ func (ne *NarrativeEngine) ActiveModels(eventThemes []string) []InvestmentModel 
 	return active
 }
 
+// SectorBias derives a sector-level narrative multiplier for industryID from
+// currently-active investment models. FavoredSectors contribute positive bias,
+// AvoidedSectors negative, each weighted by Darwinian Weight and the best
+// matching detected event's confidence×hit-rate. Returns 0 when no model
+// covers industryID (safe no-op). industryID must be a canonical sector id
+// (configs/sector_symbols.json key).
+func (ne *NarrativeEngine) SectorBias(industryID string, events []NarrativeEvent) float64 {
+	if len(events) == 0 {
+		return 0
+	}
+	bestConf := make(map[string]float64) // theme → max(confidence*hitRate)
+	for _, e := range events {
+		t := strings.ToLower(e.Theme)
+		if c := e.Confidence * e.HitRate; c > bestConf[t] {
+			bestConf[t] = c
+		}
+	}
+	var bias float64
+	for _, m := range ne.models {
+		var matchStrength float64
+		for _, t := range m.ActiveThemes {
+			if c, ok := bestConf[strings.ToLower(t)]; ok && c > matchStrength {
+				matchStrength = c
+			}
+		}
+		if matchStrength == 0 {
+			continue
+		}
+		for _, s := range m.FavoredSectors {
+			if s == industryID {
+				bias += m.Weight * matchStrength
+			}
+		}
+		for _, s := range m.AvoidedSectors {
+			if s == industryID {
+				bias -= m.Weight * matchStrength
+			}
+		}
+	}
+	return bias
+}
+
 // UpdateModelWeights adjusts model weights based on recent prediction errors.
 // Uses inverse-error weighting with a 40% single-model cap to prevent one
 // lucky model from dominating the ensemble.
