@@ -558,6 +558,14 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 
 	startIdx := max(len(ds.Dates)-lookback-holdWindow, 0)
 
+	// Regime-aware backfill (phase B): classify each replay date by 20-day
+	// momentum of the TAIEX proxy. When available, only count samples whose
+	// date regime matches the current regime, so hit-rate reflects the
+	// current market structure instead of mixing regimes. Falls back to the
+	// full window when momentum can't be computed (backward-compatible).
+	perDayRegime, currentRiskOn := momentumRegimes(ds)
+	regimeFiltered := perDayRegime != nil
+
 	for i := range ne.models {
 		m := &ne.models[i]
 		correct := 0
@@ -567,6 +575,14 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 
 		for d := startIdx; d < startIdx+lookback && d < len(ds.Dates)-holdWindow; d++ {
 			date := ds.Dates[d]
+			// Skip dates whose regime differs from the current one when
+			// regime classification is available.
+			if regimeFiltered && d >= len(perDayRegime) {
+				continue
+			}
+			if regimeFiltered && perDayRegime[d] != currentRiskOn {
+				continue
+			}
 			favored := ne.avgSectorReturn(ds, date, holdWindow, m.FavoredSectors)
 			avoided := ne.avgSectorReturn(ds, date, holdWindow, m.AvoidedSectors)
 
@@ -687,6 +703,34 @@ func (ne *NarrativeEngine) RecalculateAllTemplateHitRates(globalHitRate float64)
 		updated++
 	}
 	return updated
+}
+
+// momentumRegimes classifies each replay date by 20-day momentum of the
+// TAIEX proxy (0050.TW): momentum > 0 = risk_on, < 0 = risk_off. Returns
+// perDay[i] (valid for i >= momentumWindow) and the current regime (sign of
+// the most recent window). Returns (nil, false) when 0050 is missing or
+// momentum can't be computed, so callers fall back to the unfiltered window
+// (backward-compatible no-op).
+func momentumRegimes(ds *replay.Dataset) (perDay []bool, currentRiskOn bool) {
+	const momentumWindow = 20
+	const benchmark = "0050.TW"
+	n := len(ds.Dates)
+	if n < momentumWindow+1 {
+		return nil, false
+	}
+	closes := make([]float64, n)
+	for i, d := range ds.Dates {
+		bar, ok := ds.ByDate[d.Format("2006-01-02")][benchmark]
+		if !ok || bar.Close == 0 {
+			return nil, false
+		}
+		closes[i] = bar.Close
+	}
+	perDay = make([]bool, n)
+	for i := momentumWindow; i < n; i++ {
+		perDay[i] = closes[i] > closes[i-momentumWindow]
+	}
+	return perDay, perDay[n-1]
 }
 
 func (ne *NarrativeEngine) avgSectorReturn(ds *replay.Dataset, date time.Time, window int, sectors []string) float64 {

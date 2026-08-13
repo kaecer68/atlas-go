@@ -637,3 +637,121 @@ func TestRecalculateAllTemplateHitRates_PreservesExistingRecalc(t *testing.T) {
 		t.Errorf("US_rates_up after chained recalc: got %.6f, want %.6f", got.HistoricalHitRate, want)
 	}
 }
+
+// writeRegimeCSV writes a replay CSV where 0050 (TAIEX proxy) falls for the
+// first half of dates and rises for the second half. Other symbols use a
+// fixed multiplier so only 0050's regime structure drives classification.
+// Returns the path and the count of dates in the risk_on (second) half.
+func writeRegimeCSV(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "regime.csv")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer f.Close()
+
+	fmt.Fprintln(f, "Date,Code,Name,TradeVolume,Open,High,Low,Close")
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	const days = 60
+	// 0050: falls in first 30 days (risk_off), rises in last 30 (risk_on).
+	// Current regime = last 20-day momentum window = rising → risk_on.
+	for day := 0; day < days; day++ {
+		date := start.Add(time.Duration(day) * 24 * time.Hour).Format("2006-01-02")
+		var p0050 float64
+		if day < 30 {
+			p0050 = 140.0 - float64(day) // descending
+		} else {
+			p0050 = 110.0 + float64(day-30) // ascending
+		}
+		// All sector symbols: flat price so they never go stale (constant OHLCV
+		// would be rejected as stale by ForwardReturn, so vary slightly).
+		for _, code := range []string{"2330", "2881", "2603", "3008"} {
+			base := map[string]float64{"2330": 500, "2881": 25, "2603": 60, "3008": 250}[code]
+			px := base + float64(day)*0.1
+			fmt.Fprintf(f, "%s,%s,%s,1000,%.2f,%.2f,%.2f,%.2f\n", date, code, code, px*0.995, px*1.01, px*0.99, px)
+		}
+		px := p0050
+		fmt.Fprintf(f, "%s,%s,%s,1000,%.2f,%.2f,%.2f,%.2f\n", date, "0050", "0050", px*0.995, px*1.01, px*0.99, px)
+	}
+	return path
+}
+
+// TestEvaluateModels_RegimeFiltered verifies the phase-B regime-aware
+// backfill: when momentum classification is available, only samples whose
+// date regime matches the current regime are counted, shrinking sample_count
+// relative to the full window.
+func TestEvaluateModels_RegimeFiltered(t *testing.T) {
+	config.ResetParametersConfig()
+	csvPath := writeRegimeCSV(t)
+
+	ne := NewNarrativeEngine()
+	if err := ne.EvaluateModels(csvPath); err != nil {
+		t.Fatalf("EvaluateModels: %v", err)
+	}
+
+	// 0050 present + 60 days (>= momentumWindow+1) → regime filter active.
+	// The current regime is risk_on (last 20-day window rises), so only
+	// risk_on dates contribute. model hawkish_fed favors financials/avoids
+	// ai_supply_chain; with flat-ish sector prices its sample is the
+	// risk_on half (≈ 30 - 5 forward = 25) rather than the full window.
+	hawkish := findModel(ne.models, "hawkish_fed_model")
+	if hawkish == nil {
+		t.Fatal("hawkish_fed_model missing")
+	}
+	t.Logf("regime-filtered sample_count=%d", hawkish.SampleCount)
+	if hawkish.SampleCount >= 30 {
+		t.Fatalf("expected regime-filtered sample_count < full window (30), got %d", hawkish.SampleCount)
+	}
+	if hawkish.SampleCount <= 0 {
+		t.Fatalf("expected positive sample_count under regime filter, got %d", hawkish.SampleCount)
+	}
+}
+
+// TestEvaluateModels_RegimeFallbackNo0050 verifies backward compatibility:
+// when 0050 is absent from the replay, momentumRegimes returns nil and
+// EvaluateModels falls back to the full window (no regime filtering).
+func TestEvaluateModels_RegimeFallbackNo0050(t *testing.T) {
+	config.ResetParametersConfig()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "no0050.csv")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer f.Close()
+
+	fmt.Fprintln(f, "Date,Code,Name,TradeVolume,Open,High,Low,Close")
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for day := 0; day < 40; day++ {
+		date := start.Add(time.Duration(day) * 24 * time.Hour).Format("2006-01-02")
+		for _, code := range []string{"2330", "2881"} {
+			px := float64(100 + day)
+			fmt.Fprintf(f, "%s,%s,%s,1000,%.2f,%.2f,%.2f,%.2f\n", date, code, code, px*0.995, px*1.01, px*0.99, px)
+		}
+	}
+	ne := NewNarrativeEngine()
+	if err := ne.EvaluateModels(path); err != nil {
+		t.Fatalf("EvaluateModels: %v", err)
+	}
+	// Without 0050, momentumRegimes → nil → no filter; all valid days count.
+	hawkish := findModel(ne.models, "hawkish_fed_model")
+	if hawkish == nil {
+		t.Fatal("hawkish_fed_model missing")
+	}
+	t.Logf("fallback sample_count=%d", hawkish.SampleCount)
+	if hawkish.SampleCount == 0 {
+		t.Fatalf("expected non-zero sample_count in fallback, got 0")
+	}
+}
+
+// findModel returns a model by ID or nil.
+func findModel(models []InvestmentModel, id string) *InvestmentModel {
+	for i := range models {
+		if models[i].ID == id {
+			return &models[i]
+		}
+	}
+	return nil
+}
