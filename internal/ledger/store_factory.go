@@ -277,11 +277,12 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 	}
 }
 
-// NewDetectorScanStore returns the SQLite-backed Stage 5 PR#4
-// detector_scan_log store. Unlike other stores, DetectorScanStore has NO
-// JSONL fallback — the plan contract (../../docs/archive/2026-07-14-atlas-stage5-detector-plan.md §PR#4)
-// explicitly mandates SQLite so the MCP `template_detector_status` tool
-// can query scan history with efficient LIMIT + ORDER BY.
+// NewDetectorScanStore returns the detector_scan_log store backed by
+// SQLite or PostgreSQL. Unlike other stores, DetectorScanStore has NO
+// JSONL fallback — the contract mandates an indexed relational table so
+// the MCP `template_detector_status` tool can query scan history with
+// efficient LIMIT + ORDER BY. PostgreSQL (000013 migration) provides the
+// same indexed relational table in the multi-process-friendly database.
 func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":
@@ -290,8 +291,13 @@ func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
 			return nil, fmt.Errorf("detector_scan: shared sqlite: %w", err)
 		}
 		return NewSQLiteDetectorScanStore(db), nil
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("detector_scan: postgres backend requires SetPostgresPool before NewDetectorScanStore")
+		}
+		return NewPostgresDetectorScanStore(postgresPool), nil
 	default:
-		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite-only per Stage 5 PR#4 contract)", cfg.StoreBackend)
+		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite or postgres)", cfg.StoreBackend)
 	}
 }
 

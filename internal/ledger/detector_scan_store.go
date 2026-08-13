@@ -1,18 +1,20 @@
-// Package ledger — Stage 5 PR#4 detector_scan_log SQLite store
+// Package ledger — Stage 5 PR#4 detector_scan_log store
 //
 // Persists narrative.DetectionResult rows produced by the
 // template_detector_scan BackgroundTask (see internal/scheduler/
-// template_detector_scan.go) into the shared atlas.db SQLite database.
+// template_detector_scan.go) into the shared atlas.db SQLite database
+// (or PostgreSQL when StoreBackend=postgres).
 //
-// Contract (pre-committed in ../../docs/archive/2026-07-14-atlas-stage5-detector-plan.md §PR#4):
-//   - File:    internal/ledger/detector_scan_store.go
+// Contract:
 //   - Type:    DetectorScanStore (interface)
-//   - Table:   detector_scan_log (schema in internal/ledger/sqlite_core.go)
+//   - Table:   detector_scan_log (schema in internal/ledger/sqlite_core.go
+//     for SQLite; sql/migrations/000013_detector_scan_log.up.sql for PostgreSQL)
 //   - Columns: scan_id, scan_batch_id, theme, severity, confidence,
 //     detected_at, source, metadata_json
 //   - Method:  AppendScan(ctx, results []narrative.DetectionResult) (string, error)
 //   - Method:  LoadRecentScans(ctx, limit int) ([]ScanResultRow, error)
-//   - SQLite-only (no JSONL fallback; matches "每 1h 寫到 SQLite" requirement)
+//   - No JSONL fallback; requires an indexed relational table so the MCP
+//     `template_detector_status` tool can LIMIT + ORDER BY scan history.
 //
 // scan_batch_id groups all rows from one RunAll() invocation (UUID), letting
 // MCP / HTTP clients reconstruct a single scan's results and correlate with
