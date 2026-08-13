@@ -172,7 +172,7 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			CapitalFlow:           capitalFlowFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
 			CapitalFlowDetail:     capitalFlowDetailFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
 			EventsToday:           eventsFromPredictor(h.eventPredictor, &warnings),
-			ActiveNarrativeThemes: narrativeThemesFromProvider(h.narrative, &warnings),
+			ActiveNarrativeThemes: narrativeThemesFromProvider(h.narrative),
 		},
 	}
 	if assessmentCalibrating {
@@ -352,7 +352,7 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 // narrativeThemesFromProvider reads the detected narrative trigger themes
 // from the NarrativeProvider for MarketLight.ActiveNarrativeThemes. Nil
 // provider or detection failure → empty slice (no narrative attribution).
-func narrativeThemesFromProvider(p NarrativeProvider, w *[]string) []string {
+func narrativeThemesFromProvider(p NarrativeProvider) []string {
 	if p == nil {
 		return nil
 	}
