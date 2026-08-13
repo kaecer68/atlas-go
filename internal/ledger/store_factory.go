@@ -267,6 +267,11 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 			return nil, fmt.Errorf("shared sqlite: %w", err)
 		}
 		return NewSQLiteQuoteStore(db), nil
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("quotes: postgres backend requires SetPostgresPool before NewQuoteStore")
+		}
+		return NewPostgresQuoteStore(postgresPool), nil
 	default:
 		return NewJSONLQuoteStore(cfg.LedgerDir), nil
 	}

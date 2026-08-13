@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,3 +306,37 @@ func TestFactoryUnknownBackendFallsBackToJSONL(t *testing.T) {
 		t.Fatalf("expected 1 outcome, got %d", len(outcomes))
 	}
 }
+
+func TestFactoryQuoteStorePostgresNoPoolError(t *testing.T) {
+	// postgresPool is a package-global; save/restore so the nil-pool error
+	// case is deterministic and does not depend on other tests.
+	prev := postgresPool
+	t.Cleanup(func() { postgresPool = prev })
+	postgresPool = nil
+
+	cfg := config.Config{StoreBackend: "postgres"}
+	_, err := NewQuoteStore(cfg)
+	if err == nil {
+		t.Fatalf("expected nil-pool error for postgres backend, got nil")
+	}
+	if !strings.Contains(err.Error(), "SetPostgresPool") {
+		t.Fatalf("error should mention SetPostgresPool, got: %v", err)
+	}
+}
+
+func TestFactoryQuoteStorePostgresWithPool(t *testing.T) {
+	pool := connectTestPG(t)
+	prev := postgresPool
+	t.Cleanup(func() { postgresPool = prev })
+	postgresPool = pool
+
+	cfg := config.Config{StoreBackend: "postgres"}
+	store, err := NewQuoteStore(cfg)
+	if err != nil {
+		t.Fatalf("NewQuoteStore(postgres, pool) failed: %v", err)
+	}
+	if _, ok := store.(*PostgresQuoteStore); !ok {
+		t.Fatalf("expected *PostgresQuoteStore, got %T", store)
+	}
+}
+

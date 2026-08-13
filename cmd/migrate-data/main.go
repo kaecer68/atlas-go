@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -39,6 +40,7 @@ func run() error {
 		migrateCapitalFlow   = flag.Bool("capitalflow", false, "Migrate capital flow data")
 		migrateExportStats   = flag.Bool("exportstats", false, "Migrate export statistics")
 		migrateHistorical    = flag.Bool("historical", false, "Migrate historical tables (regime/stress/geo/period) from SQLite atlas.db")
+		migrateQuotes        = flag.Bool("quotes", false, "Migrate quotes from SQLite atlas.db")
 		sqlitePath           = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
 		migrateAll           = flag.Bool("all", false, "Migrate all data")
 	)
@@ -112,6 +114,12 @@ func run() error {
 	if *migrateAll || *migrateHistorical {
 		if err := migrateHistoricalData(ctx, pool, *sqlitePath); err != nil {
 			return fmt.Errorf("migrate historical: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateQuotes {
+		if err := migrateQuotesData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate quotes: %w", err)
 		}
 	}
 
@@ -655,5 +663,87 @@ func migrateHistoricalData(ctx context.Context, pool *pgxpool.Pool, sqlitePath s
 	}
 	log.Printf("Migrated %d period_history rows", len(periods))
 
+	return nil
+}
+
+// migrateQuotesData copies the quotes table (symbol/name/date/open/high/low/
+// close/volume/source) from the source SQLite atlas.db into PostgreSQL.
+// SQLite is the only complete quotes source (66,959 rows vs ~6.5k in the
+// JSONL backfill — M4). Rows are upserted on (symbol, date) so re-running
+// is idempotent. Batched per 1000 rows.
+func migrateQuotesData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	rows, err := sqliteDB.Query(`
+		SELECT symbol, name, date, open, high, low, close, volume, source
+		FROM quotes ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("query sqlite quotes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type quoteRow struct {
+		symbol, name, date, source string
+		open, high, low, close     float64
+		volume                     int64
+	}
+
+	var (
+		batch []quoteRow
+		count int
+	)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		for _, q := range batch {
+			_, err := pool.Exec(ctx, `
+				INSERT INTO quotes (symbol, name, date, open, high, low, close, volume, source)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				ON CONFLICT (symbol, date) DO UPDATE SET
+					name = excluded.name,
+					open = excluded.open,
+					high = excluded.high,
+					low = excluded.low,
+					close = excluded.close,
+					volume = excluded.volume,
+					source = excluded.source
+			`, q.symbol, q.name, q.date, q.open, q.high, q.low, q.close, q.volume, q.source)
+			if err != nil {
+				return fmt.Errorf("insert quote %s/%s: %w", q.symbol, q.date, err)
+			}
+		}
+		count += len(batch)
+		batch = batch[:0]
+		return nil
+	}
+
+	for rows.Next() {
+		var q quoteRow
+		var name, source sql.NullString
+		if err := rows.Scan(&q.symbol, &name, &q.date, &q.open, &q.high, &q.low, &q.close, &q.volume, &source); err != nil {
+			return fmt.Errorf("scan quote row: %w", err)
+		}
+		q.name = name.String
+		q.source = source.String
+		batch = append(batch, q)
+		if len(batch) >= 1000 {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite quotes iteration: %w", err)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+
+	log.Printf("Migrated %d quotes rows", count)
 	return nil
 }

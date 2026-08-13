@@ -165,6 +165,16 @@ func InitRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	rt.Pool = pool
 
+	// Inject the shared pool into the ledger BEFORE InitStores so the
+	// postgres branches of the store factories (OutcomeStore, QuoteStore,
+	// DetectorScanStore, FullStore) see a non-nil pool. InitStores itself
+	// reads ATLAS_STORE_BACKEND from env (config.GetSecret), so gate on the
+	// same value here to stay consistent. Without this, NewOutcomeStore's
+	// postgres branch would hit a nil-pool error at startup (M10).
+	if pool != nil && config.GetSecret("ATLAS_STORE_BACKEND") == "postgres" {
+		ledger.SetPostgresPool(pool)
+	}
+
 	stores, err := InitStores(cfg)
 	if err != nil {
 		return nil, err
