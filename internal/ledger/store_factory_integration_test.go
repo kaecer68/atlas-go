@@ -339,3 +339,34 @@ func TestFactoryQuoteStorePostgresWithPool(t *testing.T) {
 		t.Fatalf("expected *PostgresQuoteStore, got %T", store)
 	}
 }
+
+func TestFactoryDetectorScanStorePostgresNoPoolError(t *testing.T) {
+	prev := postgresPool
+	t.Cleanup(func() { postgresPool = prev })
+	postgresPool = nil
+
+	cfg := config.Config{StoreBackend: "postgres"}
+	_, err := NewDetectorScanStore(cfg)
+	if err == nil {
+		t.Fatalf("expected nil-pool error for postgres backend, got nil")
+	}
+	if !strings.Contains(err.Error(), "SetPostgresPool") {
+		t.Fatalf("error should mention SetPostgresPool, got: %v", err)
+	}
+}
+
+func TestFactoryDetectorScanStorePostgresWithPool(t *testing.T) {
+	pool := connectTestPG(t)
+	prev := postgresPool
+	t.Cleanup(func() { postgresPool = prev })
+	postgresPool = pool
+
+	cfg := config.Config{StoreBackend: "postgres"}
+	store, err := NewDetectorScanStore(cfg)
+	if err != nil {
+		t.Fatalf("NewDetectorScanStore(postgres, pool) failed: %v", err)
+	}
+	if _, ok := store.(*PostgresDetectorScanStore); !ok {
+		t.Fatalf("expected *PostgresDetectorScanStore, got %T", store)
+	}
+}

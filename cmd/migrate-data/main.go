@@ -41,6 +41,7 @@ func run() error {
 		migrateExportStats   = flag.Bool("exportstats", false, "Migrate export statistics")
 		migrateHistorical    = flag.Bool("historical", false, "Migrate historical tables (regime/stress/geo/period) from SQLite atlas.db")
 		migrateQuotes        = flag.Bool("quotes", false, "Migrate quotes from SQLite atlas.db")
+		migrateDetectorScans = flag.Bool("detector-scans", false, "Migrate detector_scan_log from SQLite atlas.db")
 		sqlitePath           = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
 		migrateAll           = flag.Bool("all", false, "Migrate all data")
 	)
@@ -120,6 +121,12 @@ func run() error {
 	if *migrateAll || *migrateQuotes {
 		if err := migrateQuotesData(ctx, pool, *sqlitePath); err != nil {
 			return fmt.Errorf("migrate quotes: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateDetectorScans {
+		if err := migrateDetectorScansData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate detector scans: %w", err)
 		}
 	}
 
@@ -745,5 +752,80 @@ func migrateQuotesData(ctx context.Context, pool *pgxpool.Pool, sqlitePath strin
 	}
 
 	log.Printf("Migrated %d quotes rows", count)
+	return nil
+}
+
+// migrateDetectorScansData copies the detector_scan_log table
+// (scan_id/scan_batch_id/theme/severity/confidence/detected_at/source/
+// metadata_json) from the source SQLite atlas.db into PostgreSQL.
+// scan_id is carried explicitly to preserve ORDER BY scan_id DESC semantics;
+// ON CONFLICT (scan_id) DO NOTHING makes re-running idempotent.
+func migrateDetectorScansData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	rows, err := sqliteDB.Query(`
+		SELECT scan_id, scan_batch_id, theme, severity, confidence, detected_at, source, metadata_json
+		FROM detector_scan_log ORDER BY scan_id`)
+	if err != nil {
+		return fmt.Errorf("query sqlite detector_scan_log: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type scanRow struct {
+		scanID                                           int64
+		scanBatchID, theme, severity, detectedAt, source string
+		confidence                                       float64
+		metadataJSON                                     sql.NullString
+	}
+
+	var (
+		batch []scanRow
+		count int
+	)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		for _, r := range batch {
+			_, err := pool.Exec(ctx, `
+				INSERT INTO detector_scan_log (scan_id, scan_batch_id, theme, severity, confidence, detected_at, source, metadata_json)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (scan_id) DO NOTHING
+			`, r.scanID, r.scanBatchID, r.theme, r.severity, r.confidence,
+				r.detectedAt, r.source, r.metadataJSON)
+			if err != nil {
+				return fmt.Errorf("insert detector scan %d: %w", r.scanID, err)
+			}
+		}
+		count += len(batch)
+		batch = batch[:0]
+		return nil
+	}
+
+	for rows.Next() {
+		var r scanRow
+		if err := rows.Scan(&r.scanID, &r.scanBatchID, &r.theme, &r.severity,
+			&r.confidence, &r.detectedAt, &r.source, &r.metadataJSON); err != nil {
+			return fmt.Errorf("scan detector_scan_log row: %w", err)
+		}
+		batch = append(batch, r)
+		if len(batch) >= 1000 {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite detector_scan_log iteration: %w", err)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+
+	log.Printf("Migrated %d detector_scan_log rows", count)
 	return nil
 }
