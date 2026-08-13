@@ -31,7 +31,7 @@
 | `ATLAS_EXCHANGE_RATE_CACHE` | ExchangeRate provider 跨日 daily cache 檔案路徑（覆寫預設 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） | 空（未設定時用 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） |
 | `ATLAS_MIGRATIONS_PATH` | 資料庫遷移腳本路徑 | `sql/migrations` |
 | `ATLAS_SQLITE_PATH` | SQLite 資料庫路徑 | `data/state/atlas.db` |
-| `ATLAS_STORE_BACKEND` | 儲存後端 (`jsonl`/`sqlite`) | `jsonl` |
+| `ATLAS_STORE_BACKEND` | 儲存後端 (`jsonl`/`sqlite`/`postgres`) | `jsonl` |
 | `ATLAS_ENV_FILE` | 自訂 `.env` 檔案路徑 | `.env`（目前目錄） |
 | `ATLAS_MARKET_DATA_PROVIDER` | 市場資料提供者選擇 (`twse`/`fugle`/`fubon`/`hybrid`) | `twse` |
 | `ATLAS_PRIMARY_MARKET` | 主要市場代碼 | `TW` |

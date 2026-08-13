@@ -23,7 +23,7 @@ type Config struct {
 	BaselinePolicyPath         string
 	ParametersConfigPath       string
 	LedgerDir                  string
-	StoreBackend               string // "jsonl" (default) or "sqlite" — ATLAS_STORE_BACKEND
+	StoreBackend               string // "jsonl" (default), "sqlite", or "postgres" — ATLAS_STORE_BACKEND
 	SQLitePath                 string // path to SQLite database file — ATLAS_SQLITE_PATH
 	ReplayDataPath             string
 	ReplaySessionDate          string
