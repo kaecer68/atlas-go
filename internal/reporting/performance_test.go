@@ -11,11 +11,12 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func TestGenerateReport_EmptyLedger(t *testing.T) {
 	tmpDir := t.TempDir()
-	report, err := GenerateReport(tmpDir, "all")
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -32,7 +33,7 @@ func TestGenerateReport_EmptyLedger(t *testing.T) {
 
 func TestGenerateReport_SingleSession(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	report, err := GenerateReport(tmpDir, "all")
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestGenerateReport_SingleSession(t *testing.T) {
 func TestGenerateReport_PeriodFiltering(t *testing.T) {
 	tmpDir := setupTestLedgerWithOldAndNewSessions(t)
 
-	reportAll, err := GenerateReport(tmpDir, "all")
+	reportAll, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestGenerateReport_PeriodFiltering(t *testing.T) {
 		t.Errorf("expected 2 trades for all, got %d", reportAll.TotalTrades)
 	}
 
-	report30d, err := GenerateReport(tmpDir, "30d")
+	report30d, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "30d")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestGenerateReport_PeriodFiltering(t *testing.T) {
 
 func TestGenerateReport_InvalidPeriod(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	report, err := GenerateReport(tmpDir, "invalid")
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "invalid")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,7 +155,7 @@ func float64Ptr(v float64) *float64 {
 
 func TestGenerateReport_SharpeNA(t *testing.T) {
 	tmpDir := setupTestLedger(t)
-	report, err := GenerateReport(tmpDir, "all")
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -507,7 +508,7 @@ func TestGenerateReport_CorruptedSummaryInAllPeriod(t *testing.T) {
 	writeSession(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 0, 0)
 	writeSession(t, tmpDir, "session-20260102-daily", 1_050_000, 100_000, 1, 100)
 
-	report, err := GenerateReport(tmpDir, "all")
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -592,6 +593,14 @@ func TestFindRegimeForWindow_DateMatch(t *testing.T) {
 	}
 	if got := findRegimeForWindow(summaries, "session-20261231-daily"); got != "" {
 		t.Errorf("expected empty for unmatched window, got %s", got)
+	}
+	// ISO window format (2006-01-02) — RecommendationOutcome.Window is stored as
+	// "2026-01-01" (no session- prefix), so the regime lookup must also match it.
+	if got := findRegimeForWindow(summaries, "2026-01-01"); got != "RISK_ON" {
+		t.Errorf("expected ISO-format window match RISK_ON, got %s", got)
+	}
+	if got := findRegimeForWindow(summaries, "2026-01-02"); got != "RISK_OFF" {
+		t.Errorf("expected ISO-format window match RISK_OFF, got %s", got)
 	}
 }
 

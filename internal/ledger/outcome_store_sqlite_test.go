@@ -447,6 +447,18 @@ func TestSQLiteOutcomeStoreRecordAndLoadSessionSummary(t *testing.T) {
 	if summaries[0].OutcomeCount != 10 {
 		t.Errorf("expected outcome count 10, got %d", summaries[0].OutcomeCount)
 	}
+	// BL-01 fix: the full summary (including PortfolioValue / PositionCount /
+	// OrderCount) must round-trip through the SQLite store so the performance
+	// report sees real equity data for StoreBackend=sqlite.
+	if summaries[0].PortfolioValue != 1500000 {
+		t.Errorf("expected PortfolioValue 1500000 (BL-01 fix), got %v", summaries[0].PortfolioValue)
+	}
+	if summaries[0].PositionCount != 3 {
+		t.Errorf("expected PositionCount 3 (BL-01 fix), got %d", summaries[0].PositionCount)
+	}
+	if summaries[0].OrderCount != 5 {
+		t.Errorf("expected OrderCount 5 (BL-01 fix), got %d", summaries[0].OrderCount)
+	}
 }
 
 func TestSQLiteOutcomeStoreLoadAllSessionScorecards(t *testing.T) {

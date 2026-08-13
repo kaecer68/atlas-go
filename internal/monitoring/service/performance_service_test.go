@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func TestPerformanceService_NewPerformanceService(t *testing.T) {
-	svc := NewPerformanceService("/tmp/ledger")
+	svc := NewPerformanceService(ledger.NewStore("/tmp/ledger"), "/tmp/ledger")
 	if svc == nil {
 		t.Fatal("NewPerformanceService returned nil")
 	}
@@ -18,7 +20,7 @@ func TestPerformanceService_NewPerformanceService(t *testing.T) {
 
 func TestPerformanceService_GetPerformanceReport_EmptyLedger(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	report, err := svc.GetPerformanceReport("30d")
 	if err != nil {
@@ -37,7 +39,7 @@ func TestPerformanceService_GetPerformanceReport_EmptyLedger(t *testing.T) {
 
 func TestPerformanceService_GetPerformanceReport_InvalidPeriod(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	report, err := svc.GetPerformanceReport("invalid")
 	if err != nil {
@@ -53,7 +55,7 @@ func TestPerformanceService_GetPerformanceReport_InvalidPeriod(t *testing.T) {
 
 func TestPerformanceService_GetAgentContributions_EmptyLedger(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	agents, err := svc.GetAgentContributions("90d")
 	if err != nil {
@@ -69,7 +71,7 @@ func TestPerformanceService_GetAgentContributions_EmptyLedger(t *testing.T) {
 
 func TestPerformanceService_GetRegimeBreakdown_EmptyLedger(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	breakdown, err := svc.GetRegimeBreakdown("1y")
 	if err != nil {
@@ -85,7 +87,7 @@ func TestPerformanceService_GetRegimeBreakdown_EmptyLedger(t *testing.T) {
 
 func TestPerformanceService_GetPerformanceReport_AllPeriod(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	report, err := svc.GetPerformanceReport("all")
 	if err != nil {
@@ -101,7 +103,7 @@ func TestPerformanceService_GetPerformanceReport_AllPeriod(t *testing.T) {
 
 func TestPerformanceService_GetAgentContributions_AllPeriod(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	agents, err := svc.GetAgentContributions("all")
 	if err != nil {
@@ -117,7 +119,7 @@ func TestPerformanceService_GetAgentContributions_AllPeriod(t *testing.T) {
 
 func TestPerformanceService_GetRegimeBreakdown_AllPeriod(t *testing.T) {
 	tmpDir := t.TempDir()
-	svc := NewPerformanceService(tmpDir)
+	svc := NewPerformanceService(ledger.NewStore(tmpDir), tmpDir)
 
 	breakdown, err := svc.GetRegimeBreakdown("all")
 	if err != nil {
@@ -133,7 +135,7 @@ func TestPerformanceService_GetRegimeBreakdown_AllPeriod(t *testing.T) {
 
 func TestPerformanceService_GetPerformanceReport_NonExistentDir(t *testing.T) {
 	nonExistent := filepath.Join(os.TempDir(), "nonexistent-ledger-dir-xyz123")
-	svc := NewPerformanceService(nonExistent)
+	svc := NewPerformanceService(ledger.NewStore(nonExistent), nonExistent)
 
 	report, err := svc.GetPerformanceReport("30d")
 	if err != nil {
@@ -149,7 +151,7 @@ func TestPerformanceService_GetPerformanceReport_NonExistentDir(t *testing.T) {
 
 func TestPerformanceService_GetAgentContributions_NonExistentDir(t *testing.T) {
 	nonExistent := filepath.Join(os.TempDir(), "nonexistent-ledger-dir-xyz456")
-	svc := NewPerformanceService(nonExistent)
+	svc := NewPerformanceService(ledger.NewStore(nonExistent), nonExistent)
 
 	agents, err := svc.GetAgentContributions("30d")
 	if err != nil {
@@ -165,7 +167,7 @@ func TestPerformanceService_GetAgentContributions_NonExistentDir(t *testing.T) {
 
 func TestPerformanceService_GetRegimeBreakdown_NonExistentDir(t *testing.T) {
 	nonExistent := filepath.Join(os.TempDir(), "nonexistent-ledger-dir-xyz789")
-	svc := NewPerformanceService(nonExistent)
+	svc := NewPerformanceService(ledger.NewStore(nonExistent), nonExistent)
 
 	breakdown, err := svc.GetRegimeBreakdown("30d")
 	if err != nil {

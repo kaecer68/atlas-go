@@ -39,6 +39,9 @@ func (s *SQLiteSessionStore) RecordSessionSummary(session domain.ReplaySession, 
 }
 
 func (s *SQLiteSessionStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	// Ensure the summary_json column exists (idempotent; in-memory test schemas
+	// may not have it until RecordSessionSummary runs its own ALTER).
+	_, _ = s.db.Exec(`ALTER TABLE session_summaries ADD COLUMN summary_json TEXT`) //nolint:errcheck
 	rows, err := s.db.Query(`
 		SELECT summary_json FROM session_summaries ORDER BY timestamp DESC
 	`)
