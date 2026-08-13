@@ -317,7 +317,7 @@ system_get_health
 
 **回傳**：`{ status: "ok" | "degraded" | "down", tools_count: 91, uptime, last_audit }`
 
-**顯示範例**：`✓ atlas-mcp ok | 116 tools registered | uptime 4h 23m`
+**顯示範例**：`✓ atlas-mcp ok | 117 tools registered | uptime 4h 23m`
 
 **注意**：任何任務的第一步 — 確認 backend / atlas-mcp / LLM router 都活著
 

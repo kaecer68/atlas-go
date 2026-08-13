@@ -50,7 +50,7 @@ self-observability 工具（`audit_state`、`mcp_get_*`、`system_get_maturity` 
 | 數據 | 模組/檔案 | 說明 |
 |------|----------|------|
 | MCP server binary | `cmd/atlas-mcp/main.go` | 入口，flag 解析，transport 啟動 |
-| Tool 實作 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 113+ 個 tool 的 handler |
+| Tool 實作 | `cmd/atlas-mcp/server/tools_*.go`（26 個檔案）+ `cmd/atlas-mcp/server/tools.go`（核心 entry-point） | 117 個 tool 的 handler |
 | Agent 文件 | `docs/investor/README.md`、`docs/reference/tool-catalog.md` | 入門 + tool catalog |
 | MCP 規格 | `docs/specs/agent-mcp-server-spec.md` | 設計規格、安全邊界、JSON Schema |
 
@@ -82,7 +82,7 @@ self-observability 工具（`audit_state`、`mcp_get_*`、`system_get_maturity` 
 }
 ```
 
-重新啟動 Claude Desktop 後，agent 即可使用 `regime_get_history`、`strategy_list_active` 等 113+ 個 tool。
+重新啟動 Claude Desktop 後，agent 即可使用 `regime_get_history`、`strategy_list_active` 等 117 個 tool。
 
 ### 範例 2: 配置 OpenCode 接入 atlas
 
@@ -178,7 +178,7 @@ Agent: regime_get_history() + crossmarket_get_status() + narrative_get_bundle()
 
 | 技能 | 關聯 |
 |------|------|
-| `atlas-mcp-tool-tour` | 113+ 個 tool 的分群導覽 — 接入成功後的下一步 |
+| `atlas-mcp-tool-tour` | 117 個 tool 的分群導覽 — 接入成功後的下一步 |
 | `atlas-pre-change-protocol` | 若需修改 atlas-mcp 程式碼，修改前必跑 |
 | `atlas-risk-management` | 風險相關 tool（`risk_get_*`）的金融背景 |
 

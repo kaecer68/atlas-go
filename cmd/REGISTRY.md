@@ -28,7 +28,7 @@
 | Binary | 用途 | 主要 internal 依賴 | 狀態 |
 |--------|------|---------------------|------|
 | `cmd/atlas` | 主程式 — 三層 executor 路由、Stage 3/4、分析引擎、HTTP API、Dashboard | orchestrator, strategy_techniques, risk, narrative, macroflow, capitalflow, subscription, recommender, dailyreport, eventdriven, llm | ✅ Stable |
-| `cmd/atlas-mcp` | MCP server — 116 tools、stdio/SSE/HTTP transports、multi-tenant auth、audit | `cmd/atlas-mcp/server`, db, constants | ✅ Stable |
+| `cmd/atlas-mcp` | MCP server — 117 tools、stdio/SSE/HTTP transports、multi-tenant auth、audit | `cmd/atlas-mcp/server`, db, constants | ✅ Stable |
 | `cmd/atlas-mcp-setup` | 互動式 wizard — 偵測 MCP 客戶端並寫入設定檔 | portprobe, server.NewHTTPClient | ✅ Utility |
 | `cmd/atlas-stage4-loader` | Stage 4 PR#2 — 將 4 個 staging JSONL 寫入 SQLite | ledger, constants | ✅ E |
 | `cmd/atlas-stage4-backfill` | Stage 4 PR#1 — 從 ledger 擷取 regime/event/stress/prediction 90 天歷史 | —（stdlib only） | ✅ E |

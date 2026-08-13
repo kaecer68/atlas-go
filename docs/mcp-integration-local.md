@@ -220,4 +220,4 @@ bin/atlas-mcp 2>&1 | head -3
 
 ---
 
-**版本**: v0.0.0.32+（118 tools）| **授權**: GNU AGPL v3
+**版本**: v0.0.0.32+（117 tools；sampling/elicitation 全開 119）| **授權**: GNU AGPL v3

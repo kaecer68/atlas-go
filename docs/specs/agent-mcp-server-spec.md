@@ -56,9 +56,9 @@
 
 ### 3.1 MCP Tools 全清單
 
-**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/server/server.go`](../../cmd/atlas-mcp/server/server.go)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [111, 114]`，防止文件↔程式碼漂移）。
+**統一數字聲明**：最終對 agent 暴露的 tool 名稱、數量與分類，以 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md) 為單一權威來源。啟動期權威計數來自 [`cmd/atlas-mcp/server/server.go`](../../cmd/atlas-mcp/server/server.go)（`server.Run()` 在啟動時 assert `RegisteredToolCount ∈ [115, 121]`，防止文件↔程式碼漂移）。
 
-**當前實際**：**113+ 個 tool**（含 #1272 `mcp_anomaly_ack` + #1278 `data_get_quality` + #1279 canonical metric fixes）。本節保留 high-level 群組對照；單一 tool 名稱請以 `tool-catalog.md` 為準。
+**當前實際**：**117 個 tool**（sampling/elicitation feature-gated 全開時 119）。本節保留 high-level 群組對照；單一 tool 名稱與數量請以 `tool-catalog.md` 為準。
 
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
@@ -86,7 +86,7 @@
 | MCP 自我觀測 | `mcp_get_*`、`mcp_anomaly_*` | 6 | session topology、call stats、tenant usage、slow tools + anomaly |
 | MCP 協議擴充 | `mcp_roots_*`、`mcp_elicit_user`、`mcp_sample_llm` | 4 | Phase 4 protocol extensions（roots/elicitation/sampling）|
 | Daily Briefing | `mcp_quickstart`、`daily_report` | 2 | 一站式摘要、每日報告 |
-| **總計（post-#1265）** | | **113+** | 詳見 `tool-catalog.md` |
+| **總計（post-#1265）** | | **117** | 詳見 `tool-catalog.md` |
 
 ### 3.2 不暴露的 endpoints（安全邊界）
 
@@ -140,7 +140,7 @@ e.g.   regime_get_history
 
 ## 3.5 MCP Resources 清單（v0.0.0.31 PR #972 新增）
 
-3 個 MCP Resources 提供結構化資料存取：
+7+ 個 MCP Resources 提供結構化資料存取（3 個 live + 4 個 audit/observability；另 8 個 file-based 內部知識 resources 見 `cmd/atlas-mcp/server/resources.go`）：
 
 | URI | 內容 | Handler |
 |-----|------|---------|
@@ -633,7 +633,7 @@ cmd/atlas-mcp/
 
 ### 13.1 v0.0.0.31（2026-07-06 PR #945–#950+）
 
-**Tool 演進**：74（§11 末）→ 87（v0.0.0.31 baseline）→ 91（v0.0.0.31 後）→ **113+（post-#1265, 2026-07-22）**
+**Tool 演進**：74（§11 末）→ 87（v0.0.0.31 baseline）→ 91（v0.0.0.31 後）→ **117（post-#1265, 2026-08-13）**
 
 | 變更類型 | 增量 | 對應 WA / Primitive |
 |---------|------|--------------------|

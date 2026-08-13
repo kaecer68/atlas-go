@@ -25,7 +25,7 @@ Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
 ## Atlas as MCP Server
 
-atlas-go doubles as a **MCP (Model Context Protocol) server** with **116 tools** (110 business + 2 template_detector + 4 audit + lifecycle tools),
+atlas-go doubles as a **MCP (Model Context Protocol) server** with **117 tools** (111 business + 2 template_detector + 4 audit + lifecycle tools),
 allowing external AI agents to query Taiwan stock market data, strategies, risks, and more.
 MCP is the **Agent Support** layer that complements the web-first dashboard — the web UI
 comes first; agents explain what the UI cannot.

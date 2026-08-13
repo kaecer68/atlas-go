@@ -458,7 +458,7 @@ groups:
 
 ## 12. 對應的文件
 
-- 完整 tool catalog（116 tools）：[`docs/reference/tool-catalog.md`](../reference/tool-catalog.md)
+- 完整 tool catalog（117 tools）：[`docs/reference/tool-catalog.md`](../reference/tool-catalog.md)
 - 設計規格（Phase 2.2 狀態）：[`docs/specs/agent-mcp-server-spec.md`](#)
 - 系統 workflow 對應（WA-XXX）：[`docs/reference/workflow-map.md`](../reference/workflow-map.md)
 - 計劃藍圖： [`docs/specs/agent-mcp-server-spec.md`](#)（canonical spec,roadmap v2 snapshot 詳見 PR #876 `feat/atlas-mcp` 歷史 commit;CI 不追蹤 `.omo/` 內路徑故不列入連結）
