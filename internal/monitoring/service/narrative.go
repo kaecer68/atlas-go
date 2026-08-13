@@ -96,6 +96,58 @@ func (s *NarrativeService) GetTemplates() []narrative.CausalTemplate {
 	return kb.ListTemplates()
 }
 
+// ListModels returns the full InvestmentModel library (all models, not just
+// currently-active ones). ACI: lets agents inventory the whole module —
+// every model's sector bets, themes, weight, hit-rate — regardless of which
+// themes are currently detected.
+func (s *NarrativeService) ListModels() []narrative.InvestmentModel {
+	return s.NarrativeEngine.ListModels()
+}
+
+// ModelInventory returns the full module picture for agents: every model,
+// the currently-active subset, and the theme→model / theme→template
+// cross-reference (表裡結構: causal templates 的 trigger_theme ↔ models 的
+// active_theme). This is the ACI entry point for understanding what the
+// capital-models module contains and how it links to the causality KB.
+func (s *NarrativeService) ModelInventory(ctx context.Context) map[string]any {
+	allModels := s.NarrativeEngine.ListModels()
+
+	// Active models = those whose themes are currently detected.
+	data, _ := s.BuildMarketNarrativeData(ctx)
+	events := s.DetectEvents(data)
+	themes := make([]string, 0, len(events))
+	for _, e := range events {
+		themes = append(themes, e.Theme)
+	}
+	activeModels := s.NarrativeEngine.ActiveModels(themes)
+
+	// theme → models (from active_theme) and theme → templates (trigger_theme).
+	templates := s.GetTemplates()
+	themeToModels := make(map[string][]string)
+	for _, m := range allModels {
+		for _, t := range m.ActiveThemes {
+			themeToModels[t] = append(themeToModels[t], m.ID)
+		}
+	}
+	themeToTemplates := make(map[string][]string)
+	for _, t := range templates {
+		themeToTemplates[t.TriggerTheme] = append(themeToTemplates[t.TriggerTheme], t.ID)
+	}
+
+	return map[string]any{
+		"all_models":         allModels,
+		"active_models":      activeModels,
+		"active_themes":      themes,
+		"theme_to_models":    themeToModels,
+		"theme_to_templates": themeToTemplates,
+		"workflow": "SectorBias derives a sector allocation multiplier per " +
+			"industry from active models: each model's FavoredSectors (+)/" +
+			"AvoidedSectors (−) × Darwinian weight × event confidence×hit-rate. " +
+			"Templates (causality KB) explain the causal chain but do not drive " +
+			"allocation directly; models are the executable sector bets.",
+	}
+}
+
 func (s *NarrativeService) GenerateDailySummary(date string, events []narrative.NarrativeEvent, recs []domain.Recommendation, risk *domain.RiskSnapshot) *domain.DailySummaryReport {
 	return s.ReportGenerator.GenerateDailySummary(date, events, recs, risk)
 }

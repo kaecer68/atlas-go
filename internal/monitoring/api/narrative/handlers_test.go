@@ -608,3 +608,29 @@ func TestHandleStressIndexHistory_PopulatesDateAndSource(t *testing.T) {
 		t.Error("expected 'history' field")
 	}
 }
+
+func TestHandleNarrativeModelInventory(t *testing.T) {
+	h := newTestNarrativeHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/models/inventory", nil)
+	status, body := h.HandleNarrativeModelInventory(req)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", status)
+	}
+	m, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map body, got %T", body)
+	}
+	all, ok := m["all_models"].([]narrative.InvestmentModel)
+	if !ok || len(all) != 21 {
+		t.Fatalf("expected all_models with 21 models, got %T len=%d", m["all_models"], len(all))
+	}
+	if _, ok := m["theme_to_models"]; !ok {
+		t.Error("expected theme_to_models in inventory")
+	}
+	if _, ok := m["theme_to_templates"]; !ok {
+		t.Error("expected theme_to_templates in inventory")
+	}
+	if _, ok := m["workflow"]; !ok {
+		t.Error("expected workflow in inventory")
+	}
+}

@@ -46,6 +46,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/narrative/events", shared.Get(h.HandleNarrativeEvents))
 	mux.Handle("GET /api/narrative/chains", shared.Get(h.HandleNarrativeChains))
 	mux.Handle("GET /api/narrative/models", shared.Get(h.HandleNarrativeModels))
+	mux.Handle("GET /api/narrative/models/inventory", shared.Get(h.HandleNarrativeModelInventory))
 	mux.Handle("GET /api/narrative/templates", shared.Get(h.HandleNarrativeTemplates))
 	mux.Handle("GET /api/narrative/seasonal", shared.Get(h.HandleSeasonalAnalysis))
 	mux.Handle("GET /api/narrative/bundle", shared.Get(h.HandleNarrativeBundle))
@@ -157,6 +158,15 @@ func (h *Handlers) HandleNarrativeModels(r *http.Request) (int, any) {
 		"models":          h.Svc.GetActiveModels(themes),
 		"calendar_themes": calendarThemes,
 	}
+}
+
+// HandleNarrativeModelInventory returns the full capital-models module
+// picture for agents (ACI): all 21 models, the active subset, and the
+// theme→model / theme→template cross-reference (表裡結構). Lets an agent
+// inventory what the module contains, how it links to the causality KB, and
+// how SectorBias turns model bets into allocation multipliers.
+func (h *Handlers) HandleNarrativeModelInventory(r *http.Request) (int, any) {
+	return http.StatusOK, h.Svc.ModelInventory(r.Context())
 }
 
 // calendarTriggerThemes maps upcoming calendar events (within the lookahead
