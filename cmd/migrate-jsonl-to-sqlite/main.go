@@ -14,7 +14,13 @@ func main() {
 	sourceDir := flag.String("source", "data/ledger", "source JSONL directory")
 	targetPath := flag.String("target", "data/state/atlas.db", "target SQLite file path")
 	dryRun := flag.Bool("dry-run", false, "show what would be migrated without writing")
+	storeBackend := flag.String("store-backend", "", "guard: refuse 'postgres' (this tool writes SQLite only)")
 	flag.Parse()
+
+	if *storeBackend == "postgres" {
+		fmt.Fprintln(os.Stderr, "error: -store-backend=postgres is not supported by this tool (JSONL → SQLite only). Use cmd/migrate-data with -quotes/-outcomes-sqlite/... for the PostgreSQL backend.")
+		os.Exit(1)
+	}
 
 	sourceAbs, err := filepath.Abs(*sourceDir)
 	if err != nil {

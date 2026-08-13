@@ -38,8 +38,11 @@ func NewPostgresLedgerStore(pool *pgxpool.Pool) *PostgresLedgerStore {
 
 // Compile-time assertions.
 var (
-	_ OutcomeStore = (*PostgresLedgerStore)(nil)
-	_ SessionStore = (*PostgresLedgerStore)(nil)
+	_ OutcomeStore    = (*PostgresLedgerStore)(nil)
+	_ SessionStore    = (*PostgresLedgerStore)(nil)
+	_ ExperimentStore = (*PostgresLedgerStore)(nil)
+	_ BacktestStore   = (*PostgresLedgerStore)(nil)
+	_ FullStore       = (*PostgresLedgerStore)(nil)
 )
 
 // ------------------------------------------------------------------
@@ -472,7 +475,7 @@ func (s *PostgresLedgerStore) RecordExperiment(record domain.ExperimentRecord) e
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES ($1, $2, $3, $4)
-	`, record.ID, string(briefJSON), record.Status == domain.ExperimentAccepted,
+	`, record.ID, string(briefJSON), boolToInt(record.Status == domain.ExperimentAccepted),
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
 	if err != nil {
 		return fmt.Errorf("insert experiment: %w", err)
@@ -490,7 +493,7 @@ func (s *PostgresLedgerStore) RecordSessionExperiment(session domain.ReplaySessi
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO experiments (experiment_id, session_id, mutation_brief_json, accepted, timestamp)
 		VALUES ($1, $2, $3, $4, $5)
-	`, record.ID, session.ID, string(briefJSON), record.Status == domain.ExperimentAccepted,
+	`, record.ID, session.ID, string(briefJSON), boolToInt(record.Status == domain.ExperimentAccepted),
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
 	if err != nil {
 		return fmt.Errorf("insert session experiment: %w", err)
@@ -547,4 +550,159 @@ func (s *PostgresLedgerStore) LoadHumanInterventions() ([]domain.HumanInterventi
 		return nil, fmt.Errorf("human intervention rows: %w", rows.Err())
 	}
 	return interventions, nil
+}
+
+// ------------------------------------------------------------------
+// Experiment store surface
+// ------------------------------------------------------------------
+
+// LoadExperiments reads all experiment records, newest first (mirror of
+// SQLiteStore.LoadExperiments).
+func (s *PostgresLedgerStore) LoadExperiments() ([]domain.ExperimentRecord, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `SELECT mutation_brief_json FROM experiments ORDER BY id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query experiments: %w", err)
+	}
+	defer rows.Close()
+
+	var records []domain.ExperimentRecord
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("scan experiment: %w", err)
+		}
+		var rec domain.ExperimentRecord
+		if err := json.Unmarshal([]byte(data), &rec); err != nil {
+			return nil, fmt.Errorf("unmarshal experiment: %w", err)
+		}
+		records = append(records, rec)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("experiment rows: %w", rows.Err())
+	}
+	return records, nil
+}
+
+// RecordPromptExperimentResult persists a prompt experiment result as a JSON blob.
+func (s *PostgresLedgerStore) RecordPromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal prompt experiment result: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
+		VALUES ($1, $2, $3)
+	`, experimentID, string(data), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("insert prompt experiment result: %w", err)
+	}
+	return nil
+}
+
+// UpdatePromptExperimentResult replaces an existing prompt experiment result by experiment_id.
+func (s *PostgresLedgerStore) UpdatePromptExperimentResult(experimentID string, result domain.PromptExperimentResult) error {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("marshal prompt experiment result: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO prompt_experiment_results (experiment_id, data_json, created_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (experiment_id) DO UPDATE SET
+			data_json = excluded.data_json,
+			created_at = excluded.created_at
+	`, experimentID, string(data), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("upsert prompt experiment result: %w", err)
+	}
+	return nil
+}
+
+// ------------------------------------------------------------------
+// Backtest store surface
+// ------------------------------------------------------------------
+
+// RecordWindowSummary persists a backtest window summary as a JSON blob.
+func (s *PostgresLedgerStore) RecordWindowSummary(summary domain.BacktestWindowSummary) error {
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("marshal window summary: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO window_summaries (window_id, data_json, created_at)
+		VALUES ($1, $2, $3)
+	`, summary.WindowID, string(data), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("insert window summary: %w", err)
+	}
+	return nil
+}
+
+// RecordMutationBrief persists a mutation brief as a JSON blob.
+func (s *PostgresLedgerStore) RecordMutationBrief(windowID string, brief domain.MutationBrief) error {
+	data, err := json.Marshal(brief)
+	if err != nil {
+		return fmt.Errorf("marshal mutation brief: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO mutation_briefs (window_id, data_json, created_at)
+		VALUES ($1, $2, $3)
+	`, windowID, string(data), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("insert mutation brief: %w", err)
+	}
+	return nil
+}
+
+// ------------------------------------------------------------------
+// Spawn records
+// ------------------------------------------------------------------
+
+// RecordSpawnRecord persists a spawn record as a JSON blob.
+func (s *PostgresLedgerStore) RecordSpawnRecord(record SpawnRecord) error {
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal spawn record: %w", err)
+	}
+	ctx := context.Background()
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO spawn_records (data_json, created_at)
+		VALUES ($1, $2)
+	`, string(data), time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("insert spawn record: %w", err)
+	}
+	return nil
+}
+
+// LoadSpawnRecords reads all spawn records, most recent first.
+func (s *PostgresLedgerStore) LoadSpawnRecords() ([]SpawnRecord, error) {
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, `SELECT data_json FROM spawn_records ORDER BY id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query spawn records: %w", err)
+	}
+	defer rows.Close()
+
+	var records []SpawnRecord
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("scan spawn record: %w", err)
+		}
+		var rec SpawnRecord
+		if err := json.Unmarshal([]byte(data), &rec); err != nil {
+			return nil, fmt.Errorf("unmarshal spawn record: %w", err)
+		}
+		records = append(records, rec)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("spawn record rows: %w", rows.Err())
+	}
+	return records, nil
 }
