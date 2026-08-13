@@ -89,7 +89,7 @@ func TestHandleResourceWorkflowsCatalog_OK(t *testing.T) {
 	defer done()
 
 	tmp := t.TempDir()
-	wfDir := filepath.Join(tmp, "docs")
+	wfDir := filepath.Join(tmp, "docs", "reference")
 	if err := os.MkdirAll(wfDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -106,6 +106,21 @@ func TestHandleResourceWorkflowsCatalog_OK(t *testing.T) {
 	}
 	if !strings.Contains(result.Contents[0].Text, "Test workflow map") {
 		t.Fatalf("missing content: %q", result.Contents[0].Text)
+	}
+}
+
+func TestHandleResourceWorkflowsCatalog_MissingFile(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+
+	tmp := t.TempDir()
+	origCwd, _ := os.Getwd()
+	os.Chdir(tmp)
+	defer os.Chdir(origCwd)
+
+	_, err := s.handleResourceWorkflowsCatalog(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error when docs/reference/workflow-map.md missing")
 	}
 }
 
