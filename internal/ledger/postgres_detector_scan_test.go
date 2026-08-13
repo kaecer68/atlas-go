@@ -30,10 +30,14 @@ func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
 
 	// First batch: 2 results sharing one batch ID.
 	batch1 := []narrative.DetectionResult{
-		{Theme: "pgsqltest-theme-a", Severity: narrative.SeverityHigh, Confidence: 0.9,
-			DetectedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), Source: narrative.SourceKB, Metadata: map[string]any{"k": "v"}},
-		{Theme: "pgsqltest-theme-b", Severity: narrative.SeverityMedium, Confidence: 0.5,
-			DetectedAt: time.Date(2026, 8, 1, 1, 0, 0, 0, time.UTC), Source: narrative.SourceKB},
+		{
+			Theme: "pgsqltest-theme-a", Severity: narrative.SeverityHigh, Confidence: 0.9,
+			DetectedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), Source: narrative.SourceKB, Metadata: map[string]any{"k": "v"},
+		},
+		{
+			Theme: "pgsqltest-theme-b", Severity: narrative.SeverityMedium, Confidence: 0.5,
+			DetectedAt: time.Date(2026, 8, 1, 1, 0, 0, 0, time.UTC), Source: narrative.SourceKB,
+		},
 	}
 	// Force the batch ID into the test namespace so cleanup works.
 	// (AppendScan generates its own UUID; we overwrite via UPDATE afterwards.)
@@ -50,8 +54,10 @@ func TestPostgresDetectorScanStore_AppendAndLoad(t *testing.T) {
 
 	// Second batch: 1 result, later scan_id (newer).
 	batch2 := []narrative.DetectionResult{
-		{Theme: "pgsqltest-theme-c", Severity: narrative.SeverityCritical, Confidence: 0.99,
-			DetectedAt: time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC), Source: narrative.SourceKB},
+		{
+			Theme: "pgsqltest-theme-c", Severity: narrative.SeverityCritical, Confidence: 0.99,
+			DetectedAt: time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC), Source: narrative.SourceKB,
+		},
 	}
 	batchID2, err := store.AppendScan(ctx, batch2)
 	if err != nil {

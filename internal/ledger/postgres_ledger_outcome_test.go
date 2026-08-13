@@ -104,9 +104,11 @@ func TestPostgresLedgerStore_ScreeningAndSummaryRoundTrip(t *testing.T) {
 
 	// Screening rejects.
 	rejects := []domain.ScreeningReject{
-		{SessionID: "pgsqltest-sess-2", Symbol: "0050", AgentID: "pgsqltest-ag", Skill: "sector-tech",
+		{
+			SessionID: "pgsqltest-sess-2", Symbol: "0050", AgentID: "pgsqltest-ag", Skill: "sector-tech",
 			Criterion: "vol", CriterionLabel: "high volatility", Threshold: "0.3", ActualValue: "0.5",
-			RecordedAt: time.Now(), FactorScores: domain.FactorScores{}},
+			RecordedAt: time.Now(), FactorScores: domain.FactorScores{},
+		},
 	}
 	if err := store.RecordSessionScreeningRejects("pgsqltest-sess-2", rejects); err != nil {
 		t.Fatalf("RecordSessionScreeningRejects: %v", err)
@@ -159,10 +161,14 @@ func TestPostgresLedgerStore_TradesRoundTrip(t *testing.T) {
 
 	ts := time.Date(2026, 8, 1, 0, 52, 7, 0, time.UTC)
 	trades := []domain.TradeRecord{
-		{TradeID: "pgsqltest-t1", SessionID: "pgsqltest-sess-3", Symbol: "00713.TW", Side: domain.SideBuy,
-			Quantity: 100, Price: 60.7, Amount: 6070, Reason: "optimized_position|weight:95.00%", Timestamp: ts},
-		{TradeID: "pgsqltest-t2", SessionID: "pgsqltest-sess-3", Symbol: "0056.TW", Side: domain.SideSell,
-			Quantity: 50, Price: 38.5, Amount: 1925, Reason: "rebalance", Timestamp: ts.Add(time.Hour)},
+		{
+			TradeID: "pgsqltest-t1", SessionID: "pgsqltest-sess-3", Symbol: "00713.TW", Side: domain.SideBuy,
+			Quantity: 100, Price: 60.7, Amount: 6070, Reason: "optimized_position|weight:95.00%", Timestamp: ts,
+		},
+		{
+			TradeID: "pgsqltest-t2", SessionID: "pgsqltest-sess-3", Symbol: "0056.TW", Side: domain.SideSell,
+			Quantity: 50, Price: 38.5, Amount: 1925, Reason: "rebalance", Timestamp: ts.Add(time.Hour),
+		},
 	}
 	if err := store.RecordSessionTrades("pgsqltest-sess-3", trades); err != nil {
 		t.Fatalf("RecordSessionTrades: %v", err)
