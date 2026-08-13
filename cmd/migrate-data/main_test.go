@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"regexp"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,8 +27,6 @@ func connectTestPG(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 	return pool
 }
-
-var dateSessionIDRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 func cleanupMigrateTestRows(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
