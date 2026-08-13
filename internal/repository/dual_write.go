@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,7 +17,19 @@ import (
 type DualWriteRepository struct {
 	pg    *PostgresRepository
 	jsonl *JSONLRepository
+
+	// PG health state (BL-06/Step2): pgUsable() now performs a live SELECT 1
+	// probe with a short TTL cache, so a dead PostgreSQL (e.g. the 2026-07-29
+	// timescaledb version mismatch that silently broke every query for 15 days)
+	// is surfaced via logs and state transitions instead of being silently
+	// swallowed by `_ =` call sites.
+	pgHealthMu     sync.Mutex
+	pgHealthy      bool
+	pgCheckedAt    time.Time
+	pgHealthWarned bool // true once we've logged the unhealthy transition
 }
+
+const pgHealthCheckTTL = 15 * time.Second
 
 type JSONLRepository struct {
 	alertStore             AlertStore
@@ -105,8 +118,44 @@ func NewDualWriteRepository(pool *pgxpool.Pool, alertStore AlertStore, metricsSt
 // Centralizes the nil-struct + nil-pool guard so direct construction of
 // &PostgresRepository{pool: nil} (e.g. in tests or after pool teardown)
 // cannot trigger a nil-pointer panic at the Query/Exec call site.
+//
+// BL-06/Step2: beyond the nil guard, this performs a live SELECT 1 probe
+// (TTL-cached) so a PostgreSQL whose pool is non-nil but actually dead (e.g.
+// the 2026-07-29 timescaledb version mismatch that broke every query for 15
+// days) is surfaced via a logged unhealthy transition instead of every call
+// site silently swallowing the failure. On the first detected failure and on
+// recovery we log; steady-state unhealthy calls return fast from cache.
 func (r *DualWriteRepository) pgUsable() bool {
-	return r.pg != nil && r.pg.pool != nil
+	if r.pg == nil || r.pg.pool == nil {
+		return false
+	}
+	ctx := context.Background()
+
+	r.pgHealthMu.Lock()
+	defer r.pgHealthMu.Unlock()
+
+	// Serve from cache within TTL to avoid a probe on every dual-write call.
+	if !r.pgCheckedAt.IsZero() && time.Since(r.pgCheckedAt) < pgHealthCheckTTL {
+		return r.pgHealthy
+	}
+
+	// Probe: SELECT 1 via the pool interface (no Ping method on pgPool).
+	healthy := true
+	var probe int
+	if err := r.pg.pool.QueryRow(ctx, "SELECT 1").Scan(&probe); err != nil {
+		healthy = false
+		if !r.pgHealthWarned {
+			r.pgHealthWarned = true
+			log.Printf("[repository] PG health FAIL: %v (falling back to SQLite/JSONL)", err)
+		}
+	} else if r.pgHealthWarned {
+		r.pgHealthWarned = false
+		log.Printf("[repository] PG health RECOVERED")
+	}
+	r.pgHealthy = healthy
+	r.pgCheckedAt = time.Now()
+
+	return healthy
 }
 
 // ============================================
