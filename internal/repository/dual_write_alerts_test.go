@@ -153,7 +153,12 @@ func TestDualWriteAlerts_QuerySessions(t *testing.T) {
 	repo := newTestDualWrite(t)
 	ctx := context.Background()
 
-	// QuerySessions needs outcomes to be present
+	// QuerySessions needs outcomes to be present. A01: RecordOutcomes is the
+	// GLOBAL write path — rows land with session_id='' (Window is preserved in
+	// metadata only), so the session query groups them under the empty
+	// (global) session. Session-scoped rows are written via
+	// PostgresLedgerStore.RecordSessionOutcomes (session.ID), which is not
+	// reachable through the dual-write repository.
 	outcomes := []domain.RecommendationOutcome{
 		{Window: "session-001", Symbol: "2330.TW", AgentID: "agent1"},
 	}
@@ -168,7 +173,10 @@ func TestDualWriteAlerts_QuerySessions(t *testing.T) {
 	if len(sessions) == 0 {
 		t.Fatal("Expected at least 1 session from QuerySessions")
 	}
-	if sessions[0].SessionID != "session-001" {
-		t.Errorf("Expected session-001, got %q", sessions[0].SessionID)
+	if sessions[0].SessionID != "" {
+		t.Errorf("Expected global (empty) session_id for RecordOutcomes rows, got %q", sessions[0].SessionID)
+	}
+	if sessions[0].OutcomeCount != 1 {
+		t.Errorf("Expected outcome_count 1, got %d", sessions[0].OutcomeCount)
 	}
 }
