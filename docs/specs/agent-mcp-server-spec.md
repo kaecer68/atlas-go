@@ -63,27 +63,26 @@
 | WA | 群組 | Tool 數 | 主要用途 |
 |----|------|---------|---------|
 | WA-101 資料源 | `data_*` | 4 | channel 健康、data pipeline 監控 |
-| WA-102 標的宇宙 | `universe_*` | 2 | session 列表、universe 重疊分析 |
+| WA-102 標的宇宙 | `universe_*` | 3 | session 列表、session detail、universe 重疊分析 |
 | WA-103 Macro 鏈 | `macro_*` | 6 | stress index、capital flow snapshot、macro snapshot |
-| WA-104 個股 | `stock_*` | 4 | quote、fundamentals、chips、technical |
+| WA-104 個股 | `stock_*` | 5 | quote、fundamentals、chips、technical、monthly revenue |
 | WA-105 資金流 | `capital_flow_*` | 2 | daily Z-score 分解、summary |
 | WA-200 體制 | `regime_*` | 1 | regime 歷史 |
-| WA-201 敘事 / 事件 | `narrative_*`、`event_*` | 9 | events/chains/models/templates/stress-index + event calendar/prediction |
+| WA-201 敘事 / 事件 | `narrative_*`、`event_*` | 10 | events/chains/models/inventory/templates/stress-index + event calendar/prediction |
 | WA-202 跨市場 | `crossmarket_*` | 3 | status/correlation/us-indices |
 | WA-301 LLM Loop | `llm_*` | 2 | health、cost |
 | WA-302 推理/Trace | `trace_*` | 4 | sim-latest、agent observatory、reasoning |
 | WA-400 風險 | `risk_*` | 5 | gate 狀態、correlation、risk-calibration |
-| WA-500 策略 | `strategy_*`、`strategy_ranker` | 6 | list/get/attribution/summary + ranked strategies |
+| WA-500 策略 | `strategy_*`、`strategy_ranker` | 7 | list/get/layers/attribution/summary/for-period + ranked strategies |
 | WA-501 達爾文 | `synergy_*` | 3 | darwinian + l2-4 schedule |
-| WA-503 實驗 | `experiment_*` | 3 | judge/diff/history |
+| WA-503 實驗 | `experiment_*` | 5 | judge/diff/history/promote/revert |
 | WA-505 報告/稅務 | `report_*` | 4 | report + tax snapshot + perf + export |
 | WA-520 推薦 | `get_recommendations` | 1 | tier-gated 投資組合推薦（v0.0.0.31 新；需 JWT） |
-| WA-601 警報 | `alert_*` | 4 | list/stats/rules/unacknowledged |
-| WA-603 控制平面 | `control_*` | 4 | approve/reject/audit/overrides |
+| WA-601 警報 | `alert_*` | 8 | list/stats/rules/unacknowledged + acknowledge/resolve/silence/scan |
+| WA-603 控制平面 | `control_*` | 7 | approve/reject/audit/overrides/pause/resume/sector-ban |
 | WA-604 排程/任務 | `scheduler_*`、`task_*` | 4 | schedule status、task CRUD |
 | WA-606 系統健康 | `system_*` | 7 | health/metrics/trends/thresholds/pipeline/circuit/maturity |
-| WA-700 PRISM | `prism_*` | 1 | training-results |
-| MCP 自我觀測 | `mcp_get_*`、`mcp_anomaly_*` | 6 | session topology、call stats、tenant usage、slow tools + anomaly |
+| MCP 自我觀測 | `mcp_get_*`、`mcp_anomaly_*`、`audit_state` | 7 | session topology、call stats、tenant usage、slow tools + anomaly + charter audit |
 | MCP 協議擴充 | `mcp_roots_*`、`mcp_elicit_user`、`mcp_sample_llm` | 4 | Phase 4 protocol extensions（roots/elicitation/sampling）|
 | Daily Briefing | `mcp_quickstart`、`daily_report` | 2 | 一站式摘要、每日報告 |
 | **總計（post-#1265）** | | **117** | 詳見 `tool-catalog.md` |

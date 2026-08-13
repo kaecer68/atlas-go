@@ -125,7 +125,7 @@ macro_get_stress_index_current
 ### "2330 今天為什麼漲？"
 
 ```js
-event_get_calendar { symbol: "2330", days: 7 }
+event_calendar { symbol: "2330", days: 7 }
 narrative_get_events { filter: { symbols: ["2330"], days: 7 } }
 ```
 
