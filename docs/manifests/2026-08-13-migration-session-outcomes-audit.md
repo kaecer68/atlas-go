@@ -33,7 +33,7 @@
 |------|----|--------|----------|
 | Data analysis (3 sources + PG) | A01 | accepted | scout: PG 7,406 date-format / 43 empty / 0 session-format; SQLite 2,965 session + 3,032 global; 25 PG dates all map to session dirs (comm -23=0) |
 | Design: remap PG dates + backfill SQLite | A01 | accepted | Fix = (1) UPDATE PG session_id date→session-YYYYMMDD-daily (safe, 0 orphans); (2) backfill SQLite session+global outcomes via LoadOutcomes() (preserves session_id format) |
-| Define acceptance | A01 | pending | PG has session-XXX rows for all summaries; LoadSessionOutcomes(session-20260702-daily)>0; report real_trades>0 |
+| Define acceptance | A01 | done | PG has session-XXX rows for all summaries; LoadSessionOutcomes(session-20260702-daily)>0; report real_trades>0 — 全部驗證通過（見 Phase D） |
 
 ### Phase B2 — Q1-Q5 Audit (handoff 2026-08-13, NEW CLI) — DONE
 
@@ -49,12 +49,12 @@
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| C1: 新增 `-outcomes-sqlite-sessions` migration（直接 SQL 讀 SQLite session_id!=''，保留 session_id，NOT EXISTS guard 冪等） | A01 | pending | 設計：cmd/migrate-data/main.go 新增 migrateOutcomesSQLiteSessions()；scanOutcomes 不保留 session_id → 直接 SQL 掃描 |
-| C2: 新增 `-remap-outcome-sessions` migration（UPDATE PG date-format session_id → session-YYYYMMDD-daily，冪等） | A01 | pending | 設計：`UPDATE recommendation_outcomes SET session_id='session-'||replace(session_id,'-','')||'-daily' WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'`。Q2 已驗證 25/25 dates 有真實 session 來源（24 dirs + 07-21 SQLite 375 筆佐證），metadata.window 不變（provenance） |
-| C3: 修 store 寫入路徑（PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes 用 '' / session.ID 取代 o.Window 當 session_id） | A01 | pending | Q5：live 寫入 bug 產生 date rows；改為 global=''、session=session.ID（對齊 SQLiteOutcomeStore 語義）。repository/postgres_outcomes.go 的 RecordOutcomes 是 DualWrite 的 global 路徑（time=now），語義同 global → 一併改 ''；其 session 查詢 tests 同步更新 |
+| C1: 新增 `-outcomes-sqlite-sessions` migration（直接 SQL 讀 SQLite session_id!=''，保留 session_id，NOT EXISTS guard 冪等） | A01 | done | 設計：cmd/migrate-data/main.go 新增 migrateOutcomesSQLiteSessions()；scanOutcomes 不保留 session_id → 直接 SQL 掃描 |
+| C2: 新增 `-remap-outcome-sessions` migration（UPDATE PG date-format session_id → session-YYYYMMDD-daily，冪等） | A01 | done | 設計：`UPDATE recommendation_outcomes SET session_id='session-'||replace(session_id,'-','')||'-daily' WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'`。Q2 已驗證 25/25 dates 有真實 session 來源（24 dirs + 07-21 SQLite 375 筆佐證），metadata.window 不變（provenance） |
+| C3: 修 store 寫入路徑（PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes 用 '' / session.ID 取代 o.Window 當 session_id） | A01 | done | Q5：live 寫入 bug 產生 date rows；改為 global=''、session=session.ID（對齊 SQLiteOutcomeStore 語義）。repository/postgres_outcomes.go 的 RecordOutcomes 是 DualWrite 的 global 路徑（time=now），語義同 global → 一併改 ''；其 session 查詢 tests 同步更新 |
 | C4: 重跑 migration（先備份 atlas.db）→ PG 驗證 | A01 | done | atlas.db 備份 atlas.db.bak-20260813-remap-c2；`-outcomes-sqlite-sessions` 遷入 93 rows（15 guard-skipped 與 remap 重疊）；`-remap-outcome-sessions` 重映射 7,406 date rows → session-YYYYMMDD-daily |
 | C5: 驗證（§五 acceptance）+ 冪等重跑 | A01 | done | 無純日期 session_id（0 rows）；LoadSessionOutcomes(session-20260702-daily)=1；report real_trades=608（via PostgresLedgerStore 實測）；重跑 counts 7,527 不變（0 inserted） |
-| C6: go test ./internal/ledger/... + make ci-gate + commit + PR | A01 | pending | ledger/reporting/repository/monitoring tests 全過；commit per ID；PR body 引用本 manifest |
+| C6: go test ./internal/ledger/... + make ci-gate + commit + PR | A01 | done | ledger/reporting/repository/monitoring tests 全過；commit per ID；PR body 引用本 manifest |
 
 > **Note**: C2 remap 在單元測試初版（未包 transaction）執行時已套用到 dev PG（7,406 rows，idempotent，與設計一致）；後修正測試為 transaction 隔離並以 RowsAffected 回報真實插入數。最終 dev PG 狀態：7,484 session-format（7,406 remapped + 78 backfilled）+ 43 empty = 7,527。
 
@@ -97,10 +97,10 @@
 
 ## Session-End State
 
-- **Done this session**: Phase A + Phase B2 audit + Phase C (C1-C5) + Phase D 驗證全部完成；commit 3 個（manifest 2 + code 1）已就緒
-- **Remaining**: 僅剩 PR create（分支 → push → gh pr create → merge）
-- **Next action**: push 分支 + gh pr create，PR body 引用本 manifest
-- **Branch / PR**: fix/20260813-session-outcomes-migration
+- **Done**: Phase A + Phase B2 audit + Phase C (C1-C6) + Phase D 驗證全部完成
+- **PR**: #1559 已 merge（2026-08-13T12:49:50Z，commit e44bc6f3）；本地/遠端分支已刪除；worktree 已移除
+- **Outstanding（外部/後續）**: ① live atlas API 需重啟以套用 C3 store 寫入路徑修復（pre-fix binary 會寫 date rows，`-remap-outcome-sessions` 冪等可隨時正常化）；② `make build-frontend` 補 admin_web/client_web dist 後 `make ci-gate` 才能本地全過（pre-existing）
+- **Branch / PR**: fix/20260813-session-outcomes-migration（已 merge 並刪除）
 
 ---
 
@@ -111,3 +111,4 @@
 | 2026-08-13 | 1.0 | Initial manifest | agent |
 | 2026-08-13 | 1.1 | Q1-Q5 audit complete (Phase B2); B01-B03 closed with evidence; Phase C plan C1-C6 | agent (takeover CLI) |
 | 2026-08-13 | 1.2 | Phase C 實作 + 驗證完成（C1-C5 done）；Phase D acceptance 全數驗證；見 Phase C/D tables | agent (takeover CLI) |
+| 2026-08-13 | 1.3 | 補正 C1/C2/C3/C6 + Define acceptance 狀態 pending→done（合併後 status audit） | agent (takeover CLI) |
