@@ -149,3 +149,51 @@ func TestInsertSessionOutcomeBatch(t *testing.T) {
 		t.Fatalf("expected 2 rows after idempotent re-run, got %d", n)
 	}
 }
+
+// TestInsertOutcomeBatchGlobal verifies SQLite global rows land with
+// session_id=” (not o.Window) and the NOT EXISTS guard keeps re-runs
+// idempotent — regression test for the -outcomes-sqlite non-idempotency
+// fixed by insertOutcomeBatchGlobal.
+func TestInsertOutcomeBatchGlobal(t *testing.T) {
+	pool := connectTestPG(t)
+	cleanupMigrateTestRows(t, pool)
+	ctx := context.Background()
+
+	// A dated-window global row: window is the evaluation date; session_id
+	// must be '' (global aggregate), NOT the date.
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "migratetest-g1", Symbol: "00713.TW", Side: "BUY", Conviction: 60, Window: "2026-07-22", PassedGuards: true},
+	}
+
+	inserted, err := insertOutcomeBatchGlobal(ctx, pool, outcomes)
+	if err != nil {
+		t.Fatalf("insertOutcomeBatchGlobal: %v", err)
+	}
+	if inserted != 1 {
+		t.Fatalf("expected 1 inserted, got %d", inserted)
+	}
+
+	var sid string
+	if err := pool.QueryRow(ctx, `SELECT session_id FROM recommendation_outcomes WHERE agent_id='migratetest-g1'`).Scan(&sid); err != nil {
+		t.Fatalf("query session_id: %v", err)
+	}
+	if sid != "" {
+		t.Fatalf("expected global session_id='', got %q (dated-window global row must NOT become a date session_id)", sid)
+	}
+
+	// Re-run: guard blocks, 0 inserted.
+	inserted, err = insertOutcomeBatchGlobal(ctx, pool, outcomes)
+	if err != nil {
+		t.Fatalf("second insertOutcomeBatchGlobal: %v", err)
+	}
+	if inserted != 0 {
+		t.Fatalf("expected 0 inserted on idempotent re-run, got %d", inserted)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM recommendation_outcomes WHERE agent_id='migratetest-g1'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 row after idempotent re-run, got %d", n)
+	}
+}
