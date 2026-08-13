@@ -91,5 +91,20 @@ func TestMCPAutoDescConformance(t *testing.T) {
 		}
 	}
 
+	// Invariant 4: narrative_get_models must describe the actual payload —
+	// investment models with sector bets — not a detector/forecaster list.
+	// Guards against regressing to the misleading "regime detector, flow
+	// forecaster" description (capital_models audit, 2026-08-13).
+	if mDesc := descBy("narrative_get_models"); mDesc != "" {
+		low := strings.ToLower(mDesc)
+		if !strings.Contains(low, "favored") && !strings.Contains(low, "avoided") &&
+			!strings.Contains(low, "investment") && !strings.Contains(low, "sector") {
+			t.Errorf("narrative_get_models description must describe investment models / sector bets; got: %q", mDesc)
+		}
+		if strings.Contains(low, "regime detector") || strings.Contains(low, "flow forecaster") {
+			t.Errorf("narrative_get_models description must not claim to be a detector/forecaster list; got: %q", mDesc)
+		}
+	}
+
 	t.Logf("conformance: %d tools in auto-desc map, all invariants passed", len(keys))
 }

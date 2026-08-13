@@ -748,9 +748,16 @@
       "type": "object"
     }
   },
+  "narrative_get_model_inventory": {
+    "name": "narrative_get_model_inventory",
+    "description": "Full capital-models module picture for agents (ACI): all investment models, the active subset, and the theme→model / theme→template cross-reference (表裡結構). Lets an agent inventory what the module contains, how models link to causality templates, and how SectorBias turns model sector bets into allocation multipliers.  HTTP: GET /api/narrative/models/inventory. Alternative: narrative_get_models, narrative_get_templates, detector_registry_list.",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
   "narrative_get_models": {
     "name": "narrative_get_models",
-    "description": "Active narrative models (regime detector, flow forecaster, etc.) HTTP: GET /api/narrative/models. Alternative: narrative_get_templates, narrative_get_seasonal.",
+    "description": "Currently-active investment models (FavoredSectors/AvoidedSectors sector bets × Darwinian weight, hit_rate, sample_count) — the executable sector allocations derived from detected narrative themes.  HTTP: GET /api/narrative/models. Alternative: narrative_get_templates, detector_registry_list.",
     "inputSchema": {
       "type": "object"
     }

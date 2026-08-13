@@ -21,9 +21,15 @@ func registerNarrativeTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_models",
-		Description: autoDescOr("narrative_get_models", "Active narrative models (regime detector, flow forecaster, etc.) HTTP: GET /api/narrative/models. Alternative: narrative_get_templates, narrative_get_seasonal."),
+		Description: autoDescOr("narrative_get_models", "Currently-active investment models (FavoredSectors/AvoidedSectors sector bets × Darwinian weight, hit_rate, sample_count) — the executable sector allocations derived from detected narrative themes.  HTTP: GET /api/narrative/models. Alternative: narrative_get_templates, detector_registry_list."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleNarrativeGetModels)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "narrative_get_model_inventory",
+		Description: autoDescOr("narrative_get_model_inventory", "Full capital-models module picture for agents (ACI): all investment models, the active subset, and the theme→model / theme→template cross-reference (表裡結構). Lets an agent inventory what the module contains, how models link to causality templates, and how SectorBias turns model sector bets into allocation multipliers.  HTTP: GET /api/narrative/models/inventory. Alternative: narrative_get_models, narrative_get_templates, detector_registry_list."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+	}, s.handleNarrativeGetModelInventory)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "narrative_get_templates",
@@ -89,6 +95,16 @@ func (s *server) handleNarrativeGetModels(ctx context.Context, _ *mcp.CallToolRe
 	var out narrativeBaseOutput
 	if err := s.withAudit(ctx, "narrative_get_models", nil, func() error {
 		return s.cli.Get(ctx, "/api/narrative/models", nil, &out.Result)
+	}); err != nil {
+		return nil, narrativeBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleNarrativeGetModelInventory(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, narrativeBaseOutput, error) {
+	var out narrativeBaseOutput
+	if err := s.withAudit(ctx, "narrative_get_model_inventory", nil, func() error {
+		return s.cli.Get(ctx, "/api/narrative/models/inventory", nil, &out.Result)
 	}); err != nil {
 		return nil, narrativeBaseOutput{}, err
 	}

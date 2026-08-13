@@ -583,3 +583,48 @@ func TestNarrativeService_WithHistoricalStore_ChainsReturnSameService(t *testing
 		t.Error("historicalStore not set after WithHistoricalStore")
 	}
 }
+
+func TestNarrativeService_ListModels_ReturnsAll(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := NewNarrativeService(t.TempDir(), eng, nil)
+
+	models := svc.ListModels()
+	// Full library = all models, not just active ones.
+	if len(models) != 21 {
+		t.Fatalf("expected 21 models in full library, got %d", len(models))
+	}
+}
+
+func TestNarrativeService_ModelInventory_Structure(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(&mockMacroProvider2{snap: marketdata.MacroDataSnapshot{}})
+
+	inv := svc.ModelInventory(context.Background())
+
+	all, ok := inv["all_models"].([]narrative.InvestmentModel)
+	if !ok || len(all) != 21 {
+		t.Fatalf("expected all_models with 21 models, got %T len=%d", inv["all_models"], len(all))
+	}
+	if _, ok := inv["active_models"].([]narrative.InvestmentModel); !ok {
+		t.Fatalf("expected active_models slice, got %T", inv["active_models"])
+	}
+	tm, ok := inv["theme_to_models"].(map[string][]string)
+	if !ok {
+		t.Fatalf("expected theme_to_models map, got %T", inv["theme_to_models"])
+	}
+	tt, ok := inv["theme_to_templates"].(map[string][]string)
+	if !ok {
+		t.Fatalf("expected theme_to_templates map, got %T", inv["theme_to_templates"])
+	}
+	// 表裡結構: AI_capex_surge maps to ai_supercycle_model AND to its template.
+	if len(tm["AI_capex_surge"]) == 0 {
+		t.Errorf("AI_capex_surge should map to ≥1 model, got %v", tm["AI_capex_surge"])
+	}
+	if len(tt["AI_capex_surge"]) == 0 {
+		t.Errorf("AI_capex_surge should map to ≥1 template, got %v", tt["AI_capex_surge"])
+	}
+	if _, ok := inv["workflow"]; !ok {
+		t.Error("expected workflow field in inventory")
+	}
+}
