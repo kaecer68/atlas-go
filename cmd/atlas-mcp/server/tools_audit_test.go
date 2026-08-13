@@ -22,7 +22,7 @@ func TestMCPGetCallStats_ReturnsAggregatedMetrics(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, stats, err := s.handleMCPGetCallStats(context.Background(), nil, CallStatsInput{WindowMinutes: 60})
+	_, stats, err := s.handleMCPGetCallStats(context.Background(), nil, CallStatsInput{WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetCallStats: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestMCPGetSessionTopology_ReturnsAgentToolMatrix(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, topo, err := s.handleMCPGetSessionTopology(context.Background(), nil, TopologyInput{WindowMinutes: 60})
+	_, topo, err := s.handleMCPGetSessionTopology(context.Background(), nil, TopologyInput{WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetSessionTopology: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestMCPGetTopSlowTools_ReturnsSortedByLatency(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: 5, WindowMinutes: 60})
+	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: intPtr(5), WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTopSlowTools: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestMCPGetTopSlowTools_RespectsLimit(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: 3, WindowMinutes: 60})
+	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: intPtr(3), WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTopSlowTools: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestMCPGetTenantUsage_ReturnsTenantStats(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: 60})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestMCPGetTenantUsage_AnonymousFallback(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: 60})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestMCPGetTenantUsage_EmptyAuditReturnsEmpty(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: 60})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}

@@ -48,17 +48,17 @@ func registerAuditTools(mcpSrv *mcp.Server, s *server) {
 
 // CallStatsInput is the request schema for mcp_get_call_stats.
 type CallStatsInput struct {
-	WindowMinutes int `json:"window_minutes" jsonschema:"query window in minutes; default 60, max 1440"`
+	WindowMinutes *int `json:"window_minutes,omitempty" jsonschema:"query window in minutes; default 60, max 1440"`
 }
 
 // TopologyInput is the request schema for mcp_get_session_topology.
 type TopologyInput struct {
-	WindowMinutes int `json:"window_minutes" jsonschema:"query window in minutes; default 60, max 1440"`
+	WindowMinutes *int `json:"window_minutes,omitempty" jsonschema:"query window in minutes; default 60, max 1440"`
 }
 
 type TopSlowToolsInput struct {
-	Limit         int `json:"limit" jsonschema:"number of slowest tools to return; default 5, max 20"`
-	WindowMinutes int `json:"window_minutes" jsonschema:"query window in minutes; default 60, max 1440"`
+	Limit         *int `json:"limit,omitempty" jsonschema:"number of slowest tools to return; default 5, max 20"`
+	WindowMinutes *int `json:"window_minutes,omitempty" jsonschema:"query window in minutes; default 60, max 1440"`
 }
 
 type ToolLatencyStats struct {
@@ -74,7 +74,7 @@ type TopSlowToolsOutput struct {
 }
 
 type TenantUsageInput struct {
-	WindowMinutes int `json:"window_minutes" jsonschema:"query window in minutes; default 60, max 1440"`
+	WindowMinutes *int `json:"window_minutes,omitempty" jsonschema:"query window in minutes; default 60, max 1440"`
 }
 
 type TenantUsageStats struct {
@@ -90,9 +90,9 @@ type TenantUsageOutput struct {
 }
 
 func (s *server) handleMCPGetCallStats(ctx context.Context, _ *mcp.CallToolRequest, in CallStatsInput) (*mcp.CallToolResult, CallStats, error) {
-	window := time.Duration(in.WindowMinutes) * time.Minute
-	if window <= 0 {
-		window = 60 * time.Minute
+	window := 60 * time.Minute
+	if in.WindowMinutes != nil && *in.WindowMinutes > 0 {
+		window = time.Duration(*in.WindowMinutes) * time.Minute
 	}
 	if window > maxAuditWindow {
 		return nil, CallStats{}, fmt.Errorf("mcp_get_call_stats: window too large")
@@ -108,9 +108,9 @@ func (s *server) handleMCPGetCallStats(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (s *server) handleMCPGetSessionTopology(ctx context.Context, _ *mcp.CallToolRequest, in TopologyInput) (*mcp.CallToolResult, SessionTopology, error) {
-	window := time.Duration(in.WindowMinutes) * time.Minute
-	if window <= 0 {
-		window = 60 * time.Minute
+	window := 60 * time.Minute
+	if in.WindowMinutes != nil && *in.WindowMinutes > 0 {
+		window = time.Duration(*in.WindowMinutes) * time.Minute
 	}
 	if window > maxAuditWindow {
 		return nil, SessionTopology{}, fmt.Errorf("mcp_get_session_topology: window too large")
@@ -126,16 +126,16 @@ func (s *server) handleMCPGetSessionTopology(ctx context.Context, _ *mcp.CallToo
 }
 
 func (s *server) handleMCPGetTopSlowTools(ctx context.Context, _ *mcp.CallToolRequest, in TopSlowToolsInput) (*mcp.CallToolResult, TopSlowToolsOutput, error) {
-	window := time.Duration(in.WindowMinutes) * time.Minute
-	if window <= 0 {
-		window = 60 * time.Minute
+	window := 60 * time.Minute
+	if in.WindowMinutes != nil && *in.WindowMinutes > 0 {
+		window = time.Duration(*in.WindowMinutes) * time.Minute
 	}
 	if window > maxAuditWindow {
 		return nil, TopSlowToolsOutput{}, fmt.Errorf("mcp_get_top_slow_tools: window too large")
 	}
-	limit := in.Limit
-	if limit <= 0 {
-		limit = 5
+	limit := 5
+	if in.Limit != nil && *in.Limit > 0 {
+		limit = *in.Limit
 	}
 	if limit > 20 {
 		limit = 20
@@ -168,9 +168,9 @@ func (s *server) handleMCPGetTopSlowTools(ctx context.Context, _ *mcp.CallToolRe
 }
 
 func (s *server) handleMCPGetTenantUsage(ctx context.Context, _ *mcp.CallToolRequest, in TenantUsageInput) (*mcp.CallToolResult, TenantUsageOutput, error) {
-	window := time.Duration(in.WindowMinutes) * time.Minute
-	if window <= 0 {
-		window = 60 * time.Minute
+	window := 60 * time.Minute
+	if in.WindowMinutes != nil && *in.WindowMinutes > 0 {
+		window = time.Duration(*in.WindowMinutes) * time.Minute
 	}
 	if window > maxAuditWindow {
 		return nil, TenantUsageOutput{}, fmt.Errorf("mcp_get_tenant_usage: window too large")

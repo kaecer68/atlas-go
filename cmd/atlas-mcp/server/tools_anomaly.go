@@ -25,7 +25,7 @@ func registerAnomalyTools(mcpSrv *mcp.Server, s *server) {
 
 // AnomalyGetRecentInput is the input schema for mcp_anomaly_get_recent.
 type AnomalyGetRecentInput struct {
-	Limit int `json:"limit" jsonschema:"how many events to return; default 10, max 100"`
+	Limit *int `json:"limit,omitempty" jsonschema:"how many events to return; default 10, max 100"`
 }
 
 // AnomalyGetRecentOutput is the output schema for mcp_anomaly_get_recent.
@@ -44,11 +44,12 @@ type AnomalyAckOutput struct {
 }
 
 func (s *server) handleAnomalyGetRecent(ctx context.Context, _ *mcp.CallToolRequest, in AnomalyGetRecentInput) (*mcp.CallToolResult, AnomalyGetRecentOutput, error) {
-	if in.Limit <= 0 {
-		in.Limit = 10
+	limit := 10
+	if in.Limit != nil && *in.Limit > 0 {
+		limit = *in.Limit
 	}
-	if in.Limit > 100 {
-		in.Limit = 100
+	if limit > 100 {
+		limit = 100
 	}
 
 	var out AnomalyGetRecentOutput
@@ -56,7 +57,7 @@ func (s *server) handleAnomalyGetRecent(ctx context.Context, _ *mcp.CallToolRequ
 		if s.detector == nil {
 			return errors.New("anomaly detector not initialized")
 		}
-		out.Events = s.detector.Store().Recent(in.Limit)
+		out.Events = s.detector.Store().Recent(limit)
 		return nil
 	}); err != nil {
 		return nil, AnomalyGetRecentOutput{}, err

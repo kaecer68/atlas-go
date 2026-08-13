@@ -42,7 +42,7 @@ type ParametersGetMetadataOutput struct {
 }
 
 type ParametersGetSnapshotsInput struct {
-	Days int `json:"days" jsonschema:"how many snapshots back; default 20, max 365"`
+	Days *int `json:"days,omitempty" jsonschema:"how many snapshots back; default 20, max 365"`
 }
 
 type ParametersGetSnapshotsOutput struct {
@@ -90,9 +90,9 @@ func (s *server) handleParametersGetMetadata(ctx context.Context, _ *mcp.CallToo
 }
 
 func (s *server) handleParametersGetSnapshots(ctx context.Context, _ *mcp.CallToolRequest, in ParametersGetSnapshotsInput) (*mcp.CallToolResult, ParametersGetSnapshotsOutput, error) {
-	days := in.Days
-	if days <= 0 {
-		days = 20
+	days := 20
+	if in.Days != nil && *in.Days > 0 {
+		days = *in.Days
 	}
 	if days > 365 {
 		days = 365

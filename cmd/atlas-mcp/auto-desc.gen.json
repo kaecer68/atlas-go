@@ -551,9 +551,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "limit"
-      ],
       "type": "object"
     }
   },
@@ -599,9 +596,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "window_minutes"
-      ],
       "type": "object"
     }
   },
@@ -615,9 +609,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "window_minutes"
-      ],
       "type": "object"
     }
   },
@@ -631,9 +622,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "window_minutes"
-      ],
       "type": "object"
     }
   },
@@ -651,10 +639,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "limit",
-        "window_minutes"
-      ],
       "type": "object"
     }
   },
@@ -821,9 +805,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "days"
-      ],
       "type": "object"
     }
   },
@@ -837,9 +818,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "days"
-      ],
       "type": "object"
     }
   },
