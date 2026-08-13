@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
@@ -15,7 +17,17 @@ import (
 var (
 	sharedSQLiteDBs = make(map[string]*sql.DB)
 	sharedSQLiteMu  sync.Mutex
+	// postgresPool is injected by the bootstrap/main wiring when the
+	// historical store is backed by PostgreSQL (StoreBackend=postgres).
+	postgresPool *pgxpool.Pool
 )
+
+// SetPostgresPool injects the shared pgxpool used by PostgresHistoricalStore.
+// Called once at wiring time when StoreBackend=postgres; nil leaves the
+// postgres historical backend unavailable.
+func SetPostgresPool(pool *pgxpool.Pool) {
+	postgresPool = pool
+}
 
 // getSharedSQLiteDB returns a shared *sql.DB for the given path.
 // The DB is opened once per path, WAL mode is enabled, foreign keys
@@ -291,7 +303,12 @@ func NewHistoricalStore(cfg config.Config) (HistoricalStore, error) {
 			return nil, fmt.Errorf("historical: shared sqlite: %w", err)
 		}
 		return NewSQLiteHistoricalStore(db), nil
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("historical: postgres backend requires SetPostgresPool before NewHistoricalStore")
+		}
+		return NewPostgresHistoricalStore(postgresPool), nil
 	default:
-		return nil, fmt.Errorf("historical: backend %q not supported (sqlite-only per Stage 4 PR#2 contract)", cfg.StoreBackend)
+		return nil, fmt.Errorf("historical: backend %q not supported (sqlite or postgres)", cfg.StoreBackend)
 	}
 }
