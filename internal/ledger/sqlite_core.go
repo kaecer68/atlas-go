@@ -258,6 +258,7 @@ func InitSchema(db *sql.DB) error {
 	// here so future operators reading the file can trace the schema delta.
 	additiveMigrations := []func(*sql.DB) error{
 		addRegimeHistorySourceColumn, // PR #1247 (D01)
+		addOutcomesEvaluationColumns, // BL-06 (outcomes 評估欄位持久化)
 	}
 	for _, m := range additiveMigrations {
 		if err := m(db); err != nil {
@@ -300,6 +301,57 @@ func addRegimeHistorySourceColumn(db *sql.DB) error {
 
 	if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT 'synthetic'`); err != nil {
 		return fmt.Errorf("alter %s add %s: %w", table, column, err)
+	}
+	return nil
+}
+
+// addColumnIfMissing adds a column to a table if it is not already present.
+// Idempotent: PRAGMA table_info gates the ALTER, so re-running on a fresh or
+// already-migrated DB is a no-op.
+func addColumnIfMissing(db *sql.DB, table, column, ddl string) error {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return fmt.Errorf("pragma table_info %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan pragma row: %w", err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + ddl); err != nil {
+		return fmt.Errorf("alter %s add %s: %w", table, column, err)
+	}
+	return nil
+}
+
+// addOutcomesEvaluationColumns adds the evaluation fields that the SQLite
+// outcomes table previously dropped on write (BL-06). The legacy `regime`
+// column was misused to store AgentLayer (see RecordSessionOutcomes), so a
+// separate `true_regime` column holds the real regime and `layer` the real
+// layer. These columns let the performance report see genuine forward
+// returns / regime / window for StoreBackend=sqlite instead of zeros.
+func addOutcomesEvaluationColumns(db *sql.DB) error {
+	const table = "outcomes"
+	for col, ddl := range map[string]string{
+		"layer":           "TEXT",
+		"forward_return":  "REAL",
+		"window":          "TEXT",
+		"hit":             "INTEGER",
+		"benchmark_delta": "REAL",
+		"is_synthetic":    "INTEGER",
+		"true_regime":     "TEXT",
+	} {
+		if err := addColumnIfMissing(db, table, col, ddl); err != nil {
+			return fmt.Errorf("migrate %s.%s: %w", table, col, err)
+		}
 	}
 	return nil
 }
