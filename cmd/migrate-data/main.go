@@ -31,19 +31,24 @@ func main() {
 
 func run() error {
 	var (
-		migrateMetrics       = flag.Bool("metrics", false, "Migrate metrics data")
-		migrateAlerts        = flag.Bool("alerts", false, "Migrate alerts data")
-		migrateOutcomes      = flag.Bool("outcomes", false, "Migrate recommendation outcomes")
-		migrateScreening     = flag.Bool("screening", false, "Migrate screening rejects")
-		migrateSummaries     = flag.Bool("summaries", false, "Migrate session summaries")
-		migrateInterventions = flag.Bool("interventions", false, "Migrate human interventions")
-		migrateCapitalFlow   = flag.Bool("capitalflow", false, "Migrate capital flow data")
-		migrateExportStats   = flag.Bool("exportstats", false, "Migrate export statistics")
-		migrateHistorical    = flag.Bool("historical", false, "Migrate historical tables (regime/stress/geo/period) from SQLite atlas.db")
-		migrateQuotes        = flag.Bool("quotes", false, "Migrate quotes from SQLite atlas.db")
-		migrateDetectorScans = flag.Bool("detector-scans", false, "Migrate detector_scan_log from SQLite atlas.db")
-		sqlitePath           = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
-		migrateAll           = flag.Bool("all", false, "Migrate all data")
+		migrateMetrics           = flag.Bool("metrics", false, "Migrate metrics data")
+		migrateAlerts            = flag.Bool("alerts", false, "Migrate alerts data")
+		migrateOutcomes          = flag.Bool("outcomes", false, "Migrate recommendation outcomes")
+		migrateScreening         = flag.Bool("screening", false, "Migrate screening rejects")
+		migrateSummaries         = flag.Bool("summaries", false, "Migrate session summaries")
+		migrateInterventions     = flag.Bool("interventions", false, "Migrate human interventions")
+		migrateCapitalFlow       = flag.Bool("capitalflow", false, "Migrate capital flow data")
+		migrateExportStats       = flag.Bool("exportstats", false, "Migrate export statistics")
+		migrateHistorical        = flag.Bool("historical", false, "Migrate historical tables (regime/stress/geo/period) from SQLite atlas.db")
+		migrateQuotes            = flag.Bool("quotes", false, "Migrate quotes from SQLite atlas.db")
+		migrateDetectorScans     = flag.Bool("detector-scans", false, "Migrate detector_scan_log from SQLite atlas.db")
+		migrateOutcomesSQLite    = flag.Bool("outcomes-sqlite", false, "Migrate outcomes from SQLite atlas.db (SQLite is the only complete source)")
+		migrateScreeningSQLite   = flag.Bool("screening-sqlite", false, "Migrate screening rejects from SQLite atlas.db")
+		migrateTradesSQLite      = flag.Bool("trades-sqlite", false, "Migrate trades from SQLite atlas.db (absent from JSONL — E5)")
+		migrateExperimentsSQLite = flag.Bool("experiments-sqlite", false, "Migrate experiments from SQLite atlas.db (C1: id space disjoint from JSONL)")
+		migrateSummariesSQLite   = flag.Bool("summaries-sqlite", false, "Migrate session summaries from SQLite atlas.db (C2: sessions missing from JSONL)")
+		sqlitePath               = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
+		migrateAll               = flag.Bool("all", false, "Migrate all data")
 	)
 	flag.Parse()
 
@@ -127,6 +132,36 @@ func run() error {
 	if *migrateAll || *migrateDetectorScans {
 		if err := migrateDetectorScansData(ctx, pool, *sqlitePath); err != nil {
 			return fmt.Errorf("migrate detector scans: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateOutcomesSQLite {
+		if err := migrateOutcomesSQLiteData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate outcomes sqlite: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateScreeningSQLite {
+		if err := migrateScreeningSQLiteData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate screening sqlite: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateTradesSQLite {
+		if err := migrateTradesSQLiteData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate trades sqlite: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateExperimentsSQLite {
+		if err := migrateExperimentsSQLiteData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate experiments sqlite: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateSummariesSQLite {
+		if err := migrateSummariesSQLiteData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate summaries sqlite: %w", err)
 		}
 	}
 
@@ -313,9 +348,16 @@ func migrateOutcomesFile(ctx context.Context, pool *pgxpool.Pool, filePath strin
 func insertOutcomeBatch(ctx context.Context, pool *pgxpool.Pool, outcomes []domain.RecommendationOutcome) error {
 	for _, o := range outcomes {
 		metadata, _ := json.Marshal(o)
+
+		// NOT EXISTS guard makes the batch idempotent: re-running the
+		// migration (or mixing JSONL + SQLite sources) never duplicates a row.
 		_, err := pool.Exec(ctx, `
 			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			WHERE NOT EXISTS (
+				SELECT 1 FROM recommendation_outcomes
+				WHERE session_id = $2 AND symbol = $3 AND agent_id = $4 AND time = $1
+			)
 		`, o.RecordedAt, o.Window, o.Symbol, o.AgentID, string(o.Layer),
 			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
 		if err != nil {
@@ -388,9 +430,14 @@ func migrateScreeningRejectsData(ctx context.Context, pool *pgxpool.Pool, stateD
 func insertScreeningRejectBatch(ctx context.Context, pool *pgxpool.Pool, rejects []domain.ScreeningReject) error {
 	for _, sr := range rejects {
 		factorScores, _ := json.Marshal(sr.FactorScores)
+		// NOT EXISTS guard makes the batch idempotent (see insertOutcomeBatch).
 		_, err := pool.Exec(ctx, `
 			INSERT INTO screening_rejects (time, session_id, symbol, agent_id, skill, criterion, criterion_label, threshold, actual_value, factor_scores)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			WHERE NOT EXISTS (
+				SELECT 1 FROM screening_rejects
+				WHERE session_id = $2 AND symbol = $3 AND agent_id = $4 AND time = $1
+			)
 		`, sr.RecordedAt, sr.SessionID, sr.Symbol, sr.AgentID, sr.Skill,
 			sr.Criterion, sr.CriterionLabel, sr.Threshold, sr.ActualValue, factorScores)
 		if err != nil {
@@ -670,6 +717,31 @@ func migrateHistoricalData(ctx context.Context, pool *pgxpool.Pool, sqlitePath s
 	}
 	log.Printf("Migrated %d period_history rows", len(periods))
 
+	// Event calendar (M2: previously skipped; 0 rows in SQLite but part of
+	// the complete historical surface).
+	events, err := hist.LoadEventCalendarRangeAll(ctx, "0000-01-01", "9999-12-31", 100000)
+	if err != nil {
+		return fmt.Errorf("load event calendar: %w", err)
+	}
+	for _, r := range events {
+		if err := pgHist.UpsertEventCalendar(ctx, r); err != nil {
+			return fmt.Errorf("migrate event calendar %s/%s: %w", r.Date, r.EventID, err)
+		}
+	}
+	log.Printf("Migrated %d event_calendar_history rows", len(events))
+
+	// Prediction backtest (M2: 2 rows in SQLite).
+	sqlitePredictions, err := hist.LoadPredictionBacktestRangeAll(ctx, "0000-01-01", "9999-12-31", 100000)
+	if err != nil {
+		return fmt.Errorf("load sqlite prediction backtest: %w", err)
+	}
+	for _, r := range sqlitePredictions {
+		if err := pgHist.UpsertPredictionBacktest(ctx, r); err != nil {
+			return fmt.Errorf("migrate prediction backtest %s: %w", r.Date, err)
+		}
+	}
+	log.Printf("Migrated %d prediction_backtest rows", len(sqlitePredictions))
+
 	return nil
 }
 
@@ -828,4 +900,297 @@ func migrateDetectorScansData(ctx context.Context, pool *pgxpool.Pool, sqlitePat
 
 	log.Printf("Migrated %d detector_scan_log rows", count)
 	return nil
+}
+
+// migrateOutcomesSQLiteData copies outcomes from the source SQLite atlas.db
+// into PostgreSQL. SQLite is the only complete outcomes source (5,997 rows
+// vs 4,164 in per-session JSONL — M5); LoadOutcomes() returns the full
+// 21-column domain objects. Rows go through insertOutcomeBatch (NOT EXISTS
+// guard) so re-running is idempotent and never duplicates JSONL-migrated rows.
+func migrateOutcomesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	store := ledger.NewSQLiteOutcomeStore(sqliteDB)
+	outcomes, err := store.LoadOutcomes()
+	if err != nil {
+		return fmt.Errorf("load sqlite outcomes: %w", err)
+	}
+	if len(outcomes) == 0 {
+		log.Println("No sqlite outcomes to migrate, skipping")
+		return nil
+	}
+
+	const batchSize = 1000
+	var count int
+	for start := 0; start < len(outcomes); start += batchSize {
+		end := start + batchSize
+		if end > len(outcomes) {
+			end = len(outcomes)
+		}
+		if err := insertOutcomeBatch(ctx, pool, outcomes[start:end]); err != nil {
+			return fmt.Errorf("insert outcome batch: %w", err)
+		}
+		count += end - start
+	}
+	log.Printf("Migrated %d sqlite outcomes rows", count)
+	return nil
+}
+
+// migrateScreeningSQLiteData copies screening rejects from the source SQLite
+// atlas.db into PostgreSQL. SQLite is the only complete source (20,423 rows
+// vs 1,155 in JSONL — M6). Old SQLite rows have no agent_id; the PG
+// agent_id NOT NULL column receives "legacy". Rows go through
+// insertScreeningRejectBatch (NOT EXISTS guard) for idempotency.
+func migrateScreeningSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	store := ledger.NewSQLiteOutcomeStore(sqliteDB)
+
+	sessionRows, err := sqliteDB.Query(`SELECT DISTINCT session_id FROM screening_rejects`)
+	if err != nil {
+		return fmt.Errorf("query sqlite screening sessions: %w", err)
+	}
+	var sessionIDs []string
+	for sessionRows.Next() {
+		var sid string
+		if err := sessionRows.Scan(&sid); err != nil {
+			_ = sessionRows.Close()
+			return fmt.Errorf("scan screening session: %w", err)
+		}
+		sessionIDs = append(sessionIDs, sid)
+	}
+	_ = sessionRows.Close()
+	if err := sessionRows.Err(); err != nil {
+		return fmt.Errorf("screening sessions iteration: %w", err)
+	}
+
+	const batchSize = 1000
+	var count int
+	var batch []domain.ScreeningReject
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := insertScreeningRejectBatch(ctx, pool, batch); err != nil {
+			return err
+		}
+		count += len(batch)
+		batch = batch[:0]
+		return nil
+	}
+
+	for _, sid := range sessionIDs {
+		rejects, err := store.LoadSessionScreeningRejects(sid)
+		if err != nil {
+			return fmt.Errorf("load screening rejects for %s: %w", sid, err)
+		}
+		for _, r := range rejects {
+			r.AgentID = "legacy"
+			batch = append(batch, r)
+			if len(batch) >= batchSize {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+
+	log.Printf("Migrated %d sqlite screening rejects rows", count)
+	return nil
+}
+
+// migrateTradesSQLiteData copies trades from the source SQLite atlas.db into
+// PostgreSQL. Evidence E5: all 51 SQLite trades (6 unique trade_ids, 6
+// sessions with no trades.jsonl on disk) are absent from JSONL — SQLite is
+// the only source. trade_id is not unique in SQLite (repeated daily runs
+// re-insert), so the NOT EXISTS guard keys on (trade_id, session_id) and
+// keeps the first occurrence per run; re-running is idempotent.
+func migrateTradesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	rows, err := sqliteDB.Query(`
+		SELECT trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp
+		FROM trades ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("query sqlite trades: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type tradeRow struct {
+		tradeID, sessionID, symbol, side, reason, timestamp string
+		quantity                                            int
+		price, amount                                       float64
+	}
+
+	var (
+		batch []tradeRow
+		count int
+	)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		for _, t := range batch {
+			_, err := pool.Exec(ctx, `
+				INSERT INTO trades (trade_id, session_id, symbol, side, quantity, price, amount, reason, timestamp)
+				SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+				WHERE NOT EXISTS (
+					SELECT 1 FROM trades WHERE trade_id = $1 AND session_id = $2
+				)
+			`, t.tradeID, t.sessionID, t.symbol, t.side, t.quantity, t.price, t.amount, t.reason, t.timestamp)
+			if err != nil {
+				return fmt.Errorf("insert trade %s: %w", t.tradeID, err)
+			}
+		}
+		count += len(batch)
+		batch = batch[:0]
+		return nil
+	}
+
+	for rows.Next() {
+		var t tradeRow
+		if err := rows.Scan(&t.tradeID, &t.sessionID, &t.symbol, &t.side,
+			&t.quantity, &t.price, &t.amount, &t.reason, &t.timestamp); err != nil {
+			return fmt.Errorf("scan trade row: %w", err)
+		}
+		batch = append(batch, t)
+		if len(batch) >= 1000 {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite trades iteration: %w", err)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+
+	log.Printf("Migrated %d sqlite trades rows", count)
+	return nil
+}
+
+// migrateExperimentsSQLiteData copies experiments from the source SQLite
+// atlas.db into PostgreSQL. Evidence E4/C1: the SQLite experiment_id set
+// (984 rows) is disjoint from experiments.jsonl (1,153 rows), so JSONL
+// migration cannot cover them. ON CONFLICT (experiment_id) DO NOTHING keeps
+// re-runs idempotent.
+func migrateExperimentsSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	full, err := ledger.NewFullStore(config.Config{StoreBackend: "sqlite", SQLitePath: sqlitePath})
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	store, ok := full.(ledger.ExperimentStore)
+	if !ok {
+		return fmt.Errorf("sqlite full store does not expose ExperimentStore")
+	}
+	records, err := store.LoadExperiments()
+	if err != nil {
+		return fmt.Errorf("load sqlite experiments: %w", err)
+	}
+	if len(records) == 0 {
+		log.Println("No sqlite experiments to migrate, skipping")
+		return nil
+	}
+
+	var count int
+	for _, rec := range records {
+		briefJSON, err := json.Marshal(rec)
+		if err != nil {
+			return fmt.Errorf("marshal experiment %s: %w", rec.ID, err)
+		}
+		_, err = pool.Exec(ctx, `
+			INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
+			SELECT $1, $2, $3, $4
+			WHERE NOT EXISTS (SELECT 1 FROM experiments WHERE experiment_id = $1)
+		`, rec.ID, string(briefJSON), boolToInt(rec.Status == domain.ExperimentAccepted),
+			rec.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
+		if err != nil {
+			return fmt.Errorf("insert experiment %s: %w", rec.ID, err)
+		}
+		count++
+	}
+	log.Printf("Migrated %d sqlite experiments rows", count)
+	return nil
+}
+
+// migrateSummariesSQLiteData copies session summaries from the source SQLite
+// atlas.db into PostgreSQL. Evidence E6/C2: 6 SQLite summaries
+// (session-20260721/25/26-daily, 0801/0802/0812-daily) have no session dir
+// on disk, so JSONL migration cannot cover them. Reuses the same
+// INSERT ... ON CONFLICT (session_id) DO UPDATE SQL as the JSONL path.
+func migrateSummariesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	store := ledger.NewSQLiteOutcomeStore(sqliteDB)
+	summaries, err := store.LoadSessionSummaries()
+	if err != nil {
+		return fmt.Errorf("load sqlite session summaries: %w", err)
+	}
+	if len(summaries) == 0 {
+		log.Println("No sqlite session summaries to migrate, skipping")
+		return nil
+	}
+
+	var count int
+	for _, summary := range summaries {
+		brokerRuntime, _ := json.Marshal(summary.BrokerRuntime)
+		guardOutcomes, _ := json.Marshal(summary.GuardOutcomes)
+
+		_, err := pool.Exec(ctx, `
+			INSERT INTO session_summaries (time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			ON CONFLICT (session_id) DO UPDATE SET
+				time = EXCLUDED.time,
+				regime = EXCLUDED.regime,
+				order_count = EXCLUDED.order_count,
+				position_count = EXCLUDED.position_count,
+				ending_cash = EXCLUDED.ending_cash,
+				portfolio_value = EXCLUDED.portfolio_value,
+				outcome_count = EXCLUDED.outcome_count,
+				broker_runtime = EXCLUDED.broker_runtime,
+				next_experiment_agent_id = EXCLUDED.next_experiment_agent_id,
+				proposal_id = EXCLUDED.proposal_id,
+				commit_id = EXCLUDED.commit_id,
+				approval_id = EXCLUDED.approval_id,
+				guard_outcomes = EXCLUDED.guard_outcomes
+		`, summary.RecordedAt, summary.SessionID, string(summary.Regime), summary.OrderCount,
+			summary.PositionCount, summary.EndingCash, summary.PortfolioValue, summary.OutcomeCount,
+			brokerRuntime, summary.NextExperimentAgentID, summary.ProposalID, summary.CommitID,
+			summary.ApprovalID, guardOutcomes)
+		if err != nil {
+			return fmt.Errorf("insert session summary %s: %w", summary.SessionID, err)
+		}
+		count++
+	}
+	log.Printf("Migrated %d sqlite session summaries rows", count)
+	return nil
+}
+
+// boolToInt converts a bool to 0/1 for INTEGER columns.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
