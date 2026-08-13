@@ -14,7 +14,7 @@
 | Tool | 用途 | Tier |
 |------|------|------|
 | `stock_get_quote` | 報價基準線（比較漲跌） | 待 #1068 |
-| `event_get_calendar` | 個股相關事件日曆 | 待 #1068 |
+| `event_calendar` | 個股相關事件日曆 | 待 #1068 |
 | `narrative_get_events` | 個股事件敘事 | 待 #1068 |
 | `narrative_get_chains` | 因果鏈（事件 → 敘事） | 待 #1068 |
 | `stock_get_chips` | 法人買賣超 | 待 #1068 |

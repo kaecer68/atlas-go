@@ -155,14 +155,14 @@ MCP tool 與 HTTP 端點的對應關係（節錄）：
 | `stock_get_fundamentals` | `GET /api/stock/fundamentals` | Premium |
 | `stock_get_chips` | `GET /api/stock/chips` | Premium |
 | `stock_get_technical` | `GET /api/stock/technical` | Premium |
-| `macro_get_snapshot` | `GET /api/macro/snapshot/latest` | Free |
+| `macro_get_snapshot_latest` | `GET /api/macro/snapshot/latest` | Free |
 | `macro_get_snapshot_history` | `GET /api/macro/snapshot/history` | Free |
-| `taiwan_get_stress_index` | `GET /api/taiwan/stress-index` | Free |
+| `macro_get_stress_index_current` | `GET /api/narrative/stress-index/current` | Free |
 | `system_get_maturity` | `GET /api/dashboard/maturity` | Admin |
 | `data_get_channel_detail` | `GET /api/dashboard/data-channels/{name}` | Admin |
 | `synergy_get_darwinian_status` | `GET /api/synergy/darwinian/status` | Admin |
 | `synergy_get_darwinian_trend` | `GET /api/synergy/darwinian/trend` | Admin |
-| `regime_get_history` | `GET /api/dashboard/regime-history` | Free |
+| `regime_get_history` | `GET /api/regime/history` | Free |
 | `report_get_export_link` | `GET /api/reports/{id}/export` | Premium |
 
 完整 117 個 MCP tools 對照見 [`docs/reference/tool-catalog.md`](../reference/tool-catalog.md)。
