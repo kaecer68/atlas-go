@@ -130,8 +130,13 @@ services:
       start_period: 5s
 
   # TimescaleDB for persistent storage and time-series data
+  # Pin to 2.26.4-pg15: the atlas_postgres-data volume's extension catalog is
+  # 2.26.4 (created 2026-05-01). Using 2.14.2-pg15 here caused a version
+  # mismatch ($libdir/timescaledb-2.26.4 not found) that silently broke ALL
+  # PG queries from 2026-07-29 until 2026-08-13. Keep image version aligned
+  # with the volume, or rebuild the volume when intentionally upgrading.
   postgres:
-    image: timescale/timescaledb:2.14.2-pg15
+    image: timescale/timescaledb:2.26.4-pg15
     container_name: atlas-postgres
     restart: unless-stopped
     environment:
