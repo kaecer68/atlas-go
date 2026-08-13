@@ -1130,7 +1130,7 @@
   },
   "system_get_maturity": {
     "name": "system_get_maturity",
-    "description": "Maturity ratings per module (S/E/X/U per docs/specs convention).",
+    "description": "Maturity ratings per module (S/E/X/U per docs/specs convention). Degrades to embedded internal/MATURITY.md snapshot when the backend is unreachable.",
     "inputSchema": {
       "type": "object"
     }

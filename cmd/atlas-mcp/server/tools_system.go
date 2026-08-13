@@ -39,7 +39,7 @@ func registerSystemTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_maturity",
-		Description: autoDescOr("system_get_maturity", "Maturity ratings per module (S/E/X/U per docs/specs convention)."),
+		Description: autoDescOr("system_get_maturity", "Maturity ratings per module (S/E/X/U per docs/specs convention). Degrades to embedded internal/MATURITY.md snapshot when the backend is unreachable."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, s.handleSystemGetMaturity)
 }
@@ -103,6 +103,17 @@ func (s *server) handleSystemGetMaturity(ctx context.Context, _ *mcp.CallToolReq
 	if err := s.withAudit(ctx, "system_get_maturity", nil, func() error {
 		return s.cli.Get(ctx, "/api/dashboard/maturity", nil, &out.Result)
 	}); err != nil {
+		// D-04: degrade to embedded internal/MATURITY.md snapshot when the
+		// backend is unreachable, so internal introspection still works.
+		if raw, ok := embeddedDocs["modules/maturity"]; ok {
+			out.Result = &map[string]any{
+				"degraded": true,
+				"source":   "embedded internal/MATURITY.md",
+				"content":  string(raw),
+				"error":    err.Error(),
+			}
+			return nil, out, nil
+		}
 		return nil, systemBaseOutput{}, err
 	}
 	return nil, out, nil

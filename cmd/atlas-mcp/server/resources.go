@@ -16,7 +16,7 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://config/parameters",
 		Name:        "atlas-go Parameters Config",
-		Description: "Live ParametersConfig from atlas-go admin endpoint. Live state, not on-disk snapshot. Read-only.",
+		Description: "Live ParametersConfig from atlas-go admin endpoint. Live state, not on-disk snapshot. Read-only. Equivalent tool (with audit + params): parameters_get.",
 		MIMEType:    "application/json",
 	}, s.handleResourceConfigParameters)
 
@@ -101,21 +101,21 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://strategies/active",
 		Name:        "Active Strategy Definitions",
-		Description: "Current active strategies in the production strategy set. Live data from /api/strategies/active.",
+		Description: "Current active strategies in the production strategy set. Live data from /api/strategies/active. Equivalent tool (with audit + params): strategy_list_active.",
 		MIMEType:    "application/json",
 	}, s.handleResourceStrategiesActive)
 
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://market/regime",
 		Name:        "Latest Market Regime",
-		Description: "Current market regime classification (RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL). Live data from /api/regime/history.",
+		Description: "Current market regime classification (RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL). Live data from /api/regime/history. Equivalent tool (with audit + days param): regime_get_history.",
 		MIMEType:    "application/json",
 	}, s.handleResourceMarketRegime)
 
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://events/today",
 		Name:        "Today's Market Events",
-		Description: "Upcoming and active Taiwan market events for today. Live data from /api/events/calendar.",
+		Description: "Upcoming and active Taiwan market events for today. Live data from /api/events/calendar. Equivalent tool (with audit): event_calendar.",
 		MIMEType:    "application/json",
 	}, s.handleResourceEventsToday)
 }

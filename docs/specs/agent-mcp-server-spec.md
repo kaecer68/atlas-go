@@ -138,15 +138,34 @@ e.g.   regime_get_history
 | `risk_check` | 投資組合風險評估 | risk + darwinian |
 | `regime_interpretation` | 盤勢解讀（`regime="RISK_ON"`） | regime + narrative |
 
-## 3.5 MCP Resources 清單（v0.0.0.31 PR #972 新增）
+## 3.5 MCP Resources 清單（v0.0.0.31 PR #972 新增；2026-08-13 擴充至 15 個）
 
-7+ 個 MCP Resources 提供結構化資料存取（3 個 live + 4 個 audit/observability；另 8 個 file-based 內部知識 resources 見 `cmd/atlas-mcp/server/resources.go`）：
+15 個 MCP Resources：7 個 live/audit + 8 個 file-based 內部知識（build-time embedded，不需 backend）。live resources 皆有 equivalent tool（帶 audit/參數）；完整清單見 `cmd/atlas-mcp/server/resources.go`。
 
-| URI | 內容 | Handler |
-|-----|------|---------|
-| `atlas://strategies/active` | 當前活躍策略定義（JSON） | `internal/strategy` 直接讀取 |
-| `atlas://market/regime` | 最新盤勢分類 + 壓力指數 | `internal/regime.GetCurrent` |
-| `atlas://events/today` | 今日事件清單 | `internal/industry.EventCalendar` |
+### Live / audit resources
+
+| URI | 內容 | Equivalent tool |
+|-----|------|----------------|
+| `atlas://strategies/active` | 當前活躍策略定義（JSON） | `strategy_list_active` |
+| `atlas://market/regime` | 最新盤勢分類 + 壓力指數 | `regime_get_history` |
+| `atlas://events/today` | 今日事件清單 | `event_calendar` |
+| `atlas://config/parameters` | Live ParametersConfig（admin） | `parameters_get` |
+| `atlas://audit/recent` | 最近 50 筆 MCP audit log（本地） | —（observability） |
+
+### File-based 內部知識 resources（embedded，不需 backend）
+
+| URI | 內容 |
+|-----|------|
+| `atlas://tools/catalog` | MCP tool catalog（docs/reference/tool-catalog.md） |
+| `atlas://workflows/catalog` | 42 WA-XXX workflows × 7 layers（docs/reference/workflow-map.md） |
+| `atlas://reference/architecture` | docs/architecture.md |
+| `atlas://reference/constitution` | docs/reference/constitution.md |
+| `atlas://reference/traps` | docs/reference/traps.md |
+| `atlas://reference/parameter-system` | docs/reference/parameter-system.md |
+| `atlas://processes/catalog` | docs/reference/processes.yaml（text/yaml） |
+| `atlas://docs/map` | docs/documentation-map.md |
+| `atlas://modules/index` | internal/AGENTS_INDEX.md |
+| `atlas://modules/maturity` | internal/MATURITY.md（`system_get_maturity` 的降級來源） |
 
 ## 3.6 v0.0.0.31 新增 MCP Tools（合計 +12）
 
