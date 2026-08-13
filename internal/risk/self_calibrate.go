@@ -373,10 +373,24 @@ func classifyDelta(deltaPct float64, nSessions int) string {
 // where repeated Bayesian optimization converges to near-zero values that
 // are 20× outside any sane operating range.
 func validateCalibrationBounds(current, proposed float64) bool {
+	// Absolute floor: relative bounds (current*0.3 ~ current*3.0) alone let
+	// the optimizer drift to absurdly small values (e.g. max_position_size
+	// 0.15 → … → 9.14e-6, a 0.0009% max position) by shrinking ≤3x per round.
+	// This floor matches the documented sane scale (15% position / 3% daily
+	// loss): anything below 0.5% is a pathological drift, not a genuine
+	// optimum, so reject it regardless of current.
+	const absFloor = 0.005 // 0.5% — sane lower bound for both params
+
+	// Relative bounds stay as the primary acceptance rule.
 	if current == 0 {
-		return true
+		return proposed >= absFloor
 	}
 	lower := current * 0.3
 	upper := current * 3.0
+	// Reject any proposed value that has drifted below the absolute floor,
+	// regardless of current (prevents multi-round shrink-to-zero).
+	if proposed < absFloor {
+		return false
+	}
 	return proposed >= lower && proposed <= upper
 }

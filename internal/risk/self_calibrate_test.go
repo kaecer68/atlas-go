@@ -397,6 +397,36 @@ func TestSelfCalibrateBoundsCurrentBuggyValues(t *testing.T) {
 	}
 }
 
+// TestSelfCalibrateBounds_AbsoluteFloorPreventsDrift covers the production
+// drift: even when `current` has already shrunk to an absurd value (e.g.
+// max_position_size=9.14e-6 from a prior buggy round), a proposed value that
+// stays below the absolute floor (0.005) must be rejected — relative bounds
+// alone (current*0.3 ~ *3.0) would otherwise accept the drift forever.
+func TestSelfCalibrateBounds_AbsoluteFloorPreventsDrift(t *testing.T) {
+	cases := []struct {
+		name     string
+		current  float64
+		proposed float64
+		want     bool
+	}{
+		{"drifted current, smaller proposed rejected", 9.14e-6, 5.48e-6, false},
+		{"drifted current, still pathological rejected", 9.14e-6, 0.001, false},
+		{"drifted current, 0.006 still below floor rejected", 9.14e-6, 0.006, false},
+		{"sane current, sane proposed accepted", 0.15, 0.10, true},
+		{"sane current, above floor within bounds accepted", 0.15, 0.30, true},
+		{"sane current, below relative lower rejected", 0.15, 0.04, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := validateCalibrationBounds(c.current, c.proposed)
+			if got != c.want {
+				t.Errorf("validateCalibrationBounds(current=%v, proposed=%v) = %v, want %v",
+					c.current, c.proposed, got, c.want)
+			}
+		})
+	}
+}
+
 func TestSelfCalibrate_Concurrent(t *testing.T) {
 	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
 	now := time.Now()
