@@ -49,10 +49,12 @@ var (
 // Outcomes
 // ------------------------------------------------------------------
 
-// RecordOutcomes writes a batch of outcomes. session_id stores o.Window
-// and metadata stores the full object JSON (mirror of
-// repository.postgres_outcomes.go RecordOutcomes); reading back
-// unmarshals metadata over the scanned columns.
+// RecordOutcomes writes a batch of global outcomes. session_id is ” for the
+// global aggregate (mirror of SQLiteOutcomeStore.RecordOutcomes); metadata
+// stores the full object JSON (window survives in metadata), so reading back
+// unmarshals metadata over the scanned columns. A01: previously session_id
+// stored o.Window (a date) which broke LoadSessionOutcomes(session-XXX) — the
+// performance-report trades=0 root cause.
 func (s *PostgresLedgerStore) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	if len(outcomes) == 0 {
 		return nil
@@ -69,7 +71,7 @@ func (s *PostgresLedgerStore) RecordOutcomes(outcomes []domain.RecommendationOut
 		batch.Queue(`
 			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`, ts, o.Window, o.Symbol, o.AgentID, string(o.Layer),
+		`, ts, "", o.Symbol, o.AgentID, string(o.Layer),
 			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
 	}
 
@@ -81,9 +83,10 @@ func (s *PostgresLedgerStore) RecordOutcomes(outcomes []domain.RecommendationOut
 	return nil
 }
 
-// RecordSessionOutcomes writes outcomes for a session. session_id still
-// stores o.Window (repository semantics); a zero RecordedAt falls back to
-// the session date.
+// RecordSessionOutcomes writes outcomes for a session. session_id stores the
+// session ID (session-YYYYMMDD-daily) so LoadSessionOutcomes(sessionID) finds
+// them — mirror of SQLiteOutcomeStore.RecordSessionOutcomes. A zero
+// RecordedAt falls back to the session date.
 func (s *PostgresLedgerStore) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {
 	if len(outcomes) == 0 {
 		return nil
@@ -103,7 +106,7 @@ func (s *PostgresLedgerStore) RecordSessionOutcomes(session domain.ReplaySession
 		batch.Queue(`
 			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`, ts, o.Window, o.Symbol, o.AgentID, string(o.Layer),
+		`, ts, session.ID, o.Symbol, o.AgentID, string(o.Layer),
 			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
 	}
 

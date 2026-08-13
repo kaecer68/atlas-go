@@ -15,17 +15,19 @@ import (
 func cleanupLedgerTestRows(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
+	// A01: RecordOutcomes now writes global rows with session_id='' (was
+	// o.Window), so cleanup must match by agent_id as well as session_id.
 	for _, tbl := range []string{
 		"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
 	} {
-		_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global'")
+		_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
 	}
 	t.Cleanup(func() {
 		ctx := context.Background()
 		for _, tbl := range []string{
 			"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
 		} {
-			_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global'")
+			_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
 		}
 	})
 }

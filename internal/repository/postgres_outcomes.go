@@ -23,10 +23,14 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 	batch := &pgx.Batch{}
 	for _, o := range outcomes {
 		metadata, _ := json.Marshal(o)
+		// A01: session_id must be '' for the global aggregate (mirror of
+		// SQLiteOutcomeStore.RecordOutcomes). Storing o.Window (a date) here
+		// made LoadSessionOutcomes(session-XXX) return 0 — the
+		// performance-report trades=0 root cause.
 		batch.Queue(`
 			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`, time.Now(), o.Window, o.Symbol, o.AgentID, string(o.Layer),
+		`, time.Now(), "", o.Symbol, o.AgentID, string(o.Layer),
 			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
 	}
 
