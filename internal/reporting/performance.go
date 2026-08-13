@@ -108,6 +108,23 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 		return emptyReport(period), nil
 	}
 
+	// Exclude sessions with no equity data (PortfolioValue and EndingCash both
+	// zero). Legacy SQLite rows written before the summary_json backfill
+	// (perf-report-zero BL-01 follow-up) carry only the 5-column projection and
+	// would otherwise become a 0-valued starting point, collapsing total_return
+	// to 0 and max_drawdown to 100%.
+	valid := filtered[:0]
+	for _, s := range filtered {
+		if s.PortfolioValue == 0 && s.EndingCash == 0 {
+			continue
+		}
+		valid = append(valid, s)
+	}
+	filtered = valid
+	if len(filtered) == 0 {
+		return emptyReport(period), nil
+	}
+
 	startDate := domain.SessionDateFromID(filtered[0].SessionID)
 	endDate := domain.SessionDateFromID(filtered[len(filtered)-1].SessionID)
 
