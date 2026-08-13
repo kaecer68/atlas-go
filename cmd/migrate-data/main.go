@@ -360,12 +360,13 @@ func migrateOutcomesFile(ctx context.Context, pool *pgxpool.Pool, filePath strin
 	return scanner.Err()
 }
 
+// insertOutcomeBatch inserts outcomes with session_id = o.Window (JSONL
+// semantics — window-as-session key, later normalized by
+// -remap-outcome-sessions) and a NOT EXISTS guard keyed on
+// (session_id, symbol, agent_id, time) so re-running never duplicates a row.
 func insertOutcomeBatch(ctx context.Context, pool *pgxpool.Pool, outcomes []domain.RecommendationOutcome) error {
 	for _, o := range outcomes {
 		metadata, _ := json.Marshal(o)
-
-		// NOT EXISTS guard makes the batch idempotent: re-running the
-		// migration (or mixing JSONL + SQLite sources) never duplicates a row.
 		_, err := pool.Exec(ctx, `
 			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
 			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
@@ -380,6 +381,32 @@ func insertOutcomeBatch(ctx context.Context, pool *pgxpool.Pool, outcomes []doma
 		}
 	}
 	return nil
+}
+
+// insertOutcomeBatchGlobal inserts SQLite global-aggregate rows (session_id=”
+// — mirror of SQLiteOutcomeStore.RecordOutcomes) with the same NOT EXISTS
+// guard. Using ” (not o.Window) keeps the migration idempotent across
+// re-runs: dated-window global rows no longer land as date-format session_ids
+// that -remap-outcome-sessions would otherwise re-key and duplicate.
+func insertOutcomeBatchGlobal(ctx context.Context, pool *pgxpool.Pool, outcomes []domain.RecommendationOutcome) (int, error) {
+	var inserted int
+	for _, o := range outcomes {
+		metadata, _ := json.Marshal(o)
+		tag, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			WHERE NOT EXISTS (
+				SELECT 1 FROM recommendation_outcomes
+				WHERE session_id = $2 AND symbol = $3 AND agent_id = $4 AND time = $1
+			)
+		`, o.RecordedAt, "", o.Symbol, o.AgentID, string(o.Layer),
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+		if err != nil {
+			return 0, err
+		}
+		inserted += int(tag.RowsAffected())
+	}
+	return inserted, nil
 }
 
 func migrateScreeningRejectsData(ctx context.Context, pool *pgxpool.Pool, stateDir string) error {
@@ -952,12 +979,13 @@ func migrateOutcomesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePa
 		if end > len(outcomes) {
 			end = len(outcomes)
 		}
-		if err := insertOutcomeBatch(ctx, pool, outcomes[start:end]); err != nil {
+		inserted, err := insertOutcomeBatchGlobal(ctx, pool, outcomes[start:end])
+		if err != nil {
 			return fmt.Errorf("insert outcome batch: %w", err)
 		}
-		count += end - start
+		count += inserted
 	}
-	log.Printf("Migrated %d sqlite outcomes rows", count)
+	log.Printf("Migrated %d sqlite global outcomes rows (%d guard-skipped duplicates)", count, len(outcomes)-count)
 	return nil
 }
 
