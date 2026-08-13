@@ -37,8 +37,10 @@ func NewPostgresLedgerStore(pool *pgxpool.Pool) *PostgresLedgerStore {
 }
 
 // Compile-time assertions.
-var _ OutcomeStore = (*PostgresLedgerStore)(nil)
-var _ SessionStore = (*PostgresLedgerStore)(nil)
+var (
+	_ OutcomeStore = (*PostgresLedgerStore)(nil)
+	_ SessionStore = (*PostgresLedgerStore)(nil)
+)
 
 // ------------------------------------------------------------------
 // Outcomes
