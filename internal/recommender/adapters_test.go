@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewNarrativeAdapterFunc_NilNil_EmptyReturn(t *testing.T) {
-	a := NewNarrativeAdapterFunc(nil, nil)
+	a := NewNarrativeAdapterFunc(nil, nil, nil)
 	if a == nil {
 		t.Fatal("adapter must not be nil")
 	}

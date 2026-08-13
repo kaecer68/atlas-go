@@ -24,9 +24,12 @@ import (
 
 // NewNarrativeAdapterFunc wraps getter functions to satisfy the
 // NarrativeProvider interface — useful for tests and decoupled wiring.
+// getDetect, when non-nil, supplies detected narrative themes from the
+// production engine; nil falls back to a no-op empty slice.
 func NewNarrativeAdapterFunc(
 	getStress func() narrative.TaiwanStressIndex,
 	getNarrative func(context.Context) (narrative.MarketNarrativeData, error),
+	getDetect func(context.Context) []string,
 ) NarrativeProvider {
 	if getStress == nil {
 		getStress = func() narrative.TaiwanStressIndex { return narrative.TaiwanStressIndex{} }
@@ -36,12 +39,16 @@ func NewNarrativeAdapterFunc(
 			return narrative.MarketNarrativeData{}, nil
 		}
 	}
-	return &narrativeAdapter{getStress: getStress, getNarrative: getNarrative}
+	if getDetect == nil {
+		getDetect = func(context.Context) []string { return nil }
+	}
+	return &narrativeAdapter{getStress: getStress, getNarrative: getNarrative, getDetect: getDetect}
 }
 
 type narrativeAdapter struct {
 	getStress    func() narrative.TaiwanStressIndex
 	getNarrative func(context.Context) (narrative.MarketNarrativeData, error)
+	getDetect    func(context.Context) []string
 }
 
 func (a *narrativeAdapter) GetCurrentStressIndex() narrative.TaiwanStressIndex {
@@ -50,6 +57,12 @@ func (a *narrativeAdapter) GetCurrentStressIndex() narrative.TaiwanStressIndex {
 
 func (a *narrativeAdapter) BuildMarketNarrativeData(ctx context.Context) (narrative.MarketNarrativeData, error) {
 	return a.getNarrative(ctx)
+}
+
+// DetectEventThemes returns the narrative trigger themes detected by the
+// production engine for the current macro snapshot. Nil-safe.
+func (a *narrativeAdapter) DetectEventThemes(ctx context.Context) []string {
+	return a.getDetect(ctx)
 }
 
 // =====================================================================

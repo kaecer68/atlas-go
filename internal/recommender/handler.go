@@ -1,6 +1,7 @@
 package recommender
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -45,12 +46,13 @@ type StrategyRecommendation struct {
 
 // MarketLight is the free/public tier market overview.
 type MarketLight struct {
-	Regime            string             `json:"regime"`
-	RegimeLabel       string             `json:"regime_label"`
-	StressIndex       float64            `json:"stress_index"`
-	CapitalFlow       string             `json:"capital_flow_summary"`
-	CapitalFlowDetail *CapitalFlowDetail `json:"capital_flow_detail,omitempty"`
-	EventsToday       []string           `json:"events_today"`
+	Regime                string             `json:"regime"`
+	RegimeLabel           string             `json:"regime_label"`
+	StressIndex           float64            `json:"stress_index"`
+	CapitalFlow           string             `json:"capital_flow_summary"`
+	CapitalFlowDetail     *CapitalFlowDetail `json:"capital_flow_detail,omitempty"`
+	EventsToday           []string           `json:"events_today"`
+	ActiveNarrativeThemes []string           `json:"active_narrative_themes,omitempty"`
 }
 
 // CapitalFlowDetail is the structured counterpart to CapitalFlow string.
@@ -164,12 +166,13 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	rec := TierRecommendation{
 		Tier: string(tier),
 		Market: MarketLight{
-			Regime:            regimeFromNarrative(h.narrative, &warnings),
-			RegimeLabel:       "盤勢中性",
-			StressIndex:       stressIndexFromNarrative(h.narrative, &warnings),
-			CapitalFlow:       capitalFlowFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
-			CapitalFlowDetail: capitalFlowDetailFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
-			EventsToday:       eventsFromPredictor(h.eventPredictor, &warnings),
+			Regime:                regimeFromNarrative(h.narrative, &warnings),
+			RegimeLabel:           "盤勢中性",
+			StressIndex:           stressIndexFromNarrative(h.narrative, &warnings),
+			CapitalFlow:           capitalFlowFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
+			CapitalFlowDetail:     capitalFlowDetailFromCapitalFlow(capitalFlowReport, capitalFlowErr, &warnings),
+			EventsToday:           eventsFromPredictor(h.eventPredictor, &warnings),
+			ActiveNarrativeThemes: narrativeThemesFromProvider(h.narrative),
 		},
 	}
 	if assessmentCalibrating {
@@ -344,6 +347,20 @@ func eventsFromPredictor(p EventPredictor, w *[]string) []string {
 	return []string{
 		"today:" + today.Direction,
 	}
+}
+
+// narrativeThemesFromProvider reads the detected narrative trigger themes
+// from the NarrativeProvider for MarketLight.ActiveNarrativeThemes. Nil
+// provider or detection failure → empty slice (no narrative attribution).
+func narrativeThemesFromProvider(p NarrativeProvider) []string {
+	if p == nil {
+		return nil
+	}
+	themes := p.DetectEventThemes(context.Background())
+	if len(themes) == 0 {
+		return nil
+	}
+	return themes
 }
 
 // buildPremiumStrategy composes the StrategyRecommendation for premium tier

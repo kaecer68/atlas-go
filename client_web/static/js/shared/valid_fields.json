@@ -74,6 +74,7 @@
   "active_destocking_capacity_max",
   "active_destocking_inventory_max",
   "active_events",
+  "active_narrative_themes",
   "active_patterns",
   "active_restocking_capacity_min",
   "active_restocking_inventory_min",

@@ -120,6 +120,21 @@ func wireForTest(in WireDeps) (recommender.HandlerDeps, *capitalflow.Service) {
 		deps.Narrative = recommender.NewNarrativeAdapterFunc(
 			getStress,
 			narrativeSvc.BuildMarketNarrativeData,
+			func(ctx context.Context) []string {
+				data, err := narrativeSvc.BuildMarketNarrativeData(ctx)
+				if err != nil {
+					return nil
+				}
+				events := narrativeSvc.DetectEvents(data)
+				if len(events) == 0 {
+					return nil
+				}
+				themes := make([]string, 0, len(events))
+				for _, e := range events {
+					themes = append(themes, e.Theme)
+				}
+				return themes
+			},
 		)
 	}
 	// 4. comparison engine: use file-backed store for persistence across restarts (F06).

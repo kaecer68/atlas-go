@@ -93,6 +93,7 @@ func realWiredDeps(t *testing.T) (NarrativeProvider, CapitalFlowProvider, EventP
 	narrativeAdapter := NewNarrativeAdapterFunc(
 		narrativeSvc.GetCurrentStressIndex,
 		narrativeSvc.BuildMarketNarrativeData,
+		nil,
 	)
 
 	// 4. comparison engine: real instance, 30-day window. No recorded trades
