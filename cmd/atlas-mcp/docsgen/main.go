@@ -79,12 +79,12 @@ var embeddedDocs = map[string][]byte{
 			fmt.Fprintf(os.Stderr, "docsgen: read %s: %v\n", rel, err)
 			os.Exit(1)
 		}
-		buf.WriteString(fmt.Sprintf("\t%q: {", k))
+		fmt.Fprintf(&buf, "\t%q: {", k)
 		for i, b := range data {
 			if i%16 == 0 {
 				buf.WriteString("\n\t\t")
 			}
-			buf.WriteString(fmt.Sprintf("0x%02x, ", b))
+			fmt.Fprintf(&buf, "0x%02x, ", b)
 		}
 		buf.WriteString("\n\t},\n")
 	}
