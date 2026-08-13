@@ -612,14 +612,15 @@ func (s *SQLiteOutcomeStore) LoadHumanInterventions() ([]domain.HumanInterventio
 func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 	var outcomes []domain.RecommendationOutcome
 	for rows.Next() {
-		var sym, agentID, action, regime, ts, guardReason, factorJSON, convictionJSON string
-		var layer string
-		var window string
-		var trueRegime string
-		var targetPrice, stopLoss, forwardReturn, benchmarkDelta float64
-		var conviction int
+		var sym, agentID string
+		var action, regime, ts, guardReason, factorJSON, convictionJSON sql.NullString
 		var passedGuards bool
-		var hit, isSynthetic int
+		// Optional columns may be NULL (partial writes or legacy rows) →
+		// scan with Null types and treat NULL as zero/empty. Includes the BL-06
+		// evaluation columns added by migration.
+		var targetPrice, stopLoss, forwardReturn, benchmarkDelta sql.NullFloat64
+		var conviction, hit, isSynthetic sql.NullInt64
+		var layer, window, trueRegime sql.NullString
 
 		if err := rows.Scan(&sym, &agentID, &action, &targetPrice, &stopLoss, &conviction,
 			&regime, &ts, &passedGuards, &guardReason, &factorJSON, &convictionJSON,
@@ -628,16 +629,16 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 		}
 
 		var fs domain.FactorScores
-		if factorJSON != "" {
-			if err := json.Unmarshal([]byte(factorJSON), &fs); err != nil {
+		if factorJSON.String != "" {
+			if err := json.Unmarshal([]byte(factorJSON.String), &fs); err != nil {
 				return nil, fmt.Errorf("unmarshal factor_scores: %w", err)
 			}
 		}
 
 		var cb *domain.ConvictionBreakdown
-		if convictionJSON != "" {
+		if convictionJSON.String != "" {
 			var breakdown domain.ConvictionBreakdown
-			if err := json.Unmarshal([]byte(convictionJSON), &breakdown); err != nil {
+			if err := json.Unmarshal([]byte(convictionJSON.String), &breakdown); err != nil {
 				return nil, fmt.Errorf("unmarshal conviction_breakdown: %w", err)
 			}
 			cb = &breakdown
@@ -645,28 +646,28 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 
 		// BL-06: prefer the dedicated layer column; fall back to the legacy
 		// regime column (which historically stored the layer) for pre-migration rows.
-		effectiveLayer := layer
+		effectiveLayer := layer.String
 		if effectiveLayer == "" {
-			effectiveLayer = regime
+			effectiveLayer = regime.String
 		}
 
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:             agentID,
 			Symbol:              sym,
-			Side:                domain.Side(action),
-			TargetPrice:         targetPrice,
-			StopLossPrice:       stopLoss,
-			Conviction:          conviction,
+			Side:                domain.Side(action.String),
+			TargetPrice:         targetPrice.Float64,
+			StopLossPrice:       stopLoss.Float64,
+			Conviction:          int(conviction.Int64),
 			Layer:               domain.AgentLayer(effectiveLayer),
-			Regime:              trueRegime,
-			Window:              window,
-			ForwardReturn:       forwardReturn,
-			BenchmarkDelta:      benchmarkDelta,
-			Hit:                 hit == 1,
-			IsSynthetic:         isSynthetic == 1,
-			RecordedAt:          parseTimestamp(ts),
+			Regime:              trueRegime.String,
+			Window:              window.String,
+			ForwardReturn:       forwardReturn.Float64,
+			BenchmarkDelta:      benchmarkDelta.Float64,
+			Hit:                 hit.Int64 == 1,
+			IsSynthetic:         isSynthetic.Int64 == 1,
+			RecordedAt:          parseTimestamp(ts.String),
 			PassedGuards:        passedGuards,
-			GuardReason:         guardReason,
+			GuardReason:         guardReason.String,
 			FactorScores:        fs,
 			ConvictionBreakdown: cb,
 		})
