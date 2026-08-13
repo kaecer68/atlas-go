@@ -212,6 +212,28 @@
   color: var(--muted);
 }
 
+/* 表裡互鏈（Wave 6）：theme chip 可點 → 錢潮因果；對應模型 badge → 錢潮模型 */
+.cm-theme-chip {
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.cm-theme-chip:hover {
+  background: rgba(59,130,246,.15);
+  border-color: rgba(59,130,246,.5);
+  color: var(--accent);
+}
+.cc-model-badge {
+  cursor: pointer;
+  background: rgba(139,92,246,.12);
+  border: 1px solid rgba(139,92,246,.4);
+  color: var(--accent-secondary);
+  transition: background .15s ease;
+}
+.cc-model-badge:hover {
+  background: rgba(139,92,246,.22);
+}
+
 /* === capital-quality === */
 .cq-summary {
   display: grid;

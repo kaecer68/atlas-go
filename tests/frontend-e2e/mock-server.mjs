@@ -78,9 +78,40 @@ function serveStaticFile(res, filePath) {
 
 const MOCK_MODELS = {
   models: [
-    { name: '鷹派聯準會', weight: 0.143, recent_error: 0.21, hit_rate: 0.67, rationale: 'FOMC dot plot 偏鷹' },
-    { name: 'AI 超級週期', weight: 0.0001, recent_error: 0.5, hit_rate: 0.5, rationale: 'NVDA 強勢' },
-    { name: '財報驚喜', weight: 0.0003, recent_error: 0.3, hit_rate: 0.65, rationale: '半導體 Q2 財報' },
+    { name: '鷹派聯準會', weight: 0.143, recent_error: 0.21, hit_rate: 0.67, rationale: 'FOMC dot plot 偏鷹', active_themes: ['US_rates_up'] },
+    { name: 'AI 超級週期', weight: 0.0001, recent_error: 0.5, hit_rate: 0.5, rationale: 'NVDA 強勢', active_themes: ['AI_capex_surge'] },
+    { name: '財報驚喜', weight: 0.0003, recent_error: 0.3, hit_rate: 0.65, rationale: '半導體 Q2 財報', active_themes: ['earnings_surprise'] },
+  ],
+};
+
+const MOCK_TEMPLATES = {
+  templates: [
+    {
+      id: 'ai_capex_template',
+      name: 'AI 資本支出擴張',
+      trigger_theme: 'AI_capex_surge',
+      required_region: 'Global',
+      historical_hit_rate: 0.71,
+      rationale: '輝達上修 AI 資本支出 → 訂單流向台灣供應鏈',
+      steps: [
+        { description: '輝達上修資本支出', affected: ['半導體', 'AI供應鏈'], impact: 0.7 },
+        { description: '外資流入台股', affected: ['台股大盤'], impact: 0.6 },
+      ],
+      source_references: ['NVDA earnings'],
+    },
+    {
+      id: 'us_rates_template',
+      name: '美國升息',
+      trigger_theme: 'US_rates_up',
+      required_region: 'US',
+      historical_hit_rate: 0.68,
+      rationale: '美債殖利率上升 → 資金回流美元資產',
+      steps: [
+        { description: '殖利率上升', affected: ['DXY'], impact: 0.7 },
+        { description: '外資流出台股', affected: ['台股大盤'], impact: -0.6 },
+      ],
+      source_references: ['FRED'],
+    },
   ],
 };
 
@@ -175,6 +206,7 @@ const MOCK_SESSIONS = {
 
 function handleAPI(pathname, res) {
   if (pathname === '/api/narrative/models') return sendJSON(res, MOCK_MODELS);
+  if (pathname === '/api/narrative/templates') return sendJSON(res, MOCK_TEMPLATES);
   if (pathname === '/api/events/prediction') return sendJSON(res, MOCK_PREDICTIONS);
   if (pathname === '/api/events/calendar') return sendJSON(res, MOCK_CALENDAR);
   if (pathname === '/api/capital-flow/summary') return sendJSON(res, MOCK_CAPITAL_FLOW_SUMMARY);

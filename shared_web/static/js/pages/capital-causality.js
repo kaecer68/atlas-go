@@ -10,14 +10,29 @@ import { narrativeThemeLabel } from '../shared/constants.js';
 import { fmtSafePct } from '../shared/format-metric.js';
 
 let _allTemplates = [];
+let _allModels = [];
 let _activeTheme = 'all';
 const RETRY_ID = 'capital-causality';
 
 export async function loadCapitalCausality() {
   const el = document.getElementById('capitalCausalityContent');
   if (!el) return;
+
+  // Cross-page navigation from capital_models theme chip: apply the
+  // requested theme as the initial filter, then clear the pending flag.
+  if (window._pendingCausalityFilter) {
+    _activeTheme = window._pendingCausalityFilter;
+    delete window._pendingCausalityFilter;
+  }
+
   try {
-    const data = await silentGetJSON('/api/narrative/templates');
+    // Fetch templates + active models in parallel so the causality page can
+    // show which trigger themes have a corresponding investment model.
+    const results = await Promise.all([
+      silentGetJSON('/api/narrative/templates'),
+      silentGetJSON('/api/narrative/models'),
+    ]);
+    const data = results[0];
     if (data === null) {
       el.classList.remove('loading');
       el.innerHTML = renderErrorState('錢潮因果', RETRY_ID);
@@ -25,7 +40,8 @@ export async function loadCapitalCausality() {
       if (btn) btn.addEventListener('click', loadCapitalCausality);
       return;
     }
-    renderCapitalCausality(data);
+    const models = results[1];
+    renderCapitalCausality(data, models);
   } catch (err) {
     console.error('[capital-causality] load failed', err);
     el.classList.remove('loading');
@@ -35,10 +51,11 @@ export async function loadCapitalCausality() {
   }
 }
 
-export function renderCapitalCausality(data) {
+export function renderCapitalCausality(data, modelsData) {
   const el = document.getElementById('capitalCausalityContent');
   if (!el) return;
   _allTemplates = data && Array.isArray(data.templates) ? data.templates : [];
+  _allModels = modelsData && Array.isArray(modelsData.models) ? modelsData.models : [];
   if (_allTemplates.length === 0) {
     el.classList.remove('loading');
     el.innerHTML = renderEmptyState('尚無因果模板');
@@ -99,6 +116,15 @@ function renderTemplateList() {
     return;
   }
 
+  // modelsByTheme: trigger theme → active model names (active_themes match).
+  const modelsByTheme = {};
+  _allModels.forEach(function (m) {
+    (m.active_themes || []).forEach(function (theme) {
+      if (!modelsByTheme[theme]) modelsByTheme[theme] = [];
+      if (modelsByTheme[theme].indexOf(m.name) === -1) modelsByTheme[theme].push(m.name);
+    });
+  });
+
   list.innerHTML = filtered.map(function (t) {
     const hitRate = t.hit_rate != null ? t.hit_rate : t.historical_hit_rate;
     const steps = Array.isArray(t.steps) && t.steps.length > 0
@@ -112,11 +138,18 @@ function renderTemplateList() {
           return '<li>' + label + affected + '</li>';
         }).join('')
       : '<li>（未定義步驟）</li>';
+    const modelNames = (t.trigger_theme && modelsByTheme[t.trigger_theme]) || [];
+    const modelBadge = modelNames.length
+      ? '<span class="badge cc-model-badge" title="此主題有對應投資模型，可跳回錢潮模型檢視">'
+          + '對應模型：' + escapeHtml(modelNames.join('、'))
+          + '</span>'
+      : '';
     return (
       '<details class="cc-item">'
       + '<summary class="cc-item__summary">'
       +   '<span>' + escapeHtml(templateName(t.name || t.id || '-')) + '</span>'
       +   '<span class="badge info">命中率 ' + fmtSafePct(hitRate, 1) + '</span>'
+      +   modelBadge
       + '</summary>'
       + '<div class="cc-item__body">'
       +   '<div class="text-muted">' + escapeHtml(t.rationale || '尚無說明') + '</div>'
@@ -133,4 +166,13 @@ function renderTemplateList() {
       + '</details>'
     );
   }).join('');
+
+  // Wire model badge clicks: jump back to capital_models page.
+  list.querySelectorAll('.cc-model-badge').forEach(function (badge) {
+    badge.addEventListener('click', function () {
+      if (typeof window.switchPage === 'function') {
+        window.switchPage('capital_models');
+      }
+    });
+  });
 }
