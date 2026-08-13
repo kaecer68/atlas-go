@@ -415,9 +415,9 @@ func TestProcessManager_F2F4_NoFireAndForgetHealthCheck(t *testing.T) {
 	}
 
 	// 3rd PID — 再觸發一次重啟
-	thirdPID, _ := waitForPIDChange(m, secondPID, 20*time.Second)
+	thirdPID, _ := waitForPIDChange(m, secondPID, 5*time.Second)
 	if thirdPID == 0 || thirdPID == secondPID {
-		t.Logf("3rd restart not observed within 12s (PID unchanged=%d), acceptable for test scope", secondPID)
+		t.Logf("3rd restart not observed within 5s (PID unchanged=%d), acceptable for test scope", secondPID)
 	} else {
 		late := runtime.NumGoroutine()
 		t.Logf("after 3rd restart: %d (delta=%d)", late, late-baseline)
@@ -1918,6 +1918,7 @@ func TestStatus_ReturnsConsistentSnapshot(t *testing.T) {
 
 func TestStatus_IncrementsRestartCountAfterSimulatedCrash(t *testing.T) {
 	_ = withFreeEphemeralPort(t)
+	setFastRestartBackoff(t)
 	tmpDir := t.TempDir()
 	fakeScript := filepath.Join(tmpDir, "crash_loop.sh")
 	// Script that exits immediately, forcing the supervisor to restart it.
@@ -1939,9 +1940,10 @@ func TestStatus_IncrementsRestartCountAfterSimulatedCrash(t *testing.T) {
 	}
 	defer m.Stop()
 
-	// Wait for at least one restart cycle: process exits → backoff (3s) → restart
-	// The supervisor will detect the exit and restart after restartInitialDelay.
-	time.Sleep(5 * time.Second)
+	// Wait for at least one restart cycle (fast backoff via setFastRestartBackoff).
+	// The supervisor will detect the exit and restart after restartInitialDelay
+	// (compressed to 10ms via setFastRestartBackoff).
+	time.Sleep(1 * time.Second)
 
 	s := m.Status()
 
