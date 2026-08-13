@@ -50,11 +50,13 @@
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
 | C1: 新增 `-outcomes-sqlite-sessions` migration（直接 SQL 讀 SQLite session_id!=''，保留 session_id，NOT EXISTS guard 冪等） | A01 | pending | 設計：cmd/migrate-data/main.go 新增 migrateOutcomesSQLiteSessions()；scanOutcomes 不保留 session_id → 直接 SQL 掃描 |
-| C2: 新增 `-remap-outcome-sessions` migration（UPDATE PG date-format session_id → session-YYYYMMDD-daily，冪等） | A01 | pending | 設計：`UPDATE recommendation_outcomes SET session_id='session-'||replace(session_id,'-','')||'-daily' WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'` |
-| C3: 修 store 寫入路徑（PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes + repository/postgres_outcomes.go 用 session.ID / 空字串取代 o.Window 當 session_id） | A01 | pending | Q5：live 寫入 bug 產生 date rows；改為 global=''、session=session.ID（對齊 SQLiteOutcomeStore 語義） |
-| C4: 重跑 migration（先備份 atlas.db）→ PG 驗證 | A01 | pending | dev PG：postgres://atlas:...@127.0.0.1:5432/atlas |
-| C5: 驗證（§五 acceptance）+ 冪等重跑 | A01 | pending | LoadSessionOutcomes(session-20260702-daily)>0；report real_trades>0；無純日期 session_id；重跑 counts 不變 |
-| C6: go test ./internal/ledger/... + make ci-gate + commit + PR | A01 | pending | commit per ID；PR body 引用本 manifest |
+| C2: 新增 `-remap-outcome-sessions` migration（UPDATE PG date-format session_id → session-YYYYMMDD-daily，冪等） | A01 | pending | 設計：`UPDATE recommendation_outcomes SET session_id='session-'||replace(session_id,'-','')||'-daily' WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'`。Q2 已驗證 25/25 dates 有真實 session 來源（24 dirs + 07-21 SQLite 375 筆佐證），metadata.window 不變（provenance） |
+| C3: 修 store 寫入路徑（PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes 用 '' / session.ID 取代 o.Window 當 session_id） | A01 | pending | Q5：live 寫入 bug 產生 date rows；改為 global=''、session=session.ID（對齊 SQLiteOutcomeStore 語義）。repository/postgres_outcomes.go 的 RecordOutcomes 是 DualWrite 的 global 路徑（time=now），語義同 global → 一併改 ''；其 session 查詢 tests 同步更新 |
+| C4: 重跑 migration（先備份 atlas.db）→ PG 驗證 | A01 | done | atlas.db 備份 atlas.db.bak-20260813-remap-c2；`-outcomes-sqlite-sessions` 遷入 93 rows（15 guard-skipped 與 remap 重疊）；`-remap-outcome-sessions` 重映射 7,406 date rows → session-YYYYMMDD-daily |
+| C5: 驗證（§五 acceptance）+ 冪等重跑 | A01 | done | 無純日期 session_id（0 rows）；LoadSessionOutcomes(session-20260702-daily)=1；report real_trades=608（via PostgresLedgerStore 實測）；重跑 counts 7,527 不變（0 inserted） |
+| C6: go test ./internal/ledger/... + make ci-gate + commit + PR | A01 | pending | ledger/reporting/repository/monitoring tests 全過；commit per ID；PR body 引用本 manifest |
+
+> **Note**: C2 remap 在單元測試初版（未包 transaction）執行時已套用到 dev PG（7,406 rows，idempotent，與設計一致）；後修正測試為 transaction 隔離並以 RowsAffected 回報真實插入數。最終 dev PG 狀態：7,484 session-format（7,406 remapped + 78 backfilled）+ 43 empty = 7,527。
 
 ### Phase D — Close Out
 
