@@ -73,6 +73,8 @@
 
 > **Push bypass note**: `git push` 被 pre-push hook 擋（`make ci-gate` → `go build ./...` 找不到 admin_web/dist、client_web/dist）。此失敗在 clean tree（無本 PR 變更）上重現，為 pre-existing 環境條件（frontend 未 build），非本 PR 引入。故以 `--no-verify` push 並於此記錄。frontend build 可日後補（`make build-frontend`）。
 
+> **Live-write validation (Q5)**: 遷移完成後，dev PG 出現 4 筆新 date-format rows（time=2026-08-13T12:12Z）— 由仍在執行的 live atlas API（pre-fix binary）以 `o.Window` 寫入。證實 Q5 的 live 寫入 bug 為真實且 C3 修復必要。`-remap-outcome-sessions` 冪等重跑即時正常化（4 rows → session-format），總數 7,531 不變；app 重啟後（含 C3 code）不再產生 date rows。
+
 ---
 
 ## Backlog
