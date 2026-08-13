@@ -839,13 +839,9 @@ func run(args []string, deps appDeps) error {
 		} else {
 			log.Printf("[StockTools] quote store init failed: %v", err)
 		}
-		// Postgres historical backend: inject the shared pgxpool so
-		// regime/stress/period history live in the multi-process-friendly
-		// PostgreSQL database instead of the SQLite atlas.db shared by
-		// multiple containers (avoids SQLITE_IOERR WAL contention).
-		if cfg.StoreBackend == "postgres" {
-			ledger.SetPostgresPool(pool)
-		}
+		// Postgres pool injection now happens in bootstrap.InitRuntime
+		// BEFORE InitStores/NewQuoteStore run (fixes M10 order bug); the
+		// historical store reuses the same injected pool here.
 		if historicalStore, err = ledger.NewHistoricalStore(cfg); err == nil {
 			log.Printf("[HistoricalStore] initialized (backend=%s)", cfg.StoreBackend)
 			// CL-3 A03: wire into DashboardAPI so /api/dashboard/regime-history
