@@ -17,6 +17,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -37,6 +38,8 @@ func run() error {
 		migrateInterventions = flag.Bool("interventions", false, "Migrate human interventions")
 		migrateCapitalFlow   = flag.Bool("capitalflow", false, "Migrate capital flow data")
 		migrateExportStats   = flag.Bool("exportstats", false, "Migrate export statistics")
+		migrateHistorical    = flag.Bool("historical", false, "Migrate historical tables (regime/stress/geo/period) from SQLite atlas.db")
+		sqlitePath           = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
 		migrateAll           = flag.Bool("all", false, "Migrate all data")
 	)
 	flag.Parse()
@@ -103,6 +106,12 @@ func run() error {
 	if *migrateAll || *migrateExportStats {
 		if err := migrateExportStatsData(ctx, pool, stateDir); err != nil {
 			return fmt.Errorf("migrate export stats: %w", err)
+		}
+	}
+
+	if *migrateAll || *migrateHistorical {
+		if err := migrateHistoricalData(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate historical: %w", err)
 		}
 	}
 
@@ -579,5 +588,72 @@ func migrateExportStatsData(ctx context.Context, pool *pgxpool.Pool, stateDir st
 	}
 
 	log.Printf("Migrated %d export statistics records", count)
+	return nil
+}
+
+// migrateHistoricalData copies the Stage 4 historical tables
+// (regime/stress/geopolitical/period) from the source SQLite atlas.db into
+// PostgreSQL. Data volume is small (tens to low hundreds of rows); rows are
+// upserted idempotently so re-running is safe. Migration is the one-time
+// data move for StoreBackend=postgres; afterwards the live pipeline writes
+// straight to postgres.
+func migrateHistoricalData(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	hist := ledger.NewSQLiteHistoricalStore(sqliteDB)
+
+	// Regime
+	regimes, err := hist.LoadRegimeHistoryAll(ctx, 100000)
+	if err != nil {
+		return fmt.Errorf("load regimes: %w", err)
+	}
+	pgHist := ledger.NewPostgresHistoricalStore(pool)
+	for _, r := range regimes {
+		if err := pgHist.UpsertRegime(ctx, r); err != nil {
+			return fmt.Errorf("migrate regime %s: %w", r.Date, err)
+		}
+	}
+	log.Printf("Migrated %d regime_history rows", len(regimes))
+
+	// Stress
+	stresses, err := hist.LoadStressHistoryAll(ctx, 100000)
+	if err != nil {
+		return fmt.Errorf("load stresses: %w", err)
+	}
+	for _, r := range stresses {
+		if err := pgHist.UpsertStress(ctx, r); err != nil {
+			return fmt.Errorf("migrate stress %s: %w", r.Date, err)
+		}
+	}
+	log.Printf("Migrated %d stress_index_history rows", len(stresses))
+
+	// Geopolitical
+	geos, err := hist.LoadGeopoliticalHistoryAll(ctx, 100000)
+	if err != nil {
+		return fmt.Errorf("load geopolitical: %w", err)
+	}
+	for _, r := range geos {
+		if err := pgHist.UpsertGeopolitical(ctx, r); err != nil {
+			return fmt.Errorf("migrate geopolitical %s: %w", r.Date, err)
+		}
+	}
+	log.Printf("Migrated %d geopolitical_history rows", len(geos))
+
+	// Period
+	periods, err := hist.LoadPeriodHistoryAll(ctx, 100000)
+	if err != nil {
+		return fmt.Errorf("load periods: %w", err)
+	}
+	for _, r := range periods {
+		if err := pgHist.UpsertPeriod(ctx, r); err != nil {
+			return fmt.Errorf("migrate period %s: %w", r.Date, err)
+		}
+	}
+	log.Printf("Migrated %d period_history rows", len(periods))
+
 	return nil
 }
