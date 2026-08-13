@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -47,6 +48,8 @@ func run() error {
 		migrateTradesSQLite      = flag.Bool("trades-sqlite", false, "Migrate trades from SQLite atlas.db (absent from JSONL — E5)")
 		migrateExperimentsSQLite = flag.Bool("experiments-sqlite", false, "Migrate experiments from SQLite atlas.db (C1: id space disjoint from JSONL)")
 		migrateSummariesSQLite   = flag.Bool("summaries-sqlite", false, "Migrate session summaries from SQLite atlas.db (C2: sessions missing from JSONL)")
+		outcomesSQLiteSessions   = flag.Bool("outcomes-sqlite-sessions", false, "Backfill SQLite session-scoped outcomes (session_id != '') preserving session_id (A01)")
+		remapOutcomeSessionsFlag = flag.Bool("remap-outcome-sessions", false, "Remap PG date-format session_id to session-YYYYMMDD-daily (A01)")
 		sqlitePath               = flag.String("sqlite-path", "data/state/atlas.db", "source SQLite atlas.db path for -historical")
 		migrateAll               = flag.Bool("all", false, "Migrate all data")
 	)
@@ -138,6 +141,18 @@ func run() error {
 	if *migrateAll || *migrateOutcomesSQLite {
 		if err := migrateOutcomesSQLiteData(ctx, pool, *sqlitePath); err != nil {
 			return fmt.Errorf("migrate outcomes sqlite: %w", err)
+		}
+	}
+
+	if *migrateAll || *outcomesSQLiteSessions {
+		if err := migrateOutcomesSQLiteSessions(ctx, pool, *sqlitePath); err != nil {
+			return fmt.Errorf("migrate outcomes sqlite sessions: %w", err)
+		}
+	}
+
+	if *migrateAll || *remapOutcomeSessionsFlag {
+		if err := remapOutcomeSessions(ctx, pool); err != nil {
+			return fmt.Errorf("remap outcome sessions: %w", err)
 		}
 	}
 
@@ -946,6 +961,185 @@ func migrateOutcomesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePa
 	return nil
 }
 
+// migrateOutcomesSQLiteSessions copies session-scoped outcomes (session_id != ”)
+// from the source SQLite atlas.db into PostgreSQL, preserving the original
+// session_id (session-YYYYMMDD-daily). This is the A01 gap: the existing
+// migrateOutcomesSQLiteData only reads global rows via LoadOutcomes()
+// (WHERE session_id = ”), so the 2,965 session-scoped rows were never migrated.
+//
+// scanOutcomes does not preserve the session_id column, so rows are scanned with
+// a dedicated row iterator here. The SQLite outcomes table is a recording log —
+// the same logical outcome (session_id, symbol, agent_id, time) is recorded many
+// times with evolving state (passed_guards, conviction, window). For each key we
+// keep the FINAL recording (MAX id) so passed_guards reflects the last state,
+// then insert with the NOT EXISTS guard (idempotent, no ghost rows).
+func migrateOutcomesSQLiteSessions(ctx context.Context, pool *pgxpool.Pool, sqlitePath string) error {
+	sqliteDB, err := ledger.OpenSQLiteDB(sqlitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite %s: %w", sqlitePath, err)
+	}
+	defer sqliteDB.Close()
+
+	const query = `
+		SELECT o.session_id, o.symbol, o.agent_id, o.action, o.target_price, o.stop_loss,
+			o.conviction, o.regime, o.timestamp, o.passed_guards, o.guard_reason,
+			o.factor_scores_json, o.conviction_breakdown_json,
+			o.layer, o.forward_return, o.window, o.hit, o.benchmark_delta, o.is_synthetic, o.true_regime
+		FROM outcomes o
+		JOIN (
+			SELECT session_id, symbol, agent_id, timestamp, MAX(id) AS max_id
+			FROM outcomes
+			WHERE session_id != ''
+			GROUP BY session_id, symbol, agent_id, timestamp
+		) m ON o.id = m.max_id
+		ORDER BY o.session_id`
+
+	rows, err := sqliteDB.Query(query)
+	if err != nil {
+		return fmt.Errorf("query sqlite session outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	var batch []domain.RecommendationOutcome
+	var batchSessions []string
+	const batchSize = 500
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		inserted, err := insertSessionOutcomeBatch(ctx, pool, batchSessions, batch)
+		if err != nil {
+			return err
+		}
+		log.Printf("Migrated %d sqlite session outcomes rows (%d guard-skipped duplicates)", inserted, len(batch)-inserted)
+		batch = batch[:0]
+		batchSessions = batchSessions[:0]
+		return nil
+	}
+
+	for rows.Next() {
+		var sessionID, sym, agentID string
+		var action, regime, ts, guardReason, factorJSON, convictionJSON sql.NullString
+		var passedGuards bool
+		var targetPrice, stopLoss, forwardReturn, benchmarkDelta sql.NullFloat64
+		var conviction, hit, isSynthetic sql.NullInt64
+		var layer, window, trueRegime sql.NullString
+
+		if err := rows.Scan(&sessionID, &sym, &agentID, &action, &targetPrice, &stopLoss,
+			&conviction, &regime, &ts, &passedGuards, &guardReason, &factorJSON, &convictionJSON,
+			&layer, &forwardReturn, &window, &hit, &benchmarkDelta, &isSynthetic, &trueRegime); err != nil {
+			return fmt.Errorf("scan session outcome row: %w", err)
+		}
+
+		var fs domain.FactorScores
+		if factorJSON.String != "" {
+			if err := json.Unmarshal([]byte(factorJSON.String), &fs); err != nil {
+				return fmt.Errorf("unmarshal factor_scores: %w", err)
+			}
+		}
+		var cb *domain.ConvictionBreakdown
+		if convictionJSON.String != "" {
+			var breakdown domain.ConvictionBreakdown
+			if err := json.Unmarshal([]byte(convictionJSON.String), &breakdown); err != nil {
+				return fmt.Errorf("unmarshal conviction_breakdown: %w", err)
+			}
+			cb = &breakdown
+		}
+
+		effectiveLayer := layer.String
+		if effectiveLayer == "" {
+			effectiveLayer = regime.String
+		}
+
+		batch = append(batch, domain.RecommendationOutcome{
+			AgentID:             agentID,
+			Symbol:              sym,
+			Side:                domain.Side(action.String),
+			TargetPrice:         targetPrice.Float64,
+			StopLossPrice:       stopLoss.Float64,
+			Conviction:          int(conviction.Int64),
+			Layer:               domain.AgentLayer(effectiveLayer),
+			Regime:              trueRegime.String,
+			Window:              window.String,
+			ForwardReturn:       forwardReturn.Float64,
+			BenchmarkDelta:      benchmarkDelta.Float64,
+			Hit:                 hit.Int64 == 1,
+			IsSynthetic:         isSynthetic.Int64 == 1,
+			RecordedAt:          parseTimestamp(ts.String),
+			PassedGuards:        passedGuards,
+			GuardReason:         guardReason.String,
+			FactorScores:        fs,
+			ConvictionBreakdown: cb,
+		})
+		batchSessions = append(batchSessions, sessionID)
+
+		if len(batch) >= batchSize {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate session outcomes: %w", err)
+	}
+	if err := flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// insertSessionOutcomeBatch inserts session-scoped outcomes under their original
+// session_id (session-YYYYMMDD-daily) with the same NOT EXISTS guard as
+// insertOutcomeBatch, so re-running the migration never duplicates a row and
+// never creates rows for sessions that do not exist in the source. It returns
+// the number of rows actually inserted (RowsAffected — 0 for guard-skipped).
+func insertSessionOutcomeBatch(ctx context.Context, pool *pgxpool.Pool, sessionIDs []string, outcomes []domain.RecommendationOutcome) (int, error) {
+	if len(outcomes) != len(sessionIDs) {
+		return 0, fmt.Errorf("insertSessionOutcomeBatch: %d outcomes vs %d session ids", len(outcomes), len(sessionIDs))
+	}
+	var inserted int
+	for i, o := range outcomes {
+		metadata, _ := json.Marshal(o)
+		tag, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			WHERE NOT EXISTS (
+				SELECT 1 FROM recommendation_outcomes
+				WHERE session_id = $2 AND symbol = $3 AND agent_id = $4 AND time = $1
+			)
+		`, o.RecordedAt, sessionIDs[i], o.Symbol, o.AgentID, string(o.Layer),
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+		if err != nil {
+			return 0, err
+		}
+		inserted += int(tag.RowsAffected())
+	}
+	return inserted, nil
+}
+
+// remapOutcomeSessions rewrites date-format session_id values (e.g. "2026-07-22")
+// — which were written by insertOutcomeBatch/RecordOutcomes using o.Window as
+// session_id — to the unified session-YYYYMMDD-daily format matching
+// session_summaries.session_id. Q2 audit verified every date maps to a real
+// session (24/25 have session dirs; 2026-07-21 has 375 SQLite session-scoped rows
+// as provenance), so no ghost sessions are created. metadata.window is untouched
+// (it is the original evaluation date — provenance). Idempotent: re-running
+// matches zero rows.
+func remapOutcomeSessions(ctx context.Context, execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}) error {
+	tag, err := execer.Exec(ctx, `
+		UPDATE recommendation_outcomes
+		SET session_id = 'session-' || replace(session_id, '-', '') || '-daily'
+		WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'`)
+	if err != nil {
+		return fmt.Errorf("remap outcome sessions: %w", err)
+	}
+	log.Printf("Remapped %d date-format outcome session_id rows to session-YYYYMMDD-daily", tag.RowsAffected())
+	return nil
+}
+
 // migrateScreeningSQLiteData copies screening rejects from the source SQLite
 // atlas.db into PostgreSQL. SQLite is the only complete source (20,423 rows
 // vs 1,155 in JSONL — M6). Old SQLite rows have no agent_id; the PG
@@ -1199,4 +1393,11 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// parseTimestamp parses ISO8601 timestamps from SQLite (mirror of the
+// ledger package helper; unexported there so duplicated locally).
+func parseTimestamp(s string) (t time.Time) {
+	t, _ = time.Parse("2006-01-02T15:04:05Z07:00", s) //nolint:errcheck
+	return t
 }

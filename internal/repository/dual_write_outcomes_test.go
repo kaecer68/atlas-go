@@ -14,6 +14,9 @@ func TestDualWriteOutcomes_RecordAndQueryBySession(t *testing.T) {
 	repo := newTestDualWrite(t)
 	ctx := context.Background()
 
+	// A01: RecordOutcomes is the GLOBAL write path — session_id is '' (mirror
+	// of SQLiteOutcomeStore.RecordOutcomes), Window is preserved in metadata.
+	// Session-scoped rows are written via RecordSessionOutcomes (session.ID).
 	outcomes := []domain.RecommendationOutcome{
 		{Window: "session-out-1", Symbol: "2330.TW", AgentID: "agent_a", PassedGuards: true, Conviction: 80},
 		{Window: "session-out-1", Symbol: "2317.TW", AgentID: "agent_a", PassedGuards: false, Conviction: 60},
@@ -22,6 +25,9 @@ func TestDualWriteOutcomes_RecordAndQueryBySession(t *testing.T) {
 		t.Fatalf("RecordOutcomes failed: %v", err)
 	}
 
+	// Session query: PG has no session_id="session-out-1" rows (global rows
+	// carry ''), so the dual-write falls back to the JSONL store — Window is
+	// the JSONL session key, so the outcomes are still found there.
 	results, err := repo.QueryOutcomesBySession(ctx, "session-out-1")
 	if err != nil {
 		t.Fatalf("QueryOutcomesBySession failed: %v", err)
@@ -46,6 +52,15 @@ func TestDualWriteOutcomes_RecordAndQueryBySession(t *testing.T) {
 	}
 	if !found2330 || !found2317 {
 		t.Errorf("Missing outcomes: 2330=%v, 2317=%v", found2330, found2317)
+	}
+
+	// Global rows land in PG with session_id='' — QueryAllOutcomes must see them.
+	all, err := repo.QueryAllOutcomes(ctx)
+	if err != nil {
+		t.Fatalf("QueryAllOutcomes failed: %v", err)
+	}
+	if len(all) == 0 {
+		t.Fatal("Expected global outcomes to be queryable via QueryAllOutcomes")
 	}
 }
 
