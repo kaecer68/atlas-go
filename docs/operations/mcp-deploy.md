@@ -348,6 +348,9 @@ curl -s http://127.0.0.1:9091/metrics
 - `mcp_anomaly_get_recent`：列出最近 N 條 anomaly event
 - `mcp_anomaly_ack`：透過 `/api/alerts/acknowledge` 確認 anomaly alert
 
+**內部 observability（不需 backend）**：`audit_state`（憲章審計快照，embedded）、`mcp_get_call_stats` / `mcp_get_session_topology` / `mcp_get_top_slow_tools` / `mcp_get_tenant_usage`（讀本地 audit JSONL）在 backend 未啟動時仍可用；`system_get_maturity` 降級回 embedded `internal/MATURITY.md`。
+**已知限制（D-05）**：stdio transport 不注入 agent identity，`mcp_get_session_topology` 的 agent 維度在 stdio 下全為 `anonymous`；SSE / streamable-HTTP 接上 authenticated agent identity 後解除。
+
 ### 9.5 T1.4 Alert / Eventbus 整合（Phase 4 Direction A）
 
 **目的**：把 anomaly detector 的輸出，從「只在 process 內部可見」升級為「可在 Alertmanager 收單 + 跨進程 SSE 訂閱 + Prometheus 計算 rate」。
