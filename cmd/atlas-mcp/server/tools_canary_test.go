@@ -65,6 +65,7 @@ var canaryRoutes = map[string]canaryTest{
 	"narrative_get_events":              {Path: "/api/narrative/events"},
 	"narrative_get_chains":              {Path: "/api/narrative/chains"},
 	"narrative_get_models":              {Path: "/api/narrative/models"},
+	"narrative_get_model_inventory":     {Path: "/api/narrative/models/inventory"},
 	"narrative_get_templates":           {Path: "/api/narrative/templates"},
 	"narrative_get_seasonal":            {Path: "/api/narrative/seasonal"},
 	"narrative_stress_index_thresholds": {Path: "/api/narrative/stress-index/thresholds"},
