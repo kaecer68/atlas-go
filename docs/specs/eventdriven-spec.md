@@ -8,7 +8,7 @@
 
 1. **Event calendar consumption** — 從 `industry.EventCalendar` 讀取即將到來的 calendar events
 2. **Type → Theme 橋接** — 透過 `EventTypeToTriggerThemes(eventType, registry)` 對應到 24 個 trigger themes
-3. **NarrativeModelProvider 介接** — 透過 `narrativeAdapter.ListModels()` 拿到 12 個 InvestmentModel
+3. **NarrativeModelProvider 介接** — 透過 `narrativeAdapter.ListModels()` 拿到 21 個 InvestmentModel
 4. **HTTP endpoint** — `/api/events/prediction` 與 `/api/events/calendar`（cmd/atlas 端）
 
 ## 二、Confidence 計算

@@ -11,7 +11,7 @@
 | `DetectionResult` | `detector.go` | 統一輸出 (Theme/Severity/Confidence/Source/Metadata)；`ToNarrativeEvent()` 向後相容 |
 | `DetectorInput` | `detector.go` | 同時承載 `MarketNarrativeData` (KB) 與 `MacroDataSnapshot` (snapshot) |
 | `CausalTemplate` | `templates.go` | 24 個 trigger_theme 的硬編碼模板（`DefaultTemplates()`） |
-| `InvestmentModel` | `knowledge_base.go` | 12 個 Darwinian weight 演化模型（`NewNarrativeEngine()`） |
+| `InvestmentModel` | `knowledge_base.go` | 21 個 Darwinian weight 演化模型（`NewNarrativeEngine()`） |
 
 ## 模組陷阱
 
