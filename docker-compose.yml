@@ -11,6 +11,7 @@ services:
         # with `Commit=unknown` cannot pass the binary freshness gate.
         VERSION: ${ATLAS_VERSION:-dev}
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:-unknown}
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
         # Pass through ATLAS_WARMUP; unset = default enabled.
         WARMUP: ${ATLAS_WARMUP:-}
     container_name: atlas-go
@@ -259,6 +260,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-geo-ingest
     restart: unless-stopped
     environment:
@@ -284,6 +289,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-macro-ingest
     restart: unless-stopped
     environment:
@@ -309,6 +318,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-replay-sync
     restart: unless-stopped
     environment:
@@ -334,6 +347,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-darwinian
     restart: unless-stopped
     environment:
@@ -364,6 +381,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-c07-collect
     restart: unless-stopped
     environment:
@@ -395,6 +416,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-c07-evaluate
     restart: unless-stopped
     environment:
@@ -427,6 +452,10 @@ services:
       dockerfile: Dockerfile.cron
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-quote-backfill
     restart: unless-stopped
     environment:
@@ -451,6 +480,10 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
+        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
+        # on proxy.golang.org (Hinet safebrowsing cert). Build with
+        #   GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-prism-worker
     restart: unless-stopped
     # Command is args-only — the Dockerfile ENTRYPOINT already provides
