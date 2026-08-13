@@ -2727,7 +2727,7 @@
       }
     },
     "max_position_size": {
-      "value": 0.000009140396100157428,
+      "value": 0.15,
       "rationale": "15% max single position size",
       "source": "literature",
       "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
@@ -2744,7 +2744,7 @@
       }
     },
     "max_daily_loss_pct": {
-      "value": 0.0000018280792200314869,
+      "value": 0.03,
       "rationale": "3% max daily loss",
       "source": "heuristic",
       "last_calibrated": "2026-07-06T00:11:32.773444+08:00",
