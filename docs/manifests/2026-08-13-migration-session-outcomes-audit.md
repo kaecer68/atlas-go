@@ -35,11 +35,26 @@
 | Design: remap PG dates + backfill SQLite | A01 | accepted | Fix = (1) UPDATE PG session_id date→session-YYYYMMDD-daily (safe, 0 orphans); (2) backfill SQLite session+global outcomes via LoadOutcomes() (preserves session_id format) |
 | Define acceptance | A01 | pending | PG has session-XXX rows for all summaries; LoadSessionOutcomes(session-20260702-daily)>0; report real_trades>0 |
 
+### Phase B2 — Q1-Q5 Audit (handoff 2026-08-13, NEW CLI) — DONE
+
+| Q | Question | Finding (evidence-backed, no guessing) | Status |
+|---|----------|----------------------------------------|--------|
+| Q1 | root JSONL 語義 | `data/state/recommendation_outcomes.jsonl` (45,661 行, 45 windows 2026-05-25..2026-07-16) = **全球聚合檔（global aggregate）**：由 `internal/ledger/ledger.go` `Store.RecordOutcomes`（ledger.go:36, global path）寫入，window=評估交易日、session_id=null。**不是** session 資料。同一批邏輯 outcome 同時存在於 root JSONL（global）、session JSONL（per-session）、SQLite global（session_id=''）、SQLite session（session_id='session-XXX'）四處 — 是同一底層資料的多重記錄。SQLite global window 大多 NULL（舊）vs root JSONL window=日期（新）— 非同義，root JSONL 是 rich 版 global | accepted |
+| Q2 | 重映射安全性 | PG 25 dates → 24 有 session 目錄；2026-07-21 **無目錄但 SQLite 有 375 筆 session-scoped 佐證 + PG 17 筆** → 非 ghost。25/25 全有真實來源。metadata JSON 內嵌 `window` **不應改**（window=評估日，是 provenance；改 session_id column 即可，`scanPGOutcomes` 讀回時 metadata 覆蓋 Window） | accepted |
+| Q3 | 三批重疊 | SQLite outcomes 表是 **recording log，重度重複**：5,997 行只有 43 個 distinct (symbol,agent,time) 邏輯 outcome（global 43 keys = session 43 keys 100% overlap）。A(2,965)→93 distinct (session_id,symbol,agent,time) keys；B(3,032)→43 keys；C(root JSONL)→2,769 keys；D(session JSONL)→4,164 行。現行 NOT EXISTS guard（session_id+symbol+agent_id+time）對去重正確，但 migrateOutcomesSQLiteData 走 LoadOutcomes()（global only）→ 根本沒碰 A | accepted |
+| Q4 | SQLite global 只遷 43 | **真相：SQLite global 3,032 行只有 43 個 distinct keys**（recording log 重複：同一 key 記錄 2~195 次，passed_guards/conviction/window 隨時間演化）。NOT EXISTS guard 正確去重到 43。「2,989 未遷」全是 exact-key duplicates，**非遺失資料**。B02 假設（key 衝突）不成立 → 關閉 | accepted |
+| Q5 | 統一 session_id 設計 | 方案甲（重映射 C + 補遷 A + B 留空）為正解：C(7,406 date rows) 重映射→session-YYYYMMDD-daily；A(SQLite session 2,965) 補遷保留 session_id（需直接 SQL，scanOutcomes 不保留 session_id）；B(SQLite global) 已遷 43 keys 完成。**store 寫入路徑**：`PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes` 用 o.Window 當 session_id（postgres_ledger.go:56,87；repository/postgres_outcomes.go:27）是 live 寫入 bug（產生 date rows）→ 需修 | accepted |
+
 ### Phase C — Implement
 
 | Task | ID | Status | Evidence |
 |------|----|--------|----------|
-| - | A01 | pending | - |
+| C1: 新增 `-outcomes-sqlite-sessions` migration（直接 SQL 讀 SQLite session_id!=''，保留 session_id，NOT EXISTS guard 冪等） | A01 | pending | 設計：cmd/migrate-data/main.go 新增 migrateOutcomesSQLiteSessions()；scanOutcomes 不保留 session_id → 直接 SQL 掃描 |
+| C2: 新增 `-remap-outcome-sessions` migration（UPDATE PG date-format session_id → session-YYYYMMDD-daily，冪等） | A01 | pending | 設計：`UPDATE recommendation_outcomes SET session_id='session-'||replace(session_id,'-','')||'-daily' WHERE session_id ~ '^\d{4}-\d{2}-\d{2}$'` |
+| C3: 修 store 寫入路徑（PostgresLedgerStore.RecordOutcomes/RecordSessionOutcomes + repository/postgres_outcomes.go 用 session.ID / 空字串取代 o.Window 當 session_id） | A01 | pending | Q5：live 寫入 bug 產生 date rows；改為 global=''、session=session.ID（對齊 SQLiteOutcomeStore 語義） |
+| C4: 重跑 migration（先備份 atlas.db）→ PG 驗證 | A01 | pending | dev PG：postgres://atlas:...@127.0.0.1:5432/atlas |
+| C5: 驗證（§五 acceptance）+ 冪等重跑 | A01 | pending | LoadSessionOutcomes(session-20260702-daily)>0；report real_trades>0；無純日期 session_id；重跑 counts 不變 |
+| C6: go test ./internal/ledger/... + make ci-gate + commit + PR | A01 | pending | commit per ID；PR body 引用本 manifest |
 
 ### Phase D — Close Out
 
@@ -51,11 +66,11 @@
 
 ## Backlog
 
-| ID | Problem | Discovery Time | Proposed Round |
-|----|---------|---------------|----------------|
-| B01 | PG 7,406 日期 session_id 來源是 root JSONL (45,661 筆, window=日期, session_id=null) 被遷成 session_id=window；但 SQLite global (3,032, window 空) 是不同批次。兩者語義需釐清：root JSONL 是「全球聚合」還是「session 交易日」？ | 2026-08-13 | 需獨立 audit — 影響 migration 正確性，不可猜測 |
-| B02 | SQLite global (3,032) vs PG 空 session_id (43) — 現行 migrateOutcomesSQLiteData 用 LoadOutcomes() 只遷到 43，2,989 未遷（NOT EXISTS 去重 key 問題？） | 2026-08-13 | 與 A01 同批修復 |
-| B03 | session-20260721-daily 無 JSONL 目錄但 SQLite 有 375 筆 + PG 有 17 筆 — 重映射需確認 ghost session 風險 | 2026-08-13 | 與 A01 同批 |
+| ID | Problem | Discovery Time | Proposed Round | Resolution |
+|----|---------|---------------|----------------|------------|
+| B01 | PG 7,406 日期 session_id 來源是 root JSONL (45,661 筆, window=日期, session_id=null) 被遷成 session_id=window；但 SQLite global (3,032, window 空) 是不同批次。兩者語義需釐清：root JSONL 是「全球聚合」還是「session 交易日」？ | 2026-08-13 | 與 A01 同批 | **closed (Q1)**：root JSONL = global aggregate（`ledger.Store.RecordOutcomes` 寫入），window=評估日、session_id=null。C 批 7,406 date rows 是 root JSONL + live 寫入的 global 資料，重映射到 session 安全（Q2：25/25 有真實來源） |
+| B02 | SQLite global (3,032) vs PG 空 session_id (43) — 現行 migrateOutcomesSQLiteData 用 LoadOutcomes() 只遷到 43，2,989 未遷（NOT EXISTS 去重 key 問題？） | 2026-08-13 | 與 A01 同批 | **closed (Q4)**：SQLite global 只有 43 個 distinct keys（recording log 重複），NOT EXISTS guard 正確去重；2,989 是 exact-key duplicates，非遺失 |
+| B03 | session-20260721-daily 無 JSONL 目錄但 SQLite 有 375 筆 + PG 有 17 筆 — 重映射需確認 ghost session 風險 | 2026-08-13 | 與 A01 同批 | **closed (Q2)**：SQLite session-scoped 375 筆佐證 session-20260721-daily 是真實 session；重映射無 ghost |
 
 ---
 
@@ -69,11 +84,11 @@
 
 ## Session-End State
 
-- **Done this session**: Phase A (root cause accepted); Phase B partial (data analysis done, design NOT finalized)
-- **Remaining**: Full audit of outcome data-source semantics (B01-B03) before any migration fix — root JSONL vs SQLite global vs session outcomes must be reconciled without guessing
-- **Next action**: 移交新 CLI — 完整 handoff 文件見 docs/manifests/2026-08-13-outcome-provenance-audit-handoff.md
-- **Uncommitted code**: manifest + handoff doc committed on branch fix/20260813-session-outcomes-migration
-- **Branch / PR**: fix/20260813-session-outcomes-migration (manifest + handoff committed; no code change yet)
+- **Done this session**: Phase A (root cause accepted); Phase B2 Q1-Q5 audit complete (evidence-backed, B01-B03 closed); Phase C design locked
+- **Remaining**: Phase C implementation (C1-C6) — migrate flags + store write-path fix + re-run + verify + PR
+- **Next action**: 接手 CLI 完成 Phase C — 見 docs/manifests/2026-08-13-outcome-provenance-audit-handoff.md §四
+- **Uncommitted code**: manifest audit updates (this file) — committed separately per commit discipline
+- **Branch / PR**: fix/20260813-session-outcomes-migration (manifest commits only; no code change yet)
 
 ---
 
@@ -82,3 +97,4 @@
 | Date | Version | Change | Author |
 |------|---------|--------|--------|
 | 2026-08-13 | 1.0 | Initial manifest | agent |
+| 2026-08-13 | 1.1 | Q1-Q5 audit complete (Phase B2); B01-B03 closed with evidence; Phase C plan C1-C6 | agent (takeover CLI) |
