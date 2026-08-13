@@ -898,6 +898,12 @@ func migrateDetectorScansData(ctx context.Context, pool *pgxpool.Pool, sqlitePat
 		return err
 	}
 
+	// Explicit scan_id inserts do not advance the BIGSERIAL sequence; bump it
+	// so subsequent AppendScan inserts never collide with migrated scan_ids.
+	if _, err := pool.Exec(ctx, `SELECT setval('detector_scan_log_scan_id_seq', (SELECT COALESCE(MAX(scan_id), 1) FROM detector_scan_log))`); err != nil {
+		return fmt.Errorf("advance detector_scan_log sequence: %w", err)
+	}
+
 	log.Printf("Migrated %d detector_scan_log rows", count)
 	return nil
 }

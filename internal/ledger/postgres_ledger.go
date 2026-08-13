@@ -342,24 +342,41 @@ func (s *PostgresLedgerStore) LoadSessionSummaries() ([]domain.SessionSummary, e
 }
 
 // scanPGSessionSummary scans one session_summaries row (mirror of
-// repository.postgres_audit.go LoadSessionSummary scan).
+// repository.postgres_audit.go LoadSessionSummary scan). Columns added by
+// later migrations (risk_commentary, tax_snapshots, after_tax_pnl,
+// total_tax_paid, parameters_version) may be NULL on rows written before
+// those columns existed — scan with pointer types and normalize.
 func scanPGSessionSummary(rows pgx.Rows) (*domain.SessionSummary, error) {
 	var summary domain.SessionSummary
 	var regime string
 	var brokerRuntime, guardOutcomes, taxSnapshots []byte
+	var riskCommentary, parametersVersion *string
+	var afterTaxPnL, totalTaxPaid *float64
 
 	err := rows.Scan(
 		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
 		&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
-		&summary.ApprovalID, &guardOutcomes, &summary.RiskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
-		&summary.ParametersVersion,
+		&summary.ApprovalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &afterTaxPnL, &totalTaxPaid,
+		&parametersVersion,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan session summary: %w", err)
 	}
 
 	summary.Regime = domain.Regime(regime)
+	if riskCommentary != nil {
+		summary.RiskCommentary = *riskCommentary
+	}
+	if parametersVersion != nil {
+		summary.ParametersVersion = *parametersVersion
+	}
+	if afterTaxPnL != nil {
+		summary.AfterTaxPnL = *afterTaxPnL
+	}
+	if totalTaxPaid != nil {
+		summary.TotalTaxPaid = *totalTaxPaid
+	}
 	if len(brokerRuntime) > 0 {
 		if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
 			return nil, fmt.Errorf("unmarshal broker_runtime: %w", err)
