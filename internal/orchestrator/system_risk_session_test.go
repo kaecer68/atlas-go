@@ -18,7 +18,7 @@ func TestRecordSessionSummary_PersistsRiskCommentary(t *testing.T) {
 	sys := &System{
 		SystemCore: &SystemCore{
 			sim: SimulationCore{
-				cfg:      config.Config{PrimaryMarket: "TW"},
+				cfg:      config.Config{PrimaryMarket: "TW", LedgerDir: baseDir},
 				provider: marketdata.NewMockProvider(),
 				engine:   sim.NewEngine(domain.SimulationConstraints{StartingCash: 1_000_000}),
 				registry: SeedRegistry(),
