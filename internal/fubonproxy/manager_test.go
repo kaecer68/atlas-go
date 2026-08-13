@@ -1086,7 +1086,14 @@ func reserveEphemeralPort(t *testing.T) (net.Listener, int) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	origPort := proxyListenPort
 	proxyListenPort = port
-	t.Cleanup(func() { proxyListenPort = origPort })
+	t.Cleanup(func() {
+		// 防呆：即使 caller 忘了關閉 listener（如直接呼叫 reserveEphemeralPort
+		// 而非經 bindEphemeralPort/withFreeEphemeralPort），測試結束時也確保
+		// port 釋放，避免殘留 listener 影響後續測試的 port probe。
+		// 與 caller 的 ln.Close()/srv.Close() 雙重關閉安全（第二次回傳 error 被忽略）。
+		_ = ln.Close()
+		proxyListenPort = origPort
+	})
 	return ln, port
 }
 

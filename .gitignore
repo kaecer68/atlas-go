@@ -37,6 +37,8 @@
 /prompts/agents/spawn_*.md
 /internal/orchestrator/prompts/agents/spawn_*.md
 /internal/orchestrator/traces/
+# Test/sim runtime session artifacts written under cwd-relative ledger path (test-session positions.json)
+/internal/orchestrator/sessions/
 cmd/atlas/prompts/agents/spawn_*.md
 cmd/experimental/*/prompts/agents/spawn_*.md
 /cmd/run-experiment/prompts/
