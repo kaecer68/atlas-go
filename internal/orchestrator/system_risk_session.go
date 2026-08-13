@@ -111,9 +111,6 @@ func (s *System) RecordSessionSummary(result domain.SimulationResult, candidate 
 }
 
 func (s *System) saveSessionPositions(sessionID string, positions []domain.Position) {
-	if len(positions) == 0 {
-		return
-	}
 	sessionDir := filepath.Join(s.Sim().cfg.LedgerDir, "sessions", sessionID)
 	_ = os.MkdirAll(sessionDir, 0o755)
 	path := filepath.Join(sessionDir, "positions.json")
