@@ -106,6 +106,7 @@ export function renderCapitalModels(data) {
       if (detail) detail.classList.toggle('open');
     });
   });
+  wireThemeChips(el);
 }
 
 function signalLabel(value) {
@@ -134,6 +135,27 @@ function renderSectorChips(sectors) {
 function renderThemeChips(themes) {
   if (!Array.isArray(themes) || themes.length === 0) return '';
   return themes.map(function (t) {
-    return '<span class="badge muted">' + escapeHtml(t) + '</span>';
+    return '<a href="javascript:void(0)" class="cm-theme-chip badge muted" data-theme="' + escapeHtml(t) + '" title="前往錢潮因果查看此主題">' + escapeHtml(t) + '</a>';
   }).join(' ');
+}
+
+// navigateToCausalityTheme jumps to the causality page pre-filtered by a
+// trigger theme. The theme is stashed on window._pendingCausalityFilter so
+// loadCapitalCausality can apply it after the page switch.
+function navigateToCausalityTheme(theme) {
+  window._pendingCausalityFilter = theme;
+  if (typeof window.switchPage === 'function') {
+    window.switchPage('capital_causality');
+  }
+}
+
+// wireThemeChips attaches click handlers after the models list renders.
+function wireThemeChips(container) {
+  if (!container) return;
+  container.querySelectorAll('.cm-theme-chip').forEach(function (chip) {
+    chip.addEventListener('click', function (ev) {
+      ev.stopPropagation(); // don't toggle the card detail
+      navigateToCausalityTheme(chip.getAttribute('data-theme'));
+    });
+  });
 }
