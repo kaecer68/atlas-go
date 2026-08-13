@@ -649,13 +649,17 @@ func calculateRegimeBreakdown(summaries []domain.SessionSummary, outcomes []doma
 		}
 		// Prefer the regime recorded on the outcome itself (rich JSONL source
 		// carries it). Fall back to the summary lookup only when the outcome
-		// has no regime field, then to "unknown" when neither resolves.
+		// has no regime field.
 		regime := oc.Regime
 		if regime == "" {
 			regime = findRegimeForWindow(summaries, oc.Window)
 		}
+		// Outcomes with no resolvable regime (e.g. SQLite fallback rows written
+		// before BL-06 carried evaluation fields) have no genuine regime data —
+		// skip rather than bucket them under "unknown", which would mislead as
+		// a real market state.
 		if regime == "" {
-			regime = "unknown"
+			continue
 		}
 		regimeReturns[regime] = append(regimeReturns[regime], oc.ForwardReturn)
 	}

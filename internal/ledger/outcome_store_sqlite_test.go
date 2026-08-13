@@ -163,6 +163,42 @@ func TestSQLiteOutcomeStoreRecordSessionOutcomes(t *testing.T) {
 	}
 }
 
+// TestSQLiteOutcomeStoreScanLegacyNullEvaluationColumns covers the BL-06
+// regression: rows written before the migration added layer/forward_return/
+// window/hit/benchmark_delta/is_synthetic/true_regime have NULL in those
+// columns. scanOutcomes must tolerate NULL (treat as zero/empty) instead of
+// erroring on converting NULL to string.
+func TestSQLiteOutcomeStoreScanLegacyNullEvaluationColumns(t *testing.T) {
+	db, err := OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenSQLiteDB failed: %v", err)
+	}
+	defer db.Close()
+	if err := InitSchema(db); err != nil {
+		t.Fatalf("InitSchema failed: %v", err)
+	}
+
+	// Insert a legacy-shaped row where the BL-06 evaluation columns are NULL.
+	if _, err := db.Exec(`
+		INSERT INTO outcomes (session_id, symbol, agent_id, action, conviction, regime, timestamp, passed_guards)
+		VALUES ('session-legacy', '2330', 'agent-legacy', 'buy', 70, 'sector', '2026-01-01T00:00:00Z', 1)`); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	store := NewSQLiteOutcomeStore(db)
+	loaded, err := store.LoadSessionOutcomes("session-legacy")
+	if err != nil {
+		t.Fatalf("LoadSessionOutcomes on legacy NULL row failed: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 legacy outcome, got %d", len(loaded))
+	}
+	// Layer falls back to the legacy regime column (which stored the layer).
+	if string(loaded[0].Layer) != "sector" {
+		t.Errorf("expected Layer fallback sector, got %q", loaded[0].Layer)
+	}
+}
+
 func TestSQLiteOutcomeStoreLoadOutcomesFromSessions(t *testing.T) {
 	db, err := OpenSQLiteDB(":memory:")
 	if err != nil {
