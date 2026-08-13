@@ -2,6 +2,10 @@ package server
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +102,39 @@ func TestHandleSystemGetMaturity_OK(t *testing.T) {
 	}
 	if out.Result == nil {
 		t.Fatal("expected Result non-nil")
+	}
+}
+
+func TestHandleSystemGetMaturity_DegradesToEmbedded(t *testing.T) {
+	// Backend that returns 500 → handler must fall back to embedded MATURITY.md.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	cfg := Config{AtlasBaseURL: ts.URL, AuditLogPath: filepath.Join(t.TempDir(), "audit.log")}
+	audit, err := NewAuditWriter(cfg.AuditLogPath)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	defer func() { _ = audit.Close() }()
+	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
+
+	_, out, err := s.handleSystemGetMaturity(context.Background(), nil, struct{}{})
+	if err != nil {
+		t.Fatalf("handler should degrade, not error: %v", err)
+	}
+	if out.Result == nil {
+		t.Fatal("expected Result non-nil (degraded embedded snapshot)")
+	}
+	if (*out.Result)["degraded"] != true {
+		t.Fatalf("expected degraded=true, got %v", (*out.Result)["degraded"])
+	}
+	content, _ := (*out.Result)["content"].(string)
+	if len(content) == 0 {
+		t.Fatal("expected embedded MATURITY.md content")
+	}
+	if !strings.Contains(content, "Maturity") && !strings.Contains(content, "maturity") {
+		t.Fatalf("embedded content does not look like MATURITY.md: %.100s", content)
 	}
 }
