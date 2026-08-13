@@ -82,7 +82,7 @@ mcp_servers:
 ```bash
 hermes mcp reload
 hermes mcp test atlas-mcp
-# 預期: 列出 118 個 tool（範圍 [115, 118]）
+# 預期: 列出 117 個 tool（範圍 [115, 121]）
 ```
 
 ### 3.2 OpenClaw（`~/.openclaw/mcp.json`）
@@ -215,7 +215,7 @@ bin/atlas-mcp 2>&1 | head -3
 
 - **5 分鐘 SOP（給 agent 用）**: [`.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md`](../.claude/skills/atlas-mcp-integration/AGENT_QUICKSTART.md)
 - **完整 MCP 指南**: [`cmd/atlas-mcp/README.md`](../cmd/atlas-mcp/README.md)
-- **118 個 tool 總覽**: [`docs/reference/tool-catalog.md`](./reference/tool-catalog.md)
+- **117 個 tool 總覽**（sampling/elicitation 全開 119）: [`docs/reference/tool-catalog.md`](./reference/tool-catalog.md)
 - **Setup wizard 詳解**: [`cmd/atlas-mcp-setup/README.md`](../cmd/atlas-mcp-setup/README.md)
 
 ---
