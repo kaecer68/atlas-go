@@ -339,4 +339,3 @@ func TestFactoryQuoteStorePostgresWithPool(t *testing.T) {
 		t.Fatalf("expected *PostgresQuoteStore, got %T", store)
 	}
 }
-
