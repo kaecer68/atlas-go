@@ -277,10 +277,8 @@
 
 | 欄位 | 值 |
 |------|-----|
-| **類型** | Directory（5 個 JSONL） |
-| **生產者** | `internal/swarm/` |
-| **消費者** | `internal/swarm/`（訓練回放）、`internal/metalearning/`（策略進化） |
-| **描述** | Swarm 訓練過程記錄，用於回放分析與 MetaLearner 策略演化 |
+| **狀態** | **Archived (deleted 2026-08-14)** |
+| **說明** | 2026-08-14 刪除 31.36 GB。`internal/swarm/` 套件已於 commit `db9412c3` (P2 final cleanup, 2026-07-07) 從程式碼庫移除；production 程式碼 0 reader；API 端點全 404；generator 已刪無法 regenerate。同時刪除 `swarm_latest.json` + `metalearner_state.json` (deprecated, test-only)。詳見 `.omo/manifests/2026-08-13-sqlite-to-postgres-migration.md` §七-B。 |
 
 ### traces `data/state/traces/`
 
