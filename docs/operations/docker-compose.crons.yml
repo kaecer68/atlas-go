@@ -1,0 +1,89 @@
+# iMac production — atlas cron services (C-pg1)
+# 使用: docker compose -f docker-compose.prod.yml -f docker-compose.crons.yml up -d
+# 注意: crons 連 host.docker.internal 的 atlas-postgres (:55432) 和 atlas-go (:18080)
+
+services:
+  cron-geo-ingest:
+    image: atlas-cron:latest
+    container_name: atlas-cron-geo-ingest-imac
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 8 * * *
+      - CRON_COMMAND=/app/geo-ingest -work-dir /app
+      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+  cron-macro-ingest:
+    image: atlas-cron:latest
+    container_name: atlas-cron-macro-ingest-imac
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 8 * * *
+      - CRON_COMMAND=/app/macro-ingest -work-dir /app
+      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+  cron-replay-sync:
+    image: atlas-cron:latest
+    container_name: atlas-cron-replay-sync-imac
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=30 15 * * *
+      - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
+      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+  cron-darwinian:
+    image: atlas-cron:latest
+    container_name: atlas-cron-darwinian-imac
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 9 * * *
+      - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
+      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
+
+  cron-quote-backfill:
+    image: atlas-cron:latest
+    container_name: atlas-cron-quote-backfill-imac
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=0 3 * * *
+      - CRON_COMMAND=/app/cron-quote-backfill
+      - FINMIND_API_KEY=${FINMIND_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      disable: true
