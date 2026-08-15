@@ -4,7 +4,7 @@
 > **Predecessor**: [`./llm-sector-agent-spec.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 > **Operational guide**: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
 > **Linked log**: `.omo/evidence/l2-4-observation-log.md`
-> **Future work**: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) §3
+> **Future work**: `.omo/manifests/l2-4-followup.md`（harness 私有）§3
 > **Issues**: [#740](https://github.com/kaecer68/atlas-go/issues/740) (slog metrics for L2.4 observability in `SemiconductorLLMAgent.Recommend`)
 
 ## Overview
@@ -95,13 +95,13 @@ Operational details (Day 7 / Day 14 checkpoints, rollback procedure): see [L2.4 
 
 ## Future work (Promotion)
 
-The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDriver removal → Version tag) is documented in [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) §3. The spec intentionally stops at the metric schema boundary — operational concerns (roll-back, promotion, risk) live in the runbook to avoid duplication.
+The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDriver removal → Version tag) is documented in `.omo/manifests/l2-4-followup.md`（harness 私有）§3. The spec intentionally stops at the metric schema boundary — operational concerns (roll-back, promotion, risk) live in the runbook to avoid duplication.
 
 ## References
 
 - Predecessor: [`./llm-sector-agent-spec.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 - Operational guide: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
-- Future work: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) (auto-cron / CLI flag / promotion)
+- Future work: `.omo/manifests/l2-4-followup.md`（harness 私有）(auto-cron / CLI flag / promotion)
 - Existing log: `.omo/evidence/l2-4-observation-log.md`
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
 - Metrics: [Issue #740](https://github.com/kaecer68/atlas-go/issues/740)

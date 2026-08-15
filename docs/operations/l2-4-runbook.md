@@ -8,7 +8,7 @@
 > **Log 範本**: `.omo/evidence/l2-4-observation-log.md`
 > **Flag 函式**: `config.GetUseLLMSectorAgents()`（`internal/config/parameters.go`）+ `config.GetL2_4Schedule()` (新加,L2.4 scheduling)
 > **Metric 來源**: PR #821 (commits `1d82c8a5` + `78fd2b4b` + `1491ab93` + `f2c37c61`) — `SemiconductorLLMAgent.Recommend()` 內 6 個 `slog.Info` events
-> **未來工作**: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) — auto-cron / CLI flag / promotion procedure
+> **未來工作**: `.omo/manifests/l2-4-followup.md`（harness 私有）— auto-cron / CLI flag / promotion procedure
 
 ## 1. Pre-flight Checklist
 
@@ -109,7 +109,7 @@ Day 14 acceptance 全部通過後,依序執行(每步獨立 PR):
 
 > 設計保持簡單:promotion 流程不引入新 CLI flag,僅翻 default + 刪 alias。
 
-完整 4 步工作報告見 [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) §3。
+完整 4 步工作報告見 `.omo/manifests/l2-4-followup.md`（harness 私有）§3。
 
 ## 6. Failure Modes & Escalation
 
@@ -134,7 +134,7 @@ Day 14 acceptance 全部通過後,依序執行(每步獨立 PR):
 - Issue: [#742](https://github.com/kaecer68/atlas-go/issues/742)
 - 指標定義: [`../specs/l2-4-observation-spec.md`](../specs/l2-4-observation-spec.md-spec) §Metrics
 - L2.3 架構: [`../specs/llm-sector-agent-spec.md`](../specs/llm-sector-agent-spec.md-spec)
-- L2.4 follow-up plan: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) — auto-cron / CLI flag / promotion procedure
+- L2.4 follow-up plan: `.omo/manifests/l2-4-followup.md`（harness 私有）— auto-cron / CLI flag / promotion procedure
 - Flag 函式: `config.GetUseLLMSectorAgents()` + `config.GetL2_4Schedule()` (`internal/config/parameters.go`)
 - Metric 實作: PR #821 — `internal/orchestrator/semiconductor_llm_agent.go` + `internal/monitoring/api/pipeline/l2_4_*.go`
 - Log 範本: `.omo/evidence/l2-4-observation-log.md`
