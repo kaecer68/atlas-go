@@ -7438,8 +7438,8 @@
       "source": "heuristic"
     },
     "a5_pcr_fallback": {
-      "value": 0.5,
-      "rationale": "Neutral score when PCR data is unavailable (0)",
+      "value": 0.0,
+      "rationale": "Score when PCR data is unavailable (0)——Audit A10：資料缺失不假裝中性 0.5，回 0 不貢獻",
       "source": "heuristic"
     },
     "a6_oddlot_thresholds": {

@@ -176,6 +176,66 @@ func TestConditionEvaluator_ZeroTAIEX(t *testing.T) {
 	}
 }
 
+// TestEvaluateReturns_MissingTAIEXUsesPreviousValid verifies that when the
+// taiex_index channel fails on a trigger day (TAIEX reading missing), the
+// evaluator resolves the most recent valid reading backwards instead of
+// dropping the sample (FIX-1: 投資心法回空).
+func TestEvaluateReturns_MissingTAIEXUsesPreviousValid(t *testing.T) {
+	e := NewConditionEvaluator()
+
+	frame := StrategyFrame{
+		ID:        "fix1-missing-taiex",
+		Direction: DirectionUp,
+		Conditions: []Condition{
+			{Field: "RetailMarginBalance", Operator: "gt", Value: 3000},
+		},
+	}
+
+	// s0/s1: valid TAIEX; s2: taiex_index failed (TAIEX missing, condition still
+	// matches via RetailMarginBalance); s3: valid TAIEX again.
+	snapshots := []marketdata.MacroDataSnapshot{
+		makeSnapshot(10000, 3500, 0),
+		makeSnapshot(11000, 3500, 0),
+		makeSnapshot(0, 3500, 0), // missing TAIEX on trigger day
+		makeSnapshot(11550, 3500, 0),
+	}
+
+	strategyReturns, taiexReturns, totalTests := e.EvaluateReturns(frame, snapshots, 1)
+	if totalTests != 3 {
+		t.Errorf("TotalTests = %d, want 3 (missing-TAIEX day must not be dropped)", totalTests)
+	}
+	if len(strategyReturns) != 3 || len(taiexReturns) != 3 {
+		t.Fatalf("len(strategyReturns)=%d len(taiexReturns)=%d, want 3/3", len(strategyReturns), len(taiexReturns))
+	}
+	// s2 forward return uses s2's resolved current (11000 from s1) → s3 (11550): +5%
+	if got := taiexReturns[2]; got < 0.049 || got > 0.051 {
+		t.Errorf("taiexReturns[2] = %f, want ~0.05 (resolved from previous valid)", got)
+	}
+}
+
+// TestResolveTAIEXValue walks backwards to the most recent valid reading.
+func TestResolveTAIEXValue(t *testing.T) {
+	snapshots := []marketdata.MacroDataSnapshot{
+		makeSnapshot(0, 0, 0),
+		makeSnapshot(0, 0, 0),
+		makeSnapshot(10000, 0, 0),
+		makeSnapshot(0, 0, 0),
+		makeSnapshot(11000, 0, 0),
+	}
+	if got := resolveTAIEXValue(snapshots, 0); got != 0 {
+		t.Errorf("resolveTAIEXValue(0) = %f, want 0 (no valid reading yet)", got)
+	}
+	if got := resolveTAIEXValue(snapshots, 2); got != 10000 {
+		t.Errorf("resolveTAIEXValue(2) = %f, want 10000", got)
+	}
+	if got := resolveTAIEXValue(snapshots, 3); got != 10000 {
+		t.Errorf("resolveTAIEXValue(3) = %f, want 10000 (walk back to index 2)", got)
+	}
+	if got := resolveTAIEXValue(snapshots, 4); got != 11000 {
+		t.Errorf("resolveTAIEXValue(4) = %f, want 11000", got)
+	}
+}
+
 // TestResolveField_KnownField returns the correct value for a known field.
 func TestResolveField_KnownField(t *testing.T) {
 	snap := marketdata.MacroDataSnapshot{

@@ -132,9 +132,11 @@ func TestFundamentalProvider_LoadFromJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fundamentals.json")
 
+	ps2330 := 8.0
+	ps2882 := 1.5
 	data := map[string]FundamentalData{
-		"2330.TW": {PE: 25.0, PB: 6.1, PS: 8.0, DividendYield: 1.5, Sector: "semiconductor"},
-		"2882.TW": {PE: 10.0, PB: 1.2, PS: 1.5, DividendYield: 4.0, Sector: "financials"},
+		"2330.TW": {PE: 25.0, PB: 6.1, PS: &ps2330, DividendYield: 1.5, Sector: "semiconductor"},
+		"2882.TW": {PE: 10.0, PB: 1.2, PS: &ps2882, DividendYield: 4.0, Sector: "financials"},
 	}
 
 	b, err := json.Marshal(data)

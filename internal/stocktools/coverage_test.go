@@ -135,7 +135,7 @@ func TestLookupCoverage_EmptySymbol(t *testing.T) {
 // magnitude, is the contract).
 func TestLookupCoverage_ZeroDataSymbol(t *testing.T) {
 	fp := writeSnapshot(t, map[string]portfolio.FundamentalData{
-		"1234.TW": {PE: 0, PB: 0, PS: 0, DividendYield: 0, Sector: ""},
+		"1234.TW": {PE: 0, PB: 0, PS: nil, DividendYield: 0, Sector: ""},
 	})
 	got := LookupCoverage("1234", fp)
 	if !got.Covered {

@@ -102,9 +102,10 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 				raw["pb_score"] = pbScore
 				raw["pe_switched_to_pb"] = 1.0 // Mark that we switched from P/E to P/B
 				formula = fmt.Sprintf("clamp(1 - (PB-%.2f)/%.2f, -1, 1)", fe.params.Factor.ValuePBRangeCenter, fe.params.Factor.ValuePBRangeWidth)
-			} else if data.PS > 0 && isFinite(data.PS) {
-				// P/B also invalid, try P/S
-				psScore := 1.0 - (data.PS-fe.params.Factor.ValuePSRangeCenter)/fe.params.Factor.ValuePSRangeWidth
+			} else if data.PS != nil && *data.PS > 0 && isFinite(*data.PS) {
+				// P/B also invalid, try P/S (FIX-7: nil PS = 缺資料, skip)
+				psValue := *data.PS
+				psScore := 1.0 - (psValue-fe.params.Factor.ValuePSRangeCenter)/fe.params.Factor.ValuePSRangeWidth
 				if psScore > 1.0 {
 					psScore = 1.0
 				}
@@ -113,7 +114,7 @@ func (fe *FactorEngine) calculateValueDetail(symbol string, quotes map[string]do
 				}
 				score += psScore
 				count++
-				raw["ps"] = data.PS
+				raw["ps"] = psValue
 				raw["ps_score"] = psScore
 				raw["pe_switched_to_ps"] = 1.0 // Mark that we switched from P/E to P/S
 				formula = fmt.Sprintf("clamp(1 - (PS-%.2f)/%.2f, -1, 1)", fe.params.Factor.ValuePSRangeCenter, fe.params.Factor.ValuePSRangeWidth)

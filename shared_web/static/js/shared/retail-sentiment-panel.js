@@ -141,9 +141,11 @@ export function renderRetailSentimentPanel(container, retailSentiment) {
     ].map(r => {
       const raw = r[1];
       const isPct = r[3] === true; // 當沖比率為原始比率，顯示時轉百分比
-      const v = fmtSafeNumber(isPct ? raw * 100 : raw, { decimals: isPct ? 1 : 2, useGrouping: true, suffix: isPct ? '%' : '' });
-      const cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
-      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + fallbackBadge(r[2]) + '</td></tr>';
+      const isFallback = r[2] === true;
+      // FIX-5: fallback 子指標（資料缺失，回 0 不貢獻）顯示 -- 而非把 0.0 冒充真實數值。
+      const display = isFallback ? '--' : fmtSafeNumber(isPct ? raw * 100 : raw, { decimals: isPct ? 1 : 2, useGrouping: true, suffix: isPct ? '%' : '' });
+      const cls = !isFallback && raw != null && raw > 0.5 ? 'up' : !isFallback && raw != null && raw < -0.5 ? 'down' : '';
+      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + display + fallbackBadge(isFallback) + '</td></tr>';
     }).join('');
 
     const cIndicatorRows = [
@@ -152,9 +154,11 @@ export function renderRetailSentimentPanel(container, retailSentiment) {
       ['ETF 申購分數', cc.etf_subscription_score, fallbackSetC.has('c3_etf_sub')]
     ].map(r => {
       const raw = r[1];
-      const v = fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
-      const cls = raw != null && raw > 0.5 ? 'up' : raw != null && raw < -0.5 ? 'down' : '';
-      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + v + fallbackBadge(r[2]) + '</td></tr>';
+      const isFallback = r[2] === true;
+      // FIX-5: fallback 子指標（資料缺失）顯示 -- 而非把預設值冒充真實數值。
+      const display = isFallback ? '--' : fmtSafeNumber(raw, { decimals: 2, useGrouping: true });
+      const cls = !isFallback && raw != null && raw > 0.5 ? 'up' : !isFallback && raw != null && raw < -0.5 ? 'down' : '';
+      return '<tr><td style="font-size:12px;padding:3px 8px">' + r[0] + '</td><td style="font-size:12px;text-align:right;padding:3px 8px" class="' + cls + '">' + display + fallbackBadge(isFallback) + '</td></tr>';
     }).join('');
 
     const dEvents = (cd.active_events && cd.active_events.length > 0) ? cd.active_events.join('、') : '無觸發事件';

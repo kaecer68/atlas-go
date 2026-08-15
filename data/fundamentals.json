@@ -3,7490 +3,6420 @@
     "PE": 0.0,
     "PB": 0.84,
     "DividendYield": 3.15,
-    "PS": 0,
     "Sector": ""
   },
   "1102.TW": {
     "PE": 12.6,
     "PB": 0.7,
     "DividendYield": 6.45,
-    "PS": 0,
     "Sector": ""
   },
   "1103.TW": {
     "PE": 16.49,
     "PB": 0.5,
     "DividendYield": 3.97,
-    "PS": 0,
     "Sector": ""
   },
   "1104.TW": {
     "PE": 11.52,
     "PB": 0.84,
     "DividendYield": 6.27,
-    "PS": 0,
     "Sector": ""
   },
   "1108.TW": {
     "PE": 6.81,
     "PB": 1.04,
     "DividendYield": 6.73,
-    "PS": 0,
     "Sector": ""
   },
   "1109.TW": {
     "PE": 14.95,
     "PB": 0.63,
     "DividendYield": 5.84,
-    "PS": 0,
     "Sector": ""
   },
   "1110.TW": {
     "PE": 42.22,
     "PB": 0.92,
     "DividendYield": 1.97,
-    "PS": 0,
     "Sector": ""
   },
   "1201.TW": {
     "PE": 33.38,
     "PB": 0.88,
     "DividendYield": 1.57,
-    "PS": 0,
     "Sector": ""
   },
   "1203.TW": {
     "PE": 22.35,
     "PB": 1.51,
     "DividendYield": 2.47,
-    "PS": 0,
     "Sector": ""
   },
   "1210.TW": {
     "PE": 12.54,
     "PB": 1.71,
     "DividendYield": 5.52,
-    "PS": 0,
     "Sector": ""
   },
   "1213.TW": {
     "PE": 0.0,
     "PB": 0.82,
     "DividendYield": 3.68,
-    "PS": 0,
     "Sector": ""
   },
   "1215.TW": {
     "PE": 13.81,
     "PB": 3.4,
     "DividendYield": 4.88,
-    "PS": 0,
     "Sector": ""
   },
   "1216.TW": {
     "PE": 20.81,
     "PB": 3.0,
     "DividendYield": 4.18,
-    "PS": 0,
     "Sector": ""
   },
   "1217.TW": {
     "PE": 24.4,
     "PB": 0.65,
     "DividendYield": 2.44,
-    "PS": 0,
     "Sector": ""
   },
   "1218.TW": {
     "PE": 12.17,
     "PB": 0.73,
     "DividendYield": 6.82,
-    "PS": 0,
     "Sector": ""
   },
   "1219.TW": {
     "PE": 31.56,
     "PB": 1.06,
     "DividendYield": 3.52,
-    "PS": 0,
     "Sector": ""
   },
   "1220.TW": {
     "PE": 156.25,
     "PB": 0.94,
     "DividendYield": 1.6,
-    "PS": 0,
     "Sector": ""
   },
   "1225.TW": {
     "PE": 20.15,
     "PB": 2.02,
     "DividendYield": 3.06,
-    "PS": 0,
     "Sector": ""
   },
   "1227.TW": {
     "PE": 22.59,
     "PB": 1.47,
     "DividendYield": 4.46,
-    "PS": 0,
     "Sector": ""
   },
   "1229.TW": {
     "PE": 17.26,
     "PB": 1.39,
     "DividendYield": 4.51,
-    "PS": 0,
     "Sector": ""
   },
   "1231.TW": {
     "PE": 23.91,
     "PB": 3.75,
     "DividendYield": 2.74,
-    "PS": 0,
     "Sector": ""
   },
   "1232.TW": {
     "PE": 18.16,
     "PB": 4.06,
     "DividendYield": 4.8,
-    "PS": 0,
     "Sector": ""
   },
   "1233.TW": {
     "PE": 39.27,
     "PB": 1.97,
     "DividendYield": 0.68,
-    "PS": 0,
     "Sector": ""
   },
   "1234.TW": {
     "PE": 17.88,
     "PB": 0.76,
     "DividendYield": 4.62,
-    "PS": 0,
     "Sector": ""
   },
   "1235.TW": {
     "PE": 0.0,
     "PB": 0.69,
     "DividendYield": 5.67,
-    "PS": 0,
     "Sector": ""
   },
   "1236.TW": {
     "PE": 0.0,
     "PB": 0.88,
     "DividendYield": 6.46,
-    "PS": 0,
     "Sector": ""
   },
   "1256.TW": {
     "PE": 14.27,
     "PB": 1.38,
     "DividendYield": 4.33,
-    "PS": 0,
     "Sector": ""
   },
   "1301.TW": {
     "PE": 0.0,
     "PB": 0.82,
     "DividendYield": 1.06,
-    "PS": 0,
     "Sector": ""
   },
   "1303.TW": {
     "PE": 143.16,
     "PB": 1.82,
     "DividendYield": 0.98,
-    "PS": 0,
     "Sector": ""
   },
   "1304.TW": {
     "PE": 0.0,
     "PB": 0.98,
     "DividendYield": 0.94,
-    "PS": 0,
     "Sector": ""
   },
   "1305.TW": {
     "PE": 0.0,
     "PB": 1.26,
     "DividendYield": 0.6,
-    "PS": 0,
     "Sector": ""
   },
   "1307.TW": {
     "PE": 11.16,
     "PB": 1.26,
     "DividendYield": 6.92,
-    "PS": 0,
     "Sector": ""
   },
   "1308.TW": {
     "PE": 0.0,
     "PB": 0.96,
     "DividendYield": 1.21,
-    "PS": 0,
     "Sector": ""
   },
   "1309.TW": {
     "PE": 0.0,
     "PB": 1.56,
     "DividendYield": 0.66,
-    "PS": 0,
     "Sector": ""
   },
   "1310.TW": {
     "PE": 0.0,
     "PB": 0.73,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1312.TW": {
     "PE": 0.0,
     "PB": 0.49,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1313.TW": {
     "PE": 0.0,
     "PB": 0.53,
     "DividendYield": 0.85,
-    "PS": 0,
     "Sector": ""
   },
   "1314.TW": {
     "PE": 0.0,
     "PB": 0.38,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1315.TW": {
     "PE": 41.87,
     "PB": 0.61,
     "DividendYield": 6.93,
-    "PS": 0,
     "Sector": ""
   },
   "1316.TW": {
     "PE": 0.0,
     "PB": 0.97,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1319.TW": {
     "PE": 12.52,
     "PB": 1.7,
     "DividendYield": 6.21,
-    "PS": 0,
     "Sector": ""
   },
   "1321.TW": {
     "PE": 0.0,
     "PB": 1.29,
     "DividendYield": 1.14,
-    "PS": 0,
     "Sector": ""
   },
   "1323.TW": {
     "PE": 83.65,
     "PB": 0.77,
     "DividendYield": 4.14,
-    "PS": 0,
     "Sector": ""
   },
   "1324.TW": {
     "PE": 0.0,
     "PB": 0.96,
     "DividendYield": 1.75,
-    "PS": 0,
     "Sector": ""
   },
   "1325.TW": {
     "PE": 0.0,
     "PB": 0.88,
     "DividendYield": 1.12,
-    "PS": 0,
     "Sector": ""
   },
   "1326.TW": {
     "PE": 0.0,
     "PB": 0.77,
     "DividendYield": 1.32,
-    "PS": 0,
     "Sector": ""
   },
   "1337.TW": {
     "PE": 0.0,
     "PB": 0.41,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1338.TW": {
     "PE": 0.0,
     "PB": 0.23,
     "DividendYield": 1.83,
-    "PS": 0,
     "Sector": ""
   },
   "1339.TW": {
     "PE": 17.24,
     "PB": 0.76,
     "DividendYield": 6.02,
-    "PS": 0,
     "Sector": ""
   },
   "1340.TW": {
     "PE": 0.0,
     "PB": 0.38,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1341.TW": {
     "PE": 16.12,
     "PB": 2.45,
     "DividendYield": 6.69,
-    "PS": 0,
     "Sector": ""
   },
   "1342.TW": {
     "PE": 15.51,
     "PB": 2.87,
     "DividendYield": 6.81,
-    "PS": 0,
     "Sector": ""
   },
   "1402.TW": {
     "PE": 18.25,
     "PB": 0.62,
     "DividendYield": 4.69,
-    "PS": 0,
     "Sector": ""
   },
   "1409.TW": {
     "PE": 13.79,
     "PB": 0.64,
     "DividendYield": 5.44,
-    "PS": 0,
     "Sector": ""
   },
   "1410.TW": {
     "PE": 53.31,
     "PB": 1.85,
     "DividendYield": 0.64,
-    "PS": 0,
     "Sector": ""
   },
   "1413.TW": {
     "PE": 21.93,
     "PB": 1.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1414.TW": {
     "PE": 79.52,
     "PB": 1.14,
     "DividendYield": 1.2,
-    "PS": 0,
     "Sector": ""
   },
   "1416.TW": {
     "PE": 14.26,
     "PB": 0.49,
     "DividendYield": 4.94,
-    "PS": 0,
     "Sector": ""
   },
   "1417.TW": {
     "PE": 14.52,
     "PB": 0.73,
     "DividendYield": 2.78,
-    "PS": 0,
     "Sector": ""
   },
   "1418.TW": {
     "PE": 0.0,
     "PB": 0.83,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1419.TW": {
     "PE": 15.23,
     "PB": 1.07,
     "DividendYield": 2.4,
-    "PS": 0,
     "Sector": ""
   },
   "1423.TW": {
     "PE": 9.21,
     "PB": 1.09,
     "DividendYield": 8.97,
-    "PS": 0,
     "Sector": ""
   },
   "1432.TW": {
     "PE": 2.88,
     "PB": 1.13,
     "DividendYield": 11.53,
-    "PS": 0,
     "Sector": ""
   },
   "1434.TW": {
     "PE": 32.16,
     "PB": 0.65,
     "DividendYield": 3.05,
-    "PS": 0,
     "Sector": ""
   },
   "1435.TW": {
     "PE": 0.0,
     "PB": 2.08,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1436.TW": {
     "PE": 10.46,
     "PB": 1.57,
     "DividendYield": 9.64,
-    "PS": 0,
     "Sector": ""
   },
   "1437.TW": {
     "PE": 12.64,
     "PB": 0.75,
     "DividendYield": 3.14,
-    "PS": 0,
     "Sector": ""
   },
   "1438.TW": {
     "PE": 16.49,
     "PB": 1.02,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1439.TW": {
     "PE": 8.68,
     "PB": 0.87,
     "DividendYield": 1.8,
-    "PS": 0,
     "Sector": ""
   },
   "1440.TW": {
     "PE": 0.0,
     "PB": 0.76,
     "DividendYield": 2.35,
-    "PS": 0,
     "Sector": ""
   },
   "1441.TW": {
     "PE": 0.0,
     "PB": 1.52,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1442.TW": {
     "PE": 8.65,
     "PB": 1.2,
     "DividendYield": 17.18,
-    "PS": 0,
     "Sector": ""
   },
   "1443.TW": {
     "PE": 20.27,
     "PB": 1.35,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1444.TW": {
     "PE": 0.0,
     "PB": 0.64,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1445.TW": {
     "PE": 0.0,
     "PB": 0.77,
     "DividendYield": 3.98,
-    "PS": 0,
     "Sector": ""
   },
   "1446.TW": {
     "PE": 10.12,
     "PB": 0.81,
     "DividendYield": 9.15,
-    "PS": 0,
     "Sector": ""
   },
   "1447.TW": {
     "PE": 0.0,
     "PB": 0.57,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1449.TW": {
     "PE": 143.18,
     "PB": 0.88,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1451.TW": {
     "PE": 10.43,
     "PB": 0.49,
     "DividendYield": 5.45,
-    "PS": 0,
     "Sector": ""
   },
   "1452.TW": {
     "PE": 0.0,
     "PB": 0.59,
     "DividendYield": 1.68,
-    "PS": 0,
     "Sector": ""
   },
   "1453.TW": {
     "PE": 302.5,
     "PB": 0.95,
     "DividendYield": 2.48,
-    "PS": 0,
     "Sector": ""
   },
   "1454.TW": {
     "PE": 0.0,
     "PB": 1.11,
     "DividendYield": 0.8,
-    "PS": 0,
     "Sector": ""
   },
   "1455.TW": {
     "PE": 0.0,
     "PB": 0.77,
     "DividendYield": 1.9,
-    "PS": 0,
     "Sector": ""
   },
   "1456.TW": {
     "PE": 4.27,
     "PB": 0.7,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1457.TW": {
     "PE": 12.58,
     "PB": 0.64,
     "DividendYield": 6.73,
-    "PS": 0,
     "Sector": ""
   },
   "1459.TW": {
     "PE": 14.32,
     "PB": 1.05,
     "DividendYield": 1.72,
-    "PS": 0,
     "Sector": ""
   },
   "1460.TW": {
     "PE": 0.0,
     "PB": 0.83,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1463.TW": {
     "PE": 138.46,
     "PB": 1.19,
     "DividendYield": 0.72,
-    "PS": 0,
     "Sector": ""
   },
   "1464.TW": {
     "PE": 29.57,
     "PB": 0.84,
     "DividendYield": 2.42,
-    "PS": 0,
     "Sector": ""
   },
   "1465.TW": {
     "PE": 0.0,
     "PB": 0.81,
     "DividendYield": 2.44,
-    "PS": 0,
     "Sector": ""
   },
   "1466.TW": {
     "PE": 0.0,
     "PB": 1.21,
     "DividendYield": 1.19,
-    "PS": 0,
     "Sector": ""
   },
   "1467.TW": {
     "PE": 0.0,
     "PB": 0.56,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1468.TW": {
     "PE": 59.05,
     "PB": 1.41,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1470.TW": {
     "PE": 28.46,
     "PB": 1.88,
     "DividendYield": 2.93,
-    "PS": 0,
     "Sector": ""
   },
   "1471.TW": {
     "PE": 400.0,
     "PB": 1.25,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1472.TW": {
     "PE": 14.84,
     "PB": 2.17,
     "DividendYield": 6.32,
-    "PS": 0,
     "Sector": ""
   },
   "1473.TW": {
     "PE": 41.75,
     "PB": 0.92,
     "DividendYield": 2.1,
-    "PS": 0,
     "Sector": ""
   },
   "1474.TW": {
     "PE": 29.71,
     "PB": 0.61,
     "DividendYield": 2.48,
-    "PS": 0,
     "Sector": ""
   },
   "1475.TW": {
     "PE": 11.08,
     "PB": 1.28,
     "DividendYield": 4.98,
-    "PS": 0,
     "Sector": ""
   },
   "1476.TW": {
     "PE": 16.34,
     "PB": 3.04,
     "DividendYield": 4.57,
-    "PS": 0,
     "Sector": ""
   },
   "1477.TW": {
     "PE": 14.98,
     "PB": 3.86,
     "DividendYield": 6.83,
-    "PS": 0,
     "Sector": ""
   },
   "1503.TW": {
     "PE": 29.67,
     "PB": 2.67,
     "DividendYield": 2.69,
-    "PS": 0,
     "Sector": ""
   },
   "1504.TW": {
     "PE": 26.65,
     "PB": 1.53,
     "DividendYield": 3.35,
-    "PS": 0,
     "Sector": ""
   },
   "1506.TW": {
     "PE": 184.17,
     "PB": 1.19,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1512.TW": {
     "PE": 39.16,
     "PB": 1.12,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1513.TW": {
     "PE": 18.65,
     "PB": 3.6,
     "DividendYield": 3.99,
-    "PS": 0,
     "Sector": ""
   },
   "1514.TW": {
     "PE": 31.67,
     "PB": 4.47,
     "DividendYield": 2.11,
-    "PS": 0,
     "Sector": ""
   },
   "1515.TW": {
     "PE": 23.81,
     "PB": 1.06,
     "DividendYield": 2.6,
-    "PS": 0,
     "Sector": ""
   },
   "1516.TW": {
     "PE": 410.0,
     "PB": 3.97,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1517.TW": {
     "PE": 0.0,
     "PB": 0.72,
     "DividendYield": 1.8,
-    "PS": 0,
     "Sector": ""
   },
   "1519.TW": {
     "PE": 58.18,
     "PB": 24.3,
     "DividendYield": 1.47,
-    "PS": 0,
     "Sector": ""
   },
   "1521.TW": {
     "PE": 28.56,
     "PB": 1.02,
     "DividendYield": 3.02,
-    "PS": 0,
     "Sector": ""
   },
   "1522.TW": {
     "PE": 17.91,
     "PB": 1.07,
     "DividendYield": 3.83,
-    "PS": 0,
     "Sector": ""
   },
   "1524.TW": {
     "PE": 15.26,
     "PB": 1.63,
     "DividendYield": 4.71,
-    "PS": 0,
     "Sector": ""
   },
   "1525.TW": {
     "PE": 19.19,
     "PB": 0.9,
     "DividendYield": 4.55,
-    "PS": 0,
     "Sector": ""
   },
   "1526.TW": {
     "PE": 0.0,
     "PB": 0.72,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1527.TW": {
     "PE": 21.38,
     "PB": 0.93,
     "DividendYield": 4.62,
-    "PS": 0,
     "Sector": ""
   },
   "1528.TW": {
     "PE": 0.0,
     "PB": 2.42,
     "DividendYield": 0.37,
-    "PS": 0,
     "Sector": ""
   },
   "1529.TW": {
     "PE": 23.47,
     "PB": 2.03,
     "DividendYield": 0.84,
-    "PS": 0,
     "Sector": ""
   },
   "1530.TW": {
     "PE": 0.0,
     "PB": 0.79,
     "DividendYield": 3.75,
-    "PS": 0,
     "Sector": ""
   },
   "1531.TW": {
     "PE": 0.0,
     "PB": 0.67,
     "DividendYield": 7.58,
-    "PS": 0,
     "Sector": ""
   },
   "1532.TW": {
     "PE": 22.07,
     "PB": 0.6,
     "DividendYield": 3.66,
-    "PS": 0,
     "Sector": ""
   },
   "1533.TW": {
     "PE": 52.59,
     "PB": 1.31,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1535.TW": {
     "PE": 13.03,
     "PB": 1.69,
     "DividendYield": 5.76,
-    "PS": 0,
     "Sector": ""
   },
   "1536.TW": {
     "PE": 0.0,
     "PB": 1.75,
     "DividendYield": 1.65,
-    "PS": 0,
     "Sector": ""
   },
   "1537.TW": {
     "PE": 15.72,
     "PB": 2.34,
     "DividendYield": 5.76,
-    "PS": 0,
     "Sector": ""
   },
   "1538.TW": {
     "PE": 0.0,
     "PB": 2.96,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1539.TW": {
     "PE": 77.86,
     "PB": 0.67,
     "DividendYield": 5.2,
-    "PS": 0,
     "Sector": ""
   },
   "1540.TW": {
     "PE": 19.68,
     "PB": 1.26,
     "DividendYield": 4.58,
-    "PS": 0,
     "Sector": ""
   },
   "1541.TW": {
     "PE": 11.21,
     "PB": 0.97,
     "DividendYield": 1.92,
-    "PS": 0,
     "Sector": ""
   },
   "1558.TW": {
     "PE": 16.38,
     "PB": 1.16,
     "DividendYield": 5.39,
-    "PS": 0,
     "Sector": ""
   },
   "1560.TW": {
     "PE": 55.84,
     "PB": 9.33,
     "DividendYield": 0.97,
-    "PS": 0,
     "Sector": ""
   },
   "1563.TW": {
     "PE": 29.27,
     "PB": 1.07,
     "DividendYield": 4.74,
-    "PS": 0,
     "Sector": ""
   },
   "1568.TW": {
     "PE": 17.35,
     "PB": 1.28,
     "DividendYield": 4.24,
-    "PS": 0,
     "Sector": ""
   },
   "1582.TW": {
     "PE": 28.17,
     "PB": 1.93,
     "DividendYield": 3.09,
-    "PS": 0,
     "Sector": ""
   },
   "1583.TW": {
     "PE": 0.0,
     "PB": 0.86,
     "DividendYield": 2.25,
-    "PS": 0,
     "Sector": ""
   },
   "1587.TW": {
     "PE": 94.05,
     "PB": 1.77,
     "DividendYield": 1.44,
-    "PS": 0,
     "Sector": ""
   },
   "1590.TW": {
     "PE": 26.55,
     "PB": 4.24,
     "DividendYield": 2.56,
-    "PS": 0,
     "Sector": ""
   },
   "1597.TW": {
     "PE": 108.9,
     "PB": 3.59,
     "DividendYield": 0.71,
-    "PS": 0,
     "Sector": ""
   },
   "1598.TW": {
     "PE": 0.0,
     "PB": 0.79,
     "DividendYield": 2.54,
-    "PS": 0,
     "Sector": ""
   },
   "1603.TW": {
     "PE": 9.91,
     "PB": 0.69,
     "DividendYield": 6.19,
-    "PS": 0,
     "Sector": ""
   },
   "1604.TW": {
     "PE": 14.82,
     "PB": 1.06,
     "DividendYield": 5.95,
-    "PS": 0,
     "Sector": ""
   },
   "1605.TW": {
     "PE": 43.96,
     "PB": 0.85,
     "DividendYield": 1.58,
-    "PS": 0,
     "Sector": ""
   },
   "1608.TW": {
     "PE": 5.89,
     "PB": 1.43,
     "DividendYield": 6.17,
-    "PS": 0,
     "Sector": ""
   },
   "1609.TW": {
     "PE": 20.24,
     "PB": 1.53,
     "DividendYield": 2.69,
-    "PS": 0,
     "Sector": ""
   },
   "1611.TW": {
     "PE": 406.67,
     "PB": 0.94,
     "DividendYield": 6.56,
-    "PS": 0,
     "Sector": ""
   },
   "1612.TW": {
     "PE": 12.65,
     "PB": 1.31,
     "DividendYield": 7.13,
-    "PS": 0,
     "Sector": ""
   },
   "1614.TW": {
     "PE": 33.14,
     "PB": 1.46,
     "DividendYield": 3.02,
-    "PS": 0,
     "Sector": ""
   },
   "1615.TW": {
     "PE": 9.65,
     "PB": 2.07,
     "DividendYield": 5.39,
-    "PS": 0,
     "Sector": ""
   },
   "1616.TW": {
     "PE": 15.1,
     "PB": 2.0,
     "DividendYield": 5.81,
-    "PS": 0,
     "Sector": ""
   },
   "1617.TW": {
     "PE": 21.62,
     "PB": 1.07,
     "DividendYield": 4.08,
-    "PS": 0,
     "Sector": ""
   },
   "1618.TW": {
     "PE": 9.03,
     "PB": 1.11,
     "DividendYield": 4.47,
-    "PS": 0,
     "Sector": ""
   },
   "1623.TW": {
     "PE": 13.33,
     "PB": 3.7,
     "DividendYield": 4.41,
-    "PS": 0,
     "Sector": ""
   },
   "1626.TW": {
     "PE": 0.0,
     "PB": 0.54,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1702.TW": {
     "PE": 32.23,
     "PB": 0.75,
     "DividendYield": 4.43,
-    "PS": 0,
     "Sector": ""
   },
   "1707.TW": {
     "PE": 14.6,
     "PB": 1.72,
     "DividendYield": 5.0,
-    "PS": 0,
     "Sector": ""
   },
   "1708.TW": {
     "PE": 12.06,
     "PB": 1.33,
     "DividendYield": 4.05,
-    "PS": 0,
     "Sector": ""
   },
   "1709.TW": {
     "PE": 14.96,
     "PB": 0.98,
     "DividendYield": 5.43,
-    "PS": 0,
     "Sector": ""
   },
   "1710.TW": {
     "PE": 0.0,
     "PB": 1.29,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1711.TW": {
     "PE": 0.0,
     "PB": 2.59,
     "DividendYield": 0.78,
-    "PS": 0,
     "Sector": ""
   },
   "1712.TW": {
     "PE": 16.33,
     "PB": 2.08,
     "DividendYield": 5.89,
-    "PS": 0,
     "Sector": ""
   },
   "1713.TW": {
     "PE": 12.11,
     "PB": 1.86,
     "DividendYield": 6.62,
-    "PS": 0,
     "Sector": ""
   },
   "1714.TW": {
     "PE": 20.4,
     "PB": 0.82,
     "DividendYield": 1.76,
-    "PS": 0,
     "Sector": ""
   },
   "1717.TW": {
     "PE": 56.74,
     "PB": 3.39,
     "DividendYield": 1.25,
-    "PS": 0,
     "Sector": ""
   },
   "1718.TW": {
     "PE": 79.67,
     "PB": 0.44,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1720.TW": {
     "PE": 12.16,
     "PB": 1.84,
     "DividendYield": 4.75,
-    "PS": 0,
     "Sector": ""
   },
   "1721.TW": {
     "PE": 0.0,
     "PB": 1.99,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1722.TW": {
     "PE": 48.74,
     "PB": 0.84,
     "DividendYield": 4.32,
-    "PS": 0,
     "Sector": ""
   },
   "1723.TW": {
     "PE": 29.47,
     "PB": 2.32,
     "DividendYield": 2.37,
-    "PS": 0,
     "Sector": ""
   },
   "1725.TW": {
     "PE": 20.46,
     "PB": 0.86,
     "DividendYield": 3.42,
-    "PS": 0,
     "Sector": ""
   },
   "1726.TW": {
     "PE": 13.73,
     "PB": 1.17,
     "DividendYield": 4.9,
-    "PS": 0,
     "Sector": ""
   },
   "1727.TW": {
     "PE": 1392.5,
     "PB": 3.4,
     "DividendYield": 0.27,
-    "PS": 0,
     "Sector": ""
   },
   "1730.TW": {
     "PE": 11.78,
     "PB": 1.63,
     "DividendYield": 5.66,
-    "PS": 0,
     "Sector": ""
   },
   "1731.TW": {
     "PE": 16.03,
     "PB": 1.34,
     "DividendYield": 5.6,
-    "PS": 0,
     "Sector": ""
   },
   "1732.TW": {
     "PE": 37.46,
     "PB": 2.18,
     "DividendYield": 2.32,
-    "PS": 0,
     "Sector": ""
   },
   "1733.TW": {
     "PE": 18.07,
     "PB": 1.57,
     "DividendYield": 4.41,
-    "PS": 0,
     "Sector": ""
   },
   "1734.TW": {
     "PE": 16.46,
     "PB": 1.74,
     "DividendYield": 5.06,
-    "PS": 0,
     "Sector": ""
   },
   "1735.TW": {
     "PE": 35.26,
     "PB": 1.76,
     "DividendYield": 2.36,
-    "PS": 0,
     "Sector": ""
   },
   "1736.TW": {
     "PE": 13.36,
     "PB": 2.67,
     "DividendYield": 3.31,
-    "PS": 0,
     "Sector": ""
   },
   "1737.TW": {
     "PE": 16.0,
     "PB": 0.94,
     "DividendYield": 4.38,
-    "PS": 0,
     "Sector": ""
   },
   "1752.TW": {
     "PE": 14.77,
     "PB": 1.45,
     "DividendYield": 4.48,
-    "PS": 0,
     "Sector": ""
   },
   "1760.TW": {
     "PE": 28.83,
     "PB": 2.81,
     "DividendYield": 3.13,
-    "PS": 0,
     "Sector": ""
   },
   "1762.TW": {
     "PE": 0.0,
     "PB": 0.69,
     "DividendYield": 0.69,
-    "PS": 0,
     "Sector": ""
   },
   "1773.TW": {
     "PE": 22.32,
     "PB": 4.06,
     "DividendYield": 2.63,
-    "PS": 0,
     "Sector": ""
   },
   "1776.TW": {
     "PE": 56.61,
     "PB": 1.1,
     "DividendYield": 3.79,
-    "PS": 0,
     "Sector": ""
   },
   "1783.TW": {
     "PE": 14.39,
     "PB": 2.49,
     "DividendYield": 1.95,
-    "PS": 0,
     "Sector": ""
   },
   "1786.TW": {
     "PE": 27.65,
     "PB": 2.27,
     "DividendYield": 3.18,
-    "PS": 0,
     "Sector": ""
   },
   "1789.TW": {
     "PE": 124.41,
     "PB": 1.59,
     "DividendYield": 1.37,
-    "PS": 0,
     "Sector": ""
   },
   "1795.TW": {
     "PE": 12.0,
     "PB": 2.38,
     "DividendYield": 1.25,
-    "PS": 0,
     "Sector": ""
   },
   "1802.TW": {
     "PE": 0.0,
     "PB": 3.52,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1805.TW": {
     "PE": 56.84,
     "PB": 0.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1806.TW": {
     "PE": 28.66,
     "PB": 0.61,
     "DividendYield": 1.81,
-    "PS": 0,
     "Sector": ""
   },
   "1808.TW": {
     "PE": 21.16,
     "PB": 2.15,
     "DividendYield": 6.47,
-    "PS": 0,
     "Sector": ""
   },
   "1809.TW": {
     "PE": 134.47,
     "PB": 1.46,
     "DividendYield": 0.98,
-    "PS": 0,
     "Sector": ""
   },
   "1810.TW": {
     "PE": 347.0,
     "PB": 0.76,
     "DividendYield": 1.15,
-    "PS": 0,
     "Sector": ""
   },
   "1817.TW": {
     "PE": 10.8,
     "PB": 1.26,
     "DividendYield": 5.64,
-    "PS": 0,
     "Sector": ""
   },
   "1903.TW": {
     "PE": 38.99,
     "PB": 2.37,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1904.TW": {
     "PE": 25.74,
     "PB": 0.72,
     "DividendYield": 2.36,
-    "PS": 0,
     "Sector": ""
   },
   "1905.TW": {
     "PE": 0.0,
     "PB": 0.98,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "1906.TW": {
     "PE": 1170.0,
     "PB": 0.63,
     "DividendYield": 0.85,
-    "PS": 0,
     "Sector": ""
   },
   "1907.TW": {
     "PE": 21.72,
     "PB": 0.57,
     "DividendYield": 3.87,
-    "PS": 0,
     "Sector": ""
   },
   "1909.TW": {
     "PE": 0.0,
     "PB": 0.63,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2002.TW": {
     "PE": 0.0,
     "PB": 1.03,
     "DividendYield": 0.75,
-    "PS": 0,
     "Sector": ""
   },
   "2006.TW": {
     "PE": 10.97,
     "PB": 1.51,
     "DividendYield": 6.06,
-    "PS": 0,
     "Sector": ""
   },
   "2007.TW": {
     "PE": 0.0,
     "PB": 1.01,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2008.TW": {
     "PE": 41.1,
     "PB": 1.43,
     "DividendYield": 3.58,
-    "PS": 0,
     "Sector": ""
   },
   "2009.TW": {
     "PE": 119.12,
     "PB": 1.5,
     "DividendYield": 0.99,
-    "PS": 0,
     "Sector": ""
   },
   "2010.TW": {
     "PE": 10.88,
     "PB": 1.27,
     "DividendYield": 7.92,
-    "PS": 0,
     "Sector": ""
   },
   "2012.TW": {
     "PE": 79.0,
     "PB": 1.14,
     "DividendYield": 1.9,
-    "PS": 0,
     "Sector": ""
   },
   "2013.TW": {
     "PE": 13.95,
     "PB": 1.57,
     "DividendYield": 5.39,
-    "PS": 0,
     "Sector": ""
   },
   "2014.TW": {
     "PE": 0.0,
     "PB": 2.2,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2015.TW": {
     "PE": 16.26,
     "PB": 1.62,
     "DividendYield": 5.23,
-    "PS": 0,
     "Sector": ""
   },
   "2017.TW": {
     "PE": 0.0,
     "PB": 0.88,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2020.TW": {
     "PE": 11.92,
     "PB": 1.52,
     "DividendYield": 8.66,
-    "PS": 0,
     "Sector": ""
   },
   "2022.TW": {
     "PE": 0.0,
     "PB": 0.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2023.TW": {
     "PE": 0.0,
     "PB": 0.8,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2024.TW": {
     "PE": 0.0,
     "PB": 1.28,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2025.TW": {
     "PE": 0.0,
     "PB": 1.36,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2027.TW": {
     "PE": 13.29,
     "PB": 1.18,
     "DividendYield": 3.97,
-    "PS": 0,
     "Sector": ""
   },
   "2028.TW": {
     "PE": 65.18,
     "PB": 1.25,
     "DividendYield": 1.1,
-    "PS": 0,
     "Sector": ""
   },
   "2029.TW": {
     "PE": 27.7,
     "PB": 0.65,
     "DividendYield": 2.93,
-    "PS": 0,
     "Sector": ""
   },
   "2030.TW": {
     "PE": 45.57,
     "PB": 0.9,
     "DividendYield": 3.13,
-    "PS": 0,
     "Sector": ""
   },
   "2031.TW": {
     "PE": 12.38,
     "PB": 1.12,
     "DividendYield": 6.12,
-    "PS": 0,
     "Sector": ""
   },
   "2032.TW": {
     "PE": 30.27,
     "PB": 1.26,
     "DividendYield": 2.95,
-    "PS": 0,
     "Sector": ""
   },
   "2033.TW": {
     "PE": 47.57,
     "PB": 1.27,
     "DividendYield": 1.2,
-    "PS": 0,
     "Sector": ""
   },
   "2034.TW": {
     "PE": 99.29,
     "PB": 1.13,
     "DividendYield": 4.8,
-    "PS": 0,
     "Sector": ""
   },
   "2038.TW": {
     "PE": 0.0,
     "PB": 0.79,
     "DividendYield": 1.3,
-    "PS": 0,
     "Sector": ""
   },
   "2049.TW": {
     "PE": 56.15,
     "PB": 2.29,
     "DividendYield": 0.83,
-    "PS": 0,
     "Sector": ""
   },
   "2059.TW": {
     "PE": 32.5,
     "PB": 11.41,
     "DividendYield": 1.52,
-    "PS": 0,
     "Sector": ""
   },
   "2062.TW": {
     "PE": 56.03,
     "PB": 0.57,
     "DividendYield": 4.58,
-    "PS": 0,
     "Sector": ""
   },
   "2069.TW": {
     "PE": 11.45,
     "PB": 0.74,
     "DividendYield": 4.85,
-    "PS": 0,
     "Sector": ""
   },
   "2072.TW": {
     "PE": 15.28,
     "PB": 1.58,
     "DividendYield": 3.88,
-    "PS": 0,
     "Sector": ""
   },
   "2101.TW": {
     "PE": 32.16,
     "PB": 2.05,
     "DividendYield": 1.96,
-    "PS": 0,
     "Sector": ""
   },
   "2102.TW": {
     "PE": 3.18,
     "PB": 0.95,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2103.TW": {
     "PE": 36.2,
     "PB": 0.81,
     "DividendYield": 1.38,
-    "PS": 0,
     "Sector": ""
   },
   "2104.TW": {
     "PE": 0.0,
     "PB": 0.47,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2105.TW": {
     "PE": 21.1,
     "PB": 1.18,
     "DividendYield": 5.69,
-    "PS": 0,
     "Sector": ""
   },
   "2106.TW": {
     "PE": 139.62,
     "PB": 0.89,
     "DividendYield": 3.58,
-    "PS": 0,
     "Sector": ""
   },
   "2107.TW": {
     "PE": 15.33,
     "PB": 0.58,
     "DividendYield": 5.47,
-    "PS": 0,
     "Sector": ""
   },
   "2108.TW": {
     "PE": 31.51,
     "PB": 0.89,
     "DividendYield": 3.82,
-    "PS": 0,
     "Sector": ""
   },
   "2109.TW": {
     "PE": 12.67,
     "PB": 1.17,
     "DividendYield": 6.8,
-    "PS": 0,
     "Sector": ""
   },
   "2114.TW": {
     "PE": 15.33,
     "PB": 2.18,
     "DividendYield": 5.64,
-    "PS": 0,
     "Sector": ""
   },
   "2115.TW": {
     "PE": 13.58,
     "PB": 0.69,
     "DividendYield": 5.59,
-    "PS": 0,
     "Sector": ""
   },
   "2201.TW": {
     "PE": 28.64,
     "PB": 0.44,
     "DividendYield": 2.13,
-    "PS": 0,
     "Sector": ""
   },
   "2204.TW": {
     "PE": 10.06,
     "PB": 0.79,
     "DividendYield": 6.64,
-    "PS": 0,
     "Sector": ""
   },
   "2206.TW": {
     "PE": 10.22,
     "PB": 1.76,
     "DividendYield": 5.04,
-    "PS": 0,
     "Sector": ""
   },
   "2207.TW": {
     "PE": 14.97,
     "PB": 3.28,
     "DividendYield": 3.94,
-    "PS": 0,
     "Sector": ""
   },
   "2208.TW": {
     "PE": 0.0,
     "PB": 3.63,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2211.TW": {
     "PE": 11.63,
     "PB": 1.53,
     "DividendYield": 6.5,
-    "PS": 0,
     "Sector": ""
   },
   "2227.TW": {
     "PE": 39.08,
     "PB": 0.84,
     "DividendYield": 7.68,
-    "PS": 0,
     "Sector": ""
   },
   "2228.TW": {
     "PE": 17.21,
     "PB": 1.43,
     "DividendYield": 4.99,
-    "PS": 0,
     "Sector": ""
   },
   "2231.TW": {
     "PE": 0.0,
     "PB": 4.93,
     "DividendYield": 0.41,
-    "PS": 0,
     "Sector": ""
   },
   "2233.TW": {
     "PE": 31.79,
     "PB": 3.24,
     "DividendYield": 1.88,
-    "PS": 0,
     "Sector": ""
   },
   "2236.TW": {
     "PE": 0.0,
     "PB": 3.24,
     "DividendYield": 0.56,
-    "PS": 0,
     "Sector": ""
   },
   "2239.TW": {
     "PE": 0.0,
     "PB": 0.24,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2241.TW": {
     "PE": 0.0,
     "PB": 2.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2243.TW": {
     "PE": 18.4,
     "PB": 1.93,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2247.TW": {
     "PE": 13.24,
     "PB": 1.52,
     "DividendYield": 5.98,
-    "PS": 0,
     "Sector": ""
   },
   "2248.TW": {
     "PE": 9.33,
     "PB": 1.39,
     "DividendYield": 6.35,
-    "PS": 0,
     "Sector": ""
   },
   "2250.TW": {
     "PE": 16.08,
     "PB": 1.06,
     "DividendYield": 4.87,
-    "PS": 0,
     "Sector": ""
   },
   "2254.TW": {
     "PE": 0.0,
     "PB": 3.99,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2258.TW": {
     "PE": 0.0,
     "PB": 3.63,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2301.TW": {
     "PE": 24.25,
     "PB": 4.08,
     "DividendYield": 3.1,
-    "PS": 0,
     "Sector": ""
   },
   "2302.TW": {
     "PE": 36.73,
     "PB": 1.66,
     "DividendYield": 1.94,
-    "PS": 0,
     "Sector": ""
   },
   "2303.TW": {
     "PE": 18.73,
     "PB": 2.06,
     "DividendYield": 4.19,
-    "PS": 0,
     "Sector": ""
   },
   "2305.TW": {
     "PE": 90.5,
     "PB": 1.6,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2308.TW": {
     "PE": 74.98,
     "PB": 16.81,
     "DividendYield": 0.67,
-    "PS": 0,
     "Sector": ""
   },
   "2312.TW": {
     "PE": 21.59,
     "PB": 1.49,
     "DividendYield": 2.67,
-    "PS": 0,
     "Sector": ""
   },
   "2313.TW": {
     "PE": 51.91,
     "PB": 7.12,
     "DividendYield": 0.98,
-    "PS": 0,
     "Sector": ""
   },
   "2314.TW": {
     "PE": 0.0,
     "PB": 10.66,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2316.TW": {
     "PE": 8.82,
     "PB": 1.7,
     "DividendYield": 1.69,
-    "PS": 0,
     "Sector": ""
   },
   "2317.TW": {
     "PE": 14.79,
     "PB": 1.58,
     "DividendYield": 3.59,
-    "PS": 0,
     "Sector": ""
   },
   "2321.TW": {
     "PE": 0.0,
     "PB": 2.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2323.TW": {
     "PE": 6.87,
     "PB": 0.61,
     "DividendYield": 1.84,
-    "PS": 0,
     "Sector": ""
   },
   "2324.TW": {
     "PE": 20.43,
     "PB": 0.93,
     "DividendYield": 3.9,
-    "PS": 0,
     "Sector": ""
   },
   "2327.TW": {
     "PE": 24.8,
     "PB": 3.43,
     "DividendYield": 2.11,
-    "PS": 0,
     "Sector": ""
   },
   "2328.TW": {
     "PE": 28.62,
     "PB": 1.55,
     "DividendYield": 2.46,
-    "PS": 0,
     "Sector": ""
   },
   "2329.TW": {
     "PE": 25.28,
     "PB": 3.2,
     "DividendYield": 1.85,
-    "PS": 0,
     "Sector": ""
   },
   "2330.TW": {
     "PE": 30.19,
     "PB": 9.57,
     "DividendYield": 1.1,
-    "PS": 0,
     "Sector": ""
   },
   "2331.TW": {
     "PE": 15.11,
     "PB": 1.1,
     "DividendYield": 0.99,
-    "PS": 0,
     "Sector": ""
   },
   "2332.TW": {
     "PE": 0.0,
     "PB": 1.08,
     "DividendYield": 0.67,
-    "PS": 0,
     "Sector": ""
   },
   "2337.TW": {
     "PE": 0.0,
     "PB": 6.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2338.TW": {
     "PE": 0.0,
     "PB": 3.0,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2340.TW": {
     "PE": 0.0,
     "PB": 1.89,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2342.TW": {
     "PE": 0.0,
     "PB": 1.98,
     "DividendYield": 1.02,
-    "PS": 0,
     "Sector": ""
   },
   "2344.TW": {
     "PE": 106.25,
     "PB": 3.9,
     "DividendYield": 0.53,
-    "PS": 0,
     "Sector": ""
   },
   "2345.TW": {
     "PE": 38.93,
     "PB": 17.82,
     "DividendYield": 0.82,
-    "PS": 0,
     "Sector": ""
   },
   "2347.TW": {
     "PE": 15.61,
     "PB": 1.65,
     "DividendYield": 5.3,
-    "PS": 0,
     "Sector": ""
   },
   "2348.TW": {
     "PE": 12.84,
     "PB": 1.67,
     "DividendYield": 7.16,
-    "PS": 0,
     "Sector": ""
   },
   "2349.TW": {
     "PE": 0.0,
     "PB": 1.71,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2351.TW": {
     "PE": 74.1,
     "PB": 3.22,
     "DividendYield": 0.89,
-    "PS": 0,
     "Sector": ""
   },
   "2352.TW": {
     "PE": 33.4,
     "PB": 1.33,
     "DividendYield": 4.16,
-    "PS": 0,
     "Sector": ""
   },
   "2353.TW": {
     "PE": 21.59,
     "PB": 1.08,
     "DividendYield": 4.78,
-    "PS": 0,
     "Sector": ""
   },
   "2354.TW": {
     "PE": 21.59,
     "PB": 0.66,
     "DividendYield": 2.99,
-    "PS": 0,
     "Sector": ""
   },
   "2355.TW": {
     "PE": 33.69,
     "PB": 1.24,
     "DividendYield": 1.86,
-    "PS": 0,
     "Sector": ""
   },
   "2356.TW": {
     "PE": 18.31,
     "PB": 2.09,
     "DividendYield": 4.51,
-    "PS": 0,
     "Sector": ""
   },
   "2357.TW": {
     "PE": 9.63,
     "PB": 1.6,
     "DividendYield": 7.27,
-    "PS": 0,
     "Sector": ""
   },
   "2359.TW": {
     "PE": 89.84,
     "PB": 3.28,
     "DividendYield": 0.9,
-    "PS": 0,
     "Sector": ""
   },
   "2360.TW": {
     "PE": 64.67,
     "PB": 23.71,
     "DividendYield": 1.09,
-    "PS": 0,
     "Sector": ""
   },
   "2362.TW": {
     "PE": 18.76,
     "PB": 0.52,
     "DividendYield": 5.17,
-    "PS": 0,
     "Sector": ""
   },
   "2363.TW": {
     "PE": 30.85,
     "PB": 1.33,
     "DividendYield": 1.27,
-    "PS": 0,
     "Sector": ""
   },
   "2364.TW": {
     "PE": 15.19,
     "PB": 3.98,
     "DividendYield": 4.7,
-    "PS": 0,
     "Sector": ""
   },
   "2365.TW": {
     "PE": 97.97,
     "PB": 2.28,
     "DividendYield": 0.96,
-    "PS": 0,
     "Sector": ""
   },
   "2367.TW": {
     "PE": 108.7,
     "PB": 4.12,
     "DividendYield": 0.27,
-    "PS": 0,
     "Sector": ""
   },
   "2368.TW": {
     "PE": 57.34,
     "PB": 16.45,
     "DividendYield": 0.92,
-    "PS": 0,
     "Sector": ""
   },
   "2369.TW": {
     "PE": 0.0,
     "PB": 2.41,
     "DividendYield": 0.97,
-    "PS": 0,
     "Sector": ""
   },
   "2371.TW": {
     "PE": 0.0,
     "PB": 1.41,
     "DividendYield": 9.75,
-    "PS": 0,
     "Sector": ""
   },
   "2373.TW": {
     "PE": 14.63,
     "PB": 1.7,
     "DividendYield": 6.5,
-    "PS": 0,
     "Sector": ""
   },
   "2374.TW": {
     "PE": 28.85,
     "PB": 2.83,
     "DividendYield": 2.57,
-    "PS": 0,
     "Sector": ""
   },
   "2375.TW": {
     "PE": 20.88,
     "PB": 0.86,
     "DividendYield": 1.54,
-    "PS": 0,
     "Sector": ""
   },
   "2376.TW": {
     "PE": 14.42,
     "PB": 2.98,
     "DividendYield": 3.81,
-    "PS": 0,
     "Sector": ""
   },
   "2377.TW": {
     "PE": 13.35,
     "PB": 1.4,
     "DividendYield": 4.63,
-    "PS": 0,
     "Sector": ""
   },
   "2379.TW": {
     "PE": 17.75,
     "PB": 5.02,
     "DividendYield": 4.92,
-    "PS": 0,
     "Sector": ""
   },
   "2380.TW": {
     "PE": 25.8,
     "PB": 2.0,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2382.TW": {
     "PE": 16.53,
     "PB": 5.09,
     "DividendYield": 4.85,
-    "PS": 0,
     "Sector": ""
   },
   "2383.TW": {
     "PE": 83.66,
     "PB": 24.29,
     "DividendYield": 0.73,
-    "PS": 0,
     "Sector": ""
   },
   "2385.TW": {
     "PE": 13.76,
     "PB": 2.04,
     "DividendYield": 5.78,
-    "PS": 0,
     "Sector": ""
   },
   "2387.TW": {
     "PE": 11.7,
     "PB": 0.74,
     "DividendYield": 9.85,
-    "PS": 0,
     "Sector": ""
   },
   "2388.TW": {
     "PE": 445.83,
     "PB": 1.39,
     "DividendYield": 0.37,
-    "PS": 0,
     "Sector": ""
   },
   "2390.TW": {
     "PE": 0.0,
     "PB": 0.84,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2392.TW": {
     "PE": 0.0,
     "PB": 0.72,
     "DividendYield": 7.33,
-    "PS": 0,
     "Sector": ""
   },
   "2393.TW": {
     "PE": 15.15,
     "PB": 1.55,
     "DividendYield": 6.46,
-    "PS": 0,
     "Sector": ""
   },
   "2395.TW": {
     "PE": 28.29,
     "PB": 5.45,
     "DividendYield": 3.24,
-    "PS": 0,
     "Sector": ""
   },
   "2397.TW": {
     "PE": 23.73,
     "PB": 1.99,
     "DividendYield": 4.15,
-    "PS": 0,
     "Sector": ""
   },
   "2399.TW": {
     "PE": 228.0,
     "PB": 2.77,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2401.TW": {
     "PE": 0.0,
     "PB": 1.42,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2402.TW": {
     "PE": 25.02,
     "PB": 2.55,
     "DividendYield": 3.26,
-    "PS": 0,
     "Sector": ""
   },
   "2404.TW": {
     "PE": 19.26,
     "PB": 9.38,
     "DividendYield": 4.32,
-    "PS": 0,
     "Sector": ""
   },
   "2405.TW": {
     "PE": 0.0,
     "PB": 1.49,
     "DividendYield": 0.66,
-    "PS": 0,
     "Sector": ""
   },
   "2406.TW": {
     "PE": 0.0,
     "PB": 3.2,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2408.TW": {
     "PE": 100.94,
     "PB": 3.91,
     "DividendYield": 0.7,
-    "PS": 0,
     "Sector": ""
   },
   "2409.TW": {
     "PE": 19.95,
     "PB": 0.9,
     "DividendYield": 2.2,
-    "PS": 0,
     "Sector": ""
   },
   "2412.TW": {
     "PE": 27.15,
     "PB": 2.72,
     "DividendYield": 3.84,
-    "PS": 0,
     "Sector": ""
   },
   "2413.TW": {
     "PE": 130.73,
     "PB": 3.39,
     "DividendYield": 0.93,
-    "PS": 0,
     "Sector": ""
   },
   "2414.TW": {
     "PE": 14.1,
     "PB": 2.24,
     "DividendYield": 6.71,
-    "PS": 0,
     "Sector": ""
   },
   "2415.TW": {
     "PE": 15.8,
     "PB": 1.52,
     "DividendYield": 5.56,
-    "PS": 0,
     "Sector": ""
   },
   "2417.TW": {
     "PE": 0.0,
     "PB": 1.89,
     "DividendYield": 0.62,
-    "PS": 0,
     "Sector": ""
   },
   "2419.TW": {
     "PE": 0.0,
     "PB": 2.43,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2420.TW": {
     "PE": 13.43,
     "PB": 2.01,
     "DividendYield": 5.71,
-    "PS": 0,
     "Sector": ""
   },
   "2421.TW": {
     "PE": 17.74,
     "PB": 4.32,
     "DividendYield": 3.9,
-    "PS": 0,
     "Sector": ""
   },
   "2423.TW": {
     "PE": 16.2,
     "PB": 2.32,
     "DividendYield": 5.29,
-    "PS": 0,
     "Sector": ""
   },
   "2424.TW": {
     "PE": 0.0,
     "PB": 4.69,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2425.TW": {
     "PE": 0.0,
     "PB": 1.07,
     "DividendYield": 0.37,
-    "PS": 0,
     "Sector": ""
   },
   "2426.TW": {
     "PE": 0.0,
     "PB": 3.77,
     "DividendYield": 0.21,
-    "PS": 0,
     "Sector": ""
   },
   "2427.TW": {
     "PE": 14.8,
     "PB": 1.36,
     "DividendYield": 3.09,
-    "PS": 0,
     "Sector": ""
   },
   "2428.TW": {
     "PE": 14.37,
     "PB": 1.94,
     "DividendYield": 3.49,
-    "PS": 0,
     "Sector": ""
   },
   "2429.TW": {
     "PE": 0.0,
     "PB": 4.2,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2430.TW": {
     "PE": 31.67,
     "PB": 0.58,
     "DividendYield": 3.66,
-    "PS": 0,
     "Sector": ""
   },
   "2431.TW": {
     "PE": 0.0,
     "PB": 1.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2432.TW": {
     "PE": 14.74,
     "PB": 1.46,
     "DividendYield": 6.07,
-    "PS": 0,
     "Sector": ""
   },
   "2433.TW": {
     "PE": 15.0,
     "PB": 1.97,
     "DividendYield": 5.9,
-    "PS": 0,
     "Sector": ""
   },
   "2434.TW": {
     "PE": 1465.0,
     "PB": 2.3,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2436.TW": {
     "PE": 22.0,
     "PB": 2.93,
     "DividendYield": 3.25,
-    "PS": 0,
     "Sector": ""
   },
   "2438.TW": {
     "PE": 0.0,
     "PB": 3.98,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2439.TW": {
     "PE": 16.32,
     "PB": 1.24,
     "DividendYield": 4.65,
-    "PS": 0,
     "Sector": ""
   },
   "2440.TW": {
     "PE": 0.0,
     "PB": 1.3,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2441.TW": {
     "PE": 21.53,
     "PB": 2.19,
     "DividendYield": 3.23,
-    "PS": 0,
     "Sector": ""
   },
   "2442.TW": {
     "PE": 3.93,
     "PB": 0.9,
     "DividendYield": 13.33,
-    "PS": 0,
     "Sector": ""
   },
   "2444.TW": {
     "PE": 0.0,
     "PB": 1.58,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2449.TW": {
     "PE": 30.8,
     "PB": 6.73,
     "DividendYield": 0.54,
-    "PS": 0,
     "Sector": ""
   },
   "2450.TW": {
     "PE": 17.38,
     "PB": 1.2,
     "DividendYield": 5.18,
-    "PS": 0,
     "Sector": ""
   },
   "2451.TW": {
     "PE": 18.6,
     "PB": 4.5,
     "DividendYield": 4.91,
-    "PS": 0,
     "Sector": ""
   },
   "2453.TW": {
     "PE": 17.18,
     "PB": 2.4,
     "DividendYield": 5.22,
-    "PS": 0,
     "Sector": ""
   },
   "2454.TW": {
     "PE": 23.87,
     "PB": 6.28,
     "DividendYield": 3.4,
-    "PS": 0,
     "Sector": ""
   },
   "2455.TW": {
     "PE": 101.01,
     "PB": 16.78,
     "DividendYield": 0.89,
-    "PS": 0,
     "Sector": ""
   },
   "2457.TW": {
     "PE": 0.0,
     "PB": 1.13,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2458.TW": {
     "PE": 15.3,
     "PB": 3.62,
     "DividendYield": 5.42,
-    "PS": 0,
     "Sector": ""
   },
   "2459.TW": {
     "PE": 12.79,
     "PB": 1.22,
     "DividendYield": 6.35,
-    "PS": 0,
     "Sector": ""
   },
   "2460.TW": {
     "PE": 0.0,
     "PB": 3.48,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2461.TW": {
     "PE": 0.0,
     "PB": 1.01,
     "DividendYield": 5.71,
-    "PS": 0,
     "Sector": ""
   },
   "2462.TW": {
     "PE": 80.56,
     "PB": 1.0,
     "DividendYield": 0.92,
-    "PS": 0,
     "Sector": ""
   },
   "2464.TW": {
     "PE": 0.0,
     "PB": 2.88,
     "DividendYield": 0.73,
-    "PS": 0,
     "Sector": ""
   },
   "2465.TW": {
     "PE": 153.33,
     "PB": 5.17,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2466.TW": {
     "PE": 246.25,
     "PB": 5.11,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2467.TW": {
     "PE": 99.45,
     "PB": 12.62,
     "DividendYield": 1.01,
-    "PS": 0,
     "Sector": ""
   },
   "2468.TW": {
     "PE": 27.0,
     "PB": 1.85,
     "DividendYield": 2.96,
-    "PS": 0,
     "Sector": ""
   },
   "2471.TW": {
     "PE": 14.34,
     "PB": 2.61,
     "DividendYield": 6.34,
-    "PS": 0,
     "Sector": ""
   },
   "2472.TW": {
     "PE": 16.95,
     "PB": 2.68,
     "DividendYield": 2.36,
-    "PS": 0,
     "Sector": ""
   },
   "2474.TW": {
     "PE": 15.79,
     "PB": 0.79,
     "DividendYield": 8.24,
-    "PS": 0,
     "Sector": ""
   },
   "2476.TW": {
     "PE": 23.45,
     "PB": 2.45,
     "DividendYield": 3.0,
-    "PS": 0,
     "Sector": ""
   },
   "2477.TW": {
     "PE": 14.17,
     "PB": 0.9,
     "DividendYield": 5.88,
-    "PS": 0,
     "Sector": ""
   },
   "2478.TW": {
     "PE": 18.27,
     "PB": 1.29,
     "DividendYield": 2.88,
-    "PS": 0,
     "Sector": ""
   },
   "2480.TW": {
     "PE": 17.69,
     "PB": 4.27,
     "DividendYield": 5.51,
-    "PS": 0,
     "Sector": ""
   },
   "2481.TW": {
     "PE": 32.37,
     "PB": 2.63,
     "DividendYield": 1.78,
-    "PS": 0,
     "Sector": ""
   },
   "2482.TW": {
     "PE": 0.0,
     "PB": 1.21,
     "DividendYield": 0.59,
-    "PS": 0,
     "Sector": ""
   },
   "2483.TW": {
     "PE": 35.75,
     "PB": 0.9,
     "DividendYield": 1.4,
-    "PS": 0,
     "Sector": ""
   },
   "2484.TW": {
     "PE": 48.85,
     "PB": 1.34,
     "DividendYield": 2.2,
-    "PS": 0,
     "Sector": ""
   },
   "2485.TW": {
     "PE": 0.0,
     "PB": 4.56,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2486.TW": {
     "PE": 843.18,
     "PB": 8.3,
     "DividendYield": 0.27,
-    "PS": 0,
     "Sector": ""
   },
   "2488.TW": {
     "PE": 10.95,
     "PB": 1.42,
     "DividendYield": 6.01,
-    "PS": 0,
     "Sector": ""
   },
   "2489.TW": {
     "PE": 34.85,
     "PB": 2.07,
     "DividendYield": 2.65,
-    "PS": 0,
     "Sector": ""
   },
   "2491.TW": {
     "PE": 10.49,
     "PB": 1.32,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2492.TW": {
     "PE": 27.11,
     "PB": 1.2,
     "DividendYield": 1.87,
-    "PS": 0,
     "Sector": ""
   },
   "2493.TW": {
     "PE": 27.29,
     "PB": 4.65,
     "DividendYield": 3.36,
-    "PS": 0,
     "Sector": ""
   },
   "2495.TW": {
     "PE": 32.61,
     "PB": 2.2,
     "DividendYield": 2.17,
-    "PS": 0,
     "Sector": ""
   },
   "2496.TW": {
     "PE": 10.9,
     "PB": 1.43,
     "DividendYield": 7.51,
-    "PS": 0,
     "Sector": ""
   },
   "2497.TW": {
     "PE": 20.78,
     "PB": 2.53,
     "DividendYield": 3.96,
-    "PS": 0,
     "Sector": ""
   },
   "2498.TW": {
     "PE": 5.52,
     "PB": 1.25,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2501.TW": {
     "PE": 8.3,
     "PB": 0.89,
     "DividendYield": 4.26,
-    "PS": 0,
     "Sector": ""
   },
   "2504.TW": {
     "PE": 11.08,
     "PB": 1.59,
     "DividendYield": 7.11,
-    "PS": 0,
     "Sector": ""
   },
   "2505.TW": {
     "PE": 8.14,
     "PB": 0.67,
     "DividendYield": 5.18,
-    "PS": 0,
     "Sector": ""
   },
   "2506.TW": {
     "PE": 448.5,
     "PB": 0.42,
     "DividendYield": 2.23,
-    "PS": 0,
     "Sector": ""
   },
   "2509.TW": {
     "PE": 0.0,
     "PB": 0.82,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2511.TW": {
     "PE": 24.82,
     "PB": 0.52,
     "DividendYield": 3.66,
-    "PS": 0,
     "Sector": ""
   },
   "2514.TW": {
     "PE": 7.19,
     "PB": 0.38,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2515.TW": {
     "PE": 32.88,
     "PB": 0.94,
     "DividendYield": 3.8,
-    "PS": 0,
     "Sector": ""
   },
   "2516.TW": {
     "PE": 11.1,
     "PB": 1.5,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2520.TW": {
     "PE": 11.78,
     "PB": 0.75,
     "DividendYield": 13.33,
-    "PS": 0,
     "Sector": ""
   },
   "2524.TW": {
     "PE": 22.44,
     "PB": 0.67,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2527.TW": {
     "PE": 35.48,
     "PB": 0.5,
     "DividendYield": 4.55,
-    "PS": 0,
     "Sector": ""
   },
   "2528.TW": {
     "PE": 6.77,
     "PB": 1.31,
     "DividendYield": 12.55,
-    "PS": 0,
     "Sector": ""
   },
   "2530.TW": {
     "PE": 11.45,
     "PB": 1.94,
     "DividendYield": 9.29,
-    "PS": 0,
     "Sector": ""
   },
   "2534.TW": {
     "PE": 9.61,
     "PB": 0.62,
     "DividendYield": 7.58,
-    "PS": 0,
     "Sector": ""
   },
   "2535.TW": {
     "PE": 10.75,
     "PB": 1.76,
     "DividendYield": 6.58,
-    "PS": 0,
     "Sector": ""
   },
   "2536.TW": {
     "PE": 6.96,
     "PB": 0.58,
     "DividendYield": 2.25,
-    "PS": 0,
     "Sector": ""
   },
   "2537.TW": {
     "PE": 68.67,
     "PB": 0.7,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2538.TW": {
     "PE": 28.57,
     "PB": 0.78,
     "DividendYield": 7.0,
-    "PS": 0,
     "Sector": ""
   },
   "2539.TW": {
     "PE": 13.8,
     "PB": 3.18,
     "DividendYield": 5.86,
-    "PS": 0,
     "Sector": ""
   },
   "2540.TW": {
     "PE": 71.18,
     "PB": 2.78,
     "DividendYield": 8.26,
-    "PS": 0,
     "Sector": ""
   },
   "2542.TW": {
     "PE": 17.48,
     "PB": 1.47,
     "DividendYield": 6.81,
-    "PS": 0,
     "Sector": ""
   },
   "2543.TW": {
     "PE": 21.69,
     "PB": 3.09,
     "DividendYield": 8.64,
-    "PS": 0,
     "Sector": ""
   },
   "2545.TW": {
     "PE": 20.14,
     "PB": 0.92,
     "DividendYield": 12.48,
-    "PS": 0,
     "Sector": ""
   },
   "2546.TW": {
     "PE": 9.03,
     "PB": 1.86,
     "DividendYield": 4.42,
-    "PS": 0,
     "Sector": ""
   },
   "2547.TW": {
     "PE": 3.8,
     "PB": 0.77,
     "DividendYield": 7.51,
-    "PS": 0,
     "Sector": ""
   },
   "2548.TW": {
     "PE": 12.57,
     "PB": 1.82,
     "DividendYield": 6.67,
-    "PS": 0,
     "Sector": ""
   },
   "2597.TW": {
     "PE": 14.51,
     "PB": 5.35,
     "DividendYield": 6.2,
-    "PS": 0,
     "Sector": ""
   },
   "2601.TW": {
     "PE": 0.0,
     "PB": 0.64,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2603.TW": {
     "PE": 6.39,
     "PB": 0.78,
     "DividendYield": 7.9,
-    "PS": 0,
     "Sector": ""
   },
   "2605.TW": {
     "PE": 27.31,
     "PB": 1.33,
     "DividendYield": 2.53,
-    "PS": 0,
     "Sector": ""
   },
   "2606.TW": {
     "PE": 14.15,
     "PB": 1.33,
     "DividendYield": 4.59,
-    "PS": 0,
     "Sector": ""
   },
   "2607.TW": {
     "PE": 9.41,
     "PB": 0.89,
     "DividendYield": 5.29,
-    "PS": 0,
     "Sector": ""
   },
   "2608.TW": {
     "PE": 15.69,
     "PB": 1.15,
     "DividendYield": 5.34,
-    "PS": 0,
     "Sector": ""
   },
   "2609.TW": {
     "PE": 10.47,
     "PB": 0.55,
     "DividendYield": 3.9,
-    "PS": 0,
     "Sector": ""
   },
   "2610.TW": {
     "PE": 7.48,
     "PB": 1.13,
     "DividendYield": 4.42,
-    "PS": 0,
     "Sector": ""
   },
   "2611.TW": {
     "PE": 29.13,
     "PB": 1.06,
     "DividendYield": 3.43,
-    "PS": 0,
     "Sector": ""
   },
   "2612.TW": {
     "PE": 10.48,
     "PB": 0.84,
     "DividendYield": 3.85,
-    "PS": 0,
     "Sector": ""
   },
   "2613.TW": {
     "PE": 20.22,
     "PB": 0.96,
     "DividendYield": 4.34,
-    "PS": 0,
     "Sector": ""
   },
   "2614.TW": {
     "PE": 10.15,
     "PB": 1.54,
     "DividendYield": 5.94,
-    "PS": 0,
     "Sector": ""
   },
   "2615.TW": {
     "PE": 6.88,
     "PB": 0.79,
     "DividendYield": 3.89,
-    "PS": 0,
     "Sector": ""
   },
   "2616.TW": {
     "PE": 0.0,
     "PB": 0.8,
     "DividendYield": 1.94,
-    "PS": 0,
     "Sector": ""
   },
   "2617.TW": {
     "PE": 9.56,
     "PB": 0.71,
     "DividendYield": 4.93,
-    "PS": 0,
     "Sector": ""
   },
   "2618.TW": {
     "PE": 7.2,
     "PB": 1.36,
     "DividendYield": 5.74,
-    "PS": 0,
     "Sector": ""
   },
   "2630.TW": {
     "PE": 45.85,
     "PB": 2.71,
     "DividendYield": 1.96,
-    "PS": 0,
     "Sector": ""
   },
   "2633.TW": {
     "PE": 23.03,
     "PB": 2.08,
     "DividendYield": 4.27,
-    "PS": 0,
     "Sector": ""
   },
   "2634.TW": {
     "PE": 59.55,
     "PB": 2.45,
     "DividendYield": 2.97,
-    "PS": 0,
     "Sector": ""
   },
   "2636.TW": {
     "PE": 8.8,
     "PB": 0.95,
     "DividendYield": 7.34,
-    "PS": 0,
     "Sector": ""
   },
   "2637.TW": {
     "PE": 13.36,
     "PB": 1.09,
     "DividendYield": 7.1,
-    "PS": 0,
     "Sector": ""
   },
   "2642.TW": {
     "PE": 0.0,
     "PB": 1.08,
     "DividendYield": 2.15,
-    "PS": 0,
     "Sector": ""
   },
   "2645.TW": {
     "PE": 27.47,
     "PB": 4.14,
     "DividendYield": 3.33,
-    "PS": 0,
     "Sector": ""
   },
   "2646.TW": {
     "PE": 233.33,
     "PB": 2.01,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2701.TW": {
     "PE": 19.29,
     "PB": 0.58,
     "DividendYield": 2.59,
-    "PS": 0,
     "Sector": ""
   },
   "2702.TW": {
     "PE": 0.0,
     "PB": 0.7,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2704.TW": {
     "PE": 74.12,
     "PB": 0.61,
     "DividendYield": 1.18,
-    "PS": 0,
     "Sector": ""
   },
   "2705.TW": {
     "PE": 19.2,
     "PB": 0.64,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2706.TW": {
     "PE": 19.15,
     "PB": 0.61,
     "DividendYield": 2.81,
-    "PS": 0,
     "Sector": ""
   },
   "2707.TW": {
     "PE": 16.67,
     "PB": 5.86,
     "DividendYield": 5.64,
-    "PS": 0,
     "Sector": ""
   },
   "2712.TW": {
     "PE": 0.0,
     "PB": 1.54,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2722.TW": {
     "PE": 0.0,
     "PB": 1.41,
     "DividendYield": 0.65,
-    "PS": 0,
     "Sector": ""
   },
   "2723.TW": {
     "PE": 0.0,
     "PB": 1.2,
     "DividendYield": 4.46,
-    "PS": 0,
     "Sector": ""
   },
   "2727.TW": {
     "PE": 14.2,
     "PB": 4.0,
     "DividendYield": 7.09,
-    "PS": 0,
     "Sector": ""
   },
   "2731.TW": {
     "PE": 9.23,
     "PB": 3.04,
     "DividendYield": 7.93,
-    "PS": 0,
     "Sector": ""
   },
   "2739.TW": {
     "PE": 14.56,
     "PB": 1.95,
     "DividendYield": 7.51,
-    "PS": 0,
     "Sector": ""
   },
   "2748.TW": {
     "PE": 18.99,
     "PB": 1.43,
     "DividendYield": 4.25,
-    "PS": 0,
     "Sector": ""
   },
   "2753.TW": {
     "PE": 14.06,
     "PB": 3.17,
     "DividendYield": 6.65,
-    "PS": 0,
     "Sector": ""
   },
   "2762.TW": {
     "PE": 19.52,
     "PB": 2.76,
     "DividendYield": 8.15,
-    "PS": 0,
     "Sector": ""
   },
   "2801.TW": {
     "PE": 14.01,
     "PB": 1.13,
     "DividendYield": 4.73,
-    "PS": 0,
     "Sector": ""
   },
   "2812.TW": {
     "PE": 14.07,
     "PB": 1.38,
     "DividendYield": 5.02,
-    "PS": 0,
     "Sector": ""
   },
   "2816.TW": {
     "PE": 6.72,
     "PB": 0.87,
     "DividendYield": 4.79,
-    "PS": 0,
     "Sector": ""
   },
   "2820.TW": {
     "PE": 12.69,
     "PB": 0.82,
     "DividendYield": 5.29,
-    "PS": 0,
     "Sector": ""
   },
   "2832.TW": {
     "PE": 9.81,
     "PB": 1.03,
     "DividendYield": 4.16,
-    "PS": 0,
     "Sector": ""
   },
   "2834.TW": {
     "PE": 12.18,
     "PB": 1.02,
     "DividendYield": 5.21,
-    "PS": 0,
     "Sector": ""
   },
   "2836.TW": {
     "PE": 17.87,
     "PB": 0.86,
     "DividendYield": 3.7,
-    "PS": 0,
     "Sector": ""
   },
   "2838.TW": {
     "PE": 15.6,
     "PB": 1.11,
     "DividendYield": 5.07,
-    "PS": 0,
     "Sector": ""
   },
   "2845.TW": {
     "PE": 14.71,
     "PB": 0.88,
     "DividendYield": 4.98,
-    "PS": 0,
     "Sector": ""
   },
   "2849.TW": {
     "PE": 17.03,
     "PB": 0.73,
     "DividendYield": 2.83,
-    "PS": 0,
     "Sector": ""
   },
   "2850.TW": {
     "PE": 10.14,
     "PB": 1.9,
     "DividendYield": 5.84,
-    "PS": 0,
     "Sector": ""
   },
   "2851.TW": {
     "PE": 8.54,
     "PB": 1.15,
     "DividendYield": 7.04,
-    "PS": 0,
     "Sector": ""
   },
   "2852.TW": {
     "PE": 8.92,
     "PB": 0.86,
     "DividendYield": 6.37,
-    "PS": 0,
     "Sector": ""
   },
   "2855.TW": {
     "PE": 10.55,
     "PB": 1.29,
     "DividendYield": 6.67,
-    "PS": 0,
     "Sector": ""
   },
   "2867.TW": {
     "PE": 38.65,
     "PB": 1.13,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2880.TW": {
     "PE": 17.95,
     "PB": 2.01,
     "DividendYield": 3.96,
-    "PS": 0,
     "Sector": ""
   },
   "2881.TW": {
     "PE": 11.3,
     "PB": 1.39,
     "DividendYield": 4.85,
-    "PS": 0,
     "Sector": ""
   },
   "2882.TW": {
     "PE": 11.03,
     "PB": 1.27,
     "DividendYield": 4.8,
-    "PS": 0,
     "Sector": ""
   },
   "2883.TW": {
     "PE": 13.06,
     "PB": 1.2,
     "DividendYield": 4.49,
-    "PS": 0,
     "Sector": ""
   },
   "2884.TW": {
     "PE": 15.21,
     "PB": 1.91,
     "DividendYield": 4.34,
-    "PS": 0,
     "Sector": ""
   },
   "2885.TW": {
     "PE": 17.41,
     "PB": 1.87,
     "DividendYield": 4.61,
-    "PS": 0,
     "Sector": ""
   },
   "2886.TW": {
     "PE": 16.89,
     "PB": 1.51,
     "DividendYield": 4.02,
-    "PS": 0,
     "Sector": ""
   },
   "2887.TW": {
     "PE": 17.29,
     "PB": 1.33,
     "DividendYield": 3.67,
-    "PS": 0,
     "Sector": ""
   },
   "2889.TW": {
     "PE": 24.37,
     "PB": 1.21,
     "DividendYield": 3.84,
-    "PS": 0,
     "Sector": ""
   },
   "2890.TW": {
     "PE": 17.87,
     "PB": 1.85,
     "DividendYield": 3.98,
-    "PS": 0,
     "Sector": ""
   },
   "2891.TW": {
     "PE": 13.5,
     "PB": 2.1,
     "DividendYield": 4.26,
-    "PS": 0,
     "Sector": ""
   },
   "2892.TW": {
     "PE": 15.29,
     "PB": 1.41,
     "DividendYield": 4.2,
-    "PS": 0,
     "Sector": ""
   },
   "2897.TW": {
     "PE": 16.92,
     "PB": 0.7,
     "DividendYield": 5.12,
-    "PS": 0,
     "Sector": ""
   },
   "2901.TW": {
     "PE": 62.76,
     "PB": 1.97,
     "DividendYield": 1.55,
-    "PS": 0,
     "Sector": ""
   },
   "2903.TW": {
     "PE": 14.62,
     "PB": 1.03,
     "DividendYield": 5.48,
-    "PS": 0,
     "Sector": ""
   },
   "2904.TW": {
     "PE": 17.04,
     "PB": 1.01,
     "DividendYield": 4.19,
-    "PS": 0,
     "Sector": ""
   },
   "2905.TW": {
     "PE": 20.35,
     "PB": 0.98,
     "DividendYield": 2.05,
-    "PS": 0,
     "Sector": ""
   },
   "2906.TW": {
     "PE": 27.45,
     "PB": 0.81,
     "DividendYield": 4.65,
-    "PS": 0,
     "Sector": ""
   },
   "2908.TW": {
     "PE": 86.96,
     "PB": 1.46,
     "DividendYield": 2.75,
-    "PS": 0,
     "Sector": ""
   },
   "2910.TW": {
     "PE": 17.52,
     "PB": 1.37,
     "DividendYield": 4.83,
-    "PS": 0,
     "Sector": ""
   },
   "2911.TW": {
     "PE": 2.35,
     "PB": 0.68,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2912.TW": {
     "PE": 21.1,
     "PB": 5.56,
     "DividendYield": 3.96,
-    "PS": 0,
     "Sector": ""
   },
   "2913.TW": {
     "PE": 0.0,
     "PB": 0.77,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2915.TW": {
     "PE": 5.17,
     "PB": 0.49,
     "DividendYield": 4.05,
-    "PS": 0,
     "Sector": ""
   },
   "2923.TW": {
     "PE": 0.0,
     "PB": 0.78,
     "DividendYield": 0.6,
-    "PS": 0,
     "Sector": ""
   },
   "2929.TW": {
     "PE": 0.0,
     "PB": 0.25,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2939.TW": {
     "PE": 0.0,
     "PB": 2.02,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "2945.TW": {
     "PE": 19.37,
     "PB": 1.4,
     "DividendYield": 3.62,
-    "PS": 0,
     "Sector": ""
   },
   "3002.TW": {
     "PE": 53.47,
     "PB": 1.53,
     "DividendYield": 1.71,
-    "PS": 0,
     "Sector": ""
   },
   "3003.TW": {
     "PE": 50.35,
     "PB": 1.2,
     "DividendYield": 2.01,
-    "PS": 0,
     "Sector": ""
   },
   "3004.TW": {
     "PE": 22.52,
     "PB": 2.05,
     "DividendYield": 2.2,
-    "PS": 0,
     "Sector": ""
   },
   "3005.TW": {
     "PE": 11.9,
     "PB": 2.39,
     "DividendYield": 6.79,
-    "PS": 0,
     "Sector": ""
   },
   "3006.TW": {
     "PE": 173.33,
     "PB": 4.13,
     "DividendYield": 0.64,
-    "PS": 0,
     "Sector": ""
   },
   "3008.TW": {
     "PE": 14.42,
     "PB": 1.62,
     "DividendYield": 3.46,
-    "PS": 0,
     "Sector": ""
   },
   "3010.TW": {
     "PE": 14.59,
     "PB": 1.4,
     "DividendYield": 4.11,
-    "PS": 0,
     "Sector": ""
   },
   "3011.TW": {
     "PE": 0.0,
     "PB": 1.18,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3013.TW": {
     "PE": 25.68,
     "PB": 4.08,
     "DividendYield": 0.77,
-    "PS": 0,
     "Sector": ""
   },
   "3014.TW": {
     "PE": 12.84,
     "PB": 2.79,
     "DividendYield": 7.17,
-    "PS": 0,
     "Sector": ""
   },
   "3015.TW": {
     "PE": 27.31,
     "PB": 0.76,
     "DividendYield": 4.33,
-    "PS": 0,
     "Sector": ""
   },
   "3016.TW": {
     "PE": 794.29,
     "PB": 3.25,
     "DividendYield": 0.9,
-    "PS": 0,
     "Sector": ""
   },
   "3017.TW": {
     "PE": 46.3,
     "PB": 19.92,
     "DividendYield": 0.93,
-    "PS": 0,
     "Sector": ""
   },
   "3018.TW": {
     "PE": 0.0,
     "PB": 1.5,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3019.TW": {
     "PE": 19.02,
     "PB": 2.36,
     "DividendYield": 3.67,
-    "PS": 0,
     "Sector": ""
   },
   "3021.TW": {
     "PE": 49.55,
     "PB": 0.97,
     "DividendYield": 3.67,
-    "PS": 0,
     "Sector": ""
   },
   "3022.TW": {
     "PE": 14.38,
     "PB": 1.05,
     "DividendYield": 5.26,
-    "PS": 0,
     "Sector": ""
   },
   "3023.TW": {
     "PE": 21.04,
     "PB": 4.06,
     "DividendYield": 3.65,
-    "PS": 0,
     "Sector": ""
   },
   "3024.TW": {
     "PE": 36.07,
     "PB": 0.94,
     "DividendYield": 2.18,
-    "PS": 0,
     "Sector": ""
   },
   "3025.TW": {
     "PE": 18.81,
     "PB": 4.15,
     "DividendYield": 4.93,
-    "PS": 0,
     "Sector": ""
   },
   "3026.TW": {
     "PE": 29.48,
     "PB": 3.17,
     "DividendYield": 2.99,
-    "PS": 0,
     "Sector": ""
   },
   "3027.TW": {
     "PE": 0.0,
     "PB": 1.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3028.TW": {
     "PE": 18.86,
     "PB": 2.24,
     "DividendYield": 5.05,
-    "PS": 0,
     "Sector": ""
   },
   "3029.TW": {
     "PE": 15.05,
     "PB": 2.85,
     "DividendYield": 5.61,
-    "PS": 0,
     "Sector": ""
   },
   "3030.TW": {
     "PE": 28.88,
     "PB": 7.45,
     "DividendYield": 2.31,
-    "PS": 0,
     "Sector": ""
   },
   "3031.TW": {
     "PE": 26.01,
     "PB": 1.68,
     "DividendYield": 3.53,
-    "PS": 0,
     "Sector": ""
   },
   "3032.TW": {
     "PE": 0.0,
     "PB": 2.92,
     "DividendYield": 4.25,
-    "PS": 0,
     "Sector": ""
   },
   "3033.TW": {
     "PE": 18.64,
     "PB": 1.5,
     "DividendYield": 6.2,
-    "PS": 0,
     "Sector": ""
   },
   "3034.TW": {
     "PE": 14.66,
     "PB": 3.54,
     "DividendYield": 5.84,
-    "PS": 0,
     "Sector": ""
   },
   "3035.TW": {
     "PE": 53.2,
     "PB": 2.98,
     "DividendYield": 1.2,
-    "PS": 0,
     "Sector": ""
   },
   "3036.TW": {
     "PE": 23.3,
     "PB": 2.68,
     "DividendYield": 2.66,
-    "PS": 0,
     "Sector": ""
   },
   "3037.TW": {
     "PE": 147.69,
     "PB": 9.79,
     "DividendYield": 0.31,
-    "PS": 0,
     "Sector": ""
   },
   "3038.TW": {
     "PE": 18.56,
     "PB": 1.17,
     "DividendYield": 5.83,
-    "PS": 0,
     "Sector": ""
   },
   "3040.TW": {
     "PE": 153.55,
     "PB": 2.03,
     "DividendYield": 7.35,
-    "PS": 0,
     "Sector": ""
   },
   "3041.TW": {
     "PE": 0.0,
     "PB": 2.13,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3042.TW": {
     "PE": 22.22,
     "PB": 2.52,
     "DividendYield": 4.07,
-    "PS": 0,
     "Sector": ""
   },
   "3043.TW": {
     "PE": 0.0,
     "PB": 0.92,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3044.TW": {
     "PE": 19.28,
     "PB": 3.64,
     "DividendYield": 3.39,
-    "PS": 0,
     "Sector": ""
   },
   "3045.TW": {
     "PE": 23.06,
     "PB": 3.86,
     "DividendYield": 4.36,
-    "PS": 0,
     "Sector": ""
   },
   "3046.TW": {
     "PE": 12.02,
     "PB": 2.27,
     "DividendYield": 6.22,
-    "PS": 0,
     "Sector": ""
   },
   "3047.TW": {
     "PE": 0.0,
     "PB": 1.39,
     "DividendYield": 1.93,
-    "PS": 0,
     "Sector": ""
   },
   "3048.TW": {
     "PE": 18.86,
     "PB": 1.83,
     "DividendYield": 2.64,
-    "PS": 0,
     "Sector": ""
   },
   "3049.TW": {
     "PE": 0.0,
     "PB": 1.36,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3050.TW": {
     "PE": 332.5,
     "PB": 0.84,
     "DividendYield": 1.88,
-    "PS": 0,
     "Sector": ""
   },
   "3051.TW": {
     "PE": 19.71,
     "PB": 1.34,
     "DividendYield": 2.49,
-    "PS": 0,
     "Sector": ""
   },
   "3052.TW": {
     "PE": 10.0,
     "PB": 0.64,
     "DividendYield": 5.45,
-    "PS": 0,
     "Sector": ""
   },
   "3054.TW": {
     "PE": 38.37,
     "PB": 5.74,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3055.TW": {
     "PE": 0.0,
     "PB": 4.06,
     "DividendYield": 1.69,
-    "PS": 0,
     "Sector": ""
   },
   "3056.TW": {
     "PE": 13.83,
     "PB": 0.81,
     "DividendYield": 4.12,
-    "PS": 0,
     "Sector": ""
   },
   "3057.TW": {
     "PE": 0.0,
     "PB": 1.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3058.TW": {
     "PE": 0.0,
     "PB": 1.18,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3059.TW": {
     "PE": 29.8,
     "PB": 1.13,
     "DividendYield": 2.73,
-    "PS": 0,
     "Sector": ""
   },
   "3060.TW": {
     "PE": 0.0,
     "PB": 1.53,
     "DividendYield": 0.68,
-    "PS": 0,
     "Sector": ""
   },
   "3062.TW": {
     "PE": 44.78,
     "PB": 2.32,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3090.TW": {
     "PE": 22.94,
     "PB": 2.08,
     "DividendYield": 4.8,
-    "PS": 0,
     "Sector": ""
   },
   "3092.TW": {
     "PE": 0.0,
     "PB": 2.18,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3094.TW": {
     "PE": 95.21,
     "PB": 1.85,
     "DividendYield": 1.09,
-    "PS": 0,
     "Sector": ""
   },
   "3130.TW": {
     "PE": 15.02,
     "PB": 4.28,
     "DividendYield": 6.65,
-    "PS": 0,
     "Sector": ""
   },
   "3135.TW": {
     "PE": 19.98,
     "PB": 4.2,
     "DividendYield": 4.07,
-    "PS": 0,
     "Sector": ""
   },
   "3138.TW": {
     "PE": 120.92,
     "PB": 4.46,
     "DividendYield": 0.9,
-    "PS": 0,
     "Sector": ""
   },
   "3149.TW": {
     "PE": 0.0,
     "PB": 3.66,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3150.TW": {
     "PE": 0.0,
     "PB": 1.33,
     "DividendYield": 2.75,
-    "PS": 0,
     "Sector": ""
   },
   "3164.TW": {
     "PE": 26.97,
     "PB": 1.15,
     "DividendYield": 4.49,
-    "PS": 0,
     "Sector": ""
   },
   "3167.TW": {
     "PE": 78.15,
     "PB": 16.37,
     "DividendYield": 0.63,
-    "PS": 0,
     "Sector": ""
   },
   "3168.TW": {
     "PE": 15.98,
     "PB": 1.8,
     "DividendYield": 7.06,
-    "PS": 0,
     "Sector": ""
   },
   "3189.TW": {
     "PE": 109.17,
     "PB": 5.32,
     "DividendYield": 0.46,
-    "PS": 0,
     "Sector": ""
   },
   "3209.TW": {
     "PE": 14.52,
     "PB": 1.94,
     "DividendYield": 5.72,
-    "PS": 0,
     "Sector": ""
   },
   "3229.TW": {
     "PE": 0.0,
     "PB": 2.21,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3231.TW": {
     "PE": 15.66,
     "PB": 2.42,
     "DividendYield": 4.07,
-    "PS": 0,
     "Sector": ""
   },
   "3257.TW": {
     "PE": 15.35,
     "PB": 2.37,
     "DividendYield": 5.33,
-    "PS": 0,
     "Sector": ""
   },
   "3266.TW": {
     "PE": 23.62,
     "PB": 0.76,
     "DividendYield": 3.65,
-    "PS": 0,
     "Sector": ""
   },
   "3296.TW": {
     "PE": 35.25,
     "PB": 1.65,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3305.TW": {
     "PE": 38.83,
     "PB": 2.86,
     "DividendYield": 1.97,
-    "PS": 0,
     "Sector": ""
   },
   "3308.TW": {
     "PE": 30.88,
     "PB": 1.12,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3311.TW": {
     "PE": 23.81,
     "PB": 0.88,
     "DividendYield": 0.94,
-    "PS": 0,
     "Sector": ""
   },
   "3312.TW": {
     "PE": 22.85,
     "PB": 1.69,
     "DividendYield": 3.6,
-    "PS": 0,
     "Sector": ""
   },
   "3321.TW": {
     "PE": 0.0,
     "PB": 1.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3338.TW": {
     "PE": 32.78,
     "PB": 2.58,
     "DividendYield": 2.2,
-    "PS": 0,
     "Sector": ""
   },
   "3346.TW": {
     "PE": 162.73,
     "PB": 0.6,
     "DividendYield": 0.61,
-    "PS": 0,
     "Sector": ""
   },
   "3356.TW": {
     "PE": 8.21,
     "PB": 1.64,
     "DividendYield": 7.84,
-    "PS": 0,
     "Sector": ""
   },
   "3376.TW": {
     "PE": 126.69,
     "PB": 2.35,
     "DividendYield": 2.91,
-    "PS": 0,
     "Sector": ""
   },
   "3380.TW": {
     "PE": 0.0,
     "PB": 2.32,
     "DividendYield": 1.28,
-    "PS": 0,
     "Sector": ""
   },
   "3406.TW": {
     "PE": 13.87,
     "PB": 1.94,
     "DividendYield": 3.73,
-    "PS": 0,
     "Sector": ""
   },
   "3413.TW": {
     "PE": 14.82,
     "PB": 2.09,
     "DividendYield": 3.49,
-    "PS": 0,
     "Sector": ""
   },
   "3416.TW": {
     "PE": 20.3,
     "PB": 3.4,
     "DividendYield": 3.42,
-    "PS": 0,
     "Sector": ""
   },
   "3419.TW": {
     "PE": 0.0,
     "PB": 1.93,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3432.TW": {
     "PE": 0.0,
     "PB": 2.21,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3437.TW": {
     "PE": 0.0,
     "PB": 1.55,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3443.TW": {
     "PE": 94.74,
     "PB": 27.66,
     "DividendYield": 0.75,
-    "PS": 0,
     "Sector": ""
   },
   "3447.TW": {
     "PE": 23.65,
     "PB": 2.26,
     "DividendYield": 2.93,
-    "PS": 0,
     "Sector": ""
   },
   "3450.TW": {
     "PE": 61.18,
     "PB": 8.82,
     "DividendYield": 0.33,
-    "PS": 0,
     "Sector": ""
   },
   "3481.TW": {
     "PE": 866.67,
     "PB": 0.94,
     "DividendYield": 3.85,
-    "PS": 0,
     "Sector": ""
   },
   "3494.TW": {
     "PE": 0.0,
     "PB": 1.29,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3501.TW": {
     "PE": 15.73,
     "PB": 0.8,
     "DividendYield": 4.24,
-    "PS": 0,
     "Sector": ""
   },
   "3504.TW": {
     "PE": 0.0,
     "PB": 2.13,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3515.TW": {
     "PE": 14.07,
     "PB": 2.22,
     "DividendYield": 5.12,
-    "PS": 0,
     "Sector": ""
   },
   "3518.TW": {
     "PE": 0.0,
     "PB": 1.48,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3528.TW": {
     "PE": 30.09,
     "PB": 2.39,
     "DividendYield": 1.99,
-    "PS": 0,
     "Sector": ""
   },
   "3530.TW": {
     "PE": 34.37,
     "PB": 1.89,
     "DividendYield": 1.34,
-    "PS": 0,
     "Sector": ""
   },
   "3532.TW": {
     "PE": 104.75,
     "PB": 2.6,
     "DividendYield": 0.6,
-    "PS": 0,
     "Sector": ""
   },
   "3533.TW": {
     "PE": 32.3,
     "PB": 6.61,
     "DividendYield": 1.54,
-    "PS": 0,
     "Sector": ""
   },
   "3535.TW": {
     "PE": 0.0,
     "PB": 10.24,
     "DividendYield": 0.37,
-    "PS": 0,
     "Sector": ""
   },
   "3543.TW": {
     "PE": 0.0,
     "PB": 1.64,
     "DividendYield": 1.34,
-    "PS": 0,
     "Sector": ""
   },
   "3545.TW": {
     "PE": 0.0,
     "PB": 1.21,
     "DividendYield": 1.67,
-    "PS": 0,
     "Sector": ""
   },
   "3550.TW": {
     "PE": 0.0,
     "PB": 1.33,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3557.TW": {
     "PE": 3020.0,
     "PB": 1.03,
     "DividendYield": 0.99,
-    "PS": 0,
     "Sector": ""
   },
   "3563.TW": {
     "PE": 58.35,
     "PB": 10.39,
     "DividendYield": 1.52,
-    "PS": 0,
     "Sector": ""
   },
   "3576.TW": {
     "PE": 0.0,
     "PB": 2.98,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3583.TW": {
     "PE": 48.7,
     "PB": 8.92,
     "DividendYield": 0.89,
-    "PS": 0,
     "Sector": ""
   },
   "3588.TW": {
     "PE": 106.33,
     "PB": 1.84,
     "DividendYield": 2.69,
-    "PS": 0,
     "Sector": ""
   },
   "3591.TW": {
     "PE": 0.0,
     "PB": 1.12,
     "DividendYield": 3.33,
-    "PS": 0,
     "Sector": ""
   },
   "3592.TW": {
     "PE": 12.5,
     "PB": 1.5,
     "DividendYield": 6.4,
-    "PS": 0,
     "Sector": ""
   },
   "3593.TW": {
     "PE": 0.0,
     "PB": 3.26,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3596.TW": {
     "PE": 13.73,
     "PB": 2.25,
     "DividendYield": 5.2,
-    "PS": 0,
     "Sector": ""
   },
   "3605.TW": {
     "PE": 16.34,
     "PB": 1.36,
     "DividendYield": 2.55,
-    "PS": 0,
     "Sector": ""
   },
   "3607.TW": {
     "PE": 707.5,
     "PB": 0.98,
     "DividendYield": 5.65,
-    "PS": 0,
     "Sector": ""
   },
   "3617.TW": {
     "PE": 12.16,
     "PB": 1.73,
     "DividendYield": 5.68,
-    "PS": 0,
     "Sector": ""
   },
   "3622.TW": {
     "PE": 9.01,
     "PB": 1.07,
     "DividendYield": 5.83,
-    "PS": 0,
     "Sector": ""
   },
   "3645.TW": {
     "PE": 53.73,
     "PB": 3.41,
     "DividendYield": 1.46,
-    "PS": 0,
     "Sector": ""
   },
   "3652.TW": {
     "PE": 20.26,
     "PB": 1.05,
     "DividendYield": 4.42,
-    "PS": 0,
     "Sector": ""
   },
   "3653.TW": {
     "PE": 114.71,
     "PB": 26.5,
     "DividendYield": 0.53,
-    "PS": 0,
     "Sector": ""
   },
   "3661.TW": {
     "PE": 43.92,
     "PB": 6.03,
     "DividendYield": 1.14,
-    "PS": 0,
     "Sector": ""
   },
   "3665.TW": {
     "PE": 47.64,
     "PB": 9.2,
     "DividendYield": 0.68,
-    "PS": 0,
     "Sector": ""
   },
   "3669.TW": {
     "PE": 34.03,
     "PB": 1.08,
     "DividendYield": 2.6,
-    "PS": 0,
     "Sector": ""
   },
   "3673.TW": {
     "PE": 18.45,
     "PB": 0.52,
     "DividendYield": 3.6,
-    "PS": 0,
     "Sector": ""
   },
   "3679.TW": {
     "PE": 12.3,
     "PB": 1.52,
     "DividendYield": 7.5,
-    "PS": 0,
     "Sector": ""
   },
   "3686.TW": {
     "PE": 0.0,
     "PB": 2.03,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "3694.TW": {
     "PE": 14.43,
     "PB": 2.42,
     "DividendYield": 4.01,
-    "PS": 0,
     "Sector": ""
   },
   "3701.TW": {
     "PE": 0.0,
     "PB": 2.77,
     "DividendYield": 0.36,
-    "PS": 0,
     "Sector": ""
   },
   "3702.TW": {
     "PE": 15.2,
     "PB": 1.85,
     "DividendYield": 3.5,
-    "PS": 0,
     "Sector": ""
   },
   "3703.TW": {
     "PE": 12.36,
     "PB": 0.66,
     "DividendYield": 4.72,
-    "PS": 0,
     "Sector": ""
   },
   "3704.TW": {
     "PE": 21.65,
     "PB": 1.18,
     "DividendYield": 1.19,
-    "PS": 0,
     "Sector": ""
   },
   "3705.TW": {
     "PE": 16.83,
     "PB": 1.82,
     "DividendYield": 5.39,
-    "PS": 0,
     "Sector": ""
   },
   "3706.TW": {
     "PE": 16.12,
     "PB": 1.61,
     "DividendYield": 4.82,
-    "PS": 0,
     "Sector": ""
   },
   "3708.TW": {
     "PE": 3.1,
     "PB": 0.77,
     "DividendYield": 5.17,
-    "PS": 0,
     "Sector": ""
   },
   "3711.TW": {
     "PE": 42.3,
     "PB": 4.96,
     "DividendYield": 1.68,
-    "PS": 0,
     "Sector": ""
   },
   "3712.TW": {
     "PE": 0.0,
     "PB": 1.29,
     "DividendYield": 17.34,
-    "PS": 0,
     "Sector": ""
   },
   "3714.TW": {
     "PE": 0.0,
     "PB": 0.93,
     "DividendYield": 1.73,
-    "PS": 0,
     "Sector": ""
   },
   "3715.TW": {
     "PE": 70.64,
     "PB": 4.9,
     "DividendYield": 0.58,
-    "PS": 0,
     "Sector": ""
   },
   "3716.TW": {
     "PE": 16.0,
     "PB": 0.63,
     "DividendYield": 3.05,
-    "PS": 0,
     "Sector": ""
   },
   "3717.TW": {
     "PE": 276.88,
     "PB": 1.43,
     "DividendYield": 0.9,
-    "PS": 0,
     "Sector": ""
   },
   "4104.TW": {
     "PE": 16.6,
     "PB": 1.46,
     "DividendYield": 5.51,
-    "PS": 0,
     "Sector": ""
   },
   "4106.TW": {
     "PE": 18.67,
     "PB": 0.89,
     "DividendYield": 4.46,
-    "PS": 0,
     "Sector": ""
   },
   "4108.TW": {
     "PE": 0.0,
     "PB": 1.33,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4119.TW": {
     "PE": 56.11,
     "PB": 1.12,
     "DividendYield": 1.49,
-    "PS": 0,
     "Sector": ""
   },
   "4133.TW": {
     "PE": 0.0,
     "PB": 1.08,
     "DividendYield": 0.49,
-    "PS": 0,
     "Sector": ""
   },
   "4137.TW": {
     "PE": 15.36,
     "PB": 1.71,
     "DividendYield": 9.13,
-    "PS": 0,
     "Sector": ""
   },
   "4142.TW": {
     "PE": 0.0,
     "PB": 1.56,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4148.TW": {
     "PE": 17.89,
     "PB": 1.0,
     "DividendYield": 2.45,
-    "PS": 0,
     "Sector": ""
   },
   "4155.TW": {
     "PE": 22.89,
     "PB": 0.75,
     "DividendYield": 2.3,
-    "PS": 0,
     "Sector": ""
   },
   "4164.TW": {
     "PE": 33.16,
     "PB": 0.81,
     "DividendYield": 3.49,
-    "PS": 0,
     "Sector": ""
   },
   "4169.TW": {
     "PE": 492.19,
     "PB": 8.81,
     "DividendYield": 0.23,
-    "PS": 0,
     "Sector": ""
   },
   "4190.TW": {
     "PE": 0.0,
     "PB": 0.98,
     "DividendYield": 1.86,
-    "PS": 0,
     "Sector": ""
   },
   "4306.TW": {
     "PE": 51.92,
     "PB": 0.69,
     "DividendYield": 5.19,
-    "PS": 0,
     "Sector": ""
   },
   "4414.TW": {
     "PE": 17.81,
     "PB": 0.7,
     "DividendYield": 0.96,
-    "PS": 0,
     "Sector": ""
   },
   "4426.TW": {
     "PE": 0.0,
     "PB": 0.78,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4438.TW": {
     "PE": 19.93,
     "PB": 0.75,
     "DividendYield": 4.06,
-    "PS": 0,
     "Sector": ""
   },
   "4439.TW": {
     "PE": 12.68,
     "PB": 1.11,
     "DividendYield": 4.09,
-    "PS": 0,
     "Sector": ""
   },
   "4440.TW": {
     "PE": 15.22,
     "PB": 0.89,
     "DividendYield": 5.76,
-    "PS": 0,
     "Sector": ""
   },
   "4441.TW": {
     "PE": 14.28,
     "PB": 1.91,
     "DividendYield": 5.55,
-    "PS": 0,
     "Sector": ""
   },
   "4526.TW": {
     "PE": 19.26,
     "PB": 1.84,
     "DividendYield": 2.85,
-    "PS": 0,
     "Sector": ""
   },
   "4532.TW": {
     "PE": 11.7,
     "PB": 1.15,
     "DividendYield": 6.13,
-    "PS": 0,
     "Sector": ""
   },
   "4536.TW": {
     "PE": 10.09,
     "PB": 1.45,
     "DividendYield": 5.32,
-    "PS": 0,
     "Sector": ""
   },
   "4540.TW": {
     "PE": 0.0,
     "PB": 1.47,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4545.TW": {
     "PE": 182.94,
     "PB": 1.26,
     "DividendYield": 0.42,
-    "PS": 0,
     "Sector": ""
   },
   "4551.TW": {
     "PE": 22.52,
     "PB": 1.75,
     "DividendYield": 3.09,
-    "PS": 0,
     "Sector": ""
   },
   "4552.TW": {
     "PE": 10.1,
     "PB": 0.39,
     "DividendYield": 2.87,
-    "PS": 0,
     "Sector": ""
   },
   "4555.TW": {
     "PE": 180.0,
     "PB": 0.88,
     "DividendYield": 1.39,
-    "PS": 0,
     "Sector": ""
   },
   "4557.TW": {
     "PE": 0.0,
     "PB": 1.06,
     "DividendYield": 3.58,
-    "PS": 0,
     "Sector": ""
   },
   "4560.TW": {
     "PE": 10.83,
     "PB": 1.12,
     "DividendYield": 4.59,
-    "PS": 0,
     "Sector": ""
   },
   "4562.TW": {
     "PE": 0.0,
     "PB": 2.95,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4564.TW": {
     "PE": 0.0,
     "PB": 1.05,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4566.TW": {
     "PE": 49.19,
     "PB": 1.49,
     "DividendYield": 1.02,
-    "PS": 0,
     "Sector": ""
   },
   "4569.TW": {
     "PE": 41.11,
     "PB": 1.87,
     "DividendYield": 1.9,
-    "PS": 0,
     "Sector": ""
   },
   "4571.TW": {
     "PE": 16.06,
     "PB": 2.53,
     "DividendYield": 3.44,
-    "PS": 0,
     "Sector": ""
   },
   "4572.TW": {
     "PE": 47.5,
     "PB": 2.82,
     "DividendYield": 3.51,
-    "PS": 0,
     "Sector": ""
   },
   "4576.TW": {
     "PE": 82.09,
     "PB": 4.82,
     "DividendYield": 0.48,
-    "PS": 0,
     "Sector": ""
   },
   "4581.TW": {
     "PE": 10.55,
     "PB": 1.38,
     "DividendYield": 6.01,
-    "PS": 0,
     "Sector": ""
   },
   "4583.TW": {
     "PE": 55.67,
     "PB": 5.26,
     "DividendYield": 1.5,
-    "PS": 0,
     "Sector": ""
   },
   "4585.TW": {
     "PE": 228.85,
     "PB": 4.52,
     "DividendYield": 0.34,
-    "PS": 0,
     "Sector": ""
   },
   "4588.TW": {
     "PE": 18.0,
     "PB": 2.67,
     "DividendYield": 5.21,
-    "PS": 0,
     "Sector": ""
   },
   "4590.TW": {
     "PE": 27.16,
     "PB": 1.14,
     "DividendYield": 3.13,
-    "PS": 0,
     "Sector": ""
   },
   "4720.TW": {
     "PE": 25.2,
     "PB": 1.31,
     "DividendYield": 2.14,
-    "PS": 0,
     "Sector": ""
   },
   "4722.TW": {
     "PE": 85.79,
     "PB": 5.4,
     "DividendYield": 0.71,
-    "PS": 0,
     "Sector": ""
   },
   "4736.TW": {
     "PE": 8.37,
     "PB": 1.23,
     "DividendYield": 3.95,
-    "PS": 0,
     "Sector": ""
   },
   "4737.TW": {
     "PE": 0.0,
     "PB": 2.58,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4739.TW": {
     "PE": 54.23,
     "PB": 1.73,
     "DividendYield": 1.18,
-    "PS": 0,
     "Sector": ""
   },
   "4746.TW": {
     "PE": 14.01,
     "PB": 0.8,
     "DividendYield": 5.84,
-    "PS": 0,
     "Sector": ""
   },
   "4755.TW": {
     "PE": 37.3,
     "PB": 2.64,
     "DividendYield": 2.68,
-    "PS": 0,
     "Sector": ""
   },
   "4763.TW": {
     "PE": 6.87,
     "PB": 2.08,
     "DividendYield": 7.28,
-    "PS": 0,
     "Sector": ""
   },
   "4764.TW": {
     "PE": 127.05,
     "PB": 5.67,
     "DividendYield": 0.65,
-    "PS": 0,
     "Sector": ""
   },
   "4766.TW": {
     "PE": 18.05,
     "PB": 3.19,
     "DividendYield": 4.92,
-    "PS": 0,
     "Sector": ""
   },
   "4770.TW": {
     "PE": 22.7,
     "PB": 2.25,
     "DividendYield": 2.59,
-    "PS": 0,
     "Sector": ""
   },
   "4771.TW": {
     "PE": 15.01,
     "PB": 2.79,
     "DividendYield": 3.68,
-    "PS": 0,
     "Sector": ""
   },
   "4807.TW": {
     "PE": 0.0,
     "PB": 0.71,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4904.TW": {
     "PE": 24.83,
     "PB": 3.7,
     "DividendYield": 4.03,
-    "PS": 0,
     "Sector": ""
   },
   "4906.TW": {
     "PE": 0.0,
     "PB": 1.51,
     "DividendYield": 1.24,
-    "PS": 0,
     "Sector": ""
   },
   "4912.TW": {
     "PE": 44.84,
     "PB": 1.49,
     "DividendYield": 1.08,
-    "PS": 0,
     "Sector": ""
   },
   "4915.TW": {
     "PE": 13.39,
     "PB": 1.71,
     "DividendYield": 6.12,
-    "PS": 0,
     "Sector": ""
   },
   "4916.TW": {
     "PE": 34.72,
     "PB": 2.29,
     "DividendYield": 0.88,
-    "PS": 0,
     "Sector": ""
   },
   "4919.TW": {
     "PE": 0.0,
     "PB": 2.93,
     "DividendYield": 0.44,
-    "PS": 0,
     "Sector": ""
   },
   "4927.TW": {
     "PE": 0.0,
     "PB": 1.98,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4930.TW": {
     "PE": 32.08,
     "PB": 0.48,
     "DividendYield": 3.12,
-    "PS": 0,
     "Sector": ""
   },
   "4934.TW": {
     "PE": 0.0,
     "PB": 2.29,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4935.TW": {
     "PE": 26.9,
     "PB": 0.58,
     "DividendYield": 2.77,
-    "PS": 0,
     "Sector": ""
   },
   "4938.TW": {
     "PE": 15.03,
     "PB": 1.04,
     "DividendYield": 4.96,
-    "PS": 0,
     "Sector": ""
   },
   "4942.TW": {
     "PE": 12.4,
     "PB": 0.59,
     "DividendYield": 5.27,
-    "PS": 0,
     "Sector": ""
   },
   "4943.TW": {
     "PE": 0.0,
     "PB": 7.19,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4949.TW": {
     "PE": 44.58,
     "PB": 3.45,
     "DividendYield": 1.65,
-    "PS": 0,
     "Sector": ""
   },
   "4952.TW": {
     "PE": 39.61,
     "PB": 2.1,
     "DividendYield": 2.45,
-    "PS": 0,
     "Sector": ""
   },
   "4956.TW": {
     "PE": 0.0,
     "PB": 2.22,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4958.TW": {
     "PE": 41.73,
     "PB": 2.29,
     "DividendYield": 1.3,
-    "PS": 0,
     "Sector": ""
   },
   "4960.TW": {
     "PE": 0.0,
     "PB": 1.77,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4961.TW": {
     "PE": 15.87,
     "PB": 1.06,
     "DividendYield": 8.41,
-    "PS": 0,
     "Sector": ""
   },
   "4967.TW": {
     "PE": 16.81,
     "PB": 3.84,
     "DividendYield": 4.56,
-    "PS": 0,
     "Sector": ""
   },
   "4968.TW": {
     "PE": 39.29,
     "PB": 3.5,
     "DividendYield": 1.53,
-    "PS": 0,
     "Sector": ""
   },
   "4976.TW": {
     "PE": 0.0,
     "PB": 1.76,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4977.TW": {
     "PE": 45.93,
     "PB": 4.04,
     "DividendYield": 1.11,
-    "PS": 0,
     "Sector": ""
   },
   "4989.TW": {
     "PE": 0.0,
     "PB": 7.55,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "4994.TW": {
     "PE": 50.71,
     "PB": 6.45,
     "DividendYield": 3.02,
-    "PS": 0,
     "Sector": ""
   },
   "4999.TW": {
     "PE": 0.0,
     "PB": 0.49,
     "DividendYield": 1.18,
-    "PS": 0,
     "Sector": ""
   },
   "5007.TW": {
     "PE": 18.81,
     "PB": 2.33,
     "DividendYield": 5.28,
-    "PS": 0,
     "Sector": ""
   },
   "5203.TW": {
     "PE": 17.07,
     "PB": 1.06,
     "DividendYield": 5.83,
-    "PS": 0,
     "Sector": ""
   },
   "5215.TW": {
     "PE": 18.14,
     "PB": 0.67,
     "DividendYield": 5.41,
-    "PS": 0,
     "Sector": ""
   },
   "5222.TW": {
     "PE": 47.57,
     "PB": 4.29,
     "DividendYield": 2.13,
-    "PS": 0,
     "Sector": ""
   },
   "5225.TW": {
     "PE": 7.77,
     "PB": 1.77,
     "DividendYield": 9.13,
-    "PS": 0,
     "Sector": ""
   },
   "5234.TW": {
     "PE": 53.8,
     "PB": 11.55,
     "DividendYield": 1.64,
-    "PS": 0,
     "Sector": ""
   },
   "5243.TW": {
     "PE": 27.05,
     "PB": 2.44,
     "DividendYield": 1.85,
-    "PS": 0,
     "Sector": ""
   },
   "5244.TW": {
     "PE": 77.75,
     "PB": 1.52,
     "DividendYield": 1.01,
-    "PS": 0,
     "Sector": ""
   },
   "5258.TW": {
     "PE": 11.01,
     "PB": 1.12,
     "DividendYield": 2.14,
-    "PS": 0,
     "Sector": ""
   },
   "5269.TW": {
     "PE": 15.3,
     "PB": 2.3,
     "DividendYield": 2.7,
-    "PS": 0,
     "Sector": ""
   },
   "5283.TW": {
     "PE": 9.77,
     "PB": 1.0,
     "DividendYield": 3.64,
-    "PS": 0,
     "Sector": ""
   },
   "5284.TW": {
     "PE": 26.39,
     "PB": 4.41,
     "DividendYield": 1.62,
-    "PS": 0,
     "Sector": ""
   },
   "5285.TW": {
     "PE": 34.97,
     "PB": 1.84,
     "DividendYield": 2.8,
-    "PS": 0,
     "Sector": ""
   },
   "5288.TW": {
     "PE": 11.67,
     "PB": 1.6,
     "DividendYield": 4.58,
-    "PS": 0,
     "Sector": ""
   },
   "5292.TW": {
     "PE": 21.85,
     "PB": 4.75,
     "DividendYield": 3.0,
-    "PS": 0,
     "Sector": ""
   },
   "5306.TW": {
     "PE": 10.95,
     "PB": 1.19,
     "DividendYield": 4.47,
-    "PS": 0,
     "Sector": ""
   },
   "5388.TW": {
     "PE": 20.97,
     "PB": 1.58,
     "DividendYield": 2.97,
-    "PS": 0,
     "Sector": ""
   },
   "5434.TW": {
     "PE": 18.45,
     "PB": 3.86,
     "DividendYield": 3.37,
-    "PS": 0,
     "Sector": ""
   },
   "5469.TW": {
     "PE": 14.97,
     "PB": 1.21,
     "DividendYield": 2.8,
-    "PS": 0,
     "Sector": ""
   },
   "5471.TW": {
     "PE": 55.0,
     "PB": 1.89,
     "DividendYield": 2.53,
-    "PS": 0,
     "Sector": ""
   },
   "5484.TW": {
     "PE": 0.0,
     "PB": 5.45,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "5515.TW": {
     "PE": 9.02,
     "PB": 1.55,
     "DividendYield": 8.17,
-    "PS": 0,
     "Sector": ""
   },
   "5519.TW": {
     "PE": 6.71,
     "PB": 1.17,
     "DividendYield": 11.41,
-    "PS": 0,
     "Sector": ""
   },
   "5521.TW": {
     "PE": 23.85,
     "PB": 1.08,
     "DividendYield": 1.21,
-    "PS": 0,
     "Sector": ""
   },
   "5522.TW": {
     "PE": 9.84,
     "PB": 1.13,
     "DividendYield": 7.5,
-    "PS": 0,
     "Sector": ""
   },
   "5525.TW": {
     "PE": 18.07,
     "PB": 1.39,
     "DividendYield": 4.74,
-    "PS": 0,
     "Sector": ""
   },
   "5531.TW": {
     "PE": 0.0,
     "PB": 0.88,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "5533.TW": {
     "PE": 25.8,
     "PB": 0.43,
     "DividendYield": 4.15,
-    "PS": 0,
     "Sector": ""
   },
   "5534.TW": {
     "PE": 13.97,
     "PB": 1.17,
     "DividendYield": 6.56,
-    "PS": 0,
     "Sector": ""
   },
   "5538.TW": {
     "PE": 10.18,
     "PB": 0.83,
     "DividendYield": 4.88,
-    "PS": 0,
     "Sector": ""
   },
   "5546.TW": {
     "PE": 0.0,
     "PB": 0.74,
     "DividendYield": 11.87,
-    "PS": 0,
     "Sector": ""
   },
   "5607.TW": {
     "PE": 17.38,
     "PB": 1.61,
     "DividendYield": 3.74,
-    "PS": 0,
     "Sector": ""
   },
   "5608.TW": {
     "PE": 0.0,
     "PB": 0.67,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "5706.TW": {
     "PE": 15.34,
     "PB": 2.31,
     "DividendYield": 8.65,
-    "PS": 0,
     "Sector": ""
   },
   "5871.TW": {
     "PE": 10.06,
     "PB": 1.09,
     "DividendYield": 5.61,
-    "PS": 0,
     "Sector": ""
   },
   "5876.TW": {
     "PE": 12.99,
     "PB": 0.94,
     "DividendYield": 4.53,
-    "PS": 0,
     "Sector": ""
   },
   "5880.TW": {
     "PE": 17.54,
     "PB": 1.34,
     "DividendYield": 4.4,
-    "PS": 0,
     "Sector": ""
   },
   "5906.TW": {
     "PE": 50.0,
     "PB": 2.95,
     "DividendYield": 1.43,
-    "PS": 0,
     "Sector": ""
   },
   "5907.TW": {
     "PE": 0.0,
     "PB": 0.29,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6005.TW": {
     "PE": 10.83,
     "PB": 1.36,
     "DividendYield": 5.24,
-    "PS": 0,
     "Sector": ""
   },
   "6024.TW": {
     "PE": 10.64,
     "PB": 1.36,
     "DividendYield": 6.12,
-    "PS": 0,
     "Sector": ""
   },
   "6108.TW": {
     "PE": 0.0,
     "PB": 0.78,
     "DividendYield": 6.08,
-    "PS": 0,
     "Sector": ""
   },
   "6112.TW": {
     "PE": 25.49,
     "PB": 2.03,
     "DividendYield": 3.56,
-    "PS": 0,
     "Sector": ""
   },
   "6115.TW": {
     "PE": 16.54,
     "PB": 1.69,
     "DividendYield": 5.94,
-    "PS": 0,
     "Sector": ""
   },
   "6116.TW": {
     "PE": 0.0,
     "PB": 0.72,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6117.TW": {
     "PE": 21.02,
     "PB": 3.28,
     "DividendYield": 2.76,
-    "PS": 0,
     "Sector": ""
   },
   "6120.TW": {
     "PE": 0.0,
     "PB": 0.95,
     "DividendYield": 1.79,
-    "PS": 0,
     "Sector": ""
   },
   "6128.TW": {
     "PE": 0.0,
     "PB": 0.95,
     "DividendYield": 2.42,
-    "PS": 0,
     "Sector": ""
   },
   "6133.TW": {
     "PE": 32.36,
     "PB": 1.71,
     "DividendYield": 1.29,
-    "PS": 0,
     "Sector": ""
   },
   "6136.TW": {
     "PE": 27.42,
     "PB": 0.89,
     "DividendYield": 4.75,
-    "PS": 0,
     "Sector": ""
   },
   "6139.TW": {
     "PE": 20.95,
     "PB": 7.69,
     "DividendYield": 3.62,
-    "PS": 0,
     "Sector": ""
   },
   "6141.TW": {
     "PE": 0.0,
     "PB": 4.1,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6142.TW": {
     "PE": 0.0,
     "PB": 1.04,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6152.TW": {
     "PE": 0.0,
     "PB": 2.4,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6153.TW": {
     "PE": 0.0,
     "PB": 1.19,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6155.TW": {
     "PE": 61.82,
     "PB": 2.54,
     "DividendYield": 1.75,
-    "PS": 0,
     "Sector": ""
   },
   "6164.TW": {
     "PE": 174.29,
     "PB": 1.07,
     "DividendYield": 4.1,
-    "PS": 0,
     "Sector": ""
   },
   "6165.TW": {
     "PE": 11.1,
     "PB": 2.19,
     "DividendYield": 10.91,
-    "PS": 0,
     "Sector": ""
   },
   "6166.TW": {
     "PE": 26.3,
     "PB": 2.4,
     "DividendYield": 1.94,
-    "PS": 0,
     "Sector": ""
   },
   "6168.TW": {
     "PE": 533.0,
     "PB": 1.82,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6176.TW": {
     "PE": 9.43,
     "PB": 1.14,
     "DividendYield": 3.93,
-    "PS": 0,
     "Sector": ""
   },
   "6177.TW": {
     "PE": 12.4,
     "PB": 2.03,
     "DividendYield": 8.47,
-    "PS": 0,
     "Sector": ""
   },
   "6183.TW": {
     "PE": 23.9,
     "PB": 4.94,
     "DividendYield": 3.81,
-    "PS": 0,
     "Sector": ""
   },
   "6184.TW": {
     "PE": 18.81,
     "PB": 1.47,
     "DividendYield": 6.3,
-    "PS": 0,
     "Sector": ""
   },
   "6189.TW": {
     "PE": 16.65,
     "PB": 1.93,
     "DividendYield": 5.94,
-    "PS": 0,
     "Sector": ""
   },
   "6191.TW": {
     "PE": 15.71,
     "PB": 1.89,
     "DividendYield": 3.04,
-    "PS": 0,
     "Sector": ""
   },
   "6192.TW": {
     "PE": 11.93,
     "PB": 1.53,
     "DividendYield": 4.83,
-    "PS": 0,
     "Sector": ""
   },
   "6196.TW": {
     "PE": 21.99,
     "PB": 4.43,
     "DividendYield": 2.0,
-    "PS": 0,
     "Sector": ""
   },
   "6197.TW": {
     "PE": 20.65,
     "PB": 4.35,
     "DividendYield": 3.91,
-    "PS": 0,
     "Sector": ""
   },
   "6201.TW": {
     "PE": 13.69,
     "PB": 1.61,
     "DividendYield": 6.1,
-    "PS": 0,
     "Sector": ""
   },
   "6202.TW": {
     "PE": 65.8,
     "PB": 2.9,
     "DividendYield": 1.38,
-    "PS": 0,
     "Sector": ""
   },
   "6205.TW": {
     "PE": 28.26,
     "PB": 1.77,
     "DividendYield": 2.64,
-    "PS": 0,
     "Sector": ""
   },
   "6206.TW": {
     "PE": 14.86,
     "PB": 2.83,
     "DividendYield": 5.37,
-    "PS": 0,
     "Sector": ""
   },
   "6209.TW": {
     "PE": 59.78,
     "PB": 3.06,
     "DividendYield": 0.91,
-    "PS": 0,
     "Sector": ""
   },
   "6213.TW": {
     "PE": 51.44,
     "PB": 3.66,
     "DividendYield": 1.4,
-    "PS": 0,
     "Sector": ""
   },
   "6214.TW": {
     "PE": 14.51,
     "PB": 1.71,
     "DividendYield": 4.54,
-    "PS": 0,
     "Sector": ""
   },
   "6215.TW": {
     "PE": 48.56,
     "PB": 5.21,
     "DividendYield": 0.99,
-    "PS": 0,
     "Sector": ""
   },
   "6216.TW": {
     "PE": 42.46,
     "PB": 1.39,
     "DividendYield": 4.11,
-    "PS": 0,
     "Sector": ""
   },
   "6224.TW": {
     "PE": 64.93,
     "PB": 1.69,
     "DividendYield": 2.87,
-    "PS": 0,
     "Sector": ""
   },
   "6225.TW": {
     "PE": 0.0,
     "PB": 6.05,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6226.TW": {
     "PE": 0.0,
     "PB": 1.36,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6230.TW": {
     "PE": 0.0,
     "PB": 2.18,
     "DividendYield": 0.15,
-    "PS": 0,
     "Sector": ""
   },
   "6235.TW": {
     "PE": 15.59,
     "PB": 1.81,
     "DividendYield": 2.65,
-    "PS": 0,
     "Sector": ""
   },
   "6239.TW": {
     "PE": 28.64,
     "PB": 2.82,
     "DividendYield": 2.1,
-    "PS": 0,
     "Sector": ""
   },
   "6243.TW": {
     "PE": 0.0,
     "PB": 1.75,
     "DividendYield": 4.04,
-    "PS": 0,
     "Sector": ""
   },
   "6257.TW": {
     "PE": 28.53,
     "PB": 3.87,
     "DividendYield": 2.39,
-    "PS": 0,
     "Sector": ""
   },
   "6269.TW": {
     "PE": 0.0,
     "PB": 0.97,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6271.TW": {
     "PE": 22.45,
     "PB": 1.34,
     "DividendYield": 1.75,
-    "PS": 0,
     "Sector": ""
   },
   "6272.TW": {
     "PE": 9.84,
     "PB": 1.26,
     "DividendYield": 6.64,
-    "PS": 0,
     "Sector": ""
   },
   "6277.TW": {
     "PE": 22.08,
     "PB": 1.68,
     "DividendYield": 5.15,
-    "PS": 0,
     "Sector": ""
   },
   "6278.TW": {
     "PE": 11.08,
     "PB": 1.32,
     "DividendYield": 5.29,
-    "PS": 0,
     "Sector": ""
   },
   "6281.TW": {
     "PE": 14.24,
     "PB": 1.81,
     "DividendYield": 6.26,
-    "PS": 0,
     "Sector": ""
   },
   "6282.TW": {
     "PE": 256.39,
     "PB": 1.75,
     "DividendYield": 1.73,
-    "PS": 0,
     "Sector": ""
   },
   "6283.TW": {
     "PE": 0.0,
     "PB": 1.8,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6285.TW": {
     "PE": 35.62,
     "PB": 3.18,
     "DividendYield": 1.91,
-    "PS": 0,
     "Sector": ""
   },
   "6405.TW": {
     "PE": 0.0,
     "PB": 0.91,
     "DividendYield": 0.27,
-    "PS": 0,
     "Sector": ""
   },
   "6409.TW": {
     "PE": 17.79,
     "PB": 6.56,
     "DividendYield": 5.18,
-    "PS": 0,
     "Sector": ""
   },
   "6412.TW": {
     "PE": 15.35,
     "PB": 2.09,
     "DividendYield": 4.64,
-    "PS": 0,
     "Sector": ""
   },
   "6414.TW": {
     "PE": 12.85,
     "PB": 1.49,
     "DividendYield": 4.95,
-    "PS": 0,
     "Sector": ""
   },
   "6415.TW": {
     "PE": 43.74,
     "PB": 2.91,
     "DividendYield": 0.91,
-    "PS": 0,
     "Sector": ""
   },
   "6416.TW": {
     "PE": 18.35,
     "PB": 1.61,
     "DividendYield": 3.55,
-    "PS": 0,
     "Sector": ""
   },
   "6426.TW": {
     "PE": 0.0,
     "PB": 8.39,
     "DividendYield": 0.25,
-    "PS": 0,
     "Sector": ""
   },
   "6431.TW": {
     "PE": 0.0,
     "PB": 3.88,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6438.TW": {
     "PE": 34.72,
     "PB": 2.75,
     "DividendYield": 2.79,
-    "PS": 0,
     "Sector": ""
   },
   "6442.TW": {
     "PE": 101.75,
     "PB": 26.45,
     "DividendYield": 0.51,
-    "PS": 0,
     "Sector": ""
   },
   "6443.TW": {
     "PE": 0.0,
     "PB": 5.0,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6446.TW": {
     "PE": 47.53,
     "PB": 7.5,
     "DividendYield": 0.4,
-    "PS": 0,
     "Sector": ""
   },
   "6449.TW": {
     "PE": 22.23,
     "PB": 3.0,
     "DividendYield": 2.65,
-    "PS": 0,
     "Sector": ""
   },
   "6451.TW": {
     "PE": 1661.54,
     "PB": 7.03,
     "DividendYield": 0.08,
-    "PS": 0,
     "Sector": ""
   },
   "6456.TW": {
     "PE": 0.0,
     "PB": 0.59,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6464.TW": {
     "PE": 18.24,
     "PB": 1.21,
     "DividendYield": 4.73,
-    "PS": 0,
     "Sector": ""
   },
   "6472.TW": {
     "PE": 17.56,
     "PB": 3.4,
     "DividendYield": 2.43,
-    "PS": 0,
     "Sector": ""
   },
   "6477.TW": {
     "PE": 1665.0,
     "PB": 1.29,
     "DividendYield": 1.05,
-    "PS": 0,
     "Sector": ""
   },
   "6491.TW": {
     "PE": 13.75,
     "PB": 1.92,
     "DividendYield": 3.48,
-    "PS": 0,
     "Sector": ""
   },
   "6504.TW": {
     "PE": 0.0,
     "PB": 0.88,
     "DividendYield": 2.41,
-    "PS": 0,
     "Sector": ""
   },
   "6505.TW": {
     "PE": 50.0,
     "PB": 1.39,
     "DividendYield": 2.31,
-    "PS": 0,
     "Sector": ""
   },
   "6515.TW": {
     "PE": 170.83,
     "PB": 44.34,
     "DividendYield": 0.63,
-    "PS": 0,
     "Sector": ""
   },
   "6525.TW": {
     "PE": 14.39,
     "PB": 2.33,
     "DividendYield": 5.91,
-    "PS": 0,
     "Sector": ""
   },
   "6526.TW": {
     "PE": 27.4,
     "PB": 4.11,
     "DividendYield": 2.85,
-    "PS": 0,
     "Sector": ""
   },
   "6531.TW": {
     "PE": 66.75,
     "PB": 6.86,
     "DividendYield": 1.36,
-    "PS": 0,
     "Sector": ""
   },
   "6533.TW": {
     "PE": 0.0,
     "PB": 1.96,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6534.TW": {
     "PE": 20.73,
     "PB": 3.58,
     "DividendYield": 5.13,
-    "PS": 0,
     "Sector": ""
   },
   "6541.TW": {
     "PE": 0.0,
     "PB": 1.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6550.TW": {
     "PE": 0.0,
     "PB": 3.01,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6552.TW": {
     "PE": 0.0,
     "PB": 1.27,
     "DividendYield": 0.77,
-    "PS": 0,
     "Sector": ""
   },
   "6558.TW": {
     "PE": 0.0,
     "PB": 1.84,
     "DividendYield": 1.11,
-    "PS": 0,
     "Sector": ""
   },
   "6573.TW": {
     "PE": 10.0,
     "PB": 1.6,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6579.TW": {
     "PE": 27.94,
     "PB": 1.98,
     "DividendYield": 3.22,
-    "PS": 0,
     "Sector": ""
   },
   "6581.TW": {
     "PE": 17.26,
     "PB": 2.64,
     "DividendYield": 4.98,
-    "PS": 0,
     "Sector": ""
   },
   "6582.TW": {
     "PE": 0.0,
     "PB": 0.55,
     "DividendYield": 3.06,
-    "PS": 0,
     "Sector": ""
   },
   "6585.TW": {
     "PE": 16.48,
     "PB": 1.72,
     "DividendYield": 4.85,
-    "PS": 0,
     "Sector": ""
   },
   "6589.TW": {
     "PE": 0.0,
     "PB": 1.92,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6591.TW": {
     "PE": 11.1,
     "PB": 1.04,
     "DividendYield": 7.07,
-    "PS": 0,
     "Sector": ""
   },
   "6592.TW": {
     "PE": 13.38,
     "PB": 1.17,
     "DividendYield": 5.28,
-    "PS": 0,
     "Sector": ""
   },
   "6598.TW": {
     "PE": 0.0,
     "PB": 3.51,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6605.TW": {
     "PE": 9.77,
     "PB": 1.14,
     "DividendYield": 4.76,
-    "PS": 0,
     "Sector": ""
   },
   "6606.TW": {
     "PE": 22.2,
     "PB": 1.65,
     "DividendYield": 4.26,
-    "PS": 0,
     "Sector": ""
   },
   "6614.TW": {
     "PE": 21.39,
     "PB": 2.03,
     "DividendYield": 4.06,
-    "PS": 0,
     "Sector": ""
   },
   "6625.TW": {
     "PE": 9.0,
     "PB": 2.43,
     "DividendYield": 6.31,
-    "PS": 0,
     "Sector": ""
   },
   "6641.TW": {
     "PE": 39.67,
     "PB": 0.45,
     "DividendYield": 2.19,
-    "PS": 0,
     "Sector": ""
   },
   "6645.TW": {
     "PE": 0.0,
     "PB": 1.67,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6655.TW": {
     "PE": 33.16,
     "PB": 4.03,
     "DividendYield": 9.23,
-    "PS": 0,
     "Sector": ""
   },
   "6657.TW": {
     "PE": 0.0,
     "PB": 4.09,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6658.TW": {
     "PE": 60.07,
     "PB": 2.26,
     "DividendYield": 1.47,
-    "PS": 0,
     "Sector": ""
   },
   "6666.TW": {
     "PE": 17.23,
     "PB": 1.16,
     "DividendYield": 4.8,
-    "PS": 0,
     "Sector": ""
   },
   "6668.TW": {
     "PE": 0.0,
     "PB": 1.68,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6669.TW": {
     "PE": 13.2,
     "PB": 5.41,
     "DividendYield": 4.55,
-    "PS": 0,
     "Sector": ""
   },
   "6670.TW": {
     "PE": 11.86,
     "PB": 2.38,
     "DividendYield": 6.03,
-    "PS": 0,
     "Sector": ""
   },
   "6671.TW": {
     "PE": 12.89,
     "PB": 1.05,
     "DividendYield": 3.93,
-    "PS": 0,
     "Sector": ""
   },
   "6672.TW": {
     "PE": 30.93,
     "PB": 3.0,
     "DividendYield": 2.23,
-    "PS": 0,
     "Sector": ""
   },
   "6674.TW": {
     "PE": 0.0,
     "PB": 1.41,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6689.TW": {
     "PE": 30.91,
     "PB": 1.63,
     "DividendYield": 2.8,
-    "PS": 0,
     "Sector": ""
   },
   "6691.TW": {
     "PE": 25.45,
     "PB": 10.01,
     "DividendYield": 3.49,
-    "PS": 0,
     "Sector": ""
   },
   "6695.TW": {
     "PE": 0.0,
     "PB": 2.35,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6698.TW": {
     "PE": 0.0,
     "PB": 1.88,
     "DividendYield": 1.62,
-    "PS": 0,
     "Sector": ""
   },
   "6706.TW": {
     "PE": 0.0,
     "PB": 2.87,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6715.TW": {
     "PE": 243.89,
     "PB": 8.41,
     "DividendYield": 0.46,
-    "PS": 0,
     "Sector": ""
   },
   "6719.TW": {
     "PE": 24.28,
     "PB": 1.19,
     "DividendYield": 2.88,
-    "PS": 0,
     "Sector": ""
   },
   "6722.TW": {
     "PE": 13.86,
     "PB": 1.43,
     "DividendYield": 4.98,
-    "PS": 0,
     "Sector": ""
   },
   "6742.TW": {
     "PE": 0.0,
     "PB": 2.23,
     "DividendYield": 0.75,
-    "PS": 0,
     "Sector": ""
   },
   "6743.TW": {
     "PE": 34.3,
     "PB": 1.34,
     "DividendYield": 6.16,
-    "PS": 0,
     "Sector": ""
   },
   "6753.TW": {
     "PE": 21.7,
     "PB": 3.16,
     "DividendYield": 0.99,
-    "PS": 0,
     "Sector": ""
   },
   "6754.TW": {
     "PE": 13.83,
     "PB": 1.34,
     "DividendYield": 7.42,
-    "PS": 0,
     "Sector": ""
   },
   "6756.TW": {
     "PE": 63.78,
     "PB": 1.73,
     "DividendYield": 1.27,
-    "PS": 0,
     "Sector": ""
   },
   "6757.TW": {
     "PE": 9.2,
     "PB": 3.1,
     "DividendYield": 4.9,
-    "PS": 0,
     "Sector": ""
   },
   "6768.TW": {
     "PE": 12.37,
     "PB": 1.11,
     "DividendYield": 6.17,
-    "PS": 0,
     "Sector": ""
   },
   "6770.TW": {
     "PE": 0.0,
     "PB": 2.85,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6771.TW": {
     "PE": 12.25,
     "PB": 1.57,
     "DividendYield": 7.17,
-    "PS": 0,
     "Sector": ""
   },
   "6776.TW": {
     "PE": 15.69,
     "PB": 1.94,
     "DividendYield": 5.06,
-    "PS": 0,
     "Sector": ""
   },
   "6781.TW": {
     "PE": 25.63,
     "PB": 4.98,
     "DividendYield": 1.95,
-    "PS": 0,
     "Sector": ""
   },
   "6782.TW": {
     "PE": 14.67,
     "PB": 2.94,
     "DividendYield": 4.07,
-    "PS": 0,
     "Sector": ""
   },
   "6789.TW": {
     "PE": 84.13,
     "PB": 5.81,
     "DividendYield": 0.89,
-    "PS": 0,
     "Sector": ""
   },
   "6790.TW": {
     "PE": 13.47,
     "PB": 1.89,
     "DividendYield": 6.5,
-    "PS": 0,
     "Sector": ""
   },
   "6792.TW": {
     "PE": 25.02,
     "PB": 1.72,
     "DividendYield": 4.48,
-    "PS": 0,
     "Sector": ""
   },
   "6794.TW": {
     "PE": 0.0,
     "PB": 5.93,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6796.TW": {
     "PE": 355.0,
     "PB": 3.64,
     "DividendYield": 0.35,
-    "PS": 0,
     "Sector": ""
   },
   "6799.TW": {
     "PE": 20.8,
     "PB": 1.98,
     "DividendYield": 3.32,
-    "PS": 0,
     "Sector": ""
   },
   "6805.TW": {
     "PE": 60.16,
     "PB": 17.78,
     "DividendYield": 0.67,
-    "PS": 0,
     "Sector": ""
   },
   "6806.TW": {
     "PE": 0.0,
     "PB": 4.48,
     "DividendYield": 5.37,
-    "PS": 0,
     "Sector": ""
   },
   "6807.TW": {
     "PE": 8.89,
     "PB": 0.86,
     "DividendYield": 6.0,
-    "PS": 0,
     "Sector": ""
   },
   "6830.TW": {
     "PE": 0.0,
     "PB": 11.92,
     "DividendYield": 0.14,
-    "PS": 0,
     "Sector": ""
   },
   "6831.TW": {
     "PE": 96.63,
     "PB": 10.3,
     "DividendYield": 0.7,
-    "PS": 0,
     "Sector": ""
   },
   "6834.TW": {
     "PE": 67.0,
     "PB": 2.07,
     "DividendYield": 1.19,
-    "PS": 0,
     "Sector": ""
   },
   "6835.TW": {
     "PE": 40.0,
     "PB": 1.38,
     "DividendYield": 2.58,
-    "PS": 0,
     "Sector": ""
   },
   "6838.TW": {
     "PE": 0.0,
     "PB": 3.2,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6854.TW": {
     "PE": 0.0,
     "PB": 4.15,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6861.TW": {
     "PE": 35.51,
     "PB": 3.89,
     "DividendYield": 1.47,
-    "PS": 0,
     "Sector": ""
   },
   "6862.TW": {
     "PE": 21.77,
     "PB": 3.02,
     "DividendYield": 2.77,
-    "PS": 0,
     "Sector": ""
   },
   "6863.TW": {
     "PE": 30.37,
     "PB": 1.15,
     "DividendYield": 1.65,
-    "PS": 0,
     "Sector": ""
   },
   "6869.TW": {
     "PE": 0.0,
     "PB": 2.25,
     "DividendYield": 2.44,
-    "PS": 0,
     "Sector": ""
   },
   "6873.TW": {
     "PE": 24.16,
     "PB": 1.17,
     "DividendYield": 7.83,
-    "PS": 0,
     "Sector": ""
   },
   "6885.TW": {
     "PE": 0.0,
     "PB": 1.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6887.TW": {
     "PE": 9.49,
     "PB": 1.07,
     "DividendYield": 5.68,
-    "PS": 0,
     "Sector": ""
   },
   "6890.TW": {
     "PE": 11.64,
     "PB": 1.56,
     "DividendYield": 5.94,
-    "PS": 0,
     "Sector": ""
   },
   "6901.TW": {
     "PE": 0.0,
     "PB": 1.27,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6902.TW": {
     "PE": 50.72,
     "PB": 3.9,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6906.TW": {
     "PE": 35.89,
     "PB": 3.02,
     "DividendYield": 2.64,
-    "PS": 0,
     "Sector": ""
   },
   "6908.TW": {
     "PE": 26.49,
     "PB": 1.15,
     "DividendYield": 3.25,
-    "PS": 0,
     "Sector": ""
   },
   "6909.TW": {
     "PE": 51.09,
     "PB": 3.07,
     "DividendYield": 2.04,
-    "PS": 0,
     "Sector": ""
   },
   "6914.TW": {
     "PE": 16.04,
     "PB": 2.76,
     "DividendYield": 5.19,
-    "PS": 0,
     "Sector": ""
   },
   "6916.TW": {
     "PE": 0.0,
     "PB": 1.14,
     "DividendYield": 1.59,
-    "PS": 0,
     "Sector": ""
   },
   "6918.TW": {
     "PE": 15.1,
     "PB": 2.02,
     "DividendYield": 6.68,
-    "PS": 0,
     "Sector": ""
   },
   "6919.TW": {
     "PE": 0.0,
     "PB": 18.45,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6921.TW": {
     "PE": 212.35,
     "PB": 7.98,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6923.TW": {
     "PE": 24.87,
     "PB": 2.66,
     "DividendYield": 3.97,
-    "PS": 0,
     "Sector": ""
   },
   "6924.TW": {
     "PE": 13.99,
     "PB": 2.88,
     "DividendYield": 6.23,
-    "PS": 0,
     "Sector": ""
   },
   "6928.TW": {
     "PE": 0.0,
     "PB": 1.92,
     "DividendYield": 1.1,
-    "PS": 0,
     "Sector": ""
   },
   "6931.TW": {
     "PE": 37.27,
     "PB": 3.0,
     "DividendYield": 0.93,
-    "PS": 0,
     "Sector": ""
   },
   "6933.TW": {
     "PE": 35.39,
     "PB": 3.29,
     "DividendYield": 1.4,
-    "PS": 0,
     "Sector": ""
   },
   "6934.TW": {
     "PE": 0.0,
     "PB": 9.45,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6936.TW": {
     "PE": 19.94,
     "PB": 1.9,
     "DividendYield": 3.77,
-    "PS": 0,
     "Sector": ""
   },
   "6937.TW": {
     "PE": 94.52,
     "PB": 5.56,
     "DividendYield": 0.49,
-    "PS": 0,
     "Sector": ""
   },
   "6944.TW": {
     "PE": 30.4,
     "PB": 8.98,
     "DividendYield": 2.13,
-    "PS": 0,
     "Sector": ""
   },
   "6949.TW": {
     "PE": 0.0,
     "PB": 27.6,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6951.TW": {
     "PE": 14.8,
     "PB": 3.19,
     "DividendYield": 6.66,
-    "PS": 0,
     "Sector": ""
   },
   "6952.TW": {
     "PE": 0.0,
     "PB": 1.84,
     "DividendYield": 5.13,
-    "PS": 0,
     "Sector": ""
   },
   "6955.TW": {
     "PE": 40.68,
     "PB": 6.5,
     "DividendYield": 1.79,
-    "PS": 0,
     "Sector": ""
   },
   "6957.TW": {
     "PE": 15.35,
     "PB": 3.26,
     "DividendYield": 5.73,
-    "PS": 0,
     "Sector": ""
   },
   "6958.TW": {
     "PE": 0.0,
     "PB": 0.84,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6962.TW": {
     "PE": 11.73,
     "PB": 0.8,
     "DividendYield": 3.08,
-    "PS": 0,
     "Sector": ""
   },
   "6965.TW": {
     "PE": 25.57,
     "PB": 1.14,
     "DividendYield": 5.7,
-    "PS": 0,
     "Sector": ""
   },
   "6969.TW": {
     "PE": 0.0,
     "PB": 3.38,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "6988.TW": {
     "PE": 0.0,
     "PB": 0.97,
     "DividendYield": 3.04,
-    "PS": 0,
     "Sector": ""
   },
   "6994.TW": {
     "PE": 10.58,
     "PB": 1.87,
     "DividendYield": 4.54,
-    "PS": 0,
     "Sector": ""
   },
   "7610.TW": {
     "PE": 100.1,
     "PB": 15.15,
     "DividendYield": 0.5,
-    "PS": 0,
     "Sector": ""
   },
   "7631.TW": {
     "PE": 17.68,
     "PB": 2.66,
     "DividendYield": 3.37,
-    "PS": 0,
     "Sector": ""
   },
   "7705.TW": {
     "PE": 18.1,
     "PB": 1.48,
     "DividendYield": 4.6,
-    "PS": 0,
     "Sector": ""
   },
   "7711.TW": {
     "PE": 24.55,
     "PB": 4.07,
     "DividendYield": 3.27,
-    "PS": 0,
     "Sector": ""
   },
   "7721.TW": {
     "PE": 161.54,
     "PB": 3.59,
     "DividendYield": 1.19,
-    "PS": 0,
     "Sector": ""
   },
   "7722.TW": {
     "PE": 41.15,
     "PB": 1.93,
     "DividendYield": 0.65,
-    "PS": 0,
     "Sector": ""
   },
   "7730.TW": {
     "PE": 114.02,
     "PB": 6.93,
     "DividendYield": 0.8,
-    "PS": 0,
     "Sector": ""
   },
   "7732.TW": {
     "PE": 19.89,
     "PB": 1.22,
     "DividendYield": 4.29,
-    "PS": 0,
     "Sector": ""
   },
   "7736.TW": {
     "PE": 16.22,
     "PB": 1.67,
     "DividendYield": 4.73,
-    "PS": 0,
     "Sector": ""
   },
   "7740.TW": {
     "PE": 36.9,
     "PB": 7.4,
     "DividendYield": 1.89,
-    "PS": 0,
     "Sector": ""
   },
   "7749.TW": {
     "PE": 32.75,
     "PB": 4.53,
     "DividendYield": 1.92,
-    "PS": 0,
     "Sector": ""
   },
   "7750.TW": {
     "PE": 47.14,
     "PB": 9.46,
     "DividendYield": 1.07,
-    "PS": 0,
     "Sector": ""
   },
   "7765.TW": {
     "PE": 21.23,
     "PB": 4.52,
     "DividendYield": 4.24,
-    "PS": 0,
     "Sector": ""
   },
   "7769.TW": {
     "PE": 61.13,
     "PB": 13.02,
     "DividendYield": 1.55,
-    "PS": 0,
     "Sector": ""
   },
   "7780.TW": {
     "PE": 50.24,
     "PB": 3.14,
     "DividendYield": 3.32,
-    "PS": 0,
     "Sector": ""
   },
   "7786.TW": {
     "PE": 12.8,
     "PB": 2.3,
     "DividendYield": 1.55,
-    "PS": 0,
     "Sector": ""
   },
   "7788.TW": {
     "PE": 43.2,
     "PB": 1.97,
     "DividendYield": 1.37,
-    "PS": 0,
     "Sector": ""
   },
   "7791.TW": {
     "PE": 13.15,
     "PB": 1.46,
     "DividendYield": 5.75,
-    "PS": 0,
     "Sector": ""
   },
   "7795.TW": {
     "PE": 110.61,
     "PB": 15.33,
     "DividendYield": 0.63,
-    "PS": 0,
     "Sector": ""
   },
   "7799.TW": {
     "PE": 0.0,
     "PB": 5.25,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "7822.TW": {
     "PE": 120.36,
     "PB": 68.78,
     "DividendYield": 0.42,
-    "PS": 0,
     "Sector": ""
   },
   "7823.TW": {
     "PE": 0.0,
     "PB": 8.33,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8011.TW": {
     "PE": 15.85,
     "PB": 1.05,
     "DividendYield": 3.4,
-    "PS": 0,
     "Sector": ""
   },
   "8016.TW": {
     "PE": 13.73,
     "PB": 1.96,
     "DividendYield": 5.68,
-    "PS": 0,
     "Sector": ""
   },
   "8021.TW": {
     "PE": 115.88,
     "PB": 9.35,
     "DividendYield": 0.63,
-    "PS": 0,
     "Sector": ""
   },
   "8028.TW": {
     "PE": 46.06,
     "PB": 6.83,
     "DividendYield": 1.41,
-    "PS": 0,
     "Sector": ""
   },
   "8033.TW": {
     "PE": 228.07,
     "PB": 10.53,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8039.TW": {
     "PE": 67.16,
     "PB": 3.31,
     "DividendYield": 1.46,
-    "PS": 0,
     "Sector": ""
   },
   "8045.TW": {
     "PE": 113.44,
     "PB": 3.43,
     "DividendYield": 1.38,
-    "PS": 0,
     "Sector": ""
   },
   "8046.TW": {
     "PE": 221.59,
     "PB": 9.34,
     "DividendYield": 0.3,
-    "PS": 0,
     "Sector": ""
   },
   "8070.TW": {
     "PE": 46.67,
     "PB": 1.87,
     "DividendYield": 5.69,
-    "PS": 0,
     "Sector": ""
   },
   "8072.TW": {
     "PE": 26.04,
     "PB": 1.01,
     "DividendYield": 3.46,
-    "PS": 0,
     "Sector": ""
   },
   "8081.TW": {
     "PE": 13.0,
     "PB": 2.43,
     "DividendYield": 6.93,
-    "PS": 0,
     "Sector": ""
   },
   "8101.TW": {
     "PE": 0.0,
     "PB": 2.66,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8103.TW": {
     "PE": 20.09,
     "PB": 1.79,
     "DividendYield": 3.16,
-    "PS": 0,
     "Sector": ""
   },
   "8104.TW": {
     "PE": 0.0,
     "PB": 1.18,
     "DividendYield": 0.63,
-    "PS": 0,
     "Sector": ""
   },
   "8105.TW": {
     "PE": 0.0,
     "PB": 0.79,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8110.TW": {
     "PE": 20.12,
     "PB": 2.06,
     "DividendYield": 0.41,
-    "PS": 0,
     "Sector": ""
   },
   "8112.TW": {
     "PE": 16.82,
     "PB": 2.36,
     "DividendYield": 4.66,
-    "PS": 0,
     "Sector": ""
   },
   "8114.TW": {
     "PE": 9.09,
     "PB": 1.75,
     "DividendYield": 6.83,
-    "PS": 0,
     "Sector": ""
   },
   "8131.TW": {
     "PE": 44.71,
     "PB": 2.2,
     "DividendYield": 1.64,
-    "PS": 0,
     "Sector": ""
   },
   "8150.TW": {
     "PE": 86.48,
     "PB": 1.79,
     "DividendYield": 2.0,
-    "PS": 0,
     "Sector": ""
   },
   "8162.TW": {
     "PE": 27.45,
     "PB": 2.0,
     "DividendYield": 3.48,
-    "PS": 0,
     "Sector": ""
   },
   "8163.TW": {
     "PE": 53.43,
     "PB": 0.74,
     "DividendYield": 1.83,
-    "PS": 0,
     "Sector": ""
   },
   "8201.TW": {
     "PE": 0.0,
     "PB": 1.88,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8210.TW": {
     "PE": 31.34,
     "PB": 10.25,
     "DividendYield": 1.57,
-    "PS": 0,
     "Sector": ""
   },
   "8213.TW": {
     "PE": 15.37,
     "PB": 0.58,
     "DividendYield": 3.27,
-    "PS": 0,
     "Sector": ""
   },
   "8215.TW": {
     "PE": 0.0,
     "PB": 1.57,
     "DividendYield": 1.2,
-    "PS": 0,
     "Sector": ""
   },
   "8222.TW": {
     "PE": 62.0,
     "PB": 2.6,
     "DividendYield": 1.03,
-    "PS": 0,
     "Sector": ""
   },
   "8249.TW": {
     "PE": 15.33,
     "PB": 0.86,
     "DividendYield": 4.31,
-    "PS": 0,
     "Sector": ""
   },
   "8261.TW": {
     "PE": 18.83,
     "PB": 2.15,
     "DividendYield": 4.65,
-    "PS": 0,
     "Sector": ""
   },
   "8271.TW": {
     "PE": 24.52,
     "PB": 4.19,
     "DividendYield": 2.74,
-    "PS": 0,
     "Sector": ""
   },
   "8341.TW": {
     "PE": 16.99,
     "PB": 1.86,
     "DividendYield": 5.26,
-    "PS": 0,
     "Sector": ""
   },
   "8367.TW": {
     "PE": 11.43,
     "PB": 1.16,
     "DividendYield": 6.56,
-    "PS": 0,
     "Sector": ""
   },
   "8374.TW": {
     "PE": 0.0,
     "PB": 4.08,
     "DividendYield": 0.28,
-    "PS": 0,
     "Sector": ""
   },
   "8404.TW": {
     "PE": 12.45,
     "PB": 1.04,
     "DividendYield": 2.81,
-    "PS": 0,
     "Sector": ""
   },
   "8411.TW": {
     "PE": 0.0,
     "PB": 0.46,
     "DividendYield": 0.81,
-    "PS": 0,
     "Sector": ""
   },
   "8422.TW": {
     "PE": 22.73,
     "PB": 3.92,
     "DividendYield": 3.4,
-    "PS": 0,
     "Sector": ""
   },
   "8429.TW": {
     "PE": 56.92,
     "PB": 0.2,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8438.TW": {
     "PE": 42.52,
     "PB": 3.26,
     "DividendYield": 1.46,
-    "PS": 0,
     "Sector": ""
   },
   "8442.TW": {
     "PE": 12.4,
     "PB": 0.94,
     "DividendYield": 5.92,
-    "PS": 0,
     "Sector": ""
   },
   "8443.TW": {
     "PE": 0.0,
     "PB": 1.19,
     "DividendYield": 1.69,
-    "PS": 0,
     "Sector": ""
   },
   "8454.TW": {
     "PE": 16.12,
     "PB": 4.97,
     "DividendYield": 5.49,
-    "PS": 0,
     "Sector": ""
   },
   "8462.TW": {
     "PE": 16.55,
     "PB": 4.67,
     "DividendYield": 5.31,
-    "PS": 0,
     "Sector": ""
   },
   "8463.TW": {
     "PE": 12.14,
     "PB": 1.36,
     "DividendYield": 3.56,
-    "PS": 0,
     "Sector": ""
   },
   "8464.TW": {
     "PE": 15.8,
     "PB": 3.48,
     "DividendYield": 4.49,
-    "PS": 0,
     "Sector": ""
   },
   "8466.TW": {
     "PE": 0.0,
     "PB": 0.47,
     "DividendYield": 1.67,
-    "PS": 0,
     "Sector": ""
   },
   "8467.TW": {
     "PE": 14.57,
     "PB": 2.59,
     "DividendYield": 4.75,
-    "PS": 0,
     "Sector": ""
   },
   "8473.TW": {
     "PE": 14.53,
     "PB": 0.98,
     "DividendYield": 1.97,
-    "PS": 0,
     "Sector": ""
   },
   "8476.TW": {
     "PE": 35.75,
     "PB": 1.7,
     "DividendYield": 5.38,
-    "PS": 0,
     "Sector": ""
   },
   "8478.TW": {
     "PE": 12.23,
     "PB": 1.68,
     "DividendYield": 4.01,
-    "PS": 0,
     "Sector": ""
   },
   "8481.TW": {
     "PE": 12.89,
     "PB": 1.6,
     "DividendYield": 6.56,
-    "PS": 0,
     "Sector": ""
   },
   "8482.TW": {
     "PE": 21.65,
     "PB": 1.71,
     "DividendYield": 3.92,
-    "PS": 0,
     "Sector": ""
   },
   "8487.TW": {
     "PE": 19.73,
     "PB": 3.15,
     "DividendYield": 6.05,
-    "PS": 0,
     "Sector": ""
   },
   "8488.TW": {
     "PE": 0.0,
     "PB": 0.31,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8499.TW": {
     "PE": 26.9,
     "PB": 1.37,
     "DividendYield": 2.93,
-    "PS": 0,
     "Sector": ""
   },
   "8926.TW": {
     "PE": 17.98,
     "PB": 2.04,
     "DividendYield": 5.47,
-    "PS": 0,
     "Sector": ""
   },
   "8940.TW": {
     "PE": 32.18,
     "PB": 1.57,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "8996.TW": {
     "PE": 115.3,
     "PB": 22.92,
     "DividendYield": 0.44,
-    "PS": 0,
     "Sector": ""
   },
   "9802.TW": {
     "PE": 12.57,
     "PB": 1.11,
     "DividendYield": 6.72,
-    "PS": 0,
     "Sector": ""
   },
   "9902.TW": {
     "PE": 0.0,
     "PB": 1.16,
     "DividendYield": 2.11,
-    "PS": 0,
     "Sector": ""
   },
   "9904.TW": {
     "PE": 6.93,
     "PB": 0.59,
     "DividendYield": 5.99,
-    "PS": 0,
     "Sector": ""
   },
   "9905.TW": {
     "PE": 16.23,
     "PB": 0.79,
     "DividendYield": 5.21,
-    "PS": 0,
     "Sector": ""
   },
   "9906.TW": {
     "PE": 462.78,
     "PB": 2.8,
     "DividendYield": 0.19,
-    "PS": 0,
     "Sector": ""
   },
   "9907.TW": {
     "PE": 13.42,
     "PB": 1.35,
     "DividendYield": 6.47,
-    "PS": 0,
     "Sector": ""
   },
   "9908.TW": {
     "PE": 17.3,
     "PB": 1.06,
     "DividendYield": 4.03,
-    "PS": 0,
     "Sector": ""
   },
   "9910.TW": {
     "PE": 15.08,
     "PB": 2.94,
     "DividendYield": 5.33,
-    "PS": 0,
     "Sector": ""
   },
   "9911.TW": {
     "PE": 13.57,
     "PB": 2.69,
     "DividendYield": 5.9,
-    "PS": 0,
     "Sector": ""
   },
   "9912.TW": {
     "PE": 0.0,
     "PB": 1.77,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "9914.TW": {
     "PE": 14.81,
     "PB": 0.92,
     "DividendYield": 4.71,
-    "PS": 0,
     "Sector": ""
   },
   "9917.TW": {
     "PE": 17.13,
     "PB": 3.78,
     "DividendYield": 5.34,
-    "PS": 0,
     "Sector": ""
   },
   "9918.TW": {
     "PE": 26.93,
     "PB": 2.33,
     "DividendYield": 3.46,
-    "PS": 0,
     "Sector": ""
   },
   "9919.TW": {
     "PE": 0.0,
     "PB": 1.41,
     "DividendYield": 1.32,
-    "PS": 0,
     "Sector": ""
   },
   "9921.TW": {
     "PE": 36.58,
     "PB": 0.77,
     "DividendYield": 2.67,
-    "PS": 0,
     "Sector": ""
   },
   "9924.TW": {
     "PE": 12.8,
     "PB": 0.97,
     "DividendYield": 5.52,
-    "PS": 0,
     "Sector": ""
   },
   "9925.TW": {
     "PE": 17.19,
     "PB": 1.2,
     "DividendYield": 4.91,
-    "PS": 0,
     "Sector": ""
   },
   "9926.TW": {
     "PE": 18.6,
     "PB": 2.12,
     "DividendYield": 4.21,
-    "PS": 0,
     "Sector": ""
   },
   "9927.TW": {
     "PE": 12.65,
     "PB": 1.47,
     "DividendYield": 7.27,
-    "PS": 0,
     "Sector": ""
   },
   "9928.TW": {
     "PE": 0.0,
     "PB": 0.59,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "9929.TW": {
     "PE": 0.0,
     "PB": 1.58,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "9930.TW": {
     "PE": 14.31,
     "PB": 2.68,
     "DividendYield": 5.63,
-    "PS": 0,
     "Sector": ""
   },
   "9931.TW": {
     "PE": 14.45,
     "PB": 1.29,
     "DividendYield": 5.08,
-    "PS": 0,
     "Sector": ""
   },
   "9933.TW": {
     "PE": 18.7,
     "PB": 1.56,
     "DividendYield": 2.83,
-    "PS": 0,
     "Sector": ""
   },
   "9934.TW": {
     "PE": 0.0,
     "PB": 0.63,
     "DividendYield": 3.76,
-    "PS": 0,
     "Sector": ""
   },
   "9935.TW": {
     "PE": 11.61,
     "PB": 1.27,
     "DividendYield": 6.27,
-    "PS": 0,
     "Sector": ""
   },
   "9937.TW": {
     "PE": 24.03,
     "PB": 3.01,
     "DividendYield": 3.88,
-    "PS": 0,
     "Sector": ""
   },
   "9938.TW": {
     "PE": 11.07,
     "PB": 1.01,
     "DividendYield": 6.61,
-    "PS": 0,
     "Sector": ""
   },
   "9939.TW": {
     "PE": 12.31,
     "PB": 1.65,
     "DividendYield": 5.54,
-    "PS": 0,
     "Sector": ""
   },
   "9940.TW": {
     "PE": 71.07,
     "PB": 1.14,
     "DividendYield": 3.02,
-    "PS": 0,
     "Sector": ""
   },
   "9941.TW": {
     "PE": 10.86,
     "PB": 1.25,
     "DividendYield": 6.12,
-    "PS": 0,
     "Sector": ""
   },
   "9942.TW": {
     "PE": 14.34,
     "PB": 2.27,
     "DividendYield": 5.98,
-    "PS": 0,
     "Sector": ""
   },
   "9943.TW": {
     "PE": 15.75,
     "PB": 1.83,
     "DividendYield": 6.09,
-    "PS": 0,
     "Sector": ""
   },
   "9944.TW": {
     "PE": 0.0,
     "PB": 0.51,
     "DividendYield": 1.83,
-    "PS": 0,
     "Sector": ""
   },
   "9945.TW": {
     "PE": 6.77,
     "PB": 0.72,
     "DividendYield": 4.3,
-    "PS": 0,
     "Sector": ""
   },
   "9946.TW": {
     "PE": 11.28,
     "PB": 0.83,
     "DividendYield": 7.99,
-    "PS": 0,
     "Sector": ""
   },
   "9955.TW": {
     "PE": 57.31,
     "PB": 2.62,
     "DividendYield": 0.0,
-    "PS": 0,
     "Sector": ""
   },
   "9958.TW": {
     "PE": 16.02,
     "PB": 2.38,
     "DividendYield": 4.21,
-    "PS": 0,
     "Sector": ""
   }
 }

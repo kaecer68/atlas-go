@@ -2160,7 +2160,7 @@
       "fields": [
         "PE float64",
         "PB float64",
-        "PS float64",
+        "PS *float64",
         "DividendYield float64",
         "Sector string"
       ],

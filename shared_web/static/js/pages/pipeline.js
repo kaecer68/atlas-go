@@ -336,9 +336,17 @@ export function renderPipeline(data, showAll, sessionId, showScreened) {
     ${paginationControls}
   ` : '';
 
-  const emptyMsg = !items.length ? (finalOutputs === 0
+  // FIX-2: when the pipeline has zero items AND every screened-out candidate
+  // was rejected by the momentum filter, surface the real reason instead of
+  // the generic control-layer message.
+  const momentumRejects = screenedItems.filter(s => (s.criterion || '').indexOf('momentum') !== -1);
+  const allRejectedByMomentum = momentumRejects.length > 0 && momentumRejects.length === screenedItems.length;
+  const momentumThreshold = allRejectedByMomentum ? (momentumRejects[0].threshold != null ? String(momentumRejects[0].threshold) : '-') : '';
+  const emptyMsg = !items.length ? (allRejectedByMomentum
+    ? `全部 ${screenedItems.length} 檔候選均因「20 日動能（momentum_20d_min，門檻 ${escapeHtml(momentumThreshold)}）」被篩選層排除，故本場次無推薦標的。可勾選「顯示被篩選層排除的標的」查看明細；市場動能回復後將自動恢復推薦。`
+    : (finalOutputs === 0
     ? '本場次經控制層審核後，沒有任何標的被放行進入模擬投組。原因可能是風控長強制阻擋，或所有推薦均被投資長過濾。'
-    : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`) : '';
+    : `控制層放行 ${finalOutputs} 筆，但投資管線暫無詳細標的資料（可能該場次尚未載入管線數據）。`)) : '';
 
   const fallbackBanner = data.is_fallback_session ? `
     <div style="margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">

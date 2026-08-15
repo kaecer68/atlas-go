@@ -124,10 +124,11 @@ func (s *Service) Store() RollingSampleStore { return s.store }
 // must gate on Service.LatestAssessment().EligibleForAutomation().
 // See spec §9.5 / CF-INV-13.
 //
-// Note: refreshIfStale runs Score with an empty history today, so
-// until Refresh has populated the store, QualityScore reflects
-// "today's snapshot with zero prior samples" (Z=raw for non-zero
-// values). See Task 4 report §Concerns.
+// Note: refreshIfStale threads the rolling-store history through
+// Score (same path as LatestDaily), so QualityScore reflects
+// "today's snapshot against prior samples" once Refresh has
+// populated the store; before that, history is empty and every
+// Z-score is pinned to 0 (neutral).
 func (s *Service) QualityScore() float64 {
 	return resonanceToScore(s.refreshIfStale())
 }
@@ -163,10 +164,10 @@ func resonanceToScore(r ResonanceResult) float64 {
 // outages.
 //
 // BK-15: refreshIfStale no longer pushes into an in-memory rolling
-// window — Extract now delegates to Score(history=nil), so the
-// cached resonance reflects "today's snapshot with empty prior
-// samples". This is a known limitation tracked in the Task 4
-// report §Concerns.
+// window — it delegates to extractAsOf, which reads prior samples
+// from the rolling store (strictly before the as-of date, spec §8.4)
+// and runs Score against them. With an unpopulated store the history
+// is empty and every Z-score is pinned to 0 (neutral).
 func (s *Service) refreshIfStale() ResonanceResult {
 	s.mu.RLock()
 	if !s.cachedAt.IsZero() && time.Since(s.cachedAt) < QualityCacheTTL {
@@ -189,7 +190,15 @@ func (s *Service) refreshIfStale() ResonanceResult {
 	if err != nil {
 		return s.cachedResonance
 	}
-	forces := s.extractor.Extract(snap)
+	// FIX-4: thread the rolling-store history through scoring so Z-scores are
+	// computed against real prior samples instead of an empty window (which
+	// pinned every force to Z=0 / raw and made 品質 read 0.00). Same
+	// strictly-before-as-of path as LatestDaily/extractAsOf (spec §8.4).
+	derivedDate := time.Unix(snap.RecordedAt, 0).Format("2006-01-02")
+	forces, err := s.extractAsOf(ctx, snap, derivedDate)
+	if err != nil {
+		return s.cachedResonance
+	}
 	s.cachedResonance = ComputeResonance(forces)
 	s.cachedAt = time.Now()
 	return s.cachedResonance

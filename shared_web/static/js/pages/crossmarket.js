@@ -264,8 +264,8 @@ function renderStaleBanner(status) {
 
   const html = `<div class="cm-stale-banner" style="background:color-mix(in srgb, var(--status-stale) 14%, transparent);border:1px solid color-mix(in srgb, var(--status-stale) 30%, transparent);border-radius:8px;padding:var(--space-md);margin-bottom:var(--space-md)">
     <strong style="color:var(--status-stale)">⏱ 部分美國市場資料為快取值</strong>
-    <div class="cm-stale-list" style="font-size:var(--text-sm);color:var(--text);margin-top:6px">以下通道回傳快取（電路熔斷器開啟或 fallback），數值仍顯示但可能過時: ${staleList}</div>
-    <div class="cm-stale-recovery" style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">系統正在使用 CB 開啟前的最後一筆快取，等待通道恢復後將自動更新為新鮮資料。</div>
+    <div class="cm-stale-list" style="font-size:var(--text-sm);color:var(--text);margin-top:6px">以下通道回傳快取（資料源長時間未更新或 fallback），數值仍顯示但可能過時: ${staleList}</div>
+    <div class="cm-stale-recovery" style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">系統正在使用資料源長時間未更新前的最後一筆快取，等待通道恢復後將自動更新為新鮮資料。</div>
   </div>`;
 
   const firstGrid = document.querySelector('#cm-us-indices');

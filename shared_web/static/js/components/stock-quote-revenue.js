@@ -56,6 +56,9 @@ export function renderRevenue(state, revenueResult) {
   const revenue = isValidNumber(data.revenue) ? data.revenue : (isValidNumber(data.value) ? data.value : null);
   const yoy = isValidNumber(data.yoy_pct) ? data.yoy_pct : (isValidNumber(data.change_pct) ? data.change_pct : null);
   const mom = isValidNumber(data.mom_pct) ? data.mom_pct : null;
+  // FIX-3: MoM for January is 0 by design (no prior-month reading within
+  // the dataset) — surface 不適用 instead of a misleading 0.0%.
+  const isJanuary = data.month === 1;
   const symbol = data.symbol ? escapeHtml(data.symbol) : '';
 
   const revenueDisplay = revenue !== null
@@ -82,8 +85,8 @@ export function renderRevenue(state, revenueResult) {
       </div>
       <div class="sq-tech-row">
         <div class="sq-tech-row__label">月增率（MoM）</div>
-        <div class="sq-tech-row__value ${pctColorClass(mom)}">${formatSignedPct(mom)}</div>
-        <div class="sq-tech-row__hint ${pctColorClass(mom)}">${mom !== null && mom > 0 ? '月增' : mom !== null && mom < 0 ? '月減' : '—'}</div>
+        <div class="sq-tech-row__value ${isJanuary ? 'sq-price-neutral' : pctColorClass(mom)}">${isJanuary ? '不適用' : formatSignedPct(mom)}</div>
+        <div class="sq-tech-row__hint sq-price-neutral">${isJanuary ? '1 月無上月可比' : (mom !== null && mom > 0 ? '月增' : mom !== null && mom < 0 ? '月減' : '—')}</div>
       </div>
     </div>
     ${isStructuralOrder ? `<div class="sq-revenue-note">年增率超過 ${STRUCTURAL_ORDER_YOY_THRESHOLD}%，屬結構性訂單信號（對位 SK-31 §4 月頻對位）。</div>` : ''}

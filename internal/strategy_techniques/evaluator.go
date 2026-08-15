@@ -65,8 +65,11 @@ func (e *ConditionEvaluator) EvaluateReturns(
 		}
 		totalTests++
 
-		current := snapshots[i].TAIEX.Value
-		forward := snapshots[i+forwardLookback].TAIEX.Value
+		// Missing TAIEX readings (e.g. taiex_index channel failures) must not
+		// silently drop the sample: resolve the most recent valid reading at
+		// or before the trigger/forward day instead of skipping.
+		current := resolveTAIEXValue(snapshots, i)
+		forward := resolveTAIEXValue(snapshots, i+forwardLookback)
 		if current == 0 || forward == 0 {
 			continue
 		}
@@ -89,6 +92,19 @@ func (e *ConditionEvaluator) EvaluateReturns(
 	}
 
 	return strategyReturns, taiexReturns, totalTests
+}
+
+// resolveTAIEXValue returns the most recent valid TAIEX reading at or before
+// index i in snapshots (walking backwards when the taiex_index channel failed
+// on a given day and the snapshot has no reading). Returns 0 when no valid
+// reading exists up to i.
+func resolveTAIEXValue(snapshots []marketdata.MacroDataSnapshot, i int) float64 {
+	for j := i; j >= 0; j-- {
+		if v := snapshots[j].TAIEX.Value; v != 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 // Evaluate checks all conditions of a strategy against each historical

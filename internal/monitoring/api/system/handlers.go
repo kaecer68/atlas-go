@@ -385,7 +385,9 @@ func convertRSITwSubIndicators(result retail.RSITwSnapshot) *domain.RSITwSubIndi
 		}
 	}
 	if v, ok := subs["a5_pcr_proxy"]; ok {
-		catA.WeeklyPCR = v.ZScore
+		// FIX-5: WeeklyPCR 是實際 PCR 比值（v.Value），不是映射後的分數
+		// （v.ZScore 0.9/0.7/0.5/0.1），否則散戶情緒頁顯示的數字會誤導。
+		catA.WeeklyPCR = v.Value
 		if v.IsFallback {
 			catA.IsFallback = true
 			catA.FallbackFields = append(catA.FallbackFields, "a5_pcr_proxy")

@@ -22,12 +22,18 @@ const (
 )
 
 // FundamentalData holds per-symbol fundamentals.
+//
+// FIX-7: PS is a *float64 with omitempty so "PS data missing" (field absent
+// in fundamentals.json → nil) is distinguishable from a real PS reading.
+// Previously 1070 筆 PS=0 were stuffed into the data file and serialized as
+// 0.0, misleading consumers into thinking the stock traded at PS=0. A nil PS
+// is omitted from API responses and treated as missing by consumers.
 type FundamentalData struct {
-	PE            float64 `json:"PE"`
-	PB            float64 `json:"PB"`
-	PS            float64 `json:"PS"` // Price-to-Sales ratio
-	DividendYield float64 `json:"DividendYield"`
-	Sector        string  `json:"Sector"`
+	PE            float64  `json:"PE"`
+	PB            float64  `json:"PB"`
+	PS            *float64 `json:"PS,omitempty"` // Price-to-Sales ratio; nil = 缺資料
+	DividendYield float64  `json:"DividendYield"`
+	Sector        string   `json:"Sector"`
 }
 
 // FundamentalProvider loads fundamental metrics for symbols.
