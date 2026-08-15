@@ -1,7 +1,7 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`documentation-standard.md`](documentation-standard.md) 配套使用。
-> **最後驗證**：2026-08-17（docs/ 治理瘦身：226 → 158 tracked 檔）
+> **最後驗證**：2026-08-17（docs/ 治理瘦身：226 → 161 tracked 檔）
 > **原則**：`docs/` 路徑均為相對於 repo root 的完整路徑且必須存在；`.omo/` 僅標示私有工作目錄的承接位置，不保證新 clone 中存在。
 
 ---
@@ -28,7 +28,7 @@
 
 ### 🧹 文件瘦身治理（2026-08-17）
 
-2026-08-17 起，`docs/` 只保留 canonical 知識，tracked 檔由 **226 減至 158**；歷史、調查、manifest 與執行計畫不再放在公開 tree。
+2026-08-17 起，`docs/` 只保留 canonical 知識，tracked 檔由 **226 減至 161**；歷史、調查、manifest 與執行計畫不再放在公開 tree。
 
 | 原公開位置 | 處理 |
 |---|---|
@@ -264,4 +264,4 @@
 
 > **維護者**：以 `docs/documentation-standard.md` 為治理規範。最後更新：2026-08-17。
 >
-> **本次更新**：補記 `docs/` 226→158 tracked 瘦身、已解散目錄、移出／刪除項、私有 `.omo/` 承接位置，以及 3 個 archive distill 的 canonical 對照。
+> **本次更新**：補記 `docs/` 226→161 tracked 瘦身、已解散目錄、移出／刪除項、私有 `.omo/` 承接位置，以及 3 個 archive distill 的 canonical 對照。

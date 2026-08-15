@@ -94,6 +94,6 @@ echo "In progress / other:        $IN_PROGRESS_COUNT"
 if [[ $STALE_COUNT -gt 0 ]]; then
     echo ""
     echo "⚠️  $STALE_COUNT 個 stale manifest 需要處理。"
-    echo "   手動處理: 歸檔 → docs/archive/ 或 promote → docs/specs/ 或 rm"
+    echo "   手動處理: 移入 .omo/audit/（私有）或 promote → docs/specs/ 或 rm"
     echo "   自動處理: $0 --stale-days $STALE_DAYS --auto-delete"
 fi

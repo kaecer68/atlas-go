@@ -10,7 +10,7 @@
 // storage-free.
 //
 // MCP tool layer (event_flow_prediction output) is deferred — see
-// .omo/audit/2026-07-14-atlas-stage5-detector-plan.md "Deferred" section.
+// 歷史 stage5 detector plan "Deferred" section（已移出公開 docs）。
 package narrative
 
 import (

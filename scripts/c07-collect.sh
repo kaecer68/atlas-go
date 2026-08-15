@@ -20,7 +20,7 @@
 #   - Any curl/HTTP failure → exit 1 (alert store will still record via atlas).
 #   - jq missing or malformed obs log → exit 2 (operator must fix).
 #
-# See: docs/specs/experimental-feature-launch-gate-spec.md §2.3 and PR #1201.
+# See: docs/specs/experimental-feature-launch-gate-spec.md（Reference Implementations）and PR #1201.
 
 set -uo pipefail
 

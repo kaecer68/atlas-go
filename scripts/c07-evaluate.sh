@@ -22,7 +22,7 @@
 #        (the underlying c07-day-evaluator already returns 1)
 #   - 2: missing obs log / parse failure
 #
-# See: docs/specs/experimental-feature-launch-gate-spec.md §2.3, §3 and PR #1201.
+# See: docs/specs/experimental-feature-launch-gate-spec.md（Reference Implementations）and PR #1201.
 
 set -uo pipefail
 
@@ -115,7 +115,7 @@ set -e
 if [ "${RC}" -eq 0 ]; then
     echo "[c07-evaluate ${TODAY}] PASS — see ${REPORT_FILE}"
 elif [ "${RC}" -eq 1 ]; then
-    echo "[c07-evaluate ${TODAY}] FAIL (Day ${DAY_NUMBER} criteria) — see ${REPORT_FILE}; per runbook §4 consider rollback" >&2
+    echo "[c07-evaluate ${TODAY}] FAIL (Day ${DAY_NUMBER} criteria) — see ${REPORT_FILE}; per launch-gate spec consider rollback" >&2
 else
     echo "[c07-evaluate ${TODAY}] evaluator exit=${RC}" >&2
 fi

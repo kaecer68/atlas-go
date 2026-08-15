@@ -31,9 +31,7 @@ find . \
     -not -path '*/.omo/*' \
     -not -name 'CHANGELOG.md' \
     -not -path '*/docs/briefs/*' \
-    -not -path '*/docs/archive/*' \
     -not -path '*/docs/handoff/*' \
-    -not -path '*/docs/investigations/*' \
     -not -path '*/docs/audit/*' \
     -not -path '*/.claude/*' \
     -not -path '*/.superpowers/*' \
