@@ -247,3 +247,4 @@ internal/narrative/testdata/*.actual.json
 docs/investigations/
 docs/work/
 docs/archive/
+.prime/
