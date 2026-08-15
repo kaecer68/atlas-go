@@ -28,7 +28,12 @@ const basePath = (typeof window !== 'undefined')
 export function switchPage(id, silent) {
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
-  if (pageEl.classList.contains('active')) return;
+  // Skip redundant work only when the page is already active AND its data was
+  // already loaded. Without the pageLoadStatus guard, the initial switchPage()
+  // for the server-rendered active page (page-home) would early-return here and
+  // never run loadPageData(id) — leaving the home scheduler status panel stuck
+  // on its static "載入中…" state (the /api/scheduler/status fetch never fired).
+  if (pageEl.classList.contains('active') && pageLoadStatus[id]) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
