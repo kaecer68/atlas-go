@@ -60,8 +60,11 @@ test('home page renders without developer-facing strings', async ({ page }) => {
     expect(bodyText, `snake_case pattern ${pattern} leaked into home`).not.toMatch(pattern);
   }
 
-  // No admin role link in the investor portal
-  expect(bodyText).not.toContain('管理者');
+  // Role switcher (8ebfe558, 2026-08-15): investor portal top-right has a
+  // 管理者 switch link (symmetric with admin). The /admin/ route still
+  // enforces backend auth — the link is navigation only.
+  await expect(page.locator('.role-switcher a[href="/admin/"]')).toBeVisible();
+  expect(bodyText).toContain('管理者');
 
   // Core sections are rendered by home.js after the redesign
   // (home-event-calendar 已移至 retail_sentiment 頁，home 不再有)
