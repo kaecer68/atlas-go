@@ -68,6 +68,33 @@
 - **分支與 PR 工作流（強制）**：任何程式碼變更 MUST 走分支 → push → PR → merge 流程。禁止直接 push 到 `main`。分支命名慣例：`fix/YYYYMMDD-<desc>` / `feat/YYYYMMDD-<desc>`（日期前綴防止與其他工作區分支混淆）。push 後 MUST 立即執行 `gh pr create`，PR body 必含 Summary / Root Cause / Verification 三段；不可停留在「compare & pull request」未完成狀態。
 - **測試同步紀律（強制）**：修改任何 `.go` 檔案的行為時，MUST 在同一個 commit 中更新對應的 `*_test.go`。不可「先 commit 功能，測試晚點補」— 這是 CI 反覆往返的根因。改 code 前先跑受影響的測試確認 baseline，改完立刻跑測試確認紅燈，修正 assertion 後一起 commit。
 
+## ⚠️ ACI-first 強制規範（2026-08-15 定案，防 AI 幻覺）
+
+> **本專案裝有 4 套 ACI 工具，agent 必須優先使用，禁止裸 grep 當主要探索手段。**
+> 背景：專案半年來功能齊全但脆弱，主因之一是 agent 不清楚全局就 grep 亂改。
+
+**強制順序（任何「找/查/改」前先走 ACI）**：
+
+| 任務 | 工具 | 範例 |
+|---|---|---|
+| 全局架構速覽 | codegraph `explore` / gitnexus context | `codegraph explore "capital flow z-score"` |
+| 找符號定義/源碼 | codegraph `node` | `codegraph node renderSevenForceBoard` |
+| 呼叫鏈/影響面 | codegraph `node` trail / gitnexus impact | `codegraph node ZScoreCalculator` |
+| 執行流程 | gitnexus `gitnexus://repo/atlas-go/process/{name}` | 追 execution flow |
+| 內部系統狀態 | atlas-mcp（`audit_state`、`system_get_health`、`mcp_get_*`） | 查運行時而非猜 |
+| 記憶/決策歷史 | codebase-memory `search_graph` / `trace_path` | `codebase-memory-mcp cli search_graph '{"query":"..."}'` |
+| 程式碼語意搜尋 | gitnexus `query` / codegraph `query` | `gitnexus query "admin route"` |
+
+**禁止**：
+- ❌ 用 `grep -r` 掃全 repo 找符號（改用 `codegraph node` / `gitnexus query`）
+- ❌ 不知道影響面就改碼（先 `codegraph node` 看 Called-by / codegraph 或 gitnexus impact）
+- ❌ 不清楚運行狀態就猜（先用 atlas-mcp 查）
+
+**工具就緒檢查**：
+- gitnexus: `gitnexus status`（stale 則 `gitnexus analyze`）
+- codegraph: `codegraph status`（.codegraph/ 存在即可用）
+- atlas-mcp: `bin/atlas-mcp`（backend 需啟動）
+
 ## 高頻陷阱速查
 
 > 完整列表見 [`docs/reference/traps.md`](docs/reference/traps.md)。
@@ -81,3 +108,48 @@
 | db migration 路徑 | `runMigrations()` 使用 `file://` + 絕對路徑 |
 | PR merge 後留分支 | 每次 merge 後必讀 `docs/multi-cli-protocol.md` §Post-merge cleanup，自動刪除遠端與本地 branch |
 | Agent 危險操作 | 執行任何改狀態/讀密碼/觸及 production 的指令前，必須先跑 `./agent-guard --check '<command>'` |
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **atlas-go** (2192 symbols, 42235 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/atlas-go/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/atlas-go/clusters` | All functional areas |
+| `gitnexus://repo/atlas-go/processes` | All execution flows |
+| `gitnexus://repo/atlas-go/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->
