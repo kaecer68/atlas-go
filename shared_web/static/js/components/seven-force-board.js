@@ -75,6 +75,22 @@ function rawValueOf(force) {
   return null;
 }
 
+// E07 unit → 中文 suffix/title map (spec §7 / CF-INV-01)。force.unit 缺失
+// 或未收錄時 fallback 舊行為「億」（原始買賣超），向後相容。
+const UNIT_META = {
+  contracts: { suffix: ' 口', title: '原始口數（口）' },
+  hundred_million_shares: { suffix: ' 億股', title: '原始買賣超（億股）' },
+  pct: { suffix: '%', title: '原始變化（%）' },
+  pct_composite: { suffix: '%', title: '原始變化（%）' },
+  twd: { suffix: ' 元', title: '原始買賣超（元）' },
+};
+const UNIT_META_DEFAULT = { suffix: ' 億', title: '原始買賣超（億）' };
+
+function unitMetaOf(force) {
+  const unit = force.unit || force.Unit || '';
+  return UNIT_META[unit] || UNIT_META_DEFAULT;
+}
+
 function forceCard(force) {
   const name = nameOf(force);
   const available = dataAvailableOf(force);
@@ -93,8 +109,9 @@ function forceCard(force) {
         : '觀望';
   const strength = (available && zScore !== null) ? Math.min(Math.abs(zScore) / 3, 1) : 0;
   const strengthPct = Math.round(strength * 100);
+  const unitMeta = unitMetaOf(force);
   const valueText = (available && rawValue !== null)
-    ? fmtSafeSigned(rawValue, { decimals: 1, suffix: ' 億', forceSign: true })
+    ? fmtSafeSigned(rawValue, { decimals: 1, suffix: unitMeta.suffix, forceSign: true })
     : '—';
   const zText = (available && zScore !== null) ? fmtSafeNumber(zScore, { decimals: 2 }) : '—';
   const label = FORCE_LABELS[name] || name;
@@ -105,7 +122,7 @@ function forceCard(force) {
         <span class="force-card__name">${escapeHtml(label)}</span>
         <span class="force-card__direction force-card__direction--${tone}${available ? '' : ' force-card__direction--unavailable'}">${escapeHtml(directionText)}</span>
       </div>
-      <div class="force-card__value" title="原始買賣超（億）">${valueText}</div>
+      <div class="force-card__value" title="${unitMeta.title}">${valueText}</div>
       <div class="force-card__strength">
         <div class="force-card__strength-bar" style="width: ${strengthPct}%" aria-label="強度 ${strengthPct}%"></div>
       </div>

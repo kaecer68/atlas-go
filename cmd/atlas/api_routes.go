@@ -136,6 +136,14 @@ func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsColle
 	mux.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/client/", http.StatusMovedPermanently)
 	})
+	// Back-compat: legacy /admin_web and /admin_web/ redirect to /admin/ so
+	// old bookmarks and deep links keep working (D1).
+	mux.HandleFunc("/admin_web", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/admin_web/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+	})
 	mux.Handle("/admin/", http.StripPrefix("/admin/", staticHandler(adminFS)))
 	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(clientFS)))
 

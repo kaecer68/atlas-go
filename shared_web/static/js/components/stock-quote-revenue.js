@@ -53,8 +53,8 @@ export function renderRevenue(state, revenueResult) {
   }
 
   const data = revenueResult.data;
-  const revenue = isValidNumber(data.value) ? data.value : null;
-  const yoy = isValidNumber(data.change_pct) ? data.change_pct : null;
+  const revenue = isValidNumber(data.revenue) ? data.revenue : (isValidNumber(data.value) ? data.value : null);
+  const yoy = isValidNumber(data.yoy_pct) ? data.yoy_pct : (isValidNumber(data.change_pct) ? data.change_pct : null);
   const mom = isValidNumber(data.mom_pct) ? data.mom_pct : null;
   const symbol = data.symbol ? escapeHtml(data.symbol) : '';
 

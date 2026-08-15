@@ -228,16 +228,24 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 		if seen[id] {
 			continue
 		}
-		// P2-3: channels in the registry without a static builder are
-		// "inactive" (no active health probe), not "unknown".
+		// P2-3: channels in the registry without a static builder used to be
+		// hardcoded "inactive", which misled the admin page into showing every
+		// registered channel as disabled even when 17/18 had a live fetcher.
+		// Resolve the real health from the Gateway health store instead; the
+		// health probe fills it on the next refresh.
+		status, updated, lastError := s.resolveStatusFromStore(id, "", "")
 		c := DataChannel{
-			ChannelID: id,
-			Country:   "台灣",
-			Platform:  "registered channel",
-			APIFormat: "n/a",
-			Path:      "(see ChannelRegistry)",
-			Status:    "inactive",
-			Enabled:   true,
+			ChannelID:     id,
+			Country:       "台灣",
+			Platform:      "registered channel",
+			APIFormat:     "n/a",
+			Path:          "(see ChannelRegistry)",
+			Status:        status,
+			StatusText:    statusText(status),
+			UpdatedAt:     updated,
+			LastError:     lastError,
+			ErrorSeverity: classifyErrorSeverity(lastError),
+			Enabled:       true,
 		}
 		channels = append(channels, mergeEnabled(c))
 	}

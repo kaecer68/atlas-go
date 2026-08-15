@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,5 +48,46 @@ func TestGetAllChannelStatuses_IncludesRegisteredFallback(t *testing.T) {
 		if c.ChannelID == "taifex_institutional" && !strings.Contains(c.Platform, "registered") {
 			t.Errorf("fallback platform=%q, expected marker", c.Platform)
 		}
+	}
+}
+
+// TestGetAllChannelStatuses_FallbackResolvesHealthFromStore verifies the
+// fallback no longer hardcodes "inactive": a registered channel with a live
+// fetcher must surface its real health-store status instead of looking disabled.
+func TestGetAllChannelStatuses_FallbackResolvesHealthFromStore(t *testing.T) {
+	dir := t.TempDir()
+	store := apigateway.NewChannelHealthStoreWithPool(dir, nil)
+	if err := store.Record("taifex_institutional", "ok", ""); err != nil {
+		t.Fatalf("record health: %v", err)
+	}
+	if err := store.Record("government_flow", "error", "connection refused"); err != nil {
+		t.Fatalf("record health: %v", err)
+	}
+
+	svc := &DataChannelService{
+		WorkDir:              dir,
+		healthStore:          store,
+		RegisteredChannelIDs: []string{"taifex_institutional", "government_flow"},
+	}
+	channels, err := svc.GetAllChannelStatuses(context.TODO())
+	if err != nil {
+		t.Fatalf("list channels: %v", err)
+	}
+	byID := make(map[string]DataChannel, len(channels))
+	for _, c := range channels {
+		byID[c.ChannelID] = c
+	}
+
+	if got := byID["taifex_institutional"].Status; got != "ok" {
+		t.Errorf("taifex_institutional status = %q, want ok (from health store)", got)
+	}
+	if got := byID["taifex_institutional"].StatusText; got != "正常" {
+		t.Errorf("taifex_institutional status_text = %q, want 正常", got)
+	}
+	if got := byID["government_flow"].Status; got != "error" {
+		t.Errorf("government_flow status = %q, want error (from health store)", got)
+	}
+	if got := byID["government_flow"].LastError; !strings.Contains(got, "connection refused") {
+		t.Errorf("government_flow last_error = %q, want to contain connection refused", got)
 	}
 }

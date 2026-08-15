@@ -23,6 +23,12 @@ func TestTAIEXIndexProvider_Name(t *testing.T) {
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_Success(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+	// Pin the fallback clock to a trading day (2026-07-29 is a Wednesday) so the
+	// weekend/holiday gate does not redirect to TWSE regardless of wall clock.
+	resetTAIEXTwseTargetDate(t)
+
 	mockResponse := `{
 		"chart": {
 			"result": [
@@ -210,6 +216,59 @@ func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "taiex_index") {
 		t.Errorf("expected wrapped taiex_index error, got %v", err)
+	}
+}
+
+func TestTAIEXIndexProvider_FetchSnapshot_WeekendBypassesYahoo(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	// 2026-07-25 is a Saturday. The weekend gate must bypass Yahoo and serve the
+	// previous trading day (Friday 2026-07-24) from TWSE without tripping the
+	// channel circuit breaker.
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 25, 3, 0, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+
+	yahooCalled := false
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		yahooCalled = true
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	// TWSE returns Friday's report, matching the rolled-back request date.
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, "date=20260724") {
+			t.Errorf("expected rolled-back TWSE date 20260724, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月24日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	snap, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot() on weekend should serve previous trading day, got error = %v", err)
+	}
+	if yahooCalled {
+		t.Error("weekend FetchSnapshot should bypass Yahoo entirely")
+	}
+	if snap.TAIEX.Value != 43654.84 {
+		t.Errorf("Value = %v, want 43654.84 (previous trading day close)", snap.TAIEX.Value)
+	}
+	if snap.TAIEX.ChangePct != -2.67 {
+		t.Errorf("ChangePct = %v, want -2.67", snap.TAIEX.ChangePct)
 	}
 }
 

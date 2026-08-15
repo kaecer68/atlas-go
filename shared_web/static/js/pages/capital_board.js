@@ -407,30 +407,58 @@ export const template = `
 function aggregateForces(data) {
   const forces = Array.isArray(data && data.forces) ? data.forces : [];
   if (!forces.length) return null;
+
+  // E07 dimension_role 分流：主體（官方法人 3 + 行為代理 2）與主體同級計數；
+  // 訊號層（期貨 positioning_indicator / TSM ADR cross_market_signal）只供
+  // 方向參考，不與主體同級計數（spec §6 / CF-INV-01）。
+  // 期貨 OI 的趨勢優先取 foreign 的 leading_trend（fallback 自身 trend）。
+  const foreign = forces.find(function (f) { return (f.force || f.Force) === 'foreign'; });
+  const leadingTrend = foreign
+    ? (foreign.leading_trend || foreign.LeadingTrend || null)
+    : null;
+
   const entries = forces.map(function (f) {
+    const name = f.force || '';
     const z = typeof f.z_score === 'number' ? f.z_score : 0;
-    const trend = f.trend || (z > 0.5 ? 'bullish' : z < -0.5 ? 'bearish' : 'neutral');
+    const role = f.dimension_role || f.DimensionRole || '';
+    const ownTrend = f.trend || (z > 0.5 ? 'bullish' : z < -0.5 ? 'bearish' : 'neutral');
+    let trend = ownTrend;
+    let layer = 'subject';
+    if (role === 'positioning_indicator') {
+      layer = 'signal';
+      trend = leadingTrend || ownTrend;
+    } else if (role === 'cross_market_signal') {
+      layer = 'signal';
+    } else if (role === 'official_actor' || role === 'behavioral_proxy') {
+      layer = 'subject';
+    } else {
+      // legacy fallback：依 force 鍵把期貨/TSM ADR 視為訊號層。
+      layer = (name === 'futures' || name === 'tsm_adr') ? 'signal' : 'subject';
+    }
     return {
-      name: f.force || '',
+      name: name,
       label: forceLabel(f),
       z: z,
       trend: trend,
       weight: Math.abs(z),
+      layer: layer,
     };
-   });
+  });
+
+  const subjectEntries = entries.filter(function (e) { return e.layer === 'subject'; });
   const counts = {
-    bullish: entries.filter(function (e) { return e.trend === 'bullish'; }).length,
-    bearish: entries.filter(function (e) { return e.trend === 'bearish'; }).length,
-    neutral: entries.filter(function (e) { return e.trend === 'neutral'; }).length,
+    bullish: subjectEntries.filter(function (e) { return e.trend === 'bullish'; }).length,
+    bearish: subjectEntries.filter(function (e) { return e.trend === 'bearish'; }).length,
+    neutral: subjectEntries.filter(function (e) { return e.trend === 'neutral'; }).length,
   };
 
   const weights = {
-    bullish: entries.filter(function (e) { return e.trend === 'bullish'; }).reduce(function (s, e) { return s + e.weight; }, 0),
-    bearish: entries.filter(function (e) { return e.trend === 'bearish'; }).reduce(function (s, e) { return s + e.weight; }, 0),
-    neutral: entries.filter(function (e) { return e.trend === 'neutral'; }).reduce(function (s, e) { return s + e.weight; }, 0),
+    bullish: subjectEntries.filter(function (e) { return e.trend === 'bullish'; }).reduce(function (s, e) { return s + e.weight; }, 0),
+    bearish: subjectEntries.filter(function (e) { return e.trend === 'bearish'; }).reduce(function (s, e) { return s + e.weight; }, 0),
+    neutral: subjectEntries.filter(function (e) { return e.trend === 'neutral'; }).reduce(function (s, e) { return s + e.weight; }, 0),
   };
 
-  return { entries: entries, counts: counts, weights: weights };
+  return { entries: entries, counts: counts, weights: weights, leadingTrend: leadingTrend };
 }
 
 function renderCounts(agg, summary) {
@@ -439,7 +467,27 @@ function renderCounts(agg, summary) {
 
   const qualityScore = summary && typeof summary.quality_score === 'number' ? summary.quality_score.toFixed(2) : '—';
   const qualityText = qualityLabel(summary && summary.quality_label);
-  const dominant = summary && summary.dominant_force ? (FORCE_LABEL[summary.dominant_force] || summary.dominant_force) : '—';
+
+  // D3：主導分開顯示主體與訊號層；期貨訊號補上 foreign.leading_trend 的偏多/偏空。
+  const dominantActorKey = summary && summary.dominant_actor ? summary.dominant_actor : '';
+  const dominantSignalKey = summary && summary.dominant_signal ? summary.dominant_signal : '';
+  const leadingTrendLabel = agg.leadingTrend === 'bullish' ? '偏多' : agg.leadingTrend === 'bearish' ? '偏空' : '';
+  const dominantParts = [];
+  if (dominantActorKey) dominantParts.push(FORCE_LABEL[dominantActorKey] || dominantActorKey);
+  if (dominantSignalKey) {
+    const signalLabel = FORCE_LABEL[dominantSignalKey] || dominantSignalKey;
+    dominantParts.push(dominantSignalKey === 'futures' && leadingTrendLabel
+      ? signalLabel + '（' + leadingTrendLabel + '）'
+      : signalLabel);
+  }
+  let dominant = '—';
+  if (dominantParts.length) {
+    dominant = dominantParts.join('｜');
+  } else if (summary && summary.dominant_force) {
+    dominant = FORCE_LABEL[summary.dominant_force] || summary.dominant_force;
+  }
+
+  const subjectCount = agg.counts.bullish + agg.counts.bearish + agg.counts.neutral;
 
   return (
     '<div class="cb-summary__grid">' +
@@ -459,7 +507,7 @@ function renderCounts(agg, summary) {
     '<div class="cb-summary__weight">權重 ' + pct(agg.weights.neutral) + '%</div>' +
     '</div>' +
     '<div class="cb-summary__card cb-summary__card--total">' +
-    '<div class="cb-summary__num">' + agg.entries.length + '</div>' +
+    '<div class="cb-summary__num">' + subjectCount + '</div>' +
     '<div class="cb-summary__label">彙總勢力數</div>' +
     '<div class="cb-summary__weight">主導：' + escapeHtml(dominant) + '<br>品質：' + escapeHtml(qualityText) + '（' + qualityScore + '）</div>' +
     '</div>' +

@@ -379,11 +379,13 @@ func ComputeForceProvenance(force ForceName) ForceProvenance {
 // is provably free of side effects (spec §8.1 / CF-INV-04).
 //
 // Per spec §8.4 the window contains only prior samples — `raw` is
-// excluded. A fresh process (history empty) gets mean=0,
-// stddev=1, so Z equals `raw` directly; this is the canonical
-// fallback before calibration completes and matches the formula
-// z_i(t) = (x_i(t) - mean(x_i[t-N:t-1])) / std(x_i[t-N:t-1]).
+// excluded. With fewer than two prior samples the sample standard
+// deviation is undefined, so Z is pinned to 0 (neutral) instead of
+// emitting a pseudo-value (CF-INV-04 / C1a).
 func zScoreFromSamples(samples []RollingSample, raw float64) float64 {
+	if len(samples) < 2 {
+		return 0
+	}
 	w := newRollingWindow(len(samples))
 	for _, s := range samples {
 		w.push(s.RawValue)

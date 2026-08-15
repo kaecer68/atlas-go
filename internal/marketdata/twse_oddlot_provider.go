@@ -3,6 +3,7 @@ package marketdata
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,7 +25,17 @@ type OddLotStats struct {
 	ImbalanceRatio float64 `json:"imbalance_ratio"`
 }
 
+// ErrOddLotUpstreamRemoved reports that the TWSE odd-lot endpoint no longer
+// serves odd-lot data. Confirmed 2026-08: BFI84U now returns the 停券預告表
+// (margin suspension notice) report, and MI_INDEX type=ODDLOT returns an empty
+// data set. Consumers should redirect to twse_capital_flow (see known_issues).
+var ErrOddLotUpstreamRemoved = fmt.Errorf("twse_oddlot: upstream report removed (redirect to twse_capital_flow)")
+
 // TWSEOddLotProvider fetches Taiwan after-hours odd-lot trading data from TWSE.
+//
+// ⚠️ 資料源已移除（2026-08 實測）：BFI84U 現在回傳「得為融資融券有價證券停券
+// 預告表」而非零股交易資料；MI_INDEX type=ODDLOT 回傳空 data。上游無等價公開
+// 替代，短期由 twse_capital_flow 代理（見 known_issues twse_oddlot_upstream_60d）。
 type TWSEOddLotProvider struct {
 	client      *http.Client
 	baseURL     string
@@ -61,6 +72,12 @@ func (p *TWSEOddLotProvider) FetchLatest(ctx context.Context) (*OddLotStats, err
 		if err == nil {
 			return stats, nil
 		}
+		// Fail fast when the upstream report was removed: later dates fail
+		// identically, and consumers must redirect to twse_capital_flow
+		// instead of burning 7 HTTP round-trips against a dead endpoint.
+		if errors.Is(err, ErrOddLotUpstreamRemoved) {
+			return nil, err
+		}
 	}
 	return nil, fmt.Errorf("no TWSE odd-lot data available in the last 7 days")
 }
@@ -93,13 +110,19 @@ func (p *TWSEOddLotProvider) fetchDate(ctx context.Context, dateStr string) (*Od
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {
-		return nil, fmt.Errorf("TWSE API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
+	if apiResp.Stat != "OK" {
+		return nil, fmt.Errorf("TWSE API returned stat=%s", apiResp.Stat)
+	}
+	if len(apiResp.Tables) == 0 {
+		// New flat response shape (BFI84U now serves the 停券預告表 report
+		// instead of odd-lot data). Report the removal so consumers redirect.
+		return nil, ErrOddLotUpstreamRemoved
 	}
 
 	marketTable := apiResp.Tables[0]
 	if len(marketTable.Data) == 0 {
-		return nil, fmt.Errorf("TWSE API returned empty odd-lot data")
+		// MI_INDEX type=ODDLOT-style report with no rows — upstream removed.
+		return nil, ErrOddLotUpstreamRemoved
 	}
 
 	// Aggregate per-stock odd-lot trading volumes.

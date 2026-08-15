@@ -244,6 +244,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	rec.LastFetchAt = time.Now().Format(time.RFC3339)
 	if status == "ok" {
 		rec.LastError = ""
+		rec.Errors = nil // P2: clear stale error text so a healthy channel no longer shows old errors
 		rec.LastSuccessAt = rec.LastFetchAt
 	} else {
 		rec.LastError = errMsg

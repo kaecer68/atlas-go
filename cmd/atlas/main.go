@@ -308,6 +308,8 @@ func isPublicPath(p string) bool {
 		return true
 	case p == "/client" || strings.HasPrefix(p, "/client/"):
 		return true
+	case p == "/admin_web" || strings.HasPrefix(p, "/admin_web/"):
+		return true
 	case strings.HasSuffix(p, ".js"):
 		// Hashed frontend chunks (stock-quote-*.js, portfolio-*.js, etc.)
 		// are served at root level (not under /client/) because main.js

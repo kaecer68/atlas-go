@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -698,18 +699,50 @@ func NewTaifexFetcher(fetcher DataFetcher) apisystem.TaifexFetcher {
 }
 
 // NewOddLotFetcher creates a fetcher for TWSE odd-lot trading data.
+//
+// The twse_oddlot upstream was removed (BFI84U now serves the 停券預告表
+// report, MI_INDEX type=ODDLOT returns empty — see known_issues
+// twse_oddlot_upstream_60d). As a short-term redirect, when the odd-lot
+// channel yields no usable imbalance we derive a retail contrarian proxy from
+// twse_capital_flow's total institutional net instead of surfacing 0.
 func NewOddLotFetcher(fetcher DataFetcher) apisystem.OddLotFetcher {
 	return func(ctx context.Context) (*marketdata.OddLotStats, error) {
 		data, _, err := fetcher(ctx, "twse_oddlot")
-		if err != nil {
-			return nil, err
+		if err == nil && len(data) > 0 {
+			var result marketdata.OddLotStats
+			if err := json.Unmarshal(data, &result); err == nil {
+				return &result, nil
+			}
 		}
-		var result marketdata.OddLotStats
-		if err := json.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("oddlot unmarshal: %w", err)
-		}
-		return &result, nil
+		// twse_oddlot returned no usable bytes (upstream removed) — redirect to
+		// the healthy twse_capital_flow channel for a retail imbalance proxy.
+		return oddLotFromCapitalFlow(ctx, fetcher)
 	}
+}
+
+// oddLotFromCapitalFlow derives a bounded retail imbalance proxy from the
+// twse_capital_flow channel when twse_oddlot is unavailable.
+func oddLotFromCapitalFlow(ctx context.Context, fetcher DataFetcher) (*marketdata.OddLotStats, error) {
+	data, _, err := fetcher(ctx, "twse_capital_flow")
+	if err != nil {
+		return nil, err
+	}
+	var snap marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		return nil, fmt.Errorf("capital flow unmarshal: %w", err)
+	}
+
+	totalNet := snap.ForeignInvestorNet.Value + snap.DomesticFundNet.Value + snap.DealerNet.Value
+	if totalNet == 0 {
+		return nil, fmt.Errorf("capital flow total net is zero")
+	}
+
+	// Contrarian proxy: odd-lot (零股) buyers are retail investors who tend to
+	// trade against institutional net flows. -tanh bounds the result to [-1,1],
+	// matching the original odd-lot imbalance ratio semantics. The 30億 scale
+	// approximates a large daily institutional net flow (values are in 億).
+	imbalance := -math.Tanh(totalNet / 30.0)
+	return &marketdata.OddLotStats{ImbalanceRatio: imbalance}, nil
 }
 
 // NewETFFetcher creates a fetcher for TWSE ETF subscription data.

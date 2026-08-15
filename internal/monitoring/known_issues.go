@@ -67,8 +67,8 @@ var knownIssues = map[string]KnownIssue{
 	},
 	"twse_oddlot": {
 		Key:          "twse_oddlot_upstream_60d",
-		Title:        "TWSE odd-lot trading data: upstream schema changed",
-		Description:  "TWSE's odd-lot trading data endpoint (www.twse.com.tw / oddlot) silently changed its response schema in 2026-Q2. Our parser at internal/marketdata/twse_oddlot_provider.go expects the legacy shape and returns zero rows. Workaround: odd-lot flow is excluded from retail signal calculations; primary flow data uses the twse_capital_flow channel which is healthy.",
+		Title:        "TWSE odd-lot trading report removed (BFI84U repurposed)",
+		Description:  "TWSE's odd-lot trading report has been removed. Confirmed 2026-08: exchangeReport/BFI84U now returns the 得為融資融券有價證券停券預告表 (margin suspension notice) report with a flat {stat,title,fields,data} shape, and MI_INDEX type=ODDLOT returns an empty data set — no public equivalent remains. Workaround (short-term redirect): the a6_odd_lot retail sub-indicator derives a contrarian proxy from twse_capital_flow's total institutional net instead of showing 0 (internal/monitoring/gateway_adapter.go NewOddLotFetcher → oddLotFromCapitalFlow).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_oddlot",
 	},

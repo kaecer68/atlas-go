@@ -183,6 +183,37 @@ func TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive(t *testing.T) {
 	}
 }
 
+// TestRegisterChannelAdapters_TWSEETFDisabledWritesInactiveHealth verifies
+// that when TWSE_ETF_API_KEY is unset, RegisterChannelAdapters does NOT register
+// twse_etf and instead writes a status="inactive" health record so the admin
+// page shows "未啟用" instead of the permanent upstream-removal error
+// (TWT44U → 404, known_issues.go twse_etf_upstream_60d).
+func TestRegisterChannelAdapters_TWSEETFDisabledWritesInactiveHealth(t *testing.T) {
+	t.Setenv("TWSE_ETF_API_KEY", "")
+	g := newTestGateway(t)
+	cfg := config.Config{}
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+		t.Fatalf("RegisterChannelAdapters failed: %v", err)
+	}
+
+	if g.HasChannel("twse_etf") {
+		t.Error("twse_etf channel should NOT be registered when TWSE_ETF_API_KEY is unset")
+	}
+
+	rec := g.Health().Get("twse_etf")
+	if rec == nil {
+		t.Fatal("expected health record for twse_etf after RegisterChannelAdapters, got nil")
+	}
+	if rec.Status != "inactive" {
+		t.Errorf("twse_etf health status = %q, want inactive", rec.Status)
+	}
+	for _, alert := range g.Health().Alerts() {
+		if alert.ChannelID == "twse_etf" {
+			t.Errorf("twse_etf should not appear in Alerts() when status=inactive, got %+v", alert)
+		}
+	}
+}
+
 func TestRegisterChannelAdapters_WithJanusEngine(t *testing.T) {
 	g := newTestGateway(t)
 	cfg := config.Config{}

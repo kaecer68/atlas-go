@@ -300,10 +300,25 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("twse_oddlot", oddlotAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_oddlot")
 
-	// --- TWSE ETF Net Subscription (no API key required) ---
-	etfAdapter := NewTWSEETFChannelAdapter()
-	g.registry.Register("twse_etf", etfAdapter)
-	logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
+	// --- TWSE ETF Net Subscription ---
+	// DISABLED 2026-08-10 — TWSE permanently removed the TWT44U aggregate
+	// report (HTTP 307 → 404 for any date/params), so this channel can never
+	// succeed and only misleads the admin page into showing a permanent error.
+	// Registration is gated on TWSE_ETF_API_KEY (opt-in, matching the TEJ
+	// pattern) so the adapter joins the registry only when an operator
+	// explicitly re-enables it. See known_issues.go twse_etf_upstream_60d.
+	if etfKey := config.GetSecret("TWSE_ETF_API_KEY"); etfKey != "" {
+		etfAdapter := NewTWSEETFChannelAdapter()
+		g.registry.Register("twse_etf", etfAdapter)
+		logging.Info("apigateway", "adapter_registered", "channel", "twse_etf")
+	} else {
+		// Mark twse_etf inactive so dashboard + Alerts() stop reporting the
+		// permanent upstream 404 error. "inactive" is filtered by
+		// UnifiedHealthStore.Alerts() and renders as "未啟用" in the admin page.
+		if err := g.Health().Record("twse_etf", "inactive", "TWSE TWT44U removed upstream (TWSE_ETF_API_KEY not configured)"); err != nil {
+			logging.Warn("apigateway", "twse_etf_inactive_record_failed", "err", err.Error())
+		}
+	}
 
 	// --- TWSE SBL (Securities Borrowing & Lending) — G02 ---
 	// STUB: provider returns "endpoint not yet confirmed" (see

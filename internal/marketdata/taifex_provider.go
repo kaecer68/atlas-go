@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ type TAIFEXProvider struct {
 // NewTAIFEXProvider creates a new TAIFEX data provider.
 func NewTAIFEXProvider() *TAIFEXProvider {
 	return &TAIFEXProvider{
-		client:      httpclient.NewFactory().NewClient(20 * time.Second),
+		client:      httpclient.NewFactory().NewClient(30 * time.Second), // P1 B: upstream can exceed 20s under load
 		baseURL:     "https://openapi.taifex.com.tw/v1",
 		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
 	}
@@ -83,6 +84,7 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
@@ -90,7 +92,7 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readTAIFEXBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("read pcr body: %w", err)
 	}
@@ -138,6 +140,7 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
@@ -145,7 +148,7 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readTAIFEXBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("read large trader body: %w", err)
 	}
@@ -268,6 +271,24 @@ func safePercent(part, total int64) float64 {
 	return float64(part) / float64(total) * 100
 }
 
+// readTAIFEXBody reads a TAIFEX response body, transparently decompressing
+// gzip content. We request Accept-Encoding: gzip explicitly because the
+// openapi.taifex.com.tw endpoints return large JSON payloads; Go's Transport
+// only auto-decompresses when it adds the header itself, so an explicit
+// header requires explicit decompression here.
+func readTAIFEXBody(resp *http.Response) ([]byte, error) {
+	var reader io.Reader = resp.Body
+	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("gzip reader: %w", err)
+		}
+		defer func() { _ = gz.Close() }()
+		reader = gz
+	}
+	return io.ReadAll(reader)
+}
+
 // TAIFEXFutures holds daily TX futures session data including night session.
 type TAIFEXFutures struct {
 	Date       string  `json:"date"`
@@ -293,6 +314,7 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
@@ -300,7 +322,7 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readTAIFEXBody(resp)
 	if err != nil {
 		return nil, fmt.Errorf("read futures body: %w", err)
 	}

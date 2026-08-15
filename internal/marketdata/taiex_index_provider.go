@@ -31,6 +31,17 @@ func (p *TAIEXIndexProvider) Name() string {
 // The TWSE response date is validated against the requested date so that
 // previous-day data is never written as today's value.
 func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
+	// Weekend/holiday gate: on non-trading days Yahoo Finance pads the latest
+	// ^TWII close with 0 (parseYahooTAIEX treats 0 as invalid) and TWSE
+	// MI_INDEX has no row for the current date, so the naive path returns an
+	// error and trips the channel circuit breaker across a long weekend.
+	// Serving the most recent trading day's close is the correct behavior and
+	// must not be recorded as a failure, so bypass Yahoo entirely.
+	now := twseTAIEXTargetDate()
+	if !isTaiwanTradingDay(now) {
+		return p.fetchFallback(ctx, fmt.Errorf("non-trading day %s (weekend/holiday)", now.Format("2006-01-02")))
+	}
+
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
 		return MacroDataSnapshot{}, fmt.Errorf("taiex_index rate limit: %w", err)
 	}

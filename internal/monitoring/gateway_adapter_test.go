@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -945,6 +947,37 @@ func TestNewOddLotFetcher(t *testing.T) {
 		_, err := f(context.Background())
 		if err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("redirect to capital flow when oddlot removed", func(t *testing.T) {
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			if channelID == "twse_oddlot" {
+				return nil, FetchMeta{Stale: true}, nil
+			}
+			if channelID == "twse_capital_flow" {
+				snap := marketdata.MacroDataSnapshot{
+					ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: 6.0},
+					DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "TAIWAN_DOMESTIC", Value: 2.0},
+					DealerNet:          marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: 2.0},
+				}
+				b, _ := json.Marshal(snap)
+				return b, FetchMeta{}, nil
+			}
+			return nil, FetchMeta{}, fmt.Errorf("unexpected channel %q", channelID)
+		}
+		f := NewOddLotFetcher(fetcher)
+		stats, err := f(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if stats.ImbalanceRatio == 0 {
+			t.Error("expected non-zero capital-flow-derived imbalance proxy")
+		}
+		// totalNet=10 → -tanh(10/30) ≈ -0.3215
+		want := -math.Tanh(10.0 / 30.0)
+		if math.Abs(stats.ImbalanceRatio-want) > 1e-9 {
+			t.Errorf("ImbalanceRatio = %v, want %v", stats.ImbalanceRatio, want)
 		}
 	})
 }

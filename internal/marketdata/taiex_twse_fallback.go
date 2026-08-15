@@ -34,12 +34,17 @@ var twseTAIEXTargetDate = func() time.Time {
 // fetchTWSETAIEXFallback fetches the TAIEX closing index from TWSE OpenAPI.
 // It is used when the primary Yahoo ^TWII path fails.
 //
-// The response's reported date (parsed from the table title in ROC calendar)
-// MUST match the requested date. This prevents writing the previous trading
-// day's close as today's value when the market has not yet produced the current
-// report (pre-market or holiday scenarios).
+// The request date is rolled back to the most recent Taiwan trading day, so
+// weekend/holiday calls serve the previous close instead of failing. The
+// response's reported date (parsed from the table title in ROC calendar) MUST
+// still match the requested date, which prevents writing stale data as today's
+// value when the market has not yet produced the current report (pre-market).
 func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
-	target := twseTAIEXTargetDate()
+	// Roll back to the most recent Taiwan trading day. On weekends/holidays the
+	// wall-clock date has no MI_INDEX row, so requesting it would always return
+	// "TAIEX row not found" and count as a failure. latestTaiwanTradingDay is a
+	// no-op on trading days and rewinds to the previous close on non-trading days.
+	target := latestTaiwanTradingDay(twseTAIEXTargetDate())
 	dateStr := target.Format("20060102")
 	url := fmt.Sprintf("%s?response=json&date=%s&type=IND", taiexTWSEBaseURL, dateStr)
 

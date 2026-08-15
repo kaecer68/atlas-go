@@ -214,3 +214,33 @@ func TestChannelHealthStore_WithStaleThreshold_Chaining(t *testing.T) {
 		t.Errorf("WithNowFunc did not apply")
 	}
 }
+
+// TestChannelHealthStore_Record_OKClearsStaleErrors verifies that a healthy
+// (status=ok) Record() clears the Errors slice left over from a previous
+// failure, so the dashboard stops showing stale error text for channels that
+// have since recovered (e.g. market_volume / day_trading).
+func TestChannelHealthStore_Record_OKClearsStaleErrors(t *testing.T) {
+	s := NewChannelHealthStoreWithPool(t.TempDir(), nil)
+
+	if err := s.Record("market_volume", "error", "connection refused"); err != nil {
+		t.Fatalf("record error: %v", err)
+	}
+	rec := s.Get("market_volume")
+	if rec == nil || len(rec.Errors) == 0 {
+		t.Fatalf("expected stale error to be recorded, got %+v", rec)
+	}
+
+	if err := s.Record("market_volume", "ok", ""); err != nil {
+		t.Fatalf("record ok: %v", err)
+	}
+	rec = s.Get("market_volume")
+	if rec == nil {
+		t.Fatal("expected record after ok")
+	}
+	if rec.LastError != "" {
+		t.Errorf("LastError = %q, want empty after ok", rec.LastError)
+	}
+	if len(rec.Errors) != 0 {
+		t.Errorf("Errors = %v, want empty after ok (stale error text must be cleared)", rec.Errors)
+	}
+}
