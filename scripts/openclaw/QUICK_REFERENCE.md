@@ -62,8 +62,6 @@
 # Apply branch protection after review
 ./scripts/openclaw/setup_branch_protection.sh --apply
 
-# Verify branch protection script contract (required-reviews 0..6)
-./scripts/openclaw/verify_branch_protection_script.sh
 
 # Apply with custom snapshot backup directory
 ./scripts/openclaw/setup_branch_protection.sh --apply --backup-dir data/state/custom-branch-protection-backups
