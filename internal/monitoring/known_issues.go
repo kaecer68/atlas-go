@@ -54,7 +54,7 @@ var knownIssues = map[string]KnownIssue{
 		Title:        "TWSE ETF subscription aggregate report removed (TWT44U → 404)",
 		Description:  "TWSE's ETF net-subscription aggregate report (www.twse.com.tw/exchangeReport/TWT44U) was removed. Container-probed 2026-08-10: HTTP 307 → page-not-found.html (404) for any date/params, while STOCK_DAY_ALL returns 200 — NOT an IP block (the earlier 403/rate-limit hypothesis was wrong). No public equivalent for the 申購贖回淨額 aggregate exists as of 2026-08: TWSE OpenAPI opendata (44 datasets) has no ETF-subscription dataset; FinMind has only ETF holdings; the ETFortune portal publicizes NAV/PCF/premium-discount but not net-subscription statistics. NOTE: this is a gap in the aggregate statistic specifically — ETF investor information (NAV, PCF, premium/discount) remains public. Impact: ETFNetSubscription (RSI-TW Part C subC3) is permanently unavailable; subC3 returns IsFallback without contributing (B03, 2026-08-10).",
 		DocumentedAt: "2026-08-05T00:00:00Z",
-		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
 	},
 	// dash alias of twse_etf — same upstream issue, different channel
 	// ID observed at runtime. See note above.
@@ -63,7 +63,7 @@ var knownIssues = map[string]KnownIssue{
 		Title:        "TWSE ETF subscription data: upstream unresponsive (dash alias)",
 		Description:  "Same upstream issue as twse_etf. The runtime channel_health record carries the channel ID \"twse-etf\" (dash-separated) instead of \"twse_etf\" (underscore-separated). This alias exists so the dashboard can render the known-issue badge on both forms until the channel-ID naming inconsistency is investigated and unified upstream.",
 		DocumentedAt: "2026-08-05T01:00:00Z",
-		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+twse_etf",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues/1573",
 	},
 	"twse_oddlot": {
 		Key:          "twse_oddlot_upstream_60d",
