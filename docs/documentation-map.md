@@ -33,23 +33,23 @@
 | 原公開位置 | 處理 |
 |---|---|
 | `docs/archive/` | 目錄解散；歷史知識移至 `.omo/audit/` 或提煉為 canonical，其餘 13 檔刪除 |
-| `docs/investigations/` | 移至 `.omo/investigations/`（私有調查紀錄） |
-| `docs/work/` | 移至 `.omo/manifests/`（個別 manifest） |
+| docs/investigations/ | 移至 `.omo/investigations/`（私有調查紀錄） |
+| docs/work/ | 移至 `.omo/manifests/`（個別 manifest） |
 | 根目錄 `ATLAS_SYSTEM_STATE.md`、`llm-promotion-evaluation.md` | 移至 `.omo/audit/` |
 | 根目錄 `script-usage-guide.md` | 移至 `.omo/handoffs/` |
 | 根目錄 `manifest-constitution-gap-audit.md`、`manifest-constitution-implementation.md`、`manifest-methodology-e4-review.md` | 移至 `.omo/manifests/` |
-| `docs/specs/dark-launch-tracker-spec.md` | 移至 `.omo/evidence/` |
-| `docs/operations/commercial-flow-scope-2026-07-22.md`、`docs/operations/mcp-2026-07-28-migration-roadmap.md`、`docs/operations/l2-4-unblocking-roadmap.md` | 移至 `.omo/plans/` |
-| `docs/operations/l2-4-fault-tolerance-design.md`、`production-rollout-runbook.md`、`sprint3-rollout-runbook.md` | 已刪除，不在公開目錄保留 |
-| `docs/archive/2026-08-12-sector-prediction-runbook.md`、`docs/archive/2026-08-12-sector-dimension-prediction-spec.md`、`docs/archive/l2-4-followup.md`、`docs/archive/l2-4-observation-log.md` 等舊流程檔 | 已移除或刪除，不再列為 public runbook/spec／log |
+| docs/specs/dark-launch-tracker-spec.md | 移至 `.omo/evidence/` |
+| docs/operations/commercial-flow-scope-2026-07-22.md、docs/operations/mcp-2026-07-28-migration-roadmap.md、docs/operations/l2-4-unblocking-roadmap.md | 移至 `.omo/plans/` |
+| docs/operations/l2-4-fault-tolerance-design.md、`production-rollout-runbook.md`、`sprint3-rollout-runbook.md` | 已刪除，不在公開目錄保留 |
+| docs/archive/2026-08-12-sector-prediction-runbook.md、docs/archive/2026-08-12-sector-dimension-prediction-spec.md、docs/archive/l2-4-followup.md、docs/archive/l2-4-observation-log.md 等舊流程檔 | 已移除或刪除，不再列為 public runbook/spec／log |
 
 #### 本次 distill 對照
 
 | 原 archive 原檔 | Canonical 目標 |
 |---|---|
-| `docs/archive/2026-06-28-decision-chain-evolution-v2.md` | `docs/audit-trail.md`（決策鏈進化 v2／ConvictionStep 參數溯源） |
-| `docs/archive/2026-07-21-binary-freshness-protocol.md` | `docs/developer-guide.md`（Binary Freshness 檢查） |
-| `docs/archive/sector-allocation-closure-rollback-drills.md` | `docs/operations/sector-allocation-closure-runbook.md`（SA11.B Rollback Drills） |
+| docs/archive/2026-06-28-decision-chain-evolution-v2.md | docs/audit-trail.md（決策鏈進化 v2／ConvictionStep 參數溯源） |
+| docs/archive/2026-07-21-binary-freshness-protocol.md | docs/developer-guide.md（Binary Freshness 檢查） |
+| docs/archive/sector-allocation-closure-rollback-drills.md | docs/operations/sector-allocation-closure-runbook.md（SA11.B Rollback Drills） |
 
 `docs/manifests/` 仍只保留 `README.md` + `TEMPLATE.md`；`docs/contracts/channel-index.json`、`docs/contracts/mcp-tools.contract.json` 與 `docs/swagger.json` 維持 canonical。
 
