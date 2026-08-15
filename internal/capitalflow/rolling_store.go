@@ -74,6 +74,7 @@ type rollingStateFile struct {
 type RollingSampleStore interface {
 	History(ctx context.Context, dimension ForceName, beforeDate string, limit int) ([]RollingSample, error)
 	UpsertDay(ctx context.Context, tradingDate string, samples []RollingSample) error
+	ImportHistory(ctx context.Context, samples []RollingSample) error
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +147,37 @@ func (s *FileRollingSampleStore) UpsertDay(_ context.Context, tradingDate string
 		return err
 	}
 	applyUpsert(state, tradingDate, samples, s.capacity)
+	return s.persistLocked(state)
+}
+
+// ImportHistory bulk-loads historical samples into the store with a
+// single atomic write (CAL-1). Every sample follows UpsertDay
+// semantics: the (dimension, trading_date) pair is deduplicated
+// ("last write wins" per CF-INV-05), the dimension slice is re-sorted
+// ascending by TradingDate, and trimmed to capacity. Unlike UpsertDay
+// (one trading date per call) the batch may span many trading dates;
+// the whole batch is validated first, then applied under a single lock
+// and persisted exactly once, so a failure mid-import can never leave
+// a partially-updated file behind.
+func (s *FileRollingSampleStore) ImportHistory(_ context.Context, samples []RollingSample) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	for i := range samples {
+		if err := validateTradingDate(samples[i].TradingDate); err != nil {
+			return fmt.Errorf("rolling_store: import sample[%d]: %w", i, err)
+		}
+		if err := validateDimension(samples[i].Dimension); err != nil {
+			return fmt.Errorf("rolling_store: import sample[%d]: %w", i, err)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	applyImport(state, samples, s.capacity)
 	return s.persistLocked(state)
 }
 
@@ -287,6 +319,29 @@ func (s *MemoryRollingSampleStore) UpsertDay(_ context.Context, tradingDate stri
 	return nil
 }
 
+// ImportHistory bulk-loads historical samples with the same per-date
+// UpsertDay semantics as FileRollingSampleStore.ImportHistory, minus
+// the disk write: same-day dedup per dimension, ascending sort, and
+// capacity trim. The whole batch is validated first and applied under
+// a single lock so concurrent readers never observe a partial import.
+func (s *MemoryRollingSampleStore) ImportHistory(_ context.Context, samples []RollingSample) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	for i := range samples {
+		if err := validateTradingDate(samples[i].TradingDate); err != nil {
+			return fmt.Errorf("rolling_store: import sample[%d]: %w", i, err)
+		}
+		if err := validateDimension(samples[i].Dimension); err != nil {
+			return fmt.Errorf("rolling_store: import sample[%d]: %w", i, err)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	applyImport(&rollingStateFile{Samples: s.samples}, samples, s.capacity)
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Shared helpers (used by both store implementations)
 // ---------------------------------------------------------------------------
@@ -317,6 +372,31 @@ func applyUpsert(state *rollingStateFile, tradingDate string, samples []RollingS
 			filtered = filtered[len(filtered)-capacity:]
 		}
 		state.Samples[sample.Dimension] = filtered
+	}
+}
+
+// applyImport applies a bulk batch to state in place, preserving the
+// exact UpsertDay semantics per trading date: for each date the
+// samples are deduplicated per dimension ("last write wins" per
+// CF-INV-05), the dimension slice is re-sorted ascending by
+// TradingDate, and trimmed to the most-recent capacity entries.
+//
+// Dates are processed in ascending order and the input order is
+// preserved within a date, so when a batch contains two samples for
+// the same (dimension, trading_date) the later one deterministically
+// wins — identical to calling UpsertDay once per date in order.
+func applyImport(state *rollingStateFile, samples []RollingSample, capacity int) {
+	byDate := make(map[string][]RollingSample, len(samples))
+	dates := make([]string, 0, len(samples))
+	for _, s := range samples {
+		if _, ok := byDate[s.TradingDate]; !ok {
+			dates = append(dates, s.TradingDate)
+		}
+		byDate[s.TradingDate] = append(byDate[s.TradingDate], s)
+	}
+	sort.Strings(dates)
+	for _, d := range dates {
+		applyUpsert(state, d, byDate[d], capacity)
 	}
 }
 

@@ -31,6 +31,11 @@ func (s *stubRollingStore) UpsertDay(_ context.Context, _ string, samples []Roll
 	return nil
 }
 
+func (s *stubRollingStore) ImportHistory(_ context.Context, samples []RollingSample) error {
+	s.samples = append(s.samples, samples...)
+	return nil
+}
+
 // TestFileRollingSampleStore_SameDayLastWriteWins verifies spec §8.2:
 // a second UpsertDay for the same trading date replaces the value
 // but does not grow the rolling sample count. CF-INV-05 requires that

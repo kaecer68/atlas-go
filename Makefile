@@ -20,7 +20,7 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
-.PHONY: ci-gate ci-full
+.PHONY: ci-gate ci-full import-history
 
 # 前端目錄列表(若有新增,加在這裡)
 FRONTENDS := admin_web client_web
@@ -290,6 +290,12 @@ lint-backend:
 	@echo "🔍 Linting Go backend..."
 	@command -v gofmt >/dev/null && gofmt -l $(GO_PKGS) | (read; if [ $$? -ne 0 ]; then echo "❌ gofmt issues found"; exit 1; fi) || echo "  (gofmt skipped)"
 	go vet $(GO_PKGS)
+
+# ---- CAL-1: rolling-store history import ----
+import-history: ## Seed rolling store history from replay + T86 snapshots (CAL-1)
+	@echo "→ Importing rolling-store history (replay calendar ∩ T86 real values)"
+	@go run ./cmd/import-rolling-history
+	@echo "✓ done — restart the atlas server to pick up the imported samples"
 
 # ---- API / contract gate ----
 

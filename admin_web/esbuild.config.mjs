@@ -27,11 +27,14 @@ const opts = {
   ],
   bundle: true,
   format: "esm",
-  splitting: false,
+  splitting: true,
   outdir: dist,
   metafile: true,
   // Stable entry names for index.html compatibility
   entryNames: "[dir]/[name]",
+  // Chunks for page modules imported via `import('./pages/X.js')` in main.js
+  // land at dist/js/pages/<name>-<hash>.js, matching the original import path.
+  chunkNames: "js/pages/[name]-[hash]",
   assetNames: "assets/[name]-[hash]",
   minify: true,
   sourcemap: false,
