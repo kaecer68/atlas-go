@@ -15,7 +15,7 @@
 
 | 類型 | 位置 | 範例 |
 |------|------|------|
-| **OpenCode CLI 啟動 prompt** | `.opencode/prompts/*.md` | `wave-8-bootstrap.md`、`wave-8-execution-prompt.md` |
+| **OpenCode CLI 啟動 prompt** | `.opencode/prompts/*.md` | `<wave>-bootstrap.md`（Wave 8/9 範本已於 2026-08-17 移除） |
 | **Skill frontmatter / 內文** | `.claude/skills/**/*.md` | `atlas-pre-change-protocol/SKILL.md` |
 | **Experiment prompt** | `prompts/agents/*.md`、`prompts/experiments/` | 任何 agent 或 experiment 的 prompt 模板 |
 | **Session handoff prompt** | `.opencode/handoffs/*.md` | 多 CLI session 之間的銜接 prompt |
@@ -63,7 +63,7 @@ grep -rln "graphify|sven1103" .opencode/prompts/ .omo/audit/\|grep -rln "graphif
 
 PR #690（2026-06-24）清理了 graphify 工具鏈。過程中發現：
 
-- `.opencode/prompts/wave-8-bootstrap.md` 等 3 個檔案因為 local-only 沒進 git
+- `.opencode/prompts/wave-8-bootstrap.md` 等 3 個檔案因為 local-only 沒進 git（2026-08-17 已連同 wave-9-bootstrap 一併移除，wave 8/9 早已結束）
 - 內容仍引用 `graphify` 等已退役工具
 - 為更新引用，需在 working tree 重新建立檔案並 commit，耗時且容易出錯
 
