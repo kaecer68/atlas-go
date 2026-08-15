@@ -20,7 +20,24 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
-.PHONY: ci-gate ci-full import-history
+.PHONY: ci-gate ci-full pre-push import-history
+
+# pre-push — 本地 push 前驗證（由 .githooks/pre-push hook 自動執行）
+#   ci-gate  (~30s)   永遠執行：gofmt/build/vet/generate-drift/ci-quick
+#   ci-full  (~5-8min) 僅當 diff 含程式碼變更時執行：lint/staticcheck/test/race/coverage
+#   目的：在本地先抓出 CI 會失敗的問題，避免 push→CI-fail 往返浪費
+#   手動用法：make pre-push            （同 hook 邏輯：auto）
+#             PRE_PUSH_FULL=always make pre-push   （強制全量）
+#             PRE_PUSH_FULL=never  make pre-push   （只跑 ci-gate）
+pre-push: ci-gate
+	@echo ""
+	@if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$$|(^|/)Makefile$$|Dockerfile|docker-compose|\.github/|\.githooks/'; then \
+		echo "🧪 diff 含程式碼變更 → 跑 make ci-full (~5-8 min)..."; \
+		$(MAKE) ci-full; \
+	else \
+		echo "ℹ️  docs-only diff — ci-gate 已足夠（ci-full 跳過）"; \
+	fi
+
 
 # 前端目錄列表(若有新增,加在這裡)
 FRONTENDS := admin_web client_web
