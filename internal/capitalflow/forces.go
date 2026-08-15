@@ -82,10 +82,18 @@ func (e *ForceExtractor) Score(
 		// shape rather than an uninitialised Weight.
 		f.Weight = 0
 		f.WeightDeprecated = true
-		// E07 / spec §7 — every fresh reading reports
-		// CalibrationStatus="calibrating" until H-CF-02 is validated.
 		f.DisplayName = f.Force.DisplayName()
-		f.CalibrationStatus = CalibrationCalibrating
+		// H-CF-02 / spec §8.4 — a force becomes calibration-eligible once
+		// the rolling history has at least 30 samples. Below the threshold
+		// we keep the conservative "calibrating" label so automation stays
+		// gated (CF-INV-13); once SampleCount crosses 30 the per-force
+		// status flips to "eligible". The "degraded" path lives in the
+		// calibration pipeline and is not set here.
+		if f.SampleCount >= 30 {
+			f.CalibrationStatus = CalibrationEligible
+		} else {
+			f.CalibrationStatus = CalibrationCalibrating
+		}
 		switch f.Force {
 		case ForceForeign, ForceInstitutional, ForceDealer:
 			f.EvidenceClass = EvidenceOfficial
