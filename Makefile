@@ -738,13 +738,13 @@ ci-full: ci-gate ci-constitution
 	@staticcheck ./...
 	@echo "    ✅"
 	@echo "  → go test (excluding cmd/atlas heavy)"
-	@go test -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
+	@ATLAS_STORE_BACKEND=jsonl go test -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
 	@echo "    ✅"
 	@echo "  → go test -race (excluding cmd/atlas)"
-	@go test -race -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
+	@ATLAS_STORE_BACKEND=jsonl go test -race -count=1 $$(go list ./... | grep -v '/cmd/atlas$$')
 	@echo "    ✅"
 	@echo "  → cmd/atlas integration tests"
-	@go test -count=1 -timeout=10m ./cmd/atlas/...
+	@ATLAS_STORE_BACKEND=jsonl go test -count=1 -timeout=10m ./cmd/atlas/...
 	@echo "    ✅"
 	@echo "  → cmd/atlas-mcp-setup integration tests"
 	@go test -tags=integration -count=1 -timeout=60s ./cmd/atlas-mcp-setup/
