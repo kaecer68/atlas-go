@@ -58,7 +58,7 @@ atlas-go 是**模擬優先、稽核導向的台股投資研究系統**。進入 
 | **WA-200** | Regime Detection (JANUS) | `internal/janus`（`janus.NewEngine()` 於 main.go:271） | API 啟動時呼叫 `EnsureAllRegimes` + `Update` | RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL | 體制分類細則 |
 | **WA-201** | Macro Ingestion Pipeline | `internal/macroflow`（daily macro cron → `MacroDataSnapshot`） | daily macro cron | MacroDataSnapshot | 排程時點 |
 | **WA-202** | Narrative Conviction Modulator | `internal/orchestrator/narrative_conviction_modulator.go`（L2.4 觀察期功能） | planreflect loop event | conviction 調整 | 是否仍在 L2.4 觀察 |
-| **WA-203** | C07 Sector Prediction Observation | `cmd/experimental/c07-day-evaluator` + `cmd/experimental/c07-spot-check-recorder` + `docs/archive/2026-08-12-sector-prediction-runbook.md` + `docs/archive/sector-prediction-observation-log.md` | Day 7 / Day 14 evaluator 跑（每日 09:00 cron，見 runbook §3）+ operator 手動 spot-check | `sector-prediction-eval-day-7.md` / `sector-prediction-eval-day-14.md` report（位於 `docs/operations/`） | Day 14 promotion gate（待 7/30 跑） |
+| **WA-203** | C07 Sector Prediction Observation | `cmd/experimental/c07-day-evaluator` + `cmd/experimental/c07-spot-check-recorder` + `.omo/audit/2026-08-12-sector-prediction-runbook.md` + `.omo/evidence/sector-prediction-observation-log.md` | Day 7 / Day 14 evaluator 跑（每日 09:00 cron，見 runbook §3）+ operator 手動 spot-check | `sector-prediction-eval-day-7.md` / `sector-prediction-eval-day-14.md` report（位於 `docs/operations/`） | Day 14 promotion gate（待 7/30 跑） |
 
 ### 3.3 決策與執行層
 
@@ -303,7 +303,7 @@ Broker config 旗標（10 個）：`-broker-mode`、`-broker-adapter`、`-broker
 | Wave | 狀態 | 對應文件 |
 |------|------|---------|
 | Wave 11（L2.3 / L2.4） | L2.3 shipped, L2.4 觀察期 active via PR #821 | `docs/specs/llm-sector-agent-spec.md`、`docs/operations/l2-4-runbook.md` |
-| Wave 11 L2.4 followup | 未來工作 | `docs/archive/l2-4-followup.md` |
+| Wave 11 L2.4 followup | 未來工作 | `.omo/manifests/l2-4-followup.md` |
 | Phase A3（gateway alert cleanup） | shipped | main.go:233 註解 |
 | Orchestrator plugin 進化 | active（janus/prism/phase3/spawning） | `internal/orchestrator/system_plugins.go` |
 

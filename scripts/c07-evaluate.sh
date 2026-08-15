@@ -22,11 +22,11 @@
 #        (the underlying c07-day-evaluator already returns 1)
 #   - 2: missing obs log / parse failure
 #
-# See: docs/operations/sector-prediction-runbook.md §2.3, §3 and PR #1201.
+# See: docs/specs/experimental-feature-launch-gate-spec.md §2.3, §3 and PR #1201.
 
 set -uo pipefail
 
-C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/archive/sector-prediction-observation-log.md}"
+C07_OBS_LOG="${C07_OBS_LOG:-/app/.omo/evidence/sector-prediction-observation-log.md}"
 C07_REPORT_DIR="${C07_REPORT_DIR:-/app/reports/c07-evaluation}"
 TZ="${C07_TZ:-Asia/Taipei}"
 export TZ

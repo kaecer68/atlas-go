@@ -1,8 +1,8 @@
 # 文件地圖 (Documentation Map)
 
 > **用途**：本文件為 `docs/` 全部文檔的**結構化目錄索引**。與 [`documentation-standard.md`](documentation-standard.md) 配套使用。
-> **最後驗證**：2026-07-26（operations/ 清理 + CLAUDE.md 精簡）
-> **原則**：每個路徑均為相對於 repo root 的**完整路徑**；檔案必須可被驗證存在。
+> **最後驗證**：2026-08-17（docs/ 治理瘦身：226 → 158 tracked 檔）
+> **原則**：`docs/` 路徑均為相對於 repo root 的完整路徑且必須存在；`.omo/` 僅標示私有工作目錄的承接位置，不保證新 clone 中存在。
 
 ---
 
@@ -25,6 +25,33 @@
 ---
 
 ## docs/ 內容地圖（依類別分組）
+
+### 🧹 文件瘦身治理（2026-08-17）
+
+2026-08-17 起，`docs/` 只保留 canonical 知識，tracked 檔由 **226 減至 158**；歷史、調查、manifest 與執行計畫不再放在公開 tree。
+
+| 原公開位置 | 處理 |
+|---|---|
+| `docs/archive/` | 目錄解散；歷史知識移至 `.omo/audit/` 或提煉為 canonical，其餘 13 檔刪除 |
+| `docs/investigations/` | 移至 `.omo/investigations/`（私有調查紀錄） |
+| `docs/work/` | 移至 `.omo/manifests/`（個別 manifest） |
+| 根目錄 `ATLAS_SYSTEM_STATE.md`、`llm-promotion-evaluation.md` | 移至 `.omo/audit/` |
+| 根目錄 `script-usage-guide.md` | 移至 `.omo/handoffs/` |
+| 根目錄 `manifest-constitution-gap-audit.md`、`manifest-constitution-implementation.md`、`manifest-methodology-e4-review.md` | 移至 `.omo/manifests/` |
+| `docs/specs/dark-launch-tracker-spec.md` | 移至 `.omo/evidence/` |
+| `docs/operations/commercial-flow-scope-2026-07-22.md`、`docs/operations/mcp-2026-07-28-migration-roadmap.md`、`docs/operations/l2-4-unblocking-roadmap.md` | 移至 `.omo/plans/` |
+| `docs/operations/l2-4-fault-tolerance-design.md`、`production-rollout-runbook.md`、`sprint3-rollout-runbook.md` | 已刪除，不在公開目錄保留 |
+| `docs/archive/2026-08-12-sector-prediction-runbook.md`、`docs/archive/2026-08-12-sector-dimension-prediction-spec.md`、`docs/archive/l2-4-followup.md`、`docs/archive/l2-4-observation-log.md` 等舊流程檔 | 已移除或刪除，不再列為 public runbook/spec／log |
+
+#### 本次 distill 對照
+
+| 原 archive 原檔 | Canonical 目標 |
+|---|---|
+| `docs/archive/2026-06-28-decision-chain-evolution-v2.md` | `docs/audit-trail.md`（決策鏈進化 v2／ConvictionStep 參數溯源） |
+| `docs/archive/2026-07-21-binary-freshness-protocol.md` | `docs/developer-guide.md`（Binary Freshness 檢查） |
+| `docs/archive/sector-allocation-closure-rollback-drills.md` | `docs/operations/sector-allocation-closure-runbook.md`（SA11.B Rollback Drills） |
+
+`docs/manifests/` 仍只保留 `README.md` + `TEMPLATE.md`；`docs/contracts/channel-index.json`、`docs/contracts/mcp-tools.contract.json` 與 `docs/swagger.json` 維持 canonical。
 
 ### 🏛️ 規範 / 憲法 / 核心 Reference
 
@@ -56,7 +83,6 @@
 | `docs/silicon-indicators-coverage.md` | 矽谷指標覆蓋 | ✅ |
 | `docs/llm-integration-strategy-framework.md` | LLM 整合策略框架（主檔） | ✅ |
 | `docs/llm-adr-log.md` | LLM 架構決策紀錄（ADR-001~010） | ✅ |
-| `docs/llm-promotion-evaluation.md` | LLM 功能晉升評估 | ✅ |
 | `docs/calibration-loop.md` | 校準循環 | ✅ |
 | `docs/evolution-loop.md` | 演化循環 | ✅ |
 
@@ -67,13 +93,12 @@
 | `docs/operations-playbook.md` | 操作手冊 | ✅ |
 | `docs/iteration-playbook.md` | 迭代指南 | ✅ |
 | `docs/data-sources.md` | 資料源說明 | ✅ |
-| `docs/developer-guide.md` | 開發者指南（人類向） | ✅ |
-| `docs/script-usage-guide.md` | 腳本使用指南 | ✅ |
+| `docs/developer-guide.md` | 開發者指南（人類向，含 binary freshness 收尾流程） | ✅ |
 | `docs/multi-cli-protocol.md` | 多 CLI 並行協議 | ✅ |
 | `docs/ai-prompt-files.md` | AI Prompt 政策 | ✅ |
 | `docs/design.md` | 設計文件 | ✅ |
 | `docs/process-annotation-sop.md` | 如何維護 processes.yaml | ✅ |
-| `docs/audit-trail.md` | 稽核軌跡 | ✅ |
+| `docs/audit-trail.md` | 三階段決策稽核軌跡，含決策鏈 v2 參數溯源 | ✅ |
 | `docs/mcp-integration-local.md` | MCP 本機接入完整指南 | ✅ |
 | `docs/guides/adding-sector-agents.md` | 新增 sector agent 指南 | ✅ |
 | `docs/guides/ai-productivity.md` | AI 生產力指南 | ✅ |
@@ -92,24 +117,17 @@
 | `docs/operations/version-bumping.md` | Version bump SOP | ✅ |
 | `docs/operations/wave9-runbook.md` | Wave 9 Observability 操作手冊 | ✅ |
 | `docs/operations/l2-4-runbook.md` | L2.4 觀察期操作手冊 | ✅ |
-| `docs/operations/l2-4-fault-tolerance-design.md` | L2.4 容錯設計 | ✅ |
-| `docs/operations/l2-4-unblocking-roadmap.md` | L2.4 解鎖路線圖 | ✅ |
 | `docs/operations/l3-runbook.md` | L3 操作手冊 | ✅ |
 | `docs/operations/loki-deployment.md` | Loki 集中式 log 部署 | ✅ |
 | `docs/operations/mcp-deploy.md` | MCP 部署指南 | ✅ |
-| `docs/operations/mcp-2026-07-28-migration-roadmap.md` | MCP 對外整合修正 + 2026-07-28 規格遷移路線圖 | ✅ |
 | `docs/operations/local-deploy.md` | 本機 Docker 部署設定（從 CLAUDE.md 移出） | ✅ |
 | `docs/operations/cmd-atlas-coverage-policy.md` | cmd/atlas 覆蓋率政策 | ✅ |
 | `docs/operations/tier-boundary.md` | Tier 邊界定義 | ✅ |
 | `docs/operations/stock-mcp-query-templates.md` | 個股 MCP 查詢範本 | ✅ |
-| `docs/operations/sprint3-rollout-runbook.md` | Sprint 3 部署手冊 | ✅ |
-| `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊 | ✅ |
-| `docs/archive/2026-08-12-sector-prediction-runbook.md` | Sector 預測操作手冊（DEPRECATED 2026-08-12，capital_predictions 頁面已移除） | ✅ |
+| `docs/operations/sector-allocation-closure-runbook.md` | Sector Allocation Closure 操作手冊，含 SA11.B rollback drills | ✅ |
 | `docs/operations/rss-feed-replacement.md` | RSS feed 替換決策記錄 | ✅ |
-| `docs/operations/production-rollout-runbook.md` | Production Rollout Runbook | ✅ |
-| `docs/operations/commercial-flow-scope-2026-07-22.md` | 商業化流程 scope 定義 | ✅ |
 
-> **2026-07-26 清理**：6 個檔案移至 archive/（有教學價值）、8 個 transient 檔案刪除。詳見 PR #1359。
+> **2026-08-17 清理**：移出、刪除與 distill 對照完整列於上方「文件瘦身治理」段。
 
 ### 📐 Specs（技術規格）
 
@@ -197,11 +215,18 @@
 
 ### 📂 其他目錄
 
-| 目錄 | 用途 |
+| 目錄／檔案 | 用途 |
 |------|------|
-| `docs/archive/` | 歷史歸檔（26+ 檔案，見 archive/README.md） |
-| `docs/manifests/` | Manifest 治理模板（README.md + TEMPLATE.md）；個別 manifest 已移至 .omo/manifests/
-| `docs/investor/` | 投資人入口 + use cases（10 個檔案） |
+| `docs/manifests/` | Manifest 治理模板；只保留 `README.md` + `TEMPLATE.md` |
+| `docs/contracts/` | 契約來源；保留 `channel-index.json` + `mcp-tools.contract.json` |
+| `docs/swagger.json` | 對外 API schema |
+| `docs/investor/` | 投資人入口 + use cases |
+| `.omo/audit/` | 私有歷史稽計；承接 `docs/archive/` 的歷史檔與根目錄審計檔 |
+| `.omo/investigations/` | 私有調查紀錄；承接 `docs/investigations/` |
+| `.omo/manifests/` | 個別 transient manifest；承接 `docs/work/` 與已移出的根目錄 manifest |
+| `.omo/plans/` | 私有短期執行計畫；承接移出的 operations/spec plans |
+| `.omo/evidence/` | 私有驗證證據；承接 `dark-launch-tracker-spec.md` 等已移出證據 |
+| `.omo/handoffs/` | 私有 session 交接；承接 `script-usage-guide.md` |
 
 ---
 
@@ -219,7 +244,7 @@
 
 ## `.omo/` 查找地圖
 
-`.omo/` 在 `.gitignore` 排除範圍，新 clone 不會取得。結構與白名單見 [`documentation-standard.md`](documentation-standard.md) § `.omo/`。
+`.omo/` 在 `.gitignore` 排除範圍，新 clone 不會取得；它承接本治理表列出的 audit、investigations、manifests、plans、evidence 與 handoffs 私有產物。結構、生命週期與白名單見 [`documentation-standard.md`](documentation-standard.md) § `.omo/`。
 
 ---
 
@@ -237,6 +262,6 @@
 
 ---
 
-> **維護者**：見「歷史動作紀錄」段。最後更新：2026-07-26。
+> **維護者**：以 `docs/documentation-standard.md` 為治理規範。最後更新：2026-08-17。
 >
-> **本次更新**：operations/ 清理（6→archive + 8 刪除 transient）、CLAUDE.md 精簡 222→80 行、local-deploy.md 新建、guidelines-index.md 重建、tool 數量統一 115-121。
+> **本次更新**：補記 `docs/` 226→158 tracked 瘦身、已解散目錄、移出／刪除項、私有 `.omo/` 承接位置，以及 3 個 archive distill 的 canonical 對照。

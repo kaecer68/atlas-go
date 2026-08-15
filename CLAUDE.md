@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.2.0+。L2.3 設計見 [`docs/specs/llm-sector-agent-spec.md`](docs/specs/llm-sector-agent-spec.md)、[`docs/specs/agent-loop-state-machine-spec.md`](docs/specs/agent-loop-state-machine-spec.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship（PR #821 merged 2026-06-29），文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md) + [`docs/archive/l2-4-followup.md`](docs/archive/l2-4-followup.md)（後續工作報告）。`UseLLMSectorAgents` flag 預設 off。
+> **Wave 11 L2.3 PoC + L2.4 觀察窗口** — v0.0.0.18..v0.0.2.0+。L2.3 設計見 [`docs/specs/llm-sector-agent-spec.md`](docs/specs/llm-sector-agent-spec.md)、[`docs/specs/agent-loop-state-machine-spec.md`](docs/specs/agent-loop-state-machine-spec.md)、[`docs/guides/adding-sector-agents.md`](docs/guides/adding-sector-agents.md)。L2.4 已 ship（PR #821 merged 2026-06-29），文件永久化於 [`docs/operations/l2-4-runbook.md`](docs/operations/l2-4-runbook.md) + [`docs/specs/l2-4-observation-spec.md`](docs/specs/l2-4-observation-spec.md)（後續工作報告已移入 harness 私有 .omo/manifests/）。`UseLLMSectorAgents` flag 預設 off。
 
 ## 語言強制規範
 

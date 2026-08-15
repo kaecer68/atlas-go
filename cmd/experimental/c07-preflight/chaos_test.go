@@ -111,7 +111,7 @@ func TestChaosPreflight(t *testing.T) {
 
 			// Create temporary obs log and parameters.json for file-based checks.
 			tmpDir := t.TempDir()
-			obsLogPath := filepath.Join(tmpDir, "docs", "archive", "sector-prediction-observation-log.md")
+			obsLogPath := filepath.Join(tmpDir, ".omo", "evidence", "sector-prediction-observation-log.md")
 			if err := os.MkdirAll(filepath.Dir(obsLogPath), 0o755); err != nil {
 				t.Fatalf("mkdir obs log dir: %v", err)
 			}

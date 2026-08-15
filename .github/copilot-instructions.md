@@ -48,7 +48,7 @@ make ci-full   # pre-PR complete check
 - [docs/evolution-loop.md](../docs/evolution-loop.md) — Acceptance gate logic
 - [docs/data-sources.md](../docs/data-sources.md) — Market data import, replay format (JSONL)
 - [docs/reference/parameter-system.md](../docs/reference/parameter-system.md) — Parameter management with provenance tracking
-- `docs/archive/2026-06-15-phase2-implementation.md` ~ `2026-06-15-phase5-architecture.md` — Historical phase decisions
+- `.omo/audit/2026-06-15-phase2-implementation.md` ~ `2026-06-15-phase5-architecture.md` — Historical phase decisions（harness 私有）
 
 ## 📝 History & Context
 

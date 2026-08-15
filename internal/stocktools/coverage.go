@@ -4,7 +4,7 @@
 // TW symbols the data pipeline actually covers. The 4 endpoints (quote /
 // fundamentals / chips / technical) currently accept any symbol and either
 // silently return zero/fake data or fail with a misleading
-// `context canceled` error (see docs/investigations/2026-08-06-equipment-stocks-chips-gaps.md).
+// `context canceled` error (see .omo/investigations/2026-08-06-equipment-stocks-chips-gaps.md).
 //
 // Sole data source: portfolio.FundamentalProvider (backed by
 // data/fundamentals.json, ~1070 TWSE-listed common stocks). Coverage is

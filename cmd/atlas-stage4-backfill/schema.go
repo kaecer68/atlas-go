@@ -8,7 +8,7 @@
 //	the Stage 4 PR#2 SQLite loader; PR#3 prediction backtest engine
 //	consumes them too.
 //
-// Why 4 JSONLs and not 5 (per ../../docs/archive/2026-07-14-atlas-stage4-backfill-plan.md):
+// Why 4 JSONLs and not 5 (per .omo/audit/2026-07-14-atlas-stage4-backfill-plan.md):
 //
 //	The plan listed prediction_input_snapshot_90d.jsonl as the 5th file.
 //	After inspecting the predictor's input shape (EventCalendar + CapitalFlow

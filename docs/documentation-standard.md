@@ -63,25 +63,20 @@ docs/
 ├── specs/                       # 規格（topic-spec.md）
 # 注意：docs/plans/ 已移除。所有具體修復/執行計畫請放 .omo/plans/（短期，merge 後刪）。
 ├── guides/                      # 指南（topic-guide.md）
-└── archive/                     # 歸檔（見下方專節）
 ```
 
-### `docs/archive/` 用途（**嚴格**）
+### 歷史歸檔（`docs/archive/` 已解散 → `.omo/audit/`）
 
-**只放對 6 個月後新貢獻者有教學價值的歷史檔案**：
+**2026-08-17 起 `docs/archive/` 不再作為公開歸檔目錄**（公開 repo 不保留過程紀錄）。
 
-| 該放 | 不該放 |
-|------|--------|
-| 重大架構演進最終快照（2026-06-15-phase5-architecture 最終狀態）| 短期 plan/spec（merge 後 git reflog 是真相）|
-| 重大決策的 audit 報告（避免重蹈覆轍）| 觀察期日誌（過渡性）|
-| 有歷史教訓的 incident postmortem | 過時 migration（CHANGELOG 已有）|
-| 重大規則演進（2026-06-15-experiment-baseline-report 稀疏資料教訓）| 純粹 snapshot（無結論、無教訓）|
+- 歷史歸檔內容 → `.omo/audit/`（gitignored，harness 私有，新 clone 不可見）
+- 具 6 個月教學價值、需公開的歷史知識 → **提煉**進 `docs/specs/`、`docs/reference/` 或 `docs/operations/`（先提煉再刪原檔）
+- 無提煉價值 → 刪除（git reflog 可恢復）
 
-**入 archive 前必答**：「新 clone 用戶 6 個月後會從這份檔案學到 CHANGELOG 看不到的東西嗎？」
-
-- 是 → 進 archive
+**入 `.omo/audit/` 前必答**：「新 clone 用戶 6 個月後會從這份檔案學到 CHANGELOG 看不到的東西嗎？」
+- 是、且值得公開 → 提煉進 `docs/` 對應目錄
+- 是、僅內部參考 → `.omo/audit/`
 - 否 → 刪除（git reflog 仍可恢復）
-
 
 ### `docs/manifests/` 治理（**2026-07-21 新增**）
 
@@ -106,7 +101,7 @@ docs/
 ```
 Manifest done →
   ├─ 含 stable spec-level invariant → promote 到 docs/specs/<topic>-spec.md（提取 invariants，非直接搬移）
-  ├─ 有 6 個月教學價值（重大 bug 的根因分析、架構決策教訓）→ docs/archive/YYYY-MM-DD-slug.md
+  ├─ 有 6 個月教學價值（重大 bug 的根因分析、架構決策教訓）→ 提煉進 docs/ 對應目錄；僅內部參考 → .omo/audit/YYYY-MM-DD-slug.md
   └─ 無長期價值（單純修復追蹤）→ 刪除（git reflog 可恢復）
 ```
 
@@ -139,8 +134,8 @@ bash scripts/ci/check_docs_governance.sh
 ### `docs/` 生命週期
 
 1. **active** — 當前使用
-2. **stale 60 天無引用** → 評估是否進 `docs/archive/`
-3. **archive 超過 6 個月無引用** → 從 repo 刪除（git reflog 可恢復）
+2. **stale 60 天無引用** → 評估是否提煉進 `docs/` 或移入 `.omo/audit/`（私有）
+3. **`.omo/audit/` 內容超過 6 個月無引用** → 刪除（git reflog 可恢復）
 
 ---
 
@@ -169,6 +164,8 @@ bash scripts/ci/check_docs_governance.sh
 | `boulder.json` | 執行追蹤器 | — | 任務完成即清 |
 | `maps/` | 自動產生的架構快照 | `<topic>-map.md` | 重新生成時覆蓋舊檔 |
 | `manifests/` | **短壽** invariant tracker（審計/修復追蹤 manifest） | `YYYY-MM-DD-<slug>.md` | 完成後 promote/archive/delete；7 天 stale 提示清理 |
+| `audit/` | 歷史歸檔/審計快照（archive 解散後承接） | `YYYY-MM-DD-<slug>.md` | 6 個月無引用 → 刪除 |
+| `investigations/` | 調查紀錄（調查完成即收斂） | `YYYY-MM-DD-<slug>.md` | 結論落地到 docs/ 或 traps 後 → 刪除 |
 
 ### **禁止的子目錄**（歷史教訓）
 
@@ -226,11 +223,11 @@ Wave 目錄用於階段性開發窗口（如 L2.3 PoC、L2.4 觀察期）。與�
 Wave 完成 → 文件分類 →
   ├─ 永久 reference → docs/specs/ 或 docs/guides/
   ├─ 觀察期文件 → .omo/wave-N/（帶 status banner）
-  └─ 一次性 audit → docs/archive/
+  └─ 一次性 audit → .omo/audit/
 ```
 
 **Rollback 路徑**：
-- 失敗 → 帶 status banner 移至 `docs/archive/YYYY-MM-DD-<wave>-resolved.md`
+- 失敗 → 帶 status banner 移至 `.omo/audit/YYYY-MM-DD-<wave>-resolved.md`（私有）
 - 觀察期結束 → 成功 promotion 升級到 `docs/`；rollback 如上
 
 **規則**：
@@ -238,7 +235,7 @@ Wave 完成 → 文件分類 →
 - wave 目錄在 `.omo/` 下（非 `docs/`），避免規範目錄被暫存內容污染
 - 每個 wave 目錄應有 README 標註狀態（PLANNED / IN PROGRESS / COMPLETED）
 
-> 歷史參考：`docs/wave-11/`（2026-06-28 解散）— L2.4 規劃 → PR #824 永久化為 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md` + `docs/archive/l2-4-followup.md`（見該 PR 的 work report 與 commits）。
+> 歷史參考：`docs/wave-11/`（2026-06-28 解散）— L2.4 規劃 → PR #824 永久化為 `docs/operations/l2-4-runbook.md` + `docs/specs/l2-4-observation-spec.md`（後續工作報告已移入 .omo/manifests/）。
 
 ### 判斷流程：放 `docs/` 還是 `.omo/`？
 
@@ -315,7 +312,7 @@ grep -E "(\.omo|\.opencode)" .gitignore
 | 開發者指南 | `docs/guides/` | `<topic>-guide.md` |
 | 模組操作手冊 | `docs/modules/` | `<module>.md` + `README.md` |
 | 操作 runbook / 驗證報告 | `docs/operations/` | `<topic>-runbook.md` / `<topic>-verification-report.md` |
-| 歸檔（教學價值） | `docs/archive/` | `YYYY-MM-DD-<slug>.md` |
+| 歸檔（教學價值，私有） | `.omo/audit/` | `YYYY-MM-DD-<slug>.md` |
 | **長壽 brief（跨 session 規劃）** | `.omo/briefs/` | `<topic>-brief.md` 或 `<topic>.md` |
 | **短期 PR 待辦 / 修復計畫** | `.omo/plans/` | `P<n>-<slug>.md` 或 `YYYY-MM-DD-<slug>.md` |
 | Manifest 治理模板 | `docs/manifests/` | `README.md` + `TEMPLATE.md` |

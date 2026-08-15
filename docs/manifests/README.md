@@ -32,7 +32,7 @@ The verifier checks:
 See `docs/documentation-standard.md` §`docs/manifests/` 治理 for the full lifecycle. After completion:
 
 1. Run `./scripts/cleanup-manifests.sh --stale-days 7` to check for stale manifests
-2. **Archive** (→ `docs/archive/`): if the manifest documents a significant bug with teaching value
+2. **Archive** (→ `.omo/audit/`, harness-private): if the manifest documents a significant bug with teaching value
 3. **Promote** (→ `docs/specs/<topic>-spec.md`): if the manifest contains stable spec-level invariants
 4. **Delete**: if it's a simple repair tracker with no long-term value
 

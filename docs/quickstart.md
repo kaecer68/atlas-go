@@ -82,7 +82,7 @@ rm .omo/plans/*.md .omo/research/*.md .omo/handoff/*.md
 
 # 如果內容有長期保存價值,**不要直接留整份 .md**:
 #   - 應先萃取到正式 docs 位置,例如 docs/specs/<feature>.md 或 docs/operations/<feature>-runbook.md
-#   - 或若屬於已歸檔的 feature,移到 docs/archive/<feature>-<date>.md
+#   - 或若屬於已結束的 feature,內容移入 .omo/audit/ 或刪除
 #   - .omo/ 是 gitignored 的「working area」,不是 archive — 不要拿來長期保存
 ```
 

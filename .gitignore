@@ -242,3 +242,8 @@ internal/narrative/testdata/*.actual.json
 # iMac production deploy-only compose files (方案二: 部署配置不進 git, 由 iMac 本機維護)
 /docker-compose.prod.yml
 /docker-compose.crons.yml
+
+# docs/ 禁止的 transient 子目錄（內容一律在 .omo/，防 future drift；2026-08-17 治理）
+docs/investigations/
+docs/work/
+docs/archive/

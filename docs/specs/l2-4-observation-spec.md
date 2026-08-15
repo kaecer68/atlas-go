@@ -3,8 +3,8 @@
 > **Status**: Metrics implementation shipped (PR #821, merge commit `f69b3551`, 2026-06-29).
 > **Predecessor**: [`./llm-sector-agent-spec.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 > **Operational guide**: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
-> **Linked log**: `docs/archive/l2-4-observation-log.md`
-> **Future work**: [`../archive/l2-4-followup.md`](../archive/l2-4-followup.md) §3
+> **Linked log**: `.omo/evidence/l2-4-observation-log.md`
+> **Future work**: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) §3
 > **Issues**: [#740](https://github.com/kaecer68/atlas-go/issues/740) (slog metrics for L2.4 observability in `SemiconductorLLMAgent.Recommend`)
 
 ## Overview
@@ -35,7 +35,7 @@ This spec defines the **metrics schema** — the slog event contract that any do
 # Plus env var (required for factory to register the plugin)
 export LLM_SECTOR_AGENTS_ENABLED=true
 
-# Or via CLI (when wired — see ../archive/l2-4-followup.md §2)
+# Or via CLI (when wired — see .omo/manifests/l2-4-followup.md §2)
 atlas run --use-llm-sector-agents
 ```
 
@@ -95,14 +95,14 @@ Operational details (Day 7 / Day 14 checkpoints, rollback procedure): see [L2.4 
 
 ## Future work (Promotion)
 
-The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDriver removal → Version tag) is documented in [`../archive/l2-4-followup.md`](../archive/l2-4-followup.md) §3. The spec intentionally stops at the metric schema boundary — operational concerns (roll-back, promotion, risk) live in the runbook to avoid duplication.
+The full promotion procedure (4 steps: Source upgrade → Default flip → LLMDriver removal → Version tag) is documented in [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) §3. The spec intentionally stops at the metric schema boundary — operational concerns (roll-back, promotion, risk) live in the runbook to avoid duplication.
 
 ## References
 
 - Predecessor: [`./llm-sector-agent-spec.md`](./llm-sector-agent-spec.md) (L2.3 PoC design)
 - Operational guide: [`../operations/l2-4-runbook.md`](../operations/l2-4-runbook.md)
-- Future work: [`../archive/l2-4-followup.md`](../archive/l2-4-followup.md) (auto-cron / CLI flag / promotion)
-- Existing log: `docs/archive/l2-4-observation-log.md`
+- Future work: [`.omo/manifests/l2-4-followup.md`](.omo/manifests/l2-4-followup.md) (auto-cron / CLI flag / promotion)
+- Existing log: `.omo/evidence/l2-4-observation-log.md`
 - Plan: [Issue #711 (Wave 10 L2.3 plan)](https://github.com/kaecer68/atlas-go/issues/711) §L2.4
 - Metrics: [Issue #740](https://github.com/kaecer68/atlas-go/issues/740)
 - Implementation: PR #821 — `internal/orchestrator/semiconductor_llm_agent.go` (orchestrator), `internal/monitoring/api/pipeline/l2_4_*.go` (state + handlers), `cmd/atlas/main.go` (route registration + `SetConfig` seed), `shared_web/static/js/pages/synergy.js` (admin UI)

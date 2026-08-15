@@ -1,6 +1,6 @@
 # AGENTS.md — scripts/openclaw
 
-> OpenClaw 治理引擎目錄。歷史操作文件見 `docs/archive/2026-06-15-openclaw-protocol-v2.md` 與 `docs/archive/2026-06-15-openclaw-protocol.md`；新計畫請見 `internal/AGENTS_INDEX.md`。
+> OpenClaw 治理引擎目錄。歷史操作文件已刪除（OpenClaw 已退役，2026-08-17 清理）；新計畫請見 `internal/AGENTS_INDEX.md`。
 
 ## ANTI-PATTERNS
 
