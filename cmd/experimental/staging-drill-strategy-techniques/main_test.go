@@ -66,6 +66,12 @@ func TestRun_Phase0And1(t *testing.T) {
 }
 
 func TestRun_Phase2_SystemConstruction(t *testing.T) {
+	// Hermetic: JSONL backend in temp dirs regardless of machine-global
+	// ATLAS_STORE_BACKEND (~/.config/atlas-go/.env may default to postgres).
+	origBackend := os.Getenv("ATLAS_STORE_BACKEND")
+	os.Setenv("ATLAS_STORE_BACKEND", "jsonl")
+	defer os.Setenv("ATLAS_STORE_BACKEND", origBackend)
+
 	var buf bytes.Buffer
 	orig := logging.Default()
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
@@ -120,6 +126,12 @@ func TestRun_Phase2_SystemConstruction(t *testing.T) {
 }
 
 func TestRun_Phase3_PostSimulation(t *testing.T) {
+	// Hermetic: JSONL backend in temp dirs regardless of machine-global
+	// ATLAS_STORE_BACKEND (~/.config/atlas-go/.env may default to postgres).
+	origBackend := os.Getenv("ATLAS_STORE_BACKEND")
+	os.Setenv("ATLAS_STORE_BACKEND", "jsonl")
+	defer os.Setenv("ATLAS_STORE_BACKEND", origBackend)
+
 	var buf bytes.Buffer
 	orig := logging.Default()
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})

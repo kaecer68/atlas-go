@@ -15,11 +15,15 @@ func TestRunBacktestWindow(t *testing.T) {
 	origReplay := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 	origLedger := os.Getenv("ATLAS_LEDGER_DIR")
 	origSQLite := os.Getenv("ATLAS_SQLITE_PATH")
+	origBackend := os.Getenv("ATLAS_STORE_BACKEND")
 	defer func() {
 		os.Setenv("ATLAS_REPLAY_DATA_PATH", origReplay)
 		os.Setenv("ATLAS_LEDGER_DIR", origLedger)
 		os.Setenv("ATLAS_SQLITE_PATH", origSQLite)
+		os.Setenv("ATLAS_STORE_BACKEND", origBackend)
 	}()
+	// Hermetic: JSONL ledger in temp dir regardless of machine-global backend.
+	os.Setenv("ATLAS_STORE_BACKEND", "jsonl")
 
 	// Use sample replay data
 	os.Setenv("ATLAS_REPLAY_DATA_PATH", filepath.Join("..", "..", "samples", "replay", "twse_stock_day_all_sample.csv"))

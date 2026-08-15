@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# .githooks/pre-push — Block redundant pushes before they reach the remote
+# .githooks/pre-push — Block pushes before they reach the remote
 #
-# Catches these failure modes:
-#   1. CI gate (`make ci-gate`) — catches 90% of CI failures before push
-#   2. Local branch HEAD == origin/main  → nothing meaningful to push
-#   3. Zero file diff vs origin/main       → PR will be closed as redundant
-#      (this is the exact failure mode that produced PR #799 — branch had
-#       no unique work vs main, but was pushed and PR'd anyway)
+# Gates:
+#   1.  `make ci-gate`  (~30s) — fast gate, always runs (gofmt/build/vet/gen-drift/ci-quick)
+#   1b. `make ci-full`  (~5-8 min) — full local suite (lint/staticcheck/test/race/coverage);
+#       runs when the diff contains code (non-docs). Avoids push→CI-fail round trips.
+#       Overrides: PRE_PUSH_FULL=always 強制全量 / never 跳過 / auto 依 diff 判定(預設)
+#   2.  Local branch HEAD == origin/main → nothing meaningful to push
+#   3.  Zero file diff vs origin/main      → PR will be closed as redundant
+#       (this is the exact failure mode that produced PR #799)
 #
 # Install: bash scripts/install-hooks.sh
-#
 # Skip with: git push --no-verify (use only if you know what you're doing)
 
 set -euo pipefail
@@ -34,14 +35,38 @@ if ! make ci-gate 2>&1; then
   exit 1
 fi
 
-# ── Gate 2: HEAD already on main ──────────────────────────────────
-local_sha=$(git rev-parse HEAD)
-
+# ── Gate 1b: full CI preflight for code changes ──────────────────
 # Fast-fetch origin/main so diffs are accurate.
 if ! git fetch origin main --quiet 2>/dev/null; then
-  echo "⚠️  pre-push: cannot fetch origin/main — skipping redundancy checks"
+  echo "⚠️  pre-push: cannot fetch origin/main — skipping ci-full/redundancy checks"
   exit 0
 fi
+
+# Code change? (docs-only diffs skip ci-full — ci-gate suffices)
+code_changed=0
+if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$|(^|/)Makefile$|Dockerfile|docker-compose|\.github/|\.githooks/'; then
+  code_changed=1
+fi
+
+mode="${PRE_PUSH_FULL:-auto}"
+if [ "$mode" = "always" ] || { [ "$mode" = "auto" ] && [ "$code_changed" -eq 1 ]; }; then
+  echo ""
+  echo "🧪 pre-push: diff 含程式碼變更 → 跑 make ci-full (~5-8 min)..."
+  echo "   （PRE_PUSH_FULL=always/never 可覆寫; docs-only diff 自動只跑 ci-gate）"
+  if ! make ci-full 2>&1; then
+    echo ""
+    echo "❌ pre-push: make ci-full FAILED."
+    echo "   已在本地抓到問題，修好再 push（避免 push→CI-fail 往返）。"
+    echo "   Bypass with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+elif [ "$mode" != "never" ]; then
+  echo "ℹ️  pre-push: docs-only diff — ci-gate 已足夠（ci-full 跳過）"
+fi
+
+# ── Gate 2: HEAD already on main ──────────────────────────────────
+local_sha=$(git rev-parse HEAD)
 
 main_sha=$(git rev-parse origin/main)
 
