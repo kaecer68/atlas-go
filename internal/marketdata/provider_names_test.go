@@ -20,6 +20,7 @@ func TestProviderNamesAndConstructors(t *testing.T) {
 		{"DRAM", func() interface{ Name() string } { return NewDRAMSpotPriceProvider() }, "dram_spot_price"},
 		{"DayTrading", func() interface{ Name() string } { return NewDayTradingProvider() }, "twse_day_trading"},
 		{"ETF", func() interface{ Name() string } { return NewTWSEETFProvider() }, "twse_etf"},
+		{"FubonPCF", func() interface{ Name() string } { return NewFubonETFProvider() }, "fubon_etf_pcf"},
 		{"OddLot", func() interface{ Name() string } { return NewTWSEOddLotProvider() }, "twse_oddlot"},
 		{"TAIFEX", func() interface{ Name() string } { return NewTAIFEXProvider() }, "taifex"},
 	}

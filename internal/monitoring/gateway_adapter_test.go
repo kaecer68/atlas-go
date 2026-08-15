@@ -999,16 +999,65 @@ func TestNewETFFetcher(t *testing.T) {
 		}
 	})
 
-	t.Run("error", func(t *testing.T) {
+	t.Run("channel error falls back to fubon pcf", func(t *testing.T) {
+		// twse_etf channel 失敗（上游移除，實務常態）→ 自動落回富邦 PCF provider。
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			return nil, FetchMeta{}, errors.New("twse_etf channel inactive")
+		}
+		stub := &stubETFNetSubFetcher{
+			stats: &marketdata.ETFStats{Date: "20260817", NetSubscription: -18_970_000},
+		}
+		f := NewETFFetcher(fetcher, stub)
+		stats, err := f(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if stats.NetSubscription != -18_970_000 {
+			t.Errorf("NetSubscription = %d, want -18970000 (from fubon fallback)", stats.NetSubscription)
+		}
+	})
+
+	t.Run("channel data with zero net sub falls back", func(t *testing.T) {
+		// channel 回傳 NetSubscription=0（無資料語意）→ 不採用，落回富邦 PCF。
+		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+			stats := marketdata.ETFStats{Date: "2026-01-01", NetSubscription: 0}
+			b, _ := json.Marshal(stats)
+			return b, FetchMeta{}, nil
+		}
+		stub := &stubETFNetSubFetcher{
+			stats: &marketdata.ETFStats{Date: "20260817", NetSubscription: 123_000_000},
+		}
+		f := NewETFFetcher(fetcher, stub)
+		stats, err := f(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if stats.NetSubscription != 123_000_000 {
+			t.Errorf("NetSubscription = %d, want 123000000 (from fubon fallback)", stats.NetSubscription)
+		}
+	})
+
+	t.Run("fubon provider failure surfaces error", func(t *testing.T) {
 		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
 			return nil, FetchMeta{}, errors.New("down")
 		}
-		f := NewETFFetcher(fetcher)
+		stub := &stubETFNetSubFetcher{err: errors.New("fubon pcf down")}
+		f := NewETFFetcher(fetcher, stub)
 		_, err := f(context.Background())
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+// stubETFNetSubFetcher 是 marketdata.ETFNetSubFetcher 的測試替身。
+type stubETFNetSubFetcher struct {
+	stats *marketdata.ETFStats
+	err   error
+}
+
+func (s *stubETFNetSubFetcher) FetchETFNetSubscription(ctx context.Context) (*marketdata.ETFStats, error) {
+	return s.stats, s.err
 }
 
 func TestNewGeopoliticalRiskFetcher(t *testing.T) {

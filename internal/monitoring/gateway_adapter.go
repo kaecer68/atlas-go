@@ -745,18 +745,34 @@ func oddLotFromCapitalFlow(ctx context.Context, fetcher DataFetcher) (*marketdat
 	return &marketdata.OddLotStats{ImbalanceRatio: imbalance}, nil
 }
 
-// NewETFFetcher creates a fetcher for TWSE ETF subscription data.
-func NewETFFetcher(fetcher DataFetcher) apisystem.ETFFetcher {
+// NewETFFetcher creates a fetcher for ETF net-subscription data consumed by
+// RSI-tw subC3（ETF 申購分數）.
+//
+// 資料源策略（2026-08-17）：TWSE TWT44U（全市場 ETF 申購贖回淨額彙總報表）
+// 已於上游移除（見 known_issues.go twse_etf_upstream_60d），twse_etf channel
+// 預設不註冊。因此主要路徑改為富邦投信官網「申購買回清單 (PCF)」頁面
+// （免費、免 key、純 HTTP GET；實測取回真實差異數 006208→0、
+// 00900→-1,000,000、00692→-500,000，見 marketdata/fubon_etf_provider.go）。
+// twse_etf gateway channel 保留為第一優先嘗試（僅在 TWSE_ETF_API_KEY 設定
+// 重新啟用時會成功）；channel 失敗或回傳無資料時自動改抓富邦 PCF。
+func NewETFFetcher(fetcher DataFetcher, fubon ...marketdata.ETFNetSubFetcher) apisystem.ETFFetcher {
+	var fubonProv marketdata.ETFNetSubFetcher
+	if len(fubon) > 0 && fubon[0] != nil {
+		fubonProv = fubon[0]
+	} else {
+		fubonProv = marketdata.NewFubonETFProvider()
+	}
 	return func(ctx context.Context) (*marketdata.ETFStats, error) {
-		data, _, err := fetcher(ctx, "twse_etf")
-		if err != nil {
-			return nil, err
+		// 第一優先：twse_etf gateway channel（legacy 全市場彙總；上游已移除，
+		// 實務上會失敗或無資料而落回富邦 PCF）。
+		if data, _, err := fetcher(ctx, "twse_etf"); err == nil {
+			var result marketdata.ETFStats
+			if err := json.Unmarshal(data, &result); err == nil && result.Date != "" && result.NetSubscription != 0 {
+				return &result, nil
+			}
 		}
-		var result marketdata.ETFStats
-		if err := json.Unmarshal(data, &result); err != nil {
-			return nil, fmt.Errorf("etf unmarshal: %w", err)
-		}
-		return &result, nil
+		// 主要路徑：富邦投信 PCF 申購買回清單（8 支主力 ETF TWD 加權淨額）。
+		return fubonProv.FetchETFNetSubscription(ctx)
 	}
 }
 
