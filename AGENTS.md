@@ -15,6 +15,7 @@
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：60%
 - **啟動入口**：[`docs/quickstart.md`](docs/quickstart.md)
+- **雙機治理**：production 在 iMac（`atlas.goluck.uk`）、開發在 MacBook；跨設備規則見 `~/workspace/a2a-dev/docs/governance/雙機治理憲章.md` 與 `~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`
 
 ## 內容歸屬與防膨脹規則
 

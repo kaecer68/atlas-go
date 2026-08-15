@@ -26,15 +26,18 @@ git branch --show-current
 | 需求 | 參考位置 |
 |------|---------|
 | 前端架構（admin_web / client_web / shared_web） | [`docs/guides/frontend-architecture.md`](docs/guides/frontend-architecture.md)（單一權威來源） |
-| 部署設定（本機 Docker） | [`docs/operations/local-deploy.md`](docs/operations/local-deploy.md)（完整環境變數、流程、rollback） |
+| 部署設定 | **production 在 iMac**：`~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`；本機 Docker 開發：`docs/operations/local-deploy.md` |
 | Token 效率規則 | `## Token Efficiency Rules`（下方） |
 | PR 驗證清單 | `## PR 驗證清單`（下方） |
 
 ## Health Check → [`docs/operations/local-deploy.md`](docs/operations/local-deploy.md) §部署驗證
 
 ```bash
-curl -fsS http://localhost:18080/health          # Liveness
-curl -fsS http://localhost:18080/api/llm/health   # LLM Readiness
+# production (iMac) — 對外
+curl -fsS https://atlas.goluck.uk/health           # Liveness
+curl -fsS https://atlas.goluck.uk/api/llm/health    # LLM Readiness (需 API key)
+# 本機 dev
+curl -fsS http://localhost:18080/health            # Liveness
 ```
 
 ## Token Efficiency Rules
