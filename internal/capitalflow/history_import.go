@@ -142,7 +142,7 @@ func LoadReplayTradingDates(replayPath string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("history_import: open replay %s: %w", replayPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	seen := make(map[string]struct{})
 	sc := bufio.NewScanner(f)
