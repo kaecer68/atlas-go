@@ -23,7 +23,7 @@ func main() {
 
 	// TODO(low): Migrate to Gateway when experimental tooling is unified.
 	// TWSECapitalFlowProvider is a local file reader (data/state/capital_flow),
-	// not a network client. Non-production path — see docs/archive/2026-06-26-gateway-migration-tracking.md.
+	// not a network client. Non-production path — (see .omo/audit/ for historical records).
 	provider := marketdata.NewTWSECapitalFlowProvider(constants.StateCapitalFlow)
 	ctx := context.Background()
 

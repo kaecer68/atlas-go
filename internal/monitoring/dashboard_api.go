@@ -155,7 +155,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 
 	// Yahoo Finance-backed providers — only when enabled.
 	// Legacy constructor: production uses NewDashboardAPIWithGateway() instead.
-	// See docs/archive/2026-06-26-gateway-migration-tracking.md.
+	// See 歷史 gateway-migration 紀錄（已移出公開 docs）。
 	if cfg.YahooEnabled {
 		providers = append(providers, marketdata.NewYahooFinanceMacroProvider())
 		providers = append(providers, marketdata.NewSOXIndexProvider())
@@ -1286,7 +1286,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	cfg := config.Load()
 	if cfg.FinMindAPIKey != "" {
 		// FinMind dividend provider is tax-utility, not a data channel.
-		// Gateway migration deferred — see docs/archive/2026-06-26-gateway-migration-tracking.md.
+		// Gateway migration deferred — 見歷史紀錄（已移出公開 docs）。
 		finMindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey, a.workDir)
 		cacheDir := filepath.Join(a.workDir, "data", "cache", "dividends")
 		dividendProvider = marketdata.NewFinMindDividendProvider(finMindClient, cacheDir)

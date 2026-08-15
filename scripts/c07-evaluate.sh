@@ -22,11 +22,11 @@
 #        (the underlying c07-day-evaluator already returns 1)
 #   - 2: missing obs log / parse failure
 #
-# See: docs/operations/sector-prediction-runbook.md §2.3, §3 and PR #1201.
+# See: docs/specs/experimental-feature-launch-gate-spec.md（Reference Implementations）and PR #1201.
 
 set -uo pipefail
 
-C07_OBS_LOG="${C07_OBS_LOG:-/app/docs/archive/sector-prediction-observation-log.md}"
+C07_OBS_LOG="${C07_OBS_LOG:-/app/.omo/evidence/sector-prediction-observation-log.md}"
 C07_REPORT_DIR="${C07_REPORT_DIR:-/app/reports/c07-evaluation}"
 TZ="${C07_TZ:-Asia/Taipei}"
 export TZ
@@ -115,7 +115,7 @@ set -e
 if [ "${RC}" -eq 0 ]; then
     echo "[c07-evaluate ${TODAY}] PASS — see ${REPORT_FILE}"
 elif [ "${RC}" -eq 1 ]; then
-    echo "[c07-evaluate ${TODAY}] FAIL (Day ${DAY_NUMBER} criteria) — see ${REPORT_FILE}; per runbook §4 consider rollback" >&2
+    echo "[c07-evaluate ${TODAY}] FAIL (Day ${DAY_NUMBER} criteria) — see ${REPORT_FILE}; per launch-gate spec consider rollback" >&2
 else
     echo "[c07-evaluate ${TODAY}] evaluator exit=${RC}" >&2
 fi

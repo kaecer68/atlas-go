@@ -13,7 +13,7 @@ import (
 //
 // 用途：取代「auto_cycle_update 失敗時只看到 last_error 字串」的被動診斷,
 // 主動告訴我們「symbol X 不在 FinMind 收錄清單裡」這類 upstream 限制。
-// 詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
+// 詳見 .omo/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
 type CoverageReport struct {
 	UpdatedAt   time.Time                `json:"updated_at"`
 	FinMindSize int                      `json:"finmind_size"` // FinMind 收錄的 symbol 總數

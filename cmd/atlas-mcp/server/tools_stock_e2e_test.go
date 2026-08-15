@@ -228,7 +228,7 @@ func TestStockE2E_ResponseIsJSON(t *testing.T) {
 // state and surface it (rather than getting misled by the all-zero payload).
 //
 // This protects against the "silent zero data → bad recommendation" failure
-// mode documented in docs/investigations/2026-08-06-equipment-stocks-chips-gaps.md
+// mode documented in .omo/investigations/2026-08-06-equipment-stocks-chips-gaps.md
 // and the related stocktools coverage design (internal/stocktools/coverage.go).
 //
 // The 4 endpoints tested: stock_get_quote / stock_get_fundamentals /

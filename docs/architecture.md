@@ -1,7 +1,7 @@
 # Atlas 系統架構活地圖
 
 > 最後更新：2026-07-29
-> 維護紀律：每支 PR 完成後同步更新本圖涉及區域（見 `docs/ATLAS_SYSTEM_STATE.md` 尾行）。
+> 維護紀律：每支 PR 完成後同步更新本圖涉及區域（見 `.omo/audit/ATLAS_SYSTEM_STATE.md` 尾行）。
 
 ---
 

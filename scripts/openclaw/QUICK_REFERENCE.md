@@ -244,10 +244,10 @@ data/
 ./scripts/openclaw/decide.sh --help
 
 # 詳細教學
-cat docs/script-usage-guide.md
+# script-usage-guide.md 已移入 .omo/handoffs/（OpenClaw 退役）
 
 # 協議文件
-cat docs/2026-06-15-openclaw-protocol.md
+# 2026-06-15-openclaw-protocol.md 已刪除（OpenClaw 退役）
 ```
 
 ---

@@ -45,7 +45,7 @@ const MetricStage3LedgerRecords = "atlas_stage3_ledger_records"
 // MetricDataAggregatorFailures 統計 DataAggregator.AggregateIndustry 失敗次數
 // (per industry × kind label)。用途：把 `auto_cycle_update` channel 持續 error
 // 拆成可區分的根因 (quota / rate_limited / no_data / parse_error / transport / unknown)，
-// 取代只看 `last_error` 字串的 single-string 監控。詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
+// 取代只看 `last_error` 字串的 single-string 監控。詳見 .omo/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
 // Label industry 值域為已知 L1 industry ID (semiconductor/electronics/leo_satellite/...)；
 // kind ∈ {"quota","rate_limited","no_data","parse_error","transport","unknown"}，值域受限避免 cardinality 爆炸。
 const MetricDataAggregatorFailures = "atlas_data_aggregator_failures_total"

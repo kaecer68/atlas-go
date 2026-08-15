@@ -29,7 +29,7 @@ description: 文件治理守門員 — 在 AI agent 準備建立或移動 docs/ 
 | Session 交接 | `.omo/handoffs/` | ❌ `docs/handoff/`（>7天清理） |
 | 技術規格 (spec) | `docs/specs/<topic>-spec.md` | ✅ |
 | 操作手冊 | `docs/operations/<topic>-runbook.md` | ✅ |
-| 審計報告（有長期價值） | `docs/audit/YYYY-MM-DD-slug.md` | ✅ |
+| 審計/調查紀錄（內部參考） | `.omo/audit/YYYY-MM-DD-slug.md`、`.omo/investigations/` | ✅（私有） |
 
 ### `docs/manifests/` 特別規則
 
@@ -46,7 +46,7 @@ description: 文件治理守門員 — 在 AI agent 準備建立或移動 docs/ 
 進行中 → .omo/manifests/（正常編輯）
 完成後 →
   ├─ 含 spec-level invariant → promote 到 docs/specs/<topic>-spec.md
-  ├─ 有 6 個月教學價值 → docs/archive/YYYY-MM-DD-slug.md
+  ├─ 有 6 個月教學價值 → 提煉進 docs/ 對應目錄（spec/reference/operations）；僅內部參考 → .omo/audit/YYYY-MM-DD-slug.md（2026-08-17 起 docs/archive/ 已解散）
   └─ 無長期價值 → 刪除
 ```
 

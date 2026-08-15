@@ -1,5 +1,5 @@
 // Command c07-preflight validates the Pre-flight Checklist items from
-// docs/operations/sector-prediction-runbook.md §1 before the operator flips
+// docs/specs/experimental-feature-launch-gate-spec.md before the operator flips
 // `SECTOR_PREDICTION_ENABLED` from default false to true.
 //
 // Run: go run ./cmd/experimental/c07-preflight [atlas_base_url]
@@ -31,7 +31,7 @@ const (
 	defaultAtlasURL     = "http://localhost:18080"
 	httpTimeout         = 5 * time.Second
 	expectedSectorCount = 20
-	observationLogPath  = "docs/archive/sector-prediction-observation-log.md"
+	observationLogPath  = ".omo/evidence/sector-prediction-observation-log.md"
 )
 
 type checkResult struct {
@@ -138,7 +138,7 @@ func checkEnvironment(baseURL string) checkResult {
 	}
 }
 
-// checkObservationLog: verify docs/archive/sector-prediction-observation-log.md
+// checkObservationLog: verify .omo/evidence/sector-prediction-observation-log.md
 // exists and has placeholder for Day 1 baseline record.
 //
 // Pre-flight assumes operator is ABOUT TO flip flag to true. Day 1 placeholder

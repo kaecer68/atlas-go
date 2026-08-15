@@ -125,7 +125,7 @@ atlas-go 採取 simulation-first 與 audit-driven 架構,但目前缺少正式�
 - [ ] AGENTS.md 高頻陷阱表含「資安設定」一列,指向 SECURITY.md 與 apigateway/constitution.md(PR #817 新增;若未合併則此項標 N/A)。
 - [ ] `docs/reference/traps.md` 包含 live trading 安全旗標陷阱與 apigateway 憲法違反陷阱。
 - [ ] 本文件(`docs/specs/security-audit-spec.md`)的引用路徑與實際 canonical 檔案位置一致。
-- [ ] 30 天以上未引用的文件已評估是否移至 `docs/archive/`(依 `documentation-standard.md` 生命週期)。
+- [ ] 30 天以上未引用的文件已評估是否刪除或移入 .omo/audit/（依 documentation-standard.md 生命週期）。
 
 ## Audit Output
 

@@ -22,14 +22,11 @@
 | 檔案 | 主題 |
 |------|------|
 | [l2-4-runbook.md](l2-4-runbook.md) | L2.4 觀察窗口操作手冊 |
-| [l2-4-fault-tolerance-design.md](l2-4-fault-tolerance-design.md) | L2.4 容錯設計 |
-| [l2-4-unblocking-roadmap.md](l2-4-unblocking-roadmap.md) | L2.4 解阻 roadmap |
 | [wave9-runbook.md](wave9-runbook.md) | Wave 9 observability 系統 runbook |
 
-> 已移至 archive: `l2-4-observation-log.md`、`l2-4-followup.md` → [`../archive/`](../archive/)
+> 已移至 .omo/：`l2-4-observation-log.md`（.omo/evidence/）、`l2-4-followup.md`（.omo/manifests/）
 | [mcp-deploy.md](mcp-deploy.md) | atlas-mcp server 部署手冊 |
 | [loki-deployment.md](loki-deployment.md) | Loki 部署手冊 |
-| [sprint3-rollout-runbook.md](sprint3-rollout-runbook.md) | Sprint 3 上線 runbook |
 
 ## 政策與流程
 

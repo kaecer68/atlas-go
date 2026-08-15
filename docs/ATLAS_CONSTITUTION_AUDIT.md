@@ -146,7 +146,7 @@
 3. **補強 MPI (MCP 公開清單)** — M1–M6 已剩 M1（PeriodDetector MCP）未獨立公開；M4 已由 `get_recommendations` / `strategy_list_active` 間接覆蓋，可選擇獨立工具。
 4. **補強憲章強制執行機制 X1–X3** — X1 已在 ci-gate 強制（三個 check 均在 ci-quick）；X3 已有 pre-push drift scan。剩 X2（PR template 強制更新追蹤表）可考慮加入 `.github/pull_request_template.md` 檢查。
 5. **回顧 DeepSeek 覆核 F1–F5** — 仍未啟動；建議 sprint plan 列入下個 L2.x wave。
-6. **文件治理**：本審計 + `docs/manifest-constitution-implementation.md` + `docs/manifest-constitution-gap-audit.md` + `docs/ATLAS_METHODOLOGY.md` 附錄 D 必須**同步更新**（v1.0 下一步 #4 仍有效）。
+6. **文件治理**：本審計 + `.omo/manifests/manifest-constitution-implementation.md` + `.omo/manifests/manifest-constitution-gap-audit.md` + `docs/ATLAS_METHODOLOGY.md` 附錄 D 必須**同步更新**（v1.0 下一步 #4 仍有效）。
 
 ---
 
@@ -157,8 +157,8 @@
 
 ## 附錄 D：審計追蹤表（v1.0 原文 + v1.1 進度更新）
 
-> **實施總表**: `docs/manifest-constitution-implementation.md`
-> **差距審計**: `docs/manifest-constitution-gap-audit.md`
+> **實施總表**: `.omo/manifests/manifest-constitution-implementation.md`
+> **差距審計**: `.omo/manifests/manifest-constitution-gap-audit.md`
 
 | # | 項目 | 等級 | 狀態 (v1.1) | 修復 PR/Commit |
 |---|------|------|------|------|
@@ -238,7 +238,7 @@
 | #1421 | feat(b5-batch3-data-infra) | 同上（SectorIndexReader、GovernmentBrokerAggregator per-broker） |
 | #1418 | fix: B5-R TAIEX 抓取韌性 | **補強 B3** TAIEX 鍵穩定性；`DataStatus` 增加可見性（degraded / stale） |
 | #1446 / #1448 / #1449 / #1450 | Fugle v0.3 → v1.0 migration + rate limiter unification + Fugle key 註解校正 | **補強 B3**：Fugle rate limiter 統一進 Constitution（與憲章 §4.5.2 對齊）；TEJ_API_KEY 未設置時寫 inactive health record（治理） |
-| #1451 | unified quota management | **補強 B3 + X3**：跨 apigateway/marketdata/monitoring 三層 quota 管理；陷阱：2026-08-06 investigation 結論此 PR 自稱 unified 但**未對應 server-side 600/hr 細粒度**（詳見 `docs/investigations/2026-08-06-finmind-quota-collision.md`） |
+| #1451 | unified quota management | **補強 B3 + X3**：跨 apigateway/marketdata/monitoring 三層 quota 管理；陷阱：2026-08-06 investigation 結論此 PR 自稱 unified 但**未對應 server-side 600/hr 細粒度**（詳見 `.omo/investigations/2026-08-06-finmind-quota-collision.md`） |
 | #1452 | capture FinMind error body | **補強 B3**：channel health 內能看 FinMind 原始錯誤，避免「無值=假資料」風險 |
 | #1453 | tw_vol stale auto-refetch on trading day rollover | **補強 B3**：陳舊快取自動 refetch |
 | #1454 / #1455 / #1457 / #1458 | known-issue badges、crossmarket recovery 擴充 | **補強 X3**：long-stale channels 浮現 known-issue badge；`taifex-daily` dead alias 註冊；dash-separated runtime alias 收斂；crossmarket recovery 含 stale status |
@@ -295,7 +295,7 @@
 
 ## 附錄 F：憲章治理追蹤表（M1–M6 / F1–F5 / X1–X3，v1.1c 更新）
 
-> 對應 `docs/manifest-constitution-gap-audit.md` §憲章審計外新增項目。本附錄把 v1.0 的 ⬜ 全部走查 7/27 → 8/7 進展。
+> 對應 `.omo/manifests/manifest-constitution-gap-audit.md` §憲章審計外新增項目。本附錄把 v1.0 的 ⬜ 全部走查 7/27 → 8/7 進展。
 
 ### F1–F5：DeepSeek 方法論覆核
 

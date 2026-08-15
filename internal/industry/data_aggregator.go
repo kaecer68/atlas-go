@@ -28,7 +28,7 @@ import (
 //  1. production 的 "no_data" kind metric 是否在月初高峰（1-10 號）顯著上升
 //  2. FinMind daily quota tracker 是否有餘裕
 //
-// 詳見 docs/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
+// 詳見 .omo/investigations/2026-08-05-auto-cycle-update-quota-misconception.md。
 const DefaultFetchFallbackAttempts = 3
 
 // IndustryAggregateStatus 記錄單一 industry 的聚合結果，供排程任務回報

@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	defaultObsLog   = "docs/archive/sector-prediction-observation-log.md"
+	defaultObsLog   = ".omo/evidence/sector-prediction-observation-log.md"
 	defaultBaseline = 0.55
 )
 

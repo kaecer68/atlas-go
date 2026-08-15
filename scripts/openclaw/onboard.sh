@@ -208,8 +208,8 @@ show_next_steps() {
     echo "     • scripts/openclaw/QUICK_REFERENCE.md - 命令速查"
     echo ""
     echo "  3. 查看實驗報告："
-    echo "     • docs/2026-06-15-experiment-baseline-report.md - 基準測試報告"
-    echo "     • docs/2026-06-15-experiment-optimization-supplement.md - 優化補充報告"
+    echo "     • .omo/audit/2026-06-15-experiment-baseline-report.md - 基準測試報告（已私有化）"
+    echo "     • .omo/audit/2026-06-15-experiment-optimization-supplement.md - 優化補充報告（已私有化）"
     echo ""
 }
 

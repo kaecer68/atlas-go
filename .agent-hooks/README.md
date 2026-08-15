@@ -54,6 +54,6 @@ bash .agent-hooks/install.sh
 ## 文件
 
 - 使用說明:[`docs/operations/aci-hook-usage.md`](../docs/operations/aci-hook-usage.md)
-- 設計 plan:[`.omo/plans/2026-08-06-aci-pretooluse-prompt.md`](../docs/archive/2026-08-06-aci-pretooluse-prompt-plan.md)
+- 設計決策（plan 已刪除，決策為 durable artifact）:[`.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md`](../.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md)
 - 已知陷阱:[`.claude/agent-memory/footguns/agent-skips-aci-routing.md`](../.claude/agent-memory/footguns/agent-skips-aci-routing.md)
 - 設計決策:[`.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md`](../.claude/agent-memory/decisions/aci-enforcement-via-local-hook.md)

@@ -425,8 +425,8 @@
 
 ## 附錄 D：憲章審計追蹤表
 
-> **實施總表**: `docs/manifest-constitution-implementation.md`
-> **差距審計**: `docs/manifest-constitution-gap-audit.md`
+> **實施總表**: `.omo/manifests/manifest-constitution-implementation.md`
+> **差距審計**: `.omo/manifests/manifest-constitution-gap-audit.md`
 > **審計報告**: `docs/ATLAS_CONSTITUTION_AUDIT.md`（2026-07-27）
 > **更新規則**: 每次修復一個審計項目後，將狀態從 ⬜ 改為 ✅，並標註 PR 編號。
 

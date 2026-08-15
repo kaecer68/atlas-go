@@ -144,7 +144,7 @@ func InitSchema(db *sql.DB) error {
 	-- Stage 4 PR#2 — historical backfill tables. Each row carries is_synthetic
 	-- (always 1 for these tables because they are populated from the
 	-- Stage 4 CLI's staging JSONLs, NOT from live runtime emitters).
-	-- PR #1247 (manifest 2026-07-21-regime-history-source-and-vocab-normalize.md D01):
+	-- PR #1247 (manifest .omo/manifests/2026-07-21-regime-history-source-and-vocab-normalize.md D01):
 	-- added 'source' column. Existing rows from older binaries have 'source'
 	-- backfilled to 'synthetic' via the migration below; new rows written by
 	-- the live ingest pipeline populate source='macro_ingest'.

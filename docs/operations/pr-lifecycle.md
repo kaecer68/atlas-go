@@ -1,7 +1,7 @@
 # PR Lifecycle — 從本地修改到 production 驗收的全流程
 
 > **文件角色**：AI agent + 人類 reviewer 共享的 PR 流程規範。取代過去散落在 `AGENTS.md`、各 runbook、Makefile 註解的 PR 紀律片段。
-> **配套文件**：`AGENTS.md` 為入口索引（引用本檔），`docs/operations/production-rollout-runbook.md` 為 staging → production 部署的下一階段（不在本檔範圍）。
+> **配套文件**：`AGENTS.md` 為入口索引（引用本檔），`docs/operations/local-deploy.md` 為 production 部署的權威說明（不在本檔範圍）。
 > **本檔建立背景**：2026-08-05 v3.0 dispatch thread 暴露兩個洞 — (1) PR-F #1457 偷跑只跑 `ci-gate` 沒跑 `ci-full`,production 才暴露 recovery path 只處理 `status=ok` 不處理 `stale`; (2) PR merge 後沒跑 production 驗收就當 done。**這兩個洞不該再發生**。
 
 ## 1. Pre-PR — 本地修改 + 驗證

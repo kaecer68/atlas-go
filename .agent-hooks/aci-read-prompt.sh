@@ -26,7 +26,7 @@
 # are reserved for destructive / irreversible actions. ACI compliance is a
 # guidance problem, not a safety problem.
 #
-# See docs/archive/2026-08-06-aci-pretooluse-prompt-plan.md for design rationale.
+# See .claude/agent-memory/decisions/aci-enforcement-via-local-hook.md for design rationale.
 
 set -euo pipefail
 

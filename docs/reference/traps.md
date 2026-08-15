@@ -2,7 +2,7 @@
 title: traps.md — 高危陷阱參考
 updated: 2026-08-06
 status: active
-referenced_by: 15+ 份文件 (docs/specs, docs/operations, docs/investigations)
+referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
 
 # traps.md — 高危陷阱參考
@@ -30,7 +30,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, docs/investigations)
 
 ### FinMind / Quota [NEW — 2026-08-06]
 
-> 來源: `docs/investigations/2026-08-06-finmind-quota-collision.md` — 20+ 次 FinMind 修補循環 (PR #1451~#1463) 未被 trap 框架吸收,2026-08-06 盤查後補記。
+> 來源: `.omo/investigations/2026-08-06-finmind-quota-collision.md` — 20+ 次 FinMind 修補循環 (PR #1451~#1463) 未被 trap 框架吸收,2026-08-06 盤查後補記。
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
@@ -262,7 +262,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 **陷阱**：`followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。AI agent（包括未來的我）容易把它們當成不可挑戰的權威來引用。
 
 **失敗案例**（2026-07-08 L2.4 prep session）：
-- `docs/archive/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
+- `.omo/manifests/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
 - 我把這個「否」當成 hard rule 來擋 T13 main 的實作，連續 7+ 次拒絕
 - 實際上這個決策本身**就是 AI 寫的**，應該被視為 proposal 而非 gospel
 - User 提醒後我才修正：**followup.md 都是 AI coding 的時候，agent 寫的，所以正確與否若有問題，你可以及時討論**
@@ -280,7 +280,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 - `docs/operations/l2-4-*.md` — L2.4 prep session 期間由 AI agent 撰寫
 - `docs/specs/*.md` — 設計文件,可能混合 human owner + AI 補充
 - `docs/observations/*.md` — 觀察日誌範本,可能是 AI 模板
-- `docs/archive/*.md` — 已被歸檔的 AI-generated docs(明確標示「已完成」)
+- `.omo/audit/*.md` — 已移入私有工作區的歷史 AI-generated docs
 - 對照 `[docs/../documentation-map.md](../documentation-map.md)` 確認文件歸屬與維護者
 
 **不要擋 work 的情境**：

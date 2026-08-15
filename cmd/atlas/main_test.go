@@ -52,7 +52,7 @@ func freePort(t *testing.T) int {
 //
 // 如果只 `os.Unsetenv` 那 .env 載入後 ATLAS_API_KEY 會被設回去,
 // AuthMiddleware 看到非空 → 401,test 失敗。詳見
-// docs/investigations/2026-06-28-boot-loop-multi-service.md § 6。
+// .omo/investigations/2026-06-28-boot-loop-multi-service.md § 6。
 //
 // T-104: also set ATLAS_SKIP_PORT_PREFLIGHT=1 to bypass the TCP port
 // preflight in startup.Preflight. CI environments frequently have
