@@ -61,6 +61,9 @@ func productionSystemConfig(t *testing.T) config.Config {
 	cfg.ParametersConfigPath = filepath.Join(root, "configs", "parameters.json")
 	cfg.ReplayDataPath = config.GetReplayDataPath(root)
 	cfg.LedgerDir = t.TempDir()
+	// Hermetic: JSONL backend in temp dir regardless of machine-global
+	// ATLAS_STORE_BACKEND (~/.config/atlas-go/.env may default to postgres).
+	cfg.StoreBackend = "jsonl"
 	return cfg
 }
 
