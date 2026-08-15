@@ -124,16 +124,20 @@ git branch -d <branch>
 
 > **PR merge ≠ PR done**。合併後需 deploy + 在 production 跑驗證 checklist 才能視為 PR 完成。
 
-### 5.1 Docker rebuild
+### 5.1 Docker rebuild（iMac production）
 
-**只有人類（kaecer）能執行**:
+> **部署真相（2026-08-15 方案二）**：production 在 iMac，rebuild 在 iMac 執行。
 
 ```bash
-make rebuild-all
-docker compose restart
+# iMac (production) — rebuild + 重啟
+ssh kk@kimac "cd ~/workspace/atlas && git pull origin main && make rebuild-all"
+
+# MacBook 本機 dev 驗證（不影響 production）
+make rebuild-all   # 在 MacBook 本機跑,起本地容器驗證
 ```
 
-**AI agent 不得執行**（CLAUDE.md Docker 禁令）。
+**執行者**：hermes（iMac 運維員）可執行 iMac 的 rebuild（這是她的職責）；MacBook 本機 dev 的
+rebuild 由開發 agent / kaecer 執行。兩者皆**不會**直接操作對方機器的 production。
 
 ### 5.2 Binaries 對齊檢查
 
@@ -143,9 +147,10 @@ make check-binaries  # 應顯示 "ALL BINARIES FRESH"
 
 若不 fresh,等 docker 重建完成。
 
-### 5.3 Production Verification Checklist（每個 PR 都必跑）
+### 5.3 Production Verification Checklist（每個 PR 都必跑，在 iMac production 上驗證）
 
-PR author 或 reviewer **MUST 給出 3-5 個 curl 指令**針對該 PR 修的 channel / endpoint。例如:
+> **驗證位置**：iMac（`ssh kk@kimac` 後執行，或派 hermes 代勞）。PR author 或 reviewer **MUST 給出
+> 3-5 個 curl 指令**針對該 PR 修的 channel / endpoint。例如:
 
 ```bash
 # 範例: PR-F #1457 修 crossmarket recovery

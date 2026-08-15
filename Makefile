@@ -55,6 +55,18 @@ version:
 sync-version:
 	@bash scripts/sync-version.sh
 
+# ---- 雙機同步 (2026-08-15) ----
+.PHONY: sync-imac
+sync-imac: ## 同步 iMac production clone + 可選部署 (a2a-sync)
+	@echo "→ 同步 GitHub → iMac (atlas)"
+	@~/bin/a2a-sync
+	@echo "✓ 完成 (部署用: make sync-imac-deploy)"
+
+.PHONY: sync-imac-deploy
+sync-imac-deploy: ## 同步 + 重建部署 atlas 到 iMac
+	@~/bin/a2a-sync --deploy
+
+
 bump-version:
 	@read -p "Bump from $(VERSION) to (e.g. 0.0.0.30): " v; \
 	echo "$$v" > VERSION; \

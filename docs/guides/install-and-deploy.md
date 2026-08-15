@@ -251,46 +251,42 @@ openssl rand -hex 32
 
 ## 4. Deployment
 
-### 4.1 Local (Docker compose)
+> **部署真相（2026-08-15 方案二定案）**：開發在 MacBook、production 在 iMac。
+> iMac 用**本地 build image**（`atlas-atlas:latest`），**不使用 ghcr.io pull**（舊模式已淘汰）。
+> 完整部署流程見 [`docs/operations/local-deploy.md`](../operations/local-deploy.md)。
 
-For local dev / staging on the same machine:
+### 4.1 Local dev (MacBook — 本機驗證)
 
 ```bash
-# 1. Pull latest image
-docker compose pull atlas-go
+# 1. 本地 build + 起容器（完整 stack）
+make rebuild-all
 
-# 2. Restart
-docker compose up -d atlas-go
-
-# 3. Verify
+# 2. 驗證
 docker compose ps
 curl -fsS http://localhost:18080/health
 ```
 
-The image tag in `docker-compose.yml` follows `ghcr.io/kaecer68/atlas-go:<git-sha>`. Update by:
-```bash
-# Edit docker-compose.yml to set the desired image tag
-docker compose pull atlas-go
-docker compose up -d atlas-go
-```
+> 本機容器與 iMac production 不同機器、不同 port 空間，**互不影響**。驗證完可 `docker compose down` 停止。
 
-### 4.2 Production (ghcr.io)
+### 4.2 Production (iMac — 唯一部署機)
 
-The CI (`ci-cd.yml` main branch) auto-builds and pushes to `ghcr.io/kaecer68/atlas-go:<sha>`. To deploy:
+**流程**：MacBook push → iMac `git pull` → iMac `make rebuild-all` → 驗證。
 
 ```bash
-# On the production host
-cd atlas-go
+# On the production host (iMac)
+cd ~/workspace/atlas
 git pull origin main
-docker compose pull atlas-go
-docker compose up -d atlas-go
+make rebuild-all
 
 # Verify
 docker compose ps  # all containers "healthy"
-curl -fsS http://<host>:18080/health
-curl -fsS http://<host>:18080/api/llm/health
+curl -fsS http://localhost:18080/health
+curl -fsS http://localhost:18080/api/llm/health
 ```
 
+> **hermes 代勞**：部署是 hermes（iMac 運維員）的職責，可透過 hermes-dispatch skill 派她執行
+> `git pull → make rebuild-all → 驗證 → 回報`。
+>
 > **Note**: atlas-go is a **single-host Docker deployment**, not a Kubernetes cluster. For multi-host / cloud-managed, you'd need to refactor `docker-compose.yml` to a Helm chart or similar.
 
 ---

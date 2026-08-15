@@ -1,5 +1,10 @@
 # Production Rollout Runbook — Day 8 起
 
+> ⚠️ **過時註記（2026-08-15）**：本文描述的 staging 7-day soak 流程屬於遷移前舊架構。
+> **方案二定案後**：無 staging，production 直接在 iMac（本地 build `atlas-atlas:latest`）。
+> 現行部署流程見 [`local-deploy.md`](local-deploy.md) 情境 B + [`pr-lifecycle.md`](pr-lifecycle.md) §5。
+> 本文保留作為歷史參考。
+
 > **觸發時機**：staging 7-day soak 全綠後
 > **Owner**：release captain + on-call SRE + 1 reviewer
 > **rollback SLA**：30 分鐘內可回滾
