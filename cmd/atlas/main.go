@@ -652,7 +652,7 @@ func run(args []string, deps appDeps) error {
 			gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
 			if gwErr != nil {
 				log.Printf("[Gateway] initialization failed: %v", gwErr)
-			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine); err != nil {
+			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine, repo); err != nil {
 				log.Printf("[Gateway] adapter registration failed: %v", err)
 			} else {
 				gateway = gw

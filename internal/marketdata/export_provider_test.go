@@ -3,12 +3,14 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -265,5 +267,129 @@ func TestExportStatisticsProvider_FetchSnapshot_SavesBothMonths(t *testing.T) {
 	}
 	if _, err := os.Stat(prevFile); os.IsNotExist(err) {
 		t.Errorf("expected previous file %s to exist", prevFile)
+	}
+}
+
+type recordingExportStatsSaver struct {
+	mu    sync.Mutex
+	calls []CustomsExportImport
+	fail  bool
+}
+
+func (s *recordingExportStatsSaver) SaveExportStats(ctx context.Context, year, month int, exportTotal, importTotal, tradeBalance float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fail {
+		return fmt.Errorf("boom")
+	}
+	s.calls = append(s.calls, CustomsExportImport{Year: year, Month: month, ExportTotal: exportTotal, ImportTotal: importTotal, TradeBalance: tradeBalance})
+	return nil
+}
+
+func (s *recordingExportStatsSaver) snapshot() []CustomsExportImport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]CustomsExportImport, len(s.calls))
+	copy(out, s.calls)
+	return out
+}
+
+// TestExportStatisticsProvider_FetchSnapshot_PersistsStats verifies that after a
+// successful JSON write, the optional saver (PostgreSQL pipeline) is invoked for
+// both fetched months with the parsed row values.
+func TestExportStatisticsProvider_FetchSnapshot_PersistsStats(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+	saver := &recordingExportStatsSaver{}
+	provider.SetExportStatsSaver(saver)
+
+	snap, err := provider.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if snap.ExportElectronics.Symbol != "TW_EXPORT_ELECTRONICS" {
+		t.Fatalf("unexpected symbol: %s", snap.ExportElectronics.Symbol)
+	}
+
+	calls := saver.snapshot()
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 SaveExportStats calls (latest + prev), got %d", len(calls))
+	}
+
+	// Latest month (114/03): 52,000,000 / 1000 = 52,000 (million USD)
+	got := calls[0]
+	if got.Year != 114 || got.Month != 3 {
+		t.Errorf("expected 114/03, got %d/%d", got.Year, got.Month)
+	}
+	if got.ExportTotal != 52000 || got.ImportTotal != 47000 || got.TradeBalance != 5000 {
+		t.Errorf("unexpected row values: export=%v import=%v balance=%v", got.ExportTotal, got.ImportTotal, got.TradeBalance)
+	}
+
+	// Previous month (114/02): 50,000,000 / 1000 = 50,000 (million USD)
+	got = calls[1]
+	if got.Year != 114 || got.Month != 2 {
+		t.Errorf("expected 114/02, got %d/%d", got.Year, got.Month)
+	}
+	if got.ExportTotal != 50000 || got.ImportTotal != 45000 || got.TradeBalance != 5000 {
+		t.Errorf("unexpected row values: export=%v import=%v balance=%v", got.ExportTotal, got.ImportTotal, got.TradeBalance)
+	}
+}
+
+// TestExportStatisticsProvider_FetchSnapshot_SaverFailureDoesNotBreakFetch
+// verifies the best-effort contract: a saver failure is logged and swallowed,
+// the fetch still succeeds and JSON files are still written.
+func TestExportStatisticsProvider_FetchSnapshot_SaverFailureDoesNotBreakFetch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+	saver := &recordingExportStatsSaver{fail: true}
+	provider.SetExportStatsSaver(saver)
+
+	if _, err := provider.FetchSnapshot(context.Background()); err != nil {
+		t.Fatalf("saver failure must not break the fetch: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "11403_export.json")); err != nil {
+		t.Errorf("expected latest JSON file to exist despite saver failure: %v", err)
+	}
+}
+
+// TestExportStatisticsProvider_NilSaverIsNoop verifies the provider works when
+// no saver is injected (backward compatible: JSON-only mode).
+func TestExportStatisticsProvider_NilSaverIsNoop(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
+"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		w.Header().Set("Content-Type", "text/csv")
+		w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+	// No SetExportStatsSaver call — must not panic and must not save.
+
+	if _, err := provider.FetchSnapshot(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
