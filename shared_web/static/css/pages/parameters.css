@@ -16,5 +16,3 @@
 .map-sub-table .param-key { font-size: var(--text-sm); }
 .btn-sm { font-size: var(--text-sm); padding: 2px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--panel-l2); color: var(--text); cursor: pointer; }
 .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-.param-val-editable { cursor: pointer; }
-.param-val-editable:hover { background: var(--panel-l2); border-radius: 3px; }
