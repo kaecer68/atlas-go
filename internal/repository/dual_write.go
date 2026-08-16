@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,6 +31,16 @@ type DualWriteRepository struct {
 }
 
 const pgHealthCheckTTL = 15 * time.Second
+
+// fallbackCounter tracks how many times LoadAllSessionSummaries falls back
+// to JSONL because PostgreSQL is unavailable or returned an error.
+var fallbackCounter atomic.Int64
+
+// DualWriteFallbackTotal returns the current count of JSONL fallbacks in
+// LoadAllSessionSummaries. Exposed for monitoring/alerting consumption.
+func DualWriteFallbackTotal() int64 {
+	return fallbackCounter.Load()
+}
 
 type JSONLRepository struct {
 	alertStore             AlertStore
@@ -503,9 +514,11 @@ func (r *DualWriteRepository) LoadAllSessionSummaries(ctx context.Context) ([]do
 			log.Printf("[DualWrite] LoadAllSessionSummaries: PG served %d summaries", len(summaries))
 			return summaries, nil
 		}
-		log.Printf("[DualWrite] LoadAllSessionSummaries: PG returned %d (err=%v); falling back to JSONL", len(summaries), err)
+		fallbackCounter.Add(1)
+		log.Printf("[DualWrite] LoadAllSessionSummaries: PG returned %d (err=%v); falling back to JSONL (total=%d)", len(summaries), err, fallbackCounter.Load())
 	} else {
-		log.Printf("[DualWrite] LoadAllSessionSummaries: PG not usable; falling back to JSONL")
+		fallbackCounter.Add(1)
+		log.Printf("[DualWrite] LoadAllSessionSummaries: PG not usable; falling back to JSONL (total=%d)", fallbackCounter.Load())
 	}
 	jsonlSummaries, err := r.jsonl.sessionSummaryStore.LoadSessionSummaries()
 	if err != nil {
