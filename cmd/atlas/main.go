@@ -2278,9 +2278,12 @@ func run(args []string, deps appDeps) error {
 			}
 			authWrappedMux.ServeHTTP(w, r)
 		})
+		// Global request timeout: downstream handlers receive a context that
+		// cancels when the deadline fires, preventing individual slow upstreams
+		// from wedging the whole HTTP server.
 		srv := &http.Server{
 			Addr:              *apiAddr,
-			Handler:           finalMux,
+			Handler:           withTimeout(finalMux, timeoutConfig{}),
 			ReadTimeout:       5 * time.Second,
 			WriteTimeout:      30 * time.Second,
 			IdleTimeout:       120 * time.Second,
@@ -2658,7 +2661,7 @@ func runLiveTrading(cfg config.Config, root *composition.Root, deps appDeps, col
 	registerSimpleRoutes(mux, collector, adminSubFS, clientSubFS, rc, apiAddr)
 	srv := &http.Server{
 		Addr:              apiAddr,
-		Handler:           mux,
+		Handler:           withTimeout(mux, timeoutConfig{}),
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
