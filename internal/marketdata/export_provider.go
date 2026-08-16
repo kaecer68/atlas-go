@@ -23,15 +23,17 @@ import (
 type CustomsExportImport struct {
 	Year         int     `json:"year"`          // ROC year (e.g., 115 = 2026)
 	Month        int     `json:"month"`         // 1-12
-	ExportTotal  float64 `json:"export_total"`  // 千美元 → /1e6 = 10億美元
-	ImportTotal  float64 `json:"import_total"`  // 千美元 → /1e6 = 10億美元
-	TradeBalance float64 `json:"trade_balance"` // 出超 (千美元)
+	ExportTotal  float64 `json:"export_total"`  // 千美元 → /1000 = 百萬美元 (million USD)
+	ImportTotal  float64 `json:"import_total"`  // 千美元 → /1000 = 百萬美元 (million USD)
+	TradeBalance float64 `json:"trade_balance"` // 出超 (千美元 → /1000 = 百萬美元)
 	DownloadedAt int64   `json:"downloaded_at"` // unix timestamp
 }
 
 // ExportStatsSaver persists customs export/import statistics rows to durable
 // storage. *repository.DualWriteRepository satisfies this interface
 // structurally; providers must treat it as optional (nil-safe).
+// All numeric values are in million USD (百萬美元) — i.e. already divided by
+// 1000 from the raw 千美元 source (see parseCustomsCSV).
 type ExportStatsSaver interface {
 	SaveExportStats(ctx context.Context, year, month int, exportTotal, importTotal, tradeBalance float64) error
 }
@@ -187,7 +189,7 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 		importTotal := parseTWDVolume(row[3])
 		tradeBalance := parseTWDVolume(row[8])
 
-		// Convert from thousand TWD to million TWD (same unit as other MacroDataPoint values)
+		// Convert from thousand USD to million USD (same unit as other MacroDataPoint values)
 		results = append(results, CustomsExportImport{
 			Year:         year,
 			Month:        month,
