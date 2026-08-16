@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,6 +49,20 @@ type MaturityTracker struct {
 // NewMaturityTracker creates a tracker. It attempts to load persisted state
 // from disk; if absent, it sets firstStartDate to now and persists it.
 func NewMaturityTracker(statePath string) (*MaturityTracker, error) {
+	return NewMaturityTrackerSeeded(statePath, "")
+}
+
+// NewMaturityTrackerSeeded creates a tracker like NewMaturityTracker, but when
+// no persisted state exists (fresh deployment) it seeds firstStartDate from
+// firstStartSeed instead of now. firstStartSeed accepts RFC3339
+// ("2026-06-01T05:10:28Z") or date-only ("2026-06-01"); an empty or
+// unparseable seed falls back to now.
+//
+// The seed lets deployments carry the original system start date across
+// data-directory loss (container/volume rebuild, machine re-provision),
+// so the burn-in / calibrating / full-auto clock never silently resets.
+// Precedence: persisted state file > seed > now.
+func NewMaturityTrackerSeeded(statePath, firstStartSeed string) (*MaturityTracker, error) {
 	state, err := loadMaturityState(statePath)
 	if err != nil {
 		return nil, fmt.Errorf("load maturity state: %w", err)
@@ -57,15 +72,30 @@ func NewMaturityTracker(statePath string) (*MaturityTracker, error) {
 		firstStartDate: state.FirstStartDate,
 		current:        MaturityBurnIn,
 	}
-	t.refresh()
 
 	// Persist on first creation so subsequent restarts see the same start date.
-	if state.FirstStartDate.IsZero() {
-		t.firstStartDate = time.Now().UTC()
+	// firstStartDate must be set BEFORE refresh() — computing maturity from a
+	// zero time would report full_auto on a brand-new deployment.
+	if t.firstStartDate.IsZero() {
+		t.firstStartDate = seedMaturityStart(firstStartSeed, time.Now().UTC())
 		_ = t.save(statePath) // best-effort; caller can retry
 	}
 
+	t.refresh()
 	return t, nil
+}
+
+// seedMaturityStart parses firstStartSeed (RFC3339 or date-only) and returns
+// it; empty or unparseable seeds fall back to fallback.
+func seedMaturityStart(firstStartSeed string, fallback time.Time) time.Time {
+	if seed := strings.TrimSpace(firstStartSeed); seed != "" {
+		for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+			if parsed, err := time.Parse(layout, seed); err == nil {
+				return parsed.UTC()
+			}
+		}
+	}
+	return fallback
 }
 
 // NewMaturityTrackerWithStart creates a tracker with an explicit start date.

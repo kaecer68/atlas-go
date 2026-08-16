@@ -139,6 +139,90 @@ func TestMaturityTracker_SaveAndLoad(t *testing.T) {
 	}
 }
 
+func TestMaturityTracker_SeededFreshStart(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "maturity.json")
+
+	// Fresh start with a valid RFC3339 seed → first_start = seed, persisted.
+	seed := "2026-06-01T05:10:28.266647Z"
+	tr, err := NewMaturityTrackerSeeded(path, seed)
+	if err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded: %v", err)
+	}
+	want := time.Date(2026, 6, 1, 5, 10, 28, 266647000, time.UTC)
+	if !tr.FirstStartDate().Equal(want) {
+		t.Errorf("FirstStartDate = %v, want %v", tr.FirstStartDate(), want)
+	}
+	// A 2026-06-01 seed is >60 days old at any realistic test time →
+	// the tracker must be past burn-in immediately (fresh-start refresh
+	// computes from the seeded date, not from zero time).
+	if tr.Current() != MaturityCalibrating {
+		t.Errorf("expected CALIBRATING for seeded tracker, got %q", tr.Current())
+	}
+
+	// The seed must be persisted so a restart keeps it.
+	tr2, err := NewMaturityTrackerSeeded(path, "2099-01-01T00:00:00Z")
+	if err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded restart: %v", err)
+	}
+	if !tr2.FirstStartDate().Equal(want) {
+		t.Errorf("restart FirstStartDate = %v, want persisted seed %v", tr2.FirstStartDate(), want)
+	}
+}
+
+func TestMaturityTracker_SeededDateOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "maturity.json")
+
+	tr, err := NewMaturityTrackerSeeded(path, "2026-06-01")
+	if err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded: %v", err)
+	}
+	want := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	if !tr.FirstStartDate().Equal(want) {
+		t.Errorf("FirstStartDate = %v, want %v", tr.FirstStartDate(), want)
+	}
+}
+
+func TestMaturityTracker_SeededInvalidFallsBackToNow(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "maturity.json")
+
+	tr, err := NewMaturityTrackerSeeded(path, "not-a-date")
+	if err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded: %v", err)
+	}
+	got := tr.FirstStartDate()
+	if got.IsZero() {
+		t.Fatal("expected FirstStartDate to be set (fallback to now)")
+	}
+	if diff := time.Since(got); diff < 0 || diff > time.Hour {
+		t.Errorf("expected FirstStartDate ≈ now, got %v (diff %v)", got, diff)
+	}
+}
+
+func TestMaturityTracker_SeededExistingFileWins(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "maturity.json")
+
+	// First creation with an old seed.
+	old := "2026-06-01T05:10:28Z"
+	if _, err := NewMaturityTrackerSeeded(path, old); err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded: %v", err)
+	}
+
+	// Restart with a different seed must NOT overwrite the persisted date.
+	newer := "2026-08-01T00:00:00Z"
+	tr, err := NewMaturityTrackerSeeded(path, newer)
+	if err != nil {
+		t.Fatalf("NewMaturityTrackerSeeded restart: %v", err)
+	}
+	want := time.Date(2026, 6, 1, 5, 10, 28, 0, time.UTC)
+	if !tr.FirstStartDate().Equal(want) {
+		t.Errorf("FirstStartDate = %v, want persisted %v (seed must not override existing file)", tr.FirstStartDate(), want)
+	}
+}
+
 func TestMaturityThresholds(t *testing.T) {
 	if MaturityThresholds[MaturityBurnIn] != 0 {
 		t.Error("BURN_IN threshold should be 0")

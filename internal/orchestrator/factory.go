@@ -8,6 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -42,10 +43,14 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	}
 
 	// Create and wire MaturityTracker.
-	maturityTracker, err := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+	// Seeded constructor: ATLAS_MATURITY_FIRST_START carries the original
+	// first_start across data-dir loss so burn-in never silently resets.
+	maturityTracker, err := domain.NewMaturityTrackerSeeded(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"), cfg.MaturityFirstStart)
 	if err != nil {
 		// Non-fatal: system can run without maturity tracking.
-		// Log and continue.
+		// Log loudly — a fallback reset of the burn-in clock would freeze
+		// experiments/calibration evolution.
+		logging.Error("orchestrator", "maturity_tracker_load_failed", "err", err)
 		maturityTracker = domain.NewMaturityTrackerWithStart(time.Now().UTC())
 	}
 	system.WithMaturityTracker(maturityTracker)
