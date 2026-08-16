@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -128,6 +129,13 @@ func scanValues(values []any, dest ...any) error {
 		}
 		if vv.Type().ConvertibleTo(dv.Elem().Type()) {
 			dv.Elem().Set(vv.Convert(dv.Elem().Type()))
+			continue
+		}
+		// Support scanning string values into sql.NullString (used for
+		// nullable TEXT columns in postgres_audit.go).
+		if ns, ok := dest[i].(*sql.NullString); ok && vv.Kind() == reflect.String {
+			ns.String = vv.String()
+			ns.Valid = true
 			continue
 		}
 		return errors.New("scan type mismatch")
@@ -575,6 +583,76 @@ func TestPostgresRepository_SessionSummary_TaxAndParamsFields(t *testing.T) {
 	}
 	if len(all[0].TaxSnapshots) != 1 || all[0].AfterTaxPnL != wantAfterTax || all[0].TotalTaxPaid != wantTotalTax || all[0].ParametersVersion != wantParamsVer {
 		t.Errorf("LoadAllSessionSummaries[0] tax/params fields mismatch: %+v", all[0])
+	}
+}
+
+func TestPostgresRepository_SessionSummary_NullableTextFields(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	summaryRow := []any{
+		now, "session-null-1", nil, 0, 0, 0.0, 0.0, 0,
+		[]byte(`{}`), nil, nil, nil, nil, []byte(`[]`), nil, []byte(`[]`), 0.0, 0.0, nil,
+	}
+	pool := &fakePGPool{
+		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+			if strings.Contains(sql, "session_summaries") {
+				return &fakeRows{rows: [][]any{summaryRow}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+		queryRowFunc: func(_ context.Context, sql string, _ ...any) pgx.Row {
+			if strings.Contains(sql, "session_summaries") {
+				return fakeRow{values: summaryRow}
+			}
+			return fakeRow{}
+		},
+	}
+	repo := newUnitPostgresRepo(pool)
+
+	single, err := repo.LoadSessionSummary(ctx, "session-null-1")
+	if err != nil {
+		t.Fatalf("LoadSessionSummary() error = %v", err)
+	}
+	if single == nil {
+		t.Fatal("LoadSessionSummary() returned nil")
+	}
+	if single.RiskCommentary != "" {
+		t.Errorf("RiskCommentary = %q, want empty string for NULL", single.RiskCommentary)
+	}
+	if single.NextExperimentAgentID != "" {
+		t.Errorf("NextExperimentAgentID = %q, want empty string for NULL", single.NextExperimentAgentID)
+	}
+	if single.ProposalID != "" {
+		t.Errorf("ProposalID = %q, want empty string for NULL", single.ProposalID)
+	}
+	if single.CommitID != "" {
+		t.Errorf("CommitID = %q, want empty string for NULL", single.CommitID)
+	}
+	if single.ApprovalID != "" {
+		t.Errorf("ApprovalID = %q, want empty string for NULL", single.ApprovalID)
+	}
+	if single.ParametersVersion != "" {
+		t.Errorf("ParametersVersion = %q, want empty string for NULL", single.ParametersVersion)
+	}
+
+	all, err := repo.LoadAllSessionSummaries(ctx)
+	if err != nil {
+		t.Fatalf("LoadAllSessionSummaries() error = %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("LoadAllSessionSummaries() len = %d, want 1", len(all))
+	}
+	if all[0].RiskCommentary != "" {
+		t.Errorf("LoadAllSessionSummaries[0].RiskCommentary = %q, want empty string for NULL", all[0].RiskCommentary)
+	}
+
+	// JSON output must not contain a literal null for risk_commentary.
+	b, err := json.Marshal(single)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if strings.Contains(string(b), `"risk_commentary":null`) {
+		t.Errorf("JSON output contains risk_commentary:null: %s", b)
 	}
 }
 
