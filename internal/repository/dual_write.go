@@ -137,7 +137,11 @@ func NewDualWriteRepository(pool *pgxpool.Pool, alertStore AlertStore, metricsSt
 // site silently swallowing the failure. On the first detected failure and on
 // recovery we log; steady-state unhealthy calls return fast from cache.
 func (r *DualWriteRepository) pgUsable() bool {
-	if r.pg == nil || r.pg.pool == nil {
+	// r == nil guards a typed-nil receiver (e.g. InitRepository returns nil
+	// when the PG pool is unavailable and the value is later passed as an
+	// interface): treat it as JSON-only mode instead of panicking on the r.pg
+	// dereference below.
+	if r == nil || r.pg == nil || r.pg.pool == nil {
 		return false
 	}
 	ctx := context.Background()

@@ -100,7 +100,7 @@ func TestGateway_Summary_NoChannels(t *testing.T) {
 }
 
 func TestRegisterChannelAdapters_NilGateway(t *testing.T) {
-	err := RegisterChannelAdapters(nil, "/tmp", config.Config{}, nil)
+	err := RegisterChannelAdapters(nil, "/tmp", config.Config{}, nil, nil)
 	if err == nil {
 		t.Fatal("RegisterChannelAdapters with nil gateway should return error")
 	}
@@ -109,7 +109,7 @@ func TestRegisterChannelAdapters_NilGateway(t *testing.T) {
 func TestRegisterChannelAdapters_EmptyConfig(t *testing.T) {
 	g := newTestGateway(t)
 	cfg := config.Config{}
-	err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil)
+	err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil)
 	if err != nil {
 		t.Fatalf("RegisterChannelAdapters failed: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestRegisterChannelAdapters_TEJDisabledWritesInactiveHealth(t *testing.T) {
 	t.Setenv("TEJ_API_KEY", "")
 	g := newTestGateway(t)
 	cfg := config.Config{}
-	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil); err != nil {
 		t.Fatalf("RegisterChannelAdapters failed: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive(t *testing.T) {
 	t.Setenv("TEJ_API_KEY", "test-paid-key-not-real")
 	g := newTestGateway(t)
 	cfg := config.Config{}
-	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil); err != nil {
 		t.Fatalf("RegisterChannelAdapters failed: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestRegisterChannelAdapters_TWSEETFDisabledWritesInactiveHealth(t *testing.
 	t.Setenv("TWSE_ETF_API_KEY", "")
 	g := newTestGateway(t)
 	cfg := config.Config{}
-	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil); err != nil {
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil); err != nil {
 		t.Fatalf("RegisterChannelAdapters failed: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestRegisterChannelAdapters_WithJanusEngine(t *testing.T) {
 	g := newTestGateway(t)
 	cfg := config.Config{}
 	engine := &janus.Engine{}
-	err := RegisterChannelAdapters(g, t.TempDir(), cfg, engine)
+	err := RegisterChannelAdapters(g, t.TempDir(), cfg, engine, nil)
 	if err != nil {
 		t.Fatalf("RegisterChannelAdapters failed: %v", err)
 	}
