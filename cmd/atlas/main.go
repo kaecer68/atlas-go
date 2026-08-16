@@ -649,10 +649,20 @@ func run(args []string, deps appDeps) error {
 			gatewayFetcher = deps.dataFetcher
 			log.Printf("[Gateway] using injected data fetcher (test mode)")
 		} else {
+			// ExportStatsSaver is optional. repo may be a typed nil when the PG
+			// pool is unavailable (DATABASE_URL unset / db.Init failure): guard
+			// before converting to the interface — a typed nil becomes a non-nil
+			// interface wrapping a nil pointer, which would panic inside
+			// SaveExportStats (pgUsable derefs r.pg). Same pattern as the other
+			// `if repo != nil` injection sites below.
+			var exportStatsSaver marketdata.ExportStatsSaver
+			if repo != nil {
+				exportStatsSaver = repo
+			}
 			gw, gwErr := apigateway.NewGateway(cfg.WorkDir, pool)
 			if gwErr != nil {
 				log.Printf("[Gateway] initialization failed: %v", gwErr)
-			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine, repo); err != nil {
+			} else if err := apigateway.RegisterChannelAdapters(gw, cfg.WorkDir, cfg, janusEngine, exportStatsSaver); err != nil {
 				log.Printf("[Gateway] adapter registration failed: %v", err)
 			} else {
 				gateway = gw
