@@ -1317,7 +1317,7 @@ func run(args []string, deps appDeps) error {
 					}
 				}()
 			})
-			livenessStore.StartMetaHeartbeat(sysCtx, 0)
+			go livenessStore.StartMetaHeartbeat(sysCtx, 0)
 			stalenessMon := liveness.NewStalenessMonitor(livenessStore, taskMgr, func(taskName string, staleFor, interval time.Duration) {
 				monitor.Alert(monitoring.AlertLevelWarning, "background_task",
 					fmt.Sprintf("Task %s is stale: not run for %s (> 3x %s interval)", taskName, staleFor.Round(time.Second), interval.String()),

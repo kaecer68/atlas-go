@@ -143,11 +143,13 @@ func (s *Store) List(ctx context.Context) ([]Row, error) {
 	return out, nil
 }
 
-// StartMetaHeartbeat launches the meta-heartbeat watchdog goroutine: if the
+// StartMetaHeartbeat runs the meta-heartbeat watchdog loop (BLOCKING; the
+// caller launches it as a goroutine — cmd/atlas/main.go, so the
+// constitution background-task check sees a main-owned goroutine): if the
 // store goes N minutes without a successful write (warnAfter; default
-// DefaultMetaHeartbeatWarnAfter when <= 0), it logs a WARN — the signal that
-// the liveness writer itself may have died silently. At most one WARN per
-// warnAfter window. Stops when ctx is cancelled.
+// DefaultMetaHeartbeatWarnAfter when <= 0), it logs a WARN — the signal
+// that the liveness writer itself may have died silently. At most one WARN
+// per warnAfter window. Returns when ctx is cancelled.
 func (s *Store) StartMetaHeartbeat(ctx context.Context, warnAfter time.Duration) {
 	if s == nil || s.db == nil {
 		return
@@ -155,18 +157,16 @@ func (s *Store) StartMetaHeartbeat(ctx context.Context, warnAfter time.Duration)
 	if warnAfter <= 0 {
 		warnAfter = DefaultMetaHeartbeatWarnAfter
 	}
-	go func() {
-		ticker := time.NewTicker(metaHeartbeatCheckEvery)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.checkMetaHeartbeat(warnAfter)
-			}
+	ticker := time.NewTicker(metaHeartbeatCheckEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.checkMetaHeartbeat(warnAfter)
 		}
-	}()
+	}
 }
 
 func (s *Store) checkMetaHeartbeat(warnAfter time.Duration) {
