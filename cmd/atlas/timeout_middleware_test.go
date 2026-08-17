@@ -72,7 +72,7 @@ func TestWithTimeout_WhitelistedSSEExempt(t *testing.T) {
 	cfg := timeoutConfig{
 		DefaultTimeout: 50 * time.Millisecond,
 		Overrides: map[string]time.Duration{
-			"/api/events/stream": 0,
+			"/test/sse-fake": 0,
 		},
 	}
 
@@ -87,12 +87,12 @@ func TestWithTimeout_WhitelistedSSEExempt(t *testing.T) {
 	})
 
 	mux := http.NewServeMux()
-	mux.Handle("/api/events/stream", inner)
+	mux.Handle("/test/sse-fake", inner)
 
 	server := httptest.NewServer(withTimeout(mux, cfg))
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/api/events/stream")
+	resp, err := http.Get(server.URL + "/test/sse-fake")
 	if err != nil {
 		t.Fatalf("http.Get failed: %v", err)
 	}
