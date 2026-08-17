@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -48,6 +49,20 @@ type Handlers struct {
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
+	// Seed the shared RSI-tw calculator's margin history from persisted margin
+	// cache files at startup so the A1 z-score has a historical baseline right
+	// away (not only after the retail-sentiment API is first called). No-op if
+	// already seeded; missing dir is logged and falls back to in-memory only.
+	if svc != nil && svc.WorkDir != "" {
+		marginDir := filepath.Join(svc.WorkDir, constants.StateMargin)
+		if n, err := retail.GetCalculator().BackfillMarginHistory(marginDir); err != nil {
+			logging.Warn("retail_sentiment", "margin_history_backfill_failed",
+				logging.Err(err), logging.FStr("margin_dir", marginDir))
+		} else if n > 0 {
+			logging.Info("retail_sentiment", "margin_history_backfilled",
+				logging.FInt("entries", n), logging.FStr("margin_dir", marginDir))
+		}
+	}
 	return &Handlers{Svc: svc}
 }
 
@@ -303,6 +318,15 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 
 	calc := retail.GetCalculator()
 	calc.SetParams(config.GetParametersConfig().RSITw)
+
+	// Lazy one-time backfill (idempotent; already seeded at NewHandlers for the
+	// production server, no-op here when that happened): read the persisted
+	// margin history so A1 z-score is computed from real history after restart.
+	// Missing dir is not fatal — the in-memory rolling window fallback applies.
+	if _, err := calc.BackfillMarginHistory(filepath.Join(h.Svc.WorkDir, constants.StateMargin)); err != nil {
+		logging.Warn("retail_sentiment", "margin_history_backfill_failed",
+			logging.Err(err), logging.FStr("margin_dir", filepath.Join(h.Svc.WorkDir, constants.StateMargin)))
+	}
 
 	rsiInput := retail.RSITwInput{
 		MarginBalance:      snap.RetailMarginBalance.Value,

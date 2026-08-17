@@ -65,6 +65,9 @@ type RSITwInput struct {
 	OddLot    float64 `json:"odd_lot"`
 }
 
+// marginHistoryMaxEntries caps the in-memory rolling margin/vix histories.
+const marginHistoryMaxEntries = 90
+
 // Calculator computes RSI-tw sentiment snapshots.
 type Calculator struct {
 	mu            sync.RWMutex
@@ -72,6 +75,12 @@ type Calculator struct {
 	vixHistory    []float64
 	params        config.RSITwParameters
 	lastScore     float64
+
+	// marginBackfilled guards the one-time seeding of marginHistory from
+	// persisted margin cache files (data/state/margin) so the A1 z-score has a
+	// real historical baseline right after restart instead of waiting for
+	// repeated API calls to accumulate a rolling window.
+	marginBackfilled bool
 }
 
 var (
@@ -83,8 +92,8 @@ var (
 func GetCalculator() *Calculator {
 	calcOnce.Do(func() {
 		calcInstance = &Calculator{
-			marginHistory: make([]float64, 0, 90),
-			vixHistory:    make([]float64, 0, 90),
+			marginHistory: make([]float64, 0, marginHistoryMaxEntries),
+			vixHistory:    make([]float64, 0, marginHistoryMaxEntries),
 			params:        config.DefaultParametersConfig().RSITw,
 		}
 	})
@@ -102,8 +111,8 @@ func (c *Calculator) LastScore() float64 {
 // Deprecated: use GetCalculator() for the singleton; this is kept for tests.
 func NewCalculator() *Calculator {
 	return &Calculator{
-		marginHistory: make([]float64, 0, 90),
-		vixHistory:    make([]float64, 0, 90),
+		marginHistory: make([]float64, 0, marginHistoryMaxEntries),
+		vixHistory:    make([]float64, 0, marginHistoryMaxEntries),
 		params:        config.DefaultParametersConfig().RSITw,
 	}
 }
@@ -155,14 +164,43 @@ func (c *Calculator) UpdateHistory(data RSITwInput) {
 	defer c.mu.Unlock()
 
 	c.marginHistory = append(c.marginHistory, data.MarginBalance)
-	if len(c.marginHistory) > 90 {
-		c.marginHistory = c.marginHistory[len(c.marginHistory)-90:]
+	if len(c.marginHistory) > marginHistoryMaxEntries {
+		c.marginHistory = c.marginHistory[len(c.marginHistory)-marginHistoryMaxEntries:]
 	}
 
 	c.vixHistory = append(c.vixHistory, data.VIXLevel)
-	if len(c.vixHistory) > 90 {
-		c.vixHistory = c.vixHistory[len(c.vixHistory)-90:]
+	if len(c.vixHistory) > marginHistoryMaxEntries {
+		c.vixHistory = c.vixHistory[len(c.vixHistory)-marginHistoryMaxEntries:]
 	}
+}
+
+// BackfillMarginHistory seeds marginHistory from persisted margin cache files
+// on disk (data/state/margin/2026MMDD_margin.json) so the A1 margin z-score has
+// a real historical baseline immediately after startup instead of accumulating
+// only when the retail-sentiment API is called repeatedly. It is idempotent: it
+// runs at most once per process — either on the first successful load or once
+// runtime history has accumulated — and later calls are no-ops. It returns the
+// number of entries loaded. A missing/unreadable dir returns an error so
+// callers can log a warning and keep the existing in-memory fallback behavior.
+func (c *Calculator) BackfillMarginHistory(dir string) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.marginBackfilled || len(c.marginHistory) > 0 {
+		return 0, nil
+	}
+
+	values, err := LoadMarginHistoryFromDisk(dir, marginHistoryBackfillMax)
+	if err != nil {
+		return 0, err
+	}
+
+	c.marginHistory = append(c.marginHistory, values...)
+	if len(c.marginHistory) > marginHistoryMaxEntries {
+		c.marginHistory = c.marginHistory[len(c.marginHistory)-marginHistoryMaxEntries:]
+	}
+	c.marginBackfilled = true
+	return len(values), nil
 }
 
 // ---------------------------------------------------------------------------
