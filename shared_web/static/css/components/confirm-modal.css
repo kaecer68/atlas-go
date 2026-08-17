@@ -1,0 +1,71 @@
+/* Atlas Dashboard — Confirm Modal（危險操作二次確認，P1-C）
+   對照既有 CSS tokens（base/variables.css）：
+   - overlay 樣式與 components/modal.css 的 .modal-overlay 一致（z-index 300 高於一般 modal 200）
+   - danger 確認鈕走 --danger / --color-danger（系統錯誤語意「綠OK 紅ERR」）
+   - danger 標題走 --color-danger
+   - 非 danger（info）確認鈕走 --primary
+*/
+.confirm-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  place-items: center;
+  z-index: 300;
+}
+.confirm-modal-overlay.open { display: grid; }
+
+.confirm-modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: min(440px, 92vw);
+  padding: 20px 22px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+.confirm-modal__title {
+  margin: 0 0 10px;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+.confirm-modal--danger .confirm-modal__title { color: var(--color-danger); }
+.confirm-modal__message {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  word-break: break-word;
+}
+.confirm-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-modal__actions button {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-l2);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: opacity .15s, box-shadow .15s;
+}
+.confirm-modal__actions button:hover { opacity: .9; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); }
+.confirm-modal__actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.confirm-modal__cancel { }
+.confirm-modal__ok.danger,
+.confirm-modal--danger .confirm-modal__ok {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+.confirm-modal--info .confirm-modal__ok {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
