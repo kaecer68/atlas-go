@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
@@ -136,13 +137,14 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 // crumb token tied to a session cookie. This manager performs the handshake
 // once and reuses the credentials for subsequent requests.
 type yahooSession struct {
-	mu        sync.RWMutex
-	client    *http.Client
-	cookie    string
-	crumb     string
-	lastFetch time.Time
-	ttl       time.Duration
-	hosts     []string
+	mu          sync.RWMutex
+	client      *http.Client
+	cookie      string
+	crumb       string
+	lastFetch   time.Time
+	ttl         time.Duration
+	hosts       []string
+	crumbFlight singleflight.Group
 }
 
 // newYahooSession creates a session manager for Yahoo Finance API access.
@@ -180,6 +182,13 @@ func (s *yahooSession) buildChartURL(host, symbol string, params map[string]stri
 //  1. Fetch a session cookie from fc.yahoo.com
 //  2. Use that cookie to fetch a crumb token
 func (s *yahooSession) fetchCrumb(ctx context.Context) error {
+	// Snapshot client and hosts under the read lock, then perform all network
+	// I/O without holding any lock. Only the final state write takes the lock.
+	s.mu.RLock()
+	client := s.client
+	hosts := s.hosts
+	s.mu.RUnlock()
+
 	// Step 1: Get session cookie from fc.yahoo.com
 	cookieURL := "https://fc.yahoo.com/"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cookieURL, nil)
@@ -188,7 +197,7 @@ func (s *yahooSession) fetchCrumb(ctx context.Context) error {
 	}
 	setUA(req)
 
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch cookie: %w", err)
 	}
@@ -219,7 +228,7 @@ func (s *yahooSession) fetchCrumb(ctx context.Context) error {
 
 	// Step 2: Get crumb using the session cookie
 	var crumb string
-	for _, host := range s.hosts {
+	for _, host := range hosts {
 		crumbURL := fmt.Sprintf("https://%s/v1/test/getcrumb", host)
 		cReq, err := http.NewRequestWithContext(ctx, http.MethodGet, crumbURL, nil)
 		if err != nil {
@@ -260,6 +269,11 @@ func (s *yahooSession) fetchCrumb(ctx context.Context) error {
 }
 
 // ensureCrumb refreshes the crumb if it's stale.
+//
+// All network I/O happens outside of s.mu; the lock is only held to read the
+// cached state and to write the result back. singleflight guarantees that
+// concurrent callers share at most one in-flight crumb handshake, preventing
+// a burst of requests from each performing the expensive cookie+crumb dance.
 func (s *yahooSession) ensureCrumb(ctx context.Context) error {
 	s.mu.RLock()
 	hasCrumb := s.crumb != "" && time.Since(s.lastFetch) < s.ttl
@@ -267,7 +281,19 @@ func (s *yahooSession) ensureCrumb(ctx context.Context) error {
 	if hasCrumb {
 		return nil
 	}
-	return s.fetchCrumb(ctx)
+
+	_, err, _ := s.crumbFlight.Do("crumb", func() (interface{}, error) {
+		// Double-check after winning the singleflight slot: another caller
+		// may have refreshed the crumb while we were waiting.
+		s.mu.RLock()
+		hasCrumb := s.crumb != "" && time.Since(s.lastFetch) < s.ttl
+		s.mu.RUnlock()
+		if hasCrumb {
+			return nil, nil
+		}
+		return nil, s.fetchCrumb(ctx)
+	})
+	return err
 }
 
 // fetchFromHost performs a Yahoo Finance API request with crumb auth.
