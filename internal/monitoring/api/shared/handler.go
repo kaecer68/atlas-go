@@ -15,89 +15,12 @@ import (
 // WriteJSON is called centrally by Adapt(), eliminating 73 duplicate call sites.
 type Handler func(r *http.Request) (status int, data any)
 
-// authFreeExactPaths and authFreePrefixPaths are kept for callers
-// that wire AuthMiddleware directly (e.g. Adapt). The canonical
-// public-path bypass now lives in cmd/atlas/main.go isPublicPath,
-// which is the single source of truth for the top-level HTTP mux.
-// These lists mirror that decision so AuthMiddleware stays
-// self-contained for direct callers.
-var authFreeExactPaths = map[string]bool{
-	"/health":                       true,
-	"/metrics":                      true,
-	"/admin":                        true,
-	"/client":                       true,
-	"/api/llm/health":               true,
-	"/api/health/aggregate":         true, // Stage 6 PR#1: 4-tier health aggregation for frontend banner
-	"/api/v1/alerts":                true, // Alertmanager webhook inbound
-	"/api/alerts":                   true,
-	"/api/stock":                    true,
-	"/api/recommendations":          true,
-	"/api/tasks":                    true,
-	"/api/field-contract":           true,
-	"/api/control/audit-log":        true,
-	"/api/control/active-overrides": true,
-	"/api/experiment/history":       true,
-	"/api/experiment/diff":          true,
-	"/api/strategies":               true,
-	// /api/parameters (no trailing slash) — mirror of main.go isPublicPath
-	// :198. authFreePrefixPaths has the "/api/parameters/" prefix, but
-	// HasPrefix("/api/parameters", "/api/parameters/") is false, so the
-	// exact path leaked 401 from the Adapt-internal AuthMiddleware even
-	// though isPublicPath allows it (SK-22 endpoint-2 audit).
-	"/api/parameters": true,
-}
-
-// Per internal/monitoring/AGENTS.md, these prefix lists must mirror
-// cmd/atlas/main.go isPublicPath. Write operations under /api/control/
-// and /api/experiment/ (approve-recommendation, reject-recommendation,
-// pause/resume-agent, sector-ban, promote, revert, judge) intentionally
-// remain outside this whitelist and continue to require an API key.
-var authFreePrefixPaths = []string{
-	"/admin/",
-	"/client/",
-	"/api/dashboard/",
-	"/api/taiwan/",
-	"/api/narrative/",
-	"/api/macro/",
-	"/api/market/",
-	"/api/alerts/",
-	"/api/synergy/",
-	"/api/cross-market/",
-	"/api/detector/",
-	"/api/capital-flow/",
-	"/api/events/",
-	"/api/industry/",
-	"/api/stock/",
-	"/api/janus/",
-	"/api/strategies/",
-	"/api/risk/",
-	"/api/regime/",
-	"/api/geopolitical/",
-	"/api/scheduler/",
-	"/api/tasks/",
-	"/api/traces/",
-	"/api/llm/",
-	"/api/llm_annotator/",
-	"/api/prism/",
-	"/api/recommendations/",
-	"/api/reports/",
-	"/api/strategy-ranker/",
-	"/api/parameters/",
-	"/api/backtest/",
-	"/api/janus/",
-	"/api/dashboard/sessions/",
-}
-
-func isAuthFreePath(p string) bool {
-	if authFreeExactPaths[p] {
-		return true
-	}
-	for _, prefix := range authFreePrefixPaths {
-		if strings.HasPrefix(p, prefix) {
-			return true
-		}
-	}
-	return false
+// isAuthFreePath determines whether a request bypasses API-key authentication.
+// GET/HEAD/OPTIONS on the public-read whitelist are public; all mutating
+// methods (POST/PUT/DELETE/PATCH) require authentication. This delegates to
+// IsPublicPath so the rule matches the top-level bypass in cmd/atlas/main.go.
+func isAuthFreePath(method, p string) bool {
+	return IsPublicPath(method, p)
 }
 
 // sha256Hex returns the hex-encoded SHA-256 hash of s, or empty string if s is empty.
@@ -113,7 +36,7 @@ func sha256Hex(s string) string {
 
 // AuthStatus returns the current authentication posture for system health reporting:
 // "production" (key set + prod env), "authenticated" (key set + non-prod),
-// or "dev_no_auth" (key not set — all /api/* endpoints are open).
+// or "dev_no_auth" (key not set — read endpoints are open, writes require a key).
 func AuthStatus() string {
 	apiKey := os.Getenv("ATLAS_API_KEY")
 	isProduction := strings.ToLower(os.Getenv("ATLAS_ENV")) == "production"
@@ -131,14 +54,14 @@ func AuthStatus() string {
 // It accepts either Authorization: Bearer <key> or X-API-Key: <key>.
 //
 // Probing paths (/health, /metrics) are always passed through
-// unconditionally — see authFreePaths. This makes the middleware
-// self-contained: callers don't need to remember to route around it.
+// unconditionally. This makes the middleware self-contained: callers don't
+// need to remember to route around it.
 func AuthMiddleware(next http.Handler) http.Handler {
 	apiKey := os.Getenv("ATLAS_API_KEY")
 	isProduction := strings.ToLower(os.Getenv("ATLAS_ENV")) == "production"
 	if isProduction && apiKey == "" {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isAuthFreePath(r.URL.Path) {
+			if isAuthFreePath(r.Method, r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -146,12 +69,24 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		})
 	}
 	if apiKey == "" {
-		log.Println("[WARNING] ATLAS_API_KEY not set — all /api/* endpoints are unauthenticated (dev mode)")
-		return next
+		log.Println("[WARNING] ATLAS_API_KEY not set — write endpoints now require authentication")
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isAuthFreePath(r.Method, r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// Dev mode: read operations remain reachable without a key so local
+			// dashboards and probes work without configuration. Writes require a key.
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+			WriteJSONErrorEx(w, http.StatusUnauthorized, "401", "ATLAS_API_KEY not configured")
+		})
 	}
 	expectedHash := sha256Hex(apiKey)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isAuthFreePath(r.URL.Path) {
+		if isAuthFreePath(r.Method, r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}

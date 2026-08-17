@@ -31,11 +31,81 @@ function isRetryable(err) {
   return false;
 }
 
+const MUTATING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
+
+/**
+ * Read the Atlas API key from localStorage, if available.
+ * Returns an empty string when localStorage is unavailable or no key is stored.
+ * @returns {string}
+ */
+export function getAtlasApiKey() {
+  try {
+    return localStorage.getItem('ATLAS_API_KEY') || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+/**
+ * Store the Atlas API key in localStorage.
+ * @param {string} key
+ */
+export function setAtlasApiKey(key) {
+  try {
+    if (key) {
+      localStorage.setItem('ATLAS_API_KEY', key);
+    } else {
+      localStorage.removeItem('ATLAS_API_KEY');
+    }
+  } catch (_) {
+    // localStorage may be unavailable in some environments; ignore.
+  }
+}
+
+/**
+ * Prompt the admin user for the ATLAS_API_KEY when a mutating request is made
+ * without one. Returns the entered key (empty if cancelled / unavailable).
+ * @returns {Promise<string>}
+ */
+async function promptForApiKey() {
+  if (typeof window === 'undefined') return '';
+  if (typeof window.__atlasPromptForApiKey === 'function') {
+    return window.__atlasPromptForApiKey();
+  }
+  if (typeof window.prompt === 'function') {
+    return window.prompt('ATLAS_API_KEY required for write operations:') || '';
+  }
+  return '';
+}
+
+/**
+ * Attach X-API-Key header for mutating methods when a key is stored.
+ * If no key is stored, prompt once and store it.
+ * @param {Record<string, string>} headers
+ * @param {string} method
+ */
+async function attachApiKey(headers, method) {
+  if (!MUTATING_METHODS.includes(method)) return;
+  let key = getAtlasApiKey();
+  if (!key) {
+    key = await promptForApiKey();
+    if (key) setAtlasApiKey(key);
+  }
+  if (key) {
+    headers['X-API-Key'] = key;
+  }
+}
+
 async function fetchOnce(method, url, body, signal) {
   const opts = { method: method, credentials: 'include', signal: signal };
+  const headers = {};
   if (body !== undefined) {
-    opts.headers = { 'Content-Type': 'application/json' };
+    headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
+  }
+  await attachApiKey(headers, method);
+  if (Object.keys(headers).length > 0) {
+    opts.headers = headers;
   }
   const res = await fetch(url, opts);
   if (!res.ok) {

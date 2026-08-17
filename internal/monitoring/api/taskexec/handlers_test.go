@@ -14,6 +14,14 @@ import (
 	taskexecpkg "github.com/kaecer68/atlas-go/internal/taskexec"
 )
 
+func setTestAPIKey(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "test-key")
+}
+
+func setAPIKeyHeader(req *http.Request) {
+	req.Header.Set("X-API-Key", "test-key")
+}
+
 // stubRunner is a minimal Runner for handler tests.
 // Set fn to customize Run behavior; set blocks to make Run wait until ctx cancellation.
 type stubRunner struct {
@@ -44,6 +52,7 @@ func (r *stubRunner) Run(ctx context.Context, req taskexecpkg.SubmitRequest, sin
 // setup creates a Handlers backed by an in-memory store and returns the helper objects.
 func setup(t *testing.T) (*taskexec.Handlers, *taskexecpkg.Manager, *taskexecpkg.InMemoryStore, *http.ServeMux) {
 	t.Helper()
+	setTestAPIKey(t)
 	store := taskexecpkg.NewInMemoryStore()
 	manager := taskexecpkg.NewManager(store)
 
@@ -94,6 +103,7 @@ func TestCreateTask_Success(t *testing.T) {
 
 	body := `{"task_type":"run_experiment","payload":{"experiment_id":"exp-001"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "test-user")
 	w := httptest.NewRecorder()
@@ -122,6 +132,7 @@ func TestCreateTask_InvalidJSON(t *testing.T) {
 	_, _, _, mux := setup(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader("not-json"))
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -141,6 +152,7 @@ func TestCreateTask_NoRunner(t *testing.T) {
 
 	body := `{"task_type":"nonexistent"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -293,6 +305,7 @@ func TestGetTask_WrongMethod(t *testing.T) {
 	_, _, _, mux := setup(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/any-id", nil)
+	setAPIKeyHeader(req)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -315,6 +328,7 @@ func TestCancelTask_Success(t *testing.T) {
 	// Submit a blocking task.
 	body := `{"task_type":"cancel-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -343,6 +357,7 @@ func TestCancelTask_Success(t *testing.T) {
 
 	// Cancel the running task.
 	req2 := httptest.NewRequest(http.MethodPost, "/api/tasks/"+createResp.ID+"/cancel", nil)
+	setAPIKeyHeader(req2)
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	mux.ServeHTTP(w2, req2)
@@ -383,6 +398,7 @@ func TestCancelTask_RunnerCompletionPreservesCancelStatus(t *testing.T) {
 
 	body := `{"task_type":"cancel-preserve-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -411,6 +427,7 @@ func TestCancelTask_RunnerCompletionPreservesCancelStatus(t *testing.T) {
 
 	// Cancel the running task.
 	req2 := httptest.NewRequest(http.MethodPost, "/api/tasks/"+createResp.ID+"/cancel", nil)
+	setAPIKeyHeader(req2)
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	mux.ServeHTTP(w2, req2)
@@ -447,6 +464,7 @@ func TestCancelTask_NotRunning(t *testing.T) {
 	_, _, _, mux := setup(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/nonexistent/cancel", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -471,6 +489,7 @@ func TestRetryTask_Success(t *testing.T) {
 	seedExecution(t, store, exec)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/exec-retry-src/retry", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "retry-user")
 	w := httptest.NewRecorder()
@@ -498,6 +517,7 @@ func TestRetryTask_NotFound(t *testing.T) {
 	_, _, _, mux := setup(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/nonexistent/retry", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -523,6 +543,7 @@ func TestConfirmTask_Success(t *testing.T) {
 	seedExecution(t, store, exec)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/exec-confirm-q/confirm", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "confirm-user")
 	w := httptest.NewRecorder()
@@ -550,6 +571,7 @@ func TestConfirmTask_NotFound(t *testing.T) {
 	_, _, _, mux := setup(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/nonexistent/confirm", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -572,6 +594,7 @@ func TestConfirmTask_NotQueued(t *testing.T) {
 	seedExecution(t, store, exec)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tasks/exec-confirm-nq/confirm", nil)
+	setAPIKeyHeader(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)

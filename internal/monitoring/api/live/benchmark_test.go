@@ -165,6 +165,7 @@ func TestHandleBenchmarkComparison_NoSessionsDir(t *testing.T) {
 
 func TestHandleBenchmarkComparison_MethodNotAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	svc := service.NewLiveService(tmpDir, tmpDir)
 	h := &Handlers{
 		LedgerDir: tmpDir,
@@ -174,6 +175,7 @@ func TestHandleBenchmarkComparison_MethodNotAllowed(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/benchmark-comparison", nil)
+	req.Header.Set("X-API-Key", "test-key")
 
 	adapted := shared.Get(func(r *http.Request) (int, any) {
 		return h.HandleBenchmarkComparison(r)
