@@ -253,6 +253,13 @@ services:
     depends_on:
       - prometheus
 
+  # ── Cron jobs ─────────────────────────────────────────────────────────────
+  # Schedule fields are matched by scripts/cron-entrypoint.sh in each
+  # container's LOCAL timezone. These services intentionally set no TZ env
+  # (Alpine image default = UTC), so every CRON_SCHEDULE value below is UTC.
+  # Do not add a TZ env to a cron service without also re-basing its
+  # CRON_SCHEDULE — it silently changes when the job fires.
+
   # Daily cron job for geopolitical risk data ingestion
   cron-geo-ingest:
     build:
