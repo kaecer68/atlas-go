@@ -38,6 +38,7 @@
         <span class="nav-group-label">維運</span>
         <a data-page="datachannels">📡 資料通道</a>
         <a data-page="parameters">🎛️ 參數管理</a>
+        <a data-page="scheduler">⏰ 排程任務</a>
 
         <span class="nav-group-label">系統</span>
         <a data-page="metrics">📊 指標監控</a>
@@ -140,7 +141,7 @@
 
       <div class="panel mt-md" id="schedulerStatusPanel">
         <h2 class="m-0">⏰ 背景排程狀態</h2>
-        <div class="text-muted text-sm">資料來源：<code>/api/scheduler/status</code></div>
+        <div class="text-muted text-sm">資料來源：<code>/api/scheduler/status</code>（即時態）＋ <code>/api/dashboard/task-liveness</code>（跨重啟持久化）</div>
         <div id="schedulerStatusContent" class="empty loading">載入中…</div>
       </div>
 
@@ -471,6 +472,14 @@
         資料品質頁顯示 4 個 tier 的健康度（liveness / channel_health / llm_ready / auth_posture），以及各資料通道的最近 fetch 時間、stale alert。tier 失敗不會讓整頁崩潰，每個獨立顯示 ok / reason / latency。
       </details>
       <div id="capitalQualityContent" class="empty loading">載入中…</div>
+    </div>
+
+    <!-- 排程任務（task liveness） -->
+    <div class="page" id="page-scheduler">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示背景排程任務的<strong>跨重啟活性</strong>：<code>task_liveness</code> 表記錄每個任務「上次執行 / 上次成功 / 連續失敗」，重啟後依然可見；「逾期」表示距離上次執行已超過 3 倍任務間隔（<code>last_run &gt; interval × 3</code>），系統會同時發出告警。即時啟停狀態來自 <code>/api/scheduler/status</code>。cron 容器任務由完成時的 HTTP ping 寫入，標記為 cron。
+      </details>
+      <div id="schedulerContent" class="empty loading">載入中…</div>
     </div>
 
   </div>

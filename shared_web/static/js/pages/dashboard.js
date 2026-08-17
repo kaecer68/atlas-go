@@ -144,7 +144,7 @@ export function renderSkeleton(lines=4) {
 }
 
 
-export function renderSchedulerStatus(tasks) {
+export function renderSchedulerStatus(tasks, liveness) {
   const el = document.getElementById('schedulerStatusContent');
   if (!el) return;
   if (!Array.isArray(tasks) || tasks.length === 0) {
@@ -152,20 +152,32 @@ export function renderSchedulerStatus(tasks) {
     el.innerHTML = '<div class="empty">目前無背景排程</div>';
     return;
   }
+  // Optional second arg: /api/dashboard/task-liveness rows (cross-restart
+  // persisted state). Keyed by task name for merging.
+  const livenessByName = {};
+  if (liveness && Array.isArray(liveness.tasks)) {
+    liveness.tasks.forEach(l => { livenessByName[l.name] = l; });
+  }
   const rows = tasks.map(t => {
+    const l = livenessByName[t.name] || {};
     const enabledBadge = t.enabled
       ? '<span class="tier-badge tier-badge--bullish">啟用</span>'
       : '<span class="tier-badge tier-badge--neutral">停用</span>';
-    const failCls = (t.consecutive_failures || 0) > 0 ? 'text-warn' : 'text-muted';
-    const failText = (t.consecutive_failures || 0) > 0
-      ? `${t.consecutive_failures} 次連續失敗`
+    const staleBadge = l.stale
+      ? '<span class="tier-badge tier-badge--warn" title="' + escapeHtml(l.stale_reason || '逾期：超過 3x 間隔未執行') + '">逾期</span>'
+      : '';
+    const failCls = (l.consecutive_failures || t.consecutive_failures || 0) > 0 ? 'text-warn' : 'text-muted';
+    const failText = (l.consecutive_failures || t.consecutive_failures || 0) > 0
+      ? `${l.consecutive_failures || t.consecutive_failures} 次連續失敗`
       : '正常';
+    const lastSuccess = l.last_success_at ? formatDate(l.last_success_at) : '<span class="text-muted">—</span>';
     return `<tr>
       <td>${escapeHtml(t.name || '-')}</td>
       <td><code>${escapeHtml(t.channel_id || '-')}</code></td>
-      <td>${enabledBadge}</td>
+      <td>${enabledBadge} ${staleBadge}</td>
       <td class="text-mono">${escapeHtml(t.interval || '-')}</td>
       <td>${formatDate(t.last_run)}</td>
+      <td>${lastSuccess}</td>
       <td>${formatDate(t.next_run)}</td>
       <td class="${failCls}">${failText}</td>
     </tr>`;
@@ -181,6 +193,7 @@ export function renderSchedulerStatus(tasks) {
             <th>狀態</th>
             <th>間隔</th>
             <th>上次執行</th>
+            <th>上次成功<span class="text-muted" title="來自 task_liveness（跨重啟持久化）">*</span></th>
             <th>下次執行</th>
             <th>連續失敗</th>
           </tr>

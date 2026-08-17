@@ -46,7 +46,7 @@ export function switchPage(id, silent) {
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
   capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
-  metrics: '指標監控', config: '部署配置'
+  metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -209,6 +209,7 @@ async function loadModules() {
     import('./pages/capital-models.js'),
     import('./pages/capital-causality.js'),
     import('./pages/capital-quality.js'),
+    import('./pages/scheduler.js'),
   ];
   var results = await Promise.allSettled(imports);
   var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality'];
@@ -243,6 +244,10 @@ async function loadModules() {
     if (modules.alerts.loadAlerts) window.loadAlerts = modules.alerts.loadAlerts;
     if (modules.alerts.acknowledgeAlert) window.acknowledgeAlert = modules.alerts.acknowledgeAlert;
     if (modules.alerts.showUnacknowledgedOnly) window.showUnacknowledgedOnly = modules.alerts.showUnacknowledgedOnly;
+  }
+  if (modules.scheduler) {
+    if (modules.scheduler.loadSchedulerPage) window.loadSchedulerPage = modules.scheduler.loadSchedulerPage;
+    if (modules.scheduler.toggleSchedulerTask) window.toggleSchedulerTask = modules.scheduler.toggleSchedulerTask;
   }
   if (modules.datachannels) {
     if (modules.datachannels.triggerChannelsIngest) window.triggerChannelsIngest = modules.datachannels.triggerChannelsIngest;
@@ -413,7 +418,11 @@ async function loadPageData(pageId) {
   if (pageId === 'home') {
     try {
       var tasks = await silentGetJSON('/api/scheduler/status');
-      if (m.dash.renderSchedulerStatus) m.dash.renderSchedulerStatus(tasks);
+      // Cross-restart persisted state (task_liveness) enriches the panel with
+      // last success / stale flags; failure of this endpoint is non-fatal.
+      var liveness = null;
+      try { liveness = await silentGetJSON('/api/dashboard/task-liveness'); } catch (e2) { /* optional */ }
+      if (m.dash.renderSchedulerStatus) m.dash.renderSchedulerStatus(tasks, liveness);
     } catch (e) {
       var el = document.getElementById('schedulerStatusContent');
       if (el) {
@@ -421,6 +430,12 @@ async function loadPageData(pageId) {
         el.innerHTML = renderMissingState('排程狀態', 'api-error');
       }
     }
+  }
+  else if (pageId === 'scheduler') {
+    try {
+      if (m.scheduler && m.scheduler.loadSchedulerPage) m.scheduler.loadSchedulerPage();
+      else if (window.loadSchedulerPage) window.loadSchedulerPage();
+    } catch(e) { console.error(e); }
   }
   else if (pageId === 'experiments') {
     try {

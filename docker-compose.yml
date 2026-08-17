@@ -47,6 +47,9 @@ services:
       # var is unset. Removed in favor of env_file-only path.
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - ATLAS_WARMUP=${ATLAS_WARMUP:-}
+      # Shared secret for POST /api/internal/task-liveness (cron pings).
+      # Set ATLAS_LIVENESS_TOKEN in the atlas .env; fail-closed when unset.
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
@@ -276,6 +279,9 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
+      - CRON_TASK_NAME=cron_geo_ingest
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
@@ -305,6 +311,9 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
+      - CRON_TASK_NAME=cron_macro_ingest
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
@@ -334,6 +343,9 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
+      - CRON_TASK_NAME=cron_replay_sync
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
@@ -363,6 +375,9 @@ services:
     environment:
       - CRON_SCHEDULE=0 9 * * *
       - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
+      - CRON_TASK_NAME=cron_darwinian
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
     volumes:
       - ./data:/app/data
@@ -397,6 +412,9 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * 1-5
       - CRON_COMMAND=/app/scripts/c07-collect.sh
+      - CRON_TASK_NAME=cron_c07_collect
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - ATLAS_BASE_URL=http://atlas:18080
       - C07_OBS_LOG=/app/.omo/evidence/sector-prediction-observation-log.md
       - C07_ALERT_DIR=/app/data/state/alerts
@@ -432,6 +450,9 @@ services:
     environment:
       - CRON_SCHEDULE=0 9 * * 1-5
       - CRON_COMMAND=/app/scripts/c07-evaluate.sh
+      - CRON_TASK_NAME=cron_c07_evaluate
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - C07_OBS_LOG=/app/.omo/evidence/sector-prediction-observation-log.md
       - C07_REPORT_DIR=/app/reports/c07-evaluation
       - C07_TZ=Asia/Taipei
@@ -468,6 +489,9 @@ services:
     environment:
       - CRON_SCHEDULE=0 3 * * *
       - CRON_COMMAND=/app/cron-quote-backfill
+      - CRON_TASK_NAME=cron_quote_backfill
+      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
+      - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - FINMIND_API_KEY=${FINMIND_API_KEY:-}
     volumes:
       - ./data:/app/data

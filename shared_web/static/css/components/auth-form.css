@@ -203,6 +203,11 @@
   color: var(--editorial-muted);
   border: 1px solid color-mix(in srgb, var(--editorial-muted) 30%, transparent);
 }
+.tier-badge--warn {
+  background: color-mix(in srgb, var(--trend-bearish) 12%, transparent);
+  color: var(--trend-bearish);
+  border: 1px solid color-mix(in srgb, var(--trend-bearish) 40%, transparent);
+}
 .premium-mcp {
   max-width: 680px;
   margin: 0 auto;

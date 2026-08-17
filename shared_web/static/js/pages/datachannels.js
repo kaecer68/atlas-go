@@ -1,5 +1,6 @@
 import { silentGetJSON, notify } from '../shared/app-utils.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
+import { confirmAction } from '../components/confirm-modal.js';
 
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
@@ -106,9 +107,38 @@ export async function disableAllChannels() {
 // channel in parallel without filtering by current state (the old `c.status ===
 // 'inactive'` filter was a semantic confusion of health status with enabled flag
 // and caused the buttons to silently do nothing for most channels).
+//
+// P1-C: 危險操作二次確認 — 「全部停用」會癱瘓整條資料管線，必須先彈
+// confirmAction 確認；「全部啟用」也一併走同一流程（停用是破壞性方向，
+// danger 樣式只在停用時啟用）。
 async function setAllChannelsEnabled(enabled) {
   const verb = enabled ? '啟用' : '停用';
   console.log(`[Management] ${verb} all channels`);
+
+  // 先取通道數，讓確認訊息能顯示 N（「將停用 N 個通道…」），順便作為後續
+  // 迴圈的資料來源（避免重複 fetch）。
+  let channels = [];
+  try {
+    const data = await silentGetJSON('/api/dashboard/data-channels');
+    channels = data.channels || [];
+  } catch (e) {
+    notify(`取得通道狀態失敗: ${e.message}`, 'err');
+    return;
+  }
+  if (channels.length === 0) {
+    notify('目前無資料通道', 'warn');
+    return;
+  }
+
+  const confirmed = await confirmAction({
+    title: `全部${verb}資料通道`,
+    message: enabled
+      ? `將啟用 ${channels.length} 個通道，確認？`
+      : `將停用 ${channels.length} 個通道，系統將停止接收資料，確認？`,
+    danger: !enabled,
+    confirmLabel: `確認${verb}`,
+  });
+  if (!confirmed) return;
 
   const buttons = Array.from(
     document.querySelectorAll('#page-datachannels button[data-action^="dc-"]')
@@ -122,12 +152,6 @@ async function setAllChannelsEnabled(enabled) {
   if (liveBtn) liveBtn.textContent = `${verb}中…`;
 
   try {
-    const data = await silentGetJSON('/api/dashboard/data-channels');
-    const channels = data.channels || [];
-    if (channels.length === 0) {
-      notify('目前無資料通道', 'warn');
-      return;
-    }
     const results = await Promise.allSettled(channels.map(c =>
       fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
         method: 'POST',
@@ -177,6 +201,16 @@ export async function triggerChannelFetch(channelID) {
 
 export async function toggleChannel(channelID, enable) {
   console.log('[Management] Toggle', channelID, 'to', enable);
+  // P1-C: 停用單一通道也需二次確認（啟用是安全方向，不擋）。
+  if (!enable) {
+    const confirmed = await confirmAction({
+      title: '停用資料通道',
+      message: `確認停用通道 ${channelID}？停用後該通道將停止接收資料。`,
+      danger: true,
+      confirmLabel: '確認停用',
+    });
+    if (!confirmed) return;
+  }
   try {
     const res = await fetch(`/api/dashboard/channels/${channelID}/toggle`, {
       method: 'POST',

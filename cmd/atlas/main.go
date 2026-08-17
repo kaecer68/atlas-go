@@ -38,6 +38,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/liveness"
 	"github.com/kaecer68/atlas-go/internal/llm"
 	llmAdapters "github.com/kaecer68/atlas-go/internal/llm/adapters"
 	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
@@ -1199,6 +1200,37 @@ func run(args []string, deps appDeps) error {
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var realtimeAdapter *realtime.RealTimeAdapter
 		taskMgr := setupBackgroundTaskManager(gateway, monitor, autoHandler)
+
+		// Task-liveness heartbeat (Phase 1): persist every task execution
+		// outcome to task_liveness (cross-restart visibility) and watch for
+		// stale tasks. Fire-and-forget: a liveness write failure only logs.
+		var livenessStore *liveness.Store
+		if pool != nil {
+			livenessStore = liveness.NewStore(pool)
+			taskMgr.SetCompletionHandler(func(name string, runErr error, duration time.Duration) {
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := livenessStore.Record(ctx, liveness.RecordInput{
+						TaskName: name,
+						Err:      runErr,
+						Duration: duration,
+					}); err != nil {
+						logging.Warn("liveness", "completion_record_failed", "task", name, "err", err.Error())
+					}
+				}()
+			})
+			go livenessStore.StartMetaHeartbeat(sysCtx, 0)
+			stalenessMon := liveness.NewStalenessMonitor(livenessStore, taskMgr, func(taskName string, staleFor, interval time.Duration) {
+				monitor.Alert(monitoring.AlertLevelWarning, "background_task",
+					fmt.Sprintf("Task %s is stale: not run for %s (> 3x %s interval)", taskName, staleFor.Round(time.Second), interval.String()),
+					map[string]any{"task": taskName, "stale_for": staleFor.String(), "interval": interval.String()})
+			})
+			go stalenessMon.Run(sysCtx)
+			logging.Info("main", "task_liveness_ready", "store", "postgres")
+		} else {
+			logging.Warn("main", "task_liveness_disabled", "reason", "pool unavailable (DATABASE_URL unset?)")
+		}
 		// PRISM 5-min queue rebalancer: migrated from rogue ticker goroutine to
 		// BTM (Issue #1447, docs/manifests/2026-08-06-btm-ticker-migration.md).
 		// prismMgr is only non-nil in apiMode; AutoBalanceEnabled gates the task.
@@ -1598,18 +1630,20 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
 			}
 
+			// D2 決策暫停 2026-08-17: 無消費端 (實作不完全)，待「大盤方向預測」產品功能立案評估
+			// (特徵需重新設計: 七維錢潮/stress-index/regime, 不是 OHLCV 統計量)
 			{
 				mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
 				mlScheduler.SetWorkDir(cfg.WorkDir)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "ml_retrain",
 					Interval: 24 * time.Hour,
-					Enabled:  true,
+					Enabled:  false,
 					Task: func(ctx context.Context) error {
 						return mlScheduler.RetrainAll(ctx)
 					},
 				})
-				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+				log.Printf("[Gateway] registered ml_retrain background task (24h interval, DISABLED D2)")
 			}
 
 			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline (06:00 TW, trading days).
@@ -2156,6 +2190,25 @@ func run(args []string, deps appDeps) error {
 		if taskMgr != nil {
 			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
 			log.Printf("[Gateway] scheduler API routes registered")
+
+			// Task-liveness: feed the persisted store + live scheduler status
+			// into GET /api/dashboard/task-liveness (providers are late-bound
+			// because the BTM is created after RegisterAllRoutes).
+			dashboard.SetSchedulerStatusProvider(taskMgr)
+			if livenessStore != nil {
+				dashboard.SetTaskLivenessProvider(livenessStore)
+			}
+		}
+		// Internal cron-completion ping (POST /api/internal/task-liveness).
+		// Security: intentionally NOT added to isPublicPath — the request is
+		// allowed through the AuthMiddleware by an explicit allowlist below
+		// and the handler itself requires X-Liveness-Token (ATLAS_LIVENESS_TOKEN,
+		// fail-closed 503 when unset). See internal/liveness/ping.go.
+		if livenessStore != nil {
+			mux.Handle("POST /api/internal/task-liveness", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				liveness.HandlePing(livenessStore, w, r)
+			}))
+			log.Printf("[Gateway] internal task-liveness ping endpoint registered")
 		}
 		// /api/health is kept as an alias for /health so external probes that
 		// expect an /api/ prefix still succeed. It does not reimplement a
@@ -2191,6 +2244,14 @@ func run(args []string, deps appDeps) error {
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
 			if isPublicPath(r.Method, r.URL.Path) {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			// Internal liveness ping: allowed past AuthMiddleware only for this
+			// exact path; the handler enforces X-Liveness-Token itself
+			// (shared secret, fail-closed). Kept OUT of isPublicPath so it is
+			// not broadly public. See internal/liveness/ping.go.
+			if r.Method == http.MethodPost && r.URL.Path == "/api/internal/task-liveness" {
 				mux.ServeHTTP(w, r)
 				return
 			}
