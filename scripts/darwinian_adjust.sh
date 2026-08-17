@@ -1,5 +1,12 @@
 #!/bin/bash
 #
+# DEPRECATED — D1 決策退役 2026-08-17
+#
+# 真實 Darwinian 演化已遷移至 Go BTM: internal/portfolio/darwinian_weights.go
+# 的 auto_daily_simulation (由 Go 側 cron 觸發, 產出 darwinian_history.jsonl)。
+# 本 shell script 僅為占位 stub，結構完整但核心計算已註解 (L101 "# would calculate")。
+# 用途: 保留脚本框架供日後參考，不承擔實際執行。
+#
 # Darwinian Weight Daily Adjustment Script
 # Atlas-GIC Style: Adjusts agent weights based on rolling Sharpe performance
 #
