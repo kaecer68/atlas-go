@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/prism"
 )
 
 // registerOpsForTest 隔離 registerOperationsTasks 的可測部分：只注入
@@ -279,5 +282,79 @@ func TestRegisterOperationsTasks_GovernmentFlowAggregate_WeekdayGate(t *testing.
 	// 嚴格斷言 false，這裡只保證它跑得起來）。
 	if err := task.Task(t.Context()); err != nil {
 		t.Logf("task err (acceptable if running on weekday post-15:00): %v", err)
+	}
+}
+
+// registerOpsForTestWithPrism is the test seam for the PRISM Phase A
+// prism_training BTM: injects a real prism manager + agent registry so the
+// task registration and its per-agent scheduling can be verified.
+func registerOpsForTestWithPrism(
+	mgr *apigateway.BackgroundTaskManager,
+	janusEngine *janus.Engine,
+	prismMgr *prism.PRISMManager,
+	registry domain.AgentRegistry,
+) {
+	registerOperationsTasks(operationsDeps{
+		taskMgr:       mgr,
+		janusEngine:   janusEngine,
+		prismMgr:      prismMgr,
+		prismRegistry: registry,
+	})
+}
+
+func TestRegisterOperationsTasks_PrismTrainingEnabled(t *testing.T) {
+	mgr := apigateway.NewBackgroundTaskManager(nil)
+	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
+	registry := domain.AgentRegistry{Agents: []domain.AgentSpec{{ID: "test-agent-01", Enabled: true}}}
+
+	registerOpsForTestWithPrism(mgr, janus.NewEngine(), pm, registry)
+
+	task, ok := mgr.Get("prism_training")
+	if !ok {
+		t.Fatal("prism_training must be registered when prismMgr + janusEngine are present (PRISM Phase A)")
+	}
+	if !task.IsEnabled() {
+		t.Fatal("prism_training must be Enabled after PRISM Phase A wiring")
+	}
+}
+
+func TestRegisterOperationsTasks_PrismTrainingSchedulesPerAgent(t *testing.T) {
+	mgr := apigateway.NewBackgroundTaskManager(nil)
+	pm := prism.NewPRISMManager(prism.DefaultPRISMConfig())
+	registry := domain.AgentRegistry{Agents: []domain.AgentSpec{
+		{ID: "agent-enabled-01", Enabled: true},
+		{ID: "agent-disabled-01", Enabled: false},
+	}}
+
+	registerOpsForTestWithPrism(mgr, janus.NewEngine(), pm, registry)
+
+	task, ok := mgr.Get("prism_training")
+	if !ok {
+		t.Fatal("prism_training must be registered")
+	}
+	if err := task.Task(context.Background()); err != nil {
+		t.Fatalf("prism_training task run: %v", err)
+	}
+
+	// The replay executor filters recommendations by task.AgentID, so the
+	// task must schedule every ENABLED registry agent (not pseudo
+	// "system-<regime>" IDs) into each of the 5 regime queues.
+	stats := pm.GetQueueStats()
+	if len(stats) != int(prism.RegimeCount) {
+		t.Fatalf("expected %d regime queues, got %d", prism.RegimeCount, len(stats))
+	}
+	for _, q := range stats {
+		if q.Size != 1 {
+			t.Errorf("regime %s queue size = %d, want 1 (one enabled agent scheduled; disabled agent must be skipped)", q.Regime, q.Size)
+		}
+	}
+}
+
+func TestRegisterOperationsTasks_PrismTrainingSkippedWhenPrismMgrNil(t *testing.T) {
+	mgr := apigateway.NewBackgroundTaskManager(nil)
+	registerOpsForTest(mgr, janus.NewEngine())
+
+	if _, ok := mgr.Get("prism_training"); ok {
+		t.Fatal("prism_training must NOT be registered when prismMgr is nil")
 	}
 }

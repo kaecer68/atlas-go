@@ -61,10 +61,14 @@ type operationsDeps struct {
 	repo            *repository.DualWriteRepository
 	collector       *monitoring.MetricsCollector
 	// eventCalendar 服務 eventdriven.RegisterRoutes(/api/events/*)。
-	eventCalendar      *industry.EventCalendar
-	capitalFlow        *capitalflow.Service
-	janusEngine        *janus.Engine
-	prismMgr           *prism.PRISMManager
+	eventCalendar *industry.EventCalendar
+	capitalFlow   *capitalflow.Service
+	janusEngine   *janus.Engine
+	prismMgr      *prism.PRISMManager
+	// prismRegistry is the agent registry used by prism_training to schedule
+	// per-agent training tasks (PRISM Phase A). Empty when unavailable —
+	// the task skips scheduling in that case.
+	prismRegistry      domain.AgentRegistry
 	vixBaselineTracker *marketdata.VIXBaselineTracker
 	// captchaCooldown (fix/20260731-govflow-cadence) gates the
 	// government_broker upstream fetch: when the TWSE CAPTCHA page is
@@ -426,14 +430,20 @@ func registerOperationsTasks(d operationsDeps) {
 	// BackgroundTaskManager.Register contract (Constitution §4.5.5).
 
 	if d.prismMgr != nil && d.janusEngine != nil {
-		// PRISM 未啟用（2026-08-12 決策：現有 Darwinian 權重 + scorecards
-		// regime_breakdown 已覆蓋動態權重與歷史稽核目標）。訓練 executor 的
-		// replay 資料源為 1 天 sample CSV，任務必失敗且無消費者 — 保留骨架
-		// 供未來啟用，Enabled=false 停止每 6h 的無效排程。
+		// PRISM Phase A（06-PRODUCT-DECISIONS.md 附錄 C）：replay 資料已達標
+		// （data/replay/tw_extended_90days.csv，93 交易日/日 41 檔）→ 啟用
+		// prism_training，由 main.go 接線的真 replay executor 產出 cohort 指標
+		// （不再 Synthetic）。Event-driven: SetOnCompleted 即時餵 JANUS（還原
+		// #1527 前設計）；6h tick 另外清點一次並清空 buffer 避免重複餵送。
+		d.prismMgr.SetOnCompleted(func(result prism.CompletedTrainingResult) {
+			if result.Result.Error == "" && !result.Result.Synthetic {
+				d.janusEngine.RecordTrainingResult(result.Regime, result.Result)
+			}
+		})
 		_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 			Name:     "prism_training",
 			Interval: 6 * time.Hour,
-			Enabled:  false,
+			Enabled:  true,
 			Task: func(_ context.Context) error {
 				if d.prismMgr == nil || d.janusEngine == nil {
 					return nil
@@ -445,22 +455,32 @@ func registerOperationsTasks(d operationsDeps) {
 					}
 					d.janusEngine.RecordTrainingResult(r.Regime, r.Result)
 				}
+				d.prismMgr.ClearCompletedResults()
 				now := time.Now()
-				for _, reg := range []prism.RegimeType{prism.RegimeRiskOn, prism.RegimeRiskOff, prism.RegimeHighVolatility, prism.RegimeLowVolatility, prism.RegimeTransition} {
-					_ = d.prismMgr.ScheduleTraining(domain.AgentSpec{
-						ID:      "system-" + reg.String(),
-						Enabled: true,
-					}, []prism.TrainingWindow{{
-						Start:     now.AddDate(0, 0, -30),
-						End:       now,
-						Regime:    reg,
-						RegimeSet: true,
-					}})
+				// 對每個 ENABLED registry agent 排 5 regime 訓練 — replay
+				// executor 依 task.AgentID 過濾 recommendation，舊的偽
+				// "system-<regime>" agent ID 永遠湊不出 outcomes（靜默 no-op）；
+				// 真 agent × 5 regime queue 對照 orchestrator plugin 路徑
+				// （plugin_adapters.go PostSimulation 的排程方式）。
+				if len(d.prismRegistry.Agents) > 0 {
+					for _, agent := range d.prismRegistry.Agents {
+						if !agent.Enabled {
+							continue
+						}
+						for _, reg := range []prism.RegimeType{prism.RegimeRiskOn, prism.RegimeRiskOff, prism.RegimeHighVolatility, prism.RegimeLowVolatility, prism.RegimeTransition} {
+							_ = d.prismMgr.ScheduleTraining(agent, []prism.TrainingWindow{{
+								Start:     now.AddDate(0, 0, -30),
+								End:       now,
+								Regime:    reg,
+								RegimeSet: true,
+							}})
+						}
+					}
 				}
 				return nil
 			},
 		})
-		log.Printf("[Gateway] prism_training background task registered (disabled — PRISM 未啟用)")
+		log.Printf("[Gateway] prism_training background task registered (6h interval, replay-backed executor — PRISM Phase A)")
 	}
 
 	// BK-13: Government flow aggregation — daily fetch of 8 core bank broker

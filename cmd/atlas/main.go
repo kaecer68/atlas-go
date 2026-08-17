@@ -619,9 +619,21 @@ func run(args []string, deps appDeps) error {
 		agentHealthMgr := portfolio.NewAgentHealthManagerWithStore(portfolio.DefaultAgentHealthConfig(), healthStore).WithParameters(runtimeParams)
 		dashboard.SetHealthManager(agentHealthMgr)
 		prismMgr := prism.NewPRISMManager(prism.DefaultPRISMConfig())
-		// PRISM 訓練結果 API 已移除（admin 頁面刪除，2026-08-12）。
-		// prismMgr 保留供 operations_tasks.go 的 prism_training BTM 使用
-		// （該 task 現為 disabled — 見 operations_tasks.go）。
+		// PRISM Phase A（06-PRODUCT-DECISIONS.md 附錄 C — PRISM 承諾完成：
+		// executor 接真 replay → 訓 5 regime cohort）。Root cause 先前是
+		// production 走 apiMode 路徑時 prismMgr 沒接 WithExecutor，導致
+		// prism_training BTM 即使 enabled 也拿到 executor=nil →
+		// "no training executor configured" → Synthetic。這裡補上真 replay
+		// executor（registry/policy/dataset 解析對照 orchestrator
+		// ResolveReplayContext；dataset 載入失敗時 executor 保持 nil，
+		// prism_training 退回 Synthetic 護欄）。
+		prismExecutor, prismRegistry := buildPrismTrainingExecutor(cfg)
+		if prismExecutor != nil {
+			prismMgr.WithExecutor(prismExecutor)
+			log.Printf("[PRISM] training executor wired (replay-backed) — prism_training BTM 將產出真 cohort 指標")
+		} else {
+			log.Printf("[PRISM] training executor NOT wired — replay dataset 不可用, prism_training 退回 Synthetic")
+		}
 		// Start the PRISM training-queue workers. Previously the manager
 		// was created but never started, so tasks scheduled via the
 		// dashboard API would queue up without ever being processed.
@@ -1304,6 +1316,7 @@ func run(args []string, deps appDeps) error {
 				collector:       collector,
 				janusEngine:     janusEngine,
 				prismMgr:        prismMgr,
+				prismRegistry:   prismRegistry,
 				// BK-15: plumb the shared capitalflow.Service so the
 				// 5-minute capital_flow_refresh closure can call
 				// Refresh(ctx, tradingDate) against the persisted
@@ -2830,4 +2843,23 @@ func buildSystemOrFallback(
 		sys.WithCapitalFlowAssessmentProvider(orchestrator.NewCapitalFlowServiceAdapter(capitalFlowService))
 	}
 	return sys, nil
+}
+
+// buildPrismTrainingExecutor constructs the real replay-backed PRISM
+// training executor (06-PRODUCT-DECISIONS.md 附錄 C Phase A — executor 接真
+// replay → 訓 5 regime cohort). The replay dataset path follows
+// config.GetReplayDataPath (ATLAS_REPLAY_DATA_PATH → data/replay/VERSION →
+// default tw_extended_90days.csv); registry and baseline policy fall back
+// to seeds/defaults when files are missing (same semantics as
+// orchestrator.ResolveReplayContext). Returns (nil, registry) when the
+// replay dataset cannot be loaded, so the caller keeps the Synthetic
+// fallback instead of surfacing "no replay dataset available" errors.
+func buildPrismTrainingExecutor(cfg config.Config) (prism.TrainingExecutor, domain.AgentRegistry) {
+	prismCfg := cfg
+	prismCfg.ReplayDataPath = config.GetReplayDataPath(cfg.WorkDir)
+	registry, policy, ds := orchestrator.ResolveReplayContext(prismCfg)
+	if ds == nil {
+		return nil, registry
+	}
+	return orchestrator.NewPRISMTrainingExecutor(ds, registry, policy), registry
 }
