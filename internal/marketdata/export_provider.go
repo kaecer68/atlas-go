@@ -23,10 +23,19 @@ import (
 type CustomsExportImport struct {
 	Year         int     `json:"year"`          // ROC year (e.g., 115 = 2026)
 	Month        int     `json:"month"`         // 1-12
-	ExportTotal  float64 `json:"export_total"`  // 千美元 → /1e6 = 10億美元
-	ImportTotal  float64 `json:"import_total"`  // 千美元 → /1e6 = 10億美元
-	TradeBalance float64 `json:"trade_balance"` // 出超 (千美元)
+	ExportTotal  float64 `json:"export_total"`  // 千美元 → /1000 = 百萬美元 (million USD)
+	ImportTotal  float64 `json:"import_total"`  // 千美元 → /1000 = 百萬美元 (million USD)
+	TradeBalance float64 `json:"trade_balance"` // 出超 (千美元 → /1000 = 百萬美元)
 	DownloadedAt int64   `json:"downloaded_at"` // unix timestamp
+}
+
+// ExportStatsSaver persists customs export/import statistics rows to durable
+// storage. *repository.DualWriteRepository satisfies this interface
+// structurally; providers must treat it as optional (nil-safe).
+// All numeric values are in million USD (百萬美元) — i.e. already divided by
+// 1000 from the raw 千美元 source (see parseCustomsCSV).
+type ExportStatsSaver interface {
+	SaveExportStats(ctx context.Context, year, month int, exportTotal, importTotal, tradeBalance float64) error
 }
 
 // ExportStatisticsProvider fetches Taiwan export/import statistics from
@@ -37,6 +46,7 @@ type ExportStatisticsProvider struct {
 	storageDir string
 	baseURL    string
 	limiter    *rate.Limiter
+	statsSaver ExportStatsSaver // optional: persists monthly rows to PostgreSQL
 }
 
 // NewExportStatisticsProvider creates a new export statistics provider.
@@ -52,6 +62,13 @@ func NewExportStatisticsProvider(storageDir string) *ExportStatisticsProvider {
 // Name returns the provider name.
 func (e *ExportStatisticsProvider) Name() string {
 	return "export_statistics"
+}
+
+// SetExportStatsSaver injects an optional export-statistics saver. When set,
+// each successful JSON write in FetchSnapshot is mirrored to the saver
+// (best-effort: saver failures are logged as WARN and never break the fetch).
+func (e *ExportStatisticsProvider) SetExportStatsSaver(saver ExportStatsSaver) {
+	e.statsSaver = saver
 }
 
 // FetchSnapshot fetches the latest customs export/import data and returns a MacroDataSnapshot.
@@ -73,9 +90,13 @@ func (e *ExportStatisticsProvider) FetchSnapshot(ctx context.Context) (MacroData
 
 	if err := e.saveExport(latest); err != nil {
 		logging.Warn("export_statistics_provider", "save_export_latest_warning", logging.Err(err))
+	} else {
+		e.persistStats(ctx, latest)
 	}
 	if err := e.saveExport(prev); err != nil {
 		logging.Warn("export_statistics_provider", "save_export_prev_warning", logging.Err(err))
+	} else {
+		e.persistStats(ctx, prev)
 	}
 
 	return MacroDataSnapshot{
@@ -168,7 +189,7 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 		importTotal := parseTWDVolume(row[3])
 		tradeBalance := parseTWDVolume(row[8])
 
-		// Convert from thousand TWD to million TWD (same unit as other MacroDataPoint values)
+		// Convert from thousand USD to million USD (same unit as other MacroDataPoint values)
 		results = append(results, CustomsExportImport{
 			Year:         year,
 			Month:        month,
@@ -192,6 +213,19 @@ func (e *ExportStatisticsProvider) saveExport(data CustomsExportImport) error {
 		return fmt.Errorf("marshal export: %w", err)
 	}
 	return os.WriteFile(path, out, 0o644)
+}
+
+// persistStats mirrors a successfully fetched monthly row to the optional
+// saver (PostgreSQL export_statistics). Best-effort: failures are logged as
+// WARN and never abort the fetch pipeline.
+func (e *ExportStatisticsProvider) persistStats(ctx context.Context, data CustomsExportImport) {
+	if e.statsSaver == nil {
+		return
+	}
+	if err := e.statsSaver.SaveExportStats(ctx, data.Year, data.Month, data.ExportTotal, data.ImportTotal, data.TradeBalance); err != nil {
+		logging.Warn("export_statistics_provider", "save_export_stats_warning",
+			"year", data.Year, "month", data.Month, logging.Err(err))
+	}
 }
 
 // ExportStatisticsProviderWithClient creates a provider with custom HTTP client (for testing).

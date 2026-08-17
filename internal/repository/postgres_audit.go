@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,14 +57,19 @@ func scanScreeningRejects(rows pgx.Rows) ([]domain.ScreeningReject, error) {
 	var rejects []domain.ScreeningReject
 	for rows.Next() {
 		var sr domain.ScreeningReject
+		var skill, criterionLabel, threshold, actualValue sql.NullString
 		var factorScores []byte
 		err := rows.Scan(
-			&sr.RecordedAt, &sr.SessionID, &sr.Symbol, &sr.AgentID, &sr.Skill,
-			&sr.Criterion, &sr.CriterionLabel, &sr.Threshold, &sr.ActualValue, &factorScores,
+			&sr.RecordedAt, &sr.SessionID, &sr.Symbol, &sr.AgentID, &skill,
+			&sr.Criterion, &criterionLabel, &threshold, &actualValue, &factorScores,
 		)
 		if err != nil {
 			continue
 		}
+		sr.Skill = skill.String
+		sr.CriterionLabel = criterionLabel.String
+		sr.Threshold = threshold.String
+		sr.ActualValue = actualValue.String
 		if len(factorScores) > 0 {
 			if err := json.Unmarshal(factorScores, &sr.FactorScores); err != nil {
 				continue
@@ -114,7 +120,8 @@ func (r *PostgresRepository) SaveSessionSummary(ctx context.Context, summary dom
 
 func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID string) (*domain.SessionSummary, error) {
 	var summary domain.SessionSummary
-	var regime string
+	var regime sql.NullString
+	var nextExperimentAgentID, proposalID, commitID, approvalID, riskCommentary, parametersVersion sql.NullString
 	var brokerRuntime, guardOutcomes, taxSnapshots []byte
 
 	err := r.pool.QueryRow(ctx, `
@@ -124,9 +131,9 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 	`, sessionID).Scan(
 		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
-		&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
-		&summary.ApprovalID, &guardOutcomes, &summary.RiskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
-		&summary.ParametersVersion,
+		&brokerRuntime, &nextExperimentAgentID, &proposalID, &commitID,
+		&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+		&parametersVersion,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -135,7 +142,13 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 		return nil, fmt.Errorf("load session summary: %w", err)
 	}
 
-	summary.Regime = domain.Regime(regime)
+	summary.Regime = domain.Regime(regime.String)
+	summary.NextExperimentAgentID = nextExperimentAgentID.String
+	summary.ProposalID = proposalID.String
+	summary.CommitID = commitID.String
+	summary.ApprovalID = approvalID.String
+	summary.RiskCommentary = riskCommentary.String
+	summary.ParametersVersion = parametersVersion.String
 	if len(brokerRuntime) > 0 {
 		if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
 			return nil, fmt.Errorf("unmarshal broker_runtime: %w", err)
@@ -169,20 +182,27 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 	var summaries []domain.SessionSummary
 	for rows.Next() {
 		var summary domain.SessionSummary
-		var regime string
+		var regime sql.NullString
+		var nextExperimentAgentID, proposalID, commitID, approvalID, riskCommentary, parametersVersion sql.NullString
 		var brokerRuntime, guardOutcomes, taxSnapshots []byte
 
 		err := rows.Scan(
 			&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 			&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
-			&brokerRuntime, &summary.NextExperimentAgentID, &summary.ProposalID, &summary.CommitID,
-			&summary.ApprovalID, &guardOutcomes, &summary.RiskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
-			&summary.ParametersVersion,
+			&brokerRuntime, &nextExperimentAgentID, &proposalID, &commitID,
+			&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+			&parametersVersion,
 		)
 		if err != nil {
 			continue
 		}
-		summary.Regime = domain.Regime(regime)
+		summary.Regime = domain.Regime(regime.String)
+		summary.NextExperimentAgentID = nextExperimentAgentID.String
+		summary.ProposalID = proposalID.String
+		summary.CommitID = commitID.String
+		summary.ApprovalID = approvalID.String
+		summary.RiskCommentary = riskCommentary.String
+		summary.ParametersVersion = parametersVersion.String
 		if len(brokerRuntime) > 0 {
 			if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
 				continue
@@ -231,13 +251,21 @@ func (r *PostgresRepository) LoadHumanInterventions(ctx context.Context) ([]doma
 	var interventions []domain.HumanIntervention
 	for rows.Next() {
 		var hi domain.HumanIntervention
+		var targetAgentID, targetModelID, targetSector, targetSymbol, reason, operator, sessionID sql.NullString
 		err := rows.Scan(
-			&hi.RecordedAt, &hi.ID, &hi.Type, &hi.TargetAgentID, &hi.TargetModelID,
-			&hi.TargetSector, &hi.TargetSymbol, &hi.Value, &hi.Reason, &hi.Operator, &hi.SessionID,
+			&hi.RecordedAt, &hi.ID, &hi.Type, &targetAgentID, &targetModelID,
+			&targetSector, &targetSymbol, &hi.Value, &reason, &operator, &sessionID,
 		)
 		if err != nil {
 			continue
 		}
+		hi.TargetAgentID = targetAgentID.String
+		hi.TargetModelID = targetModelID.String
+		hi.TargetSector = targetSector.String
+		hi.TargetSymbol = targetSymbol.String
+		hi.Reason = reason.String
+		hi.Operator = operator.String
+		hi.SessionID = sessionID.String
 		interventions = append(interventions, hi)
 	}
 	return interventions, rows.Err()
