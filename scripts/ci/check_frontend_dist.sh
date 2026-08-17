@@ -46,11 +46,21 @@ mtime_of() {
 
 # newest_mtime DIR → epoch seconds of newest file under DIR (excluding
 # node_modules/dist), or empty if no files.
+#
+# Excludes the two go:generate outputs (cmd/gentags): ci-gate runs
+# `go generate ./...` unconditionally before this check, and gentags
+# rewrites field_types.ts + valid_fields.json even when content is
+# identical → their mtime is ALWAYS newer than any dist build, which
+# would false-positive every frontend push as "dist 過期". Content drift
+# of these generated files is already caught by ci-gate's
+# `git diff --exit-code` (drift check), so excluding them is safe.
 newest_mtime() {
   local dir=$1
   find "$dir" -type f \
     -not -path "$dir/node_modules/*" \
     -not -path "$dir/dist/*" \
+    -not -path "$dir/static/js/shared/field_types.ts" \
+    -not -path "$dir/static/js/shared/valid_fields.json" \
     -print0 2>/dev/null | while IFS= read -r -d '' f; do mtime_of "$f"; done | sort -nr | head -1
 }
 
