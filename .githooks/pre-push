@@ -42,6 +42,20 @@ if ! git fetch origin main --quiet 2>/dev/null; then
   exit 0
 fi
 
+# ── Gate 1c: frontend dist freshness (frontend changes only) ─────
+# The backend embeds admin_web/dist + client_web/dist via go:embed; a stale
+# dist silently ships the old UI into the binary. Only admin_web/client_web/
+# shared_web changes can invalidate dist, so pure Go/docs pushes skip this
+# entirely (see scripts/ci/check_frontend_dist.sh).
+if ! bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD 2>&1; then
+  echo ""
+  echo "❌ pre-push: frontend dist 過期/缺失 (見上方輸出)."
+  echo "   修復: 在對應前端目錄跑 npm ci && npm run build, 再重新 push."
+  echo "   Bypass with: git push --no-verify"
+  echo ""
+  exit 1
+fi
+
 # Code change? (docs-only diffs skip ci-full — ci-gate suffices)
 code_changed=0
 if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$|(^|/)Makefile$|Dockerfile|docker-compose|\.github/|\.githooks/'; then
