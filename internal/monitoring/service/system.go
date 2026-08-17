@@ -229,10 +229,14 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 	}, nil
 }
 
+// degradedFrom returns the channel IDs that should be surfaced as degraded.
+// Only warn/error/partial count — inactive (未啟用: operator-disabled or missing
+// API key) and expected_delay (正常延遲) are intentional states, not degradation.
 func degradedFrom(channels []DataChannelInfo) []string {
 	var d []string
 	for _, c := range channels {
-		if c.Status != "ok" {
+		switch c.Status {
+		case "warn", "error", "partial":
 			d = append(d, c.ChannelID)
 		}
 	}

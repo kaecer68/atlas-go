@@ -295,6 +295,43 @@ func TestLoadSystemHealth(t *testing.T) {
 }
 
 // =============================================================================
+// degradedFrom — degraded 語意: 只收 warn/error/partial,
+// inactive(未啟用) 與 expected_delay(正常延遲) 不計入降級
+// =============================================================================
+
+func TestDegradedFrom_OnlyWarnErrorPartial(t *testing.T) {
+	channels := []DataChannelInfo{
+		{ChannelID: "ok_ch", Status: "ok"},
+		{ChannelID: "warn_ch", Status: "warn"},
+		{ChannelID: "error_ch", Status: "error"},
+		{ChannelID: "partial_ch", Status: "partial"},
+		{ChannelID: "inactive_ch", Status: "inactive"},
+		{ChannelID: "delay_ch", Status: "expected_delay"},
+	}
+	got := degradedFrom(channels)
+	want := []string{"warn_ch", "error_ch", "partial_ch"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d degraded channels %v, got %d: %v", len(want), want, len(got), got)
+	}
+	for i, id := range want {
+		if got[i] != id {
+			t.Errorf("expected degraded[%d]=%q, got %q", i, id, got[i])
+		}
+	}
+}
+
+func TestDegradedFrom_AllOkOrInactive_Empty(t *testing.T) {
+	channels := []DataChannelInfo{
+		{ChannelID: "a", Status: "ok"},
+		{ChannelID: "b", Status: "inactive"},
+		{ChannelID: "c", Status: "expected_delay"},
+	}
+	if got := degradedFrom(channels); len(got) != 0 {
+		t.Errorf("expected no degraded channels, got %v", got)
+	}
+}
+
+// =============================================================================
 // LoadClampingEvents
 // =============================================================================
 
