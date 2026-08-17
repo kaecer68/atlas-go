@@ -10,6 +10,8 @@
 // Both are merged by task name; tasks only in the runtime status (never
 // written to liveness yet) are synthesized from the live state.
 
+import { postJSON } from '../shared/app-utils.js';
+
 export function renderSchedulerPage(tasks, getJSON) {
   var el = document.getElementById('schedulerContent');
   if (!el) return;
@@ -176,21 +178,15 @@ function mergeLivenessAndStatus(livenessTasks, statusTasks) {
 
 // Global toggle function called from HTML onclick
 export function toggleSchedulerTask(name, enabled) {
-  fetch('/api/scheduler/toggle', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, enabled: enabled })
-  }).then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  }).then(function(resp) {
-    var el = document.getElementById('schedulerContent');
-    if (el) el.innerHTML = '<div class="empty loading">載入中…</div>';
-    loadSchedulerPage();
-  }).catch(function(err) {
-    console.error('toggle task ' + name + ':', err.message);
-    alert('切換失敗: ' + err.message);
-  });
+  postJSON('/api/scheduler/toggle', { name: name, enabled: enabled })
+    .then(function() {
+      var el = document.getElementById('schedulerContent');
+      if (el) el.innerHTML = '<div class="empty loading">載入中…</div>';
+      loadSchedulerPage();
+    }).catch(function(err) {
+      console.error('toggle task ' + name + ':', err.message);
+      alert('切換失敗: ' + err.message);
+    });
 };
 
 // Global page reload function: fetches persisted liveness + live status.

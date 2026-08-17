@@ -1,4 +1,4 @@
-import { silentGetJSON, notify } from '../shared/app-utils.js';
+import { silentGetJSON, notify, postJSON } from '../shared/app-utils.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { confirmAction } from '../components/confirm-modal.js';
 
@@ -73,12 +73,7 @@ export async function triggerChannelsIngest() {
   btn.disabled = true;
   btn.textContent = '更新中…';
   try {
-    const res = await fetch('/api/channels/ingest', { method: 'POST' });
-    const data = await res.json().catch(() => ({ error: 'Unknown error' }));
-    if (!res.ok) {
-      notify('資料更新失敗: ' + (data.error || res.statusText), 'err');
-      return;
-    }
+    const data = await postJSON('/api/channels/ingest');
     const parts = [];
     if (data.macro_ok) parts.push('Macro ✓');
     else parts.push('Macro ✗' + (data.macro_error ? ': ' + data.macro_error : ''));
@@ -153,11 +148,7 @@ async function setAllChannelsEnabled(enabled) {
 
   try {
     const results = await Promise.allSettled(channels.map(c =>
-      fetch(`/api/dashboard/channels/${c.channel_id}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      }).then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res; })
+      postJSON(`/api/dashboard/channels/${c.channel_id}/toggle`, { enabled })
     ));
     const ok = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.length - ok;
@@ -188,12 +179,8 @@ export async function refreshChannelStatus() {
 export async function triggerChannelFetch(channelID) {
   console.log('[Management] Trigger fetch for', channelID);
   try {
-    const res = await fetch(`/api/dashboard/channels/${channelID}/trigger`, { method: 'POST' });
-    if (res.ok) {
-      notify(`${channelID} 抓取已觸發`, 'info');
-    } else {
-      notify(`${channelID} 觸發失敗: ${res.statusText}`, 'err');
-    }
+    await postJSON(`/api/dashboard/channels/${channelID}/trigger`);
+    notify(`${channelID} 抓取已觸發`, 'info');
   } catch (e) {
     notify(`${channelID} 觸發失敗: ${e.message}`, 'err');
   }
@@ -212,16 +199,8 @@ export async function toggleChannel(channelID, enable) {
     if (!confirmed) return;
   }
   try {
-    const res = await fetch(`/api/dashboard/channels/${channelID}/toggle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: enable })
-    });
-    if (res.ok) {
-      notify(`${channelID} 已${enable ? '啟用' : '停用'}`, 'info');
-    } else {
-      notify(`${channelID} 切換失敗: ${res.statusText}`, 'err');
-    }
+    await postJSON(`/api/dashboard/channels/${channelID}/toggle`, { enabled: enable });
+    notify(`${channelID} 已${enable ? '啟用' : '停用'}`, 'info');
   } catch (e) {
     notify(`${channelID} 切換失敗: ${e.message}`, 'err');
   }
@@ -245,17 +224,9 @@ export async function updateApiKey(provider) {
   }
   console.log('[Management] Update API key for', provider);
   try {
-    const res = await fetch('/api/dashboard/api-keys/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, api_key: key })
-    });
-    if (res.ok) {
-      notify(`${provider} API Key 已更新`, 'info');
-      input.value = '';
-    } else {
-      notify('更新失敗: ' + res.statusText, 'err');
-    }
+    await postJSON('/api/dashboard/api-keys/update', { provider, api_key: key });
+    notify(`${provider} API Key 已更新`, 'info');
+    input.value = '';
   } catch (e) {
     notify('更新失敗: ' + e.message, 'err');
   }

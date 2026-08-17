@@ -1,6 +1,6 @@
 import { agentName, stockName, regimeLabel } from '../names.js';
 import { computePipelineSummary, factorBar, renderFactorMini, renderFactorBreakdown, toggleBreakdown } from './dashboard.js';
-import { formatDate, getJSON, notify, renderEmptyState } from '../shared/app-utils.js';
+import { formatDate, getJSON, notify, postJSON, renderEmptyState } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
 import { fmtSafeSignedPct, fmtSafeNumber } from '../shared/format-metric.js';
 
@@ -487,12 +487,7 @@ export function handleOverrideClick(e) {
       ? '/api/control/approve-recommendation'
       : '/api/control/reject-recommendation';
     try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, agent_id: agentId, reason, operator: 'admin' })
-      });
-      if (!resp.ok) throw new Error(await resp.text());
+      await postJSON(endpoint, { symbol, agent_id: agentId, reason, operator: 'admin' });
       popover.remove();
       window._pipelinePage = window._pipelinePage || 0;
       renderPipeline(window._pipelineData, document.getElementById('pipelineShowAll')?.checked || false, null, false);
