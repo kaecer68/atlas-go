@@ -311,11 +311,18 @@ func (m *mockStressHistoricalStore) CountSynthetic(_ context.Context) (map[strin
 }
 
 func TestNarrativeService_GetStressIndexHistory_FromLedger(t *testing.T) {
+	now := time.Now().UTC()
+	// Use dates within the last 10 days so the calendar-window semantics of
+	// GetStressIndexHistory (last N calendar days, inclusive) include them
+	// regardless of when the test runs.
+	day := func(offset int) string {
+		return now.AddDate(0, 0, offset).Format("2006-01-02")
+	}
 	store := &mockStressHistoricalStore{
 		rows: []ledger.StressRow{
-			{Date: "2026-07-20", Score: 12.0, Regime: "low"},
-			{Date: "2026-07-19", Score: 15.0, Regime: "low"},
-			{Date: "2026-07-18", Score: 30.0, Regime: "alert"},
+			{Date: day(-1), Score: 12.0, Regime: "low"},
+			{Date: day(-2), Score: 15.0, Regime: "low"},
+			{Date: day(-3), Score: 30.0, Regime: "alert"},
 		},
 	}
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
@@ -331,9 +338,15 @@ func TestNarrativeService_GetStressIndexHistory_FromLedger(t *testing.T) {
 }
 
 func TestNarrativeService_GetStressIndexHistory_DaysClamping(t *testing.T) {
+	now := time.Now().UTC()
+	// Use a recent date so the row stays inside the default 30-day window
+	// regardless of when the test runs.
+	day := func(offset int) string {
+		return now.AddDate(0, 0, offset).Format("2006-01-02")
+	}
 	store := &mockStressHistoricalStore{
 		rows: []ledger.StressRow{
-			{Date: "2026-07-20", Score: 12.0, Regime: "low"},
+			{Date: day(-1), Score: 12.0, Regime: "low"},
 		},
 	}
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator()).
@@ -351,10 +364,16 @@ func TestNarrativeService_GetStressIndexHistory_DaysClamping(t *testing.T) {
 }
 
 func TestNarrativeService_GetStressIndexHistory_WithComponents(t *testing.T) {
+	now := time.Now().UTC()
+	// Use a recent date so the row stays inside the 30-day window regardless
+	// of when the test runs.
+	day := func(offset int) string {
+		return now.AddDate(0, 0, offset).Format("2006-01-02")
+	}
 	store := &mockStressHistoricalStore{
 		rows: []ledger.StressRow{
 			{
-				Date:       "2026-07-20",
+				Date:       day(-1),
 				Score:      25.0,
 				Regime:     "alert",
 				Components: map[string]interface{}{"dxy": 1.5, "vix": 20.0, "bad": "not-a-number"},
