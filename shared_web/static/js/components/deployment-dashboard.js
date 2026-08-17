@@ -318,12 +318,14 @@ export class DeploymentDashboard {
 
   showAuthMissingState() {
     if (!this.container) return;
+    // 誠實文案（UX audit P1）：本系統沒有管理員登入流程，後端以
+    // X-API-Key / Bearer（ATLAS_API_KEY）保護此端點，瀏覽器無法提供，
+    // 顯示「需要管理員登入」+ 死連結 /admin/login 是假象。
     this.container.innerHTML = `
       <div class="deployment-dashboard">
         <h2 class="m-0">🚀 部署健康度</h2>
         <div class="error-banner mt-sm">
-          <span>⚠️ 需要管理員登入</span>
-          <a href="/admin/login" class="ml-sm">前往登入</a>
+          <span>⚠️ 此功能需要管理員 API Key 授權，瀏覽器環境無法提供，目前不可用</span>
         </div>
       </div>
     `;

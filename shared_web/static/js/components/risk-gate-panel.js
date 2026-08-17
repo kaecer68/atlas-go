@@ -7,6 +7,7 @@ import { fmtSafePct, fmtSafeDrawdown } from '../shared/format-metric.js';
 export function renderRiskGatePanel(container, getJSON) {
   container.innerHTML = '<div class="loading">載入風控狀態…</div>';
 
+  // 失敗已由 app-utils choke point 回報 (reportDegraded)，此處 .catch 僅為 null 預設值。
   return Promise.all([
     getJSON('/api/dashboard/risk').catch(() => null),
     getJSON('/api/dashboard/risk-exposure').catch(() => null),

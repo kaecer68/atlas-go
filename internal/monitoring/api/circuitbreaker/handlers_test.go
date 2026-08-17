@@ -13,6 +13,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
+func testAPIKey(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "test-key")
+}
+
+func setAPIKeyHeader(req *http.Request) {
+	req.Header.Set("X-API-Key", "test-key")
+}
+
 func TestHandleGetState(t *testing.T) {
 	tmpDir := t.TempDir()
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
@@ -41,6 +49,7 @@ func TestHandleGetState(t *testing.T) {
 }
 
 func TestHandleReset(t *testing.T) {
+	testAPIKey(t)
 	tmpDir := t.TempDir()
 
 	statePath := filepath.Join(tmpDir, "data/state/circuit_breaker_state.json")
@@ -60,6 +69,7 @@ func TestHandleReset(t *testing.T) {
 	body := `{"reason":"manual override"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/circuit-breaker/reset", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	setAPIKeyHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler := shared.Post(h.HandleReset)
@@ -93,12 +103,14 @@ func TestHandleReset(t *testing.T) {
 }
 
 func TestHandleReset_EmptyBody(t *testing.T) {
+	testAPIKey(t)
 	tmpDir := t.TempDir()
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
 	h := &Handlers{Svc: cbSvc}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/circuit-breaker/reset", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
+	setAPIKeyHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler := shared.Post(h.HandleReset)
@@ -110,12 +122,14 @@ func TestHandleReset_EmptyBody(t *testing.T) {
 }
 
 func TestHandleReset_InvalidBody(t *testing.T) {
+	testAPIKey(t)
 	tmpDir := t.TempDir()
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
 	h := &Handlers{Svc: cbSvc}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/circuit-breaker/reset", strings.NewReader(`{invalid}`))
 	req.Header.Set("Content-Type", "application/json")
+	setAPIKeyHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler := shared.Post(h.HandleReset)
@@ -127,11 +141,13 @@ func TestHandleReset_InvalidBody(t *testing.T) {
 }
 
 func TestHandleGetState_MethodNotAllowed(t *testing.T) {
+	testAPIKey(t)
 	tmpDir := t.TempDir()
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
 	h := &Handlers{Svc: cbSvc}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/circuit-breaker", nil)
+	setAPIKeyHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler := shared.Get(h.HandleGetState)
@@ -143,11 +159,13 @@ func TestHandleGetState_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleReset_MethodNotAllowed(t *testing.T) {
+	testAPIKey(t)
 	tmpDir := t.TempDir()
 	cbSvc := service.NewCircuitBreakerService(tmpDir)
 	h := &Handlers{Svc: cbSvc}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/circuit-breaker/reset", nil)
+	setAPIKeyHeader(req)
 	rec := httptest.NewRecorder()
 
 	handler := shared.Post(h.HandleReset)

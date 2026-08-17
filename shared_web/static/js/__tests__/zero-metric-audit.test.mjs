@@ -171,6 +171,51 @@ test('renderRiskPanel: missing risk metrics render em-dash, not 0.0%', async () 
   assertContainsEmDash(container.innerHTML, 'risk-panel missing metrics');
 });
 
+test('renderRiskPanel: empty portfolio hides 20x20 matrix and shows unlock guidance (P1-E)', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async (url) => {
+    if (url === '/api/dashboard/portfolio-state') {
+      return { max_drawdown: -0.05, concentration_ratio: 0.2, portfolio_value: 100000, cash: 100000, positions_count: 0, positions: [] };
+    }
+    if (url === '/api/dashboard/correlation-matrix') {
+      // 20x20 matrix would be returned by the backend even with no positions
+      return { symbols: ['A', 'B'], labels: ['A', 'B'], matrix: [[1, 0.5], [0.5, 1]] };
+    }
+    return null;
+  };
+  await renderRiskPanel(container, getJSON);
+  assert.ok(
+    container.innerHTML.includes('建立持倉後解鎖持倉相關性分析'),
+    'empty portfolio should show unlock guidance instead of the matrix'
+  );
+  assert.ok(
+    !container.innerHTML.includes('corr-matrix'),
+    'correlation matrix must not render when there are no positions'
+  );
+});
+
+test('renderRiskPanel: portfolio with positions renders correlation matrix (P1-E)', async () => {
+  const container = { innerHTML: '' };
+  const getJSON = async (url) => {
+    if (url === '/api/dashboard/portfolio-state') {
+      return { max_drawdown: -0.05, concentration_ratio: 0.3, portfolio_value: 100000, cash: 30000, positions_count: 2, positions: [{ symbol: '2330' }, { symbol: '2317' }] };
+    }
+    if (url === '/api/dashboard/correlation-matrix') {
+      return { symbols: ['2330', '2317'], labels: ['2330', '2317'], matrix: [[1, 0.5], [0.5, 1]] };
+    }
+    return null;
+  };
+  await renderRiskPanel(container, getJSON);
+  assert.ok(
+    container.innerHTML.includes('corr-matrix'),
+    'correlation matrix should render when positions exist'
+  );
+  assert.ok(
+    !container.innerHTML.includes('建立持倉後解鎖持倉相關性分析'),
+    'unlock guidance should not render when positions exist'
+  );
+});
+
 // =============================================================================
 // PnL attribution (async component)
 // =============================================================================

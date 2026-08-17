@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/admin_web"
@@ -39,6 +38,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/live"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
+	"github.com/kaecer68/atlas-go/internal/liveness"
 	"github.com/kaecer68/atlas-go/internal/llm"
 	llmAdapters "github.com/kaecer68/atlas-go/internal/llm/adapters"
 	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
@@ -216,109 +216,13 @@ var janusEngine *janus.Engine
 var strategyFeedbackStore *apistrategies.FeedbackStore
 
 // isPublicPath determines whether a request bypasses the API-key
-// AuthMiddleware. Web UI pages and their static assets under /admin/
-// and /client/, plus probing endpoints, are loaded by the browser
-// without credentials and must not require an API key. Adding a new
-// path here is a security boundary change.
-func isPublicPath(p string) bool {
-	switch {
-	case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
-		return true
-	case p == "/api/health" || p == "/api/health/":
-		// Kept public: external probes may hit the /api/ prefix; handler is a
-		// redirect to the canonical /health endpoint.
-		return true
-	case p == "/api/llm/health", p == "/api/v1/alerts": // Alertmanager webhook inbound — only POST from Alertmanager container
-		return true
-	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
-		return true
-	case p == "/api/version":
-		return true
-	case strings.HasPrefix(p, "/api/routes"):
-		return true
-	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
-		return true
-	case p == "/api/dashboard/sessions" || strings.HasPrefix(p, "/api/dashboard/sessions/"):
-		return true
-	case p == "/api/taiwan" || strings.HasPrefix(p, "/api/taiwan/"):
-		return true
-	case p == "/api/narrative" || strings.HasPrefix(p, "/api/narrative/"):
-		return true
-	case p == "/api/macro" || strings.HasPrefix(p, "/api/macro/"):
-		return true
-	case p == "/api/alerts" || strings.HasPrefix(p, "/api/alerts/"):
-		return true
-	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
-		return true
-	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
-		return true
-	case p == "/api/detector" || strings.HasPrefix(p, "/api/detector/"):
-		return true
-	case p == "/api/capital-flow" || strings.HasPrefix(p, "/api/capital-flow/"):
-		return true
-	case p == "/api/events" || strings.HasPrefix(p, "/api/events/"):
-		return true
-	case p == "/api/industry" || strings.HasPrefix(p, "/api/industry/"):
-		return true
-	case p == "/api/recommendations" || strings.HasPrefix(p, "/api/recommendations/"):
-		return true
-	case p == "/api/reports" || strings.HasPrefix(p, "/api/reports/"):
-		return true
-	case p == "/api/stock" || strings.HasPrefix(p, "/api/stock/"):
-		return true
-	case p == "/api/strategy-ranker" || strings.HasPrefix(p, "/api/strategy-ranker/"):
-		return true
-	case p == "/api/parameters" || strings.HasPrefix(p, "/api/parameters/"):
-		return true
-	case p == "/api/backtest" || strings.HasPrefix(p, "/api/backtest/"):
-		return true
-	case p == "/api/auth" || strings.HasPrefix(p, "/api/auth/"):
-		return true
-	case p == "/api/user" || strings.HasPrefix(p, "/api/user/"):
-		return true
-	case p == "/api/strategies" || strings.HasPrefix(p, "/api/strategies/"):
-		return true
-	case p == "/api/risk" || strings.HasPrefix(p, "/api/risk/"):
-		return true
-	case p == "/api/janus" || strings.HasPrefix(p, "/api/janus/"):
-		return true
-	case p == "/api/regime" || strings.HasPrefix(p, "/api/regime/"):
-		return true
-	case p == "/api/geopolitical" || strings.HasPrefix(p, "/api/geopolitical/"):
-		return true
-	case p == "/api/scheduler" || strings.HasPrefix(p, "/api/scheduler/"):
-		return true
-	case p == "/api/tasks" || strings.HasPrefix(p, "/api/tasks/"):
-		return true
-	case p == "/api/traces" || strings.HasPrefix(p, "/api/traces/"):
-		return true
-	case strings.HasPrefix(p, "/api/llm/"):
-		return true
-	case strings.HasPrefix(p, "/api/llm_annotator/"):
-		return true
-	case strings.HasPrefix(p, "/api/prism/"):
-		return true
-	case p == "/api/field-contract":
-		return true
-	case p == "/api/control/audit-log" || p == "/api/control/active-overrides":
-		return true
-	case p == "/api/experiment/history" || p == "/api/experiment/diff":
-		return true
-	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
-		return true
-	case p == "/client" || strings.HasPrefix(p, "/client/"):
-		return true
-	case p == "/admin_web" || strings.HasPrefix(p, "/admin_web/"):
-		return true
-	case strings.HasSuffix(p, ".js"):
-		// Hashed frontend chunks (stock-quote-*.js, portfolio-*.js, etc.)
-		// are served at root level (not under /client/) because main.js
-		// at /client/js/main.js imports them with a relative ../ path.
-		// Standard API routes never end in .js, so this catch-all is safe.
-		return true
-	default:
-		return false
-	}
+// AuthMiddleware. GET/HEAD/OPTIONS on the public-read whitelist and
+// web UI static assets under /admin/ and /client/ are loaded by the
+// browser without credentials. Mutating methods (POST/PUT/DELETE/PATCH)
+// always require authentication. Adding a path here is a security boundary
+// change; update internal/monitoring/api/shared.AuthFree{Exact,Prefix}Paths.
+func isPublicPath(method, p string) bool {
+	return apishared.IsPublicPath(method, p)
 }
 
 func run(args []string, deps appDeps) error {
@@ -1296,6 +1200,37 @@ func run(args []string, deps appDeps) error {
 		// Gateway already initialized before DashboardAPI. Create BackgroundTaskManager.
 		var realtimeAdapter *realtime.RealTimeAdapter
 		taskMgr := setupBackgroundTaskManager(gateway, monitor, autoHandler)
+
+		// Task-liveness heartbeat (Phase 1): persist every task execution
+		// outcome to task_liveness (cross-restart visibility) and watch for
+		// stale tasks. Fire-and-forget: a liveness write failure only logs.
+		var livenessStore *liveness.Store
+		if pool != nil {
+			livenessStore = liveness.NewStore(pool)
+			taskMgr.SetCompletionHandler(func(name string, runErr error, duration time.Duration) {
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if err := livenessStore.Record(ctx, liveness.RecordInput{
+						TaskName: name,
+						Err:      runErr,
+						Duration: duration,
+					}); err != nil {
+						logging.Warn("liveness", "completion_record_failed", "task", name, "err", err.Error())
+					}
+				}()
+			})
+			go livenessStore.StartMetaHeartbeat(sysCtx, 0)
+			stalenessMon := liveness.NewStalenessMonitor(livenessStore, taskMgr, func(taskName string, staleFor, interval time.Duration) {
+				monitor.Alert(monitoring.AlertLevelWarning, "background_task",
+					fmt.Sprintf("Task %s is stale: not run for %s (> 3x %s interval)", taskName, staleFor.Round(time.Second), interval.String()),
+					map[string]any{"task": taskName, "stale_for": staleFor.String(), "interval": interval.String()})
+			})
+			go stalenessMon.Run(sysCtx)
+			logging.Info("main", "task_liveness_ready", "store", "postgres")
+		} else {
+			logging.Warn("main", "task_liveness_disabled", "reason", "pool unavailable (DATABASE_URL unset?)")
+		}
 		// PRISM 5-min queue rebalancer: migrated from rogue ticker goroutine to
 		// BTM (Issue #1447, docs/manifests/2026-08-06-btm-ticker-migration.md).
 		// prismMgr is only non-nil in apiMode; AutoBalanceEnabled gates the task.
@@ -1695,18 +1630,20 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
 			}
 
+			// D2 決策暫停 2026-08-17: 無消費端 (實作不完全)，待「大盤方向預測」產品功能立案評估
+			// (特徵需重新設計: 七維錢潮/stress-index/regime, 不是 OHLCV 統計量)
 			{
 				mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
 				mlScheduler.SetWorkDir(cfg.WorkDir)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "ml_retrain",
 					Interval: 24 * time.Hour,
-					Enabled:  true,
+					Enabled:  false,
 					Task: func(ctx context.Context) error {
 						return mlScheduler.RetrainAll(ctx)
 					},
 				})
-				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+				log.Printf("[Gateway] registered ml_retrain background task (24h interval, DISABLED D2)")
 			}
 
 			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline (06:00 TW, trading days).
@@ -2253,6 +2190,25 @@ func run(args []string, deps appDeps) error {
 		if taskMgr != nil {
 			apischeduler.NewHandlers(apischeduler.NewSchedulerService(taskMgr)).RegisterRoutes(mux)
 			log.Printf("[Gateway] scheduler API routes registered")
+
+			// Task-liveness: feed the persisted store + live scheduler status
+			// into GET /api/dashboard/task-liveness (providers are late-bound
+			// because the BTM is created after RegisterAllRoutes).
+			dashboard.SetSchedulerStatusProvider(taskMgr)
+			if livenessStore != nil {
+				dashboard.SetTaskLivenessProvider(livenessStore)
+			}
+		}
+		// Internal cron-completion ping (POST /api/internal/task-liveness).
+		// Security: intentionally NOT added to isPublicPath — the request is
+		// allowed through the AuthMiddleware by an explicit allowlist below
+		// and the handler itself requires X-Liveness-Token (ATLAS_LIVENESS_TOKEN,
+		// fail-closed 503 when unset). See internal/liveness/ping.go.
+		if livenessStore != nil {
+			mux.Handle("POST /api/internal/task-liveness", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				liveness.HandlePing(livenessStore, w, r)
+			}))
+			log.Printf("[Gateway] internal task-liveness ping endpoint registered")
 		}
 		// /api/health is kept as an alias for /health so external probes that
 		// expect an /api/ prefix still succeed. It does not reimplement a
@@ -2287,7 +2243,15 @@ func run(args []string, deps appDeps) error {
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if isPublicPath(r.URL.Path) {
+			if isPublicPath(r.Method, r.URL.Path) {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			// Internal liveness ping: allowed past AuthMiddleware only for this
+			// exact path; the handler enforces X-Liveness-Token itself
+			// (shared secret, fail-closed). Kept OUT of isPublicPath so it is
+			// not broadly public. See internal/liveness/ping.go.
+			if r.Method == http.MethodPost && r.URL.Path == "/api/internal/task-liveness" {
 				mux.ServeHTTP(w, r)
 				return
 			}

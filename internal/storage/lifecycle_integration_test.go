@@ -22,6 +22,7 @@ import (
 func TestStorageCleanupIntegration(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
 
 	// Create LifecycleManager pointing at temp directory.
 	mgr := storage.NewLifecycleManager(tmpDir)
@@ -95,6 +96,7 @@ func TestStorageCleanupIntegration(t *testing.T) {
 	// Step 2: Toggle disable via API.
 	toggleBody, _ := json.Marshal(map[string]any{"name": "storage_cleanup", "enabled": false})
 	req = httptest.NewRequest(http.MethodPost, "/api/scheduler/toggle", bytes.NewReader(toggleBody))
+	req.Header.Set("X-API-Key", "test-key")
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -113,6 +115,7 @@ func TestStorageCleanupIntegration(t *testing.T) {
 	// Step 3: Toggle re-enable via API.
 	toggleBody, _ = json.Marshal(map[string]any{"name": "storage_cleanup", "enabled": true})
 	req = httptest.NewRequest(http.MethodPost, "/api/scheduler/toggle", bytes.NewReader(toggleBody))
+	req.Header.Set("X-API-Key", "test-key")
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

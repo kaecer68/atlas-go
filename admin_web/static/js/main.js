@@ -13,7 +13,9 @@ import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList, renderMissingState } from './shared/app-utils.js';
 import { injectSharedHead } from './shared/head-config.js';
 import { install401Interceptor } from './shared/fetch-wrapper.js';
+import { initDegradedBadge } from './components/degraded-badge.js';
 import { initAuth, invalidateAuth } from './services/auth.js';
+import { initApiKeyPrompt, showApiKeyPrompt } from './services/api-key.js';
 injectSharedHead();
 
 export { getJSON, escapeHtml };
@@ -45,7 +47,7 @@ export function switchPage(id, silent) {
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
   capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
-  metrics: '指標監控', config: '部署配置'
+  metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
@@ -208,6 +210,7 @@ async function loadModules() {
     import('./pages/capital-models.js'),
     import('./pages/capital-causality.js'),
     import('./pages/capital-quality.js'),
+    import('./pages/scheduler.js'),
   ];
   var results = await Promise.allSettled(imports);
   var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality'];
@@ -242,6 +245,10 @@ async function loadModules() {
     if (modules.alerts.loadAlerts) window.loadAlerts = modules.alerts.loadAlerts;
     if (modules.alerts.acknowledgeAlert) window.acknowledgeAlert = modules.alerts.acknowledgeAlert;
     if (modules.alerts.showUnacknowledgedOnly) window.showUnacknowledgedOnly = modules.alerts.showUnacknowledgedOnly;
+  }
+  if (modules.scheduler) {
+    if (modules.scheduler.loadSchedulerPage) window.loadSchedulerPage = modules.scheduler.loadSchedulerPage;
+    if (modules.scheduler.toggleSchedulerTask) window.toggleSchedulerTask = modules.scheduler.toggleSchedulerTask;
   }
   if (modules.datachannels) {
     if (modules.datachannels.triggerChannelsIngest) window.triggerChannelsIngest = modules.datachannels.triggerChannelsIngest;
@@ -335,7 +342,6 @@ async function fetchNonCore(m, core) {
   setPanelLoading('macroRadar', '總經雷達');
   setPanelLoading('liveStatus', '即時狀態');
   setPanelLoading('riskCards', '風險指標');
-  setPanelLoading('alertsPanel', '系統警報');
 
   const results = await Promise.all([
     fetchWithRetry('/api/dashboard/macro-radar', { label: '總經雷達' }),
@@ -343,9 +349,8 @@ async function fetchNonCore(m, core) {
     fetchWithRetry('/api/dashboard/live-status', { label: '即時狀態' }),
     fetchWithRetry('/api/dashboard/risk-exposure', { label: '風險曝險' }),
     fetchWithRetry('/api/dashboard/phase3-status', { label: 'Phase 3 狀態' }),
-    fetchWithRetry('/api/alerts', { label: '系統警報' }),
   ]);
-  const [macro, pipeline, live, riskExposure, phase3, alerts] = results;
+  const [macro, pipeline, live, riskExposure, phase3] = results;
 
   if (macro === null) setPanelError('macroRadar', '總經雷達');
   else if (m.dash.renderMacroRadar) { m.dash.renderMacroRadar(macro, pipeline); clearPanelLoading('macroRadar'); }
@@ -355,9 +360,6 @@ async function fetchNonCore(m, core) {
 
   if (riskExposure === null) setPanelError('riskCards', '風險指標');
   else if (m.risk.renderRiskCards) { m.risk.renderRiskCards(riskExposure, pipeline, core.capitalPhase); clearPanelLoading('riskCards'); }
-
-  if (alerts === null) setPanelError('alertsPanel', '系統警報');
-  else if (m.alerts.renderAlerts) { m.alerts.renderAlerts(alerts); clearPanelLoading('alertsPanel'); }
 
   if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
 
@@ -412,7 +414,11 @@ async function loadPageData(pageId) {
   if (pageId === 'home') {
     try {
       var tasks = await silentGetJSON('/api/scheduler/status');
-      if (m.dash.renderSchedulerStatus) m.dash.renderSchedulerStatus(tasks);
+      // Cross-restart persisted state (task_liveness) enriches the panel with
+      // last success / stale flags; failure of this endpoint is non-fatal.
+      var liveness = null;
+      try { liveness = await silentGetJSON('/api/dashboard/task-liveness'); } catch (e2) { /* optional */ }
+      if (m.dash.renderSchedulerStatus) m.dash.renderSchedulerStatus(tasks, liveness);
     } catch (e) {
       var el = document.getElementById('schedulerStatusContent');
       if (el) {
@@ -420,6 +426,12 @@ async function loadPageData(pageId) {
         el.innerHTML = renderMissingState('排程狀態', 'api-error');
       }
     }
+  }
+  else if (pageId === 'scheduler') {
+    try {
+      if (m.scheduler && m.scheduler.loadSchedulerPage) m.scheduler.loadSchedulerPage();
+      else if (window.loadSchedulerPage) window.loadSchedulerPage();
+    } catch(e) { console.error(e); }
   }
   else if (pageId === 'experiments') {
     try {
@@ -546,6 +558,7 @@ window.toggleAutoRefresh = function() {
 };
 
 if (typeof window !== 'undefined') {
+  initDegradedBadge();
   install401Interceptor({
     loginPageId: 'login',
     excludedPages: ['login'],
@@ -688,3 +701,31 @@ window.addEventListener('popstate', function(e) {
     switchPage(e.state.page, true);
   }
 });
+
+// Prompt for ATLAS_API_KEY on admin page load if not already stored.
+// The key is required for mutating backend calls (POST/PUT/DELETE/PATCH).
+if (typeof window !== 'undefined') {
+  initApiKeyPrompt();
+  // Wire the modal as the API-key prompt for mutating fetch requests.
+  window.__atlasPromptForApiKey = function () {
+    return new Promise(function (resolve) {
+      showApiKeyPrompt();
+      var saveBtn = document.getElementById('apiKeySave');
+      var input = document.getElementById('apiKeyInput');
+      if (!saveBtn || !input) return resolve('');
+      var handler = function () {
+        var key = input.value.trim();
+        if (key) {
+          saveBtn.removeEventListener('click', handler);
+          input.removeEventListener('keydown', keydownHandler);
+          resolve(key);
+        }
+      };
+      var keydownHandler = function (e) {
+        if (e.key === 'Enter') handler();
+      };
+      saveBtn.addEventListener('click', handler);
+      input.addEventListener('keydown', keydownHandler);
+    });
+  };
+}

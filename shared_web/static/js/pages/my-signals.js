@@ -10,7 +10,7 @@
  * Auth: JWT cookie 自動帶(credentials: 'include');401 時顯示登入提示。
  */
 
-import { renderErrorState, renderEmptyState } from '../shared/app-utils.js';
+import { renderErrorState } from '../shared/app-utils.js';
 import { listSignals, ackSignal, dismissSignal, resetSignal, renderSignalsList } from '../services/user-signals.js';
 import { showNotification } from '../services/notify.js';
 
@@ -40,7 +40,18 @@ async function load(listEl) {
     payload = await listSignals();
   } catch (err) {
     if (err && err.status === 401) {
-      listEl.innerHTML = renderEmptyState('此功能需要登入', '登入後即可開始追蹤訊號、建立投資紀律紀錄');
+      // 登入牆逃脫路徑：停留在本頁顯示原因，並提供回公開內容的連結
+      // （UX audit P0：未登入點「我的追蹤」不應直接摔進登入頁）。
+      listEl.innerHTML = `
+        <div class="empty-state-guidance">
+          <div class="icon">🔒</div>
+          <div class="title">此功能需要登入</div>
+          <div class="desc">登入後即可開始追蹤訊號、建立投資紀律紀錄</div>
+          <div class="empty-actions">
+            <a class="btn btn--primary btn-sm" data-page="login" href="/client/login">登入</a>
+            <a class="btn" data-page="home" href="/client/home">← 先看看公開內容</a>
+          </div>
+        </div>`;
       return;
     }
     listEl.innerHTML = renderErrorState('載入追蹤清單失敗', RETRY_ID);

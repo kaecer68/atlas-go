@@ -140,6 +140,12 @@ type TaskFailureHandler func(taskName string, consecutiveFailures int, err error
 // TaskRecoveryHandler is called when a task recovers after consecutive failures.
 type TaskRecoveryHandler func(taskName string, recoveredFrom int)
 
+// TaskCompletionHandler is called after every real task execution (success
+// or failure; skipped ticks are excluded) with the outcome and wall-clock
+// duration. Used by the task-liveness heartbeat (internal/liveness) to
+// persist "did this task actually succeed" across restarts.
+type TaskCompletionHandler func(taskName string, err error, duration time.Duration)
+
 // BackgroundTaskManager coordinates all background data fetch tasks.
 type BackgroundTaskManager struct {
 	gateway         *Gateway
@@ -149,6 +155,9 @@ type BackgroundTaskManager struct {
 	cancel          context.CancelFunc
 	failureHandler  TaskFailureHandler
 	recoveryHandler TaskRecoveryHandler
+	// completionHandler receives success AND failure outcomes (with duration)
+	// so callers can persist cross-restart liveness. Nil is a no-op.
+	completionHandler TaskCompletionHandler
 }
 
 // NewBackgroundTaskManager creates a task manager.
@@ -260,6 +269,35 @@ func (m *BackgroundTaskManager) safeCallFailureHandler(taskName string, consecut
 	m.failureHandler(taskName, consecutiveFailures, err)
 }
 
+// SetCompletionHandler sets a callback invoked after every task execution
+// (success or failure). The callback receives the run outcome and duration;
+// skipped ticks (ErrTaskSkipped) are NOT reported — they are no-ops by
+// contract and must not move the liveness last_run marker.
+func (m *BackgroundTaskManager) SetCompletionHandler(h TaskCompletionHandler) {
+	m.completionHandler = h
+}
+
+// safeCallCompletionHandler invokes m.completionHandler inside a nested defer
+// recover so a misbehaving handler cannot crash the task loop. A nil handler
+// is a no-op.
+func (m *BackgroundTaskManager) safeCallCompletionHandler(taskName string, err error, duration time.Duration) {
+	if m.completionHandler == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			logging.Error(
+				"background_task", "completionHandler_panic_recovered",
+				"task_name", taskName,
+				"panic", fmt.Sprintf("%v", r),
+				"stack", string(stack),
+			)
+		}
+	}()
+	m.completionHandler(taskName, err, duration)
+}
+
 func logAndWrapPanic(taskName, event string, r interface{}) error {
 	if r == nil {
 		return nil
@@ -343,6 +381,7 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 	}
 
 	task.SetLastRun(time.Now())
+	startedAt := time.Now()
 
 	// Intentionally NOT pre-checking breaker.IsOpen(): if we returned early
 	// here, the half-open probe inside breaker.Call() (gateway.Fetch path)
@@ -373,12 +412,14 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 			"consecutive_failures", task.Failures(),
 		)
 		m.safeCallFailureHandler(task.Name, task.Failures(), err)
+		m.safeCallCompletionHandler(task.Name, err, time.Since(startedAt))
 	} else {
 		prev := task.Failures()
 		task.RecordSuccess()
 		if prev > 0 && m.recoveryHandler != nil {
 			m.recoveryHandler(task.Name, prev)
 		}
+		m.safeCallCompletionHandler(task.Name, nil, time.Since(startedAt))
 	}
 }
 

@@ -10,6 +10,11 @@
   <meta property="og:description" content="Atlas-Go 台股 AI 投資系統管理後台">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="css/main.css">
+<style>
+#apiKeyModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+#apiKeyModal.hidden { display: none; }
+#apiKeyModal .modal-content { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid var(--border); }
+</style>
 </head>
 <body>
 
@@ -33,6 +38,7 @@
         <span class="nav-group-label">維運</span>
         <a data-page="datachannels">📡 資料通道</a>
         <a data-page="parameters">🎛️ 參數管理</a>
+        <a data-page="scheduler">⏰ 排程任務</a>
 
         <span class="nav-group-label">系統</span>
         <a data-page="metrics">📊 指標監控</a>
@@ -135,7 +141,7 @@
 
       <div class="panel mt-md" id="schedulerStatusPanel">
         <h2 class="m-0">⏰ 背景排程狀態</h2>
-        <div class="text-muted text-sm">資料來源：<code>/api/scheduler/status</code></div>
+        <div class="text-muted text-sm">資料來源：<code>/api/scheduler/status</code>（即時態）＋ <code>/api/dashboard/task-liveness</code>（跨重啟持久化）</div>
         <div id="schedulerStatusContent" class="empty loading">載入中…</div>
       </div>
 
@@ -468,6 +474,14 @@
       <div id="capitalQualityContent" class="empty loading">載入中…</div>
     </div>
 
+    <!-- 排程任務（task liveness） -->
+    <div class="page" id="page-scheduler">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        本頁顯示背景排程任務的<strong>跨重啟活性</strong>：<code>task_liveness</code> 表記錄每個任務「上次執行 / 上次成功 / 連續失敗」，重啟後依然可見；「逾期」表示距離上次執行已超過 3 倍任務間隔（<code>last_run &gt; interval × 3</code>），系統會同時發出告警。即時啟停狀態來自 <code>/api/scheduler/status</code>。cron 容器任務由完成時的 HTTP ping 寫入，標記為 cron。
+      </details>
+      <div id="schedulerContent" class="empty loading">載入中…</div>
+    </div>
+
   </div>
 
 
@@ -609,6 +623,18 @@
   </div>
 </div>
 
+
+<!-- API key prompt: shown once when a write operation needs a key. -->
+<div id="apiKeyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiKeyTitle">
+  <div class="modal-content" style="max-width:420px;">
+    <h3 id="apiKeyTitle">需要 Atlas API Key</h3>
+    <p style="font-size:14px;color:var(--muted);">後端已啟用 method-aware 認證，寫入操作（例如切換通道、排程、參數）需要 ATLAS_API_KEY。</p>
+    <input type="password" id="apiKeyInput" placeholder="輸入 ATLAS_API_KEY" style="width:100%;margin:8px 0;">
+    <div style="text-align:right;">
+      <button id="apiKeySave" class="btn btn--primary">儲存</button>
+    </div>
+  </div>
+</div>
 <script type="module">import "./js/main.js";</script>
 
 <script type="module" src="js/component-init.js"></script>

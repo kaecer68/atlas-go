@@ -399,6 +399,7 @@ func TestHandlePnLAttribution_EmptySessions(t *testing.T) {
 
 func TestHandlePnLAttribution_MethodNotAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	h := &Handlers{
 		LedgerDir: tmpDir,
 		WorkDir:   tmpDir,
@@ -406,6 +407,7 @@ func TestHandlePnLAttribution_MethodNotAllowed(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/pnl-attribution", nil)
+	req.Header.Set("X-API-Key", "test-key")
 
 	adapted := shared.Get(func(r *http.Request) (int, any) {
 		return h.HandlePnLAttribution(r)
@@ -555,6 +557,7 @@ func TestHandleRiskExposure_InsufficientData(t *testing.T) {
 
 func TestHandleRiskExposure_MethodNotAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	h := &Handlers{
 		LedgerDir: tmpDir,
 		WorkDir:   tmpDir,
@@ -562,6 +565,7 @@ func TestHandleRiskExposure_MethodNotAllowed(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/risk-exposure", nil)
+	req.Header.Set("X-API-Key", "test-key")
 
 	adapted := shared.Get(func(r *http.Request) (int, any) {
 		return h.HandleRiskExposure(r)
@@ -649,6 +653,7 @@ func TestHandleLiveStatus_WithCircuitBreaker(t *testing.T) {
 
 func TestHandleLiveStatus_MethodNotAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	svc := service.NewLiveService(tmpDir, tmpDir)
 	h := &Handlers{
 		LedgerDir: tmpDir,
@@ -658,6 +663,7 @@ func TestHandleLiveStatus_MethodNotAllowed(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/live-status", nil)
+	req.Header.Set("X-API-Key", "test-key")
 
 	adapted := shared.Get(func(r *http.Request) (int, any) {
 		return h.HandleLiveStatus(r)
@@ -757,6 +763,8 @@ func TestHandleTradeHistory_EmptyTrades(t *testing.T) {
 
 func TestHandleTradeHistory_MethodNotAllowed(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Setenv("ATLAS_API_KEY", "test-key")
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	svc := service.NewLiveService(tmpDir, tmpDir)
 	h := &Handlers{
 		LedgerDir: tmpDir,
@@ -766,6 +774,7 @@ func TestHandleTradeHistory_MethodNotAllowed(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/trade-history", nil)
+	req.Header.Set("X-API-Key", "test-key")
 
 	adapted := shared.Get(func(r *http.Request) (int, any) {
 		return h.HandleTradeHistory(r)

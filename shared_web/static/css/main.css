@@ -18,6 +18,7 @@
 @import url("components/inbox-card.css");
 @import url("components/pipeline.css");
 @import url("components/modal.css");
+@import url("components/confirm-modal.css");
 @import url("components/tabs.css");
 @import url("components/risk-gate-panel.css");
 @import url("components/priority.css");
@@ -32,6 +33,7 @@
 @import url("components/refresh.css");
 @import url("components/notification-colors.css");
 @import url("components/refresh-pill.css");
+@import url("components/degraded-badge.css");
 @import url("components/loading-bar.css");
 @import url("components/error-banner.css");
 @import url("components/table-pagination.css");

@@ -96,12 +96,13 @@
 | `methodology` | ATLAS_METHODOLOGY 憲章→runtime 橋接 — YAML rules loader, Advisor 過濾期別×策略匹配 | `Advisor`, `MethodologyRules` | Wave 11 P0-2 新增；configs/methodology_rules.yaml 為單一來源 |
 ---
 
-## X · Experimental（實驗中）— 11 packages
+## X · Experimental（實驗中）— 12 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
+| `liveness` | 任務活性心跳 — BTM task_liveness upsert store、staleness monitor、cron ping 端點（Phase 1, 2026-08-17） | `Store`, `StalenessMonitor`, `HandlePing` | 新上線，API 可能調整 |
 | `adversarial` | 對抗性訓練 — `AdversarialTrainer`、`BattleResult`、`StressTest` | `AdversarialTrainer` | **v0.0.2.0 維持 X**：被 orchestrator runtime 使用但無 AGENTS.md，需補文件 |
 | `reflexivity` | 自反性價格動態引擎 | `Engine` | **v0.0.2.0 維持 X**：被 orchestrator + sim runtime 使用但無 AGENTS.md，需補文件 |
 | `alerting` | Alertmanager webhook receiver — 接收 Alertmanager firing/resolved 警報，in-memory ring buffer 保留最近 1000 筆供 SSE/UI 消費 | `AlertWebhookHandler`, `AlertmanagerPayload`, `AlertmanagerAlert` | 掛載於 `/api/v1/alerts`；待 Prometheus alertmanager targets 與 docker-compose alertmanager service 補齊後晉升 evolving |

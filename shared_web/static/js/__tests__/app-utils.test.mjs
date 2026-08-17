@@ -19,6 +19,14 @@ import {
   DEFAULT_TIMEOUT_MS, DEFAULT_RETRY, DEFAULT_RETRY_BACKOFF_MS,
 } from '../shared/app-utils.js';
 
+// Minimal localStorage mock for API-key header tests in Node.js.
+const store = new Map();
+global.localStorage = {
+  getItem: (k) => store.get(k) ?? null,
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+};
+
 const originalFetch = globalThis.fetch;
 
 function setFetch(mock) { globalThis.fetch = mock; }
@@ -205,4 +213,82 @@ test('retry 間隔約等於設定的 backoffMs（容忍 5ms 抖動）', async ()
   const elapsed = Date.now() - start;
   assert.ok(elapsed >= 80, 'elapsed too small: ' + elapsed);
   assert.ok(elapsed < 80 + 50, 'elapsed too large: ' + elapsed);
+});
+
+// ---- ATLAS_API_KEY header for mutating methods ----
+
+test('postJSON 帶有 localStorage ATLAS_API_KEY 時會附加 X-API-Key header', async () => {
+  localStorage.setItem('ATLAS_API_KEY', 'secret-key');
+  let captured = null;
+  setFetch(async function (url, init) {
+    captured = { url: url, init: init };
+    return okJsonResponse({ ok: true });
+  });
+
+  await postJSON('/api/scheduler/toggle', { enabled: true });
+  assert.equal(captured.init.headers['X-API-Key'], 'secret-key');
+  assert.equal(captured.init.headers['Content-Type'], 'application/json');
+});
+
+test('postJSON 未設定 ATLAS_API_KEY 時不附加 X-API-Key header', async () => {
+  localStorage.removeItem('ATLAS_API_KEY');
+  let captured = null;
+  setFetch(async function (url, init) {
+    captured = { url: url, init: init };
+    return okJsonResponse({ ok: true });
+  });
+
+  await postJSON('/api/scheduler/toggle', { enabled: true });
+  assert.equal(captured.init.headers['X-API-Key'], undefined);
+});
+
+test('getJSON 有 ATLAS_API_KEY 時附加 X-API-Key header（GET 靜默帶 key）', async () => {
+  localStorage.setItem('ATLAS_API_KEY', 'secret-key');
+  let captured = null;
+  setFetch(async function (url, init) {
+    captured = { url: url, init: init };
+    return okJsonResponse({ ok: true });
+  });
+
+  await getJSON('/api/dashboard/status');
+  assert.equal(captured.init.headers['X-API-Key'], 'secret-key');
+});
+
+test('getJSON 未設定 ATLAS_API_KEY 時不 prompt 也不附加 X-API-Key header', async () => {
+  localStorage.removeItem('ATLAS_API_KEY');
+  let captured = null;
+  let promptCalls = 0;
+  const originalWindow = global.window;
+  global.window = {
+    prompt: function () { promptCalls++; return 'should-not-be-used'; },
+  };
+  setFetch(async function (url, init) {
+    captured = { url: url, init: init };
+    return okJsonResponse({ ok: true });
+  });
+
+  try {
+    await getJSON('/api/dashboard/status');
+    assert.equal(captured.init.headers, undefined, '無 key 的 GET 不應附加 header');
+    assert.equal(promptCalls, 0, '無 key 的 GET 不得觸發 prompt');
+  } finally {
+    if (originalWindow === undefined) {
+      delete global.window;
+    } else {
+      global.window = originalWindow;
+    }
+  }
+});
+
+test('silentGetJSON 有 ATLAS_API_KEY 時附加 X-API-Key header', async () => {
+  localStorage.setItem('ATLAS_API_KEY', 'secret-key');
+  let captured = null;
+  setFetch(async function (url, init) {
+    captured = { url: url, init: init };
+    return okJsonResponse({ v: 1 });
+  });
+
+  const data = await silentGetJSON('/api/deployment/dashboard');
+  assert.deepEqual(data, { v: 1 });
+  assert.equal(captured.init.headers['X-API-Key'], 'secret-key');
 });

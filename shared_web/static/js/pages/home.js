@@ -111,7 +111,7 @@ export async function renderHomePage(container) {
         <h2>七維錢潮雷達（3+2+2 分層）</h2>
         <span class="home-section__subtitle">官方法人 / 行為代理 / 領先＋跨市場訊號；語意見 <code>docs/specs/capital-flow-seven-dimension-spec.md</code> §4 D-CF-04</span>
         <span class="home-section__data-badge" id="seven-force-data-badge"></span>
-        <a class="home-section__nav-link" href="javascript:void(0)" onclick="switchPage('capital_board')">完整看板 →</a>
+        <a class="home-section__nav-link" href="/client/capital_board" onclick="switchPage('capital_board'); return false;">完整看板 →</a>
       </div>
       <div id="home-seven-force-content">
         <div class="home-loading-card">載入中…</div>
@@ -179,7 +179,7 @@ async function loadHomeData() {
             };
             const zh = (PERIOD_LABEL[mp] && PERIOD_LABEL[mp].zh) || mp;
             periodBadge.style.display = '';
-            periodBadge.innerHTML = `<a class="home-period-chip" data-period="${escapeHtml(mp)}" href="javascript:void(0)" onclick="switchPage('methodology')" title="目前市場時期：${escapeHtml(zh)}，點擊查看方法論">時期：${escapeHtml(zh)} →</a>`;
+            periodBadge.innerHTML = `<a class="home-period-chip" data-period="${escapeHtml(mp)}" href="/client/methodology" onclick="switchPage('methodology'); return false;" title="目前市場時期：${escapeHtml(zh)}，點擊查看方法論">時期：${escapeHtml(zh)} →</a>`;
           }
         }
       } catch (_) { /* 不影響首頁主流程 */ }

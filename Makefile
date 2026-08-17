@@ -31,6 +31,7 @@
 #             PRE_PUSH_FULL=never  make pre-push   （只跑 ci-gate）
 pre-push: ci-gate
 	@echo ""
+	@bash scripts/ci/check_frontend_dist.sh --diff origin/main...HEAD
 	@if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|js|jsx|vue|py|sh|c|cpp|h)$$|(^|/)Makefile$$|Dockerfile|docker-compose|\.github/|\.githooks/'; then \
 		echo "🧪 diff 含程式碼變更 → 跑 make ci-full (~5-8 min)..."; \
 		$(MAKE) ci-full; \
@@ -639,7 +640,7 @@ rebuild-cron-bins: | .build-cron
 CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest \
                    atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest \
                    atlas-cron-replay-sync:latest \
-                   atlas-atlas-cron-c07-evaluate:latest atlas-cron-darwinian:latest \
+                   atlas-atlas-cron-c07-evaluate:latest \
                    atlas-cron-macro-ingest:latest
 DOCKER_BIN ?= docker
 

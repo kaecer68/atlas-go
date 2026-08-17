@@ -201,12 +201,14 @@ func TestHandleGetHealth_Empty(t *testing.T) {
 // endpoint returns 405.
 func TestHandleGetHealth_MethodNotAllowed(t *testing.T) {
 	// Given
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	router := &mockRouter{
 		healthMap: make(map[corellm.Provider]corellm.HealthStatus),
 	}
 	h := NewHandler(router)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/llm/health", nil)
+	req.Header.Set("X-API-Key", "test-key")
 	rec := httptest.NewRecorder()
 
 	// When

@@ -64,12 +64,14 @@ func TestGet_AllowsGet(t *testing.T) {
 }
 
 func TestGet_RejectsPost(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	h := Get(func(r *http.Request) (int, any) {
 		return http.StatusOK, map[string]string{"method": "get"}
 	})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Header.Set("X-API-Key", "test-key")
 	h.ServeHTTP(w, req)
 
 	if w.Code != http.StatusMethodNotAllowed {
@@ -83,12 +85,14 @@ func TestGet_RejectsPost(t *testing.T) {
 }
 
 func TestPost_AllowsPost(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "test-key")
 	h := Post(func(r *http.Request) (int, any) {
 		return http.StatusOK, map[string]string{"method": "post"}
 	})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Header.Set("X-API-Key", "test-key")
 	h.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -455,6 +459,51 @@ func TestAuthMiddleware_DashboardAPIsBypassAuth(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_DashboardWritesRequireKey(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "")
+	t.Setenv("ATLAS_API_KEY", "")
+
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	writePaths := []string{
+		"/api/dashboard/channels/",
+		"/api/dashboard/channels/twse-toggle",
+		"/api/scheduler/toggle",
+		"/api/parameters",
+		"/api/control/pause-agent",
+	}
+
+	for _, path := range writePaths {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, nil))
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("POST %s without key: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusUnauthorized, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "ATLAS_API_KEY not configured") {
+			t.Errorf("POST %s without key: body = %q, want ATLAS_API_KEY not configured", path, w.Body.String())
+		}
+	}
+
+	// With a valid key, writes pass through the public-read bypass check and
+	// are accepted by the underlying handler (dummy here returns 200).
+	t.Setenv("ATLAS_API_KEY", "valid-key")
+	h = AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, path := range writePaths {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.Header.Set("X-API-Key", "valid-key")
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("POST %s with key: status = %d, want %d (body=%s)",
+				path, w.Code, http.StatusOK, w.Body.String())
+		}
+	}
+}
 func TestRequireAdmin(t *testing.T) {
 	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
 	h := RequireAdmin(func(r *http.Request) (int, any) {
@@ -475,6 +524,7 @@ func TestRequireAdmin(t *testing.T) {
 }
 
 func TestAdminPost_RequiresPostAndAdmin(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "api-secret")
 	t.Setenv("ATLAS_ADMIN_KEY", "admin-secret")
 	h := AdminPost(func(r *http.Request) (int, any) {
 		return http.StatusOK, map[string]string{"status": "ok"}
@@ -486,14 +536,23 @@ func TestAdminPost_RequiresPostAndAdmin(t *testing.T) {
 		t.Fatalf("GET status = %d, want 405", get.Code)
 	}
 
-	unauthorized := httptest.NewRecorder()
-	h.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "/admin", nil))
-	if unauthorized.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthorized status = %d, want 401", unauthorized.Code)
+	noKey := httptest.NewRecorder()
+	h.ServeHTTP(noKey, httptest.NewRequest(http.MethodPost, "/admin", nil))
+	if noKey.Code != http.StatusUnauthorized {
+		t.Fatalf("no key status = %d, want 401", noKey.Code)
+	}
+
+	apiOnly := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.Header.Set("X-API-Key", "api-secret")
+	h.ServeHTTP(apiOnly, req)
+	if apiOnly.Code != http.StatusUnauthorized {
+		t.Fatalf("API key only status = %d, want 401", apiOnly.Code)
 	}
 
 	authorized := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req = httptest.NewRequest(http.MethodPost, "/admin", nil)
+	req.Header.Set("X-API-Key", "api-secret")
 	req.Header.Set("X-Admin-Key", "admin-secret")
 	h.ServeHTTP(authorized, req)
 	if authorized.Code != http.StatusOK {
@@ -506,15 +565,138 @@ func TestAdminPost_RequiresPostAndAdmin(t *testing.T) {
 // The authFreePrefixPaths entry "/api/parameters/" does not match the exact
 // path via HasPrefix, so the exact path must live in authFreeExactPaths.
 func TestIsAuthFreePath_ParametersNoSlash(t *testing.T) {
-	if !isAuthFreePath("/api/parameters") {
-		t.Fatal("isAuthFreePath(/api/parameters) = false, want true (exact path)")
+	// GET public-read paths bypass auth.
+	if !isAuthFreePath(http.MethodGet, "/api/parameters") {
+		t.Fatal("isAuthFreePath(GET, /api/parameters) = false, want true (exact path)")
 	}
-	if !isAuthFreePath("/api/parameters/metadata") {
-		t.Fatal("isAuthFreePath(/api/parameters/metadata) = false, want true (prefix)")
+	if !isAuthFreePath(http.MethodGet, "/api/parameters/metadata") {
+		t.Fatal("isAuthFreePath(GET, /api/parameters/metadata) = false, want true (prefix)")
 	}
 	// Guard against over-broadening: exact-path check must not match a
 	// different top-level endpoint.
-	if isAuthFreePath("/api/parametersx") {
-		t.Fatal("isAuthFreePath(/api/parametersx) = true, want false")
+	if isAuthFreePath(http.MethodGet, "/api/parametersx") {
+		t.Fatal("isAuthFreePath(GET, /api/parametersx) = true, want false")
+	}
+	// Mutating methods on the same paths require auth.
+	if isAuthFreePath(http.MethodPost, "/api/parameters") {
+		t.Fatal("isAuthFreePath(POST, /api/parameters) = true, want false")
+	}
+	if isAuthFreePath(http.MethodPost, "/api/parameters/metadata") {
+		t.Fatal("isAuthFreePath(POST, /api/parameters/metadata) = true, want false")
+	}
+}
+
+// TestAuthMiddleware_DevModeWritesRequireKey verifies that when
+// ATLAS_API_KEY is not configured, mutating requests are rejected with a
+// clear message while read operations remain reachable for local development.
+func TestAuthMiddleware_DevModeWritesRequireKey(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "")
+	t.Setenv("ATLAS_API_KEY", "")
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Read operations pass without a key in dev mode.
+	get := httptest.NewRecorder()
+	h.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/dashboard/system-health", nil))
+	if get.Code != http.StatusOK {
+		t.Fatalf("GET public path status = %d, want 200", get.Code)
+	}
+
+	// Mutating operations are rejected.
+	post := httptest.NewRecorder()
+	h.ServeHTTP(post, httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/", nil))
+	if post.Code != http.StatusUnauthorized {
+		t.Fatalf("POST write path status = %d, want 401", post.Code)
+	}
+	if !strings.Contains(post.Body.String(), "ATLAS_API_KEY not configured") {
+		t.Fatalf("POST error body = %q, want to contain ATLAS_API_KEY not configured", post.Body.String())
+	}
+}
+
+// TestIsPublicPath_WhitelistConsistency verifies that every path in the
+// exported public-read whitelist is actually considered public for GET/HEAD/OPTIONS.
+// This guards against future drift between AuthFreeExactPaths, AuthFreePrefixPaths,
+// and the IsPublicPath method-aware logic.
+func TestIsPublicPath_WhitelistConsistency(t *testing.T) {
+	for p := range AuthFreeExactPaths {
+		if !IsPublicPath(http.MethodGet, p) {
+			t.Errorf("IsPublicPath(GET, %q) = false, want true (exact whitelist)", p)
+		}
+		if !IsPublicPath(http.MethodHead, p) {
+			t.Errorf("IsPublicPath(HEAD, %q) = false, want true (exact whitelist)", p)
+		}
+		if !IsPublicPath(http.MethodOptions, p) {
+			t.Errorf("IsPublicPath(OPTIONS, %q) = false, want true (exact whitelist)", p)
+		}
+		if IsPublicPath(http.MethodPost, p) {
+			t.Errorf("IsPublicPath(POST, %q) = true, want false (exact whitelist)", p)
+		}
+	}
+	for _, prefix := range AuthFreePrefixPaths {
+		sample := prefix + "sample"
+		if !IsPublicPath(http.MethodGet, sample) {
+			t.Errorf("IsPublicPath(GET, %q) = false, want true (prefix %q)", sample, prefix)
+		}
+		// User-auth prefixes are auth-free for both reads and writes.
+		var isAuthFreeWrite bool
+		for _, wp := range AuthFreeWritePrefixes {
+			if prefix == wp {
+				isAuthFreeWrite = true
+				break
+			}
+		}
+		if isAuthFreeWrite {
+			if !IsPublicPath(http.MethodPost, sample) {
+				t.Errorf("IsPublicPath(POST, %q) = false, want true (auth-free write prefix %q)", sample, prefix)
+			}
+			continue
+		}
+		if IsPublicPath(http.MethodPost, sample) {
+			t.Errorf("IsPublicPath(POST, %q) = true, want false (prefix %q)", sample, prefix)
+		}
+	}
+}
+
+// TestIsPublicPath_ReportRouteWhitelist verifies the backtest-report route
+// (/api/report/*, singular) is public-read like the rest of the admin GET
+// surface — regression guard for PR-3: the admin reports page stayed empty
+// because GET /api/report/latest returned 401 without an API key.
+// /api/report/latest (backtest markdown) and /api/reports/latest (daily
+// report JSON, dailyreport module) are DIFFERENT resources; both are
+// public-read, and mutating methods remain rejected.
+func TestIsPublicPath_ReportRouteWhitelist(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	for _, p := range []string{"/api/report", "/api/report/latest", "/api/report/list"} {
+		if !IsPublicReadPath(p) {
+			t.Errorf("IsPublicReadPath(%q) = false, want true (report whitelist)", p)
+		}
+		for _, m := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+			if !IsPublicPath(m, p) {
+				t.Errorf("IsPublicPath(%s, %q) = false, want true (report whitelist)", m, p)
+			}
+		}
+		if IsPublicPath(http.MethodPost, p) {
+			t.Errorf("IsPublicPath(POST, %q) = true, want false (mutating never auth-free)", p)
+		}
+	}
+
+	// End-to-end through AuthMiddleware: GET without key passes, POST rejected.
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, path := range []string{"/api/report/latest", "/api/report/list"} {
+		get := httptest.NewRecorder()
+		h.ServeHTTP(get, httptest.NewRequest(http.MethodGet, path, nil))
+		if get.Code != http.StatusOK {
+			t.Errorf("GET %s without auth: status = %d, want 200 (body=%s)", path, get.Code, get.Body.String())
+		}
+		post := httptest.NewRecorder()
+		h.ServeHTTP(post, httptest.NewRequest(http.MethodPost, path, nil))
+		if post.Code != http.StatusUnauthorized {
+			t.Errorf("POST %s: status = %d, want 401", path, post.Code)
+		}
 	}
 }

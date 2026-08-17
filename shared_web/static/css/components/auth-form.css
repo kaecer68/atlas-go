@@ -155,7 +155,11 @@
 .tier-premium {
   border: 2px solid var(--pnl-profit);
 }
-.tier-badge {
+.tier-card .tier-badge {
+  /* 僅限 premium 卡片右上角的「推薦」角標 ribbon；
+     不能寫成裸 .tier-badge，否則全站 tier-badge（scheduler 狀態、
+     datachannels 新鮮度、strategies 方案、nav 層級）都會被拉出
+     文件流、全部疊到頁面右上角 (UX backlog: admin 右上角紅塊)。 */
   position: absolute;
   top: -12px;
   right: 16px;
@@ -202,6 +206,11 @@
   background: color-mix(in srgb, var(--editorial-muted) 10%, transparent);
   color: var(--editorial-muted);
   border: 1px solid color-mix(in srgb, var(--editorial-muted) 30%, transparent);
+}
+.tier-badge--warn {
+  background: color-mix(in srgb, var(--trend-bearish) 12%, transparent);
+  color: var(--trend-bearish);
+  border: 1px solid color-mix(in srgb, var(--trend-bearish) 40%, transparent);
 }
 .premium-mcp {
   max-width: 680px;

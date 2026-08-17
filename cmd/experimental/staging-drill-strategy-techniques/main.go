@@ -169,6 +169,10 @@ func runPhase4And5WithEndpoint(reg *strategy_techniques.Registry, frameID, baseU
 		return fmt.Errorf("phase4 create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	atlasAPIKey := config.GetSecret("ATLAS_API_KEY")
+	if atlasAPIKey != "" {
+		req.Header.Set("X-API-Key", atlasAPIKey)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
