@@ -550,6 +550,11 @@ jobs:
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
+      # Warmup-grace window (seconds) for the runtime canary: a fresh
+      # container reports healthy while background RunWarmup is still running,
+      # so 503/connection-refused inside this window are tolerated; after it,
+      # any 503 still FAILs. See cmd/atlas-mcp/server/canary_tolerance_test.go.
+      CANARY_WARMUP_GRACE: "120"
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -631,6 +636,11 @@ jobs:
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
+      # Warmup-grace window (seconds) for the runtime canary: a fresh
+      # container reports healthy while background RunWarmup is still running,
+      # so 503/connection-refused inside this window are tolerated; after it,
+      # any 503 still FAILs. See cmd/atlas-mcp/server/canary_tolerance_test.go.
+      CANARY_WARMUP_GRACE: "120"
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
