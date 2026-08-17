@@ -162,15 +162,19 @@ async function promptForApiKey() {
 }
 
 /**
- * Attach X-API-Key header for mutating methods when a key is stored.
- * If no key is stored, prompt once and store it.
+ * Attach X-API-Key header whenever a key is available（GET/HEAD 靜默帶 key，
+ * 解決 config / metrics / deployment / report 等受保護 GET 端點的 401）。
+ * 只有 mutating（POST/PUT/DELETE/PATCH）在無 key 時才 prompt；GET/HEAD 無
+ * key 一律靜默不帶、不 prompt（未授權者維持誠實空態）。
+ *
+ * 安全性：client_web 從不寫 ATLAS_API_KEY → getAtlasApiKey() 回空 → 不帶
+ * header → client_web 零影響。
  * @param {Record<string, string>} headers
  * @param {string} method
  */
 async function attachApiKey(headers, method) {
-  if (!MUTATING_METHODS.includes(method)) return;
   let key = getAtlasApiKey();
-  if (!key) {
+  if (!key && MUTATING_METHODS.includes(method)) {
     key = await promptForApiKey();
     if (key) setAtlasApiKey(key);
   }
