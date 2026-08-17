@@ -577,7 +577,11 @@ status:
 HOST_GO       := $(shell which go 2>/dev/null || echo /opt/homebrew/bin/go)
 export ATLAS_GIT_COMMIT ?= $(GIT_COMMIT)
 BUILDTIME     := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-GOENV_LINUX   := GOOS=linux GOARCH=arm64
+# CGO_ENABLED=0 keeps the linux binaries static: the atlas/cron images are
+# alpine (musl), which cannot exec glibc-dynamic binaries (kernel ENOENT →
+# "exec /app/atlas-go: no such file or directory"). Cross-builds default cgo
+# off, but a native linux build (e.g. a linux runner) would default it ON.
+GOENV_LINUX   := GOOS=linux GOARCH=arm64 CGO_ENABLED=0
 
 LDFLAGS_BF := -w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
               -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=$(GIT_COMMIT) \
