@@ -15,9 +15,11 @@ echo "=== Route Uniqueness Check ==="
 # Helper: extract path from mux.Handle("METHOD /path") or mux.Handle("/path")
 extract_paths() {
   local pattern="$1"
-  grep -rn "$pattern" --include='*.go' cmd/atlas/ internal/ 2>/dev/null | \
+  # 只掃真實路由:排除 *_test.go(測試檔常用虛構路徑測 middleware/註冊,
+  # 不應納入真實路由檢查,否則會假陽性 — 見 tests/scripts/test-check-routes.sh)
+  grep -rn "$pattern" --include='*.go' --exclude='*_test.go' cmd/atlas/ internal/ 2>/dev/null | \
     sed -nE 's/.*"([A-Z]+ )?(\/[a-zA-Z][^"]*).*/\2/p' | \
-    sed 's/{[^}]*}/{id}/g' | sort -u
+    sed 's/{[^}]*}/{id}/g' | sort -u || true
 }
 
 # 1. 所有 mux.Handle 路由
@@ -54,11 +56,11 @@ echo ""
 # Check 2: /api/dashboard/X vs /api/X 概念衝突
 echo "  [2/3] 檢查概念衝突 (dashboard vs api)..."
 grep '^/api/dashboard/' "$TMPDIR/all_routes.txt" | \
-  sed 's|^/api/dashboard/||' | sort > "$TMPDIR/dash_stems.txt"
+  sed 's|^/api/dashboard/||' | sort > "$TMPDIR/dash_stems.txt" || true
 grep '^/api/' "$TMPDIR/all_routes.txt" | \
   grep -v '^/api/dashboard/' | grep -v '^/api/events/' | \
   grep -v '^/api/admin/' | grep -v '^/api/user/' | \
-  sed 's|^/api/||' | sort > "$TMPDIR/api_stems.txt"
+  sed 's|^/api/||' | sort > "$TMPDIR/api_stems.txt" || true
 comm -12 "$TMPDIR/dash_stems.txt" "$TMPDIR/api_stems.txt" 2>/dev/null > "$TMPDIR/concept_dup.txt" || true
 COLLISION=0
 while IFS= read -r stem; do
