@@ -1,4 +1,5 @@
 import { fmtSafeNumber } from '../shared/format-metric.js';
+import { postJSON } from '../shared/app-utils.js';
 
 export class CircuitBreakerPanel {
     constructor(containerId) {
@@ -215,20 +216,12 @@ export class CircuitBreakerPanel {
                 this.resetBtn.textContent = '重置中...';
             }
             
-            const res = await fetch('/api/dashboard/circuit-breaker/reset', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason })
-            });
-            
-            if (res.ok) {
-                await this.fetchState();
-            } else {
-                alert("重置失敗");
-            }
+            await postJSON('/api/dashboard/circuit-breaker/reset', { reason });
+            await this.fetchState();
         } catch (e) {
             console.error("Reset request failed:", e);
-            alert("連線錯誤");
+            if (e.status) alert("重置失敗");
+            else alert("連線錯誤");
         } finally {
             if (this.resetBtn) {
                 this.resetBtn.textContent = '手動重置 (Reset)';
