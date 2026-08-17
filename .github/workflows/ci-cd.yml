@@ -598,6 +598,15 @@ jobs:
         ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
+    - name: Prepare data mounts for container user (uid 1000)
+      # The alpine image runs as atlas (uid 1000). On a fresh checkout the
+      # data/reports/logs bind mounts are owned by the runner user (uid
+      # 1001), so the app's file-backed stores (alerts, macro snapshot
+      # cache, ...) fail to initialize → /api/alerts/*, macro endpoints
+      # return 404/500 and the container never passes a meaningful canary.
+      run: |
+        mkdir -p data reports logs
+        chmod -R a+rwX data reports logs
     - name: Validate docker-compose
       run: docker compose config -q
     - name: Start atlas-go
@@ -666,6 +675,15 @@ jobs:
         ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
+    - name: Prepare data mounts for container user (uid 1000)
+      # The alpine image runs as atlas (uid 1000). On a fresh checkout the
+      # data/reports/logs bind mounts are owned by the runner user (uid
+      # 1001), so the app's file-backed stores (alerts, macro snapshot
+      # cache, ...) fail to initialize → /api/alerts/*, macro endpoints
+      # return 404/500 and the container never passes a meaningful canary.
+      run: |
+        mkdir -p data reports logs
+        chmod -R a+rwX data reports logs
     - name: Start atlas-go
       run: docker compose up -d atlas
     - name: Wait for healthy (fail-fast with diagnostics)
