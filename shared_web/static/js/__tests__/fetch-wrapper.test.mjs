@@ -155,6 +155,98 @@ test('install401Interceptor: 500 error does not trigger 401 path', async () => {
   assert.equal(switched, 0, '500 should not switchPage');
 });
 
+
+test('install401Interceptor: mutating 401 (POST) with onApiKeyRequired fires modal, no login redirect', async () => {
+  const { win } = makeFakeWindow();
+  win.fetch = () => Promise.resolve({ status: 401, ok: false });
+  let apiKeyRequired = 0;
+  let unauthorized = 0;
+  let switched = 0;
+  install401Interceptor({
+    windowObj: win,
+    loginPageId: 'login',
+    excludedPages: ['login'],
+    onUnauthorized: () => {
+      unauthorized++;
+    },
+    onApiKeyRequired: () => {
+      apiKeyRequired++;
+    },
+    switchPage: () => {
+      switched++;
+    },
+  });
+  await win.fetch('/api/scheduler/toggle', { method: 'POST', body: '{}' });
+  assert.equal(apiKeyRequired, 1, 'onApiKeyRequired should fire once for mutating 401');
+  assert.equal(unauthorized, 0, 'mutating 401 should NOT fire onUnauthorized when onApiKeyRequired is set');
+  assert.equal(switched, 0, 'mutating 401 should NOT redirect to login (admin opens apiKeyModal instead)');
+});
+
+test('install401Interceptor: mutating 401 without onApiKeyRequired falls back to onUnauthorized + login (client_web)', async () => {
+  const { win } = makeFakeWindow();
+  win.fetch = () => Promise.resolve({ status: 401, ok: false });
+  let unauthorized = 0;
+  let switchedTo = null;
+  install401Interceptor({
+    windowObj: win,
+    loginPageId: 'login',
+    excludedPages: ['login', 'register'],
+    onUnauthorized: () => {
+      unauthorized++;
+    },
+    switchPage: (id) => {
+      switchedTo = id;
+    },
+  });
+  await win.fetch('/api/scheduler/toggle', { method: 'POST', body: '{}' });
+  assert.equal(unauthorized, 1, 'client_web keeps onUnauthorized on mutating 401');
+  assert.equal(switchedTo, 'login', 'client_web keeps login redirect on mutating 401');
+});
+
+test('install401Interceptor: GET 401 with onApiKeyRequired still uses user-auth path (onUnauthorized + login)', async () => {
+  const { win } = makeFakeWindow();
+  win.fetch = () => Promise.resolve({ status: 401, ok: false });
+  let apiKeyRequired = 0;
+  let unauthorized = 0;
+  let switchedTo = null;
+  install401Interceptor({
+    windowObj: win,
+    loginPageId: 'login',
+    excludedPages: ['login'],
+    onUnauthorized: () => {
+      unauthorized++;
+    },
+    onApiKeyRequired: () => {
+      apiKeyRequired++;
+    },
+    switchPage: (id) => {
+      switchedTo = id;
+    },
+  });
+  await win.fetch('/api/user/profile');
+  assert.equal(apiKeyRequired, 0, 'GET 401 must not open apiKeyModal');
+  assert.equal(unauthorized, 1, 'GET 401 is user-auth failure → onUnauthorized fires');
+  assert.equal(switchedTo, 'login', 'GET 401 redirects to login');
+});
+
+test('install401Interceptor: PUT/DELETE 401 also classified as mutating → onApiKeyRequired', async () => {
+  for (const method of ['PUT', 'DELETE', 'PATCH']) {
+    const { win } = makeFakeWindow();
+    win.fetch = () => Promise.resolve({ status: 401, ok: false });
+    let apiKeyRequired = 0;
+    install401Interceptor({
+      windowObj: win,
+      onUnauthorized: () => {},
+      onApiKeyRequired: () => {
+        apiKeyRequired++;
+      },
+      switchPage: () => {},
+    });
+    await win.fetch('/api/foo', { method: method });
+    assert.equal(apiKeyRequired, 1, method + ' 401 should fire onApiKeyRequired');
+  }
+});
+
 test('install401Interceptor: response object is still returned to caller', async () => {
   const { win } = makeFakeWindow();
   const expected = { status: 200, body: { ok: true } };

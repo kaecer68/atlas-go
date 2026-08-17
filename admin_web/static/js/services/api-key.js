@@ -2,34 +2,35 @@
  * Atlas API key management for admin_web.
  *
  * The backend now requires ATLAS_API_KEY for mutating methods (POST/PUT/DELETE/PATCH).
- * This module stores the key in localStorage and provides a simple, one-time prompt
- * so admin users can enter it on the first page that needs write access.
+ * This module provides a one-time prompt so admin users can enter the key on the
+ * first page that needs write access.
+ *
+ * 2026-08-18 (PR-7, Code Disposition Protocol「可退役」判定修正): storage/key 邏輯
+ * 與 shared app-utils 的 getAtlasApiKey/setAtlasApiKey 完全重疊（同一 localStorage
+ * key 'ATLAS_API_KEY'）→ 本模組保留 API 面（getApiKey/setApiKey/hasApiKey/
+ * ensureApiKey 改為薄 re-export 指向 app-utils），刪除重複 localStorage 邏輯；
+ * modal UI 邏輯（show/hide/initApiKeyPrompt）為活碼（admin main.js 使用）→ 保留不動。
+ *
+ * 注意: 為讓 node --test 可直接解析，import 用跨樹相對路徑指向 shared_web
+ * （esbuild 與 node 皆可解析；admin main.js 的 './shared/...' 樣式依賴 esbuild
+ * shared-static-fallback plugin，node 無法解析）。
  */
 
-const STORAGE_KEY = 'ATLAS_API_KEY';
+import { getAtlasApiKey, setAtlasApiKey } from '../../../../shared_web/static/js/shared/app-utils.js';
 
+/** 讀取已儲存的管理員 API Key（薄 re-export，儲存實作統一在 app-utils）。 */
 export function getApiKey() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) || '';
-  } catch (_) {
-    return '';
-  }
+  return getAtlasApiKey();
 }
 
+/** 是否已儲存 API Key。 */
 export function hasApiKey() {
   return getApiKey() !== '';
 }
 
+/** 儲存（或清除，傳空字串）管理員 API Key（薄 re-export）。 */
 export function setApiKey(key) {
-  try {
-    if (key) {
-      localStorage.setItem(STORAGE_KEY, key);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  } catch (_) {
-    // localStorage may be unavailable in some environments.
-  }
+  setAtlasApiKey(key);
 }
 
 /**
