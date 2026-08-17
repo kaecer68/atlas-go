@@ -35,6 +35,7 @@ const testSeedsJSON = `[
 
 func newTestRegistry(t *testing.T) *strategy_techniques.Registry {
 	t.Helper()
+	testAPIKey(t)
 	reg, err := strategy_techniques.LoadFromBytes([]byte(testSeedsJSON))
 	if err != nil {
 		t.Fatalf("LoadFromBytes: %v", err)
@@ -47,6 +48,10 @@ func newTestMux(reg *strategy_techniques.Registry) *http.ServeMux {
 	h := NewHandlers(reg, nil)
 	h.RegisterRoutes(mux)
 	return mux
+}
+
+func testAPIKey(t *testing.T) {
+	t.Setenv("ATLAS_API_KEY", "test-key")
 }
 
 func doGET(t *testing.T, mux http.Handler, path string) (int, map[string]any) {
@@ -63,11 +68,13 @@ func doGET(t *testing.T, mux http.Handler, path string) (int, map[string]any) {
 
 func doPOST(t *testing.T, mux http.Handler, path string, payload any) (int, map[string]any) {
 	t.Helper()
+	testAPIKey(t)
 	b, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
+	req.Header.Set("X-API-Key", "test-key")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	var body map[string]any
@@ -326,10 +333,12 @@ func TestHandlers_ValidateStrategy_NotFound(t *testing.T) {
 }
 
 func TestHandlers_ValidateStrategy_InvalidBody(t *testing.T) {
+	testAPIKey(t)
 	reg := newTestRegistry(t)
 	mux := newTestMux(reg)
 	req := httptest.NewRequest(http.MethodPost, "/api/strategies/alpha/validate",
 		bytes.NewReader([]byte("not json")))
+	req.Header.Set("X-API-Key", "test-key")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest {

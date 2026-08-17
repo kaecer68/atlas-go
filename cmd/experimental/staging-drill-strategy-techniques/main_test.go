@@ -234,6 +234,7 @@ func firstFrameID(t *testing.T, reg *strategy_techniques.Registry) string {
 // closed via t.Cleanup.
 func startAnnotateServer(t *testing.T, reg *strategy_techniques.Registry, annotator llm_annotator.Annotator) *httptest.Server {
 	t.Helper()
+	withEnv(t, "ATLAS_API_KEY", "atlas-test-key")
 	h := strategies.NewHandlers(reg, nil)
 	if annotator != nil {
 		h.SetAnnotator(annotator)
@@ -279,7 +280,7 @@ func TestRun_Phase4_And_5(t *testing.T) {
 		withEnv(t, "LLM_ANNOTATOR_API_KEY", "test-key-xxx")
 		// Given: ATLAS_API_KEY unset — AuthMiddleware captures env at mux-
 		// handle time and would gate /annotate behind X-API-Key otherwise.
-		withEnv(t, "ATLAS_API_KEY", "")
+		withEnv(t, "ATLAS_API_KEY", "atlas-test-key")
 		withEnv(t, "ATLAS_ADMIN_KEY", "")
 		withEnv(t, "ATLAS_ENV", "")
 
@@ -303,7 +304,7 @@ func TestRun_Phase4_And_5(t *testing.T) {
 
 		// When: runPhase4And5WithEndpoint runs to completion.
 		withEnv(t, "LLM_ANNOTATOR_API_KEY", "test-key-cleanup")
-		withEnv(t, "ATLAS_API_KEY", "")
+		withEnv(t, "ATLAS_API_KEY", "atlas-test-key")
 		withEnv(t, "ATLAS_ADMIN_KEY", "")
 		withEnv(t, "ATLAS_ENV", "")
 		mock := llm_annotator.NewMock("cleanup probe")
