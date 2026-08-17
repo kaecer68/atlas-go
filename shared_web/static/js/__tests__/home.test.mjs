@@ -144,6 +144,21 @@ test('renderHomePage: new home sections render after redesign', async () => {
   assert.ok(marketGrid, 'market pulse grid should exist');
 });
 
+test('renderHomePage: nav links use real hrefs, no javascript:void(0) dead links', async () => {
+  // UX audit P1-F-d: /client/home 有 2 個 javascript:void(0) 死鏈
+  // （「完整看板 →」與時期 chip），必須接上真實路由。
+  const container = { innerHTML: '' };
+  await renderHomePage(container);
+  assert.ok(
+    !container.innerHTML.includes('javascript:void(0)'),
+    'home page must not render javascript:void(0) dead links'
+  );
+  assert.ok(
+    container.innerHTML.includes('href="/client/capital_board"'),
+    '「完整看板 →」should link to /client/capital_board'
+  );
+});
+
 test('renderHomePage: renders trust footer after unexpected synchronous error', async () => {
   // Simulate an unexpected failure in the date-update path by making the
   // last-update element throw on textContent assignment. The outer try/catch

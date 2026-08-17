@@ -163,6 +163,35 @@ function initPageStructure() {
   _container.appendChild(pageWrapper);
 }
 
+// 空態引導（未輸入代號 / 尚無資料時，不只用「暫無」打發訪客，
+// 而是給出下一步 CTA：推薦標的 → 登入查看；出場提醒 → 建立持倉）。
+function renderGuidedEmpty(kind) {
+  if (kind === 'recommendations') {
+    return `
+      <div class="dc-empty" style="padding:20px;color:var(--muted);text-align:center">
+        <div class="empty-state-guidance">
+          <div class="icon">📌</div>
+          <div class="title">還沒有推薦標的</div>
+          <div class="desc">登入後即可查看依目前市場時期生成的個人化推薦標的。</div>
+          <div class="empty-actions">
+            <a class="btn btn--primary btn-sm" data-page="login" href="/client/login">登入查看</a>
+          </div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="dc-empty" style="padding:20px;color:var(--muted);text-align:center">
+      <div class="empty-state-guidance">
+        <div class="icon">🔔</div>
+        <div class="title">還沒有出場提醒</div>
+        <div class="desc">建立持倉後，這裡會顯示需要留意的出場提醒。</div>
+        <div class="empty-actions">
+          <a class="btn btn--primary btn-sm" data-page="strategies" href="/client/strategies">前往投資心法建立持倉</a>
+        </div>
+      </div>
+    </div>`;
+}
+
 // 推薦標的 + 出場提醒：獨立於個股查詢流程載入（市場層級資料，不隨查詢重繪）。
 async function loadDecisionPanels() {
   const recEl = document.getElementById('sq-recommendations');
@@ -170,8 +199,10 @@ async function loadDecisionPanels() {
   if (!recEl || !exitEl) return;
   try {
     const data = await fetchDecisionChain();
-    recEl.innerHTML = renderRecommendations(data);
-    exitEl.innerHTML = renderExitAlerts(data);
+    const recs = data && data.recommendations;
+    const alerts = data && data.exit_alerts;
+    recEl.innerHTML = recs && recs.length ? renderRecommendations(data) : renderGuidedEmpty('recommendations');
+    exitEl.innerHTML = alerts && alerts.length ? renderExitAlerts(data) : renderGuidedEmpty('exit-alerts');
   } catch (e) {
     console.warn('[stock-quote] decision panels load failed:', e);
     recEl.innerHTML = emptyState('推薦標的載入失敗');

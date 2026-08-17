@@ -732,9 +732,9 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-  color: var(--color-warning);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  background: var(--panel-l3);
+  color: var(--muted);
+  border: 1px solid var(--border);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
 }

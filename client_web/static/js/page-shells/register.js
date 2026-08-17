@@ -17,6 +17,7 @@ export const template = `
         <button type="submit" class="btn btn--primary btn-full">註冊</button>
       </form>
       <p class="auth-footer">已有帳號？<a href="/client/login" data-page="login" class="auth-link" onclick="event.preventDefault();window.switchPage('login')">立即登入</a></p>
+      <p class="auth-footer"><a href="/client/home" data-page="home" class="auth-link" onclick="event.preventDefault();window.switchPage('home')">← 先看看公開內容</a></p>
     </div>
   </div>
 `;
