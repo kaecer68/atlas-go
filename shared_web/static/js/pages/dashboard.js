@@ -48,22 +48,31 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     crowdingHtml = '<div class="my-xs text-sm text-success">✓ 無擁擠標的</div>';
   }
 
-  // Data channel alerts - unified from system-health API
-  const sysChannels = (health && health.data_channels) || [];
+  // Data channel alerts - unified from /api/dashboard/data-channels (40 channels;
+  // system-health only tracked 22, leaving an 18-channel blind spot e.g. twse_etf).
+  // dataChannels is the 7th renderOverview parameter; fetchWithRetry returns null
+  // on failure, so guard against null to avoid crashing the overview.
+  const dcData = dataChannels || {};
+  const sysChannels = dcData.channels || [];
+  const dcAlerts = dcData.alerts || [];
   const errorChannels = sysChannels.filter(c => c.status === 'error');
   const warnChannels = sysChannels.filter(c => c.status === 'warn');
-  const degradedIDs = new Set((health && health.degraded_channels) || []);
-  const degradedLabels = sysChannels
-    .filter(c => degradedIDs.has(c.channel_id))
-    .map(c => c.label);
-  const totalAlerts = errorChannels.length + warnChannels.length + degradedLabels.length;
-  const alertHtml = errorChannels.length > 0
-    ? `<div style="margin:4px 0;font-size:13px;color:var(--color-danger)">⚠ ${errorChannels.map(c => escapeHtml(c.label)).join('、')} 發生異常</div>`
-    : (warnChannels.length > 0
-      ? `<div class="my-xs text-sm text-warn">⚠ ${warnChannels.map(c => escapeHtml(c.label)).join('、')} 資料待更新</div>`
-      : (degradedLabels.length > 0
-        ? `<div class="my-xs text-sm text-info">◉ ${degradedLabels.map(l => escapeHtml(l)).join('、')} 降級</div>`
-        : '<div class="my-xs text-sm text-success">✓ 所有通道正常</div>'));
+  const partialChannels = sysChannels.filter(c => c.status === 'partial');
+  const inactiveChannels = sysChannels.filter(c => c.status === 'inactive');
+  const totalAlerts = errorChannels.length + warnChannels.length + partialChannels.length;
+  const channelName = c => c.channel_id || '未知通道';
+  const alertRows = dcAlerts.map(a => {
+    const isErr = a.status === 'error';
+    return `<div style="margin:2px 0;font-size:12px;color:${isErr ? 'var(--color-danger)' : 'var(--warn)'}">${isErr ? '⚠' : '◌'} ${escapeHtml(a.channel_id)} ${isErr ? '發生異常' : '資料待更新'}</div>`;
+  });
+  const inactiveHtml = inactiveChannels.length > 0
+    ? `<div class="my-xs text-sm text-muted">◌ ${inactiveChannels.map(c => escapeHtml(channelName(c))).join('、')} 未啟用</div>`
+    : '';
+  const alertHtml = dataChannels == null
+    ? '<div class="my-xs text-sm text-muted">◌ 通道狀態載入失敗</div>'
+    : (alertRows.length > 0
+      ? alertRows.join('') + inactiveHtml
+      : (inactiveHtml || '<div class="my-xs text-sm text-success">✓ 所有通道正常</div>'));
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
@@ -78,7 +87,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   gridRisk.innerHTML = `
     <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:var(--color-danger);font-weight:600' : ''}">${weakSharpe}</span></div></div>
     <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
-    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : (degradedLabels.length > 0 ? degradedLabels.length + ' 筆降級' : '正常'))}</div>${alertHtml}</div>
+    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : (partialChannels.length > 0 ? partialChannels.length + ' 筆部分異常' : '正常'))}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
     <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--color-danger)">點此查看匯入方式 →</small>'}</div></div>
