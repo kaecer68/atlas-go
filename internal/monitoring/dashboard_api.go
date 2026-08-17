@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/liveness"
 	llmcapabilities "github.com/kaecer68/atlas-go/internal/llm/capabilities"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -130,6 +132,13 @@ type DashboardAPI struct {
 	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
 	crossMarketSvc       *service.CrossMarketService
 	narrativeHandlers    *apinarrative.Handlers
+
+	// Task-liveness (cross-restart heartbeat, Phase 1): late-bound providers
+	// for GET /api/dashboard/task-liveness. Set via SetTaskLivenessProvider /
+	// SetSchedulerStatusProvider after the BackgroundTaskManager exists
+	// (cmd/atlas/main.go wires them once taskMgr is ready).
+	taskLivenessProvider apidashboard.TaskLivenessProvider
+	schedulerProvider    apidashboard.SchedulerStatusProvider
 }
 
 // SetCompositionRoot wires the dashboard's shared WeightEngine into the
@@ -1318,7 +1327,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if a.janusEngine != nil {
 		dashboardHandlers.JanusEngine = a.janusEngine
 	}
-	dashboardHandlers.DrawdownProvider = a // DashboardAPI satisfies DrawdownProvider
+	dashboardHandlers.DrawdownProvider = a     // DashboardAPI satisfies DrawdownProvider
+	dashboardHandlers.TaskLivenessProvider = a // DashboardAPI satisfies TaskLivenessProvider (late-bound)
+	dashboardHandlers.SchedulerStatus = a      // DashboardAPI satisfies SchedulerStatusProvider (late-bound)
 	dashboardHandlers.RegisterRoutes(mux)
 
 	a.RegisterPerformanceRoutes(mux)
@@ -1564,6 +1575,34 @@ func (a *DashboardAPI) SetRepository(repo *repository.DualWriteRepository) {
 
 func (a *DashboardAPI) SetTaskManager(m *taskexec.Manager) {
 	a.taskManager = m
+}
+
+// SetTaskLivenessProvider wires the cross-restart task-liveness store into
+// GET /api/dashboard/task-liveness. May be nil (endpoint then reports 503).
+func (a *DashboardAPI) SetTaskLivenessProvider(p apidashboard.TaskLivenessProvider) {
+	a.taskLivenessProvider = p
+}
+
+// SetSchedulerStatusProvider wires the live BackgroundTaskManager status into
+// the task-liveness aggregation (interval / enabled / next run / staleness).
+func (a *DashboardAPI) SetSchedulerStatusProvider(p apidashboard.SchedulerStatusProvider) {
+	a.schedulerProvider = p
+}
+
+// List implements apidashboard.TaskLivenessProvider.
+func (a *DashboardAPI) List(ctx context.Context) ([]liveness.Row, error) {
+	if a.taskLivenessProvider == nil {
+		return nil, errors.New("task liveness provider not configured")
+	}
+	return a.taskLivenessProvider.List(ctx)
+}
+
+// Status implements apidashboard.SchedulerStatusProvider.
+func (a *DashboardAPI) Status() []apigateway.TaskStatus {
+	if a.schedulerProvider == nil {
+		return nil
+	}
+	return a.schedulerProvider.Status()
 }
 
 func (a *DashboardAPI) SetStorageReporter(r apimetrics.StorageReporter) {

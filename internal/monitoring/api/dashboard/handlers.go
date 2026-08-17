@@ -1,7 +1,9 @@
 package dashboard
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,9 +12,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/liveness"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -20,6 +24,45 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/retail"
 )
+
+// TaskLivenessProvider reads the cross-restart task-liveness table.
+// Satisfied directly by *liveness.Store and by *monitoring.DashboardAPI
+// (late-bound via SetTaskLivenessProvider).
+type TaskLivenessProvider interface {
+	List(ctx context.Context) ([]liveness.Row, error)
+}
+
+// SchedulerStatusProvider exposes live BackgroundTaskManager status.
+// Satisfied directly by *apigateway.BackgroundTaskManager (Status()).
+type SchedulerStatusProvider interface {
+	Status() []apigateway.TaskStatus
+}
+
+// taskLivenessTask is one merged row of the task-liveness API response.
+type taskLivenessTask struct {
+	Name                string     `json:"name"`
+	LastRunAt           *time.Time `json:"last_run_at,omitempty"`
+	LastSuccessAt       *time.Time `json:"last_success_at,omitempty"`
+	LastError           string     `json:"last_error,omitempty"`
+	ConsecutiveFailures int        `json:"consecutive_failures"`
+	LastDurationMs      int64      `json:"last_duration_ms"`
+	// Runtime fields merged from /api/scheduler/status state when the task is
+	// registered in the BackgroundTaskManager; omitted for cron-only rows.
+	Interval     string     `json:"interval,omitempty"`
+	IntervalSecs int64      `json:"interval_seconds,omitempty"`
+	Enabled      *bool      `json:"enabled,omitempty"`
+	NextRunAt    *time.Time `json:"next_run_at,omitempty"`
+	Stale        bool       `json:"stale"`
+	StaleReason  string     `json:"stale_reason,omitempty"`
+	Source       string     `json:"source"` // "btm" (registered task) or "cron" (ping-only row)
+}
+
+type taskLivenessResponse struct {
+	GeneratedAt time.Time          `json:"generated_at"`
+	Total       int                `json:"total"`
+	StaleCount  int                `json:"stale_count"`
+	Tasks       []taskLivenessTask `json:"tasks"`
+}
 
 // DrawdownProvider is an interface for retrieving the latest drawdown result.
 // DashboardAPI satisfies this interface via its GetLatestDrawdown() method.
@@ -40,6 +83,13 @@ type Handlers struct {
 	// RegisteredChannelIDs, when set, makes the data-channels page list every
 	// ID from the ChannelRegistry (manifest #G05). May be nil in tests.
 	RegisteredChannelIDs []string
+
+	// TaskLivenessProvider / SchedulerStatusProvider back the
+	// GET /api/dashboard/task-liveness endpoint. Both are late-bound (set
+	// after RegisterAllRoutes because the BackgroundTaskManager is created
+	// later in cmd/atlas/main.go); nil → the endpoint reports 503.
+	TaskLivenessProvider TaskLivenessProvider
+	SchedulerStatus      SchedulerStatusProvider
 
 	// channel state management — initialized by LoadChannelStates
 	channelStates   map[string]channelState
@@ -80,6 +130,77 @@ func (h *Handlers) HandleRSITwCalibration(r *http.Request) (int, any) {
 	}
 }
 
+// HandleTaskLiveness returns the aggregated task-liveness snapshot: for each
+// task, the persisted last run / last success / failure count (survives
+// restarts) merged with live runtime state (interval, enabled, next run) and
+// a staleness flag computed as now-lastRun > interval x 3.
+func (h *Handlers) HandleTaskLiveness(r *http.Request) (int, any) {
+	if h.TaskLivenessProvider == nil {
+		return http.StatusServiceUnavailable, map[string]any{
+			"status": "error",
+			"error":  "task liveness provider not configured",
+		}
+	}
+	rows, err := h.TaskLivenessProvider.List(r.Context())
+	if err != nil {
+		logging.Error("dashboard", "task_liveness_list_failed", "err", err.Error())
+		return http.StatusInternalServerError, map[string]any{
+			"status": "error",
+			"error":  "failed to load task liveness: " + err.Error(),
+		}
+	}
+
+	runtime := make(map[string]apigateway.TaskStatus)
+	if h.SchedulerStatus != nil {
+		for _, st := range h.SchedulerStatus.Status() {
+			runtime[st.Name] = st
+		}
+	}
+
+	now := time.Now()
+	resp := taskLivenessResponse{GeneratedAt: now, Tasks: make([]taskLivenessTask, 0, len(rows))}
+	for _, row := range rows {
+		t := taskLivenessTask{
+			Name:                row.TaskName,
+			LastError:           row.LastError,
+			ConsecutiveFailures: row.ConsecutiveFailures,
+			LastDurationMs:      row.LastDurationMs,
+			Source:              "cron",
+		}
+		if !row.LastRunAt.IsZero() {
+			lr := row.LastRunAt
+			t.LastRunAt = &lr
+		}
+		if !row.LastSuccessAt.IsZero() {
+			ls := row.LastSuccessAt
+			t.LastSuccessAt = &ls
+		}
+		if st, ok := runtime[row.TaskName]; ok {
+			t.Source = "btm"
+			iv := st.Interval
+			t.Interval = iv.String()
+			t.IntervalSecs = int64(iv.Seconds())
+			enabled := st.Enabled
+			t.Enabled = &enabled
+			if !st.NextRun.IsZero() {
+				nr := st.NextRun
+				t.NextRunAt = &nr
+			}
+			if iv > 0 && liveness.IsStale(row.LastRunAt, iv, now) {
+				t.Stale = true
+				t.StaleReason = fmt.Sprintf("not run for %s (> 3x %s interval)",
+					now.Sub(row.LastRunAt).Round(time.Second), iv.String())
+			}
+		}
+		resp.Tasks = append(resp.Tasks, t)
+		if t.Stale {
+			resp.StaleCount++
+		}
+	}
+	resp.Total = len(resp.Tasks)
+	return http.StatusOK, resp
+}
+
 // HandleMaturity returns the system's current maturity phase and progress.
 func (h *Handlers) HandleMaturity(r *http.Request) (int, any) {
 	statePath := filepath.Join(h.WorkDir, "data", "state", "maturity_tracker.json")
@@ -117,6 +238,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// Deprecated: internal calibration; not for web UI or MCP. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
 	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
+	mux.Handle("GET /api/dashboard/task-liveness", shared.Get(h.HandleTaskLiveness))
 	mux.Handle("GET /api/janus/regime-score", shared.Get(h.HandleJanusRegimeScore))
 }
 
