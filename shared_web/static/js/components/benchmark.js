@@ -1,6 +1,7 @@
 import { fmtSafePct, fmtSafeNumber } from '../shared/format-metric.js';
 
 export async function renderBenchmarkComparison(container, getJSON) {
+  // 失敗已由 app-utils choke point 回報 (reportDegraded)，此處 .catch 僅為 null 預設值。
   const data = await getJSON('/api/dashboard/benchmark-comparison').catch(() => null);
   if (!data || data.session_count < 1) {
     container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">暫無基準比較資料</div>';

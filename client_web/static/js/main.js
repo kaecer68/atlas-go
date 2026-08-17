@@ -19,6 +19,7 @@ import { renderHomeTierSections } from './components/home-tier-sections.js';
 import './modals/modal.js';
 import { injectSharedHead } from './shared/head-config.js';
 import { install401Interceptor } from './shared/fetch-wrapper.js';
+import { initDegradedBadge } from './components/degraded-badge.js';
 injectSharedHead();
 
 const SHELL_LOADERS = {
@@ -459,6 +460,7 @@ window.toggleAutoRefresh = function() {
 };
 
 if (typeof window !== 'undefined') {
+  initDegradedBadge();
   populateAgentSelect();
   initBacktestDates();
   startAutoRefresh();

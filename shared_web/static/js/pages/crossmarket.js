@@ -1,12 +1,15 @@
 import { escapeHtml } from '../shared/utils.js';
 import { fmtSafeNumber, fmtSafePct } from '../shared/format-metric.js';
+import { silentGetJSON } from '../shared/app-utils.js';
 
 export async function loadCrossMarketData() {
+  // 統一走 app-utils choke point：失敗不再靜默（console.warn + reportDegraded），
+  // 且 !res.ok（4xx/5xx）也會回 null，不再把 error payload 當正常資料渲染。
   const [status, usIndices, correlation, correlationMatrix] = await Promise.all([
-    fetch('/api/cross-market/status').then(r => r.json()).catch(() => null),
-    fetch('/api/dashboard/us-indices').then(r => r.json()).catch(() => null),
-    fetch('/api/cross-market/correlation').then(r => r.json()).catch(() => null),
-    fetch('/api/dashboard/correlation-matrix').then(r => r.json()).catch(() => null),
+    silentGetJSON('/api/cross-market/status'),
+    silentGetJSON('/api/dashboard/us-indices'),
+    silentGetJSON('/api/cross-market/correlation'),
+    silentGetJSON('/api/dashboard/correlation-matrix'),
   ]);
   renderStaleBanner(status);
   renderDegradedBanner(status);
@@ -74,7 +77,11 @@ function getField(status, key) {
 function renderUSIndices(status) {
   const el = document.getElementById('cm-us-indices');
   if (!el) return;
-  if (!status || status.error) {
+  if (status == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
+  if (status.error) {
     el.innerHTML = emptyState('等待美台連動監控資料');
     return;
   }
@@ -96,7 +103,11 @@ function renderUSIndices(status) {
 function renderTechStocks(status) {
   const el = document.getElementById('cm-tech-stocks');
   if (!el) return;
-  if (!status) {
+  if (status == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
+  if (status.error) {
     el.innerHTML = emptyState('等待科技股資料');
     return;
   }
@@ -118,7 +129,11 @@ function renderTechStocks(status) {
 function renderMacro(status) {
   const el = document.getElementById('cm-macro');
   if (!el) return;
-  if (!status) {
+  if (status == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
+  if (status.error) {
     el.innerHTML = emptyState('等待宏觀指標');
     return;
   }
@@ -136,6 +151,10 @@ function renderMacro(status) {
 function renderCorrelation(correlation, status) {
   const el = document.getElementById('cm-correlation');
   if (!el) return;
+  if (correlation == null && status == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
   const rho = correlation && correlation.correlation != null ? correlation.correlation : (status && status.correlation_spx_twse != null ? status.correlation_spx_twse : null);
   const fallback = correlation && correlation.is_fallback;
   const observations = correlation && correlation.observations != null ? correlation.observations : '—';
@@ -167,7 +186,11 @@ function renderCorrelation(correlation, status) {
 function renderCorrelationMatrix(matrixData) {
   const el = document.getElementById('cm-correlation-matrix');
   if (!el) return;
-  if (!matrixData || !matrixData.symbols || !Array.isArray(matrixData.matrix) || matrixData.matrix.length === 0) {
+  if (matrixData == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
+  if (!matrixData.symbols || !Array.isArray(matrixData.matrix) || matrixData.matrix.length === 0) {
     el.innerHTML = emptyState('等待產業相關性矩陣資料');
     return;
   }
@@ -214,7 +237,11 @@ function renderCorrelationMatrix(matrixData) {
 function renderCrisis(status) {
   const el = document.getElementById('cm-crisis');
   if (!el) return;
-  if (!status) {
+  if (status == null) {
+    el.innerHTML = degradedState();
+    return;
+  }
+  if (status.error) {
     el.innerHTML = emptyState('等待危機信號');
     return;
   }
@@ -251,6 +278,17 @@ function emptyState(msg) {
     '<div style="font-size:32px;margin-bottom:8px">📡</div>' +
     '<div style="color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(msg || '等待資料') + '</div>' +
     '<div style="color:var(--muted);font-size:var(--text-base)">美台連動監控資料每 5 分鐘自動更新一次。</div>' +
+    '</div>';
+}
+
+// API 失敗（資料全 null）時的降級空態：不再顯示空殼，直接說明資料源不可用。
+const DEGRADED_MSG = '美台連動資料源暫時不可用，系統已記錄並將自動恢復';
+
+function degradedState() {
+  return '<div class="empty" style="padding:24px;text-align:center;background:color-mix(in srgb, var(--color-warning) 8%, var(--panel-l2));border-radius:8px;border:1px dashed color-mix(in srgb, var(--color-warning) 40%, transparent)">' +
+    '<div style="font-size:32px;margin-bottom:8px">⚠️</div>' +
+    '<div style="color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(DEGRADED_MSG) + '</div>' +
+    '<div style="color:var(--muted);font-size:var(--text-base)">資料源恢復後本區塊將自動更新。</div>' +
     '</div>';
 }
 
@@ -302,4 +340,4 @@ function renderDegradedBanner(status) {
   }
 }
 
-window.loadCrossMarketData = loadCrossMarketData;
+if (typeof window !== 'undefined') window.loadCrossMarketData = loadCrossMarketData;
