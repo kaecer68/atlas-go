@@ -94,6 +94,19 @@ var requiresLLMKey = map[string]bool{
 //   - macro_*: fresh container where the startup ingest has not produced a
 //     snapshot yet (US runner, slow upstreams) → 404 "no macro snapshot
 //     available" / 500 "macro data health" / "calculate stress index"
+//   - get_recommendations: warmup-window middleware 503. The container
+//     reports healthy (~70s) while background RunWarmup is still running
+//     (it does NOT block server listen); the first cold /api/recommendations
+//     call joins the in-flight macro FetchSnapshot (25+ upstream providers,
+//     10s timeout each) via single-flight locking and exceeds the 8s global
+//     middleware ceiling on a slow US-hosted runner → 503
+//     {"degraded":true,"error":"upstream timeout"} from
+//     cmd/atlas/timeout_middleware.go. Same marker class as stock_* above.
+//     Other macro/event-pipeline endpoints (capital_flow_summary,
+//     macro_get_snapshot_latest, ...) can hit the same warmup-window 503;
+//     markers stay per-tool — no blanket 503 tolerance, so a real regression
+//     on any tool still FAILs. Systematic fix (when more tools trip):
+//     let canary wait for warmup completion instead of adding markers.
 //
 // Anything not matching these markers still FAILs.
 var tolerateEnvFailures = map[string][]string{
@@ -103,9 +116,11 @@ var tolerateEnvFailures = map[string][]string{
 	"macro_get_snapshot_latest":     {"no macro snapshot available"},
 	"macro_get_capital_flow_latest": {"no macro snapshot available"},
 	"macro_get_ingest_status":       {"macro data health"},
-	// Fresh PG with no capital_flow table rows \u2192 HandleSummary returns 503
+	// Fresh PG with no capital_flow table rows → HandleSummary returns 503
 	// with body {"error":"failed to fetch market data: ..."}.
 	"capital_flow_summary": {"failed to fetch market data"},
+	// Warmup-window middleware 503 (see doc comment above).
+	"get_recommendations": {`"degraded":true`},
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
