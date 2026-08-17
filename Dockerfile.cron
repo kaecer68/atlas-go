@@ -88,4 +88,7 @@ RUN chmod +x /app/cron-entrypoint.sh
 RUN mkdir -p /var/log/cron
 
 # Start cron in foreground via entrypoint
+# TZ consistency: no ENV TZ is set here, so containers run Alpine's default
+# UTC; scripts/cron-entrypoint.sh therefore matches CRON_SCHEDULE fields in
+# UTC (see docker-compose.yml cron services — all schedules are UTC-based).
 CMD ["/app/cron-entrypoint.sh"]
