@@ -546,8 +546,7 @@ jobs:
   # Consumer smoke test — runs against live docker-compose on main pushes
   hermes-smoke:
     runs-on: ubuntu-latest
-    # TEMP(ci-canary): PR runs for verification; restored to main-only before merge
-    if: needs.changes.outputs.code == 'true'
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
@@ -628,8 +627,7 @@ jobs:
   # Runtime canary — exercises all read-only MCP tools against live atlas-go
   canary-test:
     runs-on: ubuntu-latest
-    # TEMP(ci-canary): PR runs for verification; restored to main-only before merge
-    if: needs.changes.outputs.code == 'true'
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
