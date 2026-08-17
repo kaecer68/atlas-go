@@ -639,7 +639,7 @@ rebuild-cron-bins: | .build-cron
 CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest \
                    atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest \
                    atlas-cron-replay-sync:latest \
-                   atlas-atlas-cron-c07-evaluate:latest atlas-cron-darwinian:latest \
+                   atlas-atlas-cron-c07-evaluate:latest \
                    atlas-cron-macro-ingest:latest
 DOCKER_BIN ?= docker
 

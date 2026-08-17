@@ -54,22 +54,23 @@ services:
     healthcheck:
       disable: true
 
-  cron-darwinian:
-    image: atlas-cron:latest
-    container_name: atlas-cron-darwinian-imac
-    restart: unless-stopped
-    environment:
-      - CRON_SCHEDULE=0 9 * * *
-      - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      disable: true
+  # D1 決策退役 2026-08-17: Go BTM auto_daily_simulation 已承載真實演化; 本容器為 stub
+  # cron-darwinian:
+  #   image: atlas-cron:latest
+  #   container_name: atlas-cron-darwinian-imac
+  #   restart: unless-stopped
+  #   environment:
+  #     - CRON_SCHEDULE=0 9 * * *
+  #     - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
+  #     - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./reports:/app/reports
+  #     - ./logs:/app/logs
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   healthcheck:
+  #     disable: true
 
   cron-quote-backfill:
     image: atlas-cron:latest
