@@ -547,11 +547,45 @@ jobs:
   hermes-smoke:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
-    needs: [release-check, changes]
+    needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
+
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version-file: go.mod
+    # Dockerfile.atlas.local COPYs these 4 host-built binaries from .build-atlas/.
+    # CI runners are linux/amd64 (unlike the iMac arm64 `make rebuild-atlas-bins`),
+    # so build with GOARCH=amd64 here.
+    - name: Build atlas binaries for Dockerfile.atlas.local (linux/amd64)
+      env:
+        GOOS: linux
+        GOARCH: amd64
+        GIT_COMMIT: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        mkdir -p .build-atlas
+        ldflags="-w -s \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-go ./cmd/atlas
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
+        ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
     - name: Validate docker-compose
@@ -575,14 +609,45 @@ jobs:
   canary-test:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
-    needs: [release-check, changes]
+    needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: admin-web-dist
+        path: admin_web/dist
+
+    - uses: actions/download-artifact@v4 # v4
+      with:
+        name: client-web-dist
+        path: client_web/dist
+
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: go.mod
+    # Dockerfile.atlas.local COPYs these 4 host-built binaries from .build-atlas/.
+    # CI runners are linux/amd64 (unlike the iMac arm64 `make rebuild-atlas-bins`),
+    # so build with GOARCH=amd64 here.
+    - name: Build atlas binaries for Dockerfile.atlas.local (linux/amd64)
+      env:
+        GOOS: linux
+        GOARCH: amd64
+        GIT_COMMIT: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        mkdir -p .build-atlas
+        ldflags="-w -s \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
+          -X github.com/kaecer68/atlas-go/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-go ./cmd/atlas
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
+        go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
+        ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
     - name: Start atlas-go
