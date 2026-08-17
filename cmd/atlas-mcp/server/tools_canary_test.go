@@ -86,42 +86,11 @@ var requiresLLMKey = map[string]bool{
 	"llm_get_cost": true,
 }
 
-// tolerateEnvFailures lists tools whose non-2xx responses are
-// environment-dependent rather than code regressions, with the exact
-// app-level body markers that downgrade the result to WARN:
-//   - stock_*: live TWSE upstream unreachable/timeout from a US-hosted
-//     GitHub runner → 503 {"degraded":true,...} / context deadline exceeded
-//   - macro_*: fresh container where the startup ingest has not produced a
-//     snapshot yet (US runner, slow upstreams) → 404 "no macro snapshot
-//     available" / 500 "macro data health" / "calculate stress index"
-//   - get_recommendations: warmup-window middleware 503. The container
-//     reports healthy (~70s) while background RunWarmup is still running
-//     (it does NOT block server listen); the first cold /api/recommendations
-//     call joins the in-flight macro FetchSnapshot (25+ upstream providers,
-//     10s timeout each) via single-flight locking and exceeds the 8s global
-//     middleware ceiling on a slow US-hosted runner → 503
-//     {"degraded":true,"error":"upstream timeout"} from
-//     cmd/atlas/timeout_middleware.go. Same marker class as stock_* above.
-//     Other macro/event-pipeline endpoints (capital_flow_summary,
-//     macro_get_snapshot_latest, ...) can hit the same warmup-window 503;
-//     markers stay per-tool — no blanket 503 tolerance, so a real regression
-//     on any tool still FAILs. Systematic fix (when more tools trip):
-//     let canary wait for warmup completion instead of adding markers.
-//
-// Anything not matching these markers still FAILs.
-var tolerateEnvFailures = map[string][]string{
-	"stock_get_quote":               {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
-	"stock_get_chips":               {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
-	"stock_get_technical":           {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
-	"macro_get_snapshot_latest":     {"no macro snapshot available"},
-	"macro_get_capital_flow_latest": {"no macro snapshot available"},
-	"macro_get_ingest_status":       {"macro data health"},
-	// Fresh PG with no capital_flow table rows → HandleSummary returns 503
-	// with body {"error":"failed to fetch market data: ..."}.
-	"capital_flow_summary": {"failed to fetch market data"},
-	// Warmup-window middleware 503 (see doc comment above).
-	"get_recommendations": {`"degraded":true`},
-}
+// tolerateEnvFailures / matchesAnyMarker / truncate / classifyCanaryResponse
+// and the warmup-grace window live in canary_tolerance_test.go (no build tag)
+// so the offline unit tests run in normal `go test` (ci-full). The warmup-503
+// class (capital_flow_summary, get_recommendations, ...) is covered by the
+// unified warmup-grace window — no per-tool markers needed.
 
 // canaryRoutes maps MCP tool names to upstream routes.
 // Keep in sync with tool registration files (tools.go, tools_*.go).
@@ -226,24 +195,6 @@ var canaryRoutes = map[string]canaryTest{
 	"mcp_quickstart":                    {Path: "/api/mcp/quickstart"},
 }
 
-// matchesAnyMarker reports whether body contains any of the given
-// substrings (empty marker list → false, so unmapped tools never WARN).
-func matchesAnyMarker(body string, markers []string) bool {
-	for _, m := range markers {
-		if strings.Contains(body, m) {
-			return true
-		}
-	}
-	return false
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
-
 // TestCanary_Runtime exercises every read-only MCP tool's upstream
 // HTTP route against a live atlas-go instance.
 func TestCanary_Runtime(t *testing.T) {
@@ -255,6 +206,14 @@ func TestCanary_Runtime(t *testing.T) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	ctx := context.Background()
 	results := make(map[string]string, len(canaryRoutes))
+
+	// Warmup-grace window: the container reports healthy while background
+	// RunWarmup is still running, so a fresh service can legitimately 503
+	// (or briefly refuse connections) right after startup. The unified grace
+	// window tolerates those for warmupGraceDuration; 503s after that FAIL
+	// as real regressions (see canary_tolerance_test.go).
+	graceUntil := time.Now().Add(warmupGraceDuration())
+	t.Logf("canary warmup-grace window: %s (until %s)", warmupGraceDuration(), graceUntil.Format(time.RFC3339))
 
 	for name, ct := range canaryRoutes {
 		if skipCanary[name] {
@@ -287,7 +246,7 @@ func TestCanary_Runtime(t *testing.T) {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			results[name] = fmt.Sprintf("FAIL: HTTP error: %v", err)
+			results[name] = classifyCanaryResponse(0, "", name, err.Error(), time.Now(), graceUntil)
 			continue
 		}
 
@@ -295,20 +254,7 @@ func TestCanary_Runtime(t *testing.T) {
 		resp.Body.Close()
 		code := resp.StatusCode
 		body := strings.TrimSpace(string(bodyBytes))
-		switch {
-		case code >= 200 && code < 300:
-			results[name] = "ok"
-		case code >= 300 && code < 400:
-			results[name] = fmt.Sprintf("WARN: HTTP %d", code)
-		case code == 401 || code == 403:
-			results[name] = fmt.Sprintf("WARN: HTTP %d (auth — set ATLAS_API_KEY)", code)
-		default:
-			if markers := tolerateEnvFailures[name]; matchesAnyMarker(body, markers) {
-				results[name] = fmt.Sprintf("WARN: HTTP %d (env-dependent: %s)", code, truncate(body, 90))
-			} else {
-				results[name] = fmt.Sprintf("FAIL: HTTP %d", code)
-			}
-		}
+		results[name] = classifyCanaryResponse(code, body, name, "", time.Now(), graceUntil)
 	}
 
 	failures, warnings, skipped, passed := 0, 0, 0, 0
