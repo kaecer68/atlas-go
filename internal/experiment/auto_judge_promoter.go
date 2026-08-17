@@ -82,7 +82,7 @@ type EvaluationResult struct {
 // auto-promote / auto-revert decisions.
 func (p *AutoJudgePromoter) RunDaily(ctx context.Context, pending []experiment.PromptExperimentResult) ([]EvaluationResult, error) {
 	if p.tracker != nil && p.tracker.Current() == domain.MaturityBurnIn {
-		logging.Info("auto_judge", "burn_in_skip",
+		logging.Warn("auto_judge", "burn_in_skip",
 			"days_until_calibrating", p.tracker.DaysUntil(domain.MaturityCalibrating))
 		return nil, nil
 	}

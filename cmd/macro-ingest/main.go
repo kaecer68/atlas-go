@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/narrative"
+	"github.com/kaecer68/atlas-go/internal/repository"
 )
 
 func main() {
@@ -40,11 +41,19 @@ func main() {
 		}
 	}
 
+	exportProvider := marketdata.NewExportStatisticsProvider(exportDir)
+	if pool != nil {
+		// Mirror each successful export fetch to PostgreSQL export_statistics
+		// through the same DualWriteRepository pipeline used by the atlas
+		// runtime (best-effort; provider logs WARN and never fails the fetch).
+		exportProvider.SetExportStatsSaver(repository.NewDualWriteRepository(pool, nil, nil, nil, nil, nil, nil))
+	}
+
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewFrankfurterFXProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
-		marketdata.NewExportStatisticsProvider(exportDir),
+		exportProvider,
 		marketdata.NewTWSEMarginBalanceProvider(""),
 		marketdata.NewSOXIndexProvider(),
 		marketdata.NewSPXIndexProvider(),

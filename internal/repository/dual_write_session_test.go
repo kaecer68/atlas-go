@@ -70,6 +70,32 @@ func TestDualWriteRepository_LoadAllSessionSummaries_PGNil_FallsBackToJSONL(t *t
 	}
 }
 
+// S1b — Every JSONL fallback in LoadAllSessionSummaries increments the
+// exported atomic fallback counter.
+func TestDualWriteRepository_LoadAllSessionSummaries_FallbackCounter(t *testing.T) {
+	want := makeStubSessionSummaries(2)
+	jsonl := &JSONLRepository{
+		sessionSummaryStore: &stubSessionSummaryStore{loadedSummaries: want},
+	}
+	repo := &DualWriteRepository{jsonl: jsonl} // pg == nil
+
+	before := DualWriteFallbackTotal()
+	if _, err := repo.LoadAllSessionSummaries(context.Background()); err != nil {
+		t.Fatalf("LoadAllSessionSummaries returned error: %v", err)
+	}
+	if got := DualWriteFallbackTotal(); got != before+1 {
+		t.Errorf("fallback counter = %d, want %d", got, before+1)
+	}
+
+	// Second call keeps incrementing.
+	if _, err := repo.LoadAllSessionSummaries(context.Background()); err != nil {
+		t.Fatalf("LoadAllSessionSummaries returned error: %v", err)
+	}
+	if got := DualWriteFallbackTotal(); got != before+2 {
+		t.Errorf("fallback counter after second call = %d, want %d", got, before+2)
+	}
+}
+
 // S2 — LoadSessionSummary (singular) MUST fall back to JSONL when PG is
 // unavailable. Same regression as S1; the pipeline calls both methods
 // (singular for chart anchors, plural for the full history list).
