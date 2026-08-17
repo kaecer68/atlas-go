@@ -103,6 +103,9 @@ var tolerateEnvFailures = map[string][]string{
 	"macro_get_snapshot_latest":     {"no macro snapshot available"},
 	"macro_get_capital_flow_latest": {"no macro snapshot available"},
 	"macro_get_ingest_status":       {"macro data health"},
+	// Fresh PG with no capital_flow table rows \u2192 HandleSummary returns 503
+	// with body {"error":"failed to fetch market data: ..."}.
+	"capital_flow_summary": {"failed to fetch market data"},
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
