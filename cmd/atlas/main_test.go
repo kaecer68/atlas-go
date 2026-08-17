@@ -1053,65 +1053,104 @@ func TestIsPrismWorkerCmd(t *testing.T) {
 
 func TestIsPublicPath(t *testing.T) {
 	cases := []struct {
-		name string
-		path string
-		want bool
+		name   string
+		method string
+		path   string
+		want   bool
 	}{
-		{"root", "/", true},
-		{"health probe", "/health", true},
-		{"metrics", "/metrics", true},
-		{"admin bare", "/admin", true},
-		{"admin prefix", "/admin/", true},
-		{"admin nested", "/admin/dashboard", true},
-		{"client bare", "/client", true},
-		{"client prefix", "/client/", true},
-		{"client nested", "/client/portfolio", true},
-		{"admin_web bare", "/admin_web", true},
-		{"admin_web prefix", "/admin_web/", true},
-		{"admin_web nested", "/admin_web/dashboard", true},
-		{"admin_webx typo", "/admin_webx", false},
-		{"adminfoo typo", "/adminfoo", false},
-		{"admin dot", "/admin.", false},
-		{"clientx typo", "/clientx", false},
-		{"staticfile typo", "/staticfile", false},
-		{"static no slash", "/static", false},
-		{"case sensitive ADMIN", "/ADMIN", false},
-		{"case sensitive Admin", "/Admin", false},
-		{"api dashboard root", "/api/dashboard", true},
-		{"api dashboard nested", "/api/dashboard/system-health", true},
-		{"api taiwan", "/api/taiwan/stress-index", true},
-		{"api narrative", "/api/narrative/bundle", true},
-		{"api macro", "/api/macro/snapshot/latest", true},
-		{"api alerts", "/api/alerts", true},
-		{"api synergy", "/api/synergy/darwinian/status", true},
-		{"api capital flow daily", "/api/capital-flow/daily", true},
-		{"api capital flow summary", "/api/capital-flow/summary", true},
-		{"api events calendar", "/api/events/calendar", true},
-		{"api events prediction", "/api/events/prediction", true},
-		{"api recommendations", "/api/recommendations", true},
-		{"api reports latest", "/api/reports/latest", true},
-		{"api reports archive", "/api/reports/archive", true},
-		{"api reports subscribe", "/api/reports/subscribe", true},
-		{"api dashboard typo", "/api/dashboardx", false},
-		{"api unrelated system", "/api/system/foo", false},
-		{"universe metrics", "/universe/metrics", false},
-		{"random path", "/random/path", false},
-		{"empty path", "", false},
-		{"double slash", "//", false},
-		{"admin with trailing slash extra", "/admin//foo", true},
-		{"llm health", "/api/llm/health", true},
+		// Read-only methods on public paths stay public.
+		{"root GET", http.MethodGet, "/", true},
+		{"health probe GET", http.MethodGet, "/health", true},
+		{"metrics GET", http.MethodGet, "/metrics", true},
+		{"admin bare GET", http.MethodGet, "/admin", true},
+		{"admin prefix GET", http.MethodGet, "/admin/", true},
+		{"admin nested GET", http.MethodGet, "/admin/dashboard", true},
+		{"client bare GET", http.MethodGet, "/client", true},
+		{"client prefix GET", http.MethodGet, "/client/", true},
+		{"client nested GET", http.MethodGet, "/client/portfolio", true},
+		{"admin_web bare GET", http.MethodGet, "/admin_web", true},
+		{"admin_web prefix GET", http.MethodGet, "/admin_web/", true},
+		{"admin_web nested GET", http.MethodGet, "/admin_web/dashboard", true},
+		{"api dashboard root GET", http.MethodGet, "/api/dashboard", true},
+		{"api dashboard nested GET", http.MethodGet, "/api/dashboard/system-health", true},
+		{"api taiwan GET", http.MethodGet, "/api/taiwan/stress-index", true},
+		{"api narrative GET", http.MethodGet, "/api/narrative/bundle", true},
+		{"api macro GET", http.MethodGet, "/api/macro/snapshot/latest", true},
+		{"api alerts GET", http.MethodGet, "/api/alerts", true},
+		{"api synergy GET", http.MethodGet, "/api/synergy/darwinian/status", true},
+		{"api capital flow daily GET", http.MethodGet, "/api/capital-flow/daily", true},
+		{"api capital flow summary GET", http.MethodGet, "/api/capital-flow/summary", true},
+		{"api events calendar GET", http.MethodGet, "/api/events/calendar", true},
+		{"api events prediction GET", http.MethodGet, "/api/events/prediction", true},
+		{"api recommendations GET", http.MethodGet, "/api/recommendations", true},
+		{"api reports latest GET", http.MethodGet, "/api/reports/latest", true},
+		{"api reports archive GET", http.MethodGet, "/api/reports/archive", true},
+		{"api reports subscribe GET", http.MethodGet, "/api/reports/subscribe", true},
+		{"admin with trailing slash extra GET", http.MethodGet, "/admin//foo", true},
+		{"llm health GET", http.MethodGet, "/api/llm/health", true},
+		{"HEAD public path", http.MethodHead, "/api/dashboard/system-health", true},
+		{"OPTIONS public path", http.MethodOptions, "/api/dashboard/system-health", true},
+
+		// Mutating methods on previously public paths now require auth.
+		{"dashboard POST no auth", http.MethodPost, "/api/dashboard/system-health", false},
+		{"alerts POST no auth", http.MethodPost, "/api/alerts", false},
+		{"parameters POST no auth", http.MethodPost, "/api/parameters", false},
+		{"channels toggle POST no auth", http.MethodPost, "/api/dashboard/channels/", false},
+		{"scheduler toggle POST no auth", http.MethodPost, "/api/scheduler/toggle", false},
+		{"control POST no auth", http.MethodPost, "/api/control/pause-agent", false},
+		{"control PUT no auth", http.MethodPut, "/api/control/pause-agent", false},
+		{"control DELETE no auth", http.MethodDelete, "/api/control/pause-agent", false},
+		{"tasks PATCH no auth", http.MethodPatch, "/api/tasks/1", false},
+
+		// Non-public paths remain non-public for all methods.
+		{"admin_webx typo GET", http.MethodGet, "/admin_webx", false},
+		{"adminfoo typo GET", http.MethodGet, "/adminfoo", false},
+		{"admin dot GET", http.MethodGet, "/admin.", false},
+		{"clientx typo GET", http.MethodGet, "/clientx", false},
+		{"staticfile typo GET", http.MethodGet, "/staticfile", false},
+		{"static no slash GET", http.MethodGet, "/static", false},
+		{"case sensitive ADMIN", http.MethodGet, "/ADMIN", false},
+		{"case sensitive Admin", http.MethodGet, "/Admin", false},
+		{"api dashboard typo GET", http.MethodGet, "/api/dashboardx", false},
+		{"api unrelated system GET", http.MethodGet, "/api/system/foo", false},
+		{"universe metrics GET", http.MethodGet, "/universe/metrics", false},
+		{"random path GET", http.MethodGet, "/random/path", false},
+		{"empty path GET", http.MethodGet, "", false},
+		{"double slash GET", http.MethodGet, "//", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isPublicPath(tc.path); got != tc.want {
-				t.Errorf("isPublicPath(%q) = %v, want %v", tc.path, got, tc.want)
+			if got := isPublicPath(tc.method, tc.path); got != tc.want {
+				t.Errorf("isPublicPath(%q, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestAPIModeApiHealthRedirectsToHealth verifies that GET /api/health returns
-// a 301 redirect to /health and does not reimplement a separate schema.
+// TestIsPublicPath_MutatingRequiresAuth verifies that high-risk write
+// endpoints (dashboard channels, scheduler toggle, parameters, control)
+// are no longer public regardless of exact path.
+func TestIsPublicPath_MutatingRequiresAuth(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/dashboard/channels/"},
+		{http.MethodPost, "/api/dashboard/channels/twse-toggle"},
+		{http.MethodPost, "/api/scheduler/toggle"},
+		{http.MethodPost, "/api/parameters"},
+		{http.MethodPost, "/api/control/pause-agent"},
+		{http.MethodPost, "/api/control/resume-agent"},
+		{http.MethodPost, "/api/control/approve-recommendation"},
+		{http.MethodPost, "/api/alerts/acknowledge"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			if isPublicPath(tc.method, tc.path) {
+				t.Errorf("isPublicPath(%q, %q) = true, want false", tc.method, tc.path)
+			}
+		})
+	}
+}
 func TestAPIModeApiHealthRedirectsToHealth(t *testing.T) {
 	ledgerDir := t.TempDir()
 	shutdown := make(chan struct{})

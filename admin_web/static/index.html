@@ -10,6 +10,11 @@
   <meta property="og:description" content="Atlas-Go 台股 AI 投資系統管理後台">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="css/main.css">
+<style>
+#apiKeyModal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+#apiKeyModal.hidden { display: none; }
+#apiKeyModal .modal-content { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid var(--border); }
+</style>
 </head>
 <body>
 
@@ -618,6 +623,18 @@
   </div>
 </div>
 
+
+<!-- API key prompt: shown once when a write operation needs a key. -->
+<div id="apiKeyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiKeyTitle">
+  <div class="modal-content" style="max-width:420px;">
+    <h3 id="apiKeyTitle">需要 Atlas API Key</h3>
+    <p style="font-size:14px;color:var(--muted);">後端已啟用 method-aware 認證，寫入操作（例如切換通道、排程、參數）需要 ATLAS_API_KEY。</p>
+    <input type="password" id="apiKeyInput" placeholder="輸入 ATLAS_API_KEY" style="width:100%;margin:8px 0;">
+    <div style="text-align:right;">
+      <button id="apiKeySave" class="btn btn--primary">儲存</button>
+    </div>
+  </div>
+</div>
 <script type="module">import "./js/main.js";</script>
 
 <script type="module" src="js/component-init.js"></script>

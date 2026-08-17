@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/admin_web"
@@ -217,109 +216,13 @@ var janusEngine *janus.Engine
 var strategyFeedbackStore *apistrategies.FeedbackStore
 
 // isPublicPath determines whether a request bypasses the API-key
-// AuthMiddleware. Web UI pages and their static assets under /admin/
-// and /client/, plus probing endpoints, are loaded by the browser
-// without credentials and must not require an API key. Adding a new
-// path here is a security boundary change.
-func isPublicPath(p string) bool {
-	switch {
-	case p == "/" || p == "/health" || p == "/ready" || p == "/metrics":
-		return true
-	case p == "/api/health" || p == "/api/health/":
-		// Kept public: external probes may hit the /api/ prefix; handler is a
-		// redirect to the canonical /health endpoint.
-		return true
-	case p == "/api/llm/health", p == "/api/v1/alerts": // Alertmanager webhook inbound — only POST from Alertmanager container
-		return true
-	case p == "/api/health/aggregate": // Stage 6 PR#1: 4-tier health aggregation for frontend banner
-		return true
-	case p == "/api/version":
-		return true
-	case strings.HasPrefix(p, "/api/routes"):
-		return true
-	case p == "/api/dashboard" || strings.HasPrefix(p, "/api/dashboard/"):
-		return true
-	case p == "/api/dashboard/sessions" || strings.HasPrefix(p, "/api/dashboard/sessions/"):
-		return true
-	case p == "/api/taiwan" || strings.HasPrefix(p, "/api/taiwan/"):
-		return true
-	case p == "/api/narrative" || strings.HasPrefix(p, "/api/narrative/"):
-		return true
-	case p == "/api/macro" || strings.HasPrefix(p, "/api/macro/"):
-		return true
-	case p == "/api/alerts" || strings.HasPrefix(p, "/api/alerts/"):
-		return true
-	case p == "/api/synergy" || strings.HasPrefix(p, "/api/synergy/"):
-		return true
-	case p == "/api/cross-market" || strings.HasPrefix(p, "/api/cross-market/"):
-		return true
-	case p == "/api/detector" || strings.HasPrefix(p, "/api/detector/"):
-		return true
-	case p == "/api/capital-flow" || strings.HasPrefix(p, "/api/capital-flow/"):
-		return true
-	case p == "/api/events" || strings.HasPrefix(p, "/api/events/"):
-		return true
-	case p == "/api/industry" || strings.HasPrefix(p, "/api/industry/"):
-		return true
-	case p == "/api/recommendations" || strings.HasPrefix(p, "/api/recommendations/"):
-		return true
-	case p == "/api/reports" || strings.HasPrefix(p, "/api/reports/"):
-		return true
-	case p == "/api/stock" || strings.HasPrefix(p, "/api/stock/"):
-		return true
-	case p == "/api/strategy-ranker" || strings.HasPrefix(p, "/api/strategy-ranker/"):
-		return true
-	case p == "/api/parameters" || strings.HasPrefix(p, "/api/parameters/"):
-		return true
-	case p == "/api/backtest" || strings.HasPrefix(p, "/api/backtest/"):
-		return true
-	case p == "/api/auth" || strings.HasPrefix(p, "/api/auth/"):
-		return true
-	case p == "/api/user" || strings.HasPrefix(p, "/api/user/"):
-		return true
-	case p == "/api/strategies" || strings.HasPrefix(p, "/api/strategies/"):
-		return true
-	case p == "/api/risk" || strings.HasPrefix(p, "/api/risk/"):
-		return true
-	case p == "/api/janus" || strings.HasPrefix(p, "/api/janus/"):
-		return true
-	case p == "/api/regime" || strings.HasPrefix(p, "/api/regime/"):
-		return true
-	case p == "/api/geopolitical" || strings.HasPrefix(p, "/api/geopolitical/"):
-		return true
-	case p == "/api/scheduler" || strings.HasPrefix(p, "/api/scheduler/"):
-		return true
-	case p == "/api/tasks" || strings.HasPrefix(p, "/api/tasks/"):
-		return true
-	case p == "/api/traces" || strings.HasPrefix(p, "/api/traces/"):
-		return true
-	case strings.HasPrefix(p, "/api/llm/"):
-		return true
-	case strings.HasPrefix(p, "/api/llm_annotator/"):
-		return true
-	case strings.HasPrefix(p, "/api/prism/"):
-		return true
-	case p == "/api/field-contract":
-		return true
-	case p == "/api/control/audit-log" || p == "/api/control/active-overrides":
-		return true
-	case p == "/api/experiment/history" || p == "/api/experiment/diff":
-		return true
-	case p == "/admin" || strings.HasPrefix(p, "/admin/"):
-		return true
-	case p == "/client" || strings.HasPrefix(p, "/client/"):
-		return true
-	case p == "/admin_web" || strings.HasPrefix(p, "/admin_web/"):
-		return true
-	case strings.HasSuffix(p, ".js"):
-		// Hashed frontend chunks (stock-quote-*.js, portfolio-*.js, etc.)
-		// are served at root level (not under /client/) because main.js
-		// at /client/js/main.js imports them with a relative ../ path.
-		// Standard API routes never end in .js, so this catch-all is safe.
-		return true
-	default:
-		return false
-	}
+// AuthMiddleware. GET/HEAD/OPTIONS on the public-read whitelist and
+// web UI static assets under /admin/ and /client/ are loaded by the
+// browser without credentials. Mutating methods (POST/PUT/DELETE/PATCH)
+// always require authentication. Adding a path here is a security boundary
+// change; update internal/monitoring/api/shared.AuthFree{Exact,Prefix}Paths.
+func isPublicPath(method, p string) bool {
+	return apishared.IsPublicPath(method, p)
 }
 
 func run(args []string, deps appDeps) error {
@@ -2340,7 +2243,7 @@ func run(args []string, deps appDeps) error {
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-			if isPublicPath(r.URL.Path) {
+			if isPublicPath(r.Method, r.URL.Path) {
 				mux.ServeHTTP(w, r)
 				return
 			}

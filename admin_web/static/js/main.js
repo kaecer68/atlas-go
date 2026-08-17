@@ -14,6 +14,7 @@ import { getJSON, silentGetJSON, escapeHtml, parseSessionsList, renderMissingSta
 import { injectSharedHead } from './shared/head-config.js';
 import { install401Interceptor } from './shared/fetch-wrapper.js';
 import { initAuth, invalidateAuth } from './services/auth.js';
+import { initApiKeyPrompt, showApiKeyPrompt } from './services/api-key.js';
 injectSharedHead();
 
 export { getJSON, escapeHtml };
@@ -703,3 +704,31 @@ window.addEventListener('popstate', function(e) {
     switchPage(e.state.page, true);
   }
 });
+
+// Prompt for ATLAS_API_KEY on admin page load if not already stored.
+// The key is required for mutating backend calls (POST/PUT/DELETE/PATCH).
+if (typeof window !== 'undefined') {
+  initApiKeyPrompt();
+  // Wire the modal as the API-key prompt for mutating fetch requests.
+  window.__atlasPromptForApiKey = function () {
+    return new Promise(function (resolve) {
+      showApiKeyPrompt();
+      var saveBtn = document.getElementById('apiKeySave');
+      var input = document.getElementById('apiKeyInput');
+      if (!saveBtn || !input) return resolve('');
+      var handler = function () {
+        var key = input.value.trim();
+        if (key) {
+          saveBtn.removeEventListener('click', handler);
+          input.removeEventListener('keydown', keydownHandler);
+          resolve(key);
+        }
+      };
+      var keydownHandler = function (e) {
+        if (e.key === 'Enter') handler();
+      };
+      saveBtn.addEventListener('click', handler);
+      input.addEventListener('keydown', keydownHandler);
+    });
+  };
+}
