@@ -61,6 +61,50 @@ test('capital models page renders model cards with weights, hit rates and expand
 
   await page.screenshot({ path: 'test-results/capital-models/cards.png', fullPage: true });
 });
+// 非歸一權重測例：weights 合計 = 0.342 (非 1.0)，驗證卡片為「相對權重」
+// (各模型權重 / 總權重，合計 100%)、合計行為「絕對權重」(原始權重合計)。
+// 卡片與合計行必須有明確單位標註，且兩者口徑不同。
+const MOCK_MODELS_NON_NORMALIZED = {
+  models: [
+    { id: 'n1', name: 'model_alpha', weight: 0.152, recent_error: 0.02, hit_rate: 0.7, rationale: '測試 A' },
+    { id: 'n2', name: 'model_beta', weight: 0.118, recent_error: 0.03, hit_rate: 0.6, rationale: '測試 B' },
+    { id: 'n3', name: 'model_gamma', weight: 0.072, recent_error: 0.04, hit_rate: 0.5, rationale: '測試 C' },
+  ],
+}; // 0.152 + 0.118 + 0.072 = 0.342
+
+test('capital models page labels relative vs absolute weights when weights are not normalized (sum=0.342)', async ({ page }) => {
+  await mockCommonEndpoints(page);
+
+  await page.route('**/api/narrative/models', r => r.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(MOCK_MODELS_NON_NORMALIZED),
+  }));
+
+  await page.goto('/');
+  await page.waitForFunction(() => typeof window.switchPage === 'function');
+  await page.evaluate(() => window.switchPage('capital_models'));
+
+  const content = page.locator('#capitalModelsContent');
+  await expect(content).toBeVisible({ timeout: 5000 });
+  await expect(content.locator('.cm-card')).toHaveCount(3);
+
+  // 卡片 = 相對權重: 0.152/0.342=44.4%, 0.118/0.342=34.5%, 0.072/0.342=21.1%
+  await expect(content).toContainText('相對權重 44.4%');
+  await expect(content).toContainText('相對權重 34.5%');
+  await expect(content).toContainText('相對權重 21.1%');
+  // 卡片不得顯示原始絕對值 (會誤導為相對占比)
+  await expect(content).not.toContainText('相對權重 15.2%');
+  await expect(content).not.toContainText('相對權重 11.8%');
+
+  // 合計行 = 絕對權重: 原始權重合計 0.342 → 34.2% (非 100.0%)
+  await expect(content).toContainText('絕對權重合計');
+  await expect(content).toContainText('34.2%');
+  await expect(content).not.toContainText('100.0%');
+
+  await page.screenshot({ path: 'test-results/capital-models/non-normalized-weights.png', fullPage: true });
+});
+
 
 test('capital models page shows graceful error state when atlas-go is unreachable', async ({ page }) => {
   await mockCommonEndpoints(page);
