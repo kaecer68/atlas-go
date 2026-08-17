@@ -2,6 +2,7 @@
 import { getJSON, postJSON, notify, escapeHtml, formatDate, renderEmptyState } from '../shared/app-utils.js';
 import { agentName, stockName } from '../names.js';
 import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct } from '../shared/format-metric.js';
+import { confirmAction } from '../components/confirm-modal.js';
 
 export function initBacktestDates() {
   const today = new Date();
@@ -119,6 +120,16 @@ export async function renderBacktestReport() {
 export async function runBacktest() {
   const start = document.getElementById('backtestStart').value;
   const end = document.getElementById('backtestEnd').value;
+  // P1-C: 回測是資源密集操作（全歷史重算 + 大量 sessions/outcomes），
+  // 啟動前必須二次確認並顯示預估影響。
+  const confirmed = await confirmAction({
+    title: '啟動回測',
+    message: `將對 ${start} ~ ${end} 期間執行完整回測：重算歷史 window、產生大量 sessions/outcomes，`
+      + '屬資源密集操作，可能耗時數分鐘並佔用後台算力。確認啟動？',
+    danger: true,
+    confirmLabel: '確認啟動',
+  });
+  if (!confirmed) return;
   const statusEl = document.getElementById('backtestStatusText');
   const detailEl = document.getElementById('backtestStatusDetail');
   statusEl.textContent = '執行中…';
