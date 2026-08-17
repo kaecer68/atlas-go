@@ -546,7 +546,8 @@ jobs:
   # Consumer smoke test — runs against live docker-compose on main pushes
   hermes-smoke:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    # TEMP(ci-canary): allow PR runs for diagnosis; restored to main-only before merge
+    if: needs.changes.outputs.code == 'true'
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
@@ -592,12 +593,8 @@ jobs:
       run: docker compose config -q
     - name: Start atlas-go
       run: docker compose up -d atlas
-    - name: Wait for healthy
-      run: |
-        for i in $(seq 1 60); do
-          if docker compose ps atlas | grep -q healthy; then break; fi
-          sleep 2
-        done
+    - name: Wait for healthy (fail-fast with diagnostics)
+      run: bash scripts/ci-wait-healthy.sh atlas 120
     - name: Run consumer smoke
       run: bash scripts/hermes-smoke.sh
     - name: Teardown
@@ -608,7 +605,8 @@ jobs:
   # Runtime canary — exercises all read-only MCP tools against live atlas-go
   canary-test:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
+    # TEMP(ci-canary): allow PR runs for diagnosis; restored to main-only before merge
+    if: needs.changes.outputs.code == 'true'
     needs: [release-check, changes, frontend-build]
     env:
       ATLAS_GIT_COMMIT: ${{ github.sha }}
@@ -652,12 +650,8 @@ jobs:
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
     - name: Start atlas-go
       run: docker compose up -d atlas
-    - name: Wait for healthy
-      run: |
-        for i in $(seq 1 90); do
-          if docker compose ps atlas | grep -q healthy; then break; fi
-          sleep 2
-        done
+    - name: Wait for healthy (fail-fast with diagnostics)
+      run: bash scripts/ci-wait-healthy.sh atlas 180
     - name: Run runtime canary
       run: ATLAS_BASE_URL=http://localhost:18080 go test -run TestCanary_Runtime -tags=canary -count=1 -v ./cmd/atlas-mcp/server/
     - name: Teardown
