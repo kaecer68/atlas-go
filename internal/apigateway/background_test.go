@@ -1585,3 +1585,98 @@ func TestExecuteTask_TrueOverlapStillSkipped(t *testing.T) {
 		t.Fatal("tick at half-interval executed; want skipped")
 	}
 }
+
+func TestBackgroundTaskManager_SetCompletionHandler_CalledOnSuccessAndFailure(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	var gotName string
+	var gotErr error
+	var gotDur time.Duration
+	completions := 0
+	m.SetCompletionHandler(func(name string, err error, duration time.Duration) {
+		completions++
+		gotName = name
+		gotErr = err
+		gotDur = duration
+	})
+
+	fail := true
+	task := &ScheduledTask{
+		Name:     "liveness-task",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			if fail {
+				return errors.New("boom")
+			}
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+
+	// Failure path: handler receives the error and a duration.
+	m.executeTask(context.Background(), task)
+	if completions != 1 {
+		t.Fatalf("completions after failure = %d, want 1", completions)
+	}
+	if gotName != "liveness-task" {
+		t.Errorf("name = %q, want liveness-task", gotName)
+	}
+	if gotErr == nil || gotErr.Error() != "boom" {
+		t.Errorf("err = %v, want boom", gotErr)
+	}
+	if gotDur <= 0 {
+		t.Errorf("duration = %v, want > 0", gotDur)
+	}
+
+	// Success path: handler receives nil error.
+	fail = false
+	task.SetLastRun(time.Now().Add(-2 * time.Hour))
+	m.executeTask(context.Background(), task)
+	if completions != 2 {
+		t.Fatalf("completions after success = %d, want 2", completions)
+	}
+	if gotErr != nil {
+		t.Errorf("err on success = %v, want nil", gotErr)
+	}
+}
+
+func TestExecuteTask_SkippedDoesNotFireCompletionHandler(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	completions := 0
+	m.SetCompletionHandler(func(name string, err error, duration time.Duration) {
+		completions++
+	})
+	task := &ScheduledTask{
+		Name:     "skip-task",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			return ErrTaskSkipped
+		},
+	}
+	task.SetEnabled(true)
+
+	m.executeTask(context.Background(), task)
+	if completions != 0 {
+		t.Fatalf("completions = %d, want 0 (skip is not an execution)", completions)
+	}
+}
+
+func TestBackgroundTaskManager_CompletionHandlerPanicDoesNotCrashTask(t *testing.T) {
+	m := NewBackgroundTaskManager(nil)
+	m.SetCompletionHandler(func(name string, err error, duration time.Duration) {
+		panic("handler bug")
+	})
+	task := &ScheduledTask{
+		Name:     "panic-task",
+		Interval: 1 * time.Hour,
+		Task: func(ctx context.Context) error {
+			return nil
+		},
+	}
+	task.SetEnabled(true)
+
+	// Must not panic; the task itself must still report success.
+	m.executeTask(context.Background(), task)
+	if got := task.Failures(); got != 0 {
+		t.Errorf("Failures = %d, want 0", got)
+	}
+}

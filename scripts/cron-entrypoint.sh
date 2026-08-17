@@ -88,8 +88,26 @@ while true; do
 
     if cron_schedule_matches; then
         echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Running: $CRON_COMMAND" >> /var/log/cron/cron.log
-        eval "$CRON_COMMAND" >> /var/log/cron/cron.log 2>&1 || true
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Done" >> /var/log/cron/cron.log
+        CRON_START_EPOCH=$(date +%s)
+        CRON_EXIT=0
+        eval "$CRON_COMMAND" >> /var/log/cron/cron.log 2>&1 || CRON_EXIT=$?
+        CRON_END_EPOCH=$(date +%s)
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Done (exit=$CRON_EXIT)" >> /var/log/cron/cron.log
+
+        # Task-liveness ping (Phase 1): report completion to the main atlas
+        # instance so cron jobs are visible in the task_liveness heartbeat
+        # table. Failures here are logged and ignored — the cron job itself
+        # already finished; a ping must never affect its exit semantics.
+        if [ -n "${CRON_TASK_NAME:-}" ] && [ -n "${ATLAS_LIVENESS_URL:-}" ] && [ -n "${ATLAS_LIVENESS_TOKEN:-}" ]; then
+            CRON_DURATION_MS=$(((CRON_END_EPOCH - CRON_START_EPOCH) * 1000))
+            [ "$CRON_DURATION_MS" -lt 0 ] && CRON_DURATION_MS=0
+            PING_BODY=$(printf '{"task_name":"%s","exit_code":%s,"duration_ms":%s}' "$CRON_TASK_NAME" "$CRON_EXIT" "$CRON_DURATION_MS")
+            curl -sS -m 10 -X POST "$ATLAS_LIVENESS_URL" \
+                -H "Content-Type: application/json" \
+                -H "X-Liveness-Token: $ATLAS_LIVENESS_TOKEN" \
+                -d "$PING_BODY" >> /var/log/cron/cron.log 2>&1 \
+                || echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] liveness ping failed (ignored)" >> /var/log/cron/cron.log
+        fi
     fi
 
     sleep 60

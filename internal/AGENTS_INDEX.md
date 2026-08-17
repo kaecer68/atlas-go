@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：76 個模組（28 S / 32 E / 8 X / 1 A / 5 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：77 個模組（28 S / 32 E / 8 X / 1 A / 6 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
@@ -108,6 +108,7 @@
 |------|---------|
 | `importer` | CSV → JSONL 資料匯入 |
 | `taskexec` | 非同步任務執行 Manager |
+| `liveness` | 任務活性心跳 — task_liveness upsert store、staleness monitor、cron ping 端點（Phase 1, 2026-08-17）|
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷（`cmd/calibrate-parameters`）|
 | `backfill` | ledger 狀態一次性修復工具（drift from canonical）|
 | `buildinfo` | runtime metadata — version/commit hash/build time |
