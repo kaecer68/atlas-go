@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -255,5 +256,18 @@ func TestFindLastValidClose_MidZeros(t *testing.T) {
 	}
 	if prev != 51.0 {
 		t.Errorf("prev = %v, want 51.0", prev)
+	}
+}
+
+func TestFindLastValidClose_NaNSkip(t *testing.T) {
+	// NaN between valid closes (parser glitch / off-hours) must be skipped
+	// just like zeros — prev resolves to the nearest earlier valid value.
+	closes := []float64{98.5, math.NaN(), 99.43}
+	latest, prev := findLastValidClose(closes)
+	if latest != 99.43 {
+		t.Errorf("latest = %v, want 99.43", latest)
+	}
+	if prev != 98.5 {
+		t.Errorf("prev = %v, want 98.5 (NaN must be skipped)", prev)
 	}
 }
