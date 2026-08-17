@@ -657,3 +657,46 @@ func TestIsPublicPath_WhitelistConsistency(t *testing.T) {
 		}
 	}
 }
+
+// TestIsPublicPath_ReportRouteWhitelist verifies the backtest-report route
+// (/api/report/*, singular) is public-read like the rest of the admin GET
+// surface — regression guard for PR-3: the admin reports page stayed empty
+// because GET /api/report/latest returned 401 without an API key.
+// /api/report/latest (backtest markdown) and /api/reports/latest (daily
+// report JSON, dailyreport module) are DIFFERENT resources; both are
+// public-read, and mutating methods remain rejected.
+func TestIsPublicPath_ReportRouteWhitelist(t *testing.T) {
+	t.Setenv("ATLAS_ENV", "production")
+	t.Setenv("ATLAS_API_KEY", "secret-key")
+
+	for _, p := range []string{"/api/report", "/api/report/latest", "/api/report/list"} {
+		if !IsPublicReadPath(p) {
+			t.Errorf("IsPublicReadPath(%q) = false, want true (report whitelist)", p)
+		}
+		for _, m := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+			if !IsPublicPath(m, p) {
+				t.Errorf("IsPublicPath(%s, %q) = false, want true (report whitelist)", m, p)
+			}
+		}
+		if IsPublicPath(http.MethodPost, p) {
+			t.Errorf("IsPublicPath(POST, %q) = true, want false (mutating never auth-free)", p)
+		}
+	}
+
+	// End-to-end through AuthMiddleware: GET without key passes, POST rejected.
+	h := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, path := range []string{"/api/report/latest", "/api/report/list"} {
+		get := httptest.NewRecorder()
+		h.ServeHTTP(get, httptest.NewRequest(http.MethodGet, path, nil))
+		if get.Code != http.StatusOK {
+			t.Errorf("GET %s without auth: status = %d, want 200 (body=%s)", path, get.Code, get.Body.String())
+		}
+		post := httptest.NewRecorder()
+		h.ServeHTTP(post, httptest.NewRequest(http.MethodPost, path, nil))
+		if post.Code != http.StatusUnauthorized {
+			t.Errorf("POST %s: status = %d, want 401", path, post.Code)
+		}
+	}
+}
