@@ -58,7 +58,7 @@ export function renderCapitalModels(data) {
       '<div class="cm-card" data-idx="' + idx + '">'
       + '<div class="cm-card__head">'
       +   '<span class="cm-card__name">' + escapeHtml(modelName(m.name || m.id || '未命名')) + '</span>'
-      +   '<span class="cm-card__weight">' + pct.toFixed(1) + '%</span>'
+      +   '<span class="cm-card__weight" title="各模型權重佔總權重比例（合計 100%）">相對權重 ' + pct.toFixed(1) + '%</span>'
       + '</div>'
       + '<div class="cm-card__bar">'
       +   '<div class="cm-card__bar-fill" style="width:' + pct.toFixed(1) + '%;background:var(--accent)"></div>'
@@ -96,7 +96,7 @@ export function renderCapitalModels(data) {
   el.classList.remove('loading');
   el.innerHTML = (
     '<div class="cm-models">' + cards + '</div>'
-    + '<div class="cm-sum">權重合計：<strong>' + fmtSafePct(totalWeight, 1) + '</strong>（共 ' + models.length + ' 個模型）</div>'
+    + '<div class="cm-sum">絕對權重合計：<strong>' + fmtSafePct(totalWeight, 1) + '</strong>（共 ' + models.length + ' 個模型）</div>'
   );
 
   el.querySelectorAll('.cm-card').forEach(function (card) {

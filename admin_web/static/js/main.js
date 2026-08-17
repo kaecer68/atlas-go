@@ -213,7 +213,10 @@ async function loadModules() {
     import('./pages/scheduler.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality'];
+  // keys 長度必須等於 imports 長度（15）。'scheduler' 之前遺漏 → m.scheduler
+  // 永遠 undefined，排程頁只能靠 scheduler.js 模組頂層自我註冊 fallback 接線
+  // （缺陷）。補 key 後走正常 loadModules 接線 path。
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality', 'scheduler'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -232,12 +235,13 @@ async function loadModules() {
     if (modules.experiments.banSector) window.banSector = modules.experiments.banSector;
     if (modules.experiments.unbanSector) window.unbanSector = modules.experiments.unbanSector;
   }
-  if (modules.pipe) {
-    if (modules.pipe.toggleFilterPanel) window.toggleFilterPanel = modules.pipe.toggleFilterPanel;
-    if (modules.pipe.applyFilters) window.applyFilters = modules.pipe.applyFilters;
-    if (modules.pipe.clearFilters) window.clearFilters = modules.pipe.clearFilters;
-    if (modules.pipe.toggleWorkflowScreening) window.toggleWorkflowScreening = modules.pipe.toggleWorkflowScreening;
-  }
+  // modules.pipe 真死碼（Code Disposition Protocol 判定, 見 PR-7 body）：
+  // 1) 設計意圖 — wave-11 admin/client SPA 拆分（64576c15）時從舊 web/ SPA
+  //    殘留, 拆分後 admin_web 無 pipeline 頁; 2) 替代者 — pipeline 功能由
+  //    client_web ./pages/pipeline.js 完整承接並接線; 3) guard 永不成立 —
+  //    keys 無 'pipe', modules.pipe 恆為 undefined; 4) 零消費者 — window 上
+  //    toggleFilterPanel/applyFilters/clearFilters/toggleWorkflowScreening 無
+  //    任何引用（含 inline onclick）。故刪除。
   if (modules.back) {
     if (modules.back.runBacktest) window.runBacktest = modules.back.runBacktest;
   }
@@ -563,6 +567,10 @@ if (typeof window !== 'undefined') {
     loginPageId: 'login',
     excludedPages: ['login'],
     onUnauthorized: invalidateAuth,
+    // 401 分流（PR-7）：mutating 401（無效/缺 X-API-Key）→ 開 apiKeyModal；
+    // user-auth 401（GET 等）維持 onUnauthorized + switchPage（admin 無
+    // login 頁為 no-op，符合預期）。
+    onApiKeyRequired: showApiKeyPrompt,
     switchPage: window.switchPage,
   });
   initBacktestDates();

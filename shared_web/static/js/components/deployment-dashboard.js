@@ -21,6 +21,9 @@
  */
 
 import { escapeHtml, fmt } from '../shared/utils.js';
+// getJSON 走 app-utils fetch 鏈（PR-2: GET 有 key 就靜默帶 X-API-Key）—
+// 讓「輸入管理員 API Key 解鎖」CTA 輸入的 key 真的生效。
+import { getJSON } from '../shared/app-utils.js';
 
 const TIMELINE_BADGE = {
   process_started:   { cls: 'badge info', label: '啟動', color: 'var(--color-info)' },
@@ -146,35 +149,43 @@ export class DeploymentDashboard {
     if (this.isDestroyed || !this.container) return;
 
     try {
-      const res = await fetch('/api/admin/live/deployment/dashboard', {
-        credentials: 'include',
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        this.showAuthMissingState();
-        this.updateLastUpdateTime('未授權');
-        return;
-      }
-
-      if (res.status === 503) {
-        this.showUnwiredState();
-        this.updateLastUpdateTime('管理員未連線');
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const status = await res.json();
+      // 走 app-utils getJSON：授權者（localStorage 已有 ATLAS_API_KEY）的
+      // GET 靜默帶 X-API-Key（PR-2），未授權者不帶 key、維持誠實未授權態。
+      const status = await getJSON('/api/admin/live/deployment/dashboard');
       this.lastStatus = status;
       this.updateView(status);
       this.updateLastUpdateTime('剛剛');
     } catch (err) {
+      if (err && (err.status === 401 || err.status === 403)) {
+        this.showAuthMissingState();
+        this.updateLastUpdateTime('未授權');
+        return;
+      }
+      if (err && err.status === 503) {
+        this.showUnwiredState();
+        this.updateLastUpdateTime('管理員未連線');
+        return;
+      }
       console.error('DeploymentDashboard: failed to fetch status:', err);
       this.showNetworkErrorState();
       this.updateLastUpdateTime('錯誤');
     }
+  }
+
+  /**
+   * 未授權態的 CTA（PR-7）：開管理員 apiKeyModal 輸入 key（admin main.js 以
+   * window.__atlasPromptForApiKey 接線），儲存後重試 fetchStatus — key 已進
+   * localStorage，getJSON 下一輪 GET 即靜默帶上 X-API-Key。
+   */
+  unlockWithApiKey() {
+    const promptFn = (typeof window !== 'undefined' && typeof window.__atlasPromptForApiKey === 'function')
+      ? window.__atlasPromptForApiKey
+      : null;
+    if (!promptFn) return;
+    promptFn().then(() => {
+      if (this.isDestroyed || !this.container) return;
+      this.fetchStatus();
+    });
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -318,14 +329,18 @@ export class DeploymentDashboard {
 
   showAuthMissingState() {
     if (!this.container) return;
-    // 誠實文案（UX audit P1）：本系統沒有管理員登入流程，後端以
-    // X-API-Key / Bearer（ATLAS_API_KEY）保護此端點，瀏覽器無法提供，
-    // 顯示「需要管理員登入」+ 死連結 /admin/login 是假象。
+    // 未授權文案 + CTA（PR-7）：admin 有 apiKeyModal 輸入流程（非死路），
+    // 點「點此輸入解鎖」開 modal，輸入 key 後重試即解鎖（key 存 localStorage，
+    // getJSON 下一輪 GET 靜默帶 X-API-Key）。無 prompt hook（client_web 等
+    // 未接 modal 的環境）時退回誠實文案。
+    const hasPrompt = typeof window !== 'undefined' && typeof window.__atlasPromptForApiKey === 'function';
     this.container.innerHTML = `
       <div class="deployment-dashboard">
         <h2 class="m-0">🚀 部署健康度</h2>
         <div class="error-banner mt-sm">
-          <span>⚠️ 此功能需要管理員 API Key 授權，瀏覽器環境無法提供，目前不可用</span>
+          <span>⚠️ 需要管理員 API Key，${hasPrompt
+            ? '<button class="retry-btn" onclick="window.deploymentDashboard && window.deploymentDashboard.unlockWithApiKey()">點此輸入解鎖</button>'
+            : '瀏覽器環境無法提供'}</span>
         </div>
       </div>
     `;

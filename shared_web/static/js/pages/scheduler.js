@@ -212,6 +212,6 @@ export function loadSchedulerPage() {
   });
 };
 
-// Keep window-level aliases for inline onclick handlers (legacy pages).
-window.toggleSchedulerTask = toggleSchedulerTask;
-window.loadSchedulerPage = loadSchedulerPage;
+// 註：window-level 接線由 admin main.js loadModules（modules.scheduler block）
+// 統一處理（PR-7 補 'scheduler' key 後走正常 path）。此處不再自我註冊，避免
+// 與 loadModules 雙重接線。本模組僅被 admin_web 動態 import。

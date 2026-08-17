@@ -22,14 +22,20 @@ export function renderDataPipeline(data) {
     el.innerHTML = '<div class="empty">目前無資料管線狀態</div>';
     return;
   }
+  // 對齊後端契約 (data_pipeline.go): ok/warn/error/unknown。
+  // fresh/stale/paused 保留為相容 key (歷史前端值)；未知狀態一律顯示「未知」,
+  // 不再誤標為「延遲」。
   const STATUS_BADGE = {
-    fresh:  { class: 'tier-badge tier-badge--bullish', label: '最新' },
-    stale:  { class: 'tier-badge tier-badge--warn',    label: '延遲' },
-    error:  { class: 'tier-badge tier-badge--bearish', label: '異常' },
-    paused: { class: 'tier-badge tier-badge--neutral', label: '暫停' },
+    ok:      { class: 'tier-badge tier-badge--bullish', label: '最新' },
+    warn:    { class: 'tier-badge tier-badge--warn',    label: '延遲' },
+    error:   { class: 'tier-badge tier-badge--bearish', label: '異常' },
+    unknown: { class: 'tier-badge tier-badge--neutral', label: '未知' },
+    fresh:   { class: 'tier-badge tier-badge--bullish', label: '最新' },
+    stale:   { class: 'tier-badge tier-badge--warn',    label: '延遲' },
+    paused:  { class: 'tier-badge tier-badge--neutral', label: '暫停' },
   };
   const rows = sources.map(s => {
-    const meta = STATUS_BADGE[s.status] || STATUS_BADGE.stale;
+    const meta = STATUS_BADGE[s.status] || STATUS_BADGE.unknown;
     return `<tr>
       <td><code>${escapeHtml(s.source_id || '-')}</code></td>
       <td>${escapeHtml(s.producer || '-')}</td>

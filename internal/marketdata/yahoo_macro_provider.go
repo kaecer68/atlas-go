@@ -192,13 +192,13 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 			"ticker", ticker,
 			"fallback_value", fmt.Sprintf("%.4f", latest))
 	} else {
-		prev = latest
-		if len(closes) > 1 {
-			candidate := closes[len(closes)-2]
-			if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
-				prev = candidate
-			}
-		}
+		// latest 有效時也必須往回找「上一個有效非零值」當 prev:
+		// Yahoo 在非美交易時段對 DX-Y.NYB 等 ticker 會在 closes 尾端塞 0/NaN，
+		// 只看 closes[len-2] 會拿到 0 → prev 保持 = latest → changePct 恆為 0。
+		// findLastValidClose 從陣列末尾往回找：第一個有效值即 latest 本身，
+		// 第二個有效值即上一個交易日的有效收盤；若整個陣列只有 1 個有效值則
+		// prev=0 → changePct=0 是合理的（真的沒有前一日資料）。
+		_, prev = findLastValidClose(closes)
 	}
 
 	changePct := 0.0

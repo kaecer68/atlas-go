@@ -467,6 +467,8 @@ if (typeof window !== 'undefined') {
   initEventStream();
 
   // Auth: check JWT validity before loading data; wrap fetch for 401 detection
+  // 401 分流（PR-7）：client_web 不接 onApiKeyRequired（無 apiKeyModal）→
+  // mutating 401 亦走 onUnauthorized + login，維持既有行為。
   install401Interceptor({
     loginPageId: 'login',
     // 'my-signals' 排除在 401 自動跳轉之外：未登入訪客停在原頁，
