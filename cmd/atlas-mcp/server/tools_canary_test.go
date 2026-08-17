@@ -15,6 +15,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -61,6 +62,47 @@ var skipCanary = map[string]bool{
 	"strategy_for_period":       true,
 	"task_get":                  true,
 	"task_get_events":           true,
+}
+
+// requiresKey lists tools whose upstream routes refuse to serve when the
+// server has no ATLAS_API_KEY configured (production mode → 503 "server
+// misconfigured: ATLAS_API_KEY required in production"). CI runs with an
+// empty .env (no secrets), so these are skipped there; the canary still
+// exercises them when a key is present.
+var requiresKey = map[string]bool{
+	"mcp_get_call_stats":       true,
+	"mcp_get_session_topology": true,
+	"mcp_get_tenant_usage":     true,
+	"mcp_get_top_slow_tools":   true,
+	"mcp_roots_list":           true,
+	"mcp_quickstart":           true,
+	"mcp_anomaly_get_recent":   true,
+}
+
+// requiresLLMKey lists tools that need an LLM annotator client; without
+// LLM_ANNOTATOR_API_KEY the upstream route returns 503 ("no KimiClient
+// wired"). Skipped in CI, exercised when a key is present.
+var requiresLLMKey = map[string]bool{
+	"llm_get_cost": true,
+}
+
+// tolerateEnvFailures lists tools whose non-2xx responses are
+// environment-dependent rather than code regressions, with the exact
+// app-level body markers that downgrade the result to WARN:
+//   - stock_*: live TWSE upstream unreachable/timeout from a US-hosted
+//     GitHub runner → 503 {"degraded":true,...} / context deadline exceeded
+//   - macro_*: fresh container where the startup ingest has not produced a
+//     snapshot yet (US runner, slow upstreams) → 404 "no macro snapshot
+//     available" / 500 "macro data health" / "calculate stress index"
+//
+// Anything not matching these markers still FAILs.
+var tolerateEnvFailures = map[string][]string{
+	"stock_get_quote":               {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
+	"stock_get_chips":               {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
+	"stock_get_technical":           {`"degraded":true`, "context deadline exceeded", "insufficient historical quote data"},
+	"macro_get_snapshot_latest":     {"no macro snapshot available"},
+	"macro_get_capital_flow_latest": {"no macro snapshot available"},
+	"macro_get_ingest_status":       {"macro data health"},
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
@@ -166,6 +208,24 @@ var canaryRoutes = map[string]canaryTest{
 	"mcp_quickstart":                    {Path: "/api/mcp/quickstart"},
 }
 
+// matchesAnyMarker reports whether body contains any of the given
+// substrings (empty marker list → false, so unmapped tools never WARN).
+func matchesAnyMarker(body string, markers []string) bool {
+	for _, m := range markers {
+		if strings.Contains(body, m) {
+			return true
+		}
+	}
+	return false
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
 // TestCanary_Runtime exercises every read-only MCP tool's upstream
 // HTTP route against a live atlas-go instance.
 func TestCanary_Runtime(t *testing.T) {
@@ -181,6 +241,14 @@ func TestCanary_Runtime(t *testing.T) {
 	for name, ct := range canaryRoutes {
 		if skipCanary[name] {
 			results[name] = "skipped (destructive)"
+			continue
+		}
+		if requiresKey[name] && os.Getenv("ATLAS_API_KEY") == "" {
+			results[name] = "skipped (requires ATLAS_API_KEY)"
+			continue
+		}
+		if requiresLLMKey[name] && os.Getenv("LLM_ANNOTATOR_API_KEY") == "" {
+			results[name] = "skipped (requires LLM_ANNOTATOR_API_KEY)"
 			continue
 		}
 
@@ -205,8 +273,10 @@ func TestCanary_Runtime(t *testing.T) {
 			continue
 		}
 
-		code := resp.StatusCode
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		code := resp.StatusCode
+		body := strings.TrimSpace(string(bodyBytes))
 		switch {
 		case code >= 200 && code < 300:
 			results[name] = "ok"
@@ -215,7 +285,11 @@ func TestCanary_Runtime(t *testing.T) {
 		case code == 401 || code == 403:
 			results[name] = fmt.Sprintf("WARN: HTTP %d (auth — set ATLAS_API_KEY)", code)
 		default:
-			results[name] = fmt.Sprintf("FAIL: HTTP %d", code)
+			if markers := tolerateEnvFailures[name]; matchesAnyMarker(body, markers) {
+				results[name] = fmt.Sprintf("WARN: HTTP %d (env-dependent: %s)", code, truncate(body, 90))
+			} else {
+				results[name] = fmt.Sprintf("FAIL: HTTP %d", code)
+			}
 		}
 	}
 

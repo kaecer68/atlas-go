@@ -573,10 +573,21 @@ jobs:
       env:
         GOOS: linux
         GOARCH: amd64
+        # CGO_ENABLED=0 is REQUIRED: Dockerfile.atlas.local is alpine (musl).
+        # A native build on the runner has cgo ON by default and produces a
+        # glibc-dynamic binary whose loader is absent in alpine — the
+        # container then crash-loops with "exec /app/atlas-go: no such file
+        # or directory" (kernel ENOENT on missing PT_INTERP).
+        CGO_ENABLED: "0"
         GIT_COMMIT: ${{ github.sha }}
       run: |
         set -euo pipefail
         mkdir -p .build-atlas
+        # Transient proxy.golang.org 403s (observed on 2026-08-17) can fail
+        # cold module downloads on a fresh runner; retry before building.
+        for i in 1 2 3; do
+          go mod download && break || sleep 5
+        done
         ldflags="-w -s \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
@@ -585,19 +596,27 @@ jobs:
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
+        # Guard: alpine cannot exec glibc-dynamic binaries. Catch regressions
+        # here instead of a 3-minute invisible crash loop in the container.
+        file .build-atlas/atlas-go | grep -q "statically linked" || { echo "::error::atlas-go is not statically linked — CGO_ENABLED=0 required for the alpine image"; file .build-atlas/atlas-go; exit 1; }
         ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
+    - name: Prepare data mounts for container user (uid 1000)
+      # The alpine image runs as atlas (uid 1000). On a fresh checkout the
+      # data/reports/logs bind mounts are owned by the runner user (uid
+      # 1001), so the app's file-backed stores (alerts, macro snapshot
+      # cache, ...) fail to initialize → /api/alerts/*, macro endpoints
+      # return 404/500 and the container never passes a meaningful canary.
+      run: |
+        mkdir -p data reports logs
+        chmod -R a+rwX data reports logs
     - name: Validate docker-compose
       run: docker compose config -q
     - name: Start atlas-go
       run: docker compose up -d atlas
-    - name: Wait for healthy
-      run: |
-        for i in $(seq 1 60); do
-          if docker compose ps atlas | grep -q healthy; then break; fi
-          sleep 2
-        done
+    - name: Wait for healthy (fail-fast with diagnostics)
+      run: bash scripts/ci-wait-healthy.sh atlas 240
     - name: Run consumer smoke
       run: bash scripts/hermes-smoke.sh
     - name: Teardown
@@ -635,10 +654,21 @@ jobs:
       env:
         GOOS: linux
         GOARCH: amd64
+        # CGO_ENABLED=0 is REQUIRED: Dockerfile.atlas.local is alpine (musl).
+        # A native build on the runner has cgo ON by default and produces a
+        # glibc-dynamic binary whose loader is absent in alpine — the
+        # container then crash-loops with "exec /app/atlas-go: no such file
+        # or directory" (kernel ENOENT on missing PT_INTERP).
+        CGO_ENABLED: "0"
         GIT_COMMIT: ${{ github.sha }}
       run: |
         set -euo pipefail
         mkdir -p .build-atlas
+        # Transient proxy.golang.org 403s (observed on 2026-08-17) can fail
+        # cold module downloads on a fresh runner; retry before building.
+        for i in 1 2 3; do
+          go mod download && break || sleep 5
+        done
         ldflags="-w -s \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
@@ -647,17 +677,25 @@ jobs:
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/atlas-mcp ./cmd/atlas-mcp
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/daily-replay-sync ./cmd/daily-replay-sync
         go build -mod=mod -ldflags="$ldflags" -o .build-atlas/calibrate-seasonal ./cmd/calibrate-seasonal
+        # Guard: alpine cannot exec glibc-dynamic binaries. Catch regressions
+        # here instead of a 3-minute invisible crash loop in the container.
+        file .build-atlas/atlas-go | grep -q "statically linked" || { echo "::error::atlas-go is not statically linked — CGO_ENABLED=0 required for the alpine image"; file .build-atlas/atlas-go; exit 1; }
         ls -la .build-atlas
     - name: Create .env for docker compose
       run: mkdir -p ${HOME}/.config/atlas-go && touch ${HOME}/.config/atlas-go/.env
+    - name: Prepare data mounts for container user (uid 1000)
+      # The alpine image runs as atlas (uid 1000). On a fresh checkout the
+      # data/reports/logs bind mounts are owned by the runner user (uid
+      # 1001), so the app's file-backed stores (alerts, macro snapshot
+      # cache, ...) fail to initialize → /api/alerts/*, macro endpoints
+      # return 404/500 and the container never passes a meaningful canary.
+      run: |
+        mkdir -p data reports logs
+        chmod -R a+rwX data reports logs
     - name: Start atlas-go
       run: docker compose up -d atlas
-    - name: Wait for healthy
-      run: |
-        for i in $(seq 1 90); do
-          if docker compose ps atlas | grep -q healthy; then break; fi
-          sleep 2
-        done
+    - name: Wait for healthy (fail-fast with diagnostics)
+      run: bash scripts/ci-wait-healthy.sh atlas 300
     - name: Run runtime canary
       run: ATLAS_BASE_URL=http://localhost:18080 go test -run TestCanary_Runtime -tags=canary -count=1 -v ./cmd/atlas-mcp/server/
     - name: Teardown
