@@ -64,7 +64,7 @@ func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, error) 
 	if p.tracker != nil {
 		m := p.tracker.Current()
 		if m == domain.MaturityBurnIn {
-			logging.Info("auto_proposer", "burn_in_skip",
+			logging.Warn("auto_proposer", "burn_in_skip",
 				"days_until_calibrating", p.tracker.DaysUntil(domain.MaturityCalibrating))
 			return nil, nil
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/feature"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -418,7 +419,12 @@ func (j *Judge) WithHistoricalStore(hs ledger.HistoricalStore) *Judge {
 
 func (j *Judge) passesAcceptance(result domain.PromptExperimentResult, promptBytes []byte) (bool, string) {
 	// Burn-in gate: do not judge experiments until statistical engines are reliable.
+	// Logged at WARN so gate/bypass events stay visible in operations (observability
+	// discipline: any skip/gate/bypass must be observable).
 	if j.maturityTracker != nil && j.maturityTracker.Current() == domain.MaturityBurnIn {
+		logging.Warn("judge", "burn_in_skip",
+			"days_until_calibrating", j.maturityTracker.DaysUntil(domain.MaturityCalibrating),
+			"experiment_id", result.Experiment.ID)
 		return false, fmt.Sprintf("rejected: burn_in mode (%d days until calibrating)",
 			j.maturityTracker.DaysUntil(domain.MaturityCalibrating))
 	}

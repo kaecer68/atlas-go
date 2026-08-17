@@ -19,7 +19,11 @@ import (
 // wraps each in a channel adapter, and registers them in the Gateway's
 // ChannelRegistry. Clients that require API keys are silently skipped
 // when the key is not configured.
-func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janusEngine *janus.Engine) error {
+//
+// exportStatsSaver is optional (nil-safe): when provided it is injected into
+// the export_statistics provider so each successful fetch also persists the
+// monthly row to PostgreSQL via the repository pipeline.
+func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janusEngine *janus.Engine, exportStatsSaver marketdata.ExportStatsSaver) error {
 	if g == nil {
 		return fmt.Errorf("gateway is nil")
 	}
@@ -115,6 +119,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- Export Statistics (no API key required) ---
 	exportProvider := marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport))
+	exportProvider.SetExportStatsSaver(exportStatsSaver)
 	exportAdapter := NewExportStatisticsChannelAdapter(exportProvider)
 	g.registry.Register("export_statistics", exportAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "export_statistics")
