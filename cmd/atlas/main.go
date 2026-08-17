@@ -1695,18 +1695,20 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered rule_engine_check background task (%ds interval)", params.RuleEngineIntervalSec.Value)
 			}
 
+			// D2 決策暫停 2026-08-17: 無消費端 (實作不完全)，待「大盤方向預測」產品功能立案評估
+			// (特徵需重新設計: 七維錢潮/stress-index/regime, 不是 OHLCV 統計量)
 			{
 				mlScheduler := scheduler.NewMLRetrainScheduler(cfg.ReplayDataPath)
 				mlScheduler.SetWorkDir(cfg.WorkDir)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "ml_retrain",
 					Interval: 24 * time.Hour,
-					Enabled:  true,
+					Enabled:  false,
 					Task: func(ctx context.Context) error {
 						return mlScheduler.RetrainAll(ctx)
 					},
 				})
-				log.Printf("[Gateway] registered ml_retrain background task (24h interval)")
+				log.Printf("[Gateway] registered ml_retrain background task (24h interval, DISABLED D2)")
 			}
 
 			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline (06:00 TW, trading days).
