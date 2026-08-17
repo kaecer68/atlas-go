@@ -94,6 +94,18 @@
       "params": "(r autobacktest.AttributionRecord)",
       "receiver": "strategyAttributionAdapter",
       "results": "(error)"
+    },
+    {
+      "name": "Write",
+      "params": "(p []byte)",
+      "receiver": "timeoutResponseWriter",
+      "results": "(int, error)"
+    },
+    {
+      "name": "WriteHeader",
+      "params": "(code int)",
+      "receiver": "timeoutResponseWriter",
+      "results": ""
     }
   ],
   "package": "main",
