@@ -584,6 +584,11 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p .build-atlas
+        # Transient proxy.golang.org 403s (observed on 2026-08-17) can fail
+        # cold module downloads on a fresh runner; retry before building.
+        for i in 1 2 3; do
+          go mod download && break || sleep 5
+        done
         ldflags="-w -s \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
@@ -661,6 +666,11 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p .build-atlas
+        # Transient proxy.golang.org 403s (observed on 2026-08-17) can fail
+        # cold module downloads on a fresh runner; retry before building.
+        for i in 1 2 3; do
+          go mod download && break || sleep 5
+        done
         ldflags="-w -s \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=dev \
           -X github.com/kaecer68/atlas-go/internal/buildinfo.Commit=${GIT_COMMIT} \
