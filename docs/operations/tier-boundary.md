@@ -54,11 +54,17 @@ atlas-go 的對外介面分為 4 個 tier（與 401 攔截器的 `excludedPages`
 |------|----------|-----------------|
 | `GET /api/strategies/{id}/summary` | `/api/strategies/{id}` + `/api/strategies/{id}/attribution` | 摘要資料已含於主回應 |
 
-### 2.4 命名統一：report vs reports（1 條，單數標記 deprecated）
+### 2.4 命名注意：`report`（單數）與 `reports`（複數）是不同資源（非 deprecated 對照）
 
-| 端點 | Canonical 替代 | 為何 deprecated |
-|------|----------------|-----------------|
-| `GET /api/report/latest` | `/api/reports/latest` | 路徑命名不一致；統一律定複數為 canonical |
+> ⚠️ 本節原把 `GET /api/report/latest` 標記為「單數 → 複數 canonical 的 deprecated 對照」，是**錯誤的**——兩者是不同資源，不可互換：
+
+| 端點 | 資源 | Content-Type |
+|------|------|--------------|
+| `GET /api/report/latest`（單數） | 回測報告 markdown（backtest report，`internal/monitoring/api/pipeline/report_handlers.go`） | `text/markdown; charset=utf-8` |
+| `GET /api/reports/latest`（複數） | 每日晨報 JSON（dailyreport 模組） | `application/json`（`?format=markdown` 可選） |
+
+- 前端 admin reports 頁（`backtest.js`）吃**單數** markdown；兩者互換會讓頁面變成 JSON 文字牆或空態。
+- 兩端點都是 public-read（auth 白名單），不是 deprecated。
 
 ### 2.5 重複摘要（1 條）
 

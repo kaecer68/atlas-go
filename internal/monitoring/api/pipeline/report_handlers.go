@@ -18,10 +18,13 @@ func NewReportHandlers(svc *service.ReportService) *ReportHandlers {
 }
 
 func (h *ReportHandlers) RegisterRoutes(mux *http.ServeMux) {
-	// Deprecated: use /api/reports/latest (plural) instead. See docs/operations/tier-boundary.md.
+	// Backtest report markdown (singular). Not deprecated — the admin reports
+	// page consumes this via GET. Do not confuse with dailyreport's
+	// /api/reports/* (plural, JSON). See docs/operations/tier-boundary.md §2.4.
 	mux.Handle("GET /api/report/latest", shared.GetRaw(h.HandleLatestReport))
 	mux.Handle("GET /api/report/list", shared.Get(h.HandleReportList))
-	// Deprecated: covered by /api/reports/latest. See docs/operations/tier-boundary.md.
+	// Deprecated: daily-summary logic has been integrated into the dailyreport
+	// module (GET /api/reports/latest). See docs/operations/tier-boundary.md §2.5.
 	mux.Handle("GET /api/dashboard/daily-summary", shared.Get(h.HandleDailySummary))
 }
 
