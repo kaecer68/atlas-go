@@ -24,6 +24,8 @@ type PingRequest struct {
 // PingEnvToken is the env var (also read through config.GetSecret, i.e.
 // macOS Keychain fallback) holding the shared secret for the internal
 // liveness ping endpoint.
+//
+//nolint:gosec // G101 false positive: the value is an env-var NAME, not a credential
 const PingEnvToken = "ATLAS_LIVENESS_TOKEN"
 
 // HandlePing is the HTTP handler for the internal liveness ping. Security
