@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -250,6 +251,101 @@ func TestMockMacroProvider(t *testing.T) {
 	}
 	if got.DXY.ChangePct != 1.69 {
 		t.Errorf("DXY.ChangePct = %v, want 1.69", got.DXY.ChangePct)
+	}
+}
+
+// fetchIndicatorWithCloses spins up a fake Yahoo server that returns a chart
+// with the given closes array, then runs fetchIndicator against it.
+func fetchIndicatorWithCloses(t *testing.T, ticker string, closes []float64) (MacroDataPoint, error) {
+	t.Helper()
+	usCache.reset()
+	var parts []string
+	for _, c := range closes {
+		parts = append(parts, f64s(c))
+	}
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		body := fmt.Sprintf(`{"chart":{"result":[{"meta":{"regularMarketTime":1714500000},"indicators":{"quote":[{"close":[%s]}]}}]}}`,
+			strings.Join(parts, ","))
+		_, _ = w.Write([]byte(body))
+	}))
+	defer ts.Close()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(ts.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(ts.Client())
+
+	return NewYahooFinanceMacroProvider().fetchIndicator(context.Background(), ticker)
+}
+
+// TestYahooFinanceMacroProvider_fetchIndicator_ValidLatestZeroGap covers the
+// DXY change_pct bug (user acceptance): Yahoo returns closes where the latest
+// value is valid but the second-to-last entry is 0 (off-hours). The old code
+// only checked closes[len-2], so prev fell back to latest → ChangePct=0.
+// The fix walks back to the previous valid non-zero close.
+func TestYahooFinanceMacroProvider_fetchIndicator_ValidLatestZeroGap(t *testing.T) {
+	// [98.5, 0.0, 99.43]: latest=99.43 valid, closes[len-2]=0 → prev must be 98.5.
+	point, err := fetchIndicatorWithCloses(t, "DX-Y.NYB", []float64{98.5, 0.0, 99.43})
+	if err != nil {
+		t.Fatalf("fetchIndicator error: %v", err)
+	}
+	if point.Value != 99.43 {
+		t.Errorf("Value = %v, want 99.43", point.Value)
+	}
+	wantPct := (99.43 - 98.5) / 98.5 * 100
+	if math.Abs(point.ChangePct-wantPct) > 1e-9 {
+		t.Errorf("ChangePct = %.6f%%, want %.6f%% (prev must be 98.5, not latest)", point.ChangePct, wantPct)
+	}
+}
+
+// TestYahooFinanceMacroProvider_fetchIndicator_SingleValidClose: only one
+// close in the whole series — there is genuinely no previous day, so
+// ChangePct=0 is the correct (and only possible) answer.
+func TestYahooFinanceMacroProvider_fetchIndicator_SingleValidClose(t *testing.T) {
+	point, err := fetchIndicatorWithCloses(t, "DX-Y.NYB", []float64{99.43})
+	if err != nil {
+		t.Fatalf("fetchIndicator error: %v", err)
+	}
+	if point.Value != 99.43 {
+		t.Errorf("Value = %v, want 99.43", point.Value)
+	}
+	if point.ChangePct != 0 {
+		t.Errorf("ChangePct = %v, want 0 (single close, no previous day)", point.ChangePct)
+	}
+}
+
+// TestYahooFinanceMacroProvider_fetchIndicator_LeadingZerosSingleValid:
+// closes=[0, 0, 99.43] contains only one valid value (99.43), so ChangePct=0
+// is correct — the fix must not invent a prev from zeros.
+func TestYahooFinanceMacroProvider_fetchIndicator_LeadingZerosSingleValid(t *testing.T) {
+	point, err := fetchIndicatorWithCloses(t, "DX-Y.NYB", []float64{0.0, 0.0, 99.43})
+	if err != nil {
+		t.Fatalf("fetchIndicator error: %v", err)
+	}
+	if point.Value != 99.43 {
+		t.Errorf("Value = %v, want 99.43", point.Value)
+	}
+	if point.ChangePct != 0 {
+		t.Errorf("ChangePct = %v, want 0 (only one valid close; zeros are not data)", point.ChangePct)
+	}
+}
+
+// TestYahooFinanceMacroProvider_fetchIndicator_TrailingZeroBeforeLatest:
+// closes=[98.5, 0.0, 0.0, 99.43] — multiple trailing zeros between latest and
+// the previous valid close; the fix must skip all of them.
+func TestYahooFinanceMacroProvider_fetchIndicator_TrailingZeroBeforeLatest(t *testing.T) {
+	point, err := fetchIndicatorWithCloses(t, "DX-Y.NYB", []float64{98.5, 0.0, 0.0, 99.43})
+	if err != nil {
+		t.Fatalf("fetchIndicator error: %v", err)
+	}
+	if point.Value != 99.43 {
+		t.Errorf("Value = %v, want 99.43", point.Value)
+	}
+	wantPct := (99.43 - 98.5) / 98.5 * 100
+	if math.Abs(point.ChangePct-wantPct) > 1e-9 {
+		t.Errorf("ChangePct = %.6f%%, want %.6f%% (skip all trailing zeros)", point.ChangePct, wantPct)
 	}
 }
 
