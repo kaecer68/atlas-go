@@ -103,6 +103,8 @@ var tolerateEnvFailures = map[string][]string{
 	"macro_get_snapshot_latest":     {"no macro snapshot available"},
 	"macro_get_capital_flow_latest": {"no macro snapshot available"},
 	"macro_get_ingest_status":       {"macro data health"},
+	"capital_flow_daily":            {"failed to fetch market data"},
+	"capital_flow_summary":          {"failed to fetch market data"},
 }
 
 // canaryRoutes maps MCP tool names to upstream routes.
