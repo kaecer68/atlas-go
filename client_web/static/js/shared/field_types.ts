@@ -4669,6 +4669,29 @@ export interface taifexPCRRaw {
   "PutCallOIRatio%": string;
 }
 
+export interface taskLivenessResponse {
+  generated_at: string;
+  total: number;
+  stale_count: number;
+  tasks: taskLivenessTask[];
+}
+
+export interface taskLivenessTask {
+  name: string;
+  last_run_at?: string | null;
+  last_success_at?: string | null;
+  last_error?: string;
+  consecutive_failures: number;
+  last_duration_ms: number;
+  interval?: string;
+  interval_seconds?: number;
+  enabled?: boolean | null;
+  next_run_at?: string | null;
+  stale: boolean;
+  stale_reason?: string;
+  source: string;
+}
+
 export interface tejResponse {
   datatable: string;
   error?: string | null;
