@@ -342,7 +342,6 @@ async function fetchNonCore(m, core) {
   setPanelLoading('macroRadar', '總經雷達');
   setPanelLoading('liveStatus', '即時狀態');
   setPanelLoading('riskCards', '風險指標');
-  setPanelLoading('alertsPanel', '系統警報');
 
   const results = await Promise.all([
     fetchWithRetry('/api/dashboard/macro-radar', { label: '總經雷達' }),
@@ -350,9 +349,8 @@ async function fetchNonCore(m, core) {
     fetchWithRetry('/api/dashboard/live-status', { label: '即時狀態' }),
     fetchWithRetry('/api/dashboard/risk-exposure', { label: '風險曝險' }),
     fetchWithRetry('/api/dashboard/phase3-status', { label: 'Phase 3 狀態' }),
-    fetchWithRetry('/api/alerts', { label: '系統警報' }),
   ]);
-  const [macro, pipeline, live, riskExposure, phase3, alerts] = results;
+  const [macro, pipeline, live, riskExposure, phase3] = results;
 
   if (macro === null) setPanelError('macroRadar', '總經雷達');
   else if (m.dash.renderMacroRadar) { m.dash.renderMacroRadar(macro, pipeline); clearPanelLoading('macroRadar'); }
@@ -362,9 +360,6 @@ async function fetchNonCore(m, core) {
 
   if (riskExposure === null) setPanelError('riskCards', '風險指標');
   else if (m.risk.renderRiskCards) { m.risk.renderRiskCards(riskExposure, pipeline, core.capitalPhase); clearPanelLoading('riskCards'); }
-
-  if (alerts === null) setPanelError('alertsPanel', '系統警報');
-  else if (m.alerts.renderAlerts) { m.alerts.renderAlerts(alerts); clearPanelLoading('alertsPanel'); }
 
   if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
 
