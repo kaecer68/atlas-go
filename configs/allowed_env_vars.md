@@ -25,6 +25,7 @@
 | 變數名稱 | 用途 | 預設值 |
 |---------|------|--------|
 | `ATLAS_WORK_DIR` | 工作目錄路徑 | `.` |
+| `ATLAS_MATURITY_FIRST_START` | maturity tracker 首次啟動日期種子（RFC3339 或 `YYYY-MM-DD`；僅在 tracker 檔不存在時使用，讓 burn-in 時鐘跨資料目錄重建存活） | 空（未設定時用首次啟動當下） |
 | `ATLAS_STATE_DIR` | 狀態目錄路徑 | `data/state` |
 | `ATLAS_DATA_DIR` | 資料根目錄路徑（provider cache files 等寫入此目錄下的 `state/`） | `/app/data` |
 | `ATLAS_LEDGER_DIR` | Ledger 持久化目錄 | `data/state` |
@@ -160,3 +161,4 @@ grep -r "os.Getenv" --include="*.go" . \
 | v1.4 | 2026-07-01 | 新增 `ATLAS_SKIP_PORT_PREFLIGHT`（測試環境 escape hatch，配套 Phase C T-104） |
 | v1.5 | 2026-07-02 | 新增 `ATLAS_MCP_ROOTS_ALLOW_UNSAFE`（issue #903 — MCP roots 危險路徑驗證 escape hatch） |
 | v1.6 | 2026-07-28 | 新增 `ATLAS_WARMUP`（啟動 eager warmup 開關，PR #1411） |
+| v1.7 | 2026-08-17 | 新增 `ATLAS_MATURITY_FIRST_START`（maturity tracker 啟動日期種子，PR #P0-F'） |

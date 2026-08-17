@@ -13,6 +13,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"ATLAS_AGENT_REGISTRY_PATH", "ATLAS_BASELINE_POLICY_PATH", "ATLAS_LEDGER_DIR",
 		"ATLAS_REPLAY_DATA_PATH", "ATLAS_REPLAY_SESSION_DATE",
 		"FUGLE_API_KEY", "ATLAS_FUGLE_API_KEY", "ATLAS_YAHOO_ENABLED",
+		"ATLAS_MATURITY_FIRST_START",
 		"ATLAS_BROKER_MODE", "ATLAS_BROKER_MAX_RETRIES", "ATLAS_BROKER_ADAPTER",
 		"ATLAS_BROKER_API_BASE_URL", "ATLAS_BROKER_API_KEY", "ATLAS_BROKER_API_SECRET",
 		"ATLAS_BROKER_HTTP_TIMEOUT_SEC", "ATLAS_BROKER_HTTP_ATTEMPTS", "ATLAS_BROKER_HTTP_RETRY_STATUS_CODES", "ATLAS_BROKER_MAX_CLOCK_SKEW_SEC", "ATLAS_BROKER_NONCE_TTL_SEC", "ATLAS_BROKER_NONCE_STORE", "ATLAS_BROKER_NONCE_STORE_PATH", "ATLAS_BROKER_NONCE_REDIS_URL", "ATLAS_BROKER_NONCE_REDIS_KEY_PREFIX", "ATLAS_BROKER_SIGNER", "ATLAS_BROKER_KEY_ID",
@@ -89,6 +90,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.BrokerKeyID != "" {
 		t.Errorf("BrokerKeyID should default to empty, got %q", cfg.BrokerKeyID)
+	}
+	if cfg.MaturityFirstStart != "" {
+		t.Errorf("MaturityFirstStart should default to empty, got %q", cfg.MaturityFirstStart)
 	}
 }
 
@@ -190,6 +194,15 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 	if cfg.BrokerKeyID != "kid-01" {
 		t.Errorf("BrokerKeyID = %q, want kid-01", cfg.BrokerKeyID)
+	}
+}
+
+func TestLoad_MaturityFirstStartEnv(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("ATLAS_MATURITY_FIRST_START", "2026-06-01T05:10:28Z")
+	cfg := Load()
+	if cfg.MaturityFirstStart != "2026-06-01T05:10:28Z" {
+		t.Errorf("MaturityFirstStart = %q, want 2026-06-01T05:10:28Z", cfg.MaturityFirstStart)
 	}
 }
 

@@ -20,6 +20,10 @@ services:
       - ATLAS_LOG_LEVEL=info
       - ATLAS_DATA_DIR=/app/data
       - ATLAS_CONFIG_DIR=/app/configs
+      # maturity tracker 跨重建存活: 見 internal/domain/maturity.go。
+      # 首次部署(或 volume 遺失)時, 用以下 env 帶入原始 first_start,
+      # 避免 burn-in 60 天重新計算 (RFC3339 或 YYYY-MM-DD):
+      # - ATLAS_MATURITY_FIRST_START=2026-06-01T05:10:28Z
       - ATLAS_STORE_BACKEND=postgres
       - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:6379/8

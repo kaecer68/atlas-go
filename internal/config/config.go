@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -13,6 +14,7 @@ import (
 
 type Config struct {
 	WorkDir                    string
+	MaturityFirstStart         string // ATLAS_MATURITY_FIRST_START — RFC3339/date-only seed for fresh maturity tracker (survives data-dir loss); empty = now
 	DatabaseURL                string
 	MigrationsPath             string
 	MarketDataProvider         string
@@ -83,8 +85,9 @@ func Load() Config {
 	loadEnvFile(resolveEnvFilePath())
 	loadUserEnvFile()
 
-	return Config{
+	cfg := Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
+		MaturityFirstStart:         envOr("ATLAS_MATURITY_FIRST_START", ""),
 		DatabaseURL:                envOr("DATABASE_URL", ""),
 		MigrationsPath:             envOr("ATLAS_MIGRATIONS_PATH", "sql/migrations"),
 		MarketDataProvider:         envOr("ATLAS_MARKET_DATA_PROVIDER", "twse"),
@@ -144,6 +147,26 @@ func Load() Config {
 		Stage3TasksEnabled:             envOrBool("STAGE3_TASKS_ENABLED", true),
 		Stage3AlertsEnabled:            envOrBool("STAGE3_ALERTS_ENABLED", true),
 	}
+	validateMaturityFirstStart(cfg.MaturityFirstStart)
+	return cfg
+}
+
+// validateMaturityFirstStart warns when ATLAS_MATURITY_FIRST_START is set but
+// not parseable as RFC3339 or date-only, so a bad seed never silently resets
+// the maturity clock to "now" on a fresh deployment.
+func validateMaturityFirstStart(raw string) {
+	seed := strings.TrimSpace(raw)
+	if seed == "" {
+		return
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+		if _, err := time.Parse(layout, seed); err == nil {
+			return
+		}
+	}
+	logging.Warn("config", "maturity_first_start_invalid",
+		logging.FStr("value", seed),
+		logging.FStr("expected", "RFC3339 (e.g. 2026-06-01T05:10:28Z) or date-only (2026-06-01)"))
 }
 
 func Normalize(cfg Config) Config {

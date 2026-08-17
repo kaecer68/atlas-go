@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -82,7 +83,9 @@ func (h *Handlers) HandleRSITwCalibration(r *http.Request) (int, any) {
 // HandleMaturity returns the system's current maturity phase and progress.
 func (h *Handlers) HandleMaturity(r *http.Request) (int, any) {
 	statePath := filepath.Join(h.WorkDir, "data", "state", "maturity_tracker.json")
-	tracker, err := domain.NewMaturityTracker(statePath)
+	// Seeded constructor: ATLAS_MATURITY_FIRST_START carries the original
+	// first_start across data-dir loss (see internal/domain/maturity.go).
+	tracker, err := domain.NewMaturityTrackerSeeded(statePath, config.Load().MaturityFirstStart)
 	if err != nil {
 		logging.Error("dashboard", "maturity_tracker_load_failed", "err", err)
 		tracker = domain.NewMaturityTrackerWithStart(time.Now().UTC())

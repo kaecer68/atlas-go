@@ -586,7 +586,12 @@ func run(args []string, deps appDeps) error {
 		eventCalendar := industry.NewEventCalendarWithProvider(nil)
 
 		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
-		maturityTracker, _ := domain.NewMaturityTracker(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"))
+		// The seeded constructor keeps first_start across data-dir loss via
+		// ATLAS_MATURITY_FIRST_START (see internal/domain/maturity.go).
+		maturityTracker, maturityErr := domain.NewMaturityTrackerSeeded(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"), cfg.MaturityFirstStart)
+		if maturityErr != nil {
+			logging.Error("bootstrap", "maturity_tracker_load_failed", "err", maturityErr)
+		}
 		if maturityTracker != nil {
 			logging.Info("bootstrap", "maturity_tracker_ready",
 				"maturity", string(maturityTracker.Current()),
