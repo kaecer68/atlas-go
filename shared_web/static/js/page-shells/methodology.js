@@ -395,12 +395,13 @@ function renderPeriodCard(host, report, isPremium, error) {
     return rebindRetry('md-period-host', 'period', isPremium);
   }
   if (!isPremium) {
-    // 非 premium 仍顯示結構，但數值區以「升級查看即時數值」呈現
+    // 非 premium 仍顯示結構與概念說明（方法論教育免費），
+    // 只有「即時數值」保留 Premium gate，以「升級查看即時數值」標示。
     host.dataset.period = '';
     host.innerHTML = `
       <div class="md-period-card__header">
-        <span class="md-period-name-zh">${tierGatePill()}</span>
-        <span class="md-period-market-period">當前市場時期需 Premium 才能查看即時判定</span>
+        <span class="md-period-name-zh">當前市場時期</span>
+        <span class="md-period-market-period">由八層即時指標判定，即時判定需 Premium</span>
       </div>
       <div class="md-period-card__body">
         <div class="md-period-summary">${escapeHtml(LAYER_IMPLICATION['第零層'])}</div>
@@ -408,10 +409,10 @@ function renderPeriodCard(host, report, isPremium, error) {
           <span class="md-period-cash__label">現金部位建議</span>
           <span class="md-period-cash__value">—</span>
           <div class="md-period-cash__bar"><div class="md-period-cash__fill" style="width:0%"></div></div>
-          ${tierGatePill()}
+          <div class="md-period-cash__hint">${tierGatePill()}</div>
         </div>
       </div>
-      <div class="md-allowed-strategies"><span class="md-tier-gate">升級查看可用策略</span></div>
+      <div class="md-allowed-strategies"><span class="md-tier-gate" title="升級 Premium 以查看可用策略">升級查看可用策略</span></div>
     `;
     return;
   }

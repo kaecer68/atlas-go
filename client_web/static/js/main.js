@@ -469,7 +469,10 @@ if (typeof window !== 'undefined') {
   // Auth: check JWT validity before loading data; wrap fetch for 401 detection
   install401Interceptor({
     loginPageId: 'login',
-    excludedPages: ['login', 'register'],
+    // 'my-signals' 排除在 401 自動跳轉之外：未登入訪客停在原頁，
+    // 由 my-signals.js 顯示「此功能需要登入」+ 回公開內容逃脫路徑，
+    // 避免直接摔進登入牆（UX audit P0）。
+    excludedPages: ['login', 'register', 'my-signals'],
     onUnauthorized: invalidateAuth,
     switchPage: window.switchPage,
   });
