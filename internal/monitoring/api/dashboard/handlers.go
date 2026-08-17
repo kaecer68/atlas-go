@@ -143,10 +143,15 @@ func (h *Handlers) HandleTaskLiveness(r *http.Request) (int, any) {
 	}
 	rows, err := h.TaskLivenessProvider.List(r.Context())
 	if err != nil {
+		// Graceful degrade: liveness is an observability endpoint, a DB hiccup
+		// must not 500 the whole admin dashboard. Report degraded and return an
+		// empty snapshot (frontend shows "活性資料暫不可用" instead of erroring).
 		logging.Error("dashboard", "task_liveness_list_failed", "err", err.Error())
-		return http.StatusInternalServerError, map[string]any{
-			"status": "error",
-			"error":  "failed to load task liveness: " + err.Error(),
+		return http.StatusOK, map[string]any{
+			"status":       "degraded",
+			"error":        "task liveness store unavailable: " + err.Error(),
+			"generated_at": time.Now().UTC().Format(time.RFC3339),
+			"tasks":        []taskLivenessTask{},
 		}
 	}
 

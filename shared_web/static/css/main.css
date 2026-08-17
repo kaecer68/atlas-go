@@ -33,6 +33,7 @@
 @import url("components/refresh.css");
 @import url("components/notification-colors.css");
 @import url("components/refresh-pill.css");
+@import url("components/degraded-badge.css");
 @import url("components/loading-bar.css");
 @import url("components/error-banner.css");
 @import url("components/table-pagination.css");

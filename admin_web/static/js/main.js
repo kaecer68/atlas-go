@@ -13,6 +13,7 @@ import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml, parseSessionsList, renderMissingState } from './shared/app-utils.js';
 import { injectSharedHead } from './shared/head-config.js';
 import { install401Interceptor } from './shared/fetch-wrapper.js';
+import { initDegradedBadge } from './components/degraded-badge.js';
 import { initAuth, invalidateAuth } from './services/auth.js';
 import { initApiKeyPrompt, showApiKeyPrompt } from './services/api-key.js';
 injectSharedHead();
@@ -562,6 +563,7 @@ window.toggleAutoRefresh = function() {
 };
 
 if (typeof window !== 'undefined') {
+  initDegradedBadge();
   install401Interceptor({
     loginPageId: 'login',
     excludedPages: ['login'],

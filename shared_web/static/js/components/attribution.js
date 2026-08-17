@@ -5,6 +5,7 @@ function isValidNumber(v) {
 }
 
 export async function renderPnLAttribution(container, getJSON) {
+  // 失敗已由 app-utils choke point 回報 (reportDegraded)，此處 .catch 僅為 null 預設值。
   const data = await getJSON('/api/dashboard/pnl-attribution').catch(() => null);
   if (!data || !data.agent_attribution) {
     container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">暫無歸因資料</div>';

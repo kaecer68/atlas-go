@@ -3,6 +3,7 @@ import { fmtSafeNumber, fmtSafePct, fmtSafeDrawdown } from '../shared/format-met
 
 export async function renderRiskPanel(container, getJSON) {
   // 1. 讀取 portfolio-state 取得 current_drawdown, concentration_ratio
+  // 失敗已由 app-utils choke point 回報 (reportDegraded)，此處 .catch 僅為 null 預設值。
   const state = await getJSON('/api/dashboard/portfolio-state').catch(() => ({}));
 
   // 2. 讀取 correlation-matrix (if available)

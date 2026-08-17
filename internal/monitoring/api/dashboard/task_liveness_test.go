@@ -56,11 +56,21 @@ func TestHandleTaskLiveness_NotConfigured_503(t *testing.T) {
 	}
 }
 
-func TestHandleTaskLiveness_StoreError_500(t *testing.T) {
+func TestHandleTaskLiveness_StoreError_Degraded(t *testing.T) {
+	// A store failure must gracefully degrade (200 + empty snapshot), not 500:
+	// liveness is an observability endpoint, and in smoke/dev environments the
+	// PG store may be unavailable without making the dashboard error out.
 	h := newTestHandlers(t)
 	h.TaskLivenessProvider = fakeLivenessProvider{err: context.DeadlineExceeded}
 	status, body := h.HandleTaskLiveness(httptest.NewRequest(http.MethodGet, "/api/dashboard/task-liveness", nil))
-	doLivenessRequest(t, status, body, http.StatusInternalServerError)
+	resp := doLivenessRequest(t, status, body, http.StatusOK)
+	if resp["status"] != "degraded" {
+		t.Errorf("expected status=degraded, got %v", resp["status"])
+	}
+	tasks, ok := resp["tasks"].([]any)
+	if !ok || len(tasks) != 0 {
+		t.Errorf("expected empty tasks list on degraded, got %v", resp["tasks"])
+	}
 }
 
 func TestHandleTaskLiveness_ResponseStructure(t *testing.T) {
