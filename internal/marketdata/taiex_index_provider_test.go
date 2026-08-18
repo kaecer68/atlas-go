@@ -219,6 +219,91 @@ func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
 	}
 }
 
+func TestTAIEXIndexProvider_FetchSnapshot_PreMarketBypassesYahoo(t *testing.T) {
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	// 2026-07-29 is a Wednesday (trading day) but 07:00 CST is pre-market:
+	// Yahoo's in-progress daily bar has a null/0 latest close and TWSE has not
+	// published today's MI_INDEX yet (data:[] until ~14:00). The provider must
+	// bypass Yahoo and serve the previous trading day (Tuesday 2026-07-28)
+	// without tripping the channel circuit breaker (N1 S2).
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 7, 0, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+
+	yahooCalled := false
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		yahooCalled = true
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	// TWSE returns Tuesday's report, matching the rolled-back request date.
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, "date=20260728") {
+			t.Errorf("expected rolled-back TWSE date 20260728, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月28日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	snap, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot() during pre-market should serve previous trading day, got error = %v", err)
+	}
+	if yahooCalled {
+		t.Error("pre-market FetchSnapshot should bypass Yahoo entirely")
+	}
+	if snap.TAIEX.Value != 43654.84 {
+		t.Errorf("Value = %v, want 43654.84 (previous trading day close)", snap.TAIEX.Value)
+	}
+	if snap.TAIEX.ChangePct != -2.67 {
+		t.Errorf("ChangePct = %v, want -2.67", snap.TAIEX.ChangePct)
+	}
+}
+
+func TestFetchTWSETAIEXFallback_PreMarketRollsBackToPreviousTradingDay(t *testing.T) {
+	// Trading day (Wednesday 2026-07-29) at 07:00 CST — the fallback must request
+	// the previous trading day (Tuesday 2026-07-28) instead of today.
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 7, 0, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, "date=20260728") {
+			t.Errorf("expected rolled-back TWSE date 20260728, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月28日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	pt, err := fetchTWSETAIEXFallback(context.Background())
+	if err != nil {
+		t.Fatalf("fetchTWSETAIEXFallback() pre-market error = %v", err)
+	}
+	if pt.Value != 43654.84 {
+		t.Errorf("Value = %v, want 43654.84 (previous trading day close)", pt.Value)
+	}
+}
+
 func TestTAIEXIndexProvider_FetchSnapshot_WeekendBypassesYahoo(t *testing.T) {
 	twiiCache.reset()
 	defer twiiCache.reset()

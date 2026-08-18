@@ -105,8 +105,8 @@ func defaultMarketdataParameters() MarketdataParameters {
 			Todo:      "Verify: check TWSE documentation for current burst limits",
 		},
 		TWSEAPITimeoutSec: ParameterMetadata[int]{
-			Value:     15,
-			Rationale: "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses",
+			Value:     20,
+			Rationale: "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses. N1 S4 (2026-08-18): 15s 在 TWSE 官方慢時段 (07:17–07:58 台北) 實測被 STOCK_DAY_ALL >15s 拖垮，校準至 20s (見 investigation-twse-timeout-2026-08-18.md §3.2)",
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: test [10, 30] range based on observed latency distribution",
 		},

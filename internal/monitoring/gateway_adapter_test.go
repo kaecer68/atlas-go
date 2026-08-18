@@ -983,66 +983,42 @@ func TestNewOddLotFetcher(t *testing.T) {
 }
 
 func TestNewETFFetcher(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			stats := marketdata.ETFStats{Date: "2026-01-01", NetSubscription: 1000}
-			b, _ := json.Marshal(stats)
-			return b, FetchMeta{}, nil
-		}
-		f := NewETFFetcher(fetcher)
-		stats, err := f(context.Background())
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if stats.NetSubscription != 1000 {
-			t.Errorf("NetSubscription = %d, want 1000", stats.NetSubscription)
-		}
-	})
-
-	t.Run("channel error falls back to fubon pcf", func(t *testing.T) {
-		// twse_etf channel 失敗（上游移除，實務常態）→ 自動落回富邦 PCF provider。
-		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			return nil, FetchMeta{}, errors.New("twse_etf channel inactive")
-		}
+	t.Run("fubon pcf data served", func(t *testing.T) {
+		// N1 S1：twse_etf legacy 探測已移除，ETFFetcher 唯一資料源為富邦 PCF。
 		stub := &stubETFNetSubFetcher{
 			stats: &marketdata.ETFStats{Date: "20260817", NetSubscription: -18_970_000},
 		}
-		f := NewETFFetcher(fetcher, stub)
+		f := NewETFFetcher(stub)
 		stats, err := f(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if stats.NetSubscription != -18_970_000 {
-			t.Errorf("NetSubscription = %d, want -18970000 (from fubon fallback)", stats.NetSubscription)
+			t.Errorf("NetSubscription = %d, want -18970000 (from fubon PCF)", stats.NetSubscription)
 		}
 	})
 
-	t.Run("channel data with zero net sub falls back", func(t *testing.T) {
-		// channel 回傳 NetSubscription=0（無資料語意）→ 不採用，落回富邦 PCF。
-		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			stats := marketdata.ETFStats{Date: "2026-01-01", NetSubscription: 0}
-			b, _ := json.Marshal(stats)
-			return b, FetchMeta{}, nil
-		}
+	t.Run("does not probe twse_etf channel", func(t *testing.T) {
+		// N1 S1 回歸測試：NewETFFetcher 不再接受 DataFetcher，結構上無法對任何
+		// gateway channel（含 twse_etf）發 fetch —— 未註冊 channel 的探測會被
+		// circuit breaker 計為失敗並覆蓋 inactive 紀錄（調查報告 §3.3）。
+		// 此處以 stub 驗證 fetcher 直接採用 PCF 資料源、無任何 channel 依賴。
 		stub := &stubETFNetSubFetcher{
 			stats: &marketdata.ETFStats{Date: "20260817", NetSubscription: 123_000_000},
 		}
-		f := NewETFFetcher(fetcher, stub)
+		f := NewETFFetcher(stub)
 		stats, err := f(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if stats.NetSubscription != 123_000_000 {
-			t.Errorf("NetSubscription = %d, want 123000000 (from fubon fallback)", stats.NetSubscription)
+			t.Errorf("NetSubscription = %d, want 123000000 (from fubon PCF)", stats.NetSubscription)
 		}
 	})
 
 	t.Run("fubon provider failure surfaces error", func(t *testing.T) {
-		fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
-			return nil, FetchMeta{}, errors.New("down")
-		}
 		stub := &stubETFNetSubFetcher{err: errors.New("fubon pcf down")}
-		f := NewETFFetcher(fetcher, stub)
+		f := NewETFFetcher(stub)
 		_, err := f(context.Background())
 		if err == nil {
 			t.Fatal("expected error")

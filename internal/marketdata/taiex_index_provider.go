@@ -31,15 +31,19 @@ func (p *TAIEXIndexProvider) Name() string {
 // The TWSE response date is validated against the requested date so that
 // previous-day data is never written as today's value.
 func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, error) {
-	// Weekend/holiday gate: on non-trading days Yahoo Finance pads the latest
-	// ^TWII close with 0 (parseYahooTAIEX treats 0 as invalid) and TWSE
-	// MI_INDEX has no row for the current date, so the naive path returns an
-	// error and trips the channel circuit breaker across a long weekend.
-	// Serving the most recent trading day's close is the correct behavior and
-	// must not be recorded as a failure, so bypass Yahoo entirely.
+	// Weekend/holiday/pre-market gate: on non-trading days Yahoo Finance pads
+	// the latest ^TWII close with 0 (parseYahooTAIEX treats 0 as invalid) and
+	// TWSE MI_INDEX has no row for the current date, so the naive path returns
+	// an error and trips the channel circuit breaker across a long weekend.
+	// The same holds during a trading day's pre-market window (00:00–09:00 CST):
+	// Yahoo's in-progress daily bar has a null/0 latest close and TWSE does not
+	// publish today's MI_INDEX until ~14:00, so the most recent valid close is
+	// the previous trading day's. Serving that close is the correct behavior and
+	// must not be recorded as a failure, so bypass Yahoo entirely (N1 S2,
+	// docs/operations/investigation-twse-timeout-2026-08-18.md §3.1).
 	now := twseTAIEXTargetDate()
-	if !isTaiwanTradingDay(now) {
-		return p.fetchFallback(ctx, fmt.Errorf("non-trading day %s (weekend/holiday)", now.Format("2006-01-02")))
+	if !isTaiwanTradingDay(now) || now.Hour() < twseMarketOpenHour {
+		return p.fetchFallback(ctx, fmt.Errorf("no published data for %s (weekend/holiday/pre-market)", now.Format("2006-01-02")))
 	}
 
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {
