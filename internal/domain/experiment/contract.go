@@ -11,6 +11,22 @@ var supportedMutationTypes = map[string]struct{}{
 	"prompt_tightening":             {},
 	"risk_rule_change":              {},
 	"portfolio_constraint_revision": {},
+	// Lifecycle mutations produced by other subsystems but routed through the
+	// same experiment ledger/executor: onboarding (system.NextExperimentCandidate),
+	// promote_spawned (SelectBestSpawnedAgent), auto_prompt_optimization
+	// (AutoProposer). These are prompt-shaped mutations and reuse the prompt
+	// candidate path in executor/judge dispatch.
+	"onboarding":               {},
+	"promote_spawned":          {},
+	"auto_prompt_optimization": {},
+}
+
+// IsSupportedMutationType reports whether mt is a mutation type the experiment
+// contract accepts. Single source of truth for the whitelist; keep every new
+// mutation type registered here so NormalizeAndValidate paths stay aligned.
+func IsSupportedMutationType(mt string) bool {
+	_, ok := supportedMutationTypes[mt]
+	return ok
 }
 
 var validMaturityLevels = map[string]struct{}{
@@ -49,7 +65,7 @@ func (b *MutationBrief) NormalizeAndValidate() error {
 	if strings.TrimSpace(b.PromptFile) == "" {
 		return fmt.Errorf("prompt_file is required")
 	}
-	if _, ok := supportedMutationTypes[b.MutationType]; !ok {
+	if !IsSupportedMutationType(b.MutationType) {
 		return fmt.Errorf("mutation_type is invalid: %q", b.MutationType)
 	}
 	if strings.TrimSpace(b.AcceptanceMetric) == "" {
@@ -115,7 +131,7 @@ func (r *PromptExperimentResult) NormalizeAndValidateForJudge() error {
 	if strings.TrimSpace(r.Experiment.Skill) == "" {
 		return fmt.Errorf("experiment.skill is required")
 	}
-	if _, ok := supportedMutationTypes[r.Experiment.MutationType]; !ok {
+	if !IsSupportedMutationType(r.Experiment.MutationType) {
 		return fmt.Errorf("experiment.mutation_type is invalid: %q", r.Experiment.MutationType)
 	}
 
