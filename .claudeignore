@@ -52,7 +52,6 @@ stress-test
 validate-*
 verify-*
 archive-state
-enhanced_experiment_runner
 
 # Large generated files
 channel_health.json

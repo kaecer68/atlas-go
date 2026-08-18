@@ -102,7 +102,6 @@ cmd/experimental/*/data/
 /migrate-data
 /promote-baseline
 /revert-baseline
-/enhanced_experiment_runner
 /realtime-quote
 
 # Log files

@@ -1,8 +1,12 @@
 //go:build integration
 
-// Package main provides integration tests for Phase 2 and Phase 3 components
+// Package atlas (module root) provides integration tests for Phase 2 and Phase 3
+// components (Darwinian Weights, Superinvestor, Spawning, PRISM, Reflexivity).
+// These tests exercise live internal packages and are kept after the retirement of
+// the legacy root experiment harness (see
+// docs/decisions/2026-08-code-disposition-enhanced-runner.md).
 // Run with: go test -v -tags=integration ./...
-package main
+package atlas
 
 import (
 	"fmt"
