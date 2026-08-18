@@ -11,6 +11,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 func (r *PostgresRepository) RecordScreeningRejects(ctx context.Context, sessionID string, rejects []domain.ScreeningReject) error {
@@ -123,6 +124,7 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 	var regime sql.NullString
 	var nextExperimentAgentID, proposalID, commitID, approvalID, riskCommentary, parametersVersion sql.NullString
 	var brokerRuntime, guardOutcomes, taxSnapshots []byte
+	var afterTaxPnL, totalTaxPaid *float64
 
 	err := r.pool.QueryRow(ctx, `
 		SELECT time, session_id, regime, order_count, position_count, ending_cash, portfolio_value, outcome_count, broker_runtime, next_experiment_agent_id, proposal_id, commit_id, approval_id, guard_outcomes, risk_commentary, tax_snapshots, after_tax_pnl, total_tax_paid, parameters_version
@@ -132,7 +134,7 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 		&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 		&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
 		&brokerRuntime, &nextExperimentAgentID, &proposalID, &commitID,
-		&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+		&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &afterTaxPnL, &totalTaxPaid,
 		&parametersVersion,
 	)
 	if err != nil {
@@ -149,6 +151,12 @@ func (r *PostgresRepository) LoadSessionSummary(ctx context.Context, sessionID s
 	summary.ApprovalID = approvalID.String
 	summary.RiskCommentary = riskCommentary.String
 	summary.ParametersVersion = parametersVersion.String
+	if afterTaxPnL != nil {
+		summary.AfterTaxPnL = *afterTaxPnL
+	}
+	if totalTaxPaid != nil {
+		summary.TotalTaxPaid = *totalTaxPaid
+	}
 	if len(brokerRuntime) > 0 {
 		if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
 			return nil, fmt.Errorf("unmarshal broker_runtime: %w", err)
@@ -180,20 +188,27 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 	defer rows.Close()
 
 	var summaries []domain.SessionSummary
+	var scanErrCount int
 	for rows.Next() {
 		var summary domain.SessionSummary
 		var regime sql.NullString
 		var nextExperimentAgentID, proposalID, commitID, approvalID, riskCommentary, parametersVersion sql.NullString
 		var brokerRuntime, guardOutcomes, taxSnapshots []byte
+		var afterTaxPnL, totalTaxPaid *float64
 
 		err := rows.Scan(
 			&summary.RecordedAt, &summary.SessionID, &regime, &summary.OrderCount,
 			&summary.PositionCount, &summary.EndingCash, &summary.PortfolioValue, &summary.OutcomeCount,
 			&brokerRuntime, &nextExperimentAgentID, &proposalID, &commitID,
-			&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &summary.AfterTaxPnL, &summary.TotalTaxPaid,
+			&approvalID, &guardOutcomes, &riskCommentary, &taxSnapshots, &afterTaxPnL, &totalTaxPaid,
 			&parametersVersion,
 		)
 		if err != nil {
+			scanErrCount++
+			logging.Warn("repository", "LoadAllSessionSummaries scan error",
+				"session_id", summary.SessionID,
+				"error", err,
+				"scan_error_count", scanErrCount)
 			continue
 		}
 		summary.Regime = domain.Regime(regime.String)
@@ -203,6 +218,12 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 		summary.ApprovalID = approvalID.String
 		summary.RiskCommentary = riskCommentary.String
 		summary.ParametersVersion = parametersVersion.String
+		if afterTaxPnL != nil {
+			summary.AfterTaxPnL = *afterTaxPnL
+		}
+		if totalTaxPaid != nil {
+			summary.TotalTaxPaid = *totalTaxPaid
+		}
 		if len(brokerRuntime) > 0 {
 			if err := json.Unmarshal(brokerRuntime, &summary.BrokerRuntime); err != nil {
 				continue
@@ -219,6 +240,10 @@ func (r *PostgresRepository) LoadAllSessionSummaries(ctx context.Context) ([]dom
 			}
 		}
 		summaries = append(summaries, summary)
+	}
+	if scanErrCount > 0 {
+		logging.Warn("repository", "LoadAllSessionSummaries completed with scan errors",
+			"scan_error_count", scanErrCount)
 	}
 	return summaries, rows.Err()
 }

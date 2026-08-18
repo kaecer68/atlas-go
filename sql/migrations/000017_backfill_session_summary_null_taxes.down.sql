@@ -1,0 +1,4 @@
+-- 000017_backfill_session_summary_null_taxes.down.sql
+-- Backfill is not reversible: we cannot distinguish rows that were
+-- originally NULL from rows that legitimately stored 0 before the backfill.
+-- Down migration is intentionally a no-op.
