@@ -107,7 +107,7 @@ type EndpointRegimeSummary struct {
 	LatestRegime string         `json:"latest_regime"`
 }
 
-// SessionRegimeSummary summarises session-level regimes in the window.
+// SessionRegimeSummary summarizes session-level regimes in the window.
 type SessionRegimeSummary struct {
 	Scanned      int            `json:"scanned"` // all sessions on disk (window-unfiltered)
 	Total        int            `json:"total"`   // sessions whose trading date falls in the window
@@ -116,7 +116,7 @@ type SessionRegimeSummary struct {
 	UnknownRatio float64        `json:"unknown_ratio"`
 }
 
-// StressRegimeSummary summarises stress_index_history rows in the window.
+// StressRegimeSummary summarizes stress_index_history rows in the window.
 // Regimes uses the raw stress vocabulary (low/alert/high/crisis); Normalized
 // shows the same rows after cross-walking into the canonical vocabulary.
 type StressRegimeSummary struct {
