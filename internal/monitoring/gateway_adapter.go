@@ -65,7 +65,7 @@ func (a *macroDataGatewayAdapter) Name() string {
 
 // FetchSnapshot returns the latest macro data snapshot with TTL caching.
 // Cache hit (within MacroSnapshotCacheTTL) returns the cached value without
-// fan-out. Cache miss triggers the full 28-channel gateway fan-out; a
+// fan-out. Cache miss triggers the full 27-channel gateway fan-out; a
 // double-checked locking pattern prevents duplicate fan-outs when multiple
 // callers arrive simultaneously.
 func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
@@ -101,7 +101,7 @@ func (a *macroDataGatewayAdapter) FetchSnapshot(ctx context.Context) (marketdata
 	return snap, err
 }
 
-// fetchFresh performs the actual 28-channel gateway fan-out without caching.
+// fetchFresh performs the actual 27-channel gateway fan-out without caching.
 // Errors are recorded per-channel in lastErrors; a single non-stale error
 // does not fail the entire fetch.
 func (a *macroDataGatewayAdapter) fetchFresh(ctx context.Context) (marketdata.MacroDataSnapshot, error) {
@@ -116,7 +116,6 @@ func (a *macroDataGatewayAdapter) fetchFresh(ctx context.Context) (marketdata.Ma
 		{channelID: "exchange_rate", apply: a.applyExchangeRate},
 		{channelID: "sox_index", apply: a.applySOXIndex},
 		{channelID: "twse_capital_flow", apply: a.applyCapitalFlow},
-		{channelID: "twse_etf", apply: a.applyETF},
 		{channelID: "export_statistics", apply: a.applyExport},
 		{channelID: "tsmc_revenue", apply: a.applyTSMCRevenue},
 		{channelID: "sector_data", apply: a.applySectorData},
@@ -332,23 +331,6 @@ func (a *macroDataGatewayAdapter) applyCapitalFlow(snap *marketdata.MacroDataSna
 		snap.DealerNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER", Value: flow.DealerNet, Timestamp: ts}
 		snap.DealerSelfNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_SELF", Value: flow.DealerSelfNet, Timestamp: ts}
 		snap.DealerHedgingNet = marketdata.MacroDataPoint{Symbol: "TAIWAN_DEALER_HEDGING", Value: flow.DealerHedgingNet, Timestamp: ts}
-	}
-}
-
-func (a *macroDataGatewayAdapter) applyETF(snap *marketdata.MacroDataSnapshot, data []byte) {
-	var stats marketdata.ETFStats
-	if err := json.Unmarshal(data, &stats); err != nil {
-		return
-	}
-	if stats.Date == "" {
-		return
-	}
-	etfTime, _ := time.Parse("20060102", stats.Date)
-	ts := etfTime.Unix()
-	snap.ETFNetSubscription = marketdata.MacroDataPoint{
-		Symbol:    "TAIWAN_ETF",
-		Value:     float64(stats.NetSubscription),
-		Timestamp: ts,
 	}
 }
 

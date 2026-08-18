@@ -1129,3 +1129,59 @@ func TestUSMacroFields_MatchesDetectorChannels(t *testing.T) {
 		}
 	}
 }
+
+// TestGetCachedSnapshot_ProviderError_ReturnsStaleCache guards the R1
+// stale-if-error behavior: once a snapshot has been cached, a subsequent
+// cache-miss that FAILS to refetch must still return the last-known-good
+// snapshot marked degraded — instead of a hard error (which the 8s timeout
+// middleware turns into an unrecoverable 503 death-spiral). Only a
+// completely empty cache (no successful fetch ever) returns the error.
+func TestGetCachedSnapshot_ProviderError_ReturnsStaleCache(t *testing.T) {
+	prov := &counterProvider{snap: makeSnapshot()}
+	svc := NewCrossMarketService(prov)
+
+	// Seed the cache with a successful fetch.
+	if _, err := svc.GetStatus(context.Background()); err != nil {
+		t.Fatalf("GetStatus (seed): %v", err)
+	}
+	if prov.calls != 1 {
+		t.Fatalf("expected 1 provider call after seed, got %d", prov.calls)
+	}
+
+	// Force the next call to miss the TTL cache, then make the provider fail.
+	svc.cacheMu.Lock()
+	svc.cacheTime = time.Now().Add(-cacheTTL - time.Second)
+	svc.cacheMu.Unlock()
+	prov.err = context.DeadlineExceeded
+
+	snap, meta, err := svc.getCachedSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("stale-if-error: expected nil error with last-known-good, got %v", err)
+	}
+	// The returned snapshot must be the cached last-known-good data.
+	if snap.SPXIndex.Value == 0 {
+		t.Errorf("stale snapshot should carry cached SPX value, got %+v", snap.SPXIndex)
+	}
+	if meta == nil {
+		t.Fatal("stale-if-error should return degraded status meta, got nil")
+	}
+	if meta.DataStatus != "degraded" {
+		t.Errorf("DataStatus = %q, want degraded for stale-if-error", meta.DataStatus)
+	}
+	if prov.calls != 2 {
+		t.Errorf("expected 2 provider calls (seed + failed refetch), got %d", prov.calls)
+	}
+}
+
+// TestGetCachedSnapshot_ProviderError_EmptyCacheStillErrors locks the R1
+// "only when the cache is completely empty do we return err" branch: a fresh
+// process with a failing provider and no prior successful fetch must still
+// surface the error (not fabricate data).
+func TestGetCachedSnapshot_ProviderError_EmptyCacheStillErrors(t *testing.T) {
+	prov := &counterProvider{err: context.DeadlineExceeded}
+	svc := NewCrossMarketService(prov)
+
+	if _, _, err := svc.getCachedSnapshot(context.Background()); err == nil {
+		t.Fatal("expected error from failing provider with empty cache, got nil")
+	}
+}

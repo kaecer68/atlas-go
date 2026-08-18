@@ -15,9 +15,12 @@ import (
 
 // cacheTTL controls how long a FetchSnapshot result is reused across
 // concurrent API calls (GetStatus + GetUSIndices are both called via
-// Promise.all). 30 seconds balances freshness against the ~15-20s
-// cost of a full CompositeMacroProvider.FetchSnapshot cycle.
-const cacheTTL = 30 * time.Second
+// Promise.all). 5 minutes reduces cache-miss frequency: each miss triggers
+// a ~15-20s full CompositeMacroProvider.FetchSnapshot fan-out (28 channels)
+// which can exceed the 8s request timeout and 503 without a fresh cache.
+// stale-if-error below serves last-known-good data when a miss then fails,
+// so this TTL only controls refresh cadence, not hard availability.
+const cacheTTL = 5 * time.Minute
 
 // correlationWindow is the rolling window for all cross-market correlation
 // estimates. 20 observations corresponds to ~1 trading month at daily
@@ -271,7 +274,34 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 		if s.degradedMetrics != nil {
 			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", classifyErrorSeverity(err.Error())).Inc()
 		}
-		return snap, nil, err
+		// stale-if-error (R1): the TTL cache has expired, but we still hold the
+		// last-known-good snapshot. Serve it marked degraded instead of
+		// propagating the error — otherwise every cache miss that also fails to
+		// fetch returns a hard 503 to the middleware (which then doesn't write
+		// the cache), producing an unrecoverable 503 death-spiral until restart.
+		// Only when the cache is completely empty (no prior successful fetch)
+		// do we return the error. degradedMetrics.ProviderErrors above still
+		// records the provider timeout / failure.
+		s.cacheMu.Lock()
+		hasStale := s.cachedSnapshot != nil
+		var staleSnap marketdata.MacroDataSnapshot
+		var staleMeta *snapshotStatusMeta
+		if hasStale {
+			staleSnap = *s.cachedSnapshot
+			if s.cachedStatusMeta != nil {
+				cp := *s.cachedStatusMeta
+				staleMeta = &cp
+			}
+		}
+		s.cacheMu.Unlock()
+		if !hasStale {
+			return snap, nil, err
+		}
+		if staleMeta == nil {
+			staleMeta = &snapshotStatusMeta{}
+		}
+		staleMeta.DataStatus = "degraded"
+		return staleSnap, staleMeta, nil
 	}
 
 	status, failed, stale := detectDegradedUSStatus(snap, channelErrorsFromProvider(s.provider))
