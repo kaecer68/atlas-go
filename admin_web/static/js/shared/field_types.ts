@@ -1060,6 +1060,13 @@ export interface EarningsQualityExecutorParameters {
   guidance_threshold: string;
 }
 
+export interface EndpointRegimeSummary {
+  rows: number;
+  regimes: Record<string, number>;
+  latest_date: string;
+  latest_regime: string;
+}
+
 export interface EngineDrawdownParameters {
   levels: string;
   orange_override_min_score: string;
@@ -3217,6 +3224,12 @@ export interface Record {
   updated_at: string;
 }
 
+export interface RegimeAvailability {
+  regime_history: boolean;
+  stress_index: boolean;
+  sessions: boolean;
+}
+
 export interface RegimeBreakdown {
   regimes: Record<string, RegimePerformance>;
 }
@@ -3228,11 +3241,37 @@ export interface RegimeCalibratedConfig {
   crisis: StressIndexWeightsConfig;
 }
 
+export interface RegimeConsistencyReport {
+  authoritative: string;
+  window_days: number;
+  generated_at: string;
+  availability: RegimeAvailability;
+  regime_history: EndpointRegimeSummary;
+  sessions: SessionRegimeSummary;
+  stress_index: StressRegimeSummary;
+  compared_days: number;
+  matches: number;
+  drifts: number;
+  unknown_count: number;
+  unknown_ratio: number;
+  status: string;
+  drift_details?: RegimeDrift[];
+  writer_gap?: RegimeWriterGap | null;
+}
+
 export interface RegimeCorrelation {
   calm: number;
   ai_boom: number;
   systemic_stress: number;
   tariff_geopolitical: number;
+}
+
+export interface RegimeDrift {
+  date: string;
+  authoritative: string;
+  endpoint: string;
+  actual: string;
+  normalized: string;
 }
 
 export interface RegimeHistoryData {
@@ -3266,6 +3305,13 @@ export interface RegimeTransition {
   from_regime: string;
   to_regime: string;
   timestamp: string;
+}
+
+export interface RegimeWriterGap {
+  unknown_session_ids?: string[];
+  empty_regime_in_summary: number;
+  missing_summary: number;
+  root_cause: string;
 }
 
 export interface ReplayDataMetadata {
@@ -3698,6 +3744,14 @@ export interface SessionDetail {
   outcomes: RecommendationOutcome[];
 }
 
+export interface SessionRegimeSummary {
+  scanned: number;
+  total: number;
+  regimes: Record<string, number>;
+  unknown_count: number;
+  unknown_ratio: number;
+}
+
 export interface SessionSummary {
   session_id: string;
   regime: string;
@@ -3964,6 +4018,14 @@ export interface StressIndexWeightsConfig {
   scaling: StressIndexScaling;
   weights: StressIndexWeights;
   thresholds: StressIndexThresholds;
+}
+
+export interface StressRegimeSummary {
+  rows: number;
+  regimes: Record<string, number>;
+  normalized: Record<string, number>;
+  latest_date: string;
+  latest_regime: string;
 }
 
 export interface StructuralTrend {

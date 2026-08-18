@@ -447,6 +447,36 @@
 
 ---
 
+### §4.6 `GET /api/dashboard/regime-consistency`（Reconciler v1 P1）
+
+**Handler**：`internal/monitoring/api/pipeline/handlers.go::HandleRegimeConsistency`
+
+**Query**：`days`（選填，look-back 天數，預設 30，最大 365）
+
+**語義**：Phase 2 Reconciler v1 的 regime 三端點一致性檢查 — session-level regime（`LoadSessions` / `sessions/*/summary.json`）vs `regime_history`（權威端, Janus 詞彙 RISK_ON/RISK_OFF/NEUTRAL/TRANSITIONAL）vs `stress_index_history`（TaiwanStressCalculator 詞彙 low/alert/high/crisis），後者經 `narrative.RegimeVocabularyMapping` cross-walk 成權威詞彙後逐日比對。
+
+**Response 200**：
+
+| 欄位 | 型別 | 語義 |
+| --- | --- | --- |
+| `authoritative` | string | 權威端點（固定 `regime_history`） |
+| `window_days` | int | look-back 天數 |
+| `availability` | object | 各端點是否可讀（`regime_history` / `stress_index` / `sessions`） |
+| `regime_history` | object | `{rows, regimes, latest_date, latest_regime}`（含 stage-4 backfill synthetic rows） |
+| `sessions` | object | `{scanned, total, regimes, unknown_count, unknown_ratio}` |
+| `stress_index` | object | `{rows, regimes(原始詞彙), normalized(cross-walk 後), latest_date, latest_regime}` |
+| `compared_days` | int | 窗口內有權威 regime_history row 的天數 |
+| `matches` | int | 全端點一致的天數 |
+| `drifts` | int | 任一非權威端點與權威端不一致的天數 |
+| `unknown_count` / `unknown_ratio` | int / float | 窗口內 unknown session 數與比例（writer 缺口訊號） |
+| `status` | string | `ok` / `drift` / `unknown_high` / `degraded` |
+| `drift_details` | array | `{date, authoritative, endpoint, actual, normalized}` |
+| `writer_gap` | object | unknown session 歸因（`empty_regime_in_summary` / `missing_summary` / `root_cause`） |
+
+**Status 規則**：`drifts>0` → `drift`；`unknown_ratio>0.2` → `unknown_high`；HistoricalStore 未接線（legacy）→ `degraded`（僅 session 端）。
+
+---
+
 ## §5 Experiments
 
 ### §5.1 `GET /api/dashboard/experiment-inbox`
