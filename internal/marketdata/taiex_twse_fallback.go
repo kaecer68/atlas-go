@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 var taiexTWSEBaseURL = "https://www.twse.com.tw/exchangeReport/MI_INDEX"
@@ -35,16 +37,26 @@ var twseTAIEXTargetDate = func() time.Time {
 // It is used when the primary Yahoo ^TWII path fails.
 //
 // The request date is rolled back to the most recent Taiwan trading day, so
-// weekend/holiday calls serve the previous close instead of failing. The
-// response's reported date (parsed from the table title in ROC calendar) MUST
-// still match the requested date, which prevents writing stale data as today's
-// value when the market has not yet produced the current report (pre-market).
+// weekend/holiday calls serve the previous close instead of failing. During a
+// trading day's pre-market window (00:00–09:00 CST) TWSE has not yet published
+// today's MI_INDEX (data:[] until ~14:00), so the target also rewinds to the
+// previous trading day — mirroring twiiCacheTimestampIsCurrentTradingDay's
+// pre-market pattern (N1 S2). The response's reported date (parsed from the
+// table title in ROC calendar) MUST still match the requested date, which
+// prevents writing stale data as today's value when the market has not yet
+// produced the current report.
 func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
 	// Roll back to the most recent Taiwan trading day. On weekends/holidays the
 	// wall-clock date has no MI_INDEX row, so requesting it would always return
 	// "TAIEX row not found" and count as a failure. latestTaiwanTradingDay is a
 	// no-op on trading days and rewinds to the previous close on non-trading days.
-	target := latestTaiwanTradingDay(twseTAIEXTargetDate())
+	// Pre-market on a trading day additionally rewinds to the previous trading
+	// day (today's row is not published until ~14:00 CST).
+	now := twseTAIEXTargetDate()
+	target := latestTaiwanTradingDay(now)
+	if isTaiwanTradingDay(now) && now.Hour() < twseMarketOpenHour {
+		target = latestTaiwanTradingDay(now.AddDate(0, 0, -1))
+	}
 	dateStr := target.Format("20060102")
 	url := fmt.Sprintf("%s?response=json&date=%s&type=IND", taiexTWSEBaseURL, dateStr)
 
@@ -54,7 +66,10 @@ func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
 	}
 	req.Header.Set("User-Agent", "atlas-go/1.0")
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	// N1 S4：與 twse_api_timeout_sec 參數統一（預設 20s，TWSE 官方慢時段
+	// 07:17–07:58 實測 >15s），消除 taiex_twse_fallback 的魔法數字 15s。
+	timeout := time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return MacroDataPoint{}, fmt.Errorf("taiex_twse: GET %s: %w", url, err)

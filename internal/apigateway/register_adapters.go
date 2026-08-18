@@ -91,9 +91,10 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		logging.Info("apigateway", "adapter_registered", "channel", "finmind")
 	}
 
-	// --- TWSE (no API key required) ---
-	twseClient := marketdata.GetSharedTWSEClient()
-	twseAdapter := NewTWSEChannelAdapter(twseClient)
+	// --- TWSE replay (no API key required, file-based) ---
+	// N1 S3a：adapter 讀本地 replay CSV（config.GetReplayDataPath），不再打
+	// live TWSE —— channel 驗證「本地資料新鮮度」而非「TWSE 通不通」。
+	twseAdapter := NewTWSEChannelAdapter(config.GetReplayDataPath(workDir))
 	g.registry.Register("twse_replay", twseAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_replay")
 

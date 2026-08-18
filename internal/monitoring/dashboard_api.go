@@ -1187,7 +1187,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		)
 		systemHandlers.TaifexFetcher = NewTaifexFetcher(a.dataFetcher)
 		systemHandlers.OddLotFetcher = NewOddLotFetcher(a.dataFetcher)
-		systemHandlers.ETFFetcher = NewETFFetcher(a.dataFetcher)
+		systemHandlers.ETFFetcher = NewETFFetcher()
 	}
 	if a.geoProvider != nil || a.taiwanGeoProvider != nil {
 		systemHandlers.GeopoliticalRiskFetcher = newGeopoliticalRiskFetcher(a.geoProvider, a.taiwanGeoProvider)
