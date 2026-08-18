@@ -4,7 +4,7 @@
 > **日期**: 2026-08-18
 > **執行者**: prime-agent 子代理 (P3 考古清理, PR-E)
 > **分支**: `chore/20260818-archaeological-cleanup`
-> **規劃來源**: `/tmp/atlas-audit-2026-08-16/16-CLEANUP-PLAN-V4PRO.md` §P3
+> **規劃來源**: 清潔規劃書 §P3 (v4pro 規劃, 見 `docs/decisions/` 旁支決策記錄)
 > **機制文件**: [`docs/reference/code-disposition-protocol.md`](../reference/code-disposition-protocol.md) (強制遵守)
 
 ---
