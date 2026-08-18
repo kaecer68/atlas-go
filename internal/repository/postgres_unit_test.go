@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type fakePGPool struct {
@@ -123,19 +125,39 @@ func scanValues(values []any, dest ...any) error {
 			continue
 		}
 		vv := reflect.ValueOf(values[i])
+
+		// Support scanning string values into sql.NullString (used for
+		// nullable TEXT columns in postgres_audit.go).
+		if ns, ok := dest[i].(*sql.NullString); ok && vv.Kind() == reflect.String {
+			ns.String = vv.String()
+			ns.Valid = true
+			continue
+		}
+
+		// Support scanning a concrete value into a pointer destination
+		// (simulates pgx scanning a nullable column, e.g., float64 -> *float64).
+		if dv.Elem().Kind() == reflect.Ptr {
+			elemType := dv.Elem().Type().Elem()
+			if vv.Type().AssignableTo(elemType) {
+				newPtr := reflect.New(elemType)
+				newPtr.Elem().Set(vv)
+				dv.Elem().Set(newPtr)
+				continue
+			}
+			if vv.Type().ConvertibleTo(elemType) {
+				newPtr := reflect.New(elemType)
+				newPtr.Elem().Set(vv.Convert(elemType))
+				dv.Elem().Set(newPtr)
+				continue
+			}
+		}
+
 		if vv.Type().AssignableTo(dv.Elem().Type()) {
 			dv.Elem().Set(vv)
 			continue
 		}
 		if vv.Type().ConvertibleTo(dv.Elem().Type()) {
 			dv.Elem().Set(vv.Convert(dv.Elem().Type()))
-			continue
-		}
-		// Support scanning string values into sql.NullString (used for
-		// nullable TEXT columns in postgres_audit.go).
-		if ns, ok := dest[i].(*sql.NullString); ok && vv.Kind() == reflect.String {
-			ns.String = vv.String()
-			ns.Valid = true
 			continue
 		}
 		return errors.New("scan type mismatch")
@@ -872,4 +894,132 @@ func (s *recordingHumanInterventionStore) RecordHumanIntervention(intervention d
 
 func (s *recordingHumanInterventionStore) LoadHumanInterventions() ([]domain.HumanIntervention, error) {
 	return s.interventions, nil
+}
+
+type testLogRecord struct {
+	level   slog.Level
+	message string
+	attrs   map[string]any
+}
+
+type captureHandler struct {
+	records []testLogRecord
+}
+
+func (h *captureHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *captureHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
+func (h *captureHandler) WithGroup(name string) slog.Handler       { return h }
+
+func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
+	rec := testLogRecord{level: r.Level, message: r.Message, attrs: make(map[string]any)}
+	r.Attrs(func(a slog.Attr) bool {
+		rec.attrs[a.Key] = a.Value.Any()
+		return true
+	})
+	h.records = append(h.records, rec)
+	return nil
+}
+
+func TestPostgresRepository_SessionSummary_NullableTaxFields(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 18, 10, 0, 0, 0, time.UTC)
+	summaryRow := []any{
+		now, "session-null-tax-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3,
+		[]byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`),
+		"risk-comment", []byte(`[]`), nil, nil, "0.0.0.11",
+	}
+	pool := &fakePGPool{
+		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+			if strings.Contains(sql, "session_summaries") {
+				return &fakeRows{rows: [][]any{summaryRow}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+		queryRowFunc: func(_ context.Context, sql string, _ ...any) pgx.Row {
+			if strings.Contains(sql, "session_summaries") {
+				return fakeRow{values: summaryRow}
+			}
+			return fakeRow{}
+		},
+	}
+	repo := newUnitPostgresRepo(pool)
+
+	single, err := repo.LoadSessionSummary(ctx, "session-null-tax-1")
+	if err != nil {
+		t.Fatalf("LoadSessionSummary() error = %v", err)
+	}
+	if single == nil {
+		t.Fatal("LoadSessionSummary() returned nil")
+	}
+	if single.AfterTaxPnL != 0 {
+		t.Errorf("LoadSessionSummary() AfterTaxPnL = %v, want 0 for NULL", single.AfterTaxPnL)
+	}
+	if single.TotalTaxPaid != 0 {
+		t.Errorf("LoadSessionSummary() TotalTaxPaid = %v, want 0 for NULL", single.TotalTaxPaid)
+	}
+
+	all, err := repo.LoadAllSessionSummaries(ctx)
+	if err != nil {
+		t.Fatalf("LoadAllSessionSummaries() error = %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("LoadAllSessionSummaries() len = %d, want 1", len(all))
+	}
+	if all[0].AfterTaxPnL != 0 || all[0].TotalTaxPaid != 0 {
+		t.Errorf("LoadAllSessionSummaries()[0] tax fields = (%v, %v), want (0, 0)", all[0].AfterTaxPnL, all[0].TotalTaxPaid)
+	}
+	if all[0].SessionID != "session-null-tax-1" {
+		t.Errorf("LoadAllSessionSummaries()[0].SessionID = %q, want %q", all[0].SessionID, "session-null-tax-1")
+	}
+}
+
+func TestPostgresRepository_LoadAllSessionSummaries_LogsScanError(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 18, 11, 0, 0, 0, time.UTC)
+
+	oldLogger := logging.Default()
+	handler := &captureHandler{}
+	logging.SetLogger(slog.New(handler))
+	t.Cleanup(func() { logging.SetLogger(oldLogger) })
+
+	// Full 19-column row with an incompatible after_tax_pnl type so the scan
+	// fails after session_id has already been populated.
+	badRow := []any{
+		now, "session-bad-1", "RISK_ON", 2, 1, 900000.0, 1000000.0, 3,
+		[]byte(`{}`), "agent-next", "proposal", "commit", "approval", []byte(`[]`),
+		"risk-comment", []byte(`[]`), "not-a-number", 0.0, "0.0.0.11",
+	}
+	pool := &fakePGPool{
+		queryFunc: func(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+			if strings.Contains(sql, "session_summaries") {
+				return &fakeRows{rows: [][]any{badRow}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+	}
+	repo := newUnitPostgresRepo(pool)
+
+	summaries, err := repo.LoadAllSessionSummaries(ctx)
+	if err != nil {
+		t.Fatalf("LoadAllSessionSummaries() error = %v", err)
+	}
+	if len(summaries) != 0 {
+		t.Errorf("LoadAllSessionSummaries() len = %d, want 0", len(summaries))
+	}
+
+	var found bool
+	for _, rec := range handler.records {
+		if rec.message == "LoadAllSessionSummaries scan error" {
+			found = true
+			if rec.attrs["session_id"] != "session-bad-1" {
+				t.Errorf("scan error log session_id = %v, want %q", rec.attrs["session_id"], "session-bad-1")
+			}
+			if rec.attrs["scan_error_count"] != int64(1) {
+				t.Errorf("scan error log scan_error_count = %v (type %T), want 1", rec.attrs["scan_error_count"], rec.attrs["scan_error_count"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected scan error warning log, got records: %+v", handler.records)
+	}
 }
