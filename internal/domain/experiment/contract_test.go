@@ -179,7 +179,14 @@ func TestMutationBrief_NormalizeAndValidate(t *testing.T) {
 	})
 
 	t.Run("all valid mutation types pass", func(t *testing.T) {
-		validTypes := []string{"prompt_tightening", "risk_rule_change", "portfolio_constraint_revision"}
+		validTypes := []string{
+			"prompt_tightening",
+			"risk_rule_change",
+			"portfolio_constraint_revision",
+			"onboarding",
+			"promote_spawned",
+			"auto_prompt_optimization",
+		}
 		for _, mt := range validTypes {
 			b := validBrief()
 			b.MutationType = mt
@@ -466,4 +473,38 @@ func TestPromptExperimentResult_NormalizeAndValidateForJudge(t *testing.T) {
 			t.Fatal("expected error for invalid experiment.mutation_type")
 		}
 	})
+}
+
+// TestIsSupportedMutationType anchors the whitelist contract so future mutation
+// types have a single testable entry point (k3 correction: export the helper,
+// not just extend the map).
+func TestIsSupportedMutationType(t *testing.T) {
+	valid := []string{
+		"prompt_tightening",
+		"risk_rule_change",
+		"portfolio_constraint_revision",
+		// N4: lifecycle mutations produced by other subsystems must be accepted.
+		"onboarding",
+		"promote_spawned",
+		"auto_prompt_optimization",
+	}
+	for _, mt := range valid {
+		if !IsSupportedMutationType(mt) {
+			t.Errorf("IsSupportedMutationType(%q) = false, want true", mt)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"unknown_mutation",
+		"bogus_mutation",
+		"prompt_tightening ",
+		"onboarding-v2",
+		"PROMOTE_SPAWNED",
+	}
+	for _, mt := range invalid {
+		if IsSupportedMutationType(mt) {
+			t.Errorf("IsSupportedMutationType(%q) = true, want false", mt)
+		}
+	}
 }
