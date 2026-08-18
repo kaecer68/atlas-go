@@ -190,3 +190,21 @@ func TestWithTimeout_FastRoutePassesThrough(t *testing.T) {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 }
+
+// TestTimeoutRouteOverrides_CrossMarketLong creates a regression lock for R3:
+// the cross-market fan-out (and its US-indices sibling) can occasionally
+// exceed the 8s default on a cache-miss refetch, so both routes must be
+// granted the long (60s) budget rather than being cut off into a 503.
+func TestTimeoutRouteOverrides_CrossMarketLong(t *testing.T) {
+	for _, route := range []string{"/api/cross-market/status", "/api/dashboard/us-indices"} {
+		d, ok := timeoutRouteOverrides[route]
+		if !ok {
+			t.Errorf("route %q missing from timeoutRouteOverrides (R3)", route)
+			continue
+		}
+		if d != longRequestTimeout {
+			t.Errorf("route %q override = %v, want longRequestTimeout (%v)",
+				route, d, longRequestTimeout)
+		}
+	}
+}

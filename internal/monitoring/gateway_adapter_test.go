@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -1128,4 +1129,36 @@ type mockGeoProvider struct {
 func (m *mockGeoProvider) Name() string { return "mock" }
 func (m *mockGeoProvider) FetchScore(ctx context.Context) (geopolitical.GeopoliticalRiskScore, error) {
 	return m.score, m.err
+}
+
+// TestMacroDataGatewayAdapter_FanOutDoesNotIncludeTwseETF guards R2: the
+// twse_etf channel was removed from the fetchFresh fan-out list
+// (gateway_adapter.go). It is no longer registered in ChannelRegistry
+// (#1614) and ETF net-subscription now comes from the Fubon PCF provider, so
+// a fan-out must never probe twse_etf — doing so would emit "channel not
+// registered / circuit breaker open" noise on every cache-miss batch.
+func TestMacroDataGatewayAdapter_FanOutDoesNotIncludeTwseETF(t *testing.T) {
+	var mu sync.Mutex
+	requested := make(map[string]bool)
+	recordingFetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		mu.Lock()
+		requested[channelID] = true
+		mu.Unlock()
+		// Return stale/empty for every channel so the batch completes quickly
+		// without failing the whole snapshot (mirrors all-stale happy path).
+		return nil, FetchMeta{Stale: true, LastError: "stale:test"}, nil
+	}
+
+	gw := NewMacroDataGatewayAdapter(recordingFetcher).(*macroDataGatewayAdapter)
+	if _, err := gw.FetchSnapshot(context.Background()); err != nil {
+		// stale fetches should not fail the whole snapshot; record and continue
+		t.Logf("FetchSnapshot err (expected none for all-stale): %v", err)
+	}
+
+	mu.Lock()
+	_, probed := requested["twse_etf"]
+	mu.Unlock()
+	if probed {
+		t.Error("fan-out must NOT probe twse_etf (removed from fetchFresh channel list)")
+	}
 }

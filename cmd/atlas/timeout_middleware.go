@@ -36,6 +36,12 @@ var timeoutRouteOverrides = map[string]time.Duration{
 	"/api/report/latest":           longRequestTimeout,
 	"/api/report/list":             longRequestTimeout,
 	"/api/dashboard/daily-summary": longRequestTimeout,
+
+	// Cross-market fan-out (28 channels) and US-indices can occasionally
+	// exceed 8s on a cache-miss refetch; give them the long budget so a
+	// slow channel doesn't 503 (see R3).
+	"/api/cross-market/status":  longRequestTimeout,
+	"/api/dashboard/us-indices": longRequestTimeout,
 }
 
 // timeoutResponseWriter wraps http.ResponseWriter so the timeout middleware
