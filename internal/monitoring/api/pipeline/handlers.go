@@ -43,6 +43,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	// R-02: consumers should use /api/regime/history going forward.
 	mux.Handle("GET /api/regime/history", shared.Get(h.HandleRegimeHistory))
 	mux.Handle("GET /api/dashboard/regime-history", shared.Get(h.HandleRegimeHistory))
+	mux.Handle("GET /api/regime/consistency", shared.Get(h.HandleRegimeConsistency))
+	mux.Handle("GET /api/dashboard/regime-consistency", shared.Get(h.HandleRegimeConsistency))
 	mux.Handle("GET /api/dashboard/baseline-info", shared.Get(h.HandleBaselineInfo))
 }
 
@@ -568,6 +570,30 @@ func (h *Handlers) HandleBaselineInfo(r *http.Request) (int, any) {
 		"updated_at": policy.UpdatedAt,
 		"history":    policy.History,
 	}
+}
+
+// HandleRegimeConsistency returns the Phase 2 Reconciler v1 regime
+// three-endpoint consistency report: session-level regimes (LoadSessions) vs
+// regime_history (authoritative) vs stress_index_history, cross-walked via the
+// narrative regime vocabulary. ?days=N sets the look-back window (default 30,
+// max 365).
+func (h *Handlers) HandleRegimeConsistency(r *http.Request) (int, any) {
+	days := service.RegimeConsistencyDefaultDays
+	if rawDays := strings.TrimSpace(r.URL.Query().Get("days")); rawDays != "" {
+		v, err := strconv.Atoi(rawDays)
+		if err != nil || v <= 0 {
+			return http.StatusBadRequest, map[string]string{"error": "invalid days: must be positive integer"}
+		}
+		if v > service.RegimeConsistencyMaxDays {
+			v = service.RegimeConsistencyMaxDays
+		}
+		days = v
+	}
+	report, err := h.Svc.CheckRegimeConsistency(r.Context(), days)
+	if err != nil {
+		return http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("check regime consistency: %v", err)}
+	}
+	return http.StatusOK, report
 }
 
 func (h *Handlers) HandleRegimeHistory(r *http.Request) (int, any) {
