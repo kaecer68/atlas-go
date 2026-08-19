@@ -204,3 +204,55 @@ func TestProductionSeeds_Loads(t *testing.T) {
 		t.Errorf("production seed count = %d, want 12", got)
 	}
 }
+
+// TestProductionSeeds_CBFxThreshold asserts the cb-fx-intervention-warning
+// strategy's USD_TWD level threshold is 32.3 (decision 2026-08-19: 32.5→32.3,
+// data/seeds/strategy_techniques.json) and that the second daily-rise
+// condition (0.5) is preserved untouched.
+func TestProductionSeeds_CBFxThreshold(t *testing.T) {
+	candidates := []string{
+		filepath.Join("..", "..", "data", "seeds", "strategy_techniques.json"),
+		filepath.Join("data", "seeds", "strategy_techniques.json"),
+	}
+	var path string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			path = c
+			break
+		}
+	}
+	if path == "" {
+		t.Skip("production seeds file not found; skipping")
+	}
+	reg, err := LoadFromFile(path)
+	if err != nil {
+		t.Fatalf("LoadFromFile(%q): %v", path, err)
+	}
+	f, err := reg.FindByID("cb-fx-intervention-warning")
+	if err != nil {
+		t.Fatalf("FindByID(cb-fx-intervention-warning): %v", err)
+	}
+	var usdCond *Condition
+	for i := range f.Conditions {
+		if f.Conditions[i].Field == "USD_TWD" {
+			usdCond = &f.Conditions[i]
+			break
+		}
+	}
+	if usdCond == nil {
+		t.Fatal("cb-fx strategy has no USD_TWD condition")
+	}
+	for _, c := range f.Conditions {
+		if c.Field != "USD_TWD" {
+			continue
+		}
+		switch {
+		case c.Value == 32.3:
+			// level threshold — decision updated 32.5 → 32.3
+		case c.Value == 0.5:
+			// daily-rise threshold — intentionally untouched
+		default:
+			t.Errorf("unexpected USD_TWD condition value %v", c.Value)
+		}
+	}
+}

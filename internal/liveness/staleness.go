@@ -13,9 +13,22 @@ import (
 // run for more than interval x StaleFactor.
 const StaleFactor = 3
 
+// GatedStaleWindow is the wall-clock absence of a real *successful* run after
+// which a time-gated task (ScheduledTask.TimeGated) is considered stale.
+// Gated tasks run on a narrow daily window (e.g. daily_report_generate at
+// 14:00 Taipei, autobacktest_daily inside its market-close window), so up to
+// ~24h can elapse between real runs by design. 72h (3 days) gives a
+// comfortable margin against false positives while still flagging a genuinely
+// dead gated task. A gated task whose run keeps failing is caught by the BTM
+// consecutive-failure alert instead.
+const GatedStaleWindow = 72 * time.Hour
+
 // IsStale reports whether a task is overdue: now - lastRun > interval x 3.
 // A zero lastRun (never ran) is stale by definition; a zero interval (no
 // cadence information) is never stale.
+//
+// This is the criterion for regular (non-gated) tasks whose tick interval is
+// their effective cadence. Time-gated tasks must use gatedIsStale instead.
 func IsStale(lastRun time.Time, interval time.Duration, now time.Time) bool {
 	if lastRun.IsZero() {
 		return true
@@ -24,6 +37,19 @@ func IsStale(lastRun time.Time, interval time.Duration, now time.Time) bool {
 		return false
 	}
 	return now.Sub(lastRun) > interval*StaleFactor
+}
+
+// gatedIsStale reports whether a time-gated task is overdue. Unlike a regular
+// task, staleness is judged on the last real *success* (the gate's actual
+// work) against the generous GatedStaleWindow, not on the short tick interval
+// that would false-alarm during the idle window between real runs. A gated
+// task that has never succeeded is not flagged here — a failing gated task is
+// caught by the BTM consecutive-failure alert.
+func gatedIsStale(lastSuccess time.Time, now time.Time) bool {
+	if lastSuccess.IsZero() {
+		return false
+	}
+	return now.Sub(lastSuccess) > GatedStaleWindow
 }
 
 // IntervalProvider resolves a task name to its runtime scheduling interval.
@@ -97,6 +123,20 @@ func (m *StalenessMonitor) CheckOnce(ctx context.Context, now time.Time) error {
 		if !ok {
 			continue // cron-only row: no BTM interval, cannot judge staleness
 		}
+		// Time-gated tasks (ScheduledTask.TimeGated) return ErrTaskSkipped
+		// outside their run window, so their tick interval is not their
+		// effective cadence. Judge them by last successful run against the
+		// generous GatedStaleWindow; this removes the false-positive "stale"
+		// alert for e.g. daily_report_generate / autobacktest_daily while
+		// they idle between daily windows.
+		if task.TimeGated {
+			if !gatedIsStale(r.LastSuccessAt, now) {
+				continue
+			}
+			nowStale[r.TaskName] = true
+			m.alertIfNew(r.TaskName, now.Sub(r.LastSuccessAt), GatedStaleWindow)
+			continue
+		}
 		interval := task.Interval
 		if interval <= 0 {
 			continue
@@ -105,16 +145,7 @@ func (m *StalenessMonitor) CheckOnce(ctx context.Context, now time.Time) error {
 			continue
 		}
 		nowStale[r.TaskName] = true
-		staleFor := now.Sub(r.LastRunAt)
-		m.mu.Lock()
-		alreadyAlerted := m.alerted[r.TaskName]
-		m.mu.Unlock()
-		if !alreadyAlerted && m.alertFn != nil {
-			m.alertFn(r.TaskName, staleFor, interval)
-			m.mu.Lock()
-			m.alerted[r.TaskName] = true
-			m.mu.Unlock()
-		}
+		m.alertIfNew(r.TaskName, now.Sub(r.LastRunAt), interval)
 	}
 	// Clear alert state for tasks that recovered (ran again or interval gone).
 	m.mu.Lock()
@@ -125,6 +156,22 @@ func (m *StalenessMonitor) CheckOnce(ctx context.Context, now time.Time) error {
 	}
 	m.mu.Unlock()
 	return nil
+}
+
+// alertIfNew fires a staleness alert for the task if it is not already
+// alerted, and marks it as alerted. Deduplication keeps one alert per stale
+// episode; the alert state is cleared by CheckOnce once the task recovers.
+func (m *StalenessMonitor) alertIfNew(taskName string, staleFor, interval time.Duration) {
+	m.mu.Lock()
+	alreadyAlerted := m.alerted[taskName]
+	m.mu.Unlock()
+	if alreadyAlerted || m.alertFn == nil {
+		return
+	}
+	m.alertFn(taskName, staleFor, interval)
+	m.mu.Lock()
+	m.alerted[taskName] = true
+	m.mu.Unlock()
 }
 
 // AlertedForTesting returns the set of currently-alerted task names.
