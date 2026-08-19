@@ -739,8 +739,163 @@
   font-family: var(--font-mono);
 }
 
+
 /* ====================================================================
-   7. RWD
+   7. Premium 即時儀表板（原則C：被鎖即時值集中於此單一板塊）
+   ==================================================================== */
+.md-premium-dashboard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--editorial-radius-lg);
+  padding: var(--space-lg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border-top: 4px solid var(--accent);
+}
+.md-premium-dashboard__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+.md-premium-dashboard__header h3 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-display);
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.md-premium-dashboard__header p {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* 門檻（非 premium） */
+.md-premium-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+  padding: var(--space-lg) var(--space-md);
+  background: var(--panel-l2);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+.md-premium-gate__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.md-premium-gate__desc {
+  font-size: var(--text-base);
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 640px;
+  margin: 0;
+}
+
+/* premium 內容 section */
+.md-premium-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+  background: var(--panel-l2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.md-premium-section__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  font-family: var(--font-display);
+}
+.md-premium-period {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.md-premium-period__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+
+/* 八層即時數值 groups */
+.md-premium-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+.md-premium-group__label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-weight: var(--font-medium);
+}
+.md-premium-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-sm);
+}
+.md-premium-tile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.md-premium-tile__label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-weight: var(--font-medium);
+}
+.md-premium-tile__label code {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  background: var(--panel-l3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.md-premium-tile__value {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-mono);
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.md-premium-tile__spark {
+  line-height: 0;
+}
+
+/* period card gate 提示（教育結構下方） */
+.md-period-card__gate-note {
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--panel-l2);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: var(--text-base);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ====================================================================
+   8. RWD
    ==================================================================== */
 @media (max-width: 900px) {
   .md-page {
@@ -758,6 +913,10 @@
     grid-template-columns: 1fr;
   }
   .md-recommend__grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+  .md-premium-period__row {
     grid-template-columns: 1fr;
     gap: var(--space-md);
   }
