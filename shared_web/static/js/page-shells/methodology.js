@@ -1,6 +1,7 @@
 // Methodology page — 對應 docs/ATLAS_METHODOLOGY.md 第二章（因果傳導鏈）與
 // 第五章（策略矩陣）。所有 8 層結構、文字、策略優先級皆來自憲章；數值
-// 區接真 API（/api/reports/latest、/api/cross-market/status、/api/regime/history），
+// 區接真 API（/api/reports/latest、/api/cross-market/status、/api/regime/history、
+// /api/macro/snapshot/latest（公開數據，所有 tier 開放）），
 // 沒資料源的指標顯示「資料源未接入」佔位，**禁止編造數值**。
 //
 // API 失敗處理：每個區塊（period card / regime band / chain / recommend）
@@ -91,10 +92,12 @@ const LAYERS = [
     num: '第二層', title: '台灣出口與半導體景氣',
     charter: '二・第二層',
     oneliner: '基本面方向訊號（出口訂單、設備進口、台積電月營收）',
+    // 第二層公開數據自 /api/macro/snapshot/latest 讀取（無 tier gate，所有 tier 開放顯示）。
+    // exports/tsm_rev 為 public 數據；semi_imp 真無資料源，維持 available:false。
     metrics: [
-      { key: 'exports',   label: '出口訂單',       en: 'MOEA Exports',     available: false },
-      { key: 'semi_imp',  label: '半導體設備進口', en: 'Semi Equip Import',available: false },
-      { key: 'tsm_rev',   label: '台積電月營收',   en: 'TSM Revenue',      available: false },
+      { key: 'exports',   label: '電子出口',       en: 'Electronics Export', source: 'macro.export_electronics', numeric: true },
+      { key: 'semi_imp',  label: '半導體設備進口', en: 'Semi Equip Import',  available: false },
+      { key: 'tsm_rev',   label: '台積電月營收',   en: 'TSM Revenue',        source: 'macro.tsmc_revenue',        format: 'ntd-billions' },
     ],
   },
   {
@@ -296,7 +299,7 @@ function renderSparkline(values) {
   return `<svg class="md-sparkline ${dirCls}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, isPremium) {
+export function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, macro, isPremium) {
   if (metric.available === false) {
     return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
       <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
@@ -351,6 +354,17 @@ function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, is
         <div class="md-metric__value md-metric__value--muted">資料獲取失敗</div>
       </div>`;
     }
+  } else if (src.startsWith('macro.')) {
+    // 來自 /api/macro/snapshot/latest — 公開數據（GET，無 tier gate），所有 tier 開放顯示。
+    // 欄位異構為 { value, change_pct, symbol, timestamp } 物件；此處僅取 value/change_pct。
+    const field = safeGet(macro, src.slice('macro.'.length));
+    if (field && typeof field === 'object') {
+      value = field.value;
+      changePct = field.change_pct;
+    } else {
+      value = field;
+    }
+    // 不設 isGated — 公開數據對所有 tier 顯示真實資料
   }
 
   if (isGated) {
@@ -364,7 +378,15 @@ function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, is
   // 數值 / 字串呈現
   const isNumeric = metric.numeric || metric.kind === 'force' || isNum(changePct);
   let display = '—';
-  if (isNumeric && isNum(value)) {
+  if (metric.format === 'ntd-billions' && isNum(value)) {
+    // 台積電月營收：原始值為「元」，顯示為「億」並接 YoY（change_pct 已是 %）
+    display = fmtSafeNumber(Number(value) / 1e8, { decimals: 1, useGrouping: true }) + ' 億';
+    if (isNum(changePct)) {
+      const cp = Number(changePct);
+      const cls = cp > 0 ? 'md-metric__value--bullish' : cp < 0 ? 'md-metric__value--bearish' : '';
+      display += ` <span class="md-metric__change ${cls}">${fmtSafeSignedPct(cp)}</span>`;
+    }
+  } else if (isNumeric && isNum(value)) {
     display = fmtSafeNumber(value, { decimals: 2, useGrouping: true });
     if (isNum(changePct)) {
       const cp = Number(changePct);
@@ -548,10 +570,10 @@ function renderRegimeHistory(host, data, error) {
 // ---------------------------------------------------------------------------
 // 渲染：3. 鏈圖（8 層）
 // ---------------------------------------------------------------------------
-function renderChain(host, report, cross, capital, capitalFlowHistory, isPremium) {
+function renderChain(host, report, cross, capital, capitalFlowHistory, macro, isPremium) {
   const layerHtml = LAYERS.map((layer, idx) => {
     const isLast = idx === LAYERS.length - 1;
-    const cards = layer.metrics.map(m => renderMetricCell(m, report, cross, capital, capitalFlowHistory, isPremium)).join('');
+    const cards = layer.metrics.map(m => renderMetricCell(m, report, cross, capital, capitalFlowHistory, macro, isPremium)).join('');
     const resonance = layer.resonance ? renderResonance(report, isPremium) : '';
     return `
       <div class="md-layer-card" data-layer-num="${escapeHtml(layer.num)}" tabindex="0" role="button" aria-label="展開 ${escapeHtml(layer.title)} 詳細">
@@ -776,9 +798,11 @@ async function reloadSection(section, isPremium) {
       }
       return;
     }
-    const [r, capital] = await Promise.all([
+    const [r, capital, cross, macro] = await Promise.all([
       silentGetJSON('/api/reports/latest'),
       silentGetJSON('/api/capital-flow/summary'),
+      silentGetJSON('/api/cross-market/status'),
+      silentGetJSON('/api/macro/snapshot/latest'), // 公開數據（第二層），無 tier gate
     ]);
     let capitalData = capital;
     if (capitalData && !Array.isArray(capitalData.forces)) {
@@ -787,8 +811,7 @@ async function reloadSection(section, isPremium) {
     }
     // 連動更新 chain，因為 chain 的 force metric 來自 capital-flow
     const chainHost = document.getElementById('md-chain-host');
-    const cross = await silentGetJSON('/api/cross-market/status');
-    if (chainHost) renderChain(chainHost, r, cross, capitalData, null, true);
+    if (chainHost) renderChain(chainHost, r, cross, capitalData, null, macro, true);
     if (section === 'period') {
       const host = document.getElementById('md-period-host');
       if (host) renderPeriodCard(host, r, true, !r);
@@ -823,13 +846,14 @@ export async function loadMethodologyData() {
   const tier = await getTier();
   const isPremium = tier === 'premium';
 
-  // 五個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
-  const [report, regime, cross, capital, capitalFlowHistory] = await Promise.all([
+  // 六個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
+  const [report, regime, cross, capital, capitalFlowHistory, macro] = await Promise.all([
     isPremium ? silentGetJSON('/api/reports/latest') : Promise.resolve(null),
     silentGetJSON('/api/regime/history'),
     silentGetJSON('/api/cross-market/status'),
     isPremium ? silentGetJSON('/api/capital-flow/summary') : Promise.resolve(null),
     silentGetJSON('/api/capital-flow/history?days=20'), // sparkline 用，無 tier gate
+    silentGetJSON('/api/macro/snapshot/latest'),       // 公開數據（第二層），無 tier gate
   ]);
 
   // capital-flow fallback：summary 若無 forces，嘗試 daily
@@ -866,7 +890,7 @@ export async function loadMethodologyData() {
 
   // 3. 鏈圖（結構全 tier 可見；數值區獨立 error/empty/tier-gate）
   const chainHost = document.getElementById('md-chain-host');
-  if (chainHost) renderChain(chainHost, report, cross, capitalData, capitalFlowHistory, isPremium);
+  if (chainHost) renderChain(chainHost, report, cross, capitalData, capitalFlowHistory, macro, isPremium);
 
   // 4. 策略推薦
   const recHost = document.getElementById('md-recommend-host');

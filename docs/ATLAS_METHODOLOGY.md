@@ -4,6 +4,7 @@
 > **狀態**: 正式（生效中）
 > **定位**: 全專案唯一真理源頭 — 所有策略邏輯、推薦輸出、前端展示、AI prompt 皆須與本文一致。
 > **關聯實作**: `internal/domain/shared/shared.go`（Regime）、`internal/macroflow/`（MacroFlow）、`internal/portfolio/regime.go`（RegimeAllocator）、`internal/narrative/`（Narrative Engine）、`internal/capitalflow/`（七大資金勢力）
+> **會員鎖住三原則**: 見 [`docs/guides/membership-gating.md`](guides/membership-gating.md)（2026-08-19 業主定案；第二層公開數據開放即其落地）
 
 ---
 
