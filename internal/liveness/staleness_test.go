@@ -45,6 +45,7 @@ func TestIsStale_Boundary(t *testing.T) {
 // fakeIntervalProvider resolves only the given tasks.
 type fakeIntervalProvider struct {
 	intervals map[string]time.Duration
+	gated     map[string]bool
 }
 
 func (f *fakeIntervalProvider) Get(name string) (*apigateway.ScheduledTask, bool) {
@@ -52,7 +53,7 @@ func (f *fakeIntervalProvider) Get(name string) (*apigateway.ScheduledTask, bool
 	if !ok {
 		return nil, false
 	}
-	return &apigateway.ScheduledTask{Name: name, Interval: d}, true
+	return &apigateway.ScheduledTask{Name: name, Interval: d, TimeGated: f.gated[name]}, true
 }
 
 // fakeLister implements the lister interface for monitor tests.
@@ -139,5 +140,94 @@ func TestStalenessMonitor_ListErrorIsReturned(t *testing.T) {
 	m.store = fakeLister{err: context.DeadlineExceeded}
 	if err := m.CheckOnce(context.Background(), time.Now()); err == nil {
 		t.Fatal("expected error to propagate")
+	}
+}
+
+func TestGatedIsStale_NeverSucceededIsNotStale(t *testing.T) {
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	if gatedIsStale(time.Time{}, now) {
+		t.Error("gated task that never succeeded must not be flagged stale")
+	}
+}
+
+func TestGatedIsStale_IdleWithinWindowIsNotStale(t *testing.T) {
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	// Last success ~24h ago (a daily-gated task normally runs every ~24h),
+	// well inside GatedStaleWindow: not stale.
+	if gatedIsStale(now.Add(-24*time.Hour), now) {
+		t.Errorf("gated task idle for 24h must not be stale (window %s)", GatedStaleWindow)
+	}
+	if gatedIsStale(now.Add(-72*time.Hour), now) {
+		t.Errorf("gated task idle exactly GatedStaleWindow must not be stale (strictly greater required)")
+	}
+}
+
+func TestGatedIsStale_GenuinelyDeadIsStale(t *testing.T) {
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	if !gatedIsStale(now.Add(-GatedStaleWindow-time.Second), now) {
+		t.Errorf("gated task idle past GatedStaleWindow must be stale")
+	}
+}
+
+// A time-gated task that idles between daily windows (no new successful run
+// for many hours but yesterday's success is inside GatedStaleWindow) must NOT
+// be flagged stale — this is the exact false positive reported for
+// daily_report_generate / autobacktest_daily.
+func TestStalenessMonitor_GatedTaskIdleNotStale(t *testing.T) {
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	interval := 1 * time.Hour
+	rows := []Row{
+		// Gated task: last real success ~15h ago (yesterday 14:00-style run,
+		// now at 10:00 next day), LastRunAt would be ~3h-tick-stale under the
+		// old 3x-interval criterion but must NOT alert for a gated task.
+		{TaskName: "daily_report_generate", LastRunAt: now.Add(-15 * time.Hour), LastSuccessAt: now.Add(-15 * time.Hour)},
+		// Regular non-gated task that is genuinely stale (4h > 3x 1h): must still alert.
+		{TaskName: "normal_task", LastRunAt: now.Add(-4 * time.Hour)},
+	}
+	intervals := map[string]time.Duration{
+		"daily_report_generate": interval,
+		"normal_task":           interval,
+	}
+	gated := map[string]bool{"daily_report_generate": true}
+
+	var calls []alertCall
+	m := NewStalenessMonitor(nil, &fakeIntervalProvider{intervals: intervals, gated: gated}, func(name string, staleFor, iv time.Duration) {
+		calls = append(calls, alertCall{name: name, staleFor: staleFor, interval: iv})
+	})
+	m.store = fakeLister{rows: rows}
+
+	if err := m.CheckOnce(context.Background(), now); err != nil {
+		t.Fatalf("CheckOnce: %v", err)
+	}
+	// Only the non-gated stale task must be alerted.
+	if len(calls) != 1 || calls[0].name != "normal_task" {
+		t.Fatalf("expected only the non-gated stale task to alert, got %+v", calls)
+	}
+}
+
+// A genuinely dead gated task (last successful run far beyond GatedStaleWindow)
+// must still be flagged stale — regression protection is retained.
+func TestStalenessMonitor_GatedTaskGenuinelyStaleStillAlerts(t *testing.T) {
+	now := time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{TaskName: "autobacktest_daily", LastRunAt: now.Add(-80 * time.Hour), LastSuccessAt: now.Add(-80 * time.Hour)},
+	}
+	intervals := map[string]time.Duration{"autobacktest_daily": 1 * time.Hour}
+	gated := map[string]bool{"autobacktest_daily": true}
+
+	var calls []alertCall
+	m := NewStalenessMonitor(nil, &fakeIntervalProvider{intervals: intervals, gated: gated}, func(name string, staleFor, iv time.Duration) {
+		calls = append(calls, alertCall{name: name, staleFor: staleFor, interval: iv})
+	})
+	m.store = fakeLister{rows: rows}
+
+	if err := m.CheckOnce(context.Background(), now); err != nil {
+		t.Fatalf("CheckOnce: %v", err)
+	}
+	if len(calls) != 1 || calls[0].name != "autobacktest_daily" {
+		t.Fatalf("expected genuinely-dead gated task to alert, got %+v", calls)
+	}
+	if calls[0].interval != GatedStaleWindow {
+		t.Errorf("gated alert interval = %v, want %v", calls[0].interval, GatedStaleWindow)
 	}
 }
