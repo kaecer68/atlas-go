@@ -4,8 +4,16 @@
 // /api/macro/snapshot/latest（公開數據，所有 tier 開放）），
 // 沒資料源的指標顯示「資料源未接入」佔位，**禁止編造數值**。
 //
-// API 失敗處理：每個區塊（period card / regime band / chain / recommend）
-// 獨立擁有自己的 loading / error / empty 三態，並各自掛重試按鈕。
+// 會員鎖住三原則（docs/guides/membership-gating.md）：
+//   - 原則A/B：只有「非公開 / 獨家算出」的數據才鎖。公開數據（cross.* / macro.*）
+//     對所有 tier 開放，於層卡直接顯示。
+//   - 原則C：要鎖的內容集中在「獨立且完整的機能板塊」—— #md-premium-dashboard。
+//     被鎖的即時值（report.* / capital.forces.* / 市場時期判定 / 資金共振 / 策略推薦）
+//     全部集中於該 Premium 板塊呈現；各層卡片只保留公開值 + 教育結構，
+//     不允許單一卡片內「有的有值、有的沒值」。
+//
+// API 失敗處理：每個區塊（premium dashboard / regime band / chain）獨立擁有
+// 自己的 loading / error 三態，並各自掛重試按鈕。
 
 import { silentGetJSON, escapeHtml } from '../shared/app-utils.js';
 import { getTier } from '../services/auth.js';
@@ -63,7 +71,10 @@ const STATUS_TO_BADGE = {
 };
 
 // ---------------------------------------------------------------------------
-// 8 層鏈圖定義 — 結構與憲章第二章完全一致，不得合併改名
+// 8 層鏈圖定義 — 結構與憲章第二章完全一致，不得合併改名。
+// 層卡僅顯示公開數值（cross.* / macro.*）+ 教育結構；被鎖即時值
+// （report.* / capital.forces.*）於層卡內以教育標籤呈現，實際數值集中於
+// #md-premium-dashboard。
 // ---------------------------------------------------------------------------
 const LAYERS = [
   {
@@ -171,6 +182,7 @@ const LAYER_IMPLICATION = {
 
 // ---------------------------------------------------------------------------
 // template（DOM 骨架）— 純靜態，所有資料由 init() 注入。
+// 版面順序：當前時期卡片 → Premium 即時儀表板 → 三態歷史色帶 → 因果傳導鏈。
 // ---------------------------------------------------------------------------
 export const template = `
   <div class="md-page">
@@ -181,33 +193,37 @@ export const template = `
 
     <details class="md-helper">
       <summary>💡 如何閱讀本頁</summary>
-      <p>由上至下讀 8 層因果鏈（全球 → 美股 → 台灣出口 → 外資 → 大盤 → 內資 → 散戶 → 事件），每一層點擊可展開「憲章引用 + 指標清單 + 對決策的含義」。最下方的「策略推薦」依當前時期套用憲章第五章策略矩陣。</p>
-      <p>非 premium 用戶仍可看到完整結構與憲章內容，僅即時數值以「升級查看即時數值」標示。</p>
+      <p>由上至下讀 8 層因果鏈（全球 → 美股 → 台灣出口 → 外資 → 大盤 → 內資 → 散戶 → 事件），每一層點擊可展開「憲章引用 + 指標清單 + 對決策的含義」。</p>
+      <p>依會員三原則（docs/guides/membership-gating.md），<strong>被鎖的即時數值集中在「Premium 即時儀表板」板塊</strong>呈現；各層卡片僅顯示公開數值（美股/台積電/匯率/出口/營收）與教育結構，不在卡片內分散 gating。</p>
     </details>
 
-    <!-- 1. 當前時期卡片 -->
+    <!-- 1. 當前時期卡片（免費教育結構；即時判定集中於 Premium 儀表板） -->
     <section id="md-period-host" class="md-period-card" data-period="" aria-label="當前市場時期">
       <div class="md-state md-state--loading">載入當前時期…</div>
     </section>
 
-    <!-- 2. 三態歷史色帶 -->
+    <!-- 2. Premium 即時儀表板（原則C：被鎖即時值集中於此獨立板塊，單一門檻） -->
+    <section id="md-premium-dashboard" class="md-premium-dashboard" aria-label="Premium 即時儀表板">
+      <div class="md-premium-dashboard__header">
+        <h3>📊 Premium 即時儀表板</h3>
+        <p>即時八層數值 / 市場時期判定 / 資金共振 / 策略推薦（R premium 集中呈現）</p>
+      </div>
+      <div id="md-premium-body" class="md-state md-state--loading">載入 Premium 即時儀表板…</div>
+    </section>
+
+    <!-- 3. 三態歷史色帶 -->
     <section id="md-regime-host" class="md-history-card" aria-label="三態歷史色帶">
       <h3>📊 風險狀態（三態）歷史</h3>
       <div class="md-state md-state--loading">載入歷史紀錄…</div>
     </section>
 
-    <!-- 3. 因果傳導鏈 -->
+    <!-- 4. 因果傳導鏈 -->
     <section class="md-chain-section">
       <h3>🔗 因果傳導鏈（八層）</h3>
-      <p class="md-chain-section__intro">由上而下、由外而內，<strong>不可反向推導</strong>。點任一層卡片查看憲章引用與指標清單。</p>
+      <p class="md-chain-section__intro">由上而下、由外而內，<strong>不可反向推導</strong>。點任一層卡片查看憲章引用與指標清單。層卡顯示公開數值（美股/台積電/匯率/出口/營收）與結構教育；被鎖即時數值集中於上方 <strong>Premium 即時儀表板</strong>。</p>
       <div id="md-chain-host" class="md-chain">
         <div class="md-state md-state--loading">載入鏈圖…</div>
       </div>
-    </section>
-
-    <!-- 4. 策略推薦輸出節點 -->
-    <section id="md-recommend-host" class="md-recommend" aria-label="散戶策略推薦">
-      <div class="md-state md-state--loading">載入策略推薦…</div>
     </section>
   </div>
 `;
@@ -229,10 +245,6 @@ function safeGet(obj, path) {
   if (cur == null || cur === '') return null;
   if (typeof cur === 'number' && Number.isNaN(cur)) return null;
   return cur;
-}
-
-function tierGatePill() {
-  return '<span class="md-tier-gate" title="升級 Premium 以查看即時數值">升級查看即時數值</span>';
 }
 
 function renderError(label, retryId) {
@@ -299,6 +311,13 @@ function renderSparkline(values) {
   return `<svg class="md-sparkline ${dirCls}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+// ---------------------------------------------------------------------------
+// renderMetricCell — 單一指標格（層卡內）
+//
+// 原則C（集中板塊）：層卡內**不**渲染被鎖即時值（report.* / capital.forces.*）
+// 的 pill/數值，改以教育標籤呈現；實際即時值統一於 #md-premium-dashboard。
+// 公開數值（cross.* / macro.*）對所有 tier 開放、照常顯示。
+// ---------------------------------------------------------------------------
 export function renderMetricCell(metric, report, cross, capital, capitalFlowHistory, macro, isPremium) {
   if (metric.available === false) {
     return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
@@ -307,44 +326,25 @@ export function renderMetricCell(metric, report, cross, capital, capitalFlowHist
     </div>`;
   }
 
-  // 解析來源
+  const src = metric.source || '';
+
+  // 原則C：premium 即時值（report.* / capital.forces.*）於層卡內不嵌數值、
+  // 也不顯示「升級查看即時數值」pill；僅保留教育標籤，實際數值集中於
+  // #md-premium-dashboard 統一呈現（避免卡片內「有的有值、有的沒值」）。
+  if (src.startsWith('report.') || src.startsWith('capital.forces.')) {
+    return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
+      <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
+      <div class="md-metric__value md-metric__value--muted">即時數值於 Premium 儀表板</div>
+    </div>`;
+  }
+
+  // 公開數值（所有 tier 可見）：cross.*（美股/台積電/匯率）與 macro.*（出口/營收）
   let value = null;
   let changePct = null;
-  let isGated = false;
   let extraBadge = '';
-  const src = metric.source || '';
-  let sparklineHtml = '';
-  if (metric.kind === 'force') {
-    // 來自 /api/capital-flow/summary 或 /api/capital-flow/daily
-    const forceName = src.slice('capital.forces.'.length);
-    const f = getForce(capital, forceName);
-    // sparkline（所有 tier 可見，因為 /api/capital-flow/history 無 tier gate）
-    if (capitalFlowHistory && capitalFlowHistory[forceName]) {
-      const rawVals = capitalFlowHistory[forceName].map(e => e.raw_value);
-      const svg = renderSparkline(rawVals);
-      if (svg) sparklineHtml = svg;
-    }
-    if (!isPremium) {
-      isGated = true;
-    } else if (!f || f.data_available === false) {
-      return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
-        <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
-        <div class="md-metric__value md-metric__value--muted">資料源未接入</div>
-      </div>`;
-    } else {
-      value = isNum(f.z_score) ? Number(f.z_score) : null;
-      const trend = f.trend || (value > 0.5 ? 'bullish' : value < -0.5 ? 'bearish' : 'neutral');
-      extraBadge = `<span class="badge ${trend === 'bullish' ? 'up' : trend === 'bearish' ? 'down' : 'muted'}">${escapeHtml(trend === 'bullish' ? '偏多' : trend === 'bearish' ? '偏空' : '中性')}</span>`;
-    }
-  } else if (src.startsWith('report.')) {
-    // 來自 /api/reports/latest — tier-gated
-    if (!isPremium) {
-      isGated = true;
-    } else {
-      value = safeGet(report, src.slice('report.'.length));
-    }
-  } else if (src.startsWith('cross.')) {
-    // 來自 /api/cross-market/status
+
+  if (src.startsWith('cross.')) {
+    // 來自 /api/cross-market/status（公開，所有 tier）
     const field = getCrossField(cross, src.slice('cross.'.length));
     value = field.value;
     changePct = field.changePct;
@@ -364,19 +364,11 @@ export function renderMetricCell(metric, report, cross, capital, capitalFlowHist
     } else {
       value = field;
     }
-    // 不設 isGated — 公開數據對所有 tier 顯示真實資料
-  }
-
-  if (isGated) {
-    return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
-      <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code></div>
-      ${sparklineHtml ? `<div class="md-metric__sparkline">${sparklineHtml}</div>` : ''}
-      <div class="md-metric__value md-metric__value--muted">${tierGatePill()}</div>
-    </div>`;
+    // 公開數據對所有 tier 顯示真實資料，不設 gate
   }
 
   // 數值 / 字串呈現
-  const isNumeric = metric.numeric || metric.kind === 'force' || isNum(changePct);
+  const isNumeric = metric.numeric || isNum(changePct);
   let display = '—';
   if (metric.format === 'ntd-billions' && isNum(value)) {
     // 台積電月營收：原始值為「元」，顯示為「億」並接 YoY（change_pct 已是 %）
@@ -403,45 +395,169 @@ export function renderMetricCell(metric, report, cross, capital, capitalFlowHist
   }
   return `<div class="md-metric" data-key="${escapeHtml(metric.key)}">
     <div class="md-metric__label">${escapeHtml(metric.label)} <code>${escapeHtml(metric.en)}</code>${extraBadge}</div>
-    ${sparklineHtml ? `<div class="md-metric__sparkline">${sparklineHtml}</div>` : ''}
     <div class="md-metric__value">${display}</div>
   </div>`;
 }
 
 // ---------------------------------------------------------------------------
-// 渲染：1. 當前時期卡片
+// 渲染：鏈圖（8 層）— 公開值 + 教育結構；被鎖即時值集中於 Premium 儀表板
 // ---------------------------------------------------------------------------
-function renderPeriodCard(host, report, isPremium, error) {
-  if (error) {
-    host.innerHTML = renderError('當前時期資料', 'period');
-    return rebindRetry('md-period-host', 'period', isPremium);
-  }
-  if (!isPremium) {
-    // 非 premium 仍顯示結構與概念說明（方法論教育免費），
-    // 只有「即時數值」保留 Premium gate，以「升級查看即時數值」標示。
-    host.dataset.period = '';
-    host.innerHTML = `
-      <div class="md-period-card__header">
-        <span class="md-period-name-zh">當前市場時期</span>
-        <span class="md-period-market-period">由八層即時指標判定，即時判定需 Premium</span>
-      </div>
-      <div class="md-period-card__body">
-        <div class="md-period-summary">${escapeHtml(LAYER_IMPLICATION['第零層'])}</div>
-        <div class="md-period-cash">
-          <span class="md-period-cash__label">現金部位建議</span>
-          <span class="md-period-cash__value">—</span>
-          <div class="md-period-cash__bar"><div class="md-period-cash__fill" style="width:0%"></div></div>
-          <div class="md-period-cash__hint">${tierGatePill()}</div>
+export function renderChain(host, cross, macro) {
+  const layerHtml = LAYERS.map((layer, idx) => {
+    const isLast = idx === LAYERS.length - 1;
+    const cards = layer.metrics.map(m => renderMetricCell(m, null, cross, null, null, macro, false)).join('');
+    return `
+      <div class="md-layer-card" data-layer-num="${escapeHtml(layer.num)}" tabindex="0" role="button" aria-label="展開 ${escapeHtml(layer.title)} 詳細">
+        <div class="md-layer-card__head">
+          <span class="md-layer-card__num">${escapeHtml(layer.num)}</span>
+          <span class="md-layer-card__title">${escapeHtml(layer.title)}</span>
+          <span class="md-layer-card__chevron">›</span>
         </div>
+        <div class="md-layer-card__oneliner">${escapeHtml(layer.oneliner)}</div>
+        <div class="md-layer-card__metrics">${cards}</div>
       </div>
-      <div class="md-allowed-strategies"><span class="md-tier-gate" title="升級 Premium 以查看可用策略">升級查看可用策略</span></div>
+      ${isLast ? '' : `<div class="md-arrow">${arrowSvg()}</div>`}
     `;
-    return;
+  }).join('');
+  host.innerHTML = layerHtml;
+  // 綁定 click / Enter 開 Modal
+  host.querySelectorAll('.md-layer-card').forEach(card => {
+    const open = () => openLayerModal(card);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 渲染：1. 當前時期卡片（純教育結構；即時判定集中於 Premium 儀表板）
+// ---------------------------------------------------------------------------
+function renderPeriodCard(host, isPremium) {
+  host.dataset.period = '';
+  const gateNote = isPremium
+    ? '即時市場時期判定、現金部位與可用策略，集中於下方的「Premium 即時儀表板」。'
+    : '即時市場時期判定、現金部位與可用策略需升級 Premium 查看（於下方「Premium 即時儀表板」統一呈現）。';
+  host.innerHTML = `
+    <div class="md-period-card__header">
+      <span class="md-period-name-zh">當前市場時期</span>
+      <span class="md-period-market-period">由八層即時指標判定</span>
+    </div>
+    <div class="md-period-card__body">
+      <div class="md-period-summary">${escapeHtml(LAYER_IMPLICATION['第零層'])}</div>
+    </div>
+    <div class="md-period-card__gate-note">${escapeHtml(gateNote)}</div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// 渲染：2. Premium 即時儀表板（原則C — 被鎖即時值的單一完整板塊）
+//   非 premium → 整塊顯示單一門檻（不再於各層卡片內分散 pill）。
+//   premium   → 顯示所有即時數值：八層即時值 / 市場時期判定 / 資金共振 / 策略推薦。
+// ---------------------------------------------------------------------------
+function premiumTile(label, en, valueHtml) {
+  return `<div class="md-premium-tile">
+    <div class="md-premium-tile__label">${escapeHtml(label)}${en ? ` <code>${escapeHtml(en)}</code>` : ''}</div>
+    <div class="md-premium-tile__value">${valueHtml}</div>
+  </div>`;
+}
+
+function renderReportTile(report, path, label, en) {
+  const v = safeGet(report, 'global.' + path);
+  const html = v == null ? '—' : fmtSafeNumber(v, { decimals: 2, useGrouping: true });
+  return premiumTile(label, en, html);
+}
+
+function eventsText(v) {
+  if (!Array.isArray(v) || v.length === 0) return '—';
+  return v.map(escapeHtml).join('、');
+}
+
+function usdTwdHtml(cross) {
+  const field = getCrossField(cross, 'usd_twd');
+  if (!field.available) return '資料獲取失敗';
+  let html = field.value == null ? '—' : escapeHtml(String(field.value));
+  if (isNum(Number(field.changePct))) {
+    const cp = Number(field.changePct);
+    html += ` <span class="md-metric__change">${fmtSafeSignedPct(cp)}</span>`;
   }
+  return html;
+}
+
+function renderPremiumForceTile(name, label, en, capital, capitalFlowHistory) {
+  const f = getForce(capital, name);
+  let valueHtml = '資料源未接入';
+  if (f && f.data_available !== false) {
+    const z = isNum(f.z_score) ? Number(f.z_score) : null;
+    const trend = f.trend || (z > 0.5 ? 'bullish' : z < -0.5 ? 'bearish' : 'neutral');
+    const badge = `<span class="badge ${trend === 'bullish' ? 'up' : trend === 'bearish' ? 'down' : 'muted'}">${escapeHtml(trend === 'bullish' ? '偏多' : trend === 'bearish' ? '偏空' : '中性')}</span>`;
+    valueHtml = `${z == null ? '—' : fmtSafeNumber(z, { decimals: 2, useGrouping: true })} ${badge}`;
+  }
+  let spark = '';
+  if (capitalFlowHistory && capitalFlowHistory[name]) {
+    const raw = capitalFlowHistory[name].map(e => e.raw_value);
+    const svg = renderSparkline(raw);
+    if (svg) spark = `<div class="md-premium-tile__spark">${svg}</div>`;
+  }
+  return `<div class="md-premium-tile">
+    <div class="md-premium-tile__label">${escapeHtml(label)}${en ? ` <code>${escapeHtml(en)}</code>` : ''}</div>
+    <div class="md-premium-tile__value">${valueHtml}</div>
+    ${spark}
+  </div>`;
+}
+
+function renderPremiumLayers(report, capital, capitalFlowHistory, cross) {
+  // 第零層 global（report.global.*）
+  const globalTiles = [
+    renderReportTile(report, 'bond_yield', '美債殖利率', 'US 10Y'),
+    renderReportTile(report, 'usd_index', '美元指數', 'DXY'),
+    renderReportTile(report, 'jpy', '日圓', 'JPY'),
+    renderReportTile(report, 'vix', '恐慌指數', 'VIX'),
+  ].join('');
+
+  // 第三/五/六層 資金勢力（capital.forces.*）+ sparkline
+  const forceRows = [
+    ['foreign', '外資現貨', 'Foreign Spot'],
+    ['futures', '外資期貨未平倉', 'Foreign Futures'],
+    ['institutional', '投信', 'Investment Trust'],
+    ['government', '公股券商', 'Government'],
+    ['dealer', '自營商', 'Dealer'],
+    ['retail', '散戶動向 Z-score', 'Retail'],
+  ];
+  const forcesHtml = forceRows
+    .map(([name, label, en]) => renderPremiumForceTile(name, label, en, capital, capitalFlowHistory))
+    .join('');
+
+  // 第七層 events + USD_TWD
+  const eventsHtml = [
+    premiumTile('近期事件（明日）', 'Tomorrow', eventsText(safeGet(report, 'events.tomorrow'))),
+    premiumTile('近期事件（本週）', 'This Week', eventsText(safeGet(report, 'events.this_week'))),
+    premiumTile('新台幣匯率', 'USD/TWD', usdTwdHtml(cross)),
+  ].join('');
+
+  return `<div class="md-premium-section">
+    <div class="md-premium-section__title">🌐 八層即時數值</div>
+    <div class="md-premium-group">
+      <div class="md-premium-group__label">第零層 · 全球資金總開關</div>
+      <div class="md-premium-tiles">${globalTiles}</div>
+    </div>
+    <div class="md-premium-group">
+      <div class="md-premium-group__label">第三・五・六層 · 資金勢力（外資/期貨/內資/散戶）</div>
+      <div class="md-premium-tiles">${forcesHtml}</div>
+    </div>
+    <div class="md-premium-group">
+      <div class="md-premium-group__label">第七層 · 資金事件 / 匯率</div>
+      <div class="md-premium-tiles">${eventsHtml}</div>
+    </div>
+  </div>`;
+}
+
+function renderPremiumPeriod(report) {
   if (!report || !report.period) {
-    host.dataset.period = '';
-    host.innerHTML = renderEmpty('當前時期資料尚未生成，請稍候或重新整理。');
-    return;
+    return `<div class="md-premium-section">
+      <div class="md-premium-section__title">🎯 市場時期即時判定</div>
+      ${renderEmpty('市場時期即時判定資料尚未生成。')}
+    </div>`;
   }
   const p = report.period;
   const periodId = p.market_period || '';
@@ -456,36 +572,147 @@ function renderPeriodCard(host, report, isPremium, error) {
   const confPct = confidence == null ? null : Math.round(confidence * 100);
   const indicators = Array.isArray(p.triggered_indicators) ? p.triggered_indicators : [];
 
-  host.dataset.period = periodId;
-  host.innerHTML = `
-    <div class="md-period-card__header">
-      <span class="md-period-name-zh">${escapeHtml(p.period_name_zh || label.zh)}</span>
-      <span class="md-period-market-period">${escapeHtml(periodId || label.en || '')}</span>
-      ${status ? `<span class="badge ${status.cls}">${escapeHtml(status.label)}</span>` : ''}
-    </div>
-    <div class="md-period-card__body">
-      <div class="md-period-summary">${escapeHtml(summary)}</div>
-      <div class="md-period-cash">
-        <span class="md-period-cash__label">現金部位（cash_reserve）</span>
-        <span class="md-period-cash__value">${cash == null ? '—' : (cashPct + '%')}</span>
-        <div class="md-period-cash__bar"><div class="md-period-cash__fill" style="width:${cash == null ? 0 : cashPct}%"></div></div>
-        <div class="md-period-cash__hint">${periodId && CASH_RANGES[periodId] ? '憲章建議區間：' + escapeHtml(CASH_RANGES[periodId]) : ''}</div>
+  return `<div class="md-premium-section">
+    <div class="md-premium-section__title">🎯 市場時期即時判定</div>
+    <div class="md-premium-period" data-period="${escapeHtml(periodId)}">
+      <div class="md-period-card__header">
+        <span class="md-period-name-zh">${escapeHtml(p.period_name_zh || label.zh)}</span>
+        <span class="md-period-market-period">${escapeHtml(periodId || label.en || '')}</span>
+        ${status ? `<span class="badge ${status.cls}">${escapeHtml(status.label)}</span>` : ''}
       </div>
-      ${condTotal > 0 ? `
-      <div class="md-period-confidence">
-        <span class="md-period-confidence__label">信心度</span>
-        <span class="md-period-confidence__value">${condHit}/${condTotal}${confPct != null ? ' (' + confPct + '%)' : ''}</span>
-      </div>` : ''}
+      <div class="md-period-summary">${escapeHtml(summary)}</div>
+      <div class="md-premium-period__row">
+        <div class="md-period-cash">
+          <span class="md-period-cash__label">現金部位（cash_reserve）</span>
+          <span class="md-period-cash__value">${cash == null ? '—' : (cashPct + '%')}</span>
+          <div class="md-period-cash__bar"><div class="md-period-cash__fill" style="width:${cash == null ? 0 : cashPct}%"></div></div>
+          <div class="md-period-cash__hint">${periodId && CASH_RANGES[periodId] ? '憲章建議區間：' + escapeHtml(CASH_RANGES[periodId]) : ''}</div>
+        </div>
+        ${condTotal > 0 ? `
+        <div class="md-period-confidence">
+          <span class="md-period-confidence__label">信心度</span>
+          <span class="md-period-confidence__value">${condHit}/${condTotal}${confPct != null ? ' (' + confPct + '%)' : ''}</span>
+        </div>` : ''}
+      </div>
+      <div class="md-allowed-strategies">
+        ${renderStrategyChips(p.strategies_detail, p.allowed_strategies)}
+      </div>
+      ${indicators.length > 0 ? renderIndicatorPanel(indicators) : ''}
     </div>
-    <div class="md-allowed-strategies">
-      ${renderStrategyChips(p.strategies_detail, p.allowed_strategies)}
+  </div>`;
+}
+
+function renderPremiumResonance(report) {
+  const c = report && report.capital ? report.capital : null;
+  const resonance = c && isNum(c.resonance) ? Math.max(0, Math.min(1, Number(c.resonance))) : null;
+  const quality = c ? c.quality : null;
+  const qualityBadge = quality
+    ? `<span class="badge ${quality === 'high' || quality === 'good' ? 'ok' : quality === 'low' || quality === 'bad' ? 'err' : 'warn'}">${escapeHtml(quality)}</span>`
+    : '<span class="badge muted">—</span>';
+  return `<div class="md-premium-section">
+    <div class="md-premium-section__title">🔗 資金共振</div>
+    <div class="md-layer-card__resonance">
+      <span>資金共振</span>
+      <div class="md-progress" title="資金共振係數（0–1）"><div class="md-progress__fill" style="width:${resonance == null ? 0 : Math.round(resonance * 100)}%"></div></div>
+      <span class="md-resonance-value">${resonance == null ? '—' : resonance.toFixed(2)}</span>
+      <span>品質</span>
+      ${qualityBadge}
     </div>
-    ${indicators.length > 0 ? renderIndicatorPanel(indicators) : ''}
-  `;
+  </div>`;
+}
+
+// 策略推薦（原 md-recommend-host 的 premium 內容，集中於 Premium 儀表板）
+function renderPremiumRecommend(report) {
+  if (!report || !report.period || !report.period.market_period) {
+    return `<div class="md-premium-section">
+      <div class="md-premium-section__title">📌 散戶策略推薦</div>
+      ${renderEmpty('策略推薦需先有當前市場時期；period 資料未就緒。')}
+    </div>`;
+  }
+  const p = report.period;
+  const periodId = p.market_period;
+  const cashRange = CASH_RANGES[periodId] || '—';
+  const activeStrategy = (report.strategy && report.strategy.active_strategy) || '';
+  const direction = (report.strategy && report.strategy.direction) || '';
+  const entryCond = (report.strategy && report.strategy.entry_condition) || '';
+  const chipsHtml = renderStrategyChips(p.strategies_detail, p.allowed_strategies);
+
+  return `<div class="md-premium-section">
+    <div class="md-premium-section__title">📌 散戶策略推薦</div>
+    <div class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + escapeHtml(String(activeStrategy)) : ''}</div>
+    <div class="md-recommend__chips">${chipsHtml}</div>
+    <div class="md-period-cash" style="margin-top:var(--space-sm)">
+      <span class="md-period-cash__label">憲章建議現金部位</span>
+      <span class="md-period-cash__value">${escapeHtml(cashRange)}</span>
+    </div>
+    ${entryCond ? `<div class="md-period-summary" style="margin-top:var(--space-sm)"><strong>進場條件：</strong>${escapeHtml(entryCond)}${direction ? '　·　方向：' + escapeHtml(direction) : ''}</div>` : ''}
+  </div>`;
+}
+
+export function renderPremiumDashboard(host, report, capital, capitalFlowHistory, cross, isPremium, error) {
+  const body = host.querySelector ? host.querySelector('#md-premium-body') : null;
+  const target = body || host;
+  if (!isPremium) {
+    // 非 premium：整塊顯示單一門檻（原則C），不再於各層卡片內分散 pill
+    target.innerHTML = `
+      <div class="md-premium-gate">
+        <div class="md-premium-gate__title">🔒 升級 Premium 解鎖即時儀表板</div>
+        <p class="md-premium-gate__desc">即時八層數值、市場時期即時判定、資金共振與策略推薦，集中於此 Premium 板塊統一呈現。</p>
+      </div>
+    `;
+    return;
+  }
+  if (error) {
+    target.innerHTML = renderError('Premium 即時儀表板', 'premium');
+    rebindRetry('md-premium-dashboard', 'premium', isPremium);
+    return;
+  }
+  if (!report) {
+    target.innerHTML = renderEmpty('Premium 即時儀表板資料尚未生成，請稍候或重新整理。');
+    return;
+  }
+  target.innerHTML = [
+    renderPremiumPeriod(report),
+    renderPremiumLayers(report, capital, capitalFlowHistory, cross),
+    renderPremiumResonance(report),
+    renderPremiumRecommend(report),
+  ].join('');
+}
+
+// renderIndicatorPanel returns an HTML panel showing each period-detection
+// condition's status. Unavailable inputs are dimmed and labeled.
+function renderIndicatorPanel(indicators) {
+  if (!indicators || indicators.length === 0) return '';
+  const rows = indicators.map(ind => {
+    const avail = ind.input_available !== false;
+    const hit = !!ind.hit;
+    const rowCls = !avail ? 'md-indicator--unavailable'
+                : hit ? 'md-indicator--hit'
+                : 'md-indicator--miss';
+    const statusLabel = !avail ? '（資料未接入）'
+                      : hit ? '✓'
+                      : '✗';
+    return `<tr class="${rowCls}">
+      <td class="md-indicator__name">${escapeHtml(ind.name || '')}</td>
+      <td class="md-indicator__value">${fmtSafeNumber(ind.value, {decimals: 2})}</td>
+      <td class="md-indicator__relation">${escapeHtml(ind.relation || '')}</td>
+      <td class="md-indicator__threshold">${fmtSafeNumber(ind.threshold, {decimals: 2})}</td>
+      <td class="md-indicator__status">${statusLabel}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="md-indicator-panel">
+    <div class="md-indicator-panel__title">觸發指標</div>
+    <table class="md-indicator-table">
+      <thead><tr>
+        <th>指標</th><th>數值</th><th>關係</th><th>閾值</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 // ---------------------------------------------------------------------------
-// 渲染：2. 三態歷史色帶
+// 渲染：3. 三態歷史色帶
 // ---------------------------------------------------------------------------
 function renderRegimeHistory(host, data, error) {
   if (error) {
@@ -568,142 +795,6 @@ function renderRegimeHistory(host, data, error) {
 }
 
 // ---------------------------------------------------------------------------
-// 渲染：3. 鏈圖（8 層）
-// ---------------------------------------------------------------------------
-function renderChain(host, report, cross, capital, capitalFlowHistory, macro, isPremium) {
-  const layerHtml = LAYERS.map((layer, idx) => {
-    const isLast = idx === LAYERS.length - 1;
-    const cards = layer.metrics.map(m => renderMetricCell(m, report, cross, capital, capitalFlowHistory, macro, isPremium)).join('');
-    const resonance = layer.resonance ? renderResonance(report, isPremium) : '';
-    return `
-      <div class="md-layer-card" data-layer-num="${escapeHtml(layer.num)}" tabindex="0" role="button" aria-label="展開 ${escapeHtml(layer.title)} 詳細">
-        <div class="md-layer-card__head">
-          <span class="md-layer-card__num">${escapeHtml(layer.num)}</span>
-          <span class="md-layer-card__title">${escapeHtml(layer.title)}</span>
-          <span class="md-layer-card__chevron">›</span>
-        </div>
-        <div class="md-layer-card__oneliner">${escapeHtml(layer.oneliner)}</div>
-        <div class="md-layer-card__metrics">${cards}</div>
-        ${resonance}
-      </div>
-      ${isLast ? '' : `<div class="md-arrow">${arrowSvg()}</div>`}
-    `;
-  }).join('');
-  host.innerHTML = layerHtml;
-  // 綁定 click / Enter 開 Modal
-  host.querySelectorAll('.md-layer-card').forEach(card => {
-    const open = () => openLayerModal(card);
-    card.addEventListener('click', open);
-    card.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
-    });
-  });
-}
-
-function renderResonance(report, isPremium) {
-  if (!isPremium) {
-    return `<div class="md-layer-card__resonance">
-      <span>資金共振</span>
-      <div class="md-progress"><div class="md-progress__fill" style="width:0%"></div></div>
-      <span>${tierGatePill()}</span>
-    </div>`;
-  }
-  const r = report && report.capital ? report.capital : null;
-  const resonance = r && isNum(r.resonance) ? Math.max(0, Math.min(1, Number(r.resonance))) : null;
-  const quality = r ? r.quality : null;
-  const qualityBadge = quality
-    ? `<span class="badge ${quality === 'high' || quality === 'good' ? 'ok' : quality === 'low' || quality === 'bad' ? 'err' : 'warn'}">${escapeHtml(quality)}</span>`
-    : '<span class="badge muted">—</span>';
-  return `<div class="md-layer-card__resonance">
-    <span>資金共振</span>
-    <div class="md-progress" title="資金共振係數（0–1）"><div class="md-progress__fill" style="width:${resonance == null ? 0 : Math.round(resonance * 100)}%"></div></div>
-    <span class="md-resonance-value">${resonance == null ? '—' : resonance.toFixed(2)}</span>
-    <span>品質</span>
-    ${qualityBadge}
-  </div>`;
-}
-
-// ---------------------------------------------------------------------------
-// 渲染：4. 策略推薦
-// ---------------------------------------------------------------------------
-function renderRecommend(host, report, isPremium, error) {
-  if (error) {
-    host.innerHTML = renderError('策略推薦', 'recommend');
-    return rebindRetry('md-recommend-host', 'recommend', isPremium);
-  }
-  if (!isPremium) {
-    host.innerHTML = `
-      <div class="md-recommend__header">
-        <h3 class="md-recommend__title">📌 散戶策略推薦</h3>
-      </div>
-      <div class="md-period-summary">${tierGatePill()} 升級 Premium 後，策略推薦將依當前市場時期自動套用憲章第五章策略矩陣。</div>
-    `;
-    return;
-  }
-  if (!report || !report.period || !report.period.market_period) {
-    host.innerHTML = renderEmpty('策略推薦需先有當前市場時期；period 資料未就緒。');
-    return;
-  }
-  const p = report.period;
-  const periodId = p.market_period;
-  const cashRange = CASH_RANGES[periodId] || '—';
-  const activeStrategy = (report.strategy && report.strategy.active_strategy) || '';
-  const direction = (report.strategy && report.strategy.direction) || '';
-  const entryCond = (report.strategy && report.strategy.entry_condition) || '';
-
-  const chipsHtml = renderStrategyChips(p.strategies_detail, p.allowed_strategies);
-
-  host.innerHTML = `
-    <div class="md-recommend__header">
-      <h3 class="md-recommend__title">📌 散戶策略推薦</h3>
-      <span class="md-recommend__active">當前：${escapeHtml(p.period_name_zh || periodId)}${activeStrategy ? ' · ' + escapeHtml(String(activeStrategy)) : ''}</span>
-    </div>
-    <div class="md-recommend__strategies">
-      <div class="md-recommend__chips">${chipsHtml}</div>
-      <div class="md-period-cash" style="margin-top:var(--space-sm)">
-        <span class="md-period-cash__label">憲章建議現金部位</span>
-        <span class="md-period-cash__value">${escapeHtml(cashRange)}</span>
-      </div>
-      ${entryCond ? `<div class="md-period-summary" style="margin-top:var(--space-sm)"><strong>進場條件：</strong>${escapeHtml(entryCond)}${direction ? '　·　方向：' + escapeHtml(direction) : ''}</div>` : ''}
-    </div>
-  `;
-}
-
-
-// renderIndicatorPanel returns an HTML panel showing each period-detection
-// condition's status. Unavailable inputs are dimmed and labeled.
-function renderIndicatorPanel(indicators) {
-  if (!indicators || indicators.length === 0) return '';
-  const rows = indicators.map(ind => {
-    const avail = ind.input_available !== false;
-    const hit = !!ind.hit;
-    const rowCls = !avail ? 'md-indicator--unavailable'
-                : hit ? 'md-indicator--hit'
-                : 'md-indicator--miss';
-    const statusLabel = !avail ? '（資料未接入）'
-                      : hit ? '✓'
-                      : '✗';
-    return `<tr class="${rowCls}">
-      <td class="md-indicator__name">${escapeHtml(ind.name || '')}</td>
-      <td class="md-indicator__value">${fmtSafeNumber(ind.value, {decimals: 2})}</td>
-      <td class="md-indicator__relation">${escapeHtml(ind.relation || '')}</td>
-      <td class="md-indicator__threshold">${fmtSafeNumber(ind.threshold, {decimals: 2})}</td>
-      <td class="md-indicator__status">${statusLabel}</td>
-    </tr>`;
-  }).join('');
-  return `<div class="md-indicator-panel">
-    <div class="md-indicator-panel__title">觸發指標</div>
-    <table class="md-indicator-table">
-      <thead><tr>
-        <th>指標</th><th>數值</th><th>關係</th><th>閾值</th><th></th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
-}
-
-
-// ---------------------------------------------------------------------------
 // Modal（本頁自管）
 // ---------------------------------------------------------------------------
 let _activeOverlay = null;
@@ -745,7 +836,7 @@ function openLayerModal(card) {
       </div>
 
       <div class="md-modal__section">
-        <h4>指標清單與即時值</h4>
+        <h4>指標清單與公開值</h4>
         <div class="md-modal__metrics">
           ${layer.metrics.map(m => {
             const cell = card.querySelector('.md-metric[data-key="' + m.key + '"]');
@@ -786,39 +877,29 @@ function rebindRetry(hostId, section, isPremium) {
 }
 
 async function reloadSection(section, isPremium) {
-  if (section === 'period' || section === 'recommend') {
+  if (section === 'premium') {
     if (!isPremium) {
-      // 非 premium 重新渲染結構（佔位）
-      if (section === 'period') {
-        const host = document.getElementById('md-period-host');
-        if (host) renderPeriodCard(host, null, false, false);
-      } else {
-        const host = document.getElementById('md-recommend-host');
-        if (host) renderRecommend(host, null, false, false);
-      }
+      const host = document.getElementById('md-premium-dashboard');
+      if (host) renderPremiumDashboard(host, null, null, null, null, false, false);
       return;
     }
-    const [r, capital, cross, macro] = await Promise.all([
+    const [r, capital, cross, macro, history] = await Promise.all([
       silentGetJSON('/api/reports/latest'),
       silentGetJSON('/api/capital-flow/summary'),
       silentGetJSON('/api/cross-market/status'),
-      silentGetJSON('/api/macro/snapshot/latest'), // 公開數據（第二層），無 tier gate
+      silentGetJSON('/api/macro/snapshot/latest'),
+      silentGetJSON('/api/capital-flow/history?days=20'),
     ]);
     let capitalData = capital;
     if (capitalData && !Array.isArray(capitalData.forces)) {
       const daily = await silentGetJSON('/api/capital-flow/daily');
       if (daily && Array.isArray(daily.forces)) capitalData = daily;
     }
-    // 連動更新 chain，因為 chain 的 force metric 來自 capital-flow
+    const host = document.getElementById('md-premium-dashboard');
+    if (host) renderPremiumDashboard(host, r, capitalData, history, cross, true, !r);
+    // 同步重繪鏈圖（公開值 cross/macro）
     const chainHost = document.getElementById('md-chain-host');
-    if (chainHost) renderChain(chainHost, r, cross, capitalData, null, macro, true);
-    if (section === 'period') {
-      const host = document.getElementById('md-period-host');
-      if (host) renderPeriodCard(host, r, true, !r);
-    } else {
-      const host = document.getElementById('md-recommend-host');
-      if (host) renderRecommend(host, r, true, !r);
-    }
+    if (chainHost) renderChain(chainHost, cross, macro);
   } else if (section === 'regime') {
     const r = await silentGetJSON('/api/regime/history');
     // 兼容 backend 同時提供 /api/dashboard/regime-history
@@ -846,13 +927,14 @@ export async function loadMethodologyData() {
   const tier = await getTier();
   const isPremium = tier === 'premium';
 
-  // 六個獨立 API；任一失敗不拖垮其他（silentGetJSON 吞錯誤回傳 null）
+  // 公開數據（所有 tier 抓，供層卡顯示）：regime / cross / capital-flow-history / macro。
+  // premium 才抓：report / capital-flow-summary（集中於 Premium 儀表板）。
   const [report, regime, cross, capital, capitalFlowHistory, macro] = await Promise.all([
     isPremium ? silentGetJSON('/api/reports/latest') : Promise.resolve(null),
     silentGetJSON('/api/regime/history'),
     silentGetJSON('/api/cross-market/status'),
     isPremium ? silentGetJSON('/api/capital-flow/summary') : Promise.resolve(null),
-    silentGetJSON('/api/capital-flow/history?days=20'), // sparkline 用，無 tier gate
+    silentGetJSON('/api/capital-flow/history?days=20'), // sparkline 用（premium 儀表板），無 tier gate
     silentGetJSON('/api/macro/snapshot/latest'),       // 公開數據（第二層），無 tier gate
   ]);
 
@@ -880,21 +962,21 @@ export async function loadMethodologyData() {
     }
   }
 
-  // 1. 時期卡片
+  // 1. 時期卡片（純教育結構；即時判定集中於 Premium 儀表板）
   const periodHost = document.getElementById('md-period-host');
-  if (periodHost) renderPeriodCard(periodHost, report, isPremium, isPremium && !report);
+  if (periodHost) renderPeriodCard(periodHost, isPremium);
 
-  // 2. Regime 歷史色帶
+  // 2. Premium 即時儀表板（原則C：被鎖即時值的單一完整板塊）
+  const premiumHost = document.getElementById('md-premium-dashboard');
+  if (premiumHost) renderPremiumDashboard(premiumHost, report, capitalData, capitalFlowHistory, cross, isPremium, isPremium && !report);
+
+  // 3. Regime 歷史色帶
   const regimeHost = document.getElementById('md-regime-host');
   if (regimeHost) renderRegimeHistory(regimeHost, regimeData, !regimeData);
 
-  // 3. 鏈圖（結構全 tier 可見；數值區獨立 error/empty/tier-gate）
+  // 4. 鏈圖（公開值 + 教育結構；被鎖即時值於 Premium 儀表板）
   const chainHost = document.getElementById('md-chain-host');
-  if (chainHost) renderChain(chainHost, report, cross, capitalData, capitalFlowHistory, macro, isPremium);
-
-  // 4. 策略推薦
-  const recHost = document.getElementById('md-recommend-host');
-  if (recHost) renderRecommend(recHost, report, isPremium, isPremium && !report);
+  if (chainHost) renderChain(chainHost, cross, macro);
 }
 
 // ---------------------------------------------------------------------------
