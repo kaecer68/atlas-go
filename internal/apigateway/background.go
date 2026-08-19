@@ -23,11 +23,20 @@ type BackgroundTaskFunc func(ctx context.Context) error
 
 // ScheduledTask represents a registered background task.
 type ScheduledTask struct {
-	Name                string
-	ChannelID           string
-	Interval            time.Duration
-	Jitter              time.Duration
-	Task                BackgroundTaskFunc
+	Name      string
+	ChannelID string
+	Interval  time.Duration
+	Jitter    time.Duration
+	Task      BackgroundTaskFunc
+	// TimeGated marks a task that returns ErrTaskSkipped for most ticks and
+	// only does real work inside a narrow run window (e.g. daily_report_generate
+	// at 14:00 Taipei, autobacktest_daily inside its market-close window). Its
+	// tick Interval is NOT the effective cadence, so the liveness staleness
+	// monitor must not judge it by interval x StaleFactor (that would false-
+	// alarm during the long idle window between real runs). Gated tasks are
+	// instead judged by time since last *successful* run against a generous
+	// wall-clock window (see liveness.GatedStaleWindow).
+	TimeGated           bool
 	Enabled             bool
 	enabledMu           sync.RWMutex
 	lastRun             time.Time

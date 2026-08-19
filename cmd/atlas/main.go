@@ -1338,9 +1338,10 @@ func run(args []string, deps appDeps) error {
 			// Taipei), once per day; other ticks skip via ErrTaskSkipped so the
 			// failure counter is untouched (fix manifest #B10).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "daily_report_generate",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
+				Name:      "daily_report_generate",
+				Interval:  1 * time.Hour,
+				TimeGated: true,
+				Enabled:   true,
 				Task: func(ctx context.Context) error {
 					taipei, tzErr := time.LoadLocation("Asia/Taipei")
 					if tzErr != nil {
@@ -1807,6 +1808,7 @@ func run(args []string, deps appDeps) error {
 					Name:      "tej_refresh",
 					ChannelID: "tej",
 					Interval:  1 * time.Hour,
+					TimeGated: true,
 					Enabled:   true,
 					Task: func(ctx context.Context) error {
 						taipei, err := time.LoadLocation("Asia/Taipei")
@@ -2151,9 +2153,10 @@ func run(args []string, deps appDeps) error {
 				}
 			}
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "autobacktest_daily",
-				Interval: 1 * time.Hour,
-				Enabled:  true,
+				Name:      "autobacktest_daily",
+				Interval:  1 * time.Hour,
+				TimeGated: true,
+				Enabled:   true,
 				Task: func(ctx context.Context) error {
 					err := autobacktest.RunScheduledBacktest(ctx, btRunner)
 					if errors.Is(err, autobacktest.ErrNotInWindow) {

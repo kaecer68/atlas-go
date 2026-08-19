@@ -525,13 +525,13 @@
     "id": "cb-fx-intervention-warning",
     "name": "央行匯市干預預警",
     "layer": "L4",
-    "summary": "USD_TWD 突破 32.5 且單日升幅 > 0.5% 時，央行可能進場調節",
-    "rationale": "新台幣 32.5 為歷史央行防線之一，當升勢過快且幅度過大，央行傾向進場拋匯阻升，後續股市動能可能因熱錢效應消退而轉弱",
+    "summary": "USD_TWD 突破 32.3 且單日升幅 > 0.5% 時，央行可能進場調節",
+    "rationale": "新台幣 32.3 為歷史央行防線之一，當升勢過快且幅度過大，央行傾向進場拋匯阻升，後續股市動能可能因熱錢效應消退而轉弱",
     "conditions": [
       {
         "field": "USD_TWD",
         "operator": "gt",
-        "value": 32.5,
+        "value": 32.3,
         "string_value": "",
         "timeframe": "1D",
         "source": "twse_fx"
