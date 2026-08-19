@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -30,13 +31,14 @@ import (
 
 // SystemService encapsulates system-level health and status monitoring.
 type SystemService struct {
-	WorkDir      string
-	LedgerDir    string
-	BaselinePath string
-	store        ledger.OutcomeStore
-	healthStore  *apigateway.ChannelHealthStore
-	JanusEngine  *janus.Engine
-	CycleTracker *industry.CycleTracker
+	WorkDir         string
+	LedgerDir       string
+	BaselinePath    string
+	store           ledger.OutcomeStore
+	healthStore     *apigateway.ChannelHealthStore
+	historicalStore ledger.HistoricalStore
+	JanusEngine     *janus.Engine
+	CycleTracker    *industry.CycleTracker
 }
 
 // NewSystemService creates a new SystemService.
@@ -52,6 +54,13 @@ func NewSystemService(workDir, ledgerDir, baselinePath string, store ledger.Outc
 		healthStore:  healthStore,
 		JanusEngine:  janusEngine,
 	}
+}
+
+// SetHistoricalStore wires the authoritative regime_history store so
+// LoadSystemHealth can surface the same regime as /api/regime/history
+// (macro_ingest 收盤權威值) instead of the session-execution-time regime.
+func (s *SystemService) SetHistoricalStore(hs ledger.HistoricalStore) {
+	s.historicalStore = hs
 }
 
 // LoadPhase3Status loads Phase 3 metrics from the well-known path.
@@ -75,6 +84,7 @@ type SystemHealthResponse struct {
 	LastWindowGeneratedAt time.Time         `json:"last_window_generated_at"`
 	Warnings              []string          `json:"warnings"`
 	Regime                domain.Regime     `json:"regime"`
+	RegimeSource          string            `json:"regime_source"`
 	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
 	DegradedChannels      []string          `json:"degraded_channels,omitempty"`
 	CycleStale            bool              `json:"cycle_stale"`
@@ -89,6 +99,27 @@ type DataChannelInfo struct {
 	Status     string `json:"status"`
 	StatusText string `json:"status_text"`
 	UpdatedAt  string `json:"updated_at"`
+}
+
+// resolveRegime returns the authoritative market regime plus its provenance.
+// The canonical source is the regime_history table (macro_ingest 收盤權威值),
+// which is the same source served by /api/regime/history — keeping
+// system-health and /api/regime/history consistent for consumers (frontend /
+// hermes briefing). When regime_history is unavailable or empty we fall back
+// to the latest session summary's regime (session 執行當下判定) and label the
+// source accordingly.
+func (s *SystemService) resolveRegime() (domain.Regime, string) {
+	if s.historicalStore != nil {
+		rows, err := s.historicalStore.LoadRegimeHistory(context.Background(), 1)
+		if err == nil && len(rows) > 0 && rows[0].Regime != "" {
+			return domain.Regime(rows[0].Regime), "regime_history"
+		}
+	}
+	regime := domain.RegimeNeutral
+	if summary, err := FindLatestSessionSummary(s.store, s.LedgerDir); err == nil && summary != nil {
+		regime = summary.Regime
+	}
+	return regime, "session_summary"
 }
 
 // LoadSystemHealth computes system health from baseline, replay, ledger, and session data.
@@ -171,10 +202,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 			}
 		}
 	}
-	regime := domain.RegimeNeutral
-	if summary, err := FindLatestSessionSummary(s.store, s.LedgerDir); err == nil && summary != nil {
-		regime = summary.Regime
-	}
+	regime, regimeSource := s.resolveRegime()
 
 	now := time.Now()
 	channels := []DataChannelInfo{
@@ -221,6 +249,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		LastWindowGeneratedAt: lastWindowTime,
 		Warnings:              warnings,
 		Regime:                regime,
+		RegimeSource:          regimeSource,
 		DataChannels:          channels,
 		DegradedChannels:      degradedFrom(channels),
 		CycleStale:            s.checkCycleStale(),

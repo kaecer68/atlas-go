@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/buildinfo"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -617,5 +620,98 @@ func TestLoadSystemHealth_YahooChannels(t *testing.T) {
 		if !found[id] {
 			t.Errorf("expected channel %s not found in DataChannels", id)
 		}
+	}
+}
+
+// =============================================================================
+// resolveRegime — R120: system-health regime must match /api/regime/history
+// =============================================================================
+
+// TestLoadSystemHealth_RegimeFromRegimeHistory verifies that when the
+// authoritative regime_history store is wired, LoadSystemHealth surfaces the
+// latest regime_history row (macro_ingest 收盤權威值) with RegimeSource
+// "regime_history", consistent with /api/regime/history.
+func TestLoadSystemHealth_RegimeFromRegimeHistory(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	svc.SetHistoricalStore(&mockHistoricalStore{
+		rows: []ledger.RegimeRow{
+			{Date: "2026-08-19", Regime: "RISK_ON"},
+			{Date: "2026-08-18", Regime: "RISK_OFF"},
+		},
+	})
+
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+	if health.Regime != domain.RegimeRiskOn {
+		t.Errorf("Regime = %q, want RISK_ON", health.Regime)
+	}
+	if health.RegimeSource != "regime_history" {
+		t.Errorf("RegimeSource = %q, want regime_history", health.RegimeSource)
+	}
+}
+
+// TestLoadSystemHealth_RegimeSource_FallbackSession verifies the fallback path:
+// when regime_history is absent (no historical store wired), the regime comes
+// from the latest session summary and RegimeSource is "session_summary".
+func TestLoadSystemHealth_RegimeSource_FallbackSession(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+
+	health, err := svc.LoadSystemHealth()
+	if err != nil {
+		t.Fatalf("LoadSystemHealth: %v", err)
+	}
+	if health.RegimeSource != "session_summary" {
+		t.Errorf("RegimeSource = %q, want session_summary", health.RegimeSource)
+	}
+	// With no session summaries available the fallback yields Neutral.
+	if health.Regime != domain.RegimeNeutral {
+		t.Errorf("Regime = %q, want NEUTRAL on empty fallback", health.Regime)
+	}
+}
+
+// TestResolveRegime_UsesRegimeHistory verifies resolveRegime picks the latest
+// regime_history row when the store is available.
+func TestResolveRegime_UsesRegimeHistory(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	svc.SetHistoricalStore(&mockHistoricalStore{
+		rows: []ledger.RegimeRow{{Date: "2026-08-19", Regime: "RISK_OFF"}},
+	})
+	regime, source := svc.resolveRegime()
+	if regime != domain.RegimeRiskOff {
+		t.Errorf("resolveRegime regime = %q, want RISK_OFF", regime)
+	}
+	if source != "regime_history" {
+		t.Errorf("resolveRegime source = %q, want regime_history", source)
+	}
+}
+
+// TestResolveRegime_EmptyHistoryFallsBackToSession ensures an empty (or error)
+// regime_history falls back to the session-summary source label.
+func TestResolveRegime_EmptyHistoryFallsBack(t *testing.T) {
+	svc := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	svc.SetHistoricalStore(&mockHistoricalStore{}) // no rows
+	regime, source := svc.resolveRegime()
+	if source != "session_summary" {
+		t.Errorf("resolveRegime source = %q, want session_summary (empty regime_history)", source)
+	}
+	_ = regime
+
+	svcErr := NewSystemService("/tmp/nonexistent", "/tmp/nonexistent", "/tmp/nonexistent", nil, nil, nil)
+	svcErr.SetHistoricalStore(&mockHistoricalStore{err: context.DeadlineExceeded})
+	_, sourceErr := svcErr.resolveRegime()
+	if sourceErr != "session_summary" {
+		t.Errorf("resolveRegime source = %q, want session_summary (store error)", sourceErr)
+	}
+}
+
+// TestSetHistoricalStore verifies the setter wires the store reference.
+func TestSetHistoricalStore(t *testing.T) {
+	svc := NewSystemService("/workdir", "/ledger", "/baseline", nil, nil, nil)
+	hs := &mockHistoricalStore{}
+	svc.SetHistoricalStore(hs)
+	if svc.historicalStore != hs {
+		t.Error("expected SetHistoricalStore to wire the historical store")
 	}
 }

@@ -1177,6 +1177,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		a.janusEngine,
 		apigateway.NewChannelHealthStoreWithPool(filepath.Join(a.workDir, "data/state"), a.pool),
 	)
+	if a.pool != nil {
+		systemSvc.SetHistoricalStore(ledger.NewPostgresHistoricalStore(a.pool))
+	}
 	if a.industryService != nil {
 		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
 	}

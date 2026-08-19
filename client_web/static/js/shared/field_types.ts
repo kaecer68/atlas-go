@@ -4125,6 +4125,7 @@ export interface SystemHealthResponse {
   last_window_generated_at: string;
   warnings: string[];
   regime: string;
+  regime_source: string;
   data_channels?: DataChannelInfo[];
   degraded_channels?: string[];
   cycle_stale: boolean;
