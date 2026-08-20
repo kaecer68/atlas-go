@@ -965,15 +965,25 @@ func run(args []string, deps appDeps) error {
 			// otherwise it stays on the legacy HS256 self-signed path.
 			goMemberJwksURL := config.GetSecret("GO_MEMBER_JWKS_URL")
 			jwtMgr := subscription.NewJWTManager(jwtSecret, goMemberJwksURL)
+			// M4b: GO_MEMBER_API_BASE_URL enables the login/register thin proxy
+			// to go-member (which signs RS256 and owns the membership source of
+			// truth). When empty, login/register keep the legacy local HS256 path.
+			goMemberAPIBaseURL := config.GetSecret("GO_MEMBER_API_BASE_URL")
 			subHandler := subscription.NewHandler(subStore, jwtMgr).
-				WithWaitlist(filepath.Join(cfg.LedgerDir, "waitlist.jsonl"))
+				WithWaitlist(filepath.Join(cfg.LedgerDir, "waitlist.jsonl")).
+				WithGoMember(goMemberAPIBaseURL)
 			// ATLAS_REQUIRE_USER_AUTH=true forces JWT; default is guest TierFree.
 			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
 			subHandler.RegisterRoutes(mux, allowGuest)
-			if goMemberJwksURL == "" {
-				log.Printf("[Subscription] JWT in legacy HS256 mode (GO_MEMBER_JWKS_URL unset); registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
+			if goMemberAPIBaseURL == "" {
+				log.Printf("[Subscription] login/register in legacy HS256 mode (GO_MEMBER_API_BASE_URL unset); registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
 			} else {
-				log.Printf("[Subscription] JWT in go-member JWKS (RS256) mode: %s; registered /api/auth/* + /api/user/* routes (guest=%v)", goMemberJwksURL, allowGuest)
+				log.Printf("[Subscription] login/register proxied to go-member (%s); registered /api/auth/* + /api/user/* routes (guest=%v)", goMemberAPIBaseURL, allowGuest)
+			}
+			if goMemberJwksURL == "" {
+				log.Printf("[Subscription] JWT in legacy HS256 verify mode (GO_MEMBER_JWKS_URL unset)")
+			} else {
+				log.Printf("[Subscription] JWT in go-member JWKS (RS256) verify mode: %s", goMemberJwksURL)
 			}
 
 			// Gap 3-R3: per-user signal-state HTTP API. Reuses the same

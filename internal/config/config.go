@@ -15,6 +15,7 @@ import (
 type Config struct {
 	WorkDir                    string
 	GoMemberJwksURL            string // GO_MEMBER_JWKS_URL — go-member /.well-known/jwks.json for RS256 auth (C-02)
+	GoMemberAPIBaseURL         string // GO_MEMBER_API_BASE_URL — go-member API base for login/register thin proxy (M4b); empty = legacy HS256 login
 	MaturityFirstStart         string // ATLAS_MATURITY_FIRST_START — RFC3339/date-only seed for fresh maturity tracker (survives data-dir loss); empty = now
 	DatabaseURL                string
 	MigrationsPath             string
@@ -89,6 +90,7 @@ func Load() Config {
 	cfg := Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),
 		GoMemberJwksURL:            envOr("GO_MEMBER_JWKS_URL", ""),
+		GoMemberAPIBaseURL:         envOr("GO_MEMBER_API_BASE_URL", ""),
 		MaturityFirstStart:         envOr("ATLAS_MATURITY_FIRST_START", ""),
 		DatabaseURL:                envOr("DATABASE_URL", ""),
 		MigrationsPath:             envOr("ATLAS_MIGRATIONS_PATH", "sql/migrations"),
