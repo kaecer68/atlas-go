@@ -1,6 +1,6 @@
 # 決策：C-02 atlas-jwt-trust — atlas 會員接入 go-member JWT（現況盤查 + 實作清單）
 
-> 狀態：**準備中**（2026-08-19 業主定案 C-02；待平台修正派工完成後再動 code）
+> 狀態：**已落地**（2026-08-20，M4a 後端 JWKS 認證遷移 + M4b 前端登入薄代理；詳見文末「落地記錄」）
 > 契約: C-02 atlas-jwt-trust（2026-08-18 業主拍板）
 > 範圍：本文件是 **atlas 側**（consumer）實作準備，不包含 go-member 側。
 
@@ -82,3 +82,22 @@
 
 ### 執行時機
 go-member Phase 2（data-permission-matrix SSOT + iMac 部署穩定）完成後，連同策略閾值（dealer/cb-fx）一起實作。
+
+
+---
+
+## 落地記錄（2026-08-20）
+
+- **M4a（後端 JWKS 認證遷移）— PR #1625**（merged，commit 336fe6fc → 部署 iMac `e0c703e8`）：
+  - `auth.go` JWTManager 由 HS256 自帶 secret → 拉 `GO_MEMBER_JWKS_URL`（go-member `/.well-known/jwks.json`）驗 RS256；tier 映射 `registered→basic` / `premium→pro` / 其他→free；無/無效 token → guest fallback（allowGuest=true）。
+  - JWKS 快取 TTL 10min + 逾時 lazy refresh（key rotation 韌性）；refresh 失敗續用 last-known keys。
+  - `GO_MEMBER_JWKS_URL` 未設 → fallback 舊 HS256（向後相容）。
+  - config `GoMemberJwksURL` / cmd 注入 / handler profile・subscription 改從已驗證 claims 解（不再自帶 users 表做會員來源）。
+  - 整合測試 `auth_jwks_test.go`（映射/無效簽名/wrong kid/過期/rotation/fallback）+ CI 55/55 全綠。
+- **M4b（前端登入薄代理）— PR #1626**（merged，commit 599a1123 → 部署 iMac `2b05526a`）：
+  - `handleLogin`/`handleRegister` 薄代理到 go-member `/api/v1/auth/login|register`（`GO_MEMBER_API_BASE_URL`=host.docker.internal:8093）：login 取 go-member RS256 accessToken → set cookie + 回前端；register 201 passthrough（需 email 驗證、不自動登入）。
+  - 不再用 atlas 自帶 HS256 `Generate` + users 表 `store.Authenticate/Register`（登入源=go-member）；錯誤透傳 401/403/422/429；proxy 不 log credential。
+  - 前端 `register.js` 顯示「請檢查電子郵件完成驗證」。
+- **go-member 穩定（前置）**：DB migration 0014/0015 套用（mcp_plan/platinum/platform）、launchd `com.goluck.go-member` 常駐 + 啟動自動 migrate、持久 PKCS#8 RSA 私鑰（`JWT_PRIVATE_KEY_PATH`）→ JWKS key/kid 重啟穩定。
+- **部署驗收**：atlas log「login/register proxied to go-member」+「JWT JWKS (RS256) verify mode」+ guest=true；E2E POST `/api/auth/login`（假帳號）→ 401 invalid credentials（go-member 透傳）；go-member 簽 RS256 premium token → atlas `/api/user/profile` → `tier:pro` + guest:false。
+- **待辦（後續）**：`GUEST_MODE` 切 false 時機 = go-member 正式上線 + 有真實付費會員（業主決定）。
