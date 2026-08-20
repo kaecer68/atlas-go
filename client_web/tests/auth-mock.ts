@@ -12,9 +12,12 @@
  */
 import type { Page, BrowserContext } from '@playwright/test';
 
+// GUEST_MODE=false（會員制）：profile 必須回傳有效 email+tier 才視為已登入，
+// 否則 SPA 的登入 gate 會把所有功能頁導向 /login。此處模擬已登入會員，讓
+// 功能頁 e2e 能正常渲染。
 const AUTH_MOCKS: Array<[string, unknown]> = [
-  ['**/api/user/profile', {}],
-  ['**/api/auth/whoami', {}],
+  ['**/api/user/profile', { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' }],
+  ['**/api/auth/whoami', { email: 'test@atlas.test', tier: 'registered' }],
 ];
 
 export async function installAuthMocks(target: Page | BrowserContext): Promise<void> {

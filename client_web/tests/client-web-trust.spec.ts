@@ -36,7 +36,7 @@ test('home page renders without developer-facing strings', async ({ page }) => {
   // Mock the APIs the home page actually calls so the page is fully populated.
   // loadAll() in main.js awaits 5 APIs in parallel before loadModules() runs —
   // missing mocks cause 10s timeouts that block home.js from ever loading.
-  await page.route('**/api/user/profile', r => r.fulfill({ json: {} }));
+  await page.route('**/api/user/profile', r => r.fulfill({ json: { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' } }));
   await page.route('**/api/dashboard/system-health', r => r.fulfill({ json: { status: 'ok' } }));
   await page.route('**/api/macro/snapshot/latest', r => r.fulfill({ json: {} }));
   await page.route('**/api/taiwan/stress-index', r => r.fulfill({ json: {} }));
@@ -73,7 +73,7 @@ test('home page renders without developer-facing strings', async ({ page }) => {
 });
 
 test('home market pulse renders without developer-facing strings', async ({ page }) => {
-  await page.route('**/api/user/profile', r => r.fulfill({ json: {} }));
+  await page.route('**/api/user/profile', r => r.fulfill({ json: { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' } }));
   await page.route('**/api/dashboard/system-health', r => r.fulfill({ json: { status: 'ok' } }));
   await page.route('**/api/macro/snapshot/latest', r => r.fulfill({ json: {} }));
   await page.route('**/api/taiwan/stress-index', r => r.fulfill({ json: {} }));
@@ -98,7 +98,7 @@ test('home market pulse renders without developer-facing strings', async ({ page
 });
 
 test('capital board renders translated sector labels and no snake_case', async ({ page }) => {
-  await page.route('**/api/user/profile', r => r.fulfill({ json: {} }));
+  await page.route('**/api/user/profile', r => r.fulfill({ json: { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' } }));
   await page.route('**/api/narrative/models', r => r.fulfill({ json: { models: [] } }));
   await page.route('**/api/system/status', r => r.fulfill({ json: { status: 'ok' } }));
   await page.route('**/api/dashboard/snapshot', r => r.fulfill({ json: {} }));
@@ -119,7 +119,7 @@ test('stock quote page renders backend data for 2330', async ({ page }) => {
   // The /api/stock/quote call originates from the in-page script, not the
   // page object. page.route() intercepts both, so this works without a real
   // backend.
-  await page.route('**/api/user/profile', r => r.fulfill({ json: {} }));
+  await page.route('**/api/user/profile', r => r.fulfill({ json: { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' } }));
   await page.route('**/api/stock/quote?*', r => r.fulfill({
     status: 200,
     contentType: 'application/json',

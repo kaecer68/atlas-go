@@ -13,6 +13,7 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
 import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getTier } from './services/auth.js';
+import { pageRequiresLogin } from './services/login-gate.js';
 import { metricCard } from './components/metric-card.js';
 import { fmtSignedPct } from './shared/format-metric.js';
 import { renderHomeTierSections } from './components/home-tier-sections.js';
@@ -78,6 +79,18 @@ export async function switchPage(id, silent) {
   // Unknown page — fallback to 404. 'home' is a loadAll-rendered page, not a shell.
   if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home' && id !== 'stock-quote') {
     return switchPage('errors/404', silent);
+  }
+  // 會員制 gate (GUEST_MODE=false)：功能頁需登入，未登入導向登入頁。
+  // 公開可看只剩 login / register / errors-404；landing 內容在 atlas-index。
+  if (pageRequiresLogin(id)) {
+    let loggedIn = false;
+    try { loggedIn = await isLoggedIn(); } catch (e) { loggedIn = false; }
+    if (!loggedIn) {
+      if (typeof window !== 'undefined' && window.history) {
+        window.history.replaceState({ page: 'login' }, '', basePath + '/login');
+      }
+      return switchPage('login', true);
+    }
   }
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }

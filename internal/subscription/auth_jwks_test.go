@@ -351,3 +351,68 @@ func TestJWKSHandlerProfileFromClaims(t *testing.T) {
 		t.Error("expected membershipExpiresAt surfaced as trial_end")
 	}
 }
+
+// ---- allowGuest=false (member mode / GUEST_MODE=false) — strict 401 ----
+
+func TestJWKSAllowGuestFalseRejectsMissingToken(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	_, url := startRotatingJWKSServer(t, priv, "k1")
+	m := newJWKSManager(t, url)
+	mid := NewAuthMiddleware(m, false) // allowGuest=false → strict
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
+	rec := httptest.NewRecorder()
+	mid.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not run with allowGuest=false and no token")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing token, got %d", rec.Code)
+	}
+}
+
+func TestJWKSAllowGuestFalseRejectsInvalidToken(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	_, url := startRotatingJWKSServer(t, priv, "k1")
+	m := newJWKSManager(t, url)
+	mid := NewAuthMiddleware(m, false) // allowGuest=false → strict
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
+	req.Header.Set("Authorization", "Bearer garbage-token")
+	rec := httptest.NewRecorder()
+	mid.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not run with allowGuest=false and invalid token")
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid token, got %d", rec.Code)
+	}
+}
+
+func TestJWKSAllowGuestFalseAcceptsValidToken(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	_, url := startRotatingJWKSServer(t, priv, "k1")
+	m := newJWKSManager(t, url)
+	mid := NewAuthMiddleware(m, false) // allowGuest=false, valid token must pass
+
+	tok := signRS256(t, priv, "k1", mkMemberTier("premium", "u-mem", time.Hour))
+	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	var gotTier string
+	mid.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := GetClaims(r)
+		if claims == nil {
+			t.Fatal("expected claims in context")
+		}
+		gotTier = claims.Tier
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid token, got %d", rec.Code)
+	}
+	if gotTier != string(TierPro) {
+		t.Errorf("expected premium→pro, got %q", gotTier)
+	}
+}

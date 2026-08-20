@@ -44,8 +44,10 @@ const MIME = {
 // these, initAuth() throws and loadAll()/loadModules() never run, leaving
 // every page empty. Tests can layer page.route() on top to override.
 const API_FALLBACKS = {
-  '/api/user/profile':   { tier: 'free', email: '' },
-  '/api/auth/whoami':    { tier: 'free' },
+  // GUEST_MODE=false：回傳有效 email+tier 讓 initAuth/isLoggedIn 判定已登入，
+  // 否則登入 gate 會把功能頁導向 /login，e2e 無法渲染功能頁。
+  '/api/user/profile':   { email: 'test@atlas.test', tier: 'registered', effective_tier: 'registered' },
+  '/api/auth/whoami':    { email: 'test@atlas.test', tier: 'registered' },
   '/api/auth/refresh':   { ok: true },
   '/api/system/status':  { status: 'ok' },
 };

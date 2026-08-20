@@ -18,7 +18,7 @@
 
 import { postJSON, getJSON } from '../shared/app-utils.js';
 
-const GUEST_MODE = true;
+const GUEST_MODE = false;
 
 let _token = null;
 let _claims = null;
