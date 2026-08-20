@@ -201,3 +201,40 @@ test('widget: 全部通道正常時顯示所有通道正常', () => {
   assert.ok(html.includes('所有通道正常'));
   assert.ok(html.includes('text-lg">正常</div>'));
 });
+
+
+// ============================================================================
+// R120: 市場狀態 KPI 顯示 regime_source（system-health → 語意來源）
+// ============================================================================
+
+// 渲染 overviewMarket（市場狀態 KPI）並回傳其 innerHTML
+function renderMarketCard(data) {
+  renderOverview(
+    data,                                 // data (health, 含 regime / regime_source)
+    { scorecards: [] },                   // agentsData
+    {},                                   // inbox
+    null,                                 // overlap
+    {},                                   // narrativeEvents
+    { score: 0, regime: 'NEUTRAL' },      // stress
+    null,                                 // dataChannels
+    null                                  // capitalPhase
+  );
+  const marketEl = elements.get('overviewMarket');
+  return marketEl ? marketEl.innerHTML : '';
+}
+
+test('market card: regime_source=regime_history 顯示「收盤權威值」來源', () => {
+  const html = renderMarketCard({ regime: 'RISK_ON', regime_source: 'regime_history' });
+  assert.ok(html.includes('市場狀態'), '應渲染市場狀態 KPI');
+  assert.ok(html.includes('來源：收盤權威值（macro_ingest）'), '應顯示收盤權威值來源');
+});
+
+test('market card: regime_source=session_summary 顯示「場次當下」來源', () => {
+  const html = renderMarketCard({ regime: 'NEUTRAL', regime_source: 'session_summary' });
+  assert.ok(html.includes('來源：場次當下'), '應顯示場次當下來源');
+});
+
+test('market card: 無 regime_source 不渲染來源行', () => {
+  const html = renderMarketCard({ regime: 'RISK_OFF' });
+  assert.ok(!html.includes('來源：'), '無 regime_source 不應渲染來源行');
+});
