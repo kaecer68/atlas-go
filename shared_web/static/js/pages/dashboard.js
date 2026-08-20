@@ -28,6 +28,11 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
 
   const regime = (data && data.regime) || '-';
   const regimeColor = regime === 'RISK_ON' ? 'var(--up)' : (regime === 'RISK_OFF' ? 'var(--down)' : (regime === 'NEUTRAL' ? 'var(--warn)' : 'inherit'));
+  // regime_source — R120: 標示此 regime 的語意來源（regime_history=macro_ingest 收盤權威值 /
+  // session_summary=session 執行當下）。僅 system-health 提供；回測場次 data.regime 無此欄位。
+  const regimeSource = (data && data.regime_source) || '';
+  const regimeSourceLabel = regimeSource === 'regime_history' ? '收盤權威值（macro_ingest）'
+    : (regimeSource === 'session_summary' ? '場次當下' : '');
 
   const nev = (narrativeEvents && narrativeEvents.events) || [];
   // 以「情緒絕對值 × 信心度 × 命中率」排序，取最強烈的事件作為代表
@@ -82,7 +87,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
 
   gridMarket.innerHTML = `
     <div class="kpi-card clickable" onclick="openKpiHelp('narrative')"><div class="kpi-label">敘事脈絡</div><div class="kpi-value text-lg">${narrativeTitle}</div><div class="kpi-hint">${narrativeSub}</div></div>
-    <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div></div>
+    <div class="kpi-card clickable" onclick="openKpiHelp('regime')"><div class="kpi-label">市場狀態</div><div class="kpi-value" style="color:${regimeColor}">${regimeLabel(regime)}</div>${regimeSourceLabel ? `<div class="kpi-hint">來源：${regimeSourceLabel}</div>` : ''}</div>
   `;
   gridRisk.innerHTML = `
     <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:var(--color-danger);font-weight:600' : ''}">${weakSharpe}</span></div></div>
