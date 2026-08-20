@@ -12,7 +12,7 @@ import (
 func newWaitlistHandler(t *testing.T) (*Handler, *WaitlistStore) {
 	t.Helper()
 	s := newTestStore(t)
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	path := filepath.Join(t.TempDir(), "waitlist.jsonl")
 	h := NewHandler(s, jwt).WithWaitlist(path)
 	return h, h.waitlist

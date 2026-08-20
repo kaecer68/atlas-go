@@ -960,13 +960,21 @@ func run(args []string, deps appDeps) error {
 			if jwtSecret == "" {
 				jwtSecret = "atlas-dev-secret-change-in-prod"
 			}
-			jwtMgr := subscription.NewJWTManager(jwtSecret)
+			// C-02 atlas-jwt-trust: when GO_MEMBER_JWKS_URL is set, JWTManager
+			// verifies go-member RS256 tokens against the JWKS and maps tiers;
+			// otherwise it stays on the legacy HS256 self-signed path.
+			goMemberJwksURL := config.GetSecret("GO_MEMBER_JWKS_URL")
+			jwtMgr := subscription.NewJWTManager(jwtSecret, goMemberJwksURL)
 			subHandler := subscription.NewHandler(subStore, jwtMgr).
 				WithWaitlist(filepath.Join(cfg.LedgerDir, "waitlist.jsonl"))
 			// ATLAS_REQUIRE_USER_AUTH=true forces JWT; default is guest TierFree.
 			allowGuest := config.GetSecret("ATLAS_REQUIRE_USER_AUTH") != "true"
 			subHandler.RegisterRoutes(mux, allowGuest)
-			log.Printf("[Subscription] registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
+			if goMemberJwksURL == "" {
+				log.Printf("[Subscription] JWT in legacy HS256 mode (GO_MEMBER_JWKS_URL unset); registered /api/auth/* + /api/user/* routes (guest=%v)", allowGuest)
+			} else {
+				log.Printf("[Subscription] JWT in go-member JWKS (RS256) mode: %s; registered /api/auth/* + /api/user/* routes (guest=%v)", goMemberJwksURL, allowGuest)
+			}
 
 			// Gap 3-R3: per-user signal-state HTTP API. Reuses the same
 			// JWT manager + allowGuest flag so R3 auth mirrors the rest of
