@@ -327,7 +327,7 @@ func mapMemberTier(claim string) Tier {
 	switch claim {
 	case "registered", "basic":
 		return TierBasic
-	case "premium", "pro":
+	case "premium", "pro", "platinum":
 		return TierPro
 	default:
 		return TierFree

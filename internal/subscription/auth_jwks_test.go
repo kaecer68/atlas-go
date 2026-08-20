@@ -137,6 +137,21 @@ func TestJWKSVerifyPremiumMapsToPro(t *testing.T) {
 	}
 }
 
+func TestJWKSVerifyPlatinumMapsToPro(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	_, url := startRotatingJWKSServer(t, priv, "k1")
+	m := newJWKSManager(t, url)
+
+	tok := signRS256(t, priv, "k1", mkMemberTier("platinum", "uuid-9", time.Hour))
+	claims, err := m.Verify(tok)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if claims.Tier != string(TierPro) {
+		t.Errorf("platinum should map to pro, got %q", claims.Tier)
+	}
+}
+
 func TestJWKSVerifyUnknownTierMapsToFree(t *testing.T) {
 	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
 	_, url := startRotatingJWKSServer(t, priv, "k1")
