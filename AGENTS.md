@@ -5,8 +5,6 @@
 > 通用規則（語言、ACI、workspace close）見 `~/.agents/AGENTS.md`。
 > Claude Code 專屬設定請見 [`CLAUDE.md`](CLAUDE.md)。
 
-> 🔧 **部署到 iMac 前必讀**: `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md`（iMac 連線/服務 SOP/工具位置/hermes CLI/常見坑）。部署順序與 SSOT 對位另見 `~/workspace/a2a-dev/docs/deployment/HERMES-ECOSYSTEM.md`。
-
 ## 專案快照
 
 - **Wave**：Wave 11+（L2.4 shipped, PRISM active）
@@ -17,7 +15,7 @@
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：60%
 - **啟動入口**：[`docs/quickstart.md`](docs/quickstart.md)
-- **雙機治理**：production 在 iMac（`atlas.goluck.uk`）、開發在 MacBook；跨設備規則見 `~/workspace/a2a-dev/docs/governance/雙機治理憲章.md` 與 `~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`
+- **雙機治理**：production 在 iMac（`atlas.goluck.uk`）、開發在 MacBook；跨設備規則見 `~/workspace/a2a-dev/docs/governance/雙機治理憲章.md` 與 `~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`；部署到 iMac 前必讀 `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md`
 
 ## 內容歸屬與防膨脹規則
 
@@ -140,8 +138,7 @@ This project is indexed by GitNexus as **atlas-go** (28812 symbols, 119801 relat
 |----------|---------|
 | `gitnexus://repo/atlas-go/context` | Codebase overview, check index freshness |
 | `gitnexus://repo/atlas-go/clusters` | All functional areas |
-| `gitnexus://repo/atlas-go/processes` | All execution flows |
-| `gitnexus://repo/atlas-go/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/atlas-go/processes` / `process/{name}` | Execution flows / step-by-step trace |
 
 ## CLI
 
