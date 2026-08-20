@@ -25,7 +25,7 @@ func newTestStore(t *testing.T) *Store {
 
 func TestRegisterLogin(t *testing.T) {
 	s := newTestStore(t)
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	h := NewHandler(s, jwt)
 
 	// Register
@@ -58,7 +58,7 @@ func TestRegisterLogin(t *testing.T) {
 
 func TestProfileAndSubscription(t *testing.T) {
 	s := newTestStore(t)
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	h := NewHandler(s, jwt)
 
 	// Register first
@@ -94,7 +94,7 @@ func TestProfileAndSubscription(t *testing.T) {
 
 func TestTierRegistration(t *testing.T) {
 	s := newTestStore(t)
-	jwt := NewJWTManager("")
+	jwt := NewJWTManager("", "")
 	h := NewHandler(s, jwt)
 
 	body := `{"email":"tier@test.com","password":"pass"}`
@@ -122,7 +122,7 @@ func TestTierRegistration(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	s := newTestStore(t)
-	jwt := NewJWTManager("test-secret-min-32-characters-long")
+	jwt := NewJWTManager("test-secret-min-32-characters-long", "")
 	h := NewHandler(s, jwt)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
@@ -139,7 +139,7 @@ func TestLogout(t *testing.T) {
 }
 
 func TestAuthRejectInvalidToken(t *testing.T) {
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	mid := NewAuthMiddleware(jwt, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
@@ -155,7 +155,7 @@ func TestAuthRejectInvalidToken(t *testing.T) {
 }
 
 func TestAuthRejectNoToken(t *testing.T) {
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	mid := NewAuthMiddleware(jwt, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
@@ -171,7 +171,7 @@ func TestAuthRejectNoToken(t *testing.T) {
 
 func TestAuthGuestModeAllowsAnon(t *testing.T) {
 	s := newTestStore(t)
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	h := NewHandler(s, jwt)
 	mid := NewAuthMiddleware(jwt, true)
 
@@ -195,7 +195,7 @@ func TestAuthGuestModeAllowsAnon(t *testing.T) {
 }
 
 func TestAuthGuestModeDemotesInvalidToken(t *testing.T) {
-	jwt := NewJWTManager("test-secret")
+	jwt := NewJWTManager("test-secret", "")
 	mid := NewAuthMiddleware(jwt, true)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/user/profile", nil)
@@ -215,7 +215,7 @@ func TestAuthGuestModeDemotesInvalidToken(t *testing.T) {
 }
 
 func TestJWTRoundTrip(t *testing.T) {
-	jwt := NewJWTManager("secret123")
+	jwt := NewJWTManager("secret123", "")
 	u := &User{ID: 1, Email: "jwt@test.com", Tier: TierRegistered}
 	token, err := jwt.Generate(u, 1*time.Hour)
 	if err != nil {

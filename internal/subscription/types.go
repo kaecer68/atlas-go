@@ -6,7 +6,16 @@ import "time"
 type Tier string
 
 const (
-	TierFree       Tier = "free"
+	// Atlas-facing access tiers.
+	//   free       — guest / no authenticated member (GUEST_MODE allowGuest)
+	//   basic      — go-member registered member (C-02 tier mapping)
+	//   pro        — go-member premium member (C-02 tier mapping)
+	TierFree  Tier = "free"
+	TierBasic Tier = "basic"
+	TierPro   Tier = "pro"
+
+	// Legacy self-signed (HS256) tiers used by the pre go-member users table.
+	// Retained for the backward-compat path while GO_MEMBER_JWKS_URL is unset.
 	TierRegistered Tier = "registered"
 	TierPremium    Tier = "premium"
 )
@@ -27,6 +36,7 @@ type ProfileResponse struct {
 	Tier          Tier      `json:"tier"`
 	EffectiveTier Tier      `json:"effective_tier"`
 	TrialEnd      time.Time `json:"trial_end"`
+	Guest         bool      `json:"guest"`
 }
 
 // EffectiveTier returns the current tier considering trial status.

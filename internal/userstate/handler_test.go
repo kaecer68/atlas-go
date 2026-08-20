@@ -28,7 +28,7 @@ func newTestHandler(t *testing.T) (*Handler, *subscription.JWTManager, *subscrip
 	t.Helper()
 	store := NewJSONLStore(t.TempDir())
 	h := NewHandler(store)
-	jwtMgr := subscription.NewJWTManager("test-secret-do-not-use-in-prod")
+	jwtMgr := subscription.NewJWTManager("test-secret-do-not-use-in-prod", "")
 	mid := subscription.NewAuthMiddleware(jwtMgr, false) // strict for tests
 	return h, jwtMgr, mid
 }

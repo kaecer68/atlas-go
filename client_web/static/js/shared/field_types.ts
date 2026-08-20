@@ -2955,6 +2955,7 @@ export interface ProfileResponse {
   tier: string;
   effective_tier: string;
   trial_end: string;
+  guest: boolean;
 }
 
 export interface PromptControl {
@@ -4333,6 +4334,7 @@ export interface TokenClaims {
   sub: number;
   email: string;
   tier: string;
+  membershipExpiresAt: number;
   exp: number;
 }
 
@@ -4579,6 +4581,18 @@ export interface insiderJSONRow {
   "目前持有股數-保留運用決定權信託股數": string;
 }
 
+export interface jwkKey {
+  kty: string;
+  kid: string;
+  n: string;
+  e: string;
+  alg: string;
+}
+
+export interface jwkSet {
+  keys: jwkKey[];
+}
+
 export interface llmReadyDetail {
   note: string;
 }
@@ -4592,6 +4606,14 @@ export interface marginHistoryFile {
 export interface maturityTrackerState {
   first_start_date: string;
   last_checked: string;
+}
+
+export interface memberClaims {
+  sub: string;
+  email: string;
+  tier: string;
+  membershipExpiresAt: number;
+  exp: number;
 }
 
 export interface odmRevenueRecord {
