@@ -111,7 +111,7 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	log.Println("[DailySync] Fetching today's quotes from TWSE OpenAPI...")
 	quotes, err := client.GetQuotes(ctx)
 	if err != nil {
-		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool)
 		return fmt.Errorf("fetch quotes: %w", err)
 	}
 
@@ -140,10 +140,10 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	}
 
 	if err := appendRecords(csvPath, records); err != nil {
-		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "error", err.Error(), pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool)
 		return err
 	}
-	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay", "ok", "", pool)
+	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "ok", "", pool)
 	log.Printf("[DailySync] Appended %d records for %s", len(records), dateStr)
 	return nil
 }
