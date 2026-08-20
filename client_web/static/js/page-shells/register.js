@@ -41,11 +41,15 @@ export async function init() {
     btn.disabled = true;
     btn.textContent = '註冊中…';
     try {
-      await register(form.email.value, form.registerPassword.value);
+      // M4b: register is now a thin proxy to go-member, which requires email
+      // verification before login — it returns {id,email,message} and NO
+      // token, so the user is not auto-logged-in. Show the verify message.
+      const res = await register(form.email.value, form.registerPassword.value);
       await renderNavState();
-      successEl.textContent = '註冊成功！7 天 Premium 試用已啟用，正為您導向首頁…';
+      successEl.textContent = (res && res.message) || '註冊成功！請檢查電子郵件完成驗證';
       successEl.classList.remove('hidden');
-      setTimeout(() => window.switchPage('home'), 1500);
+      btn.disabled = false;
+      btn.textContent = '註冊';
     } catch (err) {
       errorEl.textContent = err.message || '註冊失敗，請稍後再試';
       errorEl.classList.remove('hidden');
