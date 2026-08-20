@@ -1,5 +1,7 @@
 # AGENTS.md — atlas-go
 
+
+> 🔧 **部署到 iMac 前必讀**: `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md`（iMac 連線/服務 SOP/工具位置/hermes CLI/常見坑）。部署順序與 SSOT 對位另見 `~/workspace/HERMES-ECOSYSTEM.md`。
 > **文件角色**：跨工具 AI 共用指引（OpenCode CLI / Claude Code / Kimi Code / GitHub Copilot）。
 > 遵循 [AGENTS.md v1.0.0 規範](https://agents.md)：純 Markdown、無必須欄位。
 > 通用規則（語言、ACI、workspace close）見 `~/.agents/AGENTS.md`。
