@@ -40,3 +40,24 @@ sample_days=0、annual/sharpe/maxDD 顯示 `--`。已確認為策略條件閾值
 - `internal/marketdata/twse_capital_flow_provider.go`（T86 /1e8）
 - `cmd/atlas/main.go` L1330 (daily_report_generate) / L2154 (autobacktest_daily)
 - stale monitor：`internal/monitoring` background_task stale 判定
+
+
+---
+
+## k3 審計追蹤（2026-08-20，`kimi-coding/k3`）
+
+> 追蹤結果（審計 repo main + iMac prod，image build 2026-08-20 04:24Z，HEAD c0705f97 含 #1619）：
+
+| 項 | 狀態 | 核對 |
+|----|------|------|
+| 1b cb-fx 32.3 | ✅ **CLOSE** | main 與 iMac seeds 均 32.3；第二條件 USD_TWD>0.5 保留；registry_test 有鎖定測試 |
+| 1a dealer-domestic | ✅ 實作面 CLOSE | 兩機 seeds 均 30/20/-50，未誤改（維持 C）|
+| 2 stale monitor | ✅ **CLOSE** | #1619 TimeGated 旗標（daily_report_generate/autobacktest_daily/tej_refresh）+ GatedStaleWindow 72h；部署後 24h 無誤報 |
+| 1c 通道有來源 | ✅ CLOSE | — |
+
+> **唯一 rest（1a 尾巴）**：決策文採「維持但不 close、待數據」——現況無追蹤註記，會變孤兒。
+> **再評觸發條件（追蹤鍵，K3 建議）**：待 macro snapshot 歷史涵蓋極端行情（現況 dom max 3.13 億 vs 閾值 30 億，需股災級土洋對作才可能觸發），**或 3–6 個月後回顧**；屆時若仍 0 觸發且無歷史極端日佐證，可考慮降閾值或標 deprecated。
+
+## 低度殘留風險（不需現在動，記錄以防再發）
+- 未來新增 time-gated task 若漏標 `TimeGated` → stale 誤報會再現（新增 task 時檢查）。
+- gated task 永遠 skip（非 fail）時 `lastSuccess` 不更新 → 屬輕微盲區。
