@@ -197,7 +197,6 @@ func TestMergeSnapshot_ForceOverwrites(t *testing.T) {
 // taifexStub serves Big5 CSV for trading days and 查無資料 for other weekdays.
 type taifexStub struct {
 	trading map[string]int64 // "2006-01-02" → foreign OI net
-	mu      chan struct{}    // fake mutex-free guard; unused
 }
 
 func (s *taifexStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -244,16 +243,6 @@ func readValue(t *testing.T, dir, date string) (float64, bool) {
 		t.Fatal(err)
 	}
 	return pt.Value, true
-}
-
-func mustRun(t *testing.T, cfg config) *runStats {
-	t.Helper()
-	if err := run(cfg); err != nil {
-		t.Fatalf("run: %v", err)
-	}
-	// run() prints summary to stdout; capture stats via re-run is awkward, so
-	// we verify behavior through files instead.
-	return nil
 }
 
 func TestRun_MergesTradingAndCarriesWeekend(t *testing.T) {
