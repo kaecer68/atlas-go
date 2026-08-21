@@ -67,11 +67,11 @@ func TestDefaultPolicy_ContractGuards(t *testing.T) {
 	if !policy.ExecutionPolicy.RequireCROPass {
 		t.Error("default ExecutionPolicy.RequireCROPass drift: expected true")
 	}
-	if policy.ExecutionPolicy.MomentumCrashProtection {
-		t.Error("default MomentumCrashProtection drift: expected false")
+	if !policy.ExecutionPolicy.MomentumCrashProtection {
+		t.Error("default MomentumCrashProtection drift: expected true (A3)")
 	}
-	if policy.ExecutionPolicy.EnableConvictionNormalization {
-		t.Error("default EnableConvictionNormalization drift: expected false")
+	if !policy.ExecutionPolicy.EnableConvictionNormalization {
+		t.Error("default EnableConvictionNormalization drift: expected true (A3)")
 	}
 }
 

@@ -1591,30 +1591,50 @@ func run(args []string, deps appDeps) error {
 				Task: func(ctx context.Context) error {
 					// Backlog gate: don't pile proposals onto a full queue (#D01 cap).
 					if n := ledger.CountUnresolvedPlanned(cfg.LedgerDir); n >= 100 {
-						logging.Info("auto_propose", "backlog_full_skip", "unresolved", n)
+						logging.Warn("auto_propose", "backlog_full_skip", "unresolved", n)
 						return nil
 					}
 					// Reload weights so proposals use fresh rolling metrics.
 					_ = dwMgr.Load()
-					proposals, err := autoProposer.CheckAndPropose(ctx)
+					proposals, outcome, err := autoProposer.CheckAndPropose(ctx)
 					if err != nil {
 						return err
 					}
+					// Structured skip reasons (audit A5): a 50ms auto_propose
+					// run must be distinguishable as burn-in / backlog /
+					// no-trigger / cooldown / proposals in the logs.
+					switch outcome.Reason {
+					case "burn_in":
+						logging.Warn("auto_propose", "burn_in_skip",
+							"reason", outcome.Reason)
+					case "cooldown_only":
+						logging.Info("auto_propose", "cooldown_skip",
+							"reason", outcome.Reason,
+							"agents_scanned", outcome.AgentsScanned)
+					case "no_trigger":
+						logging.Info("auto_propose", "no_trigger_hit",
+							"reason", outcome.Reason,
+							"agents_scanned", outcome.AgentsScanned,
+							"no_trigger", outcome.NoTrigger)
+					}
 					store := ledger.NewStore(cfg.LedgerDir)
-					for _, p := range proposals {
+					for _, prop := range proposals {
 						if err := store.RecordExperiment(domain.ExperimentRecord{
-							ID:            fmt.Sprintf("auto-propose-%s-%d", p.AgentID, time.Now().Unix()),
-							TargetAgentID: p.AgentID,
-							Skill:         p.Brief.TargetSkill,
-							MutationType:  p.MutationType,
+							ID:            fmt.Sprintf("auto-propose-%s-%d", prop.AgentID, time.Now().Unix()),
+							TargetAgentID: prop.AgentID,
+							Skill:         prop.Brief.TargetSkill,
+							MutationType:  prop.MutationType,
 							Status:        domain.ExperimentPlanned,
-							Hypothesis:    p.TriggerReason,
+							Hypothesis:    prop.TriggerReason,
 						}); err != nil {
 							return fmt.Errorf("record proposal: %w", err)
 						}
 					}
 					if len(proposals) > 0 {
-						logging.Info("auto_propose", "proposals_recorded", "count", len(proposals))
+						logging.Info("auto_propose", "proposals_recorded",
+							"reason", outcome.Reason,
+							"count", len(proposals),
+							"agents_scanned", outcome.AgentsScanned)
 					}
 					return nil
 				},

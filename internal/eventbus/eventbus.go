@@ -60,6 +60,10 @@ const (
 	EventSystemStart        EventType = "system.start"
 	EventSystemError        EventType = "system.error"
 
+	// 持久化狀態重置事件 (audit A9): persistent state 檔案缺失導致
+	// 靜音重建模擬狀態（曾無告警抹除半年歷史）
+	EventPersistentStateReset EventType = "system.persistent_state.reset"
+
 	// 实验事件
 	EventExperimentInsufficientData EventType = "experiment.insufficient_data"
 	EventExperimentAccepted         EventType = "experiment.accepted"
@@ -421,6 +425,7 @@ var eventDescriptions = map[EventType]eventDesc{
 	EventSimulationComplete:         {"模擬執行完成，推薦已生成並通過風控審查", "info"},
 	EventSystemStart:                {"Atlas 系統啟動，開始監控市場與執行回測", "info"},
 	EventSystemError:                {"系統發生錯誤，請檢查日誌", "error"},
+	EventPersistentStateReset:       {"持久化模擬狀態遺失，系統已重建初始狀態（3M）——歷史可能被重置", "warning"},
 	EventRegimeChange:               {"市場體制轉變，策略權重將自動調整", "warning"},
 	EventAgentRecommendation:        {"AI Agent 生成新的投資推薦", "info"},
 	EventAgentEvaluation:            {"AI Agent 績效評估完成", "info"},

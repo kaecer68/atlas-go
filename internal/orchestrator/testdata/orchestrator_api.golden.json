@@ -3,7 +3,7 @@
   "funcs": [
     {
       "name": "ApplyControl",
-      "params": "(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult)",
+      "params": "(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult)",
       "receiver": "DefaultControlLayerStrategy",
       "results": "([]domain.Recommendation, []domain.GuardOutcome)"
     },

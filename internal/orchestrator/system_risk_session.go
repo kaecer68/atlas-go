@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
@@ -134,11 +135,55 @@ func (s *System) ensurePersistentStateLoaded() error {
 		return err
 	}
 	if loaded == nil {
-		state := domain.NewSimulationState(s.Sim().policy.Constraints.StartingCash)
+		// Audit A9: a missing persistent state file used to rebuild from
+		// scratch with NO warning, silently wiping months of history (June
+		// 2026 saw 4 pinned-3M resets). Now we WARN, record a durable reset
+		// event, and publish to the event bus so the wipe is never silent.
+		startingCash := s.Sim().policy.Constraints.StartingCash
+		logging.Warn("system", "persistent_state_reset",
+			"mode", mode,
+			"ledger_dir", s.Sim().cfg.LedgerDir,
+			"starting_cash", startingCash,
+			"hint", "simulation_state.json missing — rebuilt from scratch; prior portfolio history is NOT recoverable from this file")
+		s.recordPersistentStateReset(mode, startingCash)
+		state := domain.NewSimulationState(startingCash)
 		loaded = &state
 	}
 	s.Sim().persistentState = loaded
 	return nil
+}
+
+// recordPersistentStateReset durably records a silent-reset event in the
+// human_interventions audit trail (best-effort) and publishes it to the event
+// bus (nil-safe). Failure to record never fails the simulation.
+func (s *System) recordPersistentStateReset(mode string, startingCash float64) {
+	iv := domain.HumanIntervention{
+		ID:         fmt.Sprintf("psr-%d", time.Now().UnixNano()),
+		Type:       "persistent_state_reset",
+		Reason:     fmt.Sprintf("persistent state file missing (mode=%s); rebuilt from scratch with starting_cash=%.0f", mode, startingCash),
+		Operator:   "system",
+		SessionID:  s.Sim().session.ID,
+		RecordedAt: time.Now(),
+	}
+	if s.Sim().ledger != nil {
+		if err := s.Sim().ledger.RecordHumanIntervention(iv); err != nil {
+			logging.Warn("system", "persistent_state_reset_record_failed", logging.Err(err))
+		}
+	}
+	if bus := s.EventBus(); bus != nil {
+		bus.Publish(eventbus.BusEvent{
+			ID:        iv.ID,
+			Type:      eventbus.EventPersistentStateReset,
+			Timestamp: iv.RecordedAt,
+			Payload: map[string]any{
+				"mode":          mode,
+				"starting_cash": startingCash,
+				"session_id":    s.Sim().session.ID,
+				"reason":        iv.Reason,
+			},
+			Severity: "warning",
+		})
+	}
 }
 
 func (s *System) persistPersistentState() error {

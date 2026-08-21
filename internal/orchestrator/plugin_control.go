@@ -14,7 +14,7 @@ import (
 
 type ControlExecutor interface {
 	Supports(agent domain.AgentSpec) bool
-	Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation
+	Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation
 }
 
 type CRORiskExecutor struct {
@@ -31,13 +31,14 @@ func (CRORiskExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "cro_risk"
 }
 
-func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {
 	filtered := make([]domain.Recommendation, 0, len(recs))
 	params := config.GetParametersConfig().Orchestrator
-	floor := policy.ConvictionFloor
-	if floor <= 0 {
-		floor = params.ConvictionFloorDefault.Value
-	}
+	// A6 (perf audit 2026-08-21): during RISK_OFF the effective conviction
+	// floor is raised to 70 (max with the policy floor) so low-conviction
+	// recommendations are not pushed into a risk-off market. RISK_ON/Neutral
+	// keep the policy floor unchanged.
+	floor := effectiveConvictionFloor(policy, regime)
 
 	if policy.EnableConvictionNormalization && e.convictionNormalizer != nil {
 		for _, rec := range recs {
@@ -46,6 +47,12 @@ func (e CRORiskExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendat
 		for _, rec := range recs {
 			zScore := e.convictionNormalizer.Normalize(rec.Agent, rec.Conviction, portfolio.ZScore)
 			if zScore <= params.CROZScoreThreshold.Value {
+				continue
+			}
+			// A6: even with z-score normalization enabled, RISK_OFF still gates
+			// on absolute conviction (effective floor >= 70) so low-conviction
+			// recommendations never enter a risk-off market.
+			if regime == domain.RegimeRiskOff && rec.Conviction < floor {
 				continue
 			}
 			if rec.StopLossPrice > 0 && rec.TargetPrice > 0 && rec.Side == domain.SideBuy {
@@ -121,7 +128,7 @@ func (CIOPortfolioExecutor) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "cio_portfolio"
 }
 
-func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (CIOPortfolioExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {
 	type agg struct {
 		count          int
 		conviction     int
@@ -231,7 +238,7 @@ func (e CIOPortfolioExecutorWithWeights) Supports(agent domain.AgentSpec) bool {
 	return agent.Skill == "cio_portfolio"
 }
 
-func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (e CIOPortfolioExecutorWithWeights) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {
 	type agg struct {
 		weightedConviction float64
 		totalWeight        float64
@@ -480,7 +487,7 @@ func (SuperinvestorExecutor) Recommend(agent domain.AgentSpec, quote domain.Quot
 // super-ack-01). Sector/ETF recs (e.g. etf-rotation-01 → 00713.TW at conv 40-60)
 // must only clear the baseline ConvictionFloor — gating them at 65 starves the
 // daily sim of every non-superinvestor rec, producing perpetual 0-order sessions.
-func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (SuperinvestorExecutor) Apply(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {
 	params := config.GetParametersConfig().Orchestrator
 
 	filtered := make([]domain.Recommendation, 0, len(recs))
