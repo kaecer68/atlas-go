@@ -3,6 +3,7 @@ package experiment
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -141,6 +142,22 @@ func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, Propose
 // checkAgent evaluates a single agent against degradation triggers.
 // Returns a non-empty trigger reason string if the agent should be proposed for mutation.
 func (p *AutoProposer) checkAgent(agent *portfolio.DarwinianAgentWeight) string {
+	// Trigger 0: zero/low-signal + weight drifted far from neutral.
+	// A zero-signal agent has RollingSharpe=0/RollingVolatility=0/HitRate=0,
+	// so triggers 2-4 never fire and trigger 1 only fires at the weight floor.
+	// If its weight was nevertheless pushed >30% away from the configured
+	// neutral default (by past adjustments or a stale registry value), the
+	// strategy hypothesis deserves re-review. The baseline is the configured
+	// WeightNeutral, not the agent's initial weight, so intentional registry
+	// differences are not misread as drift.
+	if agent.TotalSignals < 30 {
+		neutral := p.dwManager.DefaultNeutralWeight()
+		if math.Abs(agent.Weight-neutral) > 0.30*neutral {
+			return fmt.Sprintf("weight_drift_no_signal: weight=%.3f neutral=%.3f signals=%d",
+				agent.Weight, neutral, agent.TotalSignals)
+		}
+	}
+
 	// Trigger 1: Sharpe trap — stuck at minimum weight for extended period
 	if agent.Weight <= 0.31 && agent.ConsecutiveAtMin >= 5 {
 		return fmt.Sprintf("weight_trap: stuck at %.2f for %d cycles", agent.Weight, agent.ConsecutiveAtMin)

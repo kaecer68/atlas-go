@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：77 個模組（28 S / 32 E / 8 X / 1 A / 6 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：78 個模組（28 S / 32 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
@@ -102,7 +102,7 @@
 |------|------|
 | `swarm` | 目錄已刪除（PR #963）；模擬引擎已降級為 pass-through；保留條目供歷史參考 |
 
-### U · Utility（輔助工具，5 個）
+### U · Utility（輔助工具，6 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -111,6 +111,7 @@
 | `liveness` | 任務活性心跳 — task_liveness upsert store、staleness monitor、cron ping 端點（Phase 1, 2026-08-17）|
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷（`cmd/calibrate-parameters`）|
 | `backfill` | ledger 狀態一次性修復工具（drift from canonical）|
+| `reconcile` | session summary 雙寫對帳 — PG vs JSONL 對稱差 + 單邊缺口回填（`cmd/reconcile-sessions`，B6）|
 | `buildinfo` | runtime metadata — version/commit hash/build time |
 
 ## 15 個保留 AGENTS.md（2026-07-11 從 27 合併精簡）

@@ -94,6 +94,44 @@ func TestMaturityTracker_OnTransition(t *testing.T) {
 	}
 }
 
+func TestMaturityTracker_SaveOnTransition(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "maturity.json")
+
+	// Start at burn_in, back-date so we can trigger a transition.
+	start := time.Now().UTC().Add(-59 * 24 * time.Hour)
+	tr := NewMaturityTrackerWithStart(start)
+
+	var saved bool
+	var saveErr error
+	tr.OnTransition(func(oldM, newM SystemMaturity) {
+		if err := tr.Save(statePath); err != nil {
+			saveErr = err
+			return
+		}
+		saved = true
+	})
+
+	// Trigger transition by advancing the start date.
+	tr.firstStartDate = time.Now().UTC().Add(-61 * 24 * time.Hour)
+	tr.Refresh()
+
+	if !saved {
+		t.Fatal("expected Save to be called on transition")
+	}
+	if saveErr != nil {
+		t.Fatalf("Save failed: %v", saveErr)
+	}
+
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("expected state file to exist: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("expected non-empty state file")
+	}
+}
+
 func TestMaturityTracker_Persistence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "maturity.json")

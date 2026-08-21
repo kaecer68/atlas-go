@@ -40,6 +40,13 @@ const (
 	// maxSharpeMagnitude clamps the stored RollingSharpe (defense-in-depth)
 	// so downstream weight math never sees pathological values.
 	maxSharpeMagnitude = 10.0
+
+	// minSignalsForLossPenalty is the signal floor for the negative-Sharpe
+	// loss penalty (B3). Agents below this signal count have no statistically
+	// meaningful Sharpe (ComputeSharpe requires SharpeMinSampleSize samples,
+	// default 30), so a negative value would be noise and must not deepen
+	// the cut. The floor intentionally matches SharpeMinSampleSize's default.
+	minSignalsForLossPenalty = 30
 )
 
 // ConvictionClampingEvent records when a conviction value was clamped.
@@ -486,8 +493,22 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		m.updateRollingMetrics(w)
 	}
 
-	// Sort by rolling Sharpe ratio
+	// B3: an agent with zero signals for ZeroSignalPenaltyAfterDays is
+	// "long-silent". Its RollingSharpe is 0 (nothing recorded), so the plain
+	// Sharpe sort would rank it mid-pack where it idles at initial weight
+	// forever. Long-silent agents are forced to the bottom tier instead.
+	zeroSignalStale := func(w *DarwinianAgentWeight) bool {
+		return w.TotalSignals == 0 &&
+			now.Sub(w.LastUpdatedAt) >= time.Duration(m.params.Darwinian.ZeroSignalPenaltyAfterDays)*24*time.Hour
+	}
+
+	// Sort by rolling Sharpe ratio; long-silent zero-signal agents rank last
+	// so they always land in the bottom tier.
 	sort.Slice(eligible, func(i, j int) bool {
+		zi, zj := zeroSignalStale(eligible[i]), zeroSignalStale(eligible[j])
+		if zi != zj {
+			return !zi
+		}
 		return eligible[i].RollingSharpe > eligible[j].RollingSharpe
 	})
 
@@ -499,6 +520,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 	// Top tier: significant increase with performance scaling
 	for i := range topTier {
 		w := eligible[i]
+		if zeroSignalStale(w) {
+			continue // handled by the forced-bottom pass below
+		}
 		oldWeight := w.Weight
 
 		// During burn-in, disable performance bonus (Sharpe is unstable).
@@ -534,6 +558,9 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 	// Middle tier: maintain or slight adjustment
 	for i := topTier; i < n-bottomTier; i++ {
 		w := eligible[i]
+		if zeroSignalStale(w) {
+			continue // handled by the forced-bottom pass below
+		}
 		oldWeight := w.Weight
 
 		// Slight adjustment based on hit rate
@@ -560,9 +587,12 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		adjustments[w.AgentID] = w.Weight - oldWeight
 	}
 
-	// Bottom tier: decrease with risk consideration
-	for i := n - bottomTier; i < n; i++ {
-		w := eligible[i]
+	// Bottom tier: decrease with risk consideration. B3 strengthens the cut
+	// for two cases, both computed on the A4-corrected Sharpe:
+	//   - long-silent zero-signal agents: extra ZeroSignalPenaltyMultiplier
+	//   - statistically meaningful losses (Sharpe<0 with >=minSignalsForLossPenalty
+	//     signals): extra LossPenaltyMultiplier
+	applyBottom := func(w *DarwinianAgentWeight) {
 		oldWeight := w.Weight
 
 		// Risk-based reduction: poor performance + high volatility = bigger cut
@@ -572,6 +602,12 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		}
 
 		multiplier := m.params.Darwinian.BottomQuartileMultiplier * riskMultiplier
+		if zeroSignalStale(w) {
+			multiplier *= m.params.Darwinian.ZeroSignalPenaltyMultiplier
+		}
+		if w.RollingSharpe < 0 && w.TotalSignals >= minSignalsForLossPenalty {
+			multiplier *= m.params.Darwinian.LossPenaltyMultiplier
+		}
 		if burnIn {
 			multiplier = math.Sqrt(multiplier)
 		}
@@ -583,6 +619,44 @@ func (m *DarwinianWeightManager) PerformDailyAdjustment() (map[string]float64, [
 		w.LastAdjustedAt = now
 
 		adjustments[w.AgentID] = w.Weight - oldWeight
+	}
+
+	for i := n - bottomTier; i < n; i++ {
+		applyBottom(eligible[i])
+	}
+
+	// Forced bottom: long-silent zero-signal agents that overflowed the
+	// bottom-tier seats (more stale agents than bottomTier) still receive
+	// bottom-tier treatment instead of idling in the middle tier.
+	for i := 0; i < n-bottomTier; i++ {
+		w := eligible[i]
+		if zeroSignalStale(w) {
+			applyBottom(w)
+		}
+	}
+
+	// B3: weight-change alert — a single-day weight move larger than
+	// WeightChangeAlertThreshold signals a regime/data anomaly worth
+	// surfacing. Logged as Warn and, when an event bus is attached, published
+	// as a health alert so downstream monitors (dashboard, Telegram) see it.
+	for agentID, delta := range adjustments {
+		if math.Abs(delta) > m.params.Darwinian.WeightChangeAlertThreshold {
+			logging.Warn("darwinian_weights", "weight_change_alert",
+				logging.AgentID(agentID),
+				logging.FFloat64("delta", delta),
+				logging.FFloat64("threshold", m.params.Darwinian.WeightChangeAlertThreshold))
+			if m.eventBus != nil {
+				m.eventBus.PublishHealthAlert(eventbus.HealthAlertPayload{
+					Severity:        "warning",
+					Category:        "darwinian_weights",
+					Message:         fmt.Sprintf("weight_change_alert: agent %s delta=%.4f exceeds threshold %.4f", agentID, delta, m.params.Darwinian.WeightChangeAlertThreshold),
+					Value:           delta,
+					Threshold:       m.params.Darwinian.WeightChangeAlertThreshold,
+					SuggestedAction: "Review recent outcomes and market regime; an abrupt daily weight move may indicate a data anomaly or a genuine regime shift.",
+					Timestamp:       now,
+				})
+			}
+		}
 	}
 
 	if len(clampingEvents) > 0 && m.eventBus != nil {
@@ -673,6 +747,17 @@ func (m *DarwinianWeightManager) GetWeight(agentID string) float64 {
 	if w, ok := m.weights[agentID]; ok {
 		return w.Weight
 	}
+	return m.params.Darwinian.WeightNeutral
+}
+
+// DefaultNeutralWeight returns the configured neutral weight for the
+// Darwinian system. It is the baseline reference for drift detection (e.g.
+// auto_proposer trigger 0) and is deliberately independent of each agent's
+// registry-provided initial weight so intentional initial differences are
+// not misread as drift.
+func (m *DarwinianWeightManager) DefaultNeutralWeight() float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.params.Darwinian.WeightNeutral
 }
 

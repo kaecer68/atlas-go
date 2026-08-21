@@ -84,7 +84,22 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 // runExperimentForCandidate executes the full experiment pipeline for a candidate:
 // build brief → run executor → judge → update ledger → promote if accepted.
 func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, candidate *domain.Candidate) error {
-	windowID := "window-" + time.Now().Add(-7*24*time.Hour).Format("20060102") + "-" + time.Now().Format("20060102")
+	// Phase B1 replay freshness gate: when the replay lags the experiment
+	// window by ≤1 day, defer the window to the replay's latest date instead of
+	// failing with 數據不足; a lag of ≥2 days fails loudly for daily-replay-sync
+	// triage (B4 alerting covers the standing failure case).
+	windowStart, windowEnd, deferred, err := resolveExperimentWindow(time.Now(), cfg.Config.ReplayDataPath)
+	if err != nil {
+		return fmt.Errorf("replay freshness gate: %w", err)
+	}
+	if deferred {
+		logging.Info("experiment", "window_deferred",
+			"agent", candidate.Agent.ID,
+			"window_start", windowStart.Format("2006-01-02"),
+			"window_end", windowEnd.Format("2006-01-02"),
+			"reason", "replay data lags experiment window by at most 1 day")
+	}
+	windowID := "window-" + windowStart.Format("20060102") + "-" + windowEnd.Format("20060102")
 	brief := domain.BuildMutationBrief(windowID, candidate)
 
 	briefDir := filepath.Join(cfg.Config.WorkDir, "data", "state", "windows")
