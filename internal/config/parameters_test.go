@@ -29,6 +29,18 @@ func TestDefaultParametersConfig(t *testing.T) {
 	if cfg.Darwinian.TopQuartileMultiplier.Value != 1.05 {
 		t.Errorf("expected top_multiplier 1.05, got %f", cfg.Darwinian.TopQuartileMultiplier.Value)
 	}
+	if cfg.Darwinian.ZeroSignalPenaltyMultiplier.Value != 0.9 {
+		t.Errorf("expected zero_signal_penalty_multiplier 0.9, got %f", cfg.Darwinian.ZeroSignalPenaltyMultiplier.Value)
+	}
+	if cfg.Darwinian.ZeroSignalPenaltyAfterDays.Value != 14 {
+		t.Errorf("expected zero_signal_penalty_after_days 14, got %d", cfg.Darwinian.ZeroSignalPenaltyAfterDays.Value)
+	}
+	if cfg.Darwinian.LossPenaltyMultiplier.Value != 0.9 {
+		t.Errorf("expected loss_penalty_multiplier 0.9, got %f", cfg.Darwinian.LossPenaltyMultiplier.Value)
+	}
+	if cfg.Darwinian.WeightChangeAlertThreshold.Value != 0.15 {
+		t.Errorf("expected weight_change_alert_threshold 0.15, got %f", cfg.Darwinian.WeightChangeAlertThreshold.Value)
+	}
 
 	// Factor
 	if cfg.Factor.MomentumStdDevDivisor.Value != 0.30 {
