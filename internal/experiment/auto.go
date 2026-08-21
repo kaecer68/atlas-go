@@ -44,6 +44,15 @@ func AutoExperiment(ctx context.Context, cfg AutoExperimentConfig) error {
 		logging.Info("experiment", "stale_planned_expired", "count", expired)
 	}
 
+	// Drain hygiene: expire abandoned "running" experiments whose latest
+	// record is older than the TTL (audit A5: stuck running holds the
+	// auto-judge pipeline hostage forever).
+	if expired, err := ExpireStaleRunning(cfg.Config.LedgerDir, staleRunningTTL); err != nil {
+		logging.Warn("experiment", "expire_stale_running_failed", logging.Err(err))
+	} else if expired > 0 {
+		logging.Info("experiment", "stale_running_expired", "count", expired)
+	}
+
 	// First, check if there are pending experiments from the daily pipeline that
 	// haven't been tested yet. Process the oldest one to close the feedback loop.
 	if pending := loadOldestPendingExperiment(cfg.Config.LedgerDir); pending != nil {
@@ -232,6 +241,12 @@ func (p *pendingExperiment) toCandidate(registry domain.AgentRegistry) *domain.C
 // before ExpireStalePlanned marks it expired.
 const stalePlannedTTL = 30 * 24 * time.Hour
 
+// staleRunningTTL bounds how long an experiment may sit in "running" status
+// before ExpireStaleRunning marks it expired. It shares the 30-day TTL
+// semantics of stalePlannedTTL so abandoned runs cannot hold the
+// auto-judge pipeline hostage forever (audit A5: 13 stuck running).
+const staleRunningTTL = stalePlannedTTL
+
 // ExpireStalePlanned appends an "expired" record for every planned
 // experiment whose oldest record is older than maxAge. Append-only semantics
 // are preserved (no rewrite); readers folding by ID see the new status.
@@ -274,6 +289,57 @@ func ExpireStalePlanned(ledgerDir string, maxAge time.Duration) (int, error) {
 	for _, rec := range toExpire {
 		if err := store.RecordExperiment(rec); err != nil {
 			return 0, fmt.Errorf("expire %s: %w", rec.ID, err)
+		}
+	}
+	return len(toExpire), nil
+}
+
+// ExpireStaleRunning appends an "expired" record for every experiment whose
+// latest ledger status is "running" and whose oldest record is older than
+// maxAge. Mirror of ExpireStalePlanned for abandoned runs: an executor that
+// died mid-run must not pin its experiment in "running" forever (audit A5).
+// Append-only semantics are preserved (no rewrite); readers folding by ID
+// see the new status.
+func ExpireStaleRunning(ledgerDir string, maxAge time.Duration) (int, error) {
+	records := ledger.ExperimentsJSONL(ledgerDir)
+	latest := ledger.LatestExperimentStatusByID(records)
+	firstRec := make(map[string]domain.ExperimentRecord)
+	for _, rec := range records {
+		if rec.ID == "" {
+			continue
+		}
+		if _, ok := firstRec[rec.ID]; !ok {
+			firstRec[rec.ID] = rec
+		}
+	}
+	cutoff := time.Now().Add(-maxAge)
+	var toExpire []domain.ExperimentRecord
+	for id, st := range latest {
+		if st != domain.ExperimentRunning {
+			continue
+		}
+		rec := firstRec[id]
+		// Records carry no explicit timestamp field; fall back to ID-embedded
+		// unix suffix when present, else expire conservatively (treat as old).
+		if !experimentRecordIsOld(rec, cutoff) {
+			continue
+		}
+		toExpire = append(toExpire, domain.ExperimentRecord{
+			ID:            rec.ID,
+			TargetAgentID: rec.TargetAgentID,
+			Skill:         rec.Skill,
+			MutationType:  rec.MutationType,
+			Status:        domain.ExperimentExpired,
+			RevertReason:  "expired: stuck in running beyond TTL",
+		})
+	}
+	if len(toExpire) == 0 {
+		return 0, nil
+	}
+	store := ledger.NewStore(ledgerDir)
+	for _, rec := range toExpire {
+		if err := store.RecordExperiment(rec); err != nil {
+			return 0, fmt.Errorf("expire running %s: %w", rec.ID, err)
 		}
 	}
 	return len(toExpire), nil
@@ -339,7 +405,20 @@ func LoadPendingExperiments(workDir string) []experiment.PromptExperimentResult 
 			continue
 		}
 		switch r.Experiment.Status {
-		case domain.ExperimentAccepted, domain.ExperimentRejected:
+		case domain.ExperimentAccepted, domain.ExperimentRejected, domain.ExperimentExpired:
+			continue
+		}
+		// Stuck-running TTL: a result left in "running" beyond the TTL is
+		// abandoned (executor died). Skip it so it never blocks the
+		// auto-judge wire again (audit A5). The ledger-level expiry
+		// (ExpireStaleRunning) records the transition.
+		if r.Experiment.Status == domain.ExperimentRunning &&
+			!r.RecordedAt.IsZero() &&
+			time.Since(r.RecordedAt) > staleRunningTTL {
+			logging.Warn("auto_judge", "stuck_running_skipped",
+				"file", filepath.Base(f),
+				"experiment_id", r.Experiment.ID,
+				"recorded_at", r.RecordedAt.Format(time.RFC3339))
 			continue
 		}
 		pending = append(pending, r)

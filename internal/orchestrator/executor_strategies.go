@@ -63,14 +63,14 @@ func (DefaultMomentumCrashProtectionStrategy) Apply(recs []domain.Recommendation
 // no MacroFlow strategy was wired); when non-nil, recs are uniformly scaled by
 // the net conservative bias before the per-agent guard loop runs.
 type ControlLayerStrategy interface {
-	ApplyControl(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome)
+	ApplyControl(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome)
 }
 
 // DefaultControlLayerStrategy delegates to the package-level applyControlLayerWithOutcomes function.
 type DefaultControlLayerStrategy struct{}
 
-func (DefaultControlLayerStrategy) ApplyControl(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome) {
-	return applyControlLayerWithOutcomes(registry, plugins, recs, policy, scratchpad, sessionID, macroAdjustment)
+func (DefaultControlLayerStrategy) ApplyControl(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome) {
+	return applyControlLayerWithOutcomes(registry, plugins, recs, policy, regime, scratchpad, sessionID, macroAdjustment)
 }
 
 // WeightApplicationStrategy applies Darwinian (Atlas-GIC style) weight multipliers

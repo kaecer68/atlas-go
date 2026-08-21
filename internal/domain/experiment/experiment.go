@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
@@ -125,4 +126,55 @@ type PromptExperimentResult struct {
 	ImportanceResult       *eval.ImportanceResult `json:"importance_result,omitempty"`
 	RegimeCounts           map[string]int         `json:"regime_counts,omitempty"`
 	RegimeTotalDays        int                    `json:"regime_total_days,omitempty"`
+}
+
+// UnmarshalJSON decodes a prompt experiment result file with tolerance for
+// the legacy "notes" schema drift (audit A2): early production files wrote
+// notes as a single JSON string, the current schema uses []string. The field
+// itself stays []string (JSON tag unchanged) while this decoder normalizes a
+// legacy string into a one-element slice before the regular field decoding,
+// so monitoring readers stop failing with parse_experiment_file_failed.
+func (r *PromptExperimentResult) UnmarshalJSON(data []byte) error {
+	normalized, err := normalizeNotesField(data)
+	if err != nil {
+		return err
+	}
+	// Decode into an alias type to avoid recursing into this method.
+	type rawResult PromptExperimentResult
+	var out rawResult
+	if err := json.Unmarshal(normalized, &out); err != nil {
+		return err
+	}
+	*r = PromptExperimentResult(out)
+	return nil
+}
+
+// normalizeNotesField rewrites a legacy string "notes" value into the
+// []string shape. Non-legacy inputs are returned unchanged.
+func normalizeNotesField(data []byte) ([]byte, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	notes, ok := raw["notes"]
+	if !ok || len(notes) == 0 {
+		return data, nil
+	}
+	if notes[0] == '"' {
+		var s string
+		if err := json.Unmarshal(notes, &s); err != nil {
+			return nil, err
+		}
+		arr, err := json.Marshal([]string{s})
+		if err != nil {
+			return nil, err
+		}
+		raw["notes"] = arr
+		normalized, err := json.Marshal(raw)
+		if err != nil {
+			return nil, err
+		}
+		return normalized, nil
+	}
+	return data, nil
 }
