@@ -141,6 +141,14 @@ type MarginHistoryBackfiller struct {
 	WorkDir      string
 	Provider     *marketdata.TWSEMarginBalanceProvider
 	LookbackDays int
+	// StartDate bounds the backfill window (inclusive). Zero means the
+	// legacy default window: EndDate - LookbackDays + 1.
+	StartDate time.Time
+	// EndDate bounds the backfill window (inclusive). Zero means time.Now().
+	EndDate time.Time
+	// MaxRetries is the number of fetch retries per date after the first
+	// failure. Zero means 3; values above 3 are capped at 3.
+	MaxRetries int
 }
 
 func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
@@ -152,6 +160,13 @@ func NewMarginHistoryBackfiller(workDir string) *MarginHistoryBackfiller {
 	}
 }
 
+// Backfill fetches margin balance snapshots for every trading day in the
+// [StartDate, EndDate] window (defaults: EndDate = now, StartDate =
+// EndDate-LookbackDays+1), skipping existing files, weekends, and failed
+// dates after MaxRetries attempts. Non-trading holidays are handled by the
+// provider's internal 7-day backward scan, so a holiday does not create a
+// file for its own date. Per-date failures are logged, not fatal; the only
+// fatal error is an invalid window (StartDate after EndDate).
 func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
 	marginDir := filepath.Join(b.WorkDir, DefaultMarginHistoryDir)
 	if err := os.MkdirAll(marginDir, 0o750); err != nil {
@@ -168,28 +183,78 @@ func (b *MarginHistoryBackfiller) Backfill(ctx context.Context) error {
 		existingDates[e.Date] = true
 	}
 
+	end := b.EndDate
+	if end.IsZero() {
+		end = time.Now()
+	}
+	start := b.StartDate
+	if start.IsZero() {
+		start = end.AddDate(0, 0, -(b.LookbackDays - 1))
+	}
+	if start.After(end) {
+		return fmt.Errorf("margin backfill: start %s after end %s",
+			start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+
+	maxRetries := b.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	if maxRetries > 3 {
+		maxRetries = 3
+	}
+
 	fetched := 0
-	for i := 0; i < b.LookbackDays; i++ {
+	skipped := 0
+	failed := 0
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		date := time.Now().AddDate(0, 0, -i)
-		if date.Weekday() == time.Saturday || date.Weekday() == time.Sunday {
+		if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
 			continue
 		}
-		dateStr := date.Format("20060102")
+		dateStr := d.Format("20060102")
 		if existingDates[dateStr] {
+			skipped++
 			continue
 		}
-		if _, err := b.Provider.FetchSnapshotForDate(ctx, date); err != nil {
-			logging.Warn("margin_backfill", "fetch_failed", logging.Err(err), "date", dateStr)
-			continue
+		if b.fetchWithRetry(ctx, d, dateStr, maxRetries) {
+			existingDates[dateStr] = true
+			fetched++
+		} else {
+			failed++
 		}
-		fetched++
 	}
 
-	logging.Info("margin_backfill", "complete", "fetched", fetched, "lookback_days", b.LookbackDays)
+	logging.Info("margin_backfill", "complete",
+		logging.FStr("start", start.Format("2006-01-02")),
+		logging.FStr("end", end.Format("2006-01-02")),
+		logging.FInt("fetched", fetched),
+		logging.FInt("skipped_existing", skipped),
+		logging.FInt("failed", failed),
+		logging.FInt("max_retries", maxRetries))
 	return nil
+}
+
+// fetchWithRetry fetches a single date, retrying up to maxRetries times after
+// the first failure. Returns true on success.
+func (b *MarginHistoryBackfiller) fetchWithRetry(ctx context.Context, d time.Time, dateStr string, maxRetries int) bool {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		if _, err := b.Provider.FetchSnapshotForDate(ctx, d); err == nil {
+			return true
+		} else {
+			logging.Warn("margin_backfill", "fetch_failed",
+				logging.Err(err), logging.FStr("date", dateStr),
+				logging.FInt("attempt", attempt+1), logging.FInt("max_attempts", maxRetries+1))
+		}
+	}
+	return false
 }
