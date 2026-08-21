@@ -169,6 +169,18 @@ type DarwinianParameters struct {
 	StdDevMeanRatioThreshold    ParameterMetadata[float64] `json:"stddev_mean_ratio_threshold"`
 	ConvictionClampMin          ParameterMetadata[int]     `json:"conviction_clamp_min"`
 	ConvictionClampMax          ParameterMetadata[int]     `json:"conviction_clamp_max"`
+	// ZeroSignalPenaltyMultiplier is the extra daily cut applied to agents
+	// with zero signals for ZeroSignalPenaltyAfterDays (B3). Default 0.9.
+	ZeroSignalPenaltyMultiplier ParameterMetadata[float64] `json:"zero_signal_penalty_multiplier"`
+	// ZeroSignalPenaltyAfterDays is the number of days an agent must have
+	// zero signals before the zero-signal penalty applies (B3). Default 14.
+	ZeroSignalPenaltyAfterDays ParameterMetadata[int] `json:"zero_signal_penalty_after_days"`
+	// LossPenaltyMultiplier is the extra daily cut applied to bottom-tier
+	// agents with negative Sharpe and >=30 signals (B3). Default 0.9.
+	LossPenaltyMultiplier ParameterMetadata[float64] `json:"loss_penalty_multiplier"`
+	// WeightChangeAlertThreshold is the absolute daily weight change that
+	// triggers a weight-change alert (B3). Default 0.15.
+	WeightChangeAlertThreshold ParameterMetadata[float64] `json:"weight_change_alert_threshold"`
 }
 
 // FactorParameters holds tunable values for the factor engine.

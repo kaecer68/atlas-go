@@ -224,6 +224,11 @@
       "source": "literature",
       "value": 30
     },
+    "loss_penalty_multiplier": {
+      "rationale": "10% extra daily cut for bottom-tier agents with negative Sharpe and \u003e=30 signals; deepens the penalty only on statistically meaningful losses computed on the A4-corrected per-outcome Sharpe (B3)",
+      "source": "heuristic",
+      "value": 0.9
+    },
     "max_performance_bonus_pct": {
       "rationale": "Cap performance bonus at +20%",
       "source": "heuristic",
@@ -282,6 +287,11 @@
       "source": "empirical",
       "value": 0.05
     },
+    "weight_change_alert_threshold": {
+      "rationale": "Absolute daily weight change above 0.15 triggers a darwinian weight-change alert (logging.Warn + event-bus health alert) (B3)",
+      "source": "heuristic",
+      "value": 0.15
+    },
     "weight_max": {
       "rationale": "Shout level: agent influence amplified to 250%",
       "source": "heuristic",
@@ -299,6 +309,16 @@
       "source": "heuristic",
       "todo": "Calibrate neutral weight: test [0.8, 1.0, 1.2] with 30-day backtest",
       "value": 1
+    },
+    "zero_signal_penalty_after_days": {
+      "rationale": "14 days without a single signal marks an agent as long-silent; after this it receives the zero-signal penalty (B3)",
+      "source": "heuristic",
+      "value": 14
+    },
+    "zero_signal_penalty_multiplier": {
+      "rationale": "10% extra daily cut for agents with zero signals for ZeroSignalPenaltyAfterDays; stops long-silent agents from idling at initial weight in the middle tier (B3)",
+      "source": "heuristic",
+      "value": 0.9
     }
   },
   "drawdown": {
