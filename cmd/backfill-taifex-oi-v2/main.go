@@ -94,6 +94,7 @@ type config struct {
 	end        time.Time
 	pacing     time.Duration
 	maxRetries int
+	batchDays  int // 0 = per-day; N = fetch N-calendar-day ranges per request
 	dryRun     bool
 	force      bool
 }
@@ -120,13 +121,14 @@ func main() {
 // runFromOSArgs parses os.Args via the package-level flag package and calls run.
 func runFromOSArgs() error {
 	var (
-		workDir = flag.String("workdir", ".", "atlas repo root (must contain data/state/macro)")
-		start   = flag.String("start", defaultStartDate, "backfill start date YYYY-MM-DD")
-		end     = flag.String("end", "", "backfill end date YYYY-MM-DD (default: today Asia/Taipei)")
-		pacing  = flag.Int("pacing", minPacingMillis, "milliseconds between TAIFEX requests (min 1500)")
-		retries = flag.Int("max-retries", maxRetriesDefault, "fetch retries per date (0..3)")
-		dryRun  = flag.Bool("dry-run", false, "print what would be written without touching files")
-		force   = flag.Bool("force", false, "overwrite existing non-zero foreign_futures_oi_net values")
+		workDir   = flag.String("workdir", ".", "atlas repo root (must contain data/state/macro)")
+		start     = flag.String("start", defaultStartDate, "backfill start date YYYY-MM-DD")
+		end       = flag.String("end", "", "backfill end date YYYY-MM-DD (default: today Asia/Taipei)")
+		pacing    = flag.Int("pacing", minPacingMillis, "milliseconds between TAIFEX requests (min 1500)")
+		retries   = flag.Int("max-retries", maxRetriesDefault, "fetch retries per date (0..3)")
+		batchDays = flag.Int("batch-days", 0, "fetch N-calendar-day ranges per request (0 = per-day; use e.g. 21 for bulk backfill to reduce request count)")
+		dryRun    = flag.Bool("dry-run", false, "print what would be written without touching files")
+		force     = flag.Bool("force", false, "overwrite existing non-zero foreign_futures_oi_net values")
 	)
 	flag.Parse()
 
@@ -135,6 +137,9 @@ func runFromOSArgs() error {
 	}
 	if *retries < 0 || *retries > maxRetriesDefault {
 		return fmt.Errorf("--max-retries must be in 0..%d (got %d)", maxRetriesDefault, *retries)
+	}
+	if *batchDays < 0 || *batchDays > 92 {
+		return fmt.Errorf("--batch-days must be in 0..92 (got %d)", *batchDays)
 	}
 
 	loc, err := time.LoadLocation("Asia/Taipei")
@@ -163,6 +168,7 @@ func runFromOSArgs() error {
 		end:        endTime,
 		pacing:     time.Duration(*pacing) * time.Millisecond,
 		maxRetries: *retries,
+		batchDays:  *batchDays,
 		dryRun:     *dryRun,
 		force:      *force,
 	})
@@ -179,6 +185,7 @@ func run(cfg config) error {
 		client:     &http.Client{Timeout: httpTimeoutSeconds * time.Second},
 		url:        taifexFutDownURL,
 		maxRetries: cfg.maxRetries,
+		batchDays:  cfg.batchDays,
 	}
 	ctx := context.Background()
 
@@ -316,22 +323,57 @@ var (
 )
 
 // taifexFetcher performs the TAIFEX website CSV download with retry.
+// When batchDays > 0, one request fetches a range of dates and the results
+// are cached, so the per-day run loop serves subsequent days from cache.
 type taifexFetcher struct {
 	client     *http.Client
 	url        string
 	maxRetries int
+	batchDays  int
+
+	cache   map[string]float64 // date (2006-01-02) → foreign OI net
+	noData  map[string]bool    // date confirmed without TAIFEX data (holiday)
+	cacheLo time.Time          // cached window start (inclusive)
+	cacheHi time.Time          // cached window end (inclusive)
 }
 
 // fetchForeignOINet downloads the per-contract CSV for one date and returns
 // the 臺股期貨 外資及陸資 OI net. found=false means the date has no TAIFEX data
-// (holiday). Errors are retried up to maxRetries times with backoff.
+// (holiday). When batchDays > 0 the request covers a range of dates and the
+// results are cached for subsequent days. Errors are retried up to maxRetries
+// times with backoff.
 func (f *taifexFetcher) fetchForeignOINet(ctx context.Context, d time.Time) (float64, bool, error) {
-	dateStr := d.Format("2006/01/02")
-	form := url.Values{}
-	form.Set("queryStartDate", dateStr)
-	form.Set("queryEndDate", dateStr)
-	form.Set("commodityId", taifexContractTX)
+	dateStr := d.Format("2006-01-02")
+	if f.batchDays <= 0 {
+		form := url.Values{}
+		form.Set("queryStartDate", d.Format("2006/01/02"))
+		form.Set("queryEndDate", d.Format("2006/01/02"))
+		form.Set("commodityId", taifexContractTX)
+		return f.fetchWithRetry(ctx, form, d, d, dateStr)
+	}
 
+	// Batch mode: serve from cache when the requested date is inside the
+	// already-fetched window.
+	if f.cache != nil && !d.Before(f.cacheLo) && !d.After(f.cacheHi) {
+		if v, ok := f.cache[dateStr]; ok {
+			return v, true, nil
+		}
+		if f.noData[dateStr] {
+			return 0, false, nil
+		}
+	}
+
+	windowEnd := d.AddDate(0, 0, f.batchDays-1)
+	form := url.Values{}
+	form.Set("queryStartDate", d.Format("2006/01/02"))
+	form.Set("queryEndDate", windowEnd.Format("2006/01/02"))
+	form.Set("commodityId", taifexContractTX)
+	return f.fetchWithRetry(ctx, form, d, windowEnd, dateStr)
+}
+
+// fetchWithRetry performs one POST and applies the retry/backoff policy.
+// start/end are the requested calendar range; label is used in error logs.
+func (f *taifexFetcher) fetchWithRetry(ctx context.Context, form url.Values, start, end time.Time, label string) (float64, bool, error) {
 	var lastErr error
 	for attempt := 0; attempt <= f.maxRetries; attempt++ {
 		if attempt > 0 {
@@ -345,86 +387,125 @@ func (f *taifexFetcher) fetchForeignOINet(ctx context.Context, d time.Time) (flo
 				return 0, false, ctx.Err()
 			}
 		}
-		v, found, err := f.fetchOnce(ctx, form)
+		values, found, err := f.fetchOnce(ctx, form)
 		if err == nil {
-			return v, found, nil
+			if f.batchDays > 0 {
+				f.storeRange(values, found, start, end)
+			}
+			v, ok := values[start.Format("2006-01-02")]
+			if !ok {
+				return 0, false, nil
+			}
+			return v, true, nil
 		}
 		lastErr = err
-		fmt.Fprintf(os.Stderr, "  [%s] attempt %d/%d failed: %v\n", dateStr, attempt+1, f.maxRetries+1, err)
+		fmt.Fprintf(os.Stderr, "  [%s] attempt %d/%d failed: %v\n", label, attempt+1, f.maxRetries+1, err)
 	}
-	return 0, false, fmt.Errorf("fetch %s after %d attempts: %w", dateStr, f.maxRetries+1, lastErr)
+	return 0, false, fmt.Errorf("fetch %s after %d attempts: %w", label, f.maxRetries+1, lastErr)
 }
 
-func (f *taifexFetcher) fetchOnce(ctx context.Context, form url.Values) (float64, bool, error) {
+// storeRange records fetched values and confirmed no-data dates for a window.
+func (f *taifexFetcher) storeRange(values map[string]float64, found bool, start, end time.Time) {
+	if f.cache == nil {
+		f.cache = make(map[string]float64)
+		f.noData = make(map[string]bool)
+	}
+	f.cacheLo, f.cacheHi = start, end
+	if !found {
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			f.noData[d.Format("2006-01-02")] = true
+		}
+		return
+	}
+	for date, v := range values {
+		f.cache[date] = v
+	}
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		ds := d.Format("2006-01-02")
+		if _, ok := values[ds]; !ok {
+			f.noData[ds] = true
+		}
+	}
+}
+
+func (f *taifexFetcher) fetchOnce(ctx context.Context, form url.Values) (map[string]float64, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, f.url, strings.NewReader(form.Encode()))
 	if err != nil {
-		return 0, false, fmt.Errorf("create request: %w", err)
+		return nil, false, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return 0, false, fmt.Errorf("http request: %w", err)
+		return nil, false, fmt.Errorf("http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, false, fmt.Errorf("read body: %w", err)
+		return nil, false, fmt.Errorf("read body: %w", err)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests || bytes.Contains(body, []byte("Just a moment")) {
-		return 0, false, errRateLimited
+		return nil, false, errRateLimited
 	}
 	if resp.StatusCode != http.StatusOK {
-		return 0, false, fmt.Errorf("HTTP %d: %.160s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, false, fmt.Errorf("HTTP %d: %.160s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	text, err := decodeBody(body, resp.Header.Get("Content-Type"))
 	if err != nil {
-		return 0, false, err
+		return nil, false, err
 	}
 	if strings.Contains(text, "查無資料") {
-		return 0, false, nil
+		return nil, false, nil
 	}
-	return parseForeignOINetCSV(text)
+	return parseForeignOINetCSVMulti(text)
 }
 
-// parseForeignOINetCSV parses the TAIFEX per-contract CSV text and returns the
-// 臺股期貨 外資及陸資 多空未平倉口數淨額. found=false means the CSV has no data
-// rows for that date (empty session / not a trading day).
-func parseForeignOINetCSV(text string) (value float64, found bool, err error) {
+// parseForeignOINetCSVMulti parses the TAIFEX per-contract CSV text and returns
+// a map of date → 臺股期貨 外資及陸資 多空未平倉口數淨額 for every date present in
+// the CSV (one date for a single-day query, many dates for a range query).
+// found=false means the CSV has no data rows at all (empty session /
+// not a trading day).
+func parseForeignOINetCSVMulti(text string) (values map[string]float64, found bool, err error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
-		return 0, false, nil
+		return nil, false, nil
 	}
 	if !strings.HasPrefix(trimmed, "日期") {
-		return 0, false, fmt.Errorf("unexpected TAIFEX response (not CSV): %.100s", trimmed)
+		return nil, false, fmt.Errorf("unexpected TAIFEX response (not CSV): %.100s", trimmed)
 	}
 
 	r := csv.NewReader(strings.NewReader(trimmed))
 	records, err := r.ReadAll()
 	if err != nil {
-		return 0, false, fmt.Errorf("parse CSV: %w", err)
+		return nil, false, fmt.Errorf("parse CSV: %w", err)
 	}
 	if len(records) < 2 {
-		return 0, false, nil // header only → no data rows
+		return nil, false, nil // header only → no data rows
 	}
 
 	header := records[0]
-	oiNetIdx := -1
+	oiNetIdx, dateIdx := -1, -1
 	for i, h := range header {
-		if strings.TrimSpace(h) == csvHeaderOINet {
+		switch strings.TrimSpace(h) {
+		case csvHeaderOINet:
 			oiNetIdx = i
-			break
+		case "日期":
+			dateIdx = i
 		}
 	}
 	if oiNetIdx < 0 {
-		return 0, false, fmt.Errorf("CSV header missing %q (got %v)", csvHeaderOINet, header)
+		return nil, false, fmt.Errorf("CSV header missing %q (got %v)", csvHeaderOINet, header)
+	}
+	if dateIdx < 0 {
+		return nil, false, fmt.Errorf("CSV header missing 日期 (got %v)", header)
 	}
 
+	values = make(map[string]float64)
 	for _, row := range records[1:] {
-		if len(row) <= oiNetIdx {
+		if len(row) <= oiNetIdx || len(row) <= dateIdx {
 			continue
 		}
 		if strings.TrimSpace(row[1]) != contractNameTX {
@@ -436,11 +517,25 @@ func parseForeignOINetCSV(text string) (value float64, found bool, err error) {
 		raw := strings.ReplaceAll(strings.TrimSpace(row[oiNetIdx]), ",", "")
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return 0, false, fmt.Errorf("parse OI net %q: %w", row[oiNetIdx], err)
+			return nil, false, fmt.Errorf("parse OI net %q: %w", row[oiNetIdx], err)
 		}
-		return float64(v), true, nil
+		date := strings.ReplaceAll(strings.TrimSpace(row[dateIdx]), "/", "-")
+		values[date] = float64(v)
 	}
-	return 0, false, nil // contract or trader row not present
+	return values, len(values) > 0, nil
+}
+
+// parseForeignOINetCSV parses a single-day CSV and returns the value.
+// found=false means the date has no TAIFEX data (holiday / not a trading day).
+func parseForeignOINetCSV(text string) (value float64, found bool, err error) {
+	values, found, err := parseForeignOINetCSVMulti(text)
+	if err != nil || !found {
+		return 0, found, err
+	}
+	for _, v := range values {
+		return v, true, nil
+	}
+	return 0, false, nil
 }
 
 // decodeBody transcodes a response body according to its Content-Type charset.

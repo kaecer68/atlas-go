@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -374,6 +375,76 @@ func TestRun_DryRunDoesNotWrite(t *testing.T) {
 	if _, ok := readValue(t, dir, "2026-08-13"); ok {
 		t.Error("dry-run wrote a value")
 	}
+}
+
+func TestRun_BatchModeFetchesRangeOnce(t *testing.T) {
+	root, dir := newTestRepo(t)
+	// 2026-08-10 (Mon) .. 2026-08-14 (Fri) trading week + weekend files.
+	for _, d := range []string{"2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"} {
+		writeSnap(t, dir, d+".json", realisticSnap())
+	}
+
+	requests := 0
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		// Serve a multi-day CSV for the requested window.
+		start := strings.ReplaceAll(r.FormValue("queryStartDate"), "/", "-")
+		end := strings.ReplaceAll(r.FormValue("queryEndDate"), "/", "-")
+		var sb strings.Builder
+		sb.WriteString("日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),空方交易口數,空方交易契約金額(千元),多空交易口數淨額,多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,多空未平倉契約金額淨額(千元)\n")
+		values := map[string]int64{"2026-08-10": -89201, "2026-08-11": -88924, "2026-08-12": -86633, "2026-08-13": -86249, "2026-08-14": -85179}
+		for d := start; d <= end; d = nextDate(d) {
+			if v, ok := values[d]; ok {
+				sb.WriteString(fmt.Sprintf("%s,臺股期貨,外資及陸資,1,2,3,4,5,6,7,8,9,10,%d,12\n", d, v))
+			}
+		}
+		b, err := traditionalchinese.Big5.NewEncoder().Bytes([]byte(sb.String()))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		big5CSVResponse(w, b)
+	}))
+	t.Cleanup(srv.Close)
+	old := taifexFutDownURL
+	t.Cleanup(func() { taifexFutDownURL = old })
+	taifexFutDownURL = srv.URL
+
+	start, _ := time.Parse("2006-01-02", "2026-08-10")
+	end, _ := time.Parse("2006-01-02", "2026-08-16")
+	if err := run(config{workDir: root, start: start, end: end, pacing: 0, maxRetries: 1, batchDays: 7}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	mu.Lock()
+	got := requests
+	mu.Unlock()
+	if got != 1 {
+		t.Errorf("requests = %d, want 1 (range fetch)", got)
+	}
+	want := map[string]float64{
+		"2026-08-10": -89201, "2026-08-11": -88924, "2026-08-12": -86633,
+		"2026-08-13": -86249, "2026-08-14": -85179,
+		"2026-08-15": -85179, "2026-08-16": -85179, // weekend carry-forward
+	}
+	for date, w := range want {
+		v, ok := readValue(t, dir, date)
+		if !ok {
+			t.Errorf("%s: field missing", date)
+			continue
+		}
+		if v != w {
+			t.Errorf("%s: value = %.0f, want %.0f", date, v, w)
+		}
+	}
+}
+
+// nextDate advances a YYYY-MM-DD string by one calendar day.
+func nextDate(s string) string {
+	d, _ := time.Parse("2006-01-02", s)
+	return d.AddDate(0, 0, 1).Format("2006-01-02")
 }
 
 func TestCountNonZeroSnapshots(t *testing.T) {
