@@ -44,6 +44,9 @@
 @import url("layout/topbar.css");
 @import url("layout/page-shell.css");
 
+/* Topbar (Track A: voluntary login UX) — 覆寫 layout/topbar.css 的 #topbar 兩列布局 */
+@import url("components/topbar.css");
+
 /* Pages - Overview */
 @import url("pages/overview.css");
 @import url("pages/home.css");

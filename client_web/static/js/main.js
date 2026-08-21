@@ -12,8 +12,10 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
-import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getTier } from './services/auth.js';
-import { pageRequiresLogin } from './services/login-gate.js';
+import { initAuth, isLoggedIn, invalidateAuth, renderNavState } from './services/auth.js';
+import { pageRequiresLogin, PUBLIC_PAGES } from './services/login-gate.js';
+import { startIdleMonitor, resetIdleMonitor } from './services/idle-monitor.js';
+import { showLoginReminderModal } from './components/login-reminder-modal.js';
 import { metricCard } from './components/metric-card.js';
 import { fmtSignedPct } from './shared/format-metric.js';
 import { renderHomeTierSections } from './components/home-tier-sections.js';
@@ -484,16 +486,36 @@ if (typeof window !== 'undefined') {
   // mutating 401 亦走 onUnauthorized + login，維持既有行為。
   install401Interceptor({
     loginPageId: 'login',
-    // 'my-signals' 排除在 401 自動跳轉之外：未登入訪客停在原頁，
-    // 由 my-signals.js 顯示「此功能需要登入」+ 回公開內容逃脫路徑，
-    // 避免直接摔進登入牆（UX audit P0）。
-    excludedPages: ['login', 'register', 'my-signals'],
+    // Track A（不強迫登入）：公開頁全部排除在 401 自動跳轉之外 —
+    // 匿名訪客 initAuth 的 /api/user/profile 401 是「預期結果」，不該被踢到
+    // login；gated 頁（portfolio/premium）由 switchPage 的 runLoginGate 擋，
+    // 個人資料 API 的 401 仍會把已登入但 session 失效的用戶導向 login
+    // （資料保護不變）。
+    excludedPages: PUBLIC_PAGES,
     onUnauthorized: invalidateAuth,
     switchPage: window.switchPage,
   });
 
   initAuth().then(function() {
-    renderNavState();
+    renderNavState(); // 內部會再呼叫 renderTopBar()
+    // Track A：20 分鐘閒置提醒（未登入時彈 modal；「再逛一下」重設計時）
+    startIdleMonitor({
+      timeoutMs: 20 * 60 * 1000,
+      onIdle: async function () {
+        try {
+          const loggedIn = await isLoggedIn();
+          if (!loggedIn) {
+            showLoginReminderModal({
+              onKeepBrowsing: function () {
+                resetIdleMonitor();
+              },
+            });
+          }
+        } catch (e) {
+          // isLoggedIn 異常時不彈，避免打擾瀏覽
+        }
+      },
+    });
     (async () => {
     loadAll().catch(e => console.warn('[init] loadAll failed:', e));
     var initialPath = window.location.pathname
