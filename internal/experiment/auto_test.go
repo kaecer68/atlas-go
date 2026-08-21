@@ -3,10 +3,14 @@ package experiment
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/experiment"
 )
@@ -191,6 +195,115 @@ func TestLoadOldestPendingExperiment_InvalidJSON(t *testing.T) {
 	result := loadOldestPendingExperiment(dir)
 	if result != nil {
 		t.Errorf("expected nil for invalid JSON, got %v", result)
+	}
+}
+
+// TestRunExperimentForCandidateDefersWindowOnOneDayStaleReplay — Phase B1:
+// replay 落後 1 天時，runExperimentForCandidate 不再回「數據不足」error，而是
+// 把窗口整窗平移對齊 replay 最新日期（[latestDate-6d, latestDate]）並跑完
+// 實驗；寫出的 brief 必須攜帶順延後的 windowID。
+func TestRunExperimentForCandidateDefersWindowOnOneDayStaleReplay(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	root := filepath.Clean(filepath.Join(wd, "../.."))
+	promptPath := filepath.Join(root, "prompts/agents/growth_momentum.md")
+
+	dir := t.TempDir()
+	workDir := dir
+	ledgerDir := filepath.Join(workDir, "data", "state")
+	if err := os.MkdirAll(filepath.Join(ledgerDir, "windows"), 0o755); err != nil {
+		t.Fatalf("mkdir windows: %v", err)
+	}
+
+	// Fixture replay whose latest date is exactly one calendar day behind now.
+	// The freshness gate must defer the window to [latest-6d, latest] instead of
+	// letting the executor fail with 數據不足. 2317.TW is in the
+	// growth_momentum universe so the judge's replay scoring sees real quotes;
+	// OHLCV varies per day so ForwardReturn does not treat the rows as stale.
+	yesterday := time.Now().AddDate(0, 0, -1)
+	var rows strings.Builder
+	for i := 6; i >= 0; i-- {
+		d := yesterday.AddDate(0, 0, -i).Format("2006-01-02")
+		close := 100 + i*3
+		rows.WriteString(fmt.Sprintf("%s,2317,Test,%d,%d,%d,%d,%d\n",
+			d, 1000000+i*50000, close-5, close+8, close-7, close))
+	}
+	replayPath := filepath.Join(dir, "replay.csv")
+	writeTestCSV(t, replayPath, rows.String())
+
+	expectedStart := yesterday.AddDate(0, 0, -6)
+	expectedWindowID := "window-" + expectedStart.Format("20060102") + "-" + yesterday.Format("20060102")
+
+	// Pre-create the window summary the judge expects (mirrors judge_test).
+	window := domain.BacktestWindowSummary{
+		WindowID:             expectedWindowID,
+		StartDate:            expectedStart,
+		EndDate:              yesterday,
+		WorstAgentSharpeLike: -100,
+	}
+	windowBytes, err := json.Marshal(window)
+	if err != nil {
+		t.Fatalf("marshal window: %v", err)
+	}
+	windowPath := filepath.Join(ledgerDir, "windows", expectedWindowID+".json")
+	if err := os.WriteFile(windowPath, windowBytes, 0o644); err != nil {
+		t.Fatalf("write window summary: %v", err)
+	}
+
+	cfg := AutoExperimentConfig{
+		Config: config.Config{
+			WorkDir:            workDir,
+			LedgerDir:          ledgerDir,
+			ReplayDataPath:     replayPath,
+			BaselinePolicyPath: filepath.Join(dir, "baseline_policy.json"),
+		},
+		Monitor: &testMonitor{},
+	}
+	candidate := &domain.Candidate{
+		Agent: domain.AgentSpec{
+			ID:               "growth-momentum-01",
+			Skill:            "growth_momentum",
+			Layer:            domain.LayerStyle,
+			PromptFile:       promptPath,
+			RequiredSkills:   []string{"growth_momentum"},
+			ForbiddenActions: []string{"illiquid_breakout_chasing"},
+		},
+		Scorecard: domain.Scorecard{
+			AgentID:     "growth-momentum-01",
+			SharpeLike:  0.05,
+			WindowCount: 2,
+		},
+		Experiment: domain.ExperimentRecord{
+			ID:               "exp-auto-defer-test",
+			TargetAgentID:    "growth-momentum-01",
+			Skill:            "growth_momentum",
+			MutationType:     "prompt_tightening",
+			Status:           domain.ExperimentPlanned,
+			BaselineValue:    0.05,
+			AcceptanceMetric: "sharpe_like",
+		},
+	}
+
+	err = runExperimentForCandidate(context.Background(), cfg, candidate)
+	if err != nil {
+		t.Fatalf("runExperimentForCandidate returned error for 1-day stale replay (expected defer, not failure): %v", err)
+	}
+
+	// The brief written by runExperimentForCandidate must carry the deferred
+	// window ID aligned to the replay's latest date.
+	briefPath := filepath.Join(workDir, "data", "state", "windows", "auto-brief-growth-momentum-01.json")
+	briefBytes, err := os.ReadFile(briefPath)
+	if err != nil {
+		t.Fatalf("read deferred brief: %v", err)
+	}
+	var brief domain.MutationBrief
+	if err := json.Unmarshal(briefBytes, &brief); err != nil {
+		t.Fatalf("unmarshal brief: %v", err)
+	}
+	if brief.WindowID != expectedWindowID {
+		t.Errorf("expected deferred windowID %s, got %s", expectedWindowID, brief.WindowID)
 	}
 }
 
