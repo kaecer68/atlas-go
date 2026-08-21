@@ -14,12 +14,15 @@ func TestAutoProposer_BurnInSkips(t *testing.T) {
 	dw := portfolio.NewDarwinianWeightManager("/tmp/test_proposer.json")
 	p := NewAutoProposer(dw, nil).WithMaturityTracker(tr)
 
-	proposals, err := p.CheckAndPropose(context.Background())
+	proposals, outcome, err := p.CheckAndPropose(context.Background())
 	if err != nil {
 		t.Fatalf("CheckAndPropose: %v", err)
 	}
 	if len(proposals) != 0 {
 		t.Errorf("expected 0 proposals during burn_in, got %d", len(proposals))
+	}
+	if !outcome.BurnInSkipped || outcome.Reason != "burn_in" {
+		t.Errorf("expected burn_in skip outcome, got %+v", outcome)
 	}
 }
 
@@ -38,12 +41,18 @@ func TestAutoProposer_NoDegradationNoProposal(t *testing.T) {
 	}
 
 	p := NewAutoProposer(dw, nil).WithMaturityTracker(tr)
-	proposals, err := p.CheckAndPropose(context.Background())
+	proposals, outcome, err := p.CheckAndPropose(context.Background())
 	if err != nil {
 		t.Fatalf("CheckAndPropose: %v", err)
 	}
 	if len(proposals) != 0 {
 		t.Errorf("expected 0 proposals for healthy agent, got %d", len(proposals))
+	}
+	if outcome.Reason != "no_trigger" {
+		t.Errorf("expected no_trigger outcome, got %+v", outcome)
+	}
+	if outcome.NoTrigger != outcome.AgentsScanned || outcome.AgentsScanned == 0 {
+		t.Errorf("expected all scanned agents to have no trigger, got %+v", outcome)
 	}
 }
 
@@ -62,12 +71,15 @@ func TestAutoProposer_SharpeDegradation(t *testing.T) {
 	}
 
 	p := NewAutoProposer(dw, nil).WithMaturityTracker(tr)
-	proposals, err := p.CheckAndPropose(context.Background())
+	proposals, outcome, err := p.CheckAndPropose(context.Background())
 	if err != nil {
 		t.Fatalf("CheckAndPropose: %v", err)
 	}
 	if len(proposals) != 1 {
 		t.Fatalf("expected 1 proposal for degraded agent, got %d", len(proposals))
+	}
+	if outcome.Reason != "proposals" || outcome.ProposalsGenerated != 1 {
+		t.Errorf("expected proposals outcome, got %+v", outcome)
 	}
 	if proposals[0].AgentID != "sick_agent" {
 		t.Errorf("expected agent sick_agent, got %s", proposals[0].AgentID)
@@ -93,15 +105,24 @@ func TestAutoProposer_CooldownRespected(t *testing.T) {
 	p := NewAutoProposer(dw, nil).WithMaturityTracker(tr).WithCooldown(24 * time.Hour)
 
 	// First scan should generate proposal
-	p1, _ := p.CheckAndPropose(context.Background())
+	p1, out1, _ := p.CheckAndPropose(context.Background())
 	if len(p1) != 1 {
 		t.Fatalf("expected 1 proposal on first scan, got %d", len(p1))
 	}
+	if out1.Reason != "proposals" {
+		t.Errorf("expected proposals outcome, got %+v", out1)
+	}
 
 	// Second scan within cooldown should return none
-	p2, _ := p.CheckAndPropose(context.Background())
+	p2, out2, _ := p.CheckAndPropose(context.Background())
 	if len(p2) != 0 {
 		t.Errorf("expected 0 proposals within cooldown, got %d", len(p2))
+	}
+	if out2.Reason != "cooldown_only" {
+		t.Errorf("expected cooldown_only outcome, got %+v", out2)
+	}
+	if out2.CooldownSkipped != out2.AgentsScanned || out2.AgentsScanned == 0 {
+		t.Errorf("expected all agents cooldown-skipped, got %+v", out2)
 	}
 }
 
@@ -126,7 +147,7 @@ func TestAutoProposer_WeightTrap(t *testing.T) {
 	}
 
 	p := NewAutoProposer(dw, nil).WithMaturityTracker(tr)
-	proposals, err := p.CheckAndPropose(context.Background())
+	proposals, _, err := p.CheckAndPropose(context.Background())
 	if err != nil {
 		t.Fatalf("CheckAndPropose: %v", err)
 	}

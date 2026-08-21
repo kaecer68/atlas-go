@@ -746,7 +746,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	var clampingEvents []portfolio.ClampingEvent
 	if s.Port().darwinian != nil && !syntheticOutcomes {
 		for _, outcome := range outcomes {
-			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
+			s.Port().darwinian.RecordOutcomeAt(outcome.AgentID, outcome.ForwardReturn, outcome.Hit, outcome.RecordedAt)
 		}
 		_, clampingEvents = s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()
@@ -909,7 +909,7 @@ func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{}
 	return keys
 }
 
-func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) float64 {
+func syntheticForwardReturn(symbol, agentID string, quote domain.Quote, asOf time.Time) float64 {
 	if quote.Open > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 		fr := intraday * 0.8
@@ -925,12 +925,12 @@ func syntheticForwardReturn(symbol string, quote domain.Quote, asOf time.Time) f
 		}
 		return fr
 	}
-	var sum int64
-	for _, r := range symbol {
-		sum += int64(r)
-	}
+	// Deterministic distribution branch: agent-scoped seed so different agents
+	// recommending the same symbol draw different synthetic values (A4 L2 —
+	// symbol-only seeding made multi-agent windows byte-identical).
+	hash := hashString(agentID + "|" + symbol)
 	daySeed := int64(asOf.YearDay())
-	return (float64((sum+daySeed)%10000)/10000.0)*0.04 - 0.02
+	return (float64((hash+daySeed)%10000)/10000.0)*0.04 - 0.02
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -975,7 +975,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, quote, asOf)
+		forwardReturn := syntheticForwardReturn(rec.Symbol, rec.Agent, quote, asOf)
 		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
@@ -1023,7 +1023,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
 		if !ok {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, quote, asOf)
+			forwardReturn = syntheticForwardReturn(rec.Symbol, rec.Agent, quote, asOf)
 			synthetic = true
 		}
 		_, passed := passedSymbols[rec.Symbol]

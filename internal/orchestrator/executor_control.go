@@ -45,7 +45,7 @@ func clampConvictionInt(v int) int {
 	return v
 }
 
-func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome) {
+func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *PluginRegistry, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime, scratchpad *Scratchpad, sessionID string, macroAdjustment *macroflow.AdjustmentResult) ([]domain.Recommendation, []domain.GuardOutcome) {
 	if !policy.RequireCROPass {
 		return recs, []domain.GuardOutcome{{
 			GuardID:     "control-bypass",
@@ -65,7 +65,7 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 			continue
 		}
 		before := len(current)
-		next := plugins.ApplyControl(agent, current, policy)
+		next := plugins.ApplyControl(agent, current, policy, regime)
 		after := len(next)
 		severity := severityForControlAgent(agent)
 		blocked := before > 0 && after == 0 && severity == domain.GuardSeverityHard
@@ -96,13 +96,15 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 					Step:      3,
 					Component: "cro_filter",
 					Action:    "apply_cro_filter",
-					Reasoning: fmt.Sprintf("CRO filter: %d in -> %d out, conviction floor: %d", before, after, policy.ConvictionFloor),
+					Reasoning: fmt.Sprintf("CRO filter: %d in -> %d out, conviction floor: %d (regime %s)", before, after, effectiveConvictionFloor(policy, regime), regime),
 					Data: map[string]any{
-						"input_count":               before,
-						"output_count":              after,
-						"conviction_floor":          policy.ConvictionFloor,
-						"z_score_enabled":           policy.EnableConvictionNormalization,
-						"momentum_crash_protection": policy.MomentumCrashProtection,
+						"input_count":                before,
+						"output_count":               after,
+						"conviction_floor":           policy.ConvictionFloor,
+						"effective_conviction_floor": effectiveConvictionFloor(policy, regime),
+						"regime":                     string(regime),
+						"z_score_enabled":            policy.EnableConvictionNormalization,
+						"momentum_crash_protection":  policy.MomentumCrashProtection,
 					},
 					Confidence: passRatio(before, after),
 				})
@@ -282,4 +284,19 @@ func passRatio(input, output int) float64 {
 		return 1.0
 	}
 	return ratio
+}
+
+// effectiveConvictionFloor returns the conviction floor actually applied by the
+// CRO filter for the given regime. A6 (perf audit 2026-08-21): during RISK_OFF
+// the effective floor is raised to at least 70; otherwise the policy floor is
+// used (falling back to the configured default when unset).
+func effectiveConvictionFloor(policy domain.ExecutionPolicy, regime domain.Regime) int {
+	floor := policy.ConvictionFloor
+	if floor <= 0 {
+		floor = config.GetParametersConfig().Orchestrator.ConvictionFloorDefault.Value
+	}
+	if regime == domain.RegimeRiskOff && floor < 70 {
+		floor = 70
+	}
+	return floor
 }

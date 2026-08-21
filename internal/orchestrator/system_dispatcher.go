@@ -199,7 +199,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	var clampingEvents []portfolio.ClampingEvent
 	if s.Port().darwinian != nil && len(outcomes) > 0 {
 		for _, outcome := range outcomes {
-			s.Port().darwinian.RecordOutcome(outcome.AgentID, outcome.ForwardReturn, outcome.Hit)
+			s.Port().darwinian.RecordOutcomeAt(outcome.AgentID, outcome.ForwardReturn, outcome.Hit, outcome.RecordedAt)
 		}
 		_, clampingEvents = s.Port().darwinian.PerformDailyAdjustment()
 		_ = s.Port().darwinian.Save()

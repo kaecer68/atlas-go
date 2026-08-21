@@ -452,6 +452,12 @@
       "results": ""
     },
     {
+      "name": "RecordOutcomeAt",
+      "params": "(agentID string, forwardReturn float64, isHit bool, recordedAt time.Time)",
+      "receiver": "DarwinianWeightManager",
+      "results": ""
+    },
+    {
       "name": "RemoveAgent",
       "params": "(agentID string)",
       "receiver": "DarwinianWeightManager",
@@ -1962,7 +1968,10 @@
         "LastAdjustedAt time.Time",
         "LastUpdatedAt time.Time",
         "DailyReturns []float64",
-        "ConsecutiveAtMin int"
+        "ConsecutiveAtMin int",
+        "LastOutcomeDay string",
+        "LastDaySum float64",
+        "LastDayCount int"
       ],
       "kind": "struct",
       "name": "DarwinianAgentWeight"

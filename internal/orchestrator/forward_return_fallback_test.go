@@ -16,7 +16,7 @@ func TestGenerateForwardReturn_ValidQuotePositiveIntraday(t *testing.T) {
 		Last:   102.0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	expected := (102.0 - 100.0) / 100.0 * 0.9
 	if math.Abs(fr-expected) > 0.0001 {
@@ -32,7 +32,7 @@ func TestGenerateForwardReturn_ValidQuoteNegativeIntraday(t *testing.T) {
 		Last:   98.0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	expected := (98.0 - 100.0) / 100.0 * 0.9
 	if math.Abs(fr-expected) > 0.0001 {
@@ -48,7 +48,7 @@ func TestGenerateForwardReturn_FlatDayUsesDistributionFallback(t *testing.T) {
 		Last:   100.0005,
 	}
 
-	fr := GenerateForwardReturn("TESTFLAT", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("TESTFLAT", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	intraday := (quote.Last - quote.Open) / quote.Open
 	rawFr := intraday * 0.9
@@ -66,7 +66,7 @@ func TestGenerateForwardReturn_NoQuoteUsesDistributionFallback(t *testing.T) {
 		Last:   0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	if fr == 0 {
 		t.Errorf("no quote should use distribution fallback, got %f", fr)
@@ -81,8 +81,8 @@ func TestGenerateForwardReturn_RiskOnVsRiskOffDiffers(t *testing.T) {
 		Last:   0,
 	}
 
-	frRiskOn := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
-	frRiskOff := GenerateForwardReturn("2330", quote, domain.RegimeRiskOff, fallback)
+	frRiskOn := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
+	frRiskOff := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOff, fallback)
 
 	if frRiskOn == frRiskOff {
 		t.Errorf("RiskOn and RiskOff should produce different results, got both %f", frRiskOn)
@@ -99,7 +99,7 @@ func TestGenerateForwardReturn_SymbolHashDeterminism(t *testing.T) {
 
 	results := make(map[float64]bool)
 	for range 10 {
-		fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+		fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 		results[fr] = true
 	}
 
@@ -116,7 +116,7 @@ func TestGenerateForwardReturn_QuoteWithNoOpenFallsBack(t *testing.T) {
 		Last:   100.0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	if fr == 0 {
 		t.Errorf("no open price should use distribution fallback, got %f", fr)
@@ -154,7 +154,7 @@ func TestGenerateForwardReturn_ClipToMax(t *testing.T) {
 		Last:   110.0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	if fr > 0.05 {
 		t.Errorf("forward return should be clipped to 0.05, got %f", fr)
@@ -169,7 +169,7 @@ func TestGenerateForwardReturn_ClipToMin(t *testing.T) {
 		Last:   90.0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	if fr < -0.05 {
 		t.Errorf("forward return should be clipped to -0.05, got %f", fr)
@@ -184,7 +184,7 @@ func TestGenerateForwardReturn_EmptySymbol(t *testing.T) {
 		Last:   0,
 	}
 
-	fr := GenerateForwardReturn("", quote, domain.RegimeRiskOn, fallback)
+	fr := GenerateForwardReturn("", "test-agent", quote, domain.RegimeRiskOn, fallback)
 
 	if fr == 0 {
 		t.Errorf("empty symbol should still produce distribution value, got %f", fr)
@@ -217,9 +217,50 @@ func TestGenerateForwardReturn_NeutralRegime(t *testing.T) {
 		Last:   0,
 	}
 
-	fr := GenerateForwardReturn("2330", quote, domain.RegimeNeutral, fallback)
+	fr := GenerateForwardReturn("2330", "test-agent", quote, domain.RegimeNeutral, fallback)
 
 	if fr == 0 {
 		t.Errorf("neutral regime should use RiskOn params (default), got %f", fr)
+	}
+}
+
+// TestGenerateForwardReturn_SameSymbolDifferentAgentsDiffer verifies Fix2:
+// the synthetic distribution fallback must be agent-scoped, so different
+// agents drawing a fallback for the same symbol get different values.
+// (A4 L2 root cause: symbol-only seed made multi-agent windows identical.)
+func TestGenerateForwardReturn_SameSymbolDifferentAgentsDiffer(t *testing.T) {
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
+	quote := domain.Quote{
+		Symbol: "2330",
+		Open:   0,
+		Last:   0,
+	}
+
+	values := make(map[float64]string)
+	for _, agent := range []string{"agent-a", "agent-b", "agent-c", "agent-d"} {
+		fr := GenerateForwardReturn("2330", agent, quote, domain.RegimeRiskOn, fallback)
+		if prev, dup := values[fr]; dup {
+			t.Errorf("agent %q and %q drew the same fallback value %f for symbol 2330 — seed must be agent-scoped",
+				prev, agent, fr)
+		}
+		values[fr] = agent
+	}
+	if len(values) < 2 {
+		t.Errorf("expected distinct fallback values across agents, got %d unique", len(values))
+	}
+}
+
+// TestGenerateForwardReturn_AgentSeedStableAcrossCalls verifies the agent-scoped
+// seed remains deterministic for the same (agent, symbol) pair.
+func TestGenerateForwardReturn_AgentSeedStableAcrossCalls(t *testing.T) {
+	fallback := DefaultFallbackParams(config.DefaultParametersConfig())
+	quote := domain.Quote{Symbol: "2330", Open: 0, Last: 0}
+
+	first := GenerateForwardReturn("2330", "agent-a", quote, domain.RegimeRiskOn, fallback)
+	for range 10 {
+		fr := GenerateForwardReturn("2330", "agent-a", quote, domain.RegimeRiskOn, fallback)
+		if fr != first {
+			t.Fatalf("agent-scoped seed not deterministic: got %f then %f", first, fr)
+		}
 	}
 }
