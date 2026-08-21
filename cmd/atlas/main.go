@@ -492,7 +492,8 @@ func run(args []string, deps appDeps) error {
 		// Initialize MaturityTracker for burn-in / calibrating / full-auto gating.
 		// The seeded constructor keeps first_start across data-dir loss via
 		// ATLAS_MATURITY_FIRST_START (see internal/domain/maturity.go).
-		maturityTracker, maturityErr := domain.NewMaturityTrackerSeeded(filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json"), cfg.MaturityFirstStart)
+		maturityStatePath := filepath.Join(cfg.WorkDir, "data/state/maturity_tracker.json")
+		maturityTracker, maturityErr := domain.NewMaturityTrackerSeeded(maturityStatePath, cfg.MaturityFirstStart)
 		if maturityErr != nil {
 			logging.Error("bootstrap", "maturity_tracker_load_failed", "err", maturityErr)
 		}
@@ -500,6 +501,19 @@ func run(args []string, deps appDeps) error {
 			logging.Info("bootstrap", "maturity_tracker_ready",
 				"maturity", string(maturityTracker.Current()),
 				"days_since_start", maturityTracker.DaysSinceStart())
+			// Persist the tracker whenever the phase changes (e.g. burn_in →
+			// calibrating → full_auto) so the transition is durable and the
+			// last_checked timestamp is updated.
+			maturityTracker.OnTransition(func(oldM, newM domain.SystemMaturity) {
+				logging.Info("maturity_tracker", "phase_transition",
+					"old", string(oldM),
+					"new", string(newM))
+				if err := maturityTracker.Save(maturityStatePath); err != nil {
+					logging.Error("maturity_tracker", "transition_save_failed",
+						"err", err,
+						"state_path", maturityStatePath)
+				}
+			})
 		}
 
 		var lifecycleMgr *storage.LifecycleManager
@@ -1641,6 +1655,11 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[Gateway] registered auto_propose background task (24h interval)")
+
+			// Register maturity_tracker_save — daily refresh + persist of the
+			// maturity tracker so last_checked stays recent even without phase
+			// transitions (Phase B7).
+			registerMaturityTrackerSaveTask(taskMgr, maturityTracker, maturityStatePath)
 
 			// Register window_backtest — periodic 20-day scoring window (7-day interval, offset 3d).
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
