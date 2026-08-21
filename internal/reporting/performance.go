@@ -252,6 +252,14 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	fmt.Fprintf(&sb, "| Profit Factor | %.2f |\n", report.ProfitFactor)
 	fmt.Fprintf(&sb, "| Avg Win | %.2f%% |\n", report.AvgWin*100)
 	fmt.Fprintf(&sb, "| Avg Loss | %.2f%% |\n", report.AvgLoss*100)
+	if report.SyntheticTradeCount > 0 {
+		fmt.Fprintf(
+			&sb,
+			"| Synthetic Share | %.1f%% |\n",
+			float64(report.SyntheticTradeCount)/float64(report.TotalTrades)*100,
+		)
+		sb.WriteString("> Headline trade metrics (win rate / profit factor / avg win / avg loss) reflect **real trades only**; synthetic evaluation trades are excluded.\n")
+	}
 	sb.WriteString("\n")
 
 	sb.WriteString("## Top Agent Contributions\n\n")
@@ -416,6 +424,23 @@ func calculateCalmarRatio(annualizedReturn, maxDrawdown float64) float64 {
 	return annualizedReturn / maxDrawdown
 }
 
+// calculateTradeMetrics computes the headline trade statistics from
+// per-trade outcomes (A7 performance decontamination).
+//
+// Source-of-truth note: domain.SessionSummary carries only an aggregate
+// OutcomeCount — it has NO real/synthetic split. The real/synthetic
+// distinction therefore comes from the per-trade IsSynthetic flag on
+// domain.RecommendationOutcome, which all three storage backends preserve
+// (JSONL is_synthetic field, SQLite is_synthetic column, Postgres metadata
+// JSON). Session-level "synthetic ratio" figures in the audit (production
+// ~35-41% synthetic) are derived from these per-trade flags.
+//
+// Headline statistics (win_rate / profit_factor / avg_win / avg_loss) are
+// computed from REAL trades only: synthetic outcomes are evaluation-only
+// paper trades whose forward returns are reconstructed (or missing from the
+// replay dataset) and would bias the headline quality numbers. Synthetic
+// trades are still counted and surfaced through the SyntheticTradeCount /
+// RealTradeCount fields so the report remains transparent about sample mix.
 func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate float64, totalTrades int, realTrades int, syntheticTrades int, avgWin, avgLoss, profitFactor float64) {
 	wins := 0
 	var winSum, lossSum float64
