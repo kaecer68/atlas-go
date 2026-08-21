@@ -87,8 +87,8 @@
     }
   },
   "lookback_days": {
-    "value": 20,
-    "rationale": "One trading month (approx 20 business days)",
+    "value": 30,
+    "rationale": "30 trading days (~1.5 months) per-day-aggregated rolling window (A4 sharpe fix); matches sharpe_min_sample_size",
     "source": "heuristic",
     "citation": {
       "source_type": "heuristic",
@@ -267,8 +267,8 @@
     }
   },
   "sharpe_min_sample_size": {
-    "value": 5,
-    "rationale": "Minimum observations for Sharpe calculation",
+    "value": 30,
+    "rationale": "Minimum observations (daily entries) for Sharpe calculation on the per-day window (A4 fix); N-1=29",
     "source": "literature",
     "citation": {
       "source_type": "literature",
