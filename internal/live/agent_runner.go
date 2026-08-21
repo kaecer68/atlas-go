@@ -234,13 +234,14 @@ func (r *AgentRunner) ApplyRiskFilters(ctx context.Context) error {
 		plugins = orchestrator.NewPluginRegistry()
 	}
 	policy := r.system.GetExecutionPolicy()
+	regime := r.stateStore.GetCurrentRegime()
 
 	filtered := recommendations
 	for _, agent := range registry.Agents {
 		if !agent.Enabled || agent.Layer != domain.LayerControl {
 			continue
 		}
-		filtered = plugins.ApplyControl(agent, filtered, policy)
+		filtered = plugins.ApplyControl(agent, filtered, policy, regime)
 	}
 
 	r.stateStore.SetFilteredRecommendations(filtered)

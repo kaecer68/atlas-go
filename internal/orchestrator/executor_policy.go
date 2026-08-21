@@ -8,8 +8,9 @@ import (
 func DefaultExecutionPolicy() domain.ExecutionPolicy {
 	cfg := config.GetParametersConfig().Engine.Executors
 	return domain.ExecutionPolicy{
-		ConvictionFloor:         cfg.ConvictionFloorDefault.Value,
-		RequireCROPass:          true,
-		MomentumCrashProtection: true,
+		ConvictionFloor:               cfg.ConvictionFloorDefault.Value,
+		RequireCROPass:                true,
+		MomentumCrashProtection:       true,
+		EnableConvictionNormalization: true,
 	}
 }
