@@ -431,6 +431,10 @@ func (ie *InferenceEngine) ListParameters() []string {
 		"darwinian_stddev_mean_ratio_threshold",
 		"darwinian_conviction_clamp_min",
 		"darwinian_conviction_clamp_max",
+		"darwinian_zero_signal_penalty_multiplier",
+		"darwinian_zero_signal_penalty_after_days",
+		"darwinian_loss_penalty_multiplier",
+		"darwinian_weight_change_alert_threshold",
 		// Factor parameters
 		"factor_momentum_lookback_days",
 		"factor_momentum_stddev_divisor",

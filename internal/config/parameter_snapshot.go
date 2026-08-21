@@ -128,6 +128,10 @@ func DiffSnapshots(old, new *ParameterSnapshot) []ParameterChange {
 	compareFloat(&changes, "darwinian.weight_max", old.Params.Darwinian.WeightMax.Value, new.Params.Darwinian.WeightMax.Value, now)
 	compareFloat(&changes, "darwinian.top_quartile_multiplier", old.Params.Darwinian.TopQuartileMultiplier.Value, new.Params.Darwinian.TopQuartileMultiplier.Value, now)
 	compareFloat(&changes, "darwinian.bottom_quartile_multiplier", old.Params.Darwinian.BottomQuartileMultiplier.Value, new.Params.Darwinian.BottomQuartileMultiplier.Value, now)
+	compareFloat(&changes, "darwinian.zero_signal_penalty_multiplier", old.Params.Darwinian.ZeroSignalPenaltyMultiplier.Value, new.Params.Darwinian.ZeroSignalPenaltyMultiplier.Value, now)
+	compareFloat(&changes, "darwinian.loss_penalty_multiplier", old.Params.Darwinian.LossPenaltyMultiplier.Value, new.Params.Darwinian.LossPenaltyMultiplier.Value, now)
+	compareFloat(&changes, "darwinian.weight_change_alert_threshold", old.Params.Darwinian.WeightChangeAlertThreshold.Value, new.Params.Darwinian.WeightChangeAlertThreshold.Value, now)
+	compareFloat(&changes, "darwinian.zero_signal_penalty_after_days", float64(old.Params.Darwinian.ZeroSignalPenaltyAfterDays.Value), float64(new.Params.Darwinian.ZeroSignalPenaltyAfterDays.Value), now)
 
 	// Compare Factor parameters
 	compareFloat(&changes, "factor.momentum_stddev_divisor", old.Params.Factor.MomentumStdDevDivisor.Value, new.Params.Factor.MomentumStdDevDivisor.Value, now)

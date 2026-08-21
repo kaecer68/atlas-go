@@ -97,6 +97,22 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Darwinian.ConvictionClampMax.Value) },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Darwinian.ConvictionClampMax.Value = int(v) },
 	},
+	"darwinian_zero_signal_penalty_multiplier": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Darwinian.ZeroSignalPenaltyMultiplier.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Darwinian.ZeroSignalPenaltyMultiplier.Value = v },
+	},
+	"darwinian_zero_signal_penalty_after_days": {
+		get: func(cfg *ParametersConfig) float64 { return float64(cfg.Darwinian.ZeroSignalPenaltyAfterDays.Value) },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Darwinian.ZeroSignalPenaltyAfterDays.Value = int(v) },
+	},
+	"darwinian_loss_penalty_multiplier": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Darwinian.LossPenaltyMultiplier.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Darwinian.LossPenaltyMultiplier.Value = v },
+	},
+	"darwinian_weight_change_alert_threshold": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Darwinian.WeightChangeAlertThreshold.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Darwinian.WeightChangeAlertThreshold.Value = v },
+	},
 
 	// ===== Factor parameters =====
 	"factor_momentum_lookback_days": {

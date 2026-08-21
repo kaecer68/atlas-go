@@ -81,6 +81,18 @@ func mergeDarwinianDefaults(cfg *ParametersConfig) {
 	if d.ConvictionClampMax.Value == 0 {
 		d.ConvictionClampMax = def.ConvictionClampMax
 	}
+	if d.ZeroSignalPenaltyMultiplier.Value == 0 {
+		d.ZeroSignalPenaltyMultiplier = def.ZeroSignalPenaltyMultiplier
+	}
+	if d.ZeroSignalPenaltyAfterDays.Value == 0 {
+		d.ZeroSignalPenaltyAfterDays = def.ZeroSignalPenaltyAfterDays
+	}
+	if d.LossPenaltyMultiplier.Value == 0 {
+		d.LossPenaltyMultiplier = def.LossPenaltyMultiplier
+	}
+	if d.WeightChangeAlertThreshold.Value == 0 {
+		d.WeightChangeAlertThreshold = def.WeightChangeAlertThreshold
+	}
 }
 
 func mergeFactorDefaults(cfg *ParametersConfig) {

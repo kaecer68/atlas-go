@@ -120,6 +120,26 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Rationale: "Maximum conviction after weight scaling (100 * 2.5)",
 			Source:    SourceHeuristic,
 		},
+		ZeroSignalPenaltyMultiplier: ParameterMetadata[float64]{
+			Value:     0.9,
+			Rationale: "10% extra daily cut for agents with zero signals for ZeroSignalPenaltyAfterDays; stops long-silent agents from idling at initial weight in the middle tier (B3)",
+			Source:    SourceHeuristic,
+		},
+		ZeroSignalPenaltyAfterDays: ParameterMetadata[int]{
+			Value:     14,
+			Rationale: "14 days without a single signal marks an agent as long-silent; after this it receives the zero-signal penalty (B3)",
+			Source:    SourceHeuristic,
+		},
+		LossPenaltyMultiplier: ParameterMetadata[float64]{
+			Value:     0.9,
+			Rationale: "10% extra daily cut for bottom-tier agents with negative Sharpe and >=30 signals; deepens the penalty only on statistically meaningful losses computed on the A4-corrected per-outcome Sharpe (B3)",
+			Source:    SourceHeuristic,
+		},
+		WeightChangeAlertThreshold: ParameterMetadata[float64]{
+			Value:     0.15,
+			Rationale: "Absolute daily weight change above 0.15 triggers a darwinian weight-change alert (logging.Warn + event-bus health alert) (B3)",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 
