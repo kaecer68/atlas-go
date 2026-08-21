@@ -374,6 +374,12 @@
       "results": "([]domain.Recommendation, []ConvictionClampingEvent)"
     },
     {
+      "name": "DefaultNeutralWeight",
+      "params": "",
+      "receiver": "DarwinianWeightManager",
+      "results": "(float64)"
+    },
+    {
       "name": "GenerateReport",
       "params": "",
       "receiver": "DarwinianWeightManager",
@@ -2629,7 +2635,11 @@
         "SharpeMinSampleSize int",
         "StdDevMeanRatioThreshold float64",
         "ConvictionClampMin int",
-        "ConvictionClampMax int"
+        "ConvictionClampMax int",
+        "ZeroSignalPenaltyMultiplier float64",
+        "ZeroSignalPenaltyAfterDays int",
+        "LossPenaltyMultiplier float64",
+        "WeightChangeAlertThreshold float64"
       ],
       "kind": "struct",
       "name": "RuntimeDarwinianConfig"

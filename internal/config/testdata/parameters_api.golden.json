@@ -379,7 +379,11 @@
         "SharpeMinSampleSize ParameterMetadata[int]",
         "StdDevMeanRatioThreshold ParameterMetadata[float64]",
         "ConvictionClampMin ParameterMetadata[int]",
-        "ConvictionClampMax ParameterMetadata[int]"
+        "ConvictionClampMax ParameterMetadata[int]",
+        "ZeroSignalPenaltyMultiplier ParameterMetadata[float64]",
+        "ZeroSignalPenaltyAfterDays ParameterMetadata[int]",
+        "LossPenaltyMultiplier ParameterMetadata[float64]",
+        "WeightChangeAlertThreshold ParameterMetadata[float64]"
       ],
       "kind": "struct",
       "name": "DarwinianParameters"

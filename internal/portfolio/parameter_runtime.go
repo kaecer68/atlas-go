@@ -30,6 +30,10 @@ type RuntimeDarwinianConfig struct {
 	StdDevMeanRatioThreshold    float64
 	ConvictionClampMin          int
 	ConvictionClampMax          int
+	ZeroSignalPenaltyMultiplier float64
+	ZeroSignalPenaltyAfterDays  int
+	LossPenaltyMultiplier       float64
+	WeightChangeAlertThreshold  float64
 }
 
 // RuntimeFactorConfig holds runtime values for factor engine.
@@ -257,6 +261,10 @@ func ToRuntimeParameters(cfg *config.ParametersConfig) *RuntimeParameters {
 			StdDevMeanRatioThreshold:    cfg.Darwinian.StdDevMeanRatioThreshold.Value,
 			ConvictionClampMin:          cfg.Darwinian.ConvictionClampMin.Value,
 			ConvictionClampMax:          cfg.Darwinian.ConvictionClampMax.Value,
+			ZeroSignalPenaltyMultiplier: cfg.Darwinian.ZeroSignalPenaltyMultiplier.Value,
+			ZeroSignalPenaltyAfterDays:  cfg.Darwinian.ZeroSignalPenaltyAfterDays.Value,
+			LossPenaltyMultiplier:       cfg.Darwinian.LossPenaltyMultiplier.Value,
+			WeightChangeAlertThreshold:  cfg.Darwinian.WeightChangeAlertThreshold.Value,
 		},
 		Factor: RuntimeFactorConfig{
 			MomentumLookbackDays:          cfg.Factor.MomentumLookbackDays.Value,
