@@ -123,7 +123,7 @@
 
 ---
 
-## U · Utility（輔助工具）— 5 packages
+## U · Utility（輔助工具）— 6 packages
 
 CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
@@ -134,6 +134,7 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷 | `cmd/calibrate-parameters` | 工具層，非 runtime |
 | `buildinfo` | Runtime binary metadata — version / commit / build time | 由 `system/health_handlers.go` 與 MCP 透出 | E08 引入，experimental tier |
 | `backfill` | 一次性 ledger state 修復工具 — 孤兒 summary.json 補寫、dry-run、安全 idempotent | `cmd/backfill-summaries` | 工具層，非 runtime |
+| `reconcile` | session summary 雙寫對帳 — PG vs JSONL 對稱差、單邊缺口回填（B6） | `cmd/reconcile-sessions` | 工具層，非 runtime；conflicts 永不自動覆寫 |
 
 ---
 
