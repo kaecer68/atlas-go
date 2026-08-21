@@ -39,8 +39,8 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Error("Expected weights map to be initialized")
 		}
 
-		if m.lookbackDays != 60 {
-			t.Errorf("Expected lookbackDays=60, got %d", m.lookbackDays)
+		if m.lookbackDays != 30 {
+			t.Errorf("Expected lookbackDays=30, got %d", m.lookbackDays)
 		}
 	})
 
@@ -130,9 +130,11 @@ func TestDarwinianWeightManager(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 		seedAgent(m, "agent_001", "tech", "sector", 1.0)
 
-		// Add 60 returns with known positive mean and realistic variance
+		// Add 60 returns with known positive mean, realistic variance, and
+		// >=8 unique values (the degenerate-window guard zeroes Sharpe when
+		// the window holds fewer than minUniqueReturnsForSharpe distinct values).
 		for i := 0; i < 60; i++ {
-			r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025}[i%5]
+			r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
 			m.RecordOutcome("agent_001", r, r > 0)
 		}
 
@@ -141,9 +143,12 @@ func TestDarwinianWeightManager(t *testing.T) {
 			t.Fatal("Expected agent data")
 		}
 
-		// With 60 returns (>=60 threshold), Sharpe should be calculated and positive
+		// With >=30 returns (MinSamples=30), Sharpe should be calculated, positive, and sane
 		if data.RollingSharpe <= 0 {
 			t.Errorf("Expected positive Sharpe for positive-mean returns, got %f", data.RollingSharpe)
+		}
+		if math.Abs(data.RollingSharpe) > maxSharpeMagnitude {
+			t.Errorf("Expected Sharpe within ±%v (non-annualized, no degenerate window), got %f", maxSharpeMagnitude, data.RollingSharpe)
 		}
 	})
 
@@ -151,9 +156,10 @@ func TestDarwinianWeightManager(t *testing.T) {
 		m := NewDarwinianWeightManager("/tmp/test_dw.json")
 		seedAgent(m, "agent_neg", "financials", "sector", 1.0)
 
-		// Add 60 returns with known negative mean and realistic variance
+		// Add 60 returns with known negative mean, realistic variance, and
+		// >=8 unique values (degenerate-window guard).
 		for i := 0; i < 60; i++ {
-			r := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025}[i%5]
+			r := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
 			m.RecordOutcome("agent_neg", r, r > 0)
 		}
 
@@ -687,5 +693,130 @@ func TestLoadThenInitializeFromRegistry(t *testing.T) {
 	}
 	if data.TotalSignals != 0 || data.WinCount != 0 || data.LossCount != 0 {
 		t.Error("agent_new_03: expected zero signals for newly initialized agent")
+	}
+}
+
+// TestRecordOutcomeAt_PerDayAggregation verifies Fix1: RecordOutcomeAt
+// aggregates all outcomes of the same calendar day into a single daily mean
+// entry, so a multi-recommendation day contributes exactly one window entry.
+func TestRecordOutcomeAt_PerDayAggregation(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_agg.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.0)
+
+	day1 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+
+	// Day 1: 4 outcomes (mean = (0.02+0.04+0.00+0.02)/4 = 0.02)
+	m.RecordOutcomeAt("agent_001", 0.02, true, day1)
+	m.RecordOutcomeAt("agent_001", 0.04, true, day1)
+	m.RecordOutcomeAt("agent_001", 0.00, false, day1)
+	m.RecordOutcomeAt("agent_001", 0.02, true, day1)
+
+	data, _ := m.GetAgentWeightData("agent_001")
+	if len(data.DailyReturns) != 0 {
+		t.Fatalf("day 1 still in progress: expected 0 completed daily entries, got %d", len(data.DailyReturns))
+	}
+	if data.TotalSignals != 4 {
+		t.Errorf("expected 4 signals, got %d", data.TotalSignals)
+	}
+
+	// Day 2: first outcome flushes day 1's mean (0.02) into the window.
+	m.RecordOutcomeAt("agent_001", 0.03, true, day2)
+
+	data, _ = m.GetAgentWeightData("agent_001")
+	if len(data.DailyReturns) != 1 {
+		t.Fatalf("expected 1 completed daily entry after day 2 starts, got %d: %v", len(data.DailyReturns), data.DailyReturns)
+	}
+	if math.Abs(data.DailyReturns[0]-0.02) > 1e-12 {
+		t.Errorf("expected day-1 mean 0.02 in window, got %f", data.DailyReturns[0])
+	}
+
+	// Day 3: flushes day 2's single outcome (0.03).
+	m.RecordOutcomeAt("agent_001", -0.01, false, time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC))
+
+	data, _ = m.GetAgentWeightData("agent_001")
+	if len(data.DailyReturns) != 2 {
+		t.Fatalf("expected 2 completed daily entries, got %d: %v", len(data.DailyReturns), data.DailyReturns)
+	}
+	if math.Abs(data.DailyReturns[1]-0.03) > 1e-12 {
+		t.Errorf("expected day-2 mean 0.03 in window, got %f", data.DailyReturns[1])
+	}
+}
+
+// TestRecordOutcomeAt_MultiRecPerDaySharpeSanity verifies the A4 acceptance
+// criteria: a realistic multi-recommendation/day agent gets a Sharpe in a
+// sane range (|sharpe| <= maxSharpeMagnitude), never a 20+ / 500+ outlier.
+func TestRecordOutcomeAt_MultiRecPerDaySharpeSanity(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_sane.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.0)
+
+	// 40 trading days x 50 recommendations/day. Daily means vary around a
+	// positive base (12 distinct day levels) so the daily window is not
+	// degenerate; per-rec noise keeps intra-day dispersion realistic.
+	dayBases := []float64{0.008, 0.004, 0.012, -0.002, 0.006, 0.010, 0.002, 0.014, -0.004, 0.005, 0.009, 0.007}
+	day := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	for d := 0; d < 40; d++ {
+		for r := 0; r < 50; r++ {
+			ret := dayBases[d%len(dayBases)] + 0.002*float64(r%5-2)
+			m.RecordOutcomeAt("agent_001", ret, ret > 0, day)
+		}
+		day = day.Add(24 * time.Hour)
+	}
+
+	data, _ := m.GetAgentWeightData("agent_001")
+	if len(data.DailyReturns) != m.lookbackDays {
+		t.Fatalf("expected %d daily entries in window (one per day, not per rec), got %d", m.lookbackDays, len(data.DailyReturns))
+	}
+	if math.Abs(data.RollingSharpe) > maxSharpeMagnitude {
+		t.Errorf("expected Sharpe within ±%v for daily-aggregated series, got %f", maxSharpeMagnitude, data.RollingSharpe)
+	}
+	// Non-annualized per-day Sharpe for this series should be modest (0..3).
+	if data.RollingSharpe <= 0 || data.RollingSharpe > 3 {
+		t.Errorf("expected sane positive Sharpe (0,3] for positive-mean daily series, got %f", data.RollingSharpe)
+	}
+}
+
+// TestUpdateRollingMetrics_DegenerateWindowGuard verifies Fix3: a window with
+// fewer than minUniqueReturnsForSharpe unique values yields Sharpe=0 instead
+// of an exploding mean/std ratio.
+func TestUpdateRollingMetrics_DegenerateWindowGuard(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_guard.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.0)
+
+	// 30 entries but only 2 unique values — the historical degenerate case
+	// (e.g. -0.0765 / -0.0723 alternating produced Sharpe -544 before the fix).
+	for i := 0; i < 30; i++ {
+		if i%2 == 0 {
+			m.RecordOutcome("agent_001", -0.0765, false)
+		} else {
+			m.RecordOutcome("agent_001", -0.0723, false)
+		}
+	}
+
+	data, _ := m.GetAgentWeightData("agent_001")
+	if data.RollingSharpe != 0 {
+		t.Errorf("expected Sharpe=0 for degenerate window (2 unique values), got %f", data.RollingSharpe)
+	}
+	if data.RollingVolatility != 0 {
+		t.Errorf("expected Volatility=0 for degenerate window, got %f", data.RollingVolatility)
+	}
+}
+
+// TestUpdateRollingMetrics_SharpeClip verifies Fix5: pathological-but-passable
+// windows (>=8 unique values, tiny std) are clipped to ±maxSharpeMagnitude.
+func TestUpdateRollingMetrics_SharpeClip(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_dw_clip.json")
+	seedAgent(m, "agent_001", "tech", "sector", 1.0)
+
+	// 8 unique values but nearly identical magnitudes -> tiny std -> huge mean/std.
+	rets := []float64{0.0100, 0.0101, 0.0102, 0.0103, 0.0104, 0.0105, 0.0106, 0.0107, 0.0100, 0.0101}
+	for i := 0; i < 30; i++ {
+		r := rets[i%len(rets)]
+		m.RecordOutcome("agent_001", r, true)
+	}
+
+	data, _ := m.GetAgentWeightData("agent_001")
+	if math.Abs(data.RollingSharpe) > maxSharpeMagnitude {
+		t.Errorf("expected Sharpe clipped to ±%v, got %f", maxSharpeMagnitude, data.RollingSharpe)
 	}
 }

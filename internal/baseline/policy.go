@@ -288,8 +288,10 @@ func ExecutionPolicyFromConstraints(constraints domain.SimulationConstraints) do
 		floor = config.GetParametersConfig().Baseline.MinRecommendationConviction.Value
 	}
 	return domain.ExecutionPolicy{
-		ConvictionFloor: floor,
-		RequireCROPass:  constraints.RequireCROPass,
+		ConvictionFloor:               floor,
+		RequireCROPass:                constraints.RequireCROPass,
+		MomentumCrashProtection:       true,
+		EnableConvictionNormalization: true,
 	}
 }
 

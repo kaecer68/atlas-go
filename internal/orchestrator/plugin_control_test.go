@@ -18,7 +18,7 @@ func TestControlLayerAppliesCROAndCIO(t *testing.T) {
 		{Agent: "c", Skill: "ai_supply_chain_desk", Symbol: "2382.TW", Conviction: 70, Side: domain.SideBuy, Reason: "good"},
 	}
 
-	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
+	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn, nil, "", nil)
 	if len(out) != 2 {
 		t.Fatalf("expected 2 aggregated control outputs, got %d", len(out))
 	}
@@ -46,7 +46,7 @@ func TestControlLayerCanBypassCROWhenPolicyAllows(t *testing.T) {
 	out, _ := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  false,
-	}, nil, "", nil)
+	}, domain.RegimeRiskOn, nil, "", nil)
 	if len(out) != 1 {
 		t.Fatalf("expected raw recommendation to bypass control when CRO pass is disabled")
 	}
@@ -64,7 +64,7 @@ func TestControlLayerProducesGuardOutcomes(t *testing.T) {
 		{Agent: "b", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 80, Side: domain.SideBuy, Reason: "strong"},
 	}
 
-	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn, nil, "", nil)
 	if len(outcomes) != 2 {
 		t.Fatalf("expected 2 guard outcomes for CRO and CIO, got %d", len(outcomes))
 	}
@@ -88,7 +88,7 @@ func TestControlLayerHardGuardCanBlockAllRecommendations(t *testing.T) {
 	final, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{
 		ConvictionFloor: 50,
 		RequireCROPass:  true,
-	}, nil, "", nil)
+	}, domain.RegimeRiskOn, nil, "", nil)
 	if len(final) != 0 {
 		t.Fatalf("expected hard guard to block all recommendations")
 	}
@@ -118,7 +118,7 @@ func TestCRORiskExecutorDynamicConcentrationThreshold(t *testing.T) {
 		{Agent: "k", Skill: "consumer", Symbol: "2207.TW", Conviction: 50, Side: domain.SideBuy, Reason: "r11"},
 	}
 
-	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn)
 	if len(out) == 0 {
 		t.Fatal("expected some recommendations to pass")
 	}
@@ -139,7 +139,7 @@ func TestCIOPortfolioExecutorDeterministicTieBreak(t *testing.T) {
 		{Agent: "b", Skill: "ai_supply_chain_desk", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "r2"},
 	}
 
-	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn)
 	if len(out) != 2 {
 		t.Fatalf("expected 2 outputs, got %d", len(out))
 	}
@@ -162,7 +162,7 @@ func TestCIOPortfolioExecutorPreservesSide(t *testing.T) {
 	recs := []domain.Recommendation{
 		{Agent: "etf-rotation-01", Skill: "etf_rotation_desk", Symbol: "00713.TW", Conviction: 61, Side: domain.SideSell, Reason: "rotation out"},
 	}
-	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn)
 	if len(out) != 1 {
 		t.Fatalf("expected 1 aggregated rec, got %d", len(out))
 	}
@@ -181,7 +181,7 @@ func TestSuperinvestorExecutorApply(t *testing.T) {
 		{Agent: "c", Skill: "value_yield", Symbol: "2884.TW", Conviction: 40, Side: domain.SideBuy, Reason: "weak"},
 	}
 
-	out := executor.Apply(agent, recs, DefaultExecutionPolicy())
+	out := executor.Apply(agent, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn)
 	if len(out) != 2 {
 		t.Fatalf("expected 2 recommendations above SuperinvestorMinConviction(50), got %d", len(out))
 	}
@@ -222,7 +222,7 @@ func TestSuperinvestorExecutorApply_NonSuperinvestorUsesFloor(t *testing.T) {
 		{Agent: "super-dru-01", Skill: "druckenmiller_macro", Layer: domain.LayerSuperinvestor, Symbol: "2330.TW", Conviction: max(floor, siMin-1), Side: domain.SideBuy, Reason: "macro"},
 	}
 
-	out := executor.Apply(agent, recs, domain.ExecutionPolicy{ConvictionFloor: floor, RequireCROPass: true})
+	out := executor.Apply(agent, recs, domain.ExecutionPolicy{ConvictionFloor: floor, RequireCROPass: true}, domain.RegimeRiskOn)
 	if len(out) != 1 {
 		t.Fatalf("expected only the sector rec (conv %d >= floor %d) to survive, got %d: %+v", max(floor, siMin-1), floor, len(out), out)
 	}
@@ -246,7 +246,7 @@ func TestSuperinvestorExecutorIntegrationInControlLayer(t *testing.T) {
 		{Agent: "b", Skill: "semiconductor", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "medium"},
 	}
 
-	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), nil, "", nil)
+	_, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, DefaultExecutionPolicy(), domain.RegimeRiskOn, nil, "", nil)
 
 	found := false
 	for _, o := range outcomes {
@@ -346,4 +346,80 @@ func TestSuperinvestorRecommendRejectsWeakSignal(t *testing.T) {
 func TestSuperinvestorDualRole(t *testing.T) {
 	var _ AgentExecutor = SuperinvestorExecutor{}
 	var _ ControlExecutor = SuperinvestorExecutor{}
+}
+
+// ─── A6 (perf audit 2026-08-21): RISK_OFF 感知 conviction 門檻 ───
+// RISK_OFF 期間有效 floor = max(policy.ConvictionFloor, 70)：conv 60 被擋、
+// conv 75 通過；RISK_ON 維持原 floor。
+
+func TestCRORiskExecutorRiskOffRaisesFloor(t *testing.T) {
+	executor := CRORiskExecutor{}
+	agent := domain.AgentSpec{ID: "cro-01", Skill: "cro_risk"}
+	policy := domain.ExecutionPolicy{ConvictionFloor: 60, RequireCROPass: true}
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "floor-level"},
+		{Agent: "b", Skill: "growth_momentum", Symbol: "2382.TW", Conviction: 75, Side: domain.SideBuy, Reason: "high"},
+	}
+
+	// RISK_OFF: effective floor = max(60, 70) = 70 → conv 60 blocked, conv 75 passes.
+	out := executor.Apply(agent, recs, policy, domain.RegimeRiskOff)
+	if len(out) != 1 {
+		t.Fatalf("RISK_OFF: expected 1 rec to survive (conv 75), got %d", len(out))
+	}
+	if out[0].Symbol != "2382.TW" || out[0].Conviction != 75 {
+		t.Fatalf("RISK_OFF: expected conv-75 rec 2382.TW to survive, got %+v", out[0])
+	}
+
+	// RISK_ON: floor stays 60 → both conv 60 and conv 75 pass.
+	out = executor.Apply(agent, recs, policy, domain.RegimeRiskOn)
+	if len(out) != 2 {
+		t.Fatalf("RISK_ON: expected both recs to survive (floor 60), got %d", len(out))
+	}
+}
+
+func TestCRORiskExecutorRiskOffKeepsHigherPolicyFloor(t *testing.T) {
+	executor := CRORiskExecutor{}
+	agent := domain.AgentSpec{ID: "cro-01", Skill: "cro_risk"}
+	policy := domain.ExecutionPolicy{ConvictionFloor: 80, RequireCROPass: true}
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 75, Side: domain.SideBuy, Reason: "below-80"},
+		{Agent: "b", Skill: "growth_momentum", Symbol: "2382.TW", Conviction: 85, Side: domain.SideBuy, Reason: "above-80"},
+	}
+	out := executor.Apply(agent, recs, policy, domain.RegimeRiskOff)
+	if len(out) != 1 || out[0].Symbol != "2382.TW" {
+		t.Fatalf("RISK_OFF with floor 80: expected only conv-85 rec to survive, got %+v", out)
+	}
+}
+
+func TestCRORiskExecutorRiskOffFloorAppliesWithNormalization(t *testing.T) {
+	executor := NewCRORiskExecutor()
+	agent := domain.AgentSpec{ID: "cro-01", Skill: "cro_risk"}
+	policy := domain.ExecutionPolicy{ConvictionFloor: 60, RequireCROPass: true, EnableConvictionNormalization: true}
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "floor-level"},
+		{Agent: "b", Skill: "growth_momentum", Symbol: "2382.TW", Conviction: 75, Side: domain.SideBuy, Reason: "high"},
+	}
+	// Single observation per agent → z-score gate passes both; the RISK_OFF
+	// absolute-conviction gate (>= 70) must still block conv 60.
+	out := executor.Apply(agent, recs, policy, domain.RegimeRiskOff)
+	if len(out) != 1 || out[0].Symbol != "2382.TW" {
+		t.Fatalf("RISK_OFF with normalization: expected only conv-75 rec to survive, got %+v", out)
+	}
+}
+
+func TestControlLayerRiskOffBlocksLowConviction(t *testing.T) {
+	registry := SeedRegistry()
+	plugins := NewPluginRegistry()
+
+	recs := []domain.Recommendation{
+		{Agent: "a", Skill: "growth_momentum", Symbol: "2317.TW", Conviction: 60, Side: domain.SideBuy, Reason: "weak-risk-off"},
+		{Agent: "b", Skill: "growth_momentum", Symbol: "2382.TW", Conviction: 75, Side: domain.SideBuy, Reason: "strong"},
+	}
+	final, outcomes := applyControlLayerWithOutcomes(registry, plugins, recs, domain.ExecutionPolicy{ConvictionFloor: 60, RequireCROPass: true}, domain.RegimeRiskOff, nil, "", nil)
+	if len(final) != 1 || final[0].Symbol != "2382.TW" {
+		t.Fatalf("RISK_OFF control layer: expected only 2382.TW to survive, got %+v", final)
+	}
+	if len(outcomes) == 0 || outcomes[0].GuardSkill != "cro_risk" || outcomes[0].OutputCount != 1 {
+		t.Fatalf("expected CRO guard outcome recording 1 output, got %+v", outcomes)
+	}
 }

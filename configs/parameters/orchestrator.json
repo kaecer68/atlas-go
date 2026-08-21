@@ -1,7 +1,7 @@
 {
   "conviction_floor_default": {
-    "value": 50,
-    "rationale": "Default conviction floor when not set by policy",
+    "value": 60,
+    "rationale": "Default conviction floor when not set by policy (A3: raised from 50 — low-conviction recs are the primary loss source, conv<60 win rate only 30.7%)",
     "source": "heuristic",
     "citation": {
       "source_type": "heuristic",

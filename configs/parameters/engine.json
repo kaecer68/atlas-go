@@ -343,8 +343,8 @@
       "source": "literature"
     },
     "conviction_floor_default": {
-      "value": 50,
-      "rationale": "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+      "value": 60,
+      "rationale": "Minimum 60 conviction (out of 100) for executor recommendations to be considered; below 60 is effectively a coin flip (A3: raised from 50 per perf audit 2026-08-21)",
       "source": "heuristic",
       "todo": "Calibrate floor against executor historical precision-recall curve"
     }

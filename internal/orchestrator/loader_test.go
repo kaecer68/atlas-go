@@ -27,7 +27,7 @@ type mockControlExecutor struct {
 }
 
 func (mockControlExecutor) Supports(domain.AgentSpec) bool { return true }
-func (mockControlExecutor) Apply(domain.AgentSpec, []domain.Recommendation, domain.ExecutionPolicy) []domain.Recommendation {
+func (mockControlExecutor) Apply(domain.AgentSpec, []domain.Recommendation, domain.ExecutionPolicy, domain.Regime) []domain.Recommendation {
 	return nil
 }
 

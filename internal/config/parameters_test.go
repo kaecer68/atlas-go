@@ -604,8 +604,8 @@ func TestEngineParameters_DefaultsExist(t *testing.T) {
 	if cfg.Engine.Executors.VIXMomentumCrashThreshold.Value != 30.0 {
 		t.Errorf("expected Engine.Executors.VIXMomentumCrashThreshold = 30.0, got %f", cfg.Engine.Executors.VIXMomentumCrashThreshold.Value)
 	}
-	if cfg.Engine.Executors.ConvictionFloorDefault.Value != 50 {
-		t.Errorf("expected Engine.Executors.ConvictionFloorDefault = 50, got %d", cfg.Engine.Executors.ConvictionFloorDefault.Value)
+	if cfg.Engine.Executors.ConvictionFloorDefault.Value != 60 {
+		t.Errorf("expected Engine.Executors.ConvictionFloorDefault = 60, got %d", cfg.Engine.Executors.ConvictionFloorDefault.Value)
 	}
 	if cfg.Engine.Simulation.NeutralRegimeSizingFactor.Value != 0.85 {
 		t.Errorf("expected Engine.Simulation.NeutralRegimeSizingFactor = 0.85, got %f", cfg.Engine.Simulation.NeutralRegimeSizingFactor.Value)

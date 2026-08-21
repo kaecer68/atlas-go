@@ -220,9 +220,9 @@
       "value": 0.4
     },
     "lookback_days": {
-      "rationale": "60 trading days (~3 months) for statistically stable rolling Sharpe; matches SharpeMinSampleSize",
+      "rationale": "30 trading days (~1.5 months) for the rolling Sharpe window; per-day aggregation (A4 fix) makes 30 daily entries a statistically meaningful sample (N-1=29)",
       "source": "literature",
-      "value": 60
+      "value": 30
     },
     "max_performance_bonus_pct": {
       "rationale": "Cap performance bonus at +20%",
@@ -251,10 +251,10 @@
       "value": 0.08
     },
     "sharpe_min_sample_size": {
-      "rationale": "60 trading days (~3 months) for statistically stable Sharpe estimation; matches academic standard for daily returns",
+      "rationale": "30 daily entries (N-1=29) minimum for statistically stable Sharpe on the per-day aggregated window; matches LookbackDays",
       "source": "literature",
-      "todo": "Calibrate: test 60 vs 90 vs 126 for TW market agent population",
-      "value": 60
+      "todo": "Calibrate: test 30 vs 60 vs 90 for TW market agent population",
+      "value": 30
     },
     "sharpe_normalize_denom": {
       "rationale": "Sigmoid normalization knee: Sharpe/(Sharpe+1.5); calibrated to top-quartile agent Sharpe for middle-range discrimination",
@@ -472,10 +472,10 @@
     },
     "executors": {
       "conviction_floor_default": {
-        "rationale": "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+        "rationale": "Minimum 60 conviction (out of 100) for executor recommendations to be considered; below 60 is effectively a coin flip (A3: raised from 50 per perf audit 2026-08-21)",
         "source": "heuristic",
         "todo": "Calibrate floor against executor historical precision-recall curve",
-        "value": 50
+        "value": 60
       },
       "crowding_penalty_agents_3": {
         "rationale": "When 3 agents crowd same stock, conviction reduced to 75% to prevent herding; based on Kelly criterion adjustment for correlated bets",
@@ -3449,9 +3449,9 @@
   },
   "orchestrator": {
     "conviction_floor_default": {
-      "rationale": "Default conviction floor when not set by policy",
+      "rationale": "Default conviction floor when not set by policy (A3: raised from 50 — low-conviction recs are the primary loss source, conv\u003c60 win rate only 30.7%)",
       "source": "heuristic",
-      "value": 50
+      "value": 60
     },
     "cro_zscore_threshold": {
       "rationale": "Z-score threshold for CRO conviction normalization filter",

@@ -332,6 +332,43 @@ func TestCalculateTradeMetrics_ProfitFactorZeroLosses(t *testing.T) {
 	}
 }
 
+// TestCalculateTradeMetrics_PureSynthetic verifies the A7 headline
+// decontamination edge case: when every outcome is synthetic (evaluation-only
+// paper trades), the headline statistics must be zero — there are no real
+// trades to measure. The synthetic count is still surfaced so the report stays
+// transparent about the sample mix.
+func TestCalculateTradeMetrics_PureSynthetic(t *testing.T) {
+	outcomes := []domain.RecommendationOutcome{
+		{ForwardReturn: 0.20, PassedGuards: true, IsSynthetic: true},
+		{ForwardReturn: -0.10, PassedGuards: true, IsSynthetic: true},
+		{ForwardReturn: 0.05, PassedGuards: true, IsSynthetic: true},
+	}
+
+	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
+
+	if totalTrades != 3 {
+		t.Errorf("expected total trades 3, got %d", totalTrades)
+	}
+	if realTrades != 0 {
+		t.Errorf("expected 0 real trades, got %d", realTrades)
+	}
+	if syntheticTrades != 3 {
+		t.Errorf("expected 3 synthetic trades, got %d", syntheticTrades)
+	}
+	if winRate != 0 {
+		t.Errorf("expected win rate 0 (no real trades), got %f", winRate)
+	}
+	if avgWin != 0 {
+		t.Errorf("expected avg win 0, got %f", avgWin)
+	}
+	if avgLoss != 0 {
+		t.Errorf("expected avg loss 0, got %f", avgLoss)
+	}
+	if profitFactor != 0 {
+		t.Errorf("expected profit factor 0, got %f", profitFactor)
+	}
+}
+
 func TestCalculateTopAgents_DisplayNamePresent(t *testing.T) {
 	outcomes := []domain.RecommendationOutcome{
 		{AgentID: "agent-a", Skill: "tech", Layer: "sector", ForwardReturn: 0.05, PassedGuards: true},
@@ -580,6 +617,48 @@ func TestGenerateReport_ZeroValueSessionExcluded(t *testing.T) {
 	}
 }
 
+// writeSessionWithOutcomes writes a session directory with a snake_case
+// summary.json and a recommendation_outcomes.jsonl containing the given
+// outcomes. Used by the A7 GenerateReport-level decontamination tests to
+// exercise the full report path with a mixed real/synthetic ledger.
+func writeSessionWithOutcomes(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash float64, totalTaxPaid float64, outcomes []domain.RecommendationOutcome) {
+	t.Helper()
+	sessDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", sessionID, err)
+	}
+	summary := domain.SessionSummary{
+		SessionID:      sessionID,
+		Regime:         domain.RegimeRiskOn,
+		PortfolioValue: portfolioValue,
+		EndingCash:     endingCash,
+		OutcomeCount:   len(outcomes),
+		TotalTaxPaid:   totalTaxPaid,
+		RecordedAt:     time.Now(),
+	}
+	summaryData, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", sessionID, err)
+	}
+	if err := os.WriteFile(filepath.Join(sessDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary %s: %v", sessionID, err)
+	}
+	if len(outcomes) == 0 {
+		return
+	}
+	f, err := os.Create(filepath.Join(sessDir, "recommendation_outcomes.jsonl"))
+	if err != nil {
+		t.Fatalf("create outcomes %s: %v", sessionID, err)
+	}
+	defer func() { _ = f.Close() }()
+	enc := json.NewEncoder(f)
+	for _, oc := range outcomes {
+		if err := enc.Encode(oc); err != nil {
+			t.Fatalf("encode outcome %s: %v", sessionID, err)
+		}
+	}
+}
+
 // writeSession is a small helper that creates a session-* directory with a
 // snake_case summary.json and a recommendation_outcomes.jsonl containing a
 // single outcome. Used by TestGenerateReport_CorruptedSummaryInAllPeriod.
@@ -626,6 +705,129 @@ func writeSession(t *testing.T, baseDir, sessionID string, portfolioValue, endin
 			t.Fatalf("encode outcome %s: %v", sessionID, err)
 		}
 		_ = f.Close()
+	}
+}
+
+// TestGenerateReport_HeadlineExcludesSynthetic verifies the A7
+// decontamination end-to-end through GenerateReport: when a session's ledger
+// mixes real and synthetic outcomes, the headline statistics (win_rate,
+// profit_factor, avg_win, avg_loss) reflect ONLY the real trades, while
+// TotalTrades / RealTradeCount / SyntheticTradeCount still account for both
+// so the sample mix stays visible. JSON field structure is unchanged.
+func TestGenerateReport_HeadlineExcludesSynthetic(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	outcomes := []domain.RecommendationOutcome{
+		// Real trades — these alone must drive the headline stats.
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: 0.05, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: 0.03, PassedGuards: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: -0.01, PassedGuards: true},
+		// Synthetic evaluation trades — must be excluded from headline stats.
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: 0.20, PassedGuards: true, IsSynthetic: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: -0.15, PassedGuards: true, IsSynthetic: true},
+	}
+	writeSessionWithOutcomes(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 0, outcomes)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Sample mix: 5 total trades = 3 real + 2 synthetic.
+	if report.TotalTrades != 5 {
+		t.Errorf("expected total trades 5, got %d", report.TotalTrades)
+	}
+	if report.RealTradeCount != 3 {
+		t.Errorf("expected 3 real trades, got %d", report.RealTradeCount)
+	}
+	if report.SyntheticTradeCount != 2 {
+		t.Errorf("expected 2 synthetic trades, got %d", report.SyntheticTradeCount)
+	}
+
+	// Headline stats driven by real trades only:
+	// wins = {0.05, 0.03} (both > default 0.002 threshold), loss = {-0.01}.
+	expectedWinRate := 2.0 / 3.0
+	if math.Abs(report.WinRate-expectedWinRate) > 1e-9 {
+		t.Errorf("expected win rate %.4f (real only), got %f", expectedWinRate, report.WinRate)
+	}
+	expectedAvgWin := 0.04 // (0.05 + 0.03) / 2
+	if math.Abs(report.AvgWin-expectedAvgWin) > 1e-9 {
+		t.Errorf("expected avg win %.4f, got %f", expectedAvgWin, report.AvgWin)
+	}
+	expectedAvgLoss := -0.01
+	if math.Abs(report.AvgLoss-expectedAvgLoss) > 1e-9 {
+		t.Errorf("expected avg loss %.4f, got %f", expectedAvgLoss, report.AvgLoss)
+	}
+	// profit factor = gross wins / |gross losses| = 0.08 / 0.01 = 8.0
+	// (synthetic +0.20 / -0.15 must NOT contribute)
+	expectedProfitFactor := 0.08 / 0.01
+	if math.Abs(report.ProfitFactor-expectedProfitFactor) > 1e-9 {
+		t.Errorf("expected profit factor %.4f (real only), got %f", expectedProfitFactor, report.ProfitFactor)
+	}
+
+	// JSON structure stays intact: all headline fields present in output.
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	for _, key := range []string{"win_rate", "profit_factor", "avg_win", "avg_loss", "total_trades", "real_trade_count", "synthetic_trade_count", "total_return"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("JSON field %q missing — structure changed", key)
+		}
+	}
+}
+
+// TestGenerateReport_PureSyntheticHeadlineZero verifies the A7 edge case at
+// the GenerateReport level: a ledger containing ONLY synthetic outcomes must
+// produce zero headline statistics (no real trades to measure) while the
+// synthetic count is still reported.
+func TestGenerateReport_PureSyntheticHeadlineZero(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	outcomes := []domain.RecommendationOutcome{
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: 0.20, PassedGuards: true, IsSynthetic: true},
+		{AgentID: "agent-a", Skill: "tech", Layer: domain.AgentLayer("sector"), Symbol: "2330", Side: "buy", Window: "session-20260101-daily", ForwardReturn: -0.15, PassedGuards: true, IsSynthetic: true},
+	}
+	writeSessionWithOutcomes(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 0, outcomes)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.TotalTrades != 2 {
+		t.Errorf("expected total trades 2, got %d", report.TotalTrades)
+	}
+	if report.RealTradeCount != 0 {
+		t.Errorf("expected 0 real trades, got %d", report.RealTradeCount)
+	}
+	if report.SyntheticTradeCount != 2 {
+		t.Errorf("expected 2 synthetic trades, got %d", report.SyntheticTradeCount)
+	}
+	if report.WinRate != 0 {
+		t.Errorf("expected win rate 0 (no real trades), got %f", report.WinRate)
+	}
+	if report.AvgWin != 0 {
+		t.Errorf("expected avg win 0, got %f", report.AvgWin)
+	}
+	if report.AvgLoss != 0 {
+		t.Errorf("expected avg loss 0, got %f", report.AvgLoss)
+	}
+	if report.ProfitFactor != 0 {
+		t.Errorf("expected profit factor 0, got %f", report.ProfitFactor)
+	}
+
+	// Markdown must clearly flag that headline metrics are real-only.
+	md := GenerateMarkdownReport(report)
+	if !strings.Contains(md, "Synthetic Share") {
+		t.Errorf("expected markdown to flag synthetic share, got:\n%s", md)
+	}
+	if !strings.Contains(md, "real trades only") {
+		t.Errorf("expected markdown to annotate real-only headline, got:\n%s", md)
 	}
 }
 
