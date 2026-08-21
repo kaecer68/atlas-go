@@ -66,7 +66,7 @@ echo
 
 # 檢查 admin_web imports 都在 shared_web
 for imp in $ADMIN_IMPORTS; do
-  if ! echo "$SHARED_PAGES" | grep -qx "$imp"; then
+  if ! grep -Fxq "$imp" <<< "$SHARED_PAGES"; then
     echo "FAIL: $ADMIN_MAIN 引用 './pages/$imp.js',但 $SHARED_PAGES_DIR/ 找不到"
     VIOLATIONS=$((VIOLATIONS+1))
   fi
@@ -74,7 +74,7 @@ done
 
 # 檢查 client_web imports 都在 shared_web
 for imp in $CLIENT_IMPORTS; do
-  if ! echo "$SHARED_PAGES" | grep -qx "$imp"; then
+  if ! grep -Fxq "$imp" <<< "$SHARED_PAGES"; then
     echo "FAIL: $CLIENT_MAIN 引用 './pages/$imp.js',但 $SHARED_PAGES_DIR/ 找不到"
     VIOLATIONS=$((VIOLATIONS+1))
   fi
@@ -84,8 +84,8 @@ done
 echo
 echo "--- Dead code warning (shared_web pages not used by admin/client main.js) ---"
 for page in $SHARED_PAGES; do
-  used_admin=$(echo "$ADMIN_IMPORTS" | grep -cx "$page" || true)
-  used_client=$(echo "$CLIENT_IMPORTS" | grep -cx "$page" || true)
+  used_admin=$(grep -Fxc "$page" <<< "$ADMIN_IMPORTS" || true)
+  used_client=$(grep -Fxc "$page" <<< "$CLIENT_IMPORTS" || true)
   if [ -z "$used_admin" ] && [ -z "$used_client" ]; then
     echo "  INFO: $page.js 未被任何 main.js 引用(可能是 dead code 或透過其他路徑引用)"
   fi
