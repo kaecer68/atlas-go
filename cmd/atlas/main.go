@@ -1309,6 +1309,7 @@ func run(args []string, deps appDeps) error {
 				gateway:           gateway,
 				autoRollback:      autoRollback,
 				autoJudgePromoter: autoJudgePromoter,
+				monitor:           monitor,
 				predictionLedger:  ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir),
 				capitalFlowStore:  capitalFlowStore,
 			})

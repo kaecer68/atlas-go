@@ -27,6 +27,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 )
@@ -40,6 +41,9 @@ type capitalDeps struct {
 	gateway           *apigateway.Gateway
 	autoRollback      *scheduler.AutoRollback
 	autoJudgePromoter *experiment.AutoJudgePromoter
+	// monitor feeds the evolution_health alert channel (B4). May be nil;
+	// then the health task still runs but raises no alerts.
+	monitor *monitoring.Monitor
 
 	// predictionLedger stores event-flow predictions so the prev-day
 	// reconciler can fill T+1 actual onto prior predictions. May be nil
@@ -309,4 +313,27 @@ func registerCapitalTasks(d capitalDeps) {
 	} else {
 		log.Printf("[Gateway] reconcile-prev-day-prediction skipped: predictionLedger or capitalFlowStore not wired")
 	}
+
+	// Register evolution_health — B4 evolution-loop liveness alerting.
+	// Watches the four evolution pillars (proposal / judge / promote /
+	// revert) for 24h of silence and raises monitor alerts through the
+	// existing alert channel (same adapter as auto_experiment). Missing
+	// monitor (nil) keeps the check running but drops alerts.
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "evolution_health",
+		Interval: 24 * time.Hour,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			health := experiment.CheckEvolutionHealth(experiment.EvolutionHealthConfig{
+				LedgerDir:          d.cfg.LedgerDir,
+				BaselinePolicyPath: d.cfg.BaselinePolicyPath,
+				ReplayDataPath:     config.GetReplayDataPath(d.cfg.WorkDir),
+			})
+			if d.monitor != nil {
+				experiment.RaiseEvolutionHealthAlerts(&experimentMonitorAdapter{m: d.monitor}, health)
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered evolution_health background task (24h interval)")
 }
