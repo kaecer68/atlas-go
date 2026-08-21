@@ -186,6 +186,7 @@ func run(cfg config) error {
 		url:        taifexFutDownURL,
 		maxRetries: cfg.maxRetries,
 		batchDays:  cfg.batchDays,
+		end:        cfg.end,
 	}
 	ctx := context.Background()
 
@@ -330,6 +331,7 @@ type taifexFetcher struct {
 	url        string
 	maxRetries int
 	batchDays  int
+	end        time.Time // batch windows are clamped to this date
 
 	cache   map[string]float64 // date (2006-01-02) → foreign OI net
 	noData  map[string]bool    // date confirmed without TAIFEX data (holiday)
@@ -364,6 +366,11 @@ func (f *taifexFetcher) fetchForeignOINet(ctx context.Context, d time.Time) (flo
 	}
 
 	windowEnd := d.AddDate(0, 0, f.batchDays-1)
+	if !f.end.IsZero() && windowEnd.After(f.end) {
+		// The TAIFEX server rejects ranges beyond the last available data
+		// (today) with an HTML error page instead of partial CSV.
+		windowEnd = f.end
+	}
 	form := url.Values{}
 	form.Set("queryStartDate", d.Format("2006/01/02"))
 	form.Set("queryEndDate", windowEnd.Format("2006/01/02"))

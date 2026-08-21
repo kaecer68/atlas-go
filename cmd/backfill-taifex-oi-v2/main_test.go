@@ -368,16 +368,19 @@ func TestRun_DryRunDoesNotWrite(t *testing.T) {
 
 func TestRun_BatchModeFetchesRangeOnce(t *testing.T) {
 	root, dir := newTestRepo(t)
-	// 2026-08-10 (Mon) .. 2026-08-14 (Fri) trading week + weekend files.
-	for _, d := range []string{"2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"} {
+	// 2026-08-10 (Mon) .. 2026-08-14 (Fri) trading week; end is clamped so the
+	// 7-day window cannot extend beyond the last available data.
+	for _, d := range []string{"2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"} {
 		writeSnap(t, dir, d+".json", realisticSnap())
 	}
 
 	requests := 0
 	var mu sync.Mutex
+	seenEnd := ""
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		requests++
+		seenEnd = r.FormValue("queryEndDate")
 		mu.Unlock()
 		// Serve a multi-day CSV for the requested window.
 		start := strings.ReplaceAll(r.FormValue("queryStartDate"), "/", "-")
@@ -403,20 +406,25 @@ func TestRun_BatchModeFetchesRangeOnce(t *testing.T) {
 	taifexFutDownURL = srv.URL
 
 	start, _ := time.Parse("2006-01-02", "2026-08-10")
-	end, _ := time.Parse("2006-01-02", "2026-08-16")
+	end, _ := time.Parse("2006-01-02", "2026-08-14")
 	if err := run(config{workDir: root, start: start, end: end, pacing: 0, maxRetries: 1, batchDays: 7}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	mu.Lock()
 	got := requests
+	seenEndCopy := seenEnd
 	mu.Unlock()
 	if got != 1 {
 		t.Errorf("requests = %d, want 1 (range fetch)", got)
 	}
+	// The batch window (7 days) must be clamped to the run end date
+	// (2026-08-14): the server rejects ranges beyond the last available data.
+	if seenEndCopy != "2026/08/14" {
+		t.Errorf("queryEndDate = %q, want 2026/08/14 (clamped to run end)", seenEndCopy)
+	}
 	want := map[string]float64{
 		"2026-08-10": -89201, "2026-08-11": -88924, "2026-08-12": -86633,
 		"2026-08-13": -86249, "2026-08-14": -85179,
-		"2026-08-15": -85179, "2026-08-16": -85179, // weekend carry-forward
 	}
 	for date, w := range want {
 		v, ok := readValue(t, dir, date)
