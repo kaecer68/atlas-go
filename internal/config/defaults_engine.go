@@ -144,8 +144,8 @@ func defaultGARCHParameters() GARCHParameters {
 func defaultOrchestratorParameters() OrchestratorParameters {
 	return OrchestratorParameters{
 		ConvictionFloorDefault: ParameterMetadata[int]{
-			Value:     50,
-			Rationale: "Default conviction floor when not set by policy",
+			Value:     60,
+			Rationale: "Default conviction floor when not set by policy (A3: raised from 50 — low-conviction recs are the primary loss source, conv<60 win rate only 30.7%)",
 			Source:    SourceHeuristic,
 		},
 		SuperinvestorMinConviction: ParameterMetadata[int]{
@@ -994,8 +994,8 @@ func defaultEngineParameters() EngineParameters {
 				Source:    SourceLiterature,
 			},
 			ConvictionFloorDefault: ParameterMetadata[int]{
-				Value:     50,
-				Rationale: "Minimum 50 conviction (out of 100) for executor recommendations to be considered; below 50 is effectively a coin flip",
+				Value:     60,
+				Rationale: "Minimum 60 conviction (out of 100) for executor recommendations to be considered; below 60 is effectively a coin flip (A3: raised from 50 per perf audit 2026-08-21)",
 				Source:    SourceHeuristic,
 				Todo:      "Calibrate floor against executor historical precision-recall curve",
 			},

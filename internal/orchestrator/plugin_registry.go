@@ -469,10 +469,10 @@ func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quo
 	return domain.Recommendation{}, false
 }
 
-func (r *PluginRegistry) ApplyControl(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy) []domain.Recommendation {
+func (r *PluginRegistry) ApplyControl(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {
 	for _, exec := range r.controlExecutors {
 		if exec.Supports(agent) {
-			return exec.Apply(agent, recs, policy)
+			return exec.Apply(agent, recs, policy, regime)
 		}
 	}
 	return recs
