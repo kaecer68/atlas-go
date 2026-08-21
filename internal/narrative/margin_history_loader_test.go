@@ -74,12 +74,6 @@ func TestMarginHistoryInsufficientData(t *testing.T) {
 	}
 }
 
-// roundTripFunc adapts a plain function to http.RoundTripper so tests can
-// stub the TWSE MI_MARGN endpoint without a live server.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
 // marginMockTransport serves the provided TWSE response body and records
 // requested dates. failFirst > 0 makes the first N requests fail with HTTP
 // 500 so retry behavior can be exercised.
