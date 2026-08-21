@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,6 +26,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 )
 
@@ -65,6 +67,14 @@ func main() {
 	bf.StartDate = start
 	bf.EndDate = end
 	bf.MaxRetries = *retries
+	// TWSE HiNetCDN issues a __chtcdn challenge cookie after bursts of
+	// cookie-less requests (HTTP 428/403). A jar keeps the cookie across
+	// requests so a long backfill is not blocked.
+	if jar, err := cookiejar.New(nil); err == nil {
+		client := httpclient.NewFactory().NewClient(30 * time.Second)
+		client.Jar = jar
+		bf.Provider.SetHTTPClient(client)
+	}
 	// One-shot backfill may use a tighter throttle than the production 5s
 	// default; the contract requires >= 1s/req.
 	bf.Provider.SetRateLimiter(rate.NewLimiter(rate.Every(*throttle), 1))
