@@ -94,6 +94,29 @@ async function run() {
     }
   });
 
+  // 會員制上線後（GUEST_MODE=false），未登入會被導向 login → 先註冊/登入測試用戶
+  // (CI-only；登入後為 free tier，與 guest 時期可渲染的頁面一致)
+  const smokeEmail = "smoke@" + Date.now() + ".local";
+  const smokePass = "SmokeTest!2026";
+  try {
+    const reg = await page.request.post("http://localhost:" + PORT + "/api/auth/register", {
+      data: { email: smokeEmail, password: smokePass },
+    });
+    if (reg.status() !== 200 && reg.status() !== 201 && reg.status() !== 409) {
+      console.warn(`[smoke-auth] register status=${reg.status()}`);
+    }
+    const lgn = await page.request.post("http://localhost:" + PORT + "/api/auth/login", {
+      data: { email: smokeEmail, password: smokePass },
+    });
+    if (lgn.status() !== 200) {
+      console.warn(`[smoke-auth] login status=${lgn.status()} — pages may redirect to login`);
+    } else {
+      console.log(`✓ smoke-auth: registered+logged in (${smokeEmail})`);
+    }
+  } catch (e) {
+    console.warn(`[smoke-auth] failed: ${e.message} — pages may redirect to login`);
+  }
+
   try {
     await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForFunction(() => typeof window.switchPage === "function", { timeout: 20000 });
