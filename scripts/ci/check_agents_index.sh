@@ -55,7 +55,11 @@ for d in internal/*/; do
     m="$(basename "$d")"
     # 只檢查含 .go 的頂層模組
     ls "$d"*.go >/dev/null 2>&1 || continue
-    if ! echo "$indexed" | grep -qx "$m"; then
+    # NOTE: use a here-string, not `echo "$indexed" | grep -qx`, because with
+    # `set -o pipefail` the early-exit of `grep -q` SIGPIPEs echo and turns a
+    # successful match into a spurious pipeline failure (flaky false alarms
+    # observed 2026-08-21 on unrelated diffs).
+    if ! grep -Fxq "$m" <<< "$indexed"; then
         log_err "module not indexed: internal/$m (add to $INDEX)"
     fi
 done
