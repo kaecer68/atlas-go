@@ -57,21 +57,38 @@ type Proposal struct {
 	Brief         experiment.MutationBrief
 }
 
+// ProposeOutcome explains why CheckAndPropose produced its result, so the
+// scheduler caller can distinguish "burn-in skip", "no degradation trigger
+// hit", "all agents in cooldown", and "proposals generated" in structured
+// logs (audit A5: auto_propose finished in 50ms with no way to tell which).
+type ProposeOutcome struct {
+	BurnInSkipped      bool   // maturity still in burn-in
+	AgentsScanned      int    // agents considered by the scan
+	CooldownSkipped    int    // agents skipped due to per-agent cooldown
+	NoTrigger          int    // agents scanned with no degradation trigger
+	ProposalsGenerated int    // proposals returned
+	Reason             string // machine-readable outcome for structured logging
+}
+
 // CheckAndPropose scans all agents and returns proposals for those that meet
 // degradation criteria. Proposals are auto-generated in all maturity phases
 // except BURN_IN. Execution is handled by the caller (AutoJudgePromoter).
-func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, error) {
+// The returned ProposeOutcome lets the caller log a precise skip reason.
+func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, ProposeOutcome, error) {
+	outcome := ProposeOutcome{}
 	if p.tracker != nil {
 		m := p.tracker.Current()
 		if m == domain.MaturityBurnIn {
+			outcome.BurnInSkipped = true
+			outcome.Reason = "burn_in"
 			logging.Warn("auto_proposer", "burn_in_skip",
 				"days_until_calibrating", p.tracker.DaysUntil(domain.MaturityCalibrating))
-			return nil, nil
+			return nil, outcome, nil
 		}
 	}
 
 	if p.dwManager == nil {
-		return nil, fmt.Errorf("auto_proposer: DarwinianWeightManager is nil")
+		return nil, outcome, fmt.Errorf("auto_proposer: DarwinianWeightManager is nil")
 	}
 
 	agents := p.dwManager.GetAllAgentWeightData()
@@ -79,13 +96,16 @@ func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, error) 
 	var proposals []Proposal
 
 	for _, agent := range agents {
+		outcome.AgentsScanned++
 		// Cooldown check
 		if last, ok := p.lastProposed[agent.AgentID]; ok && now.Sub(last) < p.cooldown {
+			outcome.CooldownSkipped++
 			continue
 		}
 
 		reason := p.checkAgent(agent)
 		if reason == "" {
+			outcome.NoTrigger++
 			continue
 		}
 
@@ -99,10 +119,23 @@ func (p *AutoProposer) CheckAndPropose(ctx context.Context) ([]Proposal, error) 
 		p.lastProposed[agent.AgentID] = now
 	}
 
+	outcome.ProposalsGenerated = len(proposals)
+	switch {
+	case len(proposals) > 0:
+		outcome.Reason = "proposals"
+	case outcome.CooldownSkipped == outcome.AgentsScanned && outcome.AgentsScanned > 0:
+		outcome.Reason = "cooldown_only"
+	default:
+		outcome.Reason = "no_trigger"
+	}
+
 	logging.Info("auto_proposer", "scan_complete",
 		"agents_scanned", len(agents),
-		"proposals_generated", len(proposals))
-	return proposals, nil
+		"proposals_generated", len(proposals),
+		"cooldown_skipped", outcome.CooldownSkipped,
+		"no_trigger", outcome.NoTrigger,
+		"reason", outcome.Reason)
+	return proposals, outcome, nil
 }
 
 // checkAgent evaluates a single agent against degradation triggers.
