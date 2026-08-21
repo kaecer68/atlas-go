@@ -824,6 +824,10 @@ export interface DarwinianParameters {
   stddev_mean_ratio_threshold: string;
   conviction_clamp_min: string;
   conviction_clamp_max: string;
+  zero_signal_penalty_multiplier: string;
+  zero_signal_penalty_after_days: string;
+  loss_penalty_multiplier: string;
+  weight_change_alert_threshold: string;
 }
 
 export interface DarwinianStatusData {

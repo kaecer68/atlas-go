@@ -1,10 +1,12 @@
 package portfolio
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -818,5 +820,161 @@ func TestUpdateRollingMetrics_SharpeClip(t *testing.T) {
 	data, _ := m.GetAgentWeightData("agent_001")
 	if math.Abs(data.RollingSharpe) > maxSharpeMagnitude {
 		t.Errorf("expected Sharpe clipped to ±%v, got %f", maxSharpeMagnitude, data.RollingSharpe)
+	}
+}
+
+// TestPerformDailyAdjustment_ZeroSignalPenalty covers B3 penalty 1: an agent
+// with zero signals for ZeroSignalPenaltyAfterDays (14d default) is forced
+// into the bottom tier AND receives the extra ZeroSignalPenaltyMultiplier,
+// while a fresh zero-signal agent (recent LastUpdatedAt) is not extra-penalized.
+func TestPerformDailyAdjustment_ZeroSignalPenalty(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_zero_signal.json")
+
+	// 3 agents, n=3 -> top=1, middle=1, bottom=1:
+	//   performer: positive Sharpe (top)
+	//   silent_fresh: zero signals, updated now (middle, Sharpe 0)
+	//   silent_stale: zero signals, updated 20 days ago (forced bottom)
+	seedAgent(m, "performer", "tech", "sector", 1.0)
+	seedAgent(m, "silent_fresh", "value", "style", 1.0)
+	seedAgent(m, "silent_stale", "macro", "sector", 1.0)
+	for i := 0; i < 60; i++ {
+		r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
+		m.RecordOutcome("performer", r, r > 0)
+	}
+	m.mu.Lock()
+	m.weights["silent_stale"].LastUpdatedAt = time.Now().Add(-20 * 24 * time.Hour)
+	m.mu.Unlock()
+
+	_, _ = m.PerformDailyAdjustment()
+
+	// silent_stale: 1.0 * BottomQuartileMultiplier(0.95) * ZeroSignalPenaltyMultiplier(0.9) = 0.855
+	wStale, ok := m.GetAgentWeightData("silent_stale")
+	if !ok {
+		t.Fatal("silent_stale missing")
+	}
+	if math.Abs(wStale.Weight-0.855) > 0.001 {
+		t.Errorf("expected silent_stale weight 0.855 (bottom + zero-signal penalty), got %f", wStale.Weight)
+	}
+	// silent_fresh: middle tier with HitRate 0 -> pre-existing
+	// MiddleTierCutMultiplier (0.98) applies, but NOT the zero-signal penalty
+	// (0.855): the stale gate (ZeroSignalPenaltyAfterDays) is what matters.
+	wFresh, ok := m.GetAgentWeightData("silent_fresh")
+	if !ok {
+		t.Fatal("silent_fresh missing")
+	}
+	if math.Abs(wFresh.Weight-0.98) > 0.001 {
+		t.Errorf("expected silent_fresh weight 0.98 (middle cut only, no zero-signal penalty), got %f", wFresh.Weight)
+	}
+	if wFresh.Weight <= wStale.Weight {
+		t.Errorf("fresh zero-signal agent (%f) must be penalized less than stale zero-signal agent (%f)", wFresh.Weight, wStale.Weight)
+	}
+	// DefaultNeutralWeight must expose the configured neutral reference (1.0).
+	if neutral := m.DefaultNeutralWeight(); math.Abs(neutral-1.0) > 0.001 {
+		t.Errorf("expected DefaultNeutralWeight 1.0, got %f", neutral)
+	}
+}
+
+// TestPerformDailyAdjustment_LossPenaltyDeepensBottomCut covers B3 penalty 2:
+// bottom-tier agents with negative Sharpe and >=30 signals receive the extra
+// LossPenaltyMultiplier; agents with fewer than 30 signals do not (their
+// negative trend could be noise, and their Sharpe is gated to 0 anyway).
+func TestPerformDailyAdjustment_LossPenaltyDeepensBottomCut(t *testing.T) {
+	m := NewDarwinianWeightManager("/tmp/test_loss_penalty.json")
+
+	// Sort (desc Sharpe): performer(>0) > losing_poor(Sharpe 0, <30 samples) > losing_rich(<0)
+	// n=3 -> top=1 (performer), middle=1 (losing_poor, multiplier 1.0), bottom=1 (losing_rich).
+	seedAgent(m, "performer", "tech", "sector", 1.0)
+	seedAgent(m, "losing_rich", "value", "style", 1.0)
+	seedAgent(m, "losing_poor", "macro", "sector", 1.0)
+	for i := 0; i < 60; i++ {
+		pr := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
+		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
+		m.RecordOutcome("performer", pr, pr > 0)
+		m.RecordOutcome("losing_rich", nr, false)
+	}
+	for i := 0; i < 20; i++ {
+		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
+		m.RecordOutcome("losing_poor", nr, false)
+	}
+
+	_, _ = m.PerformDailyAdjustment()
+
+	// losing_rich: 1.0 * BottomQuartileMultiplier(0.95) * LossPenaltyMultiplier(0.9) = 0.855
+	wRich, ok := m.GetAgentWeightData("losing_rich")
+	if !ok {
+		t.Fatal("losing_rich missing")
+	}
+	if math.Abs(wRich.Weight-0.855) > 0.001 {
+		t.Errorf("expected losing_rich weight 0.855 (bottom + loss penalty), got %f", wRich.Weight)
+	}
+	// losing_poor: 20 signals < 30 -> no loss penalty. It sits in the middle
+	// tier with HitRate 0, so only the pre-existing MiddleTierCutMultiplier
+	// (0.98) applies — the extra 0.855 loss-penalty cut is reserved for
+	// signal-rich (>=30) negative-Sharpe agents.
+	wPoor, ok := m.GetAgentWeightData("losing_poor")
+	if !ok {
+		t.Fatal("losing_poor missing")
+	}
+	if math.Abs(wPoor.Weight-0.98) > 0.001 {
+		t.Errorf("expected losing_poor weight 0.98 (middle cut only, no loss penalty), got %f", wPoor.Weight)
+	}
+	if wPoor.Weight <= wRich.Weight {
+		t.Errorf("low-signal loser (%f) must be penalized less than signal-rich loser (%f)", wPoor.Weight, wRich.Weight)
+	}
+}
+
+// TestPerformDailyAdjustment_WeightChangeAlert covers B3 penalty 3: any agent
+// whose |daily weight change| exceeds WeightChangeAlertThreshold triggers a
+// warning health alert on the event bus (and a Warn log).
+func TestPerformDailyAdjustment_WeightChangeAlert(t *testing.T) {
+	bus := eventbus.NewChannelEventBus(64)
+	defer bus.Close()
+
+	params := DefaultRuntimeParameters()
+	params.Darwinian.WeightChangeAlertThreshold = 0.01 // any meaningful move alerts
+
+	m := NewDarwinianWeightManager("/tmp/test_alert.json").WithParameters(params).WithEventBus(bus)
+
+	seedAgent(m, "top", "tech", "sector", 1.5)
+	seedAgent(m, "bottom", "value", "style", 1.0)
+	for i := 0; i < 60; i++ {
+		pr := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
+		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
+		m.RecordOutcome("top", pr, pr > 0)
+		m.RecordOutcome("bottom", nr, false)
+	}
+
+	var alerts []eventbus.HealthAlertPayload
+	var mu sync.Mutex
+	bus.SubscribeAll(func(ctx context.Context, event eventbus.BusEvent) error {
+		if event.Type == eventbus.EventHealthAlert {
+			if p, ok := event.Payload.(eventbus.HealthAlertPayload); ok {
+				mu.Lock()
+				alerts = append(alerts, p)
+				mu.Unlock()
+			}
+		}
+		return nil
+	})
+
+	_, _ = m.PerformDailyAdjustment()
+
+	// ChannelEventBus delivers asynchronously; give the worker a moment.
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(alerts) == 0 {
+		t.Fatal("expected at least one weight-change health alert on the event bus")
+	}
+	for _, a := range alerts {
+		if a.Category != "darwinian_weights" {
+			t.Errorf("expected category darwinian_weights, got %s", a.Category)
+		}
+		if a.Severity != "warning" {
+			t.Errorf("expected severity warning, got %s", a.Severity)
+		}
+		if math.Abs(a.Value) <= a.Threshold {
+			t.Errorf("expected |value| %.4f > threshold %.4f", a.Value, a.Threshold)
+		}
 	}
 }
