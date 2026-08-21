@@ -73,6 +73,8 @@
 | `cmd/backfill-month-revenue` | 月營收回填（FinMind） | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-financial-statements` | 財務報表回填 | marketdata, constants, monitoring | ✅ Utility |
 | `cmd/backfill-industry-tree` | 產業分類權重每日動態計算 | config, marketdata | ✅ Utility |
+| `cmd/backfill-market-volume` | R4 — 集中市場成交量 (market_volume) 回填既有 macro snapshot（2024-07 起，macrobackfill 模式） | backfill, marketdata | ✅ Utility |
+| `cmd/backfill-sector-index` | S-gap — TWSE 產業指數逐日回填 sector_index 到 2026-04-25 起 | backfill, marketdata | ✅ Utility |
 | `cmd/backfill-fundamentals-ps-sector` | 修補 fundamentals.json 缺少的 PS/Sector 欄位 | —（stdlib only） | ✅ Utility |
 | `cmd/backfill-summaries` | 補建 orphan session 的 summary.json | backfill, config | ✅ Utility |
 | `cmd/reconcile-sessions` | PG vs JSONL session summary 對帳 — 對稱差報告 + `-apply` 回填單邊缺口 (B6) | reconcile, ledger, repository, config | ✅ Utility |

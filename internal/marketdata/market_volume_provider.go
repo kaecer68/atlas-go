@@ -14,6 +14,10 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 )
 
+// twseBrowserUserAgent is a full browser User-Agent required to pass the
+// TWSE WAF (short UAs such as "Mozilla/5.0" get 403 Forbidden).
+const twseBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+
 // MarketVolumeResult holds the parsed 集中市場成交金額 from TWSE MI_INDEX.
 // MarketVolume is in 億元 (hundred million NTD), matching the applyMarketVolume contract.
 type MarketVolumeResult struct {
@@ -73,6 +77,14 @@ func (p *MarketVolumeProvider) FetchLatest(ctx context.Context) (*MarketVolumeRe
 	return nil, fmt.Errorf("no TWSE market volume data available in the last 7 days")
 }
 
+// FetchDate retrieves 集中市場成交金額 for a specific trading date (YYYYMMDD).
+// Non-trading days (weekends/holidays) return an error so callers can skip them.
+// Exported for historical backfill (cmd/backfill-market-volume); FetchLatest
+// keeps scanning the recent window via the private fetchDate.
+func (p *MarketVolumeProvider) FetchDate(ctx context.Context, dateStr string) (*MarketVolumeResult, error) {
+	return p.fetchDate(ctx, dateStr)
+}
+
 func (p *MarketVolumeProvider) fetchDate(ctx context.Context, dateStr string) (*MarketVolumeResult, error) {
 	if err := p.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
@@ -83,7 +95,9 @@ func (p *MarketVolumeProvider) fetchDate(ctx context.Context, dateStr string) (*
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	// Full browser UA: TWSE's WAF returns 403 for short UAs (observed
+	// 2026-08-21 during R4 backfill). Matches government_broker_aggregator.
+	req.Header.Set("User-Agent", twseBrowserUserAgent)
 
 	resp, err := p.client.Do(req)
 	if err != nil {
