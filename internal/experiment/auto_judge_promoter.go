@@ -91,6 +91,25 @@ func (p *AutoJudgePromoter) RunDaily(ctx context.Context, pending []experiment.P
 	now := time.Now()
 
 	for _, exp := range pending {
+		// Stuck-running guard (audit A5): never judge an experiment that has
+		// been "running" beyond the TTL — its executor is gone and it can
+		// never reach judgeable observations. LoadPendingExperiments filters
+		// these too; this is defense in depth for callers that pass results
+		// through another path.
+		if exp.Experiment.Status == domain.ExperimentRunning &&
+			!exp.RecordedAt.IsZero() &&
+			time.Since(exp.RecordedAt) > staleRunningTTL {
+			logging.Warn("auto_judge", "stuck_running_skip",
+				"experiment_id", exp.Experiment.ID,
+				"recorded_at", exp.RecordedAt.Format(time.RFC3339),
+				"ttl_hours", staleRunningTTL.Hours())
+			continue
+		}
+		if exp.Experiment.Status == domain.ExperimentExpired {
+			logging.Info("auto_judge", "expired_skip",
+				"experiment_id", exp.Experiment.ID)
+			continue
+		}
 		if !p.isJudgeable(exp) {
 			logging.Info("auto_judge", "pending_not_judgeable",
 				"experiment_id", exp.Experiment.ID,
