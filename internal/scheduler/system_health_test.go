@@ -20,10 +20,10 @@ func TestSystemHealthMonitor_AllClear(t *testing.T) {
 		},
 	})
 
-	// Seed positive returns so RollingSharpe > 0.
+	// Seed positive returns so RollingSharpe > 0 (>=8 unique values each).
 	for i := 0; i < 60; i++ {
-		dw.RecordOutcome("a1", 0.02, true)
-		dw.RecordOutcome("a2", 0.015, true)
+		dw.RecordOutcome("a1", 0.02+float64(i%10)*0.001, true)
+		dw.RecordOutcome("a2", 0.015+float64(i%10)*0.001, true)
 	}
 
 	hm := portfolio.NewAgentHealthManager()
@@ -57,7 +57,7 @@ func TestSystemHealthMonitor_SharpeTrendDeclining(t *testing.T) {
 			n = 60
 		}
 		for i := 0; i < n; i++ {
-			ret := 0.04 + float64(i%5)*0.005 // 0.04 ~ 0.06
+			ret := 0.04 + float64(i%10)*0.005 // 0.04 ~ 0.085, 10 unique
 			dw.RecordOutcome("a1", ret, true)
 		}
 		_, _ = monitor.RunDaily(context.Background())
@@ -71,11 +71,8 @@ func TestSystemHealthMonitor_SharpeTrendDeclining(t *testing.T) {
 		},
 	})
 	for i := 0; i < 60; i++ {
-		if i%2 == 0 {
-			dw.RecordOutcome("a1", -0.03, false)
-		} else {
-			dw.RecordOutcome("a1", -0.01, false)
-		}
+		// 10 unique values so the degenerate-window guard does not zero Sharpe.
+		dw.RecordOutcome("a1", -0.03-float64(i%10)*0.001, false)
 	}
 
 	alerts, err := monitor.RunDaily(context.Background())
@@ -103,13 +100,9 @@ func TestSystemHealthMonitor_NegativeSharpeCritical(t *testing.T) {
 		},
 	})
 
-	// Inject negative returns so RollingSharpe < -0.5.
+	// Inject negative returns so RollingSharpe < -0.5 (10 unique values).
 	for i := 0; i < 60; i++ {
-		if i%2 == 0 {
-			dw.RecordOutcome("a1", -0.03, false)
-		} else {
-			dw.RecordOutcome("a1", -0.01, false)
-		}
+		dw.RecordOutcome("a1", -0.03-float64(i%10)*0.001, false)
 	}
 
 	hm := portfolio.NewAgentHealthManager()

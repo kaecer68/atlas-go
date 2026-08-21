@@ -37,7 +37,12 @@ func DefaultFallbackParams(cfg *config.ParametersConfig) ForwardReturnFallback {
 	}
 }
 
-func GenerateForwardReturn(symbol string, quote domain.Quote, regime domain.Regime, fallback ForwardReturnFallback) float64 {
+// GenerateForwardReturn produces a forward-return proxy for a recommendation.
+// agentID scopes the synthetic distribution seed so different agents drawing
+// a fallback for the same symbol get different values (A4 L2: the seed used
+// to be symbol-only, which made every agent recommending the same symbol
+// receive byte-identical forward returns).
+func GenerateForwardReturn(symbol, agentID string, quote domain.Quote, regime domain.Regime, fallback ForwardReturnFallback) float64 {
 	if quote.Open > 0 && quote.Last > 0 {
 		intraday := (quote.Last - quote.Open) / quote.Open
 
@@ -50,22 +55,25 @@ func GenerateForwardReturn(symbol string, quote domain.Quote, regime domain.Regi
 		}
 
 		if math.Abs(fr) < 0.001 {
-			return generateFromDistribution(symbol, regime, fallback)
+			return generateFromDistribution(symbol, agentID, regime, fallback)
 		}
 
 		return fr * 0.9
 	}
 
-	return generateFromDistribution(symbol, regime, fallback)
+	return generateFromDistribution(symbol, agentID, regime, fallback)
 }
 
-func generateFromDistribution(symbol string, regime domain.Regime, fallback ForwardReturnFallback) float64 {
+func generateFromDistribution(symbol, agentID string, regime domain.Regime, fallback ForwardReturnFallback) float64 {
 	params := fallback.RiskOnParams
 	if regime == domain.RegimeRiskOff {
 		params = fallback.RiskOffParams
 	}
 
-	hash := hashString(symbol)
+	// Agent-scoped seed: the same symbol drawn by different agents must yield
+	// different samples, otherwise multi-agent windows collapse into a few
+	// repeated values and the rolling Sharpe explodes (A4 L2/L3).
+	hash := hashString(agentID + "|" + symbol)
 	normalized := (float64(hash%10000) - 5000) / 5000.0
 	fr := params.Mean + normalized*params.StdDev
 
@@ -81,5 +89,7 @@ func generateFromDistribution(symbol string, regime domain.Regime, fallback Forw
 func hashString(s string) int64 {
 	h := fnv.New64a()
 	h.Write([]byte(s))
-	return int64(h.Sum64()) //nolint:gosec // hash to int64 is deterministic for seeding, not crypto
+	// int64(uint64) can be negative, which would make % 10000 negative in Go.
+	// Normalize to a non-negative value so callers can use it as a seed.
+	return int64(h.Sum64() & 0x7fffffffffffffff) //nolint:gosec // hash to int64 is deterministic for seeding, not crypto
 }

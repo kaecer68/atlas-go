@@ -39,8 +39,8 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Todo:      "Validate 20h vs 24h cooldown impact on agent turnover and stability",
 		},
 		LookbackDays: ParameterMetadata[int]{
-			Value:     60,
-			Rationale: "60 trading days (~3 months) for statistically stable rolling Sharpe; matches SharpeMinSampleSize",
+			Value:     30,
+			Rationale: "30 trading days (~1.5 months) for the rolling Sharpe window; per-day aggregation (A4 fix) makes 30 daily entries a statistically meaningful sample (N-1=29)",
 			Source:    SourceLiterature,
 		},
 		EMAAlpha: ParameterMetadata[float64]{
@@ -100,10 +100,10 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Source:    SourceHeuristic,
 		},
 		SharpeMinSampleSize: ParameterMetadata[int]{
-			Value:     60,
-			Rationale: "60 trading days (~3 months) for statistically stable Sharpe estimation; matches academic standard for daily returns",
+			Value:     30,
+			Rationale: "30 daily entries (N-1=29) minimum for statistically stable Sharpe on the per-day aggregated window; matches LookbackDays",
 			Source:    SourceLiterature,
-			Todo:      "Calibrate: test 60 vs 90 vs 126 for TW market agent population",
+			Todo:      "Calibrate: test 30 vs 60 vs 90 for TW market agent population",
 		},
 		StdDevMeanRatioThreshold: ParameterMetadata[float64]{
 			Value:     0.001,
