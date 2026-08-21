@@ -137,6 +137,18 @@ func (p *ParametersConfig) Validate() error {
 	if p.Darwinian.LookbackDays.Value <= 0 {
 		return fmt.Errorf("darwinian.lookback_days (%d) must be positive", p.Darwinian.LookbackDays.Value)
 	}
+	if p.Darwinian.ZeroSignalPenaltyMultiplier.Value <= 0 || p.Darwinian.ZeroSignalPenaltyMultiplier.Value > 1 {
+		return fmt.Errorf("darwinian.zero_signal_penalty_multiplier (%.3f) must be in (0,1]", p.Darwinian.ZeroSignalPenaltyMultiplier.Value)
+	}
+	if p.Darwinian.ZeroSignalPenaltyAfterDays.Value < 1 {
+		return fmt.Errorf("darwinian.zero_signal_penalty_after_days (%d) must be >= 1", p.Darwinian.ZeroSignalPenaltyAfterDays.Value)
+	}
+	if p.Darwinian.LossPenaltyMultiplier.Value <= 0 || p.Darwinian.LossPenaltyMultiplier.Value > 1 {
+		return fmt.Errorf("darwinian.loss_penalty_multiplier (%.3f) must be in (0,1]", p.Darwinian.LossPenaltyMultiplier.Value)
+	}
+	if p.Darwinian.WeightChangeAlertThreshold.Value < 0 {
+		return fmt.Errorf("darwinian.weight_change_alert_threshold (%.3f) must be non-negative", p.Darwinian.WeightChangeAlertThreshold.Value)
+	}
 
 	// Factor constraints
 	if p.Factor.MomentumStdDevDivisor.Value <= 0 {
