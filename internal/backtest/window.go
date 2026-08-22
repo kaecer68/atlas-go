@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/baseline"
+	"github.com/kaecer68/atlas-go/internal/charter"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
@@ -19,6 +20,8 @@ type Runner struct {
 	cfg         config.Config
 	store       ledger.OutcomeStore
 	janusEngine *janus.Engine
+	charterOpts *charter.Options // per-arm charter switches (Phase C3); nil = cfg.CharterMode governs
+	charterTr   *charter.RecommendationTrace
 	lastState   *domain.SimulationState
 	eventBus    *eventbus.ChannelEventBus
 }
@@ -62,10 +65,26 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 		if r.janusEngine != nil {
 			system.WithJANUS(r.janusEngine, nil)
 		}
+		if r.charterOpts != nil {
+			system.WithCharterMode(*r.charterOpts)
+		}
 		system.WithPersistentState(&persistentState)
 		result, err := system.RunDailySimulation(date)
 		if err != nil {
 			return domain.BacktestWindowSummary{}, err
+		}
+		if r.charterTr != nil {
+			if rr := system.LastResearchResult(); rr != nil {
+				r.charterTr.Append(charter.DailyRecommendationTrace{
+					Date:         date.Format("2006-01-02"),
+					Regime:       rr.Regime,
+					Period:       rr.Period,
+					RawCount:     len(rr.RawRecommendations),
+					FinalCount:   len(rr.FinalRecommendations),
+					RawByAgent:   charter.CountByAgent(rr.RawRecommendations),
+					FinalByAgent: charter.CountByAgent(rr.FinalRecommendations),
+				})
+			}
 		}
 		candidate, err := system.NextExperimentCandidate()
 		if err != nil {
@@ -176,5 +195,28 @@ func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) (string, e
 // WithJANUS attaches a JANUS engine to the runner for A/B validation.
 func (r *Runner) WithJANUS(j *janus.Engine) *Runner {
 	r.janusEngine = j
+	return r
+}
+
+// WithCharterMode sets per-arm charter switches (Phase C3). Each System built
+// inside Run gets these options via System.WithCharterMode, so the harness can
+// A/B each charter layer with cfg.CharterMode left off (the global flag is not
+// consulted when options are present). nil / zero options leave cfg.CharterMode
+// to govern (Phase A when off, full charter when on).
+func (r *Runner) WithCharterMode(options charter.Options) *Runner {
+	if !options.Enabled() {
+		r.charterOpts = nil
+		return r
+	}
+	opts := options
+	r.charterOpts = &opts
+	return r
+}
+
+// WithRecommendationTrace attaches a per-day recommendation pipeline trace
+// collector for A/B attribution (raw vs final recommendation counts, detected
+// period per day).
+func (r *Runner) WithRecommendationTrace(t *charter.RecommendationTrace) *Runner {
+	r.charterTr = t
 	return r
 }

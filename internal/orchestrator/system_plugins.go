@@ -1,13 +1,63 @@
 package orchestrator
 
 import (
+	"strings"
+
+	"github.com/kaecer68/atlas-go/internal/charter"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/spawning"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
+
+// WithCharterMode attaches per-arm charter options to the system (Phase C3).
+// It wires the charter components lazily when the given options enable at
+// least one switch (even with cfg.CharterMode=false — the A/B harness keeps
+// the global flag off and controls each arm explicitly). When options are
+// zero or the system already wired full charter via cfg.CharterMode, the
+// existing wiring is kept and only the switch set is updated:
+//
+//   - cfg.CharterMode=true + no WithCharterMode → AllOn (Phase C2 behavior)
+//   - cfg.CharterMode=false + WithCharterMode(opts) → only opts' layers
+//   - cfg.CharterMode=false + no WithCharterMode → Phase A (no charter)
+func (s *System) WithCharterMode(options charter.Options) *System {
+	if s.charter == nil {
+		if !options.Enabled() {
+			return s
+		}
+		s.charter = &charterConfig{
+			periodDetector: portfolio.NewPeriodDetectorWithDefaults(),
+			macroflow:      macroflow.NewEngine(0),
+			advisor:        methodology.NewAdvisor(nil),
+			options:        options,
+		}
+		logging.Info("orchestrator", "charter_mode_attached",
+			"switches", strings.Join(options.Names(), "+"))
+		return s
+	}
+	// Charter already wired (cfg.CharterMode=true): keep components, update
+	// the active switch set (union semantics — existing switches are never
+	// disabled by a later WithCharterMode call).
+	s.charter.options = mergeCharterOptions(s.charter.options, options)
+	return s
+}
+
+// mergeCharterOptions combines two option sets (union of enabled switches).
+func mergeCharterOptions(base, add charter.Options) charter.Options {
+	merged := charter.Options{
+		PeriodOnly:      base.PeriodOnly || add.PeriodOnly,
+		StrategyFilter:  base.StrategyFilter || add.StrategyFilter,
+		MacroFlow:       base.MacroFlow || add.MacroFlow,
+		CashReserve:     base.CashReserve || add.CashReserve,
+		ConvictionFloor: base.ConvictionFloor || add.ConvictionFloor,
+	}
+	return merged
+}
 
 // WithJANUS attaches a JANUS engine to the system for backtest validation.
 func (s *System) WithJANUS(j *janus.Engine, pm *prism.PRISMManager) *System {

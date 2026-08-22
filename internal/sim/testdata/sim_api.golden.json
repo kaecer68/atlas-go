@@ -156,6 +156,12 @@
       "results": "(*Engine)"
     },
     {
+      "name": "WithConvictionFloorAdjustment",
+      "params": "(delta int)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
       "name": "WithDividends",
       "params": "(divs map[string]float64)",
       "receiver": "Engine",
@@ -303,6 +309,7 @@
       "fields": [
         "constraints domain.SimulationConstraints",
         "reserveCashFractionOverride *float64",
+        "convictionFloorAdjustment *int",
         "optimizer *portfolio.Optimizer",
         "useOptimizer bool",
         "reflexRules []reflexivity.Rule",

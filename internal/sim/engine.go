@@ -38,19 +38,23 @@ type Engine struct {
 	// constraints.ReserveCashFraction for the effective reserve calculation.
 	// Used by CharterMode period-driven cash control (C2).
 	reserveCashFractionOverride *float64
-	optimizer                   *portfolio.Optimizer
-	useOptimizer                bool
-	reflexRules                 []reflexivity.Rule
-	ctx                         context.Context
-	slippageModel               *SlippageModel
-	marketImpactModel           *MarketImpactModel
-	taxCalc                     *tax.TaiwanTaxCalculator
-	dividends                   map[string]float64
-	thresholdEngine             *DynamicThresholdEngine
-	preTradeGate                *risk.PreTradeGate
-	traceWriter                 TraceWriter
-	rotationFunc                RotationFunc
-	riskCalculator              RiskCalculator
+	// convictionFloorAdjustment, when non-nil, adds percentage points on top
+	// of constraints.MinRecommendationConviction for the effective conviction
+	// floor. Used by CharterMode period-driven conviction gating (C3).
+	convictionFloorAdjustment *int
+	optimizer                 *portfolio.Optimizer
+	useOptimizer              bool
+	reflexRules               []reflexivity.Rule
+	ctx                       context.Context
+	slippageModel             *SlippageModel
+	marketImpactModel         *MarketImpactModel
+	taxCalc                   *tax.TaiwanTaxCalculator
+	dividends                 map[string]float64
+	thresholdEngine           *DynamicThresholdEngine
+	preTradeGate              *risk.PreTradeGate
+	traceWriter               TraceWriter
+	rotationFunc              RotationFunc
+	riskCalculator            RiskCalculator
 }
 
 // RiskCalculator computes real VaR from portfolio state.
@@ -170,6 +174,30 @@ func (e *Engine) effectiveReserveCashFraction() float64 {
 		return *e.reserveCashFractionOverride
 	}
 	return e.constraints.ReserveCashFraction
+}
+
+// WithConvictionFloorAdjustment adds delta percentage points on top of the
+// base MinRecommendationConviction for subsequent runs (CharterMode periodized
+// conviction floor, C3). Passing 0 clears the adjustment and restores the base
+// constraint value (Phase A behavior). The delta is the periodized floor
+// premium: RISK_OFF +10 / black_swan +20 (charter §C14/C17).
+func (e *Engine) WithConvictionFloorAdjustment(delta int) *Engine {
+	if delta <= 0 {
+		e.convictionFloorAdjustment = nil
+		return e
+	}
+	e.convictionFloorAdjustment = &delta
+	return e
+}
+
+// effectiveConvictionFloor returns the minimum recommendation conviction in
+// effect for the current run: the base constraint plus the periodized
+// adjustment when set, otherwise the base constraint value.
+func (e *Engine) effectiveConvictionFloor() int {
+	if e.convictionFloorAdjustment != nil {
+		return e.constraints.MinRecommendationConviction + *e.convictionFloorAdjustment
+	}
+	return e.constraints.MinRecommendationConviction
 }
 
 // buildPortfolioState assembles the risk.PortfolioState used by the gate.
@@ -708,7 +736,7 @@ func (e *Engine) executeOptimizerBuys(
 	var filteredOrders []domain.Order
 	coverage := make(map[string]int)
 	for _, rec := range recs {
-		if rec.Conviction >= e.constraints.MinRecommendationConviction {
+		if rec.Conviction >= e.effectiveConvictionFloor() {
 			coverage[rec.Symbol]++
 		}
 	}
@@ -816,7 +844,7 @@ func (e *Engine) executeLegacyBuys(
 		if rec.Side != domain.SideBuy {
 			continue
 		}
-		if rec.Conviction < e.constraints.MinRecommendationConviction {
+		if rec.Conviction < e.effectiveConvictionFloor() {
 			continue
 		}
 
