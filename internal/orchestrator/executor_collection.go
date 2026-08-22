@@ -11,10 +11,51 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/retail"
 )
+
+// filterRecommendationsByPeriod is the CharterMode (Phase C2) optional gate
+// applied to raw recommendations after collection. Each recommendation's agent
+// skill is mapped to a charter strategy category (methodology.SkillToStrategyCategory);
+// recs whose category is not in the period's allowed strategy list are dropped.
+//
+// Unknown periods (advisor.AllowedStrategies returns nil) pass through
+// unfiltered; unmapped skills default to all_weather (conservative keep).
+func filterRecommendationsByPeriod(
+	period domain.MarketPeriod,
+	recs []domain.Recommendation,
+	registry domain.AgentRegistry,
+	advisor *methodology.Advisor,
+) []domain.Recommendation {
+	allowed := advisor.AllowedStrategies(period)
+	if allowed == nil || len(recs) == 0 {
+		return recs
+	}
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, id := range allowed {
+		allowedSet[id] = true
+	}
+	skillByAgent := make(map[string]string, len(registry.Agents))
+	for _, a := range registry.Agents {
+		skillByAgent[a.ID] = a.Skill
+	}
+	filtered := make([]domain.Recommendation, 0, len(recs))
+	for _, rec := range recs {
+		if allowedSet[methodology.SkillToStrategyCategory(skillByAgent[rec.Agent])] {
+			filtered = append(filtered, rec)
+		}
+	}
+	if len(filtered) != len(recs) {
+		logging.Info("charter", "period_strategy_filter",
+			"period", string(period),
+			"in", len(recs),
+			"out", len(filtered))
+	}
+	return filtered
+}
 
 func collectRecommendations(ctx context.Context, registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, regime domain.Regime, narrativeEvents []narrative.NarrativeEvent, sessionID string, scratchpad *Scratchpad) ([]domain.Recommendation, []domain.ScreeningReject) {
 	recs := make([]domain.Recommendation, 0)

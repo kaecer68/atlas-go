@@ -77,22 +77,32 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 
 	registry := ctx.MutedAgentFilter.Filter(ctx.Registry, ctx.Plugins)
 
-	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
-	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
-
-	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
-	// Computed post-regime inference so risk-level→adjustment mapping matches
-	// the detected regime. ApplyControl consumes the result later in the pipeline.
 	// ── A4 P1: Period detection from MacroDataSnapshot ──
-	// When a PeriodDetector is wired and macro snapshot has enough indicators,
-	// compute the 7-period classification before macro flow adjustment so
-	// PeriodToRiskLevel can provide finer-grained RiskLevel than the legacy
-	// 3-regime mapping.
+	// Runs before recommendation collection so the CharterMode period filter
+	// (ctx.PeriodStrategyFilter) and the macroflow risk level can both consume
+	// the 7-period classification. No-op when no PeriodDetector is wired
+	// (Phase A behavior preserved).
 	if ctx.PeriodDetector != nil && ctx.MacroDataSnapshot != nil {
 		ind := snapshotToPeriodIndicators(*ctx.MacroDataSnapshot)
 		period := ctx.PeriodDetector.DetectPeriod(ind)
 		ctx.Period = &period
 	}
+
+	regime := ctx.RegimeInference.InferRegime(ctx, registry, quoteBySymbol)
+	raw, rejects := ctx.RecommendationCollection.Collect(ctx.Context, registry, quoteBySymbol, regime, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.SessionID, ctx.Scratchpad)
+
+	// ── CharterMode period→strategy gate (Phase C2) ──
+	// Drops recommendations whose skill maps to a charter strategy category
+	// that is not allowed in the detected period. Runs before momentum-crash
+	// protection / weighting so downstream conviction work is not wasted on
+	// gated recs. nil filter or nil period → pass-through (Phase A).
+	if ctx.PeriodStrategyFilter != nil && ctx.Period != nil {
+		raw = ctx.PeriodStrategyFilter(*ctx.Period, raw, registry)
+	}
+
+	// ── MacroFlow: 宏觀風險調整（憲章 §2 第〇層→第一層）──
+	// Computed post-regime inference so risk-level→adjustment mapping matches
+	// the detected regime. ApplyControl consumes the result later in the pipeline.
 
 	var macroFlowResult *macroflow.AdjustmentResult
 	if ctx.MacroFlow != nil && ctx.MacroDataSnapshot != nil {
@@ -153,6 +163,7 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		GuardOutcomes:        guardOutcomes,
 		ScreeningRejects:     rejects,
 		DarwinianWeights:     weightData,
+		Period:               ctx.Period,
 		TraceSessionID:       ctx.SessionID,
 	}
 }

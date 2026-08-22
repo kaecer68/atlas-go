@@ -65,23 +65,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 		s.plugins.WithHeldPositions(held)
 		s.plugins.WithRecOverrides(loadRecOverrides(s.Sim().ledger))
 	}
-	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:        s.Sim().registry,
-		Quotes:          quotes,
-		Overrides:       s.Sim().policy.PromptOverrides,
-		Policy:          s.Sim().policy.ExecutionPolicy,
-		Plugins:         s.plugins,
-		SessionID:       s.Sim().session.ID,
-		WeightManager:   s.Port().darwinian,
-		Context:         s.Sim().ctx,
-		NarrativeEvents: events,
-		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
-			if s.Risk().clampingLogger != nil {
-				s.Risk().clampingLogger.AppendConvictionEvents(evts)
-			}
-		},
-		Scratchpad: s.Sim().scratchpad,
-	})
+	researchResult := ExecuteWithContext(s.buildExecutionContext(quotes, events))
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
 	finalRecs := researchResult.FinalRecommendations
@@ -160,6 +144,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	s.publishRecommendation("orchestrator", finalRecs)
 
 	tw.Record(6, "sim_exec", "START", nil)
+	// Phase C2: period-driven cash reserve (CharterMode only; no-op otherwise).
+	s.applyCharterReserveCash(researchResult.Period)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)

@@ -33,20 +33,24 @@ type RotationFunc func(
 ) []domain.Recommendation
 
 type Engine struct {
-	constraints       domain.SimulationConstraints
-	optimizer         *portfolio.Optimizer
-	useOptimizer      bool
-	reflexRules       []reflexivity.Rule
-	ctx               context.Context
-	slippageModel     *SlippageModel
-	marketImpactModel *MarketImpactModel
-	taxCalc           *tax.TaiwanTaxCalculator
-	dividends         map[string]float64
-	thresholdEngine   *DynamicThresholdEngine
-	preTradeGate      *risk.PreTradeGate
-	traceWriter       TraceWriter
-	rotationFunc      RotationFunc
-	riskCalculator    RiskCalculator
+	constraints domain.SimulationConstraints
+	// reserveCashFractionOverride, when non-nil, replaces
+	// constraints.ReserveCashFraction for the effective reserve calculation.
+	// Used by CharterMode period-driven cash control (C2).
+	reserveCashFractionOverride *float64
+	optimizer                   *portfolio.Optimizer
+	useOptimizer                bool
+	reflexRules                 []reflexivity.Rule
+	ctx                         context.Context
+	slippageModel               *SlippageModel
+	marketImpactModel           *MarketImpactModel
+	taxCalc                     *tax.TaiwanTaxCalculator
+	dividends                   map[string]float64
+	thresholdEngine             *DynamicThresholdEngine
+	preTradeGate                *risk.PreTradeGate
+	traceWriter                 TraceWriter
+	rotationFunc                RotationFunc
+	riskCalculator              RiskCalculator
 }
 
 // RiskCalculator computes real VaR from portfolio state.
@@ -142,6 +146,30 @@ func (e *Engine) WithRiskCalculator(rc RiskCalculator) *Engine {
 func (e *Engine) WithTraceWriter(tw TraceWriter) *Engine {
 	e.traceWriter = tw
 	return e
+}
+
+// WithReserveCashFraction overrides the reserve cash fraction for subsequent
+// runs (CharterMode period-driven cash control). The fraction is in [0,1] —
+// e.g. 0.45 means 45% of cash stays reserved and only 55% is deployable.
+// Passing a negative value clears the override and restores the base
+// constraint value (Phase A behavior).
+func (e *Engine) WithReserveCashFraction(f float64) *Engine {
+	if f < 0 {
+		e.reserveCashFractionOverride = nil
+		return e
+	}
+	e.reserveCashFractionOverride = &f
+	return e
+}
+
+// effectiveReserveCashFraction returns the reserve fraction in effect for
+// the current run: the per-run override when set, otherwise the base
+// constraint value.
+func (e *Engine) effectiveReserveCashFraction() float64 {
+	if e.reserveCashFractionOverride != nil {
+		return *e.reserveCashFractionOverride
+	}
+	return e.constraints.ReserveCashFraction
 }
 
 // buildPortfolioState assembles the risk.PortfolioState used by the gate.
@@ -685,7 +713,7 @@ func (e *Engine) executeOptimizerBuys(
 		}
 	}
 
-	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
+	maxDeployableCash := cash * (1 - e.effectiveReserveCashFraction())
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
 		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value
@@ -774,7 +802,7 @@ func (e *Engine) executeLegacyBuys(
 		return sortedRecs[i].Reason < sortedRecs[j].Reason
 	})
 
-	maxDeployableCash := cash * (1 - e.constraints.ReserveCashFraction)
+	maxDeployableCash := cash * (1 - e.effectiveReserveCashFraction())
 	maxPositionWeight := e.constraints.MaxPositionWeight
 	if regime == domain.RegimeNeutral {
 		maxPositionWeight = maxPositionWeight * config.GetParametersConfig().Engine.Simulation.NeutralRegimeSizingFactor.Value

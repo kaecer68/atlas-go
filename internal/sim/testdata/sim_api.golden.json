@@ -186,6 +186,12 @@
       "results": "(*Engine)"
     },
     {
+      "name": "WithReserveCashFraction",
+      "params": "(f float64)",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
       "name": "WithRiskCalculator",
       "params": "(rc RiskCalculator)",
       "receiver": "Engine",
@@ -296,6 +302,7 @@
     {
       "fields": [
         "constraints domain.SimulationConstraints",
+        "reserveCashFractionOverride *float64",
         "optimizer *portfolio.Optimizer",
         "useOptimizer bool",
         "reflexRules []reflexivity.Rule",
