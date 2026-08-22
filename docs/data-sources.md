@@ -203,12 +203,19 @@ Use for:
 
 ### FinMind
 
-⚠️ **Status: Limited Availability** (as of 2026-05-13)
+✅ **Status: Operational** (verified 2026-08-22: production `finmind` channel ok)
+
+> 歷史狀態：2026-05-13 曾標記 Limited Availability（HTTP 402 quota 撞牆，見 issue #1465）；2026-08-22 實測 production 正常（Free tier 600 req/hr 內運作）。本地 dev 曾於 2026-08-14 觸發 402，屬 dev 環境 quota 問題，非 production。
 
 FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"` when the account quota is exhausted. This affects:
 - TaiwanStockMonthRevenue (TSMC revenue data)
 - TaiwanStockFinancialStatements
 - TaiwanStockInstitutionalInvestorsBuySell
+
+**八大行庫資料集（R5 替代來源）**：
+- `TaiwanStockGovernmentBankBuySell`（台股八大行庫買賣表）：**Tier: Sponsor（付費）**，Data range 2021-06-30 ~ now，每交易日 23:30 更新
+- Columns: date, stock_id, buy_amount, sell_amount, buy, sell, bank_name
+- 實測（2026-08-22，Free token）：回 0 rows（權限不足）；Sponsor 升級後可取代 TWSE bsr 爬蟲（CAPTCHA 風險，見 Government Flow 段落）——詳見 issue #1659 方案 B
 
 **Rate Limits by Membership Tier:**
 
@@ -286,7 +293,11 @@ FinMind API returns **HTTP 402** with message `"Requests reach the upper limit"`
 
 **為何不用全體券商，而要篩選 8 家核心行庫？**
 
-TWSE 不公布「官股行庫」整體買賣超（它不是三大法人中的獨立類別）。但實務上可透過券商分點資料間接觀測：
+TWSE 不公布「官股行庫」整體買賣超（它不是三大法人中的獨立類別）。但實務上有兩條路取得：
+- **方案 A（現行，TWSE bsr 爬蟲）**：透過券商分點資料間接觀測（CAPTCHA 風險，見下）
+- **方案 B（建議，FinMind Sponsor）**：`TaiwanStockGovernmentBankBuySell` 資料集直接提供八大行庫買賣超（Sponsor tier，2021-06-30 起，免 CAPTCHA）——R5 建議採此方案，詳見 issue #1659
+
+**方案 A 的觀測方法（現行爬蟲）：**
 
 1. **篩選 8 家核心行庫**（依 `docs/specs/government-force-proxy-spec.md`）：
    合庫(8060)、土銀(8030)、臺灣銀(8040)、台企銀(8010)、彰化(8064)、兆豐(8061)、第一金(8011)、華南永昌(8080)
@@ -317,3 +328,4 @@ GovernmentBrokerAggregator（Producer，28h 排程）
 - **資料缺檔處理**：無資料或取不到時 `DataAvailable=false`，trend=neutral，**不寫入零值樣本**（CF-INV-06）
 - **gateway 錯誤處理**：Stale result，不報錯 — 共振模型需區分「無資料」與「資料說中性」
 - **回溯限制**：此通道僅從部署日開始累積，無法回溯歷史（TWSE 分點網頁不保留歷史查詢）
+- **替代方案（FinMind Sponsor）**：`TaiwanStockGovernmentBankBuySell` 提供 2021-06-30 起長歷史，可回溯 R5 所需的公股買賣超（issue #1659 方案 B）
