@@ -322,7 +322,7 @@ func TestJWKSHandlerProfileFromClaims(t *testing.T) {
 		Sub:                 "member-uuid-1",
 		Email:               "member@example.com",
 		Tier:                "premium",
-		MembershipExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(),
+		MembershipExpiresAt: json.RawMessage(fmt.Sprintf("%d", time.Now().Add(30*24*time.Hour).Unix())),
 		Exp:                 time.Now().Add(time.Hour).Unix(),
 	})
 

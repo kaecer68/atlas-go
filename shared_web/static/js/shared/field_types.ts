@@ -4616,7 +4616,7 @@ export interface memberClaims {
   sub: string;
   email: string;
   tier: string;
-  membershipExpiresAt: number;
+  membershipExpiresAt: string;
   exp: number;
 }
 
