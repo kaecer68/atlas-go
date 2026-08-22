@@ -75,6 +75,7 @@
 | `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | MCP roots 變更時觸發 alert | `false` |
 | `FUBON_PROXY_PYTHON` | Fubon proxy Python binary 路徑 | `python3` |
 | `ATLAS_L2_4_AUTO_CRON_ENABLED` | L2.4 auto-cron feature flag | `false` |
+| `ATLAS_CHARTER_MODE` | 憲章驅動時期化策略/現金控制開關（Phase C2：7 時期偵測 → 策略過濾 + 時期現金保留） | `false` |
 | `LLM_ANNOTATOR_API_KEY` | LLM annotator API key（local/CI 測試用；production 必須走 gateway） | 空 |
 | `ATLAS_WARMUP` | 開機熱機開關（設為 `0` 停用） | 空（預設啟用） |
 

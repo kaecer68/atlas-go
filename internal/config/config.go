@@ -76,6 +76,7 @@ type Config struct {
 	AllowLiveBroker                bool // ATLAS_ALLOW_LIVE_BROKER — cmd/atlas/main.go:211 live broker double-gate env
 	AllowHTTPBroker                bool // ATLAS_ALLOW_HTTP_BROKER — cmd/atlas/main.go:214 HTTP broker adapter double-gate env
 	AllowRealSigner                bool // ATLAS_ALLOW_REAL_SIGNER — cmd/atlas/main.go:217 real signer double-gate env
+	CharterMode                    bool // ATLAS_CHARTER_MODE — Phase C2: charter-driven period→strategy/cash wiring (default false)
 
 	Stage3TasksEnabled  bool // STAGE3_TASKS_ENABLED — gates registerStage3Tasks (default true)
 	Stage3AlertsEnabled bool // STAGE3_ALERTS_ENABLED — gates registerStage3AlertTasks (default true)
@@ -148,6 +149,7 @@ func Load() Config {
 		AllowLiveBroker:                envOrBool("ATLAS_ALLOW_LIVE_BROKER", false),
 		AllowHTTPBroker:                envOrBool("ATLAS_ALLOW_HTTP_BROKER", false),
 		AllowRealSigner:                envOrBool("ATLAS_ALLOW_REAL_SIGNER", false),
+		CharterMode:                    envOrBool("ATLAS_CHARTER_MODE", false),
 		Stage3TasksEnabled:             envOrBool("STAGE3_TASKS_ENABLED", true),
 		Stage3AlertsEnabled:            envOrBool("STAGE3_ALERTS_ENABLED", true),
 	}

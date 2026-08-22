@@ -208,6 +208,7 @@
         "ForecastBridge ForecastBridgeStrategy",
         "DirectionalTradeLayer DirectionalTradeWeightProvider",
         "Period *domain.MarketPeriod",
+        "PeriodStrategyFilter func(period domain.MarketPeriod, recs []domain.Recommendation, registry domain.AgentRegistry) []domain.Recommendation",
         "PeriodDetector *portfolio.PeriodDetector",
         "MacroDataSnapshot *marketdata.MacroDataSnapshot"
       ],
@@ -251,6 +252,7 @@
         "ScreeningRejects []domain.ScreeningReject",
         "DarwinianWeights []*portfolio.DarwinianAgentWeight",
         "MacroFlowAdjustment *macroflow.AdjustmentResult",
+        "Period *domain.MarketPeriod",
         "TraceSessionID string"
       ],
       "kind": "struct",

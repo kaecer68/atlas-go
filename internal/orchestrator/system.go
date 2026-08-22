@@ -18,7 +18,9 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/macroflow"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/methodology"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/replay"
@@ -119,11 +121,22 @@ func (s *System) SetDrawdownReporter(fn func(portfolio.DrawdownResult)) {
 	s.drawdownReporter = fn
 }
 
+// charterConfig holds the CharterMode (Phase C2) components: the 7-period
+// detector, the macroflow engine, and the methodology advisor. It is
+// initialized only when cfg.CharterMode is true (NewSystemWithEventBus);
+// nil otherwise, preserving Phase A behavior exactly.
+type charterConfig struct {
+	periodDetector *portfolio.PeriodDetector
+	macroflow      *macroflow.Engine
+	advisor        *methodology.Advisor
+}
+
 // System orchestrates the full simulation loop via a SystemCore and a PluginHost.
 type System struct {
 	*SystemCore
 	host             *PluginHost
 	macroSnapshot    *marketdata.MacroDataSnapshot
+	charter          *charterConfig // nil unless ATLAS_CHARTER_MODE=true (Phase C2)
 	drawdownMu       sync.RWMutex
 	drawdownReporter func(portfolio.DrawdownResult)
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
@@ -355,6 +368,23 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		macroSnapshot: macroSnapshot,
 	}
 
+	// Phase C2: when charter mode is enabled, wire the period detector, the
+	// macroflow engine, and the methodology advisor into the system. These are
+	// injected into every ExecutionContext (RunDailySimulation /
+	// runReplaySimulation) and drive period→strategy filtering + period cash
+	// reserve. nil charter keeps Phase A behavior.
+	if cfg.CharterMode {
+		sys.charter = &charterConfig{
+			periodDetector: portfolio.NewPeriodDetectorWithDefaults(),
+			macroflow:      macroflow.NewEngine(0),
+			advisor:        methodology.NewAdvisor(nil),
+		}
+		logging.Info("orchestrator", "charter_mode_enabled",
+			"period_detector", "defaults",
+			"macroflow", "engine",
+			"advisor", "methodology_rules")
+	}
+
 	sys.Sim().scratchpad = NewScratchpad(sys.Sim().session.ID, cfg.LedgerDir)
 
 	// Wire factor weight engine to event bus for self-evolution.
@@ -491,6 +521,61 @@ func (s *System) publishRecommendation(source string, recs []domain.Recommendati
 	go s.Risk().eventBus.PublishRecommendation(source, recs)
 }
 
+// buildExecutionContext assembles the per-day ExecutionContext for the research
+// pipeline. When CharterMode is active (s.charter != nil), it additionally
+// injects the period detector, macroflow engine, the current macro snapshot,
+// and the period→strategy recommendation gate so ExecuteWithContext computes
+// the 7-period classification, macro-flow adjustment, and period-filtered recs.
+// With a nil charter, the returned context matches Phase A exactly.
+func (s *System) buildExecutionContext(quotes []domain.Quote, events []narrative.NarrativeEvent) ExecutionContext {
+	execCtx := ExecutionContext{
+		Registry:        s.Sim().registry,
+		Quotes:          quotes,
+		Overrides:       s.Sim().policy.PromptOverrides,
+		Policy:          s.Sim().policy.ExecutionPolicy,
+		Plugins:         s.plugins,
+		SessionID:       s.Sim().session.ID,
+		WeightManager:   s.Port().darwinian,
+		Context:         s.Sim().ctx,
+		NarrativeEvents: events,
+		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
+			if s.Risk().clampingLogger != nil {
+				s.Risk().clampingLogger.AppendConvictionEvents(evts)
+			}
+		},
+		Scratchpad: s.Sim().scratchpad,
+	}
+	if s.charter != nil {
+		execCtx.PeriodDetector = s.charter.periodDetector
+		execCtx.MacroFlow = DefaultMacroFlowStrategy{engine: s.charter.macroflow}
+		execCtx.MacroDataSnapshot = s.macroSnapshot
+		advisor := s.charter.advisor
+		execCtx.PeriodStrategyFilter = func(period domain.MarketPeriod, recs []domain.Recommendation, registry domain.AgentRegistry) []domain.Recommendation {
+			return filterRecommendationsByPeriod(period, recs, registry, advisor)
+		}
+	}
+	return execCtx
+}
+
+// applyCharterReserveCash sets the simulation engine's reserve cash fraction
+// from the detected market period (CharterMode, Phase C2):
+// reserve = advisor.CashReserve(period) / 100. When no period was detected,
+// the override is cleared so the base constraint value applies (Phase A).
+func (s *System) applyCharterReserveCash(period *domain.MarketPeriod) {
+	if s.charter == nil {
+		return
+	}
+	if period == nil {
+		s.Sim().engine.WithReserveCashFraction(-1)
+		return
+	}
+	reserve := s.charter.advisor.CashReserve(*period) / 100.0
+	s.Sim().engine.WithReserveCashFraction(reserve)
+	logging.Info("charter", "reserve_cash_set",
+		"period", string(*period),
+		"reserve_fraction", reserve)
+}
+
 func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, error) {
 	s.publishSimulationStart(s.Sim().session.ID, asOf)
 
@@ -551,23 +636,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 		s.plugins.WithHeldPositions(held)
 		s.plugins.WithRecOverrides(loadRecOverrides(s.Sim().ledger))
 	}
-	researchResult := ExecuteWithContext(ExecutionContext{
-		Registry:        s.Sim().registry,
-		Quotes:          quotes,
-		Overrides:       s.Sim().policy.PromptOverrides,
-		Policy:          s.Sim().policy.ExecutionPolicy,
-		Plugins:         s.plugins,
-		SessionID:       s.Sim().session.ID,
-		WeightManager:   s.Port().darwinian,
-		Context:         s.Sim().ctx,
-		NarrativeEvents: events,
-		ConvictionClampingCallback: func(evts []portfolio.ConvictionClampingEvent) {
-			if s.Risk().clampingLogger != nil {
-				s.Risk().clampingLogger.AppendConvictionEvents(evts)
-			}
-		},
-		Scratchpad: s.Sim().scratchpad,
-	})
+	researchResult := ExecuteWithContext(s.buildExecutionContext(quotes, events))
 	regime := researchResult.Regime
 	rawRecs := researchResult.RawRecommendations
 	finalRecs := researchResult.FinalRecommendations
@@ -647,6 +716,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.publishRecommendation("orchestrator", finalRecs)
 
 	tw.Record(6, "sim_exec", "START", nil)
+	// Phase C2: period-driven cash reserve (CharterMode only; no-op otherwise).
+	s.applyCharterReserveCash(researchResult.Period)
 	var result domain.SimulationResult
 	if s.Sim().persistentState != nil {
 		result = s.Sim().engine.RunWithState(s.Sim().persistentState, regime, quotes, finalRecs)
@@ -1082,6 +1153,10 @@ func (s *System) SetRepository(repo repository.OutcomeRepository) {
 
 func QuotesToMacroDataSnapshot(quotes []domain.Quote) narrative.MacroDataSnapshot {
 	data := narrative.MacroDataSnapshot{}
+	// Stamp the snapshot as freshly computed. Without this, macroflow.Engine
+	// treats RecordedAt=0 (1970) as stale and returns nil adjustments, which
+	// would silently disable the CharterMode macro-flow path (Phase C2).
+	data.RecordedAt = time.Now().Unix()
 	for _, q := range quotes {
 		switch q.Symbol {
 		case "US10Y", "^TNX":

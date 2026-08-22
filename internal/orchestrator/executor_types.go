@@ -90,6 +90,13 @@ type ExecutionContext struct {
 	// than the legacy 3-regime mapping.
 	Period *domain.MarketPeriod
 
+	// PeriodStrategyFilter optionally gates raw recommendations by the detected
+	// market period (CharterMode, Phase C2). When non-nil and ctx.Period is set,
+	// it runs right after recommendation collection: recs whose skill maps to a
+	// charter strategy category not allowed in the period are dropped. nil →
+	// Phase A behavior (no filtering).
+	PeriodStrategyFilter func(period domain.MarketPeriod, recs []domain.Recommendation, registry domain.AgentRegistry) []domain.Recommendation
+
 	// PeriodDetector is the optional 7-period market cycle classifier (A4 P1).
 	// When non-nil and MacroDataSnapshot has sufficient indicators, the period
 	// is computed before macro flow adjustment and stored in ctx.Period.
@@ -109,5 +116,6 @@ type ResearchResult struct {
 	ScreeningRejects     []domain.ScreeningReject
 	DarwinianWeights     []*portfolio.DarwinianAgentWeight
 	MacroFlowAdjustment  *macroflow.AdjustmentResult
-	TraceSessionID       string // links to Scratchpad trace for decision provenance
+	Period               *domain.MarketPeriod // detected 7-period classification (CharterMode); nil otherwise
+	TraceSessionID       string               // links to Scratchpad trace for decision provenance
 }
