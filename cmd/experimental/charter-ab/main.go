@@ -20,9 +20,18 @@
 //
 // Output: /tmp/charter-ab/step-<n>.json per step + terminal summary.
 //
+// Phase C4 adds -writeback: each step report is converted into a charter
+// delta (internal/charter/delta.go) and recorded into the baseline policy
+// (internal/baseline writeback.go) through baseline.NewManager. Only
+// significant_enable deltas write runtime constraints; directional_watch /
+// inert / degenerate deltas are recorded as evidence-only promotions (the
+// runtime behavior is never overridden). Re-running the writeback is
+// idempotent.
+//
 // Usage:
 //
 //	go run ./cmd/experimental/charter-ab -start 2026-01-01 -end 2026-08-21
+//	go run ./cmd/experimental/charter-ab -writeback -policy data/state/baseline_policy.json
 package main
 
 import (
@@ -34,9 +43,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
+	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/charter"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -138,7 +149,17 @@ func main() {
 	end := flag.String("end", "2026-08-21", "window end (YYYY-MM-DD)")
 	outDir := flag.String("out", "/tmp/charter-ab", "output directory for per-step JSON")
 	steps := flag.Int("steps", 5, "number of stepwise arms to run (1..5)")
+	writeback := flag.Bool("writeback", false, "write charter A/B deltas back to the baseline policy instead of running the A/B")
+	policyPath := flag.String("policy", "", "baseline policy path for -writeback (default: <workdir>/data/state/baseline_policy.json)")
 	flag.Parse()
+
+	if *writeback {
+		cfg := config.Load()
+		if err := runWriteback(*outDir, *steps, *policyPath, cfg); err != nil {
+			log.Fatalf("charter-ab -writeback: %v", err)
+		}
+		return
+	}
 
 	startDate, err := time.Parse("2006-01-02", *start)
 	if err != nil {
@@ -453,4 +474,74 @@ func sigMark(sig bool) string {
 		return "✅ significant (p<0.05 / CI excludes 0)"
 	}
 	return "➖ not significant"
+}
+
+// ─── writeback mode (Phase C4) ────────────────────────────────────────────
+
+// runWriteback loads the C3 step reports from outDir, converts each into a
+// charter delta (internal/charter/delta.go) and writes them back to the
+// baseline policy at policyPath through baseline.NewManager. It prints a
+// per-record summary, then reloads the policy to confirm the closed loop
+// ("write back → load → verify"). Directional watch / inert / degenerate
+// deltas never override runtime values — the writeback only records evidence
+// (and bumps Version per record, keeping version == len(promotions)+1).
+func runWriteback(outDir string, steps int, policyPath string, cfg config.Config) error {
+	deltas, err := charter.LoadDeltasFromReports(outDir, steps)
+	if err != nil {
+		return fmt.Errorf("load charter deltas: %w", err)
+	}
+	if policyPath == "" {
+		policyPath = filepath.Join(cfg.WorkDir, "data", "state", "baseline_policy.json")
+	}
+
+	before, err := baseline.LoadStrict(policyPath)
+	if err != nil {
+		return fmt.Errorf("load baseline policy %s: %w", policyPath, err)
+	}
+
+	manager := baseline.NewManager(policyPath)
+	next, err := manager.WritebackCharter(deltas, outDir)
+	if err != nil {
+		return fmt.Errorf("charter writeback: %w", err)
+	}
+
+	fmt.Printf("\n=== charter-ab -writeback ===\n")
+	fmt.Printf("policy: %s\n", policyPath)
+	fmt.Printf("version: %d → %d\n", before.Version, next.Version)
+	fmt.Printf("promotions: %d → %d\n", len(before.Promotions), len(next.Promotions))
+	for _, d := range deltas {
+		wasRecorded := false
+		for _, p := range before.Promotions {
+			if p.ExperimentID == d.ExperimentID() {
+				wasRecorded = true
+				break
+			}
+		}
+		action := "skipped (already recorded)"
+		for _, p := range next.Promotions {
+			if p.ExperimentID == d.ExperimentID() && !wasRecorded {
+				action = fmt.Sprintf("appended (status=%s, mutation=%s, version_after=%d)",
+					p.Status, p.MutationType, p.VersionAfter)
+				break
+			}
+		}
+		fmt.Printf("  step %d  %-18s  %-20s  → %s\n", d.Step, d.Switch, d.Verdict, action)
+		fmt.Printf("      evidence: %s\n", d.Evidence)
+	}
+
+	// Closed-loop reload: the policy on disk must load and carry the charter
+	// records (mechanism integrity — runtime behavior is unchanged).
+	reloaded, err := baseline.LoadStrict(policyPath)
+	if err != nil {
+		return fmt.Errorf("reload policy after writeback: %w", err)
+	}
+	charterRecs := 0
+	for _, p := range reloaded.Promotions {
+		if strings.HasPrefix(p.ExperimentID, "charter-ab-") {
+			charterRecs++
+		}
+	}
+	fmt.Printf("reload OK: version=%d promotions=%d (charter records=%d)\n",
+		reloaded.Version, len(reloaded.Promotions), charterRecs)
+	return nil
 }

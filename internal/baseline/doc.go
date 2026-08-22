@@ -16,6 +16,9 @@
 //	policy.go    — Policy struct, defaults, load/save, Promote()
 //	manager.go   — Manager facade coordinating experiment results and policy updates
 //	rollback.go  — Revert(), version resolution, reconstructPolicyAtVersion
+//	writeback.go — Charter A/B delta writeback (Phase C4 evolution loop):
+//	               significant_enable → constraints, directional_watch →
+//	               evidence-only watch promotion, inert/degenerate → finding
 //
 // Runtime enforcement: Trigger (trigger.go) subscribes to EventPositionUpdate
 // and evaluates each position against current policy's simulation constraints.
