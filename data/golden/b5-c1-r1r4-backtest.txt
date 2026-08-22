@@ -1,0 +1,6 @@
+B5 C1 R1-R4 Backtest — Fallback Gate Certificate (C2 進入憑證)
+===========================================================
+Total dates: 100
+Real (non-fallback) days: 100 (100.0%)
+Fallback days: 0
+Gate threshold: 70% → PASS

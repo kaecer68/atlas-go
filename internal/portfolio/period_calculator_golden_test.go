@@ -67,6 +67,8 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 	var results []result
 	changeCount := 0
 	unknownCount := 0
+	fallbackDays := 0
+	realDays := 0
 
 	// Sort dates for stable output.
 	dates := make([]string, 0, len(snapshots))
@@ -104,8 +106,13 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 		govFlowDir := filepath.Join(workDir, "data", "state", "government_flow")
 		calc.EnrichBatch3(&ind, date, sectorIndexDir, govFlowDir)
 
-		// Detect period.
-		newPeriod := detector.DetectPeriod(ind)
+		// Detect period with full assessment (IsFallback metadata).
+		assessment, _ := detector.DetectAssessment(ind)
+		newPeriod := assessment.MarketPeriod
+		// 非 fallback 計數（設計 §3.1.2 step 3）：
+		// fallback = 判為 consolidation 且所有輸入指標為 0/不可用。
+		// 用生產 helper indicatorsHaveData（reflect 全欄位檢查）判定資料支撐。
+		isFallback := newPeriod == domain.PeriodConsolidation && !indicatorsHaveData(ind)
 
 		// Get old period.
 		oldPeriod, hasOld := periodHistory[date]
@@ -128,6 +135,11 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 		if !hasOld || oldPeriod == "" {
 			unknownCount++
 		}
+		if isFallback {
+			fallbackDays++
+		} else {
+			realDays++
+		}
 		results = append(results, r)
 	}
 
@@ -136,6 +148,38 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 	fmt.Printf("Total dates: %d\n", len(results))
 	fmt.Printf("Changed: %d, Unknown (no history): %d, Unchanged: %d\n\n",
 		changeCount, unknownCount, len(results)-changeCount-unknownCount)
+
+	// ─── Fallback gate（設計 §3.1.2 step 3-5）───
+	// 非 fallback 日 / 總日數 ≥ 70% 才算通過（C2 進入憑證）。
+	nonFallbackRatio := 0.0
+	if len(results) > 0 {
+		nonFallbackRatio = float64(realDays) / float64(len(results)) * 100
+	}
+	fmt.Printf("\n── Fallback Gate ──\n")
+	fmt.Printf("Real (non-fallback) days: %d / %d = %.1f%%\n", realDays, len(results), nonFallbackRatio)
+	fmt.Printf("Fallback days (consolidation with no data): %d\n", fallbackDays)
+	const gateMinPct = 70.0
+	gatePass := nonFallbackRatio >= gateMinPct
+	fmt.Printf("Gate: %.0f%% threshold → %s\n", gateMinPct, map[bool]string{true: "PASS ✅", false: "FAIL ❌"}[gatePass])
+	if !gatePass {
+		t.Errorf("fallback gate FAILED: non-fallback ratio %.1f%% < %.0f%% (R2/R3/R4 回填後仍不足，需補 R5/R8)", nonFallbackRatio, gateMinPct)
+	}
+
+	// C2 進入憑證存檔（設計 §3.1.2 step 5）
+	outDir := filepath.Join(workDir, "data", "golden")
+	os.MkdirAll(outDir, 0o755)
+	gatePath := filepath.Join(outDir, "b5-c1-r1r4-backtest.txt")
+	fGate, errGate := os.Create(gatePath)
+	if errGate == nil {
+		defer fGate.Close()
+		fmt.Fprintf(fGate, "B5 C1 R1-R4 Backtest — Fallback Gate Certificate (C2 進入憑證)\n")
+		fmt.Fprintf(fGate, "===========================================================\n")
+		fmt.Fprintf(fGate, "Total dates: %d\n", len(results))
+		fmt.Fprintf(fGate, "Real (non-fallback) days: %d (%.1f%%)\n", realDays, nonFallbackRatio)
+		fmt.Fprintf(fGate, "Fallback days: %d\n", fallbackDays)
+		fmt.Fprintf(fGate, "Gate threshold: %.0f%% → %s\n", gateMinPct, map[bool]string{true: "PASS", false: "FAIL"}[gatePass])
+		t.Logf("saved C2 gate certificate to %s", gatePath)
+	}
 
 	if changeCount > 0 {
 		fmt.Printf("%-12s %-16s %-16s %s\n", "Date", "Old Period", "New Period", "Indicators")
@@ -168,7 +212,6 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 	}
 
 	// Save to file.
-	outDir := filepath.Join(workDir, "data", "golden")
 	os.MkdirAll(outDir, 0o755)
 	outPath := filepath.Join(outDir, "b5-batch1-backtest.txt")
 	f, err := os.Create(outPath)
