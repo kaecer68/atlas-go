@@ -81,6 +81,7 @@
 | `cmd/reconcile-sessions` | PG vs JSONL session summary 對帳 — 對稱差報告 + `-apply` 回填單邊缺口 (B6) | reconcile, ledger, repository, config | ✅ Utility |
 | `cmd/backfill-var-returns` | 將 session summary 聚合進 VaR return 計算 | —（stdlib only） | ⚠️ Utility |
 | `cmd/backfill-margin-history` | TWSE 融資餘額歷史回填（2024-07 起，data/state/margin/*_margin.json，one-shot） | narrative, marketdata, constants | ✅ Utility |
+| `cmd/backfill-period-history` | R9 — period_history/regime_history 歷史回填（macro snapshot 逐日 → enrich → DetectPeriod + stress regime，SQLite/PG upsert，dry-run） | monitoring, portfolio, narrative, ledger, marketdata | ✅ Utility |
 
 ---
 
