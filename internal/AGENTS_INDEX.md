@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：78 個模組（28 S / 32 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：79 個模組（28 S / 33 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
@@ -49,6 +49,7 @@
 |------|---------|
 | `autobacktest` | 自動回測定時任務 |
 | `backtest` | 視窗回測 Window.Run() |
+| `charter` | **v0.0.0.2+ 新** — Phase C3 charter A/B 開關 + 統計（paired t-test / BCa bootstrap）+ per-arm 控制（WithCharterMode） |
 | `capitalflow` | **v0.0.0.32 新** — 七維錢潮雷達（3+2+2 分層）分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源）；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `dailyreport` | **v0.0.0.32 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
 | `eval` | 模型評估指標、可解釋性工具（SK-12~15） |
