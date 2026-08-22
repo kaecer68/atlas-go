@@ -1109,6 +1109,7 @@ type mockStressStore struct {
 	upserted       []ledger.StressRow
 	upsertedGeo    []ledger.GeopoliticalRow
 	upsertedRegime []ledger.RegimeRow
+	upsertedPeriod []ledger.PeriodRow
 	geoRows        []ledger.GeopoliticalRow
 	returnErr      error
 }
@@ -1214,7 +1215,10 @@ func (m *mockStressStore) LoadGeopoliticalHistoryAll(ctx context.Context, limit 
 func (m *mockStressStore) CountSynthetic(ctx context.Context) (map[string]int64, error) {
 	return nil, nil
 }
-func (m *mockStressStore) UpsertPeriod(_ context.Context, _ ledger.PeriodRow) error { return nil }
+func (m *mockStressStore) UpsertPeriod(_ context.Context, row ledger.PeriodRow) error {
+	m.upsertedPeriod = append(m.upsertedPeriod, row)
+	return m.returnErr
+}
 func (m *mockStressStore) LoadPeriodByDate(_ context.Context, _ string) (ledger.PeriodRow, bool, error) {
 	return ledger.PeriodRow{}, false, nil
 }
@@ -1751,4 +1755,187 @@ func TestDashboardAPI_WarmupQuotes_NoFugleKey(t *testing.T) {
 	d := NewDashboardAPIWithGateway(".", ".", nil, NoopFetcher())
 	d.SetQuoteStore(&mockQuoteStore{})
 	d.warmupQuotes() // should not panic
+}
+
+// ---------------------------------------------------------------------------
+// R9: persistPeriodHistory / persistRegimeHistory unit tests.
+// ---------------------------------------------------------------------------
+
+// writeFixtureMacroSnapshots writes `n` dated snapshot files starting at
+// startDate into dir, each with a flat TAIEX series so rolling indicators
+// (TAIEXMA20 etc.) become computable once >= MinDaysTAIEXMA20 files exist.
+func writeFixtureMacroSnapshots(t *testing.T, dir, startDate string, n int) {
+	t.Helper()
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < n; i++ {
+		day := start.AddDate(0, 0, i)
+		snap := marketdata.MacroDataSnapshot{
+			VIX:                marketdata.MacroDataPoint{Symbol: "^VIX", Value: 14},
+			DXY:                marketdata.MacroDataPoint{Symbol: "DX-Y.NYB", Value: 100},
+			US10Y:              marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.2},
+			SOXIndex:           marketdata.MacroDataPoint{Symbol: "^SOX", Value: 6000},
+			TSMADR:             marketdata.MacroDataPoint{Symbol: "TSM", Value: 250},
+			TAIEX:              marketdata.MacroDataPoint{Symbol: "TAIEX", Value: 25000},
+			ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "TAIWAN_FOREIGN", Value: 10},
+			MarketVolume:       marketdata.MacroDataPoint{Symbol: "TSE_VOLUME", Value: 8000},
+			RecordedAt:         day.Unix(),
+		}
+		data, err := json.Marshal(snap)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, day.Format("2006-01-02")+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestDashboardAPI_PersistPeriodHistory covers R9: the live persist path must
+// upsert one period_history row with the snapshot's own date (not today) and
+// run the documented enrich pipeline against on-disk fixtures.
+func TestDashboardAPI_PersistPeriodHistory(t *testing.T) {
+	tmp := t.TempDir()
+	// persistPeriodHistory reads enrich dirs from a.workDir/data/state/*
+	for _, d := range []string{"margin", "sector_index", "government_flow"} {
+		if err := os.MkdirAll(filepath.Join(tmp, "data", "state", d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	macroDir := filepath.Join(tmp, "macro_fixture")
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 30 days of history so TAIEXMA20 becomes computable for the target date.
+	writeFixtureMacroSnapshots(t, macroDir, "2026-07-01", 30)
+
+	store := &mockStressStore{}
+	d := NewDashboardAPIWithGateway(tmp, tmp, nil, NoopFetcher())
+	d.historicalStore = store
+	d.macroIngestor = narrative.NewMacroIngestor(nil, macroDir)
+
+	target, _ := time.Parse("2006-01-02", "2026-08-01")
+	snap := marketdata.MacroDataSnapshot{
+		VIX:                marketdata.MacroDataPoint{Value: 14},
+		DXY:                marketdata.MacroDataPoint{Value: 100},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.2},
+		SOXIndex:           marketdata.MacroDataPoint{Value: 6000},
+		TSMADR:             marketdata.MacroDataPoint{Value: 250},
+		TAIEX:              marketdata.MacroDataPoint{Value: 26000},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 15},
+		MarketVolume:       marketdata.MacroDataPoint{Value: 8500},
+		RecordedAt:         target.Unix(),
+	}
+
+	d.persistPeriodHistory(context.Background(), snap)
+
+	if len(store.upsertedPeriod) != 1 {
+		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))
+	}
+	row := store.upsertedPeriod[0]
+	if row.Date != "2026-08-01" {
+		t.Errorf("row.Date = %q, want 2026-08-01 (snapshot date, not today)", row.Date)
+	}
+	if row.Period == "" {
+		t.Error("row.Period is empty")
+	}
+	if row.IsSynthetic != 0 {
+		t.Errorf("row.IsSynthetic = %d, want 0 (live ingest)", row.IsSynthetic)
+	}
+	if row.Source != "macro_ingest" {
+		t.Errorf("row.Source = %q, want macro_ingest", row.Source)
+	}
+	if row.RecordedAt.IsZero() || row.CapturedAt.IsZero() {
+		t.Error("row timestamps must be set")
+	}
+
+	// The persisted period must equal the documented pipeline output on the
+	// same fixtures (proves enrichment ran and the row is not a hardcoded value).
+	ind := SnapshotToPeriodIndicators(snap)
+	calc := portfolio.NewCalculator()
+	_ = calc.EnrichFromDir(&ind, "2026-08-01", macroDir)
+	want := string(portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind))
+	if row.Period != want {
+		t.Errorf("row.Period = %q, pipeline DetectPeriod = %q", row.Period, want)
+	}
+}
+
+// TestDashboardAPI_PersistPeriodHistory_NoEnrichDirNoPanic covers the honest
+// degradation path: missing enrich dirs must leave indicators at zero and
+// still produce a row (consolidation fallback) instead of panicking.
+func TestDashboardAPI_PersistPeriodHistory_NoEnrichDirNoPanic(t *testing.T) {
+	tmp := t.TempDir() // no data/state subdirs at all
+	store := &mockStressStore{}
+	d := NewDashboardAPIWithGateway(tmp, tmp, nil, NoopFetcher())
+	d.historicalStore = store
+	d.macroIngestor = narrative.NewMacroIngestor(nil, filepath.Join(tmp, "missing_macro"))
+
+	snap := marketdata.MacroDataSnapshot{RecordedAt: unixTimeForTest("2026-08-01")}
+	d.persistPeriodHistory(context.Background(), snap)
+
+	if len(store.upsertedPeriod) != 1 {
+		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))
+	}
+	row := store.upsertedPeriod[0]
+	if row.Date != "2026-08-01" {
+		t.Errorf("row.Date = %q, want 2026-08-01", row.Date)
+	}
+	if row.Period != "consolidation" {
+		t.Errorf("row.Period = %q, want consolidation (all-zero no-data fallback)", row.Period)
+	}
+}
+
+// TestDashboardAPI_PersistRegimeHistory covers R9: the live persist path must
+// upsert one regime_history row derived from the narrative engine's current
+// stress index, normalized to the canonical regime vocabulary.
+func TestDashboardAPI_PersistRegimeHistory(t *testing.T) {
+	store := &mockStressStore{}
+	d := NewDashboardAPIWithGateway(t.TempDir(), t.TempDir(), nil, NoopFetcher())
+	d.historicalStore = store
+
+	snap := marketdata.MacroDataSnapshot{
+		VIX:                marketdata.MacroDataPoint{Value: 45},
+		DXY:                marketdata.MacroDataPoint{Value: 105},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.2},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: -8},
+		RecordedAt:         unixTimeForTest("2026-08-01"),
+	}
+	d.narrativeEngine.UpdateMacro(snap, geopolitical.GeopoliticalRiskScore{Intensity: 25})
+
+	d.persistRegimeHistory(context.Background())
+
+	if len(store.upsertedRegime) != 1 {
+		t.Fatalf("UpsertRegime calls = %d, want 1", len(store.upsertedRegime))
+	}
+	row := store.upsertedRegime[0]
+	if row.Date != "2026-08-01" {
+		t.Errorf("row.Date = %q, want 2026-08-01", row.Date)
+	}
+	idx := d.narrativeEngine.GetCurrentStressIndex()
+	wantRegime := narrative.NormalizeRegime(idx.Regime)
+	if row.Regime != wantRegime {
+		t.Errorf("row.Regime = %q, want %q (NormalizeRegime(%q))", row.Regime, wantRegime, idx.Regime)
+	}
+	if row.Regime != "RISK_ON" && row.Regime != "NEUTRAL" && row.Regime != "RISK_OFF" {
+		t.Errorf("row.Regime = %q, want canonical regime vocabulary", row.Regime)
+	}
+	if row.IsSynthetic != 0 {
+		t.Errorf("row.IsSynthetic = %d, want 0 (live ingest)", row.IsSynthetic)
+	}
+	if row.Source != "macro_ingest" {
+		t.Errorf("row.Source = %q, want macro_ingest", row.Source)
+	}
+	if row.SourceSessionID != "macro_ingest:2026-08-01" {
+		t.Errorf("row.SourceSessionID = %q, want macro_ingest:2026-08-01", row.SourceSessionID)
+	}
+}
+
+func unixTimeForTest(date string) int64 {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		panic(err)
+	}
+	return t.Unix()
 }
