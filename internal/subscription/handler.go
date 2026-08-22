@@ -64,11 +64,44 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux, allowGuest bool) {
 	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
 	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
+	// Track A: go-member 登入後回跳 endpoint — 驗證 JWT（JWKS RS256）並設
+	// HttpOnly session cookie，再 302 到乾淨的 redirect 路徑（移除 URL token）。
+	mux.HandleFunc("GET /api/auth/sso", h.handleSSO)
 	mux.Handle("GET /api/user/profile", mid.Wrap(http.HandlerFunc(h.handleProfile)))
 	mux.Handle("GET /api/user/subscription", mid.Wrap(http.HandlerFunc(h.handleSubscription)))
 	if h.waitlist != nil {
 		mux.HandleFunc("POST /api/waitlist", h.handleWaitlist)
 	}
+}
+
+// handleSSO completes the go-member → atlas session handoff (Track A).
+//
+// Flow: atlas top bar Login → member.goluck.uk/login?redirect=<atlas url>
+// → go-member 登入成功 → redirect 回此端點 ?token=<JWT>&redirect=<path>.
+// Atlas 用 JWTManager（JWKS RS256）驗證 token，設定 HttpOnly session
+// cookie，再 302 到乾淨的 redirect 路徑（URL 中不殘留 token）。
+//
+// 安全：redirect 只允許同源相對路徑（禁止 //、http:// 等 open redirect）。
+func (h *Handler) handleSSO(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, `{"error":"missing token"}`, http.StatusBadRequest)
+		return
+	}
+	if _, err := h.jwt.Verify(token); err != nil {
+		logging.Info("subscription", "sso_invalid_token", "err", err.Error())
+		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+		return
+	}
+	setAuthCookie(w, token)
+
+	redirect := r.URL.Query().Get("redirect")
+	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+		redirect = "/client/home"
+	}
+	// 回傳 JSON 而非 302：前端 fetch 不需要追 redirect（避免 HTML 被當 JSON
+	// 解析失敗），由前端拿到 redirect 後自行跳轉（乾淨 URL、無 token 殘留）。
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "true", "redirect": redirect})
 }
 
 // setAuthCookie writes the HttpOnly token cookie. Shared by /register

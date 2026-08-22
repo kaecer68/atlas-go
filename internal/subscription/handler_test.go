@@ -418,3 +418,64 @@ func TestHandleRegisterProxyConflict(t *testing.T) {
 		t.Errorf("expected conflict error, got %v", resp["error"])
 	}
 }
+
+func TestSSOEndpoint(t *testing.T) {
+	s := newTestStore(t)
+	jwt := NewJWTManager("test-secret", "")
+	h := NewHandler(s, jwt)
+
+	// 有效 token → 設 cookie + JSON redirect
+	user := &User{ID: 1, Email: "sso@test.com", Tier: "registered"}
+	token, err := jwt.Generate(user, time.Hour)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/sso?token="+token+"&redirect=/client/home", nil)
+	rec := httptest.NewRecorder()
+	h.handleSSO(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["ok"] != "true" || resp["redirect"] != "/client/home" {
+		t.Errorf("unexpected resp: %v", resp)
+	}
+	cookies := rec.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == "token" && c.HttpOnly && c.Value == token {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected HttpOnly token cookie to be set")
+	}
+
+	// 缺 token → 400
+	req2 := httptest.NewRequest(http.MethodGet, "/api/auth/sso?redirect=/client/home", nil)
+	rec2 := httptest.NewRecorder()
+	h.handleSSO(rec2, req2)
+	if rec2.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec2.Code)
+	}
+
+	// 無效 token → 401
+	req3 := httptest.NewRequest(http.MethodGet, "/api/auth/sso?token=bad.token.here", nil)
+	rec3 := httptest.NewRecorder()
+	h.handleSSO(rec3, req3)
+	if rec3.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rec3.Code)
+	}
+
+	// open redirect 防護：外部 URL → 預設 /client/home
+	req4 := httptest.NewRequest(http.MethodGet, "/api/auth/sso?token="+token+"&redirect=https%3A%2F%2Fevil.example.com", nil)
+	rec4 := httptest.NewRecorder()
+	h.handleSSO(rec4, req4)
+	var resp4 map[string]string
+	_ = json.NewDecoder(rec4.Body).Decode(&resp4)
+	if resp4["redirect"] != "/client/home" {
+		t.Errorf("open redirect not blocked: %v", resp4["redirect"])
+	}
+}

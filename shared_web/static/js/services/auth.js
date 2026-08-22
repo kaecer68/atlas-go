@@ -145,7 +145,32 @@ export function invalidateAuth() {
  * In GUEST_MODE, every visitor is auto-promoted to anonymous TierFree
  * when no JWT is present so the rest of the app can run unmodified.
  */
+// Track A: go-member 登入回跳 — URL 帶 ?token= 時先交換成 HttpOnly session
+// cookie（/api/auth/sso），再清掉 URL 上的 token 避免殘留。go-member 的
+// email/OAuth 登入流程都會把 token 附在 redirect 上。
+async function consumeSSOTokenIfPresent() {
+  if (typeof window === 'undefined' || !window.location) return;
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  if (!token || token.length < 20) return;
+  const redirect = params.get('redirect') || window.location.pathname + window.location.search.replace(/[?&]token=[^&]*/, '').replace(/[?&]redirect=[^&]*/, '');
+  try {
+    const data = await getJSON('/api/auth/sso?token=' + encodeURIComponent(token) + '&redirect=' + encodeURIComponent(redirect));
+    if (data && data.ok === 'true') {
+      // cookie 已設，跳到乾淨 URL（不含 token）
+      window.location.href = data.redirect || redirect;
+      return;
+    }
+  } catch (e) {
+    // sso 失敗視同未登入，不阻斷瀏覽
+  }
+  try {
+    window.history.replaceState({}, '', redirect);
+  } catch (e) {}
+}
+
 export async function initAuth() {
+  await consumeSSOTokenIfPresent();
   const loggedIn = await isLoggedIn();
   if (!loggedIn) {
     const token = readCookie('token');
