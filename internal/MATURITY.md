@@ -96,7 +96,7 @@
 | `methodology` | ATLAS_METHODOLOGY 憲章→runtime 橋接 — YAML rules loader, Advisor 過濾期別×策略匹配 | `Advisor`, `MethodologyRules` | Wave 11 P0-2 新增；configs/methodology_rules.yaml 為單一來源 |
 ---
 
-## X · Experimental（實驗中）— 12 packages
+## X · Experimental（實驗中）— 13 packages
 
 研究性質模組，API 不穩定，不應被 stable/evolving 模組依賴。
 
@@ -112,6 +112,7 @@
 | `llm/capabilities` | LLM 能力處理器 — 10 個 capability handler（failure_attribution + 9 個新），每個封裝 prompt template + schema-typed I/O + Router 呼叫 | `FailureAttributionHandler`, `RationaleGenerationHandler`, `StrategySummaryHandler`, `PromptLintHandler`, `ScenarioSimulationHandler`, `RiskSurfaceExtractionHandler`, `RegimeExplanationHandler`, `PerformanceForensicsHandler`, `CodeReviewAnnotationHandler`, `SentimentExplanationHandler` | Phase 2 從 1 個擴充至 10 個；Kimi K2.7 已移除（coding plan key 限制 CLI 工具，不可用於 app-level 呼叫） |
 | `mcp/anomaly` | MCP audit event 異常偵測 — rolling-window z-score、per-tool/per-tenant error-rate、in-memory ring buffer | `Detector`, `Store`, `AnomalyEvent` | Wave 11 Phase 4 Direction A：僅供 `cmd/atlas-mcp` 消費，不應被其他 stable/evolving 模組依賴 |
 | `stocktools` | 個股級查詢端點 — quote、fundamentals、chips、technical | `QuoteHandler`, `FundamentalsHandler`, `ChipsHandler`, `TechnicalHandler` | Wave 11 新增；API: /api/stock/*；供 atlas-mcp stock_* tools 使用 |
+| `charter` | 憲章選項與 A/B 統計 — per-run 開關（PeriodOnly/StrategyFilter/MacroFlow/CashReserve/ConvictionFloor）、paired t-test、BCa bootstrap | `Options`, `StepwiseArms`, `PairedTest`, `BCa` | Phase C3 新增（2026-08-22）；實驗性 A/B harness，API 可能調整 |
 ---
 ## A · Archived（封存）— 1 package
 

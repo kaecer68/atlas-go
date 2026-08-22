@@ -49,7 +49,7 @@
 |------|---------|
 | `autobacktest` | 自動回測定時任務 |
 | `backtest` | 視窗回測 Window.Run() |
-| `charter` | **v0.0.0.2+ 新** — Phase C3 charter A/B 開關 + 統計（paired t-test / BCa bootstrap）+ per-arm 控制（WithCharterMode） |
+| `charter` | **v0.0.2.0 新** — Phase C3 charter A/B 開關 + 統計（paired t-test / BCa bootstrap）+ per-arm 控制（WithCharterMode） |
 | `capitalflow` | **v0.0.0.32 新** — 七維錢潮雷達（3+2+2 分層）分解 + 共振強度（`capital_flow_daily` / `capital_flow_summary` MCP tool 來源）；詳見 `docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 |
 | `dailyreport` | **v0.0.0.32 新** — 每日市場報告 JSON 組裝（`daily_report` MCP tool 來源，agent morning briefing 入口） |
 | `eval` | 模型評估指標、可解釋性工具（SK-12~15） |
