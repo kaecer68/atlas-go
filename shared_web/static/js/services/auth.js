@@ -261,8 +261,8 @@ export async function renderNavState() {
  * @returns {string}
  */
 function tierLabelText(tier) {
-  if (tier === 'premium') return 'Premium';
-  if (tier === 'registered') return '已註冊';
+  if (tier === 'premium' || tier === 'pro' || tier === 'platinum') return 'Premium';
+  if (tier === 'registered' || tier === 'basic') return '已註冊';
   return '免費';
 }
 
@@ -329,7 +329,8 @@ export async function renderTopBar() {
     const claims = getClaims() || {};
     const email = claims.email || '會員';
     const tierText = tierLabelText(tier);
-    const tierCls = tier === 'premium' ? 'premium' : tier === 'registered' ? 'registered' : 'free';
+    const tierCls = (tier === 'premium' || tier === 'pro' || tier === 'platinum') ? 'premium'
+      : (tier === 'registered' || tier === 'basic') ? 'registered' : 'free';
     container.innerHTML =
       '<div class="topbar__menu topbar__menu--member">' +
         '<nav aria-label="會員導覽"><ul class="topbar__menu-list">' +
