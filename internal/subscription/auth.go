@@ -63,11 +63,42 @@ type TokenClaims struct {
 // parsed separately from TokenClaims because go-member's sub is a string
 // uuid rather than an int, and it carries a membershipExpiresAt claim.
 type memberClaims struct {
-	Sub                 string `json:"sub"`
-	Email               string `json:"email"`
-	Tier                string `json:"tier"`
-	MembershipExpiresAt int64  `json:"membershipExpiresAt"`
-	Exp                 int64  `json:"exp"`
+	Sub   string `json:"sub"`
+	Email string `json:"email"`
+	Tier  string `json:"tier"`
+	// MembershipExpiresAt 可能是 epoch int64（舊版）或 ISO-8601 string
+	// （go-member 現版，如 "2026-09-19T07:28:40.000Z"）。用 json.RawMessage
+	// 兩者都接受，再由 parseMembershipExpiry 轉成 epoch（驗收實測：
+	// int64 嚴格型別會讓 json.Unmarshal 回 "invalid claims json"，
+	// 導致所有 go-member RS256 token 驗證失敗 —— C-02 既有 bug）。
+	MembershipExpiresAt json.RawMessage `json:"membershipExpiresAt"`
+	Exp                 int64           `json:"exp"`
+}
+
+// parseMembershipExpiry 接受 epoch 秒（數字）或 ISO-8601（string），
+// 回傳 epoch 秒；無法解析時回傳 0（視同無到期限制）。
+func parseMembershipExpiry(raw json.RawMessage) int64 {
+	if len(raw) == 0 {
+		return 0
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err == nil {
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+		if f, err := n.Float64(); err == nil {
+			return int64(f)
+		}
+		return 0
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return 0
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.Unix()
+	}
+	return 0
 }
 
 // JWK (RSA public key) as served by go-member /.well-known/jwks.json.
@@ -238,7 +269,7 @@ func (m *JWTManager) verifyRS256(token string) (*TokenClaims, error) {
 		Sub:                 mc.Sub,
 		Email:               mc.Email,
 		Tier:                string(mapMemberTier(mc.Tier)),
-		MembershipExpiresAt: mc.MembershipExpiresAt,
+		MembershipExpiresAt: parseMembershipExpiry(mc.MembershipExpiresAt),
 		Exp:                 mc.Exp,
 	}, nil
 }
