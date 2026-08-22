@@ -42,8 +42,8 @@
 
 | Endpoint | 檔案 | 顯示位置 |
 |----------|------|---------|
-| `GET /api/admin/live/state` | `internal/admin/live_state.go` ⚠️ | 已於 admin Web 顯示,但獨立 section |
-| `GET /api/admin/live/metrics` | `internal/admin/live_metrics.go` ⚠️ | 獨立 panel |
+| `GET /api/admin/live/state` | `cmd/atlas/admin_routes.go` → `internal/adminapi/deployment/dashboard.go` | 已於 admin Web 顯示,但獨立 section |
+| `GET /api/admin/live/metrics` | `cmd/atlas/admin_routes.go` → `internal/adminapi/deployment/dashboard.go` | 獨立 panel |
 | `GET /api/admin/gateway/health` | `internal/apigateway/admin_handler.go` ⚠️ | 另一個 panel |
 
 admin 進入「live ops」頁需切換三個 section 才能看全 live 狀態,違反「live deployment 應是整體可觀測」設計原則。也讓 on-call 一次看到 deployment 全貌的成本變高。
@@ -354,7 +354,7 @@ W3 final day:  M4 + 4-doc 整合驗收 + runbook
 | `internal/forecast_bridge/` | 新檔 | M4 |
 | `internal/orchestrator/daily_pipeline.go` | 3 次 hook insertion | M3 + M4 |
 | `internal/strategy/directional_trade_layer.go` | ApplySignal 新增 | M4 |
-| `internal/admin/live_deployment_dashboard.go` | 新檔 | M1 |
+| `internal/adminapi/deployment/dashboard.go` | 新檔（2026-06 adminapi/live 拆分後實際位置） | M1 |
 | `admin_web/static/js/pages/live-deployment.js` | 新檔 | M1 |
 | `internal/factor/event_bridge.go` | hardcoded → SQL-driven | M2 |
 | migrations/20260630_add_narrative_taxonomy.sql | 新檔 | M2 |
@@ -388,7 +388,7 @@ M2 ──→ event_bridge SQL-driven
 | Macro data stale 時 macro flow 拒絕 → portfolio 永遠不 rebalance | 中 | 預設保留「若 macro data 超過 7 天 stale,允許以 default RiskLevel=balanced 跑一次」fallback |
 | Forecast bridge 持續失敗 → 大量 warn log | 中 | Circuit breaker(見 3.4.4),防 log spam 也防垃圾 trade signal |
 | M2 event_bridge SQL-driven:慢於 hardcoded mapping | 低 | 加 index(`narrative_taxonomy_factor_map.l1_l2_idx`),SLA 設 50ms p95 |
-| M1 dashboard 30s polling 對 gateway 壓力 | 低 | 共用既有 polling 機制(若 `internal/admin/live_metrics.go` 存在;若不存在,加 simple cache TTL 5s)— **⚠️ 待確認實際位置**,`internal/admin/` 2026-06 後已不存在 |
+| M1 dashboard 30s polling 對 gateway 壓力 | 低 | 共用既有 polling 機制(`internal/adminapi/deployment/dashboard.go` 已提供 handler,2026-08 修正路徑);必要時加 simple cache TTL 5s |
 | 4 個 PR 跨 3 週 → merge conflict 機率 | 中 | 各 M 改檔不重疊;但 `daily_pipeline.go` 同時被 M3 + M4 改,須協調整合 commit |
 
 ---
@@ -431,15 +431,15 @@ M1-M4 完成後,以下項目移交 Phase 4:
 
 ### 7.2 來源程式碼(已存在,本 spec 引用不修改)
 
-> **⚠ 2026-07-02 路徑稽核校正（Oracle 二階稽核後）**：以下 8 條目中 6 條目路徑經 deep-verify 報告 + Oracle 二階稽核驗證修正，2 條目（rows 7-8）原標記「沿用 ✓」為誤判（`internal/admin/` 與 `internal/apigateway/admin_handler.go` 均已不存在，Oracle P0-1）。校正後路徑與現況落差詳見 §7.5 稽核報告。
+> **⚠ 2026-07-02 路徑稽核校正（Oracle 二階稽核後）**：以下 8 條目中 6 條目路徑經 deep-verify 報告 + Oracle 二階稽核驗證修正，2 條目（rows 7-8）原標記「沿用 ✓」為誤判（`internal/admin/` 與 `internal/apigateway/admin_handler.go` 均已不存在，Oracle P0-1）。**2026-08-22 補確認**：rows 7-8 實際位置為 `internal/adminapi/deployment/dashboard.go` + `cmd/atlas/admin_routes.go`（見下方標記 ✅）。校正後路徑與現況落差詳見 §7.5 稽核報告。
 
 - `internal/narrative/types.go`(M2 改: 在 `NarrativeEvent` struct 加 `TaxonomyL1`/`TaxonomyL2` 欄位)
 - `internal/narrative/macro_assessment.go:60` `MacroRiskAssessmentEngine.Assess()`（M3 引用；`determineRiskLevel` 為內部 method，line 158）
 - `internal/orchestrator/executor_pipeline.go`(M3/M4 改: hook 插在 `inferRegime` 與 `collectRecommendations` 之間，line 76-77)
 - `internal/forecast/engine.go`(**✅ 已存在** — `internal/forecast/engine.go`，2026-07-02 ship via PR #905)
 - `internal/strategy/directional_trade_layer.go`(**✅ 已存在** — `internal/strategy/directional_trade_layer.go`，2026-07-02 ship)
-- `internal/admin/live_state.go` / `live_metrics.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/admin/` 已於 2026-06 adminapi/live 拆分後不存在，疑隨之搬移，待確認實際位置
-- `internal/apigateway/admin_handler.go`(M1 引用,**沿用聲明錯誤**) ⚠️ **路徑不存在**：`internal/apigateway/` 內無 `admin_handler.go`，待確認實際位置
+- `internal/admin/live_state.go` / `live_metrics.go`(M1 引用,**沿用聲明錯誤**) ✅ **2026-08-22 已確認**：實際位置為 `internal/adminapi/deployment/dashboard.go`（`/api/admin/live/deployment/dashboard` 由 `cmd/atlas/admin_routes.go` 註冊）
+- `internal/apigateway/admin_handler.go`(M1 引用,**沿用聲明錯誤**) ✅ **2026-08-22 已確認**：admin 路由統一在 `cmd/atlas/admin_routes.go`（`/api/admin/*` 全部），handler 在 `internal/adminapi/`（deployment 子套件）
 - `internal/portfolio/factor_weight_engine.go:288-414`(M2 改: 保留舊 `switch event.Theme`(向下相容無 taxonomy 的舊事件) + 新增 `applyTaxonomyAdjustment`(in-memory map,`map[TaxonomyL1]map[TaxonomyL2]map[FactorType]float64`),2026-07-02 ship)
 
 ### 7.3 提案 / 議題
