@@ -83,6 +83,12 @@ type BootstrapResult struct {
 	CI95High    float64 `json:"ci95_high"`
 	Resamples   int     `json:"resamples"`
 	Significant bool    `json:"significant"` // CI excludes 0
+	// Degenerate marks bootstrap distributions that cannot support a CI:
+	// the resampled statistic never reproduces the observed value (typical
+	// for path-dependent stats like MaxDrawdown, where resampling destroys
+	// the temporal ordering). Such CIs are reported but MUST NOT be read as
+	// significance evidence.
+	Degenerate bool `json:"degenerate"`
 }
 
 // BCaBootstrap computes a bias-corrected-and-accelerated 100*(1-alpha)%
@@ -137,12 +143,20 @@ func BCaBootstrap(baseline, feature []float64, stat func(baseline, feature []flo
 
 	lo := empiricalQuantile(dist, a1)
 	hi := empiricalQuantile(dist, a2)
+	if lo > hi {
+		lo, hi = hi, lo // degenerate distributions can invert the BCa endpoints
+	}
+	// A valid CI brackets the observed statistic. When it does not, the
+	// bootstrap distribution is degenerate (e.g. resampling destroyed the
+	// path structure of a MaxDrawdown) and significance must not be claimed.
+	degenerate := observed < lo || observed > hi
 	return BootstrapResult{
 		Observed:    observed,
 		CI95Low:     lo,
 		CI95High:    hi,
 		Resamples:   resamples,
-		Significant: lo > 0 || hi < 0, // CI excludes 0
+		Significant: !degenerate && (lo > 0 || hi < 0),
+		Degenerate:  degenerate,
 	}
 }
 

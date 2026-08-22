@@ -134,6 +134,31 @@ func TestBCaBootstrapSharpeDiff(t *testing.T) {
 	}
 }
 
+// TestBCaBootstrapDegenerateMaxDrawdown verifies the degenerate guard: for a
+// path-dependent statistic (MaxDrawdown) whose resampled distribution cannot
+// reproduce the observed value, the CI must not claim significance.
+func TestBCaBootstrapDegenerateMaxDrawdown(t *testing.T) {
+	// Feature arm has one deep drawdown late in the window; resampling the
+	// daily returns destroys the path, so bootstrap drawdowns are ~0 while the
+	// observed diff is large — the textbook degenerate case.
+	baseline := make([]float64, 200)
+	feature := make([]float64, 200)
+	for i := 0; i < 200; i++ {
+		baseline[i] = 100 + float64(i) // monotone up, no drawdown
+		feature[i] = 100 + float64(i)
+	}
+	feature[150] = 50 // one deep drawdown in the feature arm
+	// NB: BCaBootstrap takes return-series for SharpeDiff; here we pass equity
+	// curves and the MaxDrawdownDiff statistic.
+	res := BCaBootstrap(baseline, feature, MaxDrawdownDiff, 2000, 0.05)
+	if !res.Degenerate {
+		t.Errorf("expected degenerate flag for path-dependent MaxDrawdown, got %+v", res)
+	}
+	if res.Significant {
+		t.Error("degenerate bootstrap must not claim significance")
+	}
+}
+
 // ─── nonlinear metrics ────────────────────────────────────────────────────
 
 func TestMaxDrawdownKnownInput(t *testing.T) {
