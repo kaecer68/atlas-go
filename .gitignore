@@ -247,3 +247,6 @@ docs/investigations/
 docs/work/
 docs/archive/
 .prime/
+
+# CodeGraph local index (2026-08-22, iMac)
+.codegraph/
