@@ -185,3 +185,59 @@ func TestMarketVolumeProvider_InvalidAmountRow(t *testing.T) {
 		t.Fatal("expected error for non-positive amount, got nil")
 	}
 }
+
+func TestMarketVolumeProvider_FetchDate(t *testing.T) {
+	// FetchDate must request exactly the given date and parse the response.
+	twseResp := twseMIIndexResponse{
+		Stat: "OK",
+		Date: "20260427",
+		Tables: []twseMITable{
+			{},
+			{},
+			{},
+			{},
+			{},
+			{},
+			{
+				Title:  "大盤統計資訊",
+				Fields: []string{"成交統計", "成交金額(元)", "成交股數(股)", "成交筆數"},
+				Data: [][]string{
+					{"1.一般股票", "520,025,000,000", "3,300,000,000", "2,200,000"},
+				},
+			},
+		},
+	}
+
+	var gotDate string
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotDate = r.URL.Query().Get("date")
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(twseResp)
+	}))
+	defer srv.Close()
+
+	provider := NewMarketVolumeProvider()
+	provider.SetHTTPClient(srv.Client())
+	provider.SetRateLimiter(rate.NewLimiter(rate.Inf, 1))
+	provider.baseURL = srv.URL
+
+	result, err := provider.FetchDate(context.Background(), "20260427")
+	if err != nil {
+		t.Fatalf("FetchDate: %v", err)
+	}
+	if gotDate != "20260427" {
+		t.Errorf("requested date = %q, want 20260427", gotDate)
+	}
+	if gotUA != twseBrowserUserAgent {
+		t.Errorf("User-Agent = %q, want full browser UA (TWSE WAF rejects short UAs)", gotUA)
+	}
+	if result.Date != "20260427" {
+		t.Errorf("result date = %q, want 20260427", result.Date)
+	}
+	expected := 520025000000.0 / 100_000_000 // 5200.25 億元
+	if result.MarketVolume != expected {
+		t.Errorf("MarketVolume = %f, want %f", result.MarketVolume, expected)
+	}
+}
