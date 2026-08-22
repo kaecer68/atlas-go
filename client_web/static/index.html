@@ -87,7 +87,7 @@
 }
 </script>
 </head>
-<body>
+<body class="client-shell">
 <a href="#main-content" class="home-skip-link" aria-label="跳至主要內容">跳至主要內容</a>
 <div id="loadingBar"></div>
 <aside id="sidebar" role="complementary" aria-label="側邊導航">
@@ -132,18 +132,30 @@
 </aside>
 <main id="main" role="main">
   <div id="topbar">
-    <div class="flex-center-gap">
-      <button id="menuToggle" aria-label="開啟選單"><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span></button>
-      <h2 id="pageTitle">總覽</h2>
+    <!-- Track A：頂部品牌列（logo + brand + 動態 menu，對齊 atlas-index 風格） -->
+    <div class="topbar__nav-row">
+      <a href="/client/home" class="topbar__brand" aria-label="ATLAS-GO 台股觀測站 首頁">
+        <img src="/assets/img/ATLAS-GO.png" alt="ATLAS-GO 台股觀測站" class="topbar__logo" width="907" height="789" decoding="async">
+        <span class="topbar__brand-text">ATLAS-GO</span>
+      </a>
+      <!-- 動態 menu 容器：renderTopBar() 依 isLoggedIn() 渲染 marketing/member 兩套 -->
+      <div id="topbarMenu" class="topbar__menu-host" aria-live="polite"></div>
     </div>
-    <div class="refresh-pill" id="refreshPill">
-      <span class="dot"></span>
-      <span id="refreshTime">等待更新…</span>
-      <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
-    </div>
-    <div class="role-switcher">
-      <a href="/client/" class="role-link active">投資人平台</a>
-      <a href="/admin/" class="role-link">管理者</a>
+    <!-- 既有 dashboard 控制列（page title + refresh pill + role switcher 保留） -->
+    <div class="topbar__controls-row">
+      <div class="flex-center-gap">
+        <button id="menuToggle" aria-label="開啟選單"><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span></button>
+        <h2 id="pageTitle">總覽</h2>
+      </div>
+      <div class="refresh-pill" id="refreshPill">
+        <span class="dot"></span>
+        <span id="refreshTime">等待更新…</span>
+        <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
+      </div>
+      <div class="role-switcher">
+        <a href="/client/" class="role-link active">投資人平台</a>
+        <a href="/admin/" class="role-link">管理者</a>
+      </div>
     </div>
   </div>
   <div id="content" role="main">
