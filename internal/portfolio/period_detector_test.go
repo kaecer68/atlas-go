@@ -331,3 +331,40 @@ func TestDetectionPriority_TurnaroundDownOverDownturn(t *testing.T) {
 		t.Errorf("Turnaround down should override downturn: got %v, want %v", got, domain.PeriodTurnaroundDown)
 	}
 }
+
+func TestDetectAssessment_IsFallback(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+
+	// 零資料：所有欄位 0 → consolidation + IsFallback=true
+	empty := PeriodIndicators{}
+	a1, err := d.DetectAssessment(empty)
+	if err != nil {
+		t.Fatalf("DetectAssessment empty: %v", err)
+	}
+	if a1.MarketPeriod != domain.PeriodConsolidation {
+		t.Errorf("empty → want consolidation, got %s", a1.MarketPeriod)
+	}
+	if !a1.IsFallback {
+		t.Error("empty indicators → IsFallback should be true (no data fallback)")
+	}
+
+	// 有資料：TAIEX 存在 → 不應是 fallback
+	withData := PeriodIndicators{TAIEXPrice: 23000, TAIEXMA20: 22000, ForeignFuturesOI: 30000, MarketVolume: 4500}
+	a2, err := d.DetectAssessment(withData)
+	if err != nil {
+		t.Fatalf("DetectAssessment withData: %v", err)
+	}
+	if a2.IsFallback {
+		t.Errorf("with data → IsFallback should be false (got period=%s)", a2.MarketPeriod)
+	}
+
+	// 部分資料（只有 VIX）→ 非 fallback
+	partial := PeriodIndicators{VIX: 18.5}
+	a3, err := d.DetectAssessment(partial)
+	if err != nil {
+		t.Fatalf("DetectAssessment partial: %v", err)
+	}
+	if a3.IsFallback {
+		t.Error("partial data (VIX) → IsFallback should be false")
+	}
+}

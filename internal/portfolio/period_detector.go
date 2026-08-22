@@ -10,6 +10,8 @@
 package portfolio
 
 import (
+	"reflect"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/macroflow"
@@ -950,6 +952,12 @@ func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessmen
 			ConditionsHit:       condHit,
 			ConditionsTotal:     condTotal,
 			TriggeredIndicators: indicators,
+			// IsFallback: 判為 consolidation 且整個 PeriodIndicators 無任何
+			// 非零輸入（設計 §3.1.2 step 3：無資料 fallback vs 有指標支撐的
+			// 真實盤整）。consolidation 專屬的 indicators（買賣天數/輪動等）
+			// 可能為零但其他層級有資料（TAIEX/OI/量能）——只要有資料就不算
+			// fallback，故檢查全 struct 而非單一 assess 的 InputAvailable。
+			IsFallback: !indicatorsHaveData(ind),
 		}
 	}
 
@@ -962,6 +970,31 @@ func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessmen
 }
 
 // ─── Downward Compatibility Mappings ───
+
+// indicatorsHaveData reports whether any period indicator carries a non-zero
+// value (float64 / int / bool). Used to distinguish data-backed classifications
+// from zero-data fallbacks: a day with any non-zero input is never "fallback"
+// even if it classifies as consolidation (design §3.1.2 step 3).
+func indicatorsHaveData(ind PeriodIndicators) bool {
+	v := reflect.ValueOf(ind)
+	for i := 0; i < v.NumField(); i++ {
+		switch f := v.Field(i).Interface().(type) {
+		case float64:
+			if f != 0 {
+				return true
+			}
+		case int:
+			if f != 0 {
+				return true
+			}
+		case bool:
+			if f {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // PeriodToRegime maps a seven-period classification to the three-state
 // domain.Regime used by the existing pipeline. This is the bridge that
