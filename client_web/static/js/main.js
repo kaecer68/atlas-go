@@ -89,7 +89,7 @@ export async function switchPage(id, silent) {
     try { loggedIn = await isLoggedIn(); } catch (e) { loggedIn = false; }
     if (!loggedIn) {
       if (typeof window !== 'undefined' && window.history) {
-        window.history.replaceState({ page: 'login' }, '', basePath + '/login');
+        window.history.replaceState({ page: 'login', __atlas: true }, '', basePath + '/login');
       }
       return switchPage('login', true);
     }
@@ -119,7 +119,7 @@ export async function switchPage(id, silent) {
   document.getElementById('pageTitle').textContent = titles[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
-  if (!silent) history.pushState({page: id}, '', basePath + '/' + id);
+  if (!silent) history.pushState({page: id, __atlas: true}, '', basePath + '/' + id);
 }
 
 export function toggleSidebar() {
@@ -645,7 +645,16 @@ if (typeof window !== "undefined") window.toggleTheme = function() {
 
 
 window.addEventListener('popstate', function(e) {
-  if (e.state && e.state.page) {
+  // 只處理 atlas 自己 pushState 的 state，避免跨域返回或第三方 state 誤觸
+  if (e.state && e.state.page && e.state.__atlas === true) {
     switchPage(e.state.page, true);
+  }
+  // 若 state 為 null（例如從 go-member 跨域返回 / bfcache），讓瀏覽器自然恢復，不做 SPA 切換
+});
+
+// bfcache 恢復時重新確認 top bar / 登入狀態，避免跨域跳轉回來後狀態過舊
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) {
+    renderNavState();
   }
 });
