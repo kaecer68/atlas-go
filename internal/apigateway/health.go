@@ -143,14 +143,6 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	return summary
 }
 
-// deriveStatusWithFreshness downgrades an "ok" record to "stale" when its
-// LastFetchAt is older than StaleDataThreshold (the default contract window).
-// Kept as a thin wrapper for callers that do not have a per-channel contract
-// at hand; StatusSummary uses deriveStatusWithContract instead.
-func (u *UnifiedHealthStore) deriveStatusWithFreshness(rec *ChannelHealthRecord) string {
-	return u.deriveStatusWithContract(rec, DefaultChannelContract(""))
-}
-
 // deriveStatusWithContract downgrades an "ok" record to "stale" when its
 // LastFetchAt is older than the channel contract's FreshnessWindow (default:
 // StaleDataThreshold). Other statuses (error, warn, inactive, degraded) pass
