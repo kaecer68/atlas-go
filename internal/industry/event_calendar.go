@@ -278,7 +278,7 @@ func (tec *EventCalendar) filterByQualityGate(events []CalendarEvent) []Calendar
 // ---------------------------------------------------------------------------
 //
 // P1-8: these maps are DERIVED from the single-source internal/taiwanholidays
-// package (verified 2023-2030). They exist as package-level maps so existing
+// package (verified 2023-2040). They exist as package-level maps so existing
 // callers (event rules, tests) keep indexing by year; the canonical data lives
 // in taiwanholidays and cannot drift. Out-of-range years fall back to the
 // conventional dates below (same conventions as before).
