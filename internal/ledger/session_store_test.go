@@ -17,8 +17,10 @@ func TestStoreSessionStoreMethods(t *testing.T) {
 
 	session := domain.ReplaySession{ID: "session-test"}
 	summary := domain.SessionSummary{
-		SessionID: session.ID,
-		Regime:    domain.RegimeNeutral,
+		SessionID:      session.ID,
+		Regime:         domain.RegimeNeutral,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
 	}
 
 	if err := store.RecordSessionSummary(session, summary); err != nil {

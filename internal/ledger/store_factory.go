@@ -256,6 +256,24 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 	}
 }
 
+// NewReportOutcomeStore returns the outcome store used by the performance
+// report. Per the SSoT decision (docs/decisions/2026-08-23-performance-report-ssot.md),
+// PostgreSQL is the single source of truth, so the postgres backend is wrapped
+// in PGFirstOutcomeStore: reads go to PG first and fall back to the JSONL
+// ledger only when PG is unavailable (report marked degraded). All other
+// backends keep NewOutcomeStore semantics.
+func NewReportOutcomeStore(cfg config.Config) (OutcomeStore, error) {
+	switch cfg.StoreBackend {
+	case "postgres":
+		if postgresPool == nil {
+			return nil, fmt.Errorf("report store: postgres backend requires SetPostgresPool before NewReportOutcomeStore")
+		}
+		return NewPGFirstOutcomeStore(NewPostgresLedgerStore(postgresPool), newStore(cfg.LedgerDir)), nil
+	default:
+		return NewOutcomeStore(cfg)
+	}
+}
+
 func NewSessionStore(cfg config.Config) (SessionStore, error) {
 	switch cfg.StoreBackend {
 	case "sqlite":

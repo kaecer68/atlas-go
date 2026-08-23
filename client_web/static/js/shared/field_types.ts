@@ -2765,6 +2765,8 @@ export interface PerformanceReport {
   regime_breakdown: RegimeBreakdown;
   monthly_returns: MonthlyReturn[];
   generated_at: string;
+  source?: string;
+  degraded?: boolean;
 }
 
 export interface PeriodSection {

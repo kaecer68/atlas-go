@@ -1542,7 +1542,9 @@ func (a *DashboardAPI) RegisterBacktestRoutes(mux *http.ServeMux) {
 
 func (a *DashboardAPI) RegisterPerformanceRoutes(mux *http.ServeMux) {
 	cfg := config.Normalize(config.Load())
-	store, err := ledger.NewOutcomeStore(cfg)
+	// SSoT read path (2026-08-23): PG-first with JSONL fallback + degraded
+	// marker for the postgres backend; other backends keep their semantics.
+	store, err := ledger.NewReportOutcomeStore(cfg)
 	if err != nil {
 		logging.Error("dashboard", "performance_store_init_failed", logging.Err(err))
 		store = ledger.NewStore(a.ledgerDir)

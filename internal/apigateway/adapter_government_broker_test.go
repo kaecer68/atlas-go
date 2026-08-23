@@ -205,3 +205,103 @@ func TestGovernmentBrokerChannelAdapter_Metadata(t *testing.T) {
 		t.Error("HasLimiter should be true")
 	}
 }
+
+// TestGovernmentBrokerChannelAdapter_DataState_Missing verifies DataState
+// reports Present=false when no reading file exists for the previous trading
+// day — the "ok 假象" condition (fetch succeeded, no data landed).
+func TestGovernmentBrokerChannelAdapter_DataState_Missing(t *testing.T) {
+	dir := t.TempDir()
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	ds, err := adapter.DataState(context.Background())
+	if err != nil {
+		t.Fatalf("DataState() error = %v", err)
+	}
+	if ds.Present {
+		t.Error("Present = true, want false (no reading file written)")
+	}
+	if ds.NonZero {
+		t.Error("NonZero = true, want false")
+	}
+	if ds.Detail == "" {
+		t.Error("Detail should explain which date/file is missing")
+	}
+}
+
+// TestGovernmentBrokerChannelAdapter_DataState_NonZero verifies DataState
+// reports Present + NonZero for a real reading with total_net != 0.
+func TestGovernmentBrokerChannelAdapter_DataState_NonZero(t *testing.T) {
+	dir := t.TempDir()
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
+	path := filepath.Join(dir, date.Format("20060102")+".json")
+	if err := os.WriteFile(path, []byte(`{"date":"`+date.Format("20060102")+`","total_net":1234,"source":"broker-aggregate"}`), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	ds, err := adapter.DataState(context.Background())
+	if err != nil {
+		t.Fatalf("DataState() error = %v", err)
+	}
+	if !ds.Present {
+		t.Error("Present = false, want true")
+	}
+	if !ds.NonZero {
+		t.Error("NonZero = false, want true (total_net=1234)")
+	}
+}
+
+// TestGovernmentBrokerChannelAdapter_DataState_Zero verifies DataState
+// reports Present but NonZero=false when the reading file has total_net=0 —
+// the value_nonzero contract treats this as failed data.
+func TestGovernmentBrokerChannelAdapter_DataState_Zero(t *testing.T) {
+	dir := t.TempDir()
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
+	path := filepath.Join(dir, date.Format("20060102")+".json")
+	if err := os.WriteFile(path, []byte(`{"date":"`+date.Format("20060102")+`","total_net":0,"source":"broker-aggregate"}`), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	ds, err := adapter.DataState(context.Background())
+	if err != nil {
+		t.Fatalf("DataState() error = %v", err)
+	}
+	if !ds.Present {
+		t.Error("Present = false, want true (file exists)")
+	}
+	if ds.NonZero {
+		t.Error("NonZero = true, want false (total_net=0 fails value_nonzero)")
+	}
+}
+
+// TestGovernmentBrokerChannelAdapter_DataState_NoDataStub verifies a no_data
+// stub file (written by the adapter on the "no stocks processed" path) is
+// reported as present-but-empty, which fails value_nonzero.
+func TestGovernmentBrokerChannelAdapter_DataState_NoDataStub(t *testing.T) {
+	dir := t.TempDir()
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
+	path := filepath.Join(dir, date.Format("20060102")+".json")
+	if err := os.WriteFile(path, []byte(`{"date":"`+date.Format("20060102")+`","status":"no_data"}`), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	ds, err := adapter.DataState(context.Background())
+	if err != nil {
+		t.Fatalf("DataState() error = %v", err)
+	}
+	if !ds.Present {
+		t.Error("Present = false, want true (stub file exists)")
+	}
+	if ds.NonZero {
+		t.Error("NonZero = true, want false (no_data stub has zero total_net)")
+	}
+}
