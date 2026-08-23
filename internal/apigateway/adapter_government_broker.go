@@ -108,6 +108,54 @@ func (a *GovernmentBrokerChannelAdapter) HealthCheck(ctx context.Context) (Healt
 	}, nil
 }
 
+// DataState implements DataStateProvider: it reports the persisted
+// government-broker reading state so contract evaluation can verify data
+// validity (non-zero total_net) instead of trusting a successful fetch.
+//
+// This is the concrete cure for the 2026-08-22 "ok 假象": AggregateDate
+// returns (nil, nil) when every upstream symbol fetch fails (e.g. all
+// captcha'd), the adapter surfaces a no_data stub as a successful fetch,
+// and no reading file is written for the date. DataState then reports
+// Present=false, which fails the contract's value_nonzero SuccessCriteria
+// and downgrades the recorded health from "ok" to "degraded".
+func (a *GovernmentBrokerChannelAdapter) DataState(ctx context.Context) (DataState, error) {
+	date := marketdata.PreviousTradingDay(time.Now(), 1)
+	file := filepath.Join(a.aggregator.DataDir(), date.Format("20060102")+".json")
+
+	info, err := os.Stat(file)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DataState{
+				Present: false,
+				Detail:  "missing reading file for " + date.Format("20060102"),
+			}, nil
+		}
+		return DataState{}, fmt.Errorf("government_broker stat %s: %w", file, err)
+	}
+
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return DataState{}, fmt.Errorf("government_broker read %s: %w", file, err)
+	}
+
+	var reading marketdata.GovernmentFlowReading
+	if err := json.Unmarshal(raw, &reading); err != nil {
+		return DataState{
+			Present:    true,
+			NonZero:    false,
+			RecordedAt: info.ModTime(),
+			Detail:     fmt.Sprintf("%s unparseable reading", file),
+		}, nil
+	}
+
+	return DataState{
+		Present:    true,
+		NonZero:    reading.TotalNet != 0,
+		RecordedAt: info.ModTime(),
+		Detail:     fmt.Sprintf("%s total_net=%d", file, reading.TotalNet),
+	}, nil
+}
+
 // RateLimit returns the per-symbol rate limiter used by the aggregator.
 func (a *GovernmentBrokerChannelAdapter) RateLimit() *rate.Limiter {
 	return a.limiter

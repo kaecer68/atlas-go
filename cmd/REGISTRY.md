@@ -131,6 +131,7 @@
 |--------|------|---------------------|------|
 | `cmd/check-maturity` | CI 檢查所有 internal doc.go 有 Maturity tag | —（stdlib only） | ✅ Stable |
 | `cmd/check-data-health` | Replay CSV 健康檢查（日期範圍、延遲天數、近 14 日缺日偵測；缺日/延遲時 exit 1） | config, marketdata, replay | ✅ Utility |
+| `cmd/check-channel-contracts` | Channel 資料契約完整性/語意一致性檢查（channelIDs 覆蓋、alias 衝突、file-state 契約一致性） | apigateway | ✅ Utility |
 | `cmd/check-persistence-format` | 掃描 data/state 持久性格式分類 | domain | ✅ Utility |
 | `cmd/cleanup-channel-health` | 清理過期 alerts | domain, monitoring | ✅ Utility |
 | `cmd/parameter-health-check` | 參數品質報告（citation/todo/calibrated/evidence 等級） | —（stdlib only） | ✅ Utility |

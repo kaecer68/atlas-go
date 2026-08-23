@@ -23,6 +23,10 @@ import (
 //     auto_daily_simulation). 48h gives a full interval of slack.
 //   - Channels that fail to refresh for 2x their normal interval almost
 //     certainly have a real problem (scheduler drift, upstream outage, etc).
+//
+// Per-channel override: a channel's ChannelContract.FreshnessWindow replaces
+// this global for that channel (see channel_contract.go and
+// deriveStatusWithContract). Zero/unspecified windows inherit this constant.
 const StaleDataThreshold = 48 * time.Hour
 
 // UnifiedHealthStore wraps the local ChannelHealthStore (relocated from
@@ -106,14 +110,17 @@ func (u *UnifiedHealthStore) ChannelLatencyMs(channelID string) int64 {
 
 // StatusSummary returns a summary of all channel health statuses.
 //
-// Freshness-aware: channels whose status is "ok" but whose LastFetchAt is older
-// than StaleDataThreshold (48h by default) are downgraded to "stale" by
-// deriveStatusWithFreshness. This catches the silent-failure pattern reported
-// in Issue #1086 where channels reported "ok" (live API ping worked) but had
-// not actually been refreshed in 66+ days.
+// Contract-aware: channels whose status is "ok" but whose LastFetchAt is older
+// than the channel's contract FreshnessWindow (StaleDataThreshold 48h by
+// default) are downgraded to "stale" by deriveStatusWithContract. This
+// catches the silent-failure pattern reported in Issue #1086 where channels
+// reported "ok" (live API ping worked) but had not actually been refreshed in
+// 66+ days. Per-channel windows let fast channels (intraday quotes) stale out
+// sooner and slow channels (twse_replay, 72h) stay ok longer.
 func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	ids := channelIDs()
 	summary := make(map[string]HealthSummary)
+	contracts := ChannelContracts()
 
 	for _, id := range ids {
 		rec := u.store.Get(id)
@@ -127,7 +134,7 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 
 		summary[id] = HealthSummary{
 			ChannelID: id,
-			Status:    u.deriveStatusWithFreshness(rec),
+			Status:    u.deriveStatusWithContract(rec, contracts.Contract(id)),
 			LastFetch: rec.LastFetchAt,
 			LastError: rec.LastError,
 		}
@@ -137,14 +144,23 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 }
 
 // deriveStatusWithFreshness downgrades an "ok" record to "stale" when its
-// LastFetchAt is older than StaleDataThreshold. Other statuses (error, warn,
-// inactive) pass through unchanged — they're already alerting on real failures.
+// LastFetchAt is older than StaleDataThreshold (the default contract window).
+// Kept as a thin wrapper for callers that do not have a per-channel contract
+// at hand; StatusSummary uses deriveStatusWithContract instead.
+func (u *UnifiedHealthStore) deriveStatusWithFreshness(rec *ChannelHealthRecord) string {
+	return u.deriveStatusWithContract(rec, DefaultChannelContract(""))
+}
+
+// deriveStatusWithContract downgrades an "ok" record to "stale" when its
+// LastFetchAt is older than the channel contract's FreshnessWindow (default:
+// StaleDataThreshold). Other statuses (error, warn, inactive, degraded) pass
+// through unchanged — they're already alerting on real failures.
 //
 // Returns "stale" if the record is "ok" AND LastFetchAt parses as RFC3339 AND
-// time.Since() exceeds StaleDataThreshold. Unparseable timestamps or empty
-// LastFetchAt keep the original status — the channel is broken, but not
-// because of staleness, so mislabeling as "stale" would mislead on-call.
-func (u *UnifiedHealthStore) deriveStatusWithFreshness(rec *ChannelHealthRecord) string {
+// time.Since() exceeds the window. Unparseable timestamps or empty LastFetchAt
+// keep the original status — the channel is broken, but not because of
+// staleness, so mislabeling as "stale" would mislead on-call.
+func (u *UnifiedHealthStore) deriveStatusWithContract(rec *ChannelHealthRecord, contract ChannelContract) string {
 	if rec == nil {
 		return "unknown"
 	}
@@ -158,7 +174,11 @@ func (u *UnifiedHealthStore) deriveStatusWithFreshness(rec *ChannelHealthRecord)
 	if err != nil {
 		return rec.Status
 	}
-	if time.Since(ts) > StaleDataThreshold {
+	window := contract.FreshnessWindow
+	if window <= 0 {
+		window = StaleDataThreshold
+	}
+	if time.Since(ts) > window {
 		return "stale"
 	}
 	return rec.Status
@@ -195,6 +215,13 @@ func (u *UnifiedHealthStore) CheckHealth(ctx context.Context, registry *ChannelR
 				CheckType: status.CheckType,
 			}
 		}
+
+		// Apply the channel contract: an "ok" result is downgraded to
+		// "degraded" when the contract requires data-level validation
+		// (file_state / value_nonzero) and the persisted data state fails
+		// the SuccessCriteria. This stops file-based channels from reporting
+		// ok on file existence alone (government_broker ok 假象, 2026-08-22).
+		status = EvaluateContractHealth(ctx, ChannelContracts().Contract(id), provider, status)
 
 		results[id] = status
 		_ = u.Record(id, status.Status, status.LastError)

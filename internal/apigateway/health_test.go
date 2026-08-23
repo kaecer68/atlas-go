@@ -312,3 +312,111 @@ func TestHealthSummary_Fields(t *testing.T) {
 		t.Errorf("LastError = %q, want none", hs.LastError)
 	}
 }
+
+// TestUnifiedHealthStore_StatusSummary_ContractWindow verifies that
+// StatusSummary's stale downgrade uses the per-channel contract
+// FreshnessWindow rather than only the global 48h threshold.
+func TestUnifiedHealthStore_StatusSummary_ContractWindow(t *testing.T) {
+	s := newTestHealthStore(t)
+
+	// A 3-hour-old "ok" record for a channel with a 2h contract window
+	// must downgrade to stale even though it is well under 48h.
+	s.store.data["fast_channel"] = &ChannelHealthRecord{
+		Status:      "ok",
+		LastFetchAt: time.Now().Add(-3 * time.Hour).Format(time.RFC3339),
+	}
+	fastContract := ChannelContract{
+		ChannelID:       "fast_channel",
+		ExpectedRefresh: time.Hour,
+		FreshnessWindow: 2 * time.Hour,
+	}
+	if got := s.deriveStatusWithContract(s.store.data["fast_channel"], fastContract); got != "stale" {
+		t.Errorf("fast_channel status = %q, want stale (3h old vs 2h contract window)", got)
+	}
+
+	// A 60-hour-old "ok" record for a channel with a 100h contract window
+	// must stay ok even though it is over the global 48h threshold.
+	s.store.data["slow_channel"] = &ChannelHealthRecord{
+		Status:      "ok",
+		LastFetchAt: time.Now().Add(-60 * time.Hour).Format(time.RFC3339),
+	}
+	slowContract := ChannelContract{
+		ChannelID:       "slow_channel",
+		ExpectedRefresh: 24 * time.Hour,
+		FreshnessWindow: 100 * time.Hour,
+	}
+	if got := s.deriveStatusWithContract(s.store.data["slow_channel"], slowContract); got != "ok" {
+		t.Errorf("slow_channel status = %q, want ok (60h old but within 100h contract window)", got)
+	}
+}
+
+// TestUnifiedHealthStore_StatusSummary_ContractWindowFallback verifies that a
+// contract with an unset window inherits the global StaleDataThreshold.
+func TestUnifiedHealthStore_StatusSummary_ContractWindowFallback(t *testing.T) {
+	s := newTestHealthStore(t)
+	rec := &ChannelHealthRecord{
+		Status:      "ok",
+		LastFetchAt: time.Now().Add(-(StaleDataThreshold + time.Hour)).Format(time.RFC3339),
+	}
+	contract := DefaultChannelContract("x") // FreshnessWindow == StaleDataThreshold
+	if got := s.deriveStatusWithContract(rec, contract); got != "stale" {
+		t.Errorf("status = %q, want stale (beyond global threshold with default window)", got)
+	}
+}
+
+// TestUnifiedHealthStore_CheckHealth_ContractDegradesFakeOK is the
+// government_broker ok 假象 regression test: a file-state channel whose
+// HealthCheck returns ok but whose persisted data fails the contract's
+// value_nonzero SuccessCriteria must be downgraded to "degraded" by
+// CheckHealth (and recorded into the store).
+func TestUnifiedHealthStore_CheckHealth_ContractDegradesFakeOK(t *testing.T) {
+	s := newTestHealthStore(t)
+	g := newTestGateway(t)
+
+	provider := &contractTestProvider{
+		hs: HealthStatus{Status: "ok", CheckType: "readiness"},
+		ds: DataState{Present: true, NonZero: false, Detail: "20260821.json total_net=0"},
+	}
+	g.registry.Register("government_broker", provider)
+
+	results := s.CheckHealth(context.Background(), g.registry)
+	got, ok := results["government_broker"]
+	if !ok {
+		t.Fatal("government_broker missing from CheckHealth results")
+	}
+	if got.Status != "degraded" {
+		t.Errorf("government_broker status = %q, want degraded (ok 假象: zero total_net must not report ok)", got.Status)
+	}
+	if got.LastError == "" {
+		t.Error("degraded result should carry the data-state reason")
+	}
+
+	// The corrected status must also be recorded into the store so the
+	// dashboard (StatusSummary) sees it.
+	rec := s.Get("government_broker")
+	if rec == nil {
+		t.Fatal("government_broker health record missing after CheckHealth")
+	}
+	if rec.Status != "degraded" {
+		t.Errorf("recorded status = %q, want degraded", rec.Status)
+	}
+}
+
+// TestUnifiedHealthStore_CheckHealth_ContractKeepsValidOK verifies the
+// opposite direction: a file-state channel whose data satisfies the contract
+// stays ok.
+func TestUnifiedHealthStore_CheckHealth_ContractKeepsValidOK(t *testing.T) {
+	s := newTestHealthStore(t)
+	g := newTestGateway(t)
+
+	provider := &contractTestProvider{
+		hs: HealthStatus{Status: "ok", CheckType: "readiness"},
+		ds: DataState{Present: true, NonZero: true, Detail: "20260821.json total_net=1234"},
+	}
+	g.registry.Register("government_broker", provider)
+
+	results := s.CheckHealth(context.Background(), g.registry)
+	if got := results["government_broker"]; got.Status != "ok" {
+		t.Errorf("government_broker status = %q, want ok (non-zero total_net satisfies value_nonzero)", got.Status)
+	}
+}
