@@ -367,6 +367,20 @@ jobs:
   # Use paths-filter to skip heavy service containers (postgres+redis) for
   # PRs that don't touch the database layer, and to skip heavy build/test/lint
   # jobs for PRs that only touch documentation/markdown.
+  #
+  # Scope contract (2026-08-23, CI quality fix — PR #1666 regression):
+  # the `integration` filter decides WHEN this job runs (db-layer changes),
+  # while the run step executes the full suite with `-tags=integration`.
+  # Real-data tests must therefore be deterministic in BOTH worlds:
+  #   - real-data tests (e.g. internal/marketdata sector_index RealFixture)
+  #     are gated behind `//go:build integration` so normal `go test ./...`
+  #     never compiles them, and they SKIP (never fail) when the repo-root
+  #     fixture is absent — no parent-of-checkout probing, which is what
+  #     made the old test pick up CI workspace leftovers and fail PRs that
+  #     only touched internal/repository.
+  #   - any new environment-dependent test must either carry the integration
+  #     build tag or skip deterministically; never probe outside the repo
+  #     root for gitignored runtime data.
   changes:
     runs-on: ubuntu-latest
     permissions:
