@@ -142,11 +142,19 @@ function renderThemeChips(themes) {
 // navigateToCausalityTheme jumps to the causality page pre-filtered by a
 // trigger theme. The theme is stashed on window._pendingCausalityFilter so
 // loadCapitalCausality can apply it after the page switch.
+// 2026-08-23：錢潮因果頁已遷移到 client_web（/client/capital-causality）。
+// admin shell（capital_models 所在處）沒有 causality page div → 改為整頁
+// 跳轉到 client SPA，並用 ?theme= query 帶初始主題（client 端
+// loadCapitalCausality 讀取）。client shell 才走站內 switchPage。
 function navigateToCausalityTheme(theme) {
   window._pendingCausalityFilter = theme;
-  if (typeof window.switchPage === 'function') {
-    window.switchPage('capital_causality');
+  const isClientShell = typeof document !== 'undefined'
+    && document.body && document.body.classList.contains('client-shell');
+  if (isClientShell && typeof window.switchPage === 'function') {
+    window.switchPage('capital-causality');
+    return;
   }
+  window.location.href = '/client/capital-causality?theme=' + encodeURIComponent(theme);
 }
 
 // wireThemeChips attaches click handlers after the models list renders.

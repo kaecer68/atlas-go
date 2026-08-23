@@ -17,15 +17,15 @@
 
 /** 不需登入即可瀏覽的頁面（client 內）。 */
 export const PUBLIC_PAGES = [
-  'login', 'register', 'errors/404',
+  'errors/404',
   // 公開內容頁（後端對應 endpoint 皆為 shared.Get 公開 API）
   'home', 'capital_board', 'stock-quote', 'narrative', 'crossmarket',
-  'industry', 'retail_sentiment', 'pipeline', 'strategies', 'methodology',
-  'mcp', 'performance-report', 'my-signals',
+  'industry', 'retail_sentiment', 'strategies', 'methodology',
+  'my-signals', 'capital-causality',
 ];
 
 /** 明確需要會員資料 / 付費才可進入的頁面 → gate 強制登入。 */
-export const GATED_PAGES = ['portfolio', 'premium'];
+export const GATED_PAGES = ['premium'];
 
 /**
  * 判定某個 page id 是否需登入。
@@ -37,18 +37,19 @@ export function pageRequiresLogin(pageId) {
 }
 
 /**
- * Gate：gated 頁面且未登入 → 導向 login。
- * 回傳 true 表示「已擋下並導向 login」，false 表示可繼續。
+ * Gate：gated 頁面且未登入 → 導向 go-member 登入（login/register 頁已
+ * 移除，由 member.goluck.uk 接管）。回傳 true 表示「已擋下並導向 member
+ * 登入」，false 表示可繼續。
  *
  * @param {string} pageId
  * @param {() => Promise<boolean>} isLoggedInFn
- * @param {(id: string) => void} switchPageFn
+ * @param {() => void} redirectFn  導向 go-member 登入的函式
  * @returns {Promise<boolean>}
  */
-export async function runLoginGate(pageId, isLoggedInFn, switchPageFn) {
+export async function runLoginGate(pageId, isLoggedInFn, redirectFn) {
   if (!pageRequiresLogin(pageId)) return false;
   const loggedIn = await isLoggedInFn();
   if (loggedIn) return false;
-  switchPageFn('login');
+  if (typeof redirectFn === 'function') redirectFn();
   return true;
 }

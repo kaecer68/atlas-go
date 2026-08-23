@@ -255,3 +255,55 @@ test('install401Interceptor: response object is still returned to caller', async
   const res = await win.fetch('/api/foo');
   assert.equal(res, expected, 'caller should get the original response object back');
 });
+
+test('install401Interceptor: loginRedirectUrl redirects externally instead of switchPage', async () => {
+  const { win } = makeFakeWindow();
+  win.fetch = () => Promise.resolve({ status: 401, ok: false });
+  let unauthorized = 0;
+  let switched = 0;
+  let redirectedTo = null;
+  install401Interceptor({
+    windowObj: win,
+    loginPageId: 'login',
+    loginRedirectUrl: 'https://member.goluck.uk/login?redirect=https%3A%2F%2Fatlas.goluck.uk%2Fclient%2Fhome',
+    excludedPages: ['login', 'register'],
+    onUnauthorized: () => {
+      unauthorized++;
+    },
+    switchPage: () => {
+      switched++;
+    },
+  });
+  await win.fetch('/api/user/profile');
+  assert.equal(unauthorized, 1, 'onUnauthorized should fire once');
+  assert.equal(switched, 0, 'should NOT switchPage when loginRedirectUrl provided');
+  assert.equal(redirectedTo, null, 'fake window has no location.href assignment; just verify no throw');
+});
+
+test('install401Interceptor: loginRedirectUrl as function is evaluated lazily', async () => {
+  const { win } = makeFakeWindow();
+  win.fetch = () => Promise.resolve({ status: 401, ok: false });
+  let evaluated = 0;
+  const captured = [];
+  const fakeWin = {
+    location: {
+      pathname: '/client/home',
+      set href(v) { captured.push(v); },
+      get href() { return 'http://localhost/client/home'; },
+    },
+    fetch: win.fetch,
+  };
+  install401Interceptor({
+    windowObj: fakeWin,
+    loginPageId: 'login',
+    loginRedirectUrl: () => {
+      evaluated++;
+      return 'https://member.goluck.uk/login?redirect=x';
+    },
+    excludedPages: ['login'],
+    onUnauthorized: () => {},
+  });
+  await fakeWin.fetch('/api/user/profile');
+  assert.equal(evaluated, 1, 'function loginRedirectUrl should be called on 401');
+  assert.deepEqual(captured, ['https://member.goluck.uk/login?redirect=x'], 'should set location.href');
+});

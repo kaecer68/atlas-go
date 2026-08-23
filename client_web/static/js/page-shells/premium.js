@@ -46,7 +46,7 @@ export const template = `
     <div class="premium-mcp panel">
       <h3>MCP 外部 AI 整合</h3>
       <p>Premium 用戶可將 atlas-mcp 接入 Claude Desktop、OpenClaw、OpenCode 等外部 AI，直接透過自然語言查詢市場狀態、策略訊號與風險評估。</p>
-      <p>升級後您的 MCP token 將自動啟用全部 80+ 工具權限，詳見 <a href="/client/mcp" data-page="mcp" onclick="event.preventDefault();window.switchPage('mcp')">MCP 整合指南</a>。</p>
+      <p>升級後您的 MCP token 將自動啟用全部 80+ 工具權限，詳見 <a href="https://member.goluck.uk/mcp" target="_blank" rel="noopener">MCP 整合指南</a>。</p>
     </div>
   </div>
 `;

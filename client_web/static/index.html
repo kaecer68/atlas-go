@@ -108,23 +108,16 @@
       <a data-page="retail_sentiment" href="/client/retail_sentiment">散戶情緒</a>
     </div>
     <div class="nav-section">
-      <span class="nav-group-label">策略</span>
-      <a data-page="pipeline" href="/client/pipeline">投資管線</a>
-      <a data-page="portfolio" href="/client/portfolio">組合持倉</a>
-    </div>
-    <div class="nav-section">
       <span class="nav-group-label">更多</span>
+      <a data-page="capital-causality" href="/client/capital-causality">錢潮因果</a>
       <a data-page="strategies" href="/client/strategies">投資心法</a>
       <a data-page="methodology" href="/client/methodology">方法論：為什麼</a>
-      <a data-page="mcp" href="/client/mcp">MCP 整合</a>
-      <a data-page="performance-report" href="/client/performance-report">績效報告</a>
     </div>
     <div class="nav-section" id="navAccountSection">
       <span class="nav-group-label">帳戶</span>
       <a data-page="my-signals" href="/client/my-signals" class="nav-auth-item nav-user hidden">我的追蹤</a>
-      <a data-page="login" href="/client/login" class="nav-auth-item nav-guest">登入</a>
-      <a data-page="register" href="/client/register" class="nav-auth-item nav-guest">註冊</a>
       <a data-page="premium" href="/client/premium" class="nav-auth-item nav-user hidden">升級 <span id="navTierBadge" class="tier-badge tier-free">免費</span></a>
+      <a href="https://member.goluck.uk/login" class="nav-auth-item nav-guest">登入</a>
       <button type="button" id="navLogoutBtn" class="nav-auth-item nav-user hidden">登出</button>
     </div>
   </nav>
@@ -162,19 +155,19 @@
     <div class="page active" id="page-home"><div id="home-root" class="editorial-home"></div></div>
     <div class="page" id="page-stock-quote" data-page-src="stock-quote"></div>
     <div class="page" id="page-narrative" data-page-src="narrative"></div>
-    <div class="page" id="page-pipeline" data-page-src="pipeline"></div>
-    <div id="page-portfolio" class="page" data-page-src="portfolio"></div>
+    <div class="page" id="page-capital-causality">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        錢潮因果頁顯示 24 個 narrative template 的因果鏈展開。每個 template 都有 trigger_theme（自動偵測）、required_region（地理限制）、hit_rate（歷史命中率）。點擊展開看 steps — 從訊號偵測到板塊結論的完整推導。
+      </details>
+      <div id="capitalCausalityContent" class="empty loading">載入中…</div>
+    </div>
     <div class="page" id="page-crossmarket" data-page-src="crossmarket"></div>
     <div class="page" id="page-industry" data-page-src="industry"></div>
     <div class="page" id="page-retail_sentiment" data-page-src="retail_sentiment"></div>
     <div class="page" id="page-strategies" data-page-src="strategies"></div>
     <div class="page" id="page-capital_board" data-page-src="capital_board"></div>
-    <div class="page" id="page-login" data-page-src="login"></div>
-    <div class="page" id="page-register" data-page-src="register"></div>
     <div class="page" id="page-premium" data-page-src="premium"></div>
-    <div class="page" id="page-mcp" data-page-src="mcp"></div>
     <div class="page" id="page-methodology" data-page-src="methodology"></div>
-    <div class="page" id="page-performance-report" data-page-src="performance-report"></div>
     <div class="page" id="page-errors/404" data-page-src="errors/404"></div>
     <div class="page" id="page-my-signals" data-page-src="my-signals"></div>
   </div>

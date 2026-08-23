@@ -26,6 +26,7 @@ const PAGES = [
   { id: 'capital_board',       title: '七大勢力看板' },
   { id: 'stock-quote',         title: '個股快查' },
   { id: 'strategies',          title: '投資心法' },
+  { id: 'capital-causality',   title: '錢潮因果' },
 ];
 
 for (const { id, title } of PAGES) {
@@ -47,6 +48,21 @@ test('removed evolution_panel deep-link falls to 404', async ({ page }) => {
   const body = await page.locator('body').innerText();
   expect(body).toContain('找不到這個頁面');
 });
+
+// 2026-08-23 遷移刪除的頁面：login/register/mcp 刪除、pipeline/portfolio/
+// performance-report 遷移到 admin、capital_causality 改 id 為 capital-causality。
+const REMOVED_PATHS = [
+  '/client/login', '/client/register', '/client/mcp',
+  '/client/pipeline', '/client/portfolio', '/client/performance-report',
+  '/client/capital_causality',
+];
+for (const path of REMOVED_PATHS) {
+  test(`removed page deep-link ${path} falls to 404`, async ({ page }) => {
+    await installAuthMocks(page);
+    await page.goto(path);
+    await expect(page.locator('#pageTitle')).toHaveText('404', { timeout: 15000 });
+  });
+}
 
 test('sidebar nav click routes to correct page', async ({ page }) => {
   await installAuthMocks(page);

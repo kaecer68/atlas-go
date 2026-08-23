@@ -27,7 +27,8 @@ const MUTATING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
 /**
  * @typedef {Object} InterceptorOptions
- * @property {string} [loginPageId='login']        401 觸發時要跳轉的 page id
+ * @property {string} [loginPageId='login']        401 觸發時要跳轉的 page id（無 loginRedirectUrl 時）
+ * @property {string|(() => string)} [loginRedirectUrl]  401 時導向的外部登入 URL（優於 switchPage(loginPageId)；可用函式延遲計算）
  * @property {string[]} [excludedPages=[]]          已是登入相關頁時不再跳轉
  * @property {() => void} [onUnauthorized]          401 觸發時的副作用（預設 invalidateAuth）
  * @property {() => void} [onApiKeyRequired]        mutating 401（缺/無效 X-API-Key）時觸發（admin 開 apiKeyModal）
@@ -44,6 +45,7 @@ const MUTATING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 export function install401Interceptor(options = {}) {
   const {
     loginPageId = 'login',
+    loginRedirectUrl,
     excludedPages = [],
     onUnauthorized,
     onApiKeyRequired,
@@ -100,15 +102,23 @@ export function install401Interceptor(options = {}) {
                 .replace(/^\/(client|admin)\/?/, '')
                 .replace(/\?.*$/, '') || 'home';
             }
-            if (
-              excludedPages.indexOf(currentPage) === -1 &&
-              typeof switchPage === 'function'
-            ) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                '[auth] 401 detected, redirecting to ' + loginPageId,
-              );
-              switchPage(loginPageId);
+            if (excludedPages.indexOf(currentPage) === -1) {
+              // 外部登入 URL（如 member.goluck.uk）優於站內 switchPage —
+              // client 的 login/register 頁已移除，401 一律導 go-member。
+              if (loginRedirectUrl != null) {
+                var redirectUrl = typeof loginRedirectUrl === 'function'
+                  ? loginRedirectUrl()
+                  : loginRedirectUrl;
+                // eslint-disable-next-line no-console
+                console.warn('[auth] 401 detected, redirecting to ' + redirectUrl);
+                if (win.location) win.location.href = redirectUrl;
+              } else if (typeof switchPage === 'function') {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[auth] 401 detected, redirecting to ' + loginPageId,
+                );
+                switchPage(loginPageId);
+              }
             }
           }
         } catch (e) {

@@ -14,6 +14,16 @@ let _allModels = [];
 let _activeTheme = 'all';
 const RETRY_ID = 'capital-causality';
 
+// 從 URL ?theme= 讀初始主題（admin capital_models 跨 SPA 跳轉時帶入）。
+function readInitialThemeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    return params.get('theme') || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function loadCapitalCausality() {
   const el = document.getElementById('capitalCausalityContent');
   if (!el) return;
@@ -23,6 +33,8 @@ export async function loadCapitalCausality() {
   if (window._pendingCausalityFilter) {
     _activeTheme = window._pendingCausalityFilter;
     delete window._pendingCausalityFilter;
+  } else if (readInitialThemeFromUrl()) {
+    _activeTheme = readInitialThemeFromUrl();
   }
 
   try {
