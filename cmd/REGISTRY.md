@@ -109,6 +109,7 @@
 | `cmd/extend-replay-etf` | TWSE ETF 歷史日棒抓取 | constants, marketdata/twse, apigateway/httpclient | ✅ Utility |
 | `cmd/import-replay` | CSV → JSONL 格式轉換 | importer | ✅ Utility |
 | `cmd/merge-replay` | 多個 JSONL 合併為 replay CSV | —（stdlib only） | ✅ Utility |
+| `cmd/clean-replay-weekends` | 掃描 replay JSONL/CSV，移除週末/台灣假日複製行並重新生成 merged.csv（2026-08-23 replay bug 防護） | marketdata | ✅ Utility |
 
 ---
 
