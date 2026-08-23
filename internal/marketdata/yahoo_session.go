@@ -389,11 +389,15 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if len(body) > 0 && body[0] == '<' {
-			return nil, block(fmt.Sprintf("http %d: HTML response (rate limited or blocked)", resp.StatusCode))
-		}
 		if resp.StatusCode == http.StatusTooManyRequests {
 			return nil, block("http 429: rate limited")
+		}
+		if len(body) > 0 && body[0] == '<' {
+			// HTML error page — usually a transient Yahoo error, NOT a
+			// definitive IP block. Do NOT mark the session blocked (that
+			// would kill host fallback for a transient page); just fail this
+			// host so fetchWithFallback tries the next one.
+			return nil, fmt.Errorf("http %d: HTML response from %s", resp.StatusCode, host)
 		}
 		return nil, fmt.Errorf("http %d from %s: %s", resp.StatusCode, host, string(body))
 	}
@@ -404,7 +408,9 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 	}
 
 	if len(body) > 0 && body[0] == '<' {
-		return nil, block("HTML response (likely rate limited)")
+		// 200 with HTML body — transient error page, not a block. Fail this
+		// host only so the fallback chain continues.
+		return nil, fmt.Errorf("HTML response (likely temporary error) from %s", host)
 	}
 
 	return body, nil

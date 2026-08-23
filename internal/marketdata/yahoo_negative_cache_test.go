@@ -61,12 +61,12 @@ func TestYahooNegativeCache_429HonorsRetryAfterAndShortCircuits(t *testing.T) {
 	}
 }
 
-func TestYahooNegativeCache_HTMLResponseBlocks(t *testing.T) {
+func TestYahooNegativeCache_HTMLResponseDoesNotBlock(t *testing.T) {
 	hit := 0
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit++
 		w.Header().Set("Content-Type", "text/html")
-		_, _ = w.Write([]byte("<html><body>rate limited</body></html>"))
+		_, _ = w.Write([]byte("<html><body>temporary error</body></html>"))
 	}))
 	defer ts.Close()
 
@@ -77,12 +77,15 @@ func TestYahooNegativeCache_HTMLResponseBlocks(t *testing.T) {
 	s := getYahooSession()
 	defer resetYahooSessionState()
 
+	// HTML error page is a transient Yahoo error, NOT a definitive IP block:
+	// the request fails (this host) but the negative cache must NOT be set,
+	// so fetchWithFallback can still try the next host in the chain.
 	_, err := s.fetchWithFallback(context.Background(), "^VIX", map[string]string{"interval": "1d", "range": "5d"})
 	if err == nil {
-		t.Fatal("expected HTML-block error")
+		t.Fatal("expected error for HTML response")
 	}
-	if !time.Now().Before(s.blockedUntil) {
-		t.Fatal("HTML block did not set the negative cache")
+	if time.Now().Before(s.blockedUntil) {
+		t.Fatal("HTML response must NOT set the negative cache (only 429 does)")
 	}
 }
 
