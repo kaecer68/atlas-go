@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,13 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 )
+
+// ErrTAIFEXSchema is returned when a TAIFEX response cannot be parsed —
+// a required field is missing or non-numeric (upstream schema change /
+// renamed column). Mirrors the twse_etf / fubon_etf typed-error convention
+// (P0-3): previously parseInt64/parseFloat64 silently returned 0, so a
+// column rename produced "0 data, nil error" and the channel looked healthy.
+var ErrTAIFEXSchema = errors.New("taifex: schema mismatch")
 
 // PCRStats holds the put/call ratio data from TAIFEX.
 type PCRStats struct {
@@ -111,14 +119,42 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	}
 
 	raw := rawList[0]
+	if raw.Date == "" {
+		return nil, fmt.Errorf("%w: missing Date in PutCallRatio row", ErrTAIFEXSchema)
+	}
+	putVolume, ok := parseInt64OK(raw.PutVolume)
+	if !ok {
+		return nil, fmt.Errorf("%w: PutVolume=%q not parseable", ErrTAIFEXSchema, raw.PutVolume)
+	}
+	callVolume, ok := parseInt64OK(raw.CallVolume)
+	if !ok {
+		return nil, fmt.Errorf("%w: CallVolume=%q not parseable", ErrTAIFEXSchema, raw.CallVolume)
+	}
+	putCallVolumeRatioPct, ok := parseFloat64OK(raw.PutCallVolumeRatioPct)
+	if !ok {
+		return nil, fmt.Errorf("%w: PutCallVolumeRatio%%=%q not parseable", ErrTAIFEXSchema, raw.PutCallVolumeRatioPct)
+	}
+	putOI, ok := parseInt64OK(raw.PutOI)
+	if !ok {
+		return nil, fmt.Errorf("%w: PutOI=%q not parseable", ErrTAIFEXSchema, raw.PutOI)
+	}
+	callOI, ok := parseInt64OK(raw.CallOI)
+	if !ok {
+		return nil, fmt.Errorf("%w: CallOI=%q not parseable", ErrTAIFEXSchema, raw.CallOI)
+	}
+	putCallOIRatioPct, ok := parseFloat64OK(raw.PutCallOIRatioPct)
+	if !ok {
+		return nil, fmt.Errorf("%w: PutCallOIRatio%%=%q not parseable", ErrTAIFEXSchema, raw.PutCallOIRatioPct)
+	}
+
 	stats := &PCRStats{
 		Date:               raw.Date,
-		PutVolume:          parseInt64(raw.PutVolume),
-		CallVolume:         parseInt64(raw.CallVolume),
-		PutCallVolumeRatio: parseFloat64(raw.PutCallVolumeRatioPct) / 100.0,
-		PutOI:              parseInt64(raw.PutOI),
-		CallOI:             parseInt64(raw.CallOI),
-		PutCallOIRatio:     parseFloat64(raw.PutCallOIRatioPct) / 100.0,
+		PutVolume:          putVolume,
+		CallVolume:         callVolume,
+		PutCallVolumeRatio: putCallVolumeRatioPct / 100.0,
+		PutOI:              putOI,
+		CallOI:             callOI,
+		PutCallOIRatio:     putCallOIRatioPct / 100.0,
 	}
 
 	return stats, nil
@@ -181,11 +217,29 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 		return nil, fmt.Errorf("taifex large trader api: no TX all-months record found")
 	}
 
-	top5Long := parseInt64(latest.Top5Buy)
-	top5Short := parseInt64(latest.Top5Sell)
-	top10Long := parseInt64(latest.Top10Buy)
-	top10Short := parseInt64(latest.Top10Sell)
-	totalOI := parseInt64(latest.OIOfMarket)
+	if latest.Date == "" {
+		return nil, fmt.Errorf("%w: missing Date in large-trader record", ErrTAIFEXSchema)
+	}
+	top5Long, ok := parseInt64OK(latest.Top5Buy)
+	if !ok {
+		return nil, fmt.Errorf("%w: Top5Buy=%q not parseable", ErrTAIFEXSchema, latest.Top5Buy)
+	}
+	top5Short, ok := parseInt64OK(latest.Top5Sell)
+	if !ok {
+		return nil, fmt.Errorf("%w: Top5Sell=%q not parseable", ErrTAIFEXSchema, latest.Top5Sell)
+	}
+	top10Long, ok := parseInt64OK(latest.Top10Buy)
+	if !ok {
+		return nil, fmt.Errorf("%w: Top10Buy=%q not parseable", ErrTAIFEXSchema, latest.Top10Buy)
+	}
+	top10Short, ok := parseInt64OK(latest.Top10Sell)
+	if !ok {
+		return nil, fmt.Errorf("%w: Top10Sell=%q not parseable", ErrTAIFEXSchema, latest.Top10Sell)
+	}
+	totalOI, ok := parseInt64OK(latest.OIOfMarket)
+	if !ok {
+		return nil, fmt.Errorf("%w: OIOfMarket=%q not parseable", ErrTAIFEXSchema, latest.OIOfMarket)
+	}
 
 	retailLong := totalOI - top10Long
 	retailShort := totalOI - top10Short
@@ -240,27 +294,46 @@ type taifexLargeTraderRaw struct {
 
 // --- shared helpers ---
 
-func parseInt64(s string) int64 {
+// parseInt64OK parses s as an int64, returning ok=false when the field is
+// empty or malformed. P0-3: callers must check ok and surface a typed
+// ErrTAIFEXSchema error instead of silently treating a schema change as 0.
+func parseInt64OK(s string) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0
+		return 0, false
 	}
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return 0
+		return 0, false
 	}
+	return v, true
+}
+
+// parseFloat64OK parses s as a float64, returning ok=false when the field
+// is empty or malformed. P0-3: same contract as parseInt64OK.
+func parseFloat64OK(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// parseInt64 / parseFloat64 are the legacy silent-zero helpers. They are
+// kept for callers that genuinely tolerate a missing field (provider_names
+// tests pin the 0-on-empty behavior); new TAIFEX parsing must use the OK
+// variants and reject schema gaps with ErrTAIFEXSchema.
+func parseInt64(s string) int64 {
+	v, _ := parseInt64OK(s)
 	return v
 }
 
 func parseFloat64(s string) float64 {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0
-	}
+	v, _ := parseFloat64OK(s)
 	return v
 }
 
@@ -353,8 +426,38 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 		return nil, fmt.Errorf("taifex futures api: no TX contract found")
 	}
 
-	prevClose := parseFloat64(latest.PreviousSettlementPrice)
-	closePrice := parseFloat64(latest.LastPrice)
+	if latest.Date == "" {
+		return nil, fmt.Errorf("%w: missing Date in futures record", ErrTAIFEXSchema)
+	}
+	openPrice, ok := parseFloat64OK(latest.Open)
+	if !ok {
+		return nil, fmt.Errorf("%w: Open=%q not parseable", ErrTAIFEXSchema, latest.Open)
+	}
+	highPrice, ok := parseFloat64OK(latest.High)
+	if !ok {
+		return nil, fmt.Errorf("%w: High=%q not parseable", ErrTAIFEXSchema, latest.High)
+	}
+	lowPrice, ok := parseFloat64OK(latest.Low)
+	if !ok {
+		return nil, fmt.Errorf("%w: Low=%q not parseable", ErrTAIFEXSchema, latest.Low)
+	}
+	prevClose, ok := parseFloat64OK(latest.PreviousSettlementPrice)
+	if !ok {
+		return nil, fmt.Errorf("%w: PreviousSettlementPrice=%q not parseable", ErrTAIFEXSchema, latest.PreviousSettlementPrice)
+	}
+	closePrice, ok := parseFloat64OK(latest.LastPrice)
+	if !ok {
+		return nil, fmt.Errorf("%w: LastPrice=%q not parseable", ErrTAIFEXSchema, latest.LastPrice)
+	}
+	volume, ok := parseInt64OK(latest.Volume)
+	if !ok {
+		return nil, fmt.Errorf("%w: Volume=%q not parseable", ErrTAIFEXSchema, latest.Volume)
+	}
+	settlementPrice, ok := parseFloat64OK(latest.SettlementPrice)
+	if !ok {
+		return nil, fmt.Errorf("%w: SettlementPrice=%q not parseable", ErrTAIFEXSchema, latest.SettlementPrice)
+	}
+
 	changePct := 0.0
 	if prevClose > 0 {
 		changePct = (closePrice - prevClose) / prevClose * 100
@@ -362,12 +465,12 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 
 	return &TAIFEXFutures{
 		Date:       latest.Date,
-		Open:       parseFloat64(latest.Open),
-		High:       parseFloat64(latest.High),
-		Low:        parseFloat64(latest.Low),
+		Open:       openPrice,
+		High:       highPrice,
+		Low:        lowPrice,
 		Close:      closePrice,
-		Volume:     parseInt64(latest.Volume),
-		Settlement: parseFloat64(latest.SettlementPrice),
+		Volume:     volume,
+		Settlement: settlementPrice,
 		ChangePct:  changePct,
 	}, nil
 }
