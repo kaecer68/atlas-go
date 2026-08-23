@@ -2,16 +2,14 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/kaecer68/atlas-go/internal/domain"
-	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -28,44 +26,42 @@ func (f *fakeQuoteStore) LoadLatestQuotes([]string) (map[string]domain.DailyBar,
 	return nil, nil
 }
 
-// newQuotaCappedFinMindClient builds a FinMindClient whose daily tracker has
-// only a few calls left, so the backfill gate must stop early.
-func newQuotaCappedFinMindClient(limit, used int) *marketdata.FinMindClient {
-	tracker := marketdata.NewDailyQuotaTracker("finmind_test", t.TempDir(), limit)
-	// bump callsToday directly so Remaining() == limit-used
-	return &marketdata.FinMindClient{
-		rateLimiter:  rate.NewLimiter(rate.Inf, 0),
-		quotaTracker: tracker,
-	}
-}
-
 func TestQuoteBackfillRunner_StopsWhenQuotaNearlyExhausted(t *testing.T) {
 	dir := t.TempDir()
 	// fundamentals.json with one PE>0 symbol.
-	if err := os.WriteFile(filepath.Join(dir, "fundamentals.json"),
+	if err := os.MkdirAll(filepath.Join(dir, "data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "data", "fundamentals.json"),
 		[]byte(`{"2330":{"PE":15}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	tracker := marketdata.NewDailyQuotaTracker("finmind_gate_test", dir, 100)
-	tracker.SetLimit(100)
-	// simulate 99 calls used → 1 remaining < stop threshold (200)
-	client := &marketdata.FinMindClient{
-		rateLimiter:  rate.NewLimiter(rate.Inf, 0),
-		quotaTracker: tracker,
+	// Pre-seed the quota state file so the client starts with 99/100 used
+	// (1 remaining < backfillQuotaStopRemaining=200).
+	stateDir := t.TempDir()
+	state := map[string]any{
+		"calls_today": 99,
+		"last_reset":  time.Now().Truncate(24 * time.Hour),
 	}
+	raw, _ := json.Marshal(state)
+	if err := os.WriteFile(filepath.Join(stateDir, "finmind_daily_quota.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	client := marketdata.NewFinMindClientWithStateDir("k", stateDir)
+	client.SetQuotaLimit(100) // 99 used → 1 remaining
 
 	runner := NewQuoteBackfillRunner(QuoteBackfillDeps{
 		FinMindClient: client,
 		QuoteStore:    &fakeQuoteStore{},
 		WorkDir:       dir,
 	})
-	err := runner(context.Background())
-	if err != nil {
+	if err := runner(context.Background()); err != nil {
 		t.Fatalf("runner error: %v", err)
 	}
-	if got := tracker.Remaining(); got >= 200 {
-		t.Fatalf("runner did not stop early: remaining=%d", got)
+	if got := client.QuotaRemaining(); got >= backfillQuotaStopRemaining {
+		t.Fatalf("runner did not stop early: remaining=%d (gate floor=%d)", got, backfillQuotaStopRemaining)
 	}
 }
 

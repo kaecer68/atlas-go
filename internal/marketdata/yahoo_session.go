@@ -151,6 +151,11 @@ type yahooSession struct {
 	// (they are data-shape issues handled per-provider); transport/HTTP
 	// failures are.
 	breaker *providerBreaker
+	// blockedUntil is the negative cache (P1-14): when Yahoo serves 429 or
+	// an HTML block page, fetchFromHost records a session-level block
+	// (Retry-After clamped to [5,10] minutes) and every Yahoo channel
+	// short-circuits without touching the network until it elapses.
+	blockedUntil time.Time
 }
 
 // newYahooSession creates a session manager for Yahoo Finance API access.
@@ -395,12 +400,40 @@ func (s *yahooSession) BreakerInfo() ProviderBreakerInfo {
 	return s.breaker.stateSnapshot()
 }
 
+// isBlocked reports whether the negative cache is active (429/HTML block).
+func (s *yahooSession) isBlocked() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return time.Now().Before(s.blockedUntil)
+}
+
+// markBlocked sets the session-level negative cache for d (clamped by the
+// caller to [5,10] minutes).
+func (s *yahooSession) markBlocked(d time.Duration) {
+	s.mu.Lock()
+	s.blockedUntil = time.Now().Add(d)
+	s.mu.Unlock()
+}
+
+// negativeCacheBlockMin/Max bound the negative-cache window: long enough to
+// stop 8+ channels hammering a blocked IP, short enough to recover quickly
+// once Yahoo lifts the block.
+const (
+	negativeCacheBlockMin = 5 * time.Minute
+	negativeCacheBlockMax = 10 * time.Minute
+)
+
 // fetchWithFallback tries each host in order and returns on first success.
 // P1-7: the session-level breaker gates the whole fallback chain — when it
 // is open we return immediately without touching the network, so every
 // Yahoo channel (US indices, tw_vol, TAIEX, DRAM, SOX, …) short-circuits
 // together. All-hosts-failed records a failure; any-host-success resets.
+// P1-14: the negative cache additionally short-circuits after a 429/HTML
+// block, so a blocked IP stops being hammered by every channel each cycle.
 func (s *yahooSession) fetchWithFallback(ctx context.Context, symbol string, params map[string]string) ([]byte, error) {
+	if s.isBlocked() {
+		return nil, fmt.Errorf("%w: yahoo negative-cache block active until %s", ErrUpstream, s.blockedUntil.Format(time.RFC3339))
+	}
 	if s.breaker != nil && !s.breaker.shouldTry() {
 		return nil, fmt.Errorf("%w: yahoo circuit breaker open", ErrUpstream)
 	}

@@ -187,6 +187,15 @@ func (c *FinMindClient) QuotaRemaining() int {
 	return c.quotaTracker.Remaining()
 }
 
+// SetQuotaLimit overrides the daily ceiling (e.g., when the FinMind tier
+// changes). Delegates to the shared DailyQuotaTracker so the QuotaRegistry
+// view updates consistently.
+func (c *FinMindClient) SetQuotaLimit(limit int) {
+	if c.quotaTracker != nil {
+		c.quotaTracker.SetLimit(limit)
+	}
+}
+
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	// P1-7: client-level breaker — open 時不發 HTTP，所有 FinMind 消費層
 	// 共享同一個 breaker（shared client）。quota exhausted 與 no-data 是
