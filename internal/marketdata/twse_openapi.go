@@ -146,6 +146,12 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		return nil, fmt.Errorf("decode response: %w", decodeErr)
 	}
 
+	// P0-4: surface a non-OK upstream status instead of silently treating
+	// the payload as an empty success (aligned with GetDailyQuote).
+	if twseResp.Stat != "OK" {
+		return nil, fmt.Errorf("twse: STOCK_DAY_ALL stat=%q (expected OK)", twseResp.Stat)
+	}
+
 	twseQuotes := make([]TWSEQuote, 0, len(twseResp.Data))
 	for _, row := range twseResp.Data {
 		if len(row) < 9 {
@@ -165,14 +171,29 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		})
 	}
 
+	// P0-4: zero rows → typed ErrTWSEEmptyData so adapters can distinguish
+	// holiday/no-data from a genuine upstream failure. Previously this was
+	// an empty success slice, so the gateway breaker never tripped and
+	// channel-health showed ok while every quote was missing.
+	if len(twseQuotes) == 0 {
+		return nil, fmt.Errorf("%w: STOCK_DAY_ALL returned no rows", ErrTWSEEmptyData)
+	}
+
 	quotes := make([]domain.Quote, 0, len(twseQuotes))
+	parseFailures := 0
 	for _, q := range twseQuotes {
 		quote, err := c.convertToQuote(q)
 		if err != nil {
-			// 跳过解析失败的记录
+			parseFailures++
 			continue
 		}
 		quotes = append(quotes, quote)
+	}
+
+	// P0-4: every row failed to parse = upstream schema change (renamed /
+	// re-typed columns), NOT a silent empty success.
+	if len(quotes) == 0 {
+		return nil, fmt.Errorf("twse: all %d rows failed to parse (schema change?)", parseFailures)
 	}
 
 	return quotes, nil
@@ -423,6 +444,8 @@ func (c *TWSEClient) parseStockCSV(body io.Reader) ([]domain.Quote, error) {
 	}
 
 	var quotes []domain.Quote
+	parseFailures := 0
+	rows := 0
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -431,6 +454,7 @@ func (c *TWSEClient) parseStockCSV(body io.Reader) ([]domain.Quote, error) {
 		if err != nil {
 			return nil, fmt.Errorf("csv row: %w", err)
 		}
+		rows++
 		symbol := rowAt(row, symbolIdx, "")
 		if symbol == "" {
 			continue
@@ -449,9 +473,18 @@ func (c *TWSEClient) parseStockCSV(body io.Reader) ([]domain.Quote, error) {
 		}
 		quote, err := c.convertToQuote(q)
 		if err != nil {
+			parseFailures++
 			continue
 		}
 		quotes = append(quotes, quote)
+	}
+	// P0-4: mirror the JSON path — empty CSV or all-rows-unparseable must
+	// not surface as an empty success.
+	if rows == 0 {
+		return nil, fmt.Errorf("%w: STOCK_DAY_ALL CSV returned no rows", ErrTWSEEmptyData)
+	}
+	if len(quotes) == 0 {
+		return nil, fmt.Errorf("twse: all %d CSV rows failed to parse (schema change?)", parseFailures)
 	}
 	return quotes, nil
 }
