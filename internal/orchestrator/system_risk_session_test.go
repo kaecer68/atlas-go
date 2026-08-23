@@ -30,6 +30,9 @@ func TestRecordSessionSummary_PersistsRiskCommentary(t *testing.T) {
 	}
 
 	result := domain.SimulationResult{
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
 		RiskCommentary: "test commentary XYZ",
 	}
 

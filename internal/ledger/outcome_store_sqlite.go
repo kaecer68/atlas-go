@@ -449,6 +449,12 @@ func (s *SQLiteOutcomeStore) RecordSessionExperiment(session domain.ReplaySessio
 // We now also persist summary_json (mirroring SQLiteSessionStore) and read it
 // back in LoadSessionSummaries so the report and the sim agree on one source.
 func (s *SQLiteOutcomeStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	// SSoT write guard (2026-08-23): strict validation on the real-time write
+	// path — a corrupted summary is rejected before it can pollute the
+	// performance report later.
+	if err := summary.Validate(); err != nil {
+		return fmt.Errorf("record session summary: rejected corrupted summary: %w", err)
+	}
 	summaryJSON, err := json.Marshal(summary)
 	if err != nil {
 		return fmt.Errorf("marshal session summary: %w", err)

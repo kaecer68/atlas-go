@@ -471,6 +471,15 @@ func (r *DualWriteRepository) RecordSessionOutcomes(ctx context.Context, session
 // Either failure bumps the reconcile-pending marker counter so monitoring can
 // alert that cmd/reconcile-sessions should be run.
 func (r *DualWriteRepository) RecordSessionSummary(ctx context.Context, session domain.ReplaySession, summary domain.SessionSummary) error {
+	// SSoT write guard (2026-08-23): a corrupted summary must fail loudly at
+	// write time instead of being persisted to one or both backends and
+	// surfacing later as a performance-report data problem. Strict validation
+	// (PortfolioValue > 0, legal regime, non-negative cash/counts) applies to
+	// the real-time sim write path; count-only legacy rows go through
+	// SaveSessionSummary (ValidateLegacy).
+	if err := summary.Validate(); err != nil {
+		return fmt.Errorf("record session summary: rejected corrupted summary: %w", err)
+	}
 	jsonlErr := r.jsonl.sessionSummaryStore.RecordSessionSummary(session, summary)
 	if jsonlErr != nil {
 		sessionSummaryJSONLErrorTotal.Add(1)
@@ -591,6 +600,15 @@ func (r *DualWriteRepository) QueryScreeningRejectsBySession(ctx context.Context
 // error is only returned when the summary was persisted nowhere (JSONL failed
 // while PG is unavailable).
 func (r *DualWriteRepository) SaveSessionSummary(ctx context.Context, summary domain.SessionSummary) error {
+	// Backfill/migration write guard (SSoT 2026-08-23): lenient validation.
+	// Legacy count-only rows (PortfolioValue=0, EndingCash=0, empty regime —
+	// cmd/backfill-summaries, pre-backfill SQLite rows) are legal production
+	// data that reconcile-sessions copies into PG; strict validation would
+	// block the backfill. Genuinely corrupted rows (zero portfolio with cash
+	// or orders) are still rejected.
+	if err := summary.ValidateLegacy(); err != nil {
+		return fmt.Errorf("save session summary: rejected corrupted summary: %w", err)
+	}
 	jsonlErr := r.jsonl.sessionSummaryStore.RecordSessionSummary(domain.ReplaySession{ID: summary.SessionID}, summary)
 	if jsonlErr != nil {
 		sessionSummaryJSONLErrorTotal.Add(1)

@@ -1,0 +1,136 @@
+{
+  "period": "all",
+  "start_date": "2026-07-10T00:00:00Z",
+  "end_date": "2026-07-22T00:00:00Z",
+  "total_return": 0.0738255033557047,
+  "annualized_return": 7.727713368375028,
+  "sharpe_ratio": 6.791614515630587,
+  "sortino_ratio": 21.090742956440202,
+  "calmar_ratio": 235.69525773543833,
+  "max_drawdown": 0.03278688524590164,
+  "starting_value": 2980000,
+  "ending_value": 3200000,
+  "after_tax_value": 3197000,
+  "total_tax_paid": 3000,
+  "win_rate": 0.6,
+  "total_trades": 11,
+  "real_trade_count": 5,
+  "synthetic_trade_count": 6,
+  "profit_factor": 6.666666666666667,
+  "avg_win": 0.03333333333333333,
+  "avg_loss": -0.0075,
+  "top_agents": [
+    {
+      "agent_id": "agent-a",
+      "display_name": "agent-a",
+      "skill": "tech",
+      "layer": "sector",
+      "aggregate_forward_return": 0.08,
+      "win_rate": 1,
+      "real_trade_count": 2,
+      "synthetic_trade_count": 1,
+      "trade_count": 3,
+      "avg_return": 0.04,
+      "profit_factor": 0,
+      "sharpe_like": null
+    },
+    {
+      "agent_id": "agent-c",
+      "display_name": "agent-c",
+      "skill": "macro",
+      "layer": "macro",
+      "aggregate_forward_return": 0.02,
+      "win_rate": 1,
+      "real_trade_count": 1,
+      "synthetic_trade_count": 2,
+      "trade_count": 3,
+      "avg_return": 0.02,
+      "profit_factor": 0,
+      "sharpe_like": null
+    },
+    {
+      "agent_id": "agent-d",
+      "display_name": "agent-d",
+      "skill": "event",
+      "layer": "context",
+      "aggregate_forward_return": 0,
+      "win_rate": 0,
+      "real_trade_count": 0,
+      "synthetic_trade_count": 1,
+      "trade_count": 1,
+      "avg_return": 0,
+      "profit_factor": 0,
+      "sharpe_like": null
+    },
+    {
+      "agent_id": "agent-e",
+      "display_name": "agent-e",
+      "skill": "quality",
+      "layer": "style",
+      "aggregate_forward_return": -0.005,
+      "win_rate": 0,
+      "real_trade_count": 1,
+      "synthetic_trade_count": 1,
+      "trade_count": 2,
+      "avg_return": -0.005,
+      "profit_factor": 0,
+      "sharpe_like": null
+    },
+    {
+      "agent_id": "agent-b",
+      "display_name": "agent-b",
+      "skill": "value",
+      "layer": "style",
+      "aggregate_forward_return": -0.01,
+      "win_rate": 0,
+      "real_trade_count": 1,
+      "synthetic_trade_count": 1,
+      "trade_count": 2,
+      "avg_return": -0.01,
+      "profit_factor": 0,
+      "sharpe_like": null
+    }
+  ],
+  "regime_breakdown": {
+    "regimes": {
+      "NEUTRAL": {
+        "regime": "NEUTRAL",
+        "session_count": 1,
+        "aggregate_forward_return": 0,
+        "win_rate": 0,
+        "avg_return": 0
+      },
+      "RISK_OFF": {
+        "regime": "RISK_OFF",
+        "session_count": 1,
+        "aggregate_forward_return": 0.015,
+        "win_rate": 0.5,
+        "avg_return": 0.0075
+      },
+      "RISK_ON": {
+        "regime": "RISK_ON",
+        "session_count": 1,
+        "aggregate_forward_return": 0.07,
+        "win_rate": 0.6666666666666666,
+        "avg_return": 0.023333333333333334
+      },
+      "unknown": {
+        "regime": "unknown",
+        "session_count": 1,
+        "aggregate_forward_return": 0,
+        "win_rate": 0,
+        "avg_return": 0
+      }
+    }
+  },
+  "monthly_returns": [
+    {
+      "year": 2026,
+      "month": 7,
+      "return": 0.0738255033557047,
+      "cumulative": 0.0738255033557047,
+      "label": "2026-07"
+    }
+  ],
+  "generated_at": "0001-01-01T00:00:00Z"
+}

@@ -83,6 +83,37 @@ type PerformanceReport struct {
 	RegimeBreakdown     RegimeBreakdown     `json:"regime_breakdown"`
 	MonthlyReturns      []MonthlyReturn     `json:"monthly_returns"`
 	GeneratedAt         time.Time           `json:"generated_at"`
+	// Source identifies which backend served the report data ("postgres" for
+	// the SSoT backend, "jsonl" when degraded, "" for stores that do not
+	// report a source). SSoT decision: docs/decisions/2026-08-23-performance-report-ssot.md.
+	Source string `json:"source,omitempty"`
+	// Degraded is true when the SSoT backend (PostgreSQL) was unavailable and
+	// the report was served from the JSONL fallback. Consumers should treat a
+	// degraded report as best-effort, not authoritative.
+	Degraded bool `json:"degraded,omitempty"`
+}
+
+// reportSourceInfo is implemented by stores that can report which backend
+// actually served the data and whether they degraded to a fallback. The
+// PG-first SSoT store (ledger.PGFirstOutcomeStore) implements it so the
+// report can carry Source / Degraded markers (see PerformanceReport).
+type reportSourceInfo interface {
+	// SourceBackend is the backend that actually served the data
+	// ("postgres" / "jsonl").
+	SourceBackend() string
+	// Degraded is true when the primary SSoT backend was unavailable and a
+	// fallback backend served the data.
+	Degraded() bool
+}
+
+// applyReportSource stamps Source / Degraded onto the report when the store
+// can report them (PG-first SSoT store). Stores without the interface leave
+// the fields empty — their backend semantics are unchanged.
+func applyReportSource(report *PerformanceReport, store ledger.OutcomeStore) {
+	if src, ok := store.(reportSourceInfo); ok {
+		report.Source = src.SourceBackend()
+		report.Degraded = src.Degraded()
+	}
 }
 
 // GenerateReport builds a PerformanceReport from ledger data for the given period.
@@ -94,7 +125,9 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	}
 
 	if len(summaries) == 0 {
-		return emptyReport(period), nil
+		report := emptyReport(period)
+		applyReportSource(report, store)
+		return report, nil
 	}
 
 	slices.SortFunc(summaries, func(a, b domain.SessionSummary) int {
@@ -105,7 +138,9 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	filtered := filterSummariesByDate(summaries, cutoff)
 
 	if len(filtered) == 0 {
-		return emptyReport(period), nil
+		report := emptyReport(period)
+		applyReportSource(report, store)
+		return report, nil
 	}
 
 	// Exclude sessions with no equity data (PortfolioValue and EndingCash both
@@ -122,7 +157,9 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	}
 	filtered = valid
 	if len(filtered) == 0 {
-		return emptyReport(period), nil
+		report := emptyReport(period)
+		applyReportSource(report, store)
+		return report, nil
 	}
 
 	startDate := domain.SessionDateFromID(filtered[0].SessionID)
@@ -184,7 +221,7 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	regimeBreakdown := calculateRegimeBreakdown(filtered, outcomes)
 	monthlyReturns := calculateMonthlyReturns(filtered, portfolioValues)
 
-	return &PerformanceReport{
+	report := &PerformanceReport{
 		Period:              period,
 		StartDate:           startDate,
 		EndDate:             endDate,
@@ -209,7 +246,9 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 		RegimeBreakdown:     regimeBreakdown,
 		MonthlyReturns:      monthlyReturns,
 		GeneratedAt:         time.Now(),
-	}, nil
+	}
+	applyReportSource(report, store)
+	return report, nil
 }
 
 // GenerateMarkdownReport renders a PerformanceReport as Markdown.
@@ -227,6 +266,15 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		report.StartDate.Format("2006-01-02"),
 		report.EndDate.Format("2006-01-02"),
 	)
+
+	// SSoT source annotation (2026-08-23): a degraded report was served from
+	// the JSONL fallback because PostgreSQL (the single source of truth) was
+	// unavailable — flag it so consumers do not mistake it for authoritative.
+	if report.Degraded {
+		sb.WriteString("> ⚠️ **Degraded source:** PostgreSQL (SSoT) unavailable; report served from JSONL fallback. Data is best-effort, not authoritative.\n\n")
+	} else if report.Source != "" && report.Source != "postgres" {
+		fmt.Fprintf(&sb, "> ℹ️ Source backend: `%s`\n\n", report.Source)
+	}
 
 	sb.WriteString("## Key Metrics\n\n")
 	sb.WriteString("| Metric | Value |\n")
@@ -294,9 +342,18 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	if len(report.RegimeBreakdown.Regimes) == 0 {
 		sb.WriteString("_No regime data available._\n")
 	} else {
+		// Deterministic output: iterate regimes in sorted order (map
+		// iteration order is randomized in Go and would make the report
+		// non-reproducible).
+		regimeNames := make([]string, 0, len(report.RegimeBreakdown.Regimes))
+		for name := range report.RegimeBreakdown.Regimes {
+			regimeNames = append(regimeNames, name)
+		}
+		slices.Sort(regimeNames)
 		sb.WriteString("| Regime | Sessions | Aggregate Forward Return | Win Rate | Avg Return |\n")
 		sb.WriteString("|--------|----------|--------------------------|----------|------------|\n")
-		for _, r := range report.RegimeBreakdown.Regimes {
+		for _, name := range regimeNames {
+			r := report.RegimeBreakdown.Regimes[name]
 			fmt.Fprintf(
 				&sb, "| %s | %d | %.2f%% | %.1f%% | %.2f%% |\n",
 				r.Regime,

@@ -127,9 +127,12 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 	for i := range 25 {
 		session := domain.ReplaySession{ID: "sess-cb-" + string(rune('a'+i))}
 		summary := domain.SessionSummary{
-			SessionID:      session.ID,
-			Regime:         domain.RegimeRiskOn,
-			PortfolioValue: 100000.0 - float64(i)*10000.0,
+			SessionID: session.ID,
+			Regime:    domain.RegimeRiskOn,
+			// Monotonic decline but always positive — the SSoT write guard
+			// rejects PortfolioValue<=0 (corrupted summary), so the circuit
+			// breaker fixture must not dip to zero.
+			PortfolioValue: 100000.0 - float64(i)*3000.0,
 			EndingCash:     50000.0,
 		}
 		if err := store.RecordSessionSummary(session, summary); err != nil {
