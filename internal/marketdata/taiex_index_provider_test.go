@@ -17,12 +17,14 @@ func resetTAIEXTwseTargetDate(t *testing.T) {
 }
 
 func TestTAIEXIndexProvider_Name(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	if got := NewTAIEXIndexProvider().Name(); got != "taiex_index" {
 		t.Errorf("Name() = %q, want taiex_index", got)
 	}
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_Success(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 	// Pin the fallback clock to a trading day (2026-07-29 is a Wednesday) so the
@@ -74,6 +76,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_Success(t *testing.T) {
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_NoChartResult_FallsBackThenFails(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 	resetTAIEXTwseTargetDate(t)
@@ -107,6 +110,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_NoChartResult_FallsBackThenFails(t *te
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackSuccess(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 	resetTAIEXTwseTargetDate(t)
@@ -151,6 +155,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackSuccess(t *testing.T) {
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackRejectsStaleDate(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 	resetTAIEXTwseTargetDate(t)
@@ -187,6 +192,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_TWSEFallbackRejectsStaleDate(t *testin
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 	resetTAIEXTwseTargetDate(t)
@@ -220,6 +226,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_PreMarketBypassesYahoo(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 
@@ -275,6 +282,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_PreMarketBypassesYahoo(t *testing.T) {
 }
 
 func TestFetchTWSETAIEXFallback_PreMarketRollsBackToPreviousTradingDay(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	// Trading day (Wednesday 2026-07-29) at 07:00 CST — the fallback must request
 	// the previous trading day (Tuesday 2026-07-28) instead of today.
 	orig := twseTAIEXTargetDate
@@ -305,6 +313,7 @@ func TestFetchTWSETAIEXFallback_PreMarketRollsBackToPreviousTradingDay(t *testin
 }
 
 func TestTAIEXIndexProvider_FetchSnapshot_WeekendBypassesYahoo(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	twiiCache.reset()
 	defer twiiCache.reset()
 
@@ -358,6 +367,7 @@ func TestTAIEXIndexProvider_FetchSnapshot_WeekendBypassesYahoo(t *testing.T) {
 }
 
 func TestFetchTWSETAIEXFallback_RejectsMismatchedDate(t *testing.T) {
+	ResetSharedTWSEClient() // P1-13: 測試用 shared TWSE client，reset 避免 breaker/limiter 跨測試污染
 	resetTAIEXTwseTargetDate(t)
 
 	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
