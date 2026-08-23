@@ -264,7 +264,25 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 		return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
 	}
 
-	return c.convertDailyRowToQuote(dailyResp.Data[0], symbol)
+	// TWSE STOCK_DAY returns the whole MONTH for the requested date (the day
+	// component is ignored server-side), so Data[0] is the month's first
+	// trading day, not the requested day. Find the row matching the requested
+	// date (ROC calendar, e.g. "115/08/20"); a weekday that never traded
+	// (holiday) simply has no matching row → "no data", which callers treat
+	// as a non-trading day. Same date-matching pattern as
+	// cmd/extend-replay-etf/main.go:fetchStockDay.
+	t, err := time.Parse("20060102", date)
+	if err != nil {
+		return domain.Quote{}, fmt.Errorf("invalid date %q: %w", date, err)
+	}
+	wantROC := fmt.Sprintf("%d/%02d/%02d", t.Year()-1911, t.Month(), t.Day())
+	for _, row := range dailyResp.Data {
+		if len(row) > 0 && strings.TrimSpace(row[0]) == wantROC {
+			return c.convertDailyRowToQuote(row, symbol)
+		}
+	}
+
+	return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
 }
 
 // convertToQuote 将 TWSE 数据转换为 domain.Quote
