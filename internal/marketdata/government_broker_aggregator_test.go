@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -222,6 +223,156 @@ func TestMergeBrokerDetails(t *testing.T) {
 		if acc.Buy != 1500 || acc.Sell != 200 || acc.Net != 1300 {
 			t.Errorf("Accumulated detail = %+v, want buy=1500 sell=200 net=1300", acc)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// P0-2: CaptchaCooldown wiring — CAPTCHA breaks the symbol loop, records the
+// cooldown, and the next AggregateDate run skips (ShouldSkip → nil,nil).
+// ---------------------------------------------------------------------------
+
+// TestAggregateDate_Captcha_BreaksLoopAndRecordsCooldown pins the P0-2 fix:
+// when the upstream serves a CAPTCHA, AggregateDate must (a) record the
+// cooldown for GovernmentBrokerChannelID and (b) STOP — the remaining
+// symbols must NOT be fetched (previously the loop continued into all 50,
+// re-triggering the upstream block).
+func TestAggregateDate_Captcha_BreaksLoopAndRecordsCooldown(t *testing.T) {
+	dir := t.TempDir()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`<html><body><form>
+<input id="__VIEWSTATE" value="/wEP">
+<input id="__VIEWSTATEGENERATOR" value="AA1F01CB">
+<input id="__EVENTVALIDATION" value="/wEW"></form></body></html>`))
+			return
+		}
+		_, _ = w.Write([]byte(`<html><body><img src="CaptchaImage.aspx?guid=123"></body></html>`))
+	}))
+	defer server.Close()
+
+	clock := time.Unix(1_700_000_000, 0)
+	cd := CaptchaCooldownWith(24*time.Hour, func() time.Time { return clock })
+	agg := NewGovernmentBrokerAggregator(dir)
+	agg.SetHTTPClient(server.Client())
+	agg.SetBaseURL(server.URL)
+	agg.SetSymbols([]string{"2330", "2317", "2454"})
+	agg.SetCaptchaCooldown(cd)
+
+	_, err := agg.AggregateDate(context.Background(), time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("AggregateDate() error = %v", err)
+	}
+	if !cd.ShouldSkip(GovernmentBrokerChannelID) {
+		t.Fatal("cooldown should be active after CAPTCHA (RecordCaptcha must be wired)")
+	}
+	// First symbol: 1 GET (menu tokens) + 1 POST (query) → CAPTCHA → break.
+	// Symbols 2 and 3 must never be touched.
+	if got := requests.Load(); got != 2 {
+		t.Errorf("HTTP requests = %d, want 2 (loop must break after first CAPTCHA, not continue into remaining symbols)", got)
+	}
+}
+
+// TestAggregateDate_CaptchaCooldown_ShouldSkipReturnsNilNil pins the P0-2
+// gate: while the cooldown is active, AggregateDate returns (nil, nil)
+// WITHOUT making any HTTP request, so the next scheduled run cannot
+// re-trigger the upstream block.
+func TestAggregateDate_CaptchaCooldown_ShouldSkipReturnsNilNil(t *testing.T) {
+	dir := t.TempDir()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><body>ok</body></html>"))
+	}))
+	defer server.Close()
+
+	clock := time.Unix(1_700_000_000, 0)
+	cd := CaptchaCooldownWith(24*time.Hour, func() time.Time { return clock })
+	cd.RecordCaptcha(GovernmentBrokerChannelID) // simulate a recent CAPTCHA
+
+	agg := NewGovernmentBrokerAggregator(dir)
+	agg.SetHTTPClient(server.Client())
+	agg.SetBaseURL(server.URL)
+	agg.SetSymbols([]string{"2330"})
+	agg.SetCaptchaCooldown(cd)
+
+	reading, err := agg.AggregateDate(context.Background(), time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("AggregateDate() during cooldown = error %v, want (nil, nil)", err)
+	}
+	if reading != nil {
+		t.Errorf("AggregateDate() during cooldown = %+v, want nil", reading)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("HTTP requests during cooldown = %d, want 0 (ShouldSkip must short-circuit before any fetch)", got)
+	}
+}
+
+// TestAggregateDate_CaptchaCooldown_ExpiredRunsAgain verifies the cooldown
+// is wall-clock based: once it expires, the next AggregateDate run fetches
+// normally again (and a success clears the stale cooldown entry).
+func TestAggregateDate_CaptchaCooldown_ExpiredRunsAgain(t *testing.T) {
+	dir := t.TempDir()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`<html><body><form>
+<input id="__VIEWSTATE" value="/wEP">
+<input id="__VIEWSTATEGENERATOR" value="AA1F01CB">
+<input id="__EVENTVALIDATION" value="/wEW"></form></body></html>`))
+			return
+		}
+		_, _ = w.Write([]byte(`<html><body><table><tr>
+<th>券商代號</th><th>券商名稱</th><th>買進</th><th>賣出</th><th>淨買</th>
+</tr><tr><td>8060</td><td>合作金庫</td><td>1000</td><td>0</td><td>1000</td>
+</tr></table></body></html>`))
+	}))
+	defer server.Close()
+
+	start := time.Unix(1_700_000_000, 0)
+	cd := CaptchaCooldownWith(24*time.Hour, func() time.Time { return start })
+	cd.RecordCaptcha(GovernmentBrokerChannelID)
+
+	agg := NewGovernmentBrokerAggregator(dir)
+	agg.SetHTTPClient(server.Client())
+	agg.SetBaseURL(server.URL)
+	agg.SetSymbols([]string{"2330"})
+	agg.SetCaptchaCooldown(cd)
+
+	// Within cooldown → skip.
+	if _, err := agg.AggregateDate(context.Background(), time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("AggregateDate() during cooldown: %v", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("requests during cooldown = %d, want 0", got)
+	}
+
+	// Advance past the cooldown window → fetch resumes and succeeds.
+	start = start.Add(25 * time.Hour)
+	reading, err := agg.AggregateDate(context.Background(), time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("AggregateDate() after cooldown expired: %v", err)
+	}
+	if reading == nil || reading.TotalNet != 1000 {
+		t.Errorf("reading after expiry = %+v, want TotalNet=1000", reading)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Errorf("requests after expiry = %d, want 2 (GET + POST)", got)
+	}
+}
+
+// TestGovernmentBrokerAggregator_CaptchaCooldownDefaultsWired verifies the
+// production constructor wires a real CaptchaCooldown (not nil) so the P0-2
+// gate is active out of the box.
+func TestGovernmentBrokerAggregator_CaptchaCooldownDefaultsWired(t *testing.T) {
+	agg := NewGovernmentBrokerAggregator(t.TempDir())
+	if agg.CaptchaCooldown() == nil {
+		t.Fatal("NewGovernmentBrokerAggregator must wire a CaptchaCooldown (P0-2)")
 	}
 }
 

@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -107,5 +108,38 @@ func TestFetchInstitutionalFuturesDaily_NegativeParsing(t *testing.T) {
 	}
 	if d.Foreign.TradeNet != -10 {
 		t.Errorf("negative trade net parse failed: got %d", d.Foreign.TradeNet)
+	}
+}
+
+// TestFetchInstitutionalFuturesDaily_SchemaGap_ReturnsErrTAIFEXSchema is the
+// P0-3 test: a renamed/non-numeric field on a 臺股期貨 row must surface
+// typed ErrTAIFEXSchema instead of silently parsing to 0.
+func TestFetchInstitutionalFuturesDaily_SchemaGap_ReturnsErrTAIFEXSchema(t *testing.T) {
+	badField := `[
+		{"Date":"20260716","ContractCode":"臺股期貨","Item":"外資及陸資",
+		 "TradingVolume(Long)":"1","TradingVolume(Short)":"2","TradingVolume(Net)":"-1",
+		 "OpenInterest(Long)":"--","OpenInterest(Short)":"4","OpenInterest(Net)":"-1"},
+		{"Date":"20260716","ContractCode":"臺股期貨","Item":"投信",
+		 "TradingVolume(Long)":"1","TradingVolume(Short)":"2","TradingVolume(Net)":"-1",
+		 "OpenInterest(Long)":"3","OpenInterest(Short)":"4","OpenInterest(Net)":"-1"},
+		{"Date":"20260716","ContractCode":"臺股期貨","Item":"自營商",
+		 "TradingVolume(Long)":"1","TradingVolume(Short)":"2","TradingVolume(Net)":"-1",
+		 "OpenInterest(Long)":"3","OpenInterest(Short)":"4","OpenInterest(Net)":"-1"}
+	]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(badField))
+	}))
+	defer srv.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = srv.URL
+	p.rateLimiter = unlimitedLimiter()
+
+	_, err := p.FetchInstitutionalFuturesDaily(context.Background())
+	if err == nil {
+		t.Fatal("expected ErrTAIFEXSchema for non-numeric OpenInterest(Long), got nil")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
 	}
 }

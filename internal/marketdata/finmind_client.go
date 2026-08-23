@@ -52,6 +52,10 @@ type FinMindClient struct {
 	httpClient   *http.Client
 	rateLimiter  *rate.Limiter
 	quotaTracker *DailyQuotaTracker
+	// retryCfg is the shared fetchWithRetry policy (P0-5). Before P0-5 the
+	// main fetchDataset path had NO retry at all — every 5xx/429 failed
+	// immediately and the next scheduled cycle repeated the failure.
+	retryCfg retryConfig
 }
 
 type FinMindResponse struct {
@@ -140,6 +144,7 @@ func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
 		httpClient:   httpclient.NewFactory().NewClient(30 * time.Second),
 		rateLimiter:  rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
 		quotaTracker: tracker,
+		retryCfg:     defaultRetryConfig(),
 	}
 }
 func (c *FinMindClient) SetHTTPClient(client *http.Client) {
@@ -208,7 +213,9 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	// P0-5: shared fetchWithRetry — 429/5xx retried with Retry-After /
+	// exponential backoff (previously no retry on the main data path).
+	resp, err := fetchWithRetry(ctx, c.httpClient, req, c.retryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("finmind: http request: %w", err)
 	}
@@ -234,6 +241,17 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 			"dataset", dataset,
 			"data_id", dataId,
 		)
+		// P0-1 (provider-resilience): a server-side 402 IS the FinMind quota
+		// signal ("Requests reach the upper limit" — free-tier daily cap).
+		// Wrap ErrQuotaExhausted so errors.Is at the adapter/industry layer
+		// maps it to warn/quotas instead of a plain "status 402" string that
+		// paged on-call. Previously only the LOCAL daily-quota gate wrapped
+		// the sentinel; the server-side 402 fell through to the generic
+		// status error below, so channel-health reported "error" for a
+		// budget condition that auto-resets at 00:00 TW.
+		if resp.StatusCode == http.StatusPaymentRequired {
+			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)
+		}
 		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
