@@ -16,10 +16,22 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/db"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
+
+// dailyQuoteFetcher is the subset of TWSEClient used by gap backfill, so
+// tests can substitute a mock without a network client.
+type dailyQuoteFetcher interface {
+	GetDailyQuote(ctx context.Context, date, symbol string) (domain.Quote, error)
+}
+
+// gapBackfillDefaultWindow is the default look-back window (calendar days)
+// for the post-sync gap backfill. Cron runs daily; 5 calendar days covers the
+// previous trading week, so a single-day API failure is retried within days.
+const gapBackfillDefaultWindow = 5
 
 // stockNameMap mirrors frontend mapping for CSV output
 var stockNameMap = map[string]string{
@@ -72,6 +84,7 @@ func main() {
 	csvPath := flag.String("csv", constants.ReplayCSVPath, "target CSV path")
 	backfillStart := flag.String("backfill-start", "", "backfill start date (YYYY-MM-DD)")
 	backfillEnd := flag.String("backfill-end", "", "backfill end date (YYYY-MM-DD)")
+	backfillWindow := flag.Int("backfill-window", gapBackfillDefaultWindow, "gap backfill look-back window in calendar days (0 disables)")
 	flag.Parse()
 
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(*csvPath)), "state")
@@ -97,8 +110,21 @@ func main() {
 		return
 	}
 
+	client := marketdata.GetSharedTWSEClient()
+
+	// Daily sync first (existing cron behavior). On failure we still run the
+	// gap backfill below — a failed today-fetch must not block recovery of
+	// older gaps — and report the sync failure via a non-zero exit afterwards.
+	var syncErr error
 	if err := runDailySync(*csvPath, pool); err != nil {
-		log.Fatalf("daily sync failed: %v", err)
+		log.Printf("[DailySync] failed: %v (continuing with gap backfill)", err)
+		syncErr = err
+	}
+	if err := runGapBackfill(*csvPath, *backfillWindow, time.Now(), client); err != nil {
+		log.Fatalf("gap backfill failed: %v", err)
+	}
+	if syncErr != nil {
+		log.Fatalf("daily sync failed: %v", syncErr)
 	}
 }
 
@@ -198,6 +224,85 @@ func runBackfill(csvPath, startStr, endStr string) error {
 			log.Printf("[Backfill] No data available for %s", dateStr)
 		}
 	}
+	return nil
+}
+
+// runGapBackfill closes replay gaps: after the daily sync, scan back
+// `window` calendar days from `now`, find dates missing from the CSV, and
+// refetch them per-symbol with GetDailyQuote (same per-date loop as
+// runBackfill). Dates already present are never refetched (dedup is also
+// enforced by appendRecords). Non-trading days (weekends / known TWSE
+// holidays via marketdata.IsTaiwanTradingDay) are skipped without API calls;
+// a date that yields 0 quotes is treated as "no data, not a gap" per the
+// TWSE-empty-response rule and is simply logged and retried on the next run.
+func runGapBackfill(csvPath string, window int, now time.Time, client dailyQuoteFetcher) error {
+	if window <= 0 {
+		log.Printf("[GapBackfill] window %d <= 0, disabled", window)
+		return nil
+	}
+
+	existing, err := loadCSV(csvPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("load csv: %w", err)
+	}
+	present := make(map[string]bool, len(existing))
+	for _, r := range existing {
+		present[r.Date] = true
+	}
+
+	ctx := context.Background()
+	symbols := orchestrator.DefaultSymbols()
+	failedDays := 0
+	appendedDays := 0
+
+	for i := window - 1; i >= 0; i-- {
+		d := now.AddDate(0, 0, -i)
+		dateStr := d.Format("2006-01-02")
+		if present[dateStr] {
+			continue // already have this date — never refetch
+		}
+		if !marketdata.IsTaiwanTradingDay(d) {
+			continue // weekend / known holiday — not a gap
+		}
+
+		apiDateStr := d.Format("20060102") // TWSE API expects YYYYMMDD
+		var records []csvRecord
+		for _, sym := range symbols {
+			code := stripSuffix(sym)
+			quote, err := client.GetDailyQuote(ctx, apiDateStr, code)
+			if err != nil {
+				log.Printf("[GapBackfill]   skip %s on %s: %v", code, dateStr, err)
+				continue
+			}
+			records = append(records, csvRecord{
+				Date:        dateStr,
+				Code:        code,
+				Name:        stockNameMap[code],
+				TradeVolume: quote.Volume,
+				Open:        quote.Open,
+				High:        quote.High,
+				Low:         quote.Low,
+				Close:       quote.Last,
+			})
+		}
+
+		if len(records) == 0 {
+			// All-zero quotes ⇒ treat as non-trading day (holiday not in the
+			// calendar, or API outage). Not a hard gap; the date stays missing
+			// and is retried on the next run while inside the window.
+			log.Printf("[GapBackfill] failed %s (0/%d quotes fetched; treated as non-trading day, will retry)", dateStr, len(symbols))
+			failedDays++
+			continue
+		}
+
+		if err := appendRecords(csvPath, records); err != nil {
+			return fmt.Errorf("gap backfill append %s: %w", dateStr, err)
+		}
+		log.Printf("[GapBackfill] Appended %d records for %s", len(records), dateStr)
+		appendedDays++
+	}
+
+	log.Printf("[GapBackfill] done: window=%d days, appended=%d days, failed/skipped=%d days", window, appendedDays, failedDays)
 	return nil
 }
 
