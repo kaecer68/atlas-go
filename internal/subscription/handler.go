@@ -17,6 +17,11 @@ import (
 // proxyTimeout bounds each go-member upstream call (login/register proxy).
 const proxyTimeout = 8 * time.Second
 
+// sessionTTL is the lifetime of atlas-issued session tokens (login memory).
+// go-member access tokens only live 15 minutes; atlas re-signs them into
+// 7-day session cookies at SSO/login so users stay logged in across windows.
+const sessionTTL = 7 * 24 * time.Hour
+
 // Handler serves subscription and auth endpoints.
 type Handler struct {
 	store    *Store
@@ -88,12 +93,22 @@ func (h *Handler) handleSSO(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"missing token"}`, http.StatusBadRequest)
 		return
 	}
-	if _, err := h.jwt.Verify(token); err != nil {
+	claims, err := h.jwt.Verify(token)
+	if err != nil {
 		logging.Info("subscription", "sso_invalid_token", "err", err.Error())
 		http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 		return
 	}
-	setAuthCookie(w, token)
+	// 2026-08-24（登入記憶）：go-member access token 只有 15 分鐘 TTL，直接
+	// 存 cookie 會讓 session 很快就失效。這裡把驗證過的 claims 重新簽成
+	// atlas 自己的長效 session token（7 天）再寫入 cookie。
+	sessionToken, err := h.jwt.GenerateSession(claims, sessionTTL)
+	if err != nil {
+		logging.Warn("subscription", "sso_session_mint_failed", logging.Err(err))
+		http.Error(w, `{"error":"session mint failed"}`, http.StatusInternalServerError)
+		return
+	}
+	setAuthCookie(w, sessionToken, sessionTTL)
 
 	redirect := r.URL.Query().Get("redirect")
 	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
@@ -104,9 +119,10 @@ func (h *Handler) handleSSO(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true", "redirect": redirect})
 }
 
-// setAuthCookie writes the HttpOnly token cookie. Shared by /register
-// and /login so both endpoints produce identical session state.
-func setAuthCookie(w http.ResponseWriter, token string) {
+// setAuthCookie writes the HttpOnly token cookie. Shared by /register,
+// /login and /sso so all endpoints produce identical session state.
+// maxAge controls how long the cookie (and the login memory) persists.
+func setAuthCookie(w http.ResponseWriter, token string, maxAge time.Duration) {
 	//nolint:gosec // local dev without HTTPS; Secure flag is environment-dependent
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
@@ -115,7 +131,7 @@ func setAuthCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(24 * time.Hour.Seconds()),
+		MaxAge:   int(maxAge.Seconds()),
 	})
 }
 
@@ -161,7 +177,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	token, _ := h.jwt.Generate(user, 24*time.Hour)
 	logging.Info("subscription", "user_registered", "email", req.Email)
-	setAuthCookie(w, token)
+	setAuthCookie(w, token, 24*time.Hour)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"user":  user,
 		"token": token,
@@ -194,11 +210,26 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusBadGateway, map[string]string{"error": "login upstream returned no token"})
 				return
 			}
+			// 2026-08-24（登入記憶）：驗證 upstream RS256 token 後重新簽成
+			// atlas 長效 session token（7 天），cookie 與回應 body 都給
+			// session token — 不再直接把 15 分鐘就過期的 access token 存進 cookie。
+			claims, err := h.jwt.Verify(accessToken)
+			if err != nil {
+				logging.Warn("subscription", "login_upstream_token_invalid", logging.Err(err))
+				writeJSON(w, http.StatusBadGateway, map[string]string{"error": "login upstream token invalid"})
+				return
+			}
+			sessionToken, err := h.jwt.GenerateSession(claims, sessionTTL)
+			if err != nil {
+				logging.Warn("subscription", "login_session_mint_failed", logging.Err(err))
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "session mint failed"})
+				return
+			}
 			logging.Info("subscription", "user_login", "email", req.Email)
-			setAuthCookie(w, accessToken)
+			setAuthCookie(w, sessionToken, sessionTTL)
 			writeJSON(w, http.StatusOK, map[string]any{
 				"user":  map[string]string{"email": req.Email},
-				"token": accessToken,
+				"token": sessionToken,
 			})
 			return
 		}
@@ -216,7 +247,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	token, _ := h.jwt.Generate(user, 24*time.Hour)
 	logging.Info("subscription", "user_login", "email", req.Email)
-	setAuthCookie(w, token)
+	setAuthCookie(w, token, 24*time.Hour)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":  user,
 		"token": token,

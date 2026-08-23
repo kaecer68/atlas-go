@@ -978,11 +978,18 @@ func run(args []string, deps appDeps) error {
 			if jwtSecret == "" {
 				jwtSecret = "atlas-dev-secret-change-in-prod"
 			}
+			// 2026-08-24（登入記憶）：ATLAS_SESSION_SECRET 簽發長效 atlas
+			// session token（SSO/login 時把 15 分鐘就過期的 go-member access
+			// token 重新簽成 7 天 session）。未設定時退回 ATLAS_JWT_SECRET。
+			sessionSecret := config.GetSecret("ATLAS_SESSION_SECRET")
+			if sessionSecret == "" {
+				sessionSecret = jwtSecret
+			}
 			// C-02 atlas-jwt-trust: when GO_MEMBER_JWKS_URL is set, JWTManager
 			// verifies go-member RS256 tokens against the JWKS and maps tiers;
 			// otherwise it stays on the legacy HS256 self-signed path.
 			goMemberJwksURL := config.GetSecret("GO_MEMBER_JWKS_URL")
-			jwtMgr := subscription.NewJWTManager(jwtSecret, goMemberJwksURL)
+			jwtMgr := subscription.NewJWTManager(sessionSecret, goMemberJwksURL)
 			// M4b: GO_MEMBER_API_BASE_URL enables the login/register thin proxy
 			// to go-member (which signs RS256 and owns the membership source of
 			// truth). When empty, login/register keep the legacy local HS256 path.
