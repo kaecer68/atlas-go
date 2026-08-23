@@ -234,6 +234,17 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 			"dataset", dataset,
 			"data_id", dataId,
 		)
+		// P0-1 (provider-resilience): a server-side 402 IS the FinMind quota
+		// signal ("Requests reach the upper limit" — free-tier daily cap).
+		// Wrap ErrQuotaExhausted so errors.Is at the adapter/industry layer
+		// maps it to warn/quotas instead of a plain "status 402" string that
+		// paged on-call. Previously only the LOCAL daily-quota gate wrapped
+		// the sentinel; the server-side 402 fell through to the generic
+		// status error below, so channel-health reported "error" for a
+		// budget condition that auto-resets at 00:00 TW.
+		if resp.StatusCode == http.StatusPaymentRequired {
+			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)
+		}
 		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 

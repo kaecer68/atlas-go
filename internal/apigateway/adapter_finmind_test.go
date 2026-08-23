@@ -2,6 +2,7 @@ package apigateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -159,5 +160,36 @@ func TestFinMindChannelAdapter_HealthCheck_QuotaExhausted_MapsToWarn(t *testing.
 	}
 	if status.Status != "error" {
 		t.Errorf("non-quota HTTP error should map to %q, got %q", "error", status.Status)
+	}
+}
+
+// TestFinMindChannelAdapter_HealthCheck_Server402_MapsToWarn is the P0-1
+// end-to-end contract test: a SERVER-side 402 (real FinMind quota signal)
+// must surface as status="warn" through HealthCheck, exactly like the
+// local daily-quota gate. Before P0-1, fetchDataset returned a plain
+// "status 402" error that classified as "error" and paged on-call.
+func TestFinMindChannelAdapter_HealthCheck_Server402_MapsToWarn(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = w.Write([]byte(`{"msg":"Requests reach the upper limit. https://finmindtrade.com/","status":402}`))
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, nil)
+	marketdata.ResetSharedFinMindClient()
+	client := marketdata.NewFinMindClient("test-key")
+	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
+
+	adapter := NewFinMindChannelAdapter(client)
+	status, err := adapter.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("expected error on 402 response")
+	}
+	if !errors.Is(err, marketdata.ErrQuotaExhausted) {
+		t.Errorf("HealthCheck error must wrap ErrQuotaExhausted, got: %v", err)
+	}
+	if status.Status != "warn" {
+		t.Errorf("server-402 HealthCheck Status = %q, want %q (quota must not page on-call)", status.Status, "warn")
 	}
 }

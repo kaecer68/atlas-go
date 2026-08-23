@@ -813,27 +813,31 @@ func TestClassifyFinMindError_RateLimited(t *testing.T) {
 	}
 }
 
-// TestClassifyFinMindError_Server402 驗證 server-side 402 body 被分到 "quota"
-// (Issue #1465 HF-1b — 與 ErrQuotaExhausted 共用 quota bucket)。
+// TestClassifyFinMindError_Server402 驗證 server-side 402 被 client wrap 成
+// marketdata.ErrQuotaExhausted 後分到 "quota"（P0-1：移除字串比對，統一走
+// sentinel chain）。Issue #1465 HF-1b 的 quota bucket 語義不變 — 只是偵測
+// 方式從字串比對改為 errors.Is。
 func TestClassifyFinMindError_Server402(t *testing.T) {
-	msg := `finmind: status 402, body: {"msg":"Requests reach the upper limit. https://finmindtrade.com/","status":402}`
-	if got := classifyFinMindError(fmt.Errorf("%s", msg)); got != "quota" {
-		t.Errorf("server 402: got %q, want %q", got, "quota")
+	// fetchDataset 對 402 的回傳形狀：fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, body)
+	msg := `{"msg":"Requests reach the upper limit. https://finmindtrade.com/","status":402}`
+	wrapped := fmt.Errorf("finmind: %w: %s", marketdata.ErrQuotaExhausted, msg)
+	if got := classifyFinMindError(wrapped); got != "quota" {
+		t.Errorf("server 402 wrapped: got %q, want %q", got, "quota")
 	}
-	// 獨立 body 也應識別
-	if got := classifyFinMindError(fmt.Errorf("finmind: status 402, body: Requests reach the upper limit")); got != "quota" {
-		t.Errorf("bare 402: got %q, want %q", got, "quota")
+	// 裸 402 字串（沒有 sentinel）不再被視為 quota — 上層必須依賴 wrap chain。
+	if got := classifyFinMindError(fmt.Errorf("finmind: status 402, body: Requests reach the upper limit")); got == "quota" {
+		t.Errorf("bare 402 string without ErrQuotaExhausted should NOT classify as quota (string matching removed), got %q", got)
 	}
 }
 
-// TestIsFinMindQuotaOrRateLimited 驗證 helper 的判斷面：
-// rate-limit sentinel、402 body → true；no-data / transport → false。
+// TestIsFinMindQuotaOrRateLimited 驗證 helper 的判斷面（P0-1 改版）：
+// rate-limit / quota sentinel（含 wrap chain）→ true；no-data / transport / 裸 402 字串 → false。
 func TestIsFinMindQuotaOrRateLimited(t *testing.T) {
 	quotaCases := []error{
 		marketdata.ErrRateLimited,
+		marketdata.ErrQuotaExhausted,
 		fmt.Errorf("finmind: rate limit wait: %w", marketdata.ErrRateLimited),
-		fmt.Errorf("finmind: status 402, body: Requests reach the upper limit"),
-		fmt.Errorf("finmind: status 402, body: {\"msg\":\"Requests reach the upper limit\",\"status\":402}"),
+		fmt.Errorf("finmind: %w: {\"msg\":\"Requests reach the upper limit\",\"status\":402}", marketdata.ErrQuotaExhausted),
 	}
 	for _, err := range quotaCases {
 		if !isFinMindQuotaOrRateLimited(err) {
@@ -845,6 +849,8 @@ func TestIsFinMindQuotaOrRateLimited(t *testing.T) {
 		fmt.Errorf("finmind: no month revenue data for 2330.TW 2026-08"),
 		fmt.Errorf("finmind revenue: no data for 2330.TW in last 3 months"),
 		fmt.Errorf("finmind: http request: context deadline exceeded"),
+		// 裸 402 字串（未 wrap sentinel）不再是 quota 訊號 — client 已保證 wrap。
+		fmt.Errorf("finmind: status 402, body: Requests reach the upper limit"),
 	}
 	for _, err := range nonQuotaCases {
 		if isFinMindQuotaOrRateLimited(err) {

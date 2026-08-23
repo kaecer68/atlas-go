@@ -420,21 +420,23 @@ func writeCalibratedConfig(configPath string, results []CalibrationResult) error
 // isFinMindQuotaOrRateLimited reports whether err is a quota/rate-limit
 // condition that must NOT be treated as "no data":
 //   - local rate limiter Wait failure (ErrRateLimited, 5s ctx vs 6s token)
-//   - server-side 402 (finmind_client.go fetchDataset non-2xx body)
+//   - local daily-quota gate or server-side 402 (both wrapped in
+//     marketdata.ErrQuotaExhausted by finmind_client.go fetchDataset)
 //
 // Issue #1465 P1.10: without this, both conditions were swallowed by the
 // month/quarter fallback loop and surfaced as misleading
 // "no data in last N months" → metric kind=no_data.
+//
+// P0-1 (provider-resilience): server-side 402 is now wrapped in
+// ErrQuotaExhausted by the client, so the previous brittle string matches
+// ("Requests reach the upper limit" / "status 402") are removed — the
+// sentinel chain is the single source of truth and survives refactors.
 func isFinMindQuotaOrRateLimited(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, marketdata.ErrRateLimited) {
-		return true
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "Requests reach the upper limit") ||
-		strings.Contains(msg, "status 402")
+	return errors.Is(err, marketdata.ErrRateLimited) ||
+		errors.Is(err, marketdata.ErrQuotaExhausted)
 }
 
 func classifyFinMindError(err error) string {
@@ -446,12 +448,6 @@ func classifyFinMindError(err error) string {
 	}
 	if errors.Is(err, marketdata.ErrRateLimited) {
 		return "rate_limited"
-	}
-	// Server-side 402 (Requests reach the upper limit) is a quota
-	// condition — classify as quota so alert rules can share the bucket
-	// with ErrQuotaExhausted (Issue #1465 HF-1b).
-	if isFinMindQuotaOrRateLimited(err) {
-		return "quota"
 	}
 	msg := err.Error()
 	switch {
