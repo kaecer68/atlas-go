@@ -127,8 +127,8 @@ func TestSignalEngineCircuitBreakerActive(t *testing.T) {
 	for i := range 25 {
 		session := domain.ReplaySession{ID: "sess-cb-" + string(rune('a'+i))}
 		summary := domain.SessionSummary{
-			SessionID:      session.ID,
-			Regime:         domain.RegimeRiskOn,
+			SessionID: session.ID,
+			Regime:    domain.RegimeRiskOn,
 			// Monotonic decline but always positive — the SSoT write guard
 			// rejects PortfolioValue<=0 (corrupted summary), so the circuit
 			// breaker fixture must not dip to zero.
