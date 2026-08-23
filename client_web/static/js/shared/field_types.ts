@@ -1475,6 +1475,12 @@ export interface FetcherStatus {
   geopolitical_risk: string;
 }
 
+export interface FieldChange {
+  path: string;
+  old_value: string;
+  new_value: string;
+}
+
 export interface FinMindResponse {
   msg: string;
   status: number;
@@ -3339,6 +3345,11 @@ export interface Report {
   strategy: StrategySection;
   risk: RiskSection;
   period?: PeriodSection | null;
+  workflow_status?: string;
+  revised_at?: string;
+  revised_by?: string;
+  revision_note?: string;
+  revision_history?: RevisionEntry[];
 }
 
 export interface ReportEntry {
@@ -3416,6 +3427,24 @@ export interface RevenueSurprise {
   actual: number;
   surprise_pct: number;
   flow_impact: string;
+}
+
+export interface ReviseField {
+  path: string;
+  value: string;
+}
+
+export interface ReviseRequest {
+  note: string;
+  by?: string;
+  fields: ReviseField[];
+}
+
+export interface RevisionEntry {
+  at: string;
+  by: string;
+  note: string;
+  field_changes?: FieldChange[];
 }
 
 export interface RiskEvent {
@@ -4340,6 +4369,19 @@ export interface TokenClaims {
   tier: string;
   membershipExpiresAt: number;
   exp: number;
+}
+
+export interface TrackedClaim {
+  id: string;
+  report_date: string;
+  claim_type: string;
+  claim_text: string;
+  symbol?: string;
+  verify_after: string;
+  status: string;
+  created_at: string;
+  verified_at?: string;
+  outcome?: string;
 }
 
 export interface TradeRecord {

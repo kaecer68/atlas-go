@@ -847,6 +847,10 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dailyRptGen := dailyreport.NewGenerator(cfg.WorkDir)
+		// Cross-day claim tracker: persists report claims under the ledger dir
+		// and verifies them against replay prices / recommendation outcomes.
+		reportTracker := dailyreport.NewTracker(cfg.LedgerDir, filepath.Join(cfg.WorkDir, "data", "replay"))
+		dailyRptGen.SetTracker(reportTracker)
 		var macroProvider marketdata.MacroDataProvider
 		var eventPredictor orchestrator.EventFlowPredictor // F04
 		// BK-15: capitalFlowStore is the production-side handle for the
@@ -1073,7 +1077,7 @@ func run(args []string, deps appDeps) error {
 				TriggeredIndicators: indicators,
 			}
 		})
-		dailyreport.RegisterRoutes(mux, dailyRptGen)
+		dailyreport.RegisterRoutes(mux, dailyRptGen, reportTracker)
 		log.Printf("[DailyReport] registered /api/reports/* routes")
 
 		if taskManager != nil {
@@ -1392,6 +1396,37 @@ func run(args []string, deps appDeps) error {
 				},
 			})
 			log.Printf("[DailyReport] registered daily_report_generate background task (1h interval, gated 14:00 Taipei)")
+
+			// Cross-day claim verification: after the 14:00 report generation,
+			// verify due claims once per day at 15:00 Taipei. Skips via
+			// ErrTaskSkipped outside the window and when nothing is due, so
+			// the failure counter is untouched (daily_report_generate pattern).
+			_ = taskMgr.Register(&apigateway.ScheduledTask{
+				Name:      "report_tracker_verify",
+				Interval:  1 * time.Hour,
+				TimeGated: true,
+				Enabled:   true,
+				Task: func(ctx context.Context) error {
+					taipei, tzErr := time.LoadLocation("Asia/Taipei")
+					if tzErr != nil {
+						taipei = time.FixedZone("CST", 8*3600)
+					}
+					now := time.Now().In(taipei)
+					if now.Hour() != 15 {
+						return apigateway.ErrTaskSkipped
+					}
+					changed, err := reportTracker.VerifyDueClaims(now)
+					if err != nil {
+						return fmt.Errorf("verify tracked claims: %w", err)
+					}
+					if changed == 0 {
+						return apigateway.ErrTaskSkipped
+					}
+					log.Printf("[ReportTracker] verified %d due claims", changed)
+					return nil
+				},
+			})
+			log.Printf("[ReportTracker] registered report_tracker_verify background task (1h interval, gated 15:00 Taipei)")
 
 			// Register auto_daily_simulation — runs daily simulation at market close.
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
