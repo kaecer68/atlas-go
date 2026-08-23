@@ -440,11 +440,6 @@ func (s *yahooSession) blockedUntilTime() time.Time {
 	return s.blockedUntil
 }
 
-// isBlocked reports whether the negative cache is active (429/HTML block).
-func (s *yahooSession) isBlocked() bool {
-	return time.Now().Before(s.blockedUntilTime())
-}
-
 // markBlocked sets the session-level negative cache for d (clamped by the
 // caller to [5,10] minutes).
 func (s *yahooSession) markBlocked(d time.Duration) {
