@@ -12,9 +12,11 @@ type PerformanceService struct {
 }
 
 // NewPerformanceService creates a new PerformanceService backed by the given
-// outcome store. The store is created by the caller via ledger.NewOutcomeStore(cfg)
-// so StoreBackend=sqlite reports read the same session/outcome source the sim
-// writes (perf-report-zero audit BL-01).
+// outcome store. The store is created by the caller via
+// ledger.NewReportOutcomeStore(cfg): postgres backend reads PG first with a
+// JSONL fallback + degraded marker (SSoT decision
+// docs/decisions/2026-08-23-performance-report-ssot.md); other backends keep
+// NewOutcomeStore semantics (perf-report-zero audit BL-01).
 func NewPerformanceService(store ledger.OutcomeStore, ledgerDir string) *PerformanceService {
 	return &PerformanceService{store: store, ledgerDir: ledgerDir}
 }

@@ -237,6 +237,12 @@ func (s *Store) RecordSessionExperiment(session domain.ReplaySession, record dom
 }
 
 func (s *Store) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	// SSoT write guard (2026-08-23): strict validation on the real-time write
+	// path — a corrupted summary is rejected before it can pollute the
+	// performance report later.
+	if err := summary.Validate(); err != nil {
+		return fmt.Errorf("record session summary: rejected corrupted summary: %w", err)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := os.MkdirAll(s.sessionDir(session.ID), 0o755); err != nil {

@@ -775,9 +775,12 @@ func TestSQLiteOutcomeStoreUpdateSessionSummary(t *testing.T) {
 	}
 
 	summary1 := domain.SessionSummary{
-		SessionID:    "session-20260115",
-		OutcomeCount: 5,
-		RecordedAt:   time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		SessionID:      "session-20260115",
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     500000,
+		PortfolioValue: 1500000,
+		OutcomeCount:   5,
+		RecordedAt:     time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
 	}
 
 	if err := store.RecordSessionSummary(session, summary1); err != nil {
@@ -785,9 +788,12 @@ func TestSQLiteOutcomeStoreUpdateSessionSummary(t *testing.T) {
 	}
 
 	summary2 := domain.SessionSummary{
-		SessionID:    "session-20260115",
-		OutcomeCount: 10,
-		RecordedAt:   time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC),
+		SessionID:      "session-20260115",
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     500000,
+		PortfolioValue: 1600000,
+		OutcomeCount:   10,
+		RecordedAt:     time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC),
 	}
 
 	if err := store.RecordSessionSummary(session, summary2); err != nil {

@@ -38,7 +38,11 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 	// Load all snapshot dates.
 	snapshots := loadSnapshots(t, snapshotDir)
 	if len(snapshots) == 0 {
-		t.Fatal("no snapshots found")
+		// Deterministic-skip contract (2026-08-23, CI quality fix): a golden
+		// run without dated macro snapshots is an environment without data,
+		// not a code failure. Skip instead of failing so `-tags=golden` is
+		// safe to run on any checkout.
+		t.Skipf("no dated macro snapshots in %s", snapshotDir)
 	}
 	t.Logf("loaded %d snapshots", len(snapshots))
 
@@ -234,10 +238,16 @@ func TestGolden_BacktestAllDates(t *testing.T) {
 // ── helpers ──
 
 func findWorkDir() string {
-	// Walk up from cwd to find go.mod then check for data/state/macro.
-	// In a git worktree, the data directory (gitignored) lives next door
-	// to the wip worktree, not inside it. We probe for an actual dated
-	// snapshot file (not just _metadata.json) to distinguish worktree vs main.
+	// DESIGN INTENT (2026-08-23, CI quality fix): this golden test reads real
+	// runtime data by design — it compares calculator output against the
+	// period_history table in data/state/atlas.db. Reading sibling worktree
+	// data is intentional: in a git worktree the gitignored data directory
+	// lives next door to the wip worktree, not inside it. This file is gated
+	// behind `//go:build golden` (opt-in only, never part of CI), so the
+	// sibling/parent probe cannot flake CI. Determinism is enforced by skip
+	// conditions: no snapshot dir → skip (above); no dated snapshots → skip
+	// (loadSnapshots check). We probe for an actual dated snapshot file (not
+	// just _metadata.json) to distinguish worktree vs main.
 	dir, _ := os.Getwd()
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
@@ -372,7 +382,11 @@ func TestGolden_B5Batch2(t *testing.T) {
 
 	snapshots := loadSnapshots(t, snapshotDir)
 	if len(snapshots) == 0 {
-		t.Fatal("no snapshots found")
+		// Deterministic-skip contract (2026-08-23, CI quality fix): a golden
+		// run without dated macro snapshots is an environment without data,
+		// not a code failure. Skip instead of failing so `-tags=golden` is
+		// safe to run on any checkout.
+		t.Skipf("no dated macro snapshots in %s", snapshotDir)
 	}
 	t.Logf("loaded %d snapshots", len(snapshots))
 
