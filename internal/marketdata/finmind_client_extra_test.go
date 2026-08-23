@@ -1001,6 +1001,37 @@ func TestFinMindClient_fetchDataset_Non2xx_BodyTooLarge(t *testing.T) {
 	}
 }
 
+// TestFinMindClient_fetchDataset_402_WrapsErrQuotaExhausted is the P0-1
+// regression test: a server-side 402 (FinMind "Requests reach the upper
+// limit" — free-tier daily quota) must be wrapped in ErrQuotaExhausted so
+// the channel adapter's errors.Is check maps it to warn, not error.
+// Before P0-1 the 402 fell through to the generic "status 402" error and
+// on-call got paged for a quota condition that auto-resets at 00:00 TW.
+func TestFinMindClient_fetchDataset_402_WrapsErrQuotaExhausted(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = w.Write([]byte(`{"msg":"Requests reach the upper limit. https://finmindtrade.com/","status":402}`))
+	}))
+	defer ts.Close()
+
+	c := NewFinMindClient("k")
+	c.httpClient = &http.Client{
+		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
+	}
+
+	_, err := c.fetchDataset(context.Background(), "TaiwanStockPrice", "2330", "2026-08-04", "2026-08-04")
+	if err == nil {
+		t.Fatal("expected error for 402 response")
+	}
+	if !errors.Is(err, ErrQuotaExhausted) {
+		t.Errorf("402 error must wrap ErrQuotaExhausted, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Requests reach the upper limit") {
+		t.Errorf("error %q must include the real FinMind reason so operators can diagnose", err.Error())
+	}
+}
+
 // TestLastDayOfMonth_AllMonthsAndLeapYears is the PR-E regression test for
 // the FinMind 80+ day "auto_cycle_update" stale bug.
 //

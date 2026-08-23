@@ -10,6 +10,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/replay"
 )
 
@@ -58,7 +59,12 @@ func main() {
 		}
 	}
 
-	fmt.Printf("loaded %d daily bars from %s\n", len(bars), *csvPath)
+	// Skip weekends and Taiwan public holidays before writing: a closed-market
+	// row in the replay CSV is a copy of the previous trading day and poisons
+	// ForwardReturn duplicate detection downstream (2026-08-23 replay bug).
+	bars, skipped := filterTradingDays(bars)
+
+	fmt.Printf("loaded %d daily bars from %s (%d non-trading-day rows skipped)\n", len(bars), *csvPath, skipped)
 	if *dryRun {
 		return
 	}
@@ -77,4 +83,21 @@ func getEnvDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// filterTradingDays removes bars on non-trading days (weekends and Taiwan
+// public holidays per marketdata.IsTaiwanTradingDay) and returns the kept
+// bars plus the number of removed rows. Same guard as
+// cmd/cron-quote-backfill and cmd/daily-replay-sync runGapBackfill.
+func filterTradingDays(bars []domain.DailyBar) ([]domain.DailyBar, int) {
+	kept := bars[:0]
+	skipped := 0
+	for _, bar := range bars {
+		if !marketdata.IsTaiwanTradingDay(bar.Date) {
+			skipped++
+			continue
+		}
+		kept = append(kept, bar)
+	}
+	return kept, skipped
 }

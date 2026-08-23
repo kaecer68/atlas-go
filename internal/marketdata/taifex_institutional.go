@@ -88,13 +88,40 @@ func (t *TAIFEXProvider) FetchInstitutionalFuturesDaily(ctx context.Context) (*I
 		if seen[r.Item] {
 			continue
 		}
+		// P0-3: a non-numeric / missing field means the upstream schema
+		// changed — surface typed ErrTAIFEXSchema instead of silently
+		// recording zeros (0 data + nil error looked healthy downstream).
+		tradeLong, ok := parseInt64OK(r.TradingVolumeLong)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s TradingVolume(Long)=%q not parseable", ErrTAIFEXSchema, r.Item, r.TradingVolumeLong)
+		}
+		tradeShort, ok := parseInt64OK(r.TradingVolumeShort)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s TradingVolume(Short)=%q not parseable", ErrTAIFEXSchema, r.Item, r.TradingVolumeShort)
+		}
+		tradeNet, ok := parseInt64OK(r.TradingVolumeNet)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s TradingVolume(Net)=%q not parseable", ErrTAIFEXSchema, r.Item, r.TradingVolumeNet)
+		}
+		oiLong, ok := parseInt64OK(r.OpenInterestLong)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s OpenInterest(Long)=%q not parseable", ErrTAIFEXSchema, r.Item, r.OpenInterestLong)
+		}
+		oiShort, ok := parseInt64OK(r.OpenInterestShort)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s OpenInterest(Short)=%q not parseable", ErrTAIFEXSchema, r.Item, r.OpenInterestShort)
+		}
+		oiNet, ok := parseInt64OK(r.OpenInterestNet)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s OpenInterest(Net)=%q not parseable", ErrTAIFEXSchema, r.Item, r.OpenInterestNet)
+		}
 		side := TraderSide{
-			TradeLong:  parseInt64(r.TradingVolumeLong),
-			TradeShort: parseInt64(r.TradingVolumeShort),
-			TradeNet:   parseInt64(r.TradingVolumeNet),
-			OILong:     parseInt64(r.OpenInterestLong),
-			OIShort:    parseInt64(r.OpenInterestShort),
-			OINet:      parseInt64(r.OpenInterestNet),
+			TradeLong:  tradeLong,
+			TradeShort: tradeShort,
+			TradeNet:   tradeNet,
+			OILong:     oiLong,
+			OIShort:    oiShort,
+			OINet:      oiNet,
 		}
 		switch r.Item {
 		case "外資及陸資":

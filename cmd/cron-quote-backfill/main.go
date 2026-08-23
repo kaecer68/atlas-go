@@ -119,6 +119,14 @@ func main() {
 func backfillSymbol(ctx context.Context, c *marketdata.FinMindClient, s ledger.QuoteStore, sym string, start, end time.Time, dry bool) (int, error) {
 	var bars []domain.DailyBar
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		// Skip weekends and Taiwan public holidays: FinMind returns the last
+		// trading day's quote for a closed-market date, which backfills a
+		// "copy of the previous trading day" row and poisons ForwardReturn
+		// duplicate detection downstream (2026-08-23 replay bug). No fetch,
+		// no write. Same guard as cmd/daily-replay-sync runGapBackfill.
+		if !marketdata.IsTaiwanTradingDay(d) {
+			continue
+		}
 		q, err := c.GetStockPrice(ctx, sym, d.Format("2006-01-02"))
 		if err != nil {
 			return len(bars), fmt.Errorf("%s @ %s: %w", sym, d.Format("2006-01-02"), err)

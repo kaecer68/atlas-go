@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -115,5 +116,107 @@ func TestTAIFEXFetchPCR_ZeroRatio(t *testing.T) {
 	}
 	if stats.PutCallVolumeRatio != 0 {
 		t.Errorf("PutCallVolumeRatio = %v, want 0", stats.PutCallVolumeRatio)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// P0-3: typed ErrTAIFEXSchema — required-field validation. A missing or
+// non-numeric field must surface ErrTAIFEXSchema (errors.Is-detectable)
+// instead of silently parsing to 0 ("0 data, nil error" hid schema changes).
+// ---------------------------------------------------------------------------
+
+func TestTAIFEXFetchPCR_EmptyField_ReturnsErrTAIFEXSchema(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// PutVolume is empty — upstream renamed/removed the column.
+		_, _ = w.Write([]byte(`[
+			{"Date":"20260811","PutVolume":"","CallVolume":"200","PutCallVolumeRatio%":"110.43","PutOI":"50","CallOI":"40","PutCallOIRatio%":"123.58"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	_, err := p.FetchPCR(context.Background())
+	if err == nil {
+		t.Fatal("FetchPCR with empty PutVolume = nil error, want ErrTAIFEXSchema")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
+	}
+}
+
+func TestTAIFEXFetchPCR_MissingRatioField_ReturnsErrTAIFEXSchema(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// PutCallVolumeRatio% field renamed → absent from JSON.
+		_, _ = w.Write([]byte(`[
+			{"Date":"20260811","PutVolume":"100","CallVolume":"200","PutOI":"50","CallOI":"40","PutCallOIRatio%":"123.58"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	_, err := p.FetchPCR(context.Background())
+	if err == nil {
+		t.Fatal("FetchPCR with missing ratio field = nil error, want ErrTAIFEXSchema")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
+	}
+}
+
+func TestTAIFEXFetchRetailFuturesOI_BadField_ReturnsErrTAIFEXSchema(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Top10Buy is a renamed/non-numeric field.
+		_, _ = w.Write([]byte(`[
+			{"Date":"20260811","Contract":"TX","SettlementMonth":"999912","TypeOfTraders":"0","Top5Buy":"1000","Top5Sell":"900","Top10Buy":"--","Top10Sell":"800","OIOfMarket":"50000"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	_, err := p.FetchRetailFuturesOI(context.Background())
+	if err == nil {
+		t.Fatal("FetchRetailFuturesOI with bad Top10Buy = nil error, want ErrTAIFEXSchema")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
+	}
+}
+
+func TestTAIFEXFetchFutures_BadField_ReturnsErrTAIFEXSchema(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// LastPrice renamed → empty.
+		_, _ = w.Write([]byte(`[
+			{"Date":"20260811","Contract":"TX","Open":"100","High":"110","Low":"99","LastPrice":"","Volume":"10000","SettlementPrice":"105","PreviousSettlementPrice":"101"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	_, err := p.FetchFutures(context.Background())
+	if err == nil {
+		t.Fatal("FetchFutures with empty LastPrice = nil error, want ErrTAIFEXSchema")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
 	}
 }

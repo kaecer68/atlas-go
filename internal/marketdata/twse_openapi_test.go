@@ -2,8 +2,10 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"golang.org/x/text/encoding/traditionalchinese"
@@ -174,4 +176,142 @@ func TestTWSEClient_GetDailyQuote_DateFiltered(t *testing.T) {
 			t.Fatal("GetDailyQuote for Saturday 2026-08-22 = nil, want no-data error")
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// P0-4: GetQuotes Stat check + non-empty validation. A non-OK stat, an
+// empty payload, or all-rows-unparseable must surface an error instead of
+// an empty success slice (which hid schema changes and never tripped the
+// gateway breaker).
+// ---------------------------------------------------------------------------
+
+func TestTWSEClient_GetQuotes_NonOKStat_ReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"stat":"假日","date":"20260823","title":"","fields":[],"data":[]}`))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	_, err := c.GetQuotes(context.Background())
+	if err == nil {
+		t.Fatal("GetQuotes with stat!=OK = nil error, want error")
+	}
+	if !strings.Contains(err.Error(), `stat="假日"`) {
+		t.Errorf("error %q should surface the upstream stat value", err.Error())
+	}
+}
+
+func TestTWSEClient_GetQuotes_EmptyData_ReturnsErrTWSEEmptyData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"stat":"OK","date":"20260823","title":"","fields":[],"data":[]}`))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	_, err := c.GetQuotes(context.Background())
+	if err == nil {
+		t.Fatal("GetQuotes with empty data = nil error, want ErrTWSEEmptyData")
+	}
+	if !errors.Is(err, ErrTWSEEmptyData) {
+		t.Errorf("err = %v, want wrapped ErrTWSEEmptyData", err)
+	}
+}
+
+func TestTWSEClient_GetQuotes_AllRowsUnparseable_ReturnsError(t *testing.T) {
+	// Every row has a non-numeric ClosingPrice → upstream schema changed.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{
+			"stat": "OK",
+			"date": "20260513",
+			"title": "上市個股日成交",
+			"fields": ["Code","Name","TradeVolume","TradeValue","OpeningPrice","HighestPrice","LowestPrice","ClosingPrice","Change","Transaction"],
+			"data": [
+				["2330","台積電","100","100","190","191","189","--","+0.50","1"],
+				["2308","台達電","100","100","380","381","377","--","-0.50","1"]
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	_, err := c.GetQuotes(context.Background())
+	if err == nil {
+		t.Fatal("GetQuotes with all rows unparseable = nil error, want error")
+	}
+	if !strings.Contains(err.Error(), "failed to parse") {
+		t.Errorf("error %q should mention the parse failure count", err.Error())
+	}
+}
+
+func TestTWSEClient_GetQuotes_PartialFailureStillReturnsValid(t *testing.T) {
+	// One good row + one bad row → keep partial tolerance (no error).
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{
+			"stat": "OK",
+			"date": "20260513",
+			"title": "上市個股日成交",
+			"fields": ["Code","Name","TradeVolume","TradeValue","OpeningPrice","HighestPrice","LowestPrice","ClosingPrice","Change","Transaction"],
+			"data": [
+				["2330","台積電","81160741","15450000000","190","191.23","189.07","190.64","+0.50","35000"],
+				["2308","台達電","100","100","380","381","377","--","-0.50","1"]
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	quotes, err := c.GetQuotes(context.Background())
+	if err != nil {
+		t.Fatalf("GetQuotes with partial failure = error %v, want the valid row", err)
+	}
+	if len(quotes) != 1 || quotes[0].Symbol != "2330" {
+		t.Errorf("quotes = %+v, want only the valid 2330 row", quotes)
+	}
+}
+
+func TestTWSEClient_GetQuotes_EmptyCSV_ReturnsErrTWSEEmptyData(t *testing.T) {
+	// CSV fallback path: header only, no rows → ErrTWSEEmptyData.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		_, _ = w.Write([]byte("日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數\n"))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	_, err := c.GetQuotes(context.Background())
+	if err == nil {
+		t.Fatal("GetQuotes with empty CSV = nil error, want ErrTWSEEmptyData")
+	}
+	if !errors.Is(err, ErrTWSEEmptyData) {
+		t.Errorf("err = %v, want wrapped ErrTWSEEmptyData", err)
+	}
 }

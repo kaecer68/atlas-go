@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,6 +43,16 @@ func (a *GovernmentBrokerChannelAdapter) Fetch(ctx context.Context) (*FetchResul
 	date := marketdata.PreviousTradingDay(time.Now(), 1)
 	reading, err := a.aggregator.AggregateDate(ctx, date)
 	if err != nil {
+		// P0-2: belt-and-suspenders — AggregateDate records the cooldown
+		// internally on CAPTCHA, but if an ErrCaptchaRequired ever surfaces
+		// here (e.g. a future code path that propagates the per-symbol
+		// error), record it so the next scheduled run skips via ShouldSkip
+		// instead of re-hammering the blocked upstream.
+		if errors.Is(err, marketdata.ErrCaptchaRequired) {
+			if cd := a.aggregator.CaptchaCooldown(); cd != nil {
+				cd.RecordCaptcha(marketdata.GovernmentBrokerChannelID)
+			}
+		}
 		return nil, fmt.Errorf("government_broker aggregate %s: %w", date.Format("20060102"), err)
 	}
 	// reading == nil with err == nil means "no stocks processed for the
