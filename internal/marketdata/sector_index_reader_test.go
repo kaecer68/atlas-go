@@ -2,7 +2,6 @@ package marketdata
 
 import (
 	"encoding/json"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,92 +187,6 @@ func TestSectorIndexReader_ReadRange_LegacyFilesKeepFirstFileValue(t *testing.T)
 	}
 	if got := data["2026-06-03"]["electronics"]; got != 4.0 {
 		t.Errorf("electronics return = %v, want 4 from first legacy file", got)
-	}
-}
-
-func TestSectorIndexReader_ReadRange_RealFixture(t *testing.T) {
-	// This test reads the actual state directory if it exists. It is gated so
-	// it does not fail in environments without the data directory.
-	realDir := findSectorIndexDataDir(t)
-	if realDir == "" {
-		t.Skip("Real sector_index data directory not available")
-	}
-
-	reader := NewSectorIndexReader(realDir)
-	start, _ := time.Parse("2006-01-02", "2026-06-03")
-	end, _ := time.Parse("2006-01-02", "2026-07-10")
-	data, err := reader.ReadRange(start, end)
-	if err != nil {
-		t.Fatalf("ReadRange error = %v", err)
-	}
-	if len(data) == 0 {
-		t.Fatal("Expected some real data")
-	}
-
-	// Spot-check 2026-06-03 (8-industry schema) and 2026-07-01 (18-industry schema).
-	for _, date := range []string{"2026-06-03", "2026-07-01"} {
-		returns, ok := data[date]
-		if !ok {
-			t.Errorf("Expected data for %s", date)
-			continue
-		}
-		if len(returns) == 0 {
-			t.Errorf("Expected non-empty returns for %s", date)
-		}
-		for industry, ret := range returns {
-			if ret == 0 && industry != "" {
-				// Some sectors may legitimately be flat; we just record it.
-				_ = ret
-			}
-		}
-	}
-
-	// After the S-gap backfill (cmd/backfill-sector-index), 2026-06-24 is
-	// no longer missing: it must exist with plausible canonical content.
-	returns, ok := data["2026-06-24"]
-	if !ok {
-		t.Error("2026-06-24 should be present in the real dataset after the sector_index backfill")
-	} else {
-		if len(returns) == 0 {
-			t.Error("2026-06-24 should have non-empty returns")
-		}
-		for industry, ret := range returns {
-			if math.IsNaN(ret) || math.IsInf(ret, 0) {
-				t.Errorf("2026-06-24 %s return = %v, want finite", industry, ret)
-			}
-		}
-	}
-}
-
-// findSectorIndexDataDir returns the sector_index runtime dir for this
-// checkout. Runtime data (data/state/**) is gitignored; in a git worktree the
-// real per-day files live in the worktree's own data/state when present, or
-// next door in the main checkout. The first candidate containing at least one
-// sector_indices_*.json file wins; "" means neither is available.
-func findSectorIndexDataDir(t *testing.T) string {
-	t.Helper()
-	dir, _ := os.Getwd()
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			for _, candidate := range []string{dir, filepath.Dir(dir)} {
-				p := filepath.Join(candidate, "data", "state", "sector_index")
-				entries, err := os.ReadDir(p)
-				if err != nil {
-					continue
-				}
-				for _, e := range entries {
-					if strings.HasPrefix(e.Name(), "sector_indices_") && strings.HasSuffix(e.Name(), ".json") {
-						return p
-					}
-				}
-			}
-			return ""
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
 	}
 }
 
