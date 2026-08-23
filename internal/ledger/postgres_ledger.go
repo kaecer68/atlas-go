@@ -278,6 +278,12 @@ func (s *PostgresLedgerStore) LoadSessionScreeningRejects(sessionID string) ([]d
 // RecordSessionSummary upserts a session summary (mirror of
 // repository.postgres_audit.go SaveSessionSummary).
 func (s *PostgresLedgerStore) RecordSessionSummary(session domain.ReplaySession, summary domain.SessionSummary) error {
+	// SSoT write guard (2026-08-23): strict validation on the real-time write
+	// path — a corrupted summary is rejected before it can pollute the
+	// performance report later.
+	if err := summary.Validate(); err != nil {
+		return fmt.Errorf("record session summary: rejected corrupted summary: %w", err)
+	}
 	ctx := context.Background()
 
 	brokerRuntime, _ := json.Marshal(summary.BrokerRuntime)

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -69,4 +70,102 @@ func SessionDateFromID(id string) time.Time {
 		return d
 	}
 	return time.Time{}
+}
+
+// isValidRegime reports whether r is one of the legal market regimes
+// (RISK_ON / RISK_OFF / NEUTRAL). The empty regime is not legal — it is the
+// signature of a legacy count-only row, which callers must handle explicitly
+// (ValidateLegacy) rather than silently treating as a real market state.
+func isValidRegime(r Regime) bool {
+	switch r {
+	case RegimeRiskOn, RegimeRiskOff, RegimeNeutral:
+		return true
+	default:
+		return false
+	}
+}
+
+// Validate performs strict validation of a SessionSummary before it is
+// persisted through a real-time write path (sim → DualWriteRepository /
+// SQLiteOutcomeStore / Store / PostgresLedgerStore).
+//
+// It is the write-side half of the performance-report SSoT contract
+// (docs/decisions/2026-08-23-performance-report-ssot.md): every summary the
+// sim persists must be structurally sound, so a corrupted row (missing
+// SessionID, zero portfolio value, negative cash/counts, illegal regime)
+// fails loudly at write time instead of surfacing weeks later as one more
+// "newly discovered data problem" in the performance report.
+//
+// PortfolioValue must be strictly positive. Zero-valued summaries are NEVER
+// written through the real-time path: a zero portfolio value with orders is
+// the sim's own anomaly signature (zero_portfolio_with_orders), and the
+// count-only legacy rows produced by cmd/backfill-summaries are a
+// migration-time construct that must go through ValidateLegacy instead.
+//
+// Regime: the empty regime is rejected here because a real-time sim run
+// always classifies the session's market state; NULL-regime rows are a
+// legacy-read concern and are tolerated on the read path.
+func (s *SessionSummary) Validate() error {
+	if s.SessionID == "" {
+		return fmt.Errorf("SessionSummary.Validate: missing SessionID")
+	}
+	if s.PortfolioValue <= 0 {
+		return fmt.Errorf("SessionSummary.Validate: PortfolioValue must be > 0, got %v", s.PortfolioValue)
+	}
+	if s.EndingCash < 0 {
+		return fmt.Errorf("SessionSummary.Validate: EndingCash must be >= 0, got %v", s.EndingCash)
+	}
+	if s.OutcomeCount < 0 {
+		return fmt.Errorf("SessionSummary.Validate: OutcomeCount must be >= 0, got %d", s.OutcomeCount)
+	}
+	if s.Regime != "" && !isValidRegime(s.Regime) {
+		return fmt.Errorf("SessionSummary.Validate: illegal regime %q (want RISK_ON/RISK_OFF/NEUTRAL)", s.Regime)
+	}
+	if s.Regime == "" {
+		return fmt.Errorf("SessionSummary.Validate: missing Regime")
+	}
+	return nil
+}
+
+// ValidateLegacy performs the lenient validation used by backfill / migration
+// write paths (DualWriteRepository.SaveSessionSummary, reconcile-sessions,
+// cmd/migrate-jsonl-to-sqlite). It exists because legacy count-only rows are
+// real production data: rows written before the summary_json backfill carry
+// only session_id + outcome_count (PortfolioValue=0, EndingCash=0, Regime=""),
+// and cmd/backfill-summaries intentionally writes the same shape.
+//
+// "Legal 0" vs "corrupted 0" discrimination:
+//
+//   - Legal 0: PortfolioValue == 0 AND EndingCash == 0 — a count-only row
+//     that carries no equity data by construction. The report already
+//     excludes these from the equity curve.
+//   - Corrupted 0: PortfolioValue == 0 while EndingCash > 0 (cash exists but
+//     portfolio value is zero) or OrderCount > 0 (orders were placed into a
+//     zero-valued portfolio) — inconsistent data that must not be propagated
+//     into the SSoT backend.
+//
+// Regime may be empty (legacy), but a non-empty regime must still be legal.
+func (s *SessionSummary) ValidateLegacy() error {
+	if s.SessionID == "" {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: missing SessionID")
+	}
+	if s.PortfolioValue < 0 {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: PortfolioValue must be >= 0, got %v", s.PortfolioValue)
+	}
+	if s.PortfolioValue == 0 && s.EndingCash != 0 {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: corrupted zero portfolio (PortfolioValue=0 but EndingCash=%v)", s.EndingCash)
+	}
+	if s.PortfolioValue == 0 && s.OrderCount > 0 {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: corrupted zero portfolio (PortfolioValue=0 but OrderCount=%d)", s.OrderCount)
+	}
+	if s.EndingCash < 0 {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: EndingCash must be >= 0, got %v", s.EndingCash)
+	}
+	if s.OutcomeCount < 0 {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: OutcomeCount must be >= 0, got %d", s.OutcomeCount)
+	}
+	if s.Regime != "" && !isValidRegime(s.Regime) {
+		return fmt.Errorf("SessionSummary.ValidateLegacy: illegal regime %q (want RISK_ON/RISK_OFF/NEUTRAL)", s.Regime)
+	}
+	return nil
 }

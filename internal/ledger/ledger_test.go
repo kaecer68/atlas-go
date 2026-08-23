@@ -40,11 +40,13 @@ func TestRecordSessionSummaryPersistsTraceIDs(t *testing.T) {
 	session := domain.ReplaySession{ID: "session-test"}
 
 	summary := domain.SessionSummary{
-		SessionID:  session.ID,
-		Regime:     domain.RegimeNeutral,
-		ProposalID: "proposal-1",
-		CommitID:   "commit-1",
-		ApprovalID: "approval-1",
+		SessionID:      session.ID,
+		Regime:         domain.RegimeNeutral,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
+		ProposalID:     "proposal-1",
+		CommitID:       "commit-1",
+		ApprovalID:     "approval-1",
 		BrokerRuntime: domain.BrokerRuntimeAudit{
 			Mode:             "live",
 			Adapter:          "http",
@@ -203,9 +205,11 @@ func TestStore_ConcurrentMixedReadWrite(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			summary := domain.SessionSummary{
-				SessionID:    fmt.Sprintf("session-%d", g),
-				Regime:       domain.RegimeNeutral,
-				OutcomeCount: 1,
+				SessionID:      fmt.Sprintf("session-%d", g),
+				Regime:         domain.RegimeNeutral,
+				EndingCash:     100_000,
+				PortfolioValue: 1_000_000,
+				OutcomeCount:   1,
 			}
 			if err := store.RecordSessionSummary(domain.ReplaySession{ID: summary.SessionID}, summary); err != nil {
 				errCh <- fmt.Errorf("write goroutine %d: %w", g, err)

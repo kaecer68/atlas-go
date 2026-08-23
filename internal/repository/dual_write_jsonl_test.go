@@ -422,7 +422,7 @@ func TestDualWriteNilPG_RecordSessionSummary(t *testing.T) {
 
 	session := domain.ReplaySession{ID: "jsonl-rs-1"}
 	summary := domain.SessionSummary{
-		SessionID: "jsonl-rs-1", OrderCount: 50, PositionCount: 15, EndingCash: 20000.0, PortfolioValue: 100000.0, RecordedAt: time.Now(),
+		SessionID: "jsonl-rs-1", Regime: domain.RegimeRiskOn, OrderCount: 50, PositionCount: 15, EndingCash: 20000.0, PortfolioValue: 100000.0, RecordedAt: time.Now(),
 	}
 
 	// RecordSessionSummary — writes to JSONL, skips PG

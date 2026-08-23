@@ -222,10 +222,12 @@ func TestLoadSessionSummaries(t *testing.T) {
 	session := domain.ReplaySession{ID: "session-sum-1"}
 
 	summary := domain.SessionSummary{
-		SessionID:  session.ID,
-		Regime:     domain.RegimeRiskOn,
-		ProposalID: "p1",
-		RecordedAt: time.Now(),
+		SessionID:      session.ID,
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
+		ProposalID:     "p1",
+		RecordedAt:     time.Now(),
 	}
 
 	if err := store.RecordSessionSummary(session, summary); err != nil {

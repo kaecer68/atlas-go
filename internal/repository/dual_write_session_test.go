@@ -206,7 +206,7 @@ func TestDualWriteRepository_RecordSessionSummary_JSONLError_NotSilent(t *testin
 		jsonl: &JSONLRepository{sessionSummaryStore: &stubSessionSummaryStore{recordErr: errors.New("disk full")}},
 	} // pg == nil
 
-	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-jsonl-err"}, domain.SessionSummary{SessionID: "sess-jsonl-err"})
+	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-jsonl-err"}, validTestSummary("sess-jsonl-err"))
 	if err == nil {
 		t.Fatal("JSONL-only total write failure must return an error (no silent loss)")
 	}
@@ -241,7 +241,7 @@ func TestDualWriteRepository_RecordSessionSummary_JSONLError_PGStillWrites(t *te
 		jsonl: &JSONLRepository{sessionSummaryStore: &stubSessionSummaryStore{recordErr: errors.New("disk full")}},
 	}
 
-	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-jsonl-err"}, domain.SessionSummary{SessionID: "sess-jsonl-err"})
+	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-jsonl-err"}, validTestSummary("sess-jsonl-err"))
 	if err != nil {
 		t.Fatalf("JSONL failure must not abort the PG write: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestDualWriteRepository_RecordSessionSummary_PGError_ReturnsError(t *testin
 		jsonl: &JSONLRepository{sessionSummaryStore: &stubSessionSummaryStore{}}, // JSONL ok
 	}
 
-	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-pg-err"}, domain.SessionSummary{SessionID: "sess-pg-err"})
+	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-pg-err"}, validTestSummary("sess-pg-err"))
 	if err == nil {
 		t.Fatal("PG write failure must return an error")
 	}
@@ -302,7 +302,7 @@ func TestDualWriteRepository_RecordSessionSummary_BothSucceed(t *testing.T) {
 		jsonl: &JSONLRepository{sessionSummaryStore: &stubSessionSummaryStore{}},
 	}
 
-	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-ok"}, domain.SessionSummary{SessionID: "sess-ok"})
+	err := repo.RecordSessionSummary(context.Background(), domain.ReplaySession{ID: "sess-ok"}, validTestSummary("sess-ok"))
 	if err != nil {
 		t.Fatalf("dual success returned error: %v", err)
 	}
@@ -343,6 +343,20 @@ func TestDualWriteRepository_SaveSessionSummary_JSONLError_NotSilent(t *testing.
 // ============================================
 // B6 — LoadAllSessionSummaries merge semantics
 // ============================================
+
+// validTestSummary returns a session summary that satisfies the strict SSoT
+// write validation (SessionSummary.Validate) so tests can focus on the
+// error-handling path under test rather than validation itself.
+func validTestSummary(id string) domain.SessionSummary {
+	return domain.SessionSummary{
+		SessionID:      id,
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
+		OutcomeCount:   1,
+		RecordedAt:     time.Now(),
+	}
+}
 
 func sessionSummary(id string, at time.Time, pv float64) domain.SessionSummary {
 	return domain.SessionSummary{

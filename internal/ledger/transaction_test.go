@@ -225,10 +225,12 @@ func TestRecordSessionSummary_RoundTrip(t *testing.T) {
 
 	session := domain.ReplaySession{ID: "session-summary-test"}
 	summary := domain.SessionSummary{
-		SessionID:    "session-summary-test",
-		Regime:       domain.RegimeRiskOn,
-		OutcomeCount: 42,
-		RecordedAt:   time.Date(2026, 4, 22, 0, 0, 0, 0, time.UTC),
+		SessionID:      "session-summary-test",
+		Regime:         domain.RegimeRiskOn,
+		EndingCash:     100_000,
+		PortfolioValue: 1_000_000,
+		OutcomeCount:   42,
+		RecordedAt:     time.Date(2026, 4, 22, 0, 0, 0, 0, time.UTC),
 	}
 
 	if err := store.RecordSessionSummary(session, summary); err != nil {

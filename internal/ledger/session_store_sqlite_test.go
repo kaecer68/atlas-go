@@ -112,16 +112,20 @@ func TestSQLiteSessionStore_UpdateExisting(t *testing.T) {
 
 	session := domain.ReplaySession{ID: "session-update-test"}
 	summary1 := domain.SessionSummary{
-		SessionID:  session.ID,
-		Regime:     domain.RegimeRiskOn,
-		OrderCount: 1,
-		RecordedAt: time.Now(),
+		SessionID:      session.ID,
+		Regime:         domain.RegimeRiskOn,
+		OrderCount:     1,
+		EndingCash:     100000.0,
+		PortfolioValue: 150000.0,
+		RecordedAt:     time.Now(),
 	}
 	summary2 := domain.SessionSummary{
-		SessionID:  session.ID,
-		Regime:     domain.RegimeRiskOff,
-		OrderCount: 2,
-		RecordedAt: time.Now(),
+		SessionID:      session.ID,
+		Regime:         domain.RegimeRiskOff,
+		OrderCount:     2,
+		EndingCash:     90000.0,
+		PortfolioValue: 160000.0,
+		RecordedAt:     time.Now(),
 	}
 
 	if err := store.RecordSessionSummary(session, summary1); err != nil {
