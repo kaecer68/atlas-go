@@ -69,6 +69,10 @@ type FugleClient struct {
 	// 讓所有消費層（gateway/stocktools/hybrid/warmup）共享同一 breaker —
 	// 連續失敗後統一短路，不再逐層重試上游。
 	breaker *providerBreaker
+	// retryCfg is the shared fetchWithRetry policy (P0-5) used by the
+	// candles path — doGet already had its own 429 retry loop, but
+	// GetHistoricalCandles had none (a single 429 failed the fetch).
+	retryCfg retryConfig
 }
 
 // FugleQuoteResponse Fugle v1.0 行情响应（扁平結構）
@@ -171,6 +175,7 @@ func newFugleClient(apiKey string, stateDir string) *FugleClient {
 		rateLimiter:  rate.NewLimiter(rate.Every(time.Minute/time.Duration(limit)), burst),
 		quotaTracker: tracker,
 		breaker:      newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
+		retryCfg:     defaultRetryConfig(),
 	}
 }
 
@@ -438,7 +443,10 @@ func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to
 	}
 	req.Header.Set("X-API-KEY", c.apiKey)
 
-	resp, err := c.httpClient.Do(req)
+	// P0-5: shared fetchWithRetry — 429/5xx on the candles path are retried
+	// with Retry-After / exponential backoff (previously a single 429 failed
+	// the fetch, inconsistent with doGet which already retried).
+	resp, err := fetchWithRetry(ctx, c.httpClient, req, c.retryCfg)
 	if err != nil {
 		c.breakerRecordFailure()
 		return nil, fmt.Errorf("fugle candles fetch: %w", err)

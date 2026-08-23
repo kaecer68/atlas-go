@@ -56,6 +56,10 @@ type TAIFEXProvider struct {
 	client      *http.Client
 	baseURL     string
 	rateLimiter *rate.Limiter
+	// retryCfg is the shared fetchWithRetry policy (P0-5). TAIFEX had no
+	// retry and no breaker — a 5xx during the 30s upstream window failed
+	// the whole cycle.
+	retryCfg retryConfig
 }
 
 // NewTAIFEXProvider creates a new TAIFEX data provider.
@@ -64,6 +68,7 @@ func NewTAIFEXProvider() *TAIFEXProvider {
 		client:      httpclient.NewFactory().NewClient(30 * time.Second), // P1 B: upstream can exceed 20s under load
 		baseURL:     "https://openapi.taifex.com.tw/v1",
 		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		retryCfg:    defaultRetryConfig(),
 	}
 }
 
@@ -94,7 +99,9 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	resp, err := t.client.Do(req)
+	// P0-5: shared fetchWithRetry — 429/5xx retried (TAIFEX previously
+	// failed the whole cycle on the first transient 5xx).
+	resp, err := fetchWithRetry(ctx, t.client, req, t.retryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("taifex pcr http request: %w", err)
 	}
@@ -178,7 +185,9 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	resp, err := t.client.Do(req)
+	// P0-5: shared fetchWithRetry — 429/5xx retried (TAIFEX previously
+	// failed the whole cycle on the first transient 5xx).
+	resp, err := fetchWithRetry(ctx, t.client, req, t.retryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("taifex large trader http request: %w", err)
 	}
@@ -389,7 +398,9 @@ func (t *TAIFEXProvider) FetchFutures(ctx context.Context) (*TAIFEXFutures, erro
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	resp, err := t.client.Do(req)
+	// P0-5: shared fetchWithRetry — 429/5xx retried (TAIFEX previously
+	// failed the whole cycle on the first transient 5xx).
+	resp, err := fetchWithRetry(ctx, t.client, req, t.retryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("taifex futures http request: %w", err)
 	}
