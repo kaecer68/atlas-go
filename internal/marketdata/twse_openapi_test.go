@@ -117,3 +117,61 @@ func TestTWSEClient_GetQuotes_UTF8Charset_Smoke(t *testing.T) {
 		t.Errorf("Symbol = %q, want 2330", quotes[0].Symbol)
 	}
 }
+
+// TestTWSEClient_GetDailyQuote_DateFiltered pins the per-date contract of
+// GetDailyQuote. TWSE STOCK_DAY ignores the day component of the `date`
+// parameter and returns the whole month; the client must return the row
+// matching the requested date (ROC calendar), not Data[0] (the month's first
+// trading day). Regression for the replay gap-backfill path: backfilling a
+// missing date with Data[0] would write the month's first trading day's
+// OHLCV under the wrong date.
+func TestTWSEClient_GetDailyQuote_DateFiltered(t *testing.T) {
+	const monthResp = `{
+		"stat": "OK",
+		"date": "20260820",
+		"title": "115年08月 2330 台積電           各日成交資訊",
+		"fields": ["日期","成交股數","成交金額","開盤價","最高價","最低價","收盤價","漲跌價差","成交筆數","註記"],
+		"data": [
+			["115/08/03","35,209,944","83,673,350,698","2,390.00","2,395.00","2,365.00","2,370.00","-55.00","174,489",""],
+			["115/08/04","41,021,199","95,455,200,000","2,330.00","2,360.00","2,310.00","2,340.00","-30.00","180,000",""],
+			["115/08/20","30,000,000","70,000,000,000","2,100.00","2,120.00","2,080.00","2,110.00","+10.00","150,000",""]
+		]
+	}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(monthResp))
+	}))
+	defer server.Close()
+
+	c := &TWSEClient{
+		httpClient:  server.Client(),
+		baseURL:     server.URL,
+		rateLimiter: rate.NewLimiter(rate.Inf, 0),
+	}
+
+	t.Run("returns requested day row not month-first row", func(t *testing.T) {
+		q, err := c.GetDailyQuote(context.Background(), "20260820", "2330")
+		if err != nil {
+			t.Fatalf("GetDailyQuote: %v", err)
+		}
+		// Row 115/08/20: open 2100, high 2120, low 2080, close 2110, volume 30000000.
+		if q.Last != 2110 {
+			t.Errorf("Last = %v, want 2110 (requested day), not 2370 (month first row)", q.Last)
+		}
+		if q.Open != 2100 || q.High != 2120 || q.Low != 2080 {
+			t.Errorf("OHLC = %v/%v/%v, want 2100/2120/2080", q.Open, q.High, q.Low)
+		}
+		if q.Volume != 30000000 {
+			t.Errorf("Volume = %d, want 30000000", q.Volume)
+		}
+		if q.Symbol != "2330" {
+			t.Errorf("Symbol = %q, want 2330", q.Symbol)
+		}
+	})
+
+	t.Run("non-trading day returns no-data error", func(t *testing.T) {
+		if _, err := c.GetDailyQuote(context.Background(), "20260822", "2330"); err == nil {
+			t.Fatal("GetDailyQuote for Saturday 2026-08-22 = nil, want no-data error")
+		}
+	})
+}

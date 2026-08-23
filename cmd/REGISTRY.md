@@ -32,7 +32,7 @@
 | `cmd/atlas-mcp-setup` | 互動式 wizard — 偵測 MCP 客戶端並寫入設定檔 | portprobe, server.NewHTTPClient | ✅ Utility |
 | `cmd/atlas-stage4-loader` | Stage 4 PR#2 — 將 4 個 staging JSONL 寫入 SQLite | ledger, constants | ✅ E |
 | `cmd/atlas-stage4-backfill` | Stage 4 PR#1 — 從 ledger 擷取 regime/event/stress/prediction 90 天歷史 | —（stdlib only） | ✅ E |
-| `cmd/daily-replay-sync` | cron 同步 TWSE CSV 到 JSONL/SQLite 雙後端 | db, marketdata, monitoring, orchestrator | ✅ Evolving |
+| `cmd/daily-replay-sync` | cron 同步 TWSE CSV 到 JSONL/SQLite 雙後端；缺日回溯補抓（`-backfill-window N`，預設 5 日曆日） | db, marketdata, monitoring, orchestrator | ✅ Evolving |
 | `cmd/cron-quote-backfill` | cron 每日增量拉取 FinMind quotes | marketdata, config, domain, ledger | ✅ Utility |
 
 ---
@@ -130,7 +130,7 @@
 | Binary | 用途 | 主要 internal 依賴 | 狀態 |
 |--------|------|---------------------|------|
 | `cmd/check-maturity` | CI 檢查所有 internal doc.go 有 Maturity tag | —（stdlib only） | ✅ Stable |
-| `cmd/check-data-health` | Replay CSV 健康檢查（日期範圍、延遲天數） | config, replay | ✅ Utility |
+| `cmd/check-data-health` | Replay CSV 健康檢查（日期範圍、延遲天數、近 14 日缺日偵測；缺日/延遲時 exit 1） | config, marketdata, replay | ✅ Utility |
 | `cmd/check-persistence-format` | 掃描 data/state 持久性格式分類 | domain | ✅ Utility |
 | `cmd/cleanup-channel-health` | 清理過期 alerts | domain, monitoring | ✅ Utility |
 | `cmd/parameter-health-check` | 參數品質報告（citation/todo/calibrated/evidence 等級） | —（stdlib only） | ✅ Utility |
