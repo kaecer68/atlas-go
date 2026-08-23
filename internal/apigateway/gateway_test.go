@@ -580,3 +580,75 @@ func TestUnifiedHealthStore_CheckHealth_WithProvider(t *testing.T) {
 		}
 	}
 }
+
+// TestGateway_Fetch_RecordsDegradedForEmptyData is the production-path
+// regression test for the government_broker "ok 假象": when a fetch
+// succeeds but the contract's data-state validation fails (no reading file
+// written because every upstream symbol failed), the health record must be
+// "degraded", not "ok".
+func TestGateway_Fetch_RecordsDegradedForEmptyData(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &contractTestProvider{
+		hs: HealthStatus{Status: "ok", CheckType: "readiness"},
+		ds: DataState{Present: false, Detail: "missing reading file for 20260821"},
+	}
+	g.registry.Register("government_broker", provider)
+
+	_, err := g.Fetch(context.Background(), "government_broker")
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	rec := g.Health().Get("government_broker")
+	if rec == nil {
+		t.Fatal("health record missing after Fetch")
+	}
+	if rec.Status != "degraded" {
+		t.Errorf("recorded status = %q, want degraded (fetch succeeded but no data landed — ok 假象)", rec.Status)
+	}
+	if rec.LastError == "" {
+		t.Error("degraded record should carry a reason in LastError")
+	}
+}
+
+// TestGateway_Fetch_RecordsOKWhenDataValid verifies the control direction:
+// a fetch with valid persisted data keeps the "ok" health record.
+func TestGateway_Fetch_RecordsOKWhenDataValid(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &contractTestProvider{
+		hs: HealthStatus{Status: "ok", CheckType: "readiness"},
+		ds: DataState{Present: true, NonZero: true, Detail: "20260821.json total_net=1234"},
+	}
+	g.registry.Register("government_broker", provider)
+
+	_, err := g.Fetch(context.Background(), "government_broker")
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	rec := g.Health().Get("government_broker")
+	if rec == nil {
+		t.Fatal("health record missing after Fetch")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("recorded status = %q, want ok (valid non-zero reading)", rec.Status)
+	}
+}
+
+// TestGateway_Fetch_RecordsOKForLiveChannel verifies live-ping channels are
+// untouched by contract data validation (no DataStateProvider required).
+func TestGateway_Fetch_RecordsOKForLiveChannel(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &nonDataStateProvider{hs: HealthStatus{Status: "ok"}}
+	g.registry.Register("us_yahoo", provider)
+
+	_, err := g.Fetch(context.Background(), "us_yahoo")
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	rec := g.Health().Get("us_yahoo")
+	if rec == nil {
+		t.Fatal("health record missing after Fetch")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("recorded status = %q, want ok (live_ping contract skips data validation)", rec.Status)
+	}
+}
