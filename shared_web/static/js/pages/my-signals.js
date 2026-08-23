@@ -48,7 +48,7 @@ async function load(listEl) {
           <div class="title">此功能需要登入</div>
           <div class="desc">登入後即可開始追蹤訊號、建立投資紀律紀錄</div>
           <div class="empty-actions">
-            <a class="btn btn--primary btn-sm" data-page="login" href="/client/login">登入</a>
+            <a class="btn btn--primary btn-sm" href="https://member.goluck.uk/login">登入</a>
             <a class="btn" data-page="home" href="/client/home">← 先看看公開內容</a>
           </div>
         </div>`;

@@ -118,23 +118,6 @@ test.describe('capital pages', () => {
     await expect(page.locator('#capitalModelsContent').getByText('權重合計')).toBeVisible();
   });
 
-  test('capital_causality renders 24 templates and theme filter works', async ({ page }) => {
-    await setupMocks(page);
-    await navigateTo(page, 'capital_causality');
-
-    await expect(page.locator('.cc-item')).toHaveCount(24);
-    await expect(page.locator('text=共 24 個模板')).toBeVisible();
-
-    // filter by theme
-    await page.selectOption('#cc-theme-filter', 'AI_capex_surge');
-    await expect(page.locator('.cc-item')).toHaveCount(12);
-
-    // expand first item and verify steps bullets
-    const firstItem = page.locator('.cc-item').first();
-    await firstItem.locator('summary').click();
-    await expect(firstItem.locator('.cc-item__steps li')).toHaveCount(2);
-  });
-
   test('capital_quality renders channels with staleness colors and error details', async ({ page }) => {
     await setupMocks(page);
     await navigateTo(page, 'capital_quality');

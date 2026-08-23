@@ -43,10 +43,12 @@ export function switchPage(id, silent) {
   if (btn) btn.classList.add('active');
   const titles = {
   home: '系統總覽', live: '風控營運台', alerts: '系統警報',
-  experiments: '模擬交易',
+  capital_models: '錢潮模型',
+  pipeline: '投資管線', portfolio: '組合持倉',
+  experiments: '模擬交易', 'performance-report': '績效報告',
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測',
-  capital_models: '錢潮模型', capital_causality: '錢潮因果', capital_quality: '資料品質',
+  capital_quality: '資料品質',
   metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
 };
   document.getElementById('pageTitle').textContent = titles[id] || id;
@@ -208,15 +210,18 @@ async function loadModules() {
     import('./pages/parameters.js'),
     import('./pages/deploy-config.js'),
     import('./pages/capital-models.js'),
-    import('./pages/capital-causality.js'),
     import('./pages/capital-quality.js'),
     import('./pages/scheduler.js'),
+    import('./pages/pipeline.js'),
+    import('./pages/portfolio.js'),
+    import('./pages/performance-report.js'),
   ];
   var results = await Promise.allSettled(imports);
-  // keys 長度必須等於 imports 長度（15）。'scheduler' 之前遺漏 → m.scheduler
+  // keys 長度必須等於 imports 長度（17）。'scheduler' 之前遺漏 → m.scheduler
   // 永遠 undefined，排程頁只能靠 scheduler.js 模組頂層自我註冊 fallback 接線
   // （缺陷）。補 key 後走正常 loadModules 接線 path。
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalCausality', 'capitalQuality', 'scheduler'];
+  // capital_causality 已遷移 client_web（2026-08-23），自 admin imports 移除。
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalQuality', 'scheduler', 'pipe', 'portfolio', 'performanceReport'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -235,13 +240,21 @@ async function loadModules() {
     if (modules.experiments.banSector) window.banSector = modules.experiments.banSector;
     if (modules.experiments.unbanSector) window.unbanSector = modules.experiments.unbanSector;
   }
-  // modules.pipe 真死碼（Code Disposition Protocol 判定, 見 PR-7 body）：
-  // 1) 設計意圖 — wave-11 admin/client SPA 拆分（64576c15）時從舊 web/ SPA
-  //    殘留, 拆分後 admin_web 無 pipeline 頁; 2) 替代者 — pipeline 功能由
-  //    client_web ./pages/pipeline.js 完整承接並接線; 3) guard 永不成立 —
-  //    keys 無 'pipe', modules.pipe 恆為 undefined; 4) 零消費者 — window 上
-  //    toggleFilterPanel/applyFilters/clearFilters/toggleWorkflowScreening 無
-  //    任何引用（含 inline onclick）。故刪除。
+  // modules.pipe — pipeline 頁 2026-08-23 由 client_web 遷移到 admin_web
+  // （投資管線）。PR-7 曾判定 client 端的 pipe 接線為死碼並刪除；本 PR 把
+  // 接線移到 admin（filter panel / workflow screening toggle 依賴 window.*）。
+  if (modules.pipe) {
+    if (modules.pipe.toggleFilterPanel) window.toggleFilterPanel = modules.pipe.toggleFilterPanel;
+    if (modules.pipe.applyFilters) window.applyFilters = modules.pipe.applyFilters;
+    if (modules.pipe.clearFilters) window.clearFilters = modules.pipe.clearFilters;
+    if (modules.pipe.toggleWorkflowScreening) window.toggleWorkflowScreening = modules.pipe.toggleWorkflowScreening;
+  }
+  if (modules.portfolio) {
+    if (modules.portfolio.loadPortfolioPage) window.loadPortfolioPage = modules.portfolio.loadPortfolioPage;
+  }
+  if (modules.performanceReport) {
+    if (modules.performanceReport.loadPerformanceReport) window.loadPerformanceReport = modules.performanceReport.loadPerformanceReport;
+  }
   if (modules.back) {
     if (modules.back.runBacktest) window.runBacktest = modules.back.runBacktest;
   }
@@ -456,6 +469,36 @@ async function loadPageData(pageId) {
       if (m.back.renderForecastVsRealityTable) m.back.renderForecastVsRealityTable(fvrReport);
     } catch(e) { console.error(e); }
   }
+  else if (pageId === 'pipeline') {
+    try {
+      // Fetch the session list explicitly: renderPipeline's session dropdown
+      // reads window.pipelineSessions, which nothing else populates on this page.
+      var pipelineResults = await Promise.all([
+        silentGetJSON('/api/dashboard/recommendation-pipeline'),
+        silentGetJSON('/api/dashboard/sessions'),
+      ]);
+      var p = pipelineResults[0];
+      var sessResp = pipelineResults[1];
+      if (sessResp && Array.isArray(sessResp.sessions)) {
+        window.pipelineSessions = sessResp.sessions;
+      }
+      if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'portfolio') {
+    try {
+      if (m.portfolio && m.portfolio.loadPortfolioPage) {
+        m.portfolio.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
+      }
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'performance-report') {
+    try {
+      if (m.performanceReport && m.performanceReport.loadPerformanceReport) {
+        m.performanceReport.loadPerformanceReport();
+      }
+    } catch(e) { console.error(e); }
+  }
   else if (pageId === 'datachannels') {
     try {
       if (m.datachannels.loadDataChannels) m.datachannels.loadDataChannels();
@@ -463,9 +506,6 @@ async function loadPageData(pageId) {
   }
   else if (pageId === 'capital_models') {
     try { if (m.capitalModels && m.capitalModels.loadCapitalModels) m.capitalModels.loadCapitalModels(); } catch(e) { console.error(e); }
-  }
-  else if (pageId === 'capital_causality') {
-    try { if (m.capitalCausality && m.capitalCausality.loadCapitalCausality) m.capitalCausality.loadCapitalCausality(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'capital_quality') {
     try { if (m.capitalQuality && m.capitalQuality.loadCapitalQuality) m.capitalQuality.loadCapitalQuality(); } catch(e) { console.error(e); }

@@ -8,8 +8,7 @@
 - /client/narrative — 宏觀視野：總經快照、散戶情緒、敘事事件與因果鏈
 - /client/crossmarket — 美台連動：危機信號、美股指數、相關性矩陣
 - /client/industry — 產業地圖：產業權重、週期羅盤、供應鏈連動
-- /client/pipeline — 投資管線：AI 推薦 → 篩選 → 控制 → 模擬投組全流程
-- /client/portfolio — 組合持倉：AI 示範組合淨值、持倉與風險（唯讀）
+- /client/capital-causality — 錢潮因果：narrative template 因果鏈展開
 - /client/strategies — 投資心法：L1-L5 框架與策略排名表
 - /client/premium — 方案比較（免費 vs 升級）
 

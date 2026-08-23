@@ -39,12 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
   var el_refreshToggle = document.getElementById('refreshToggle'); if (el_refreshToggle) el_refreshToggle.addEventListener('click', () => window.toggleAutoRefresh());
   var qs__button_refresh_ = document.querySelector('button.refresh'); if (qs__button_refresh_) qs__button_refresh_.addEventListener('click', () => window.loadAll());
 
-  // === Page: pipeline ===
-  var el_workflowScreening = document.getElementById('workflowScreening'); if (el_workflowScreening) el_workflowScreening.addEventListener('click', () => window.toggleWorkflowScreening());
-  var el_filterToggle = document.getElementById('filterToggle'); if (el_filterToggle) el_filterToggle.addEventListener('click', () => window.toggleFilterPanel());
-  var qs___filter_actions__primary_ = document.querySelector('.filter-actions .primary'); if (qs___filter_actions__primary_) qs___filter_actions__primary_.addEventListener('click', () => window.applyFilters());
-  var qs___filter_actions__button_not_primary_ = document.querySelector('.filter-actions button:not(.primary)'); if (qs___filter_actions__button_not_primary_) qs___filter_actions__button_not_primary_.addEventListener('click', () => window.clearFilters());
-
   // === Page: industry ===
   var qs___page_industry__cursor_pointe = document.querySelector('#page-industry .cursor-pointer'); if (qs___page_industry__cursor_pointe) qs___page_industry__cursor_pointe.addEventListener('click', () => window.toggleCycleLegend());
   var el_btnRunShockSim = document.getElementById('btnRunShockSim'); if (el_btnRunShockSim) el_btnRunShockSim.addEventListener('click', () => window.runShockSimulation());

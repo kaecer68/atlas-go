@@ -33,7 +33,11 @@
         <a data-page="alerts">🚨 系統警報</a>
 
         <span class="nav-group-label">研究</span>
+        <a data-page="capital_models">🧠 錢潮模型</a>
+        <a data-page="pipeline">投資管線</a>
+        <a data-page="portfolio">組合持倉</a>
         <a data-page="experiments">🧪 模擬交易</a>
+        <a data-page="performance-report">績效報告</a>
 
         <span class="nav-group-label">維運</span>
         <a data-page="datachannels">📡 資料通道</a>
@@ -45,8 +49,6 @@
         <a data-page="config">⚙️ 部署配置</a>
 
         <span class="nav-group-label">錢潮方向</span>
-        <a data-page="capital_models">🧠 錢潮模型</a>
-        <a data-page="capital_causality">🕸 錢潮因果</a>
         <a data-page="capital_quality">🔬 資料品質</a>
   </nav>
   <div class="foot">
@@ -178,10 +180,104 @@
       </div>
     </div>
 
-    <!-- 投資管線 -->
-    <!-- 決策鏈 -->
+    <!-- 投資管線（client → admin 遷移，2026-08-23） -->
+    <div class="page" id="page-pipeline">
+      <div class="workflow mb-sm">
+        <div class="step">AI 推薦</div><span class="arrow">→</span>
+        <div class="step clickable" id="workflowScreening" title="點擊顯示/隱藏被篩選層排除的標的">篩選層</div><span class="arrow">→</span>
+        <div class="step">控制層</div><span class="arrow">→</span>
+        <div class="step">模擬投組</div>
+      </div>
+      <button class="filter-toggle" id="filterToggle" title="點擊展開/收合進階篩選">
+        <span class="icon">⚙</span> 進階篩選
+        <span id="filterBadge"></span>
+      </button>
+      <div class="filter-panel" id="filterPanel">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>P/E 比（最小～最大）</label>
+            <div class="flex-gap-6">
+              <input type="number" id="peMin" placeholder="0" min="0" step="0.1" aria-label="P/E 最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="peMax" placeholder="無上限" min="0" step="0.1" aria-label="P/E 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>P/B 比（最小～最大）</label>
+            <div class="flex-gap-6">
+              <input type="number" id="pbMin" placeholder="0" min="0" step="0.1" aria-label="P/B 最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="pbMax" placeholder="無上限" min="0" step="0.1" aria-label="P/B 最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>股息率（最小～最大）%</label>
+            <div class="flex-gap-6">
+              <input type="number" id="dyMin" placeholder="0" min="0" step="0.1" aria-label="股息率最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="dyMax" placeholder="無上限" min="0" step="0.1" aria-label="股息率最大值">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label>報酬率範圍 %</label>
+            <div class="flex-gap-6">
+              <input type="number" id="retMin" placeholder="-100" step="0.1" aria-label="報酬率最小值">
+              <span class="text-xs-muted">～</span>
+              <input type="number" id="retMax" placeholder="100" step="0.1" aria-label="報酬率最大值">
+            </div>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="primary">套用篩選</button>
+          <button>清除條件</button>
+          <span id="filterResultCount" class="ml-auto text-xs-muted"></span>
+        </div>
+      </div>
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        以下為最新回測場次中，<strong>控制層已放行的推薦標的</strong>。每筆資料包含策略來源、方向、收盤價與隔日回測報酬。價量標籤與推薦理由供您快速評估是否放行。
+        若勾選「顯示全部被過濾項目」，<span class="text-up">紅色邊框列</span>為被控制層擋下的標的，您可點擊「補追」進行人工覆寫。
+        <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
+      </details>
+      <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
+    </div>
 
-    <!-- 組合持倉 -->
+    <!-- 組合持倉（client → admin 遷移，2026-08-23） -->
+    <div class="page" id="page-portfolio">
+      <h1 id="portfolioPageTitle">📂 組合持倉</h1>
+      <div class="kpi-grid" id="portfolioKPIs"></div>
+      <div class="panel wide hidden" id="equityCurvePanel">
+        <h2>淨值趨勢</h2>
+        <canvas id="equityChart" height="200"></canvas>
+      </div>
+      <div class="panel wide" id="positionsPanel">
+        <h2>持倉明細</h2>
+        <div id="positionsTable"></div>
+      </div>
+      <div class="panel wide" id="tradeHistoryPanel">
+        <h2>交易時間軸</h2>
+        <div id="tradeHistoryContainer"></div>
+      </div>
+      <div class="panel wide" id="pnlAttributionPanel">
+        <h2>損益歸因 (PnL Attribution)</h2>
+        <div id="pnlAttribution" class="empty loading">載入中…</div>
+      </div>
+      <div class="panel wide"><h2>基準比較</h2><div id="benchmarkComparison" class="loading">載入中…</div></div>
+      <div class="panel wide"><h2>風控閘道</h2><div id="riskGatePanel" class="loading">載入中…</div></div>
+      <div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
+      <details class="help-details">
+        <summary><strong>📖 如何解讀本頁</strong></summary>
+        <p><strong>投組稅前淨值</strong> = 可用現金 + 所有持倉市值（未扣除稅負）</p>
+        <p><strong>投組稅後淨值</strong> = 稅前淨值 - 累積稅負（已實現獲利所產生的稅負）</p>
+        <p><strong>淨值趨勢</strong> = 每日回測的投組總值變化曲線（含稅前與稅後）</p>
+        <p>損益為未實現損益，實際損益需待部位平倉後確認。</p>
+        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
+      </details>
+    </div>
+
+    <!-- 績效報告（client → admin 遷移，2026-08-23；績效不適合對外） -->
+    <div class="page" id="page-performance-report">
+      <div id="performanceReportContainer"></div>
+    </div>
 
     <!-- 模擬交易 -->
     <div class="page" id="page-experiments">
@@ -458,13 +554,6 @@
         錢潮模型頁顯示 narrative engine 目前啟用的 0–21 個投資模型（依當前偵測到的事件主題而變），每個模型包含 Darwinian weight（動態權重，依近期預測誤差反比加權）、recent_error、hit_rate。權重透過每小時排程自動重算。
       </details>
       <div id="capitalModelsContent" class="empty loading">載入中…</div>
-    </div>
-
-    <div class="page" id="page-capital_causality">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        錢潮因果頁顯示 24 個 narrative template 的因果鏈展開。每個 template 都有 trigger_theme（自動偵測）、required_region（地理限制）、hit_rate（歷史命中率）。點擊展開看 steps — 從訊號偵測到板塊結論的完整推導。
-      </details>
-      <div id="capitalCausalityContent" class="empty loading">載入中…</div>
     </div>
 
     <div class="page" id="page-capital_quality">

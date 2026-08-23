@@ -34,7 +34,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/admin`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,live,reports,experiments,parameters,alerts,datachannels,metrics,config")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,live,reports,experiments,pipeline,portfolio,performance-report,parameters,alerts,datachannels,metrics,config")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -44,6 +44,9 @@ const PAGE_SELECTORS = {
   live: "#page-live",
   reports: "#page-reports",
   experiments: "#page-experiments",
+  pipeline: "#page-pipeline",
+  portfolio: "#page-portfolio",
+  "performance-report": "#page-performance-report",
   parameters: "#page-parameters",
   alerts: "#page-alerts",
   datachannels: "#page-datachannels",

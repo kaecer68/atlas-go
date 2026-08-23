@@ -174,7 +174,7 @@ function renderGuidedEmpty(kind) {
           <div class="title">還沒有推薦標的</div>
           <div class="desc">登入後即可查看依目前市場時期生成的個人化推薦標的。</div>
           <div class="empty-actions">
-            <a class="btn btn--primary btn-sm" data-page="login" href="/client/login">登入查看</a>
+            <a class="btn btn--primary btn-sm" href="https://member.goluck.uk/login">登入查看</a>
           </div>
         </div>
       </div>`;

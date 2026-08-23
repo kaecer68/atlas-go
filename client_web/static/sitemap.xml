@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <url><loc>https://atlas-go.example.com/client/</loc><priority>1.0</priority></url>
 <url><loc>https://atlas-go.example.com/client/home</loc><priority>0.9</priority></url>
-<url><loc>https://atlas-go.example.com/client/portfolio</loc><priority>0.7</priority></url>
+<url><loc>https://atlas-go.example.com/client/capital-causality</loc><priority>0.6</priority></url>
 <url><loc>https://atlas-go.example.com/client/crossmarket</loc><priority>0.6</priority></url>
 <url><loc>https://atlas-go.example.com/client/industry</loc><priority>0.6</priority></url>
 <url><loc>https://atlas-go.example.com/client/narrative</loc><priority>0.6</priority></url>

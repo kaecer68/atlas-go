@@ -31,6 +31,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // === Page: reports (backtest) ===
   var qs___page_reports__primary_ = document.querySelector('#page-reports .primary'); if (qs___page_reports__primary_) qs___page_reports__primary_.addEventListener('click', () => window.runBacktest());
 
+  // === Page: pipeline（client → admin 遷移，2026-08-23）===
+  // 頁面靜態 HTML 已內嵌在 admin index.html，DOMContentLoaded 時元素存在。
+  // 用 safeCall 橋接 module-load race（同 datachannels 模式）。
+  var el_workflowScreening = document.getElementById('workflowScreening'); if (el_workflowScreening) el_workflowScreening.addEventListener('click', () => safeCall('toggleWorkflowScreening'));
+  var el_filterToggle = document.getElementById('filterToggle'); if (el_filterToggle) el_filterToggle.addEventListener('click', () => safeCall('toggleFilterPanel'));
+  var qs___filter_actions__primary_ = document.querySelector('.filter-actions .primary'); if (qs___filter_actions__primary_) qs___filter_actions__primary_.addEventListener('click', () => safeCall('applyFilters'));
+  var qs___filter_actions__button_not_primary_ = document.querySelector('.filter-actions button:not(.primary)'); if (qs___filter_actions__button_not_primary_) qs___filter_actions__button_not_primary_.addEventListener('click', () => safeCall('clearFilters'));
+
   // === Page: datachannels ===
   var el_btnIngestChannels = document.getElementById('btnIngestChannels'); if (el_btnIngestChannels) el_btnIngestChannels.addEventListener('click', () => window.triggerChannelsIngest());
   // safeCall bridges the race between DOMContentLoaded (when these listeners

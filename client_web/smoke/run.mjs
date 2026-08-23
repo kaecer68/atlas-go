@@ -34,7 +34,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/client`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,pipeline,portfolio,strategies,login,register,premium,stock-quote,capital_board,decision-chain")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,crossmarket,industry,narrative,strategies,premium,stock-quote,capital_board,capital-causality")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -44,15 +44,11 @@ const PAGE_SELECTORS = {
   crossmarket: "#page-crossmarket",
   industry: "#page-industry",
   narrative: "#page-narrative",
-  pipeline: "#page-pipeline",
-  portfolio: "#page-portfolio",
   strategies: "#page-strategies",
-  login: "#page-login",
-  register: "#page-register",
   premium: "#page-premium",
   "stock-quote": "#page-stock-quote",
   capital_board: "#page-capital_board",
-  "decision-chain": "#page-decision-chain",
+  "capital-causality": "#page-capital-causality",
 };
 
 const BAD_PATTERNS = [

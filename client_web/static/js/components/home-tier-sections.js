@@ -1,7 +1,7 @@
 import { metricCard } from './metric-card.js';
 import { fmtSignedPct, formatSigned, formatNumber } from '../shared/format-metric.js';
 import { escapeHtml } from '../shared/utils.js';
-import { getTier } from '../services/auth.js';
+import { getTier, getRedirectUrl } from '../services/auth.js';
 import { silentGetJSON } from '../shared/app-utils.js';
 
 function buildTierSection(title, children) {
@@ -44,7 +44,7 @@ function buildTierCTA() {
   btn.className = 'btn btn--primary tier-cta__btn';
   btn.type = 'button';
   btn.textContent = '免費註冊';
-  btn.addEventListener('click', function () { window.switchPage('register'); });
+  btn.addEventListener('click', function () { window.location.href = getRedirectUrl(); });
   header.appendChild(h2);
   header.appendChild(sub);
   header.appendChild(btn);

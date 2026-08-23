@@ -11,6 +11,17 @@ import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned } from '../s
  * @param {Array<{label:string, page?:string, href?:string}>} [actions]
  * @returns {string}
  */
+// pipeline 頁已遷移到 admin shell（2026-08-23）：client 端不再有
+// page-pipeline，action 按鈕若仍 switchPage('pipeline') 會摔進 404。
+// 依當前 shell 是否真的有 pipeline 頁決定要不要提供該 action。
+function hasPipelinePage() {
+  return typeof document !== 'undefined' && !!document.getElementById('page-pipeline');
+}
+
+function pipelineAction(label) {
+  return hasPipelinePage() ? [{ label: label, page: 'pipeline' }] : [];
+}
+
 function renderActionEmptyState(title, message, actions) {
   let html = renderEmptyState(title, message);
   if (!actions || !actions.length) return html;
@@ -185,7 +196,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const macroEl = document.getElementById('narrativeMacro');
   if (macroEl) {
     macroEl.classList.remove('loading');
-    if (!snapshot) { macroEl.innerHTML = renderActionEmptyState('無可用快照', '執行回測後將自動產生。', [{label: '執行模擬', page: 'pipeline'}, {label: '查看示範', page: 'crossmarket'}]); }
+    if (!snapshot) { macroEl.innerHTML = renderActionEmptyState('無可用快照', '執行回測後將自動產生。', pipelineAction('執行模擬').concat([{label: '查看示範', page: 'crossmarket'}])); }
     else {
       const rows = [
         ['DXY-美元指數', snapshot.dxy], ['US10Y-美債10年期', snapshot.us10y], ['VIX-波動率指數', snapshot.vix],
@@ -250,7 +261,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
           <span class="font-bold text-sm text-accent">台股三大法人資金流</span>
           <span class="text-sm font-bold" style="color:${capitalStatus.color}">${capitalStatus.text}</span>
           <span class="text-muted text-sm">更新於 ${capitalTimeStr}</span>
-        </div>${renderActionEmptyState('暫無可用資料', '執行第一次宏觀分析後將自動更新。', [{label: '執行宏觀分析', page: 'pipeline'}])}`;
+        </div>${renderActionEmptyState('暫無可用資料', '執行第一次宏觀分析後將自動更新。', pipelineAction('執行宏觀分析'))}`;
       }
       macroEl.innerHTML = html;
     }
@@ -259,7 +270,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const stressEl = document.getElementById('narrativeStress');
   if (stressEl) {
     stressEl.classList.remove('loading');
-    if (!stress) { stressEl.innerHTML = renderActionEmptyState('無可用壓力資料', '執行回測或模擬後將顯示壓力測試結果。', [{label: '執行模擬', page: 'pipeline'}]); }
+    if (!stress) { stressEl.innerHTML = renderActionEmptyState('無可用壓力資料', '執行回測或模擬後將顯示壓力測試結果。', pipelineAction('執行模擬')); }
     else {
       const score = fmtSafeNumber(stress && stress.score, { decimals: 1 });
       const sLabel = stressLabel(stress.regime || '-');
@@ -361,7 +372,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (chainsEl) {
     chainsEl.classList.remove('loading');
     const list = (chains && chains.chains) || [];
-    if (!list.length) { chainsEl.innerHTML = renderActionEmptyState('目前無匹配的因果鏈', '因果鏈會在執行宏觀分析後產生。', [{label: '執行宏觀分析', page: 'pipeline'}]); }
+    if (!list.length) { chainsEl.innerHTML = renderActionEmptyState('目前無匹配的因果鏈', '因果鏈會在執行宏觀分析後產生。', pipelineAction('執行宏觀分析')); }
     else {
       chainsEl.innerHTML = list.map(c => `
         <div style="margin:12px 0;padding:12px;background:var(--panel-l2);border-radius:10px;border:1px solid var(--border)">
@@ -396,7 +407,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   if (modelsEl) {
     modelsEl.classList.remove('loading');
     const list = (models && models.models) || [];
-    if (!list.length) { modelsEl.innerHTML = renderActionEmptyState('目前無活躍模型', '模型會在回測或模擬運行後啟動。', [{label: '執行模擬', page: 'pipeline'}]); }
+    if (!list.length) { modelsEl.innerHTML = renderActionEmptyState('目前無活躍模型', '模型會在回測或模擬運行後啟動。', pipelineAction('執行模擬')); }
     else {
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
@@ -470,7 +481,7 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
   const seasonalEl = document.getElementById('narrativeSeasonal');
   if (seasonalEl) {
     seasonalEl.classList.remove('loading');
-    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderActionEmptyState('無季節性事件', '執行回測後將顯示季節性預期與事件。', [{label: '執行模擬', page: 'pipeline'}]); }
+    if (!seasonal || !seasonal.expectations || seasonal.expectations.length === 0) { seasonalEl.innerHTML = renderActionEmptyState('無季節性事件', '執行回測後將顯示季節性預期與事件。', pipelineAction('執行模擬')); }
     else {
       const rows = seasonal.expectations.map(e => {
         const hasCurrent = e.current_return !== null && e.current_return !== undefined;

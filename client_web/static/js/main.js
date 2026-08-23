@@ -12,7 +12,7 @@ import { renderLiveProgress } from './components/live-progress.js';
 import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
-import { initAuth, isLoggedIn, invalidateAuth, renderNavState } from './services/auth.js';
+import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getRedirectUrl } from './services/auth.js';
 import { pageRequiresLogin, PUBLIC_PAGES } from './services/login-gate.js';
 import { startIdleMonitor, resetIdleMonitor } from './services/idle-monitor.js';
 import { showLoginReminderModal } from './components/login-reminder-modal.js';
@@ -27,21 +27,16 @@ injectSharedHead();
 
 const SHELL_LOADERS = {
   narrative: () => import('./page-shells/narrative.js'),
-  pipeline: () => import('./page-shells/pipeline.js'),
-  portfolio: () => import('./page-shells/portfolio.js'),
   crossmarket: () => import('./page-shells/crossmarket.js'),
   industry: () => import('./page-shells/industry.js'),
   strategies: () => import('./page-shells/strategies.js'),
   capital_board: () => import('./pages/capital_board.js'),
-  login: () => import('./page-shells/login.js'),
-  register: () => import('./page-shells/register.js'),
   premium: () => import('./page-shells/premium.js'),
-  mcp: () => import('./page-shells/mcp.js'),
   'stock-quote': () => import('./page-shells/stock-quote.js'),
-  'performance-report': () => import('./page-shells/performance-report.js'),
   methodology: () => import('./page-shells/methodology.js'),
   'my-signals': () => import('./pages/my-signals.js'),
   retail_sentiment: () => import('./pages/retail_sentiment.js'),
+  'capital-causality': () => import('./pages/capital-causality.js'),
   'errors/404': () => import('./page-shells/errors/404.js'),
 };
 const _shellsLoaded = new Set();
@@ -82,16 +77,14 @@ export async function switchPage(id, silent) {
   if (!SHELL_LOADERS[id] && id !== 'errors/404' && id !== 'home' && id !== 'stock-quote') {
     return switchPage('errors/404', silent);
   }
-  // 會員制 gate (GUEST_MODE=false)：功能頁需登入，未登入導向登入頁。
-  // 公開可看只剩 login / register / errors-404；landing 內容在 atlas-index。
+  // 會員制 gate：需登入的頁面（premium）未登入 → 導向 go-member 登入。
+  // login/register 頁已移除（go-member 接管），gate 不再導向站內 login。
   if (pageRequiresLogin(id)) {
     let loggedIn = false;
     try { loggedIn = await isLoggedIn(); } catch (e) { loggedIn = false; }
     if (!loggedIn) {
-      if (typeof window !== 'undefined' && window.history) {
-        window.history.replaceState({ page: 'login', __atlas: true }, '', basePath + '/login');
-      }
-      return switchPage('login', true);
+      window.location.href = getRedirectUrl();
+      return;
     }
   }
   var pageEl = document.getElementById('page-' + id);
@@ -107,12 +100,11 @@ export async function switchPage(id, silent) {
   const titles = {
     home: '今日判讀', narrative: '全球宏觀', live: '風險總覽',
     crossmarket: '美台連動', industry: '產業熱力圖',
-    pipeline: '投資管線', portfolio: '組合持倉',
-    'performance-report': '績效報告',
     strategies: '投資心法',
     capital_board: '七大勢力看板',
-      login: '登入', register: '註冊', premium: '升級 Premium',
-      mcp: 'MCP 整合', 'errors/404': '404', 'stock-quote': '個股快查',
+    'capital-causality': '錢潮因果',
+      premium: '升級 Premium',
+      'errors/404': '404', 'stock-quote': '個股快查',
       methodology: '方法論：為什麼', 'my-signals': '我的追蹤',
       retail_sentiment: '散戶情緒'
   };
@@ -178,15 +170,15 @@ async function loadModules() {
     import('./pages/dashboard.js'),
     import('./pages/risk.js'),
     import('./pages/narrative.js'),
-    import('./pages/pipeline.js'),
     import('./pages/inbox.js'),
     import('./pages/experiments.js'),
     import('./pages/industry.js'),
     import('./pages/strategies.js'),
     import('./pages/crossmarket.js'),
+    import('./pages/capital-causality.js'),
   ];
   var results = await Promise.allSettled(imports);
-  var keys = ['home', 'dash', 'risk', 'narr', 'pipe', 'inbox', 'experiments', 'industry', 'strategies', 'crossmarket'];
+  var keys = ['home', 'dash', 'risk', 'narr', 'inbox', 'experiments', 'industry', 'strategies', 'crossmarket', 'capitalCausality'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -204,12 +196,6 @@ async function loadModules() {
     if (modules.experiments.resumeAgent) window.resumeAgent = modules.experiments.resumeAgent;
     if (modules.experiments.banSector) window.banSector = modules.experiments.banSector;
     if (modules.experiments.unbanSector) window.unbanSector = modules.experiments.unbanSector;
-  }
-  if (modules.pipe) {
-    if (modules.pipe.toggleFilterPanel) window.toggleFilterPanel = modules.pipe.toggleFilterPanel;
-    if (modules.pipe.applyFilters) window.applyFilters = modules.pipe.applyFilters;
-    if (modules.pipe.clearFilters) window.clearFilters = modules.pipe.clearFilters;
-    if (modules.pipe.toggleWorkflowScreening) window.toggleWorkflowScreening = modules.pipe.toggleWorkflowScreening;
   }
   if (modules.back) {
     if (modules.back.runBacktest) window.runBacktest = modules.back.runBacktest;
@@ -300,22 +286,6 @@ async function loadPageData(pageId) {
 
     } catch(e) { console.warn(e); }
   }
-  else if (pageId === 'pipeline') {
-    try {
-      // Fetch the session list explicitly: renderPipeline's session dropdown
-      // reads window.pipelineSessions, which nothing else populates on this page.
-      var pipelineResults = await Promise.all([
-        silentGetJSON('/api/dashboard/recommendation-pipeline'),
-        silentGetJSON('/api/dashboard/sessions'),
-      ]);
-      var p = pipelineResults[0];
-      var sessResp = pipelineResults[1];
-      if (sessResp && Array.isArray(sessResp.sessions)) {
-        window.pipelineSessions = sessResp.sessions;
-      }
-      if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
-    } catch(e) { console.warn(e); }
-  }
   else if (pageId === 'reasoning-trace') {
     loadReasoningTrace(window._currentSessionId);
   }
@@ -378,15 +348,6 @@ async function loadPageData(pageId) {
       }
     } catch(e) { console.warn(e); }
   }
-  else if (pageId === 'portfolio') {
-    try {
-      var portfolioModule = await import('./pages/portfolio.js').catch(function(err) {
-        console.warn('[Dynamic import] portfolio module load failed:', err);
-        return null;
-      });
-      if (portfolioModule) portfolioModule.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
-    } catch(e) { console.warn(e); }
-  }
   else if (pageId === 'parameters') {
     try {
       var pData = await Promise.all([
@@ -418,15 +379,9 @@ async function loadPageData(pageId) {
   else if (pageId === 'crossmarket') {
     try { if (m.crossmarket && m.crossmarket.loadCrossMarketData) m.crossmarket.loadCrossMarketData(); } catch(e) { console.warn(e); }
   }
-  
-  else if (pageId === 'performance-report') {
-    try {
-      import('./pages/performance-report.js').then(function(mod) {
-        if (mod.loadPerformanceReport) mod.loadPerformanceReport();
-      }).catch(function(err) {
-        console.warn('[Dynamic import] performance-report module load failed:', err);
-      });
-    } catch(e) { console.warn(e); }
+
+  else if (pageId === 'capital-causality') {
+    try { if (m.capitalCausality && m.capitalCausality.loadCapitalCausality) m.capitalCausality.loadCapitalCausality(); } catch(e) { console.warn(e); }
   }
 }
 
@@ -483,13 +438,17 @@ if (typeof window !== 'undefined') {
 
   // Auth: check JWT validity before loading data; wrap fetch for 401 detection
   // 401 分流（PR-7）：client_web 不接 onApiKeyRequired（無 apiKeyModal）→
-  // mutating 401 亦走 onUnauthorized + login，維持既有行為。
+  // mutating 401 亦走 onUnauthorized + 導向 go-member 登入（login/register
+  // 頁已移除），維持既有資料保護行為。
   install401Interceptor({
     loginPageId: 'login',
+    // login/register 頁已移除（go-member 接管）：401 改導向 member 登入
+    // （含 redirect 回目前頁），不再 switchPage('login')。
+    loginRedirectUrl: function () { return getRedirectUrl(); },
     // Track A（不強迫登入）：公開頁全部排除在 401 自動跳轉之外 —
     // 匿名訪客 initAuth 的 /api/user/profile 401 是「預期結果」，不該被踢到
-    // login；gated 頁（portfolio/premium）由 switchPage 的 runLoginGate 擋，
-    // 個人資料 API 的 401 仍會把已登入但 session 失效的用戶導向 login
+    // member；gated 頁（premium）由 switchPage 的 login gate 擋，
+    // 個人資料 API 的 401 仍會把已登入但 session 失效的用戶導向 member 登入
     // （資料保護不變）。
     excludedPages: PUBLIC_PAGES,
     onUnauthorized: invalidateAuth,
