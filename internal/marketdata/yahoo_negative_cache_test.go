@@ -29,6 +29,7 @@ func TestYahooNegativeCache_429HonorsRetryAfterAndShortCircuits(t *testing.T) {
 	defer func() { yahooHosts = origHosts }()
 	SetYahooSessionClient(ts.Client())
 	s := getYahooSession()
+	defer resetYahooSessionState()
 
 	ctx := context.Background()
 	_, err := s.fetchWithFallback(ctx, "^TWII", map[string]string{"interval": "1d", "range": "5d"})
@@ -74,6 +75,7 @@ func TestYahooNegativeCache_HTMLResponseBlocks(t *testing.T) {
 	defer func() { yahooHosts = origHosts }()
 	SetYahooSessionClient(ts.Client())
 	s := getYahooSession()
+	defer resetYahooSessionState()
 
 	_, err := s.fetchWithFallback(context.Background(), "^VIX", map[string]string{"interval": "1d", "range": "5d"})
 	if err == nil {
@@ -96,6 +98,7 @@ func TestYahooNegativeCache_ShortRetryAfterClampsToFiveMinutes(t *testing.T) {
 	defer func() { yahooHosts = origHosts }()
 	SetYahooSessionClient(ts.Client())
 	s := getYahooSession()
+	defer resetYahooSessionState()
 
 	_, err := s.fetchWithFallback(context.Background(), "^TWII", map[string]string{"interval": "1d", "range": "5d"})
 	if err == nil {
@@ -120,6 +123,7 @@ func TestYahooNegativeCache_Expires(t *testing.T) {
 	defer func() { yahooHosts = origHosts }()
 	SetYahooSessionClient(ts.Client())
 	s := getYahooSession()
+	defer resetYahooSessionState()
 
 	// Force an expired block window.
 	s.markBlocked(-time.Minute)
@@ -145,6 +149,7 @@ func TestYahooNegativeCache_RetryAfterHTTPDate(t *testing.T) {
 	defer func() { yahooHosts = origHosts }()
 	SetYahooSessionClient(ts.Client())
 	s := getYahooSession()
+	defer resetYahooSessionState()
 
 	_, err := s.fetchWithFallback(context.Background(), "^TWII", map[string]string{"interval": "1d", "range": "5d"})
 	if err == nil {
@@ -156,5 +161,16 @@ func TestYahooNegativeCache_RetryAfterHTTPDate(t *testing.T) {
 	}
 	if wait < negativeCacheBlockMin-time.Second {
 		t.Fatalf("HTTP-date Retry-After not honored (below floor): %v", wait)
+	}
+}
+
+// resetYahooSessionState clears the shared session's negative-cache block and
+// breaker so a test that intentionally trips them does not pollute later
+// tests (the singleton session is shared package-wide).
+func resetYahooSessionState() {
+	s := getYahooSession()
+	s.blockedUntil = time.Time{}
+	if s.breaker != nil {
+		s.breaker.reset()
 	}
 }
