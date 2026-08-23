@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -359,10 +360,40 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	block := func(reason string) error {
+		// P1-14: negative cache — a 429 (or any HTML block page) means Yahoo
+		// is rate-limiting our IP. Honor Retry-After when present, clamp to
+		// [5,10] minutes, and mark the whole session blocked so every channel
+		// short-circuits instead of re-hammering the same IP.
+		wait := negativeCacheBlockMin
+		if ra := resp.Header.Get("Retry-After"); ra != "" {
+			if secs, parseErr := strconv.Atoi(ra); parseErr == nil && secs > 0 {
+				wait = time.Duration(secs) * time.Second
+			} else if t, parseErr := http.ParseTime(ra); parseErr == nil {
+				if d := time.Until(t); d > 0 {
+					wait = d
+				}
+			}
+		}
+		if wait < negativeCacheBlockMin {
+			wait = negativeCacheBlockMin
+		}
+		if wait > negativeCacheBlockMax {
+			wait = negativeCacheBlockMax
+		}
+		s.markBlocked(wait)
+		logging.Warn("yahoo_session", "negative_cache_block",
+			"host", host, "reason", reason, "block_minutes", int(wait.Minutes()))
+		return fmt.Errorf("%s: %s", reason, host)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if len(body) > 0 && body[0] == '<' {
-			return nil, fmt.Errorf("http %d: HTML response from %s (rate limited or blocked)", resp.StatusCode, host)
+			return nil, block(fmt.Sprintf("http %d: HTML response (rate limited or blocked)", resp.StatusCode))
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, block("http 429: rate limited")
 		}
 		return nil, fmt.Errorf("http %d from %s: %s", resp.StatusCode, host, string(body))
 	}
@@ -373,7 +404,7 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 	}
 
 	if len(body) > 0 && body[0] == '<' {
-		return nil, fmt.Errorf("HTML response from %s (likely rate limited)", host)
+		return nil, block("HTML response (likely rate limited)")
 	}
 
 	return body, nil
@@ -528,6 +559,8 @@ func SetYahooSessionClient(client *http.Client) {
 	if s.breaker != nil {
 		s.breaker.reset()
 	}
+	// Reset the negative cache too (P1-14).
+	s.blockedUntil = time.Time{}
 
 	// Reset shared caches so each mock-server test starts from a clean
 	// state and does not observe data from a prior test/subtest.
