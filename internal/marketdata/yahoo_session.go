@@ -431,11 +431,18 @@ func (s *yahooSession) BreakerInfo() ProviderBreakerInfo {
 	return s.breaker.stateSnapshot()
 }
 
-// isBlocked reports whether the negative cache is active (429/HTML block).
-func (s *yahooSession) isBlocked() bool {
+// blockedUntilTime returns the negative-cache expiry (zero when no block is
+// active). The value is read under the lock so callers never observe a torn
+// timestamp (race-free under concurrent markBlocked).
+func (s *yahooSession) blockedUntilTime() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return time.Now().Before(s.blockedUntil)
+	return s.blockedUntil
+}
+
+// isBlocked reports whether the negative cache is active (429/HTML block).
+func (s *yahooSession) isBlocked() bool {
+	return time.Now().Before(s.blockedUntilTime())
 }
 
 // markBlocked sets the session-level negative cache for d (clamped by the
@@ -462,8 +469,8 @@ const (
 // P1-14: the negative cache additionally short-circuits after a 429/HTML
 // block, so a blocked IP stops being hammered by every channel each cycle.
 func (s *yahooSession) fetchWithFallback(ctx context.Context, symbol string, params map[string]string) ([]byte, error) {
-	if s.isBlocked() {
-		return nil, fmt.Errorf("%w: yahoo negative-cache block active until %s", ErrUpstream, s.blockedUntil.Format(time.RFC3339))
+	if until := s.blockedUntilTime(); time.Now().Before(until) {
+		return nil, fmt.Errorf("%w: yahoo negative-cache block active until %s", ErrUpstream, until.Format(time.RFC3339))
 	}
 	if s.breaker != nil && !s.breaker.shouldTry() {
 		return nil, fmt.Errorf("%w: yahoo circuit breaker open", ErrUpstream)

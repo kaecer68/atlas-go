@@ -101,9 +101,14 @@ func TestYahooFinanceMacroProvider_FetchSnapshot_AllSuccess(t *testing.T) {
 }
 
 func TestYahooFinanceMacroProvider_FetchSnapshot_PartialFailure(t *testing.T) {
+	// P1-14: use a 500 (not 429) for the failing ticker — a 429 now arms the
+	// session-level negative cache and short-circuits the concurrent fetches
+	// (the intended new behavior, covered by TestYahooNegativeCache_*). A 500
+	// keeps this test's original intent: one upstream failure is tolerated
+	// and the successful paths still populate the snapshot.
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "^VIX") {
-			w.WriteHeader(http.StatusTooManyRequests)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
