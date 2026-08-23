@@ -5,11 +5,23 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+func cleanupTEJQuotaState() {
+	// P1-12: TEJ quota tracker is file-based (data/state/tej_daily_quota.json).
+	// Tests share the same file via NewTEJClient → calls accumulate across
+	// tests and hit the 500/day limit. Remove the state file so each test
+	// starts at zero.
+	_ = os.Remove(filepath.Join("data", "state", "tej_daily_quota.json"))
+}
+
 func TestTEJClient_GetStockPriceDaily_Success(t *testing.T) {
+	cleanupTEJQuotaState()
+	t.Cleanup(cleanupTEJQuotaState)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("api_key") == "" {
 			t.Error("expected api_key query parameter")
