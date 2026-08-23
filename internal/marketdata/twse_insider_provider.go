@@ -61,7 +61,7 @@ func NewTWSEInsiderProvider(storageDir string) *TWSEInsiderProvider {
 	return &TWSEInsiderProvider{
 		client:     httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
 		baseURL:    constants.TWSEBaseURL,
-		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
+		limiter:    getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 		storageDir: storageDir,
 	}
 }
@@ -77,6 +77,14 @@ func (p *TWSEInsiderProvider) SetHTTPClient(client *http.Client) {
 func (p *TWSEInsiderProvider) Name() string {
 	return "twse_insider"
 }
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (p *TWSEInsiderProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		p.limiter = l
+	}
+}
+
 
 // FetchLatest fetches the most recent insider trading daily report and
 // returns an aggregate summary.

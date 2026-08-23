@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventquality"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/taiwanholidays"
 )
 
 // TaiwanEventType is a canonical string enum for Taiwan market event types.
@@ -273,62 +274,32 @@ func (tec *EventCalendar) filterByQualityGate(events []CalendarEvent) []Calendar
 }
 
 // ---------------------------------------------------------------------------
-// Lunar calendar lookup tables (2024-2028)
+// Lunar calendar lookup tables
 // ---------------------------------------------------------------------------
+//
+// P1-8: these maps are DERIVED from the single-source internal/taiwanholidays
+// package (verified 2023-2030). They exist as package-level maps so existing
+// callers (event rules, tests) keep indexing by year; the canonical data lives
+// in taiwanholidays and cannot drift. Out-of-range years fall back to the
+// conventional dates below (same conventions as before).
 
-// lunarNewYearDates maps year to lunar new year (春節) date in Asia/Taipei.
-var lunarNewYearDates = map[int]time.Time{
-	2024: time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),
-	2025: time.Date(2025, 1, 29, 0, 0, 0, 0, time.UTC),
-	2026: time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),
-	2027: time.Date(2027, 2, 6, 0, 0, 0, 0, time.UTC),
-	2028: time.Date(2028, 1, 26, 0, 0, 0, 0, time.UTC),
-	2029: time.Date(2029, 2, 13, 0, 0, 0, 0, time.UTC),
-	2030: time.Date(2030, 2, 3, 0, 0, 0, 0, time.UTC),
-}
-
-// lunarDragonBoatDates maps year to 端午節 date (lunar 5/5).
-var lunarDragonBoatDates = map[int]time.Time{
-	2023: time.Date(2023, 6, 22, 0, 0, 0, 0, time.UTC),
-	2024: time.Date(2024, 6, 10, 0, 0, 0, 0, time.UTC),
-	2025: time.Date(2025, 5, 31, 0, 0, 0, 0, time.UTC),
-	2026: time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC),
-	2027: time.Date(2027, 6, 9, 0, 0, 0, 0, time.UTC),
-	2028: time.Date(2028, 5, 28, 0, 0, 0, 0, time.UTC),
-	2029: time.Date(2029, 6, 16, 0, 0, 0, 0, time.UTC),
-	2030: time.Date(2030, 6, 5, 0, 0, 0, 0, time.UTC),
-}
-
-// lunarMidAutumnDates maps year to 中秋節 date (lunar 8/15).
-var lunarMidAutumnDates = map[int]time.Time{
-	2023: time.Date(2023, 9, 29, 0, 0, 0, 0, time.UTC),
-	2024: time.Date(2024, 9, 17, 0, 0, 0, 0, time.UTC),
-	2025: time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
-	2026: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
-	2027: time.Date(2027, 9, 15, 0, 0, 0, 0, time.UTC),
-	2028: time.Date(2028, 10, 3, 0, 0, 0, 0, time.UTC),
-	2029: time.Date(2029, 9, 22, 0, 0, 0, 0, time.UTC),
-	2030: time.Date(2030, 9, 12, 0, 0, 0, 0, time.UTC),
-}
-
-// tombSweepingDates maps year to 清明節 date.
-var tombSweepingDates = map[int]time.Time{
-	2023: time.Date(2023, 4, 5, 0, 0, 0, 0, time.UTC),
-	2024: time.Date(2024, 4, 4, 0, 0, 0, 0, time.UTC),
-	2025: time.Date(2025, 4, 4, 0, 0, 0, 0, time.UTC),
-	2026: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
-	2027: time.Date(2027, 4, 5, 0, 0, 0, 0, time.UTC),
-	2028: time.Date(2028, 4, 4, 0, 0, 0, 0, time.UTC),
-	2029: time.Date(2029, 4, 4, 0, 0, 0, 0, time.UTC),
-	2030: time.Date(2030, 4, 5, 0, 0, 0, 0, time.UTC),
-}
+var (
+	// lunarNewYearDates maps year to lunar new year (春節) date in Asia/Taipei.
+	lunarNewYearDates = taiwanholidays.LunarNewYearDates()
+	// lunarDragonBoatDates maps year to 端午節 date (lunar 5/5).
+	lunarDragonBoatDates = taiwanholidays.LunarDragonBoatDates()
+	// lunarMidAutumnDates maps year to 中秋節 date (lunar 8/15).
+	lunarMidAutumnDates = taiwanholidays.LunarMidAutumnDates()
+	// tombSweepingDates maps year to 清明節 date.
+	tombSweepingDates = taiwanholidays.TombSweepingDates()
+)
 
 // GetLunarCoverageYears returns the effective coverage range of the lunar calendar
 // system. Since ST-8 (lunar automation), the range is effectively unbounded;
 // the returned values indicate the verified hardcoded cache range (2023-2030).
 // Callers should treat any year as computable.
 func GetLunarCoverageYears() (int, int) {
-	return 2023, 2030
+	return taiwanholidays.CoverageYears()
 }
 
 // taiwanHoliday is a fixed-date or lookup-based Taiwan public holiday.

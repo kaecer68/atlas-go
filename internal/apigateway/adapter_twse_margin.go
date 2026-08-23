@@ -3,8 +3,8 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -33,7 +33,8 @@ func (a *TWSEMarginChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 		// Non-trading days or holidays: TWSE returns no data for the past 7 days,
 		// which is expected behavior. Return a stale result instead of an error
 		// to avoid triggering the circuit breaker.
-		if strings.Contains(err.Error(), "no TWSE") || strings.Contains(err.Error(), "no data") {
+		// P1-9: typed no-data classification (previously string matching).
+		if errors.Is(err, marketdata.ErrNoData) {
 			return &FetchResult{Stale: true, Meta: FetchMetadata{ChannelID: "twse_margin", Timestamp: time.Now()}}, nil
 		}
 		return nil, fmt.Errorf("margin fetch: %w", err)

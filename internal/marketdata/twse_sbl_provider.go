@@ -39,13 +39,14 @@ type TWSESBLProvider struct {
 // NewTWSESBLProvider creates a TWSE SBL data provider.
 // ratePerSec defaults to 0.5 (1 request per 2 seconds) per TWSE rate-limiting.
 func NewTWSESBLProvider(ratePerSec float64) *TWSESBLProvider {
-	if ratePerSec <= 0 {
-		ratePerSec = 0.5
-	}
+	// ratePerSec is accepted for API compatibility but the provider now
+	// shares the single TWSE token bucket (P1-13): 11 independent limiters
+	// against the same host could collectively exceed the documented policy.
+	_ = ratePerSec
 	return &TWSESBLProvider{
 		client:  httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL: constants.TWSEBaseURL,
-		limiter: rate.NewLimiter(rate.Limit(ratePerSec), 1),
+		limiter: getTWSESharedLimiter(),
 	}
 }
 
@@ -57,6 +58,14 @@ func (p *TWSESBLProvider) SetBaseURL(u string) { p.baseURL = u }
 
 // Name identifies this provider.
 func (p *TWSESBLProvider) Name() string { return "twse_sbl" }
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (p *TWSESBLProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		p.limiter = l
+	}
+}
+
 
 // RateLimiter returns the per-provider rate limiter.
 func (p *TWSESBLProvider) RateLimiter() *rate.Limiter { return p.limiter }

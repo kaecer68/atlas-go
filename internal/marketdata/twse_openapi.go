@@ -25,11 +25,56 @@ const (
 	twseAPIBaseURL = constants.TWSEBaseURL
 )
 
+// ─── shared TWSE token bucket (P1-13) ───────────────────────────────────────
+//
+// Previously 11 providers each built their OWN rate limiter against
+// www.twse.com.tw (openapi 0.6/s, capital_flow 1/5s, margin 1/5s, oddlot 1/s,
+// day_trading 1/5s, market_volume 1/5s, calendar 0.6/s, insider 1/5s, etf 1/s,
+// sector_index 0.6/s, sbl 1/2s) — a busy cycle could collectively hit TWSE
+// several times per second. One shared bucket enforces the documented policy
+// (marketdata.twse_api_rate_limit / twse_api_rate_burst, default 3 req per
+// 5s) across ALL call sites, including the taiex_twse_fallback path that
+// previously skipped rate limiting entirely.
+var (
+	twseSharedLimiterMu sync.Mutex
+	twseSharedLimiter   *rate.Limiter
+)
+
+// getTWSESharedLimiter lazily constructs the shared bucket from the
+// parameter system (lazy so config overrides are honored at first use).
+func getTWSESharedLimiter() *rate.Limiter {
+	twseSharedLimiterMu.Lock()
+	defer twseSharedLimiterMu.Unlock()
+	if twseSharedLimiter == nil {
+		params := config.GetParametersConfig()
+		twseSharedLimiter = rate.NewLimiter(
+			rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value),
+			params.Marketdata.TWSEAPIRateBurst.Value,
+		)
+	}
+	return twseSharedLimiter
+}
+
+// SetTWSESharedLimiterForTest replaces the shared bucket. Returns the
+// previous limiter for the caller to restore with defer/Cleanup.
+func SetTWSESharedLimiterForTest(l *rate.Limiter) *rate.Limiter {
+	twseSharedLimiterMu.Lock()
+	defer twseSharedLimiterMu.Unlock()
+	old := twseSharedLimiter
+	twseSharedLimiter = l
+	return old
+}
+
 // TWSEClient TWSE OpenAPI 客户端
 type TWSEClient struct {
 	httpClient  *http.Client
 	baseURL     string
 	rateLimiter *rate.Limiter
+	// breaker is the client-level circuit breaker (P1-7). All TWSE call
+	// sites (hybrid provider, gateway adapters, GetQuote/GetQuotes) share
+	// this client via GetSharedTWSEClient, so one breaker covers the whole
+	// host. ErrTWSEEmptyData (holiday/no-data) does NOT trip it.
+	breaker *providerBreaker
 }
 
 // TWSEQuote TWSE 行情数据结构
@@ -69,7 +114,8 @@ func GetSharedTWSEClient() *TWSEClient {
 		sharedTWSEClient = &TWSEClient{
 			httpClient:  httpclient.NewFactory().NewClient(time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
 			baseURL:     twseAPIBaseURL,
-			rateLimiter: rate.NewLimiter(rate.Limit(config.GetParametersConfig().Marketdata.TWSEAPIRateLimit.Value), config.GetParametersConfig().Marketdata.TWSEAPIRateBurst.Value),
+			rateLimiter: getTWSESharedLimiter(),
+			breaker:     newProviderBreaker("twse", defaultCircuitBreakerConfig()),
 		}
 	})
 	return sharedTWSEClient
@@ -81,6 +127,11 @@ func ResetSharedTWSEClient() {
 	defer sharedTWSEClientMu.Unlock()
 	sharedTWSEClient = nil
 	sharedTWSEClientOnce = sync.Once{}
+	// Also clear the shared token bucket so the next GetSharedTWSEClient
+	// constructs a fresh one (tests must not inherit drained tokens).
+	twseSharedLimiterMu.Lock()
+	twseSharedLimiter = nil
+	twseSharedLimiterMu.Unlock()
 }
 
 // NewTWSEClient 创建 TWSE OpenAPI 客户端
@@ -90,7 +141,8 @@ func NewTWSEClient() *TWSEClient {
 	return &TWSEClient{
 		httpClient:  httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
 		baseURL:     twseAPIBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), params.Marketdata.TWSEAPIRateBurst.Value),
+		rateLimiter: getTWSESharedLimiter(),
+		breaker:     newProviderBreaker("twse", defaultCircuitBreakerConfig()),
 	}
 }
 
@@ -99,8 +151,26 @@ func (c *TWSEClient) SetHTTPClient(client *http.Client) {
 	c.httpClient = client
 }
 
+// HTTPClient returns the underlying HTTP client (shared by the TAIEX
+// fallback path, P1-13).
+func (c *TWSEClient) HTTPClient() *http.Client {
+	return c.httpClient
+}
+
+// RateLimiter returns the shared TWSE token bucket (P1-13: every
+// www.twse.com.tw caller — providers and the TAIEX fallback — shares one
+// limiter instead of 11 independent buckets).
+func (c *TWSEClient) RateLimiter() *rate.Limiter {
+	return c.rateLimiter
+}
+
 // GetQuotes 批量获取当日所有上市股票行情
 func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
+	// P1-7: client-level breaker — open 時不發 HTTP。ErrTWSEEmptyData
+	// (假日/no-data) 不計 failure（見下方）。
+	if c.breaker != nil && !c.breaker.shouldTry() {
+		return nil, fmt.Errorf("%w: twse circuit breaker open", ErrUpstream)
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := c.rateLimiter.Wait(waitCtx); err != nil {
@@ -116,11 +186,13 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
@@ -143,12 +215,14 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		if isCSVContentType(contentType) {
 			return c.parseStockCSV(bytes.NewReader(body))
 		}
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("decode response: %w", decodeErr)
 	}
 
 	// P0-4: surface a non-OK upstream status instead of silently treating
 	// the payload as an empty success (aligned with GetDailyQuote).
 	if twseResp.Stat != "OK" {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("twse: STOCK_DAY_ALL stat=%q (expected OK)", twseResp.Stat)
 	}
 
@@ -176,6 +250,8 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	// an empty success slice, so the gateway breaker never tripped and
 	// channel-health showed ok while every quote was missing.
 	if len(twseQuotes) == 0 {
+		// P1-7: no-data (holiday / market closed) must NOT trip the breaker.
+		c.breakerRecordSuccess()
 		return nil, fmt.Errorf("%w: STOCK_DAY_ALL returned no rows", ErrTWSEEmptyData)
 	}
 
@@ -193,10 +269,36 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	// P0-4: every row failed to parse = upstream schema change (renamed /
 	// re-typed columns), NOT a silent empty success.
 	if len(quotes) == 0 {
+		// P1-7: all-rows-parse-failed is a schema change (upstream problem),
+		// NOT a no-data condition — it must trip the breaker.
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("twse: all %d rows failed to parse (schema change?)", parseFailures)
 	}
 
+	c.breakerRecordSuccess()
 	return quotes, nil
+}
+
+// breakerRecordSuccess / breakerRecordFailure are nil-safe breaker wrappers
+// (hand-constructed TWSEClient values in tests may have a nil breaker).
+func (c *TWSEClient) breakerRecordSuccess() {
+	if c.breaker != nil {
+		c.breaker.recordSuccess()
+	}
+}
+
+func (c *TWSEClient) breakerRecordFailure() {
+	if c.breaker != nil {
+		c.breaker.recordFailure()
+	}
+}
+
+// BreakerInfo exposes the breaker state for tests and observability.
+func (c *TWSEClient) BreakerInfo() ProviderBreakerInfo {
+	if c.breaker == nil {
+		return ProviderBreakerInfo{Name: "twse", State: ProviderCircuitClosed}
+	}
+	return c.breaker.stateSnapshot()
 }
 
 // GetQuote 获取单个股票行情
@@ -240,6 +342,10 @@ func (c *TWSEClient) GetQuotesBySymbols(ctx context.Context, symbols []string) (
 
 // GetDailyQuote 获取指定日期和股票的行情
 func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol string) (domain.Quote, error) {
+	// P1-7: client-level breaker (same shared breaker as GetQuotes).
+	if c.breaker != nil && !c.breaker.shouldTry() {
+		return domain.Quote{}, fmt.Errorf("%w: twse circuit breaker open", ErrUpstream)
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := c.rateLimiter.Wait(waitCtx); err != nil {
@@ -261,11 +367,13 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
@@ -273,15 +381,20 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 	// DecodeJSON uses a fresh reader. Mirrors twse_margin_provider.go:110-118.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("read body: %w", err)
 	}
 
 	var dailyResp TWSEDailyResponse
 	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &dailyResp); err != nil {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("decode response: %w", err)
 	}
 
 	if dailyResp.Stat != "OK" || len(dailyResp.Data) == 0 {
+		// P1-7: no-data for the requested date (holiday/weekend) is expected
+		// — must NOT trip the breaker.
+		c.breakerRecordSuccess()
 		return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
 	}
 
@@ -299,10 +412,18 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 	wantROC := fmt.Sprintf("%d/%02d/%02d", t.Year()-1911, t.Month(), t.Day())
 	for _, row := range dailyResp.Data {
 		if len(row) > 0 && strings.TrimSpace(row[0]) == wantROC {
-			return c.convertDailyRowToQuote(row, symbol)
+			quote, err := c.convertDailyRowToQuote(row, symbol)
+			if err != nil {
+				c.breakerRecordFailure()
+				return domain.Quote{}, err
+			}
+			c.breakerRecordSuccess()
+			return quote, nil
 		}
 	}
 
+	// Date not present in the month's rows = that day never traded (holiday).
+	c.breakerRecordSuccess()
 	return domain.Quote{}, fmt.Errorf("no data for %s on %s", symbol, date)
 }
 
@@ -481,10 +602,14 @@ func (c *TWSEClient) parseStockCSV(body io.Reader) ([]domain.Quote, error) {
 	// P0-4: mirror the JSON path — empty CSV or all-rows-unparseable must
 	// not surface as an empty success.
 	if rows == 0 {
+		// P1-7: no-data must not trip the breaker.
+		c.breakerRecordSuccess()
 		return nil, fmt.Errorf("%w: STOCK_DAY_ALL CSV returned no rows", ErrTWSEEmptyData)
 	}
 	if len(quotes) == 0 {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("twse: all %d CSV rows failed to parse (schema change?)", parseFailures)
 	}
+	c.breakerRecordSuccess()
 	return quotes, nil
 }

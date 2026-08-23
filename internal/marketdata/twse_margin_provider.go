@@ -34,7 +34,7 @@ func NewTWSEMarginBalanceProvider(storageDir string) *TWSEMarginBalanceProvider 
 	return &TWSEMarginBalanceProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 		storageDir:  storageDir,
 	}
 }
@@ -109,7 +109,7 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 			return snap, nil
 		}
 	}
-	return MacroDataSnapshot{}, fmt.Errorf("no TWSE margin balance data available in the last 7 days")
+	return MacroDataSnapshot{}, fmt.Errorf("%w: no TWSE margin balance data available in the last 7 days", ErrNoData)
 }
 
 func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateStr string) (float64, float64, float64, float64, error) {

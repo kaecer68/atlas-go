@@ -40,7 +40,7 @@ func NewMarketVolumeProvider() *MarketVolumeProvider {
 	return &MarketVolumeProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 	}
 }
 

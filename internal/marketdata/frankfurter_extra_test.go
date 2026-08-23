@@ -160,8 +160,12 @@ func TestPreviousBusinessDay(t *testing.T) {
 	}{
 		{"Thursday→Wednesday", thursday, 1, "2026-04-29"},
 		{"Thursday→Friday prior week", thursday, 3, "2026-04-27"},
-		{"Saturday skips to Friday", time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC), 1, "2026-05-01"},
-		{"Sunday skips to Friday", time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC), 1, "2026-05-01"},
+		// P1-8: PreviousTradingDay now skips Taiwan public holidays, not just
+		// weekends. 2026-05-01 is 勞動節 (Labor Day) — a Taiwan holiday — so
+		// Saturday 05-02 / Sunday 05-03 with daysBack=1 lands on Thursday
+		// 04-30, not the holiday Friday 05-01.
+		{"Saturday skips to Friday", time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC), 1, "2026-04-30"},
+		{"Sunday skips to Friday", time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC), 1, "2026-04-30"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

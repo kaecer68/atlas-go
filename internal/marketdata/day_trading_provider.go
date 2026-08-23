@@ -39,7 +39,7 @@ func NewDayTradingProvider() *DayTradingProvider {
 	return &DayTradingProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(5*time.Second), 1),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 	}
 }
 
@@ -53,6 +53,13 @@ func (d *DayTradingProvider) SetHTTPClient(client *http.Client) {
 // Name returns the provider name.
 func (d *DayTradingProvider) Name() string {
 	return "twse_day_trading"
+}
+
+// SetRateLimiter overrides the rate limiter (tests only).
+func (d *DayTradingProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		d.rateLimiter = l
+	}
 }
 
 // FetchLatest retrieves the most recent day trading statistics.

@@ -144,14 +144,22 @@ type yahooSession struct {
 	ttl         time.Duration
 	hosts       []string
 	crumbFlight singleflight.Group
+	// breaker is the session-level circuit breaker (P1-7). Every Yahoo
+	// channel funnels through fetchWithFallback on this singleton session,
+	// so one breaker short-circuits all 8+ channels when Yahoo is down.
+	// "no valid close" / empty-chart parse results are NOT recorded here
+	// (they are data-shape issues handled per-provider); transport/HTTP
+	// failures are.
+	breaker *providerBreaker
 }
 
 // newYahooSession creates a session manager for Yahoo Finance API access.
 func newYahooSession() *yahooSession {
 	return &yahooSession{
-		client: httpclient.NewFactory().NewClient(15 * time.Second),
-		hosts:  yahooHosts,
-		ttl:    15 * time.Minute, // re-fetch crumb every 15 minutes
+		client:  httpclient.NewFactory().NewClient(15 * time.Second),
+		hosts:   yahooHosts,
+		ttl:     15 * time.Minute, // re-fetch crumb every 15 minutes
+		breaker: newProviderBreaker("yahoo", defaultCircuitBreakerConfig()),
 	}
 }
 
@@ -366,8 +374,36 @@ func (s *yahooSession) fetchFromHost(ctx context.Context, host, symbol string, p
 	return body, nil
 }
 
+// breakerRecordSuccess / breakerRecordFailure are nil-safe breaker wrappers.
+func (s *yahooSession) breakerRecordSuccess() {
+	if s.breaker != nil {
+		s.breaker.recordSuccess()
+	}
+}
+
+func (s *yahooSession) breakerRecordFailure() {
+	if s.breaker != nil {
+		s.breaker.recordFailure()
+	}
+}
+
+// BreakerInfo exposes the breaker state for tests and observability.
+func (s *yahooSession) BreakerInfo() ProviderBreakerInfo {
+	if s.breaker == nil {
+		return ProviderBreakerInfo{Name: "yahoo", State: ProviderCircuitClosed}
+	}
+	return s.breaker.stateSnapshot()
+}
+
 // fetchWithFallback tries each host in order and returns on first success.
+// P1-7: the session-level breaker gates the whole fallback chain — when it
+// is open we return immediately without touching the network, so every
+// Yahoo channel (US indices, tw_vol, TAIEX, DRAM, SOX, …) short-circuits
+// together. All-hosts-failed records a failure; any-host-success resets.
 func (s *yahooSession) fetchWithFallback(ctx context.Context, symbol string, params map[string]string) ([]byte, error) {
+	if s.breaker != nil && !s.breaker.shouldTry() {
+		return nil, fmt.Errorf("%w: yahoo circuit breaker open", ErrUpstream)
+	}
 	var lastErr error
 	// Rotate starting host for load distribution
 	startIdx := int(time.Now().UnixNano() / 1e9 % int64(len(s.hosts)))
@@ -375,11 +411,13 @@ func (s *yahooSession) fetchWithFallback(ctx context.Context, symbol string, par
 		host := s.hosts[(startIdx+i)%len(s.hosts)]
 		body, err := s.fetchFromHost(ctx, host, symbol, params)
 		if err == nil {
+			s.breakerRecordSuccess()
 			return body, nil
 		}
 		lastErr = err
 		logging.Warn("yahoo_session", "host_failed", "host", host, "error", err)
 	}
+	s.breakerRecordFailure()
 	return nil, fmt.Errorf("all hosts failed for %s: %w", symbol, lastErr)
 }
 
@@ -451,6 +489,12 @@ func SetYahooSessionClient(client *http.Client) {
 	s.crumb = "test-crumb"
 	s.cookie = "test-cookie=1"
 	s.lastFetch = time.Now()
+	// Reset the session-level breaker so every mock-server test starts from
+	// a closed circuit (the singleton breaker otherwise accumulates failures
+	// across unrelated failure-path tests and trips the whole package).
+	if s.breaker != nil {
+		s.breaker.reset()
+	}
 
 	// Reset shared caches so each mock-server test starts from a clean
 	// state and does not observe data from a prior test/subtest.

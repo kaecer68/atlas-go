@@ -47,6 +47,10 @@ type GovernmentBrokerAggregator struct {
 	// 24h 內不再打 bsr.twse.com.tw，避免重複觸發 upstream block。
 	// 死碼修復 — captcha_cooldown.go 的元件此前從未被接線。
 	cooldown *CaptchaCooldown
+	// breaker is the aggregator-level circuit breaker (P1-7). The "no
+	// stocks processed" (nil,nil) result — a holiday/no-data condition —
+	// does NOT trip it; transport/parse/write failures do.
+	breaker *providerBreaker
 }
 
 // GovernmentBrokerChannelID is the channel identifier used for the
@@ -161,6 +165,7 @@ func NewGovernmentBrokerAggregator(outputDir string) *GovernmentBrokerAggregator
 		baseURL:   "https://bsr.twse.com.tw/bshtm",
 		symbols:   tw50Symbols,
 		cooldown:  NewCaptchaCooldown(),
+		breaker:   newProviderBreaker("government_broker", defaultCircuitBreakerConfig()),
 	}
 }
 
@@ -193,11 +198,37 @@ func (a *GovernmentBrokerAggregator) CaptchaCooldown() *CaptchaCooldown {
 	return a.cooldown
 }
 
+// breakerRecordSuccess / breakerRecordFailure are nil-safe breaker wrappers.
+func (a *GovernmentBrokerAggregator) breakerRecordSuccess() {
+	if a.breaker != nil {
+		a.breaker.recordSuccess()
+	}
+}
+
+func (a *GovernmentBrokerAggregator) breakerRecordFailure() {
+	if a.breaker != nil {
+		a.breaker.recordFailure()
+	}
+}
+
+// BreakerInfo exposes the breaker state for tests and observability.
+func (a *GovernmentBrokerAggregator) BreakerInfo() ProviderBreakerInfo {
+	if a.breaker == nil {
+		return ProviderBreakerInfo{Name: "government_broker", State: ProviderCircuitClosed}
+	}
+	return a.breaker.stateSnapshot()
+}
+
 // AggregateDate fetches broker data for the given trading date, aggregates net
 // buy/sell for the 8 core government banks across TW50 stocks, and writes the
 // result as both a GovernmentFlowReading JSON file and a per-broker detail file.
 func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
 	dateStr := date.Format("20060102")
+
+	// P1-7: aggregator-level breaker — open 時不發 50-symbol 的請求串。
+	if a.breaker != nil && !a.breaker.shouldTry() {
+		return nil, fmt.Errorf("%w: government_broker circuit breaker open", ErrUpstream)
+	}
 
 	// P0-2: CAPTCHA cooldown gate — a recent CAPTCHA response means the
 	// upstream has blocked us; skip the whole run instead of hammering all
@@ -221,10 +252,13 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 			// P0-2: CAPTCHA means the upstream is actively blocking us —
 			// record the cooldown and STOP (previously the loop continued
 			// into the remaining ~49 symbols, re-triggering the block).
+			// P1-7: CAPTCHA/upstream failure counts against the breaker.
 			if a.cooldown != nil && errors.Is(err, ErrCaptchaRequired) {
 				a.cooldown.RecordCaptcha(GovernmentBrokerChannelID)
+				a.breakerRecordFailure()
 				break
 			}
+			a.breakerRecordFailure()
 			continue
 		}
 		if a.cooldown != nil {
@@ -248,6 +282,9 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 	// channel error on the dashboard (regression: 2026-08-03 channel-health
 	// "no stocks processed for 20260803" — was a holiday, not a fault).
 	if stocksProcessed == 0 {
+		// P1-7: no-data (holiday / upstream empty) is expected — not a
+		// breaker failure.
+		a.breakerRecordSuccess()
 		return nil, nil
 	}
 	// Write government bank reading (existing format).
@@ -258,6 +295,7 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		RawURL:   "https://bsr.twse.com.tw/bshtm/bsMenu.aspx",
 	}
 	if err := a.writeReading(*govReading); err != nil {
+		a.breakerRecordFailure()
 		return nil, fmt.Errorf("government_broker write: %w", err)
 	}
 
@@ -269,14 +307,17 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 		RawURL:   "https://bsr.twse.com.tw/bshtm/bsMenu.aspx",
 	}
 	if err := a.writeInsuranceReading(*insReading); err != nil {
+		a.breakerRecordFailure()
 		return nil, fmt.Errorf("insurance_broker write: %w", err)
 	}
 
 	// Write per-broker detail file (new: PR-A).
 	if err := a.writeBrokerDetails(dateStr, details); err != nil {
+		a.breakerRecordFailure()
 		return nil, fmt.Errorf("broker_details write: %w", err)
 	}
 
+	a.breakerRecordSuccess()
 	return govReading, nil
 }
 

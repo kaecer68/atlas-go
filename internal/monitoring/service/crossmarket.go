@@ -272,7 +272,7 @@ func (s *CrossMarketService) getCachedSnapshot(ctx context.Context) (marketdata.
 	snap, err := s.provider.FetchSnapshot(ctx)
 	if err != nil {
 		if s.degradedMetrics != nil {
-			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", classifyErrorSeverity(err.Error())).Inc()
+			s.degradedMetrics.ProviderErrors.WithLabelValues("crossmarket", classifyErrorSeverity(err)).Inc()
 		}
 		// stale-if-error (R1): the TTL cache has expired, but we still hold the
 		// last-known-good snapshot. Serve it marked degraded instead of

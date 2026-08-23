@@ -56,6 +56,12 @@ type FinMindClient struct {
 	// main fetchDataset path had NO retry at all — every 5xx/429 failed
 	// immediately and the next scheduled cycle repeated the failure.
 	retryCfg retryConfig
+	// breaker is the client-level circuit breaker (P1-7). All call sites
+	// funnel through fetchDataset, so one breaker covers every FinMind
+	// consumer (gateway channel, auto_quote_backfill, TSMC revenue,
+	// hybrid fallback). Quota-exhaustion and no-data conditions do NOT
+	// trip it — they are budget/holiday conditions, not outages.
+	breaker *providerBreaker
 }
 
 type FinMindResponse struct {
@@ -145,6 +151,7 @@ func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
 		rateLimiter:  rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
 		quotaTracker: tracker,
 		retryCfg:     defaultRetryConfig(),
+		breaker:      newProviderBreaker("finmind", defaultCircuitBreakerConfig()),
 	}
 }
 func (c *FinMindClient) SetHTTPClient(client *http.Client) {
@@ -181,6 +188,12 @@ func (c *FinMindClient) QuotaRemaining() int {
 }
 
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
+	// P1-7: client-level breaker — open 時不發 HTTP，所有 FinMind 消費層
+	// 共享同一個 breaker（shared client）。quota exhausted 與 no-data 是
+	// 預算/假日條件，不是 outage，不計 failure（見下方 record 點位）。
+	if c.breaker != nil && !c.breaker.shouldTry() {
+		return nil, fmt.Errorf("finmind: %w", ErrFinMindBreakerOpen)
+	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)
 	}
@@ -190,7 +203,11 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	// can hit 1000s of calls per cycle without this gate). When the daily
 	// budget is gone we return ErrQuotaExhausted rather than letting the
 	// HTTP request fail with a misleading 400 status.
+	// P1-7: quota exhaustion is a budget condition (auto-resets at 00:00 TW)
+	// — it must NOT trip the breaker, so we reset instead of recording a
+	// failure.
 	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+		c.breakerRecordSuccess()
 		return nil, fmt.Errorf("finmind: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 
@@ -217,6 +234,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	// exponential backoff (previously no retry on the main data path).
 	resp, err := fetchWithRetry(ctx, c.httpClient, req, c.retryCfg)
 	if err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("finmind: http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -249,22 +267,58 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		// the sentinel; the server-side 402 fell through to the generic
 		// status error below, so channel-health reported "error" for a
 		// budget condition that auto-resets at 00:00 TW.
+		// P1-7: 402 is the server-side quota signal — a budget condition, not
+		// an outage; do NOT trip the breaker (same rule as the local gate).
 		if resp.StatusCode == http.StatusPaymentRequired {
+			c.breakerRecordSuccess()
 			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)
 		}
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var finmindResp FinMindResponse
 	if err := json.NewDecoder(resp.Body).Decode(&finmindResp); err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("finmind: decode response: %w", err)
 	}
 
 	if finmindResp.Status != 200 {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("finmind: API error: %s", finmindResp.Msg)
 	}
 
+	c.breakerRecordSuccess()
 	return finmindResp.Data, nil
+}
+
+// ErrFinMindBreakerOpen is returned by fetchDataset when the client-level
+// circuit breaker is open. All FinMind consumers share the singleton client,
+// so an open breaker short-circuits the whole channel until the recovery
+// timeout elapses.
+var ErrFinMindBreakerOpen = fmt.Errorf("finmind: circuit breaker open")
+
+// breakerRecordSuccess / breakerRecordFailure are nil-safe breaker wrappers
+// (hand-constructed FinMindClient values in tests may have a nil breaker).
+// P1-7 semantics: quota exhaustion and no-data DO NOT count as failures.
+func (c *FinMindClient) breakerRecordSuccess() {
+	if c.breaker != nil {
+		c.breaker.recordSuccess()
+	}
+}
+
+func (c *FinMindClient) breakerRecordFailure() {
+	if c.breaker != nil {
+		c.breaker.recordFailure()
+	}
+}
+
+// BreakerInfo exposes the breaker state for tests and observability.
+func (c *FinMindClient) BreakerInfo() ProviderBreakerInfo {
+	if c.breaker == nil {
+		return ProviderBreakerInfo{Name: "finmind", State: ProviderCircuitClosed}
+	}
+	return c.breaker.stateSnapshot()
 }
 
 // normalizeFinMindStockID 將 FinMind Taiwan stock dataset 的 data_id 正規化為

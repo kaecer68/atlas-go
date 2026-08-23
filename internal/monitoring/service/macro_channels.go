@@ -86,7 +86,7 @@ func (s *DataChannelService) buildMacroPointChannel(now time.Time, channelID, la
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
