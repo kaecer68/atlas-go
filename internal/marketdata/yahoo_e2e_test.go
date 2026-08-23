@@ -130,18 +130,21 @@ func TestYahooStockProvider_EmptyCloses(t *testing.T) {
 	}
 }
 
-// TestYahooStockProvider_InvalidLatestPrice verifies the provider rejects
-// zero, NaN and Inf values at the latest close position.
-func TestYahooStockProvider_InvalidLatestPrice(t *testing.T) {
+// TestYahooStockProvider_NoValidCloses verifies the provider returns an
+// error only when the closes array contains NO valid (non-zero, non-NaN)
+// value — after the P0-6 unification, a zero/NaN at the latest position is
+// no longer fatal: findLastValidClose falls back to the previous valid
+// close (same behavior as the macro provider).
+func TestYahooStockProvider_NoValidCloses(t *testing.T) {
 	tests := []struct {
 		name   string
 		closes []float64
 	}{
-		{"zero price", []float64{100, 0}},
+		{"all zeros", []float64{0, 0}},
+		{"empty", []float64{}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Serialize closes into JSON response
 			closesJSON := ""
 			for i, c := range tc.closes {
 				if i > 0 {
@@ -171,6 +174,76 @@ func TestYahooStockProvider_InvalidLatestPrice(t *testing.T) {
 				t.Fatalf("expected error for %s, got nil", tc.name)
 			}
 		})
+	}
+}
+
+// TestYahooStockProvider_TrailingZeroFallsBack is the P0-6 regression test:
+// when Yahoo pads the tail of the closes array with 0 (off-hours), the stock
+// provider must use findLastValidClose — latest resolves to the last valid
+// close (101) and prev to the one before it (100) → change_pct = +1%.
+// Before the unification this was rejected as "invalid latest price".
+func TestYahooStockProvider_TrailingZeroFallsBack(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// closes = [100, 101, 0] → latest=101, prev=100 → +1%
+		w.Write([]byte(`{
+			"chart": {
+				"result": [{
+					"meta": {"regularMarketTime": 1750000000, "regularMarketPrice": 101},
+					"indicators": {"quote": [{"close": [100, 101, 0]}]}
+				}]
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	client := &http.Client{Transport: &rewriteHostTransport{target: ts.URL}}
+	marketdata.SetYahooSessionClient(client)
+
+	p := marketdata.NewNVDAProvider()
+	snap, err := p.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot with trailing zero = error %v, want fallback", err)
+	}
+	if snap.NVDA.Value != 101 {
+		t.Errorf("NVDA.Value = %f, want 101 (last valid close, not 0)", snap.NVDA.Value)
+	}
+	if snap.NVDA.ChangePct < 0.99 || snap.NVDA.ChangePct > 1.01 {
+		t.Errorf("NVDA.ChangePct = %f, want ~1.00 (prev must be 100, not latest)", snap.NVDA.ChangePct)
+	}
+}
+
+// TestYahooStockProvider_ZeroLatestWithHistoryFallsBack verifies a zero
+// value AT the latest position falls back to the previous valid close
+// (P0-6 unified behavior; previously rejected).
+func TestYahooStockProvider_ZeroLatestWithHistoryFallsBack(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// closes = [100, 0] → latest=100, prev=0 → change 0%
+		w.Write([]byte(`{
+			"chart": {
+				"result": [{
+					"meta": {"regularMarketTime": 1750000000, "regularMarketPrice": 100},
+					"indicators": {"quote": [{"close": [100, 0]}]}
+				}]
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	client := &http.Client{Transport: &rewriteHostTransport{target: ts.URL}}
+	marketdata.SetYahooSessionClient(client)
+
+	p := marketdata.NewNVDAProvider()
+	snap, err := p.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot with zero latest = error %v, want fallback", err)
+	}
+	if snap.NVDA.Value != 100 {
+		t.Errorf("NVDA.Value = %f, want 100 (fallback to last valid close)", snap.NVDA.Value)
+	}
+	if snap.NVDA.ChangePct != 0 {
+		t.Errorf("NVDA.ChangePct = %f, want 0 (no previous valid close)", snap.NVDA.ChangePct)
 	}
 }
 

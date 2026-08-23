@@ -92,18 +92,17 @@ func (p *YahooStockProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 		return MacroDataSnapshot{}, fmt.Errorf("%s: no close prices", p.channelID)
 	}
 
-	latest := closes[len(closes)-1]
-	if math.IsNaN(latest) || math.IsInf(latest, 0) || latest == 0 {
-		return MacroDataSnapshot{}, fmt.Errorf("%s: invalid latest price: %v", p.channelID, latest)
-	}
-
-	// Daily change: compare latest close to the previous trading day's close.
-	prev := latest
-	if len(closes) > 1 {
-		candidate := closes[len(closes)-2]
-		if !math.IsNaN(candidate) && !math.IsInf(candidate, 0) && candidate != 0 {
-			prev = candidate
-		}
+	// P0-6: unified prev-close algorithm — findLastValidClose is the SAME
+	// helper the macro provider uses (yahoo_macro_provider.go, #1601 DXY
+	// fix): walk backwards skipping zero/NaN/Inf so both the latest valid
+	// close and the previous valid close are found even when Yahoo pads the
+	// tail with 0/NaN (off-hours). Previously this provider only looked at
+	// closes[len-2], so a trailing zero made prev=latest → change_pct was
+	// stuck at 0 — the exact regression that hit US channels (change_pct
+	// 恆 0) before the macro side was fixed.
+	latest, prev := findLastValidClose(closes)
+	if latest == 0 {
+		return MacroDataSnapshot{}, fmt.Errorf("%s: no valid close prices", p.channelID)
 	}
 
 	changePct := 0.0

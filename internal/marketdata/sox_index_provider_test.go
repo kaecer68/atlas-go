@@ -171,10 +171,12 @@ func TestSOXIndexProvider_FetchSnapshot_NaNPrice(t *testing.T) {
 	ctx := context.Background()
 	_, err := NewSOXIndexProvider().FetchSnapshot(ctx)
 	if err == nil {
-		t.Fatal("expected error on NaN price")
+		t.Fatal("expected error on all-NaN price array")
 	}
-	if !strings.Contains(err.Error(), "invalid latest") {
-		t.Errorf(`expected error containing "invalid", got: %v`, err)
+	// P0-6: the unified findLastValidClose reports "no valid close prices"
+	// when the entire closes array is zero/NaN (previously "invalid latest").
+	if !strings.Contains(err.Error(), "no valid close prices") {
+		t.Errorf(`expected error containing "no valid close prices", got: %v`, err)
 	}
 }
 
