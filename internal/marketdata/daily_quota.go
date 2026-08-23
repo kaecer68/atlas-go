@@ -128,6 +128,18 @@ func (t *DailyQuotaTracker) save() {
 		return
 	}
 
-	_ = os.MkdirAll(filepath.Dir(t.stateFile), 0o755)
-	_ = os.WriteFile(t.stateFile, data, 0o644)
+	// P1-12: atomic write (tmp + rename, matching government_broker). A
+	// direct WriteFile could leave a truncated/corrupt state file if the
+	// process dies mid-write — the next process would then silently start
+	// at calls_today=0 and blow the daily budget.
+	if err := os.MkdirAll(filepath.Dir(t.stateFile), 0o755); err != nil {
+		return
+	}
+	tmpPath := t.stateFile + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(tmpPath, t.stateFile); err != nil {
+		_ = os.Remove(tmpPath)
+	}
 }

@@ -46,6 +46,12 @@ type QuoteBackfillDeps struct {
 // defaultBackfillStart is the earliest date we backfill from.
 const defaultBackfillStart = "2026-01-01"
 
+// backfillQuotaStopRemaining is the FinMind daily-quota floor at which the
+// backfill task stops pulling more data (P1-12). The scheduler gate keeps a
+// headroom budget for the live channel (auto_cycle_update / channel health)
+// instead of letting a cold-start backfill burn the whole 14400/day ceiling.
+const backfillQuotaStopRemaining = 200
+
 // NewQuoteBackfillRunner returns a BTM-compatible runner (func(ctx) error)
 // that backfills missing historical quotes via FinMind for stocks in
 // fundamentals.json with PE > 0.
@@ -82,6 +88,14 @@ func NewQuoteBackfillRunner(deps QuoteBackfillDeps) func(ctx context.Context) er
 					fetched, totalBars, skipped, failed)
 				return ctx.Err()
 			default:
+			}
+
+			// P1-12: scheduler quota gate — stop early when the daily budget
+			// is nearly gone so the live channel keeps its headroom.
+			if deps.FinMindClient.QuotaRemaining() < backfillQuotaStopRemaining {
+				log.Printf("[quote_backfill] stopping early: FinMind quota remaining %d < %d (reserving headroom for live channel)",
+					deps.FinMindClient.QuotaRemaining(), backfillQuotaStopRemaining)
+				break
 			}
 
 			qsSymbol := sym + ".TW"

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -40,9 +41,19 @@ type raw5SecIndexResponse struct {
 var twseLocation = time.FixedZone("CST", 8*60*60) // UTC+8
 
 // FetchTaiwan5SecIndex 向 FinMind 取得指定日期的台股指數 5 秒頻率資料。
+//
+// Deprecated: P1-11 — 此 API 目前沒有 production caller（僅測試使用）。
+// 保留但標記 deprecated，並補上與 fetchDataset 一致的 daily-quota gate
+// 與 512B 錯誤體收錄（此前直接繞過 quota gate，可突破 14400/day 上限；
+// 若未來仍無 caller，應整組移除）。
 func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) ([]Taiwan5SecIndexBar, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind 5sec index: rate limit wait: %w", ErrRateLimited)
+	}
+	// P1-11: daily-quota gate — same AllowCall check as fetchDataset so this
+	// endpoint cannot bypass the 14400/day ceiling.
+	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+		return nil, fmt.Errorf("finmind 5sec index: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)
@@ -68,7 +79,14 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("finmind 5sec index: status %d", resp.StatusCode)
+		// P1-11: bounded error body (FinMind 512B pattern) — previously the
+		// upstream reason was dropped and only the status code surfaced.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return nil, fmt.Errorf("finmind 5sec index: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	body, err := io.ReadAll(resp.Body)
