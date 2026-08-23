@@ -43,7 +43,16 @@ type GovernmentBrokerAggregator struct {
 	outputDir string
 	baseURL   string
 	symbols   []string
+	// cooldown 是 per-channel CAPTCHA backoff（P0-2）：CAPTCHA 被偵測後
+	// 24h 內不再打 bsr.twse.com.tw，避免重複觸發 upstream block。
+	// 死碼修復 — captcha_cooldown.go 的元件此前從未被接線。
+	cooldown *CaptchaCooldown
 }
+
+// GovernmentBrokerChannelID is the channel identifier used for the
+// CaptchaCooldown key. It matches the adapter Metadata().ChannelID so the
+// adapter and aggregator share one cooldown state.
+const GovernmentBrokerChannelID = "government_broker"
 
 // coreBankBranches maps the 8 government-controlled banks to their TWSE head-office
 // branch codes per docs/specs/government-force-proxy-spec.md. Definition updated
@@ -151,6 +160,7 @@ func NewGovernmentBrokerAggregator(outputDir string) *GovernmentBrokerAggregator
 		outputDir: outputDir,
 		baseURL:   "https://bsr.twse.com.tw/bshtm",
 		symbols:   tw50Symbols,
+		cooldown:  NewCaptchaCooldown(),
 	}
 }
 
@@ -169,11 +179,33 @@ func (a *GovernmentBrokerAggregator) SetSymbols(symbols []string) {
 	a.symbols = symbols
 }
 
+// SetCaptchaCooldown overrides the CAPTCHA backoff state (tests only; pass
+// CaptchaCooldownWith(d, fakeClock) for deterministic cooldown tests).
+func (a *GovernmentBrokerAggregator) SetCaptchaCooldown(cd *CaptchaCooldown) {
+	a.cooldown = cd
+}
+
+// CaptchaCooldown returns the aggregator's CAPTCHA backoff state so the
+// channel adapter can RecordCaptcha when an ErrCaptchaRequired surfaces
+// outside AggregateDate (defensive belt-and-suspenders — AggregateDate
+// already records internally). May be nil for hand-constructed aggregators.
+func (a *GovernmentBrokerAggregator) CaptchaCooldown() *CaptchaCooldown {
+	return a.cooldown
+}
+
 // AggregateDate fetches broker data for the given trading date, aggregates net
 // buy/sell for the 8 core government banks across TW50 stocks, and writes the
 // result as both a GovernmentFlowReading JSON file and a per-broker detail file.
 func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
 	dateStr := date.Format("20060102")
+
+	// P0-2: CAPTCHA cooldown gate — a recent CAPTCHA response means the
+	// upstream has blocked us; skip the whole run instead of hammering all
+	// 50 symbols. Same nil,nil contract as the "no stocks processed" path
+	// so the adapter surfaces a no_data stub (not a channel error).
+	if a.cooldown != nil && a.cooldown.ShouldSkip(GovernmentBrokerChannelID) {
+		return nil, nil
+	}
 
 	var totalGovNet, totalInsNet int64
 	var stocksProcessed int
@@ -186,7 +218,19 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 
 		res, err := a.fetchStockBrokerNet(ctx, symbol, date)
 		if err != nil {
+			// P0-2: CAPTCHA means the upstream is actively blocking us —
+			// record the cooldown and STOP (previously the loop continued
+			// into the remaining ~49 symbols, re-triggering the block).
+			if a.cooldown != nil && errors.Is(err, ErrCaptchaRequired) {
+				a.cooldown.RecordCaptcha(GovernmentBrokerChannelID)
+				break
+			}
 			continue
+		}
+		if a.cooldown != nil {
+			// Any successful non-CAPTCHA fetch clears a stale cooldown so a
+			// future CAPTCHA starts a fresh window (captcha_cooldown.go doc).
+			a.cooldown.RecordSuccess(GovernmentBrokerChannelID)
 		}
 		totalGovNet += res.GovNet
 		totalInsNet += res.InsNet
