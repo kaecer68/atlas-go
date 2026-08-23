@@ -192,8 +192,16 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		// P1-10: capture a bounded upstream error body (FinMind 512B pattern)
+		// so LastError / channel-health shows WHY TWSE rejected the call,
+		// not just the status code.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	// Buffer body to bytes (bytes-read pattern) so the CSV fallback below can
@@ -373,8 +381,14 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		// P1-10: bounded error body for diagnostics (FinMind 512B pattern).
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
 		c.breakerRecordFailure()
-		return domain.Quote{}, fmt.Errorf("api error: status %d", resp.StatusCode)
+		return domain.Quote{}, fmt.Errorf("api error: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	// Buffer body to bytes (bytes-read pattern) so charset transcoding via

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -75,7 +76,14 @@ func (p *BDIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, err
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return MacroDataSnapshot{}, fmt.Errorf("bdi http status %d", resp.StatusCode)
+		// P1-10: bounded upstream error body (FinMind 512B pattern) so the
+		// channel LastError shows CNBC's response, not just the status.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return MacroDataSnapshot{}, fmt.Errorf("bdi http status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	body, err := io.ReadAll(resp.Body)

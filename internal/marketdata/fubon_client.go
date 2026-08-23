@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -160,7 +162,14 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
+		// P1-10: bounded upstream error body (FinMind 512B pattern) so
+		// LastError shows the proxy's reason, not just the status code.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var fubonResp FubonQuoteResponse
@@ -224,7 +233,13 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
+		// P1-10: bounded upstream error body (FinMind 512B pattern).
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return nil, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var fubonResps []FubonQuoteResponse
@@ -268,7 +283,13 @@ func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("fubon proxy: status %d", resp.StatusCode)
+		// P1-10: bounded upstream error body (FinMind 512B pattern).
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return false, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var status FubonMarketStatus
