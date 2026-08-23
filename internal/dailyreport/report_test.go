@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ func TestHandleLatest(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	gen := NewGenerator(dir)
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/reports/latest", nil)
 	rec := httptest.NewRecorder()
@@ -51,7 +52,7 @@ func TestHandleArchive(t *testing.T) {
 	gen := NewGenerator(dir)
 	gen.Generate()
 
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/reports/archive?date=2025-01-01", nil)
 	rec := httptest.NewRecorder()
 	h.HandleArchive(rec, req)
@@ -66,7 +67,7 @@ func TestHandleSubscribe(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	gen := NewGenerator(dir)
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/reports/subscribe", nil)
 	rec := httptest.NewRecorder()
@@ -82,7 +83,7 @@ func TestHandleSubscribe_GetRejected(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	gen := NewGenerator(dir)
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/reports/subscribe", nil)
 	rec := httptest.NewRecorder()
@@ -100,7 +101,7 @@ func TestHandleArchive_Success(t *testing.T) {
 	gen := NewGenerator(dir)
 	rep := gen.Generate()
 
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/reports/archive?date="+rep.Date, nil)
 	rec := httptest.NewRecorder()
 	h.HandleArchive(rec, req)
@@ -115,7 +116,7 @@ func TestHandleArchive_MissingDate(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	gen := NewGenerator(dir)
-	h := NewHandler(gen)
+	h := NewHandler(gen, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/reports/archive", nil)
 	rec := httptest.NewRecorder()
@@ -291,9 +292,13 @@ func TestGetByDate(t *testing.T) {
 }
 
 func TestRegisterRoutes(t *testing.T) {
-	gen := NewGenerator("")
+	dir, _ := os.MkdirTemp("", "rpt-test")
+	defer os.RemoveAll(dir)
+
+	gen := NewGenerator(dir)
+	trk := NewTracker(dir, filepath.Join(dir, "replay"))
 	mux := http.NewServeMux()
-	RegisterRoutes(mux, gen)
+	RegisterRoutes(mux, gen, trk)
 
 	// ServeMux doesn't expose registered patterns directly;
 	// verify by making requests that would 404 if not registered.
