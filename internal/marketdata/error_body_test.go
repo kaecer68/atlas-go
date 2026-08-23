@@ -23,9 +23,8 @@ func TestTWSE_ErrorBodyCaptured(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := GetSharedTWSEClient()
 	ResetSharedTWSEClient()
-	c = GetSharedTWSEClient()
+	c := GetSharedTWSEClient()
 	c.baseURL = ts.URL
 	c.SetHTTPClient(ts.Client())
 	c.rateLimiter = newUnlimitedLimiter()
