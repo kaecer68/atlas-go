@@ -56,6 +56,7 @@ func (rt *testT86RoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 }
 
 func TestFetchSymbolFlow(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"stat":"OK","data":[["2330","台積電","1000","500","500","0","0","0","800","300","500","400","0","0","0","0","0","0","1400"]]}`)
@@ -87,6 +88,7 @@ func TestFetchSymbolFlow(t *testing.T) {
 }
 
 func TestFetchSnapshot_ChangePctFromPreviousDay(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	storageDir := t.TempDir()
 	p := NewTWSECapitalFlowProvider(storageDir)
 
