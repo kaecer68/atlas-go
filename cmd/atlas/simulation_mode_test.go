@@ -33,7 +33,7 @@ func runSimTest(t *testing.T, args []string, deps appDeps) error {
 }
 
 func TestSimulationModeDefaultPath(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -69,7 +69,7 @@ func TestSimulationModeBrokerGuardrails(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
-				LedgerDir:        t.TempDir(),
+				LedgerDir:        tempDir(t),
 				BrokerMode:       "dry-run",
 				BrokerAdapter:    "guarded",
 				BrokerMaxRetries: 1,
@@ -94,7 +94,7 @@ func TestSimulationModeBrokerGuardrails(t *testing.T) {
 }
 
 func TestSimulationModeSystemCoreInitialization(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	var capturedCollector *monitoring.MetricsCollector
 
 	deps := appDeps{
@@ -126,7 +126,7 @@ func TestSimulationModeSystemCoreInitialization(t *testing.T) {
 }
 
 func TestSimulationModeDoesNotStartHTTPServer(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	serverStarted := false
 
 	deps := appDeps{
@@ -155,7 +155,7 @@ func TestSimulationModeDoesNotStartHTTPServer(t *testing.T) {
 }
 
 func TestSimulationModeWithExplicitDryRunBroker(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -186,7 +186,7 @@ func TestSimulationModeRejectsUnsupportedBrokerMode(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
-				LedgerDir:        t.TempDir(),
+				LedgerDir:        tempDir(t),
 				BrokerMode:       "dry-run",
 				BrokerAdapter:    "guarded",
 				BrokerMaxRetries: 1,
@@ -211,7 +211,7 @@ func TestSimulationModeRejectsUnsupportedBrokerMode(t *testing.T) {
 }
 
 func TestSimulationModeFlagOverridesConfig(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -240,7 +240,7 @@ func TestSimulationModeFlagOverridesConfig(t *testing.T) {
 }
 
 func TestSimulationModeWithMetricsCollector(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -268,7 +268,7 @@ func TestSimulationModeWithMetricsCollector(t *testing.T) {
 }
 
 func TestRunSimulationWithPaperBrokerMode(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -296,7 +296,7 @@ func TestRunSimulationWithPaperBrokerMode(t *testing.T) {
 }
 
 func TestRunSimulationBrokerRetryConfigPropagation(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -332,7 +332,7 @@ func TestRunSimulationBrokerRetryConfigPropagation(t *testing.T) {
 }
 
 func TestRunSimulationNonceStoreConfig(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -360,7 +360,7 @@ func TestRunSimulationNonceStoreConfig(t *testing.T) {
 }
 
 func TestRunSimulationReturnsMeaningfulError(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -388,7 +388,7 @@ func TestRunSimulationReturnsMeaningfulError(t *testing.T) {
 }
 
 func TestSimulationModeShutdownBehavior(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	shutdown := make(chan struct{})
 
 	deps := appDeps{
@@ -434,7 +434,7 @@ func TestSimulationModeShutdownBehavior(t *testing.T) {
 }
 
 func TestSimulationModeWithRepositoryInjection(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -462,7 +462,7 @@ func TestSimulationModeWithRepositoryInjection(t *testing.T) {
 }
 
 func TestRunSimulationWithAllBrokerFlags(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -500,7 +500,7 @@ func TestRunSimulationWithAllBrokerFlags(t *testing.T) {
 }
 
 func TestSimulationModeNoDepsShutdownSignal(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{
@@ -523,7 +523,7 @@ func TestSimulationModeNoDepsShutdownSignal(t *testing.T) {
 }
 
 func TestRunSimulationModeWithAPIFlagFalse(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	serverStarted := false
 
 	deps := appDeps{
@@ -552,7 +552,7 @@ func TestRunSimulationModeWithAPIFlagFalse(t *testing.T) {
 }
 
 func TestSimulationModeCapitalManagementSetup(t *testing.T) {
-	ledgerDir := t.TempDir()
+	ledgerDir := tempDir(t)
 	deps := appDeps{
 		loadConfig: func() config.Config {
 			return config.Config{

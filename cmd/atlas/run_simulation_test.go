@@ -19,7 +19,7 @@ import (
 // pre-goroutine shutdown check (main.go runSimulation) and never spawn the
 // background simulation goroutine. That goroutine would otherwise keep
 // writing session/trace files into cfg.LedgerDir after this test returns,
-// racing t.TempDir() cleanup on slow CI runners ("directory not empty:
+// racing tempDir(t) cleanup on slow CI runners ("directory not empty:
 // unlinkat" — pre-existing flake). The ledger-content guard below locks
 // this: no simulation artifacts may appear in LedgerDir.
 func TestRunSimulation_ImmediateShutdownReturnsShutdownError(t *testing.T) {
@@ -41,7 +41,7 @@ func TestRunSimulation_ImmediateShutdownReturnsShutdownError(t *testing.T) {
 	// synchronously during system build by NewScratchpad — the goroutine-only
 	// artifacts are the per-session files below.) If a future refactor spawns
 	// the goroutine before honoring a pre-closed shutdown, this test fails
-	// instead of flaking against t.TempDir() cleanup.
+	// instead of flaking against tempDir(t) cleanup.
 	for _, name := range []string{"sessions", "recommendation_outcomes.jsonl"} {
 		if _, err := os.Stat(filepath.Join(cfg.LedgerDir, name)); err == nil {
 			t.Errorf("simulation goroutine leaked artifact %q into LedgerDir after shutdown abort", name)
