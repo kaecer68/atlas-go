@@ -46,7 +46,7 @@ func NewTWSECapitalFlowProvider(storageDir string) *TWSECapitalFlowProvider {
 		client:     httpclient.NewFactory().NewClient(20 * time.Second),
 		storageDir: storageDir,
 		// P1-13: shared TWSE token bucket (was an independent 1/5s limiter).
-		limiter:    getTWSESharedLimiter(),
+		limiter: getTWSESharedLimiter(),
 	}
 }
 
@@ -61,6 +61,7 @@ func (t *TWSECapitalFlowProvider) SetHTTPClient(client *http.Client) {
 func (t *TWSECapitalFlowProvider) Name() string {
 	return "twse_capital_flow"
 }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (t *TWSECapitalFlowProvider) SetRateLimiter(l *rate.Limiter) {

@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 var taiexTWSEBaseURL = "https://www.twse.com.tw/exchangeReport/MI_INDEX"

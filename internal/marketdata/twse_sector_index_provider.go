@@ -62,6 +62,7 @@ func (p *TWSESectorIndexProvider) SetHTTPClient(client *http.Client) {
 func (p *TWSESectorIndexProvider) Name() string {
 	return "twse_sector_index"
 }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (p *TWSESectorIndexProvider) SetRateLimiter(l *rate.Limiter) {
@@ -69,7 +70,6 @@ func (p *TWSESectorIndexProvider) SetRateLimiter(l *rate.Limiter) {
 		p.limiter = l
 	}
 }
-
 
 // FetchSectorIndices fetches historical industry index data for the given date range.
 // Returns a map of industry ID -> sorted daily index data.

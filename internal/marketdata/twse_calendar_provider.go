@@ -45,6 +45,7 @@ func (p *TWSECalendarProvider) SetHTTPClient(client *http.Client) {
 func (p *TWSECalendarProvider) Name() string {
 	return "twse_calendar"
 }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (p *TWSECalendarProvider) SetRateLimiter(l *rate.Limiter) {
@@ -52,7 +53,6 @@ func (p *TWSECalendarProvider) SetRateLimiter(l *rate.Limiter) {
 		p.rateLimiter = l
 	}
 }
-
 
 // FetchEvents fetches calendar events for the given year from TWSE.
 // Returns ex-dividend dates and shareholder meetings.

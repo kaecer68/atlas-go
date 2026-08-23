@@ -14,7 +14,6 @@ var ErrRateLimited = errors.New("rate limited")
 // (200 + coverage_note policy signal) from a genuine upstream failure (503).
 var ErrTWSEQuoteNotFound = errors.New("twse: quote symbol not found")
 
-
 // ─── P1-9: three-way error taxonomy ─────────────────────────────────────────
 //
 // Every provider-facing error should wrap exactly one of these three
@@ -31,9 +30,9 @@ var ErrTWSEQuoteNotFound = errors.New("twse: quote symbol not found")
 //	               HTML instead of JSON). Actionable; trips breakers, maps
 //	               to "error".
 var (
-	ErrNoData    = errors.New("no data available")
-	ErrUpstream  = errors.New("upstream failure")
-	ErrSchema    = errors.New("schema mismatch")
+	ErrNoData   = errors.New("no data available")
+	ErrUpstream = errors.New("upstream failure")
+	ErrSchema   = errors.New("schema mismatch")
 )
 
 // ErrTWSEEmptyData is returned by TWSEClient.GetQuotes when TWSE responds

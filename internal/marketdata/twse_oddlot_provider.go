@@ -62,6 +62,7 @@ func (p *TWSEOddLotProvider) SetHTTPClient(client *http.Client) {
 func (p *TWSEOddLotProvider) Name() string {
 	return "twse_oddlot"
 }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (p *TWSEOddLotProvider) SetRateLimiter(l *rate.Limiter) {
@@ -69,7 +70,6 @@ func (p *TWSEOddLotProvider) SetRateLimiter(l *rate.Limiter) {
 		p.rateLimiter = l
 	}
 }
-
 
 // FetchLatest retrieves the most recent odd-lot trading statistics.
 func (p *TWSEOddLotProvider) FetchLatest(ctx context.Context) (*OddLotStats, error) {

@@ -77,6 +77,7 @@ func (p *TWSEInsiderProvider) SetHTTPClient(client *http.Client) {
 func (p *TWSEInsiderProvider) Name() string {
 	return "twse_insider"
 }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (p *TWSEInsiderProvider) SetRateLimiter(l *rate.Limiter) {
@@ -84,7 +85,6 @@ func (p *TWSEInsiderProvider) SetRateLimiter(l *rate.Limiter) {
 		p.limiter = l
 	}
 }
-
 
 // FetchLatest fetches the most recent insider trading daily report and
 // returns an aggregate summary.

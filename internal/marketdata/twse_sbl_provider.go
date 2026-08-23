@@ -58,6 +58,7 @@ func (p *TWSESBLProvider) SetBaseURL(u string) { p.baseURL = u }
 
 // Name identifies this provider.
 func (p *TWSESBLProvider) Name() string { return "twse_sbl" }
+
 // SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
 // tests use SetTWSESharedLimiterForTest instead).
 func (p *TWSESBLProvider) SetRateLimiter(l *rate.Limiter) {
@@ -65,7 +66,6 @@ func (p *TWSESBLProvider) SetRateLimiter(l *rate.Limiter) {
 		p.limiter = l
 	}
 }
-
 
 // RateLimiter returns the per-provider rate limiter.
 func (p *TWSESBLProvider) RateLimiter() *rate.Limiter { return p.limiter }

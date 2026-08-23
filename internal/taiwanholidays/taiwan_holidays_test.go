@@ -121,10 +121,10 @@ func TestHolidaysInYear_2026(t *testing.T) {
 
 func TestIsHoliday_FixedAndLunar(t *testing.T) {
 	cases := []time.Time{
-		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),  // 元旦
-		time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC), // 春節
-		time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),  // 清明
-		time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC),// 國慶
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),   // 元旦
+		time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC),  // 春節
+		time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),   // 清明
+		time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC), // 國慶
 	}
 	for _, c := range cases {
 		if !IsHoliday(c) {
