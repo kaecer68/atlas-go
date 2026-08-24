@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -526,6 +527,17 @@ func UnmarshalYahooChart(body []byte) (*yahooChartResult, error) {
 	if result.Chart.Error != nil {
 		return nil, fmt.Errorf("yahoo api error: [%s] %s",
 			result.Chart.Error.Code, result.Chart.Error.Description)
+	}
+	// P2-15: response schema fingerprint. Every consumer indexes
+	// Result[0].Indicators.Quote[0].Close directly (only taiex_return_calculator
+	// guards it), so a missing/empty indicators.quote is a PANIC on schema
+	// change — convert it into a typed ErrSchema error + warn instead.
+	// This is the single choke point for all 8+ Yahoo channels.
+	if problems := yahooChartFingerprintProblems(&result); len(problems) > 0 {
+		logging.Warn("yahoo", "schema_fingerprint_change",
+			"endpoint", "chart/v8",
+			"problems", strings.Join(problems, "; "))
+		return nil, fmt.Errorf("yahoo: %w: %s", ErrSchema, strings.Join(problems, "; "))
 	}
 	return &result, nil
 }

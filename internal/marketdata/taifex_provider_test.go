@@ -220,3 +220,65 @@ func TestTAIFEXFetchFutures_BadField_ReturnsErrTAIFEXSchema(t *testing.T) {
 		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
 	}
 }
+
+// TestTAIFEXFetchPCR_PicksLatestDate (P2-16) verifies FetchPCR selects the row
+// with the MAXIMUM Date instead of assuming rawList[0] is the newest. The
+// upstream row order is not a documented contract — a sorting change would
+// previously serve stale PCR data silently.
+func TestTAIFEXFetchPCR_PicksLatestDate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Deliberately out of order: newest row NOT first.
+		_, _ = w.Write([]byte(`[
+			{"Date":"20260810","PutVolume":"100","CallVolume":"200","PutCallVolumeRatio%":"90.00","PutOI":"50","CallOI":"40","PutCallOIRatio%":"80.00"},
+			{"Date":"20260813","PutVolume":"500","CallVolume":"600","PutCallVolumeRatio%":"150.00","PutOI":"250","CallOI":"140","PutCallOIRatio%":"160.00"},
+			{"Date":"20260811","PutVolume":"200","CallVolume":"300","PutCallVolumeRatio%":"110.00","PutOI":"80","CallOI":"60","PutCallOIRatio%":"100.00"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	stats, err := p.FetchPCR(context.Background())
+	if err != nil {
+		t.Fatalf("FetchPCR error: %v", err)
+	}
+	if got, want := stats.Date, "20260813"; got != want {
+		t.Errorf("Date = %q, want %q (latest by Date, not rawList[0])", got, want)
+	}
+	if got, want := stats.PutVolume, int64(500); got != want {
+		t.Errorf("PutVolume = %d, want %d (must come from the 20260813 row)", got, want)
+	}
+	if got, want := stats.PutCallVolumeRatio, 1.5; got != want {
+		t.Errorf("PutCallVolumeRatio = %v, want %v", got, want)
+	}
+}
+
+// TestTAIFEXFetchPCR_AllEmptyDates (P2-16) verifies that a payload where every
+// row has an empty Date surfaces a typed schema error instead of a nil
+// dereference (latest stays nil after the max-Date scan).
+func TestTAIFEXFetchPCR_AllEmptyDates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"Date":"","PutVolume":"100","CallVolume":"200","PutCallVolumeRatio%":"90.00","PutOI":"50","CallOI":"40","PutCallOIRatio%":"80.00"}
+		]`))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	_, err := p.FetchPCR(context.Background())
+	if err == nil {
+		t.Fatal("expected schema error for all-empty Date rows")
+	}
+	if !errors.Is(err, ErrTAIFEXSchema) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrTAIFEXSchema)", err)
+	}
+}

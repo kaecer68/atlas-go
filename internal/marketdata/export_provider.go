@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +47,10 @@ type ExportStatisticsProvider struct {
 	storageDir string
 	baseURL    string
 	limiter    *rate.Limiter
+	// retryCfg is the shared fetchWithRetry policy (P2-19). Previously the
+	// single CSV fetch had NO retry — a transient 5xx/429 from the customs
+	// portal failed the whole channel cycle.
+	retryCfg   retryConfig
 	statsSaver ExportStatsSaver // optional: persists monthly rows to PostgreSQL
 }
 
@@ -56,6 +61,7 @@ func NewExportStatisticsProvider(storageDir string) *ExportStatisticsProvider {
 		storageDir: storageDir,
 		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
 		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
+		retryCfg:   defaultRetryConfig(),
 	}
 }
 
@@ -122,7 +128,11 @@ func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (Cu
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "text/csv")
 
-	resp, err := e.client.Do(req)
+	// P2-19: shared fetchWithRetry — transient 429/5xx from the customs
+	// portal are retried with Retry-After / exponential backoff (previously
+	// a single failure killed the whole channel cycle). Non-transient status
+	// codes return as-is and are classified below.
+	resp, err := fetchWithRetry(ctx, e.client, req, e.retryCfg)
 	if err != nil {
 		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP request: %w", err)
 	}
@@ -157,6 +167,68 @@ func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (Cu
 	return records[0], records[1], nil
 }
 
+// ─── P2-19: CSV schema guard (header-driven column mapping) ─────────────────
+//
+// The customs CSV (dataset 6053) header verified live 2026-08-24:
+//
+//	年度, 月份, 出口總值(新臺幣千元), 出口(新臺幣千元), 復出口(新臺幣千元),
+//	進口總值(新臺幣千元), 進口(新臺幣千元), 復進口(新臺幣千元), 出入超(新臺幣千元), 備註
+//
+// Required columns are matched BY NAME (not fixed index): a renamed column
+// must trip a typed ErrSchema error (→ breaker + alert) instead of silently
+// shifting values between fields. This also fixes a latent bug: the old
+// fixed-index parser read 進口總值 from row[3], which is 出口 in the real
+// header — imports were persisted as the exports sub-total.
+var (
+	customsExportRequiredHeaders = map[string]string{
+		"年度":          "year",
+		"月份":          "month",
+		"出口總值(新臺幣千元)": "export_total",
+		"進口總值(新臺幣千元)": "import_total",
+		"出入超(新臺幣千元)":  "trade_balance",
+	}
+)
+
+// customsCSVColumns is the header-driven column index map built from the
+// CSV header row. Lookup by the Chinese header name → 0-based column index.
+type customsCSVColumns struct {
+	year         int
+	month        int
+	exportTotal  int
+	importTotal  int
+	tradeBalance int
+}
+
+// resolveCustomsCSVColumns validates the header row against the required
+// column names and returns the column map. A missing / renamed column is a
+// typed ErrSchema error (upstream schema change), not a silent mis-parse.
+func resolveCustomsCSVColumns(header []string) (customsCSVColumns, error) {
+	col := make(map[string]int, len(header))
+	for i, name := range header {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			col[name] = i
+		}
+	}
+	var missing []string
+	for want := range customsExportRequiredHeaders {
+		if _, ok := col[want]; !ok {
+			missing = append(missing, want)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return customsCSVColumns{}, fmt.Errorf("%w: customs CSV header missing columns %v (got %d columns)", ErrSchema, missing, len(header))
+	}
+	return customsCSVColumns{
+		year:         col["年度"],
+		month:        col["月份"],
+		exportTotal:  col["出口總值(新臺幣千元)"],
+		importTotal:  col["進口總值(新臺幣千元)"],
+		tradeBalance: col["出入超(新臺幣千元)"],
+	}, nil
+}
+
 // parseCustomsCSV parses the customs CSV body into CustomsExportImport slice (newest-first).
 func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 	// Strip UTF-8 BOM if present.
@@ -175,26 +247,44 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 		return nil, fmt.Errorf("CSV has no data rows")
 	}
 
+	// P2-19: schema guard — validate the header row before trusting any
+	// column position.
+	cols, err := resolveCustomsCSVColumns(records[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// needCols must cover the rightmost REQUIRED column, not assume the
+	// trade-balance column is always last: the upstream may reorder columns
+	// without renaming them (k3 audit 2026-08-24), in which case a short row
+	// would slip past a tradeBalance-based guard and panic on row[cols.year].
+	maxIdx := cols.year
+	for _, idx := range []int{cols.month, cols.exportTotal, cols.importTotal, cols.tradeBalance} {
+		if idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	needCols := maxIdx + 1
 	var results []CustomsExportImport
 	now := time.Now().Unix()
 
-	// Skip header row (records[0]), iterate data rows
+	// records[0] is the header row; iterate data rows
 	for _, row := range records[1:] {
-		if len(row) < 8 {
+		if len(row) < needCols {
 			continue
 		}
-		year, err := strconv.Atoi(row[0])
+		year, err := strconv.Atoi(strings.TrimSpace(row[cols.year]))
 		if err != nil {
 			continue
 		}
-		month, err := strconv.Atoi(row[1])
+		month, err := strconv.Atoi(strings.TrimSpace(row[cols.month]))
 		if err != nil || month < 1 || month > 12 {
 			continue
 		}
 
-		exportTotal := parseTWDVolume(row[2])
-		importTotal := parseTWDVolume(row[3])
-		tradeBalance := parseTWDVolume(row[8])
+		exportTotal := parseTWDVolume(row[cols.exportTotal])
+		importTotal := parseTWDVolume(row[cols.importTotal])
+		tradeBalance := parseTWDVolume(row[cols.tradeBalance])
 
 		// Convert from thousand USD to million USD (same unit as other MacroDataPoint values)
 		results = append(results, CustomsExportImport{
@@ -242,5 +332,6 @@ func ExportStatisticsProviderWithClient(client *http.Client, storageDir string) 
 		storageDir: storageDir,
 		baseURL:    "https://opendata.customs.gov.tw/data/6053/csv.csv",
 		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
+		retryCfg:   defaultRetryConfig(),
 	}
 }

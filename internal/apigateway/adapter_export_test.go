@@ -44,9 +44,9 @@ func TestExportStatisticsChannelAdapter_RateLimit(t *testing.T) {
 }
 
 func TestExportStatisticsChannelAdapter_Fetch(t *testing.T) {
-	csvBody := "year,month,export_total,import_total,col4,col5,col6,col7,trade_balance\n" +
-		"115,5,1000000,900000,0,0,0,0,100000\n" +
-		"115,4,950000,850000,0,0,0,0,100000\n"
+	csvBody := "年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註\n" +
+		"115,5,1000000,950000,50000,900000,850000,50000,100000,\n" +
+		"115,4,950000,900000,50000,850000,800000,50000,100000,\n"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
@@ -68,9 +68,9 @@ func TestExportStatisticsChannelAdapter_Fetch(t *testing.T) {
 }
 
 func TestExportStatisticsChannelAdapter_HealthCheck(t *testing.T) {
-	csvBody := "year,month,export_total,import_total,col4,col5,col6,col7,trade_balance\n" +
-		"115,5,1000000,900000,0,0,0,0,100000\n" +
-		"115,4,950000,850000,0,0,0,0,100000\n"
+	csvBody := "年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註\n" +
+		"115,5,1000000,950000,50000,900000,850000,50000,100000,\n" +
+		"115,4,950000,900000,50000,850000,800000,50000,100000,\n"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")

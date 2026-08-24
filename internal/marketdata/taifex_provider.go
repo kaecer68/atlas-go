@@ -148,6 +148,12 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 		return nil, fmt.Errorf("taifex pcr api error: status %d, body=%s", resp.StatusCode, string(body))
 	}
 
+	// P2-15: response schema fingerprint — warn with the exact missing key
+	// when the raw PutCallRatio rows no longer match the expected shape. The
+	// struct-level parseOK checks below remain the hard gate (ErrTAIFEXSchema
+	// + breaker trip); the fingerprint is the early warn-only canary.
+	warnTAIFEXPCRFingerprint(body, resp.Header.Get("Content-Type"))
+
 	var rawList []taifexPCRRaw
 	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
 		t.breakerRecordFailure()
@@ -160,11 +166,24 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 		return nil, fmt.Errorf("taifex pcr api returned empty list")
 	}
 
-	raw := rawList[0]
-	if raw.Date == "" {
-		t.breakerRecordFailure()
-		return nil, fmt.Errorf("%w: missing Date in PutCallRatio row", ErrTAIFEXSchema)
+	// P2-16: pick the LATEST row by Date instead of rawList[0]. The upstream
+	// order is not a documented contract — a sorting change would silently
+	// serve stale PCR data. Same latestDate pattern as FetchRetailFuturesOI
+	// (and FetchFutures).
+	var latest *taifexPCRRaw
+	var latestDate string
+	for i := range rawList {
+		r := &rawList[i]
+		if r.Date > latestDate {
+			latestDate = r.Date
+			latest = r
+		}
 	}
+	if latest == nil {
+		t.breakerRecordFailure()
+		return nil, fmt.Errorf("%w: every PutCallRatio row has an empty Date", ErrTAIFEXSchema)
+	}
+	raw := latest
 	putVolume, ok := parseInt64OK(raw.PutVolume)
 	if !ok {
 		t.breakerRecordFailure()

@@ -24,6 +24,16 @@ const (
 	tejAPIBaseURL = "https://api.tej.com.tw"
 )
 
+// ErrTEJQuotaExhausted is returned when TEJ's daily quota is gone.
+// Mirrors ErrQuotaExhausted (FinMind) / ErrFugleQuotaExhausted so callers
+// can `errors.Is` any provider's budget-exhausted condition without
+// coupling to the specific provider (P2-18). TEJ is currently DISABLED in
+// production (API key expired 2026-08-03); the daily gate + registry
+// registration below are the revival checklist — the quota tracker and
+// sentinel must be in place BEFORE the key is re-enabled so a revived
+// channel cannot blow the 500/day trial budget.
+var ErrTEJQuotaExhausted = fmt.Errorf("tej: daily quota exhausted")
+
 // getTEJDailyLimit returns the daily call limit based on TEJ_TIER env var.
 // trial: 500/day (default), paid: 2000/day
 func getTEJDailyLimit() int {
@@ -116,12 +126,19 @@ func (c *TEJClient) SetHTTPClient(client *http.Client) {
 func newTEJClientInternal(apiKey string) *TEJClient {
 	params := config.GetParametersConfig()
 	dailyLimit := getTEJDailyLimit()
+	tracker := NewDailyQuotaTracker("tej", "data/state", dailyLimit)
+	// P2-18: register the tracker with the global QuotaRegistry so the
+	// dashboard / channel-health page shows TEJ alongside FinMind/Fugle in
+	// one Snapshot() once the key is revived. FinMind and Fugle register in
+	// their constructors; TEJ was the only quota-tracked provider missing
+	// this wiring.
+	GlobalQuotaRegistry().Register("tej", tracker)
 	return &TEJClient{
 		apiKey:       apiKey,
 		baseURL:      tejAPIBaseURL,
 		httpClient:   httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TEJAPITimeoutSec.Value) * time.Second),
 		rateLimiter:  rate.NewLimiter(rate.Limit(params.Marketdata.TEJCallsPerSecond.Value), params.Marketdata.TEJCallsPerSecond.Value),
-		quotaTracker: NewDailyQuotaTracker("tej", "data/state", dailyLimit),
+		quotaTracker: tracker,
 	}
 }
 
@@ -146,7 +163,10 @@ func (c *TEJClient) Ping(ctx context.Context) error {
 // startDate / endDate in YYYY-MM-DD format.
 func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, endDate string) ([]TEJStockPriceRow, error) {
 	if !c.quotaTracker.AllowCall() {
-		return nil, fmt.Errorf("tej daily quota exceeded: %d/%d calls", c.quotaTracker.CallsToday(), c.quotaTracker.Remaining()+c.quotaTracker.CallsToday())
+		// P2-18: wrap ErrTEJQuotaExhausted so errors.Is at the adapter /
+		// monitoring layer maps this to warn/quotas instead of a plain
+		// string that paged on-call (FinMind 402 lesson, P0-1).
+		return nil, fmt.Errorf("%w (used=%d, remaining=%d)", ErrTEJQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)
@@ -214,7 +234,8 @@ func (c *TEJClient) GetStockPriceDaily(ctx context.Context, stockID, startDate, 
 // Returns raw JSON rows; caller can parse specific tables.
 func (c *TEJClient) GetFinancialStatements(ctx context.Context, stockID, tableCode, startDate, endDate string) ([]map[string]any, error) {
 	if !c.quotaTracker.AllowCall() {
-		return nil, fmt.Errorf("tej daily quota exceeded: %d/%d calls", c.quotaTracker.CallsToday(), c.quotaTracker.Remaining()+c.quotaTracker.CallsToday())
+		// P2-18: same sentinel as GetStockPriceDaily.
+		return nil, fmt.Errorf("%w (used=%d, remaining=%d)", ErrTEJQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("tej rate limit wait: %w", ErrRateLimited)

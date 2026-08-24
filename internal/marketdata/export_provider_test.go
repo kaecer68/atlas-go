@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -56,9 +57,9 @@ func TestExportStatisticsProvider_FetchSnapshot_Decommissioned(t *testing.T) {
 }
 
 func TestParseCustomsCSV_ValidData(t *testing.T) {
-	input := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"113","12","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+	input := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""
+"113","12","48,000,000","46,000,000","2,000,000","43,000,000","41,000,000","2,000,000","5,000,000",""`
 
 	records, err := parseCustomsCSV([]byte(input))
 	if err != nil {
@@ -90,7 +91,7 @@ func TestParseCustomsCSV_ValidData(t *testing.T) {
 }
 
 func TestParseCustomsCSV_HeaderOnly(t *testing.T) {
-	input := `年月,出口總值,進口總值,出超`
+	input := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註`
 	records, err := parseCustomsCSV([]byte(input))
 	if err == nil {
 		t.Fatal("expected error for header-only CSV")
@@ -101,10 +102,10 @@ func TestParseCustomsCSV_HeaderOnly(t *testing.T) {
 }
 
 func TestParseCustomsCSV_MalformedRows(t *testing.T) {
-	input := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
+	input := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""
 bad_row
-"113","invalid_month","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+"113","invalid_month","48,000,000","46,000,000","2,000,000","43,000,000","41,000,000","2,000,000","5,000,000",""`
 
 	records, err := parseCustomsCSV([]byte(input))
 	if err != nil {
@@ -121,8 +122,8 @@ bad_row
 
 func TestParseCustomsCSV_UTF8BOM(t *testing.T) {
 	data := []byte{0xef, 0xbb, 0xbf} // UTF-8 BOM
-	data = append(data, []byte(`年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"`)...)
+	data = append(data, []byte(`年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`)...)
 
 	records, err := parseCustomsCSV(data)
 	if err != nil {
@@ -136,14 +137,38 @@ func TestParseCustomsCSV_UTF8BOM(t *testing.T) {
 	}
 }
 
+func TestParseCustomsCSV_ReorderedHeaderShortRow_NoPanic(t *testing.T) {
+	// k3 audit (2026-08-24): needCols was derived from the trade-balance
+	// column position, assuming it is always rightmost. If the upstream
+	// reorders columns (names unchanged → no ErrSchema), a short data row
+	// must not index-out-of-range panic.
+	input := `月份,出入超(新臺幣千元),出口總值(新臺幣千元),年度,進口總值(新臺幣千元)
+"01","5,000,000","50,000,000","114","45,000,000"
+"02"` // short row — must be skipped, not panicked
+
+	records, err := parseCustomsCSV([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 parsed record (short row skipped), got %d", len(records))
+	}
+	if records[0].Year != 114 || records[0].Month != 1 {
+		t.Errorf("expected 114/01, got %d/%d", records[0].Year, records[0].Month)
+	}
+	if records[0].ExportTotal != 50000 {
+		t.Errorf("export total = %f, want 50000", records[0].ExportTotal)
+	}
+}
+
 func TestExportStatisticsProvider_FetchSnapshot_MockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "text/csv" {
 			t.Errorf("expected Accept: text/csv, got %s", r.Header.Get("Accept"))
 		}
-		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","01","50,000,000","45,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"113","12","48,000,000","43,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""
+"113","12","48,000,000","46,000,000","2,000,000","43,000,000","41,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -174,8 +199,8 @@ func TestExportStatisticsProvider_FetchSnapshot_MockServer(t *testing.T) {
 
 func TestExportStatisticsProvider_FetchSnapshot_InsufficientData(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		csv := `年月,出口總值,進口總值,出超
-"114","01","50,000,000","45,000,000","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -242,9 +267,9 @@ func TestExportStatisticsProvider_SaveExport(t *testing.T) {
 
 func TestExportStatisticsProvider_FetchSnapshot_SavesBothMonths(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","03","52,000,000","50,000,000","2,000,000","47,000,000","45,000,000","2,000,000","5,000,000",""
+"114","02","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -299,9 +324,9 @@ func (s *recordingExportStatsSaver) snapshot() []CustomsExportImport {
 // both fetched months with the parsed row values.
 func TestExportStatisticsProvider_FetchSnapshot_PersistsStats(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","03","52,000,000","50,000,000","2,000,000","47,000,000","45,000,000","2,000,000","5,000,000",""
+"114","02","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -350,9 +375,9 @@ func TestExportStatisticsProvider_FetchSnapshot_PersistsStats(t *testing.T) {
 // the fetch still succeeds and JSON files are still written.
 func TestExportStatisticsProvider_FetchSnapshot_SaverFailureDoesNotBreakFetch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","03","52,000,000","50,000,000","2,000,000","47,000,000","45,000,000","2,000,000","5,000,000",""
+"114","02","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -376,9 +401,9 @@ func TestExportStatisticsProvider_FetchSnapshot_SaverFailureDoesNotBreakFetch(t 
 // no saver is injected (backward compatible: JSON-only mode).
 func TestExportStatisticsProvider_NilSaverIsNoop(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		csv := `年月,出口總值,進口總值,出超,出超(與上月比較),出超(與上年同月比較),出口總值(與上月比較),出口總值(與上年同月比較),出超值
-"114","03","52,000,000","47,000,000","5,000,000","10.0","5.0","8.0","5,000,000"
-"114","02","50,000,000","45,000,000","5,000,000","9.0","4.0","7.0","5,000,000"`
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","03","52,000,000","50,000,000","2,000,000","47,000,000","45,000,000","2,000,000","5,000,000",""
+"114","02","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
 		w.Header().Set("Content-Type", "text/csv")
 		w.Write([]byte(csv))
 	}))
@@ -391,5 +416,107 @@ func TestExportStatisticsProvider_NilSaverIsNoop(t *testing.T) {
 
 	if _, err := provider.FetchSnapshot(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestResolveCustomsCSVColumns_MissingColumn (P2-19) verifies the CSV schema
+// guard: a renamed/missing required column must surface a typed ErrSchema
+// error instead of silently mis-parsing values by position.
+func TestResolveCustomsCSVColumns_MissingColumn(t *testing.T) {
+	// Renamed 進口總值(新臺幣千元) → 進口總額(新臺幣千元)
+	header := []string{"年度", "月份", "出口總值(新臺幣千元)", "出口(新臺幣千元)", "復出口(新臺幣千元)",
+		"進口總額(新臺幣千元)", "進口(新臺幣千元)", "復進口(新臺幣千元)", "出入超(新臺幣千元)", "備註"}
+	_, err := resolveCustomsCSVColumns(header)
+	if err == nil {
+		t.Fatal("expected ErrSchema for missing 進口總值(新臺幣千元) column")
+	}
+	if !errors.Is(err, ErrSchema) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrSchema)", err)
+	}
+}
+
+// TestParseCustomsCSV_SchemaMismatch (P2-19) verifies end-to-end: a CSV whose
+// header no longer matches the required columns fails with ErrSchema (and
+// fetchLatestTwoMonths surfaces it), so a renamed column trips the breaker /
+// alert instead of producing silently-wrong values.
+func TestParseCustomsCSV_SchemaMismatch(t *testing.T) {
+	input := `年月,出口總值,進口總值,出超
+"114","01","50,000,000","45,000,000","5,000,000"`
+	_, err := parseCustomsCSV([]byte(input))
+	if err == nil {
+		t.Fatal("expected error for mismatched header")
+	}
+	if !errors.Is(err, ErrSchema) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrSchema)", err)
+	}
+}
+
+// TestParseCustomsCSV_HeaderDrivenImportIndex (P2-19) verifies the header-
+// driven mapping fixes the latent wrong-index bug: 進口總值 lives at column 5
+// (not 3) in the real upstream header. Row[3] is 出口 — the old fixed-index
+// parser persisted exports as imports.
+func TestParseCustomsCSV_HeaderDrivenImportIndex(t *testing.T) {
+	input := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""`
+	records, err := parseCustomsCSV([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	// 45,000,000 / 1000 = 45,000 (million USD) — must come from 進口總值
+	// (column 5), NOT from 出口 (column 3 = 48,000,000).
+	if records[0].ImportTotal != 45000 {
+		t.Errorf("ImportTotal = %f, want 45000 (must read 進口總值 column, not 出口)", records[0].ImportTotal)
+	}
+	if records[0].ExportTotal != 50000 {
+		t.Errorf("ExportTotal = %f, want 50000", records[0].ExportTotal)
+	}
+	if records[0].TradeBalance != 5000 {
+		t.Errorf("TradeBalance = %f, want 5000", records[0].TradeBalance)
+	}
+}
+
+// TestExportStatisticsProvider_FetchSnapshot_RetriesTransient503 (P2-19)
+// verifies the shared fetchWithRetry is wired in: the first 503 is retried
+// and the second attempt (200 + valid CSV) succeeds. Previously a single
+// transient failure killed the whole channel cycle.
+func TestExportStatisticsProvider_FetchSnapshot_RetriesTransient503(t *testing.T) {
+	var mu sync.Mutex
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		first := attempts == 1
+		mu.Unlock()
+		if first {
+			http.Error(w, "temporary", http.StatusServiceUnavailable)
+			return
+		}
+		csv := `年度,月份,出口總值(新臺幣千元),出口(新臺幣千元),復出口(新臺幣千元),進口總值(新臺幣千元),進口(新臺幣千元),復進口(新臺幣千元),出入超(新臺幣千元),備註
+"114","01","50,000,000","48,000,000","2,000,000","45,000,000","43,000,000","2,000,000","5,000,000",""
+"113","12","48,000,000","46,000,000","2,000,000","43,000,000","41,000,000","2,000,000","5,000,000",""`
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte(csv))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	provider := ExportStatisticsProviderWithClient(server.Client(), tmpDir)
+	provider.baseURL = server.URL
+
+	snap, err := provider.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error after retry: %v", err)
+	}
+	if snap.ExportElectronics.Value != 0.05 {
+		t.Errorf("expected value 0.05, got %f", snap.ExportElectronics.Value)
+	}
+	mu.Lock()
+	got := attempts
+	mu.Unlock()
+	if got < 2 {
+		t.Errorf("expected >=2 HTTP attempts (retry after 503), got %d", got)
 	}
 }

@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -226,5 +227,55 @@ func TestTEJClient_Ping_EmptyResponse(t *testing.T) {
 	err := client.Ping(context.Background())
 	if err == nil {
 		t.Fatal("expected error for empty response")
+	}
+}
+
+// TestTEJClient_RegistersQuotaRegistry (P2-18) verifies the TEJ constructor
+// registers its DailyQuotaTracker with the global QuotaRegistry, so the
+// dashboard sees TEJ alongside FinMind/Fugle once the key is revived.
+func TestTEJClient_RegistersQuotaRegistry(t *testing.T) {
+	cleanupTEJQuotaState()
+	t.Cleanup(cleanupTEJQuotaState)
+
+	client := NewTEJClient("test-key")
+	if client.quotaTracker == nil {
+		t.Fatal("expected quotaTracker to be set")
+	}
+	snap := GlobalQuotaRegistry().Snapshot()
+	var found bool
+	for _, e := range snap.Entries {
+		if e.Provider == "tej" {
+			found = true
+			if e.Limit != 500 {
+				t.Errorf("tej registry limit = %d, want 500 (trial tier)", e.Limit)
+			}
+		}
+	}
+	if !found {
+		t.Error("tej not registered in GlobalQuotaRegistry snapshot")
+	}
+}
+
+// TestTEJClient_QuotaExhausted_Sentinel (P2-18) verifies that when the daily
+// budget is gone, GetStockPriceDaily returns an error wrapping
+// ErrTEJQuotaExhausted (so errors.Is works at the adapter layer) instead of
+// a bare string.
+func TestTEJClient_QuotaExhausted_Sentinel(t *testing.T) {
+	cleanupTEJQuotaState()
+	t.Cleanup(cleanupTEJQuotaState)
+
+	client := NewTEJClient("test-key")
+	// Drain the daily budget.
+	client.quotaTracker.SetLimit(1)
+	if !client.quotaTracker.AllowCall() {
+		t.Fatal("expected first AllowCall to succeed")
+	}
+
+	_, err := client.GetStockPriceDaily(context.Background(), "2330", "2025-01-01", "2025-01-03")
+	if err == nil {
+		t.Fatal("expected quota-exceeded error")
+	}
+	if !errors.Is(err, ErrTEJQuotaExhausted) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrTEJQuotaExhausted)", err)
 	}
 }

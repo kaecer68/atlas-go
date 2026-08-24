@@ -47,4 +47,22 @@
 
 - `healthClient`（2s timeout）專用健康探測；`httpClient`（`FubonAPITimeoutSec`）專用資料請求。
 - 15s 背景探測；連續 3 次失敗 → `IsHealthy()=false` → `Fetch()` fast-fail。
+- **P2-17 request-failure breaker**：`providerBreaker` 計數**實際 request 失敗**（transport / 非 2xx / decode），
+  3 連敗 → breaker open + `IsHealthy()=false`（不再等 15s 探測才發現 proxy 掛）；成功（request 或 probe）即復位。
+  Open 期間 `GetQuote`/`GetQuotes`/`CheckMarketStatus` fast-fail（不碰網路）。不影響 hybrid fallback 鏈。
 - SDK init 前 TCP pre-flight check（`neoapi.fbs.com.tw:443`），不可達時回 503。
+
+## Response schema fingerprints（P2-15）
+
+- 共用元件：`schema_fingerprint.go` — `responseFingerprint`（必要欄位 + JSON 型別）+ `warnFingerprint()`（變更即 warn）。
+- 已接線：FinMind（envelope + dataset 必要欄位）、Yahoo `UnmarshalYahooChart`
+  （`indicators.quote` 空 → typed `ErrSchema` + warn，防 4/5 消費層 panic）、TWSE `STOCK_DAY_ALL`
+  （fields header / row 寬度 warn）、TAIFEX `FetchPCR`（raw row keys warn）。
+- 語意：fingerprint 是 **warn-only 早期偵測**；硬 gate（typed ErrSchema、breaker trip）決定 fetch 是否失敗。
+
+## 海關出口 CSV（P2-19）
+
+- `fetchLatestTwoMonths` 改用共用 `fetchWithRetry`（429/5xx retry）。
+- `parseCustomsCSV` 改 **header-driven 欄位對映**：必要欄位 `年度`/`月份`/`出口總值(新臺幣千元)`/
+  `進口總值(新臺幣千元)`/`出入超(新臺幣千元)` 缺一 → typed `ErrSchema`。修正舊 fixed-index 把 row[3]
+  （= 出口）誤當進口總值的潛在 bug。
