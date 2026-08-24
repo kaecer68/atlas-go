@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -108,22 +109,18 @@ func TestGovernmentBrokerChannelAdapter_Fetch(t *testing.T) {
 	}
 }
 
-// TestGovernmentBrokerChannelAdapter_Fetch_NoStocksOk verifies the contract
-// for non-trading-day outcomes: when the upstream TWSE page returns no
-// broker data (holiday, weekend, upstream temporarily empty), the adapter
-// must NOT surface an error — it returns a stub payload with status="no_data"
-// so the dashboard sees a successful fetch and the channel-health page
-// does not page on-call (regression: 2026-08-03 "no stocks processed"
-// false-positive error in channel_health.govbroker).
-func TestGovernmentBrokerChannelAdapter_Fetch_NoStocksOk(t *testing.T) {
+// TestGovernmentBrokerChannelAdapter_Fetch_UpstreamDown_ReturnsError locks the
+// k3-audit contract (2026-08-24): an all-failure run (upstream outage) must
+// surface as a channel error, NOT as a no_data stub. The pre-audit contract
+// masked a total upstream failure behind "no stocks processed" — exactly the
+// hole the unconditional recordSuccess was hiding in the breaker.
+func TestGovernmentBrokerChannelAdapter_Fetch_UpstreamDown_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	agg := marketdata.NewGovernmentBrokerAggregator(dir)
 	agg.SetSymbols([]string{"2330"})
 
-	// Server returns 500 on GET so fetchMenuTokens fails — simulating an
-	// upstream TWSE outage where the page is unreachable but no broker data
-	// was returned. AggregateDate should treat this as "no stocks processed"
-	// (nil, nil) rather than an error.
+	// Server returns 500 on GET so fetchMenuTokens fails — an upstream TWSE
+	// outage. Must surface as error + wrapped ErrUpstream.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -134,21 +131,60 @@ func TestGovernmentBrokerChannelAdapter_Fetch_NoStocksOk(t *testing.T) {
 	adapter := NewGovernmentBrokerChannelAdapter(agg)
 
 	res, err := adapter.Fetch(context.Background())
+	if err == nil {
+		t.Fatalf("Fetch() should error on total upstream failure, got nil (res=%+v)", res)
+	}
+	if !errors.Is(err, marketdata.ErrUpstream) {
+		t.Fatalf("Fetch() error = %v, want wrapped ErrUpstream", err)
+	}
+}
+
+// TestGovernmentBrokerChannelAdapter_Fetch_HolidayEmptyPage_ReturnsData locks
+// the genuine no-data contract: a holiday/empty trading day serves a valid
+// form and a page with no broker table rows. Each symbol parses into an
+// empty reading (TotalNet 0) — this must NOT error (regression: 2026-08-03
+// "no stocks processed" false-positive in channel_health.govbroker) and must
+// NOT trip the breaker.
+func TestGovernmentBrokerChannelAdapter_Fetch_HolidayEmptyPage_ReturnsData(t *testing.T) {
+	dir := t.TempDir()
+	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	agg.SetSymbols([]string{"2330"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`<html><body><form>
+<input id="__VIEWSTATE" value="abc123">
+<input id="__VIEWSTATEGENERATOR" value="gen123">
+<input id="__EVENTVALIDATION" value="ev123">
+</form></body></html>`))
+			return
+		}
+		_, _ = w.Write([]byte(`<html><body><table><tr><td>no rows</td></tr></table></body></html>`))
+	}))
+	defer server.Close()
+
+	agg.SetHTTPClient(server.Client())
+	agg.SetBaseURL(server.URL)
+	adapter := NewGovernmentBrokerChannelAdapter(agg)
+
+	res, err := adapter.Fetch(context.Background())
 	if err != nil {
-		t.Fatalf("Fetch() should NOT error on no-data (was a regression for 2026-08-03), got: %v", err)
+		t.Fatalf("Fetch() should NOT error on holiday no-data, got: %v", err)
 	}
 	if res == nil {
-		t.Fatal("Fetch() returned nil result — expected stub no_data payload")
+		t.Fatal("Fetch() returned nil result — expected reading payload")
 	}
 	var payload struct {
-		Date   string `json:"date"`
-		Status string `json:"status"`
+		Date     string `json:"date"`
+		TotalNet int64  `json:"total_net"`
+		Source   string `json:"source"`
 	}
 	if err := json.Unmarshal(res.Data, &payload); err != nil {
-		t.Fatalf("Unmarshal stub payload: %v", err)
+		t.Fatalf("Unmarshal reading payload: %v", err)
 	}
-	if payload.Status != "no_data" {
-		t.Errorf("payload.Status = %q, want no_data", payload.Status)
+	if payload.Source != "broker-aggregate" {
+		t.Fatalf("payload source = %q, want broker-aggregate", payload.Source)
 	}
 	if res.Meta.ChannelID != "government_broker" {
 		t.Errorf("Meta.ChannelID = %q, want government_broker", res.Meta.ChannelID)

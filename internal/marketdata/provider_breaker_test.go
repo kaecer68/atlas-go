@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -294,11 +295,27 @@ func TestYahooBreaker_AllHostsFailTrips(t *testing.T) {
 // ─── GovernmentBroker ───────────────────────────────────────────────────────
 
 func TestGovernmentBrokerBreaker_NoDataDoesNotTrip(t *testing.T) {
-	// An upstream that returns no broker rows (holiday) yields (nil, nil);
-	// repeated no-data runs must not trip the breaker.
+	// A real no-data upstream: bsMenu.aspx returns a valid ASP.NET form
+	// (form tokens present) and the POST query returns a page with no
+	// broker table rows (holiday / empty trading day). Each symbol parses
+	// successfully into an empty result — no transport/parse failure — so
+	// AggregateDate yields (nil, nil) and the breaker must NOT accumulate
+	// failures. (k3 audit: the previous mock returned token-less HTML,
+	// which actually exercised the failure path and only passed because the
+	// buggy unconditional recordSuccess masked it.)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte("<html><body>no data</body></html>"))
+		if r.Method == http.MethodGet {
+			// bsMenu.aspx — valid form with the three ASP.NET tokens.
+			_, _ = w.Write([]byte(`<html><body><form>
+<input type="hidden" id="__VIEWSTATE" value="abc123">
+<input type="hidden" id="__VIEWSTATEGENERATOR" value="gen123">
+<input type="hidden" id="__EVENTVALIDATION" value="ev123">
+</form></body></html>`))
+			return
+		}
+		// POST query — valid response, but no broker table rows for this date.
+		_, _ = w.Write([]byte(`<html><body><table><tr><td>no rows</td></tr></table></body></html>`))
 	}))
 	defer ts.Close()
 
@@ -314,12 +331,70 @@ func TestGovernmentBrokerBreaker_NoDataDoesNotTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("run %d: unexpected error: %v", i+1, err)
 		}
-		if res != nil {
-			t.Fatalf("run %d: expected nil result (no data), got %+v", i+1, res)
+		// A holiday/empty page parses into an empty reading (TotalNet 0),
+		// NOT (nil, nil): the (nil, nil) contract is reserved for the
+		// all-failure path (see AllTransportFail test), which is exactly
+		// the path the old unconditional recordSuccess was masking.
+		if res != nil && (res.TotalNet != 0 || res.Source != "broker-aggregate") {
+			t.Fatalf("run %d: unexpected reading %+v", i+1, res)
 		}
 	}
 	if got := agg.BreakerInfo().State; got != ProviderCircuitClosed {
 		t.Fatalf("breaker state = %s, want closed (no-data must not trip)", got)
+	}
+	if got := agg.BreakerInfo().FailureCount; got != 0 {
+		t.Fatalf("FailureCount = %d, want 0 (no-data must not accumulate failures)", got)
+	}
+}
+
+func TestGovernmentBrokerBreaker_AllTransportFail_OpensBreaker(t *testing.T) {
+	// Upstream completely down: every symbol fetch fails at the transport
+	// layer. The breaker must OPEN (threshold 3, one run of 50 symbols
+	// exceeds it) and stay open — the run must NOT reset it via the
+	// no-data path (k3 audit regression guard). The next run is gated by
+	// the open breaker without sending any request.
+	reqs := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqs++
+		http.Error(w, "upstream unavailable", http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	agg := NewGovernmentBrokerAggregator(t.TempDir())
+	agg.SetHTTPClient(ts.Client())
+	agg.SetBaseURL(ts.URL)
+	agg.limiter = newUnlimitedLimiter()
+	agg.breaker = newProviderBreaker("government_broker", fastTestConfig())
+
+	ctx := context.Background()
+	date := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+
+	// Run 1: all symbols fail -> error surfaced + breaker opens.
+	res, err := agg.AggregateDate(ctx, date)
+	if err == nil {
+		t.Fatal("expected error when all symbols fail, got nil")
+	}
+	if res != nil {
+		t.Fatalf("expected nil result on total failure, got %+v", res)
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Fatalf("error = %v, want wrapped ErrUpstream", err)
+	}
+	if got := agg.BreakerInfo().State; got != ProviderCircuitOpen {
+		t.Fatalf("breaker state = %s, want open after all-fail run", got)
+	}
+
+	// Run 2: gated by the open breaker — no requests sent, open error.
+	reqsBefore := reqs
+	_, err = agg.AggregateDate(ctx, date)
+	if err == nil {
+		t.Fatal("expected error from open breaker, got nil")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Fatalf("open-breaker error = %v, want wrapped ErrUpstream", err)
+	}
+	if reqs != reqsBefore {
+		t.Fatalf("open breaker must not send requests (sent %d new)", reqs-reqsBefore)
 	}
 }
 

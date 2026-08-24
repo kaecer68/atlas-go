@@ -240,6 +240,7 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 
 	var totalGovNet, totalInsNet int64
 	var stocksProcessed int
+	var runFailed bool // any per-symbol transport/parse failure this run
 	details := make(map[detailKey]*detailAccumulator)
 
 	for _, symbol := range a.symbols {
@@ -249,6 +250,7 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 
 		res, err := a.fetchStockBrokerNet(ctx, symbol, date)
 		if err != nil {
+			runFailed = true
 			// P0-2: CAPTCHA means the upstream is actively blocking us —
 			// record the cooldown and STOP (previously the loop continued
 			// into the remaining ~49 symbols, re-triggering the block).
@@ -282,9 +284,18 @@ func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date tim
 	// channel error on the dashboard (regression: 2026-08-03 channel-health
 	// "no stocks processed for 20260803" — was a holiday, not a fault).
 	if stocksProcessed == 0 {
-		// P1-7: no-data (holiday / upstream empty) is expected — not a
-		// breaker failure.
-		a.breakerRecordSuccess()
+		if runFailed {
+			// Every symbol failed at the transport/parse layer — this is an
+			// upstream outage, NOT a quiet holiday. Keep the breaker failure
+			// count (do NOT reset it via recordSuccess) so the breaker can
+			// open and gate the next run, and surface the failure to the
+			// caller instead of a misleading no_data stub (k3 audit 2026-08-24:
+			// the previous unconditional recordSuccess masked the outage).
+			return nil, fmt.Errorf("%w: government_broker fetch failed for all %d symbols", ErrUpstream, len(a.symbols))
+		}
+		// True no-data (holiday / upstream empty page): expected outcome, not
+		// a breaker failure. Leave counts untouched (no-op) so prior real
+		// failures are not masked by a quiet day.
 		return nil, nil
 	}
 	// Write government bank reading (existing format).
