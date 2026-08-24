@@ -104,19 +104,20 @@ else
         ["cmd/atlas/"]="home,live,reports,experiments,pipeline,portfolio,performance-report,parameters,alerts,datachannels,metrics,config"
       )
 
-      # client_web 專用覆蓋表
+      # client_web 專用覆蓋表（2026-08-24：portfolio/pipeline 已遷移至 admin，
+      # client 不再有該頁 → 對應路徑不得再帶入，否則 smoke 報 Unknown page id）
       declare -A CLIENT_PATH_MAP=(
         ["internal/marketdata/"]="crossmarket"
         ["internal/baseline/"]="crossmarket"
         ["internal/narrative/"]="narrative"
-        ["internal/portfolio/"]="crossmarket,portfolio"
-        ["internal/risk/"]="crossmarket,portfolio"
-        ["internal/recommendation/"]="crossmarket,portfolio"
-        ["internal/orchestrator/"]="crossmarket,portfolio"
+        ["internal/portfolio/"]="crossmarket"
+        ["internal/risk/"]="crossmarket"
+        ["internal/recommendation/"]="crossmarket"
+        ["internal/orchestrator/"]="crossmarket"
         ["internal/industry/"]="industry"
-        ["internal/monitoring/"]="crossmarket,narrative,portfolio"
-        ["internal/config/"]="crossmarket,narrative,portfolio"
-        ["cmd/atlas/"]="crossmarket,narrative,portfolio"
+        ["internal/monitoring/"]="crossmarket,narrative"
+        ["internal/config/"]="crossmarket,narrative"
+        ["cmd/atlas/"]="crossmarket,narrative"
         ["client_web/"]="crossmarket,narrative,capital-causality,strategies"
         ["shared_web/"]="crossmarket,narrative,capital-causality,strategies"
       )
