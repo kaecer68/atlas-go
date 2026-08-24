@@ -113,8 +113,15 @@ func fingerprintKindMatches(k fingerprintKind, v any) bool {
 		_, ok := v.(bool)
 		return ok
 	case fingerprintArray:
-		_, ok := v.([]any)
-		return ok
+		// Accept both []any and []map[string]any: FinMind's Data field is
+		// []map[string]any after JSON decode (k3 audit 2026-08-24 — the
+		// []any-only assertion made every successful fetchDataset log a
+		// false schema-change warn, drowning out real drift alerts).
+		switch v.(type) {
+		case []any, []map[string]any:
+			return true
+		}
+		return false
 	case fingerprintObject:
 		_, ok := v.(map[string]any)
 		return ok

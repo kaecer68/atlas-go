@@ -137,6 +137,30 @@ func TestParseCustomsCSV_UTF8BOM(t *testing.T) {
 	}
 }
 
+func TestParseCustomsCSV_ReorderedHeaderShortRow_NoPanic(t *testing.T) {
+	// k3 audit (2026-08-24): needCols was derived from the trade-balance
+	// column position, assuming it is always rightmost. If the upstream
+	// reorders columns (names unchanged → no ErrSchema), a short data row
+	// must not index-out-of-range panic.
+	input := `月份,出入超(新臺幣千元),出口總值(新臺幣千元),年度,進口總值(新臺幣千元)
+"01","5,000,000","50,000,000","114","45,000,000"
+"02"` // short row — must be skipped, not panicked
+
+	records, err := parseCustomsCSV([]byte(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 parsed record (short row skipped), got %d", len(records))
+	}
+	if records[0].Year != 114 || records[0].Month != 1 {
+		t.Errorf("expected 114/01, got %d/%d", records[0].Year, records[0].Month)
+	}
+	if records[0].ExportTotal != 50000 {
+		t.Errorf("export total = %f, want 50000", records[0].ExportTotal)
+	}
+}
+
 func TestExportStatisticsProvider_FetchSnapshot_MockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "text/csv" {

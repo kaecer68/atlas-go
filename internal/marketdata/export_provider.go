@@ -254,7 +254,17 @@ func parseCustomsCSV(body []byte) ([]CustomsExportImport, error) {
 		return nil, err
 	}
 
-	needCols := cols.tradeBalance + 1
+	// needCols must cover the rightmost REQUIRED column, not assume the
+	// trade-balance column is always last: the upstream may reorder columns
+	// without renaming them (k3 audit 2026-08-24), in which case a short row
+	// would slip past a tradeBalance-based guard and panic on row[cols.year].
+	maxIdx := cols.year
+	for _, idx := range []int{cols.month, cols.exportTotal, cols.importTotal, cols.tradeBalance} {
+		if idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	needCols := maxIdx + 1
 	var results []CustomsExportImport
 	now := time.Now().Unix()
 

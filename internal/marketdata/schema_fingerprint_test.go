@@ -101,6 +101,26 @@ func TestCheckFingerprint_FinMindRevenueRow(t *testing.T) {
 	}
 }
 
+func TestCheckFingerprint_FinMindEnvelopeArrayData(t *testing.T) {
+	// k3 audit (2026-08-24): FinMindResponse.Data decodes to
+	// []map[string]any; the []any-only array assertion made every healthy
+	// fetchDataset log a false schema-change warn. The array kind must
+	// accept []map[string]any.
+	// Envelope-level fingerprint: only the "data" array is checked at the
+	// envelope layer (row fields are checked per-row by warnFinMindDatasetFingerprint).
+	fp := responseFingerprint{
+		provider: "finmind",
+		endpoint: "TaiwanStockPrice",
+		fields:   []fingerprintField{{name: "data", kind: fingerprintArray}},
+	}
+	problems := checkFingerprint(fp, map[string]any{
+		"data": []map[string]any{{"date": "2026-08-01", "close": float64(100)}},
+	})
+	if len(problems) != 0 {
+		t.Errorf("healthy []map[string]any data must not warn, got problems = %v", problems)
+	}
+}
+
 // ─── Yahoo chart fingerprint ────────────────────────────────────────────────
 
 // TestUnmarshalYahooChart_EmptyIndicatorsQuote (P2-15) verifies that a chart
