@@ -23,6 +23,9 @@
 | `CompositeMacroProvider` | 多總經來源合併 |
 | `BDIProvider` | 波羅的海乾散貨指數 |
 | `TaiwanVolatilityProvider` | TAIEX 20 日歷史波動率 |
+| `TWSECalendarProvider` | 除息(exRight)+股東會(meeting)日曆（**原 rwd/zh endpoint 2026-06 起已 deprecated → 回空**；現役改用 `TWSEOpenAPICalendarProvider`） |
+| `TWSEOpenAPICalendarProvider` | 除權息預告表 TWT48U_ALL + 股東會日期 t187ap41_L（OpenAPI v1，**僅當年 snapshot**） |
+| `MSCIRebalanceCalendarProvider` | MSCI 季度調整 static 表（2023-2026，2/5/8/11 月最後交易日生效；每年更新） |
 
 > 詳細通道規則見 `internal/apigateway/CONSTITUTION.md`。
 

@@ -1,6 +1,7 @@
 [
   "CallOI",
   "CallVolume",
+  "CashDividend",
   "Change",
   "ClosingPrice",
   "Code",
@@ -8,6 +9,7 @@
   "ContractCode",
   "ContractName",
   "Date",
+  "Exdividend",
   "High",
   "HighestPrice",
   "Item",
@@ -29,6 +31,7 @@
   "QuickQuoteResult",
   "SettlementMonth",
   "SettlementPrice",
+  "StockDividendRatio",
   "TAIEX",
   "Top10Buy",
   "Top10Sell",
@@ -2108,6 +2111,8 @@
   "申報人身分",
   "目前持有股數-保留運用決定權信託股數",
   "目前持有股數-自有持股",
+  "股東常(臨時)會",
+  "開會日期",
   "預定轉讓方式及股數-轉讓方式",
   "預定轉讓方式及股數-轉讓股數"
 ]
