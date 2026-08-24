@@ -4938,6 +4938,22 @@ export interface twseOddLotTable {
   total: number;
 }
 
+export interface twseOpenAPIExRightRow {
+  Date: string;
+  Code: string;
+  Name: string;
+  Exdividend: string;
+  StockDividendRatio: string;
+  CashDividend: string;
+}
+
+export interface twseOpenAPIMeetingRow {
+  公司代號: string;
+  公司名稱: string;
+  開會日期: string;
+  "股東常(臨時)會": string;
+}
+
 export interface twseT86Response {
   stat: string;
   data: string[][];
