@@ -23,7 +23,9 @@
 .progress-step.completed { opacity: 0.8; }
 .progress-step.active { opacity: 1; transform: scale(1.05); }
 .step-icon {
-  font-size: var(--text-2xl);
+  font-size: var(--text-sm);   /* 2026-08-24：文字 glyph 用小字級 */
+  font-weight: 800;
+  letter-spacing: 0.02em;
   background: var(--panel-l3);
   width: 40px;
   height: 40px;

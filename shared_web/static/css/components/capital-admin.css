@@ -2,8 +2,10 @@
 
 /* === capital-models === */
 .cm-models {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* 2026-08-24 UI audit P3：flex wrap 取代 grid auto-fit —
+     5 張卡 3+2 時末排 2 卡自動拉伸填滿，不再右側留白。 */
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-top: 12px;
 }
@@ -15,6 +17,8 @@
   padding: 16px;
   cursor: pointer;
   transition: box-shadow 0.15s ease, transform 0.1s ease;
+  flex: 1 1 300px;
+  max-width: 420px;
 }
 
 .cm-card:hover {

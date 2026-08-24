@@ -2,7 +2,7 @@
 .params-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
 .params-table th { text-align: left; padding: 4px 8px; font-size: var(--text-sm); color: var(--muted); border-bottom: 1px solid var(--border); }
 .params-table td { padding: 4px 8px; font-size: var(--text-sm); vertical-align: top; }
-.param-key { word-break: break-all; color: var(--accent); }
+.param-key { word-break: break-all; color: var(--text); } /* 2026-08-24 UI audit P3：參數名不是連結，移除藍色誤導 */
 .param-val { word-break: break-all; }
 .param-meta { color: var(--muted); font-size: var(--text-sm); white-space: nowrap; }
 .param-val-trunc { cursor: pointer; color: var(--accent-secondary); display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
