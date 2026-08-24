@@ -315,3 +315,50 @@ func TestSave5SecIndexToLedger_Append(t *testing.T) {
 		t.Fatalf("expected 2 lines after append, got %d", len(lines))
 	}
 }
+
+// ─── P1-11: 5sec index must respect the daily-quota gate and capture
+// error bodies (previously it bypassed AllowCall entirely) ────────────────
+
+func TestFetchTaiwan5SecIndex_QuotaGate(t *testing.T) {
+	hit := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"msg":"success","status":200,"data":[]}`))
+	}))
+	defer server.Close()
+
+	client := &FinMindClient{
+		httpClient:   server.Client(),
+		rateLimiter:  newUnlimitedLimiter(),
+		quotaTracker: &DailyQuotaTracker{dailyLimit: 0, lastReset: time.Now().Truncate(24 * time.Hour)},
+	}
+
+	_, err := client.FetchTaiwan5SecIndex(context.Background(), "2026-04-29")
+	if err == nil || !strings.Contains(err.Error(), ErrQuotaExhausted.Error()) {
+		t.Fatalf("expected ErrQuotaExhausted, got %v", err)
+	}
+	if hit != 0 {
+		t.Fatalf("quota gate bypassed: HTTP request made (%d hits)", hit)
+	}
+}
+
+func TestFetchTaiwan5SecIndex_ErrorBodyCaptured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"msg":"start_date is illegal"}`))
+	}))
+	defer server.Close()
+
+	client := NewFinMindClient("test-key")
+	client.httpClient = &http.Client{Transport: &rewriteTransport{target: server.URL, inner: http.DefaultTransport}}
+	client.rateLimiter = newUnlimitedLimiter()
+
+	_, err := client.FetchTaiwan5SecIndex(context.Background(), "2026-04-29")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "start_date is illegal") {
+		t.Errorf("error body not captured: %v", err)
+	}
+}

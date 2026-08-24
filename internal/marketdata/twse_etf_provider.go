@@ -29,13 +29,13 @@ type ETFStats struct {
 var (
 	// ErrETFNoTradingData：上游正常回覆但最近 7 天無交易資料（假日/休市）。
 	// adapter 允許轉成 stale，不觸發 circuit breaker。
-	ErrETFNoTradingData = errors.New("twse_etf: no trading data in last 7 days")
+	ErrETFNoTradingData = fmt.Errorf("twse_etf: no trading data in last 7 days: %w", ErrNoData)
 	// ErrETFUpstream：transport/HTTP 層失敗（timeout、DNS、4xx/5xx）。
 	// 必須觸發 circuit breaker。
-	ErrETFUpstream = errors.New("twse_etf: upstream failure")
+	ErrETFUpstream = fmt.Errorf("twse_etf: upstream failure: %w", ErrUpstream)
 	// ErrETFSchema：回應無法解析（WAF 頁面、schema 改變、非預期格式）。
 	// 必須觸發 circuit breaker。
-	ErrETFSchema = errors.New("twse_etf: schema mismatch")
+	ErrETFSchema = fmt.Errorf("twse_etf: schema mismatch: %w", ErrSchema)
 )
 
 // TWSEETFProvider fetches Taiwan ETF net subscription data from TWSE.
@@ -58,7 +58,7 @@ func NewTWSEETFProvider() *TWSEETFProvider {
 	return &TWSEETFProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 	}
 }
 

@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 var taiexTWSEBaseURL = "https://www.twse.com.tw/exchangeReport/MI_INDEX"
@@ -66,10 +64,18 @@ func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
 	}
 	req.Header.Set("User-Agent", "atlas-go/1.0")
 
-	// N1 S4：與 twse_api_timeout_sec 參數統一（預設 20s，TWSE 官方慢時段
-	// 07:17–07:58 實測 >15s），消除 taiex_twse_fallback 的魔法數字 15s。
-	timeout := time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second
-	client := &http.Client{Timeout: timeout}
+	// P1-13: share the TWSEClient's HTTP client AND token bucket instead of
+	// building a fresh raw &http.Client per call (which bypassed both the
+	// timeout parameter consistency AND the rate limit — a busy cycle could
+	// fire this fallback at the same host concurrently with the 11 TWSE
+	// providers). The shared client's timeout comes from
+	// marketdata.twse_api_timeout_sec (N1 S4: 20s default).
+	client := GetSharedTWSEClient().HTTPClient()
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := GetSharedTWSEClient().RateLimiter().Wait(waitCtx); err != nil {
+		return MacroDataPoint{}, fmt.Errorf("taiex_twse: rate limit wait (10s timeout): %w", err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return MacroDataPoint{}, fmt.Errorf("taiex_twse: GET %s: %w", url, err)

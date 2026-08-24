@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -262,8 +263,15 @@ func TestAggregateDate_Captcha_BreaksLoopAndRecordsCooldown(t *testing.T) {
 	agg.SetCaptchaCooldown(cd)
 
 	_, err := agg.AggregateDate(context.Background(), time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC))
-	if err != nil {
-		t.Fatalf("AggregateDate() error = %v", err)
+	// CAPTCHA is an upstream block — a real failure, not no-data. Since
+	// every symbol failed (loop broke on the first), AggregateDate must
+	// surface the failure (k3 audit: all-failure must not be masked as
+	// no_data) instead of returning (nil, nil).
+	if err == nil {
+		t.Fatal("AggregateDate() should return error on CAPTCHA (upstream blocked), got nil")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Fatalf("AggregateDate() error = %v, want wrapped ErrUpstream", err)
 	}
 	if !cd.ShouldSkip(GovernmentBrokerChannelID) {
 		t.Fatal("cooldown should be active after CAPTCHA (RecordCaptcha must be wired)")

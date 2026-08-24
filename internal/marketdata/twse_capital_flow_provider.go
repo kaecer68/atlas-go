@@ -45,7 +45,8 @@ func NewTWSECapitalFlowProvider(storageDir string) *TWSECapitalFlowProvider {
 	return &TWSECapitalFlowProvider{
 		client:     httpclient.NewFactory().NewClient(20 * time.Second),
 		storageDir: storageDir,
-		limiter:    rate.NewLimiter(rate.Every(5*time.Second), 1),
+		// P1-13: shared TWSE token bucket (was an independent 1/5s limiter).
+		limiter: getTWSESharedLimiter(),
 	}
 }
 
@@ -59,6 +60,14 @@ func (t *TWSECapitalFlowProvider) SetHTTPClient(client *http.Client) {
 // Name returns the provider name.
 func (t *TWSECapitalFlowProvider) Name() string {
 	return "twse_capital_flow"
+}
+
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (t *TWSECapitalFlowProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		t.limiter = l
+	}
 }
 
 // SymbolFlow holds per-symbol institutional investor flow from TWSE T86.
@@ -224,7 +233,7 @@ func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TW
 			return flow, nil
 		}
 	}
-	return TWSECapitalFlow{}, fmt.Errorf("no TWSE capital flow data available in the last 7 days")
+	return TWSECapitalFlow{}, fmt.Errorf("%w: no TWSE capital flow data available in the last 7 days", ErrNoData)
 }
 
 func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string) (TWSECapitalFlow, error) {

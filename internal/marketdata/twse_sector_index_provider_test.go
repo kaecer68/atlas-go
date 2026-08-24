@@ -23,6 +23,7 @@ func TestNewTWSESectorIndexProvider(t *testing.T) {
 }
 
 func TestTWSESectorIndexProvider_FetchSectorIndices(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	mockData := []twseIndexItem{
 		{Index: "半導體類指數", CloseIndex: "1,250.50", Change: "+", ChangePts: "27.36", ChangePct: "1.94"},
 		{Index: "金融保險類指數", CloseIndex: "850.30", Change: "+", ChangePts: "5.12", ChangePct: "0.60"},
@@ -213,6 +214,7 @@ func TestMapIndustryName(t *testing.T) {
 }
 
 func TestTWSESectorIndexProvider_APIError(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -235,6 +237,7 @@ func TestTWSESectorIndexProvider_APIError(t *testing.T) {
 }
 
 func TestTWSESectorIndexProvider_EmptyCloseIndex(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	mockData := []twseIndexItem{
 		{Index: "半導體類指數", CloseIndex: "", Change: "+", ChangePts: "27.36", ChangePct: "1.94"},
 	}
@@ -262,6 +265,7 @@ func TestTWSESectorIndexProvider_EmptyCloseIndex(t *testing.T) {
 }
 
 func TestTWSESectorIndexProvider_ZeroCloseIndex(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	mockData := []twseIndexItem{
 		{Index: "半導體類指數", CloseIndex: "0", Change: "+", ChangePts: "0", ChangePct: "0"},
 	}
@@ -289,6 +293,7 @@ func TestTWSESectorIndexProvider_ZeroCloseIndex(t *testing.T) {
 }
 
 func TestTWSESectorIndexProvider_InvalidJSON(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte("not valid json"))

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
 )
@@ -27,7 +29,38 @@ const (
 	ErrorSeverityCritical = "critical" // Auth: API key missing or invalid
 )
 
-func classifyErrorSeverity(errMsg string) string {
+// classifyErrorSeverity maps an error to a frontend severity. P1-9:
+// provider typed sentinels (ErrNoData / ErrUpstream / ErrSchema /
+// ErrQuotaExhausted / rate-limit) are checked FIRST via errors.Is — message
+// text can no longer misclassify a condition the provider already typed.
+// String matching remains as a fallback for errors that carry no typed
+// sentinel (e.g. messages re-read from the persisted health store).
+func classifyErrorSeverity(err error) string {
+	if err == nil {
+		return ""
+	}
+	switch {
+	case errors.Is(err, marketdata.ErrQuotaExhausted),
+		errors.Is(err, marketdata.ErrFugleQuotaExhausted),
+		errors.Is(err, marketdata.ErrRateLimited),
+		errors.Is(err, marketdata.ErrFugleBreakerOpen):
+		return ErrorSeverityWarn
+	case errors.Is(err, marketdata.ErrNoData):
+		return ErrorSeverityInfo
+	case errors.Is(err, marketdata.ErrUpstream),
+		errors.Is(err, marketdata.ErrSchema):
+		return ErrorSeverityError
+	case errors.Is(err, marketdata.ErrFugleUnauthorized):
+		return ErrorSeverityCritical
+	}
+	return classifyErrorSeverityMsg(err.Error())
+}
+
+// classifyErrorSeverityMsg is the string-based fallback path. It is used
+// where only a stored message is available (health-store records lose the
+// typed error chain); the pattern rules below are the same classification
+// semantics the classifier used before typed sentinels existed.
+func classifyErrorSeverityMsg(errMsg string) string {
 	if errMsg == "" {
 		return ""
 	}
@@ -244,7 +277,7 @@ func (s *DataChannelService) GetAllChannelStatuses(ctx context.Context) ([]DataC
 			StatusText:    statusText(status),
 			UpdatedAt:     updated,
 			LastError:     lastError,
-			ErrorSeverity: classifyErrorSeverity(lastError),
+			ErrorSeverity: classifyErrorSeverityMsg(lastError),
 			Enabled:       true,
 		}
 		channels = append(channels, mergeEnabled(c))
@@ -294,7 +327,7 @@ func (s *DataChannelService) buildUSYahooChannel(now time.Time) DataChannel {
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -313,7 +346,7 @@ func (s *DataChannelService) buildTWSEReplayChannel(now time.Time) DataChannel {
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -347,7 +380,7 @@ func (s *DataChannelService) buildFugleChannel() DataChannel {
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -364,7 +397,7 @@ func (s *DataChannelService) buildFubonChannel() DataChannel {
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -381,7 +414,7 @@ func (s *DataChannelService) buildFinMindChannel() DataChannel {
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -431,7 +464,7 @@ func (s *DataChannelService) buildGeopoliticalChannel(now time.Time) DataChannel
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -468,7 +501,7 @@ func (s *DataChannelService) buildExportStatisticsChannel(now time.Time) DataCha
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 
@@ -505,7 +538,7 @@ func (s *DataChannelService) buildTaiwanGeopoliticalChannel(now time.Time) DataC
 		StatusText:    statusText(status),
 		UpdatedAt:     updated,
 		LastError:     lastError,
-		ErrorSeverity: classifyErrorSeverity(lastError),
+		ErrorSeverity: classifyErrorSeverityMsg(lastError),
 	}
 }
 

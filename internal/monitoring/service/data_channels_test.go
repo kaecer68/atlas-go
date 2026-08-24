@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 func TestChannelHealthStore_PassesOptionsAndPersistence(t *testing.T) {
@@ -519,7 +522,7 @@ func TestClassifyErrorSeverity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyErrorSeverity(tt.errMsg)
+			got := classifyErrorSeverityMsg(tt.errMsg)
 			if got != tt.expect {
 				t.Errorf("classifyErrorSeverity(%q) = %q, want %q", tt.errMsg, got, tt.expect)
 			}
@@ -528,19 +531,101 @@ func TestClassifyErrorSeverity(t *testing.T) {
 }
 
 func TestClassifyErrorSeverity_RulePriority(t *testing.T) {
-	got := classifyErrorSeverity("invalid api key")
+	got := classifyErrorSeverityMsg("invalid api key")
 	if got != ErrorSeverityCritical {
 		t.Errorf("expected critical (auth beats config), got %q", got)
 	}
 
-	got2 := classifyErrorSeverity("connection refused: no data available in the last hour")
+	got2 := classifyErrorSeverityMsg("connection refused: no data available in the last hour")
 	if got2 != ErrorSeverityError {
 		t.Errorf("expected error (infra beats info), got %q", got2)
 	}
 
-	got3 := classifyErrorSeverity("rate limit exceeded: HTTP 403")
+	got3 := classifyErrorSeverityMsg("rate limit exceeded: HTTP 403")
 	if got3 != ErrorSeverityWarn {
 		t.Errorf("expected warn (rate limit before 403), got %q", got3)
+	}
+}
+
+func TestClassifyErrorSeverity_TypedSentinels(t *testing.T) {
+	// P1-9: typed sentinels take priority over message text.
+	tests := []struct {
+		name   string
+		err    error
+		expect string
+	}{
+		{name: "nil", err: nil, expect: ""},
+		{
+			name:   "finmind quota exhausted (typed warn beats message)",
+			err:    fmt.Errorf("finmind: %w: %s", marketdata.ErrQuotaExhausted, "Requests reach the upper limit"),
+			expect: ErrorSeverityWarn,
+		},
+		{
+			name:   "server 402 wrapped quota (P0-1 regression)",
+			err:    fmt.Errorf("finmind: %w: status 402 body", marketdata.ErrQuotaExhausted),
+			expect: ErrorSeverityWarn,
+		},
+		{
+			name:   "fugle quota",
+			err:    fmt.Errorf("fugle: %w", marketdata.ErrFugleQuotaExhausted),
+			expect: ErrorSeverityWarn,
+		},
+		{
+			name:   "rate limited",
+			err:    fmt.Errorf("finmind: rate limit wait: %w", marketdata.ErrRateLimited),
+			expect: ErrorSeverityWarn,
+		},
+		{
+			name:   "no-data (holiday) -> info",
+			err:    fmt.Errorf("%w: no TWSE margin balance data available in the last 7 days", marketdata.ErrNoData),
+			expect: ErrorSeverityInfo,
+		},
+		{
+			name:   "twse empty data -> info (wraps ErrNoData)",
+			err:    marketdata.ErrTWSEEmptyData,
+			expect: ErrorSeverityInfo,
+		},
+		{
+			name:   "etf no trading data -> info",
+			err:    marketdata.ErrETFNoTradingData,
+			expect: ErrorSeverityInfo,
+		},
+		{
+			name:   "upstream -> error",
+			err:    fmt.Errorf("%w: http status 503", marketdata.ErrUpstream),
+			expect: ErrorSeverityError,
+		},
+		{
+			name:   "schema -> error",
+			err:    fmt.Errorf("%w: PutVolume not parseable", marketdata.ErrTAIFEXSchema),
+			expect: ErrorSeverityError,
+		},
+		{
+			name:   "fugle unauthorized -> critical",
+			err:    marketdata.ErrFugleUnauthorized,
+			expect: ErrorSeverityCritical,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyErrorSeverity(tt.err)
+			if got != tt.expect {
+				t.Errorf("classifyErrorSeverity(%v) = %q, want %q", tt.err, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestClassifyErrorSeverity_UntypedFallsBackToStringRules(t *testing.T) {
+	// An error with NO typed sentinel must still classify via message rules.
+	if got := classifyErrorSeverity(errors.New("dial tcp 127.0.0.1:18081: connection refused")); got != ErrorSeverityError {
+		t.Errorf("untyped infra error = %q, want error", got)
+	}
+	if got := classifyErrorSeverity(errors.New("HTTP 401 Unauthorized")); got != ErrorSeverityCritical {
+		t.Errorf("untyped auth error = %q, want critical", got)
+	}
+	if got := classifyErrorSeverity(errors.New("rate limit: context deadline exceeded")); got != ErrorSeverityWarn {
+		t.Errorf("untyped transient error = %q, want warn", got)
 	}
 }
 
@@ -569,7 +654,7 @@ func TestClassifyErrorSeverity_RealWorldMessages(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := classifyErrorSeverity(tt.errMsg)
+			got := classifyErrorSeverityMsg(tt.errMsg)
 			if got != tt.expect {
 				t.Errorf("classifyErrorSeverity(%q) = %q, want %q", tt.errMsg, got, tt.expect)
 			}

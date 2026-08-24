@@ -32,10 +32,15 @@
 //   - Errors wrap HTTP status + endpoint context for diagnostics
 //   - Taiwan data parsing aligns to CST (UTC+8)
 //
-// providerBreaker provides per-provider circuit breaking. Adding a new
-// breaker requires (1) construct providerBreaker, (2) register in
-// HybridProvider.breakers, (3) call shouldTry() + recordSuccess/recordFailure
-// in the corresponding GetQuotes path.
+// providerBreaker provides per-provider circuit breaking. P1-7: client-level
+// breakers now live on the shared clients (FinMindClient.breaker,
+// TWSEClient.breaker, TAIFEXProvider.breaker, yahooSession.breaker,
+// GovernmentBrokerAggregator.breaker), so every consumer of a client shares
+// one breaker. Wiring pattern: construct via newProviderBreaker(name, cfg)
+// (threshold injectable via circuitBreakerConfig), call shouldTry() at entry
+// and recordSuccess/recordFailure on exit. No-data / holiday / quota
+// conditions MUST NOT count as failures (they call recordSuccess). HybridProvider
+// additionally keeps per-leg breakers (fugle/fubon) for its fallback chain.
 //
 // Maturity: stable
 package marketdata

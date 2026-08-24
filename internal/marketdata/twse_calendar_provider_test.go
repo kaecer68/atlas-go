@@ -15,6 +15,7 @@ func TestTWSECalendarProvider_Name(t *testing.T) {
 }
 
 func TestTWSECalendarProvider_FetchExDividendMonth(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	// Mock TWSE exRight endpoint that returns ex-dividend data.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{
@@ -65,6 +66,7 @@ func TestTWSECalendarProvider_FetchExDividendMonth(t *testing.T) {
 }
 
 func TestTWSECalendarProvider_FetchShareholderMeetingMonth(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	// Mock TWSE meeting endpoint that returns shareholder meeting data.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{
@@ -132,6 +134,7 @@ func TestNormalizeTWDate_Empty(t *testing.T) {
 }
 
 func TestTWSECalendarProvider_FetchExDividendMonth_HTMLResponseDeprecated(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	// TWSE deprecated exRight endpoint (2026-06): returns 302 → /page-not-found.html
 	// with text/html body. Provider must return empty events gracefully, not error.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +157,7 @@ func TestTWSECalendarProvider_FetchExDividendMonth_HTMLResponseDeprecated(t *tes
 }
 
 func TestTWSECalendarProvider_FetchMeetingMonth_HTMLResponseDeprecated(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
 	// TWSE deprecated meeting endpoint (2026-06): same HTML fallback behavior.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=UTF-8")

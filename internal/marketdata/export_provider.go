@@ -129,7 +129,14 @@ func (e *ExportStatisticsProvider) fetchLatestTwoMonths(ctx context.Context) (Cu
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d", resp.StatusCode)
+		// P1-10: bounded upstream error body (FinMind 512B pattern) so the
+		// channel LastError shows why the customs portal rejected the call.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if bodyStr == "" {
+			bodyStr = "(empty body)"
+		}
+		return CustomsExportImport{}, CustomsExportImport{}, fmt.Errorf("export statistics HTTP %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	body, err := io.ReadAll(resp.Body)

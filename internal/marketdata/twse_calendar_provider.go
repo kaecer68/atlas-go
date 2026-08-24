@@ -32,7 +32,7 @@ func NewTWSECalendarProvider() *TWSECalendarProvider {
 	return &TWSECalendarProvider{
 		httpClient:  httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Limit(params.Marketdata.TWSEAPIRateLimit.Value), params.Marketdata.TWSEAPIRateBurst.Value),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 	}
 }
 
@@ -44,6 +44,14 @@ func (p *TWSECalendarProvider) SetHTTPClient(client *http.Client) {
 // Name returns the provider name.
 func (p *TWSECalendarProvider) Name() string {
 	return "twse_calendar"
+}
+
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (p *TWSECalendarProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		p.rateLimiter = l
+	}
 }
 
 // FetchEvents fetches calendar events for the given year from TWSE.

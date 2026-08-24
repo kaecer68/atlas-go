@@ -79,6 +79,7 @@ func TestYahooFinanceMacroProvider_HTMLFallback(t *testing.T) {
 	if snap.DXY.Value == 0 {
 		t.Error("expected DXY to be populated after host fallback, got zero")
 	}
+	resetYahooSessionState() // P1-14: HTML response tripped the negative cache; don't pollute later tests
 }
 
 func TestYahooFinanceMacroProvider_AllHostsFail(t *testing.T) {
@@ -98,6 +99,7 @@ func TestYahooFinanceMacroProvider_AllHostsFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when all hosts fail")
 	}
+	resetYahooSessionState() // P1-14: 429 tripped the negative cache; don't pollute later tests
 }
 
 func TestYahooFetchFromHost_Success(t *testing.T) {

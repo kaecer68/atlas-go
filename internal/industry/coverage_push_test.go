@@ -613,8 +613,8 @@ func TestDynamicEnvModulator_ShippingSeasonalModulation(t *testing.T) {
 
 func TestEventCalendar_LunarCoverageAndProviderUpdate(t *testing.T) {
 	minYear, maxYear := GetLunarCoverageYears()
-	if minYear != 2023 || maxYear != 2030 {
-		t.Fatalf("unexpected lunar coverage: %d-%d", minYear, maxYear)
+	if minYear != 2023 || maxYear != 2040 {
+		t.Fatalf("unexpected lunar coverage: %d-%d (single-source taiwanholidays table extended to 2040)", minYear, maxYear)
 	}
 
 	cal := NewEventCalendar()

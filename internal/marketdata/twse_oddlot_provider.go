@@ -47,7 +47,7 @@ func NewTWSEOddLotProvider() *TWSEOddLotProvider {
 	return &TWSEOddLotProvider{
 		client:      httpclient.NewFactory().NewClient(20 * time.Second),
 		baseURL:     constants.TWSEBaseURL,
-		rateLimiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
+		rateLimiter: getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 	}
 }
 
@@ -61,6 +61,14 @@ func (p *TWSEOddLotProvider) SetHTTPClient(client *http.Client) {
 // Name returns the provider name.
 func (p *TWSEOddLotProvider) Name() string {
 	return "twse_oddlot"
+}
+
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (p *TWSEOddLotProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		p.rateLimiter = l
+	}
 }
 
 // FetchLatest retrieves the most recent odd-lot trading statistics.
@@ -79,7 +87,7 @@ func (p *TWSEOddLotProvider) FetchLatest(ctx context.Context) (*OddLotStats, err
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("no TWSE odd-lot data available in the last 7 days")
+	return nil, fmt.Errorf("%w: no TWSE odd-lot data available in the last 7 days", ErrNoData)
 }
 
 func (p *TWSEOddLotProvider) fetchDate(ctx context.Context, dateStr string) (*OddLotStats, error) {

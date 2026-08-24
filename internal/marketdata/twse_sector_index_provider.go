@@ -39,18 +39,14 @@ type TWSESectorIndexProvider struct {
 func NewTWSESectorIndexProvider(cacheDir string) *TWSESectorIndexProvider {
 	params := config.GetParametersConfig()
 	timeoutSec := 30
-	apiRate := 0.2 // 1 req per 5 seconds default
-	burst := 1
 	if params != nil {
 		timeoutSec = params.Marketdata.TWSEAPITimeoutSec.Value
-		apiRate = params.Marketdata.TWSEAPIRateLimit.Value
-		burst = params.Marketdata.TWSEAPIRateBurst.Value
 	}
 
 	return &TWSESectorIndexProvider{
 		client:   httpclient.NewFactory().NewClient(time.Duration(timeoutSec) * time.Second),
 		baseURL:  "https://openapi.twse.com.tw/v1",
-		limiter:  rate.NewLimiter(rate.Limit(apiRate), burst),
+		limiter:  getTWSESharedLimiter(), // P1-13: shared TWSE bucket
 		cacheDir: cacheDir,
 	}
 }
@@ -65,6 +61,14 @@ func (p *TWSESectorIndexProvider) SetHTTPClient(client *http.Client) {
 // Name returns the provider name.
 func (p *TWSESectorIndexProvider) Name() string {
 	return "twse_sector_index"
+}
+
+// SetRateLimiter overrides the rate limiter (tests only; P1-13 shared-bucket
+// tests use SetTWSESharedLimiterForTest instead).
+func (p *TWSESectorIndexProvider) SetRateLimiter(l *rate.Limiter) {
+	if l != nil {
+		p.limiter = l
+	}
 }
 
 // FetchSectorIndices fetches historical industry index data for the given date range.
