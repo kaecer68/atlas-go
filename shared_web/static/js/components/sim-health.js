@@ -105,6 +105,13 @@ export class SimHealthPanel {
   updateUI() {
     if (!this.container) return;
 
+    // 2026-08-24 UI audit P3：步驟依時間戳排序（新→舊），避免 1,1,2,3,4,5,2,3,4,5
+    // 混排難以追蹤單一步驟。
+    const sorted = Array.from(this.traces).sort(function (a, b) {
+      return new Date(b.ts || 0) - new Date(a.ts || 0);
+    });
+    this.traces = sorted;
+
     const summary = this.computeSummary();
     this.updateSummary(summary);
     this.renderTable();

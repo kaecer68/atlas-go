@@ -243,8 +243,16 @@ export function renderCycleStatusCard(card) {
     中性: "var(--muted)",
     偏空: "color-mix(in srgb, var(--trend-bearish) 65%, transparent)",
     強烈看空: "var(--trend-bearish)",
+    // 2026-08-24 UI audit P3：後端若回傳英文 enum（bullish/bearish 等）也對應到
+    // 正確語意色，未對應的值一律中性色，避免 10/11 張卡同色無區分。
+    bullish: "var(--trend-bullish)",
+    "強烈看多": "var(--trend-bullish)",
+    bearish: "var(--trend-bearish)",
+    "強烈看空": "var(--trend-bearish)",
+    neutral: "var(--muted)",
   };
-  const sentiment = card.sentiment_label || "中性";
+  const rawSentiment = card.sentiment_label || "中性";
+  const sentiment = sentimentColors[rawSentiment] ? rawSentiment : (String(rawSentiment).toLowerCase() === "bullish" ? "強烈看多" : String(rawSentiment).toLowerCase() === "bearish" ? "強烈看空" : "中性");
   const sentimentColor = sentimentColors[sentiment] || sentimentColors["中性"];
   const generatedAt = card.generated_at ? new Date(card.generated_at).toLocaleString("zh-TW") : "-";
   const confidence = card.cycle_confidence;
@@ -359,7 +367,7 @@ export function renderCycleStatusCard(card) {
     breakdown.forEach((item) => {
       const delta = cycleDelta(item.contribution);
       let reason = item.reason || "";
-      reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能") || "-";
+      reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能").replace(/avg across industries/g,"跨產業平均") || "-";
       html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${fmtSafePct(item.weight, 0)}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
     });
     html += `</tbody></table>`;
@@ -661,11 +669,12 @@ function renderCycleTab(detail) {
   });
   html += "</div></div>";
 
+  // 2026-08-24 UI audit P2：關鍵指標的原始 enum（business_cycle 等）中文化
   const metrics = [
-    { label: "商業週期", value: cp.business_cycle || "-" },
-    { label: "庫存週期", value: cp.inventory_cycle || "-" },
-    { label: "資本支出週期", value: cp.capex_cycle || "-" },
-    { label: "趨勢方向", value: cp.trend || "-" },
+    { label: "商業週期", value: cycleStatusText(cp.business_cycle) || "-" },
+    { label: "庫存週期", value: cycleStatusText(cp.inventory_cycle) || "-" },
+    { label: "資本支出週期", value: cycleStatusText(cp.capex_cycle) || "-" },
+    { label: "趨勢方向", value: cycleStatusText(cp.trend) || "-" },
     {
       label: "週期分數",
       value: fmtSafeNumber(cp.phase_score, { decimals: 2 }),
