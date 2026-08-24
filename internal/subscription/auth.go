@@ -75,6 +75,18 @@ type memberClaims struct {
 	Exp                 int64           `json:"exp"`
 }
 
+// sessionClaims is the payload shape of atlas-issued session tokens (HS256).
+// It mirrors the go-member claims but keeps sub as a string (member uuid) so
+// atlas can re-sign verified go-member sessions into long-lived cookies
+// (2026-08-24 login memory — upstream access tokens only live 15 minutes).
+type sessionClaims struct {
+	Sub                 string `json:"sub"`
+	Email               string `json:"email"`
+	Tier                string `json:"tier"`
+	MembershipExpiresAt int64  `json:"membershipExpiresAt"`
+	Exp                 int64  `json:"exp"`
+}
+
 // parseMembershipExpiry 接受 epoch 秒（數字）或 ISO-8601（string），
 // 回傳 epoch 秒；無法解析時回傳 0（視同無到期限制）。
 func parseMembershipExpiry(raw json.RawMessage) int64 {
@@ -177,16 +189,59 @@ func (m *JWTManager) Generate(user *User, duration time.Duration) (string, error
 	return toSign + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
+// GenerateSession signs an atlas session token (HS256) carrying the given
+// verified claims, valid for the given duration. It re-signs go-member
+// RS256 access tokens (15-min TTL) into long-lived atlas session cookies so
+// login memory survives the upstream token lifetime (2026-08-24).
+func (m *JWTManager) GenerateSession(claims *TokenClaims, duration time.Duration) (string, error) {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	payload := sessionClaims{
+		Sub:                 claims.Sub,
+		Email:               claims.Email,
+		Tier:                claims.Tier,
+		MembershipExpiresAt: claims.MembershipExpiresAt,
+		Exp:                 time.Now().Add(duration).Unix(),
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	toSign := header + "." + base64.RawURLEncoding.EncodeToString(payloadJSON)
+	sig := m.sign(toSign)
+	return toSign + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
 // Verify validates and parses a JWT token according to the active mode.
+//
+// In go-member JWKS mode it accepts both raw go-member RS256 tokens AND
+// atlas-issued HS256 session tokens (re-signed at SSO/login), so old
+// cookies survive config changes and new session cookies verify. In legacy
+// mode it validates HS256 tokens (legacy numeric-sub shape or session shape).
 func (m *JWTManager) Verify(token string) (*TokenClaims, error) {
 	if m.jwksURL != "" {
-		return m.verifyRS256(token)
+		claims, err := m.verifyRS256(token)
+		if err == nil {
+			return claims, nil
+		}
+		return m.verifyHS256(token)
 	}
 	return m.verifyHS256(token)
 }
 
-// verifyHS256 is the pre-migration HMAC-SHA256 verification path.
+// verifyHS256 is the HMAC-SHA256 verification path. It accepts both the
+// legacy numeric-sub shape (self-signed HS256, pre go-member) and the atlas
+// session shape (string sub, re-signed at SSO/login).
 func (m *JWTManager) verifyHS256(token string) (*TokenClaims, error) {
+	claims, err := m.verifyHS256LegacyShape(token)
+	if err == nil {
+		return claims, nil
+	}
+	return m.verifyHS256SessionShape(token)
+}
+
+// verifyHS256LegacyShape parses a legacy self-signed HS256 token (numeric
+// sub → UserID).
+func (m *JWTManager) verifyHS256LegacyShape(token string) (*TokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid token format")
@@ -212,6 +267,42 @@ func (m *JWTManager) verifyHS256(token string) (*TokenClaims, error) {
 		return nil, fmt.Errorf("token expired")
 	}
 	return &claims, nil
+}
+
+// verifyHS256SessionShape parses an atlas-issued HS256 session token
+// (string sub → Sub). Called after the legacy shape fails to unmarshal.
+func (m *JWTManager) verifyHS256SessionShape(token string) (*TokenClaims, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid token format")
+	}
+	toSign := parts[0] + "." + parts[1]
+	expectedSig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid signature encoding")
+	}
+	actualSig := m.sign(toSign)
+	if !hmac.Equal(expectedSig, actualSig) {
+		return nil, fmt.Errorf("invalid signature")
+	}
+	claimsJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid payload encoding")
+	}
+	var sc sessionClaims
+	if err := json.Unmarshal(claimsJSON, &sc); err != nil {
+		return nil, fmt.Errorf("invalid claims json")
+	}
+	if time.Now().Unix() > sc.Exp {
+		return nil, fmt.Errorf("token expired")
+	}
+	return &TokenClaims{
+		Sub:                 sc.Sub,
+		Email:               sc.Email,
+		Tier:                sc.Tier,
+		MembershipExpiresAt: sc.MembershipExpiresAt,
+		Exp:                 sc.Exp,
+	}, nil
 }
 
 // verifyRS256 validates a go-member token against the JWKS public key and

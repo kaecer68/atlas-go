@@ -4750,6 +4750,14 @@ export interface sectorDataJSON {
   updated_at: string;
 }
 
+export interface sessionClaims {
+  sub: string;
+  email: string;
+  tier: string;
+  membershipExpiresAt: number;
+  exp: number;
+}
+
 export interface submitTaskRequest {
   task_type: string;
   payload?: Record<string, string>;

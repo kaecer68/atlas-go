@@ -247,6 +247,13 @@ func goMemberMock(t *testing.T, handlerFn http.HandlerFunc) *httptest.Server {
 func TestHandleLoginProxySuccess(t *testing.T) {
 	s := newTestStore(t)
 	jwt := NewJWTManager("test-secret", "")
+	// Upstream（go-member）回傳的 access token 必須是 atlas 能驗證的 token；
+	// 這裡用同一個 JWTManager 簽一個 HS256 token 模擬。
+	upstreamUser := &User{ID: 99, Email: "member@test.com", Tier: TierRegistered}
+	upstreamToken, err := jwt.Generate(upstreamUser, 15*time.Minute)
+	if err != nil {
+		t.Fatalf("generate upstream token: %v", err)
+	}
 	got := make(chan string, 1)
 	server := goMemberMock(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/auth/login" {
@@ -256,7 +263,7 @@ func TestHandleLoginProxySuccess(t *testing.T) {
 		got <- r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"accessToken":"mock.rs256.token","refreshToken":"rt","expiresIn":900,"tokenType":"Bearer"}`))
+		_, _ = w.Write([]byte(`{"accessToken":"` + upstreamToken + `","refreshToken":"rt","expiresIn":900,"tokenType":"Bearer"}`))
 	})
 	h := NewHandler(s, jwt).WithGoMember(server.URL)
 
@@ -270,19 +277,48 @@ func TestHandleLoginProxySuccess(t *testing.T) {
 	}
 	var resp map[string]any
 	_ = json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["token"] != "mock.rs256.token" {
-		t.Errorf("expected RS256 token echoed, got %v", resp["token"])
+	// 2026-08-24：回應 body 應為重新簽發的 atlas session token（≠ upstream token）
+	sessionToken, _ := resp["token"].(string)
+	if sessionToken == "" || sessionToken == upstreamToken {
+		t.Errorf("expected re-minted session token (≠ upstream), got %v", resp["token"])
+	}
+	claims, err := jwt.Verify(sessionToken)
+	if err != nil {
+		t.Fatalf("session token should verify: %v", err)
+	}
+	if claims.Email != "member@test.com" {
+		t.Errorf("session claims email: %s", claims.Email)
 	}
 	u, ok := resp["user"].(map[string]any)
 	if !ok || u["email"] != "member@test.com" {
 		t.Errorf("expected user.email, got %v", resp["user"])
 	}
 	cookie := rec.Header().Get("Set-Cookie")
-	if !strings.Contains(cookie, "token=mock.rs256.token") {
-		t.Errorf("expected token cookie set, got %q", cookie)
+	if !strings.Contains(cookie, "token="+sessionToken) {
+		t.Errorf("expected session token cookie set, got %q", cookie)
 	}
 	if path := <-got; path != "/api/v1/auth/login" {
 		t.Errorf("proxy hit wrong path: %s", path)
+	}
+}
+
+func TestHandleLoginProxyInvalidUpstreamToken(t *testing.T) {
+	s := newTestStore(t)
+	jwt := NewJWTManager("test-secret", "")
+	server := goMemberMock(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"accessToken":"not.a.valid.jwt","refreshToken":"rt","expiresIn":900,"tokenType":"Bearer"}`))
+	})
+	h := NewHandler(s, jwt).WithGoMember(server.URL)
+
+	body := `{"email":"bad@test.com","password":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.handleLogin(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 for invalid upstream token, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -424,7 +460,7 @@ func TestSSOEndpoint(t *testing.T) {
 	jwt := NewJWTManager("test-secret", "")
 	h := NewHandler(s, jwt)
 
-	// 有效 token → 設 cookie + JSON redirect
+	// 有效 token → 重新簽發長效 session token + 設 cookie + JSON redirect
 	user := &User{ID: 1, Email: "sso@test.com", Tier: "registered"}
 	token, err := jwt.Generate(user, time.Hour)
 	if err != nil {
@@ -442,15 +478,33 @@ func TestSSOEndpoint(t *testing.T) {
 	if resp["ok"] != "true" || resp["redirect"] != "/client/home" {
 		t.Errorf("unexpected resp: %v", resp)
 	}
+	// 2026-08-24（登入記憶）：cookie 應是重新簽發的 atlas session token
+	//（≠ 原 upstream token），可被 Verify 驗證，MaxAge = 7 天。
 	cookies := rec.Result().Cookies()
-	found := false
+	var sessionCookie *http.Cookie
 	for _, c := range cookies {
-		if c.Name == "token" && c.HttpOnly && c.Value == token {
-			found = true
+		if c.Name == "token" {
+			sessionCookie = c
 		}
 	}
-	if !found {
-		t.Error("expected HttpOnly token cookie to be set")
+	if sessionCookie == nil {
+		t.Fatal("expected token cookie to be set")
+	}
+	if !sessionCookie.HttpOnly {
+		t.Error("expected HttpOnly cookie")
+	}
+	if sessionCookie.Value == token {
+		t.Error("cookie should hold re-minted session token, not the raw upstream token")
+	}
+	claims, err := jwt.Verify(sessionCookie.Value)
+	if err != nil {
+		t.Fatalf("session cookie token should verify: %v", err)
+	}
+	if claims.Email != "sso@test.com" || claims.Tier != string(TierRegistered) {
+		t.Errorf("session claims: email=%s tier=%s", claims.Email, claims.Tier)
+	}
+	if sessionCookie.MaxAge < int((6 * 24 * time.Hour).Seconds()) {
+		t.Errorf("session cookie MaxAge should be ~7 days, got %d", sessionCookie.MaxAge)
 	}
 
 	// 缺 token → 400
@@ -477,5 +531,25 @@ func TestSSOEndpoint(t *testing.T) {
 	_ = json.NewDecoder(rec4.Body).Decode(&resp4)
 	if resp4["redirect"] != "/client/home" {
 		t.Errorf("open redirect not blocked: %v", resp4["redirect"])
+	}
+}
+
+// TestGenerateSessionRoundTrip: atlas session token（string sub）可驗證回原 claims。
+func TestGenerateSessionRoundTrip(t *testing.T) {
+	jwt := NewJWTManager("session-secret", "")
+	claims := &TokenClaims{Sub: "uuid-1234", Email: "m@test.com", Tier: "pro", MembershipExpiresAt: 1777777777}
+	tok, err := jwt.GenerateSession(claims, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSession: %v", err)
+	}
+	got, err := jwt.Verify(tok)
+	if err != nil {
+		t.Fatalf("Verify session token: %v", err)
+	}
+	if got.Sub != "uuid-1234" || got.Email != "m@test.com" || got.Tier != "pro" || got.MembershipExpiresAt != 1777777777 {
+		t.Errorf("session claims mismatch: %+v", got)
+	}
+	if got.Exp < time.Now().Add(6*24*time.Hour).Unix() {
+		t.Errorf("session exp should be ~7 days out, got %d", got.Exp)
 	}
 }

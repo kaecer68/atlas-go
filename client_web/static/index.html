@@ -91,10 +91,11 @@
 <a href="#main-content" class="home-skip-link" aria-label="跳至主要內容">跳至主要內容</a>
 <div id="loadingBar"></div>
 <aside id="sidebar" role="complementary" aria-label="側邊導航">
-  <div class="brand">
-    <h1>Atlas-Go</h1>
-    <p>Atlas 投資人平台</p>
-    <button class="theme-toggle" title="切換主題"><span class="theme-toggle__label">主題</span></button>
+  <div class="brand brand--logo">
+    <a href="/client/home" class="brand__logo-link" aria-label="ATLAS-GO 台股觀測站 首頁">
+      <img src="/assets/img/ATLAS-GO.png" alt="" class="brand__logo" width="985" height="793" decoding="async">
+      <span class="brand__logo-text">ATLAS-GO</span>
+    </a>
   </div>
   <nav role="navigation" aria-label="主要導航">
     <div class="nav-section">
@@ -117,7 +118,6 @@
       <span class="nav-group-label">帳戶</span>
       <a data-page="my-signals" href="/client/my-signals" class="nav-auth-item nav-user hidden">我的追蹤</a>
       <a data-page="premium" href="/client/premium" class="nav-auth-item nav-user hidden">升級 <span id="navTierBadge" class="tier-badge tier-free">免費</span></a>
-      <a href="https://member.goluck.uk/login" class="nav-auth-item nav-guest">登入</a>
       <button type="button" id="navLogoutBtn" class="nav-auth-item nav-user hidden">登出</button>
     </div>
   </nav>
@@ -125,30 +125,19 @@
 </aside>
 <main id="main" role="main">
   <div id="topbar">
-    <!-- Track A：頂部品牌列（logo + brand + 動態 menu，對齊 atlas-index 風格） -->
-    <div class="topbar__nav-row">
-      <a href="/client/home" class="topbar__brand" aria-label="ATLAS-GO 台股觀測站 首頁">
-        <img src="/assets/img/ATLAS-GO.png" alt="ATLAS-GO 台股觀測站" class="topbar__logo" width="907" height="789" decoding="async">
-        <span class="topbar__brand-text">ATLAS-GO</span>
-      </a>
-      <!-- 動態 menu 容器：renderTopBar() 依 isLoggedIn() 渲染 marketing/member 兩套 -->
-      <div id="topbarMenu" class="topbar__menu-host" aria-live="polite"></div>
-    </div>
-    <!-- 既有 dashboard 控制列（page title + refresh pill + role switcher 保留） -->
+    <!-- 單列 top bar：左側（選單 + 頁面標題 + 更新時間）、右側動態 menu
+         （renderTopBar() 依 isLoggedIn() 渲染 Login / 會員中心） -->
     <div class="topbar__controls-row">
       <div class="flex-center-gap">
         <button id="menuToggle" aria-label="開啟選單"><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span><span class="menu-toggle__bars"></span></button>
         <h2 id="pageTitle">總覽</h2>
+        <div class="refresh-pill" id="refreshPill">
+          <span class="dot"></span>
+          <span id="refreshTime">等待更新…</span>
+          <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
+        </div>
       </div>
-      <div class="refresh-pill" id="refreshPill">
-        <span class="dot"></span>
-        <span id="refreshTime">等待更新…</span>
-        <button id="refreshToggle" class="refresh-toggle" title="暫停/恢復自動刷新"><span class="refresh-toggle__label">暫停</span></button>
-      </div>
-      <div class="role-switcher">
-        <a href="/client/" class="role-link active">投資人平台</a>
-        <a href="/admin/" class="role-link">管理者</a>
-      </div>
+      <div id="topbarMenu" class="topbar__menu-host" aria-live="polite"></div>
     </div>
   </div>
   <div id="content" role="main">
