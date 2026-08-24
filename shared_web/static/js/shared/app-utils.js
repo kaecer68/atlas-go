@@ -327,6 +327,14 @@ export function renderMissingState(label, reason) {
     'api-error': { icon: '⚠️', text: 'API 錯誤', className: 'missing-state--error' },
   };
   const state = states[reason] || states['no-data'];
+  // 2026-08-24 UI audit P3：loading 狀態改用 skeleton 線條（避免多卡同時
+  // 「⏳ 載入中」長時間空白；載入完成由各 renderer 覆蓋 innerHTML）。
+  if (reason === 'loading') {
+    return `<div class="missing-state ${state.className}" style="padding:12px 16px;border-radius:6px;background:color-mix(in srgb,var(--bg) 90%,transparent);border:1px dashed var(--border)">
+      ${label ? `<div style="font-weight:600;color:var(--text);margin-bottom:8px">${escapeHtml(label)}</div>` : ''}
+      <div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line" style="width:60%"></div>
+    </div>`;
+  }
   return `<div class="missing-state ${state.className}" style="padding:12px 16px;text-align:center;border-radius:6px;background:color-mix(in srgb,var(--bg) 90%,transparent);border:1px dashed var(--border);color:var(--muted)">
     <div style="font-size:16px;margin-bottom:4px">${state.icon}</div>
     ${label ? `<div style="font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(label)}</div>` : ''}
