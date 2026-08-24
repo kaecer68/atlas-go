@@ -2472,6 +2472,20 @@ func runSimulation(cfg config.Config, root *composition.Root, verbose bool, coll
 	}
 	system.WithCapitalManagement(controller, allocator, workflow)
 
+	// If shutdown has already fired before the simulation goroutine would
+	// start, abort immediately without spawning it. Spawning it anyway would
+	// leak a goroutine that keeps writing session/trace files into
+	// cfg.LedgerDir while nobody listens: production reaps it at process
+	// exit, but callers that pre-close shutdown (tests) then tear down their
+	// temp dirs and race against those background writes (pre-existing CI
+	// flake: "directory not empty: unlinkat"). Shutdown semantics are
+	// unchanged — a fired shutdown yields the "simulation: shutdown" error.
+	select {
+	case <-shutdown:
+		return fmt.Errorf("simulation: shutdown")
+	default:
+	}
+
 	// Run simulation in a goroutine so we can listen for shutdown signals.
 	done := make(chan error, 1)
 	go func() {
