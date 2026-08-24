@@ -563,7 +563,8 @@ async function loadPageData(pageId) {
   else if (pageId === 'config') {
     try {
       var cfg = await silentGetJSON('/api/config');
-      if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg);
+      // 2026-08-24 UI audit P2：把錯誤傳給 renderConfigPage 顯示原因 + 重試。
+      if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg, cfg == null ? new Error('API 未回傳資料（可能未授權）') : null);
     } catch(e) { console.error(e); }
   }
 }
@@ -586,6 +587,11 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 if (typeof window !== "undefined") window.switchPage = switchPage;
+// 2026-08-24 UI audit P2：config 錯誤狀態的重試鈕 — 清除已載入旗標後重新切頁
+if (typeof window !== "undefined") window.loadConfigPage = function () {
+  delete pageLoadStatus['config'];
+  switchPage('config', true);
+};
 if (typeof window !== "undefined") window.toggleSidebar = toggleSidebar;
 if (typeof window !== "undefined") window.retryLoad = retryLoad;
 if (typeof window !== "undefined") window.fmtNTD = fmtNTD;

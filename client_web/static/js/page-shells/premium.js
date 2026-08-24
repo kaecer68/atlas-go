@@ -78,7 +78,30 @@ async function submitWaitlist() {
 }
 
 export async function init() {
-  const { getTier } = await import('../services/auth.js');
+  const { getTier, isLoggedIn } = await import('../services/auth.js');
+  // 2026-08-24 UI audit P2：未登入 → 頁內登入牆（與 my-signals 一致），
+  // 不再整頁跳轉 member login；登入後回此頁即可看到方案。
+  let loggedIn = false;
+  try { loggedIn = await isLoggedIn(); } catch (e) { loggedIn = false; }
+  if (!loggedIn) {
+    const root = document.querySelector('#page-premium');
+    if (root) {
+      const redirect = encodeURIComponent(
+        (window.location.origin || 'https://atlas.goluck.uk') + '/client/premium'
+      );
+      root.innerHTML =
+        '<div class="login-gate-wall" style="max-width:520px;margin:48px auto;text-align:center;padding:40px 28px;background:var(--panel);border:1px solid var(--border);border-radius:16px">' +
+          '<div style="font-size:2.4rem;margin-bottom:12px">🔒</div>' +
+          '<h2 style="margin:0 0 8px;font-family:var(--font-display)">此功能需要登入</h2>' +
+          '<p style="margin:0 0 24px;color:var(--muted)">登入後即可查看 Premium 方案與升級權益</p>' +
+          '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">' +
+            '<a class="btn btn--primary btn-sm" href="https://member.goluck.uk/login?redirect=' + redirect + '">登入</a>' +
+            '<a class="btn btn-sm" href="/client/home">← 先看看公開內容</a>' +
+          '</div>' +
+        '</div>';
+    }
+    return;
+  }
   const tier = await getTier();
   const btn = document.getElementById('upgradeBtn');
   if (tier === 'premium') {

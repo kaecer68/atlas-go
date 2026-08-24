@@ -3,6 +3,8 @@
 @media (max-width: 900px) { .inbox-grid { grid-template-columns: 1fr; } }
 .inbox-col h3 { margin: 0 0 8px; font-size: var(--text-base); color: var(--muted); }
 .inbox-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: var(--text-sm); }
-.inbox-card .title { font-weight: 600; margin-bottom: 4px; }
-.inbox-card .meta { color: var(--muted); margin-bottom: 6px; }
+.inbox-card .title { font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+/* 2026-08-24 UI audit P2：meta 行（基線/候選、長 agent 名）允許在任意字元斷行，
+   避免長單字（auto_prompt_optimization 等）溢出或亂斷。 */
+.inbox-card .meta { color: var(--muted); margin-bottom: 6px; overflow-wrap: anywhere; line-height: 1.5; }
 .inbox-card .actions { display: flex; gap: 6px; flex-wrap: wrap; }

@@ -99,11 +99,13 @@
 }
 
 .pr-card-value.positive {
-  color: var(--color-success);
+  /* 2026-08-24 UI audit P2：台股紅漲綠跌 — 與表格（pnlColorStyle→--up/--down）
+     一致；原先用 --color-success/--color-danger（西式）造成同頁兩套邏輯。 */
+  color: var(--up);
 }
 
 .pr-card-value.negative {
-  color: var(--color-danger);
+  color: var(--down);
 }
 
 .pr-card-hint {

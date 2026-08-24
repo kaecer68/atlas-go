@@ -374,10 +374,12 @@ function volatilityTone(val) {
 
 function marketTrendDirection(changePct) {
   if (changePct === null) return { value: '持平', tone: 'neutral' };
+  // 2026-08-24 UI audit P3：值前綴不加 +/-（數值欄位本身會帶符號），
+  // 避免「+偏多+0.7%」雙加號。
   return changePct > 0
-    ? { value: '+偏多', tone: 'positive' }
+    ? { value: '偏多', tone: 'positive' }
     : changePct < 0
-      ? { value: '-偏空', tone: 'negative' }
+      ? { value: '偏空', tone: 'negative' }
       : { value: '持平', tone: 'neutral' };
 }
 

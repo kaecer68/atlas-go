@@ -24,8 +24,10 @@ export const PUBLIC_PAGES = [
   'my-signals', 'capital-causality',
 ];
 
-/** 明確需要會員資料 / 付費才可進入的頁面 → gate 強制登入。 */
-export const GATED_PAGES = ['premium'];
+/** 明確需要會員資料 / 付費才可進入的頁面 → gate 強制登入。
+    2026-08-24 UI audit P2：premium 改用頁內 gate（與 my-signals 一致），
+    未登入顯示登入牆而非整頁跳轉；此清單保留供未來真正需擋的頁面使用。 */
+export const GATED_PAGES = [];
 
 /**
  * 判定某個 page id 是否需登入。

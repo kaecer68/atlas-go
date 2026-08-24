@@ -102,6 +102,34 @@ export function renderParametersPage(params, categoriesResp, auditLog, metadata)
   contentDiv.innerHTML = html;
   contentDiv.classList.remove('empty', 'loading');
 
+  // 2026-08-24 UI audit P2：長參數表加客戶端搜尋框（依參數名過濾，即時）。
+  const searchBox = document.createElement('div');
+  searchBox.style.cssText = 'margin-bottom:12px;display:flex;gap:8px;align-items:center;max-width:420px';
+  searchBox.innerHTML =
+    '<input type="search" id="paramSearchInput" placeholder="搜尋參數（例如：drawdown / zscore）…" ' +
+    'style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:var(--text-sm)" />';
+  contentDiv.insertBefore(searchBox, contentDiv.firstChild);
+
+  const input = document.getElementById('paramSearchInput');
+  if (input) {
+    input.addEventListener('input', function () {
+      const q = (input.value || '').trim().toLowerCase();
+      const rows = contentDiv.querySelectorAll('.params-table tbody tr');
+      rows.forEach(function (tr) {
+        const keyCell = tr.querySelector('td');
+        const text = keyCell ? keyCell.textContent.toLowerCase() : '';
+        tr.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+      // 隱藏沒有可見列的 panel
+      contentDiv.querySelectorAll('.parameters-grid .panel').forEach(function (panel) {
+        const visible = Array.prototype.some.call(panel.querySelectorAll('tbody tr'), function (tr) {
+          return tr.style.display !== 'none';
+        });
+        panel.style.display = visible ? '' : 'none';
+      });
+    });
+  }
+
   renderAuditLog(auditLog);
 }
 

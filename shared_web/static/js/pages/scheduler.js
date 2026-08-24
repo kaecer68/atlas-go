@@ -83,7 +83,13 @@ export function renderSchedulerPage(tasks, getJSON) {
         '<span class="text-muted text-sm" style="margin-left:10px">來源：task_liveness（跨重啟持久化）＋ /api/scheduler/status（即時）</span>' +
       '</div>' +
       '<div class="rc-summary__gauge">' +
-        '<div class="rc-summary__bar"><div class="rc-summary__fill" style="width:' + (total > 0 ? (ok / total * 100) : 0) + '%;background:' + (err > 0 ? 'var(--color-danger)' : 'var(--color-success)') + '"></div></div>' +
+        // 2026-08-24 UI audit P2：狀態條依比例分段（正常綠/異常紅/逾期黃），
+        // 不再「任一異常就整條變紅」造成 86/97 正常卻全紅的誤讀。
+        '<div class="rc-summary__bar">' +
+          '<div class="rc-summary__fill" style="width:' + (total > 0 ? (ok / total * 100) : 0) + '%;background:var(--color-success)"></div>' +
+          (err > 0 ? '<div class="rc-summary__fill" style="width:' + (err / total * 100) + '%;background:var(--color-danger)"></div>' : '') +
+          (stale > 0 ? '<div class="rc-summary__fill" style="width:' + (stale / total * 100) + '%;background:var(--color-warning)"></div>' : '') +
+        '</div>' +
         '<span class="rc-summary__score">' + total + '</span>' +
         '<span class="text-muted text-sm" style="margin-left:8px">總任務</span>' +
       '</div>' +
