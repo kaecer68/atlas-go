@@ -47,6 +47,17 @@ type FubonClient struct {
 	httpClient      *http.Client
 	healthClient    *http.Client
 	intradayLimiter *rate.Limiter
+	// breaker is the request-failure circuit breaker (P2-17). The health
+	// probe alone is NOT a request-failure breaker: healthy=true while the
+	// proxy is down meant every GetQuote/GetQuotes still hammered the dead
+	// proxy until the next 15s probe. The breaker counts ACTUAL request
+	// failures (transport error, non-2xx, decode error), opens after
+	// failureThreshold consecutive failures, and fails fast. A request or
+	// probe success resets it immediately (成功即復位), so recovery does not
+	// wait for the 5-minute recovery timeout when the proxy comes back.
+	// The hybrid fallback chain is unaffected: an open breaker surfaces a
+	// normal error that HybridProvider's own fubon breaker already handles.
+	breaker *providerBreaker
 
 	healthy       atomic.Bool
 	healthStop    chan struct{}
@@ -128,6 +139,7 @@ func newFubonClient() *FubonClient {
 		httpClient:      httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.FubonAPITimeoutSec.Value) * time.Second),
 		healthClient:    httpclient.NewFactory().NewClient(2 * time.Second),
 		intradayLimiter: rate.NewLimiter(rate.Every(time.Minute/time.Duration(params.Marketdata.FubonIntradayLimit.Value)), params.Marketdata.FubonIntradayLimit.Value),
+		breaker:         newProviderBreaker("fubon", defaultCircuitBreakerConfig()),
 	}
 	c.healthy.Store(true)
 	return c
@@ -141,7 +153,52 @@ func (c *FubonClient) SetHealthClient(client *http.Client) {
 	c.healthClient = client
 }
 
+// breakerShouldTry / breakerRecordSuccess / breakerRecordFailure are
+// nil-safe providerBreaker wrappers (hand-constructed FubonClient values in
+// tests may have a nil breaker). P2-17: when the breaker opens on actual
+// request failures, healthy flips to false so adapters that fast-fail on
+// IsHealthy() stop immediately too; a request/probe success resets it
+// (成功即復位).
+func (c *FubonClient) breakerShouldTry() bool {
+	if c.breaker == nil {
+		return true
+	}
+	return c.breaker.shouldTry()
+}
+
+func (c *FubonClient) breakerRecordSuccess() {
+	if c.breaker == nil {
+		return
+	}
+	c.breaker.recordSuccess()
+	c.healthy.Store(true)
+}
+
+func (c *FubonClient) breakerRecordFailure() {
+	if c.breaker == nil {
+		return
+	}
+	c.breaker.recordFailure()
+	if c.breaker.stateSnapshot().State == ProviderCircuitOpen {
+		c.healthy.Store(false)
+	}
+}
+
+// BreakerInfo exposes the request-failure breaker state for tests and
+// observability.
+func (c *FubonClient) BreakerInfo() ProviderBreakerInfo {
+	if c.breaker == nil {
+		return ProviderBreakerInfo{Name: "fubon", State: ProviderCircuitClosed}
+	}
+	return c.breaker.stateSnapshot()
+}
+
 func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote, error) {
+	// P2-17: fail fast while the request-failure breaker is open — do not
+	// hammer a proxy that the health probe has not caught yet.
+	if !c.breakerShouldTry() {
+		return domain.Quote{}, fmt.Errorf("fubon proxy: %w: circuit breaker open", ErrUpstream)
+	}
 	if err := c.intradayLimiter.Wait(ctx); err != nil {
 		return domain.Quote{}, fmt.Errorf("fubon proxy: rate limit wait: %w", ErrRateLimited)
 	}
@@ -157,6 +214,7 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -169,11 +227,13 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var fubonResp FubonQuoteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fubonResp); err != nil {
+		c.breakerRecordFailure()
 		return domain.Quote{}, fmt.Errorf("fubon proxy: decode response: %w", err)
 	}
 
@@ -190,6 +250,7 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 		Source:     "fubon",
 	}
 
+	c.breakerRecordSuccess()
 	return quote, nil
 }
 
@@ -204,6 +265,11 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 			return nil, err
 		}
 		return []domain.Quote{quote}, nil
+	}
+
+	// P2-17: fail fast while the request-failure breaker is open.
+	if !c.breakerShouldTry() {
+		return nil, fmt.Errorf("fubon proxy: %w: circuit breaker open", ErrUpstream)
 	}
 
 	if err := c.intradayLimiter.Wait(ctx); err != nil {
@@ -228,6 +294,7 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -239,11 +306,13 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var fubonResps []FubonQuoteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fubonResps); err != nil {
+		c.breakerRecordFailure()
 		return nil, fmt.Errorf("fubon proxy: decode response: %w", err)
 	}
 
@@ -263,10 +332,15 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 		})
 	}
 
+	c.breakerRecordSuccess()
 	return quotes, nil
 }
 
 func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
+	// P2-17: fail fast while the request-failure breaker is open.
+	if !c.breakerShouldTry() {
+		return false, fmt.Errorf("fubon proxy: %w: circuit breaker open", ErrUpstream)
+	}
 	endpoint := fmt.Sprintf("%s/market-status", c.proxyURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -278,6 +352,7 @@ func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return false, fmt.Errorf("fubon proxy: http request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -289,14 +364,17 @@ func (c *FubonClient) CheckMarketStatus(ctx context.Context) (bool, error) {
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
+		c.breakerRecordFailure()
 		return false, fmt.Errorf("fubon proxy: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
 	var status FubonMarketStatus
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		c.breakerRecordFailure()
 		return false, fmt.Errorf("fubon proxy: decode response: %w", err)
 	}
 
+	c.breakerRecordSuccess()
 	return status.IsOpen, nil
 }
 
@@ -305,19 +383,26 @@ func (c *FubonClient) HealthCheck(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("fubon proxy: create health request: %w", err)
+		// P2-17: probe failures feed the request-failure breaker (a dead
+		// proxy opens the breaker even when no quote request is in flight).
+		c.breakerRecordFailure()
+		return fmt.Errorf("fubon proxy: health check failed: %w", err)
 	}
 
 	resp, err := c.healthClient.Do(req)
 	if err != nil {
+		c.breakerRecordFailure()
 		return fmt.Errorf("fubon proxy: health check failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
+		c.breakerRecordFailure()
 		return fmt.Errorf("fubon proxy: health check status %d", resp.StatusCode)
 	}
 
+	// P2-17: probe success = proxy alive — reset the breaker (成功即復位).
+	c.breakerRecordSuccess()
 	return nil
 }
 
@@ -351,6 +436,8 @@ func (c *FubonClient) runHealthProbe(interval time.Duration) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		if err := c.HealthCheck(ctx); err != nil {
+			// Breaker recording happens inside HealthCheck (P2-17); the
+			// probe's own counter below only drives the backoff schedule.
 			n := failures.Add(1)
 			if n >= healthProbeConsecutiveFailures {
 				c.healthy.Store(false)

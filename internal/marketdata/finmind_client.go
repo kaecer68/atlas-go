@@ -297,6 +297,17 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		return nil, fmt.Errorf("finmind: API error: %s", finmindResp.Msg)
 	}
 
+	// P2-15: response schema fingerprint — warn the moment the upstream
+	// renames/drops a field this client depends on, instead of surfacing
+	// later as an obscure type-assertion error in the dataset callers.
+	// Envelope shape + first data row against the dataset's required fields.
+	warnFingerprint(finmindEnvelopeFingerprint, map[string]any{
+		"msg":    finmindResp.Msg,
+		"status": finmindResp.Status,
+		"data":   finmindResp.Data,
+	})
+	warnFinMindDatasetFingerprint(dataset, finmindResp.Data)
+
 	c.breakerRecordSuccess()
 	return finmindResp.Data, nil
 }

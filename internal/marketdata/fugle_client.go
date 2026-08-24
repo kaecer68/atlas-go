@@ -29,13 +29,23 @@ const (
 )
 
 // fugleDailyLimit is the daily quota ceiling enforced locally before any
-// request reaches the Fugle upstream (manifest F1/A1). The theoretical
-// free-tier theoretical ceiling (60/min × 1440 = 86,400) is useless as a gate — the
-// upstream rejects long before it. 2000/day is a conservative bound:
-// normal usage (warmup ~32 candles + on-demand technical + quotes) is
-// well under 500/day, so 2000 only trips during runaway bursts, giving
+// request reaches the Fugle upstream (manifest F1/A1). P2-21 researched the
+// official docs (developer.fugle.tw/docs/pricing/, 2026-08-24):
+//
+//	基本用戶 (free)   : intraday 60/min, historical 60/min, snapshot 不支援
+//	開發者 (NT$1499/m): intraday 600/min, historical 60/min
+//	進階用戶 (NT$2999/m): intraday 2000/min, historical 60/min
+//
+// The docs publish per-MINUTE caps only — there is NO official daily cap for
+// the marketdata API (the "2000/day" figure in older comments matched the
+// TRADING API's 委託下單 daily limit, not the行情 API). So there is no official
+// daily number to align with; 2000/day stays as a deliberately conservative
+// LOCAL runaway-burst gate (≈33 min of sustained free-tier max rate):
+// normal usage (warmup ~32 candles + on-demand technical + quotes) is well
+// under 500/day, so 2000 only trips during runaway bursts, giving
 // channel-health a warn signal instead of an invisible 401 lockout.
-// TODO(kaecler): confirm the actual free-tier daily cap and tune.
+// Actual free-tier tolerance should be re-validated by live measurement
+// before tuning the constant.
 const fugleDailyLimit = 2000
 
 // ErrFugleQuotaExhausted is returned by FugleClient.doGet when the daily

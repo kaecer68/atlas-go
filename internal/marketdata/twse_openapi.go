@@ -234,6 +234,12 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		return nil, fmt.Errorf("twse: STOCK_DAY_ALL stat=%q (expected OK)", twseResp.Stat)
 	}
 
+	// P2-15: response schema fingerprint — warn on partial column drift
+	// (short fields header / short rows) that the fixed-index parser would
+	// otherwise skip silently. Total breakage is caught by the hard gates
+	// below (Stat != OK, all-rows-parse-failed).
+	warnTWSEStockDayAllFingerprint(&twseResp)
+
 	twseQuotes := make([]TWSEQuote, 0, len(twseResp.Data))
 	for _, row := range twseResp.Data {
 		if len(row) < 9 {
