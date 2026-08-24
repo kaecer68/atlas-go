@@ -248,6 +248,38 @@ body.client-shell #topbar {
   .topbar__login-btn, .topbar__member-link { padding: 0.4rem 0.85rem; font-size: 0.8125rem; gap: 0.4rem; }
 }
 
+/* 2026-08-24 UI audit P1-6：行動版單列 topbar 精簡 —
+   標題不折行、時間 pill 收斂、暫停/繼續標籤隱藏。 */
+@media (max-width: 900px) {
+  body.client-shell #topbar { padding: 0.5rem 0.75rem; }
+  body.client-shell #topbar h2 {
+    font-size: var(--text-base);
+    line-height: 1.25;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  body.client-shell .topbar__controls-row { gap: 0.5rem; }
+  body.client-shell .refresh-pill { max-width: 42vw; }
+  body.client-shell .refresh-pill #refreshTime {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.client-shell .refresh-toggle__label { display: none; }
+}
+
+/* 2026-08-24 UI audit P1-7：admin 行動版 header 精簡（標題不折行、role
+   switcher 收斂）；client 也套用同規則避免折行。 */
+@media (max-width: 900px) {
+  #topbar h2 {
+    font-size: var(--text-base);
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  .role-switcher { font-size: var(--text-xs); }
+  .role-switcher .role-link { padding: 4px 10px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .topbar__login-btn { transition: background-color 0.2s, color 0.2s; }
   .topbar__login-btn:hover { transform: none; }

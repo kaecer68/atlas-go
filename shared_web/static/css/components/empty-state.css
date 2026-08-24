@@ -24,3 +24,25 @@
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
 }
+
+/* 2026-08-24 UI audit P1-5：portfolio 空狀態 CTA 原本無樣式（預設藍連結） */
+.action-empty-state-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  min-height: 44px;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border-radius: var(--editorial-radius-sm);
+  background: var(--editorial-accent);
+  color: #fff;
+  text-decoration: none;
+  border: 1px solid var(--editorial-accent);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.action-empty-state-button:hover {
+  background: color-mix(in srgb, var(--editorial-accent) 90%, #000);
+}

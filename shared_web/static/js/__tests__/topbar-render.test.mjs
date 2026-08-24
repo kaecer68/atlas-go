@@ -88,7 +88,7 @@ test('getRedirectUrl: 有 window 時用目前 location（origin + path + search�
   }
 });
 
-test('renderTopBar: 未登入 → marketing menu + 金色 Login 按鈕', async () => {
+test('renderTopBar: 未登入 → 只有金色 Login 按鈕（無行銷 menu）', async () => {
   makeFakeDom();
   stub401Fetch();
   invalidateAuth();
@@ -96,11 +96,12 @@ test('renderTopBar: 未登入 → marketing menu + 金色 Login 按鈕', async (
     await renderTopBar();
     const html = globalThis.document.getElementById('topbarMenu').innerHTML;
     assert.ok(html.includes('topbar__menu--marketing'), '應為 marketing 模式');
-    for (const label of ['Why Atlas', '會員方案', '社群學習', '問答提示']) {
-      assert.ok(html.includes(label), '應含 menu: ' + label);
-    }
     assert.ok(html.includes('topbar__login-btn'), '應含 Login 按鈕');
     assert.ok(html.includes('href="' + getRedirectUrl() + '"'), 'Login 指向 member login?redirect');
+    // 2026-08-24 UI audit P0-1：app 內不再嵌入行銷 menu（避免雙導航/重複登入入口）
+    for (const label of ['Why Atlas', '會員方案', '社群學習', '問答提示']) {
+      assert.ok(!html.includes(label), '不應含行銷 menu: ' + label);
+    }
     assert.ok(!html.includes('topbar__menu--member'), '不應出現 member 模式');
   } finally {
     restoreFetch();

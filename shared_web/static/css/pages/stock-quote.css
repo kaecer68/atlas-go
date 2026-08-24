@@ -19,21 +19,30 @@
 }
 
 .sq-search-row {
+  /* 2026-08-24 UI audit P1-10：輸入框與查詢鈕同行（原為直排，按鈕被擠到
+     輸入框下方），熱門標籤/說明文字維持獨立行，對齊一致。 */
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--spacing-3);
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .sq-search-input {
   width: 100%;
-  max-width: 480px;
-  padding: 5px 9px;
+  flex: 0 1 480px;
+  min-width: 0;
+  padding: 8px 12px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: var(--text-sm);
+}
+
+.sq-search-btn {
+  flex-shrink: 0;
 }
 
 .sq-search-input:focus {
