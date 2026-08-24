@@ -17,8 +17,10 @@ import (
 //     the following session — the classic MSCI effect day for TWSE stocks.
 //
 // Effective dates below are the last TWSE business day of Feb/May/Aug/Nov
-// (weekends and TWSE holidays excluded; 2026 春節 2/17-2/23 verified against
-// the TWSE holiday calendar). These are the dates that matter for
+// (weekends and TWSE holidays excluded; verified against the TWSE holiday
+// calendar 2026-08-24 by k3 audit: 2023-02-24/2025-02-27/2025-05-29/2026-02-26
+// are the pre-holiday trading days for 228/端午 closures). These are the
+// dates that matter for
 // event-driven mispricing backtests (charter C4/C16).
 //
 // Source: MSCI index calendar / public announcements (rich01, stockfeel,
@@ -47,7 +49,7 @@ type msciReviewEntry struct {
 
 var msciReviewEntries = []msciReviewEntry{
 	// 2023
-	{date: "2023-02-28"},
+	{date: "2023-02-24"},
 	{date: "2023-05-31"},
 	{date: "2023-08-31"},
 	{date: "2023-11-30"},
@@ -57,12 +59,12 @@ var msciReviewEntries = []msciReviewEntry{
 	{date: "2024-08-30"},
 	{date: "2024-11-29"},
 	// 2025
-	{date: "2025-02-28"},
-	{date: "2025-05-30"},
+	{date: "2025-02-27"},
+	{date: "2025-05-29"},
 	{date: "2025-08-29"},
 	{date: "2025-11-28"},
 	// 2026
-	{date: "2026-02-27"},
+	{date: "2026-02-26"},
 	{date: "2026-05-29"},
 	{date: "2026-08-31"},
 	{date: "2026-11-30"}, // scheduled (derived from trading calendar)

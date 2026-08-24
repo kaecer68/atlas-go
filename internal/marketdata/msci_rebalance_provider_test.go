@@ -24,7 +24,7 @@ func TestMSCIRebalanceCalendarProvider_FetchEventsByYear(t *testing.T) {
 	if len(events) != 4 {
 		t.Fatalf("expected 4 MSCI events for 2023, got %d", len(events))
 	}
-	wantDates := []string{"2023-02-28", "2023-05-31", "2023-08-31", "2023-11-30"}
+	wantDates := []string{"2023-02-24", "2023-05-31", "2023-08-31", "2023-11-30"}
 	for i, want := range wantDates {
 		if events[i].Date != want {
 			t.Errorf("2023 event[%d] date = %s, want %s", i, events[i].Date, want)
