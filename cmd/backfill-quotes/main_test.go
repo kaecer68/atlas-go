@@ -40,22 +40,16 @@ func TestFilterTradingDays(t *testing.T) {
 
 func TestFilterTradingDays_TaiwanHoliday(t *testing.T) {
 	input := []domain.DailyBar{
-		bar("2026-02-16", 200), // Mon (spring festival eve, listed in table only for 02-17)
-		bar("2026-02-17", 201), // Tue — 春節初一, Taiwan holiday, skip
-		bar("2026-02-18", 202), // Wed
+		bar("2026-02-16", 200), // Mon — 除夕 (spring closure 2/12-2/20), skip
+		bar("2026-02-17", 201), // Tue — 春節初一, skip
+		bar("2026-02-18", 202), // Wed — 初二, skip
 	}
 	kept, skipped := filterTradingDays(input)
-	if skipped != 1 {
-		t.Errorf("expected 1 skipped holiday row, got %d", skipped)
+	if skipped != 3 {
+		t.Errorf("expected 3 skipped holiday rows (spring closure 2/16-18), got %d", skipped)
 	}
-	if len(kept) != 2 {
-		t.Fatalf("expected 2 kept bars, got %d", len(kept))
-	}
-	if got := kept[0].Date.Format("2006-01-02"); got != "2026-02-16" {
-		t.Errorf("kept[0] date = %s, want 2026-02-16", got)
-	}
-	if got := kept[1].Date.Format("2006-01-02"); got != "2026-02-18" {
-		t.Errorf("kept[1] date = %s, want 2026-02-18", got)
+	if len(kept) != 0 {
+		t.Fatalf("expected 0 kept bars, got %d", len(kept))
 	}
 }
 
