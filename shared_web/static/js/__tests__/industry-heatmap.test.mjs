@@ -36,17 +36,27 @@ test('renderSectorHeatmap: null payload renders empty state', () => {
   );
 });
 
-test('renderSectorHeatmap: populated entries render sector names + confidence', () => {
+test('renderSectorHeatmap: populated entries render sector names + localized confidence/reasons', () => {
   const html = renderSectorHeatmap({
     sector_heatmap: [
-      { sector: '半導體', confidence: 'high', confidence_score: 0.9, reasons: ['產業處於有利階段', '週期: 擴張'] },
-      { sector: '金融', confidence: 'low', confidence_score: 0.2, reasons: [] },
+      { sector: '半導體', confidence: 'high', confidence_score: 0.9, reasons: ['產業處於有利階段', '週期: recession', '季節性: 科技旺季'] },
+      { sector: '金融', confidence: 'medium', confidence_score: 0.5, reasons: ['avg across industries'] },
+      { sector: '散戶', confidence: 'low', confidence_score: 0.2, reasons: [] },
     ],
   });
   assert.ok(html.includes('半導體'), `expected 半導體 in rendered HTML, got: ${html}`);
   assert.ok(html.includes('金融'), `expected 金融 in rendered HTML, got: ${html}`);
-  assert.ok(html.includes('high'), `expected high confidence badge, got: ${html}`);
+  // 2026-08-24 UI audit P2：confidence 中文化（high→高 / medium→中 / low→低）
+  assert.ok(html.includes('>高<'), `expected 高 confidence badge, got: ${html}`);
+  assert.ok(html.includes('>中<'), `expected 中 confidence badge, got: ${html}`);
+  assert.ok(html.includes('>低<'), `expected 低 confidence badge, got: ${html}`);
+  // reasons 中文化（recession→衰退、avg across industries→跨產業平均）
+  assert.ok(html.includes('週期：衰退') || html.includes('週期： 衰退'), `expected localized reason, got: ${html}`);
+  assert.ok(html.includes('跨產業平均'), `expected avg across industries localized, got: ${html}`);
   assert.ok(html.includes('產業處於有利階段'), `expected reason text, got: ${html}`);
+  // 不應殘留 raw enum
+  assert.ok(!html.includes('recession'), `raw enum leaked: ${html}`);
+  assert.ok(!html.includes('avg across industries'), `raw enum leaked: ${html}`);
   // Empty state must not appear when data is present.
   assert.ok(!html.includes('尚無產業數據'), `populated heatmap must not show empty state, got: ${html}`);
 });
