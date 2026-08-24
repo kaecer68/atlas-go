@@ -88,6 +88,8 @@
   background: var(--border);
   border-radius: 4px;
   overflow: hidden;
+  /* 2026-08-24 UI audit P2：支援多段 fill 並排（正常/異常/逾期） */
+  display: flex;
 }
 .rc-summary__fill {
   height: 100%;

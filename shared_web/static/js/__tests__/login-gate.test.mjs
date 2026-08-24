@@ -22,24 +22,26 @@ test('login-gate: 公開頁不需登入（404 + 全部內容頁）', () => {
   }
 });
 
-test('login-gate: 只有明確 gated 頁（premium）需登入', () => {
-  assert.deepEqual(GATED_PAGES, ['premium'], 'GATED_PAGES 應只有需要會員資料/付費的頁');
-  assert.equal(pageRequiresLogin('premium'), true, '升級 Premium 應需登入');
+test('login-gate: GATED_PAGES 現為空（premium 改頁內 gate）', () => {
+  // 2026-08-24 UI audit P2：premium 改頁內 gate（與 my-signals 一致），
+  // route-level 不再整頁跳轉登入。
+  assert.deepEqual(GATED_PAGES, [], 'GATED_PAGES 應為空');
+  assert.equal(pageRequiresLogin('premium'), false, 'premium 走頁內 gate，不整頁跳轉');
   // 組合持倉已遷移 admin（2026-08-23），不再需要 client 登入 gate。
   assert.equal(pageRequiresLogin('portfolio'), false, '組合持倉已遷移 admin，client 不需登入');
 });
 
-test('login-gate: gated 頁 + 未登入 → 呼叫導向 member 登入的 redirectFn 並回傳 true', async () => {
+test('login-gate: 未登入 → runLoginGate 不擋非 gated 頁（premium 走頁內 gate）', async () => {
   let redirected = 0;
   const gated = await runLoginGate('premium', async () => false, () => { redirected++; });
-  assert.equal(gated, true, 'gate 應擋下');
-  assert.equal(redirected, 1, '應呼叫一次 redirectFn（導向 go-member 登入）');
+  assert.equal(gated, false, 'premium 已非 gated → 不擋下');
+  assert.equal(redirected, 0, '不應呼叫 redirectFn');
 });
 
-test('login-gate: gated 頁 + 已登入 → 不導向並回傳 false', async () => {
+test('login-gate: 已登入 → runLoginGate 不擋（保留給未來 gated 頁）', async () => {
   let redirected = 0;
   const gated = await runLoginGate('premium', async () => true, () => { redirected++; });
-  assert.equal(gated, false, '已登入不應擋下');
+  assert.equal(gated, false, '不應擋下');
   assert.equal(redirected, 0, '不應導向 member');
 });
 

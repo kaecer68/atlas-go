@@ -25,7 +25,9 @@ function kpiCard(label, value, fmt, color, borderColor, symbol, helpKey, failed)
   const c = color || 'var(--text)';
   const bc = borderColor || 'transparent';
   const borderStyle = bc !== 'transparent' ? `border-left:3px solid ${bc};` : '';
-  const symbolHtml = symbol ? `<span style="font-size:var(--text-sm);color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
+  // 2026-08-24 UI audit P3：symbol 與 label 相同（如 NVDA/NVDA）時不重複顯示
+  const symbolHtml = symbol && String(symbol).toLowerCase() !== String(label).toLowerCase()
+    ? `<span style="font-size:var(--text-sm);color:var(--muted);margin-left:6px">${escapeHtml(symbol)}</span>` : '';
   const clickable = helpKey ? ` clickable" onclick="openKpiHelp('${helpKey}')` : '';
   let display;
   if (failed) {
