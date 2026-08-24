@@ -92,7 +92,7 @@ test('GUEST_MODE=false: 登入後 isLoggedIn() true、getTier() 回真實 tier',
   assert.equal(tier, 'registered', 'getTier 應回傳後端 tier');
 });
 
-test('GUEST_MODE=false: renderNavState 未登入 → 顯示 nav-guest、隱藏 nav-user、帳戶 section 不隱藏', async () => {
+test('GUEST_MODE=false: renderNavState 未登入 → 隱藏整個帳戶 section（登入統一 top bar）', async () => {
   // setup nav elements
   const accountSection = makeEl('navAccountSection');
   const tierBadge = makeEl('navTierBadge');
@@ -105,8 +105,9 @@ test('GUEST_MODE=false: renderNavState 未登入 → 顯示 nav-guest、隱藏 n
   stubFetch(unauthorized());
   await auth.renderNavState();
 
-  assert.equal(accountSection.classSet.has('hidden'), false, '非 guest 模式不應隱藏整個帳戶 section');
-  assert.equal(guest1.classSet.has('hidden'), false, '未登入時 nav-guest（登入/註冊）應顯示');
+  // 2026-08-24：側欄「登入」已移除（top bar 統一 Login 入口）→ 未登入時
+  // 整段帳戶 section 隱藏，避免出現空的「帳戶」nav-group。
+  assert.equal(accountSection.classSet.has('hidden'), true, '未登入時帳戶 section 應隱藏');
   assert.equal(user1.classSet.has('hidden'), true, '未登入時 nav-user 應隱藏');
   assert.equal(tierBadge.textContent, '', '未登入 tier 為 null，badge 不應被 renderNavState 改寫');
 });

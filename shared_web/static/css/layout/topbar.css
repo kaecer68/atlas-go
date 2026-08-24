@@ -22,3 +22,36 @@
 }
 #topbar h2 { margin: 0; font-size: var(--text-xl); font-family: var(--font-display); font-weight: var(--font-semibold); letter-spacing: -0.01em; }
 #topbar .meta { font-size: var(--text-sm); color: var(--muted); }
+
+/* 2026-08-24 UI audit P1-5：admin「管理者 | 投資人」role switcher 原本無樣式
+   （瀏覽器預設藍連結、貼頂緣）→ 深色 pill toggle，與 topbar 整合。 */
+.role-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.role-switcher .role-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.role-switcher .role-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.role-switcher .role-link.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: var(--font-medium);
+}
+.role-switcher .role-divider { display: none; }

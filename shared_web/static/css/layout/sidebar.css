@@ -18,6 +18,41 @@ body { display: flex; margin: 0; min-height: 100vh; }
 }
 #sidebar .brand h1 { margin: 0; font-size: var(--text-3xl); font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
 #sidebar .brand p { margin: 4px 0 0; font-size: var(--text-xs); color: var(--muted); letter-spacing: 0.5px; }
+
+/* ── Sidebar 品牌（2026-08-24）：logo + ATLAS-GO，取代舊 Atlas-Go 標題 ──
+   對齊 atlas-index 的 gold-gradient 品牌字；logo 圖高與文字 font-size 一致，
+   避免一頁同時出現兩組 Atlas-Go 品牌。 */
+#sidebar .brand--logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0.75rem 0.875rem;
+}
+.brand__logo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.brand__logo-link:hover { opacity: 0.85; }
+.brand__logo {
+  display: block;
+  height: 1.25rem;   /* 與 .brand__logo-text 的 font-size 一致（協調感） */
+  width: auto;
+  flex-shrink: 0;
+}
+.brand__logo-text {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background-image: linear-gradient(100deg, oklch(85% 0.12 80) 0%, oklch(76.86% 0.1647 70.1) 55%, oklch(68% 0.15 62) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 .theme-toggle { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: var(--text-sm); margin-top: 6px; }
 .theme-toggle__label { font-size: var(--text-xs); letter-spacing: 0.5px; }
 .nav-divider { height: 1px; background: var(--border); margin: 10px 14px; opacity: 0.5; }

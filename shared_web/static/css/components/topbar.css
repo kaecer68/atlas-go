@@ -1,73 +1,31 @@
-/* Atlas Dashboard - Topbar (Track A: voluntary login UX, 2026-08-21)
+/* Atlas Dashboard - Topbar (Track A: voluntary login UX, 2026-08-24)
  *
- * 頂部品牌列：logo + brand + 動態 menu（marketing / member 兩套），
- * 對齊 atlas-index 的 topbar 設計語言（金色 accent、玻璃面板、max-w-6xl）。
+ * 單列 top bar：左側（menu toggle + 頁面標題 + refresh pill 時間）、
+ * 右側動態 menu（marketing / member 兩套，renderTopBar() 依登入狀態渲染）。
+ * 品牌 logo + ATLAS-GO 已遷移至左側選單頂端（見 layout/sidebar.css），
+ * 此處不再重複。
  *
  * 註：client_web 的 CSS 由 shared_web/static/css/main.css 統一 bundle
  * （esbuild @import 解析），故此檔放在 shared_web/static/css/components/，
  * 與既有 my-signals.css / stock-quote.css 等 client 專用樣式同層。
- *
- * 布局：
- *   #topbar（既有 sticky 容器，改為縱向兩列）
- *     ├─ .topbar__nav-row      品牌列（max-w-6xl mx-auto）
- *     └─ .topbar__controls-row 既有 dashboard 控制列（page title / refresh / role）
  */
 
 /* ── 金色 token（對齊 atlas-index input.css 的 --gold 家族）── */
-.topbar__nav-row {
+body.client-shell #topbar {
   --topbar-gold: oklch(76.86% 0.1647 70.1);
   --topbar-gold-soft: oklch(85% 0.12 80);
   --topbar-gold-dim: oklch(68% 0.15 62);
 }
 
-/* #topbar 由單列 flex 改為縱向兩列（既有 border-bottom / sticky / 玻璃背景保留）。
+/* 單列 top bar（既有 border-bottom / sticky / 玻璃背景保留）。
    僅作用於 client shell（admin_web 共用同一份 main.css 且是單列 topbar，
    用 body.client-shell 作用域避免打亂 admin 布局）。 */
 body.client-shell #topbar {
-  padding: 0;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0;
-}
-
-/* ── 品牌列（row 1）── */
-.topbar__nav-row {
-  width: 100%;
-  max-width: 72rem;            /* max-w-6xl = 1152px，對齊 atlas-index 內容頁寬 */
-  margin: 0 auto;
-  display: flex;
+  padding: 0.625rem 1.5rem;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.75rem 1.5rem;     /* py-3 px-6 */
-}
-
-.topbar__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-.topbar__brand:hover { opacity: 0.85; }
-
-.topbar__logo {
-  display: block;
-  height: 2.25rem;   /* h-9，與 atlas-index topbar-logo 一致 */
-  width: auto;
-}
-
-.topbar__brand-text {
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  background-image: linear-gradient(100deg, var(--topbar-gold-soft) 0%, var(--topbar-gold) 55%, var(--topbar-gold-dim) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 /* ── 動態 menu 容器 ── */
@@ -138,59 +96,42 @@ body.client-shell #topbar {
 }
 .topbar__login-icon { flex-shrink: 0; }
 
-/* ── 已登入：user chip（email + tier badge + 登出）── */
-.topbar__user {
+/* ── 已登入：最右上角【會員中心】入口（單一連結）── */
+.topbar__member-link {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin-left: 0.25rem;
-}
-
-.topbar__user-email {
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.topbar__tier-badge {
-  padding: 0.125rem 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--topbar-gold) 65%, transparent);
+  color: var(--topbar-gold);
+  background-color: color-mix(in oklab, var(--topbar-gold) 10%, transparent);
   border-radius: 999px;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  border: 1px solid;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
-.topbar__tier-badge--free { color: var(--muted); border-color: var(--border); background: rgba(255,255,255,0.03); }
-.topbar__tier-badge--registered { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.45); background: rgba(var(--accent-rgb), 0.08); }
-.topbar__tier-badge--premium { color: var(--topbar-gold); border-color: color-mix(in oklab, var(--topbar-gold) 55%, transparent); background: color-mix(in oklab, var(--topbar-gold) 12%, transparent); }
+.topbar__member-link:hover {
+  background-color: var(--topbar-gold);
+  color: oklch(19% 0.02 70);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px -10px color-mix(in oklab, var(--topbar-gold) 75%, transparent);
+}
+.topbar__member-link:focus-visible {
+  outline: 2px solid var(--topbar-gold);
+  outline-offset: 2px;
+}
+.topbar__member-icon { flex-shrink: 0; }
 
-.topbar__logout-btn {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-}
-.topbar__logout-btn:hover {
-  color: var(--color-danger);
-  border-color: color-mix(in oklab, var(--color-danger) 50%, transparent);
-  background: rgba(var(--color-danger-rgb), 0.06);
-}
-
-/* ── 既有 dashboard 控制列（row 2）── */
+/* ── 控制列＝唯一 top bar 列 ── */
 .topbar__controls-row {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.625rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* ── 登入提醒 modal（Track A）── */
@@ -298,17 +239,45 @@ body.client-shell #topbar {
 }
 .login-reminder-btn--ghost:hover { color: var(--text); border-color: var(--muted); }
 
-/* ── Responsive：小螢幕收斂 menu list / user chip，保留 brand + Login ── */
+/* ── Responsive：小螢幕收斂 marketing menu list，保留 Login / 會員中心 ── */
 @media (max-width: 860px) {
   .topbar__menu-list { display: none; }
-  .topbar__user-email { display: none; }
-  .topbar__user { margin-left: 0; }
 }
 
 @media (max-width: 640px) {
-  .topbar__logo { height: 2rem; }
-  .topbar__login-btn { padding: 0.4rem 0.85rem; font-size: 0.8125rem; gap: 0.4rem; }
-  .topbar__brand-text { display: none; }
+  .topbar__login-btn, .topbar__member-link { padding: 0.4rem 0.85rem; font-size: 0.8125rem; gap: 0.4rem; }
+}
+
+/* 2026-08-24 UI audit P1-6：行動版單列 topbar 精簡 —
+   標題不折行、時間 pill 收斂、暫停/繼續標籤隱藏。 */
+@media (max-width: 900px) {
+  body.client-shell #topbar { padding: 0.5rem 0.75rem; }
+  body.client-shell #topbar h2 {
+    font-size: var(--text-base);
+    line-height: 1.25;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  body.client-shell .topbar__controls-row { gap: 0.5rem; }
+  body.client-shell .refresh-pill { max-width: 42vw; }
+  body.client-shell .refresh-pill #refreshTime {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.client-shell .refresh-toggle__label { display: none; }
+}
+
+/* 2026-08-24 UI audit P1-7：admin 行動版 header 精簡（標題不折行、role
+   switcher 收斂）；client 也套用同規則避免折行。 */
+@media (max-width: 900px) {
+  #topbar h2 {
+    font-size: var(--text-base);
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  .role-switcher { font-size: var(--text-xs); }
+  .role-switcher .role-link { padding: 4px 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

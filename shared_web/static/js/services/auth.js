@@ -237,6 +237,10 @@ export async function renderNavState() {
   const userItems = document.querySelectorAll('.nav-user');
   const tierBadge = document.getElementById('navTierBadge');
   const tierLabel = document.getElementById('navTierLabel');
+  // 2026-08-24：左側選單的「登入」已移除（top bar 統一 Login 入口）→
+  // 未登入時整段「帳戶」區塊隱藏，避免出現空 nav-group。
+  const accountSection = document.getElementById('navAccountSection');
+  if (accountSection) accountSection.classList.toggle('hidden', !loggedIn);
 
   guestItems.forEach(function(el) { el.classList.toggle('hidden', loggedIn); });
   userItems.forEach(function(el) { el.classList.toggle('hidden', !loggedIn); });
@@ -269,26 +273,13 @@ function tierLabelText(tier) {
 // ─── Top bar（Track A：自願登入 + 雙模式 menu）───
 
 /**
- * 行銷（未登入）模式 menu：對齊 atlas-index 的 4 個主導覽。
- * 連結指向 atlas-index landing 的對應錨點（production 同源 root）或
- * go-member 註冊入口。
- */
-const MARKETING_MENU = [
-  { label: 'Why Atlas', href: '/#why-atlas' },
-  { label: '會員方案', href: '/#pricing-detail' },
-  { label: '社群學習', href: MEMBER_BASE_URL + '/login' },
-  { label: '問答提示', href: '/#faq' },
-];
-
-/**
- * 會員（已登入）模式 menu：對齊 go-member dashboard 的 4 個分頁。
- * go-member dashboard 用 location.hash 切 tab（#membership / #vip / #bot）。
+ * 會員（已登入）模式：top bar 只保留最右上角的【會員中心】入口
+ * （member.goluck.uk/dashboard）。會員中心的個人化內容（控制台 / 會員權益 /
+ * VIP Room / 私人 AI 機器人）統一在 go-member dashboard 內以分頁呈現，
+ * 不再重複散落在 atlas top bar。
  */
 const MEMBER_MENU = [
-  { label: '控制台', href: MEMBER_BASE_URL + '/dashboard' },
-  { label: '會員權益', href: MEMBER_BASE_URL + '/dashboard#membership' },
-  { label: '升級 VIP Room', href: MEMBER_BASE_URL + '/dashboard#vip' },
-  { label: '私人 AI 機器人', href: MEMBER_BASE_URL + '/dashboard#bot' },
+  { label: '會員中心', href: MEMBER_BASE_URL + '/dashboard' },
 ];
 
 /**
@@ -321,48 +312,31 @@ export function getRedirectUrl(currentUrl) {
  */
 export async function renderTopBar() {
   const loggedIn = await isLoggedIn();
-  const tier = await getTier();
   const container = typeof document !== 'undefined' ? document.getElementById('topbarMenu') : null;
   if (!container) return;
 
   if (loggedIn) {
-    const claims = getClaims() || {};
-    const email = claims.email || '會員';
-    const tierText = tierLabelText(tier);
-    const tierCls = (tier === 'premium' || tier === 'pro' || tier === 'platinum') ? 'premium'
-      : (tier === 'registered' || tier === 'basic') ? 'registered' : 'free';
+    // 2026-08-24：已登入後 top bar 只保留【會員中心】入口
+    // （member.goluck.uk/dashboard）。登出改由左側選單「帳戶」區塊的登出鈕。
     container.innerHTML =
       '<div class="topbar__menu topbar__menu--member">' +
-        '<nav aria-label="會員導覽"><ul class="topbar__menu-list">' +
-        MEMBER_MENU.map(function (item) {
-          return '<li><a class="topbar__menu-link" href="' + item.href + '">' + item.label + '</a></li>';
-        }).join('') +
-        '</ul></nav>' +
-        '<div class="topbar__user">' +
-          '<span class="topbar__user-email" title="' + escapeEmail(email) + '">' + escapeEmail(email) + '</span>' +
-          '<span class="topbar__tier-badge topbar__tier-badge--' + tierCls + '">' + tierText + '</span>' +
-          '<button type="button" class="topbar__logout-btn" id="topbarLogoutBtn">登出</button>' +
-        '</div>' +
+        '<a class="topbar__member-link" href="' + MEMBER_MENU[0].href + '" aria-label="會員中心">' +
+          '<svg class="topbar__member-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>' +
+            '<circle cx="12" cy="7" r="4"></circle>' +
+          '</svg>' +
+          '<span>會員中心</span>' +
+        '</a>' +
       '</div>';
-    const logoutBtn = container.querySelector('#topbarLogoutBtn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', async function () {
-        await logout();
-        await renderNavState();
-      });
-    }
     return;
   }
 
-  // 未登入：marketing menu + 自願 Login 按鈕
+  // 未登入：只保留右上角 Login 按鈕（2026-08-24 UI audit P0-1：移除嵌入的
+  // atlas-index 行銷 menu，避免一屏兩組導航/重複登入入口；行銷內容由
+  // atlas-index landing（atlas.goluck.uk/）負責）。
   const loginHref = getRedirectUrl();
   container.innerHTML =
     '<div class="topbar__menu topbar__menu--marketing">' +
-      '<nav aria-label="主導覽"><ul class="topbar__menu-list">' +
-      MARKETING_MENU.map(function (item) {
-        return '<li><a class="topbar__menu-link" href="' + item.href + '">' + item.label + '</a></li>';
-      }).join('') +
-      '</ul></nav>' +
       '<a class="topbar__login-btn" href="' + loginHref + '">' +
         '<svg class="topbar__login-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
           '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>' +
@@ -372,15 +346,6 @@ export async function renderTopBar() {
         '<span>Login</span>' +
       '</a>' +
     '</div>';
-}
-
-/** 最小 HTML escape（email 只可能含 @ . - _ +；防 attribute injection）。 */
-function escapeEmail(email) {
-  return String(email)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 
 // ─── Re-export for convenience ───

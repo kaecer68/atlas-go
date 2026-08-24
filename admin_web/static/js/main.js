@@ -27,6 +27,20 @@ const basePath = (typeof window !== 'undefined')
   ? window.location.pathname.replace(/\/[^/]*$/, '') || ''
   : '';
 
+/** 頁面 id → topbar 標題（module scope：switchPage 與 initial route 共用；
+    2026-08-24 UI audit P0-2：原本 const 在 switchPage 內，initial route 引用
+    時 ReferenceError → 深層連結全部 fallback 總覽）。 */
+const PAGE_TITLES = {
+  home: '系統總覽', live: '風控營運台', alerts: '系統警報',
+  capital_models: '錢潮模型',
+  pipeline: '投資管線', portfolio: '組合持倉',
+  experiments: '模擬交易', 'performance-report': '績效報告',
+  datachannels: '資料通道', parameters: '參數管理',
+  reports: '最新回測',
+  capital_quality: '資料品質',
+  metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
+};
+
 export function switchPage(id, silent) {
   var pageEl = document.getElementById('page-' + id);
   if (!pageEl) { console.warn('[switchPage] page not found:', id); return; }
@@ -41,17 +55,7 @@ export function switchPage(id, silent) {
   document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
-  const titles = {
-  home: '系統總覽', live: '風控營運台', alerts: '系統警報',
-  capital_models: '錢潮模型',
-  pipeline: '投資管線', portfolio: '組合持倉',
-  experiments: '模擬交易', 'performance-report': '績效報告',
-  datachannels: '資料通道', parameters: '參數管理',
-  reports: '最新回測',
-  capital_quality: '資料品質',
-  metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
-};
-  document.getElementById('pageTitle').textContent = titles[id] || id;
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[id] || id;
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
   if (!silent) history.pushState({page: id}, '', basePath + '/' + id);
@@ -629,7 +633,11 @@ if (typeof window !== 'undefined') {
     var pageId = window.location.hash.replace('#page-', '');
     window.location.replace(basePath + '/' + pageId);
   } else if (initialPath && initialPath !== 'home') {
-    if (titles[initialPath]) {
+    // 2026-08-24 UI audit P0-3：capital_causality 已遷移 client_web，
+    // admin 無此頁 → 直接導向 client 版本，避免深層連結落空。
+    if (initialPath === 'capital_causality' || initialPath === 'capital-causality') {
+      window.location.replace('/client/capital-causality');
+    } else if (PAGE_TITLES[initialPath]) {
       history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
       switchPage(initialPath, true);
     } else {

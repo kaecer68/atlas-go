@@ -26,7 +26,7 @@ function makeFakeDom() {
   };
   const els = {
     topbarMenu,
-    navAccountSection: { classList: { add() {}, remove() {} } },
+    navAccountSection: { classList: { add() {}, remove() {}, toggle() {} } },
     navTierBadge: { textContent: '', className: '' },
     navTierLabel: { textContent: '', className: '', classList: { remove() {} } },
   };
@@ -88,7 +88,7 @@ test('getRedirectUrl: 有 window 時用目前 location（origin + path + search�
   }
 });
 
-test('renderTopBar: 未登入 → marketing menu + 金色 Login 按鈕', async () => {
+test('renderTopBar: 未登入 → 只有金色 Login 按鈕（無行銷 menu）', async () => {
   makeFakeDom();
   stub401Fetch();
   invalidateAuth();
@@ -96,11 +96,12 @@ test('renderTopBar: 未登入 → marketing menu + 金色 Login 按鈕', async (
     await renderTopBar();
     const html = globalThis.document.getElementById('topbarMenu').innerHTML;
     assert.ok(html.includes('topbar__menu--marketing'), '應為 marketing 模式');
-    for (const label of ['Why Atlas', '會員方案', '社群學習', '問答提示']) {
-      assert.ok(html.includes(label), '應含 menu: ' + label);
-    }
     assert.ok(html.includes('topbar__login-btn'), '應含 Login 按鈕');
     assert.ok(html.includes('href="' + getRedirectUrl() + '"'), 'Login 指向 member login?redirect');
+    // 2026-08-24 UI audit P0-1：app 內不再嵌入行銷 menu（避免雙導航/重複登入入口）
+    for (const label of ['Why Atlas', '會員方案', '社群學習', '問答提示']) {
+      assert.ok(!html.includes(label), '不應含行銷 menu: ' + label);
+    }
     assert.ok(!html.includes('topbar__menu--member'), '不應出現 member 模式');
   } finally {
     restoreFetch();
@@ -108,7 +109,7 @@ test('renderTopBar: 未登入 → marketing menu + 金色 Login 按鈕', async (
   }
 });
 
-test('renderTopBar: 已登入 → member menu + email + tier badge + 登出', async () => {
+test('renderTopBar: 已登入 → 只有【會員中心】入口', async () => {
   makeFakeDom();
   stubProfileFetch('user@example.com', 'premium');
   invalidateAuth();
@@ -116,29 +117,13 @@ test('renderTopBar: 已登入 → member menu + email + tier badge + 登出', as
     await renderTopBar();
     const html = globalThis.document.getElementById('topbarMenu').innerHTML;
     assert.ok(html.includes('topbar__menu--member'), '應為 member 模式');
-    for (const label of ['控制台', '會員權益', '升級 VIP Room', '私人 AI 機器人']) {
-      assert.ok(html.includes(label), '應含 menu: ' + label);
-    }
-    assert.ok(html.includes('user@example.com'), '應含 user email');
-    assert.ok(html.includes('Premium'), '應含 premium tier badge');
-    assert.ok(html.includes('topbar__logout-btn'), '應含登出按鈕');
-    assert.ok(html.includes(MEMBER_BASE_URL + '/dashboard#vip'), '升級 VIP Room 應指向 dashboard#vip');
+    assert.ok(html.includes('會員中心'), '應含會員中心入口');
+    assert.ok(html.includes('href="' + MEMBER_BASE_URL + '/dashboard"'), '會員中心應指向 member dashboard');
+    // 2026-08-24：top bar 只保留會員中心 — 不應再有行銷 menu / user chip / 登出
     assert.ok(!html.includes('topbar__login-btn'), '已登入不應顯示 Login 按鈕');
-  } finally {
-    restoreFetch();
-    delete globalThis.document;
-  }
-});
-
-test('renderTopBar: free tier 顯示「免費」badge', async () => {
-  makeFakeDom();
-  stubProfileFetch('free@example.com', 'free');
-  invalidateAuth();
-  try {
-    await renderTopBar();
-    const html = globalThis.document.getElementById('topbarMenu').innerHTML;
-    assert.ok(html.includes('topbar__tier-badge--free'), 'free tier badge class');
-    assert.ok(html.includes('免費'), 'free tier label');
+    assert.ok(!html.includes('topbar__user-email'), '不應顯示 user email');
+    assert.ok(!html.includes('topbar__logout-btn'), '登出改由側欄負責，top bar 不顯示');
+    assert.ok(!html.includes('Why Atlas'), '不應出現行銷 menu');
   } finally {
     restoreFetch();
     delete globalThis.document;
@@ -153,7 +138,7 @@ test('renderNavState: 末尾串接 renderTopBar（單一入口）', async () => 
     await renderNavState();
     const html = globalThis.document.getElementById('topbarMenu').innerHTML;
     assert.ok(html.includes('topbar__menu--member'), 'renderNavState 後 topbar 應同步渲染');
-    assert.ok(html.includes('nav@example.com'), 'topbar 應顯示 email');
+    assert.ok(html.includes('會員中心'), 'topbar 應顯示會員中心入口');
   } finally {
     restoreFetch();
     delete globalThis.document;

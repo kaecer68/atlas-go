@@ -193,6 +193,33 @@ func TestJWKSVerifyWrongKid(t *testing.T) {
 	}
 }
 
+// 2026-08-24（登入記憶）：JWKS 模式下，atlas 重新簽發的 HS256 session
+// token（SSO/login 產生）必須能被 Verify 接受，session 才能在 go-member
+// access token 過期後繼續存活。
+func TestJWKSVerifyAcceptsAtlasSessionToken(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	_, url := startRotatingJWKSServer(t, priv, "k1")
+	m := newJWKSManager(t, url)
+
+	// 先用 RS256 驗證一個 go-member token，再以相同 claims 簽 atlas session token。
+	memberTok := signRS256(t, priv, "k1", mkMemberTier("premium", "u-9", time.Hour))
+	memberClaims, err := m.Verify(memberTok)
+	if err != nil {
+		t.Fatalf("verify member token: %v", err)
+	}
+	sessionTok, err := m.GenerateSession(memberClaims, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSession: %v", err)
+	}
+	got, err := m.Verify(sessionTok)
+	if err != nil {
+		t.Fatalf("atlas session token should verify in JWKS mode: %v", err)
+	}
+	if got.Sub != "u-9" || got.Email != "u-9@member.test" || got.Tier != string(TierPro) {
+		t.Errorf("session claims mismatch: %+v", got)
+	}
+}
+
 func TestJWKSVerifyExpired(t *testing.T) {
 	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
 	_, url := startRotatingJWKSServer(t, priv, "k1")
