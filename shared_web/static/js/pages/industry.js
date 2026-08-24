@@ -194,6 +194,17 @@ function cycleEventStyle(direction) {
   return { icon: "→", label: "中性", color: "var(--muted)" };
 }
 
+// 2026-08-24 UI audit P2：決策鏈 reason 正規化（頂部 breakdown 卡與表格共用）
+function localizeCycleReason(reason) {
+  let r = reason || "";
+  r = r.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能").replace(/avg across industries/g,"跨產業平均");
+  r = r.replace(/\b(recovery|expansion|mature|recession|contraction|maintenance)\b/g, function (m) { return { recovery: "復甦", expansion: "擴張", mature: "成熟", recession: "衰退", contraction: "緊縮", maintenance: "維護" }[m] || m; })
+    .replace(/\b(active_restocking|passive_restocking|active_destocking|passive_destocking)\b/g, function (m) { return { active_restocking: "主動補庫存", passive_restocking: "被動補庫存", active_destocking: "主動去庫存", passive_destocking: "被動去庫存" }[m] || m; })
+    .replace(/\b(business_cycle|inventory_cycle|capex_cycle|silicon|seasonal|supply_chain)\b/g, function (m) { return { business_cycle: "商業週期", inventory_cycle: "庫存週期", capex_cycle: "資本支出週期", silicon: "矽循環", seasonal: "季節性", supply_chain: "供應鏈" }[m] || m; })
+    .replace(/\b(strong|medium|weak|high|low|bullish|bearish|neutral)\b/g, function (m) { return { strong: "強", medium: "中", weak: "弱", high: "高", low: "低", bullish: "看多", bearish: "看空", neutral: "中性" }[m] || m; });
+  return r || "-";
+}
+
 function cyclePhaseBadge(value) {
   const phase = String(value || "").toLowerCase();
   const colorMap = {
@@ -297,7 +308,7 @@ export function renderCycleStatusCard(card) {
     html += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${layer.label}</div>`;
     html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:6px"><span style="font-size:18px;font-weight:800">${cycleNumber(item.raw_value, 3)}</span><span style="font-size:13px;font-weight:800;color:${delta.color}">${delta.text}</span></div>`;
     html += `<div style="font-size:10px;color:var(--muted);margin-top:4px">權重 ${weight}</div>`;
-    html += `<div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.35;min-height:28px">${item.reason || "尚無原因說明"}</div>`;
+    html += `<div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.35;min-height:28px">${localizeCycleReason(item.reason) || "尚無原因說明"}</div>`;
     html += `</div>`;
   });
   html += `</div>`;
@@ -377,14 +388,7 @@ export function renderCycleStatusCard(card) {
     const layerLabels = {silicon:"矽循環",business_cycle:"商業週期",seasonal:"季節性",events:"事件",supply_chain:"供應鏈"};
     breakdown.forEach((item) => {
       const delta = cycleDelta(item.contribution);
-      let reason = item.reason || "";
-      reason = reason.replace(/silicon phase=/,"矽階段=").replace(/^phase=/,"階段=").replace(/score=/g,"評分=").replace(/confidence=/g,"信賴度=").replace(/(\d+) active patterns/,"$1 個活躍模式").replace(/(\d+) active events/,"$1 個活躍事件").replace("upstream-downstream momentum","上下游動能").replace(/avg across industries/g,"跨產業平均");
-      // 2026-08-24 UI audit P2：決策鏈原因內的裸 enum 中文化（word-boundary 防誤傷）
-      reason = reason.replace(/\b(recovery|expansion|mature|recession|contraction|maintenance)\b/g, function (m) { return { recovery: "復甦", expansion: "擴張", mature: "成熟", recession: "衰退", contraction: "緊縮", maintenance: "維護" }[m] || m; })
-        .replace(/\b(active_restocking|passive_restocking|active_destocking|passive_destocking)\b/g, function (m) { return { active_restocking: "主動補庫存", passive_restocking: "被動補庫存", active_destocking: "主動去庫存", passive_destocking: "被動去庫存" }[m] || m; })
-        .replace(/\b(business_cycle|inventory_cycle|capex_cycle|silicon|seasonal|supply_chain)\b/g, function (m) { return { business_cycle: "商業週期", inventory_cycle: "庫存週期", capex_cycle: "資本支出週期", silicon: "矽循環", seasonal: "季節性", supply_chain: "供應鏈" }[m] || m; })
-        .replace(/\b(strong|medium|weak|high|low|bullish|bearish|neutral)\b/g, function (m) { return { strong: "強", medium: "中", weak: "弱", high: "高", low: "低", bullish: "看多", bearish: "看空", neutral: "中性" }[m] || m; });
-      reason = reason || "-";
+      const reason = localizeCycleReason(item.reason);
       html += `<tr><td>${layerLabels[item.layer] || item.layer || "-"}</td><td>${cycleNumber(item.raw_value, 3)}</td><td>${fmtSafePct(item.weight, 0)}</td><td style="color:${delta.color};font-weight:800">${delta.text}</td><td>${reason}</td></tr>`;
     });
     html += `</tbody></table>`;

@@ -29,6 +29,38 @@ export function emptyState(msg) {
 }
 
 // --- 產業熱力圖 ---
+// 2026-08-24 UI audit P2：產業熱力圖 reason/confidence 中文化
+//（後端回傳 raw enum：週期: recession / confidence: medium）
+function localizeReasonText(str) {
+  const m = {
+    recovery: "復甦", expansion: "擴張", mature: "成熟", recession: "衰退",
+    contraction: "緊縮", maintenance: "維護",
+    active_restocking: "主動補庫存", passive_restocking: "被動補庫存",
+    active_destocking: "主動去庫存", passive_destocking: "被動去庫存",
+    business_cycle: "商業週期", inventory_cycle: "庫存週期", capex_cycle: "資本支出週期",
+    silicon: "矽循環", seasonal: "季節性", supply_chain: "供應鏈", events: "日曆事件",
+    strong: "強", medium: "中", weak: "弱", high: "高", low: "低",
+    bullish: "看多", bearish: "看空", neutral: "中性",
+  };
+  return String(str)
+    .replace(/^週期[:：]\s*/, "週期：")
+    .replace(/^季節性[:：]\s*/, "季節性：")
+    .replace(/\b(recovery|expansion|mature|recession|contraction|maintenance)\b/g, (x) => m[x] || x)
+    .replace(/\b(active_restocking|passive_restocking|active_destocking|passive_destocking)\b/g, (x) => m[x] || x)
+    .replace(/\b(business_cycle|inventory_cycle|capex_cycle|silicon|seasonal|supply_chain|events)\b/g, (x) => m[x] || x)
+    .replace(/\b(strong|medium|weak|high|low|bullish|bearish|neutral)\b/g, (x) => m[x] || x)
+    .replace(/avg across industries/g, "跨產業平均")
+    .replace(/(\d+) active patterns/g, "$1 個活躍模式")
+    .replace(/(\d+) active events/g, "$1 個活躍事件");
+}
+
+function localizeConfidence(c) {
+  if (c === "high") return "高";
+  if (c === "medium") return "中";
+  if (c === "low") return "低";
+  return c;
+}
+
 export function renderSectorHeatmap(data) {
   const sectors = data && data.sector_heatmap;
   if (!sectors || !sectors.length) return emptyState('尚無產業數據');
@@ -42,12 +74,12 @@ export function renderSectorHeatmap(data) {
       <span style="font-size:14px">${emoji}</span>
       <div style="flex:1">
         <div style="font-size:12px;font-weight:600">${escapeHtml(s.sector)}</div>
-        <div style="font-size:10px;color:var(--muted)">${(s.reasons || []).map(escapeHtml).join(' · ')}</div>
+        <div style="font-size:10px;color:var(--muted)">${(s.reasons || []).map(localizeReasonText).map(escapeHtml).join(' · ')}</div>
         <div style="margin-top:4px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
           <div style="width:${Math.round(score * 100)}%;height:100%;background:${border}"></div>
         </div>
       </div>
-      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}" title="信心度 ${fmtSafeNumber(score, { percent: true, decimals: 0 })}">${s.confidence}</span>
+      <span class="badge ${s.confidence === 'high' ? 'ok' : s.confidence === 'medium' ? 'warn' : 'muted'}" title="信心度 ${fmtSafeNumber(score, { percent: true, decimals: 0 })}">${localizeConfidence(s.confidence)}</span>
     </div>`;
   }).join('');
 
