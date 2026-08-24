@@ -77,3 +77,16 @@
 .stage-hint::before {
   content: "\01F4A1 ";
 }
+
+/* 2026-08-24 UI audit P1-7：行動版 stepper 橫向可捲動，避免「模擬結算/完成」
+   被裁切看不到。 */
+@media (max-width: 900px) {
+  .progress-track {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    padding-bottom: 4px;
+  }
+  .progress-step { flex-shrink: 0; }
+  .progress-connector { flex: 0 0 10px; }
+}

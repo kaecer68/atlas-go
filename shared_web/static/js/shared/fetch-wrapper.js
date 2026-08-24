@@ -29,7 +29,10 @@ const MUTATING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
  * @typedef {Object} InterceptorOptions
  * @property {string} [loginPageId='login']        401 觸發時要跳轉的 page id（無 loginRedirectUrl 時）
  * @property {string|(() => string)} [loginRedirectUrl]  401 時導向的外部登入 URL（優於 switchPage(loginPageId)；可用函式延遲計算）
- * @property {string[]} [excludedPages=[]]          已是登入相關頁時不再跳轉
+ * @property {string[]|((pageId: string) => boolean)} [excludedPages=[]]
+ *       已是登入相關頁時不再跳轉；可傳函式 (pageId) => boolean 精準判斷
+ *       （2026-08-24 UI audit P0-4：未知路徑不應被 initAuth 的 profile 401
+ *       誤導向 member login，應走 404）
  * @property {() => void} [onUnauthorized]          401 觸發時的副作用（預設 invalidateAuth）
  * @property {() => void} [onApiKeyRequired]        mutating 401（缺/無效 X-API-Key）時觸發（admin 開 apiKeyModal）
  * @property {typeof fetch} [fetchImpl]             自訂 fetch（測試用，預設 window.fetch）
@@ -102,7 +105,10 @@ export function install401Interceptor(options = {}) {
                 .replace(/^\/(client|admin)\/?/, '')
                 .replace(/\?.*$/, '') || 'home';
             }
-            if (excludedPages.indexOf(currentPage) === -1) {
+            var isExcluded = typeof excludedPages === 'function'
+              ? excludedPages(currentPage)
+              : excludedPages.indexOf(currentPage) !== -1;
+            if (!isExcluded) {
               // 外部登入 URL（如 member.goluck.uk）優於站內 switchPage —
               // client 的 login/register 頁已移除，401 一律導 go-member。
               if (loginRedirectUrl != null) {

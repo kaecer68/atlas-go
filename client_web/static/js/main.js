@@ -13,7 +13,7 @@ import { renderToolEvents } from './components/tool-events.js';
 import { fmtNTD } from './shared/utils.js';
 import { getJSON, silentGetJSON, escapeHtml } from './shared/app-utils.js';
 import { initAuth, isLoggedIn, invalidateAuth, renderNavState, getRedirectUrl } from './services/auth.js';
-import { pageRequiresLogin, PUBLIC_PAGES } from './services/login-gate.js';
+import { pageRequiresLogin, PUBLIC_PAGES, GATED_PAGES } from './services/login-gate.js';
 import { startIdleMonitor, resetIdleMonitor } from './services/idle-monitor.js';
 import { showLoginReminderModal } from './components/login-reminder-modal.js';
 import { metricCard } from './components/metric-card.js';
@@ -83,7 +83,12 @@ export async function switchPage(id, silent) {
     let loggedIn = false;
     try { loggedIn = await isLoggedIn(); } catch (e) { loggedIn = false; }
     if (!loggedIn) {
-      window.location.href = getRedirectUrl();
+      // 2026-08-24 UI audit P1-8：redirect 指向「目標頁」而非來源頁 —
+      // 從 methodology 點「升級」登入後應回到 premium，不是 methodology。
+      const target = (typeof window !== 'undefined' && window.location && window.location.origin)
+        ? window.location.origin + basePath + '/' + id
+        : undefined;
+      window.location.href = getRedirectUrl(target);
       return;
     }
   }
@@ -450,7 +455,14 @@ if (typeof window !== 'undefined') {
     // member；gated 頁（premium）由 switchPage 的 login gate 擋，
     // 個人資料 API 的 401 仍會把已登入但 session 失效的用戶導向 member 登入
     // （資料保護不變）。
-    excludedPages: PUBLIC_PAGES,
+    // 2026-08-24 UI audit P0-4：router 不認識的「未知路徑」也排除 — 否則
+    // 直接訪問 /client/不存在頁時，initAuth 的 profile 401 會搶先導向
+    // member login（redirect 還回指不存在頁）；未知路徑應由 404 頁處理。
+    excludedPages: function (pageId) {
+      if (PUBLIC_PAGES.indexOf(pageId) !== -1) return true;
+      if (GATED_PAGES.indexOf(pageId) !== -1) return false; // 會員頁 → 跳登入
+      return true; // 未知路徑 → 不跳（走 404）
+    },
     onUnauthorized: invalidateAuth,
     switchPage: window.switchPage,
   });

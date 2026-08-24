@@ -5,7 +5,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // === Sidebar Navigation (22 pages) ===
   document.querySelectorAll('#sidebar nav a[data-page]').forEach(a => {
-    a.addEventListener('click', () => window.switchPage(a.dataset.page));
+    // 2026-08-24 UI audit P2：側欄連結有真實 href（a11y/開新分頁）→ 點擊時
+    // 必須 preventDefault 走 SPA switchPage，避免「SPA 切頁 + 整頁導航」雙重執行。
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.switchPage(a.dataset.page);
+    });
   });
 
   // === Global page navigation (inline links with data-page, e.g. alert health panel)
