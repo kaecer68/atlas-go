@@ -42,6 +42,11 @@ fi
 ALPHA_PCT="${LAYER3_BENCH_ALPHA:-5}"
 # benchstat expects -alpha as probability in [0,1], not percentage.
 ALPHA_PROB=$(awk -v pct="${ALPHA_PCT}" 'BEGIN { printf "%.2f", pct / 100 }')
+# More samples make benchstat's comparison robust for micro-benchmarks:
+# cmd/atlas has ~0.3ns/op benchmarks (ShouldStartFubonProxy) that fluctuate
+# heavily under machine load (parallel ci-full from other worktrees caused
+# repeated false regressions at -count=3). Overridable for CI tuning.
+BENCH_COUNT="${LAYER3_BENCH_COUNT:-8}"
 
 declare -a TARGETS=(
     "internal/config"
@@ -79,7 +84,7 @@ for target in "${TARGETS[@]}"; do
     echo "[layer3-bench] RUN  ${target}"
     # Hermetic: JSONL backend — unit benchmarks must not depend on machine-global
     # ATLAS_STORE_BACKEND (~/.config/atlas-go/.env may default to postgres).
-    if ! ATLAS_STORE_BACKEND=jsonl go test -bench=. -benchmem -count=3 "./${target}/..." > "${current}" 2>&1; then
+    if ! ATLAS_STORE_BACKEND=jsonl go test -bench=. -benchmem -count="${BENCH_COUNT}" "./${target}/..." > "${current}" 2>&1; then
         echo "[layer3-bench] FAIL ${target}: benchmark run failed (see ${current})"
         FAILED=1
         continue
