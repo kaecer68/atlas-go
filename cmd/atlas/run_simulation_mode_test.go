@@ -74,8 +74,8 @@ func TestRunSimulationMode_EmptyDateReachesRuntimeAccess(t *testing.T) {
 // the call will fail downstream (which is the whole point of these tests).
 func configStub(t *testing.T) config.Config {
 	return config.Config{
-		WorkDir:        t.TempDir(),
-		LedgerDir:      t.TempDir(),
+		WorkDir:        tempDir(t),
+		LedgerDir:      tempDir(t),
 		BrokerMode:     "dry-run",
 		BrokerAdapter:  "guarded",
 		BrokerSigner:   "hmac-sha256",
