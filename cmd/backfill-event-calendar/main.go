@@ -190,7 +190,12 @@ func run(ctx context.Context, cfg runConfig) (*runStats, error) {
 		defer func() { _ = closeStore() }()
 	}
 
-	seen := make(map[string]bool) // date|event_id dedup across providers
+	// seen dedups within a single run by (date, event_id). The event_id embeds
+	// the provider name (<provider>_backfill_<type>_<date>), so the same event
+	// type from different providers intentionally does NOT collide — msci
+	// rebalance vs ex_dividend on the same date are distinct events. (k3 audit:
+	// the earlier "across providers" comment was misleading.)
+	seen := make(map[string]bool) // (date|event_id) within-run dedup
 	for _, year := range years {
 		if err := ctx.Err(); err != nil {
 			return stats, err
