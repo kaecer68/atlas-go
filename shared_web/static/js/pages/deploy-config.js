@@ -35,12 +35,21 @@ function renderSection(title, entries) {
   return html;
 }
 
-export function renderConfigPage(cfg) {
+export function renderConfigPage(cfg, error) {
   const contentDiv = document.getElementById('configContent');
   if (!contentDiv) return;
 
   if (!cfg || Object.keys(cfg).length === 0) {
-    contentDiv.innerHTML = '<div class="empty" style="text-align:center;padding:40px">無法載入部署配置。</div>';
+    // 2026-08-24 UI audit P2：錯誤狀態補上原因 + 重試按鈕（原先只有一行灰字）。
+    const reason = error ? escapeHtml(String(error.message || error).slice(0, 120)) : '';
+    contentDiv.innerHTML =
+      '<div style="text-align:center;padding:48px 24px;max-width:480px;margin:0 auto">' +
+        '<div style="font-size:2rem;margin-bottom:10px">⚠️</div>' +
+        '<div style="font-weight:700;margin-bottom:6px">無法載入部署配置</div>' +
+        (reason ? '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + reason + '</div>' : '') +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">此頁為受保護端點，若持續失敗請確認 ATLAS_API_KEY 已設定。</div>' +
+        '<button class="alert-action-btn" onclick="window.loadConfigPage()">🔄 重試</button>' +
+      '</div>';
     contentDiv.classList.remove('empty', 'loading');
     return;
   }

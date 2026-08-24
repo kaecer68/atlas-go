@@ -277,11 +277,11 @@ function renderAlertCard(a) {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${a.status === 'triggered' ? `
-          <button class="primary" style="font-size:12px;padding:6px 14px" onclick="acknowledgeAlert('${escapeHtml(a.id)}')">✓ 已知悉</button>
-          <button style="font-size:12px;padding:6px 14px;background:var(--color-danger);color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="resolveAlert('${escapeHtml(a.id)}')">🔧 已修復</button>
+          <button class="alert-action-btn" onclick="acknowledgeAlert('${escapeHtml(a.id)}')">✓ 已知悉</button>
+          <button class="alert-action-btn alert-action-btn--danger" onclick="resolveAlert('${escapeHtml(a.id)}')">🔧 已修復</button>
         ` : ''}
         ${a.status === 'acknowledged' ? `
-          <button style="font-size:12px;padding:6px 14px;background:var(--color-danger);color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="resolveAlert('${escapeHtml(a.id)}')">🔧 已修復</button>
+          <button class="alert-action-btn alert-action-btn--danger" onclick="resolveAlert('${escapeHtml(a.id)}')">🔧 已修復</button>
           <span style="font-size:12px;color:var(--muted)">已於 ${formatDate(a.acknowledged_at)} 確認</span>
         ` : ''}
         ${a.status === 'resolved' ? `

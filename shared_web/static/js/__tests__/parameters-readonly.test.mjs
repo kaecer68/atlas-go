@@ -25,7 +25,10 @@ function createElement(id) {
     style: {},
     classList: { add() {}, remove() {}, contains() { return false; } },
     appendChild() {},
+    insertBefore() {},
     querySelector() { return null; },
+    querySelectorAll() { return []; },
+    addEventListener() {},
   };
   elements.set(id, el);
   return el;

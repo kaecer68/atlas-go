@@ -13,7 +13,7 @@
 
 import { escapeHtml } from '../shared/app-utils.js';
 import { classifyFetchError } from '../shared/fetch-error.js';
-import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned } from '../shared/format-metric.js';
+import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeDrawdown, fmtSafeSigned } from '../shared/format-metric.js';
 
 const STATE = {
   strategies: [],
@@ -327,7 +327,9 @@ export async function renderStrategiesPage(root) {
       '<td><span class="' + scoreClass + '">' + (score == null ? '--' : fmtSafeNumber(score, { decimals: 0 })) + '</span></td>' +
       '<td class="text-right ' + retClass + '">' + (annRet == null ? '--' : fmtSafeSignedPct(annRet, 2)) + '</td>' +
       '<td class="text-right">' + (sharpe == null ? '--' : fmtSafeNumber(sharpe, { decimals: 2 })) + '</td>' +
-      '<td class="text-right">' + (maxDD == null ? '--' : fmtSafeSignedPct(maxDD, 2)) + '</td>' +
+      // 2026-08-24 UI audit P3：最大回撤以「-X%」呈現（fmtSafeDrawdown），
+      // 避免正數幅度被顯示成「+X%」造成語意混淆。
+      '<td class="text-right">' + (maxDD == null ? '--' : fmtSafeDrawdown(maxDD)) + '</td>' +
       '<td class="text-right">' + (winRate == null ? '--' : fmtSafePct(winRate, 1)) + '</td>' +
       '<td class="text-right">' + (sample == null ? '--' : sample) + '</td>' +
       '</tr>';

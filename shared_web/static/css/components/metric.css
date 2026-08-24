@@ -5,3 +5,56 @@
 .metric .value.up, .up { color: var(--up); }
 .metric .value.down, .down { color: var(--down); }
 .metric .value.warn, .warn { color: var(--warn); }
+
+/* 2026-08-24 UI audit P2：模擬健康度（sim-health）stat 卡 + 元數據排版。
+   原樣式缺失 → 摘要逐行堆疊、元數據 key:value 黏在一起。 */
+.sim-health-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (max-width: 640px) {
+  .sim-health-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.sim-health-stat {
+  background: var(--panel-l3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sim-health-stat__value {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+}
+.sim-health-stat__value--ok { color: var(--color-success); }
+.sim-health-stat__value--warn { color: var(--color-warning); }
+.sim-health-stat__value--fail { color: var(--color-danger); }
+.sim-health-stat__label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.sim-health-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  max-width: 360px;
+}
+.sim-health-meta-item {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sim-health-meta-key { color: var(--muted); }
+.sim-health-meta-val { color: var(--text); }
+.sim-health-meta-more {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}

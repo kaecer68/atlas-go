@@ -1,3 +1,30 @@
 /* Atlas Dashboard - Misc Elements */
 .empty { color: var(--muted); font-size: var(--text-base); padding: 10px 0; }
 pre { white-space: pre-wrap; word-break: break-word; font-size: var(--text-sm); background: var(--panel-l3); padding: 10px; border-radius: 6px; max-height: 280px; overflow: auto; }
+
+/* 2026-08-24 UI audit P2：警報操作鈕統一深色描邊樣式（原先白底/紅底實心突兀） */
+.alert-action-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.alert-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.alert-action-btn--danger {
+  border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
+  color: var(--color-danger);
+  background: transparent;
+}
+.alert-action-btn--danger:hover {
+  background: rgba(var(--color-danger-rgb), 0.1);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}

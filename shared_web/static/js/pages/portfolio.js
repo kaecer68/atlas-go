@@ -120,7 +120,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       </div>
       <div class="kpi-card">
         <div class="kpi-label">最大回撤</div>
-        <div class="kpi-value text-danger">${formatMaxDrawdown(maxDrawdown, { asAbsolute: true })}</div>
+        <div class="kpi-value ${maxDrawdown === 0 ? '' : 'text-danger'}">${formatMaxDrawdown(maxDrawdown, { asAbsolute: true })}</div>
         <div class="kpi-hint">歷史最大回撤</div>
       </div>
     `;
