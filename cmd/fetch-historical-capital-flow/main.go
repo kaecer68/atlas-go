@@ -45,7 +45,9 @@ func main() {
 	start := flag.String("start", "", "start date in YYYY-MM-DD format (required)")
 	end := flag.String("end", "", "end date in YYYY-MM-DD format (default: today)")
 	output := flag.String("output", "data/state/capital_flow/", "output directory")
-	rateLimit := flag.Float64("rate-limit", 1.0, "requests per second")
+	// CONSTITUTION 第二條: TWSE 三大法人保守 1 req / 5s（TWSECapitalFlowRate）。
+	// 預設 0.2/s（5s 間隔）；歷史回填長任務可視需要放寬，但不得超過官方限制。
+	rateLimit := flag.Float64("rate-limit", 0.2, "requests per second (CONSTITUTION: TWSE T86 = 0.2/s)")
 	dryRun := flag.Bool("dry-run", false, "print what would be fetched without downloading")
 	skipExisting := flag.Bool("skip-existing", true, "skip dates that already have files")
 	flag.Parse()
