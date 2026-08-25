@@ -604,7 +604,7 @@ func (a *DashboardAPI) applyMacroUpdate(ctx context.Context, snap marketdata.Mac
 	a.narrativeEngine.UpdateMacro(snap, geoScore)
 	a.persistStressIndex(ctx)
 	a.persistGeopolitical(ctx, geoScore)
-	a.persistPeriodHistory(ctx, snap)
+	a.persistPeriodHistory(ctx, snap, geoScore)
 	a.persistRegimeHistory(ctx)
 }
 
@@ -735,7 +735,7 @@ func (a *DashboardAPI) persistRegimeHistory(ctx context.Context) {
 
 // persistPeriodHistory derives the current seven-period classification from
 // the macro snapshot via PeriodDetector and upserts it into period_history.
-func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata.MacroDataSnapshot) {
+func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata.MacroDataSnapshot, geoScore geopolitical.GeopoliticalRiskScore) {
 	if a.historicalStore == nil {
 		return
 	}
@@ -744,6 +744,9 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 		date = time.Unix(snap.RecordedAt, 0).UTC().Format("2006-01-02")
 	}
 	ind := SnapshotToPeriodIndicators(snap)
+	// G5: 台海危機訊號進時期判別（憲章 §3 黑天鵝/轉折下壓地緣條件）。
+	// geoScore 由 applyMacroUpdate 的 resolveGeoScore() 提供（live → history → file）。
+	ind.GeoIntensity = geoScore.Intensity
 	// B5 Batch 1 & 2: enrich with computed fields from historical snapshots.
 	// Errors are swallowed — if historical data is unavailable, indicators
 	// stay at zero (honest degradation, detector guards handle it).
@@ -1105,6 +1108,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 				govFlowDir := filepath.Join(a.workDir, "data", "state", "government_flow")
 				calc.EnrichBatch3(&ind, time.Now().UTC().Format("2006-01-02"), sectorIndexDir, govFlowDir)
 			}
+			// G5: 台海危機訊號進時期判別（與 persistPeriodHistory 同源 resolveGeoScore）。
+			ind.GeoIntensity = a.resolveGeoScore(ctx).Intensity
 			assessment, _ := detector.DetectAssessment(ind)
 			indicators := make([]service.IndicatorHit, len(assessment.TriggeredIndicators))
 			for i, ti := range assessment.TriggeredIndicators {

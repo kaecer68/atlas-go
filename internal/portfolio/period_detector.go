@@ -77,6 +77,9 @@ type PeriodIndicators struct {
 
 	// ── 事件（第七層）──
 	NationalFundActive bool // 國安基金宣布進場
+
+	// ── 地緣政治（台海危機，憲章 §3 黑天鵝/轉折下壓）──
+	GeoIntensity float64 // 地緣（台海）風險強度 0-100（geo RSS provider → 壓力指數 geopolitical 元件）
 }
 
 // TriggeredIndicator captures the evaluation outcome of a single period-detection
@@ -175,6 +178,10 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 	if ind.TWDChange1D > d.cfg.BlackSwanTWDDepreciationPct {
 		triggers++
 	}
+	// Geopolitical (Taiwan Strait) crisis: intensity >= threshold (0-100)
+	if ind.GeoIntensity >= d.cfg.BlackSwanGeoIntensity {
+		triggers++
+	}
 
 	return triggers >= 1
 }
@@ -183,7 +190,7 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 // returns the assessment metadata alongside the boolean result. The boolean
 // result is guaranteed identical to isBlackSwan(ind) for the same input.
 func (d *PeriodDetector) assessBlackSwan(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
-	condTotal = 5
+	condTotal = 6
 
 	// 1. Foreign panic sell: single day > 500億
 	thr1 := -(d.cfg.BlackSwanForeignSellBillion * 1_000_000_00)
@@ -248,6 +255,18 @@ func (d *PeriodDetector) assessBlackSwan(ind PeriodIndicators) (hit bool, condHi
 		condHit++
 	}
 
+	// 6. Geopolitical (Taiwan Strait) crisis
+	avail6 := ind.GeoIntensity != 0
+	hit6 := ind.GeoIntensity >= d.cfg.BlackSwanGeoIntensity
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "地緣（台海）風險強度", Value: ind.GeoIntensity,
+		Threshold: d.cfg.BlackSwanGeoIntensity, Relation: "gte",
+		Hit: hit6, InputAvailable: avail6,
+	})
+	if avail6 && hit6 {
+		condHit++
+	}
+
 	return condHit >= 1, condHit, condTotal, indicators
 }
 
@@ -289,6 +308,11 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 		passed++
 	}
 
+	// 6. Geopolitical (Taiwan Strait) tension rising: intensity >= threshold
+	if ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity {
+		passed++
+	}
+
 	return passed >= 3
 }
 
@@ -296,7 +320,7 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 // assessment metadata. The boolean result is guaranteed identical to
 // isTurnaroundDown(ind) for the same input.
 func (d *PeriodDetector) assessTurnaroundDown(ind PeriodIndicators) (hit bool, condHit int, condTotal int, indicators []TriggeredIndicator) {
-	condTotal = 5
+	condTotal = 6
 	heavyThreshold := -(d.cfg.TurnDownSingleSellBillion * 1_000_000_00)
 
 	// 1. Foreign consecutive heavy sell
@@ -358,6 +382,18 @@ func (d *PeriodDetector) assessTurnaroundDown(ind PeriodIndicators) (hit bool, c
 		Hit: hit5, InputAvailable: avail5,
 	})
 	if avail5 && hit5 {
+		condHit++
+	}
+
+	// 6. Geopolitical (Taiwan Strait) tension rising
+	avail6 := ind.GeoIntensity != 0
+	hit6 := ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity
+	indicators = append(indicators, TriggeredIndicator{
+		Name: "地緣（台海）緊張升溫", Value: ind.GeoIntensity,
+		Threshold: d.cfg.TurnDownGeoIntensity, Relation: "gte",
+		Hit: hit6, InputAvailable: avail6,
+	})
+	if avail6 && hit6 {
 		condHit++
 	}
 

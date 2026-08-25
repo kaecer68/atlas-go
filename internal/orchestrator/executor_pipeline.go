@@ -248,6 +248,8 @@ func ExecuteRegistryResearchDetailedWithPolicyAndGuardsAndPlugins(
 // (MA50/MA20/5-day avg/consecutive days/futures delta/TWD change) are left
 // at zero — the PeriodDetector treats zero-valued indicators as "unavailable".
 // Full coverage needs a MultiDayPeriodSnapshot (planned as follow-up PR-2).
+// NOTE: GeoIntensity is likewise not wired here (G5); the authoritative
+// period_history path (dashboard_api.persistPeriodHistory) does carry it.
 func snapshotToPeriodIndicators(snapshot marketdata.MacroDataSnapshot) portfolio.PeriodIndicators {
 	return portfolio.PeriodIndicators{
 		VIX:                    snapshot.VIX.Value,

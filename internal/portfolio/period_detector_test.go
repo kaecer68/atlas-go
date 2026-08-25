@@ -44,6 +44,13 @@ func TestPeriodDetector_BlackSwan(t *testing.T) {
 			want: domain.PeriodBlackSwan,
 		},
 		{
+			name: "geopolitical crisis intensity triggers black swan (G5)",
+			ind: PeriodIndicators{
+				GeoIntensity: 75, // 4 級制 ≥ 高張(3)；閾值 60
+			},
+			want: domain.PeriodBlackSwan,
+		},
+		{
 			name: "no black swan conditions returns next period",
 			ind: PeriodIndicators{
 				VIX:         20,
@@ -83,6 +90,40 @@ func TestPeriodDetector_TurnaroundDown(t *testing.T) {
 	got := d.DetectPeriod(ind)
 	if got != domain.PeriodTurnaroundDown {
 		t.Errorf("DetectPeriod() = %v, want %v", got, domain.PeriodTurnaroundDown)
+	}
+}
+
+// TestPeriodDetector_TurnaroundDown_Geo covers the G5 geopolitical condition:
+// 地緣緊張升溫（GeoIntensity ≥ 40）可與既有條件共同觸發轉折下壓。
+func TestPeriodDetector_TurnaroundDown_Geo(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+
+	ind := PeriodIndicators{
+		// 2 hits from classic conditions + 1 from geopolitical = 3/6
+		MarginMaintenanceRatio: 145,  // 融資維持率 < 150%
+		SOXPrice:               4200, // 跌破 50 日線
+		SOXMA50:                5200,
+		GeoIntensity:           55, // 地緣緊張升溫（≥ 40）
+	}
+
+	got := d.DetectPeriod(ind)
+	if got != domain.PeriodTurnaroundDown {
+		t.Errorf("DetectPeriod() = %v, want %v", got, domain.PeriodTurnaroundDown)
+	}
+}
+
+// TestPeriodDetector_GeoBelowThreshold ensures geopolitical intensity below
+// the turnaround-down threshold does NOT fire the condition on its own.
+func TestPeriodDetector_GeoBelowThreshold(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+
+	ind := PeriodIndicators{
+		GeoIntensity: 25, // 平靜(1) — 低於 40
+	}
+
+	got := d.DetectPeriod(ind)
+	if got == domain.PeriodTurnaroundDown {
+		t.Errorf("DetectPeriod() = %v, want NOT turnaround_down for calm geo", got)
 	}
 }
 
