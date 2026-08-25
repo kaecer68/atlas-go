@@ -274,17 +274,17 @@ func TestRunSkipsInvalidDates(t *testing.T) {
 
 func TestDefaultFactoryModes(t *testing.T) {
 	cfg := runConfig{}
-	// auto → twse_openapi + msci_static
+	// auto → twse_openapi + msci_static + nsf_static
 	auto := defaultFactory(cfg, 2026)
-	if len(auto) != 2 {
-		t.Fatalf("auto providers = %d, want 2", len(auto))
+	if len(auto) != 3 {
+		t.Fatalf("auto providers = %d, want 3", len(auto))
 	}
 	names := map[string]bool{}
 	for _, np := range auto {
 		names[np.name] = true
 	}
-	if !names["twse_openapi"] || !names["msci_static"] {
-		t.Errorf("auto providers = %v, want twse_openapi + msci_static", names)
+	if !names["twse_openapi"] || !names["msci_static"] || !names["nsf_static"] {
+		t.Errorf("auto providers = %v, want twse_openapi + msci_static + nsf_static", names)
 	}
 
 	cfg.provider = "msci"
@@ -294,6 +294,10 @@ func TestDefaultFactoryModes(t *testing.T) {
 	cfg.provider = "twse"
 	if twse := defaultFactory(cfg, 2026); len(twse) != 1 || twse[0].name != "twse" {
 		t.Errorf("twse providers = %+v, want 1 twse", twse)
+	}
+	cfg.provider = "nsf"
+	if nsf := defaultFactory(cfg, 2026); len(nsf) != 1 || nsf[0].name != "nsf_static" {
+		t.Errorf("nsf providers = %+v, want 1 nsf_static", nsf)
 	}
 }
 
