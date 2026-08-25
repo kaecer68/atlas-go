@@ -35,7 +35,7 @@
 | `docs/archive/` | 目錄解散；歷史知識移至 `.omo/audit/` 或提煉為 canonical，其餘 13 檔刪除 |
 | docs/investigations/ | 移至 `.omo/investigations/`（私有調查紀錄） |
 | docs/work/ | 移至 `.omo/manifests/`（個別 manifest） |
-| 根目錄 `ATLAS_SYSTEM_STATE.md`、`llm-promotion-evaluation.md` | 移至 `.omo/audit/` |
+| 根目錄 `ATLAS_SYSTEM_STATE.md`、`llm-promotion-evaluation.md` | 移至 `.omo/audit/`（私有、非版本控制） |
 | 根目錄 `script-usage-guide.md` | 移至 `.omo/handoffs/` |
 | 根目錄 `manifest-constitution-gap-audit.md`、`manifest-constitution-implementation.md`、`manifest-methodology-e4-review.md` | 移至 `.omo/manifests/` |
 | docs/specs/dark-launch-tracker-spec.md | 移至 `.omo/evidence/` |
