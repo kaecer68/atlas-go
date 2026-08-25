@@ -84,7 +84,7 @@ for target in "${TARGETS[@]}"; do
     echo "[layer3-bench] RUN  ${target}"
     # Hermetic: JSONL backend — unit benchmarks must not depend on machine-global
     # ATLAS_STORE_BACKEND (~/.config/atlas-go/.env may default to postgres).
-    if ! ATLAS_STORE_BACKEND=jsonl go test -bench=. -benchmem -count="${BENCH_COUNT}" "./${target}/..." > "${current}" 2>&1; then
+    if ! ATLAS_STORE_BACKEND=jsonl go test -run=^$ -bench=. -benchmem -count="${BENCH_COUNT}" "./${target}/..." > "${current}" 2>&1; then
         echo "[layer3-bench] FAIL ${target}: benchmark run failed (see ${current})"
         FAILED=1
         continue
