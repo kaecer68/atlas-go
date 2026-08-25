@@ -19,14 +19,24 @@ import (
 
 // GeopoliticalRiskScore represents a computed geopolitical risk reading.
 type GeopoliticalRiskScore struct {
-	Region         string    `json:"region"`
-	Intensity      float64   `json:"intensity"`  // 0 - 100
-	Sentiment      float64   `json:"sentiment"`  // -1.0 to +1.0 (negative = risk-off)
-	Confidence     float64   `json:"confidence"` // 0.0 to 1.0
-	OilImpact      float64   `json:"oil_impact"` // estimated impact direction
-	ShippingImpact float64   `json:"shipping_impact"`
-	Sources        []string  `json:"sources"`
-	Timestamp      time.Time `json:"timestamp"`
+	Region         string     `json:"region"`
+	Intensity      float64    `json:"intensity"`  // 0 - 100
+	Sentiment      float64    `json:"sentiment"`  // -1.0 to +1.0 (negative = risk-off)
+	Confidence     float64    `json:"confidence"` // 0.0 to 1.0
+	OilImpact      float64    `json:"oil_impact"` // estimated impact direction
+	ShippingImpact float64    `json:"shipping_impact"`
+	Sources        []string   `json:"sources"`
+	Events         []GeoEvent `json:"events,omitempty"` // G5-4: keyword-matched news items (event-layer trace)
+	Timestamp      time.Time  `json:"timestamp"`
+}
+
+// GeoEvent captures one keyword-matched geopolitical news item so the
+// intensity can be traced back to concrete events (G5-4). Title/Keyword
+// come from the RSS item; Source is the feed URL.
+type GeoEvent struct {
+	Title   string `json:"title"`
+	Keyword string `json:"keyword"`
+	Source  string `json:"source"`
 }
 
 // GeopoliticalRiskProvider fetches geopolitical risk indicators.

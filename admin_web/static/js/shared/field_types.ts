@@ -1640,6 +1640,12 @@ export interface GARCHParameters {
   weekly_rebalance_days: string;
 }
 
+export interface GeoEvent {
+  title: string;
+  keyword: string;
+  source: string;
+}
+
 export interface GeopoliticalPoint {
   date: string;
   intensity: number;
@@ -1656,6 +1662,7 @@ export interface GeopoliticalRiskScore {
   oil_impact: number;
   shipping_impact: number;
   sources: string[];
+  events?: GeoEvent[];
   timestamp: string;
 }
 

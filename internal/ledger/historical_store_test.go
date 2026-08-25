@@ -591,6 +591,65 @@ func TestSQLiteHistoricalStore_UpsertGeopolitical_Idempotent(t *testing.T) {
 	}
 }
 
+// TestSQLiteHistoricalStore_GeopoliticalEventsRoundTrip covers G5-4: the
+// sources_json column now stores {"feeds":[...],"events":[...]} and both
+// legacy (plain []string) and new formats must round-trip.
+func TestSQLiteHistoricalStore_GeopoliticalEventsRoundTrip(t *testing.T) {
+	store, _, _, done := mustOpenStore(t)
+	defer done()
+
+	row := GeopoliticalRow{
+		Date:      "2026-08-25",
+		Intensity: 42,
+		Sources:   []string{"https://feed1.example/rss"},
+		Events: []GeoEventRow{
+			{Title: "共機繞台 40 架次", Keyword: "共機", Source: "https://feed1.example/rss"},
+			{Title: "PLA drills near Taiwan Strait", Keyword: "taiwan strait", Source: "https://feed1.example/rss"},
+		},
+		Source:      "macro_ingest",
+		CapturedAt:  time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC),
+		IsSynthetic: 0,
+	}
+	if err := store.UpsertGeopolitical(context.Background(), row); err != nil {
+		t.Fatalf("upsert with events: %v", err)
+	}
+
+	got, ok, err := store.LoadGeopoliticalByDateAll(context.Background(), "2026-08-25")
+	if err != nil || !ok {
+		t.Fatalf("load: ok=%v err=%v", ok, err)
+	}
+	if len(got.Sources) != 1 || got.Sources[0] != "https://feed1.example/rss" {
+		t.Errorf("Sources = %v, want feed URL preserved", got.Sources)
+	}
+	if len(got.Events) != 2 || got.Events[0].Keyword != "共機" || got.Events[1].Title != "PLA drills near Taiwan Strait" {
+		t.Errorf("Events = %+v, want 2 traced items", got.Events)
+	}
+
+	// Legacy format (plain []string, no events) must still round-trip:
+	// Upsert writes the plain array when Events is nil, and the tolerant
+	// loader must read it back into Sources with Events nil.
+	legacy := GeopoliticalRow{
+		Date:       "2026-08-01",
+		Intensity:  10,
+		Sources:    []string{"https://legacy.example/rss"},
+		Source:     "macro_ingest",
+		CapturedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+	}
+	if err := store.UpsertGeopolitical(context.Background(), legacy); err != nil {
+		t.Fatalf("upsert legacy: %v", err)
+	}
+	gotL, ok, err := store.LoadGeopoliticalByDateAll(context.Background(), "2026-08-01")
+	if err != nil || !ok {
+		t.Fatalf("load legacy: ok=%v err=%v", ok, err)
+	}
+	if len(gotL.Sources) != 1 || gotL.Sources[0] != "https://legacy.example/rss" {
+		t.Errorf("legacy Sources = %v, want plain array read back", gotL.Sources)
+	}
+	if len(gotL.Events) != 0 {
+		t.Errorf("legacy Events = %+v, want nil", gotL.Events)
+	}
+}
+
 func TestSQLiteHistoricalStore_UpsertGeopolitical_RequiresDate(t *testing.T) {
 	store, _, _, done := mustOpenStore(t)
 	defer done()
