@@ -50,6 +50,15 @@ func (b *providerBreaker) shouldTry() bool {
 	return false
 }
 
+// recordSuccess resets the breaker to Closed. NOTE (k3 audit 2026-08-24):
+// several providers call recordSuccess for "no-data / quota-gate / holiday"
+// conditions that should be *no-ops* rather than success resets — a
+// recordSuccess here erases prior REAL failures (e.g. government_broker
+// masked a total outage until P1 fix). Prefer a true no-op for
+// expected-empty conditions; keep recordSuccess only for actual successful
+// data fetches. Reviewed 2026-08-24: finmind quota-gate and twse empty-data
+// paths still use recordSuccess (per-request breaker, impact small) — treat
+// as accepted trade-off; new code must use no-op semantics.
 func (b *providerBreaker) recordSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()

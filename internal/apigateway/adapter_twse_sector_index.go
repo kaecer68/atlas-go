@@ -23,7 +23,11 @@ type TWSESectorIndexChannelAdapter struct {
 func NewTWSESectorIndexChannelAdapter(provider *marketdata.TWSESectorIndexProvider) *TWSESectorIndexChannelAdapter {
 	return &TWSESectorIndexChannelAdapter{
 		provider: provider,
-		limiter:  rate.NewLimiter(rate.Every(5*time.Second), 1),
+		// P1-13: rate limiting is enforced by the provider-side shared TWSE
+		// bucket; this adapter's 5s bucket used to double-wait (k3 audit Low
+		// 2026-08-24). rate.Inf keeps the Wait as a ctx-cancellation check
+		// point without throttling; Tokens() stays full as RateLimit metadata.
+		limiter: rate.NewLimiter(rate.Inf, 0),
 	}
 }
 
@@ -31,8 +35,13 @@ func NewTWSESectorIndexChannelAdapter(provider *marketdata.TWSESectorIndexProvid
 func (a *TWSESectorIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 
-	if err := a.limiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("twse_sector_index rate limit: %w", err)
+	// P1-13: rate limiting is enforced by the provider-side shared TWSE
+	// bucket (getTWSESharedLimiter); this adapter's own 5s bucket used to
+	// double-wait (k3 audit Low 2026-08-24). The limiter is now rate.Inf
+	// (pure RateLimit metadata, Tokens() full) and the Wait was replaced by
+	// an explicit ctx check that keeps the cancelled-context contract.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("twse_sector_index: %w", err)
 	}
 
 	today := time.Now()
