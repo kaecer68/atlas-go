@@ -2368,7 +2368,8 @@
         "MarginMaintenanceRatio float64",
         "PublicBankConsecBuyDays int",
         "SectorRotationFlag bool",
-        "NationalFundActive bool"
+        "NationalFundActive bool",
+        "GeoIntensity float64"
       ],
       "kind": "struct",
       "name": "PeriodIndicators"

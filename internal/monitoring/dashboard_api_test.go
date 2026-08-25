@@ -1829,7 +1829,7 @@ func TestDashboardAPI_PersistPeriodHistory(t *testing.T) {
 		RecordedAt:         target.Unix(),
 	}
 
-	d.persistPeriodHistory(context.Background(), snap)
+	d.persistPeriodHistory(context.Background(), snap, geopolitical.GeopoliticalRiskScore{})
 
 	if len(store.upsertedPeriod) != 1 {
 		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))
@@ -1873,7 +1873,7 @@ func TestDashboardAPI_PersistPeriodHistory_NoEnrichDirNoPanic(t *testing.T) {
 	d.macroIngestor = narrative.NewMacroIngestor(nil, filepath.Join(tmp, "missing_macro"))
 
 	snap := marketdata.MacroDataSnapshot{RecordedAt: unixTimeForTest("2026-08-01")}
-	d.persistPeriodHistory(context.Background(), snap)
+	d.persistPeriodHistory(context.Background(), snap, geopolitical.GeopoliticalRiskScore{})
 
 	if len(store.upsertedPeriod) != 1 {
 		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))

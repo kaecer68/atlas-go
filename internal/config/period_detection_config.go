@@ -15,12 +15,14 @@ type PeriodDetectionConfig struct {
 	BlackSwanVIX                float64 // VIX > N
 	BlackSwanTAIEXDeclinePct    float64 // 加權指數單日跌幅 > N%
 	BlackSwanTWDDepreciationPct float64 // 新台幣單日重貶 > N%
+	BlackSwanGeoIntensity       float64 // 地緣（台海）風險強度 > N（0-100，憲章 §3 黑天鵝）
 
 	// ── Turnaround Down ──
 	TurnDownConsecSellDays    int     // 外資連續賣超天數
 	TurnDownSingleSellBillion float64 // 單日賣超 > N 億元
 	TurnDownMarginMaintRatio  float64 // 融資維持率 < N%
 	TurnDownFuturesOIDecrease int     // 期貨未平倉減少 > N 口
+	TurnDownGeoIntensity      float64 // 地緣（台海）風險強度 > N（0-100，憲章 §3 轉折下壓）
 
 	// ── Downturn ──
 	DownturnSellRatioToPeak    float64 // 5日均值 / 峰值 < N
@@ -62,12 +64,14 @@ func DefaultPeriodDetectionConfig() PeriodDetectionConfig {
 		BlackSwanVIX:                35,
 		BlackSwanTAIEXDeclinePct:    5,
 		BlackSwanTWDDepreciationPct: 0.5,
+		BlackSwanGeoIntensity:       60, // 地緣強度 ≥60（4 級制 ≥ 高張(3)）— 憲章 §3 黑天鵝
 
 		// Turnaround Down
 		TurnDownConsecSellDays:    3,
 		TurnDownSingleSellBillion: 150,
 		TurnDownMarginMaintRatio:  150,
 		TurnDownFuturesOIDecrease: 10000,
+		TurnDownGeoIntensity:      40, // 地緣強度 ≥40（4 級制 ≥ 升溫(2)）— 憲章 §3 轉折下壓
 
 		// Downturn
 		DownturnSellRatioToPeak:    0.30,
