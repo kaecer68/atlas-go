@@ -42,6 +42,59 @@ var fixedHolidays = []struct {
 	{Name: "國慶日", Month: time.October, Day: 10},
 }
 
+// springFestivalClosures holds the FULL TWSE closure span for the Spring
+// Festival (lunar new year), not just 初一: settlement days (市場無交易僅結算),
+// 除夕, 春節 初一~初五 and any 補假 (adjusted leave) — verified against the
+// TWSE official 開休市日期 calendar (web, 2026-08-25). Without these, weekday
+// closures during the holiday window were misjudged as trading days, so
+// daily-replay-sync appended fake holiday quotes and clean-replay-weekends
+// failed to remove them (2026-02 spring-festival rows in production replay,
+// k3-audit follow-up). Years without an entry fall back to 初一-only with a
+// warning — acceptable outside the 2023-2026 backtest window.
+var springFestivalClosures = map[int][]time.Time{
+	2023: {
+		time.Date(2023, 1, 18, 0, 0, 0, 0, time.UTC), // 結算 1/18-19
+		time.Date(2023, 1, 19, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 1, 20, 0, 0, 0, 0, time.UTC), // 除夕前一日(調整放假)
+		time.Date(2023, 1, 21, 0, 0, 0, 0, time.UTC), // 除夕
+		time.Date(2023, 1, 22, 0, 0, 0, 0, time.UTC), // 初一
+		time.Date(2023, 1, 23, 0, 0, 0, 0, time.UTC), // 初二
+		time.Date(2023, 1, 24, 0, 0, 0, 0, time.UTC), // 初三
+		time.Date(2023, 1, 25, 0, 0, 0, 0, time.UTC), // 補假
+		time.Date(2023, 1, 26, 0, 0, 0, 0, time.UTC), // 補假
+		time.Date(2023, 1, 27, 0, 0, 0, 0, time.UTC), // 調整放假
+	},
+	2024: {
+		time.Date(2024, 2, 6, 0, 0, 0, 0, time.UTC), // 結算 2/6-7
+		time.Date(2024, 2, 7, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 2, 8, 0, 0, 0, 0, time.UTC),  // 除夕前一日(調整放假)
+		time.Date(2024, 2, 9, 0, 0, 0, 0, time.UTC),  // 除夕
+		time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC), // 初一
+		time.Date(2024, 2, 11, 0, 0, 0, 0, time.UTC), // 初二
+		time.Date(2024, 2, 12, 0, 0, 0, 0, time.UTC), // 初三
+		time.Date(2024, 2, 13, 0, 0, 0, 0, time.UTC), // 補假
+		time.Date(2024, 2, 14, 0, 0, 0, 0, time.UTC), // 補假
+	},
+	2025: {
+		time.Date(2025, 1, 23, 0, 0, 0, 0, time.UTC), // 結算 1/23-24
+		time.Date(2025, 1, 24, 0, 0, 0, 0, time.UTC),
+		time.Date(2025, 1, 27, 0, 0, 0, 0, time.UTC), // 除夕前一日(調整放假)
+		time.Date(2025, 1, 28, 0, 0, 0, 0, time.UTC), // 除夕
+		time.Date(2025, 1, 29, 0, 0, 0, 0, time.UTC), // 初一
+		time.Date(2025, 1, 30, 0, 0, 0, 0, time.UTC), // 初二
+		time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC), // 初三
+	},
+	2026: {
+		time.Date(2026, 2, 12, 0, 0, 0, 0, time.UTC), // 結算 2/12-13
+		time.Date(2026, 2, 13, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC), // 除夕（2/15 週日）
+		time.Date(2026, 2, 17, 0, 0, 0, 0, time.UTC), // 初一
+		time.Date(2026, 2, 18, 0, 0, 0, 0, time.UTC), // 初二
+		time.Date(2026, 2, 19, 0, 0, 0, 0, time.UTC), // 初三
+		time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC), // 補假
+	},
+}
+
 // lunar tables: year → date (verified 2023-2030). This is the canonical
 // copy — marketdata/calendar.go and industry/event_calendar.go previously
 // each maintained their own duplicate and could drift.
@@ -216,7 +269,16 @@ func warnFallback(year int) {
 // for out-of-range years.
 func lunarDatesInYear(year int) []Holiday {
 	holidays := make([]Holiday, 0, 4)
-	if d, ok := lunarNewYearDates[year]; ok {
+	if closures, ok := springFestivalClosures[year]; ok {
+		// Full TWSE closure span (settlement days + 除夕~初五 + 補假),
+		// verified against the official calendar — see springFestivalClosures.
+		for _, d := range closures {
+			holidays = append(holidays, Holiday{Name: "春節休市", Date: d})
+		}
+	} else if d, ok := lunarNewYearDates[year]; ok {
+		// Fallback: 初一 only (pre-2023 / beyond-2026 years) — a weekday
+		// closure inside the spring window may be missed; acceptable outside
+		// the verified 2023-2026 span.
 		holidays = append(holidays, Holiday{Name: "春節", Date: d})
 	} else {
 		warnFallback(year)

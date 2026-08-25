@@ -396,7 +396,19 @@ func newWiredIndustryService(narrativeEngine *narrative.NarrativeEngine, macroPr
 		linkageAnalyzer,
 		industry.NewRiskMonitor(),
 		siliconTracker,
-		newWiredEventCalendar(marketdata.NewTWSECalendarProvider()), // eventCalendar with TWSE provider
+		// R7 (2026-08-24, k3 adjudication): TWSE rwd API deprecated 2026-06 —
+		// the old TWSECalendarProvider returns nothing for any year, leaving
+		// the live event calendar empty. Switch to the composite of the new
+		// OpenAPI snapshot provider (current-year ex-dividend/shareholder
+		// meetings) + MSCI static rebalance dates. Composite fails open:
+		// only errors when ALL providers fail (CalendarEventProvider contract),
+		// so a provider outage degrades to an empty calendar instead of
+		// blocking the dashboard. Announced (future) events are inert —
+		// DetectActiveEvents only fires when now ∈ [start, end].
+		newWiredEventCalendar(marketdata.NewCompositeCalendarProvider(
+			marketdata.NewTWSEOpenAPICalendarProvider(),
+			marketdata.NewMSCIRebalanceCalendarProvider(),
+		)),
 		nil,                                // odmChannel (optional, not wired in default dashboard)
 		nil,                                // dataAggregator (optional, not wired in default dashboard)
 		config.Load().ParametersConfigPath, // paramsPath

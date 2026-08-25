@@ -60,13 +60,18 @@ func TestLunarTables_2031_2040(t *testing.T) {
 }
 
 // TestHolidaysInYear_FullCoverage pins the complete holiday set for every
-// verified year: exactly 8 holidays (4 fixed + 4 lunar) and the lunar dates
-// must match the canonical accessors (single-source consistency).
+// verified year: 8 base holidays (4 fixed + 4 lunar) plus the TWSE spring
+// festival closure span (settlement days + 除夕~初五 + 補假) for 2023-2026,
+// and the lunar dates must match the canonical accessors.
 func TestHolidaysInYear_FullCoverage(t *testing.T) {
 	for y := 2023; y <= 2040; y++ {
 		hs := HolidaysInYear(y)
-		if len(hs) != 8 {
-			t.Fatalf("%d: holidays = %d, want 8 (got %+v)", y, len(hs), hs)
+		want := 8
+		if closures, ok := springFestivalClosures[y]; ok {
+			want += len(closures) - 1 // -1: 初一 already counted in the 4 lunar
+		}
+		if len(hs) != want {
+			t.Fatalf("%d: holidays = %d, want %d (got %+v)", y, len(hs), want, hs)
 		}
 		// 清明 must match the canonical tomb-sweeping accessor.
 		for _, h := range hs {
@@ -88,9 +93,9 @@ func TestHolidaysInYear_FullCoverage(t *testing.T) {
 
 func TestHolidaysInYear_2026(t *testing.T) {
 	hs := HolidaysInYear(2026)
-	// 4 fixed + 4 lunar = 8
-	if len(hs) != 8 {
-		t.Fatalf("2026 holidays = %d, want 8 (got %+v)", len(hs), hs)
+	// 4 fixed + 4 lunar + 6 extra spring-closure days (2/12,13,16,18,19,20)
+	if len(hs) != 14 {
+		t.Fatalf("2026 holidays = %d, want 14 (got %+v)", len(hs), hs)
 	}
 	dates := map[string]bool{}
 	for _, h := range hs {
@@ -177,11 +182,12 @@ func TestPreviousTradingDay_SkipsHoliday(t *testing.T) {
 		t.Errorf("got %s, want 2026-10-09 (holiday Monday rollback)", got.Format("2006-01-02"))
 	}
 
-	// 2026 春節: 2/17 (Tue). From 2/18 (Wed) one day back must skip the
-	// holiday and land on 2/16 (Mon), NOT the holiday itself.
-	got = PreviousTradingDay(time.Date(2026, 2, 18, 12, 0, 0, 0, time.UTC), 1)
-	if got.Format("2006-01-02") != "2026-02-16" {
-		t.Errorf("got %s, want 2026-02-16 (holiday Tuesday rollback)", got.Format("2006-01-02"))
+	// 2026 春節休市: 2/12-2/20 (settlement + 除夕~初五 + 補假). From 2/23
+	// (Mon, reopening) one day back must skip the entire closure span and
+	// land on 2/11 (Wed, last trading day), NOT a closure day.
+	got = PreviousTradingDay(time.Date(2026, 2, 23, 12, 0, 0, 0, time.UTC), 1)
+	if got.Format("2006-01-02") != "2026-02-11" {
+		t.Errorf("got %s, want 2026-02-11 (spring festival closure rollback)", got.Format("2006-01-02"))
 	}
 }
 
@@ -225,5 +231,35 @@ func TestLunarNewYearAccessor(t *testing.T) {
 	}
 	if m := LunarNewYearDates(); len(m) != len(lunarNewYearDates) {
 		t.Fatalf("LunarNewYearDates() copy len=%d want %d", len(m), len(lunarNewYearDates))
+	}
+}
+
+// TestSpringFestivalClosures_TWSEOfficial pins the full TWSE closure span
+// (settlement days + 除夕~初五 + 補假) for 2023-2026 — verified against the
+// TWSE official 開休市日期 calendar (2026-08-25). Regression guard: a
+// weekday closure inside the spring window must NOT be a trading day
+// (previously only 初一 was marked, so daily-replay-sync appended fake
+// spring-festival quotes and clean-replay-weekends failed to remove them).
+func TestSpringFestivalClosures_TWSEOfficial(t *testing.T) {
+	closures := map[string][]string{
+		"2023": {"2023-01-18", "2023-01-19", "2023-01-20", "2023-01-21", "2023-01-24", "2023-01-25", "2023-01-26", "2023-01-27"},
+		"2024": {"2024-02-06", "2024-02-07", "2024-02-08", "2024-02-09", "2024-02-13", "2024-02-14"},
+		"2025": {"2025-01-23", "2025-01-24", "2025-01-27", "2025-01-28", "2025-01-30", "2025-01-31"},
+		"2026": {"2026-02-12", "2026-02-13", "2026-02-16", "2026-02-18", "2026-02-19", "2026-02-20"},
+	}
+	for yr, days := range closures {
+		for _, ds := range days {
+			d, _ := time.Parse("2006-01-02", ds)
+			if IsTradingDay(d) {
+				t.Errorf("%s must be closed (spring festival closure %s)", ds, yr)
+			}
+		}
+	}
+	// Reopening days must be trading days.
+	for _, ds := range []string{"2023-01-30", "2024-02-15", "2025-02-03", "2026-02-23"} {
+		d, _ := time.Parse("2006-01-02", ds)
+		if !IsTradingDay(d) {
+			t.Errorf("%s must be a trading day (spring festival reopening)", ds)
+		}
 	}
 }
