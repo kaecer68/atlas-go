@@ -1939,3 +1939,44 @@ func unixTimeForTest(date string) int64 {
 	}
 	return t.Unix()
 }
+
+// TestDashboardAPI_PersistPeriodHistory_NationalFundActive covers A1 (R8 接線):
+// 國安基金護盤期間（2025-04-09~2026-01-12 川普關稅窗口內）→ NationalFundActive=true
+// → 黑天鵝條件 4「國安基金宣布進場護盤」觸發 → period=black_swan。
+func TestDashboardAPI_PersistPeriodHistory_NationalFundActive(t *testing.T) {
+	tmp := t.TempDir()
+	store := &mockStressStore{}
+	d := NewDashboardAPIWithGateway(tmp, tmp, nil, NoopFetcher())
+	d.historicalStore = store
+	d.macroIngestor = narrative.NewMacroIngestor(nil, filepath.Join(tmp, "missing_macro"))
+
+	snap := marketdata.MacroDataSnapshot{RecordedAt: unixTimeForTest("2025-04-09")}
+	d.persistPeriodHistory(context.Background(), snap, geopolitical.GeopoliticalRiskScore{})
+
+	if len(store.upsertedPeriod) != 1 {
+		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))
+	}
+	if got := store.upsertedPeriod[0].Period; got != string(domain.PeriodBlackSwan) {
+		t.Errorf("row.Period = %q, want black_swan (國安基金護盤中, A1/R8)", got)
+	}
+}
+
+// TestDashboardAPI_PersistPeriodHistory_NoNSFOutOfWindow is the control for A1:
+// 護盤窗口外日期不得因國安基金誤判黑天鵝（2026-08-01 無護盤）。
+func TestDashboardAPI_PersistPeriodHistory_NoNSFOutOfWindow(t *testing.T) {
+	tmp := t.TempDir()
+	store := &mockStressStore{}
+	d := NewDashboardAPIWithGateway(tmp, tmp, nil, NoopFetcher())
+	d.historicalStore = store
+	d.macroIngestor = narrative.NewMacroIngestor(nil, filepath.Join(tmp, "missing_macro"))
+
+	snap := marketdata.MacroDataSnapshot{RecordedAt: unixTimeForTest("2026-08-01")}
+	d.persistPeriodHistory(context.Background(), snap, geopolitical.GeopoliticalRiskScore{})
+
+	if len(store.upsertedPeriod) != 1 {
+		t.Fatalf("UpsertPeriod calls = %d, want 1", len(store.upsertedPeriod))
+	}
+	if got := store.upsertedPeriod[0].Period; got == string(domain.PeriodBlackSwan) {
+		t.Errorf("row.Period = %q, want NOT black_swan (無護盤, A1 control)", got)
+	}
+}

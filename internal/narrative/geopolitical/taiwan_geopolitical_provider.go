@@ -74,6 +74,7 @@ func (t *TaiwanRSSGeopoliticalProvider) SetHTTPClient(client *http.Client) {
 func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (GeopoliticalRiskScore, error) {
 	var totalMatches int
 	var succeeded []string
+	var events []GeoEvent
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -81,7 +82,7 @@ func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 		wg.Add(1)
 		go func(url string) {
 			defer wg.Done()
-			matches, err := t.countKeywordsInFeed(ctx, url)
+			matches, evs, err := t.countKeywordsInFeed(ctx, url)
 			if err != nil {
 				logging.Warn("taiwan_geopolitical_provider", "feed_failed", logging.FStr("url", url), logging.Err(err))
 				return
@@ -89,11 +90,30 @@ func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 			mu.Lock()
 			totalMatches += matches
 			succeeded = append(succeeded, url)
+			events = append(events, evs...)
 			mu.Unlock()
 		}(url)
 	}
 
 	wg.Wait()
+
+	// G5-4: cap + dedupe event-layer trace items (newest-first not available
+	// from RSS without pubDate; dedupe by title keeps the sample meaningful).
+	seen := make(map[string]struct{}, len(events))
+	deduped := make([]GeoEvent, 0, len(events))
+	for _, ev := range events {
+		if ev.Title == "" {
+			continue
+		}
+		if _, ok := seen[ev.Title]; ok {
+			continue
+		}
+		seen[ev.Title] = struct{}{}
+		deduped = append(deduped, ev)
+		if len(deduped) >= 20 {
+			break
+		}
+	}
 
 	// Map matches to 0-100 intensity
 	// Cross-strait news is typically less frequent but more impactful than Middle East conflicts
@@ -119,18 +139,19 @@ func (t *TaiwanRSSGeopoliticalProvider) FetchScore(ctx context.Context) (Geopoli
 		OilImpact:      0.1, // Lower oil impact than Middle East
 		ShippingImpact: 0.4, // Taiwan Strait shipping risk
 		Sources:        succeeded,
+		Events:         deduped,
 		Timestamp:      time.Now().UTC(),
 	}
 	return score, nil
 }
 
-func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url string) (int, error) {
+func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context, url string) (int, []GeoEvent, error) {
 	if err := t.limiter.Wait(ctx); err != nil {
-		return 0, fmt.Errorf("rate limit: %w", err)
+		return 0, nil, fmt.Errorf("rate limit: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
@@ -139,30 +160,40 @@ func (t *TaiwanRSSGeopoliticalProvider) countKeywordsInFeed(ctx context.Context,
 	t.mu.RUnlock()
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	var rss rssFeed
 	if err := xml.Unmarshal(body, &rss); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	matches := 0
+	var events []GeoEvent
 	for _, item := range rss.Channel.Items {
 		text := strings.ToLower(item.Title + " " + item.Description)
 		for _, kw := range t.keywords {
 			if strings.Contains(text, kw) {
 				matches++
+				// G5-4: keep the first matched keyword per item for tracing.
+				if len(events) < 20 {
+					events = append(events, GeoEvent{
+						Title:   strings.TrimSpace(item.Title),
+						Keyword: kw,
+						Source:  url,
+					})
+				}
+				break // one event per item is enough for tracing
 			}
 		}
 	}
-	return matches, nil
+	return matches, events, nil
 }
 
 // CompositeTaiwanGeopoliticalProvider combines Taiwan RSS with other Taiwan-focused providers.

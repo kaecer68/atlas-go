@@ -367,7 +367,17 @@ func (s *PostgresHistoricalStore) UpsertGeopolitical(ctx context.Context, row Ge
 		return fmt.Errorf("geopolitical date is empty")
 	}
 	sourcesJSON := ""
-	if len(row.Sources) > 0 {
+	if len(row.Events) > 0 {
+		// G5-4: new format {"feeds":[...],"events":[...]} — same as SQLite.
+		wrapped, err := json.Marshal(struct {
+			Feeds  []string      `json:"feeds"`
+			Events []GeoEventRow `json:"events"`
+		}{Feeds: row.Sources, Events: row.Events})
+		if err != nil {
+			return fmt.Errorf("marshal geopolitical sources+events: %w", err)
+		}
+		sourcesJSON = string(wrapped)
+	} else if len(row.Sources) > 0 {
 		b, err := json.Marshal(row.Sources)
 		if err != nil {
 			return fmt.Errorf("marshal geopolitical sources: %w", err)
@@ -418,7 +428,16 @@ func (s *PostgresHistoricalStore) loadGeopoliticalByDate(ctx context.Context, da
 	r.Source = deref(source)
 	r.CapturedAt = parseTimeColumn(ptrToNull(capturedAtStr))
 	if sourcesJSON != nil && *sourcesJSON != "" {
-		_ = json.Unmarshal([]byte(*sourcesJSON), &r.Sources)
+		var wrapped struct {
+			Feeds  []string      `json:"feeds"`
+			Events []GeoEventRow `json:"events"`
+		}
+		if err := json.Unmarshal([]byte(*sourcesJSON), &wrapped); err == nil && wrapped.Feeds != nil {
+			r.Sources = wrapped.Feeds
+			r.Events = wrapped.Events
+		} else {
+			_ = json.Unmarshal([]byte(*sourcesJSON), &r.Sources)
+		}
 	}
 	return r, true, nil
 }
@@ -456,7 +475,16 @@ func (s *PostgresHistoricalStore) loadGeopoliticalHistory(ctx context.Context, l
 		r.Source = deref(source)
 		r.CapturedAt = parseTimeColumn(ptrToNull(capturedAtStr))
 		if sourcesJSON != nil && *sourcesJSON != "" {
-			_ = json.Unmarshal([]byte(*sourcesJSON), &r.Sources)
+			var wrapped struct {
+				Feeds  []string      `json:"feeds"`
+				Events []GeoEventRow `json:"events"`
+			}
+			if err := json.Unmarshal([]byte(*sourcesJSON), &wrapped); err == nil && wrapped.Feeds != nil {
+				r.Sources = wrapped.Feeds
+				r.Events = wrapped.Events
+			} else {
+				_ = json.Unmarshal([]byte(*sourcesJSON), &r.Sources)
+			}
 		}
 		out = append(out, r)
 	}

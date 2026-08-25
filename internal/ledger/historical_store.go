@@ -53,14 +53,24 @@ type StressRow struct {
 	IsSynthetic uint8                  `json:"is_synthetic"`
 }
 
+// GeoEventRow is one keyword-matched geopolitical news item persisted for
+// event-layer tracing (G5-4). Stored inside geopolitical_history.sources_json
+// alongside the feed URLs (new format: {"feeds":[...],"events":[...]}).
+type GeoEventRow struct {
+	Title   string `json:"title"`
+	Keyword string `json:"keyword"`
+	Source  string `json:"source"`
+}
+
 // GeopoliticalRow is one row from geopolitical_history.
 type GeopoliticalRow struct {
-	Date        string    `json:"date"`
-	Intensity   float64   `json:"intensity"`
-	Sources     []string  `json:"sources,omitempty"`
-	Source      string    `json:"source"`
-	CapturedAt  time.Time `json:"captured_at"`
-	IsSynthetic uint8     `json:"is_synthetic"`
+	Date        string        `json:"date"`
+	Intensity   float64       `json:"intensity"`
+	Sources     []string      `json:"sources,omitempty"`
+	Events      []GeoEventRow `json:"events,omitempty"` // G5-4 event-layer trace
+	Source      string        `json:"source"`
+	CapturedAt  time.Time     `json:"captured_at"`
+	IsSynthetic uint8         `json:"is_synthetic"`
 }
 
 // EventCalendarRow is one row from event_calendar_history.
@@ -507,7 +517,18 @@ func (s *SQLiteHistoricalStore) UpsertGeopolitical(ctx context.Context, row Geop
 		return fmt.Errorf("geopolitical date is empty")
 	}
 	sourcesJSON := ""
-	if row.Sources != nil {
+	if len(row.Events) > 0 {
+		// G5-4: new format {"feeds":[...],"events":[...]} — keeps feed URLs
+		// for backward compat and adds the event-layer trace items.
+		wrapped, err := json.Marshal(struct {
+			Feeds  []string      `json:"feeds"`
+			Events []GeoEventRow `json:"events"`
+		}{Feeds: row.Sources, Events: row.Events})
+		if err != nil {
+			return fmt.Errorf("marshal geopolitical sources+events: %w", err)
+		}
+		sourcesJSON = string(wrapped)
+	} else if row.Sources != nil {
 		b, err := json.Marshal(row.Sources)
 		if err != nil {
 			return fmt.Errorf("marshal geopolitical sources: %w", err)
@@ -558,9 +579,26 @@ func (s *SQLiteHistoricalStore) loadGeopoliticalByDate(ctx context.Context, date
 	r.Source = source.String
 	r.CapturedAt = parseTimeColumn(capturedAtStr)
 	if sourcesJSON.Valid && sourcesJSON.String != "" {
-		_ = json.Unmarshal([]byte(sourcesJSON.String), &r.Sources)
+		unmarshalGeopoliticalSources(sourcesJSON.String, &r)
 	}
 	return r, true, nil
+}
+
+// unmarshalGeopoliticalSources tolerantly reads geopolitical_history.sources_json:
+// legacy rows store a plain []string of feed URLs; G5-4 rows store
+// {"feeds":[...],"events":[...]}. Both round-trip into GeopoliticalRow.
+func unmarshalGeopoliticalSources(raw string, r *GeopoliticalRow) {
+	var wrapped struct {
+		Feeds  []string      `json:"feeds"`
+		Events []GeoEventRow `json:"events"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapped); err == nil && wrapped.Feeds != nil {
+		r.Sources = wrapped.Feeds
+		r.Events = wrapped.Events
+		return
+	}
+	// legacy: plain feed-URL array
+	_ = json.Unmarshal([]byte(raw), &r.Sources)
 }
 
 func (s *SQLiteHistoricalStore) LoadGeopoliticalHistory(ctx context.Context, limit int) ([]GeopoliticalRow, error) {
@@ -596,7 +634,7 @@ func (s *SQLiteHistoricalStore) loadGeopoliticalHistory(ctx context.Context, lim
 		r.Source = source.String
 		r.CapturedAt = parseTimeColumn(capturedAtStr)
 		if sourcesJSON.Valid && sourcesJSON.String != "" {
-			_ = json.Unmarshal([]byte(sourcesJSON.String), &r.Sources)
+			unmarshalGeopoliticalSources(sourcesJSON.String, &r)
 		}
 		out = append(out, r)
 	}

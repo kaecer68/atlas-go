@@ -670,6 +670,18 @@ func (a *DashboardAPI) resolveGeoScore(ctx context.Context) geopolitical.Geopoli
 	return geopolitical.GeopoliticalRiskScore{}
 }
 
+// toGeoEventRows converts provider-level geo events to ledger rows (G5-4).
+func toGeoEventRows(evs []geopolitical.GeoEvent) []ledger.GeoEventRow {
+	if len(evs) == 0 {
+		return nil
+	}
+	out := make([]ledger.GeoEventRow, 0, len(evs))
+	for _, ev := range evs {
+		out = append(out, ledger.GeoEventRow{Title: ev.Title, Keyword: ev.Keyword, Source: ev.Source})
+	}
+	return out
+}
+
 // persistGeopolitical writes the latest geopolitical risk score to the ledger
 // so historical reconstruction can read real geo values instead of defaulting
 // to zero. The SQLite ON CONFLICT(date) upsert makes repeated calls idempotent.
@@ -684,6 +696,7 @@ func (a *DashboardAPI) persistGeopolitical(ctx context.Context, geo geopolitical
 		Date:        geo.Timestamp.UTC().Format("2006-01-02"),
 		Intensity:   geo.Intensity,
 		Sources:     geo.Sources,
+		Events:      toGeoEventRows(geo.Events),
 		Source:      "macro_ingest",
 		CapturedAt:  geo.Timestamp.UTC(),
 		IsSynthetic: 0,
@@ -747,6 +760,9 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 	// G5: 台海危機訊號進時期判別（憲章 §3 黑天鵝/轉折下壓地緣條件）。
 	// geoScore 由 applyMacroUpdate 的 resolveGeoScore() 提供（live → history → file）。
 	ind.GeoIntensity = geoScore.Intensity
+	// A1（R8 接線）：國安基金護盤期間 → 黑天鵝條件 4「國安基金宣布進場護盤」。
+	// 使用 snapshot 自身日期判定（static 表涵蓋 2000-2026，backfill 亦正確）。
+	ind.NationalFundActive = marketdata.NewNationalStabilizationProvider().IsInterventionActive(date)
 	// B5 Batch 1 & 2: enrich with computed fields from historical snapshots.
 	// Errors are swallowed — if historical data is unavailable, indicators
 	// stay at zero (honest degradation, detector guards handle it).
@@ -1110,6 +1126,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			}
 			// G5: 台海危機訊號進時期判別（與 persistPeriodHistory 同源 resolveGeoScore）。
 			ind.GeoIntensity = a.resolveGeoScore(ctx).Intensity
+			// A1（R8 接線）：國安基金護盤期間 → 黑天鵝條件 4。
+			ind.NationalFundActive = marketdata.NewNationalStabilizationProvider().
+				IsInterventionActive(time.Now().UTC().Format("2006-01-02"))
 			assessment, _ := detector.DetectAssessment(ind)
 			indicators := make([]service.IndicatorHit, len(assessment.TriggeredIndicators))
 			for i, ti := range assessment.TriggeredIndicators {
