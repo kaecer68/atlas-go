@@ -21,6 +21,7 @@
 //   - twse-openapi  TWSE OpenAPI v1 (TWT48U_ALL + t187ap41_L); current year
 //     only (OpenAPI v1 serves current snapshots).
 //   - msci          static MSCI quarterly rebalance table (2023-2026).
+//   - nsf           static 國安基金護盤期間表（2000-2026，人工維護）。
 //   - auto          twse-openapi + msci.
 //
 // Writes one event_calendar_history row per event via
@@ -35,6 +36,7 @@
 //	backfill-event-calendar -workdir . -start-year 2023 -end-year 2026 -db data/state/atlas.db
 //	backfill-event-calendar -workdir . -pg -pg-dsn postgres://...
 //	backfill-event-calendar -workdir . -provider msci
+//	backfill-event-calendar -workdir . -provider nsf
 package main
 
 import (
@@ -98,10 +100,13 @@ func defaultFactory(cfg runConfig, _ int) []namedProvider {
 		return []namedProvider{{name: "twse_openapi", provider: marketdata.NewTWSEOpenAPICalendarProvider()}}
 	case "msci":
 		return []namedProvider{{name: "msci_static", provider: marketdata.NewMSCIRebalanceCalendarProvider()}}
+	case "nsf":
+		return []namedProvider{{name: "nsf_static", provider: marketdata.NewNationalStabilizationProvider()}}
 	default: // auto
 		return []namedProvider{
 			{name: "twse_openapi", provider: marketdata.NewTWSEOpenAPICalendarProvider()},
 			{name: "msci_static", provider: marketdata.NewMSCIRebalanceCalendarProvider()},
+			{name: "nsf_static", provider: marketdata.NewNationalStabilizationProvider()},
 		}
 	}
 }
@@ -124,7 +129,7 @@ func runFromOSArgs() error {
 		*endYear = curYear
 	}
 	switch *provider {
-	case "twse", "twse-openapi", "msci", "auto":
+	case "twse", "twse-openapi", "msci", "nsf", "auto":
 	default:
 		return fmt.Errorf("invalid -provider %q (want twse|twse-openapi|msci|auto)", *provider)
 	}
