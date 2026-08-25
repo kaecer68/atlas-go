@@ -95,6 +95,31 @@ var springFestivalClosures = map[int][]time.Time{
 	},
 }
 
+// adjustedHolidays holds ADJUSTED LEAVE days (補假/調整放假) plus any
+// non-spring settlement closures — weekday market closures NOT covered by
+// fixedHolidays, springFestivalClosures or the lunar tables. Verified against
+// the TWSE official 開休市日期 calendar (web, 2026-08-25). Without these,
+// e.g. 2026-02-27 (228 補假) was misjudged a trading day and fake quotes
+// leaked into replay (2885 Close 788.33 vs 47.25 the day before).
+var adjustedHolidays = map[int][]time.Time{
+	2023: {
+		time.Date(2023, 2, 27, 0, 0, 0, 0, time.UTC), // 和平紀念日補假
+		time.Date(2023, 4, 3, 0, 0, 0, 0, time.UTC),  // 兒童節調整放假
+		time.Date(2023, 10, 9, 0, 0, 0, 0, time.UTC), // 國慶日補假
+	},
+	2025: {
+		time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC),  // 端午節補假（5/31 週六）
+		time.Date(2025, 9, 29, 0, 0, 0, 0, time.UTC),  // 教師節補假（9/28 週日）
+		time.Date(2025, 10, 24, 0, 0, 0, 0, time.UTC), // 光復節補假（10/25 週六）
+	},
+	2026: {
+		time.Date(2026, 2, 27, 0, 0, 0, 0, time.UTC),  // 和平紀念日補假（2/28 週六）
+		time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC),   // 民族掃墓節補假（4/5 週日）
+		time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC),  // 國慶日補假（10/10 週六）
+		time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), // 光復節補假（10/25 週日）
+	},
+}
+
 // lunar tables: year → date (verified 2023-2030). This is the canonical
 // copy — marketdata/calendar.go and industry/event_calendar.go previously
 // each maintained their own duplicate and could drift.
@@ -314,6 +339,11 @@ func HolidaysInYear(year int) []Holiday {
 		holidays = append(holidays, Holiday{Name: f.Name, Date: time.Date(year, f.Month, f.Day, 0, 0, 0, 0, time.UTC)})
 	}
 	holidays = append(holidays, lunarDatesInYear(year)...)
+	if adj, ok := adjustedHolidays[year]; ok {
+		for _, d := range adj {
+			holidays = append(holidays, Holiday{Name: "調整放假", Date: d})
+		}
+	}
 	sort.Slice(holidays, func(i, j int) bool { return holidays[i].Date.Before(holidays[j].Date) })
 	return holidays
 }

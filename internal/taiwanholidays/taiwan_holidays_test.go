@@ -70,6 +70,9 @@ func TestHolidaysInYear_FullCoverage(t *testing.T) {
 		if closures, ok := springFestivalClosures[y]; ok {
 			want += len(closures) - 1 // -1: 初一 already counted in the 4 lunar
 		}
+		if adj, ok := adjustedHolidays[y]; ok {
+			want += len(adj)
+		}
 		if len(hs) != want {
 			t.Fatalf("%d: holidays = %d, want %d (got %+v)", y, len(hs), want, hs)
 		}
@@ -93,9 +96,9 @@ func TestHolidaysInYear_FullCoverage(t *testing.T) {
 
 func TestHolidaysInYear_2026(t *testing.T) {
 	hs := HolidaysInYear(2026)
-	// 4 fixed + 4 lunar + 6 extra spring-closure days (2/12,13,16,18,19,20)
-	if len(hs) != 14 {
-		t.Fatalf("2026 holidays = %d, want 14 (got %+v)", len(hs), hs)
+	// 4 fixed + 4 lunar + 6 spring-closure + 4 adjusted-leave (2/27, 4/6, 10/9, 10/26)
+	if len(hs) != 18 {
+		t.Fatalf("2026 holidays = %d, want 18 (got %+v)", len(hs), hs)
 	}
 	dates := map[string]bool{}
 	for _, h := range hs {
@@ -178,8 +181,8 @@ func TestPreviousTradingDay_SkipsHoliday(t *testing.T) {
 	// 2026-10-10 (Sat) is 國慶日; 2026-10-09 (Fri) is a regular trading day.
 	// From Monday 2026-10-12, one day back must land on Friday 10-09.
 	got := PreviousTradingDay(time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC), 1)
-	if got.Format("2006-01-02") != "2026-10-09" {
-		t.Errorf("got %s, want 2026-10-09 (holiday Monday rollback)", got.Format("2006-01-02"))
+	if got.Format("2006-01-02") != "2026-10-08" {
+		t.Errorf("got %s, want 2026-10-08 (10/9 國慶補假 + 10/10 國慶 rollback)", got.Format("2006-01-02"))
 	}
 
 	// 2026 春節休市: 2/12-2/20 (settlement + 除夕~初五 + 補假). From 2/23

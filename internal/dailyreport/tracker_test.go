@@ -24,10 +24,10 @@ func TestTradingDaysAfter(t *testing.T) {
 	}{
 		// 2026-08-10 Mon → +5 trading days = 2026-08-17 Mon
 		{"2026-08-10", 5, "2026-08-17"},
-		// 2026-02-13 Fri → 5 trading days: spring closure 2/12-2/20 all
-		// non-trading (settlement + 除夕~初五 + 補假), reopening 2/23 Mon;
-		// +5 trading days = 2026-02-27
-		{"2026-02-13", 5, "2026-02-27"},
+		// 2026-02-13 Fri → 5 trading days: spring closure 2/12-2/20,
+		// reopening 2/23; 2/27 is 228 補假 (adjusted leave) → +5 trading
+		// days = 2026-03-02
+		{"2026-02-13", 5, "2026-03-02"},
 		// A report on a Friday: next trading day is Monday.
 		{"2026-08-14", 1, "2026-08-17"},
 	}

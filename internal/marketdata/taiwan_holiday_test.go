@@ -49,7 +49,7 @@ func TestIsTaiwanTradingDay_Holidays(t *testing.T) {
 		{"春節初一 2026（平日）", time.Date(2026, 2, 17, 0, 0, 0, 0, twseLocation), false},
 		{"國慶日 2026（週六）", time.Date(2026, 10, 10, 0, 0, 0, 0, twseLocation), false},
 		{"一般週五 2026-07-10", time.Date(2026, 7, 10, 0, 0, 0, 0, twseLocation), true},
-		{"春節後週五 2026-02-27", time.Date(2026, 2, 27, 0, 0, 0, 0, twseLocation), true},
+		{"228補假 2026-02-27", time.Date(2026, 2, 27, 0, 0, 0, 0, twseLocation), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
