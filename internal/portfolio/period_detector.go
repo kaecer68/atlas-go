@@ -79,7 +79,8 @@ type PeriodIndicators struct {
 	NationalFundActive bool // 國安基金宣布進場
 
 	// ── 地緣政治（台海危機，憲章 §3 黑天鵝/轉折下壓）──
-	GeoIntensity float64 // 地緣（台海）風險強度 0-100（geo RSS provider → 壓力指數 geopolitical 元件）
+	GeoIntensity         float64 // 地緣（台海）風險強度 0-100（geo RSS provider → 壓力指數 geopolitical 元件）
+	GeoIntensityChange5D float64 // 地緣強度 5 日變動（正=升溫；0=無歷史資料/持平，視為不可用→僅以當日強度判定）
 }
 
 // TriggeredIndicator captures the evaluation outcome of a single period-detection
@@ -309,7 +310,8 @@ func (d *PeriodDetector) isTurnaroundDown(ind PeriodIndicators) bool {
 	}
 
 	// 6. Geopolitical (Taiwan Strait) tension rising: intensity >= threshold
-	if ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity {
+	// AND 5-day trend not declining (Change5D == 0 = no history → intensity-only).
+	if ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity && ind.GeoIntensityChange5D >= 0 {
 		passed++
 	}
 
@@ -385,9 +387,10 @@ func (d *PeriodDetector) assessTurnaroundDown(ind PeriodIndicators) (hit bool, c
 		condHit++
 	}
 
-	// 6. Geopolitical (Taiwan Strait) tension rising
+	// 6. Geopolitical (Taiwan Strait) tension rising: intensity >= threshold
+	// AND 5-day trend not declining (Change5D == 0 = no history → intensity-only).
 	avail6 := ind.GeoIntensity != 0
-	hit6 := ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity
+	hit6 := ind.GeoIntensity >= d.cfg.TurnDownGeoIntensity && ind.GeoIntensityChange5D >= 0
 	indicators = append(indicators, TriggeredIndicator{
 		Name: "地緣（台海）緊張升溫", Value: ind.GeoIntensity,
 		Threshold: d.cfg.TurnDownGeoIntensity, Relation: "gte",

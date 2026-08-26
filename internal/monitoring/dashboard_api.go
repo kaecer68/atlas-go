@@ -670,6 +670,31 @@ func (a *DashboardAPI) resolveGeoScore(ctx context.Context) geopolitical.Geopoli
 	return geopolitical.GeopoliticalRiskScore{}
 }
 
+// geoIntensityChange5D computes the 5-calendar-day change of geopolitical
+// intensity vs the given date from the historical ledger. Returns 0 when
+// history is unavailable (honest degradation — the 地緣升溫 condition in the
+// detector then falls back to intensity-only, since Change5D==0 passes >= 0).
+func (a *DashboardAPI) geoIntensityChange5D(ctx context.Context, date string, current float64) float64 {
+	if a.historicalStore == nil || current == 0 {
+		return 0
+	}
+	rows, err := a.historicalStore.LoadGeopoliticalHistoryAll(ctx, 30)
+	if err != nil || len(rows) == 0 {
+		return 0
+	}
+	target, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return 0
+	}
+	base := target.AddDate(0, 0, -5).Format("2006-01-02")
+	for _, row := range rows {
+		if row.Date == base {
+			return current - row.Intensity
+		}
+	}
+	return 0
+}
+
 // toGeoEventRows converts provider-level geo events to ledger rows (G5-4).
 func toGeoEventRows(evs []geopolitical.GeoEvent) []ledger.GeoEventRow {
 	if len(evs) == 0 {
@@ -760,6 +785,9 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 	// G5: 台海危機訊號進時期判別（憲章 §3 黑天鵝/轉折下壓地緣條件）。
 	// geoScore 由 applyMacroUpdate 的 resolveGeoScore() 提供（live → history → file）。
 	ind.GeoIntensity = geoScore.Intensity
+	// 地緣 5 日趨勢（憲章 v1.1：轉折下壓「地緣緊張升溫」需 5 日非下降；
+	// 無歷史資料回傳 0 → detector 退為僅以當日強度判定）。
+	ind.GeoIntensityChange5D = a.geoIntensityChange5D(ctx, date, geoScore.Intensity)
 	// A1（R8 接線）：國安基金護盤期間 → 黑天鵝條件 4「國安基金宣布進場護盤」。
 	// 使用 snapshot 自身日期判定（static 表涵蓋 2000-2026，backfill 亦正確）。
 	ind.NationalFundActive = marketdata.NewNationalStabilizationProvider().IsInterventionActive(date)
@@ -1126,6 +1154,8 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			}
 			// G5: 台海危機訊號進時期判別（與 persistPeriodHistory 同源 resolveGeoScore）。
 			ind.GeoIntensity = a.resolveGeoScore(ctx).Intensity
+			ind.GeoIntensityChange5D = a.geoIntensityChange5D(ctx,
+				time.Now().UTC().Format("2006-01-02"), ind.GeoIntensity)
 			// A1（R8 接線）：國安基金護盤期間 → 黑天鵝條件 4。
 			ind.NationalFundActive = marketdata.NewNationalStabilizationProvider().
 				IsInterventionActive(time.Now().UTC().Format("2006-01-02"))
