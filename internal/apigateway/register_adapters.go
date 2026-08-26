@@ -295,8 +295,17 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("government_flow", govAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "government_flow")
 
-	// --- Government Broker Aggregate (TWSE broker-level fetcher; C06) ---
+	// --- Government Broker Aggregate (C06) ---
+	// Default upstream since 2026-08-26 is the HiStock broker8 page
+	// (histock.tw/stock/broker8.aspx): the TWSE bsr.twse.com.tw scraper is
+	// CAPTCHA-blocked for all automated sessions and never produced non-zero
+	// data. GOV_BROKER_SOURCE=legacy-scraper opts back into the old scraper.
 	brokerProvider := marketdata.NewGovernmentBrokerAggregator(filepath.Join(workDir, "data/state/government_flow"))
+	if src := config.GetSecret("GOV_BROKER_SOURCE"); src == marketdata.GovSourceLegacyScraper {
+		brokerProvider.SetFetchSource(marketdata.GovSourceLegacyScraper)
+		logging.Warn("apigateway", "government_broker_legacy_scraper_enabled",
+			"warn", "bsr.twse.com.tw is CAPTCHA-blocked; expect failures")
+	}
 	brokerAdapter := NewGovernmentBrokerChannelAdapter(brokerProvider)
 	g.registry.Register("government_broker", brokerAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "government_broker")

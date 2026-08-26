@@ -51,7 +51,23 @@ type GovernmentBrokerAggregator struct {
 	// stocks processed" (nil,nil) result — a holiday/no-data condition —
 	// does NOT trip it; transport/parse/write failures do.
 	breaker *providerBreaker
+	// histock is the primary upstream since 2026-08-26: the TWSE bsr
+	// scraper is CAPTCHA-blocked for all automated sessions (root-cause
+	// analysis 2026-08-26) and never produced non-zero data.
+	histock *HistockBroker8Provider
+	// fetchSource selects the upstream used by AggregateDate:
+	// govSourceHistock (default) or govSourceLegacyScraper.
+	fetchSource string
 }
+
+const (
+	// GovSourceHistock is the default fetch source (HiStock broker8 page).
+	GovSourceHistock = "histock"
+	// GovSourceLegacyScraper selects the pre-2026-08-26 bsr.twse.com.tw
+	// scraper. Kept as an opt-in fallback; it currently fails on every run
+	// because the upstream serves a CAPTCHA to automated sessions.
+	GovSourceLegacyScraper = "legacy-scraper"
+)
 
 // GovernmentBrokerChannelID is the channel identifier used for the
 // CaptchaCooldown key. It matches the adapter Metadata().ChannelID so the
@@ -158,14 +174,33 @@ type detailAccumulator struct {
 // Uses the shared httpclient factory (C06: replaces raw &http.Client{} to
 // remove the last direct HTTP client creation outside Gateway/ProviderRegistry).
 func NewGovernmentBrokerAggregator(outputDir string) *GovernmentBrokerAggregator {
+	hp := NewHistockBroker8Provider()
 	return &GovernmentBrokerAggregator{
-		client:    httpclient.NewFactory().NewClient(30 * time.Second),
-		limiter:   rate.NewLimiter(rate.Every(2*time.Second), 1),
-		outputDir: outputDir,
-		baseURL:   "https://bsr.twse.com.tw/bshtm",
-		symbols:   tw50Symbols,
-		cooldown:  NewCaptchaCooldown(),
-		breaker:   newProviderBreaker("government_broker", defaultCircuitBreakerConfig()),
+		client:      httpclient.NewFactory().NewClient(30 * time.Second),
+		limiter:     rate.NewLimiter(rate.Every(2*time.Second), 1),
+		outputDir:   outputDir,
+		baseURL:     "https://bsr.twse.com.tw/bshtm",
+		symbols:     tw50Symbols,
+		cooldown:    NewCaptchaCooldown(),
+		breaker:     newProviderBreaker("government_broker", defaultCircuitBreakerConfig()),
+		histock:     hp,
+		fetchSource: GovSourceHistock,
+	}
+}
+
+// Histock exposes the HiStock provider for test injection.
+func (a *GovernmentBrokerAggregator) Histock() *HistockBroker8Provider {
+	return a.histock
+}
+
+// SetFetchSource overrides the upstream selection ("histock" | "legacy-scraper").
+// Invalid values fall back to the default histock source.
+func (a *GovernmentBrokerAggregator) SetFetchSource(src string) {
+	switch src {
+	case GovSourceHistock, GovSourceLegacyScraper:
+		a.fetchSource = src
+	default:
+		a.fetchSource = GovSourceHistock
 	}
 }
 
@@ -219,10 +254,93 @@ func (a *GovernmentBrokerAggregator) BreakerInfo() ProviderBreakerInfo {
 	return a.breaker.stateSnapshot()
 }
 
-// AggregateDate fetches broker data for the given trading date, aggregates net
-// buy/sell for the 8 core government banks across TW50 stocks, and writes the
-// result as both a GovernmentFlowReading JSON file and a per-broker detail file.
+// AggregateDate fetches broker data for the given trading date and writes the
+// result as both a GovernmentFlowReading JSON file and a per-broker detail
+// file. The upstream is selected by fetchSource: the HiStock broker8 page
+// (default, 2026-08-26) or the legacy bsr.twse.com.tw scraper.
 func (a *GovernmentBrokerAggregator) AggregateDate(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
+	if a.fetchSource == GovSourceLegacyScraper {
+		return a.aggregateDateViaScraper(ctx, date)
+	}
+	return a.aggregateDateViaHistock(ctx, date)
+}
+
+// aggregateDateViaHistock is the default upstream (2026-08-26): a single
+// server-rendered GET to the HiStock broker8 page replaces the CAPTCHA-blocked
+// bsr.twse.com.tw 50-symbol scrape. Output files and semantics are unchanged:
+// YYYYMMDD.json (GovernmentFlowReading) + YYYYMMDD_brokers.json (8-bank
+// detail). The _insurance.json file is no longer written — HiStock does not
+// publish an insurance split; LatestInsurance degrades gracefully (missing
+// file → not-ok), and the scraper-era insurance data was all zeros anyway.
+func (a *GovernmentBrokerAggregator) aggregateDateViaHistock(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
+	dateStr := date.Format("20060102")
+
+	// P1-7: aggregator-level breaker.
+	if a.breaker != nil && !a.breaker.shouldTry() {
+		return nil, fmt.Errorf("%w: government_broker circuit breaker open", ErrUpstream)
+	}
+
+	rows, err := a.histock.FetchDaily(ctx, date)
+	if err != nil {
+		a.breakerRecordFailure()
+		return nil, fmt.Errorf("%w: government_broker histock fetch %s: %v", ErrUpstream, dateStr, err)
+	}
+
+	// Empty page = holiday / data not yet published — expected, not a failure.
+	if len(rows) == 0 {
+		a.breakerRecordSuccess()
+		if a.cooldown != nil {
+			a.cooldown.RecordSuccess(GovernmentBrokerChannelID)
+		}
+		return nil, nil
+	}
+
+	var totalWan int64
+	details := make(map[detailKey]*detailAccumulator)
+	for _, row := range rows {
+		totalWan += row.TotalWan
+		for bankName, amountWan := range row.Banks {
+			code, ok := histockBankCodes[bankName]
+			if !ok {
+				continue
+			}
+			key := detailKey{Code: code, Name: coreBankBranches[code], Type: "gov"}
+			acc, exists := details[key]
+			if !exists {
+				acc = &detailAccumulator{Code: key.Code, Name: key.Name, Type: "gov"}
+				details[key] = acc
+			}
+			acc.Net += amountWan * 10000 // 萬元 → TWD
+		}
+	}
+
+	reading := &GovernmentFlowReading{
+		Date:     dateStr,
+		TotalNet: totalWan * 10000, // 萬元 → TWD
+		Source:   "media-curated",
+		RawURL:   "https://histock.tw/stock/broker8.aspx",
+	}
+	if err := a.writeReading(*reading); err != nil {
+		a.breakerRecordFailure()
+		return nil, fmt.Errorf("government_broker write: %w", err)
+	}
+	if err := a.writeBrokerDetails(dateStr, details); err != nil {
+		a.breakerRecordFailure()
+		return nil, fmt.Errorf("broker_details write: %w", err)
+	}
+
+	a.breakerRecordSuccess()
+	if a.cooldown != nil {
+		a.cooldown.RecordSuccess(GovernmentBrokerChannelID)
+	}
+	return reading, nil
+}
+
+// aggregateDateViaScraper is the pre-2026-08-26 implementation, retained as an
+// opt-in fallback (SetFetchSource(GovSourceLegacyScraper)). It currently fails
+// on every production run because bsr.twse.com.tw serves a CAPTCHA to all
+// automated sessions.
+func (a *GovernmentBrokerAggregator) aggregateDateViaScraper(ctx context.Context, date time.Time) (*GovernmentFlowReading, error) {
 	dateStr := date.Format("20060102")
 
 	// P1-7: aggregator-level breaker — open 時不發 50-symbol 的請求串。

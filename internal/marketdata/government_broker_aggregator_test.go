@@ -49,6 +49,7 @@ func TestAggregateDate_WritesBrokerDetails(t *testing.T) {
 	agg := NewGovernmentBrokerAggregator(dir)
 	agg.SetHTTPClient(server.Client())
 	agg.SetBaseURL(server.URL)
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 
 	date := time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC)
@@ -259,6 +260,7 @@ func TestAggregateDate_Captcha_BreaksLoopAndRecordsCooldown(t *testing.T) {
 	agg := NewGovernmentBrokerAggregator(dir)
 	agg.SetHTTPClient(server.Client())
 	agg.SetBaseURL(server.URL)
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330", "2317", "2454"})
 	agg.SetCaptchaCooldown(cd)
 
@@ -304,6 +306,7 @@ func TestAggregateDate_CaptchaCooldown_ShouldSkipReturnsNilNil(t *testing.T) {
 	agg := NewGovernmentBrokerAggregator(dir)
 	agg.SetHTTPClient(server.Client())
 	agg.SetBaseURL(server.URL)
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 	agg.SetCaptchaCooldown(cd)
 
@@ -349,6 +352,7 @@ func TestAggregateDate_CaptchaCooldown_ExpiredRunsAgain(t *testing.T) {
 	agg := NewGovernmentBrokerAggregator(dir)
 	agg.SetHTTPClient(server.Client())
 	agg.SetBaseURL(server.URL)
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 	agg.SetCaptchaCooldown(cd)
 

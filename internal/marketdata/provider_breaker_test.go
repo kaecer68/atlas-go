@@ -323,6 +323,7 @@ func TestGovernmentBrokerBreaker_NoDataDoesNotTrip(t *testing.T) {
 	agg.SetHTTPClient(ts.Client())
 	agg.SetBaseURL(ts.URL)
 	agg.limiter = newUnlimitedLimiter()
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.breaker = newProviderBreaker("government_broker", fastTestConfig())
 
 	ctx := context.Background()
@@ -364,6 +365,7 @@ func TestGovernmentBrokerBreaker_AllTransportFail_OpensBreaker(t *testing.T) {
 	agg.SetHTTPClient(ts.Client())
 	agg.SetBaseURL(ts.URL)
 	agg.limiter = newUnlimitedLimiter()
+	agg.SetFetchSource(GovSourceLegacyScraper)
 	agg.breaker = newProviderBreaker("government_broker", fastTestConfig())
 
 	ctx := context.Background()
