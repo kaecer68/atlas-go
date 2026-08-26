@@ -2369,7 +2369,8 @@
         "PublicBankConsecBuyDays int",
         "SectorRotationFlag bool",
         "NationalFundActive bool",
-        "GeoIntensity float64"
+        "GeoIntensity float64",
+        "GeoIntensityChange5D float64"
       ],
       "kind": "struct",
       "name": "PeriodIndicators"
