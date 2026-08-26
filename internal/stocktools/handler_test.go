@@ -74,6 +74,11 @@ type mockTWSEProvider struct {
 	incomplete bool
 	// notFound=true 回傳 ErrTWSEQuoteNotFound（policy 語義測試用）。
 	notFound bool
+	// checkDeadline, if > 0, makes GetQuotes fail unless the inbound context
+	// has at least this much remaining time. Used to verify the handler grants
+	// the TWSE fallback enough budget (previously 5s proved too short for the
+	// full-market STOCK_DAY_ALL payload).
+	checkDeadline time.Duration
 }
 
 func (m *mockTWSEProvider) Name() string { return "mock-twse" }
@@ -89,6 +94,19 @@ func (m *mockTWSEProvider) GetQuotes(ctx context.Context, _ time.Time, symbols [
 	// the SK-22 endpoint-2 audit.
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	// Verify the handler grants the fallback enough time. The TWSE fallback
+	// downloads the full-market STOCK_DAY_ALL (~300KB), which can exceed the
+	// old 5s budget under production load.
+	if m.checkDeadline > 0 {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return nil, errors.New("expected TWSE fallback context to have a deadline")
+		}
+		remaining := time.Until(deadline)
+		if remaining < m.checkDeadline {
+			return nil, fmt.Errorf("TWSE fallback deadline too short: %v, want at least %v", remaining, m.checkDeadline)
+		}
 	}
 	if m.notFound {
 		return nil, fmt.Errorf("%w: %s", marketdata.ErrTWSEQuoteNotFound, symbols[0])
@@ -133,6 +151,35 @@ func TestHandleQuote_TWSEFallbackGetsIndependentTimeoutBudget(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 (TWSE fallback got full budget), got %d: %s", rec.Code, rec.Body.String())
+	}
+	if mockTWSE.gotCtx == nil {
+		t.Fatal("TWSE provider was not called")
+	}
+}
+
+// TestHandleQuote_TWSEFallbackTimeoutBudget verifies that the TWSE fallback
+// is given at least 10 seconds to download the full-market quote payload. The
+// previous 5s budget was too short for the ~300KB STOCK_DAY_ALL response
+// when Fugle had already consumed part of the request window, producing 503.
+func TestHandleQuote_TWSEFallbackTimeoutBudget(t *testing.T) {
+	fugleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer fugleServer.Close()
+
+	fugleClient := marketdata.NewFugleClient("test-key")
+	fugleClient.SetHTTPClient(&http.Client{Transport: &redirectRoundTripper{serverURL: fugleServer.URL}})
+
+	mockTWSE := &mockTWSEProvider{checkDeadline: 9 * time.Second}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{FugleClient: fugleClient, TWSEQuote: mockTWSE})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/quote?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (TWSE fallback got >= 10s budget), got %d: %s", rec.Code, rec.Body.String())
 	}
 	if mockTWSE.gotCtx == nil {
 		t.Fatal("TWSE provider was not called")

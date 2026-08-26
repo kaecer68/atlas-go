@@ -164,12 +164,14 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 
 	// Fallback: TWSE OpenAPI with its own timeout budget.
 	if h.deps.TWSEQuote != nil {
-		// Independent 5s budget for the fallback: context.WithoutCancel drops
+		// Independent 10s budget for the fallback: context.WithoutCancel drops
 		// the parent request deadline (which Fugle may have already consumed)
 		// while preserving request cancellation propagation. Without this, a
 		// slow Fugle response eats the fallback's time and TWSE fails with
-		// context deadline exceeded (SK-22 endpoint-2 audit).
-		twseCtx, twseCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+		// context deadline exceeded (SK-22 endpoint-2 audit). 10s was chosen
+		// because the TWSE STOCK_DAY_ALL fallback payload is ~300KB and can
+		// take more than 5s under production network load.
+		twseCtx, twseCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
 		defer twseCancel()
 		quotes, err := h.deps.TWSEQuote.GetQuotes(twseCtx, h.now(), []string{symbol})
 		if err != nil {
