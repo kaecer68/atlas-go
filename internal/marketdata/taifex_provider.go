@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"net/http"
@@ -273,8 +274,16 @@ func (t *TAIFEXProvider) FetchRetailFuturesOI(ctx context.Context) (*RetailFutur
 
 	var rawList []taifexLargeTraderRaw
 	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
-		t.breakerRecordFailure()
-		return nil, fmt.Errorf("decode large trader response: %w", err)
+		// 2026-08-26 upstream change: OpenInterestOfLargeTradersFutures now
+		// serves a BOM-prefixed CSV (日期,契約,商品名稱(契約名稱),到期月份(週別),
+		// 交易人類別,前五大/前十大交易人買方/賣方數量,全市場未沖銷部位數)
+		// instead of JSON. Fall back to CSV parsing so the taifex_daily
+		// channel keeps working; regions/CDN caches may still serve JSON.
+		rawList, err = parseLargeTraderCSV(body)
+		if err != nil {
+			t.breakerRecordFailure()
+			return nil, fmt.Errorf("decode large trader response: %w", err)
+		}
 	}
 
 	// Find the latest TX futures all-months record for all traders (TypeOfTraders="0").
@@ -379,6 +388,67 @@ type taifexLargeTraderRaw struct {
 	Top10Buy        string `json:"Top10Buy"`
 	Top10Sell       string `json:"Top10Sell"`
 	OIOfMarket      string `json:"OIOfMarket"`
+}
+
+// parseLargeTraderCSV parses the CSV format now served by
+// /OpenInterestOfLargeTradersFutures (2026-08-26 upstream change). Column
+// mapping is header-driven:
+//
+//	日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,
+//	前五大交易人買方數量,前五大交易人賣方數量,
+//	前十大交易人買方數量,前十大交易人賣方數量,全市場未沖銷部位數
+func parseLargeTraderCSV(body []byte) ([]taifexLargeTraderRaw, error) {
+	// The body may carry a UTF-8 BOM; stripBOM handles it (readTAIFEXBody
+	// already strips, but this function is also a defensive fallback for
+	// direct callers/tests).
+	b := stripBOM(body)
+	reader := csv.NewReader(bytes.NewReader(b))
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("large trader csv parse: %w", err)
+	}
+	if len(records) < 2 {
+		return nil, fmt.Errorf("large trader csv: no data rows (%d records)", len(records))
+	}
+	header := records[0]
+	col := make(map[string]int, len(header))
+	for i, h := range header {
+		col[strings.TrimSpace(h)] = i
+	}
+	need := []string{"日期", "契約", "到期月份(週別)", "交易人類別",
+		"前五大交易人買方數量", "前五大交易人賣方數量",
+		"前十大交易人買方數量", "前十大交易人賣方數量", "全市場未沖銷部位數"}
+	for _, n := range need {
+		if _, ok := col[n]; !ok {
+			return nil, fmt.Errorf("large trader csv: missing column %q (header=%v)", n, header)
+		}
+	}
+	get := func(row []string, name string) string {
+		i := col[name]
+		if i < 0 || i >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[i])
+	}
+	rows := make([]taifexLargeTraderRaw, 0, len(records)-1)
+	for _, rec := range records[1:] {
+		if len(rec) == 0 {
+			continue
+		}
+		rows = append(rows, taifexLargeTraderRaw{
+			Date:            get(rec, "日期"),
+			Contract:        get(rec, "契約"),
+			ContractName:    get(rec, "商品名稱(契約名稱)"),
+			SettlementMonth: get(rec, "到期月份(週別)"),
+			TypeOfTraders:   get(rec, "交易人類別"),
+			Top5Buy:         get(rec, "前五大交易人買方數量"),
+			Top5Sell:        get(rec, "前五大交易人賣方數量"),
+			Top10Buy:        get(rec, "前十大交易人買方數量"),
+			Top10Sell:       get(rec, "前十大交易人賣方數量"),
+			OIOfMarket:      get(rec, "全市場未沖銷部位數"),
+		})
+	}
+	return rows, nil
 }
 
 // --- shared helpers ---
