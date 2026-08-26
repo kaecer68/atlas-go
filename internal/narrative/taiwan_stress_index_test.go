@@ -2,6 +2,7 @@ package narrative
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -472,4 +473,24 @@ func TestCalculate_US10YHybridSignal_CompareWithLegacy(t *testing.T) {
 		t.Fatalf("hybrid US10Y should be non-zero (z-score), got %v", hybridUS10Y)
 	}
 	t.Logf("legacy=%.4f hybrid=%.4f (both non-zero confirms US10Y coverage)", legacyUS10Y, hybridUS10Y)
+}
+
+// TestGeoIntensityFromStressComponent covers the component↔GeoIntensity mapping
+// (2b): stress component = intensity * 0.13, so 4.29 ≈ intensity 33, 5.2 ≈ 40.
+func TestGeoIntensityFromStressComponent(t *testing.T) {
+	tests := []struct {
+		component float64
+		want      float64
+	}{
+		{0, 0},
+		{4.29, 33.0}, // hermes 案例：4.29 → intensity ≈ 33（4 級制升溫邊界內）
+		{5.2, 40.0},  // intensity 40 對應的元件值
+		{7.8, 60.0},  // intensity 60 對應的元件值（黑天鵝門檻）
+	}
+	for _, tt := range tests {
+		got := GeoIntensityFromStressComponent(tt.component)
+		if diff := math.Abs(got - tt.want); diff > 0.01 {
+			t.Errorf("GeoIntensityFromStressComponent(%v) = %v, want ~%v", tt.component, got, tt.want)
+		}
+	}
 }

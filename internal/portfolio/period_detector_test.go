@@ -112,6 +112,26 @@ func TestPeriodDetector_TurnaroundDown_Geo(t *testing.T) {
 	}
 }
 
+// TestPeriodDetector_GeoDecliningTrend ensures the 地緣升溫 condition requires
+// a non-declining 5-day trend (GeoIntensityChange5D >= 0): high intensity with
+// a falling trend must NOT fire the condition (憲章 v1.1 5 日趨勢).
+func TestPeriodDetector_GeoDecliningTrend(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+
+	ind := PeriodIndicators{
+		MarginMaintenanceRatio: 145,  // 融資維持率 < 150%
+		SOXPrice:               4200, // 跌破 50 日線
+		SOXMA50:                5200,
+		GeoIntensity:           55,  // ≥ 40，但...
+		GeoIntensityChange5D:   -20, // ...5 日趨勢顯著下降 → 地緣條件不成立
+	}
+
+	// Only 2/6 conditions → NOT turnaround_down.
+	if got := d.DetectPeriod(ind); got == domain.PeriodTurnaroundDown {
+		t.Errorf("DetectPeriod() = %v, want NOT turnaround_down (地緣 5 日趨勢下降不觸發)", got)
+	}
+}
+
 // TestPeriodDetector_GeoBelowThreshold ensures geopolitical intensity below
 // the turnaround-down threshold does NOT fire the condition on its own.
 func TestPeriodDetector_GeoBelowThreshold(t *testing.T) {

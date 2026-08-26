@@ -415,3 +415,20 @@ func (c *TaiwanStressCalculator) CalculateFromSnapshotWithStore(ctx context.Cont
 	c.mu.Unlock()
 	return idx, nil
 }
+
+// GeoIntensityFromStressComponent converts a Taiwan stress index geopolitical
+// component value back to the raw GeoIntensity (0-100) scale.
+//
+// Component = GeoIntensity * StressScaleGeopolitical(1.0) * StressWeightGeopolitical(0.13)
+//
+//	→ GeoIntensity = component / 0.13
+//
+// External consumers that read components["geopolitical"] (e.g. hermes
+// trigger-monitor) MUST use this mapping instead of treating the component
+// as a standalone "台海緊張" scale (see docs/ATLAS_METHODOLOGY.md §3 台海緊張 4 級制).
+func GeoIntensityFromStressComponent(component float64) float64 {
+	if calibration.StressWeightGeopolitical == 0 {
+		return 0
+	}
+	return component / calibration.StressWeightGeopolitical
+}
