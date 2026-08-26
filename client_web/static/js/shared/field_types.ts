@@ -4176,17 +4176,6 @@ export interface SystemHealthResponse {
   runtime?: string | null;
 }
 
-export interface TAIFEXFutures {
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  settlement: number;
-  change_pct: number;
-}
-
 export interface TEJStockPriceRow {
   co_id: string;
   date: string;
@@ -4780,18 +4769,6 @@ export interface submitTaskResponse {
 export interface supplyChainGraphJSON {
   nodes: string[];
   correlations: Record<string, number>;
-}
-
-export interface taifexFuturesRaw {
-  Date: string;
-  Contract: string;
-  Open: string;
-  High: string;
-  Low: string;
-  LastPrice: string;
-  Volume: string;
-  SettlementPrice: string;
-  PreviousSettlementPrice: string;
 }
 
 export interface taifexLargeTraderRaw {
