@@ -433,11 +433,27 @@ func safePercent(part, total int64) float64 {
 	return float64(part) / float64(total) * 100
 }
 
+// utf8BOM is the byte order mark prefix that some upstreams (including
+// occasional TAIFEX responses) prepend to UTF-8 text. It must be removed
+// before handing the body to the JSON decoder.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// stripBOM removes a leading UTF-8 BOM from b. It returns b unchanged if no
+// BOM is present. A BOM in the byte stream becomes the invalid character
+// 'ï' (U+00EF) when the decoder treats it as part of the JSON text.
+func stripBOM(b []byte) []byte {
+	if len(b) >= 3 && bytes.Equal(b[:3], utf8BOM) {
+		return b[3:]
+	}
+	return b
+}
+
 // readTAIFEXBody reads a TAIFEX response body, transparently decompressing
-// gzip content. We request Accept-Encoding: gzip explicitly because the
-// openapi.taifex.com.tw endpoints return large JSON payloads; Go's Transport
-// only auto-decompresses when it adds the header itself, so an explicit
-// header requires explicit decompression here.
+// gzip content and stripping a leading UTF-8 BOM if present. We request
+// Accept-Encoding: gzip explicitly because the openapi.taifex.com.tw
+// endpoints return large JSON payloads; Go's Transport only auto-decompresses
+// when it adds the header itself, so an explicit header requires explicit
+// decompression here.
 func readTAIFEXBody(resp *http.Response) ([]byte, error) {
 	var reader io.Reader = resp.Body
 	if strings.EqualFold(resp.Header.Get("Content-Encoding"), "gzip") {
@@ -448,7 +464,11 @@ func readTAIFEXBody(resp *http.Response) ([]byte, error) {
 		defer func() { _ = gz.Close() }()
 		reader = gz
 	}
-	return io.ReadAll(reader)
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	return stripBOM(body), nil
 }
 
 // TAIFEXFutures holds daily TX futures session data including night session.

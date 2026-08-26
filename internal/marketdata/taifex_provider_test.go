@@ -82,6 +82,36 @@ func TestTAIFEXFetchPCR_GzipResponse(t *testing.T) {
 	}
 }
 
+// TestTAIFEXFetchPCR_BOMPrefixedJSON verifies that when the upstream response
+// is prefixed with a UTF-8 BOM (0xEF 0xBB 0xBF), the provider strips it
+// before JSON parsing. Without stripping, json.Decoder sees the BOM as an
+// invalid character ('ï' / 'ï') and fails.
+func TestTAIFEXFetchPCR_BOMPrefixedJSON(t *testing.T) {
+	payload := []byte(`[
+		{"Date":"20260811","PutVolume":"100","CallVolume":"200","PutCallVolumeRatio%":"110.43","PutOI":"50","CallOI":"40","PutCallOIRatio%":"123.58"}
+	]`)
+	bomPayload := append([]byte{0xEF, 0xBB, 0xBF}, payload...)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(bomPayload)
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	stats, err := p.FetchPCR(context.Background())
+	if err != nil {
+		t.Fatalf("FetchPCR error: %v", err)
+	}
+	if got, want := stats.PutCallVolumeRatio, 1.1043; got != want {
+		t.Errorf("PutCallVolumeRatio = %v, want %v (BOM stripped)", got, want)
+	}
+}
+
 // TestTAIFEXProvider_ClientTimeout verifies the upstream timeout was raised to
 // 30s (openapi.taifex.com.tw can exceed the old 20s budget under load).
 func TestTAIFEXProvider_ClientTimeout(t *testing.T) {
