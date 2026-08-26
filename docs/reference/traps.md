@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-08-06
+updated: 2026-08-26
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -37,6 +37,16 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **FinMind server 402 ≠ `ErrQuotaExhausted`** | marketdata / industry | server-side 402 (`{"msg":"Requests reach the upper limit"}`) 與本地 `marketdata.ErrQuotaExhausted` (14400/day tracker) 是**兩個不同 error**。`fetchDataset` 對 402 只回 `fmt.Errorf("finmind: status 402, body: ...")` 不 wrap sentinel。診斷「FinMind 撞牆」必須看 `fetch_non_2xx status=402` log,不能只看 quota counter。 |
 | **rate limiter 本地失敗會被 fallback 吞掉** | industry / marketdata | `fetchRevenueYoY`/`fetchProfitYoY` 的月份/季度 fallback loop 曾把 `ErrRateLimited` (5s ctx vs 6s token) 吞成「no data in last 3 months」→ metric 誤報 `no_data`。2026-08-06 HF-1 修復 (透傳 + 10s ctx)。**教訓**: fallback loop 吞 error 前必須判斷是否 quota/rate-limit 類 — 見 `isFinMindQuotaOrRateLimited()`。 |
 | **排程器 24h 整點多 task 同步觸發** | scheduler / apigateway | `auto_cycle_update` (6h) + `auto_quote_backfill` (24h) + `channel_health_finmind` (1h) 在整點同時觸發會瞬間耗盡 rate limiter burst (60)。修排程錯開前,任何新增的固定間隔 FinMind caller 都應檢查是否與既有 task 整點對齊。 |
+
+### 資料源上游 / Upstream [NEW — 2026-08-26]
+
+> 來源: 2026-08-26 資料通道根因調查（PR #1696/#1697/#1698）。全部為「上游格式/可及性變更」類，非程式 bug——改動前先確認上游現況。
+
+| 陷阱 | 所屬模組 | 說明 |
+|------|---------|------|
+| **bsr.twse.com.tw 已死（CAPTCHA 全擋）** | marketdata / apigateway | TWSE 券商分點頁 `bsr.twse.com.tw/bshtm` 對所有自動化 session 回 CAPTCHA（2026-07-31 起漸進，2026-08 全面）。BK-13 爬蟲（2026-07-22 上線）因此**從未產出非零資料**——每日寫 `total_net=0` 假成功，直到 2026-08-23 value_nonzero contract 才誠實報錯。**不要再走這條路**；government_broker 上游已是 HiStock（見下條）。舊爬蟲保留於 `GOV_BROKER_SOURCE=legacy-scraper` opt-in（預設關閉）。 |
+| **HiStock broker8 是 media-curated Top60，非官方全分點** | marketdata / apigateway | `government_broker` 通道上游 = `histock.tw/stock/broker8.aspx`（2026-08-26 起）：server-rendered、無 CAPTCHA、`?d=YYYY/MM/DD` 歷史至 2024-06、**僅買超 Top30 + 賣超 Top30**（約 60 檔/日）、金額單位**萬元**（寫檔時 ×10000 換 TWD）、`source: media-curated`。**口徑 ≠ bsr 的 TW50 全分點加總**：z-score 歷史有斷點（2026-08-26 前後分開校準）。輸出契約不變（`YYYYMMDD.json` + `YYYYMMDD_brokers.json`）。 |
+| **TAIFEX large-trader 是 CSV、PutCallRatio 是 JSON——格式不同不要混用** | marketdata / apigateway | TAIFEX OpenAPI 各 endpoint 格式不一致：`/OpenInterestOfLargeTradersFutures` 2026-08-26 起回**帶 BOM 的 CSV**（表頭：日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大/前十大交易人買方/賣方數量,全市場未沖銷部位數；`taifex_daily` 走 `parseLargeTraderCSV` fallback）；`/PutCallRatio` 仍是 JSON；`/DailyMarketReportFutures` 已 302 移除（FetchFutures 已刪除）。新增 TAIFEX endpoint 前先 curl 實測格式。 |
 
 ### Orchestrator / Control
 
