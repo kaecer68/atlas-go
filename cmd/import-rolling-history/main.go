@@ -18,12 +18,15 @@
 //	    [-store data/state/capital_flow_rolling.json] \
 //	    [-replay data/replay/tw_extended_90days.csv] \
 //	    [-t86 data/state/capital_flow] \
+//	    [-gov data/state/government_flow] \
 //	    [-from 2026-05-01] [-capacity 252] [-dry-run]
 //
-// The remaining dimensions (futures / tsm_adr / government / retail)
-// are intentionally not fabricated: they need their real sources
-// (TAIFEX institutional OI, Yahoo TSM ADR, operator-imported 官股,
-// TWSE margin+當沖). See internal/capitalflow/history_import.go.
+// Since 2026-08-26 the government dimension IS imported when real
+// readings exist under data/state/government_flow/ (HiStock media-curated
+// daily readings; total_net TWD converted to 億元). The remaining
+// dimensions (futures / tsm_adr / retail) are intentionally not
+// fabricated: they need their real sources (TAIFEX institutional OI,
+// Yahoo TSM ADR, TWSE margin+當沖). See internal/capitalflow/history_import.go.
 package main
 
 import (
@@ -40,6 +43,7 @@ const (
 	defaultStorePath  = "data/state/capital_flow_rolling.json"
 	defaultReplayPath = "data/replay/tw_extended_90days.csv"
 	defaultT86Dir     = "data/state/capital_flow"
+	defaultGovDir     = "data/state/government_flow"
 	defaultCapacity   = 252
 	// defaultFrom excludes the 2025-05..2025-09 T86 snapshots that
 	// repeat identical values across consecutive days (synthetic
@@ -53,6 +57,7 @@ func main() {
 		storePath  = flag.String("store", defaultStorePath, "rolling sample store JSON path (same file the server reads)")
 		replayPath = flag.String("replay", defaultReplayPath, "replay CSV trading calendar")
 		t86Dir     = flag.String("t86", defaultT86Dir, "directory of TWSE T86 snapshot JSON files")
+		govDir     = flag.String("gov", defaultGovDir, "directory of government_flow reading JSON files (YYYYMMDD.json)")
 		fromDate   = flag.String("from", defaultFrom, "import only trading dates >= this date (YYYY-MM-DD, inclusive); empty = full replay range")
 		capacity   = flag.Int("capacity", defaultCapacity, "per-dimension rolling capacity (must match the server wiring, main.go:939 uses 252)")
 		dryRun     = flag.Bool("dry-run", false, "build and report the batch without writing the store")
@@ -62,7 +67,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	samples, rep, err := capitalflow.BuildHistorySamples(*replayPath, *t86Dir, *fromDate)
+	samples, rep, err := capitalflow.BuildHistorySamples(*replayPath, *t86Dir, *govDir, *fromDate)
 	if err != nil {
 		log.Fatalf("import-rolling-history: %v", err)
 	}
