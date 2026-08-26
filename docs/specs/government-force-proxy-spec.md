@@ -90,6 +90,27 @@ v1 階段資料源為操作員手動匯入，樣本量不足以做有意義的�
 - 從分點資料以外用啟發式（如「投信動向 × 0.3 + 自營避險倉」）硬湊出官股代理 — 違反 §8。
 - 在 < 30 個資料點的樣本下對外顯示「官股共振」訊號 — 違反 §8。
 
+## 5.1 v2 資料源切換：HiStock broker8（2026-08-26）
+
+**根因**：bsr.twse.com.tw 對所有自動化 session 回 CAPTCHA；且 BK-13 爬蟲上線
+（2026-07-22）至 2026-08-23 間 parser 從未解析出非零資料——每日寫入
+`total_net=0` 的假成功檔案（"ok 假象"，k3 審計 2026-08-22/24 後才誠實報錯）。
+
+**新上游**：`histock.tw/stock/broker8.aspx`（server-rendered、無 CAPTCHA、
+支援 `?d=YYYY/MM/DD` 歷史查詢至 2024-06）。每日買超 Top30 + 賣超 Top30，
+每檔含八家行庫逐家金額 + 合計（萬元）；行庫口徑與 §2 八家定義一致。
+
+**方法論變更（誠實記錄）**：
+1. 覆蓋範圍由「TW50 全分點加總」改為「HiStock Top60 買賣超加總」——排名外
+   個股官股流量極小，對聚合訊號影響有限，但 z-score 歷史有一次斷點。
+2. `source` 欄位值改用 `media-curated`（第三方媒體彙整口徑）。
+3. `<date>_insurance.json` 不再產出（HiStock 無保險拆分；舊爬蟲時代的
+   保險資料本來就全為 0），`LatestInsurance` 缺檔時優雅降級。
+4. 舊爬蟲保留於 `GOV_BROKER_SOURCE=legacy-scraper` opt-in，預設關閉。
+
+**Backfill**：`cmd/backfill-govflow-histock` 可回填歷史日，供 60 日滾動
+Z-score 校準使用。
+
 ## 6. 後續工作
 
 - **BK-13**：建立證交所分點加總通道（選項 A 自動化）。

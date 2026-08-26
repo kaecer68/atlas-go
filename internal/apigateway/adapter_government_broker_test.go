@@ -45,6 +45,7 @@ func TestGovernmentBrokerChannelAdapter_Fetch(t *testing.T) {
 
 	// Use only the first symbol so the test stays fast and deterministic.
 	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	agg.SetFetchSource(marketdata.GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 
 	// The first symbol maps to branch 8060 (合作金庫).
@@ -117,6 +118,7 @@ func TestGovernmentBrokerChannelAdapter_Fetch(t *testing.T) {
 func TestGovernmentBrokerChannelAdapter_Fetch_UpstreamDown_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	agg.SetFetchSource(marketdata.GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 
 	// Server returns 500 on GET so fetchMenuTokens fails — an upstream TWSE
@@ -148,6 +150,7 @@ func TestGovernmentBrokerChannelAdapter_Fetch_UpstreamDown_ReturnsError(t *testi
 func TestGovernmentBrokerChannelAdapter_Fetch_HolidayEmptyPage_ReturnsData(t *testing.T) {
 	dir := t.TempDir()
 	agg := marketdata.NewGovernmentBrokerAggregator(dir)
+	agg.SetFetchSource(marketdata.GovSourceLegacyScraper)
 	agg.SetSymbols([]string{"2330"})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
