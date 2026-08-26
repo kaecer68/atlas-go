@@ -51,6 +51,10 @@ services:
       # Set ATLAS_LIVENESS_TOKEN in the atlas .env; fail-closed when unset.
       - ATLAS_LIVENESS_TOKEN=${ATLAS_LIVENESS_TOKEN:-}
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
+      # Broker nonce store uses the dev atlas-redis instance. Host port
+      # 16379 mirrors docker-compose.yml's redis ports mapping (dev only;
+      # prod uses host.docker.internal:6379 → litellm-redis).
+      - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:16379/8
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -120,13 +124,21 @@ services:
       retries: 3
       start_period: 60s
 
-  # Redis for caching and message queue
+# Redis for caching and message queue
   redis:
     image: redis:7-alpine
     container_name: atlas-redis
     restart: unless-stopped
+    # Host port moved from 6379 → 16379 on 2026-08-26 to avoid collision
+    # with the standalone `litellm-redis` container bound to host 6379 by
+    # imac-server-plan/configs/docker-compose.infra.yaml. Container port
+    # stays 6379, so other atlas services still reach it as `redis:6379`
+    # via the docker network; only host-side tooling / env vars pointing
+    # at host.docker.internal:6379 need to use 16379 in dev.
+    # prod (docker-compose.prod.yml) intentionally does NOT use this
+    # service — it shares the host's litellm-redis at host.docker.internal:6379.
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis-data:/data
     networks:
