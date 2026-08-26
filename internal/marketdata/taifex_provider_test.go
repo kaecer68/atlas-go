@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -310,5 +311,50 @@ func TestTAIFEXFetchPCR_AllEmptyDates(t *testing.T) {
 	}
 	if !errors.Is(err, ErrTAIFEXSchema) {
 		t.Fatalf("err = %v, want errors.Is(err, ErrTAIFEXSchema)", err)
+	}
+}
+
+// TestTAIFEXFetchRetailFuturesOI_CSVFormat verifies the 2026-08-26 upstream
+// format change: OpenInterestOfLargeTradersFutures now serves a BOM-prefixed
+// CSV (日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大/前十大
+// 交易人買方/賣方數量,全市場未沖銷部位數) instead of JSON. The provider must
+// fall back to CSV parsing so the taifex_daily channel keeps working.
+func TestTAIFEXFetchRetailFuturesOI_CSVFormat(t *testing.T) {
+	csvBody := "\xef\xbb\xbf" + strings.Join([]string{
+		"日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大交易人買方數量,前五大交易人賣方數量,前十大交易人買方數量,前十大交易人賣方數量,全市場未沖銷部位數",
+		"20260825,TX,臺股期貨,202609,0,30000,28000,45000,42000,120000",
+		"20260825,TX,臺股期貨,999912,0,35000,33000,52000,51000,150000",
+		"20260825,TX,臺股期貨,999912,1,4000,3000,8000,7000,150000",
+	}, "\n")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		_, _ = w.Write([]byte(csvBody))
+	}))
+	defer server.Close()
+
+	p := NewTAIFEXProvider()
+	p.baseURL = server.URL
+	p.SetHTTPClient(server.Client())
+	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
+
+	oi, err := p.FetchRetailFuturesOI(context.Background())
+	if err != nil {
+		t.Fatalf("FetchRetailFuturesOI() CSV error = %v", err)
+	}
+	// TX all-months (999912) all traders (type 0): Top5 35000/33000,
+	// Top10 52000/51000, market OI 150000.
+	if oi.Top5LongOI != 35000 || oi.Top5ShortOI != 33000 {
+		t.Errorf("Top5 = %d/%d, want 35000/33000", oi.Top5LongOI, oi.Top5ShortOI)
+	}
+	if oi.Top10LongOI != 52000 || oi.Top10ShortOI != 51000 {
+		t.Errorf("Top10 = %d/%d, want 52000/51000", oi.Top10LongOI, oi.Top10ShortOI)
+	}
+	if oi.TotalMarketOI != 150000 {
+		t.Errorf("TotalMarketOI = %d, want 150000", oi.TotalMarketOI)
+	}
+	// retail = market - top10
+	if oi.RetailLongOI != 150000-52000 || oi.RetailShortOI != 150000-51000 {
+		t.Errorf("Retail = %d/%d, want %d/%d", oi.RetailLongOI, oi.RetailShortOI, 150000-52000, 150000-51000)
 	}
 }
