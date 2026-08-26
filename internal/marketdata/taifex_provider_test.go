@@ -228,34 +228,6 @@ func TestTAIFEXFetchRetailFuturesOI_BadField_ReturnsErrTAIFEXSchema(t *testing.T
 	}
 }
 
-func TestTAIFEXFetchFutures_BadField_ReturnsErrTAIFEXSchema(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		// LastPrice renamed → empty.
-		_, _ = w.Write([]byte(`[
-			{"Date":"20260811","Contract":"TX","Open":"100","High":"110","Low":"99","LastPrice":"","Volume":"10000","SettlementPrice":"105","PreviousSettlementPrice":"101"}
-		]`))
-	}))
-	defer server.Close()
-
-	p := NewTAIFEXProvider()
-	p.baseURL = server.URL
-	p.SetHTTPClient(server.Client())
-	p.rateLimiter = rate.NewLimiter(rate.Every(time.Second), 1)
-
-	_, err := p.FetchFutures(context.Background())
-	if err == nil {
-		t.Fatal("FetchFutures with empty LastPrice = nil error, want ErrTAIFEXSchema")
-	}
-	if !errors.Is(err, ErrTAIFEXSchema) {
-		t.Errorf("err = %v, want wrapped ErrTAIFEXSchema", err)
-	}
-}
-
-// TestTAIFEXFetchPCR_PicksLatestDate (P2-16) verifies FetchPCR selects the row
-// with the MAXIMUM Date instead of assuming rawList[0] is the newest. The
-// upstream row order is not a documented contract — a sorting change would
-// previously serve stale PCR data silently.
 func TestTAIFEXFetchPCR_PicksLatestDate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -615,8 +615,10 @@ func (a *GovernmentBrokerAggregator) writeBrokerDetails(dateStr string, details 
 		Source  string              `json:"source"`
 		Brokers []BrokerDailyDetail `json:"brokers"`
 	}{
+		// 與主檔 (GovernmentFlowReading.Source) 一致：HiStock 是第三方
+		// 媒體彙整口徑 (media-curated)，不再寫 legacy 爬蟲的 broker-aggregate。
 		Date:    dateStr,
-		Source:  "broker-aggregate",
+		Source:  "media-curated",
 		Brokers: rows,
 	}
 
