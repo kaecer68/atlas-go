@@ -213,7 +213,7 @@ func TestBuildHistorySamples(t *testing.T) {
 	}
 	writeT86Fixture(t, t86Dir, dates)
 
-	samples, rep, err := BuildHistorySamples(replayPath, t86Dir, "")
+	samples, rep, err := BuildHistorySamples(replayPath, t86Dir, filepath.Join(dir, "gov-empty"), "")
 	if err != nil {
 		t.Fatalf("BuildHistorySamples: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestBuildHistorySamples(t *testing.T) {
 	}
 
 	// fromDate window filter
-	samples2, rep2, err := BuildHistorySamples(replayPath, t86Dir, "2026-05-15")
+	samples2, rep2, err := BuildHistorySamples(replayPath, t86Dir, filepath.Join(dir, "gov-empty"), "2026-05-15")
 	if err != nil {
 		t.Fatalf("BuildHistorySamples(from): %v", err)
 	}
@@ -256,7 +256,7 @@ func TestBuildHistorySamples(t *testing.T) {
 	// replay date without T86 snapshot → skipped, not imported
 	extraReplay := filepath.Join(dir, "replay_extra.csv")
 	writeReplayFixture(t, extraReplay, append([]string{"2026-04-29", "2026-04-30"}, dates...))
-	samples3, rep3, err := BuildHistorySamples(extraReplay, t86Dir, "")
+	samples3, rep3, err := BuildHistorySamples(extraReplay, t86Dir, filepath.Join(dir, "gov-empty"), "")
 	if err != nil {
 		t.Fatalf("BuildHistorySamples(skip): %v", err)
 	}
@@ -304,4 +304,135 @@ func TestLoadReplayTradingDates(t *testing.T) {
 	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Fatalf("got %v, want %v", got, want)
 	}
+}
+
+// writeGovFlowFixture writes one government_flow reading JSON per date
+// (the actual production schema: YYYYMMDD.json with total_net in TWD).
+func writeGovFlowFixture(t *testing.T, dir string, dates []string) {
+	t.Helper()
+	for i, d := range dates {
+		compact := d[0:4] + d[5:7] + d[8:10]
+		rec := map[string]any{
+			"date":      compact,
+			"total_net": int64((i + 1) * 100_000_000), // 1億, 2億, ...
+			"source":    "media-curated",
+		}
+		data, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatalf("marshal gov fixture: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, compact+".json"), data, 0o644); err != nil {
+			t.Fatalf("write gov fixture %s: %v", compact, err)
+		}
+	}
+}
+
+// TestBuildHistorySamples_Government verifies the CAL-1 government
+// extension (2026-08-26): BuildHistorySamples now emits ForceGovernment
+// samples from data/state/government_flow/YYYYMMDD.json readings,
+// converting total_net (TWD) to 億元 (÷1e8) to match the snapshot
+// semantics used by scoreGovernment.
+func TestBuildHistorySamples_Government(t *testing.T) {
+	dates := genDates("2026-08-24", 3)
+	dir := t.TempDir()
+	writeReplayFixture(t, filepath.Join(dir, "replay.csv"), dates)
+	t86Dir := filepath.Join(dir, "t86")
+	govDir := filepath.Join(dir, "gov")
+	if err := os.MkdirAll(t86Dir, 0o755); err != nil {
+		t.Fatalf("mkdir t86: %v", err)
+	}
+	if err := os.MkdirAll(govDir, 0o755); err != nil {
+		t.Fatalf("mkdir gov: %v", err)
+	}
+	writeT86Fixture(t, t86Dir, dates)
+	writeGovFlowFixture(t, govDir, dates)
+
+	samples, rep, err := BuildHistorySamples(
+		filepath.Join(dir, "replay.csv"),
+		t86Dir,
+		govDir,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("BuildHistorySamples: %v", err)
+	}
+
+	// 3 dates × 4 dims (foreign/institutional/dealer + government) = 12.
+	if rep.ImportedDates != 3 {
+		t.Errorf("ImportedDates = %d, want 3", rep.ImportedDates)
+	}
+	if rep.ImportedSamples != 12 {
+		t.Errorf("ImportedSamples = %d, want 12 (3×4 dims)", rep.ImportedSamples)
+	}
+	// Government no longer listed as needing a real source.
+	for _, n := range rep.NeedsRealSource {
+		if n == ForceGovernment {
+			t.Errorf("NeedsRealSource still contains ForceGovernment despite gov files present")
+		}
+	}
+
+	var gov []RollingSample
+	for _, s := range samples {
+		if s.Dimension == ForceGovernment {
+			gov = append(gov, s)
+		}
+	}
+	if len(gov) != 3 {
+		t.Fatalf("government samples = %d, want 3", len(gov))
+	}
+	for i, s := range gov {
+		wantVal := float64(i+1) * 100_000_000 / 1e8 // (i+1) 億
+		if s.RawValue != wantVal {
+			t.Errorf("gov[%d].RawValue = %v, want %v (total_net/1e8)", i, s.RawValue, wantVal)
+		}
+		if s.Unit != "hundred_million_shares" {
+			t.Errorf("gov[%d].Unit = %q, want hundred_million_shares", i, s.Unit)
+		}
+		if s.SourceID != SourceGovernmentOperator {
+			t.Errorf("gov[%d].SourceID = %q, want %q", i, s.SourceID, SourceGovernmentOperator)
+		}
+		if s.TradingDate != dates[i] {
+			t.Errorf("gov[%d].TradingDate = %q, want %q", i, s.TradingDate, dates[i])
+		}
+	}
+}
+
+// TestBuildHistorySamples_Government_MissingGovFileOnlyT86 verifies
+// dates with T86 but no gov reading still import the T86 dims and skip
+// the gov dim without error (government stays partial).
+func TestBuildHistorySamples_Government_MissingGovFileOnlyT86(t *testing.T) {
+	dates := genDates("2026-08-24", 2)
+	dir := t.TempDir()
+	writeReplayFixture(t, filepath.Join(dir, "replay.csv"), dates)
+	t86Dir := filepath.Join(dir, "t86")
+	govDir := filepath.Join(dir, "gov")
+	if err := os.MkdirAll(t86Dir, 0o755); err != nil {
+		t.Fatalf("mkdir t86: %v", err)
+	}
+	if err := os.MkdirAll(govDir, 0o755); err != nil {
+		t.Fatalf("mkdir gov: %v", err)
+	}
+	writeT86Fixture(t, t86Dir, dates)
+	// Only write gov for the first date.
+	writeGovFlowFixture(t, govDir, dates[:1])
+
+	samples, rep, err := BuildHistorySamples(
+		filepath.Join(dir, "replay.csv"),
+		t86Dir,
+		govDir,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("BuildHistorySamples: %v", err)
+	}
+	var gov int
+	for _, s := range samples {
+		if s.Dimension == ForceGovernment {
+			gov++
+		}
+	}
+	if gov != 1 {
+		t.Errorf("government samples = %d, want 1 (only date with gov file)", gov)
+	}
+	_ = rep
 }

@@ -31,8 +31,16 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"golang.org/x/net/html"
 )
+
+// ErrHistockBroker8Schema is returned when the HiStock broker8 page
+// contains ranked rows (li with a goUrl symbol) but none of them parse —
+// the upstream changed the cell layout. Callers must treat this as a real
+// upstream failure (breaker failure / error), NOT as a holiday no-data
+// condition. Mirrors ErrTAIFEXSchema (anti-regression, k3 advisor 2026-08-26).
+var ErrHistockBroker8Schema = fmt.Errorf("histock broker8: schema mismatch: %w", ErrSchema)
 
 // histockBankCodes maps the HiStock column short names to the canonical
 // core-bank branch codes used by coreBankBranches / broker detail files.
@@ -115,17 +123,29 @@ func (p *HistockBroker8Provider) FetchDaily(ctx context.Context, date time.Time)
 var histockGoURLRe = regexp.MustCompile(`goUrl\("(\d+)"\)`)
 
 // ParseHistockBroker8HTML extracts all ranked rows from the page HTML.
+//
+// Anti-regression (k3 advisor 2026-08-26): a page that renders ranked
+// rows but parses NONE of them (upstream changed the cell layout) returns
+// ErrHistockBroker8Schema so the caller records a real failure instead of
+// a fake "holiday / no data" success — the exact failure mode that killed
+// the bsr.twse.com.tw scraper. A genuinely empty page (no ranked rows,
+// e.g. holiday) returns an empty slice with nil error. Partial pages keep
+// the parseable rows and emit a warning.
 func ParseHistockBroker8HTML(body []byte) ([]HistockBroker8Row, error) {
 	doc, err := html.Parse(strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("histock parse html: %w", err)
 	}
 	var rows []HistockBroker8Row
+	ranked, malformed := 0, 0
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "li" {
+		if n.Type == html.ElementNode && n.Data == "li" && histockRankedLi(n) {
+			ranked++
 			if r, ok := parseHistockRow(n); ok {
 				rows = append(rows, r)
+			} else {
+				malformed++
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -133,7 +153,31 @@ func ParseHistockBroker8HTML(body []byte) ([]HistockBroker8Row, error) {
 		}
 	}
 	walk(doc)
+
+	if ranked == 0 {
+		// No ranked rows: holiday / not-yet-published page.
+		return nil, nil
+	}
+	if len(rows) == 0 {
+		// Every ranked row malformed → upstream layout change.
+		return nil, fmt.Errorf("%w: %d ranked rows, 0 parsed", ErrHistockBroker8Schema, ranked)
+	}
+	if malformed > 0 {
+		logging.Warn("histock", "broker8_partial_parse",
+			"ranked", ranked, "parsed", len(rows), "malformed", malformed)
+	}
 	return rows, nil
+}
+
+// histockRankedLi reports whether an <li> is a ranking row (has the
+// goUrl("SYM") onclick attribute) vs an unrelated list item.
+func histockRankedLi(li *html.Node) bool {
+	for _, a := range li.Attr {
+		if a.Key == "onclick" && histockGoURLRe.MatchString(a.Val) {
+			return true
+		}
+	}
+	return false
 }
 
 // parseHistockRow converts one <li> into a row. Returns ok=false for

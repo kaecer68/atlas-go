@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -209,5 +210,73 @@ func mustUnmarshal(t *testing.T, data []byte, v any) {
 	t.Helper()
 	if err := json.Unmarshal(data, v); err != nil {
 		t.Fatalf("unmarshal: %v", err)
+	}
+}
+
+// --- Anti-regression (k3 advisor 2026-08-26): a HiStock format change
+// must never silently degrade into a "holiday / no data" fake success
+// (the exact failure mode that killed the bsr scraper). ---
+
+// TestParseHistockBroker8HTML_AllRowsMalformed_SchemaError verifies that a
+// page whose ranked rows all fail to parse (upstream changed the cell
+// layout) surfaces ErrHistockBroker8Schema instead of an empty success.
+func TestParseHistockBroker8HTML_AllRowsMalformed_SchemaError(t *testing.T) {
+	body := `<html><body><ul class="stock-list">` +
+		`<li onclick='goUrl("2330");' title="x"><span class="w20"></span><span class="w100 name">台積電</span><span class="w70">NOT-A-NUMBER</span></li>` +
+		`<li onclick='goUrl("2317");' title="y"><span class="w20"></span><span class="w100 name">鴻海</span><span class="w70">ALSO-BAD</span></li>` +
+		`</ul></body></html>`
+	_, err := ParseHistockBroker8HTML([]byte(body))
+	if err == nil {
+		t.Fatal("ParseHistockBroker8HTML(all-malformed) = nil error, want ErrHistockBroker8Schema")
+	}
+	if !errors.Is(err, ErrHistockBroker8Schema) {
+		t.Fatalf("err = %v, want wrapped ErrHistockBroker8Schema", err)
+	}
+}
+
+// TestParseHistockBroker8HTML_PartialRowsKeepsGood verifies a page with a
+// mix of good and malformed rows keeps the parseable rows (partial data is
+// still real data) instead of failing the whole page.
+func TestParseHistockBroker8HTML_PartialRowsKeepsGood(t *testing.T) {
+	body := `<html><body><ul class="stock-list">` +
+		`<li onclick='goUrl("2308");' title="2026-08-25 八大公股行庫合計買超 Top.1 : 台達電 (2308) 合計：81,585萬元"><span class="w20"></span><span class="w100 name">台達電</span><span class="w70">7,615</span><span class="w70">1,739</span><span class="w70">6,532</span><span class="w70">1,394</span><span class="w70">17,285</span><span class="w70">16,977</span><span class="w70">16,237</span><span class="w70">13,806</span><span class="w70">81,585</span></li>` +
+		`<li onclick='goUrl("2454");' title="x"><span class="w20"></span><span class="w100 name">聯發科</span><span class="w70">BAD</span></li>` +
+		`</ul></body></html>`
+	rows, err := ParseHistockBroker8HTML([]byte(body))
+	if err != nil {
+		t.Fatalf("ParseHistockBroker8HTML(partial) error = %v, want nil with good rows", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows len = %d, want 1 (good row kept)", len(rows))
+	}
+	if rows[0].Symbol != "2308" {
+		t.Errorf("row symbol = %s, want 2308", rows[0].Symbol)
+	}
+}
+
+// TestAggregateDate_HistockSource_SchemaErrorIsUpstreamFailure verifies the
+// aggregator treats a parser schema error as a real upstream failure: error
+// wraps ErrUpstream and the breaker records a failure (no fake success).
+func TestAggregateDate_HistockSource_SchemaErrorIsUpstreamFailure(t *testing.T) {
+	dir := t.TempDir()
+	server := newStubHistockServer(t, `<html><body><ul class="stock-list">`+
+		`<li onclick='goUrl("2330");'><span class="w20"></span><span class="w100 name">台積電</span><span class="w70">BAD</span></li>`+
+		`</ul></body></html>`)
+	defer server.Close()
+
+	agg := NewGovernmentBrokerAggregator(dir)
+	agg.SetHTTPClient(server.Client())
+	agg.Histock().SetBaseURL(server.URL)
+	agg.breaker = newProviderBreaker("government_broker", fastTestConfig())
+
+	_, err := agg.AggregateDate(context.Background(), time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("AggregateDate() schema error = nil, want wrapped ErrUpstream")
+	}
+	if !errors.Is(err, ErrUpstream) {
+		t.Fatalf("err = %v, want wrapped ErrUpstream", err)
+	}
+	if got := agg.BreakerInfo().FailureCount; got != 1 {
+		t.Errorf("breaker FailureCount = %d, want 1 (schema change must count as failure)", got)
 	}
 }

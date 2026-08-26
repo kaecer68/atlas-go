@@ -59,8 +59,12 @@ type ImportReport struct {
 	// ImportedDates is the number of trading dates written.
 	ImportedDates int
 	// ImportedSamples is the total number of RollingSample entries
-	// (3 per imported date: foreign / institutional / dealer).
+	// (3 per imported date: foreign / institutional / dealer, +1 when
+	// a government reading exists for the date).
 	ImportedSamples int
+	// GovImportedDates is how many dates contributed a ForceGovernment
+	// sample (subset of ImportedDates).
+	GovImportedDates int
 	// SkippedDatesNoT86 is the count of replay trading dates inside
 	// the window that had no T86 snapshot (real source missing).
 	SkippedDatesNoT86 int
@@ -71,6 +75,58 @@ type ImportReport struct {
 	// DateRange is the first..last imported date (empty when nothing
 	// was imported).
 	DateRange [2]string
+}
+
+// LoadGovernmentFlow reads every government_flow reading JSON under dir
+// (data/state/government_flow/YYYYMMDD.json) and returns them keyed by
+// normalized YYYY-MM-DD trading date with TotalNet converted to 億元
+// (÷1e8, matching the snapshot GovernmentNet semantics used by
+// scoreGovernment). Skipped: *_insurance.json and *_brokers.json (the
+// suffix check excludes them), and any non-reading files.
+func LoadGovernmentFlow(dir string) (map[string]float64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No government_flow readings yet — the government dimension
+			// simply stays out of the import (T86 trio still imported).
+			return map[string]float64{}, nil
+		}
+		return nil, fmt.Errorf("history_import: read gov dir %s: %w", dir, err)
+	}
+	out := make(map[string]float64, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".json") ||
+			strings.HasSuffix(name, "_insurance.json") ||
+			strings.HasSuffix(name, "_brokers.json") {
+			continue
+		}
+		// Only YYYYMMDD.json (8 digits before .json).
+		base := strings.TrimSuffix(name, ".json")
+		if len(base) != 8 {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, fmt.Errorf("history_import: read %s: %w", name, err)
+		}
+		var raw struct {
+			TotalNet int64  `json:"total_net"`
+			Date     string `json:"date"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("history_import: parse %s: %w", name, err)
+		}
+		if raw.Date == "" {
+			continue
+		}
+		date, err := normalizeT86Date(raw.Date)
+		if err != nil {
+			return nil, fmt.Errorf("history_import: %s: %w", name, err)
+		}
+		out[date] = float64(raw.TotalNet) / 1e8
+	}
+	return out, nil
 }
 
 // LoadT86CapitalFlow reads every T86 snapshot JSON under dir
@@ -184,7 +240,7 @@ func LoadReplayTradingDates(replayPath string) ([]string, error) {
 // (foreign / institutional / dealer). The remaining four dimensions
 // are listed in the returned ImportReport.NeedsRealSource and are
 // intentionally not fabricated (see file doc).
-func BuildHistorySamples(replayPath, t86Dir, fromDate string) ([]RollingSample, ImportReport, error) {
+func BuildHistorySamples(replayPath, t86Dir, govDir, fromDate string) ([]RollingSample, ImportReport, error) {
 	var rep ImportReport
 	if fromDate != "" {
 		if err := validateTradingDate(fromDate); err != nil {
@@ -199,10 +255,14 @@ func BuildHistorySamples(replayPath, t86Dir, fromDate string) ([]RollingSample, 
 	if err != nil {
 		return nil, rep, err
 	}
-	rep.NeedsRealSource = []ForceName{ForceFutures, ForceTSMADR, ForceGovernment, ForceRetail}
+	gov, err := LoadGovernmentFlow(govDir)
+	if err != nil {
+		return nil, rep, err
+	}
 
 	var samples []RollingSample
 	first, last := "", ""
+	govDates := make(map[string]struct{})
 	for _, d := range replayDates {
 		if fromDate != "" && d < fromDate {
 			continue
@@ -217,6 +277,21 @@ func BuildHistorySamples(replayPath, t86Dir, fromDate string) ([]RollingSample, 
 			RollingSample{TradingDate: d, Dimension: ForceInstitutional, RawValue: rec.InstitutionalNet, Unit: "hundred_million_shares", SourceID: SourceTWSET86},
 			RollingSample{TradingDate: d, Dimension: ForceDealer, RawValue: rec.DealerNet, Unit: "hundred_million_shares", SourceID: SourceTWSET86},
 		)
+		// CAL-1 government extension (2026-08-26): emit ForceGovernment
+		// from data/state/government_flow/YYYYMMDD.json (total_net → 億元).
+		// Dates with a gov reading contribute a 4th sample; dates without
+		// one keep the T86-only trio (government stays partial).
+		if govVal, ok := gov[d]; ok {
+			samples = append(samples, RollingSample{
+				TradingDate: d,
+				Dimension:   ForceGovernment,
+				RawValue:    govVal,
+				Unit:        "hundred_million_shares",
+				SourceID:    SourceGovernmentOperator,
+			})
+			govDates[d] = struct{}{}
+			rep.GovImportedDates++
+		}
 		rep.ImportedDates++
 		if first == "" {
 			first = d
@@ -224,6 +299,14 @@ func BuildHistorySamples(replayPath, t86Dir, fromDate string) ([]RollingSample, 
 		last = d
 	}
 	rep.ImportedSamples = len(samples)
+
+	// NeedsRealSource: dimensions whose real feed never landed. Government
+	// is dropped from the list when at least one gov reading was imported.
+	rep.NeedsRealSource = []ForceName{ForceFutures, ForceTSMADR, ForceRetail}
+	if len(govDates) == 0 {
+		rep.NeedsRealSource = append(rep.NeedsRealSource, ForceGovernment)
+	}
+
 	if first != "" {
 		rep.DateRange = [2]string{first, last}
 	}
@@ -240,6 +323,9 @@ func (r ImportReport) String() string {
 	}
 	if r.SkippedDatesNoT86 > 0 {
 		fmt.Fprintf(&b, "; %d replay dates skipped (no T86 snapshot)", r.SkippedDatesNoT86)
+	}
+	if r.GovImportedDates > 0 {
+		fmt.Fprintf(&b, "; government: %d dates imported (media-curated readings)", r.GovImportedDates)
 	}
 	if len(r.NeedsRealSource) > 0 {
 		names := make([]string, len(r.NeedsRealSource))

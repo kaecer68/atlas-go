@@ -21,6 +21,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // GovernmentBrokerAggregator fetches daily broker-level trading data from TWSE
@@ -286,12 +287,15 @@ func (a *GovernmentBrokerAggregator) aggregateDateViaHistock(ctx context.Context
 		return nil, fmt.Errorf("%w: government_broker histock fetch %s: %v", ErrUpstream, dateStr, err)
 	}
 
-	// Empty page = holiday / data not yet published — expected, not a failure.
+	// Empty page = holiday / data not yet published. Expected on holidays,
+	// but NOT proof of a healthy upstream: a format change that slipped past
+	// the parser would also produce zero rows. Keep the breaker counts
+	// untouched (no success, no failure) so a prior real failure is never
+	// masked by a quiet day, and warn so the operator can tell holidays
+	// apart from a silently-broken upstream (k3 advisor 2026-08-26).
 	if len(rows) == 0 {
-		a.breakerRecordSuccess()
-		if a.cooldown != nil {
-			a.cooldown.RecordSuccess(GovernmentBrokerChannelID)
-		}
+		logging.Warn("government_broker", "histock_empty_rows",
+			"date", dateStr, "hint", "0 rows parsed; holiday or upstream format change?")
 		return nil, nil
 	}
 
