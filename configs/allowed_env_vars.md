@@ -53,6 +53,7 @@
 | `ATLAS_MCP_AUDIT_LOG` | MCP server 用：JSONL audit log 路徑 | `$TMPDIR/atlas-mcp-audit.log` |
 | `ATLAS_ENV` | 環境模式（`production`/`development`） | 空 |
 | `ATLAS_SKIP_DOCKER` | 跳過 Docker-based PostgreSQL 啟動 | 空 |
+| `CI` | CI 環境旗標（integration 測試：CI 下 PG 必須可用 → fail loudly；本地缺 PG → skip） | 空 |
 | `ATLAS_SKIP_PORT_PREFLIGHT` | 測試環境用：跳過 `internal/startup.Preflight` TCP port 檢查（`cmd/atlas` TestMain 設定；CI 環境常因殘留 `atlas -api` 或平行 atlas.test binary 佔住 port 18080，導致 4 個 live-broker 測試 wedge） | 空 |
 | `DATABASE_URL` | PostgreSQL 連線字串 | 空（需手動設定） |
 | `HOME` | 使用者家目錄（用於 CLI 工具路徑建構） | 系統預設 |
