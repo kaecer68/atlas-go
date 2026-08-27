@@ -145,6 +145,7 @@ CLI 工具、資料轉換、一次性驗證。非 runtime 一部分。
 
 | 目錄 | 說明 |
 |------|------|
+| `testdb` | PG 整合測試 DATABASE_URL 政策（CI fail-loud / 本地 skip） | `URL`, `Require`, `Connect`, `Pool` | utility，僅測試用（2026-08-28, WP3 M6） |
 | `testdata/` | Go 標準 `testdata` 目錄，存放測試 fixtures（非 Go package） |
 
 ---
