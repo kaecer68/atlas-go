@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,6 +85,75 @@ func TestFetchSymbolFlow(t *testing.T) {
 	}
 	if flow.DealerNet != 0.4 {
 		t.Fatalf("dealer=%v", flow.DealerNet)
+	}
+}
+
+func TestFetchDateFlows(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// 3 valid rows (19 columns) + 1 short row (< 12) + 1 grand-total
+		// row (empty symbol) that must be skipped.
+		fmt.Fprint(w, `{"stat":"OK","data":[
+			["2330","台積電","1000","500","500","0","0","0","800","300","500","400","0","0","0","0","0","0","1400"],
+			["2317","鴻海","2000","1000","1000","0","0","0","600","200","400","300","0","0","0","0","0","0","1700"],
+			["0050","元大台灣50","500","250","250","0","0","0","400","100","300","200","0","0","0","0","0","0","750"],
+			["0056"],
+			["","總計","3000","1500","1500","0","0","0","1400","400","1000","700","0","0","0","0","0","0","3200"]
+		]}`)
+	}))
+	defer server.Close()
+
+	p := NewTWSECapitalFlowProvider("")
+	p.SetHTTPClient(&http.Client{Transport: &testT86RoundTripper{serverURL: server.URL}})
+
+	flows, err := p.FetchDateFlows(context.Background(), "20260701")
+	if err != nil {
+		t.Fatalf("FetchDateFlows: %v", err)
+	}
+	if len(flows) != 3 {
+		t.Fatalf("len(flows) = %d, want 3 (malformed + grand-total rows skipped)", len(flows))
+	}
+
+	want := []SymbolFlow{
+		{Symbol: "2330", Name: "台積電", ForeignInvestorNet: 0.5, DomesticFundNet: 0.5, DealerNet: 0.4, Date: "20260701"},
+		{Symbol: "2317", Name: "鴻海", ForeignInvestorNet: 1.0, DomesticFundNet: 0.4, DealerNet: 0.3, Date: "20260701"},
+		{Symbol: "0050", Name: "元大台灣50", ForeignInvestorNet: 0.25, DomesticFundNet: 0.3, DealerNet: 0.2, Date: "20260701"},
+	}
+	for i, w := range want {
+		got := flows[i]
+		if got.Symbol != w.Symbol || got.Name != w.Name || got.Date != w.Date {
+			t.Errorf("flows[%d] = %+v, want symbol/name/date %q/%q/%q", i, got, w.Symbol, w.Name, w.Date)
+		}
+		if got.ForeignInvestorNet != w.ForeignInvestorNet {
+			t.Errorf("flows[%d].ForeignInvestorNet = %v, want %v", i, got.ForeignInvestorNet, w.ForeignInvestorNet)
+		}
+		if got.DomesticFundNet != w.DomesticFundNet {
+			t.Errorf("flows[%d].DomesticFundNet = %v, want %v", i, got.DomesticFundNet, w.DomesticFundNet)
+		}
+		if got.DealerNet != w.DealerNet {
+			t.Errorf("flows[%d].DealerNet = %v, want %v", i, got.DealerNet, w.DealerNet)
+		}
+	}
+}
+
+func TestFetchDateFlows_NoDataWrapsErrNoData(t *testing.T) {
+	withUnlimitedTWSELimiter(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"stat":"OK","data":[]}`)
+	}))
+	defer server.Close()
+
+	p := NewTWSECapitalFlowProvider("")
+	p.SetHTTPClient(&http.Client{Transport: &testT86RoundTripper{serverURL: server.URL}})
+
+	_, err := p.FetchDateFlows(context.Background(), "20260704")
+	if err == nil {
+		t.Fatal("expected error for empty T86 response")
+	}
+	if !errors.Is(err, ErrNoData) {
+		t.Fatalf("error = %v, want it to wrap ErrNoData (holiday classification)", err)
 	}
 }
 
