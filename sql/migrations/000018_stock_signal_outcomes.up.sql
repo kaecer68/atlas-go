@@ -1,15 +1,16 @@
 -- 000018_stock_signal_outcomes.up.sql
 -- PR 1b: per-symbol, per-trigger, per-source signal outcomes.
--- SQLite-compatible DDL (INTEGER for booleans) so the same file can be
--- exercised in SQLite tests; PostgreSQL treats INTEGER the same way.
+-- Dual-dialect DDL: PostgreSQL REAL = float4 (precision loss), so float
+-- columns use DOUBLE PRECISION; SQLite accepts DOUBLE PRECISION and stores
+-- it as REAL (8-byte double). INTEGER booleans are portable.
 CREATE TABLE IF NOT EXISTS stock_signal_outcomes (
     symbol TEXT NOT NULL,
     trigger_date TEXT NOT NULL,
     source TEXT NOT NULL,
-    forward_return REAL,
-    net_forward_return REAL,
+    forward_return DOUBLE PRECISION,
+    net_forward_return DOUBLE PRECISION,
     hit INTEGER,
-    cost_rate REAL,
+    cost_rate DOUBLE PRECISION,
     regime TEXT,
     created_at TEXT NOT NULL,
     UNIQUE(symbol, trigger_date, source)
