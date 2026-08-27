@@ -158,8 +158,12 @@ func (a *app) loadAndValidate(tradingDate string) (records []historyRecord, err 
 	}
 
 	loc := time.FixedZone("Asia/Taipei", taipeiOffsetSeconds)
+	dateT, err := time.Parse("2006-01-02", tradingDate)
+	if err != nil {
+		return nil, fmt.Errorf("parse trading date: %w", err)
+	}
 	recordedAt := time.Date(
-		parseYear(tradingDate), parseMonth(tradingDate), parseDay(tradingDate),
+		dateT.Year(), dateT.Month(), dateT.Day(),
 		15, 30, 0, 0, loc,
 	).Format(time.RFC3339)
 
@@ -279,24 +283,4 @@ func (a *app) writeHistory(tradingDate string, records []historyRecord) (written
 		return 0, 0, 0, fmt.Errorf("replace history file: %w", err)
 	}
 	return written, kept, removed, nil
-}
-
-// parseYear, parseMonth and parseDay are tiny helpers that assume the caller
-// has already validated the date format.
-func parseYear(s string) int {
-	var y int
-	_, _ = fmt.Sscanf(s, "%d-%*d-%*d", &y)
-	return y
-}
-
-func parseMonth(s string) time.Month {
-	var m int
-	_, _ = fmt.Sscanf(s, "%*d-%d-%*d", &m)
-	return time.Month(m)
-}
-
-func parseDay(s string) int {
-	var d int
-	_, _ = fmt.Sscanf(s, "%*d-%*d-%d", &d)
-	return d
 }

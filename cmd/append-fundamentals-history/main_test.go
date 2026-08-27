@@ -142,6 +142,25 @@ func TestAppend_ForceOverwrite(t *testing.T) {
 	}
 }
 
+// TestAppend_RecordedAt verifies the recorded_at timestamp is derived from the
+// trading date (not silently normalized to a wrong month/day due to scanf).
+func TestAppend_RecordedAt(t *testing.T) {
+	dir := t.TempDir()
+	writeFundamentals(t, dir, map[string]rawFundamental{
+		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+	})
+	runApp(t, dir, "2026-08-27", false, nil)
+
+	records := readHistory(t, dir)
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	want := "2026-08-27T15:30:00+08:00"
+	if records[0].RecordedAt != want {
+		t.Fatalf("recorded_at = %s, want %s (date parsing bug?)", records[0].RecordedAt, want)
+	}
+}
+
 func TestAppend_MissingFundamentals(t *testing.T) {
 	dir := t.TempDir()
 	a := &app{workDir: dir, date: "2026-08-27", now: time.Now}
