@@ -74,7 +74,7 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	force := fs.Bool("force", false, "rerun even when outcomes already exist for the date range")
 	dryRun := fs.Bool("dry-run", false, "compute coverage and print it without persisting")
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
-	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then DATABASE_URL heuristic)")
+	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then job-local sqlite)")
 	expectDB := fs.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch")
 	conditionsFlag := fs.String("conditions", "", "comma-separated condition IDs to run (default: foreign-3d-net-buy,momentum-20d-positive)")
 	listConditions := fs.Bool("list-conditions", false, "print the registered conditions and exit")
@@ -100,7 +100,10 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 		return fmt.Errorf("end %s before start %s", end.Format("2006-01-02"), start.Format("2006-01-02"))
 	}
 
-	backend := resolveBackend(*backendFlag)
+	backend, err := resolveBackend(*backendFlag)
+	if err != nil {
+		return err
+	}
 
 	// M12 target guard: report the postgres connection target and abort on
 	// -expect-db mismatch before any migration can touch the wrong database
@@ -191,6 +194,8 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	fmt.Printf("conditions: %s\n", strings.Join(conditionIDs(conds), ", "))
 
 	if *dryRun {
+		log.Printf("dry-run: nothing persisted; a real run would write outcomes to job-local SQLite %s (non-prod artifact), not to the postgres target",
+			filepath.Join(*workDir, "data", "state", "atlas.db"))
 		return nil
 	}
 
@@ -217,11 +222,16 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	return nil
 }
 
+// openOutcomeDB opens the job-local SQLite ledger holding backtest outcomes
+// and win-rate rows. Outcomes are a job-local SQLite artifact
+// (data/state/atlas.db), never written to the postgres target: quotes are
+// backend-aware, outcomes stay local (M4③).
 func openOutcomeDB(workDir string) (*sql.DB, error) {
 	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir state dir: %w", err)
 	}
+	log.Printf("outcomes ledger: %s (job-local SQLite artifact; postgres target untouched)", dbPath)
 	db, err := ledger.OpenSQLiteDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open ledger db %s: %w", dbPath, err)
@@ -304,18 +314,25 @@ func guardDatabaseTarget(ctx context.Context, dsn, expectDB string) error {
 }
 
 // resolveBackend picks the quote backend. Explicit -backend wins, then the
-// ATLAS_STORE_BACKEND env var, then a heuristic on DATABASE_URL.
-func resolveBackend(flagValue string) string {
-	if flagValue != "" {
-		return flagValue
+// ATLAS_STORE_BACKEND env var, then the job-local sqlite default. It
+// delegates normalization and fail-loud validation to the shared ledger
+// resolver (WP4) instead of a local DATABASE_URL heuristic (M4②).
+func resolveBackend(flagValue string) (string, error) {
+	value := flagValue
+	if value == "" {
+		value = os.Getenv("ATLAS_STORE_BACKEND")
 	}
-	if v := os.Getenv("ATLAS_STORE_BACKEND"); v != "" {
-		return v
+	if value == "" {
+		value = "sqlite" // job-local default: outcomes are a local SQLite artifact
 	}
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" && strings.Contains(strings.ToLower(dsn), "postgres") {
-		return "postgres"
+	backend, err := ledger.ResolveStoreBackend(value)
+	if err != nil {
+		return "", err
 	}
-	return "sqlite"
+	if backend == "jsonl" {
+		return "", fmt.Errorf("store backend jsonl is not supported by run-stockpicker-backtest (quotes: sqlite | postgres; outcomes: job-local sqlite)")
+	}
+	return backend, nil
 }
 
 // parseDate parses YYYY-MM-DD; empty falls back to def (UTC, date only).

@@ -272,34 +272,45 @@ func TestRealPanel_FlowsFromFile(t *testing.T) {
 }
 
 // TestResolveBackend_Priority verifies the backend resolution order:
-// explicit flag > ATLAS_STORE_BACKEND > DATABASE_URL heuristic > sqlite default.
+// explicit flag > ATLAS_STORE_BACKEND > job-local sqlite default. The local
+// DATABASE_URL heuristic is gone (M4②): a postgres DSN alone must not flip
+// the backend; normalization + fail-loud validation delegate to the shared
+// ledger resolver (WP4).
 func TestResolveBackend_Priority(t *testing.T) {
 	t.Setenv("ATLAS_STORE_BACKEND", "")
 	t.Setenv("DATABASE_URL", "")
-	if got := resolveBackend("postgres"); got != "postgres" {
-		t.Fatalf("flag value lost: got %q", got)
+	if got, err := resolveBackend("postgres"); err != nil || got != "postgres" {
+		t.Fatalf("flag value lost: got %q err %v", got, err)
 	}
 
 	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
 	t.Setenv("DATABASE_URL", "")
-	if got := resolveBackend(""); got != "postgres" {
-		t.Fatalf("ATLAS_STORE_BACKEND ignored: got %q", got)
+	if got, err := resolveBackend(""); err != nil || got != "postgres" {
+		t.Fatalf("ATLAS_STORE_BACKEND ignored: got %q err %v", got, err)
 	}
 
+	// A postgres DSN without an explicit flag/env must NOT select postgres
+	// anymore — the heuristic diverged from store_factory (M4②).
 	t.Setenv("ATLAS_STORE_BACKEND", "")
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost/db")
-	if got := resolveBackend(""); got != "postgres" {
-		t.Fatalf("DATABASE_URL heuristic failed: got %q", got)
-	}
-
-	t.Setenv("DATABASE_URL", "sqlite://file.db")
-	if got := resolveBackend(""); got != "sqlite" {
-		t.Fatalf("non-postgres DSN should default to sqlite: got %q", got)
+	if got, err := resolveBackend(""); err != nil || got != "sqlite" {
+		t.Fatalf("DATABASE_URL must not select postgres anymore: got %q err %v", got, err)
 	}
 
 	t.Setenv("DATABASE_URL", "")
-	if got := resolveBackend(""); got != "sqlite" {
-		t.Fatalf("empty env should default to sqlite: got %q", got)
+	if got, err := resolveBackend(""); err != nil || got != "sqlite" {
+		t.Fatalf("empty env should default to job-local sqlite: got %q err %v", got, err)
+	}
+
+	// Garbage and jsonl are rejected loudly through the shared resolver
+	// (WP4 fail-loud; jsonl is not a backend this command can serve).
+	t.Setenv("ATLAS_STORE_BACKEND", "garbage")
+	if got, err := resolveBackend(""); err == nil {
+		t.Fatalf("garbage ATLAS_STORE_BACKEND should error, got %q", got)
+	}
+	t.Setenv("ATLAS_STORE_BACKEND", "jsonl")
+	if got, err := resolveBackend(""); err == nil {
+		t.Fatalf("jsonl ATLAS_STORE_BACKEND should error (unsupported by this command), got %q", got)
 	}
 }
 
