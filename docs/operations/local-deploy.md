@@ -68,6 +68,12 @@ curl -fsS http://localhost:18080/health
 > **hermes 代勞**：部署是 hermes（iMac 運維員）的職責。可用 hermes-dispatch skill 派她完成
 > `git pull → make rebuild-all → 驗證 /health → 回報`。
 
+> ⚠️ **Darwinian state 同步（2026-08-27 起）**：`data/state/darwinian_history.jsonl` 不是 git
+> tracked，部署不會自動帶過去。任何會**重建/重啟 atlas-go 或 atlas-cron-darwinian 容器**的部署，
+> 先跑 `~/workspace/atlas/scripts/sync-darwinian.sh`（union merge，只增不減），
+> 並遵守「sync 前容器必須停」的硬性規定（避免 torn line）。完整章節見
+> a2a-dev `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1。
+
 ## 部署驗證
 
 兩個 endpoint 都必須通過：
