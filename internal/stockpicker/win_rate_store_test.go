@@ -106,7 +106,7 @@ func TestWinRateStore_UpsertUpdates(t *testing.T) {
 
 	var n int
 	if err := db.QueryRow(
-		`SELECT COUNT(*) FROM stock_win_rate WHERE symbol = ? AND source = ? AND window = ?`,
+		`SELECT COUNT(*) FROM stock_win_rate WHERE symbol = ? AND source = ? AND rolling_window = ?`,
 		first.Symbol, first.Source, first.Window,
 	).Scan(&n); err != nil {
 		t.Fatalf("count rows: %v", err)

@@ -246,7 +246,7 @@ func InitSchema(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS stock_win_rate (
 		symbol TEXT NOT NULL,
 		source TEXT NOT NULL,
-		window TEXT NOT NULL,
+		rolling_window TEXT NOT NULL,
 		observations INTEGER NOT NULL,
 		hits INTEGER NOT NULL,
 		win_rate REAL NOT NULL,
@@ -257,7 +257,7 @@ func InitSchema(db *sql.DB) error {
 		net_cost_rate REAL,
 		avg_forward_return REAL,
 		updated_at TEXT NOT NULL,
-		UNIQUE(symbol, source, window)
+		UNIQUE(symbol, source, rolling_window)
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
@@ -281,7 +281,7 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_theme_time ON detector_scan_log(theme, detected_at);
 	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_symbol_date ON stock_signal_outcomes(symbol, trigger_date);
 	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_source_date ON stock_signal_outcomes(source, trigger_date);
-	CREATE INDEX IF NOT EXISTS idx_stock_win_rate_key ON stock_win_rate(symbol, source, window);
+	CREATE INDEX IF NOT EXISTS idx_stock_win_rate_key ON stock_win_rate(symbol, source, rolling_window);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
