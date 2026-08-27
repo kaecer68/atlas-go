@@ -87,6 +87,19 @@ func testConfig(t *testing.T, workdir, start, end string, minRows int, p *market
 	return config{workDir: workdir, start: st, end: en, minRows: minRows, provider: p}
 }
 
+func readFlowFileAt(t *testing.T, dir, symbol string) (flowFile, error) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, symbol+".json"))
+	if err != nil {
+		return flowFile{}, err
+	}
+	var f flowFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return flowFile{}, err
+	}
+	return f, nil
+}
+
 func flowsDirOf(t *testing.T, workdir string) string {
 	t.Helper()
 	return filepath.Join(workdir, "data", "state", "stock_flows")
@@ -184,15 +197,18 @@ func TestRun_ZeroRowsFails(t *testing.T) {
 
 // TestRun_NoDataSkips: TWSE returning no data (non-trading day message) is
 // skipped, not a failure.
-func TestRun_NoDataSkips(t *testing.T) {
+// TestRun_AllSkippedFails (PR review P0): when the whole window yields no
+// data (systematic stat != OK / invalid range / every day ErrNoData), the
+// run must fail loudly instead of reporting a fake success with 0 files.
+func TestRun_AllSkippedFails(t *testing.T) {
 	server := t86Server(nil) // every date → empty data → ErrNoData
 	defer server.Close()
 	p := stubProvider(t, server.URL)
 
 	workdir := t.TempDir()
 	cfg := testConfig(t, workdir, "2026-01-05", "2026-01-06", 2, p)
-	if err := run(context.Background(), cfg); err != nil {
-		t.Fatalf("non-trading days should skip, got error: %v", err)
+	if err := run(context.Background(), cfg); err == nil {
+		t.Fatal("all-skipped window must fail (fake success gate), got nil error")
 	}
 	entries, err := os.ReadDir(flowsDirOf(t, workdir))
 	if err != nil {
@@ -200,6 +216,31 @@ func TestRun_NoDataSkips(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("skipped days must not write files, got %d entries", len(entries))
+	}
+}
+
+// TestRun_MixedSkipAndOK: a window with some no-data days and some real data
+// succeeds and writes only the real-data days (skip is per-day, not whole-run).
+func TestRun_MixedSkipAndOK(t *testing.T) {
+	server := t86Server(map[string][][]string{
+		"20260105": {t86Row("2330", "台積電", 500)}, // Mon: real data
+		// 20260106 Tue: missing key → empty data → skip
+		"20260107": {t86Row("2330", "台積電", 600)}, // Wed: real data
+	})
+	defer server.Close()
+	p := stubProvider(t, server.URL)
+
+	workdir := t.TempDir()
+	cfg := testConfig(t, workdir, "2026-01-05", "2026-01-07", 1, p)
+	if err := run(context.Background(), cfg); err != nil {
+		t.Fatalf("mixed skip+ok should succeed, got error: %v", err)
+	}
+	f, err := readFlowFileAt(t, flowsDirOf(t, workdir), "2330")
+	if err != nil {
+		t.Fatalf("read 2330 flow file: %v", err)
+	}
+	if len(f.Flows) != 2 {
+		t.Fatalf("expected 2 flow points (Mon+Wed), got %d", len(f.Flows))
 	}
 }
 

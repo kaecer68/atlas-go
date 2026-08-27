@@ -196,6 +196,16 @@ func run(ctx context.Context, cfg config) (err error) {
 		}
 	}
 
+	// Aggregated fake-success gate (PR review P0): if not a single trading day
+	// produced rows (e.g. every day was ErrNoData from an invalid range, a
+	// systematic stat != OK, or a start before T86's earliest date), the run
+	// must fail loudly instead of printing "result: OK" with 0 files written.
+	if len(written) == 0 {
+		err := fmt.Errorf("no trading day produced data: %d day(s) processed, 0 files written (possible fake success)",
+			len(results))
+		return err
+	}
+
 	if err := verifyFiles(flowsDir, written); err != nil {
 		return err
 	}
