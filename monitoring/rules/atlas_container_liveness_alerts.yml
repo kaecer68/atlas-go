@@ -1,0 +1,102 @@
+# atlas-go-target-down-alerts.yml
+# Created 2026-08-27 after PR #1695 follow-up investigation.
+# 2026-08-26 01:24-08-27 cloudflared 502 silent 32+ hr 事件根因之一:
+# Prometheus 已 scrape 到 atlas-go job up=0,但 alertmanager /api/v2/alerts = [],
+# 完全沒有告警接到通知 — target-down 沒有對應 rule。
+#
+# 本檔案加 4 條 alert:
+# - AtlasGoTargetDown        : up==0 for 2m → critical (atlas-go 是主要 API)
+# - AtlasPostgresTargetDown  : up==0 for 5m → critical (postgres 是依賴)
+# - AtlasFubonProxyTargetDown: up==0 for 5m → warning  (影響報價但不擋 API)
+# - AtlasContainerRestarting : restart count 激增 → warning (atlas-go 一直 crash loop)
+#
+# 與 AtlasDBInitFailure (atlas_startup_anomaly_alerts.yml) 互補:
+# - AtlasDBInitFailure 監聽 atlas-go 內部 emit 的 counter (PR-926 schema)
+# - 本檔監聽外部 Prometheus 觀點的容器存活,即使 atlas-go 啟動崩潰也能告警
+#
+# 對齊 `docs/operations/docker-compose.prod.yml` scrape_configs 的 job 名。
+
+groups:
+  - name: atlas_container_liveness
+    interval: 30s
+    rules:
+      - alert: AtlasGoTargetDown
+        expr: up{job="atlas-go"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: atlas
+          component: api
+          wave: "9.2"
+          incident_ref: "PR#1695-20260826"
+        annotations:
+          summary: "atlas-go Prometheus scrape 連續 2 分鐘失敗"
+          description: |
+            atlas.goluck.uk backend (Prometheus job=atlas-go, target=atlas:18080) 連續 2 分鐘
+            scrape 失敗。直接證據:Prometheus up==0;間接證據:https://atlas.goluck.uk/health 回 5xx。
+            立即檢查:
+            1. docker ps --filter name=atlas-go-imac (容器是否 exited/crash loop?)
+            2. docker logs atlas-go-imac --tail 50 (DB connection / port 衝突 / panic?)
+            3. 確認 iMac 端 atlas-postgres 健康:docker ps --filter name=atlas-postgres
+            4. 確認 55432 port 未被 rogue ssh tunnel 佔用:lsof -iTCP:55432
+            實證:2026-08-26 PR #1695 事件 silent 32 小時,因缺本 rule。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/iMac-RUNBOOK.md"
+
+      - alert: AtlasPostgresTargetDown
+        expr: up{job="postgres"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: atlas
+          component: database
+          wave: "9.2"
+          incident_ref: "PR#1695-20260826"
+        annotations:
+          summary: "atlas-postgres (timescale) scrape 連續 5 分鐘失敗"
+          description: |
+            postgres job (target=postgres:5432) 連續 5 分鐘 scrape 失敗。
+            通常原因:容器 exited、port 衝突、容器被誤刪重建。
+            立即檢查:
+            1. docker ps --filter name=atlas-postgres
+            2. docker logs atlas-postgres --tail 50
+            3. 確認 volume 仍掛 prod volume (atlas-postgres-data, NOT atlas_postgres-data 底線版):
+               docker inspect atlas-postgres --format '{{.Mounts}}'
+            4. 容器不存在時依 .claude/skills/atlas-imac-prod-guard/ 復原 SOP 重建
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
+
+      - alert: AtlasFubonProxyTargetDown
+        expr: up{job="redis"} == 0  # fubon-proxy 沒有獨立 scrape job,沿用 redis 觀察 broker nonce store 健康
+        for: 10m
+        labels:
+          severity: warning
+          service: atlas
+          component: broker-nonce-store
+          wave: "9.2"
+        annotations:
+          summary: "atlas-redis (broker nonce store) scrape 連續 10 分鐘失敗"
+          description: |
+            redis job (broker nonce store for fubon-proxy) 連續 10 分鐘失敗。
+            影響:broker nonce 重複偵測失效,但不擋主 API。
+            立即檢查:docker ps --filter name=atlas-redis (host port 16379)
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/iMac-RUNBOOK.md"
+
+      - alert: AtlasGoContainerRestartLoop
+        expr: increase(container_last_seen{name=~".+atlas-go.+", image=~".+atlas-atlas.+"} [10m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          service: atlas
+          component: api
+          wave: "9.2"
+          incident_ref: "PR#1695-20260826"
+        annotations:
+          summary: "atlas-go container 10 分鐘內重啟超過 3 次"
+          description: |
+            atlas-go container 在 10 分鐘內 scrape 數次出現超過 3 次重啟 (PR #1695 期間
+            RestartCount 13 次,仍持續 crash loop)。
+            常見原因:DB 密碼錯誤、port 衝突、binary panic、env 改寫後沒重啟。
+            立即檢查:
+            1. docker inspect atlas-go-imac --format '{{.RestartCount}} {{.State.Status}}'
+            2. docker logs atlas-go-imac --tail 30 | grep -E 'ERROR|FATAL|panic'
+            3. 如 13+ 次仍在 loop → 停下來查 root cause,不要無限重啟
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
