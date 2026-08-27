@@ -146,3 +146,26 @@ func scanQuoteRows(rows pgx.Rows) ([]domain.DailyBar, error) {
 	}
 	return quotes, nil
 }
+
+// QuoteSymbols returns the distinct symbols in the PostgreSQL quotes table.
+// It implements the optional ledger.QuoteSymbolLister interface.
+func (s *PostgresQuoteStore) QuoteSymbols(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT symbol FROM quotes ORDER BY symbol`)
+	if err != nil {
+		return nil, fmt.Errorf("query quote symbols: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var sym string
+		if err := rows.Scan(&sym); err != nil {
+			return nil, fmt.Errorf("scan quote symbol: %w", err)
+		}
+		out = append(out, sym)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate quote symbols: %w", err)
+	}
+	return out, nil
+}

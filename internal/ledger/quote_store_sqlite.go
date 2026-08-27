@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -176,4 +177,27 @@ func placeholders(n int) string {
 		result += ",?"
 	}
 	return result
+}
+
+// QuoteSymbols returns the distinct symbols in the SQLite quotes table.
+// It implements the optional ledger.QuoteSymbolLister interface.
+func (s *SQLiteQuoteStore) QuoteSymbols(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT symbol FROM quotes ORDER BY symbol`)
+	if err != nil {
+		return nil, fmt.Errorf("query quote symbols: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []string
+	for rows.Next() {
+		var sym string
+		if err := rows.Scan(&sym); err != nil {
+			return nil, fmt.Errorf("scan quote symbol: %w", err)
+		}
+		out = append(out, sym)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate quote symbols: %w", err)
+	}
+	return out, nil
 }
