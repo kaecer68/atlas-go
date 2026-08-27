@@ -5,13 +5,6 @@ global:
   # 在 iMac 用 ~/.config/atlas-go/.env 的 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID。
   # Slack receivers 保留為 placeholder fallback（未來需要時再加進 webhook URL）。
 
-
-  resolve_timeout: 5m
-  # Telegram 是主要通知路徑（PR #1695 事件後 32h silent 根因之一就是 slack_api_url 是 PLACEHOLDER）。
-  # bot_token 與 chat_id 透過 docker compose env 注入（避免 commit 進 git）。
-  # 在 iMac 用 ~/.config/atlas-go/.env 的 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID。
-  # Slack receivers 保留為 placeholder fallback（未來需要時再加進 webhook URL）。
-
 route:
   receiver: atlas-telegram
   group_by: [alertname, service, provider]
@@ -49,7 +42,9 @@ receivers:
   - name: atlas-telegram
     telegram_configs:
       - bot_token: ${TELEGRAM_BOT_TOKEN}
-        chat_id: ${TELEGRAM_CHAT_ID}
+        # alertmanager 0.27.0 chat_id 需為 int (新版本可接受 string)
+        # 暫時硬編 iMac 已知 chat_id (之後改 secret):
+        chat_id: 8387647295
         parse_mode: 'Markdown'
         message: |
           *[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}*
@@ -118,7 +113,7 @@ receivers:
           {{ end }}
         send_resolved: false
 
-inhibit_rulesinhibit_rules:
+inhibit_rules:
   - source_match:
       severity: critical
     target_match:
