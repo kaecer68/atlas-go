@@ -1,7 +1,10 @@
+//go:build integration
+
 package ledger
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,26 +13,26 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// cleanupLedgerTestRows removes pgsqltest- prefixed rows from the four
-// ledger tables so tests stay isolated from migrated production data.
+// cleanupLedgerTestRows TRUNCATEs the ledger tables at the start of every
+// test (M8). The previous combined WHERE mixed `agent_id` into tables that
+// lack the column (trades, session_summaries, human_interventions,
+// experiments); those DELETEs silently errored and leaked rows across runs
+// ("expected 2 trades, got 4"). CI runs integration packages serially
+// (-p 1), so a per-test TRUNCATE is a deterministic clean slate.
 func cleanupLedgerTestRows(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	ctx := context.Background()
-	// A01: RecordOutcomes now writes global rows with session_id='' (was
-	// o.Window), so cleanup must match by agent_id as well as session_id.
-	for _, tbl := range []string{
-		"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
-	} {
-		_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
+	tables := []string{
+		"recommendation_outcomes", "screening_rejects", "session_summaries",
+		"trades", "human_interventions", "experiments",
 	}
-	t.Cleanup(func() {
+	run := func() {
 		ctx := context.Background()
-		for _, tbl := range []string{
-			"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
-		} {
-			_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
+		if _, err := pool.Exec(ctx, "TRUNCATE TABLE "+strings.Join(tables, ", ")); err != nil {
+			t.Errorf("truncate ledger test tables: %v", err)
 		}
-	})
+	}
+	run()
+	t.Cleanup(run)
 }
 
 func TestPostgresLedgerStore_OutcomeRoundTrip(t *testing.T) {
