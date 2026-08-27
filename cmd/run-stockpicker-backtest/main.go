@@ -1,15 +1,16 @@
-// Command run-stockpicker-backtest runs the PR 1c stockpicker panel
-// backtest + win-rate aggregation job after market close.
+// Command run-stockpicker-backtest runs the stockpicker panel backtest +
+// win-rate aggregation job after market close.
 //
 // Usage (from the repo root):
 //
 //	run-stockpicker-backtest -workdir . -start 2026-01-01 -end 2026-08-26 -asof 2026-08-26
 //
-// Flags: -workdir, -start, -end, -asof, -force, -dry-run, -backend (and optional
-// -universe to limit the scan). The job:
+// Flags: -workdir, -start, -end, -asof, -force, -dry-run, -universe, -backend,
+// -conditions, -list-conditions. The job:
 //
-//  1. replays the PR 1c demo conditions (foreign-3d-net-buy,
-//     momentum-20d-positive) over point-in-time price bars (backend-aware quotes)
+//  1. replays the selected conditions (PR 2a configurable engine; default
+//     foreign-3d-net-buy, momentum-20d-positive) over point-in-time price bars
+//     (backend-aware quotes)
 //     and per-symbol T86 flows (data/state/stock_flows/<symbol>.json), and
 //  2. writes SignalOutcome rows into stock_signal_outcomes (idempotent:
 //     ON CONFLICT DO NOTHING), then aggregates per (symbol, source) into
@@ -65,6 +66,8 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	dryRun := fs.Bool("dry-run", false, "compute coverage and print it without persisting")
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
 	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then DATABASE_URL heuristic)")
+	conditionsFlag := fs.String("conditions", "", "comma-separated condition IDs to run (default: foreign-3d-net-buy,momentum-20d-positive)")
+	listConditions := fs.Bool("list-conditions", false, "print the registered conditions and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -101,6 +104,16 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	}
 	costRate := params.Stockpicker.Costs.RoundTripPct.Value
 	minSamples := params.Stockpicker.Calibration.MinSamples.Value
+
+	registry := stockpicker.NewDefaultConditionRegistry(&params.Stockpicker.Conditions)
+	if *listConditions {
+		fmt.Print(listConditionsText(registry))
+		return nil
+	}
+	conds, err := selectConditions(*conditionsFlag, registry)
+	if err != nil {
+		return err
+	}
 
 	outcomeDB, err := openOutcomeDB(*workDir)
 	if err != nil {
@@ -146,14 +159,14 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 		CostRate:    costRate,
 		Source:      "stockpicker",
 	}
-	outcomes, err := stockpicker.RunBacktest(ctx, cfg, panel)
+	outcomes, err := stockpicker.RunBacktest(ctx, cfg, panel, conds...)
 	if err != nil {
 		return fmt.Errorf("run backtest: %w", err)
 	}
 
 	coverage := stockpicker.BuildCoverage(cfg, outcomes)
 	printCoverage(coverage)
-	fmt.Printf("conditions: %s\n", stockpicker.DescribeConditions())
+	fmt.Printf("conditions: %s\n", strings.Join(conditionIDs(conds), ", "))
 
 	if *dryRun {
 		return nil
@@ -279,13 +292,4 @@ func countExistingOutcomes(ctx context.Context, db *sql.DB, start, end time.Time
 		return 0, fmt.Errorf("count outcomes: %w", err)
 	}
 	return n, nil
-}
-
-// printCoverage prints the per-condition sample counts (PR verification input).
-func printCoverage(rep stockpicker.CoverageReport) {
-	fmt.Printf("coverage: asof=%s universe=%d triggers=%s..%s total_outcomes=%d\n",
-		rep.AsOf, rep.UniverseSize, rep.Start, rep.End, rep.TotalOutcomes)
-	for src, n := range rep.BySource {
-		fmt.Printf("  %-40s %d\n", src, n)
-	}
 }

@@ -5188,6 +5188,34 @@
         "value": 30
       }
     },
+    "conditions": {
+      "foreign_3d_net_buy": {
+        "threshold": {
+          "rationale": "Cumulative foreign net buy over the window must exceed this value to trigger (PR 2a).",
+          "source": "heuristic",
+          "value": 0
+        },
+        "window_days": {
+          "rationale": "Foreign net-buy accumulation window in trading days (PR 1c demo condition; configurable since PR 2a).",
+          "source": "heuristic",
+          "todo": "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+          "value": 3
+        }
+      },
+      "momentum_20d_positive": {
+        "threshold": {
+          "rationale": "Momentum must exceed this value to trigger (PR 2a).",
+          "source": "heuristic",
+          "value": 0
+        },
+        "window_days": {
+          "rationale": "Momentum lookback in trading days: close[t]/close[t-window] - 1 (PR 1c demo condition; configurable since PR 2a).",
+          "source": "heuristic",
+          "todo": "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+          "value": 20
+        }
+      }
+    },
     "costs": {
       "round_trip_pct": {
         "rationale": "Taiwan round-trip cost: commission 0.1425% ×2 + sell-side transaction tax 0.3% ≈ 0.585%. NetHit uses this to avoid systematically overstating win rates (k3 review R1 / P0-3).",

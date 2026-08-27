@@ -8068,6 +8068,32 @@
         "rationale": "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
         "source": "heuristic"
       }
+    },
+    "conditions": {
+      "foreign_3d_net_buy": {
+        "window_days": {
+          "value": 3,
+          "rationale": "Foreign net-buy accumulation window in trading days (PR 1c demo condition; configurable since PR 2a conditions engine).",
+          "source": "heuristic"
+        },
+        "threshold": {
+          "value": 0,
+          "rationale": "Cumulative foreign net buy over the window must exceed this value to trigger.",
+          "source": "heuristic"
+        }
+      },
+      "momentum_20d_positive": {
+        "window_days": {
+          "value": 20,
+          "rationale": "Momentum lookback in trading days: close[t]/close[t-window] - 1 (PR 1c demo condition; configurable since PR 2a conditions engine).",
+          "source": "heuristic"
+        },
+        "threshold": {
+          "value": 0,
+          "rationale": "Momentum must exceed this value to trigger.",
+          "source": "heuristic"
+        }
+      }
     }
   }
 }

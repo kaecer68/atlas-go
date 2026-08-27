@@ -1531,6 +1531,22 @@
     },
     {
       "fields": [
+        "WindowDays ParameterMetadata[float64]",
+        "Threshold ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "StockpickerConditionWindow"
+    },
+    {
+      "fields": [
+        "Foreign3DNetBuy StockpickerConditionWindow",
+        "Momentum20DPosit StockpickerConditionWindow"
+      ],
+      "kind": "struct",
+      "name": "StockpickerConditionsParameters"
+    },
+    {
+      "fields": [
         "RoundTripPct ParameterMetadata[float64]"
       ],
       "kind": "struct",
@@ -1539,7 +1555,8 @@
     {
       "fields": [
         "Costs StockpickerCostsParameters",
-        "Calibration StockpickerCalibrationParameters"
+        "Calibration StockpickerCalibrationParameters",
+        "Conditions StockpickerConditionsParameters"
       ],
       "kind": "struct",
       "name": "StockpickerParameters"
