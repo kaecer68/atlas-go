@@ -72,7 +72,7 @@ curl -fsS http://localhost:18080/health
 > tracked，部署不會自動帶過去。任何會**重建/重啟 atlas-go 或 atlas-cron-darwinian 容器**的部署，
 > 先跑 `~/workspace/atlas/scripts/sync-darwinian.sh`（union merge，只增不減），
 > 並遵守「sync 前容器必須停」的硬性規定（避免 torn line）。完整章節見
-> a2a-dev `docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1。
+> a2a-dev `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1。
 
 ## 部署驗證
 
