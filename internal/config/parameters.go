@@ -166,9 +166,13 @@ type DarwinianParameters struct {
 	MiddleTierBoostMultiplier   ParameterMetadata[float64] `json:"middle_tier_boost_multiplier"`
 	MiddleTierCutMultiplier     ParameterMetadata[float64] `json:"middle_tier_cut_multiplier"`
 	SharpeMinSampleSize         ParameterMetadata[int]     `json:"sharpe_min_sample_size"`
-	StdDevMeanRatioThreshold    ParameterMetadata[float64] `json:"stddev_mean_ratio_threshold"`
-	ConvictionClampMin          ParameterMetadata[int]     `json:"conviction_clamp_min"`
-	ConvictionClampMax          ParameterMetadata[int]     `json:"conviction_clamp_max"`
+	// MinUniqueReturnsForSharpe is the minimum distinct values a rolling
+	// window must contain for Sharpe to be statistically meaningful.
+	// Default 10 (per-outcome sampling v2, 2026-08-27 mechanism fix).
+	MinUniqueReturnsForSharpe ParameterMetadata[int]     `json:"min_unique_returns_for_sharpe"`
+	StdDevMeanRatioThreshold  ParameterMetadata[float64] `json:"stddev_mean_ratio_threshold"`
+	ConvictionClampMin        ParameterMetadata[int]     `json:"conviction_clamp_min"`
+	ConvictionClampMax        ParameterMetadata[int]     `json:"conviction_clamp_max"`
 	// ZeroSignalPenaltyMultiplier is the extra daily cut applied to agents
 	// with zero signals for ZeroSignalPenaltyAfterDays (B3). Default 0.9.
 	ZeroSignalPenaltyMultiplier ParameterMetadata[float64] `json:"zero_signal_penalty_multiplier"`

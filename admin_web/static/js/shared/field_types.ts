@@ -821,6 +821,7 @@ export interface DarwinianParameters {
   middle_tier_boost_multiplier: string;
   middle_tier_cut_multiplier: string;
   sharpe_min_sample_size: string;
+  min_unique_returns_for_sharpe: string;
   stddev_mean_ratio_threshold: string;
   conviction_clamp_min: string;
   conviction_clamp_max: string;
