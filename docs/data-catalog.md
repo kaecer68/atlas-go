@@ -426,19 +426,21 @@
 | **Tables** | `outcomes`, `screening_rejects`, `experiments`, `session_summaries`, `human_interventions`, `quotes` |
 | **生產者** | `cmd/migrate-jsonl-to-sqlite/main.go` |
 | **消費者** | `internal/config/config.go`（路徑參考） |
-| **狀態** | ⚠️ 文件化不足 — 見 P2.1 處理方案 |
+| **狀態** | 本機 dev artifact；`ATLAS_STORE_BACKEND=sqlite` 時使用。prod 上 `ATLAS_STORE_BACKEND=postgres` 為空殼或不會被寫入。 |
+| **注意** | 禁止把此路徑當成 production 資料來源；CLI/job 讀資料必須走 `store_factory` backend-aware 路徑。 |
 
-### PostgreSQL `recommendation_outcomes`
+### PostgreSQL `atlas` database
 
 | 欄位 | 值 |
 |------|-----|
 | **類型** | PostgreSQL 15（TimescaleDB hypertable） |
-| **Tables** | `metrics`, `recommendation_outcomes`, `capital_flow`, `export_statistics`, `alerts`, `users`, `workspaces`, `screening_rejects`, `session_summaries`, `human_interventions` |
-| **Migration** | `internal/db/migrations/`（5 組 up/down） |
+| **Tables** | `metrics`, `recommendation_outcomes`, `capital_flow`, `export_statistics`, `alerts`, `users`, `workspaces`, `screening_rejects`, `session_summaries`, `human_interventions`, `quotes`, `detector_scan_log`, `task_liveness`, `experiment_lineage`, `baseline_history`, `metric_trends`, `stock_signal_outcomes`, `stock_win_rate`, `regime_history`, `stress_index_history`, `period_history`, `geopolitical_history`, `event_calendar_history`, `prediction_backtest` |
+| **Migration** | `sql/migrations/`（19 組 up/down） |
 | **壓縮** | TimescaleDB compression（7 天後） |
 | **保留** | 90 天 retention policy |
-| **生產者** | `internal/repository/dual_write.go` |
+| **生產者** | `internal/repository/dual_write.go`、`internal/ledger/postgres_*.go` |
 | **消費者** | Dashboard API（`repo.Query*()` 方法） |
+| **SSoT** | `quotes` 由 PostgreSQL 作為單一真相來源；SQLite `atlas.db.quotes` 僅為本機 dev artifact，prod 不可信。 |
 
 ---
 
