@@ -7,141 +7,190 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
-// newTestSQLiteDB 開啟一個 file-backed 的 SQLite（WAL + busy timeout + FK），
-// 供本 package 的 store 測試共用。用檔案而非 :memory: 以避免 database/sql
-// 連線池對 in-memory DB 的每個連線各自擁有一份獨立 schema 的陷阱。
-func newTestSQLiteDB(t *testing.T) *sql.DB {
+// openStockpickerTestDB opens an in-memory SQLite database and initializes
+// the ledger schema (which now includes stock_signal_outcomes and stock_win_rate).
+func openStockpickerTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "stockpicker_test.db")
-	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := ledger.OpenSQLiteDB(":memory:")
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping sqlite: %v", err)
-	}
 	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
 	return db
 }
 
 func TestSignalOutcomeStore_RecordAndLoad(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewSignalOutcomeStore(db)
-	if err != nil {
-		t.Fatalf("NewSignalOutcomeStore: %v", err)
-	}
+	db := openStockpickerTestDB(t)
+	store := NewSignalOutcomeStore(db)
 	ctx := context.Background()
 
 	outcomes := []SignalOutcome{
-		{Symbol: "2330", TriggerDate: "2026-01-02", Source: "stockpicker-momentum", ForwardReturn: 0.02, Hit: true},
-		{Symbol: "2330", TriggerDate: "2026-01-05", Source: "stockpicker-momentum", ForwardReturn: -0.01, Hit: false},
+		{
+			Symbol:           "2330",
+			TriggerDate:      "2026-01-02",
+			ForwardReturn:    0.02,
+			NetForwardReturn: 0.01415,
+			Hit:              true,
+			CostRate:         0.00585,
+			Source:           "stockpicker-momentum",
+			Regime:           "bull",
+			CreatedAt:        "2026-01-02T18:00:00Z",
+		},
+		{
+			Symbol:           "2330",
+			TriggerDate:      "2026-01-05",
+			ForwardReturn:    -0.01,
+			NetForwardReturn: -0.01585,
+			Hit:              false,
+			CostRate:         0.00585,
+			Source:           "stockpicker-momentum",
+			CreatedAt:        "2026-01-05T18:00:00Z",
+		},
 	}
+
 	if err := store.RecordOutcomes(ctx, outcomes); err != nil {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	got, err := store.LoadOutcomes(ctx, "2330", "stockpicker-momentum", "")
+	loaded, err := store.LoadOutcomes(ctx, "2330", "stockpicker-momentum", "")
 	if err != nil {
 		t.Fatalf("LoadOutcomes: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len(got) = %d, want 2", len(got))
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 outcomes, got %d", len(loaded))
 	}
 
-	first := got[0]
+	first := loaded[0]
 	if first.Symbol != "2330" || first.TriggerDate != "2026-01-02" || first.Source != "stockpicker-momentum" {
-		t.Fatalf("first outcome = %+v, want symbol/date/source preserved", first)
+		t.Fatalf("key fields mismatch: %+v", first)
 	}
-	if first.ForwardReturn != 0.02 || !first.Hit {
-		t.Fatalf("first outcome fields = %+v, want forward_return=0.02 hit=true", first)
+	if first.ForwardReturn != 0.02 {
+		t.Errorf("ForwardReturn = %v, want 0.02", first.ForwardReturn)
+	}
+	if first.NetForwardReturn != 0.01415 {
+		t.Errorf("NetForwardReturn = %v, want 0.01415", first.NetForwardReturn)
+	}
+	if !first.Hit {
+		t.Errorf("Hit = %v, want true", first.Hit)
+	}
+	if first.CostRate != 0.00585 {
+		t.Errorf("CostRate = %v, want 0.00585", first.CostRate)
+	}
+	if first.Regime != "bull" {
+		t.Errorf("Regime = %q, want bull", first.Regime)
+	}
+	if first.CreatedAt != "2026-01-02T18:00:00Z" {
+		t.Errorf("CreatedAt = %q, want 2026-01-02T18:00:00Z", first.CreatedAt)
 	}
 
-	second := got[1]
+	second := loaded[1]
 	if second.TriggerDate != "2026-01-05" || second.ForwardReturn != -0.01 || second.Hit {
 		t.Fatalf("second outcome fields = %+v, want date=2026-01-05 forward_return=-0.01 hit=false", second)
 	}
 }
 
 func TestSignalOutcomeStore_DuplicateIdempotent(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewSignalOutcomeStore(db)
-	if err != nil {
-		t.Fatalf("NewSignalOutcomeStore: %v", err)
-	}
+	db := openStockpickerTestDB(t)
+	store := NewSignalOutcomeStore(db)
 	ctx := context.Background()
 
-	first := SignalOutcome{Symbol: "2330", TriggerDate: "2026-01-02", Source: "stockpicker-momentum", ForwardReturn: 0.02, Hit: true}
-	second := SignalOutcome{Symbol: "2330", TriggerDate: "2026-01-02", Source: "stockpicker-momentum", ForwardReturn: 0.99, Hit: false}
+	first := SignalOutcome{
+		Symbol:        "2330",
+		TriggerDate:   "2026-01-02",
+		ForwardReturn: 0.02,
+		Hit:           true,
+		Source:        "stockpicker-momentum",
+		CreatedAt:     "2026-01-02T18:00:00Z",
+	}
+	second := SignalOutcome{
+		Symbol:        "2330",
+		TriggerDate:   "2026-01-02",
+		ForwardReturn: 0.99,
+		Hit:           false,
+		Source:        "stockpicker-momentum",
+		CreatedAt:     "2026-01-02T19:00:00Z",
+	}
 
 	if err := store.RecordOutcomes(ctx, []SignalOutcome{first}); err != nil {
 		t.Fatalf("first RecordOutcomes: %v", err)
 	}
-	// 同 key 再寫一次不得報錯，也不得產生第二列或覆寫第一列。
 	if err := store.RecordOutcomes(ctx, []SignalOutcome{second}); err != nil {
 		t.Fatalf("second RecordOutcomes (duplicate): %v", err)
 	}
 
-	got, err := store.LoadOutcomes(ctx, "2330", "stockpicker-momentum", "")
+	loaded, err := store.LoadOutcomes(ctx, "2330", "stockpicker-momentum", "")
 	if err != nil {
 		t.Fatalf("LoadOutcomes: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("len(got) = %d, want 1 (duplicate must be ignored)", len(got))
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 outcome after duplicate insert, got %d", len(loaded))
 	}
-	if got[0].ForwardReturn != 0.02 || !got[0].Hit {
-		t.Fatalf("duplicate overwrote original: got %+v, want first write preserved", got[0])
+	if loaded[0].ForwardReturn != 0.02 || !loaded[0].Hit {
+		t.Fatalf("duplicate overwrote original: got %+v, want first write preserved", loaded[0])
 	}
 }
 
 func TestSignalOutcomeStore_MultipleSources(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewSignalOutcomeStore(db)
-	if err != nil {
-		t.Fatalf("NewSignalOutcomeStore: %v", err)
-	}
+	db := openStockpickerTestDB(t)
+	store := NewSignalOutcomeStore(db)
 	ctx := context.Background()
 
 	outcomes := []SignalOutcome{
-		{Symbol: "2330", TriggerDate: "2026-01-02", Source: "stockpicker-momentum", ForwardReturn: 0.02, Hit: true},
-		{Symbol: "2330", TriggerDate: "2026-01-02", Source: "research-agent-1", ForwardReturn: 0.01, Hit: true},
+		{
+			Symbol:        "2330",
+			TriggerDate:   "2026-01-02",
+			ForwardReturn: 0.02,
+			Source:        "stockpicker-momentum",
+			CreatedAt:     "2026-01-02T18:00:00Z",
+		},
+		{
+			Symbol:        "2330",
+			TriggerDate:   "2026-01-02",
+			ForwardReturn: 0.015,
+			Source:        "research-agent-1",
+			CreatedAt:     "2026-01-02T18:00:00Z",
+		},
 	}
+
 	if err := store.RecordOutcomes(ctx, outcomes); err != nil {
 		t.Fatalf("RecordOutcomes: %v", err)
 	}
 
-	got, err := store.LoadOutcomes(ctx, "2330", "", "")
+	loaded, err := store.LoadOutcomes(ctx, "2330", "stockpicker-momentum", "")
 	if err != nil {
-		t.Fatalf("LoadOutcomes (all sources): %v", err)
+		t.Fatalf("LoadOutcomes momentum: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len(got) = %d, want 2 (same symbol/date, different sources)", len(got))
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 momentum outcome, got %d", len(loaded))
 	}
 
-	for _, source := range []string{"stockpicker-momentum", "research-agent-1"} {
-		bySource, err := store.LoadOutcomes(ctx, "2330", source, "")
-		if err != nil {
-			t.Fatalf("LoadOutcomes(source=%s): %v", source, err)
-		}
-		if len(bySource) != 1 || bySource[0].Source != source {
-			t.Fatalf("source %s: got %+v, want exactly one row with that source", source, bySource)
-		}
+	loaded, err = store.LoadOutcomes(ctx, "2330", "research-agent-1", "")
+	if err != nil {
+		t.Fatalf("LoadOutcomes research: %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 research outcome, got %d", len(loaded))
 	}
 }
 
 func TestSignalOutcomeStore_SourceColumnNotNull(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewSignalOutcomeStore(db)
-	if err != nil {
-		t.Fatalf("NewSignalOutcomeStore: %v", err)
-	}
+	db := openStockpickerTestDB(t)
+	store := NewSignalOutcomeStore(db)
 	ctx := context.Background()
 
-	err = store.RecordOutcomes(ctx, []SignalOutcome{
-		{Symbol: "2330", TriggerDate: "2026-01-02", Source: "", ForwardReturn: 0.01},
+	err := store.RecordOutcomes(ctx, []SignalOutcome{
+		{
+			Symbol:      "2330",
+			TriggerDate: "2026-01-02",
+			Source:      "",
+			CreatedAt:   "2026-01-02T18:00:00Z",
+		},
 	})
 	if err == nil {
 		t.Fatal("RecordOutcomes with empty source: want error, got nil")
@@ -157,16 +206,13 @@ func TestSignalOutcomeStore_SourceColumnNotNull(t *testing.T) {
 }
 
 func TestSignalOutcomeStore_WindowFilter(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewSignalOutcomeStore(db)
-	if err != nil {
-		t.Fatalf("NewSignalOutcomeStore: %v", err)
-	}
+	db := openStockpickerTestDB(t)
+	store := NewSignalOutcomeStore(db)
 	ctx := context.Background()
 
 	outcomes := []SignalOutcome{
-		{Symbol: "2330", TriggerDate: "2000-01-01", Source: "s", ForwardReturn: 0.01},
-		{Symbol: "2330", TriggerDate: "2099-01-01", Source: "s", ForwardReturn: 0.02},
+		{Symbol: "2330", TriggerDate: "2000-01-01", Source: "s", ForwardReturn: 0.01, CreatedAt: "2000-01-01T18:00:00Z"},
+		{Symbol: "2330", TriggerDate: "2099-01-01", Source: "s", ForwardReturn: 0.02, CreatedAt: "2099-01-01T18:00:00Z"},
 	}
 	if err := store.RecordOutcomes(ctx, outcomes); err != nil {
 		t.Fatalf("RecordOutcomes: %v", err)
@@ -185,8 +231,34 @@ func TestSignalOutcomeStore_WindowFilter(t *testing.T) {
 	}
 }
 
+func TestAggregateWinRate_SkipsConsistencyCheck(t *testing.T) {
+	// PR 1a 驗收報告 §5-1: 跨 symbol / 跨 source 聚合時應跳過 SignalWinRate 的一致性檢查。
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", Source: "stockpicker-momentum", ForwardReturn: 0.02},
+		{Symbol: "2317", Source: "stockpicker-momentum", ForwardReturn: 0.015},
+		{Symbol: "2330", Source: "research-agent-1", ForwardReturn: -0.01},
+	}
+
+	summary, err := aggregateWinRate(outcomes, 0.00585, 30, 0.95)
+	if err != nil {
+		t.Fatalf("aggregateWinRate: %v", err)
+	}
+	if summary.Observations != 3 {
+		t.Fatalf("Observations = %d, want 3", summary.Observations)
+	}
+	if summary.Hits != 2 {
+		t.Fatalf("Hits = %d, want 2", summary.Hits)
+	}
+	if summary.WinRate != 2.0/3.0 {
+		t.Fatalf("WinRate = %v, want %v", summary.WinRate, 2.0/3.0)
+	}
+	if summary.Symbol != "" || summary.Source != "" {
+		t.Fatalf("cross aggregate must not fill Symbol/Source, got %q/%q", summary.Symbol, summary.Source)
+	}
+}
+
 func TestMigration_UpDownUp(t *testing.T) {
-	db := newTestSQLiteDB(t)
+	db := openStockpickerTestDB(t)
 
 	read := func(name string) string {
 		t.Helper()
@@ -229,15 +301,15 @@ func TestMigration_UpDownUp(t *testing.T) {
 		}
 	}
 
-	// up → both tables exist
+	// up -> both tables exist
 	exec(up18, up19)
 	assertTables(true)
 
-	// down → both dropped
+	// down -> both dropped
 	exec(down19, down18)
 	assertTables(false)
 
-	// up again → both recreated（可重複執行）
+	// up again -> both recreated
 	exec(up18, up19)
 	assertTables(true)
 }

@@ -2,8 +2,25 @@ package stockpicker
 
 import (
 	"context"
+	"database/sql"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
+
+// openWinRateTestDB opens an in-memory SQLite database with the ledger schema.
+func openWinRateTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	return db
+}
 
 func sampleWinRateSummary() StockWinRateSummary {
 	return StockWinRateSummary{
@@ -16,7 +33,7 @@ func sampleWinRateSummary() StockWinRateSummary {
 		WilsonLower:       0.44,
 		WilsonUpper:       0.74,
 		Confidence:        0.95,
-		CalibrationStatus: WinRateEligible,
+		CalibrationStatus: CalibrationEligible,
 		NetCostRate:       0.00585,
 		AvgForwardReturn:  0.012,
 		UpdatedAt:         "2026-08-27T12:00:00Z",
@@ -24,11 +41,8 @@ func sampleWinRateSummary() StockWinRateSummary {
 }
 
 func TestWinRateStore_SaveAndLoad(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewWinRateStore(db)
-	if err != nil {
-		t.Fatalf("NewWinRateStore: %v", err)
-	}
+	db := openWinRateTestDB(t)
+	store := NewWinRateStore(db)
 	ctx := context.Background()
 
 	in := sampleWinRateSummary()
@@ -47,22 +61,18 @@ func TestWinRateStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("round trip mismatch: got = %+v, want = %+v", got, in)
 	}
 
-	// 未寫入的 key → found=false、nil error。
-	missing, found, err := store.LoadWinRate(ctx, "2330", "stockpicker-momentum", "60d")
+	_, found, err = store.LoadWinRate(ctx, "2330", "stockpicker-momentum", "60d")
 	if err != nil {
 		t.Fatalf("LoadWinRate(missing): %v", err)
 	}
 	if found {
-		t.Fatalf("LoadWinRate(missing): found = true, want false (got %+v)", missing)
+		t.Fatal("LoadWinRate(missing): found = true, want false")
 	}
 }
 
 func TestWinRateStore_UpsertUpdates(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewWinRateStore(db)
-	if err != nil {
-		t.Fatalf("NewWinRateStore: %v", err)
-	}
+	db := openWinRateTestDB(t)
+	store := NewWinRateStore(db)
 	ctx := context.Background()
 
 	first := sampleWinRateSummary()
@@ -74,7 +84,7 @@ func TestWinRateStore_UpsertUpdates(t *testing.T) {
 	second.Observations = 45
 	second.Hits = 30
 	second.WinRate = 30.0 / 45.0
-	second.CalibrationStatus = WinRateDegraded
+	second.CalibrationStatus = CalibrationDegraded
 	second.UpdatedAt = "2026-08-27T13:00:00Z"
 	if err := store.SaveWinRate(ctx, second); err != nil {
 		t.Fatalf("second SaveWinRate (upsert): %v", err)
@@ -90,7 +100,7 @@ func TestWinRateStore_UpsertUpdates(t *testing.T) {
 	if got.Observations != 45 || got.Hits != 30 || got.WinRate != 30.0/45.0 {
 		t.Fatalf("upsert did not update numeric fields: got %+v", got)
 	}
-	if got.CalibrationStatus != WinRateDegraded || got.UpdatedAt != "2026-08-27T13:00:00Z" {
+	if got.CalibrationStatus != CalibrationDegraded || got.UpdatedAt != "2026-08-27T13:00:00Z" {
 		t.Fatalf("upsert did not update status/updated_at: got %+v", got)
 	}
 
@@ -107,16 +117,13 @@ func TestWinRateStore_UpsertUpdates(t *testing.T) {
 }
 
 func TestCalibrationStatusRoundTrip(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewWinRateStore(db)
-	if err != nil {
-		t.Fatalf("NewWinRateStore: %v", err)
-	}
+	db := openWinRateTestDB(t)
+	store := NewWinRateStore(db)
 	ctx := context.Background()
 
-	for _, status := range []string{WinRateCalibrating, WinRateEligible, WinRateDegraded} {
+	for _, status := range []CalibrationStatus{CalibrationCalibrating, CalibrationEligible, CalibrationDegraded} {
 		in := sampleWinRateSummary()
-		in.Source = "source-" + status
+		in.Source = "source-" + string(status)
 		in.CalibrationStatus = status
 
 		if err := store.SaveWinRate(ctx, in); err != nil {
@@ -137,50 +144,12 @@ func TestCalibrationStatusRoundTrip(t *testing.T) {
 }
 
 func TestWinRateStore_RejectsInvalidCalibrationStatus(t *testing.T) {
-	db := newTestSQLiteDB(t)
-	store, err := NewWinRateStore(db)
-	if err != nil {
-		t.Fatalf("NewWinRateStore: %v", err)
-	}
+	db := openWinRateTestDB(t)
+	store := NewWinRateStore(db)
 
 	in := sampleWinRateSummary()
-	in.CalibrationStatus = "not-a-status"
+	in.CalibrationStatus = CalibrationStatus("not-a-status")
 	if err := store.SaveWinRate(context.Background(), in); err == nil {
 		t.Fatal("SaveWinRate with invalid calibration_status: want error, got nil")
-	}
-}
-
-// TestAggregateWinRate_SkipsConsistencyCheck 驗證 §5-1 解法：跨 symbol / 跨
-// source 的混合 outcomes 可以直接聚合，不再因 SignalWinRate 的一致性檢查
-// 而報 mixed symbols/sources 錯誤。
-func TestAggregateWinRate_SkipsConsistencyCheck(t *testing.T) {
-	const (
-		costRate   = 0.00585
-		minSamples = 30
-		confidence = 0.95
-	)
-	outcomes := []SignalOutcome{
-		{Symbol: "2330", Source: "stockpicker-momentum", ForwardReturn: 0.02},
-		{Symbol: "2317", Source: "research-agent-1", ForwardReturn: -0.01},
-		{Symbol: "2330", Source: "research-agent-1", ForwardReturn: 0.01},
-	}
-
-	got := aggregateWinRateWithoutConsistency(outcomes, costRate, minSamples, confidence)
-
-	if got.Observations != 3 {
-		t.Fatalf("Observations = %d, want 3", got.Observations)
-	}
-	// 命中：0.02 > 0.00585、0.01 > 0.00585，共 2 筆；-0.01 不命中。
-	if got.Hits != 2 {
-		t.Fatalf("Hits = %d, want 2", got.Hits)
-	}
-	if got.WinRate != 2.0/3.0 {
-		t.Fatalf("WinRate = %v, want %v", got.WinRate, 2.0/3.0)
-	}
-	if got.Symbol != "" || got.Source != "" {
-		t.Fatalf("cross aggregate must not fill Symbol/Source, got %q/%q", got.Symbol, got.Source)
-	}
-	if got.CalibrationStatus != CalibrationCalibrating {
-		t.Fatalf("CalibrationStatus = %q, want %q (3 < minSamples)", got.CalibrationStatus, CalibrationCalibrating)
 	}
 }

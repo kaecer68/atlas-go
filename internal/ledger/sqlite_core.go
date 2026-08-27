@@ -279,6 +279,9 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_prediction_backtest_captured_at ON prediction_backtest(captured_at);
 	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_batch ON detector_scan_log(scan_batch_id);
 	CREATE INDEX IF NOT EXISTS idx_detector_scan_log_theme_time ON detector_scan_log(theme, detected_at);
+	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_symbol_date ON stock_signal_outcomes(symbol, trigger_date);
+	CREATE INDEX IF NOT EXISTS idx_stock_signal_outcomes_source_date ON stock_signal_outcomes(source, trigger_date);
+	CREATE INDEX IF NOT EXISTS idx_stock_win_rate_key ON stock_win_rate(symbol, source, window);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
