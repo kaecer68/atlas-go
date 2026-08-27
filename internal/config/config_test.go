@@ -332,6 +332,29 @@ func TestLoad_SkipsEnvFilesUnderTest(t *testing.T) {
 	}
 }
 
+// TestLoad_SkipsUserEnvFileUnderTest is the M7 regression guard for the user
+// config file specifically: a developer's ~/.config/atlas-go/.env (e.g.
+// ATLAS_STORE_BACKEND=postgres) must not leak into `go test` process state.
+func TestLoad_SkipsUserEnvFileUnderTest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	t.Setenv("ATLAS_STORE_BACKEND", "")
+
+	userEnv := filepath.Join(home, ".config", "atlas-go", ".env")
+	if err := os.MkdirAll(filepath.Dir(userEnv), 0o755); err != nil {
+		t.Fatalf("mkdir user config dir: %v", err)
+	}
+	if err := os.WriteFile(userEnv, []byte("ATLAS_STORE_BACKEND=postgres\n"), 0o644); err != nil {
+		t.Fatalf("write user .env: %v", err)
+	}
+
+	cfg := Load()
+	if cfg.StoreBackend == "postgres" {
+		t.Errorf("Load() read ~/.config/atlas-go/.env under test; config loading must be hermetic (M7)")
+	}
+}
+
 func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
