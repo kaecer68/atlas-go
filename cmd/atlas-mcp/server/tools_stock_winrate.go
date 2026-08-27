@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	_ "modernc.org/sqlite" // driver for the read-only stockpicker SQLite handle
 
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
