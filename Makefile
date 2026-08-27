@@ -21,6 +21,17 @@
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
 .PHONY: ci-gate ci-full pre-push import-history
+.PHONY: test-makefile-imac-guard
+
+# ── iMac prod guard (2026-08-27, 修 PR #1695 二次破壞事件) ─────────────────
+# `rebuild-atlas` 跑 `docker compose up -d atlas` 沒指定 -f,在 iMac (KiMac)
+# 主機上會走預設 dev compose,誤刪/重建 prod 容器、volume、密碼。
+# 在 iMac 上預設 fail-closed,需顯式 ALLOW_DEV_REBUILD_ON_IMAC=1 才能跑。
+# Linux/CI 不受影響 (LocalHostName 為空)。可用 test-makefile-imac-guard 驗證偵測。
+IMAC_LOCAL_HOSTNAME ?= $(shell scutil --get LocalHostName 2>/dev/null)
+ifeq ($(IMAC_LOCAL_HOSTNAME),KiMac)
+IMAC_DETECTED := 1
+endif
 
 # pre-push — 本地 push 前驗證（由 .githooks/pre-push hook 自動執行）
 #   ci-gate  (~30s)   永遠執行：gofmt/build/vet/generate-drift/ci-quick
@@ -593,6 +604,20 @@ LDFLAGS_BF := -w -s -X github.com/kaecer68/atlas-go/internal/buildinfo.Version=d
 check-binaries:
 	@./scripts/check-binary-freshness.sh
 
+# test-makefile-imac-guard — 驗 iMac fail-closed 防線是否生效
+# 在 iMac 跑應看到:IMAC_DETECTED=1 + 模擬 rebuild-atlas 會 exit 1
+# 在 MacBook 跑應看到:IMAC_DETECTED 為空 + 模擬 rebuild-atlas 會 exit 0
+.PHONY: test-makefile-imac-guard
+test-makefile-imac-guard:
+	@echo "LocalHostName: $(IMAC_LOCAL_HOSTNAME)"
+	@echo "IMAC_DETECTED: $(IMAC_DETECTED)"
+	@echo "ALLOW_DEV_REBUILD_ON_IMAC: $(ALLOW_DEV_REBUILD_ON_IMAC)"
+	@if [ "$(IMAC_DETECTED)" = "1" ] && [ "$(ALLOW_DEV_REBUILD_ON_IMAC)" != "1" ]; then \
+		echo "→ iMac guard 啟用,'make rebuild-atlas' 會 fail-closed (期望行為)"; \
+	else \
+		echo "→ iMac guard 未啟用,'make rebuild-atlas' 會直接跑 (非 iMac 或顯式放行)"; \
+	fi
+
 # Quick integrity check: binary freshness + source formatting.
 # Runs in < 30s; safe to run before every push.
 check: check-binaries
@@ -615,6 +640,17 @@ rebuild-atlas-bins: | .build-atlas
 
 # Rebuild atlas-atlas image from host-built binaries + restart container.
 rebuild-atlas: rebuild-atlas-bins
+	@if [ "$(IMAC_DETECTED)" = "1" ] && [ "$(ALLOW_DEV_REBUILD_ON_IMAC)" != "1" ]; then \
+		echo '❌ iMac (KiMac) 偵測到 make rebuild-atlas,但 docker 步會用 dev compose 預設值'; \
+		echo '   (POSTGRES_PASSWORD=atlas / port 5432 / container_name atlas-postgres 撞 prod 同名)'; \
+		echo '   會改寫 prod 狀態 (實證:2026-08-26 PR #1695 二次破壞事件)'; \
+		echo '   iMac 是 prod 主機,請改用:'; \
+		echo '     make -f Makefile.prod rebuild-atlas'; \
+		echo '     或 docker compose -f docker-compose.prod.yml up -d atlas'; \
+		echo '   確認要在 iMac 跑 dev rebuild:'; \
+		echo '     ALLOW_DEV_REBUILD_ON_IMAC=1 make rebuild-atlas'; \
+		exit 1; \
+	fi
 	@if [ "$$(git rev-parse --git-dir)" != "$$(git rev-parse --git-common-dir)" ]; then \
 		echo "❌ 含 docker 的 rebuild 只能在主 worktree 執行（linked worktree 拒絕）"; exit 1; \
 	fi
