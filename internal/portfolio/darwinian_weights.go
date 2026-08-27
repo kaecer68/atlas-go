@@ -30,11 +30,13 @@ const (
 	// DEPRECATED: Use RuntimeParameters instead. These constants exist for test compatibility.
 	DailyAdjustmentCooldown = 20 * time.Hour
 
-	// minUniqueReturnsForSharpe is the minimum number of distinct values a
-	// rolling-return window must contain for Sharpe/volatility to be
+	// minUniqueReturnsForSharpe is the DEFAULT minimum number of distinct
+	// values a rolling-return window must contain for Sharpe/volatility to be
 	// statistically meaningful. Windows with fewer unique values have a
 	// degenerate (near-zero) sample stdDev and mean/std explodes. A4 audit:
 	// 100% of historical |sharpe|>5 records had <=6 unique values.
+	// Overridable via RuntimeDarwinianConfig.MinUniqueReturnsForSharpe
+	// (per-outcome sampling v2 default is 10).
 	minUniqueReturnsForSharpe = 8
 
 	// maxSharpeMagnitude clamps the stored RollingSharpe (defense-in-depth)
@@ -112,12 +114,14 @@ type DarwinianAgentWeight struct {
 	LastUpdatedAt     time.Time `json:"last_updated_at"`
 	DailyReturns      []float64 `json:"daily_returns"`      // Rolling window of returns for Sharpe calc
 	ConsecutiveAtMin  int       `json:"consecutive_at_min"` // Days stuck at weight minimum
-	// Per-day aggregation state (RecordOutcomeAt): forward returns recorded
-	// on the same calendar day are accumulated here and flushed as a single
-	// daily mean into DailyReturns when the next day arrives.
-	LastOutcomeDay string  `json:"last_outcome_day,omitempty"` // yyyy-mm-dd of in-progress day
-	LastDaySum     float64 `json:"last_day_sum,omitempty"`     // running sum of the day's returns
-	LastDayCount   int     `json:"last_day_count,omitempty"`   // number of outcomes recorded that day
+	// ReturnSamplingVersion marks how DailyReturns entries are sampled:
+	//   1 = per-day mean of outcomes (historical, pre-2026-08-27)
+	//   2 = per-outcome entries (mechanism fix 2026-08-27; ~10-30x more samples)
+	ReturnSamplingVersion int `json:"return_sampling_version,omitempty"`
+	// Legacy per-day aggregation state (v1 only; unused since v2).
+	LastOutcomeDay string  `json:"last_outcome_day,omitempty"`
+	LastDaySum     float64 `json:"last_day_sum,omitempty"`
+	LastDayCount   int     `json:"last_day_count,omitempty"`
 }
 
 // DarwinianWeightManager implements Atlas-GIC style Darwinian weight system
@@ -305,7 +309,11 @@ func (m *DarwinianWeightManager) RecordOutcomeAt(agentID string, forwardReturn f
 	m.recordOutcome(agentID, forwardReturn, isHit, recordedAt.Format("2006-01-02"))
 }
 
-func (m *DarwinianWeightManager) recordOutcome(agentID string, forwardReturn float64, isHit bool, dayKey string) {
+// recordOutcome appends one outcome to the agent's rolling return window
+// (per-outcome sampling v2). dayKey is retained for API/signature stability
+// (RecordOutcome passes "", RecordOutcomeAt passes the observation day) but
+// no longer drives per-day aggregation.
+func (m *DarwinianWeightManager) recordOutcome(agentID string, forwardReturn float64, isHit bool, _ string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -333,33 +341,35 @@ func (m *DarwinianWeightManager) recordOutcome(agentID string, forwardReturn flo
 		w.AvgReturn = alpha*forwardReturn + (1-alpha)*w.AvgReturn
 	}
 
-	if dayKey == "" {
-		// Legacy per-call path: append immediately.
-		w.DailyReturns = append(w.DailyReturns, forwardReturn)
-		if len(w.DailyReturns) > m.lookbackDays {
-			w.DailyReturns = w.DailyReturns[1:]
-		}
-	} else {
-		// Per-day aggregation: flush the previous completed day as its mean,
-		// then start accumulating the new day.
-		if w.LastOutcomeDay != dayKey {
-			if w.LastOutcomeDay != "" && w.LastDayCount > 0 {
-				w.DailyReturns = append(w.DailyReturns, w.LastDaySum/float64(w.LastDayCount))
-				if len(w.DailyReturns) > m.lookbackDays {
-					w.DailyReturns = w.DailyReturns[1:]
-				}
-			}
-			w.LastOutcomeDay = dayKey
-			w.LastDaySum = forwardReturn
-			w.LastDayCount = 1
-		} else {
-			w.LastDaySum += forwardReturn
-			w.LastDayCount++
-		}
+	// Per-outcome sampling (v2, 2026-08-27 mechanism fix): every recorded
+	// forward return is appended directly to the rolling window, regardless of
+	// dayKey. The previous per-day aggregation (v1) collapsed 1-31 outcomes per
+	// day into a single daily mean, leaving a 30-day window with few unique
+	// values (degenerate stdDev -> Sharpe 0 or old-bug extremes). Per-outcome
+	// sampling raises sample count ~10-30x, so the unique-guard passes far more
+	// often and Sharpe is statistically meaningful. History written before this
+	// change is marked ReturnSamplingVersion=1; new windows are version=2.
+	w.ReturnSamplingVersion = 2
+	w.DailyReturns = append(w.DailyReturns, forwardReturn)
+	if len(w.DailyReturns) > m.lookbackDays {
+		w.DailyReturns = w.DailyReturns[1:]
 	}
+	w.LastOutcomeDay = ""
+	w.LastDaySum = 0
+	w.LastDayCount = 0
 
 	m.updateRollingMetrics(w)
 	w.LastUpdatedAt = time.Now()
+}
+
+// effectiveMinUniqueReturns returns the configured minimum unique returns
+// guard for Sharpe validity. Defaults to the package const unless the runtime
+// parameters override it.
+func (m *DarwinianWeightManager) effectiveMinUniqueReturns() int {
+	if m.params != nil && m.params.Darwinian.MinUniqueReturnsForSharpe > 0 {
+		return m.params.Darwinian.MinUniqueReturnsForSharpe
+	}
+	return minUniqueReturnsForSharpe
 }
 
 // updateRollingMetrics updates rolling Sharpe ratio and volatility for an agent
@@ -379,7 +389,7 @@ func (m *DarwinianWeightManager) updateRollingMetrics(w *DarwinianAgentWeight) {
 	// Degenerate-window guard (A4 L3): with only a handful of distinct values
 	// the sample stdDev is tiny and mean/std (Sharpe) explodes. 100% of
 	// historical |sharpe|>5 records had <=6 unique values in the window.
-	if uniqueFloat64Count(recentReturns) < minUniqueReturnsForSharpe {
+	if uniqueFloat64Count(recentReturns) < m.effectiveMinUniqueReturns() {
 		w.RollingSharpe = 0
 		w.RollingVolatility = 0
 		return

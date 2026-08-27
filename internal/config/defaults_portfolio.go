@@ -39,9 +39,10 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Todo:      "Validate 20h vs 24h cooldown impact on agent turnover and stability",
 		},
 		LookbackDays: ParameterMetadata[int]{
-			Value:     30,
-			Rationale: "30 trading days (~1.5 months) for the rolling Sharpe window; per-day aggregation (A4 fix) makes 30 daily entries a statistically meaningful sample (N-1=29)",
-			Source:    SourceLiterature,
+			Value:     240,
+			Rationale: "Per-outcome sampling v2 (2026-08-27): the window holds raw outcomes (not day-means), so 240 entries cover ~8-30 trading days depending on daily recommendation volume (9-31/day observed). 240 keeps multi-day diversity for the unique-returns guard while staying responsive.",
+			Source:    SourceHeuristic,
+			Todo:      "Calibrate: 240 vs 480 (60d) for TW market agent population",
 		},
 		EMAAlpha: ParameterMetadata[float64]{
 			Value:     0.3,
@@ -100,10 +101,15 @@ func defaultDarwinianParameters() DarwinianParameters {
 			Source:    SourceHeuristic,
 		},
 		SharpeMinSampleSize: ParameterMetadata[int]{
-			Value:     30,
-			Rationale: "30 daily entries (N-1=29) minimum for statistically stable Sharpe on the per-day aggregated window; matches LookbackDays",
+			Value:     20,
+			Rationale: "20 samples minimum for statistically stable Sharpe (per-outcome sampling v2, 2026-08-27: window holds 10-30x more samples than v1 day-mean). Matches min-unique guard floor.",
 			Source:    SourceLiterature,
-			Todo:      "Calibrate: test 30 vs 60 vs 90 for TW market agent population",
+			Todo:      "Calibrate: test 20 vs 30 vs 60 for TW market agent population",
+		},
+		MinUniqueReturnsForSharpe: ParameterMetadata[int]{
+			Value:     10,
+			Rationale: "10 distinct values minimum for Sharpe validity (per-outcome v2, 2026-08-27). v1 day-mean used 8; per-outcome yields 14-30 unique in 30d window so 10 is a safe degenerate guard.",
+			Source:    SourceHeuristic,
 		},
 		StdDevMeanRatioThreshold: ParameterMetadata[float64]{
 			Value:     0.001,
