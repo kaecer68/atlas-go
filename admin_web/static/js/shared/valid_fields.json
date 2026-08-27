@@ -1111,6 +1111,7 @@
   "min_trade_amount",
   "min_trade_size",
   "min_trend_strength",
+  "min_unique_returns_for_sharpe",
   "min_weight",
   "missing_stocks",
   "missing_summary",
