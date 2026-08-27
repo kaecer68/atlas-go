@@ -70,59 +70,21 @@ const (
 	ConditionMomentum20D     DemoConditionID = "momentum-20d-positive"
 )
 
-// DemoConditions returns the PR 1c hardcoded condition set. Fundamentals
-// conditions (value / all_weather) are intentionally absent (P0-1).
+// DemoConditions returns the PR 1c demo condition IDs. Fundamentals
+// conditions (value / all_weather) are intentionally absent (P0-1). The
+// condition definitions themselves come from DefaultConditions() (PR 2a).
 func DemoConditions() []DemoConditionID {
 	return []DemoConditionID{ConditionForeign3DNetBuy, ConditionMomentum20D}
 }
 
-// condition is a point-in-time evaluator over data available at trigger date t.
-type condition struct {
-	id   DemoConditionID
-	eval func(bars []HistoricalBar, flows map[string]FlowPoint, flowDates []string, t time.Time) bool
-}
-
-// demoConditionSet is the frozen PR 1c condition list.
-var demoConditionSet = []condition{
-	{
-		id: ConditionForeign3DNetBuy,
-		eval: func(bars []HistoricalBar, flows map[string]FlowPoint, flowDates []string, t time.Time) bool {
-			// Foreign net buy over the 3 most recent flow dates <= t must be > 0.
-			// SearchStrings returns the first index with date >= t; everything
-			// before it is dated <= t (PIT). Missing flow data on any of the 3
-			// dates → no trigger (fail-open, conservative PIT semantics).
-			idx := sort.SearchStrings(flowDates, t.Format("2006-01-02"))
-			if idx < 3 {
-				return false
-			}
-			var sum float64
-			for _, d := range flowDates[idx-3 : idx] {
-				sum += flows[d].ForeignNet
-			}
-			return sum > 0
-		},
-	},
-	{
-		id: ConditionMomentum20D,
-		eval: func(bars []HistoricalBar, flows map[string]FlowPoint, flowDates []string, t time.Time) bool {
-			// 20-trading-day momentum = close[t]/close[t-20] - 1 > 0.
-			if len(bars) < 21 {
-				return false
-			}
-			base := bars[len(bars)-21].Close
-			if base <= 0 {
-				return false
-			}
-			return bars[len(bars)-1].Close/base-1 > 0
-		},
-	},
-}
-
-// RunBacktest replays the demo condition set over the panel and returns the
+// RunBacktest replays conditions over the panel and returns the
 // SignalOutcome rows for every (symbol, trigger_date, condition) that fired.
-// Forward return is measured from the trigger close to the close ForwardDays
-// trading sessions later; hit = NetHit(forwardReturn, costRate) (P0-3).
-func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource) ([]SignalOutcome, error) {
+// conditions is variadic for backward compatibility: when empty, the default
+// backtest-eligible conditions from the loaded parameters config are used
+// (DefaultConditions, PR 2a). Forward return is measured from the trigger
+// close to the close ForwardDays trading sessions later;
+// hit = NetHit(forwardReturn, costRate) (P0-3).
+func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource, conditions ...Condition) ([]SignalOutcome, error) {
 	if cfg.AsOf.IsZero() {
 		return nil, fmt.Errorf("stockpicker: backtest requires AsOf (point-in-time cutoff)")
 	}
@@ -143,6 +105,14 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource) ([]
 	}
 	if len(cfg.Universe) == 0 {
 		return nil, fmt.Errorf("stockpicker: empty universe")
+	}
+
+	conds := conditions
+	if len(conds) == 0 {
+		conds = DefaultConditions() // PR 2a: params from configs/parameters.json
+	}
+	if len(conds) == 0 {
+		return nil, fmt.Errorf("stockpicker: no conditions to evaluate")
 	}
 
 	var out []SignalOutcome
@@ -186,8 +156,8 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource) ([]
 			forwardReturn := fwd/closePrice - 1
 
 			prefix := bars[:i+1] // condition inputs: data with date <= t only
-			for _, cond := range demoConditionSet {
-				if !cond.eval(prefix, flowByDate, flowDates, t) {
+			for _, cond := range conds {
+				if !cond.Eval(prefix, flowByDate, flowDates, t) {
 					continue
 				}
 				out = append(out, SignalOutcome{
@@ -197,7 +167,7 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource) ([]
 					NetForwardReturn: forwardReturn - cfg.CostRate,
 					Hit:              NetHit(forwardReturn, cfg.CostRate),
 					CostRate:         cfg.CostRate,
-					Source:           cfg.Source + "-" + string(cond.id),
+					Source:           cfg.Source + "-" + cond.ID,
 				})
 			}
 		}
@@ -233,11 +203,13 @@ func BuildCoverage(cfg BacktestConfig, outcomes []SignalOutcome) CoverageReport 
 }
 
 // DescribeConditions returns a human-readable line listing the demo
-// conditions, used by the CLI and tests to prove fundamentals are excluded.
+// condition IDs, used by the CLI and tests to prove fundamentals are
+// excluded. The definitions of the configurable conditions themselves live
+// in conditions.go (PR 2a).
 func DescribeConditions() string {
-	ids := make([]string, len(demoConditionSet))
-	for i, c := range demoConditionSet {
-		ids[i] = string(c.id)
+	ids := make([]string, len(DemoConditions()))
+	for i, id := range DemoConditions() {
+		ids[i] = string(id)
 	}
 	return strings.Join(ids, ", ")
 }
