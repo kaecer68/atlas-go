@@ -1,26 +1,26 @@
 global:
   resolve_timeout: 5m
-  # Telegram 是主要通知路徑（PR #1695 事件後 32h silent 根因之一就是 slack_api_url 是 PLACEHOLDER）。
-  # bot_token 與 chat_id 透過 docker compose env 注入（避免 commit 進 git）。
-  # 在 iMac 用 ~/.config/atlas-go/.env 的 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID。
-  # Slack receivers 保留為 placeholder fallback（未來需要時再加進 webhook URL）。
+  # Telegram 是備援方案（PR #1707），但 alertmanager 0.27.0/0.28.1 + telebot.v3
+  # 對 telegram API sendMessage 持續回 404（root cause 仍待查）。主通知走 webhook
+  # 路徑（atlas-webhook-telegram → ~/bin/atlas-alertmanager-webhook-to-telegram.py）。
+  # 修好後改回 atlas-telegram 即可。
 
 route:
-  receiver: atlas-telegram
+  receiver: atlas-webhook-telegram
   group_by: [alertname, service, provider]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
   routes:
-    # atlas.* 所有 severity 都走 telegram（含 critical/warning/info）
-    - receiver: atlas-telegram
+    # atlas.* 所有 severity 都走 webhook
+    - receiver: atlas-webhook-telegram
       match_re:
         service: atlas.*
       group_wait: 10s
       repeat_interval: 1h
 
-    # 非 atlas 服務的 critical 也走 telegram（避免 service label 不對齊時漏通知）
-    - receiver: atlas-telegram
+    # 非 atlas 服務的 critical 也走 webhook（避免 service label 不對齊時漏通知）
+    - receiver: atlas-webhook-telegram
       match:
         severity: critical
       group_wait: 10s
@@ -38,12 +38,17 @@ route:
       repeat_interval: 12h
 
 receivers:
-  # 主要通知: Telegram (iMac 環境用 kaecer68/atlas 的 bot)
+  # 主要通知: webhook → python script → Telegram
+  # 詳見 ~/bin/atlas-alertmanager-webhook-to-telegram.py
+  - name: atlas-webhook-telegram
+    webhook_configs:
+      - url: 'http://host.docker.internal:9095/alert'
+        send_resolved: true
+
+  # Telegram（備援方案，等 alertmanager 修好可切回）
   - name: atlas-telegram
     telegram_configs:
       - bot_token: ${TELEGRAM_BOT_TOKEN}
-        # alertmanager 0.27.0 chat_id 需為 int (新版本可接受 string)
-        # 暫時硬編 iMac 已知 chat_id (之後改 secret):
         chat_id: 8387647295
         parse_mode: 'Markdown'
         message: |
@@ -58,9 +63,7 @@ receivers:
           {{ end }}
         send_resolved: true
 
-  # Placeholder slack fallback (待 atlas 正式 slack webhook URL 設定後移除)
-  # 之前 atlas-webhook route 是把 atlas alert 送回 http://atlas:18080/api/v1/alerts
-  # 結果 atlas 自己當掉時 alert 通知也跟著死,造成 32h silent — 2026-08-27 刪除。
+  # Placeholder slack fallback
   - name: default-slack
     slack_configs:
       - api_url: "https://hooks.slack.com/services/PLACEHOLDER/PLACEHOLDER/PLACEHOLDER"
@@ -102,7 +105,7 @@ receivers:
 
   - name: info-slack
     slack_configs:
-      - api_url: "https://hooks.slack.com/services/PLACEHOLDER/PLACEHOLDER/PLACEHOLDER"
+      - api_url: "https://hooks.slack.com/services/PLACEHOLDER/PLACEHOLDER/PLACEHOLDER/PLACEHOLDER"
         channel: "#atlas-alerts-info"
         title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
         text: >-
