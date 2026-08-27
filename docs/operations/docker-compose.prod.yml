@@ -25,6 +25,11 @@ services:
       # 避免 burn-in 60 天重新計算 (RFC3339 或 YYYY-MM-DD):
       # - ATLAS_MATURITY_FIRST_START=2026-06-01T05:10:28Z
       - ATLAS_STORE_BACKEND=postgres
+      # ATLAS_SKIP_DOCKER=1: 關閉 atlas-go binary 的「password repair」自癒邏輯
+      # (會嘗試 docker CLI 改 DB 密碼,在 prod 危險)。2026-08-26 PR #1695 事件中
+      # log 顯示 "attempted password repair; docker CLI not found" 是這條路徑
+      # 的 prod 不安全訊號。詳見 .claude/skills/atlas-imac-prod-guard/。
+      - ATLAS_SKIP_DOCKER=1
       - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:6379/8
     volumes:
@@ -61,6 +66,34 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
+
+  # TimescaleDB for prod (atlas-postgres-data volume, 573MB, 2026-08-14 建)
+  # 注意:此 service 補上原本 prod compose 缺的 postgres 管理入口,讓 prod DB
+  # 不再依賴手動 docker run。掛的 volume 名稱必須維持 atlas-postgres-data (無底線,
+  # 對應原本手動建的 prod volume;底線版 atlas_postgres-data 是 dev 用,87MB,
+  # 不要混用)。port 55432:5432 對齊 iMac-RUNBOOK.md 文件化值。
+  postgres:
+    image: timescale/timescaledb:2.26.4-pg15
+    container_name: atlas-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=atlas
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-atlas_dev_pwd_2026}
+      - POSTGRES_DB=atlas
+      - TS_TUNE_MEMORY=2GB
+      - TS_TUNE_NUM_CPUS=4
+    ports:
+      - "55432:5432"
+    volumes:
+      - atlas-postgres-data:/var/lib/postgresql/data
+    networks:
+      - atlas-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   prometheus:
     image: prom/prometheus:latest
@@ -111,5 +144,20 @@ services:
     restart: unless-stopped
 
 volumes:
+  # atlas-postgres-data 必須保持 external + literal name,才能對應到
+  # 原本手動建的 prod volume (573MB, 2026-08-14)。若用 default compose
+  # behavior,會自動建 `<project>_<volume-name>` 變成 atlas_atlas-postgres-data,
+  # 資料會丟失。
+  atlas-postgres-data:
+    external: true
+    name: atlas-postgres-data
   prometheus-data:
   grafana-data:
+
+# 共享網路:與 dev docker-compose.yml 同名,讓 crons (dev compose 起)
+# 可用 DNS `postgres:5432` 直接連 prod compose 起的 atlas-postgres。
+# 兩個 compose project 名稱都是 atlas,compose 自動用同名 network 不撞。
+networks:
+  atlas-network:
+    name: atlas-network
+    driver: bridge
