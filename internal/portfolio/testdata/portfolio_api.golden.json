@@ -1975,6 +1975,7 @@
         "LastUpdatedAt time.Time",
         "DailyReturns []float64",
         "ConsecutiveAtMin int",
+        "ReturnSamplingVersion int",
         "LastOutcomeDay string",
         "LastDaySum float64",
         "LastDayCount int"
@@ -2635,6 +2636,7 @@
         "MiddleTierBoostMultiplier float64",
         "MiddleTierCutMultiplier float64",
         "SharpeMinSampleSize int",
+        "MinUniqueReturnsForSharpe int",
         "StdDevMeanRatioThreshold float64",
         "ConvictionClampMin int",
         "ConvictionClampMax int",

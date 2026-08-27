@@ -72,6 +72,9 @@ func mergeDarwinianDefaults(cfg *ParametersConfig) {
 	if d.SharpeMinSampleSize.Value == 0 {
 		d.SharpeMinSampleSize = def.SharpeMinSampleSize
 	}
+	if d.MinUniqueReturnsForSharpe.Value == 0 {
+		d.MinUniqueReturnsForSharpe = def.MinUniqueReturnsForSharpe
+	}
 	if d.StdDevMeanRatioThreshold.Value == 0 {
 		d.StdDevMeanRatioThreshold = def.StdDevMeanRatioThreshold
 	}

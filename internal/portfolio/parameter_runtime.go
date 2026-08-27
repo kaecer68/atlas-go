@@ -27,6 +27,7 @@ type RuntimeDarwinianConfig struct {
 	MiddleTierBoostMultiplier   float64
 	MiddleTierCutMultiplier     float64
 	SharpeMinSampleSize         int
+	MinUniqueReturnsForSharpe   int
 	StdDevMeanRatioThreshold    float64
 	ConvictionClampMin          int
 	ConvictionClampMax          int
@@ -258,6 +259,7 @@ func ToRuntimeParameters(cfg *config.ParametersConfig) *RuntimeParameters {
 			MiddleTierBoostMultiplier:   cfg.Darwinian.MiddleTierBoostMultiplier.Value,
 			MiddleTierCutMultiplier:     cfg.Darwinian.MiddleTierCutMultiplier.Value,
 			SharpeMinSampleSize:         cfg.Darwinian.SharpeMinSampleSize.Value,
+			MinUniqueReturnsForSharpe:   cfg.Darwinian.MinUniqueReturnsForSharpe.Value,
 			StdDevMeanRatioThreshold:    cfg.Darwinian.StdDevMeanRatioThreshold.Value,
 			ConvictionClampMin:          cfg.Darwinian.ConvictionClampMin.Value,
 			ConvictionClampMax:          cfg.Darwinian.ConvictionClampMax.Value,

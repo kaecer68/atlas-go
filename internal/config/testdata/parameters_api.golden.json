@@ -377,6 +377,7 @@
         "MiddleTierBoostMultiplier ParameterMetadata[float64]",
         "MiddleTierCutMultiplier ParameterMetadata[float64]",
         "SharpeMinSampleSize ParameterMetadata[int]",
+        "MinUniqueReturnsForSharpe ParameterMetadata[int]",
         "StdDevMeanRatioThreshold ParameterMetadata[float64]",
         "ConvictionClampMin ParameterMetadata[int]",
         "ConvictionClampMax ParameterMetadata[int]",
