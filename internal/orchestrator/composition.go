@@ -237,12 +237,28 @@ func buildFactorEngine(runtimeParams *portfolio.RuntimeParameters, macroSnap *ma
 // state dir, ATLAS_LEDGER_DIR) instead of CWD-relative literals so the
 // writer and the monitoring readers always resolve the same files.
 func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry domain.AgentRegistry, eventBus *eventbus.ChannelEventBus, factorEngine *portfolio.FactorEngine, ledgerDir string) PortfolioManager {
-	darwinian := portfolio.NewDarwinianWeightManager(filepath.Join(ledgerDir, "darwinian_weights.json")).
+	darwinianPath := filepath.Join(ledgerDir, "darwinian_weights.json")
+	darwinian := portfolio.NewDarwinianWeightManager(darwinianPath).
 		WithHistoryPath(filepath.Join(ledgerDir, "darwinian_history.jsonl")).
 		WithParameters(runtimeParams)
-	_ = darwinian.Load()
-	darwinian.InitializeFromRegistry(registry)
-	_ = darwinian.Save()
+	// Distinguish first-run (file missing — ok) from corruption (file present but
+	// unmarshal failed — must NOT silently overwrite, otherwise the next
+	// InitializeFromRegistry+Save replaces real Sharpe history with a fresh
+	// Sharpe=0 snapshot of every agent. See darwinian_history.jsonl regression
+	// 2026-08-13 23:36 where 16/20 agents lost their TotalSignals in one cycle.
+	if err := darwinian.Load(); err != nil {
+		logging.Error("darwinian_weights", "load_failed",
+			logging.FStr("path", darwinianPath),
+			logging.Err(err),
+			logging.FStr("action", "refusing to overwrite; continuing with empty in-memory state, will not Save"))
+	} else {
+		darwinian.InitializeFromRegistry(registry)
+		if err := darwinian.Save(); err != nil {
+			logging.Error("darwinian_weights", "save_failed",
+				logging.FStr("path", darwinianPath),
+				logging.Err(err))
+		}
+	}
 	darwinian.WithEventBus(eventBus)
 
 	factorWeightEngine := portfolio.NewFactorWeightEngine()
