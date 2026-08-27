@@ -80,10 +80,11 @@ func (a *CapitalAllocator) Allocate(
 // dedupeRecommendations merges recommendations that share the same symbol.
 //
 // Semantics (P0-2 fix): for a duplicated symbol, the entry with the highest
-// Conviction wins and its target/goal fields are kept; on a conviction tie the
-// first occurrence is kept (deterministic). Every merge is logged explicitly
-// so conflicts are never silent. Empty-symbol entries are kept verbatim (no
-// dedup key available) and do not participate in merging.
+// Conviction wins and the full winning Recommendation entry (TargetPrice,
+// StopLossPrice, Reason, etc.) is kept; on a conviction tie the first
+// occurrence is kept (deterministic). Every merge is logged explicitly so
+// conflicts are never silent. Empty-symbol entries are suppressed with a
+// warning (no dedup key available) and never enter the allocation.
 func dedupeRecommendations(recs []domain.Recommendation) []domain.Recommendation {
 	if len(recs) <= 1 {
 		return recs
@@ -95,7 +96,8 @@ func dedupeRecommendations(recs []domain.Recommendation) []domain.Recommendation
 
 	for _, rec := range recs {
 		if rec.Symbol == "" {
-			deduped = append(deduped, rec)
+			log.Printf("warn: capital allocator: skipping recommendation with empty symbol (conviction %d)", rec.Conviction)
+			merged++
 			continue
 		}
 		idx, exists := bestIdx[rec.Symbol]
@@ -121,7 +123,7 @@ func dedupeRecommendations(recs []domain.Recommendation) []domain.Recommendation
 
 	if merged > 0 {
 		log.Printf(
-			"warn: capital allocator: merged %d duplicate recommendation(s), %d unique symbol(s) after dedup",
+			"warn: capital allocator: suppressed %d duplicate recommendation(s) (incl. empty-symbol), %d unique symbol(s) after dedup",
 			merged, len(deduped),
 		)
 	}

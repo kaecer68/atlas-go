@@ -322,3 +322,75 @@ func TestAllocate_DuplicateSymbolTieKeepsFirst(t *testing.T) {
 		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
 	}
 }
+
+func TestAllocate_EmptySymbolSuppressed(t *testing.T) {
+	a := NewCapitalAllocator()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseSimulation
+
+	// empty-symbol entry must be suppressed, not enter the denominator or map.
+	recs := []domain.Recommendation{
+		{Symbol: "2330", Conviction: 3},
+		{Symbol: "", Conviction: 5}, // invalid: no dedup key
+		{Symbol: "2454", Conviction: 1},
+	}
+
+	result := a.Allocate(cfg, recs, 1000000, 0.0)
+
+	deployable := 1000000.0
+	// 去重後 totalConviction = 3 + 1 = 4（empty-symbol 被 suppress）
+	expected2330 := deployable * 3.0 / 4.0
+	expected2454 := deployable * 1.0 / 4.0
+
+	if diff := absFloat(result.PositionSizes["2330"] - expected2330); diff > 0.01 {
+		t.Errorf("expected 2330 size %.2f, got %.2f", expected2330, result.PositionSizes["2330"])
+	}
+	if diff := absFloat(result.PositionSizes["2454"] - expected2454); diff > 0.01 {
+		t.Errorf("expected 2454 size %.2f, got %.2f", expected2454, result.PositionSizes["2454"])
+	}
+	if _, exists := result.PositionSizes[""]; exists {
+		t.Error("empty-symbol entry must not appear in PositionSizes")
+	}
+
+	var sum float64
+	for _, v := range result.PositionSizes {
+		sum += v
+	}
+	if diff := absFloat(sum - deployable); diff > 0.01 {
+		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
+	}
+}
+
+func TestReallocateWithTax_DuplicateSymbolDeduped(t *testing.T) {
+	a := NewCapitalAllocator()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseSimulation
+
+	// 同 symbol 兩筆（外資+投信）：tax 調整後仍只有一筆、權重總和正確。
+	recs := []domain.Recommendation{
+		{Symbol: "2330", Conviction: 3, TargetPrice: 900},
+		{Symbol: "2330", Conviction: 5, TargetPrice: 950}, // higher conviction wins
+		{Symbol: "2454", Conviction: 1},
+	}
+
+	result := a.ReallocateWithTax(cfg, recs, 1000000, 0.0, nil)
+
+	deployable := 1000000.0
+	expected2330 := deployable * 5.0 / 6.0 // max conviction 5 wins
+	expected2454 := deployable * 1.0 / 6.0
+
+	if diff := absFloat(result.PositionSizes["2330"] - expected2330); diff > 0.01 {
+		t.Errorf("expected 2330 size %.2f, got %.2f", expected2330, result.PositionSizes["2330"])
+	}
+	if diff := absFloat(result.PositionSizes["2454"] - expected2454); diff > 0.01 {
+		t.Errorf("expected 2454 size %.2f, got %.2f", expected2454, result.PositionSizes["2454"])
+	}
+
+	var sum float64
+	for _, v := range result.PositionSizes {
+		sum += v
+	}
+	if diff := absFloat(sum - deployable); diff > 0.01 {
+		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
+	}
+}
