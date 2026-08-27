@@ -251,7 +251,9 @@ func openQuoteStore(ctx context.Context, backend, workDir string) (ledger.QuoteS
 	case "sqlite":
 		return openSQLiteQuoteStore(workDir)
 	default:
-		return nil, fmt.Errorf("unknown backend %q", backend)
+		// jsonl resolves through the shared resolver but is not a backend this
+		// command can serve — fail loudly instead of silently switching.
+		return nil, fmt.Errorf("unknown backend %q (quotes support sqlite | postgres)", backend)
 	}
 }
 
@@ -330,6 +332,9 @@ func resolveBackend(flagValue string) (string, error) {
 		return "", err
 	}
 	if backend == "jsonl" {
+		// jsonl resolves through the shared resolver (WP4) but is not a
+		// backend this command can serve — quotes read sqlite|postgres and
+		// outcomes are a job-local SQLite artifact.
 		return "", fmt.Errorf("store backend jsonl is not supported by run-stockpicker-backtest (quotes: sqlite | postgres; outcomes: job-local sqlite)")
 	}
 	return backend, nil
