@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.goluck.atlas-webhook-to-telegram</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-u</string>
+        <string>/Users/kk/bin/atlas-alertmanager-webhook-to-telegram.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TELEGRAM_BOT_TOKEN</key>
+        <string>8896320719:AAHijLqpvTpKcOHDDkCNRME8-gERcNqd6QI</string>
+        <key>TELEGRAM_CHAT_ID</key>
+        <string>8387647295</string>
+        <key>PORT</key>
+        <string>9095</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/kk/Library/Logs/atlas-webhook.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kk/Library/Logs/atlas-webhook.err.log</string>
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
