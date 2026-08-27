@@ -433,6 +433,12 @@ jobs:
             - 'internal/db/**'
             - 'internal/repository/**'
             - 'internal/storage/**'
+            - 'internal/ledger/**'
+            - 'internal/liveness/**'
+            - 'internal/testdb/**'
+            - 'internal/config/**'
+            - 'cmd/migrate-data/**'
+            - 'cmd/run-stockpicker-backtest/**'
             - 'migrations/**'
             - '**/*.sql'
 
