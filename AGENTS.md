@@ -105,7 +105,7 @@
 | Session 日期 | 以 `SessionID` 中的交易日為準，非 `RecordedAt` |
 | LLM 路由繞過 | 不可直接呼叫 `clients/*Provider`，須透過 `DefaultRouter` |
 | Live 旗標 | 本地測試切勿啟用 `-allow-live-broker` |
-| db migration 路徑 | `runMigrations()` 使用 `file://` + 絕對路徑 |
+| db migration / Storage backend | migration 用 `file://` + 絕對路徑；production = Postgres-first（`ATLAS_STORE_BACKEND=postgres`），`data/state/atlas.db` 僅本機 dev artifact（prod 空殼），CLI/job 讀資料須走 `store_factory` backend-aware，禁硬編碼 SQLite 路徑 |
 | PR merge 後留分支 | 每次 merge 後必讀 `docs/multi-cli-protocol.md` §Post-merge cleanup，自動刪除遠端與本地 branch |
 | Agent 危險操作 | 執行任何改狀態/讀密碼/觸及 production 的指令前，必須先跑 `./agent-guard --check '<command>'` |
 
