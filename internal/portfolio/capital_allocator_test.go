@@ -212,3 +212,113 @@ func absFloat(x float64) float64 {
 	}
 	return x
 }
+
+func TestAllocate_DuplicateSymbolDedupConvictionWeighted(t *testing.T) {
+	a := NewCapitalAllocator()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseSimulation
+
+	// 同 symbol 兩筆（外資 conviction=3、投信 conviction=4）+ 一筆獨立 symbol。
+	// 去重語意：conviction 取 max 並保留該筆 entry；分母用去重後 symbol 集。
+	recs := []domain.Recommendation{
+		{Symbol: "2330", Conviction: 3, TargetPrice: 900},
+		{Symbol: "2330", Conviction: 4, TargetPrice: 950},
+		{Symbol: "2454", Conviction: 1},
+	}
+
+	result := a.Allocate(cfg, recs, 1000000, 0.0)
+
+	deployable := 1000000.0
+	// 去重後 totalConviction = 4 + 1 = 5
+	expected2330 := deployable * 4.0 / 5.0
+	expected2454 := deployable * 1.0 / 5.0
+
+	if diff := absFloat(result.PositionSizes["2330"] - expected2330); diff > 0.01 {
+		t.Errorf("expected 2330 size %.2f (max conviction wins), got %.2f", expected2330, result.PositionSizes["2330"])
+	}
+	if diff := absFloat(result.PositionSizes["2454"] - expected2454); diff > 0.01 {
+		t.Errorf("expected 2454 size %.2f, got %.2f", expected2454, result.PositionSizes["2454"])
+	}
+
+	var sum float64
+	for _, v := range result.PositionSizes {
+		sum += v
+	}
+	if diff := absFloat(sum - deployable); diff > 0.01 {
+		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
+	}
+	if len(result.PositionSizes) != 2 {
+		t.Errorf("expected 2 unique symbols after dedup, got %d", len(result.PositionSizes))
+	}
+}
+
+func TestAllocate_DuplicateSymbolDedupEqualShare(t *testing.T) {
+	a := NewCapitalAllocator()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseSimulation
+
+	// 零 conviction 路徑也要去重：同 symbol 兩筆只算一個 symbol。
+	recs := []domain.Recommendation{
+		{Symbol: "2330", Conviction: 0},
+		{Symbol: "2330", Conviction: 0},
+		{Symbol: "2454", Conviction: 0},
+	}
+
+	result := a.Allocate(cfg, recs, 1000000, 0.0)
+
+	deployable := 1000000.0
+	equalShare := deployable / 2.0 // 去重後 2 個 unique symbol
+
+	if diff := absFloat(result.PositionSizes["2330"] - equalShare); diff > 0.01 {
+		t.Errorf("expected 2330 equal share %.2f after dedup, got %.2f", equalShare, result.PositionSizes["2330"])
+	}
+	if diff := absFloat(result.PositionSizes["2454"] - equalShare); diff > 0.01 {
+		t.Errorf("expected 2454 equal share %.2f after dedup, got %.2f", equalShare, result.PositionSizes["2454"])
+	}
+
+	var sum float64
+	for _, v := range result.PositionSizes {
+		sum += v
+	}
+	if diff := absFloat(sum - deployable); diff > 0.01 {
+		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
+	}
+	if len(result.PositionSizes) != 2 {
+		t.Errorf("expected 2 unique symbols after dedup, got %d", len(result.PositionSizes))
+	}
+}
+
+func TestAllocate_DuplicateSymbolTieKeepsFirst(t *testing.T) {
+	a := NewCapitalAllocator()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	cfg.CurrentPhase = domain.PhaseSimulation
+
+	// 同 conviction 平手：保留第一筆（deterministic）。
+	recs := []domain.Recommendation{
+		{Symbol: "2330", Conviction: 3, TargetPrice: 900},
+		{Symbol: "2330", Conviction: 3, TargetPrice: 950},
+		{Symbol: "2454", Conviction: 1},
+	}
+
+	result := a.Allocate(cfg, recs, 1000000, 0.0)
+
+	deployable := 1000000.0
+	// 去重後 totalConviction = 3 + 1 = 4
+	expected2330 := deployable * 3.0 / 4.0
+	expected2454 := deployable * 1.0 / 4.0
+
+	if diff := absFloat(result.PositionSizes["2330"] - expected2330); diff > 0.01 {
+		t.Errorf("expected 2330 size %.2f, got %.2f", expected2330, result.PositionSizes["2330"])
+	}
+	if diff := absFloat(result.PositionSizes["2454"] - expected2454); diff > 0.01 {
+		t.Errorf("expected 2454 size %.2f, got %.2f", expected2454, result.PositionSizes["2454"])
+	}
+
+	var sum float64
+	for _, v := range result.PositionSizes {
+		sum += v
+	}
+	if diff := absFloat(sum - deployable); diff > 0.01 {
+		t.Errorf("expected position sizes sum to deployable %.2f, got %.2f", deployable, sum)
+	}
+}
