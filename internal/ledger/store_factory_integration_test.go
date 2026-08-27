@@ -263,47 +263,21 @@ func TestFactoryInvalidSQLitePath(t *testing.T) {
 	}
 }
 
-func TestFactoryUnknownBackendFallsBackToJSONL(t *testing.T) {
+func TestFactoryUnknownBackendFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.Config{
 		LedgerDir:    tmpDir,
 		StoreBackend: "unknown_backend",
 	}
 
-	store, err := NewOutcomeStore(cfg)
-	if err != nil {
-		t.Fatalf("NewOutcomeStore(unknown) should not fail, got: %v", err)
+	// M4① fail-loud: an unrecognized backend string must error instead of
+	// silently falling back to the JSONL ledger.
+	_, err := NewOutcomeStore(cfg)
+	if err == nil {
+		t.Fatalf("NewOutcomeStore(unknown) should fail, got nil")
 	}
-
-	outcome := domain.RecommendationOutcome{
-		AgentID:       "test-fallback",
-		Skill:         "sector-tech",
-		Layer:         domain.LayerSector,
-		Symbol:        "2330",
-		Side:          domain.SideBuy,
-		Conviction:    75,
-		TargetPrice:   1100,
-		StopLossPrice: 1000,
-		Window:        "2026-01",
-		ForwardReturn: 0.05,
-		Hit:           true,
-		Reason:        "fallback test",
-		Price:         1050,
-		PassedGuards:  true,
-		RecordedAt:    time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
-	}
-
-	if err := store.RecordOutcomes([]domain.RecommendationOutcome{outcome}); err != nil {
-		t.Fatalf("RecordOutcome failed: %v", err)
-	}
-
-	outcomes, err := store.LoadOutcomes()
-	if err != nil {
-		t.Fatalf("LoadOutcomes failed: %v", err)
-	}
-
-	if len(outcomes) != 1 {
-		t.Fatalf("expected 1 outcome, got %d", len(outcomes))
+	if !strings.Contains(err.Error(), "unknown store backend") {
+		t.Fatalf("error should mention unknown store backend, got: %v", err)
 	}
 }
 
