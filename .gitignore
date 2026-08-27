@@ -250,3 +250,7 @@ docs/archive/
 
 # CodeGraph local index (2026-08-22, iMac)
 .codegraph/
+
+# PR 1c backtest CLI compiled artifact
+/run-stockpicker-backtest
+/cmd/run-stockpicker-backtest/run-stockpicker-backtest
