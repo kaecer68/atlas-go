@@ -1,14 +1,14 @@
 // Panel data sources for run-stockpicker-backtest.
 //
-// realPanel is the production PanelSource: bars from the SQLite quotes table
-// and per-symbol T86 flows from data/state/stock_flows/<symbol>.json. Flow
-// files are the production backfill target ("production 回填後補"); missing
-// files mean the flow condition simply produces no triggers.
+// realPanel is the production PanelSource: bars from a backend-aware
+// ledger.QuoteStore and per-symbol T86 flows from
+// data/state/stock_flows/<symbol>.json. Flow files are the production
+// backfill target ("production 回填後補"); missing files mean the flow
+// condition simply produces no triggers.
 package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,20 +16,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
-// newRealPanel reads bars from the SQLite quotes table and per-symbol T86
-// flows from data/state/stock_flows/<symbol>.json. Flow files are the
-// production backfill target ("production 回填後補"); missing files mean the
-// flow condition simply produces no triggers.
-func newRealPanel(ctx context.Context, db *sql.DB, workDir string) (*realPanel, error) {
-	symbols, err := quoteSymbols(ctx, db)
-	if err != nil {
-		return nil, err
+// newRealPanel reads bars from a QuoteStore and per-symbol T86 flows from
+// data/state/stock_flows/<symbol>.json. Flow files are the production
+// backfill target; missing files mean the flow condition stays silent.
+func newRealPanel(ctx context.Context, quoteStore ledger.QuoteStore, workDir string) (stockpicker.PanelSource, error) {
+	lister, ok := quoteStore.(ledger.QuoteSymbolLister)
+	var symbols []string
+	var err error
+	if ok {
+		symbols, err = quoteSymbols(ctx, lister)
+		if err != nil {
+			return nil, err
+		}
 	}
 	flowsDir := filepath.Join(workDir, "data", "state", "stock_flows")
-	return &realPanel{db: db, symbols: symbols, flowsDir: flowsDir}, nil
+	return &realPanel{quoteStore: quoteStore, symbols: symbols, flowsDir: flowsDir}, nil
 }
 
 // panelSymbols returns the symbols to scan: from -universe when set, else
@@ -58,22 +63,25 @@ func splitUniverse(s string) []string {
 	return out
 }
 
-// quoteSymbols lists distinct symbols present in the quotes table.
-func quoteSymbols(ctx context.Context, db *sql.DB) ([]string, error) {
-	rows, err := db.QueryContext(ctx, `SELECT DISTINCT symbol FROM quotes ORDER BY symbol`)
+// quoteSymbols lists distinct symbols from a QuoteSymbolLister and strips
+// the exchange suffix so bars and T86 flows share the bare TWSE code used as
+// the outcome symbol.
+func quoteSymbols(ctx context.Context, lister ledger.QuoteSymbolLister) ([]string, error) {
+	raw, err := lister.QuoteSymbols(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query quote symbols: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-	var out []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return nil, fmt.Errorf("scan quote symbol: %w", err)
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+	for _, s := range raw {
+		sym := normalizeSymbol(s)
+		if _, ok := seen[sym]; ok {
+			continue
 		}
-		out = append(out, normalizeSymbol(s))
+		seen[sym] = struct{}{}
+		out = append(out, sym)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // normalizeSymbol strips the exchange suffix (.TW/.TWO) so bars and T86 flows
@@ -82,37 +90,42 @@ func normalizeSymbol(s string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(s, ".TW"), ".TWO")
 }
 
-// realPanel is the production PanelSource: bars from SQLite quotes, flows
+// realPanel is the production PanelSource: bars from a QuoteStore, flows
 // from per-symbol JSON files.
 type realPanel struct {
-	db       *sql.DB
-	symbols  []string
-	flowsDir string
+	quoteStore ledger.QuoteStore
+	symbols    []string
+	flowsDir   string
 }
 
+// barWindowStart is the earliest date loaded from the QuoteStore. Quotes are
+// keyed by session date, so any date before the dataset is harmless.
+var barWindowStart = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// barWindowEnd is the latest date loaded from the QuoteStore. Using now gives
+// a stable upper bound without needing a schema query.
+var barWindowEnd = time.Now()
+
 func (p *realPanel) Bars(ctx context.Context, symbol string) ([]stockpicker.HistoricalBar, error) {
-	rows, err := p.db.QueryContext(ctx, `
-		SELECT date, close, volume FROM quotes
-		WHERE symbol = ? OR symbol = ? OR symbol = ?
-		ORDER BY date ASC`, symbol, symbol+".TW", symbol+".TWO")
-	if err != nil {
-		return nil, fmt.Errorf("query bars %s: %w", symbol, err)
-	}
-	defer func() { _ = rows.Close() }()
-	var bars []stockpicker.HistoricalBar
-	for rows.Next() {
-		var dateStr string
-		var b stockpicker.HistoricalBar
-		if err := rows.Scan(&dateStr, &b.Close, &b.Volume); err != nil {
-			return nil, fmt.Errorf("scan bar %s: %w", symbol, err)
-		}
-		b.Date, err = time.Parse("2006-01-02", dateStr)
+	variants := []string{symbol + ".TW", symbol, symbol + ".TWO"}
+	for _, sym := range variants {
+		quotes, err := p.quoteStore.LoadQuotes(sym, barWindowStart, barWindowEnd)
 		if err != nil {
-			return nil, fmt.Errorf("parse bar date %q: %w", dateStr, err)
+			return nil, fmt.Errorf("load quotes %s: %w", sym, err)
 		}
-		bars = append(bars, b)
+		if len(quotes) > 0 {
+			bars := make([]stockpicker.HistoricalBar, len(quotes))
+			for i, q := range quotes {
+				bars[i] = stockpicker.HistoricalBar{
+					Date:   q.Date,
+					Close:  q.Close,
+					Volume: q.Volume,
+				}
+			}
+			return bars, nil
+		}
 	}
-	return bars, rows.Err()
+	return nil, nil
 }
 
 // flowFile is the on-disk shape of data/state/stock_flows/<symbol>.json.
