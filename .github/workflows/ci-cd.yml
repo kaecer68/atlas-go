@@ -491,7 +491,11 @@ jobs:
         # must read DATABASE_URL/REDIS_URL only.
         ATLAS_ENV_FILE: /dev/null
       run: |
-        go test -v -tags=integration ./...
+        # -p 1 serializes packages: repository and ledger integration tests
+        # share the postgres tables (recommendation_outcomes, ...), and
+        # running them in parallel makes one package's TRUNCATE/full cleanup
+        # wipe the other's in-flight rows (M8 shared-DB cross-test pollution).
+        go test -v -tags=integration -p 1 ./...
 
   # Semantic commit message validation (migrated from ci.yml per 2026-07-03 pipeline audit Phase 2)
   commitlint:

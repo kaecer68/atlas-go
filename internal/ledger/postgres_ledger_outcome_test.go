@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,31 +11,22 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// cleanupLedgerTestRows removes pgsqltest- prefixed rows from the ledger
-// tables so tests stay isolated from migrated production data.
-//
-// Cleanup is per-table with only the columns each table actually has. The
-// previous combined WHERE mixed `agent_id` into tables that lack it (trades,
-// session_summaries, human_interventions, experiments); those DELETEs
-// silently errored and leaked rows across runs (M8: "expected 2 trades,
-// got 4"). recommendation_outcomes / screening_rejects also match agent_id
-// because RecordOutcomes writes global rows with session_id=” (A01).
+// cleanupLedgerTestRows TRUNCATEs the ledger tables at the start of every
+// test (M8). The previous combined WHERE mixed `agent_id` into tables that
+// lack the column (trades, session_summaries, human_interventions,
+// experiments); those DELETEs silently errored and leaked rows across runs
+// ("expected 2 trades, got 4"). CI runs integration packages serially
+// (-p 1), so a per-test TRUNCATE is a deterministic clean slate.
 func cleanupLedgerTestRows(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	cleanups := []struct{ table, clause string }{
-		{"recommendation_outcomes", "session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'"},
-		{"screening_rejects", "session_id LIKE 'pgsqltest-%' OR agent_id LIKE 'pgsqltest-%'"},
-		{"session_summaries", "session_id LIKE 'pgsqltest-%'"},
-		{"trades", "session_id LIKE 'pgsqltest-%'"},
-		{"human_interventions", "session_id LIKE 'pgsqltest-%' OR target_agent_id LIKE 'pgsqltest-%'"},
-		{"experiments", "experiment_id LIKE 'pgsqltest-%' OR session_id LIKE 'pgsqltest-%'"},
+	tables := []string{
+		"recommendation_outcomes", "screening_rejects", "session_summaries",
+		"trades", "human_interventions", "experiments",
 	}
 	run := func() {
 		ctx := context.Background()
-		for _, c := range cleanups {
-			if _, err := pool.Exec(ctx, "DELETE FROM "+c.table+" WHERE "+c.clause); err != nil {
-				t.Errorf("cleanup delete from %s: %v", c.table, err)
-			}
+		if _, err := pool.Exec(ctx, "TRUNCATE TABLE "+strings.Join(tables, ", ")); err != nil {
+			t.Errorf("truncate ledger test tables: %v", err)
 		}
 	}
 	run()
