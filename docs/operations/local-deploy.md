@@ -34,7 +34,9 @@ MacBook (kaecer) = 唯一開發機           iMac (kk) = 唯一 production 部�
 | `LLM_RISK_FORENSICS_ENABLED` | 啟用 `CapabilityPerformanceForensics` | default `false` |
 | `LLM_SECTOR_AGENTS_ENABLED` | 啟用 `SectorAgentLLM` Plan→ToolCall→Reflect loop（Issue #719 wired） | default `false` |
 
-> **兩機 .env 分離**：MacBook `~/.config/atlas-go/.env` 指向 dev DB（`atlas_dev`）；iMac `~/.config/atlas-go/.env` 指向 prod DB（`atlas`）。**不可互相覆蓋**。
+> **兩機 .env 分離（2026-08-28 修正）**：MacBook 與 iMac 的 `~/.config/atlas-go/.env` 都指向 **dev DB（`atlas_dev`）**；production DB（`atlas`）的 DSN **只存在 gateway 容器環境**（`docs/operations/docker-compose.prod.yml`），**不進 .env**——讓任何「source .env 的 CLI」永遠碰不到 prod DB。**不可互相覆蓋**。
+>
+> ⚠️ **陷阱**：source `.env` 跑任何會 migrate 的 CLI 前，先 `echo $DATABASE_URL` 確認目標 DB（曾發生 migration 19 誤套到 atlas_dev 的事件，2026-08-28）。
 
 ## 部署流程
 
