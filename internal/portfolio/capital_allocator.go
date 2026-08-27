@@ -45,7 +45,7 @@ func (a *CapitalAllocator) Allocate(
 	}
 
 	// 同 symbol 多筆 recommendation 先合併（max conviction 勝出並保留該筆
-	// target/goal；平手保留第一筆；衝突以 log 顯式記錄），
+	// 完整 entry（TargetPrice/StopLossPrice/Reason 等）；平手保留第一筆；衝突以 log 顯式記錄），
 	// totalConviction 分母與分配均以去重後的 symbol 集計算。
 	deduped := dedupeRecommendations(recommendations)
 	if len(deduped) == 0 {
@@ -86,10 +86,6 @@ func (a *CapitalAllocator) Allocate(
 // conflicts are never silent. Empty-symbol entries are suppressed with a
 // warning (no dedup key available) and never enter the allocation.
 func dedupeRecommendations(recs []domain.Recommendation) []domain.Recommendation {
-	if len(recs) <= 1 {
-		return recs
-	}
-
 	bestIdx := make(map[string]int, len(recs)) // symbol -> index in deduped
 	deduped := make([]domain.Recommendation, 0, len(recs))
 	merged := 0
