@@ -1,31 +1,22 @@
+//go:build integration
+
 package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/testdb"
 )
 
-// connectTestPG connects to PostgreSQL (DATABASE_URL or the dev default) and
-// returns the pool. Skips when postgres is unavailable — same pattern as
-// internal/ledger/postgres_historical_test.go.
+// connectTestPG connects to PostgreSQL (DATABASE_URL only, no hardcoded DSN)
+// and returns the pool. See testdb.Pool for the CI/local skip policy.
 func connectTestPG(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://atlas:atlas_dev_pwd_2026@127.0.0.1:5432/atlas?sslmode=prefer"
-	}
-	pool, err := db.Init(context.Background(), dsn, "../../sql/migrations")
-	if err != nil {
-		t.Skipf("Skipping postgres integration test: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return testdb.Pool(t, "../../sql/migrations")
 }
 
 func cleanupMigrateTestRows(t *testing.T, pool *pgxpool.Pool) {
