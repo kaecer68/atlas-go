@@ -754,5 +754,11 @@ func (p *ParametersConfig) Validate() error {
 	if p.Stockpicker.Calibration.MinSamples.Value < 1 {
 		return fmt.Errorf("stockpicker.calibration.min_samples (%d) must be >= 1", p.Stockpicker.Calibration.MinSamples.Value)
 	}
+	if p.Stockpicker.Conditions.Foreign3DNetBuy.WindowDays.Value < 1 {
+		return fmt.Errorf("stockpicker.conditions.foreign_3d_net_buy.window_days (%.0f) must be >= 1", p.Stockpicker.Conditions.Foreign3DNetBuy.WindowDays.Value)
+	}
+	if p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value < 1 {
+		return fmt.Errorf("stockpicker.conditions.momentum_20d_positive.window_days (%.0f) must be >= 1", p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value)
+	}
 	return nil
 }

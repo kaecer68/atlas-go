@@ -3965,6 +3965,16 @@ export interface StockpickerCalibrationParameters {
   min_samples: string;
 }
 
+export interface StockpickerConditionWindow {
+  window_days: string;
+  threshold: string;
+}
+
+export interface StockpickerConditionsParameters {
+  foreign_3d_net_buy: StockpickerConditionWindow;
+  momentum_20d_positive: StockpickerConditionWindow;
+}
+
 export interface StockpickerCostsParameters {
   round_trip_pct: string;
 }
@@ -3972,6 +3982,7 @@ export interface StockpickerCostsParameters {
 export interface StockpickerParameters {
   costs: StockpickerCostsParameters;
   calibration: StockpickerCalibrationParameters;
+  conditions?: StockpickerConditionsParameters;
 }
 
 export interface StrategiesListResponse {

@@ -113,7 +113,7 @@
 | `mcp/anomaly` | MCP audit event 異常偵測 — rolling-window z-score、per-tool/per-tenant error-rate、in-memory ring buffer | `Detector`, `Store`, `AnomalyEvent` | Wave 11 Phase 4 Direction A：僅供 `cmd/atlas-mcp` 消費，不應被其他 stable/evolving 模組依賴 |
 | `stocktools` | 個股級查詢端點 — quote、fundamentals、chips、technical | `QuoteHandler`, `FundamentalsHandler`, `ChipsHandler`, `TechnicalHandler` | Wave 11 新增；API: /api/stock/*；供 atlas-mcp stock_* tools 使用 |
 | `charter` | 憲章選項與 A/B 統計 — per-run 開關（PeriodOnly/StrategyFilter/MacroFlow/CashReserve/ConvictionFloor）、paired t-test、BCa bootstrap | `Options`, `StepwiseArms`, `PairedTest`, `BCa` | Phase C3 新增（2026-08-22）；實驗性 A/B harness，API 可能調整 |
-| `stockpicker` | 個股選股核心 — 三層勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job（PR 1a/1b/1c，2026-08-27） | `WinRate`, `WilsonScoreInterval`, `CalibrationStatusFor`, `NetHit`, `SignalWinRate`, `StockWinRate`, `StrategyWinRate`, `RunBacktest`, `AggregateFromStore`, `GroupAndSummarize` | 含回測聚合 job（`cmd/run-stockpicker-backtest`）；尚未接 runtime 排程/MCP tool；API 可能調整 |
+| `stockpicker` | 個股選股核心 — 三層勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job + 可設定條件引擎（PR 1a/1b/1c/2a，2026-08-28） | `WinRate`, `WilsonScoreInterval`, `CalibrationStatusFor`, `NetHit`, `SignalWinRate`, `StockWinRate`, `StrategyWinRate`, `RunBacktest`, `AggregateFromStore`, `GroupAndSummarize`, `Condition`, `ConditionRegistry`, `DefaultConditions` | 含回測聚合 job（`cmd/run-stockpicker-backtest`，`-conditions` 可選條件）；fundamentals 條件僅 live_observe_only；尚未接 runtime 排程/MCP tool；API 可能調整 |
 ---
 ## A · Archived（封存）— 1 package
 

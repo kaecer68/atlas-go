@@ -1165,6 +1165,7 @@ type CapitalflowParameters struct {
 type StockpickerParameters struct {
 	Costs       StockpickerCostsParameters       `json:"costs"`
 	Calibration StockpickerCalibrationParameters `json:"calibration"`
+	Conditions  StockpickerConditionsParameters  `json:"conditions,omitempty"`
 }
 
 // StockpickerCostsParameters holds trading-cost assumptions used by NetHit.
@@ -1178,6 +1179,24 @@ type StockpickerCostsParameters struct {
 // calibration status (observations < min_samples → calibrating).
 type StockpickerCalibrationParameters struct {
 	MinSamples ParameterMetadata[int] `json:"min_samples"`
+}
+
+// StockpickerConditionsParameters holds the tunable parameters of the
+// registered stockpicker conditions (PR 2a). Each backtest-eligible
+// condition reads its window (trading days) and trigger threshold from
+// here; conditions.go contains no hard-coded numbers (P0-6).
+type StockpickerConditionsParameters struct {
+	Foreign3DNetBuy  StockpickerConditionWindow `json:"foreign_3d_net_buy"`
+	Momentum20DPosit StockpickerConditionWindow `json:"momentum_20d_positive"`
+}
+
+// StockpickerConditionWindow is the numeric parameter set shared by the
+// window+threshold conditions (foreign flow accumulation, price momentum).
+type StockpickerConditionWindow struct {
+	// WindowDays is the lookback window in trading days.
+	WindowDays ParameterMetadata[float64] `json:"window_days"`
+	// Threshold is the value the window aggregate must exceed to trigger.
+	Threshold ParameterMetadata[float64] `json:"threshold"`
 }
 
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.

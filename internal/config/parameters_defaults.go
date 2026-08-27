@@ -64,6 +64,34 @@ func defaultStockpickerParameters() StockpickerParameters {
 				Source:    SourceHeuristic,
 			},
 		},
+		Conditions: StockpickerConditionsParameters{
+			Foreign3DNetBuy: StockpickerConditionWindow{
+				WindowDays: ParameterMetadata[float64]{
+					Value:     3,
+					Rationale: "Foreign net-buy accumulation window in trading days (PR 1c demo condition; configurable since PR 2a).",
+					Source:    SourceHeuristic,
+					Todo:      "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+				},
+				Threshold: ParameterMetadata[float64]{
+					Value:     0,
+					Rationale: "Cumulative foreign net buy over the window must exceed this value to trigger (PR 2a).",
+					Source:    SourceHeuristic,
+				},
+			},
+			Momentum20DPosit: StockpickerConditionWindow{
+				WindowDays: ParameterMetadata[float64]{
+					Value:     20,
+					Rationale: "Momentum lookback in trading days: close[t]/close[t-window] - 1 (PR 1c demo condition; configurable since PR 2a).",
+					Source:    SourceHeuristic,
+					Todo:      "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+				},
+				Threshold: ParameterMetadata[float64]{
+					Value:     0,
+					Rationale: "Momentum must exceed this value to trigger (PR 2a).",
+					Source:    SourceHeuristic,
+				},
+			},
+		},
 	}
 }
 
@@ -77,6 +105,12 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Stockpicker.Calibration.MinSamples.Rationale == "" {
 		cfg.Stockpicker.Calibration = def.Calibration
+	}
+	if cfg.Stockpicker.Conditions.Foreign3DNetBuy.WindowDays.Rationale == "" {
+		cfg.Stockpicker.Conditions.Foreign3DNetBuy = def.Conditions.Foreign3DNetBuy
+	}
+	if cfg.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Rationale == "" {
+		cfg.Stockpicker.Conditions.Momentum20DPosit = def.Conditions.Momentum20DPosit
 	}
 }
 
