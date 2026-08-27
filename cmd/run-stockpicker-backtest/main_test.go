@@ -303,6 +303,22 @@ func TestResolveBackend_Priority(t *testing.T) {
 	}
 }
 
+// TestExpectDB_RequiresPostgres: -expect-db guards a postgres migration
+// target, so a sqlite resolution must fail loudly instead of silently
+// ignoring the assertion (M12).
+func TestExpectDB_RequiresPostgres(t *testing.T) {
+	t.Setenv("ATLAS_STORE_BACKEND", "")
+	t.Setenv("DATABASE_URL", "")
+	wd := writeTestWorkdir(t)
+	err := runWithPanel([]string{"-workdir", wd, "-start", "2026-01-05", "-end", "2026-01-30", "-asof", "2026-02-13", "-universe", "2330", "-expect-db", "atlas"}, synthPanel(t))
+	if err == nil {
+		t.Fatal("expected error: -expect-db with resolved sqlite backend")
+	}
+	if !strings.Contains(err.Error(), "-expect-db") || !strings.Contains(err.Error(), "sqlite") {
+		t.Fatalf("error = %v, want -expect-db + sqlite mention", err)
+	}
+}
+
 // TestOpenSQLiteQuoteStore_CreatesSchema verifies the sqlite backend path
 // opens the DB, initializes the schema, and returns a usable QuoteStore.
 func TestOpenSQLiteQuoteStore_CreatesSchema(t *testing.T) {

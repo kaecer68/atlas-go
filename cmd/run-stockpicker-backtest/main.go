@@ -6,7 +6,7 @@
 //	run-stockpicker-backtest -workdir . -start 2026-01-01 -end 2026-08-26 -asof 2026-08-26
 //
 // Flags: -workdir, -start, -end, -asof, -force, -dry-run, -universe, -backend,
-// -conditions, -list-conditions. The job:
+// -expect-db, -conditions, -list-conditions. The job:
 //
 //  1. replays the selected conditions (PR 2a configurable engine; default
 //     foreign-3d-net-buy, momentum-20d-positive) over point-in-time price bars
@@ -15,6 +15,13 @@
 //  2. writes SignalOutcome rows into stock_signal_outcomes (idempotent:
 //     ON CONFLICT DO NOTHING), then aggregates per (symbol, source) into
 //     stock_win_rate and data/state/stock_win_rate.json.
+//
+// Outcomes and win-rate rows always land in a job-local SQLite artifact
+// (data/state/atlas.db), never in the postgres target; quotes are
+// backend-aware (sqlite | postgres). When the postgres backend is used the
+// job prints current_database + inet_server_port at startup and aborts
+// before running migrations unless -expect-db matches the actual database
+// (M12 target guard).
 //
 // Same-day rerun skips unless -force is given. No runtime scheduler is wired
 // in this PR; the job is CLI-only (scheduling lands in a later PR).
@@ -30,6 +37,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
@@ -66,6 +75,7 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	dryRun := fs.Bool("dry-run", false, "compute coverage and print it without persisting")
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
 	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then DATABASE_URL heuristic)")
+	expectDB := fs.String("expect-db", "", "assert the postgres database name before migrations (e.g. atlas); aborts with the actual current_database on mismatch")
 	conditionsFlag := fs.String("conditions", "", "comma-separated condition IDs to run (default: foreign-3d-net-buy,momentum-20d-positive)")
 	listConditions := fs.Bool("list-conditions", false, "print the registered conditions and exit")
 	if err := fs.Parse(args); err != nil {
@@ -91,6 +101,18 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	}
 
 	backend := resolveBackend(*backendFlag)
+
+	// M12 target guard: report the postgres connection target and abort on
+	// -expect-db mismatch before any migration can touch the wrong database
+	// (yesterday's run migrated atlas_dev from a stray DATABASE_URL).
+	if *expectDB != "" && backend != "postgres" {
+		return fmt.Errorf("-expect-db %q requires the postgres backend (resolved %s); outcomes are job-local sqlite and need no db guard", *expectDB, backend)
+	}
+	if backend == "postgres" {
+		if err := guardDatabaseTarget(ctx, os.Getenv("DATABASE_URL"), *expectDB); err != nil {
+			return err
+		}
+	}
 
 	// Parameters from the worktree's parameters.json (P0-3/P0-6: cost and
 	// min_samples come from config, never hard-coded).
@@ -250,6 +272,35 @@ func openPostgresQuoteStore(ctx context.Context) (ledger.QuoteStore, error) {
 	}
 	ledger.SetPostgresPool(pool)
 	return ledger.NewPostgresQuoteStore(pool), nil
+}
+
+// guardDatabaseTarget reports the postgres connection target (M12) and, when
+// expectDB is set, aborts on mismatch. It runs before any migration so a
+// stray DATABASE_URL (e.g. source .env pointing at atlas_dev) can never
+// migrate the wrong database. A read-only connection is used: no migrations,
+// no schema writes.
+func guardDatabaseTarget(ctx context.Context, dsn, expectDB string) error {
+	if dsn == "" {
+		return fmt.Errorf("postgres backend requires DATABASE_URL (or use -backend sqlite)")
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("connect for db target check: %w", err)
+	}
+	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("ping for db target check: %w", err)
+	}
+	var actual string
+	var port int
+	if err := pool.QueryRow(ctx, "SELECT current_database(), inet_server_port()").Scan(&actual, &port); err != nil {
+		return fmt.Errorf("query db target: %w", err)
+	}
+	log.Printf("db target: current_database=%s inet_server_port=%d", actual, port)
+	if expectDB != "" && actual != expectDB {
+		return fmt.Errorf("expected database %q but connected to %q; aborting before migrations (DATABASE_URL target mismatch)", expectDB, actual)
+	}
+	return nil
 }
 
 // resolveBackend picks the quote backend. Explicit -backend wins, then the
