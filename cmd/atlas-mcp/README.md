@@ -75,7 +75,7 @@ MCP client config 路徑：
 
 | 面向 | 現狀 |
 |------|------|
-| MCP Tools | **117 個 tool**（預設；+2 sampling/elicitation feature-gated 全開時 119；啟動期 assert [115, 121]；權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
+| MCP Tools | **118 個 tool**（預設；+2 sampling/elicitation feature-gated 全開時 120；啟動期 assert [116, 122]；權威清單見 [`docs/reference/tool-catalog.md`](../../docs/reference/tool-catalog.md)） |
 | Tool description | `auto-desc.gen.json`（由 `cmd/atlas-mcp/descgen/` 自動生成） |
 | Transport | **stdio**（預設，向後相容）；**SSE + streamable-HTTP**（Phase 4 啟用，Bearer auth 強制） |
 | Auth | TokenAuth + DB TokenStore（`auth.go` / `auth_db.go` / `auth_db_pg.go`）+ admin HTTP API（127.0.0.1，`token_admin_handler.go`） |
@@ -178,6 +178,12 @@ streamable-HTTP / SSE 模式 bind `ATLAS_MCP_ADDR`（預設 `127.0.0.1:9090`）�
 | `ATLAS_MCP_ROOTS_READ_SIZE_CAP` | `1048576`（1 MiB） | 單次 `mcp_roots_read_file` 讀取上限（bytes） |
 | `ATLAS_MCP_ROOTS_ALLOW_UNSAFE` | `0` | escape hatch（不建議）：`1` = 跳過 root path 驗證（僅限 dev） |
 | `ATLAS_MCP_ROOTS_ALERT_ON_CHANGE` | `false` | client 宣告的 roots 變動時是否 alert |
+
+### Stockpicker 勝率資料（Phase 4 / stock_get_win_rate）
+
+| 變數 | 預設值 | 用途 |
+|------|--------|------|
+| `ATLAS_MCP_STOCKPICKER_DB` | （未設） | 含 stockpicker win-rate 聚合（`stock_win_rate` + `stock_signal_outcomes`）的 SQLite ledger 路徑（read-only 開啟；未設或檔案不存在時 `stock_get_win_rate` 回覆明確「無資料」訊息） |
 
 > **stdio 安全模型**：stdio 模式預設不強制 Bearer token（process isolation 是本機單用戶場景的安全邊界），但仍接受 token 標頭作為多租戶 routing。**若 atlas-mcp 被多個 agent / 多個使用者共用，或運行在共享主機上，請務必設定 `ATLAS_MCP_TOKEN`**，否則任何能啟動 process 的程式都能呼叫全部 110+ 個 tool。SSE / streamable-HTTP 模式 `Authorization: Bearer <token>` **必填**，未帶或錯誤回傳 401。
 

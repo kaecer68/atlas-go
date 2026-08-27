@@ -1001,6 +1001,34 @@
       "type": "object"
     }
   },
+  "stock_get_win_rate": {
+    "name": "stock_get_win_rate",
+    "description": "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: symbol (+ optional condition_id, rolling_window, asof). No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical.",
+    "inputSchema": {
+      "properties": {
+        "asof": {
+          "description": "as-of date YYYY-MM-DD (informational; stored aggregates are returned as-is, never recomputed)",
+          "type": "string"
+        },
+        "condition_id": {
+          "description": "condition id, e.g. foreign-3d-net-buy or momentum-20d-positive; default: return every condition available for the symbol",
+          "type": "string"
+        },
+        "rolling_window": {
+          "description": "rolling window label, e.g. 120d; default 120d",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
   "strategy_for_period": {
     "name": "strategy_for_period",
     "description": "Return the strategies allowed for a given market period (downturn / turnaround_up / bull / plateau / consolidation / turnaround_down / black_swan). Reads configs/methodology_rules.yaml (same source as MethodologyAdvisor). Use to answer 'what strategy fits this regime' without calling the recommender. Read-only; no side effects.",
