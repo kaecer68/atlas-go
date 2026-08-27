@@ -21,7 +21,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Replay 格式錯誤** | ledger | Replay 為 **JSONL**（每行獨立 JSON 物件），不是 JSON array。 |
 | **Session 日期不可信賴 `RecordedAt`** | domain | `RecordedAt` 是計算完成時間。排序/比較請以 `SessionID` 中的交易日為準。 |
 | **JSON tag 大小寫錯誤** | domain / API | API handler 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase 而 JSON 實際是 snake_case，unmarshal 會靜默失敗。 |
-| **PostgreSQL 保留字** | data / migrations | migration 的欄位/表名不得用未加引號的 PostgreSQL 保留字（`window`/`user`/`order`/`select`/…）；SQLite 接受但 PG 報 `SQLSTATE 42601`（實例：000019 `stock_win_rate.rolling_window` 因不能用 `window` 而改名）。新增欄位時先用 `SELECT * FROM pg_get_keywords() WHERE catcode = 'R'` 對照或參考 `docs/reference/traps.md`。 |
+| **PostgreSQL 保留字** | data / migrations | migration 欄位/表名禁用未加引號的 PG 保留字（`window`/`user`/`order`/`select`/…）；SQLite 接受但 PG 報 `SQLSTATE 42601`（實例：000019 因 `window` 改名 `rolling_window`）。 |
 | **REAL vs DOUBLE PRECISION** | data / migrations | SQLite `REAL` = 8-byte double；PostgreSQL `REAL` = float4 單精度。migration 中任何 float 語意欄必須用 `DOUBLE PRECISION`（兩方言皆接受；SQLite 仍存 REAL）。禁止在 PG 語意欄用 `REAL`，避免無聲精度損失。 |
 | **migration 是雙方言 DDL** | data / migrations | `sql/migrations/*.up.sql` 同時被 SQLite 測試與 production PG 執行，必須兩方言皆合法。不要在 migration 裡寫 `CREATE EXTENSION`（PG-only）或 SQLite-only pragma；這類東西應該在啟動腳本或測試 setup 處理。 |
 | **MCP auth-free prefix paths 必須同步兩處** | apigateway / monitoring | `/api/market/` 等 auth-free prefix path **必須同時**寫進 `internal/monitoring/api/shared/handler.go` 的 `authFreePrefixPaths` slice **與** `cmd/atlas/main.go` 的 `isPublicPath()` switch case。任一處遺漏都會導致 `curl /api/market/explain_market_move` 回 401（PR #1269 修復 E-01~E-06 四個端點路徑掛一漏萬問題）。`authFreePrefixPaths` 供 `Adapt()` 與直接 wrap `AuthMiddleware` 的呼叫端使用；`isPublicPath` 是 top-level mux 最終繞過層，兩者語意不同但需保持同步。 |
@@ -274,11 +274,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 
 **陷阱**：`followup.md` / `docs/specs/*.md` / `docs/operations/*.md` 等**都是 AI coding agent 寫的**，可能是過時或決策本身可挑戰的（**不是 human owner 的 hard rule**）。AI agent（包括未來的我）容易把它們當成不可挑戰的權威來引用。
 
-**失敗案例**（2026-07-08 L2.4 prep session）：
-- `.omo/manifests/l2-4-followup.md §1` 寫「Auto-cron 是否現在可以開始實作？否」
-- 我把這個「否」當成 hard rule 來擋 T13 main 的實作，連續 7+ 次拒絕
-- 實際上這個決策本身**就是 AI 寫的**，應該被視為 proposal 而非 gospel
-- User 提醒後我才修正：**followup.md 都是 AI coding 的時候，agent 寫的，所以正確與否若有問題，你可以及時討論**
+**失敗案例**（2026-07-08 L2.4 prep session）：把 `.omo/manifests/l2-4-followup.md §1` 的「Auto-cron 否」當 hard rule，連續 7+ 次擋 T13 實作；實際上該決策是 AI 寫的，應視為 proposal 而非 gospel（User 提醒後修正）。
 
 **協議**（任何 AI-generated doc 與 code 衝突時）：
 
@@ -289,12 +285,7 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
    - **修 code 或 doc**：不擋自己的 work 等 doc 同步
    - **如果決策本身可疑**（如「否,不要現在做」）：直接問 user 是否要 override，不要假裝它是 hard rule
 
-**判斷哪些 doc 是 AI 寫的**：
-- `docs/operations/l2-4-*.md` — L2.4 prep session 期間由 AI agent 撰寫
-- `docs/specs/*.md` — 設計文件,可能混合 human owner + AI 補充
-- `docs/observations/*.md` — 觀察日誌範本,可能是 AI 模板
-- `.omo/audit/*.md` — 已移入私有工作區的歷史 AI-generated docs
-- 對照 `[docs/../documentation-map.md](../documentation-map.md)` 確認文件歸屬與維護者
+**判斷哪些 doc 是 AI 寫的**：`docs/operations/l2-4-*.md`（L2.4 session AI 撰寫）、`docs/specs/*.md`（可能混合）、`docs/observations/*.md`（模板）、`.omo/audit/*.md`（歷史 AI docs）；對照 `documentation-map.md` 確認歸屬。
 
 **不要擋 work 的情境**：
 - Doc 說「不能做 X」但你 grep code 沒看到實際阻擋邏輯
