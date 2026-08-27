@@ -84,10 +84,14 @@ func RecordOutcomes(ctx context.Context, db *sql.DB, outcomes []SignalOutcome) e
 	}
 	defer func() { _ = tx.Rollback() }() //nolint:errcheck
 
+	// P0-4: use `ON CONFLICT DO NOTHING` instead of SQLite-only `INSERT OR IGNORE`
+	// so the same statement is valid against production PostgreSQL
+	// (sql/migrations/000018) and SQLite (ledger InitSchema).
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT OR IGNORE INTO stock_signal_outcomes
+		INSERT INTO stock_signal_outcomes
 			(symbol, trigger_date, source, forward_return, net_forward_return, hit, cost_rate, regime, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT DO NOTHING`)
 	if err != nil {
 		return fmt.Errorf("stockpicker: prepare signal outcome insert: %w", err)
 	}
@@ -138,7 +142,19 @@ func RecordOutcomes(ctx context.Context, db *sql.DB, outcomes []SignalOutcome) e
 // calendar days are returned; an empty window returns all rows. Rows are
 // ordered by trigger_date ascending, source ascending.
 func LoadOutcomes(ctx context.Context, db *sql.DB, symbol, source, window string) ([]SignalOutcome, error) {
-	cutoff, err := rollingWindowCutoff(window)
+	return loadOutcomes(ctx, db, symbol, source, window, time.Now())
+}
+
+// LoadOutcomesAsOf is LoadOutcomes with an explicit as-of date. The rolling
+// window cutoff is computed against asOf instead of time.Now(), making replay
+// deterministic (P0-5). Used by the backtest aggregation job whose as-of date
+// comes from the CLI -asof flag or the backtest run date.
+func LoadOutcomesAsOf(ctx context.Context, db *sql.DB, symbol, source, window string, asOf time.Time) ([]SignalOutcome, error) {
+	return loadOutcomes(ctx, db, symbol, source, window, asOf)
+}
+
+func loadOutcomes(ctx context.Context, db *sql.DB, symbol, source, window string, asOf time.Time) ([]SignalOutcome, error) {
+	cutoff, err := rollingWindowCutoff(window, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +204,7 @@ func LoadOutcomes(ctx context.Context, db *sql.DB, symbol, source, window string
 // rollingWindowCutoff converts a rolling-window label ("60d"/"120d") into the
 // earliest trigger_date (YYYY-MM-DD) included in the window. An empty label
 // returns "" (no lower bound).
-func rollingWindowCutoff(window string) (string, error) {
+func rollingWindowCutoff(window string, asOf time.Time) (string, error) {
 	if window == "" {
 		return "", nil
 	}
@@ -199,7 +215,7 @@ func rollingWindowCutoff(window string) (string, error) {
 	if err != nil || days <= 0 {
 		return "", fmt.Errorf("stockpicker: invalid window %q (want Nd, e.g. 120d)", window)
 	}
-	return time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02"), nil
+	return asOf.UTC().AddDate(0, 0, -days).Format("2006-01-02"), nil
 }
 
 // boolToInt converts a bool to a SQLite INTEGER 0/1 value.

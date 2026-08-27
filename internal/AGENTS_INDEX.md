@@ -96,7 +96,7 @@
 | `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、DataClass gate）|
 | `llm_annotator` | LLM 自然語言註解 — strategy_techniques 的 LLM 註解路徑 |
 | `stocktools` | per-symbol 台股查詢端點（quote/fundamentals/chips/technical）|
-| `stockpicker` | **PR 1a 新** — 個股選股純數學核心（樣本勝率/Wilson CI/校準狀態/淨報酬命中）；尚未整合任何 runtime |
+| `stockpicker` | **PR 1a/1b/1c** — 個股選股核心：勝率數學 + outcome/win-rate 儲存 + 回測聚合 job（PIT 面板→`stock_signal_outcomes`→`stock_win_rate`+state JSON）；CLI 盤後執行，尚未接 runtime 排程 |
 
 ### A · Archived（封存，1 個）
 

@@ -139,6 +139,7 @@ func mergeAllDefaults(cfg *ParametersConfig) {
 	mergeSectorAllocationDefaults(cfg)
 	mergeSmartUniverseDefaults(cfg)
 	mergeCapitalflowDefaults(cfg)
+	mergeStockpickerDefaults(cfg)
 }
 
 // GetParametersConfig returns the singleton parameters configuration.

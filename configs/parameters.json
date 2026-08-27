@@ -8053,5 +8053,21 @@
       "rationale": "Resonance coefficient lower bound: 0.5 = foreign vs government 對立. Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
       "source": "heuristic"
     }
+  },
+  "stockpicker": {
+    "costs": {
+      "round_trip_pct": {
+        "value": 0.00585,
+        "rationale": "Taiwan round-trip cost: commission 0.1425% ×2 + sell-side transaction tax 0.3% ≈ 0.585%. NetHit uses this to avoid systematically overstating win rates (k3 review R1 / P0-3).",
+        "source": "heuristic"
+      }
+    },
+    "calibration": {
+      "min_samples": {
+        "value": 30,
+        "rationale": "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
+        "source": "heuristic"
+      }
+    }
   }
 }
