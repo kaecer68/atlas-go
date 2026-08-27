@@ -113,6 +113,7 @@
 | `mcp/anomaly` | MCP audit event 異常偵測 — rolling-window z-score、per-tool/per-tenant error-rate、in-memory ring buffer | `Detector`, `Store`, `AnomalyEvent` | Wave 11 Phase 4 Direction A：僅供 `cmd/atlas-mcp` 消費，不應被其他 stable/evolving 模組依賴 |
 | `stocktools` | 個股級查詢端點 — quote、fundamentals、chips、technical | `QuoteHandler`, `FundamentalsHandler`, `ChipsHandler`, `TechnicalHandler` | Wave 11 新增；API: /api/stock/*；供 atlas-mcp stock_* tools 使用 |
 | `charter` | 憲章選項與 A/B 統計 — per-run 開關（PeriodOnly/StrategyFilter/MacroFlow/CashReserve/ConvictionFloor）、paired t-test、BCa bootstrap | `Options`, `StepwiseArms`, `PairedTest`, `BCa` | Phase C3 新增（2026-08-22）；實驗性 A/B harness，API 可能調整 |
+| `stockpicker` | 個股選股純數學核心 — 三層勝率（signal/stock/strategy）共用：樣本勝率、Wilson score interval、校準狀態、淨報酬命中（PR 1a，2026-08-27） | `WinRate`, `WilsonScoreInterval`, `CalibrationStatusFor`, `NetHit`, `SignalWinRate`, `StockWinRate`, `StrategyWinRate` | 新上線，尚未整合任何 runtime；API 可能調整 |
 ---
 ## A · Archived（封存）— 1 package
 
