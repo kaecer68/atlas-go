@@ -5,11 +5,11 @@
 //
 //	run-stockpicker-backtest -workdir . -start 2026-01-01 -end 2026-08-26 -asof 2026-08-26
 //
-// Flags: -workdir, -start, -end, -asof, -force, -dry-run (and optional
+// Flags: -workdir, -start, -end, -asof, -force, -dry-run, -backend (and optional
 // -universe to limit the scan). The job:
 //
 //  1. replays the PR 1c demo conditions (foreign-3d-net-buy,
-//     momentum-20d-positive) over point-in-time price bars (SQLite quotes)
+//     momentum-20d-positive) over point-in-time price bars (backend-aware quotes)
 //     and per-symbol T86 flows (data/state/stock_flows/<symbol>.json), and
 //  2. writes SignalOutcome rows into stock_signal_outcomes (idempotent:
 //     ON CONFLICT DO NOTHING), then aggregates per (symbol, source) into
@@ -27,18 +27,20 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
-// aggregationWindow is the rolling window label written into stock_win_rate.
-const aggregationWindow = "120d"
-
-// confidenceLevel is the Wilson interval confidence used for summaries.
-const confidenceLevel = 0.95
+const (
+	aggregationWindow         = "120d" // rolling window label
+	confidenceLevel           = 0.95   // Wilson interval confidence
+	defaultPostgresMigrations = "sql/migrations"
+)
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -47,7 +49,7 @@ func main() {
 }
 
 // run parses CLI flags and delegates to runWithPanel. panel==nil builds the
-// real point-in-time panel from the workdir (SQLite quotes + flow files).
+// real point-in-time panel from the workdir (backend-aware quotes + flow files).
 func run(args []string) error {
 	return runWithPanel(args, nil)
 }
@@ -62,6 +64,7 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	force := fs.Bool("force", false, "rerun even when outcomes already exist for the date range")
 	dryRun := fs.Bool("dry-run", false, "compute coverage and print it without persisting")
 	universe := fs.String("universe", "", "comma-separated symbols to scan (default: all symbols present in quotes)")
+	backendFlag := fs.String("backend", "", "quote backend: sqlite | postgres (default: ATLAS_STORE_BACKEND env, then DATABASE_URL heuristic)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -84,6 +87,8 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 		return fmt.Errorf("end %s before start %s", end.Format("2006-01-02"), start.Format("2006-01-02"))
 	}
 
+	backend := resolveBackend(*backendFlag)
+
 	// Parameters from the worktree's parameters.json (P0-3/P0-6: cost and
 	// min_samples come from config, never hard-coded).
 	paramsPath := filepath.Join(*workDir, "configs", "parameters.json")
@@ -97,26 +102,19 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	costRate := params.Stockpicker.Costs.RoundTripPct.Value
 	minSamples := params.Stockpicker.Calibration.MinSamples.Value
 
-	dbPath := filepath.Join(*workDir, "data", "state", "atlas.db")
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return fmt.Errorf("mkdir state dir: %w", err)
-	}
-	db, err := ledger.OpenSQLiteDB(dbPath)
+	outcomeDB, err := openOutcomeDB(*workDir)
 	if err != nil {
-		return fmt.Errorf("open ledger db %s: %w", dbPath, err)
+		return err
 	}
-	defer func() { _ = db.Close() }()
-	if err := ledger.InitSchema(db); err != nil {
-		return fmt.Errorf("init schema: %w", err)
-	}
+	defer func() { _ = outcomeDB.Close() }()
 
-	outStore := stockpicker.NewSignalOutcomeStore(db)
-	winStore := stockpicker.NewWinRateStore(db)
+	outStore := stockpicker.NewSignalOutcomeStore(outcomeDB)
+	winStore := stockpicker.NewWinRateStore(outcomeDB)
 
 	// Idempotency: same-day rerun skips (autobacktest snapshot_exists_skip
 	// pattern). -force bypasses the check.
 	if !*force && !*dryRun {
-		n, err := countExistingOutcomes(ctx, db, start, end)
+		n, err := countExistingOutcomes(ctx, outcomeDB, start, end)
 		if err != nil {
 			return fmt.Errorf("idempotency check: %w", err)
 		}
@@ -128,7 +126,11 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	}
 
 	if panel == nil {
-		panel, err = newRealPanel(ctx, db, *workDir)
+		quoteStore, err := openQuoteStore(ctx, backend, *workDir)
+		if err != nil {
+			return err
+		}
+		panel, err = newRealPanel(ctx, quoteStore, *workDir)
 		if err != nil {
 			return fmt.Errorf("build panel: %w", err)
 		}
@@ -178,6 +180,78 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	}
 	fmt.Printf("aggregated %d keys into stock_win_rate (%d eligible) -> %s\n", len(summaries), eligible, statePath)
 	return nil
+}
+
+func openOutcomeDB(workDir string) (*sql.DB, error) {
+	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir state dir: %w", err)
+	}
+	db, err := ledger.OpenSQLiteDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open ledger db %s: %w", dbPath, err)
+	}
+	if err := ledger.InitSchema(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	return db, nil
+}
+
+// openQuoteStore builds a QuoteStore for the requested backend.
+func openQuoteStore(ctx context.Context, backend, workDir string) (ledger.QuoteStore, error) {
+	switch backend {
+	case "postgres":
+		return openPostgresQuoteStore(ctx)
+	case "sqlite":
+		return openSQLiteQuoteStore(workDir)
+	default:
+		return nil, fmt.Errorf("unknown backend %q", backend)
+	}
+}
+
+func openSQLiteQuoteStore(workDir string) (ledger.QuoteStore, error) {
+	dbPath := filepath.Join(workDir, "data", "state", "atlas.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir state dir: %w", err)
+	}
+	db, err := ledger.OpenSQLiteDB(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite db %s: %w", dbPath, err)
+	}
+	if err := ledger.InitSchema(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("init schema: %w", err)
+	}
+	return ledger.NewSQLiteQuoteStore(db), nil
+}
+
+func openPostgresQuoteStore(ctx context.Context) (ledger.QuoteStore, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
+	}
+	pool, err := db.Init(ctx, dsn, defaultPostgresMigrations)
+	if err != nil {
+		return nil, fmt.Errorf("open postgres: %w", err)
+	}
+	ledger.SetPostgresPool(pool)
+	return ledger.NewPostgresQuoteStore(pool), nil
+}
+
+// resolveBackend picks the quote backend. Explicit -backend wins, then the
+// ATLAS_STORE_BACKEND env var, then a heuristic on DATABASE_URL.
+func resolveBackend(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	if v := os.Getenv("ATLAS_STORE_BACKEND"); v != "" {
+		return v
+	}
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" && strings.Contains(strings.ToLower(dsn), "postgres") {
+		return "postgres"
+	}
+	return "sqlite"
 }
 
 // parseDate parses YYYY-MM-DD; empty falls back to def (UTC, date only).

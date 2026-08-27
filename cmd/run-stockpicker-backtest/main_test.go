@@ -270,3 +270,66 @@ func TestRealPanel_FlowsFromFile(t *testing.T) {
 		t.Fatalf("missing symbol: err=%v flows=%v, want empty nil", err, missing)
 	}
 }
+
+// TestResolveBackend_Priority verifies the backend resolution order:
+// explicit flag > ATLAS_STORE_BACKEND > DATABASE_URL heuristic > sqlite default.
+func TestResolveBackend_Priority(t *testing.T) {
+	t.Setenv("ATLAS_STORE_BACKEND", "")
+	t.Setenv("DATABASE_URL", "")
+	if got := resolveBackend("postgres"); got != "postgres" {
+		t.Fatalf("flag value lost: got %q", got)
+	}
+
+	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
+	t.Setenv("DATABASE_URL", "")
+	if got := resolveBackend(""); got != "postgres" {
+		t.Fatalf("ATLAS_STORE_BACKEND ignored: got %q", got)
+	}
+
+	t.Setenv("ATLAS_STORE_BACKEND", "")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost/db")
+	if got := resolveBackend(""); got != "postgres" {
+		t.Fatalf("DATABASE_URL heuristic failed: got %q", got)
+	}
+
+	t.Setenv("DATABASE_URL", "sqlite://file.db")
+	if got := resolveBackend(""); got != "sqlite" {
+		t.Fatalf("non-postgres DSN should default to sqlite: got %q", got)
+	}
+
+	t.Setenv("DATABASE_URL", "")
+	if got := resolveBackend(""); got != "sqlite" {
+		t.Fatalf("empty env should default to sqlite: got %q", got)
+	}
+}
+
+// TestOpenSQLiteQuoteStore_CreatesSchema verifies the sqlite backend path
+// opens the DB, initializes the schema, and returns a usable QuoteStore.
+func TestOpenSQLiteQuoteStore_CreatesSchema(t *testing.T) {
+	dir := t.TempDir()
+	store, err := openSQLiteQuoteStore(dir)
+	if err != nil {
+		t.Fatalf("openSQLiteQuoteStore: %v", err)
+	}
+	if store == nil {
+		t.Fatal("expected non-nil QuoteStore")
+	}
+	// The schema file should now exist on disk.
+	if _, err := os.Stat(filepath.Join(dir, "data", "state", "atlas.db")); err != nil {
+		t.Fatalf("schema db not created: %v", err)
+	}
+}
+
+// TestRunWithPanel_BackendFlag exercises the full CLI with the -backend flag
+// set to sqlite. The synthetic panel bypasses the real quote store, so this
+// only checks that the flag is accepted and the outcome DB path is wired.
+func TestRunWithPanel_BackendFlag(t *testing.T) {
+	wd, err := runCLI(t, synthPanel(t), "-backend", "sqlite")
+	if err != nil {
+		t.Fatalf("run with -backend sqlite: %v", err)
+	}
+	db := openCLITestDB(t, wd)
+	if n := outcomeCount(t, db); n == 0 {
+		t.Fatal("expected outcomes after -backend sqlite run")
+	}
+}
