@@ -10,26 +10,35 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-// cleanupLedgerTestRows removes pgsqltest- prefixed rows from the four
-// ledger tables so tests stay isolated from migrated production data.
+// cleanupLedgerTestRows removes pgsqltest- prefixed rows from the ledger
+// tables so tests stay isolated from migrated production data.
+//
+// Cleanup is per-table with only the columns each table actually has. The
+// previous combined WHERE mixed `agent_id` into tables that lack it (trades,
+// session_summaries, human_interventions, experiments); those DELETEs
+// silently errored and leaked rows across runs (M8: "expected 2 trades,
+// got 4"). recommendation_outcomes / screening_rejects also match agent_id
+// because RecordOutcomes writes global rows with session_id=” (A01).
 func cleanupLedgerTestRows(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	ctx := context.Background()
-	// A01: RecordOutcomes now writes global rows with session_id='' (was
-	// o.Window), so cleanup must match by agent_id as well as session_id.
-	for _, tbl := range []string{
-		"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
-	} {
-		_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
+	cleanups := []struct{ table, clause string }{
+		{"recommendation_outcomes", "session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'"},
+		{"screening_rejects", "session_id LIKE 'pgsqltest-%' OR agent_id LIKE 'pgsqltest-%'"},
+		{"session_summaries", "session_id LIKE 'pgsqltest-%'"},
+		{"trades", "session_id LIKE 'pgsqltest-%'"},
+		{"human_interventions", "session_id LIKE 'pgsqltest-%' OR target_agent_id LIKE 'pgsqltest-%'"},
+		{"experiments", "experiment_id LIKE 'pgsqltest-%' OR session_id LIKE 'pgsqltest-%'"},
 	}
-	t.Cleanup(func() {
+	run := func() {
 		ctx := context.Background()
-		for _, tbl := range []string{
-			"recommendation_outcomes", "screening_rejects", "session_summaries", "trades", "human_interventions", "experiments",
-		} {
-			_, _ = pool.Exec(ctx, "DELETE FROM "+tbl+" WHERE session_id LIKE 'pgsqltest-%' OR session_id = 'pgsqltest-global' OR agent_id LIKE 'pgsqltest-%'")
+		for _, c := range cleanups {
+			if _, err := pool.Exec(ctx, "DELETE FROM "+c.table+" WHERE "+c.clause); err != nil {
+				t.Errorf("cleanup delete from %s: %v", c.table, err)
+			}
 		}
-	})
+	}
+	run()
+	t.Cleanup(run)
 }
 
 func TestPostgresLedgerStore_OutcomeRoundTrip(t *testing.T) {

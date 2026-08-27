@@ -3,13 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/testdb"
 )
 
 // compile-time assertions
@@ -216,16 +215,8 @@ func TestNewRealPanel_WithoutListerRequiresUniverse(t *testing.T) {
 // real PostgreSQL quotes table when DATABASE_URL is available. It skips
 // cleanly when postgres is unreachable, keeping CI green on sqlite-only runs.
 func TestBars_PostgresBackend(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://atlas:atlas_dev_pwd_2026@127.0.0.1:5432/atlas?sslmode=prefer"
-	}
 	ctx := context.Background()
-	pool, err := db.Init(ctx, dsn, "../../sql/migrations")
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	defer pool.Close()
+	pool := testdb.Pool(t, "../../sql/migrations")
 
 	// Clean up test rows on both sides of the run.
 	defer func() {
@@ -258,16 +249,8 @@ func TestBars_PostgresBackend(t *testing.T) {
 // TestQuoteSymbols_Postgres exercises QuoteSymbols on a real PostgreSQL quotes
 // table when DATABASE_URL is available.
 func TestQuoteSymbols_Postgres(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://atlas:atlas_dev_pwd_2026@127.0.0.1:5432/atlas?sslmode=prefer"
-	}
 	ctx := context.Background()
-	pool, err := db.Init(ctx, dsn, "../../sql/migrations")
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	defer pool.Close()
+	pool := testdb.Pool(t, "../../sql/migrations")
 
 	defer func() {
 		_, _ = pool.Exec(ctx, "DELETE FROM quotes WHERE symbol LIKE 'rspgtest-%'")

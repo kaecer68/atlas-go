@@ -2,29 +2,20 @@ package ledger
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kaecer68/atlas-go/internal/db"
+	"github.com/kaecer68/atlas-go/internal/testdb"
 )
 
-// connectTestPG connects to PostgreSQL (DATABASE_URL or default), runs
-// migrations, and returns the pool. Skips when postgres is unavailable.
+// connectTestPG connects to PostgreSQL (DATABASE_URL only, no hardcoded DSN),
+// runs migrations, and returns the pool. See testdb.Pool for the CI/local
+// skip policy.
 func connectTestPG(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://atlas:atlas_dev_pwd_2026@127.0.0.1:5432/atlas?sslmode=prefer"
-	}
-	pool, err := db.Init(context.Background(), dsn, "../../sql/migrations")
-	if err != nil {
-		t.Skipf("Skipping postgres integration test: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return testdb.Pool(t, "../../sql/migrations")
 }
 
 // cleanupHistoricalTables removes all historical rows so tests are isolated.

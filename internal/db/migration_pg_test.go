@@ -1,6 +1,6 @@
 //go:build integration
 
-package db
+package db_test
 
 import (
 	"context"
@@ -14,6 +14,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+
+	"github.com/kaecer68/atlas-go/internal/testdb"
 )
 
 // TestMigrationsUpDownUp applies every migration (up to latest), rolls all
@@ -26,7 +28,7 @@ import (
 // down/up cycle cannot race with, or wipe, other integration tests sharing
 // the CI postgres service.
 func TestMigrationsUpDownUp(t *testing.T) {
-	baseURL := testDatabaseURL(t)
+	baseURL := testdb.URL(t)
 
 	dbName := fmt.Sprintf("atlas_migration_gate_%d", time.Now().UnixNano())
 	testURL, err := withDatabaseName(baseURL, dbName)
@@ -34,7 +36,7 @@ func TestMigrationsUpDownUp(t *testing.T) {
 		t.Fatalf("derive migration test database URL: %v", err)
 	}
 
-	admin := connectPool(t, baseURL)
+	admin := testdb.Connect(t, baseURL)
 	t.Cleanup(admin.Close)
 
 	if _, err := admin.Exec(context.Background(), "CREATE DATABASE "+quoteIdent(dbName)); err != nil {
@@ -93,7 +95,7 @@ func newMigrationGateInstance(t *testing.T, dsn string) *migrate.Migrate {
 // up/down/up cycle (i.e. migrations 000018 and 000019 both applied).
 func assertTablesExist(t *testing.T, dsn string, tables ...string) {
 	t.Helper()
-	pool := connectPool(t, dsn)
+	pool := testdb.Connect(t, dsn)
 	defer pool.Close()
 
 	ctx := context.Background()

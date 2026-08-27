@@ -8,23 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/db"
+	"github.com/kaecer68/atlas-go/internal/testdb"
 )
-
-// testPGURL mirrors internal/repository/dual_write_test_helper_test.go.
-const testPGURL = "postgres://atlas:atlas@localhost:5432/atlas?sslmode=disable"
 
 const testMigrationsPath = "../../sql/migrations"
 
-// connectLivenessTestDB connects to PostgreSQL, runs migrations (including
-// 000016_task_liveness), and skips the test when PG is unavailable.
+// connectLivenessTestDB connects to PostgreSQL (DATABASE_URL only, no
+// hardcoded DSN), runs migrations (including 000016_task_liveness), and
+// returns the store. See testdb.Pool for the CI/local skip policy.
 func connectLivenessTestDB(t *testing.T) *Store {
 	t.Helper()
-	pool, err := db.Init(context.Background(), testPGURL, testMigrationsPath)
-	if err != nil {
-		t.Skipf("Skipping integration test: PostgreSQL not available (%v). Start with: docker compose up -d postgres", err)
-	}
-	t.Cleanup(pool.Close)
+	pool := testdb.Pool(t, testMigrationsPath)
 	return NewStore(pool)
 }
 
