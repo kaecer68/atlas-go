@@ -226,6 +226,40 @@ func InitSchema(db *sql.DB) error {
 		metadata_json TEXT
 	);
 
+	-- PR 1b: stockpicker signal outcomes and per-symbol/source win-rate summaries.
+	-- These tables are shared between SQLite (ledger InitSchema) and PostgreSQL
+	-- (sql/migrations/000018/000019). Columns use TEXT/REAL/INTEGER so the same
+	-- DDL works in both dialects.
+	CREATE TABLE IF NOT EXISTS stock_signal_outcomes (
+		symbol TEXT NOT NULL,
+		trigger_date TEXT NOT NULL,
+		source TEXT NOT NULL,
+		forward_return REAL,
+		net_forward_return REAL,
+		hit INTEGER,
+		cost_rate REAL,
+		regime TEXT,
+		created_at TEXT NOT NULL,
+		UNIQUE(symbol, trigger_date, source)
+	);
+
+	CREATE TABLE IF NOT EXISTS stock_win_rate (
+		symbol TEXT NOT NULL,
+		source TEXT NOT NULL,
+		window TEXT NOT NULL,
+		observations INTEGER NOT NULL,
+		hits INTEGER NOT NULL,
+		win_rate REAL NOT NULL,
+		wilson_lower REAL,
+		wilson_upper REAL,
+		confidence REAL,
+		calibration_status TEXT NOT NULL,
+		net_cost_rate REAL,
+		avg_forward_return REAL,
+		updated_at TEXT NOT NULL,
+		UNIQUE(symbol, source, window)
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_outcomes_session_id ON outcomes(session_id);
 	CREATE INDEX IF NOT EXISTS idx_outcomes_symbol ON outcomes(symbol);
 	CREATE INDEX IF NOT EXISTS idx_screening_rejects_session_id ON screening_rejects(session_id);
