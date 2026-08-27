@@ -270,44 +270,65 @@ func TestLoad_FugleAPIKeyPriority(t *testing.T) {
 	})
 }
 
-func TestLoad_EnvFile(t *testing.T) {
+func TestLoadEnvFile_LoadsValues(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
 
 	// 清除對應環境變數，確保由 .env 檔填入
 	t.Setenv("ATLAS_MARKET_DATA_PROVIDER", "")
 	t.Setenv("ATLAS_REPLAY_MODE", "")
 
 	envContent := "ATLAS_MARKET_DATA_PROVIDER=from-env-file\nATLAS_REPLAY_MODE=weekly\n"
-	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0o644); err != nil {
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
 
-	cfg := Load()
+	loadEnvFile(path)
 
-	if cfg.MarketDataProvider != "from-env-file" {
-		t.Errorf("MarketDataProvider = %q, want from-env-file", cfg.MarketDataProvider)
+	if got := os.Getenv("ATLAS_MARKET_DATA_PROVIDER"); got != "from-env-file" {
+		t.Errorf("ATLAS_MARKET_DATA_PROVIDER = %q, want from-env-file", got)
 	}
-	if cfg.ReplayMode != "weekly" {
-		t.Errorf("ReplayMode = %q, want weekly", cfg.ReplayMode)
+	if got := os.Getenv("ATLAS_REPLAY_MODE"); got != "weekly" {
+		t.Errorf("ATLAS_REPLAY_MODE = %q, want weekly", got)
 	}
 }
 
-func TestLoad_EnvFileSkipsComments(t *testing.T) {
+func TestLoadEnvFile_SkipsComments(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
 
 	t.Setenv("ATLAS_PRIMARY_MARKET", "")
 
 	// 確保帶 # 的行不被當作設定值解析
 	envContent := "# This is a comment\nATLAS_PRIMARY_MARKET=JP\n"
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte(envContent), 0o644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	loadEnvFile(path)
+	if got := os.Getenv("ATLAS_PRIMARY_MARKET"); got != "JP" {
+		t.Errorf("ATLAS_PRIMARY_MARKET = %q, want JP", got)
+	}
+}
+
+// TestLoad_SkipsEnvFilesUnderTest is the M7 regression guard: Load() must
+// never read .env or ~/.config/atlas-go/.env while running under `go test`,
+// so a developer's local config cannot flip tests onto a postgres backend or
+// leak secrets into test logs.
+func TestLoad_SkipsEnvFilesUnderTest(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	t.Setenv("ATLAS_PRIMARY_MARKET", "")
+
+	envContent := "ATLAS_PRIMARY_MARKET=JP\n"
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0o644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
 
 	cfg := Load()
-	if cfg.PrimaryMarket != "JP" {
-		t.Errorf("PrimaryMarket = %q, want JP", cfg.PrimaryMarket)
+	if cfg.PrimaryMarket == "JP" {
+		t.Errorf("Load() read .env under test; config loading must be hermetic (M7)")
 	}
 }
 

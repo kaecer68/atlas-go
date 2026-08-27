@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -83,10 +84,16 @@ type Config struct {
 }
 
 func Load() Config {
-	// 加载 .env 文件 — 优先使用 ATLAS_ENV_FILE 指定的路径，
-	// 然后依次尝试 .env、~/.config/atlas-go/.env
-	loadEnvFile(resolveEnvFilePath())
-	loadUserEnvFile()
+	// Tests must be hermetic: never load .env or ~/.config/atlas-go/.env
+	// (M7). A developer's local user env file (e.g. ATLAS_STORE_BACKEND=
+	// postgres, API keys) must not leak into `go test` process state and
+	// flip tests onto a postgres backend or expose secrets in logs.
+	if !testing.Testing() {
+		// 加载 .env 文件 — 优先使用 ATLAS_ENV_FILE 指定的路径，
+		// 然后依次尝试 .env、~/.config/atlas-go/.env
+		loadEnvFile(resolveEnvFilePath())
+		loadUserEnvFile()
+	}
 
 	cfg := Config{
 		WorkDir:                    envOr("ATLAS_WORK_DIR", "."),

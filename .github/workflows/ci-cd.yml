@@ -219,6 +219,18 @@ jobs:
     - name: Run agents.md drift check
       run: bash scripts/ci/check_agents_md_drift.sh
 
+  # PG migration SQL static gate — catches unquoted PostgreSQL reserved words
+  # (window/user/order/...) and bare REAL column types before they reach
+  # production. No database service needed; always runs (never skipped).
+  db-migration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check migration SQL for reserved words and bare REAL
+      run: bash scripts/ci/check-migration-sql.sh
+
   # Security Scan
   security:
     needs: [changes]
@@ -473,6 +485,11 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379
         DATABASE_URL: postgres://atlas:atlas_test@localhost:5432/atlas_test?sslmode=disable
+        # Hermeticity (M7): point ATLAS_ENV_FILE at /dev/null so any spawned
+        # binary never reads a stray .env. In-process tests are additionally
+        # guarded by testing.Testing() in config.Load(). Integration tests
+        # must read DATABASE_URL/REDIS_URL only.
+        ATLAS_ENV_FILE: /dev/null
       run: |
         go test -v -tags=integration ./...
 
@@ -528,7 +545,7 @@ jobs:
   # Treats skipped jobs as acceptable, which happens for documentation-only PRs.
   release-check:
     runs-on: ubuntu-latest
-    needs: [routes, contracts, build, lint, test-cmd-atlas]
+    needs: [routes, contracts, build, lint, test-cmd-atlas, db-migration-check]
     if: always()
     steps:
     - name: Gate decision
@@ -541,6 +558,7 @@ jobs:
           "build:${{ needs.build.result }}"
           "lint:${{ needs.lint.result }}"
           "test-cmd-atlas:${{ needs.test-cmd-atlas.result }}"
+          "db-migration-check:${{ needs.db-migration-check.result }}"
         )
         FAILED=0
         for entry in "${RESULTS[@]}"; do
@@ -727,7 +745,7 @@ jobs:
       run: docker compose down -v
   notify:
     runs-on: ubuntu-latest
-    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, commitlint, governance, operations, routes, contracts, release-check]
+    needs: [build, test-cmd-atlas, lint, security, integration, generate, agents-md-drift, db-migration-check, commitlint, governance, operations, routes, contracts, release-check]
     if: always() && github.event_name == 'pull_request'
     permissions:
       pull-requests: write
@@ -763,6 +781,7 @@ jobs:
         | integration | ${{ needs.integration.result }} |
         | generate | ${{ needs.generate.result }} |
         | agents-md-drift | ${{ needs.agents-md-drift.result }} |
+        | db-migration-check | ${{ needs.db-migration-check.result }} |
         | commitlint | ${{ needs.commitlint.result }} |
         | governance | ${{ needs.governance.result }} |
         | operations | ${{ needs.operations.result }} |
