@@ -223,6 +223,39 @@ func (t *TWSECapitalFlowProvider) FetchSymbolFlow(ctx context.Context, symbol, d
 	return SymbolFlow{}, fmt.Errorf("symbol %s not found for %s", symbol, dateStr)
 }
 
+// FetchDateFlows retrieves institutional investor flows for every symbol on
+// a given trading date (TWSE T86). One request fetches the whole day.
+//
+// The returned slice holds one SymbolFlow per listed security, in API row
+// order. Rows that are too short to carry the T86 institutional columns
+// (< 12 fields) or that have an empty symbol (header / grand-total rows)
+// are skipped. Values follow the provider convention: TWSE raw share counts
+// divided by 1e3 (see SymbolFlow field docs).
+//
+// A non-trading day (holiday / data not yet published) surfaces as an
+// error wrapping ErrNoData; callers can errors.Is it to skip such days.
+func (t *TWSECapitalFlowProvider) FetchDateFlows(ctx context.Context, dateStr string) ([]SymbolFlow, error) {
+	rows, err := t.fetchDateRows(ctx, dateStr)
+	if err != nil {
+		return nil, err
+	}
+	flows := make([]SymbolFlow, 0, len(rows))
+	for _, row := range rows {
+		if len(row) < 12 || strings.TrimSpace(row[0]) == "" {
+			continue
+		}
+		flows = append(flows, SymbolFlow{
+			Symbol:             row[0],
+			Name:               row[1],
+			ForeignInvestorNet: parseTWDVolume(row[4]) / 1e3,
+			DomesticFundNet:    parseTWDVolume(row[10]) / 1e3,
+			DealerNet:          parseTWDVolume(row[11]) / 1e3,
+			Date:               dateStr,
+		})
+	}
+	return flows, nil
+}
+
 func (t *TWSECapitalFlowProvider) fetchLatestTradingDay(ctx context.Context) (TWSECapitalFlow, error) {
 	now := time.Now().UTC()
 	// Try up to 7 days back to find the most recent trading day with data.
@@ -302,7 +335,10 @@ func (t *TWSECapitalFlowProvider) fetchDateRows(ctx context.Context, dateStr str
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	if apiResp.Stat != "OK" || len(apiResp.Data) == 0 {
-		return nil, fmt.Errorf("TWSE API returned no data: %s", apiResp.Stat)
+		// Wrap ErrNoData (P1-9 taxonomy): TWSE answered but has nothing for
+		// this day — holiday, weekend, or data not yet published. Backfill
+		// callers use errors.Is to skip such days instead of failing.
+		return nil, fmt.Errorf("TWSE API returned no data: %s: %w", apiResp.Stat, ErrNoData)
 	}
 	return apiResp.Data, nil
 }
