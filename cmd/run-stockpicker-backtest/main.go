@@ -111,8 +111,16 @@ func runWithPanel(args []string, panel stockpicker.PanelSource) error {
 	if *expectDB != "" && backend != "postgres" {
 		return fmt.Errorf("-expect-db %q requires the postgres backend (resolved %s); outcomes are job-local sqlite and need no db guard", *expectDB, backend)
 	}
+	if backend == "postgres" && *expectDB == "" {
+		// Fail loudly before any connection: the guard is only meaningful if it
+		// is mandatory. An opt-in guard leaves the M12 failure mode reachable
+		// via ATLAS_STORE_BACKEND=postgres + a stray DATABASE_URL.
+		return fmt.Errorf("postgres backend requires -expect-db <dbname> to assert the migration target (e.g. -expect-db atlas); re-run with -expect-db to proceed")
+	}
 	if backend == "postgres" {
-		if err := guardDatabaseTarget(ctx, os.Getenv("DATABASE_URL"), *expectDB); err != nil {
+		guardCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := guardDatabaseTarget(guardCtx, os.Getenv("DATABASE_URL"), *expectDB); err != nil {
 			return err
 		}
 	}

@@ -330,6 +330,22 @@ func TestExpectDB_RequiresPostgres(t *testing.T) {
 	}
 }
 
+// TestExpectDB_MissingOnPostgres (B1): postgres backend without -expect-db
+// must fail loudly before any connection — an opt-in guard leaves the M12
+// failure mode reachable via ATLAS_STORE_BACKEND=postgres + stray DATABASE_URL.
+func TestExpectDB_MissingOnPostgres(t *testing.T) {
+	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
+	t.Setenv("DATABASE_URL", "postgres://unreachable")
+	wd := writeTestWorkdir(t)
+	err := runWithPanel([]string{"-workdir", wd, "-start", "2026-01-05", "-end", "2026-01-30", "-asof", "2026-02-13", "-universe", "2330"}, synthPanel(t))
+	if err == nil {
+		t.Fatal("expected error: postgres backend without -expect-db")
+	}
+	if !strings.Contains(err.Error(), "-expect-db") {
+		t.Fatalf("error = %v, want -expect-db mention", err)
+	}
+}
+
 // TestOpenSQLiteQuoteStore_CreatesSchema verifies the sqlite backend path
 // opens the DB, initializes the schema, and returns a usable QuoteStore.
 func TestOpenSQLiteQuoteStore_CreatesSchema(t *testing.T) {
