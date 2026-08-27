@@ -748,5 +748,11 @@ func (p *ParametersConfig) Validate() error {
 		return fmt.Errorf("narrative taiwan stress weights must sum to 1.0, got %.3f", stressWeights)
 	}
 
+	if p.Stockpicker.Costs.RoundTripPct.Value < 0 {
+		return fmt.Errorf("stockpicker.costs.round_trip_pct (%.5f) must be non-negative", p.Stockpicker.Costs.RoundTripPct.Value)
+	}
+	if p.Stockpicker.Calibration.MinSamples.Value < 1 {
+		return fmt.Errorf("stockpicker.calibration.min_samples (%d) must be >= 1", p.Stockpicker.Calibration.MinSamples.Value)
+	}
 	return nil
 }

@@ -1158,6 +1158,28 @@ type CapitalflowParameters struct {
 	ResonanceCoefficientMin ParameterMetadata[float64] `json:"resonance_coefficient_min"`
 }
 
+// StockpickerParameters holds tunable parameters for the stock-picking
+// backtest/aggregation subsystem (PR 1c). Values are heuristic until the
+// backtest aggregation job produces enough samples to calibrate them
+// (product-positioning §8 calibration philosophy).
+type StockpickerParameters struct {
+	Costs       StockpickerCostsParameters       `json:"costs"`
+	Calibration StockpickerCalibrationParameters `json:"calibration"`
+}
+
+// StockpickerCostsParameters holds trading-cost assumptions used by NetHit.
+type StockpickerCostsParameters struct {
+	// RoundTripPct is the round-trip transaction cost rate (Taiwan:
+	// 0.1425% commission × 2 + 0.3% sell-side transaction tax ≈ 0.585%).
+	RoundTripPct ParameterMetadata[float64] `json:"round_trip_pct"`
+}
+
+// StockpickerCalibrationParameters holds the sample-size gate for
+// calibration status (observations < min_samples → calibrating).
+type StockpickerCalibrationParameters struct {
+	MinSamples ParameterMetadata[int] `json:"min_samples"`
+}
+
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.
 type RiskGateParameters struct {
 	PreTrade  PreTradeGateParameters  `json:"pre_trade"`
@@ -1406,6 +1428,7 @@ type ParametersConfig struct {
 	Reporting            ReportingParameters            `json:"reporting"`
 	SmartUniverse        SmartUniverseConfig            `json:"smart_universe,omitempty"`
 	ForwardReturn        ForwardReturnParameters        `json:"forward_return,omitempty"`
+	Stockpicker          StockpickerParameters          `json:"stockpicker,omitempty"`
 }
 
 // TaxParameters holds tunable Taiwan tax rates with full provenance tracking.

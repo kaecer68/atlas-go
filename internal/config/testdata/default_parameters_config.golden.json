@@ -5180,6 +5180,23 @@
       "value": 0.15
     }
   },
+  "stockpicker": {
+    "calibration": {
+      "min_samples": {
+        "rationale": "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
+        "source": "heuristic",
+        "value": 30
+      }
+    },
+    "costs": {
+      "round_trip_pct": {
+        "rationale": "Taiwan round-trip cost: commission 0.1425% ×2 + sell-side transaction tax 0.3% ≈ 0.585%. NetHit uses this to avoid systematically overstating win rates (k3 review R1 / P0-3).",
+        "source": "heuristic",
+        "todo": "Calibrate: after backtest aggregation produces enough samples, fit per-window cost from slippage/impact data.",
+        "value": 0.00585
+      }
+    }
+  },
   "strategy": {
     "fallback_strategy": {
       "rationale": "Default strategy when no clear winner; momentum has broad applicability",

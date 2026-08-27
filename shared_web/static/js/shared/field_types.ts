@@ -2746,6 +2746,7 @@ export interface ParametersConfig {
   reporting: ReportingParameters;
   smart_universe?: SmartUniverseConfig;
   forward_return?: ForwardReturnParameters;
+  stockpicker?: StockpickerParameters;
 }
 
 export interface PerformanceReport {
@@ -3958,6 +3959,19 @@ export interface StockInfo {
   stock_name: string;
   industry_category: string;
   type: string;
+}
+
+export interface StockpickerCalibrationParameters {
+  min_samples: string;
+}
+
+export interface StockpickerCostsParameters {
+  round_trip_pct: string;
+}
+
+export interface StockpickerParameters {
+  costs: StockpickerCostsParameters;
+  calibration: StockpickerCalibrationParameters;
 }
 
 export interface StrategiesListResponse {

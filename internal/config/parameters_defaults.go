@@ -38,6 +38,45 @@ func DefaultParametersConfig() *ParametersConfig {
 		Reporting:            deriveDefaultReportingConfig(),
 		SmartUniverse:        defaultSmartUniverseParams(),
 		ForwardReturn:        defaultForwardReturnParameters(),
+		Stockpicker:          defaultStockpickerParameters(),
+	}
+}
+
+// defaultStockpickerParameters returns the canonical defaults for the
+// stockpicker backtest/aggregation subsystem (PR 1c). The round-trip cost
+// follows the Taiwan statutory schedule (commission 0.1425% × 2 + sell-side
+// transaction tax 0.3% ≈ 0.585%); min_samples mirrors the capitalflow
+// 30-sample calibration gate (forces.go H-CF-02).
+func defaultStockpickerParameters() StockpickerParameters {
+	return StockpickerParameters{
+		Costs: StockpickerCostsParameters{
+			RoundTripPct: ParameterMetadata[float64]{
+				Value:     0.00585,
+				Rationale: "Taiwan round-trip cost: commission 0.1425% ×2 + sell-side transaction tax 0.3% ≈ 0.585%. NetHit uses this to avoid systematically overstating win rates (k3 review R1 / P0-3).",
+				Source:    SourceHeuristic,
+				Todo:      "Calibrate: after backtest aggregation produces enough samples, fit per-window cost from slippage/impact data.",
+			},
+		},
+		Calibration: StockpickerCalibrationParameters{
+			MinSamples: ParameterMetadata[int]{
+				Value:     30,
+				Rationale: "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
+				Source:    SourceHeuristic,
+			},
+		},
+	}
+}
+
+// mergeStockpickerDefaults fills missing Stockpicker fields from the
+// canonical defaults after JSON unmarshal so old saved configs (that predate
+// the stockpicker section) still resolve to the documented values.
+func mergeStockpickerDefaults(cfg *ParametersConfig) {
+	def := defaultStockpickerParameters()
+	if cfg.Stockpicker.Costs.RoundTripPct.Rationale == "" {
+		cfg.Stockpicker.Costs = def.Costs
+	}
+	if cfg.Stockpicker.Calibration.MinSamples.Rationale == "" {
+		cfg.Stockpicker.Calibration = def.Calibration
 	}
 }
 

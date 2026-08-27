@@ -13,19 +13,19 @@ import (
 // schema. The third calibration state, CalibrationDegraded, is written by
 // aggregation jobs when IS/OOS drift or overfitting is detected.
 type StockWinRateSummary struct {
-	Symbol            string
-	Source            string
-	Window            string
-	Observations      int
-	Hits              int
-	WinRate           float64
-	WilsonLower       float64
-	WilsonUpper       float64
-	Confidence        float64
-	CalibrationStatus CalibrationStatus
-	NetCostRate       float64
-	AvgForwardReturn  float64
-	UpdatedAt         string // ISO-8601
+	Symbol            string            `json:"symbol"`
+	Source            string            `json:"source"`
+	Window            string            `json:"window"`
+	Observations      int               `json:"observations"`
+	Hits              int               `json:"hits"`
+	WinRate           float64           `json:"win_rate"`
+	WilsonLower       float64           `json:"wilson_lower"`
+	WilsonUpper       float64           `json:"wilson_upper"`
+	Confidence        float64           `json:"confidence"`
+	CalibrationStatus CalibrationStatus `json:"calibration_status"`
+	NetCostRate       float64           `json:"net_cost_rate"`
+	AvgForwardReturn  float64           `json:"avg_forward_return"`
+	UpdatedAt         string            `json:"updated_at"` // ISO-8601
 }
 
 // WinRateStore is a thin SQLite-backed wrapper around stock_win_rate.

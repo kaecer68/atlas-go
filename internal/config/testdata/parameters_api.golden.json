@@ -1213,7 +1213,8 @@
         "SectorAllocation SectorAllocationConfig",
         "Reporting ReportingParameters",
         "SmartUniverse SmartUniverseConfig",
-        "ForwardReturn ForwardReturnParameters"
+        "ForwardReturn ForwardReturnParameters",
+        "Stockpicker StockpickerParameters"
       ],
       "kind": "struct",
       "name": "ParametersConfig"
@@ -1520,6 +1521,28 @@
       ],
       "kind": "struct",
       "name": "SmartUniverseConfig"
+    },
+    {
+      "fields": [
+        "MinSamples ParameterMetadata[int]"
+      ],
+      "kind": "struct",
+      "name": "StockpickerCalibrationParameters"
+    },
+    {
+      "fields": [
+        "RoundTripPct ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "StockpickerCostsParameters"
+    },
+    {
+      "fields": [
+        "Costs StockpickerCostsParameters",
+        "Calibration StockpickerCalibrationParameters"
+      ],
+      "kind": "struct",
+      "name": "StockpickerParameters"
     },
     {
       "fields": [
