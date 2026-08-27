@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-08-26
+updated: 2026-08-28
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -21,6 +21,9 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Replay 格式錯誤** | ledger | Replay 為 **JSONL**（每行獨立 JSON 物件），不是 JSON array。 |
 | **Session 日期不可信賴 `RecordedAt`** | domain | `RecordedAt` 是計算完成時間。排序/比較請以 `SessionID` 中的交易日為準。 |
 | **JSON tag 大小寫錯誤** | domain / API | API handler 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase 而 JSON 實際是 snake_case，unmarshal 會靜默失敗。 |
+| **PostgreSQL 保留字** | data / migrations | migration 的欄位/表名不得用未加引號的 PostgreSQL 保留字（`window`/`user`/`order`/`select`/…）；SQLite 接受但 PG 報 `SQLSTATE 42601`（實例：000019 `stock_win_rate.rolling_window` 因不能用 `window` 而改名）。新增欄位時先用 `SELECT * FROM pg_get_keywords() WHERE catcode = 'R'` 對照或參考 `docs/reference/traps.md`。 |
+| **REAL vs DOUBLE PRECISION** | data / migrations | SQLite `REAL` = 8-byte double；PostgreSQL `REAL` = float4 單精度。migration 中任何 float 語意欄必須用 `DOUBLE PRECISION`（兩方言皆接受；SQLite 仍存 REAL）。禁止在 PG 語意欄用 `REAL`，避免無聲精度損失。 |
+| **migration 是雙方言 DDL** | data / migrations | `sql/migrations/*.up.sql` 同時被 SQLite 測試與 production PG 執行，必須兩方言皆合法。不要在 migration 裡寫 `CREATE EXTENSION`（PG-only）或 SQLite-only pragma；這類東西應該在啟動腳本或測試 setup 處理。 |
 | **MCP auth-free prefix paths 必須同步兩處** | apigateway / monitoring | `/api/market/` 等 auth-free prefix path **必須同時**寫進 `internal/monitoring/api/shared/handler.go` 的 `authFreePrefixPaths` slice **與** `cmd/atlas/main.go` 的 `isPublicPath()` switch case。任一處遺漏都會導致 `curl /api/market/explain_market_move` 回 401（PR #1269 修復 E-01~E-06 四個端點路徑掛一漏萬問題）。`authFreePrefixPaths` 供 `Adapt()` 與直接 wrap `AuthMiddleware` 的呼叫端使用；`isPublicPath` 是 top-level mux 最終繞過層，兩者語意不同但需保持同步。 |
 | **Scorecard OOS 欄位遺漏同步** | domain / ledger / monitoring | `domain.Scorecard` 新增 OOS 欄位（`rolling_sharpe_trend` 等）時，必須同步更新 `ledger.BuildScorecards()` 計算邏輯、`internal/monitoring/dashboard_api.go` 的 response mapping、`web-ui/js/dashboard.js` 的前端渲染，以及 `internal/web/field_types.go` 的 `go generate` 自動生成。遺漏任何一環會導致 OOS 欄位在 API 或前端消失。 |
 | **JSONL ledger append 必須包在 Mutex 內** | ledger | `internal/ledger/event_flow_prediction_store.go` 的 `AppendPrediction` 採 read-modify-write 整段進 `sync.Mutex`（line 61-62）。**不要**為了效能改寫成 append-only mode(`os.O_APPEND`) — append-only 模式在 concurrent write 仍可能交錯，且無法實作 1000 筆 FIFO 上限。若未來引入 rotation，rotation 邏輯也必須在 lock 下跑（reader thread 不能在 rename 進行中讀到一半的檔案）。並發防護由 `TestJSONLEventFlowPredictionStore_ConcurrentAppendsNoLoss` 守住（PR #1129，5 goroutine × 50 append，驗證 250 筆唯一 `PredictedAt`）— 跑 `go test -race` 才會抓出 lock-not-held 的 race detector hit。 |
