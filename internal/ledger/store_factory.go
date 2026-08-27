@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 var (
@@ -54,8 +55,37 @@ func getSharedSQLiteDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// ResolveStoreBackend normalizes a store backend flag value into one of the
+// supported backend identifiers ("jsonl", "sqlite", "postgres"). An empty
+// value preserves the legacy default (JSONL) and logs a warning; any other
+// unrecognized value returns an error so a misconfigured backend fails loudly
+// at startup instead of silently falling back to JSONL. It is shared by all
+// ledger store factories and intended for cross-command reuse (WP5).
+func ResolveStoreBackend(flagValue string) (string, error) {
+	switch flagValue {
+	case "":
+		logging.Warn("ledger_store_factory", "store_backend_empty_default_jsonl",
+			logging.FStr("resolved_backend", "jsonl"))
+		return "jsonl", nil
+	case "jsonl":
+		return "jsonl", nil
+	case "sqlite":
+		return "sqlite", nil
+	case "postgres":
+		return "postgres", nil
+	default:
+		return "", fmt.Errorf("unknown store backend %q (supported: jsonl, sqlite, postgres)", flagValue)
+	}
+}
+
 func NewFullStore(cfg config.Config) (FullStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("fullstore: %w", err)
+	}
+	switch backend {
+	case "jsonl":
+		return newStore(cfg.LedgerDir), nil
 	case "sqlite":
 		return newSQLiteFullStore(cfg.SQLitePath)
 	case "postgres":
@@ -64,7 +94,7 @@ func NewFullStore(cfg config.Config) (FullStore, error) {
 		}
 		return NewPostgresLedgerStore(postgresPool), nil
 	default:
-		return newStore(cfg.LedgerDir), nil
+		return nil, fmt.Errorf("fullstore: unexpected store backend %q", backend)
 	}
 }
 
@@ -236,7 +266,13 @@ func (s *SQLiteStore) RecordMutationBrief(windowID string, brief domain.Mutation
 }
 
 func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("outcomes: %w", err)
+	}
+	switch backend {
+	case "jsonl":
+		return newStore(cfg.LedgerDir), nil
 	case "sqlite":
 		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
@@ -252,7 +288,7 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 		}
 		return NewPostgresLedgerStore(postgresPool), nil
 	default:
-		return newStore(cfg.LedgerDir), nil
+		return nil, fmt.Errorf("outcomes: unexpected store backend %q", backend)
 	}
 }
 
@@ -263,19 +299,34 @@ func NewOutcomeStore(cfg config.Config) (OutcomeStore, error) {
 // ledger only when PG is unavailable (report marked degraded). All other
 // backends keep NewOutcomeStore semantics.
 func NewReportOutcomeStore(cfg config.Config) (OutcomeStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("report store: %w", err)
+	}
+	switch backend {
 	case "postgres":
 		if postgresPool == nil {
 			return nil, fmt.Errorf("report store: postgres backend requires SetPostgresPool before NewReportOutcomeStore")
 		}
 		return NewPGFirstOutcomeStore(NewPostgresLedgerStore(postgresPool), newStore(cfg.LedgerDir)), nil
-	default:
+	case "jsonl", "sqlite":
+		// Delegate to NewOutcomeStore with the already-normalized backend so
+		// the value is not re-resolved (avoids a duplicate empty-backend warn).
+		cfg.StoreBackend = backend
 		return NewOutcomeStore(cfg)
+	default:
+		return nil, fmt.Errorf("report store: unexpected store backend %q", backend)
 	}
 }
 
 func NewSessionStore(cfg config.Config) (SessionStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("sessions: %w", err)
+	}
+	switch backend {
+	case "jsonl":
+		return newStore(cfg.LedgerDir), nil
 	case "sqlite":
 		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
@@ -288,12 +339,18 @@ func NewSessionStore(cfg config.Config) (SessionStore, error) {
 		}
 		return NewPostgresLedgerStore(postgresPool), nil
 	default:
-		return newStore(cfg.LedgerDir), nil
+		return nil, fmt.Errorf("sessions: unexpected store backend %q", backend)
 	}
 }
 
 func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("quotes: %w", err)
+	}
+	switch backend {
+	case "jsonl":
+		return NewJSONLQuoteStore(cfg.LedgerDir), nil
 	case "sqlite":
 		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
@@ -306,7 +363,7 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 		}
 		return NewPostgresQuoteStore(postgresPool), nil
 	default:
-		return NewJSONLQuoteStore(cfg.LedgerDir), nil
+		return nil, fmt.Errorf("quotes: unexpected store backend %q", backend)
 	}
 }
 
@@ -317,7 +374,11 @@ func NewQuoteStore(cfg config.Config) (QuoteStore, error) {
 // efficient LIMIT + ORDER BY. PostgreSQL (000013 migration) provides the
 // same indexed relational table in the multi-process-friendly database.
 func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("detector_scan: %w", err)
+	}
+	switch backend {
 	case "sqlite":
 		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
@@ -330,7 +391,7 @@ func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
 		}
 		return NewPostgresDetectorScanStore(postgresPool), nil
 	default:
-		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite or postgres)", cfg.StoreBackend)
+		return nil, fmt.Errorf("detector_scan: backend %q not supported (sqlite or postgres)", backend)
 	}
 }
 
@@ -340,7 +401,11 @@ func NewDetectorScanStore(cfg config.Config) (DetectorScanStore, error) {
 // history_stress, history_event_calendar) run LIMIT + ORDER BY queries that
 // need an indexed relational table.
 func NewHistoricalStore(cfg config.Config) (HistoricalStore, error) {
-	switch cfg.StoreBackend {
+	backend, err := ResolveStoreBackend(cfg.StoreBackend)
+	if err != nil {
+		return nil, fmt.Errorf("historical: %w", err)
+	}
+	switch backend {
 	case "sqlite":
 		db, err := getSharedSQLiteDB(cfg.SQLitePath)
 		if err != nil {
@@ -353,6 +418,6 @@ func NewHistoricalStore(cfg config.Config) (HistoricalStore, error) {
 		}
 		return NewPostgresHistoricalStore(postgresPool), nil
 	default:
-		return nil, fmt.Errorf("historical: backend %q not supported (sqlite or postgres)", cfg.StoreBackend)
+		return nil, fmt.Errorf("historical: backend %q not supported (sqlite or postgres)", backend)
 	}
 }
