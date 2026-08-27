@@ -17,13 +17,14 @@ import (
 // fail with "mixed symbols" or "mixed sources" errors.
 //
 // This helper is intentionally unexported and only for use inside
-// internal/stockpicker.
-func aggregateWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) (SignalWinRateSummary, error) {
+// internal/stockpicker. It never errors; invalid inputs are handled by
+// the pure math helpers (WinRate, WilsonScoreInterval return zeros).
+func aggregateWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) SignalWinRateSummary {
 	var summary SignalWinRateSummary
 	if len(outcomes) == 0 {
 		summary.Confidence = confidence
 		summary.CalibrationStatus = CalibrationStatusFor(0, minSamples)
-		return summary, nil
+		return summary
 	}
 
 	var totalReturn float64
@@ -42,7 +43,7 @@ func aggregateWinRate(outcomes []SignalOutcome, costRate float64, minSamples int
 	summary.CalibrationStatus = CalibrationStatusFor(n, minSamples)
 	summary.NetCostRate = costRate
 	summary.AvgForwardReturn = totalReturn / float64(n)
-	return summary, nil
+	return summary
 }
 
 // SignalOutcomeStore is a thin SQLite-backed wrapper around
@@ -137,32 +138,22 @@ func RecordOutcomes(ctx context.Context, db *sql.DB, outcomes []SignalOutcome) e
 // calendar days are returned; an empty window returns all rows. Rows are
 // ordered by trigger_date ascending, source ascending.
 func LoadOutcomes(ctx context.Context, db *sql.DB, symbol, source, window string) ([]SignalOutcome, error) {
-	query := `SELECT symbol, trigger_date, source, forward_return, net_forward_return, hit, cost_rate, regime, created_at
-		FROM stock_signal_outcomes`
-	var conds []string
-	var args []any
-	if symbol != "" {
-		conds = append(conds, "symbol = ?")
-		args = append(args, symbol)
+	cutoff, err := rollingWindowCutoff(window)
+	if err != nil {
+		return nil, err
 	}
-	if source != "" {
-		conds = append(conds, "source = ?")
-		args = append(args, source)
-	}
-	if window != "" {
-		cutoff, err := rollingWindowCutoff(window)
-		if err != nil {
-			return nil, err
-		}
-		conds = append(conds, "trigger_date >= ?")
-		args = append(args, cutoff)
-	}
-	if len(conds) > 0 {
-		query += " WHERE " + strings.Join(conds, " AND ")
-	}
-	query += " ORDER BY trigger_date ASC, source ASC"
 
-	rows, err := db.QueryContext(ctx, query, args...)
+	// Use a single static query with placeholder guards to avoid dynamic SQL
+	// concatenation flagged by gosec G202. Empty filters are represented by
+	// empty strings or a date well in the past.
+	const query = `SELECT symbol, trigger_date, source, forward_return, net_forward_return, hit, cost_rate, regime, created_at
+		FROM stock_signal_outcomes
+		WHERE (symbol = ? OR ? = '')
+		  AND (source = ? OR ? = '')
+		  AND (trigger_date >= ? OR ? = '')
+		ORDER BY trigger_date ASC, source ASC`
+
+	rows, err := db.QueryContext(ctx, query, symbol, symbol, source, source, cutoff, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("stockpicker: query signal outcomes: %w", err)
 	}

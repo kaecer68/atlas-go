@@ -239,10 +239,7 @@ func TestAggregateWinRate_SkipsConsistencyCheck(t *testing.T) {
 		{Symbol: "2330", Source: "research-agent-1", ForwardReturn: -0.01},
 	}
 
-	summary, err := aggregateWinRate(outcomes, 0.00585, 30, 0.95)
-	if err != nil {
-		t.Fatalf("aggregateWinRate: %v", err)
-	}
+	summary := aggregateWinRate(outcomes, 0.00585, 30, 0.95)
 	if summary.Observations != 3 {
 		t.Fatalf("Observations = %d, want 3", summary.Observations)
 	}
