@@ -13,15 +13,21 @@ const (
 	CalibrationCalibrating CalibrationStatus = "calibrating"
 	// CalibrationEligible 樣本充足，可參考。
 	CalibrationEligible CalibrationStatus = "eligible"
+	// CalibrationDegraded IS/OOS 背離或過擬合，由聚合層寫入，非純數學結果。
+	CalibrationDegraded CalibrationStatus = "degraded"
 )
 
 // SignalOutcome 單一訊號結果。
 type SignalOutcome struct {
-	Symbol        string
-	TriggerDate   string // YYYY-MM-DD
-	ForwardReturn float64
-	Hit           bool   // 已扣成本後是否命中；由呼叫端依 NetHit 預先計算，供顯示/溯源用
-	Source        string // e.g. "stockpicker-momentum" or agent id
+	Symbol           string
+	TriggerDate      string // YYYY-MM-DD
+	ForwardReturn    float64
+	NetForwardReturn float64 // ForwardReturn - CostRate
+	Hit              bool    // 已扣成本後是否命中；由呼叫端依 NetHit 預先計算，供顯示/溯源用
+	CostRate         float64 // 來回交易成本率（如 0.00585）
+	Source           string  // e.g. "stockpicker-momentum" or agent id
+	Regime           string  // 觸發時市場時期（可選）
+	CreatedAt        string  // ISO-8601
 }
 
 // SignalWinRateSummary 勝率摘要。
