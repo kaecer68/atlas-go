@@ -1,6 +1,8 @@
 package portfolio
 
 import (
+	"log"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
@@ -42,22 +44,30 @@ func (a *CapitalAllocator) Allocate(
 		return allocation
 	}
 
+	// 同 symbol 多筆 recommendation 先合併（max conviction 勝出並保留該筆
+	// 完整 entry（TargetPrice/StopLossPrice/Reason 等）；平手保留第一筆；衝突以 log 顯式記錄），
+	// totalConviction 分母與分配均以去重後的 symbol 集計算。
+	deduped := dedupeRecommendations(recommendations)
+	if len(deduped) == 0 {
+		return allocation
+	}
+
 	totalConviction := 0.0
-	for _, rec := range recommendations {
+	for _, rec := range deduped {
 		if rec.Conviction > 0 {
 			totalConviction += float64(rec.Conviction)
 		}
 	}
 
 	if totalConviction == 0 {
-		equalShare := deployableCapital / float64(len(recommendations))
-		for _, rec := range recommendations {
+		equalShare := deployableCapital / float64(len(deduped))
+		for _, rec := range deduped {
 			allocation.PositionSizes[rec.Symbol] = equalShare
 		}
 		return allocation
 	}
 
-	for _, rec := range recommendations {
+	for _, rec := range deduped {
 		if rec.Conviction > 0 {
 			weight := float64(rec.Conviction) / totalConviction
 			allocation.PositionSizes[rec.Symbol] = deployableCapital * weight
@@ -65,6 +75,55 @@ func (a *CapitalAllocator) Allocate(
 	}
 
 	return allocation
+}
+
+// dedupeRecommendations merges recommendations that share the same symbol.
+//
+// Semantics (P0-2 fix): for a duplicated symbol, the entry with the highest
+// Conviction wins and the full winning Recommendation entry (TargetPrice,
+// StopLossPrice, Reason, etc.) is kept; on a conviction tie the first
+// occurrence is kept (deterministic). Every merge is logged explicitly so
+// conflicts are never silent. Empty-symbol entries are suppressed with a
+// warning (no dedup key available) and never enter the allocation.
+func dedupeRecommendations(recs []domain.Recommendation) []domain.Recommendation {
+	bestIdx := make(map[string]int, len(recs)) // symbol -> index in deduped
+	deduped := make([]domain.Recommendation, 0, len(recs))
+	merged := 0
+
+	for _, rec := range recs {
+		if rec.Symbol == "" {
+			log.Printf("warn: capital allocator: skipping recommendation with empty symbol (conviction %d)", rec.Conviction)
+			merged++
+			continue
+		}
+		idx, exists := bestIdx[rec.Symbol]
+		if !exists {
+			bestIdx[rec.Symbol] = len(deduped)
+			deduped = append(deduped, rec)
+			continue
+		}
+		merged++
+		if rec.Conviction > deduped[idx].Conviction {
+			log.Printf(
+				"warn: capital allocator: symbol %s duplicated: replacing kept entry (conviction %d) with higher-conviction entry (conviction %d)",
+				rec.Symbol, deduped[idx].Conviction, rec.Conviction,
+			)
+			deduped[idx] = rec
+		} else {
+			log.Printf(
+				"warn: capital allocator: symbol %s duplicated: keeping entry with conviction %d, merging duplicate with conviction %d",
+				rec.Symbol, deduped[idx].Conviction, rec.Conviction,
+			)
+		}
+	}
+
+	if merged > 0 {
+		log.Printf(
+			"warn: capital allocator: suppressed %d duplicate recommendation(s) (incl. empty-symbol), %d unique symbol(s) after dedup",
+			merged, len(deduped),
+		)
+	}
+	return deduped
 }
 
 func (a *CapitalAllocator) ReallocateWithTax(
