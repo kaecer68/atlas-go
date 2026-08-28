@@ -32,6 +32,10 @@
 //	PGHOST/PGPORT/PGUSER/...        PostgreSQL connection (standard libpq env vars)
 //	ATLAS_MCP_SAMPLING_ENABLED      enable mcp_sample_llm (default false)
 //	ATLAS_MCP_ELICITATION_ENABLED   enable mcp_elicit_user (default false)
+//	ATLAS_MCP_STOCKPICKER_DB        SQLite ledger with stockpicker win-rate
+//	                                aggregates (stock_win_rate +
+//	                                stock_signal_outcomes); empty = stock_get_win_rate
+//	                                reports "no data configured"
 //	ATLAS_MCP_ROOTS_ALLOWED         comma-separated file:// roots allowed when client declares none
 //	ATLAS_MCP_ROOTS_READ_SIZE_CAP   max bytes per roots file read (default 1048576)
 package main
@@ -94,6 +98,7 @@ func main() {
 		Addr:               firstNonEmpty(*addrFlag, os.Getenv("ATLAS_MCP_ADDR"), "127.0.0.1:9090"),
 		SamplingEnabled:    envBoolOr("ATLAS_MCP_SAMPLING_ENABLED", false),
 		ElicitationEnabled: envBoolOr("ATLAS_MCP_ELICITATION_ENABLED", false),
+		StockpickerDBPath:  os.Getenv("ATLAS_MCP_STOCKPICKER_DB"),
 		Roots: func() server.RootsConfig {
 			cfg, err := resolveRootsConfig()
 			if err != nil {

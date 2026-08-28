@@ -1,11 +1,11 @@
 # atlas-mcp Tool Catalog
 
-> **117 tools**（預設啟用；sampling/elicitation feature-gated 全開時 119）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **118 tools**（預設啟用；sampling/elicitation feature-gated 全開時 120）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **117**（**基礎 117**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 119；啟動期 assert ∈ [115, 121]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + stock_get_win_rate 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **118**（**基礎 118**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 120；啟動期 assert ∈ [116, 122]，見 `cmd/atlas-mcp/server/server.go`）
 
 ## 完整工具 Catalog（120 個 tool 槽位，其中 118 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
@@ -171,9 +171,10 @@
 | `data_get_quality` | 資料品質 metrics |
 | `data_get_field_contract` | Field contract schema |
 
-### Stock（5 個）
+### Stock（6 個）
 | Tool | 用途 |
 |------|------|
+| `stock_get_win_rate` | Phase 4 個股勝率聚合（read-only；從 stockpicker SQLite ledger 讀取，不重新計算；無資料回 found=false） |
 | `stock_get_quote` | 個股即時報價（最新價、漲跌、成交量） |
 | `stock_get_fundamentals` | 個股基本面（PE、PB、PS、殖利率、sector 等） |
 | `stock_get_chips` | 個股籌碼面（法人/外資/投信買賣超，可選日期） |

@@ -23,7 +23,7 @@ func registerResources(mcpSrv *mcp.Server, s *server) {
 	mcpSrv.AddResource(&mcp.Resource{
 		URI:         "atlas://tools/catalog",
 		Name:        "atlas-mcp Tool Catalog",
-		Description: "117 MCP tools grouped by area (119 with sampling/elicitation feature-gated on). Source: docs/reference/tool-catalog.md (embedded at build time). Use to enumerate capabilities without tools/list round-trip.",
+		Description: "118 MCP tools grouped by area (120 with sampling/elicitation feature-gated on). Source: docs/reference/tool-catalog.md (embedded at build time; catalog doc lags until the doc PR lands). Use to enumerate capabilities without tools/list round-trip.",
 		MIMEType:    "text/markdown",
 	}, s.handleResourceToolsCatalog)
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -33,6 +34,12 @@ type Config struct {
 	SamplingEnabled    bool          // ATLAS_MCP_SAMPLING_ENABLED (default false)
 	ElicitationEnabled bool          // ATLAS_MCP_ELICITATION_ENABLED (default false)
 	Roots              RootsConfig   // roots filesystem boundary configuration
+
+	// StockpickerDBPath is the SQLite ledger holding the Phase-4 stockpicker
+	// win-rate aggregates (stock_win_rate + stock_signal_outcomes), e.g.
+	// /Users/kk/workspace/atlas/data/state/atlas.db. Read-only; empty means
+	// stock_get_win_rate answers "no data configured" (ATLAS_MCP_STOCKPICKER_DB).
+	StockpickerDBPath string
 
 	// Phase 4 transport wiring. Empty Transport defaults to "stdio" for
 	// backwards compatibility with existing deployments (Claude Desktop,
@@ -180,11 +187,12 @@ func Run(ctx context.Context, cfg Config) error {
 	// 0-2 sampling/elicitation (feature-gated, default off) = 107..109 tools.
 	// registerAuditStateTool (audit_state) + registerStrategyForPeriodTool
 	// (strategy_for_period) + stock_get_monthly_revenue (monthly_revenue,
-	// in registerTools) add 3 → 117-121.
+	// in registerTools) + stock_get_win_rate (stock_win_rate, in registerTools)
+	// add 4 → 118-122.
 	n := RegisteredToolCount
 	log.Printf("atlas-mcp: registered %d tools", n)
-	if n < 115 || n > 121 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 115-121", n)
+	if n < 116 || n > 122 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 116-122", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for
@@ -241,6 +249,8 @@ type server struct {
 	rootsMu      sync.RWMutex
 	rootsCache   []string
 	anomalyStore anomaly.AnomalyStore
+	winRateMu    sync.Mutex
+	winRateDB    *sql.DB // lazily-opened read-only stockpicker ledger (stock_get_win_rate)
 }
 
 func (s *server) cachedRoots() []string {
