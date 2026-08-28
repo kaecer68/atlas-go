@@ -825,7 +825,10 @@ func run(args []string, deps appDeps) error {
 			winRateDBPath = filepath.Join(cfg.WorkDir, "data", "state", "atlas.db")
 		}
 		if winRateDB, err := stocktools.OpenWinRateDB(winRateDBPath); err != nil {
-			log.Printf("[StockTools] win-rate store unavailable at %s: %v (GET /api/stock/win_rate will 503)", winRateDBPath, err)
+			// The path is not logged: it may come from ATLAS_MCP_STOCKPICKER_DB
+			// (env-tinted for gosec G706); the error from OpenWinRateDB already
+			// names the file it failed to open.
+			log.Printf("[StockTools] win-rate store unavailable: %v (GET /api/stock/win_rate will 503)", err)
 		} else {
 			stockDeps.WinRate = stocktools.NewSQLiteWinRateProvider(winRateDB)
 		}
