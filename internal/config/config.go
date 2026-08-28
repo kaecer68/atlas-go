@@ -29,6 +29,7 @@ type Config struct {
 	ParametersConfigPath       string
 	LedgerDir                  string
 	StoreBackend               string // "jsonl" (default), "sqlite", or "postgres" — ATLAS_STORE_BACKEND
+	StockpickerExpectDB        string // postgres migration-target guard for the daily-update scheduler (M12) — ATLAS_STOCKPICKER_EXPECT_DB
 	SQLitePath                 string // path to SQLite database file — ATLAS_SQLITE_PATH
 	ReplayDataPath             string
 	ReplaySessionDate          string
@@ -111,6 +112,7 @@ func Load() Config {
 		ParametersConfigPath:       envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json"),
 		LedgerDir:                  envOr("ATLAS_LEDGER_DIR", "data/state"),
 		StoreBackend:               envOr("ATLAS_STORE_BACKEND", "jsonl"),
+		StockpickerExpectDB:        envOr("ATLAS_STOCKPICKER_EXPECT_DB", ""),
 		SQLitePath:                 envOr("ATLAS_SQLITE_PATH", "data/state/atlas.db"),
 		ReplayDataPath:             envOr("ATLAS_REPLAY_DATA_PATH", "samples/replay/twse_stock_day_all_sample.csv"),
 		ReplaySessionDate:          envOr("ATLAS_REPLAY_SESSION_DATE", ""),
