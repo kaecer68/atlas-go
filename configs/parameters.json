@@ -8094,6 +8094,70 @@
           "source": "heuristic"
         }
       }
+    },
+    "flow_gateway": {
+      "conditions": {
+        "foreign-3d-net-buy": {
+          "layers": {
+            "rationale": "foreign-3d-net-buy enforces the full two-level gate: per-symbol foreign magnitude (個股層) + both market-regime layers (市場層) (PR 2b).",
+            "source": "heuristic",
+            "value": [
+              "foreign",
+              "institutional",
+              "retail"
+            ]
+          }
+        },
+        "momentum-20d-positive": {
+          "layers": {
+            "rationale": "momentum-20d-positive is a price condition; its gate narrows to the two institution-driven layers (per-symbol foreign + institutional market regime) and skips the retail regime (PR 2b review fix: real narrowing, not a no-op all-three copy).",
+            "source": "heuristic",
+            "value": [
+              "foreign",
+              "institutional"
+            ]
+          }
+        }
+      },
+      "fail_closed_when_all_missing": {
+        "rationale": "When every enforced flow-gateway layer is skipped due to missing data, fail closed (no-decision): the live path must never trade on a fully-missing flow picture. Backtests may set false to keep evaluating on partial data (PR 2b review fix).",
+        "source": "heuristic",
+        "value": true
+      },
+      "layers": {
+        "foreign": {
+          "min_abs_net": {
+            "rationale": "Minimum |foreign net buy| of THE CHECKED SYMBOL (億股, per-symbol 個股層; FlowPoint.ForeignNet 千股 → /1e5) for the foreign layer of the flow gateway (PR 2b). ≈1 萬張 net buy on one symbol marks meaningful foreign interest; below this a symbol's foreign flow is noise — the '外資小幅賣超但勝率高' failure mode the gate exists to filter.",
+            "source": "heuristic",
+            "todo": "Calibrate: tune per-symbol magnitude against backtest win rates once OOS samples accumulate.",
+            "value": 0.1
+          }
+        },
+        "institutional": {
+          "min_abs_raw": {
+            "rationale": "Minimum |investment-trust net buy| (億股, market regime 市場層; capitalflow ForceInstitutional RawValue) for the institutional layer; 投信 daily magnitudes are smaller than 外資, so the raw gate is lower (PR 2b). 無個股層級資料，僅供市場 regime 參考.",
+            "source": "heuristic",
+            "value": 0.3
+          },
+          "min_abs_z": {
+            "rationale": "Minimum |investment-trust z-score| for the institutional market-regime layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary (trendFor in forces.go).",
+            "source": "heuristic",
+            "value": 0.5
+          }
+        },
+        "retail": {
+          "min_abs_raw": {
+            "rationale": "Minimum |retail composite| (融資+融券/借券 change pct, capitalflow ForceRetail RawValue) for the retail market-regime layer; a >1pct composite move marks meaningful retail positioning (PR 2b). 無個股層級資料，僅供市場 regime 參考.",
+            "source": "heuristic",
+            "value": 1
+          },
+          "min_abs_z": {
+            "rationale": "Minimum |retail z-score| for the retail market-regime layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary.",
+            "source": "heuristic",
+            "value": 0.5
+          }
+        }
+      }
     }
   }
 }

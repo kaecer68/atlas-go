@@ -720,6 +720,54 @@
     },
     {
       "fields": [
+        "Layers ParameterMetadata[[]string]"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayCondition"
+    },
+    {
+      "fields": [
+        "Foreign3DNetBuy FlowGatewayCondition",
+        "Momentum20DPosit FlowGatewayCondition"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayConditions"
+    },
+    {
+      "fields": [
+        "MinAbsNet ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayForeignThreshold"
+    },
+    {
+      "fields": [
+        "Foreign FlowGatewayForeignThreshold",
+        "Institutional FlowGatewayMarketThreshold",
+        "Retail FlowGatewayMarketThreshold"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayLayers"
+    },
+    {
+      "fields": [
+        "MinAbsRaw ParameterMetadata[float64]",
+        "MinAbsZ ParameterMetadata[float64]"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayMarketThreshold"
+    },
+    {
+      "fields": [
+        "FailClosedWhenAllMissing ParameterMetadata[bool]",
+        "Layers FlowGatewayLayers",
+        "Conditions FlowGatewayConditions"
+      ],
+      "kind": "struct",
+      "name": "FlowGatewayParameters"
+    },
+    {
+      "fields": [
         "RiskOnMean ParameterMetadata[float64]",
         "RiskOffMean ParameterMetadata[float64]",
         "RiskOnStdDev ParameterMetadata[float64]",
@@ -1556,7 +1604,8 @@
       "fields": [
         "Costs StockpickerCostsParameters",
         "Calibration StockpickerCalibrationParameters",
-        "Conditions StockpickerConditionsParameters"
+        "Conditions StockpickerConditionsParameters",
+        "FlowGateway FlowGatewayParameters"
       ],
       "kind": "struct",
       "name": "StockpickerParameters"

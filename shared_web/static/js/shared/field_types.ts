@@ -1500,6 +1500,36 @@ export interface FinancialsExecutorParameters {
   price_to_high_threshold: string;
 }
 
+export interface FlowGatewayCondition {
+  layers: string;
+}
+
+export interface FlowGatewayConditions {
+  "foreign-3d-net-buy": FlowGatewayCondition;
+  "momentum-20d-positive": FlowGatewayCondition;
+}
+
+export interface FlowGatewayForeignThreshold {
+  min_abs_net: string;
+}
+
+export interface FlowGatewayLayers {
+  foreign: FlowGatewayForeignThreshold;
+  institutional: FlowGatewayMarketThreshold;
+  retail: FlowGatewayMarketThreshold;
+}
+
+export interface FlowGatewayMarketThreshold {
+  min_abs_raw: string;
+  min_abs_z: string;
+}
+
+export interface FlowGatewayParameters {
+  fail_closed_when_all_missing: string;
+  layers: FlowGatewayLayers;
+  conditions?: FlowGatewayConditions;
+}
+
 export interface FlowPrediction {
   date: string;
   direction: string;
@@ -3983,6 +4013,7 @@ export interface StockpickerParameters {
   costs: StockpickerCostsParameters;
   calibration: StockpickerCalibrationParameters;
   conditions?: StockpickerConditionsParameters;
+  flow_gateway?: FlowGatewayParameters;
 }
 
 export interface StrategiesListResponse {

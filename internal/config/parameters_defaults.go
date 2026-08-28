@@ -92,6 +92,76 @@ func defaultStockpickerParameters() StockpickerParameters {
 				},
 			},
 		},
+		FlowGateway: defaultFlowGatewayParameters(),
+	}
+}
+
+// defaultFlowGatewayParameters returns the canonical defaults for the
+// stockpicker.flow_gateway section (PR 2b two-level capital-flow gate).
+// Foreign is a per-symbol layer: min_abs_net is the minimum |foreign net
+// buy| of the checked symbol in 億股 (the evaluator converts
+// FlowPoint.ForeignNet 千股 → 億股 by ÷1e5). Institutional and retail are
+// market-regime layers gated by the market-wide capitalflow ForceScore —
+// 無個股層級資料，僅供市場 regime 參考. Values mirror configs/parameters.json
+// → stockpicker.flow_gateway; the gate evaluator never reads these literals
+// directly.
+func defaultFlowGatewayParameters() FlowGatewayParameters {
+	return FlowGatewayParameters{
+		FailClosedWhenAllMissing: ParameterMetadata[bool]{
+			Value:     true,
+			Rationale: "When every enforced gateway layer is skipped due to missing data, fail closed (no-decision): the live path must never trade on a fully-missing flow picture. Backtests may set false to keep evaluating on partial data (PR 2b review fix).",
+			Source:    SourceHeuristic,
+		},
+		Layers: FlowGatewayLayers{
+			Foreign: FlowGatewayForeignThreshold{
+				MinAbsNet: ParameterMetadata[float64]{
+					Value:     0.1,
+					Rationale: "Minimum |foreign net buy| of the CHECKED SYMBOL (億股) for the per-symbol foreign layer; ≈1 萬張 net buy on one symbol marks meaningful foreign interest (PR 2b review fix: per-symbol granularity).",
+					Source:    SourceHeuristic,
+					Todo:      "Calibrate: tune per-symbol magnitude against backtest win rates once OOS samples accumulate.",
+				},
+			},
+			Institutional: FlowGatewayMarketThreshold{
+				MinAbsRaw: ParameterMetadata[float64]{
+					Value:     0.3,
+					Rationale: "Minimum |investment-trust net buy| (億股, market regime) for the institutional layer; 投信 daily magnitudes are smaller than 外資, so the raw gate is lower (PR 2b). No per-symbol source exists — 市場 regime 參考 only.",
+					Source:    SourceHeuristic,
+				},
+				MinAbsZ: ParameterMetadata[float64]{
+					Value:     0.5,
+					Rationale: "Minimum |investment-trust z-score| (capitalflow 60-day rolling) for the institutional market-regime layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary.",
+					Source:    SourceHeuristic,
+				},
+			},
+			Retail: FlowGatewayMarketThreshold{
+				MinAbsRaw: ParameterMetadata[float64]{
+					Value:     1.0,
+					Rationale: "Minimum |retail composite| (融資+融券/借券 change pct, capitalflow ForceRetail RawValue) for the retail market-regime layer; a >1pct composite move marks meaningful retail positioning (PR 2b).",
+					Source:    SourceHeuristic,
+				},
+				MinAbsZ: ParameterMetadata[float64]{
+					Value:     0.5,
+					Rationale: "Minimum |retail z-score| for the retail market-regime layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary.",
+					Source:    SourceHeuristic,
+				},
+			},
+		},
+		Conditions: FlowGatewayConditions{
+			Foreign3DNetBuy: FlowGatewayCondition{
+				Layers: ParameterMetadata[[]string]{
+					Value:     []string{"foreign", "institutional", "retail"},
+					Rationale: "foreign-3d-net-buy enforces the full two-level gate: per-symbol foreign magnitude + both market-regime layers (PR 2b).",
+					Source:    SourceHeuristic,
+				},
+			},
+			Momentum20DPosit: FlowGatewayCondition{
+				Layers: ParameterMetadata[[]string]{
+					Value:     []string{"foreign", "institutional"},
+					Rationale: "momentum-20d-positive is a price condition; its gate narrows to the two institution-driven layers (per-symbol foreign + institutional market regime) and skips the retail regime (PR 2b review fix: real narrowing, not a no-op all-three copy).",
+					Source:    SourceHeuristic,
+				},
+			},
+		},
 	}
 }
 
@@ -111,6 +181,27 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Rationale == "" {
 		cfg.Stockpicker.Conditions.Momentum20DPosit = def.Conditions.Momentum20DPosit
+	}
+	// flow_gateway (PR 2b): fill each sub-block whose provenance is missing
+	// so old saved configs (predating the section) resolve to the documented
+	// two-level gate defaults.
+	if cfg.Stockpicker.FlowGateway.FailClosedWhenAllMissing.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.FailClosedWhenAllMissing = def.FlowGateway.FailClosedWhenAllMissing
+	}
+	if cfg.Stockpicker.FlowGateway.Layers.Foreign.MinAbsNet.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.Layers.Foreign = def.FlowGateway.Layers.Foreign
+	}
+	if cfg.Stockpicker.FlowGateway.Layers.Institutional.MinAbsRaw.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.Layers.Institutional = def.FlowGateway.Layers.Institutional
+	}
+	if cfg.Stockpicker.FlowGateway.Layers.Retail.MinAbsRaw.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.Layers.Retail = def.FlowGateway.Layers.Retail
+	}
+	if cfg.Stockpicker.FlowGateway.Conditions.Foreign3DNetBuy.Layers.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.Conditions.Foreign3DNetBuy = def.FlowGateway.Conditions.Foreign3DNetBuy
+	}
+	if cfg.Stockpicker.FlowGateway.Conditions.Momentum20DPosit.Layers.Rationale == "" {
+		cfg.Stockpicker.FlowGateway.Conditions.Momentum20DPosit = def.FlowGateway.Conditions.Momentum20DPosit
 	}
 }
 

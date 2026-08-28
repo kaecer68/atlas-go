@@ -760,5 +760,8 @@ func (p *ParametersConfig) Validate() error {
 	if p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value < 1 {
 		return fmt.Errorf("stockpicker.conditions.momentum_20d_positive.window_days (%.0f) must be >= 1", p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value)
 	}
+	if err := p.validateFlowGateway(); err != nil {
+		return err
+	}
 	return nil
 }
