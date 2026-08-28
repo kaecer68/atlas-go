@@ -647,7 +647,7 @@
       "layer": "style",
       "skill": "stockpicker_winrate",
       "promptFile": "prompts/agents/stockpicker_winrate.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "alpha_hit_rate",
@@ -664,8 +664,7 @@
       ],
       "operatingNotes": [
         "Act only on eligible calibration_status; calibrating winrates are observation-only.",
-        "Require stock_get_win_rate evidence; never fabricate or extrapolate winrate data.",
-        "DISABLED until a stockpicker_winrate executor lands (PR 2d review P0): no builtin executor matches this skill, so enabling it would create an empty Darwinian weight row with zero outcomes."
+        "Require stock_get_win_rate evidence; never fabricate or extrapolate winrate data."
       ],
       "screening_criteria": {
         "volume_intraday": {

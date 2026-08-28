@@ -52,12 +52,8 @@ func TestLoadRegistryStockpickerWinrate(t *testing.T) {
 	if spec.Skill != "stockpicker_winrate" {
 		t.Errorf("skill = %q, want %q", spec.Skill, "stockpicker_winrate")
 	}
-	if spec.Enabled {
-		// P0 (PR 2d review): no builtin executor matches skill
-		// "stockpicker_winrate", so an enabled style-layer agent would be
-		// silently skipped by collectRecommendations and leave an empty
-		// Darwinian weight row. Keep it disabled until the executor lands.
-		t.Error("stockpicker-winrate-01 must be disabled until a matching executor exists (PR 2d review P0)")
+	if !spec.Enabled {
+		t.Error("stockpicker-winrate-01 must be enabled — StockpickerWinrateExecutor is registered in builtinAgentExecutors and backs the skill (PR 2d-executor)")
 	}
 	if spec.PromptFile != "prompts/agents/stockpicker_winrate.md" {
 		t.Errorf("promptFile = %q, want %q", spec.PromptFile, "prompts/agents/stockpicker_winrate.md")
