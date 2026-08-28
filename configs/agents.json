@@ -7,7 +7,7 @@
       "layer": "context",
       "skill": "taiwan_macro",
       "promptFile": "prompts/agents/taiwan_macro.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -31,7 +31,7 @@
       "layer": "context",
       "skill": "foreign_flow",
       "promptFile": "prompts/agents/foreign_flow.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -679,7 +679,7 @@
       "layer": "control",
       "skill": "cro_risk",
       "promptFile": "prompts/agents/cro_risk.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "drawdown_control",
@@ -703,7 +703,7 @@
       "layer": "control",
       "skill": "cio_portfolio",
       "promptFile": "prompts/agents/cio_seed.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "portfolio_return",
@@ -887,7 +887,7 @@
       "layer": "macro",
       "skill": "us_macro_spx",
       "promptFile": "prompts/agents/us_macro_spx.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -911,7 +911,7 @@
       "layer": "macro",
       "skill": "us_macro_tech",
       "promptFile": "prompts/agents/us_macro_tech.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "sector_rotation_timing",
@@ -936,7 +936,7 @@
       "layer": "macro",
       "skill": "us_tw_crossmarket",
       "promptFile": "prompts/agents/us_tw_crossmarket.md",
-      "enabled": false,
+      "enabled": true,
       "universe": [],
       "primaryMetrics": [
         "transmission_capture",

@@ -143,3 +143,25 @@ func TestRegistryExecutorsCovered(t *testing.T) {
 		}
 	}
 }
+
+// TestCoreControlContextAgentsEnabled guards the PR 2d regression: a broad
+// replace must never flip core control/context agents (CRO/CIO/macro
+// regime) to disabled — they have RegimeExecutor/ControlExecutor backing
+// and their removal would silently disable risk controls.
+func TestCoreControlContextAgentsEnabled(t *testing.T) {
+	reg, err := LoadRegistry("../../configs/agents.json")
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+	mustEnabled := map[string]bool{
+		"cro-01":          true,
+		"cio-01":          true,
+		"taiwan-macro-01": true,
+		"foreign-flow-01": true,
+	}
+	for _, agent := range reg.Agents {
+		if mustEnabled[agent.ID] && !agent.Enabled {
+			t.Errorf("core agent %s (layer %s) must stay enabled — disabling it removes risk/regime controls", agent.ID, agent.Layer)
+		}
+	}
+}
