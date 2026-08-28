@@ -105,14 +105,17 @@ type RealPanel struct {
 // keyed by session date, so any date before the dataset is harmless.
 var barWindowStart = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// barWindowEnd is the latest date loaded from the QuoteStore. Using now gives
-// a stable upper bound without needing a schema query.
-var barWindowEnd = time.Now()
+// barWindowEnd returns the latest date loaded from the QuoteStore. It is a
+// function (not a package-level frozen var) so a long-lived process (e.g.
+// the cmd/atlas scheduler) always loads quotes up to "now" instead of the
+// process start date — otherwise the daily update would silently serve
+// stale data after the server outlives its start day (PR 2e review MAJOR).
+func barWindowEnd() time.Time { return time.Now() }
 
 func (p *RealPanel) Bars(ctx context.Context, symbol string) ([]HistoricalBar, error) {
 	variants := []string{symbol + ".TW", symbol, symbol + ".TWO"}
 	for _, sym := range variants {
-		quotes, err := p.quoteStore.LoadQuotes(sym, barWindowStart, barWindowEnd)
+		quotes, err := p.quoteStore.LoadQuotes(sym, barWindowStart, barWindowEnd())
 		if err != nil {
 			return nil, fmt.Errorf("load quotes %s: %w", sym, err)
 		}

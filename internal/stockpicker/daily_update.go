@@ -467,8 +467,3 @@ func countOutcomesForTriggerDate(ctx context.Context, db *sql.DB, triggerDate ti
 	}
 	return n, nil
 }
-
-// NewestTriggerDateForCheck is a temporary exported wrapper for verification.
-func NewestTriggerDateForCheck(asOf time.Time) time.Time {
-	return newestTriggerDate(asOf, DefaultForwardDays)
-}
