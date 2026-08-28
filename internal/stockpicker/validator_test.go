@@ -566,7 +566,7 @@ func TestFlowGateway_InvalidJSON(t *testing.T) {
 }
 
 func TestFlowGateway_UnknownLayerNameFailsLoad(t *testing.T) {
-	// "foregin" typo must be a config-load error, not a silent skip.
+	//nolint:misspell // "foregin" is an intentional typo to prove config-load rejection.
 	body := `{
   "version": "1.0",
   "stockpicker": {
@@ -578,7 +578,7 @@ func TestFlowGateway_UnknownLayerNameFailsLoad(t *testing.T) {
         "retail": {"min_abs_raw": {"value": 1.0, "rationale": "r", "source": "heuristic"}, "min_abs_z": {"value": 0.5, "rationale": "r", "source": "heuristic"}}
       },
       "conditions": {
-        "foreign-3d-net-buy": {"layers": {"value": ["foregin", "institutional", "retail"], "rationale": "r", "source": "heuristic"}}
+        "foreign-3d-net-buy": {"layers": {"value": ["foregin", "institutional", "retail"], "rationale": "r", "source": "heuristic"}} //nolint:misspell
       }
     }
   }
@@ -586,7 +586,7 @@ func TestFlowGateway_UnknownLayerNameFailsLoad(t *testing.T) {
 	path := writeFixture(t, body)
 	_, err := config.LoadParametersConfig(path)
 	if err == nil {
-		t.Fatal("typo'd layer name (foregin) must fail config load, not silently skip")
+		t.Fatal("typo'd layer name (foregin) must fail config load, not silently skip") //nolint:misspell
 	}
 	if !strings.Contains(err.Error(), "unknown layer") {
 		t.Errorf("error %q should mention the unknown layer", err)

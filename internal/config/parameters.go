@@ -1256,7 +1256,7 @@ type FlowGatewayConditions struct {
 
 // FlowGatewayCondition declares which gateway layers a condition enforces.
 // Layer names must be one of foreign|institutional|retail (validated at
-// config load — a typo like "foregin" is a load error, not a silent skip).
+// config load — a layer-name typo is a load error, not a silent skip).
 type FlowGatewayCondition struct {
 	Layers ParameterMetadata[[]string] `json:"layers"`
 }
@@ -1894,9 +1894,9 @@ func GetParametersConfigPath() string {
 
 // validateFlowGateway enforces the stockpicker.flow_gateway contract:
 // condition layer names must be one of foreign|institutional|retail and all
-// thresholds must be non-negative. A layer-name typo (e.g. "foregin") is a
-// config-load error rather than a silent skip (PR 2b review fix), so a typo
-// can never silently narrow the gate.
+// thresholds must be non-negative. A layer-name typo is a config-load error
+// rather than a silent skip (PR 2b review fix), so a typo can never silently
+// narrow the gate.
 func (p *ParametersConfig) validateFlowGateway() error {
 	validLayer := map[string]bool{"foreign": true, "institutional": true, "retail": true}
 	checkLayers := func(condID string, layers []string) error {
