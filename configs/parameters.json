@@ -8095,7 +8095,7 @@
         }
       }
     },
-  "flow_gateway":     {
+    "flow_gateway": {
       "conditions": {
         "foreign-3d-net-buy": {
           "layers": {
