@@ -8099,7 +8099,7 @@
       "conditions": {
         "foreign-3d-net-buy": {
           "layers": {
-            "rationale": "foreign-3d-net-buy enforces the full two-level gate: per-symbol foreign magnitude (個股層) + both market-regime layers (市場層) (PR 2b).",
+            "rationale": "foreign-3d-net-buy configures the full two-level gate (per-symbol foreign magnitude 個股層 + market-regime layers 市場層, PR 2b); the StockpickerWinrateExecutor currently enforces the foreign layer only, market layers fail-open skip until #1737 lands.",
             "source": "heuristic",
             "value": [
               "foreign",

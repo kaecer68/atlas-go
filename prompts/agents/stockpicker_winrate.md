@@ -19,7 +19,7 @@ Select Taiwan stocks whose persisted Phase-4 win-rate data shows a statistically
 ## Rules
 - recommend only when `calibration_status` is `eligible`; `calibrating` (insufficient samples) is observation-only, never a buy
 - prefer higher `wilson_lower` over raw `win_rate` — sample size matters
-- require the capital-flow gateway to pass: per-symbol foreign net flow (個股層) plus the market-regime layers configured for the condition (市場層)
+- require the capital-flow gateway to pass: per-symbol foreign net flow (個股層). Note: the executor currently enforces the foreign layer only — the market-regime layers (市場層) for this condition are documented as not-yet-wired (see issue #1737); missing flow data means no recommendation, never a guess
 - never fabricate or extrapolate win-rate data; `found=false` or missing flow data means no recommendation, not a guess
 - avoid single-condition outliers without flow confirmation
 

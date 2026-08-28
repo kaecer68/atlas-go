@@ -94,6 +94,12 @@ func builtinAgentExecutors() []AgentExecutor {
 		ValueYieldExecutor{},
 		EarningsQualityExecutor{},
 		TechnicalBreakoutExecutor{},
+		// StockpickerWinrateExecutor backs the stockpicker-winrate-01 style
+		// agent (skill "stockpicker_winrate"). It reads the persisted
+		// stockpicker win-rate ledger + per-symbol T86 flows (read-only)
+		// and gates recommendations on calibration/win-rate/flow thresholds
+		// (PR 2d-executor; re-enables the agent).
+		StockpickerWinrateExecutor{},
 		// SuperinvestorExecutor is also registered in builtinControlExecutors().
 		// This dual registration enables the PM role (AgentExecutor.Recommend +
 		// ControlExecutor.Apply). See plugin_control.go for architectural context.
