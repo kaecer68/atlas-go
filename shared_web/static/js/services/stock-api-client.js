@@ -9,7 +9,11 @@ const TTL_MS = {
   // Monthly revenue is published ~10th of each month; 7-day TTL keeps
   // the section fresh across the mid-month publish without hammering
   // the FinMind-backed endpoint (which has a daily quota budget).
-  'monthly-revenue': 7 * 24 * 60 * 60 * 1000
+  'monthly-revenue': 7 * 24 * 60 * 60 * 1000,
+  // Win-rate is recomputed by the daily post-close stockpicker update
+  // (scheduler stockpicker_daily_update); 12h TTL keeps the section fresh
+  // without hammering the local SQLite-backed endpoint.
+  'win-rate': 12 * 60 * 60 * 1000
 };
 
 const STORAGE_PREFIX = 'atlas_stock_cache::';
@@ -129,6 +133,19 @@ export async function fetchStockMonthlyRevenue(symbol, year, month) {
   return fetchCached('monthly-revenue', `${symbol}::${variant}`, path);
 }
 
+
+// fetchStockWinRate calls GET /api/stock/win_rate?symbol=X (optionally
+// condition_id) and returns the persisted Phase-4 stockpicker win-rate
+// aggregates for the symbol (read-only; never recomputed). The response
+// mirrors the MCP stock_get_win_rate contract: 200 + found=false when no
+// data exists — the caller renders the section's empty state, not an
+// error. The endpoint 503s only when the store is not configured; treat
+// that as a non-fatal missing section like monthly_revenue.
+export async function fetchStockWinRate(symbol, conditionId) {
+  let path = `/api/stock/win_rate?symbol=${encodeURIComponent(symbol)}`;
+  if (conditionId) path += `&condition_id=${encodeURIComponent(conditionId)}`;
+  return fetchCached('win-rate', symbol, path);
+}
 
 // fetchStockCoverage calls GET /api/stock/coverage?symbol=X to discover
 // whether the 4 stocktools endpoints (quote/fundamentals/chips/technical)

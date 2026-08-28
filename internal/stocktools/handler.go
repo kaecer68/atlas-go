@@ -51,6 +51,13 @@ type Deps struct {
 	// / 6640 even though the other 4 stocktools endpoints correctly mark
 	// them as NOT_COVERED. This is an intentional scope exception.
 	Revenue MonthlyRevenueProvider
+	// WinRate is the read-only stockpicker win-rate store provider
+	// (PR 3c). Optional — when nil, GET /api/stock/win_rate returns 503.
+	// Production injects *SQLiteWinRateProvider backed by the job-local
+	// stockpicker ledger (data/state/atlas.db or ATLAS_MCP_STOCKPICKER_DB,
+	// opened read-only); tests may inject a fake to exercise error paths
+	// without opening SQLite.
+	WinRate WinRateProvider
 }
 
 // MonthlyRevenueProvider is the minimal interface the
@@ -97,6 +104,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/sector-median-pe", shared.Get(h.HandleSectorMedianPE))
 	mux.Handle("GET /api/stock/coverage", shared.Get(h.HandleCoverage))
 	mux.Handle("GET /api/stock/monthly_revenue", shared.Get(h.HandleMonthlyRevenue))
+	mux.Handle("GET /api/stock/win_rate", shared.Get(h.HandleWinRate))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -511,4 +519,100 @@ func parseRevenueYearMonth(r *http.Request, now time.Time) (int, int, error) {
 		return 0, 0, fmt.Errorf("invalid month %q (expected 1-12)", monthStr)
 	}
 	return year, month, nil
+}
+
+// HandleWinRate returns the persisted Phase-4 stockpicker win-rate
+// aggregates for a single symbol (read-only; never recomputes). Query
+// parameters:
+//
+//	symbol         (required) — Taiwan stock code, e.g. 2330
+//	condition_id   (optional) — filter to one condition, e.g. foreign-3d-net-buy
+//	rolling_window (optional) — rolling window label, e.g. 120d; default 120d
+//
+// The response mirrors the MCP stock_get_win_rate contract: 200 +
+// found=false (+ message) when the symbol has no stored data — "no data"
+// is informational, not a 5xx, matching the coverage/quote convention.
+// Like monthly_revenue, this endpoint is NOT short-circuited by the
+// Fundamentals coverage guard: the stockpicker universe (quote symbols)
+// can include TPEX codes the 4 TWSE-scoped endpoints mark NOT_COVERED.
+func (h *Handler) HandleWinRate(r *http.Request) (int, any) {
+	if h.deps.WinRate == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "win rate store not configured",
+		}
+	}
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{
+			"error": "symbol is required",
+		}
+	}
+	symbol = stripSymbolSuffix(symbol)
+
+	window := r.URL.Query().Get("rolling_window")
+	if window == "" {
+		window = defaultWinRateWindow
+	}
+	conditionID := r.URL.Query().Get("condition_id")
+
+	out := WinRateResponse{
+		Symbol:        symbol,
+		RollingWindow: window,
+		Conditions:    []WinRateCondition{},
+	}
+
+	sources, err := h.deps.WinRate.Sources(r.Context(), symbol, window)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	if conditionID != "" {
+		want := winRateSourcePrefix + conditionID
+		filtered := sources[:0]
+		for _, s := range sources {
+			if s == want {
+				filtered = append(filtered, s)
+			}
+		}
+		sources = filtered
+	}
+
+	for _, source := range sources {
+		summary, found, err := h.deps.WinRate.LoadWinRate(r.Context(), symbol, source, window)
+		if err != nil {
+			return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+		}
+		if !found {
+			continue
+		}
+		out.Found = true
+		cond := WinRateCondition{
+			ConditionID:       strings.TrimPrefix(source, winRateSourcePrefix),
+			Source:            source,
+			Observations:      summary.Observations,
+			Hits:              summary.Hits,
+			WinRate:           summary.WinRate,
+			WilsonLower:       summary.WilsonLower,
+			WilsonUpper:       summary.WilsonUpper,
+			Confidence:        summary.Confidence,
+			CalibrationStatus: string(summary.CalibrationStatus),
+			NetCostRate:       summary.NetCostRate,
+			AvgForwardReturn:  summary.AvgForwardReturn,
+			UpdatedAt:         summary.UpdatedAt,
+		}
+		if start, end, ok := h.deps.WinRate.OutcomeDateRange(r.Context(), symbol, source); ok {
+			cond.DataStart = start
+			cond.DataEnd = end
+		}
+		out.Conditions = append(out.Conditions, cond)
+	}
+
+	if !out.Found {
+		scope := ""
+		if conditionID != "" {
+			scope = ", condition " + conditionID
+		}
+		out.Message = fmt.Sprintf("no stockpicker win-rate data for symbol %s (window %s%s)",
+			symbol, window, scope)
+	}
+	return http.StatusOK, out
 }
