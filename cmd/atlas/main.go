@@ -812,6 +812,23 @@ func run(args []string, deps appDeps) error {
 		if cfg.FinMindAPIKey != "" {
 			stockDeps.Revenue = marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"))
 		}
+		// Win-rate endpoint (GET /api/stock/win_rate, PR 3c) — read-only
+		// view over the job-local stockpicker SQLite ledger
+		// (data/state/atlas.db by default; ATLAS_MCP_STOCKPICKER_DB
+		// overrides, the same env the MCP server reads). The ledger is
+		// written by the stockpicker daily update (scheduler
+		// stockpicker_daily_update / cmd/run-stockpicker-backtest).
+		// Missing/unopenable ledger → the endpoint 503s with a clear
+		// message instead of crashing the server.
+		winRateDBPath := os.Getenv("ATLAS_MCP_STOCKPICKER_DB")
+		if winRateDBPath == "" {
+			winRateDBPath = filepath.Join(cfg.WorkDir, "data", "state", "atlas.db")
+		}
+		if winRateDB, err := stocktools.OpenWinRateDB(winRateDBPath); err != nil {
+			log.Printf("[StockTools] win-rate store unavailable at %s: %v (GET /api/stock/win_rate will 503)", winRateDBPath, err)
+		} else {
+			stockDeps.WinRate = stocktools.NewSQLiteWinRateProvider(winRateDB)
+		}
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
 

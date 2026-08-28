@@ -137,6 +137,31 @@ test('stock quote page renders backend data for 2330', async ({ page }) => {
   await page.route('**/api/stock/fundamentals?*', r => r.fulfill({ json: { pe: 15.2, pb: 4.1, ps: 3.5, dividend_yield: 2.3, sector: 'semiconductor' } }));
   await page.route('**/api/stock/chips?*', r => r.fulfill({ json: { name: '台積電', foreign_net: 1234, dealer_net: 567, investment_trust_net: 890 } }));
   await page.route('**/api/stock/technical?*', r => r.fulfill({ json: { sma20: 570, sma50: 560, rsi14: 55 } }));
+  await page.route('**/api/stock/win_rate?*', r => r.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      symbol: '2330',
+      rolling_window: '120d',
+      found: true,
+      conditions: [{
+        condition_id: 'foreign-3d-net-buy',
+        source: 'stockpicker-foreign-3d-net-buy',
+        observations: 42,
+        hits: 26,
+        win_rate: 0.619,
+        wilson_lower: 0.47,
+        wilson_upper: 0.75,
+        confidence: 0.95,
+        calibration_status: 'eligible',
+        net_cost_rate: 0.00585,
+        avg_forward_return: 0.0081,
+        updated_at: '2026-08-28T00:00:00Z',
+        data_start: '2026-06-01',
+        data_end: '2026-08-20'
+      }]
+    }),
+  }));
 
   await page.goto('/client/stock-quote?symbol=2330');
   await expect(page.locator('#page-stock-quote')).toBeVisible({ timeout: 15000 });
@@ -154,4 +179,12 @@ test('stock quote page renders backend data for 2330', async ({ page }) => {
   await expect(page.locator('.sq-header-price')).toContainText(/[0-9,.]+/);
 
   await expect(page.locator('.stock-quote-grid')).toBeAttached();
+
+  // Win-rate section (PR 3c): win_rate + observations + wilson interval +
+  // calibration badge render from the mocked /api/stock/win_rate payload.
+  await expect(page.locator('.sq-winrate-condition')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.sq-winrate-condition')).toContainText('61.9%');
+  await expect(page.locator('.sq-winrate-condition')).toContainText('42 次');
+  await expect(page.locator('.sq-winrate-condition')).toContainText('47% ~ 75%');
+  await expect(page.locator('.sq-winrate-badge--eligible')).toBeVisible();
 });

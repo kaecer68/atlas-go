@@ -1,4 +1,4 @@
-import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue } from '../services/stock-api-client.js';
+import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue, fetchStockWinRate } from '../services/stock-api-client.js';
 import { renderMissingState } from '../shared/app-utils.js';
 import { fetchDecisionChain, renderRecommendations, renderExitAlerts, emptyState } from '../components/decision-panels.js';
 import { renderSearch } from '../components/stock-quote-search.js';
@@ -7,6 +7,7 @@ import { renderFundamentals } from '../components/stock-quote-fundamentals.js';
 import { renderChips } from '../components/stock-quote-chips.js';
 import { renderTechnical } from '../components/stock-quote-technical.js';
 import { renderRevenue } from '../components/stock-quote-revenue.js';
+import { renderWinRate } from '../components/stock-quote-winrate.js';
 
 let state = {
   currentSymbol: null,
@@ -54,6 +55,7 @@ function renderContent() {
         ${renderChips(state.status, res.chips, res.coverage)}
         ${renderTechnical(state.status, res.technical, res.coverage)}
         ${renderRevenue(state.status, res.monthlyRevenue)}
+        ${renderWinRate(state.status, res.winRate)}
       </div>
     `;
   }
@@ -90,23 +92,35 @@ async function doSearch(symbol) {
   // bundle's per-endpoint TTLs. The section degrades gracefully to a
   // "暫時無法取得" box on 503 so the page doesn't look broken.
   // Only runs when the bundle succeeded — on bundle failure the whole
-  // page is in error state and the revenue section isn't rendered anyway.
+  // page is in error state and the revenue/win-rate sections aren't
+  // rendered anyway.
   if (state.status === 'loaded' && state.results) {
     const revenueState = {
       status: 'loading',
       data: null,
       error: null
     };
+    const winRateState = {
+      status: 'loading',
+      data: null,
+      error: null
+    };
     state.results.monthlyRevenue = revenueState;
+    state.results.winRate = winRateState;
     renderContent();
-    try {
-      const revenue = await fetchStockMonthlyRevenue(symbol);
-      revenueState.status = 'loaded';
-      revenueState.data = revenue;
-    } catch (e) {
-      revenueState.status = 'error';
-      revenueState.error = e.message;
-    }
+    // Win-rate is a read-only local SQLite read (no external quota), but
+    // both sections share the same degrade-gracefully contract: a failed
+    // fetch renders a neutral "稍後再試" box instead of breaking the page.
+    const [revenueResult, winRateResult] = await Promise.allSettled([
+      fetchStockMonthlyRevenue(symbol),
+      fetchStockWinRate(symbol)
+    ]);
+    revenueState.status = revenueResult.status === 'fulfilled' ? 'loaded' : 'error';
+    revenueState.data = revenueResult.status === 'fulfilled' ? revenueResult.value : null;
+    revenueState.error = revenueResult.status === 'fulfilled' ? null : revenueResult.reason.message;
+    winRateState.status = winRateResult.status === 'fulfilled' ? 'loaded' : 'error';
+    winRateState.data = winRateResult.status === 'fulfilled' ? winRateResult.value : null;
+    winRateState.error = winRateResult.status === 'fulfilled' ? null : winRateResult.reason.message;
     renderContent();
   }
 
