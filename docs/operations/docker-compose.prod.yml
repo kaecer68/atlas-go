@@ -25,6 +25,9 @@ services:
       # 避免 burn-in 60 天重新計算 (RFC3339 或 YYYY-MM-DD):
       # - ATLAS_MATURITY_FIRST_START=2026-06-01T05:10:28Z
       - ATLAS_STORE_BACKEND=postgres
+      # M12 guard for the stockpicker daily-update scheduler: postgres
+      # backend requires the migration-target assertion (PR #1739).
+      - ATLAS_STOCKPICKER_EXPECT_DB=${ATLAS_STOCKPICKER_EXPECT_DB:-atlas}
       # ATLAS_SKIP_DOCKER=1: 關閉 atlas-go binary 的「password repair」自癒邏輯
       # (會嘗試 docker CLI 改 DB 密碼,在 prod 危險)。2026-08-26 PR #1695 事件中
       # log 顯示 "attempted password repair; docker CLI not found" 是這條路徑

@@ -35,6 +35,10 @@ services:
       # -trades-sqlite -experiments-sqlite -summaries-sqlite -historical
       # against the same DATABASE_URL before enabling this.
       - ATLAS_STORE_BACKEND=postgres
+      # M12 guard for the stockpicker daily-update scheduler: with the
+      # postgres backend the scheduler must assert its migration target;
+      # dev/sqlite leaves this empty (no guard needed).
+      - ATLAS_STOCKPICKER_EXPECT_DB=${ATLAS_STOCKPICKER_EXPECT_DB:-atlas}
       # ATLAS_API_KEY intentionally NOT set in environment — it would
       - ATLAS_WARMUP=${ATLAS_WARMUP:-}
       # shadow env_file with shell-expanded ${ATLAS_API_KEY} (empty
