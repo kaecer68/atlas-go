@@ -139,6 +139,10 @@ services:
     container_name: atlas-alertmanager-imac
     ports:
       - "9093:9093"
+    # 注入 telegram bot token (PR #1707 — 不 commit token 進 git; 絕對路徑與
+    # atlas/fubon-proxy 同模式, 避免 env_file 相對路徑依 compose 位置解析)
+    env_file:
+      - /Users/kk/.config/atlas-go/.env
     volumes:
       - /Users/kk/workspace/atlas-monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     command:
