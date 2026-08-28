@@ -93,6 +93,30 @@ func TestStockpickerTask_RunsAfter18OnTradingDay(t *testing.T) {
 	}
 }
 
+// TestStockpickerTask_ExpectDBPassedThrough pins that ExpectDB in deps
+// reaches the runner (the M12 migration-target guard for the postgres
+// path). Backend stays on env resolution (ATLAS_STORE_BACKEND=postgres in
+// prod); ExpectDB is what satisfies the guard so the daily tick does not
+// fail loudly.
+func TestStockpickerTask_ExpectDBPassedThrough(t *testing.T) {
+	var got stockpicker.RunDailyOptions
+	canned := stockpicker.RunDailyResult{AsOf: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)}
+	deps := StockpickerUpdateDeps{
+		WorkDir:  "/tmp/x",
+		ExpectDB: "atlas",
+		Now:      fixedNow("2026-03-16 18:30"),
+		TimeZone: tzAsia,
+		Runner:   fakeRunner(&got, &canned),
+	}
+	err := StockpickerUpdateTaskFunc(deps)(context.Background())
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if got.ExpectDB != "atlas" {
+		t.Errorf("runner ExpectDB = %q, want atlas (M12 guard target must reach RunDailyUpdate)", got.ExpectDB)
+	}
+}
+
 func TestStockpickerTask_SkipDayReturnsErrTaskSkipped(t *testing.T) {
 	var got stockpicker.RunDailyOptions
 	skipped := stockpicker.RunDailyResult{Skipped: true}

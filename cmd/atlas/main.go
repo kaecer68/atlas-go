@@ -1365,7 +1365,17 @@ func run(args []string, deps appDeps) error {
 			// default to the job-local sqlite artifact unless the operator
 			// opts into postgres via env + explicit ExpectDB (M12 guard).
 			scheduler.RegisterStockpickerUpdateSchedule(taskMgr, scheduler.StockpickerUpdateDeps{
-				WorkDir: cfg.WorkDir,
+				// Backend stays on env/config resolution (prod →
+				// ATLAS_STORE_BACKEND=postgres): quotes read from the
+				// postgres SSoT; outcomes are always written to the
+				// job-local SQLite artifact (openOutcomeDB ignores Backend).
+				// ExpectDB satisfies the M12 migration-target guard on the
+				// postgres path — set ATLAS_STOCKPICKER_EXPECT_DB=atlas in
+				// prod (container env) so the daily tick does not fail
+				// loudly on every run (prod task_failed observed
+				// 2026-08-28 after Phase 4 deploy).
+				ExpectDB: cfg.StockpickerExpectDB,
+				WorkDir:  cfg.WorkDir,
 			})
 			// fix/20260731-govflow-cadence: shared in-memory CAPTCHA
 			// cooldown. One instance per process, injected into the

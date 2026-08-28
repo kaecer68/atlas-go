@@ -355,6 +355,22 @@ func TestLoad_SkipsUserEnvFileUnderTest(t *testing.T) {
 	}
 }
 
+// TestLoad_StockpickerExpectDB_EnvOr pins the M12 guard knob: default is
+// empty (sqlite path needs no guard); set via ATLAS_STOCKPICKER_EXPECT_DB
+// for the postgres path (prod sets "atlas").
+func TestLoad_StockpickerExpectDB_EnvOr(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ATLAS_STOCKPICKER_EXPECT_DB", "")
+	if cfg := Load(); cfg.StockpickerExpectDB != "" {
+		t.Errorf("StockpickerExpectDB = %q, want default empty", cfg.StockpickerExpectDB)
+	}
+	t.Setenv("ATLAS_STOCKPICKER_EXPECT_DB", "atlas")
+	if cfg := Load(); cfg.StockpickerExpectDB != "atlas" {
+		t.Errorf("StockpickerExpectDB = %q, want atlas (from env)", cfg.StockpickerExpectDB)
+	}
+}
+
 func TestLoad_EnvFileDoesNotOverrideExisting(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
