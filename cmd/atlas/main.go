@@ -1338,6 +1338,13 @@ func run(args []string, deps appDeps) error {
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
 			}
+			// Phase 4 (PR 2e): daily post-close stockpicker win-rate update.
+			// WorkDir is required (data/state under it); backend/expect-db
+			// default to the job-local sqlite artifact unless the operator
+			// opts into postgres via env + explicit ExpectDB (M12 guard).
+			scheduler.RegisterStockpickerUpdateSchedule(taskMgr, scheduler.StockpickerUpdateDeps{
+				WorkDir: cfg.WorkDir,
+			})
 			// fix/20260731-govflow-cadence: shared in-memory CAPTCHA
 			// cooldown. One instance per process, injected into the
 			// two gov-related background tasks (BTM aggregate +

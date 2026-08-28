@@ -241,79 +241,6 @@ func TestCLI_RejectsInvalidDates(t *testing.T) {
 	}
 }
 
-// TestRealPanel_FlowsFromFile pins the per-symbol flow JSON parsing used by
-// the production panel (foreign_net must unmarshal into FlowPoint.ForeignNet).
-func TestRealPanel_FlowsFromFile(t *testing.T) {
-	dir := t.TempDir()
-	flowsDir := filepath.Join(dir, "stock_flows")
-	if err := os.MkdirAll(flowsDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	file := `{"symbol":"2330","flows":[{"date":"2026-01-05","foreign_net":1500},{"date":"2026-01-06","foreign_net":1200}]}`
-	if err := os.WriteFile(filepath.Join(flowsDir, "2330.json"), []byte(file), 0o644); err != nil {
-		t.Fatalf("write flows: %v", err)
-	}
-	panel := &realPanel{flowsDir: flowsDir}
-	flows, err := panel.Flows(context.Background(), "2330")
-	if err != nil {
-		t.Fatalf("Flows: %v", err)
-	}
-	if len(flows) != 2 {
-		t.Fatalf("len(flows) = %d, want 2", len(flows))
-	}
-	if flows[0].ForeignNet != 1500 || flows[0].Date != "2026-01-05" {
-		t.Fatalf("flow[0] = %+v, want foreign_net 1500 on 2026-01-05", flows[0])
-	}
-	// Missing symbol file → empty (no error), the flow condition stays silent.
-	missing, err := panel.Flows(context.Background(), "9999")
-	if err != nil || len(missing) != 0 {
-		t.Fatalf("missing symbol: err=%v flows=%v, want empty nil", err, missing)
-	}
-}
-
-// TestResolveBackend_Priority verifies the backend resolution order:
-// explicit flag > ATLAS_STORE_BACKEND > job-local sqlite default. The local
-// DATABASE_URL heuristic is gone (M4②): a postgres DSN alone must not flip
-// the backend; normalization + fail-loud validation delegate to the shared
-// ledger resolver (WP4).
-func TestResolveBackend_Priority(t *testing.T) {
-	t.Setenv("ATLAS_STORE_BACKEND", "")
-	t.Setenv("DATABASE_URL", "")
-	if got, err := resolveBackend("postgres"); err != nil || got != "postgres" {
-		t.Fatalf("flag value lost: got %q err %v", got, err)
-	}
-
-	t.Setenv("ATLAS_STORE_BACKEND", "postgres")
-	t.Setenv("DATABASE_URL", "")
-	if got, err := resolveBackend(""); err != nil || got != "postgres" {
-		t.Fatalf("ATLAS_STORE_BACKEND ignored: got %q err %v", got, err)
-	}
-
-	// A postgres DSN without an explicit flag/env must NOT select postgres
-	// anymore — the heuristic diverged from store_factory (M4②).
-	t.Setenv("ATLAS_STORE_BACKEND", "")
-	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost/db")
-	if got, err := resolveBackend(""); err != nil || got != "sqlite" {
-		t.Fatalf("DATABASE_URL must not select postgres anymore: got %q err %v", got, err)
-	}
-
-	t.Setenv("DATABASE_URL", "")
-	if got, err := resolveBackend(""); err != nil || got != "sqlite" {
-		t.Fatalf("empty env should default to job-local sqlite: got %q err %v", got, err)
-	}
-
-	// Garbage and jsonl are rejected loudly through the shared resolver
-	// (WP4 fail-loud; jsonl is not a backend this command can serve).
-	t.Setenv("ATLAS_STORE_BACKEND", "garbage")
-	if got, err := resolveBackend(""); err == nil {
-		t.Fatalf("garbage ATLAS_STORE_BACKEND should error, got %q", got)
-	}
-	t.Setenv("ATLAS_STORE_BACKEND", "jsonl")
-	if got, err := resolveBackend(""); err == nil {
-		t.Fatalf("jsonl ATLAS_STORE_BACKEND should error (unsupported by this command), got %q", got)
-	}
-}
-
 // TestExpectDB_RequiresPostgres: -expect-db guards a postgres migration
 // target, so a sqlite resolution must fail loudly instead of silently
 // ignoring the assertion (M12).
@@ -343,23 +270,6 @@ func TestExpectDB_MissingOnPostgres(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "-expect-db") {
 		t.Fatalf("error = %v, want -expect-db mention", err)
-	}
-}
-
-// TestOpenSQLiteQuoteStore_CreatesSchema verifies the sqlite backend path
-// opens the DB, initializes the schema, and returns a usable QuoteStore.
-func TestOpenSQLiteQuoteStore_CreatesSchema(t *testing.T) {
-	dir := t.TempDir()
-	store, err := openSQLiteQuoteStore(dir)
-	if err != nil {
-		t.Fatalf("openSQLiteQuoteStore: %v", err)
-	}
-	if store == nil {
-		t.Fatal("expected non-nil QuoteStore")
-	}
-	// The schema file should now exist on disk.
-	if _, err := os.Stat(filepath.Join(dir, "data", "state", "atlas.db")); err != nil {
-		t.Fatalf("schema db not created: %v", err)
 	}
 }
 

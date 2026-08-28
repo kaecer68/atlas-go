@@ -1,11 +1,15 @@
-// Panel data sources for run-stockpicker-backtest.
+// Panel data sources for the stockpicker daily win-rate update.
 //
-// realPanel is the production PanelSource: bars from a backend-aware
+// RealPanel is the production PanelSource: bars from a backend-aware
 // ledger.QuoteStore and per-symbol T86 flows from
 // data/state/stock_flows/<symbol>.json. Flow files are the production
 // backfill target ("production 回填後補"); missing files mean the flow
 // condition simply produces no triggers.
-package main
+//
+// Moved here from cmd/run-stockpicker-backtest/panel.go (PR 2e) so the
+// scheduled daily-update task and the CLI share the exact same panel —
+// no copy-pasted panel construction between the two entry points.
+package stockpicker
 
 import (
 	"context"
@@ -17,13 +21,12 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/ledger"
-	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
-// newRealPanel reads bars from a QuoteStore and per-symbol T86 flows from
+// NewRealPanel reads bars from a QuoteStore and per-symbol T86 flows from
 // data/state/stock_flows/<symbol>.json. Flow files are the production
 // backfill target; missing files mean the flow condition stays silent.
-func newRealPanel(ctx context.Context, quoteStore ledger.QuoteStore, workDir string) (stockpicker.PanelSource, error) {
+func NewRealPanel(ctx context.Context, quoteStore ledger.QuoteStore, workDir string) (*RealPanel, error) {
 	lister, ok := quoteStore.(ledger.QuoteSymbolLister)
 	var symbols []string
 	var err error
@@ -34,13 +37,13 @@ func newRealPanel(ctx context.Context, quoteStore ledger.QuoteStore, workDir str
 		}
 	}
 	flowsDir := filepath.Join(workDir, "data", "state", "stock_flows")
-	return &realPanel{quoteStore: quoteStore, symbols: symbols, flowsDir: flowsDir}, nil
+	return &RealPanel{quoteStore: quoteStore, symbols: symbols, flowsDir: flowsDir}, nil
 }
 
-// panelSymbols returns the symbols to scan: from -universe when set, else
+// PanelSymbols returns the symbols to scan: from universeFlag when set, else
 // whatever the panel carries (quotes symbols).
-func panelSymbols(panel stockpicker.PanelSource, universeFlag string) []string {
-	if rp, ok := panel.(*realPanel); ok {
+func PanelSymbols(panel PanelSource, universeFlag string) []string {
+	if rp, ok := panel.(*RealPanel); ok {
 		if universeFlag != "" {
 			return splitUniverse(universeFlag)
 		}
@@ -90,9 +93,9 @@ func normalizeSymbol(s string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(s, ".TW"), ".TWO")
 }
 
-// realPanel is the production PanelSource: bars from a QuoteStore, flows
+// RealPanel is the production PanelSource: bars from a QuoteStore, flows
 // from per-symbol JSON files.
-type realPanel struct {
+type RealPanel struct {
 	quoteStore ledger.QuoteStore
 	symbols    []string
 	flowsDir   string
@@ -102,21 +105,24 @@ type realPanel struct {
 // keyed by session date, so any date before the dataset is harmless.
 var barWindowStart = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// barWindowEnd is the latest date loaded from the QuoteStore. Using now gives
-// a stable upper bound without needing a schema query.
-var barWindowEnd = time.Now()
+// barWindowEnd returns the latest date loaded from the QuoteStore. It is a
+// function (not a package-level frozen var) so a long-lived process (e.g.
+// the cmd/atlas scheduler) always loads quotes up to "now" instead of the
+// process start date — otherwise the daily update would silently serve
+// stale data after the server outlives its start day (PR 2e review MAJOR).
+func barWindowEnd() time.Time { return time.Now() }
 
-func (p *realPanel) Bars(ctx context.Context, symbol string) ([]stockpicker.HistoricalBar, error) {
+func (p *RealPanel) Bars(ctx context.Context, symbol string) ([]HistoricalBar, error) {
 	variants := []string{symbol + ".TW", symbol, symbol + ".TWO"}
 	for _, sym := range variants {
-		quotes, err := p.quoteStore.LoadQuotes(sym, barWindowStart, barWindowEnd)
+		quotes, err := p.quoteStore.LoadQuotes(sym, barWindowStart, barWindowEnd())
 		if err != nil {
 			return nil, fmt.Errorf("load quotes %s: %w", sym, err)
 		}
 		if len(quotes) > 0 {
-			bars := make([]stockpicker.HistoricalBar, len(quotes))
+			bars := make([]HistoricalBar, len(quotes))
 			for i, q := range quotes {
-				bars[i] = stockpicker.HistoricalBar{
+				bars[i] = HistoricalBar{
 					Date:   q.Date,
 					Close:  q.Close,
 					Volume: q.Volume,
@@ -130,11 +136,11 @@ func (p *realPanel) Bars(ctx context.Context, symbol string) ([]stockpicker.Hist
 
 // flowFile is the on-disk shape of data/state/stock_flows/<symbol>.json.
 type flowFile struct {
-	Symbol string                  `json:"symbol"`
-	Flows  []stockpicker.FlowPoint `json:"flows"`
+	Symbol string      `json:"symbol"`
+	Flows  []FlowPoint `json:"flows"`
 }
 
-func (p *realPanel) Flows(ctx context.Context, symbol string) ([]stockpicker.FlowPoint, error) {
+func (p *RealPanel) Flows(ctx context.Context, symbol string) ([]FlowPoint, error) {
 	data, err := os.ReadFile(filepath.Join(p.flowsDir, symbol+".json"))
 	if err != nil {
 		if os.IsNotExist(err) {
