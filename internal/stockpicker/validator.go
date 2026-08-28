@@ -1,55 +1,72 @@
-// Package validator.go — PR 2b three-layer capital-flow gateway.
+// Package validator.go — PR 2b mixed-granularity capital-flow gateway.
 //
 // The stockpicker condition engine (conditions.go, PR 2a) decides WHEN a
 // signal fires, but win rates built on "外資小幅賣超但勝率高" noise are not
 // trustworthy. This file adds the gate in front of that: every candidate
 // (symbol + condition) must sit on top of MEANINGFUL capital flow.
 //
-// The gate has three layers, each backed by one capitalflow ForceScore
-// dimension (never guessed — read from internal/capitalflow/types.go and
-// forces.go):
+// The gate is a two-level design (PR 2b review fix for granularity):
 //
-//	foreign       → capitalflow.ForceForeign       (外資, official_actor)
-//	institutional → capitalflow.ForceInstitutional (投信, official_actor)
-//	retail        → capitalflow.ForceRetail        (散戶, behavioral_proxy)
+//   - 個股層 (per-symbol): the foreign layer reads the CHECKED SYMBOL's own
+//     T86 foreign net flow — FlowPoint.ForeignNet (backtest.go:38, units
+//     shares/1e3 = 千股) — via the points map keyed by symbol. The symbol
+//     argument is a real query key, not a label. The layer passes when
+//     |ForeignNet| converted to 億股 (÷1e5) exceeds min_abs_net. Per-symbol
+//     FlowPoint has no z-score channel, so the foreign layer is
+//     magnitude-only.
+//   - 市場 regime 層 (market level): institutional and retail have no
+//     per-symbol data source, so they stay as market-regime layers backed by
+//     the market-wide capitalflow ForceScore dimensions (ForceInstitutional
+//     / ForceRetail). 文件明示: 無個股層級資料，僅供市場 regime 參考.
 //
-// Layer semantics (per the PR 2b contract): a layer passes when the force
-// reading is meaningful in ABSOLUTE terms — abs(RawValue) above min_abs_raw
-// (e.g. "abs 淨買超 > X 億") OR abs(ZScore) above min_abs_z ("z-score > Y").
-// Direction is the condition's job, not the gate's: the gate only rejects
+// Layer semantics: a market layer passes when the force reading is
+// meaningful in ABSOLUTE terms — abs(RawValue) > min_abs_raw OR abs(ZScore)
+// > min_abs_z (strict >; a threshold <= 0 disables that metric). Direction
+// is the condition's job, not the gate's: the gate only rejects
 // magnitude-noise, exactly the "小幅賣超但勝率高" failure mode.
 //
-// Missing data is handled fail-open: when a layer's force is absent from the
-// input or reports DataAvailable=false (capitalflow's "source channel empty",
-// spec §8.3 / CF-INV-06), the layer is SKIPPED and annotated — never treated
-// as a failure, so a data gap cannot silently kill a symbol ("缺層 skip 並註
-// 記，不可誤殺").
+// Missing data is handled per-layer fail-open: when a layer's data is absent
+// (no FlowPoint for the symbol, force missing from the input, or
+// DataAvailable=false — capitalflow's "source channel empty", spec §8.3 /
+// CF-INV-06), the layer is SKIPPED and annotated — never treated as a
+// failure, so a data gap cannot silently kill a symbol ("缺層 skip 並註記，
+// 不可誤殺"). When EVERY enforced layer is skipped the verdict is
+// AllSkipped=true with SkippedCount: with FailClosedWhenAllMissing=true (the
+// default, live path) the gate fails closed — "全缺層不交易"; backtests may
+// set false to keep evaluating on partial data.
 //
-// All thresholds live in configs/parameters.json → stockpicker.flow_gateway
-// (mirrored by DefaultFlowGatewayParameters as the documented fallback for
-// missing files, following the repo-wide parameters_defaults.go convention).
-// The gate logic itself contains no magic numbers.
+// All thresholds live in configs/parameters.json → stockpicker.flow_gateway,
+// read through the config singleton (config.GetParametersConfig().Stockpicker
+// .FlowGateway, internal/config/parameters.go). The gate logic itself
+// contains no magic numbers.
 package stockpicker
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
 )
+
+// foreignNetToYiShares converts FlowPoint.ForeignNet (千股 = shares/1e3) to
+// 億股 (hundred million shares): 1 億股 = 1e8 shares = 1e5 × 千股, so
+// 億股 = ForeignNet / 1e5. All foreign per-symbol thresholds are expressed
+// in 億股.
+const foreignNetToYiShares = 1e5
 
 // FlowLayer identifies one of the three gateway layers.
 type FlowLayer string
 
 const (
-	// FlowLayerForeign is the 外資 layer (capitalflow.ForceForeign).
+	// FlowLayerForeign is the 外資 layer — per-symbol (個股層), backed by
+	// FlowPoint.ForeignNet.
 	FlowLayerForeign FlowLayer = "foreign"
-	// FlowLayerInstitutional is the 投信 layer (capitalflow.ForceInstitutional).
+	// FlowLayerInstitutional is the 投信 layer — market regime (市場層),
+	// backed by capitalflow.ForceInstitutional.
 	FlowLayerInstitutional FlowLayer = "institutional"
-	// FlowLayerRetail is the 散戶 layer (capitalflow.ForceRetail).
+	// FlowLayerRetail is the 散戶 layer — market regime (市場層), backed by
+	// capitalflow.ForceRetail.
 	FlowLayerRetail FlowLayer = "retail"
 )
 
@@ -71,35 +88,48 @@ func (l FlowLayer) DisplayName() string {
 	}
 }
 
-// LayerThreshold holds the two numeric gates for one layer. A gate value
-// <= 0 disables that metric (fail-open), so a layer with both gates at 0
-// always passes whenever its data is available.
+// LayerThreshold holds the two numeric gates for one MARKET-REGIME layer
+// (institutional / retail). A gate value <= 0 disables that metric
+// (fail-open), so a layer with both gates at 0 always passes whenever its
+// data is available.
 type LayerThreshold struct {
 	// MinAbsRaw is the minimum absolute RawValue (units follow the
-	// capitalflow provenance row: 億股 for foreign/institutional,
-	// pct_composite for retail).
+	// capitalflow provenance row: 億股 for institutional, pct_composite for
+	// retail).
 	MinAbsRaw float64
 	// MinAbsZ is the minimum absolute ZScore (capitalflow 60-day rolling).
 	MinAbsZ float64
 }
 
-// FlowGatewayParameters is the stockpicker.flow_gateway section of
-// configs/parameters.json. ConditionLayers optionally narrows the enforced
-// layer set per condition ID; a condition absent from the map enforces all
-// three layers.
+// ForeignThreshold is the per-symbol foreign layer gate (個股層).
+type ForeignThreshold struct {
+	// MinAbsNet is the minimum |foreign net buy| of the CHECKED SYMBOL in
+	// 億股. The evaluator converts FlowPoint.ForeignNet (千股) by ÷1e5.
+	// A value <= 0 disables the gate (fail-open).
+	MinAbsNet float64
+}
+
+// FlowGatewayParameters is the evaluator's lean parameter table, converted
+// from configs/parameters.json → stockpicker.flow_gateway (the authoritative
+// config-package table with provenance metadata; see flowGatewayParamsFromConfig).
+// ConditionLayers optionally narrows the enforced layer set per condition ID;
+// a condition absent from the map enforces all three layers.
 type FlowGatewayParameters struct {
-	Foreign         LayerThreshold
+	Foreign         ForeignThreshold
 	Institutional   LayerThreshold
 	Retail          LayerThreshold
 	ConditionLayers map[string][]FlowLayer
+	// FailClosedWhenAllMissing: true → when every enforced layer is skipped
+	// (missing data), the verdict fails closed (no-decision). false → passes
+	// with AllSkipped=true. Default true (live path: 全缺層不交易).
+	FailClosedWhenAllMissing bool
 }
 
-// Layer returns the threshold for a layer. Unknown layers get a zero
-// threshold (both metrics disabled → pass whenever data is available).
+// Layer returns the market-regime threshold for a layer. The foreign layer
+// has its own threshold type (ForeignThreshold) and is handled separately by
+// Check; this method returns a zero threshold for it.
 func (p FlowGatewayParameters) Layer(l FlowLayer) LayerThreshold {
 	switch l {
-	case FlowLayerForeign:
-		return p.Foreign
 	case FlowLayerInstitutional:
 		return p.Institutional
 	case FlowLayerRetail:
@@ -124,140 +154,54 @@ func (p FlowGatewayParameters) LayersFor(conditionID string) []FlowLayer {
 }
 
 // DefaultFlowGatewayParameters returns the documented fallback thresholds.
-// The values mirror configs/parameters.json → stockpicker.flow_gateway and
-// are used only when the file or section is absent (same convention as
-// internal/config/parameters_defaults.go). The gate logic never reads these
-// literals directly.
+// The values mirror configs/parameters.json → stockpicker.flow_gateway (and
+// internal/config defaultFlowGatewayParameters) and are used only as the
+// fallback when the config singleton is unavailable. The gate logic never
+// reads these literals directly.
 func DefaultFlowGatewayParameters() FlowGatewayParameters {
 	return FlowGatewayParameters{
-		Foreign: LayerThreshold{
-			MinAbsRaw: 1.0, // 億股: meaningful market-wide foreign net buy
-			MinAbsZ:   0.5, // capitalflow trendFor bullish/bearish boundary
+		Foreign: ForeignThreshold{
+			MinAbsNet: 0.1, // 億股: meaningful per-symbol foreign net buy (≈1 萬張)
 		},
 		Institutional: LayerThreshold{
 			MinAbsRaw: 0.3, // 億股: 投信 daily magnitudes are smaller than 外資
-			MinAbsZ:   0.5,
+			MinAbsZ:   0.5, // capitalflow trendFor bullish/bearish boundary
 		},
 		Retail: LayerThreshold{
 			MinAbsRaw: 1.0, // pct_composite: >1pct margin+short move is meaningful
 			MinAbsZ:   0.5,
 		},
-		ConditionLayers: map[string][]FlowLayer{},
+		ConditionLayers:          map[string][]FlowLayer{},
+		FailClosedWhenAllMissing: true,
 	}
 }
 
-// LoadFlowGatewayParameters reads the stockpicker.flow_gateway section from
-// configs/parameters.json. The path resolves from ATLAS_PARAMETERS_CONFIG_PATH,
-// ATLAS_PARAMETERS_CONFIG, or a repo-root walk-up from the working directory
-// (same default as internal/config). A missing file or section returns the
-// documented defaults with no error; malformed JSON returns an error so
-// callers can decide whether to fall back.
-func LoadFlowGatewayParameters() (FlowGatewayParameters, error) {
-	path := resolveParametersConfigPath()
-	if path == "" {
-		return DefaultFlowGatewayParameters(), nil
-	}
-	return loadFlowGatewayParameters(path)
-}
-
-// loadFlowGatewayParameters is the injectable loader used by tests.
-func loadFlowGatewayParameters(path string) (FlowGatewayParameters, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultFlowGatewayParameters(), nil
-		}
-		return FlowGatewayParameters{}, fmt.Errorf("stockpicker: read flow_gateway config %s: %w", path, err)
-	}
-	var file struct {
-		Stockpicker struct {
-			FlowGateway *flowGatewayFileSection `json:"flow_gateway"`
-		} `json:"stockpicker"`
-	}
-	if err := json.Unmarshal(data, &file); err != nil {
-		return FlowGatewayParameters{}, fmt.Errorf("stockpicker: parse flow_gateway config %s: %w", path, err)
-	}
-	if file.Stockpicker.FlowGateway == nil {
-		return DefaultFlowGatewayParameters(), nil
-	}
-	return file.Stockpicker.FlowGateway.toParams(), nil
-}
-
-// resolveParametersConfigPath locates configs/parameters.json: env override
-// first, then walk up from the working directory (tests and jobs run from
-// the repo root; walking up covers nested invocation dirs). Returns "" when
-// no file is found so callers fall back to defaults.
-func resolveParametersConfigPath() string {
-	for _, env := range []string{"ATLAS_PARAMETERS_CONFIG_PATH", "ATLAS_PARAMETERS_CONFIG"} {
-		if p := os.Getenv(env); p != "" {
-			return p
-		}
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return "configs/parameters.json"
-	}
-	for range 10 {
-		candidate := filepath.Join(dir, "configs", "parameters.json")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return ""
-}
-
-// flowGatewayFileSection mirrors the JSON shape of
-// stockpicker.flow_gateway (parameter blocks use the repo-wide
-// {"value": ..., "rationale": ..., "source": ...} convention; rationale and
-// source are documentation only and are intentionally not decoded).
-type flowGatewayFileSection struct {
-	Layers     map[string]flowLayerFile     `json:"layers"`
-	Conditions map[string]flowConditionFile `json:"conditions,omitempty"`
-}
-
-type flowParamValue struct {
-	Value float64 `json:"value"`
-}
-
-type flowLayerFile struct {
-	MinAbsRaw flowParamValue `json:"min_abs_raw"`
-	MinAbsZ   flowParamValue `json:"min_abs_z"`
-}
-
-type flowConditionFile struct {
-	Layers []string `json:"layers"`
-}
-
-// toParams merges the file section over the documented defaults: a layer
-// key present in the file replaces that layer's thresholds wholesale (a
-// missing metric inside the block decodes to 0 = metric disabled); a
-// condition key maps its declared layer set. Layers/conditions absent from
-// the file keep the defaults.
-func (s *flowGatewayFileSection) toParams() FlowGatewayParameters {
+// flowGatewayParamsFromConfig maps the config-package flow_gateway section
+// (configs/parameters.json → stockpicker.flow_gateway, the authoritative
+// parameter table) into the evaluator's lean parameter table. Threshold
+// units are preserved verbatim: foreign min_abs_net is in 億股 (compared
+// against FlowPoint.ForeignNet ÷1e5), institutional/retail min_abs_raw
+// follow the capitalflow provenance row (億股 / pct_composite).
+func flowGatewayParamsFromConfig(cfg config.FlowGatewayParameters) FlowGatewayParameters {
 	p := DefaultFlowGatewayParameters()
-	if l, ok := s.Layers["foreign"]; ok {
-		p.Foreign = LayerThreshold{MinAbsRaw: l.MinAbsRaw.Value, MinAbsZ: l.MinAbsZ.Value}
+	p.Foreign = ForeignThreshold{MinAbsNet: cfg.Layers.Foreign.MinAbsNet.Value}
+	p.Institutional = LayerThreshold{MinAbsRaw: cfg.Layers.Institutional.MinAbsRaw.Value, MinAbsZ: cfg.Layers.Institutional.MinAbsZ.Value}
+	p.Retail = LayerThreshold{MinAbsRaw: cfg.Layers.Retail.MinAbsRaw.Value, MinAbsZ: cfg.Layers.Retail.MinAbsZ.Value}
+	p.FailClosedWhenAllMissing = cfg.FailClosedWhenAllMissing.Value
+	p.ConditionLayers = map[string][]FlowLayer{}
+	condLayers := map[string][]string{
+		string(ConditionForeign3DNetBuy): cfg.Conditions.Foreign3DNetBuy.Layers.Value,
+		string(ConditionMomentum20D):     cfg.Conditions.Momentum20DPosit.Layers.Value,
 	}
-	if l, ok := s.Layers["institutional"]; ok {
-		p.Institutional = LayerThreshold{MinAbsRaw: l.MinAbsRaw.Value, MinAbsZ: l.MinAbsZ.Value}
-	}
-	if l, ok := s.Layers["retail"]; ok {
-		p.Retail = LayerThreshold{MinAbsRaw: l.MinAbsRaw.Value, MinAbsZ: l.MinAbsZ.Value}
-	}
-	for id, cond := range s.Conditions {
-		if len(cond.Layers) == 0 {
+	for id, names := range condLayers {
+		if len(names) == 0 {
 			continue
 		}
-		layers := make([]FlowLayer, 0, len(cond.Layers))
-		for _, ls := range cond.Layers {
-			layers = append(layers, FlowLayer(ls))
+		ls := make([]FlowLayer, 0, len(names))
+		for _, n := range names {
+			ls = append(ls, FlowLayer(n))
 		}
-		p.ConditionLayers[id] = layers
+		p.ConditionLayers[id] = ls
 	}
 	return p
 }
@@ -273,7 +217,7 @@ const (
 	// thresholds were not met — the symbol fails the gate.
 	LayerStatusFail LayerStatus = "fail"
 	// LayerStatusSkip means the layer's data was missing; the layer is
-	// annotated and ignored (fail-open, never kills the symbol).
+	// annotated and ignored (fail-open, never kills the symbol by itself).
 	LayerStatusSkip LayerStatus = "skip"
 )
 
@@ -284,18 +228,27 @@ type LayerVerdict struct {
 	Reason string
 }
 
-// FlowVerdict is the result of a three-layer gateway check for one
+// FlowVerdict is the result of a two-level gateway check for one
 // (symbol, condition) candidate.
 type FlowVerdict struct {
 	Symbol      string
 	ConditionID string
 	Pass        bool
 	Layers      []LayerVerdict
+	// AllSkipped is true when every enforced layer was skipped (missing
+	// data). With FailClosedWhenAllMissing=true the verdict then fails
+	// closed (no-decision); with false it passes.
+	AllSkipped bool
+	// SkippedCount is the number of enforced layers that were skipped.
+	SkippedCount int
+	// Reason annotates the verdict when it fails closed on all-missing data.
+	Reason string
 }
 
-// FlowGateway is the three-layer capital-flow gate. It is a pure
-// evaluator: thresholds come from the parameters table, force readings come
-// from the caller (typically capitalflow.Service.LatestDaily → DailyReport).
+// FlowGateway is the two-level capital-flow gate. It is a pure evaluator:
+// thresholds come from the parameter table, per-symbol flows come from the
+// caller (stockpicker backtest FlowPoint rows), market forces come from the
+// caller (typically capitalflow.Service.LatestDaily → DailyReport).
 type FlowGateway struct {
 	params FlowGatewayParameters
 }
@@ -306,32 +259,39 @@ func NewFlowGateway(params FlowGatewayParameters) *FlowGateway {
 }
 
 // NewDefaultFlowGateway builds a gateway with the loaded
-// stockpicker.flow_gateway parameters (configs/parameters.json or the
-// documented defaults).
-func NewDefaultFlowGateway() (*FlowGateway, error) {
-	params, err := LoadFlowGatewayParameters()
-	if err != nil {
-		return nil, err
+// stockpicker.flow_gateway parameters from the config singleton
+// (config.GetParametersConfig().Stockpicker.FlowGateway —
+// configs/parameters.json or the documented defaults). It never errors: the
+// config singleton falls back to defaults when no file is present.
+func NewDefaultFlowGateway() *FlowGateway {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		return NewFlowGateway(DefaultFlowGatewayParameters())
 	}
-	return NewFlowGateway(params), nil
+	return NewFlowGateway(flowGatewayParamsFromConfig(cfg.Stockpicker.FlowGateway))
 }
 
-// Check evaluates the three-layer gateway for symbol + condition against
-// the supplied capitalflow force readings. The forces are usually
-// report.Forces from capitalflow.Service.LatestDaily (see CheckFromReport).
+// Check evaluates the two-level gateway for symbol + condition against the
+// symbol's per-symbol foreign flow (points[symbol], 個股層) and the supplied
+// market-wide capitalflow force readings (市場 regime 層). The forces are
+// usually report.Forces from capitalflow.Service.LatestDaily (see
+// CheckFromReport).
 //
 // Verdict semantics:
 //
-//   - A layer whose force is absent from the input or has DataAvailable=false
-//     is SKIPPED with an annotated reason (fail-open, 不可誤殺).
-//   - A layer whose data is available fails when abs(RawValue) <= min_abs_raw
-//     AND abs(ZScore) <= min_abs_z (with either metric disabled when its
-//     threshold is <= 0).
+//   - A layer whose data is absent from the input (no FlowPoint for symbol,
+//     force missing from the slice, or DataAvailable=false) is SKIPPED with
+//     an annotated reason (fail-open, 不可誤殺).
+//   - The foreign layer fails when abs(ForeignNet 億股) <= min_abs_net
+//     (strict >; threshold <= 0 disables).
+//   - A market layer fails when abs(RawValue) <= min_abs_raw AND
+//     abs(ZScore) <= min_abs_z (strict > for each enabled metric).
 //   - Pass is true iff no enforced layer failed; skipped layers do not
-//     affect the outcome.
+//     affect the outcome. If EVERY enforced layer was skipped, AllSkipped is
+//     true and Pass follows FailClosedWhenAllMissing.
 //
 // A nil receiver returns Pass=true (no gate configured → fail-open).
-func (g *FlowGateway) Check(symbol string, conditionID string, forces []capitalflow.ForceScore) FlowVerdict {
+func (g *FlowGateway) Check(symbol string, conditionID string, points map[string]FlowPoint, forces []capitalflow.ForceScore) FlowVerdict {
 	verdict := FlowVerdict{Symbol: symbol, ConditionID: conditionID}
 	if g == nil {
 		verdict.Pass = true
@@ -341,55 +301,118 @@ func (g *FlowGateway) Check(symbol string, conditionID string, forces []capitalf
 	for _, f := range forces {
 		byForce[f.Force] = f
 	}
+	layers := g.params.LayersFor(conditionID)
 	pass := true
-	for _, layer := range g.params.LayersFor(conditionID) {
-		score, ok := byForce[forceNameForLayer(layer)]
-		if !ok || !score.DataAvailable {
+	skipped := 0
+	for _, layer := range layers {
+		switch layer {
+		case FlowLayerForeign:
+			point, ok := points[symbol]
+			if !ok {
+				if len(points) == 0 {
+					// Data source entirely absent (e.g. pre-backfill): skip,
+					// fail-open — a data gap must not kill a symbol.
+					skipped++
+					verdict.Layers = append(verdict.Layers, LayerVerdict{
+						Layer:  layer,
+						Status: LayerStatusSkip,
+						Reason: fmt.Sprintf("%s層缺個股 flow 資料（無任何 FlowPoint 輸入），skip 不誤殺", layer.DisplayName()),
+					})
+					continue
+				}
+				// Data exists for OTHER symbols but not THIS one: the symbol
+				// has no foreign backing — fail, exactly the "無外資背書"
+				// noise this gate exists to filter.
+				pass = false
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusFail,
+					Reason: fmt.Sprintf("%s層不過: 無 %s 的個股外資 flow 資料（其他 symbol 有資料，本 symbol 無外資背書）", layer.DisplayName(), symbol),
+				})
+				continue
+			}
+			netYi := math.Abs(point.ForeignNet) / foreignNetToYiShares
+			th := g.params.Foreign.MinAbsNet
+			if th <= 0 || netYi > th {
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusPass,
+					Reason: fmt.Sprintf("%s層通過（個股淨買超 %.2f 億股達標）", layer.DisplayName(), netYi),
+				})
+			} else {
+				pass = false
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusFail,
+					Reason: fmt.Sprintf("%s層不過: abs(個股淨買超)=%.2f 億股 ≤ min_abs_net=%.2f 億股（個股外資幅度不足）", layer.DisplayName(), netYi, th),
+				})
+			}
+		case FlowLayerInstitutional, FlowLayerRetail:
+			score, ok := byForce[forceNameForLayer(layer)]
+			if !ok || !score.DataAvailable {
+				skipped++
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusSkip,
+					Reason: fmt.Sprintf("%s層缺資料（capitalflow data unavailable），skip 不誤殺", layer.DisplayName()),
+				})
+				continue
+			}
+			th := g.params.Layer(layer)
+			if reason := layerFailReason(layer, score, th); reason != "" {
+				pass = false
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusFail,
+					Reason: reason,
+				})
+			} else {
+				verdict.Layers = append(verdict.Layers, LayerVerdict{
+					Layer:  layer,
+					Status: LayerStatusPass,
+					Reason: fmt.Sprintf("%s層通過（市場 regime 資金流幅度達標）", layer.DisplayName()),
+				})
+			}
+		default:
+			// Unknown layer names are rejected at config load
+			// (config.validateFlowGateway); defensively skip any that still
+			// reach the evaluator so it can never mis-fail a symbol.
+			skipped++
 			verdict.Layers = append(verdict.Layers, LayerVerdict{
 				Layer:  layer,
 				Status: LayerStatusSkip,
-				Reason: fmt.Sprintf("%s層缺資料（capitalflow data unavailable），skip 不誤殺", layer.DisplayName()),
-			})
-			continue
-		}
-		th := g.params.Layer(layer)
-		if reason := layerFailReason(layer, score, th); reason != "" {
-			pass = false
-			verdict.Layers = append(verdict.Layers, LayerVerdict{
-				Layer:  layer,
-				Status: LayerStatusFail,
-				Reason: reason,
-			})
-		} else {
-			verdict.Layers = append(verdict.Layers, LayerVerdict{
-				Layer:  layer,
-				Status: LayerStatusPass,
-				Reason: fmt.Sprintf("%s層通過（資金流幅度達標）", layer.DisplayName()),
+				Reason: fmt.Sprintf("未知層 %q，skip 不誤殺", layer),
 			})
 		}
+	}
+	verdict.SkippedCount = skipped
+	verdict.AllSkipped = skipped == len(layers)
+	if verdict.AllSkipped && g.params.FailClosedWhenAllMissing {
+		pass = false
+		verdict.Reason = fmt.Sprintf("全缺層 no-decision：%d 個強制層皆缺資料，fail-closed 不交易", skipped)
 	}
 	verdict.Pass = pass
 	return verdict
 }
 
-// CheckFromReport evaluates the gateway against a capitalflow.DailyReport —
-// the canonical read path output of capitalflow.Service.LatestDaily. A nil
-// report evaluates with no forces: every enforced layer is skipped and the
-// verdict is Pass=true (fail-open, 不可誤殺).
-func (g *FlowGateway) CheckFromReport(symbol string, conditionID string, report *capitalflow.DailyReport) FlowVerdict {
+// CheckFromReport evaluates the gateway against a symbol's per-symbol flow
+// point and a capitalflow.DailyReport — the canonical read path output of
+// capitalflow.Service.LatestDaily. A nil report evaluates with no market
+// forces: market-regime layers are skipped and only the per-symbol foreign
+// layer can pass (fail-open, 不可誤殺).
+func (g *FlowGateway) CheckFromReport(symbol string, conditionID string, points map[string]FlowPoint, report *capitalflow.DailyReport) FlowVerdict {
 	if report == nil {
-		return g.Check(symbol, conditionID, nil)
+		return g.Check(symbol, conditionID, points, nil)
 	}
-	return g.Check(symbol, conditionID, report.Forces)
+	return g.Check(symbol, conditionID, points, report.Forces)
 }
 
-// forceNameForLayer maps a gateway layer to its capitalflow dimension.
-// Unknown layers map to the empty ForceName, which never matches a real
-// reading → the layer is skipped.
+// forceNameForLayer maps a gateway market-regime layer to its capitalflow
+// dimension. The foreign layer is per-symbol (FlowPoint) and never uses this
+// mapping; unknown layers map to the empty ForceName, which never matches a
+// real reading → the layer is skipped.
 func forceNameForLayer(l FlowLayer) capitalflow.ForceName {
 	switch l {
-	case FlowLayerForeign:
-		return capitalflow.ForceForeign
 	case FlowLayerInstitutional:
 		return capitalflow.ForceInstitutional
 	case FlowLayerRetail:
@@ -399,10 +422,11 @@ func forceNameForLayer(l FlowLayer) capitalflow.ForceName {
 	}
 }
 
-// layerFailReason returns "" when the layer passes, or a Chinese reason
-// identifying why the layer fails. A layer passes when abs(RawValue) >
-// min_abs_raw OR abs(ZScore) > min_abs_z (a threshold <= 0 disables that
-// metric); both below → fail ("外資小幅賣超但勝率高" noise gate).
+// layerFailReason returns "" when the market-regime layer passes, or a
+// Chinese reason identifying why it fails. A layer passes when
+// abs(RawValue) > min_abs_raw OR abs(ZScore) > min_abs_z (strict >; a
+// threshold <= 0 disables that metric); both at-or-below → fail ("外資小幅
+// 賣超但勝率高" noise gate).
 func layerFailReason(layer FlowLayer, score capitalflow.ForceScore, th LayerThreshold) string {
 	rawOk := th.MinAbsRaw <= 0 || math.Abs(score.RawValue) > th.MinAbsRaw
 	zOk := th.MinAbsZ <= 0 || math.Abs(score.ZScore) > th.MinAbsZ

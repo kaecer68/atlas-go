@@ -1166,6 +1166,11 @@ type StockpickerParameters struct {
 	Costs       StockpickerCostsParameters       `json:"costs"`
 	Calibration StockpickerCalibrationParameters `json:"calibration"`
 	Conditions  StockpickerConditionsParameters  `json:"conditions,omitempty"`
+	// FlowGateway configures the PR 2b two-level capital-flow gate
+	// (internal/stockpicker/validator.go): a per-symbol foreign layer
+	// (個股層) plus institutional/retail market-regime layers (市場 regime
+	// 層). Read by the validator via config.GetParametersConfig().
+	FlowGateway FlowGatewayParameters `json:"flow_gateway,omitempty"`
 }
 
 // StockpickerCostsParameters holds trading-cost assumptions used by NetHit.
@@ -1197,6 +1202,63 @@ type StockpickerConditionWindow struct {
 	WindowDays ParameterMetadata[float64] `json:"window_days"`
 	// Threshold is the value the window aggregate must exceed to trigger.
 	Threshold ParameterMetadata[float64] `json:"threshold"`
+}
+
+// FlowGatewayParameters is the stockpicker.flow_gateway section of
+// configs/parameters.json (PR 2b). It configures the two-level capital-flow
+// gateway in internal/stockpicker/validator.go: a per-symbol foreign layer
+// (個股層) plus institutional/retail market-regime layers (市場 regime 層).
+// Every value carries the repo-wide {"value", "rationale", "source"}
+// provenance convention; the evaluator reads .Value only.
+type FlowGatewayParameters struct {
+	// FailClosedWhenAllMissing: when every enforced layer is skipped due to
+	// missing data, close the gate (no-decision → fail). Default true so the
+	// live path never trades on a fully-missing flow picture; backtests may
+	// set false to keep evaluating on partial data.
+	FailClosedWhenAllMissing ParameterMetadata[bool] `json:"fail_closed_when_all_missing"`
+	Layers                   FlowGatewayLayers       `json:"layers"`
+	Conditions               FlowGatewayConditions   `json:"conditions,omitempty"`
+}
+
+// FlowGatewayLayers groups the per-layer threshold blocks.
+type FlowGatewayLayers struct {
+	// Foreign is the per-symbol layer (個股層): min_abs_net is the minimum
+	// |foreign net buy| of the CHECKED SYMBOL in 億股. FlowPoint.ForeignNet
+	// is 千股 (shares/1e3); the evaluator converts 億股 = ForeignNet / 1e5.
+	Foreign FlowGatewayForeignThreshold `json:"foreign"`
+	// Institutional and Retail are market-regime layers (市場 regime 層):
+	// no per-symbol source exists, so they gate on the market-wide
+	// capitalflow ForceScore readings (ForceInstitutional / ForceRetail) —
+	// 無個股層級資料，僅供市場 regime 參考.
+	Institutional FlowGatewayMarketThreshold `json:"institutional"`
+	Retail        FlowGatewayMarketThreshold `json:"retail"`
+}
+
+// FlowGatewayForeignThreshold is the per-symbol foreign layer gate.
+type FlowGatewayForeignThreshold struct {
+	MinAbsNet ParameterMetadata[float64] `json:"min_abs_net"`
+}
+
+// FlowGatewayMarketThreshold is a market-regime layer gate (institutional /
+// retail). A value <= 0 disables that metric (fail-open).
+type FlowGatewayMarketThreshold struct {
+	MinAbsRaw ParameterMetadata[float64] `json:"min_abs_raw"`
+	MinAbsZ   ParameterMetadata[float64] `json:"min_abs_z"`
+}
+
+// FlowGatewayConditions maps each registered condition ID to its enforced
+// layer set. A condition absent here enforces all three layers in the
+// evaluator (AllFlowLayers).
+type FlowGatewayConditions struct {
+	Foreign3DNetBuy  FlowGatewayCondition `json:"foreign-3d-net-buy"`
+	Momentum20DPosit FlowGatewayCondition `json:"momentum-20d-positive"`
+}
+
+// FlowGatewayCondition declares which gateway layers a condition enforces.
+// Layer names must be one of foreign|institutional|retail (validated at
+// config load — a typo like "foregin" is a load error, not a silent skip).
+type FlowGatewayCondition struct {
+	Layers ParameterMetadata[[]string] `json:"layers"`
 }
 
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.
@@ -1796,8 +1858,11 @@ func (p *ParametersConfig) validateEngine() error {
 }
 
 var (
-	parametersConfig    *ParametersConfig
-	parametersPath      = envOr("ATLAS_PARAMETERS_CONFIG", "configs/parameters.json")
+	parametersConfig *ParametersConfig
+	// Canonical parameters path env var is ATLAS_PARAMETERS_CONFIG_PATH
+	// (config.go Load); the legacy ATLAS_PARAMETERS_CONFIG name is removed
+	// (PR 2b review fix — 假 env var, 倉庫正規是 ATLAS_PARAMETERS_CONFIG_PATH).
+	parametersPath      = envOr("ATLAS_PARAMETERS_CONFIG_PATH", "configs/parameters.json")
 	parametersConfigDir string // set when loaded from directory, used by Save
 )
 
@@ -1825,6 +1890,46 @@ func ReloadParametersConfig() error {
 // GetParametersConfigPath returns the path to the parameters configuration file.
 func GetParametersConfigPath() string {
 	return parametersPath
+}
+
+// validateFlowGateway enforces the stockpicker.flow_gateway contract:
+// condition layer names must be one of foreign|institutional|retail and all
+// thresholds must be non-negative. A layer-name typo (e.g. "foregin") is a
+// config-load error rather than a silent skip (PR 2b review fix), so a typo
+// can never silently narrow the gate.
+func (p *ParametersConfig) validateFlowGateway() error {
+	validLayer := map[string]bool{"foreign": true, "institutional": true, "retail": true}
+	checkLayers := func(condID string, layers []string) error {
+		for _, l := range layers {
+			if !validLayer[l] {
+				return fmt.Errorf("stockpicker.flow_gateway.conditions.%s.layers: unknown layer %q (want foreign|institutional|retail)", condID, l)
+			}
+		}
+		return nil
+	}
+	if err := checkLayers("foreign-3d-net-buy", p.Stockpicker.FlowGateway.Conditions.Foreign3DNetBuy.Layers.Value); err != nil {
+		return err
+	}
+	if err := checkLayers("momentum-20d-positive", p.Stockpicker.FlowGateway.Conditions.Momentum20DPosit.Layers.Value); err != nil {
+		return err
+	}
+	fg := p.Stockpicker.FlowGateway
+	if fg.Layers.Foreign.MinAbsNet.Value < 0 {
+		return fmt.Errorf("stockpicker.flow_gateway.layers.foreign.min_abs_net (%.3f) must be non-negative", fg.Layers.Foreign.MinAbsNet.Value)
+	}
+	if fg.Layers.Institutional.MinAbsRaw.Value < 0 {
+		return fmt.Errorf("stockpicker.flow_gateway.layers.institutional.min_abs_raw (%.3f) must be non-negative", fg.Layers.Institutional.MinAbsRaw.Value)
+	}
+	if fg.Layers.Institutional.MinAbsZ.Value < 0 {
+		return fmt.Errorf("stockpicker.flow_gateway.layers.institutional.min_abs_z (%.3f) must be non-negative", fg.Layers.Institutional.MinAbsZ.Value)
+	}
+	if fg.Layers.Retail.MinAbsRaw.Value < 0 {
+		return fmt.Errorf("stockpicker.flow_gateway.layers.retail.min_abs_raw (%.3f) must be non-negative", fg.Layers.Retail.MinAbsRaw.Value)
+	}
+	if fg.Layers.Retail.MinAbsZ.Value < 0 {
+		return fmt.Errorf("stockpicker.flow_gateway.layers.retail.min_abs_z (%.3f) must be non-negative", fg.Layers.Retail.MinAbsZ.Value)
+	}
+	return nil
 }
 
 // SetRiskCalibrationMetadata records when and how a risk parameter was
