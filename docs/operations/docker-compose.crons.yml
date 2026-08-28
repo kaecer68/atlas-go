@@ -7,10 +7,16 @@ services:
     image: atlas-cron:latest
     container_name: atlas-cron-geo-ingest-imac
     restart: unless-stopped
+    # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
+    # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
+    env_file:
+      - /Users/kk/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
       - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - CRON_TASK_NAME=cron_geo_ingest
+      - ATLAS_LIVENESS_URL=http://host.docker.internal:18080/api/internal/task-liveness
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -24,10 +30,16 @@ services:
     image: atlas-cron:latest
     container_name: atlas-cron-macro-ingest-imac
     restart: unless-stopped
+    # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
+    # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
+    env_file:
+      - /Users/kk/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
       - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - CRON_TASK_NAME=cron_macro_ingest
+      - ATLAS_LIVENESS_URL=http://host.docker.internal:18080/api/internal/task-liveness
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -41,10 +53,16 @@ services:
     image: atlas-cron:latest
     container_name: atlas-cron-replay-sync-imac
     restart: unless-stopped
+    # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
+    # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
+    env_file:
+      - /Users/kk/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
       - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - CRON_TASK_NAME=cron_replay_sync
+      - ATLAS_LIVENESS_URL=http://host.docker.internal:18080/api/internal/task-liveness
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -76,10 +94,15 @@ services:
     image: atlas-cron:latest
     container_name: atlas-cron-quote-backfill-imac
     restart: unless-stopped
+    # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
+    # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
+    env_file:
+      - /Users/kk/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 3 * * *
       - CRON_COMMAND=/app/cron-quote-backfill
-      - FINMIND_API_KEY=${FINMIND_API_KEY:-}
+      - CRON_TASK_NAME=cron_quote_backfill
+      - ATLAS_LIVENESS_URL=http://host.docker.internal:18080/api/internal/task-liveness
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
