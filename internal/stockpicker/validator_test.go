@@ -578,7 +578,7 @@ func TestFlowGateway_UnknownLayerNameFailsLoad(t *testing.T) {
         "retail": {"min_abs_raw": {"value": 1.0, "rationale": "r", "source": "heuristic"}, "min_abs_z": {"value": 0.5, "rationale": "r", "source": "heuristic"}}
       },
       "conditions": {
-        "foreign-3d-net-buy": {"layers": {"value": ["foregin", "institutional", "retail"], "rationale": "r", "source": "heuristic"}} //nolint:misspell
+        "foreign-3d-net-buy": {"layers": {"value": ["foregin", "institutional", "retail"], "rationale": "r", "source": "heuristic"}}
       }
     }
   }
