@@ -198,6 +198,62 @@ func TestStockpickerWinrateRecommendWinRateGates(t *testing.T) {
 	}
 }
 
+// TestStockpickerWinrateRecommendBoundaries pins the >=/> semantics at the
+// exact thresholds: observations=30, win_rate=0.55, wilson_lower=0.45 all
+// pass (>=), while foreign flow = 10000 千股 = exactly 0.1 億股 fails
+// (validator uses strict >).
+func TestStockpickerWinrateRecommendBoundaries(t *testing.T) {
+	base := eligibleWinRateSummary()
+	cases := []struct {
+		name   string
+		mutate func(*stockpicker.StockWinRateSummary)
+		wantOK bool
+	}{
+		{name: "observations exactly 30 passes", mutate: func(s *stockpicker.StockWinRateSummary) { s.Observations = 30 }, wantOK: true},
+		{name: "win_rate exactly 0.55 passes", mutate: func(s *stockpicker.StockWinRateSummary) { s.WinRate = 0.55 }, wantOK: true},
+		{name: "wilson_lower exactly 0.45 passes", mutate: func(s *stockpicker.StockWinRateSummary) { s.WilsonLower = 0.45 }, wantOK: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := base
+			tc.mutate(&s)
+			e := StockpickerWinrateExecutor{
+				WinRateStore: &mockWinRateStore{summary: s, found: true},
+				FlowSource:   mockFlowSource{net: 50000, ok: true},
+				Gateway:      testFlowGateway(),
+			}
+			_, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
+			if ok != tc.wantOK {
+				t.Errorf("Recommend = ok=%v, want %v", ok, tc.wantOK)
+			}
+		})
+	}
+
+	// Foreign flow exactly at the gate: 10000 千股 = 0.1 億股. The foreign
+	// layer uses strict > (abs(億股) > min_abs_net), so exactly 0.1 fails.
+	t.Run("flow exactly 0.1 億股 fails (strict >)", func(t *testing.T) {
+		e := StockpickerWinrateExecutor{
+			WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+			FlowSource:   mockFlowSource{net: 10000, ok: true},
+			Gateway:      testFlowGateway(),
+		}
+		if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+			t.Fatal("Recommend with flow exactly 0.1 億股 = true, want false (strict >)")
+		}
+	})
+	// Just above the gate passes: 10001 千股 = 0.10001 億股 > 0.1.
+	t.Run("flow just above 0.1 億股 passes", func(t *testing.T) {
+		e := StockpickerWinrateExecutor{
+			WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+			FlowSource:   mockFlowSource{net: 10001, ok: true},
+			Gateway:      testFlowGateway(),
+		}
+		if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+			t.Fatal("Recommend with flow just above 0.1 億股 = false, want true")
+		}
+	})
+}
+
 func TestStockpickerWinrateRecommendFlowGateReject(t *testing.T) {
 	// 500 千股 = 0.005 億股 ≤ min_abs_net 0.1 → foreign layer fails.
 	e := StockpickerWinrateExecutor{

@@ -86,7 +86,7 @@ const (
 // Conviction mapping constants (deterministic, evidence-based).
 const (
 	stockpickerWinrateConvictionBase  = 55 // passed every gate
-	stockpickerWinrateConvictionCap   = 90 // headroom below 100: aggregate-backed, not certain
+	stockpickerWinrateConvictionCap   = 80 // max reachable: 55 base + 10 + 10 + 5 (not a dead ceiling)
 	stockpickerWinrateStrongEdge      = 0.60
 	stockpickerWinrateStrongLower     = 0.50
 	stockpickerWinrateConvictionStep1 = 10
@@ -251,6 +251,14 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 			logging.Symbol(quote.Symbol), "stage", "flow_missing")
 		return domain.Recommendation{}, false
 	}
+	// Design note (PR 2d-executor, k3 review A): the gateway is invoked with
+	// forces=nil — only the per-symbol foreign layer (個股層) is evaluated
+	// here. The market-regime layers configured for this condition
+	// (institutional/retail) fail-open skip because the executor has no
+	// market-wide capitalflow force readings in Recommend(); wiring
+	// capitalflow.Service.LatestDaily → CheckFromReport for the full
+	// two-level gate is tracked as a follow-up (issue #1737). This is a
+	// deliberate, documented foreign-only scope, not an oversight.
 	verdict := e.gateway().Check(quote.Symbol, e.conditionID(), map[string]stockpicker.FlowPoint{
 		quote.Symbol: {ForeignNet: net},
 	}, nil)
@@ -382,8 +390,9 @@ func stockpickerSymbol(symbol string) string {
 // conviction: base 55 for passing every gate, +10 when the raw win rate
 // shows a clear edge (>= 0.60), +10 when the Wilson lower bound clears
 // 0.50 (sample-supported edge), +5 when the sample comfortably exceeds the
-// minimum (>= 2×minObservations). Capped at 90 — the recommendation is
-// aggregate-backed, not certainty.
+// minimum (>= 2×minObservations). Capped at 80 (the exact max reachable:
+// 55 base + 10 strong-edge + 10 strong-lower + 5 large-sample) — the
+// recommendation is aggregate-backed, not certainty.
 func convictionForWinRate(s stockpicker.StockWinRateSummary, minObs int) int {
 	conv := stockpickerWinrateConvictionBase
 	if s.WinRate >= stockpickerWinrateStrongEdge {
