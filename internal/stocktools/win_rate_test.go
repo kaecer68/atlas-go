@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -272,5 +273,51 @@ func TestHandleWinRate_ProviderErrorReturns503(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "fake win-rate provider error") {
 		t.Errorf("503 body should surface provider error, got: %s", rec.Body.String())
+	}
+}
+
+// TestOpenWinRateDB_ReadOnly verifies OpenWinRateDB forces mode=ro at the
+// driver level: after opening, any write (INSERT) must fail. This promotes
+// the read-only guarantee from a DSN convention to a regression-tested
+// assertion (k3 review M7) — a future refactor that drops `?mode=ro` from
+// the DSN breaks this test instead of silently allowing writes.
+func TestOpenWinRateDB_ReadOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ledger.db")
+
+	// Build a real file-backed ledger with the schema + one row so the
+	// read-only handle has something to read and something to refuse.
+	w, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open writable ledger: %v", err)
+	}
+	if err := ledger.InitSchema(w); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	ctx := context.Background()
+	if err := stockpicker.SaveWinRate(ctx, w, sampleWinRateSummary("2330", "stockpicker-foreign-3d-net-buy", "120d")); err != nil {
+		t.Fatalf("seed SaveWinRate: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writable ledger: %v", err)
+	}
+
+	ro, err := OpenWinRateDB(path)
+	if err != nil {
+		t.Fatalf("OpenWinRateDB: %v", err)
+	}
+	defer func() { _ = ro.Close() }()
+
+	// Reads still work on the read-only handle.
+	summary, found, err := stockpicker.LoadWinRate(ctx, ro, "2330", "stockpicker-foreign-3d-net-buy", "120d")
+	if err != nil || !found {
+		t.Fatalf("read-only LoadWinRate: found=%v err=%v", found, err)
+	}
+	if summary.Observations != 40 {
+		t.Errorf("read-only LoadWinRate observations = %d, want 40", summary.Observations)
+	}
+
+	// Writes must fail at the driver level (mode=ro).
+	if err := stockpicker.SaveWinRate(ctx, ro, sampleWinRateSummary("2317", "stockpicker-foreign-3d-net-buy", "120d")); err == nil {
+		t.Fatal("INSERT on read-only handle succeeded; mode=ro is not enforced")
 	}
 }

@@ -9,7 +9,7 @@
 
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchStockMonthlyRevenue } from '../services/stock-api-client.js';
+import { fetchStockMonthlyRevenue, fetchStockWinRate } from '../services/stock-api-client.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -116,4 +116,51 @@ test('monthly-revenue TTL 是 7 天（對位 TTL_MS 設計）', () => {
       `expiresAt ${entry.expiresAt} should be ~7 days from now`
     );
   });
+});
+
+// ---- fetchStockWinRate ----
+
+test('fetchStockWinRate 不同 conditionId 用不同 cache key', async () => {
+  clearStorage();
+  let calls = 0;
+  setFetch(async () => {
+    calls++;
+    return okJsonResponse({ symbol: '2330', found: true, rolling_window: '120d', conditions: [] });
+  });
+  await fetchStockWinRate('2330', 'foreign-3d-net-buy');
+  await fetchStockWinRate('2330', 'momentum-20d-positive');
+  // 兩個不同 conditionId 必須各打一次 API（cache key 含 conditionId），不能共享。
+  assert.equal(calls, 2);
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}win-rate::2330::foreign-3d-net-buy`));
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}win-rate::2330::momentum-20d-positive`));
+});
+
+test('fetchStockWinRate 無 conditionId 時用 all 當 cache key', async () => {
+  clearStorage();
+  setFetch(async () => okJsonResponse({ symbol: '2330', found: true, conditions: [] }));
+  await fetchStockWinRate('2330');
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}win-rate::2330::all`));
+});
+
+test('fetchStockWinRate found=false 不寫 cache（18:00 更新後立即可見）', async () => {
+  clearStorage();
+  let calls = 0;
+  setFetch(async () => {
+    calls++;
+    return okJsonResponse({ symbol: '9999', found: false, message: 'no stockpicker win-rate data', conditions: [] });
+  });
+  await fetchStockWinRate('9999');
+  assert.equal(calls, 1);
+  // found=false 的回應不該留下 cache entry
+  assert.equal(localStorage.getItem(`${STORAGE_PREFIX}win-rate::9999::all`), null);
+  // 再呼叫一次仍會打 API（沒有被快取的「無資料」）
+  await fetchStockWinRate('9999');
+  assert.equal(calls, 2);
+});
+
+test('fetchStockWinRate found=true 正常寫 cache', async () => {
+  clearStorage();
+  setFetch(async () => okJsonResponse({ symbol: '2330', found: true, conditions: [] }));
+  await fetchStockWinRate('2330');
+  assert.ok(localStorage.getItem(`${STORAGE_PREFIX}win-rate::2330::all`));
 });
