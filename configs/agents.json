@@ -7,7 +7,7 @@
       "layer": "context",
       "skill": "taiwan_macro",
       "promptFile": "prompts/agents/taiwan_macro.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -31,7 +31,7 @@
       "layer": "context",
       "skill": "foreign_flow",
       "promptFile": "prompts/agents/foreign_flow.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -647,7 +647,7 @@
       "layer": "style",
       "skill": "stockpicker_winrate",
       "promptFile": "prompts/agents/stockpicker_winrate.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "alpha_hit_rate",
@@ -664,7 +664,8 @@
       ],
       "operatingNotes": [
         "Act only on eligible calibration_status; calibrating winrates are observation-only.",
-        "Require stock_get_win_rate evidence; never fabricate or extrapolate winrate data."
+        "Require stock_get_win_rate evidence; never fabricate or extrapolate winrate data.",
+        "DISABLED until a stockpicker_winrate executor lands (PR 2d review P0): no builtin executor matches this skill, so enabling it would create an empty Darwinian weight row with zero outcomes."
       ],
       "screening_criteria": {
         "volume_intraday": {
@@ -678,7 +679,7 @@
       "layer": "control",
       "skill": "cro_risk",
       "promptFile": "prompts/agents/cro_risk.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "drawdown_control",
@@ -702,7 +703,7 @@
       "layer": "control",
       "skill": "cio_portfolio",
       "promptFile": "prompts/agents/cio_seed.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "portfolio_return",
@@ -886,7 +887,7 @@
       "layer": "macro",
       "skill": "us_macro_spx",
       "promptFile": "prompts/agents/us_macro_spx.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "regime_accuracy",
@@ -910,7 +911,7 @@
       "layer": "macro",
       "skill": "us_macro_tech",
       "promptFile": "prompts/agents/us_macro_tech.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "sector_rotation_timing",
@@ -935,7 +936,7 @@
       "layer": "macro",
       "skill": "us_tw_crossmarket",
       "promptFile": "prompts/agents/us_tw_crossmarket.md",
-      "enabled": true,
+      "enabled": false,
       "universe": [],
       "primaryMetrics": [
         "transmission_capture",

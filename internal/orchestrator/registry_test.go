@@ -52,8 +52,12 @@ func TestLoadRegistryStockpickerWinrate(t *testing.T) {
 	if spec.Skill != "stockpicker_winrate" {
 		t.Errorf("skill = %q, want %q", spec.Skill, "stockpicker_winrate")
 	}
-	if !spec.Enabled {
-		t.Error("stockpicker-winrate-01 must be enabled")
+	if spec.Enabled {
+		// P0 (PR 2d review): no builtin executor matches skill
+		// "stockpicker_winrate", so an enabled style-layer agent would be
+		// silently skipped by collectRecommendations and leave an empty
+		// Darwinian weight row. Keep it disabled until the executor lands.
+		t.Error("stockpicker-winrate-01 must be disabled until a matching executor exists (PR 2d review P0)")
 	}
 	if spec.PromptFile != "prompts/agents/stockpicker_winrate.md" {
 		t.Errorf("promptFile = %q, want %q", spec.PromptFile, "prompts/agents/stockpicker_winrate.md")
@@ -105,4 +109,37 @@ func TestPluginRegistryScreenDetailedNoScreener(t *testing.T) {
 
 func int64Ptr(i int64) *int64 {
 	return &i
+}
+
+// TestRegistryExecutorsCovered guards the PR 2d P0: every ENABLED agent in
+// the recommendation layers (sector/style/superinvestor) must have a
+// matching agent executor, otherwise collectRecommendations silently skips
+// it (zero recommendations) and Darwinian tracks an empty weight row.
+func TestRegistryExecutorsCovered(t *testing.T) {
+	reg, err := LoadRegistry("../../configs/agents.json")
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+	pr := NewPluginRegistry()
+	recLayers := map[domain.AgentLayer]bool{
+		domain.LayerSector:        true,
+		domain.LayerStyle:         true,
+		domain.LayerSuperinvestor: true,
+	}
+	for _, agent := range reg.Agents {
+		if !agent.Enabled || !recLayers[agent.Layer] {
+			continue
+		}
+		matched := false
+		for _, exec := range pr.agentExecutors {
+			if exec.Supports(agent) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			t.Errorf("enabled agent %s (layer %s, skill %s) has no matching executor — collectRecommendations will silently skip it; disable the agent or add an executor",
+				agent.ID, agent.Layer, agent.Skill)
+		}
+	}
 }
