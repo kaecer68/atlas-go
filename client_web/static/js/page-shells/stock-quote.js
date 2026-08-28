@@ -25,6 +25,10 @@ export const template = `
         <h3>技術指標</h3>
         <div class="sq-placeholder">載入技術指標…</div>
       </div>
+      <div class="sq-section sq-revenue">
+        <h3>月營收</h3>
+        <div class="sq-placeholder">載入月營收資料…</div>
+      </div>
       <div class="sq-section sq-winrate">
         <h3>個股勝率</h3>
         <div class="sq-placeholder">載入勝率資料…</div>

@@ -73,13 +73,15 @@ async function fetchWithAuth(url) {
   return res.json();
 }
 
-async function fetchCached(kind, symbol, urlPath) {
+async function fetchCached(kind, symbol, urlPath, shouldCache = () => true) {
   const cached = readCache(kind, symbol);
   if (cached) {
     return { ...cached, _fromCache: true };
   }
   const data = await fetchWithAuth(urlPath);
-  writeCache(kind, symbol, data);
+  if (shouldCache(data)) {
+    writeCache(kind, symbol, data);
+  }
   return { ...data, _fromCache: false };
 }
 
@@ -144,7 +146,17 @@ export async function fetchStockMonthlyRevenue(symbol, year, month) {
 export async function fetchStockWinRate(symbol, conditionId) {
   let path = `/api/stock/win_rate?symbol=${encodeURIComponent(symbol)}`;
   if (conditionId) path += `&condition_id=${encodeURIComponent(conditionId)}`;
-  return fetchCached('win-rate', symbol, path);
+  // Cache key includes the condition so different conditionIds never share
+  // a 12h entry (mirrors fetchStockMonthlyRevenue's variant handling).
+  // found=false responses are intentionally NOT cached: the daily 18:00
+  // stockpicker update would otherwise stay invisible for up to 12h on
+  // clients that cached the "no data" answer (k3 review M1/M6).
+  return fetchCached(
+    'win-rate',
+    `${symbol}::${conditionId || 'all'}`,
+    path,
+    (data) => data && data.found !== false
+  );
 }
 
 // fetchStockCoverage calls GET /api/stock/coverage?symbol=X to discover

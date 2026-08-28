@@ -128,16 +128,11 @@ func (p *SQLiteWinRateProvider) OutcomeDateRange(ctx context.Context, symbol, so
 	if err != nil || len(outcomes) == 0 {
 		return "", "", false
 	}
-	start, end = outcomes[0].TriggerDate, outcomes[0].TriggerDate
-	for _, o := range outcomes[1:] {
-		if o.TriggerDate < start {
-			start = o.TriggerDate
-		}
-		if o.TriggerDate > end {
-			end = o.TriggerDate
-		}
-	}
-	return start, end, true
+	// LoadOutcomes orders rows by trigger_date ASC (signal_outcome_store.go),
+	// so the first row is the earliest trigger_date and the last is the
+	// latest — a min/max scan over all rows would be redundant (k3 review
+	// M2). First/last row reads only.
+	return outcomes[0].TriggerDate, outcomes[len(outcomes)-1].TriggerDate, true
 }
 
 // OpenWinRateDB opens the stockpicker ledger at path in read-only mode,
