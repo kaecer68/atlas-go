@@ -10,7 +10,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -27,7 +27,7 @@ services:
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
-      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -44,7 +44,7 @@ services:
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
-      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
@@ -62,7 +62,7 @@ services:
   #   environment:
   #     - CRON_SCHEDULE=0 9 * * *
   #     - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-  #     - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+  #     - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
   #   volumes:
   #     - ./data:/app/data
   #     - ./reports:/app/reports

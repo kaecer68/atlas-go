@@ -30,7 +30,7 @@ services:
       # log 顯示 "attempted password repair; docker CLI not found" 是這條路徑
       # 的 prod 不安全訊號。詳見 .claude/skills/atlas-imac-prod-guard/。
       - ATLAS_SKIP_DOCKER=1
-      - DATABASE_URL=postgres://atlas:atlas_dev_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
+      - DATABASE_URL=postgres://atlas:atlas_prod_pwd_2026@host.docker.internal:55432/atlas?sslmode=disable
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:6379/8
     volumes:
       - ./data:/app/data
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=atlas
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-atlas_dev_pwd_2026}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-atlas_prod_pwd_2026}
       - POSTGRES_DB=atlas
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4

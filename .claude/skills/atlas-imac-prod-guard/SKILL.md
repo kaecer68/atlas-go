@@ -11,7 +11,7 @@ description: "Use when on iMac (KiMac) before any docker compose / docker rm / m
 
 1. `make rebuild-atlas` 內部 `docker compose up -d atlas` 沒帶 `-f`，預設走 dev `docker-compose.yml`
 2. dev compose 的 `atlas` service `depends_on: postgres`，自動重建 `atlas-postgres` 容器
-3. 重建用 dev 預設值（`POSTGRES_PASSWORD=atlas`、port `5432:5432`），覆蓋 prod `atlas-postgres`（密碼 `atlas_dev_pwd_2026`、port `55432:5432`）
+3. 重建用 dev 預設值（`POSTGRES_PASSWORD=atlas`、port `5432:5432`），覆蓋 prod `atlas-postgres`（密碼 `atlas_prod_pwd_2026`、port `55432:5432`）
 5. `atlas-go-imac` 用 prod compose DATABASE_URL 連不到新 postgres，crash loop → 502 bad gateway on atlas.goluck.uk
 6. 32+ 小時 silent failure（alert 斷鏈是另一個 issue）
 
@@ -60,7 +60,7 @@ cat ~/.config/atlas-go/.env  # 對應欄
 | `container_name` | `atlas-postgres` | `docker ps --filter name=atlas-postgres` | 名稱一致但密碼/port 漂移 |
 | `image` | `atlas-atlas:latest` | `docker inspect atlas-go-imac --format '{{.Config.Image}}'` | image 不一致 = 跑錯 binary |
 | `port` | `55432:5432` | `docker inspect atlas-postgres --format '{{.HostConfig.PortBindings}}'` | port 不是 55432 = 走 ssh tunnel 或 dev compose |
-| `password` | `atlas_dev_pwd_2026` | `docker exec -e PGPASSWORD=atlas_dev_pwd_2026 atlas-postgres psql -h 127.0.0.1 -U atlas -d atlas -tAc "SELECT 1;"` | auth failed → ALTER USER 修正並記錄 |
+| `password` | `atlas_prod_pwd_2026` | `docker exec -e PGPASSWORD=atlas_prod_pwd_2026 atlas-postgres psql -h 127.0.0.1 -U atlas -d atlas -tAc "SELECT 1;"` | auth failed → ALTER USER 修正並記錄 |
 
 ### 5. 決策樹
 
@@ -99,8 +99,8 @@ cat ~/.config/atlas-go/.env  # 對應欄
 1. `ssh kk@kimac "ps -p 1008 -o command"` 確認 ssh tunnel 是否 rogue（若是 `ssh -L 55432:...`，`kill 1008`）
 3. `cd /Users/kk/workspace/atlas && /usr/local/bin/docker compose -f docker-compose.prod.yml stop postgres`
 4. `/usr/local/bin/docker rm -f atlas-postgres`（volume 保留）
-5. `/usr/local/bin/docker run -d --name atlas-postgres --restart unless-stopped -e POSTGRES_USER=atlas -e POSTGRES_PASSWORD=atlas_dev_pwd_2026 -e POSTGRES_DB=atlas -p 55432:5432 -v atlas-postgres-data:/var/lib/postgresql/data --health-cmd "pg_isready -U atlas -d atlas" timescale/timescaledb:2.26.4-pg15`
-6. 驗密碼：`docker exec -e PGPASSWORD=atlas_dev_pwd_2026 atlas-postgres psql -h 127.0.0.1 -U atlas -d atlas -tAc "SELECT 1;"`
+5. `/usr/local/bin/docker run -d --name atlas-postgres --restart unless-stopped -e POSTGRES_USER=atlas -e POSTGRES_PASSWORD=atlas_prod_pwd_2026 -e POSTGRES_DB=atlas -p 55432:5432 -v atlas-postgres-data:/var/lib/postgresql/data --health-cmd "pg_isready -U atlas -d atlas" timescale/timescaledb:2.26.4-pg15`
+6. 驗密碼：`docker exec -e PGPASSWORD=atlas_prod_pwd_2026 atlas-postgres psql -h 127.0.0.1 -U atlas -d atlas -tAc "SELECT 1;"`
 7. `/usr/local/bin/docker start atlas-go-imac`
 8. `curl -s -o /dev/null -w '%{http_code}\n' https://atlas.goluck.uk/health`（期望 200）
 9. 驗 prod 資料新鮮度：`docker exec atlas-postgres psql -U atlas -d atlas -tAc "select max(date) from quotes;"`
