@@ -153,7 +153,14 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 		query += ` AND source = ?`
 		args = append(args, stockWinRateSourcePrefix+conditionID)
 	}
-	query += ` ORDER BY ` + sortCol + ` DESC, symbol ASC`
+	// sortCol is whitelisted by the handler (wilson_lower | win_rate); select
+	// the full ORDER BY clause from fixed constants so no input reaches SQL
+	// text (gosec G202).
+	orderBy := "wilson_lower DESC, symbol ASC"
+	if sortCol == "win_rate" {
+		orderBy = "win_rate DESC, symbol ASC"
+	}
+	query += ` ORDER BY ` + orderBy
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
