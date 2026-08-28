@@ -1,7 +1,8 @@
 package main
 
 // conditions_cli_test.go — PR 2a CLI tests: -list-conditions output and
-// -conditions flag filtering.
+// -conditions flag filtering. selectConditions itself moved to
+// internal/stockpicker (PR 2e) and is tested there.
 
 import (
 	"database/sql"
@@ -71,37 +72,6 @@ func TestCLI_ConditionsFlag_Unknown(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown condition") {
 		t.Fatalf("error = %v, want unknown-condition mention", err)
-	}
-}
-
-// TestSelectConditions_Defaults verifies an empty -conditions list resolves
-// to the full default registry set, and whitespace is tolerated.
-func TestSelectConditions_Defaults(t *testing.T) {
-	params, err := config.LoadParametersConfig(filepath.Join("..", "..", "configs", "parameters.json"))
-	if err != nil {
-		t.Fatalf("load parameters: %v", err)
-	}
-	reg := stockpicker.NewDefaultConditionRegistry(&params.Stockpicker.Conditions)
-
-	conds, err := selectConditions("", reg)
-	if err != nil {
-		t.Fatalf("selectConditions empty: %v", err)
-	}
-	if len(conds) != len(reg.All()) {
-		t.Fatalf("empty flag resolved to %d conditions, want %d", len(conds), len(reg.All()))
-	}
-	for i, c := range conds {
-		if c.ID != reg.All()[i].ID {
-			t.Errorf("condition order mismatch at %d: %q vs %q", i, c.ID, reg.All()[i].ID)
-		}
-	}
-
-	one, err := selectConditions(" momentum-20d-positive ", reg)
-	if err != nil {
-		t.Fatalf("selectConditions one: %v", err)
-	}
-	if len(one) != 1 || one[0].ID != "momentum-20d-positive" {
-		t.Fatalf("selectConditions one = %+v, want [momentum-20d-positive]", one)
 	}
 }
 

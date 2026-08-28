@@ -1,21 +1,20 @@
-//go:build integration
+package stockpicker
 
-package main
+// real_panel_test.go — tests for the RealPanel production PanelSource
+// (moved from cmd/run-stockpicker-backtest/panel_test.go, PR 2e). The
+// postgres integration tests live in real_panel_integration_test.go.
 
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
-	"github.com/kaecer68/atlas-go/internal/testdb"
 )
-
-// compile-time assertions
-var _ ledger.QuoteSymbolLister = (*ledger.SQLiteQuoteStore)(nil)
-var _ ledger.QuoteSymbolLister = (*ledger.PostgresQuoteStore)(nil)
 
 // fakeQuoteStore is an in-memory QuoteStore for unit tests.
 type fakeQuoteStore struct {
@@ -43,10 +42,6 @@ func newFakeQuoteStore() *fakeQuoteStore {
 	return &fakeQuoteStore{quotes: make(map[string][]domain.DailyBar)}
 }
 
-// asQuoteStore returns the fake store as the interface type (used for type
-// assertions in tests).
-func asQuoteStore(f *fakeQuoteStore) ledger.QuoteStore { return f }
-
 // TestBars_SymbolSuffixFallback verifies that Bars prefers symbol.TW,
 // falls back to bare symbol, then symbol.TWO.
 func TestBars_SymbolSuffixFallback(t *testing.T) {
@@ -64,7 +59,7 @@ func TestBars_SymbolSuffixFallback(t *testing.T) {
 		{Symbol: "2330.TWO", Date: base, Close: 888, Volume: 8888},
 	}
 
-	panel := &realPanel{quoteStore: store}
+	panel := &RealPanel{quoteStore: store}
 	bars, err := panel.Bars(ctx, "2330")
 	if err != nil {
 		t.Fatalf("Bars: %v", err)
@@ -78,7 +73,7 @@ func TestBars_SymbolSuffixFallback(t *testing.T) {
 
 	// Only bare symbol exists -> fallback to bare.
 	delete(store.quotes, "2330.TW")
-	panel = &realPanel{quoteStore: store}
+	panel = &RealPanel{quoteStore: store}
 	bars, err = panel.Bars(ctx, "2330")
 	if err != nil {
 		t.Fatalf("Bars bare fallback: %v", err)
@@ -89,7 +84,7 @@ func TestBars_SymbolSuffixFallback(t *testing.T) {
 
 	// Only .TWO exists -> fallback to .TWO.
 	delete(store.quotes, "2330")
-	panel = &realPanel{quoteStore: store}
+	panel = &RealPanel{quoteStore: store}
 	bars, err = panel.Bars(ctx, "2330")
 	if err != nil {
 		t.Fatalf("Bars .TWO fallback: %v", err)
@@ -103,7 +98,7 @@ func TestBars_SymbolSuffixFallback(t *testing.T) {
 func TestBars_NoSuffixMatch(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeQuoteStore()
-	panel := &realPanel{quoteStore: store}
+	panel := &RealPanel{quoteStore: store}
 	bars, err := panel.Bars(ctx, "9999")
 	if err != nil {
 		t.Fatalf("Bars: %v", err)
@@ -152,16 +147,7 @@ func TestQuoteSymbols_SQLite(t *testing.T) {
 	}
 }
 
-// TestQuoteSymbols_FakeStoreWithoutLister confirms that fakeQuoteStore does
-// not implement the optional lister.
-func TestQuoteSymbols_FakeStoreWithoutLister(t *testing.T) {
-	store := newFakeQuoteStore()
-	if _, ok := asQuoteStore(store).(ledger.QuoteSymbolLister); ok {
-		t.Fatalf("fakeQuoteStore should not implement QuoteSymbolLister")
-	}
-}
-
-// TestNewRealPanel_UsesQuoteSymbolLister verifies that newRealPanel lists
+// TestNewRealPanel_UsesQuoteSymbolLister verifies that NewRealPanel lists
 // symbols from stores that implement QuoteSymbolLister and normalizes them.
 func TestNewRealPanel_UsesQuoteSymbolLister(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
@@ -181,16 +167,15 @@ func TestNewRealPanel_UsesQuoteSymbolLister(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	panel, err := newRealPanel(ctx, store, t.TempDir())
+	panel, err := NewRealPanel(ctx, store, t.TempDir())
 	if err != nil {
-		t.Fatalf("newRealPanel: %v", err)
+		t.Fatalf("NewRealPanel: %v", err)
 	}
-	rp := panel.(*realPanel)
-	if len(rp.symbols) != 2 {
-		t.Fatalf("expected 2 symbols, got %d: %v", len(rp.symbols), rp.symbols)
+	if len(panel.symbols) != 2 {
+		t.Fatalf("expected 2 symbols, got %d: %v", len(panel.symbols), panel.symbols)
 	}
 	want := map[string]bool{"2330": true, "2317": true}
-	for _, s := range rp.symbols {
+	for _, s := range panel.symbols {
 		if !want[s] {
 			t.Fatalf("unexpected normalized symbol %q", s)
 		}
@@ -198,91 +183,46 @@ func TestNewRealPanel_UsesQuoteSymbolLister(t *testing.T) {
 }
 
 // TestNewRealPanel_WithoutListerRequiresUniverse verifies that a panel built
-// from a QuoteStore without QuoteSymbolLister has no symbols; the CLI will
-// then require -universe.
+// from a QuoteStore without QuoteSymbolLister has no symbols; the caller
+// must then pass an explicit universe.
 func TestNewRealPanel_WithoutListerRequiresUniverse(t *testing.T) {
 	store := newFakeQuoteStore()
 	ctx := context.Background()
-	panel, err := newRealPanel(ctx, store, t.TempDir())
+	panel, err := NewRealPanel(ctx, store, t.TempDir())
 	if err != nil {
-		t.Fatalf("newRealPanel: %v", err)
+		t.Fatalf("NewRealPanel: %v", err)
 	}
-	rp := panel.(*realPanel)
-	if len(rp.symbols) != 0 {
-		t.Fatalf("expected 0 symbols for non-lister store, got %d", len(rp.symbols))
+	if len(panel.symbols) != 0 {
+		t.Fatalf("expected 0 symbols for non-lister store, got %d", len(panel.symbols))
 	}
 }
 
-// TestBars_PostgresBackend exercises the backend-aware Bars path against a
-// real PostgreSQL quotes table when DATABASE_URL is available. It skips
-// cleanly when postgres is unreachable, keeping CI green on sqlite-only runs.
-func TestBars_PostgresBackend(t *testing.T) {
-	ctx := context.Background()
-	pool := testdb.Pool(t, "../../sql/migrations")
-
-	// Clean up test rows on both sides of the run.
-	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM quotes WHERE symbol LIKE 'rspgtest-%'")
-	}()
-	_, _ = pool.Exec(ctx, "DELETE FROM quotes WHERE symbol LIKE 'rspgtest-%'")
-
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	store := ledger.NewPostgresQuoteStore(pool)
-	if err := store.RecordQuotes([]domain.DailyBar{
-		{Symbol: "rspgtest-2330.TW", Date: base, Close: 100, Volume: 1000},
-		{Symbol: "rspgtest-2330.TW", Date: base.AddDate(0, 0, 1), Close: 101, Volume: 1100},
-	}); err != nil {
-		t.Fatalf("RecordQuotes: %v", err)
+// TestRealPanel_FlowsFromFile pins the per-symbol flow JSON parsing used by
+// the production panel (foreign_net must unmarshal into FlowPoint.ForeignNet).
+func TestRealPanel_FlowsFromFile(t *testing.T) {
+	dir := t.TempDir()
+	flowsDir := filepath.Join(dir, "stock_flows")
+	if err := os.MkdirAll(flowsDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
-
-	panel := &realPanel{quoteStore: store}
-	bars, err := panel.Bars(ctx, "rspgtest-2330")
+	file := `{"symbol":"2330","flows":[{"date":"2026-01-05","foreign_net":1500},{"date":"2026-01-06","foreign_net":1200}]}`
+	if err := os.WriteFile(filepath.Join(flowsDir, "2330.json"), []byte(file), 0o644); err != nil {
+		t.Fatalf("write flows: %v", err)
+	}
+	panel := &RealPanel{flowsDir: flowsDir}
+	flows, err := panel.Flows(context.Background(), "2330")
 	if err != nil {
-		t.Fatalf("Bars: %v", err)
+		t.Fatalf("Flows: %v", err)
 	}
-	if len(bars) != 2 {
-		t.Fatalf("expected 2 postgres bars, got %d", len(bars))
+	if len(flows) != 2 {
+		t.Fatalf("len(flows) = %d, want 2", len(flows))
 	}
-	if bars[0].Close != 100 || bars[1].Close != 101 {
-		t.Fatalf("unexpected closes: %+v", bars)
+	if flows[0].ForeignNet != 1500 || flows[0].Date != "2026-01-05" {
+		t.Fatalf("flow[0] = %+v, want foreign_net 1500 on 2026-01-05", flows[0])
 	}
-}
-
-// TestQuoteSymbols_Postgres exercises QuoteSymbols on a real PostgreSQL quotes
-// table when DATABASE_URL is available.
-func TestQuoteSymbols_Postgres(t *testing.T) {
-	ctx := context.Background()
-	pool := testdb.Pool(t, "../../sql/migrations")
-
-	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM quotes WHERE symbol LIKE 'rspgtest-%'")
-	}()
-	_, _ = pool.Exec(ctx, "DELETE FROM quotes WHERE symbol LIKE 'rspgtest-%'")
-
-	store := ledger.NewPostgresQuoteStore(pool)
-	if err := store.RecordQuotes([]domain.DailyBar{
-		{Symbol: "rspgtest-2330.TW", Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Close: 100, Volume: 1000},
-		{Symbol: "rspgtest-2317.TW", Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Close: 200, Volume: 2000},
-	}); err != nil {
-		t.Fatalf("RecordQuotes: %v", err)
-	}
-
-	var qs ledger.QuoteStore = store
-	lister, ok := qs.(ledger.QuoteSymbolLister)
-	if !ok {
-		t.Fatalf("PostgresQuoteStore does not implement QuoteSymbolLister")
-	}
-	syms, err := lister.QuoteSymbols(ctx)
-	if err != nil {
-		t.Fatalf("QuoteSymbols: %v", err)
-	}
-	want := map[string]bool{"rspgtest-2330.TW": true, "rspgtest-2317.TW": true}
-	if len(syms) != len(want) {
-		t.Fatalf("expected %d symbols, got %d: %v", len(want), len(syms), syms)
-	}
-	for _, s := range syms {
-		if !want[s] {
-			t.Fatalf("unexpected symbol %q", s)
-		}
+	// Missing symbol file → empty (no error), the flow condition stays silent.
+	missing, err := panel.Flows(context.Background(), "9999")
+	if err != nil || len(missing) != 0 {
+		t.Fatalf("missing symbol: err=%v flows=%v, want empty nil", err, missing)
 	}
 }
