@@ -188,11 +188,12 @@ func Run(ctx context.Context, cfg Config) error {
 	// registerAuditStateTool (audit_state) + registerStrategyForPeriodTool
 	// (strategy_for_period) + stock_get_monthly_revenue (monthly_revenue,
 	// in registerTools) + stock_get_win_rate (stock_win_rate, in registerTools)
-	// add 4 → 118-122.
+	// + stock_picker_scan (stock_picker_scan, in registerTools)
+	// add 5 → 119-123.
 	n := RegisteredToolCount
 	log.Printf("atlas-mcp: registered %d tools", n)
-	if n < 116 || n > 122 {
-		return fmt.Errorf("server: tool count drift: got %d, expected 116-122", n)
+	if n < 117 || n > 123 {
+		return fmt.Errorf("server: tool count drift: got %d, expected 117-123", n)
 	}
 
 	// Phase 4 transport dispatch. Empty Transport defaults to stdio for
