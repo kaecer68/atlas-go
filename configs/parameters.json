@@ -8094,6 +8094,58 @@
           "source": "heuristic"
         }
       }
+    },
+    "flow_gateway": {
+      "layers": {
+        "foreign": {
+          "min_abs_raw": {
+            "value": 1.0,
+            "rationale": "Minimum |foreign net buy| (億股, capitalflow ForceForeign RawValue) for the foreign layer of the flow gateway (PR 2b). Below this magnitude a foreign reading is noise — the '外資小幅賣超但勝率高' failure mode the gate exists to filter.",
+            "source": "heuristic"
+          },
+          "min_abs_z": {
+            "value": 0.5,
+            "rationale": "Minimum |foreign z-score| (capitalflow 60-day rolling) for the foreign layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary (trendFor in forces.go).",
+            "source": "heuristic"
+          }
+        },
+        "institutional": {
+          "min_abs_raw": {
+            "value": 0.3,
+            "rationale": "Minimum |investment-trust net buy| (億股) for the institutional layer; 投信 daily magnitudes are smaller than 外資, so the raw gate is lower (PR 2b).",
+            "source": "heuristic"
+          },
+          "min_abs_z": {
+            "value": 0.5,
+            "rationale": "Minimum |investment-trust z-score| for the institutional layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary.",
+            "source": "heuristic"
+          }
+        },
+        "retail": {
+          "min_abs_raw": {
+            "value": 1.0,
+            "rationale": "Minimum |retail composite| (融資+當沖 change pct, capitalflow ForceRetail RawValue) for the retail layer; a >1pct composite move marks meaningful retail positioning (PR 2b).",
+            "source": "heuristic"
+          },
+          "min_abs_z": {
+            "value": 0.5,
+            "rationale": "Minimum |retail z-score| for the retail layer; 0.5 aligns with capitalflow's bullish/bearish trend boundary.",
+            "source": "heuristic"
+          }
+        }
+      },
+      "conditions": {
+        "foreign-3d-net-buy": {
+          "layers": ["foreign", "institutional", "retail"],
+          "rationale": "foreign-3d-net-buy enforces the full three-layer gate: a foreign net-buy signal only counts when all three flow layers are meaningful (PR 2b).",
+          "source": "heuristic"
+        },
+        "momentum-20d-positive": {
+          "layers": ["foreign", "institutional", "retail"],
+          "rationale": "momentum-20d-positive is a price condition but still sits behind the full flow gate, so price signals are not trusted without meaningful capital flow (PR 2b).",
+          "source": "heuristic"
+        }
+      }
     }
   }
 }
