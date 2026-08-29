@@ -44,6 +44,15 @@ echo ""
 echo "─── Hardcoded 策略清單 ───"
 
 # Check for hardcoded strategy gating without period awareness
+# Filters (evidence-based, 2026-08-29):
+# - json:\"value\" / json:\"momentum\" etc: struct field tags, not strategy lists (Value float64 `json:\"value\"`)
+# - Value/Momentum float64: struct field definitions
+# - :.*//.*\": comment lines mentioning strategy names in docs/examples
+# - test_tools.go: test helper with mock weights
+# - \[\"value\"\] etc: map index access (item[\"value\"]), not lists
+# - FactorMomentum/FactorValue: factor type constants
+# - name: \"value\": fingerprint field name
+# - case \"value\": switch on factor type, not strategy gating
 HARDCODED=$(grep -rn '"all_weather"\|"defensive"\|"growth"\|"momentum"\|"value"' internal/ --include="*.go" \
   | grep -v "_test.go" \
   | grep -v "methodology/" \
@@ -52,6 +61,23 @@ HARDCODED=$(grep -rn '"all_weather"\|"defensive"\|"growth"\|"momentum"\|"value"'
   | grep -v "portfolio/regime.go" \
   | grep -v "orchestrator/executor_pipeline.go" \
   | grep -v "orchestrator/executor_types.go" \
+  | grep -v 'json:"value"' \
+  | grep -v 'json:"momentum"' \
+  | grep -v 'json:"growth"' \
+  | grep -v 'json:"defensive"' \
+  | grep -v 'json:"all_weather"' \
+  | grep -v 'Value[[:space:]]*float64' \
+  | grep -v 'Momentum[[:space:]]*float64' \
+  | grep -v ':.*//.*"' \
+  | grep -v 'test_tools\.go' \
+  | grep -v '\["value"\]' \
+  | grep -v '\["momentum"\]' \
+  | grep -v '\["growth"\]' \
+  | grep -v 'FactorMomentum\|FactorValue' \
+  | grep -v 'name: "value"' \
+  | grep -v 'case "value":' \
+  | grep -v 'case "growth":' \
+  | grep -v 'case "momentum":' \
   || true)
 
 if [ -n "$HARDCODED" ]; then
