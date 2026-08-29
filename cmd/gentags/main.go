@@ -13,6 +13,7 @@
 //	internal/fubonproxy/**/*.go         — fubon-proxy supervisor types (DeploymentConfig, DeploymentStatus, ...)
 //	internal/userstate/**/*.go        — per-user signal state types (UserSignalState, ...)
 //	internal/marketdata/**/*.go         — market data types (MacroDataPoint, MacroDataSnapshot, ...)
+//	internal/stocktools/**/*.go        — per-symbol stock API types (WinRateResponse, WinRateCondition, ...)
 //
 // Writes (to all active frontend directories so copies don't drift):
 //
@@ -73,11 +74,12 @@ func main() {
 	recommenderDir := findRecommenderDir(rootDir)
 	subscriptionDir := findSubscriptionDir(rootDir)
 	userstateDir := findUserStateDir(rootDir)
-	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" || userstateDir != "" || dailyreportDir != "" {
+	stocktoolsDir := findStocktoolsDir(rootDir)
+	if apiDir != "" || svcDir != "" || reportDir != "" || configDir != "" || industryDir != "" || narrativeDir != "" || fubonDir != "" || marketdataDir != "" || capitalflowDir != "" || eventdrivenDir != "" || recommenderDir != "" || subscriptionDir != "" || userstateDir != "" || stocktoolsDir != "" || dailyreportDir != "" {
 		// Build merged struct names from all directories so cross-package
 		// type references resolve correctly.
 		allNames := preScanStructNames(domainDir)
-		for _, d := range []string{dailyreportDir, apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir, userstateDir} {
+		for _, d := range []string{dailyreportDir, apiDir, svcDir, configDir, industryDir, narrativeDir, fubonDir, marketdataDir, capitalflowDir, eventdrivenDir, recommenderDir, subscriptionDir, userstateDir, stocktoolsDir} {
 			if d == "" {
 				continue
 			}
@@ -220,6 +222,16 @@ func main() {
 				structs[k] = v
 			}
 		}
+		// Merge stocktools structs (e.g. WinRateResponse, WinRateCondition).
+		if stocktoolsDir != "" {
+			stStructs := parseStructsWithNames(stocktoolsDir, allNames)
+			for k, v := range stStructs {
+				if _, exists := structs[k]; exists {
+					fmt.Fprintf(os.Stderr, "gentags: struct %q exists in both domain and stocktools; using stocktools version\n", k)
+				}
+				structs[k] = v
+			}
+		}
 	}
 
 	for _, webDir := range webDirs {
@@ -320,6 +332,14 @@ func findFubonDir(rootDir string) string {
 
 func findMarketDataDir(rootDir string) string {
 	candidate := filepath.Join(rootDir, "internal", "marketdata")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
+}
+
+func findStocktoolsDir(rootDir string) string {
+	candidate := filepath.Join(rootDir, "internal", "stocktools")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}
