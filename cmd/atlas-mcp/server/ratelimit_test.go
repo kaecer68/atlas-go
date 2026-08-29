@@ -174,15 +174,13 @@ func TestRateLimiter_ConcurrentAllow(t *testing.T) {
 	var allowed int64
 	var mu sync.Mutex
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if r := rl.Allow("tool", "caller"); r.Allowed {
 				mu.Lock()
 				allowed++
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if allowed > 10 {

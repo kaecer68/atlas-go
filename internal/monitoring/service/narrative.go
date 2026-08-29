@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -186,8 +187,8 @@ func (s *NarrativeService) GetStressIndexHistory(days int) []narrative.TaiwanStr
 
 func stressRowsToIndex(rows []ledger.StressRow) []narrative.TaiwanStressIndex {
 	out := make([]narrative.TaiwanStressIndex, 0, len(rows))
-	for i := len(rows) - 1; i >= 0; i-- {
-		r := rows[i]
+	for _, r := range slices.Backward(rows) {
+
 		idx := narrative.TaiwanStressIndex{
 			Score:     r.Score,
 			Regime:    narrative.NormalizeRegime(r.Regime),

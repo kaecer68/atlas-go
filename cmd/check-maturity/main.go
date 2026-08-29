@@ -194,7 +194,7 @@ func checkCrossConsistency(repoRoot string) []Violation {
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(data), "\n") {
+		for line := range strings.SplitSeq(string(data), "\n") {
 			if strings.Contains(line, "Maturity:") {
 				docTiers[pkg] = strings.TrimSpace(strings.TrimPrefix(line, "// Maturity:"))
 				break

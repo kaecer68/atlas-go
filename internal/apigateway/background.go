@@ -451,9 +451,9 @@ type TaskStatus struct {
 	LastError           string        `json:"last_error,omitempty"`
 
 	// Data-health fields (#1265): separated from run-success.
-	LastDataAsOf     time.Time `json:"last_data_as_of,omitempty"`
+	LastDataAsOf     time.Time `json:"last_data_as_of,omitzero"`
 	LastNewSamples   int       `json:"last_new_samples"`
-	LastPersistedAt  time.Time `json:"last_persisted_at,omitempty"`
+	LastPersistedAt  time.Time `json:"last_persisted_at,omitzero"`
 	NoProgressReason string    `json:"no_progress_reason,omitempty"`
 }
 

@@ -206,7 +206,7 @@ func lookupOccupantByPort(port int) (Occupant, error) {
 		return Occupant{}, fmt.Errorf("lsof: %w", err)
 	}
 	var occ Occupant
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if len(line) < 2 {
 			continue
 		}

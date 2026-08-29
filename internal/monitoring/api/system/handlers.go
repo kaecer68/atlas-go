@@ -212,9 +212,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 	var mu sync.Mutex
 
 	if h.DayTradingFetcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if stats, err := h.DayTradingFetcher(fetchCtx); err == nil {
 				ratio := stats.VolumeRatio
 				dtStatsLocal := &retail.DayTradingStats{
@@ -231,12 +229,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				fetcherStatus.DayTrading = "error"
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	if h.TaifexFetcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if pcr, futures, err := h.TaifexFetcher(fetchCtx); err == nil {
 				var foi *float64
 				if futures != nil {
@@ -254,12 +250,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				fetcherStatus.Taifex = "error"
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	if h.OddLotFetcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if data, err := h.OddLotFetcher(fetchCtx); err == nil {
 				mu.Lock()
 				oddLotData = data
@@ -270,12 +264,10 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				fetcherStatus.OddLot = "error"
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	if h.ETFFetcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if data, err := h.ETFFetcher(fetchCtx); err == nil {
 				var sub *float64
 				if data != nil {
@@ -292,14 +284,12 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				fetcherStatus.ETF = "error"
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 
 	geoRisk := 0.0
 	if h.GeopoliticalRiskFetcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			g := h.GeopoliticalRiskFetcher(fetchCtx)
 			mu.Lock()
 			geoRisk = g
@@ -309,7 +299,7 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 				fetcherStatus.GeopoliticalRisk = "no_data"
 			}
 			mu.Unlock()
-		}()
+		})
 	} else {
 		fetcherStatus.GeopoliticalRisk = "not_available"
 	}

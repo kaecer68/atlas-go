@@ -231,7 +231,7 @@ func run(args []string) error {
 	var symbolFilter map[string]bool
 	if *symbolsFlag != "" {
 		symbolFilter = make(map[string]bool)
-		for _, s := range strings.Split(*symbolsFlag, ",") {
+		for s := range strings.SplitSeq(*symbolsFlag, ",") {
 			s = strings.TrimSpace(s)
 			if s != "" {
 				symbolFilter[s] = true

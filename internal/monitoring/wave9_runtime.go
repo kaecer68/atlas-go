@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
@@ -157,8 +158,8 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 		// the caller can distinguish a clean partial-failure from one where
 		// detectors leaked bus subscriptions (Stop returned an error).
 		var cleanupErrs []error
-		for i := len(started) - 1; i >= 0; i-- {
-			if stopErr := started[i](); stopErr != nil {
+		for _, s := range slices.Backward(started) {
+			if stopErr := s(); stopErr != nil {
 				cleanupErrs = append(cleanupErrs, stopErr)
 				logging.Warn("wave9_observability", "cleanup_stop_failed", logging.Err(stopErr))
 			}
@@ -189,38 +190,32 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 	var wg sync.WaitGroup
 	errs := make(chan error, 3)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.ingestionLagMonitor = w.factory.newIngestionLagMonitor(w.bus, w.ingestionLagProvider)
 		if startErr := w.ingestionLagMonitor.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start ingestion lag monitor: %w", startErr)
 			return
 		}
 		addStarted(w.ingestionLagMonitor.Stop)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.channelHealthSynthesizer = w.factory.newChannelHealthSynthesizer(w.bus, w.channelHealthProvider)
 		if startErr := w.channelHealthSynthesizer.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start channel health synthesizer: %w", startErr)
 			return
 		}
 		addStarted(w.channelHealthSynthesizer.Stop)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.factorWeightRegression = w.factory.newFactorWeightRegressionDetector(w.bus, w.weightProvider)
 		if startErr := w.factorWeightRegression.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start factor weight regression detector: %w", startErr)
 			return
 		}
 		addStarted(w.factorWeightRegression.Stop)
-	}()
+	})
 
 	wg.Wait()
 	close(errs)

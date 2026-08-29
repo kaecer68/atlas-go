@@ -311,7 +311,7 @@ func (a *moduleAnalysis) runCoverage(repoRoot, modName string) {
 // "coverage: 68.3% of statements"
 // Returns -1 if not found.
 func parseCoverage(output string) float64 {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		idx := strings.Index(line, "coverage:")
 		if idx < 0 {
 			continue
@@ -378,7 +378,7 @@ func loadPreviousPct(modName string) int {
 	}
 
 	// Simple line-by-line search for the module row.
-	for _, line := range strings.Split(prev, "\n") {
+	for line := range strings.SplitSeq(prev, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "|") {
 			continue

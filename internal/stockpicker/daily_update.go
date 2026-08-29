@@ -296,7 +296,7 @@ func selectConditions(list string, reg *ConditionRegistry) ([]Condition, error) 
 		return reg.All(), nil
 	}
 	var out []Condition
-	for _, id := range strings.Split(list, ",") {
+	for id := range strings.SplitSeq(list, ",") {
 		id = strings.TrimSpace(id)
 		c, ok := reg.Lookup(id)
 		if !ok {

@@ -110,7 +110,7 @@ func parseFlags(args []string) (config, error) {
 	cfg := config{workDir: *workDir, start: start, end: end, dryRun: *dryRun, minRows: *minRows, sleep: *sleep}
 	if *symbols != "" {
 		cfg.symbols = map[string]bool{}
-		for _, s := range strings.Split(*symbols, ",") {
+		for s := range strings.SplitSeq(*symbols, ",") {
 			if s = strings.TrimSpace(s); s != "" {
 				cfg.symbols[s] = true
 			}

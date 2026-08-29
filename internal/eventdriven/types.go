@@ -36,7 +36,7 @@ type EventCalendarItem struct {
 	Direction           string    `json:"direction"`
 	StartDate           time.Time `json:"start_date"`
 	EndDate             time.Time `json:"end_date"`
-	PeakDate            time.Time `json:"peak_date,omitempty"`
+	PeakDate            time.Time `json:"peak_date,omitzero"`
 	DecayDays           int       `json:"decay_days"`
 	AffectedIndustries  []string  `json:"affected_industries,omitempty"`
 	ExpectedFlowImpact  string    `json:"expected_flow_impact"`
@@ -46,7 +46,7 @@ type EventCalendarItem struct {
 	EvidenceQuality     string    `json:"evidence_quality,omitempty"`
 	Backfilled          bool      `json:"backfilled"`
 	CrossSourceStatus   string    `json:"cross_source_status,omitempty"`
-	GeneratedAt         time.Time `json:"generated_at,omitempty"`
+	GeneratedAt         time.Time `json:"generated_at,omitzero"`
 }
 
 // ETFEstimate represents the predicted capital flow from an ETF rebalance event.

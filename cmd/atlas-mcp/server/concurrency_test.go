@@ -100,14 +100,12 @@ func TestHTTPClient_ConcurrentRequests(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, n)
 	for range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			var out []map[string]any
 			if err := cli.Get(context.Background(), "/x", nil, &out); err != nil {
 				errCh <- err
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(errCh)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 )
 
 // TAIEXReturnCalculator calculates recent TAIEX returns using Yahoo Finance.
@@ -78,9 +79,9 @@ func (t *TAIEXReturnCalculator) GetNDayReturn(ctx context.Context, days int) (fl
 
 	// Current price: last valid close.
 	current := 0.0
-	for i := len(closes) - 1; i >= 0; i-- {
-		if closes[i] > 0 && !math.IsNaN(closes[i]) && !math.IsInf(closes[i], 0) {
-			current = closes[i]
+	for _, close := range slices.Backward(closes) {
+		if close > 0 && !math.IsNaN(close) && !math.IsInf(close, 0) {
+			current = close
 			break
 		}
 	}

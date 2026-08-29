@@ -345,7 +345,7 @@ func run(args []string) error {
 	var total fileStats
 	var rewritten []string
 
-	for _, raw := range strings.Split(*inputsFlag, ",") {
+	for raw := range strings.SplitSeq(*inputsFlag, ",") {
 		path := strings.TrimSpace(raw)
 		if path == "" {
 			continue

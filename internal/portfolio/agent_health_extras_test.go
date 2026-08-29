@@ -179,11 +179,9 @@ func TestJoinLines_SingleAndMultiple(t *testing.T) {
 func TestJoinLines_ConcurrentNoRace(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = joinLines("x", "y", "z")
-		}()
+		})
 	}
 	wg.Wait()
 }

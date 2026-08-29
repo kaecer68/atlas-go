@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -508,8 +509,8 @@ func checkReplayHealth(path string, now time.Time) (string, string) {
 		prevCloseByCode := make(map[string]float64)
 		lastCloseByCode := make(map[string]float64)
 		var prevDate string
-		for i := len(lines) - 1; i >= 0; i-- {
-			row := strings.Split(lines[i], ",")
+		for _, line := range slices.Backward(lines) {
+			row := strings.Split(line, ",")
 			if len(row) < 9 || row[0] == "Date" {
 				continue
 			}

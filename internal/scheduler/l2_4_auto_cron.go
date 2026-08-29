@@ -268,7 +268,7 @@ func dayMatches(weekday, daysSpec string) bool {
 		}
 	}
 
-	for _, day := range strings.Split(daysSpec, ",") {
+	for day := range strings.SplitSeq(daysSpec, ",") {
 		if strings.TrimSpace(day) == weekday {
 			return true
 		}

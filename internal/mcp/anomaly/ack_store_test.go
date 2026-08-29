@@ -226,9 +226,7 @@ func Test_MemoryStore_ConcurrentSafe(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 10 {
 				sa, err := s.Save(AnomalyEvent{TenantID: "t", AnomalyType: "burst"})
 				if err != nil {
@@ -237,19 +235,17 @@ func Test_MemoryStore_ConcurrentSafe(t *testing.T) {
 				}
 				idsCh <- sa.AnomalyID
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(idsCh)
 
 	wg2 := sync.WaitGroup{}
 	for range 5 {
-		wg2.Add(1)
-		go func() {
-			defer wg2.Done()
+		wg2.Go(func() {
 			_ = s.ListAll(500)
 			_ = s.ListUnacked(500)
-		}()
+		})
 	}
 	wg2.Wait()
 

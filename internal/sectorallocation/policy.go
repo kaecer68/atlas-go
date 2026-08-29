@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -160,9 +161,9 @@ func (s *FileClosureStore) latestUnlocked() (*SectorAllocationSnapshot, error) {
 		return nil, err
 	}
 	// Walk backwards to find the most recent unconsumed snapshot.
-	for i := len(rows) - 1; i >= 0; i-- {
-		if !rows[i].consumed {
-			snap := rows[i].snap
+	for _, row := range slices.Backward(rows) {
+		if !row.consumed {
+			snap := row.snap
 			return &snap, nil
 		}
 	}

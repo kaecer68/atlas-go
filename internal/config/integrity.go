@@ -9,11 +9,17 @@ import (
 
 // requiredParamsKeys lists the top-level keys that must be present in params.json.
 // These correspond to the non-omitempty fields on ParametersConfig.
+// The ten struct-typed sub-config keys (factor_weight, narrative_conviction,
+// sector_executor, risk_gate, engine, rsi_tw, tax, smart_universe,
+// forward_return, stockpicker) are always serialized: omitempty is a no-op on
+// struct fields, so removing the ineffective tags (Batch 1 of the omitzero
+// cleanup) makes the list match runtime behavior.
 var requiredParamsKeys = []string{
 	"version",
 	"updated_at",
 	"darwinian",
 	"factor",
+	"factor_weight",
 	"optimizer",
 	"sizing",
 	"health",
@@ -26,14 +32,23 @@ var requiredParamsKeys = []string{
 	"realtime",
 	"janus",
 	"narrative",
+	"narrative_conviction",
 	"marketdata",
 	"industry",
 	"strategy",
 	"precious_metals",
+	"sector_executor",
 	"alert",
 	"capitalflow",
+	"risk_gate",
+	"engine",
+	"rsi_tw",
+	"tax",
 	"sector_allocation",
 	"reporting",
+	"smart_universe",
+	"forward_return",
+	"stockpicker",
 }
 
 // CheckParamsIntegrity validates that the file at path is a non-empty, valid JSON

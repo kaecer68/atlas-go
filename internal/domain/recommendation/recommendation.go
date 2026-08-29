@@ -107,7 +107,7 @@ type HumanIntervention struct {
 	Operator      string    `json:"operator"`
 	SessionID     string    `json:"session_id,omitempty"`
 	RecordedAt    time.Time `json:"recorded_at"`
-	ExpiresAt     time.Time `json:"expires_at,omitempty"`
+	ExpiresAt     time.Time `json:"expires_at,omitzero"`
 	TTLHours      int       `json:"ttl_hours,omitempty"`
 }
 

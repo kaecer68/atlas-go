@@ -377,7 +377,7 @@ func normalizeGoParams(pattern string) string {
 // splitPath splits a URL path into segments.
 func splitPath(path string) []string {
 	var segs []string
-	for _, s := range strings.Split(path, "/") {
+	for s := range strings.SplitSeq(path, "/") {
 		if s != "" {
 			segs = append(segs, s)
 		}
