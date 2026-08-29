@@ -343,6 +343,25 @@ func (r *PluginRegistry) WithRecOverrides(overrides map[string]string) *PluginRe
 	return r
 }
 
+// WithCapitalFlowReportProvider injects a capital-flow report provider into
+// the stockpicker-winrate executor so its flow gateway can enforce the
+// market-regime layers via LatestDaily → CheckFromReport (issue #1737). The
+// executor is held as a value in the agent-executor slice, so the configured
+// value replaces the zero-value copy. A nil provider is a no-op (the executor
+// keeps its documented foreign-only fallback).
+func (r *PluginRegistry) WithCapitalFlowReportProvider(p CapitalFlowReportProvider) *PluginRegistry {
+	if r == nil || p == nil {
+		return r
+	}
+	for i, exec := range r.agentExecutors {
+		if e, ok := exec.(StockpickerWinrateExecutor); ok {
+			e.CapitalFlow = p
+			r.agentExecutors[i] = e
+		}
+	}
+	return r
+}
+
 // Rotator returns the PortfolioRotator, or nil if no evaluators are registered.
 func (r *PluginRegistry) Rotator() *PortfolioRotator {
 	return r.rotator

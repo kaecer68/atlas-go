@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -43,6 +44,48 @@ type mockFlowSource struct {
 
 func (m mockFlowSource) LatestForeignNet(symbol string) (float64, bool) {
 	return m.net, m.ok
+}
+
+// mockCapitalFlowReportProvider is a scriptable CapitalFlowReportProvider.
+type mockCapitalFlowReportProvider struct {
+	report capitalflow.DailyReport
+	err    error
+}
+
+func (m mockCapitalFlowReportProvider) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
+	if m.err != nil {
+		return capitalflow.DailyReport{}, m.err
+	}
+	return m.report, nil
+}
+
+// marketFlowScore builds one capitalflow.ForceScore fixture for a
+// market-regime layer.
+func marketFlowScore(force capitalflow.ForceName, raw, z float64, avail bool) capitalflow.ForceScore {
+	return capitalflow.ForceScore{
+		Force:         force,
+		RawValue:      raw,
+		ZScore:        z,
+		DataAvailable: avail,
+	}
+}
+
+// marketPassReport returns a DailyReport whose institutional/retail forces
+// clear the two-level gateway thresholds (0.3/0.5 and 1.0/0.5).
+func marketPassReport() capitalflow.DailyReport {
+	return capitalflow.DailyReport{Forces: []capitalflow.ForceScore{
+		marketFlowScore(capitalflow.ForceInstitutional, 1.0, 0.8, true),
+		marketFlowScore(capitalflow.ForceRetail, 1.5, 0.6, true),
+	}}
+}
+
+// marketFailReport returns a DailyReport whose institutional/retail forces
+// are below every enabled threshold — the market regime fails the gate.
+func marketFailReport() capitalflow.DailyReport {
+	return capitalflow.DailyReport{Forces: []capitalflow.ForceScore{
+		marketFlowScore(capitalflow.ForceInstitutional, 0.1, 0.2, true),
+		marketFlowScore(capitalflow.ForceRetail, 0.2, 0.1, true),
+	}}
 }
 
 // ── fixtures ──────────────────────────────────────────────────────────
@@ -84,6 +127,20 @@ func eligibleWinRateSummary() stockpicker.StockWinRateSummary {
 func testFlowGateway() *stockpicker.FlowGateway {
 	return stockpicker.NewFlowGateway(stockpicker.FlowGatewayParameters{
 		Foreign:                  stockpicker.ForeignThreshold{MinAbsNet: 0.1},
+		FailClosedWhenAllMissing: true,
+	})
+}
+
+// twoLevelFlowGateway returns a hermetic gateway with BOTH levels enabled:
+// per-symbol foreign (0.1 億股) plus market-regime institutional/retail
+// thresholds matching the documented defaults. Used by the issue #1737
+// market-report tests so the market layers are actually enforced (not
+// fail-open skipped like the foreign-only testFlowGateway).
+func twoLevelFlowGateway() *stockpicker.FlowGateway {
+	return stockpicker.NewFlowGateway(stockpicker.FlowGatewayParameters{
+		Foreign:                  stockpicker.ForeignThreshold{MinAbsNet: 0.1},
+		Institutional:            stockpicker.LayerThreshold{MinAbsRaw: 0.3, MinAbsZ: 0.5},
+		Retail:                   stockpicker.LayerThreshold{MinAbsRaw: 1.0, MinAbsZ: 0.5},
 		FailClosedWhenAllMissing: true,
 	})
 }
@@ -275,6 +332,83 @@ func TestStockpickerWinrateRecommendFlowMissing(t *testing.T) {
 	}
 	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
 		t.Fatal("Recommend with missing flow = true, want false (fail closed)")
+	}
+}
+
+// ── issue #1737: two-level flow gate via capitalflow report ──────────
+
+// TestStockpickerWinrateRecommendMarketReportPass proves the executor reads
+// the market-wide DailyReport and enforces the market-regime layers: with a
+// passing report the full two-level gate passes.
+func TestStockpickerWinrateRecommendMarketReportPass(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      twoLevelFlowGateway(),
+		CapitalFlow:  mockCapitalFlowReportProvider{report: marketPassReport()},
+	}
+
+	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
+	if !ok {
+		t.Fatal("Recommend with passing market report = (_, false), want (rec, true)")
+	}
+	if rec.Symbol != "2330.TW" || rec.Side != domain.SideBuy {
+		t.Fatalf("rec = %+v, want BUY 2330.TW", rec)
+	}
+}
+
+// TestStockpickerWinrateRecommendMarketReportReject proves the market-regime
+// layers are actually ENFORCED (not skipped): the same passing foreign flow
+// fails when the injected DailyReport carries weak institutional/retail
+// forces. Before issue #1737 the forces=nil Check call skipped these layers
+// and would have emitted a recommendation.
+func TestStockpickerWinrateRecommendMarketReportReject(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      twoLevelFlowGateway(),
+		CapitalFlow:  mockCapitalFlowReportProvider{report: marketFailReport()},
+	}
+
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+		t.Fatal("Recommend with failing market report = true, want false (market regime must reject)")
+	}
+}
+
+// TestStockpickerWinrateRecommendNilCapitalFlowForeignOnlyFallback pins the
+// documented fallback: with no CapitalFlow provider the executor degrades to
+// the original foreign-only scope and still emits a recommendation on a
+// passing foreign flow (market layers fail-open skip).
+func TestStockpickerWinrateRecommendNilCapitalFlowForeignOnlyFallback(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      twoLevelFlowGateway(),
+		CapitalFlow:  nil,
+	}
+
+	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
+	if !ok {
+		t.Fatal("Recommend with nil CapitalFlow = (_, false), want foreign-only fallback pass")
+	}
+	if rec.Symbol != "2330.TW" || rec.Side != domain.SideBuy {
+		t.Fatalf("rec = %+v, want BUY 2330.TW", rec)
+	}
+}
+
+// TestStockpickerWinrateRecommendCapitalFlowErrorFallback keeps fail-open
+// semantics for a market-report outage: LatestDaily errors degrade to the
+// foreign-only scope instead of failing the recommendation closed.
+func TestStockpickerWinrateRecommendCapitalFlowErrorFallback(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      twoLevelFlowGateway(),
+		CapitalFlow:  mockCapitalFlowReportProvider{err: context.DeadlineExceeded},
+	}
+
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+		t.Fatal("Recommend with CapitalFlow error = (_, false), want foreign-only fallback pass (fail-open)")
 	}
 }
 
