@@ -696,7 +696,7 @@ func countNonEmptyLines(path string) int {
 		return 0
 	}
 	count := 0
-	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
 		if strings.TrimSpace(line) != "" {
 			count++
 		}

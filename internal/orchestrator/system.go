@@ -953,7 +953,7 @@ func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
 	backlogFull := ledger.CountUnresolvedPlanned(s.Sim().cfg.LedgerDir) >= maxUnresolvedPlanned
 	existingIDs := make(map[string]bool)
 	if expData, err := os.ReadFile(filepath.Join(s.Sim().cfg.LedgerDir, "experiments.jsonl")); err == nil {
-		for _, line := range strings.Split(string(expData), "\n") {
+		for line := range strings.SplitSeq(string(expData), "\n") {
 			if line == "" {
 				continue
 			}

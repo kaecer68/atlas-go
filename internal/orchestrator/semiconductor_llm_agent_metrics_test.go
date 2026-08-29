@@ -29,7 +29,7 @@ func captureMetricsLogger(t *testing.T) (*slog.Logger, *bytes.Buffer) {
 // strings).
 func findEvent(t *testing.T, buf *bytes.Buffer, msg string) map[string]any {
 	t.Helper()
-	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line == "" {
 			continue
 		}

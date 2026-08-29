@@ -316,8 +316,8 @@ func (cb *CircuitBreaker) LoadEvents() ([]CircuitBreakerEvent, error) {
 		return nil, nil
 	}
 	var events []CircuitBreakerEvent
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(strings.TrimSpace(string(data)), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

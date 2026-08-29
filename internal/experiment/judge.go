@@ -1038,7 +1038,7 @@ func promptMentionsHoldingPeriod(prompt string) bool {
 // extractPipelineStageAction extracts the stage and action values from a
 // pipeline_stage_toggle config patch YAML artifact.
 func extractPipelineStageAction(artifact string) (stage, action string) {
-	for _, line := range strings.Split(artifact, "\n") {
+	for line := range strings.SplitSeq(artifact, "\n") {
 		line = strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(line, "stage:"); ok {
 			stage = strings.TrimSpace(after)

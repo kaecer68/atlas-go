@@ -312,7 +312,7 @@ func getOperator() string {
 // parseSectorList splits a comma-separated string of sector IDs.
 func parseSectorList(s string) []string {
 	var out []string
-	for _, p := range strings.Split(s, ",") {
+	for p := range strings.SplitSeq(s, ",") {
 		p = strings.TrimSpace(p)
 		if p != "" {
 			out = append(out, p)
@@ -415,7 +415,7 @@ func parseObsLogRaw(path string) ([]obsRow, string, error) {
 func parseObsLog(content string) []obsRow {
 	var rows []obsRow
 	inRecords := false
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "## Records" {
 			inRecords = true
@@ -576,7 +576,7 @@ func updateObsLog(path, raw string, date string, newCount int, narrative, marker
 
 // rowHasDate reports whether the obs log markdown already has a row for the given date.
 func rowHasDate(raw, date string) bool {
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		if !strings.HasPrefix(line, "|") {
 			continue
 		}

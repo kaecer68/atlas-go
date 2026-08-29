@@ -355,7 +355,7 @@ func parseTables(spec string) (map[string]bool, error) {
 		return want, nil
 	}
 	out := map[string]bool{}
-	for _, p := range strings.Split(spec, ",") {
+	for p := range strings.SplitSeq(spec, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue

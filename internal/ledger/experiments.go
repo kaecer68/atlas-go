@@ -19,7 +19,7 @@ func ExperimentsJSONL(ledgerDir string) []domain.ExperimentRecord {
 		return nil
 	}
 	var records []domain.ExperimentRecord
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if line == "" {
 			continue
 		}

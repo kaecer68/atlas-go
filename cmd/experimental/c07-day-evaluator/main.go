@@ -117,7 +117,7 @@ func parseObsLog(path string) ([]obsRow, error) {
 
 	var rows []obsRow
 	inRecords := false
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "## Records" {
 			inRecords = true
