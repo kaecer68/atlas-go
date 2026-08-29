@@ -127,8 +127,8 @@ func GetCapitalflowResonanceCoefficientMin() float64 {
 type L2_4ScheduleParameters struct {
 	DefaultStartTime   ParameterMetadata[string] `json:"default_start_time"`
 	DefaultPeriodDays  ParameterMetadata[int]    `json:"default_period_days"`
-	OverrideStartTime  ParameterMetadata[string] `json:"override_start_time,omitempty"`
-	OverridePeriodDays ParameterMetadata[int]    `json:"override_period_days,omitempty"`
+	OverrideStartTime  ParameterMetadata[string] `json:"override_start_time"`
+	OverridePeriodDays ParameterMetadata[int]    `json:"override_period_days"`
 	AutoEnabled        ParameterMetadata[bool]   `json:"auto_enabled"`
 }
 
@@ -332,8 +332,8 @@ type OrchestratorParameters struct {
 	PromotionHitRateThreshold        ParameterMetadata[float64]                       `json:"promotion_hitrate_threshold"`
 	RejectionSharpeThreshold         ParameterMetadata[float64]                       `json:"rejection_sharpe_threshold"`
 	RejectionHitRateThreshold        ParameterMetadata[float64]                       `json:"rejection_hitrate_threshold"`
-	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments,omitempty"`
-	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments,omitempty"`
+	SectorRotationMacroAdjustments   ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_macro_adjustments"`
+	SectorRotationFlowAdjustments    ParameterMetadata[map[string]map[string]float64] `json:"sector_rotation_flow_adjustments"`
 	UseMLScoring                     ParameterMetadata[bool]                          `json:"use_ml_scoring"`
 	UseLLMSectorAgents               ParameterMetadata[bool]                          `json:"use_llm_sector_agents"`
 	L2_4Schedule                     L2_4ScheduleParameters                           `json:"l2_4_schedule"`
@@ -466,7 +466,7 @@ type NarrativeParameters struct {
 	RetailFrenzyPercentileThreshold ParameterMetadata[float64] `json:"retail_frenzy_percentile_threshold"`
 	RetailFearPercentileThreshold   ParameterMetadata[float64] `json:"retail_fear_percentile_threshold"`
 	RetailAccelerationWindowDays    ParameterMetadata[int]     `json:"retail_acceleration_window_days"`
-	InflationEstimate               ParameterMetadata[float64] `json:"inflation_estimate,omitempty"`
+	InflationEstimate               ParameterMetadata[float64] `json:"inflation_estimate"`
 
 	// Seasonal event detection confidence values (calendar-based events)
 	SpringFestivalConfidence        ParameterMetadata[float64] `json:"spring_festival_confidence"`
@@ -599,8 +599,8 @@ type IndustryParameters struct {
 	AdjustmentFloor        ParameterMetadata[float64]                 `json:"adjustment_floor"`         // was 0.01 in seasonality.go:270
 	FreshnessScores        ParameterMetadata[FreshnessScoresConfig]   `json:"freshness_scores"`
 	PhaseScores            ParameterMetadata[PhaseScoresConfig]       `json:"phase_scores"`
-	SkillToIndustry        ParameterMetadata[map[string]string]       `json:"skill_to_industry,omitempty"`
-	SkillToIndustries      ParameterMetadata[map[string][]string]     `json:"skill_to_industries,omitempty"`
+	SkillToIndustry        ParameterMetadata[map[string]string]       `json:"skill_to_industry"`
+	SkillToIndustries      ParameterMetadata[map[string][]string]     `json:"skill_to_industries"`
 	CycleTransitions       ParameterMetadata[[]CycleTransitionConfig] `json:"cycle_transitions"`
 
 	CycleWeightMultipliers ParameterMetadata[CycleWeightMultipliersConfig] `json:"cycle_weight_multipliers"`
@@ -948,41 +948,41 @@ type StrategyParameters struct {
 // FactorWeightParameters holds regime-aware factor weights used by the factor engine
 // to adjust allocation across market regimes (bull/bear/high-vol/risk-on/risk-off/etc.).
 type FactorWeightParameters struct {
-	BaseWeights            ParameterMetadata[map[string]float64] `json:"base_weights,omitempty"`
-	RegimeBullMomentum     ParameterMetadata[float64]            `json:"regime_bull_momentum,omitempty"`
-	RegimeBullQuality      ParameterMetadata[float64]            `json:"regime_bull_quality,omitempty"`
-	RegimeBullValue        ParameterMetadata[float64]            `json:"regime_bull_value,omitempty"`
-	RegimeBearQuality      ParameterMetadata[float64]            `json:"regime_bear_quality,omitempty"`
-	RegimeBearValue        ParameterMetadata[float64]            `json:"regime_bear_value,omitempty"`
-	RegimeBearMomentum     ParameterMetadata[float64]            `json:"regime_bear_momentum,omitempty"`
-	RegimeHighVolLiquidity ParameterMetadata[float64]            `json:"regime_high_vol_liquidity,omitempty"`
-	RegimeHighVolMomentum  ParameterMetadata[float64]            `json:"regime_high_vol_momentum,omitempty"`
-	RegimeHighVolInstSent  ParameterMetadata[float64]            `json:"regime_high_vol_inst_sent,omitempty"`
-	SeverityCritical       ParameterMetadata[float64]            `json:"severity_critical,omitempty"`
-	SeverityHigh           ParameterMetadata[float64]            `json:"severity_high,omitempty"`
-	SeverityMedium         ParameterMetadata[float64]            `json:"severity_medium,omitempty"`
-	SeverityLow            ParameterMetadata[float64]            `json:"severity_low,omitempty"`
-	ClampMin               ParameterMetadata[float64]            `json:"clamp_min,omitempty"`
-	ClampMax               ParameterMetadata[float64]            `json:"clamp_max,omitempty"`
-	RiskOnMomentum         ParameterMetadata[float64]            `json:"risk_on_momentum,omitempty"`
-	RiskOnQuality          ParameterMetadata[float64]            `json:"risk_on_quality,omitempty"`
-	RiskOffMomentum        ParameterMetadata[float64]            `json:"risk_off_momentum,omitempty"`
-	RiskOffQuality         ParameterMetadata[float64]            `json:"risk_off_quality,omitempty"`
-	RiskOffLiquidity       ParameterMetadata[float64]            `json:"risk_off_liquidity,omitempty"`
-	ConservativeValue      ParameterMetadata[float64]            `json:"conservative_value,omitempty"`
-	ConservativeQuality    ParameterMetadata[float64]            `json:"conservative_quality,omitempty"`
-	ConservativeMomentum   ParameterMetadata[float64]            `json:"conservative_momentum,omitempty"`
-	AggressiveMomentum     ParameterMetadata[float64]            `json:"aggressive_momentum,omitempty"`
-	AggressiveInstSent     ParameterMetadata[float64]            `json:"aggressive_inst_sent,omitempty"`
-	AggressiveValue        ParameterMetadata[float64]            `json:"aggressive_value,omitempty"`
-	AggressiveQuality      ParameterMetadata[float64]            `json:"aggressive_quality,omitempty"`
+	BaseWeights            ParameterMetadata[map[string]float64] `json:"base_weights"`
+	RegimeBullMomentum     ParameterMetadata[float64]            `json:"regime_bull_momentum"`
+	RegimeBullQuality      ParameterMetadata[float64]            `json:"regime_bull_quality"`
+	RegimeBullValue        ParameterMetadata[float64]            `json:"regime_bull_value"`
+	RegimeBearQuality      ParameterMetadata[float64]            `json:"regime_bear_quality"`
+	RegimeBearValue        ParameterMetadata[float64]            `json:"regime_bear_value"`
+	RegimeBearMomentum     ParameterMetadata[float64]            `json:"regime_bear_momentum"`
+	RegimeHighVolLiquidity ParameterMetadata[float64]            `json:"regime_high_vol_liquidity"`
+	RegimeHighVolMomentum  ParameterMetadata[float64]            `json:"regime_high_vol_momentum"`
+	RegimeHighVolInstSent  ParameterMetadata[float64]            `json:"regime_high_vol_inst_sent"`
+	SeverityCritical       ParameterMetadata[float64]            `json:"severity_critical"`
+	SeverityHigh           ParameterMetadata[float64]            `json:"severity_high"`
+	SeverityMedium         ParameterMetadata[float64]            `json:"severity_medium"`
+	SeverityLow            ParameterMetadata[float64]            `json:"severity_low"`
+	ClampMin               ParameterMetadata[float64]            `json:"clamp_min"`
+	ClampMax               ParameterMetadata[float64]            `json:"clamp_max"`
+	RiskOnMomentum         ParameterMetadata[float64]            `json:"risk_on_momentum"`
+	RiskOnQuality          ParameterMetadata[float64]            `json:"risk_on_quality"`
+	RiskOffMomentum        ParameterMetadata[float64]            `json:"risk_off_momentum"`
+	RiskOffQuality         ParameterMetadata[float64]            `json:"risk_off_quality"`
+	RiskOffLiquidity       ParameterMetadata[float64]            `json:"risk_off_liquidity"`
+	ConservativeValue      ParameterMetadata[float64]            `json:"conservative_value"`
+	ConservativeQuality    ParameterMetadata[float64]            `json:"conservative_quality"`
+	ConservativeMomentum   ParameterMetadata[float64]            `json:"conservative_momentum"`
+	AggressiveMomentum     ParameterMetadata[float64]            `json:"aggressive_momentum"`
+	AggressiveInstSent     ParameterMetadata[float64]            `json:"aggressive_inst_sent"`
+	AggressiveValue        ParameterMetadata[float64]            `json:"aggressive_value"`
+	AggressiveQuality      ParameterMetadata[float64]            `json:"aggressive_quality"`
 }
 
 // NarrativeConvictionParameters maps skill types to narrative themes and their
 // historical hit rates for conviction-driven weight adjustments.
 type NarrativeConvictionParameters struct {
-	ThemeHitRates ParameterMetadata[map[string]float64] `json:"theme_hit_rates,omitempty"`
-	SkillToTheme  ParameterMetadata[map[string]string]  `json:"skill_to_theme,omitempty"`
+	ThemeHitRates ParameterMetadata[map[string]float64] `json:"theme_hit_rates"`
+	SkillToTheme  ParameterMetadata[map[string]string]  `json:"skill_to_theme"`
 }
 
 // SectorExecutorParameters holds tunable conviction and price values
@@ -990,14 +990,14 @@ type NarrativeConvictionParameters struct {
 // Each sub-struct groups parameters for a specific executor, so adding
 // a new executor only requires adding its block of ParameterMetadata fields.
 type SectorExecutorParameters struct {
-	LEOSatellite      LEOSatelliteExecutorParameters      `json:"leo_satellite,omitempty"`
-	Financials        FinancialsExecutorParameters        `json:"financials,omitempty"`
-	Shipping          ShippingExecutorParameters          `json:"shipping,omitempty"`
-	ValueYield        ValueYieldExecutorParameters        `json:"value_yield,omitempty"`
-	EarningsQuality   EarningsQualityExecutorParameters   `json:"earnings_quality,omitempty"`
-	TechnicalBreakout TechnicalBreakoutExecutorParameters `json:"technical_breakout,omitempty"`
-	GrowthMomentum    GrowthMomentumExecutorParameters    `json:"growth_momentum,omitempty"`
-	FactorConviction  FactorConvictionParams              `json:"factor_conviction,omitempty"`
+	LEOSatellite      LEOSatelliteExecutorParameters      `json:"leo_satellite"`
+	Financials        FinancialsExecutorParameters        `json:"financials"`
+	Shipping          ShippingExecutorParameters          `json:"shipping"`
+	ValueYield        ValueYieldExecutorParameters        `json:"value_yield"`
+	EarningsQuality   EarningsQualityExecutorParameters   `json:"earnings_quality"`
+	TechnicalBreakout TechnicalBreakoutExecutorParameters `json:"technical_breakout"`
+	GrowthMomentum    GrowthMomentumExecutorParameters    `json:"growth_momentum"`
+	FactorConviction  FactorConvictionParams              `json:"factor_conviction"`
 }
 
 // FactorConvictionParams holds all factor-score thresholds and conviction deltas
@@ -1165,12 +1165,12 @@ type CapitalflowParameters struct {
 type StockpickerParameters struct {
 	Costs       StockpickerCostsParameters       `json:"costs"`
 	Calibration StockpickerCalibrationParameters `json:"calibration"`
-	Conditions  StockpickerConditionsParameters  `json:"conditions,omitempty"`
+	Conditions  StockpickerConditionsParameters  `json:"conditions"`
 	// FlowGateway configures the PR 2b two-level capital-flow gate
 	// (internal/stockpicker/validator.go): a per-symbol foreign layer
 	// (個股層) plus institutional/retail market-regime layers (市場 regime
 	// 層). Read by the validator via config.GetParametersConfig().
-	FlowGateway FlowGatewayParameters `json:"flow_gateway,omitempty"`
+	FlowGateway FlowGatewayParameters `json:"flow_gateway"`
 }
 
 // StockpickerCostsParameters holds trading-cost assumptions used by NetHit.
@@ -1217,7 +1217,7 @@ type FlowGatewayParameters struct {
 	// set false to keep evaluating on partial data.
 	FailClosedWhenAllMissing ParameterMetadata[bool] `json:"fail_closed_when_all_missing"`
 	Layers                   FlowGatewayLayers       `json:"layers"`
-	Conditions               FlowGatewayConditions   `json:"conditions,omitempty"`
+	Conditions               FlowGatewayConditions   `json:"conditions"`
 }
 
 // FlowGatewayLayers groups the per-layer threshold blocks.
@@ -1264,8 +1264,8 @@ type FlowGatewayCondition struct {
 // RiskGateParameters holds all tunable parameters for the unified risk gate system.
 type RiskGateParameters struct {
 	PreTrade  PreTradeGateParameters  `json:"pre_trade"`
-	InTrade   InTradeGateParameters   `json:"in_trade,omitempty"`
-	PostTrade PostTradeGateParameters `json:"post_trade,omitempty"`
+	InTrade   InTradeGateParameters   `json:"in_trade"`
+	PostTrade PostTradeGateParameters `json:"post_trade"`
 }
 
 // PreTradeGateParameters holds pre-trade risk check parameters.
@@ -1438,7 +1438,7 @@ type RSITwParameters struct {
 
 	// LastCalibratedScore records the most recent autonomous calibration score,
 	// loaded at startup so PreTradeGate does not start with a blind 0.0.
-	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score,omitempty"`
+	LastCalibratedScore ParameterMetadata[float64] `json:"last_calibrated_score"`
 }
 
 // FallbackPriceTarget holds per-skill target and stop-loss multipliers
@@ -1480,7 +1480,7 @@ type ParametersConfig struct {
 	FallbackPriceTargets map[string]FallbackPriceTarget `json:"fallback_price_targets,omitempty"`
 	Darwinian            DarwinianParameters            `json:"darwinian"`
 	Factor               FactorParameters               `json:"factor"`
-	FactorWeight         FactorWeightParameters         `json:"factor_weight,omitempty"`
+	FactorWeight         FactorWeightParameters         `json:"factor_weight"`
 	Optimizer            OptimizerParameters            `json:"optimizer"`
 	Sizing               SizingParameters               `json:"sizing"`
 	Health               HealthParameters               `json:"health"`
@@ -1493,23 +1493,23 @@ type ParametersConfig struct {
 	Realtime             RealtimeParameters             `json:"realtime"`
 	Janus                JanusParameters                `json:"janus"`
 	Narrative            NarrativeParameters            `json:"narrative"`
-	NarrativeConviction  NarrativeConvictionParameters  `json:"narrative_conviction,omitempty"`
+	NarrativeConviction  NarrativeConvictionParameters  `json:"narrative_conviction"`
 	Marketdata           MarketdataParameters           `json:"marketdata"`
 	Industry             IndustryParameters             `json:"industry"`
 	Strategy             StrategyParameters             `json:"strategy"`
 	PreciousMetals       PreciousMetalsParameters       `json:"precious_metals"`
-	SectorExecutor       SectorExecutorParameters       `json:"sector_executor,omitempty"`
+	SectorExecutor       SectorExecutorParameters       `json:"sector_executor"`
 	Alert                AlertParameters                `json:"alert"`
 	Capitalflow          CapitalflowParameters          `json:"capitalflow"`
-	RiskGate             RiskGateParameters             `json:"risk_gate,omitempty"`
-	Engine               EngineParameters               `json:"engine,omitempty"`
-	RSITw                RSITwParameters                `json:"rsi_tw,omitempty"`
-	Tax                  TaxParameters                  `json:"tax,omitempty"`
+	RiskGate             RiskGateParameters             `json:"risk_gate"`
+	Engine               EngineParameters               `json:"engine"`
+	RSITw                RSITwParameters                `json:"rsi_tw"`
+	Tax                  TaxParameters                  `json:"tax"`
 	SectorAllocation     SectorAllocationConfig         `json:"sector_allocation"`
 	Reporting            ReportingParameters            `json:"reporting"`
-	SmartUniverse        SmartUniverseConfig            `json:"smart_universe,omitempty"`
-	ForwardReturn        ForwardReturnParameters        `json:"forward_return,omitempty"`
-	Stockpicker          StockpickerParameters          `json:"stockpicker,omitempty"`
+	SmartUniverse        SmartUniverseConfig            `json:"smart_universe"`
+	ForwardReturn        ForwardReturnParameters        `json:"forward_return"`
+	Stockpicker          StockpickerParameters          `json:"stockpicker"`
 }
 
 // TaxParameters holds tunable Taiwan tax rates with full provenance tracking.

@@ -1433,34 +1433,34 @@ export interface FactorScores {
 }
 
 export interface FactorWeightParameters {
-  base_weights?: string;
-  regime_bull_momentum?: string;
-  regime_bull_quality?: string;
-  regime_bull_value?: string;
-  regime_bear_quality?: string;
-  regime_bear_value?: string;
-  regime_bear_momentum?: string;
-  regime_high_vol_liquidity?: string;
-  regime_high_vol_momentum?: string;
-  regime_high_vol_inst_sent?: string;
-  severity_critical?: string;
-  severity_high?: string;
-  severity_medium?: string;
-  severity_low?: string;
-  clamp_min?: string;
-  clamp_max?: string;
-  risk_on_momentum?: string;
-  risk_on_quality?: string;
-  risk_off_momentum?: string;
-  risk_off_quality?: string;
-  risk_off_liquidity?: string;
-  conservative_value?: string;
-  conservative_quality?: string;
-  conservative_momentum?: string;
-  aggressive_momentum?: string;
-  aggressive_inst_sent?: string;
-  aggressive_value?: string;
-  aggressive_quality?: string;
+  base_weights: string;
+  regime_bull_momentum: string;
+  regime_bull_quality: string;
+  regime_bull_value: string;
+  regime_bear_quality: string;
+  regime_bear_value: string;
+  regime_bear_momentum: string;
+  regime_high_vol_liquidity: string;
+  regime_high_vol_momentum: string;
+  regime_high_vol_inst_sent: string;
+  severity_critical: string;
+  severity_high: string;
+  severity_medium: string;
+  severity_low: string;
+  clamp_min: string;
+  clamp_max: string;
+  risk_on_momentum: string;
+  risk_on_quality: string;
+  risk_off_momentum: string;
+  risk_off_quality: string;
+  risk_off_liquidity: string;
+  conservative_value: string;
+  conservative_quality: string;
+  conservative_momentum: string;
+  aggressive_momentum: string;
+  aggressive_inst_sent: string;
+  aggressive_value: string;
+  aggressive_quality: string;
 }
 
 export interface FallbackPriceTarget {
@@ -1527,7 +1527,7 @@ export interface FlowGatewayMarketThreshold {
 export interface FlowGatewayParameters {
   fail_closed_when_all_missing: string;
   layers: FlowGatewayLayers;
-  conditions?: FlowGatewayConditions;
+  conditions: FlowGatewayConditions;
 }
 
 export interface FlowPrediction {
@@ -1964,8 +1964,8 @@ export interface IndustryParameters {
   adjustment_floor: string;
   freshness_scores: string;
   phase_scores: string;
-  skill_to_industry?: string;
-  skill_to_industries?: string;
+  skill_to_industry: string;
+  skill_to_industries: string;
   cycle_transitions: string;
   cycle_weight_multipliers: string;
   linkage_weight_impact: string;
@@ -2142,8 +2142,8 @@ export interface L24ScheduleStatus {
 export interface L2_4ScheduleParameters {
   default_start_time: string;
   default_period_days: string;
-  override_start_time?: string;
-  override_period_days?: string;
+  override_start_time: string;
+  override_period_days: string;
   auto_enabled: string;
 }
 
@@ -2499,8 +2499,8 @@ export interface NarrativeContextItem {
 }
 
 export interface NarrativeConvictionParameters {
-  theme_hit_rates?: string;
-  skill_to_theme?: string;
+  theme_hit_rates: string;
+  skill_to_theme: string;
 }
 
 export interface NarrativeEvent {
@@ -2597,7 +2597,7 @@ export interface NarrativeParameters {
   retail_frenzy_percentile_threshold: string;
   retail_fear_percentile_threshold: string;
   retail_acceleration_window_days: string;
-  inflation_estimate?: string;
+  inflation_estimate: string;
   spring_festival_confidence: string;
   election_cycle_confidence: string;
   earnings_blackout_confidence: string;
@@ -2687,8 +2687,8 @@ export interface OrchestratorParameters {
   promotion_hitrate_threshold: string;
   rejection_sharpe_threshold: string;
   rejection_hitrate_threshold: string;
-  sector_rotation_macro_adjustments?: string;
-  sector_rotation_flow_adjustments?: string;
+  sector_rotation_macro_adjustments: string;
+  sector_rotation_flow_adjustments: string;
   use_ml_scoring: string;
   use_llm_sector_agents: string;
   l2_4_schedule: L2_4ScheduleParameters;
@@ -2747,7 +2747,7 @@ export interface ParametersConfig {
   fallback_price_targets?: Record<string, FallbackPriceTarget>;
   darwinian: DarwinianParameters;
   factor: FactorParameters;
-  factor_weight?: FactorWeightParameters;
+  factor_weight: FactorWeightParameters;
   optimizer: OptimizerParameters;
   sizing: SizingParameters;
   health: HealthParameters;
@@ -2760,23 +2760,23 @@ export interface ParametersConfig {
   realtime: RealtimeParameters;
   janus: JanusParameters;
   narrative: NarrativeParameters;
-  narrative_conviction?: NarrativeConvictionParameters;
+  narrative_conviction: NarrativeConvictionParameters;
   marketdata: MarketdataParameters;
   industry: IndustryParameters;
   strategy: StrategyParameters;
   precious_metals: PreciousMetalsParameters;
-  sector_executor?: SectorExecutorParameters;
+  sector_executor: SectorExecutorParameters;
   alert: AlertParameters;
   capitalflow: CapitalflowParameters;
-  risk_gate?: RiskGateParameters;
-  engine?: EngineParameters;
-  rsi_tw?: RSITwParameters;
-  tax?: TaxParameters;
+  risk_gate: RiskGateParameters;
+  engine: EngineParameters;
+  rsi_tw: RSITwParameters;
+  tax: TaxParameters;
   sector_allocation: SectorAllocationConfig;
   reporting: ReportingParameters;
-  smart_universe?: SmartUniverseConfig;
-  forward_return?: ForwardReturnParameters;
-  stockpicker?: StockpickerParameters;
+  smart_universe: SmartUniverseConfig;
+  forward_return: ForwardReturnParameters;
+  stockpicker: StockpickerParameters;
 }
 
 export interface PerformanceReport {
@@ -3158,7 +3158,7 @@ export interface RSITwParameters {
   d_vix_spike_threshold: string;
   d_vix_spike_multiplier: string;
   d_credit_tightening_multiplier: string;
-  last_calibrated_score?: string;
+  last_calibrated_score: string;
 }
 
 export interface RSITwSubIndicators {
@@ -3520,8 +3520,8 @@ export interface RiskExposureResponse {
 
 export interface RiskGateParameters {
   pre_trade: PreTradeGateParameters;
-  in_trade?: InTradeGateParameters;
-  post_trade?: PostTradeGateParameters;
+  in_trade: InTradeGateParameters;
+  post_trade: PostTradeGateParameters;
 }
 
 export interface RiskInfo {
@@ -3765,14 +3765,14 @@ export interface SectorDayPrediction {
 }
 
 export interface SectorExecutorParameters {
-  leo_satellite?: LEOSatelliteExecutorParameters;
-  financials?: FinancialsExecutorParameters;
-  shipping?: ShippingExecutorParameters;
-  value_yield?: ValueYieldExecutorParameters;
-  earnings_quality?: EarningsQualityExecutorParameters;
-  technical_breakout?: TechnicalBreakoutExecutorParameters;
-  growth_momentum?: GrowthMomentumExecutorParameters;
-  factor_conviction?: FactorConvictionParams;
+  leo_satellite: LEOSatelliteExecutorParameters;
+  financials: FinancialsExecutorParameters;
+  shipping: ShippingExecutorParameters;
+  value_yield: ValueYieldExecutorParameters;
+  earnings_quality: EarningsQualityExecutorParameters;
+  technical_breakout: TechnicalBreakoutExecutorParameters;
+  growth_momentum: GrowthMomentumExecutorParameters;
+  factor_conviction: FactorConvictionParams;
 }
 
 export interface SectorExposure {
@@ -4012,8 +4012,8 @@ export interface StockpickerCostsParameters {
 export interface StockpickerParameters {
   costs: StockpickerCostsParameters;
   calibration: StockpickerCalibrationParameters;
-  conditions?: StockpickerConditionsParameters;
-  flow_gateway?: FlowGatewayParameters;
+  conditions: StockpickerConditionsParameters;
+  flow_gateway: FlowGatewayParameters;
 }
 
 export interface StrategiesListResponse {
