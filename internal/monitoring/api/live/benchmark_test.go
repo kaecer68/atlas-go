@@ -14,9 +14,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
-//go:fix inline
-func float64Ptr(v float64) *float64 { return new(v) }
-
 func TestHandleBenchmarkComparison_SessionsWithData(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionsDir := filepath.Join(tmpDir, "sessions")

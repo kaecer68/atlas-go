@@ -234,13 +234,3 @@ func TestAppend_WeekendRollover(t *testing.T) {
 		t.Fatalf("expected previous Friday 2026-09-04, got %+v", records)
 	}
 }
-
-// fp returns a pointer to a float64 to simplify test fixture construction.
-//
-//go:fix inline
-func fp(v float64) *float64 { return new(v) }
-
-// sp returns a pointer to a string to simplify test fixture construction.
-//
-//go:fix inline
-func sp(v string) *string { return new(v) }
