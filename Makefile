@@ -365,18 +365,18 @@ lint: lint-backend
 ci:
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
-	for script in $$(ls scripts/ci/check_*.sh 2>/dev/null | grep -vE 'data_naming|layer3_|markdown_links|critical_tasks' | sort); do \
-		if [ -f "$$script" ]; then \
-			echo "  → $$script"; \
-			if timeout 30 bash $$script > /dev/null 2>&1; then \
-				passed=$$((passed+1)); \
-			elif [ $$? -eq 124 ]; then \
-				echo "    ⏱️  TIMEOUT (>30s): $$script"; \
-				skipped=$$((skipped+1)); \
-			else \
-				echo "    ❌ FAILED: $$script"; \
-				failed=$$((failed+1)); \
-			fi; \
+	for script in scripts/ci/check_*.sh; do \
+		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*) continue;; esac; \
+		if [ ! -f "$$script" ]; then continue; fi; \
+		echo "  → $$script"; \
+		if timeout 30 bash "$$script" > /dev/null 2>&1; then \
+			passed=$$((passed+1)); \
+		elif [ $$? -eq 124 ]; then \
+			echo "    ⏱️  TIMEOUT (>30s): $$script"; \
+			skipped=$$((skipped+1)); \
+		else \
+			echo "    ❌ FAILED: $$script"; \
+			failed=$$((failed+1)); \
 		fi; \
 	done; \
 	echo ""; \

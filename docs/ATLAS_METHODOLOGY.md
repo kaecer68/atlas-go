@@ -297,6 +297,58 @@
 **程式碼映射**：`internal/portfolio/period_detector.go` `DetectAssessment()`；閾值於
 `internal/config/period_detection_config.go` `DefaultPeriodDetectionConfig()` 參數化。
 
+### 參數欄位對照表（Go field → 憲章閾值，drift-check 用，2026-08-29 新增）
+
+此表為 `internal/config/period_detection_config.go` `PeriodDetectionConfig` 的欄位名與本憲章 §3 閾值的對照，供 `scripts/ci/check_constitution_drift.sh` drift 偵測使用。欄位名本身即為機讀標記，數值與上節各時期表格一致。
+
+| Go 欄位 | 預設值 | 對應憲章描述 |
+|---|---|---|
+| BlackSwanForeignSellBillion | 500 | 外資單日賣超 > 500 億（黑天鵝） |
+| BlackSwanVIX | 35 | VIX > 35（黑天鵝） |
+| BlackSwanTAIEXDeclinePct | 5 | 加權指數單日跌幅 > 5%（黑天鵝） |
+| BlackSwanTWDDepreciationPct | 0.5 | 新台幣單日重貶 > 0.5%（黑天鵝） |
+| BlackSwanGeoIntensity | 60 | 地緣強度 ≥ 60（黑天鵝，4 級制 ≥ 高張） |
+| TurnDownConsecSellDays | 3 | 外資連續賣超 3 日（轉折下壓） |
+| TurnDownSingleSellBillion | 150 | 單日賣超 > 150 億（轉折下壓） |
+| TurnDownMarginMaintRatio | 150 | 融資維持率 < 150%（轉折下壓） |
+| TurnDownFuturesOIDecrease | 10000 | 期貨未平倉減少 > 10,000 口（轉折下壓） |
+| TurnDownGeoIntensity | 40 | 地緣強度 ≥ 40（轉折下壓，4 級制 ≥ 升溫） |
+| DownturnSellRatioToPeak | 0.30 | 5 日均值 / 峰值 < 0.30（低迷） |
+| DownturnMarginReductionPct | 0.15 | 融資較高點減少 > 15%（低迷） |
+| DownturnPublicBankBuyDays | 5 | 公股連續買超 > 5 日（低迷） |
+| DownturnVIXMin | 25 | VIX > 25（低迷） |
+| TurnUpSingleBuyBillion | 100 | 外資單日買超 > 100 億（轉折開高） |
+| TurnUpConsecBuyDays | 3 | 外資連續買超 3 日（轉折開高） |
+| TurnUpTWDApprec1DPct | -0.3 | 新台幣單日升值 > 0.3%（轉折開高，負值表示升值） |
+| TurnUpTWDApprec3DPct | -0.5 | 新台幣 3 日累積升值 > 0.5%（轉折開高） |
+| TurnUpFuturesOIIncrease | 3000 | 期貨多單增加 > 3,000 口（轉折開高） |
+| TurnUpTSMADRPct | 2.0 | TSM ADR 單日漲幅 > 2%（轉折開高） |
+| BullForeignBuyRatio10 | 0.7 | 近 10 日買超佔比 > 0.7（多頭） |
+| BullFuturesOIMin | 30000 | 期貨多單 > 30,000 口（多頭） |
+| BullMarginDailyMaxPct | 1.0 | 融資日均增幅 < 1%（多頭） |
+| PlateauBuyRatio3to10 | 0.50 | 3 日均值 / 10 日均值 < 0.50（高原） |
+| PlateauDayTradeMinPct | 35 | 當沖佔比 > 35%（高原） |
+| PlateauTAIEXDeviationPct | 2.0 | 指數偏離 20 日線 < ±2%（高原） |
+| ConsolidationBuyDaysMin | 3 | 近 10 日買超天數 > 3（盤整） |
+| ConsolidationSellDaysMin | 3 | 近 10 日賣超天數 > 3（盤整） |
+| ConsolidationTWDBandPct | 0.5 | 新台幣偏離月線 < ±0.5%（盤整） |
+| ConsolidationVolRatioMin | 0.7 | 成交量 / 20 日均量 > 0.7（盤整） |
+| ConsolidationVolRatioMax | 1.0 | 成交量 / 20 日均量 < 1.0（盤整） |
+
+### MarketPeriod 常數對照（Go constant → 時期，drift-check 用，2026-08-29 新增）
+
+`internal/domain/shared/shared.go` `MarketPeriod` 七階段常數與本憲章時期名稱的對照。
+
+| Go 常數 | 值 | 中文 | 憲章小節 |
+|---|---|---|---|
+| PeriodDownturn | downturn | 低迷 | §3.1 |
+| PeriodTurnaroundUp | turnaround_up | 轉折開高 | §3.2 |
+| PeriodBull | bull | 上升／多頭 | §3.3 |
+| PeriodPlateau | plateau | 高原 | §3.4 |
+| PeriodConsolidation | consolidation | 盤整 | §3.5 |
+| PeriodTurnaroundDown | turnaround_down | 轉折下壓 | §3.6 |
+| PeriodBlackSwan | black_swan | 黑天鵝 | §3.7 |
+
 ### 台海緊張 4 級制與地緣強度來源（v1.1，2026-08-25 新增）
 
 `GeoIntensity`（0-100）由 `TaiwanRSSGeopoliticalProvider`（4 財經 RSS 關鍵字計數）產出，

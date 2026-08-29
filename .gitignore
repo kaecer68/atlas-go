@@ -251,6 +251,15 @@ docs/archive/
 # CodeGraph local index (2026-08-22, iMac)
 .codegraph/
 
+# SQLite DSN artifact — empty path + modernc.org/sqlite DSN creates literal "?_pragma..." file
+# e.g. cmd/atlas/?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)
+# Root cause: OpenSQLiteDB("") → path "" + "?_pragma..." → sql.Open creates file with "?" in name.
+# Fix: never call OpenSQLiteDB with empty path; guard added in sqlite_core.go (future).
+# Ignore any such artifact wherever it appears.
+**/?_pragma*
+**/*_pragma=journal_mode*
+**/*_pragma=busy_timeout*
+
 # PR 1c backtest CLI compiled artifact
 /run-stockpicker-backtest
 /cmd/run-stockpicker-backtest/run-stockpicker-backtest
