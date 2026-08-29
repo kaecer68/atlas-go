@@ -127,7 +127,7 @@ type DataState struct {
 	// (e.g. government_broker total_net != 0).
 	NonZero bool `json:"non_zero,omitempty"`
 	// RecordedAt is the data timestamp (file mtime or embedded date).
-	RecordedAt time.Time `json:"recorded_at,omitempty"`
+	RecordedAt time.Time `json:"recorded_at,omitzero"`
 	// Detail is a human-readable description (file path, date, value).
 	Detail string `json:"detail,omitempty"`
 }

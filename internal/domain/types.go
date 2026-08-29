@@ -307,7 +307,7 @@ func (s RetailSentimentSnapshot) ExtremeReading() string {
 type DataQuality struct {
 	Available      bool      `json:"available"`
 	Source         string    `json:"source,omitempty"`
-	AsOf           time.Time `json:"as_of,omitempty"`
+	AsOf           time.Time `json:"as_of,omitzero"`
 	SampleCount    int       `json:"sample_count"`
 	SampleUnit     string    `json:"sample_unit,omitempty"`
 	IsFallback     bool      `json:"is_fallback"`

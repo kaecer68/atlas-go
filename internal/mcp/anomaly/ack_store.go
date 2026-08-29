@@ -49,7 +49,7 @@ type StoredAnomaly struct {
 	Event     AnomalyEvent `json:"event"`
 	Acked     bool         `json:"acked"`
 	AckedBy   string       `json:"acked_by,omitempty"`
-	AckedAt   time.Time    `json:"acked_at,omitempty"`
+	AckedAt   time.Time    `json:"acked_at,omitzero"`
 	CreatedAt time.Time    `json:"created_at"`
 }
 

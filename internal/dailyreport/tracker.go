@@ -58,7 +58,7 @@ type TrackedClaim struct {
 	VerifyAfter string      `json:"verify_after"` // YYYY-MM-DD, N trading days after report
 	Status      ClaimStatus `json:"status"`
 	CreatedAt   time.Time   `json:"created_at"`
-	VerifiedAt  time.Time   `json:"verified_at,omitempty"`
+	VerifiedAt  time.Time   `json:"verified_at,omitzero"`
 	Outcome     string      `json:"outcome,omitempty"`
 }
 

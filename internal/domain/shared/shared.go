@@ -97,12 +97,12 @@ type FactorScoreBreakdown struct {
 	Agent                  FactorScoreItem `json:"agent"`
 	InstitutionalSentiment FactorScoreItem `json:"institutional_sentiment"`
 	Liquidity              FactorScoreItem `json:"liquidity"`
-	Narrative              FactorScoreItem `json:"narrative,omitempty"`
-	IndustryCycle          FactorScoreItem `json:"industry_cycle,omitempty"`
-	PreciousMetals         FactorScoreItem `json:"precious_metals,omitempty"`
-	ETF                    FactorScoreItem `json:"etf,omitempty"`
-	Linkage                FactorScoreItem `json:"linkage,omitempty"`
-	TSMC                   FactorScoreItem `json:"tsmc,omitempty"`
+	Narrative              FactorScoreItem `json:"narrative,omitzero"`
+	IndustryCycle          FactorScoreItem `json:"industry_cycle,omitzero"`
+	PreciousMetals         FactorScoreItem `json:"precious_metals,omitzero"`
+	ETF                    FactorScoreItem `json:"etf,omitzero"`
+	Linkage                FactorScoreItem `json:"linkage,omitzero"`
+	TSMC                   FactorScoreItem `json:"tsmc,omitzero"`
 	Total                  FactorScoreItem `json:"total"`
 }
 

@@ -105,7 +105,7 @@ type PredictionBacktestRow struct {
 type PeriodRow struct {
 	Date       string    `json:"date"`
 	Period     string    `json:"period"`
-	RecordedAt time.Time `json:"recorded_at,omitempty"`
+	RecordedAt time.Time `json:"recorded_at,omitzero"`
 	CapturedAt time.Time `json:"captured_at"`
 	// IsSynthetic is 1 when backfilled, 0 when written by live ingest.
 	IsSynthetic uint8  `json:"is_synthetic"`
