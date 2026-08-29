@@ -275,7 +275,6 @@ func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]Dete
 	ch := make(chan out, len(detectors))
 
 	for _, d := range detectors {
-		d := d // capture
 		go func() {
 			res, err := d.Detect(ctx, in)
 			ch <- out{theme: d.Theme(), result: res, err: err, d: d}

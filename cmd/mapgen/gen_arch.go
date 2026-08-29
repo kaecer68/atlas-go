@@ -348,8 +348,8 @@ func extractImports(dirPath, selfName string) []string {
 //	github.com/kaecer68/atlas-go/internal/portfolio/opt  → "portfolio"
 func moduleNameFromImport(importPath string) string {
 	trimmed := strings.TrimPrefix(importPath, modulePrefix+"/internal/")
-	if idx := strings.Index(trimmed, "/"); idx >= 0 {
-		return trimmed[:idx]
+	if before, _, ok := strings.Cut(trimmed, "/"); ok {
+		return before
 	}
 	return trimmed
 }

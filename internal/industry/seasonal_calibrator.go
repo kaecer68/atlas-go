@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -155,8 +156,9 @@ func periodReturn(dailyReturns []float64) float64 {
 
 // CalibrationReport returns a human-readable summary of calibration results.
 func CalibrationReport(results []SeasonalCalibration) string {
-	out := "季節性模式回測校準報告\n"
-	out += "========================\n\n"
+	var out strings.Builder
+	out.WriteString("季節性模式回測校準報告\n")
+	out.WriteString("========================\n\n")
 
 	for _, c := range results {
 		icon := "✓"
@@ -166,17 +168,17 @@ func CalibrationReport(results []SeasonalCalibration) string {
 		case "understated":
 			icon = "↑"
 		}
-		out += fmt.Sprintf("%s %s (%s)\n", icon, c.PatternName, c.PatternID)
-		out += fmt.Sprintf("  觀察次數: %d\n", c.ObservationCount)
-		out += fmt.Sprintf("  準確度: 宣稱 %.0f%% → 實測 %.0f%% (%s)\n",
-			c.DeclaredAccuracy*100, c.ObservedAccuracy*100, c.Verdict)
-		out += fmt.Sprintf("  平均回報: 宣稱 %.1f%% → 實測 %.1f%%\n",
-			c.DeclaredReturn*100, c.ObservedAvgReturn*100)
-		out += fmt.Sprintf("  調整因子: 宣稱 %.2f → 實測 %.2f\n",
-			c.DeclaredAdjustment, c.ObservedAdjustment)
-		out += "\n"
+		out.WriteString(fmt.Sprintf("%s %s (%s)\n", icon, c.PatternName, c.PatternID))
+		out.WriteString(fmt.Sprintf("  觀察次數: %d\n", c.ObservationCount))
+		out.WriteString(fmt.Sprintf("  準確度: 宣稱 %.0f%% → 實測 %.0f%% (%s)\n",
+			c.DeclaredAccuracy*100, c.ObservedAccuracy*100, c.Verdict))
+		out.WriteString(fmt.Sprintf("  平均回報: 宣稱 %.1f%% → 實測 %.1f%%\n",
+			c.DeclaredReturn*100, c.ObservedAvgReturn*100))
+		out.WriteString(fmt.Sprintf("  調整因子: 宣稱 %.2f → 實測 %.2f\n",
+			c.DeclaredAdjustment, c.ObservedAdjustment))
+		out.WriteString("\n")
 	}
-	return out
+	return out.String()
 }
 
 // IndustryReturnAggregator computes aggregate industry returns from individual

@@ -176,8 +176,7 @@ func TestRegimeDebouncer_StartStopLifecycle(t *testing.T) {
 	bus := newRegimeRecordingBus()
 	d := NewRegimeDebouncer(bus)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := d.Start(ctx); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}

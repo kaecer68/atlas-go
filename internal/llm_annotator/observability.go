@@ -2,6 +2,7 @@ package llm_annotator
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -118,11 +119,12 @@ func metricKey(name string, labels map[string]string) string {
 		keys = append(keys, k)
 	}
 	sortStrings(keys)
-	out := name
+	var out strings.Builder
+	out.WriteString(name)
 	for _, k := range keys {
-		out += "\x00" + k + "=" + labels[k]
+		out.WriteString("\x00" + k + "=" + labels[k])
 	}
-	return out
+	return out.String()
 }
 
 // sortStrings sorts a slice of strings in ascending order in place.

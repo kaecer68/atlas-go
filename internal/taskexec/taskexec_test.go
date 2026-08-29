@@ -539,8 +539,7 @@ func TestManager_ListEvents(t *testing.T) {
 
 func TestManager_SetContext(t *testing.T) {
 	mgr := NewManager(NewInMemoryStore())
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	mgr.SetContext(ctx)
 	if mgr.ctx != ctx {
 		t.Error("expected context to be set")

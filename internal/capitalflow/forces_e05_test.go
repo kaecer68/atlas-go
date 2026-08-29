@@ -319,7 +319,6 @@ func TestForceScore_LegacyRoleStillParseable(t *testing.T) {
 		got[f.Force] = f
 	}
 	for _, c := range cases {
-		c := c
 		t.Run(string(c.force), func(t *testing.T) {
 			f, ok := got[c.force]
 			if !ok {

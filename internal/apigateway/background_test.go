@@ -963,8 +963,7 @@ func TestBackgroundTaskManager_Start_PanicInTask_DoesNotCrashManager(t *testing.
 		eventCh <- struct{}{}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.Start(ctx)
 	defer m.Stop()
@@ -1353,8 +1352,7 @@ func TestBackgroundTaskManager_RunTask_AppliesStartupJitter(t *testing.T) {
 
 	// ── Phase B: 模擬後續週期（LastRun 非零值 → 應套用抖動）──
 	task.SetLastRun(time.Now().Add(-2 * time.Hour))
-	ctxB, cancelB := context.WithCancel(context.Background())
-	defer cancelB()
+	ctxB := t.Context()
 	m2 := NewBackgroundTaskManager(nil)
 	if err := m2.Register(task); err != nil {
 		t.Fatalf("Register phase B: %v", err)
@@ -1424,8 +1422,7 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	startTime := time.Now()
 	m.Start(ctx)
 	defer m.Stop()

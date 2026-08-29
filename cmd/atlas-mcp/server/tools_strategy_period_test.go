@@ -76,8 +76,7 @@ func TestStrategyForPeriod_UnknownPeriod(t *testing.T) {
 	if err == nil {
 		t.Fatal("unknown period must return error")
 	}
-	var unknown *unknownPeriodError
-	if !errors.As(err, &unknown) {
+	if _, ok := errors.AsType[*unknownPeriodError](err); !ok {
 		t.Errorf("error type = %T, want *unknownPeriodError", err)
 	}
 	if len(out.KnownPeriods) == 0 {

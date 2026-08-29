@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -312,9 +311,7 @@ func (m *MacroIngestor) loadPreviousSnapshot(curr marketdata.MacroDataSnapshot) 
 	if len(candidates) == 0 {
 		return marketdata.MacroDataSnapshot{}, fmt.Errorf("no previous snapshots")
 	}
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i] < candidates[j]
-	})
+	slices.Sort(candidates)
 	for _, candidate := range slices.Backward(candidates) {
 		path := filepath.Join(m.snapshotDir, candidate)
 		data, err := os.ReadFile(path)

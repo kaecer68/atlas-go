@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -184,7 +184,7 @@ func percentile50(latencies []int64) float64 {
 	}
 	sorted := make([]int64, len(latencies))
 	copy(sorted, latencies)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	slices.Sort(sorted)
 	n := len(sorted)
 	if n%2 == 1 {
 		return float64(sorted[n/2])

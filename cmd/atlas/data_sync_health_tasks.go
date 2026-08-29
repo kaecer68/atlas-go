@@ -76,7 +76,6 @@ func registerDataSyncAndHealthTasks(
 	// Gateway.Fetch serialize requests to the same endpoint group, so launching
 	// concurrently does not violate rate limits.
 	for _, ch := range apigateway.USMarketChannels() {
-		ch := ch
 		_ = taskMgr.Register(&apigateway.ScheduledTask{
 			Name:      "us_market_refresh_" + ch,
 			ChannelID: ch,

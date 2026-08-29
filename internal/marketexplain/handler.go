@@ -178,11 +178,12 @@ func buildCapitalSection(cfSummary capitalflow.SummaryReport) Section {
 	if cfSummary.Summary == "" {
 		return Section{}
 	}
-	body := cfSummary.Summary
+	var body strings.Builder
+	body.WriteString(cfSummary.Summary)
 
 	// Add dominant force detail if available.
 	if len(cfSummary.Forces) > 0 {
-		body += "\n\n各勢力動態："
+		body.WriteString("\n\n各勢力動態：")
 		for _, f := range cfSummary.Forces {
 			if f.Role != "subject" {
 				continue
@@ -202,11 +203,11 @@ func buildCapitalSection(cfSummary capitalflow.SummaryReport) Section {
 			if rawVal < 0 {
 				rawVal = -rawVal
 			}
-			body += fmt.Sprintf("\n• %s：%s %.1f 億%s", label, directionText(f.ZScore), rawVal, zSuffix)
+			fmt.Fprintf(&body, "\n• %s：%s %.1f 億%s", label, directionText(f.ZScore), rawVal, zSuffix)
 		}
 	}
 
-	return Section{Title: "資金面", Body: body}
+	return Section{Title: "資金面", Body: body.String()}
 }
 
 func directionText(z float64) string {

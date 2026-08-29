@@ -536,11 +536,11 @@ func (v *MarketClaimVerifier) verdict(claim *TrackedClaim, fwd float64) string {
 // claimDirection extracts the embedded 方向: marker from a claim text.
 func claimDirection(text string) string {
 	const marker = "方向:"
-	idx := strings.Index(text, marker)
-	if idx < 0 {
+	_, after, ok := strings.Cut(text, marker)
+	if !ok {
 		return ""
 	}
-	rest := text[idx+len(marker):]
+	rest := after
 	if end := strings.IndexAny(rest, " "); end >= 0 {
 		rest = rest[:end]
 	}
