@@ -31,7 +31,7 @@ func mustWriteFile(t *testing.T, path, content string) {
 func writeRegimeJSONL(t *testing.T, path string, rows int) {
 	t.Helper()
 	var b strings.Builder
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		date := time.Date(2026, 4, i+1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		r := loaderRegime{
 			Date:            date,
@@ -50,7 +50,7 @@ func writeRegimeJSONL(t *testing.T, path string, rows int) {
 func writeStressJSONL(t *testing.T, path string, rows int) {
 	t.Helper()
 	var b strings.Builder
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		date := time.Date(2026, 4, i+1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		r := loaderStress{
 			Date:        date,
@@ -69,7 +69,7 @@ func writeStressJSONL(t *testing.T, path string, rows int) {
 func writeEventJSONL(t *testing.T, path string, rows int) {
 	t.Helper()
 	var b strings.Builder
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		date := time.Date(2026, 4, i+1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		r := loaderEvent{
 			Date:        date,
@@ -321,7 +321,7 @@ func TestRun_VerifyIdempotentReRun(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "atlas.db")
 	makeStaging(t, staging, 3, 3, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		_, err := Run(RunOptions{
 			StagingDir: staging,
 			DBPath:     dbPath,

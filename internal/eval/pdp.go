@@ -53,7 +53,7 @@ func PartialDependence(predictor Predictor, X [][]float64, featureIdx int, gridR
 		grid[0] = (minVal + maxVal) / 2
 	} else {
 		step := (maxVal - minVal) / float64(gridResolution-1)
-		for i := 0; i < gridResolution; i++ {
+		for i := range gridResolution {
 			grid[i] = minVal + float64(i)*step
 		}
 		// Ensure last point is exactly maxVal to avoid floating-point drift

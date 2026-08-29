@@ -601,7 +601,7 @@ func makeTestHistory(syms []string, nDays int, gen func(sym string, day int) flo
 	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, sym := range syms {
 		pts := make([]pricePoint, nDays)
-		for d := 0; d < nDays; d++ {
+		for d := range nDays {
 			pts[d] = pricePoint{
 				Date:  base.AddDate(0, 0, d),
 				Close: gen(sym, d),

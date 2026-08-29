@@ -239,7 +239,7 @@ func TestJSONLQuoteStoreConcurrentWrites(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, goroutines)
 	symbols := make([]string, goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		symbols[g] = fmt.Sprintf("233%d", g)
 		go func(g int) {

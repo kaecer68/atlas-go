@@ -186,7 +186,7 @@ func (h *Handlers) HandleCorrelationMatrix(r *http.Request) (int, any) {
 		matrix[i][i] = 1.0
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := i + 1; j < n; j++ {
 			corr, ok := cm.GetCorrelation(symbols[i], symbols[j])
 			if ok {

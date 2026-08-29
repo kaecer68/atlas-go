@@ -57,7 +57,7 @@ func TestYahooSession_ConcurrentEnsureCrumb_SingleFlight(t *testing.T) {
 	const n = 20
 	var wg sync.WaitGroup
 	ctx := context.Background()
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -108,7 +108,7 @@ func TestYahooSession_ConcurrentEnsureCrumb_NoDeadlock(t *testing.T) {
 	globalYahooSession.s.lastFetch = time.Time{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

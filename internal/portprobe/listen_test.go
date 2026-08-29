@@ -131,7 +131,7 @@ func TestListen_ConcurrentBindSameAddr(t *testing.T) {
 		err error
 	}
 	results := make(chan result, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			ln, err := Listen(addr)
 			var closer interface {
@@ -145,7 +145,7 @@ func TestListen_ConcurrentBindSameAddr(t *testing.T) {
 	}
 
 	var successes, failures int
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		r := <-results
 		if r.err == nil {
 			successes++

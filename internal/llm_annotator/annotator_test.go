@@ -262,7 +262,7 @@ func TestKimiClient_Annotate_TracksTokenUsage(t *testing.T) {
 	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
 	c.backoff = func(int) time.Duration { return 0 }
 	c.cacheTTL = 0
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("attempt %d: %v", i, err)
 		}
@@ -319,12 +319,12 @@ func newLabeledKimiClient(t *testing.T) *KimiClient {
 func TestPerFeatureUsage_TracksPerLabel(t *testing.T) {
 	c := newLabeledKimiClient(t)
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: "alert"}); err != nil {
 			t.Fatalf("alert call %d: %v", i, err)
 		}
 	}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if _, err := c.Annotate(ctx, FailureContext{FrameID: "x", Label: "summary"}); err != nil {
 			t.Fatalf("summary call %d: %v", i, err)
 		}
@@ -443,7 +443,7 @@ func TestBudgetAlert_FiresWhenThresholdCrossed(t *testing.T) {
 	}
 	// Each call returns 100 tokens total. After 2nd call we are at 200 >= 150.
 	c := newBudgetKimiClient(t, 50, 50, 150, callback)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
@@ -463,7 +463,7 @@ func TestBudgetAlert_DoesNotFireUnderThreshold(t *testing.T) {
 	var mu sync.Mutex
 	callback := func(u Usage) { mu.Lock(); fired++; mu.Unlock() }
 	c := newBudgetKimiClient(t, 10, 10, 1000, callback)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
@@ -480,7 +480,7 @@ func TestBudgetAlert_FiresExactlyOnceAcrossManyCalls(t *testing.T) {
 	var mu sync.Mutex
 	callback := func(u Usage) { mu.Lock(); fired++; mu.Unlock() }
 	c := newBudgetKimiClient(t, 25, 25, 50, callback)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
@@ -501,7 +501,7 @@ func TestBudgetAlert_DisabledByDefault(t *testing.T) {
 	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL, MaxTokens: 64, Timeout: 5 * time.Second})
 	c.backoff = func(int) time.Duration { return 0 }
 	c.cacheTTL = 0
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
@@ -526,7 +526,7 @@ func TestBudgetAlert_CallbackCanCallUsageWithoutDeadlock(t *testing.T) {
 	c := newBudgetKimiClient(t, 50, 50, 100, callback)
 	done := make(chan struct{})
 	go func() {
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
 		}
 		close(done)
@@ -554,7 +554,7 @@ func TestKimiClient_Annotate_CacheHit(t *testing.T) {
 	c, _ := NewKimiClient(Config{APIKey: "k", BaseURL: srv.URL})
 	c.backoff = func(int) time.Duration { return 0 }
 	fc := FailureContext{FrameID: "f1", FrameName: "n1", Layer: "L1"}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		got, err := c.Annotate(context.Background(), fc)
 		if err != nil {
 			t.Fatalf("attempt %d: %v", i, err)
@@ -583,7 +583,7 @@ func TestKimiClient_Annotate_CacheTTL(t *testing.T) {
 	c.backoff = func(int) time.Duration { return 0 }
 	c.cacheTTL = 0
 	fc := FailureContext{FrameID: "f1", FrameName: "n1", Layer: "L1"}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if _, err := c.Annotate(context.Background(), fc); err != nil {
 			t.Fatalf("attempt %d: %v", i, err)
 		}

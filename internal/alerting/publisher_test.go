@@ -59,7 +59,7 @@ func TestNoopPublisher_PublishReturnsNil(t *testing.T) {
 func TestNoopPublisher_ConcurrentSafe(t *testing.T) {
 	p := NoopPublisher{}
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
+	for range 32 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -154,7 +154,7 @@ func TestNoopAnomalyPublisher_PublishAnomalyReturnsNil(t *testing.T) {
 func TestNoopAnomalyPublisher_PublishAnomalyIdempotent(t *testing.T) {
 	p := &NoopAnomalyPublisher{}
 	ev := AnomalyEvent{AnomalyID: "anom-replay", Type: "tool_error_spike"}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := p.PublishAnomaly(context.Background(), ev); err != nil {
 			t.Fatalf("iteration %d: expected nil, got %v", i, err)
 		}

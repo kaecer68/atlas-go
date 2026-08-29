@@ -95,7 +95,7 @@ func Probe(addr string) (State, Occupant, error) {
 
 func classifyOccupied(port int, host string) (State, Occupant, error) {
 	healthURL := "http://" + net.JoinHostPort(host, strconv.Itoa(port)) + healthPath
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := range 5 {
 		if isHealthy(healthURL) {
 			occ, _ := lookupOccupantByPort(port)
 			return StateHealthy, occ, nil

@@ -81,7 +81,7 @@ func TestSACClosureStateManager_RecordSession(t *testing.T) {
 	dir := t.TempDir()
 	m := NewSACClosureStateManager(dir)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := m.RecordSession("receipt-" + string(rune('a'+i))); err != nil {
 			t.Fatalf("RecordSession %d: %v", i, err)
 		}
@@ -99,7 +99,7 @@ func TestSACClosureStateManager_InvariantViolations(t *testing.T) {
 	dir := t.TempDir()
 	m := NewSACClosureStateManager(dir)
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := m.RecordInvariantViolation(); err != nil {
 			t.Fatalf("RecordInvariantViolation: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestSACClosureStateManager_IsPromotable(t *testing.T) {
 	}
 
 	_ = m.StartObservation(14)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		_ = m.RecordSession("receipt")
 	}
 

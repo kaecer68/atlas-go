@@ -91,7 +91,7 @@ func TestBaseClient_RateLimit(t *testing.T) {
 	client.HTTPClient = srv.Client()
 
 	start := time.Now()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, _, err := client.DoRequest(context.Background(), http.MethodPost, srv.URL, nil, nil)
 		if err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i+1, err)

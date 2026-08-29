@@ -387,7 +387,7 @@ func TestLoadDarwinianHistory_LimitRespected(t *testing.T) {
 	}
 	// 5 lines × 1 weight each = 5 points; limit=2 → only 2 returned.
 	var lines []string
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		lines = append(lines,
 			`{"timestamp":"2026-04-2`+string(rune('0'+i))+`T04:00:00Z","weights":{"a":{"weight":1.0,"rolling_sharpe":1.0,"hit_rate":0.5}}}`)
 	}

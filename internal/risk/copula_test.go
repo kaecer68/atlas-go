@@ -9,7 +9,7 @@ import (
 // i/(n+1) for i = 1..n. These are valid rank-based pseudo-observations.
 func pseudoUniformGrid(n int) []float64 {
 	u := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		u[i] = float64(i+1) / float64(n+1)
 	}
 	return u
@@ -53,7 +53,7 @@ func TestGumbel_IndependentUniform(t *testing.T) {
 	rng := newLCG(0x1234567890ABCDEF)
 	u := make([]float64, n)
 	v := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		u[i] = rng.Next()
 		v[i] = rng.Next()
 	}
@@ -154,10 +154,10 @@ func TestKendallTau_Convergence(t *testing.T) {
 		maxAbs = 0.10
 	)
 	rng := newLCG(0xCAFEBABEDEADBEEF)
-	for run := 0; run < nRuns; run++ {
+	for run := range nRuns {
 		u := make([]float64, n)
 		v := make([]float64, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			u[i] = rng.Next()
 			v[i] = rng.Next()
 		}

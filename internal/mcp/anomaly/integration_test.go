@@ -73,7 +73,7 @@ func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 		BurstZScoreThreshold: 1.0,
 	}, scoreRec, nil)
 	detector.now = fixedClock(now)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "mcp_x", tenant: "tenant-a", status: "ok"})
 	}
 
@@ -157,7 +157,7 @@ func Test_Integration_idempotency_under_repeated_process(t *testing.T) {
 		BurstZScoreThreshold: 1.0,
 	}, &fakeScoreRecorder{}, nil)
 	detector.now = fixedClock(now)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "mcp_x", tenant: "tenant-a", status: "ok"})
 	}
 
@@ -166,7 +166,7 @@ func Test_Integration_idempotency_under_repeated_process(t *testing.T) {
 		Publisher: alerting.NewWebhookPublisher(alerting.WebhookPublisherConfig{URL: webhookSrv.URL, HTTPTimeout: time.Second}),
 		AckStore:  NewMemoryStore(100),
 	})
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		require.NoError(t, em.ProcessOnce(context.Background()))
 	}
 	require.Equal(t, int32(1), atomic.LoadInt32(&hits), "expected exactly 1 webhook hit across 5 ticks")

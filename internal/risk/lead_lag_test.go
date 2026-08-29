@@ -18,7 +18,7 @@ func TestGranger_IndependentSeries(t *testing.T) {
 	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = r.NormFloat64()
 		y[i] = r.NormFloat64()
 	}
@@ -47,7 +47,7 @@ func TestGranger_KnownCausality(t *testing.T) {
 	x := make([]float64, n)
 	y := make([]float64, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = r.NormFloat64()
 	}
 
@@ -106,7 +106,7 @@ func TestGranger_Bidirectional(t *testing.T) {
 func TestGranger_InsufficientData(t *testing.T) {
 	x := make([]float64, 30)
 	y := make([]float64, 30)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		x[i] = rand.NormFloat64()
 		y[i] = rand.NormFloat64()
 	}
@@ -125,7 +125,7 @@ func TestGranger_LagSelection(t *testing.T) {
 	x := make([]float64, n)
 	y := make([]float64, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = r.NormFloat64()
 	}
 
@@ -179,7 +179,7 @@ func TestGranger_SymmetricCausality(t *testing.T) {
 	x := make([]float64, n)
 	y := make([]float64, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = r.NormFloat64()
 	}
 	for i := 1; i < n; i++ {
@@ -235,7 +235,7 @@ func TestGranger_IdenticalSeries(t *testing.T) {
 	n := 200
 	r := rand.New(rand.NewSource(1))
 	x := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = r.NormFloat64()
 	}
 
@@ -290,7 +290,7 @@ func TestGranger_FStatisticRange(t *testing.T) {
 	n := 200
 	x := make([]float64, n)
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = rand.NormFloat64()
 		y[i] = rand.NormFloat64()
 	}
@@ -314,7 +314,7 @@ func TestGranger_VeryWeakCausality(t *testing.T) {
 	x := make([]float64, n)
 	y := make([]float64, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = rand.NormFloat64()
 	}
 
@@ -348,7 +348,7 @@ func TestGranger_Persistence(t *testing.T) {
 	r1 := rand.New(rand.NewSource(seed))
 	x1 := make([]float64, n)
 	y1 := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x1[i] = r1.NormFloat64()
 	}
 	for i := 1; i < n; i++ {
@@ -358,7 +358,7 @@ func TestGranger_Persistence(t *testing.T) {
 	r2 := rand.New(rand.NewSource(seed))
 	x2 := make([]float64, n)
 	y2 := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x2[i] = r2.NormFloat64()
 	}
 	for i := 1; i < n; i++ {

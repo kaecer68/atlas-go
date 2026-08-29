@@ -69,7 +69,7 @@ func TestFactorWeightEngine_GetWeights_WithEvent(t *testing.T) {
 func TestFactorWeightEngine_GetWeights_EventClamped(t *testing.T) {
 	engine := NewFactorWeightEngine()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &narrative.NarrativeEvent{
 			ID:       "test-event-" + string(rune('a'+i)),
 			Theme:    "AI_capex_surge",

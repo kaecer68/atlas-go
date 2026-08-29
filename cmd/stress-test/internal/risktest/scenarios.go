@@ -37,7 +37,7 @@ func RunMarketCrash(cfg Config) Result {
 	baseValue := 1_000_000.0
 	portfolioValues[0] = baseValue
 
-	for i := 0; i < nDays; i++ {
+	for i := range nDays {
 		if i == 0 {
 			dailyReturns[i] = (rng.NormFloat64() * 0.008) + 0.0002
 			continue
@@ -300,7 +300,7 @@ func RunLiquidityCrisis(cfg Config) Result {
 	baseValue := 1_000_000.0
 	portfolioValues[0] = baseValue
 
-	for i := 0; i < nDays; i++ {
+	for i := range nDays {
 		if i == 0 {
 			dailyReturns[i] = (rng.NormFloat64() * 0.01) + 0.0003
 			continue

@@ -149,7 +149,7 @@ func TestSQLiteHistoricalStore_UpsertRegime_Idempotent(t *testing.T) {
 		CapturedAt:      time.Date(2026, 7, 14, 1, 0, 0, 0, time.UTC),
 		IsSynthetic:     1,
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := store.UpsertRegime(context.Background(), row); err != nil {
 			t.Fatalf("upsert #%d: %v", i, err)
 		}
@@ -484,9 +484,9 @@ func TestSQLiteHistoricalStore_ConcurrentUpserts(t *testing.T) {
 	const goroutines = 10
 	const perGoroutine = 5
 	doneCh := make(chan error, goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(grp int) {
-			for i := 0; i < perGoroutine; i++ {
+			for i := range perGoroutine {
 				date := time.Date(2026, 4, (grp%28)+1, 0, 0, 0, 0, time.UTC).
 					AddDate(0, 0, i).Format("2006-01-02")
 				err := store.UpsertRegime(context.Background(), RegimeRow{
@@ -500,7 +500,7 @@ func TestSQLiteHistoricalStore_ConcurrentUpserts(t *testing.T) {
 			doneCh <- nil
 		}(g)
 	}
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		if err := <-doneCh; err != nil {
 			t.Fatalf("goroutine err: %v", err)
 		}

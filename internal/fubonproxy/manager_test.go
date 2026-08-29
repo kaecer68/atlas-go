@@ -1039,7 +1039,7 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 		// 模擬 Python 程序快速寫入多行 stderr — logWriter 必須不阻塞
 		done := make(chan struct{})
 		go func() {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				_, _ = w.Write([]byte("line\n"))
 			}
 			close(done)

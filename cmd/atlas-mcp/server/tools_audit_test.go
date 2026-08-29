@@ -123,7 +123,7 @@ func TestMCPGetTopSlowTools_RespectsLimit(t *testing.T) {
 		t.Fatalf("new audit writer: %v", err)
 	}
 	now := time.Now().UTC()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_ = w.Write(AuditEntry{TS: now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano), Tool: fmt.Sprintf("t%d", i), Status: "ok", DurationMS: int64(10 * (i + 1))})
 	}
 	_ = w.Close()
@@ -227,7 +227,7 @@ func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
 		t.Fatalf("new audit writer: %v", err)
 	}
 	now := time.Now().UTC()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_ = w.Write(AuditEntry{
 			TS:         now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
 			AgentID:    "agent1",
@@ -242,7 +242,7 @@ func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

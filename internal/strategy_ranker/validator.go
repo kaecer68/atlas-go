@@ -145,7 +145,7 @@ func pearsonCorrelation(x, y []float64) float64 {
 		return 0
 	}
 	var sumX, sumY, sumXY, sumX2, sumY2 float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sumX += x[i]
 		sumY += y[i]
 		sumXY += x[i] * y[i]

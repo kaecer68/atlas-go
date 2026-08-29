@@ -27,7 +27,7 @@ func TestMLRetrainScheduler_OLSDeterministic(t *testing.T) {
 	rng := simpleRand{state: 42}
 	n := 50
 	bars := make([]domain.DailyBar, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		date := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
 		base := 100.0 + float64(i)*0.3
 		bars[i] = domain.DailyBar{
@@ -106,7 +106,7 @@ func TestMLRetrainScheduler_RetrainSingle(t *testing.T) {
 	rng := simpleRand{state: 17}
 	n := 30
 	bars := make([]domain.DailyBar, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		date := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
 		base := 50.0 + float64(i)*2
 		bars[i] = domain.DailyBar{
@@ -157,7 +157,7 @@ func TestMLRetrainScheduler_PredictionConsistency(t *testing.T) {
 	rng := simpleRand{state: 99}
 	n := 40
 	bars := make([]domain.DailyBar, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
 		base := 200.0 + float64(i)*0.5
 		bars[i] = domain.DailyBar{

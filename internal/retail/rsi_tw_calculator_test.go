@@ -527,7 +527,7 @@ func TestRound4(t *testing.T) {
 
 func TestUpdateHistory_MaintainsCap(t *testing.T) {
 	c := NewCalculator()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		c.UpdateHistory(RSITwInput{
 			MarginBalance: float64(5000 + i*10),
 			VIXLevel:      float64(20 + i%10),
@@ -672,7 +672,7 @@ func TestCalibrateRSITw_WithData(t *testing.T) {
 	macroDir := filepath.Join(dir, "data", "state", "macro")
 	os.MkdirAll(macroDir, 0o755)
 
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		ts := time.Date(2026, 7, 1+i, 8, 0, 0, 0, time.UTC)
 		data := map[string]interface{}{
 			"recorded_at":           ts.Format(time.RFC3339),

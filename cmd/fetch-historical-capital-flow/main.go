@@ -168,7 +168,7 @@ func fetchCapitalFlowData(dateStr string) (*CapitalFlowData, error) {
 	var lastErr error
 	backoff := time.Second
 
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		url := fmt.Sprintf(constants.TWSEBaseURL+"/rwd/zh/fund/T86?response=json&date=%s&selectType=ALLBUT0999", dateStr)
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {

@@ -94,7 +94,7 @@ func TestFeatureReturn1d(t *testing.T) {
 func TestFeatureReturn5d(t *testing.T) {
 	bars := makeBars(10)
 	fn := Registry["return_5d"]
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if v := fn(bars[i], i, bars); v != 0 {
 			t.Errorf("idx=%d: expected 0, got %f", i, v)
 		}
@@ -121,7 +121,7 @@ func TestFeatureHLRatio(t *testing.T) {
 func TestFeatureMARatio(t *testing.T) {
 	bars := makeBars(25)
 	fn := Registry["ma_ratio"]
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 1.0 {
 			t.Errorf("idx=%d: expected 1.0, got %f", i, v)
 		}
@@ -139,7 +139,7 @@ func TestFeatureMARatio(t *testing.T) {
 func TestFeatureVolumeRatio(t *testing.T) {
 	bars := makeBars(25)
 	fn := Registry["volume_ratio"]
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 1.0 {
 			t.Errorf("idx=%d: expected 1.0, got %f", i, v)
 		}
@@ -230,7 +230,7 @@ func TestForwardReturnLabel(t *testing.T) {
 	if len(labels) != 5 {
 		t.Errorf("expected 5 labels, got %d", len(labels))
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		expected := (bars[i+1].Close - bars[i].Close) / bars[i].Close
 		if math.Abs(labels[i]-expected) > 1e-9 {
 			t.Errorf("label[%d]: expected %f, got %f", i, expected, labels[i])
@@ -257,7 +257,7 @@ func TestRSI14(t *testing.T) {
 	fn := Registry["rsi_14"]
 
 	// idx < 14 → 50.0 (neutral).
-	for i := 0; i < 14; i++ {
+	for i := range 14 {
 		if v := fn(bars[i], i, bars); math.Abs(v-50.0) > 1e-9 {
 			t.Errorf("idx=%d: expected 50.0, got %f", i, v)
 		}
@@ -289,7 +289,7 @@ func TestMACD(t *testing.T) {
 	fn := Registry["macd"]
 
 	// idx < 25 → 0.0 (need 26 bars for MACD: EMA12 + EMA26).
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -307,7 +307,7 @@ func TestMACDSignal(t *testing.T) {
 	fn := Registry["macd_signal"]
 
 	// idx < 33 → 0.0 (26 for first MACD + 9 for signal EMA, first valid idx=33).
-	for i := 0; i < 33; i++ {
+	for i := range 33 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -324,7 +324,7 @@ func TestBBPctB(t *testing.T) {
 	fn := Registry["bb_pct_b"]
 
 	// idx < 19 → 0.0 (need 20 bars for MA20 + std20).
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -352,7 +352,7 @@ func TestATR14(t *testing.T) {
 	fn := Registry["atr_14"]
 
 	// idx < 14 → 0.0.
-	for i := 0; i < 14; i++ {
+	for i := range 14 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -391,7 +391,7 @@ func TestADX14(t *testing.T) {
 	fn := Registry["adx_14"]
 
 	// idx < 28 → 0.0 (need 14 for DI + 14 for smoothing = 28).
-	for i := 0; i < 28; i++ {
+	for i := range 28 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -409,7 +409,7 @@ func TestVolatility20d(t *testing.T) {
 	fn := Registry["volatility_20d"]
 
 	// idx < 20 → 0.0.
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -425,7 +425,7 @@ func TestSkewness20d(t *testing.T) {
 	bars := makeBars(30)
 	fn := Registry["skewness_20d"]
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -441,7 +441,7 @@ func TestKurtosis20d(t *testing.T) {
 	bars := makeBars(30)
 	fn := Registry["kurtosis_20d"]
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -482,7 +482,7 @@ func TestPricePosition(t *testing.T) {
 	fn := Registry["price_position"]
 
 	// idx < 19 → 0.0 (need 20 bars for MA20).
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -506,7 +506,7 @@ func TestVolumeTrend(t *testing.T) {
 	fn := Registry["volume_trend"]
 
 	// idx < 19 → 1.0 (need 20 bars for MA20 of volume).
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 1.0 {
 			t.Errorf("idx=%d: expected 1.0, got %f", i, v)
 		}
@@ -523,7 +523,7 @@ func TestHLRangePct(t *testing.T) {
 	fn := Registry["hl_range_pct"]
 
 	// idx < 19 → 0.0 (need 20 bars for MA20).
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}
@@ -539,7 +539,7 @@ func TestReturnAutocorr(t *testing.T) {
 	bars := makeBars(30)
 	fn := Registry["return_autocorr"]
 
-	for i := 0; i < 21; i++ {
+	for i := range 21 {
 		if v := fn(bars[i], i, bars); v != 0.0 {
 			t.Errorf("idx=%d: expected 0.0, got %f", i, v)
 		}

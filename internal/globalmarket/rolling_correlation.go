@@ -71,7 +71,7 @@ func (rc *RollingCorrelation) Update(x, y float64) float64 {
 	}
 
 	var sumX, sumY, sumXY, sumX2, sumY2 float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xi := rc.xs[i]
 		yi := rc.ys[i]
 		sumX += xi

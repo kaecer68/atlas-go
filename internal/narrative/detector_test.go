@@ -278,7 +278,7 @@ func TestDetectorRegistry_RunAll_ParallelExecution(t *testing.T) {
 	const n = 4
 	const sleep = 50 * time.Millisecond
 	r := NewDetectorRegistry()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		theme := string(rune('a' + i))
 		d := newMockDetector(theme, true,
 			&DetectionResult{Theme: theme, DetectedAt: time.Now()}, nil)
@@ -396,11 +396,11 @@ func TestDetectorRegistry_ConcurrentAccess(t *testing.T) {
 	const goroutines = 16
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(i int) {
 			defer wg.Done()
 			ctx := context.Background()
-			for j := 0; j < 50; j++ {
+			for j := range 50 {
 				switch (i + j) % 5 {
 				case 0:
 					_, _ = r.Get("a")

@@ -18,7 +18,7 @@ func OOSR2(yTrue, yPred []float64) float64 {
 		return 0
 	}
 	var ssRes, ssTot float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		diff := yTrue[i] - yPred[i]
 		ssRes += diff * diff
 		ssTot += yTrue[i] * yTrue[i]

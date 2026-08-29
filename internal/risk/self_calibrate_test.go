@@ -101,7 +101,7 @@ func TestScoreThresholdsMixed(t *testing.T) {
 
 func TestScoreThresholdsHighInterceptPenalty(t *testing.T) {
 	results := make([]replayResult, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		results[i] = replayResult{
 			ForwardReturn:    -0.01,
 			WouldHaveBlocked: true,
@@ -448,7 +448,7 @@ func TestSelfCalibrate_Concurrent(t *testing.T) {
 	const N = 8
 	var wg sync.WaitGroup
 	errs := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for range N {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

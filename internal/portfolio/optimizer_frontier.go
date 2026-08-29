@@ -35,7 +35,7 @@ func (o *Optimizer) GetEfficientFrontier() []struct{ Return, Risk float64 } {
 	N := len(rm.assets)
 	lb := make([]float64, N)
 	ub := make([]float64, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		ub[i] = wMax
 	}
 
@@ -54,29 +54,29 @@ func (o *Optimizer) GetEfficientFrontier() []struct{ Return, Risk float64 } {
 	const numPoints = 20
 
 	Aeq := mat.NewDense(2, N, nil)
-	for j := 0; j < N; j++ {
+	for j := range N {
 		Aeq.Set(0, j, 1.0)
 	}
 
 	frontier := make([]struct{ Return, Risk float64 }, numPoints)
-	for k := 0; k < numPoints; k++ {
+	for k := range numPoints {
 		frac := float64(k) / float64(numPoints-1)
 		rTarget := minRet + frac*(maxRet-minRet)
-		for j := 0; j < N; j++ {
+		for j := range N {
 			Aeq.Set(1, j, rm.means[j])
 		}
 		beq := []float64{1.0, rTarget}
 
 		wInit := make([]float64, N)
-		for i := 0; i < N; i++ {
+		for i := range N {
 			wInit[i] = 1.0 / float64(N)
 		}
 
 		wOpt := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
 
 		var portVar float64
-		for i := 0; i < N; i++ {
-			for j := 0; j < N; j++ {
+		for i := range N {
+			for j := range N {
 				portVar += wOpt[i] * sigma.At(i, j) * wOpt[j]
 			}
 		}

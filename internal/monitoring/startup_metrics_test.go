@@ -224,7 +224,7 @@ func TestRecordStage3AlertFired_NilCollectorAndEmptyRuleIDAreSafe(t *testing.T) 
 func TestRecordStage3LedgerRecords_EmitsGaugeValueMatchingStoreLen(t *testing.T) {
 	c := NewMetricsCollector()
 	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
 			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
 			DirectionSign: float64(i + 1),
@@ -263,7 +263,7 @@ func TestRecordStage3LedgerRecords_GaugeOverwriteSemantics(t *testing.T) {
 		t.Fatalf("empty store: expected 0, got %v", v.Value)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
 			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
 			DirectionSign: float64(i + 1),

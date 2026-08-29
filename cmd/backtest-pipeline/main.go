@@ -220,7 +220,7 @@ func oosR2(pred, act []float64) float64 {
 	}
 	mean /= float64(n)
 	sst, sse := 0.0, 0.0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		dA := act[i] - mean
 		sst += dA * dA
 		dE := act[i] - pred[i]
@@ -238,7 +238,7 @@ func annualizedSharpe(pred, act []float64) float64 {
 		return math.NaN()
 	}
 	s := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if pred[i] >= 0 {
 			s[i] = act[i]
 		} else {
@@ -370,7 +370,7 @@ func runSynthetic(modelName string) error {
 	X := make([][]float64, nSamples)
 	y := make([]float64, nSamples)
 
-	for i := 0; i < nSamples; i++ {
+	for i := range nSamples {
 		X[i] = []float64{rand.Float64()*10 - 5, rand.Float64()*10 - 5}
 		y[i] = 2.0*X[i][0] + 3.0*X[i][1] + (rand.Float64() - 0.5)
 	}

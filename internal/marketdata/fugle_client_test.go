@@ -390,7 +390,7 @@ func TestFugleClient_Breaker_OpensAfterConsecutiveFailures(t *testing.T) {
 	c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
 
 	// 3 次失敗 → breaker open
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.GetQuote(context.Background(), "2330"); err == nil {
 			t.Fatalf("attempt %d: expected error, got nil", i+1)
 		}

@@ -91,7 +91,7 @@ func ComputeFF5Alpha(portfolioReturns []float64, factorReturns map[string][]floa
 	k := len(available)
 	nCols := k + 1 // intercept + factors
 	flat := make([]float64, n*nCols)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		offset := i * nCols
 		flat[offset] = 1.0 // intercept
 		for j, fk := range available {
@@ -134,7 +134,7 @@ func ComputeFF5Alpha(portfolioReturns []float64, factorReturns map[string][]floa
 	// SE(β_j) = sqrt(MSE × (XᵀX)⁻¹_jj)
 	dof := float64(n - nCols)
 	tStats := make([]float64, nCols)
-	for j := 0; j < nCols; j++ {
+	for j := range nCols {
 		variance := mse * xtxInv.At(j, j)
 		se := math.Sqrt(variance)
 		if se > 0 {

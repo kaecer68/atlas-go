@@ -129,7 +129,7 @@ func validatePseudoObservations(u, v []float64) error {
 	}
 	uMin, uMax := u[0], u[0]
 	vMin, vMax := v[0], v[0]
-	for i := 0; i < len(u); i++ {
+	for i := range u {
 		ui, vi := u[i], v[i]
 		if ui < 0 || ui > 1 || vi < 0 || vi > 1 {
 			return errCopulaOutOfRange

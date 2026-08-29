@@ -12,7 +12,7 @@ import (
 // Every 3rd record has positive outflow (Outflow=10), the rest have Outflow=0.
 func validationTestRecords(n int) []CalibrationRecord {
 	records := make([]CalibrationRecord, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		outflow := 0.0
 		if i%3 == 0 { // every 3rd record has outflow
 			outflow = 10.0

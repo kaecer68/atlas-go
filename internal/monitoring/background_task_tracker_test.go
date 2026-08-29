@@ -153,7 +153,7 @@ func TestBackgroundTaskFailureTracker_RepeatedFailuresEmitOnce(t *testing.T) {
 	defer sub.Cancel()
 
 	tr := NewBackgroundTaskFailureTracker(bus, "test-task", 3)
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		tr.OnFailure()
 	}
 	// Expect exactly 1 event (from the 3rd failure), not 4 events.

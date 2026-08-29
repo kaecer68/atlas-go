@@ -25,7 +25,7 @@ func fixtureDates(t *testing.T, n int) []time.Time {
 	t.Helper()
 	now := time.Now().UTC()
 	dates := make([]time.Time, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		dates[i] = now.AddDate(0, 0, -(n - 1 - i))
 	}
 	return dates

@@ -629,7 +629,7 @@ func writeMarginHistory(dir string, entries []MarginHistoryEntry) error {
 func makeRisingHistory(n int, startBalance, endBalance float64) []MarginHistoryEntry {
 	entries := make([]MarginHistoryEntry, n)
 	step := (endBalance - startBalance) / float64(n-1)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		entries[i] = MarginHistoryEntry{
 			Date:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("20060102"),
 			MarginBalance: startBalance + step*float64(i),

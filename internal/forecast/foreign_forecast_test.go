@@ -116,7 +116,7 @@ func TestJudge(t *testing.T) {
 func TestCalibrate(t *testing.T) {
 	// 60% hits over 100 samples → calibrated.
 	recs := make([]Record, 0, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		hit := i%10 < 6
 		recs = append(recs, Record{Date: "20260716", Correct: &hit})
 	}
@@ -129,7 +129,7 @@ func TestCalibrate(t *testing.T) {
 	}
 
 	// 40% hits → not calibrated.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		hit := i%10 < 4
 		recs[i] = Record{Date: "20260716", Correct: &hit}
 	}

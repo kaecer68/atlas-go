@@ -253,7 +253,7 @@ func TestRegisterOperationsTasks_GovernmentFlowAggregate_CaptchaCooldown_Consecu
 	cd.RecordCaptcha("government_broker")
 
 	// 3 個連續 task 呼叫：全部應 return nil（fetch 被跳過）
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := task.Task(t.Context()); err != nil {
 			t.Errorf("consecutive tick %d/3: expected nil (cooldown skip), got err=%v", i+1, err)
 		}

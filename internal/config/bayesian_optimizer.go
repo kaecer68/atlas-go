@@ -49,9 +49,9 @@ func (gp *gaussianProcess) fit(x [][]float64, y []float64) {
 	copy(gp.yTrain, y)
 
 	k := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		k[i] = make([]float64, n)
-		for j := 0; j < n; j++ {
+		for j := range n {
 			// gosec G602: false positive — kernelMatrix iterates over len(x[i]) (feature dim), not n.
 			k[i][j] = gp.kernelMatrix(x[i], x[j]) //nolint:gosec
 			if i == j {
@@ -76,7 +76,7 @@ func (gp *gaussianProcess) predict(xStar []float64) (mean, std float64) {
 	}
 
 	mean = 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		mean += kStar[i] * gp.alpha[i]
 	}
 
@@ -148,7 +148,7 @@ func (opt *BayesianOptimizer) Optimize() (OptimizeResult, error) {
 
 	for i := 0; i < opt.initialPoints; i++ {
 		x := make([]float64, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			t := float64(i+1) / float64(opt.initialPoints+1)
 			x[d] = opt.bounds[d][0] + t*(opt.bounds[d][1]-opt.bounds[d][0])
 		}
@@ -216,9 +216,9 @@ func (opt *BayesianOptimizer) proposeNext() []float64 {
 	bestEI := math.Inf(-1)
 	bestX := make([]float64, dim)
 
-	for i := 0; i < nCandidates; i++ {
+	for range nCandidates {
 		x := make([]float64, dim)
-		for d := 0; d < dim; d++ {
+		for d := range dim {
 			x[d] = opt.bounds[d][0] + opt.randFloat()*(opt.bounds[d][1]-opt.bounds[d][0])
 		}
 		mean, std := opt.gp.predict(x)
@@ -250,7 +250,7 @@ func normPDF(x float64) float64 {
 func (opt *BayesianOptimizer) randomPoint() []float64 {
 	dim := len(opt.bounds)
 	x := make([]float64, dim)
-	for d := 0; d < dim; d++ {
+	for d := range dim {
 		x[d] = opt.bounds[d][0] + opt.randFloat()*(opt.bounds[d][1]-opt.bounds[d][0])
 	}
 	return x
@@ -343,7 +343,7 @@ func dotProduct(a, b []float64) float64 {
 func cholesky(a [][]float64) [][]float64 {
 	n := len(a)
 	l := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		l[i] = make([]float64, n)
 	}
 	for i := 0; i < n; i++ {

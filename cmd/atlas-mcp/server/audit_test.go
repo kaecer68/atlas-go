@@ -15,7 +15,7 @@ func TestAuditWriter_AppendsJSONLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if wErr := w.Write(AuditEntry{Tool: "t", Status: "ok", DurationMS: int64(i)}); wErr != nil {
 			t.Fatalf("write %d: %v", i, wErr)
 		}

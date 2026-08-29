@@ -14,16 +14,16 @@ func TestPCR_DimensionReduction(t *testing.T) {
 
 	f1 := make([]float64, n)
 	f2 := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		f1[i] = rng.NormFloat64()
 		f2[i] = rng.NormFloat64()
 	}
 
 	X := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		X[i] = make([]float64, p)
 		// First 3 features from f1
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			X[i][j] = f1[i] + 0.05*rng.NormFloat64()
 		}
 		// Last 3 features from f2
@@ -33,7 +33,7 @@ func TestPCR_DimensionReduction(t *testing.T) {
 	}
 
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		y[i] = 3*f1[i] - 2*f2[i] + 0.1*rng.NormFloat64()
 	}
 
@@ -59,7 +59,7 @@ func TestPCR_DimensionReduction(t *testing.T) {
 		meanY += v
 	}
 	meanY /= float64(n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		ssRes += (y[i] - pred[i]) * (y[i] - pred[i])
 		ssTot += (y[i] - meanY) * (y[i] - meanY)
 	}
@@ -153,15 +153,15 @@ func TestPCR_VarianceThreshold(t *testing.T) {
 
 	f1 := make([]float64, n)
 	f2 := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		f1[i] = rng.NormFloat64()
 		f2[i] = rng.NormFloat64()
 	}
 
 	X := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		X[i] = make([]float64, p)
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			X[i][j] = f1[i] + 0.05*rng.NormFloat64()
 		}
 		for j := 3; j < 6; j++ {
@@ -170,7 +170,7 @@ func TestPCR_VarianceThreshold(t *testing.T) {
 	}
 
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		y[i] = 3*f1[i] - 2*f2[i] + 0.1*rng.NormFloat64()
 	}
 

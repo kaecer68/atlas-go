@@ -51,10 +51,10 @@ func TestCountingMetrics_LabelOrderIndependent(t *testing.T) {
 
 func TestCountingMetrics_CallCountTracksEveryInvocation(t *testing.T) {
 	m := newCountingMetrics()
-	for i := 0; i < 7; i++ {
+	for range 7 {
 		m.RecordCounter("x", 1, map[string]string{"k": "v"})
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		m.RecordGauge("y", 1, map[string]string{"k": "v"})
 	}
 	if got := m.CallCount("x", map[string]string{"k": "v"}); got != 7 {
@@ -74,10 +74,10 @@ func TestCountingMetrics_ConcurrentSafe(t *testing.T) {
 	const perG = 100
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < perG; j++ {
+			for j := range perG {
 				m.RecordCounter("c", 1, map[string]string{"k": "v"})
 				m.RecordGauge("g", float64(j), map[string]string{"k": "v"})
 			}
@@ -123,7 +123,7 @@ func TestAppendAnnotation_StoresAndReturns(t *testing.T) {
 
 func TestRecentAnnotations_ReturnsLastN(t *testing.T) {
 	k := &KimiClient{}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		k.appendAnnotation(AnnotationRecord{ID: fmt.Sprintf("ann-%d", i), Tokens: int64(i)})
 	}
 
@@ -140,7 +140,7 @@ func TestRecentAnnotations_ReturnsLastN(t *testing.T) {
 
 func TestRecentAnnotations_NLargerThanSizeReturnsAll(t *testing.T) {
 	k := &KimiClient{}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		k.appendAnnotation(AnnotationRecord{ID: fmt.Sprintf("ann-%d", i)})
 	}
 
@@ -153,7 +153,7 @@ func TestRecentAnnotations_NLargerThanSizeReturnsAll(t *testing.T) {
 func TestRecentAnnotations_RingBufferDropsOldest(t *testing.T) {
 	k := &KimiClient{}
 	total := annotationBufferCap + 50
-	for i := 0; i < total; i++ {
+	for i := range total {
 		k.appendAnnotation(AnnotationRecord{ID: fmt.Sprintf("ann-%d", i)})
 	}
 
@@ -175,10 +175,10 @@ func TestAppendAnnotation_ConcurrentSafe(t *testing.T) {
 	const perG = 50
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(gid int) {
 			defer wg.Done()
-			for j := 0; j < perG; j++ {
+			for j := range perG {
 				k.appendAnnotation(AnnotationRecord{ID: fmt.Sprintf("g%d-%d", gid, j)})
 			}
 		}(g)
@@ -194,7 +194,7 @@ func TestAppendAnnotation_ConcurrentSafe(t *testing.T) {
 func TestNextAnnotationID_Unique(t *testing.T) {
 	k := &KimiClient{}
 	seen := make(map[string]bool, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		id := k.nextAnnotationID()
 		if seen[id] {
 			t.Fatalf("duplicate id %q at iteration %d", id, i)

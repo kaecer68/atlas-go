@@ -62,12 +62,12 @@ func (o *OLS) Fit(X [][]float64, y []float64) error {
 	// Build the design matrix in row-major flat storage.
 	flat := make([]float64, nSamples*nCols)
 	if o.FitIntercept {
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			flat[i*nCols] = 1.0
 			copy(flat[i*nCols+1:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	} else {
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			copy(flat[i*nCols:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	}
@@ -133,12 +133,12 @@ func (o *OLS) Predict(X [][]float64) ([]float64, error) {
 	// Build design matrix.
 	flat := make([]float64, nSamples*nCols)
 	if o.FitIntercept {
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			flat[i*nCols] = 1.0
 			copy(flat[i*nCols+1:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	} else {
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			copy(flat[i*nCols:], X[i]) //nolint:gosec // G602: bounds validated
 		}
 	}

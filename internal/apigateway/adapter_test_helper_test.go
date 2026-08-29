@@ -163,7 +163,7 @@ func findRepoParametersJSON(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		candidate := filepath.Join(dir, "configs", "parameters.json")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate

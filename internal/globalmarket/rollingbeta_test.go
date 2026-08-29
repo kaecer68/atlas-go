@@ -10,7 +10,7 @@ func TestRollingBeta_PerfectCorrelation(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// y = 2x: perfect positive linear relationship
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		x := float64(i) * 0.01
 		y := 2.0 * x
 		beta, _, r2 := rb.Update(x, y)
@@ -44,7 +44,7 @@ func TestRollingBeta_ZeroCorrelation(t *testing.T) {
 
 	// x and y are independent random series
 	src := rand.New(rand.NewSource(42))
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		x := src.NormFloat64()
 		y := src.NormFloat64()
 		rb.Update(x, y)
@@ -64,7 +64,7 @@ func TestRollingBeta_NegativeCorrelation(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// y = -x: perfect negative correlation
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		x := float64(i) * 0.01
 		y := -x
 		rb.Update(x, y)
@@ -86,7 +86,7 @@ func TestRollingBeta_InsufficientData(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// First 4 observations should return defaults
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		beta, alpha, r2 := rb.Update(float64(i)*0.01, float64(i)*0.02)
 		if beta != 1.0 {
 			t.Errorf("iteration %d: expected default beta=1.0, got %f", i, beta)
@@ -110,7 +110,7 @@ func TestRollingBeta_StabilityAtLowVolatility(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// x is effectively constant (very low variance)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		x := 1.0 + float64(i)*1e-15
 		y := float64(i) * 0.01 // y varies normally
 		rb.Update(x, y)
@@ -162,7 +162,7 @@ func TestRollingBeta_RingBufferWrap(t *testing.T) {
 	rb := NewRollingBeta(10)
 
 	// Fill 10 observations with perfect correlation (y=2x)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		x := float64(i + 1)
 		y := 2.0 * x
 		rb.Update(x, y)
@@ -199,7 +199,7 @@ func TestRollingBeta_NaNHandling(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// Feed valid data first
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		rb.Update(float64(i)*0.01, float64(i)*0.02)
 	}
 
@@ -224,7 +224,7 @@ func TestRollingBeta_InfHandling(t *testing.T) {
 	rb := NewRollingBeta(60)
 
 	// Feed valid data first
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		rb.Update(float64(i)*0.01, float64(i)*0.02)
 	}
 

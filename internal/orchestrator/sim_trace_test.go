@@ -124,10 +124,10 @@ func TestSimTrace_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for g := 0; g < numGoroutines; g++ {
+	for g := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < writesPerGoroutine; i++ {
+			for i := range writesPerGoroutine {
 				// Alternate between different statuses to cover all code paths.
 				statuses := []string{"START", "OK", "WARN", "FAIL"}
 				status := statuses[i%len(statuses)]

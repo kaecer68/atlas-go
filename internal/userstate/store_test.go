@@ -120,7 +120,7 @@ func TestJSONLStore_RespectsFIFOCap(t *testing.T) {
 	dir := t.TempDir()
 	store := NewJSONLStoreWithCap(dir, 3)
 	// 5 distinct (user, signal) tuples → oldest 2 evicted.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_ = store.Upsert(ackState(int64(i), "sig", false, false))
 	}
 	records, _ := store.LoadByUser(0)
@@ -181,12 +181,12 @@ func TestJSONLStore_ConcurrentUpsertsNoLoss(t *testing.T) {
 	var failures atomic.Int32
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(g int) {
 			defer wg.Done()
 			ready.Done()
 			<-start
-			for i := 0; i < perGoroutine; i++ {
+			for range perGoroutine {
 				if err := store.Upsert(ackState(int64(g+1), "sig", false, false)); err != nil {
 					failures.Add(1)
 				}

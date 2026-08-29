@@ -221,7 +221,7 @@ func TestTaiwanVolatilityProvider_YahooDown_FallbackFromHistory(t *testing.T) {
 	storePath := filepath.Join(t.TempDir(), "twii_history.json")
 	p := NewTaiwanVolatilityProviderWithStore(storePath)
 	base := time.Date(2026, 7, 1, 0, 0, 0, 0, twseLocation)
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		p.history.Append(base.AddDate(0, 0, i), 23000.0+float64(i)*10)
 	}
 
@@ -259,7 +259,7 @@ func TestTaiwanVolatilityProvider_YahooDown_HistoryInsufficient(t *testing.T) {
 	p := NewTaiwanVolatilityProviderWithStore(filepath.Join(t.TempDir(), "empty.json"))
 	// 只放 5 筆
 	base := time.Date(2026, 7, 1, 0, 0, 0, 0, twseLocation)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p.history.Append(base.AddDate(0, 0, i), 23000.0)
 	}
 

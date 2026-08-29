@@ -472,7 +472,7 @@ func TestGateway_Fetch_CircuitBreakerOpens(t *testing.T) {
 	g.registry.Register("us_yahoo", provider)
 
 	// Fetch until circuit breaker opens (threshold = 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = g.Fetch(context.Background(), "us_yahoo")
 	}
 

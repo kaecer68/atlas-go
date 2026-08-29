@@ -520,7 +520,7 @@ func computeSlope(entries []SnapshotEntry, start int, fn func(SnapshotEntry) flo
 	// MA20 for day 19 (index start+19) uses days start+0..start+19
 	// MA20 for day 20 uses start+1..start+20, ..., day 23 uses start+4..start+23 (=end)
 	ma20vals := make([]float64, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		// Each MA20 requires 20 non-zero entries in its 20-day window.
 		ma20vals[i] = computeSMA(entries, start+i, start+i+19, 20, fn)
 	}
@@ -532,7 +532,7 @@ func computeSlope(entries []SnapshotEntry, start int, fn func(SnapshotEntry) flo
 	sumY := 0.0
 	sumXY := 0.0
 	sumXX := 0.0
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		x := float64(i)
 		y := ma20vals[i]
 		sumX += x

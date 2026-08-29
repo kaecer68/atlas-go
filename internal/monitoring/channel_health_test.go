@@ -289,7 +289,7 @@ func TestChannelHealthStore_RecentFetches_LimitRespected(t *testing.T) {
 	dir := t.TempDir()
 	store := NewChannelHealthStore(dir)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		channelID := []string{"twse", "finmind", "fugle"}[i%3]
 		if err := store.Record(channelID, "ok", "", WithLatencyMs(int64(100+i))); err != nil {
 			t.Fatalf("Record %d: %v", i, err)
@@ -312,7 +312,7 @@ func TestChannelHealthStore_RecentFetches_CapAt50(t *testing.T) {
 	dir := t.TempDir()
 	store := NewChannelHealthStore(dir)
 
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		if err := store.Record("twse", "ok", "", WithLatencyMs(int64(i))); err != nil {
 			t.Fatalf("Record %d: %v", i, err)
 		}

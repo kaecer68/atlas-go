@@ -28,7 +28,7 @@ func TestProviderBreaker_OpensAfterThresholdFailures(t *testing.T) {
 	b := newProviderBreaker("fugle", fastTestConfig())
 
 	// 3 consecutive failures should trip to Open
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		b.recordFailure()
 	}
 
@@ -48,7 +48,7 @@ func TestProviderBreaker_OpensAfterThresholdFailures(t *testing.T) {
 
 func TestProviderBreaker_StaysOpenBeforeRecoveryTimeout(t *testing.T) {
 	b := newProviderBreaker("fugle", fastTestConfig())
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		b.recordFailure()
 	}
 	// immediately after opening, before any timeout
@@ -59,7 +59,7 @@ func TestProviderBreaker_StaysOpenBeforeRecoveryTimeout(t *testing.T) {
 
 func TestProviderBreaker_HalfOpenAfterRecoveryTimeout(t *testing.T) {
 	b := newProviderBreaker("fugle", fastTestConfig())
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		b.recordFailure()
 	}
 
@@ -79,7 +79,7 @@ func TestProviderBreaker_HalfOpenAfterRecoveryTimeout(t *testing.T) {
 
 func TestProviderBreaker_HalfOpenSuccessCloses(t *testing.T) {
 	b := newProviderBreaker("fugle", fastTestConfig())
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		b.recordFailure()
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -98,7 +98,7 @@ func TestProviderBreaker_HalfOpenSuccessCloses(t *testing.T) {
 
 func TestProviderBreaker_HalfOpenFailureReopens(t *testing.T) {
 	b := newProviderBreaker("fugle", fastTestConfig())
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		b.recordFailure()
 	}
 	time.Sleep(150 * time.Millisecond)

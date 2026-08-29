@@ -34,7 +34,7 @@ func writeMarginFile(t *testing.T, dir, date string, balance float64) {
 func writeMarginFiles(t *testing.T, dir string, endDate string, startBalance, step float64, n int) {
 	t.Helper()
 	date := endDate
-	for i := 0; i < n; i++ {
+	for i := range n {
 		writeMarginFile(t, dir, date, startBalance+step*float64(n-1-i))
 		date = prevTradingDate(date)
 	}

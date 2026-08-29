@@ -93,7 +93,7 @@ func TestCalculateComponentVaR(t *testing.T) {
 	a := make([]float64, 252)
 	b := make([]float64, 252)
 	c := make([]float64, 252)
-	for i := 0; i < 252; i++ {
+	for i := range 252 {
 		a[i] = baseReturns[i%10]
 		b[i] = baseReturns[(i+3)%10]
 		c[i] = baseReturns[(i+7)%10]
@@ -145,7 +145,7 @@ func TestCalculateComponentVaR_EqualWeights(t *testing.T) {
 	baseB := []float64{0.02, -0.02, 0.01, -0.01, 0.02, -0.02, 0.01, -0.01, 0.02, -0.02}
 	a := make([]float64, 252)
 	b := make([]float64, 252)
-	for i := 0; i < 252; i++ {
+	for i := range 252 {
 		a[i] = baseA[i%10]
 		b[i] = baseB[i%10]
 	}
@@ -199,7 +199,7 @@ func TestCalculateComponentVaR_CustomConfidence(t *testing.T) {
 	// Use unique returns so sorted[2] ≠ sorted[12] at 252 observations.
 	a := make([]float64, MinObservationsForVaR)
 	b := make([]float64, MinObservationsForVaR)
-	for i := 0; i < MinObservationsForVaR; i++ {
+	for i := range MinObservationsForVaR {
 		a[i] = float64(i-MinObservationsForVaR/2) / 1000.0
 		b[i] = float64(MinObservationsForVaR/2-i) / 1000.0
 	}

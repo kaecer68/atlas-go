@@ -36,11 +36,11 @@ func TestAuditWriter_ConcurrentWrites(t *testing.T) {
 	defer w.Close()
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrentWorkers; i++ {
+	for i := range concurrentWorkers {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < concurrentWritesPerWorker; j++ {
+			for j := range concurrentWritesPerWorker {
 				entry := AuditEntry{
 					Tool:       fmt.Sprintf("worker_%d", id),
 					ArgKeys:    []string{fmt.Sprintf("j=%d", j)},
@@ -99,7 +99,7 @@ func TestHTTPClient_ConcurrentRequests(t *testing.T) {
 	const n = concurrentHandlerRounds
 	var wg sync.WaitGroup
 	errCh := make(chan error, n)
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -131,7 +131,7 @@ func TestHandlers_ConcurrentInvocations(t *testing.T) {
 
 	const n = concurrentHandlerRounds
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -153,7 +153,7 @@ func TestWithAudit_ConcurrentMix(t *testing.T) {
 
 	const n = concurrentHandlerRounds
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()

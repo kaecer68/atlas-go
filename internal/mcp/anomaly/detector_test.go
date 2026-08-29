@@ -58,7 +58,7 @@ func Test_Detector_burst_short_vs_long_window_emits_anomaly(t *testing.T) {
 	d := NewDetector(cfg, rec, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		d.Observe(testAuditEntry{version: 2, ts: now, tool: "t", tenant: "tenant-a", status: "ok"})
 	}
 
@@ -84,7 +84,7 @@ func Test_Detector_per_tool_error_spike_emits_anomaly(t *testing.T) {
 	d := NewDetector(cfg, rec, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		status := "error"
 		if i == 0 {
 			status = "ok"
@@ -113,7 +113,7 @@ func Test_Detector_per_tenant_error_anomaly_emits_anomaly(t *testing.T) {
 	d := NewDetector(cfg, rec, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		d.Observe(testAuditEntry{version: 2, ts: now, tool: fmt.Sprintf("tool-%d", i), tenant: "tenant-c", status: "error"})
 	}
 
@@ -138,7 +138,7 @@ func Test_Detector_rolling_window_evicts_old_entries(t *testing.T) {
 	d.now = fixedClock(now)
 
 	old := now.Add(-25 * time.Hour)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		d.Observe(testAuditEntry{version: 2, ts: old, tenant: "tenant-d", status: "ok"})
 	}
 	// A single current observation should not be a burst against empty windows.
@@ -155,7 +155,7 @@ func Test_Detector_AnomalyEvent_schema(t *testing.T) {
 	d := NewDetector(cfg, &fakeScoreRecorder{}, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		d.Observe(testAuditEntry{version: 2, ts: now, tool: "x", tenant: "tenant-e", status: "ok"})
 	}
 
@@ -176,7 +176,7 @@ func Test_Detector_ignores_v1_entries(t *testing.T) {
 	d := NewDetector(cfg, rec, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		d.Observe(testAuditEntry{version: 1, ts: now, tenant: "tenant-f", status: "ok"})
 	}
 
@@ -193,7 +193,7 @@ func Test_Detector_gauge_updated_on_detection(t *testing.T) {
 	d := NewDetector(cfg, rec, NewStore(100))
 	d.now = fixedClock(now)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		d.Observe(testAuditEntry{version: 2, ts: now, tenant: "tenant-g", status: "ok"})
 	}
 
@@ -217,7 +217,7 @@ func Test_Detector_conservative_threshold_avoids_false_positive(t *testing.T) {
 	d := NewDetector(cfg, rec, store)
 	d.now = fixedClock(now)
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		d.Observe(testAuditEntry{version: 2, ts: now, tenant: "tenant-h", status: "ok"})
 	}
 

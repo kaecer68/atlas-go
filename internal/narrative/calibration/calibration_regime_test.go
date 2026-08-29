@@ -198,25 +198,25 @@ func TestCalibrateWeightsByRegime(t *testing.T) {
 	// Create records spanning all regimes with enough per-regime for calibration
 	var records []CalibrationRecord
 	// Bull (VIX=12): 5 records
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r := syntheticRegimeRecord(12, -float64(i+1))
 		r.OutflowTarget = r.Outflow
 		records = append(records, r)
 	}
 	// Normal (VIX=20): 5 records
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r := syntheticRegimeRecord(20, -float64(i+1))
 		r.OutflowTarget = r.Outflow
 		records = append(records, r)
 	}
 	// Bear (VIX=30): 5 records
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r := syntheticRegimeRecord(30, -float64(i+1))
 		r.OutflowTarget = r.Outflow
 		records = append(records, r)
 	}
 	// Crisis (VIX=40): 5 records
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		r := syntheticRegimeRecord(40, -float64(i+1))
 		r.OutflowTarget = r.Outflow
 		records = append(records, r)

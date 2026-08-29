@@ -133,7 +133,7 @@ func BackfillMarketVolume(ctx context.Context, fetcher MarketVolumeFetcher, dir,
 // MarketVolumeProvider.FetchLatest's 7-day scan. Each scanned date is retried
 // up to maxBackfillAttempts times for transient errors.
 func fetchWithBackscan(ctx context.Context, fetcher MarketVolumeFetcher, date time.Time) (*marketdata.MarketVolumeResult, time.Time, error) {
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		candidate := date.AddDate(0, 0, -i)
 		res, err := fetchWithRetry(ctx, fetcher, candidate)
 		if err == nil {

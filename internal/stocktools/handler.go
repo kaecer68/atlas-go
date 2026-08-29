@@ -286,7 +286,7 @@ func (h *Handler) HandleChips(r *http.Request) (int, any) {
 
 func (h *Handler) fetchLatestSymbolFlow(ctx context.Context, symbol, dateStr string) (marketdata.SymbolFlow, error) {
 	// Try up to 7 trading days back to find the most recent data.
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		d, err := time.Parse("20060102", dateStr)
 		if err != nil {
 			return marketdata.SymbolFlow{}, err

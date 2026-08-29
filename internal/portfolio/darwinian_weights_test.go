@@ -135,7 +135,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 		// Add 60 returns with known positive mean, realistic variance, and
 		// >=8 unique values (the degenerate-window guard zeroes Sharpe when
 		// the window holds fewer than minUniqueReturnsForSharpe distinct values).
-		for i := 0; i < 60; i++ {
+		for i := range 60 {
 			r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
 			m.RecordOutcome("agent_001", r, r > 0)
 		}
@@ -160,7 +160,7 @@ func TestDarwinianWeightManager(t *testing.T) {
 
 		// Add 60 returns with known negative mean, realistic variance, and
 		// >=8 unique values (degenerate-window guard).
-		for i := 0; i < 60; i++ {
+		for i := range 60 {
 			r := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
 			m.RecordOutcome("agent_neg", r, r > 0)
 		}
@@ -752,8 +752,8 @@ func TestRecordOutcomeAt_MultiRecPerDaySharpeSanity(t *testing.T) {
 	// degenerate; per-rec noise keeps intra-day dispersion realistic.
 	dayBases := []float64{0.008, 0.004, 0.012, -0.002, 0.006, 0.010, 0.002, 0.014, -0.004, 0.005, 0.009, 0.007}
 	day := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-	for d := 0; d < 40; d++ {
-		for r := 0; r < 50; r++ {
+	for d := range 40 {
+		for r := range 50 {
 			ret := dayBases[d%len(dayBases)] + 0.002*float64(r%5-2)
 			m.RecordOutcomeAt("agent_001", ret, ret > 0, day)
 		}
@@ -784,7 +784,7 @@ func TestUpdateRollingMetrics_DegenerateWindowGuard(t *testing.T) {
 
 	// 30 entries but only 2 unique values — the historical degenerate case
 	// (e.g. -0.0765 / -0.0723 alternating produced Sharpe -544 before the fix).
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		if i%2 == 0 {
 			m.RecordOutcome("agent_001", -0.0765, false)
 		} else {
@@ -809,7 +809,7 @@ func TestUpdateRollingMetrics_SharpeClip(t *testing.T) {
 
 	// 8 unique values but nearly identical magnitudes -> tiny std -> huge mean/std.
 	rets := []float64{0.0100, 0.0101, 0.0102, 0.0103, 0.0104, 0.0105, 0.0106, 0.0107, 0.0100, 0.0101}
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		r := rets[i%len(rets)]
 		m.RecordOutcome("agent_001", r, true)
 	}
@@ -834,7 +834,7 @@ func TestPerformDailyAdjustment_ZeroSignalPenalty(t *testing.T) {
 	seedAgent(m, "performer", "tech", "sector", 1.0)
 	seedAgent(m, "silent_fresh", "value", "style", 1.0)
 	seedAgent(m, "silent_stale", "macro", "sector", 1.0)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		r := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
 		m.RecordOutcome("performer", r, r > 0)
 	}
@@ -883,13 +883,13 @@ func TestPerformDailyAdjustment_LossPenaltyDeepensBottomCut(t *testing.T) {
 	seedAgent(m, "performer", "tech", "sector", 1.0)
 	seedAgent(m, "losing_rich", "value", "style", 1.0)
 	seedAgent(m, "losing_poor", "macro", "sector", 1.0)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		pr := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
 		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
 		m.RecordOutcome("performer", pr, pr > 0)
 		m.RecordOutcome("losing_rich", nr, false)
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
 		m.RecordOutcome("losing_poor", nr, false)
 	}
@@ -934,7 +934,7 @@ func TestPerformDailyAdjustment_WeightChangeAlert(t *testing.T) {
 
 	seedAgent(m, "top", "tech", "sector", 1.5)
 	seedAgent(m, "bottom", "value", "style", 1.0)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		pr := 0.01 + []float64{0.02, -0.01, 0.015, -0.005, 0.025, -0.02, 0.01, -0.015, 0.005, -0.025}[i%10]
 		nr := -0.01 + []float64{-0.02, 0.01, -0.015, 0.005, -0.025, 0.02, -0.01, 0.015, -0.005, 0.025}[i%10]
 		m.RecordOutcome("top", pr, pr > 0)

@@ -1022,7 +1022,7 @@ func TestParametersConfig_LockedSaveWithRollback_Concurrent(t *testing.T) {
 	const N = 10
 	var wg sync.WaitGroup
 	errCh := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -1105,7 +1105,7 @@ func TestParametersConfig_TryLockedSaveWithRollback_Concurrent(t *testing.T) {
 	const N = 10
 	var wg sync.WaitGroup
 	errCh := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

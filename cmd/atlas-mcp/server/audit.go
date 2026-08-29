@@ -247,7 +247,7 @@ func (w *AuditWriter) Cleanup(retentionDays int, now time.Time) (int, error) {
 // successful call, w.f and w.enc are restored.
 func (w *AuditWriter) reopenForAppend() error {
 	const maxAttempts = 3
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := range maxAttempts {
 		if attempt > 0 {
 			backoff := time.Duration(1<<uint(attempt-1)) * 50 * time.Millisecond
 			time.Sleep(backoff)

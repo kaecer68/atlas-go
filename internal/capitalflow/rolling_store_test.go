@@ -182,7 +182,7 @@ func TestFileRollingSampleStore_TrimsToCapacity(t *testing.T) {
 		t.Fatalf("parse base date: %v", err)
 	}
 	const total = 61
-	for i := 0; i < total; i++ {
+	for i := range total {
 		date := base.AddDate(0, 0, i).Format("2006-01-02")
 		if err := store.UpsertDay(ctx, date, []RollingSample{{
 			TradingDate: date,

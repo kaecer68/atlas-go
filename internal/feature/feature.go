@@ -219,7 +219,7 @@ var Registry = map[string]Func{
 			return 0.0
 		}
 		lr := make([]float64, 20)
-		for j := 0; j < 20; j++ {
+		for j := range 20 {
 			pos := idx - 19 + j
 			if bars[pos-1].Close > 0 && bars[pos].Close > 0 {
 				lr[j] = math.Log(bars[pos].Close / bars[pos-1].Close)
@@ -271,7 +271,7 @@ var Registry = map[string]Func{
 		}
 		// Compute MACD history for the last 9+ values.
 		macdVals := make([]float64, 9)
-		for j := 0; j < 9; j++ {
+		for j := range 9 {
 			pos := idx - 8 + j
 			ema12 := emaClose(bars, pos, 12)
 			ema26 := emaClose(bars, pos, 26)
@@ -336,7 +336,7 @@ var Registry = map[string]Func{
 			return 0.0
 		}
 		rets := make([]float64, 20)
-		for j := 0; j < 20; j++ {
+		for j := range 20 {
 			pos := idx - 19 + j
 			if bars[pos-1].Close > 0 {
 				rets[j] = (bars[pos].Close - bars[pos-1].Close) / bars[pos-1].Close
@@ -345,14 +345,14 @@ var Registry = map[string]Func{
 		// Series A: rets[0..18], Series B: rets[1..19].
 		n := 19.0
 		meanA, meanB := 0.0, 0.0
-		for j := 0; j < 19; j++ {
+		for j := range 19 {
 			meanA += rets[j]
 			meanB += rets[j+1]
 		}
 		meanA /= n
 		meanB /= n
 		cov, varA, varB := 0.0, 0.0, 0.0
-		for j := 0; j < 19; j++ {
+		for j := range 19 {
 			da := rets[j] - meanA
 			db := rets[j+1] - meanB
 			cov += da * db
@@ -395,7 +395,7 @@ var Registry = map[string]Func{
 			return 0.0
 		}
 		lr := make([]float64, 20)
-		for j := 0; j < 20; j++ {
+		for j := range 20 {
 			pos := idx - 19 + j
 			if bars[pos-1].Close > 0 && bars[pos].Close > 0 {
 				lr[j] = math.Log(bars[pos].Close / bars[pos-1].Close)
@@ -436,7 +436,7 @@ var Registry = map[string]Func{
 			return 0.0
 		}
 		lr := make([]float64, 20)
-		for j := 0; j < 20; j++ {
+		for j := range 20 {
 			pos := idx - 19 + j
 			if bars[pos-1].Close > 0 && bars[pos].Close > 0 {
 				lr[j] = math.Log(bars[pos].Close / bars[pos-1].Close)
@@ -502,7 +502,7 @@ func emaClose(bars []domain.DailyBar, idx int, period int) float64 {
 
 	// Seed: SMA of bars[0..period-1].
 	sum := 0.0
-	for j := 0; j < period; j++ {
+	for j := range period {
 		sum += bars[j].Close
 	}
 	ema := sum / float64(period)
@@ -524,7 +524,7 @@ func emaOf(vals []float64, period int) float64 {
 
 	// Seed with SMA of first 'period' values.
 	sum := 0.0
-	for i := 0; i < period; i++ {
+	for i := range period {
 		sum += vals[i]
 	}
 	ema := sum / float64(period)

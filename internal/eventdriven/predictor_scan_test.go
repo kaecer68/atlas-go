@@ -259,7 +259,7 @@ func TestApplyScanThemes_AggregatesMixed(t *testing.T) {
 func TestApplyScanThemes_BoundsTiltAtPlusMinusOne(t *testing.T) {
 	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	scans := make([]ScanResult, 0, 20)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		scans = append(scans, ScanResult{
 			Theme:      "ai_rally",
 			Severity:   "critical",
@@ -278,7 +278,7 @@ func TestApplyScanThemes_BoundsTiltAtPlusMinusOne(t *testing.T) {
 func TestApplyScanThemes_DriverCapAtFive(t *testing.T) {
 	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	scans := make([]ScanResult, 0, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		scans = append(scans, ScanResult{
 			Theme:      "ai_rally",
 			Severity:   "critical",

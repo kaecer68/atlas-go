@@ -386,7 +386,7 @@ func TestGetCachedSnapshot_CacheHit_AvoidsProviderCall(t *testing.T) {
 	if _, err := svc.GetStatus(context.Background()); err != nil {
 		t.Fatalf("GetStatus (warm): %v", err)
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := svc.GetUSIndices(context.Background()); err != nil {
 			t.Fatalf("GetUSIndices[%d]: %v", i, err)
 		}

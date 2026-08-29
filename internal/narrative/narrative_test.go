@@ -66,7 +66,7 @@ func writeTestReplayCSV(dir string) (string, error) {
 
 	fmt.Fprintln(f, "Date,Code,Name,TradeVolume,Open,High,Low,Close")
 	startDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for day := 0; day < 45; day++ {
+	for day := range 45 {
 		date := startDate.Add(time.Duration(day) * 24 * time.Hour)
 		dateStr := date.Format("2006-01-02")
 		for code, multiplier := range symbols {
@@ -579,7 +579,7 @@ func TestRecalculateAllTemplateHitRates_IdempotentConvergence(t *testing.T) {
 	ne := NewNarrativeEngine()
 	const globalHitRate = 0.55
 	const iterations = 60
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		ne.RecalculateAllTemplateHitRates(globalHitRate)
 	}
 	prev := map[string]float64{}
@@ -657,7 +657,7 @@ func writeRegimeCSV(t *testing.T) string {
 	const days = 60
 	// 0050: falls in first 30 days (risk_off), rises in last 30 (risk_on).
 	// Current regime = last 20-day momentum window = rising → risk_on.
-	for day := 0; day < days; day++ {
+	for day := range days {
 		date := start.Add(time.Duration(day) * 24 * time.Hour).Format("2006-01-02")
 		var p0050 float64
 		if day < 30 {
@@ -724,7 +724,7 @@ func TestEvaluateModels_RegimeFallbackNo0050(t *testing.T) {
 
 	fmt.Fprintln(f, "Date,Code,Name,TradeVolume,Open,High,Low,Close")
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for day := 0; day < 40; day++ {
+	for day := range 40 {
 		date := start.Add(time.Duration(day) * 24 * time.Hour).Format("2006-01-02")
 		for _, code := range []string{"2330", "2881"} {
 			px := float64(100 + day)

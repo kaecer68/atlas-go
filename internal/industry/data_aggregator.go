@@ -226,7 +226,7 @@ func (a *DataAggregator) fetchRevenueYoY(ctx context.Context, symbol string, now
 	year := now.Year()
 	month := int(now.Month())
 
-	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
+	for range DefaultFetchFallbackAttempts {
 		current, err := a.finmind.GetMonthRevenue(ctx, symbol, year, month)
 		if err != nil {
 			// Rate-limit (local 5s ctx vs 6s token) or server 402 are
@@ -282,7 +282,7 @@ func (a *DataAggregator) fetchProfitYoY(ctx context.Context, symbol string, now 
 	quarter := ((int(now.Month()) - 1) / 3) + 1
 	year := now.Year()
 
-	for attempt := 0; attempt < DefaultFetchFallbackAttempts; attempt++ {
+	for range DefaultFetchFallbackAttempts {
 		currentData, err := a.finmind.GetFinancialStatements(ctx, symbol, year, quarter)
 		if err != nil {
 			// Propagate quota/rate-limit errors instead of swallowing into

@@ -360,13 +360,13 @@ func TestDriftDetector_V2ConcurrentProviderAccess(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			d.checkPeriod(time.Now())
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			_ = d.onRegimeChangeConfirmed(context.Background(), eventbus.BusEvent{
 				Type:    eventbus.EventRegimeChangeConfirmed,
 				Payload: map[string]any{"new_regime": "TEST"},

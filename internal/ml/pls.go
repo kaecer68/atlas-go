@@ -83,15 +83,15 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	// 1. Compute per-feature mean and standard deviation.
 	m.xMean = make([]float64, p)
 	m.xStd = make([]float64, p)
-	for j := 0; j < p; j++ {
+	for j := range p {
 		var sum float64
-		for i := 0; i < n; i++ {
+		for i := range n {
 			sum += X[i][j] //nolint:gosec // G602: bounds validated at lines 55-70
 		}
 		m.xMean[j] = sum / float64(n)
 
 		var sqSum float64
-		for i := 0; i < n; i++ {
+		for i := range n {
 			diff := X[i][j] - m.xMean[j] //nolint:gosec // G602: bounds validated at lines 55-70
 			sqSum += diff * diff
 		}
@@ -104,8 +104,8 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 
 	// 2. Standardize X into mat.Dense (n × p).
 	X0 := mat.NewDense(n, p, nil)
-	for i := 0; i < n; i++ {
-		for j := 0; j < p; j++ {
+	for i := range n {
+		for j := range p {
 			X0.Set(i, j, (X[i][j]-m.xMean[j])/m.xStd[j]) //nolint:gosec // G602: bounds validated at lines 55-70
 		}
 	}
@@ -223,7 +223,7 @@ func colDataAt(m *mat.Dense, j int) []float64 {
 	raw := m.RawMatrix()
 	rows := raw.Rows
 	col := make([]float64, rows)
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		col[i] = raw.Data[i*raw.Stride+j]
 	}
 	return col
@@ -248,8 +248,8 @@ func (m *PLS) Predict(X [][]float64) ([]float64, error) {
 
 	// Standardize X using stored mean/std.
 	Xstd := mat.NewDense(n, p, nil)
-	for i := 0; i < n; i++ {
-		for j := 0; j < p; j++ {
+	for i := range n {
+		for j := range p {
 			Xstd.Set(i, j, (X[i][j]-m.xMean[j])/m.xStd[j])
 		}
 	}
@@ -259,7 +259,7 @@ func (m *PLS) Predict(X [][]float64) ([]float64, error) {
 	yPred.MulVec(Xstd, m.bPLS)
 
 	pred := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		pred[i] = yPred.AtVec(i) + m.yMean
 	}
 	return pred, nil

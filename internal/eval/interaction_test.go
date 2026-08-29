@@ -19,9 +19,9 @@ func (m *mockPredictor) Predict(X [][]float64) ([]float64, error) {
 // is uniformly spaced in [0, 1].
 func generateData(n, nFeatures int) [][]float64 {
 	X := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		row := make([]float64, nFeatures)
-		for j := 0; j < nFeatures; j++ {
+		for j := range nFeatures {
 			row[j] = float64(i) / float64(n-1)
 		}
 		X[i] = row
@@ -293,7 +293,7 @@ func TestSignificantPairs_Sorting(t *testing.T) {
 
 	// Verify H-matrix symmetry
 	n := len(result.FeatureNames)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := i + 1; j < n; j++ {
 			if math.Abs(result.HMatrix[i][j]-result.HMatrix[j][i]) > 1e-10 {
 				t.Errorf("H-matrix not symmetric: H[%d][%d]=%.6f, H[%d][%d]=%.6f",

@@ -78,7 +78,7 @@ func bootstrapSample(X [][]float64, y []float64, rng *rand.Rand) ([][]float64, [
 	yb := make([]float64, n)
 	selected := make([]bool, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		idx := rng.IntN(n)
 		Xb[i] = X[idx]
 		yb[i] = y[idx]
@@ -86,7 +86,7 @@ func bootstrapSample(X [][]float64, y []float64, rng *rand.Rand) ([][]float64, [
 	}
 
 	var oob []int
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if !selected[i] {
 			oob = append(oob, i)
 		}
@@ -168,7 +168,7 @@ func buildTree(X [][]float64, y []float64, depth int, maxDepth int, minSamplesSp
 
 	// Select random subset of features to consider.
 	featurePool := make([]int, nFeatures)
-	for i := 0; i < nFeatures; i++ {
+	for i := range nFeatures {
 		featurePool[i] = i
 	}
 	// Shuffle and take first maxFeats.
@@ -186,7 +186,7 @@ func buildTree(X [][]float64, y []float64, depth int, maxDepth int, minSamplesSp
 	for _, feat := range featSet {
 		// Extract feature values.
 		vals := make([]float64, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			vals[i] = X[i][feat]
 		}
 		uniq := uniqueSorted(vals)
@@ -200,7 +200,7 @@ func buildTree(X [][]float64, y []float64, depth int, maxDepth int, minSamplesSp
 
 			// Split and compute MSE.
 			var leftY, rightY []float64
-			for i := 0; i < n; i++ {
+			for i := range n {
 				if vals[i] <= threshold {
 					leftY = append(leftY, y[i])
 				} else {
@@ -237,7 +237,7 @@ func buildTree(X [][]float64, y []float64, depth int, maxDepth int, minSamplesSp
 
 	// Split data and recurse.
 	var leftX, rightX [][]float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if X[i][bestFeature] <= bestThreshold {
 			leftX = append(leftX, X[i])
 		} else {

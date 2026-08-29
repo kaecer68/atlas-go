@@ -38,7 +38,7 @@ func TestProviderBreaker_InjectableThreshold(t *testing.T) {
 		recoveryTimeout:  100 * time.Millisecond,
 		halfOpenMaxCalls: 1,
 	})
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		b5.recordFailure()
 		if b5.stateSnapshot().State != ProviderCircuitClosed {
 			t.Fatalf("threshold=5 breaker opened after %d failures", i+1)
@@ -57,7 +57,7 @@ func TestProviderBreaker_NoDataDoesNotCountAsFailure(t *testing.T) {
 	// A provider that classifies its no-data condition via recordSuccess
 	// must never trip: interleave no-data events with the failure counter.
 	b := newProviderBreaker("nodata", fastTestConfig())
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		b.recordFailure()
 		// "no-data/holiday" conditions reset instead of counting.
 		b.recordSuccess()
@@ -84,7 +84,7 @@ func TestFinMindBreaker_OpensAfterUpstreamFailures(t *testing.T) {
 	c.retryCfg = retryConfig{maxAttempts: 1, baseBackoff: time.Millisecond}
 
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.fetchDataset(ctx, "TaiwanStockPrice", "2330", "2026-01-01", "2026-01-01"); err == nil {
 			t.Fatalf("attempt %d: expected error", i+1)
 		}
@@ -113,7 +113,7 @@ func TestFinMindBreaker_QuotaExhaustionDoesNotTrip(t *testing.T) {
 		retryCfg:    retryConfig{maxAttempts: 1},
 	}
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_, err := c.fetchDataset(ctx, "TaiwanStockPrice", "2330", "2026-01-01", "2026-01-01")
 		if err == nil || !strings.Contains(err.Error(), ErrQuotaExhausted.Error()) {
 			t.Fatalf("call %d: expected ErrQuotaExhausted, got %v", i+1, err)
@@ -139,7 +139,7 @@ func TestFinMindBreaker_NoDataDoesNotTrip(t *testing.T) {
 	c.retryCfg = retryConfig{maxAttempts: 1}
 
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		data, err := c.fetchDataset(ctx, "TaiwanStockPrice", "2330", "2026-01-01", "2026-01-01")
 		if err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i+1, err)
@@ -168,7 +168,7 @@ func TestTWSEBreaker_OpensAfterUpstreamFailures(t *testing.T) {
 	c.breaker = newProviderBreaker("twse", fastTestConfig())
 
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := c.GetQuotes(ctx); err == nil {
 			t.Fatalf("attempt %d: expected error", i+1)
 		}
@@ -194,7 +194,7 @@ func TestTWSEBreaker_EmptyDataDoesNotTrip(t *testing.T) {
 	c.breaker = newProviderBreaker("twse", fastTestConfig())
 
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := c.GetQuotes(ctx); err == nil || !isNoDataErr(err) {
 			t.Fatalf("call %d: expected ErrTWSEEmptyData, got %v", i+1, err)
 		}
@@ -223,7 +223,7 @@ func TestTAIFEXBreaker_SchemaFailureTrips(t *testing.T) {
 	p.breaker = newProviderBreaker("taifex", fastTestConfig())
 
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := p.FetchPCR(ctx); err == nil {
 			t.Fatalf("attempt %d: expected ErrTAIFEXSchema", i+1)
 		}
@@ -248,7 +248,7 @@ func TestTAIFEXBreaker_EmptyListDoesNotTrip(t *testing.T) {
 	p.breaker = newProviderBreaker("taifex", fastTestConfig())
 
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := p.FetchPCR(ctx); err == nil {
 			t.Fatalf("call %d: expected empty-list error", i+1)
 		}
@@ -276,7 +276,7 @@ func TestYahooBreaker_AllHostsFailTrips(t *testing.T) {
 	defer func() { s.breaker = oldBreaker }() // restore so later Yahoo tests start clean
 
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := s.fetchWithFallback(ctx, "^TWII", map[string]string{"interval": "1d", "range": "5d"}); err == nil {
 			t.Fatalf("attempt %d: expected error", i+1)
 		}
@@ -327,7 +327,7 @@ func TestGovernmentBrokerBreaker_NoDataDoesNotTrip(t *testing.T) {
 	agg.breaker = newProviderBreaker("government_broker", fastTestConfig())
 
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		res, err := agg.AggregateDate(ctx, time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC))
 		if err != nil {
 			t.Fatalf("run %d: unexpected error: %v", i+1, err)

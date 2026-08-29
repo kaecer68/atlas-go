@@ -51,7 +51,7 @@ func TestCircuitBreaker_State_And_IsOpen(t *testing.T) {
 		cb := NewCircuitBreaker("ch")
 		failFn := func() error { return errors.New("fail") }
 
-		for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+		for range CircuitBreakerFailureThreshold {
 			_ = cb.Call(failFn)
 		}
 
@@ -82,7 +82,7 @@ var errTestFailure = errors.New("test failure")
 func TestCircuitBreaker_Call_SuccessfulCallsStayClosed(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err := cb.Call(func() error { return nil })
 		if err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i, err)
@@ -97,7 +97,7 @@ func TestCircuitBreaker_Call_FailuresResetOnSuccess(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Two failures — not enough to open
-	for i := 0; i < CircuitBreakerFailureThreshold-1; i++ {
+	for range CircuitBreakerFailureThreshold - 1 {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	if cb.failures != 2 {
@@ -117,7 +117,7 @@ func TestCircuitBreaker_Call_FailuresResetOnSuccess(t *testing.T) {
 func TestCircuitBreaker_Call_ThreeFailuresOpenCircuit(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for i := range CircuitBreakerFailureThreshold {
 		// First N-1 calls should not yet open
 		err := cb.Call(func() error { return errTestFailure })
 		if i < CircuitBreakerFailureThreshold-1 {
@@ -143,7 +143,7 @@ func TestCircuitBreaker_Call_OpenCircuitRejectsCalls(t *testing.T) {
 	cb := NewCircuitBreaker("test-chan")
 
 	// Put breaker into open state
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 
@@ -164,7 +164,7 @@ func TestCircuitBreaker_Call_RecoveryTransitionsToHalfOpen(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Put breaker into open state
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	if cb.State() != StateOpen {
@@ -188,7 +188,7 @@ func TestCircuitBreaker_Call_HalfOpenUpToMaxCalls(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Put breaker into open state, then simulate recovery
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	cb.lastFailure = time.Now().Add(-10 * time.Minute)
@@ -204,7 +204,7 @@ func TestCircuitBreaker_Call_HalfOpenUpToMaxCalls(t *testing.T) {
 
 	// Enter half-open, fail call → back to open
 	cb2 := NewCircuitBreaker("ch2")
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb2.Call(func() error { return errTestFailure })
 	}
 	cb2.lastFailure = time.Now().Add(-10 * time.Minute)
@@ -244,7 +244,7 @@ func TestCircuitBreaker_Call_HalfOpenLimitRejectsCalls(t *testing.T) {
 	// halfOpenCalls to simulate the case.
 
 	cb := NewCircuitBreaker("ch")
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	cb.lastFailure = time.Now().Add(-10 * time.Minute)
@@ -265,7 +265,7 @@ func TestCircuitBreaker_Call_SuccessInHalfOpenResetsToClosed(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Open the circuit
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	// Simulate recovery
@@ -291,7 +291,7 @@ func TestCircuitBreaker_Call_FailureInHalfOpenReOpens(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Open the circuit
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	// Simulate recovery
@@ -325,7 +325,7 @@ func TestCircuitBreaker_Call_RecoveryNotYetExpired(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Open the circuit
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	// lastFailure was just set — recovery NOT yet expired
@@ -341,7 +341,7 @@ func TestCircuitBreaker_Call_RecoveryNotYetExpired(t *testing.T) {
 func TestCircuitBreaker_Call_RecoveryExactlyAtBoundary(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	// Set lastFailure exactly at the recovery timeout boundary
@@ -364,7 +364,7 @@ func TestCircuitBreaker_Call_OscillationPattern(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Cycle 1: open → half-open (fail) → open
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	cb.lastFailure = time.Now().Add(-10 * time.Minute)
@@ -493,7 +493,7 @@ func TestCircuitBreakerManager_Status(t *testing.T) {
 
 	// Open one of the breakers
 	twseCB, _ := mgr.Get("twse")
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = twseCB.Call(func() error { return errTestFailure })
 	}
 
@@ -591,7 +591,7 @@ func TestCircuitBreaker_Call_Concurrent(t *testing.T) {
 	done := make(chan bool, 20)
 
 	// 10 goroutines calling success concurrently
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			_ = cb.Call(func() error { return nil })
 			done <- true
@@ -599,7 +599,7 @@ func TestCircuitBreaker_Call_Concurrent(t *testing.T) {
 	}
 
 	// Wait for all to finish
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
@@ -617,14 +617,14 @@ func TestCircuitBreaker_Call_ConcurrentFailures(t *testing.T) {
 	done := make(chan bool, 20)
 
 	// 20 goroutines calling failure concurrently
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		go func() {
 			_ = cb.Call(func() error { return errTestFailure })
 			done <- true
 		}()
 	}
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 
@@ -797,7 +797,7 @@ func TestCircuitBreaker_Reset(t *testing.T) {
 		cb := NewCircuitBreaker("ch")
 
 		// Accumulate failures just below threshold
-		for i := 0; i < CircuitBreakerFailureThreshold-1; i++ {
+		for range CircuitBreakerFailureThreshold - 1 {
 			_ = cb.Call(func() error { return errTestFailure })
 		}
 		if cb.failures != CircuitBreakerFailureThreshold-1 {
@@ -822,7 +822,7 @@ func TestCircuitBreaker_OverrideResetEndToEnd(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
 	// Step 1: drive failures to open
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	if cb.State() != StateOpen {
@@ -869,7 +869,7 @@ func TestCircuitBreaker_OverrideResetEndToEnd(t *testing.T) {
 func TestCircuitBreaker_OverrideHalfOpenLimitReached(t *testing.T) {
 	cb := NewCircuitBreaker("ch")
 
-	for i := 0; i < CircuitBreakerFailureThreshold; i++ {
+	for range CircuitBreakerFailureThreshold {
 		_ = cb.Call(func() error { return errTestFailure })
 	}
 	if cb.State() != StateOpen {
@@ -879,7 +879,7 @@ func TestCircuitBreaker_OverrideHalfOpenLimitReached(t *testing.T) {
 	cb.SetManualOverride(true)
 	cb.lastFailure = time.Now().Add(-10 * time.Minute)
 
-	for i := 0; i < CircuitBreakerHalfOpenMaxCalls; i++ {
+	for i := range CircuitBreakerHalfOpenMaxCalls {
 		if err := cb.Call(func() error { return nil }); err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i+1, err)
 		}

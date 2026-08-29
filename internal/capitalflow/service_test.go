@@ -187,7 +187,7 @@ func TestService_RefreshSameDayDoesNotGrowWindow(t *testing.T) {
 	svc := NewServiceWithStore(provider, 0, store, nil)
 	ctx := context.Background()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := svc.Refresh(ctx); err != nil {
 			t.Fatalf("refresh %d: %v", i, err)
 		}
@@ -261,7 +261,7 @@ func TestRefresh_IdempotentSameDay(t *testing.T) {
 	}}
 	store := NewMemoryRollingSampleStore(60)
 	svc := NewServiceWithStore(provider, 0, store, nil)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := svc.Refresh(context.Background()); err != nil {
 			t.Fatalf("refresh %d: %v", i, err)
 		}

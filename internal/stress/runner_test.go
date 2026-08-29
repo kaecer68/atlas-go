@@ -244,10 +244,10 @@ func TestCholeskyDecompose(t *testing.T) {
 		t.Fatal("cholesky returned nil")
 	}
 	n := len(A)
-	for i := 0; i < n; i++ {
-		for j := 0; j < n; j++ {
+	for i := range n {
+		for j := range n {
 			var sum float64
-			for k := 0; k < n; k++ {
+			for k := range n {
 				sum += L[i][k] * L[j][k]
 			}
 			if math.Abs(sum-A[i][j]) > 1e-10 {

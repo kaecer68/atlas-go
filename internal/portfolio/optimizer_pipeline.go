@@ -234,7 +234,7 @@ func (o *Optimizer) allocateInitialWeights(
 		// Inflate covariance diagonal: during extreme stress all assets become
 		// more volatile and more correlated — diagonal inflation pushes QP toward
 		// uniform weights (maximum diversification), countering panic concentration.
-		for i := 0; i < N; i++ {
+		for i := range N {
 			oldVal := sigma.At(i, i)
 			if oldVal > 0 {
 				sigma.SetSym(i, i, oldVal*1.5)
@@ -256,8 +256,8 @@ func (o *Optimizer) allocateInitialWeights(
 	o.mu.RUnlock()
 	if crossRho > 0.5 {
 		scale := 1.0 + (crossRho-0.5)/0.5 // maps [0.5, 1.0] → [1.0, 2.0]
-		for i := 0; i < N; i++ {
-			for j := 0; j < N; j++ {
+		for i := range N {
+			for j := range N {
 				if i != j {
 					sigma.SetSym(i, j, sigma.At(i, j)*scale)
 				}
@@ -286,7 +286,7 @@ func (o *Optimizer) allocateInitialWeights(
 	}
 
 	Aeq := mat.NewDense(1, N, nil)
-	for j := 0; j < N; j++ {
+	for j := range N {
 		Aeq.Set(0, j, 1.0)
 	}
 	beq := []float64{1.0}
@@ -294,7 +294,7 @@ func (o *Optimizer) allocateInitialWeights(
 	wOpt := o.activeSetQP(sigma, Aeq, beq, lb, ub, wInit)
 
 	var weights []weightInfo
-	for i := 0; i < N; i++ {
+	for i := range N {
 		if wOpt[i] < 1e-10 {
 			continue
 		}

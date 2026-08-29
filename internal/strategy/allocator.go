@@ -135,7 +135,7 @@ func (sa *StrategyAllocator) computeRiskParity(candidates []*Strategy, vols map[
 
 func (sa *StrategyAllocator) applyCaps(mix StrategyMix, candidates []*Strategy) StrategyMix {
 	maxIter := 10
-	for iter := 0; iter < maxIter; iter++ {
+	for range maxIter {
 		var excess float64
 		capped := 0
 

@@ -24,7 +24,7 @@ func Test_Metrics_ObserveAnomaly_sets_gauge_and_increments_counter(t *testing.T)
 // on this).
 func Test_Metrics_ObserveAnomaly_accumulates_counter(t *testing.T) {
 	m := NewMetrics()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		m.ObserveAnomaly("tenant-a", "burst", "high", 1.0)
 	}
 	require.InDelta(t, 3.0, testutil.ToFloat64(m.anomalyEmitted.WithLabelValues("tenant-a", "burst", "high")), 0.001)

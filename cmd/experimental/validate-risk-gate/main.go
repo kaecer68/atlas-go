@@ -644,7 +644,7 @@ func findRepoRoot() string {
 		}
 		if info, err := os.Stat(arg); err == nil && info != nil {
 			dir := arg
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 					return dir
 				}

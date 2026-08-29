@@ -78,7 +78,7 @@ func FriedmanH(predictor Predictor, X [][]float64, y []float64, featureNames []s
 	if len(featureNames) >= nFeatures {
 		copy(names, featureNames)
 	} else {
-		for i := 0; i < nFeatures; i++ {
+		for i := range nFeatures {
 			names[i] = fmt.Sprintf("feature_%d", i)
 		}
 	}
@@ -98,7 +98,7 @@ func FriedmanH(predictor Predictor, X [][]float64, y []float64, featureNames []s
 
 	var pairs []InteractionPair
 
-	for fi := 0; fi < nFeatures; fi++ {
+	for fi := range nFeatures {
 		for fj := fi + 1; fj < nFeatures; fj++ {
 			h, err := computePairwiseH(predictor, X, fi, fj, yMean, gridResolution)
 			if err != nil {
@@ -160,8 +160,8 @@ func computePairwiseH(predictor Predictor, X [][]float64, fi, fj int, yMean floa
 	// numerator = Σ_{gi,gj} (PD(gi,gj) - PD(gi) - PD(gj) + ȳ)²
 	// denominator = Σ_{gi,gj} (PD(gi,gj) - ȳ)²
 	var numerator, denominator float64
-	for gi := 0; gi < gridResolution; gi++ {
-		for gj := 0; gj < gridResolution; gj++ {
+	for gi := range gridResolution {
+		for gj := range gridResolution {
 			noInteraction := pd2D[gi][gj] - pdFi[gi] - pdFj[gj] + yMean
 			numerator += noInteraction * noInteraction
 			fromMean := pd2D[gi][gj] - yMean
@@ -267,7 +267,7 @@ func buildGrid(minVal, maxVal float64, resolution int) []float64 {
 		return grid
 	}
 	step := (maxVal - minVal) / float64(resolution-1)
-	for i := 0; i < resolution; i++ {
+	for i := range resolution {
 		grid[i] = minVal + float64(i)*step
 	}
 	grid[resolution-1] = maxVal

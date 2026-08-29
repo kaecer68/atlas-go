@@ -74,7 +74,7 @@ func TestBCaBootstrapSignificantPositiveShift(t *testing.T) {
 	n := 200
 	baseline := make([]float64, n)
 	feature := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		baseline[i] = 0.001 * float64(i%10)
 		feature[i] = baseline[i] + 0.001
 	}
@@ -143,7 +143,7 @@ func TestBCaBootstrapDegenerateMaxDrawdown(t *testing.T) {
 	// observed diff is large — the textbook degenerate case.
 	baseline := make([]float64, 200)
 	feature := make([]float64, 200)
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		baseline[i] = 100 + float64(i) // monotone up, no drawdown
 		feature[i] = 100 + float64(i)
 	}

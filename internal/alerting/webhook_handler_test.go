@@ -72,7 +72,7 @@ func TestAlertWebhookHandler_RejectsBadJSON(t *testing.T) {
 
 func TestAlertWebhookHandler_CapacityTrims(t *testing.T) {
 	h := NewAlertWebhookHandler(3)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		body, _ := json.Marshal(AlertmanagerPayload{Alerts: []AlertmanagerAlert{{Labels: map[string]string{"i": itoa(i)}}}})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/alerts", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -91,9 +91,9 @@ func TestAlertWebhookHandler_ConcurrentSafe(t *testing.T) {
 	h := NewAlertWebhookHandler(1000)
 	body, _ := json.Marshal(AlertmanagerPayload{Alerts: []AlertmanagerAlert{{Labels: map[string]string{"a": "b"}}}})
 	done := make(chan struct{})
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		go func() {
-			for j := 0; j < 5; j++ {
+			for range 5 {
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/alerts", bytes.NewReader(body))
 				rr := httptest.NewRecorder()
 				h.ServeHTTP(rr, req)
@@ -101,7 +101,7 @@ func TestAlertWebhookHandler_ConcurrentSafe(t *testing.T) {
 			done <- struct{}{}
 		}()
 	}
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 	if got := h.Len(); got != 100 {

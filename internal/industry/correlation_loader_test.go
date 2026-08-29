@@ -24,7 +24,7 @@ func TestLoadIndustryReturnsFromReplay_ValidData(t *testing.T) {
 	}
 	writer := csv.NewWriter(csvFile)
 	writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		date := fmt.Sprintf("2026-01-%02d", 1+i)
 		writer.Write([]string{date, "2330", "TSMC", "10000", "100", "105", "99", "104"})
 		writer.Write([]string{date, "2303", "UMC", "5000", "50", "52", "49", "51"})
@@ -85,7 +85,7 @@ func TestLoadIndustryReturnsFromReplay_EmptySymbols(t *testing.T) {
 	}
 	writer := csv.NewWriter(csvFile)
 	writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		writer.Write([]string{fmt.Sprintf("2026-01-%02d", 1+i), "2330", "TSMC", "10000", "100", "105", "99", "104"})
 	}
 	writer.Flush()

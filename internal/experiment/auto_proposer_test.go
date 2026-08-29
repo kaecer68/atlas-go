@@ -37,7 +37,7 @@ func TestAutoProposer_NoDegradationNoProposal(t *testing.T) {
 			{ID: "healthy_agent", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		dw.RecordOutcome("healthy_agent", 0.02, true)
 	}
 
@@ -67,7 +67,7 @@ func TestAutoProposer_SharpeDegradation(t *testing.T) {
 		},
 	})
 	// 60 negative returns → negative Sharpe
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		dw.RecordOutcome("sick_agent", -0.02, false)
 	}
 
@@ -99,7 +99,7 @@ func TestAutoProposer_CooldownRespected(t *testing.T) {
 			{ID: "sick_agent", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		dw.RecordOutcome("sick_agent", -0.02, false)
 	}
 
@@ -137,7 +137,7 @@ func TestAutoProposer_WeightTrap(t *testing.T) {
 		},
 	})
 	// Give it some signals but keep at min weight
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		dw.RecordOutcome("trapped_agent", 0.001, true)
 	}
 	// Manually set weight to minimum and consecutive at min
@@ -245,14 +245,14 @@ func TestAutoProposer_TriggerZero_SignalRichAgentUsesOriginalTriggers(t *testing
 	})
 	// rich_healthy: 40 positive returns, weight drifted to 1.5 — must NOT fire
 	// trigger 0 (signals >= 30) and has no other degradation.
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		dw.RecordOutcome("rich_healthy", 0.02, true)
 	}
 	if _, ev := dw.SetWeight("rich_healthy", 1.5); ev != nil {
 		t.Fatalf("SetWeight produced clamping event: %+v", ev)
 	}
 	// rich_sick: 60 negative returns -> negative Sharpe triggers trigger 2.
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		dw.RecordOutcome("rich_sick", -0.02, false)
 	}
 

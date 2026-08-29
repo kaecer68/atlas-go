@@ -57,11 +57,11 @@ func PermutationImportance(model Predictor, X [][]float64, y []float64, nRepeats
 
 	importances := make([]float64, nFeatures)
 	featureNames := make([]string, nFeatures)
-	for fi := 0; fi < nFeatures; fi++ {
+	for fi := range nFeatures {
 		featureNames[fi] = fmt.Sprintf("feature_%d", fi)
 
 		var totalDrop float64
-		for rep := 0; rep < nRepeats; rep++ {
+		for rep := range nRepeats {
 			// Create a copy of X with only column fi shuffled
 			Xcopy := deepCopyX(X)
 			col := extractColumn(Xcopy, fi)

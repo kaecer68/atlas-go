@@ -76,10 +76,10 @@ func TestJSONLStore_ConcurrentSafe(t *testing.T) {
 	const perG = 50
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(gid int) {
 			defer wg.Done()
-			for j := 0; j < perG; j++ {
+			for j := range perG {
 				rec := AnnotationRecord{ID: fmt.Sprintf("g%d-%d", gid, j), Tokens: int64(j)}
 				if err := store.Write(rec); err != nil {
 					t.Errorf("Write g=%d j=%d: %v", gid, j, err)
@@ -113,7 +113,7 @@ func TestJSONLStore_RotatesOnSize(t *testing.T) {
 	defer store.Close()
 
 	bigRec := AnnotationRecord{ID: "big", Label: "xxxxxxxxxxxx", Tokens: 1, Outcome: "success", LatencyMs: 1, Timestamp: time.Now()}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_ = store.Write(bigRec)
 	}
 	store.Close()
@@ -139,7 +139,7 @@ func TestKimiClient_PersistsAnnotationsToFile(t *testing.T) {
 	defer store.Close()
 	k.SetAnnotationStore(store)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		k.appendAnnotation(AnnotationRecord{ID: fmt.Sprintf("ann-%d", i), Label: "test", Tokens: int64(i * 10)})
 	}
 

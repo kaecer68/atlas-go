@@ -244,7 +244,7 @@ func TestFileClosureStore_Concurrent(t *testing.T) {
 
 	done := make(chan bool, 4)
 	storeFn := func(prefix string) {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			snap := SectorAllocationSnapshot{
 				AsOfTradingDate:   prefix,
 				EffectiveFrom:     prefix,
@@ -258,11 +258,11 @@ func TestFileClosureStore_Concurrent(t *testing.T) {
 		done <- true
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		go storeFn(string(rune('A' + i)))
 	}
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		<-done
 	}
 

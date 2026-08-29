@@ -286,7 +286,7 @@ func TestHybridProvider_FubonBreaker_OpensAfter3Failures(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = p.GetQuotes(ctx, now, []string{"2330"})
 	}
 

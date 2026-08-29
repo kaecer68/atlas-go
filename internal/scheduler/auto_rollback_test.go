@@ -42,7 +42,7 @@ func TestAutoRollback_AgentDisable(t *testing.T) {
 	})
 
 	// Inject negative returns so RollingSharpe < -1.0 (prevents count reset).
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		// 10 unique values (>= minUniqueReturnsForSharpe) so the degenerate-window
 		// guard does not zero the Sharpe; negative mean keeps it well below -1.0.
 		dw.RecordOutcome("sick_agent", -0.03-float64(i%10)*0.001, false)
@@ -85,7 +85,7 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		ret := 0.005 + float64(i%10)*0.002
 		dw.RecordOutcome("agent_1", ret, true)
 	}
@@ -104,7 +104,7 @@ func TestAutoRollback_PromotionDegradation(t *testing.T) {
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		ret := -0.03 - float64(i%10)*0.001
 		dw.RecordOutcome("agent_1", ret, false)
 	}
@@ -175,7 +175,7 @@ func TestAutoRollback_PromotionDegradation_ExecutesActualRevert(t *testing.T) {
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		ret := 0.005 + float64(i%10)*0.002
 		dw.RecordOutcome("agent_1", ret, true)
 	}
@@ -193,7 +193,7 @@ func TestAutoRollback_PromotionDegradation_ExecutesActualRevert(t *testing.T) {
 			{ID: "agent_1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		ret := -0.03 - float64(i%10)*0.001
 		dw.RecordOutcome("agent_1", ret, false)
 	}
@@ -341,7 +341,7 @@ func TestAutoRollback_History(t *testing.T) {
 	})
 
 	// Inject negative returns so RollingSharpe < -1.0.
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		// 10 unique values (>= minUniqueReturnsForSharpe) so the degenerate-window
 		// guard does not zero the Sharpe; negative mean keeps it well below -1.0.
 		dw.RecordOutcome("sick_agent", -0.03-float64(i%10)*0.001, false)

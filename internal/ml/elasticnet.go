@@ -123,9 +123,9 @@ func (en *ElasticNet) Predict(X [][]float64) ([]float64, error) {
 
 	n := len(X)
 	pred := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum := en.yMean
-		for j := 0; j < p; j++ {
+		for j := range p {
 			if en.xStd[j] > 0 {
 				sum += (X[i][j] - en.xMean[j]) / en.xStd[j] * en.coef[j]
 			}
@@ -162,15 +162,15 @@ func (en *ElasticNet) standardizeX(X [][]float64) [][]float64 {
 	en.xMean = make([]float64, p)
 	en.xStd = make([]float64, p)
 
-	for j := 0; j < p; j++ {
+	for j := range p {
 		var sum float64
-		for i := 0; i < n; i++ {
+		for i := range n {
 			sum += X[i][j]
 		}
 		en.xMean[j] = sum / float64(n)
 
 		var ssq float64
-		for i := 0; i < n; i++ {
+		for i := range n {
 			d := X[i][j] - en.xMean[j]
 			ssq += d * d
 		}
@@ -183,9 +183,9 @@ func (en *ElasticNet) standardizeX(X [][]float64) [][]float64 {
 	}
 
 	xs := make([][]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs[i] = make([]float64, p)
-		for j := 0; j < p; j++ {
+		for j := range p {
 			xs[i][j] = (X[i][j] - en.xMean[j]) / en.xStd[j]
 		}
 	}
@@ -236,7 +236,7 @@ func (en *ElasticNet) searchAlpha(Xs [][]float64, yc []float64) float64 {
 			var foldMSE float64
 			for i := range valXs {
 				var pred float64
-				for j := 0; j < p; j++ {
+				for j := range p {
 					pred += valXs[i][j] * beta[j]
 				}
 				diff := pred - valYc[i]
@@ -270,10 +270,10 @@ func (en *ElasticNet) fitCD(Xs [][]float64, yc []float64, alpha float64, beta []
 	useHuber := en.UseHuber
 	xi := en.Xi
 
-	for iter := 0; iter < maxIter; iter++ {
+	for range maxIter {
 		maxDelta := 0.0
 
-		for j := 0; j < p; j++ {
+		for j := range p {
 			oldBeta := beta[j]
 
 			// Compute the partial residual r_{-j} = yc - Xs·beta + Xs_j·beta_j
@@ -283,10 +283,10 @@ func (en *ElasticNet) fitCD(Xs [][]float64, yc []float64, alpha float64, beta []
 			if useHuber {
 				// Re-weight with Huber weights.
 				var wSum float64
-				for i := 0; i < n; i++ {
+				for i := range n {
 					// Full residual.
 					var ri float64
-					for k := 0; k < p; k++ {
+					for k := range p {
 						ri += Xs[i][k] * beta[k]
 					}
 					ri = yc[i] - ri
@@ -307,10 +307,10 @@ func (en *ElasticNet) fitCD(Xs [][]float64, yc []float64, alpha float64, beta []
 					rho /= wSum
 				}
 			} else {
-				for i := 0; i < n; i++ {
+				for i := range n {
 					// Full residual.
 					var ri float64
-					for k := 0; k < p; k++ {
+					for k := range p {
 						ri += Xs[i][k] * beta[k]
 					}
 					ri = yc[i] - ri

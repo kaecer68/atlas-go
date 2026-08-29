@@ -49,16 +49,16 @@ func matMul(A, B [][]float64) [][]float64 {
 	for i := range C {
 		C[i] = make([]float64, p)
 	}
-	for i := 0; i < m; i++ {
+	for i := range m {
 		rowA := A[i]
 		rowC := C[i]
-		for k := 0; k < n; k++ {
+		for k := range n {
 			aik := rowA[k]
 			if aik == 0 {
 				continue
 			}
 			rowB := B[k]
-			for j := 0; j < p; j++ {
+			for j := range p {
 				rowC[j] += aik * rowB[j]
 			}
 		}
@@ -73,9 +73,9 @@ func matTranspose(A [][]float64) [][]float64 {
 	for i := range At {
 		At[i] = make([]float64, m)
 	}
-	for i := 0; i < m; i++ {
+	for i := range m {
 		rowA := A[i]
-		for j := 0; j < n; j++ {
+		for j := range n {
 			At[j][i] = rowA[j]
 		}
 	}
@@ -112,10 +112,10 @@ func luDecompose(A [][]float64) ([][]float64, [][]float64, error) {
 	perturbed := false
 
 retry:
-	for k := 0; k < n; k++ {
+	for k := range n {
 		if math.Abs(U[k][k]) < eps {
 			if !perturbed {
-				for i := 0; i < n; i++ {
+				for i := range n {
 					U[i][i] += 1e-8
 				}
 				perturbed = true
@@ -139,7 +139,7 @@ retry:
 func solveLowerTriangular(L [][]float64, b []float64) []float64 {
 	n := len(L)
 	x := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum := b[i]
 		for j := 0; j < i; j++ {
 			sum -= L[i][j] * x[j]
@@ -175,13 +175,13 @@ func invertMatrix(A [][]float64) ([][]float64, error) {
 		return nil, err
 	}
 	inv := make([][]float64, n)
-	for col := 0; col < n; col++ {
+	for col := range n {
 		e := make([]float64, n)
 		e[col] = 1.0
 		y := solveLowerTriangular(L, e)
 		x := solveUpperTriangular(U, y)
 		invCol := make([]float64, n)
-		for row := 0; row < n; row++ {
+		for row := range n {
 			invCol[row] = x[row]
 		}
 		inv[col] = invCol
@@ -199,7 +199,7 @@ func cholesky(A [][]float64) ([][]float64, error) {
 	for i := range L {
 		L[i] = make([]float64, n)
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := 0; j <= i; j++ {
 			sum := A[i][j]
 			for k := 0; k < j; k++ {
@@ -235,9 +235,9 @@ func estimateVAR(returns [][]float64, p int) ([][][]float64, [][]float64, error)
 
 	// Y: N × K  (response)
 	Y := make([][]float64, N)
-	for t := 0; t < N; t++ {
+	for t := range N {
 		Y[t] = make([]float64, K)
-		for i := 0; i < K; i++ {
+		for i := range K {
 			Y[t][i] = returns[i][t+p]
 		}
 	}
@@ -245,11 +245,11 @@ func estimateVAR(returns [][]float64, p int) ([][][]float64, [][]float64, error)
 	// X: N × (Kp + 1)  — [1 | y_{t-1}' | … | y_{t-p}']
 	nCols := K*p + 1
 	X := make([][]float64, N)
-	for t := 0; t < N; t++ {
+	for t := range N {
 		X[t] = make([]float64, nCols)
 		X[t][0] = 1.0
-		for lag := 0; lag < p; lag++ {
-			for i := 0; i < K; i++ {
+		for lag := range p {
+			for i := range K {
 				X[t][1+lag*K+i] = returns[i][t+p-1-lag]
 			}
 		}
@@ -267,11 +267,11 @@ func estimateVAR(returns [][]float64, p int) ([][][]float64, [][]float64, error)
 
 	// Extract Φ₁ … Φ_p
 	Phi := make([][][]float64, p)
-	for lag := 0; lag < p; lag++ {
+	for lag := range p {
 		Phi[lag] = make([][]float64, K)
-		for i := 0; i < K; i++ {
+		for i := range K {
 			Phi[lag][i] = make([]float64, K)
-			for j := 0; j < K; j++ {
+			for j := range K {
 				Phi[lag][i][j] = B[1+lag*K+i][j]
 			}
 		}
@@ -283,10 +283,10 @@ func estimateVAR(returns [][]float64, p int) ([][][]float64, [][]float64, error)
 	for i := range Sigma {
 		Sigma[i] = make([]float64, K)
 	}
-	for t := 0; t < N; t++ {
-		for i := 0; i < K; i++ {
+	for t := range N {
+		for i := range K {
 			eI := Y[t][i] - Yhat[t][i]
-			for j := 0; j < K; j++ {
+			for j := range K {
 				Sigma[i][j] += eI * (Y[t][j] - Yhat[t][j])
 			}
 		}
@@ -295,8 +295,8 @@ func estimateVAR(returns [][]float64, p int) ([][][]float64, [][]float64, error)
 	if dof < 1 {
 		dof = 1
 	}
-	for i := 0; i < K; i++ {
-		for j := 0; j < K; j++ {
+	for i := range K {
+		for j := range K {
 			Sigma[i][j] /= dof
 		}
 	}
@@ -320,15 +320,15 @@ func computeVMA(Phi [][][]float64, horizon int) [][][]float64 {
 	for i := range F {
 		F[i] = make([]float64, Kp)
 	}
-	for lag := 0; lag < p; lag++ {
-		for i := 0; i < K; i++ {
-			for j := 0; j < K; j++ {
+	for lag := range p {
+		for i := range K {
+			for j := range K {
 				F[i][lag*K+j] = Phi[lag][i][j]
 			}
 		}
 	}
 	for lag := 0; lag < p-1; lag++ {
-		for i := 0; i < K; i++ {
+		for i := range K {
 			F[(lag+1)*K+i][lag*K+i] = 1.0
 		}
 	}
@@ -343,7 +343,7 @@ func computeVMA(Phi [][][]float64, horizon int) [][][]float64 {
 
 	Theta := make([][][]float64, horizon)
 	Fpow := matIdentity(Kp)
-	for h := 0; h < horizon; h++ {
+	for h := range horizon {
 		temp := matMul(J, Fpow)
 		Theta[h] = matMul(temp, Jt)
 		Fpow = matMul(F, Fpow)
@@ -389,14 +389,14 @@ func ComputeSpillover(returns [][]float64, vars []string, horizon int) (*Spillov
 	}
 
 	// Zero-variance check
-	for i := 0; i < K; i++ {
+	for i := range K {
 		mean := 0.0
-		for t := 0; t < T; t++ {
+		for t := range T {
 			mean += returns[i][t]
 		}
 		mean /= float64(T)
 		variance := 0.0
-		for t := 0; t < T; t++ {
+		for t := range T {
 			d := returns[i][t] - mean
 			variance += d * d
 		}
@@ -418,7 +418,7 @@ func ComputeSpillover(returns [][]float64, vars []string, horizon int) (*Spillov
 	P, err := cholesky(Sigma)
 	if err != nil {
 		// Try perturbation on Sigma diagonal
-		for i := 0; i < K; i++ {
+		for i := range K {
 			Sigma[i][i] += 1e-8
 		}
 		P, err = cholesky(Sigma)
@@ -439,27 +439,27 @@ func ComputeSpillover(returns [][]float64, vars []string, horizon int) (*Spillov
 		fevd[i] = make([]float64, K)
 	}
 
-	for i := 0; i < K; i++ {
+	for i := range K {
 		denom := 0.0
 		omega := make([]float64, K)
 		for h := 0; h < horizon; h++ {
 			rowH := Theta[h][i]
-			for j := 0; j < K; j++ {
+			for j := range K {
 				// C_h[i][j] = Σ_k Θ_h[i][k] × P[k][j]
 				c := 0.0
-				for k := 0; k < K; k++ {
+				for k := range K {
 					c += rowH[k] * P[k][j]
 				}
 				omega[j] += c * c
 			}
 		}
-		for j := 0; j < K; j++ {
+		for j := range K {
 			denom += omega[j]
 		}
 		if denom == 0 {
 			fevd[i][i] = 1.0
 		} else {
-			for j := 0; j < K; j++ {
+			for j := range K {
 				fevd[i][j] = omega[j] / denom
 			}
 		}
@@ -467,14 +467,14 @@ func ComputeSpillover(returns [][]float64, vars []string, horizon int) (*Spillov
 
 	// Normalise to percentages (each row sums to 100)
 	normalised := make([][]float64, K)
-	for i := 0; i < K; i++ {
+	for i := range K {
 		normalised[i] = make([]float64, K)
 		rowSum := 0.0
-		for j := 0; j < K; j++ {
+		for j := range K {
 			rowSum += fevd[i][j]
 		}
 		if rowSum > 0 {
-			for j := 0; j < K; j++ {
+			for j := range K {
 				normalised[i][j] = (fevd[i][j] / rowSum) * 100.0
 			}
 		}

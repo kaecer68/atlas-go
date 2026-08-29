@@ -15,7 +15,7 @@ func TestPartialDependence(t *testing.T) {
 		model := &mockPredictor{weights: []float64{2.0, 3.0}, bias: 1.0}
 		nSamples := 20
 		X := make([][]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			X[i] = []float64{
 				float64(i) * 0.5,        // feature 0: 0, 0.5, 1.0, ..., 9.5
 				float64((i*7)%10) * 0.2, // feature 1: varies
@@ -101,7 +101,7 @@ func TestPartialDependence(t *testing.T) {
 		model := &mockPredictor{weights: []float64{1.0, 2.0, 3.0}, bias: 0.5}
 		nSamples := 10
 		X := make([][]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			X[i] = []float64{float64(i), float64(i) * 2, float64(i) * 0.5}
 		}
 
@@ -135,7 +135,7 @@ func TestPartialDependence(t *testing.T) {
 		model := &mockPredictor{weights: []float64{0.0, 1.0}, bias: 2.0}
 		nSamples := 10
 		X := make([][]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			X[i] = []float64{5.0, float64(i)} // feature 0 is constant at 5.0
 		}
 
