@@ -284,10 +284,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 		for j := i + 1; j < len(industries); j++ {
 			a, b := industries[i], industries[j]
 			returnsA, returnsB := industryReturns[a], industryReturns[b]
-			n := len(returnsA)
-			if len(returnsB) < n {
-				n = len(returnsB)
-			}
+			n := min(len(returnsB), len(returnsA))
 			if n < 30 {
 				continue
 			}

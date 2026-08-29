@@ -48,10 +48,7 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 			continue
 		}
 		n := len(prices)
-		start := n - lookback - 1
-		if start < 0 {
-			start = 0
-		}
+		start := max(n-lookback-1, 0)
 		window := prices[start:]
 		if len(window) < minDays+1 {
 			continue

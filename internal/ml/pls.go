@@ -69,16 +69,7 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 		}
 	}
 
-	k := m.NComponents
-	if k < 1 {
-		k = 1
-	}
-	if k > p {
-		k = p
-	}
-	if k > n {
-		k = n
-	}
+	k := min(min(max(m.NComponents, 1), p), n)
 
 	// 1. Compute per-feature mean and standard deviation.
 	m.xMean = make([]float64, p)

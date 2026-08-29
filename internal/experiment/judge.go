@@ -860,10 +860,7 @@ func (j *Judge) addRegimeConditionalChecks(result *domain.PromptExperimentResult
 	// Compute a dynamic limit: max(90, days in window * 2) to avoid loading
 	// unnecessary history for short experiment windows.
 	windowDays := int(end.Sub(start).Hours()/24) + 1
-	limit := windowDays * 2
-	if limit < 90 {
-		limit = 90
-	}
+	limit := max(windowDays*2, 90)
 	rows, err := j.historicalStore.LoadRegimeHistoryAll(ctx, limit)
 	if err != nil {
 		result.JudgeChecks = append(result.JudgeChecks,

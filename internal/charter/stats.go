@@ -30,10 +30,7 @@ type TTestResult struct {
 // difference yields t = ±Inf with p = 0 (statistically conclusive);
 // identical series yields t = 0, p = 1.
 func PairedTTest(baseline, feature []float64) TTestResult {
-	n := len(baseline)
-	if len(feature) < n {
-		n = len(feature)
-	}
+	n := min(len(feature), len(baseline))
 	if n < 2 {
 		return TTestResult{DF: max(n-1, 0)}
 	}
@@ -101,10 +98,7 @@ type BootstrapResult struct {
 // resamples = 10_000 for the C3 harness. The RNG is seeded for reproducible
 // CIs. The acceleration term is estimated by the delete-one jackknife.
 func BCaBootstrap(baseline, feature []float64, stat func(baseline, feature []float64) float64, resamples int, alpha float64) BootstrapResult {
-	n := len(baseline)
-	if len(feature) < n {
-		n = len(feature)
-	}
+	n := min(len(feature), len(baseline))
 	baseline = baseline[:n]
 	feature = feature[:n]
 

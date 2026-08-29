@@ -89,10 +89,7 @@ func (t *TAIEXReturnCalculator) GetNDayReturn(ctx context.Context, days int) (fl
 	}
 
 	// Past price: approximate N calendar days as trading-day offset.
-	idx := len(closes) - 1 - tradingDayOffset
-	if idx < 0 {
-		idx = 0
-	}
+	idx := max(len(closes)-1-tradingDayOffset, 0)
 	past := closes[idx]
 	if past <= 0 || math.IsNaN(past) || math.IsInf(past, 0) {
 		// Fallback: scan backwards for the first valid price at or before the offset.

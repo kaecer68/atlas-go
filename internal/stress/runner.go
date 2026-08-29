@@ -317,10 +317,7 @@ func historicalVaR(values []float64, confidence float64) float64 {
 		returns[i-1] = (values[i] - values[i-1]) / values[i-1]
 	}
 	sort.Float64s(returns)
-	idx := int((1 - confidence) * float64(len(returns)))
-	if idx < 0 {
-		idx = 0
-	}
+	idx := max(int((1-confidence)*float64(len(returns))), 0)
 	return -returns[idx]
 }
 

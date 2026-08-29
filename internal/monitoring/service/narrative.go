@@ -169,10 +169,7 @@ func (s *NarrativeService) GetStressIndexHistory(days int) []narrative.TaiwanStr
 		defer cancel()
 		// Load enough rows to cover the requested calendar window, then filter by
 		// date so `days=N` means "last N calendar days" rather than "last N rows".
-		limit := days * 2
-		if limit < 90 {
-			limit = 90
-		}
+		limit := max(days*2, 90)
 		rows, err := s.historicalStore.LoadStressHistory(ctx, limit)
 		if err != nil {
 			logging.Warn("narrative_service", "load_stress_history_failed", logging.Err(err))
@@ -237,10 +234,7 @@ func (s *NarrativeService) GetGeopoliticalHistory(days int) []GeopoliticalPoint 
 		days = 365
 	}
 	if s.historicalStore != nil {
-		limit := days * 2
-		if limit < 90 {
-			limit = 90
-		}
+		limit := max(days*2, 90)
 		rows, err := s.historicalStore.LoadGeopoliticalHistory(context.Background(), limit)
 		if err != nil {
 			logging.Warn("narrative_service", "load_geopolitical_history_failed", logging.Err(err))

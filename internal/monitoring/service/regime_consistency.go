@@ -425,9 +425,6 @@ func (s *PipelineService) loadStressHistoryForConsistency(ctx context.Context, d
 // regimeStoreLimit mirrors loadRegimeHistoryFromStoreDays: a generous row
 // limit so the in-memory window filter is authoritative.
 func regimeStoreLimit(days int) int {
-	limit := days * 2
-	if limit < 90 {
-		limit = 90
-	}
+	limit := max(days*2, 90)
 	return limit
 }

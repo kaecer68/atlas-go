@@ -50,10 +50,7 @@ func defaultRetryConfig() retryConfig {
 // The request must be reusable across attempts (GET with nil body — same
 // contract as http.Client.Do with redirects).
 func fetchWithRetry(ctx context.Context, client *http.Client, req *http.Request, cfg retryConfig) (*http.Response, error) {
-	attempts := cfg.maxAttempts
-	if attempts < 1 {
-		attempts = 1
-	}
+	attempts := max(cfg.maxAttempts, 1)
 	for attempt := 0; attempt < attempts; attempt++ {
 		resp, err := client.Do(req)
 		if err != nil {

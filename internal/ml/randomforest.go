@@ -60,10 +60,7 @@ func maxFeaturesPerSplit(nFeatures int, maxFeat string) int {
 	case "all":
 		return nFeatures
 	case "sqrt":
-		nf := int(math.Floor(math.Sqrt(float64(nFeatures))))
-		if nf < 1 {
-			nf = 1
-		}
+		nf := max(int(math.Floor(math.Sqrt(float64(nFeatures)))), 1)
 		return nf
 	default:
 		return nFeatures
@@ -289,10 +286,7 @@ func (rf *RandomForest) Fit(X [][]float64, y []float64) error {
 	if maxDepth <= 0 {
 		maxDepth = 10
 	}
-	minSplit := rf.MinSamplesSplit
-	if minSplit < 2 {
-		minSplit = 2
-	}
+	minSplit := max(rf.MinSamplesSplit, 2)
 	maxFeats := maxFeaturesPerSplit(nFeatures, rf.MaxFeatures)
 
 	rf.trees = make([]*decisionTree, rf.NTrees)

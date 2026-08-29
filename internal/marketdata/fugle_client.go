@@ -168,10 +168,7 @@ func newFugleClient(apiKey string, stateDir string) *FugleClient {
 	// single caller fire 60 requests instantly, which the Fugle sliding
 	// window rejects well before 60 (measured 429 at ~39 live calls,
 	// 2026-08-03). Keep burst small (3) so the limiter actually throttles.
-	burst := 3
-	if limit < burst {
-		burst = limit
-	}
+	burst := min(limit, 3)
 	tracker := NewDailyQuotaTracker("fugle", stateDir, fugleDailyLimit)
 	// Register the tracker with the global QuotaRegistry so the dashboard
 	// sees Fugle alongside FinMind in one Snapshot(). Pairs with the

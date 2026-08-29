@@ -975,10 +975,7 @@ func migrateOutcomesSQLiteData(ctx context.Context, pool *pgxpool.Pool, sqlitePa
 	const batchSize = 1000
 	var count int
 	for start := 0; start < len(outcomes); start += batchSize {
-		end := start + batchSize
-		if end > len(outcomes) {
-			end = len(outcomes)
-		}
+		end := min(start+batchSize, len(outcomes))
 		inserted, err := insertOutcomeBatchGlobal(ctx, pool, outcomes[start:end])
 		if err != nil {
 			return fmt.Errorf("insert outcome batch: %w", err)

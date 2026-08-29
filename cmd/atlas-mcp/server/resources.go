@@ -233,10 +233,7 @@ func tailAuditLog(path string, n int) ([]auditEntryView, error) {
 	}
 
 	const tailSize = 64 * 1024
-	offset := info.Size() - tailSize
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(info.Size()-tailSize, 0)
 	if _, err := f.Seek(offset, 0); err != nil {
 		return nil, err
 	}

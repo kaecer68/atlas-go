@@ -406,20 +406,6 @@ func repeatChar(c string, n int) string {
 	return string(b)
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 type postTradeSnap struct {
 	SessionID    string
 	PortfolioVal float64

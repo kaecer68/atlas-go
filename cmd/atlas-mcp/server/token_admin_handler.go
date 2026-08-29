@@ -210,10 +210,7 @@ func redactHash(hash string) string {
 	if hash == "" {
 		return "sha256:"
 	}
-	prefixLen := 8
-	if len(hash) < prefixLen {
-		prefixLen = len(hash)
-	}
+	prefixLen := min(len(hash), 8)
 	return "sha256:" + hash[:prefixLen] + "..."
 }
 

@@ -47,10 +47,7 @@ func (p *ChannelHealthIngestionLagProvider) P99LatencySeconds() float64 {
 	}
 
 	sort.Float64s(latencies)
-	idx := int(math.Ceil(0.99*float64(len(latencies)))) - 1
-	if idx < 0 {
-		idx = 0
-	}
+	idx := max(int(math.Ceil(0.99*float64(len(latencies))))-1, 0)
 	if idx >= len(latencies) {
 		idx = len(latencies) - 1
 	}
