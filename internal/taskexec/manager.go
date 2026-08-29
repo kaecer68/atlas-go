@@ -48,11 +48,11 @@ type subscription struct {
 type localSink struct {
 	manager     *Manager
 	executionID string
-	seq         int64
+	seq         atomic.Int64
 }
 
 func (s *localSink) Emit(event domain.TaskExecutionEvent) {
-	seq := atomic.AddInt64(&s.seq, 1)
+	seq := s.seq.Add(1)
 	event.Sequence = seq
 	event.ExecutionID = s.executionID
 	event.CreatedAt = time.Now()
