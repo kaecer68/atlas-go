@@ -45,13 +45,13 @@ func (v IncrementalValidator) ComputeDieboldMariano(baselineErrors, candidateErr
 	}
 	var mean float64
 	diffs := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		diffs[i] = baselineErrors[i] - candidateErrors[i]
 		mean += diffs[i]
 	}
 	mean /= float64(n)
 	var varSum float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		delta := diffs[i] - mean
 		varSum += delta * delta
 	}

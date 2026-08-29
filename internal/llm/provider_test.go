@@ -59,8 +59,7 @@ func TestSafeInvokeHandler_ContextDeadlineExceeded(t *testing.T) {
 // when the context is not cancelled, the handler runs to completion
 // and the result is returned.
 func TestSafeInvokeHandler_ContextNotCancelled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	tool := Tool{
 		Name: "happy_path_tool",

@@ -20,7 +20,6 @@ func TestNewTreeBasedMapper_Empty(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			mapper := NewTreeBasedMapper(tc.tree)
@@ -125,7 +124,6 @@ func TestGetClassification(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, ok := mapper.GetClassification(tc.symbol)
@@ -191,7 +189,6 @@ func TestGetSymbolsByIndustry(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := mapper.GetSymbolsByIndustry(tc.industry)

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -127,8 +126,7 @@ func TestIngestionLagMonitor_StartStopLifecycle(t *testing.T) {
 	m := NewIngestionLagMonitor(bus, provider)
 	m.(*ingestionLagMonitor).interval = 10 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := m.Start(ctx); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}

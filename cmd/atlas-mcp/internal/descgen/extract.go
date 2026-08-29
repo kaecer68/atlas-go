@@ -203,16 +203,16 @@ func collectFields(st *ast.StructType) []structField {
 func extractTagValue(rawTag, key string) string {
 	tag := strings.Trim(rawTag, "`")
 	prefix := key + ":\""
-	idx := strings.Index(tag, prefix)
-	if idx < 0 {
+	_, after, ok := strings.Cut(tag, prefix)
+	if !ok {
 		return ""
 	}
-	rest := tag[idx+len(prefix):]
-	end := strings.IndexByte(rest, '"')
-	if end < 0 {
+	rest := after
+	before0, _, ok0 := strings.Cut(rest, "\"")
+	if !ok0 {
 		return ""
 	}
-	return rest[:end]
+	return before0
 }
 
 func extractInputType(fn *ast.FuncDecl) string {

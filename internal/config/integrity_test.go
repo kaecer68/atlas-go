@@ -92,8 +92,7 @@ func TestRequiredParamsKeysMatchStructFields(t *testing.T) {
 	omitemptyFields := make(map[string]struct{})
 	alwaysSerializedFields := make([]string, 0)
 	rt := reflect.TypeFor[ParametersConfig]()
-	for i := 0; i < rt.NumField(); i++ {
-		field := rt.Field(i)
+	for field := range rt.Fields() {
 		tag := field.Tag.Get("json")
 		if tag == "" || tag == "-" {
 			continue

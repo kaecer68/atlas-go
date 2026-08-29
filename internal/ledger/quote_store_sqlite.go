@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -172,11 +173,12 @@ func placeholders(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	result := "?"
+	var result strings.Builder
+	result.WriteString("?")
 	for i := 1; i < n; i++ {
-		result += ",?"
+		result.WriteString(",?")
 	}
-	return result
+	return result.String()
 }
 
 // QuoteSymbols returns the distinct symbols in the SQLite quotes table.

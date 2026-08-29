@@ -133,8 +133,7 @@ func Test_Metrics_server_binds_loopback_only(t *testing.T) {
 	addr, err := freeLoopbackAddr(t)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() {
 		_ = StartMetricsServer(ctx, addr, m)
 	}()

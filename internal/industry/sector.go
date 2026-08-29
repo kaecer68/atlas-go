@@ -24,7 +24,7 @@
 package industry
 
 import (
-	"sort"
+	"slices"
 )
 
 // SectorID is the canonical machine-readable identifier for a Taiwan stock
@@ -248,7 +248,7 @@ func AllSectors() []SectorID {
 		seen[id] = struct{}{}
 		out = append(out, id)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -272,7 +272,7 @@ func L1Sectors() []SectorID {
 	for id := range DisplayZHTw {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	return ids
 }
 

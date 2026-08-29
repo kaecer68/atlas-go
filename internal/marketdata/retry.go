@@ -51,7 +51,7 @@ func defaultRetryConfig() retryConfig {
 // contract as http.Client.Do with redirects).
 func fetchWithRetry(ctx context.Context, client *http.Client, req *http.Request, cfg retryConfig) (*http.Response, error) {
 	attempts := max(cfg.maxAttempts, 1)
-	for attempt := 0; attempt < attempts; attempt++ {
+	for attempt := range attempts {
 		resp, err := client.Do(req)
 		if err != nil {
 			// Transport failure: do not retry (caller classifies it).

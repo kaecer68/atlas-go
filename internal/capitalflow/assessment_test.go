@@ -72,7 +72,6 @@ func TestProvenanceMatrix(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		c := c
 		t.Run(string(c.force), func(t *testing.T) {
 			got := ComputeForceProvenance(c.force)
 			if got.DimensionRole != c.want.role {
@@ -366,7 +365,6 @@ func TestComputeCapitalFlowAssessment_CalibratingByDefault(t *testing.T) {
 // automation gate open. RED today: EligibleForAutomation does not exist.
 func TestCapitalFlowAssessment_EligibleForAutomationTransitions(t *testing.T) {
 	for _, status := range []string{"calibrating", "eligible", "degraded"} {
-		status := status
 		t.Run(status, func(t *testing.T) {
 			a := CapitalFlowAssessment{CalibrationStatus: status}
 			eligible := a.EligibleForAutomation()

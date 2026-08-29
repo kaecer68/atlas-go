@@ -207,7 +207,7 @@ func parsePostgresCredentials(dsn string) (user, password string) {
 	if !strings.Contains(after, "@") {
 		return "", ""
 	}
-	userInfo := strings.SplitN(after, "@", 2)[0]
+	userInfo, _, _ := strings.Cut(after, "@")
 	if strings.Contains(userInfo, ":") {
 		parts := strings.SplitN(userInfo, ":", 2)
 		return parts[0], parts[1]
@@ -225,7 +225,7 @@ func parsePostgresHostPort(dsn string) (host, port string) {
 	}
 	after := strings.SplitN(dsn, "@", 2)[1]
 	// Remove query string and database name
-	before := strings.SplitN(after, "/", 2)[0]
+	before, _, _ := strings.Cut(after, "/")
 	if strings.Contains(before, ":") {
 		hp := strings.SplitN(before, ":", 2)
 		host = hp[0]

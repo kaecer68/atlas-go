@@ -459,14 +459,14 @@ func joinSwitches(sw []string) string {
 	if len(sw) == 0 {
 		return "none (Phase A)"
 	}
-	s := ""
+	var s strings.Builder
 	for i, n := range sw {
 		if i > 0 {
-			s += "+"
+			s.WriteString("+")
 		}
-		s += n
+		s.WriteString(n)
 	}
-	return s
+	return s.String()
 }
 
 func sigMark(sig bool) string {

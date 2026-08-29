@@ -1016,8 +1016,8 @@ func (d *PeriodDetector) DetectAssessment(ind PeriodIndicators) (PeriodAssessmen
 // even if it classifies as consolidation (design §3.1.2 step 3).
 func indicatorsHaveData(ind PeriodIndicators) bool {
 	v := reflect.ValueOf(ind)
-	for i := 0; i < v.NumField(); i++ {
-		switch f := v.Field(i).Interface().(type) {
+	for _, field := range v.Fields() {
+		switch f := field.Interface().(type) {
 		case float64:
 			if f != 0 {
 				return true

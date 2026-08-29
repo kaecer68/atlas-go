@@ -352,8 +352,7 @@ func orderIdempotencyKey(order domain.Order) string {
 }
 
 func isRetryableBrokerError(err error) bool {
-	var be *brokerHTTPError
-	if errors.As(err, &be) {
+	if be, ok := errors.AsType[*brokerHTTPError](err); ok {
 		return be.retryable
 	}
 	return false

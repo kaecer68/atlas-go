@@ -110,7 +110,7 @@ func BCaBootstrap(baseline, feature []float64, stat func(baseline, feature []flo
 	bs, fs := make([]float64, n), make([]float64, n)
 	below := 0
 	for b := range resamples {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			k := rng.Intn(n)
 			bs[i], fs[i] = baseline[k], feature[k]
 		}

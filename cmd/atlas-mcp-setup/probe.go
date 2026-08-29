@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/portprobe"
 )
@@ -89,15 +90,15 @@ func (r ProbeResult) String() string {
 	checks := []ProbeCheck{
 		r.AtlasGoBackend, r.AtlasMCPBinary, r.AtlasMCPAdmin, r.WritableTarget,
 	}
-	out := ""
+	var out strings.Builder
 	for _, c := range checks {
 		mark := "✗"
 		if c.OK {
 			mark = "✓"
 		}
-		out += fmt.Sprintf("  %s %s\n", mark, c.Detail)
+		fmt.Fprintf(&out, "  %s %s\n", mark, c.Detail)
 	}
-	return out
+	return out.String()
 }
 
 // stateName renders a portprobe.State as a human string.
