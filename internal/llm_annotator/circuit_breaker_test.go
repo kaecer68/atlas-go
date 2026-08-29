@@ -79,15 +79,15 @@ func TestKimiClient_BreakerOpensAfterRepeatedFailures(t *testing.T) {
 	}
 
 	// Next call: short-circuits with circuit_open metric, no HTTP call.
-	var hits int32
+	var hits atomic.Int32
 	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&hits, 1)
+		hits.Add(1)
 		w.Write([]byte(successResponse("ok")))
 	}))
 	defer srv2.Close()
 	c.cfg.BaseURL = srv2.URL
 	_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
-	if got := atomic.LoadInt32(&hits); got != 0 {
+	if got := hits.Load(); got != 0 {
 		t.Errorf("HTTP server hit count = %d while breaker open, want 0", got)
 	}
 }
@@ -132,7 +132,7 @@ func TestKimiClient_BreakerRecoversOnSuccess(t *testing.T) {
 // (ForceOpen + SetManualOverride(true)), the breaker must stay Open even
 // after a subsequent successful Annotate call.
 func TestKimiClient_BudgetForcesBreakerOpen(t *testing.T) {
-	var fired int32
+	var fired atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(successResponse("ok")))
 	}))
@@ -141,7 +141,7 @@ func TestKimiClient_BudgetForcesBreakerOpen(t *testing.T) {
 		APIKey:          "k",
 		BaseURL:         srv.URL,
 		BudgetThreshold: 19,
-		BudgetCallback:  func(u Usage) { atomic.StoreInt32(&fired, 1) },
+		BudgetCallback:  func(u Usage) { fired.Store(1) },
 		Breaker:         newCircuitBreaker(),
 	})
 	if err != nil {
@@ -152,7 +152,7 @@ func TestKimiClient_BudgetForcesBreakerOpen(t *testing.T) {
 	if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"}); err != nil {
 		t.Fatalf("first Annotate: %v", err)
 	}
-	if atomic.LoadInt32(&fired) != 1 {
+	if fired.Load() != 1 {
 		t.Fatalf("budget callback not invoked after first call")
 	}
 	if got := c.BreakerState(); got != "open" {

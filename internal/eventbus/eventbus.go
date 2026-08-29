@@ -548,13 +548,13 @@ type ChannelEventBus struct {
 	wg             sync.WaitGroup
 
 	// Observable counters (atomic)
-	publishDropped  int64
-	handlerTimeouts int64
+	publishDropped  atomic.Int64
+	handlerTimeouts atomic.Int64
 
 	// PD-3: Throttling
 	throttleMu       sync.RWMutex
 	throttleConfigs  map[EventType]*throttleEntry
-	publishThrottled int64 // atomic
+	publishThrottled atomic.Int64 // atomic
 }
 
 type subscriber struct {
@@ -589,7 +589,7 @@ func NewChannelEventBus(bufferSize int) *ChannelEventBus {
 func (b *ChannelEventBus) Publish(event BusEvent) {
 	// PD-3: Throttle check
 	if !b.allowEvent(event.Type) {
-		atomic.AddInt64(&b.publishThrottled, 1)
+		b.publishThrottled.Add(1)
 		return
 	}
 
@@ -597,13 +597,13 @@ func (b *ChannelEventBus) Publish(event BusEvent) {
 	case b.eventChan <- event:
 		return
 	case <-b.ctx.Done():
-		atomic.AddInt64(&b.publishDropped, 1)
+		b.publishDropped.Add(1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
 			logging.FStr("reason", "bus_closed"))
 	default:
-		atomic.AddInt64(&b.publishDropped, 1)
+		b.publishDropped.Add(1)
 		logging.Warn("eventbus", "publish_dropped",
 			logging.FStr("event_id", event.ID),
 			logging.FStr("event_type", string(event.Type)),
@@ -1241,7 +1241,7 @@ func (b *ChannelEventBus) handleEvent(sub *subscriber, event BusEvent) {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		atomic.AddInt64(&b.handlerTimeouts, 1)
+		b.handlerTimeouts.Add(1)
 		logging.Error("eventbus", "handler_timeout", "subscriber_id", sub.id)
 	}
 }
@@ -1300,9 +1300,9 @@ func (b *ChannelEventBus) Stats() map[string]any {
 	stats["subscribers_by_type"] = len(b.subscribers)
 	stats["channel_capacity"] = cap(b.eventChan)
 	stats["channel_length"] = len(b.eventChan)
-	stats["publish_dropped"] = atomic.LoadInt64(&b.publishDropped)
-	stats["publish_throttled"] = atomic.LoadInt64(&b.publishThrottled)
-	stats["handler_timeouts"] = atomic.LoadInt64(&b.handlerTimeouts)
+	stats["publish_dropped"] = b.publishDropped.Load()
+	stats["publish_throttled"] = b.publishThrottled.Load()
+	stats["handler_timeouts"] = b.handlerTimeouts.Load()
 
 	return stats
 }

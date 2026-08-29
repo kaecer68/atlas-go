@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -138,15 +137,15 @@ func TestSSEHandler_ServeHTTP_DisconnectCleanup(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	if atomic.LoadInt64(&handler.clientCount) != 1 {
-		t.Errorf("expected client count 1, got %d", atomic.LoadInt64(&handler.clientCount))
+	if handler.clientCount.Load() != 1 {
+		t.Errorf("expected client count 1, got %d", handler.clientCount.Load())
 	}
 
 	cancel()
 	<-handlerDone
 
-	if atomic.LoadInt64(&handler.clientCount) != 0 {
-		t.Errorf("expected client count 0 after disconnect, got %d", atomic.LoadInt64(&handler.clientCount))
+	if handler.clientCount.Load() != 0 {
+		t.Errorf("expected client count 0 after disconnect, got %d", handler.clientCount.Load())
 	}
 }
 

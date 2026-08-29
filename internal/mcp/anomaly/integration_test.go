@@ -24,11 +24,11 @@ import (
 // the alert webhook + bus + metrics + ack store all move.
 func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 	// 1. Webhook target.
-	var webhookHits int32
+	var webhookHits atomic.Int32
 	var webhookMu sync.Mutex
 	var webhookPayloads []alerting.AlertmanagerPayload
 	webhookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&webhookHits, 1)
+		webhookHits.Add(1)
 		var p alerting.AlertmanagerPayload
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 			t.Errorf("decode webhook payload: %v", err)
@@ -45,12 +45,12 @@ func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 	// 2. Event bus.
 	bus := eventbus.NewChannelEventBus(100)
 	defer func() { _ = bus.Close() }()
-	var busHits int32
+	var busHits atomic.Int32
 	var busMu sync.Mutex
 	var busEvents []eventbus.BusEvent
 	sub := bus.SubscribeAll(func(_ context.Context, ev eventbus.BusEvent) error {
 		if ev.Type == eventbus.EventMCPAnomalyDetected {
-			atomic.AddInt32(&busHits, 1)
+			busHits.Add(1)
 			busMu.Lock()
 			busEvents = append(busEvents, ev)
 			busMu.Unlock()
@@ -97,7 +97,7 @@ func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// 7. Webhook assertions.
-	require.Equal(t, int32(1), atomic.LoadInt32(&webhookHits))
+	require.Equal(t, int32(1), webhookHits.Load())
 	webhookMu.Lock()
 	require.Len(t, webhookPayloads, 1)
 	wp := webhookPayloads[0]
@@ -111,7 +111,7 @@ func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 	require.NotEmpty(t, wp.Alerts[0].Annotations["anomaly_id"])
 
 	// 8. Event bus assertions.
-	require.Equal(t, int32(1), atomic.LoadInt32(&busHits))
+	require.Equal(t, int32(1), busHits.Load())
 	busMu.Lock()
 	require.Len(t, busEvents, 1)
 	busEvent := busEvents[0]
@@ -143,9 +143,9 @@ func Test_Integration_anomaly_to_alert_to_eventbus_to_metrics(t *testing.T) {
 // emitter does not re-publish on every tick — critical for the
 // polling goroutine.
 func Test_Integration_idempotency_under_repeated_process(t *testing.T) {
-	var hits int32
+	var hits atomic.Int32
 	webhookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&hits, 1)
+		hits.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer webhookSrv.Close()
@@ -169,7 +169,7 @@ func Test_Integration_idempotency_under_repeated_process(t *testing.T) {
 	for range 5 {
 		require.NoError(t, em.ProcessOnce(context.Background()))
 	}
-	require.Equal(t, int32(1), atomic.LoadInt32(&hits), "expected exactly 1 webhook hit across 5 ticks")
+	require.Equal(t, int32(1), hits.Load(), "expected exactly 1 webhook hit across 5 ticks")
 }
 
 // Test_Integration_acked_anomaly_still_in_audit_but_excluded_from_unacked

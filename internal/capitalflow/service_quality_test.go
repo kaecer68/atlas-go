@@ -11,7 +11,7 @@ import (
 )
 
 type stubSnapshotProvider struct {
-	calls int32
+	calls atomic.Int32
 	snap  marketdata.MacroDataSnapshot
 	err   error
 	delay time.Duration
@@ -20,7 +20,7 @@ type stubSnapshotProvider struct {
 func (s *stubSnapshotProvider) Name() string { return "stub" }
 
 func (s *stubSnapshotProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDataSnapshot, error) {
-	atomic.AddInt32(&s.calls, 1)
+	s.calls.Add(1)
 	if s.delay > 0 {
 		time.Sleep(s.delay)
 	}
@@ -76,14 +76,14 @@ func TestService_QualityScore_CacheReducesFetchCalls(t *testing.T) {
 	svc := NewService(provider, time.Second, nil)
 
 	_ = svc.QualityScore()
-	if got := atomic.LoadInt32(&provider.calls); got != 1 {
+	if got := provider.calls.Load(); got != 1 {
 		t.Fatalf("first call must fetch once, got %d", got)
 	}
 
 	for range 5 {
 		_ = svc.QualityScore()
 	}
-	if got := atomic.LoadInt32(&provider.calls); got != 1 {
+	if got := provider.calls.Load(); got != 1 {
 		t.Errorf("subsequent calls within QualityCacheTTL must not refetch, got %d", got)
 	}
 }
@@ -96,7 +96,7 @@ func TestService_QualityLabel_CacheReducesFetchCalls(t *testing.T) {
 	_ = svc.QualityLabel()
 	_ = svc.QualityLabel()
 
-	if got := atomic.LoadInt32(&provider.calls); got != 1 {
+	if got := provider.calls.Load(); got != 1 {
 		t.Errorf("QualityLabel within TTL must reuse cache, got %d fetches", got)
 	}
 }
