@@ -238,6 +238,20 @@ func (s *System) WithCapitalFlowAssessmentProvider(p CapitalFlowAssessmentProvid
 	return s
 }
 
+// WithCapitalFlowService injects the shared *capitalflow.Service into the
+// stockpicker-winrate executor so its flow gateway enforces the full
+// two-level gate (per-symbol foreign + market-regime institutional/retail)
+// via capitalflow.Service.LatestDaily → CheckFromReport (issue #1737).
+// A nil service is a no-op: the executor keeps its documented foreign-only
+// fallback.
+func (s *System) WithCapitalFlowService(svc *capitalflow.Service) *System {
+	if s == nil || s.plugins == nil || svc == nil {
+		return s
+	}
+	s.plugins.WithCapitalFlowReportProvider(NewCapitalFlowServiceAdapter(svc))
+	return s
+}
+
 // CapitalFlowServiceAdapter wraps a *capitalflow.Service to satisfy
 // CapitalFlowAssessmentProvider, bridging the value/pointer return mismatch.
 type CapitalFlowServiceAdapter struct {
@@ -259,6 +273,16 @@ func (a *CapitalFlowServiceAdapter) LatestAssessment(ctx context.Context) (*capi
 		return nil, err
 	}
 	return &assessment, nil
+}
+
+// LatestDaily delegates to the underlying service and returns the value
+// report. It satisfies CapitalFlowReportProvider so the same adapter backs
+// the stockpicker-winrate executor's two-level flow gate (issue #1737).
+func (a *CapitalFlowServiceAdapter) LatestDaily(ctx context.Context) (capitalflow.DailyReport, error) {
+	if a.svc == nil {
+		return capitalflow.DailyReport{}, fmt.Errorf("capitalflow service not available")
+	}
+	return a.svc.LatestDaily(ctx)
 }
 
 // Use the With* functions to create options.

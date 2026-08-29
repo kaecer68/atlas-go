@@ -659,4 +659,19 @@ func TestFlowGateway_CheckFromReport(t *testing.T) {
 			t.Errorf("%s status=%s, want skip for nil report", layer, lv.Status)
 		}
 	}
+
+	// A report with failing market forces must reject: the two-level gate is
+	// enforced, not silently downgraded to the foreign-only scope.
+	fail := g.CheckFromReport("2330", "c", point, &capitalflow.DailyReport{Forces: []capitalflow.ForceScore{
+		flowScore(capitalflow.ForceInstitutional, 0.1, 0.2, true),
+		flowScore(capitalflow.ForceRetail, 0.2, 0.1, true),
+	}})
+	if fail.Pass {
+		t.Fatalf("failing market forces must reject, got %+v", fail)
+	}
+	for _, layer := range []FlowLayer{FlowLayerInstitutional, FlowLayerRetail} {
+		if lv, ok := layerVerdict(fail, layer); !ok || lv.Status != LayerStatusFail {
+			t.Errorf("%s status=%v ok=%v, want fail (two-level gate enforced)", layer, lv.Status, ok)
+		}
+	}
 }

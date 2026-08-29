@@ -53,6 +53,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -104,6 +105,15 @@ type WinRateStoreReader interface {
 // stripped); the value is FlowPoint.ForeignNet units (千股).
 type FlowSource interface {
 	LatestForeignNet(symbol string) (float64, bool)
+}
+
+// CapitalFlowReportProvider supplies the market-wide capitalflow DailyReport
+// for the flow gateway's institutional/retail market-regime layers (市場層).
+// *capitalflow.Service satisfies it. When nil, or when LatestDaily errors,
+// the executor falls back to the documented foreign-only scope (nil report →
+// the market layers fail-open skip) — issue #1737.
+type CapitalFlowReportProvider interface {
+	LatestDaily(ctx context.Context) (capitalflow.DailyReport, error)
 }
 
 // fileFlowSource is the production FlowSource: it reads
@@ -162,6 +172,12 @@ type StockpickerWinrateExecutor struct {
 	// Gateway is the capital-flow gate. nil → NewDefaultFlowGateway()
 	// (configs/parameters.json → stockpicker.flow_gateway).
 	Gateway *stockpicker.FlowGateway
+	// CapitalFlow supplies the market-wide DailyReport for the gateway's
+	// market-regime layers (institutional/retail). nil → foreign-only scope
+	// (the gateway evaluates only the per-symbol foreign layer; market
+	// layers fail-open skip). Issue #1737: production wiring injects
+	// *capitalflow.Service through System.WithCapitalFlowService.
+	CapitalFlow CapitalFlowReportProvider
 	// Source/Window/ConditionID override the default win-rate key and the
 	// flow-gateway condition id. Empty → defaults.
 	Source      string
@@ -187,8 +203,10 @@ func (e StockpickerWinrateExecutor) Supports(agent domain.AgentSpec) bool {
 //  1. load the persisted (symbol, source, window) win-rate summary;
 //  2. calibration gate — eligible only;
 //  3. win-rate gate — observations / win_rate / wilson_lower thresholds;
-//  4. flow gateway — latest per-symbol foreign net flow must pass
-//     FlowGateway.Check (missing flow data → fail closed);
+//  4. flow gateway — latest per-symbol foreign net flow plus the
+//     market-wide capitalflow DailyReport must pass
+//     FlowGateway.CheckFromReport (missing per-symbol flow data → fail
+//     closed; missing market report → foreign-only fallback);
 //  5. emit a BUY recommendation carrying the win-rate evidence.
 //
 // Returns (zero, false) on any gate failure or DB/flow error (logged at
@@ -251,17 +269,21 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 			logging.Symbol(quote.Symbol), "stage", "flow_missing")
 		return domain.Recommendation{}, false
 	}
-	// Design note (PR 2d-executor, k3 review A): the gateway is invoked with
-	// forces=nil — only the per-symbol foreign layer (個股層) is evaluated
-	// here. The market-regime layers configured for this condition
-	// (institutional/retail) fail-open skip because the executor has no
-	// market-wide capitalflow force readings in Recommend(); wiring
-	// capitalflow.Service.LatestDaily → CheckFromReport for the full
-	// two-level gate is tracked as a follow-up (issue #1737). This is a
-	// deliberate, documented foreign-only scope, not an oversight.
-	verdict := e.gateway().Check(quote.Symbol, e.conditionID(), map[string]stockpicker.FlowPoint{
+	// Issue #1737: enforce the full two-level gate (個股層 + 市場層) by
+	// reading the market-wide capitalflow DailyReport and delegating to
+	// FlowGateway.CheckFromReport. The report supplies the
+	// institutional/retail ForceScore dimensions that the plain Check call
+	// could not see when forces=nil (PR 2d-executor, k3 review A).
+	//
+	// Fallback (documented, fail-open): when no CapitalFlow provider is
+	// injected or LatestDaily fails, latestReport returns nil and
+	// CheckFromReport degrades to the original foreign-only scope — the
+	// market-regime layers fail-open skip exactly as before. The per-symbol
+	// foreign layer still decides the verdict, so this is a deliberate,
+	// documented foreign-only fallback, not an oversight.
+	verdict := e.gateway().CheckFromReport(quote.Symbol, e.conditionID(), map[string]stockpicker.FlowPoint{
 		quote.Symbol: {ForeignNet: net},
-	}, nil)
+	}, e.latestReport(ctx))
 	if !verdict.Pass {
 		logging.Debug("stockpicker_winrate", "skip",
 			logging.Symbol(quote.Symbol), "stage", "flow_gate", "reason", verdict.Reason)
@@ -313,6 +335,24 @@ func (e StockpickerWinrateExecutor) gateway() *stockpicker.FlowGateway {
 		return e.Gateway
 	}
 	return stockpicker.NewDefaultFlowGateway()
+}
+
+// latestReport returns the market-wide capitalflow DailyReport for the flow
+// gateway's market-regime layers, or nil when the provider is absent or
+// LatestDaily fails. A nil return keeps the documented foreign-only fallback
+// (issue #1737): the market layers fail-open skip and only the per-symbol
+// foreign layer is enforced.
+func (e StockpickerWinrateExecutor) latestReport(ctx context.Context) *capitalflow.DailyReport {
+	if e.CapitalFlow == nil {
+		return nil
+	}
+	report, err := e.CapitalFlow.LatestDaily(ctx)
+	if err != nil {
+		logging.Debug("stockpicker_winrate", "market_report_unavailable",
+			"err", err, "fallback", "foreign_only")
+		return nil
+	}
+	return &report
 }
 
 // thresholds returns the eligibility gates (injected overrides or the

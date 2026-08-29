@@ -174,6 +174,33 @@ func TestPluginRegistry_Screen(t *testing.T) {
 	}
 }
 
+func TestPluginRegistry_WithCapitalFlowReportProvider(t *testing.T) {
+	reg := NewPluginRegistry()
+	// nil provider is a no-op.
+	reg.WithCapitalFlowReportProvider(nil)
+
+	provider := mockCapitalFlowReportProvider{report: marketPassReport()}
+	reg.WithCapitalFlowReportProvider(provider)
+
+	found := false
+	for _, exec := range reg.agentExecutors {
+		e, ok := exec.(StockpickerWinrateExecutor)
+		if !ok {
+			continue
+		}
+		found = true
+		if e.CapitalFlow == nil {
+			t.Fatal("WithCapitalFlowReportProvider did not inject CapitalFlow into StockpickerWinrateExecutor")
+		}
+		if _, err := e.CapitalFlow.LatestDaily(context.Background()); err != nil {
+			t.Fatalf("injected provider returned error: %v", err)
+		}
+	}
+	if !found {
+		t.Fatal("StockpickerWinrateExecutor not found in builtin agent executors")
+	}
+}
+
 func TestPluginRegistry_Rotator(t *testing.T) {
 	reg := NewPluginRegistry()
 	if reg.Rotator() != nil {

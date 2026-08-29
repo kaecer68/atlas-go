@@ -2997,6 +2997,10 @@ func buildSystemOrFallback(
 	}
 	if capitalFlowService != nil {
 		sys.WithCapitalFlowAssessmentProvider(orchestrator.NewCapitalFlowServiceAdapter(capitalFlowService))
+		// Issue #1737: wire the shared capitalflow.Service into the
+		// stockpicker-winrate executor so the flow gateway enforces the full
+		// two-level gate (個股層 + 市場層) via LatestDaily → CheckFromReport.
+		sys.WithCapitalFlowService(capitalFlowService)
 	}
 	return sys, nil
 }
