@@ -432,9 +432,9 @@ func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
 	defer os.RemoveAll(dir)
 	store, _ := subscription.NewStore(dir)
 
-	var fireCount int32
+	var fireCount atomic.Int32
 	listener := func(oldRegime, newRegime string) {
-		atomic.AddInt32(&fireCount, 1)
+		fireCount.Add(1)
 	}
 
 	mock := &mockNarrative{stress: 20.0, regime: "RISK_ON"}
@@ -462,7 +462,7 @@ func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
 
 	// reproduce-flagged: racy read/write in detectRegimeChange lets N goroutines
 	// observe RISK_OFF simultaneously and each fire the listener
-	count := atomic.LoadInt32(&fireCount)
+	count := fireCount.Load()
 	if count != 1 {
 		t.Errorf("listener fired %d times, want 1 (race condition)", count)
 	}

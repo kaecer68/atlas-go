@@ -378,9 +378,9 @@ func TestFugleClient_401_ReturnsErrFugleUnauthorized(t *testing.T) {
 // the upstream (all consumers — gateway channel, stocktools, hybrid,
 // warmup — share this single client).
 func TestFugleClient_Breaker_OpensAfterConsecutiveFailures(t *testing.T) {
-	var httpHits int32
+	var httpHits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&httpHits, 1)
+		httpHits.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -395,7 +395,7 @@ func TestFugleClient_Breaker_OpensAfterConsecutiveFailures(t *testing.T) {
 			t.Fatalf("attempt %d: expected error, got nil", i+1)
 		}
 	}
-	if got := atomic.LoadInt32(&httpHits); got != 3 {
+	if got := httpHits.Load(); got != 3 {
 		t.Fatalf("http hits = %d, want 3 (breaker should not short-circuit before threshold)", got)
 	}
 
@@ -404,7 +404,7 @@ func TestFugleClient_Breaker_OpensAfterConsecutiveFailures(t *testing.T) {
 	if !errors.Is(err, ErrFugleBreakerOpen) {
 		t.Fatalf("err = %v, want errors.Is(err, ErrFugleBreakerOpen)", err)
 	}
-	if got := atomic.LoadInt32(&httpHits); got != 3 {
+	if got := httpHits.Load(); got != 3 {
 		t.Errorf("http hits = %d after breaker open, want 3 (no upstream calls while open)", got)
 	}
 }

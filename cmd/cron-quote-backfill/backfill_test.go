@@ -135,12 +135,12 @@ func TestBackfillSymbol_HTTPError(t *testing.T) {
 // countingHandler counts FinMind quote requests so tests can assert that
 // non-trading days are skipped without any API call.
 type countingHandler struct {
-	hits int32
+	hits atomic.Int32
 }
 
 func (h *countingHandler) serve() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&h.hits, 1)
+		h.hits.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"msg":    "success",
@@ -179,7 +179,7 @@ func TestBackfillSymbol_SkipsWeekends(t *testing.T) {
 	if n != 2 {
 		t.Errorf("expected 2 bars (Fri+Mon), got %d", n)
 	}
-	if got := atomic.LoadInt32(&h.hits); got != 2 {
+	if got := h.hits.Load(); got != 2 {
 		t.Errorf("expected 2 FinMind fetches (weekend skipped), got %d", got)
 	}
 
@@ -217,7 +217,7 @@ func TestBackfillSymbol_SkipsTaiwanHoliday(t *testing.T) {
 	if n != 0 {
 		t.Errorf("expected 0 bars on Taiwan holiday, got %d", n)
 	}
-	if got := atomic.LoadInt32(&h.hits); got != 0 {
+	if got := h.hits.Load(); got != 0 {
 		t.Errorf("expected 0 FinMind fetches on holiday, got %d", got)
 	}
 }

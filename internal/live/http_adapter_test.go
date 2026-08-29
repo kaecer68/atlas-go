@@ -135,9 +135,9 @@ func expectedHMACSignature(t *testing.T, payload []byte, secret string, ts strin
 }
 
 func TestHTTPBrokerAdapterNoRetryOnBadRequest(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		http.Error(w, "invalid order", http.StatusBadRequest)
 	}))
 	defer server.Close()
@@ -155,15 +155,15 @@ func TestHTTPBrokerAdapterNoRetryOnBadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1 for non-retryable 400", got)
 	}
 }
 
 func TestHTTPBrokerAdapterNoRetryOnNotImplementedByDefault(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		http.Error(w, "not implemented", http.StatusNotImplemented)
 	}))
 	defer server.Close()
@@ -181,15 +181,15 @@ func TestHTTPBrokerAdapterNoRetryOnNotImplementedByDefault(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1 for default non-retryable 501", got)
 	}
 }
 
 func TestHTTPBrokerAdapterCustomRetryMatrixRetriesOnConfiguredCode(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if n == 1 {
 			http.Error(w, "not implemented yet", http.StatusNotImplemented)
 			return
@@ -216,15 +216,15 @@ func TestHTTPBrokerAdapterCustomRetryMatrixRetriesOnConfiguredCode(t *testing.T)
 	if res.Status != "placed" {
 		t.Fatalf("status = %q, want placed", res.Status)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 }
 
 func TestHTTPBrokerAdapterRetriesOnTooManyRequests(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if n == 1 {
 			http.Error(w, "rate limited", http.StatusTooManyRequests)
 			return
@@ -250,15 +250,15 @@ func TestHTTPBrokerAdapterRetriesOnTooManyRequests(t *testing.T) {
 	if res.Status != "placed" {
 		t.Fatalf("status = %q, want placed", res.Status)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 }
 
 func TestHTTPBrokerAdapterRetriesOnServerError(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if n == 1 {
 			http.Error(w, "temporary failure", http.StatusBadGateway)
 			return
@@ -284,7 +284,7 @@ func TestHTTPBrokerAdapterRetriesOnServerError(t *testing.T) {
 	if res.Status != "placed" {
 		t.Fatalf("status = %q, want placed", res.Status)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 }
@@ -301,9 +301,9 @@ func TestHTTPBrokerAdapterRejectsMissingBaseURL(t *testing.T) {
 }
 
 func TestHTTPBrokerAdapterRejectsReplayNonceWithinTTL(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
@@ -331,15 +331,15 @@ func TestHTTPBrokerAdapterRejectsReplayNonceWithinTTL(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "nonce replay") {
 		t.Fatalf("unexpected replay nonce error: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1", got)
 	}
 }
 
 func TestHTTPBrokerAdapterAllowsNonceReuseAfterTTL(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
@@ -367,7 +367,7 @@ func TestHTTPBrokerAdapterAllowsNonceReuseAfterTTL(t *testing.T) {
 	if _, err := adapter.SubmitOrder(context.Background(), domain.Order{Symbol: "2330", Side: domain.SideBuy, Quantity: 1, Price: 1}); err != nil {
 		t.Fatalf("second SubmitOrder error: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 }
@@ -424,9 +424,9 @@ func TestHTTPBrokerAdapterRejectsHMACSignerWithoutSecret(t *testing.T) {
 }
 
 func TestHTTPBrokerAdapterClassifiesSignatureErrors(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		http.Error(w, "bad signature", http.StatusUnauthorized)
 	}))
 	defer server.Close()
@@ -446,7 +446,7 @@ func TestHTTPBrokerAdapterClassifiesSignatureErrors(t *testing.T) {
 	if !strings.Contains(err.Error(), "auth.signature_invalid") {
 		t.Fatalf("unexpected classification error: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1 for non-retryable auth error", got)
 	}
 }
@@ -493,9 +493,9 @@ func TestHTTPBrokerAdapterKeyRotationUsesNewKeyID(t *testing.T) {
 }
 
 func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testing.T) {
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
+		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "placed"})
 	}))
@@ -538,7 +538,7 @@ func TestHTTPBrokerAdapterRejectsReplayNonceAcrossRestartsWithFileStore(t *testi
 		t.Fatalf("unexpected replay nonce error: %v", err)
 	}
 
-	if got := atomic.LoadInt32(&calls); got != 1 {
+	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1", got)
 	}
 }

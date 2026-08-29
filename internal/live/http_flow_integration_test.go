@@ -27,9 +27,9 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 		t.Fatalf("unexpected guarded broker error: %v", err)
 	}
 
-	var calls int32
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
+		n := calls.Add(1)
 		if r.Header.Get("X-Signature") == "" {
 			t.Fatalf("missing signature header")
 		}
@@ -76,7 +76,7 @@ func TestGuardedToHTTPFlowIntegration(t *testing.T) {
 	if err := httpMgr.Run(context.Background(), order); err != nil {
 		t.Fatalf("http manager run failed: %v", err)
 	}
-	if got := atomic.LoadInt32(&calls); got != 2 {
+	if got := calls.Load(); got != 2 {
 		t.Fatalf("calls = %d, want 2", got)
 	}
 
