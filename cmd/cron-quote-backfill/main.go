@@ -92,7 +92,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	var total atomic.Int64
-	for i := 0; i < conc; i++ {
+	for range conc {
 		wg.Go(func() {
 			for sym := range jobs {
 				n, err := backfillSymbol(ctx, client, store, sym, start, end, *dryRun)

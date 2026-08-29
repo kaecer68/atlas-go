@@ -231,7 +231,7 @@ func (cm *TaiwanCostModel) NetReturn(rawReturn, turnover float64) float64 {
 func (cm *TaiwanCostModel) ApplyToSeries(rawReturns, turnovers []float64) []float64 {
 	n := min(len(turnovers), len(rawReturns))
 	result := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		result[i] = cm.NetReturn(rawReturns[i], turnovers[i])
 	}
 	return result

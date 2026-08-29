@@ -81,7 +81,7 @@ func TestBCaBootstrapSignificantPositiveShift(t *testing.T) {
 	meanDiff := func(b, f []float64) float64 {
 		var sum float64
 		m := min(len(f), len(b))
-		for i := 0; i < m; i++ {
+		for i := range m {
 			sum += f[i] - b[i]
 		}
 		return sum / float64(m)

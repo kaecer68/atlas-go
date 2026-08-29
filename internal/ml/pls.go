@@ -119,7 +119,7 @@ func (m *PLS) Fit(X [][]float64, y []float64) error {
 	Cvec := mat.NewVecDense(k, nil) // k × 1 Y-loading vector
 
 	extracted := 0
-	for comp := 0; comp < k; comp++ {
+	for range k {
 		// (a) w = X0ᵀ * y0, normalized to unit length.
 		var wVec mat.VecDense
 		wVec.MulVec(X0.T(), y0)
