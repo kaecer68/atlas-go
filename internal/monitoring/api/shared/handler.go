@@ -93,8 +93,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		provided := r.Header.Get("X-API-Key")
 		if provided == "" {
 			auth := r.Header.Get("Authorization")
-			if strings.HasPrefix(auth, "Bearer ") {
-				provided = strings.TrimPrefix(auth, "Bearer ")
+			if after, ok := strings.CutPrefix(auth, "Bearer "); ok {
+				provided = after
 			}
 		}
 		if sha256Hex(provided) != expectedHash {
@@ -181,8 +181,8 @@ func RequireAdmin(h Handler) Handler {
 		provided := r.Header.Get("X-Admin-Key")
 		if provided == "" {
 			auth := r.Header.Get("Authorization")
-			if strings.HasPrefix(auth, "Admin ") {
-				provided = strings.TrimPrefix(auth, "Admin ")
+			if after, ok := strings.CutPrefix(auth, "Admin "); ok {
+				provided = after
 			}
 		}
 		if sha256Hex(provided) != expectedHash {

@@ -47,8 +47,8 @@ func wrapAdminAuth(h http.HandlerFunc) http.HandlerFunc {
 			provided := r.Header.Get("X-API-Key")
 			if provided == "" {
 				auth := r.Header.Get("Authorization")
-				if strings.HasPrefix(auth, "Bearer ") {
-					provided = strings.TrimPrefix(auth, "Bearer ")
+				if after, ok := strings.CutPrefix(auth, "Bearer "); ok {
+					provided = after
 				}
 			}
 			if sha256HexKey(provided) != expectedHash {

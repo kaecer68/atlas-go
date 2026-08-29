@@ -40,7 +40,7 @@ func staticHandler(assets fs.FS) http.Handler {
 		// explicit `index.html`, SPA-fallback targets) keep their original
 		// lookup semantics.
 		lookupPath := strings.TrimPrefix(cleanPath, "/")
-		if rest := strings.TrimPrefix(lookupPath, "dist/"); rest != lookupPath {
+		if rest, ok := strings.CutPrefix(lookupPath, "dist/"); ok {
 			if _, err := fs.Stat(assets, rest); err == nil {
 				r.URL.Path = "/" + rest
 				lookupPath = rest

@@ -1045,11 +1045,11 @@ func promptMentionsHoldingPeriod(prompt string) bool {
 func extractPipelineStageAction(artifact string) (stage, action string) {
 	for _, line := range strings.Split(artifact, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "stage:") {
-			stage = strings.TrimSpace(strings.TrimPrefix(line, "stage:"))
+		if after, ok := strings.CutPrefix(line, "stage:"); ok {
+			stage = strings.TrimSpace(after)
 		}
-		if strings.HasPrefix(line, "action:") {
-			action = strings.TrimSpace(strings.TrimPrefix(line, "action:"))
+		if after, ok := strings.CutPrefix(line, "action:"); ok {
+			action = strings.TrimSpace(after)
 		}
 	}
 	return

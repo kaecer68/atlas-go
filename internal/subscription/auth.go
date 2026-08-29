@@ -31,8 +31,8 @@ const defaultJWKSTTL = 10 * time.Minute
 // or the "token" cookie. Returns empty string if no token found.
 func ExtractToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
+	if after, ok := strings.CutPrefix(auth, "Bearer "); ok {
+		return after
 	}
 	if cookie, err := r.Cookie("token"); err == nil {
 		return cookie.Value

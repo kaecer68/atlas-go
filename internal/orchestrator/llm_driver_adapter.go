@@ -158,11 +158,11 @@ func ParseReflectResponse(output string) (Reflection, error) {
 // around JSON responses.
 func stripMarkdownFences(s string) string {
 	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
+	if after, ok := strings.CutPrefix(s, "```"); ok {
 		if idx := strings.Index(s, "\n"); idx != -1 {
 			s = s[idx+1:]
 		} else {
-			s = strings.TrimPrefix(s, "```")
+			s = after
 		}
 	}
 	s = strings.TrimSuffix(s, "```")
