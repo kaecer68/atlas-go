@@ -140,52 +140,22 @@ func (r *SectorRotator) macroLevelKey(level narrative.MacroRiskLevel) string {
 	}
 }
 
-func defaultMacroAdjustments() map[string]map[string]float64 {
-	return map[string]map[string]float64{
-		"yellow": {
-			"defensive":       0.05,
-			"cash":            0.03,
-			"ai_supply_chain": -0.04,
-			"semiconductor":   -0.04,
-		},
-		"orange": {
-			"defensive":       0.10,
-			"cash":            0.08,
-			"gold":            0.05,
-			"ai_supply_chain": -0.08,
-			"semiconductor":   -0.08,
-			"financials":      -0.05,
-		},
-		"red": {
-			"cash":            0.25,
-			"defensive":       0.15,
-			"gold":            0.10,
-			"ai_supply_chain": -0.15,
-			"semiconductor":   -0.15,
-			"financials":      -0.10,
-			"shipping":        -0.05,
-		},
-	}
+// sectorRotationMacroAdjustments returns the single source of truth for macro
+// risk level → sector allocation adjustments. Values come from
+// ParametersConfig (Orchestrator.SectorRotationMacroAdjustments); the defaults
+// live in internal/config/defaults_engine.go. No code-level fallback map is
+// kept here on purpose: an empty config is rejected by Validate()
+// ("orchestrator.sector_rotation_macro_adjustments must not be empty").
+func sectorRotationMacroAdjustments() map[string]map[string]float64 {
+	return config.GetParametersConfig().Orchestrator.SectorRotationMacroAdjustments.Value
 }
 
 func sectorRotationConfigSource() string {
-	cfg := config.GetParametersConfig()
-	if cfg == nil {
-		return "builtin_defaults"
-	}
-	hasMacro := cfg.Orchestrator.SectorRotationMacroAdjustments.Value != nil
-	hasFlow := cfg.Orchestrator.SectorRotationFlowAdjustments.Value != nil
-	if hasMacro || hasFlow {
-		return "config"
-	}
-	return "builtin_defaults"
+	return "config"
 }
 
 func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, macro *narrative.MacroRiskAssessment) {
-	adjustments := defaultMacroAdjustments()
-	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.SectorRotationMacroAdjustments.Value != nil {
-		adjustments = cfg.Orchestrator.SectorRotationMacroAdjustments.Value
-	}
+	adjustments := sectorRotationMacroAdjustments()
 
 	levelKey := r.macroLevelKey(macro.Level)
 	deltas, ok := adjustments[levelKey]
@@ -201,39 +171,18 @@ func (r *SectorRotator) applyMacroAdjustments(allocations map[string]float64, ma
 	}
 }
 
-func defaultFlowAdjustments() map[string]map[string]float64 {
-	return map[string]map[string]float64{
-		"risk_off": {
-			"gold":            0.10,
-			"utilities":       0.08,
-			"high_dividend":   0.07,
-			"ai_supply_chain": -0.10,
-			"small_cap":       0.0,
-		},
-		"carry_trade_unwind": {
-			"cash":             0.30,
-			"short_term_bonds": 0.15,
-			"jpy":              0.05,
-			"ai_supply_chain":  0.02,
-			"semiconductor":    0.03,
-			"financials":       -0.10,
-		},
-		"sector_rotation": {
-			"energy":              0.15,
-			"oil_services":        0.08,
-			"alternative_energy":  0.05,
-			"shipping":            0.05,
-			"high_valuation_tech": 0.02,
-			"rate_sensitive":      -0.08,
-		},
-	}
+// sectorRotationFlowAdjustments returns the single source of truth for capital
+// flow pattern → sector allocation adjustments. Values come from
+// ParametersConfig (Orchestrator.SectorRotationFlowAdjustments); the defaults
+// live in internal/config/defaults_engine.go. No code-level fallback map is
+// kept here on purpose: an empty config is rejected by Validate()
+// ("orchestrator.sector_rotation_flow_adjustments must not be empty").
+func sectorRotationFlowAdjustments() map[string]map[string]float64 {
+	return config.GetParametersConfig().Orchestrator.SectorRotationFlowAdjustments.Value
 }
 
 func (r *SectorRotator) applyFlowAdjustments(allocations map[string]float64, flow string) {
-	adjustments := defaultFlowAdjustments()
-	if cfg := config.GetParametersConfig(); cfg != nil && cfg.Orchestrator.SectorRotationFlowAdjustments.Value != nil {
-		adjustments = cfg.Orchestrator.SectorRotationFlowAdjustments.Value
-	}
+	adjustments := sectorRotationFlowAdjustments()
 
 	deltas, ok := adjustments[flow]
 	if !ok {
