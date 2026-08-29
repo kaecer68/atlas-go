@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -914,10 +915,5 @@ func (h *SSEHandler) matchesFilter(client *SSEClient, eventType eventbus.EventTy
 	if len(client.types) == 0 {
 		return true
 	}
-	for _, t := range client.types {
-		if t == eventType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(client.types, eventType)
 }

@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -388,13 +389,7 @@ func pipelineStageToggleJudgeChecks(lower string, brief domain.PromptExperimentR
 	}
 	// Architecture mutations must require multi-regime validation
 	if len(brief.Experiment.AcceptanceGates) > 0 {
-		hasRegimeGate := false
-		for _, g := range brief.Experiment.AcceptanceGates {
-			if g == "regime_diversified" {
-				hasRegimeGate = true
-				break
-			}
-		}
+		hasRegimeGate := slices.Contains(brief.Experiment.AcceptanceGates, "regime_diversified")
 		if hasRegimeGate {
 			checks = append(checks, "regime_diversified gate required for architecture mutation")
 		} else {

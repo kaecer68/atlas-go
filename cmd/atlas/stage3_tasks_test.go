@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
@@ -44,13 +45,7 @@ func TestRegisterStage3Tasks_RegistersAllFiveTasksInBTM(t *testing.T) {
 		"recalibrate-templates-monthly",
 	}
 	for _, name := range want {
-		found := false
-		for _, got := range registered {
-			if got == name {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(registered, name)
 		if !found {
 			t.Fatalf("expected %q registered in BTM; got %v", name, registered)
 		}
@@ -88,13 +83,7 @@ func TestRegisterStage3AlertTasks_RegistersThreeEvaluatorsInBTM(t *testing.T) {
 		"stage3-alert-market-close",
 	}
 	for _, name := range want {
-		found := false
-		for _, got := range registered {
-			if got == name {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(registered, name)
 		if !found {
 			t.Fatalf("expected %q registered in BTM; got %v", name, registered)
 		}

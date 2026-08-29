@@ -1,6 +1,7 @@
 package eventbus
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -84,12 +85,7 @@ func (b *SSEBridge) matchesFilter(client *SSEClient, eventType EventType) bool {
 	if len(client.Types) == 0 {
 		return true
 	}
-	for _, t := range client.Types {
-		if t == eventType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(client.Types, eventType)
 }
 
 // ClientCount returns the number of connected clients.

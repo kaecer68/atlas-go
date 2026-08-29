@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1117,13 +1118,7 @@ func TestUSMacroFields_MatchesDetectorChannels(t *testing.T) {
 		}
 	}
 	for ch := range detected {
-		found := false
-		for _, m := range USMacroFields {
-			if m == ch {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(USMacroFields, ch)
 		if !found {
 			t.Errorf("detectDegradedUSStatus marks %q as failed but USMacroFields does not list it — main.go recovery loop will not clear this channel", ch)
 		}

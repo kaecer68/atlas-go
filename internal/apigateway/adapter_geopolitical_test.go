@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -381,10 +382,5 @@ func TestGeopoliticalChannelAdapter_HealthCheck_Degraded(t *testing.T) {
 
 // containsSource returns true if needle is in haystack.
 func containsSource(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }

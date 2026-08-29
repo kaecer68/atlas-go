@@ -248,20 +248,14 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 					continue // already handled above
 				}
 				upstream := se.linkageGraph.GetUpstreamChain(favoredID, 3)
-				for _, id := range upstream {
-					if id == industryID {
-						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
-						adjustment *= boost
-						break
-					}
+				if slices.Contains(upstream, industryID) {
+					boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+					adjustment *= boost
 				}
 				downstream := se.linkageGraph.GetDownstreamChain(favoredID, 3)
-				for _, id := range downstream {
-					if id == industryID {
-						boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
-						adjustment *= boost
-						break
-					}
+				if slices.Contains(downstream, industryID) {
+					boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+					adjustment *= boost
 				}
 			}
 			// Check if our industry is upstream of an avoided industry
@@ -271,12 +265,9 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 					continue // already handled above
 				}
 				upstream := se.linkageGraph.GetUpstreamChain(avoidedID, 3)
-				for _, id := range upstream {
-					if id == industryID {
-						dampen := 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
-						adjustment *= dampen
-						break
-					}
+				if slices.Contains(upstream, industryID) {
+					dampen := 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+					adjustment *= dampen
 				}
 			}
 		}

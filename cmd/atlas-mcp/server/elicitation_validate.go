@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 const (
@@ -57,10 +58,8 @@ func hasExternalRef(v any) bool {
 			}
 		}
 	case []any:
-		for _, item := range t {
-			if hasExternalRef(item) {
-				return true
-			}
+		if slices.ContainsFunc(t, hasExternalRef) {
+			return true
 		}
 	}
 	return false

@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -35,13 +36,7 @@ func TestYahooFinanceMacroProvider_UserAgent(t *testing.T) {
 	if captured == "" {
 		t.Fatal("User-Agent header was not sent")
 	}
-	found := false
-	for _, ua := range modernUserAgents {
-		if captured == ua {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(modernUserAgents, captured)
 	if !found {
 		t.Errorf("User-Agent %q not in modern list", captured)
 	}

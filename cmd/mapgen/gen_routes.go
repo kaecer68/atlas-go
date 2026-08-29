@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -182,10 +183,5 @@ func capitalizeGroup(g string) string {
 
 // containsString checks whether a string slice contains a target string.
 func containsString(slice []string, target string) bool {
-	for _, s := range slice {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, target)
 }

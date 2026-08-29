@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 )
 
@@ -233,10 +234,8 @@ func (r *ChannelContractRegistry) Contract(channelID string) ChannelContract {
 // The second return value is false when name is not an alias of any channel.
 func (r *ChannelContractRegistry) ResolveAlias(name string) (string, bool) {
 	for id, c := range r.contracts {
-		for _, a := range c.Aliases {
-			if a == name {
-				return id, true
-			}
+		if slices.Contains(c.Aliases, name) {
+			return id, true
 		}
 	}
 	return "", false

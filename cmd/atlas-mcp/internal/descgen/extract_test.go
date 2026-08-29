@@ -3,6 +3,7 @@ package descgen
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -302,12 +303,7 @@ func (s *server) handlePointerTest(ctx context.Context, _ *mcp.CallToolRequest, 
 }
 
 func contains(s []string, v string) bool {
-	for _, x := range s {
-		if x == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, v)
 }
 
 func TestExtract_DescriptionFromContext(t *testing.T) {
