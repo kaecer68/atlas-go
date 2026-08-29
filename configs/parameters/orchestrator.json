@@ -264,24 +264,31 @@
   },
   "sector_rotation_macro_adjustments": {
     "value": {
-      "high_risk": {
-        "cash": 0.1,
-        "defensive": 0.08,
+      "yellow": {
+        "defensive": 0.05,
+        "cash": 0.03,
+        "ai_supply_chain": -0.04,
+        "semiconductor": -0.04
+      },
+      "orange": {
+        "defensive": 0.10,
+        "cash": 0.08,
         "gold": 0.05,
-        "value": 0.03
+        "ai_supply_chain": -0.08,
+        "semiconductor": -0.08,
+        "financials": -0.05
       },
-      "low_risk": {
-        "defensive": -0.04,
-        "growth": 0.08,
-        "momentum": 0.05
-      },
-      "moderate_risk": {
-        "cash": -0.03,
-        "growth": 0.04,
-        "value": 0.03
+      "red": {
+        "cash": 0.25,
+        "defensive": 0.15,
+        "gold": 0.10,
+        "ai_supply_chain": -0.15,
+        "semiconductor": -0.15,
+        "financials": -0.10,
+        "shipping": -0.05
       }
     },
-    "rationale": "Macro risk level → sector allocation adjustments; de-risk to gold/cash/defensive in high risk, rotate to growth in low risk",
+    "rationale": "Macro risk level → sector allocation adjustments; yellow=light defensive tilt, orange=moderate, red=severe risk-off; aligns with sector_rotator.go macroLevelKey mapping",
     "source": "heuristic",
     "citation": {
       "source_type": "heuristic",
@@ -295,27 +302,31 @@
   },
   "sector_rotation_flow_adjustments": {
     "value": {
-      "cash_surge": {
-        "cash": 0.3,
-        "short_term": 0.15
+      "risk_off": {
+        "gold": 0.10,
+        "utilities": 0.08,
+        "high_dividend": 0.07,
+        "ai_supply_chain": -0.10,
+        "small_cap": 0.0
       },
-      "defensive_flight": {
-        "defensive": 0.08,
-        "growth": -0.05,
-        "staples": 0.05,
-        "utilities": 0.05
+      "carry_trade_unwind": {
+        "cash": 0.30,
+        "short_term_bonds": 0.15,
+        "jpy": 0.05,
+        "ai_supply_chain": 0.02,
+        "semiconductor": 0.03,
+        "financials": -0.10
       },
-      "gold_surge": {
-        "defensive": 0.03,
-        "gold": 0.1,
-        "mining": 0.05
-      },
-      "tech_exodus": {
-        "ai_supply_chain": -0.05,
-        "semiconductor": -0.08
+      "sector_rotation": {
+        "energy": 0.15,
+        "oil_services": 0.08,
+        "alternative_energy": 0.05,
+        "shipping": 0.05,
+        "high_valuation_tech": 0.02,
+        "rate_sensitive": -0.08
       }
     },
-    "rationale": "Capital flow patterns → sector allocation adjustments; gold/cash surges trigger defensive rotation, tech exodus reduces semiconductor exposure, defensive flight shifts to utilities/staples",
+    "rationale": "Capital flow patterns → sector allocation adjustments; risk_off=defensive, carry_trade_unwind=cash/JPY, sector_rotation=energy/shipping",
     "source": "heuristic",
     "citation": {
       "source_type": "heuristic",

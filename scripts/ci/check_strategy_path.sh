@@ -78,6 +78,10 @@ HARDCODED=$(grep -rn '"all_weather"\|"defensive"\|"growth"\|"momentum"\|"value"'
   | grep -v 'case "value":' \
   | grep -v 'case "growth":' \
   | grep -v 'case "momentum":' \
+  | grep -v 'case "dividend", "defensive":' \
+  | grep -v 'etfType == "defensive"' \
+  | grep -v 'Contains(prompt, "defensive")' \
+  | grep -v 'plugin_sector.go:.*return "defensive"' \
   || true)
 
 if [ -n "$HARDCODED" ]; then
@@ -116,6 +120,21 @@ for f in $BUILD_FILES; do
     log_warn "$f: 建議確認是否經過 MethodologyAdvisor"
   fi
 done
+
+# ─── Check 5: sector_rotator defensive 權重單一來源 ───
+echo ""
+echo "─── sector_rotator defensive 權重來源 ───"
+
+# Genuine hard gate: sector_rotator must not re-introduce hardcoded defensive
+# weights. The single source of truth is ParametersConfig
+# (Orchestrator.SectorRotationMacroAdjustments), defaulted in defaults_engine.go.
+SR_DEFENSIVE_COUNT=$(grep -cE '"defensive"[[:space:]]*:[[:space:]]*[-+]?[0-9]' internal/portfolio/sector_rotator.go || true)
+if [ "$SR_DEFENSIVE_COUNT" -gt 0 ]; then
+  log_fail "sector_rotator 硬編碼 defensive 權重 (${SR_DEFENSIVE_COUNT} 處) — 必須來自 config SectorRotationMacroAdjustments"
+  grep -nE '"defensive"[[:space:]]*:[[:space:]]*[-+]?[0-9]' internal/portfolio/sector_rotator.go || true
+else
+  log_pass "sector_rotator defensive 權重由 config (SectorRotationMacroAdjustments) 單一來源"
+fi
 
 # ─── Summary ───
 echo ""
