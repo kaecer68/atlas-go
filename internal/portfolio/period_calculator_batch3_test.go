@@ -14,9 +14,9 @@ func writeSectorIndexFile(t *testing.T, dir, date string, industries map[string]
 	t.Helper()
 	dateCompact := strings.ReplaceAll(date, "-", "")
 	filename := fmt.Sprintf("sector_indices_%s_%s.json", dateCompact, dateCompact)
-	out := make(map[string][]map[string]interface{})
+	out := make(map[string][]map[string]any)
 	for industry, ret := range industries {
-		out[industry] = []map[string]interface{}{
+		out[industry] = []map[string]any{
 			{"date": date, "industry": industry, "index": 100.0 + ret, "return_pct": ret},
 		}
 	}

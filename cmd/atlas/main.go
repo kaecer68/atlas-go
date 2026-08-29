@@ -2158,7 +2158,7 @@ func run(args []string, deps appDeps) error {
 				}
 			}
 			if cfg.LLMPrismScenarioEnabled {
-				orchestrator.ScenarioExplainer = func(ctx context.Context, result interface{}) (string, error) {
+				orchestrator.ScenarioExplainer = func(ctx context.Context, result any) (string, error) {
 					h := capabilities.NewScenarioSimulationHandler(llmRouter)
 					tr, ok := result.(prism.TrainingResult)
 					if !ok {
@@ -2170,7 +2170,7 @@ func run(args []string, deps appDeps) error {
 				}
 			}
 			if cfg.LLMNarrativeExplainEnabled {
-				narrative.RegimeExplainer = func(ctx context.Context, event interface{}) (string, error) {
+				narrative.RegimeExplainer = func(ctx context.Context, event any) (string, error) {
 					h := capabilities.NewRegimeExplanationHandler(llmRouter)
 					ne, ok := event.(*narrative.NarrativeEvent)
 					if !ok {
@@ -2180,7 +2180,7 @@ func run(args []string, deps appDeps) error {
 					output, err := h.Handle(ctx, input)
 					return output.Headline, err
 				}
-				narrative.SentimentExplainer = func(ctx context.Context, event interface{}) (string, error) {
+				narrative.SentimentExplainer = func(ctx context.Context, event any) (string, error) {
 					h := capabilities.NewSentimentExplanationHandler(llmRouter)
 					ne, ok := event.(*narrative.NarrativeEvent)
 					if !ok {
@@ -2192,7 +2192,7 @@ func run(args []string, deps appDeps) error {
 				}
 			}
 			if cfg.LLMRiskForensicsEnabled {
-				risk.PerformanceForensics = func(ctx context.Context, snapshot interface{}) (string, error) {
+				risk.PerformanceForensics = func(ctx context.Context, snapshot any) (string, error) {
 					h := capabilities.NewPerformanceForensicsHandler(llmRouter)
 					rs, ok := snapshot.(domain.RiskSnapshot)
 					if !ok {
@@ -2204,7 +2204,7 @@ func run(args []string, deps appDeps) error {
 				}
 			}
 			if cfg.LLMConfidenceCommentaryEnabled {
-				risk.ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+				risk.ConfidenceCommentary = func(ctx context.Context, decision any) (string, error) {
 					h := capabilities.NewConfidenceCommentaryHandler(llmRouter)
 					rd, ok := decision.(risk.RiskDecision)
 					if !ok {

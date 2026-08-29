@@ -23,7 +23,7 @@ func TestEquityCurvePoint_JSONMarshaling(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(bytes, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestEquityCurvePoint_Omitempty(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(bytes, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}

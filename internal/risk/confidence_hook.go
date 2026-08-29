@@ -9,13 +9,13 @@ import "context"
 // Set by main.go when config.LLMConfidenceCommentaryEnabled is true and
 // an LLM router is available. Uses var indirection to avoid a risk→llm
 // import cycle (risk is a leaf package that cannot import llm).
-var ConfidenceCommentary func(ctx context.Context, decision interface{}) (string, error)
+var ConfidenceCommentary func(ctx context.Context, decision any) (string, error)
 
 // EnrichDecision runs the ConfidenceCommentary hook (when non-nil) against
 // a risk.RiskDecision and returns the LLM-generated commentary. Returns
 // an empty string when the hook is nil or returns an error so callers
 // never fail on LLM unavailability.
-func EnrichDecision(ctx context.Context, decision interface{}) string {
+func EnrichDecision(ctx context.Context, decision any) string {
 	if ConfidenceCommentary == nil {
 		return ""
 	}

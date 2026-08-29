@@ -246,7 +246,7 @@ func TestRiskGate_PublishWritesConfidenceCommentary(t *testing.T) {
 	g := NewRiskGate(NewPreTradeGate(), NewInTradeGate(), NewPostTradeGate())
 	defer func() { ConfidenceCommentary = nil }()
 
-	ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+	ConfidenceCommentary = func(ctx context.Context, decision any) (string, error) {
 		if _, ok := decision.(RiskDecision); !ok {
 			t.Errorf("unexpected decision type: %T", decision)
 		}

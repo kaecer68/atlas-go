@@ -19,21 +19,21 @@ import (
 // When reading, entries without SchemaVersion are treated as v1 and backfilled
 // with safe defaults (empty ArgsHash/SessionID, Transport="unknown").
 type AuditEntry struct {
-	SchemaVersion int                    `json:"schema_version"`
-	TS            string                 `json:"ts"`
-	SessionID     string                 `json:"session_id,omitempty"`
-	Tool          string                 `json:"tool"`
-	TenantID      string                 `json:"tenant_id,omitempty"`
-	AgentID       string                 `json:"agent_id,omitempty"`
-	CallerPID     int                    `json:"caller_pid,omitempty"`
-	ArgKeys       []string               `json:"arg_keys,omitempty"`
-	ArgsHash      string                 `json:"args_hash,omitempty"`
-	Status        string                 `json:"status"` // "ok" | "error" | "unauthorized" | "ratelimited"
-	LatencyMS     int64                  `json:"latency_ms"`
-	DurationMS    int64                  `json:"duration_ms"` // kept for v1 backward compat; v2 prefers latency_ms
-	Transport     string                 `json:"transport,omitempty"`
-	Error         string                 `json:"error,omitempty"`
-	Extra         map[string]interface{} `json:"extra,omitempty"`
+	SchemaVersion int            `json:"schema_version"`
+	TS            string         `json:"ts"`
+	SessionID     string         `json:"session_id,omitempty"`
+	Tool          string         `json:"tool"`
+	TenantID      string         `json:"tenant_id,omitempty"`
+	AgentID       string         `json:"agent_id,omitempty"`
+	CallerPID     int            `json:"caller_pid,omitempty"`
+	ArgKeys       []string       `json:"arg_keys,omitempty"`
+	ArgsHash      string         `json:"args_hash,omitempty"`
+	Status        string         `json:"status"` // "ok" | "error" | "unauthorized" | "ratelimited"
+	LatencyMS     int64          `json:"latency_ms"`
+	DurationMS    int64          `json:"duration_ms"` // kept for v1 backward compat; v2 prefers latency_ms
+	Transport     string         `json:"transport,omitempty"`
+	Error         string         `json:"error,omitempty"`
+	Extra         map[string]any `json:"extra,omitempty"`
 }
 
 // CanonicalizeArgsHash computes SHA-256 hex of the canonical JSON form of

@@ -300,7 +300,7 @@ func TestSQLiteHistoricalStore_UpsertStress_RoundTripComponents(t *testing.T) {
 		Date:   "2026-04-15",
 		Score:  0.42,
 		Regime: "medium",
-		Components: map[string]interface{}{
+		Components: map[string]any{
 			"us":       0.5,
 			"asia":     0.3,
 			"isString": "ignored-or-kept",

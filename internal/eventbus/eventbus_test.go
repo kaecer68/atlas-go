@@ -1037,7 +1037,7 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}

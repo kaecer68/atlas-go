@@ -124,7 +124,7 @@ func TestPRISMTrainingExecutorRunFiltersSamplesByTaskRegime(t *testing.T) {
 
 func TestScenarioExplainerHook(t *testing.T) {
 	called := false
-	ScenarioExplainer = func(ctx context.Context, result interface{}) (string, error) {
+	ScenarioExplainer = func(ctx context.Context, result any) (string, error) {
 		called = true
 		return "PRISM scenario insight", nil
 	}

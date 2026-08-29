@@ -206,7 +206,7 @@ type jsonlField struct {
 }
 
 func parseJSONLRow(line string) (jsonlField, error) {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal([]byte(line), &raw); err != nil {
 		return jsonlField{}, fmt.Errorf("unmarshal JSONL row: %w", err)
 	}

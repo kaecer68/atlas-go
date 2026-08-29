@@ -1014,7 +1014,7 @@ func TestNewProvider_DefaultsToHybrid(t *testing.T) {
 	}
 
 	// Must be *marketdata.HybridProvider, not *marketdata.MockProvider
-	if _, ok := interface{}(hp).(*marketdata.HybridProvider); !ok {
+	if _, ok := any(hp).(*marketdata.HybridProvider); !ok {
 		t.Fatalf("expected *marketdata.HybridProvider, got %T", hp)
 	}
 }

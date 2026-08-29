@@ -8,7 +8,7 @@ import (
 
 func TestAnnotateSnapshot_HookCalled(t *testing.T) {
 	called := false
-	PerformanceForensics = func(ctx context.Context, snapshot interface{}) (string, error) {
+	PerformanceForensics = func(ctx context.Context, snapshot any) (string, error) {
 		called = true
 		return "VaR 95 is elevated; review exposure", nil
 	}
@@ -32,7 +32,7 @@ func TestAnnotateSnapshot_NilHook_ReturnsEmpty(t *testing.T) {
 }
 
 func TestAnnotateSnapshot_ErrorReturnsEmpty(t *testing.T) {
-	PerformanceForensics = func(ctx context.Context, snapshot interface{}) (string, error) {
+	PerformanceForensics = func(ctx context.Context, snapshot any) (string, error) {
 		return "", fmt.Errorf("LLM unavailable")
 	}
 	defer func() { PerformanceForensics = nil }()

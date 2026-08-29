@@ -69,7 +69,7 @@ func CheckParamsIntegrity(path string) []error {
 				continue
 			}
 
-			var val interface{}
+			var val any
 			if json.Unmarshal(raw, &val) == nil {
 				switch val.(type) {
 				case string:
@@ -78,7 +78,7 @@ func CheckParamsIntegrity(path string) []error {
 					errs = append(errs, fmt.Errorf("params.json key '%s' has type number, expected object", key))
 				case bool:
 					errs = append(errs, fmt.Errorf("params.json key '%s' has type bool, expected object", key))
-				case []interface{}:
+				case []any:
 					errs = append(errs, fmt.Errorf("params.json key '%s' has type array, expected object", key))
 				case nil:
 					errs = append(errs, fmt.Errorf("params.json key '%s' has type null, expected object", key))

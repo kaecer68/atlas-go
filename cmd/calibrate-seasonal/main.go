@@ -92,12 +92,12 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 		return fmt.Errorf("read parameters.json: %w", err)
 	}
 
-	var params map[string]interface{}
+	var params map[string]any
 	if err := json.Unmarshal(data, &params); err != nil {
 		return fmt.Errorf("parse parameters.json: %w", err)
 	}
 
-	industrySection, ok := params["industry"].(map[string]interface{})
+	industrySection, ok := params["industry"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("industry section not found in parameters.json")
 	}
@@ -107,7 +107,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 		return fmt.Errorf("seasonal_patterns not found in parameters.json")
 	}
 
-	seasonalPatterns, ok := seasonalPatternsObj.(map[string]interface{})
+	seasonalPatterns, ok := seasonalPatternsObj.(map[string]any)
 	if !ok {
 		return fmt.Errorf("seasonal_patterns is not an object")
 	}
@@ -117,7 +117,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 		return fmt.Errorf("seasonal_patterns.value not found")
 	}
 
-	patternsArray, ok := patternsArrayObj.([]interface{})
+	patternsArray, ok := patternsArrayObj.([]any)
 	if !ok {
 		return fmt.Errorf("seasonal_patterns.value is not an array")
 	}
@@ -131,7 +131,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 	var skipped []string
 
 	for i, patternObj := range patternsArray {
-		pattern, ok := patternObj.(map[string]interface{})
+		pattern, ok := patternObj.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -185,9 +185,9 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 	if len(results) > 0 {
 		avgObs /= len(results)
 	}
-	cite, ok := seasonalPatterns["citation"].(map[string]interface{})
+	cite, ok := seasonalPatterns["citation"].(map[string]any)
 	if !ok {
-		cite = make(map[string]interface{})
+		cite = make(map[string]any)
 	}
 	if avgObs >= 5 {
 		cite["evidence_quality"] = "high"

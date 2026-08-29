@@ -27,7 +27,7 @@ func TestHandleReport_NoData(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", status)
 	}
 
-	report, ok := data.(map[string]interface{})
+	report, ok := data.(map[string]any)
 	if ok {
 		if report["period"] != "all" {
 			t.Errorf("expected period all, got %v", report["period"])
@@ -52,7 +52,7 @@ func TestHandleReport_SingleSession(t *testing.T) {
 		t.Fatalf("marshal response: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestHandleReport_SnakeCaseJSON(t *testing.T) {
 		t.Fatalf("marshal response: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}

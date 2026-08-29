@@ -93,7 +93,7 @@ func (h *TokenAdminHandler) handleRegister(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
+	writeJSON(w, http.StatusCreated, map[string]any{
 		"token_id":   info.TokenID.String(),
 		"token":      raw,
 		"tenant_id":  info.TenantID,
@@ -140,7 +140,7 @@ func (h *TokenAdminHandler) handleRotate(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"token_id":  info.TokenID.String(),
 		"token":     raw,
 		"tenant_id": info.TenantID,
@@ -200,7 +200,7 @@ func (h *TokenAdminHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

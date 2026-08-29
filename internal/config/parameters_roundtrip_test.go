@@ -182,7 +182,7 @@ func configDeepEqualExcluding(a, b *ParametersConfig, skipFields ...string) (boo
 }
 
 // normalizeForCompare converts nil slices/maps to empty ones so reflect.DeepEqual treats `var s []T` and `[]T{}` as equivalent.
-func normalizeForCompare(v interface{}) interface{} {
+func normalizeForCompare(v any) any {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice:

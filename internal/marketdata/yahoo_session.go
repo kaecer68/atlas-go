@@ -296,7 +296,7 @@ func (s *yahooSession) ensureCrumb(ctx context.Context) error {
 		return nil
 	}
 
-	_, err, _ := s.crumbFlight.Do("crumb", func() (interface{}, error) {
+	_, err, _ := s.crumbFlight.Do("crumb", func() (any, error) {
 		// Double-check after winning the singleflight slot: another caller
 		// may have refreshed the crumb while we were waiting.
 		s.mu.RLock()

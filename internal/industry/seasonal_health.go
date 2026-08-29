@@ -74,7 +74,7 @@ func SummarizeCalibrationHealth(paramsPath string) (*CalibrationHealthSummary, e
 		return nil, fmt.Errorf("read parameters.json: %w", err)
 	}
 
-	var root map[string]interface{}
+	var root map[string]any
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return nil, fmt.Errorf("parse parameters.json: %w", err)
 	}
@@ -142,15 +142,15 @@ func SummarizeCalibrationHealth(paramsPath string) (*CalibrationHealthSummary, e
 // extractSeasonalPatterns 從 root 中取出 seasonal_patterns.value 陣列，
 // 並回傳其健度狀態以區分「結構不存在」、「結構錯誤」、「結構正常」三種情境。
 // 容忍陣列中個別元素不是 object（會被略過），但陣列本身必須存在且型別正確。
-func extractSeasonalPatterns(root map[string]interface{}) ([]map[string]interface{}, seasonalDataStatus) {
+func extractSeasonalPatterns(root map[string]any) ([]map[string]any, seasonalDataStatus) {
 	if root == nil {
 		return nil, seasonalDataMissingSection
 	}
-	industry, ok := root["industry"].(map[string]interface{})
+	industry, ok := root["industry"].(map[string]any)
 	if !ok {
 		return nil, seasonalDataMissingSection
 	}
-	sp, ok := industry["seasonal_patterns"].(map[string]interface{})
+	sp, ok := industry["seasonal_patterns"].(map[string]any)
 	if !ok {
 		return nil, seasonalDataMissingSection
 	}
@@ -158,13 +158,13 @@ func extractSeasonalPatterns(root map[string]interface{}) ([]map[string]interfac
 	if !exists {
 		return nil, seasonalDataMissingSection
 	}
-	arr, ok := rawValue.([]interface{})
+	arr, ok := rawValue.([]any)
 	if !ok {
 		return nil, seasonalDataMalformedValue
 	}
-	out := make([]map[string]interface{}, 0, len(arr))
+	out := make([]map[string]any, 0, len(arr))
 	for _, item := range arr {
-		if m, ok := item.(map[string]interface{}); ok {
+		if m, ok := item.(map[string]any); ok {
 			out = append(out, m)
 		}
 	}

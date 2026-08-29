@@ -163,7 +163,7 @@ func TestCheckParamsIntegrity_NullValue(t *testing.T) {
 		t.Fatalf("marshal default config: %v", err)
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
 		t.Fatalf("unmarshal config to map: %v", err)
 	}
@@ -196,11 +196,11 @@ func TestCheckParamsIntegrity_EmptyObject(t *testing.T) {
 		t.Fatalf("marshal default config: %v", err)
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
 		t.Fatalf("unmarshal config to map: %v", err)
 	}
-	obj["darwinian"] = map[string]interface{}{}
+	obj["darwinian"] = map[string]any{}
 
 	badData, err := json.Marshal(obj)
 	if err != nil {
@@ -229,7 +229,7 @@ func TestCheckParamsIntegrity_WrongType(t *testing.T) {
 		t.Fatalf("marshal default config: %v", err)
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
 		t.Fatalf("unmarshal config to map: %v", err)
 	}

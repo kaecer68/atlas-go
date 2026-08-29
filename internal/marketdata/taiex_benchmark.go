@@ -17,7 +17,7 @@ type DailyBenchmark struct {
 
 // TAIEXBenchmarkProvider returns the daily TAIEX benchmark return.
 type TAIEXBenchmarkProvider interface {
-	DailyReturn(ctx interface{}, tradingDate time.Time) (DailyBenchmark, error)
+	DailyReturn(ctx any, tradingDate time.Time) (DailyBenchmark, error)
 }
 
 // FileTAIEXBenchmarkProvider reads TAIEX daily returns from a JSON file.
@@ -51,7 +51,7 @@ func NewFileTAIEXBenchmarkProvider(macroDir string) *FileTAIEXBenchmarkProvider 
 
 // DailyReturn returns the benchmark for the given trading date.
 // Returns an unavailable benchmark when data is missing.
-func (p *FileTAIEXBenchmarkProvider) DailyReturn(ctx interface{}, tradingDate time.Time) (DailyBenchmark, error) {
+func (p *FileTAIEXBenchmarkProvider) DailyReturn(ctx any, tradingDate time.Time) (DailyBenchmark, error) {
 	dateStr := tradingDate.Format("2006-01-02")
 	b, ok := p.data[dateStr]
 	if !ok {

@@ -201,7 +201,7 @@ func writeSectorIndexFixture(t *testing.T, dir, filename string, data map[string
 	}
 }
 
-func writeJSON(path string, v interface{}) error {
+func writeJSON(path string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err

@@ -278,7 +278,7 @@ func TestPipelineItem_MetricsOmittedWhenEmpty(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -313,12 +313,12 @@ func TestPipelineItem_MetricsPresentWhenPopulated(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	metrics, ok := raw["metrics"].(map[string]interface{})
+	metrics, ok := raw["metrics"].(map[string]any)
 	if !ok {
 		t.Fatal("expected 'metrics' to be present and be an object")
 	}
@@ -353,12 +353,12 @@ func TestPipelineItem_FactorScoresAlignment(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	fs, ok := raw["factor_scores"].(map[string]interface{})
+	fs, ok := raw["factor_scores"].(map[string]any)
 	if !ok {
 		t.Fatal("expected factor_scores to be present")
 	}
@@ -381,7 +381,7 @@ func TestRecommendationPipelineResponse_StatusFieldsSerialized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -426,7 +426,7 @@ func TestHandleRecommendationPipeline_StatusPropagatesToResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal response: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

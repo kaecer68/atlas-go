@@ -307,7 +307,7 @@ func (m *BackgroundTaskManager) safeCallCompletionHandler(taskName string, err e
 	m.completionHandler(taskName, err, duration)
 }
 
-func logAndWrapPanic(taskName, event string, r interface{}) error {
+func logAndWrapPanic(taskName, event string, r any) error {
 	if r == nil {
 		return nil
 	}
