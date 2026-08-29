@@ -431,7 +431,7 @@ func parseStructsWithNames(dir string, baseStructNames map[string]bool) map[stri
 					if jsonName == "" || jsonName == "-" {
 						continue
 					}
-					optional := strings.Contains(field.Tag.Value, ",omitempty")
+					optional := isOptionalJSONTag(field.Tag.Value)
 					tsType := goTypeToTSWithStructs(field.Type, structNames)
 					fields = append(fields, structField{
 						Name:     field.Names[0].Name,
@@ -616,6 +616,14 @@ func writeTypeScriptInterfaces(structs map[string][]structField, out string, amb
 	}
 
 	fmt.Printf("Wrote %d interfaces to %s\n", len(structs), out)
+}
+
+// isOptionalJSONTag reports whether a struct field's raw tag value marks the
+// JSON key as optional in generated TypeScript. Both ",omitempty" and
+// ",omitzero" make the key potentially absent at runtime, so both must emit
+// an optional ("?") TypeScript property.
+func isOptionalJSONTag(tag string) bool {
+	return strings.Contains(tag, ",omitempty") || strings.Contains(tag, ",omitzero")
 }
 
 func extractJSONName(tag string) string {
