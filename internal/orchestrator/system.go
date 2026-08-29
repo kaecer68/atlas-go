@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1075,15 +1076,11 @@ func buildParameterSnapshot() *shared.ParameterSnapshot {
 	}
 	if cfg.FactorWeight.BaseWeights.Value != nil {
 		snap.FactorWeights = make(map[string]float64, len(cfg.FactorWeight.BaseWeights.Value))
-		for k, v := range cfg.FactorWeight.BaseWeights.Value {
-			snap.FactorWeights[k] = v
-		}
+		maps.Copy(snap.FactorWeights, cfg.FactorWeight.BaseWeights.Value)
 	}
 	if cfg.NarrativeConviction.ThemeHitRates.Value != nil {
 		snap.NarrativeHitRates = make(map[string]float64, len(cfg.NarrativeConviction.ThemeHitRates.Value))
-		for k, v := range cfg.NarrativeConviction.ThemeHitRates.Value {
-			snap.NarrativeHitRates[k] = v
-		}
+		maps.Copy(snap.NarrativeHitRates, cfg.NarrativeConviction.ThemeHitRates.Value)
 	}
 	if cfg.Industry.PhaseScores.Value.ScoreExpansion != 0 || cfg.Industry.PhaseScores.Value.ScoreRecovery != 0 {
 		snap.IndustryPhaseScores = map[string]float64{

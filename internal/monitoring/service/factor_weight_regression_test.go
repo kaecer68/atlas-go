@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -23,9 +24,7 @@ func (s *stubWeightProvider) GetWeights(regime string) map[string]float64 {
 		return nil
 	}
 	cp := make(map[string]float64, len(src))
-	for k, v := range src {
-		cp[k] = v
-	}
+	maps.Copy(cp, src)
 	return cp
 }
 

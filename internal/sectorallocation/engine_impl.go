@@ -3,6 +3,7 @@ package sectorallocation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"time"
 
@@ -308,9 +309,7 @@ func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers Driv
 	// Strategic prior 作為 base；nil prior 會被 Projector 拒絕（non L1 行為）。
 	base := map[industry.SectorID]float64{}
 	if e.prior != nil {
-		for k, v := range e.prior.Weights {
-			base[k] = v
-		}
+		maps.Copy(base, e.prior.Weights)
 	}
 
 	// 從 6 個 provider 收集 driver deltas（SA-INV-08 每個 driver 最多一次）。

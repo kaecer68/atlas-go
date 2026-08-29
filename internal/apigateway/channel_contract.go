@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -244,9 +245,7 @@ func (r *ChannelContractRegistry) ResolveAlias(name string) (string, bool) {
 // All returns a copy of the registry's contracts keyed by channel ID.
 func (r *ChannelContractRegistry) All() map[string]ChannelContract {
 	out := make(map[string]ChannelContract, len(r.contracts))
-	for k, v := range r.contracts {
-		out[k] = v
-	}
+	maps.Copy(out, r.contracts)
 	return out
 }
 

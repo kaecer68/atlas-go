@@ -10,6 +10,7 @@ package stocktools
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,9 +28,7 @@ func writeSnapshot(t *testing.T, entries map[string]portfolio.FundamentalData) *
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fundamentals.json")
 	raw := map[string]portfolio.FundamentalData{}
-	for k, v := range entries {
-		raw[k] = v
-	}
+	maps.Copy(raw, entries)
 	data, err := json.Marshal(raw)
 	if err != nil {
 		t.Fatalf("marshal snapshot: %v", err)

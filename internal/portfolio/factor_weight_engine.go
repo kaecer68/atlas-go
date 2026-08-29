@@ -160,9 +160,7 @@ func (e *FactorWeightEngine) SetBaseWeights(weights map[FactorType]float64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.baseWeights = make(map[FactorType]float64)
-	for k, v := range weights {
-		e.baseWeights[k] = v
-	}
+	maps.Copy(e.baseWeights, weights)
 }
 
 func (e *FactorWeightEngine) normalizeWeights(weights map[FactorType]float64) {
@@ -505,9 +503,7 @@ func (e *FactorWeightEngine) ApplyStrategy(s *strategy.Strategy) {
 	if deltas == nil {
 		return
 	}
-	for ft, d := range deltas {
-		e.strategyAdjustment[ft] = d
-	}
+	maps.Copy(e.strategyAdjustment, deltas)
 }
 
 // ApplyStrategyMix computes a weighted-average factor adjustment from multiple

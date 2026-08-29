@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"time"
@@ -313,9 +314,7 @@ func enumerateCandidates(p ParamMeta) []float64 {
 
 func cloneMap(m map[string]float64) map[string]float64 {
 	c := make(map[string]float64, len(m))
-	for k, v := range m {
-		c[k] = v
-	}
+	maps.Copy(c, m)
 	return c
 }
 

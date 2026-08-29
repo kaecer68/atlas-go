@@ -3,6 +3,7 @@ package narrative
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"strings"
@@ -115,9 +116,7 @@ func loadSectorSymbols(path string) map[string][]string {
 
 func copySectorMap(src map[string][]string) map[string][]string {
 	dst := make(map[string][]string, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 

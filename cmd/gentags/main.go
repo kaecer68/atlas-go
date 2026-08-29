@@ -34,6 +34,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -127,9 +128,7 @@ func main() {
 		// Merge config structs (e.g. ParametersConfig, CalibrationEvidence).
 		if configDir != "" {
 			configStructs := parseStructsWithNames(configDir, allNames)
-			for k, v := range configStructs {
-				structs[k] = v
-			}
+			maps.Copy(structs, configStructs)
 		}
 		// Merge industry structs (e.g. CycleStatusCard, CalendarEvent, SupplyChainGraph).
 		if industryDir != "" {

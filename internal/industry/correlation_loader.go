@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strconv"
@@ -57,9 +58,7 @@ func loadSectorSymbolsJSON(path string) (map[string][]string, error) {
 	}
 
 	result := make(map[string][]string, len(raw))
-	for k, v := range raw {
-		result[k] = v
-	}
+	maps.Copy(result, raw)
 	return result, nil
 }
 

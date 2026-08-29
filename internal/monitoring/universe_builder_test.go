@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"sort"
 	"testing"
@@ -128,9 +129,7 @@ func (m *mockFactorEng) CalculateAllScores(symbol string, _ map[string]domain.Qu
 	}
 	if s, ok := m.scores[symbol]; ok {
 		out := make(map[string]float64, len(s))
-		for k, v := range s {
-			out[k] = v
-		}
+		maps.Copy(out, s)
 		return out
 	}
 	return nil
