@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -254,9 +255,9 @@ func latestDateJSONL(path string) (string, error) {
 		chunk := string(buf[:readSize])
 		lines := strings.Split(chunk, "\n")
 
-		for i := len(lines) - 1; i >= 0; i-- {
-			if strings.TrimSpace(lines[i]) != "" {
-				lastNonEmptyLine = lines[i]
+		for _, line := range slices.Backward(lines) {
+			if strings.TrimSpace(line) != "" {
+				lastNonEmptyLine = line
 				goto parse
 			}
 		}

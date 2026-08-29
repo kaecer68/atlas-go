@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -735,8 +736,8 @@ func (c *PeriodIndicatorsCalculator) EnrichGovernmentBroker(ind *PeriodIndicator
 	streak := 0
 	consecutiveBuy := true
 	// Walk from most recent backward; count consecutive buy days.
-	for i := len(validDates) - 1; i >= 0; i-- {
-		dateCanonical := validDates[i]
+	for _, dateCanonical := range slices.Backward(validDates) {
+
 		dateCompact := strings.ReplaceAll(dateCanonical, "-", "")
 		legacyPath := filepath.Join(flowDir, dateCompact+".json")
 		data, err := os.ReadFile(legacyPath)

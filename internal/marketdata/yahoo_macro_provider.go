@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -231,8 +232,8 @@ func (y *YahooFinanceMacroProvider) fetchIndicator(ctx context.Context, ticker s
 // the latest close is zero (Yahoo Finance off-hours) — we fall back to the
 // most recent valid trading-day close from the historical data (range=1mo).
 func findLastValidClose(closes []float64) (latest, prev float64) {
-	for i := len(closes) - 1; i >= 0; i-- {
-		v := closes[i]
+	for _, v := range slices.Backward(closes) {
+
 		if math.IsNaN(v) || math.IsInf(v, 0) || v == 0 {
 			continue
 		}

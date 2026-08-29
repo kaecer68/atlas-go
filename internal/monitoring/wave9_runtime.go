@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/eventbus"
@@ -157,8 +158,8 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 		// the caller can distinguish a clean partial-failure from one where
 		// detectors leaked bus subscriptions (Stop returned an error).
 		var cleanupErrs []error
-		for i := len(started) - 1; i >= 0; i-- {
-			if stopErr := started[i](); stopErr != nil {
+		for _, s := range slices.Backward(started) {
+			if stopErr := s(); stopErr != nil {
 				cleanupErrs = append(cleanupErrs, stopErr)
 				logging.Warn("wave9_observability", "cleanup_stop_failed", logging.Err(stopErr))
 			}

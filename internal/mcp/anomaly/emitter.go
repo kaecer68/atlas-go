@@ -3,6 +3,7 @@ package anomaly
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -100,8 +101,8 @@ func (e *Emitter) ProcessOnce(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	for i := len(recent) - 1; i >= 0; i-- {
-		ev := recent[i]
+	for _, ev := range slices.Backward(recent) {
+
 		key := dedupKey(ev)
 		if _, seen := e.dedup[key]; seen {
 			continue

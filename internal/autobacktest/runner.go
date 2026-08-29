@@ -2,6 +2,7 @@ package autobacktest
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/backtest"
@@ -232,12 +233,12 @@ func (r *Runner) mostRecentTradingDay() (time.Time, error) {
 	}
 
 	now := time.Now()
-	for i := len(ds.Dates) - 1; i >= 0; i-- {
-		if ds.Dates[i].After(now) {
+	for _, v := range slices.Backward(ds.Dates) {
+		if v.After(now) {
 			continue
 		}
-		if _, ok := ds.NextDate(ds.Dates[i], 1); ok {
-			return ds.Dates[i], nil
+		if _, ok := ds.NextDate(v, 1); ok {
+			return v, nil
 		}
 	}
 
