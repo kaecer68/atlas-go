@@ -262,4 +262,5 @@ func TestSystem_ApplyCharterReserveCash_VariesWithPeriod(t *testing.T) {
 	}
 }
 
-func periodPtr(p domain.MarketPeriod) *domain.MarketPeriod { return &p }
+//go:fix inline
+func periodPtr(p domain.MarketPeriod) *domain.MarketPeriod { return new(p) }

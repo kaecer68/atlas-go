@@ -7,7 +7,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
-func p(v float64) *float64 { return &v }
+//go:fix inline
+func p(v float64) *float64 { return new(v) }
 
 func TestAgentPerformanceRow_HasAfterTaxPnLField(t *testing.T) {
 	row := AgentPerformanceRow{

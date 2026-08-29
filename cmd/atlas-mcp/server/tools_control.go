@@ -11,43 +11,43 @@ func registerControlTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_get_audit_log",
 		Description: autoDescOr("control_get_audit_log", "Control override audit log (which agents were paused/banned, by which operator). Read-only by design."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleControlGetAuditLog)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_get_active_overrides",
 		Description: autoDescOr("control_get_active_overrides", "Currently active control overrides (paused agents, sector bans, weight overrides)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleControlGetActiveOverrides)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_approve_recommendation",
 		Description: autoDescOr("control_approve_recommendation", "Status of an approve-recommendation override (read-only state inspection; actual approval is admin-only)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleControlApproveRecommendation)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_reject_recommendation",
 		Description: autoDescOr("control_reject_recommendation", "Status of a reject-recommendation override (read-only state inspection)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleControlRejectRecommendation)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_pause_agent",
 		Description: autoDescOr("control_pause_agent", "Pause a specific agent (suspend its recommendations). Side-effect: persists in control store. Requires ATLAS_API_KEY."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleControlPauseAgent)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_resume_agent",
 		Description: autoDescOr("control_resume_agent", "Resume a previously-paused agent. Side-effect: removes pause override. Requires ATLAS_API_KEY."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleControlResumeAgent)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "control_sector_ban",
 		Description: autoDescOr("control_sector_ban", "Ban a sector from new positions. Side-effect: applies sector override. Requires ATLAS_API_KEY."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleControlSectorBan)
 }
 

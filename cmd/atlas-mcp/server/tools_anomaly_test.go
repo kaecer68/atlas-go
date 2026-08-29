@@ -82,7 +82,7 @@ func TestHandleAnomalyGetRecent_RespectsLimit(t *testing.T) {
 		detector.Store().Add(anomaly.AnomalyEvent{TenantID: "t1", AnomalyType: "burst", Score: float64(i)})
 	}
 
-	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: intPtr(3)})
+	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: new(3)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestHandleAnomalyGetRecent_NewestFirst(t *testing.T) {
 		detector.Store().Add(anomaly.AnomalyEvent{TenantID: "t1", AnomalyType: "burst", Score: float64(i)})
 	}
 
-	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: intPtr(3)})
+	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: new(3)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

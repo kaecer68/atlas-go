@@ -14,7 +14,8 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
-func float64Ptr(v float64) *float64 { return &v }
+//go:fix inline
+func float64Ptr(v float64) *float64 { return new(v) }
 
 func TestHandleBenchmarkComparison_SessionsWithData(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -193,13 +194,13 @@ func TestBenchmarkComparisonResponse_JSONSerialization(t *testing.T) {
 		SnapshotTime:    now,
 		SessionCount:    5,
 		PortfolioReturn: 0.12,
-		TAIEXReturn:     float64Ptr(0.08),
-		Outperformance:  float64Ptr(0.04),
-		Alpha:           float64Ptr(0.03),
-		Beta:            float64Ptr(1.15),
-		TrackingError:   float64Ptr(0.02),
-		SharpeRatio:     float64Ptr(1.85),
-		InfoRatio:       float64Ptr(2.0),
+		TAIEXReturn:     new(0.08),
+		Outperformance:  new(0.04),
+		Alpha:           new(0.03),
+		Beta:            new(1.15),
+		TrackingError:   new(0.02),
+		SharpeRatio:     new(1.85),
+		InfoRatio:       new(2.0),
 		EquityCurve: []BenchmarkPoint{
 			{Label: "04/13", Portfolio: 100.0, Benchmark: 100.0, Outperf: 0.0},
 			{Label: "04/14", Portfolio: 102.0, Benchmark: 101.0, Outperf: 1.0},
@@ -261,7 +262,7 @@ func TestBuildBenchmarkEquityCurve(t *testing.T) {
 		{
 			name:        "empty points",
 			points:      nil,
-			taiexReturn: float64Ptr(0.05),
+			taiexReturn: new(0.05),
 			wantLen:     0,
 		},
 		{
@@ -269,7 +270,7 @@ func TestBuildBenchmarkEquityCurve(t *testing.T) {
 			points: []sessionPoint{
 				{date: time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC), name: "session-20260413-daily", value: 1000000},
 			},
-			taiexReturn: float64Ptr(0.05),
+			taiexReturn: new(0.05),
 			wantLen:     1,
 			wantFirst:   BenchmarkPoint{Label: "04/13", Portfolio: 100.0, Benchmark: 100.0, Outperf: 0.0},
 		},
@@ -280,7 +281,7 @@ func TestBuildBenchmarkEquityCurve(t *testing.T) {
 				{date: time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC), name: "session-20260414-daily", value: 1020000},
 				{date: time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC), name: "session-20260415-daily", value: 1050000},
 			},
-			taiexReturn: float64Ptr(0.05),
+			taiexReturn: new(0.05),
 			wantLen:     3,
 			wantFirst:   BenchmarkPoint{Label: "04/13", Portfolio: 100.0, Benchmark: 100.0, Outperf: 0.0},
 		},

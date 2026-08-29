@@ -245,8 +245,11 @@ func TestPromptControlRoundTripEmpty(t *testing.T) {
 
 // ---- ScreeningCriteria.HasFilters ----
 
-func ptrFloat64(v float64) *float64 { return &v }
-func ptrInt64(v int64) *int64       { return &v }
+//go:fix inline
+func ptrFloat64(v float64) *float64 { return new(v) }
+
+//go:fix inline
+func ptrInt64(v int64) *int64 { return new(v) }
 
 func TestScreeningCriteriaHasFilters(t *testing.T) {
 	tests := []struct {
@@ -257,11 +260,11 @@ func TestScreeningCriteriaHasFilters(t *testing.T) {
 		{"empty all nil", ScreeningCriteria{}, false},
 		{"PE range set", ScreeningCriteria{PE: &RangeFilter{Min: ptrFloat64(10)}}, true},
 		{"PB range set", ScreeningCriteria{PB: &RangeFilter{Max: ptrFloat64(2)}}, true},
-		{"dividend yield set", ScreeningCriteria{DividendYield: &RangeFilter{Min: ptrFloat64(0.03)}}, true},
-		{"momentum 20d set", ScreeningCriteria{Momentum20Day: &RangeFilter{Min: ptrFloat64(-0.05), Max: ptrFloat64(0.15)}}, true},
-		{"volatility 20d set", ScreeningCriteria{Volatility20Day: &RangeFilter{Max: ptrFloat64(0.35)}}, true},
+		{"dividend yield set", ScreeningCriteria{DividendYield: &RangeFilter{Min: new(0.03)}}, true},
+		{"momentum 20d set", ScreeningCriteria{Momentum20Day: &RangeFilter{Min: new(-0.05), Max: new(0.15)}}, true},
+		{"volatility 20d set", ScreeningCriteria{Volatility20Day: &RangeFilter{Max: new(0.35)}}, true},
 		{"volume intraday set", ScreeningCriteria{VolumeIntraday: &MinFilter{Min: ptrInt64(1000000)}}, true},
-		{"min factor score set", ScreeningCriteria{MinTotalFactorScore: ptrFloat64(0.5)}, true},
+		{"min factor score set", ScreeningCriteria{MinTotalFactorScore: new(0.5)}, true},
 		{"required factors non-empty", ScreeningCriteria{RequiredFactors: []string{"momentum", "value"}}, true},
 		{
 			"multiple criteria set",

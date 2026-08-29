@@ -10,25 +10,25 @@ func registerStrategyTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_layers",
 		Description: autoDescOr("strategy_get_layers", "All strategy layers (L1-L5) currently configured in the system."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyGetLayers)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get",
 		Description: autoDescOr("strategy_get", "Fetch a single strategy by id (returns full config + state metadata)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyGet)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_attribution",
 		Description: autoDescOr("strategy_get_attribution", "Performance attribution for a strategy over the requested window.  HTTP: GET /api/strategies/{id}/attribution. Alternative: strategy_get_summary, strategy_ranker."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyGetAttribution)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_get_summary",
 		Description: autoDescOr("strategy_get_summary", "Compact summary of a strategy (hit rate, Sharpe, drawdown, regime behavior) HTTP: GET /api/strategies/{id}/summary. Alternative: strategy_get_attribution, strategy_ranker."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyGetSummary)
 }
 

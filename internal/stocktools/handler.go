@@ -154,8 +154,8 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 		q, err := h.deps.FugleClient.GetQuote(fugleCtx, symbol)
 		if err == nil {
 			if marketdata.QuoteComplete(q) {
-				q.Complete = boolPtr(true)
-				q.TradingDay = boolPtr(tradingDay)
+				q.Complete = new(true)
+				q.TradingDay = new(tradingDay)
 				return http.StatusOK, q
 			}
 			// Manifest Phase B2: Fugle 200 但 OHLC 殘缺（closePrice-only）
@@ -203,16 +203,12 @@ func (h *Handler) HandleQuote(r *http.Request) (int, any) {
 			return http.StatusNotFound, map[string]string{"error": "symbol not found"}
 		}
 		q := quotes[0]
-		q.Complete = boolPtr(marketdata.QuoteComplete(q))
-		q.TradingDay = boolPtr(tradingDay)
+		q.Complete = new(marketdata.QuoteComplete(q))
+		q.TradingDay = new(tradingDay)
 		return http.StatusOK, q
 	}
 	return http.StatusServiceUnavailable, map[string]string{"error": "quote provider failed"}
 }
-
-// boolPtr 回傳指向 b 的指標（domain.Quote 的 Complete/TradingDay 標記用；
-// nil = 未評估，false 是明確訊號，故不能省略 false）。
-func boolPtr(b bool) *bool { return &b }
 
 // HandleSectorMedianPE returns the median P/E for a given sector; 0 if no data.
 func (h *Handler) HandleSectorMedianPE(r *http.Request) (int, any) {

@@ -89,7 +89,7 @@ func registerAuditStateTool(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "audit_state",
 		Description: autoDescOr("audit_state", "Return the constitution audit tracking snapshot (ATLAS_CONSTITUTION_AUDIT.md §附錄 D + §附錄 F). Use to self-audit 憲章對齊狀態: 22 audit items + F1-F5/M1-M6/X1-X3 governance progress, with P0/P1/P2 stats. Read-only; no side effects."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleAuditState)
 }
 

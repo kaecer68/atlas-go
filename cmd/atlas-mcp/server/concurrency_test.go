@@ -135,7 +135,7 @@ func TestHandlers_ConcurrentInvocations(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(id + 1)})
+			_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(id + 1)})
 			if err != nil {
 				t.Errorf("goroutine %d: %v", id, err)
 			}
@@ -159,7 +159,7 @@ func TestWithAudit_ConcurrentMix(t *testing.T) {
 			defer wg.Done()
 			switch id % 5 {
 			case 0:
-				_, _, _ = s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(7)})
+				_, _, _ = s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(7)})
 			case 1:
 				rec.SetResponseBody([]byte(`{"strategies":[]}`))
 				_, _, _ = s.handleStrategyListActive(context.Background(), nil, struct{}{})

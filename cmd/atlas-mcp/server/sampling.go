@@ -37,7 +37,7 @@ func registerSamplingTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_sample_llm",
 		Description: autoDescOr("mcp_sample_llm", "Request the connected MCP client to sample a message from its LLM. Requires client sampling capability."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPSampleLLM)
 }
 

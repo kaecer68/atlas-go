@@ -357,16 +357,16 @@ func (h *Handlers) HandleRetailSentiment(r *http.Request) (int, any) {
 		MarginPercentile:       marginPercentile,
 	}
 	if snap.RetailMarginBalance.Symbol != "" {
-		resp.SentimentScore = float64Ptr(rsiResult.Score)
-		resp.MarginChangePct = float64Ptr(snap.RetailMarginBalance.ChangePct / 100)
-		resp.MarginBalance = float64Ptr(snap.RetailMarginBalance.Value)
-		resp.Score = float64Ptr(rsiResult.Score)
-		resp.ChangePct = float64Ptr(snap.RetailMarginBalance.ChangePct)
-		resp.CompositeSentiment = float64Ptr(rsiResult.Score)
+		resp.SentimentScore = new(rsiResult.Score)
+		resp.MarginChangePct = new(snap.RetailMarginBalance.ChangePct / 100)
+		resp.MarginBalance = new(snap.RetailMarginBalance.Value)
+		resp.Score = new(rsiResult.Score)
+		resp.ChangePct = new(snap.RetailMarginBalance.ChangePct)
+		resp.CompositeSentiment = new(rsiResult.Score)
 	}
 	if snap.RetailShortBalance.Symbol != "" {
-		resp.ShortBalance = float64Ptr(snap.RetailShortBalance.Value)
-		resp.ShortChangePct = float64Ptr(snap.RetailShortBalance.ChangePct)
+		resp.ShortBalance = new(snap.RetailShortBalance.Value)
+		resp.ShortChangePct = new(snap.RetailShortBalance.ChangePct)
 	}
 	return http.StatusOK, resp
 }
@@ -560,8 +560,4 @@ func getFloatOrZero[T any](data *T, fn func(*T) float64) float64 {
 		return 0
 	}
 	return fn(data)
-}
-
-func float64Ptr(v float64) *float64 {
-	return &v
 }

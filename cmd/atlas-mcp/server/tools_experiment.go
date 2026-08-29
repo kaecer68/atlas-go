@@ -12,25 +12,25 @@ func registerExperimentTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_diff",
 		Description: autoDescOr("experiment_diff", "Diff between a candidate experiment and the baseline (config + metrics comparison)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleExperimentDiff)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_history",
 		Description: autoDescOr("experiment_history", "Historical list of experiments (judge results, promotions, reverts)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleExperimentHistory)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_promote",
 		Description: autoDescOr("experiment_promote", "Promote a candidate experiment to baseline. Side-effect: rewrites baseline policy. Requires ATLAS_API_KEY."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleExperimentPromote)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_revert",
 		Description: autoDescOr("experiment_revert", "Revert a candidate experiment (cancel promotion / restore prior baseline). Side-effect: rewrites baseline policy. Requires ATLAS_API_KEY."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleExperimentRevert)
 }
 

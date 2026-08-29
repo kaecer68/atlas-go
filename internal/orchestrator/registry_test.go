@@ -103,8 +103,9 @@ func TestPluginRegistryScreenDetailedNoScreener(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func int64Ptr(i int64) *int64 {
-	return &i
+	return new(i)
 }
 
 // TestRegistryExecutorsCovered guards the PR 2d P0: every ENABLED agent in

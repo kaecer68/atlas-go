@@ -111,30 +111,30 @@ func registerParametersTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get",
 		Description: autoDescOr("parameters_get", "Current parameters (flat key→type map). For structured access, prefer parameters_get_categories (category breakdown) or parameters_get_metadata (provenance, rationale, citation)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleParametersGet)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get_categories",
 		Description: autoDescOr("parameters_get_categories", "Available parameter categories with id/name/description (darwinian, factor, optimizer, sizing, health, garch, experiment, baseline, ...)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleParametersGetCategories)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get_audit_log",
 		Description: autoDescOr("parameters_get_audit_log", "Parameter change audit log (who/when/why). Empty list when no changes recorded yet."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleParametersGetAuditLog)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get_metadata",
 		Description: autoDescOr("parameters_get_metadata", "Parameters with full provenance metadata (value, rationale, source, citation, last_calibrated)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleParametersGetMetadata)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "parameters_get_snapshots",
 		Description: autoDescOr("parameters_get_snapshots", "Historical parameter snapshots (default last 20 days, max 365)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleParametersGetSnapshots)
 }

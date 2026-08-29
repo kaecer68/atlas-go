@@ -59,7 +59,7 @@ func registerStrategyForPeriodTool(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_for_period",
 		Description: autoDescOr("strategy_for_period", "Return the strategies allowed for a given market period (downturn / turnaround_up / bull / plateau / consolidation / turnaround_down / black_swan). Reads configs/methodology_rules.yaml (same source as MethodologyAdvisor). Use to answer 'what strategy fits this regime' without calling the recommender. Read-only; no side effects."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyForPeriod)
 }
 
