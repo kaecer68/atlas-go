@@ -141,7 +141,7 @@ func solveLowerTriangular(L [][]float64, b []float64) []float64 {
 	x := make([]float64, n)
 	for i := range n {
 		sum := b[i]
-		for j := 0; j < i; j++ {
+		for j := range i {
 			sum -= L[i][j] * x[j]
 		}
 		x[i] = sum / L[i][i]

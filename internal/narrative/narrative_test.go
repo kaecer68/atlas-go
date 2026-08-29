@@ -72,7 +72,7 @@ func writeTestReplayCSV(dir string) (string, error) {
 		for code, multiplier := range symbols {
 			base := basePrices[code]
 			price := base
-			for i := 0; i < day; i++ {
+			for range day {
 				price *= multiplier
 			}
 			open := price * 0.995
