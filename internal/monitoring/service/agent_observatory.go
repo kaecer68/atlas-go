@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"time"
 
@@ -63,9 +64,7 @@ func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*Ag
 	if darwinErr != nil {
 		logging.Warn("pipeline_service", "load_darwinian_status_failed", logging.Err(darwinErr))
 	} else if darwinData != nil {
-		for id, a := range darwinData.Agents {
-			darwinByAgent[id] = a
-		}
+		maps.Copy(darwinByAgent, darwinData.Agents)
 	}
 
 	defaultRegime := "unknown"

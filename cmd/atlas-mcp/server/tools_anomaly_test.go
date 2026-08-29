@@ -61,7 +61,7 @@ func TestHandleAnomalyGetRecent_DefaultLimit(t *testing.T) {
 	s, detector, _, done := newAnomalyTestHarness(t)
 	defer done()
 
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		detector.Store().Add(anomaly.AnomalyEvent{TenantID: "t1", AnomalyType: "burst", Score: float64(i)})
 	}
 
@@ -78,11 +78,11 @@ func TestHandleAnomalyGetRecent_RespectsLimit(t *testing.T) {
 	s, detector, _, done := newAnomalyTestHarness(t)
 	defer done()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		detector.Store().Add(anomaly.AnomalyEvent{TenantID: "t1", AnomalyType: "burst", Score: float64(i)})
 	}
 
-	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: intPtr(3)})
+	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: new(3)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -95,11 +95,11 @@ func TestHandleAnomalyGetRecent_NewestFirst(t *testing.T) {
 	s, detector, _, done := newAnomalyTestHarness(t)
 	defer done()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		detector.Store().Add(anomaly.AnomalyEvent{TenantID: "t1", AnomalyType: "burst", Score: float64(i)})
 	}
 
-	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: intPtr(3)})
+	_, out, err := s.handleAnomalyGetRecent(context.Background(), nil, AnomalyGetRecentInput{Limit: new(3)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

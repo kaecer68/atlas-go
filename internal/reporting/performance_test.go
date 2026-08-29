@@ -149,8 +149,9 @@ func TestGenerateMarkdownReport_Nil(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func float64Ptr(v float64) *float64 {
-	return &v
+	return new(v)
 }
 
 func TestGenerateReport_SharpeNA(t *testing.T) {
@@ -173,7 +174,7 @@ func TestGenerateMarkdownReport_SharpeNA(t *testing.T) {
 
 	report2 := &PerformanceReport{
 		Period:      "all",
-		SharpeRatio: float64Ptr(1.234),
+		SharpeRatio: new(1.234),
 	}
 	md2 := GenerateMarkdownReport(report2)
 	if !strings.Contains(md2, "| Sharpe Ratio | 1.234 |") {
@@ -190,7 +191,7 @@ func TestCalculateSharpeRatio(t *testing.T) {
 		{"empty", []float64{}, nil},
 		{"single", []float64{0.01}, nil},
 		{"zero variance", []float64{0.01, 0.01, 0.01}, float64Ptr(0)},
-		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, float64Ptr(7.360)},
+		{"normal", []float64{0.01, -0.005, 0.02, -0.01, 0.015}, new(7.360)},
 	}
 
 	for _, tt := range tests {

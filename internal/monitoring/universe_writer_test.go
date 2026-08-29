@@ -125,10 +125,10 @@ func TestWriteUniverseRegistry(t *testing.T) {
 		wg.Add(readerCount + 1)
 		panicCh := make(chan error, readerCount)
 
-		for i := 0; i < readerCount; i++ {
+		for range readerCount {
 			go func() {
 				defer wg.Done()
-				for j := 0; j < 100; j++ {
+				for range 100 {
 					_, _ = LoadUniverseRegistry(path)
 				}
 			}()
@@ -136,7 +136,7 @@ func TestWriteUniverseRegistry(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 50; i++ {
+			for range 50 {
 				_ = WriteUniverseRegistry(path, sampleUniverseBuildResult(), sampleRankedSymbols(3), 1)
 			}
 		}()

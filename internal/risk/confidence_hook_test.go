@@ -8,7 +8,7 @@ import (
 
 func TestEnrichDecision_HookCalled(t *testing.T) {
 	called := false
-	ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+	ConfidenceCommentary = func(ctx context.Context, decision any) (string, error) {
 		called = true
 		return "defensive mode VaR approaching limit", nil
 	}
@@ -34,7 +34,7 @@ func TestEnrichDecision_NilHook_ReturnsEmpty(t *testing.T) {
 }
 
 func TestEnrichDecision_ErrorReturnsEmpty(t *testing.T) {
-	ConfidenceCommentary = func(ctx context.Context, decision interface{}) (string, error) {
+	ConfidenceCommentary = func(ctx context.Context, decision any) (string, error) {
 		return "", fmt.Errorf("LLM unavailable")
 	}
 	defer func() { ConfidenceCommentary = nil }()

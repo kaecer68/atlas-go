@@ -3,6 +3,7 @@ package eventdriven
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -210,12 +211,7 @@ func (sp *SectorPredictor) applyMacroDrivers(sid industry.SectorID, scoreIn, sco
 }
 
 func sectorInSet(sid industry.SectorID, set []industry.SectorID) bool {
-	for _, s := range set {
-		if s == sid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(set, sid)
 }
 
 type macroDriverDef struct {

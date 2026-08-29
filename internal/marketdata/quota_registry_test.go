@@ -43,7 +43,7 @@ func TestQuotaRegistry_Snapshot_ExhaustedFlag(t *testing.T) {
 	}
 
 	// Burn through the budget one call at a time.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if !tracker.AllowCall() {
 			t.Fatalf("AllowCall returned false at iteration %d (should have quota left)", i)
 		}
@@ -118,7 +118,7 @@ func TestQuotaRegistry_ConcurrentReadSnapshot(t *testing.T) {
 	r := NewQuotaRegistry()
 	var wg sync.WaitGroup
 	// Writer goroutines register providers.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -127,7 +127,7 @@ func TestQuotaRegistry_ConcurrentReadSnapshot(t *testing.T) {
 		}(i)
 	}
 	// Reader goroutines hit Snapshot concurrently.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

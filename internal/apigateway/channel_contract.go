@@ -3,6 +3,8 @@ package apigateway
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 )
 
@@ -232,10 +234,8 @@ func (r *ChannelContractRegistry) Contract(channelID string) ChannelContract {
 // The second return value is false when name is not an alias of any channel.
 func (r *ChannelContractRegistry) ResolveAlias(name string) (string, bool) {
 	for id, c := range r.contracts {
-		for _, a := range c.Aliases {
-			if a == name {
-				return id, true
-			}
+		if slices.Contains(c.Aliases, name) {
+			return id, true
 		}
 	}
 	return "", false
@@ -244,9 +244,7 @@ func (r *ChannelContractRegistry) ResolveAlias(name string) (string, bool) {
 // All returns a copy of the registry's contracts keyed by channel ID.
 func (r *ChannelContractRegistry) All() map[string]ChannelContract {
 	out := make(map[string]ChannelContract, len(r.contracts))
-	for k, v := range r.contracts {
-		out[k] = v
-	}
+	maps.Copy(out, r.contracts)
 	return out
 }
 

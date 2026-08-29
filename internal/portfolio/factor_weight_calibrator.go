@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"sort"
@@ -121,9 +122,7 @@ func currentFactorWeights() map[FactorType]float64 {
 	w := make(map[FactorType]float64)
 	params := config.GetParametersConfig()
 	if params == nil || params.FactorWeight.BaseWeights.Value == nil {
-		for ft, v := range defaultBaseWeights() {
-			w[ft] = v
-		}
+		maps.Copy(w, defaultBaseWeights())
 		return w
 	}
 	for k, v := range params.FactorWeight.BaseWeights.Value {

@@ -13,13 +13,13 @@ func registerAnomalyTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_anomaly_get_recent",
 		Description: autoDescOr("mcp_anomaly_get_recent", "List the most recent anomaly events detected by the MCP observability subsystem."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleAnomalyGetRecent)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_anomaly_ack",
 		Description: autoDescOr("mcp_anomaly_ack", "Acknowledge an anomaly alert via the atlas alert store."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleAnomalyAck)
 }
 

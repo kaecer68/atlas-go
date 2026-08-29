@@ -43,10 +43,7 @@ func Split(outcomes []domain.RecommendationOutcome, cfg SplitConfig) ([]domain.R
 		if ratio <= 0 || ratio >= 1 {
 			ratio = 0.8
 		}
-		splitIdx := int(math.Floor(float64(len(outcomes)) * ratio))
-		if splitIdx < 1 {
-			splitIdx = 1
-		}
+		splitIdx := max(int(math.Floor(float64(len(outcomes))*ratio)), 1)
 		if splitIdx >= len(outcomes) {
 			splitIdx = len(outcomes) - 1
 		}
@@ -72,14 +69,8 @@ func WalkForwardFolds(outcomes []domain.RecommendationOutcome, cfg SplitConfig) 
 	if len(outcomes) < cfg.TrainSize {
 		return nil
 	}
-	step := cfg.TestSize
-	if step < 1 {
-		step = 1
-	}
-	embargo := cfg.EmbargoDays
-	if embargo < 0 {
-		embargo = 0
-	}
+	step := max(cfg.TestSize, 1)
+	embargo := max(cfg.EmbargoDays, 0)
 	var folds []Fold
 	for start := 0; start+cfg.TrainSize <= len(outcomes); start += step {
 		end := start + cfg.TrainSize

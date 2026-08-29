@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -671,9 +672,7 @@ func TestEngineParameters_Validate(t *testing.T) {
 			name: "engine_drawdown_level_pct_out_of_range",
 			mutate: func(c *ParametersConfig) {
 				levels := make(map[string]DrawdownLevel)
-				for k, v := range c.Engine.Drawdown.Levels.Value {
-					levels[k] = v
-				}
+				maps.Copy(levels, c.Engine.Drawdown.Levels.Value)
 				levels["light"] = DrawdownLevel{Percentage: 1.5, MaxExposure: 0.85}
 				c.Engine.Drawdown.Levels.Value = levels
 			},
@@ -683,9 +682,7 @@ func TestEngineParameters_Validate(t *testing.T) {
 			name: "engine_sector_rotation_alloc_not_sum_1",
 			mutate: func(c *ParametersConfig) {
 				allocs := make(map[string]float64)
-				for k, v := range c.Engine.SectorRotation.BaseAllocations.Value {
-					allocs[k] = v
-				}
+				maps.Copy(allocs, c.Engine.SectorRotation.BaseAllocations.Value)
 				allocs["semiconductor"] = 0.9
 				c.Engine.SectorRotation.BaseAllocations.Value = allocs
 			},
@@ -1022,7 +1019,7 @@ func TestParametersConfig_LockedSaveWithRollback_Concurrent(t *testing.T) {
 	const N = 10
 	var wg sync.WaitGroup
 	errCh := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -1105,7 +1102,7 @@ func TestParametersConfig_TryLockedSaveWithRollback_Concurrent(t *testing.T) {
 	const N = 10
 	var wg sync.WaitGroup
 	errCh := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

@@ -18,13 +18,13 @@ func generateL1Data(rng *rand.Rand) ([][]float64, []float64, []float64) {
 	trueCoef[1] = -1.5
 	trueCoef[2] = 1.0
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		X[i] = make([]float64, p)
-		for j := 0; j < p; j++ {
+		for j := range p {
 			X[i][j] = rng.NormFloat64()
 		}
 		y[i] = 0.0
-		for j := 0; j < p; j++ {
+		for j := range p {
 			y[i] += X[i][j] * trueCoef[j]
 		}
 		// add minor noise
@@ -49,7 +49,7 @@ func TestElasticNet_L1Sparsity(t *testing.T) {
 	}
 
 	// Check signal features (first 3) have non-zero coefficients.
-	for j := 0; j < 3; j++ {
+	for j := range 3 {
 		if en.coef[j] == 0 {
 			t.Logf("WARNING: signal feature %d has zero coefficient (true=%.1f, fitted=%.6f)", j, trueCoef[j], en.coef[j])
 		}
@@ -78,7 +78,7 @@ func TestElasticNet_Predict(t *testing.T) {
 	n := 30
 	X := make([][]float64, n)
 	y := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		X[i] = []float64{float64(i) * 0.5}
 		y[i] = 3*float64(i)*0.5 + 5 + 0.05*rng.NormFloat64()
 	}
@@ -108,7 +108,7 @@ func TestElasticNet_Predict(t *testing.T) {
 
 	// Check predictions are numerically reasonable: MSE should be low.
 	var mse float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		diff := pred[i] - y[i]
 		mse += diff * diff
 	}
@@ -147,7 +147,7 @@ func TestElasticNet_RidgeBehavior(t *testing.T) {
 	}
 
 	ridgeZeroCount := 0
-	for j := 0; j < 20; j++ {
+	for j := range 20 {
 		if math.Abs(ridge.coef[j]) < 1e-6 {
 			ridgeZeroCount++
 		}
@@ -169,7 +169,7 @@ func TestElasticNet_RidgeBehavior(t *testing.T) {
 	}
 
 	lassoZeroCount := 0
-	for j := 0; j < 20; j++ {
+	for j := range 20 {
 		if math.Abs(lasso.coef[j]) < 0.01 {
 			lassoZeroCount++
 		}

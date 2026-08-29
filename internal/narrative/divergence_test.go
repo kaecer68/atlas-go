@@ -58,7 +58,7 @@ func TestRetailDivergenceAndMarginZScore_FlatMarketReturnsZero(t *testing.T) {
 func seedDivergenceHistory(d *DivergenceDetector, count int, marginStart, marginStep, foreignStart, foreignStep float64) {
 	margin := marginStart
 	foreign := foreignStart
-	for i := 0; i < count; i++ {
+	for i := range count {
 		marginDelta := marginStep + float64(i%5)
 		foreignDelta := foreignStep + float64((i+2)%5)
 		if i%2 == 1 {

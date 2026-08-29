@@ -80,7 +80,7 @@ func TestSSEBridge_Broadcast_SlowClient(t *testing.T) {
 	client := bridge.AddClient("client-1", nil)
 
 	// Fill the channel to capacity.
-	for i := 0; i < 128; i++ {
+	for range 128 {
 		select {
 		case client.Events <- BusEvent{ID: "fill", Type: EventMarketSnapshot}:
 		default:
@@ -118,7 +118,7 @@ drainLoop:
 
 func TestSSEBridge_ClientCount_Concurrent(t *testing.T) {
 	bridge := NewSSEBridge()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		bridge.AddClient(string(rune('a'+i)), nil)
 	}
 	if bridge.ClientCount() != 10 {

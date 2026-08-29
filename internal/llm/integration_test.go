@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -568,13 +569,7 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 	if len(resp.AttemptedProviders) == 0 {
 		t.Fatal("len(AttemptedProviders) = 0, want at least 1")
 	}
-	foundMiniMax := false
-	for _, p := range resp.AttemptedProviders {
-		if p == llm.ProviderMiniMax {
-			foundMiniMax = true
-			break
-		}
-	}
+	foundMiniMax := slices.Contains(resp.AttemptedProviders, llm.ProviderMiniMax)
 	if !foundMiniMax {
 		t.Errorf("AttemptedProviders = %v, expected MiniMax", resp.AttemptedProviders)
 	}
@@ -650,13 +645,7 @@ func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 	}
 
 	// Assert: DeepSeek IS in AttemptedProviders.
-	foundDeepSeek := false
-	for _, p := range resp.AttemptedProviders {
-		if p == llm.ProviderDeepSeek {
-			foundDeepSeek = true
-			break
-		}
-	}
+	foundDeepSeek := slices.Contains(resp.AttemptedProviders, llm.ProviderDeepSeek)
 	if !foundDeepSeek {
 		t.Errorf("ProviderDeepSeek should appear in AttemptedProviders: %v", resp.AttemptedProviders)
 	}

@@ -9,6 +9,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -257,10 +258,5 @@ func (r *MethodologyRules) GetStrategyCategory(strategyID string) string {
 // for a given period.
 func (r *MethodologyRules) IsStrategyAllowed(periodID, strategyID string) bool {
 	allowed := r.GetAllowedStrategies(periodID)
-	for _, id := range allowed {
-		if id == strategyID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, strategyID)
 }

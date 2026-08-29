@@ -126,14 +126,14 @@ func TestScheduledTask_LastRun_ThreadSafe(t *testing.T) {
 	task := &ScheduledTask{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_ = task.LastRun()
 		}()
 	}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -203,7 +203,7 @@ func TestScheduledTask_RecordSuccess_OnCleanTask(t *testing.T) {
 func TestScheduledTask_RecordFailure_RecordSuccess_MultipleCycles(t *testing.T) {
 	task := &ScheduledTask{}
 
-	for cycle := 0; cycle < 3; cycle++ {
+	for cycle := range 3 {
 		// Build up failures
 		for i := 0; i < cycle+1; i++ {
 			task.RecordFailure()
@@ -484,7 +484,7 @@ func TestBackgroundTaskManager_Status_SingleTask(t *testing.T) {
 func TestBackgroundTaskManager_Status_MultipleTasks(t *testing.T) {
 	m := NewBackgroundTaskManager(nil)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		name := string(rune('A' + i))
 		_ = m.Register(&ScheduledTask{
 			Name:     string(name),
@@ -636,22 +636,22 @@ func TestScheduledTask_ConcurrentIsEnabled(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 50 goroutines reading IsEnabled
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_ = task.IsEnabled()
 			}
 		}()
 	}
 
 	// 50 goroutines writing SetEnabled
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				task.SetEnabled(j%2 == 0)
 			}
 		}()
@@ -666,11 +666,11 @@ func TestScheduledTask_ConcurrentFailures(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 100 goroutines recording failures concurrently
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 50; j++ {
+			for range 50 {
 				task.RecordFailure()
 			}
 		}()
@@ -689,11 +689,11 @@ func TestScheduledTask_ConcurrentMixedOperations(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Readers
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_ = task.IsEnabled()
 				_ = task.LastRun()
 				_ = task.Failures()
@@ -702,12 +702,12 @@ func TestScheduledTask_ConcurrentMixedOperations(t *testing.T) {
 	}
 
 	// Writers
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			now := time.Now()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				task.SetEnabled(j%2 == 0)
 				task.SetLastRun(now)
 				task.RecordFailure()
@@ -726,7 +726,7 @@ func TestBackgroundTaskManager_ConcurrentRegisterAndGet(t *testing.T) {
 	m := NewBackgroundTaskManager(nil)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -753,7 +753,7 @@ func TestBackgroundTaskManager_ConcurrentListAndRegister(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Register some initial tasks
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_ = m.Register(&ScheduledTask{
 			Name:     "initial-task-" + string(rune('A'+i)),
 			Interval: 1 * time.Hour,
@@ -762,14 +762,14 @@ func TestBackgroundTaskManager_ConcurrentListAndRegister(t *testing.T) {
 	}
 
 	// Concurrent List and Register
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_ = m.List()
 		}()
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -1414,7 +1414,7 @@ func TestBackgroundTaskManager_RunTask_DesynchronizesMultipleTasks(t *testing.T)
 	doneCh := make(chan int, numTasks)
 	var mu sync.Mutex
 
-	for i := 0; i < numTasks; i++ {
+	for i := range numTasks {
 		idx := i
 		task := &ScheduledTask{
 			Name:     "desync-task-" + string(rune('A'+i)),
@@ -1506,7 +1506,7 @@ func TestExecuteTask_SkippedPreservesFailures(t *testing.T) {
 		t.Fatalf("after failure: Failures = %d, want 1", got)
 	}
 	// No-op ticks must NOT wash the failure away.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		task.SetLastRun(time.Now().Add(-2 * time.Hour))
 		m.executeTask(context.Background(), task)
 	}

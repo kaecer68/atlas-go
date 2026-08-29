@@ -171,7 +171,7 @@ func (a SemiconductorLLMAgent) Recommend(agent domain.AgentSpec, quote domain.Qu
 		// Tool-call phase: concatenate all tool results into the
 		// toolResult string fed to the next reflect prompt.
 		toolResult = ""
-		for j := 0; j < len(steps); j++ {
+		for j := range steps {
 			if err := runner.AdvanceToolCall(); err != nil {
 				rec.Reason = fmt.Sprintf("AdvanceToolCall[%d]: %v", j, err)
 				return rec, false

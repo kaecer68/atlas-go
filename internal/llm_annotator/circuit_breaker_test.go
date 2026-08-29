@@ -71,7 +71,7 @@ func TestKimiClient_BreakerOpensAfterRepeatedFailures(t *testing.T) {
 
 	// 3 consecutive breaker failures (= 3 Annotate calls each exhausting
 	// their retry budget) opens the breaker.
-	for i := 0; i < apigatewayCircuitBreakerFailureThreshold; i++ {
+	for range apigatewayCircuitBreakerFailureThreshold {
 		_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
 	}
 	if got := c.BreakerState(); got != "open" {
@@ -109,7 +109,7 @@ func TestKimiClient_BreakerRecoversOnSuccess(t *testing.T) {
 	}
 	c.cacheTTL = 0
 
-	for i := 0; i < apigatewayCircuitBreakerFailureThreshold; i++ {
+	for range apigatewayCircuitBreakerFailureThreshold {
 		_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
 	}
 	if c.BreakerState() != "open" {
@@ -197,7 +197,7 @@ func TestKimiClient_Annotate_RecordsCircuitOpenMetric(t *testing.T) {
 	}
 	c.cacheTTL = 0
 
-	for i := 0; i < apigatewayCircuitBreakerFailureThreshold; i++ {
+	for range apigatewayCircuitBreakerFailureThreshold {
 		_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
 	}
 	_, _ = c.Annotate(context.Background(), FailureContext{FrameID: "x"})
@@ -290,7 +290,7 @@ func TestCircuitBreaker_WithNowFunc(t *testing.T) {
 	// Drive 3 failures with the frozen clock — lastFailure should be
 	// "frozen", not the real wall clock.
 	errBoom := simpleError("boom")
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := cb.Call(func() error { return errBoom }); err == nil {
 			t.Fatalf("call %d: expected error, got nil", i)
 		}

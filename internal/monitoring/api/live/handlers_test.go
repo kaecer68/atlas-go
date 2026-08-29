@@ -428,7 +428,7 @@ func TestHandleRiskExposure_WithSessionsAndPositions(t *testing.T) {
 	sessionsDir := filepath.Join(tmpDir, "sessions")
 
 	// Create sessions with portfolio values
-	for i := 0; i < 35; i++ {
+	for i := range 35 {
 		sessionID := fmt.Sprintf("session-202604%02d-daily", i+1)
 		dir := filepath.Join(sessionsDir, sessionID)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -510,7 +510,7 @@ func TestHandleRiskExposure_InsufficientData(t *testing.T) {
 	sessionsDir := filepath.Join(tmpDir, "sessions")
 
 	// Create only a few sessions (less than 30 needed for VaR)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		sessionID := fmt.Sprintf("session-202604%02d-daily", i+1)
 		dir := filepath.Join(sessionsDir, sessionID)
 		if err := os.MkdirAll(dir, 0o755); err != nil {

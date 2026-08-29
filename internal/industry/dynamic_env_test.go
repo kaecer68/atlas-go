@@ -14,7 +14,7 @@ func TestDynamicEnvModulator_UpdateRollingBaseline(t *testing.T) {
 	)
 
 	// Record 30 days of history with known median
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		dem.RecordSnapshot(marketdata.MacroDataSnapshot{
 			Oil: marketdata.MacroDataPoint{Value: float64(70 + i)}, // 70-99
 			DXY: marketdata.MacroDataPoint{Value: float64(100 + i)},
@@ -37,7 +37,7 @@ func TestDynamicEnvModulator_UpdateRollingBaseline_Window(t *testing.T) {
 	dem.windowDays = 10
 
 	// Record 20 days
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		dem.RecordSnapshot(marketdata.MacroDataSnapshot{
 			Oil: marketdata.MacroDataPoint{Value: float64(50 + i*5)}, // 50, 55, 60, ..., 145
 		})
@@ -60,7 +60,7 @@ func TestDynamicEnvModulator_RecordSnapshot_Cap(t *testing.T) {
 	dem.windowDays = 5
 
 	// Record 15 days (max should be 10 = 2*window)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		dem.RecordSnapshot(marketdata.MacroDataSnapshot{
 			Oil: marketdata.MacroDataPoint{Value: float64(i)},
 		})
@@ -83,7 +83,7 @@ func TestDynamicEnvModulator_UpdateRollingBaseline_BDI(t *testing.T) {
 		},
 	)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		dem.RecordSnapshot(marketdata.MacroDataSnapshot{
 			Oil: marketdata.MacroDataPoint{Value: float64(70 + i)},
 			Bdi: marketdata.MacroDataPoint{Value: float64(1500 + i*50)},

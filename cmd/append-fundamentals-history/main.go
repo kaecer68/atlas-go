@@ -205,8 +205,8 @@ func (a *app) loadAndValidate(tradingDate string) (records []historyRecord, err 
 // a canonical key so that downstream history consumers see the bare stock ID.
 func normalizeSymbol(symbol string) string {
 	for _, suf := range []string{".TW", ".TWO"} {
-		if strings.HasSuffix(symbol, suf) {
-			return strings.TrimSuffix(symbol, suf)
+		if before, ok := strings.CutSuffix(symbol, suf); ok {
+			return before
 		}
 	}
 	return symbol

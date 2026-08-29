@@ -284,10 +284,7 @@ func (cm *CorrelationMatrix) RecalculateFromReturns(industryReturns map[string][
 		for j := i + 1; j < len(industries); j++ {
 			a, b := industries[i], industries[j]
 			returnsA, returnsB := industryReturns[a], industryReturns[b]
-			n := len(returnsA)
-			if len(returnsB) < n {
-				n = len(returnsB)
-			}
+			n := min(len(returnsB), len(returnsA))
 			if n < 30 {
 				continue
 			}
@@ -314,7 +311,7 @@ func pearsonCorrelation(x, y []float64) float64 {
 		return 0
 	}
 	var sumX, sumY, sumXY, sumX2, sumY2 float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sumX += x[i]
 		sumY += y[i]
 		sumXY += x[i] * y[i]

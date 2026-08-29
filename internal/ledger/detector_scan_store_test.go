@@ -152,7 +152,7 @@ func TestSQLiteDetectorScanStore_LimitRespected(t *testing.T) {
 	ctx := context.Background()
 
 	var batch []narrative.DetectionResult
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		batch = append(batch, sampleResult("test", narrative.SeverityMedium, narrative.SourceKB, float64(i)/10, nil))
 	}
 	if _, err := store.AppendScan(ctx, batch); err != nil {
@@ -173,7 +173,7 @@ func TestSQLiteDetectorScanStore_DefaultLimitOnZero(t *testing.T) {
 	ctx := context.Background()
 
 	var batch []narrative.DetectionResult
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		batch = append(batch, sampleResult("t", narrative.SeverityLow, narrative.SourceKB, 0.5, nil))
 	}
 	if _, err := store.AppendScan(ctx, batch); err != nil {

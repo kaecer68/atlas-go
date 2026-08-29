@@ -1770,7 +1770,7 @@ func writeFixtureMacroSnapshots(t *testing.T, dir, startDate string, n int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		day := start.AddDate(0, 0, i)
 		snap := marketdata.MacroDataSnapshot{
 			VIX:                marketdata.MacroDataPoint{Symbol: "^VIX", Value: 14},

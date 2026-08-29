@@ -408,7 +408,7 @@ func outputJSON(violations []Violation) {
 		passed = 0
 	}
 
-	out := map[string]interface{}{
+	out := map[string]any{
 		"status":           "passed",
 		"total_violations": len(violations),
 		"checks_passed":    passed,
@@ -422,7 +422,7 @@ func outputJSON(violations []Violation) {
 	fmt.Println(string(b))
 }
 
-func fatal(format string, args ...interface{}) {
+func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
 }

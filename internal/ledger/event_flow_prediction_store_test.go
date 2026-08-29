@@ -45,7 +45,7 @@ func TestJSONLEventFlowPredictionStore_LoadRecentRespectsLimit(t *testing.T) {
 	store := NewJSONLEventFlowPredictionStore(baseDir)
 
 	now := time.Now().UTC()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := store.AppendPrediction(EventFlowPredictionRecord{
 			PredictedAt:   now.AddDate(0, 0, i-5),
 			DirectionSign: float64(i),
@@ -76,7 +76,7 @@ func TestJSONLEventFlowPredictionStore_RespectsMaxRecordsCap(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := store.AppendPrediction(EventFlowPredictionRecord{
 			PredictedAt:   now.Add(time.Duration(i) * time.Second),
 			DirectionSign: float64(i),
@@ -185,7 +185,7 @@ func TestJSONLEventFlowPredictionStore_LenAndSizeOnEmptyStore(t *testing.T) {
 
 func TestJSONLEventFlowPredictionStore_LenAndSizeAfterAppends(t *testing.T) {
 	store := NewJSONLEventFlowPredictionStore(t.TempDir())
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := store.AppendPrediction(EventFlowPredictionRecord{
 			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
 			DirectionSign: float64(i + 1),
@@ -213,10 +213,10 @@ func TestJSONLEventFlowPredictionStore_ConcurrentAppendsNoLoss(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(g int) {
 			defer wg.Done()
-			for i := 0; i < perGoroutine; i++ {
+			for i := range perGoroutine {
 				rec := EventFlowPredictionRecord{
 					PredictedAt:   allStart.Add(time.Duration(g*perGoroutine+i) * time.Millisecond),
 					DirectionSign: float64(g*perGoroutine + i),

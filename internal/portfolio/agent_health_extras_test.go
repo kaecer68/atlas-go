@@ -127,7 +127,7 @@ func TestString_ContainsAllAgents(t *testing.T) {
 
 	m.RecordOutcome("agent-1", true, 1.2, 0.6)
 	m.RecordOutcome("agent-2", false, -0.4, 0.45)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.RecordOutcome("agent-3", false, -0.7, 0.3)
 	}
 
@@ -178,7 +178,7 @@ func TestJoinLines_SingleAndMultiple(t *testing.T) {
 // (the helper itself is pure; we keep a small race-detector-friendly check).
 func TestJoinLines_ConcurrentNoRace(t *testing.T) {
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

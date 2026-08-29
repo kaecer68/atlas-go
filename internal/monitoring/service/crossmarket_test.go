@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -386,7 +387,7 @@ func TestGetCachedSnapshot_CacheHit_AvoidsProviderCall(t *testing.T) {
 	if _, err := svc.GetStatus(context.Background()); err != nil {
 		t.Fatalf("GetStatus (warm): %v", err)
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := svc.GetUSIndices(context.Background()); err != nil {
 			t.Fatalf("GetUSIndices[%d]: %v", i, err)
 		}
@@ -1117,13 +1118,7 @@ func TestUSMacroFields_MatchesDetectorChannels(t *testing.T) {
 		}
 	}
 	for ch := range detected {
-		found := false
-		for _, m := range USMacroFields {
-			if m == ch {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(USMacroFields, ch)
 		if !found {
 			t.Errorf("detectDegradedUSStatus marks %q as failed but USMacroFields does not list it — main.go recovery loop will not clear this channel", ch)
 		}

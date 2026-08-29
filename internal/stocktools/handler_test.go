@@ -352,7 +352,7 @@ func TestHandleTechnical(t *testing.T) {
 
 func TestComputeTechnical(t *testing.T) {
 	bars := make([]domain.DailyBar, 25)
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		bars[i] = domain.DailyBar{
 			Date:   time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i),
 			Symbol: "2330.TW",

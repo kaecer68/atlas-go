@@ -71,7 +71,7 @@ func TestStage3Metrics_PrometheusHandler_StableBeforeEmission(t *testing.T) {
 func TestStage3Metrics_PrometheusHandler_ExposesLedgerGauge(t *testing.T) {
 	c := NewMetricsCollector()
 	store := ledger.NewJSONLEventFlowPredictionStore(t.TempDir())
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := store.AppendPrediction(ledger.EventFlowPredictionRecord{
 			PredictedAt:   time.Now().Add(time.Duration(i) * time.Hour),
 			DirectionSign: float64(i + 1),

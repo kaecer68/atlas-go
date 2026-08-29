@@ -244,10 +244,7 @@ func latestDateJSONL(path string) (string, error) {
 	pos := fileSize
 	buf := make([]byte, chunkSize)
 	for pos > 0 {
-		readSize := int64(chunkSize)
-		if pos < readSize {
-			readSize = pos
-		}
+		readSize := min(pos, int64(chunkSize))
 		pos -= readSize
 		_, err := f.ReadAt(buf[:readSize], pos)
 		if err != nil && err != io.EOF {

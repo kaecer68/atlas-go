@@ -232,8 +232,9 @@ func TestScreenerAllowsAllWhenNoCriteriaSet(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func ptrInt64(i int64) *int64 {
-	return &i
+	return new(i)
 }
 
 func TestRegistrySymbolsIncludesNewSectorUniverses(t *testing.T) {

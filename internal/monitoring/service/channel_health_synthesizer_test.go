@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -21,9 +22,7 @@ func (f *fakeChannelHealthProvider) ChannelErrors() map[string]string {
 		return nil
 	}
 	cp := make(map[string]string, len(f.data))
-	for k, v := range f.data {
-		cp[k] = v
-	}
+	maps.Copy(cp, f.data)
 	return cp
 }
 

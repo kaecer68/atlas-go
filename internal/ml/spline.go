@@ -70,7 +70,7 @@ func computeKnots(vals []float64, degree int) []float64 {
 	sort.Float64s(sorted)
 
 	knots := make([]float64, nKnots)
-	for i := 0; i < nKnots; i++ {
+	for i := range nKnots {
 		// Quantile positions: equally spaced from 1/(nKnots+1) to nKnots/(nKnots+1).
 		frac := float64(i+1) / float64(nKnots+1)
 		pos := frac * float64(len(sorted)-1)
@@ -104,7 +104,7 @@ func (g *GLMSpline) buildDesignMatrix(X [][]float64) ([]float64, int, int) {
 	// Determine which features get spline expansion.
 	expandSet := make(map[int]bool)
 	if g.Features == nil {
-		for j := 0; j < nOrig; j++ {
+		for j := range nOrig {
 			expandSet[j] = true
 		}
 	} else {
@@ -120,7 +120,7 @@ func (g *GLMSpline) buildDesignMatrix(X [][]float64) ([]float64, int, int) {
 	if g.FitIntercept {
 		nCols++
 	}
-	for j := 0; j < nOrig; j++ {
+	for j := range nOrig {
 		if expandSet[j] {
 			nCols += g.Degree + 1
 		} else {
@@ -129,13 +129,13 @@ func (g *GLMSpline) buildDesignMatrix(X [][]float64) ([]float64, int, int) {
 	}
 
 	flat := make([]float64, nSamples*nCols)
-	for i := 0; i < nSamples; i++ {
+	for i := range nSamples {
 		col := 0
 		if g.FitIntercept {
 			flat[i*nCols+col] = 1.0
 			col++
 		}
-		for j := 0; j < nOrig; j++ {
+		for j := range nOrig {
 			if expandSet[j] && len(g.knotPositions) > j && g.knotPositions[j] != nil {
 				basis := splineBasis(X[i][j], g.knotPositions[j])
 				for _, bv := range basis {
@@ -176,7 +176,7 @@ func (g *GLMSpline) Fit(X [][]float64, y []float64) error {
 	// Determine which features get spline expansion.
 	expandSet := make(map[int]bool)
 	if g.Features == nil {
-		for j := 0; j < nOrig; j++ {
+		for j := range nOrig {
 			expandSet[j] = true
 		}
 	} else {
@@ -189,7 +189,7 @@ func (g *GLMSpline) Fit(X [][]float64, y []float64) error {
 
 	// Compute knot positions for each expanded feature.
 	g.knotPositions = make([][]float64, nOrig)
-	for j := 0; j < nOrig; j++ {
+	for j := range nOrig {
 		if expandSet[j] {
 			vals := expandFeature(X, j)
 			g.knotPositions[j] = computeKnots(vals, g.Degree)
@@ -222,7 +222,7 @@ func (g *GLMSpline) fitGaussian(design *mat.Dense, yVec *mat.VecDense, nCols int
 	xtx.Mul(design.T(), design)
 
 	// Add ridge penalty to diagonal.
-	for i := 0; i < nCols; i++ {
+	for i := range nCols {
 		xtx.Set(i, i, xtx.At(i, i)+ridge)
 	}
 
@@ -262,7 +262,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 		beta[i] = 0.01
 	}
 
-	for iter := 0; iter < maxIter; iter++ {
+	for iter := range maxIter {
 		// Compute η = Xβ.
 		betaVec := mat.NewVecDense(nCols, beta)
 		var eta mat.VecDense
@@ -271,7 +271,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 		// Compute weights and working response.
 		weights := make([]float64, nSamples)
 		z := make([]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			etaI := eta.AtVec(i)
 
 			switch family {
@@ -304,7 +304,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 		var xtwx mat.Dense
 		// Build sqrt(W) * X for stability.
 		sqrtW := mat.NewDense(nSamples, nSamples, nil)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			sqrtW.Set(i, i, math.Sqrt(weights[i]))
 		}
 
@@ -314,7 +314,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 		xtwx.Mul(wx.T(), &wx)
 
 		// Ridge penalty.
-		for i := 0; i < nCols; i++ {
+		for i := range nCols {
 			xtwx.Set(i, i, xtwx.At(i, i)+ridge)
 		}
 
@@ -325,7 +325,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 
 		// XᵀWz.
 		wz := mat.NewVecDense(nSamples, nil)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			wz.SetVec(i, weights[i]*z[i])
 		}
 		var xtwz mat.VecDense
@@ -337,7 +337,7 @@ func (g *GLMSpline) fitIRLS(design *mat.Dense, yVec *mat.VecDense, nCols int, fa
 
 		// Check convergence.
 		maxDiff := 0.0
-		for i := 0; i < nCols; i++ {
+		for i := range nCols {
 			diff := math.Abs(betaNew.AtVec(i) - beta[i])
 			if diff > maxDiff {
 				maxDiff = diff

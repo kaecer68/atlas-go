@@ -50,7 +50,7 @@ func TestYahooNegativeCache_429HonorsRetryAfterAndShortCircuits(t *testing.T) {
 	}
 
 	// Every subsequent call short-circuits WITHOUT touching the network.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err = s.fetchWithFallback(ctx, "AAPL", map[string]string{"interval": "1d", "range": "5d"})
 		if err == nil || !strings.Contains(err.Error(), "negative-cache") {
 			t.Fatalf("call %d: expected negative-cache short-circuit, got %v", i+1, err)

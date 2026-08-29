@@ -10,19 +10,19 @@ func registerCrossmarketTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_status",
 		Description: autoDescOr("crossmarket_get_status", "Cross-market data feed status (HTTP: GET /api/cross-market/status) — US indices source, freshness, error count."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleCrossmarketGetStatus)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_correlation",
 		Description: autoDescOr("crossmarket_get_correlation", "Latest cross-market correlation matrix (HTTP: GET /api/cross-market/correlation) — Taiwan sector vs US indices."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleCrossmarketGetCorrelation)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "crossmarket_get_us_indices",
 		Description: autoDescOr("crossmarket_get_us_indices", "Latest US index and tech stock snapshots (HTTP: GET /api/dashboard/us-indices) — live-fetched from Yahoo Finance. Includes S&P 500, NASDAQ, Dow Jones, SOX, NVDA, AAPL, MSFT, TSM ADR."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleCrossmarketGetUsIndices)
 }
 

@@ -13,7 +13,7 @@ import (
 // for a single symbol over n days, starting from baseDate.
 func createTestPrices(symbol string, n int, basePrice float64, startDate time.Time) *HistoricalPrices {
 	hp := NewHistoricalPrices()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		hp.prices[symbol] = append(hp.prices[symbol], pricePoint{
 			Date:  startDate.AddDate(0, 0, i),
 			Close: basePrice + float64(i),
@@ -28,7 +28,7 @@ func createTestPrices(symbol string, n int, basePrice float64, startDate time.Ti
 func TestAdjustForCorporateActions_WithReferencePrice(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -65,7 +65,7 @@ func TestAdjustForCorporateActions_WithReferencePrice(t *testing.T) {
 func TestAdjustForCorporateActions_StockDividend(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -102,7 +102,7 @@ func TestAdjustForCorporateActions_StockDividend(t *testing.T) {
 func TestAdjustForCorporateActions_CapitalReduction(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -140,7 +140,7 @@ func TestAdjustForCorporateActions_CapitalReduction(t *testing.T) {
 func TestAdjustForCorporateActions_MultipleEvents(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -191,7 +191,7 @@ func TestAdjustForCorporateActions_MultipleEvents(t *testing.T) {
 func TestAdjustForCorporateActions_Idempotent(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -225,7 +225,7 @@ func TestAdjustForCorporateActions_Idempotent(t *testing.T) {
 func TestAdjustForCorporateActions_UnknownSymbol(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -266,7 +266,7 @@ func TestAdjustForCorporateActions_UnknownSymbol(t *testing.T) {
 func TestAdjustForCorporateActions_InvalidPostEventPrice(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 0.0, // all prices zero
@@ -291,7 +291,7 @@ func TestAdjustForCorporateActions_InvalidPostEventPrice(t *testing.T) {
 func TestActionEffects(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -338,7 +338,7 @@ func TestActionEffects(t *testing.T) {
 func TestAdjustForCorporateActions_SameDayMultipleAdjustments(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,
@@ -395,7 +395,7 @@ func TestAdjustForCorporateActions_CashDividend_NoReferencePrice(t *testing.T) {
 	baseDate := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 	hp := NewHistoricalPrices()
 	// 10 days of prices at 100.0
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		hp.prices["2330"] = append(hp.prices["2330"], pricePoint{
 			Date:  baseDate.AddDate(0, 0, i),
 			Close: 100.0,

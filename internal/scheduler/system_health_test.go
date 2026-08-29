@@ -21,7 +21,7 @@ func TestSystemHealthMonitor_AllClear(t *testing.T) {
 	})
 
 	// Seed positive returns so RollingSharpe > 0 (>=8 unique values each).
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		dw.RecordOutcome("a1", 0.02+float64(i%10)*0.001, true)
 		dw.RecordOutcome("a2", 0.015+float64(i%10)*0.001, true)
 	}
@@ -51,7 +51,7 @@ func TestSystemHealthMonitor_SharpeTrendDeclining(t *testing.T) {
 
 	// Build 10 days of high Sharpe history.
 	// Use varied returns so stddev > 0 and Sharpe is non-zero.
-	for day := 0; day < 10; day++ {
+	for day := range 10 {
 		n := 6
 		if day == 0 {
 			n = 60
@@ -70,7 +70,7 @@ func TestSystemHealthMonitor_SharpeTrendDeclining(t *testing.T) {
 			{ID: "a1", Enabled: true, Layer: domain.LayerSector, Skill: "tech"},
 		},
 	})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		// 10 unique values so the degenerate-window guard does not zero Sharpe.
 		dw.RecordOutcome("a1", -0.03-float64(i%10)*0.001, false)
 	}
@@ -101,7 +101,7 @@ func TestSystemHealthMonitor_NegativeSharpeCritical(t *testing.T) {
 	})
 
 	// Inject negative returns so RollingSharpe < -0.5 (10 unique values).
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		dw.RecordOutcome("a1", -0.03-float64(i%10)*0.001, false)
 	}
 
@@ -137,7 +137,7 @@ func TestSystemHealthMonitor_AgentPopulationMuted30(t *testing.T) {
 
 	// Mute a1 via 5 consecutive losses (default mute threshold).
 	hm := portfolio.NewAgentHealthManager()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		hm.RecordOutcome("a1", false, -1.0, 0.0)
 	}
 
@@ -173,7 +173,7 @@ func TestSystemHealthMonitor_AgentPopulationMuted50(t *testing.T) {
 
 	// Mute both agents.
 	hm := portfolio.NewAgentHealthManager()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		hm.RecordOutcome("a1", false, -1.0, 0.0)
 		hm.RecordOutcome("a2", false, -1.0, 0.0)
 	}

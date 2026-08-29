@@ -9,7 +9,7 @@ import (
 
 func TestRateLimiter_DisabledWhenZeroCapacity(t *testing.T) {
 	rl := NewRateLimiter(RateLimiterConfig{PerMinute: 0, Burst: 0})
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		if r := rl.Allow("tool", "caller"); !r.Allowed {
 			t.Fatalf("expected allowed when disabled, got deny at i=%d", i)
 		}
@@ -24,7 +24,7 @@ func TestRateLimiter_BurstDefaultsToPerMinute(t *testing.T) {
 		refillPerS: 1,
 		now:        func() time.Time { return now },
 	}
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		if r := rl.Allow("tool", "caller"); !r.Allowed {
 			t.Fatalf("burst %d: expected allowed, got deny", i)
 		}
@@ -42,7 +42,7 @@ func TestRateLimiter_BurstThenDeny(t *testing.T) {
 		refillPerS: 1,
 		now:        func() time.Time { return now },
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if r := rl.Allow("tool", "caller"); !r.Allowed {
 			t.Fatalf("burst %d: expected allowed, got deny", i)
 		}
@@ -64,7 +64,7 @@ func TestRateLimiter_RefillOverTime(t *testing.T) {
 		refillPerS: 1,
 		now:        func() time.Time { return now },
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		rl.Allow("tool", "caller")
 	}
 	if r := rl.Allow("tool", "caller"); r.Allowed {
@@ -112,7 +112,7 @@ func TestRateLimiter_CapAtCapacity(t *testing.T) {
 	}
 	now = now.Add(100 * time.Second) // would yield 100000 tokens without cap
 	allowed := 0
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if r := rl.Allow("tool", "caller"); r.Allowed {
 			allowed++
 		}
@@ -173,7 +173,7 @@ func TestRateLimiter_ConcurrentAllow(t *testing.T) {
 	var wg sync.WaitGroup
 	var allowed int64
 	var mu sync.Mutex
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

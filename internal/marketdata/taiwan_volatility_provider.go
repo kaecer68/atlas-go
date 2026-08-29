@@ -233,7 +233,7 @@ func computeAnnualizedVolatility20D(closes []float64) float64 {
 	}
 
 	lr := make([]float64, 20)
-	for j := 0; j < 20; j++ {
+	for j := range 20 {
 		pos := n - 20 + j
 		if closes[pos-1] > 0 && closes[pos] > 0 {
 			lr[j] = math.Log(closes[pos] / closes[pos-1])

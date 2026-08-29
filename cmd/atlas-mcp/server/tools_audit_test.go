@@ -22,7 +22,7 @@ func TestMCPGetCallStats_ReturnsAggregatedMetrics(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, stats, err := s.handleMCPGetCallStats(context.Background(), nil, CallStatsInput{WindowMinutes: intPtr(60)})
+	_, stats, err := s.handleMCPGetCallStats(context.Background(), nil, CallStatsInput{WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetCallStats: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestMCPGetSessionTopology_ReturnsAgentToolMatrix(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, topo, err := s.handleMCPGetSessionTopology(context.Background(), nil, TopologyInput{WindowMinutes: intPtr(60)})
+	_, topo, err := s.handleMCPGetSessionTopology(context.Background(), nil, TopologyInput{WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetSessionTopology: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestMCPGetTopSlowTools_ReturnsSortedByLatency(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: intPtr(5), WindowMinutes: intPtr(60)})
+	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: new(5), WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTopSlowTools: %v", err)
 	}
@@ -123,13 +123,13 @@ func TestMCPGetTopSlowTools_RespectsLimit(t *testing.T) {
 		t.Fatalf("new audit writer: %v", err)
 	}
 	now := time.Now().UTC()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_ = w.Write(AuditEntry{TS: now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano), Tool: fmt.Sprintf("t%d", i), Status: "ok", DurationMS: int64(10 * (i + 1))})
 	}
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: intPtr(3), WindowMinutes: intPtr(60)})
+	_, out, err := s.handleMCPGetTopSlowTools(context.Background(), nil, TopSlowToolsInput{Limit: new(3), WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTopSlowTools: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestMCPGetTenantUsage_ReturnsTenantStats(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestMCPGetTenantUsage_AnonymousFallback(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestMCPGetTenantUsage_EmptyAuditReturnsEmpty(t *testing.T) {
 	_ = w.Close()
 
 	s := &server{audit: w}
-	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: intPtr(60)})
+	_, out, err := s.handleMCPGetTenantUsage(context.Background(), nil, TenantUsageInput{WindowMinutes: new(60)})
 	if err != nil {
 		t.Fatalf("handleMCPGetTenantUsage: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
 		t.Fatalf("new audit writer: %v", err)
 	}
 	now := time.Now().UTC()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_ = w.Write(AuditEntry{
 			TS:         now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
 			AgentID:    "agent1",
@@ -242,7 +242,7 @@ func TestReadAuditEntriesV2_ConcurrentSafe(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

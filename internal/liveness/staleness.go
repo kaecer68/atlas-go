@@ -2,6 +2,7 @@ package liveness
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"time"
 
@@ -179,9 +180,7 @@ func (m *StalenessMonitor) AlertedForTesting() map[string]bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make(map[string]bool, len(m.alerted))
-	for k, v := range m.alerted {
-		out[k] = v
-	}
+	maps.Copy(out, m.alerted)
 	return out
 }
 

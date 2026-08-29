@@ -835,11 +835,11 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 	}
 }
 
-func stressComponentsToMap(comps map[string]float64) map[string]interface{} {
+func stressComponentsToMap(comps map[string]float64) map[string]any {
 	if comps == nil {
 		return nil
 	}
-	out := make(map[string]interface{}, len(comps))
+	out := make(map[string]any, len(comps))
 	for k, v := range comps {
 		out[k] = v
 	}

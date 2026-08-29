@@ -18,7 +18,8 @@ func mp(value, changePct float64) marketdata.MacroDataPoint {
 	return marketdata.MacroDataPoint{Symbol: "TEST", Value: value, ChangePct: changePct}
 }
 
-func float64Ptr(v float64) *float64 { return &v }
+//go:fix inline
+func float64Ptr(v float64) *float64 { return new(v) }
 
 func TestResolveSymbolName(t *testing.T) {
 	tests := []struct {
@@ -568,7 +569,7 @@ func TestStrategyFrameSummary_JSONTags(t *testing.T) {
 }
 
 func TestExitAlert_JSONTags(t *testing.T) {
-	ea := ExitAlert{Symbol: "2330.TW", Name: "台積電", DaysHeld: 10, PnlPct: float64Ptr(15.0), Suggestion: "部分獲利了結"}
+	ea := ExitAlert{Symbol: "2330.TW", Name: "台積電", DaysHeld: 10, PnlPct: new(15.0), Suggestion: "部分獲利了結"}
 	b, err := json.Marshal(ea)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -584,9 +585,9 @@ func TestExitAlert_JSONTags(t *testing.T) {
 func TestCoreIndicators_JSONTags(t *testing.T) {
 	ci := CoreIndicators{
 		ForeignCapitalNetTWD: float64Ptr(5000),
-		TSMADRpct:            float64Ptr(2.5),
-		NVDApct:              float64Ptr(1.5),
-		DXYpct:               float64Ptr(-0.3),
+		TSMADRpct:            new(2.5),
+		NVDApct:              new(1.5),
+		DXYpct:               new(-0.3),
 	}
 	b, err := json.Marshal(ci)
 	if err != nil {

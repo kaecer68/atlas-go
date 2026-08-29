@@ -306,8 +306,8 @@ func (ie *InferenceEngine) getParameterFromConfig(cfg *ParametersConfig, name st
 // handleMapGetParameter handles getting map sub-keys via dot notation.
 func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name string) *float64 {
 	// Factor.InstitutionalSentimentWeights
-	if strings.HasPrefix(name, "factor_institutional_sentiment_weights_") {
-		key := strings.TrimPrefix(name, "factor_institutional_sentiment_weights_")
+	if after, ok := strings.CutPrefix(name, "factor_institutional_sentiment_weights_"); ok {
+		key := after
 		if cfg.Factor.InstitutionalSentimentWeights.Value != nil {
 			if v, ok := cfg.Factor.InstitutionalSentimentWeights.Value[key]; ok {
 				return &v
@@ -316,8 +316,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Optimizer.FactorWeights
-	if strings.HasPrefix(name, "optimizer_factor_weights_") {
-		key := strings.TrimPrefix(name, "optimizer_factor_weights_")
+	if after, ok := strings.CutPrefix(name, "optimizer_factor_weights_"); ok {
+		key := after
 		if cfg.Optimizer.FactorWeights.Value != nil {
 			if v, ok := cfg.Optimizer.FactorWeights.Value[key]; ok {
 				return &v
@@ -326,8 +326,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Risk.SectorConstraintsRiskOff
-	if strings.HasPrefix(name, "risk_sector_constraints_risk_off_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_risk_off_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_risk_off_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsRiskOff.Value != nil {
 			if v, ok := cfg.Risk.SectorConstraintsRiskOff.Value[key]; ok {
 				return &v
@@ -336,8 +336,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Risk.SectorConstraintsCarryTrade
-	if strings.HasPrefix(name, "risk_sector_constraints_carry_trade_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_carry_trade_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_carry_trade_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsCarryTrade.Value != nil {
 			if v, ok := cfg.Risk.SectorConstraintsCarryTrade.Value[key]; ok {
 				return &v
@@ -346,8 +346,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Risk.SectorConstraintsSectorRotation
-	if strings.HasPrefix(name, "risk_sector_constraints_sector_rotation_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_sector_rotation_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_sector_rotation_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsSectorRotation.Value != nil {
 			if v, ok := cfg.Risk.SectorConstraintsSectorRotation.Value[key]; ok {
 				return &v
@@ -356,8 +356,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Narrative.EventTTLMultiplier
-	if strings.HasPrefix(name, "narrative_event_ttl_multiplier_") {
-		key := strings.TrimPrefix(name, "narrative_event_ttl_multiplier_")
+	if after, ok := strings.CutPrefix(name, "narrative_event_ttl_multiplier_"); ok {
+		key := after
 		if cfg.Narrative.EventTTLMultiplier.Value != nil {
 			if v, ok := cfg.Narrative.EventTTLMultiplier.Value[key]; ok {
 				return &v
@@ -370,8 +370,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 	// sector_allocation.base_weights (see internal/sectorallocation). Returns nil
 	// for backward compatibility; callers should query the sectorallocation module.
 	// Drawdown.SectorConstraintsRiskOff
-	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_risk_off_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsRiskOff.Value != nil {
 			if v, ok := cfg.Drawdown.SectorConstraintsRiskOff.Value[key]; ok {
 				return &v
@@ -380,8 +380,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Drawdown.SectorConstraintsCarryTradeUnwind
-	if strings.HasPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value != nil {
 			if v, ok := cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value[key]; ok {
 				return &v
@@ -390,8 +390,8 @@ func (ie *InferenceEngine) handleMapGetParameter(cfg *ParametersConfig, name str
 		return nil
 	}
 	// Drawdown.SectorConstraintsSectorRotation
-	if strings.HasPrefix(name, "drawdown_sector_constraints_sector_rotation_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_sector_rotation_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_sector_rotation_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsSectorRotation.Value != nil {
 			if v, ok := cfg.Drawdown.SectorConstraintsSectorRotation.Value[key]; ok {
 				return &v
@@ -646,8 +646,8 @@ func (ie *InferenceEngine) setParameterOnConfig(cfg *ParametersConfig, name stri
 // Returns true if handled, false otherwise.
 func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name string, value float64) bool {
 	// Factor.InstitutionalSentimentWeights
-	if strings.HasPrefix(name, "factor_institutional_sentiment_weights_") {
-		key := strings.TrimPrefix(name, "factor_institutional_sentiment_weights_")
+	if after, ok := strings.CutPrefix(name, "factor_institutional_sentiment_weights_"); ok {
+		key := after
 		if cfg.Factor.InstitutionalSentimentWeights.Value == nil {
 			cfg.Factor.InstitutionalSentimentWeights.Value = make(map[string]float64)
 		}
@@ -655,8 +655,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Optimizer.FactorWeights
-	if strings.HasPrefix(name, "optimizer_factor_weights_") {
-		key := strings.TrimPrefix(name, "optimizer_factor_weights_")
+	if after, ok := strings.CutPrefix(name, "optimizer_factor_weights_"); ok {
+		key := after
 		if cfg.Optimizer.FactorWeights.Value == nil {
 			cfg.Optimizer.FactorWeights.Value = make(map[string]float64)
 		}
@@ -664,8 +664,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Risk.SectorConstraintsRiskOff
-	if strings.HasPrefix(name, "risk_sector_constraints_risk_off_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_risk_off_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_risk_off_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsRiskOff.Value == nil {
 			cfg.Risk.SectorConstraintsRiskOff.Value = make(map[string]float64)
 		}
@@ -673,8 +673,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Risk.SectorConstraintsCarryTrade
-	if strings.HasPrefix(name, "risk_sector_constraints_carry_trade_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_carry_trade_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_carry_trade_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsCarryTrade.Value == nil {
 			cfg.Risk.SectorConstraintsCarryTrade.Value = make(map[string]float64)
 		}
@@ -682,8 +682,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Risk.SectorConstraintsSectorRotation
-	if strings.HasPrefix(name, "risk_sector_constraints_sector_rotation_") {
-		key := strings.TrimPrefix(name, "risk_sector_constraints_sector_rotation_")
+	if after, ok := strings.CutPrefix(name, "risk_sector_constraints_sector_rotation_"); ok {
+		key := after
 		if cfg.Risk.SectorConstraintsSectorRotation.Value == nil {
 			cfg.Risk.SectorConstraintsSectorRotation.Value = make(map[string]float64)
 		}
@@ -691,8 +691,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Narrative.EventTTLMultiplier
-	if strings.HasPrefix(name, "narrative_event_ttl_multiplier_") {
-		key := strings.TrimPrefix(name, "narrative_event_ttl_multiplier_")
+	if after, ok := strings.CutPrefix(name, "narrative_event_ttl_multiplier_"); ok {
+		key := after
 		if cfg.Narrative.EventTTLMultiplier.Value == nil {
 			cfg.Narrative.EventTTLMultiplier.Value = make(map[string]float64)
 		}
@@ -704,8 +704,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 	// sector_allocation.base_weights instead. Returns false to indicate the
 	// parameter name is no longer recognized.
 	// Drawdown.SectorConstraintsRiskOff
-	if strings.HasPrefix(name, "drawdown_sector_constraints_risk_off_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_risk_off_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_risk_off_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsRiskOff.Value == nil {
 			cfg.Drawdown.SectorConstraintsRiskOff.Value = make(map[string]float64)
 		}
@@ -713,8 +713,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Drawdown.SectorConstraintsCarryTradeUnwind
-	if strings.HasPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_carry_trade_unwind_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value == nil {
 			cfg.Drawdown.SectorConstraintsCarryTradeUnwind.Value = make(map[string]float64)
 		}
@@ -722,8 +722,8 @@ func (ie *InferenceEngine) handleMapSetParameter(cfg *ParametersConfig, name str
 		return true
 	}
 	// Drawdown.SectorConstraintsSectorRotation
-	if strings.HasPrefix(name, "drawdown_sector_constraints_sector_rotation_") {
-		key := strings.TrimPrefix(name, "drawdown_sector_constraints_sector_rotation_")
+	if after, ok := strings.CutPrefix(name, "drawdown_sector_constraints_sector_rotation_"); ok {
+		key := after
 		if cfg.Drawdown.SectorConstraintsSectorRotation.Value == nil {
 			cfg.Drawdown.SectorConstraintsSectorRotation.Value = make(map[string]float64)
 		}

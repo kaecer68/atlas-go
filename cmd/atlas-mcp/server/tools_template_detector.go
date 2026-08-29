@@ -11,13 +11,13 @@ func registerTemplateDetectorTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "template_detector_status",
 		Description: autoDescOr("template_detector_status", "Recent template trigger detector scan results from ledger. Returns the most recent DetectionResult rows (newest first), each with theme, severity, confidence, detected_at, source, and scan_batch_id. limit param defaults to 100."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleTemplateDetectorStatus)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "detector_registry_list",
 		Description: autoDescOr("detector_registry_list", "All 24 template trigger detectors registered in the narrative.DetectorRegistry with current enable/disable state. Use to inspect which detectors are active or to verify registry wiring."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDetectorRegistryList)
 }
 

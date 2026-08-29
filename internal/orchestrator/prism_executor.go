@@ -19,7 +19,7 @@ import (
 // Set by main.go when config.LLMPrismScenarioEnabled is true and an LLM
 // router is available. Uses var indirection to avoid an orchestrator→llm
 // import cycle.
-var ScenarioExplainer func(ctx context.Context, result interface{}) (string, error)
+var ScenarioExplainer func(ctx context.Context, result any) (string, error)
 
 // PRISMTrainingExecutor runs actual backtests over replay data for PRISM training tasks.
 type PRISMTrainingExecutor struct {

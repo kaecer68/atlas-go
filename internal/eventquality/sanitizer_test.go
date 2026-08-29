@@ -24,7 +24,7 @@ func TestSanitizeTitle_RejectsHTMLTags(t *testing.T) {
 
 func TestSanitizeTitle_RejectsOver200Chars(t *testing.T) {
 	long := ""
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		long += "tenchar10"
 	}
 	long += "extra001"
@@ -50,7 +50,7 @@ func TestSanitizeTitle_RejectsMixedHTMLAllDigits(t *testing.T) {
 
 func TestSanitizeTitle_AcceptsAtBoundary(t *testing.T) {
 	s := ""
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		s += "x"
 	}
 	r := SanitizeTitle(s)

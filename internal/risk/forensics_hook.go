@@ -9,7 +9,7 @@ import "context"
 // Set by main.go when config.LLMRiskForensicsEnabled is true and an LLM
 // router is available. Uses var indirection to avoid a risk→llm import
 // cycle (risk is a leaf package that cannot import llm).
-var PerformanceForensics func(ctx context.Context, snapshot interface{}) (string, error)
+var PerformanceForensics func(ctx context.Context, snapshot any) (string, error)
 
 // AnnotateSnapshot runs the PerformanceForensics hook (when non-nil) against
 // a domain.RiskSnapshot and returns the LLM-generated commentary. Returns
@@ -18,7 +18,7 @@ var PerformanceForensics func(ctx context.Context, snapshot interface{}) (string
 //
 // This function is not auto-wired into the existing VaR pipeline — callers
 // invoke it explicitly when LLM-based forensics is desired.
-func AnnotateSnapshot(ctx context.Context, snapshot interface{}) string {
+func AnnotateSnapshot(ctx context.Context, snapshot any) string {
 	if PerformanceForensics == nil {
 		return ""
 	}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -126,12 +127,7 @@ func TestIsStockPickingLayerByID(t *testing.T) {
 }
 
 func contains(ss []string, target string) bool {
-	for _, s := range ss {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ss, target)
 }
 
 func TestComputePipelineTags_NilDataset(t *testing.T) {

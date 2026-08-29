@@ -104,7 +104,7 @@ func TestHandleChannelFetchLog_ReturnsEntries(t *testing.T) {
 func TestHandleChannelFetchLog_RespectsLimit(t *testing.T) {
 	dir := t.TempDir()
 	all := make([]map[string]any, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		all = append(all, map[string]any{
 			"channel": "ch", "status": "ok", "latency_ms": i, "timestamp": "2026-06-19T14:00:0" + string(rune('0'+i)) + "Z",
 		})

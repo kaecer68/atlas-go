@@ -13,37 +13,37 @@ func registerLLMTraceTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "llm_get_cost",
 		Description: autoDescOr("llm_get_cost", "LLM cost snapshot — recent spend, by model, by capability."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleLLMGetCost)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "llm_get_health",
 		Description: autoDescOr("llm_get_health", "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleLLMGetHealth)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_sim_latest",
 		Description: autoDescOr("trace_get_sim_latest", "Latest simulation reasoning trace (most recent agent run)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleTraceGetSimLatest)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_agent_observatory",
 		Description: autoDescOr("trace_get_agent_observatory", "Current agent activity observatory (which agents are active, what they're working on)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleTraceGetAgentObservatory)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_decision_chain",
 		Description: autoDescOr("trace_get_decision_chain", "Decision chain for a symbol (full causal trace from macro → sector → agent recommendation)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleTraceGetDecisionChain)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "trace_get_reasoning",
 		Description: autoDescOr("trace_get_reasoning", "Reasoning trace (RAG/CoT steps) for a recent recommendation."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleTraceGetReasoning)
 }
 

@@ -109,7 +109,7 @@ func testDirection(cause, effect []float64, maxLag int) (directionResult, error)
 		kUnrestricted := 1 + 2*lag // intercept + effect lags + cause lags
 		X := make([][]float64, n)
 		Y := make([]float64, n)
-		for t := 0; t < n; t++ {
+		for t := range n {
 			row := make([]float64, kUnrestricted)
 			row[0] = 1.0 // intercept
 			for i := 1; i <= lag; i++ {
@@ -125,7 +125,7 @@ func testDirection(cause, effect []float64, maxLag int) (directionResult, error)
 		// Restricted design: [const, lagged effect]
 		kRestricted := 1 + lag
 		Xr := make([][]float64, n)
-		for t := 0; t < n; t++ {
+		for t := range n {
 			row := make([]float64, kRestricted)
 			row[0] = 1.0
 			for i := 1; i <= lag; i++ {
@@ -185,10 +185,10 @@ func olsFit(X [][]float64, y []float64) ([]float64, float64, error) { //nolint:u
 	for i := range xtx {
 		xtx[i] = make([]float64, k)
 	}
-	for i := 0; i < k; i++ {
+	for i := range k {
 		for j := 0; j <= i; j++ {
 			sum := 0.0
-			for t := 0; t < n; t++ {
+			for t := range n {
 				sum += X[t][i] * X[t][j]
 			}
 			xtx[i][j] = sum
@@ -200,16 +200,16 @@ func olsFit(X [][]float64, y []float64) ([]float64, float64, error) { //nolint:u
 
 	// X'y
 	xty := make([]float64, k)
-	for i := 0; i < k; i++ {
+	for i := range k {
 		sum := 0.0
-		for t := 0; t < n; t++ {
+		for t := range n {
 			sum += X[t][i] * y[t]
 		}
 		xty[i] = sum
 	}
 
 	// Add ridge penalty for numerical stability if near-singular
-	for i := 0; i < k; i++ {
+	for i := range k {
 		xtx[i][i] += 1e-8
 	}
 
@@ -221,9 +221,9 @@ func olsFit(X [][]float64, y []float64) ([]float64, float64, error) { //nolint:u
 
 	// Compute RSS
 	rss := 0.0
-	for t := 0; t < n; t++ {
+	for t := range n {
 		pred := 0.0
-		for i := 0; i < k; i++ {
+		for i := range k {
 			pred += X[t][i] * beta[i]
 		}
 		resid := y[t] - pred
@@ -249,7 +249,7 @@ func solveLinearSystem(A [][]float64, b []float64) ([]float64, error) {
 	}
 
 	// Gaussian elimination with partial pivoting
-	for col := 0; col < n; col++ {
+	for col := range n {
 		// Find pivot
 		maxRow := col
 		maxVal := math.Abs(aug[col][col])

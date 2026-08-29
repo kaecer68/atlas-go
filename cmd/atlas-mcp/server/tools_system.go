@@ -10,37 +10,37 @@ func registerSystemTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_metrics",
 		Description: autoDescOr("system_get_metrics", "Live system metrics (request rate, error rate, circuit-breaker state)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetMetrics)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_metrics_trend",
 		Description: autoDescOr("system_get_metrics_trend", "System metrics trend over a recent window (per-minute aggregates)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetMetricsTrend)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_thresholds",
 		Description: autoDescOr("system_get_thresholds", "Configured SLO thresholds (latency, error rate, saturation)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetThresholds)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_data_pipeline",
 		Description: autoDescOr("system_get_data_pipeline", "Data pipeline state (which channels are flowing, latency, lag)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetDataPipeline)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_circuit_breaker",
 		Description: autoDescOr("system_get_circuit_breaker", "Live trading 風險熔斷器（daily loss / stop-loss circuit）狀態 — 含 state/consecutive_sl/cooldown/intraday_peak/day_start_value。注意：這是交易風控熔斷器，不是資料通道熔斷器；資料通道健康請用 data_get_channels 或 system_get_health。HTTP: GET /api/dashboard/circuit-breaker."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetCircuitBreaker)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_maturity",
 		Description: autoDescOr("system_get_maturity", "Maturity ratings per module (S/E/X/U per docs/specs convention). Degrades to embedded internal/MATURITY.md snapshot when the backend is unreachable."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetMaturity)
 }
 

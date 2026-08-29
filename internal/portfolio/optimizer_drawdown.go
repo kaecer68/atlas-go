@@ -81,21 +81,21 @@ func (o *Optimizer) SimulateDrawdown(
 	worstDD := 0.0
 	var worstPath []float64
 
-	for p := 0; p < numPaths; p++ {
+	for p := range numPaths {
 		cumulative := 1.0
 		peak := 1.0
 		pathDD := 0.0
 		pathVals := make([]float64, 0, numDays+1)
 		pathVals = append(pathVals, 1.0)
 
-		for d := 0; d < numDays; d++ {
+		for range numDays {
 			// Generate independent standard normals, then scale.
-			for i := 0; i < N; i++ {
+			for i := range N {
 				z[i] = boxMuller(rng) * volatilityScale
 			}
 
 			// Correlated returns: r = L · z.
-			for i := 0; i < N; i++ {
+			for i := range N {
 				var sum float64
 				for j := 0; j <= i; j++ {
 					// L is lower-triangular; L.At(i,j) accesses row i, col j.
@@ -108,7 +108,7 @@ func (o *Optimizer) SimulateDrawdown(
 
 			// Portfolio return = w' · r.
 			portRet := 0.0
-			for i := 0; i < N; i++ {
+			for i := range N {
 				portRet += w[i] * r[i]
 			}
 
@@ -167,9 +167,9 @@ func (o *Optimizer) GetCovarianceMatrix(symbols []string) ([][]float64, []string
 	sigma := o.ledoitWolfShrink(rm, sample)
 	N := len(rm.assets)
 	mat := make([][]float64, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		mat[i] = make([]float64, N)
-		for j := 0; j < N; j++ {
+		for j := range N {
 			mat[i][j] = sigma.At(i, j)
 		}
 	}

@@ -12,6 +12,7 @@
 package taiwanholidays
 
 import (
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -268,9 +269,7 @@ func LunarMidAutumnDates() map[int]time.Time { return copyTable(lunarMidAutumnDa
 
 func copyTable(in map[int]time.Time) map[int]time.Time {
 	out := make(map[int]time.Time, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 

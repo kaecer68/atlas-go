@@ -84,8 +84,8 @@ func readHistory(t *testing.T, dir string) []historyRecord {
 func TestAppend_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
-		"2317.TW": {PE: fp(12.3), PB: fp(1.5), DividendYield: fp(4.0), Sector: sp("電子零組件業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
+		"2317.TW": {PE: new(12.3), PB: new(1.5), DividendYield: new(4.0), Sector: new("電子零組件業")},
 	})
 
 	runApp(t, dir, "2026-08-27", false, nil)
@@ -102,7 +102,7 @@ func TestAppend_Idempotent(t *testing.T) {
 func TestAppend_MultipleDates(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 
 	runApp(t, dir, "2026-08-25", false, nil)
@@ -124,12 +124,12 @@ func TestAppend_MultipleDates(t *testing.T) {
 func TestAppend_ForceOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 	runApp(t, dir, "2026-08-27", false, nil)
 
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(19.0), PB: fp(2.2), DividendYield: fp(2.6), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(19.0), PB: new(2.2), DividendYield: new(2.6), Sector: new("半導體業")},
 	})
 	runApp(t, dir, "2026-08-27", true, nil)
 
@@ -147,7 +147,7 @@ func TestAppend_ForceOverwrite(t *testing.T) {
 func TestAppend_RecordedAt(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 	runApp(t, dir, "2026-08-27", false, nil)
 
@@ -176,8 +176,8 @@ func TestAppend_MissingFundamentals(t *testing.T) {
 func TestAppend_SkipsBadSymbol(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
-		"9999.TW": {PE: fp(1.0), DividendYield: fp(1.0), Sector: sp("壞資料")}, // missing PB
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
+		"9999.TW": {PE: new(1.0), DividendYield: new(1.0), Sector: new("壞資料")}, // missing PB
 	})
 
 	runApp(t, dir, "2026-08-27", false, nil)
@@ -190,7 +190,7 @@ func TestAppend_SkipsBadSymbol(t *testing.T) {
 func TestAppend_TradingDateAfterClose(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 
 	loc := time.FixedZone("Asia/Taipei", taipeiOffsetSeconds)
@@ -206,7 +206,7 @@ func TestAppend_TradingDateAfterClose(t *testing.T) {
 func TestAppend_TradingDateBeforeClose(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 
 	loc := time.FixedZone("Asia/Taipei", taipeiOffsetSeconds)
@@ -222,7 +222,7 @@ func TestAppend_TradingDateBeforeClose(t *testing.T) {
 func TestAppend_WeekendRollover(t *testing.T) {
 	dir := t.TempDir()
 	writeFundamentals(t, dir, map[string]rawFundamental{
-		"2330.TW": {PE: fp(18.5), PB: fp(2.1), DividendYield: fp(2.5), Sector: sp("半導體業")},
+		"2330.TW": {PE: new(18.5), PB: new(2.1), DividendYield: new(2.5), Sector: new("半導體業")},
 	})
 
 	loc := time.FixedZone("Asia/Taipei", taipeiOffsetSeconds)
@@ -234,9 +234,3 @@ func TestAppend_WeekendRollover(t *testing.T) {
 		t.Fatalf("expected previous Friday 2026-09-04, got %+v", records)
 	}
 }
-
-// fp returns a pointer to a float64 to simplify test fixture construction.
-func fp(v float64) *float64 { return &v }
-
-// sp returns a pointer to a string to simplify test fixture construction.
-func sp(v string) *string { return &v }

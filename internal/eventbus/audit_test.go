@@ -118,7 +118,7 @@ func TestAuditTrailSubscriber_DisabledSkipsWrite(t *testing.T) {
 	})
 
 	path := filepath.Join(ledgerDir, "events.jsonl")
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("expected events.jsonl to not exist when disabled, got err=%v", err)
 		}
@@ -138,7 +138,7 @@ func TestAuditTrailSubscriber_Close(t *testing.T) {
 
 func waitForLines(t *testing.T, path string, want int) {
 	t.Helper()
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if count, _ := countLines(path); count >= want {
 			return
 		}

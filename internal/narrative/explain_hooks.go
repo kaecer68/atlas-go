@@ -9,7 +9,7 @@ import "context"
 // Set by main.go when config.LLMNarrativeExplainEnabled is true and an LLM
 // router is available. Uses var indirection to avoid a narrative→llm
 // import cycle (narrative is a leaf package that cannot import llm).
-var RegimeExplainer func(ctx context.Context, event interface{}) (string, error)
+var RegimeExplainer func(ctx context.Context, event any) (string, error)
 
 // SentimentExplainer is a package-level hook for LLM-based sentiment
 // explanation of a NarrativeEvent. When non-nil, AnnotateEvent calls this
@@ -17,7 +17,7 @@ var RegimeExplainer func(ctx context.Context, event interface{}) (string, error)
 //
 // Set by main.go when config.LLMNarrativeExplainEnabled is true and an LLM
 // router is available. Uses the same var indirection pattern as RegimeExplainer.
-var SentimentExplainer func(ctx context.Context, event interface{}) (string, error)
+var SentimentExplainer func(ctx context.Context, event any) (string, error)
 
 // AnnotateEvent runs the RegimeExplainer and SentimentExplainer hooks (when
 // non-nil) against a NarrativeEvent and mutates the event's Explanation and

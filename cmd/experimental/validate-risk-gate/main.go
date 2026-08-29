@@ -406,20 +406,6 @@ func repeatChar(c string, n int) string {
 	return string(b)
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 type postTradeSnap struct {
 	SessionID    string
 	PortfolioVal float64
@@ -644,7 +630,7 @@ func findRepoRoot() string {
 		}
 		if info, err := os.Stat(arg); err == nil && info != nil {
 			dir := arg
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 					return dir
 				}

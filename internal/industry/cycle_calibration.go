@@ -2,6 +2,7 @@
 package industry
 
 import (
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -81,9 +82,7 @@ func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[
 	defer c.mu.RUnlock()
 
 	calibrated := make(map[string]float64, len(baseWeights))
-	for layer, w := range baseWeights {
-		calibrated[layer] = w
-	}
+	maps.Copy(calibrated, baseWeights)
 
 	if len(c.outcomes) < c.config.MinSamples {
 		return calibrated

@@ -10,12 +10,14 @@ import (
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 )
 
+//go:fix inline
 func ptrFloat64(f float64) *float64 {
-	return &f
+	return new(f)
 }
 
+//go:fix inline
 func ptrInt64(i int64) *int64 {
-	return &i
+	return new(i)
 }
 
 func loadTestFundamentals(t *testing.T, data map[string]portfolio.FundamentalData) *portfolio.FundamentalProvider {
@@ -79,7 +81,7 @@ func TestScreenFiltersByPB(t *testing.T) {
 	engine := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		PB: &domain.RangeFilter{Max: ptrFloat64(1.5)},
+		PB: &domain.RangeFilter{Max: new(1.5)},
 	}
 
 	lowPassed, _ := engine.Screen(context.Background(), "LOW_PB.TW", criteria, quotes)
@@ -102,7 +104,7 @@ func TestScreenFiltersByDividendYield(t *testing.T) {
 	engine := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		DividendYield: &domain.RangeFilter{Min: ptrFloat64(2.0)},
+		DividendYield: &domain.RangeFilter{Min: new(2.0)},
 	}
 
 	highPassed, _ := engine.Screen(context.Background(), "HIGH_DIV.TW", criteria, quotes)
@@ -145,7 +147,7 @@ func TestScreenFiltersByMomentum(t *testing.T) {
 		"DOWN.TW": {Symbol: "DOWN.TW", Open: 100, Last: 90, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		Momentum20Day: &domain.RangeFilter{Min: ptrFloat64(0.0)},
+		Momentum20Day: &domain.RangeFilter{Min: new(0.0)},
 	}
 
 	upPassed, _ := engine.Screen(context.Background(), "UP.TW", criteria, quotes)
@@ -166,7 +168,7 @@ func TestScreenFiltersByMinTotalFactorScore(t *testing.T) {
 		"STRONG.TW": {Symbol: "STRONG.TW", Open: 100, Last: 130, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		MinTotalFactorScore: ptrFloat64(0.2),
+		MinTotalFactorScore: new(0.2),
 	}
 
 	passed, err := engine.Screen(context.Background(), "STRONG.TW", criteria, quotes)
@@ -319,7 +321,7 @@ func TestScreenDetailedPBMissingFail(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		PB: &domain.RangeFilter{Max: ptrFloat64(2.0)},
+		PB: &domain.RangeFilter{Max: new(2.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "NO_DATA.TW", criteria, quotes)
 	if err != nil {
@@ -349,7 +351,7 @@ func TestScreenDetailedMomentum20DMaxFail(t *testing.T) {
 		"SKY_HIGH.TW": {Symbol: "SKY_HIGH.TW", Open: 100, Last: 200, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		Momentum20Day: &domain.RangeFilter{Max: ptrFloat64(0.5)},
+		Momentum20Day: &domain.RangeFilter{Max: new(0.5)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "SKY_HIGH.TW", criteria, quotes)
 	if err != nil {
@@ -379,7 +381,7 @@ func TestScreenDetailedMinTotalFactorScoreMissing(t *testing.T) {
 		"NO_SCORE.TW": {Symbol: "NO_SCORE.TW", Open: 100, Last: 100, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		MinTotalFactorScore: ptrFloat64(0.5),
+		MinTotalFactorScore: new(0.5),
 	}
 	res, err := e.ScreenDetailed(context.Background(), "NO_SCORE.TW", criteria, quotes)
 	if err != nil {
@@ -490,7 +492,7 @@ func TestScreenDetailed_DividendYieldMinFail(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		DividendYield: &domain.RangeFilter{Min: ptrFloat64(3.0)},
+		DividendYield: &domain.RangeFilter{Min: new(3.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "LOW_DIV.TW", criteria, quotes)
 	if err != nil {
@@ -520,7 +522,7 @@ func TestScreenDetailed_DividendYieldMaxFail(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		DividendYield: &domain.RangeFilter{Max: ptrFloat64(5.0)},
+		DividendYield: &domain.RangeFilter{Max: new(5.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "HIGH_DIV.TW", criteria, quotes)
 	if err != nil {
@@ -544,7 +546,7 @@ func TestScreenDetailed_DividendYieldMissing(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		DividendYield: &domain.RangeFilter{Min: ptrFloat64(2.0)},
+		DividendYield: &domain.RangeFilter{Min: new(2.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "NO_DATA.TW", criteria, quotes)
 	if err != nil {
@@ -611,7 +613,7 @@ func TestScreenDetailed_PBMinFail(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		PB: &domain.RangeFilter{Min: ptrFloat64(1.0)},
+		PB: &domain.RangeFilter{Min: new(1.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "LOW_PB.TW", criteria, quotes)
 	if err != nil {
@@ -635,7 +637,7 @@ func TestScreenDetailed_PBMaxFail(t *testing.T) {
 	e := NewEngine(nil, fp)
 	quotes := map[string]domain.Quote{}
 	criteria := domain.ScreeningCriteria{
-		PB: &domain.RangeFilter{Max: ptrFloat64(3.0)},
+		PB: &domain.RangeFilter{Max: new(3.0)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "HIGH_PB.TW", criteria, quotes)
 	if err != nil {
@@ -659,7 +661,7 @@ func TestScreenDetailed_MinTotalFactorScoreBelowThreshold(t *testing.T) {
 		"FLAT.TW": {Symbol: "FLAT.TW", Open: 100, Last: 100, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		MinTotalFactorScore: ptrFloat64(0.9),
+		MinTotalFactorScore: new(0.9),
 	}
 	res, err := e.ScreenDetailed(context.Background(), "FLAT.TW", criteria, quotes)
 	if err != nil {
@@ -683,7 +685,7 @@ func TestScreenDetailed_Momentum20DMinFail(t *testing.T) {
 		"DOWN.TW": {Symbol: "DOWN.TW", Open: 100, Last: 90, IsTradable: true},
 	}
 	criteria := domain.ScreeningCriteria{
-		Momentum20Day: &domain.RangeFilter{Min: ptrFloat64(0.05)},
+		Momentum20Day: &domain.RangeFilter{Min: new(0.05)},
 	}
 	res, err := e.ScreenDetailed(context.Background(), "DOWN.TW", criteria, quotes)
 	if err != nil {

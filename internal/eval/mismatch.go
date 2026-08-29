@@ -90,7 +90,7 @@ func spearmanRankCorrelation(x, y []float64) float64 {
 
 	// 計算等級的 Pearson 相關係數
 	var sumX, sumY float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sumX += rankX[i]
 		sumY += rankY[i]
 	}
@@ -98,7 +98,7 @@ func spearmanRankCorrelation(x, y []float64) float64 {
 	meanY := sumY / float64(n)
 
 	var covXY, varX, varY float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		dx := rankX[i] - meanX
 		dy := rankY[i] - meanY
 		covXY += dx * dy

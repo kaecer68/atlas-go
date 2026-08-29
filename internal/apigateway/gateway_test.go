@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -39,13 +40,7 @@ func TestGateway_HasChannel(t *testing.T) {
 
 func TestGateway_channelIDs(t *testing.T) {
 	result := channelIDs()
-	found := false
-	for _, id := range result {
-		if id == "fubon" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(result, "fubon")
 	if !found {
 		t.Error("channelIDs() should include fubon")
 	}
@@ -472,7 +467,7 @@ func TestGateway_Fetch_CircuitBreakerOpens(t *testing.T) {
 	g.registry.Register("us_yahoo", provider)
 
 	// Fetch until circuit breaker opens (threshold = 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = g.Fetch(context.Background(), "us_yahoo")
 	}
 

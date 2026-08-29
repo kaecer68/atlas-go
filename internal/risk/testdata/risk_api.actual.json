@@ -155,7 +155,7 @@
   "funcs": [
     {
       "name": "AnnotateSnapshot",
-      "params": "(ctx context.Context, snapshot interface{})",
+      "params": "(ctx context.Context, snapshot any)",
       "results": "(string)"
     },
     {
@@ -371,7 +371,7 @@
     },
     {
       "name": "EnrichDecision",
-      "params": "(ctx context.Context, decision interface{})",
+      "params": "(ctx context.Context, decision any)",
       "results": "(string)"
     },
     {
@@ -1151,7 +1151,7 @@
   "vars": [
     {
       "name": "ConfidenceCommentary",
-      "type": "func(ctx context.Context, decision interface{})(string, error)"
+      "type": "func(ctx context.Context, decision any)(string, error)"
     },
     {
       "name": "DefaultDrawdownLevels",
@@ -1159,7 +1159,7 @@
     },
     {
       "name": "PerformanceForensics",
-      "type": "func(ctx context.Context, snapshot interface{})(string, error)"
+      "type": "func(ctx context.Context, snapshot any)(string, error)"
     }
   ]
 }

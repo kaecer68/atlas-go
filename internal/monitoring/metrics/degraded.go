@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -148,9 +149,7 @@ func (cv *CounterVec) snapshotSamplesAt(t time.Time) []Sample {
 	samples := make([]Sample, 0, len(cv.counters))
 	for _, c := range cv.counters {
 		labelsCopy := make(map[string]string, len(c.labels))
-		for k, v := range c.labels {
-			labelsCopy[k] = v
-		}
+		maps.Copy(labelsCopy, c.labels)
 		samples = append(samples, Sample{
 			Labels:    labelsCopy,
 			Value:     c.Value(),

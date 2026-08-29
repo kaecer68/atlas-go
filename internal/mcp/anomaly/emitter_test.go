@@ -78,7 +78,7 @@ func Test_Emitter_ProcessOnce_dispatches_new_events(t *testing.T) {
 	detectorStore := NewStore(100)
 	detector := NewDetector(Config{ShortWindow: time.Hour, LongWindow: 24 * time.Hour, BurstZScoreThreshold: 1.0}, &countingMetrics{}, detectorStore)
 	detector.now = fixedClock(now)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "t", tenant: "tenant-a", status: "ok"})
 	}
 
@@ -124,7 +124,7 @@ func Test_Emitter_ProcessOnce_idempotent(t *testing.T) {
 	detectorStore := NewStore(100)
 	detector := NewDetector(Config{ShortWindow: time.Hour, LongWindow: 24 * time.Hour, BurstZScoreThreshold: 1.0}, &countingMetrics{}, detectorStore)
 	detector.now = fixedClock(now)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "t", tenant: "tenant-a", status: "ok"})
 	}
 
@@ -137,7 +137,7 @@ func Test_Emitter_ProcessOnce_idempotent(t *testing.T) {
 		SeverityFn: fixedSeverity,
 	})
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := em.ProcessOnce(context.Background()); err != nil {
 			t.Fatalf("ProcessOnce %d: %v", i, err)
 		}
@@ -161,7 +161,7 @@ func Test_Emitter_ProcessOnce_dispatches_only_new(t *testing.T) {
 	}, &countingMetrics{}, detectorStore)
 	detector.now = fixedClock(now)
 	// First anomaly: burst for tenant-a
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "t", tenant: "tenant-a", status: "ok"})
 	}
 	pub := &recordingPublisher{}
@@ -181,7 +181,7 @@ func Test_Emitter_ProcessOnce_dispatches_only_new(t *testing.T) {
 	}
 
 	// Second anomaly: tool_error_spike (use a different tool name with errors)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		detector.Observe(testAuditEntry{version: 2, ts: now.Add(time.Millisecond), tool: "fail-tool", tenant: "tenant-a", status: "error"})
 	}
 	if err := em.ProcessOnce(context.Background()); err != nil {
@@ -206,7 +206,7 @@ func Test_Emitter_ProcessOnce_swallows_publisher_error(t *testing.T) {
 	detectorStore := NewStore(100)
 	detector := NewDetector(Config{ShortWindow: time.Hour, LongWindow: 24 * time.Hour, BurstZScoreThreshold: 1.0}, &countingMetrics{}, detectorStore)
 	detector.now = fixedClock(now)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		detector.Observe(testAuditEntry{version: 2, ts: now, tool: "t", tenant: "tenant-a", status: "ok"})
 	}
 	pub := &recordingPublisher{Err: errors.New("webhook down")}

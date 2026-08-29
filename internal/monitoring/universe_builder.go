@@ -484,10 +484,7 @@ func (s *ScoringScreener) ApplyConcentrationCap(ranked []RankedSymbol) []RankedS
 	if len(ranked) == 0 {
 		return ranked
 	}
-	maxCount := int(s.MaxIndustryConcentration * float64(len(ranked)))
-	if maxCount < 1 {
-		maxCount = 1
-	}
+	maxCount := max(int(s.MaxIndustryConcentration*float64(len(ranked))), 1)
 	byIndustry := make(map[string][]RankedSymbol, len(ranked))
 	for _, r := range ranked {
 		byIndustry[r.Industry] = append(byIndustry[r.Industry], r)

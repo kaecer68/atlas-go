@@ -48,10 +48,7 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 			continue
 		}
 		n := len(prices)
-		start := n - lookback - 1
-		if start < 0 {
-			start = 0
-		}
+		start := max(n-lookback-1, 0)
 		window := prices[start:]
 		if len(window) < minDays+1 {
 			continue
@@ -77,16 +74,16 @@ func (o *Optimizer) extractReturnMatrix(symbols []string) *returnMatrix {
 
 	Tret := T - 1
 	ret := make([][]float64, Tret)
-	for t := 0; t < Tret; t++ {
+	for t := range Tret {
 		ret[t] = make([]float64, N)
 	}
 	means := make([]float64, N)
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		s := series[i]
 		offset := len(s) - T
 		sum := 0.0
-		for t := 0; t < Tret; t++ {
+		for t := range Tret {
 			prev := s[offset+t]
 			curr := s[offset+t+1]
 			if prev == 0 {
@@ -110,7 +107,7 @@ func (o *Optimizer) sampleCov(rm *returnMatrix) *mat.SymDense {
 	}
 
 	cov := mat.NewSymDense(N, nil)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		for j := i; j < N; j++ {
 			var sum float64
 			for t := 0; t < len(rm.returns); t++ {
@@ -131,7 +128,7 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 	S := sample
 
 	nu := 0.0
-	for i := 0; i < N; i++ {
+	for i := range N {
 		nu += S.At(i, i)
 	}
 	nu /= float64(N)
@@ -140,16 +137,16 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 	demeaned := make([][]float64, len(rm.returns))
 	for t := 0; t < len(rm.returns); t++ {
 		demeaned[t] = make([]float64, N)
-		for i := 0; i < N; i++ {
+		for i := range N {
 			demeaned[t][i] = rm.returns[t][i] - rm.means[i]
 		}
 	}
 
-	for i := 0; i < N; i++ {
-		for j := 0; j < N; j++ {
+	for i := range N {
+		for j := range N {
 			sij := S.At(i, j)
 			var ssq float64
-			for t := 0; t < len(demeaned); t++ {
+			for t := range demeaned {
 				d := demeaned[t][i]*demeaned[t][j] - sij
 				ssq += d * d
 			}
@@ -162,8 +159,8 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 	}
 
 	var gamma float64
-	for i := 0; i < N; i++ {
-		for j := 0; j < N; j++ {
+	for i := range N {
+		for j := range N {
 			target := 0.0
 			if i == j {
 				target = nu
@@ -187,7 +184,7 @@ func (o *Optimizer) ledoitWolfShrink(rm *returnMatrix, sample *mat.SymDense) *ma
 	}
 
 	shrunk := mat.NewSymDense(N, nil)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		for j := i; j < N; j++ {
 			val := (1 - delta) * S.At(i, j)
 			if i == j {
@@ -217,14 +214,14 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 
 	active := make([]bool, N)
 
-	for iter := 0; iter < maxIter; iter++ {
+	for range maxIter {
 		isActive := make([]bool, N)
-		for i := 0; i < N; i++ {
+		for i := range N {
 			isActive[i] = active[i] || w[i] <= lb[i]+tol || w[i] >= ub[i]-tol
 		}
 
 		freeIdx := make([]int, 0, N)
-		for i := 0; i < N; i++ {
+		for i := range N {
 			if !isActive[i] {
 				freeIdx = append(freeIdx, i)
 			}
@@ -244,7 +241,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 		kktDim := nFree + mEq
 		kkt := mat.NewDense(kktDim, kktDim, nil)
 
-		for p := 0; p < nFree; p++ {
+		for p := range nFree {
 			for q := p; q < nFree; q++ {
 				val := 2 * sigma.At(freeIdx[p], freeIdx[q])
 				kkt.Set(p, q, val)
@@ -254,26 +251,26 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 			}
 		}
 
-		for p := 0; p < nFree; p++ {
-			for k := 0; k < mEq; k++ {
+		for p := range nFree {
+			for k := range mEq {
 				kkt.Set(p, nFree+k, Aeq.At(k, freeIdx[p]))
 				kkt.Set(nFree+k, p, Aeq.At(k, freeIdx[p]))
 			}
 		}
 
 		rhs := make([]float64, kktDim)
-		for p := 0; p < nFree; p++ {
+		for p := range nFree {
 			var sum float64
-			for j := 0; j < N; j++ {
+			for j := range N {
 				if isActive[j] {
 					sum += sigma.At(freeIdx[p], j) * w[j]
 				}
 			}
 			rhs[p] = -2 * sum
 		}
-		for k := 0; k < mEq; k++ {
+		for k := range mEq {
 			Aw := 0.0
-			for j := 0; j < N; j++ {
+			for j := range N {
 				if isActive[j] {
 					Aw += Aeq.At(k, j) * w[j]
 				}
@@ -288,7 +285,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 		}
 
 		wFree := make([]float64, nFree)
-		for p := 0; p < nFree; p++ {
+		for p := range nFree {
 			wFree[p] = soln.AtVec(p)
 		}
 
@@ -311,7 +308,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 
 		alpha := 1.0
 		blockingIdx := -1
-		for i := 0; i < N; i++ {
+		for i := range N {
 			if d[i] > tol {
 				a := (ub[i] - w[i]) / d[i]
 				if a < alpha {
@@ -327,7 +324,7 @@ func (o *Optimizer) activeSetQP(sigma *mat.SymDense, Aeq *mat.Dense, beq []float
 			}
 		}
 
-		for i := 0; i < N; i++ {
+		for i := range N {
 			w[i] += alpha * d[i]
 		}
 
@@ -348,9 +345,9 @@ func (o *Optimizer) isOptimal(sigma *mat.SymDense, w []float64, active []bool, l
 	const tol = 1e-10
 	N := sigma.SymmetricDim()
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		g := 0.0
-		for j := 0; j < N; j++ {
+		for j := range N {
 			g += sigma.At(i, j) * w[j]
 		}
 		if active[i] && w[i] <= lb[i]+tol && g < -tol {
@@ -372,12 +369,12 @@ func (o *Optimizer) releaseConstraint(sigma *mat.SymDense, w []float64,
 	worstIdx := -1
 	worstViolation := 0.0
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		if !isActive[i] {
 			continue
 		}
 		g := 0.0
-		for j := 0; j < N; j++ {
+		for j := range N {
 			g += sigma.At(i, j) * w[j]
 		}
 		if w[i] <= lb[i]+tol && g < -worstViolation {
@@ -398,14 +395,14 @@ func (o *Optimizer) releaseConstraint(sigma *mat.SymDense, w []float64,
 func (o *Optimizer) gradientProjection(sigma *mat.SymDense, w, lb, ub []float64) []float64 {
 	N := len(w)
 	grad := make([]float64, N)
-	for i := 0; i < N; i++ {
-		for j := 0; j < N; j++ {
+	for i := range N {
+		for j := range N {
 			grad[i] += sigma.At(i, j) * w[j]
 		}
 	}
 
 	wNew := make([]float64, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wNew[i] = w[i] - 0.5*grad[i]
 		if wNew[i] < lb[i] {
 			wNew[i] = lb[i]

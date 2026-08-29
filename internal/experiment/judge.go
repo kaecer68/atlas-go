@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -388,13 +389,7 @@ func pipelineStageToggleJudgeChecks(lower string, brief domain.PromptExperimentR
 	}
 	// Architecture mutations must require multi-regime validation
 	if len(brief.Experiment.AcceptanceGates) > 0 {
-		hasRegimeGate := false
-		for _, g := range brief.Experiment.AcceptanceGates {
-			if g == "regime_diversified" {
-				hasRegimeGate = true
-				break
-			}
-		}
+		hasRegimeGate := slices.Contains(brief.Experiment.AcceptanceGates, "regime_diversified")
 		if hasRegimeGate {
 			checks = append(checks, "regime_diversified gate required for architecture mutation")
 		} else {
@@ -860,10 +855,7 @@ func (j *Judge) addRegimeConditionalChecks(result *domain.PromptExperimentResult
 	// Compute a dynamic limit: max(90, days in window * 2) to avoid loading
 	// unnecessary history for short experiment windows.
 	windowDays := int(end.Sub(start).Hours()/24) + 1
-	limit := windowDays * 2
-	if limit < 90 {
-		limit = 90
-	}
+	limit := max(windowDays*2, 90)
 	rows, err := j.historicalStore.LoadRegimeHistoryAll(ctx, limit)
 	if err != nil {
 		result.JudgeChecks = append(result.JudgeChecks,
@@ -1048,11 +1040,11 @@ func promptMentionsHoldingPeriod(prompt string) bool {
 func extractPipelineStageAction(artifact string) (stage, action string) {
 	for _, line := range strings.Split(artifact, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "stage:") {
-			stage = strings.TrimSpace(strings.TrimPrefix(line, "stage:"))
+		if after, ok := strings.CutPrefix(line, "stage:"); ok {
+			stage = strings.TrimSpace(after)
 		}
-		if strings.HasPrefix(line, "action:") {
-			action = strings.TrimSpace(strings.TrimPrefix(line, "action:"))
+		if after, ok := strings.CutPrefix(line, "action:"); ok {
+			action = strings.TrimSpace(after)
 		}
 	}
 	return

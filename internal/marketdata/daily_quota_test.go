@@ -137,7 +137,7 @@ func TestDailyQuotaTracker_AllowCallIncrementsCounter(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tracker := NewDailyQuotaTracker("test_increment", tmpDir, 10)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tracker.AllowCall()
 	}
 
@@ -222,7 +222,7 @@ func TestDailyQuotaTracker_CallsTodayReturnsExactCount(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tracker := NewDailyQuotaTracker("test_exact", tmpDir, 1000)
-	for i := 0; i < 123; i++ {
+	for range 123 {
 		tracker.AllowCall()
 	}
 
@@ -236,7 +236,7 @@ func TestDailyQuotaTracker_RemainingFlooredAtZero(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	tracker := NewDailyQuotaTracker("test_floor", tmpDir, 5)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tracker.AllowCall()
 	}
 

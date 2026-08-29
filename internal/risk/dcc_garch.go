@@ -266,7 +266,7 @@ func dccNegLogLikelihood(zA, zB []float64, qbar [2][2]float64, a, b float64) (fl
 	qT[1][0] = qbar[1][0]
 	qT[1][1] = qbar[1][1]
 	var nll float64
-	for t := 0; t < n; t++ {
+	for t := range n {
 		var zAv, zBv float64
 		if t > 0 {
 			zAv, zBv = zA[t-1], zB[t-1]
@@ -340,7 +340,7 @@ func reconstructDCC(zA, zB []float64, sigma2A, sigma2B []float64, qbar [2][2]flo
 	qT[0][1] = qbar[0][1]
 	qT[1][0] = qbar[1][0]
 	qT[1][1] = qbar[1][1]
-	for t := 0; t < n; t++ {
+	for t := range n {
 		var zAv, zBv float64
 		if t > 0 {
 			zAv, zBv = zA[t-1], zB[t-1]
@@ -413,7 +413,7 @@ func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun fl
 	}
 	simplex := make([][]float64, n+1)
 	simplex[0] = append([]float64(nil), x0...)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		v := make([]float64, n)
 		copy(v, x0)
 		step := 0.05 * math.Abs(x0[i])
@@ -421,7 +421,7 @@ func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun fl
 			step = 0.05
 		}
 		v[i] += step
-		for k := 0; k < 6; k++ {
+		for k := range 6 {
 			fv := objective(v)
 			if !math.IsInf(fv, 0) && !math.IsNaN(fv) {
 				break
@@ -455,22 +455,22 @@ func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun fl
 			}
 		}
 		c := make([]float64, n)
-		for i := 0; i < n; i++ {
-			for j := 0; j < n; j++ {
+		for i := range n {
+			for j := range n {
 				c[j] += simplex[i][j]
 			}
 		}
-		for j := 0; j < n; j++ {
+		for j := range n {
 			c[j] /= float64(n)
 		}
 		xr := make([]float64, n)
-		for j := 0; j < n; j++ {
+		for j := range n {
 			xr[j] = c[j] + alphaNM*(c[j]-simplex[n][j])
 		}
 		fr := objective(xr)
 		if fr < fvals[0] {
 			xe := make([]float64, n)
-			for j := 0; j < n; j++ {
+			for j := range n {
 				xe[j] = c[j] + gamma*(xr[j]-c[j])
 			}
 			fe := objective(xe)
@@ -487,11 +487,11 @@ func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun fl
 		} else {
 			xc := make([]float64, n)
 			if fr < fvals[n] {
-				for j := 0; j < n; j++ {
+				for j := range n {
 					xc[j] = c[j] + rho*(xr[j]-c[j])
 				}
 			} else {
-				for j := 0; j < n; j++ {
+				for j := range n {
 					xc[j] = c[j] - rho*(simplex[n][j]-c[j])
 				}
 			}
@@ -502,7 +502,7 @@ func nelderMead(x0 []float64, objective func([]float64) float64, tolX, tolFun fl
 			} else {
 				best := simplex[0]
 				for i := 1; i <= n; i++ {
-					for j := 0; j < n; j++ {
+					for j := range n {
 						simplex[i][j] = best[j] + sigma*(simplex[i][j]-best[j])
 					}
 					fvals[i] = objective(simplex[i])

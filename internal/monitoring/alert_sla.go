@@ -120,13 +120,7 @@ func percentile(vals []int, p int) int {
 	}
 	sort.Ints(vals)
 	// nearest-rank: rank = ceil(p/100 * N), clamped to [1, N]
-	rank := int(math.Ceil(float64(p) / 100.0 * float64(len(vals))))
-	if rank < 1 {
-		rank = 1
-	}
-	if rank > len(vals) {
-		rank = len(vals)
-	}
+	rank := min(max(int(math.Ceil(float64(p)/100.0*float64(len(vals)))), 1), len(vals))
 	return vals[rank-1]
 }
 

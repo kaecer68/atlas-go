@@ -545,7 +545,7 @@ func ComputeAutocorrelation(returns []float64, lag int) float64 {
 	for i := 0; i < len(returns)-lag; i++ {
 		sumCorr += (returns[i] - mean) * (returns[i+lag] - mean)
 	}
-	for i := 0; i < len(returns); i++ {
+	for i := range returns {
 		dx := returns[i] - mean
 		sumSq += dx * dx
 	}

@@ -876,7 +876,7 @@ func Test_Predict_AuxFieldsAreStableSlicesAndString(t *testing.T) {
 	if report.Summary == "" {
 		t.Error("Summary is empty, want non-empty string from buildPredictionSummary")
 	}
-	if _, ok := interface{}(report.Summary).(string); !ok {
+	if _, ok := any(report.Summary).(string); !ok {
 		t.Errorf("Summary type = %T, want string", report.Summary)
 	}
 }

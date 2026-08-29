@@ -307,7 +307,7 @@ func (m *BackgroundTaskManager) safeCallCompletionHandler(taskName string, err e
 	m.completionHandler(taskName, err, duration)
 }
 
-func logAndWrapPanic(taskName, event string, r interface{}) error {
+func logAndWrapPanic(taskName, event string, r any) error {
 	if r == nil {
 		return nil
 	}
@@ -435,10 +435,7 @@ func (m *BackgroundTaskManager) executeTask(ctx context.Context, task *Scheduled
 // overlapTolerance returns how much earlier than the full interval a tick
 // may fire before it is treated as an overlap: max(1s, interval/20).
 func overlapTolerance(interval time.Duration) time.Duration {
-	tol := interval / 20
-	if tol < time.Second {
-		tol = time.Second
-	}
+	tol := max(interval/20, time.Second)
 	return tol
 }
 

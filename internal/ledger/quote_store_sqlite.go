@@ -135,7 +135,7 @@ func (s *SQLiteQuoteStore) LoadLatestQuotes(symbols []string) (map[string]domain
 		) latest ON q.symbol = latest.symbol AND q.date = latest.max_date
 	`
 
-	args := make([]interface{}, len(symbols))
+	args := make([]any, len(symbols))
 	for i, sym := range symbols {
 		args[i] = sym
 	}

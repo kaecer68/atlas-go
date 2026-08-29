@@ -80,7 +80,7 @@ func TestService_QualityScore_CacheReducesFetchCalls(t *testing.T) {
 		t.Fatalf("first call must fetch once, got %d", got)
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = svc.QualityScore()
 	}
 	if got := atomic.LoadInt32(&provider.calls); got != 1 {

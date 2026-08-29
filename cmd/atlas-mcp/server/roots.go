@@ -49,13 +49,13 @@ func registerRootsTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_roots_list",
 		Description: autoDescOr("mcp_roots_list", "List the file:// roots declared by the connected MCP client."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPRootsList)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_roots_read_file",
 		Description: autoDescOr("mcp_roots_read_file", "Read a file under a declared file:// root. Read-only, path-traversal hardened, and audited."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPRootsReadFile)
 }
 

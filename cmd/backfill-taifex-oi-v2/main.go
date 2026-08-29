@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"mime"
 	"net/http"
 	"net/url"
@@ -424,9 +425,7 @@ func (f *taifexFetcher) storeRange(values map[string]float64, found bool, start,
 		}
 		return
 	}
-	for date, v := range values {
-		f.cache[date] = v
-	}
+	maps.Copy(f.cache, values)
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		ds := d.Format("2006-01-02")
 		if _, ok := values[ds]; !ok {

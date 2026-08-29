@@ -73,13 +73,7 @@ func main() {
 	client := marketdata.GetSharedFinMindClient(finmindKey, *workDir)
 	store := ledger.NewJSONLQuoteStore(filepath.Join(*workDir, "data", "state", "quotes"))
 
-	conc := *concurrency
-	if conc < 1 {
-		conc = 1
-	}
-	if conc > 60 {
-		conc = 60
-	}
+	conc := min(max(*concurrency, 1), 60)
 
 	days := int(end.Sub(start).Hours()/24) + 1
 	calls := len(syms) * days

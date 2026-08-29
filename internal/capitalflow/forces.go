@@ -414,7 +414,7 @@ func trendFor(z float64) string {
 
 func round(v float64, decimals int) float64 {
 	pow := 1.0
-	for i := 0; i < decimals; i++ {
+	for range decimals {
 		pow *= 10
 	}
 	return math.Round(v*pow) / pow

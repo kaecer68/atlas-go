@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"sync"
@@ -53,9 +54,7 @@ func (a *macroDataGatewayAdapter) ChannelErrors() map[string]string {
 		return nil
 	}
 	cp := make(map[string]string, len(a.lastErrors))
-	for k, v := range a.lastErrors {
-		cp[k] = v
-	}
+	maps.Copy(cp, a.lastErrors)
 	return cp
 }
 

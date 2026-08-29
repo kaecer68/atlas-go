@@ -302,7 +302,7 @@ func matchURL(feURL, bePattern string) bool {
 	// If FE is shorter or equal, match all FE segments against BE (BE can have extra params).
 	if len(feSegs) <= len(beSegs) {
 		match := true
-		for i := 0; i < len(feSegs); i++ {
+		for i := range feSegs {
 			fes := feSegs[i]
 			bes := beSegs[i]
 			// "..." in FE matches anything.
@@ -322,7 +322,7 @@ func matchURL(feURL, bePattern string) bool {
 	// If BE is shorter, check if it's a prefix of FE.
 	if len(beSegs) <= len(feSegs) {
 		match := true
-		for i := 0; i < len(beSegs); i++ {
+		for i := range beSegs {
 			bes := beSegs[i]
 			fes := feSegs[i]
 			if fes == "..." || isGoParam(bes) {

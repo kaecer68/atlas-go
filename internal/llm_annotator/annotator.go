@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"sync"
@@ -208,9 +209,7 @@ func (k *KimiClient) UsageAll() map[string]Usage {
 	k.usageMu.RLock()
 	defer k.usageMu.RUnlock()
 	out := make(map[string]Usage, len(k.usageByLabel))
-	for label, u := range k.usageByLabel {
-		out[label] = u
-	}
+	maps.Copy(out, k.usageByLabel)
 	return out
 }
 
@@ -235,9 +234,7 @@ type Snapshot struct {
 func (k *KimiClient) Snapshot() Snapshot {
 	k.usageMu.RLock()
 	byLabel := make(map[string]Usage, len(k.usageByLabel))
-	for label, u := range k.usageByLabel {
-		byLabel[label] = u
-	}
+	maps.Copy(byLabel, k.usageByLabel)
 	usage := k.usage
 	k.usageMu.RUnlock()
 	return Snapshot{

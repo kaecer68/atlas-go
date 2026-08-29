@@ -72,7 +72,7 @@ func TestNarrativeConvictionModulator_JSONRoundTrip(t *testing.T) {
 	}
 
 	// With omitempty, empty provenance fields should not appear
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal to map: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestNarrativeConvictionModulator_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("marshal with provenance: %v", err)
 	}
 
-	var raw2 map[string]interface{}
+	var raw2 map[string]any
 	if err := json.Unmarshal(data2, &raw2); err != nil {
 		t.Fatalf("unmarshal to map: %v", err)
 	}

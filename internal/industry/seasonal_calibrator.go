@@ -357,10 +357,7 @@ func ValidateCalibration(p SeasonalPattern, industryReturns map[string]map[strin
 	if len(years) < 2 {
 		return ValidationResult{PatternID: p.ID, Margin: margin}
 	}
-	splitIdx := int(float64(len(years)) * (1.0 - testFraction))
-	if splitIdx < 1 {
-		splitIdx = 1
-	}
+	splitIdx := max(int(float64(len(years))*(1.0-testFraction)), 1)
 	if splitIdx >= len(years) {
 		splitIdx = len(years) - 1
 	}

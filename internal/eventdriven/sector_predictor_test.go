@@ -30,7 +30,7 @@ func testMacroSnapshot() *marketdata.MacroDataSnapshot {
 func testFlowPredictions() []FlowPrediction {
 	base := time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC)
 	var out []FlowPrediction
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		day := base.AddDate(0, 0, i)
 		out = append(out, FlowPrediction{
 			Date:       day,

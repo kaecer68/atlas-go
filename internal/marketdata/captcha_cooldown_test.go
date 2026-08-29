@@ -85,7 +85,7 @@ func TestCaptchaCooldown_ConsecutiveCaptchaSkips(t *testing.T) {
 	// "ShouldSkip=true" state, the caller is expected to skip the
 	// upstream fetch every time. This is the W2 spec scenario.
 	c.RecordCaptcha(ch)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		nowFake.Add(int64(10 * time.Millisecond))
 		if !c.ShouldSkip(ch) {
 			t.Fatalf("consecutive CAPTCHA tick %d/3: ShouldSkip should be true (now=%v, until=%v)", i+1, clock(), c.Until(ch))
@@ -195,14 +195,14 @@ func TestCaptchaCooldown_ConcurrentSafety(t *testing.T) {
 	const iterations = 100
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(id int) {
 			defer wg.Done()
 			ch := "channel"
 			if id%2 == 0 {
 				ch = "other"
 			}
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				switch i % 3 {
 				case 0:
 					c.RecordCaptcha(ch)

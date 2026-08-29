@@ -25,7 +25,7 @@ func TestAdminHandler_Register_200(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestAdminHandler_Rotate_200(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestAdminHandler_List_Redacted(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var tokens []map[string]interface{}
+	var tokens []map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&tokens); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}

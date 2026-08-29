@@ -95,7 +95,7 @@ func (fl *FileLocker) TryLock(timeout time.Duration) (func(), error) {
 // LockWithRetry retries TryLock up to maxRetries times, waiting retryDelay
 // between attempts, and returns an idempotent unlock function on success.
 func (fl *FileLocker) LockWithRetry(maxRetries int, retryDelay time.Duration) (func(), error) {
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		unlock, err := fl.TryLock(retryDelay)
 		if err == nil {
 			return unlock, nil

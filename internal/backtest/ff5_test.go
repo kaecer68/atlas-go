@@ -237,7 +237,7 @@ func TestComputeFF5Alpha_MissingFactors(t *testing.T) {
 	seed := uint64(55)
 	a := uint64(6364136223846793005)
 	c := uint64(1442695040888963407)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		seed = a*seed + c
 		fr["Mkt"][i] = (float64(seed%10000)/10000.0 - 0.5) * 0.06
 		seed = a*seed + c

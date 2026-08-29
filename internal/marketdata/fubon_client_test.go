@@ -75,7 +75,7 @@ func TestFubonClient_BreakerOpensOnRequestFailures(t *testing.T) {
 
 	// Feed consecutive request failures until the breaker opens (threshold 3).
 	var lastErr error
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, lastErr = client.GetQuote(context.Background(), "2330")
 	}
 	if lastErr == nil {
@@ -133,7 +133,7 @@ func TestFubonClient_BreakerRecoversViaProbe(t *testing.T) {
 	client.SetHealthClient(server.Client())
 
 	// 3 failures open the breaker.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = client.GetQuote(context.Background(), "2330")
 	}
 	if got := client.BreakerInfo().State; got != ProviderCircuitOpen {
@@ -191,7 +191,7 @@ func TestFubonClient_HealthProbeFeedsBreaker(t *testing.T) {
 	client.SetHealthClient(server.Client())
 
 	// 3 probe failures → breaker open + healthy false.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = client.HealthCheck(context.Background())
 	}
 	if got := client.BreakerInfo().State; got != ProviderCircuitOpen {

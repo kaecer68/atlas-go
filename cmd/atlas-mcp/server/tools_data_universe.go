@@ -11,43 +11,43 @@ func registerDataUniverseTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_channels",
 		Description: autoDescOr("data_get_channels", "List all data channels (fugle, twse, yahoo, finmind, internal) with status."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDataGetChannels)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_channel_detail",
 		Description: autoDescOr("data_get_channel_detail", "Detail for a single data channel by name (latency, error rate, last fetch)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDataGetChannelDetail)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_quality",
 		Description: autoDescOr("data_get_quality", "Data quality metrics (gaps, stale symbols, completeness by source)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDataGetQuality)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "data_get_field_contract",
 		Description: autoDescOr("data_get_field_contract", "Field contract schema introspection (field types, optionality) for a model."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleDataGetFieldContract)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_sessions",
 		Description: autoDescOr("universe_get_sessions", "Recent simulation sessions (id, date, status, top_strategies)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleUniverseGetSessions)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_session_detail",
 		Description: autoDescOr("universe_get_session_detail", "Per-strategy drill-down for one session (full recommendation outcomes + summary)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleUniverseGetSessionDetail)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "universe_get_universe_overlap",
 		Description: autoDescOr("universe_get_universe_overlap", "Universe overlap analysis across recent simulation sessions."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleUniverseGetUniverseOverlap)
 }
 

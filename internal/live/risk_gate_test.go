@@ -153,7 +153,7 @@ func TestRiskGate_ConcurrentRecordFill_NoRace(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 4)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			gate.RecordFill(domain.SideSell, 100.0, 90.0, 10, 1000.0)

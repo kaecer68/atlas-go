@@ -660,7 +660,7 @@ func TestNarrativeEventBridge_Scrape_Configure_Race(t *testing.T) {
 
 	var wg sync.WaitGroup
 	const goroutines = 10
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		if i%2 == 0 {
 			// Scrape goroutines.

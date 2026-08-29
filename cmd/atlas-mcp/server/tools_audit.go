@@ -24,25 +24,25 @@ func registerAuditTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_call_stats",
 		Description: autoDescOr("mcp_get_call_stats", "Return call statistics for the recent window: total calls, error count, p50 latency, and per-tool breakdown. window_minutes defaults to 60 and is capped at 1440 (24h)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPGetCallStats)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_session_topology",
 		Description: autoDescOr("mcp_get_session_topology", "Return the agent_id to tool call matrix for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). Empty agent_id falls back to 'anonymous'."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPGetSessionTopology)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_top_slow_tools",
 		Description: autoDescOr("mcp_get_top_slow_tools", "Return the slowest tools by p50 latency for the recent window. window_minutes defaults to 60 and is capped at 1440 (24h). limit defaults to 5 and is capped at 20."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPGetTopSlowTools)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "mcp_get_tenant_usage",
 		Description: autoDescOr("mcp_get_tenant_usage", "Return per-tenant usage stats for the recent window: total calls, error count, tool count. window_minutes defaults to 60 and is capped at 1440 (24h)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleMCPGetTenantUsage)
 }
 

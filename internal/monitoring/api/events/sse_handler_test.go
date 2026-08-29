@@ -372,7 +372,7 @@ func TestBufferHealthAlertEvent_AppendsToBuffer(t *testing.T) {
 func TestBufferHealthAlertEvent_CapsAt50(t *testing.T) {
 	resetHealthAlertBuffer()
 
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		BufferHealthAlertEvent(eventbus.BusEvent{
 			ID:        fmt.Sprintf("evt-cap-%d", i),
 			Type:      eventbus.EventHealthAlert,

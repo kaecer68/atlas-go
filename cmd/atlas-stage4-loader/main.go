@@ -61,13 +61,13 @@ type loaderRegime struct {
 }
 
 type loaderStress struct {
-	Date        string                 `json:"date"`
-	Score       float64                `json:"score"`
-	Regime      string                 `json:"regime"`
-	Components  map[string]interface{} `json:"components"`
-	Source      string                 `json:"source"`
-	CapturedAt  time.Time              `json:"captured_at"`
-	IsSynthetic uint8                  `json:"is_synthetic"`
+	Date        string         `json:"date"`
+	Score       float64        `json:"score"`
+	Regime      string         `json:"regime"`
+	Components  map[string]any `json:"components"`
+	Source      string         `json:"source"`
+	CapturedAt  time.Time      `json:"captured_at"`
+	IsSynthetic uint8          `json:"is_synthetic"`
 }
 
 type loaderEvent struct {
@@ -255,7 +255,7 @@ func filterByDate[T any](in []T, since, until string, dropped int) ([]T, int) {
 	return out, dropped
 }
 
-func extractDate(v interface{}) string {
+func extractDate(v any) string {
 	switch r := v.(type) {
 	case loaderRegime:
 		return r.Date

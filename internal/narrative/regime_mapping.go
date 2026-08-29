@@ -1,5 +1,7 @@
 package narrative
 
+import "slices"
+
 // RegimeVocabularyMapping describes the cross-walk between the two regime
 // vocabularies that have ended up sharing the SQLite stress_index_history.regime
 // and regime_history.regime columns:
@@ -49,10 +51,8 @@ var RegimeVocabularyMapping = map[string]string{
 // token if the original vocabulary matters.
 func NormalizeRegime(in string) string {
 	// Already canonical — no rewrite needed.
-	for _, r := range RegimeVocabulary {
-		if r == in {
-			return in
-		}
+	if slices.Contains(RegimeVocabulary, in) {
+		return in
 	}
 	if mapped, ok := RegimeVocabularyMapping[in]; ok {
 		return mapped

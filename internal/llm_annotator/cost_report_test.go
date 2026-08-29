@@ -44,7 +44,7 @@ func TestKimiClient_CostReport_AccumulatesPerFeature(t *testing.T) {
 	c.cacheTTL = 0
 
 	// 2 calls labeled "alert" + 1 call labeled "summary" = 3 calls * 19 tokens = 57 total
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if _, err := c.Annotate(context.Background(), FailureContext{FrameID: "x", Label: "alert"}); err != nil {
 			t.Fatalf("alert Annotate: %v", err)
 		}

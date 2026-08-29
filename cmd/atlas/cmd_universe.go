@@ -137,7 +137,7 @@ func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string)
 	log.Printf("  %-8s  %-8s  %-20s  %s", "RANK", "SCORE", "INDUSTRY", "SYMBOL")
 	log.Printf("  %-8s  %-8s  %-20s  %s", "────", "─────", "────────", "──────")
 	printCount := min(20, len(ranked))
-	for i := 0; i < printCount; i++ {
+	for i := range printCount {
 		r := ranked[i]
 		freshTag := ""
 		if !r.ScoreFresh {
@@ -225,7 +225,7 @@ func buildUniverseStatus(cfg config.Config) error {
 		top := snap.TopSymbols
 		sort.Slice(top, func(i, j int) bool { return top[i].Score > top[j].Score })
 		limit := min(10, len(top))
-		for i := 0; i < limit; i++ {
+		for i := range limit {
 			log.Printf("    %-8s  %-8.1f  %s", top[i].Symbol, top[i].Score, top[i].Industry)
 		}
 	}

@@ -266,9 +266,7 @@ func (ct *CycleTracker) SaveToFile(path string) error {
 		Positions: make(map[string]*CyclePosition, len(ct.positions)),
 		History:   make(map[string][]CyclePosition, len(ct.history)),
 	}
-	for id, pos := range ct.positions {
-		snap.Positions[id] = pos
-	}
+	maps.Copy(snap.Positions, ct.positions)
 	for id, hist := range ct.history {
 		cp := make([]CyclePosition, len(hist))
 		copy(cp, hist)

@@ -442,10 +442,7 @@ func (c *FubonClient) runHealthProbe(interval time.Duration) {
 			if n >= healthProbeConsecutiveFailures {
 				c.healthy.Store(false)
 				// Exponential backoff: double wait each failure, capped at 5 min.
-				backoff = time.Duration(1<<min(int(n), 8)) * interval / 2
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
+				backoff = min(time.Duration(1<<min(int(n), 8))*interval/2, maxBackoff)
 			}
 			logging.Warn("fubon_client", "health_probe_failed",
 				logging.Err(err),

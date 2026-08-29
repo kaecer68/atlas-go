@@ -16,7 +16,7 @@ func TestTaiwanIndexHistoryStore_AppendAndRecent(t *testing.T) {
 
 	// 依日期升序 append（provider 每日一次）
 	base := time.Date(2026, 7, 1, 0, 0, 0, 0, twseLocation)
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		s.Append(base.AddDate(0, 0, i), 23000.0+float64(i)*10)
 	}
 

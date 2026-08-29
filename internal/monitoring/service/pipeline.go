@@ -1301,10 +1301,7 @@ func (s *PipelineService) loadRegimeHistoryFromStore(limit int) (*RegimeHistoryD
 // rows whose date is within the last N days. This makes `?days=N` on the
 // HTTP endpoint mean a date window, not a row limit.
 func (s *PipelineService) loadRegimeHistoryFromStoreDays(days int) (*RegimeHistoryData, error) {
-	limit := days * 2
-	if limit < 90 {
-		limit = 90
-	}
+	limit := max(days*2, 90)
 	rows, err := s.historicalStore.LoadRegimeHistory(context.Background(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("load regime history: %w", err)

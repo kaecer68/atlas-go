@@ -38,12 +38,12 @@ func registerBacktestTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "backtest_status",
 		Description: autoDescOr("backtest_status", "Latest backtest run summary (last_auto_date, last_auto_portfolio_val) HTTP: GET /api/backtest/status. Alternative: backtest_signals, report_get_performance."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleBacktestStatus)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "backtest_signals",
 		Description: autoDescOr("backtest_signals", "Active backtest signals (active_signals, var_95/99, sharpe_short/long, drawdown_pct) HTTP: GET /api/backtest/signals. Alternative: backtest_status."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleBacktestSignals)
 }

@@ -303,8 +303,8 @@ func exactMatch(query string, segments []*MapperIndustrySegment) *MapperIndustry
 	}
 
 	queries := []string{query}
-	if strings.HasSuffix(query, "業") {
-		queries = append(queries, strings.TrimSuffix(query, "業"))
+	if before, ok := strings.CutSuffix(query, "業"); ok {
+		queries = append(queries, before)
 	}
 
 	for _, q := range queries {

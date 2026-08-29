@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -428,9 +429,7 @@ func fieldToSchema(f structField, structs map[string][]structField) map[string]a
 			prop["items"] = itemType
 		}
 	} else if nested, ok := propType.(map[string]any); ok {
-		for k, v := range nested {
-			prop[k] = v
-		}
+		maps.Copy(prop, nested)
 	} else {
 		prop["type"] = propType
 	}

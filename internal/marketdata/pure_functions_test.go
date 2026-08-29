@@ -71,7 +71,7 @@ func TestDailyQuotaTracker_AllowCall_DecrementsRemaining(t *testing.T) {
 	dir := t.TempDir()
 	tracker := NewDailyQuotaTracker("test", dir, 5)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !tracker.AllowCall() {
 			t.Fatalf("AllowCall() #%d should be allowed", i+1)
 		}
@@ -128,7 +128,7 @@ func TestDailyQuotaTracker_Remaining_ClampsToZero(t *testing.T) {
 	// Manually exhaust quota by calling AllowCall 10 times but limit set to 5.
 	// Actually SetLimit doesn't reset callsToday, so if we had calls > limit, Remaining clamps.
 	// We simulate by calling AllowCall to exhaustion, then reducing limit.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tracker.AllowCall()
 	}
 	tracker.SetLimit(3)

@@ -78,7 +78,7 @@ func (rb *RollingBeta) Update(x, y float64) (beta, alpha, r2 float64) {
 
 	// One-pass computation of means and sums
 	var sumX, sumY, sumXY, sumX2, sumY2 float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xi := rb.xs[i]
 		yi := rb.ys[i]
 		sumX += xi
@@ -158,7 +158,7 @@ func (rb *RollingBeta) computeBeta(xs, ys []float64, n int) (beta, alpha, r2 flo
 	}
 
 	var sumX, sumY, sumXY, sumX2, sumY2 float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xi := xs[i]
 		yi := ys[i]
 		sumX += xi

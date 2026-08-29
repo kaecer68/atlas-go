@@ -158,7 +158,7 @@ func TestSpillover_NumericalStability(t *testing.T) {
 	a := make([]float64, n)
 	b := make([]float64, n)
 	c := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// a and b share almost all variance from "common".
 		a[i] = common[i] + rng.NormFloat64()*1e-6
 		b[i] = common[i] + rng.NormFloat64()*1e-6

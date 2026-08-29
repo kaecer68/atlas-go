@@ -20,7 +20,7 @@ func TestScorecard_DarwinianWeightFieldSnakeCase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestScorecard_DarwinianSharpeOmittedWhenNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestScorecard_DarwinianSharpePresentWhenSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestScorecard_RegimeBreakdownOmittedWhenEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -95,19 +95,19 @@ func TestScorecard_RegimeBreakdownShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	rbRaw, ok := raw["regime_breakdown"].(map[string]interface{})
+	rbRaw, ok := raw["regime_breakdown"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected 'regime_breakdown' to be an object, got %T", raw["regime_breakdown"])
 	}
-	regimes, ok := rbRaw["regimes"].(map[string]interface{})
+	regimes, ok := rbRaw["regimes"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected regimes to be a map, got %T", rbRaw["regimes"])
 	}
-	riskOn, ok := regimes["RISK_ON"].(map[string]interface{})
+	riskOn, ok := regimes["RISK_ON"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected RISK_ON to be an object, got %T", regimes["RISK_ON"])
 	}
@@ -126,7 +126,7 @@ func TestScorecard_RegimeStabilityOmittedWhenNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestScorecard_DataConsistencyWarningOmittedWhenEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestScorecard_DataConsistencyWarningPresent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestScorecard_BackwardCompat_PreExistingFieldsUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestHandleAgentObservatory_SanitizesDarwinianWeightNaN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestHandleAgentObservatory_SanitizesDarwinianWeightNaN(t *testing.T) {
 	}
 }
 
-func keysOf(m map[string]interface{}) []string {
+func keysOf(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

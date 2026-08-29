@@ -30,10 +30,7 @@ type TTestResult struct {
 // difference yields t = ±Inf with p = 0 (statistically conclusive);
 // identical series yields t = 0, p = 1.
 func PairedTTest(baseline, feature []float64) TTestResult {
-	n := len(baseline)
-	if len(feature) < n {
-		n = len(feature)
-	}
+	n := min(len(feature), len(baseline))
 	if n < 2 {
 		return TTestResult{DF: max(n-1, 0)}
 	}
@@ -101,10 +98,7 @@ type BootstrapResult struct {
 // resamples = 10_000 for the C3 harness. The RNG is seeded for reproducible
 // CIs. The acceleration term is estimated by the delete-one jackknife.
 func BCaBootstrap(baseline, feature []float64, stat func(baseline, feature []float64) float64, resamples int, alpha float64) BootstrapResult {
-	n := len(baseline)
-	if len(feature) < n {
-		n = len(feature)
-	}
+	n := min(len(feature), len(baseline))
 	baseline = baseline[:n]
 	feature = feature[:n]
 
@@ -115,7 +109,7 @@ func BCaBootstrap(baseline, feature []float64, stat func(baseline, feature []flo
 	dist := make([]float64, resamples)
 	bs, fs := make([]float64, n), make([]float64, n)
 	below := 0
-	for b := 0; b < resamples; b++ {
+	for b := range resamples {
 		for i := 0; i < n; i++ {
 			k := rng.Intn(n)
 			bs[i], fs[i] = baseline[k], feature[k]
@@ -172,9 +166,9 @@ func jackknifeAcceleration(baseline, feature []float64, stat func(baseline, feat
 	bs, fs := make([]float64, n-1), make([]float64, n-1)
 	jack := make([]float64, n)
 	var sum float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		k := 0
-		for j := 0; j < n; j++ {
+		for j := range n {
 			if j == i {
 				continue
 			}
@@ -186,7 +180,7 @@ func jackknifeAcceleration(baseline, feature []float64, stat func(baseline, feat
 	}
 	mean := sum / float64(n)
 	var num, den float64
-	for i := 0; i < n; i++ {
+	for i := range n {
 		d := mean - jack[i]
 		num += d * d * d
 		den += d * d

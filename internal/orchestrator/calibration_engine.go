@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"time"
@@ -298,10 +299,9 @@ func enumerateCandidates(p ParamMeta) []float64 {
 	if p.Step <= 0 || p.Min >= p.Max {
 		return []float64{p.Value}
 	}
-	n := int((p.Max-p.Min)/p.Step) + 1
-	if n > 30 {
-		n = 30 // prevent combinatorial explosion
-	}
+	n := min(int((p.Max-p.Min)/p.Step)+1,
+		// prevent combinatorial explosion
+		30)
 	candidates := make([]float64, 0, n)
 	for v := p.Min; v <= p.Max+1e-10; v += p.Step {
 		candidates = append(candidates, math.Round(v*1e6)/1e6)
@@ -314,9 +314,7 @@ func enumerateCandidates(p ParamMeta) []float64 {
 
 func cloneMap(m map[string]float64) map[string]float64 {
 	c := make(map[string]float64, len(m))
-	for k, v := range m {
-		c[k] = v
-	}
+	maps.Copy(c, m)
 	return c
 }
 

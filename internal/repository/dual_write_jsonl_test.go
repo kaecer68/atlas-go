@@ -93,7 +93,7 @@ func TestDualWriteNilPG_Metrics_LoadRecent(t *testing.T) {
 	repo := newNilPGDualWrite()
 	ctx := context.Background()
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_ = repo.SaveSnapshot(ctx, &MetricsSnapshot{
 			ScreeningTotal: int64(i * 100),
 			Timestamp:      time.Now(),

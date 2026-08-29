@@ -70,39 +70,33 @@ func registerTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "regime_get_history",
 		Description: autoDescOr("regime_get_history", "Return the market regime history for the last N days (HTTP: GET /api/regime/history). Regimes: RISK_ON / RISK_OFF / NEUTRAL / TRANSITIONAL."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleRegimeGetHistory)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "strategy_list_active",
 		Description: autoDescOr("strategy_list_active", "List the market technique set (L1-L5 signal detectors) currently active in production. Includes detectors like foreign-3day-inflow, margin-balance-extreme — these are trading signal rules, NOT portfolio allocation strategies. For portfolio strategies (growth, momentum, defensive), use get_recommendations.  HTTP: GET /api/strategies/active. Alternative: strategy_ranker, strategy_get_summary."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStrategyListActive)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "experiment_judge",
 		Description: autoDescOr("experiment_judge", "Trigger statistical replay judge scoring for a candidate experiment vs the baseline (Welch t-test, Sharpe stability, drawdown protection, OOS validation — no LLM call). Side-effect: writes to experiment history."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 	}, s.handleExperimentJudge)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "alert_list_unacknowledged",
 		Description: autoDescOr("alert_list_unacknowledged", "List unacknowledged alerts with optional filtering by severity (WARNING/ERROR/CRITICAL/INFO) and rule (simulation/experiment/etf_nav). Omit both params to list all. Use alert_acknowledge / alert_resolve via direct HTTP for state changes (those remain out of Phase 1 scope)."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleAlertListUnacknowledged)
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "system_get_health",
 		Description: autoDescOr("system_get_health", "Return overall system health status (HTTP: GET /api/dashboard/system-health). See docs/workflow-map.md WA-606."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleSystemGetHealth)
 }
-
-func boolPtr(b bool) *bool { return &b }
-
-// intPtr returns a pointer to v. Used by input schemas so optional fields with
-// defaults are not marked required in the generated JSON Schema.
-func intPtr(v int) *int { return &v }
 
 // --- Input / Output schemas ---------------------------------------------------
 

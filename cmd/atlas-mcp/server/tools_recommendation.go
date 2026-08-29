@@ -10,7 +10,7 @@ func registerRecommendationTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "get_recommendations",
 		Description: autoDescOr("get_recommendations", "Tier-appropriate portfolio allocation recommendations (growth, momentum, defensive, all_weather, value). Returns market light overview for free tier. These are portfolio-level strategy IDs — for market signal detectors (e.g. foreign-3day-inflow, margin-balance-extreme), use strategy_list_active."),
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleGetRecommendations)
 }
 

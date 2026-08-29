@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -640,11 +641,8 @@ func TestIsPublicPath_WhitelistConsistency(t *testing.T) {
 		}
 		// User-auth prefixes are auth-free for both reads and writes.
 		var isAuthFreeWrite bool
-		for _, wp := range AuthFreeWritePrefixes {
-			if prefix == wp {
-				isAuthFreeWrite = true
-				break
-			}
+		if slices.Contains(AuthFreeWritePrefixes, prefix) {
+			isAuthFreeWrite = true
 		}
 		if isAuthFreeWrite {
 			if !IsPublicPath(http.MethodPost, sample) {

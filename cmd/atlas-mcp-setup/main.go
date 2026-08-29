@@ -115,7 +115,7 @@ func resolvePaths(cfg *SetupConfig) error {
 		return fmt.Errorf("cwd: %w", err)
 	}
 	dir := cwd
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := os.Stat(filepath.Join(dir, "VERSION")); err == nil {
 			cfg.REPOROOT = dir
 			break

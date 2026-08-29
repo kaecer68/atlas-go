@@ -187,10 +187,7 @@ func (r *PortfolioRotator) RotatePortfolio(
 			pct := pos.MarketValue / totalValue
 			if pct > maxPositionPct {
 				overPct := (pct - maxPositionPct) * 100
-				penalty := int(overPct * concentrationPenalty)
-				if penalty > bestConviction-10 {
-					penalty = bestConviction - 10
-				}
+				penalty := min(int(overPct*concentrationPenalty), bestConviction-10)
 				bestConviction -= penalty
 			}
 		}

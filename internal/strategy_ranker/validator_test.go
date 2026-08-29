@@ -155,7 +155,7 @@ func TestRank(t *testing.T) {
 	}
 
 	// 排名遞增
-	for i := 0; i < len(ranked); i++ {
+	for i := range ranked {
 		if ranked[i].Rank != i+1 {
 			t.Errorf("ranked[%d].Rank = %d, want %d", i, ranked[i].Rank, i+1)
 		}

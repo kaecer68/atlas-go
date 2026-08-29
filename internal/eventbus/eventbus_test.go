@@ -218,7 +218,7 @@ func TestPublish_BufferFull_Drop(t *testing.T) {
 	})
 
 	// Publish many events rapidly; at least one should hit default.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		bus.Publish(BusEvent{ID: "fill-" + string(rune('0'+i)), Type: EventSystemStart, Timestamp: time.Now()})
 	}
 
@@ -1037,7 +1037,7 @@ func TestBusEvent_SchemaVersionInJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
@@ -1068,7 +1068,7 @@ func TestChannelEventBus_ThrottleLimitsRate(t *testing.T) {
 
 	bus.SetEventThrottle(EventMarketSnapshot, 5)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		bus.Publish(BusEvent{ID: fmt.Sprintf("throttle-%d", i), Type: EventMarketSnapshot, Timestamp: time.Now()})
 	}
 
@@ -1095,7 +1095,7 @@ func TestChannelEventBus_ThrottleWithoutConfig(t *testing.T) {
 		return nil
 	})
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		bus.Publish(BusEvent{ID: fmt.Sprintf("no-throttle-%d", i), Type: EventSystemStart, Timestamp: time.Now()})
 	}
 

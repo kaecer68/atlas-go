@@ -300,7 +300,7 @@ func TestQualityLog_ConcurrentSafe(t *testing.T) {
 	var buf bytes.Buffer
 	log := NewQualityLog(&buf)
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

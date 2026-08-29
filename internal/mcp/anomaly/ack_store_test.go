@@ -60,7 +60,7 @@ func Test_MemoryStore_Save_assigns_unique_ids(t *testing.T) {
 	s := NewMemoryStore(100)
 	ev := AnomalyEvent{TenantID: "t", AnomalyType: "burst", Score: 1.0}
 	ids := map[string]struct{}{}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		sa, err := s.Save(ev)
 		if err != nil {
 			t.Fatalf("Save: %v", err)
@@ -191,7 +191,7 @@ func Test_MemoryStore_ListAll_includes_acked(t *testing.T) {
 // the limit (operators only see N most-recent rows in the dashboard).
 func Test_MemoryStore_List_respects_limit(t *testing.T) {
 	s := NewMemoryStore(10)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, _ = s.Save(AnomalyEvent{TenantID: "t", AnomalyType: "burst"})
 	}
 	if got := s.ListUnacked(2); len(got) != 2 {
@@ -225,11 +225,11 @@ func Test_MemoryStore_ConcurrentSafe(t *testing.T) {
 	idsCh := make(chan string, 100)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 10; j++ {
+			for range 10 {
 				sa, err := s.Save(AnomalyEvent{TenantID: "t", AnomalyType: "burst"})
 				if err != nil {
 					t.Errorf("Save: %v", err)
@@ -243,7 +243,7 @@ func Test_MemoryStore_ConcurrentSafe(t *testing.T) {
 	close(idsCh)
 
 	wg2 := sync.WaitGroup{}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg2.Add(1)
 		go func() {
 			defer wg2.Done()

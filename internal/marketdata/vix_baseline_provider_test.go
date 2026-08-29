@@ -70,7 +70,7 @@ func TestVIXBaselineTracker_MaxSize(t *testing.T) {
 	tracker := NewVIXBaselineTracker(filepath.Join(t.TempDir(), "vix_history.json"))
 
 	n := vixBaselineMaxDays + 10 // 262 values: 0..261, trimmed to 10..261 (252 values)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		tracker.Update(float64(i))
 	}
 

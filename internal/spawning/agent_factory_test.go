@@ -1,6 +1,7 @@
 package spawning
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -147,13 +148,7 @@ func TestAgentFactory_DetermineUniverse(t *testing.T) {
 			t.Errorf("%s: expected non-empty universe, got empty", tt.name)
 		}
 		if tt.contains != "" {
-			found := false
-			for _, s := range got {
-				if s == tt.contains {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(got, tt.contains)
 			if !found {
 				t.Errorf("%s: expected universe to contain %s, got %v", tt.name, tt.contains, got)
 			}

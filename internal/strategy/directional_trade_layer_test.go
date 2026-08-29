@@ -66,13 +66,13 @@ func TestDirectionalTradeLayer_ConcurrentSafety(t *testing.T) {
 
 	done := make(chan bool, 2)
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			l.ApplySignal(forecast.TradeSignal{Symbol: "2330.TW", WeightMultiplier: 1.0})
 		}
 		done <- true
 	}()
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			l.WeightFor("2330.TW")
 		}
 		done <- true

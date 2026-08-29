@@ -181,7 +181,7 @@ func mathSqrt(x float64) float64 {
 		return 0
 	}
 	s := x / 2
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		s = (s + x/s) / 2
 	}
 	return s

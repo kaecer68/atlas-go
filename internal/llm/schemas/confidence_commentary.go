@@ -10,7 +10,7 @@ import "github.com/kaecer68/atlas-go/internal/llm"
 // Callers must pass a risk.RiskDecision value that the handler
 // serializes to JSON for LLM consumption.
 type ConfidenceCommentaryInput struct {
-	Decision  interface{}   `json:"decision"`
+	Decision  any           `json:"decision"`
 	DataClass llm.DataClass `json:"data_class"`
 }
 

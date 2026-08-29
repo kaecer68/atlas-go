@@ -215,7 +215,7 @@ func TestCalibrateDarwinian(t *testing.T) {
 		outcomes := make([]recommendation.RecommendationOutcome, 0)
 		for i, agent := range agents {
 			hit := i%2 == 0
-			for j := 0; j < 5; j++ {
+			for j := range 5 {
 				outcomes = append(outcomes, recommendation.RecommendationOutcome{
 					AgentID:       agent,
 					Symbol:        "2330",

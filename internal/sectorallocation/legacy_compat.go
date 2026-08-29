@@ -2,6 +2,7 @@ package sectorallocation
 
 import (
 	"log/slog"
+	"maps"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 )
@@ -41,9 +42,7 @@ func (c *LegacyReadCounter) Snapshot() map[string]int64 {
 		return map[string]int64{}
 	}
 	out := make(map[string]int64, len(c.reads))
-	for k, v := range c.reads {
-		out[k] = v
-	}
+	maps.Copy(out, c.reads)
 	return out
 }
 
@@ -75,9 +74,7 @@ type LegacyCompatReader struct {
 func NewLegacyCompatReader(cfg *config.ParametersConfig, counter *LegacyReadCounter) *LegacyCompatReader {
 	allocs := map[string]float64{}
 	if cfg != nil {
-		for k, v := range cfg.Engine.SectorRotation.BaseAllocations.Value {
-			allocs[k] = v
-		}
+		maps.Copy(allocs, cfg.Engine.SectorRotation.BaseAllocations.Value)
 	}
 	return &LegacyCompatReader{allocations: allocs, counter: counter}
 }

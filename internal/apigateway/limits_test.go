@@ -173,7 +173,7 @@ func TestNewRateLimitManager_YahooGroupSplit(t *testing.T) {
 	}
 
 	groups := []*rate.Limiter{yahooMacroLimiter, yahooIndexLimiter, yahooTechLimiter}
-	for i := 0; i < len(groups); i++ {
+	for i := range groups {
 		for j := i + 1; j < len(groups); j++ {
 			if groups[i] == groups[j] {
 				t.Errorf("group limiters %d and %d should be distinct instances", i, j)

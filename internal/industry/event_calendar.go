@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -845,11 +846,8 @@ func (tec *EventCalendar) GetEventAdjustment(industryID string, now time.Time) f
 		adj := evt.SentimentAdjustment
 		// If industry matches, give full weight; otherwise partial
 		relevant := len(evt.AffectedIndustries) == 0
-		for _, id := range evt.AffectedIndustries {
-			if id == industryID {
-				relevant = true
-				break
-			}
+		if slices.Contains(evt.AffectedIndustries, industryID) {
+			relevant = true
 		}
 		if relevant {
 			total += adj

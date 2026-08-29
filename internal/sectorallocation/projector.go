@@ -2,6 +2,7 @@ package sectorallocation
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
@@ -126,9 +127,7 @@ func (p *Projector) Project(raw map[industry.SectorID]float64, drivers DriverInp
 
 	// 2. 累加所有 driver 對 raw 的 delta（SA-INV-08：每 driver 最多一次）
 	target := make(map[industry.SectorID]float64, 20)
-	for id, w := range raw {
-		target[id] = w
-	}
+	maps.Copy(target, raw)
 	log := []AdjustmentEvent{}
 	provenance := map[string]string{
 		"cycle":        "v1.0.0",

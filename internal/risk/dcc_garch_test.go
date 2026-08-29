@@ -16,7 +16,7 @@ func makeCorrelatedNormals(n int, rho float64, seed int64) ([]float64, []float64
 	a := make([]float64, n)
 	b := make([]float64, n)
 	sqrtTerm := math.Sqrt(1.0 - rho*rho)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		z1 := rng.NormFloat64()
 		z2 := rng.NormFloat64()
 		a[i] = z1
@@ -84,7 +84,7 @@ func TestDCCGARCH_NumericalStability(t *testing.T) {
 	n := 500
 	a := make([]float64, n)
 	b := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if i%50 == 0 {
 			a[i] = (rng.Float64() - 0.5) * 1e6
 			b[i] = (rng.Float64() - 0.5) * 1e6
@@ -125,7 +125,7 @@ func TestDCCGARCH_Stationarity(t *testing.T) {
 	b := make([]float64, n)
 	rho := 0.9
 	sqrtTerm := math.Sqrt(1.0 - rho*rho)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		z1 := rng.NormFloat64() * 2.0
 		z2 := rng.NormFloat64() * 2.0
 		a[i] = z1

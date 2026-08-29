@@ -405,7 +405,7 @@ func TestWelchTTest(t *testing.T) {
 	// 63 samples required per group for statistical significance
 	baseline := make([]float64, 63)
 	candidate := make([]float64, 63)
-	for i := 0; i < 63; i++ {
+	for i := range 63 {
 		baseline[i] = []float64{0.01, 0.02, 0.015, 0.01, 0.02}[i%5]
 		candidate[i] = []float64{0.02, 0.03, 0.025, 0.02, 0.03}[i%5]
 	}
@@ -783,7 +783,7 @@ func TestPreserveDownsideProtectionGate_AcceptableDrawdown(t *testing.T) {
 	// 63 samples required for Welch t-test statistical significance
 	baseline := make([]float64, 63)
 	candidate := make([]float64, 63)
-	for i := 0; i < 63; i++ {
+	for i := range 63 {
 		baseline[i] = []float64{0.01, -0.01, 0.02, -0.005, 0.015, -0.01}[i%6]
 		candidate[i] = []float64{0.06, 0.04, 0.07, 0.045, 0.065, 0.04}[i%6]
 	}

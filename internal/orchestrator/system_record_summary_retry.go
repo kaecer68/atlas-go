@@ -35,7 +35,7 @@ func recordSummaryWithRetry(
 	const maxAttempts = 3
 
 	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := range maxAttempts {
 		if err := store.RecordSessionSummary(session, summary); err == nil {
 			return nil
 		} else {

@@ -40,7 +40,7 @@ func TestRecordOutcome_AccuracyTracking(t *testing.T) {
 		"supply_chain":   0.05,
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		cal.RecordOutcome("sess-01", time.Now(), baseSignals, 0.01)
 	}
 
@@ -71,10 +71,10 @@ func TestRecordOutcome_MixedDirections(t *testing.T) {
 	bullishSignals := map[string]float64{"silicon": 0.75, "business_cycle": 0.60, "seasonal": 1.10, "events": 1.05, "supply_chain": 0.05}
 	bearishSignals := map[string]float64{"silicon": 0.25, "business_cycle": 0.50, "seasonal": 0.95, "events": 0.90, "supply_chain": -0.05}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		cal.RecordOutcome("sess-bull", time.Now(), bullishSignals, 0.02)
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		cal.RecordOutcome("sess-bear", time.Now(), bearishSignals, -0.02)
 	}
 
@@ -114,7 +114,7 @@ func TestCalibrateWeights_InsufficientSamples(t *testing.T) {
 
 	baseWeights := map[string]float64{"silicon": 0.25, "business_cycle": 0.20, "seasonal": 0.15}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{
 			"silicon":        0.75,
 			"business_cycle": 0.60,
@@ -135,7 +135,7 @@ func TestCalibrateWeights_UpweightHighAccuracy(t *testing.T) {
 
 	baseWeights := map[string]float64{"silicon": 0.25, "business_cycle": 0.20, "seasonal": 0.15}
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{
 			"silicon":        0.75,
 			"business_cycle": 0.60,
@@ -164,7 +164,7 @@ func TestCalibrateWeights_DownweightLowAccuracy(t *testing.T) {
 
 	highAccuracySignals := map[string]float64{"silicon": 0.75, "business_cycle": 0.25, "seasonal": 1.10}
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		cal.RecordOutcome("sess", time.Now(), highAccuracySignals, 0.01)
 	}
 
@@ -186,7 +186,7 @@ func TestCalibrateWeights_WeightClamping(t *testing.T) {
 
 	baseWeights := map[string]float64{"silicon": 0.03, "business_cycle": 0.45}
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{
 			"silicon":        0.75,
 			"business_cycle": 0.25,
@@ -214,7 +214,7 @@ func TestCalibrateWeights_NormalizesToOne(t *testing.T) {
 
 	baseWeights := map[string]float64{"silicon": 0.3, "business_cycle": 0.3, "seasonal": 0.2}
 
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{
 			"silicon":        0.75,
 			"business_cycle": 0.25,
@@ -241,7 +241,7 @@ func TestRecordOutcome_RollingWindowEviction(t *testing.T) {
 	cfg.MinSamples = 3
 	cal := NewCycleCalibration(cfg)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{"silicon": 0.75}, 0.01)
 	}
 
@@ -309,7 +309,7 @@ func TestSetConfig_PropagatesChanges(t *testing.T) {
 	cal.SetConfig(cfg)
 
 	baseWeights := map[string]float64{"silicon": 0.25}
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{"silicon": 0.75}, 0.01)
 	}
 

@@ -161,7 +161,7 @@ func TestHandleResourceAuditRecent_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		entry := `{"ts":"2026-06-30T10:00:0` + string(rune('0'+i)) + `Z","tool":"t","status":"ok","duration_ms":1}` + "\n"
 		f.WriteString(entry)
 	}
@@ -183,7 +183,7 @@ func TestHandleResourceAuditRecent_OK(t *testing.T) {
 func TestTailAuditLog_LimitsResultsToN(t *testing.T) {
 	auditPath := filepath.Join(t.TempDir(), "audit.log")
 	f, _ := os.Create(auditPath)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		f.WriteString(`{"ts":"2026-06-30T10:00:00Z","tool":"t","status":"ok","duration_ms":1}` + "\n")
 	}
 	f.Close()

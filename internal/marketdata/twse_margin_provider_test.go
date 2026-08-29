@@ -36,7 +36,7 @@ func TestTWSEMarginBalanceProvider_SaveMargin(t *testing.T) {
 		t.Fatalf("read file failed: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}

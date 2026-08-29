@@ -199,7 +199,7 @@ func TestDecodeJSON_StreamingLargerPayload(t *testing.T) {
 	const rows = 200
 	var utf8 bytes.Buffer
 	utf8.WriteString(`{"rows":[`)
-	for i := 0; i < rows; i++ {
+	for i := range rows {
 		if i > 0 {
 			utf8.WriteString(",")
 		}

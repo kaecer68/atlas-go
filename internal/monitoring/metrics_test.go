@@ -137,7 +137,7 @@ func TestGetAlertTriggerCount(t *testing.T) {
 
 func TestCheckThresholds_AlertTriggerCount_BelowThreshold(t *testing.T) {
 	m := NewMetricsCollector()
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		m.RecordAlert("test")
 	}
 	threshold := AlertThreshold{
@@ -282,7 +282,7 @@ func TestGetAlertTriggerRate(t *testing.T) {
 		t.Errorf("1ms window rate = %v, want 1 (count as-is)", got)
 	}
 	// 60 個 alerts 在 1 小時窗口 → rate = 60/hr
-	for i := 0; i < 59; i++ {
+	for range 59 {
 		m.RecordAlert("bulk")
 	}
 	if got := m.GetAlertTriggerRate(time.Hour); got != 60 {
@@ -297,7 +297,7 @@ func TestGetAlertTriggerRate(t *testing.T) {
 func TestCheckThresholds_AlertTriggerRate_Hourly(t *testing.T) {
 	m := NewMetricsCollector()
 	// 觸發 150 個 alerts（> 100/hr 閾值）
-	for i := 0; i < 150; i++ {
+	for range 150 {
 		m.RecordAlert("flood")
 	}
 	threshold := AlertThreshold{
@@ -329,7 +329,7 @@ func TestCheckThresholds_AlertTriggerRate_Hourly(t *testing.T) {
 func TestCheckThresholds_AlertTriggerRate_Acceptable(t *testing.T) {
 	m := NewMetricsCollector()
 	// 50 個 alerts（< 100/hr 閾值）
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		m.RecordAlert("normal")
 	}
 	threshold := AlertThreshold{

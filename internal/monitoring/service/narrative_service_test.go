@@ -376,7 +376,7 @@ func TestNarrativeService_GetStressIndexHistory_WithComponents(t *testing.T) {
 				Date:       day(-1),
 				Score:      25.0,
 				Regime:     "alert",
-				Components: map[string]interface{}{"dxy": 1.5, "vix": 20.0, "bad": "not-a-number"},
+				Components: map[string]any{"dxy": 1.5, "vix": 20.0, "bad": "not-a-number"},
 			},
 		},
 	}

@@ -527,7 +527,7 @@ func TestRound4(t *testing.T) {
 
 func TestUpdateHistory_MaintainsCap(t *testing.T) {
 	c := NewCalculator()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		c.UpdateHistory(RSITwInput{
 			MarginBalance: float64(5000 + i*10),
 			VIXLevel:      float64(20 + i%10),
@@ -672,14 +672,14 @@ func TestCalibrateRSITw_WithData(t *testing.T) {
 	macroDir := filepath.Join(dir, "data", "state", "macro")
 	os.MkdirAll(macroDir, 0o755)
 
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		ts := time.Date(2026, 7, 1+i, 8, 0, 0, 0, time.UTC)
-		data := map[string]interface{}{
+		data := map[string]any{
 			"recorded_at":           ts.Format(time.RFC3339),
-			"retail_margin_balance": map[string]interface{}{"value": 5000.0 + float64(i)*100},
-			"vix":                   map[string]interface{}{"value": 22.0 + float64(i%5)},
-			"foreign_investor_net":  map[string]interface{}{"value": 1_000_000_000.0},
-			"domestic_fund_net":     map[string]interface{}{"value": 500_000_000.0},
+			"retail_margin_balance": map[string]any{"value": 5000.0 + float64(i)*100},
+			"vix":                   map[string]any{"value": 22.0 + float64(i%5)},
+			"foreign_investor_net":  map[string]any{"value": 1_000_000_000.0},
+			"domestic_fund_net":     map[string]any{"value": 500_000_000.0},
 		}
 		fname := fmt.Sprintf("2026-07-%02d.json", 1+i)
 		raw, _ := json.Marshal(data)

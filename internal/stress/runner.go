@@ -114,7 +114,7 @@ func (r *Runner) RunScenario(scenario Scenario, stockQuotes []domain.Quote, recs
 		}
 
 		portRet := baseDrift
-		for i := 0; i < n; i++ {
+		for i := range n {
 			sym := stockQuotes[i].Symbol
 			sign := symbolSign[sym]
 			if goldSyms[sym] {
@@ -178,14 +178,14 @@ func (r *Runner) runScenarioCov(scenario Scenario, vix, volScale float64) Scenar
 	if vix < 20 {
 		baseDrift = volScale * 0.005
 	}
-	for t := 0; t < W; t++ {
+	for t := range W {
 		decay := decayFactor(t, W)
 		z := make([]float64, N)
-		for i := 0; i < N; i++ {
+		for i := range N {
 			z[i] = boxMullerStress(rng)
 		}
 		var portRet float64
-		for i := 0; i < N; i++ {
+		for i := range N {
 			var ri float64
 			for j := 0; j <= i; j++ {
 				ri += L[i][j] * z[j]
@@ -219,7 +219,7 @@ func choleskyDecompose(a [][]float64) [][]float64 {
 	for i := range L {
 		L[i] = make([]float64, n)
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := 0; j <= i; j++ {
 			sum := 0.0
 			for k := 0; k < j; k++ {
@@ -317,10 +317,7 @@ func historicalVaR(values []float64, confidence float64) float64 {
 		returns[i-1] = (values[i] - values[i-1]) / values[i-1]
 	}
 	sort.Float64s(returns)
-	idx := int((1 - confidence) * float64(len(returns)))
-	if idx < 0 {
-		idx = 0
-	}
+	idx := max(int((1-confidence)*float64(len(returns))), 0)
 	return -returns[idx]
 }
 

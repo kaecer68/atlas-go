@@ -284,7 +284,7 @@ func (r *DetectorRegistry) RunAll(ctx context.Context, in DetectorInput) ([]Dete
 
 	results := make([]DetectionResult, 0, len(detectors))
 	var errs []error
-	for i := 0; i < len(detectors); i++ {
+	for range detectors {
 		o := <-ch
 		if o.err != nil {
 			errs = append(errs, fmt.Errorf("narrative: detector %s: %w", o.theme, o.err))

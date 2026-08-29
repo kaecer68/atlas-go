@@ -28,11 +28,11 @@ func TestAnnotateEvent_BothHooksCalled(t *testing.T) {
 	regimeCalled := false
 	sentimentCalled := false
 
-	RegimeExplainer = func(ctx context.Context, event interface{}) (string, error) {
+	RegimeExplainer = func(ctx context.Context, event any) (string, error) {
 		regimeCalled = true
 		return "Regime: Risk-On", nil
 	}
-	SentimentExplainer = func(ctx context.Context, event interface{}) (string, error) {
+	SentimentExplainer = func(ctx context.Context, event any) (string, error) {
 		sentimentCalled = true
 		return "Sentiment: Bullish", nil
 	}
@@ -62,7 +62,7 @@ func TestAnnotateEvent_BothHooksCalled(t *testing.T) {
 }
 
 func TestAnnotateEvent_ErrorFallsThrough(t *testing.T) {
-	RegimeExplainer = func(ctx context.Context, event interface{}) (string, error) {
+	RegimeExplainer = func(ctx context.Context, event any) (string, error) {
 		return "", fmt.Errorf("LLM timeout")
 	}
 	defer func() { RegimeExplainer = nil }()

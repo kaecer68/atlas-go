@@ -39,10 +39,7 @@ func (v IncrementalValidator) CompareModels(baselineRecords, candidateRecords []
 }
 
 func (v IncrementalValidator) ComputeDieboldMariano(baselineErrors, candidateErrors []float64) DMStatistic {
-	n := len(baselineErrors)
-	if len(candidateErrors) < n {
-		n = len(candidateErrors)
-	}
+	n := min(len(candidateErrors), len(baselineErrors))
 	if n == 0 {
 		return DMStatistic{}
 	}

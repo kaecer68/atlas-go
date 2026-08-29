@@ -44,13 +44,13 @@ type RegimeRow struct {
 
 // StressRow is one row from stress_index_history.
 type StressRow struct {
-	Date        string                 `json:"date"`
-	Score       float64                `json:"score"`
-	Regime      string                 `json:"regime"`
-	Components  map[string]interface{} `json:"components,omitempty"`
-	Source      string                 `json:"source"`
-	CapturedAt  time.Time              `json:"captured_at"`
-	IsSynthetic uint8                  `json:"is_synthetic"`
+	Date        string         `json:"date"`
+	Score       float64        `json:"score"`
+	Regime      string         `json:"regime"`
+	Components  map[string]any `json:"components,omitempty"`
+	Source      string         `json:"source"`
+	CapturedAt  time.Time      `json:"captured_at"`
+	IsSynthetic uint8          `json:"is_synthetic"`
 }
 
 // GeoEventRow is one keyword-matched geopolitical news item persisted for

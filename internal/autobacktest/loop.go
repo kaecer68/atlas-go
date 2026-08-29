@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
@@ -128,13 +129,7 @@ func SignalApply(ctx context.Context, ledgerDir string, gw LiveChannelOpener) er
 	if len(sigs.Active) == 0 {
 		return nil
 	}
-	circuitBroken := false
-	for _, s := range sigs.Active {
-		if s == SignalCircuitBreaker {
-			circuitBroken = true
-			break
-		}
-	}
+	circuitBroken := slices.Contains(sigs.Active, SignalCircuitBreaker)
 	if !circuitBroken {
 		return nil
 	}

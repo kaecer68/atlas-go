@@ -144,12 +144,12 @@ func TestStore_ConcurrentWrites(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(g int) {
 			defer wg.Done()
 			batch := make([]domain.RecommendationOutcome, perGoroutine)
-			for i := 0; i < perGoroutine; i++ {
+			for i := range perGoroutine {
 				batch[i] = domain.RecommendationOutcome{
 					AgentID:       fmt.Sprintf("agent-%d", g),
 					Skill:         "alpha",
@@ -200,7 +200,7 @@ func TestStore_ConcurrentMixedReadWrite(t *testing.T) {
 	const goroutines = 6
 	var wg sync.WaitGroup
 	errCh := make(chan error, goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(g int) {
 			defer wg.Done()
@@ -297,7 +297,7 @@ func TestMean(t *testing.T) {
 func TestBuildScorecardsNewFields(t *testing.T) {
 	// Create outcomes with enough windows for statistical significance
 	outcomes := []domain.RecommendationOutcome{}
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		outcomes = append(outcomes, domain.RecommendationOutcome{
 			AgentID:       "sig-agent",
 			Skill:         "alpha",
@@ -742,7 +742,7 @@ func TestConcurrentRecordOutcomes(t *testing.T) {
 	store := NewStore(dir).(*Store)
 	var wg sync.WaitGroup
 	n := 10
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()

@@ -262,7 +262,7 @@ func (m *mockEventPredictor) PredictToday() (eventdriven.FlowPrediction, error) 
 
 func (m *mockEventPredictor) NextNDays(n int) ([]eventdriven.FlowPrediction, error) {
 	out := make([]eventdriven.FlowPrediction, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out[i] = eventdriven.FlowPrediction{
 			Date:       time.Date(2026, 7, 8+i+1, 0, 0, 0, 0, time.UTC),
 			Direction:  m.direction,
@@ -450,7 +450,7 @@ func TestHandleRecommendations_RegimeChange_ConcurrentSafety(t *testing.T) {
 	const N = 100
 	var wg sync.WaitGroup
 	wg.Add(N)
-	for i := 0; i < N; i++ {
+	for range N {
 		go func() {
 			defer wg.Done()
 			req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)

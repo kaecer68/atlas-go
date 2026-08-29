@@ -3,6 +3,7 @@ package risk
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"time"
 
@@ -249,9 +250,7 @@ func copyStrFloatMap(src map[string]float64) map[string]float64 {
 		return make(map[string]float64)
 	}
 	dst := make(map[string]float64, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 

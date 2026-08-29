@@ -37,7 +37,7 @@ func TestPermutationImportance(t *testing.T) {
 		}
 		X := make([][]float64, nSamples)
 		y := make([]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			X[i] = []float64{
 				float64(i%10) * 0.1, // feature 0: varies 0-0.9
 				float64(i%5) * 0.05, // feature 1: varies 0-0.2
@@ -132,7 +132,7 @@ func TestPermutationImportance(t *testing.T) {
 		}
 		X := make([][]float64, nSamples)
 		y := make([]float64, nSamples)
-		for i := 0; i < nSamples; i++ {
+		for i := range nSamples {
 			X[i] = []float64{
 				float64(i) * 0.02,
 				float64((i*7)%13) * 0.1,

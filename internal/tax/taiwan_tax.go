@@ -229,10 +229,7 @@ func (cm *TaiwanCostModel) NetReturn(rawReturn, turnover float64) float64 {
 // paired with corresponding turnover rates.
 // Returns a new slice; does not mutate the input.
 func (cm *TaiwanCostModel) ApplyToSeries(rawReturns, turnovers []float64) []float64 {
-	n := len(rawReturns)
-	if len(turnovers) < n {
-		n = len(turnovers)
-	}
+	n := min(len(turnovers), len(rawReturns))
 	result := make([]float64, n)
 	for i := 0; i < n; i++ {
 		result[i] = cm.NetReturn(rawReturns[i], turnovers[i])

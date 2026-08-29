@@ -282,10 +282,7 @@ func (m *OrderManager) GetOrders(filter OrderFilter) ([]OrderRecord, int, error)
 	if start >= total {
 		return []OrderRecord{}, total, nil
 	}
-	end := start + filter.PageSize
-	if end > total {
-		end = total
-	}
+	end := min(start+filter.PageSize, total)
 	return all[start:end], total, nil
 }
 

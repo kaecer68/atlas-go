@@ -140,7 +140,7 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource, con
 		}
 		sort.Strings(flowDates)
 
-		for i := 0; i < len(bars); i++ {
+		for i := range bars {
 			t := bars[i].Date
 			if t.Before(cfg.Start) || t.After(cfg.End) {
 				continue

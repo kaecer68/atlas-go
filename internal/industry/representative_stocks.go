@@ -2,6 +2,8 @@
 // cycle positioning, and supply-chain linkage for Taiwan stock market analysis.
 package industry
 
+import "slices"
+
 // DefaultRepresentativeStocks returns a map of canonical SectorID constants
 // to their representative stock symbols. All symbols are WITHOUT .TW suffix.
 //
@@ -160,10 +162,8 @@ func DefaultRepresentativeStocks() map[SectorID][]string {
 // classification path is through ClassificationTree.GetSegment().
 func ClassifyBySymbol(symbol string) SectorID {
 	for id, stocks := range DefaultRepresentativeStocks() {
-		for _, s := range stocks {
-			if s == symbol {
-				return id
-			}
+		if slices.Contains(stocks, symbol) {
+			return id
 		}
 	}
 	return ""

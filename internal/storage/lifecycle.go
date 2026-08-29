@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -283,10 +284,5 @@ func countMatches(dirPath string, entries []os.DirEntry, pattern string, exclude
 
 // isExcluded checks if a filename is in the exclusion list.
 func isExcluded(name string, exclude []string) bool {
-	for _, ex := range exclude {
-		if name == ex {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(exclude, name)
 }

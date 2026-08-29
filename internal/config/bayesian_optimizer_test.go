@@ -183,10 +183,10 @@ func TestCholesky_2x2PositiveDefinite(t *testing.T) {
 
 	// Verify L * L^T = original matrix
 	n := len(a)
-	for i := 0; i < n; i++ {
-		for j := 0; j < n; j++ {
+	for i := range n {
+		for j := range n {
 			sum := 0.0
-			for k := 0; k < n; k++ {
+			for k := range n {
 				sum += l[i][k] * l[j][k]
 			}
 			if math.Abs(sum-a[i][j]) > 1e-9 {
@@ -207,10 +207,10 @@ func TestCholesky_3x3(t *testing.T) {
 
 	// Verify L * L^T = original
 	n := len(a)
-	for i := 0; i < n; i++ {
-		for j := 0; j < n; j++ {
+	for i := range n {
+		for j := range n {
 			sum := 0.0
-			for k := 0; k < n; k++ {
+			for k := range n {
 				sum += l[i][k] * l[j][k]
 			}
 			if math.Abs(sum-a[i][j]) > 1e-9 {
@@ -228,7 +228,7 @@ func TestCholesky_LowerTriangular(t *testing.T) {
 	}
 	l := cholesky(a)
 	n := len(l)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		for j := i + 1; j < n; j++ {
 			if l[i][j] != 0 {
 				t.Errorf("L[%d][%d] = %v; want 0 (lower triangular)", i, j, l[i][j])
@@ -244,7 +244,7 @@ func TestCholesky_DiagonalPositive(t *testing.T) {
 		{2, 0, 4},
 	}
 	l := cholesky(a)
-	for i := 0; i < len(l); i++ {
+	for i := range l {
 		if l[i][i] <= 0 {
 			t.Errorf("L[%d][%d] = %v; want >0", i, i, l[i][i])
 		}
@@ -299,7 +299,7 @@ func TestForwardSubstitution_3x3(t *testing.T) {
 
 	// Verify L * y = b
 	n := len(l)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum := 0.0
 		for j := 0; j <= i; j++ {
 			sum += l[i][j] * y[j]
@@ -330,7 +330,7 @@ func TestSolveTriangular_Simple(t *testing.T) {
 	// Verify L^T * x = y (where y is from forward sub)
 	yExpected := forwardSubstitution(l, b)
 	n := len(l)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sum := 0.0
 		for j := 0; j <= i; j++ {
 			sum += l[i][j] * x[j]
@@ -343,9 +343,9 @@ func TestSolveTriangular_Simple(t *testing.T) {
 
 	// Verify that after forward+back, L * (L^T * x) should equal b
 	// or equivalently: L^T * x = forwardSubstitution(L, b)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		ltX := 0.0
-		for j := 0; j < n; j++ {
+		for j := range n {
 			ltX += l[j][i] * x[j]
 		}
 		if math.Abs(ltX-yExpected[i]) > 1e-9 {
@@ -755,7 +755,7 @@ func TestBayesianOptimizer_RandFloat(t *testing.T) {
 	opt := NewBayesianOptimizer([][2]float64{{0, 1}}, eval, DefaultOptimizerConfig())
 	opt.rngState = 42
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		f := opt.randFloat()
 		if f < 0 || f > 1 {
 			t.Errorf("randFloat() = %v; want in [0,1]", f)

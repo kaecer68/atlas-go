@@ -99,7 +99,7 @@ func TestHandleRegimeGetHistory_DefaultDays(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{"sessions":[]}`)
-	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(0)})
+	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(0)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestHandleRegimeGetHistory_ClampedTo365(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{"sessions":[]}`)
-	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(999)})
+	_, _, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(999)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestHandleRegimeGetHistory_PrefersRealEngineScore(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{"sessions":[{"session_id":"s1","regime":"RISK_OFF","recorded_at":"2026-06-30T00:00:00Z"}],"current_regime":"RISK_OFF"}`)
-	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(7)})
+	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(7)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestHandleRegimeGetHistory_ForwardsAPIToken(t *testing.T) {
 	defer audit.Close()
 	cfg := Config{AtlasBaseURL: ts.URL, APIToken: "secret-token", AuditLogPath: filepath.Join(tmp, "audit.log")}
 	s := &server{cfg: cfg, audit: audit, cli: NewHTTPClient(cfg)}
-	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: intPtr(7)})
+	_, out, err := s.handleRegimeGetHistory(context.Background(), nil, RegimeGetHistoryInput{Days: new(7)})
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestHandleNewReadOnlyTools_HitCorrectBackendPath(t *testing.T) {
 			return e
 		}, "/api/parameters/metadata"},
 		{"parameters_get_snapshots_default", func(s *server) error {
-			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: intPtr(0)})
+			_, _, e := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: new(0)})
 			return e
 		}, "/api/parameters/snapshots"},
 		{"sector_allocation_plan", func(s *server) error {
@@ -312,7 +312,7 @@ func TestHandleParametersGetSnapshots_DefaultDays(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{}`)
-	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: intPtr(0)})
+	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: new(0)})
 	if err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestHandleParametersGetSnapshots_ClampUpperBound(t *testing.T) {
 	s, rec, done := newTestHarness(t)
 	defer done()
 	rec.responseBody = []byte(`{}`)
-	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: intPtr(9999)})
+	_, _, err := s.handleParametersGetSnapshots(context.Background(), nil, ParametersGetSnapshotsInput{Days: new(9999)})
 	if err != nil {
 		t.Fatalf("handler error: %v", err)
 	}

@@ -28,46 +28,46 @@ func TestChaosPreflight(t *testing.T) {
 	tests := []struct {
 		name           string
 		healthStatus   int
-		macroResponse  map[string]interface{}
-		eventsResponse map[string]interface{}
+		macroResponse  map[string]any
+		eventsResponse map[string]any
 		wantExitCode   int
 	}{
 		{
 			name:         "health_500_fails",
 			healthStatus: 500,
-			macroResponse: map[string]interface{}{
-				"dxy":                  map[string]interface{}{"symbol": "DXY", "value": 104.5},
-				"foreign_investor_net": map[string]interface{}{"symbol": "FIN", "value": -1200000000},
-				"nvda":                 map[string]interface{}{"symbol": "NVDA", "value": 875.0},
-				"tsm_adr":              map[string]interface{}{"symbol": "TSM", "value": 175.0},
+			macroResponse: map[string]any{
+				"dxy":                  map[string]any{"symbol": "DXY", "value": 104.5},
+				"foreign_investor_net": map[string]any{"symbol": "FIN", "value": -1200000000},
+				"nvda":                 map[string]any{"symbol": "NVDA", "value": 875.0},
+				"tsm_adr":              map[string]any{"symbol": "TSM", "value": 175.0},
 			},
-			eventsResponse: map[string]interface{}{
-				"sector_predictions": []interface{}{},
+			eventsResponse: map[string]any{
+				"sector_predictions": []any{},
 			},
 			wantExitCode: 1,
 		},
 		{
 			name:         "macro_missing_fields_fails",
 			healthStatus: 200,
-			macroResponse: map[string]interface{}{
-				"dxy": map[string]interface{}{"symbol": "DXY", "value": 104.5},
+			macroResponse: map[string]any{
+				"dxy": map[string]any{"symbol": "DXY", "value": 104.5},
 				// missing foreign_investor_net, nvda, tsm_adr
 			},
-			eventsResponse: map[string]interface{}{
-				"sector_predictions": []interface{}{},
+			eventsResponse: map[string]any{
+				"sector_predictions": []any{},
 			},
 			wantExitCode: 1,
 		},
 		{
 			name:         "events_missing_sector_predictions_fails",
 			healthStatus: 200,
-			macroResponse: map[string]interface{}{
-				"dxy":                  map[string]interface{}{"symbol": "DXY", "value": 104.5},
-				"foreign_investor_net": map[string]interface{}{"symbol": "FIN", "value": -1200000000},
-				"nvda":                 map[string]interface{}{"symbol": "NVDA", "value": 875.0},
-				"tsm_adr":              map[string]interface{}{"symbol": "TSM", "value": 175.0},
+			macroResponse: map[string]any{
+				"dxy":                  map[string]any{"symbol": "DXY", "value": 104.5},
+				"foreign_investor_net": map[string]any{"symbol": "FIN", "value": -1200000000},
+				"nvda":                 map[string]any{"symbol": "NVDA", "value": 875.0},
+				"tsm_adr":              map[string]any{"symbol": "TSM", "value": 175.0},
 			},
-			eventsResponse: map[string]interface{}{
+			eventsResponse: map[string]any{
 				// missing sector_predictions
 			},
 			wantExitCode: 1,
@@ -75,14 +75,14 @@ func TestChaosPreflight(t *testing.T) {
 		{
 			name:         "all_ok_passes",
 			healthStatus: 200,
-			macroResponse: map[string]interface{}{
-				"dxy":                  map[string]interface{}{"symbol": "DXY", "value": 104.5},
-				"foreign_investor_net": map[string]interface{}{"symbol": "FIN", "value": -1200000000},
-				"nvda":                 map[string]interface{}{"symbol": "NVDA", "value": 875.0},
-				"tsm_adr":              map[string]interface{}{"symbol": "TSM", "value": 175.0},
+			macroResponse: map[string]any{
+				"dxy":                  map[string]any{"symbol": "DXY", "value": 104.5},
+				"foreign_investor_net": map[string]any{"symbol": "FIN", "value": -1200000000},
+				"nvda":                 map[string]any{"symbol": "NVDA", "value": 875.0},
+				"tsm_adr":              map[string]any{"symbol": "TSM", "value": 175.0},
 			},
-			eventsResponse: map[string]interface{}{
-				"sector_predictions": []interface{}{},
+			eventsResponse: map[string]any{
+				"sector_predictions": []any{},
 			},
 			wantExitCode: 0,
 		},
