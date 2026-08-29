@@ -189,38 +189,32 @@ func (w *Wave9Observability) Start(ctx context.Context) (err error) {
 	var wg sync.WaitGroup
 	errs := make(chan error, 3)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.ingestionLagMonitor = w.factory.newIngestionLagMonitor(w.bus, w.ingestionLagProvider)
 		if startErr := w.ingestionLagMonitor.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start ingestion lag monitor: %w", startErr)
 			return
 		}
 		addStarted(w.ingestionLagMonitor.Stop)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.channelHealthSynthesizer = w.factory.newChannelHealthSynthesizer(w.bus, w.channelHealthProvider)
 		if startErr := w.channelHealthSynthesizer.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start channel health synthesizer: %w", startErr)
 			return
 		}
 		addStarted(w.channelHealthSynthesizer.Stop)
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.factorWeightRegression = w.factory.newFactorWeightRegressionDetector(w.bus, w.weightProvider)
 		if startErr := w.factorWeightRegression.Start(ctx); startErr != nil {
 			errs <- fmt.Errorf("start factor weight regression detector: %w", startErr)
 			return
 		}
 		addStarted(w.factorWeightRegression.Stop)
-	}()
+	})
 
 	wg.Wait()
 	close(errs)

@@ -94,11 +94,9 @@ func TestBacktestService_ConcurrentIsRunning(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = svc.IsRunning()
-		}()
+		})
 	}
 	wg.Wait()
 	// No panic means thread-safe
@@ -111,11 +109,9 @@ func TestBacktestService_ConcurrentReset(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			svc.Reset()
-		}()
+		})
 	}
 	wg.Wait()
 	// No panic means thread-safe

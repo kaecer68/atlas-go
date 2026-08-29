@@ -58,12 +58,10 @@ func TestYahooSession_ConcurrentEnsureCrumb_SingleFlight(t *testing.T) {
 	var wg sync.WaitGroup
 	ctx := context.Background()
 	for range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			p := NewNVDAProvider()
 			_, _ = p.FetchSnapshot(ctx)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -109,11 +107,9 @@ func TestYahooSession_ConcurrentEnsureCrumb_NoDeadlock(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = globalYahooSession.s.ensureCrumb(context.Background())
-		}()
+		})
 	}
 	wg.Wait()
 

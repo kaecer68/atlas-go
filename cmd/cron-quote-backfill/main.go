@@ -93,9 +93,7 @@ func main() {
 	var wg sync.WaitGroup
 	var total atomic.Int64
 	for i := 0; i < conc; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for sym := range jobs {
 				n, err := backfillSymbol(ctx, client, store, sym, start, end, *dryRun)
 				if err != nil {
@@ -104,7 +102,7 @@ func main() {
 				}
 				total.Add(int64(n))
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	fmt.Printf("wrote %d bars across %d symbols\n", total.Load(), len(syms))

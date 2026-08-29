@@ -449,13 +449,11 @@ func TestSelfCalibrate_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, N)
 	for range N {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if _, err := g.SelfCalibrate(context.Background(), provider, 5); err != nil {
 				errs <- err
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)

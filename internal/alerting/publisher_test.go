@@ -60,11 +60,9 @@ func TestNoopPublisher_ConcurrentSafe(t *testing.T) {
 	p := NoopPublisher{}
 	var wg sync.WaitGroup
 	for range 32 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = p.Publish(context.Background(), Alert{Type: EventSecurityRootsChanged})
-		}()
+		})
 	}
 	wg.Wait()
 }

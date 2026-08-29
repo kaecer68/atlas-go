@@ -128,11 +128,9 @@ func TestQuotaRegistry_ConcurrentReadSnapshot(t *testing.T) {
 	}
 	// Reader goroutines hit Snapshot concurrently.
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = r.Snapshot()
-		}()
+		})
 	}
 	wg.Wait()
 	// Final snapshot must include all 5 providers — proves no goroutine

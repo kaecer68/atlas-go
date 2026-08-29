@@ -127,11 +127,9 @@ func TestScheduledTask_LastRun_ThreadSafe(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = task.LastRun()
-		}()
+		})
 	}
 	for i := range 100 {
 		wg.Add(1)
@@ -637,24 +635,20 @@ func TestScheduledTask_ConcurrentIsEnabled(t *testing.T) {
 
 	// 50 goroutines reading IsEnabled
 	for range 50 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 100 {
 				_ = task.IsEnabled()
 			}
-		}()
+		})
 	}
 
 	// 50 goroutines writing SetEnabled
 	for range 50 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range 100 {
 				task.SetEnabled(j%2 == 0)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -667,13 +661,11 @@ func TestScheduledTask_ConcurrentFailures(t *testing.T) {
 
 	// 100 goroutines recording failures concurrently
 	for range 100 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 50 {
 				task.RecordFailure()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -690,22 +682,18 @@ func TestScheduledTask_ConcurrentMixedOperations(t *testing.T) {
 
 	// Readers
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 100 {
 				_ = task.IsEnabled()
 				_ = task.LastRun()
 				_ = task.Failures()
 			}
-		}()
+		})
 	}
 
 	// Writers
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			now := time.Now()
 			for j := range 100 {
 				task.SetEnabled(j%2 == 0)
@@ -715,7 +703,7 @@ func TestScheduledTask_ConcurrentMixedOperations(t *testing.T) {
 					task.RecordSuccess()
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -763,11 +751,9 @@ func TestBackgroundTaskManager_ConcurrentListAndRegister(t *testing.T) {
 
 	// Concurrent List and Register
 	for range 20 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = m.List()
-		}()
+		})
 	}
 	for i := range 20 {
 		wg.Add(1)
