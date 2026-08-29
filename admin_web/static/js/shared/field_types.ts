@@ -573,6 +573,14 @@ export interface CorrelationResponse {
   fallback_reason?: string;
 }
 
+export interface CoverageEntry {
+  symbol: string;
+  covered: boolean;
+  listing: string;
+  quote_covered: boolean;
+  reason: string;
+}
+
 export interface CoverageReport {
   updated_at: string;
   finmind_size: number;
@@ -4545,6 +4553,31 @@ export interface WeightFactorConfig {
   weight: number;
   source: string;
   evidence: string;
+}
+
+export interface WinRateCondition {
+  condition_id: string;
+  source: string;
+  observations: number;
+  hits: number;
+  win_rate: number;
+  wilson_lower: number;
+  wilson_upper: number;
+  confidence: number;
+  calibration_status: string;
+  net_cost_rate: number;
+  avg_forward_return: number;
+  updated_at: string;
+  data_start?: string;
+  data_end?: string;
+}
+
+export interface WinRateResponse {
+  symbol: string;
+  rolling_window: string;
+  found: boolean;
+  message?: string;
+  conditions: WinRateCondition[];
 }
 
 export interface aggregateResponse {

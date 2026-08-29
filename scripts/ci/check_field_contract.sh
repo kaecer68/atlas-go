@@ -99,9 +99,7 @@ for JS_DIR in "${JS_DIRS[@]}"; do
         foreign_capital_signal|foreign_investor_net_billions|\
         taiwan_ex_change_pct|taiwan_ex_direction|\
         total_pnl|total_value|\
-        sample_days|strategy_id|strategy_name|\
-        condition_id|rolling_window|wilson_lower|wilson_upper|\
-        avg_forward_return|data_start|data_end) continue ;;
+        sample_days|strategy_id|strategy_name) continue ;;
       esac
 
       echo "$field" >> "$FOUND_FIELDS"
