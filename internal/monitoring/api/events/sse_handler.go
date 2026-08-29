@@ -26,7 +26,7 @@ type SSEClient struct {
 type SSEHandler struct {
 	eventBus    *eventbus.ChannelEventBus
 	clients     map[string]*SSEClient
-	clientCount int64
+	clientCount atomic.Int64
 	mutex       sync.RWMutex
 	maxClients  int
 }
@@ -641,7 +641,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	// Enforce max concurrent connections
-	count := atomic.LoadInt64(&h.clientCount)
+	count := h.clientCount.Load()
 	if count >= int64(h.maxClients) {
 		fmt.Fprintf(w, "event: error\ndata: {\"message\":\"too many connections\"}\n\n")
 		flusher.Flush()
@@ -660,7 +660,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mutex.Lock()
 	h.clients[clientID] = client
 	h.mutex.Unlock()
-	atomic.AddInt64(&h.clientCount, 1)
+	h.clientCount.Add(1)
 
 	// Send initial connected event.
 	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", `{"client_id":"`+clientID+`"}`)
@@ -885,7 +885,7 @@ func (h *SSEHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.mutex.Lock()
 			delete(h.clients, clientID)
 			h.mutex.Unlock()
-			atomic.AddInt64(&h.clientCount, -1)
+			h.clientCount.Add(-1)
 			close(client.events)
 			return
 		}
