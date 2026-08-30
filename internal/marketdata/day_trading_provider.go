@@ -62,17 +62,30 @@ func (d *DayTradingProvider) SetRateLimiter(l *rate.Limiter) {
 	}
 }
 
+// SetBaseURL overrides the TWSE base URL (tests only).
+func (d *DayTradingProvider) SetBaseURL(u string) {
+	if u != "" {
+		d.baseURL = u
+	}
+}
+
 // FetchLatest retrieves the most recent day trading statistics.
 func (d *DayTradingProvider) FetchLatest(ctx context.Context) (*DayTradingStats, error) {
 	now := time.Now().UTC()
+	var lastErr error
 	for i := range 7 {
 		dateStr := now.AddDate(0, 0, -i).Format("20060102")
 		stats, err := d.fetchDate(ctx, dateStr)
 		if err == nil {
 			return stats, nil
 		}
+		lastErr = err
 	}
-	return nil, fmt.Errorf("no TWSE day trading data available in the last 7 days")
+	// Keep the stable prefix (channel-health text matches on it) but attach
+	// the last underlying error so transient upstream failures (rate-limit
+	// bursts after startup, TWSE maintenance) are diagnosable from the
+	// channel record instead of surfacing as an opaque "no data" message.
+	return nil, fmt.Errorf("no TWSE day trading data available in the last 7 days: last error: %w", lastErr)
 }
 
 func (d *DayTradingProvider) fetchDate(ctx context.Context, dateStr string) (*DayTradingStats, error) {
