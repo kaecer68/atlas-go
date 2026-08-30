@@ -4964,6 +4964,7 @@ export interface twseETFTable {
 }
 
 export interface twseIndexItem {
+  日期: string;
   指數: string;
   收盤指數: string;
   漲跌: string;
