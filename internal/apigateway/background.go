@@ -167,14 +167,31 @@ type BackgroundTaskManager struct {
 	// completionHandler receives success AND failure outcomes (with duration)
 	// so callers can persist cross-restart liveness. Nil is a no-op.
 	completionHandler TaskCompletionHandler
+	// staggerStartup spreads the first runs of a fresh process start across
+	// a bounded window (see startupStaggerDelay) to avoid the startup
+	// thundering herd against shared rate limiters (#1763). Default true.
+	staggerStartup bool
 }
 
 // NewBackgroundTaskManager creates a task manager.
 func NewBackgroundTaskManager(gateway *Gateway) *BackgroundTaskManager {
+	// Note: staggerStartup intentionally defaults to false — the documented
+	// first-run contract is "fresh start executes immediately" (see runTask
+	// and TestBackgroundTaskManager_RunTask_AppliesStartupJitter). Production
+	// wiring (cmd/atlas/background_tasks.go) opts into the startup stagger to
+	// avoid the thundering herd (#1763).
 	return &BackgroundTaskManager{
 		gateway:  gateway,
 		registry: make(map[string]*ScheduledTask),
 	}
+}
+
+// WithStartupStagger overrides whether fresh starts stagger the first run
+// (default true via NewBackgroundTaskManager). Unit tests that assert
+// immediate first execution use false.
+func (m *BackgroundTaskManager) WithStartupStagger(enabled bool) *BackgroundTaskManager {
+	m.staggerStartup = enabled
+	return m
 }
 
 // Register adds a task to the registry.
@@ -233,6 +250,38 @@ func (m *BackgroundTaskManager) List() []string {
 }
 
 // Start begins executing all registered tasks.
+// startupStaggerDelay returns the deterministic pre-first-run delay for a
+// freshly started task (#1763). The delay is derived from a stable hash of
+// the task name so the fan-out order is reproducible across restarts, and is
+// capped at min(staggerWindow, interval/10) so short-interval probes spread
+// over a bounded window while long-interval tasks are unaffected in
+// relative terms.
+func startupStaggerDelay(name string, interval time.Duration) time.Duration {
+	const staggerWindow = 2 * time.Minute
+	if interval <= 0 {
+		return 0
+	}
+	window := staggerWindow
+	if cap := interval / 10; cap < window {
+		window = cap
+	}
+	if window <= 0 {
+		return 0
+	}
+	h := fnv32a(name)
+	return time.Duration(h%uint32(window/time.Second)) * time.Second
+}
+
+// fnv32a is the 32-bit FNV-1a hash (dependency-free, stable across runs).
+func fnv32a(s string) uint32 {
+	var h uint32 = 2166136261
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= 16777619
+	}
+	return h
+}
+
 func (m *BackgroundTaskManager) Start(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
@@ -344,7 +393,6 @@ func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask
 		}
 	}()
 
-	// Apply startup jitter to prevent thundering herd
 	// Apply startup jitter to prevent thundering herd, but ONLY after
 	// the first execution (the initial run fires immediately so that
 	// long-interval tasks like government_flow_aggregate don't sit
@@ -355,6 +403,23 @@ func (m *BackgroundTaskManager) runTask(ctx context.Context, task *ScheduledTask
 		case <-ctx.Done():
 			return
 		case <-time.After(jitter):
+		}
+	}
+	// Fresh process start (#1763): every task fires its first run
+	// simultaneously and stampedes the shared TWSE rate limiter + upstreams —
+	// fetches queue past their context deadlines and the channel health page
+	// shows false alarms (bdi timeout, taiex fallback rate-limit, day_trading
+	// "no data") for ~30 minutes after every deploy. Spread the first runs
+	// deterministically across a bounded stagger window (name-hashed so the
+	// order is stable across restarts); long-interval tasks lose at most
+	// min(2min, interval/10) of idleness, a negligible cost vs hours.
+	if m.staggerStartup && task.LastRun().IsZero() && task.Interval > 0 {
+		if delay := startupStaggerDelay(task.Name, task.Interval); delay > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(delay):
+			}
 		}
 	}
 	ticker := time.NewTicker(task.Interval)
