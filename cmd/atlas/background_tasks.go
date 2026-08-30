@@ -23,6 +23,11 @@ func setupBackgroundTaskManager(gw *apigateway.Gateway, monitor *monitoring.Moni
 	} else {
 		taskMgr = apigateway.NewBackgroundTaskManager(nil)
 	}
+	// Production: stagger the first runs of a fresh process start across a
+	// bounded window so all tasks don't stampede the shared rate limiters and
+	// upstreams simultaneously (#1763) — the restart window otherwise shows
+	// ~30 minutes of false channel alarms on the dashboard.
+	taskMgr.WithStartupStagger(true)
 	taskMgr.SetFailureHandler(func(name string, consecutiveFailures int, err error) {
 		if consecutiveFailures >= 3 {
 			monitor.Alert(monitoring.AlertLevelError, "background_task",
