@@ -358,25 +358,25 @@ func (s *MacroService) GetMacroDataHealth() (*MacroDataHealthResponse, error) {
 		case now.Unix()-item.pt.Timestamp > 7*86400:
 			h.Status = "error"
 			h.StatusText = fmt.Sprintf("資料過期 (%d 天前)", (now.Unix()-item.pt.Timestamp)/86400)
-		case now.Unix()-item.pt.Timestamp > 86400:
-			h.Status = "warn"
-			h.StatusText = fmt.Sprintf("資料待更新 (%d 小時前)", (now.Unix()-item.pt.Timestamp)/3600)
-		case item.pt.Value == 0:
-			h.Status = "error"
-			h.StatusText = "數值異常 — 資料提供者回傳零值"
-		case math.Abs(item.pt.ChangePct) < 1e-9 && item.pt.Value > 0:
-			// 僅在時間戳記遺失或超過 24 小時時才標記為異常。
-			// 近期資料的零變動為正當情況（首次執行或市場持平）。
-			if item.pt.Timestamp == 0 || now.Unix()-item.pt.Timestamp > 86400 {
-				h.Status = "warn"
-				h.StatusText = "日變動率為 0 — 資料可能未更新"
-			} else {
-				h.Status = "ok"
-				h.StatusText = "正常"
-			}
 		default:
-			h.Status = "ok"
-			h.StatusText = "正常"
+			// Session-aware freshness (#1762): judge data age against the
+			// symbol's own market calendar instead of a fixed 24h wall clock,
+			// so the latest session close never renders as「資料待更新」during
+			// weekends/holidays/pre-open. UX: closed windows surface as
+			// 「週末休市（M/D 收盤）」etc.
+			status, text := evaluateMacroFreshness(item.pt.Symbol, item.pt.Timestamp, now)
+			h.Status = status
+			h.StatusText = text
+			if status == "ok" {
+				// Preserve the legacy sanity checks for fresh data.
+				if item.pt.Value == 0 {
+					h.Status = "error"
+					h.StatusText = "數值異常 — 資料提供者回傳零值"
+				} else if math.Abs(item.pt.ChangePct) < 1e-9 && item.pt.Value > 0 && now.Unix()-item.pt.Timestamp > 86400 {
+					h.Status = "warn"
+					h.StatusText = "日變動率為 0 — 資料可能未更新"
+				}
+			}
 		}
 		result = append(result, h)
 	}
