@@ -148,18 +148,24 @@ func registerDataSyncAndHealthTasks(
 	if exeErr == nil {
 		seasonalBin := filepath.Join(filepath.Dir(exePath), "calibrate-seasonal")
 		if _, statErr := os.Stat(seasonalBin); statErr == nil {
-			replayPath := filepath.Join(cfg.WorkDir, "data", "replay", "finmind_2020_2024.jsonl")
-			if _, rpErr := os.Stat(replayPath); rpErr != nil {
-				replayPath = ""
+			replayPath := resolveSeasonalReplayPath(cfg.WorkDir)
+			if replayPath == "" {
+				// calibrate-seasonal hard-refuses `-update` without real replay
+				// data (synthetic-fallback guard), so registering the task
+				// without a replay dataset guarantees a task_failed every 7d
+				// tick (pure noise — #1757). Skip registration instead and
+				// surface a clear WARN, mirroring the binary-missing guard.
+				log.Printf("[Gateway] seasonal_calibration skipped: replay dataset not found under %s (sync data/replay/finmind_2020_2024.jsonl to enable)", filepath.Join(cfg.WorkDir, "data", "replay"))
+			} else {
+				_ = taskMgr.Register(&apigateway.ScheduledTask{
+					Name:     "seasonal_calibration",
+					Interval: scheduler.SeasonalCalibrationDefaults.Interval,
+					Jitter:   30 * time.Minute,
+					Enabled:  true,
+					Task:     scheduler.SeasonalCalibrationTaskFuncWithReplay(seasonalBin, replayPath),
+				})
+				log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
 			}
-			_ = taskMgr.Register(&apigateway.ScheduledTask{
-				Name:     "seasonal_calibration",
-				Interval: scheduler.SeasonalCalibrationDefaults.Interval,
-				Jitter:   30 * time.Minute,
-				Enabled:  true,
-				Task:     scheduler.SeasonalCalibrationTaskFuncWithReplay(seasonalBin, replayPath),
-			})
-			log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
 		} else {
 			log.Printf("[Gateway] seasonal_calibration skipped: binary not found at %s", seasonalBin)
 		}
@@ -334,4 +340,18 @@ func gatewayChannelFetch(g *apigateway.Gateway, channelID string) apigateway.Bac
 		_, err := g.Fetch(ctx, channelID)
 		return err
 	}
+}
+
+// resolveSeasonalReplayPath returns the absolute replay dataset path used by
+// the seasonal_calibration background task when it exists under workDir, or
+// "" when missing. calibrate-seasonal hard-refuses `-update` without real
+// replay data, so an empty result means the task must not be registered
+// (registering it would produce a guaranteed task_failed every 7d tick —
+// see #1757).
+func resolveSeasonalReplayPath(workDir string) string {
+	p := filepath.Join(workDir, "data", "replay", "finmind_2020_2024.jsonl")
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
 }
