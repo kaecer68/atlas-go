@@ -70,7 +70,7 @@ export function renderChips(state, chipsResult, coverage) {
       ${renderBar('外資', foreign, maxAbs)}
       ${renderBar('投信', domestic, maxAbs)}
       ${renderBar('自營商', dealer, maxAbs)}
-      <hr style="margin:var(--spacing-1) 0; border:none; border-top:1px solid var(--border-color);" />
+      <hr style="margin:var(--space-2xs) 0; border:none; border-top:1px solid var(--border);" />
       ${renderBar('合計', total, maxAbs)}
       <div class="sq-card__source">資料日期：${dateDisplay}（資料來源：TWSE）</div>
     </div>

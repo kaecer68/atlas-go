@@ -102,19 +102,19 @@ export class DeploymentDashboard {
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-sm);" class="mb-sm">
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-sm);">
+          <div style="border:1px solid var(--border);border-radius:var(--editorial-radius-sm);padding:var(--space-sm);">
             <div class="text-sm text-muted">總體狀態</div>
             <div class="text-lg" id="deploymentSupervisorState">-</div>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-sm);">
+          <div style="border:1px solid var(--border);border-radius:var(--editorial-radius-sm);padding:var(--space-sm);">
             <div class="text-sm text-muted">程序存活</div>
             <div class="text-lg" id="deploymentProcessAlive">-</div>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-sm);">
+          <div style="border:1px solid var(--border);border-radius:var(--editorial-radius-sm);padding:var(--space-sm);">
             <div class="text-sm text-muted">重啟次數</div>
             <div class="text-lg" id="deploymentRestartCount">-</div>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-sm);">
+          <div style="border:1px solid var(--border);border-radius:var(--editorial-radius-sm);padding:var(--space-sm);">
             <div class="text-sm text-muted">最後心跳</div>
             <div class="text-lg" id="deploymentLastBeat">-</div>
           </div>
