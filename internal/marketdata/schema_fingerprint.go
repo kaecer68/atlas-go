@@ -171,6 +171,15 @@ var finmindDatasetFields = map[string][]fingerprintField{
 		{name: "min", kind: fingerprintNumber},
 		{name: "close", kind: fingerprintNumber},
 	},
+	"TaiwanStockGovernmentBankBuySell": {
+		{name: "date", kind: fingerprintString},
+		{name: "stock_id", kind: fingerprintString},
+		{name: "bank_name", kind: fingerprintString},
+		{name: "buy", kind: fingerprintNumber},
+		{name: "sell", kind: fingerprintNumber},
+		{name: "buy_amount", kind: fingerprintNumber},
+		{name: "sell_amount", kind: fingerprintNumber},
+	},
 	"TaiwanStockInfo": {
 		{name: "stock_id", kind: fingerprintString},
 		{name: "stock_name", kind: fingerprintString},
