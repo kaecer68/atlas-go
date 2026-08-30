@@ -330,7 +330,16 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		// Mark twse_etf inactive so dashboard + Alerts() stop reporting the
 		// permanent upstream 404 error. "inactive" is filtered by
 		// UnifiedHealthStore.Alerts() and renders as "未啟用" in the admin page.
-		if err := g.Health().Record("twse_etf", "inactive", "TWSE TWT44U removed upstream (TWSE_ETF_API_KEY not configured)"); err != nil {
+		//
+		// Message wording note (2026-08-31): TWSE_ETF_API_KEY is NOT a real
+		// credential — it is an operator opt-in flag that re-registers the
+		// adapter for the REMOVED TWT44U endpoint (which can only 404). The
+		// working replacement for ETF net-subscription data is the keyless
+		// Fubon PCF provider (marketdata.NewFubonETFProvider via
+		// NewETFFetcher, wired since 2026-08-17), consumed by RSI-tw subC3.
+		// The old message implied "configure the key to fix" — misleading.
+		if err := g.Health().Record("twse_etf", "inactive",
+			"TWT44U removed upstream (2026-08-10); ETF 淨申購改由 Fubon PCF 替代源供給（免 key，subC3 已接線）— 本 channel 無全市場彙總來源，維持未啟用"); err != nil {
 			logging.Warn("apigateway", "twse_etf_inactive_record_failed", "err", err.Error())
 		}
 	}
