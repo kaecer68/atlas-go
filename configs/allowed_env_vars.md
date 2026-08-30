@@ -133,7 +133,7 @@
 | `FUGLE_API_KEY` / `ATLAS_FUGLE_API_KEY` | Fugle API 金鑰 | Fugle |
 | `FUBON_API_KEY` / `ATLAS_FUBON_API_KEY` | Fubon API 金鑰 | Fubon |
 | `FUBON_PERSONAL_ID` | Fubon 個人 ID（DMA 登入） | Fubon |
-| `FINMIND_API_KEY` | FinMind API 金鑰 | FinMind |
+| `FINMIND_API_KEY` / `FINMIND_TOKEN` | FinMind API 金鑰（Sponsor token 亦經此；backfill CLI 兩者皆接受） | FinMind |
 | `TEJ_API_KEY` | TEJ API 金鑰 | TEJ |
 
 ---
