@@ -1,6 +1,8 @@
 package marketdata
 
 import (
+	"errors"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -28,6 +30,9 @@ type SectorIndexData struct {
 
 // TWSESectorIndexProvider fetches Taiwan industry index data from TWSE.
 // Industry indices are used for empirical correlation calibration between sectors.
+// ErrLatestOnly indicates MI_INDEX openapi latest-only guard (G2).
+var ErrLatestOnly = errors.New("MI_INDEX openapi is latest-only")
+
 type TWSESectorIndexProvider struct {
 	client   *http.Client
 	baseURL  string
@@ -106,6 +111,9 @@ func (p *TWSESectorIndexProvider) fetchWithMapper(ctx context.Context, startDate
 
 		dailyData, err := p.fetchSingleDay(ctx, current, mapper)
 		if err != nil {
+			if errors.Is(err, ErrLatestOnly) {
+				return nil, err
+			}
 			logging.Warn("marketdata", "sector_index_fetch_failed",
 				logging.FStr("date", current.Format("2006-01-02")),
 				logging.Err(err))
@@ -130,6 +138,7 @@ func (p *TWSESectorIndexProvider) fetchWithMapper(ctx context.Context, startDate
 }
 
 type twseIndexItem struct {
+	Date       string `json:"日期"`
 	Index      string `json:"指數"`
 	CloseIndex string `json:"收盤指數"`
 	Change     string `json:"漲跌"`
@@ -138,7 +147,31 @@ type twseIndexItem struct {
 }
 
 // fetchSingleDay fetches industry index data for a single trading day.
+// MI_INDEX openapi is latest-only: it ignores the date param and always returns
+// the most recent trading day snapshot. Using it for historical backfill
+// produces fake-dated files (G2). Historical sector index is therefore
+// explicitly unsupported via this provider — callers must use an alternative
+// source (FinMind/TEJ) or fail fast instead of writing polluted data.
 func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.Time, mapper func(string) string) (map[string]SectorIndexData, error) {
+	// 硬阻擋：openapi 僅支援最新交易日，歷史日期直接報錯而非假成功
+	// 測試用 httptest server（127.0.0.1）跳過此檢查
+	if p.baseURL == "https://openapi.twse.com.tw/v1" {
+		loc, _ := time.LoadLocation("Asia/Taipei")
+		today := time.Now().In(loc).Format("20060102")
+		reqDay := date.In(loc).Format("20060102")
+		if reqDay != today {
+			todayTime, _ := time.ParseInLocation("20060102", today, loc)
+			reqTime, _ := time.ParseInLocation("20060102", reqDay, loc)
+			delta := todayTime.Sub(reqTime)
+			if delta > 5*24*time.Hour {
+				return nil, fmt.Errorf("%w: historical date %s not supported, use FinMind/TEJ alternative (G2)", ErrLatestOnly, reqDay)
+			}
+			// 未來日期不阻擋（Sub 為負）
+			if delta < 0 {
+				// 未來日期，放行
+			}
+		}
+	}
 	dateStr := date.Format("20060102")
 	endpoint := fmt.Sprintf("%s/exchangeReport/MI_INDEX?date=%s&type=MS&response=json", p.baseURL, dateStr)
 
@@ -164,6 +197,24 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 
 	result := make(map[string]SectorIndexData)
 	dateFormatted := date.Format("2006-01-02")
+
+	// MUST-2：response 內含「日期」欄（民國年如 1150828），比對請求日期，5 日窗內假成功亦阻擋
+	if len(apiResp) > 0 && p.baseURL == "https://openapi.twse.com.tw/v1" {
+		respDateRaw := strings.TrimSpace(apiResp[0].Date)
+		if respDateRaw != "" {
+			// 民國年轉西元：1150828 → 20260828
+			respDay := respDateRaw
+			if len(respDateRaw) == 7 {
+				// 7 位：MYYMMDD，M=民國年-1911
+				mYear, _ := strconv.Atoi(respDateRaw[:3])
+				respDay = fmt.Sprintf("%04d%s", mYear+1911, respDateRaw[3:])
+			}
+			reqDay2 := date.Format("20060102")
+			if respDay != reqDay2 {
+				return nil, fmt.Errorf("%w: response date %s != request date %s (MUST-2 within-window pollution)", ErrLatestOnly, respDay, reqDay2)
+			}
+		}
+	}
 
 	for _, item := range apiResp {
 		industryName := strings.TrimSpace(item.Index)

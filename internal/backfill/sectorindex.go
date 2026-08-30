@@ -3,6 +3,7 @@ package backfill
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,8 +80,13 @@ func BackfillSectorIndex(ctx context.Context, fetcher SectorIndexFetcher, dir, s
 
 		data, err := sectorFetchWithRetry(ctx, fetcher, day)
 		if err != nil || len(data) == 0 {
-			// Non-trading day (holiday) or persistent failure: skip.
-			result.SkippedNoData++
+			// 歷史污染防呆：MI_INDEX 假成功會使 len>0 但日期錯，此處已由 provider 硬阻擋
+			// 真正的無資料（假日/錯誤）才計 SkippedNoData，硬錯誤應計 Errors 避免誤導
+			if err != nil && isHistoricalNotSupported(err) {
+				result.Errors++
+			} else {
+				result.SkippedNoData++
+			}
 			current = current.AddDate(0, 0, 1)
 			continue
 		}
@@ -134,4 +140,9 @@ func sectorFetchWithRetry(ctx context.Context, fetcher SectorIndexFetcher, day t
 		}
 	}
 	return nil, lastErr
+}
+
+// isHistoricalNotSupported reports G2 latest-only guard (openapi latest-only).
+func isHistoricalNotSupported(err error) bool {
+	return errors.Is(err, marketdata.ErrLatestOnly)
 }
