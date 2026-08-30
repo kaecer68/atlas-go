@@ -20,7 +20,7 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
-.PHONY: ci-gate ci-full pre-push import-history
+.PHONY: ci-gate ci-full pre-push import-history ci-quota
 .PHONY: test-makefile-imac-guard
 
 # ── iMac prod guard (2026-08-27, 修 PR #1695 二次破壞事件) ─────────────────
@@ -143,6 +143,7 @@ help:
 	@echo "  ci                 跑 scripts/ci/ 下所有 check_*.sh (per-script timeout 30s)"
 	@echo "  ci-quick           只跑快速 check(<2s,適合 PR 前)"
 	@echo "  ci-slow            只跑慢速 check(data_naming/layer3/markdown)"
+	@echo "  ci-quota            FinMind 每日 quota 檢查 (--strict, 週一開市前)"
 	@echo "  smoke              跑前端 smoke test(需 backend 已啟動)"
 	@echo "  clean              清除 build artifacts"
 	@echo ""
@@ -366,7 +367,7 @@ ci:
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
 	for script in scripts/ci/check_*.sh; do \
-		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*) continue;; esac; \
+		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*) continue;; esac; \
 		if [ ! -f "$$script" ]; then continue; fi; \
 		echo "  → $$script"; \
 		if timeout 30 bash "$$script" > /dev/null 2>&1; then \
@@ -425,6 +426,16 @@ ci-slow:
 		fi; \
 	done
 	@echo "✅ ci-slow complete"
+
+# #1742 P1: FinMind 每日 quota 檢查（runtime state 依賴，不進預設 make ci）。
+# 用法: make ci-quota [STRICT=1] — prod/開市前用; 開發機無 state file 會跳過。
+ci-quota:
+	@echo "🛡️  Checking FinMind daily quota..."
+	@if [ "$${STRICT:-0}" = "1" ]; then \
+		bash scripts/ci/check_finmind_quota.sh --strict; \
+	else \
+		bash scripts/ci/check_finmind_quota.sh; \
+	fi
 
 smoke:
 	@echo "🚬 Running frontend smoke tests (needs backend on :18080)..."
