@@ -12,7 +12,6 @@
 //      client_web 的 window.prompt fallback），輸入的 key 被帶上並存入
 //      localStorage
 //   3. 錯誤路徑仍走既有的 notify / alert 提示
-//   4. setAllChannelsEnabled 的 Promise.allSettled 平行 N 個 toggle 各自帶 key
 //
 // 執行：node --test shared_web/static/js/__tests__/rawfetch-postjson.test.mjs
 
@@ -200,8 +199,7 @@ globalThis.window = win;
 globalThis.alert = spyAlert;
 globalThis.prompt = () => ''; // circuit-breaker.js 使用原生 prompt
 
-const { toggleChannel, triggerChannelFetch, updateApiKey, triggerChannelsIngest, enableAllChannels } =
-  await import('../pages/datachannels.js');
+const { triggerChannelsIngest } = await import('../pages/datachannels.js');
 const { toggleSchedulerTask } = await import('../pages/scheduler.js');
 const { CircuitBreakerPanel } = await import('../components/circuit-breaker.js');
 const { handleOverrideClick } = await import('../pages/pipeline.js');
@@ -209,60 +207,6 @@ const { handleOverrideClick } = await import('../pages/pipeline.js');
 // ============================================================================
 // datachannels.js — 5 條寫入路徑
 // ============================================================================
-
-test('toggleChannel: POST toggle 帶 X-API-Key（有 key 不 prompt）', async () => {
-  setApiKey('secret-key');
-  installFetch({});
-  await toggleChannel('TWSE', true);
-  const calls = postCallsFor('/api/dashboard/channels/TWSE/toggle');
-  assert.equal(calls.length, 1, '應剛好 1 次 POST toggle');
-  assert.equal(calls[0].headers['X-API-Key'], 'secret-key', 'postJSON 應附加 X-API-Key');
-  assert.deepEqual(calls[0].body, { enabled: true }, 'body 應為 {enabled:true}');
-});
-
-test('toggleChannel: 無 key 時走 modal hook prompt 並帶上輸入的 key', async () => {
-  win.__atlasPromptForApiKey = () => 'modal-key-123';
-  installFetch({});
-  await toggleChannel('TWSE', true);
-  const calls = postCallsFor('/api/dashboard/channels/TWSE/toggle');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].headers['X-API-Key'], 'modal-key-123', 'prompt 回的 key 應被帶上');
-  assert.equal(storage.get('ATLAS_API_KEY'), 'modal-key-123', 'key 應存入 localStorage');
-});
-
-test('toggleChannel: client_web 無 modal hook → 退回原生 window.prompt', async () => {
-  win.prompt = () => 'prompt-key-456';
-  installFetch({});
-  await toggleChannel('TWSE', true);
-  const calls = postCallsFor('/api/dashboard/channels/TWSE/toggle');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].headers['X-API-Key'], 'prompt-key-456', 'window.prompt 的 key 應被帶上');
-  assert.equal(storage.get('ATLAS_API_KEY'), 'prompt-key-456');
-});
-
-test('triggerChannelFetch: POST trigger 帶 X-API-Key', async () => {
-  setApiKey('secret-key');
-  installFetch({});
-  await triggerChannelFetch('fugle');
-  const calls = postCallsFor('/api/dashboard/channels/fugle/trigger');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].headers['X-API-Key'], 'secret-key');
-  assert.equal(calls[0].body, undefined, 'trigger 不帶 body');
-});
-
-test('updateApiKey: POST api-keys/update 帶 X-API-Key + body', async () => {
-  setApiKey('secret-key');
-  const input = makeElement('input');
-  input.value = '  new-provider-key  ';
-  byId.set('dcApiKeyYahoo', input);
-  installFetch({});
-  await updateApiKey('yahoo');
-  const calls = postCallsFor('/api/dashboard/api-keys/update');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].headers['X-API-Key'], 'secret-key');
-  assert.deepEqual(calls[0].body, { provider: 'yahoo', api_key: 'new-provider-key' });
-  assert.equal(input.value, '', '成功後應清空 input');
-});
 
 test('triggerChannelsIngest: POST ingest 帶 X-API-Key，成功訊息依 macro/geo 組成', async () => {
   setApiKey('secret-key');
@@ -274,32 +218,6 @@ test('triggerChannelsIngest: POST ingest 帶 X-API-Key，成功訊息依 macro/g
   assert.equal(calls.length, 1);
   assert.equal(calls[0].headers['X-API-Key'], 'secret-key');
 });
-
-test('setAllChannelsEnabled: Promise.allSettled 平行 N 個 toggle 各自帶 key', async () => {
-  setApiKey('secret-key');
-  installFetch({
-    '/api/dashboard/data-channels': { channels: [{ channel_id: 'A' }, { channel_id: 'B' }, { channel_id: 'C' }] },
-  });
-  const pending = enableAllChannels();
-  // 等 confirm modal 出現後按「確認」
-  await new Promise(resolve => setTimeout(resolve, 20));
-  const overlay = doc.body._children.find(c => c.className === 'confirm-modal-overlay');
-  assert.ok(overlay, '應彈出 confirmAction 確認框');
-  overlay.querySelector('.confirm-modal__ok').emit('click');
-  await pending;
-
-  const toggles = fetchCalls.filter(c => c.method === 'POST' && c.url.includes('/toggle'));
-  assert.equal(toggles.length, 3, '3 個通道各 1 次 toggle（全平行）');
-  for (const t of toggles) {
-    assert.equal(t.headers['X-API-Key'], 'secret-key', '每個 toggle 都帶 key');
-    assert.deepEqual(t.body, { enabled: true });
-  }
-  assert.equal(alerts.length, 0);
-});
-
-// ============================================================================
-// scheduler.js — toggle
-// ============================================================================
 
 test('toggleSchedulerTask: POST scheduler/toggle 帶 X-API-Key + body', async () => {
   setApiKey('secret-key');

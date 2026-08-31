@@ -273,11 +273,8 @@ async function loadModules() {
   }
   if (modules.datachannels) {
     if (modules.datachannels.triggerChannelsIngest) window.triggerChannelsIngest = modules.datachannels.triggerChannelsIngest;
-    if (modules.datachannels.enableAllChannels) window.dcEnableAll = modules.datachannels.enableAllChannels;
-    if (modules.datachannels.disableAllChannels) window.dcDisableAll = modules.datachannels.disableAllChannels;
-    if (modules.datachannels.triggerChannelFetch) window.triggerChannelFetch = modules.datachannels.triggerChannelFetch;
-    if (modules.datachannels.toggleChannel) window.toggleChannel = modules.datachannels.toggleChannel;
-    if (modules.datachannels.updateApiKey) window.dcUpdateApiKey = modules.datachannels.updateApiKey;
+    // 2026-08-31 (#1776 audit): dcEnableAll/dcDisableAll/triggerChannelFetch/
+    // toggleChannel/dcUpdateApiKey bindings removed with the UI buttons.
     if (modules.datachannels.loadFetchLogs) window.loadFetchLogs = modules.datachannels.loadFetchLogs;
     if (modules.datachannels.loadDataChannels) window.loadDataChannels = modules.datachannels.loadDataChannels;
     if (modules.datachannels.refreshChannelStatus) window.refreshChannelStatus = modules.datachannels.refreshChannelStatus;

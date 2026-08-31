@@ -4606,11 +4606,6 @@ export interface channelHealthDetail {
   other: number;
 }
 
-export interface channelState {
-  enabled: boolean;
-  updated_at: string;
-}
-
 export interface cnbcQuickQuote {
   symbol: string;
   last: string;

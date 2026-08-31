@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -21,15 +19,12 @@ import (
 func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	workDir := t.TempDir()
-	// Pre-create the data/state directory so channel toggle writes don't
-	// race with directory creation in channel_state.go.
 	if err := os.MkdirAll(filepath.Join(workDir, "data/state"), 0o755); err != nil {
 		t.Fatalf("mkdir data/state: %v", err)
 	}
 	return &Handlers{
-		WorkDir:       workDir,
-		LedgerDir:     workDir,
-		channelStates: make(map[string]channelState),
+		WorkDir:   workDir,
+		LedgerDir: workDir,
 	}
 }
 
@@ -89,184 +84,6 @@ func TestHandleDataChannels_IncludesAlertsSliceEvenWhenEmpty(t *testing.T) {
 	gen, _ := resp["generated"].(string)
 	if gen == "" {
 		t.Error("expected 'generated' to be a non-empty RFC3339 timestamp")
-	}
-}
-
-// ---------- HandleChannelAction ----------
-
-func TestHandleChannelAction_ToggleValid(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/fugle/toggle",
-		bytes.NewBufferString(`{"enabled":true}`))
-	status, body := h.HandleChannelAction(req)
-
-	resp := doRequest(t, status, body, http.StatusOK)
-	if resp["status"] != "ok" {
-		t.Errorf("expected status=ok, got %v", resp["status"])
-	}
-	if resp["enabled"] != true {
-		t.Errorf("expected enabled=true, got %v", resp["enabled"])
-	}
-	if resp["channel_id"] != "fugle" {
-		t.Errorf("expected channel_id=fugle, got %v", resp["channel_id"])
-	}
-
-	// Verify state file was persisted.
-	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read channels.json: %v", err)
-	}
-	var stored map[string]channelState
-	if err := json.Unmarshal(b, &stored); err != nil {
-		t.Fatalf("unmarshal channels.json: %v", err)
-	}
-	if stored["fugle"].Enabled != true {
-		t.Errorf("expected persisted state for fugle=true, got %+v", stored["fugle"])
-	}
-}
-
-func TestHandleChannelAction_ToggleDisable(t *testing.T) {
-	h := newTestHandlers(t)
-	// Pre-seed the state file with fugle=true.
-	seed := map[string]channelState{
-		"fugle": {Enabled: true},
-	}
-	b, _ := json.Marshal(seed)
-	path := filepath.Join(h.WorkDir, constants.StateChannels+".json")
-	if err := os.WriteFile(path, b, 0o644); err != nil {
-		t.Fatalf("seed channels.json: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/fugle/toggle",
-		bytes.NewBufferString(`{"enabled":false}`))
-	status, body := h.HandleChannelAction(req)
-
-	resp := doRequest(t, status, body, http.StatusOK)
-	if resp["enabled"] != false {
-		t.Errorf("expected enabled=false, got %v", resp["enabled"])
-	}
-}
-
-func TestHandleChannelAction_TriggerStub(t *testing.T) {
-	// STUB-LOCK: trigger is a pure stub that always returns status=ok.
-	// This test pins that contract — do not "fix" it to actually trigger fetches.
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/fugle/trigger", nil)
-	status, body := h.HandleChannelAction(req)
-
-	resp := doRequest(t, status, body, http.StatusOK)
-	if resp["status"] != "ok" {
-		t.Errorf("trigger stub: expected status=ok, got %v", resp["status"])
-	}
-	if resp["action"] != "trigger" {
-		t.Errorf("trigger stub: expected action=trigger, got %v", resp["action"])
-	}
-}
-
-func TestHandleChannelAction_InvalidPath(t *testing.T) {
-	h := newTestHandlers(t)
-	// URL with no action segment — too few parts.
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/", nil)
-	// Go's net/http will not match mux pattern for trailing slash, but our
-	// path-stripping logic handles "/api/dashboard/channels/" by stripping the
-	// prefix and splitting "" → [""] (len 1, no action). Return 400.
-	status, body := h.HandleChannelAction(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for path with no action, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleChannelAction_UnknownAction(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/fugle/yolo", nil)
-	status, body := h.HandleChannelAction(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unknown action, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleChannelAction_ToggleMalformedBody(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/channels/fugle/toggle",
-		bytes.NewBufferString(`{not valid json`))
-	status, body := h.HandleChannelAction(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for malformed body, got %d (body=%v)", status, body)
-	}
-}
-
-// ---------- HandleAPIKeyUpdate ----------
-
-func TestHandleAPIKeyUpdate_Valid(t *testing.T) {
-	// t.Setenv auto-restores — safer than manual t.Cleanup with os.Setenv.
-	t.Setenv("FINMIND_API_KEY", "original-finmind-key-12345")
-
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/api-keys/update",
-		bytes.NewBufferString(`{"provider":"finmind","api_key":"new-finmind-key-67890"}`))
-	status, body := h.HandleAPIKeyUpdate(req)
-
-	resp := doRequest(t, status, body, http.StatusOK)
-	if resp["provider"] != "finmind" {
-		t.Errorf("expected provider=finmind, got %v", resp["provider"])
-	}
-	if resp["status"] != "ok" {
-		t.Errorf("expected status=ok, got %v", resp["status"])
-	}
-	if got := os.Getenv("FINMIND_API_KEY"); got != "new-finmind-key-67890" {
-		t.Errorf("expected FINMIND_API_KEY=updated, got %q", got)
-	}
-}
-
-func TestHandleAPIKeyUpdate_MissingFields(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/api-keys/update",
-		bytes.NewBufferString(`{"provider":"finmind"}`))
-	status, body := h.HandleAPIKeyUpdate(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing api_key, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleAPIKeyUpdate_MalformedJSON(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/api-keys/update",
-		bytes.NewBufferString(`not json at all`))
-	status, body := h.HandleAPIKeyUpdate(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for malformed JSON, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleAPIKeyUpdate_InvalidProvider(t *testing.T) {
-	h := newTestHandlers(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/api-keys/update",
-		bytes.NewBufferString(`{"provider":"not-a-real-provider","api_key":"abcdefghijkl"}`))
-	status, body := h.HandleAPIKeyUpdate(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid provider, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleAPIKeyUpdate_KeyLengthOutOfRange(t *testing.T) {
-	h := newTestHandlers(t)
-	// Too short (< 8 chars).
-	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/api-keys/update",
-		bytes.NewBufferString(`{"provider":"fugle","api_key":"short"}`))
-	status, body := h.HandleAPIKeyUpdate(req)
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for too-short key, got %d (body=%v)", status, body)
-	}
-}
-
-func TestHandleAPIKeyUpdate_EnvLeakPrevented(t *testing.T) {
-	// Regression guard: t.Setenv in TestHandleAPIKeyUpdate_Valid above
-	// must not leak to subsequent tests. This test starts with the OS default
-	// (unset or whatever was there before) and verifies it doesn't see the
-	// "new-finmind-key-67890" value the earlier test wrote.
-	if got := os.Getenv("FINMIND_API_KEY"); got == "new-finmind-key-67890" {
-		t.Errorf("ENV LEAK: FINMIND_API_KEY still set to value written by earlier test: %q", got)
 	}
 }
 

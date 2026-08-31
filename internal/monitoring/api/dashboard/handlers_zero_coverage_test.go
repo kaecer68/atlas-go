@@ -18,95 +18,6 @@ import (
 // LoadChannelStates
 // =====================================================================
 
-func TestLoadChannelStates_FileDoesNotExist(t *testing.T) {
-	h := &Handlers{channelStates: make(map[string]channelState)}
-	dir := t.TempDir()
-	h.WorkDir = dir
-	h.LoadChannelStates()
-	if len(h.channelStates) != 0 {
-		t.Errorf("expected empty state when file does not exist, got %d", len(h.channelStates))
-	}
-}
-
-func TestLoadChannelStates_ValidFile(t *testing.T) {
-	dir := t.TempDir()
-	stateFile := filepath.Join(dir, "data", "state", "channels.json")
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	seed := map[string]channelState{
-		"twse":    {Enabled: true},
-		"finmind": {Enabled: false},
-	}
-	b, _ := json.Marshal(seed)
-	if err := os.WriteFile(stateFile, b, 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	h := &Handlers{channelStates: make(map[string]channelState)}
-	h.WorkDir = dir
-	h.LoadChannelStates()
-
-	if len(h.channelStates) != 2 {
-		t.Errorf("expected 2 states, got %d", len(h.channelStates))
-	}
-	if !h.channelStates["twse"].Enabled {
-		t.Error("expected twse to be enabled")
-	}
-	if h.channelStates["finmind"].Enabled {
-		t.Error("expected finmind to be disabled")
-	}
-}
-
-func TestLoadChannelStates_InvalidJSON(t *testing.T) {
-	dir := t.TempDir()
-	stateFile := filepath.Join(dir, "data", "state", "channels.json")
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(stateFile, []byte("{not json"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	h := &Handlers{channelStates: make(map[string]channelState)}
-	h.WorkDir = dir
-	h.LoadChannelStates()
-	if len(h.channelStates) != 0 {
-		t.Errorf("expected empty state for invalid JSON, got %d", len(h.channelStates))
-	}
-}
-
-// =====================================================================
-// setChannelEnabled + saveChannelStates
-// =====================================================================
-
-func TestSetChannelEnabled_SavesState(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "data", "state"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	h := &Handlers{channelStates: make(map[string]channelState)}
-	h.WorkDir = dir
-	h.setChannelEnabled("fugle", true)
-
-	if !h.channelStates["fugle"].Enabled {
-		t.Error("expected fugle to be enabled in memory")
-	}
-	stateFile := filepath.Join(dir, "data", "state", "channels.json")
-	b, err := os.ReadFile(stateFile)
-	if err != nil {
-		t.Fatalf("read state file: %v", err)
-	}
-	var stored map[string]channelState
-	if err := json.Unmarshal(b, &stored); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !stored["fugle"].Enabled {
-		t.Error("expected fugle to be enabled in persisted file")
-	}
-}
-
 // =====================================================================
 // HandleDrawdown
 // =====================================================================
@@ -332,34 +243,13 @@ func TestHandleSimLatest_ParseFail(t *testing.T) {
 // NewHandlers
 // =====================================================================
 
-func TestNewHandlers_InitializesChannelStates(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "data", "state"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	stateFile := filepath.Join(dir, "data", "state", "channels.json")
-	seed := map[string]channelState{"twse": {Enabled: true}}
-	b, _ := json.Marshal(seed)
-	if err := os.WriteFile(stateFile, b, 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	h := NewHandlers(dir, dir)
-	if len(h.channelStates) != 1 {
-		t.Errorf("expected 1 channel state, got %d", len(h.channelStates))
-	}
-	if !h.channelStates["twse"].Enabled {
-		t.Error("expected twse enabled from persisted state")
-	}
-}
-
 func TestNewHandlers_NonExistentWorkDir(t *testing.T) {
-	// Should not panic, just start with empty states.
+	// Should not panic with directories that do not exist yet.
 	h := NewHandlers("/nonexistent/work/dir", "/nonexistent/ledger/dir")
 	if h == nil {
 		t.Fatal("expected non-nil handlers")
 	}
-	if len(h.channelStates) != 0 {
-		t.Errorf("expected 0 channel states for nonexistent dir, got %d", len(h.channelStates))
+	if h.WorkDir != "/nonexistent/work/dir" {
+		t.Errorf("unexpected WorkDir: %q", h.WorkDir)
 	}
 }

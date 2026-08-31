@@ -329,65 +329,21 @@
         <div class="flex-between">
           <h2 class="m-0">資料通道管理中心</h2>
           <div class="control-group m-0">
-            <button class="primary" id="btnIngestChannels">立即更新 Macro + Geo 資料</button>
+            <button class="primary" id="btnIngestChannels">立即更新 Macro 資料</button>
           </div>
         </div>
 
-        <!-- 控制面板 -->
-        <div id="dcControlPanel" class="rc-summary mt-md">
-          <div class="rc-summary__left">
-            <button class="primary" data-action="dc-enable-all">全部啟用</button>
-            <button class="danger" data-action="dc-disable-all">全部停用</button>
-            <button data-action="dc-refresh">刷新狀態</button>
-          </div>
-          <div class="rc-summary__gauge">
-            <div class="rc-summary__bar"><div class="rc-summary__fill" id="dcTotalBar" style="width:100%;background:var(--accent)"></div></div>
-            <span class="rc-summary__score" id="dcTotalScore">- / -</span>
-            <span class="text-muted text-sm" style="margin-left:8px">總通道</span>
-          </div>
-          <div class="flex" style="gap:16px;margin-top:8px">
-            <div class="text-sm"><span class="text-success">●</span> 正常 <span id="dcOkCount">-</span></div>
-            <div class="text-sm"><span class="text-warn">●</span> 異常 <span id="dcWarnCount">-</span></div>
-            <div class="text-sm"><span class="text-warn">●</span> 限流中 <span id="dcRateLimitCount">-</span></div>
-          </div>
+        <!-- 控制面板（2026-08-31 #1776 audit: 全部啟用/全部停用移除 —
+             enabled 旗標僅影響顯示層、無 fetcher 讀取，且全部啟用會覆蓋
+             刻意停用通道的部署狀態；死接線 gauge/legend 一併移除） -->
+        <div id="dcControlPanel" class="mt-md">
+          <button data-action="dc-refresh">刷新狀態</button>
         </div>
 
         <div id="macroDataHealth" class="empty loading mt-sm">載入中…</div>
 
         <div id="dataChannels" class="empty loading mt-sm">載入中…</div>
       </div>
-
-      <!-- API Key 管理 -->
-      <details class="help-details mt-md">
-        <summary><strong>🔑 API Key 管理</strong></summary>
-        <div style="padding:10px 0;display:flex;flex-direction:column;gap:10px">
-          <div class="flex-gap-10">
-            <label class="label-muted label-w-sm">Yahoo Finance:</label>
-            <input type="password" id="dcApiKeyYahoo" class="input-w-md" placeholder="API Key">
-            <button data-provider="yahoo">更新</button>
-          </div>
-          <div class="flex-gap-10">
-            <label class="label-muted label-w-sm">FinMind:</label>
-            <input type="password" id="dcApiKeyFinmind" class="input-w-md" placeholder="API Key">
-            <button data-provider="finmind">更新</button>
-          </div>
-          <div class="flex-gap-10">
-            <label class="label-muted label-w-sm">Fugle:</label>
-            <input type="password" id="dcApiKeyFugle" class="input-w-md" placeholder="API Key">
-            <button data-provider="fugle">更新</button>
-          </div>
-           <div class="flex-gap-10">
-            <label class="label-muted label-w-sm">Fubon (富邦):</label>
-            <input type="password" id="dcApiKeyFubon" class="input-w-md" placeholder="API Key">
-            <button data-provider="fubon">更新</button>
-          </div>
-          <div class="flex-gap-10">
-            <label class="label-muted label-w-sm">TEJ:</label>
-            <input type="password" id="dcApiKeyTej" class="input-w-md" placeholder="API Key">
-            <button data-provider="tej">更新</button>
-          </div>
-        </div>
-      </details>
 
       <!-- 抓取日誌 -->
       <details class="help-details mt-md">
