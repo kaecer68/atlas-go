@@ -24,9 +24,13 @@ async function mockCommonEndpoints(page) {
 }
 
 // 真實 API 回傳 bare array（internal/apigateway.TaskStatus），不是 {tasks: []}
+// 2026-08-31 (#1776 audit): home scheduler panel now shows ONLY abnormal rows
+// (archived / overdue / failing). Mock: one healthy enabled task (must NOT
+// appear), one failing enabled task, one archived disabled task.
 const MOCK_TASKS = [
   { name: 'prism_auto_balancer', channel_id: '-', enabled: true, interval: 300000000000, last_run: '2026-08-17T08:00:00Z', next_run: '2026-08-17T08:05:00Z', consecutive_failures: 0 },
-  { name: 'seasonal_calibration', channel_id: '-', enabled: false, interval: 604800000000000, last_run: '2026-08-16T08:00:00Z', next_run: '2026-08-24T08:00:00Z', consecutive_failures: 2 },
+  { name: 'risk_gate_calibrate', channel_id: '-', enabled: true, interval: 86400000000000, last_run: '2026-08-17T08:00:00Z', next_run: '2026-08-18T08:00:00Z', consecutive_failures: 3, last_error: 'self_calibrate: no sessions available' },
+  { name: 'ml_retrain', channel_id: '-', enabled: false, interval: 86400000000000, last_run: '2026-08-16T08:00:00Z', next_run: '2026-08-24T08:00:00Z', consecutive_failures: 0 },
 ];
 
 test('scheduler status tier badges render inside table cells, not floating at viewport top-right', async ({ page }) => {
@@ -49,11 +53,14 @@ test('scheduler status tier badges render inside table cells, not floating at vi
   const table = page.locator('#schedulerStatusContent table.ranker-table');
   await expect(table).toBeVisible({ timeout: 8000 });
 
-  // 啟用 + 停用 badges 都出現
-  await expect(page.locator('#schedulerStatusContent .tier-badge--bullish')).toHaveCount(1);
+  // 只列異常：健康任務不出現；失敗與歸檔各一列
+  await expect(page.locator('#schedulerStatusContent')).toContainText('risk_gate_calibrate');
+  await expect(page.locator('#schedulerStatusContent')).toContainText('ml_retrain');
+  await expect(page.locator('#schedulerStatusContent')).not.toContainText('prism_auto_balancer');
+  await expect(page.locator('#schedulerStatusContent .tier-badge--bearish')).toHaveCount(1);
   await expect(page.locator('#schedulerStatusContent .tier-badge--neutral')).toHaveCount(1);
-  await expect(page.locator('#schedulerStatusContent')).toContainText('啟用');
-  await expect(page.locator('#schedulerStatusContent')).toContainText('停用');
+  await expect(page.locator('#schedulerStatusContent')).toContainText('連續失敗 3 次');
+  await expect(page.locator('#schedulerStatusContent')).toContainText('歸檔 · 等待啟用');
 
   // 每個 badge 都必須是非 absolute，且落在表格 bounding box 內
   const tableBox = await table.boundingBox();
