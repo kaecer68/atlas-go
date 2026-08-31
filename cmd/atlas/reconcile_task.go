@@ -66,8 +66,17 @@ func (d calibrationDeps) registerSessionSummaryReconcile() {
 				"backfilled_to_pg", res.BackfilledToPG,
 				"conflicts", len(res.Diff.Conflicts),
 				"errors", len(res.Errors))
+			// Per-row backfill failures (e.g. a PG row rejected by the
+			// SessionSummary.Validate SSoT guard — session-20260721-daily has
+			// PortfolioValue=0) must not fail the task forever: the sync
+			// itself converged for every other session and the skipped row is
+			// a data-quality problem owned by #1775 follow-up, not a sync
+			// error. Run() already logged each row error.
 			if len(res.Errors) > 0 {
-				return fmt.Errorf("reconcile: %d backfill errors, first: %v", len(res.Errors), res.Errors[0])
+				logging.Warn("session_summary_reconcile",
+					"reconcile_partial",
+					"errors", len(res.Errors),
+					"first", res.Errors[0])
 			}
 			return nil
 		},
