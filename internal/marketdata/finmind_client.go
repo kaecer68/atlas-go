@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,10 +27,43 @@ import (
 // For production, prefer Fugle (real-time) or TWSE OpenAPI (free, no key).
 // To rotate key: update FINMIND_API_KEY in .env and restart the service.
 const (
-	finmindBaseURL   = constants.FinMindBaseURL
-	finmindRateLimit = 600 // 600 requests per hour for free tier
-	finmindBurst     = 60
+	finmindBaseURL          = constants.FinMindBaseURL
+	finmindRateLimitFree    = 600  // 600 requests per hour for the free tier
+	finmindRateLimitSponsor = 6000 // Sponsor tier: 6000/hr (2026-08-30 upgrade)
+	finmindBurst            = 60
 )
+
+// finmindRateLimitPerHour returns the LOCAL FinMind request budget per hour.
+// The free tier allows 600/hr; the Sponsor tier (2026-08-30 upgrade,
+// issue #1742) allows 6000/hr. The local limiter must match the ACTIVE tier —
+// after upgrading, self-throttling at free-tier speed left ~90% of the paid
+// quota unusable and made the auto_cycle_update startup stampede time out
+// ("rate limited" → "no valid data for industry"). Override with the
+// FINMIND_RATE_LIMIT_PER_HOUR env var; unset falls back to the free tier.
+func finmindRateLimitPerHour() int {
+	if v := strings.TrimSpace(os.Getenv("FINMIND_RATE_LIMIT_PER_HOUR")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return finmindRateLimitFree
+}
+
+// newFinMindRateLimiter builds the shared rate limiter for the configured
+// hourly budget, with a burst of rate/10 bounded to [60, 300] — enough to
+// absorb startup stampedes (auto_cycle_update aggregates many symbols at
+// once) without risking a 402 from the upstream quota.
+func newFinMindRateLimiter() *rate.Limiter {
+	perHour := finmindRateLimitPerHour()
+	burst := perHour / 10
+	if burst < finmindBurst {
+		burst = finmindBurst
+	}
+	if burst > 300 {
+		burst = 300
+	}
+	return rate.NewLimiter(rate.Limit(float64(perHour)/3600.0), burst)
+}
 
 // finmindDailyLimit is the daily quota ceiling for the FinMind free tier.
 // 600/hr × 24 = 14,400/day. We track this with DailyQuotaTracker so concurrent
@@ -148,7 +183,7 @@ func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
 	return &FinMindClient{
 		apiKey:       apiKey,
 		httpClient:   httpclient.NewFactory().NewClient(30 * time.Second),
-		rateLimiter:  rate.NewLimiter(rate.Every(time.Hour/finmindRateLimit), finmindBurst),
+		rateLimiter:  newFinMindRateLimiter(),
 		quotaTracker: tracker,
 		retryCfg:     defaultRetryConfig(),
 		breaker:      newProviderBreaker("finmind", defaultCircuitBreakerConfig()),
