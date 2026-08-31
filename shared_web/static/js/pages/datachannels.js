@@ -91,88 +91,7 @@ export async function triggerChannelsIngest() {
     notify('資料更新失敗: ' + e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = '立即更新 Macro + Geo 資料';
-  }
-}
-
-export async function enableAllChannels() {
-  return setAllChannelsEnabled(true);
-}
-
-export async function disableAllChannels() {
-  return setAllChannelsEnabled(false);
-}
-
-// The backend (POST /api/dashboard/channels/{id}/toggle) is idempotent — a write
-// to data/state/channels.json with the same value is harmless. So we toggle every
-// channel in parallel without filtering by current state (the old `c.status ===
-// 'inactive'` filter was a semantic confusion of health status with enabled flag
-// and caused the buttons to silently do nothing for most channels).
-//
-// P1-C: 危險操作二次確認 — 「全部停用」會癱瘓整條資料管線，必須先彈
-// confirmAction 確認；「全部啟用」也一併走同一流程（停用是破壞性方向，
-// danger 樣式只在停用時啟用）。
-async function setAllChannelsEnabled(enabled) {
-  const verb = enabled ? '啟用' : '停用';
-  console.log(`[Management] ${verb} all channels`);
-
-  // 先取通道數，讓確認訊息能顯示 N（「將停用 N 個通道…」），順便作為後續
-  // 迴圈的資料來源（避免重複 fetch）。
-  let channels = [];
-  try {
-    const data = await silentGetJSON('/api/dashboard/data-channels');
-    channels = data.channels || [];
-  } catch (e) {
-    notify(`取得通道狀態失敗: ${e.message}`, 'err');
-    return;
-  }
-  if (channels.length === 0) {
-    notify('目前無資料通道', 'warn');
-    return;
-  }
-
-  const confirmed = await confirmAction({
-    title: `全部${verb}資料通道`,
-    message: enabled
-      ? `將啟用 ${channels.length} 個通道，確認？`
-      : `將停用 ${channels.length} 個通道，系統將停止接收資料，確認？`,
-    danger: !enabled,
-    confirmLabel: `確認${verb}`,
-  });
-  if (!confirmed) return;
-
-  const buttons = Array.from(
-    document.querySelectorAll('#page-datachannels button[data-action^="dc-"]')
-  );
-  const originalLabels = new Map();
-  for (const b of buttons) {
-    originalLabels.set(b, b.textContent);
-    b.disabled = true;
-  }
-  const liveBtn = buttons.find(b => b.dataset.action === (enabled ? 'dc-enable-all' : 'dc-disable-all'));
-  if (liveBtn) liveBtn.textContent = `${verb}中…`;
-
-  try {
-    const results = await Promise.allSettled(channels.map(c =>
-      postJSON(`/api/dashboard/channels/${c.channel_id}/toggle`, { enabled })
-    ));
-    const ok = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.length - ok;
-    if (failed === 0) {
-      notify(`已${verb} ${ok} 個通道`, enabled ? 'info' : 'warn');
-    } else {
-      notify(`${verb}部分失敗：${ok}/${results.length} 成功`, 'warn');
-    }
-    // Re-fetch so persisted enabled flags show up in row badges.
-    await loadDataChannels();
-  } catch (e) {
-    notify(`${verb}通道失敗: ${e.message}`, 'err');
-  } finally {
-    for (const b of buttons) {
-      b.disabled = false;
-      const original = originalLabels.get(b);
-      if (original !== undefined) b.textContent = original;
-    }
+    btn.textContent = '立即更新 Macro 資料';
   }
 }
 
@@ -180,62 +99,6 @@ export async function refreshChannelStatus() {
   console.log('[Management] Refresh channel status');
   await loadDataChannels();
   notify('狀態已刷新', 'info');
-}
-
-export async function triggerChannelFetch(channelID) {
-  console.log('[Management] Trigger fetch for', channelID);
-  try {
-    await postJSON(`/api/dashboard/channels/${channelID}/trigger`);
-    notify(`${channelID} 抓取已觸發`, 'info');
-  } catch (e) {
-    notify(`${channelID} 觸發失敗: ${e.message}`, 'err');
-  }
-}
-
-export async function toggleChannel(channelID, enable) {
-  console.log('[Management] Toggle', channelID, 'to', enable);
-  // P1-C: 停用單一通道也需二次確認（啟用是安全方向，不擋）。
-  if (!enable) {
-    const confirmed = await confirmAction({
-      title: '停用資料通道',
-      message: `確認停用通道 ${channelID}？停用後該通道將停止接收資料。`,
-      danger: true,
-      confirmLabel: '確認停用',
-    });
-    if (!confirmed) return;
-  }
-  try {
-    await postJSON(`/api/dashboard/channels/${channelID}/toggle`, { enabled: enable });
-    notify(`${channelID} 已${enable ? '啟用' : '停用'}`, 'info');
-  } catch (e) {
-    notify(`${channelID} 切換失敗: ${e.message}`, 'err');
-  }
-}
-
-const idMap = {
-  'yahoo': 'dcApiKeyYahoo',
-  'finmind': 'dcApiKeyFinmind',
-  'fubon': 'dcApiKeyFubon',
-  'fugle': 'dcApiKeyFugle',
-  'tej': 'dcApiKeyTej'
-};
-
-export async function updateApiKey(provider) {
-  const input = document.getElementById(idMap[provider] || `apikey-${provider}`);
-  if (!input) return;
-  const key = input.value.trim();
-  if (!key) {
-    notify('請輸入 API Key', 'warn');
-    return;
-  }
-  console.log('[Management] Update API key for', provider);
-  try {
-    await postJSON('/api/dashboard/api-keys/update', { provider, api_key: key });
-    notify(`${provider} API Key 已更新`, 'info');
-    input.value = '';
-  } catch (e) {
-    notify('更新失敗: ' + e.message, 'err');
-  }
 }
 
 let fetchLogs = [];
@@ -345,7 +208,7 @@ export function renderDataChannels(data) {
 
   Object.keys(byCountry).forEach(country => {
     html += `<div style="margin:12px 0"><div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${country}</div>`;
-    html += '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-8">燈號</th><th class="w-12">平台名稱</th><th class="w-10">API 格式</th><th class="w-20">資料路徑</th><th class="w-12">本地儲存</th><th class="w-15">狀態</th><th class="w-13">操作</th><th class="w-10">最後更新</th></tr></thead><tbody>';
+    html += '<div class="dc-table-wrap"><table class="dc-table" style="table-layout:fixed"><thead><tr><th class="w-8">燈號</th><th class="w-12">平台名稱</th><th class="w-10">API 格式</th><th class="w-20">資料路徑</th><th class="w-12">本地儲存</th><th class="w-15">狀態</th><th class="w-10">最後更新</th></tr></thead><tbody>';
     byCountry[country].forEach(c => {
       const sev = c.error_severity || 'warn';
       const errorHint = c.last_error ? `<div style="font-size:11px;color:${sevColor[sev] || sevColor.warn};margin-top:2px">${sevIcon[sev] || sevIcon.warn} ${escapeHtml(c.last_error)}</div>` : '';
@@ -353,8 +216,6 @@ export function renderDataChannels(data) {
       // backend (data/state/channels.json) — the old code keyed off c.status
       // which conflates health with the operator's enable toggle.
       const isEnabled = c.enabled !== false;
-      const toggleBtn = `<button class="text-xs dc-toggle" onclick="toggleChannel('${c.channel_id}', ${!isEnabled})" data-enabled="${isEnabled}" style="padding:2px 8px;border-radius:4px;background:var(--border);border:1px solid var(--border);cursor:pointer">${isEnabled ? '停用' : '啟用'}</button>`;
-      const triggerBtn = `<button class="text-xs dc-trigger" onclick="triggerChannelFetch('${c.channel_id}')" style="padding:2px 8px;border-radius:4px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;margin-left:4px">觸發</button>`;
       const statusBadge = !isEnabled
         ? `<span class="badge status-disabled">已停用</span>`
         : `<span class="badge ${statusClass(c.status)}">${c.status_text}</span>`;
@@ -365,7 +226,6 @@ export function renderDataChannels(data) {
         <td class="text-muted text-xs">${c.path}</td>
         <td class="text-muted text-xs">${c.storage}</td>
         <td>${statusBadge}${errorHint}</td>
-        <td>${toggleBtn}${triggerBtn}</td>
         <td class="text-xs">${c.updated_at}</td>
       </tr>`;
     });

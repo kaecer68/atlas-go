@@ -520,8 +520,6 @@ const SHELL_LOADERS = {
 | `POST` | `/api/experiment/promote` | 提升實驗 |
 | `POST` | `/api/experiment/revert` | 回退實驗 |
 | `POST` | `/api/experiment/judge` | 評分實驗 |
-| `POST` | `/api/dashboard/channels/` | 通道管理 |
-| `POST` | `/api/dashboard/api-keys/update` | API key 更新 |
 | `POST` | `/api/macro/ingest` | 手動觸發宏觀攝取（deprecated） |
 
 ### 6.3 MCP Server（atlas-mcp, stdio mode）

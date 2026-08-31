@@ -58,13 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof fn !== 'function') throw new Error(`${fnName} not available after module load`);
     return fn(...args);
   };
-  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-enable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('dcEnableAll'));
-  var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-disable-all"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('dcDisableAll'));
   var qs___page_datachannels__data_acti = document.querySelector('#page-datachannels [data-action="dc-refresh"]'); if (qs___page_datachannels__data_acti) qs___page_datachannels__data_acti.addEventListener('click', () => safeCall('refreshChannelStatus'));
-  // API Key update buttons
-  document.querySelectorAll('#page-datachannels [data-provider]').forEach(btn => {
-    btn.addEventListener('click', () => window.dcUpdateApiKey(btn.dataset.provider));
-  });
 
   // === Page: alerts ===
   var qs___page_alerts__data_action__lo = document.querySelector('#page-alerts [data-action="load-alerts"]'); if (qs___page_alerts__data_action__lo) qs___page_alerts__data_action__lo.addEventListener('click', () => window.loadAlerts());

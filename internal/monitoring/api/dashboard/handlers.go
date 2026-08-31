@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -90,21 +89,15 @@ type Handlers struct {
 	// later in cmd/atlas/main.go); nil → the endpoint reports 503.
 	TaskLivenessProvider TaskLivenessProvider
 	SchedulerStatus      SchedulerStatusProvider
-
-	// channel state management — initialized by LoadChannelStates
-	channelStates   map[string]channelState
-	channelStatesMu sync.RWMutex
 }
 
 // NewHandlers creates a new Handlers with the required directory paths.
 // Channel states are loaded from the state file on initialization.
 func NewHandlers(workDir, ledgerDir string) *Handlers {
 	h := &Handlers{
-		WorkDir:       workDir,
-		LedgerDir:     ledgerDir,
-		channelStates: make(map[string]channelState),
+		WorkDir:   workDir,
+		LedgerDir: ledgerDir,
 	}
-	h.LoadChannelStates()
 	return h
 }
 
@@ -238,8 +231,12 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/drawdown", shared.Get(h.HandleDrawdown))
 	mux.Handle("GET /api/dashboard/channel-fetch-log", shared.Get(h.HandleChannelFetchLog))
 	mux.Handle("GET /api/traces/sim-latest", shared.Get(h.HandleSimLatest))
-	mux.Handle("POST /api/dashboard/channels/", shared.Adapt(h.HandleChannelAction))
-	mux.Handle("POST /api/dashboard/api-keys/update", shared.Post(h.HandleAPIKeyUpdate))
+	// 2026-08-31 (#1776 audit): channel toggle/trigger and api-keys/update
+	// endpoints removed — the UI buttons were removed with them. trigger was a
+	// hard-coded no-op; toggle only wrote display-layer state (no fetcher reads
+	// channels.json enabled); api-keys/update was an os.Setenv placebo (keys are
+	// injected at startup via config and never re-read). channels.json is now a
+	// deploy-managed asset (see internal/monitoring/service/data_channels.go).
 	// Deprecated: internal calibration; not for web UI or MCP. See docs/operations/tier-boundary.md.
 	mux.Handle("GET /api/dashboard/rsi-tw-calibration", shared.Get(h.HandleRSITwCalibration))
 	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
