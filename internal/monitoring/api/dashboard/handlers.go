@@ -184,7 +184,17 @@ func (h *Handlers) HandleTaskLiveness(r *http.Request) (int, any) {
 				nr := st.NextRun
 				t.NextRunAt = &nr
 			}
-			if iv > 0 && liveness.IsStale(row.LastRunAt, iv, now) {
+			// #1776 audit: time-gated tasks tick hourly but only do real work
+			// inside their gate window — Interval×3 staleness false-alarms
+			// during idle windows. Gated tasks are judged on last real success
+			// against the generous gate window instead.
+			if st.TimeGated {
+				if liveness.GatedIsStale(row.LastSuccessAt, now) {
+					t.Stale = true
+					t.StaleReason = fmt.Sprintf("last success %s ago (> gate window %s)",
+						now.Sub(row.LastSuccessAt).Round(time.Second), liveness.GatedStaleWindow)
+				}
+			} else if iv > 0 && liveness.IsStale(row.LastRunAt, iv, now) {
 				t.Stale = true
 				t.StaleReason = fmt.Sprintf("not run for %s (> 3x %s interval)",
 					now.Sub(row.LastRunAt).Round(time.Second), iv.String())

@@ -46,6 +46,12 @@ func IsStale(lastRun time.Time, interval time.Duration, now time.Time) bool {
 // that would false-alarm during the idle window between real runs. A gated
 // task that has never succeeded is not flagged here — a failing gated task is
 // caught by the BTM consecutive-failure alert.
+// GatedIsStale is the exported form used by API consumers (task-liveness
+// handler) that must apply gate-window staleness to time-gated tasks.
+func GatedIsStale(lastSuccess time.Time, now time.Time) bool {
+	return gatedIsStale(lastSuccess, now)
+}
+
 func gatedIsStale(lastSuccess time.Time, now time.Time) bool {
 	if lastSuccess.IsZero() {
 		return false
