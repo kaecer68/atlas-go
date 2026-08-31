@@ -30,6 +30,7 @@
 | `ATLAS_DATA_DIR` | 資料根目錄路徑（provider cache files 等寫入此目錄下的 `state/`） | `/app/data` |
 | `ATLAS_LEDGER_DIR` | Ledger 持久化目錄 | `data/state` |
 | `ATLAS_EXCHANGE_RATE_CACHE` | ExchangeRate provider 跨日 daily cache 檔案路徑（覆寫預設 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） | 空（未設定時用 `ATLAS_DATA_DIR/state/exchange_rate_daily.json`） |
+| `ATLAS_STOCKPICKER_EXPECT_DB` | stockpicker_daily_update 排程的 postgres 遷移目標守衛（M12 guard）：prod 設 `atlas`，使每日 post-close 更新不通過 M12 檢查直接失敗（prod task_failed 實證 2026-08-28） | 空（本地 sqlite 路徑不需守衛；postgres 路徑未設則任務每次失敗） |
 | `ATLAS_MCP_STOCKPICKER_DB` | atlas-mcp 讀取 Phase-4 個股勝率聚合的 SQLite ledger 路徑（read-only；未設定時該 tool 回無資料） | 空（未設定時 `stock_get_win_rate` 回 found=false） |
 | `ATLAS_MIGRATIONS_PATH` | 資料庫遷移腳本路徑 | `sql/migrations` |
 | `ATLAS_SQLITE_PATH` | SQLite 資料庫路徑 | `data/state/atlas.db` |

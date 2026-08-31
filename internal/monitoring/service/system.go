@@ -89,6 +89,8 @@ type SystemHealthResponse struct {
 	DataChannels          []DataChannelInfo `json:"data_channels,omitempty"`
 	DegradedChannels      []string          `json:"degraded_channels,omitempty"`
 	CycleStale            bool              `json:"cycle_stale"`
+	CycleStaleCount       int               `json:"cycle_stale_count,omitempty"`
+	CycleTrackedTotal     int               `json:"cycle_tracked_total,omitempty"`
 	BacktestStale         bool              `json:"backtest_stale,omitempty"`
 	Runtime               *buildinfo.Info   `json:"runtime,omitempty"`
 }
@@ -241,6 +243,7 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		})
 	}
 
+	cycleStaleCount, cycleTotal := s.cycleStaleStats()
 	runtimeInfo := buildinfo.Current()
 	return SystemHealthResponse{
 		BaselineVersion:       baselineVersion,
@@ -253,7 +256,9 @@ func (s *SystemService) LoadSystemHealth() (SystemHealthResponse, error) {
 		RegimeSource:          regimeSource,
 		DataChannels:          channels,
 		DegradedChannels:      degradedFrom(channels),
-		CycleStale:            s.checkCycleStale(),
+		CycleStaleCount:       cycleStaleCount,
+		CycleTrackedTotal:     cycleTotal,
+		CycleStale:            cycleStaleCount*2 > cycleTotal,
 		BacktestStale:         backtestStale,
 		Runtime:               &runtimeInfo,
 	}, nil
@@ -961,20 +966,36 @@ func (s *SystemService) LoadConvictionClampingEvents(limit int) ([]portfolio.Con
 	return events, nil
 }
 
+// cycleStaleStats returns (staleCount, total) for the industry cycle
+// positions. Staleness is per-position: UpdatedAt older than 24h.
+func (s *SystemService) cycleStaleStats() (staleCount, total int) {
+	if s.CycleTracker == nil {
+		return 0, 0
+	}
+	positions := s.CycleTracker.GetAllPositions()
+	for _, pos := range positions {
+		if time.Since(pos.UpdatedAt) > 24*time.Hour {
+			staleCount++
+		}
+	}
+	return staleCount, len(positions)
+}
+
+// checkCycleStale uses majority semantics (>50% of tracked positions stale).
+// The old ANY-stale rule made the dashboard card permanently red: sub-industry
+// positions without an aggregation target (e.g. etf_rotation, which has no
+// representative stocks and is a strategy bucket, not a data-source industry)
+// stay old forever and tripped the whole card (#1776 audit, 2026-08-31).
+// Majority-stale still trips when aggregation is genuinely broken.
 func (s *SystemService) checkCycleStale() bool {
 	if s.CycleTracker == nil {
 		return false
 	}
-	positions := s.CycleTracker.GetAllPositions()
-	if len(positions) == 0 {
+	staleCount, total := s.cycleStaleStats()
+	if total == 0 {
 		return true
 	}
-	for _, pos := range positions {
-		if time.Since(pos.UpdatedAt) > 24*time.Hour {
-			return true
-		}
-	}
-	return false
+	return staleCount*2 > total
 }
 
 func (s *SystemService) SetCycleTracker(ct *industry.CycleTracker) {

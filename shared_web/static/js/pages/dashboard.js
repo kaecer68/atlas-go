@@ -99,33 +99,26 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
     <div class="kpi-card ${health.baseline_version === '未知' ? 'alert-err' : ''}"><div class="kpi-label">基線版本</div><div class="kpi-value">${health.baseline_version || '?'}</div><div class="kpi-hint">${health.baseline_version === '未知' ? '⚠️ 基線策略未載入<br><small style="color:var(--muted)">確認 baseline_policy.json 存在</small>' : '目前生效的政策'}</div></div>
     <div class="kpi-card clickable" onclick="openKpiHelp('experiment')"><div class="kpi-label">實驗狀態</div><div class="kpi-value text-lg">${experimentText}</div><div class="kpi-hint">待處理項目</div></div>
     <div class="kpi-card clickable" onclick="switchPage('parameters')"><div class="kpi-label">資金階段</div><div class="kpi-value" style="color:${phaseColor};font-size:18px">${capitalPhase ? phaseMap[capitalPhase.phase] || capitalPhase.phase : '-'}</div>${phaseHtml}</div>
-    <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''}"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${health.cycle_stale ? '請檢查資料通道狀態' : '定時更新中'}</div></div>
+    <div class="kpi-card ${health.cycle_stale ? 'alert-err' : ''}"><div class="kpi-label">產業週期數據</div><div class="kpi-value text-lg">${health.cycle_stale ? '⚠️ 數據過期' : '正常'}</div><div class="kpi-hint">${(typeof health.cycle_tracked_total === 'number' && health.cycle_tracked_total > 0) ? (health.cycle_stale ? (health.cycle_stale_count + '/' + health.cycle_tracked_total + ' 產業未更新<br>請檢查資料通道狀態') : (health.cycle_tracked_total - (health.cycle_stale_count || 0)) + '/' + health.cycle_tracked_total + ' 產業最新') : (health.cycle_stale ? '請檢查資料通道狀態' : '定時更新中')}</div></div>
   `;
 
-  // Session sync alert — rendered below the KPI cards
-  var sessionSyncEl = document.getElementById('sessionSyncAlert');
-  if (!sessionSyncEl) {
-    sessionSyncEl = document.createElement('div');
-    sessionSyncEl.id = 'sessionSyncAlert';
-    sessionSyncEl.style.margin = '8px 0';
-    document.querySelector('.kpi-grid')?.after(sessionSyncEl);
-  }
+  // Session sync — 2026-08-31 (#1776 audit): moved from the standalone green
+  // bar above the panel into a proper 風險信號 card (user feedback: a lone
+  // full-width bar looked misplaced).
   var sessions = window.pipelineSessions || [];
+  var syncCard = '<div class="kpi-card"><div class="kpi-label">場次同步</div><div class="kpi-value text-lg">-</div><div class="kpi-hint">尚無場次資料</div></div>';
   if (sessions.length) {
     var latest = sessions[0];
     var latestDate = new Date(latest.recorded_at);
     var today = new Date();
     var diffDays = Math.floor((today - latestDate) / (1000 * 60 * 60 * 24));
     if (diffDays > 1) {
-      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(245,158,11,0.15);border:1px solid var(--color-warning);color:var(--color-warning);display:flex;align-items:center;gap:8px">' +
-        '⚠️ 最新場次為 ' + diffDays + ' 天前（' + latestDate.toLocaleDateString('zh-TW') + '），可能已非當日同步' +
-        '</div>';
+      syncCard = '<div class="kpi-card alert-err"><div class="kpi-label">場次同步</div><div class="kpi-value text-lg" style="color:var(--color-warning)">⚠️ ' + diffDays + ' 天前</div><div class="kpi-hint">最新場次 ' + latestDate.toLocaleDateString('zh-TW') + '，可能已非當日同步</div></div>';
     } else {
-      sessionSyncEl.innerHTML = '<div style="padding:8px 16px;border-radius:4px;font-size:13px;background:rgba(16,185,129,0.15);border:1px solid var(--color-success);color:var(--color-success);display:flex;align-items:center;gap:8px">' +
-        '✅ 場次已同步 · 最新：' + latestDate.toLocaleDateString('zh-TW') +
-        '</div>';
+      syncCard = '<div class="kpi-card"><div class="kpi-label">場次同步</div><div class="kpi-value text-lg" style="color:var(--color-success)">✅ 已同步</div><div class="kpi-hint">最新：' + latestDate.toLocaleDateString('zh-TW') + '</div></div>';
     }
   }
+  gridRisk.innerHTML += syncCard;
 }
 
 
@@ -158,9 +151,24 @@ export function renderSkeleton(lines=4) {
 }
 
 
+// Known intentionally-paused tasks (2026-08-31 audit). These are registered
+// with Enabled=false by design, each with a documented revival condition in
+// cmd/atlas — they are 歸檔 (archived/pending), NOT errors. Shown on the home
+// dashboard so the admin sees why they are off, with zero alarm styling.
+const ARCHIVED_TASKS = {
+  ml_retrain: '歸檔 · D2 決策暫停：無消費端，待「大盤方向預測」功能立案後啟用',
+  calibration_cycle: '歸檔 · 敘事權重校準：待初始驗證確認改善後啟用（narrative.calibration_enabled）',
+  auto_twse_sbl: '歸檔 · G02 借券賣出餘額：stub adapter，通道未啟用',
+  tej_refresh: '歸檔 · TEJ 決策暫不開通（#1758）：FinMind Free 已全覆蓋',
+};
+
 export function renderSchedulerStatus(tasks, liveness) {
   const el = document.getElementById('schedulerStatusContent');
   if (!el) return;
+  // 2026-08-31 (#1776 audit, user decision): the home dashboard is for admins,
+  // not developers — show ONLY abnormal rows (archived / overdue / failing).
+  // The full 90+ task list lives on the 排程任務 page (/admin/scheduler),
+  // which shares the same backend endpoints.
   if (!Array.isArray(tasks) || tasks.length === 0) {
     el.classList.remove('loading');
     el.innerHTML = '<div class="empty">目前無背景排程</div>';
@@ -172,44 +180,62 @@ export function renderSchedulerStatus(tasks, liveness) {
   if (liveness && Array.isArray(liveness.tasks)) {
     liveness.tasks.forEach(l => { livenessByName[l.name] = l; });
   }
-  const rows = tasks.map(t => {
+
+  const abnormal = [];
+  for (const t of tasks) {
     const l = livenessByName[t.name] || {};
-    const enabledBadge = t.enabled
-      ? '<span class="tier-badge tier-badge--bullish">啟用</span>'
-      : '<span class="tier-badge tier-badge--neutral">停用</span>';
-    const staleBadge = l.stale
-      ? '<span class="tier-badge tier-badge--warn" title="' + escapeHtml(l.stale_reason || '逾期：超過 3x 間隔未執行') + '">逾期</span>'
-      : '';
-    const failCls = (l.consecutive_failures || t.consecutive_failures || 0) > 0 ? 'text-warn' : 'text-muted';
-    const failText = (l.consecutive_failures || t.consecutive_failures || 0) > 0
-      ? `${l.consecutive_failures || t.consecutive_failures} 次連續失敗`
-      : '正常';
-    const lastSuccess = l.last_success_at ? formatDate(l.last_success_at) : '<span class="text-muted">—</span>';
-    return `<tr>
+    const failures = l.consecutive_failures || t.consecutive_failures || 0;
+    if (!t.enabled) {
+      abnormal.push({ task: t, live: l, kind: 'archived' });
+    } else if (failures > 0 || l.stale) {
+      abnormal.push({ task: t, live: l, kind: 'failing' });
+    }
+  }
+
+  if (abnormal.length === 0) {
+    el.classList.remove('loading');
+    el.innerHTML = '<div class="empty" style="color:var(--color-success)">✅ 所有排程正常（' + tasks.length + ' 個任務全數啟用中，無逾期、無連續失敗）</div>';
+    return;
+  }
+
+  abnormal.sort((a, b) => (a.kind === b.kind)
+    ? ((b.live.consecutive_failures || 0) - (a.live.consecutive_failures || 0))
+    : (a.kind === 'failing' ? -1 : 1));
+
+  const rows = abnormal.map(({ task: t, live: l, kind }) => {
+    const failures = l.consecutive_failures || t.consecutive_failures || 0;
+    let statusBadge;
+    let reason = '';
+    if (kind === 'archived') {
+      reason = ARCHIVED_TASKS[t.name] || '已歸檔（等待啟用條件）';
+      statusBadge = '<span class="tier-badge tier-badge--neutral" title="' + escapeHtml(reason) + '">歸檔 · 等待啟用</span>';
+    } else {
+      if (l.stale) {
+        statusBadge = '<span class="tier-badge tier-badge--warn" title="' + escapeHtml(l.stale_reason || '逾期：超過 3x 間隔未執行') + '">逾期</span>';
+      }
+      if (failures > 0) {
+        statusBadge = '<span class="tier-badge tier-badge--bearish">❌ 連續失敗 ' + failures + ' 次</span>' + (statusBadge || '');
+      }
+      if (t.last_error) {
+        reason = escapeHtml(String(t.last_error).slice(0, 120));
+      }
+    }
+    return `<tr class="${kind === 'archived' ? 'dc-row-disabled' : ''}">
       <td>${escapeHtml(t.name || '-')}</td>
-      <td><code>${escapeHtml(t.channel_id || '-')}</code></td>
-      <td>${enabledBadge} ${staleBadge}</td>
-      <td class="text-mono">${escapeHtml(t.interval || '-')}</td>
-      <td>${formatDate(t.last_run)}</td>
-      <td>${lastSuccess}</td>
-      <td>${formatDate(t.next_run)}</td>
-      <td class="${failCls}">${failText}</td>
+      <td>${statusBadge}</td>
+      <td class="${kind === 'archived' ? 'text-muted text-sm' : 'text-sm'}">${reason || (l.last_success_at ? '上次成功：' + formatDate(l.last_success_at) : '—')}</td>
     </tr>`;
   }).join('');
   el.classList.remove('loading');
   el.innerHTML = `
+    <div class="text-muted text-sm mb-xs">僅列出需要留意的排程（歸檔 / 逾期 / 連續失敗）；完整清單見<a href="#/scheduler" onclick="switchPage('scheduler')" style="color:var(--accent)">排程任務頁</a>（共 ${tasks.length} 個任務）。</div>
     <div class="table-scroll mt-sm">
       <table class="ranker-table">
         <thead>
           <tr>
-            <th>任務</th>
-            <th>Channel</th>
-            <th>狀態</th>
-            <th>間隔</th>
-            <th>上次執行</th>
-            <th>上次成功<span class="text-muted" title="來自 task_liveness（跨重啟持久化）">*</span></th>
-            <th>下次執行</th>
-            <th>連續失敗</th>
+            <th class="w-30">任務</th>
+            <th class="w-25">狀態</th>
+            <th>說明 / 錯誤</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>

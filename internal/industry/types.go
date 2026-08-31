@@ -161,6 +161,20 @@ func (t *ClassificationTree) GetLevel1() []*IndustrySegment {
 	return result
 }
 
+// GetAggregatableSegments returns all segments (any level) that carry
+// representative stocks, i.e. the industries the data aggregator can update.
+// Order is stable: tree insertion order — deterministic report ordering for
+// tests and logs.
+func (t *ClassificationTree) GetAggregatableSegments() []*IndustrySegment {
+	var result []*IndustrySegment
+	for _, seg := range t.segments {
+		if len(seg.RepresentativeStocks) > 0 {
+			result = append(result, seg)
+		}
+	}
+	return result
+}
+
 func (t *ClassificationTree) GetAllSegments() []*IndustrySegment {
 	var result []*IndustrySegment
 	for _, seg := range t.segments {
