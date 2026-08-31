@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,11 +158,12 @@ func TestRegisterChannelAdapters_TEJDisabledWritesInactiveHealth(t *testing.T) {
 }
 
 // TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive verifies the
-// opposite direction: when TEJ_API_KEY is configured, the adapter is registered
-// AND no pre-emptive inactive health record is left behind (which would mask
-// the first real Fetch() outcome).
+// opposite direction: when TEJ is double-opted-in (TEJ_API_KEY + TEJ_ENABLED=true),
+// the adapter is registered AND no pre-emptive inactive health record is left
+// behind (which would mask the first real Fetch() outcome).
 func TestRegisterChannelAdapters_TEJEnabledDoesNotWriteInactive(t *testing.T) {
 	t.Setenv("TEJ_API_KEY", "test-paid-key-not-real")
+	t.Setenv("TEJ_ENABLED", "true")
 	g := newTestGateway(t)
 	cfg := config.Config{}
 	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil); err != nil {
@@ -645,5 +647,30 @@ func TestGateway_Fetch_RecordsOKForLiveChannel(t *testing.T) {
 	}
 	if rec.Status != "ok" {
 		t.Errorf("recorded status = %q, want ok (live_ping contract skips data validation)", rec.Status)
+	}
+}
+
+// TestRegisterChannelAdapters_TEJKeyWithoutOptInWritesInactive covers the
+// #1758 decision: a configured-but-expired key must NOT keep the channel in
+// permanent「異常」— without TEJ_ENABLED=true the channel records inactive
+// (暫不開通) instead, and is NOT registered.
+func TestRegisterChannelAdapters_TEJKeyWithoutOptInWritesInactive(t *testing.T) {
+	t.Setenv("TEJ_API_KEY", "test-expired-key")
+	t.Setenv("TEJ_ENABLED", "")
+	g := newTestGateway(t)
+	cfg := config.Config{}
+	if err := RegisterChannelAdapters(g, t.TempDir(), cfg, nil, nil); err != nil {
+		t.Fatalf("RegisterChannelAdapters failed: %v", err)
+	}
+
+	if g.HasChannel("tej") {
+		t.Error("tej must NOT be registered without TEJ_ENABLED=true")
+	}
+	rec := g.Health().Get("tej")
+	if rec == nil || rec.Status != "inactive" {
+		t.Fatalf("tej health = %+v, want inactive record", rec)
+	}
+	if !strings.Contains(rec.LastError, "#1758") {
+		t.Errorf("inactive message should reference #1758, got %q", rec.LastError)
 	}
 }

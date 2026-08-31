@@ -133,7 +133,15 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// tej_refresh scheduler in cmd/atlas/main.go reads the same secret, keeping
 	// channel + scheduler in lock-step (T3-A47 fix). To re-enable, set TEJ_API_KEY
 	// (and TEJ_TIER=paid if upgraded) in the atlas env.
-	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" {
+	//
+	// 2026-08-31 (#1758 決策落地): an EXPIRED key still passes the TEJ_API_KEY
+	// gate, so the adapter kept registering and every health probe surfaced a
+	// permanent AAA003「異常」on the admin page. Value audit showed all three
+	// TEJ datasets have FinMind free-tier coverage and no mission-required
+	// consumer, so enabling is now explicit double opt-in: TEJ_API_KEY **and**
+	// TEJ_ENABLED=true. With a key but no TEJ_ENABLED the channel records
+	// inactive（暫不開通）instead of erroring forever.
+	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" && config.GetSecret("TEJ_ENABLED") == "true" {
 		tejClient := marketdata.GetSharedTEJClient(tejKey)
 		tejAdapter := NewTEJChannelAdapter(tejClient)
 		g.registry.Register("tej", tejAdapter)
@@ -146,7 +154,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		// and renders as "未啟用" via monitoring/service/session.go StatusText.
 		// Pair with the tej_refresh scheduler gate in cmd/atlas/main.go:1670
 		// so channel + scheduler + health record all stay in lock-step.
-		if err := g.Health().Record("tej", "inactive", "TEJ_API_KEY not configured (PR chore/20260803-disable-tej)"); err != nil {
+		inactiveMsg := "TEJ_API_KEY not configured (PR chore/20260803-disable-tej)"
+		if config.GetSecret("TEJ_API_KEY") != "" {
+			inactiveMsg = "暫不開通（#1758）：TEJ key 過期且三類資料均有 FinMind 免費替代 — 設 TEJ_ENABLED=true 重新啟用"
+		}
+		if err := g.Health().Record("tej", "inactive", inactiveMsg); err != nil {
 			logging.Warn("apigateway", "tej_inactive_record_failed", "err", err.Error())
 		}
 	}

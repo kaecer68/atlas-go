@@ -564,13 +564,20 @@ func (s *DataChannelService) buildTEJChannel() DataChannel {
 	updated := "TEJ_API_KEY not configured"
 	tejKey := s.TejAPIKey
 	if tejKey != "" {
+		// #1758 雙重 opt-in：key 存在但 TEJ_ENABLED 未開 → 維持 inactive
+		// （health store 的 inactive 記錄由 register_adapters.go 寫入），
+		// 不得把過期 key 的殘留 AAA003 error 提升為「異常」。
+		if rec := s.healthStore.Get("tej"); rec != nil && rec.Status == "inactive" {
+			return s.tejInactiveChannel(rec)
+		}
 		status = "ok"
 		updated = "TEJ API key configured"
-		rec := s.healthStore.Get("tej")
-		if rec != nil && rec.LastError != "" {
+		if rec := s.healthStore.Get("tej"); rec != nil && rec.LastError != "" {
 			status = "error"
 			updated = "上次失敗: " + rec.LastError
 		}
+	} else if rec := s.healthStore.Get("tej"); rec != nil && rec.Status == "inactive" {
+		return s.tejInactiveChannel(rec)
 	}
 	return DataChannel{
 		ChannelID:  "tej",
@@ -582,6 +589,29 @@ func (s *DataChannelService) buildTEJChannel() DataChannel {
 		Status:     status,
 		StatusText: statusText(status),
 		UpdatedAt:  updated,
+	}
+}
+
+// tejInactiveChannel renders the TEJ row for the intentionally-disabled state
+// (#1758 雙重 opt-in): the channel is off by operator decision, so the row
+// carries the inactive status + the reason instead of any stale AAA003 error.
+// The admin frontend additionally hides enabled=false rows.
+func (s *DataChannelService) tejInactiveChannel(rec *apigateway.ChannelHealthRecord) DataChannel {
+	updated := rec.LastFetchAt
+	if updated == "" {
+		updated = "暫不開通"
+	}
+	return DataChannel{
+		ChannelID:  "tej",
+		Country:    "台灣",
+		Platform:   "TEJ 台灣經濟新報",
+		APIFormat:  "REST JSON",
+		Path:       "TEJ API (premium)",
+		Storage:    "N/A (live query)",
+		Status:     "inactive",
+		StatusText: statusText("inactive"),
+		UpdatedAt:  updated,
+		LastError:  rec.LastError,
 	}
 }
 
