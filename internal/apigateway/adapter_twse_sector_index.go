@@ -3,12 +3,14 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/time/rate"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/taiwanholidays"
 )
 
 // TWSESectorIndexChannelAdapter wraps TWSESectorIndexProvider as a Gateway channel.
@@ -46,6 +48,16 @@ func (a *TWSESectorIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult
 
 	today := time.Now()
 	data, err := a.provider.FetchSectorIndices(ctx, today, today)
+	if err != nil && errors.Is(err, marketdata.ErrLatestOnly) {
+		// MI_INDEX openapi is latest-only (G2): on a non-trading day (or
+		// pre-open) the response date is the previous session while the
+		// request said today, so the MUST-2 guard rejects it and the
+		// resulting error tripped the circuit breaker for an entire weekend
+		// (#1767). Retry with the previous expected trading day — on Sunday
+		// this is Friday, whose data the upstream genuinely holds.
+		prev := taiwanholidays.PreviousTradingDay(today, 0)
+		data, err = a.provider.FetchSectorIndices(ctx, prev, prev)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("twse_sector_index: fetch: %w", err)
 	}
