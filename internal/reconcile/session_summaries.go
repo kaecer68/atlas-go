@@ -176,11 +176,27 @@ func indexBySessionID(summaries []domain.SessionSummary) map[string]domain.Sessi
 
 // summariesConflict reports whether two summaries for the same session carry
 // different content (timestamp compared via time.Equal, other fields via
-// DeepEqual after zeroing the timestamp).
+// DeepEqual after normalization).
+//
+// Normalization (#1783): RecordedAt is zeroed (time.Equal already handled the
+// instant), and nil vs empty slices are equated — the PG round-trip stores
+// tax_snapshots as an empty array while the JSONL flat file omits the field
+// (omitempty), so reflect.DeepEqual reported 158 false "content drifted"
+// conflicts on otherwise identical summaries.
 func summariesConflict(a, b domain.SessionSummary) bool {
 	if !a.RecordedAt.Equal(b.RecordedAt) {
 		return true
 	}
-	a.RecordedAt, b.RecordedAt = time.Time{}, time.Time{}
+	normalize := func(s domain.SessionSummary) domain.SessionSummary {
+		s.RecordedAt = time.Time{} // instant already compared via time.Equal
+		if len(s.TaxSnapshots) == 0 {
+			s.TaxSnapshots = nil
+		}
+		if len(s.GuardOutcomes) == 0 {
+			s.GuardOutcomes = nil
+		}
+		return s
+	}
+	a, b = normalize(a), normalize(b)
 	return !reflect.DeepEqual(a, b)
 }

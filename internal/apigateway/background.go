@@ -257,7 +257,12 @@ func (m *BackgroundTaskManager) List() []string {
 // over a bounded window while long-interval tasks are unaffected in
 // relative terms.
 func startupStaggerDelay(name string, interval time.Duration) time.Duration {
-	const staggerWindow = 2 * time.Minute
+	// #1780: widened from 2min — 93 registered tasks compressed into 120s
+	// still stamped PG (concurrent QueryAllOutcomes full scans → minutes of
+	// endpoint 503s after every deploy). 10min spreads the heavy calibration
+	// tasks enough that their full-table reads no longer overlap; short
+	// interval probes remain protected by the interval/10 cap below.
+	const staggerWindow = 10 * time.Minute
 	if interval <= 0 {
 		return 0
 	}

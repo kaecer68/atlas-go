@@ -17,15 +17,15 @@ func TestStartupStaggerDelay_DeterministicAndBounded(t *testing.T) {
 		t.Fatalf("not deterministic: %v vs %v", a, b)
 	}
 
-	// Bounded: never exceeds min(2min, interval/10).
+	// Bounded: never exceeds min(staggerWindow=10min, interval/10) (#1780).
 	for _, tc := range []struct {
 		name string
 		itvl time.Duration
 		max  time.Duration
 	}{
-		{"hourly-probe", time.Hour, 2 * time.Minute},
+		{"hourly-probe", time.Hour, 10 * time.Minute},
 		{"fast-probe", 5 * time.Minute, 30 * time.Second}, // interval/10 caps
-		{"daily-task", 24 * time.Hour, 2 * time.Minute},
+		{"daily-task", 24 * time.Hour, 10 * time.Minute},
 	} {
 		d := startupStaggerDelay(tc.name, tc.itvl)
 		if d < 0 || d > tc.max {
