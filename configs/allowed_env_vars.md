@@ -134,6 +134,7 @@
 | `FUBON_API_KEY` / `ATLAS_FUBON_API_KEY` | Fubon API 金鑰 | Fubon |
 | `FUBON_PERSONAL_ID` | Fubon 個人 ID（DMA 登入） | Fubon |
 | `FINMIND_API_KEY` / `FINMIND_TOKEN` | FinMind API 金鑰（Sponsor token 亦經此；backfill CLI 兩者皆接受） | FinMind |
+| `FINMIND_RATE_LIMIT_PER_HOUR` | FinMind 本地每小時請求預算（free tier 600；Sponsor 6000，#1742） | FinMind |
 | `TEJ_API_KEY` | TEJ API 金鑰 | TEJ |
 
 ---
