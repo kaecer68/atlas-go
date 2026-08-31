@@ -515,6 +515,12 @@ type TaskStatus struct {
 	ConsecutiveFailures int           `json:"consecutive_failures"`
 	LastError           string        `json:"last_error,omitempty"`
 
+	// TimeGated marks tick-tasks that only do real work inside a time window
+	// (e.g. post-market-close). Staleness for gated tasks must use the gate
+	// window, not Interval×3 (#1776 audit: false "逾期" on the home dashboard
+	// for daily_report_generate / autobacktest_daily / report_tracker_verify).
+	TimeGated bool `json:"time_gated,omitempty"`
+
 	// Data-health fields (#1265): separated from run-success.
 	LastDataAsOf     time.Time `json:"last_data_as_of,omitzero"`
 	LastNewSamples   int       `json:"last_new_samples"`
@@ -539,6 +545,7 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 			ChannelID:           t.ChannelID,
 			Enabled:             t.IsEnabled(),
 			Interval:            t.Interval,
+			TimeGated:           t.TimeGated,
 			LastRun:             t.LastRun(),
 			NextRun:             nextRun,
 			ConsecutiveFailures: t.Failures(),
