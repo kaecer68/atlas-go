@@ -53,7 +53,10 @@ type ChannelCoverageExpectation struct {
 // is not yet finalized.
 func defaultChannelCoverageExpectations() []ChannelCoverageExpectation {
 	return []ChannelCoverageExpectation{
-		{ChannelID: "capital_flow", CoverageType: CoverageDailyFiles, FilePattern: "20060102.json", LookbackDays: 30, Enabled: true},
+		// #1780 audit: files were renamed upstream to <date>_capital_flow.json
+		// (2026-06); the old bare-date pattern reported 13 false "missing
+		// coverage" warnings daily for data that existed under the new name.
+		{ChannelID: "capital_flow", CoverageType: CoverageDailyFiles, FilePattern: "20060102_capital_flow.json", LookbackDays: 30, Enabled: true},
 		{ChannelID: "margin", CoverageType: CoverageDailyFiles, FilePattern: "20060102_margin.json", LookbackDays: 30, Enabled: true},
 		{ChannelID: "government_flow", CoverageType: CoverageDailyFiles, FilePattern: "20060102.json", LookbackDays: 30, Enabled: true},
 		// Channels that only publish a "latest" snapshot.

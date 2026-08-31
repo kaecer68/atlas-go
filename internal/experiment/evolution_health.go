@@ -100,8 +100,19 @@ func CheckEvolutionHealth(cfg EvolutionHealthConfig) EvolutionHealthResult {
 	res.LastActivity[PillarPromote] = lastPolicyActivity(cfg.BaselinePolicyPath, true)
 	res.LastActivity[PillarRevert] = lastPolicyActivity(cfg.BaselinePolicyPath, false)
 
+	// Staleness applies to pillars whose upstream activity source exists.
+	// When baseline_policy.json has never been created, promote/revert are
+	// structurally impossible — "never promoted" is the documented correct
+	// state for this deployment, not a 24h anomaly (#1780 audit: the missing
+	// file made these two pillars raise no_*_activity_in_24h WARNINGs on
+	// every cycle, permanent alarm noise).
+	policyFileExists := cfg.BaselinePolicyPath != "" && fileExists(cfg.BaselinePolicyPath)
+
 	cutoff := now.Add(-window)
 	for _, p := range AllPillars {
+		if (p == PillarPromote || p == PillarRevert) && !policyFileExists {
+			continue
+		}
 		if res.LastActivity[p].Before(cutoff) {
 			res.Stale = append(res.Stale, p)
 		}
@@ -192,6 +203,14 @@ func lastJudgeActivity(ledgerDir string) time.Time {
 		}
 	}
 	return latest
+}
+
+func fileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // lastPolicyActivity returns the newest promoted_at (promote=true) or
