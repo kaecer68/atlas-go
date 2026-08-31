@@ -64,17 +64,23 @@ func (p *MarketVolumeProvider) Name() string {
 }
 
 // FetchLatest retrieves the most recent 集中市場成交金額.
-// Scans up to 7 days back to find the latest available trading day.
+// Calendar-aware scan (#1767): walk back over EXPECTED Taiwan trading days
+// only (weekends/holidays skipped via taiwanholidays) instead of blind 7
+// calendar days — on a Sunday the blind scan burned 2 rate-limiter tokens on
+// empty Saturday/Sunday queries before reaching Friday, which under the
+// shared TWSE bucket queued past the caller's context deadline and tripped
+// the circuit breaker for a channel whose data was actually fine.
 func (p *MarketVolumeProvider) FetchLatest(ctx context.Context) (*MarketVolumeResult, error) {
-	now := time.Now().UTC()
-	for i := range 7 {
-		dateStr := now.AddDate(0, 0, -i).Format("20060102")
-		result, err := p.fetchDate(ctx, dateStr)
+	const maxAttempts = 3
+	var lastErr error
+	for _, day := range RecentTradingDays(time.Now().UTC(), maxAttempts) {
+		result, err := p.fetchDate(ctx, day.Format("20060102"))
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 	}
-	return nil, fmt.Errorf("no TWSE market volume data available in the last 7 days")
+	return nil, fmt.Errorf("no TWSE market volume data available in the last %d expected trading days: last error: %w", maxAttempts, lastErr)
 }
 
 // FetchDate retrieves 集中市場成交金額 for a specific trading date (YYYYMMDD).

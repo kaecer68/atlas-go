@@ -49,3 +49,17 @@ func isTaiwanTradingDay(t time.Time) bool {
 func IsTaiwanTradingDay(t time.Time) bool {
 	return taiwanholidays.IsTradingDay(t)
 }
+
+// RecentTradingDays returns up to n most recent expected Taiwan trading days
+// (inclusive of now's own day when that is a trading day), most recent first.
+// Data-source scan loops use this instead of blind calendar-day walks so
+// weekend/holiday queries never burn rate-limiter tokens (#1767).
+func RecentTradingDays(now time.Time, n int) []time.Time {
+	days := make([]time.Time, 0, n)
+	day := taiwanholidays.PreviousTradingDay(now, 0)
+	for len(days) < n {
+		days = append(days, day)
+		day = taiwanholidays.PreviousTradingDay(day.AddDate(0, 0, -1), 0)
+	}
+	return days
+}

@@ -70,12 +70,16 @@ func (d *DayTradingProvider) SetBaseURL(u string) {
 }
 
 // FetchLatest retrieves the most recent day trading statistics.
+// Calendar-aware scan (#1767): walk back over EXPECTED Taiwan trading days
+// only — the blind 7-calendar-day scan wasted rate-limiter tokens on empty
+// weekend queries, and under the shared TWSE bucket the queued waits exceeded
+// the caller's context deadline ("rate limit wait: rate: Wait(n=1) would
+// exceed context deadline") even though Friday's data was available.
 func (d *DayTradingProvider) FetchLatest(ctx context.Context) (*DayTradingStats, error) {
-	now := time.Now().UTC()
+	const maxAttempts = 3
 	var lastErr error
-	for i := range 7 {
-		dateStr := now.AddDate(0, 0, -i).Format("20060102")
-		stats, err := d.fetchDate(ctx, dateStr)
+	for _, day := range RecentTradingDays(time.Now().UTC(), maxAttempts) {
+		stats, err := d.fetchDate(ctx, day.Format("20060102"))
 		if err == nil {
 			return stats, nil
 		}
