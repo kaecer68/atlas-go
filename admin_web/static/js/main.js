@@ -623,7 +623,6 @@ if (typeof window !== 'undefined') {
   initBacktestDates();
   loadAll();
   startAutoRefresh();
-  initEventStream();
   var initialPath = window.location.pathname
     .replace(new RegExp('^' + (basePath || '/') + '/?'), '')
     .replace(/\/$/, '');
@@ -650,103 +649,6 @@ if (typeof window !== 'undefined') {
   } else if (initialPath === 'home') {
     switchPage('home', true);
   }
-}
-
-function initEventStream() {
-function eventDedupKey(ev) {
-  if (ev.payload && ev.payload.event_id) return ev.payload.event_id;
-  return ev.id || ev.timestamp || '';
-}
-
-const recentEvents = [];
-const maxEvents = 20;
-
-  function mapEventToProgress(eventType) {
-    if (eventType === 'simulation.start' || eventType === 'system.start') return 'fetching_data';
-    if (eventType === 'market.regime.change') return 'regime_detection';
-    if (eventType === 'agent.recommendation') return 'agent_recommendations';
-    if (eventType === 'guard.outcome') return 'control_filtering';
-    if (eventType === 'portfolio.position.update') return 'simulation_running';
-    if (eventType === 'simulation.complete' || eventType === 'system.complete') return 'complete';
-    return null;
-  }
-
-  function updateStatusHint(status, eventCount) {
-    const hintEl = document.getElementById('liveStatusHint');
-    if (!hintEl) return;
-    
-    const now = new Date().toLocaleTimeString('zh-TW');
-    
-    if (status === 'connecting') {
-      hintEl.innerHTML = `🟡 連接中... <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--warn)';
-    } else if (status === 'error') {
-      hintEl.innerHTML = `🔴 連線中斷 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--color-danger)';
-    } else if (status === 'connected' && eventCount === 0) {
-      hintEl.innerHTML = `🟢 已連線 · 等待事件 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--color-success)';
-    } else if (status === 'connected') {
-      hintEl.innerHTML = `🟢 已連線 · ${eventCount} 個事件 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--color-success)';
-    } else {
-      hintEl.innerHTML = `⚪ 未連線 <span style="opacity:0.6">${now}</span>`;
-      hintEl.style.color = 'var(--muted)';
-    }
-  }
-
-  eventSource.on('*', (ev) => {
-    var key = eventDedupKey(ev);
-    if (key) {
-      var dupIdx = recentEvents.findIndex(function(e) { return eventDedupKey(e) === key; });
-      if (dupIdx !== -1) recentEvents.splice(dupIdx, 1);
-    }
-    recentEvents.unshift(ev);
-    if (recentEvents.length > maxEvents) {
-      recentEvents.pop();
-    }
-    
-    const eventsContainer = document.getElementById('toolEvents');
-    if (eventsContainer) renderToolEvents(eventsContainer, recentEvents);
-
-    const newState = mapEventToProgress(ev.type);
-    if (newState) {
-      const progressContainer = document.getElementById('liveProgress');
-      if (progressContainer) renderLiveProgress(progressContainer, newState);
-      
-      if (newState === 'complete') {
-        setTimeout(() => {
-          if (progressContainer) renderLiveProgress(progressContainer, 'idle');
-        }, 3000);
-      }
-    }
-    
-    updateStatusHint('connected', recentEvents.length);
-  });
-
-  eventSource.onStatusChange((status) => {
-    const pill = document.getElementById('refreshPill');
-    if (pill) {
-      pill.classList.remove('sse-connected', 'sse-connecting', 'sse-error');
-      if (status === 'connected') {
-        pill.classList.add('sse-connected');
-      } else if (status === 'connecting') {
-        pill.classList.add('sse-connecting');
-      } else if (status === 'error' || status === 'disconnected') {
-        pill.classList.add('sse-error');
-      }
-    }
-    
-    updateStatusHint(status, recentEvents.length);
-  });
-
-  eventSource.connect();
-  
-  const progressContainer = document.getElementById('liveProgress');
-  const eventsContainer = document.getElementById('toolEvents');
-  if (progressContainer) renderLiveProgress(progressContainer, 'idle');
-  if (eventsContainer) renderToolEvents(eventsContainer, []);
-  updateStatusHint('connecting', 0);
 }
 
 if (typeof window !== "undefined") window.toggleTheme = function() {

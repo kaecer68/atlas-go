@@ -98,9 +98,14 @@ func (a *DataAggregator) AggregateAllIndustriesReport(ctx context.Context) (*Agg
 		return report, nil
 	}
 
-	industries := a.tree.GetLevel1()
+	// 2026-08-31 (#1776 audit): aggregate every segment that has representative
+	// stocks — not just Level-1. The L1-only rule left 12 L2 sub-industries
+	// (cooling, foundry, satellite_rf_components, …) un-aggregated since
+	// 2026-08-14, which tripped checkCycleStale's staleness detector and kept
+	// the dashboard 產業週期數據 card permanently red.
+	industries := a.tree.GetAggregatableSegments()
 	if len(industries) == 0 {
-		return report, fmt.Errorf("data_aggregator: no Level-1 industries in classification tree")
+		return report, fmt.Errorf("data_aggregator: no industries with representative stocks in classification tree")
 	}
 
 	var aggregateErr error

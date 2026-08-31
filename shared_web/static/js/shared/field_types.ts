@@ -4237,6 +4237,8 @@ export interface SystemHealthResponse {
   data_channels?: DataChannelInfo[];
   degraded_channels?: string[];
   cycle_stale: boolean;
+  cycle_stale_count?: number;
+  cycle_tracked_total?: number;
   backtest_stale?: boolean;
   runtime?: string | null;
 }
