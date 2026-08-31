@@ -99,6 +99,7 @@ func registerCalibrationTasks(d calibrationDeps) {
 	d.registerAutoThresholdCalibrate()
 	d.registerAutoCycleUpdate()
 	d.registerRiskGateCalibrate()
+	d.registerSessionSummaryReconcile()
 	d.registerCycleCalibrate()
 	d.registerRegimeCalibrate()
 	d.registerFactorWeightCalibrate()
