@@ -1942,7 +1942,7 @@ func run(args []string, deps appDeps) error {
 			// AAA003 error. This scheduler branch is intentionally a no-op (log only) —
 			// the health-record write is centralized in the adapter layer to avoid
 			// double-writes between the two gate sites.
-			if tejAPIKey := config.GetSecret("TEJ_API_KEY"); tejAPIKey != "" {
+			if tejAPIKey := config.GetSecret("TEJ_API_KEY"); tejAPIKey != "" && config.GetSecret("TEJ_ENABLED") == "true" {
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:      "tej_refresh",
 					ChannelID: "tej",
@@ -1969,7 +1969,7 @@ func run(args []string, deps appDeps) error {
 				})
 				log.Printf("[Gateway] registered tej_refresh background task (1h interval, 15:00 TW trigger)")
 			} else {
-				log.Printf("[Gateway] tej_refresh SKIPPED: TEJ_API_KEY not configured (channel disabled; see PR chore/20260803-disable-tej)")
+				log.Printf("[Gateway] tej_refresh SKIPPED: TEJ not double-opted-in (TEJ_API_KEY set but TEJ_ENABLED!=true, or key unset) — see #1758")
 			}
 
 			// Register janus_regime_refresh — periodic JANUS regime data refresh (6h interval).
