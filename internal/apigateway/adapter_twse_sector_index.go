@@ -49,13 +49,14 @@ func (a *TWSESectorIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult
 	today := time.Now()
 	data, err := a.provider.FetchSectorIndices(ctx, today, today)
 	if err != nil && errors.Is(err, marketdata.ErrLatestOnly) {
-		// MI_INDEX openapi is latest-only (G2): on a non-trading day (or
-		// pre-open) the response date is the previous session while the
-		// request said today, so the MUST-2 guard rejects it and the
-		// resulting error tripped the circuit breaker for an entire weekend
-		// (#1767). Retry with the previous expected trading day — on Sunday
-		// this is Friday, whose data the upstream genuinely holds.
-		prev := taiwanholidays.PreviousTradingDay(today, 0)
+		// MI_INDEX openapi is latest-only (G2): whenever the upstream's
+		// latest session is not TODAY (weekends, TW holidays, pre-open
+		// mornings), the response date is the previous session while the
+		// request said today, so the MUST-2 guard rejects it and the error
+		// tripped the circuit breaker for entire weekends (#1767). Retry
+		// with the trading day strictly BEFORE today — on Sunday, and on
+		// Monday pre-open, that is Friday, whose data upstream holds.
+		prev := taiwanholidays.PreviousTradingDay(today.AddDate(0, 0, -1), 0)
 		data, err = a.provider.FetchSectorIndices(ctx, prev, prev)
 	}
 	if err != nil {
