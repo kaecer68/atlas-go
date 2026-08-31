@@ -155,10 +155,23 @@ func (t *TAIFEXProvider) FetchPCR(ctx context.Context) (*PCRStats, error) {
 	// + breaker trip); the fingerprint is the early warn-only canary.
 	warnTAIFEXPCRFingerprint(body, resp.Header.Get("Content-Type"))
 
+	// 2026-08-31 (#1771): TAIFEX flip-flopped the PutCallRatio response
+	// between JSON and CSV — it now serves CSV with a UTF-8 BOM and
+	// content-type application/octet-stream (same drift family as TWT44U /
+	// TWTB4U / MI_INDEX). Accept both: dispatch on the first non-space byte.
 	var rawList []taifexPCRRaw
-	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
-		t.breakerRecordFailure()
-		return nil, fmt.Errorf("decode pcr response: %w", err)
+	if isTAIFEXJSONBody(body) {
+		if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &rawList); err != nil {
+			t.breakerRecordFailure()
+			return nil, fmt.Errorf("decode pcr response: %w", err)
+		}
+	} else {
+		parsed, err := parseTAIFEXPCRCSV(body)
+		if err != nil {
+			t.breakerRecordFailure()
+			return nil, fmt.Errorf("decode pcr csv response: %w", err)
+		}
+		rawList = parsed
 	}
 
 	if len(rawList) == 0 {
