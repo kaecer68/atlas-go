@@ -498,9 +498,15 @@ func (s *PostgresLedgerStore) RecordExperiment(record domain.ExperimentRecord) e
 		return fmt.Errorf("marshal mutation brief: %w", err)
 	}
 	ctx := context.Background()
+	// #1780: ON CONFLICT DO NOTHING — the auto-experiment pipeline retries the
+	// same experiment_id across status transitions and (before #1774 was
+	// fixed) across task failures; a duplicate key error here surfaced as a
+	// PG ERROR every ~2min during the restart stampede. First write wins;
+	// later transitions are append-only via RecordPromptExperimentResult.
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO experiments (experiment_id, mutation_brief_json, accepted, timestamp)
 		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (experiment_id) DO NOTHING
 	`, record.ID, string(briefJSON), boolToInt(record.Status == domain.ExperimentAccepted),
 		record.WindowStart.Format("2006-01-02T15:04:05Z07:00"))
 	if err != nil {

@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/reconcile"
@@ -77,6 +80,42 @@ func (d calibrationDeps) registerSessionSummaryReconcile() {
 					"reconcile_partial",
 					"errors", len(res.Errors),
 					"first", res.Errors[0])
+			}
+
+			// #1775 part 2: risk_gate SelfCalibrate also reads each session's
+			// recommendation_outcomes.jsonl — under PG-first that file never
+			// exists ("no orders to evaluate" with 54k outcomes in PG).
+			// Backfill per-session outcomes for sessions whose flat file is
+			// missing. QueryOutcomesBySession hits the session_id index.
+			summaries, err := pgRepo.LoadAllSessionSummaries(runCtx)
+			if err != nil {
+				return fmt.Errorf("load session ids: %w", err)
+			}
+			fileStore := ledger.NewStore(d.Cfg.LedgerDir)
+			outcomesBackfilled := 0
+			for _, s := range summaries {
+				outPath := filepath.Join(d.Cfg.LedgerDir, "sessions", s.SessionID, "recommendation_outcomes.jsonl")
+				if _, statErr := os.Stat(outPath); statErr == nil {
+					continue
+				}
+				outcomes, qErr := pgRepo.QueryOutcomesBySession(runCtx, s.SessionID)
+				if qErr != nil {
+					logging.Warn("session_summary_reconcile", "outcomes_query_failed",
+						"session", s.SessionID, "err", qErr.Error())
+					continue
+				}
+				if len(outcomes) == 0 {
+					continue
+				}
+				if wErr := fileStore.RecordSessionOutcomes(domain.ReplaySession{ID: s.SessionID}, outcomes); wErr != nil {
+					logging.Warn("session_summary_reconcile", "outcomes_write_failed",
+						"session", s.SessionID, "err", wErr.Error())
+					continue
+				}
+				outcomesBackfilled++
+			}
+			if outcomesBackfilled > 0 {
+				logging.Info("session_summary_reconcile", "outcomes_backfilled", "sessions", outcomesBackfilled)
 			}
 			return nil
 		},

@@ -132,11 +132,14 @@ func TestCheckEvolutionHealth_NoActivity(t *testing.T) {
 		BaselinePolicyPath: filepath.Join(dir, "baseline_policy.json"),
 		Now:                now,
 	})
-	if len(res.Stale) != 4 {
-		t.Fatalf("expected all 4 pillars stale, got %v", res.Stale)
+	// (#1780 audit) missing baseline_policy.json → promote/revert are
+	// structurally impossible and must NOT count as stale; only proposal
+	// and judge (whose activity sources exist) are reported.
+	if len(res.Stale) != 2 {
+		t.Fatalf("expected 2 stale pillars (proposal,judge), got %v", res.Stale)
 	}
-	if !res.AllStale {
-		t.Fatal("expected AllStale=true")
+	if res.AllStale {
+		t.Fatal("expected AllStale=false")
 	}
 }
 
@@ -155,11 +158,11 @@ func TestCheckEvolutionHealth_PartialActivity(t *testing.T) {
 
 	res := CheckEvolutionHealth(EvolutionHealthConfig{
 		LedgerDir:          dir,
-		BaselinePolicyPath: filepath.Join(dir, "baseline_policy.json"), // missing → stale
+		BaselinePolicyPath: filepath.Join(dir, "baseline_policy.json"), // missing → promote/revert exempt
 		Now:                now,
 	})
-	if len(res.Stale) != 3 {
-		t.Fatalf("expected 3 stale pillars (judge,promote,revert), got %v", res.Stale)
+	if len(res.Stale) != 1 {
+		t.Fatalf("expected 1 stale pillar (judge), got %v", res.Stale)
 	}
 	if res.AllStale {
 		t.Fatal("expected AllStale=false")
@@ -180,8 +183,8 @@ func TestCheckEvolutionHealth_ProposalTimestampPriority(t *testing.T) {
 		{ID: "exec-desk-01", WindowStart: now.Add(-time.Hour), Status: domain.ExperimentRunning},
 	})
 	res := CheckEvolutionHealth(EvolutionHealthConfig{LedgerDir: dir, Now: now})
-	if len(res.Stale) != 3 {
-		t.Fatalf("expected 3 stale (judge,promote,revert), got %v", res.Stale)
+	if len(res.Stale) != 1 {
+		t.Fatalf("expected 1 stale (judge; promote/revert exempt without policy file), got %v", res.Stale)
 	}
 	found := false
 	for _, p := range res.Stale {
@@ -275,18 +278,21 @@ func TestRaiseEvolutionHealthAlerts_AllStale(t *testing.T) {
 	mon := &recordingMonitor{}
 	RaiseEvolutionHealthAlerts(mon, res)
 
-	if len(mon.alerts) != 1 {
-		t.Fatalf("expected exactly 1 alert for all-stale, got %d: %+v", len(mon.alerts), mon.alerts)
+	// (#1780 audit) promote/revert exempt without a policy file → the
+	// remaining stale pillars are proposal+judge, raised as per-pillar
+	// warnings (AllStale no longer triggers for a missing policy file).
+	if len(mon.alerts) != 2 {
+		t.Fatalf("expected 2 warning alerts (proposal,judge), got %d: %+v", len(mon.alerts), mon.alerts)
 	}
 	a := mon.alerts[0]
-	if a.level != "error" {
-		t.Errorf("expected error level, got %q", a.level)
+	if a.level != "warning" {
+		t.Errorf("expected warning level, got %q", a.level)
 	}
 	if a.category != "evolution" {
 		t.Errorf("expected category evolution, got %q", a.category)
 	}
-	if a.details["pillars"] == nil {
-		t.Errorf("expected pillar details, got %+v", a.details)
+	if a.details["pillar"] == nil {
+		t.Errorf("expected pillar detail, got %+v", a.details)
 	}
 }
 
@@ -302,8 +308,8 @@ func TestRaiseEvolutionHealthAlerts_Partial(t *testing.T) {
 	mon := &recordingMonitor{}
 	RaiseEvolutionHealthAlerts(mon, res)
 
-	if len(mon.alerts) != 3 {
-		t.Fatalf("expected 3 warning alerts (judge,promote,revert), got %d: %+v", len(mon.alerts), mon.alerts)
+	if len(mon.alerts) != 1 {
+		t.Fatalf("expected 1 warning alert (judge), got %d: %+v", len(mon.alerts), mon.alerts)
 	}
 	for _, a := range mon.alerts {
 		if a.level != "warning" {
