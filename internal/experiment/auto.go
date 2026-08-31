@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/backtest"
 	"github.com/kaecer68/atlas-go/internal/baseline"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -125,6 +126,28 @@ func runExperimentForCandidate(_ context.Context, cfg AutoExperimentConfig, cand
 	expPath := FindLatestExperiment(filepath.Join(cfg.Config.WorkDir, "data", "state", "experiments"))
 	if expPath == "" {
 		return fmt.Errorf("experiment result not found for %s", result.Experiment.ID)
+	}
+
+	// #1774: materialize the experiment window's summary before judging. No
+	// upstream writer ever produced data/state/windows/<windowID>.json for the
+	// experiment's own trailing window — window_backtest and autobacktest write
+	// windows with different spans (21d rolling / 1d), so judge.Evaluate
+	// reliably failed with "open .../windows/window-YYYYMMDD-YYYYMMDD.json: no
+	// such file or directory" (71 consecutive failures in prod, 2026-08-31).
+	// Run the backtest over the experiment window on demand; the Runner records
+	// the summary via ledger.RecordWindowSummary into the same base dir the
+	// judge reads.
+	baseDir := filepath.Dir(filepath.Dir(expPath))
+	windowPath := filepath.Join(baseDir, "windows", windowID+".json")
+	if _, statErr := os.Stat(windowPath); os.IsNotExist(statErr) {
+		btRunner := backtest.NewRunner(cfg.Config, ledger.NewStore(baseDir))
+		summary, btErr := btRunner.Run(windowStart, windowEnd)
+		if btErr != nil {
+			return fmt.Errorf("materialize window summary %s: %w", windowID, btErr)
+		}
+		logging.Info("experiment", "window_summary_materialized",
+			"window_id", summary.WindowID,
+			"sessions", summary.SessionCount)
 	}
 
 	judge := NewJudge(store.(ledger.ExperimentStore), cfg.Config.ReplayDataPath, cfg.Config.BaselinePolicyPath)
