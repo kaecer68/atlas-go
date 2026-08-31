@@ -278,11 +278,28 @@ export async function loadFetchLogs() {
   }
 }
 
+// splitDisabledChannels partitions channels into operator-active rows and
+// intentionally-disabled rows (channels.json enabled=false). Disabled rows are
+// hidden from the table + summary counts (#1758 決策: intentionally-off
+// channels like tej/twse_etf must not render as「異常」or clutter the page) but
+// stay discoverable via the one-line summary so operators can re-enable them.
+export function splitDisabledChannels(channels) {
+  const active = [];
+  const disabled = [];
+  (channels || []).forEach(c => {
+    if (c.enabled === false) disabled.push(c);
+    else active.push(c);
+  });
+  return { active, disabled };
+}
+
 export function renderDataChannels(data) {
   const el = document.getElementById('dataChannels');
   if (!data || !data.channels) { el.innerHTML = renderEmptyState('尚無資料通道資料', ''); el.classList.remove('loading'); return; }
   el.classList.remove('loading');
-  const channels = data.channels || [];
+  const allChannels = data.channels || [];
+  const { active: channels, disabled: disabledChannels } = splitDisabledChannels(allChannels);
+  const disabledIds = new Set(disabledChannels.map(c => c.channel_id));
   const statusLight = s => {
     const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
@@ -355,13 +372,20 @@ export function renderDataChannels(data) {
     html += '</tbody></table></div></div>';
   });
 
-  if (data.alerts && data.alerts.length) {
+  // 需要關注的通道 — exclude intentionally-disabled channels (#1758): an
+  // operator-disabled channel is a decision, not an incident.
+  const visibleAlerts = (data.alerts || []).filter(a => !disabledIds.has(a.channel_id));
+  if (visibleAlerts.length) {
     const statusLabel = s => s === 'error' ? '異常' : (s === 'warn' ? '待更新' : '異常');
     const statusColor = s => s === 'error' ? 'var(--color-danger)' : 'var(--warn)';
     html += `<div style="margin-top:14px;padding:10px 12px;background:color-mix(in srgb, var(--color-danger) 8%, transparent);border-left:3px solid var(--color-danger);border-radius:6px">
       <div style="font-size:13px;font-weight:700;color:var(--color-danger);margin-bottom:6px">需要關注的通道</div>
-      ${data.alerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
+      ${visibleAlerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
     </div>`;
+  }
+
+  if (disabledChannels.length) {
+    html += `<div class="mt-sm text-muted text-sm">已停用通道（${disabledChannels.length}）：${disabledChannels.map(c => escapeHtml(c.channel_id)).join('、')} — 重新啟用請調整 data/state/channels.json 或對應環境變數後重啟</div>`;
   }
 
   html += `<div class="mt-sm text-muted text-sm">報告生成時間：${data.generated || '-'}</div>`;
