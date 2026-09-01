@@ -219,6 +219,53 @@ func registerCapitalTasks(d capitalDeps) {
 	})
 	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Taipei, once daily, G02 live)")
 
+	// Register auto_sbl_tdcc_history_backfill — one-time 6-month historical
+	// backfill for the two newly wired channels (2026-09-01 user directive:
+	// anything backfillable for prediction is backfilled instead of waiting
+	// for future data). Self-advancing month cursor: each run fetches the
+	// next 30-day chunk for both channels (~2 FinMind calls), then no-ops
+	// until the cursor passes today. Idempotent (existing files skipped).
+	historyStart, _ := time.Parse("2006-01-02", "2026-03-01")
+	cursor := historyStart
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_sbl_tdcc_history_backfill",
+		ChannelID: "twse_sbl",
+		Interval:  1 * time.Hour,
+		Enabled:   true,
+		Task: func(ctx context.Context) error {
+			if cursor.After(time.Now()) {
+				return nil // backfill complete
+			}
+			chunkEnd := cursor.AddDate(0, 1, 0).AddDate(0, 0, -1)
+			if chunkEnd.After(time.Now()) {
+				chunkEnd = time.Now()
+			}
+			// SBL: per-day files via the gateway's provider.
+			if _, err := d.gateway.Fetch(ctx, "twse_sbl"); err != nil {
+				log.Printf("[Backfill] twse_sbl history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
+				return err
+			}
+			// TDCC: monthly chunk via the provider's history method. The
+			// gateway Fetch path only returns the newest snapshot, so the
+			// chunked history walk goes through the registry provider
+			// directly.
+			provider, perr := d.gateway.Provider("tdcc_equity_dispersion")
+			if perr != nil {
+				return perr
+			}
+			if tdcc, ok := provider.(*apigateway.TDCClientChannelAdapter); ok {
+				if _, err := tdcc.Provider().FetchDispersionHistory(ctx, cursor, chunkEnd); err != nil {
+					log.Printf("[Backfill] tdcc history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
+					return err
+				}
+			}
+			log.Printf("[Backfill] history chunk %s..%s done", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"))
+			cursor = chunkEnd.AddDate(0, 0, 1)
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered auto_sbl_tdcc_history_backfill (monthly chunks from %s, self-advancing)", historyStart.Format("2006-01-02"))
+
 	// Register auto_tdcc_dispersion — weekly fetch of the 集保戶股權分散表
 	// (G01 live). The table is weekly (data dated Friday, published early
 	// the following week): fetch on Tue (primary) and Fri (retry).

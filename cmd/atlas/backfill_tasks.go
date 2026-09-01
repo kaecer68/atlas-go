@@ -64,9 +64,11 @@ func defaultChannelCoverageExpectations() []ChannelCoverageExpectation {
 		{ChannelID: "fugle", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 7, Enabled: true},
 		{ChannelID: "fubon", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 7, Enabled: true},
 		{ChannelID: "geopolitical", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 7, Enabled: true},
+		// G01 live (2026-09-01): latest.json refreshed on each weekly fetch.
+		{ChannelID: "tdcc_equity_dispersion", CoverageType: CoverageLatestFile, FilePattern: "latest.json", LookbackDays: 14, Enabled: true},
+		// G02 live (2026-09-01): per-day report files.
+		{ChannelID: "twse_sbl", CoverageType: CoverageDailyFiles, FilePattern: "20060102_sbl.json", LookbackDays: 30, Enabled: true},
 		// Stubs / file-backed / conditional channels with no uniform date layout.
-		{ChannelID: "tdcc_equity_dispersion", CoverageType: CoverageNone, Enabled: false},
-		{ChannelID: "twse_sbl", CoverageType: CoverageNone, Enabled: false},
 		{ChannelID: "janus_regime", CoverageType: CoverageNone, Enabled: false},
 		{ChannelID: "sector_data", CoverageType: CoverageNone, Enabled: false},
 	}

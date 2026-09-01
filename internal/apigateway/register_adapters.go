@@ -366,6 +366,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	finmindShared := marketdata.GetSharedFinMindClient(finmindKey)
 	sblAdapter := NewTWSESBLChannelAdapter()
 	sblAdapter.SetFinMindClient(finmindShared)
+	sblAdapter.SetStorageDir(filepath.Join(workDir, "data", "state", "sbl"))
 	g.registry.Register("twse_sbl", sblAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_sbl", "source", "FinMind:TaiwanDailyShortSaleBalances")
 
@@ -374,6 +375,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// 股權分散表, full-market single call ~68k rows).
 	tdccAdapter := NewTDCClientChannelAdapter()
 	tdccAdapter.SetFinMindClient(finmindShared)
+	tdccAdapter.SetStorageDir(filepath.Join(workDir, "data", "state", "tdcc_dispersion"))
 	g.registry.Register("tdcc_equity_dispersion", tdccAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "tdcc_equity_dispersion", "source", "FinMind:TaiwanStockHoldingSharesPer")
 
