@@ -371,3 +371,18 @@
 .cq-dot.ok { background: var(--color-success, #26a17b); }
 .cq-dot.warn { background: var(--warn, #f5a623); }
 .cq-dot.critical { background: var(--color-danger, #ef4444); }
+
+/* #1785-followup: archived (by-design not-yet-live) channel rows —
+   visually distinct from failures: grey, no alarm border. */
+.cq-row.archived td:first-child {
+  border-left: 3px solid var(--muted, #6b7280);
+}
+
+.cq-row.archived {
+  opacity: 0.75;
+}
+
+.badge.muted {
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--muted, #9ca3af);
+}

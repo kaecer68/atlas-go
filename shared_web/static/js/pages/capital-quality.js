@@ -61,12 +61,26 @@ export function renderCapitalQuality(payload) {
 
   const now = Date.now();
   const rows = channels.map(function (c, idx) {
-    const freshness = computeFreshness(c.updated_at || c.last_fetch_at, now);
-    const errorText = c.last_error || c.error || '';
-    const statusClass = errorText ? 'critical' : freshness.className;
-    const displayName = humanizeChannelId(c.channel_id || c.id || c.source_id || 'unknown');
+    const cid = c.channel_id || c.id || c.source_id || 'unknown';
+    const displayName = humanizeChannelId(cid);
     const platform = c.platform || displayName;
     const lastUpdate = formatChannelTime(c.updated_at || c.last_fetch_at);
+    const errorText = c.last_error || c.error || '';
+
+    // #1785-followup: by-design non-live channels (G01/G02 stubs, disabled
+    // channels) must not render as 未知/過期 — they are archived awaiting
+    // enablement, same semantics as the home scheduler ARCHIVED_TASKS.
+    const archivedReason = ARCHIVED_CHANNELS[cid]
+      || (c.enabled === false && (errorText || '已停用'));
+
+    const freshness = computeFreshness(c.updated_at || c.last_fetch_at, now, cid);
+    const statusClass = archivedReason ? 'archived' : (errorText ? 'critical' : freshness.className);
+    const statusLabel = archivedReason
+      ? '歸檔·等待啟用'
+      : (c.status_text || c.status || '-');
+    const freshnessLabel = archivedReason
+      ? archivedReason
+      : freshness.label;
 
     return (
       '<tr class="cq-row ' + statusClass + '" data-idx="' + idx + '">'
@@ -74,9 +88,9 @@ export function renderCapitalQuality(payload) {
       +   '<div><strong>' + escapeHtml(platform) + '</strong></div>'
       +   '<div class="text-muted text-xs">' + escapeHtml(displayName) + ' · ' + escapeHtml(c.country || '-') + '</div>'
       + '</td>'
-      + '<td>' + escapeHtml(c.status_text || c.status || '-') + '</td>'
+      + '<td>' + escapeHtml(statusLabel) + '</td>'
       + '<td>' + escapeHtml(lastUpdate) + '</td>'
-      + '<td><span class="badge ' + (statusClass === 'ok' ? 'ok' : statusClass === 'warn' ? 'warn' : 'err') + '">' + freshness.label + '</span></td>'
+      + '<td><span class="badge ' + (statusClass === 'ok' ? 'ok' : statusClass === 'warn' ? 'warn' : statusClass === 'archived' ? 'muted' : 'err') + '">' + escapeHtml(String(freshnessLabel)) + '</span></td>'
       + '</tr>'
       + (errorText
         ? '<tr class="cq-error" id="cq-error-' + idx + '"><td colspan="4">'
@@ -86,8 +100,12 @@ export function renderCapitalQuality(payload) {
     );
   }).join('');
 
+  // #1787 lifecycle: a resolved alert is a closed condition — listing it
+  // under 嚴重警報 made the page show fixed errors forever.
   const criticalAlerts = alerts.filter(function (a) {
-    return a && (a.severity === 'CRITICAL' || a.severity === 'ERROR' || a.severity === 'HIGH');
+    return a
+      && (a.severity === 'CRITICAL' || a.severity === 'ERROR' || a.severity === 'HIGH')
+      && a.status !== 'resolved' && a.status !== 'silenced';
   }).slice(0, 10);
 
   const summary = buildSummary(channels, criticalAlerts);
@@ -99,6 +117,7 @@ export function renderCapitalQuality(payload) {
     +   '<span><span class="cq-dot ok"></span> 新鮮 (&lt;2h)</span>'
     +   '<span><span class="cq-dot warn"></span> 待更新 (2h–6h)</span>'
     +   '<span><span class="cq-dot critical"></span> 過期 (&gt;6h) 或異常</span>'
+    +   '<span style="color:var(--muted)">日頻通道以交易日計（收盤後更新不計過期）</span>'
     + '</div>'
     + '<div class="cq-table table-scroll">'
     +   '<table class="ranker-table">'
@@ -120,13 +139,18 @@ export function renderCapitalQuality(payload) {
 
 function buildSummary(channels, criticalAlerts) {
   const now = Date.now();
-  let ok = 0, warn = 0, critical = 0;
+  let ok = 0, warn = 0, critical = 0, archived = 0;
   channels.forEach(function (c) {
+    const cid = c.channel_id || c.id || c.source_id || 'unknown';
     const errorText = c.last_error || c.error || '';
+    if (ARCHIVED_CHANNELS[cid] || (c.enabled === false && (errorText || '已停用'))) {
+      archived++;
+      return;
+    }
     if (errorText) {
       critical++;
     } else {
-      const fresh = computeFreshness(c.updated_at || c.last_fetch_at, now);
+      const fresh = computeFreshness(c.updated_at || c.last_fetch_at, now, cid);
       if (fresh.className === 'ok') ok++;
       else if (fresh.className === 'warn') warn++;
       else critical++;
@@ -150,6 +174,10 @@ function buildSummary(channels, criticalAlerts) {
     + '<div class="cq-summary__card">'
     +   '<div class="cq-summary__label">嚴重警報</div>'
     +   '<div class="cq-summary__value" style="color:var(--color-danger)">' + criticalAlerts.length + '</div>'
+    + '</div>'
+    + '<div class="cq-summary__card">'
+    +   '<div class="cq-summary__label">歸檔·等待啟用</div>'
+    +   '<div class="cq-summary__value" style="color:var(--muted)">' + archived + '</div>'
     + '</div>'
     + '</div>'
   );
@@ -176,13 +204,57 @@ function renderCriticalAlerts(alerts) {
   );
 }
 
-function computeFreshness(value, now) {
+// By-design archived channels (G01/G02 stubs, disabled channels).
+// Same semantics as the home dashboard ARCHIVED_TASKS: these are NOT
+// failures — render them as 歸檔·等待啟用 with the reason instead of
+// 未知/過期, so the page distinguishes "known not-yet-live" from "broken".
+const ARCHIVED_CHANNELS = {
+  tdcc_equity_dispersion: 'G01 · TDCC API 未接線',
+  twse_sbl: 'G02 · stub 未啟用',
+  twse_etf: '上游 TWT44U 移除 · 改 Fubon PCF 替代源',
+};
+
+// Taiwan-market daily channels: data lands after market close (13:30+),
+// often in the evening batch. A fixed 6h threshold flags them 過期 every
+// morning — freshness for these must be trading-day-aware: fresh if the
+// last update falls on/after the most recent settled trading day's close.
+const DAILY_TW_CHANNELS = new Set([
+  'twse_oddlot', 'government_broker', 'government_flow',
+  'tdcc_equity_dispersion', 'twse_sbl', 'twse_etf',
+]);
+
+// The most recent weekday whose 13:00 Taipei close has passed (as UTC ms).
+// Holiday-blind by design — same known follow-up as the gov_flow coverage
+// expectation (see #1787 comments).
+function lastSettledTradingClose(nowMs) {
+  const shifted = new Date(nowMs + 8 * 3600 * 1000); // Taipei wall clock as UTC
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(shifted.getTime());
+    day.setUTCDate(day.getUTCDate() - i);
+    const wd = day.getUTCDay();
+    if (wd === 0 || wd === 6) continue;
+    // 13:00 Taipei = 05:00 UTC
+    const closeUTC = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 5, 0, 0);
+    if (nowMs >= closeUTC) return closeUTC;
+  }
+  return 0;
+}
+
+function computeFreshness(value, now, channelId) {
   const ts = parseTimestamp(value);
   if (!ts) {
     return { className: 'critical', label: '未知' };
   }
   const age = now - ts;
   if (age < STALE_WARNING_MS) return { className: 'ok', label: '新鮮' };
+  if (channelId && DAILY_TW_CHANNELS.has(channelId)) {
+    // Trading-day-aware: stale only if the last settled trading day
+    // (13:00+ Taipei) has produced no update. Before that it is simply
+    // "today's batch pending".
+    const settled = lastSettledTradingClose(now);
+    if (ts >= settled) return { className: 'warn', label: '今日待更新' };
+    return { className: 'critical', label: '過期' };
+  }
   if (age < STALE_CRITICAL_MS) return { className: 'warn', label: '待更新' };
   return { className: 'critical', label: '過期' };
 }

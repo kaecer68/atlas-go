@@ -66,9 +66,14 @@ func (s *AlertStore) LoadUnacknowledged() ([]domain.AlertRecord, error) {
 		return nil, fmt.Errorf("load alerts: %w", err)
 	}
 
+	// #1787: a RESOLVED alert needs no human decision — auto-resolve hooks
+	// (task success / coverage restored / TTL) close the condition but do
+	// not touch the Acknowledged bool. The queue must report only live,
+	// undecided conditions; resolved records previously lingered here even
+	// after the underlying condition had cleared.
 	var unacked []domain.AlertRecord
 	for _, a := range all {
-		if !a.Acknowledged {
+		if !a.Acknowledged && a.Status != domain.AlertStatusResolved && a.Status != domain.AlertStatusSilenced {
 			unacked = append(unacked, a)
 		}
 	}
