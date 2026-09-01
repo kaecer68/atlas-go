@@ -189,24 +189,65 @@ func registerCapitalTasks(d capitalDeps) {
 	})
 	log.Printf("[Gateway] registered auto_taifex_institutional background task (1h interval, 15:00+ Taipei)")
 
-	// Register auto_twse_sbl — daily fetch of TWSE SBL (借券賣出餘額) data (G02).
+	// Register auto_twse_sbl — daily fetch of SBL (借券賣出餘額) balances
+	// via FinMind TaiwanDailyShortSaleBalances (G02 live).
+	sblLastFetchDay := ""
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_twse_sbl",
 		ChannelID: "twse_sbl",
 		Interval:  1 * time.Hour,
-		Enabled:   false, // G02: stub adapter, channel not yet active
+		Enabled:   true, // G02 live (FinMind TaiwanDailyShortSaleBalances)
 		Task: func(ctx context.Context) error {
-			// Only fetch on weekdays after market close (15:00+).
-			if now := time.Now(); now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-				return nil
-			} else if now.Hour() < 15 {
+			// Weekdays after market close (15:00+), once per day.
+			now := time.Now()
+			if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
 				return nil
 			}
+			if now.Hour() < 15 {
+				return nil
+			}
+			today := now.Format("2006-01-02")
+			if sblLastFetchDay == today {
+				return nil // hourly tick; already fetched today
+			}
 			_, err := d.gateway.Fetch(ctx, "twse_sbl")
+			if err == nil {
+				sblLastFetchDay = today
+			}
 			return err
 		},
 	})
-	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Taipei, G02)")
+	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Taipei, once daily, G02 live)")
+
+	// Register auto_tdcc_dispersion — weekly fetch of the 集保戶股權分散表
+	// (G01 live). The table is weekly (data dated Friday, published early
+	// the following week): fetch on Tue (primary) and Fri (retry).
+	tdccLastFetchDay := ""
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:      "auto_tdcc_dispersion",
+		ChannelID: "tdcc_equity_dispersion",
+		Interval:  1 * time.Hour,
+		Enabled:   true, // G01 live (FinMind TaiwanStockHoldingSharesPer)
+		Task: func(ctx context.Context) error {
+			now := time.Now()
+			if wd := now.Weekday(); wd != time.Tuesday && wd != time.Friday {
+				return nil
+			}
+			if now.Hour() < 10 {
+				return nil
+			}
+			today := now.Format("2006-01-02")
+			if tdccLastFetchDay == today {
+				return nil
+			}
+			_, err := d.gateway.Fetch(ctx, "tdcc_equity_dispersion")
+			if err == nil {
+				tdccLastFetchDay = today
+			}
+			return err
+		},
+	})
+	log.Printf("[Gateway] registered auto_tdcc_dispersion background task (1h interval, Tue/Fri 10:00+ Taipei, G01 live)")
 
 	// Register auto_government_flow — daily refresh of operator-imported
 	// 官股行庫 readings (manifest #E04). No upstream HTTP — just reads the
