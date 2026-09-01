@@ -292,6 +292,14 @@ func (s *AlertStore) loadFromFile() ([]domain.AlertRecord, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan alert file: %w", err)
 	}
+	// #1787 one-time self-heal: records acknowledged before the lifecycle
+	// transition fix carry acknowledged=true but status=triggered, which kept
+	// them in the "需要決策" queue forever. Normalize on load (idempotent).
+	for i := range records {
+		if records[i].Acknowledged && records[i].Status == domain.AlertStatusTriggered {
+			records[i].Status = domain.AlertStatusAcknowledged
+		}
+	}
 	return records, nil
 }
 
