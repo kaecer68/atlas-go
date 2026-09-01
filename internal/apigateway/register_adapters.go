@@ -356,25 +356,26 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		}
 	}
 
-	// --- TWSE SBL (Securities Borrowing & Lending) — G02 ---
-	// STUB: provider returns "endpoint not yet confirmed" (see
-	// internal/marketdata/twse_sbl_provider.go). The channel is
-	// registered so the dashboard can show "not yet live" via
-	// Metadata().Stub, but HealthCheck returns "inactive" so the
-	// alerting path in monitoring/service/data_channels.go skips it.
+	// --- TWSE SBL (Securities Borrowing & Lending) — G02 live ---
+	// Data source: FinMind TaiwanDailyShortSaleBalances (TWSE 借券賣出餘額
+	// 每日報表轉載, full-market single call).
+	finmindKey := cfg.FinMindAPIKey
+	if finmindKey == "" {
+		finmindKey = config.GetSecret("FINMIND_API_KEY")
+	}
+	finmindShared := marketdata.GetSharedFinMindClient(finmindKey)
 	sblAdapter := NewTWSESBLChannelAdapter()
+	sblAdapter.SetFinMindClient(finmindShared)
 	g.registry.Register("twse_sbl", sblAdapter)
-	logging.Warn("apigateway", "stub_adapter_registered", "channel", "twse_sbl", "gate", "G02")
+	logging.Info("apigateway", "adapter_registered", "channel", "twse_sbl", "source", "FinMind:TaiwanDailyShortSaleBalances")
 
-	// --- TDCC Equity Dispersion (集保股權分散) — G01 ---
-	// STUB: provider returns "API access not yet configured" (see
-	// internal/marketdata/tdcc_provider.go). Auto-fetch is not
-	// scheduled; the channel is registered so the dashboard shows
-	// it as "not yet live" via Metadata().Stub. HealthCheck returns
-	// "inactive" so the alerting path skips it.
+	// --- TDCC Equity Dispersion (集保股權分散) — G01 live ---
+	// Data source: FinMind TaiwanStockHoldingSharesPer (weekly 集保戶
+	// 股權分散表, full-market single call ~68k rows).
 	tdccAdapter := NewTDCClientChannelAdapter()
+	tdccAdapter.SetFinMindClient(finmindShared)
 	g.registry.Register("tdcc_equity_dispersion", tdccAdapter)
-	logging.Warn("apigateway", "stub_adapter_registered", "channel", "tdcc_equity_dispersion", "gate", "G01")
+	logging.Info("apigateway", "adapter_registered", "channel", "tdcc_equity_dispersion", "source", "FinMind:TaiwanStockHoldingSharesPer")
 
 	// TwseInsider — TWSE OpenAPI 內部人持股轉讓 (t187ap12_L).
 	insiderAdapter := NewTWSEInsiderChannelAdapter(filepath.Join(workDir, "data/state/insider_flow"))

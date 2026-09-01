@@ -208,9 +208,9 @@ function renderCriticalAlerts(alerts) {
 // Same semantics as the home dashboard ARCHIVED_TASKS: these are NOT
 // failures — render them as 歸檔·等待啟用 with the reason instead of
 // 未知/過期, so the page distinguishes "known not-yet-live" from "broken".
+// G01/G02 已接線（FinMind TaiwanStockHoldingSharesPer / TaiwanDailyShortSaleBalances，
+// PR 2026-09-01）——tdcc 走週期 freshness 規則、twse_sbl 走日頻規則，離開歸檔清單。
 const ARCHIVED_CHANNELS = {
-  tdcc_equity_dispersion: 'G01 · TDCC API 未接線',
-  twse_sbl: 'G02 · stub 未啟用',
   twse_etf: '上游 TWT44U 移除 · 改 Fubon PCF 替代源',
   // 上游 BFI84U/ODDLOT 報表 2026-08 移除；known_issues
   // twse_oddlot_upstream_60d 追蹤，短期由 twse_capital_flow 代理。
@@ -218,6 +218,8 @@ const ARCHIVED_CHANNELS = {
   // #1758 決策：key 過期且三類資料均有 FinMind 免費替代。
   tej: '暫不開通（#1758）· FinMind 替代',
 };
+// 週期通道：資料每週更新一次，過期判定用「資料日期 < 最近已收盤週五」。
+const WEEKLY_TW_CHANNELS = new Set(['tdcc_equity_dispersion']);
 
 // Taiwan-market daily channels: data lands after market close (13:30+),
 // often in the evening batch. A fixed 6h threshold flags them 過期 every
@@ -251,6 +253,26 @@ function taipeiDateKey(tsMs) {
   return new Date(tsMs + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+// The most recent completed Friday (Taipei date key): weekly data dated on
+// or after it covers the current week. A Friday's own data counts once
+// published (i.e. from Friday evening / Saturday onward).
+function lastCompletedFriday(nowMs) {
+  const shifted = new Date(nowMs + 8 * 3600 * 1000);
+  for (let i = 1; i <= 7; i++) {
+    const day = new Date(shifted.getTime());
+    day.setUTCDate(day.getUTCDate() - i);
+    if (day.getUTCDay() === 5) { // Friday
+      // Friday 13:30 close: data "exists" for this week from Fri 13:30 TW.
+      const publishUTC = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 5, 30, 0);
+      if (nowMs >= publishUTC) return day.toISOString().slice(0, 10);
+      // Friday morning: the week isn't complete yet — use the prior Friday.
+      const prev = new Date(day.getTime() - 7 * 24 * 3600 * 1000);
+      return prev.toISOString().slice(0, 10);
+    }
+  }
+  return '';
+}
+
 function computeFreshness(value, now, channelId) {
   const ts = parseTimestamp(value);
   if (!ts) {
@@ -267,6 +289,15 @@ function computeFreshness(value, now, channelId) {
     const settledDay = lastSettledTradingDay(now);
     if (settledDay && taipeiDateKey(ts) >= settledDay) {
       return { className: 'warn', label: '今日待更新' };
+    }
+    return { className: 'critical', label: '過期' };
+  }
+  if (channelId && WEEKLY_TW_CHANNELS.has(channelId)) {
+    // Weekly channels (集保分散表 data dated Friday): fresh if the last
+    // update covers the most recent completed week.
+    const fridayKey = lastCompletedFriday(now);
+    if (fridayKey && taipeiDateKey(ts) >= fridayKey) {
+      return { className: 'warn', label: '本週待更新' };
     }
     return { className: 'critical', label: '過期' };
   }

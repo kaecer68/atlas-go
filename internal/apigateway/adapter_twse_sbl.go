@@ -23,6 +23,11 @@ func NewTWSESBLChannelAdapter() *TWSESBLChannelAdapter {
 	return &TWSESBLChannelAdapter{provider: p, limiter: p.RateLimiter()}
 }
 
+// SetFinMindClient injects the shared FinMind client (G02 live wiring).
+func (a *TWSESBLChannelAdapter) SetFinMindClient(f *marketdata.FinMindClient) {
+	a.provider.SetFinMindClient(f)
+}
+
 func (a *TWSESBLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 	if err := waitForLimiter(ctx, a.limiter); err != nil {
@@ -48,16 +53,35 @@ func (a *TWSESBLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 }
 
 func (a *TWSESBLChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	// Stub: TWSE SBL endpoint not yet confirmed (G02). HealthCheck
-	// returns "inactive" so the alerting path in
-	// monitoring/service/data_channels.go skips this channel; the
-	// dashboard renders it as "not yet live" via Metadata().Stub.
-	return HealthStatus{
-		Status:    "inactive",
-		CheckType: "liveness",
-		LastError: "stub: TWSE SBL endpoint not yet confirmed (G02) — see internal/marketdata/twse_sbl_provider.go",
-		UpdatedAt: time.Now().Format(time.RFC3339),
-	}, nil
+	// G02 live: report the provider's last fetch outcome instead of
+	// re-fetching the full-market dataset on every health probe.
+	lastSuccessAt, lastErr := a.provider.LastFetchState()
+	st := struct {
+		LastError     string
+		LastSuccessAt time.Time
+	}{lastErr, lastSuccessAt}
+	switch {
+	case st.LastError != "":
+		return HealthStatus{
+			Status:    "error",
+			CheckType: "readiness",
+			LastError: st.LastError,
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	case st.LastSuccessAt.IsZero():
+		return HealthStatus{
+			Status:    "unknown",
+			CheckType: "liveness",
+			LastError: "no fetch completed yet",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	default:
+		return HealthStatus{
+			Status:    "ok",
+			CheckType: "liveness",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	}
 }
 
 func (a *TWSESBLChannelAdapter) RateLimit() *rate.Limiter { return a.limiter }
@@ -68,11 +92,7 @@ func (a *TWSESBLChannelAdapter) Metadata() ChannelMetadata {
 		Country:    "TW",
 		Platform:   "TWSE",
 		APIFormat:  "JSON",
-		Path:       "/rwd/zh/lending/TWT93U",
+		Path:       "FinMind:TaiwanDailyShortSaleBalances",
 		HasLimiter: true,
-		// Stub: channel is registered so the dashboard can show
-		// "not yet live" explicitly. Real implementation is gated
-		// on G02 (TWSE SBL endpoint confirmation).
-		Stub: true,
 	}
 }

@@ -23,6 +23,11 @@ func NewTDCClientChannelAdapter() *TDCClientChannelAdapter {
 	return &TDCClientChannelAdapter{provider: p, limiter: p.RateLimiter()}
 }
 
+// SetFinMindClient injects the shared FinMind client (G01 live wiring).
+func (a *TDCClientChannelAdapter) SetFinMindClient(f *marketdata.FinMindClient) {
+	a.provider.SetFinMindClient(f)
+}
+
 func (a *TDCClientChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 	if err := waitForLimiter(ctx, a.limiter); err != nil {
@@ -48,16 +53,35 @@ func (a *TDCClientChannelAdapter) Fetch(ctx context.Context) (*FetchResult, erro
 }
 
 func (a *TDCClientChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
-	// Stub: TDCC API access not yet configured (G01). HealthCheck
-	// returns "inactive" so the alerting path in
-	// monitoring/service/data_channels.go skips this channel; the
-	// dashboard renders it as "not yet live" via Metadata().Stub.
-	return HealthStatus{
-		Status:    "inactive",
-		CheckType: "liveness",
-		LastError: "stub: TDCC API access not yet configured (G01) — see internal/marketdata/tdcc_provider.go",
-		UpdatedAt: time.Now().Format(time.RFC3339),
-	}, nil
+	// G01 live: report the provider's last fetch outcome instead of
+	// re-fetching the ~68k-row weekly table on every health probe.
+	lastSuccessAt, lastErr := a.provider.LastFetchState()
+	st := struct {
+		LastError     string
+		LastSuccessAt time.Time
+	}{lastErr, lastSuccessAt}
+	switch {
+	case st.LastError != "":
+		return HealthStatus{
+			Status:    "error",
+			CheckType: "readiness",
+			LastError: st.LastError,
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	case st.LastSuccessAt.IsZero():
+		return HealthStatus{
+			Status:    "unknown",
+			CheckType: "liveness",
+			LastError: "no fetch completed yet",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	default:
+		return HealthStatus{
+			Status:    "ok",
+			CheckType: "liveness",
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}, nil
+	}
 }
 
 func (a *TDCClientChannelAdapter) RateLimit() *rate.Limiter { return a.limiter }
@@ -68,11 +92,7 @@ func (a *TDCClientChannelAdapter) Metadata() ChannelMetadata {
 		Country:    "TW",
 		Platform:   "TDCC",
 		APIFormat:  "JSON",
-		Path:       "/v1/equity-dispersion",
+		Path:       "FinMind:TaiwanStockHoldingSharesPer",
 		HasLimiter: true,
-		// Stub: channel is registered so the dashboard can show
-		// "not yet live" explicitly. Real implementation is gated
-		// on G01 (TDCC API access).
-		Stub: true,
 	}
 }

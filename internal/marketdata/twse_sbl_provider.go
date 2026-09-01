@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -34,6 +35,33 @@ type TWSESBLProvider struct {
 	client  *http.Client
 	baseURL string
 	limiter *rate.Limiter
+	finmind *FinMindClient
+
+	lastMu        sync.Mutex
+	lastSuccessAt time.Time
+	lastErr       string
+}
+
+// LastFetchState reports the outcome of the most recent FetchSBLSummary for
+// lightweight health checks (the full-market fetch is too heavy to re-run
+// on every probe).
+func (p *TWSESBLProvider) LastFetchState() (successAt time.Time, lastErr string) {
+	p.lastMu.Lock()
+	defer p.lastMu.Unlock()
+	return p.lastSuccessAt, p.lastErr
+}
+
+func (p *TWSESBLProvider) recordFetchSuccess() {
+	p.lastMu.Lock()
+	p.lastSuccessAt = time.Now()
+	p.lastErr = ""
+	p.lastMu.Unlock()
+}
+
+func (p *TWSESBLProvider) recordFetchFailure(err error) {
+	p.lastMu.Lock()
+	p.lastErr = err.Error()
+	p.lastMu.Unlock()
 }
 
 // NewTWSESBLProvider creates a TWSE SBL data provider.
@@ -53,6 +81,10 @@ func NewTWSESBLProvider(ratePerSec float64) *TWSESBLProvider {
 // SetHTTPClient overrides the HTTP client (for testing).
 func (p *TWSESBLProvider) SetHTTPClient(c *http.Client) { p.client = c }
 
+// SetFinMindClient injects the shared FinMind client (G02 wiring). Without
+// it FetchSBLSummary keeps returning the "not wired" error.
+func (p *TWSESBLProvider) SetFinMindClient(f *FinMindClient) { p.finmind = f }
+
 // SetBaseURL overrides the base URL (for testing).
 func (p *TWSESBLProvider) SetBaseURL(u string) { p.baseURL = u }
 
@@ -70,24 +102,66 @@ func (p *TWSESBLProvider) SetRateLimiter(l *rate.Limiter) {
 // RateLimiter returns the per-provider rate limiter.
 func (p *TWSESBLProvider) RateLimiter() *rate.Limiter { return p.limiter }
 
-// FetchSBLSummary fetches the daily SBL summary data from TWSE.
-// Returns SBLStats for all listed stocks.
+// FetchSBLSummary fetches the daily SBL summary data (full market).
 //
-// TODO(G02): Implement actual HTTP fetch against TWSE SBL endpoint.
-// The TWSE endpoint is likely of the form:
+// Data source: FinMind dataset "TaiwanDailyShortSaleBalances" — the TWSE
+// 借券賣出餘額每日報表 (full-market, one call; ~2.2k rows verified
+// 2026-09-01). Field mapping into SBLStats:
 //
-//	https://www.twse.com.tw/rwd/zh/lending/TWT93U?date=YYYYMMDD&response=json
+//	SBLShortBalance  ← SBLShortSalesCurrentDayBalance（借券賣出今日餘額）
+//	SBLShortVolume   ← SBLShortSalesShortSales（當日借券賣出）
+//	SBLReturnVolume  ← SBLShortSalesReturns（當日還券）
+//	SBLBorrowBalance ← 未提供（dataset 無借券餘額欄位，保持 0）
 //
-// Confirmation is needed on the exact endpoint and response format.
-// Until then, this returns a placeholder indicating the data is unavailable.
+// date is the target trading day (YYYYMMDD).
 func (p *TWSESBLProvider) FetchSBLSummary(ctx context.Context, date string) ([]SBLStats, error) {
-	_ = ctx
-	_ = date
-	// Placeholder: return empty results until TWSE endpoint is confirmed.
-	// The caller (ChannelAdapter) will record the fetch attempt and surface
-	// the "data unavailable" status through the channel health system.
-	return nil, fmt.Errorf("twse_sbl: endpoint not yet confirmed; see G02 implementation notes in internal/marketdata/twse_sbl_provider.go")
-}
+	if p.finmind == nil {
+		return nil, fmt.Errorf("twse_sbl: FinMind client not wired; see G02 implementation notes in internal/marketdata/twse_sbl_provider.go")
+	}
+	day, err := time.Parse("20060102", date)
+	if err != nil {
+		return nil, fmt.Errorf("twse_sbl: parse date %q: %w", date, err)
+	}
+	// Weekend / holiday: the previous trading day's report is the latest —
+	// query a 4-day window and use whatever rows come back (FinMind returns
+	// only published dates).
+	start := day.AddDate(0, 0, -4)
 
-// Ensure time import is used.
-var _ = time.Now
+	rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanDailyShortSaleBalances", "", start.Format("2006-01-02"), day.Format("2006-01-02"))
+	if err != nil {
+		p.recordFetchFailure(err)
+		return nil, fmt.Errorf("twse_sbl: finmind fetch: %w", err)
+	}
+
+	latest := make(map[string]SBLStats, len(rows))
+	for _, row := range rows {
+		rowDate := strField(row, "date")
+		sym := strField(row, "stock_id")
+		if rowDate == "" || sym == "" {
+			continue
+		}
+		// Keep the newest row per symbol in the window.
+		prev, seen := latest[sym]
+		if seen && rowDate < prev.Date {
+			continue
+		}
+		latest[sym] = SBLStats{
+			Date:            rowDate,
+			Symbol:          sym,
+			SBLShortBalance: int64(floatField(row, "SBLShortSalesCurrentDayBalance")),
+			SBLShortVolume:  int64(floatField(row, "SBLShortSalesShortSales")),
+			SBLReturnVolume: int64(floatField(row, "SBLShortSalesReturns")),
+		}
+	}
+	if len(latest) == 0 {
+		err := fmt.Errorf("twse_sbl: no SBL balance data for %s", date)
+		p.recordFetchFailure(err)
+		return nil, err
+	}
+	stats := make([]SBLStats, 0, len(latest))
+	for _, s := range latest {
+		stats = append(stats, s)
+	}
+	p.recordFetchSuccess()
+	return stats, nil
+}

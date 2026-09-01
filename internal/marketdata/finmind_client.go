@@ -85,6 +85,7 @@ var ErrQuotaExhausted = fmt.Errorf("finmind: daily quota exhausted")
 type FinMindClient struct {
 	apiKey       string
 	httpClient   *http.Client
+	baseURL      string // overridable for tests; defaults to finmindBaseURL
 	rateLimiter  *rate.Limiter
 	quotaTracker *DailyQuotaTracker
 	// retryCfg is the shared fetchWithRetry policy (P0-5). Before P0-5 the
@@ -160,6 +161,9 @@ func NewFinMindClient(apiKey string) *FinMindClient {
 	return newFinMindClientInternal(apiKey, "data/state")
 }
 
+// SetBaseURL overrides the FinMind API base URL (testing only).
+func (c *FinMindClient) SetBaseURL(u string) { c.baseURL = u }
+
 // NewFinMindClientWithStateDir creates a standalone FinMindClient whose
 // DailyQuotaTracker persists under the given stateDir instead of the
 // default "data/state". Test-only convenience — production callers
@@ -182,6 +186,7 @@ func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
 	GlobalQuotaRegistry().Register("finmind", tracker)
 	return &FinMindClient{
 		apiKey:       apiKey,
+		baseURL:      finmindBaseURL,
 		httpClient:   httpclient.NewFactory().NewClient(30 * time.Second),
 		rateLimiter:  newFinMindRateLimiter(),
 		quotaTracker: tracker,
@@ -231,6 +236,15 @@ func (c *FinMindClient) SetQuotaLimit(limit int) {
 	}
 }
 
+// FetchDatasetRaw exposes a generic FinMind dataset fetch for providers that
+// need datasets without a dedicated typed method (G01 equity dispersion /
+// G02 SBL balances). Full-market queries pass an empty dataId — FinMind
+// returns every listed symbol for the window. Rate limiting, quota gating,
+// retries and the client-level breaker are all inherited from fetchDataset.
+func (c *FinMindClient) FetchDatasetRaw(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
+	return c.fetchDataset(ctx, dataset, dataId, startDate, endDate)
+}
+
 func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId string, startDate string, endDate string) ([]map[string]any, error) {
 	// P1-7: client-level breaker — open 時不發 HTTP，所有 FinMind 消費層
 	// 共享同一個 breaker（shared client）。quota exhausted 與 no-data 是
@@ -255,7 +269,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		return nil, fmt.Errorf("finmind: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 
-	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)
+	endpoint := fmt.Sprintf("%s/data", c.baseURL)
 	params := url.Values{}
 	params.Set("dataset", dataset)
 	params.Set("data_id", normalizeFinMindStockID(dataId))
