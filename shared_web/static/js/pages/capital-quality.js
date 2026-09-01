@@ -212,6 +212,11 @@ const ARCHIVED_CHANNELS = {
   tdcc_equity_dispersion: 'G01 · TDCC API 未接線',
   twse_sbl: 'G02 · stub 未啟用',
   twse_etf: '上游 TWT44U 移除 · 改 Fubon PCF 替代源',
+  // 上游 BFI84U/ODDLOT 報表 2026-08 移除；known_issues
+  // twse_oddlot_upstream_60d 追蹤，短期由 twse_capital_flow 代理。
+  twse_oddlot: '上游報表移除 · 暫由 twse_capital_flow 代理',
+  // #1758 決策：key 過期且三類資料均有 FinMind 免費替代。
+  tej: '暫不開通（#1758）· FinMind 替代',
 };
 
 // Taiwan-market daily channels: data lands after market close (13:30+),
@@ -223,21 +228,27 @@ const DAILY_TW_CHANNELS = new Set([
   'tdcc_equity_dispersion', 'twse_sbl', 'twse_etf',
 ]);
 
-// The most recent weekday whose 13:00 Taipei close has passed (as UTC ms).
-// Holiday-blind by design — same known follow-up as the gov_flow coverage
-// expectation (see #1787 comments).
-function lastSettledTradingClose(nowMs) {
+// The Taipei calendar date (YYYY-MM-DD) of the most recent weekday whose
+// 13:30 close has passed. Holiday-blind by design — same known follow-up
+// as the gov_flow coverage expectation (see #1787 comments).
+function lastSettledTradingDay(nowMs) {
   const shifted = new Date(nowMs + 8 * 3600 * 1000); // Taipei wall clock as UTC
   for (let i = 0; i < 7; i++) {
     const day = new Date(shifted.getTime());
     day.setUTCDate(day.getUTCDate() - i);
     const wd = day.getUTCDay();
     if (wd === 0 || wd === 6) continue;
-    // 13:00 Taipei = 05:00 UTC
-    const closeUTC = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 5, 0, 0);
-    if (nowMs >= closeUTC) return closeUTC;
+    // 13:30 Taipei = 05:30 UTC
+    const settleUTC = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 5, 30, 0);
+    if (nowMs >= settleUTC) {
+      return day.toISOString().slice(0, 10);
+    }
   }
-  return 0;
+  return '';
+}
+
+function taipeiDateKey(tsMs) {
+  return new Date(tsMs + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function computeFreshness(value, now, channelId) {
@@ -248,11 +259,15 @@ function computeFreshness(value, now, channelId) {
   const age = now - ts;
   if (age < STALE_WARNING_MS) return { className: 'ok', label: '新鮮' };
   if (channelId && DAILY_TW_CHANNELS.has(channelId)) {
-    // Trading-day-aware: stale only if the last settled trading day
-    // (13:00+ Taipei) has produced no update. Before that it is simply
-    // "today's batch pending".
-    const settled = lastSettledTradingClose(now);
-    if (ts >= settled) return { className: 'warn', label: '今日待更新' };
+    // Trading-day-aware: stale only if the update predates the most recent
+    // settled trading day. Comparing calendar DATES (not hours) — some
+    // daily channels land their batch in the morning
+    // (government_broker 10:46 observed), so hour-level cutoffs would
+    // falsely expire them every morning.
+    const settledDay = lastSettledTradingDay(now);
+    if (settledDay && taipeiDateKey(ts) >= settledDay) {
+      return { className: 'warn', label: '今日待更新' };
+    }
     return { className: 'critical', label: '過期' };
   }
   if (age < STALE_CRITICAL_MS) return { className: 'warn', label: '待更新' };
