@@ -97,6 +97,12 @@ func (s *AlertStore) Acknowledge(alertID string, user string) error {
 			all[i].Acknowledged = true
 			all[i].AcknowledgedAt = &now
 			all[i].AcknowledgedBy = user
+			// #1787: acknowledgement is a lifecycle transition, not a side
+			// flag. The "需要決策" queue reads status==triggered; without this
+			// the same record stayed listed forever after "已知悉" — the UI
+			// literally could not clear anything. The bool fields are kept in
+			// sync for the unacknowledged endpoint and backward compat.
+			all[i].Status = domain.AlertStatusAcknowledged
 			found = true
 			break
 		}
@@ -224,6 +230,7 @@ func (s *AlertStore) AcknowledgeWhere(predicate func(*domain.AlertRecord) bool, 
 			all[i].Acknowledged = true
 			all[i].AcknowledgedAt = &now
 			all[i].AcknowledgedBy = user
+			all[i].Status = domain.AlertStatusAcknowledged // #1787 lifecycle transition
 			acknowledged++
 		}
 	}
