@@ -181,6 +181,19 @@ func (g *RiskGate) publish(ctx context.Context, dec RiskDecision) {
 	}
 }
 
+// RecordDecision records an externally-produced decision into the gate
+// (#1785-D). The simulation engine's pre-trade checks flow through here so
+// LastDecision (風控長評語 surface) reflects simulation activity — previously
+// only the live/paper order path published decisions, leaving the panel
+// permanently empty in dry-run deployments. Quiet variant: updates
+// lastDecision without fanning out to subscribers (the daily sim produces
+// hundreds of decisions per session; SSE spam is undesirable).
+func (g *RiskGate) RecordDecision(dec RiskDecision) {
+	g.mu.Lock()
+	g.lastDecision = dec
+	g.mu.Unlock()
+}
+
 // LastDecision returns the most recent risk decision, or a zero-value RiskDecision
 // if no decision has been recorded yet.
 func (g *RiskGate) LastDecision() RiskDecision {

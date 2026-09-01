@@ -162,6 +162,12 @@
       "results": "(*Engine)"
     },
     {
+      "name": "WithDecisionRecorder",
+      "params": "(fn func(risk.RiskDecision))",
+      "receiver": "Engine",
+      "results": "(*Engine)"
+    },
+    {
       "name": "WithDividends",
       "params": "(divs map[string]float64)",
       "receiver": "Engine",
@@ -320,6 +326,7 @@
         "dividends map[string]float64",
         "thresholdEngine *DynamicThresholdEngine",
         "preTradeGate *risk.PreTradeGate",
+        "decisionRecorder func(risk.RiskDecision)",
         "traceWriter TraceWriter",
         "rotationFunc RotationFunc",
         "riskCalculator RiskCalculator"

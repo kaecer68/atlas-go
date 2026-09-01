@@ -244,6 +244,11 @@ type RiskExposureResponse struct {
 	Concentration    []PositionConcentration `json:"concentration"`
 	DataPoints       int                     `json:"data_points"`
 	InsufficientData bool                    `json:"insufficient_data"`
+	// VarAvailable reports whether the return history meets VaR's minimum
+	// observation bar (risk.MinObservationsForVaR). Below it, VaR/CVaR are
+	// zero-valued placeholders and the UI must show the observation period
+	// instead (#1785-B: 182 points rendered as "VaR 0.0" was misleading).
+	VarAvailable bool `json:"var_available"`
 }
 
 type SectorExposure struct {
@@ -484,8 +489,12 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 
 	var snap domain.RiskSnapshot
 	var insufficient bool
+	var varAvailable bool
 	if len(dailyReturns) >= 30 {
 		snap = risk.ComputeRiskSnapshot(dailyReturns, portfolioValues)
+		// VaR/CVaR are zero placeholders below 252 observations — surface the
+		// gap explicitly so the UI can show the observation period (#1785-B).
+		varAvailable = len(dailyReturns) >= risk.MinObservationsForVaR
 	} else {
 		insufficient = true
 	}
@@ -555,6 +564,7 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 		Concentration:    concentration,
 		DataPoints:       len(dailyReturns),
 		InsufficientData: insufficient,
+		VarAvailable:     varAvailable,
 	}
 }
 

@@ -3524,6 +3524,7 @@ export interface RiskExposureResponse {
   concentration: PositionConcentration[];
   data_points: number;
   insufficient_data: boolean;
+  var_available: boolean;
 }
 
 export interface RiskGateParameters {

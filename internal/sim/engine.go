@@ -52,6 +52,7 @@ type Engine struct {
 	dividends                 map[string]float64
 	thresholdEngine           *DynamicThresholdEngine
 	preTradeGate              *risk.PreTradeGate
+	decisionRecorder          func(risk.RiskDecision)
 	traceWriter               TraceWriter
 	rotationFunc              RotationFunc
 	riskCalculator            RiskCalculator
@@ -136,6 +137,17 @@ func (e *Engine) WithThresholdEngine(te *DynamicThresholdEngine) *Engine {
 
 func (e *Engine) WithPreTradeGate(g *risk.PreTradeGate) *Engine {
 	e.preTradeGate = g
+	return e
+}
+
+// WithDecisionRecorder attaches a sink for every pre-trade gate decision the
+// engine makes (#1785-D). The simulation engine historically used its own bare
+// PreTradeGate, bypassing the RiskGate wrapper — so the live 風控長評語 surface
+// (RiskGate.LastDecision) never saw simulation activity and stayed empty.
+// The orchestrator wires this to RiskGate.RecordDecision (quiet: no SSE fan-out,
+// the daily sim produces hundreds of decisions per session).
+func (e *Engine) WithDecisionRecorder(fn func(risk.RiskDecision)) *Engine {
+	e.decisionRecorder = fn
 	return e
 }
 
@@ -241,6 +253,16 @@ func (e *Engine) filterByPreTradeGate(
 			logging.Warn("sim", "pre_trade_check_failed", "symbol", rec.Symbol, "err", err)
 			filtered = append(filtered, rec)
 			continue
+		}
+		if e.decisionRecorder != nil {
+			e.decisionRecorder(risk.RiskDecision{
+				Phase:    risk.PhasePreTrade,
+				Verdict:  decision.Verdict,
+				Reason:   decision.Reason,
+				Mode:     "simulation",
+				Symbol:   rec.Symbol,
+				Recorded: time.Now(),
+			})
 		}
 		if decision.Verdict == risk.VerdictBlock || decision.Verdict == risk.VerdictHalt {
 			// Auto-size: when blocked by position concentration, reduce order

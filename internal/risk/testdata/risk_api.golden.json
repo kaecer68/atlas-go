@@ -614,6 +614,12 @@
       "results": "(*RiskDecision, error)"
     },
     {
+      "name": "RecordDecision",
+      "params": "(dec RiskDecision)",
+      "receiver": "RiskGate",
+      "results": ""
+    },
+    {
       "name": "SelfCalibrate",
       "params": "(ctx context.Context, provider CalibrationProvider, lookback int)",
       "receiver": "RiskGate",

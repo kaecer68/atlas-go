@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -14,13 +16,13 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/retail"
-	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 // DayTradingFetcher fetches day trading statistics. Set by the constructor when Gateway is available.
@@ -136,9 +138,133 @@ func (h *Handlers) HandleConvictionClampingEvents(r *http.Request) (int, any) {
 	}
 }
 
+// HandleCapitalPhase serves the capital phase snapshot backed by REAL data
+// (#1785-A: the old handler constructed a throwaway controller per request —
+// every field was permanently zero while the portfolio page showed
+// NT$2.99M net value from a different source).
+//
+// Data sources (same ones the risk-exposure endpoint uses):
+//   - sessions/<id>/summary.json series → portfolio values → rolling Sharpe
+//     (last 30 sessions) and max drawdown over the session history
+//   - live portfolio state (cash + positions) → total/reserve/deployed capital
+//   - first session date → days-in-phase
+//
+// 口徑 note: the session series comes from independent daily simulations
+// (each starts from the same initial cash), so the drawdown reflects the
+// cross-session distribution, not a continuous equity curve — the frontend
+// labels it accordingly.
 func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
-	ctrl := risk.NewCapitalPhaseController(domain.DefaultCapitalPhaseConfig())
-	return http.StatusOK, ctrl.GetSnapshot()
+	cfg := domain.DefaultCapitalPhaseConfig()
+	snap := domain.CapitalSnapshot{
+		Phase:          cfg.CurrentPhase,
+		PhaseStartDate: cfg.PhaseStartDate,
+	}
+
+	if h.Svc == nil {
+		return http.StatusOK, snap
+	}
+
+	// Portfolio value series from session summaries.
+	sessionsDir := filepath.Join(h.Svc.LedgerDir, "sessions")
+	entries, err := os.ReadDir(sessionsDir)
+	if err == nil {
+		type sessionEntry struct {
+			name  string
+			value float64
+			cash  float64
+			date  time.Time
+		}
+		var series []sessionEntry
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name(), "summary.json"))
+			if err != nil {
+				continue
+			}
+			var summary domain.SessionSummary
+			if json.Unmarshal(data, &summary) != nil || summary.SessionID == "" {
+				continue
+			}
+			series = append(series, sessionEntry{
+				name:  entry.Name(),
+				value: summary.PortfolioValue,
+				cash:  summary.EndingCash,
+				date:  summary.RecordedAt,
+			})
+		}
+		sort.Slice(series, func(i, j int) bool { return series[i].name < series[j].name })
+
+		if len(series) > 0 {
+			first := series[0]
+			if !first.date.IsZero() {
+				snap.PhaseStartDate = first.date
+				snap.DaysInPhase = int(time.Since(first.date).Hours() / 24)
+			}
+			snap.TotalCapital = series[len(series)-1].value
+			snap.ReserveCash = series[len(series)-1].cash
+			snap.DeployedCapital = snap.TotalCapital - snap.ReserveCash
+
+			// Daily returns over the bounded recent window (last 30 sessions)
+			// for the rolling Sharpe; max drawdown over the full series.
+			window := series
+			if len(window) > 30 {
+				window = window[len(window)-30:]
+			}
+			returns := make([]float64, 0, len(window))
+			for i := 1; i < len(window); i++ {
+				if window[i-1].value > 0 {
+					returns = append(returns, (window[i].value-window[i-1].value)/window[i-1].value)
+				}
+			}
+			if len(returns) > 1 {
+				mean := 0.0
+				for _, rr := range returns {
+					mean += rr
+				}
+				mean /= float64(len(returns))
+				variance := 0.0
+				for _, rr := range returns {
+					variance += (rr - mean) * (rr - mean)
+				}
+				variance /= float64(len(returns) - 1)
+				if std := math.Sqrt(variance); std > 0 {
+					snap.RollingSharpe = (mean / std) * math.Sqrt(252) // annualized
+				}
+			}
+			peak := series[0].value
+			for _, s := range series {
+				if s.value > peak {
+					peak = s.value
+				}
+				if peak > 0 {
+					if dd := (peak - s.value) / peak; dd > snap.MaxDrawdown {
+						snap.MaxDrawdown = dd
+					}
+				}
+			}
+		}
+	} else {
+		logging.Warn("system_handler", "capital_phase_sessions_unreadable", logging.Err(err))
+	}
+
+	// Live portfolio state refines cash/positions when available (same source
+	// as the risk-exposure endpoint's net value).
+	liveBase := filepath.Join(h.Svc.WorkDir, livestore.DefaultLiveStateBasePath)
+	if portfolio, err := livestore.LoadLastPortfolioState(liveBase); err == nil {
+		var totalMV float64
+		if positions, err := livestore.LoadLastPositions(liveBase); err == nil {
+			for _, p := range positions {
+				totalMV += p.MarketValue
+			}
+		}
+		snap.TotalCapital = portfolio.Cash + totalMV
+		snap.ReserveCash = portfolio.Cash
+		snap.DeployedCapital = totalMV
+	}
+
+	return http.StatusOK, snap
 }
 
 type RetailSentimentResponse struct {
