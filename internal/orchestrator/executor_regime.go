@@ -14,7 +14,14 @@ import (
 // strongly disagrees with the current layer, confidence is reduced.
 // LayerID/LayerParentID traces are recorded in the scratchpad for
 // causal chain provenance (B2 P0 + B5 P1).
-func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent, scratchpad *Scratchpad, sessionID string) domain.Regime {
+// RegimeAuthorityFunc returns the authoritative market regime for the
+// current moment (from regime_history, written continuously by macro_ingest
+// from the Taiwan stress index), plus the stress score when available.
+// ok=false means no authoritative value exists (cold start / store down) and
+// the evidence-based inference is used as fallback (#1785).
+type RegimeAuthorityFunc func() (regime domain.Regime, stressScore float64, ok bool)
+
+func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, plugins *PluginRegistry, overrides map[string]string, events []narrative.NarrativeEvent, scratchpad *Scratchpad, sessionID string, authority RegimeAuthorityFunc) domain.Regime {
 	sources := []RegimeEvidenceSource{
 		NewMacroEvidenceSource(),                                   // layer_0: 全球資金總開關
 		NewTechnicalEvidenceSource(),                               // layer_4: 台股大盤量能
@@ -93,6 +100,35 @@ func inferRegime(registry domain.AgentRegistry, quotes map[string]domain.Quote, 
 				LayerID:       src.LayerID(),
 				LayerParentID: parentID,
 			})
+		}
+	}
+
+	// #1785: authoritative-first. regime_history (macro_ingest stress index)
+	// is the designated truth (see monitoring/service/regime_consistency.go).
+	// When an authoritative value exists, the 4-layer evidence runs only as
+	// advisory context and the verdict comes from the authority — the two
+	// dashboards can no longer disagree. Evidence inference remains the
+	// fallback when no authority is available.
+	if authority != nil {
+		if authRegime, authScore, ok := authority(); ok {
+			normalized := 0.0
+			if totalConfidence > 0 {
+				normalized = totalScore / totalConfidence
+			}
+			if scratchpad != nil {
+				scratchpad.Record(ReasoningTrace{
+					SessionID:  sessionID,
+					Timestamp:  time.Now().UTC(),
+					Phase:      PhaseRegimeDetection,
+					Step:       len(sources) + 1,
+					Component:  "regime_inference",
+					Action:     "authoritative_regime_override",
+					Reasoning:  fmt.Sprintf("Regime adopted from authoritative regime_history (stress score %.3f); 4-layer inference normalized %.4f (advisory, %d/%d layers active)", authScore, normalized, len(snapshots), len(sources)),
+					Data:       map[string]any{"regime": authRegime, "score": authScore, "inferred_score": normalized, "evidence_count": len(sources), "source": "regime_history"},
+					Confidence: 1.0,
+				})
+			}
+			return authRegime
 		}
 	}
 

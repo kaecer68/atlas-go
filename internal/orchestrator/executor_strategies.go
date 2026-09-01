@@ -23,7 +23,7 @@ type RegimeInferenceStrategy interface {
 type DefaultRegimeInferenceStrategy struct{}
 
 func (DefaultRegimeInferenceStrategy) InferRegime(ctx ExecutionContext, registry domain.AgentRegistry, quoteBySymbol map[string]domain.Quote) domain.Regime {
-	return inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID)
+	return inferRegime(registry, quoteBySymbol, ctx.Plugins, ctx.Overrides, ctx.NarrativeEvents, ctx.Scratchpad, ctx.SessionID, ctx.RegimeAuthority)
 }
 
 // RecommendationCollectionStrategy walks the enabled Sector/Style/Superinvestor agents,

@@ -110,6 +110,18 @@ func (sc *SystemCore) WithSimDecisionRecorder(fn func(risk.RiskDecision)) {
 	}
 	sc.sim.engine.WithDecisionRecorder(fn)
 }
+
+// WithRegimeAuthority attaches the authoritative regime source (#1785):
+// regime_history (macro_ingest stress index) overrides the 4-layer evidence
+// inference so the session regime and the home dashboard cannot disagree.
+// Evidence layers still run and are recorded as advisory traces.
+func (s *System) WithRegimeAuthority(fn RegimeAuthorityFunc) {
+	if s == nil {
+		return
+	}
+	s.regimeAuthority = fn
+}
+
 func (sc *SystemCore) Port() *PortfolioManager { return &sc.port }
 func (sc *SystemCore) Risk() *RiskOps          { return &sc.risk }
 func (sc *SystemCore) Strat() *StrategyLayer   { return &sc.strat }
@@ -158,6 +170,7 @@ type System struct {
 	drawdownReporter func(portfolio.DrawdownResult)
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 	phase3Ctrl       *Phase3Controller
+	regimeAuthority  RegimeAuthorityFunc // #1785: authoritative regime override (nil = evidence-only)
 
 	maturityTracker *domain.MaturityTracker
 
@@ -586,6 +599,9 @@ func (s *System) buildExecutionContext(quotes []domain.Quote, events []narrative
 			}
 		},
 		Scratchpad: s.Sim().scratchpad,
+	}
+	if s.regimeAuthority != nil {
+		execCtx.RegimeAuthority = s.regimeAuthority
 	}
 	if s.charter != nil {
 		opts := s.charter.options

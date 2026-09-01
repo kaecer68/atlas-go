@@ -227,6 +227,7 @@ func isPublicPath(method, p string) bool {
 
 func run(args []string, deps appDeps) error {
 	var simDecisionSink func(risk.RiskDecision)
+	var regimeAuthority orchestrator.RegimeAuthorityFunc
 	flags := flag.NewFlagSet("atlas", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 
@@ -1123,7 +1124,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
+			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink, regimeAuthority)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1500,7 +1501,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink, regimeAuthority)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1618,7 +1619,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink, regimeAuthority)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1656,7 +1657,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink, regimeAuthority)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -2016,6 +2017,25 @@ func run(args []string, deps appDeps) error {
 			// time — after this assignment.
 			simDecisionSink = func(dec risk.RiskDecision) {
 				riskGate.RecordDecision(dec)
+			}
+
+			// #1785: authoritative regime source — sessions adopt the
+			// regime_history value (macro_ingest stress index, the designated
+			// truth per monitoring/service/regime_consistency.go) instead of
+			// running the noisy 4-layer inference as the verdict. This removes
+			// the home=RISK_ON vs radar=RISK_OFF contradiction at its root.
+			// The closure reads lazily per session run; historicalStore may
+			// still be nil (PG unavailable) — the closure then reports
+			// ok=false and the evidence inference remains the fallback.
+			if historicalStore != nil {
+				hs := historicalStore
+				regimeAuthority = func() (domain.Regime, float64, bool) {
+					rows, err := hs.LoadRegimeHistory(context.Background(), 1)
+					if err != nil || len(rows) == 0 {
+						return "", 0, false
+					}
+					return domain.Regime(rows[0].Regime), 0, true
+				}
 			}
 
 			// Forward every risk gate decision to the shared EventBus so SSE
@@ -2997,6 +3017,7 @@ func buildSystemOrFallback(
 	eventPredictor orchestrator.EventFlowPredictor,
 	capitalFlowService *capitalflow.Service,
 	simDecisionSink func(risk.RiskDecision),
+	regimeAuthority orchestrator.RegimeAuthorityFunc,
 ) (*orchestrator.System, error) {
 	var sys *orchestrator.System
 	var err error
@@ -3013,6 +3034,9 @@ func buildSystemOrFallback(
 	}
 	if simDecisionSink != nil {
 		sys.WithSimDecisionRecorder(simDecisionSink)
+	}
+	if regimeAuthority != nil {
+		sys.WithRegimeAuthority(regimeAuthority)
 	}
 	if capitalFlowService != nil {
 		sys.WithCapitalFlowAssessmentProvider(orchestrator.NewCapitalFlowServiceAdapter(capitalFlowService))

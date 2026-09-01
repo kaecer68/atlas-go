@@ -51,6 +51,11 @@ func (s *MacroEvidenceSource) Evidence(quotes map[string]domain.Quote, events []
 			score = 0.4
 			confidence = 0.5
 		}
+	} else {
+		// #1785: no VIX in the quote map = no macro evidence at all. The old
+		// code still voted with confidence 0.3 at score 0 — a phantom neutral
+		// vote that diluted real evidence in small-sample simulation contexts.
+		confidence = 0
 	}
 
 	return RegimeEvidence{Score: score, Confidence: confidence, Source: "macro", LayerID: "layer_0"}
@@ -65,18 +70,31 @@ func NewTechnicalEvidenceSource() *TechnicalEvidenceSource {
 }
 
 func (s *TechnicalEvidenceSource) Evidence(quotes map[string]domain.Quote, events []narrative.NarrativeEvent) RegimeEvidence {
-	score := 0.0
-	confidence := 0.25
-
+	// #1785: the old implementation accumulated ±0.3 PER QUOTE, so a tiny
+	// quote map (daily-sim replay exposes only a handful of volumed symbols)
+	// produced large raw scores with full confidence — e.g. 4 down-ticks →
+	// score=-1.2 conf=0.4, enough to drag the whole session to RISK_OFF while
+	// the authoritative stress index said RISK_ON. The layer now emits a
+	// bounded vote ratio in [-1,1] and scales confidence by sample coverage:
+	// a 4-symbol sample can no longer outvote the macro layer.
+	up, down, total := 0, 0, 0
 	for _, q := range quotes {
-		if q.Volume > 0 && q.Last >= q.Open {
-			score += 0.3
-			confidence = 0.4
-		} else if q.Volume > 0 {
-			score -= 0.3
-			confidence = 0.4
+		if q.Volume <= 0 {
+			continue
+		}
+		total++
+		if q.Last >= q.Open {
+			up++
+		} else {
+			down++
 		}
 	}
+	if total == 0 {
+		return RegimeEvidence{Score: 0, Confidence: 0, Source: "technical", LayerID: "layer_4"}
+	}
+
+	score := (float64(up) - float64(down)) / float64(total)
+	confidence := 0.4 * min(1.0, float64(total)/20.0) // full weight at ≥20 symbols
 
 	return RegimeEvidence{Score: score, Confidence: confidence, Source: "technical", LayerID: "layer_4"}
 }
@@ -161,12 +179,21 @@ func NewAgentSignalEvidenceSource(registry domain.AgentRegistry, plugins *Plugin
 
 func (s *AgentSignalEvidenceSource) Evidence(quotes map[string]domain.Quote, events []narrative.NarrativeEvent) RegimeEvidence {
 	score := 0
+	contributed := 0 // #1785: a registry with no enabled context agents must
+	// not cast a phantom 0.3-confidence neutral vote — it diluted the other
+	// layers and (combined with the old technical-layer math) produced false
+	// RISK_OFF verdicts in small-sample simulation contexts.
 	for _, agent := range s.registry.Agents {
 		if !agent.Enabled || agent.Layer != domain.LayerContext {
 			continue
 		}
 		prompt := s.plugins.ResolvePrompt(agent, s.overrides)
 		score += s.plugins.RegimeScore(agent, quotes, prompt)
+		contributed++
+	}
+
+	if contributed == 0 {
+		return RegimeEvidence{Score: 0, Confidence: 0, Source: "agent_signal", LayerID: "layer_root"}
 	}
 
 	var regimeScore float64

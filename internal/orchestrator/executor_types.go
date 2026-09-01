@@ -62,15 +62,20 @@ func FilterAgentsByLayer(agents []domain.AgentSpec, layer domain.AgentLayer) []d
 
 // ExecutionContext holds all parameters needed to execute registry research.
 type ExecutionContext struct {
-	Registry                   domain.AgentRegistry
-	Quotes                     []domain.Quote
-	Overrides                  map[string]string
-	Policy                     domain.ExecutionPolicy
-	Plugins                    *PluginRegistry
-	SessionID                  string
-	WeightManager              *portfolio.DarwinianWeightManager
-	Context                    context.Context            // request-level context for cancellation propagation
-	NarrativeEvents            []narrative.NarrativeEvent // narrative events for regime evidence fusion
+	Registry        domain.AgentRegistry
+	Quotes          []domain.Quote
+	Overrides       map[string]string
+	Policy          domain.ExecutionPolicy
+	Plugins         *PluginRegistry
+	SessionID       string
+	WeightManager   *portfolio.DarwinianWeightManager
+	Context         context.Context            // request-level context for cancellation propagation
+	NarrativeEvents []narrative.NarrativeEvent // narrative events for regime evidence fusion
+	// RegimeAuthority, when set, overrides the 4-layer evidence inference
+	// with the authoritative regime_history value (macro_ingest stress
+	// index) so session regime and the home dashboard cannot disagree
+	// (#1785). Evidence layers still run and are recorded as advisory.
+	RegimeAuthority            RegimeAuthorityFunc
 	ConvictionClampingCallback func([]portfolio.ConvictionClampingEvent)
 	Scratchpad                 *Scratchpad     // optional reasoning trace recorder
 	FactorSnapshot             *FactorSnapshot // pre-computed factor scores for executor consumption
