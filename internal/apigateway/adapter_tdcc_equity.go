@@ -28,6 +28,18 @@ func (a *TDCClientChannelAdapter) SetFinMindClient(f *marketdata.FinMindClient) 
 	a.provider.SetFinMindClient(f)
 }
 
+// SetStorageDir enables weekly snapshot + latest.json persistence.
+func (a *TDCClientChannelAdapter) SetStorageDir(dir string) {
+	a.provider.SetStorageDir(dir)
+}
+
+// StorageDir exposes the configured directory (backfill task wiring).
+func (a *TDCClientChannelAdapter) StorageDir() string { return a.provider.StorageDir() }
+
+// Provider exposes the underlying provider (backfill task wiring for the
+// G01 monthly history walk).
+func (a *TDCClientChannelAdapter) Provider() *marketdata.TDCClient { return a.provider }
+
 func (a *TDCClientChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 	if err := waitForLimiter(ctx, a.limiter); err != nil {

@@ -7,7 +7,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func newTestFinMind(t *testing.T, body string) *FinMindClient {
@@ -54,6 +58,44 @@ func TestTDCClient_NoFinMind_StubError(t *testing.T) {
 	}
 }
 
+func TestTDCClient_HistoryBackfill_WritesWeeklyFiles(t *testing.T) {
+	// Two weekly snapshots in one month chunk; one pre-existing (idempotency).
+	body := `{"msg":"success","status":200,"data":[
+		{"date":"2026-07-24","stock_id":"2330","HoldingSharesLevel":"1-999","people":100,"percent":1.0,"unit":1000},
+		{"date":"2026-08-21","stock_id":"2330","HoldingSharesLevel":"1-999","people":200,"percent":1.1,"unit":2000},
+		{"date":"2026-08-21","stock_id":"2454","HoldingSharesLevel":"1-999","people":50,"percent":2.0,"unit":300}
+	]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewFinMindClientWithStateDir("", t.TempDir())
+	c.SetBaseURL(srv.URL)
+
+	p := NewTDCClient()
+	p.SetFinMindClient(c)
+	p.SetStorageDir(t.TempDir())
+
+	start, _ := time.Parse("2006-01-02", "2026-07-01")
+	end, _ := time.Parse("2006-01-02", "2026-08-31")
+	written, err := p.FetchDispersionHistory(context.Background(), start, end)
+	if err != nil {
+		t.Fatalf("FetchDispersionHistory: %v", err)
+	}
+	if written != 2 {
+		t.Fatalf("written = %d, want 2 weekly files", written)
+	}
+	written2, err := p.FetchDispersionHistory(context.Background(), start, end)
+	if err != nil || written2 != 0 {
+		t.Fatalf("idempotent re-run: written=%d err=%v, want 0/nil", written2, err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(p.storageDir, "20260821_tdcc_dispersion.json"))
+	if !strings.Contains(string(raw), `"symbol": "2454"`) || !strings.Contains(string(raw), `"tier": "1-999"`) {
+		t.Errorf("20260821 file content wrong: %s", raw)
+	}
+}
+
 func TestTWSESBLProvider_FetchSBLSummary_MapsFinMindRows(t *testing.T) {
 	c := newTestFinMind(t, `{"msg":"success","status":200,"data":[
 		{"stock_id":"2330","SBLShortSalesPreviousDayBalance":100,"SBLShortSalesShortSales":50,"SBLShortSalesReturns":10,"SBLShortSalesCurrentDayBalance":140,"SBLShortSalesQuota":1000000,"date":"2026-08-27"},
@@ -87,5 +129,47 @@ func TestTWSESBLProvider_NoFinMind_StubError(t *testing.T) {
 	p := NewTWSESBLProvider(0.5)
 	if _, err := p.FetchSBLSummary(context.Background(), "20260828"); err == nil {
 		t.Fatal("expected explicit not-wired error without FinMind client")
+	}
+}
+
+func TestTWSESBLProvider_HistoryBackfill_WritesDayFiles(t *testing.T) {
+	// Two months of windowed data in one chunk: 3 report days across the
+	// boundary; one day pre-exists (idempotency).
+	body := `{"msg":"success","status":200,"data":[
+		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":100,"SBLShortSalesShortSales":10,"SBLShortSalesReturns":5,"date":"2026-07-30"},
+		{"stock_id":"2454","SBLShortSalesCurrentDayBalance":200,"SBLShortSalesShortSales":20,"SBLShortSalesReturns":0,"date":"2026-07-30"},
+		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":110,"SBLShortSalesShortSales":12,"SBLShortSalesReturns":3,"date":"2026-08-28"},
+		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":120,"SBLShortSalesShortSales":15,"SBLShortSalesReturns":1,"date":"2026-08-31"}
+	]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewFinMindClientWithStateDir("", t.TempDir())
+	c.SetBaseURL(srv.URL)
+
+	p := NewTWSESBLProvider(0.5)
+	p.SetFinMindClient(c)
+	p.SetStorageDir(t.TempDir())
+
+	start, _ := time.Parse("2006-01-02", "2026-07-01")
+	end, _ := time.Parse("2006-01-02", "2026-08-31")
+	written, err := p.FetchSBLHistory(context.Background(), start, end)
+	if err != nil {
+		t.Fatalf("FetchSBLHistory: %v", err)
+	}
+	if written != 3 {
+		t.Fatalf("written = %d, want 3 day files", written)
+	}
+	// Second run: all files exist, nothing new.
+	written2, err := p.FetchSBLHistory(context.Background(), start, end)
+	if err != nil || written2 != 0 {
+		t.Fatalf("idempotent re-run: written=%d err=%v, want 0/nil", written2, err)
+	}
+	// File content sanity.
+	raw, _ := os.ReadFile(filepath.Join(p.storageDir, "20260828_sbl.json"))
+	if !strings.Contains(string(raw), `"sbl_short_balance": 110`) {
+		t.Errorf("20260828 file content wrong: %s", raw)
 	}
 }

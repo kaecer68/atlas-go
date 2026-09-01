@@ -28,6 +28,11 @@ func (a *TWSESBLChannelAdapter) SetFinMindClient(f *marketdata.FinMindClient) {
 	a.provider.SetFinMindClient(f)
 }
 
+// SetStorageDir enables per-day JSON persistence (data/state/sbl/).
+func (a *TWSESBLChannelAdapter) SetStorageDir(dir string) {
+	a.provider.SetStorageDir(dir)
+}
+
 func (a *TWSESBLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 	if err := waitForLimiter(ctx, a.limiter); err != nil {

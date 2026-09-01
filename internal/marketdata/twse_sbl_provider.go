@@ -2,8 +2,12 @@ package marketdata
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +15,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/constants"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // SBLStats holds securities borrowing & lending statistics for a single stock.
@@ -32,10 +37,11 @@ type SBLStats struct {
 //   - Set endpoint via SetBaseURL
 //   - Implement FetchSBL() with actual HTTP call + JSON parsing
 type TWSESBLProvider struct {
-	client  *http.Client
-	baseURL string
-	limiter *rate.Limiter
-	finmind *FinMindClient
+	client     *http.Client
+	baseURL    string
+	limiter    *rate.Limiter
+	finmind    *FinMindClient
+	storageDir string
 
 	lastMu        sync.Mutex
 	lastSuccessAt time.Time
@@ -84,6 +90,92 @@ func (p *TWSESBLProvider) SetHTTPClient(c *http.Client) { p.client = c }
 // SetFinMindClient injects the shared FinMind client (G02 wiring). Without
 // it FetchSBLSummary keeps returning the "not wired" error.
 func (p *TWSESBLProvider) SetFinMindClient(f *FinMindClient) { p.finmind = f }
+
+// SetStorageDir enables per-day file persistence: a successful fetch writes
+// data/state/sbl/YYYYMMDD_sbl.json (one file per report date), following the
+// margin/capital_flow channel convention. Empty (default) = no persistence.
+func (p *TWSESBLProvider) SetStorageDir(dir string) { p.storageDir = dir }
+
+// persistDay writes one report-date file if it does not already exist.
+// Returns true when a new file was written.
+func (p *TWSESBLProvider) persistDay(dateStr string, stats []SBLStats) (bool, error) {
+	if p.storageDir == "" || dateStr == "" || len(stats) == 0 {
+		return false, nil
+	}
+	if err := os.MkdirAll(p.storageDir, 0o755); err != nil {
+		return false, fmt.Errorf("twse_sbl: mkdir: %w", err)
+	}
+	fileName := strings.ReplaceAll(dateStr, "-", "") + "_sbl.json"
+	path := filepath.Join(p.storageDir, fileName)
+	if _, err := os.Stat(path); err == nil {
+		return false, nil // already backfilled/fetched
+	}
+	payload, err := json.MarshalIndent(stats, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("twse_sbl: marshal %s: %w", dateStr, err)
+	}
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		return false, fmt.Errorf("twse_sbl: write %s: %w", fileName, err)
+	}
+	return true, nil
+}
+
+// fetchWindow returns raw FinMind rows for [start, end].
+func (p *TWSESBLProvider) fetchWindow(ctx context.Context, start, end time.Time) ([]map[string]any, error) {
+	return p.finmind.FetchDatasetRaw(ctx, "TaiwanDailyShortSaleBalances", "",
+		start.Format("2006-01-02"), end.Format("2006-01-02"))
+}
+
+// FetchSBLHistory backfills per-day report files for [start, end]. Each
+// FinMind window call covers the whole chunk (full market, all dates), so
+// six months of history costs ~6 API calls. Returns the number of NEW day
+// files written. Idempotent: existing files are skipped.
+func (p *TWSESBLProvider) FetchSBLHistory(ctx context.Context, start, end time.Time) (int, error) {
+	if p.finmind == nil {
+		return 0, fmt.Errorf("twse_sbl: FinMind client not wired; see G02 implementation notes in internal/marketdata/twse_sbl_provider.go")
+	}
+	if p.storageDir == "" {
+		return 0, fmt.Errorf("twse_sbl: storage dir not set (SetStorageDir) — history fetch would discard results")
+	}
+	written := 0
+	for chunkStart := start; !chunkStart.After(end); chunkStart = chunkStart.AddDate(0, 1, 0) {
+		chunkEnd := chunkStart.AddDate(0, 1, 0).AddDate(0, 0, -1)
+		if chunkEnd.After(end) {
+			chunkEnd = end
+		}
+		rows, err := p.fetchWindow(ctx, chunkStart, chunkEnd)
+		if err != nil {
+			p.recordFetchFailure(err)
+			return written, fmt.Errorf("twse_sbl: history chunk %s..%s: %w", chunkStart.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
+		}
+		byDate := map[string][]SBLStats{}
+		for _, row := range rows {
+			rowDate := strField(row, "date")
+			sym := strField(row, "stock_id")
+			if rowDate == "" || sym == "" {
+				continue
+			}
+			byDate[rowDate] = append(byDate[rowDate], SBLStats{
+				Date:            rowDate,
+				Symbol:          sym,
+				SBLShortBalance: int64(floatField(row, "SBLShortSalesCurrentDayBalance")),
+				SBLShortVolume:  int64(floatField(row, "SBLShortSalesShortSales")),
+				SBLReturnVolume: int64(floatField(row, "SBLShortSalesReturns")),
+			})
+		}
+		for dateStr, stats := range byDate {
+			isNew, err := p.persistDay(dateStr, stats)
+			if err != nil {
+				return written, err
+			}
+			if isNew {
+				written++
+			}
+		}
+	}
+	p.recordFetchSuccess()
+	return written, nil
+}
 
 // SetBaseURL overrides the base URL (for testing).
 func (p *TWSESBLProvider) SetBaseURL(u string) { p.baseURL = u }
@@ -161,6 +253,13 @@ func (p *TWSESBLProvider) FetchSBLSummary(ctx context.Context, date string) ([]S
 	stats := make([]SBLStats, 0, len(latest))
 	for _, s := range latest {
 		stats = append(stats, s)
+	}
+	// Persist the newest report date's file (daily accumulation). Older
+	// dates in the window are backfilled via FetchSBLHistory.
+	if newest := stats[0].Date; newest != "" {
+		if _, err := p.persistDay(newest, stats); err != nil {
+			logging.Warn("twse_sbl_provider", "save_sbl_warning", logging.Err(err))
+		}
 	}
 	p.recordFetchSuccess()
 	return stats, nil

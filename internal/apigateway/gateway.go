@@ -134,6 +134,13 @@ func (g *Gateway) HealthCheck(ctx context.Context, channelID string) (HealthStat
 	return provider.HealthCheck(ctx)
 }
 
+// Provider returns the registered DataProvider for a channel (exported for
+// background tasks that need provider-level operations beyond Fetch, e.g.
+// the G01 history backfill walking monthly chunks).
+func (g *Gateway) Provider(channelID string) (DataProvider, error) {
+	return g.registry.Get(channelID)
+}
+
 // RateLimitStatus returns rate limit status for all channels.
 func (g *Gateway) RateLimitStatus() map[string]RateLimitStatus {
 	return g.limiters.Status()
