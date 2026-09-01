@@ -158,23 +158,23 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   el.innerHTML = `
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.var_95, { percent: true, decimals: 1 })}</div>
-      <div class="kpi-hint">日頻 · 95% 信賴水準</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${(insufficient || !re.var_available) ? '觀察期中' : fmtSafeNumber(re.var_95, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-hint">${re.var_available ? '日頻 · 95% 信賴水準' : '需 ' + 252 + ' 個交易日觀察 · ' + (re.data_points || 0) + '/252'}</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">VaR 99%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.var_99, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${(insufficient || !re.var_available) ? '觀察期中' : fmtSafeNumber(re.var_99, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">日頻 · 極端事件壓力</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">CVaR 95%</div>
-      <div class="kpi-value" style="color:var(--color-danger)">${insufficient ? '資料不足' : fmtSafeNumber(re.cvar_95, { percent: true, decimals: 1 })}</div>
+      <div class="kpi-value" style="color:var(--color-danger)">${(insufficient || !re.var_available) ? '觀察期中' : fmtSafeNumber(re.cvar_95, { percent: true, decimals: 1 })}</div>
       <div class="kpi-hint">95% 條件期望虧損</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">最大回撤</div>
       <div class="kpi-value" style="color:var(--warn)">${insufficient ? '資料不足' : fmtSafeDrawdown(re.max_drawdown_pct, { asAbsolute: true })}</div>
-      <div class="kpi-hint">歷史峰值回撤幅度</div>
+      <div class="kpi-hint">跨場次獨立模擬之歷史峰值回撤分布</div>
     </div>
     <div class="panel" style="text-align:center">
       <div class="kpi-label">Rolling Sharpe</div>
@@ -464,7 +464,7 @@ export function renderDrawdownPanel(data) {
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬最大回撤</div>
         <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtSafeDrawdown(maxDD, { asAbsolute: true })}</div>
-        <div class="kpi-hint">Monte Carlo 壓力測試</div>
+        <div class="kpi-hint">Monte Carlo · 1000 條壓力路徑之最差值</div>
       </div>
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬 VaR 95</div>

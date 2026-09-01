@@ -226,6 +226,7 @@ func isPublicPath(method, p string) bool {
 }
 
 func run(args []string, deps appDeps) error {
+	var simDecisionSink func(risk.RiskDecision)
 	flags := flag.NewFlagSet("atlas", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 
@@ -1122,7 +1123,7 @@ func run(args []string, deps appDeps) error {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
+			system, err := buildSystemOrFallback(compositionRoot, composition.PathAdminManual, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1494,7 +1495,7 @@ func run(args []string, deps appDeps) error {
 					}
 					log.Printf("[Simulation] auto trigger: %s", nextClose.Format("2006-01-02"))
 
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -1612,7 +1613,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathStressTestDaily, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
 					if err != nil {
 						return fmt.Errorf("create system for stress test: %w", err)
 					}
@@ -1650,7 +1651,7 @@ func run(args []string, deps appDeps) error {
 				Interval: 7 * 24 * time.Hour,
 				Enabled:  true,
 				Task: func(ctx context.Context) error {
-					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService)
+					system, err := buildSystemOrFallback(compositionRoot, composition.PathAutoExperiment, cfg, dashEventBus, janusEngine, eventPredictor, capitalFlowService, simDecisionSink)
 					if err != nil {
 						return fmt.Errorf("create system: %w", err)
 					}
@@ -2002,6 +2003,15 @@ func run(args []string, deps appDeps) error {
 				riskGate.WithMaturityTracker(maturityTracker)
 			}
 			dashboard.SetRiskGate(riskGate)
+
+			// #1785-D: route the simulation engine's pre-trade decisions into
+			// the RiskGate (quiet — no SSE fan-out) so the 風控長評語 surface
+			// reflects simulation runs. The sink var is read by the daily-sim
+			// task closures above, which build their systems lazily at trigger
+			// time — after this assignment.
+			simDecisionSink = func(dec risk.RiskDecision) {
+				riskGate.RecordDecision(dec)
+			}
 
 			// Forward every risk gate decision to the shared EventBus so SSE
 			// clients and audit subscribers receive real-time risk events.
@@ -2981,6 +2991,7 @@ func buildSystemOrFallback(
 	janusEngine *janus.Engine,
 	eventPredictor orchestrator.EventFlowPredictor,
 	capitalFlowService *capitalflow.Service,
+	simDecisionSink func(risk.RiskDecision),
 ) (*orchestrator.System, error) {
 	var sys *orchestrator.System
 	var err error
@@ -2994,6 +3005,9 @@ func buildSystemOrFallback(
 	}
 	if eventPredictor != nil {
 		sys.WithEventPredictor(eventPredictor)
+	}
+	if simDecisionSink != nil {
+		sys.WithSimDecisionRecorder(simDecisionSink)
 	}
 	if capitalFlowService != nil {
 		sys.WithCapitalFlowAssessmentProvider(orchestrator.NewCapitalFlowServiceAdapter(capitalFlowService))

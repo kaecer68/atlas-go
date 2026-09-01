@@ -99,7 +99,17 @@ type SystemCore struct {
 	narrativeEngine *narrative.NarrativeEngine
 }
 
-func (sc *SystemCore) Sim() *SimulationCore    { return &sc.sim }
+func (sc *SystemCore) Sim() *SimulationCore { return &sc.sim }
+
+// WithSimDecisionRecorder attaches an external sink for the simulation
+// engine's pre-trade gate decisions (#1785-D). main.go wires this to
+// RiskGate.RecordDecision so the 風控長評語 surface reflects simulation runs.
+func (sc *SystemCore) WithSimDecisionRecorder(fn func(risk.RiskDecision)) {
+	if sc == nil || sc.sim.engine == nil {
+		return
+	}
+	sc.sim.engine.WithDecisionRecorder(fn)
+}
 func (sc *SystemCore) Port() *PortfolioManager { return &sc.port }
 func (sc *SystemCore) Risk() *RiskOps          { return &sc.risk }
 func (sc *SystemCore) Strat() *StrategyLayer   { return &sc.strat }
