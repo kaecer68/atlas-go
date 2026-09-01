@@ -22,7 +22,7 @@ func TestSequentialRegime_CounterExampleA(t *testing.T) {
 		"2317": {Symbol: "2317", Last: 105, Open: 102},
 	}
 
-	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, nil, "")
+	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, nil, "", nil)
 	if regime != domain.RegimeNeutral {
 		t.Errorf("counter-A: got %s, want %s — retail chasing without macro must be neutral", regime, domain.RegimeNeutral)
 	}
@@ -38,7 +38,7 @@ func TestSequentialRegime_CounterExampleB(t *testing.T) {
 		"2454": {Symbol: "2454", Last: 1100, Open: 1080},
 	}
 
-	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, nil, "")
+	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, nil, "", nil)
 	if regime == domain.RegimeRiskOn {
 		t.Errorf("counter-B: got RISK_ON, want not RISK_ON — layer_0 VIX crash must dominate")
 	}
@@ -51,7 +51,7 @@ func TestSequentialRegime_CounterExampleC(t *testing.T) {
 	events := []narrative.NarrativeEvent{
 		{Theme: "geopolitical_risk_spike", Severity: "high", Confidence: 0.6, HitRate: 0.8},
 	}
-	regime := inferRegime(emptyRegistry(), quotes, nil, nil, events, nil, "")
+	regime := inferRegime(emptyRegistry(), quotes, nil, nil, events, nil, "", nil)
 	if regime != domain.RegimeRiskOff && regime != domain.RegimeNeutral {
 		t.Errorf("counter-C: got %s, want RISK_OFF or NEUTRAL (geopolitical risk)", regime)
 	}
@@ -65,7 +65,7 @@ func TestSequentialRegime_LayerIDTraces(t *testing.T) {
 	}
 
 	scratchpad := NewScratchpad("test-session", t.TempDir())
-	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, scratchpad, "test-session")
+	regime := inferRegime(emptyRegistry(), quotes, nil, nil, nil, scratchpad, "test-session", nil)
 
 	traces := scratchpad.Traces()
 	if len(traces) == 0 {
@@ -115,7 +115,7 @@ func TestSequentialRegime_Regression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := inferRegime(emptyRegistry(), tt.quotes, nil, nil, nil, nil, "")
+			got := inferRegime(emptyRegistry(), tt.quotes, nil, nil, nil, nil, "", nil)
 			if got != tt.want {
 				t.Errorf("got %s, want %s", got, tt.want)
 			}
