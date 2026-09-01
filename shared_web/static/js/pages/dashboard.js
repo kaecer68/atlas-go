@@ -321,7 +321,7 @@ export function renderMacroRadar(data, pipelineData) {
       以下為 <strong>最新回測場次</strong>（${recordedAt}）。這不是即時持倉，而是系統以當時資料與基線策略模擬後，控制層對 AI 推薦的最終處置。
     </div>
     <div class="metric"><div class="label">回測場次</div><div class="value">${data.session_id}</div></div>
-    <div class="metric"><div class="label">市場狀態</div><div class="value" style="color:${regimeColor}">${regimeLabel(data.regime || '-')}</div></div>
+    <div class="metric"><div class="label">市場狀態</div><div class="value" style="color:${regimeColor}">${regimeLabel(data.regime || '-')}</div><div style="font-size:11px;color:var(--text-muted)">場次執行時推論（首頁卡片為收盤權威值，口徑不同）</div></div>
     <div class="metric"><div class="label">推薦處置</div><div class="value">${rawInputs} 筆推薦 → 最終放行 ${finalOutputs} 筆</div></div>
     ${filteredCount > 0 ? `<div style="font-size:12px;color:var(--warn);margin:4px 0">其中 ${filteredCount} 筆因風控條件未通過而被過濾（詳見下方控制層紀錄）</div>` : ''}
     ${controlSummary}

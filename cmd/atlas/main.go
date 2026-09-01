@@ -1190,8 +1190,8 @@ func run(args []string, deps appDeps) error {
 			fmt.Fprintf(w, `{"status":"ok","session":"%s","regime":"%s","orders":%d,"positions":%d}`+"\n",
 				system.Session().ID, result.Regime, len(result.Orders), len(result.Positions))
 		}))
-		monitor, autoHandler := setupMonitor(alertStore, paramsCfg.Alert.SuppressCategories.Value)
 		sysCtx, sysCancel := context.WithCancel(context.Background())
+		monitor, autoHandler := setupMonitor(alertStore, paramsCfg.Alert.SuppressCategories.Value, sysCtx)
 
 		var ruleEngine *monitoring.RuleEngine
 		if monitor != nil {
@@ -1286,6 +1286,11 @@ func run(args []string, deps appDeps) error {
 		if pool != nil {
 			livenessStore = liveness.NewStore(pool)
 			taskMgr.SetCompletionHandler(func(name string, runErr error, duration time.Duration) {
+				// #1787: task success clears its own open alerts (staleness /
+				// consecutive-failure warnings for THIS task only).
+				if runErr == nil {
+					monitor.ResolveByIdentity("background_task", name, "task-success")
+				}
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()

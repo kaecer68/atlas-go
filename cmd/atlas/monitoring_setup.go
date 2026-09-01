@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -14,7 +15,7 @@ import (
 // The returned autoHandler is consumed by BackgroundTaskManager's
 // recovery handler (see background_tasks.go) and any other component
 // that wants to trigger an automatic recovery flow.
-func setupMonitor(alertStore *monitoring.AlertStore, suppressCategories []string) (*monitoring.Monitor, *monitoring.AutoHandler) {
+func setupMonitor(alertStore *monitoring.AlertStore, suppressCategories []string, lifecycleCtx context.Context) (*monitoring.Monitor, *monitoring.AutoHandler) {
 	monitor := monitoring.NewMonitor()
 	if alertStore != nil {
 		monitor.SetAlertStore(alertStore)
@@ -31,5 +32,9 @@ func setupMonitor(alertStore *monitoring.AlertStore, suppressCategories []string
 	monitor.SetDeduplicator(alertDeduplicator)
 	monitor.SetAutoHandler(autoHandler)
 	monitor.RegisterHandler(monitoring.ConsoleHandler)
+	// #1787: TTL auto-archival — open alerts whose condition stops recurring
+	// are resolved automatically (WARNING 7d / ERROR+CRITICAL 30d) instead of
+	// polluting the "需要決策" queue forever.
+	monitoring.StartAlertTTLLifecycle(alertStore, lifecycleCtx, time.Hour)
 	return monitor, autoHandler
 }

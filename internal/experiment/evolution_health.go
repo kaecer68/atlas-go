@@ -303,6 +303,11 @@ func latestReplayDate(csvPath string) (time.Time, error) {
 //   - replay unreadable → warning "replay_data_unavailable"
 //
 // Replay alerts are independent and always raised.
+//
+// #1787: the resolver (optional interface, wired via experimentMonitorAdapter)
+// clears open alerts whose condition has recovered: pillars showing activity
+// and fresh replay data. Identity-less evolution alerts (the replay family)
+// are resolved by empty identity, i.e. category-wide.
 func RaiseEvolutionHealthAlerts(monitor AutoExperimentMonitor, res EvolutionHealthResult) {
 	if monitor == nil {
 		return
@@ -322,6 +327,22 @@ func RaiseEvolutionHealthAlerts(monitor AutoExperimentMonitor, res EvolutionHeal
 				fmt.Sprintf("no_%s_activity_in_24h", p),
 				map[string]any{"pillar": string(p), "last_activity": lastStr, "window": res.Window.String()})
 		}
+		if resolver, ok := monitor.(EvolutionAlertResolver); ok {
+			stale := make(map[Pillar]bool, len(res.Stale))
+			for _, p := range res.Stale {
+				stale[p] = true
+			}
+			for _, p := range AllPillars {
+				if !stale[p] {
+					resolver.ResolveAlert("evolution", string(p), "pillar-active")
+				}
+			}
+			if len(res.Stale) == 0 {
+				// Loop fully healthy — also clear the identity-less
+				// evolution_loop_inactive alert family.
+				resolver.ResolveAlert("evolution", "", "evolution-healthy")
+			}
+		}
 	}
 	if res.ReplayErr != nil {
 		monitor.Alert("warning", "evolution", "replay_data_unavailable",
@@ -329,7 +350,16 @@ func RaiseEvolutionHealthAlerts(monitor AutoExperimentMonitor, res EvolutionHeal
 	} else if !res.ReplayFresh {
 		monitor.Alert("warning", "evolution", "replay_data_stale",
 			map[string]any{"days_behind": res.ReplayDaysOld})
+	} else if resolver, ok := monitor.(EvolutionAlertResolver); ok {
+		resolver.ResolveAlert("evolution", "", "replay-fresh")
 	}
+}
+
+// EvolutionAlertResolver is the optional alert-resolution half of the
+// monitor interface (#1787). identity "" resolves ALL open alerts in the
+// category (used for identity-less families like the replay warnings).
+type EvolutionAlertResolver interface {
+	ResolveAlert(category, identity, reason string)
 }
 
 func pillarNames(pillars []Pillar) []string {
