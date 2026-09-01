@@ -33,6 +33,15 @@ type experimentMonitorAdapter struct {
 	m *monitoring.Monitor
 }
 
+// ResolveAlert implements experiment.EvolutionAlertResolver (#1787):
+// clears open alerts whose condition has recovered. Empty identity means
+// category-wide (identity-less alert families).
+func (a *experimentMonitorAdapter) ResolveAlert(category, identity, reason string) {
+	if a.m != nil {
+		a.m.ResolveByIdentity(category, identity, reason)
+	}
+}
+
 func (a *experimentMonitorAdapter) Alert(level string, category, message string, details map[string]any) {
 	if a.m != nil {
 		var al monitoring.AlertLevel

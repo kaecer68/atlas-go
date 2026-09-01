@@ -203,6 +203,9 @@ func (g *gapDetector) emitAlerts(monitor *monitoring.Monitor, report GapReport) 
 	}
 	for _, ch := range report.Channels {
 		if ch.MissingCount == 0 && ch.Error == "" {
+			// #1787: a clean coverage pass resolves any open data_gap alert
+			// for this channel — the condition has cleared.
+			monitor.ResolveByIdentity("data_gap", ch.ChannelID, "coverage-restored")
 			continue
 		}
 		msg := fmt.Sprintf("channel %s has %d missing coverage date(s)", ch.ChannelID, ch.MissingCount)

@@ -48,6 +48,12 @@
       "results": ""
     },
     {
+      "name": "ResolveAlert",
+      "params": "(category,identity,reason string)",
+      "receiver": "experimentMonitorAdapter",
+      "results": ""
+    },
+    {
       "name": "FetchCapital",
       "params": "",
       "receiver": "liveDailyReportProvider",

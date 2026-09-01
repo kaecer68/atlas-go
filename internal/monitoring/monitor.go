@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,6 +90,50 @@ func (m *Monitor) AlertWithBreakdown(level AlertLevel, category string, message 
 	m.alertWithBreakdown(level, category, message, metadata, breakdown)
 }
 
+// alertIdentity extracts a per-condition identity from alert metadata so
+// dedup keys distinguish conditions within a category (#1787). Recognized
+// keys, in priority order: task / channel / pillar / agent / symbol.
+func alertIdentity(metadata map[string]any) string {
+	if metadata == nil {
+		return ""
+	}
+	for _, key := range []string{"task", "channel", "pillar", "agent", "symbol"} {
+		if v, ok := metadata[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// ResolveByIdentity resolves all open (triggered) alerts for a
+// category+identity condition. Called by recovery hooks when the underlying
+// condition clears (task success, coverage restored, activity detected).
+// Identity matches the alert's dedup key suffix, with a message-contains
+// fallback for records created before #1787.
+func (m *Monitor) ResolveByIdentity(category, identity, reason string) int {
+	m.mu.RLock()
+	store := m.alertStore
+	m.mu.RUnlock()
+	if store == nil {
+		return 0
+	}
+	resolved, err := store.ResolveWhere(func(r *domain.AlertRecord) bool {
+		if r.Rule != category || r.Status != domain.AlertStatusTriggered {
+			return false
+		}
+		if identity == "" {
+			// Category-wide resolve for identity-less alert families.
+			return true
+		}
+		return strings.HasSuffix(r.DedupKey, ":"+identity) || strings.Contains(r.Message, identity)
+	}, reason)
+	if err != nil {
+		logging.Warn("monitor", "alert_resolve_failed", "category", category, "identity", identity, "err", err.Error())
+		return 0
+	}
+	return resolved
+}
+
 func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message string, metadata map[string]any, breakdown *domain.AlertBreakdown) {
 	alert := Alert{
 		ID:        generateAlertID(),
@@ -139,19 +184,59 @@ func (m *Monitor) alertWithBreakdown(level AlertLevel, category string, message 
 		Count:     1,
 	}
 
-	// Dedup check: skip save+notify if duplicate within window
+	// #1787: dedup key carries a per-condition identity (task / channel /
+	// pillar / agent / symbol) so distinct conditions in one category don't
+	// collide and one persistent condition maps to ONE record.
+	if identity := alertIdentity(metadata); identity != "" {
+		record.DedupKey = category + ":" + level.String() + ":" + identity
+	}
+
+	// #1787: unresolved-record reuse. If the same condition is already open
+	// (status=triggered), update it (count/last_seen/message) instead of
+	// appending a new row. A persistent condition therefore produces one row
+	// whose count grows; only after resolution does a new row get created.
+	// This replaces the coarse 5-minute window as the primary anti-spam
+	// mechanism (the window still short-circuits store scans for hot paths).
+	if dedup != nil && record.DedupKey == "" {
+		record.DedupKey = category + ":" + level.String()
+	}
 	if dedup != nil {
-		dedupKey := category + ":" + level.String()
-		record.DedupKey = dedupKey
-		result, err := dedup.Check(dedupKey)
+		result, err := dedup.Check(record.DedupKey)
 		if err == nil && result.Skip {
 			if result.ExistingAlertID != "" && store != nil {
 				_ = store.Update(result.ExistingAlertID, func(r *domain.AlertRecord) {
 					r.Count = result.NewCount
 					r.LastSeen = &record.Timestamp
+					r.Message = message
+					if breakdown != nil {
+						r.Breakdown = breakdown
+					}
 				})
 			}
 			return
+		}
+		if store != nil {
+			if existing, err := store.FindByDedupKey(record.DedupKey); err == nil &&
+				existing != nil && existing.Status == domain.AlertStatusTriggered {
+				_ = store.Update(existing.ID, func(r *domain.AlertRecord) {
+					r.Count++
+					r.LastSeen = &record.Timestamp
+					r.Timestamp = record.Timestamp
+					r.Message = message
+					r.Severity = level.String()
+					if breakdown != nil {
+						r.Breakdown = breakdown
+					}
+				})
+				// Notifiers still fire so a long-running condition that keeps
+				// recurring stays visible; no new row is appended.
+				go func() {
+					for _, n := range notifiers {
+						_ = n.Notify(record)
+					}
+				}()
+				return
+			}
 		}
 		// Track immediately to close the race window: previously
 		// Track was called async (in the save goroutine), so two

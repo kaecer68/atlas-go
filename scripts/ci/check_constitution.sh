@@ -236,6 +236,7 @@ check_background_tasks() {
     "internal/live/fubon_dma.go"                  # process-wait cleanup
     "internal/live/scheduler.go"                  # live trading real-time scheduler
     "internal/monitoring/monitor.go"              # per-alert one-shot handlers
+    "internal/monitoring/alert_ttl.go"            # #1787 TTL archiver (ctx-bound lifecycle)
     "internal/monitoring/service/"                # Wave9 detector subsystems (lifecycle-bound)
     "internal/monitoring/dashboard_api.go"        # monitoring internals
     "internal/monitoring/api/system/handlers.go"  # monitoring API handlers (event-driven)
