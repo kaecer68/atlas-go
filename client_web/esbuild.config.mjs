@@ -18,12 +18,13 @@ const mode = process.argv[2] || "build"; // "build" or "watch"
 
 const opts = {
   entryPoints: [
-    { in: "../shared_web/static/js/bootstrap-utils.js", out: "js/bootstrap-utils" },
-    { in: "static/js/main.js", out: "js/main" },
-    { in: "static/js/component-init.js", out: "js/component-init" },
-    { in: "static/js/event-listeners.js", out: "js/event-listeners" },
-    // CSS entry — esbuild resolves @import at build time into single file
-    { in: "../shared_web/static/css/main.css", out: "css/main" },
+    // -v2 suffix: see admin_web/esbuild.config.mjs — renamed entries defeat
+    // stale CDN edge caches without requiring a manual purge.
+    { in: "../shared_web/static/js/bootstrap-utils.js", out: "js/bootstrap-utils-v2" },
+    { in: "static/js/main.js", out: "js/main-v2" },
+    { in: "static/js/component-init.js", out: "js/component-init-v2" },
+    { in: "static/js/event-listeners.js", out: "js/event-listeners-v2" },
+    { in: "../shared_web/static/css/main.css", out: "css/main-v2" },
   ],
   bundle: true,
   format: "esm",
