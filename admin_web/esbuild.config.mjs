@@ -1,5 +1,5 @@
 import * as esbuild from "esbuild";
-import { copyFileSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import createSharedPlugin from "../shared_web/esbuild-shared-plugin.mjs";
 
@@ -54,6 +54,20 @@ const opts = {
         build.onEnd((result) => {
           if (result.errors.length > 0) return;
           copyFileSync("static/index.html", "dist/index.html");
+          // Cache-bust the non-hashed entry assets. component-init.js /
+          // event-listeners.js / main.js have stable names and a strict
+          // no-cache header (static_handler.go), but CDN edges that cached
+          // them under the OLD immutable header never revalidate — purging
+          // is manual. Appending the build timestamp to their index.html
+          // references gives every deployment a fresh URL, which CDNs key
+          // separately. Hashed chunks already self-bust via [hash].
+          let html = readFileSync("dist/index.html", "utf8");
+          const stamp = String(Date.now());
+          html = html.replaceAll(
+            /(src|href)="((?:\.?\/)?(?:js\/(?:main|component-init|event-listeners|bootstrap-utils)\.js|css\/main\.css))"/g,
+            (_, attr, url) => `${attr}="${url}?v=${stamp}"`,
+          );
+          writeFileSync("dist/index.html", html);
         });
       },
     },
@@ -81,7 +95,8 @@ async function run() {
       process.exit(1);
     }
     writeFileSync("dist/meta.json", JSON.stringify(result.metafile, null, 2));
-    copyFileSync("static/index.html", "dist/index.html");
+    // index.html copy + cache-bust stamping happens in the copy-index-html
+    // plugin's onEnd — duplicating it here overwrote the stamped version.
     console.log("✅ esbuild build complete");
   }
 }
