@@ -243,11 +243,11 @@ func registerCapitalTasks(d capitalDeps) {
 			// SBL: per-day files via the provider's history walk
 			// (gateway.Fetch only returns the newest snapshot — the
 			// backfill needs every day in the chunk).
-			provider, perr := d.gateway.Provider("twse_sbl")
-			if perr != nil {
-				return perr
+			sblProvider, sblErr := d.gateway.Provider("twse_sbl")
+			if sblErr != nil {
+				return sblErr
 			}
-			if sbl, ok := provider.(*apigateway.TWSESBLChannelAdapter); ok {
+			if sbl, ok := sblProvider.(*apigateway.TWSESBLChannelAdapter); ok {
 				if _, err := sbl.Provider().FetchSBLHistory(ctx, cursor, chunkEnd); err != nil {
 					log.Printf("[Backfill] twse_sbl history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
 					return err
@@ -257,11 +257,11 @@ func registerCapitalTasks(d capitalDeps) {
 			// gateway Fetch path only returns the newest snapshot, so the
 			// chunked history walk goes through the registry provider
 			// directly.
-			provider, perr := d.gateway.Provider("tdcc_equity_dispersion")
-			if perr != nil {
-				return perr
+			tdccProvider, tdccErr := d.gateway.Provider("tdcc_equity_dispersion")
+			if tdccErr != nil {
+				return tdccErr
 			}
-			if tdcc, ok := provider.(*apigateway.TDCClientChannelAdapter); ok {
+			if tdcc, ok := tdccProvider.(*apigateway.TDCClientChannelAdapter); ok {
 				if _, err := tdcc.Provider().FetchDispersionHistory(ctx, cursor, chunkEnd); err != nil {
 					log.Printf("[Backfill] tdcc history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
 					return err
