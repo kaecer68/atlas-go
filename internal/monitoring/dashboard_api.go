@@ -81,6 +81,25 @@ type FetchMeta struct {
 // It breaks the import cycle between monitoring and apigateway packages.
 type DataFetcher func(ctx context.Context, channelID string) ([]byte, FetchMeta, error)
 
+// newPersistedMetricsCollector wires the collector to a jsonl persistence
+// file under data/state/metrics/ so screening counters and alert tallies
+// survive restarts. The appendRecord/replayFromFile machinery already
+// existed — it just was never wired (observed 2026-09-02: every deploy
+// restarted the container and the dashboard counters reset to zero).
+func newPersistedMetricsCollector(workDir string) *MetricsCollector {
+	path := filepath.Join(workDir, "data", "state", "metrics", "metrics.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		logging.Warn("dashboard", "metrics_persistence_mkdir_failed", logging.Err(err))
+		return NewMetricsCollector()
+	}
+	mc, err := NewMetricsCollectorWithPath(path)
+	if err != nil {
+		logging.Warn("dashboard", "metrics_replay_failed", logging.Err(err))
+		return NewMetricsCollector()
+	}
+	return mc
+}
+
 // dataQualityAdapter converts the monitoring-layer checker to the
 // service-layer interface consumed by the metrics handlers.
 type dataQualityAdapter struct {
@@ -249,7 +268,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 		geopolitical.NewTaiwanRSSGeopoliticalProvider(),
 	)
 	if metricsCollector == nil {
-		metricsCollector = NewMetricsCollector()
+		metricsCollector = newPersistedMetricsCollector(workDir)
 	}
 	lifecycle := narrative.NewEventLifecycleManager()
 	ingestor := narrative.NewMacroIngestor(provider, filepath.Join(workDir, constants.StateMacro))
@@ -283,7 +302,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 // the Gateway via DataFetcher from the start, complying with the Constitution.
 func NewDashboardAPIWithGateway(workDir, ledgerDir string, metricsCollector *MetricsCollector, fetcher DataFetcher) *DashboardAPI {
 	if metricsCollector == nil {
-		metricsCollector = NewMetricsCollector()
+		metricsCollector = newPersistedMetricsCollector(workDir)
 	}
 
 	macroProvider := NewMacroDataGatewayAdapter(fetcher)
