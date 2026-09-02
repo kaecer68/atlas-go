@@ -33,6 +33,10 @@ func (a *TWSESBLChannelAdapter) SetStorageDir(dir string) {
 	a.provider.SetStorageDir(dir)
 }
 
+// Provider exposes the underlying provider (backfill task wiring for the
+// G02 history walk).
+func (a *TWSESBLChannelAdapter) Provider() *marketdata.TWSESBLProvider { return a.provider }
+
 func (a *TWSESBLChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	start := time.Now()
 	if err := waitForLimiter(ctx, a.limiter); err != nil {
