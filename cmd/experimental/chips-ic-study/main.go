@@ -428,7 +428,9 @@ func main() {
 		if o.synthetic {
 			continue
 		}
-		key := o.symbol + "|" + o.date + "|" + strconv.FormatBool(o.hit)
+		// Panel join key: FinMind symbols carry no exchange suffix.
+		o.symbol = strings.TrimSuffix(strings.TrimSuffix(o.symbol, ".TWO"), ".TW")
+		key := o.symbol + "|" + o.date + "|" + strconv.FormatFloat(o.forwardReturn, 'f', 6, 64)
 		if seen[key] {
 			continue
 		}
@@ -478,8 +480,12 @@ func main() {
 	for _, f := range features {
 		st := computeIC(feats, f.fn, 10)
 		allICS = append(allICS, st)
-		fmt.Printf("IC %-22s dates=%-4d obs=%-6d meanIC=%+.4f ICIR=%+.2f pos=%.0f%%\n",
-			f.name, st.N, st.SumN, st.MeanIC, st.ICIR, st.PosPct)
+		note := ""
+		if st.SumN > 0 && st.StdIC == 0 {
+			note = " (zero-variance — no signal coverage)"
+		}
+		fmt.Printf("IC %-22s dates=%-4d obs=%-6d meanIC=%+.4f ICIR=%+.2f pos=%.0f%%%s\n",
+			f.name, st.N, st.SumN, st.MeanIC, st.ICIR, st.PosPct, note)
 		fmt.Fprintf(&md, "| %s | %d | %d | %+.4f | %.4f | %+.2f | %.0f%% |\n",
 			f.name, st.N, st.SumN, st.MeanIC, st.StdIC, st.ICIR, st.PosPct)
 	}
