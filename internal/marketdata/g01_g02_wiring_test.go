@@ -1,10 +1,18 @@
 package marketdata
 
-// Tests for the G01/G02 live wiring (#1793): both providers fetch full-market
-// datasets from the shared FinMind client and map the generic rows.
+// Tests for the G01/G02 live wiring: both providers fetch full-market
+// datasets from the shared FinMind client.
+//
+// EMPIRICAL contract (verified 2026-09-01 against the real API): both
+// TaiwanStockHoldingSharesPer and TaiwanDailyShortSaleBalances return rows
+// ONLY for single-day windows (a multi-day full-market window returns an
+// empty result, or only the start date's rows). The mock therefore filters
+// rows by the requested start_date, exactly like the real API.
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,25 +20,42 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
-func newTestFinMind(t *testing.T, body string) *FinMindClient {
+// finmindMock serves rows whose "date" equals the requested start_date.
+func finmindMock(t *testing.T, allRows string) *FinMindClient {
 	t.Helper()
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(allRows), &rows); err != nil {
+		t.Fatalf("mock rows: %v", err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := r.URL.Query().Get("start_date")
+		out := []map[string]any{}
+		for _, row := range rows {
+			if fmt.Sprint(row["date"]) == start {
+				out = append(out, row)
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
+		_ = json.NewEncoder(w).Encode(map[string]any{"msg": "success", "status": 200, "data": out})
 	}))
 	t.Cleanup(srv.Close)
 	c := NewFinMindClientWithStateDir("", t.TempDir())
 	c.SetBaseURL(srv.URL)
+	// Tests must not sleep on the production rate limiter (~2.7s/call):
+	// a 62-day history walk would take minutes.
+	c.SetRateLimiter(rate.NewLimiter(rate.Inf, 1))
 	return c
 }
 
 func TestTDCClient_FetchDispersion_MapsFinMindRows(t *testing.T) {
-	c := newTestFinMind(t, `{"msg":"success","status":200,"data":[
-		{"date":"2026-08-21","stock_id":"2330","HoldingSharesLevel":"1-999","people":2511714,"percent":1.12,"unit":292743125},
-		{"date":"2026-08-21","stock_id":"2330","HoldingSharesLevel":"400001-600000","people":120,"percent":1.5,"unit":345678901}
-	]}`)
+	c := finmindMock(t, `[
+		{"date":"2026-08-28","stock_id":"2330","HoldingSharesLevel":"1-999","people":2511714,"percent":1.12,"unit":292743125},
+		{"date":"2026-08-28","stock_id":"2330","HoldingSharesLevel":"400001-600000","people":120,"percent":1.5,"unit":345678901}
+	]`)
 	p := NewTDCClient()
 	p.SetFinMindClient(c)
 
@@ -45,9 +70,25 @@ func TestTDCClient_FetchDispersion_MapsFinMindRows(t *testing.T) {
 	if r0.Symbol != "2330" || r0.Tier != "1-999" || r0.Holders != 2511714 || r0.PctHeld != 1.12 || r0.SharesHeld != 292743125 {
 		t.Errorf("row mapping wrong: %+v", r0)
 	}
-	// Last-fetch state must reflect success (adapter HealthCheck reads it).
 	if _, lastErr := p.LastFetchState(); lastErr != "" {
 		t.Errorf("lastErr = %q, want empty after success", lastErr)
+	}
+}
+
+func TestTDCClient_FetchDispersion_WalksBackToLatestSnapshot(t *testing.T) {
+	// Target 8/28 (no snapshot yet); the newest published snapshot is 8/21.
+	c := finmindMock(t, `[
+		{"date":"2026-08-21","stock_id":"2330","HoldingSharesLevel":"1-999","people":100,"percent":1.0,"unit":1000}
+	]`)
+	p := NewTDCClient()
+	p.SetFinMindClient(c)
+
+	recs, err := p.FetchDispersion(context.Background(), "20260828")
+	if err != nil {
+		t.Fatalf("FetchDispersion walk-back: %v", err)
+	}
+	if len(recs) != 1 || recs[0].Date != "2026-08-21" {
+		t.Errorf("walk-back should land on the 2026-08-21 snapshot, got %+v", recs)
 	}
 }
 
@@ -59,20 +100,13 @@ func TestTDCClient_NoFinMind_StubError(t *testing.T) {
 }
 
 func TestTDCClient_HistoryBackfill_WritesWeeklyFiles(t *testing.T) {
-	// Two weekly snapshots in one month chunk; one pre-existing (idempotency).
-	body := `{"msg":"success","status":200,"data":[
+	// Two weekly snapshots (7/24, 8/21) across a two-month range; the mock
+	// only serves rows for the exact probed Friday.
+	c := finmindMock(t, `[
 		{"date":"2026-07-24","stock_id":"2330","HoldingSharesLevel":"1-999","people":100,"percent":1.0,"unit":1000},
 		{"date":"2026-08-21","stock_id":"2330","HoldingSharesLevel":"1-999","people":200,"percent":1.1,"unit":2000},
 		{"date":"2026-08-21","stock_id":"2454","HoldingSharesLevel":"1-999","people":50,"percent":2.0,"unit":300}
-	]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
-	}))
-	t.Cleanup(srv.Close)
-	c := NewFinMindClientWithStateDir("", t.TempDir())
-	c.SetBaseURL(srv.URL)
-
+	]`)
 	p := NewTDCClient()
 	p.SetFinMindClient(c)
 	p.SetStorageDir(t.TempDir())
@@ -97,11 +131,9 @@ func TestTDCClient_HistoryBackfill_WritesWeeklyFiles(t *testing.T) {
 }
 
 func TestTWSESBLProvider_FetchSBLSummary_MapsFinMindRows(t *testing.T) {
-	c := newTestFinMind(t, `{"msg":"success","status":200,"data":[
-		{"stock_id":"2330","SBLShortSalesPreviousDayBalance":100,"SBLShortSalesShortSales":50,"SBLShortSalesReturns":10,"SBLShortSalesCurrentDayBalance":140,"SBLShortSalesQuota":1000000,"date":"2026-08-27"},
-		{"stock_id":"2330","SBLShortSalesPreviousDayBalance":140,"SBLShortSalesShortSales":20,"SBLShortSalesReturns":30,"SBLShortSalesCurrentDayBalance":130,"SBLShortSalesQuota":1000000,"date":"2026-08-28"},
-		{"stock_id":"2454","SBLShortSalesPreviousDayBalance":0,"SBLShortSalesShortSales":5000,"SBLShortSalesReturns":0,"SBLShortSalesCurrentDayBalance":5000,"SBLShortSalesQuota":200000,"date":"2026-08-28"}
-	]}`)
+	c := finmindMock(t, `[
+		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":130,"SBLShortSalesShortSales":20,"SBLShortSalesReturns":30,"date":"2026-08-28"}
+	]`)
 	p := NewTWSESBLProvider(0.5)
 	p.SetFinMindClient(c)
 
@@ -109,19 +141,12 @@ func TestTWSESBLProvider_FetchSBLSummary_MapsFinMindRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchSBLSummary: %v", err)
 	}
-	if len(stats) != 2 {
-		t.Fatalf("stats = %d, want 2 (newest row per symbol)", len(stats))
+	if len(stats) != 1 {
+		t.Fatalf("stats = %d, want 1", len(stats))
 	}
-	bySym := map[string]SBLStats{}
-	for _, s := range stats {
-		bySym[s.Symbol] = s
-	}
-	s2330 := bySym["2330"]
-	if s2330.Date != "2026-08-28" || s2330.SBLShortBalance != 130 || s2330.SBLShortVolume != 20 || s2330.SBLReturnVolume != 30 {
-		t.Errorf("2330 mapping wrong: %+v (want newest row 2026-08-28)", s2330)
-	}
-	if bySym["2454"].SBLShortBalance != 5000 {
-		t.Errorf("2454 mapping wrong: %+v", bySym["2454"])
+	s := stats[0]
+	if s.Symbol != "2330" || s.SBLShortBalance != 130 || s.SBLShortVolume != 20 || s.SBLReturnVolume != 30 {
+		t.Errorf("mapping wrong: %+v", s)
 	}
 }
 
@@ -133,22 +158,14 @@ func TestTWSESBLProvider_NoFinMind_StubError(t *testing.T) {
 }
 
 func TestTWSESBLProvider_HistoryBackfill_WritesDayFiles(t *testing.T) {
-	// Two months of windowed data in one chunk: 3 report days across the
-	// boundary; one day pre-exists (idempotency).
-	body := `{"msg":"success","status":200,"data":[
+	// Three report days across a two-month range; the mock serves each day
+	// only on its own date probe (single-day window contract).
+	c := finmindMock(t, `[
 		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":100,"SBLShortSalesShortSales":10,"SBLShortSalesReturns":5,"date":"2026-07-30"},
 		{"stock_id":"2454","SBLShortSalesCurrentDayBalance":200,"SBLShortSalesShortSales":20,"SBLShortSalesReturns":0,"date":"2026-07-30"},
 		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":110,"SBLShortSalesShortSales":12,"SBLShortSalesReturns":3,"date":"2026-08-28"},
 		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":120,"SBLShortSalesShortSales":15,"SBLShortSalesReturns":1,"date":"2026-08-31"}
-	]}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
-	}))
-	t.Cleanup(srv.Close)
-	c := NewFinMindClientWithStateDir("", t.TempDir())
-	c.SetBaseURL(srv.URL)
-
+	]`)
 	p := NewTWSESBLProvider(0.5)
 	p.SetFinMindClient(c)
 	p.SetStorageDir(t.TempDir())
@@ -162,12 +179,10 @@ func TestTWSESBLProvider_HistoryBackfill_WritesDayFiles(t *testing.T) {
 	if written != 3 {
 		t.Fatalf("written = %d, want 3 day files", written)
 	}
-	// Second run: all files exist, nothing new.
 	written2, err := p.FetchSBLHistory(context.Background(), start, end)
 	if err != nil || written2 != 0 {
 		t.Fatalf("idempotent re-run: written=%d err=%v, want 0/nil", written2, err)
 	}
-	// File content sanity.
 	raw, _ := os.ReadFile(filepath.Join(p.storageDir, "20260828_sbl.json"))
 	if !strings.Contains(string(raw), `"sbl_short_balance": 110`) {
 		t.Errorf("20260828 file content wrong: %s", raw)

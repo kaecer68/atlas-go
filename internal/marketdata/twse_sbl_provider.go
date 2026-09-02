@@ -126,10 +126,12 @@ func (p *TWSESBLProvider) fetchWindow(ctx context.Context, start, end time.Time)
 		start.Format("2006-01-02"), end.Format("2006-01-02"))
 }
 
-// FetchSBLHistory backfills per-day report files for [start, end]. Each
-// FinMind window call covers the whole chunk (full market, all dates), so
-// six months of history costs ~6 API calls. Returns the number of NEW day
-// files written. Idempotent: existing files are skipped.
+// FetchSBLHistory backfills per-day report files for [start, end].
+// EMPIRICAL (2026-09-01): TaiwanDailyShortSaleBalances full-market query
+// returns only the START date's rows regardless of the window — so each
+// trading day is one dedicated call (weekends skipped; holidays return
+// empty and are skipped silently). ~22 calls per month. Idempotent:
+// existing files are skipped.
 func (p *TWSESBLProvider) FetchSBLHistory(ctx context.Context, start, end time.Time) (int, error) {
 	if p.finmind == nil {
 		return 0, fmt.Errorf("twse_sbl: FinMind client not wired; see G02 implementation notes in internal/marketdata/twse_sbl_provider.go")
@@ -138,39 +140,36 @@ func (p *TWSESBLProvider) FetchSBLHistory(ctx context.Context, start, end time.T
 		return 0, fmt.Errorf("twse_sbl: storage dir not set (SetStorageDir) — history fetch would discard results")
 	}
 	written := 0
-	for chunkStart := start; !chunkStart.After(end); chunkStart = chunkStart.AddDate(0, 1, 0) {
-		chunkEnd := chunkStart.AddDate(0, 1, 0).AddDate(0, 0, -1)
-		if chunkEnd.After(end) {
-			chunkEnd = end
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		if day.Weekday() == time.Saturday || day.Weekday() == time.Sunday {
+			continue
 		}
-		rows, err := p.fetchWindow(ctx, chunkStart, chunkEnd)
+		rows, err := p.fetchWindow(ctx, day, day)
 		if err != nil {
 			p.recordFetchFailure(err)
-			return written, fmt.Errorf("twse_sbl: history chunk %s..%s: %w", chunkStart.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
+			return written, fmt.Errorf("twse_sbl: history day %s: %w", day.Format("2006-01-02"), err)
 		}
-		byDate := map[string][]SBLStats{}
+		stats := make([]SBLStats, 0, len(rows))
 		for _, row := range rows {
-			rowDate := strField(row, "date")
 			sym := strField(row, "stock_id")
-			if rowDate == "" || sym == "" {
+			if sym == "" {
 				continue
 			}
-			byDate[rowDate] = append(byDate[rowDate], SBLStats{
-				Date:            rowDate,
+			stats = append(stats, SBLStats{
+				Date:            strField(row, "date"),
 				Symbol:          sym,
 				SBLShortBalance: int64(floatField(row, "SBLShortSalesCurrentDayBalance")),
 				SBLShortVolume:  int64(floatField(row, "SBLShortSalesShortSales")),
 				SBLReturnVolume: int64(floatField(row, "SBLShortSalesReturns")),
 			})
 		}
-		for dateStr, stats := range byDate {
-			isNew, err := p.persistDay(dateStr, stats)
-			if err != nil {
-				return written, err
-			}
-			if isNew {
-				written++
-			}
+		dateStr := day.Format("2006-01-02")
+		isNew, err := p.persistDay(dateStr, stats)
+		if err != nil {
+			return written, err
+		}
+		if isNew {
+			written++
 		}
 	}
 	p.recordFetchSuccess()
@@ -214,39 +213,39 @@ func (p *TWSESBLProvider) FetchSBLSummary(ctx context.Context, date string) ([]S
 	if err != nil {
 		return nil, fmt.Errorf("twse_sbl: parse date %q: %w", date, err)
 	}
-	// Weekend / holiday: the previous trading day's report is the latest —
-	// query a 4-day window and use whatever rows come back (FinMind returns
-	// only published dates).
-	start := day.AddDate(0, 0, -4)
-
-	rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanDailyShortSaleBalances", "", start.Format("2006-01-02"), day.Format("2006-01-02"))
-	if err != nil {
-		p.recordFetchFailure(err)
-		return nil, fmt.Errorf("twse_sbl: finmind fetch: %w", err)
-	}
-
-	latest := make(map[string]SBLStats, len(rows))
-	for _, row := range rows {
-		rowDate := strField(row, "date")
-		sym := strField(row, "stock_id")
-		if rowDate == "" || sym == "" {
-			continue
+	// EMPIRICAL: single-day windows only. Probe day, then walk back up to
+	// 4 days (weekend/holiday gap) until rows come back.
+	var latest map[string]SBLStats
+	probed := day
+	for i := 0; i < 5; i++ {
+		rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanDailyShortSaleBalances", "",
+			probed.Format("2006-01-02"), probed.Format("2006-01-02"))
+		if err != nil {
+			p.recordFetchFailure(err)
+			return nil, fmt.Errorf("twse_sbl: finmind fetch %s: %w", probed.Format("2006-01-02"), err)
 		}
-		// Keep the newest row per symbol in the window.
-		prev, seen := latest[sym]
-		if seen && rowDate < prev.Date {
-			continue
+		latest = make(map[string]SBLStats, len(rows))
+		for _, row := range rows {
+			rowDate := strField(row, "date")
+			sym := strField(row, "stock_id")
+			if rowDate == "" || sym == "" {
+				continue
+			}
+			latest[sym] = SBLStats{
+				Date:            rowDate,
+				Symbol:          sym,
+				SBLShortBalance: int64(floatField(row, "SBLShortSalesCurrentDayBalance")),
+				SBLShortVolume:  int64(floatField(row, "SBLShortSalesShortSales")),
+				SBLReturnVolume: int64(floatField(row, "SBLShortSalesReturns")),
+			}
 		}
-		latest[sym] = SBLStats{
-			Date:            rowDate,
-			Symbol:          sym,
-			SBLShortBalance: int64(floatField(row, "SBLShortSalesCurrentDayBalance")),
-			SBLShortVolume:  int64(floatField(row, "SBLShortSalesShortSales")),
-			SBLReturnVolume: int64(floatField(row, "SBLShortSalesReturns")),
+		if len(latest) > 0 {
+			break
 		}
+		probed = probed.AddDate(0, 0, -1)
 	}
 	if len(latest) == 0 {
-		err := fmt.Errorf("twse_sbl: no SBL balance data for %s", date)
+		err := fmt.Errorf("twse_sbl: no SBL balance data for %s (probed back to %s)", date, probed.Format("2006-01-02"))
 		p.recordFetchFailure(err)
 		return nil, err
 	}

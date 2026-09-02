@@ -134,27 +134,32 @@ func (p *TDCClient) FetchDispersionHistory(ctx context.Context, start, end time.
 	if p.storageDir == "" {
 		return 0, fmt.Errorf("tdcc: storage dir not set (SetStorageDir) — history fetch would discard results")
 	}
+	// EMPIRICAL (2026-09-01): the dataset only returns rows for single-day
+	// windows — weekly snapshots are dated Friday, so probe each Friday.
 	written := 0
-	for chunkStart := start; !chunkStart.After(end); chunkStart = chunkStart.AddDate(0, 1, 0) {
-		chunkEnd := chunkStart.AddDate(0, 1, 0).AddDate(0, 0, -1)
-		if chunkEnd.After(end) {
-			chunkEnd = end
-		}
+	first := start
+	// Advance to the first Friday on/after start.
+	for first.Weekday() != time.Friday {
+		first = first.AddDate(0, 0, 1)
+	}
+	for probe := first; !probe.After(end); probe = probe.AddDate(0, 0, 7) {
 		rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanStockHoldingSharesPer", "",
-			chunkStart.Format("2006-01-02"), chunkEnd.Format("2006-01-02"))
+			probe.Format("2006-01-02"), probe.Format("2006-01-02"))
 		if err != nil {
 			p.recordFetchFailure(err)
-			return written, fmt.Errorf("tdcc: history chunk %s..%s: %w", chunkStart.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
+			return written, fmt.Errorf("tdcc: history probe %s: %w", probe.Format("2006-01-02"), err)
 		}
-		byDate := map[string][]EquityDispersionRecord{}
+		if len(rows) == 0 {
+			continue // no snapshot for this week
+		}
+		records := make([]EquityDispersionRecord, 0, len(rows))
 		for _, row := range rows {
-			dateStr := strField(row, "date")
 			sym := strField(row, "stock_id")
-			if dateStr == "" || sym == "" {
+			if sym == "" {
 				continue
 			}
-			byDate[dateStr] = append(byDate[dateStr], EquityDispersionRecord{
-				Date:       dateStr,
+			records = append(records, EquityDispersionRecord{
+				Date:       strField(row, "date"),
 				Symbol:     sym,
 				Tier:       strField(row, "HoldingSharesLevel"),
 				Holders:    int(floatField(row, "people")),
@@ -162,14 +167,12 @@ func (p *TDCClient) FetchDispersionHistory(ctx context.Context, start, end time.
 				PctHeld:    floatField(row, "percent"),
 			})
 		}
-		for dateStr, records := range byDate {
-			isNew, err := p.persistSnapshot(dateStr, records)
-			if err != nil {
-				return written, err
-			}
-			if isNew {
-				written++
-			}
+		isNew, err := p.persistSnapshot(probe.Format("2006-01-02"), records)
+		if err != nil {
+			return written, err
+		}
+		if isNew {
+			written++
 		}
 	}
 	p.recordFetchSuccess()
@@ -188,39 +191,34 @@ func (p *TDCClient) FetchDispersion(ctx context.Context, date string) ([]EquityD
 	if err != nil {
 		return nil, fmt.Errorf("tdcc: parse date %q: %w", date, err)
 	}
-	// Query a 21-day window ending at date. The weekly snapshot is dated
-	// Friday, but FinMind's copy can lag publishing by 1-2 weeks (verified
-	// 2026-09-01: latest snapshot 2026-08-21 while target 2026-09-01).
-	// Only the newest snapshot date in the window is kept (below).
-	start := end.AddDate(0, 0, -21)
-
-	rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanStockHoldingSharesPer", "", start.Format("2006-01-02"), end.Format("2006-01-02"))
-	if err != nil {
-		p.recordFetchFailure(err)
-		return nil, fmt.Errorf("tdcc: finmind fetch: %w", err)
-	}
-
-	// Keep only the newest weekly snapshot inside the window.
-	newestDate := ""
-	for _, row := range rows {
-		if d := strField(row, "date"); d > newestDate {
-			newestDate = d
+	// EMPIRICAL (2026-09-01): TaiwanStockHoldingSharesPer full-market query
+	// returns rows ONLY for single-day windows — a multi-day window returns
+	// an empty result. The weekly snapshot (dated Friday) is located by
+	// probing day by day backwards, max 21 days (publishing can lag ~2 weeks).
+	var records []EquityDispersionRecord
+	probed := end
+	for i := 0; i < 21; i++ {
+		rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanStockHoldingSharesPer", "",
+			probed.Format("2006-01-02"), probed.Format("2006-01-02"))
+		if err != nil {
+			p.recordFetchFailure(err)
+			return nil, fmt.Errorf("tdcc: finmind fetch %s: %w", probed.Format("2006-01-02"), err)
 		}
-	}
-	records := make([]EquityDispersionRecord, 0, len(rows))
-	for _, row := range rows {
-		if strField(row, "date") != newestDate {
-			continue
+		if len(rows) > 0 {
+			records = make([]EquityDispersionRecord, 0, len(rows))
+			for _, row := range rows {
+				records = append(records, EquityDispersionRecord{
+					Date:       strField(row, "date"),
+					Symbol:     strField(row, "stock_id"),
+					Tier:       strField(row, "HoldingSharesLevel"),
+					Holders:    int(floatField(row, "people")),
+					SharesHeld: int64(floatField(row, "unit")),
+					PctHeld:    floatField(row, "percent"),
+				})
+			}
+			break
 		}
-		rec := EquityDispersionRecord{
-			Date:       strField(row, "date"),
-			Symbol:     strField(row, "stock_id"),
-			Tier:       strField(row, "HoldingSharesLevel"),
-			Holders:    int(floatField(row, "people")),
-			SharesHeld: int64(floatField(row, "unit")),
-			PctHeld:    floatField(row, "percent"),
-		}
-		records = append(records, rec)
+		probed = probed.AddDate(0, 0, -1)
 	}
 	if len(records) == 0 {
 		err := fmt.Errorf("tdcc: no dispersion data for %s (weekly snapshot may not be published yet)", date)
