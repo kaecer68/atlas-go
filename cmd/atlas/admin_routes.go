@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	nethttppprof "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +81,15 @@ func RegisterAdminRoutes(mux *http.ServeMux, cfg config.Config, pm *fubonproxy.P
 	// public-read, so demanding an X-API-Key here only produced a dead-end
 	// "需要管理員登入" prompt for already-authenticated admins.
 	mux.HandleFunc("/api/admin/live/deployment/dashboard", dh.HandleDeploymentDashboard)
+
+	// Memory-leak forensics: explicit pprof handlers on a dedicated mux
+	// (NOT the DefaultServeMux, which gosec G108 forbids). Guarded by
+	// wrapAdminAuth like the other admin endpoints.
+	pprofMux := http.NewServeMux()
+	pprofMux.Handle("/debug/pprof/heap", nethttppprof.Handler("heap"))
+	pprofMux.Handle("/debug/pprof/goroutine", nethttppprof.Handler("goroutine"))
+	pprofMux.Handle("/debug/pprof/allocs", nethttppprof.Handler("allocs"))
+	mux.Handle("/debug/pprof/", wrapAdminAuth(http.HandlerFunc(pprofMux.ServeHTTP)))
 }
 
 // handleAdminReloadConfig reloads parameters.json from disk and returns
