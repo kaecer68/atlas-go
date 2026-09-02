@@ -319,9 +319,16 @@ func TestDataQualityChecker_checkLedgerFiles_Oversized(t *testing.T) {
 	if err := os.MkdirAll(ledgerDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(ledgerDir, "big.jsonl"), make([]byte, 60*1024*1024), 0o644); err != nil {
+	// 520 MB sparse file (Truncate) — matches the recalibrated 500 MB
+	// threshold without allocating real disk space.
+	f, err := os.Create(filepath.Join(ledgerDir, "big.jsonl"))
+	if err != nil {
 		t.Fatal(err)
 	}
+	if err := f.Truncate(520 * 1024 * 1024); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
 
 	dq := NewDataQualityChecker(tmp, ledgerDir)
 	res := dq.checkLedgerFiles(context.Background())

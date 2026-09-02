@@ -201,9 +201,14 @@ func (dq *DataQualityChecker) checkLedgerFiles(ctx context.Context) DataQualityC
 		"newest_file":   newestMod.Format("2006-01-02 15:04:05"),
 	}
 
-	if totalSize > 50*1024*1024 {
+	// 500 MB (recalibrated 2026-09-02 from 50 MB): the ledger is the audit
+	// trail — steady growth is expected and constitutionally required. The
+	// old 50 MB baseline warned within days of normal operation (58 MB / 6
+	// files at calibration time). Message states it is a directory total,
+	// not a single-file size.
+	if totalSize > 500*1024*1024 {
 		check.Status = StatusWarning
-		check.Message = "Ledger 檔案總大小超過 50MB，建議考慮歸檔"
+		check.Message = "Ledger 目錄總量超過 500MB（6 檔以上合計），建議考慮歸檔"
 	}
 
 	return check
@@ -393,9 +398,14 @@ func (dq *DataQualityChecker) checkDataDirectorySize(ctx context.Context) DataQu
 		"file_count": fileCount,
 	}
 
-	if sizeMB > 500 {
+	// 2 GB threshold (recalibrated 2026-09-02): the dir intentionally holds
+	// market-data history (tdcc 138M + sbl 32M backfilled research datasets)
+	// — that growth is an asset, not waste. Operational subdirs already have
+	// retention policies (traces 7d, sessions 30d, …). The old 500 MB
+	// baseline predated the backfill and warned on healthy growth.
+	if sizeMB > 2048 {
 		check.Status = StatusWarning
-		check.Message = fmt.Sprintf("資料目錄超過 500 MB (%.1f MB)，建議清理或歸檔", sizeMB)
+		check.Message = fmt.Sprintf("資料目錄超過 2 GB (%.1f MB)，檢查可清理的運維資料", sizeMB)
 	}
 
 	return check
