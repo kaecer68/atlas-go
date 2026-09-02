@@ -269,7 +269,7 @@ async function loadModules() {
   }
   if (modules.scheduler) {
     if (modules.scheduler.loadSchedulerPage) window.loadSchedulerPage = modules.scheduler.loadSchedulerPage;
-    if (modules.scheduler.toggleSchedulerTask) window.toggleSchedulerTask = modules.scheduler.toggleSchedulerTask;
+    // toggleSchedulerTask 已隨 UI 停用/啟用按鈕移除（2026-09-03 審計）。
   }
   if (modules.datachannels) {
     if (modules.datachannels.triggerChannelsIngest) window.triggerChannelsIngest = modules.datachannels.triggerChannelsIngest;

@@ -509,9 +509,81 @@ func overlapTolerance(interval time.Duration) time.Duration {
 	return tol
 }
 
+// taskDescriptions documents the scheduled tasks that are NOT bound to a
+// data channel (ChannelID == ""). The scheduler dashboard shows this text in
+// the 通道 column so those rows don't render as an empty dash. Keyed by task
+// name; tasks missing from the map fall back to "系統任務".
+var taskDescriptions = map[string]string{
+	"channel_health_sync":               "各通道健康快照同步（寫入 DB/JSON）",
+	"health_check":                      "全通道健康檢查總排程（30s）",
+	"template_detector_scan":            "敘事模板掃描",
+	"universe_coverage_check":           "股票宇宙覆蓋率檢查",
+	"channel_health_metrics_export":     "通道健康指標匯出（Prometheus 格式）",
+	"auto_cycle_update":                 "產業週期指標更新",
+	"regime_calibrate":                  "regime 判定校準",
+	"predictor_calibrate":               "預測器校準",
+	"conviction_calibrate":              "信念度門檻校準",
+	"daily_report_generate":             "每日報告生成（14:00 時窗）",
+	"auto_propose":                      "自動提案生成",
+	"auto_threshold_calibrate":          "警報門檻自動校準",
+	"cycle_calibrate":                   "產業週期校準",
+	"macro_risk_calibrate":              "宏觀風險校準",
+	"auto_judge_promoter":               "判決結果升階審查",
+	"macro_ingest":                      "宏觀指標攝取 + VIX 危機偵測（5m）",
+	"capital_flow_refresh":              "錢潮資料刷新",
+	"auto_daily_simulation":             "每日模擬場次執行",
+	"reconcile-prev-day-prediction":     "前日預測對帳",
+	"evolution_health":                  "策略演化健康檢查",
+	"auto_quote_backfill":               "報價回填",
+	"autobacktest_daily":                "每日回測（收盤後時窗）",
+	"risk_gate_calibrate":               "風控閘校準",
+	"prism_auto_balancer":               "PRISM 自動平衡（5m）",
+	"seasonal_calibration":              "季節性校準",
+	"metrics_snapshot":                  "指標快照持久化",
+	"auto_universe_full_rebuild":        "股票宇宙全量重建",
+	"stockpicker_daily_update":          "stockpicker 每日更新",
+	"auto_gap_detection":                "資料缺口偵測",
+	"window_backtest":                   "窗口回測",
+	"rule_engine_check":                 "規則引擎檢查（30s）",
+	"auto_strategy_evolution":           "策略演化執行",
+	"linkage_calibrate":                 "產業連動校準",
+	"auto_calibrate":                    "校準總排程",
+	"e2e_chain_probe":                   "端到端鏈路探測",
+	"fundamentals_staleness_check":      "基本面資料時效檢查",
+	"ml_retrain":                        "ML 重訓練（D2 決策暫停：無消費端）",
+	"prediction_backtest_reverse_write": "預測回測反寫",
+	"narrative_weight_update":           "敘事權重更新",
+	"storage_cleanup":                   "儲存生命週期清理（24h）",
+	"auto_calendar_refresh":             "交易日曆刷新",
+	"silicon_cycle_update":              "矽循環指標更新（10m）",
+	"prism_training":                    "PRISM 訓練",
+	"report_tracker_verify":             "報告追蹤驗證（時窗）",
+	"stress_test_daily":                 "每日壓力測試",
+	"auto_experiment":                   "實驗執行",
+	"structural_trend_calibrate":        "結構趨勢校準",
+	"auto_rollback":                     "自動回滾檢查",
+	"maturity_tracker_save":             "成熟度追蹤保存",
+	"auto_universe_refresh":             "股票宇宙增量刷新（1m）",
+	"calibration_cycle":                 "校準週期（由 Narrative.CalibrationEnabled 參數控制啟停）",
+	"factor_weight_strategy_calibrate":  "因子權重策略校準",
+	"rsi_tw_calibrate":                  "RSI-TW 校準",
+	"system_health_monitor":             "系統健康日檢",
+}
+
+// TaskDescription returns the human-readable description for a scheduled
+// task, preferring the curated map and falling back to a generic label for
+// non-channel tasks.
+func TaskDescription(name string) string {
+	if d, ok := taskDescriptions[name]; ok {
+		return d
+	}
+	return "系統任務"
+}
+
 // TaskStatus represents the runtime status of a task.
 type TaskStatus struct {
 	Name                string        `json:"name"`
+	Description         string        `json:"description,omitempty"`
 	ChannelID           string        `json:"channel_id"`
 	Enabled             bool          `json:"enabled"`
 	Interval            time.Duration `json:"interval"`
@@ -547,6 +619,7 @@ func (m *BackgroundTaskManager) Status() []TaskStatus {
 		asOf, newSamples, persistedAt, noProgress := t.DataHealth()
 		result = append(result, TaskStatus{
 			Name:                t.Name,
+			Description:         TaskDescription(t.Name),
 			ChannelID:           t.ChannelID,
 			Enabled:             t.IsEnabled(),
 			Interval:            t.Interval,

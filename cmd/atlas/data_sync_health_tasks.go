@@ -1,27 +1,8 @@
 package main
 
-// PR10a: Data sync + Health background task registration.
-// Extracted from main.go run() to reduce file size and improve testability.
-// Tasks here are periodic data fetches / health probes that run independently
-// of the realtime / live trading paths.
-//
-// Tasks (9 + 8 total):
-//   1. channel_health_sync    — sync in-memory channel health to Postgres (5m)
-//   2-9. us_market_refresh_<ch> — per-channel US market refresh (5m) for each USMarketChannels()
-//   10. seasonal_calibration   — optional seasonal binary (7d, binary-presence-gated)
-//   11. health_check           — HealthChecker.RunOnce (30s)
-//   12. channel_health_fugle   — third-party health probe (1h)
-//   13. channel_health_fubon   — third-party health probe (1h)
-//   14. channel_health_finmind — third-party health probe (1h)
-//   15. channel_health_twse_replay — always-on local CSV probe (1h)
-//   16. tsmc_revenue           — Gateway.Fetch tsmc_revenue (24h)
-//
-// Note: calibration_cycle (narrative weight calibration, 24h, maturity-gated)
-// belongs to PR10b and stays in main.go between seasonal_calibration and
-// health_check to preserve original ordering.
-
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -32,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
 )
@@ -204,6 +186,13 @@ func registerDataSyncAndHealthTasks(
 			Enabled:   true,
 			Task: func(ctx context.Context) error {
 				_, err := gateway.Fetch(ctx, "fugle")
+				if err != nil && errors.Is(err, marketdata.ErrFugleBreakerOpen) {
+					// Breaker open 是熔斷狀態不是任務失敗——頻道頁已呈現
+					// 熔斷狀態，每小時 task_failed 警報只是噪音
+					// （observed 2026-09-03: fugle breaker open 連環 task_failed）。
+					log.Printf("[Gateway] channel_health_fugle skipped: fugle breaker open")
+					return nil
+				}
 				return err
 			},
 		})

@@ -219,32 +219,7 @@ test('triggerChannelsIngest: POST ingest 帶 X-API-Key，成功訊息依 macro/g
   assert.equal(calls[0].headers['X-API-Key'], 'secret-key');
 });
 
-test('toggleSchedulerTask: POST scheduler/toggle 帶 X-API-Key + body', async () => {
-  setApiKey('secret-key');
-  installFetch({
-    '/api/dashboard/task-liveness': { tasks: [] },
-    '/api/scheduler/status': [],
-  });
-  await new Promise(resolve => {
-    toggleSchedulerTask('fetch_channels', false);
-    setTimeout(resolve, 30);
-  });
-  const calls = postCallsFor('/api/scheduler/toggle');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].headers['X-API-Key'], 'secret-key');
-  assert.deepEqual(calls[0].body, { name: 'fetch_channels', enabled: false });
-});
-
-test('toggleSchedulerTask: HTTP 401 → alert 切換失敗', async () => {
-  setApiKey('secret-key');
-  installFetch({}, () => okJson({}, 401));
-  await new Promise(resolve => {
-    toggleSchedulerTask('fetch_channels', true);
-    setTimeout(resolve, 30);
-  });
-  assert.ok(alerts.length >= 1, '401 應觸發 alert');
-  assert.match(alerts[0], /切換失敗/);
-});
+// toggleSchedulerTask 測試已隨 UI 停用/啟用按鈕移除（2026-09-03 審計）。
 
 // ============================================================================
 // circuit-breaker.js — reset
