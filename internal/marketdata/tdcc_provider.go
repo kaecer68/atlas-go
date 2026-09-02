@@ -201,6 +201,10 @@ func (p *TDCClient) FetchDispersion(ctx context.Context, date string) ([]EquityD
 		rows, err := p.finmind.FetchDatasetRaw(ctx, "TaiwanStockHoldingSharesPer", "",
 			probed.Format("2006-01-02"), probed.Format("2006-01-02"))
 		if err != nil {
+			// ErrQuotaExhausted (free-tier throttling) surfaces through this
+			// path with the typed chain intact — the channel page shows the
+			// budget message and the walk stops on the first probe instead
+			// of burning the remaining quota on 21 empty-day re-probes.
 			p.recordFetchFailure(err)
 			return nil, fmt.Errorf("tdcc: finmind fetch %s: %w", probed.Format("2006-01-02"), err)
 		}
