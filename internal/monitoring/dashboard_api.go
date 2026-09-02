@@ -132,6 +132,8 @@ type DashboardAPI struct {
 	metricsCollector           *MetricsCollector
 	metricsHistory             *MetricsHistory
 	lastHistoryPush            atomic.Int64 // unix sec; throttles trend snapshot recording
+	lastHistoryVal             atomic.Int64 // last recorded ScreeningRate * 1e6 (change gate)
+	lastHistoryTotal           atomic.Int64 // last recorded ScreeningTotal (change gate)
 	healthManager              *portfolio.AgentHealthManager
 	dataQualityChecker         *DataQualityChecker
 	janusEngine                *janus.Engine
@@ -1218,15 +1220,23 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			GetMetricsSnapshotFunc: func() service.MetricsSnapshot {
 				snap := a.metricsCollector.GetMetricsSnapshot()
 				// Record the snapshot into the trend history (throttled to
-				// one point per minute) so the metrics trend chart has data.
+				// one point per minute, and only when the counters actually
+				// moved) so the trend chart shows real changes instead of a
+				// flat plateau between simulation runs.
 				if now := time.Now().Unix(); now-a.lastHistoryPush.Load() >= 60 {
 					a.lastHistoryPush.Store(now)
-					a.metricsHistory.AddSnapshot(MetricsSnapshot{
-						ScreeningRate:      snap.ScreeningRate,
-						AlertsTriggered:    snap.AlertsTriggered,
-						AlertsAcknowledged: snap.AlertsAcknowledged,
-						Timestamp:          snap.Timestamp,
-					})
+					rate := int64(snap.ScreeningRate * 1e6)
+					changed := rate != a.lastHistoryVal.Load() || snap.ScreeningTotal != a.lastHistoryTotal.Load()
+					a.lastHistoryVal.Store(rate)
+					a.lastHistoryTotal.Store(snap.ScreeningTotal)
+					if changed {
+						a.metricsHistory.AddSnapshot(MetricsSnapshot{
+							ScreeningRate:      snap.ScreeningRate,
+							AlertsTriggered:    snap.AlertsTriggered,
+							AlertsAcknowledged: snap.AlertsAcknowledged,
+							Timestamp:          snap.Timestamp,
+						})
+					}
 				}
 				return service.MetricsSnapshot{
 					ScreeningTotal:     snap.ScreeningTotal,

@@ -140,8 +140,13 @@ export async function updateMetricsTrend(data) {
     const innerHeight = height - padding.top - padding.bottom;
 
     const values = validPoints.map(p => p.value * 100);
-    const minVal = Math.min(...values, 0);
-    const maxVal = Math.max(...values, 100);
+    // Y 軸貼合資料範圍（± padding，夾在 0-100）——固定 0-100 會讓 78.9%
+    // 的平緩序列畫成一條中線直線，掩蓋真實變化。
+    let dataMin = Math.min(...values);
+    let dataMax = Math.max(...values);
+    const pad = Math.max((dataMax - dataMin) * 0.2, 2);
+    const minVal = Math.max(0, dataMin - pad);
+    const maxVal = Math.min(100, dataMax + pad);
     const range = maxVal - minVal || 1;
 
     const firstVal = values[0];

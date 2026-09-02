@@ -54,6 +54,10 @@ export class SimHealthPanel {
             <div class="sim-health-stat__value sim-health-stat__value--fail" id="simStatFail">-</div>
             <div class="sim-health-stat__label">失敗</div>
           </div>
+          <div class="sim-health-stat">
+            <div class="sim-health-stat__value sim-health-stat__value--running" id="simStatRunning">-</div>
+            <div class="sim-health-stat__label">進行中</div>
+          </div>
         </div>
         <div class="table-wrapper mt-sm">
           <table id="simHealthTable">
@@ -118,13 +122,28 @@ export class SimHealthPanel {
   }
 
   computeSummary() {
-    const summary = { total: 0, ok: 0, warn: 0, fail: 0 };
+    // 追蹤事件是「layer 發 START 再發 OK/WARN/FAIL」成對出現——逐事件統計
+    // 會把每個 layer 多算一筆 START（看起來像 7 個步驟永遠不完成）。
+    // 正確語意：以 layer 為單位，取最終狀態 FAIL > WARN > OK；只有 START
+    // 的 layer 才是進行中。
+    const byLayer = new Map();
     for (const trace of this.traces) {
-      summary.total++;
+      const layer = trace.layer || `step-${trace.step}`;
       const status = (trace.status || '').toUpperCase();
+      const prev = byLayer.get(layer);
+      // 優先序：FAIL > WARN > OK > START
+      const rank = { FAIL: 3, WARN: 2, OK: 1, START: 0 };
+      if (!prev || (rank[status] || 0) > (rank[prev] || 0)) {
+        byLayer.set(layer, status);
+      }
+    }
+    const summary = { total: 0, ok: 0, warn: 0, fail: 0, running: 0 };
+    for (const status of byLayer.values()) {
+      summary.total++;
       if (status === 'OK') summary.ok++;
       else if (status === 'WARN') summary.warn++;
       else if (status === 'FAIL') summary.fail++;
+      else summary.running++;
     }
     return summary;
   }
@@ -135,10 +154,12 @@ export class SimHealthPanel {
     const warnEl = this.container.querySelector('#simStatWarn');
     const failEl = this.container.querySelector('#simStatFail');
 
+    const runningEl = this.container.querySelector('#simStatRunning');
     if (totalEl) totalEl.textContent = summary.total;
     if (okEl) okEl.textContent = summary.ok;
     if (warnEl) warnEl.textContent = summary.warn;
     if (failEl) failEl.textContent = summary.fail;
+    if (runningEl) runningEl.textContent = summary.running || 0;
   }
 
   renderTable() {

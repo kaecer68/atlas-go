@@ -265,8 +265,8 @@ func TestDataQualityChecker_determineOverallStatus(t *testing.T) {
 func TestParseEnabledAgents(t *testing.T) {
 	data := []byte(`{"agents":[{"name":"a1","enabled":true},{"name":"a2","enabled":false}]}`)
 	got := parseEnabledAgents(data)
-	if len(got) != 1 || got[0] != "a1" {
-		t.Errorf("got %v, want [a1]", got)
+	if len(got) != 1 || got[0].name != "a1" {
+		t.Errorf("got %v, want [{a1 }]", got)
 	}
 
 	if got := parseEnabledAgents([]byte("invalid")); got != nil {

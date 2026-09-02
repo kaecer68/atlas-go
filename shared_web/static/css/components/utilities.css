@@ -119,3 +119,18 @@
 .p-4-v { padding: 4px 0; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Generic responsive grid — .grid.cols-N utilities used by admin pages
+ * (metrics KPI cards, trend detail splits). Previously .grid.cols-3 had no
+ * CSS anywhere, so every KPI card stacked full-width (2026-09-02 UI audit). */
+.grid { display: grid; gap: var(--space-md); }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid > * { min-width: 0; }
+@media (max-width: 1024px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+}
