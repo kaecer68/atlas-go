@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,7 @@ type PolicyReport struct {
 type LifecycleManager struct {
 	stateDir   string
 	policies   []RetentionPolicy
+	reportMu   sync.RWMutex
 	lastReport CleanupReport
 }
 
@@ -131,13 +133,34 @@ func (lm *LifecycleManager) Run(ctx context.Context, dryRun bool) (CleanupReport
 		report.Policies = append(report.Policies, pr)
 	}
 
+	lm.reportMu.Lock()
 	lm.lastReport = report
+	lm.reportMu.Unlock()
 	return report, nil
 }
 
-// LastReport returns the most recent cleanup report.
+// LastReport returns the most recent cleanup report. Before the first run
+// (fresh process, 24h scheduled task not yet fired) it synthesizes a dry-run
+// report so the dashboard still shows the retention schedule per directory
+// instead of an empty placeholder.
 func (lm *LifecycleManager) LastReport() any {
-	return lm.lastReport
+	lm.reportMu.RLock()
+	last := lm.lastReport
+	lm.reportMu.RUnlock()
+	if last.Policies == nil {
+		report := CleanupReport{
+			Policies: make([]PolicyReport, 0, len(lm.policies)),
+		}
+		for _, policy := range lm.policies {
+			report.Policies = append(report.Policies, PolicyReport{
+				Policy:     policy.Dir,
+				Dir:        policy.Dir,
+				MaxAgeDays: policy.MaxAgeDays,
+			})
+		}
+		return report
+	}
+	return last
 }
 
 // Stats returns current file counts per policy directory without performing any cleanup.
