@@ -10,8 +10,6 @@
 // Both are merged by task name; tasks only in the runtime status (never
 // written to liveness yet) are synthesized from the live state.
 
-import { postJSON } from '../shared/app-utils.js';
-
 export function renderSchedulerPage(tasks, getJSON) {
   var el = document.getElementById('schedulerContent');
   if (!el) return;
@@ -58,7 +56,9 @@ export function renderSchedulerPage(tasks, getJSON) {
 
     rows += '<tr>' +
       '<td><strong>' + escapeHtml(t.name) + '</strong>' + sourceBadge + '</td>' +
-      '<td>' + (t.channel_id ? '<span class="badge info">' + escapeHtml(t.channel_id) + '</span>' : '<span class="text-muted">—</span>') + '</td>' +
+      '<td>' + (t.channel_id
+        ? '<span class="badge info">' + escapeHtml(t.channel_id) + '</span>'
+        : '<span class="text-muted" style="font-size:11px" title="' + escapeHtml(t.description || '系統任務') + '">' + escapeHtml(t.description || '系統任務') + '</span>') + '</td>' +
       '<td>' + intervalStr + '</td>' +
       '<td>' + lastRunStr + '</td>' +
       '<td>' + lastSuccessStr + '</td>' +
@@ -68,10 +68,6 @@ export function renderSchedulerPage(tasks, getJSON) {
       '<td>' + staleBadge + (t.last_error ? '<span class="text-muted" style="font-size:11px" title="' + escapeHtml(t.last_error) + '">⚠</span>' : '') + '</td>' +
       '<td>' + nextRunStr + '</td>' +
       '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
-      (t.source === 'cron' ? '' :
-      '<td><button class="' + (t.enabled ? 'danger' : 'primary') + '" style="font-size:11px;padding:3px 10px" onclick="toggleSchedulerTask(\'' + escapeHtml(t.name) + '\',' + (!t.enabled) + ')">' +
-        (t.enabled ? '停用' : '啟用') +
-      '</button></td>') +
     '</tr>';
   }
 
@@ -112,7 +108,6 @@ export function renderSchedulerPage(tasks, getJSON) {
         '<th>逾期/錯誤</th>' +
         '<th>下次執行</th>' +
         '<th>狀態</th>' +
-        (tasks.some(function(t) { return t.source !== 'cron'; }) ? '<th style="width:80px">操作</th>' : '') +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody>' +
     '</table></div>';
@@ -165,6 +160,7 @@ function mergeLivenessAndStatus(livenessTasks, statusTasks) {
     var base = byName[l.name] || {};
     byName[l.name] = {
       name: l.name,
+      description: base.description || '',
       channel_id: base.channel_id,
       enabled: base.enabled,
       interval: l.interval || base.interval,
@@ -182,18 +178,10 @@ function mergeLivenessAndStatus(livenessTasks, statusTasks) {
   return Object.keys(byName).map(function(k) { return byName[k]; });
 }
 
-// Global toggle function called from HTML onclick
-export function toggleSchedulerTask(name, enabled) {
-  postJSON('/api/scheduler/toggle', { name: name, enabled: enabled })
-    .then(function() {
-      var el = document.getElementById('schedulerContent');
-      if (el) el.innerHTML = '<div class="empty loading">載入中…</div>';
-      loadSchedulerPage();
-    }).catch(function(err) {
-      console.error('toggle task ' + name + ':', err.message);
-      alert('切換失敗: ' + err.message);
-    });
-};
+// 2026-09-03 UI 審計：停用/啟用按鈕移除——內部管線不應由 UI 切換運行狀態
+//（誤點即停用關鍵監控；ml_retrain/calibration_cycle 的停用屬 code/參數
+// 層決策，UI toggle 反而會與其打架）。POST /api/scheduler/toggle 端點
+// 保留給 CLI/維運腳本。postJSON import 一併移除。
 
 // Global page reload function: fetches persisted liveness + live status.
 export function loadSchedulerPage() {

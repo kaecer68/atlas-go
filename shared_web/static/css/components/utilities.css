@@ -134,3 +134,15 @@
 @media (max-width: 640px) {
   .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
 }
+
+/* Inline refresh button — page-level manual refresh controls must NOT reuse
+ * .refresh (position:fixed bottom-right FAB), which stacked them on top of
+ * the global floating refresh (2026-09-03 metrics page audit). */
+.refresh-inline {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}

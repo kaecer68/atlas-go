@@ -42,6 +42,11 @@ var timeoutRouteOverrides = map[string]time.Duration{
 	// slow channel doesn't 503 (see R3).
 	"/api/cross-market/status":  longRequestTimeout,
 	"/api/dashboard/us-indices": longRequestTimeout,
+
+	// Task-liveness aggregates ~90 tasks' persisted state per request and
+	// consistently runs 4-11s — the 8s default 503'd it, leaving the
+	// scheduler page spinning forever (observed 2026-09-03).
+	"/api/dashboard/task-liveness": longRequestTimeout,
 }
 
 // timeoutResponseWriter wraps http.ResponseWriter so the timeout middleware
