@@ -346,6 +346,19 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		return nil, fmt.Errorf("finmind: API error: %s", finmindResp.Msg)
 	}
 
+	// Free-tier throttling masquerades as success: FinMind answers HTTP 200
+	// with a non-"success" msg (e.g. "Your level is free. Please update
+	// your user level.") and an EMPTY data array when the request budget is
+	// exhausted. Callers that walk dates backward (tdcc/sbl history probes)
+	// would otherwise burn their remaining budget re-probing empty days
+	// (observed 2026-09-02: tdcc channel "no dispersion data" after the
+	// backfill cursor + scheduled tasks shared the free quota). Classify it
+	// as a quota condition — a budget state that resets, not an outage.
+	if finmindResp.Msg != "" && finmindResp.Msg != "success" && len(finmindResp.Data) == 0 {
+		c.breakerRecordSuccess()
+		return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, finmindResp.Msg)
+	}
+
 	// P2-15: response schema fingerprint — warn the moment the upstream
 	// renames/drops a field this client depends on, instead of surfacing
 	// later as an obscure type-assertion error in the dataset callers.
