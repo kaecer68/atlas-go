@@ -13,12 +13,20 @@ type StorageReporter interface {
 }
 
 type Handlers struct {
-	svc           *service.MetricsService
-	storageReport StorageReporter
+	svc            *service.MetricsService
+	storageReport  StorageReporter
+	qualityChecker service.DataQualityCheckerInterface
 }
 
 func NewHandlers(svc *service.MetricsService) *Handlers {
 	return &Handlers{svc: svc}
+}
+
+// WithQualityChecker attaches a data quality checker so HandleDataQuality
+// reports real checks instead of an empty placeholder report.
+func (h *Handlers) WithQualityChecker(c service.DataQualityCheckerInterface) *Handlers {
+	h.qualityChecker = c
+	return h
 }
 
 // WithStorageReporter attaches a storage reporter for the /api/metrics/storage endpoint.
@@ -55,7 +63,7 @@ func (h *Handlers) HandleMetricsTrend(r *http.Request) (int, any) {
 }
 
 func (h *Handlers) HandleDataQuality(r *http.Request) (int, any) {
-	return http.StatusOK, h.svc.CheckDataQuality(nil)
+	return http.StatusOK, h.svc.CheckDataQuality(h.qualityChecker)
 }
 
 func (h *Handlers) HandleThresholds(r *http.Request) (int, any) {
