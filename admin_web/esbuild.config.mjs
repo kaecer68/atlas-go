@@ -18,12 +18,15 @@ const mode = process.argv[2] || "build"; // "build" or "watch"
 
 const opts = {
   entryPoints: [
-    { in: "../shared_web/static/js/bootstrap-utils.js", out: "js/bootstrap-utils" },
-    { in: "static/js/main.js", out: "js/main" },
-    { in: "static/js/component-init.js", out: "js/component-init" },
-    { in: "static/js/event-listeners.js", out: "js/event-listeners" },
+    // -v2 suffix: entry names are stable (unhashed), and CDN edges that
+    // cached the old names under a stale immutable header would keep serving
+    // them for a year. A renamed entry is a brand-new URL — no purge needed.
+    { in: "../shared_web/static/js/bootstrap-utils.js", out: "js/bootstrap-utils-v2" },
+    { in: "static/js/main.js", out: "js/main-v2" },
+    { in: "static/js/component-init.js", out: "js/component-init-v2" },
+    { in: "static/js/event-listeners.js", out: "js/event-listeners-v2" },
     // CSS entry — esbuild resolves @import at build time into single file
-    { in: "../shared_web/static/css/main.css", out: "css/main" },
+    { in: "../shared_web/static/css/main.css", out: "css/main-v2" },
   ],
   bundle: true,
   format: "esm",
