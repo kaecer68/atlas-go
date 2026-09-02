@@ -74,7 +74,12 @@ func RegisterAdminRoutes(mux *http.ServeMux, cfg config.Config, pm *fubonproxy.P
 
 	// Phase 3.5 M1: deployment dashboard — read-only snapshot of fubon-proxy status.
 	dh := deployment.NewHandlers(pm)
-	mux.HandleFunc("/api/admin/live/deployment/dashboard", wrapAdminAuth(dh.HandleDeploymentDashboard))
+	// Read-only operational status — served WITHOUT the API-key guard. The
+	// admin console is gated by the member auth system upstream
+	// (member.goluck.uk/admin); every other dashboard GET on this console is
+	// public-read, so demanding an X-API-Key here only produced a dead-end
+	// "需要管理員登入" prompt for already-authenticated admins.
+	mux.HandleFunc("/api/admin/live/deployment/dashboard", dh.HandleDeploymentDashboard)
 }
 
 // handleAdminReloadConfig reloads parameters.json from disk and returns

@@ -331,12 +331,22 @@ func (dq *DataQualityChecker) checkPromptFiles(ctx context.Context) DataQualityC
 	missingPrompts := []string{}
 	promptsDir := filepath.Join(dq.workDir, "prompts", "agents")
 	for _, agent := range enabledAgents {
-		promptPath := filepath.Join(promptsDir, agent+".md")
-		if _, err := os.Stat(promptPath); os.IsNotExist(err) {
-			promptPath2 := filepath.Join(promptsDir, agent+".prompt.md")
-			if _, err := os.Stat(promptPath2); os.IsNotExist(err) {
-				missingPrompts = append(missingPrompts, agent)
+		// agents.json carries the authoritative promptFile path (English
+		// file id) while `name` is the Chinese display label — checking by
+		// name produced false "missing prompt" criticals for every agent
+		// (observed 2026-09-02: 5 agents flagged though all prompts exist).
+		promptPath := agent.promptFile
+		if promptPath != "" && !filepath.IsAbs(promptPath) {
+			promptPath = filepath.Join(dq.workDir, promptPath)
+		}
+		if promptPath == "" {
+			promptPath = filepath.Join(promptsDir, agent.name+".md")
+			if _, err := os.Stat(promptPath); os.IsNotExist(err) {
+				promptPath = filepath.Join(promptsDir, agent.name+".prompt.md")
 			}
+		}
+		if _, err := os.Stat(promptPath); os.IsNotExist(err) {
+			missingPrompts = append(missingPrompts, agent.name)
 		}
 	}
 
@@ -438,20 +448,26 @@ func (dq *DataQualityChecker) determineOverallStatus(checks []DataQualityCheck) 
 	return StatusOK
 }
 
-func parseEnabledAgents(data []byte) []string {
+type agentPromptRef struct {
+	name       string
+	promptFile string
+}
+
+func parseEnabledAgents(data []byte) []agentPromptRef {
 	var reg struct {
 		Agents []struct {
-			Name    string `json:"name"`
-			Enabled bool   `json:"enabled"`
+			Name       string `json:"name"`
+			PromptFile string `json:"promptFile"`
+			Enabled    bool   `json:"enabled"`
 		} `json:"agents"`
 	}
 	if err := json.Unmarshal(data, &reg); err != nil {
 		return nil
 	}
-	var agents []string
+	var agents []agentPromptRef
 	for _, a := range reg.Agents {
 		if a.Enabled {
-			agents = append(agents, a.Name)
+			agents = append(agents, agentPromptRef{name: a.Name, promptFile: a.PromptFile})
 		}
 	}
 	return agents

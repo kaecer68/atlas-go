@@ -37,6 +37,7 @@ type CleanupReport struct {
 type PolicyReport struct {
 	Policy     string `json:"policy"`
 	Dir        string `json:"dir"`
+	MaxAgeDays int    `json:"max_age_days"`
 	Deleted    int    `json:"deleted"`
 	Kept       int    `json:"kept"`
 	OldestKept string `json:"oldest_kept"`
@@ -167,8 +168,9 @@ func (lm *LifecycleManager) Stats() (map[string]int, error) {
 // applyPolicy applies a single retention policy and returns the report.
 func (lm *LifecycleManager) applyPolicy(policy RetentionPolicy, dryRun bool) (PolicyReport, error) {
 	pr := PolicyReport{
-		Policy: policy.Dir,
-		Dir:    policy.Dir,
+		Policy:     policy.Dir,
+		Dir:        policy.Dir,
+		MaxAgeDays: policy.MaxAgeDays,
 	}
 
 	dirPath := filepath.Join(lm.stateDir, policy.Dir)
