@@ -111,6 +111,11 @@ type DeploymentConfig struct {
 // Used by the deployment dashboard to surface process health without blocking the supervisor.
 // Returns a zero-value (SupervisorRunning=false) when the ProcessManager has not been started.
 type DeploymentStatus struct {
+	// NeverStarted distinguishes "supervisor intentionally not started"
+	// (sim phase — the normal production posture) from a real crash. The
+	// zero-value status was previously rendered as DOWN/死亡 with a green
+	// "心跳剛剛", which read as an outage.
+	NeverStarted      bool             `json:"never_started"`
 	SupervisorRunning bool             `json:"supervisor_running"`
 	ProcessAlive      bool             `json:"process_alive"`
 	PID               int              `json:"pid"`
@@ -609,7 +614,7 @@ func (m *ProcessManager) Status() DeploymentStatus {
 	// Pre-Start or post-Stop: no process ever spawned.
 	if cmd == nil && !running {
 		m.mu.RUnlock()
-		return DeploymentStatus{}
+		return DeploymentStatus{NeverStarted: true}
 	}
 
 	pid := 0

@@ -194,6 +194,22 @@ export class DeploymentDashboard {
 
   updateView(status) {
     if (!this.container) return;
+    if (status.never_started) {
+      // Supervisor 從未啟動（模擬階段的正常姿態）——顯示中性「未啟用」，
+      // 不渲染成 DOWN/死亡 假警報。
+      const stateEl = this.container.querySelector('#deploymentSupervisorState');
+      const aliveEl = this.container.querySelector('#deploymentProcessAlive');
+      const beatEl = this.container.querySelector('#deploymentLastBeat');
+      if (stateEl) stateEl.innerHTML = '<span class="badge">未啟用</span>';
+      if (aliveEl) aliveEl.innerHTML = '<span class="badge">—</span>';
+      if (beatEl) beatEl.textContent = '—';
+      const restartEl = this.container.querySelector('#deploymentRestartCount');
+      if (restartEl) restartEl.textContent = '0';
+      this.renderProcessInfo(status);
+      this.renderTimeline(status);
+      this.renderRecentErrors(status);
+      return;
+    }
     this.renderSummaryStats(status);
     this.renderProcessInfo(status);
     this.renderTimeline(status);

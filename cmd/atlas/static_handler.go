@@ -4,8 +4,14 @@ import (
 	"io/fs"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+// hashRe matches esbuild content-hashed asset names: <name>-<8 alphanumerics>
+// (e.g. metrics-IBTZZMC5.js, chunk-AEYXGOVL.js). Non-handed shared files
+// (component-init.js, bootstrap-utils.js) do not match and stay no-cache.
+var hashRe = regexp.MustCompile(`-[0-9A-Za-z]{8}\.(js|css)$`)
 
 // staticHandler returns an http.Handler that serves static assets from the given fs.FS.
 // It applies Cache-Control headers (immutable for hashed assets, no-cache for others)
@@ -27,8 +33,13 @@ func staticHandler(assets fs.FS) http.Handler {
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
 		cleanPath := filepath.Clean(r.URL.Path)
-		// Serve hashed assets with long-lived cache
-		if strings.Contains(cleanPath, "-") && (strings.HasSuffix(cleanPath, ".js") || strings.HasSuffix(cleanPath, ".css")) {
+		// Serve hashed assets with long-lived cache. Hash detection must be
+		// strict (final dash + 8 alphanumeric chars, esbuild's hash shape):
+		// the old "filename contains -" heuristic also matched NON-hashed
+		// files like component-init.js / event-listeners.js and pinned them
+		// immutable for a year — deployments then served stale JS until a
+		// manual hard refresh (observed 2026-09-02 on /admin/metrics).
+		if hashRe.MatchString(cleanPath) {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.Header().Del("Pragma")
 			w.Header().Del("Expires")

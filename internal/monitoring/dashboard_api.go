@@ -134,6 +134,7 @@ type DashboardAPI struct {
 	lastHistoryPush            atomic.Int64 // unix sec; throttles trend snapshot recording
 	lastHistoryVal             atomic.Int64 // last recorded ScreeningRate * 1e6 (change gate)
 	lastHistoryTotal           atomic.Int64 // last recorded ScreeningTotal (change gate)
+	lastHistoryHeartbeat       atomic.Int64 // unix hour of last heartbeat snapshot
 	healthManager              *portfolio.AgentHealthManager
 	dataQualityChecker         *DataQualityChecker
 	janusEngine                *janus.Engine
@@ -1227,9 +1228,17 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 					a.lastHistoryPush.Store(now)
 					rate := int64(snap.ScreeningRate * 1e6)
 					changed := rate != a.lastHistoryVal.Load() || snap.ScreeningTotal != a.lastHistoryTotal.Load()
-					a.lastHistoryVal.Store(rate)
-					a.lastHistoryTotal.Store(snap.ScreeningTotal)
-					if changed {
+					// Heartbeat: one point per hour even without change, so
+					// the 24h trend chart always shows a continuous line
+					// (change-only recording left 2-3 sparse points between
+					// simulation runs).
+					heartbeat := now/3600 != a.lastHistoryHeartbeat.Load()
+					if heartbeat {
+						a.lastHistoryHeartbeat.Store(now / 3600)
+					}
+					if changed || heartbeat {
+						a.lastHistoryVal.Store(rate)
+						a.lastHistoryTotal.Store(snap.ScreeningTotal)
 						a.metricsHistory.AddSnapshot(MetricsSnapshot{
 							ScreeningRate:      snap.ScreeningRate,
 							AlertsTriggered:    snap.AlertsTriggered,

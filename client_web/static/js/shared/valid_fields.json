@@ -1186,6 +1186,7 @@
   "neutral",
   "neutral_penalty_reduction",
   "neutral_regime_sizing_factor",
+  "never_started",
   "new_accuracy",
   "new_config",
   "new_value",

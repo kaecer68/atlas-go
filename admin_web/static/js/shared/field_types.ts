@@ -947,6 +947,7 @@ export interface DeploymentConfig {
 }
 
 export interface DeploymentStatus {
+  never_started: boolean;
   supervisor_running: boolean;
   process_alive: boolean;
   pid: number;
