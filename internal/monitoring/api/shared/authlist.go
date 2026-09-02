@@ -102,6 +102,7 @@ var AuthFreePrefixPaths = []string{
 	"/api/traces/",
 	"/api/llm/",
 	"/api/llm_annotator/",
+	"/api/metrics/",
 	"/api/prism/",
 }
 

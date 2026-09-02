@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -80,6 +81,36 @@ type FetchMeta struct {
 // It breaks the import cycle between monitoring and apigateway packages.
 type DataFetcher func(ctx context.Context, channelID string) ([]byte, FetchMeta, error)
 
+// dataQualityAdapter converts the monitoring-layer checker to the
+// service-layer interface consumed by the metrics handlers.
+type dataQualityAdapter struct {
+	checker *DataQualityChecker
+}
+
+func (d dataQualityAdapter) RunAll(ctx context.Context) *service.DataQualityReport {
+	rep := d.checker.RunAll(ctx)
+	if rep == nil {
+		return nil
+	}
+	out := &service.DataQualityReport{
+		Overall:     service.CheckStatus(rep.Overall),
+		Score:       rep.Score,
+		GeneratedAt: rep.GeneratedAt,
+		Checks:      make([]service.DataQualityCheck, 0, len(rep.Checks)),
+	}
+	for _, ch := range rep.Checks {
+		out.Checks = append(out.Checks, service.DataQualityCheck{
+			Name:      ch.Name,
+			Status:    service.CheckStatus(ch.Status),
+			Message:   ch.Message,
+			Details:   ch.Details,
+			CheckedAt: ch.CheckedAt,
+			Duration:  ch.Duration,
+		})
+	}
+	return out
+}
+
 type DashboardAPI struct {
 	workDir                    string
 	ledgerDir                  string
@@ -100,6 +131,7 @@ type DashboardAPI struct {
 	industryService            *service.IndustryService
 	metricsCollector           *MetricsCollector
 	metricsHistory             *MetricsHistory
+	lastHistoryPush            atomic.Int64 // unix sec; throttles trend snapshot recording
 	healthManager              *portfolio.AgentHealthManager
 	dataQualityChecker         *DataQualityChecker
 	janusEngine                *janus.Engine
@@ -1185,6 +1217,17 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 			GetScreeningRateFunc: a.metricsCollector.GetScreeningRate,
 			GetMetricsSnapshotFunc: func() service.MetricsSnapshot {
 				snap := a.metricsCollector.GetMetricsSnapshot()
+				// Record the snapshot into the trend history (throttled to
+				// one point per minute) so the metrics trend chart has data.
+				if now := time.Now().Unix(); now-a.lastHistoryPush.Load() >= 60 {
+					a.lastHistoryPush.Store(now)
+					a.metricsHistory.AddSnapshot(MetricsSnapshot{
+						ScreeningRate:      snap.ScreeningRate,
+						AlertsTriggered:    snap.AlertsTriggered,
+						AlertsAcknowledged: snap.AlertsAcknowledged,
+						Timestamp:          snap.Timestamp,
+					})
+				}
 				return service.MetricsSnapshot{
 					ScreeningTotal:     snap.ScreeningTotal,
 					ScreeningPassed:    snap.ScreeningPassed,
@@ -1232,6 +1275,9 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	metricsHandlers := apimetrics.NewHandlers(metricsSvc)
 	if a.storageReport != nil {
 		metricsHandlers.WithStorageReporter(a.storageReport)
+	}
+	if a.dataQualityChecker != nil {
+		metricsHandlers.WithQualityChecker(dataQualityAdapter{a.dataQualityChecker})
 	}
 	metricsHandlers.RegisterRoutes(mux)
 
