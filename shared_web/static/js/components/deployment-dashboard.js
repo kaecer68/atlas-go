@@ -123,7 +123,7 @@ export class DeploymentDashboard {
         <h3 class="text-muted mb-sm">程序資訊</h3>
         <div id="deploymentProcessInfo" class="text-sm">載入中…</div>
 
-        <h3 class="text-muted mb-sm mt-sm">最近事件 (timeline, 最新 10 筆)</h3>
+        <h3 class="text-muted mb-sm mt-sm">最近事件（最多顯示 10 筆；無事件表示 supervisor 未產生任何紀錄）</h3>
         <div class="table-wrapper">
           <table id="deploymentTimelineTable">
             <thead>
@@ -135,7 +135,7 @@ export class DeploymentDashboard {
           </table>
         </div>
 
-        <h3 class="text-muted mb-sm mt-sm">最近錯誤 (最新 5 筆)</h3>
+        <h3 class="text-muted mb-sm mt-sm">最近錯誤（最多顯示 5 筆；「無」= 目前沒有任何錯誤）</h3>
         <div id="deploymentErrorsList" class="text-sm">載入中…</div>
       </div>
     `;
@@ -205,7 +205,11 @@ export class DeploymentDashboard {
       if (beatEl) beatEl.textContent = '—';
       const restartEl = this.container.querySelector('#deploymentRestartCount');
       if (restartEl) restartEl.textContent = '0';
-      this.renderProcessInfo(status);
+      const infoEl = this.container.querySelector('#deploymentProcessInfo');
+      if (infoEl) {
+        infoEl.innerHTML =
+          '<span class="text-muted">supervisor 從未啟動——fubon-proxy 僅在啟用實盤模式時執行，模擬階段無 PID/Port 可顯示。</span>';
+      }
       this.renderTimeline(status);
       this.renderRecentErrors(status);
       return;
@@ -285,7 +289,7 @@ export class DeploymentDashboard {
 
     const events = Array.isArray(status.recent_events) ? status.recent_events : [];
     if (events.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="empty">尚無事件</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="empty">尚無事件——supervisor 從未啟動或尚未產生任何事件</td></tr>';
       return;
     }
 
