@@ -14,8 +14,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
-func ptr(s string) *string { return &s }
-
 // openTempDB opens a fresh SQLite file DB (file-backed so UPDATE persists).
 func openTempDB(t *testing.T) (*sql.DB, string) {
 	t.Helper()
@@ -210,10 +208,11 @@ func TestBackfillJSONLFile(t *testing.T) {
 	}
 
 	// Second run: nothing to fill.
-	if examined, filled, err = backfillJSONLFile(path, periodFor, false); err != nil {
+	var filled2 int
+	if _, filled2, err = backfillJSONLFile(path, periodFor, false); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
-	if filled != 0 {
-		t.Errorf("second run filled=%d, want 0 (idempotent)", filled)
+	if filled2 != 0 {
+		t.Errorf("second run filled=%d, want 0 (idempotent)", filled2)
 	}
 }
