@@ -222,10 +222,22 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 			if report == nil {
 				return aggErr
 			}
+			// 2026-09-03 per-industry 容錯：no_data 產業已被 aggregator skip
+			// （report.Skipped）。無資料產業不該讓 6h 任務失敗——只有「全數
+			// 硬失敗」（quota/rate-limit/transport 等，aggErr != nil）才算
+			// 失敗；全數無資料時回 nil，並用 noProgress 說明本輪跳過原因。
 			noProgress := ""
-			if report.Attempted > 0 && report.Succeeded == 0 {
+			switch {
+			case report.Succeeded == 0 && report.Attempted > 0 && report.Skipped == report.Attempted:
+				noProgress = fmt.Sprintf("0/%d industries aggregated — 本輪 %d 個產業皆無資料（已跳過，等待發布）",
+					report.Attempted, report.Skipped)
+			case report.Succeeded == 0 && report.Attempted > 0:
 				noProgress = fmt.Sprintf("0/%d industries aggregated; last: %s",
 					report.Attempted, aggErr)
+			case report.Skipped > 0:
+				logging.Info("auto_cycle_update", "round_skipped_summary",
+					"succeeded", report.Succeeded, "skipped", report.Skipped,
+					"attempted", report.Attempted)
 			}
 			// LastNewSamples = 成功聚合的 industry 數（= 寫入 CycleTracker 的
 			// UpdatePosition 次數）；LastDataAsOf = 本次聚合完成時間。
@@ -236,6 +248,10 @@ func (d calibrationDeps) registerAutoCycleUpdate() {
 				if err := svc.CycleTracker.SaveToFile(filepath.Join(d.Cfg.WorkDir, "data/state", "cycle_tracker.json")); err != nil {
 					logging.Warn("auto_cycle_update", "cycle_state_save_failed", "err", err.Error())
 				}
+			}
+			// 全數無資料（全 skip）不是失敗：沒有可更新的資料 ≠ 任務出錯。
+			if report.Attempted > 0 && report.Succeeded == 0 && report.Skipped == report.Attempted {
+				return nil
 			}
 			return aggErr
 		},

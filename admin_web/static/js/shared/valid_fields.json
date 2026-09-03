@@ -1703,6 +1703,7 @@
   "skill_to_industries",
   "skill_to_industry",
   "skill_to_theme",
+  "skipped",
   "sla_violation_meta_alert",
   "slippage_bps",
   "slippage_error_bps",

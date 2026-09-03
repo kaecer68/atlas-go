@@ -44,8 +44,12 @@ type IndustryAggregateStatus struct {
 // （LastDataAsOf / LastNewSamples / NoProgressReason），取代「只有
 // last_error 字串」的被動監控。
 type AggregateReport struct {
-	Attempted  int                       `json:"attempted"`
-	Succeeded  int                       `json:"succeeded"`
+	Attempted int `json:"attempted"`
+	Succeeded int `json:"succeeded"`
+	// Skipped counts industries that had no data this round (no_data kind) —
+	// they were deliberately skipped (warn log) instead of treated as
+	// failures, so a single data-less industry never fails the whole 6h task.
+	Skipped    int                       `json:"skipped"`
 	UpdatedAt  time.Time                 `json:"updated_at"`
 	Industries []IndustryAggregateStatus `json:"industries"`
 }
@@ -116,10 +120,22 @@ func (a *DataAggregator) AggregateAllIndustriesReport(ctx context.Context) (*Agg
 		report.Attempted++
 		status := IndustryAggregateStatus{IndustryID: seg.ID}
 		if err := a.AggregateIndustry(ctx, seg.ID); err != nil {
-			logging.Warn("data_aggregator", "industry_aggregate_failed",
-				"industry", seg.ID, "err", err)
 			status.Error = err.Error()
 			report.Industries = append(report.Industries, status)
+			// 2026-09-03 per-industry 容錯（實證：auto_cycle_update 因單一
+			// 產業 laser_communication 無資料連續失敗 4 次）：no_data kind 的
+			// 產業失敗是「本輪無資料可抓」——skip + warn log（記入彙總 Skipped
+			// 計數），其他產業照常更新；只有硬失敗（quota / rate_limited /
+			// transport / parse_error / unknown 等真實異常）才可能讓整輪任務
+			// 失敗。
+			if classifyFinMindError(err) == "no_data" {
+				logging.Warn("data_aggregator", "industry_skipped_no_data",
+					"industry", seg.ID, "round_skipped", report.Skipped+1, "err", err)
+				report.Skipped++
+				continue
+			}
+			logging.Warn("data_aggregator", "industry_aggregate_failed",
+				"industry", seg.ID, "err", err)
 			aggregateErr = err
 			continue
 		}
@@ -128,8 +144,11 @@ func (a *DataAggregator) AggregateAllIndustriesReport(ctx context.Context) (*Agg
 		report.Succeeded++
 	}
 	// Partial failure (e.g. FinMind quota exhausted for some symbols) must not
-	// fail the whole scheduled task; only a total failure is an error.
-	if report.Attempted > 0 && report.Succeeded == 0 {
+	// fail the whole scheduled task. A round is an error only when EVERY
+	// attempted industry failed AND at least one failure is a hard failure —
+	// a round whose only failures are no-data skips is not an error (there was
+	// simply nothing new to update this round).
+	if report.Attempted > 0 && report.Succeeded == 0 && report.Skipped < report.Attempted {
 		return report, aggregateErr
 	}
 	return report, nil
@@ -156,10 +175,21 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	now := time.Now()
 	revSum, revCount := 0.0, 0
 	profitSum, profitCount := 0.0, 0
+	// firstBlockingErr captures the first quota/rate-limit condition seen
+	// while fetching symbols. Per-symbol errors are otherwise swallowed by
+	// the count-based flow; without this the industry-level failure would be
+	// misclassified as "no valid data" (kind=no_data) even when the real
+	// cause was FinMind quota/rate-limit — the exact symptom observed when
+	// auto_cycle_update reported 4 consecutive "no valid data for industry
+	// laser_communication" failures that were actually quota exhaustion.
+	var firstBlockingErr error
 
 	for _, symbol := range stocks {
 		revYoY, err := a.fetchRevenueYoY(ctx, symbol, now)
 		if err != nil {
+			if isFinMindQuotaOrRateLimited(err) && firstBlockingErr == nil {
+				firstBlockingErr = err
+			}
 			logging.Warn("data_aggregator", "revenue_fetch_failed",
 				"symbol", symbol, "industry", industryID, "err", err)
 			continue
@@ -171,6 +201,9 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	for _, symbol := range stocks {
 		profitYoY, err := a.fetchProfitYoY(ctx, symbol, now)
 		if err != nil {
+			if isFinMindQuotaOrRateLimited(err) && firstBlockingErr == nil {
+				firstBlockingErr = err
+			}
 			continue
 		}
 		profitSum += profitYoY
@@ -178,6 +211,12 @@ func (a *DataAggregator) AggregateIndustry(ctx context.Context, industryID strin
 	}
 
 	if revCount == 0 && profitCount == 0 {
+		// Keep the typed root cause in the chain so classifyFinMindError
+		// reports "quota"/"rate_limited" (not a misleading "no_data") when the
+		// whole batch failed because FinMind budget/rate ran out.
+		if firstBlockingErr != nil {
+			return a.recordIndustryFailure(industryID, fmt.Errorf("data_aggregator: %w: no valid data for industry %q", firstBlockingErr, industryID))
+		}
 		return a.recordIndustryFailure(industryID, fmt.Errorf("data_aggregator: no valid data for industry %q", industryID))
 	}
 
