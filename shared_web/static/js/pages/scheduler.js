@@ -30,10 +30,14 @@ export function renderSchedulerPage(tasks, getJSON) {
       statusText = '逾期';
       stale++;
     }
-    if (!t.enabled) {
+    if (t.enabled === false) {
       statusClass = 'info';
       statusText = '已停用';
       disabled++;
+    } else if (t.enabled === null) {
+      // liveness-only：外部 cron 容器，不在 BTM 管理範圍
+      statusClass = 'info';
+      statusText = '外部排程';
     } else if (t.consecutive_failures > 0) {
       statusClass = t.consecutive_failures >= 3 ? 'err' : 'warn';
       statusText = '失効' + t.consecutive_failures + (t.consecutive_failures > 1 ? ' 次' : ' 次');
@@ -162,7 +166,9 @@ function mergeLivenessAndStatus(livenessTasks, statusTasks) {
       name: l.name,
       description: base.description || '',
       channel_id: base.channel_id,
-      enabled: base.enabled,
+      // liveness-only rows（cron 容器等外部排程）enabled 未知——不得渲染成
+      // 「已停用」（2026-09-03 審計：5 筆 cron 容器幽靈列被誤標停用）。
+      enabled: base.enabled !== undefined ? base.enabled : null,
       interval: l.interval || base.interval,
       next_run_at: l.next_run_at || base.next_run_at,
       last_run_at: l.last_run_at,
