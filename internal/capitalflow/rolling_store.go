@@ -45,6 +45,12 @@ const (
 	SourceGovernmentOperator = "SRC-OPERATOR-IMPORTED"
 	SourceSECTSMC            = "SRC-SEC-TSMC"
 	SourceYahoo              = "SRC-YAHOO-TSM-DERIVED"
+
+	// SourceFinMindFutOI is the FinMind TaiwanFuturesInstitutionalInvestors
+	// feed (FinMind's mirror of the TAIFEX institutional futures OI
+	// report). Used by the history import for the ForceFutures dimension
+	// when the snapshot source is the FinMind backfill channel.
+	SourceFinMindFutOI = "SRC-FINMIND-FUT-OI"
 )
 
 // currentRollingStateVersion is the schema version this code emits

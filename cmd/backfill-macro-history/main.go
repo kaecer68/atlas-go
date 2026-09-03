@@ -45,11 +45,6 @@ type channel struct {
 	ticker string // Yahoo chart ticker, e.g. "TSM"
 }
 
-var defaultChannels = []channel{
-	{field: "taiex", symbol: "^TWII", ticker: "^TWII"},
-	{field: "tsm_adr", symbol: "TSM", ticker: "TSM"},
-}
-
 // chartQuote is the subset of the Yahoo v8 chart response this tool needs.
 type chartQuote struct {
 	Chart struct {
@@ -148,7 +143,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("open log: %v", err)
 	}
-	defer logf.Close()
+	defer func() { _ = logf.Close() }()
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	ctx := context.Background()
@@ -205,7 +200,7 @@ func fetchHistory(ctx context.Context, client *http.Client, ch channel, start, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("yahoo %s: HTTP %d: %s", ch.ticker, resp.StatusCode, strings.TrimSpace(string(body)))
