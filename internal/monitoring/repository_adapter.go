@@ -3,9 +3,11 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/repository"
 )
 
@@ -111,6 +113,22 @@ func NewOutcomeStoreAdapter(store ledger.OutcomeStore) *OutcomeStoreAdapter {
 	return &OutcomeStoreAdapter{store: store}
 }
 
+// scorecardSlimAdapterFallbackTotal counts observatory slim-projection
+// fallbacks at the OutcomeStoreAdapter layer (#1780 Phase 1, B1): when the
+// wrapped ledger store lacks the optional LoadScorecardOutcomes method, the
+// adapter silently falling back to LoadOutcomesFromSessions would re-enable
+// the full-metadata ~1.9GB load the slim projection eliminates, with no
+// signal. A non-zero delta since deploy means the slim path is NOT active and
+// the OOM mitigation is not engaged. Mirrors the DualWriteFallbackTotal
+// observability pattern.
+var scorecardSlimAdapterFallbackTotal atomic.Int64
+
+// ScorecardSlimAdapterFallbackTotal returns the total OutcomeStoreAdapter
+// slim-projection fallbacks. Exposed for monitoring/alerting consumption.
+func ScorecardSlimAdapterFallbackTotal() int64 {
+	return scorecardSlimAdapterFallbackTotal.Load()
+}
+
 func (a *OutcomeStoreAdapter) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
 	return a.store.RecordOutcomes(outcomes)
 }
@@ -124,6 +142,24 @@ func (a *OutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, er
 }
 
 func (a *OutcomeStoreAdapter) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
+	return a.store.LoadOutcomesFromSessions()
+}
+
+// LoadScorecardOutcomes serves the observatory scorecard slim projection (8
+// scalar fields from JSONB, #1780 Phase 1) when the wrapped ledger store
+// implements the optional ledger.ScorecardOutcomeStore interface. Stores that
+// lack the method (jsonl/sqlite backends, existing mocks) fall back to the
+// full LoadOutcomesFromSessions read — the pre-#1780 behavior — with a warn
+// log and counter so a silently inactive slim path is observable (B1).
+func (a *OutcomeStoreAdapter) LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error) {
+	if sl, ok := a.store.(ledger.ScorecardOutcomeStore); ok {
+		return sl.LoadScorecardOutcomes()
+	}
+	scorecardSlimAdapterFallbackTotal.Add(1)
+	logging.Warn("monitoring", "scorecard_slim_fallback",
+		"layer", "outcome_store_adapter",
+		"store_type", fmt.Sprintf("%T", a.store),
+		"reason", "store does not implement ledger.ScorecardOutcomeStore; full metadata read")
 	return a.store.LoadOutcomesFromSessions()
 }
 
@@ -196,6 +232,10 @@ func (a *DualWriteOutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOu
 
 func (a *DualWriteOutcomeStoreAdapter) LoadOutcomesFromSessions() ([]domain.RecommendationOutcome, error) {
 	return a.repo.QueryAllOutcomes(a.ctx)
+}
+
+func (a *DualWriteOutcomeStoreAdapter) LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error) {
+	return a.repo.QueryScorecardOutcomes(a.ctx)
 }
 
 func (a *DualWriteOutcomeStoreAdapter) RecordSessionOutcomes(session domain.ReplaySession, outcomes []domain.RecommendationOutcome) error {

@@ -490,8 +490,18 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 	scorecards := make([]domain.Scorecard, 0, len(byAgent))
 	for _, entry := range byAgent {
 		avg := mean(entry.returns)
-		daily := make([]float64, 0, len(entry.windows))
+		// Deterministic per-window order (B4, #1780 Phase 1 review): daily is
+		// fed into order-dependent sharpeTrendSlope/maxDrawdown, and ranging
+		// over the windows map directly yields random iteration order — the
+		// same input could produce a different RollingSharpeTrend/MaxDrawdown
+		// on every run. Sorting the window keys first makes both reproducible.
+		windows := make([]string, 0, len(entry.windows))
 		for w := range entry.windows {
+			windows = append(windows, w)
+		}
+		slices.Sort(windows)
+		daily := make([]float64, 0, len(windows))
+		for _, w := range windows {
 			if c := entry.dailyCounts[w]; c > 0 {
 				daily = append(daily, entry.dailyReturns[w]/float64(c))
 			}
@@ -604,7 +614,12 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 		case a.SharpeLike > b.SharpeLike:
 			return 1
 		default:
-			return 0
+			// Deterministic tiebreak (B4): with equal SharpeLike the previous
+			// comparator returned 0, so the order — and therefore the
+			// observatory's top-limit cut — depended on the random byAgent
+			// map iteration above. AgentID makes the output fully
+			// reproducible across runs and across the slim/full read paths.
+			return strings.Compare(a.AgentID, b.AgentID)
 		}
 	})
 

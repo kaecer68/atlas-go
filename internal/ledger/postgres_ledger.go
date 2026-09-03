@@ -38,11 +38,12 @@ func NewPostgresLedgerStore(pool *pgxpool.Pool) *PostgresLedgerStore {
 
 // Compile-time assertions.
 var (
-	_ OutcomeStore    = (*PostgresLedgerStore)(nil)
-	_ SessionStore    = (*PostgresLedgerStore)(nil)
-	_ ExperimentStore = (*PostgresLedgerStore)(nil)
-	_ BacktestStore   = (*PostgresLedgerStore)(nil)
-	_ FullStore       = (*PostgresLedgerStore)(nil)
+	_ OutcomeStore          = (*PostgresLedgerStore)(nil)
+	_ SessionStore          = (*PostgresLedgerStore)(nil)
+	_ ExperimentStore       = (*PostgresLedgerStore)(nil)
+	_ BacktestStore         = (*PostgresLedgerStore)(nil)
+	_ FullStore             = (*PostgresLedgerStore)(nil)
+	_ ScorecardOutcomeStore = (*PostgresLedgerStore)(nil)
 )
 
 // ------------------------------------------------------------------
@@ -190,6 +191,87 @@ func scanPGOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, error) {
 	}
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("outcome rows: %w", rows.Err())
+	}
+	return outcomes, nil
+}
+
+// ScorecardOutcomeStore is the optional narrow interface for stores that can
+// serve the observatory scorecard slim projection: only the 8 scalar fields
+// consumed by BuildScorecards/computeAgentRegimeBreakdown
+// (AgentID/Skill/Layer/Window/ForwardReturn/Hit/RecordedAt/Regime), with the
+// heavy metadata fields (factor_scores, conviction_breakdown,
+// supporting_events, parameter_snapshot) never unmarshalled (#1780 Phase 1).
+//
+// It is deliberately NOT part of OutcomeStore: jsonl/sqlite backends and
+// existing mocks keep compiling and automatically fall back to the full
+// LoadOutcomesFromSessions read (each fallback layer warns + counts, see B1
+// in the #1780 Phase 1 review).
+type ScorecardOutcomeStore interface {
+	LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)
+}
+
+// LoadScorecardOutcomes reads only the 8 scalar fields the observatory
+// scorecard pipeline consumes, via a slim JSONB projection instead of the
+// full-table + full-metadata load (LoadOutcomesFromSessions → scanPGOutcomes,
+// which unmarshals every row's complete metadata JSON ~1.69GB live heap at
+// 63k rows — the #1780 OOM root cause). Semantic equivalence with the full
+// read, per the #1780 Phase 1 review:
+//
+//   - field values come from metadata (the JSONB source of truth), exactly
+//     like scanPGOutcomes' column-scan-then-unmarshal final result;
+//   - COALESCE defaults reproduce encoding/json zero-value behavior for
+//     absent/null keys, and guard the metadata DEFAULT '{}' rows from NULL
+//     scans into float64/bool (B2);
+//   - recorded_at is returned as TEXT (RFC3339Nano preserved) and parsed in
+//     Go, so sub-microsecond ordering is identical to the full read instead
+//     of being rounded away by a timestamptz cast (B3).
+func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error) {
+	ctx := context.Background()
+	const query = `
+		SELECT agent_id,
+		       COALESCE(metadata->>'skill', ''),
+		       COALESCE(metadata->>'layer', ''),
+		       COALESCE(metadata->>'window', ''),
+		       COALESCE((metadata->>'forward_return')::float8, 0),
+		       COALESCE((metadata->>'hit')::boolean, false),
+		       COALESCE(metadata->>'regime', ''),
+		       COALESCE(metadata->>'recorded_at', ''),
+		       time
+		FROM recommendation_outcomes
+		ORDER BY time DESC`
+	rows, err := s.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query scorecard outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	var outcomes []domain.RecommendationOutcome
+	for rows.Next() {
+		var o domain.RecommendationOutcome
+		var layer, recordedAtText string
+		var colTime time.Time
+		if err := rows.Scan(
+			&o.AgentID, &o.Skill, &layer, &o.Window,
+			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &colTime,
+		); err != nil {
+			return nil, fmt.Errorf("scan scorecard outcome row: %w", err)
+		}
+		o.Layer = domain.AgentLayer(layer)
+		if recordedAtText == "" {
+			// Metadata has no recorded_at key — mirror the full read, which
+			// keeps the scanned time column value in that case.
+			o.RecordedAt = colTime
+		} else {
+			parsed, err := time.Parse(time.RFC3339Nano, recordedAtText)
+			if err != nil {
+				return nil, fmt.Errorf("parse scorecard outcome recorded_at %q: %w", recordedAtText, err)
+			}
+			o.RecordedAt = parsed
+		}
+		outcomes = append(outcomes, o)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("scorecard outcome rows: %w", rows.Err())
 	}
 	return outcomes, nil
 }
