@@ -33,6 +33,12 @@ func TestGenerateReport_EmptyLedger(t *testing.T) {
 
 func TestGenerateReport_SingleSession(t *testing.T) {
 	tmpDir := setupTestLedger(t)
+	// The JSONL ledger records 2 outcomes but 1 real executed trade — under
+	// the SSOT P1-4 split total_outcomes=2 (decisions) while total_trades=1
+	// (executions), reconciling with trade-history.
+	writeSessionTrades(t, tmpDir, "session-20260101-daily", []domain.TradeRecord{
+		testExecutedTrade("t1", "session-20260101-daily", "2330", time.Now()),
+	})
 	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -50,8 +56,11 @@ func TestGenerateReport_SingleSession(t *testing.T) {
 	if report.AfterTaxValue != 999_000 {
 		t.Errorf("expected after-tax value 999000, got %f", report.AfterTaxValue)
 	}
-	if report.TotalTrades != 2 {
-		t.Errorf("expected 2 trades, got %d", report.TotalTrades)
+	if report.TotalTrades != 1 {
+		t.Errorf("expected 1 executed trade, got %d", report.TotalTrades)
+	}
+	if report.TotalOutcomes != 2 {
+		t.Errorf("expected 2 outcomes, got %d", report.TotalOutcomes)
 	}
 	if len(report.TopAgents) != 2 {
 		t.Errorf("expected 2 agents, got %d", len(report.TopAgents))
@@ -65,16 +74,22 @@ func TestGenerateReport_PeriodFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if reportAll.TotalTrades != 2 {
-		t.Errorf("expected 2 trades for all, got %d", reportAll.TotalTrades)
+	if reportAll.TotalTrades != 3 {
+		t.Errorf("expected 3 executed trades for all, got %d", reportAll.TotalTrades)
+	}
+	if reportAll.TotalOutcomes != 2 {
+		t.Errorf("expected 2 outcomes for all, got %d", reportAll.TotalOutcomes)
 	}
 
 	report30d, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "30d")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if report30d.TotalTrades != 1 {
-		t.Errorf("expected 1 trade for 30d, got %d", report30d.TotalTrades)
+	if report30d.TotalTrades != 2 {
+		t.Errorf("expected 2 executed trades for 30d (old session outside window), got %d", report30d.TotalTrades)
+	}
+	if report30d.TotalOutcomes != 1 {
+		t.Errorf("expected 1 outcome for 30d, got %d", report30d.TotalOutcomes)
 	}
 }
 
@@ -712,9 +727,12 @@ func writeSession(t *testing.T, baseDir, sessionID string, portfolioValue, endin
 // TestGenerateReport_HeadlineExcludesSynthetic verifies the A7
 // decontamination end-to-end through GenerateReport: when a session's ledger
 // mixes real and synthetic outcomes, the headline statistics (win_rate,
-// profit_factor, avg_win, avg_loss) reflect ONLY the real trades, while
-// TotalTrades / RealTradeCount / SyntheticTradeCount still account for both
-// so the sample mix stays visible. JSON field structure is unchanged.
+// profit_factor, avg_win, avg_loss) reflect ONLY the real outcomes, while
+// TotalOutcomes / RealTradeCount / SyntheticTradeCount still account for all
+// passed-guard outcomes so the sample mix stays visible. Under the SSOT P1-4
+// split, report.TotalTrades counts REAL executed trades from the trades
+// source (this fixture records outcomes only → 0). JSON field structure is
+// unchanged (total_trades stays, total_outcomes added).
 func TestGenerateReport_HeadlineExcludesSynthetic(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -734,9 +752,12 @@ func TestGenerateReport_HeadlineExcludesSynthetic(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Sample mix: 5 total trades = 3 real + 2 synthetic.
-	if report.TotalTrades != 5 {
-		t.Errorf("expected total trades 5, got %d", report.TotalTrades)
+	// Sample mix: 5 total outcomes = 3 real + 2 synthetic.
+	if report.TotalOutcomes != 5 {
+		t.Errorf("expected total_outcomes 5, got %d", report.TotalOutcomes)
+	}
+	if report.TotalTrades != 0 {
+		t.Errorf("expected total_trades 0 (no executed trades in fixture), got %d", report.TotalTrades)
 	}
 	if report.RealTradeCount != 3 {
 		t.Errorf("expected 3 real trades, got %d", report.RealTradeCount)
@@ -800,8 +821,11 @@ func TestGenerateReport_PureSyntheticHeadlineZero(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if report.TotalTrades != 2 {
-		t.Errorf("expected total trades 2, got %d", report.TotalTrades)
+	if report.TotalOutcomes != 2 {
+		t.Errorf("expected total_outcomes 2, got %d", report.TotalOutcomes)
+	}
+	if report.TotalTrades != 0 {
+		t.Errorf("expected total_trades 0 (no executed trades in fixture), got %d", report.TotalTrades)
 	}
 	if report.RealTradeCount != 0 {
 		t.Errorf("expected 0 real trades, got %d", report.RealTradeCount)
@@ -854,6 +878,44 @@ func TestFindRegimeForWindow_DateMatch(t *testing.T) {
 	}
 	if got := findRegimeForWindow(summaries, "2026-01-02"); got != "RISK_OFF" {
 		t.Errorf("expected ISO-format window match RISK_OFF, got %s", got)
+	}
+}
+
+// writeSessionTrades writes an executed-trade ledger file for a session.
+// Executed trades are the P1-4 source of report.total_trades (PG trades
+// table on production; trades.jsonl in the JSONL ledger).
+func writeSessionTrades(t *testing.T, baseDir, sessionID string, trades []domain.TradeRecord) {
+	t.Helper()
+	if len(trades) == 0 {
+		return
+	}
+	sessDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", sessionID, err)
+	}
+	f, err := os.Create(filepath.Join(sessDir, "trades.jsonl"))
+	if err != nil {
+		t.Fatalf("create trades %s: %v", sessionID, err)
+	}
+	defer func() { _ = f.Close() }()
+	for _, tr := range trades {
+		if err := json.NewEncoder(f).Encode(tr); err != nil {
+			t.Fatalf("encode trade %s: %v", sessionID, err)
+		}
+	}
+}
+
+// testExecutedTrade builds a TradeRecord row for the given session.
+func testExecutedTrade(id, sessionID, symbol string, ts time.Time) domain.TradeRecord {
+	return domain.TradeRecord{
+		TradeID:   id,
+		SessionID: sessionID,
+		Symbol:    symbol,
+		Side:      domain.SideBuy,
+		Quantity:  1000,
+		Price:     100.0,
+		Amount:    100_000.0,
+		Timestamp: ts,
 	}
 }
 
@@ -997,6 +1059,18 @@ func setupTestLedgerWithOldAndNewSessions(t *testing.T) string {
 			t.Fatalf("encode outcome: %v", err)
 		}
 		outcomeFile.Close()
+		if sess.isRecent {
+			// Recent session: 2 executed trades (period=30d window).
+			writeSessionTrades(t, tmpDir, sess.id, []domain.TradeRecord{
+				testExecutedTrade("t2", sess.id, "2330", sess.date.Add(9*time.Hour)),
+				testExecutedTrade("t3", sess.id, "0050", sess.date.Add(10*time.Hour)),
+			})
+		} else {
+			// Old session: 1 executed trade (outside the 30d window).
+			writeSessionTrades(t, tmpDir, sess.id, []domain.TradeRecord{
+				testExecutedTrade("t1", sess.id, "2330", sess.date.Add(9*time.Hour)),
+			})
+		}
 	}
 
 	return tmpDir

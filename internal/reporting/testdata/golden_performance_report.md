@@ -17,7 +17,8 @@
 | After-Tax Value | NT$3,197,000.00 |
 | Total Tax Paid | NT$3,000.00 |
 | Win Rate | 60.0% |
-| Total Trades | 11 |
+| Executed Trades | 5 |
+| Total Outcomes | 11 |
 | Real Trades | 5 |
 | Synthetic Trades | 6 |
 | Profit Factor | 6.67 |

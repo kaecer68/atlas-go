@@ -42,8 +42,12 @@ func (f *fakeSourceStore) LoadSessionScreeningRejects(string) ([]domain.Screenin
 }
 func (f *fakeSourceStore) RecordSessionTrades(string, []domain.TradeRecord) error { panic("unused") }
 func (f *fakeSourceStore) LoadSessionTrades(string) ([]domain.TradeRecord, error) { panic("unused") }
-func (f *fakeSourceStore) LoadAllSessionTrades() ([]domain.TradeRecord, error)    { panic("unused") }
-func (f *fakeSourceStore) RecordExperiment(domain.ExperimentRecord) error         { panic("unused") }
+func (f *fakeSourceStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	// GenerateReport now counts executed trades (SSOT P1-4) — the fake has no
+	// trades, which is a legitimate "no executions in window" answer.
+	return nil, nil
+}
+func (f *fakeSourceStore) RecordExperiment(domain.ExperimentRecord) error { panic("unused") }
 func (f *fakeSourceStore) RecordSessionExperiment(domain.ReplaySession, domain.ExperimentRecord) error {
 	panic("unused")
 }

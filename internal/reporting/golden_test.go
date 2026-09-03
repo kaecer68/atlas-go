@@ -68,7 +68,40 @@ func writeGoldenFixture(t *testing.T) string {
 		{AgentID: "agent-e", Skill: "quality", Layer: "style", Symbol: "2317", Side: "buy", Window: "session-20260722-daily", ForwardReturn: 0.03, PassedGuards: true, IsSynthetic: true, Regime: "RISK_OFF"},
 	})
 
+	// Executed trades (SSOT P1-4 total_trades source): 5 real fills across
+	// the three outcome-bearing sessions — deliberately FEWER than the 11
+	// passed-guard outcomes, mirroring production where recommendations are
+	// evaluated but only a subset executes.
+	writeGoldenTrades(t, dir, "session-20260710-daily", []domain.TradeRecord{
+		{TradeID: "g-t1", SessionID: "session-20260710-daily", Symbol: "2330", Side: domain.SideBuy, Quantity: 1000, Price: 980, Amount: 980000, Timestamp: time.Date(2026, 7, 10, 2, 0, 0, 0, time.UTC)},
+		{TradeID: "g-t2", SessionID: "session-20260710-daily", Symbol: "2330", Side: domain.SideBuy, Quantity: 1000, Price: 985, Amount: 985000, Timestamp: time.Date(2026, 7, 10, 2, 5, 0, 0, time.UTC)},
+		{TradeID: "g-t3", SessionID: "session-20260710-daily", Symbol: "2881", Side: domain.SideBuy, Quantity: 500, Price: 40, Amount: 20000, Timestamp: time.Date(2026, 7, 10, 2, 10, 0, 0, time.UTC)},
+	})
+	writeGoldenTrades(t, dir, "session-20260714-daily", []domain.TradeRecord{
+		{TradeID: "g-t4", SessionID: "session-20260714-daily", Symbol: "0050", Side: domain.SideBuy, Quantity: 2000, Price: 120, Amount: 240000, Timestamp: time.Date(2026, 7, 14, 2, 0, 0, 0, time.UTC)},
+	})
+	writeGoldenTrades(t, dir, "session-20260722-daily", []domain.TradeRecord{
+		{TradeID: "g-t5", SessionID: "session-20260722-daily", Symbol: "2317", Side: domain.SideBuy, Quantity: 1000, Price: 180, Amount: 180000, Timestamp: time.Date(2026, 7, 22, 2, 0, 0, 0, time.UTC)},
+	})
+
 	return dir
+}
+
+// writeGoldenTrades writes executed-trade rows (trades.jsonl) for a session.
+func writeGoldenTrades(t *testing.T, baseDir, sessionID string, trades []domain.TradeRecord) {
+	t.Helper()
+	sessDir := filepath.Join(baseDir, "sessions", sessionID)
+	f, err := os.Create(filepath.Join(sessDir, "trades.jsonl"))
+	if err != nil {
+		t.Fatalf("create trades %s: %v", sessionID, err)
+	}
+	defer func() { _ = f.Close() }()
+	enc := json.NewEncoder(f)
+	for _, tr := range trades {
+		if err := enc.Encode(tr); err != nil {
+			t.Fatalf("encode trade %s: %v", sessionID, err)
+		}
+	}
 }
 
 func writeGoldenSession(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash, totalTaxPaid float64, regime domain.Regime, outcomes []domain.RecommendationOutcome) {
@@ -189,8 +222,16 @@ func TestGolden_ContractAssertions(t *testing.T) {
 	}
 
 	// Headline: real trades only (5 real of 11 total: 3+1 real, 2+2+1+1 synthetic).
-	if report.TotalTrades != 11 {
-		t.Errorf("total_trades = %d, want 11", report.TotalTrades)
+	// SSOT P1-4 semantics: total_outcomes = 11 (passed-guard outcomes, the
+	// former total_trades meaning); total_trades = 5 executed fills written to
+	// the trades source — recommendations outnumber executions, exactly the
+	// production mismatch (24,014 outcomes vs far fewer real fills) this split
+	// makes visible.
+	if report.TotalOutcomes != 11 {
+		t.Errorf("total_outcomes = %d, want 11", report.TotalOutcomes)
+	}
+	if report.TotalTrades != 5 {
+		t.Errorf("total_trades = %d, want 5 (executed fills in trades source)", report.TotalTrades)
 	}
 	if report.RealTradeCount != 5 {
 		t.Errorf("real_trade_count = %d, want 5", report.RealTradeCount)
