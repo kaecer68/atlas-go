@@ -4570,6 +4570,17 @@ export interface ValidateResponse {
   message: string;
 }
 
+export interface ValidationReport {
+  version: string;
+  run_at: string;
+  workdir?: string;
+  data_coverage?: Record<string, number>;
+  hypotheses: HypothesisResult[];
+  eligible_recommendation: boolean;
+  operator_notes?: string[];
+  method?: Record<string, string>;
+}
+
 export interface ValidationResult {
   pattern_id: string;
   train_accuracy: number;
