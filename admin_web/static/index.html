@@ -240,7 +240,10 @@
            保留 id 供測試/外部錨點相容（display:none）。 -->
       <h1 id="portfolioPageTitle" style="display:none">📂 組合持倉</h1>
       <div class="kpi-grid" id="portfolioKPIs"></div>
-      <div class="panel wide hidden" id="equityCurvePanel">
+      <!-- B2 (risk-console Phase 1)：移除 hidden class — auth-form.css
+           .hidden{display:none!important} 會壓過 JS 的 inline display，
+           淨值趨勢 canvas 永久隱藏；顯示與否改由 renderDualEquityCurve 全權控制 -->
+      <div class="panel wide" id="equityCurvePanel">
         <h2>淨值趨勢</h2>
         <canvas id="equityChart" height="200"></canvas>
       </div>

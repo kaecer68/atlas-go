@@ -2,6 +2,7 @@
 // Extracted from index.html - DO NOT EDIT inline
 import { sectorName, renderStockCell } from '../names.js';
 import { escapeHtml, fmtNTD, fmtInt, pnlColor } from '../shared/utils.js';
+import { capitalPhaseLabel, businessCycleLabel, inventoryCycleLabel, capexCycleLabel, trendLabel } from '../shared/constants.js';
 import { fmtSafeNumber, fmtSafeDrawdown, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { renderEmptyState, formatDate } from '../shared/app-utils.js';
 
@@ -21,8 +22,18 @@ export function renderLiveStatus(data) {
   const pf = data.portfolio || {};
   const pnl = pf.unrealized_pnl;
   const dayPnl = pf.day_pnl;
-  const cbState = cb.state === 'tripped' ? '已觸發' : '正常';
-  const cbStateColor = cb.state === 'tripped' ? 'var(--color-danger)' : 'var(--color-success)';
+  // B7 (risk-console Phase 1)：未辨識/unknown 狀態顯示「未知」灰燈，
+  // 不再把 unknown 一律當成「正常」綠燈（live 未啟動時 state=unknown）。
+  const cbStateMap = {
+    normal: { label: '正常', color: 'var(--color-success)' },
+    paused: { label: '暫停', color: 'var(--color-warning)' },
+    halted: { label: '已觸發', color: 'var(--color-danger)' },
+    tripped: { label: '已觸發', color: 'var(--color-danger)' },
+    unknown: { label: '未知', color: 'var(--status-unknown)' },
+  };
+  const cbStateInfo = cbStateMap[cb.state] || { label: '未知', color: 'var(--status-unknown)' };
+  const cbState = cbStateInfo.label;
+  const cbStateColor = cbStateInfo.color;
 
   let cooldownInfo = '';
   if (cb.cooldown_until && cb.cooldown_until !== '0001-01-01T00:00:00Z') {
@@ -71,8 +82,8 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
   const insufficient = re.insufficient_data || (typeof re.data_points === 'number' && re.data_points < 30);
 
   const cp = capitalPhase || {};
-  const phaseLabel = { advance: '🚀 推進', reduce: '🔻 縮減', standby: '⏸️ 觀望' };
-  const phase = phaseLabel[cp.phase] || cp.phase || '—';
+  // B5 (risk-console Phase 1)：capital-phase 列舉值中文化（simulation/paper/live/full）
+  const phase = cp.phase ? capitalPhaseLabel(cp.phase) : '—';
   const rollingSharpeRaw = cp.rolling_sharpe;
   const rollingSharpe = fmtSafeNumber(rollingSharpeRaw, { decimals: 2, useGrouping: true });
   const rollingSharpeColor = isFiniteNumber(rollingSharpeRaw)
@@ -122,7 +133,8 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
     const sectorBars = sectors.map(s => {
       const w = s.weight;
       const pct = fmtSafeNumber(w, { percent: true, decimals: 1 });
-      const barPct = fmtSafeNumber(w / maxW, { percent: true, decimals: 1 });
+      // 純寬度數字（B3 後 percent 格式化會帶 '%'，寬度樣式自己補 %）
+      const barWidthPct = Math.min(100, Math.round((w / maxW) * 1000) / 10);
       const color = w > 0.3 ? 'var(--accent)' : (w > 0.15 ? 'var(--warn)' : 'var(--muted)');
       return `
         <div style="margin:4px 0">
@@ -131,7 +143,7 @@ export function renderRiskCards(riskExposure, pipelineData, capitalPhase) {
             <span>${pct}</span>
           </div>
           <div style="width:100%;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
-            <div style="width:${barPct}%;height:100%;background:${color};border-radius:3px;transition:width 0.3s"></div>
+            <div style="width:${barWidthPct}%;height:100%;background:${color};border-radius:3px;transition:width 0.3s"></div>
           </div>
         </div>
       `;
@@ -230,23 +242,28 @@ export function renderRiskCalibration(data) {
 
   var report = data.report;
   var generated = data.generated || '';
-  var isCalibrated = report.verdict === 'calibrated';
+  // B4 (risk-console Phase 1)：verdict=stable 亦屬已校準（後端語意：
+  // thresholds optimal、本次無調整），舊邏輯把它誤判成「未校準」與
+  // 下方 summary 自相矛盾。
+  var isCalibrated = report.verdict === 'calibrated' || report.verdict === 'stable';
   var hasChanges = report.changes && report.changes.length > 0;
-  var statusIcon = isCalibrated && hasChanges ? '🔵' : (isCalibrated ? '⚪' : '⚪');
+  var statusIcon = isCalibrated && hasChanges ? '🔵' : '⚪';
   var statusLabel = isCalibrated && hasChanges ? '已校準（本次有調整）'
-    : (isCalibrated ? '已校準（本次無調整）' : '未校準 — 等待首次校準完成');
+    : (report.verdict === 'stable' ? '已校準 · 無需調整'
+      : (isCalibrated ? '已校準（本次無調整）' : '未校準 — 等待首次校準完成'));
   var statusColor = isCalibrated && hasChanges ? 'var(--color-info)' : 'var(--muted)';
 
   var changesHtml = '';
   if (report.changes && report.changes.length > 0) {
     var rows = report.changes.map(function(c) {
       var confidenceColor = c.confidence === 'high' ? 'var(--up)' : (c.confidence === 'medium' ? 'var(--warn)' : 'var(--muted)');
+      var confidenceLabel = { high: '高', medium: '中', low: '低' }[c.confidence] || escapeHtml(c.confidence);
       return '<tr>' +
         '<td style="padding:4px 8px;font-size:12px;font-family:monospace">' + escapeHtml(c.name) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;text-align:right">' + fmtSafeNumber(c.before, { decimals: 4 }) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;text-align:right;color:var(--up)">' + fmtSafeNumber(c.after, { decimals: 4 }) + '</td>' +
         '<td style="padding:4px 8px;font-size:12px;color:var(--muted)">' + escapeHtml(c.rationale) + '</td>' +
-        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + escapeHtml(c.confidence) + '</span></td>' +
+        '<td style="padding:4px 8px;font-size:12px;text-align:center"><span style="padding:1px 6px;border-radius:3px;font-size:11px;background:color-mix(in srgb, ' + confidenceColor + ' 13%, transparent);color:' + confidenceColor + '">' + confidenceLabel + '</span></td>' +
         '</tr>';
     }).join('');
     changesHtml =
@@ -382,19 +399,25 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
     : 'var(--muted)';
 
   const cycle = industryCycle || {};
-  const phaseMap = {
-    expansion: { label: '擴張', color: 'var(--up)' },
-    recovery: { label: '復甦', color: 'var(--color-success)' },
-    mature: { label: '成熟', color: 'var(--warn)' },
-    downturn: { label: '衰退', color: 'var(--down)' }
+  // B5 (risk-console Phase 1)：enum 以 constants 映射表翻譯；
+  // 後端實際值為 recession（舊 map 錯用 downturn 導致永遠 fallback 原文）。
+  const phaseColor = {
+    expansion: 'var(--up)',
+    recovery: 'var(--color-success)',
+    mature: 'var(--warn)',
+    recession: 'var(--down)',
   };
-  const phase = phaseMap[cycle.business_cycle] || { label: cycle.business_cycle || '—', color: 'var(--muted)' };
+  const phaseLabel = businessCycleLabel(cycle.business_cycle);
+  const phase = {
+    label: phaseLabel === '-' ? '—' : phaseLabel,
+    color: phaseColor[cycle.business_cycle] || 'var(--muted)',
+  };
 
   const rows = [
-    { label: '庫存週期', value: cycle.inventory_cycle || '—' },
-    { label: '資本支出週期', value: cycle.capex_cycle || '—' },
-    { label: '信心指數', value: fmtSafeNumber(cycle.confidence, { decimals: 2, useGrouping: true }) },
-    { label: '趨勢', value: cycle.trend || '—' }
+    { label: '庫存週期', value: inventoryCycleLabel(cycle.inventory_cycle) },
+    { label: '資本支出週期', value: capexCycleLabel(cycle.capex_cycle) },
+    { label: '信心指數', value: fmtSafeNumber(cycle.confidence, { percent: true, decimals: 0 }) },
+    { label: '趨勢', value: trendLabel(cycle.trend) }
   ];
 
   el.innerHTML = `
@@ -407,7 +430,7 @@ export function renderSemiconductorSentiment(snapshot, industryCycle) {
       <div class="panel" style="text-align:center">
         <div class="kpi-label">半導體景氣週期</div>
         <div class="kpi-value" style="color:${phase.color};font-size:20px">${phase.label}</div>
-        <div class="kpi-hint">business_cycle</div>
+        <div class="kpi-hint">景氣循環階段</div>
       </div>
     </div>
     <table style="width:100%;font-size:12px;border-collapse:collapse">
@@ -463,7 +486,8 @@ export function renderDrawdownPanel(data) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
       <div class="panel" style="text-align:center">
         <div class="kpi-label">模擬最大回撤</div>
-        <div class="kpi-value" style="color:var(--down);font-size:20px">${fmtSafeDrawdown(maxDD, { asAbsolute: true })}</div>
+        <!-- B6：回撤是風險語意，不著漲跌綠（--down 會被讀成好消息）；Phase 1 先以 --warn 起跳 -->
+        <div class="kpi-value" style="color:var(--warn);font-size:20px">${fmtSafeDrawdown(maxDD, { asAbsolute: true })}</div>
         <div class="kpi-hint">Monte Carlo · 1000 條壓力路徑之最差值</div>
       </div>
       <div class="panel" style="text-align:center">

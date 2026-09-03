@@ -244,3 +244,93 @@ func TestChannelHealthStore_Record_OKClearsStaleErrors(t *testing.T) {
 		t.Errorf("Errors = %v, want empty after ok (stale error text must be cleared)", rec.Errors)
 	}
 }
+
+// TestChannelHealthStore_RecordWaiting_KeepsOKWithoutAdvancingLastSuccess
+// verifies the waiting semantics added in the 2026-09-03 alert-noise fix: a
+// channel whose upstream has no NEW data yet (e.g. TDCC weekly snapshot not
+// published) keeps status "ok" (no ChannelHealthStatusError alert) but does
+// NOT advance LastSuccessAt — consumers treat last_success as the
+// data-freshness anchor, so it must stay at the last time data landed.
+func TestChannelHealthStore_RecordWaiting_KeepsOKWithoutAdvancingLastSuccess(t *testing.T) {
+	s := NewChannelHealthStoreWithPool(t.TempDir(), nil)
+
+	// First: a real successful fetch lands data.
+	if err := s.Record("tdcc_equity_dispersion", "ok", ""); err != nil {
+		t.Fatalf("record ok: %v", err)
+	}
+	rec := s.Get("tdcc_equity_dispersion")
+	if rec == nil || rec.LastSuccessAt == "" {
+		t.Fatalf("expected LastSuccessAt after a successful fetch, got %+v", rec)
+	}
+	firstSuccess := rec.LastSuccessAt
+
+	// Waiting outcome: upstream answered but has no new snapshot yet.
+	if err := s.RecordWaiting("tdcc_equity_dispersion"); err != nil {
+		t.Fatalf("record waiting: %v", err)
+	}
+	rec = s.Get("tdcc_equity_dispersion")
+	if rec == nil {
+		t.Fatal("expected record after waiting")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("Status = %q, want ok (waiting must not surface as error)", rec.Status)
+	}
+	if rec.LastError != "" {
+		t.Errorf("LastError = %q, want empty on waiting (no error text on a healthy record)", rec.LastError)
+	}
+	if rec.LastSuccessAt != firstSuccess {
+		t.Errorf("LastSuccessAt = %q, want unchanged %q (waiting must not advance last_success)", rec.LastSuccessAt, firstSuccess)
+	}
+	if rec.LastFetchAt < firstSuccess {
+		t.Errorf("LastFetchAt = %q should be refreshed on waiting (>= first success %q)", rec.LastFetchAt, firstSuccess)
+	}
+
+	// A later real success advances last_success again (the ok record sets
+	// LastSuccessAt == LastFetchAt, unlike the waiting record which keeps
+	// the old anchor). Cross a second boundary so the RFC3339 (second
+	// precision) timestamps differ deterministically.
+	time.Sleep(1100 * time.Millisecond)
+	if err := s.Record("tdcc_equity_dispersion", "ok", ""); err != nil {
+		t.Fatalf("record ok after waiting: %v", err)
+	}
+	rec = s.Get("tdcc_equity_dispersion")
+	if rec == nil {
+		t.Fatal("expected record after final ok")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("Status = %q, want ok after final success", rec.Status)
+	}
+	if rec.LastSuccessAt != rec.LastFetchAt {
+		t.Errorf("LastSuccessAt = %q, want == LastFetchAt %q after a real success", rec.LastSuccessAt, rec.LastFetchAt)
+	}
+	if rec.LastSuccessAt == firstSuccess {
+		t.Errorf("expected LastSuccessAt to advance after a real success, still %q", rec.LastSuccessAt)
+	}
+}
+
+// TestChannelHealthStore_RecordWaiting_NoPriorSuccess stays ok from a cold
+// start: a brand-new channel that has never landed data records waiting
+// without inventing a last_success.
+func TestChannelHealthStore_RecordWaiting_NoPriorSuccess(t *testing.T) {
+	s := NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	if err := s.RecordWaiting("tdcc_equity_dispersion"); err != nil {
+		t.Fatalf("record waiting: %v", err)
+	}
+	rec := s.Get("tdcc_equity_dispersion")
+	if rec == nil {
+		t.Fatal("expected record after waiting")
+	}
+	if rec.Status != "ok" {
+		t.Errorf("Status = %q, want ok", rec.Status)
+	}
+	if rec.LastSuccessAt != "" {
+		t.Errorf("LastSuccessAt = %q, want empty (no data ever landed)", rec.LastSuccessAt)
+	}
+	if rec.LastFetchAt == "" {
+		t.Error("LastFetchAt should be refreshed even on waiting")
+	}
+	// Waiting records must not appear in Alerts().
+	if alerts := s.Alerts(); len(alerts) != 0 {
+		t.Errorf("waiting record surfaced as alert: %+v", alerts)
+	}
+}

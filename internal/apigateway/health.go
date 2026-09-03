@@ -50,6 +50,13 @@ func (u *UnifiedHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	return u.store.Record(channelID, status, errMsg, opts...)
 }
 
+// RecordWaiting keeps a channel's health record "ok" while upstream has no new
+// data yet (weekly snapshot not published / daily budget exhausted), without
+// advancing LastSuccessAt. See ChannelHealthStore.RecordWaiting.
+func (u *UnifiedHealthStore) RecordWaiting(channelID string, opts ...RecordOption) error {
+	return u.store.RecordWaiting(channelID, opts...)
+}
+
 // Get retrieves the health record for a channel.
 func (u *UnifiedHealthStore) Get(channelID string) *ChannelHealthRecord {
 	return u.store.Get(channelID)

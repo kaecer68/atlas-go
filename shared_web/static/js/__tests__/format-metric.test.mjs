@@ -77,6 +77,16 @@ test('formatNumber supports grouping', () => {
   assert.equal(formatNumber(1234567.89, { decimals: 0, useGrouping: true }), '1,234,568');
 });
 
+// B3 (risk-console Phase 1)：percent:true 未指定 suffix 時自動帶 '%'，
+// 避免 live/portfolio 頁百分比無單位（集中度 47.8、現金比 52.2…）。
+test('formatNumber percent:true appends % suffix automatically', () => {
+  assert.equal(formatNumber(0.1523, { percent: true, decimals: 1 }), '15.2%');
+  assert.equal(formatNumber(0.522, { percent: true, decimals: 1 }), '52.2%');
+  assert.equal(formatNumber(-0.0048, { percent: true, decimals: 1 }), '-0.5%');
+  // 明確給 suffix 時不受影響
+  assert.equal(formatNumber(0.1523, { percent: true, decimals: 1, suffix: '%' }), '15.2%');
+});
+
 test('formatSigned handles tiny negative values', () => {
   assert.equal(formatSigned(-0.0001, { decimals: 1, suffix: '%' }), '0.0%');
   assert.equal(formatSigned(0, { forceSign: true }), '0.00');

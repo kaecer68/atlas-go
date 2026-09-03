@@ -53,3 +53,67 @@ export const PAGE_TITLES = {
   synergy: '人機協同', alerts: '系統警報', metrics: '指標監控',
   industry: '產業生態系', portfolio: '組合持倉', parameters: '參數管理'
 };
+
+
+// ============================================================================
+// 列舉值中文化（risk-console UX refactor Phase 1, B5）
+// 後端 enum 一律經前端映射表翻譯；對應 Go 定義：
+//   - capital phase: internal/domain/types.go CapitalPhase
+//   - business/inventory/capex cycle + trend: internal/industry/cycle.go
+// 未列出的值原樣回傳（避免資料遺失），null/undefined 回 '-'。
+// ============================================================================
+
+export const CAPITAL_PHASE_LABELS = {
+  simulation: '模擬',
+  paper: '紙上交易',
+  live: '實盤',
+  full: '全額實盤',
+};
+
+export const BUSINESS_CYCLE_LABELS = {
+  recovery: '復甦',
+  expansion: '擴張',
+  mature: '成熟',
+  recession: '衰退',
+};
+
+export const INVENTORY_CYCLE_LABELS = {
+  active_restocking: '主動補庫存',
+  passive_restocking: '被動補庫存',
+  active_destocking: '主動去庫存',
+  passive_destocking: '被動去庫存',
+};
+
+export const CAPEX_CYCLE_LABELS = {
+  expansion: '資本支出擴張',
+  maintenance: '維護性支出',
+  contraction: '資本支出緊縮',
+};
+
+export const TREND_LABELS = {
+  up: '上升',
+  down: '下降',
+  stable: '持平',
+};
+
+/** 依映射表翻譯列舉值；未知值保留原文字串，null/undefined 回 '-'。 */
+export function enumLabel(map, value) {
+  if (value === null || value === undefined || value === '') return '-';
+  return map[value] ?? String(value);
+}
+
+export function capitalPhaseLabel(value) {
+  return enumLabel(CAPITAL_PHASE_LABELS, value);
+}
+export function businessCycleLabel(value) {
+  return enumLabel(BUSINESS_CYCLE_LABELS, value);
+}
+export function inventoryCycleLabel(value) {
+  return enumLabel(INVENTORY_CYCLE_LABELS, value);
+}
+export function capexCycleLabel(value) {
+  return enumLabel(CAPEX_CYCLE_LABELS, value);
+}
+export function trendLabel(value) {
+  return enumLabel(TREND_LABELS, value);
+}
