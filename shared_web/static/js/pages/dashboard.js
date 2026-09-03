@@ -326,16 +326,7 @@ export function renderMacroRadar(data, pipelineData) {
     ${filteredCount > 0 ? `<div style="font-size:12px;color:var(--warn);margin:4px 0">其中 ${filteredCount} 筆因風控條件未通過而被過濾（詳見下方控制層紀錄）</div>` : ''}
     ${controlSummary}
     ${symbolTable}
-    ${guard.length ? '<table style="margin-top:8px;font-size:12px"><thead><tr><th>AI</th><th>結果</th><th>處理數量</th><th>說明</th></tr></thead><tbody>' + guard.map(g => {
-      const inputCount = g.input_count || 0;
-      const outputCount = g.output_count || 0;
-      const filtered = inputCount - outputCount;
-      let actionText = '放行';
-      let actionClass = 'ok';
-      if (!g.passed) { actionText = '阻擋'; actionClass = 'err'; }
-      else if (filtered > 0) { actionText = '過濾'; actionClass = 'warn'; }
-      return `<tr><td>${escapeHtml(agentName(g.guard_id)) || '-'}</td><td><span class="badge ${actionClass}">${actionText}</span></td><td>${inputCount} → ${outputCount}</td><td>${g.reason ? escapeHtml(g.reason) : '-'}</td></tr>`;
-    }).join('') + '</tbody></table>' : renderEmptyState('本場次無控制層紀錄', '')}
+    ${guard.length ? '' : renderEmptyState('本場次無控制層紀錄', '')}
   `;
 }
 

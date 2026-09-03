@@ -31,9 +31,9 @@ export function renderPerformanceReport(container) {
         <thead>
           <tr>
             <th>AI 名稱</th>
-            <th>總報酬</th>
-            <th>勝率</th>
-            <th>夏普值</th>
+            <th class="num">累積遠期報酬 (pt)</th>
+            <th class="num">勝率</th>
+            <th class="num">夏普值</th>
           </tr>
         </thead>
         <tbody id="prAgentsBody">
@@ -48,9 +48,9 @@ export function renderPerformanceReport(container) {
         <thead>
           <tr>
             <th>市場狀態</th>
-            <th>場次數</th>
-            <th>平均報酬</th>
-            <th>勝率</th>
+            <th class="num">場次數</th>
+            <th class="num">平均報酬</th>
+            <th class="num">勝率</th>
           </tr>
         </thead>
         <tbody id="prRegimesBody">
@@ -65,8 +65,8 @@ export function renderPerformanceReport(container) {
         <thead>
           <tr>
             <th>月份</th>
-            <th>報酬</th>
-            <th>累積</th>
+            <th class="num">報酬</th>
+            <th class="num">累積</th>
           </tr>
         </thead>
         <tbody id="prMonthsBody">
@@ -126,11 +126,14 @@ function drawdownSign(v) {
 function renderReportData(data) {
   document.getElementById('prDateRange').textContent = `${(data.start_date || '--').slice(0,10)} ～ ${(data.end_date || '--').slice(0,10)}`;
 
+  // 期間中文標籤（KPI 口徑 hint 用）
+  const periodZh = { '30d': '近 30 日', '90d': '近 90 日', '1y': '近 1 年', 'all': '全部期間' }[data.period] || '本期間';
+
   const kpis = [
     { label: '總報酬', value: fmtSafePct(data.total_return), sign: data.total_return },
     { label: '年化報酬', value: fmtSafePct(data.annualized_return), sign: data.annualized_return },
-    { label: '夏普比率', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }) },
-    { label: '最大回撤', value: fmtSafeDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown) },
+    { label: '夏普比率', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }), hint: '口徑：期間日報酬（AI 表 sharpe_like 不同）' },
+    { label: '最大回撤', value: fmtSafeDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown), hint: `${periodZh} · 期間內最大回撤` },
     { label: '稅後價值', value: fmtNTD(data.after_tax_value) },
     { label: '已繳稅額', value: fmtNTD(data.total_tax_paid), hint: '累積' },
     { label: '勝率', value: fmtSafePct(data.win_rate), sign: data.win_rate },
@@ -153,13 +156,16 @@ function renderReportData(data) {
   const agentsBody = document.getElementById('prAgentsBody');
   if (data.top_agents && data.top_agents.length > 0) {
     agentsBody.innerHTML = data.top_agents.map(function(a) {
+      // aggregate_forward_return 是多筆決策遠期報酬的加總（fraction），
+      // 不是單一報酬率：×100 後以「點 (pt)」呈現，避免誤讀成 3610.9%。
       var ret = a.aggregate_forward_return;
+      var retPt = fmtSafeNumber(ret * 100, { decimals: 1, useGrouping: true }) + ' pt';
       var sharpeCell = fmtSafeNumber(a.sharpe_like, { decimals: 2, useGrouping: true });
       return '<tr>' +
         '<td>' + escapeHtml(a.display_name || agentNameEsm(a.agent_id) || a.agent_id) + '</td>' +
-        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtSafePct(ret) + '</td>' +
-        '<td>' + fmtSafePct(a.win_rate) + '</td>' +
-        '<td>' + sharpeCell + '</td>' +
+        '<td class="num" style="color:' + pnlColorStyle(ret) + '">' + retPt + '</td>' +
+        '<td class="num">' + fmtSafePct(a.win_rate) + '</td>' +
+        '<td class="num">' + sharpeCell + '</td>' +
         '</tr>';
     }).join('');
   } else {
@@ -176,9 +182,9 @@ function renderReportData(data) {
       var sessions = r.session_count;
       return '<tr>' +
         '<td>' + escapeHtml(regimeLabelEsm(id) || id) + '</td>' +
-        '<td>' + fmtInt(sessions) + '</td>' +
-        '<td style="color:' + pnlColorStyle(avgRet) + '">' + fmtSafePct(avgRet) + '</td>' +
-        '<td>' + fmtSafePct(r.win_rate) + '</td>' +
+        '<td class="num">' + fmtInt(sessions) + '</td>' +
+        '<td class="num" style="color:' + pnlColorStyle(avgRet) + '">' + fmtSafePct(avgRet) + '</td>' +
+        '<td class="num">' + fmtSafePct(r.win_rate) + '</td>' +
         '</tr>';
     }).join('');
   } else {
@@ -191,8 +197,8 @@ function renderReportData(data) {
       var ret = m.return;
       return '<tr>' +
         '<td>' + escapeHtml(m.label || m.month || '--') + '</td>' +
-        '<td style="color:' + pnlColorStyle(ret) + '">' + fmtSafePct(ret) + '</td>' +
-        '<td>' + fmtSafePct(m.cumulative) + '</td>' +
+        '<td class="num" style="color:' + pnlColorStyle(ret) + '">' + fmtSafePct(ret) + '</td>' +
+        '<td class="num">' + fmtSafePct(m.cumulative) + '</td>' +
         '</tr>';
     }).join('');
   } else {
