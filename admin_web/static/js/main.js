@@ -36,7 +36,7 @@ const PAGE_TITLES = {
   pipeline: '投資管線', portfolio: '組合持倉',
   experiments: '模擬交易', 'performance-report': '績效報告',
   datachannels: '資料通道', parameters: '參數管理',
-  reports: '最新回測',
+  reports: '最新回測', period_matrix: '策略×時期熱圖',
   capital_quality: '資料品質',
   metrics: '指標監控', config: '部署配置', scheduler: '排程任務'
 };
@@ -219,13 +219,14 @@ async function loadModules() {
     import('./pages/pipeline.js'),
     import('./pages/portfolio.js'),
     import('./pages/performance-report.js'),
+    import('./pages/period-matrix.js'),
   ];
   var results = await Promise.allSettled(imports);
   // keys 長度必須等於 imports 長度（17）。'scheduler' 之前遺漏 → m.scheduler
   // 永遠 undefined，排程頁只能靠 scheduler.js 模組頂層自我註冊 fallback 接線
   // （缺陷）。補 key 後走正常 loadModules 接線 path。
   // capital_causality 已遷移 client_web（2026-08-23），自 admin imports 移除。
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalQuality', 'scheduler', 'pipe', 'portfolio', 'performanceReport'];
+  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalQuality', 'scheduler', 'pipe', 'portfolio', 'performanceReport', 'periodMatrix'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -555,6 +556,11 @@ async function loadPageData(pageId) {
       if (m.parameters && m.parameters.renderParametersPage) {
         m.parameters.renderParametersPage(pData[0], pData[1], pData[2], pData[3]);
       }
+    } catch(e) { console.error(e); }
+  }
+  else if (pageId === 'period_matrix') {
+    try {
+      if (m.periodMatrix && m.periodMatrix.loadPeriodMatrix) m.periodMatrix.loadPeriodMatrix();
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'config') {

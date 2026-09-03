@@ -37,6 +37,7 @@
         <a data-page="portfolio" href="/admin/portfolio">📂 組合持倉</a>
         <a data-page="experiments" href="/admin/experiments">🧪 模擬交易</a>
         <a data-page="performance-report" href="/admin/performance-report">📈 績效報告</a>
+        <a data-page="period_matrix" href="/admin/period_matrix">🗺️ 策略×時期</a>
 
         <span class="nav-group-label">維運</span>
         <a data-page="alerts" href="/admin/alerts">🚨 系統警報</a>
@@ -311,7 +312,18 @@
 
 
     <!-- 信息通道 -->
-    <div class="page" id="page-datachannels">
+    
+    <!-- 策略×時期熱圖（CF Phase 2 PR-2c） -->
+    <div class="page" id="page-period_matrix">
+      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
+        <div>本頁把每個策略（agent）的已實現績效依<strong>七時期</strong>分層（資料源 = PR-2a 寫入 outcome 的 market_period）。每一格顯示該策略在該時期的<strong>勝率</strong>與 Sharpe；綠色 = 勝率高，紅色 = 勝率低。<strong>樣本 &lt; 30</strong> 的格子標「資料不足（n=N）」——時期間不互相借樣本，因此小樣本格不會有數值（API <code>status=insufficient_data</code>）。點格子看完整統計。此頁為唯讀研究視圖，不影響 Darwinian 權重。</div>
+      </details>
+      <div id="periodMatrixMeta"></div>
+      <div id="periodMatrixHeatmap" class="loading"></div>
+      <div id="periodMatrixDetail"></div>
+    </div>
+
+<div class="page" id="page-datachannels">
       <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
         本頁呈現 Atlas 所有<strong>外部資料來源的健康狀態</strong>，按國家與平台分類。
         若某個通道顯示 <span class="text-danger">🔴 異常</span>，表示連線失敗或資料缺失，需立即檢查。

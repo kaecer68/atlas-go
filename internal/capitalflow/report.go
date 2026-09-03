@@ -48,9 +48,11 @@ func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance Resona
 	if dominant == "" {
 		dominant = dominantSignal
 	}
-	if dominant == "" {
-		dominant = ForceRetail
-	}
+	// M6 (audit): when no actor and no signal reading is present the
+	// dominant stays empty instead of fabricating ForceRetail — a
+	// missing picture must not name 散戶 as the default protagonist.
+	// buildShortSummary ignores dominant (it never produced 武斷文案),
+	// and the API/frontend render an empty dominant_force as "—".
 
 	return SummaryReport{
 		Date:           date,
