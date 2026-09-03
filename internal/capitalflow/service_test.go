@@ -73,8 +73,14 @@ func TestService_Summary_DerivesFromLatestDaily(t *testing.T) {
 	if summary.QualityLabel == "" {
 		t.Errorf("QualityLabel empty after GenerateSummaryReport")
 	}
-	if summary.DominantForce == "" {
-		t.Errorf("DominantForce empty after GenerateSummaryReport")
+	// M6 (audit): with an empty rolling store every Z is pinned to 0, so no
+	// actor/signal reading exists — the summary must NOT fabricate a
+	// DominantForce (the pre-M6 ForceRetail fallback made this non-empty).
+	if summary.DominantForce != "" {
+		t.Errorf("DominantForce = %q on a zero-history snapshot; M6 removed the fabricated retail fallback", summary.DominantForce)
+	}
+	if summary.DominantActor != "" || summary.DominantSignal != "" {
+		t.Errorf("DominantActor/DominantSignal = %q/%q on a zero-history snapshot, want empty/empty", summary.DominantActor, summary.DominantSignal)
 	}
 	if summary.ResonanceDir == "" {
 		t.Errorf("ResonanceDir empty after GenerateSummaryReport")
@@ -298,5 +304,117 @@ func TestRefresh_TimezoneOffset(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].TradingDate != want {
 		t.Errorf("UTC 16:00 should map to Taipei next day: got %v, want %s", got, want)
+	}
+}
+
+// TestDeriveTradingDate_TaipeiBoundary locks audit M4: the read path
+// trading-date derivation must use Asia/Taipei (same clock Refresh uses
+// to key persisted samples). The canonical regression is a snapshot
+// recorded 2026-09-03T23:30:00Z — Taipei 2026-09-04 07:30 — which a UTC
+// derivation would mislabel as 2026-09-03.
+func TestDeriveTradingDate_TaipeiBoundary(t *testing.T) {
+	cases := []struct {
+		name string
+		utc  time.Time
+		want string
+	}{
+		{"taipei_morning_before_8am", time.Date(2026, 9, 3, 23, 30, 0, 0, time.UTC), "2026-09-04"},
+		{"taipei_noon_same_utc_day", time.Date(2026, 9, 4, 4, 0, 0, 0, time.UTC), "2026-09-04"},
+		{"utc_evening_rolls_taipei_day", time.Date(2026, 7, 15, 16, 0, 0, 0, time.UTC), "2026-07-16"},
+		{"taipei_late_night_same_day", time.Date(2026, 9, 4, 15, 59, 59, 0, time.UTC), "2026-09-04"},
+		{"utc_epoch_zero", time.Unix(0, 0), "1970-01-01"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := deriveTradingDate(c.utc.Unix()); got != c.want {
+				t.Errorf("deriveTradingDate(%v) = %q, want %q (Asia/Taipei)", c.utc, got, c.want)
+			}
+		})
+	}
+}
+
+// TestService_ReadPathDateKeyAlignsWithRefreshWrite locks audit M4
+// end-to-end: Refresh persists the snapshot under its Taipei trading
+// date, and LatestDaily must read with the same Taipei as-of date so
+// the (write key, read upper bound, force AsOfTradingDate) all agree.
+// Before the fix, the UTC-derived read date was one day behind the
+// Taipei write key for Taiwan mornings before 08:00.
+func TestService_ReadPathDateKeyAlignsWithRefreshWrite(t *testing.T) {
+	recordedAt := time.Date(2026, 9, 3, 23, 30, 0, 0, time.UTC).Unix() // Taipei 09-04 07:30
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         recordedAt,
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	svc := NewServiceWithStore(provider, 0, store, nil)
+	ctx := context.Background()
+
+	if err := svc.Refresh(ctx); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	samples, err := store.History(ctx, ForceForeign, "2099-12-31", 10)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(samples) != 1 || samples[0].TradingDate != "2026-09-04" {
+		t.Fatalf("Refresh wrote samples %v, want TradingDate=2026-09-04 (Taipei)", samples)
+	}
+
+	report, err := svc.LatestDaily(ctx)
+	if err != nil {
+		t.Fatalf("LatestDaily: %v", err)
+	}
+	asOf := ""
+	for _, f := range report.Forces {
+		if f.Force == ForceForeign {
+			asOf = f.AsOfTradingDate
+		}
+	}
+	if asOf != "2026-09-04" {
+		t.Errorf("LatestDaily force AsOfTradingDate = %q, want %q (must match Refresh write key)", asOf, "2026-09-04")
+	}
+}
+
+// TestRefresh_PersistsProvenanceUnits locks audit M3 on the write path:
+// every RollingSample Refresh persists must carry exactly the
+// (unit, source_id) of ComputeForceProvenance — the single provenance
+// table — for all seven dimensions.
+func TestRefresh_PersistsProvenanceUnits(t *testing.T) {
+	recordedAt := time.Date(2026, 9, 4, 4, 0, 0, 0, time.UTC).Unix()
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:          recordedAt,
+		ForeignInvestorNet:  marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DomesticFundNet:     marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+		DealerNet:           marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -30},
+		ForeignFuturesOINet: marketdata.MacroDataPoint{Symbol: "ForeignFuturesOINet", Value: -8000},
+		TSMADR:              marketdata.MacroDataPoint{Symbol: "TSMADR", ChangePct: 1.2},
+		GovernmentNet:       marketdata.MacroDataPoint{Symbol: "GovernmentNet", Value: 5},
+		RetailMarginBalance: marketdata.MacroDataPoint{Symbol: "RetailMarginBalance", ChangePct: -0.5},
+		RetailShortBalance:  marketdata.MacroDataPoint{Symbol: "RetailShortBalance", ChangePct: 0.3},
+	}}
+	store := NewMemoryRollingSampleStore(60)
+	svc := NewServiceWithStore(provider, 0, store, nil)
+	if err := svc.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	dims := []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	}
+	for _, dim := range dims {
+		samples, err := store.History(context.Background(), dim, "2099-12-31", 10)
+		if err != nil {
+			t.Fatalf("History(%s): %v", dim, err)
+		}
+		if len(samples) != 1 {
+			t.Fatalf("History(%s) len = %d, want 1", dim, len(samples))
+		}
+		prov := ComputeForceProvenance(dim)
+		if samples[0].Unit != prov.Unit || samples[0].SourceID != prov.SourceID {
+			t.Errorf("%s sample provenance = (%q, %q), want (%q, %q) from ComputeForceProvenance",
+				dim, samples[0].Unit, samples[0].SourceID, prov.Unit, prov.SourceID)
+		}
 	}
 }

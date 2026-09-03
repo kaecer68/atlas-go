@@ -520,3 +520,61 @@ var (
 	_ = testSnapshot
 	_ = marketdata.MacroDataSnapshot{}
 )
+
+// ===========================================================================
+// M3 — dimensionSource ↔ ComputeForceProvenance single source of truth
+// (audit 2026-09-04). The persistence writer (dimensionSource, used by
+// Service.Refresh) used to carry its own unit/source table that
+// contradicted ComputeForceProvenance on government (hundred_million_shares
+// vs twd), retail (hundred_million_shares vs pct_composite) and TSM ADR
+// (percent/SourceYahoo vs pct/SourceSECTSMC). The two must agree for all
+// 7 dimensions — a 7×4 matrix lock (unit, source_id per dimension).
+// ===========================================================================
+
+func TestDimensionSource_MatchesProvenanceMatrix(t *testing.T) {
+	dims := []ForceName{
+		ForceForeign, ForceInstitutional, ForceDealer,
+		ForceGovernment, ForceRetail, ForceFutures, ForceTSMADR,
+	}
+	for _, dim := range dims {
+		t.Run(string(dim), func(t *testing.T) {
+			prov := ComputeForceProvenance(dim)
+			unit, sourceID := dimensionSource(dim)
+			if unit != prov.Unit {
+				t.Errorf("dimensionSource(%s) unit = %q, want %q (ComputeForceProvenance)", dim, unit, prov.Unit)
+			}
+			if sourceID != prov.SourceID {
+				t.Errorf("dimensionSource(%s) source_id = %q, want %q (ComputeForceProvenance)", dim, sourceID, prov.SourceID)
+			}
+			if unit == "" || sourceID == "" {
+				t.Errorf("dimensionSource(%s) returned empty provenance (%q, %q); every dimension must have a concrete row", dim, unit, sourceID)
+			}
+		})
+	}
+}
+
+// TestDimensionSource_AnchoredRows pins the acceptance rows of audit M3:
+// the contested dimensions must resolve to the provenance table's values,
+// and the T86 trio keeps its spec §5.1 億股 unit.
+func TestDimensionSource_AnchoredRows(t *testing.T) {
+	anchors := []struct {
+		dim      ForceName
+		wantUnit string
+		wantSrc  string
+	}{
+		{ForceForeign, "hundred_million_shares", SourceTWSET86},
+		{ForceInstitutional, "hundred_million_shares", SourceTWSET86},
+		{ForceDealer, "hundred_million_shares", SourceTWSET86},
+		{ForceGovernment, "twd", SourceGovernmentOperator},
+		{ForceRetail, "pct_composite", SourceTWSEODDLOT},
+		{ForceFutures, "contracts", SourceTAIFEXInst},
+		{ForceTSMADR, "pct", SourceSECTSMC},
+	}
+	for _, c := range anchors {
+		unit, sourceID := dimensionSource(c.dim)
+		if unit != c.wantUnit || sourceID != c.wantSrc {
+			t.Errorf("dimensionSource(%s) = (%q, %q), want (%q, %q)",
+				c.dim, unit, sourceID, c.wantUnit, c.wantSrc)
+		}
+	}
+}
