@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/experiment"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -213,6 +215,16 @@ func registerCapitalTasks(d capitalDeps) {
 			_, err := d.gateway.Fetch(ctx, "twse_sbl")
 			if err == nil {
 				sblLastFetchDay = today
+				return nil
+			}
+			// 告警降噪（2026-09-03）：FinMind 日額度耗盡是等待態（00:00 TW
+			// 自動重置），不是通道故障——health 已在 gateway 分類為 warn（非
+			// error）。把今日標記為已嘗試，避免 16:00-23:00 每小時重試白燒額度
+			// 並持續製造 task_failed 噪音；隔日 15:00+ 額度重置後自然恢復。
+			if errors.Is(err, marketdata.ErrQuotaExhausted) {
+				sblLastFetchDay = today
+				logging.Warn("capital_tasks", "auto_twse_sbl_quota_skip", "err", err.Error())
+				return nil
 			}
 			return err
 		},
@@ -298,6 +310,17 @@ func registerCapitalTasks(d capitalDeps) {
 			_, err := d.gateway.Fetch(ctx, "tdcc_equity_dispersion")
 			if err == nil {
 				tdccLastFetchDay = today
+				return nil
+			}
+			// 告警降噪（2026-09-03）：TDCC 股權分散是週頻快照，「walk-back 無
+			// 資料」= 快照尚未發布（等待態）、FinMind 額度耗盡 = 00:00 TW 重置
+			// ——皆非通道故障。health 已在 gateway 分類（ErrNoData→ok 不更新
+			// last_success；ErrQuotaExhausted→warn），任務回 nil 避免 task_failed
+			// 噪音。不設 tdccLastFetchDay：當日後續 tick 仍會嘗試，捕捉同日晚些
+			// 發布的快照。
+			if errors.Is(err, marketdata.ErrNoData) || errors.Is(err, marketdata.ErrQuotaExhausted) {
+				logging.Warn("capital_tasks", "auto_tdcc_dispersion_waiting", "err", err.Error())
+				return nil
 			}
 			return err
 		},
