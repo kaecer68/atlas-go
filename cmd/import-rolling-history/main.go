@@ -19,14 +19,19 @@
 //	    [-replay data/replay/tw_extended_90days.csv] \
 //	    [-t86 data/state/capital_flow] \
 //	    [-gov data/state/government_flow] \
+//	    [-oi data/state/taifex_oi] [-macro data/state/macro] \
 //	    [-from 2026-05-01] [-capacity 252] [-dry-run]
 //
 // Since 2026-08-26 the government dimension IS imported when real
 // readings exist under data/state/government_flow/ (HiStock media-curated
-// daily readings; total_net TWD converted to 億元). The remaining
-// dimensions (futures / tsm_adr / retail) are intentionally not
-// fabricated: they need their real sources (TAIFEX institutional OI,
-// Yahoo TSM ADR, TWSE margin+當沖). See internal/capitalflow/history_import.go.
+// daily readings; total_net TWD converted to 億元).
+// Since 2026-09-04 the futures OI dimension IS imported from real TAIFEX
+// institutional OI snapshots (data/state/taifex_oi/, backfilled via
+// cmd/backfill-taifex-oi-finmind) and the tsm_adr dimension from real
+// Yahoo-derived macro snapshots (data/state/macro/, backfilled via
+// cmd/backfill-macro-history). Retail remains intentionally not
+// fabricated: it needs TWSE margin+當沖 history. See
+// internal/capitalflow/history_import.go.
 package main
 
 import (
@@ -44,6 +49,8 @@ const (
 	defaultReplayPath = "data/replay/tw_extended_90days.csv"
 	defaultT86Dir     = "data/state/capital_flow"
 	defaultGovDir     = "data/state/government_flow"
+	defaultOIDir      = "data/state/taifex_oi"
+	defaultMacroDir   = "data/state/macro"
 	defaultCapacity   = 252
 	// defaultFrom excludes the 2025-05..2025-09 T86 snapshots that
 	// repeat identical values across consecutive days (synthetic
@@ -58,6 +65,8 @@ func main() {
 		replayPath = flag.String("replay", defaultReplayPath, "replay CSV trading calendar")
 		t86Dir     = flag.String("t86", defaultT86Dir, "directory of TWSE T86 snapshot JSON files")
 		govDir     = flag.String("gov", defaultGovDir, "directory of government_flow reading JSON files (YYYYMMDD.json)")
+		oiDir      = flag.String("oi", defaultOIDir, "directory of TAIFEX institutional OI day snapshots (YYYY-MM-DD.json; empty string skips)")
+		macroDir   = flag.String("macro", defaultMacroDir, "directory of dated macro snapshots (tsm_adr change_pct; empty string skips)")
 		fromDate   = flag.String("from", defaultFrom, "import only trading dates >= this date (YYYY-MM-DD, inclusive); empty = full replay range")
 		capacity   = flag.Int("capacity", defaultCapacity, "per-dimension rolling capacity (must match the server wiring, main.go:939 uses 252)")
 		dryRun     = flag.Bool("dry-run", false, "build and report the batch without writing the store")
@@ -67,7 +76,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	samples, rep, err := capitalflow.BuildHistorySamples(*replayPath, *t86Dir, *govDir, *fromDate)
+	samples, rep, err := capitalflow.BuildHistorySamplesExt(*replayPath, *t86Dir, *govDir, *fromDate, *oiDir, *macroDir)
 	if err != nil {
 		log.Fatalf("import-rolling-history: %v", err)
 	}
