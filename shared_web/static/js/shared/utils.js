@@ -58,10 +58,11 @@ export function escapeHtml(str) {
 }
 
 export function fmtNTD(v) {
+  // B8 (risk-console Phase 1)：台幣無角分實務 — 0 位小數（與 fmtCurrency 一致）。
   if (!isValidNumber(v)) return 'NT$—';
   const sign = v < 0 ? '-' : '';
   const abs = Math.abs(v);
-  const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   return `NT$${sign}${formatted}`;
 }
 

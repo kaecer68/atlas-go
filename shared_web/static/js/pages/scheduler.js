@@ -117,24 +117,53 @@ export function renderSchedulerPage(tasks, getJSON) {
     '</table></div>';
 }
 
+// humanizeDuration formats a Go time.Duration (nanoseconds — runtime
+// /api/scheduler/status marshals Duration as an integer) or a Go duration
+// string ("1h0m0s") into a compact human form:
+//   <1s → ms、<60s → s、<3600s → m、≤24h → h、其餘 → d
+// (2026-09-03 fix: interval used to render the raw ns integer, e.g.
+// 86400000000000 → "24h"、21600000000000 → "6h").
+function humanizeDuration(d) {
+  var NS_PER_MS = 1e6, S = 1000 * NS_PER_MS, M = 60 * S, H = 3600 * S, D = 86400 * S;
+  if (typeof d === 'number' && isFinite(d) && d > 0) {
+    if (d < S) return Math.round(d / NS_PER_MS) + 'ms';
+    if (d < M) return Math.round(d / S) + 's';
+    if (d < H) return Math.round(d / M) + 'm';
+    if (d <= D) return Math.round(d / H) + 'h';
+    return Math.round(d / D) + 'd';
+  }
+  return null;
+}
+
 function formatDuration(d) {
   if (!d) return '—';
   if (typeof d === 'string') {
-    var match = d.match(/(\d+)h(\d+)m(\d+)s/);
-    if (match) {
+    // Go Duration.String() shapes: "1h0m0s" / "5m0s" / "45s"
+    var m = d.match(/^(?:(\d+)h)?(?:(\d+)m)?(\d+)s$/);
+    if (m) {
       var parts = [];
-      if (+match[1]) parts.push(match[1] + 'h');
-      if (+match[2]) parts.push(match[2] + 'm');
-      if (+match[3]) parts.push(match[3] + 's');
-      return parts.join(' ') || d;
+      if (+m[1]) parts.push(m[1] + 'h');
+      if (+m[2]) parts.push(m[2] + 'm');
+      if (+m[3] || parts.length === 0) parts.push(m[3] + 's');
+      return parts.join(' ');
+    }
+    if (/^\d+$/.test(d)) {
+      var asNum = humanizeDuration(Number(d));
+      if (asNum) return asNum;
     }
     return d;
   }
+  var h = humanizeDuration(d);
+  if (h) return h;
   return String(d);
 }
 
 function formatTime(iso) {
   if (!iso) return '—';
+  // Go time.Time zero value serializes as "0001-01-01T00:00:00Z" — that is
+  // "never", not a real instant. Rendering it produced a nonsense date in
+  // the 下次執行 column (2026-09-03 fix).
+  if (String(iso).indexOf('0001-01-01') === 0) return '—';
   try {
     var d = new Date(iso);
     return d.toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -152,7 +181,12 @@ function mergeLivenessAndStatus(livenessTasks, statusTasks) {
       channel_id: s.channel_id,
       enabled: s.enabled,
       interval: s.interval,
-      next_run_at: s.next_run,
+      // Runtime next_run is a Go time.Time that serializes even when zero
+      // ("0001-01-01…" = the task has never run since process start). Drop
+      // it here so the merge falls back to the liveness next_run_at (if any)
+      // and the 下次執行 column renders "—" instead of a fake 0001 date
+      // (2026-09-03 fix).
+      next_run_at: s.next_run && String(s.next_run).indexOf('0001-01-01') !== 0 ? s.next_run : null,
       last_run_at: s.last_run,
       consecutive_failures: s.consecutive_failures || 0,
       last_error: s.last_error || '',
@@ -215,3 +249,6 @@ export function loadSchedulerPage() {
 // 註：window-level 接線由 admin main.js loadModules（modules.scheduler block）
 // 統一處理（PR-7 補 'scheduler' key 後走正常 path）。此處不再自我註冊，避免
 // 與 loadModules 雙重接線。本模組僅被 admin_web 動態 import。
+
+// Pure helpers exported for node unit tests (shared_web/static/js/__tests__).
+export { formatDuration, formatTime, mergeLivenessAndStatus };

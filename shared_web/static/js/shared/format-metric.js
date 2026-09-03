@@ -97,7 +97,10 @@ export function formatNumber(value, options = {}) {
   const formatted = useGrouping
     ? v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
     : v.toFixed(decimals);
-  return `${formatted}${suffix}`;
+  // B3 (risk-console Phase 1)：percent:true 即代表百分比語意，
+  // 未明確給 suffix 時自動補上 '%'，避免 live/portfolio 頁數字無單位。
+  const effSuffix = percent && suffix === '' ? '%' : suffix;
+  return `${formatted}${effSuffix}`;
 }
 
 /**

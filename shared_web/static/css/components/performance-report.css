@@ -137,6 +137,13 @@
   text-align: left;
 }
 
+/* 2.5 表格規範（risk-console Phase 1）：數字欄右對齊 + 等寬數字 */
+.pr-table th.num,
+.pr-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .pr-table th {
   padding: var(--space-sm) var(--space-md);
   background: var(--panel-l2);
