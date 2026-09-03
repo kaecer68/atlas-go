@@ -12,6 +12,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/risk"
@@ -22,10 +23,23 @@ type Handlers struct {
 	correlationMatrix  *industry.CorrelationMatrix
 	classificationTree *industry.ClassificationTree
 	RiskGate           *risk.RiskGate // optional, set via WithRiskGate()
+	// commentaryStore backs the risk-commentary PG fallback (P0-2). It is the
+	// backend-aware ledger store (PG-first on production) used to read the
+	// latest persisted session_summaries.risk_commentary after a restart,
+	// when RiskGate.LastDecision is still empty (decisions are in-memory).
+	commentaryStore ledger.OutcomeStore
 }
 
 func NewHandlers(ledgerDir string) *Handlers {
 	return &Handlers{LedgerDir: ledgerDir}
+}
+
+// WithCommentaryStore wires the store used by the risk-commentary fallback.
+// When nil, HandleRiskCommentary keeps the pre-fallback behavior (report
+// "not_available" when the in-memory gate has no decision).
+func (h *Handlers) WithCommentaryStore(store ledger.OutcomeStore) *Handlers {
+	h.commentaryStore = store
+	return h
 }
 
 // WithCorrelationMatrix sets an optional correlation matrix provider.
@@ -129,10 +143,17 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 			"insufficient_data": 1,
 		}
 	} else {
+		// P0-1 (SSOT Phase 0): fewer than 252 observations — never surface a
+		// provisional VaR value. The 30..251 range used to return the raw
+		// percentile (e.g. -0.3214) alongside insufficient_data=1, so a
+		// consumer that only checked the data-availability flag still painted
+		// "-32.1%" while risk-exposure correctly showed "觀察期中". Zero the
+		// VaR/CVaR fields and keep the drawdown (a 1..251-observation
+		// historical fact, not a sample-size-gated estimate).
 		dd := risk.CalculateMaxDrawdown(portfolioValues)
 		snap = map[string]float64{
-			"var_95":            risk.CalculateVaRPercentile(dailyReturns, 0.95),
-			"var_99":            risk.CalculateVaRPercentile(dailyReturns, 0.99),
+			"var_95":            0,
+			"var_99":            0,
 			"cvar_95":           0,
 			"max_drawdown_pct":  dd,
 			"data_points":       float64(len(dailyReturns)),
@@ -234,29 +255,78 @@ func (h *Handlers) HandleRiskCalibration(r *http.Request) (int, any) {
 }
 
 // HandleRiskCommentary returns the latest risk gate decision commentary.
+//
+// P0-2 (SSOT Phase 0): RiskGate decisions live only in memory, so after a
+// service restart LastDecision is empty and the commentary surface goes blank
+// even though the latest session's commentary was already persisted in PG
+// session_summaries.risk_commentary. When the in-memory gate has no decision
+// yet, fall back to the newest persisted summary commentary (pure read-side
+// change — the write path is untouched).
 func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
 		return serviceUnavailable("risk_gate_not_injected", "")
 	}
 	dec := h.RiskGate.LastDecision()
-	if dec.Recorded.IsZero() {
+	if !dec.Recorded.IsZero() {
 		return http.StatusOK, map[string]any{
-			"status":    "not_available",
-			"message":   "no risk decision recorded yet",
-			"generated": false,
+			"phase":                 string(dec.Phase),
+			"verdict":               string(dec.Verdict),
+			"reason":                dec.Reason,
+			"action_type":           string(dec.Action.Type),
+			"action_description":    dec.Action.Description,
+			"mode":                  dec.Mode,
+			"symbol":                dec.Symbol,
+			"recorded_at":           dec.Recorded.Format(time.RFC3339),
+			"confidence_commentary": dec.ConfidenceCommentary,
+			"source":                "risk_gate_memory",
+			"generated":             true,
 		}
 	}
+
+	// Fallback: read the latest session summary that carries a persisted
+	// risk_commentary from the backend-aware store (PG-first on production).
+	if h.commentaryStore != nil {
+		if summaries, err := h.commentaryStore.LoadSessionSummaries(); err == nil {
+			var latest *domain.SessionSummary
+			for i := range summaries {
+				s := &summaries[i]
+				if strings.TrimSpace(s.RiskCommentary) == "" {
+					continue
+				}
+				if latest == nil || s.SessionID > latest.SessionID {
+					latest = s
+				}
+			}
+			if latest != nil {
+				recorded := latest.RecordedAt
+				if recorded.IsZero() {
+					recorded = domain.SessionDateFromID(latest.SessionID)
+				}
+				commentary := strings.TrimSpace(latest.RiskCommentary)
+				return http.StatusOK, map[string]any{
+					"phase":                 "session_summary",
+					"verdict":               "UNKNOWN",
+					"reason":                commentary,
+					"action_type":           "none",
+					"action_description":    "RiskGate 重啟後尚無新決策，此評語來自最近一次已持久化之 session_summary（risk_commentary）",
+					"mode":                  "unknown",
+					"symbol":                "",
+					"recorded_at":           recorded.Format(time.RFC3339),
+					"confidence_commentary": commentary,
+					"source":                "session_summaries_pg",
+					"session_id":            latest.SessionID,
+					"generated":             true,
+				}
+			}
+		} else {
+			logging.Warn("risk_handler", "commentary_fallback_summaries_failed", "err", err.Error())
+		}
+	}
+
 	return http.StatusOK, map[string]any{
-		"phase":                 string(dec.Phase),
-		"verdict":               string(dec.Verdict),
-		"reason":                dec.Reason,
-		"action_type":           string(dec.Action.Type),
-		"action_description":    dec.Action.Description,
-		"mode":                  dec.Mode,
-		"symbol":                dec.Symbol,
-		"recorded_at":           dec.Recorded.Format(time.RFC3339),
-		"confidence_commentary": dec.ConfidenceCommentary,
-		"generated":             true,
+		"status":    "not_available",
+		"message":   "no risk decision recorded yet",
+		"generated": false,
 	}
 }
 

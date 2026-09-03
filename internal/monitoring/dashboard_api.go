@@ -1428,6 +1428,15 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if a.riskGate != nil {
 		riskHandlers.WithRiskGate(a.riskGate)
 	}
+	// P0-2 (SSOT Phase 0): risk-commentary fallback reads the latest persisted
+	// session_summaries.risk_commentary through the same backend-aware factory
+	// as the performance report (PG-first on production). Same DI pattern as
+	// RegisterPerformanceRoutes / RegisterLiveRoutes.
+	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
+		riskHandlers.WithCommentaryStore(store)
+	} else {
+		logging.Warn("dashboard", "risk_commentary_store_init_failed", logging.Err(err))
+	}
 	if a.industryService != nil {
 		if a.industryService.LinkageAnalyzer != nil {
 			riskHandlers.WithCorrelationMatrix(a.industryService.LinkageAnalyzer.GetCorrelationMatrix())
