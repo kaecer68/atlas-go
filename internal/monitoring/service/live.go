@@ -80,6 +80,13 @@ type LiveService struct {
 	WorkDir    string
 	LedgerDir  string
 	Classifier *industry.ClassificationTree
+
+	// TradeStore backs LoadTradeHistory (the source of the portfolio
+	// trade_count KPI). When nil the legacy JSONL *Store (LedgerDir) is
+	// used; production wiring injects the same PG-first SSoT store that
+	// backs the performance report so the portfolio card and the report
+	// share one backend semantics (see RegisterLiveRoutes).
+	TradeStore ledger.OutcomeStore
 }
 
 // NewLiveService creates a new LiveService.
@@ -88,6 +95,12 @@ func NewLiveService(workDir, ledgerDir string) *LiveService {
 		WorkDir:   workDir,
 		LedgerDir: ledgerDir,
 	}
+}
+
+// WithTradeStore attaches the ledger store used for trade-history reads.
+func (s *LiveService) WithTradeStore(store ledger.OutcomeStore) *LiveService {
+	s.TradeStore = store
+	return s
 }
 
 // LiveStatusResponse represents the live trading status response.
@@ -223,20 +236,37 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 
 	positions := make([]PositionDTO, 0, len(posMap))
 	var totalUnrealizedPnL float64
+	var storedUnrealizedPnL float64
 	for _, pos := range posMap {
+		// Mark-to-market at read time. The live-store writers (simulation /
+		// backtest → live-store sync, intraday orchestrator fills) persist
+		// current_price but can leave unrealized_pnl / market_value stale
+		// (e.g. 0) when a position's last update was a fill or trim that did
+		// not re-run the mark (observed 2026-09-03 production: 00713.TW cost
+		// 62.43 vs price 62.35 but pnl 0). Recompute both from current_price
+		// so the dashboard never shows a pnl that contradicts the snapshot
+		// price. Positions without a price (never quoted) keep the persisted
+		// values, so a missing quote cannot masquerade as a total loss.
+		marketValue := pos.MarketValue
+		unrealized := pos.UnrealizedPnL
+		if pos.CurrentPrice > 0 {
+			marketValue = float64(pos.Quantity) * pos.CurrentPrice
+			unrealized = float64(pos.Quantity) * (pos.CurrentPrice - pos.AverageCost)
+		}
 		pnlPct := 0.0
 		if cost := float64(pos.Quantity) * pos.AverageCost; cost > 0 {
-			pnlPct = pos.UnrealizedPnL / cost
+			pnlPct = unrealized / cost
 		}
-		totalUnrealizedPnL += pos.UnrealizedPnL
+		storedUnrealizedPnL += pos.UnrealizedPnL
+		totalUnrealizedPnL += unrealized
 		positions = append(positions, PositionDTO{
 			Symbol:        pos.Symbol,
 			Name:          resolveSymbolName(pos.Symbol),
 			Quantity:      pos.Quantity,
 			AverageCost:   pos.AverageCost,
 			CurrentPrice:  pos.CurrentPrice,
-			MarketValue:   pos.MarketValue,
-			UnrealizedPnL: pos.UnrealizedPnL,
+			MarketValue:   marketValue,
+			UnrealizedPnL: unrealized,
 			PnlPct:        pnlPct,
 		})
 	}
@@ -258,12 +288,19 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		}
 	}
 
-	// Cross-footing verification
+	// Cross-footing verification: validates the persisted snapshot's own
+	// internal consistency (portfolio_state.json unrealized_pnl vs the sum of
+	// the persisted per-position unrealized_pnl values), i.e. whether the
+	// writer kept the two state files in sync. It intentionally uses the
+	// persisted (pre-mark-to-market) values: the KPI-level mark above
+	// overrides stale writer output, so comparing the file's portfolio pnl
+	// against the recomputed sum would flag every stale-but-consistent
+	// snapshot and spam the log.
 	crossFoot := CrossFootCheck{
 		Portfolio:    portfolio.UnrealizedPnL,
-		SumPositions: totalUnrealizedPnL,
-		Difference:   portfolio.UnrealizedPnL - totalUnrealizedPnL,
-		IsBalanced:   math.Abs(portfolio.UnrealizedPnL-totalUnrealizedPnL) < 0.01,
+		SumPositions: storedUnrealizedPnL,
+		Difference:   portfolio.UnrealizedPnL - storedUnrealizedPnL,
+		IsBalanced:   math.Abs(portfolio.UnrealizedPnL-storedUnrealizedPnL) < 0.01,
 	}
 	if !crossFoot.IsBalanced {
 		logging.Warn("liveservice", "cross_footing_mismatch",
@@ -298,7 +335,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		StartingCash:       startingCash,
 		PortfolioValue:     portfolio.Cash + totalMarketValue,
 		RealizedPnL:        realizedPnL,
-		CumulativePnL:      realizedPnL + portfolio.UnrealizedPnL,
+		CumulativePnL:      realizedPnL + totalUnrealizedPnL,
 		CumulativePnLPct:   0,
 		CurrentDrawdown:    currentDrawdown,
 		MaxDrawdown:        maxDrawdown,
@@ -318,7 +355,10 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 }
 
 func (s *LiveService) LoadTradeHistory() []domain.TradeRecord {
-	store := ledger.NewStore(s.LedgerDir)
+	store := s.TradeStore
+	if store == nil {
+		store = ledger.NewStore(s.LedgerDir)
+	}
 	trades, err := store.LoadAllSessionTrades()
 	if err != nil {
 		logging.Warn("liveservice", "load_trade_history_failed", "err", err.Error())

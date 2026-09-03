@@ -58,6 +58,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     const realizedPnL = isValidNumber(state.realized_pnl) ? state.realized_pnl : null;
     // B10 (risk-console Phase 1)：trade_count 缺欄位時顯示 —，
     // 禁止 fallback 成空陣列長度（0）誤導使用者；交易總數以績效報告為準。
+    // 2026-09-03：trade_count 改為 trades 表實際成交（下單）筆數（後端與績效
+    // 報告同源 SSoT store）；績效報告「總交易數」另含 AI 推薦模擬撮合，兩者
+    // 口徑不同，hint 明示避免與績效報告數字混淆。
     const tradeCount = typeof state.trade_count === 'number' ? state.trade_count : null;
     const unrealizedPnLTotal = isValidNumber(state.unrealized_pnl_total) ? state.unrealized_pnl_total : null;
     const concentrationRatio = isValidNumber(state.concentration_ratio) ? state.concentration_ratio : null;
@@ -103,7 +106,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       <div class="kpi-card">
         <div class="kpi-label">累積交易數</div>
         <div class="kpi-value">${kpiNum(tradeCount)}</div>
-        <div class="kpi-hint">${tradeCount === null ? '以績效報告「總交易數」為準' : '交易歷史總筆數'}</div>
+        <div class="kpi-hint">${tradeCount === null ? '以績效報告「總交易數」為準' : `實際下單 ${tradeCount.toLocaleString('en-US')} 筆 · 績效報告另計模擬撮合`}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積稅負</div>

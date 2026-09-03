@@ -2,11 +2,14 @@ package service
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func TestEquityCurvePoint_JSONMarshaling(t *testing.T) {
@@ -364,5 +367,154 @@ func TestCalculateMaxDrawdownFromEquityCurve(t *testing.T) {
 				t.Errorf("calculateMaxDrawdownFromEquityCurve() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// writeLiveStateFiles seeds a minimal live store snapshot under workDir
+// (data/state/live/state/{portfolio_state,positions_current}.json) using the
+// same JSON shapes livestore.LoadLastPortfolioState / LoadLastPositions read.
+func writeLiveStateFiles(t *testing.T, workDir string, portfolio map[string]any, positions []domain.Position) {
+	t.Helper()
+	stateDir := filepath.Join(workDir, "data", "state", "live", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	pb, err := json.Marshal(portfolio)
+	if err != nil {
+		t.Fatalf("marshal portfolio: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "portfolio_state.json"), pb, 0o644); err != nil {
+		t.Fatalf("write portfolio_state: %v", err)
+	}
+	posb, err := json.Marshal(positions)
+	if err != nil {
+		t.Fatalf("marshal positions: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "positions_current.json"), posb, 0o644); err != nil {
+		t.Fatalf("write positions_current: %v", err)
+	}
+}
+
+func TestLoadPortfolioState_MarksPositionsToMarket(t *testing.T) {
+	// Regression (2026-09-03 production): the live-store snapshot carried a
+	// fresh current_price (62.35) but unrealized_pnl=0 (writer did not re-run
+	// the mark after fills/trims), so /api/dashboard/portfolio-state returned
+	// per-position pnl 0 and unrealized_pnl_total omitted as 0.
+	tmpDir := t.TempDir()
+	writeLiveStateFiles(t, tmpDir,
+		map[string]any{
+			"cash":           100000.0,
+			"unrealized_pnl": 0.0,
+			"total_exposure": 956095.0,
+			"last_updated":   "2026-09-03T05:05:11Z",
+		},
+		[]domain.Position{
+			{Symbol: "00713.TW", Quantity: 7700, AverageCost: 62.4279375, CurrentPrice: 62.35, MarketValue: 480095.0, UnrealizedPnL: 0},
+			{Symbol: "2603.TW", Quantity: 2000, AverageCost: 238.2975, CurrentPrice: 238.0, MarketValue: 476000.0, UnrealizedPnL: 0},
+		},
+	)
+
+	svc := NewLiveService(tmpDir, tmpDir)
+	state := svc.LoadPortfolioState()
+
+	if len(state.Positions) != 2 {
+		t.Fatalf("positions = %d, want 2", len(state.Positions))
+	}
+	// Recomputed: 7700*(62.35-62.4279375) = -600.12 (not 0).
+	wantPnl1 := 7700.0 * (62.35 - 62.4279375)
+	if math.Abs(state.Positions[0].UnrealizedPnL-wantPnl1) > 0.01 {
+		t.Errorf("pos0 unrealized_pnl = %.4f, want %.4f (mark-to-market)", state.Positions[0].UnrealizedPnL, wantPnl1)
+	}
+	wantPnl2 := 2000.0 * (238.0 - 238.2975)
+	if math.Abs(state.Positions[1].UnrealizedPnL-wantPnl2) > 0.01 {
+		t.Errorf("pos1 unrealized_pnl = %.4f, want %.4f (mark-to-market)", state.Positions[1].UnrealizedPnL, wantPnl2)
+	}
+	wantTotal := wantPnl1 + wantPnl2
+	if math.Abs(state.UnrealizedPnLTotal-wantTotal) > 0.01 {
+		t.Errorf("unrealized_pnl_total = %.4f, want %.4f", state.UnrealizedPnLTotal, wantTotal)
+	}
+	if math.Abs(state.CumulativePnL-wantTotal) > 0.01 {
+		t.Errorf("cumulative_pnl = %.4f, want %.4f (realized 0 + recomputed unrealized)", state.CumulativePnL, wantTotal)
+	}
+	if state.Positions[0].PnlPct == 0 {
+		t.Error("pnl_pct should be non-zero after mark-to-market")
+	}
+	// Persisted snapshot was internally consistent (file pnl 0 == sum of
+	// stored per-position pnl 0); cross-foot stays balanced and quiet.
+	if !state.CrossFootPnL.IsBalanced {
+		t.Errorf("cross_foot should be balanced for the persisted snapshot, got %+v", state.CrossFootPnL)
+	}
+}
+
+func TestLoadPortfolioState_KeepsPersistedPnlWhenNoPrice(t *testing.T) {
+	// A position never quoted (current_price 0) must keep the persisted pnl;
+	// recomputing 0-price as qty*(0-cost) would fabricate a total loss.
+	tmpDir := t.TempDir()
+	writeLiveStateFiles(t, tmpDir,
+		map[string]any{"cash": 100000.0, "unrealized_pnl": 123.0, "last_updated": "2026-09-03T05:05:11Z"},
+		[]domain.Position{
+			{Symbol: "2330.TW", Quantity: 1000, AverageCost: 900.0, CurrentPrice: 0, MarketValue: 900000.0, UnrealizedPnL: 123.0},
+		},
+	)
+
+	svc := NewLiveService(tmpDir, tmpDir)
+	state := svc.LoadPortfolioState()
+
+	if len(state.Positions) != 1 {
+		t.Fatalf("positions = %d, want 1", len(state.Positions))
+	}
+	if state.Positions[0].UnrealizedPnL != 123.0 {
+		t.Errorf("unrealized_pnl = %v, want persisted 123.0 when no current price", state.Positions[0].UnrealizedPnL)
+	}
+	if state.Positions[0].MarketValue != 900000.0 {
+		t.Errorf("market_value = %v, want persisted 900000.0 when no current price", state.Positions[0].MarketValue)
+	}
+}
+
+// stubTradeStore implements ledger.OutcomeStore by embedding the interface
+// and overriding only the trade-history read.
+type stubTradeStore struct {
+	ledger.OutcomeStore
+	records []domain.TradeRecord
+}
+
+func (s *stubTradeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
+	return s.records, nil
+}
+
+func writeJSONLTrade(t *testing.T, ledgerDir, sessionID string, rec domain.TradeRecord) {
+	t.Helper()
+	dir := filepath.Join(ledgerDir, "sessions", sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll: %v", err)
+	}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal trade: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trades.jsonl"), append(b, '\n'), 0o644); err != nil {
+		t.Fatalf("write trades.jsonl: %v", err)
+	}
+}
+
+func TestLoadTradeHistory_DefaultJSONLAndInjectedStore(t *testing.T) {
+	rec := domain.TradeRecord{
+		TradeID: "t-1", SessionID: "session-20260903-daily", Symbol: "2330.TW",
+		Side: domain.SideBuy, Quantity: 100, Price: 900.0, Amount: 90000.0, Reason: "test",
+		Timestamp: time.Date(2026, 9, 3, 6, 22, 44, 0, time.UTC),
+	}
+	// 1) Default path (no injected store) reads the JSONL ledger under LedgerDir.
+	tmpDir := t.TempDir()
+	writeJSONLTrade(t, tmpDir, "session-20260903-daily", rec)
+	svc := NewLiveService(tmpDir, tmpDir)
+	if got := len(svc.LoadTradeHistory()); got != 1 {
+		t.Fatalf("default JSONL LoadTradeHistory = %d records, want 1", got)
+	}
+
+	// 2) Injected store (production PG-first wiring) takes precedence.
+	injected := &stubTradeStore{records: []domain.TradeRecord{rec, rec}}
+	svc = svc.WithTradeStore(injected)
+	if got := len(svc.LoadTradeHistory()); got != 2 {
+		t.Fatalf("injected LoadTradeHistory = %d records, want 2", got)
 	}
 }
