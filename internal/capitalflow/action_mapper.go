@@ -20,6 +20,12 @@ const (
 	CapitalFlowActionRiskOff CapitalFlowAction = "risk_off"
 )
 
+// Deprecated: use sectorallocation.CapitalFlowAction (and its provenance
+// consumption in sectorallocation projector / strategy_evolver) instead.
+// This capitalflow-side mapper type has zero production callers (audit C3:
+// 死碼); it is frozen in PR-3c and scheduled for deletion in a later
+// cleanup PR. Do not add new callers.
+//
 // CapitalFlowActionMapper 介面（spec §6.2）：walk-forward 通過、model-versioned 才可啟用。
 // MapperVersion()="" 表示 disabled，呼叫 Map 必回 unavailable。
 type CapitalFlowActionMapper interface {

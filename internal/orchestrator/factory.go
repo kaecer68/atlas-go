@@ -104,7 +104,19 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	ctrl := NewPhase3Controller(&system.Sim().registry, pm, sm, re, system.Sim().ledger)
 	system.WithPhase3Controller(ctrl)
 
-	system.WithStrategyEvolver(NewStrategyEvolver())
+	// PR-3c (capital-flow model plan v1.1 §5.1): observation-mode decision
+	// log, gated by capitalflow.action_observation_mode (default true =
+	// record-only). The E07 capital-flow action is appended to
+	// data/state/capital_flow_observation.jsonl next to the legacy label —
+	// never executed (k3 B1: decision-inert; no mutation switch exists in
+	// this PR).
+	evolver := NewStrategyEvolver()
+	if config.GetCapitalflowActionObservationMode() {
+		obsPath := filepath.Join(cfg.WorkDir, "data", "state", "capital_flow_observation.jsonl")
+		evolver.WithCapitalFlowObserver(NewJSONLObservationLogger(obsPath))
+		logging.Info("orchestrator", "capital_flow_observation_mode_enabled", "path", obsPath)
+	}
+	system.WithStrategyEvolver(evolver)
 	pm.Start()
 
 	// Wave 11 L2.1 (Issue #719): opt-in LLM-driven sector agent wiring.

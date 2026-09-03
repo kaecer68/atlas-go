@@ -66,6 +66,7 @@
   "acknowledged_by",
   "acknowledged_within_sec",
   "action",
+  "action_observation_mode",
   "active",
   "active_destocking_capacity_max",
   "active_destocking_inventory_max",

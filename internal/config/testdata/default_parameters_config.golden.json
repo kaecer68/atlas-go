@@ -168,6 +168,12 @@
     }
   },
   "capitalflow": {
+    "action_observation_mode": {
+      "rationale": "Observation-first decision wiring: record what the E07 capital-flow action WOULD be at plan time without changing any weight. The 30-trading-day observation report (label agreement, hit rates) is the human-gate evidence for any future mutation design PR (capitalflow.mutation_enabled stays undefined).",
+      "source": "experimental",
+      "todo": "After the 30-trading-day observation report passes human review, a separate action→delta mapper design PR decides the next step.",
+      "value": true
+    },
     "period_weighted_quality": {
       "rationale": "Config gate for the period-weighted capital-flow quality score. Default false preserves the legacy equal-weight composite (k3 review B4: switching semantics directly would change the eventdriven baseline input — a hidden behavior change). quality_score_period_weighted is always emitted alongside for the 30-day observation window.",
       "source": "experimental",
