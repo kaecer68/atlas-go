@@ -234,6 +234,10 @@ type CapitalSnapshot struct {
 	ConsecutiveLosses int          `json:"consecutive_losses"`
 	CanAdvance        bool         `json:"can_advance"`
 	AdvanceReason     string       `json:"advance_reason,omitempty"`
+	// Source / Degraded (SSOT P1-3) label the L-cold history that feeds the
+	// rolling Sharpe / max drawdown ("postgres" / "jsonl" / "").
+	Source   string `json:"source,omitempty"`
+	Degraded bool   `json:"degraded,omitempty"`
 }
 
 type RetailSentimentSnapshot struct {

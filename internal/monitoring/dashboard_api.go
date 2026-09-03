@@ -165,6 +165,8 @@ type DashboardAPI struct {
 	dataFetcher                DataFetcher
 	riskGate                   *risk.RiskGate
 	riskHandlers               *apirisk.Handlers
+	liveHandlers               *apilive.Handlers
+	dashboardHandlers          *apidashboard.Handlers
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
@@ -1334,6 +1336,14 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		systemSvc.SetCycleTracker(a.industryService.CycleTracker)
 	}
 	systemHandlers := apisystem.NewHandlers(systemSvc)
+	// P1-2 (SSOT): HandleCapitalPhase reads its equity series through the
+	// shared SessionHistoryProvider (PG-first on production) instead of a raw
+	// os.ReadDir over LedgerDir/sessions.
+	if provider, err := service.NewSessionHistoryProvider(config.Normalize(config.Load())); err == nil {
+		systemHandlers.WithHistory(provider)
+	} else {
+		logging.Warn("dashboard", "system_history_provider_init_failed", logging.Err(err))
+	}
 	if a.dataFetcher != nil {
 		systemHandlers.DayTradingFetcher = apisystem.DayTradingFetcher(
 			NewDayTradingFetcher(a.dataFetcher),
@@ -1427,14 +1437,15 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if a.riskGate != nil {
 		riskHandlers.WithRiskGate(a.riskGate)
 	}
-	// P0-2 (SSOT Phase 0): risk-commentary fallback reads the latest persisted
-	// session_summaries.risk_commentary through the same backend-aware factory
-	// as the performance report (PG-first on production). Same DI pattern as
-	// RegisterPerformanceRoutes / RegisterLiveRoutes.
+	// P0-2/P1-2 (SSOT): risk handlers read their L-cold history (summary
+	// series for risk metrics, persisted risk_commentary fallback) through
+	// the same backend-aware factory as the performance report (PG-first on
+	// production). Same DI pattern as RegisterPerformanceRoutes /
+	// RegisterLiveRoutes.
 	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
-		riskHandlers.WithCommentaryStore(store)
+		riskHandlers.WithStore(store)
 	} else {
-		logging.Warn("dashboard", "risk_commentary_store_init_failed", logging.Err(err))
+		logging.Warn("dashboard", "risk_store_init_failed", logging.Err(err))
 	}
 	if a.industryService != nil {
 		if a.industryService.LinkageAnalyzer != nil {
@@ -1473,6 +1484,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	// Dashboard management center handlers (data-channels, data-pipeline,
 	// drawdown, sim-trace, channel toggle, api-keys, etc.)
 	dashboardHandlers := apidashboard.NewHandlers(a.workDir, a.ledgerDir)
+	a.dashboardHandlers = dashboardHandlers // late-bound overview wiring (RegisterAllRoutes)
 	dashboardHandlers.RegisteredChannelIDs = a.RegisteredChannelIDs
 	if a.pool != nil {
 		dashboardHandlers.Pool = a.pool
@@ -1670,17 +1682,20 @@ func (a *DashboardAPI) GetCrossMarketService() *service.CrossMarketService {
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
-	// Trade-history source must follow the configured ledger backend (PG on
-	// production), same SSoT read path as the performance report
-	// (NewReportOutcomeStore: PG-first with JSONL fallback). The previous
-	// hardcoded JSONL store scanned LedgerDir/sessions/*/trades.jsonl, which
-	// does not exist when ATLAS_STORE_BACKEND=postgres (trades live only in
-	// the PG trades table), so LoadTradeHistory returned empty and the
-	// portfolio card's trade_count was omitted as 0/null.
-	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
-		svc = svc.WithTradeStore(store)
+	// SSOT (P1-1): every L-cold read of the live handlers (equity curve,
+	// trade history) goes through the shared SessionHistoryProvider, which
+	// wraps NewReportOutcomeStore (PG-first with JSONL fallback + degraded on
+	// production) — the same SSoT read path as the performance report. The
+	// previous hardcoded JSONL store scanned LedgerDir/sessions/*/trades.jsonl,
+	// which does not exist when ATLAS_STORE_BACKEND=postgres (trades live
+	// only in the PG trades table), so LoadTradeHistory returned empty and
+	// the portfolio card's trade_count was omitted as 0/null (#1821). The
+	// provider additionally removes the raw os.ReadDir equity-curve scan so
+	// portfolio-state / risk-exposure / benchmark all answer from PG.
+	if provider, err := service.NewSessionHistoryProvider(config.Normalize(config.Load())); err == nil {
+		svc = svc.WithHistory(provider)
 	} else {
-		logging.Warn("dashboard", "live_trade_store_init_failed", logging.Err(err))
+		logging.Warn("dashboard", "live_history_provider_init_failed", logging.Err(err))
 	}
 	handlers := &apilive.Handlers{
 		LedgerDir:     a.ledgerDir,
@@ -1689,6 +1704,7 @@ func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 		Classifier:    a.industryService.Classifier,
 		AgentLayerMap: apilive.BuildAgentLayerMap(a.workDir),
 	}
+	a.liveHandlers = handlers
 	handlers.RegisterRoutes(mux)
 }
 
@@ -1947,6 +1963,13 @@ func (a *DashboardAPI) RegisterAllRoutes(mux *http.ServeMux, opts RouteOptions) 
 	a.RegisterIndustryRoutes(mux)
 	a.RegisterStrategiesRoutes(mux)
 	a.RegisterLiveRoutes(mux)
+
+	// P1-7 (SSOT): the overview aggregate (/api/dashboard/overview) reuses
+	// the live handlers for its three sections — bind them after
+	// RegisterLiveRoutes built them.
+	if a.dashboardHandlers != nil && a.liveHandlers != nil {
+		a.dashboardHandlers.Live = a.liveHandlers
+	}
 
 	if opts.IncludeBacktest {
 		a.RegisterBacktestRoutes(mux)
