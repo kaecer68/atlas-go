@@ -1809,6 +1809,17 @@ export interface HumanIntervention {
   ttl_hours?: number;
 }
 
+export interface HypothesisResult {
+  id: string;
+  status: string;
+  verdict: string;
+  sample_count: number;
+  metrics?: Record<string, number>;
+  thresholds?: Record<string, number>;
+  notes?: string[];
+  started_at: string;
+}
+
 export interface InTradeGateParameters {
   monitor_interval_sec: string;
   stop_loss_pct: string;
