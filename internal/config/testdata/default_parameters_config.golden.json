@@ -1646,7 +1646,7 @@
             "name_en": "LEO Satellite",
             "representative_stocks": [
               "6271.TW",
-              "3426.TW"
+              "2314.TW"
             ],
             "technology_intensity": "HighTech",
             "weight": 0.02
@@ -1843,8 +1843,9 @@
             "name_en": "Laser Communication",
             "parent_id": "leo_satellite",
             "representative_stocks": [
-              "3426.TW",
-              "6533.TW"
+              "4979.TW",
+              "6533.TW",
+              "3163.TW"
             ],
             "technology_intensity": "HighTech",
             "weight": 0.15

@@ -225,7 +225,11 @@ func (p *TDCClient) FetchDispersion(ctx context.Context, date string) ([]EquityD
 		probed = probed.AddDate(0, 0, -1)
 	}
 	if len(records) == 0 {
-		err := fmt.Errorf("tdcc: no dispersion data for %s (weekly snapshot may not be published yet)", date)
+		// 2026-09-03 告警降噪：TDCC 股權分散是週頻快照（資料日為週五，
+		// 次週初發布），「walk-back 21 天仍無資料」是『等待發布』而非通道
+		// 故障。wrap ErrNoData sentinel 讓 gateway/監控層能用 errors.Is 把
+		// 它分類成 waiting（status 維持 ok、不告警），而不是 channel error。
+		err := fmt.Errorf("tdcc: no dispersion data for %s (weekly snapshot may not be published yet): %w", date, ErrNoData)
 		p.recordFetchFailure(err)
 		return nil, err
 	}

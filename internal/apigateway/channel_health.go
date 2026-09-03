@@ -233,6 +233,28 @@ func (s *ChannelHealthStore) RecentFetches(limit int) []ChannelFetchLogEntry {
 
 // Record updates the health record for a channel.
 func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...RecordOption) error {
+	return s.recordInternal(channelID, status, errMsg, status == "ok", opts...)
+}
+
+// RecordWaiting marks a fetch outcome where the channel itself is healthy but
+// upstream has no NEW data yet — e.g. the TDCC 股權分散 weekly snapshot is not
+// yet published (ErrNoData), or a FinMind daily budget reset is pending.
+//
+// Semantics (2026-09-03 告警降噪): the record must NOT look like an error
+// (status stays "ok" — no ChannelHealthStatusError alert) and must NOT advance
+// LastSuccessAt (no data actually landed — consumers treat last_success as the
+// data-freshness anchor and gap detectors rely on it). Only LastFetchAt moves,
+// so staleness is measured from the last real data. The reason is logged by the
+// caller; LastError is cleared to keep the channel page clean.
+func (s *ChannelHealthStore) RecordWaiting(channelID string, opts ...RecordOption) error {
+	return s.recordInternal(channelID, "ok", "", false, opts...)
+}
+
+// recordInternal is the shared implementation behind Record and RecordWaiting.
+// advanceLastSuccess controls whether a successful outcome refreshes
+// LastSuccessAt: ordinary "ok" records advance it; waiting/no-new-data records
+// keep the previous value so freshness anchors stay truthful.
+func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, advanceLastSuccess bool, opts ...RecordOption) error {
 	_ = s.load()
 	s.mu.Lock()
 	rec := s.data[channelID]
@@ -245,7 +267,9 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	if status == "ok" {
 		rec.LastError = ""
 		rec.Errors = nil // P2: clear stale error text so a healthy channel no longer shows old errors
-		rec.LastSuccessAt = rec.LastFetchAt
+		if advanceLastSuccess {
+			rec.LastSuccessAt = rec.LastFetchAt
+		}
 	} else {
 		rec.LastError = errMsg
 		if errMsg != "" {
@@ -265,7 +289,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	s.mu.Unlock()
 
 	if s.pool != nil {
-		dbErr := s.recordToDB(channelID, status, errMsg)
+		dbErr := s.recordToDB(channelID, status, errMsg, advanceLastSuccess)
 		if dbErr == nil {
 			return s.save()
 		}
@@ -274,7 +298,7 @@ func (s *ChannelHealthStore) Record(channelID, status, errMsg string, opts ...Re
 	return s.save()
 }
 
-func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error {
+func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanceLastSuccess bool) error {
 	if s.pool == nil {
 		return fmt.Errorf("database pool not initialized")
 	}
@@ -283,7 +307,7 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 
 	now := time.Now()
 	var lastSuccessAt *time.Time
-	if status == "ok" {
+	if advanceLastSuccess {
 		ts := now
 		lastSuccessAt = &ts
 	}
@@ -300,7 +324,7 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string) error 
 		DO UPDATE SET status = EXCLUDED.status,
 					  last_fetch_at = EXCLUDED.last_fetch_at,
 					  last_error = EXCLUDED.last_error,
-					  last_success_at = EXCLUDED.last_success_at,
+					  last_success_at = COALESCE(EXCLUDED.last_success_at, channel_health.last_success_at),
 					  updated_at = EXCLUDED.updated_at
 	`, channelID, status, now, lastErrorPtr, lastSuccessAt, now)
 	if err != nil {
@@ -422,7 +446,12 @@ func (s *ChannelHealthStore) SyncAllToDB() error {
 		if rec.Status != "ok" {
 			errMsg = rec.LastError
 		}
-		if err := s.recordToDB(id, rec.Status, errMsg); err != nil {
+		// Sync mirrors the file semantics: last_success advances only when
+		// the stored record was produced by a real success (a waiting record
+		// stores status "ok" but keeps the previous LastSuccessAt — see
+		// RecordWaiting).
+		advance := rec.Status == "ok" && rec.LastSuccessAt == rec.LastFetchAt
+		if err := s.recordToDB(id, rec.Status, errMsg, advance); err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %v", id, err))
 		}
 	}

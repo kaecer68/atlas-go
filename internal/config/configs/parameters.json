@@ -5852,7 +5852,7 @@
             "capital_intensity": "HighCapital",
             "representative_stocks": [
               "6271.TW",
-              "3426.TW"
+              "2314.TW"
             ],
             "description": "衛星通訊新興供應鏈"
           },
@@ -6049,8 +6049,9 @@
             "technology_intensity": "HighTech",
             "capital_intensity": "HighCapital",
             "representative_stocks": [
-              "3426.TW",
-              "6533.TW"
+              "4979.TW",
+              "6533.TW",
+              "3163.TW"
             ],
             "description": "Optical inter-satellite links"
           }
