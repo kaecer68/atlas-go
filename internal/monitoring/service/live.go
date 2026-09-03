@@ -81,11 +81,15 @@ type LiveService struct {
 	LedgerDir  string
 	Classifier *industry.ClassificationTree
 
+	// History is the shared SSoT read provider for L-cold history (session
+	// summaries / trades / outcomes), PG-first on production (SSOT plan
+	// P1-1). When nil the legacy JSONL *Store (LedgerDir) is used so unit
+	// tests and non-wired callers keep file semantics.
+	History *SessionHistoryProvider
+
 	// TradeStore backs LoadTradeHistory (the source of the portfolio
-	// trade_count KPI). When nil the legacy JSONL *Store (LedgerDir) is
-	// used; production wiring injects the same PG-first SSoT store that
-	// backs the performance report so the portfolio card and the report
-	// share one backend semantics (see RegisterLiveRoutes).
+	// trade_count KPI). Superseded by History in production wiring
+	// (RegisterLiveRoutes); kept for direct-injection callers/tests.
 	TradeStore ledger.OutcomeStore
 }
 
@@ -97,10 +101,65 @@ func NewLiveService(workDir, ledgerDir string) *LiveService {
 	}
 }
 
+// WithHistory attaches the SSoT session-history provider. All L-cold reads
+// (equity curve, trade history) then follow the configured ledger backend
+// (PG on production) instead of hardcoding the JSONL ledger.
+func (s *LiveService) WithHistory(provider *SessionHistoryProvider) *LiveService {
+	s.History = provider
+	return s
+}
+
 // WithTradeStore attaches the ledger store used for trade-history reads.
 func (s *LiveService) WithTradeStore(store ledger.OutcomeStore) *LiveService {
 	s.TradeStore = store
 	return s
+}
+
+// summariesStore resolves the store used for L-cold summary reads: the SSoT
+// provider when wired, the JSONL ledger otherwise.
+func (s *LiveService) summariesStore() ledger.OutcomeStore {
+	if s.History != nil && s.History.Store() != nil {
+		return s.History.Store()
+	}
+	return ledger.NewStore(s.LedgerDir)
+}
+
+// tradeStore resolves the store used for executed-trade reads.
+func (s *LiveService) tradeStore() ledger.OutcomeStore {
+	if s.TradeStore != nil {
+		return s.TradeStore
+	}
+	return s.summariesStore()
+}
+
+// HistoryPoints returns the date-sorted session history through the SSoT
+// provider when wired, otherwise the legacy JSONL ledger. A nil slice means
+// no readable history (handlers treat it as insufficient data).
+func (s *LiveService) HistoryPoints() []HistoryPoint {
+	summaries, err := s.summariesStore().LoadSessionSummaries()
+	if err != nil {
+		logging.Warn("liveservice", "load_history_summaries_failed", logging.Err(err))
+		return nil
+	}
+	return BuildHistoryPoints(summaries)
+}
+
+// HistorySource reports the backend that served the most recent L-cold read
+// ("postgres" / "jsonl" / ""). Handlers surface it as `source` (P1-3).
+func (s *LiveService) HistorySource() string {
+	if s.History != nil {
+		return s.History.Source()
+	}
+	return ""
+}
+
+// HistoryDegraded reports whether the most recent L-cold read fell back to
+// JSONL because the SSoT backend was unavailable (P1-3).
+func (s *LiveService) HistoryDegraded() bool {
+	if s.History != nil {
+		return s.History.Degraded()
+	}
+	return false
 }
 
 // LiveStatusResponse represents the live trading status response.
@@ -186,6 +245,11 @@ type PortfolioStateResponse struct {
 	Positions          []PositionDTO      `json:"positions"`
 	EquityCurve        []EquityCurvePoint `json:"equity_curve"`
 	CrossFootPnL       CrossFootCheck     `json:"cross_foot_pnl"`
+	// Source / Degraded (SSOT P1-3) label the L-cold part of this response
+	// (equity curve / trade count served from session summaries / trades).
+	// L-hot fields (cash/positions) always come from the livestore files.
+	Source   string `json:"source,omitempty"`
+	Degraded bool   `json:"degraded,omitempty"`
 }
 
 // PositionDTO represents a single position with computed P&L percentage.
@@ -346,6 +410,8 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 		Positions:          positions,
 		EquityCurve:        equityCurve,
 		CrossFootPnL:       crossFoot,
+		Source:             s.HistorySource(),
+		Degraded:           s.HistoryDegraded(),
 	}
 	if startingCash > 0 {
 		resp.CumulativePnLPct = resp.CumulativePnL / startingCash
@@ -355,11 +421,7 @@ func (s *LiveService) LoadPortfolioState() PortfolioStateResponse {
 }
 
 func (s *LiveService) LoadTradeHistory() []domain.TradeRecord {
-	store := s.TradeStore
-	if store == nil {
-		store = ledger.NewStore(s.LedgerDir)
-	}
-	trades, err := store.LoadAllSessionTrades()
+	trades, err := s.tradeStore().LoadAllSessionTrades()
 	if err != nil {
 		logging.Warn("liveservice", "load_trade_history_failed", "err", err.Error())
 		return nil
@@ -367,69 +429,25 @@ func (s *LiveService) LoadTradeHistory() []domain.TradeRecord {
 	return trades
 }
 
-// buildEquityCurve constructs an equity curve from all session summaries.
+// buildEquityCurve constructs an equity curve from the L-cold session
+// history. SSOT (P1-1/P1-2): reads session summaries through the shared
+// SessionHistoryProvider (PG-first on production) instead of scanning
+// sessions/*/summary.json directly — the JSONL directory is an import
+// source on production and contains no session files.
 func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
-	sessionsDir := filepath.Join(s.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return nil
-	}
-
-	type sessionPoint struct {
-		date          time.Time
-		label         string
-		value         float64
-		taxPaid       float64
-		afterTaxValue float64
-	}
-	points := make([]sessionPoint, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			continue
-		}
-		if summary.PortfolioValue == 0 {
-			continue
-		}
-		date := domain.SessionDateFromID(summary.SessionID)
-		afterTaxValue := summary.PortfolioValue - summary.TotalTaxPaid
-		points = append(points, sessionPoint{
-			date:          date,
-			label:         summary.SessionID,
-			value:         summary.PortfolioValue,
-			taxPaid:       summary.TotalTaxPaid,
-			afterTaxValue: afterTaxValue,
-		})
-	}
-
+	points := s.HistoryPoints()
 	if len(points) == 0 {
 		return nil
 	}
-
-	slices.SortFunc(points, func(a, b sessionPoint) int {
-		return a.date.Compare(b.date)
-	})
-
-	curve := make([]EquityCurvePoint, len(points))
-	for i, p := range points {
-		curve[i] = EquityCurvePoint{
-			Label:         p.label,
-			Value:         p.value,
+	curve := make([]EquityCurvePoint, 0, len(points))
+	for _, p := range points {
+		curve = append(curve, EquityCurvePoint{
+			Label:         p.SessionID,
+			Value:         p.PortfolioValue,
 			Currency:      "TWD",
-			AfterTaxValue: p.afterTaxValue,
-			TaxPaid:       p.taxPaid,
-		}
+			AfterTaxValue: p.PortfolioValue - p.TotalTaxPaid,
+			TaxPaid:       p.TotalTaxPaid,
+		})
 	}
 	return curve
 }

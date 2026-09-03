@@ -10,6 +10,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 )
 
@@ -290,5 +291,78 @@ func TestHandleJanusRegimeScore_NoData(t *testing.T) {
 	}
 	if resp["is_synthetic"] != false {
 		t.Errorf("expected is_synthetic=false (no data at all), got %v", resp["is_synthetic"])
+	}
+}
+
+// TestHandleOverview_NotWired verifies the overview endpoint reports 503
+// until RegisterLiveRoutes bound the live handlers (SSOT P1-7).
+func TestHandleOverview_NotWired(t *testing.T) {
+	h := newTestHandlers(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/overview", nil)
+	status, body := h.HandleOverview(req)
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 when Live is nil", status)
+	}
+	m, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("body = %T, want map", body)
+	}
+	if m["status"] != "service_unavailable" {
+		t.Errorf("status key = %v, want service_unavailable", m["status"])
+	}
+}
+
+// TestHandleOverview_Wired verifies the aggregate response carries the three
+// sections with the standalone endpoints' shapes and honors the 60s TTL.
+func TestHandleOverview_Wired(t *testing.T) {
+	tmpDir := t.TempDir()
+	ledgerDir := t.TempDir()
+
+	// One session summary so risk/portfolio history is non-empty.
+	sessDir := filepath.Join(ledgerDir, "sessions", "session-20260401-daily")
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("mkdir sessions: %v", err)
+	}
+	summary := map[string]any{
+		"session_id":      "session-20260401-daily",
+		"portfolio_value": 1_000_000.0,
+		"ending_cash":     200_000.0,
+	}
+	b, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessDir, "summary.json"), b, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	svc := service.NewLiveService(tmpDir, ledgerDir)
+	liveHandlers := &live.Handlers{LedgerDir: ledgerDir, WorkDir: tmpDir, Svc: svc}
+
+	h := newTestHandlers(t)
+	h.Live = liveHandlers
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/overview", nil)
+	status, body := h.HandleOverview(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	resp, ok := body.(*OverviewResponse)
+	if !ok {
+		t.Fatalf("body = %T, want *OverviewResponse", body)
+	}
+	if resp.LiveStatus == nil || resp.PortfolioState == nil || resp.RiskExposure == nil {
+		t.Fatalf("overview missing sections: live=%v portfolio=%v risk=%v",
+			resp.LiveStatus, resp.PortfolioState, resp.RiskExposure)
+	}
+	if resp.GeneratedAt.IsZero() {
+		t.Error("generated_at must be set")
+	}
+
+	// 60s TTL: a second call within the window returns the identical cached
+	// instance (same pointer) without rebuilding.
+	status2, body2 := h.HandleOverview(req)
+	if status2 != http.StatusOK {
+		t.Fatalf("second status = %d, want 200", status2)
+	}
+	if body2 != body {
+		t.Error("second call within 60s TTL must return the cached payload")
 	}
 }

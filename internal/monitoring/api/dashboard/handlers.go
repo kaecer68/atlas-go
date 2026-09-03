@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/liveness"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/monitoring/api/live"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/narrative/geopolitical"
@@ -89,6 +91,15 @@ type Handlers struct {
 	// later in cmd/atlas/main.go); nil → the endpoint reports 503.
 	TaskLivenessProvider TaskLivenessProvider
 	SchedulerStatus      SchedulerStatusProvider
+
+	// Live backs GET /api/dashboard/overview (SSOT P1-7). It is late-bound by
+	// RegisterAllRoutes after RegisterLiveRoutes created the live handlers;
+	// nil → the overview endpoint reports 503.
+	Live *live.Handlers
+
+	overviewMu  sync.Mutex
+	overviewAt  time.Time
+	overviewHit any // *OverviewResponse; 60s TTL cache (agent-observatory 前例 PR #1813)
 }
 
 // NewHandlers creates a new Handlers with the required directory paths.
@@ -252,6 +263,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/maturity", shared.Get(h.HandleMaturity))
 	mux.Handle("GET /api/dashboard/task-liveness", shared.Get(h.HandleTaskLiveness))
 	mux.Handle("GET /api/janus/regime-score", shared.Get(h.HandleJanusRegimeScore))
+	h.RegisterOverviewRoutes(mux)
 }
 
 // HandleJanusRegimeScore returns the current regime score from JANUS engine.

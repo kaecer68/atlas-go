@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -16,13 +14,16 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	livestore "github.com/kaecer68/atlas-go/internal/live/store"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
+	"github.com/kaecer68/atlas-go/internal/reporting"
 	"github.com/kaecer68/atlas-go/internal/retail"
+	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
 // DayTradingFetcher fetches day trading statistics. Set by the constructor when Gateway is available.
@@ -48,6 +49,9 @@ type Handlers struct {
 	OddLotFetcher           OddLotFetcher
 	ETFFetcher              ETFFetcher
 	GeopoliticalRiskFetcher GeopoliticalRiskFetcher
+	// History is the shared SSoT session-history provider (P1-1/P1-2). When
+	// nil, HandleCapitalPhase falls back to the JSONL ledger store.
+	History *service.SessionHistoryProvider
 }
 
 func NewHandlers(svc *service.SystemService) *Handlers {
@@ -66,6 +70,50 @@ func NewHandlers(svc *service.SystemService) *Handlers {
 		}
 	}
 	return &Handlers{Svc: svc}
+}
+
+// WithHistory wires the SSoT session-history provider used by
+// HandleCapitalPhase (equity series / rolling Sharpe / max drawdown).
+func (h *Handlers) WithHistory(provider *service.SessionHistoryProvider) *Handlers {
+	h.History = provider
+	return h
+}
+
+// capitalHistory resolves the session history for capital-phase: the SSoT
+// provider when wired, the JSONL ledger store otherwise (tests/legacy).
+func (h *Handlers) capitalHistory() []service.HistoryPoint {
+	if h.History != nil {
+		points, err := h.History.HistoryPoints()
+		if err == nil {
+			return points
+		}
+	}
+	if h.Svc == nil {
+		return nil
+	}
+	summaries, err := ledger.NewStore(h.Svc.LedgerDir).LoadSessionSummaries()
+	if err != nil {
+		logging.Warn("system_handler", "capital_phase_history_unreadable", logging.Err(err))
+		return nil
+	}
+	return service.BuildHistoryPoints(summaries)
+}
+
+// historySource reports the backend that served the capital-phase history.
+func (h *Handlers) historySource() string {
+	if h.History != nil {
+		return h.History.Source()
+	}
+	return ""
+}
+
+// historyDegraded reports whether the capital-phase history fell back to
+// JSONL because the SSoT backend was unavailable.
+func (h *Handlers) historyDegraded() bool {
+	if h.History != nil {
+		return h.History.Degraded()
+	}
+	return false
 }
 
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
@@ -164,90 +212,42 @@ func (h *Handlers) HandleCapitalPhase(r *http.Request) (int, any) {
 		return http.StatusOK, snap
 	}
 
-	// Portfolio value series from session summaries.
-	sessionsDir := filepath.Join(h.Svc.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err == nil {
-		type sessionEntry struct {
-			name  string
-			value float64
-			cash  float64
-			date  time.Time
+	// Portfolio value series from the SSoT session history (P1-1/P1-2): the
+	// shared SessionHistoryProvider (PG-first on production) replaces the raw
+	// os.ReadDir over LedgerDir/sessions — the JSONL ledger is an import
+	// source only on production, so the old scan silently returned an empty
+	// capital series there.
+	points := h.capitalHistory()
+	if len(points) > 0 {
+		first := points[0]
+		if !first.RecordedAt.IsZero() {
+			snap.PhaseStartDate = first.RecordedAt
+			snap.DaysInPhase = int(time.Since(first.RecordedAt).Hours() / 24)
 		}
-		var series []sessionEntry
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			data, err := os.ReadFile(filepath.Join(sessionsDir, entry.Name(), "summary.json"))
-			if err != nil {
-				continue
-			}
-			var summary domain.SessionSummary
-			if json.Unmarshal(data, &summary) != nil || summary.SessionID == "" {
-				continue
-			}
-			series = append(series, sessionEntry{
-				name:  entry.Name(),
-				value: summary.PortfolioValue,
-				cash:  summary.EndingCash,
-				date:  summary.RecordedAt,
-			})
-		}
-		sort.Slice(series, func(i, j int) bool { return series[i].name < series[j].name })
+		last := points[len(points)-1]
+		snap.TotalCapital = last.PortfolioValue
+		snap.ReserveCash = last.EndingCash
+		snap.DeployedCapital = snap.TotalCapital - snap.ReserveCash
 
-		if len(series) > 0 {
-			first := series[0]
-			if !first.date.IsZero() {
-				snap.PhaseStartDate = first.date
-				snap.DaysInPhase = int(time.Since(first.date).Hours() / 24)
-			}
-			snap.TotalCapital = series[len(series)-1].value
-			snap.ReserveCash = series[len(series)-1].cash
-			snap.DeployedCapital = snap.TotalCapital - snap.ReserveCash
+		// Max drawdown over the full series via the canonical function
+		// (SSOT rule R4 — no handler-inline reimplementation).
+		snap.MaxDrawdown = risk.CalculateMaxDrawdown(service.PortfolioValues(points))
 
-			// Daily returns over the bounded recent window (last 30 sessions)
-			// for the rolling Sharpe; max drawdown over the full series.
-			window := series
-			if len(window) > 30 {
-				window = window[len(window)-30:]
-			}
-			returns := make([]float64, 0, len(window))
-			for i := 1; i < len(window); i++ {
-				if window[i-1].value > 0 {
-					returns = append(returns, (window[i].value-window[i-1].value)/window[i-1].value)
-				}
-			}
-			if len(returns) > 1 {
-				mean := 0.0
-				for _, rr := range returns {
-					mean += rr
-				}
-				mean /= float64(len(returns))
-				variance := 0.0
-				for _, rr := range returns {
-					variance += (rr - mean) * (rr - mean)
-				}
-				variance /= float64(len(returns) - 1)
-				if std := math.Sqrt(variance); std > 0 {
-					snap.RollingSharpe = (mean / std) * math.Sqrt(252) // annualized
-				}
-			}
-			peak := series[0].value
-			for _, s := range series {
-				if s.value > peak {
-					peak = s.value
-				}
-				if peak > 0 {
-					if dd := (peak - s.value) / peak; dd > snap.MaxDrawdown {
-						snap.MaxDrawdown = dd
-					}
-				}
-			}
+		// Rolling Sharpe over the bounded recent window (last 30 sessions)
+		// via the shared Sharpe function (SSOT rule R4).
+		window := points
+		if len(window) > 30 {
+			window = window[len(window)-30:]
 		}
-	} else {
-		logging.Warn("system_handler", "capital_phase_sessions_unreadable", logging.Err(err))
+		returns := service.SessionReturns(window)
+		if v := reporting.CalculateSharpeRatio(returns); v != nil {
+			snap.RollingSharpe = *v
+		}
 	}
+
+	// P1-3: label the L-cold history source of the Sharpe/drawdown inputs.
+	snap.Source = h.historySource()
+	snap.Degraded = h.historyDegraded()
 
 	// Live portfolio state refines cash/positions when available (same source
 	// as the risk-exposure endpoint's net value).

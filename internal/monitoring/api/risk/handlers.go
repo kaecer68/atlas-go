@@ -1,11 +1,7 @@
 package risk
 
 import (
-	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	"github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -23,22 +20,24 @@ type Handlers struct {
 	correlationMatrix  *industry.CorrelationMatrix
 	classificationTree *industry.ClassificationTree
 	RiskGate           *risk.RiskGate // optional, set via WithRiskGate()
-	// commentaryStore backs the risk-commentary PG fallback (P0-2). It is the
-	// backend-aware ledger store (PG-first on production) used to read the
-	// latest persisted session_summaries.risk_commentary after a restart,
-	// when RiskGate.LastDecision is still empty (decisions are in-memory).
-	commentaryStore ledger.OutcomeStore
+	// store backs every L-cold read of these handlers through the
+	// backend-aware ledger factory (PG-first on production):
+	//   - HandleRiskMetrics session-summary history (P1-2: replaces the raw
+	//     os.ReadDir over LedgerDir/sessions),
+	//   - HandleRiskCommentary's persisted-summary fallback (P0-2).
+	// When nil, handlers fall back to the JSONL ledger store (tests/legacy).
+	store ledger.OutcomeStore
 }
 
 func NewHandlers(ledgerDir string) *Handlers {
 	return &Handlers{LedgerDir: ledgerDir}
 }
 
-// WithCommentaryStore wires the store used by the risk-commentary fallback.
-// When nil, HandleRiskCommentary keeps the pre-fallback behavior (report
-// "not_available" when the in-memory gate has no decision).
-func (h *Handlers) WithCommentaryStore(store ledger.OutcomeStore) *Handlers {
-	h.commentaryStore = store
+// WithStore wires the backend-aware ledger store used for L-cold reads
+// (risk-metrics session history + risk-commentary persisted fallback).
+// When nil, handlers fall back to the JSONL ledger store.
+func (h *Handlers) WithStore(store ledger.OutcomeStore) *Handlers {
+	h.store = store
 	return h
 }
 
@@ -67,10 +66,16 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	if h.RiskGate == nil {
 		return serviceUnavailable("risk_gate_not_injected", "RiskGate 尚未注入, 請檢查 cmd/atlas main.go 的 DI chain")
 	}
-	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
+
+	// SSOT (P1-2): session-summary history comes from the backend-aware store
+	// (PG-first on production via NewReportOutcomeStore) instead of a raw
+	// os.ReadDir over LedgerDir/sessions. This removes the duplicated VaR
+	// threshold logic the old scan implied: the store path and the
+	// risk-exposure endpoint now read the same PG history.
+	store := h.summariesStore()
+	summaries, err := store.LoadSessionSummaries()
 	if err != nil {
-		logging.Warn("risk_handler", "sessions_dir_unreadable", logging.Err(err))
+		logging.Warn("risk_handler", "summaries_unreadable", logging.Err(err))
 		return http.StatusOK, map[string]any{
 			"risk_snapshot": map[string]float64{
 				"var_95":            0,
@@ -85,43 +90,9 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 		}
 	}
 
-	type sessionEntry struct {
-		name  string
-		value float64
-	}
-	sessions := make([]sessionEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			logging.Warn("risk_handler", "corrupted_summary_skipped", logging.Err(err))
-			continue
-		}
-		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
-	}
-
-	slices.SortFunc(sessions, func(a, b sessionEntry) int {
-		return strings.Compare(a.name, b.name)
-	})
-
-	portfolioValues := make([]float64, len(sessions))
-	for i, s := range sessions {
-		portfolioValues[i] = s.value
-	}
-
-	dailyReturns := make([]float64, 0, max(0, len(portfolioValues)-1))
-	for i := 1; i < len(portfolioValues); i++ {
-		if portfolioValues[i-1] > 0 {
-			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
-		}
-	}
+	points := service.BuildHistoryPoints(summaries)
+	portfolioValues := service.PortfolioValues(points)
+	dailyReturns := service.SessionReturns(points)
 
 	var snap map[string]float64
 	if len(dailyReturns) >= risk.MinObservationsForVaR {
@@ -174,7 +145,24 @@ func (h *Handlers) HandleRiskMetrics(r *http.Request) (int, any) {
 	if len(dailyReturns) < risk.MinObservationsForVaR {
 		resp["var_gate"] = "light" // <252 obs — provisional VaR estimate
 	}
+	// P1-3: label the L-cold history source so consumers can show a degraded
+	// badge when the SSoT backend (PG) was unavailable and JSONL served.
+	if d, ok := store.(interface{ Degraded() bool }); ok {
+		resp["degraded"] = d.Degraded()
+	}
+	if s, ok := store.(interface{ SourceBackend() string }); ok {
+		resp["source"] = s.SourceBackend()
+	}
 	return http.StatusOK, resp
+}
+
+// summariesStore resolves the store used for L-cold summary reads: the
+// injected backend-aware store when present, the JSONL ledger otherwise.
+func (h *Handlers) summariesStore() ledger.OutcomeStore {
+	if h.store != nil {
+		return h.store
+	}
+	return ledger.NewStore(h.LedgerDir)
 }
 
 // CorrelationMatrixResponse is the response for GET /api/dashboard/correlation-matrix.
@@ -285,8 +273,8 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 
 	// Fallback: read the latest session summary that carries a persisted
 	// risk_commentary from the backend-aware store (PG-first on production).
-	if h.commentaryStore != nil {
-		if summaries, err := h.commentaryStore.LoadSessionSummaries(); err == nil {
+	if h.store != nil {
+		if summaries, err := h.store.LoadSessionSummaries(); err == nil {
 			var latest *domain.SessionSummary
 			for i := range summaries {
 				s := &summaries[i]

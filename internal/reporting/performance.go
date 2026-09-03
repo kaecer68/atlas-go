@@ -14,6 +14,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -59,21 +60,28 @@ type MonthlyReturn struct {
 
 // PerformanceReport is the structured performance report for a given period.
 type PerformanceReport struct {
-	Period              string              `json:"period"`
-	StartDate           time.Time           `json:"start_date"`
-	EndDate             time.Time           `json:"end_date"`
-	TotalReturn         float64             `json:"total_return"`
-	AnnualizedReturn    float64             `json:"annualized_return"`
-	SharpeRatio         *float64            `json:"sharpe_ratio"`
-	SortinoRatio        float64             `json:"sortino_ratio"`
-	CalmarRatio         float64             `json:"calmar_ratio"`
-	MaxDrawdown         float64             `json:"max_drawdown"`
-	StartingValue       float64             `json:"starting_value"`
-	EndingValue         float64             `json:"ending_value"`
-	AfterTaxValue       float64             `json:"after_tax_value"`
-	TotalTaxPaid        float64             `json:"total_tax_paid"`
-	WinRate             float64             `json:"win_rate"`
-	TotalTrades         int                 `json:"total_trades"`
+	Period           string    `json:"period"`
+	StartDate        time.Time `json:"start_date"`
+	EndDate          time.Time `json:"end_date"`
+	TotalReturn      float64   `json:"total_return"`
+	AnnualizedReturn float64   `json:"annualized_return"`
+	SharpeRatio      *float64  `json:"sharpe_ratio"`
+	SortinoRatio     float64   `json:"sortino_ratio"`
+	CalmarRatio      float64   `json:"calmar_ratio"`
+	MaxDrawdown      float64   `json:"max_drawdown"`
+	StartingValue    float64   `json:"starting_value"`
+	EndingValue      float64   `json:"ending_value"`
+	AfterTaxValue    float64   `json:"after_tax_value"`
+	TotalTaxPaid     float64   `json:"total_tax_paid"`
+	WinRate          float64   `json:"win_rate"`
+	// TotalTrades (SSOT P1-4) is the count of REAL executed trades in the
+	// report window, read from the ledger trades source (PG trades table on
+	// production). It reconciles with GET /api/dashboard/trade-history.
+	TotalTrades int `json:"total_trades"`
+	// TotalOutcomes (SSOT P1-4, formerly the meaning of total_trades) is the
+	// number of recommendation outcomes (passed-guard decisions, real +
+	// synthetic) in the window — a decision count, NOT an execution count.
+	TotalOutcomes       int                 `json:"total_outcomes,omitempty"`
 	RealTradeCount      int                 `json:"real_trade_count"`
 	SyntheticTradeCount int                 `json:"synthetic_trade_count"`
 	ProfitFactor        float64             `json:"profit_factor"`
@@ -215,7 +223,12 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	agentNames := loadAgentDisplayNames()
 
 	outcomes := loadAllOutcomes(store, filtered)
-	winRate, totalTrades, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
+	// Trade-metric semantics (SSOT P1-4): calculateTradeMetrics counts
+	// recommendation outcomes (passed-guard decisions). totalOutcomes keeps
+	// that meaning; totalTrades below becomes the REAL executed-trade count
+	// from the trades source so the report reconciles with trade-history.
+	winRate, totalOutcomes, realTrades, syntheticTrades, avgWin, avgLoss, profitFactor := calculateTradeMetrics(outcomes)
+	totalTrades := countExecutedTradesInWindow(store, filtered)
 
 	topAgents := calculateTopAgents(outcomes, agentNames)
 	regimeBreakdown := calculateRegimeBreakdown(filtered, outcomes)
@@ -237,6 +250,7 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 		TotalTaxPaid:        totalTaxPaid,
 		WinRate:             winRate,
 		TotalTrades:         totalTrades,
+		TotalOutcomes:       totalOutcomes,
 		RealTradeCount:      realTrades,
 		SyntheticTradeCount: syntheticTrades,
 		ProfitFactor:        profitFactor,
@@ -294,7 +308,8 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	fmt.Fprintf(&sb, "| After-Tax Value | %s |\n", domain.FormatNTD(report.AfterTaxValue))
 	fmt.Fprintf(&sb, "| Total Tax Paid | %s |\n", domain.FormatNTD(report.TotalTaxPaid))
 	fmt.Fprintf(&sb, "| Win Rate | %.1f%% |\n", report.WinRate*100)
-	fmt.Fprintf(&sb, "| Total Trades | %d |\n", report.TotalTrades)
+	fmt.Fprintf(&sb, "| Executed Trades | %d |\n", report.TotalTrades)
+	fmt.Fprintf(&sb, "| Total Outcomes | %d |\n", report.TotalOutcomes)
 	fmt.Fprintf(&sb, "| Real Trades | %d |\n", report.RealTradeCount)
 	fmt.Fprintf(&sb, "| Synthetic Trades | %d |\n", report.SyntheticTradeCount)
 	fmt.Fprintf(&sb, "| Profit Factor | %.2f |\n", report.ProfitFactor)
@@ -304,7 +319,7 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		fmt.Fprintf(
 			&sb,
 			"| Synthetic Share | %.1f%% |\n",
-			float64(report.SyntheticTradeCount)/float64(report.TotalTrades)*100,
+			float64(report.SyntheticTradeCount)/float64(report.TotalOutcomes)*100,
 		)
 		sb.WriteString("> Headline trade metrics (win rate / profit factor / avg win / avg loss) reflect **real trades only**; synthetic evaluation trades are excluded.\n")
 	}
@@ -538,6 +553,36 @@ func calculateTradeMetrics(outcomes []domain.RecommendationOutcome) (winRate flo
 	}
 
 	return
+}
+
+// countExecutedTradesInWindow returns the number of REAL executed trades
+// whose session belongs to the report window (the filtered summary set).
+// SSOT P1-4: the trades source is the ledger trades table (PG on production,
+// via the same OutcomeStore that serves trade-history), so the report's
+// total_trades reconciles with GET /api/dashboard/trade-history for the
+// window. Sessions outside the window (legacy 0-value rows, other periods)
+// are excluded by matching the trade's SessionID against the summaries that
+// actually entered the report.
+func countExecutedTradesInWindow(store ledger.OutcomeStore, filtered []domain.SessionSummary) int {
+	if store == nil || len(filtered) == 0 {
+		return 0
+	}
+	inWindow := make(map[string]struct{}, len(filtered))
+	for _, s := range filtered {
+		inWindow[s.SessionID] = struct{}{}
+	}
+	trades, err := store.LoadAllSessionTrades()
+	if err != nil {
+		logging.Warn("reporting", "load_executed_trades_failed", logging.Err(err))
+		return 0
+	}
+	count := 0
+	for _, t := range trades {
+		if _, ok := inWindow[t.SessionID]; ok {
+			count++
+		}
+	}
+	return count
 }
 
 func calculateTopAgents(outcomes []domain.RecommendationOutcome, agentNames map[string]string) []AgentContribution {

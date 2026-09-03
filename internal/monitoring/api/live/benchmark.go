@@ -2,15 +2,11 @@ package live
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/reporting"
@@ -30,6 +26,9 @@ type BenchmarkComparisonResponse struct {
 	SharpeRatio     *float64         `json:"sharpe_ratio,omitempty"`
 	InfoRatio       *float64         `json:"info_ratio,omitempty"`
 	EquityCurve     []BenchmarkPoint `json:"equity_curve"`
+	// Source / Degraded (SSOT P1-3) label the L-cold portfolio history.
+	Source   string `json:"source,omitempty"`
+	Degraded bool   `json:"degraded,omitempty"`
 }
 
 // BenchmarkPoint is a single point on the benchmark comparison equity curve.
@@ -48,45 +47,28 @@ type sessionPoint struct {
 
 // HandleBenchmarkComparison returns portfolio vs TAIEX benchmark comparison metrics.
 func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
-	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return http.StatusOK, BenchmarkComparisonResponse{SnapshotTime: time.Now()}
-		}
-		logging.Warn("benchmark", "sessions_dir_unreadable", logging.Err(err))
-		return http.StatusOK, BenchmarkComparisonResponse{SnapshotTime: time.Now()}
-	}
+	// SSOT (P1-1/P1-2): portfolio history comes from the shared
+	// SessionHistoryProvider (PG-first on production). The old scan read
+	// LedgerDir/sessions/*/summary.json directly — an import source only on
+	// production — so the comparison curve silently diverged from the
+	// performance report's PG equity curve.
+	svc := h.getService()
+	history := svc.HistoryPoints()
 
 	var points []sessionPoint
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			logging.Warn("benchmark", "corrupted_summary_skipped", logging.Err(err))
-			continue
-		}
-		if summary.PortfolioValue == 0 {
-			continue
-		}
-		date := domain.SessionDateFromID(summary.SessionID)
+	for _, p := range history {
 		points = append(points, sessionPoint{
-			name:  summary.SessionID,
-			date:  date,
-			value: summary.PortfolioValue,
+			name:  p.SessionID,
+			date:  p.Date,
+			value: p.PortfolioValue,
 		})
 	}
 
 	if len(points) == 0 {
 		return http.StatusOK, BenchmarkComparisonResponse{
 			SnapshotTime: time.Now(),
+			Source:       svc.HistorySource(),
+			Degraded:     svc.HistoryDegraded(),
 		}
 	}
 
@@ -144,6 +126,8 @@ func (h *Handlers) HandleBenchmarkComparison(r *http.Request) (int, any) {
 		SharpeRatio:     sharpeRatio,
 		InfoRatio:       infoRatio,
 		EquityCurve:     equityCurve,
+		Source:          svc.HistorySource(),
+		Degraded:        svc.HistoryDegraded(),
 	}
 }
 

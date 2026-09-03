@@ -214,6 +214,8 @@ export interface BenchmarkComparisonResponse {
   sharpe_ratio?: number | null;
   info_ratio?: number | null;
   equity_curve: BenchmarkPoint[];
+  source?: string;
+  degraded?: boolean;
 }
 
 export interface BenchmarkPoint {
@@ -394,6 +396,8 @@ export interface CapitalSnapshot {
   consecutive_losses: number;
   can_advance: boolean;
   advance_reason?: string;
+  source?: string;
+  degraded?: boolean;
 }
 
 export interface CapitalflowParameters {
@@ -2704,6 +2708,15 @@ export interface OrchestratorParameters {
   l2_4_schedule: L2_4ScheduleParameters;
 }
 
+export interface OverviewResponse {
+  generated_at: string;
+  source?: string;
+  degraded: boolean;
+  live_status: string;
+  portfolio_state: string;
+  risk_exposure: string;
+}
+
 export interface PCRStats {
   date: string;
   put_volume: number;
@@ -2805,6 +2818,7 @@ export interface PerformanceReport {
   total_tax_paid: number;
   win_rate: number;
   total_trades: number;
+  total_outcomes?: number;
   real_trade_count: number;
   synthetic_trade_count: number;
   profit_factor: number;
@@ -2917,6 +2931,8 @@ export interface PortfolioStateResponse {
   positions: PositionDTO[];
   equity_curve: EquityCurvePoint[];
   cross_foot_pnl: CrossFootCheck;
+  source?: string;
+  degraded?: boolean;
 }
 
 export interface PortfolioSummary {
@@ -3527,6 +3543,8 @@ export interface RiskExposureResponse {
   data_points: number;
   insufficient_data: boolean;
   var_available: boolean;
+  source?: string;
+  degraded?: boolean;
 }
 
 export interface RiskGateParameters {

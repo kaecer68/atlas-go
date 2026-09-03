@@ -140,8 +140,27 @@ func (s *PGFirstOutcomeStore) LoadSessionTrades(sessionID string) ([]domain.Trad
 	return s.pg.LoadSessionTrades(sessionID)
 }
 
+// LoadAllSessionTrades reads PG first; JSONL fallback (marked degraded) only
+// when PG errors. A successful PG read returning zero trades is authoritative
+// (the SSoT backend simply has no executed trades). The performance report
+// counts executed trades during generation (SSOT P1-4), so this read needs
+// the same degraded semantics as LoadSessionSummaries — otherwise a PG blip
+// would fail the whole report.
 func (s *PGFirstOutcomeStore) LoadAllSessionTrades() ([]domain.TradeRecord, error) {
-	return s.pg.LoadAllSessionTrades()
+	trades, err := s.pg.LoadAllSessionTrades()
+	if err == nil {
+		s.markDegraded(false)
+		return trades, nil
+	}
+	if s.jsonl == nil {
+		return nil, fmt.Errorf("load all session trades from postgres: %w", err)
+	}
+	fallback, ferr := s.jsonl.LoadAllSessionTrades()
+	if ferr != nil {
+		return nil, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return fallback, nil
 }
 
 func (s *PGFirstOutcomeStore) RecordExperiment(record domain.ExperimentRecord) error {

@@ -249,6 +249,10 @@ type RiskExposureResponse struct {
 	// zero-valued placeholders and the UI must show the observation period
 	// instead (#1785-B: 182 points rendered as "VaR 0.0" was misleading).
 	VarAvailable bool `json:"var_available"`
+	// Source / Degraded (SSOT P1-3) label the L-cold history that feeds the
+	// drawdown/VaR inputs ("postgres" / "jsonl" / "").
+	Source   string `json:"source,omitempty"`
+	Degraded bool   `json:"degraded,omitempty"`
 }
 
 type SectorExposure struct {
@@ -433,59 +437,14 @@ func (h *Handlers) HandlePnLAttribution(r *http.Request) (int, any) {
 
 // HandleRiskExposure returns risk metrics including VaR, CVaR, max drawdown, and sector/factor exposure.
 func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
-	sessionsDir := filepath.Join(h.LedgerDir, "sessions")
-	entries, err := os.ReadDir(sessionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return http.StatusOK, RiskExposureResponse{
-				SnapshotTime:     time.Now(),
-				InsufficientData: true,
-			}
-		}
-		logging.Warn("live_handler", "sessions_dir_unreadable", logging.Err(err))
-		return http.StatusOK, RiskExposureResponse{
-			SnapshotTime:     time.Now(),
-			InsufficientData: true,
-		}
-	}
-
-	type sessionEntry struct {
-		name  string
-		value float64
-	}
-	sessions := make([]sessionEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		summaryPath := filepath.Join(sessionsDir, entry.Name(), "summary.json")
-		bytes, err := os.ReadFile(summaryPath)
-		if err != nil {
-			continue
-		}
-		var summary domain.SessionSummary
-		if err := json.Unmarshal(bytes, &summary); err != nil {
-			logging.Warn("live_handler", "corrupted_summary_skipped", logging.Err(err))
-			continue
-		}
-		sessions = append(sessions, sessionEntry{name: entry.Name(), value: summary.PortfolioValue})
-	}
-
-	slices.SortFunc(sessions, func(a, b sessionEntry) int {
-		return strings.Compare(a.name, b.name)
-	})
-
-	portfolioValues := make([]float64, len(sessions))
-	for i, s := range sessions {
-		portfolioValues[i] = s.value
-	}
-
-	dailyReturns := make([]float64, 0, max(0, len(portfolioValues)-1))
-	for i := 1; i < len(portfolioValues); i++ {
-		if portfolioValues[i-1] > 0 {
-			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
-		}
-	}
+	// SSOT (P1-1/P1-2): portfolio-value history comes from the shared
+	// SessionHistoryProvider (PG-first on production) instead of a raw
+	// os.ReadDir over LedgerDir/sessions. svc.HistoryPoints() falls back to
+	// the JSONL ledger store when no provider is wired (tests/legacy).
+	svc := h.getService()
+	points := svc.HistoryPoints()
+	portfolioValues := service.PortfolioValues(points)
+	dailyReturns := service.SessionReturns(points)
 
 	var snap domain.RiskSnapshot
 	var insufficient bool
@@ -565,6 +524,8 @@ func (h *Handlers) HandleRiskExposure(r *http.Request) (int, any) {
 		DataPoints:       len(dailyReturns),
 		InsufficientData: insufficient,
 		VarAvailable:     varAvailable,
+		Source:           svc.HistorySource(),
+		Degraded:         svc.HistoryDegraded(),
 	}
 }
 
