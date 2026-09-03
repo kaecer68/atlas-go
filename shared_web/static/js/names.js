@@ -234,6 +234,8 @@ export function templateName(t) { return TEMPLATE_NAME_MAP[t] || t; }
 
 // Sector name mapping
 export const SECTOR_NAME_MAP = {
+  // risk-console UX Phase 1 B5：sector other 未翻譯直接上畫面
+  'other': '其他',
   'semiconductor': '半導體',
   'ai_supply_chain': 'AI 供應鏈',
   'financials': '金融',

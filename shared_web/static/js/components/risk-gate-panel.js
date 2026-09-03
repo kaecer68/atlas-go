@@ -18,8 +18,13 @@ export function renderRiskGatePanel(container, getJSON) {
         return;
       }
 
-      const snap = risk.risk_snapshot;
-      const var95 = fmtSafePct(snap.var_95);
+      const snap = risk.risk_snapshot || {};
+      // B9 (risk-console Phase 1)：與 live 風險指標的 252 交易日觀察期門檻對齊 —
+      // insufficient_data / var 未達觀察門檻時顯示「觀察期中」，不再照顯 -32.1% 原值。
+      const varObserving = !!(exposure
+        ? (exposure.insufficient_data || exposure.var_available === false)
+        : (snap.insufficient_data === 1 || (typeof snap.data_points === 'number' && snap.data_points < 252)));
+      const var95 = varObserving ? null : fmtSafePct(snap.var_95);
       const drawdown = fmtSafeDrawdown(snap.max_drawdown_pct);
       const positions = fmtInt(exposure && exposure.position_count);
       const gateMode = typeof risk.gate_mode === 'string' && risk.gate_mode ? risk.gate_mode : '—';
@@ -28,10 +33,7 @@ export function renderRiskGatePanel(container, getJSON) {
           ? 'risk-gate-mode'
           : `risk-gate-mode risk-gate-mode--${gateMode.toLowerCase()}`;
 
-      const var95Num = snap.var_95;
       const ddNum = snap.max_drawdown_pct;
-      const varCls =
-        typeof var95Num === 'number' && var95Num < -0.05 ? 'critical' : 'normal';
       const ddCls =
         typeof ddNum === 'number'
           ? ddNum > 0.15
@@ -40,12 +42,16 @@ export function renderRiskGatePanel(container, getJSON) {
             ? 'warning'
             : 'normal'
           : 'normal';
+      const varCls = varObserving ? 'observing' : 'normal';
+      const varHtml = varObserving
+        ? '<span class="metric-value observing" style="color:var(--status-unknown)">觀察期中</span>'
+        : `<span class="metric-value ${varCls}">${var95}</span>`;
 
       container.innerHTML = `
         <div class="risk-gate-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px">
           <div class="risk-gate-metric">
             <span class="metric-label">VaR 95%</span>
-            <span class="metric-value ${varCls}">${var95}</span>
+            ${varHtml}
           </div>
           <div class="risk-gate-metric">
             <span class="metric-label">最大回撤</span>

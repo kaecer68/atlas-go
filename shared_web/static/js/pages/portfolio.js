@@ -56,7 +56,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
     const totalTaxPaid = isValidNumber(tax.total_tax_paid) ? tax.total_tax_paid : null;
     const afterTaxValue = portfolioValue !== null && totalTaxPaid !== null ? portfolioValue - totalTaxPaid : null;
     const realizedPnL = isValidNumber(state.realized_pnl) ? state.realized_pnl : null;
-    const tradeCount = typeof state.trade_count === 'number' ? state.trade_count : trades.length;
+    // B10 (risk-console Phase 1)：trade_count 缺欄位時顯示 —，
+    // 禁止 fallback 成空陣列長度（0）誤導使用者；交易總數以績效報告為準。
+    const tradeCount = typeof state.trade_count === 'number' ? state.trade_count : null;
     const unrealizedPnLTotal = isValidNumber(state.unrealized_pnl_total) ? state.unrealized_pnl_total : null;
     const concentrationRatio = isValidNumber(state.concentration_ratio) ? state.concentration_ratio : null;
     const maxDrawdown = isValidNumber(state.max_drawdown) ? state.max_drawdown : null;
@@ -101,7 +103,7 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
       <div class="kpi-card">
         <div class="kpi-label">累積交易數</div>
         <div class="kpi-value">${kpiNum(tradeCount)}</div>
-        <div class="kpi-hint">交易歷史總筆數</div>
+        <div class="kpi-hint">${tradeCount === null ? '以績效報告「總交易數」為準' : '交易歷史總筆數'}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">累積稅負</div>
