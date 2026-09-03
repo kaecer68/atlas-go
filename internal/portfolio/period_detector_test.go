@@ -10,45 +10,70 @@ import (
 func TestPeriodDetector_BlackSwan(t *testing.T) {
 	d := NewPeriodDetectorWithDefaults()
 
+	// PR-3b (audit P1): black swan is graded — ≥ BlackSwanMinConditions (2)
+	// conditions, OR a single EXTREME condition (VIX ≥ 35×1.5, foreign
+	// net-sell ≥ 500億×2). Single weak signals no longer fire.
 	tests := []struct {
 		name string
 		ind  PeriodIndicators
 		want domain.MarketPeriod
 	}{
 		{
-			name: "VIX spike alone triggers black swan",
+			name: "single weak VIX spike no longer triggers black swan",
 			ind: PeriodIndicators{
-				VIX: 36,
+				VIX: 36, // > 35 but < 35×1.5 extreme bar
+			},
+			want: domain.PeriodConsolidation, // falls through to default
+		},
+		{
+			name: "two conditions trigger black swan",
+			ind: PeriodIndicators{
+				VIX:          36,
+				GeoIntensity: 65,
 			},
 			want: domain.PeriodBlackSwan,
 		},
 		{
-			name: "foreign panic sell triggers black swan",
+			name: "extreme VIX alone triggers black swan",
 			ind: PeriodIndicators{
-				ForeignSingleDayNet: -55_000_000_000, // 550億賣超
+				VIX: 54, // ≥ 35×1.5
 			},
 			want: domain.PeriodBlackSwan,
 		},
 		{
-			name: "national fund intervention triggers black swan",
+			name: "extreme foreign panic sell alone triggers black swan",
+			ind: PeriodIndicators{
+				ForeignSingleDayNet: -1_050_000_000_000, // 1050億 ≥ 500×2
+			},
+			want: domain.PeriodBlackSwan,
+		},
+		{
+			name: "single foreign panic sell (550億) no longer triggers",
+			ind: PeriodIndicators{
+				ForeignSingleDayNet: -55_000_000_000, // 550億 < 500×2 extreme bar
+			},
+			want: domain.PeriodConsolidation,
+		},
+		{
+			name: "national fund intervention alone still triggers (extreme, A1/R8)",
 			ind: PeriodIndicators{
 				NationalFundActive: true,
 			},
 			want: domain.PeriodBlackSwan,
 		},
 		{
-			name: "TWD panic depreciation triggers black swan",
+			name: "TWD panic depreciation alone no longer triggers",
 			ind: PeriodIndicators{
 				TWDChange1D: 0.6,
 			},
-			want: domain.PeriodBlackSwan,
+			want: domain.PeriodConsolidation,
 		},
 		{
-			name: "geopolitical crisis intensity triggers black swan (G5)",
+			name: "geopolitical crisis intensity alone no longer triggers (G5)",
 			ind: PeriodIndicators{
-				GeoIntensity: 75, // 4 級制 ≥ 高張(3)；閾值 60
+				GeoIntensity: 75, // 4 級制 ≥ 高張(3)；閾值 60 — weak single signal
 			},
-			want: domain.PeriodBlackSwan,
+			want: domain.PeriodConsolidation,
 		},
 		{
 			name: "no black swan conditions returns next period",
@@ -348,10 +373,12 @@ func TestPeriodToRegime_AllPeriodsCovered(t *testing.T) {
 func TestDetectionPriority_BlackSwanOverridesAll(t *testing.T) {
 	d := NewPeriodDetectorWithDefaults()
 
-	// Indicators that would normally be bull market
+	// Indicators that would normally be bull market. PR-3b: two graded
+	// black-swan conditions (VIX 36 + foreign sell 550億) still override.
 	ind := PeriodIndicators{
-		VIX:                   36, // black swan trigger
-		ForeignBuyDays10:      9,  // bull
+		VIX:                   36,              // black swan trigger 1
+		ForeignSingleDayNet:   -55_000_000_000, // 550億賣超 — trigger 2
+		ForeignBuyDays10:      9,               // bull
 		ForeignFuturesOI:      40000,
 		MarginBalanceChange5D: 1.0,
 		TAIEXPrice:            19000,
@@ -427,5 +454,130 @@ func TestDetectAssessment_IsFallback(t *testing.T) {
 	}
 	if a3.IsFallback {
 		t.Error("partial data (VIX) → IsFallback should be false")
+	}
+}
+
+// ===========================================================================
+// PR-3b — P2 state machine: minimal stay + transition hysteresis.
+// A jitter sequence (bull → plateau → bull) must be smoothed; a candidate
+// period confirmed on PeriodConfirmDays consecutive days after
+// PeriodMinStayDays transitions.
+// ===========================================================================
+
+func TestDetectAssessmentWithState_JitterSmoothed(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+	bullInd := PeriodIndicators{
+		VIX:                   18,
+		ForeignBuyDays10:      9,
+		ForeignFuturesOI:      40000,
+		MarginBalanceChange5D: 1.0,
+		TAIEXPrice:            19000,
+		TAIEXMA20:             18500,
+		TAIEXMA20Slope:        0.02,
+	}
+	plateauInd := PeriodIndicators{
+		VIX:                    20,
+		ForeignNet5DayAvg:      2_000_000_000,
+		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
+		ForeignFuturesOIDelta3: -3,            // cond 2
+		DayTradeRatio:          40,            // cond 3
+		TAIEXPrice:             18100,
+		TAIEXMA20:              18000, // within ±2% → cond 4
+		SectorRotationFlag:     true,  // cond 5
+	}
+
+	var state PeriodDetectorState
+	// Day 1: bull adopted immediately.
+	ass, s, err := d.DetectAssessmentWithState(state, bullInd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = s
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Fatalf("day1 = %v, want bull", ass.MarketPeriod)
+	}
+	// Day 2: single plateau reading is smoothed back to bull.
+	ass, state, _ = d.DetectAssessmentWithState(state, plateauInd)
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Errorf("day2 (jitter) = %v, want held bull", ass.MarketPeriod)
+	}
+	// Day 3: back to bull — candidate cleared, still bull.
+	ass, _, _ = d.DetectAssessmentWithState(state, bullInd)
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Errorf("day3 = %v, want bull", ass.MarketPeriod)
+	}
+}
+
+func TestDetectAssessmentWithState_ConfirmedTransitionAfterHysteresis(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+	bullInd := PeriodIndicators{
+		VIX:                   18,
+		ForeignBuyDays10:      9,
+		ForeignFuturesOI:      40000,
+		MarginBalanceChange5D: 1.0,
+		TAIEXPrice:            19000,
+		TAIEXMA20:             18500,
+		TAIEXMA20Slope:        0.02,
+	}
+	plateauInd := PeriodIndicators{
+		VIX:                    20,
+		ForeignNet5DayAvg:      2_000_000_000,
+		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
+		ForeignFuturesOIDelta3: -3,            // cond 2
+		DayTradeRatio:          40,            // cond 3
+		TAIEXPrice:             18100,
+		TAIEXMA20:              18000, // within ±2% → cond 4
+		SectorRotationFlag:     true,  // cond 5
+	}
+
+	var state PeriodDetectorState
+	ass, state, _ := d.DetectAssessmentWithState(state, bullInd)
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Fatalf("day1 = %v, want bull", ass.MarketPeriod)
+	}
+	// Day 2: plateau observed once — held (confirm needs 2 consecutive days,
+	// min-stay needs 3 days in bull).
+	ass, state, _ = d.DetectAssessmentWithState(state, plateauInd)
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Errorf("day2 = %v, want held bull (min-stay)", ass.MarketPeriod)
+	}
+	// Day 3: plateau observed twice (confirm satisfied) AND bull held for
+	// 3 days (min-stay satisfied) → confirmed transition.
+	ass, _, _ = d.DetectAssessmentWithState(state, plateauInd)
+	if ass.MarketPeriod != domain.PeriodPlateau {
+		t.Errorf("day3 = %v, want confirmed plateau transition", ass.MarketPeriod)
+	}
+}
+
+func TestStatefulPeriodDetector_DebrisCrossCalls(t *testing.T) {
+	d := NewStatefulPeriodDetectorWithDefaults()
+	bullInd := PeriodIndicators{
+		VIX:                   18,
+		ForeignBuyDays10:      9,
+		ForeignFuturesOI:      40000,
+		MarginBalanceChange5D: 1.0,
+		TAIEXPrice:            19000,
+		TAIEXMA20:             18500,
+		TAIEXMA20Slope:        0.02,
+	}
+	plateauInd := PeriodIndicators{
+		VIX:                    20,
+		ForeignNet5DayAvg:      2_000_000_000,
+		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
+		ForeignFuturesOIDelta3: -3,            // cond 2
+		DayTradeRatio:          40,            // cond 3
+		TAIEXPrice:             18100,
+		TAIEXMA20:              18000, // within ±2% → cond 4
+		SectorRotationFlag:     true,  // cond 5
+	}
+	if _, err := d.DetectAssessmentDebounced(bullInd); err != nil {
+		t.Fatal(err)
+	}
+	ass, err := d.DetectAssessmentDebounced(plateauInd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ass.MarketPeriod != domain.PeriodBull {
+		t.Errorf("stateful detector jitter = %v, want held bull", ass.MarketPeriod)
 	}
 }

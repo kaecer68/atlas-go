@@ -54,6 +54,28 @@ type PeriodDetectionConfig struct {
 	ConsolidationTWDBandPct  float64 // 新台幣偏離月線 < ±N%
 	ConsolidationVolRatioMin float64 // 成交量 / 20日均量 > N
 	ConsolidationVolRatioMax float64 // 成交量 / 20日均量 < N
+
+	// ── P1 grading + P2 state machine (PR-3b, plan v1.1) ──
+	// BlackSwanMinConditions: black swan fires only when at least N of the 6
+	// conditions hit, OR when a single extreme condition hits (see the two
+	// multipliers below). Default 2 fixes audit P1 ("OR 邏輯過敏").
+	BlackSwanMinConditions int
+	// BlackSwanExtremeVIXMultiplier: a single VIX reading ≥
+	// BlackSwanVIX × N counts as an extreme condition that alone fires
+	// black swan. Default 1.5 (VIX ≥ 52.5 with BlackSwanVIX=35).
+	BlackSwanExtremeVIXMultiplier float64
+	// BlackSwanExtremeForeignSellMultiplier: a single foreign net-sell ≥
+	// BlackSwanForeignSellBillion × N (億元) counts as extreme. Default 2.0.
+	// NationalFundActive is treated as inherently extreme: the government
+	// only officially activates the fund in genuine market crises (A1/R8),
+	// so it alone still fires black swan.
+	BlackSwanExtremeForeignSellMultiplier float64
+	// PeriodMinStayDays: once a period is confirmed, it stays for at least
+	// N trading days before a transition is allowed (audit P2 最小停留期).
+	PeriodMinStayDays int
+	// PeriodConfirmDays: a candidate period must be observed on N
+	// consecutive days before the state machine switches (轉移遲滯).
+	PeriodConfirmDays int
 }
 
 // DefaultPeriodDetectionConfig returns thresholds matching ATLAS_METHODOLOGY.md §3.
@@ -103,5 +125,12 @@ func DefaultPeriodDetectionConfig() PeriodDetectionConfig {
 		ConsolidationTWDBandPct:  0.5,
 		ConsolidationVolRatioMin: 0.7,
 		ConsolidationVolRatioMax: 1.0,
+
+		// P1 grading + P2 state machine (PR-3b)
+		BlackSwanMinConditions:                2,
+		BlackSwanExtremeVIXMultiplier:         1.5,
+		BlackSwanExtremeForeignSellMultiplier: 2.0,
+		PeriodMinStayDays:                     3,
+		PeriodConfirmDays:                     2,
 	}
 }
