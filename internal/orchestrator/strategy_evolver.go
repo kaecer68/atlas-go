@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -67,6 +68,20 @@ type StrategyEvolver struct {
 	// ApplySectorRotation also bumps the persistent session counter
 	// (required for the Gate 5 promotion check).
 	closureStateMgr *sectorallocation.SACClosureStateManager
+
+	// cfObserver is the PR-3c observation-mode logger. When non-nil,
+	// ApplySectorRotation records what the E07 capital-flow action WOULD
+	// be — record-only, never executed (plan §5.1 / k3 B1: the action is
+	// label-only; the terminal decision is decision-inert in Phase 3).
+	cfObserver ObservationLogger
+}
+
+// WithCapitalFlowObserver wires the PR-3c observation-mode logger. The
+// observer is fail-soft by contract: logging failures never block the
+// rotation path.
+func (e *StrategyEvolver) WithCapitalFlowObserver(o ObservationLogger) *StrategyEvolver {
+	e.cfObserver = o
+	return e
 }
 
 // NewStrategyEvolver creates a new strategy evolver
@@ -369,6 +384,14 @@ func (e *StrategyEvolver) ApplySectorRotation(
 	// Compute projected target from WeightEngine (SA04 single source).
 	if e.weightEngine != nil {
 		cfAction := capitalFlowActionFromPlan(plan)
+		// PR-3c observation mode (record-only): log what the E07 action
+		// WOULD be next to the legacy label. Never blocks, never mutates —
+		// the action only reaches DriverProvenance["capital_flow"].
+		if e.cfObserver != nil {
+			legacy := legacyPrimaryFlowAction(plan.PrimaryFlow)
+			observed := deriveE07CapitalFlowAction(plan.CapitalFlowAssessment)
+			e.cfObserver.Observe(observationEntryFromPlan(plan, legacy, observed, asOf.Format("2006-01-02")))
+		}
 		drivers := sectorallocation.DriverInputs{
 			CapitalFlowAction: cfAction,
 		}
@@ -447,12 +470,39 @@ func (e *StrategyEvolver) Reset() {
 func capitalFlowActionFromPlan(plan *portfolio.SectorRotationPlan) sectorallocation.CapitalFlowAction {
 	if plan.CapitalFlowAssessment == nil || !plan.CapitalFlowAssessment.EligibleForAutomation() {
 		// Fall back to legacy macro PrimaryFlow mapping.
-		return sectorallocation.CapitalFlowAction(plan.PrimaryFlow)
+		// B1 cast fix (PR-3c): PrimaryFlow ∈ {"mixed","sector_rotation",
+		// "carry_trade_unwind","risk_off"} (macro_assessment.go
+		// determinePrimaryFlow). The old direct cast produced enum-external
+		// strings for everything except "risk_off"; now only risk_off maps
+		// to RiskOff and everything else maps to Neutral.
+		return legacyPrimaryFlowAction(plan.PrimaryFlow)
 	}
 
-	a := plan.CapitalFlowAssessment
+	return deriveE07CapitalFlowAction(plan.CapitalFlowAssessment)
+}
 
-	// Derive consensus from Institutional + Behavioral layers.
+// legacyPrimaryFlowAction maps the macro PrimaryFlow to a
+// sectorallocation.CapitalFlowAction without producing enum-external
+// values (B1 fix): only "risk_off" is a real action; mixed /
+// sector_rotation / carry_trade_unwind are not risk-off signals.
+func legacyPrimaryFlowAction(primaryFlow string) sectorallocation.CapitalFlowAction {
+	if primaryFlow == "risk_off" {
+		return sectorallocation.CapitalFlowActionRiskOff
+	}
+	return sectorallocation.CapitalFlowActionNeutral
+}
+
+// deriveE07CapitalFlowAction derives the E07 consensus action from the
+// assessment's Institutional + Behavioral layers, ignoring the calibration
+// gate. Used both by capitalFlowActionFromPlan (when eligible) and by the
+// PR-3c observation logger (to record the action the gate WOULD produce).
+//   - Institutional + Behavioral both bullish → risk_on
+//   - Institutional + Behavioral both bearish → risk_off
+//   - Otherwise → neutral
+func deriveE07CapitalFlowAction(a *capitalflow.CapitalFlowAssessment) sectorallocation.CapitalFlowAction {
+	if a == nil {
+		return sectorallocation.CapitalFlowActionNeutral
+	}
 	instDir := a.Institutional.Direction
 	behDir := a.Behavioral.Direction
 

@@ -203,6 +203,35 @@ func GetCapitalflowPeriodWeightedQuality() bool {
 	return PeriodWeightedQualityMetadata.Value
 }
 
+// ActionObservationModeMetadata gates the capital-flow observation-mode
+// decision log (PR-3c / plan §5.1). Default true: when
+// ApplySectorRotation runs, the E07 capital-flow action is WRITTEN to
+// data/state/capital_flow_observation.jsonl but never executed —
+// the action is label-only (k3 B1: DriverProvenance["capital_flow"],
+// weights come from DriverInputs.CapitalFlow, not the action).
+// Setting false disables the log entirely (no observation data).
+var ActionObservationModeMetadata = ParameterMetadata[bool]{
+	Value: true,
+	Rationale: "Observation-first decision wiring: record what the E07 " +
+		"capital-flow action WOULD be at plan time without changing any " +
+		"weight. The 30-trading-day observation report (label agreement, " +
+		"hit rates) is the human-gate evidence for any future mutation " +
+		"design PR (capitalflow.mutation_enabled stays undefined).",
+	Source: SourceExperimental,
+	Todo:   "After the 30-trading-day observation report passes human review, a separate action→delta mapper design PR decides the next step.",
+}
+
+// GetCapitalflowActionObservationMode returns whether the observation-mode
+// decision log is enabled. Falls back to
+// ActionObservationModeMetadata.Value (true, observe-only) when config is
+// not loaded.
+func GetCapitalflowActionObservationMode() bool {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.ActionObservationMode.Value
+	}
+	return ActionObservationModeMetadata.Value
+}
+
 // L2_4ScheduleParameters holds tunable values for the L2.4 LLM-driven
 // sector agent observation period. Used by the synergy page admin
 // UI to expose manual start/stop controls (auto-cron deferred to a
@@ -1254,6 +1283,13 @@ type CapitalflowParameters struct {
 	// formula. Observation-first: quality_score_period_weighted is always
 	// emitted for side-by-side comparison regardless of the switch.
 	PeriodWeightedQuality ParameterMetadata[bool] `json:"period_weighted_quality"`
+	// ActionObservationMode gates the PR-3c observation-mode decision log
+	// (default true = record-only). The E07 action is written to
+	// data/state/capital_flow_observation.jsonl but never executed;
+	// action_is_label_only is always true. No mutation switch exists in
+	// this PR — a future action→delta mapper design PR adds
+	// capitalflow.mutation_enabled (default off).
+	ActionObservationMode ParameterMetadata[bool] `json:"action_observation_mode"`
 }
 
 // StockpickerParameters holds tunable parameters for the stock-picking

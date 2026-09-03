@@ -406,6 +406,7 @@ export interface CapitalflowParameters {
   trend_bullish_threshold: string;
   trend_bearish_threshold: string;
   period_weighted_quality: string;
+  action_observation_mode: string;
 }
 
 export interface CardConfig {

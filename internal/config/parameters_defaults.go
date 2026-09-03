@@ -216,6 +216,7 @@ func defaultCapitalflowParameters() CapitalflowParameters {
 		TrendBullishThreshold:   TrendBullishThresholdMetadata,
 		TrendBearishThreshold:   TrendBearishThresholdMetadata,
 		PeriodWeightedQuality:   PeriodWeightedQualityMetadata,
+		ActionObservationMode:   ActionObservationModeMetadata,
 	}
 }
 
@@ -239,5 +240,8 @@ func mergeCapitalflowDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Capitalflow.PeriodWeightedQuality.Rationale == "" {
 		cfg.Capitalflow.PeriodWeightedQuality = def.PeriodWeightedQuality
+	}
+	if cfg.Capitalflow.ActionObservationMode.Rationale == "" {
+		cfg.Capitalflow.ActionObservationMode = def.ActionObservationMode
 	}
 }

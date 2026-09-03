@@ -75,6 +75,11 @@
       "results": "(StructuralTrendConfig)"
     },
     {
+      "name": "GetCapitalflowActionObservationMode",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "GetCapitalflowPeriodWeightedQuality",
       "params": "",
       "results": "(bool)"
@@ -265,7 +270,8 @@
         "ResonanceCoefficientMin ParameterMetadata[float64]",
         "TrendBullishThreshold ParameterMetadata[float64]",
         "TrendBearishThreshold ParameterMetadata[float64]",
-        "PeriodWeightedQuality ParameterMetadata[bool]"
+        "PeriodWeightedQuality ParameterMetadata[bool]",
+        "ActionObservationMode ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "CapitalflowParameters"
@@ -1727,6 +1733,10 @@
     }
   ],
   "vars": [
+    {
+      "name": "ActionObservationModeMetadata",
+      "type": ""
+    },
     {
       "name": "PeriodWeightedQualityMetadata",
       "type": ""
