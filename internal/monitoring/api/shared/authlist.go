@@ -35,6 +35,7 @@ var AuthFreeExactPaths = map[string]bool{
 	"/api/field-contract":           true,
 	"/api/control/audit-log":        true,
 	"/api/control/active-overrides": true,
+	"/api/config":                   true,
 	"/api/experiment/history":       true,
 	"/api/experiment/diff":          true,
 	"/api/strategies":               true,

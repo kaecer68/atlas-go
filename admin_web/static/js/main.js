@@ -561,7 +561,7 @@ async function loadPageData(pageId) {
     try {
       var cfg = await silentGetJSON('/api/config');
       // 2026-08-24 UI audit P2：把錯誤傳給 renderConfigPage 顯示原因 + 重試。
-      if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg, cfg == null ? new Error('API 未回傳資料（可能未授權）') : null);
+      if (m.deployConfig && m.deployConfig.renderConfigPage) m.deployConfig.renderConfigPage(cfg, cfg == null ? new Error('API 未回傳資料（伺服器無回應，請稍後重試）') : null);
     } catch(e) { console.error(e); }
   }
 }
