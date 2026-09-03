@@ -2711,7 +2711,7 @@ export interface OrchestratorParameters {
 export interface OverviewResponse {
   generated_at: string;
   source?: string;
-  degraded?: boolean;
+  degraded: boolean;
   live_status: string;
   portfolio_state: string;
   risk_exposure: string;

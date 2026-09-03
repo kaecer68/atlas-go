@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/risk"
 )
 
@@ -264,4 +265,61 @@ func TestHandleRiskCommentary_RiskGateNotInjected_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/risk/commentary", nil)
 	status, _ := h.HandleRiskCommentary(req)
 	assertStatus(t, status, http.StatusServiceUnavailable)
+}
+
+// TestHandleRiskCommentary_PersistedFallback verifies the P0-2 read-side
+// fallback: when RiskGate has no in-memory decision (fresh restart) but a
+// session summary with a persisted risk_commentary exists in the store, the
+// commentary endpoint serves the newest one with an explicit provenance.
+func TestHandleRiskCommentary_PersistedFallback(t *testing.T) {
+	dir := t.TempDir()
+	sessionsDir := filepath.Join(dir, "sessions")
+	if err := os.MkdirAll(filepath.Join(sessionsDir, "session-20260902-daily"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	summary := map[string]any{
+		"session_id":      "session-20260902-daily",
+		"portfolio_value": 1_000_000.0,
+		"risk_commentary": "風險水位穩定，曝險低於閾值，維持現行配置。",
+	}
+	b, _ := json.Marshal(summary)
+	if err := os.WriteFile(filepath.Join(sessionsDir, "session-20260902-daily", "summary.json"), b, 0o644); err != nil {
+		t.Fatalf("write summary: %v", err)
+	}
+
+	// Newer session WITHOUT commentary must not win over the older one that
+	// carries it.
+	if err := os.MkdirAll(filepath.Join(sessionsDir, "session-20260903-daily"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	summary2 := map[string]any{
+		"session_id":      "session-20260903-daily",
+		"portfolio_value": 1_010_000.0,
+	}
+	b2, _ := json.Marshal(summary2)
+	if err := os.WriteFile(filepath.Join(sessionsDir, "session-20260903-daily", "summary.json"), b2, 0o644); err != nil {
+		t.Fatalf("write summary2: %v", err)
+	}
+
+	// A fresh RiskGate has no decision yet (simulates a restart).
+	rg := risk.NewRiskGate(nil, nil, nil)
+	h := NewHandlers(dir).WithRiskGate(rg)
+	h.WithStore(ledger.NewStore(dir))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/risk/commentary", nil)
+	status, body := h.HandleRiskCommentary(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "session_id")
+	if m["session_id"] != "session-20260902-daily" {
+		t.Errorf("fallback session_id = %v, want session-20260902-daily", m["session_id"])
+	}
+	if m["generated"] != true {
+		t.Errorf("generated = %v, want true", m["generated"])
+	}
+	if m["source"] != "session_summaries_pg" {
+		t.Errorf("source = %v, want session_summaries_pg", m["source"])
+	}
+	if m["verdict"] != "UNKNOWN" {
+		t.Errorf("verdict = %v, want UNKNOWN (honest unknown for persisted text)", m["verdict"])
+	}
 }

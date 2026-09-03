@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -29,7 +30,9 @@ import (
 type OverviewResponse struct {
 	GeneratedAt time.Time `json:"generated_at"`
 	Source      string    `json:"source,omitempty"`
-	Degraded    bool      `json:"degraded,omitempty"`
+	// Degraded is always emitted (false when the SSoT backend served the
+	// last read) so consumers can rely on the key's presence.
+	Degraded bool `json:"degraded"`
 	// LiveStatus / PortfolioState / RiskExposure mirror the standalone
 	// endpoint payloads (typed structs marshal to their own JSON shapes).
 	LiveStatus     any `json:"live_status"`
@@ -73,7 +76,7 @@ func (h *Handlers) buildOverview(r *http.Request) *OverviewResponse {
 	payload := &OverviewResponse{
 		GeneratedAt:    time.Now().UTC(),
 		LiveStatus:     liveStatus,
-		PortfolioState: portfolioState,
+		PortfolioState: portfolioEssence(portfolioState),
 		RiskExposure:   riskExposure,
 	}
 	// Top-level source/degraded describe the L-cold history backend; each
@@ -87,6 +90,28 @@ func (h *Handlers) buildOverview(r *http.Request) *OverviewResponse {
 	payload.Source = svc.HistorySource()
 	payload.Degraded = svc.HistoryDegraded()
 	return payload
+}
+
+// portfolioEssence strips the full equity-curve array from the portfolio-state
+// section of the overview. The curve can run hundreds of points; the merged
+// dashboard page draws it from GET /api/dashboard/portfolio-state (or the
+// upcoming dedicated curve endpoint) instead of every overview response.
+// Field names are preserved exactly (JSON round-trip); on any unexpected
+// shape the section is passed through untouched.
+func portfolioEssence(section any) any {
+	if section == nil {
+		return nil
+	}
+	b, err := json.Marshal(section)
+	if err != nil {
+		return section
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return section
+	}
+	delete(m, "equity_curve")
+	return m
 }
 
 // RegisterOverviewRoutes mounts the overview endpoint. Kept separate so the
