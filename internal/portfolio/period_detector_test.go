@@ -497,14 +497,12 @@ func TestDetectAssessmentWithState_JitterSmoothed(t *testing.T) {
 		t.Fatalf("day1 = %v, want bull", ass.MarketPeriod)
 	}
 	// Day 2: single plateau reading is smoothed back to bull.
-	ass, s, _ = d.DetectAssessmentWithState(state, plateauInd)
-	state = s
+	ass, state, _ = d.DetectAssessmentWithState(state, plateauInd)
 	if ass.MarketPeriod != domain.PeriodBull {
 		t.Errorf("day2 (jitter) = %v, want held bull", ass.MarketPeriod)
 	}
 	// Day 3: back to bull — candidate cleared, still bull.
-	ass, s, _ = d.DetectAssessmentWithState(state, bullInd)
-	state = s
+	ass, _, _ = d.DetectAssessmentWithState(state, bullInd)
 	if ass.MarketPeriod != domain.PeriodBull {
 		t.Errorf("day3 = %v, want bull", ass.MarketPeriod)
 	}
@@ -533,22 +531,19 @@ func TestDetectAssessmentWithState_ConfirmedTransitionAfterHysteresis(t *testing
 	}
 
 	var state PeriodDetectorState
-	ass, s, _ := d.DetectAssessmentWithState(state, bullInd)
-	state = s
+	ass, state, _ := d.DetectAssessmentWithState(state, bullInd)
 	if ass.MarketPeriod != domain.PeriodBull {
 		t.Fatalf("day1 = %v, want bull", ass.MarketPeriod)
 	}
 	// Day 2: plateau observed once — held (confirm needs 2 consecutive days,
 	// min-stay needs 3 days in bull).
-	ass, s, _ = d.DetectAssessmentWithState(state, plateauInd)
-	state = s
+	ass, state, _ = d.DetectAssessmentWithState(state, plateauInd)
 	if ass.MarketPeriod != domain.PeriodBull {
 		t.Errorf("day2 = %v, want held bull (min-stay)", ass.MarketPeriod)
 	}
 	// Day 3: plateau observed twice (confirm satisfied) AND bull held for
 	// 3 days (min-stay satisfied) → confirmed transition.
-	ass, s, _ = d.DetectAssessmentWithState(state, plateauInd)
-	state = s
+	ass, _, _ = d.DetectAssessmentWithState(state, plateauInd)
 	if ass.MarketPeriod != domain.PeriodPlateau {
 		t.Errorf("day3 = %v, want confirmed plateau transition", ass.MarketPeriod)
 	}
