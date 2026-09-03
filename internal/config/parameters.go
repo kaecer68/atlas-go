@@ -170,6 +170,39 @@ func GetCapitalflowTrendBearishThreshold() float64 {
 	return TrendBearishThresholdMetadata.Value
 }
 
+// PeriodWeightedQualityMetadata gates the capital-flow quality score
+// formula switch (capital-flow model plan v1.1, k3 review B4):
+//
+//	false (default) → quality_score keeps the legacy equal-weight
+//	                      Foreign(Z)+Institutional(Z)-Retail(Z) composite;
+//	true            → quality_score switches to the period-weighted
+//	                  computeQualityScoreWithPeriod composite.
+//
+// The switch is a behavior change (eventdriven scaleQualityScoreToBaseline
+// consumes QualityScore), so it must stay observation-first: flip only
+// after the 30-trading-day observation report passes human review.
+var PeriodWeightedQualityMetadata = ParameterMetadata[bool]{
+	Value: false,
+	Rationale: "Config gate for the period-weighted capital-flow quality " +
+		"score. Default false preserves the legacy equal-weight composite " +
+		"(k3 review B4: switching semantics directly would change the " +
+		"eventdriven baseline input — a hidden behavior change). " +
+		"quality_score_period_weighted is always emitted alongside for " +
+		"the 30-day observation window.",
+	Source: SourceExperimental,
+	Todo:   "Flip to true only after the 30-trading-day observation report (PR-3c) shows no regression and passes human review.",
+}
+
+// GetCapitalflowPeriodWeightedQuality returns whether the capital-flow
+// quality score uses the period-weighted formula. Falls back to
+// PeriodWeightedQualityMetadata.Value (false) when config is not loaded.
+func GetCapitalflowPeriodWeightedQuality() bool {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.PeriodWeightedQuality.Value
+	}
+	return PeriodWeightedQualityMetadata.Value
+}
+
 // L2_4ScheduleParameters holds tunable values for the L2.4 LLM-driven
 // sector agent observation period. Used by the synergy page admin
 // UI to expose manual start/stop controls (auto-cron deferred to a
@@ -1215,6 +1248,12 @@ type CapitalflowParameters struct {
 	// the pre-parameterization hardcoded thresholds exactly.
 	TrendBullishThreshold ParameterMetadata[float64] `json:"trend_bullish_threshold"`
 	TrendBearishThreshold ParameterMetadata[float64] `json:"trend_bearish_threshold"`
+	// PeriodWeightedQuality gates the capital-flow quality score formula
+	// (PR-3a, k3 review B4). Default false keeps the legacy equal-weight
+	// composite; true switches quality_score to the period-weighted
+	// formula. Observation-first: quality_score_period_weighted is always
+	// emitted for side-by-side comparison regardless of the switch.
+	PeriodWeightedQuality ParameterMetadata[bool] `json:"period_weighted_quality"`
 }
 
 // StockpickerParameters holds tunable parameters for the stock-picking

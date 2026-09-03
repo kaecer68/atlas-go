@@ -2,11 +2,14 @@ package capitalflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -416,5 +419,44 @@ func TestRefresh_PersistsProvenanceUnits(t *testing.T) {
 			t.Errorf("%s sample provenance = (%q, %q), want (%q, %q) from ComputeForceProvenance",
 				dim, samples[0].Unit, samples[0].SourceID, prov.Unit, prov.SourceID)
 		}
+	}
+}
+
+func TestService_PeriodProvider_FeedsObservationColumn(t *testing.T) {
+	recordedAt := time.Date(2026, 7, 8, 9, 0, 0, 0, time.UTC).Unix() // 17:00 Taipei
+	provider := &stubProvider{snap: marketdata.MacroDataSnapshot{
+		RecordedAt:         recordedAt,
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 100},
+		DealerNet:          marketdata.MacroDataPoint{Symbol: "DealerNet", Value: -50},
+		DomesticFundNet:    marketdata.MacroDataPoint{Symbol: "DomesticFundNet", Value: 20},
+	}}
+	svc := NewService(provider, 0, nil)
+	// PR-3a: the provider is keyed by the Asia/Taipei trading date.
+	gotDate := ""
+	svc.WithPeriodProvider(func(tradingDate string) (*domain.MarketPeriod, bool) {
+		gotDate = tradingDate
+		p := domain.PeriodBull
+		return &p, true
+	})
+	report, err := svc.LatestDaily(context.Background())
+	if err != nil {
+		t.Fatalf("LatestDaily: %v", err)
+	}
+	wantDate := time.Unix(recordedAt, 0).In(taipeiZone).Format("2006-01-02")
+	if gotDate != wantDate {
+		t.Errorf("period provider called with %q, want %q", gotDate, wantDate)
+	}
+	// Fresh process → every Z is 0, so both composites round to 0; assert
+	// the observation column is present in the wire format (PR-3a contract).
+	wire, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	if !strings.Contains(string(wire), "quality_score_period_weighted") {
+		t.Errorf("wire format missing quality_score_period_weighted: %s", wire)
+	}
+	// Default config (switch off) → quality_score stays legacy.
+	if !report.LegacyQuality {
+		t.Errorf("legacy_quality = false, want true under default config")
 	}
 }

@@ -938,6 +938,22 @@ func run(args []string, deps appDeps) error {
 			// ServiceFromHandler call up two statements fixes the
 			// init order.
 			capitalFlowService = capitalflow.ServiceFromHandler(cfHandler)
+			// PR-3a (capital-flow model plan v1.1): resolve the seven-period
+			// market classification per trading date from period_history so
+			// the quality-score report can emit the period-weighted
+			// observation column (capitalflow.period_weighted_quality stays
+			// default-off; this wiring is read-only).
+			if historicalStore != nil {
+				hs := historicalStore
+				capitalFlowService.WithPeriodProvider(func(tradingDate string) (*domain.MarketPeriod, bool) {
+					row, ok, err := hs.LoadPeriodByDateAll(context.Background(), tradingDate)
+					if err != nil || !ok || row.Period == "" {
+						return nil, false
+					}
+					period := domain.MarketPeriod(row.Period)
+					return &period, true
+				})
+			}
 			// H03: market explain endpoint for retail "為什麼漲跌" button.
 			explainHandler := marketexplain.NewHandler(macroProvider, capitalFlowService)
 			mux.Handle("GET /api/market/explain", apishared.Get(explainHandler.HandleExplain))

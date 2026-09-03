@@ -196,9 +196,16 @@ type DailyReport struct {
 	Forces    []ForceScore    `json:"forces"`
 	Resonance ResonanceResult `json:"resonance"`
 	// QualityScore = Foreign + Institutional – Retail (Z-score composite)
+	// (period-weighted variant when capitalflow.period_weighted_quality=true,
+	// PR-3a).
 	QualityScore float64 `json:"quality_score"`
-	QualityLabel string  `json:"quality_label"` // "strong_inflow", "inflow", "neutral", "outflow", "strong_outflow"
-	Summary      string  `json:"summary"`       // 繁體中文 summary
+	// QualityScorePeriodWeighted is the period-weighted composite
+	// (computeQualityScoreWithPeriod) emitted alongside quality_score for
+	// the 30-trading-day observation window (PR-3a / k3 review B4). When
+	// no period is known it equals the equal-weight legacy value.
+	QualityScorePeriodWeighted float64 `json:"quality_score_period_weighted"`
+	QualityLabel               string  `json:"quality_label"` // "strong_inflow", "inflow", "neutral", "outflow", "strong_outflow"
+	Summary                    string  `json:"summary"`       // 繁體中文 summary
 	// Assessment is the E07 4-layer sub-assessment
 	// (Institutional / Behavioral / ForeignPositioning / CrossMarket)
 	// built by ComputeCapitalFlowAssessment. It is the authoritative
@@ -222,13 +229,18 @@ type DailyReport struct {
 // It includes the top forces so the home page can render metric cards without a
 // second round-trip to /api/capital-flow/daily.
 type SummaryReport struct {
-	Date          time.Time    `json:"date"`
-	QualityScore  float64      `json:"quality_score"`
-	QualityLabel  string       `json:"quality_label"`
-	ResonanceDir  string       `json:"resonance_dir"`
-	DominantForce ForceName    `json:"dominant_force"` // force with highest absolute Z-score
-	Forces        []ForceScore `json:"forces"`
-	Summary       string       `json:"summary"`
+	Date         time.Time `json:"date"`
+	QualityScore float64   `json:"quality_score"`
+	// QualityScorePeriodWeighted is the period-weighted composite emitted
+	// alongside quality_score for the 30-trading-day observation window
+	// (PR-3a / k3 review B4). Equals the legacy value when no period is
+	// known.
+	QualityScorePeriodWeighted float64      `json:"quality_score_period_weighted"`
+	QualityLabel               string       `json:"quality_label"`
+	ResonanceDir               string       `json:"resonance_dir"`
+	DominantForce              ForceName    `json:"dominant_force"` // force with highest absolute Z-score
+	Forces                     []ForceScore `json:"forces"`
+	Summary                    string       `json:"summary"`
 	// Assessment mirrors DailyReport.Assessment so the home page
 	// can render the calibration gate without a second round-trip
 	// (CF-INV-08). Summary flattens the layered sub-assessments in

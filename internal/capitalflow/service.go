@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -82,6 +84,35 @@ type Service struct {
 	reportMu       sync.RWMutex
 	cachedReport   *DailyReport
 	reportCachedAt time.Time
+
+	// periodProvider resolves the seven-period market classification for a
+	// trading date (PR-3a). Optional: nil keeps the legacy behavior (no
+	// period → period-weighted score equals the equal-weight composite).
+	// Wired in cmd/atlas from period_history (HistoricalStore).
+	periodProvider func(tradingDate string) (*domain.MarketPeriod, bool)
+}
+
+// WithPeriodProvider wires a period resolver keyed by trading date
+// (YYYY-MM-DD, Asia/Taipei). Used by LatestDaily/Summary to feed the
+// current period into the quality-score report (PR-3a). The resolver must
+// be safe for concurrent use; returning (nil, false) is always allowed and
+// means "period unknown for that date" (legacy semantics).
+func (s *Service) WithPeriodProvider(p func(tradingDate string) (*domain.MarketPeriod, bool)) *Service {
+	s.periodProvider = p
+	return s
+}
+
+// periodFor resolves the market period for a trading date via the wired
+// provider. Never fails: unknown periods are represented by nil.
+func (s *Service) periodFor(tradingDate string) *domain.MarketPeriod {
+	if s.periodProvider == nil {
+		return nil
+	}
+	period, ok := s.periodProvider(tradingDate)
+	if !ok || period == nil {
+		return nil
+	}
+	return period
 }
 
 // NewService constructs a Service backed by the given macrodata
@@ -359,7 +390,11 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 	}
 	date := time.Unix(snap.RecordedAt, 0)
 	resonance := ComputeResonance(forces)
-	report := GenerateDailyReport(date, forces, resonance)
+	// PR-3a: feed the current period + the config-gated quality formula.
+	// The config default (capitalflow.period_weighted_quality=false)
+	// keeps quality_score bit-identical to the legacy composite.
+	report := GenerateDailyReport(date, forces, resonance,
+		s.periodFor(derivedDate), config.GetCapitalflowPeriodWeightedQuality())
 
 	s.reportMu.Lock()
 	s.cachedReport = &report
@@ -412,7 +447,17 @@ func (s *Service) Summary(ctx context.Context) (SummaryReport, error) {
 	if err != nil {
 		return SummaryReport{}, fmt.Errorf("capitalflow: build summary from latest daily: %w", err)
 	}
-	return GenerateSummaryReport(daily.Date, daily.Forces, daily.Resonance), nil
+	return GenerateSummaryReport(daily.Date, daily.Forces, daily.Resonance,
+		s.periodFor(deriveTradingDateFromReport(daily.Date)),
+		config.GetCapitalflowPeriodWeightedQuality()), nil
+}
+
+// deriveTradingDateFromReport converts a report date back to the
+// Asia/Taipei YYYY-MM-DD trading-date key used by the period provider
+// (PR-3a). LatestDaily already stores the report under the derived date,
+// so this keeps Summary consistent with it.
+func deriveTradingDateFromReport(date time.Time) string {
+	return date.In(taipeiZone).Format("2006-01-02")
 }
 
 // LatestAssessment is the E07 automation face (spec §9.5 /

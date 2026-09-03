@@ -215,6 +215,7 @@ func defaultCapitalflowParameters() CapitalflowParameters {
 		ResonanceCoefficientMin: ResonanceCoefficientMinMetadata,
 		TrendBullishThreshold:   TrendBullishThresholdMetadata,
 		TrendBearishThreshold:   TrendBearishThresholdMetadata,
+		PeriodWeightedQuality:   PeriodWeightedQualityMetadata,
 	}
 }
 
@@ -235,5 +236,8 @@ func mergeCapitalflowDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Capitalflow.TrendBearishThreshold.Rationale == "" {
 		cfg.Capitalflow.TrendBearishThreshold = def.TrendBearishThreshold
+	}
+	if cfg.Capitalflow.PeriodWeightedQuality.Rationale == "" {
+		cfg.Capitalflow.PeriodWeightedQuality = def.PeriodWeightedQuality
 	}
 }
