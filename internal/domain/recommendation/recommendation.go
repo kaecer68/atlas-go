@@ -73,6 +73,20 @@ type RecommendationOutcome struct {
 	ParameterSnapshot   *shared.ParameterSnapshot   `json:"parameter_snapshot,omitempty"`
 	IsSynthetic         bool                        `json:"is_synthetic"`
 	Regime              string                      `json:"regime,omitempty"`
+	// MarketPeriod is the seven-period market classification (bull / plateau /
+	// black_swan / …) of the outcome's trading day, joined from
+	// period_history at write time (capital-flow Phase 2 PR-2a). Empty when no
+	// period_history row exists for the day (e.g. live ingest predates the
+	// period table). The canonical classification lives in
+	// domain.MarketPeriod; the field is a string so persistence round-trips
+	// stay symmetric with the legacy Regime field.
+	MarketPeriod string `json:"market_period,omitempty"`
+	// MarketPeriodSource is the provenance of the MarketPeriod join:
+	// "live" when the period_history row was written by live ingest
+	// (is_synthetic=0), "synthetic" when the row is an OHLCV backfill
+	// (is_synthetic=1), "" when MarketPeriod is empty. Per-period
+	// performance matrices exclude "synthetic" rows by default.
+	MarketPeriodSource string `json:"market_period_source,omitempty"`
 }
 
 func (r *RecommendationOutcome) Validate() error {

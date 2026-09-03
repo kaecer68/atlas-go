@@ -50,8 +50,9 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
 			stop_loss, conviction, regime, timestamp, passed_guards, guard_reason,
 			factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -95,6 +96,8 @@ func (s *SQLiteOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutc
 			outcome.BenchmarkDelta,
 			boolToInt(outcome.IsSynthetic),
 			outcome.Regime,
+			nullableOutcomeText(outcome.MarketPeriod),
+			nullableOutcomeText(outcome.MarketPeriodSource),
 		)
 		if err != nil {
 			return fmt.Errorf("insert outcome: %w", err)
@@ -116,8 +119,9 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 		INSERT INTO outcomes (session_id, symbol, agent_id, action, weight, target_price,
 			stop_loss, conviction, regime, timestamp, passed_guards, guard_reason,
 			factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -161,6 +165,8 @@ func (s *SQLiteOutcomeStore) RecordSessionOutcomes(session domain.ReplaySession,
 			outcome.BenchmarkDelta,
 			boolToInt(outcome.IsSynthetic),
 			outcome.Regime,
+			nullableOutcomeText(outcome.MarketPeriod),
+			nullableOutcomeText(outcome.MarketPeriodSource),
 		)
 		if err != nil {
 			return fmt.Errorf("insert outcome: %w", err)
@@ -187,7 +193,8 @@ func (s *SQLiteOutcomeStore) LoadOutcomesFromSessions() ([]domain.Recommendation
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source
 		FROM outcomes WHERE session_id != '' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("query outcomes from sessions: %w", err)
@@ -203,7 +210,8 @@ func (s *SQLiteOutcomeStore) LoadOutcomes() ([]domain.RecommendationOutcome, err
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source
 		FROM outcomes WHERE session_id = '' ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("query outcomes: %w", err)
@@ -225,7 +233,8 @@ func (s *SQLiteOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.Rec
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source
 		FROM outcomes WHERE session_id = ? ORDER BY id`, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query session outcomes: %w", err)
@@ -542,7 +551,8 @@ func (s *SQLiteOutcomeStore) LoadAllSessionScorecards() ([]domain.Scorecard, []d
 	rows, err := s.db.Query(`
 		SELECT symbol, agent_id, action, target_price, stop_loss, conviction,
 			regime, timestamp, passed_guards, guard_reason, factor_scores_json, conviction_breakdown_json,
-			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime
+			layer, forward_return, window, hit, benchmark_delta, is_synthetic, true_regime,
+			market_period, market_period_source
 		FROM outcomes WHERE session_id != '' ORDER BY id`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query outcomes for scorecards: %w", err)
@@ -626,11 +636,12 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 		// evaluation columns added by migration.
 		var targetPrice, stopLoss, forwardReturn, benchmarkDelta sql.NullFloat64
 		var conviction, hit, isSynthetic sql.NullInt64
-		var layer, window, trueRegime sql.NullString
+		var layer, window, trueRegime, marketPeriod, marketPeriodSource sql.NullString
 
 		if err := rows.Scan(&sym, &agentID, &action, &targetPrice, &stopLoss, &conviction,
 			&regime, &ts, &passedGuards, &guardReason, &factorJSON, &convictionJSON,
-			&layer, &forwardReturn, &window, &hit, &benchmarkDelta, &isSynthetic, &trueRegime); err != nil {
+			&layer, &forwardReturn, &window, &hit, &benchmarkDelta, &isSynthetic, &trueRegime,
+			&marketPeriod, &marketPeriodSource); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
@@ -667,6 +678,8 @@ func scanOutcomes(rows *sql.Rows) ([]domain.RecommendationOutcome, error) {
 			Layer:               domain.AgentLayer(effectiveLayer),
 			Regime:              trueRegime.String,
 			Window:              window.String,
+			MarketPeriod:        marketPeriod.String,
+			MarketPeriodSource:  marketPeriodSource.String,
 			ForwardReturn:       forwardReturn.Float64,
 			BenchmarkDelta:      benchmarkDelta.Float64,
 			Hit:                 hit.Int64 == 1,
@@ -692,6 +705,16 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// nullableOutcomeText returns nil for an empty string so empty
+// market_period / market_period_source values persist as SQL NULL (legacy
+// rows written before the Phase 2 PR-2a columns read back as empty strings).
+func nullableOutcomeText(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // countPassedGuards counts guard outcomes that passed.

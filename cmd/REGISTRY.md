@@ -85,6 +85,7 @@
 | `cmd/backfill-margin-history` | TWSE 融資餘額歷史回填（2024-07 起，data/state/margin/*_margin.json，one-shot） | narrative, marketdata, constants | ✅ Utility |
 | `cmd/backfill-period-history` | R9 — period_history/regime_history 歷史回填（macro snapshot 逐日 → enrich → DetectPeriod + stress regime，SQLite/PG upsert，dry-run） | monitoring, portfolio, narrative, ledger, marketdata | ✅ Utility |
 | `cmd/backfill-event-calendar` | R7 — event_calendar_history 歷史回填（TWSE OpenAPI 當年 + MSCI 2023-2026 static 季度調整，SQLite/PG upsert，dry-run，idempotent） | marketdata, ledger | ✅ Utility |
+| `cmd/backfill-outcome-period` | CF Phase 2 PR-2a — recommendation_outcomes 補 market_period/market_period_source（sqlite UPDATE / PG UPDATE join / JSONL 原地重寫，dry-run，idempotent，不猜無 period 的日子） | domain, ledger, db | ✅ Utility |
 
 ---
 

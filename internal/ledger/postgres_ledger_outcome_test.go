@@ -46,21 +46,23 @@ func TestPostgresLedgerStore_OutcomeRoundTrip(t *testing.T) {
 	store := NewPostgresLedgerStore(pool)
 
 	o := domain.RecommendationOutcome{
-		AgentID:       "pgsqltest-agent",
-		Skill:         "sector-tech",
-		Layer:         domain.LayerSector,
-		Symbol:        "2330",
-		Side:          domain.SideBuy,
-		Conviction:    75,
-		TargetPrice:   1100,
-		StopLossPrice: 1000,
-		Window:        "pgsqltest-global",
-		ForwardReturn: 0.05,
-		Hit:           true,
-		Reason:        "test",
-		Price:         1050,
-		PassedGuards:  true,
-		RecordedAt:    time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		AgentID:            "pgsqltest-agent",
+		Skill:              "sector-tech",
+		Layer:              domain.LayerSector,
+		Symbol:             "2330",
+		Side:               domain.SideBuy,
+		Conviction:         75,
+		TargetPrice:        1100,
+		StopLossPrice:      1000,
+		Window:             "pgsqltest-global",
+		ForwardReturn:      0.05,
+		Hit:                true,
+		Reason:             "test",
+		Price:              1050,
+		PassedGuards:       true,
+		RecordedAt:         time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		MarketPeriod:       "plateau",
+		MarketPeriodSource: "live",
 	}
 	if err := store.RecordOutcomes([]domain.RecommendationOutcome{o}); err != nil {
 		t.Fatalf("RecordOutcomes: %v", err)
@@ -76,6 +78,10 @@ func TestPostgresLedgerStore_OutcomeRoundTrip(t *testing.T) {
 			found = true
 			if got.Symbol != "2330" || !got.Hit || got.ForwardReturn != 0.05 || got.Layer != domain.LayerSector {
 				t.Fatalf("outcome mismatch (metadata unmarshal failed): %+v", got)
+			}
+			if got.MarketPeriod != "plateau" || got.MarketPeriodSource != "live" {
+				t.Errorf("market_period columns lost: got %q/%q, want plateau/live",
+					got.MarketPeriod, got.MarketPeriodSource)
 			}
 		}
 	}

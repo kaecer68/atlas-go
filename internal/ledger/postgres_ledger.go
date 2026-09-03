@@ -32,6 +32,16 @@ type PostgresLedgerStore struct {
 }
 
 // NewPostgresLedgerStore binds the store to an already-opened pgxpool.
+// nullablePGText returns nil for empty input so empty market_period /
+// market_period_source values persist as SQL NULL (scan-side *string keeps
+// the distinction; metadata JSON remains the rich source of truth).
+func nullablePGText(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func NewPostgresLedgerStore(pool *pgxpool.Pool) *PostgresLedgerStore {
 	return &PostgresLedgerStore{pool: pool}
 }
@@ -70,10 +80,11 @@ func (s *PostgresLedgerStore) RecordOutcomes(outcomes []domain.RecommendationOut
 			ts = time.Now()
 		}
 		batch.Queue(`
-			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata, market_period, market_period_source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`, ts, "", o.Symbol, o.AgentID, string(o.Layer),
-			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata,
+			nullablePGText(o.MarketPeriod), nullablePGText(o.MarketPeriodSource))
 	}
 
 	br := s.pool.SendBatch(ctx, batch)
@@ -105,10 +116,11 @@ func (s *PostgresLedgerStore) RecordSessionOutcomes(session domain.ReplaySession
 			ts = time.Now()
 		}
 		batch.Queue(`
-			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata, market_period, market_period_source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`, ts, session.ID, o.Symbol, o.AgentID, string(o.Layer),
-			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata,
+			nullablePGText(o.MarketPeriod), nullablePGText(o.MarketPeriodSource))
 	}
 
 	br := s.pool.SendBatch(ctx, batch)
@@ -139,7 +151,8 @@ func (s *PostgresLedgerStore) LoadOutcomesFromSessions() ([]domain.Recommendatio
 func (s *PostgresLedgerStore) loadOutcomes(where string, arg string) ([]domain.RecommendationOutcome, error) {
 	ctx := context.Background()
 	query := `
-		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
+			market_period, market_period_source
 		FROM recommendation_outcomes `
 	if where != "" {
 		query += where + " "
@@ -171,10 +184,11 @@ func scanPGOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, error) {
 		var t time.Time
 		var sessionID, agentLayer string
 		var metadata []byte
+		var marketPeriod, marketPeriodSource *string
 		err := rows.Scan(
 			&t, &sessionID, &o.Symbol, &o.AgentID, &agentLayer,
 			&o.Conviction, &o.PassedGuards, &o.GuardReason, &o.Price,
-			&metadata,
+			&metadata, &marketPeriod, &marketPeriodSource,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan outcome row: %w", err)
@@ -182,6 +196,12 @@ func scanPGOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, error) {
 		o.RecordedAt = t
 		o.Window = sessionID
 		o.Layer = domain.AgentLayer(agentLayer)
+		if marketPeriod != nil {
+			o.MarketPeriod = *marketPeriod
+		}
+		if marketPeriodSource != nil {
+			o.MarketPeriodSource = *marketPeriodSource
+		}
 		if len(metadata) > 0 {
 			if err := json.Unmarshal(metadata, &o); err != nil {
 				return nil, fmt.Errorf("unmarshal outcome metadata: %w", err)
