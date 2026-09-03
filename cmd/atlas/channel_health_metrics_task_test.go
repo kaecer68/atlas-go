@@ -37,6 +37,16 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 				LastFetchAt: now.Add(-2 * 24 * time.Hour).Format(time.RFC3339),
 				LatencyMs:   5000,
 			},
+			// Known-issue channel (upstream removed — see
+			// internal/monitoring/known_issues.go): must NOT emit
+			// staleness/latency series (they only feed false
+			// ChannelDataStale / ChannelFetchLatencyHigh alerts), but the
+			// status gauge stays for the dashboard known-issue badge.
+			"twse_oddlot": {
+				Status:     "error",
+				LastDataAt: now.Add(-3 * 24 * time.Hour).Format(time.RFC3339),
+				LatencyMs:  5000,
+			},
 		},
 	}
 	data, err := json.MarshalIndent(wrapper, "", "  ")
@@ -64,10 +74,23 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 		`atlas_channel_health_status{channel="finmind"} 2`,
 		`atlas_channel_fetch_latency_seconds{channel="finmind"} 5`,
 		`atlas_channel_data_staleness_seconds{channel="finmind"} 172800`,
+		// known-issue 通道仍輸出 status gauge（dashboard badge 需要），
+		`atlas_channel_health_status{channel="twse_oddlot"} 2`,
 	}
 	for _, want := range mustContain {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing /metrics line %q\n--- full body ---\n%s", want, body)
+		}
+	}
+	// 但不得輸出 staleness/latency 序列（2026-09-03 告警降噪：這些序列只會
+	// 讓 ChannelDataStale / ChannelFetchLatencyHigh 對已停用上游誤報）。
+	mustAbsent := []string{
+		`atlas_channel_fetch_latency_seconds{channel="twse_oddlot"}`,
+		`atlas_channel_data_staleness_seconds{channel="twse_oddlot"}`,
+	}
+	for _, absent := range mustAbsent {
+		if strings.Contains(body, absent) {
+			t.Fatalf("unexpected /metrics line %q for known-issue channel\n--- full body ---\n%s", absent, body)
 		}
 	}
 }

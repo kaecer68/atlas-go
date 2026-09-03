@@ -48,6 +48,16 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 	records := store.All()
 	for channelID, rec := range records {
 		collector.RecordGauge(MetricChannelHealthStatus, healthStatusValue(rec.Status), map[string]string{"channel": channelID})
+		// 告警降噪（2026-09-03 盤查）：known-issue 通道（twse_oddlot /
+		// twse_etf / taifex-daily 等，見 monitoring/known_issues.go）的上游
+		// 已停用或遷移，資料永遠不會刷新——staleness/latency gauge 只會讓
+		// ChannelDataStale / ChannelFetchLatencyHigh 每 5m 誤報一次（實證：
+		// twse_oddlot 資料 >24h 卻被當成異常）。status gauge 仍輸出（dashboard
+		// 需要它顯示 known-issue badge），但不再對 known-issue 通道輸出
+		// staleness/latency 序列。
+		if monitoring.LookupKnownIssue(channelID) != nil {
+			continue
+		}
 		if rec.LatencyMs > 0 {
 			collector.RecordGauge(MetricChannelFetchLatencySeconds, float64(rec.LatencyMs)/1000.0, map[string]string{"channel": channelID})
 		}
