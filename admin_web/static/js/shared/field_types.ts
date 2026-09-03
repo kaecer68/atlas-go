@@ -3277,6 +3277,8 @@ export interface RecommendationOutcome {
   parameter_snapshot?: ParameterSnapshot | null;
   is_synthetic: boolean;
   regime?: string;
+  market_period?: string;
+  market_period_source?: string;
 }
 
 export interface RecommendationPipelineResponse {

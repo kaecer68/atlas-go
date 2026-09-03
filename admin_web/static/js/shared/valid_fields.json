@@ -1029,6 +1029,7 @@
   "margin_percentile",
   "market",
   "market_period",
+  "market_period_source",
   "market_value",
   "market_volume",
   "marketdata",

@@ -171,6 +171,11 @@ type System struct {
 	traceVerbose     bool // when true, SimTraceWriter emits color-coded terminal output
 	phase3Ctrl       *Phase3Controller
 	regimeAuthority  RegimeAuthorityFunc // #1785: authoritative regime override (nil = evidence-only)
+	// periodResolver joins period_history at outcome-write time so every
+	// RecommendationOutcome carries its seven-period market classification
+	// (capital-flow Phase 2 PR-2a). nil = outcomes keep an empty
+	// market_period (legacy behavior preserved).
+	periodResolver PeriodResolver
 
 	maturityTracker *domain.MaturityTracker
 
@@ -871,10 +876,10 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	s.updateCapitalMetrics(s.Sim().ctx, result)
 
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.Sim().replay, s.periodResolver)
 	syntheticOutcomes := len(outcomes) == 0
 	if syntheticOutcomes {
-		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime))
+		outcomes = buildSyntheticOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, asOf, string(regime), s.periodResolver)
 	}
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
@@ -1143,13 +1148,67 @@ func buildParameterSnapshot() *shared.ParameterSnapshot {
 	return snap
 }
 
-func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string) []domain.RecommendationOutcome {
+// PeriodResolver resolves the seven-period market classification for an
+// outcome's trading date at write time, joining ledger.period_history
+// (capital-flow Phase 2 PR-2a). The trading date is the outcome's
+// as-of date in YYYY-MM-DD (the same key period_history rows use).
+//
+// Returns the period, its provenance ("live" when the period_history row was
+// written by live ingest, "synthetic" when it is an OHLCV backfill), and
+// whether a period row exists. A nil resolver yields empty period/source and
+// ok=false (legacy behavior).
+type PeriodResolver func(tradingDate string) (period domain.MarketPeriod, source string, ok bool)
+
+// HistoricalPeriodResolver adapts a ledger.HistoricalStore into a
+// PeriodResolver using LoadPeriodByDateAll (PG-first via store_factory; rows
+// include backfilled is_synthetic=1 rows so the matrix can exclude them).
+func HistoricalPeriodResolver(store ledger.HistoricalStore) PeriodResolver {
+	if store == nil {
+		return nil
+	}
+	return func(tradingDate string) (domain.MarketPeriod, string, bool) {
+		row, ok, err := store.LoadPeriodByDateAll(context.Background(), tradingDate)
+		if err != nil || !ok {
+			return "", "", false
+		}
+		source := "live"
+		if row.IsSynthetic == 1 {
+			source = "synthetic"
+		}
+		return domain.MarketPeriod(row.Period), source, true
+	}
+}
+
+// WithPeriodResolver injects the period_history join used when building
+// recommendation outcomes. nil (default) keeps legacy behavior — outcomes
+// carry no market_period classification.
+func (s *System) WithPeriodResolver(fn PeriodResolver) *System {
+	s.periodResolver = fn
+	return s
+}
+
+// resolveOutcomePeriod resolves the market_period classification for one
+// trading date through the resolver, returning the two outcome fields.
+// A nil or unresolved resolver returns empty values (no classification).
+func resolveOutcomePeriod(fn PeriodResolver, tradingDate string) (period, source string) {
+	if fn == nil {
+		return "", ""
+	}
+	p, src, ok := fn(tradingDate)
+	if !ok {
+		return "", ""
+	}
+	return string(p), src
+}
+
+func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string, periodFor PeriodResolver) []domain.RecommendationOutcome {
 	if len(rawRecs) == 0 {
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
 	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
+	marketPeriod, marketPeriodSource := resolveOutcomePeriod(periodFor, asOf.Format("2006-01-02"))
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
@@ -1183,18 +1242,21 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 			ParameterSnapshot:   snapshot,
 			Regime:              regime,
 			IsSynthetic:         true,
+			MarketPeriod:        marketPeriod,
+			MarketPeriodSource:  marketPeriodSource,
 		})
 	}
 	return outcomes
 }
 
-func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string, ds *replay.Dataset) []domain.RecommendationOutcome {
+func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []domain.Quote, asOf time.Time, regime string, ds *replay.Dataset, periodFor PeriodResolver) []domain.RecommendationOutcome {
 	if ds == nil || len(rawRecs) == 0 {
 		return nil
 	}
 	quoteMap := quoteBySymbolMap(quotes)
 	passedSymbols := buildPassedSymbolKey(finalRecs)
 	snapshot := buildParameterSnapshot()
+	marketPeriod, marketPeriodSource := resolveOutcomePeriod(periodFor, asOf.Format("2006-01-02"))
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
@@ -1233,6 +1295,8 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 			ParameterSnapshot:   snapshot,
 			Regime:              regime,
 			IsSynthetic:         synthetic,
+			MarketPeriod:        marketPeriod,
+			MarketPeriodSource:  marketPeriodSource,
 		})
 	}
 	return outcomes

@@ -150,7 +150,7 @@ func TestBuildReplayOutcomesUsesRecommendationAgentAndSkill(t *testing.T) {
 			Reason:     "test",
 		},
 	}
-	outcomes := buildReplayOutcomes(recs, recs, nil, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), string(domain.RegimeRiskOn), ds)
+	outcomes := buildReplayOutcomes(recs, recs, nil, time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC), string(domain.RegimeRiskOn), ds, nil)
 
 	if len(outcomes) != 1 {
 		t.Fatalf("expected one outcome, got %d", len(outcomes))

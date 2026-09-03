@@ -296,6 +296,7 @@ func InitSchema(db *sql.DB) error {
 	additiveMigrations := []func(*sql.DB) error{
 		addRegimeHistorySourceColumn, // PR #1247 (D01)
 		addOutcomesEvaluationColumns, // BL-06 (outcomes 評估欄位持久化)
+		addOutcomePeriodColumns,      // capital-flow Phase 2 PR-2a (market_period join)
 	}
 	for _, m := range additiveMigrations {
 		if err := m(db); err != nil {
@@ -385,6 +386,23 @@ func addOutcomesEvaluationColumns(db *sql.DB) error {
 		"benchmark_delta": "REAL",
 		"is_synthetic":    "INTEGER",
 		"true_regime":     "TEXT",
+	} {
+		if err := addColumnIfMissing(db, table, col, ddl); err != nil {
+			return fmt.Errorf("migrate %s.%s: %w", table, col, err)
+		}
+	}
+	return nil
+}
+
+// addOutcomePeriodColumns adds the Phase 2 PR-2a market-period join columns
+// to the outcomes table. Both are nullable TEXT: rows written before the
+// migration (and rows whose trading day has no period_history row) keep
+// NULL and read back as empty strings (→ "unknown" in period matrices).
+func addOutcomePeriodColumns(db *sql.DB) error {
+	const table = "outcomes"
+	for col, ddl := range map[string]string{
+		"market_period":        "TEXT",
+		"market_period_source": "TEXT",
 	} {
 		if err := addColumnIfMissing(db, table, col, ddl); err != nil {
 			return fmt.Errorf("migrate %s.%s: %w", table, col, err)

@@ -158,7 +158,7 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	tw.Record(6, "sim_exec", "OK", map[string]any{"orders": len(result.Orders), "positions": len(result.Positions)})
 	result.GuardOutcomes = guardOutcomes
 	tw.Record(7, "ledger_write", "START", nil)
-	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, string(regime), s.Sim().replay)
+	outcomes := buildReplayOutcomes(outcomeRawRecs, outcomeFinalRecs, quotes, sessionDate, string(regime), s.Sim().replay, s.periodResolver)
 	if s.Risk().repo != nil {
 		_ = s.Risk().repo.RecordOutcomes(s.Sim().ctx, outcomes)
 	}

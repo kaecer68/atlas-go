@@ -15,6 +15,16 @@ import (
 // Outcome Repository Implementation
 // ============================================
 
+// nullableText returns nil for empty input so empty market_period /
+// market_period_source values persist as SQL NULL (mirror of the ledger
+// package helper of the same shape).
+func nullableText(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []domain.RecommendationOutcome) error {
 	if len(outcomes) == 0 {
 		return nil
@@ -28,10 +38,11 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 		// made LoadSessionOutcomes(session-XXX) return 0 — the
 		// performance-report trades=0 root cause.
 		batch.Queue(`
-			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO recommendation_outcomes (time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata, market_period, market_period_source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`, time.Now(), "", o.Symbol, o.AgentID, string(o.Layer),
-			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata)
+			o.Conviction, o.PassedGuards, o.GuardReason, o.Price, metadata,
+			nullableText(o.MarketPeriod), nullableText(o.MarketPeriodSource))
 	}
 
 	br := r.pool.SendBatch(ctx, batch)
@@ -46,7 +57,8 @@ func (r *PostgresRepository) RecordOutcomes(ctx context.Context, outcomes []doma
 
 func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
+			market_period, market_period_source
 		FROM recommendation_outcomes
 		WHERE session_id = $1
 		ORDER BY time DESC
@@ -61,7 +73,8 @@ func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, session
 
 func (r *PostgresRepository) QueryOutcomesBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
+			market_period, market_period_source
 		FROM recommendation_outcomes
 		WHERE symbol = $1 AND time >= $2 AND time <= $3
 		ORDER BY time DESC
@@ -76,7 +89,8 @@ func (r *PostgresRepository) QueryOutcomesBySymbol(ctx context.Context, symbol s
 
 func (r *PostgresRepository) QueryOutcomesByAgent(ctx context.Context, agentID string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
+			market_period, market_period_source
 		FROM recommendation_outcomes
 		WHERE agent_id = $1 AND time >= $2 AND time <= $3
 		ORDER BY time DESC
@@ -91,7 +105,8 @@ func (r *PostgresRepository) QueryOutcomesByAgent(ctx context.Context, agentID s
 
 func (r *PostgresRepository) QueryAllOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata
+		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
+			market_period, market_period_source
 		FROM recommendation_outcomes
 		ORDER BY time DESC
 	`)
@@ -187,16 +202,23 @@ func scanRecommendationOutcomes(rows pgx.Rows) ([]domain.RecommendationOutcome, 
 		var t time.Time
 		var sessionID, agentLayer string
 		var metadata []byte
+		var marketPeriod, marketPeriodSource *string
 		err := rows.Scan(
 			&t, &sessionID, &o.Symbol, &o.AgentID, &agentLayer,
 			&o.Conviction, &o.PassedGuards, &o.GuardReason, &o.Price,
-			&metadata,
+			&metadata, &marketPeriod, &marketPeriodSource,
 		)
 		if err != nil {
 			continue
 		}
 		o.Window = sessionID
 		o.Layer = domain.AgentLayer(agentLayer)
+		if marketPeriod != nil {
+			o.MarketPeriod = *marketPeriod
+		}
+		if marketPeriodSource != nil {
+			o.MarketPeriodSource = *marketPeriodSource
+		}
 		if len(metadata) > 0 {
 			_ = json.Unmarshal(metadata, &o)
 		}

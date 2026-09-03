@@ -8,6 +8,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/prism"
 	"github.com/kaecer68/atlas-go/internal/reflexivity"
@@ -40,6 +41,25 @@ func NewProductionSystemWithEventBus(cfg config.Config, eventBus *eventbus.Chann
 	system, err := NewSystemWithEventBus(cfg, eventBus, opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	// Phase 2 PR-2a: join period_history at outcome-write time so every
+	// RecommendationOutcome carries its seven-period market classification.
+	// The historical store is backend-aware (sqlite/postgres). Backends it
+	// does not support (jsonl) or an unopenable store leave the resolver nil
+	// and outcomes keep the legacy empty market_period (jsonl is the
+	// pre-bootstrap default — not an error worth logging).
+	switch backend, err := ledger.ResolveStoreBackend(cfg.StoreBackend); {
+	case err != nil:
+		logging.Warn("orchestrator", "period_resolver_skip_bad_backend", logging.Err(err))
+	case backend == "jsonl":
+		// jsonl has no period_history table; no resolver.
+	default:
+		if histStore, hsErr := ledger.NewHistoricalStore(cfg); hsErr == nil {
+			system.WithPeriodResolver(HistoricalPeriodResolver(histStore))
+		} else {
+			logging.Warn("orchestrator", "period_resolver_unavailable", logging.Err(hsErr))
+		}
 	}
 
 	// Create and wire MaturityTracker.
