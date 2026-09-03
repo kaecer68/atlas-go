@@ -29,11 +29,6 @@
       "pattern": "/api/parameters",
       "reason": "Smoke test runs unauthenticated; parameters endpoints require auth.",
       "ticket": "smoke-unauthenticated"
-    },
-    {
-      "pattern": "/api/config",
-      "reason": "Smoke test runs unauthenticated; config endpoints require auth.",
-      "ticket": "smoke-unauthenticated"
     }
   ]
 }

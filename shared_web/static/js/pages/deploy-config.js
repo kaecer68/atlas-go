@@ -47,7 +47,7 @@ export function renderConfigPage(cfg, error) {
         '<div style="font-size:2rem;margin-bottom:10px">⚠️</div>' +
         '<div style="font-weight:700;margin-bottom:6px">無法載入部署配置</div>' +
         (reason ? '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + reason + '</div>' : '') +
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">此頁為受保護端點，若持續失敗請確認 ATLAS_API_KEY 已設定。</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">讀取失敗可能為後端暫時無回應，請稍後重試。</div>' +
         '<button class="alert-action-btn" onclick="window.loadConfigPage()">🔄 重試</button>' +
       '</div>';
     contentDiv.classList.remove('empty', 'loading');
