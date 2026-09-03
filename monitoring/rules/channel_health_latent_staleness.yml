@@ -17,8 +17,11 @@ groups:
           runbook_url: "https://wiki.internal/runbooks/channel-data-stale"
 
       - alert: ChannelFetchLatencyHigh
-        expr: atlas_channel_fetch_latency_seconds > 30
-        for: 5m
+        # 2026-09-03 告警降噪：day_trading / market_volume /
+        # geopolitical_taiwan 為多來源外部抓取，30-50s 是常態不是故障——
+        # threshold 30s→90s、for 5m→15m（實證：每日重複誤報）。
+        expr: atlas_channel_fetch_latency_seconds > 90
+        for: 15m
         labels:
           severity: warning
           service: atlas-monitoring

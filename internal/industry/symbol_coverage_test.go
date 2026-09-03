@@ -68,13 +68,16 @@ func TestValidateFinMindSymbolCoverage_AllCovered(t *testing.T) {
 func TestValidateFinMindSymbolCoverage_PartialMissing(t *testing.T) {
 	tree := buildSimpleCoverageTree([]*IndustrySegment{
 		{ID: "semiconductor", Level: Level1, RepresentativeStocks: []string{"2330.TW", "2303.TW"}},
-		// 模擬 3426.TW 不在 FinMind 收錄(對應 2026-08-05 觀察到的 leo_satellite 失敗)
-		{ID: "leo_satellite", Level: Level1, RepresentativeStocks: []string{"6271.TW", "3426.TW"}},
+		// 模擬某檔 representative 已停牌/下市 → FinMind 無現役資料。
+		// 真實案例: 3426.TW 台興 2026-06 起無價量且月營收停滯,2026-09-03 已從
+		// defaults_narrative.go 的 leo_satellite/laser_communication 代表股移除;
+		// 此處用合成符號 99999.TW 維持「部分 missing」分類的覆蓋。
+		{ID: "leo_satellite", Level: Level1, RepresentativeStocks: []string{"6271.TW", "99999.TW"}},
 	})
 
 	fetcher := &stubStockInfoFetcher{symbols: map[string]bool{
 		"2330": true, "2303": true, // semiconductor 全部 covered
-		"6271": true, // 6271 在,3426 不在
+		"6271": true, // 6271 在,99999 不在
 	}}
 
 	report, err := ValidateFinMindSymbolCoverage(context.Background(), fetcher, tree)
@@ -92,8 +95,8 @@ func TestValidateFinMindSymbolCoverage_PartialMissing(t *testing.T) {
 	if leo.CoverageRatio != 0.5 {
 		t.Errorf("leo_satellite CoverageRatio: got %v, want 0.5", leo.CoverageRatio)
 	}
-	if len(leo.MissingStocks) != 1 || leo.MissingStocks[0] != "3426.TW" {
-		t.Errorf("leo_satellite MissingStocks: got %v, want [3426.TW]", leo.MissingStocks)
+	if len(leo.MissingStocks) != 1 || leo.MissingStocks[0] != "99999.TW" {
+		t.Errorf("leo_satellite MissingStocks: got %v, want [99999.TW]", leo.MissingStocks)
 	}
 	if !report.MissingAnyIndustry() {
 		t.Error("MissingAnyIndustry should return true when at least one industry has missing stocks")

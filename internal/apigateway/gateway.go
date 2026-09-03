@@ -2,9 +2,13 @@ package apigateway
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // Gateway is the unified entry point for all data channels.
@@ -117,6 +121,25 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 				stale.Meta.LastError = callErr.Error()
 				return stale, nil
 			}
+		}
+		// 告警降噪（2026-09-03）：預期中的非故障條件不要標 error——否則
+		// ChannelHealthStatusError 每 tick 誤報（實證：tdcc 週頻快照非發布日、
+		// FinMind 日額度耗盡）。兩者皆非通道故障：
+		//   - ErrNoData（上游當下無新資料）→ RecordWaiting：status 維持 ok、
+		//     不更新 last_success、記 info log（週頻快照發布後自然恢復）。
+		//   - ErrQuotaExhausted（FinMind 日額度用完，00:00 TW 自動重置）→ warn
+		//     （與 adapter_finmind.go HealthCheck / ErrQuotaExhausted 文件語意一致）。
+		if errors.Is(callErr, marketdata.ErrNoData) {
+			_ = g.health.RecordWaiting(channelID)
+			logging.Info("gateway", "channel_waiting_no_data",
+				"channel", channelID, "err", callErr.Error())
+			return nil, callErr
+		}
+		if errors.Is(callErr, marketdata.ErrQuotaExhausted) {
+			_ = g.health.Record(channelID, "warn", callErr.Error())
+			logging.Info("gateway", "channel_quota_waiting",
+				"channel", channelID, "err", callErr.Error())
+			return nil, callErr
 		}
 		_ = g.health.Record(channelID, "error", callErr.Error())
 		return nil, callErr
