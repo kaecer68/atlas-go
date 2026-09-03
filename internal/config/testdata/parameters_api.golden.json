@@ -75,6 +75,11 @@
       "results": "(StructuralTrendConfig)"
     },
     {
+      "name": "GetCapitalflowPeriodWeightedQuality",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "GetCapitalflowResonanceCoefficientMax",
       "params": "",
       "results": "(float64)"
@@ -259,7 +264,8 @@
         "ResonanceCoefficientMax ParameterMetadata[float64]",
         "ResonanceCoefficientMin ParameterMetadata[float64]",
         "TrendBullishThreshold ParameterMetadata[float64]",
-        "TrendBearishThreshold ParameterMetadata[float64]"
+        "TrendBearishThreshold ParameterMetadata[float64]",
+        "PeriodWeightedQuality ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "CapitalflowParameters"
@@ -1721,6 +1727,10 @@
     }
   ],
   "vars": [
+    {
+      "name": "PeriodWeightedQualityMetadata",
+      "type": ""
+    },
     {
       "name": "ResonanceCoefficientMaxMetadata",
       "type": ""

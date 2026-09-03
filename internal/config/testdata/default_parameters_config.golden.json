@@ -168,6 +168,12 @@
     }
   },
   "capitalflow": {
+    "period_weighted_quality": {
+      "rationale": "Config gate for the period-weighted capital-flow quality score. Default false preserves the legacy equal-weight composite (k3 review B4: switching semantics directly would change the eventdriven baseline input — a hidden behavior change). quality_score_period_weighted is always emitted alongside for the 30-day observation window.",
+      "source": "experimental",
+      "todo": "Flip to true only after the 30-trading-day observation report (PR-3c) shows no regression and passes human review.",
+      "value": false
+    },
     "resonance_coefficient_max": {
       "rationale": "Resonance coefficient upper bound: 1.5 = 三勢力全對齊 (foreign + institutional + government all aligned). Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
       "source": "heuristic",

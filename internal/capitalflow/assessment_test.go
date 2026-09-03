@@ -246,7 +246,7 @@ func TestGenerateDailyReport_DominantActorAndDominantSignalSeparate(t *testing.T
 		{Force: ForceFutures, Role: ForceRoleLeadingIndicator, Deprecated: true, ZScore: 5.0, Trend: "bullish", DataAvailable: true},
 		{Force: ForceTSMADR, Role: ForceRoleSentiment, Deprecated: true, ZScore: 4.0, Trend: "bullish", DataAvailable: true},
 	}
-	rep := GenerateDailyReport(date, forces, ResonanceResult{Direction: "bullish"})
+	rep := GenerateDailyReport(date, forces, ResonanceResult{Direction: "bullish"}, nil, false)
 
 	// DominantActor must come from an official_actor; the futures/tsm_adr
 	// forces with the highest absolute Z must NOT win the actor slot.
@@ -289,7 +289,7 @@ func TestGenerateDailyReport_AssessmentCarriesLayeredSubAssessments(t *testing.T
 		{Force: ForceInstitutional, Role: ForceRoleSubject, ZScore: 1.0, Trend: "bullish", DataAvailable: true},
 		{Force: ForceDealer, Role: ForceRoleSubject, ZScore: 1.0, Trend: "bullish", DataAvailable: true},
 	}
-	rep := GenerateDailyReport(date, forces, ResonanceResult{Direction: "bullish"})
+	rep := GenerateDailyReport(date, forces, ResonanceResult{Direction: "bullish"}, nil, false)
 
 	if rep.Assessment.CalibrationStatus == "" {
 		t.Errorf("Assessment.CalibrationStatus empty; spec §9.5 requires calibrating/eligible/degraded")

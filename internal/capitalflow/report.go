@@ -12,8 +12,23 @@ import (
 // ---------------------------------------------------------------------------
 
 // GenerateDailyReport produces a full daily report from force scores.
-func GenerateDailyReport(date time.Time, forces []ForceScore, resonance ResonanceResult) DailyReport {
-	quality := computeQualityScore(forces)
+// GenerateDailyReport produces a full daily report from force scores.
+//
+// PR-3a (capital-flow model plan v1.1): period is the seven-period market
+// classification for the report's trading date (nil = unknown → legacy
+// semantics). periodWeighted mirrors the config gate
+// capitalflow.period_weighted_quality (default false): when true,
+// quality_score switches to the period-weighted composite; when false the
+// legacy equal-weight composite is kept bit-identical. Both values are
+// always emitted (quality_score vs quality_score_period_weighted) for the
+// 30-trading-day observation window (k3 review B4: observation-first).
+func GenerateDailyReport(date time.Time, forces []ForceScore, resonance ResonanceResult, period *domain.MarketPeriod, periodWeighted bool) DailyReport {
+	legacy := computeQualityScore(forces)
+	weighted := computeQualityScoreWithPeriod(forces, period)
+	quality := legacy
+	if periodWeighted {
+		quality = weighted
+	}
 	label := qualityLabel(quality)
 	assessment := ComputeCapitalFlowAssessment(forces)
 	if assessment.AsOfTradingDate == "" && !date.IsZero() {
@@ -22,22 +37,30 @@ func GenerateDailyReport(date time.Time, forces []ForceScore, resonance Resonanc
 	dominantActor, dominantSignal := dominantActorAndSignal(forces)
 
 	return DailyReport{
-		Date:           date,
-		Forces:         applyForceWeights(forces),
-		Resonance:      resonance,
-		QualityScore:   round(quality, 2),
-		QualityLabel:   label,
-		Summary:        buildSummary(resonance, quality, label, assessment),
-		Assessment:     assessment,
-		LegacyQuality:  true,
-		DominantActor:  dominantActor,
-		DominantSignal: dominantSignal,
+		Date:                       date,
+		Forces:                     applyForceWeights(forces),
+		Resonance:                  resonance,
+		QualityScore:               round(quality, 2),
+		QualityScorePeriodWeighted: round(weighted, 2),
+		QualityLabel:               label,
+		Summary:                    buildSummary(resonance, quality, label, assessment),
+		Assessment:                 assessment,
+		LegacyQuality:              !periodWeighted,
+		DominantActor:              dominantActor,
+		DominantSignal:             dominantSignal,
 	}
 }
 
 // GenerateSummaryReport produces a condensed summary.
-func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance ResonanceResult) SummaryReport {
-	quality := computeQualityScore(forces)
+// GenerateSummaryReport produces a condensed summary. See
+// GenerateDailyReport for the period / periodWeighted contract (PR-3a).
+func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance ResonanceResult, period *domain.MarketPeriod, periodWeighted bool) SummaryReport {
+	legacy := computeQualityScore(forces)
+	weighted := computeQualityScoreWithPeriod(forces, period)
+	quality := legacy
+	if periodWeighted {
+		quality = weighted
+	}
 	label := qualityLabel(quality)
 	assessment := ComputeCapitalFlowAssessment(forces)
 	if assessment.AsOfTradingDate == "" && !date.IsZero() {
@@ -55,17 +78,18 @@ func GenerateSummaryReport(date time.Time, forces []ForceScore, resonance Resona
 	// and the API/frontend render an empty dominant_force as "—".
 
 	return SummaryReport{
-		Date:           date,
-		QualityScore:   round(quality, 2),
-		QualityLabel:   label,
-		ResonanceDir:   resonance.Direction,
-		DominantForce:  dominant,
-		Forces:         applyForceWeights(forces),
-		Summary:        buildShortSummary(label, resonance, dominant, assessment),
-		Assessment:     assessment,
-		LegacyQuality:  true,
-		DominantActor:  dominantActor,
-		DominantSignal: dominantSignal,
+		Date:                       date,
+		QualityScore:               round(quality, 2),
+		QualityScorePeriodWeighted: round(weighted, 2),
+		QualityLabel:               label,
+		ResonanceDir:               resonance.Direction,
+		DominantForce:              dominant,
+		Forces:                     applyForceWeights(forces),
+		Summary:                    buildShortSummary(label, resonance, dominant, assessment),
+		Assessment:                 assessment,
+		LegacyQuality:              !periodWeighted,
+		DominantActor:              dominantActor,
+		DominantSignal:             dominantSignal,
 	}
 }
 

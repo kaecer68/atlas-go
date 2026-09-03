@@ -405,6 +405,7 @@ export interface CapitalflowParameters {
   resonance_coefficient_min: string;
   trend_bullish_threshold: string;
   trend_bearish_threshold: string;
+  period_weighted_quality: string;
 }
 
 export interface CardConfig {
@@ -775,6 +776,7 @@ export interface DailyReport {
   forces: ForceScore[];
   resonance: ResonanceResult;
   quality_score: number;
+  quality_score_period_weighted: number;
   quality_label: string;
   summary: string;
   assessment: CapitalFlowAssessment;
@@ -4212,6 +4214,7 @@ export interface SubscriptionEvent {
 export interface SummaryReport {
   date: string;
   quality_score: number;
+  quality_score_period_weighted: number;
   quality_label: string;
   resonance_dir: string;
   dominant_force: string;
