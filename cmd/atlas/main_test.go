@@ -1077,6 +1077,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"api narrative GET", http.MethodGet, "/api/narrative/bundle", true},
 		{"api macro GET", http.MethodGet, "/api/macro/snapshot/latest", true},
 		{"api alerts GET", http.MethodGet, "/api/alerts", true},
+		{"api config GET", http.MethodGet, "/api/config", true},
 		{"api synergy GET", http.MethodGet, "/api/synergy/darwinian/status", true},
 		{"api capital flow daily GET", http.MethodGet, "/api/capital-flow/daily", true},
 		{"api capital flow summary GET", http.MethodGet, "/api/capital-flow/summary", true},
@@ -1101,6 +1102,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"control PUT no auth", http.MethodPut, "/api/control/pause-agent", false},
 		{"control DELETE no auth", http.MethodDelete, "/api/control/pause-agent", false},
 		{"tasks PATCH no auth", http.MethodPatch, "/api/tasks/1", false},
+		{"config POST no auth", http.MethodPost, "/api/config", false},
 
 		// Non-public paths remain non-public for all methods.
 		{"admin_webx typo GET", http.MethodGet, "/admin_webx", false},
