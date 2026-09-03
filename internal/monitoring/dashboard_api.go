@@ -173,11 +173,16 @@ type DashboardAPI struct {
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
 	historicalStore            ledger.HistoricalStore
-	quoteStore                 ledger.QuoteStore
-	quoteStoreMu               sync.RWMutex
-	fugleAPIKey                string
-	fugleAPIKeyMu              sync.RWMutex
-	fugleClient                *marketdata.FugleClient
+	// periodDetectorState is the persistent stateful seven-period detector
+	// for the live macro-ingest path (PR-3b P2: debounce state carries
+	// across daily ingests). Created lazily; use statefulPeriodDetector().
+	periodDetector   *portfolio.PeriodDetector
+	periodDetectorMu sync.Mutex
+	quoteStore       ledger.QuoteStore
+	quoteStoreMu     sync.RWMutex
+	fugleAPIKey      string
+	fugleAPIKeyMu    sync.RWMutex
+	fugleClient      *marketdata.FugleClient
 
 	// RegisteredChannelIDs, when set, is fed to the data-channels endpoint
 	// so the admin page lists every registered channel rather than a
@@ -829,6 +834,18 @@ func (a *DashboardAPI) persistRegimeHistory(ctx context.Context) {
 	}
 }
 
+// periodDetector lazily creates the persistent stateful period detector
+// used by the live ingest path (PR-3b). A single instance is reused so the
+// P2 debounce state (candidate confirm + min-stay) accumulates across days.
+func (a *DashboardAPI) statefulPeriodDetector() *portfolio.PeriodDetector {
+	a.periodDetectorMu.Lock()
+	defer a.periodDetectorMu.Unlock()
+	if a.periodDetector == nil {
+		a.periodDetector = portfolio.NewStatefulPeriodDetectorWithDefaults()
+	}
+	return a.periodDetector
+}
+
 // persistPeriodHistory derives the current seven-period classification from
 // the macro snapshot via PeriodDetector and upserts it into period_history.
 func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata.MacroDataSnapshot, geoScore geopolitical.GeopoliticalRiskScore) {
@@ -876,15 +893,23 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 		govFlowDir := filepath.Join(a.workDir, "data", "state", "government_flow")
 		calc.EnrichBatch3(&ind, date, sectorIndexDir, govFlowDir)
 	}
-	period := portfolio.NewPeriodDetectorWithDefaults().DetectPeriod(ind)
+	// PR-3b: a persistent stateful detector carries the P2 debounced
+	// transition state across daily ingests (最小停留期 + 轉移遲滯) and
+	// the P1 graded black-swan rule; rows are stamped detector_version=v2.
+	period, err := a.statefulPeriodDetector().DetectAssessmentDebounced(ind)
+	if err != nil {
+		logging.Warn("dashboard_api", "period_detect_failed", logging.Err(err))
+		return
+	}
 	now := time.Now().UTC()
 	row := ledger.PeriodRow{
-		Date:        date,
-		Period:      string(period),
-		RecordedAt:  now,
-		CapturedAt:  now,
-		IsSynthetic: 0,
-		Source:      "macro_ingest",
+		Date:            date,
+		Period:          string(period.MarketPeriod),
+		RecordedAt:      now,
+		CapturedAt:      now,
+		IsSynthetic:     0,
+		Source:          "macro_ingest",
+		DetectorVersion: portfolio.PeriodDetectorVersionV2,
 	}
 	if err := a.historicalStore.UpsertPeriod(ctx, row); err != nil {
 		logging.Warn("dashboard_api", "persist_period_history_failed",

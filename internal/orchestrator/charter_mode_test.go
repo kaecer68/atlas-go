@@ -91,8 +91,9 @@ func TestNewSystem_CharterModeWiring(t *testing.T) {
 // allowed strategies (only all_weather survives black_swan).
 func TestExecuteWithContext_CharterModeOn(t *testing.T) {
 	snapshot := &marketdata.MacroDataSnapshot{
-		VIX:        marketdata.MacroDataPoint{Value: 45}, // ≥35 → black_swan
-		RecordedAt: time.Now().Unix(),                    // not stale
+		// PR-3b graded rule: single extreme (VIX ≥ 35×1.5 = 52.5) → black_swan.
+		VIX:        marketdata.MacroDataPoint{Value: 54},
+		RecordedAt: time.Now().Unix(), // not stale
 	}
 	advisor := methodology.NewAdvisor(nil)
 	execCtx := ExecutionContext{

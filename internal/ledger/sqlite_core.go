@@ -177,7 +177,8 @@ func InitSchema(db *sql.DB) error {
 		recorded_at TEXT,
 		captured_at TEXT NOT NULL,
 		is_synthetic INTEGER NOT NULL,
-		source TEXT NOT NULL DEFAULT 'macro_ingest'
+		source TEXT NOT NULL DEFAULT 'macro_ingest',
+		detector_version TEXT NOT NULL DEFAULT 'v1'
 	);
 
 
@@ -294,9 +295,10 @@ func InitSchema(db *sql.DB) error {
 	// already-migrated DB) is a no-op. Each migration's intent is captured
 	// here so future operators reading the file can trace the schema delta.
 	additiveMigrations := []func(*sql.DB) error{
-		addRegimeHistorySourceColumn, // PR #1247 (D01)
-		addOutcomesEvaluationColumns, // BL-06 (outcomes 評估欄位持久化)
-		addOutcomePeriodColumns,      // capital-flow Phase 2 PR-2a (market_period join)
+		addRegimeHistorySourceColumn,   // PR #1247 (D01)
+		addOutcomesEvaluationColumns,   // BL-06 (outcomes 評估欄位持久化)
+		addOutcomePeriodColumns,        // capital-flow Phase 2 PR-2a (market_period join)
+		addPeriodDetectorVersionColumn, // capital-flow Phase 3 PR-3b (detector semantics stamp)
 	}
 	for _, m := range additiveMigrations {
 		if err := m(db); err != nil {
@@ -407,6 +409,20 @@ func addOutcomePeriodColumns(db *sql.DB) error {
 		if err := addColumnIfMissing(db, table, col, ddl); err != nil {
 			return fmt.Errorf("migrate %s.%s: %w", table, col, err)
 		}
+	}
+	return nil
+}
+
+// addPeriodDetectorVersionColumn adds `detector_version TEXT NOT NULL
+// DEFAULT 'v1'` to period_history (capital-flow Phase 3 PR-3b). Existing
+// rows inherit 'v1' (pre-PR-3b detection semantics); rows written after
+// PR-3b carry 'v2' (P1 black-swan grading + P2 state machine). Phase 2's
+// period×strategy matrix splits on this column. Idempotent via
+// addColumnIfMissing.
+func addPeriodDetectorVersionColumn(db *sql.DB) error {
+	const table = "period_history"
+	if err := addColumnIfMissing(db, table, "detector_version", "TEXT NOT NULL DEFAULT 'v1'"); err != nil {
+		return fmt.Errorf("migrate %s.detector_version: %w", table, err)
 	}
 	return nil
 }

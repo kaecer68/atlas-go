@@ -176,6 +176,10 @@
       "value": ""
     },
     {
+      "name": "PeriodDetectorVersionV2",
+      "value": "\"v2\""
+    },
+    {
       "name": "SectorConsumer",
       "type": "Sector",
       "value": "\"consumer\""
@@ -1105,6 +1109,16 @@
       "results": "(*Sizer)"
     },
     {
+      "name": "NewStatefulPeriodDetector",
+      "params": "(cfg config.PeriodDetectionConfig)",
+      "results": "(*PeriodDetector)"
+    },
+    {
+      "name": "NewStatefulPeriodDetectorWithDefaults",
+      "params": "",
+      "results": "(*PeriodDetector)"
+    },
+    {
       "name": "NewStressIndexFromConfig",
       "params": "(cfg StressIndexConfig)",
       "results": "(*StressIndex)"
@@ -1249,6 +1263,18 @@
       "params": "(ind PeriodIndicators)",
       "receiver": "PeriodDetector",
       "results": "(PeriodAssessment, error)"
+    },
+    {
+      "name": "DetectAssessmentDebounced",
+      "params": "(ind PeriodIndicators)",
+      "receiver": "PeriodDetector",
+      "results": "(PeriodAssessment, error)"
+    },
+    {
+      "name": "DetectAssessmentWithState",
+      "params": "(state PeriodDetectorState, ind PeriodIndicators)",
+      "receiver": "PeriodDetector",
+      "results": "(PeriodAssessment, PeriodDetectorState, error)"
     },
     {
       "name": "DetectPeriod",
@@ -1975,6 +2001,7 @@
         "LastUpdatedAt time.Time",
         "DailyReturns []float64",
         "ConsecutiveAtMin int",
+        "ReturnSamplingVersion int",
         "LastOutcomeDay string",
         "LastDaySum float64",
         "LastDayCount int"
@@ -2325,10 +2352,23 @@
     },
     {
       "fields": [
-        "cfg config.PeriodDetectionConfig"
+        "cfg config.PeriodDetectionConfig",
+        "stateful bool",
+        "mu sync.Mutex",
+        "state PeriodDetectorState"
       ],
       "kind": "struct",
       "name": "PeriodDetector"
+    },
+    {
+      "fields": [
+        "Current domain.MarketPeriod",
+        "Candidate domain.MarketPeriod",
+        "CandidateDays int",
+        "StayDays int"
+      ],
+      "kind": "struct",
+      "name": "PeriodDetectorState"
     },
     {
       "fields": [
@@ -2635,6 +2675,7 @@
         "MiddleTierBoostMultiplier float64",
         "MiddleTierCutMultiplier float64",
         "SharpeMinSampleSize int",
+        "MinUniqueReturnsForSharpe int",
         "StdDevMeanRatioThreshold float64",
         "ConvictionClampMin int",
         "ConvictionClampMax int",

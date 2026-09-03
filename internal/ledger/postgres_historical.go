@@ -157,16 +157,17 @@ func (s *PostgresHistoricalStore) UpsertPeriod(ctx context.Context, row PeriodRo
 		return fmt.Errorf("period date is empty")
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source)
-		VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'macro_ingest'))
+		INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source, detector_version)
+		VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'macro_ingest'), COALESCE($7, 'v1'))
 		ON CONFLICT(date) DO UPDATE SET
 			period = excluded.period,
 			recorded_at = excluded.recorded_at,
 			captured_at = excluded.captured_at,
 			is_synthetic = excluded.is_synthetic,
-			source = excluded.source
+			source = excluded.source,
+			detector_version = excluded.detector_version
 	`, row.Date, row.Period, nullTime(row.RecordedAt), nullTime(row.CapturedAt),
-		row.IsSynthetic, emptyAsNil(row.Source))
+		row.IsSynthetic, emptyAsNil(row.Source), emptyAsNil(row.DetectorVersion))
 	if err != nil {
 		return fmt.Errorf("upsert period %s: %w", row.Date, err)
 	}
@@ -189,9 +190,9 @@ func (s *PostgresHistoricalStore) loadPeriodByDate(ctx context.Context, date str
 	var r PeriodRow
 	var recordedAtStr, capturedAtStr *string
 	err := s.pool.QueryRow(ctx,
-		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source, COALESCE(detector_version, 'v1')
 		FROM period_history WHERE date = $1`+filter, date).Scan(
-		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source,
+		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source, &r.DetectorVersion,
 	)
 	if err == pgx.ErrNoRows {
 		return r, false, nil
@@ -224,7 +225,7 @@ func (s *PostgresHistoricalStore) loadPeriodHistory(ctx context.Context, limit i
 		filter = " WHERE is_synthetic = 0"
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source, COALESCE(detector_version, 'v1')
 		FROM period_history`+filter+` ORDER BY date DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load period history: %w", err)
@@ -234,7 +235,7 @@ func (s *PostgresHistoricalStore) loadPeriodHistory(ctx context.Context, limit i
 	for rows.Next() {
 		var r PeriodRow
 		var recordedAtStr, capturedAtStr *string
-		if err := rows.Scan(&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source); err != nil {
+		if err := rows.Scan(&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source, &r.DetectorVersion); err != nil {
 			return nil, fmt.Errorf("period row scan: %w", err)
 		}
 		r.RecordedAt = parseTimeColumn(ptrToNull(recordedAtStr))

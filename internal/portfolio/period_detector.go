@@ -11,6 +11,7 @@ package portfolio
 
 import (
 	"reflect"
+	"sync"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -112,6 +113,30 @@ type PeriodAssessment struct {
 // use NewPeriodDetector(config) or NewPeriodDetectorWithDefaults().
 type PeriodDetector struct {
 	cfg config.PeriodDetectionConfig
+
+	// P2 state machine (PR-3b): only used by stateful detectors
+	// (NewStatefulPeriodDetector*). mu guards state across concurrent calls.
+	stateful bool
+	mu       sync.Mutex
+	state    PeriodDetectorState
+}
+
+// DetectAssessmentDebounced classifies ind through the P2 state machine
+// using the detector's internal state (stateful detectors only; on a
+// stateless detector it is equivalent to DetectAssessment). Thread-safe.
+func (d *PeriodDetector) DetectAssessmentDebounced(ind PeriodIndicators) (PeriodAssessment, error) {
+	if !d.stateful {
+		return d.DetectAssessment(ind)
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	raw, err := d.DetectAssessment(ind)
+	if err != nil {
+		return raw, err
+	}
+	ass, newState := d.applyPeriodState(d.state, raw)
+	d.state = newState
+	return ass, nil
 }
 
 // package-level reference: keep isXxx methods alive for backward compatibility
@@ -136,6 +161,109 @@ func NewPeriodDetector(cfg config.PeriodDetectionConfig) *PeriodDetector {
 // NewPeriodDetectorWithDefaults creates a detector with constitution defaults.
 func NewPeriodDetectorWithDefaults() *PeriodDetector {
 	return &PeriodDetector{cfg: config.DefaultPeriodDetectionConfig()}
+}
+
+// PeriodDetectorState carries the debounced transition state of the
+// seven-period state machine (PR-3b / audit P2 最小停留期 + 轉移遲滯).
+// It is threaded explicitly through DetectAssessmentWithState (pure) or
+// held internally by a stateful detector created with
+// NewStatefulPeriodDetectorWithDefaults.
+//
+// Semantics: a candidate period must be observed on PeriodConfirmDays
+// consecutive days AND the current period must have been held for at least
+// PeriodMinStayDays days before a transition happens. While holding, the
+// raw classification is still computed (TriggeredIndicators reflect today)
+// but MarketPeriod reports the confirmed current period.
+type PeriodDetectorState struct {
+	Current       domain.MarketPeriod // confirmed period ("" before first observation)
+	Candidate     domain.MarketPeriod // pending candidate period
+	CandidateDays int                 // consecutive days the candidate was observed
+	StayDays      int                 // consecutive days the current period has been held
+}
+
+// PeriodDetectorVersionV2 stamps period_history rows written after the
+// PR-3b semantics change (P1 black-swan grading + P2 state machine).
+// Phase 2's period×strategy matrix splits on this column; rows written
+// before PR-3b keep the DB default "v1".
+const PeriodDetectorVersionV2 = "v2"
+
+// NewStatefulPeriodDetector creates a detector that keeps the P2 debounced
+// state across calls (thread-safe). Use only where a single instance is
+// reused across consecutive trading days (e.g. the live macro-ingest path).
+func NewStatefulPeriodDetector(cfg config.PeriodDetectionConfig) *PeriodDetector {
+	return &PeriodDetector{cfg: cfg, stateful: true}
+}
+
+// NewStatefulPeriodDetectorWithDefaults is NewStatefulPeriodDetector with
+// constitution defaults.
+func NewStatefulPeriodDetectorWithDefaults() *PeriodDetector {
+	return &PeriodDetector{cfg: config.DefaultPeriodDetectionConfig(), stateful: true}
+}
+
+// DetectAssessmentWithState classifies ind and threads the P2 debounced
+// transition state explicitly. The raw (stateless) classification is fed
+// through the state machine: transitions need PeriodConfirmDays consecutive
+// candidate days after PeriodMinStayDays of holding the current period.
+func (d *PeriodDetector) DetectAssessmentWithState(state PeriodDetectorState, ind PeriodIndicators) (PeriodAssessment, PeriodDetectorState, error) {
+	raw, err := d.DetectAssessment(ind)
+	if err != nil {
+		return raw, state, err
+	}
+	ass, newState := d.applyPeriodState(state, raw)
+	return ass, newState, nil
+}
+
+// applyPeriodState runs the debounce logic (pure; shared by the stateful
+// detector). raw.MarketPeriod is replaced by the confirmed period when the
+// state machine holds or has not yet confirmed a transition.
+func (d *PeriodDetector) applyPeriodState(state PeriodDetectorState, raw PeriodAssessment) (PeriodAssessment, PeriodDetectorState) {
+	minStay := d.cfg.PeriodMinStayDays
+	if minStay < 0 {
+		minStay = 0
+	}
+	confirm := d.cfg.PeriodConfirmDays
+	if confirm <= 0 {
+		confirm = 2
+	}
+
+	if state.Current == "" {
+		// First observation: adopt the raw classification immediately.
+		state.Current = raw.MarketPeriod
+		state.Candidate = ""
+		state.CandidateDays = 0
+		state.StayDays = 1
+		return raw, state
+	}
+
+	// Every observed day counts toward the min-stay of the held period.
+	state.StayDays++
+
+	if raw.MarketPeriod == state.Current {
+		state.Candidate = ""
+		state.CandidateDays = 0
+		return raw, state
+	}
+
+	if raw.MarketPeriod == state.Candidate {
+		state.CandidateDays++
+	} else {
+		state.Candidate = raw.MarketPeriod
+		state.CandidateDays = 1
+	}
+
+	if state.CandidateDays >= confirm && state.StayDays >= minStay {
+		// Confirmed transition.
+		state.Current = raw.MarketPeriod
+		state.Candidate = ""
+		state.CandidateDays = 0
+		state.StayDays = 0
+		return raw, state
+	}
+
+	// Hold the current period; today's indicators stay visible for
+	// transparency but the reported MarketPeriod is the confirmed one.
+	raw.MarketPeriod = state.Current
+	return raw, state
 }
 
 // DetectPeriod classifies the current market into one of seven periods.
@@ -184,7 +312,45 @@ func (d *PeriodDetector) isBlackSwan(ind PeriodIndicators) bool {
 		triggers++
 	}
 
-	return triggers >= 1
+	// P1 grading (PR-3b / audit P1): a plain OR (triggers >= 1) mis-fires on
+	// single weak readings (e.g. VIX=36 in a normal correction year). Black
+	// swan now requires ≥ BlackSwanMinConditions conditions, OR one extreme
+	// condition alone (VIX ≥ threshold × multiplier, or foreign net-sell ≥
+	// threshold × multiplier) — a rare crash, not a routine correction.
+	return d.blackSwanFires(triggers, ind)
+}
+
+// blackSwanFires implements the P1 graded rule shared by isBlackSwan and
+// assessBlackSwan so the two stay boolean-identical.
+func (d *PeriodDetector) blackSwanFires(triggers int, ind PeriodIndicators) bool {
+	minConditions := d.cfg.BlackSwanMinConditions
+	if minConditions <= 0 {
+		minConditions = 2
+	}
+	if triggers >= minConditions {
+		return true
+	}
+	// Single extreme condition alone fires black swan.
+	vixMult := d.cfg.BlackSwanExtremeVIXMultiplier
+	if vixMult <= 0 {
+		vixMult = 1.5
+	}
+	if ind.VIX >= d.cfg.BlackSwanVIX*vixMult {
+		return true
+	}
+	sellMult := d.cfg.BlackSwanExtremeForeignSellMultiplier
+	if sellMult <= 0 {
+		sellMult = 2.0
+	}
+	if ind.ForeignSingleDayNet <= -(d.cfg.BlackSwanForeignSellBillion * sellMult * 1_000_000_00) {
+		return true
+	}
+	// National fund activation is itself an extreme, officially-declared
+	// crisis signal (A1/R8): it alone fires black swan.
+	if ind.NationalFundActive {
+		return true
+	}
+	return false
 }
 
 // assessBlackSwan evaluates each black-swan condition independently and
@@ -268,7 +434,10 @@ func (d *PeriodDetector) assessBlackSwan(ind PeriodIndicators) (hit bool, condHi
 		condHit++
 	}
 
-	return condHit >= 1, condHit, condTotal, indicators
+	// P1 grading (PR-3b): identical rule to isBlackSwan — ≥ min conditions
+	// or a single extreme condition (kept boolean-identical by sharing
+	// blackSwanFires).
+	return d.blackSwanFires(condHit, ind), condHit, condTotal, indicators
 }
 
 // ─── Turnaround Down Detection ───

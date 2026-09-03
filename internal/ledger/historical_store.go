@@ -110,6 +110,11 @@ type PeriodRow struct {
 	// IsSynthetic is 1 when backfilled, 0 when written by live ingest.
 	IsSynthetic uint8  `json:"is_synthetic"`
 	Source      string `json:"source"`
+	// DetectorVersion stamps the period-detection semantics used to
+	// produce this row (PR-3b): "v1" for pre-PR-3b rows (DB default),
+	// "v2" after the P1 black-swan grading + P2 state-machine change.
+	// Phase 2's period×strategy matrix splits on this column.
+	DetectorVersion string `json:"detector_version,omitempty"`
 }
 
 // ------------------------------------------------------------------
@@ -300,16 +305,17 @@ func (s *SQLiteHistoricalStore) UpsertPeriod(ctx context.Context, row PeriodRow)
 		return fmt.Errorf("period date is empty")
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source)
-		VALUES (?, ?, ?, ?, ?, COALESCE(?, 'macro_ingest'))
+		INSERT INTO period_history (date, period, recorded_at, captured_at, is_synthetic, source, detector_version)
+		VALUES (?, ?, ?, ?, ?, COALESCE(?, 'macro_ingest'), COALESCE(?, 'v1'))
 		ON CONFLICT(date) DO UPDATE SET
 			period = excluded.period,
 			recorded_at = excluded.recorded_at,
 			captured_at = excluded.captured_at,
 			is_synthetic = excluded.is_synthetic,
-			source = excluded.source
+			source = excluded.source,
+			detector_version = excluded.detector_version
 	`, row.Date, row.Period, nullTime(row.RecordedAt), nullTime(row.CapturedAt),
-		row.IsSynthetic, emptyAsNil(row.Source))
+		row.IsSynthetic, emptyAsNil(row.Source), emptyAsNil(row.DetectorVersion))
 	if err != nil {
 		return fmt.Errorf("upsert period %s: %w", row.Date, err)
 	}
@@ -336,9 +342,9 @@ func (s *SQLiteHistoricalStore) loadPeriodByDate(ctx context.Context, date strin
 	var r PeriodRow
 	var recordedAtStr, capturedAtStr sql.NullString
 	err := s.db.QueryRowContext(ctx,
-		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source, COALESCE(detector_version, 'v1')
 		FROM period_history WHERE date = ?`+filter, date).Scan(
-		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source,
+		&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source, &r.DetectorVersion,
 	)
 	if err == sql.ErrNoRows {
 		return r, false, nil
@@ -374,7 +380,7 @@ func (s *SQLiteHistoricalStore) loadPeriodHistory(ctx context.Context, limit int
 		filter = " WHERE is_synthetic = 0"
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT date, period, recorded_at, captured_at, is_synthetic, source
+		`SELECT date, period, recorded_at, captured_at, is_synthetic, source, COALESCE(detector_version, 'v1')
 		FROM period_history`+filter+` ORDER BY date DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load period history: %w", err)
@@ -384,7 +390,7 @@ func (s *SQLiteHistoricalStore) loadPeriodHistory(ctx context.Context, limit int
 	for rows.Next() {
 		var r PeriodRow
 		var recordedAtStr, capturedAtStr sql.NullString
-		if err := rows.Scan(&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source); err != nil {
+		if err := rows.Scan(&r.Date, &r.Period, &recordedAtStr, &capturedAtStr, &r.IsSynthetic, &r.Source, &r.DetectorVersion); err != nil {
 			return nil, fmt.Errorf("period row scan: %w", err)
 		}
 		r.RecordedAt = parseTimeColumn(recordedAtStr)
