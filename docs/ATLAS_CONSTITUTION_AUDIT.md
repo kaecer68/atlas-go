@@ -77,7 +77,7 @@
 | D2 | 時期→策略自動選擇 | v1.1：`MethodologyAdvisor` 消費 `configs/methodology_rules.yaml`，YAML consumer 落地 | ✅ 完成 (#1372) |
 | D3 | 推薦引擎按時期過濾 | v1.1：`buildPremiumStrategy()` 與 `TierRegistered` 改走 `GetApplicableStrategies(regime)` | ✅ 完成 (#1372) |
 | D4 | Narrative 19/24 themes | v1.1：全部 24 themes 進入 `NarrativeEvidenceSource`，權重隨時期調整 | ✅ 完成 (#1372) |
-| D5 | RegimeAllocator 六策略×七時期 | v1.1：擴展為 all_weather/value/growth/momentum/event_arbitrage/cash_only 六策略 | ✅ 完成 (#1372) |
+| D5 | RegimeAllocator 六策略×七時期 | v1.1：擴展為 all_weather/value/growth/momentum/event_arbitrage/cash_only 六策略 | ⚠️ **code 完成 (#1372) 但未接 production caller**：`RegimeAllocator` 無外部呼叫（ACI 2026-09-04 證實）；接線不在 capital-flow Phase 0，另立風險評估 |
 
 ### E. 前端與配置
 
@@ -104,7 +104,7 @@
 | 5 | E1+E2: YAML loader + 參數可配置 | 憲章配置可被程式讀取 | ✅ (#1372) |
 | 6 | D1: detector 時期敏感度 | 5 detector 差異化權重 | ✅ (#1372) |
 | 7 | C1+C2: 七大勢力數據源 | 壽險/公司派/散戶上線 | ✅ (#1372 / #1421)；CAPTCHA 為下游依賴 |
-| 8 | D5: RegimeAllocator 六策略 | 六策略×七時期矩陣 | ✅ (#1372) |
+| 8 | D5: RegimeAllocator 六策略 | 六策略×七時期矩陣 | ⚠️ code 完成 (#1372)，**未接 production caller**（ACI 2026-09-04，見 docs/specs/capital-flow-model-audit.md §2.2） |
 
 ### 第二批：P1 — 信號不完整（v1.1 全部完成）
 
@@ -174,7 +174,7 @@
 | 10 | D1: detector 時期敏感度 | P0 | ✅ 完成 | #1372 |
 | 11 | D2: YAML consumer | P0 | ✅ 完成 | #1372 |
 | 12 | D3: 推薦引擎按時期過濾 | P0 | ✅ 完成 | #1372 |
-| 13 | D5: RegimeAllocator 六策略×七時期 | P0 | ✅ 完成 | #1372 |
+| 13 | D5: RegimeAllocator 六策略×七時期 | P0 | ⚠️ code 完成、**未接線**（無 production caller，ACI 2026-09-04） | #1372（未接 production caller；另立風險評估） |
 | 14 | A4: macroflow RiskLevel 自動推導 | P1 | ✅ 完成 | #1372 |
 | 15 | B3: MacroDataSnapshot 補漏指標 | P1 | ✅ 完成 | #1372 |
 | 16 | C4: capitalflow 4-layer Assessment 消費鏈 | P1 | ✅ 完成 | #1378 |
@@ -189,13 +189,13 @@
 
 | 等級 | 總計 | ✅ 完成 | ⚠️ 部分 | ⬜ 未完成 |
 |------|------|--------|--------|----------|
-| P0 | 13 | 13 | 0 | 0 |
+| P0 | 13 | 12 | 1 | 0 |
 | P1 | 6 | 6 | 0 | 0 |
 | P2 | 1 | 1 | 0 | 0 |
 | 已對齊 | 2 | 2 | 0 | 0 |
-| **合計** | **22** | **22** | **0** | **0** |
+| **合計** | **22** | **21** | **1** | **0** |
 
-> v1.0 統計：19 ✅ / 1 ⚠️ partial / 2 ⬜ → v1.1：22 ✅ / 0 ⚠️ / 0 ⬜。**審計原始 20 項 + 已對齊 2 項全部完成**。
+> v1.0 統計：19 ✅ / 1 ⚠️ partial / 2 ⬜ → v1.1：21 ✅ / 1 ⚠️ / 0 ⬜。唯一 partial = D5（RegimeAllocator code 完成但未接 production caller，2026-09-04 ACI 複核），其餘**審計原始 20 項 + 已對齊 2 項全部完成**。
 > 殘餘風險已轉移至 §附錄 E（v1.1 新發現差距）與 §附錄 F（F/M/X 治理追蹤表）。
 
 > **v1.1 最後更新**：2026-08-07，commit `0f8667a6`。

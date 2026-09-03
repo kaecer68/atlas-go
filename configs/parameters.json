@@ -8064,6 +8064,16 @@
       "value": 0.5,
       "rationale": "Resonance coefficient lower bound: 0.5 = foreign vs government 對立. Bound on ComputeResonance in internal/capitalflow/resonance.go:13. Tied to PR #1007 invariant test.",
       "source": "heuristic"
+    },
+    "trend_bullish_threshold": {
+      "value": 0.5,
+      "rationale": "Z-score cutoff for bullish force trend (trendFor): z > threshold → bullish. Legacy hardcoded 0.5 kept as default (audit M8); mirrors the parameterized-threshold convention of PeriodDetectionConfig.",
+      "source": "heuristic"
+    },
+    "trend_bearish_threshold": {
+      "value": -0.5,
+      "rationale": "Z-score cutoff for bearish force trend (trendFor): z < threshold → bearish. Legacy hardcoded -0.5 kept as default (audit M8); mirrors the parameterized-threshold convention of PeriodDetectionConfig.",
+      "source": "heuristic"
     }
   },
   "stockpicker": {

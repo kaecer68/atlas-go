@@ -403,6 +403,8 @@ export interface CapitalSnapshot {
 export interface CapitalflowParameters {
   resonance_coefficient_max: string;
   resonance_coefficient_min: string;
+  trend_bullish_threshold: string;
+  trend_bearish_threshold: string;
 }
 
 export interface CardConfig {

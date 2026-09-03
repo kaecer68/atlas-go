@@ -1950,6 +1950,8 @@
   "transfer_type",
   "transitions",
   "trend",
+  "trend_bearish_threshold",
+  "trend_bullish_threshold",
   "trend_confirmation_penalty",
   "trend_down_multiplier",
   "trend_up_multiplier",

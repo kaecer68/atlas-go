@@ -78,6 +78,19 @@ func NewSectorRotatorWithConfig(cfg config.SectorRotationConfig) *SectorRotator 
 	}
 }
 
+// GeneratePlan computes the sector rotation plan from the macro risk
+// assessment and current allocations.
+//
+// capitalFlowAssessment is stored on the plan for downstream consumers
+// (ApplySectorRotation → capitalFlowActionFromPlan in
+// internal/orchestrator/strategy_evolver.go) but is NOT consumed by the
+// allocation math in this function.
+// TODO(capital-flow Phase 3): not consumed here — the E07 branch of
+// capitalFlowActionFromPlan is short-circuited by M1 (CalibrationStatus
+// is hardcoded "calibrating", so EligibleForAutomation() is always
+// false). Wiring the assessment into decisions is planned (see
+// .omo/plans/2026-09-04-capital-flow-model-plan.md B1 / Phase 3);
+// until then this parameter is carried for observation only.
 func (r *SectorRotator) GeneratePlan(
 	macroAssessment *narrative.MacroRiskAssessment,
 	currentAllocations map[string]float64,
