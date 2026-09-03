@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -80,8 +81,12 @@ func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit i
 	if sessionID == "" {
 		// Full historical view: load outcomes from ALL sessions for proper
 		// OOS validation (IS/OOS split needs ≥10 train / ≥5 test per agent).
-		// A single session yields only 1-10 outcomes per agent.
-		outcomes, err = store.LoadOutcomesFromSessions()
+		// A single session yields only 1-10 outcomes per agent. #1780 Phase 1:
+		// prefer the 8-field slim projection (LoadScorecardOutcomes) so the
+		// full-metadata ~1.9GB unmarshal never happens on this hot path;
+		// stores without the optional loader fall back to the full read with
+		// a warn + counter (B1).
+		outcomes, err = loadScorecardOutcomes(store)
 		if err != nil {
 			return nil, fmt.Errorf("load outcomes from sessions: %w", err)
 		}
@@ -150,6 +155,38 @@ func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit i
 		data.RecordedAt = summary.RecordedAt
 	}
 	return data, nil
+}
+
+// scorecardSlimServiceFallbackTotal counts observatory slim-projection
+// fallbacks at the PipelineService layer (#1780 Phase 1, B1): when the
+// configured outcome store lacks the optional LoadScorecardOutcomes method,
+// the sessionID=="" observatory view silently falling back to
+// LoadOutcomesFromSessions would re-enable the full-metadata ~1.9GB load the
+// slim projection eliminates, with no signal. A non-zero delta since deploy
+// means the slim path is NOT active and the OOM mitigation is not engaged.
+var scorecardSlimServiceFallbackTotal atomic.Int64
+
+// ScorecardSlimServiceFallbackTotal returns the total service-layer
+// slim-projection fallbacks. Exposed for monitoring/alerting consumption.
+func ScorecardSlimServiceFallbackTotal() int64 {
+	return scorecardSlimServiceFallbackTotal.Load()
+}
+
+// loadScorecardOutcomes loads the observatory slim projection when the store
+// implements the optional 8-field loader; otherwise it warns, increments the
+// fallback counter, and uses the pre-#1780 full metadata read.
+func loadScorecardOutcomes(store ledger.OutcomeStore) ([]domain.RecommendationOutcome, error) {
+	if sl, ok := store.(interface {
+		LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)
+	}); ok {
+		return sl.LoadScorecardOutcomes()
+	}
+	scorecardSlimServiceFallbackTotal.Add(1)
+	logging.Warn("pipeline_service", "scorecard_slim_fallback",
+		"layer", "service",
+		"store_type", fmt.Sprintf("%T", store),
+		"reason", "store does not implement LoadScorecardOutcomes; full metadata read")
+	return store.LoadOutcomesFromSessions()
 }
 
 type AgentObservatoryData struct {

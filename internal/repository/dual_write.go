@@ -46,6 +46,21 @@ func DualWriteFallbackTotal() int64 {
 	return fallbackCounter.Load()
 }
 
+// scorecardSlimRepoFallbackTotal counts observatory slim-projection fallbacks
+// at the DualWriteRepository layer (#1780 Phase 1, B1): a JSONL outcome store
+// that lacks the optional LoadScorecardOutcomes method makes
+// QueryScorecardOutcomes fall back to the full QueryAllOutcomes metadata read
+// — the exact ~1.9GB OOM pattern #1780 eliminates. A non-zero delta since
+// deploy means the slim path is NOT active. Mirrors the DualWriteFallbackTotal
+// observability pattern.
+var scorecardSlimRepoFallbackTotal atomic.Int64
+
+// ScorecardSlimRepoFallbackTotal returns the total DualWriteRepository
+// slim-projection fallbacks. Exposed for monitoring/alerting consumption.
+func ScorecardSlimRepoFallbackTotal() int64 {
+	return scorecardSlimRepoFallbackTotal.Load()
+}
+
 // B6 (session summary dual-write consistency): session-summary write and read
 // error counters. These replace the silent `_ =` JSONL error swallowing so a
 // one-sided write/read failure is observable via monitoring instead of
@@ -150,6 +165,14 @@ type OutcomeStore interface {
 
 	RecordHumanIntervention(intervention domain.HumanIntervention) error
 	LoadHumanInterventions() ([]domain.HumanIntervention, error)
+}
+
+// scorecardOutcomeStore mirrors ledger.ScorecardOutcomeStore for the
+// repository-side OutcomeStore contract. Optional narrow interface: stores
+// that implement LoadScorecardOutcomes get the slim projection, everything
+// else falls back to the full read (B1).
+type scorecardOutcomeStore interface {
+	LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)
 }
 
 // SessionStore mirrors ledger.SessionStore for interface compatibility.
@@ -444,6 +467,28 @@ func (r *DualWriteRepository) QueryTopSymbols(ctx context.Context, limit int, st
 
 func (r *DualWriteRepository) QueryAllOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
 	return r.jsonl.outcomeStore.LoadOutcomesFromSessions()
+}
+
+// QueryScorecardOutcomes reads the observatory scorecard slim projection (8
+// scalar fields from JSONB, #1780 Phase 1) when the JSONL outcome store
+// implements the optional scorecardOutcomeStore interface; otherwise it falls
+// back to the full QueryAllOutcomes metadata read with a warn log and counter
+// (B1). The nil outcome-store guard keeps the JSON-only cmd paths (judge /
+// macro-ingest construct DualWriteRepository with nil stores) failing loudly
+// instead of panicking on a nil dereference inside QueryAllOutcomes.
+func (r *DualWriteRepository) QueryScorecardOutcomes(ctx context.Context) ([]domain.RecommendationOutcome, error) {
+	if r.jsonl.outcomeStore == nil {
+		return nil, fmt.Errorf("query scorecard outcomes: outcome store unavailable")
+	}
+	if sl, ok := r.jsonl.outcomeStore.(scorecardOutcomeStore); ok {
+		return sl.LoadScorecardOutcomes()
+	}
+	scorecardSlimRepoFallbackTotal.Add(1)
+	logging.Warn("repository", "scorecard_slim_fallback",
+		"layer", "dual_write_repository",
+		"store_type", fmt.Sprintf("%T", r.jsonl.outcomeStore),
+		"reason", "outcome store does not implement LoadScorecardOutcomes; full metadata read")
+	return r.QueryAllOutcomes(ctx)
 }
 
 func (r *DualWriteRepository) QueryAllSessionScorecards(ctx context.Context) ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
