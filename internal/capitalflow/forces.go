@@ -3,6 +3,7 @@ package capitalflow
 import (
 	"math"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -401,11 +402,29 @@ func zScoreFromSamples(samples []RollingSample, raw float64) float64 {
 	return w.zScore(raw)
 }
 
+// trendFor labels a Z-score's direction using the configured
+// capitalflow trend thresholds (audit M8): bullish when z strictly
+// exceeds the bullish cutoff, bearish when z strictly undercuts the
+// bearish cutoff, neutral otherwise. The cutoffs come from
+// config.GetCapitalflowTrendBullishThreshold /
+// GetCapitalflowTrendBearishThreshold — defaults +0.5 / -0.5 reproduce
+// the pre-parameterization hardcoded behavior exactly (same call path
+// pattern as ComputeResonance's coefficient bounds).
 func trendFor(z float64) string {
+	return classifyTrend(z,
+		config.GetCapitalflowTrendBullishThreshold(),
+		config.GetCapitalflowTrendBearishThreshold())
+}
+
+// classifyTrend is the pure threshold comparator behind trendFor. It
+// exists so tests (and future callers that already hold thresholds)
+// can exercise the mapping without round-tripping through the config
+// singleton.
+func classifyTrend(z, bullishThreshold, bearishThreshold float64) string {
 	switch {
-	case z > 0.5:
+	case z > bullishThreshold:
 		return "bullish"
-	case z < -0.5:
+	case z < bearishThreshold:
 		return "bearish"
 	default:
 		return "neutral"

@@ -213,6 +213,8 @@ func defaultCapitalflowParameters() CapitalflowParameters {
 	return CapitalflowParameters{
 		ResonanceCoefficientMax: ResonanceCoefficientMaxMetadata,
 		ResonanceCoefficientMin: ResonanceCoefficientMinMetadata,
+		TrendBullishThreshold:   TrendBullishThresholdMetadata,
+		TrendBearishThreshold:   TrendBearishThresholdMetadata,
 	}
 }
 
@@ -227,5 +229,11 @@ func mergeCapitalflowDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Capitalflow.ResonanceCoefficientMin.Rationale == "" {
 		cfg.Capitalflow.ResonanceCoefficientMin = def.ResonanceCoefficientMin
+	}
+	if cfg.Capitalflow.TrendBullishThreshold.Rationale == "" {
+		cfg.Capitalflow.TrendBullishThreshold = def.TrendBullishThreshold
+	}
+	if cfg.Capitalflow.TrendBearishThreshold.Rationale == "" {
+		cfg.Capitalflow.TrendBearishThreshold = def.TrendBearishThreshold
 	}
 }

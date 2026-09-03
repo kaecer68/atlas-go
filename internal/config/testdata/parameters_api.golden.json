@@ -85,6 +85,16 @@
       "results": "(float64)"
     },
     {
+      "name": "GetCapitalflowTrendBearishThreshold",
+      "params": "",
+      "results": "(float64)"
+    },
+    {
+      "name": "GetCapitalflowTrendBullishThreshold",
+      "params": "",
+      "results": "(float64)"
+    },
+    {
       "name": "GetL2_4Schedule",
       "params": "",
       "results": "(L2_4ScheduleParameters)"
@@ -247,7 +257,9 @@
     {
       "fields": [
         "ResonanceCoefficientMax ParameterMetadata[float64]",
-        "ResonanceCoefficientMin ParameterMetadata[float64]"
+        "ResonanceCoefficientMin ParameterMetadata[float64]",
+        "TrendBullishThreshold ParameterMetadata[float64]",
+        "TrendBearishThreshold ParameterMetadata[float64]"
       ],
       "kind": "struct",
       "name": "CapitalflowParameters"
@@ -1715,6 +1727,14 @@
     },
     {
       "name": "ResonanceCoefficientMinMetadata",
+      "type": ""
+    },
+    {
+      "name": "TrendBearishThresholdMetadata",
+      "type": ""
+    },
+    {
+      "name": "TrendBullishThresholdMetadata",
       "type": ""
     },
     {

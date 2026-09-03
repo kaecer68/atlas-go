@@ -179,6 +179,18 @@
       "source": "heuristic",
       "todo": "Promote to SourceEmpirical after backtest validation across L2.4 observation window.",
       "value": 0.5
+    },
+    "trend_bearish_threshold": {
+      "rationale": "Z-score cutoff for bearish force trend (trendFor): z \u003c threshold → bearish. Legacy hardcoded -0.5 kept as default (audit M8); mirrors the parameterized-threshold convention of PeriodDetectionConfig.",
+      "source": "heuristic",
+      "todo": "Promote to SourceEmpirical after capital-flow hypothesis validation (H-CF-01/02/05) observes trend-label quality.",
+      "value": -0.5
+    },
+    "trend_bullish_threshold": {
+      "rationale": "Z-score cutoff for bullish force trend (trendFor): z \u003e threshold → bullish. Legacy hardcoded 0.5 kept as default (audit M8); mirrors the parameterized-threshold convention of PeriodDetectionConfig.",
+      "source": "heuristic",
+      "todo": "Promote to SourceEmpirical after capital-flow hypothesis validation (H-CF-01/02/05) observes trend-label quality.",
+      "value": 0.5
     }
   },
   "darwinian": {

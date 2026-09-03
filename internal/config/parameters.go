@@ -120,6 +120,56 @@ func GetCapitalflowResonanceCoefficientMin() float64 {
 	return ResonanceCoefficientMinMetadata.Value
 }
 
+// TrendBullishThresholdMetadata is the Z-score cutoff above which a
+// capital force's trend is labeled "bullish" (trendFor in
+// internal/capitalflow/forces.go). Audit M8 (2026-09-04): the ±0.5
+// threshold was hardcoded while the seven-period detector's thresholds
+// were already parameterized — this makes capital-flow thresholds
+// configurable too, with the legacy value as the default so behavior
+// is unchanged until a tuned value is promoted.
+var TrendBullishThresholdMetadata = ParameterMetadata[float64]{
+	Value: 0.5,
+	Rationale: "Z-score cutoff for bullish force trend (trendFor): z > threshold → " +
+		"bullish. Legacy hardcoded 0.5 kept as default (audit M8); mirrors the " +
+		"parameterized-threshold convention of PeriodDetectionConfig.",
+	Source: SourceHeuristic,
+	Todo:   "Promote to SourceEmpirical after capital-flow hypothesis validation (H-CF-01/02/05) observes trend-label quality.",
+}
+
+// TrendBearishThresholdMetadata is the Z-score cutoff below which a
+// capital force's trend is labeled "bearish" (trendFor in
+// internal/capitalflow/forces.go). Negative mirror of
+// TrendBullishThresholdMetadata; default -0.5 preserves the legacy
+// hardcoded behavior (audit M8).
+var TrendBearishThresholdMetadata = ParameterMetadata[float64]{
+	Value: -0.5,
+	Rationale: "Z-score cutoff for bearish force trend (trendFor): z < threshold → " +
+		"bearish. Legacy hardcoded -0.5 kept as default (audit M8); mirrors the " +
+		"parameterized-threshold convention of PeriodDetectionConfig.",
+	Source: SourceHeuristic,
+	Todo:   "Promote to SourceEmpirical after capital-flow hypothesis validation (H-CF-01/02/05) observes trend-label quality.",
+}
+
+// GetCapitalflowTrendBullishThreshold returns the configured bullish
+// Z-score cutoff used by trendFor. Falls back to
+// TrendBullishThresholdMetadata.Value (0.5) when config is not loaded.
+func GetCapitalflowTrendBullishThreshold() float64 {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.TrendBullishThreshold.Value
+	}
+	return TrendBullishThresholdMetadata.Value
+}
+
+// GetCapitalflowTrendBearishThreshold returns the configured bearish
+// Z-score cutoff used by trendFor. Falls back to
+// TrendBearishThresholdMetadata.Value (-0.5) when config is not loaded.
+func GetCapitalflowTrendBearishThreshold() float64 {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.TrendBearishThreshold.Value
+	}
+	return TrendBearishThresholdMetadata.Value
+}
+
 // L2_4ScheduleParameters holds tunable values for the L2.4 LLM-driven
 // sector agent observation period. Used by the synergy page admin
 // UI to expose manual start/stop controls (auto-cron deferred to a
@@ -1148,14 +1198,23 @@ type AlertParameters struct {
 	SLAViolationMetaAlert ParameterMetadata[bool] `json:"sla_violation_meta_alert"`
 }
 
-// CapitalflowParameters holds tunables for capital-flow analysis pipeline.
-// Currently only the resonance coefficient bounds (see ComputeResonance in
-// internal/capitalflow/resonance.go:13). The bounds are design constants —
-// not statistical fit — so they live under SourceHeuristic until backtest
-// validation promotes them to SourceEmpirical (PR follow-up after L2.4 window).
+// CapitalflowParameters holds tunables for the capital-flow analysis
+// pipeline: the resonance coefficient bounds (see ComputeResonance in
+// internal/capitalflow/resonance.go:13) and, since audit M8, the
+// bullish/bearish Z-score trend thresholds used by ForceExtractor.trendFor
+// (internal/capitalflow/forces.go). Values are design constants — not
+// statistical fit — so they live under SourceHeuristic until backtest /
+// hypothesis validation promotes them to SourceEmpirical.
 type CapitalflowParameters struct {
 	ResonanceCoefficientMax ParameterMetadata[float64] `json:"resonance_coefficient_max"`
 	ResonanceCoefficientMin ParameterMetadata[float64] `json:"resonance_coefficient_min"`
+	// TrendBullishThreshold / TrendBearishThreshold are the Z-score
+	// cutoffs ForceExtractor.trendFor applies when labeling a
+	// dimension "bullish" / "bearish" (internal/capitalflow/forces.go).
+	// Parameterized in audit M8; the defaults (+0.5 / -0.5) reproduce
+	// the pre-parameterization hardcoded thresholds exactly.
+	TrendBullishThreshold ParameterMetadata[float64] `json:"trend_bullish_threshold"`
+	TrendBearishThreshold ParameterMetadata[float64] `json:"trend_bearish_threshold"`
 }
 
 // StockpickerParameters holds tunable parameters for the stock-picking
