@@ -135,7 +135,7 @@ function renderReportData(data) {
     { label: '夏普比率', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }), hint: '口徑：期間日報酬（AI 表 sharpe_like 不同）' },
     { label: '最大回撤', value: fmtSafeDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown), hint: `${periodZh} · 期間內最大回撤` },
     { label: '稅後價值', value: fmtNTD(data.after_tax_value) },
-    { label: '已繳稅額', value: fmtNTD(data.total_tax_paid), hint: '累積' },
+    { label: '累積已繳稅費', value: fmtNTD(data.total_tax_paid), hint: `${periodZh} · 實際已繳（非清倉試算）` },
     { label: '勝率', value: fmtSafePct(data.win_rate), sign: data.win_rate },
     { label: '總交易數', value: fmtInt(data.total_trades) }
   ];

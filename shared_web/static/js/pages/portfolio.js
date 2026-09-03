@@ -94,9 +94,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         <div class="kpi-hint">可用現金: ${kpiNTD(state.cash)}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">稅後淨值</div>
+        <div class="kpi-label">稅後淨值（若今日清倉）</div>
         <div class="kpi-value">${kpiNTD(afterTaxValue)}</div>
-        <div class="kpi-hint">已扣除累積稅負</div>
+        <div class="kpi-hint">已扣除清倉預估稅費</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">已實現損益</div>
@@ -109,9 +109,9 @@ export async function loadPortfolioPage(getJSON, agentNameFn) {
         <div class="kpi-hint">${tradeCount === null ? '以績效報告「總交易數」為準' : `實際下單 ${tradeCount.toLocaleString('en-US')} 筆 · 績效報告另計模擬撮合`}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">累積稅負</div>
+        <div class="kpi-label">若今日清倉預估稅費</div>
         <div class="kpi-value text-danger">${kpiNTD(totalTaxPaid)}</div>
-        <div class="kpi-hint">持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '—'}</div>
+        <div class="kpi-hint">清倉試算（非已繳累計）| 持倉檔數: ${positions.length} | 更新: ${state.snapshot_time ? new Date(state.snapshot_time).toLocaleTimeString() : '—'}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">未實現損益</div>
