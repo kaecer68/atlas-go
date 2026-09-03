@@ -2631,6 +2631,14 @@ func runSimulation(cfg config.Config, root *composition.Root, verbose bool, coll
 			}
 			var totalExposure, totalUnrealizedPnL float64
 			for _, pos := range result.Positions {
+				// Mark to market before persisting: engine state can carry a
+				// stale/zero unrealized_pnl after a fill/trim day (read-side
+				// mirror in LiveService.LoadPortfolioState also recomputes).
+				// current_price is authoritative when present.
+				if pos.CurrentPrice > 0 {
+					pos.MarketValue = float64(pos.Quantity) * pos.CurrentPrice
+					pos.UnrealizedPnL = float64(pos.Quantity) * (pos.CurrentPrice - pos.AverageCost)
+				}
 				totalExposure += pos.MarketValue
 				totalUnrealizedPnL += pos.UnrealizedPnL
 				stateStore.UpdatePosition(pos)

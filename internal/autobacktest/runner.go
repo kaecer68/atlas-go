@@ -140,6 +140,14 @@ func (r *Runner) syncToLiveStore() {
 
 	var totalExposure, totalUnrealizedPnL float64
 	for _, pos := range state.Positions {
+		// Mark to market before persisting (same rule as the simulation sync
+		// in cmd/atlas): the backtest's last state may carry stale/zero
+		// unrealized_pnl while current_price is set; recompute keeps the live
+		// store snapshot self-consistent for portfolio-state / live-status.
+		if pos.CurrentPrice > 0 {
+			pos.MarketValue = float64(pos.Quantity) * pos.CurrentPrice
+			pos.UnrealizedPnL = float64(pos.Quantity) * (pos.CurrentPrice - pos.AverageCost)
+		}
 		totalExposure += pos.MarketValue
 		totalUnrealizedPnL += pos.UnrealizedPnL
 		store.UpdatePosition(pos)

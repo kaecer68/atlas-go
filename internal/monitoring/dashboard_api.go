@@ -1661,6 +1661,18 @@ func (a *DashboardAPI) GetCrossMarketService() *service.CrossMarketService {
 
 func (a *DashboardAPI) RegisterLiveRoutes(mux *http.ServeMux) {
 	svc := service.NewLiveService(a.workDir, a.ledgerDir)
+	// Trade-history source must follow the configured ledger backend (PG on
+	// production), same SSoT read path as the performance report
+	// (NewReportOutcomeStore: PG-first with JSONL fallback). The previous
+	// hardcoded JSONL store scanned LedgerDir/sessions/*/trades.jsonl, which
+	// does not exist when ATLAS_STORE_BACKEND=postgres (trades live only in
+	// the PG trades table), so LoadTradeHistory returned empty and the
+	// portfolio card's trade_count was omitted as 0/null.
+	if store, err := ledger.NewReportOutcomeStore(config.Normalize(config.Load())); err == nil {
+		svc = svc.WithTradeStore(store)
+	} else {
+		logging.Warn("dashboard", "live_trade_store_init_failed", logging.Err(err))
+	}
 	handlers := &apilive.Handlers{
 		LedgerDir:     a.ledgerDir,
 		WorkDir:       a.workDir,

@@ -92,9 +92,9 @@
 | `cumulative_pnl_pct` | float64 | 累計損益%（相對 starting_cash；starting_cash 為 0 時為 0） |
 | `current_drawdown` | float64 | 當前回撤 |
 | `max_drawdown` | float64 | 歷史最大回撤（由 equity_curve 計算） |
-| `unrealized_pnl_total` | float64 | 未實現損益總計（omitempty） |
+| `unrealized_pnl_total` | float64 | 未實現損益總計（omitempty）。讀取時以 `current_price` mark-to-market 重算（`qty×(price−avg_cost)`；price≤0 時沿用已存值），避免寫入端未重算造成全 0（2026-09-03） |
 | `concentration_ratio` | float64 | HHI 集中度 [0,1] |
-| `trade_count` | int | 交易筆數（omitempty） |
+| `trade_count` | int | 實際成交（下單）筆數，語義與績效報告同源（backend-aware SSoT store：production 為 PG `trades` 表；`ATLAS_STORE_BACKEND` 未設時回 JSONL）。績效報告「總交易數」另含 AI 推薦模擬撮合，兩者口徑不同（omitempty） |
 | `positions_count` | int | 持股檔數 |
 | `positions` | array | 見 `PositionDTO` |
 | `equity_curve` | array | 見 `EquityCurvePoint` |
@@ -109,14 +109,14 @@
 | `quantity` | int | 股數 |
 | `average_cost` | float64 | 平均成本 |
 | `current_price` | float64 | 現價 |
-| `market_value` | float64 | 市值 |
-| `unrealized_pnl` | float64 | 未實現損益 |
+| `market_value` | float64 | 市值（讀取時 current_price>0 則以 `qty×price` 重算） |
+| `unrealized_pnl` | float64 | 未實現損益（讀取時 current_price>0 則以 `qty×(price−avg_cost)` 重算） |
 | `pnl_pct` | float64 | 未實現損益%（相對成本） |
 | `sector` | string | 產業分類（omitempty） |
 
 **EquityCurvePoint**：`label`（session_id）、`value`（總市值）、`currency`、`after_tax_value`、`tax_paid`。
 
-**CrossFootPnL**：`is_balanced`（差距 < 0.01）、`portfolio_unrealized`、`sum_positions_unrealized`、`difference`。
+**CrossFootPnL**：`is_balanced`（差距 < 0.01）、`portfolio_unrealized`、`sum_positions_unrealized`、`difference`。核對對象為「已存快照」的 portfolio-level 與 per-position 未實現損益（同一寫入端檔案內一致性）；KPI 層（`unrealized_pnl_total`/`positions[].unrealized_pnl`）會以 current_price 重算覆寫過期寫入值，兩者不互斥。
 
 **缺失資料**：無 live state 時回傳空物件（`{}`），不是 503。
 
