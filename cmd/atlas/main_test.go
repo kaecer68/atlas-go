@@ -1078,6 +1078,8 @@ func TestIsPublicPath(t *testing.T) {
 		{"api macro GET", http.MethodGet, "/api/macro/snapshot/latest", true},
 		{"api alerts GET", http.MethodGet, "/api/alerts", true},
 		{"api config GET", http.MethodGet, "/api/config", true},
+		{"api strategy period-matrix GET", http.MethodGet, "/api/strategy/period-matrix", true},
+		{"api strategy period-matrix POST still authed", http.MethodPost, "/api/strategy/period-matrix", false},
 		{"api synergy GET", http.MethodGet, "/api/synergy/darwinian/status", true},
 		{"api capital flow daily GET", http.MethodGet, "/api/capital-flow/daily", true},
 		{"api capital flow summary GET", http.MethodGet, "/api/capital-flow/summary", true},

@@ -256,3 +256,95 @@ func TestProductionSeeds_CBFxThreshold(t *testing.T) {
 		}
 	}
 }
+
+// ===========================================================================
+// PR-3d — FramesForPeriod: display-only period filtering of technique
+// frames (seven-period → regime tag mapping; empty Regimes always pass;
+// unknown period fail-open).
+// ===========================================================================
+
+// mustTestRegistry loads testdata/seed.json (2 BULL frames + 1 BEAR frame).
+func mustTestRegistry(t *testing.T) *Registry {
+	t.Helper()
+	reg, err := LoadFromFile(filepath.Join("testdata", "seed.json"))
+	if err != nil {
+		t.Fatalf("LoadFromFile: %v", err)
+	}
+	return reg
+}
+
+func TestFramesForPeriod_MapsSevenPeriodsToTags(t *testing.T) {
+	reg := mustTestRegistry(t)
+
+	bull := reg.FramesForPeriod("bull")
+	if len(bull) != 2 || bull[0].ID != "sox-test" || bull[1].ID != "nvda-test" {
+		t.Errorf("bull = %v, want [sox-test nvda-test]", ids(bull))
+	}
+	bs := reg.FramesForPeriod("black_swan")
+	if len(bs) != 0 {
+		t.Errorf("black_swan = %v, want [] (testdata has no HIGH_VOL frame)", ids(bs))
+	}
+	bear := reg.FramesForPeriod("downturn")
+	if len(bear) != 1 || bear[0].ID != "taiwan-strait-test" {
+		t.Errorf("downturn = %v, want [taiwan-strait-test]", ids(bear))
+	}
+	// Unknown period → fail-open (all frames).
+	all := reg.FramesForPeriod("nonexistent_period")
+	if len(all) != 3 {
+		t.Errorf("unknown period = %v, want all 3 frames", ids(all))
+	}
+	// Empty input is unknown too.
+	if got := len(reg.FramesForPeriod("")); got != 3 {
+		t.Errorf("empty period = %d frames, want 3", got)
+	}
+}
+
+func TestFramesForPeriod_EmptyRegimesAlwaysPass(t *testing.T) {
+	// All frames in testdata carry non-empty Regimes; unannotated frames
+	// must survive any filter. Build one inline.
+	data := []byte(`[{"id":"no-regime","name":"x","layer":"L1","summary":"x","direction":"up","risk":"medium","source":"backtest","status":"active","attribution_mode":"rule_based","conditions":[{"field":"DXY","operator":"lt","value":1,"string_value":"","timeframe":"1D","source":"us_yahoo"}]}]`)
+	reg2, err := LoadFromBytes(data)
+	if err != nil {
+		t.Fatalf("LoadFromBytes: %v", err)
+	}
+	got := reg2.FramesForPeriod("black_swan")
+	if len(got) != 1 || got[0].ID != "no-regime" {
+		t.Errorf("FramesForPeriod(black_swan) = %v, want the unannotated frame", ids(got))
+	}
+}
+
+func TestProductionSeeds_BlackSwanOnlyDefensive(t *testing.T) {
+	// The production seed file must annotate HIGH_VOL (black_swan) only on
+	// non-up (defensive/volatile) frames — 黑天鵝只留防守型 (plan PR-3d).
+	reg, err := LoadFromFile("../../data/seeds/strategy_techniques.json")
+	if err != nil {
+		t.Fatalf("load production seeds: %v", err)
+	}
+	for _, f := range reg.All() {
+		defensive := true
+		for _, g := range f.Regimes {
+			if g == "HIGH_VOL" {
+				if f.Direction == "up" {
+					defensive = false
+				}
+			}
+		}
+		hasHighVol := false
+		for _, g := range f.Regimes {
+			if g == "HIGH_VOL" {
+				hasHighVol = true
+			}
+		}
+		if hasHighVol && !defensive {
+			t.Errorf("frame %q (direction=%s) annotated HIGH_VOL but is offensive", f.ID, f.Direction)
+		}
+	}
+}
+
+func ids(frames []StrategyFrame) []string {
+	out := make([]string, 0, len(frames))
+	for _, f := range frames {
+		out = append(out, f.ID)
+	}
+	return out
+}

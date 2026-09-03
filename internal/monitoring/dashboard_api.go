@@ -1211,6 +1211,20 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		WorkDir:       a.workDir,
 		LedgerDir:     a.ledgerDir,
 	}
+	// PR-3d (capital-flow model plan v1.1): display-only period annotation
+	// for the decision-chain 心法 block. The period comes from
+	// period_history (live ingest rows); failures or missing rows leave the
+	// strategies block unfiltered — never a hard dependency.
+	if a.historicalStore != nil {
+		hs := a.historicalStore
+		decisionHandlers.PeriodProvider = func() string {
+			row, ok, err := hs.LoadPeriodByDateAll(context.Background(), time.Now().UTC().Format("2006-01-02"))
+			if err != nil || !ok {
+				return ""
+			}
+			return row.Period
+		}
+	}
 
 	decisionHandlers.RegisterRoutes(mux)
 
