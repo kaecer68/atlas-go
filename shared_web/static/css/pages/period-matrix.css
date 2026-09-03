@@ -1,0 +1,95 @@
+/* shared_web/static/css/pages/period-matrix.css
+   「策略 × 時期」熱圖（capital-flow Phase 2 PR-2c）。 */
+
+.pm-heat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pm-cell {
+  border: 1px solid var(--border, #3a3f4b);
+  padding: 6px 8px;
+  text-align: center;
+  vertical-align: middle;
+  min-width: 88px;
+}
+
+.pm-corner,
+.pm-agent-head {
+  position: sticky;
+  left: 0;
+  background: var(--panel, #1e222b);
+  color: var(--text, #e8eaf0);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pm-period-head {
+  color: var(--text-muted, #9aa1af);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pm-cell-empty {
+  color: var(--text-muted, #9aa1af);
+  background: transparent;
+}
+
+.pm-cell-insufficient {
+  background: #2a2d36;
+  color: #8b93a3;
+  cursor: help;
+}
+
+.pm-cell-ok {
+  color: #f2f4f8;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.pm-cell-main {
+  display: block;
+  font-weight: 600;
+}
+
+.pm-cell-sub {
+  display: block;
+  font-size: 11px;
+  opacity: 0.9;
+  color: var(--text-muted, #cfd4dd);
+}
+
+#periodMatrixHeatmap.loading {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#periodMatrixHeatmap.loading::before {
+  content: '載入中…';
+  color: var(--text-muted, #9aa1af);
+}
+
+#periodMatrixMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+#periodMatrixMeta .badge {
+  background: var(--panel, #262b36);
+  border: 1px solid var(--border, #3a3f4b);
+  color: var(--text, #e8eaf0);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+#periodMatrixDetail {
+  margin-top: 10px;
+  font-size: 13px;
+  min-height: 18px;
+  color: var(--text, #e8eaf0);
+}
