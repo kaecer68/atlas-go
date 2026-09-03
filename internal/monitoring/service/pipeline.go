@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -32,6 +33,17 @@ type PipelineService struct {
 	cardProvider      CycleCardProviderFunc
 	store             ledger.OutcomeStore
 	historicalStore   ledger.HistoricalStore
+
+	// Agent-observatory response cache (60s TTL + in-flight dedup).
+	// Each uncached LoadAgentObservatory("") loads ALL recommendation
+	// outcomes (~1.9GB live heap, see #1780); concurrent polls of the admin
+	// dashboard stacked multiple full loads until the Docker VM OOM-killed
+	// the container every ~7 minutes (2026-09-03 outage, heap-profiled).
+	obsMu       sync.Mutex
+	obsInflight bool
+	obsCacheAt  time.Time
+	obsCacheKey string
+	obsCache    *AgentObservatoryData
 }
 
 type NarrativeContextData struct {

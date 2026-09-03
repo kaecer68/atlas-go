@@ -17,7 +17,53 @@ import (
 //     rolling_sharpe_trend, oos_sample_warning).
 //   - AgentObservatoryData: response shape for /api/dashboard/agent-observatory.
 
+// LoadAgentObservatory serves the agent-observatory aggregate with a 60s
+// TTL cache and in-flight dedup: the uncached full-history load pulls ALL
+// recommendation outcomes (~1.9GB, #1780), and concurrent dashboard polls
+// stacked until the container was OOM-killed (2026-09-03 outage).
 func (s *PipelineService) LoadAgentObservatory(sessionID string, limit int) (*AgentObservatoryData, error) {
+	cacheKey := fmt.Sprintf("%s|%d", sessionID, limit)
+
+	s.obsMu.Lock()
+	// In-flight dedup: another caller is computing the same view right now —
+	// wait for it and reuse its result.
+	if s.obsInflight && s.obsCacheKey == cacheKey {
+		for s.obsInflight && s.obsCacheKey == cacheKey && time.Since(s.obsCacheAt) < 90*time.Second {
+			s.obsMu.Unlock()
+			time.Sleep(200 * time.Millisecond)
+			s.obsMu.Lock()
+		}
+		if s.obsCache != nil && s.obsCacheKey == cacheKey {
+			data := s.obsCache
+			s.obsMu.Unlock()
+			return data, nil
+		}
+		s.obsMu.Unlock()
+		return nil, fmt.Errorf("load agent observatory: concurrent load in progress")
+	}
+	if s.obsCache != nil && s.obsCacheKey == cacheKey && time.Since(s.obsCacheAt) < 60*time.Second {
+		data := s.obsCache
+		s.obsMu.Unlock()
+		return data, nil
+	}
+	s.obsInflight = true
+	s.obsCacheKey = cacheKey
+	s.obsMu.Unlock()
+
+	data, err := s.loadAgentObservatoryUncached(sessionID, limit)
+
+	s.obsMu.Lock()
+	s.obsInflight = false
+	if err == nil && data != nil {
+		s.obsCacheAt = time.Now()
+		s.obsCache = data
+	}
+	s.obsMu.Unlock()
+
+	return data, err
+}
+
+func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit int) (*AgentObservatoryData, error) {
 	var summary *domain.SessionSummary
 	var err error
 	if sessionID == "" {
