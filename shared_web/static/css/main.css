@@ -87,6 +87,9 @@
 /* Pages - Methodology (E4) */
 @import url("pages/methodology.css");
 
+/* Pages - Period Matrix (CF Phase 2 PR-2c) */
+@import url("pages/period-matrix.css");
+
 /* Pages - My Signals (Gap 3-R4) */
 @import url("pages/my-signals.css");
 
