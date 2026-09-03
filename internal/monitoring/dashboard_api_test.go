@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/janus"
@@ -538,6 +539,114 @@ func TestDashboardAPI_ConfigHandler(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestConfigMasking_Unit(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		val  any
+		want any
+	}{
+		{"api key long masked", "FubonAPIKey", "fubon-key-1234567890", "fub••••890"},
+		{"api key short fully masked", "FugleAPIKey", "short", "••••"},
+		{"exactly 8 chars fully masked", "FinMindAPIKey", "12345678", "••••"},
+		{"secret masked", "BrokerAPISecret", "bkr-secret-abcdef", "bkr••••def"},
+		{"personal id masked", "FubonDMAPersonalID", "A123456789", "A12••••789"},
+		{"key suffix catches XxxKey", "FugleKey", "abcdefghijklmnop", "abc••••nop"},
+		{"empty secret stays empty", "TWSEAPISecret", "", ""},
+		{"normal string unchanged", "WorkDir", "/srv/atlas", "/srv/atlas"},
+		{"store backend unchanged", "StoreBackend", "postgres", "postgres"},
+		{"url with creds stripped", "DatabaseURL", "postgres://alice:s3cr3t@db.example.com:5432/atlas?sslmode=require", "postgres://db.example.com:5432"},
+		{"url without creds unchanged", "TWSEAPIURL", "https://api.twse.com.tw/v1", "https://api.twse.com.tw/v1"},
+		{"bool unchanged", "YahooEnabled", true, true},
+		{"int unchanged", "BrokerMaxRetries", 3, 3},
+		{"redis url with creds stripped", "BrokerNonceRedisURL", "redis://:pw@redis.internal:6379/0", "redis://redis.internal:6379"},
+		{"redis key prefix not masked", "BrokerNonceRedisKeyPrefix", "atlas:nonce", "atlas:nonce"},
+		{"non-secret keyid unchanged", "BrokerKeyID", "2026-key-01", "2026-key-01"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := maskedConfigValue(tc.key, tc.val); got != tc.want {
+				t.Errorf("maskedConfigValue(%q, %v) = %#v, want %#v", tc.key, tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMaskedConfigMap_KeysPreservedAndSensitiveRedacted(t *testing.T) {
+	cfg := config.Config{
+		WorkDir:                    "/srv/atlas",
+		StoreBackend:               "postgres",
+		PrimaryMarket:              "TW",
+		DatabaseURL:                "postgres://alice:s3cr3t@db.example.com:5432/atlas",
+		FubonAPIKey:                "fubon-key-1234567890",
+		FugleAPIKey:                "fugle",
+		FinMindAPIKey:              "fin-0123456789",
+		BrokerAPISecret:            "broker-top-secret-99",
+		TWSEAPISecret:              "",
+		FubonDMAPersonalID:         "A123456789",
+		BrokerMode:                 "dry-run",
+		YahooEnabled:               true,
+		BrokerHTTPRetryStatusCodes: []int{408, 429, 503},
+	}
+	m := MaskedConfigMap(cfg)
+	if len(m) == 0 {
+		t.Fatal("MaskedConfigMap returned empty map")
+	}
+	// Masking must not drop or rename any key: compare against the unmasked
+	// struct serialization (62 fields, unset ones serialize as ""/false/0).
+	var plain map[string]any
+	rawPlain, _ := json.Marshal(cfg)
+	if err := json.Unmarshal(rawPlain, &plain); err != nil {
+		t.Fatalf("unmarshal plain config: %v", err)
+	}
+	if len(m) != len(plain) {
+		t.Errorf("key count = %d, want %d (masking must not drop keys)", len(m), len(plain))
+	}
+	for k := range plain {
+		if _, ok := m[k]; !ok {
+			t.Errorf("masked map missing key %q", k)
+		}
+	}
+	if got := m["FubonAPIKey"]; got != "fub••••890" {
+		t.Errorf("FubonAPIKey = %#v, want masked fub••••890", got)
+	}
+	if got := m["FugleAPIKey"]; got != "••••" {
+		t.Errorf("FugleAPIKey = %#v, want full-masked (<=8 chars)", got)
+	}
+	if got := m["BrokerAPISecret"]; got != "bro••••-99" {
+		t.Errorf("BrokerAPISecret = %#v, want masked bro••••-99", got)
+	}
+	if got := m["FubonDMAPersonalID"]; got != "A12••••789" {
+		t.Errorf("FubonDMAPersonalID = %#v, want masked A12••••789", got)
+	}
+	if got := m["TWSEAPISecret"]; got != "" {
+		t.Errorf("TWSEAPISecret = %#v, want unchanged empty string", got)
+	}
+	if got := m["DatabaseURL"]; got != "postgres://db.example.com:5432" {
+		t.Errorf("DatabaseURL = %#v, want scheme://host only (creds stripped)", got)
+	}
+	if got := m["WorkDir"]; got != "/srv/atlas" {
+		t.Errorf("WorkDir = %#v, want unchanged /srv/atlas", got)
+	}
+	if got := m["StoreBackend"]; got != "postgres" {
+		t.Errorf("StoreBackend = %#v, want unchanged postgres", got)
+	}
+	if got := m["YahooEnabled"]; got != true {
+		t.Errorf("YahooEnabled = %#v, want true", got)
+	}
+	// Round-trip through real JSON to prove the wire body carries masked values.
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("marshal masked map: %v", err)
+	}
+	s := string(raw)
+	for _, leak := range []string{"s3cr3t", "fubon-key-1234567890", "broker-top-secret-99", "A123456789"} {
+		if strings.Contains(s, leak) {
+			t.Errorf("wire JSON leaks plaintext %q", leak)
+		}
 	}
 }
 

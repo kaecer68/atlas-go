@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1951,8 +1952,102 @@ func configHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg := config.Load()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(cfg)
+		_ = json.NewEncoder(w).Encode(MaskedConfigMap(cfg))
 	})
+}
+
+// configMaskParts lists lower-cased substrings that mark a config key as
+// credential-bearing. Adapted from the deploy-config page's SENSITIVE_KEYS
+// intent, but matching the PascalCase field names config.Config is
+// serialized with (no json tags) instead of snake_case keys.
+var configMaskParts = []string{
+	"password", "secret", "token",
+	"apikey", "api_key", "dsn",
+	"signorkey", "signor_key", "personalid", "personal_id",
+}
+
+// isSensitiveConfigKey reports whether key names a value that must never be
+// returned in plaintext (API keys, secrets, tokens, DSNs, personal IDs).
+func isSensitiveConfigKey(key string) bool {
+	k := strings.ToLower(key)
+	for _, part := range configMaskParts {
+		if strings.Contains(k, part) {
+			return true
+		}
+	}
+	// Catch XxxKey fields that do not embed "api" (e.g. GoogleKey).
+	return strings.HasSuffix(k, "key")
+}
+
+// maskSensitiveString hides a credential: values of 8 or fewer characters
+// are fully replaced; longer values keep 3 leading/trailing characters so an
+// operator can still tell which key changed between environments.
+func maskSensitiveString(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= 8 {
+		return "••••"
+	}
+	return string(r[:3]) + "••••" + string(r[len(r)-3:])
+}
+
+// stripURLCredentials reduces a URL that embeds credentials (userinfo) to
+// scheme://host so passwords/usernames inside DSN-style URLs never leave the
+// server. URLs without embedded credentials are returned unchanged.
+func stripURLCredentials(s string) string {
+	if !strings.Contains(s, "://") {
+		return s
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User == nil {
+		return s
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// maskedConfigValue applies wire-boundary masking to one decoded JSON value.
+func maskedConfigValue(key string, v any) any {
+	switch t := v.(type) {
+	case string:
+		if isSensitiveConfigKey(key) {
+			return maskSensitiveString(t)
+		}
+		return stripURLCredentials(t)
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, v2 := range t {
+			out[k] = maskedConfigValue(k, v2)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, v2 := range t {
+			out[i] = maskedConfigValue(key, v2)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// MaskedConfigMap returns cfg as a JSON-safe object with sensitive values
+// masked at the response boundary. config.Load() keeps plaintext internally;
+// only this wire representation is redacted. Exported for tests.
+func MaskedConfigMap(cfg config.Config) map[string]any {
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return map[string]any{"error": "config serialization failed"}
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return map[string]any{"error": "config serialization failed"}
+	}
+	for k, v := range m {
+		m[k] = maskedConfigValue(k, v)
+	}
+	return m
 }
 
 // SnapshotToPeriodIndicators maps a raw macro snapshot to the indicator set
