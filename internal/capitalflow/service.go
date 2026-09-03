@@ -31,6 +31,24 @@ const defaultHistoryLimit = 252
 // Set to 30s to stay aligned with the frontend auto-refresh interval.
 const LatestDailyCacheTTL = 30 * time.Second
 
+// taipeiZone is the fixed Asia/Taipei offset (UTC+8, no DST) used to
+// derive the trading-date key on both the write path (Refresh) and the
+// read path (LatestDaily / refreshIfStale). Keeping one zone constant
+// here prevents the two paths from disagreeing around the UTC midnight
+// boundary (CF-INV-15 / audit M4).
+var taipeiZone = time.FixedZone("Asia/Taipei", 8*3600)
+
+// deriveTradingDate converts a snapshot RecordedAt Unix timestamp to
+// the Asia/Taipei YYYY-MM-DD trading date. M4 (spec §6 / CF-INV-15):
+// the read path must derive its history upper bound and as-of date
+// from the same Taipei clock the write path (Refresh) uses — a UTC
+// derivation made Taiwan mornings before 08:00 read and write under
+// different date keys, dropping one day of history and mislabeling
+// the as-of date.
+func deriveTradingDate(recordedAt int64) string {
+	return time.Unix(recordedAt, 0).In(taipeiZone).Format("2006-01-02")
+}
+
 // Service exposes capital-flow aggregation as a callable interface
 // so downstream consumers (e.g. internal/recommender,
 // internal/eventdriven) can reuse the same pipeline the HTTP
@@ -106,13 +124,22 @@ func NewServiceWithStore(p marketdata.MacroDataProvider, timeout time.Duration, 
 func (s *Service) Store() RollingSampleStore { return s.store }
 
 // QualityScore returns a signed score in [-1, 1] derived from the
-// latest cached ResonanceResult. Mapping:
+// latest cached ResonanceResult. Mapping (resonanceToScore):
 //
-//	score = (coefficient - 1.0) * 2.0 * sign(direction)
+//	score = sign(direction) * max(0.5, coefficient - 0.5)
 //
 // so bullish alignment (coefficient 1.5, dir bullish) → +1,
 // bearish alignment (coefficient 1.5, dir bearish) → -1,
+// typical alignment (coefficient 1.0, dir bullish) → +0.5,
+// coefficient 0.5 with a non-neutral direction → ±0.5 (floor),
 // mixed / neutral → 0.
+//
+// M5 (audit): the previous doc claimed
+// (coefficient - 1.0) * 2.0 * sign(direction), which disagrees with
+// the implementation (it would map coefficient 1.0 bullish → 0 and
+// could emit ±1.0 only at coefficient 1.5). The implementation is the
+// behavior eventdriven's scaleQualityScoreToBaseline depends on and
+// is kept; this comment now documents it exactly.
 //
 // Returns 0 if no successful resonance has been observed yet.
 // Auto-refreshes when the cache is older than QualityCacheTTL.
@@ -145,6 +172,19 @@ func (s *Service) QualityLabel() string {
 	return r.Direction
 }
 
+// resonanceToScore maps a ResonanceResult to the legacy signed quality
+// score consumed by QualityScore and by eventdriven's
+// scaleQualityScoreToBaseline:
+//
+//	bullish → +max(0.5, coefficient-0.5)
+//	bearish → -max(0.5, coefficient-0.5)
+//	mixed / neutral / "" → 0
+//
+// The ±0.5 floor keeps every non-neutral direction at a non-zero
+// magnitude even at the minimum coefficient (0.5), so the eventdriven
+// baseline never treats a real direction as "no signal". M5: the
+// implementation is kept (changing it would shift the eventdriven
+// baseline semantics); this doc now matches it exactly.
 func resonanceToScore(r ResonanceResult) float64 {
 	switch r.Direction {
 	case "bullish":
@@ -194,7 +234,9 @@ func (s *Service) refreshIfStale() ResonanceResult {
 	// computed against real prior samples instead of an empty window (which
 	// pinned every force to Z=0 / raw and made 品質 read 0.00). Same
 	// strictly-before-as-of path as LatestDaily/extractAsOf (spec §8.4).
-	derivedDate := time.Unix(snap.RecordedAt, 0).Format("2006-01-02")
+	// M4: the as-of date is derived in Asia/Taipei (deriveTradingDate) so it
+	// matches the TradingDate key Refresh persists.
+	derivedDate := deriveTradingDate(snap.RecordedAt)
 	forces, err := s.extractAsOf(ctx, snap, derivedDate)
 	if err != nil {
 		return s.cachedResonance
@@ -243,9 +285,8 @@ func (s *Service) Refresh(ctx context.Context) error {
 		return fmt.Errorf("capitalflow: Refresh fetch snapshot: %w", err)
 	}
 
-	taipei := time.FixedZone("Asia/Taipei", 8*3600)
-	recordTime := time.Unix(snap.RecordedAt, 0).In(taipei)
-	currentDate := recordTime.Format("2006-01-02")
+	recordTime := time.Unix(snap.RecordedAt, 0).In(taipeiZone)
+	currentDate := deriveTradingDate(snap.RecordedAt)
 
 	if s.eventCalendar == nil {
 		logging.Warn("capitalflow", "refresh_no_calendar",
@@ -285,10 +326,11 @@ func (s *Service) Refresh(ctx context.Context) error {
 // ComputeResonance → GenerateDailyReport pipeline as a Go call.
 //
 // derivedDate is the trading date used as the History upper bound;
-// it is taken from snap.RecordedAt (UTC, kept for back-compat —
-// Task 5 will introduce Taipei-timezone derivation per spec §6's
-// `as_of_trading_date` field). The rolling-history lookup is
-// per-dimension against s.store with a strictly-before
+// it is derived from snap.RecordedAt in Asia/Taipei via
+// deriveTradingDate, matching the TradingDate key Refresh persists
+// (CF-INV-15 / M4) so the read and write paths never disagree on the
+// date key around the UTC midnight boundary. The rolling-history
+// lookup is per-dimension against s.store with a strictly-before
 // `derivedDate` upper bound so today's reading never bleeds into
 // its own reference window (spec §8.4).
 //
@@ -310,7 +352,7 @@ func (s *Service) LatestDaily(ctx context.Context) (DailyReport, error) {
 	if err != nil {
 		return DailyReport{}, err
 	}
-	derivedDate := time.Unix(snap.RecordedAt, 0).Format("2006-01-02")
+	derivedDate := deriveTradingDate(snap.RecordedAt)
 	forces, err := s.extractAsOf(cctx, snap, derivedDate)
 	if err != nil {
 		return DailyReport{}, err
@@ -395,30 +437,18 @@ func (s *Service) LatestAssessment(ctx context.Context) (CapitalFlowAssessment, 
 }
 
 // dimensionSource returns the (unit, source_id) tuple to attach to
-// a RollingSample for the given capital dimension, per the source
-// registry in docs/specs/capital-flow-seven-dimension-spec.md §5
-// and the rolling_store.go source-id constants. Keeping the table
-// here (instead of on ForceExtractor) makes Refresh a single
-// switch — the extractor stays focused on scoring, the persistence
-// writer owns source provenance.
+// a RollingSample for the given capital dimension.
 //
-// Spec §7 calls these out per dimension: foreign/institutional/
-// dealer share TWSE-T86 (T86 億股 proxy), government uses an
-// operator-imported source, futures uses TAIFEX institutional OI
-// (口數), retail uses TWSE margin/short balance (percent), TSM ADR
-// uses the Yahoo-derived daily change.
+// M3 (audit): this used to be a second, hand-maintained provenance
+// table that contradicted ComputeForceProvenance on government
+// (hundred_million_shares vs twd), retail (hundred_million_shares
+// vs pct_composite) and TSM ADR (percent/SourceYahoo vs
+// pct/SourceSECTSMC). It now delegates to ComputeForceProvenance
+// (forces.go) so the write path (Refresh) persists exactly the
+// same unit/source metadata the extractor and the API surface
+// expose — spec §6 / CF-INV-01 / CF-INV-11 single source of truth.
+// T86 三法人 keep hundred_million_shares (spec §5.1: T86 億股 proxy).
 func dimensionSource(dim ForceName) (unit, sourceID string) {
-	switch dim {
-	case ForceForeign, ForceInstitutional, ForceDealer:
-		return "hundred_million_shares", SourceTWSET86
-	case ForceGovernment:
-		return "hundred_million_shares", SourceGovernmentOperator
-	case ForceFutures:
-		return "contracts", SourceTAIFEXInst
-	case ForceRetail:
-		return "hundred_million_shares", SourceTWSEODDLOT
-	case ForceTSMADR:
-		return "percent", SourceYahoo
-	}
-	return "", ""
+	prov := ComputeForceProvenance(dim)
+	return prov.Unit, prov.SourceID
 }
