@@ -60,6 +60,7 @@ export interface AgentUniverseView {
 export interface AggregateReport {
   attempted: number;
   succeeded: number;
+  skipped: number;
   updated_at: string;
   industries: IndustryAggregateStatus[];
 }
