@@ -12,8 +12,10 @@
 // macro snapshots with TAIEX/TSM ADR, the rolling sample store, and
 // the replay trading calendar), replays the pre-registered statistical
 // procedures, prints a PASS/FAIL/INSUFFICIENT_DATA table, and
-// optionally writes a JSON report with -out. It never writes state or
-// config; flipping automation eligibility is a separate human PR.
+// optionally writes a versioned validation report (JSON via -out,
+// human-readable Markdown via -out-md; conventional location
+// data/reports/cf-hypotheses-<date>.{json,md}). It never writes state
+// or config; flipping automation eligibility is a separate human PR.
 //
 // All decision thresholds are compile-time constants inside
 // internal/capitalflow (pre-registered; never configurable from the
@@ -23,7 +25,8 @@
 //
 //	go run ./cmd/validate-capital-flow-hypotheses \
 //	    [-workdir .] [-start 2020-01-01] [-end 2026-12-31] \
-//	    [-out /tmp/cf-report.json] [-dry-run]
+//	    [-out data/reports/cf-hypotheses-2026-09-04.json \
+//	     -out-md data/reports/cf-hypotheses-2026-09-04.md] [-dry-run]
 package main
 
 import (
@@ -66,7 +69,8 @@ func main() {
 		startDate = flag.String("start", "", "restrict to trading dates >= YYYY-MM-DD (inclusive)")
 		endDate   = flag.String("end", "", "restrict to trading dates <= YYYY-MM-DD (inclusive)")
 		replay    = flag.String("replay", defaultReplayPath, "replay CSV trading calendar (relative to -workdir)")
-		out       = flag.String("out", "", "write the results JSON to this path (empty = stdout only)")
+		out       = flag.String("out", "", "write the validation report JSON to this path (empty = stdout only)")
+		outMD     = flag.String("out-md", "", "write the human-readable Markdown report to this path (empty = skip)")
 		dryRun    = flag.Bool("dry-run", false, "run all validations read-only but write no report file")
 	)
 	flag.Parse()
@@ -123,6 +127,14 @@ func main() {
 		capitalflow.ValidateHypothesis02(adr, taiex, dates),
 		capitalflow.ValidateHypothesis05(samples, taiex, dates),
 	}
+	report := capitalflow.BuildValidationReport(*workdir, map[string]int{
+		"calendar_days": len(dates),
+		"oi_days":       len(oi),
+		"t86_spot_days": len(spot),
+		"macro_days":    len(macro),
+		"taiex_days":    len(taiex),
+		"adr_days":      len(adr),
+	}, results)
 
 	fmt.Println()
 	fmt.Println("=== Capital-Flow Hypothesis Validation (pre-registered thresholds) ===")
@@ -132,6 +144,7 @@ func main() {
 			fmt.Printf("  note: %s\n", n)
 		}
 	}
+	fmt.Printf("\neligible_recommendation: %t (僅供人工 PR review；CLI 永不寫 config)\n", report.EligibleRecommendation)
 	fmt.Println("\nPass/FAIL 对照表:")
 	fmt.Printf("%-10s %-18s %s\n", "ID", "STATUS", "KEY METRICS")
 	for _, r := range results {
@@ -147,16 +160,24 @@ func main() {
 		fmt.Printf("%-10s %-18s %s\n", r.ID, r.Status, strings.Join(parts, ", "))
 	}
 
-	if *out == "" || *dryRun {
-		if *dryRun && *out != "" {
-			log.Printf("dry-run: report %s NOT written", *out)
+	if *dryRun {
+		if *out != "" || *outMD != "" {
+			log.Printf("dry-run: report files NOT written (-out %q -out-md %q)", *out, *outMD)
 		}
 		return
 	}
-	if err := writeResultsJSON(*out, results); err != nil {
-		log.Fatalf("validate-capital-flow-hypotheses: write report: %v", err)
+	if *out != "" {
+		if err := capitalflow.WriteValidationReportJSON(*out, report); err != nil {
+			log.Fatalf("validate-capital-flow-hypotheses: write JSON report: %v", err)
+		}
+		log.Printf("JSON report written: %s", *out)
 	}
-	log.Printf("report written: %s", *out)
+	if *outMD != "" {
+		if err := capitalflow.WriteValidationReportMarkdown(*outMD, report); err != nil {
+			log.Fatalf("validate-capital-flow-hypotheses: write Markdown report: %v", err)
+		}
+		log.Printf("Markdown report written: %s", *outMD)
+	}
 }
 
 // validateDateArg checks a YYYY-MM-DD CLI date argument.
@@ -326,19 +347,4 @@ func loadRollingSamples(ctx context.Context, path string) (map[capitalflow.Force
 		out[dim] = rows
 	}
 	return out, nil
-}
-
-// writeResultsJSON marshals the hypothesis results as a JSON object.
-func writeResultsJSON(path string, results []capitalflow.HypothesisResult) error {
-	data, err := json.MarshalIndent(map[string]any{
-		"generated_at": time.Now().UTC().Format(time.RFC3339),
-		"hypotheses":   results,
-	}, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
 }

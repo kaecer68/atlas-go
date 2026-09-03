@@ -294,11 +294,11 @@ TSM ADR 是跨市場價格訊號。未來可加入 SOX、USD/TWD 等，但新增
 
 | Hypothesis ID | 假設 | 最低資料 | 驗證方式 | 啟用門檻 | 目前狀態 |
 |---------------|------|----------|----------|----------|----------|
-| `H-CF-01` | 外資期貨 OI 領先外資現貨 1–3 日 | ≥252 交易日 | lag correlation + Granger／walk-forward | out-of-sample 顯著且方向穩定 | 未驗證 |
-| `H-CF-02` | TSM ADR 對隔日台股方向具資訊力 | ≥252 交易日 | 開盤／收盤方向命中率、regime 分層 | rolling hit rate ≥55% 且樣本充分 | 未驗證 |
+| `H-CF-01` | 外資期貨 OI 領先外資現貨 1–3 日 | ≥252 交易日 | lag correlation + Granger／walk-forward | out-of-sample 顯著且方向穩定 | INSUFFICIENT_DATA（2026-09-04 首次工具化驗證；期貨 OI 涵蓋 2021、現貨 2026-06 起，兩源不重疊；報告 `data/reports/cf-hypotheses-2026-09-04.json`，工具 `cmd/validate-capital-flow-hypotheses`） |
+| `H-CF-02` | TSM ADR 對隔日台股方向具資訊力 | ≥252 交易日 | 開盤／收盤方向命中率、regime 分層 | rolling hit rate ≥55% 且樣本充分 | INSUFFICIENT_DATA（2026-09-04；ADR 歷史 ~71 日 < 252；報告 `data/reports/cf-hypotheses-2026-09-04.json`） |
 | `H-CF-03` | 官股代理能改善反轉／護盤辨識 | ≥90 個有效代理日 | 有無官股特徵 A/B | out-of-sample 不劣化且改善明確 | 資料不足 |
 | `H-CF-04` | 現行融資融券代理可代表散戶擁擠 | ≥252 交易日 | 與 TDCC／自然人資料交叉驗證 | 相關與方向穩定 | 未驗證 |
-| `H-CF-05` | 分層模型優於七項平權模型 | ≥252 交易日 | walk-forward 對照、Brier／hit rate／drawdown | 多指標不劣化 | 未驗證 |
+| `H-CF-05` | 分層模型優於七項平權模型 | ≥252 交易日 | walk-forward 對照、Brier／hit rate／drawdown | 多指標不劣化 | INSUFFICIENT_DATA（2026-09-04；rolling store 評估日 49 < warmup 126；報告 `data/reports/cf-hypotheses-2026-09-04.json`） |
 
 任何 AI Agent 不得把表中的未驗證假設改寫成查證事實。
 
