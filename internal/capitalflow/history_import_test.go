@@ -436,3 +436,182 @@ func TestBuildHistorySamples_Government_MissingGovFileOnlyT86(t *testing.T) {
 	}
 	_ = rep
 }
+
+// writeOIFixture writes one TAIFEX OI day snapshot per date into dir
+// (TX contract with foreign oi_net; MTX included to prove it is ignored).
+func writeOIFixture(t *testing.T, dir string, dates []string, oiNet int64) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir oi: %v", err)
+	}
+	for _, d := range dates {
+		snap := map[string]any{
+			"date":   d,
+			"source": "finmind:TaiwanFuturesInstitutionalInvestors",
+			"contracts": map[string]any{
+				"TX":  map[string]any{"date": d, "foreign": map[string]any{"oi_net": oiNet}},
+				"MTX": map[string]any{"date": d, "foreign": map[string]any{"oi_net": oiNet + 1}},
+			},
+		}
+		data, err := json.Marshal(snap)
+		if err != nil {
+			t.Fatalf("marshal oi fixture: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, d+".json"), data, 0o644); err != nil {
+			t.Fatalf("write oi fixture %s: %v", d, err)
+		}
+	}
+}
+
+// writeMacroTSMADRFixture writes dated macro snapshots with a tsm_adr
+// change_pct for every date (plus latest.json to prove it is skipped).
+func writeMacroTSMADRFixture(t *testing.T, dir string, dates []string, chg float64) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir macro: %v", err)
+	}
+	for _, d := range dates {
+		snap := map[string]any{
+			"taiex":   map[string]any{"symbol": "^TWII", "value": 23000.0},
+			"tsm_adr": map[string]any{"symbol": "TSM", "value": 300.0, "change_pct": chg},
+		}
+		data, err := json.Marshal(snap)
+		if err != nil {
+			t.Fatalf("marshal macro fixture: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, d+".json"), data, 0o644); err != nil {
+			t.Fatalf("write macro fixture %s: %v", d, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "latest.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write latest.json: %v", err)
+	}
+}
+
+// TestLoadFuturesOI verifies the TX-only foreign oi_net extraction and
+// the missing-directory behavior.
+func TestLoadFuturesOI(t *testing.T) {
+	dir := t.TempDir()
+	dates := genDates("2026-06-01", 5)
+	writeOIFixture(t, dir, dates, -10220)
+
+	oi, err := LoadFuturesOI(dir)
+	if err != nil {
+		t.Fatalf("LoadFuturesOI: %v", err)
+	}
+	if len(oi) != 5 {
+		t.Fatalf("oi days = %d, want 5", len(oi))
+	}
+	if oi[dates[0]] != -10220 {
+		t.Fatalf("oi[%s] = %v, want -10220", dates[0], oi[dates[0]])
+	}
+
+	if empty, err := LoadFuturesOI(filepath.Join(dir, "missing")); err != nil || len(empty) != 0 {
+		t.Fatalf("missing dir: got %v, %v; want empty, nil", empty, err)
+	}
+}
+
+// TestLoadMacroTSMADR verifies change_pct extraction, zero-skip, and
+// latest/previous.json exclusion.
+func TestLoadMacroTSMADR(t *testing.T) {
+	dir := t.TempDir()
+	dates := genDates("2026-06-01", 3)
+	writeMacroTSMADRFixture(t, dir, dates, 1.25)
+
+	adr, err := LoadMacroTSMADR(dir)
+	if err != nil {
+		t.Fatalf("LoadMacroTSMADR: %v", err)
+	}
+	if len(adr) != 3 {
+		t.Fatalf("adr days = %d, want 3", len(adr))
+	}
+	if adr[dates[0]] != 1.25 {
+		t.Fatalf("adr[%s] = %v, want 1.25", dates[0], adr[dates[0]])
+	}
+
+	if empty, err := LoadMacroTSMADR(filepath.Join(dir, "missing")); err != nil || len(empty) != 0 {
+		t.Fatalf("missing dir: got %v, %v; want empty, nil", empty, err)
+	}
+}
+
+// TestBuildHistorySamplesExt verifies the futures + tsm_adr extension:
+// real-source samples are appended for every replay date with a source
+// snapshot (not fromDate-filtered), NeedsRealSource shrinks accordingly,
+// and Retail stays flagged.
+func TestBuildHistorySamplesExt(t *testing.T) {
+	dir := t.TempDir()
+	dates := genDates("2026-05-01", 30)
+	replayPath := filepath.Join(dir, "replay.csv")
+	writeReplayFixture(t, replayPath, dates)
+	t86Dir := filepath.Join(dir, "t86")
+	if err := os.MkdirAll(t86Dir, 0o755); err != nil {
+		t.Fatalf("mkdir t86: %v", err)
+	}
+	writeT86Fixture(t, t86Dir, dates)
+	oiDir := filepath.Join(dir, "oi")
+	writeOIFixture(t, oiDir, dates, -5000)
+	macroDir := filepath.Join(dir, "macro")
+	writeMacroTSMADRFixture(t, macroDir, dates, 0.8)
+
+	// fromDate excludes the early T86 placeholders but NOT the real
+	// futures/tsm_adr sources.
+	samples, rep, err := BuildHistorySamplesExt(replayPath, t86Dir, filepath.Join(dir, "gov-empty"), "2026-05-15", oiDir, macroDir)
+	if err != nil {
+		t.Fatalf("BuildHistorySamplesExt: %v", err)
+	}
+	var fut, adr int
+	for _, s := range samples {
+		switch s.Dimension {
+		case ForceFutures:
+			fut++
+			if s.SourceID != SourceFinMindFutOI || s.Unit != "contracts" {
+				t.Fatalf("futures sample %+v", s)
+			}
+		case ForceTSMADR:
+			adr++
+			if s.SourceID != SourceYahoo || s.Unit != "percent" {
+				t.Fatalf("tsm_adr sample %+v", s)
+			}
+		}
+	}
+	if fut != 30 || adr != 30 {
+		t.Fatalf("futures=%d tsm_adr=%d, want 30/30 (not fromDate-filtered)", fut, adr)
+	}
+	if rep.FuturesImportedDates != 30 || rep.TSMADRImportedDates != 30 {
+		t.Fatalf("report futures/tsm_adr = %d/%d, want 30/30", rep.FuturesImportedDates, rep.TSMADRImportedDates)
+	}
+	// T86 trio fromDate-filtered to 16 dates (48 samples) + 30 + 30 = 108.
+	if len(samples) != 108 {
+		t.Fatalf("samples len=%d, want 108", len(samples))
+	}
+	for _, dim := range rep.NeedsRealSource {
+		if dim == ForceFutures || dim == ForceTSMADR {
+			t.Fatalf("%s still flagged as NeedsRealSource after import", dim)
+		}
+	}
+	hasRetail := false
+	for _, dim := range rep.NeedsRealSource {
+		if dim == ForceRetail {
+			hasRetail = true
+		}
+	}
+	if !hasRetail {
+		t.Fatal("retail must remain flagged as NeedsRealSource")
+	}
+
+	// Missing oi/macro dirs → dims stay out and stay flagged.
+	samples2, rep2, err := BuildHistorySamplesExt(replayPath, t86Dir, filepath.Join(dir, "gov-empty"), "", filepath.Join(dir, "no-oi"), filepath.Join(dir, "no-macro"))
+	if err != nil {
+		t.Fatalf("BuildHistorySamplesExt(missing dirs): %v", err)
+	}
+	if len(samples2) != 90 {
+		t.Fatalf("samples len=%d, want 90 (T86 trio only)", len(samples2))
+	}
+	flagged := map[ForceName]bool{}
+	for _, dim := range rep2.NeedsRealSource {
+		flagged[dim] = true
+	}
+	if !flagged[ForceFutures] || !flagged[ForceTSMADR] || !flagged[ForceRetail] {
+		t.Fatalf("NeedsRealSource=%v, want futures+tsm_adr+retail flagged", rep2.NeedsRealSource)
+	}
+}
