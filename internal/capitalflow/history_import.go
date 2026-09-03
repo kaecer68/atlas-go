@@ -65,6 +65,14 @@ type ImportReport struct {
 	// GovImportedDates is how many dates contributed a ForceGovernment
 	// sample (subset of ImportedDates).
 	GovImportedDates int
+	// FuturesImportedDates is how many dates contributed a ForceFutures
+	// sample from real TAIFEX institutional OI snapshots (via
+	// BuildHistorySamplesExt; 0 when -oi was not given).
+	FuturesImportedDates int
+	// TSMADRImportedDates is how many dates contributed a ForceTSMADR
+	// sample from real Yahoo-derived TSM ADR macro snapshots (via
+	// BuildHistorySamplesExt; 0 when -macro was not given).
+	TSMADRImportedDates int
 	// SkippedDatesNoT86 is the count of replay trading dates inside
 	// the window that had no T86 snapshot (real source missing).
 	SkippedDatesNoT86 int
@@ -234,6 +242,194 @@ func LoadReplayTradingDates(replayPath string) ([]string, error) {
 	return dates, nil
 }
 
+// LoadFuturesOI reads every TAIFEX institutional OI day snapshot under
+// dir (data/state/taifex_oi/YYYY-MM-DD.json, produced by
+// cmd/backfill-taifex-oi-finmind or the taifex_institutional adapter)
+// and returns the TX contract foreign open-interest net (口數) keyed by
+// normalized trading date. Files without a TX contract are skipped.
+// A missing directory yields an empty map (dimension stays out of the
+// import) — never a fabricated value.
+func LoadFuturesOI(dir string) (map[string]float64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]float64{}, nil
+		}
+		return nil, fmt.Errorf("history_import: read futures OI dir %s: %w", dir, err)
+	}
+	out := make(map[string]float64, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("history_import: read %s: %w", e.Name(), err)
+		}
+		var raw struct {
+			Date      string `json:"date"`
+			Contracts map[string]struct {
+				Foreign struct {
+					OINet int64 `json:"oi_net"`
+				} `json:"foreign"`
+			} `json:"contracts"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("history_import: parse %s: %w", e.Name(), err)
+		}
+		if raw.Date == "" {
+			continue
+		}
+		date, err := normalizeT86Date(raw.Date)
+		if err != nil {
+			return nil, fmt.Errorf("history_import: %s: %w", e.Name(), err)
+		}
+		tx, ok := raw.Contracts["TX"]
+		if !ok {
+			continue
+		}
+		out[date] = float64(tx.Foreign.OINet)
+	}
+	return out, nil
+}
+
+// LoadMacroTSMADR reads the dated macro snapshots under dir
+// (data/state/macro/YYYY-MM-DD.json) and returns the TSM ADR daily
+// change percent keyed by trading date. latest.json / previous.json
+// and zero-valued points are skipped: the TSMADR dimension's raw
+// value is exactly snap.TSMADR.ChangePct (see scoreTSMADR).
+func LoadMacroTSMADR(dir string) (map[string]float64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]float64{}, nil
+		}
+		return nil, fmt.Errorf("history_import: read macro dir %s: %w", dir, err)
+	}
+	out := make(map[string]float64, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".json") || name == "latest.json" || name == "previous.json" {
+			continue
+		}
+		date := strings.TrimSuffix(name, ".json")
+		if err := validateTradingDate(date); err != nil {
+			continue // not a dated snapshot
+		}
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return nil, fmt.Errorf("history_import: read %s: %w", name, err)
+		}
+		var raw struct {
+			TSMADR struct {
+				ChangePct float64 `json:"change_pct"`
+			} `json:"tsm_adr"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("history_import: parse %s: %w", name, err)
+		}
+		if raw.TSMADR.ChangePct == 0 {
+			continue
+		}
+		out[date] = raw.TSMADR.ChangePct
+	}
+	return out, nil
+}
+
+// BuildHistorySamples extends the CAL-1 batch with the two dimensions
+// whose real feeds landed: ForceFutures (TAIFEX institutional OI
+// snapshots under oiDir, TX foreign oi_net in 口數) and ForceTSMADR
+// (Yahoo-derived TSM ADR daily change percent from dated macro
+// snapshots under macroDir). Unlike the T86 trio, these dimensions are
+// NOT filtered by fromDate: their source snapshots are real readings
+// across their whole range (the fromDate placeholder exclusion only
+// applies to the early synthetic T86 files). Dates outside the replay
+// trading calendar are still skipped. Retail remains a real-source
+// gap (TWSE margin + 當沖 history) and is reported via NeedsRealSource.
+func BuildHistorySamplesExt(replayPath, t86Dir, govDir, fromDate, oiDir, macroDir string) ([]RollingSample, ImportReport, error) {
+	samples, rep, err := BuildHistorySamples(replayPath, t86Dir, govDir, fromDate)
+	if err != nil {
+		return nil, rep, err
+	}
+	oi, err := LoadFuturesOI(oiDir)
+	if err != nil {
+		return nil, rep, err
+	}
+	adr, err := LoadMacroTSMADR(macroDir)
+	if err != nil {
+		return nil, rep, err
+	}
+	replayDates, err := LoadReplayTradingDates(replayPath)
+	if err != nil {
+		return nil, rep, err
+	}
+
+	futDates := make(map[string]struct{})
+	adrDates := make(map[string]struct{})
+	first, last := "", ""
+	for _, d := range replayDates {
+		if v, ok := oi[d]; ok {
+			samples = append(samples, RollingSample{
+				TradingDate: d,
+				Dimension:   ForceFutures,
+				RawValue:    v,
+				Unit:        "contracts",
+				SourceID:    SourceFinMindFutOI,
+			})
+			futDates[d] = struct{}{}
+			rep.FuturesImportedDates++
+		}
+		if v, ok := adr[d]; ok {
+			samples = append(samples, RollingSample{
+				TradingDate: d,
+				Dimension:   ForceTSMADR,
+				RawValue:    v,
+				Unit:        "percent",
+				SourceID:    SourceYahoo,
+			})
+			adrDates[d] = struct{}{}
+			rep.TSMADRImportedDates++
+		}
+		if _, ok := futDates[d]; ok || first == "" {
+			if first == "" {
+				first = d
+			}
+			last = d
+		}
+	}
+	rep.ImportedSamples = len(samples)
+
+	// Drop the dimensions that now have real sources from NeedsRealSource.
+	remaining := rep.NeedsRealSource[:0]
+	for _, dim := range rep.NeedsRealSource {
+		switch dim {
+		case ForceFutures:
+			if len(futDates) == 0 {
+				remaining = append(remaining, dim)
+			}
+		case ForceTSMADR:
+			if len(adrDates) == 0 {
+				remaining = append(remaining, dim)
+			}
+		default:
+			remaining = append(remaining, dim)
+		}
+	}
+	rep.NeedsRealSource = remaining
+
+	if first != "" {
+		// Ext range = union coverage of the appended dimensions (may be
+		// wider than the T86-only range).
+		if rep.DateRange[0] == "" || first < rep.DateRange[0] {
+			rep.DateRange[0] = first
+		}
+		if last > rep.DateRange[1] {
+			rep.DateRange[1] = last
+		}
+	}
+	return samples, rep, nil
+}
+
 // BuildHistorySamples builds the import batch for every replay trading
 // date (>= fromDate when non-empty, YYYY-MM-DD inclusive) that has a
 // real T86 record, emitting the three dimensions with real sources
@@ -326,6 +522,12 @@ func (r ImportReport) String() string {
 	}
 	if r.GovImportedDates > 0 {
 		fmt.Fprintf(&b, "; government: %d dates imported (media-curated readings)", r.GovImportedDates)
+	}
+	if r.FuturesImportedDates > 0 {
+		fmt.Fprintf(&b, "; futures OI: %d dates imported (TX foreign oi_net)", r.FuturesImportedDates)
+	}
+	if r.TSMADRImportedDates > 0 {
+		fmt.Fprintf(&b, "; tsm_adr: %d dates imported (Yahoo daily change%%)", r.TSMADRImportedDates)
 	}
 	if len(r.NeedsRealSource) > 0 {
 		names := make([]string, len(r.NeedsRealSource))
