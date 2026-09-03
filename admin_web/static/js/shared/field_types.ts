@@ -4778,6 +4778,15 @@ export interface odmRevenueRecord {
   timestamp: number;
 }
 
+export interface periodMatrixResponse {
+  generated_at: string;
+  source?: string;
+  degraded: boolean;
+  min_samples: number;
+  periods: string[];
+  cells: string[];
+}
+
 export interface portHealthReport {
   addr: string;
   state: string;

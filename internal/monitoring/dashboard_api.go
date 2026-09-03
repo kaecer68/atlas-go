@@ -47,6 +47,7 @@ import (
 	apinarrative "github.com/kaecer68/atlas-go/internal/monitoring/api/narrative"
 	apiparameters "github.com/kaecer68/atlas-go/internal/monitoring/api/parameters"
 	apiperformance "github.com/kaecer68/atlas-go/internal/monitoring/api/performance"
+	periodmatrix "github.com/kaecer68/atlas-go/internal/monitoring/api/periodmatrix"
 	apipipeline "github.com/kaecer68/atlas-go/internal/monitoring/api/pipeline"
 	apirisk "github.com/kaecer68/atlas-go/internal/monitoring/api/risk"
 	apishared "github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
@@ -1508,6 +1509,7 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	dashboardHandlers.RegisterRoutes(mux)
 
 	a.RegisterPerformanceRoutes(mux)
+	a.RegisterPeriodMatrixRoutes(mux)
 	a.RegisterCircuitBreakerRoutes(mux)
 }
 
@@ -1747,6 +1749,20 @@ func (a *DashboardAPI) RegisterCircuitBreakerRoutes(mux *http.ServeMux) {
 	handlers := &apicircuitbreaker.Handlers{
 		Svc: svc,
 	}
+	handlers.RegisterRoutes(mux)
+}
+
+// RegisterPeriodMatrixRoutes mounts GET /api/strategy/period-matrix
+// (capital-flow Phase 2 PR-2b). The read path is the same SSoT store as the
+// performance report (PG-first with degraded JSONL fallback).
+func (a *DashboardAPI) RegisterPeriodMatrixRoutes(mux *http.ServeMux) {
+	cfg := config.Normalize(config.Load())
+	svc, err := service.NewPeriodMatrixService(cfg)
+	if err != nil {
+		logging.Error("dashboard", "period_matrix_store_init_failed", logging.Err(err))
+		return
+	}
+	handlers := periodmatrix.NewHandlers(svc)
 	handlers.RegisterRoutes(mux)
 }
 
