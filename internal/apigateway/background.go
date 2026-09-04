@@ -568,6 +568,7 @@ var taskDescriptions = map[string]string{
 	"factor_weight_strategy_calibrate":  "因子權重策略校準",
 	"rsi_tw_calibrate":                  "RSI-TW 校準",
 	"system_health_monitor":             "系統健康日檢",
+	"cf_hypothesis_validation":          "Hypothesis 驗證自動重測（08:30 時窗、唯讀離線、資料解鎖才出變更）",
 }
 
 // TaskDescription returns the human-readable description for a scheduled

@@ -455,4 +455,10 @@ func registerCapitalTasks(d capitalDeps) {
 		},
 	})
 	log.Printf("[Gateway] registered evolution_health background task (24h interval)")
+
+	// Register cf_hypothesis_validation — daily auto-rerun of the
+	// pre-registered capital-flow hypothesis validator (08:30 Taipei
+	// window). Read-only + offline (local snapshots only, no FinMind
+	// quota); governance details in cf_hypothesis_validation_task.go.
+	registerCFHypothesisValidationTask(d)
 }
