@@ -45,6 +45,18 @@ type channel struct {
 	ticker string // Yahoo chart ticker, e.g. "TSM"
 }
 
+// defaultChannels lists the Yahoo-chart-backed macro snapshot fields a default
+// run repairs. bdi (.BADI) is intentionally absent — the Yahoo chart endpoint
+// returns 404 for both .BADI and ^BDIY (ranaroussi/yfinance#1667).
+func defaultChannels() string {
+	return "taiex:^TWII,tsm_adr:TSM," +
+		"vix:^VIX,usd_twd:USDTWD=X,dxy:DX-Y.NYB,us10y:^TNX," +
+		"sox_index:^SOX,spx_index:^GSPC,ndx_index:^IXIC,dji_index:^DJI," +
+		"nvda:NVDA,aapl:AAPL,msft:MSFT," +
+		"oil:CL=F,gold:GC=F,silver:SI=F,copper:HG=F," +
+		"jpy:JPY=X,dram_spot_price:MU"
+}
+
 // chartQuote is the subset of the Yahoo v8 chart response this tool needs.
 type chartQuote struct {
 	Chart struct {
@@ -96,14 +108,14 @@ func main() {
 		// Default channels cover every Yahoo-chart-backed field in
 		// MacroDataSnapshot that the composite live provider fills, so a single
 		// backfill run repairs the same field set the runtime would have persisted.
-		// jpy (frankfurter_fx), bdi (.BADI), taiwan_semi_index/dram_spot_price,
-		// tsmc_revenue (FinMind/TWSE) and the institutional/flow fields have other
-		// sources and are intentionally NOT in this list.
-		chans = flag.String("channels", "taiex:^TWII,tsm_adr:TSM,"+
-			"vix:^VIX,usd_twd:USDTWD=X,dxy:DX-Y.NYB,us10y:^TNX,"+
-			"sox_index:^SOX,spx_index:^GSPC,ndx_index:^IXIC,dji_index:^DJI,"+
-			"nvda:NVDA,aapl:AAPL,msft:MSFT,"+
-			"oil:CL=F,gold:GC=F,silver:SI=F,copper:HG=F",
+		// jpy is Yahoo-chart-backed here (historical only; live uses the
+		// frankfurter_fx channel), and dram_spot_price maps to MU closes.
+		// bdi (.BADI) is NOT fillable from Yahoo — the Yahoo chart endpoint
+		// returns 404 for both .BADI and ^BDIY (ranaroussi/yfinance#1667); the
+		// live BDI source is the CNBC quote API, which has no history. Also
+		// intentionally NOT in this list: taiwan_semi_index, tsmc_revenue
+		// (FinMind/TWSE) and the institutional/flow fields.
+		chans = flag.String("channels", defaultChannels(),
 			"comma list of field:ticker pairs")
 		outDir = flag.String("out", "data/state/macro", "output directory under workdir")
 		dryRun = flag.Bool("dry-run", false, "fetch nothing: print plan only")

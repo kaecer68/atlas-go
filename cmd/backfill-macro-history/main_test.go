@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -168,5 +169,27 @@ func TestMergeBarFillsAndSkips(t *testing.T) {
 	_ = json.Unmarshal(snap["taiex"], &taiexPt)
 	if taiexPt.Value != 23000 {
 		t.Fatalf("taiex point = %v", taiexPt.Value)
+	}
+}
+
+// TestDefaultChannelsCoverYahooBackedFields guards the default -channels list:
+// every Yahoo-chart-backed snapshot field must be present so one default run
+// repairs the full live field set. bdi is the documented exception — Yahoo
+// returns 404 for both .BADI and ^BDIY.
+func TestDefaultChannelsCoverYahooBackedFields(t *testing.T) {
+	got := defaultChannels()
+	for _, want := range []string{
+		"taiex:^TWII", "tsm_adr:TSM", "vix:^VIX", "usd_twd:USDTWD=X",
+		"dxy:DX-Y.NYB", "us10y:^TNX", "sox_index:^SOX", "spx_index:^GSPC",
+		"ndx_index:^IXIC", "dji_index:^DJI", "nvda:NVDA", "aapl:AAPL",
+		"msft:MSFT", "oil:CL=F", "gold:GC=F", "silver:SI=F", "copper:HG=F",
+		"jpy:JPY=X", "dram_spot_price:MU",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("default channels %q missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, "bdi:") {
+		t.Errorf("default channels %q must not include bdi (Yahoo 404)", got)
 	}
 }
