@@ -1767,6 +1767,11 @@ export interface GuardOutcome {
   severity: string;
 }
 
+export interface HCF01V2DropEntry {
+  date: string;
+  reason: string;
+}
+
 export interface HealthParameters {
   mute_threshold: string;
   unmute_threshold: string;
