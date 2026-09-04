@@ -120,16 +120,66 @@ func (d *DayTradingProvider) fetchDate(ctx context.Context, dateStr string) (*Da
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
-	if apiResp.Stat != "OK" || len(apiResp.Tables) == 0 {
-		return nil, fmt.Errorf("TWSE API returned no data: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
+	if apiResp.Stat != "OK" {
+		return nil, fmt.Errorf("TWSE API returned no data: stat=%s", apiResp.Stat)
 	}
 
-	marketTable := apiResp.Tables[0]
-	if len(marketTable.Data) == 0 || len(marketTable.Data[0]) < 6 {
-		return nil, fmt.Errorf("TWSE API returned empty market data")
+	// PR-3: locate the aggregate statistics table robustly. TWSE moved the
+	// response to a `tables` array (BFI84U precedent) and the layout varies:
+	//   - tables[0] = 「當日沖銷交易統計資訊」(the 6-column aggregate row this
+	//     parser consumes) and tables[1] = the eligible-securities list
+	//     (2026-09-01/09-03 live shape), OR
+	//   - tables[0] = an EMPTY object and tables[1] = the securities list
+	//     with only 3 columns — the day's statistics are simply not
+	//     published yet (2026-09-04 live shape, verified 18:40 TW: the
+	//     ratio lands after TWSE's evening processing), OR
+	//   - legacy pre-tables shape: a top-level `data` array.
+	// Dispatch on table identity (fields of the stats table), not on
+	// position, so a future reorder cannot silently parse the securities
+	// list as statistics.
+	var row []string
+	for i := range apiResp.Tables {
+		table := &apiResp.Tables[i]
+		if isDayTradingStatsTable(table) {
+			if len(table.Data) > 0 && len(table.Data[0]) >= 6 {
+				row = table.Data[0]
+			}
+			break
+		}
+	}
+	// Fallback 1 — unlabeled aggregate row: some payloads (and legacy test
+	// fixtures) carry a field-less table whose first row is the 6-column
+	// aggregate. Accept the first such table, skipping the eligible-
+	// securities list (identified by its 證券代號 field) so a volume-less or
+	// 6-column securities table can never be mis-parsed as statistics.
+	if row == nil {
+		for i := range apiResp.Tables {
+			table := &apiResp.Tables[i]
+			if isSecuritiesListTable(table) {
+				continue
+			}
+			if len(table.Data) > 0 && len(table.Data[0]) >= 6 {
+				row = table.Data[0]
+				break
+			}
+		}
+	}
+	// Fallback 2 — legacy dual-format: no tables payload → top-level data
+	// rows carry the same 6 columns.
+	if row == nil && len(apiResp.Tables) == 0 && len(apiResp.Data) > 0 {
+		if len(apiResp.Data[0]) >= 6 {
+			row = apiResp.Data[0]
+		}
+	}
+	if row == nil {
+		// Covers both "statistics not published yet" (empty tables[0] on
+		// fresh dates) and genuine schema breakage. Wrapping ErrNoData keeps
+		// gateway/channel-health classification (waiting, not outage) and
+		// FetchLatest's calendar walk-back intact.
+		return nil, fmt.Errorf("%w: TWSE day trading statistics not in response (stat=%s tables=%d top_data=%d) — not published yet or schema moved",
+			ErrNoData, apiResp.Stat, len(apiResp.Tables), len(apiResp.Data))
 	}
 
-	row := marketTable.Data[0]
 	stats := &DayTradingStats{
 		Date:                dateStr,
 		DayTradingVolume:    parseTWSEInt(row[0]),
@@ -143,10 +193,38 @@ func (d *DayTradingProvider) fetchDate(ctx context.Context, dateStr string) (*Da
 	return stats, nil
 }
 
+// isSecuritiesListTable reports whether a `tables` entry is the
+// eligible-securities list (證券代號 field present) rather than the aggregate
+// statistics row.
+func isSecuritiesListTable(t *twseDayTradingTable) bool {
+	for _, f := range t.Fields {
+		if strings.Contains(f, "證券代號") {
+			return true
+		}
+	}
+	return false
+}
+
+// isDayTradingStatsTable reports whether a `tables` entry is the aggregate
+// 當日沖銷交易統計資訊 table (as opposed to the eligible-securities list).
+// Field-matching survives reordering and the volume-less securities table
+// that TWSE serves before the day's statistics are published.
+func isDayTradingStatsTable(t *twseDayTradingTable) bool {
+	for _, f := range t.Fields {
+		if strings.Contains(f, "當日沖銷交易總成交股數") {
+			return true
+		}
+	}
+	return false
+}
+
 type twseDayTradingResponse struct {
 	Stat   string                `json:"stat"`
 	Date   string                `json:"date"`
 	Tables []twseDayTradingTable `json:"tables"`
+	// Data is the legacy (pre-tables) top-level row array, kept for the
+	// dual-format fallback in fetchDate.
+	Data [][]string `json:"data"`
 }
 
 type twseDayTradingTable struct {
