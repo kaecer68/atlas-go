@@ -134,8 +134,15 @@ func runFromOSArgs() error {
 		dryRun  = flag.Bool("dry-run", false, "report what would be merged without writing")
 	)
 	flag.Parse()
-	_, err := run(*workDir, *source, *srcDir, *start, *end, *dryRun)
-	return err
+	stats, err := run(*workDir, *source, *srcDir, *start, *end, *dryRun)
+	if err != nil {
+		return err
+	}
+	if stats != nil {
+		log.Printf("backfill-macro-fields done: sources=%d snapshots_merged=%d fields_filled=%d skipped_existing=%d skipped_zero_source=%d missing_snapshot=%d errors=%d",
+			stats.sources, stats.snapshotsMerged, stats.fieldsFilled, stats.skippedExisting, stats.skippedZeroSource, stats.missingSnapshot, stats.errors)
+	}
+	return nil
 }
 
 // run executes one merge pass. Kept exported-shaped for tests: returns run
