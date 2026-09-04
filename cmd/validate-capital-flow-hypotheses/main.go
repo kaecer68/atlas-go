@@ -7,6 +7,14 @@
 //	H-CF-02  TSM ADR information content for next-day TAIEX direction
 //	H-CF-05  layered (E07 4-layer vote) vs equal-weight model
 //
+// OI SOURCE CONTRACT (H-CF-01 data hygiene, 2026-09-04): the FinMind
+// snapshots under data/state/taifex_oi/ are the SINGLE open-interest source
+// for every judgment this tool produces. The macro-snapshot channel
+// (foreign_futures_oi_net) is BLOCKED as signal input — its date attribution
+// carried the previous session's value on 19/33 overlap days (see
+// internal/capitalflow/oi_alignment.go); any -r3+ judgment report must state
+// this single-source declaration verbatim.
+//
 // The tool is strictly offline and read-only: it reads local data
 // under -workdir (TAIFEX OI snapshots, T86 capital-flow snapshots,
 // macro snapshots with TAIEX/TSM ADR, the rolling sample store, and
