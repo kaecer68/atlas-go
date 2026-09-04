@@ -95,6 +95,77 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 	}
 }
 
+// TestExportChannelHealthMetrics_StalenessOverageRespectsContract —
+// 2026-09-04 告警降噪: atlas_channel_staleness_overage_seconds 只在
+// staleness 超出該通道契約 FreshnessWindow 時輸出。
+//   - us10y（無契約 → 預設 48h 窗）staleness 27h: 資料時間戳合法落後 → 不得輸出
+//     （舊 raw >24h 規則對它日日誤報,實證 2026-09-03/04）。
+//   - twse_replay_sync（無契約 → 預設 48h 窗）staleness 6d: 真斷軌 → 必須輸出
+//     overage = 6d-48h。
+//   - tdcc_equity_dispersion（契約窗 8d,週快照）staleness 3d: 不得輸出。
+func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 9, 4, 1, 30, 0, 0, time.UTC)
+	wrapper := struct {
+		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+	}{
+		Channels: map[string]*apigateway.ChannelHealthRecord{
+			"us10y": {
+				Status:     "ok",
+				LastDataAt: now.Add(-27 * time.Hour).Format(time.RFC3339),
+			},
+			"twse_replay_sync": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-6 * 24 * time.Hour).Format(time.RFC3339),
+			},
+			"tdcc_equity_dispersion": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-3 * 24 * time.Hour).Format(time.RFC3339),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	collector := monitoring.NewMetricsCollector()
+	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	monitoring.PrometheusHandler(collector).ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	// twse_replay_sync: 6d staleness - 48h window = 96h overage。
+	wantOverage := `atlas_channel_staleness_overage_seconds{channel="twse_replay_sync"} 345600`
+	if !strings.Contains(body, wantOverage) {
+		t.Fatalf("missing overage series %q\n--- full body ---\n%s", wantOverage, body)
+	}
+	for _, absent := range []string{
+		`atlas_channel_staleness_overage_seconds{channel="us10y"}`,
+		`atlas_channel_staleness_overage_seconds{channel="tdcc_equity_dispersion"}`,
+	} {
+		if strings.Contains(body, absent) {
+			t.Fatalf("unexpected overage series %q (within contract window)\n--- full body ---\n%s", absent, body)
+		}
+	}
+	// raw staleness gauge 仍輸出（dashboard 需要）。
+	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="us10y"} 97200`) {
+		t.Fatalf("raw staleness gauge for us10y missing\n--- full body ---\n%s", body)
+	}
+}
+
 func TestExportChannelHealthMetrics_NoCollectorIsNoOp(t *testing.T) {
 	dir := t.TempDir()
 	if err := exportChannelHealthMetrics(dir, nil, time.Now()); err != nil {

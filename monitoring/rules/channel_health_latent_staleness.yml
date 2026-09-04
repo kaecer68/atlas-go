@@ -2,8 +2,13 @@ groups:
   - name: channel_health_latent_staleness
     rules:
       - alert: ChannelDataStale
-        expr: atlas_channel_data_staleness_seconds > 86400
-        for: 5m
+        # 2026-09-04 告警降噪: 改用契約感知超額量 overage（staleness 超出
+        # 該通道 FreshnessWindow 的秒數,由 channel_health_metrics_task 匯出）。
+        # raw staleness > 24h 會對「資料時間戳合法落後」的通道日日誤報
+        # （實證: us10y/vix data-as-of 落後 ~27h）與週快照通道
+        # （tdcc_equity_dispersion 8 天窗口）。
+        expr: atlas_channel_staleness_overage_seconds > 0
+        for: 15m
         labels:
           severity: warning
           service: atlas-monitoring
@@ -12,7 +17,7 @@ groups:
         annotations:
           summary: "通道數據過於老舊"
           description: |
-            Channel {{ $labels.channel }} data is {{ $value | humanizeDuration }} old.
+            Channel {{ $labels.channel }} data staleness exceeds its freshness contract by {{ $value | humanizeDuration }}.
             建議檢查該通道的自動排程是否仍在運行，或資料源是否中斷。
           runbook_url: "https://wiki.internal/runbooks/channel-data-stale"
 

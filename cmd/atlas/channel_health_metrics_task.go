@@ -22,6 +22,14 @@ const (
 	MetricChannelDataStalenessSeconds = "atlas_channel_data_staleness_seconds"
 	MetricChannelFetchLatencySeconds  = "atlas_channel_fetch_latency_seconds"
 	MetricChannelHealthStatus         = "atlas_channel_health_status"
+	// MetricChannelStalenessOverageSeconds reports how much the data
+	// staleness EXCEEDS the channel's contract FreshnessWindow (0 = within
+	// contract). The ChannelDataStale alert keys on this instead of the raw
+	// staleness gauge: raw staleness fires daily false positives for
+	// channels whose upstream data timestamp legitimately lags the fetch
+	// time (2026-09-04 盤查: us10y/vix data-as-of 落後 ~27h 慢性超過 24h 門檻)
+	// and for low-frequency snapshots (tdcc_equity_dispersion 週快照).
+	MetricChannelStalenessOverageSeconds = "atlas_channel_staleness_overage_seconds"
 )
 
 // registerChannelHealthMetricsTask wires the channel_health_metrics_export
@@ -64,6 +72,17 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 		staleSec, err := computeChannelStalenessSeconds(rec, now)
 		if err == nil {
 			collector.RecordGauge(MetricChannelDataStalenessSeconds, staleSec, map[string]string{"channel": channelID})
+			// Contract-aware overage: only emitted when staleness exceeds
+			// the contract FreshnessWindow, so the ChannelDataStale alert
+			// (expr: overage > 0) fires on real pipeline breakage, not on
+			// legitimate data-timestamp lag or low-frequency snapshots.
+			window := apigateway.ChannelContracts().Contract(channelID).FreshnessWindow
+			if window <= 0 {
+				window = apigateway.StaleDataThreshold
+			}
+			if overage := staleSec - window.Seconds(); overage > 0 {
+				collector.RecordGauge(MetricChannelStalenessOverageSeconds, overage, map[string]string{"channel": channelID})
+			}
 		}
 	}
 	return nil
