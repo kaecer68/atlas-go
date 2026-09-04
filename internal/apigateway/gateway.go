@@ -129,13 +129,15 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		//     不更新 last_success、記 info log（週頻快照發布後自然恢復）。
 		//   - ErrQuotaExhausted（FinMind 日額度用完，00:00 TW 自動重置）→ warn
 		//     （與 adapter_finmind.go HealthCheck / ErrQuotaExhausted 文件語意一致）。
+		//   - ErrFugleQuotaExhausted（Fugle 本機日額度閘 2000/day 用完，00:00 UTC
+		//     重置）→ warn（2026-09-04 實證：額度閘未映射時 fugle 全日 error 告警）。
 		if errors.Is(callErr, marketdata.ErrNoData) {
 			_ = g.health.RecordWaiting(channelID)
 			logging.Info("gateway", "channel_waiting_no_data",
 				"channel", channelID, "err", callErr.Error())
 			return nil, callErr
 		}
-		if errors.Is(callErr, marketdata.ErrQuotaExhausted) {
+		if errors.Is(callErr, marketdata.ErrQuotaExhausted) || errors.Is(callErr, marketdata.ErrFugleQuotaExhausted) {
 			_ = g.health.Record(channelID, "warn", callErr.Error())
 			logging.Info("gateway", "channel_quota_waiting",
 				"channel", channelID, "err", callErr.Error())
