@@ -258,7 +258,7 @@ func TestPeriodDetector_Plateau(t *testing.T) {
 		ForeignNet5DayAvg:      2_000_000_000,
 		ForeignNet10DayAvg:     5_000_000_000, // 2B/5B = 40% < 50%
 		ForeignFuturesOIDelta3: -3,
-		DayTradeRatio:          38,
+		DayTradeRatio:          0.38, // 38% (小數語意)
 		TAIEXPrice:             18100,
 		TAIEXMA20:              18000, // +0.55%, within ±2%
 		SectorRotationFlag:     true,
@@ -268,6 +268,43 @@ func TestPeriodDetector_Plateau(t *testing.T) {
 	if got != domain.PeriodPlateau {
 		t.Errorf("DetectPeriod() = %v, want %v (got bull=%v)", got, domain.PeriodPlateau,
 			d.isBull(ind))
+	}
+}
+
+// TestPeriodDetector_PlateauDayTradeDecimalUnit is the regression test for
+// the PR-A unit mismatch: macro snapshot day_trade_ratio stores a fraction
+// (e.g. 0.2488 = 24.88%), so the plateau day-trade threshold must also be a
+// fraction (0.35). Under the old % semantics (threshold 35) the condition
+// could never fire against live snapshots.
+func TestPeriodDetector_PlateauDayTradeDecimalUnit(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+
+	if d.cfg.PlateauDayTradeMinPct != 0.35 {
+		t.Fatalf("PlateauDayTradeMinPct = %v, want 0.35 (decimal semantics)", d.cfg.PlateauDayTradeMinPct)
+	}
+
+	// Base hits exactly 2 plateau conditions (cond 1 + cond 4) so the
+	// day-trade condition is the deciding 3rd.
+	base := PeriodIndicators{
+		ForeignNet5DayAvg:  2_000_000_000,
+		ForeignNet10DayAvg: 5_000_000_000, // 40% < 50% → cond 1 hit
+		TAIEXPrice:         18100,
+		TAIEXMA20:          18000, // within ±2% → cond 4 hit
+	}
+
+	// Snapshot-style value 0.2488 (24.88%): below 0.35 → cond 3 must NOT hit,
+	// leaving only 2 conditions → not plateau.
+	low := base
+	low.DayTradeRatio = 0.2488
+	if got := d.DetectPeriod(low); got == domain.PeriodPlateau {
+		t.Errorf("DayTradeRatio=0.2488 (< 0.35) must not complete the plateau classification")
+	}
+
+	// 0.38 (38%) > 0.35 → cond 3 hits, plateau classification fires.
+	high := base
+	high.DayTradeRatio = 0.38
+	if got := d.DetectPeriod(high); got != domain.PeriodPlateau {
+		t.Errorf("DetectPeriod() = %v, want %v (day-trade cond must trigger at 0.38 > 0.35)", got, domain.PeriodPlateau)
 	}
 }
 
@@ -480,7 +517,7 @@ func TestDetectAssessmentWithState_JitterSmoothed(t *testing.T) {
 		ForeignNet5DayAvg:      2_000_000_000,
 		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
 		ForeignFuturesOIDelta3: -3,            // cond 2
-		DayTradeRatio:          40,            // cond 3
+		DayTradeRatio:          0.40,          // cond 3 (40%, 小數語意)
 		TAIEXPrice:             18100,
 		TAIEXMA20:              18000, // within ±2% → cond 4
 		SectorRotationFlag:     true,  // cond 5
@@ -524,7 +561,7 @@ func TestDetectAssessmentWithState_ConfirmedTransitionAfterHysteresis(t *testing
 		ForeignNet5DayAvg:      2_000_000_000,
 		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
 		ForeignFuturesOIDelta3: -3,            // cond 2
-		DayTradeRatio:          40,            // cond 3
+		DayTradeRatio:          0.40,          // cond 3 (40%, 小數語意)
 		TAIEXPrice:             18100,
 		TAIEXMA20:              18000, // within ±2% → cond 4
 		SectorRotationFlag:     true,  // cond 5
@@ -565,7 +602,7 @@ func TestStatefulPeriodDetector_DebrisCrossCalls(t *testing.T) {
 		ForeignNet5DayAvg:      2_000_000_000,
 		ForeignNet10DayAvg:     5_000_000_000, // 40% < 50% → plateau cond 1
 		ForeignFuturesOIDelta3: -3,            // cond 2
-		DayTradeRatio:          40,            // cond 3
+		DayTradeRatio:          0.40,          // cond 3 (40%, 小數語意)
 		TAIEXPrice:             18100,
 		TAIEXMA20:              18000, // within ±2% → cond 4
 		SectorRotationFlag:     true,  // cond 5

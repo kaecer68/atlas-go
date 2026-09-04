@@ -45,7 +45,7 @@ type PeriodDetectionConfig struct {
 
 	// ── Plateau ──
 	PlateauBuyRatio3to10     float64 // 3日均值 / 10日均值 < N
-	PlateauDayTradeMinPct    float64 // 當沖佔比 > N%
+	PlateauDayTradeMinPct    float64 // 當沖佔比 > N（小數語意, 0.35 = 35%；snapshot day_trade_ratio 存小數, PR-A 單位錯位修復）
 	PlateauTAIEXDeviationPct float64 // 指數偏離20日線 < ±N%
 
 	// ── Consolidation ──
@@ -116,7 +116,7 @@ func DefaultPeriodDetectionConfig() PeriodDetectionConfig {
 
 		// Plateau
 		PlateauBuyRatio3to10:     0.50,
-		PlateauDayTradeMinPct:    35,
+		PlateauDayTradeMinPct:    0.35,
 		PlateauTAIEXDeviationPct: 2.0,
 
 		// Consolidation

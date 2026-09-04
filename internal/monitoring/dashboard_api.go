@@ -895,7 +895,8 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 	}
 	// PR-3b: a persistent stateful detector carries the P2 debounced
 	// transition state across daily ingests (最小停留期 + 轉移遲滯) and
-	// the P1 graded black-swan rule; rows are stamped detector_version=v2.
+	// the P1 graded black-swan rule; rows are stamped detector_version=v3
+	// (v3: PR-A day-trade unit fix restores the plateau day-trade condition).
 	period, err := a.statefulPeriodDetector().DetectAssessmentDebounced(ind)
 	if err != nil {
 		logging.Warn("dashboard_api", "period_detect_failed", logging.Err(err))
@@ -909,7 +910,7 @@ func (a *DashboardAPI) persistPeriodHistory(ctx context.Context, snap marketdata
 		CapturedAt:      now,
 		IsSynthetic:     0,
 		Source:          "macro_ingest",
-		DetectorVersion: portfolio.PeriodDetectorVersionV2,
+		DetectorVersion: portfolio.PeriodDetectorVersionV3,
 	}
 	if err := a.historicalStore.UpsertPeriod(ctx, row); err != nil {
 		logging.Warn("dashboard_api", "persist_period_history_failed",

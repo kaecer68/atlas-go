@@ -180,6 +180,10 @@
       "value": "\"v2\""
     },
     {
+      "name": "PeriodDetectorVersionV3",
+      "value": "\"v3\""
+    },
+    {
       "name": "SectorConsumer",
       "type": "Sector",
       "value": "\"consumer\""
