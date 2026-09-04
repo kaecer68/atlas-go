@@ -20,20 +20,28 @@ type MacroDataPoint struct {
 
 // MacroDataSnapshot holds the latest readings for all tracked indicators.
 type MacroDataSnapshot struct {
-	US10Y                  MacroDataPoint `json:"us10y"`
-	DXY                    MacroDataPoint `json:"dxy"`
-	VIX                    MacroDataPoint `json:"vix"`
-	USD_TWD                MacroDataPoint `json:"usd_twd"`
-	Oil                    MacroDataPoint `json:"oil"`
-	Gold                   MacroDataPoint `json:"gold"`
-	JPY                    MacroDataPoint `json:"jpy"`
-	ForeignInvestorNet     MacroDataPoint `json:"foreign_investor_net"`
-	ForeignDealerNet       MacroDataPoint `json:"foreign_dealer_net"` // F1: 外資自營商(投機性)
-	DomesticFundNet        MacroDataPoint `json:"domestic_fund_net"`
-	DealerNet              MacroDataPoint `json:"dealer_net"`
-	DealerSelfNet          MacroDataPoint `json:"dealer_self_net"`      // F2: 自營商自行買賣(大型)
-	DealerHedgingNet       MacroDataPoint `json:"dealer_hedging_net"`   // F2: 自營商避險(投機)
-	ETFNetSubscription     MacroDataPoint `json:"etf_net_subscription"` // F3: ETF 申購贖回淨額(被動資金) — ⚠️ 資料源已移除(TWT44U→404)，恆為零
+	US10Y              MacroDataPoint `json:"us10y"`
+	DXY                MacroDataPoint `json:"dxy"`
+	VIX                MacroDataPoint `json:"vix"`
+	USD_TWD            MacroDataPoint `json:"usd_twd"`
+	Oil                MacroDataPoint `json:"oil"`
+	Gold               MacroDataPoint `json:"gold"`
+	JPY                MacroDataPoint `json:"jpy"`
+	ForeignInvestorNet MacroDataPoint `json:"foreign_investor_net"`
+	ForeignDealerNet   MacroDataPoint `json:"foreign_dealer_net"` // F1: 外資自營商(投機性)
+	DomesticFundNet    MacroDataPoint `json:"domestic_fund_net"`
+	DealerNet          MacroDataPoint `json:"dealer_net"`
+	DealerSelfNet      MacroDataPoint `json:"dealer_self_net"`      // F2: 自營商自行買賣(大型)
+	DealerHedgingNet   MacroDataPoint `json:"dealer_hedging_net"`   // F2: 自營商避險(投機)
+	ETFNetSubscription MacroDataPoint `json:"etf_net_subscription"` // F3: ETF 申購贖回淨額(被動資金) — ⚠️ 資料源已移除(TWT44U→404)，恆為零
+	// ForeignFuturesOINet is populated by the TAIFEX CSV/OpenAPI channel
+	// (cmd/backfill-taifex-oi-v2). ⚠️ DATE-ATTRIBUTION BUG (H-CF-01 data
+	// hygiene, 2026-09-04): on 19/33 overlap days the value stored for day d
+	// equals the previous session's OI (unmarked weekday carry-forward when
+	// TAIFEX had not published day d). Do NOT use this channel as a
+	// direction-signal input or mix it with data/state/taifex_oi (FinMind)
+	// until the realignment is verified; H-CF-01 judgments declare the
+	// FinMind taifex_oi snapshots as the single OI source.
 	ForeignFuturesOINet    MacroDataPoint `json:"foreign_futures_oi_net"`
 	GovernmentNet          MacroDataPoint `json:"government_net"`
 	InsuranceNet           MacroDataPoint `json:"insurance_net"`

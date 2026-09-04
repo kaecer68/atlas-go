@@ -12,7 +12,8 @@ package capitalflow
 //
 //   - the real TWSE T86 三大法人買賣超日報 snapshots under
 //     data/state/capital_flow/ (foreign / institutional / dealer
-//     readings in 億元, i.e. hundred_million_shares), and
+//     readings in 億股 / hundred_million_shares — T86 reports SHARE
+//     counts ÷ 1e8, not NT$ 億元; unit erratum fixed 2026-09-04), and
 //   - the replay trading calendar (data/replay/tw_extended_90days.csv)
 //     which defines which dates are valid trading days.
 //
@@ -44,8 +45,9 @@ import (
 )
 
 // T86Record is one day of real TWSE T86 三大法人買賣超 readings
-// (units: 億元 / hundred_million_shares). Loaded from the snapshot
-// JSON files under data/state/capital_flow/.
+// (units: 億股 / hundred_million_shares — TWSE T86 買賣超股數 ÷ 1e8;
+// NOT NT$ 億元). Loaded from the snapshot JSON files under
+// data/state/capital_flow/.
 type T86Record struct {
 	TradingDate      string
 	ForeignNet       float64

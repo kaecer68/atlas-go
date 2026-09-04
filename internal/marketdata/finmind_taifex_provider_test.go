@@ -202,3 +202,48 @@ func TestFinMindFuturesInstitutionalProvider_Empty(t *testing.T) {
 		t.Fatalf("got %d rows, want 0", len(rows))
 	}
 }
+
+// TestParseInstitutionalFuturesRows_DuplicateRowGuard (H-CF-01 data
+// hygiene, 2026-09-04): a second row for the same (date, category) must be
+// a typed error, never silent last-write-wins — the old behavior would take
+// whichever contract row came last if upstream ever started returning
+// per-contract-month rows.
+func TestParseInstitutionalFuturesRows_DuplicateRowGuard(t *testing.T) {
+	base := map[string]any{
+		"futures_id":                         "TX",
+		"date":                               "2021-06-15",
+		"long_deal_volume":                   float64(77043),
+		"long_deal_amount":                   float64(266651525),
+		"short_deal_volume":                  float64(79201),
+		"short_deal_amount":                  float64(273983321),
+		"long_open_interest_balance_volume":  float64(21584),
+		"long_open_interest_balance_amount":  float64(74661544),
+		"short_open_interest_balance_volume": float64(52853),
+		"short_open_interest_balance_amount": float64(181960351),
+	}
+	mk := func(cat string, oi float64) map[string]any {
+		row := make(map[string]any, len(base)+1)
+		for k, v := range base {
+			row[k] = v
+		}
+		row["institutional_investors"] = cat
+		row["long_open_interest_balance_volume"] = oi
+		return row
+	}
+	rows := []map[string]any{
+		mk("外資", 21584),
+		mk("投信", 19164),
+		mk("自營商", 27610),
+		mk("外資", 99999), // duplicate (date, category) with a different value
+	}
+	if _, err := parseInstitutionalFuturesRows(rows, "TX"); err == nil {
+		t.Fatal("duplicate 外資 row: want error, got nil (last-write-wins must be guarded)")
+	} else if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("error should name the duplicate, got: %v", err)
+	}
+
+	dupTrust := []map[string]any{mk("投信", 19164), mk("投信", 1), mk("外資", 21584), mk("自營商", 27610)}
+	if _, err := parseInstitutionalFuturesRows(dupTrust, "TX"); err == nil {
+		t.Fatal("duplicate 投信 row: want error, got nil")
+	}
+}
