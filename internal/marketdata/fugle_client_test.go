@@ -307,6 +307,39 @@ func TestFugleClient_QuotaGate_ReturnsErrFugleQuotaExhausted(t *testing.T) {
 // TestFugleClient_QuotaTelemetry verifies the QuotaUsed/Remaining accessors
 // expose the same counter as the FinMind ones, so a future /api/dashboard/quota
 // endpoint can render both providers from one Snapshot() call.
+// TestFugleClient_Breaker_QuotaExhaustionDoesNotTrip mirrors the FinMind
+// P1-7 test: daily-quota exhaustion is a budget condition (auto-resets at
+// 00:00 UTC), not an upstream outage — it must NOT trip the client breaker.
+// 實證 2026-09-04 生產事故：quota gate 記 breaker 失敗 → breaker 開啟 →
+// 後續 ErrFugleBreakerOpen 以 error 級寫入 channel_health → 全日誤報。
+func TestFugleClient_Breaker_QuotaExhaustionDoesNotTrip(t *testing.T) {
+	c := newFugleClient("test-key", t.TempDir())
+	c.rateLimiter = rate.NewLimiter(rate.Inf, 0)
+	c.quotaTracker.SetLimit(0)
+
+	var httpHit int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&httpHit, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c.baseURL = srv.URL
+
+	ctx := context.Background()
+	for i := range 5 {
+		_, err := c.GetQuote(ctx, "2330")
+		if !errors.Is(err, ErrFugleQuotaExhausted) {
+			t.Fatalf("call %d: expected ErrFugleQuotaExhausted, got %v", i+1, err)
+		}
+	}
+	if c.breaker.shouldTry() == false {
+		t.Fatal("breaker should remain closed (quota exhaustion must not trip)")
+	}
+	if atomic.LoadInt32(&httpHit) != 0 {
+		t.Errorf("HTTP handler hit %d times — quota gate did not block", httpHit)
+	}
+}
+
 func TestFugleClient_QuotaTelemetry(t *testing.T) {
 	c := newFugleClient("k", t.TempDir())
 	c.rateLimiter = rate.NewLimiter(rate.Inf, 0)

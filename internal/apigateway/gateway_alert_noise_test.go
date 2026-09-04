@@ -95,6 +95,32 @@ func TestGateway_Fetch_ErrQuotaExhausted_RecordsWarn(t *testing.T) {
 	}
 }
 
+// TestGateway_Fetch_ErrFugleQuotaExhausted_RecordsWarn mirrors the FinMind
+// quota warn mapping for Fugle: the LOCAL daily-quota gate (2000/day, resets
+// 00:00 UTC) is a budget condition, not an outage — 實證 2026-09-04 生產事故:
+// 未映射時 fugle 額度耗盡全日以 error 級告警（ChannelHealthStatusError）。
+func TestGateway_Fetch_ErrFugleQuotaExhausted_RecordsWarn(t *testing.T) {
+	g := newTestGateway(t)
+	channelID := "fugle"
+	quotaErr := fmt.Errorf("fugle fetch: fugle: %w (used=2000, remaining=0)", marketdata.ErrFugleQuotaExhausted)
+	registerFailingProvider(g, channelID, quotaErr)
+
+	_, err := g.Fetch(context.Background(), channelID)
+	if err == nil {
+		t.Fatal("Fetch should still surface the quota error to callers")
+	}
+	rec := g.Health().Get(channelID)
+	if rec == nil {
+		t.Fatal("expected health record after fetch")
+	}
+	if rec.Status != "warn" {
+		t.Errorf("Status = %q, want warn (fugle quota exhaustion is a waiting state, not an error)", rec.Status)
+	}
+	if rec.LastError == "" {
+		t.Error("LastError should carry the quota reason for the channel page")
+	}
+}
+
 // TestGateway_Fetch_RealError_StillRecordsError guards the classification
 // boundary: only typed no-data/quota conditions are downgraded; ordinary
 // upstream failures must keep recording "error" so ChannelHealthStatusError

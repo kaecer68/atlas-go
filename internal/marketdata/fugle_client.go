@@ -235,7 +235,11 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 		// providers. Without it, a cold-start burst from any caller can
 		// burn the day's Fugle budget in seconds (30/min × 1440 = 43,200).
 		if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
-			c.breakerRecordFailure()
+			// P1-7 鏡像（FinMind 同修）：額度耗盡是預算條件（00:00 UTC 自動
+			// 重置），不是上游故障 — 不得計入 breaker 連續失敗，否則 quota
+			// 事件會把 breaker 打開、讓後續 ErrFugleBreakerOpen 以 error 級
+			// 告警（實證 2026-09-04: calls_today=2000 觸發後 fugle 全日 error）。
+			c.breakerRecordSuccess()
 			return nil, fmt.Errorf("fugle: %w (used=%d, remaining=%d)", ErrFugleQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 		}
 
@@ -432,7 +436,8 @@ func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to
 		return nil, fmt.Errorf("fugle: %w", ErrFugleBreakerOpen)
 	}
 	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
-		c.breakerRecordFailure()
+		// P1-7 鏡像：同 doGet — 額度耗盡不計 breaker 失敗。
+		c.breakerRecordSuccess()
 		return nil, fmt.Errorf("fugle: %w (used=%d, remaining=%d)", ErrFugleQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
 	}
 
