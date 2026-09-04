@@ -302,6 +302,70 @@ TSM ADR 是跨市場價格訊號。未來可加入 SOX、USD/TWD 等，但新增
 
 任何 AI Agent 不得把表中的未驗證假設改寫成查證事實。
 
+### 10.1 H-CF-01 v2 修訂預註冊（2026-09-04 仲裁定稿；判決尚未執行）
+
+> 權威文本：`.omo/plans/2026-09-04-hcf01-arbitration.md` §2.2–2.6。本區塊為 PR-2 預註冊落地：門檻已進
+> `internal/capitalflow/validation_v2.go` compile-time 常數（CLI 永不可調）。**本 PR 不執行判決**——
+> v2a 修訂版 + v2a′ + v2b 三個判決由 PR-3 同批跑、出 `-r3` 報告（不覆寫 r2）。嚴禁任何人以 v1 舊門檻
+> （hit≥55% vs H0=0.5）直接判 v2a：那會得到必然 PASS 的假證書並永久短路放棄線。
+
+**資料源聲明（判決前置條件）**：所有 H-CF-01 判決以 FinMind `data/state/taifex_oi/` 為**唯一 OI 源**；
+macro snapshot 通道 `foreign_futures_oi_net` 因日期歸屬 bug（19/33 重疊日 `macro(d)==FinMind(d−1)`，
+見 `internal/capitalflow/oi_alignment.go`）**禁止**作為訊號輸入或與 FinMind 通路混用/補缺。
+
+#### v2a 修訂版 —— 雙層門檻
+
+- **訊號定義（不變，補縫隙）**：`ΔOI_t<0 且 ret_t>0 → 預測次日買超`；`ΔOI_t<0 且 ret_t<0 → 預測次日賣超`；
+  `ΔOI_t≥0 或 ret_t==0 → abstain`。rollover 窗剔除（第三週三遇假日取前一交易日規則，見 rollover.go）。
+- **基準（必須揭露，錨點取代 H0=0.5）**：基準 A 現貨持續性 ≈58.7%；基準 B 價格動量 ≈58.4%；
+  基準 C（無-OI 控制組）`sign(spot_t) 與 ret_t 同向才啟動、預測同向延續`（≈60.9%，與 v2a 同日可得性）。
+- **判定（兩層皆過才 PASS）**：
+  1. **統計層**：`logit P(spot_{t+1} 買超) ~ sign(spot_t) + sign(ret_t) + 1[ΔOI_t<0]`（可評估日樣本），
+     ΔOI 指標係數 >0 且 circular moving-block bootstrap（block=10）單尾 p ≤ Holm 調整後 α。
+  2. **經濟意義層**：v2a 啟動日命中率**嚴格優於基準 C ≥5pp**，且差異的 cell-wise block-bootstrap
+     檢定 p ≤ Holm α（glm53 §2 的 61.6% vs 60.9% 對照形式）；共同啟動日的配對差異另揭露。
+- **判定類別**：`PASS`（兩層皆過）/ `PASS_NO_INCREMENT`（統計層過、增量閘不過 → 記「現貨延續效果，
+  非 OI 資訊」，**計入放棄線**）/ `FAIL` / `INSUFFICIENT_DATA`（<252 可評估日）。
+- **揭露項**：每象限命中率+p 值（≥52% 僅 sanity floor，不作 gate）；rolling60 min/max/last；
+  精確 n 與逐日 drop 原因；rollover 敏感性。
+
+#### v2a′ —— 僅賣邊象限增量檢驗（新預註冊，最後一次否證機會）
+
+- **訊號定義**：`spot_t<0 且 ret_t<0 且 ΔOI_t<0 → 預測次日現貨賣超`；控制組=同格 `ΔOI_t≥0`。
+  機制敘事：跌勢中「已賣現貨+繼續加空期貨」是真方向性空頭確認（重算 64.4% vs 51.3%），
+  「已賣現貨+回補空單」是賣壓竭盡。
+- **門檻**：訊號格命中率 − 控制格命中率 ≥5pp，且 cell-wise block-bootstrap（block=10）兩比例差
+  p ≤ Holm α；兩格各 n≥30；Wilson 95% CI 揭露（樣本小，CI 寬，明文承認）。rollover 剔除、
+  ret_t==0 abstain 同 v2a。
+- **定位**：PASS → 因果鏈不翻 eligible，僅升級「賣邊有條件有效，待新資料樣本外驗證 + 30 日線上觀察」；
+  FAIL/NO_INCREMENT → 與 v2a/v2b 一起餵放棄線。
+
+#### v2b —— 照 R1 原樣 + warmup 明文
+
+- 維持 R1 預註冊（OI~TAIEX expanding OLS 殘差、k 鎖死=1、rollover 剔除），**不改自變數**（仲裁 D2；
+  降級時註記「更佳對沖變數未試」）。
+- **warmup 明文**：126 日消耗 OI/TAIEX 資料窗（自 2024-07-01 起），不消耗配對窗；評估窗=配對窗全段。
+- 門檻沿用 v1 閘門（train |ρ|≥0.10、OOS hit≥55% vs 0.5、p≤0.05、3 折符號一致）**以便版本對比**，
+  但 OOS hit 落在 [55%, 基準 A 58.7%) 者判 `PASS_NO_INCREMENT` 計入放棄線；報告並列基準 A 對照，
+  附「對沖變數選擇未試」與「水位-水位偽迴歸風險」兩條限制註記。
+
+#### 放棄線（取代 R1 §C.2 對應段）
+
+> 若 **v2a 修訂版 FAIL 或 PASS_NO_INCREMENT**，且 **v2a′ FAIL 或無增量**，且 **v2b FAIL 或
+> PASS_NO_INCREMENT**（三者各自非 INSUFFICIENT_DATA）→ 「期貨 OI → 現貨方向」因果鏈降級 **inactive**：
+> OI 維僅保留為對沖狀態脈絡變數（hedge-state context，餵七維雷達敘事層），不再作方向訊號；本節標記
+> `DEMOTED(date=…, versions tried=[v1, v2a, v2a′, v2b], note="對沖變數改良未試")`。
+> FAIL 的成立條件：必須是「控制 sign(spot_t) 與 sign(ret_t) 後 signal 不顯著」或「增量閘不過」——
+> 靠持續性假過 55% 的版本記 `PASS_NO_INCREMENT` 並計入本線。
+> v2c 不計入放棄線計數（描述性定位，仲裁 D3）；回填死線 2026-09-30 逾期則擱置並記錄原因。
+
+#### 多重檢定
+
+- 同一家族 {v2a 修訂版, v2a′, v2b}，α=0.05 以 Holm 校正（依各判定最小 p 值排序分配 0.05/3、0.05/2、
+  0.05/1）；各判定內雙層為合取條件、不再分割 α。v2c 描述性不進家族；v2d 未啟動不進家族。
+- 治理：本輪是該 16 個月窗口的最後一次判決；之後任何 v3 必須用 2026-09-04 之後累積的新資料做
+  真正的樣本外。PASS 類結果一律接 30 日線上觀察期才談 eligible（既有紅線不變）。
+
 ---
 
 ## 11. 2026-07-17 活體稽核快照
