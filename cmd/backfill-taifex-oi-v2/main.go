@@ -222,16 +222,19 @@ func run(cfg config) error {
 			lastValue, lastSourceDate, haveLast = value, dateStr, true
 			stats.fetched++
 		case actionNoData:
+			// H-CF-01 data-hygiene fix (2026-09-04): a WEEKDAY with no
+			// TAIFEX data is ambiguous — either a holiday (carry-forward
+			// would be correct) or a trading day whose CSV is not yet
+			// published (carry-forward would label the PREVIOUS session's
+			// OI as day d). Observed result: 19/33 overlap days had
+			// macro(d) == FinMind(d−1), i.e. a systematic one-session lag
+			// baked into the macro channel. Weekday no-data therefore
+			// merges NOTHING (skip) instead of carrying forward unmarked.
 			stats.noData++
-			if haveLast {
-				value, sourceDate = lastValue, lastSourceDate
-				action = actionCarryForward
-				stats.carriedForward++
-			} else {
-				fmt.Printf("[%s] no data and no prior baseline → skip\n", dateStr)
-				continue
-			}
+			fmt.Printf("[%s] no TAIFEX data on a weekday → skip (no unmarked carry-forward; value for %s stays absent rather than mislabeled)\n", dateStr, snapshotField)
+			continue
 		case actionCarryForward:
+			// Weekend days only (dailyValue carries those directly).
 			stats.carriedForward++
 		}
 
@@ -298,7 +301,9 @@ func (a dailyAction) String() string {
 
 // dailyValue resolves the foreign OI net value for one calendar day.
 // Weekends skip the HTTP request and carry the previous value forward.
-// Weekday holidays return 查無資料 from TAIFEX and also carry forward.
+// Weekday holidays return 查無資料 from TAIFEX; the run loop now SKIPS
+// them (no unmarked carry-forward — a weekday value must be that
+// weekday's own session, see the actionNoData note in run).
 func dailyValue(ctx context.Context, f *taifexFetcher, d time.Time, lastValue float64, lastSourceDate string, haveLast bool) (float64, string, dailyAction, error) {
 	if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
 		if !haveLast {

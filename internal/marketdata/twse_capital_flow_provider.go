@@ -22,15 +22,22 @@ import (
 
 // TWSECapitalFlow holds daily net buy/sell for the three major investor types,
 // with sub-type splits for foreign and dealer per TWSE T86 column schema.
+//
+// UNIT CONTRACT (H-CF-01 data-hygiene erratum, 2026-09-04): every net field
+// below is a TWSE T86 買賣超**股數** (share count) summed across all listed
+// securities and divided by 1e8. The unit is 億股 (hundred million SHARES) —
+// NOT 新台幣億元 (hundred million NT$). TWSE T86 reports share counts only;
+// any monetary threshold / NT$ narrative built on these fields is wrong until
+// a per-share-price join exists. See docs/specs/capital-flow-seven-dimension-spec.md.
 type TWSECapitalFlow struct {
 	Date               string  `json:"date"`
-	ForeignInvestorNet float64 `json:"foreign_investor_net"` // 外陸資買賣超(不含外資自營商) — column 4
-	ForeignDealerNet   float64 `json:"foreign_dealer_net"`   // 外資自營商買賣超 — column 7
-	DomesticFundNet    float64 `json:"domestic_fund_net"`    // 投信買賣超 — column 10
-	DealerNet          float64 `json:"dealer_net"`           // 自營商合計(自行+避險) — column 11
-	DealerSelfNet      float64 `json:"dealer_self_net"`      // 自營商自行買賣 — column 14
-	DealerHedgingNet   float64 `json:"dealer_hedging_net"`   // 自營商避險 — column 17
-	TotalNet           float64 `json:"total_net"`
+	ForeignInvestorNet float64 `json:"foreign_investor_net"` // 外陸資買賣超股數(不含外資自營商) — column 4, 億股
+	ForeignDealerNet   float64 `json:"foreign_dealer_net"`   // 外資自營商買賣超股數 — column 7, 億股
+	DomesticFundNet    float64 `json:"domestic_fund_net"`    // 投信買賣超股數 — column 10, 億股
+	DealerNet          float64 `json:"dealer_net"`           // 自營商買賣超股數合計(自行+避險) — column 11, 億股
+	DealerSelfNet      float64 `json:"dealer_self_net"`      // 自營商自行買賣超股數 — column 14, 億股
+	DealerHedgingNet   float64 `json:"dealer_hedging_net"`   // 自營商避險買賣超股數 — column 17, 億股
+	TotalNet           float64 `json:"total_net"`            // 三大法人買賣超股數合計 — column 18, 億股
 }
 
 // TWSECapitalFlowProvider fetches Taiwan institutional investor flows from TWSE.
@@ -71,6 +78,8 @@ func (t *TWSECapitalFlowProvider) SetRateLimiter(l *rate.Limiter) {
 }
 
 // SymbolFlow holds per-symbol institutional investor flow from TWSE T86.
+// Fields are raw T86 share counts divided by 1e3 (千股, thousand shares) —
+// share counts, not NT$ amounts.
 type SymbolFlow struct {
 	Symbol             string  `json:"symbol"`
 	Name               string  `json:"name"`
@@ -230,7 +239,7 @@ func (t *TWSECapitalFlowProvider) FetchSymbolFlow(ctx context.Context, symbol, d
 // order. Rows that are too short to carry the T86 institutional columns
 // (< 12 fields) or that have an empty symbol (header / grand-total rows)
 // are skipped. Values follow the provider convention: TWSE raw share counts
-// divided by 1e3 (see SymbolFlow field docs).
+// divided by 1e3 (千股; see SymbolFlow field docs). NOT NT$ amounts.
 //
 // A non-trading day (holiday / data not yet published) surfaces as an
 // error wrapping ErrNoData; callers can errors.Is it to skip such days.
@@ -295,6 +304,7 @@ func (t *TWSECapitalFlowProvider) fetchDate(ctx context.Context, dateStr string)
 		totalDealerHedging += parseTWDVolume(row[17])
 	}
 
+	// Units: raw share counts ÷ 1e8 = 億股 (hundred million SHARES), never 億元.
 	flow := TWSECapitalFlow{
 		Date:               dateStr,
 		ForeignInvestorNet: totalForeign / 1e8,
@@ -360,6 +370,9 @@ type twseT86Response struct {
 	Data [][]string `json:"data"`
 }
 
+// parseTWDVolume parses one raw TWSE T86 numeric cell (comma-separated).
+// Despite the historical name, the values it parses for T86 rows are SHARE
+// COUNTS (股數), not TWD amounts; callers divide by 1e8 → 億股 or 1e3 → 千股.
 func parseTWDVolume(s string) float64 {
 	// Remove commas and parse.
 	s = strings.ReplaceAll(s, ",", "")
