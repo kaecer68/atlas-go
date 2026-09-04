@@ -115,6 +115,12 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// --- TWSE Margin Balance (no API key required) ---
 	marginProvider := marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin"))
 	marginAdapter := NewTWSEMarginChannelAdapter(marginProvider)
+	if cfg.FinMindAPIKey != "" {
+		// PR-2: fill margin_maintenance_ratio from FinMind when TWSE has none
+		// (shared singleton client + DailyQuotaTracker; ~1 call/day via the
+		// adapter's daily dedup).
+		marginAdapter.SetFinMindClient(marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey))
+	}
 	g.registry.Register("twse_margin", marginAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_margin")
 
