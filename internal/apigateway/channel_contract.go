@@ -521,6 +521,11 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.SourcePriority = []string{"TDCC"}
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
+	// TDCC 股權分散是週快照（2026-09-04 盤查: upstream 對未發布日回
+	// "no dispersion data ... weekly snapshot may not be published yet"）。
+	// 預設 48h 窗口會讓 ChannelDataStale 一週誤報大半; 放寬為 8 天
+	// (7 天發布週期 + 1 天發布延遲 slack)。
+	c.FreshnessWindow = 8 * 24 * time.Hour
 	r.Register(c)
 
 	c = DefaultChannelContract("twse_sbl")

@@ -23,6 +23,10 @@
     {
       "name": "MetricChannelHealthStatus",
       "value": "\"atlas_channel_health_status\""
+    },
+    {
+      "name": "MetricChannelStalenessOverageSeconds",
+      "value": "\"atlas_channel_staleness_overage_seconds\""
     }
   ],
   "funcs": [
