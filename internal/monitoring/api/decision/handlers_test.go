@@ -629,3 +629,66 @@ func containsStr(s, substr string) bool {
 	}
 	return false
 }
+
+// ===========================================================================
+// PR-3d — period-annotated display filter on the decision-chain strategies
+// block. Display only: recommendations/conviction are untouched.
+// ===========================================================================
+
+func TestBuildStrategiesSummary_PeriodFilter(t *testing.T) {
+	reg := newTestRegistryWithRegimes(t)
+	h := &Handlers{StrategyRegistry: reg}
+
+	// black_swan → only frames tagged HIGH_VOL (defensive) pass.
+	h.PeriodProvider = func() string { return "black_swan" }
+	got := h.buildStrategiesSummary()
+	if len(got) != 1 || got[0].ID != "hedge-tail" {
+		t.Fatalf("black_swan strategies = %v, want [hedge-tail]", idsOf(got))
+	}
+
+	// bull → BULL-annotated frames pass (growth-1), others not.
+	h.PeriodProvider = func() string { return "bull" }
+	got = h.buildStrategiesSummary()
+	if len(got) != 1 || got[0].ID != "growth-1" {
+		t.Fatalf("bull strategies = %v, want [growth-1]", idsOf(got))
+	}
+
+	// No provider → unfiltered (all 3 active).
+	h.PeriodProvider = nil
+	got = h.buildStrategiesSummary()
+	if len(got) != 3 {
+		t.Fatalf("no provider strategies = %d, want 3", len(got))
+	}
+
+	// Provider returning "" (period unknown) → unfiltered.
+	h.PeriodProvider = func() string { return "" }
+	got = h.buildStrategiesSummary()
+	if len(got) != 3 {
+		t.Fatalf("unknown period strategies = %d, want 3", len(got))
+	}
+}
+
+func idsOf(summaries []StrategyFrameSummary) []string {
+	out := make([]string, 0, len(summaries))
+	for _, s := range summaries {
+		out = append(out, s.ID)
+	}
+	return out
+}
+
+func newTestRegistryWithRegimes(t *testing.T) *strategy_techniques.Registry {
+	t.Helper()
+	const seeds = `[
+  {"id":"growth-1","name":"growth","layer":"L2","summary":"foreign inflow","conditions":[{"field":"ForeignInvestorNet.Value","operator":"gt","value":0,"timeframe":"1D","source":"twse_capital_flow"}],
+   "regimes":["BULL"],"direction":"up","risk":"low","source":"backtest","status":"active","attribution_mode":"rule_based"},
+  {"id":"value-1","name":"value","layer":"L4","summary":"margin support","conditions":[{"field":"DXY.ChangePct","operator":"lt","value":0,"timeframe":"1D","source":"us_yahoo"}],
+   "regimes":["NEUTRAL"],"direction":"up","risk":"medium","source":"backtest","status":"active","attribution_mode":"rule_based"},
+  {"id":"hedge-tail","name":"tail hedge","layer":"L5","summary":"strait tension","conditions":[{"field":"DXY.ChangePct","operator":"gt","value":0.5,"timeframe":"1D","source":"us_yahoo"}],
+   "regimes":["HIGH_VOL","BEAR"],"direction":"volatile","risk":"high","source":"manual","status":"active","attribution_mode":"llm_annotated"}
+]`
+	reg, err := strategy_techniques.LoadFromBytes([]byte(seeds))
+	if err != nil {
+		t.Fatalf("LoadFromBytes: %v", err)
+	}
+	return reg
+}

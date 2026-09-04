@@ -91,6 +91,13 @@ type Handlers struct {
 	WorkDir          string
 	LedgerDir        string
 	StrategyRegistry *strategy_techniques.Registry
+
+	// PeriodProvider supplies the current seven-period market
+	// classification (PR-3d). When nil or when it returns "", the
+	// decision-chain strategies block shows all active frames unchanged.
+	// Display-only filtering: recommendation ordering and conviction are
+	// never affected (plan v1.1 PR-3d red line).
+	PeriodProvider func() string
 }
 
 // StrategyFrameSummary is the API-facing projection of a strategy_techniques
@@ -451,6 +458,14 @@ func (h *Handlers) buildStrategiesSummary() []StrategyFrameSummary {
 		return nil
 	}
 	frames := h.StrategyRegistry.All()
+	// PR-3d: period-annotated display filter. Only the 心法展示 is filtered
+	// by the current market period; recommendations/conviction upstream of
+	// this projection are untouched.
+	if h.PeriodProvider != nil {
+		if period := h.PeriodProvider(); period != "" {
+			frames = h.StrategyRegistry.FramesForPeriod(period)
+		}
+	}
 	out := make([]StrategyFrameSummary, 0, len(frames))
 	for _, f := range frames {
 		if f.Status != strategy_techniques.StatusActive {
