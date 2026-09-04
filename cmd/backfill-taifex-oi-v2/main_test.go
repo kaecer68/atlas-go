@@ -279,9 +279,14 @@ func TestRun_MergesTradingAndCarriesWeekend(t *testing.T) {
 	}
 }
 
-func TestRun_HolidayCarriesForward(t *testing.T) {
+func TestRun_WeekdayNoDataSkipsUnmarkedCarryForward(t *testing.T) {
 	root, dir := newTestRepo(t)
 	// 2026-06-19 is a weekday holiday in the stub (not in trading map).
+	// H-CF-01 data-hygiene fix (2026-09-04): a weekday with no TAIFEX data
+	// must NOT receive the previous session's OI unmarked — a holiday and a
+	// not-yet-published trading day are indistinguishable at fetch time, and
+	// the unmarked carry-forward is what produced macro(d)==FinMind(d−1) on
+	// 19/33 overlap days. Weekday no-data now skips the merge entirely.
 	writeSnap(t, dir, "2026-06-18.json", realisticSnap())
 	writeSnap(t, dir, "2026-06-19.json", realisticSnap())
 	setupStub(t, map[string]int64{"2026-06-18": -70000})
@@ -291,12 +296,8 @@ func TestRun_HolidayCarriesForward(t *testing.T) {
 	if err := run(config{workDir: root, start: start, end: end, pacing: 0, maxRetries: 1}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got, ok := readValue(t, dir, "2026-06-19")
-	if !ok {
-		t.Fatal("2026-06-19: field missing, want carry-forward")
-	}
-	if got != -70000 {
-		t.Errorf("2026-06-19: value = %.0f, want -70000 (carry-forward)", got)
+	if _, ok := readValue(t, dir, "2026-06-19"); ok {
+		t.Fatal("2026-06-19: field present, want NO unmarked weekday carry-forward (skip)")
 	}
 }
 

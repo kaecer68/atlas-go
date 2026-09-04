@@ -147,14 +147,29 @@ func parseInstitutionalFuturesRows(data []map[string]any, futuresID string) ([]I
 		}
 		// Map FinMind category names to TraderSide slots. "外資" is FinMind's
 		// name; "外資及陸資" is TAIFEX OpenAPI's — both map to Foreign.
+		// Duplicate-row guard (H-CF-01 data hygiene, 2026-09-04): the
+		// dataset is one row per (date, futures_id, institutional_investors).
+		// A second row for the same (date, category) means upstream schema
+		// drift (e.g. per-contract-month rows appearing) — silently keeping
+		// the last write would fabricate a plausible-looking OI value, so
+		// fail with a typed error instead of last-write-wins.
 		switch cat {
 		case "外資", "外資及陸資":
+			if acc.seen["外資"] {
+				return nil, fmt.Errorf("finmind taifex: duplicate 外資 row for %s (futures_id=%s): last-write-wins is not allowed, verify upstream schema", date, futuresID)
+			}
 			acc.daily.Foreign = side
 			acc.seen["外資"] = true
 		case "投信":
+			if acc.seen["投信"] {
+				return nil, fmt.Errorf("finmind taifex: duplicate 投信 row for %s (futures_id=%s): last-write-wins is not allowed, verify upstream schema", date, futuresID)
+			}
 			acc.daily.InvestmentTrust = side
 			acc.seen["投信"] = true
 		case "自營商":
+			if acc.seen["自營商"] {
+				return nil, fmt.Errorf("finmind taifex: duplicate 自營商 row for %s (futures_id=%s): last-write-wins is not allowed, verify upstream schema", date, futuresID)
+			}
 			acc.daily.Dealer = side
 			acc.seen["自營商"] = true
 		default:
