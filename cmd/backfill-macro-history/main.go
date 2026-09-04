@@ -93,9 +93,20 @@ func main() {
 		workDir  = flag.String("workdir", ".", "atlas work directory (repo root)")
 		startStr = flag.String("start", "2025-05-01", "backfill start date YYYY-MM-DD (inclusive)")
 		endStr   = flag.String("end", time.Now().Format("2006-01-02"), "backfill end date YYYY-MM-DD (inclusive)")
-		chans    = flag.String("channels", "taiex:^TWII,tsm_adr:TSM", "comma list of field:ticker pairs")
-		outDir   = flag.String("out", "data/state/macro", "output directory under workdir")
-		dryRun   = flag.Bool("dry-run", false, "fetch nothing: print plan only")
+		// Default channels cover every Yahoo-chart-backed field in
+		// MacroDataSnapshot that the composite live provider fills, so a single
+		// backfill run repairs the same field set the runtime would have persisted.
+		// jpy (frankfurter_fx), bdi (.BADI), taiwan_semi_index/dram_spot_price,
+		// tsmc_revenue (FinMind/TWSE) and the institutional/flow fields have other
+		// sources and are intentionally NOT in this list.
+		chans = flag.String("channels", "taiex:^TWII,tsm_adr:TSM,"+
+			"vix:^VIX,usd_twd:USDTWD=X,dxy:DX-Y.NYB,us10y:^TNX,"+
+			"sox_index:^SOX,spx_index:^GSPC,ndx_index:^IXIC,dji_index:^DJI,"+
+			"nvda:NVDA,aapl:AAPL,msft:MSFT,"+
+			"oil:CL=F,gold:GC=F,silver:SI=F,copper:HG=F",
+			"comma list of field:ticker pairs")
+		outDir = flag.String("out", "data/state/macro", "output directory under workdir")
+		dryRun = flag.Bool("dry-run", false, "fetch nothing: print plan only")
 	)
 	flag.Parse()
 
