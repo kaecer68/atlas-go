@@ -34,7 +34,7 @@ function classifyError(msg, knownIssues) {
 const PORT = process.env.ATLAS_PORT || "18080";
 const BASE = `http://localhost:${PORT}/admin`;
 const FETCH_WAIT = parseInt(process.env.SMOKE_TIMEOUT || "5", 10) * 1000;
-const PAGES_ARG = (process.env.SMOKE_PAGES || "home,live,reports,experiments,pipeline,portfolio,performance-report,parameters,alerts,datachannels,metrics,config")
+const PAGES_ARG = (process.env.SMOKE_PAGES || "home,live,reports,experiments,pipeline,performance-report,parameters,alerts,datachannels,metrics,config")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -45,7 +45,8 @@ const PAGE_SELECTORS = {
   reports: "#page-reports",
   experiments: "#page-experiments",
   pipeline: "#page-pipeline",
-  portfolio: "#page-portfolio",
+  // SSOT Phase 2：組合持倉已併入持倉風控台（/admin/live）——
+  // /admin/portfolio 由 Go 路由 301 → /admin/live#holdings，smoke 不再直訪。
   "performance-report": "#page-performance-report",
   parameters: "#page-parameters",
   alerts: "#page-alerts",

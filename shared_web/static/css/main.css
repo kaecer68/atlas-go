@@ -54,6 +54,9 @@
 /* Pages - Home */
 @import url("pages/home.css");
 
+/* Pages - 持倉風控台（SSOT Phase 2, /admin/live S1–S9） */
+@import url("pages/risk-console.css");
+
 /* Components - Utilities & Chain */
 @import url("components/utilities.css");
 @import url("components/chain.css");
