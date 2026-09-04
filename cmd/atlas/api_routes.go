@@ -115,11 +115,11 @@ func newHealthHandler(cfg healthConfig) http.Handler {
 //
 // All routes are best-effort and unconditional — they must not block
 // startup if any of them fails to install.
-func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS, rc readyChecker, selfAddr string) {
-	mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
-	mux.Handle("/health", newHealthHandler(healthConfig{SelfAddr: selfAddr}))
-	mux.Handle("/ready", newReadyHandler(rc))
-
+// registerStaticRedirects installs the root/admin/client redirects shared by
+// registerSimpleRoutes. Kept as its own function so api_routes_test.go can
+// exercise the SPA redirect matrix (incl. /admin/portfolio → live#holdings)
+// without constructing a MetricsCollector.
+func registerStaticRedirects(mux *http.ServeMux) {
 	// Redirect root to the client-facing UI. Bare /admin and /client are
 	// also redirected so the trailing-slash relative asset paths in
 	// index.html resolve correctly.
@@ -144,6 +144,21 @@ func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsColle
 	mux.HandleFunc("/admin_web/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
 	})
+	// SSOT Phase 2 (2026-09-04)：組合持倉頁併入持倉風控台（/admin/live）。
+	// /admin/portfolio 301 → /admin/live#holdings：#holdings 錨點保留持倉
+	// 直達語意，舊書籤/深層連結不落空。ServeMux 最長 pattern 優先，此精確
+	// 路徑蓋過下面的 /admin/ SPA fallback。
+	mux.HandleFunc("/admin/portfolio", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/live#holdings", http.StatusMovedPermanently)
+	})
+}
+
+func registerSimpleRoutes(mux *http.ServeMux, collector *monitoring.MetricsCollector, adminFS, clientFS fs.FS, rc readyChecker, selfAddr string) {
+	mux.HandleFunc("/metrics", monitoring.PrometheusHandler(collector))
+	mux.Handle("/health", newHealthHandler(healthConfig{SelfAddr: selfAddr}))
+	mux.Handle("/ready", newReadyHandler(rc))
+
+	registerStaticRedirects(mux)
 	mux.Handle("/admin/", http.StripPrefix("/admin/", staticHandler(adminFS)))
 	mux.Handle("/client/", http.StripPrefix("/client/", staticHandler(clientFS)))
 

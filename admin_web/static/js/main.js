@@ -31,9 +31,9 @@ const basePath = (typeof window !== 'undefined')
     2026-08-24 UI audit P0-2：原本 const 在 switchPage 內，initial route 引用
     時 ReferenceError → 深層連結全部 fallback 總覽）。 */
 const PAGE_TITLES = {
-  home: '系統總覽', live: '風控營運台', alerts: '系統警報',
+  home: '系統總覽', live: '持倉風控台', alerts: '系統警報',
   capital_models: '錢潮模型',
-  pipeline: '投資管線', portfolio: '組合持倉',
+  pipeline: '投資管線',
   experiments: '模擬交易', 'performance-report': '績效報告',
   datachannels: '資料通道', parameters: '參數管理',
   reports: '最新回測', period_matrix: '策略×時期熱圖',
@@ -56,6 +56,8 @@ export function switchPage(id, silent) {
   const btn = document.querySelector('#sidebar nav a[data-page="' + id + '"]');
   if (btn) btn.classList.add('active');
   document.getElementById('pageTitle').textContent = PAGE_TITLES[id] || id;
+  // SSOT Phase 2：瀏覽器 title 隨頁更新（頁名「持倉風控台」須出現在 title）
+  document.title = (PAGE_TITLES[id] || 'Atlas-Go') + ' · Atlas-Go 管理控制台';
   document.getElementById('sidebar').classList.remove('open');
   if (!pageLoadStatus[id]) { pageLoadStatus[id] = true; loadPageData(id); }
   if (!silent) history.pushState({page: id}, '', basePath + '/' + id);
@@ -204,6 +206,7 @@ async function loadModules() {
   var imports = [
     import('./pages/dashboard.js'),
     import('./pages/risk.js'),
+    import('./pages/risk-console.js'),
     import('./pages/narrative.js'),
     import('./pages/backtest.js'),
     import('./pages/inbox.js'),
@@ -217,7 +220,6 @@ async function loadModules() {
     import('./pages/capital-quality.js'),
     import('./pages/scheduler.js'),
     import('./pages/pipeline.js'),
-    import('./pages/portfolio.js'),
     import('./pages/performance-report.js'),
     import('./pages/period-matrix.js'),
   ];
@@ -226,7 +228,7 @@ async function loadModules() {
   // 永遠 undefined，排程頁只能靠 scheduler.js 模組頂層自我註冊 fallback 接線
   // （缺陷）。補 key 後走正常 loadModules 接線 path。
   // capital_causality 已遷移 client_web（2026-08-23），自 admin imports 移除。
-  var keys = ['dash', 'risk', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalQuality', 'scheduler', 'pipe', 'portfolio', 'performanceReport', 'periodMatrix'];
+  var keys = ['dash', 'risk', 'riskConsole', 'narr', 'back', 'inbox', 'experiments', 'alerts', 'metrics', 'datachannels', 'parameters', 'deployConfig', 'capitalModels', 'capitalQuality', 'scheduler', 'pipe', 'performanceReport', 'periodMatrix'];
   results.forEach(function(r, i) {
     modules[keys[i]] = r.status === 'fulfilled' ? r.value : {};
   });
@@ -253,9 +255,6 @@ async function loadModules() {
     if (modules.pipe.applyFilters) window.applyFilters = modules.pipe.applyFilters;
     if (modules.pipe.clearFilters) window.clearFilters = modules.pipe.clearFilters;
     if (modules.pipe.toggleWorkflowScreening) window.toggleWorkflowScreening = modules.pipe.toggleWorkflowScreening;
-  }
-  if (modules.portfolio) {
-    if (modules.portfolio.loadPortfolioPage) window.loadPortfolioPage = modules.portfolio.loadPortfolioPage;
   }
   if (modules.performanceReport) {
     if (modules.performanceReport.loadPerformanceReport) window.loadPerformanceReport = modules.performanceReport.loadPerformanceReport;
@@ -357,34 +356,6 @@ function renderCore(m, core) {
   if (m.datachannels.renderDataChannels) m.datachannels.renderDataChannels(dataChannels);
 }
 
-async function fetchNonCore(m, core) {
-  setPanelLoading('macroRadar', '總經雷達');
-  setPanelLoading('liveStatus', '即時狀態');
-  setPanelLoading('riskCards', '風險指標');
-
-  const results = await Promise.all([
-    fetchWithRetry('/api/dashboard/macro-radar', { label: '總經雷達' }),
-    fetchWithRetry('/api/dashboard/recommendation-pipeline', { label: '推薦管線' }),
-    fetchWithRetry('/api/dashboard/live-status', { label: '即時狀態' }),
-    fetchWithRetry('/api/dashboard/risk-exposure', { label: '風險曝險' }),
-    fetchWithRetry('/api/dashboard/phase3-status', { label: 'Phase 3 狀態' }),
-  ]);
-  const [macro, pipeline, live, riskExposure, phase3] = results;
-
-  if (macro === null) setPanelError('macroRadar', '總經雷達');
-  else if (m.dash.renderMacroRadar) { m.dash.renderMacroRadar(macro, pipeline); clearPanelLoading('macroRadar'); }
-
-  if (live === null) setPanelError('liveStatus', '即時狀態');
-  else if (m.risk.renderLiveStatus) { m.risk.renderLiveStatus(live); clearPanelLoading('liveStatus'); }
-
-  if (riskExposure === null) setPanelError('riskCards', '風險指標');
-  else if (m.risk.renderRiskCards) { m.risk.renderRiskCards(riskExposure, pipeline, core.capitalPhase); clearPanelLoading('riskCards'); }
-
-  if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
-
-  if (phase3 === null) console.warn('[non-core] phase3-status unavailable');
-}
-
 async function loadAll() {
   var loadingBar = document.getElementById('loadingBar');
   if (loadingBar) loadingBar.classList.add('active');
@@ -405,8 +376,15 @@ async function loadAll() {
 
     renderCore(m, core);
 
-    // Background non-core updates; do not block the next refresh or the UI.
-    fetchNonCore(m, core).catch(function(e) { console.error('[non-core] background update failed', e); });
+    // SSOT Phase 2：持倉風控台（live）啟用時，30s tick 整頁 background 刷新。
+    // 資料編排全部集中在 pages/risk-console.js（overview 優先、既有端點 fallback），
+    // background 模式不重設 loading placeholder，避免每 30s 閃爍。
+    const livePageEl = document.getElementById('page-live');
+    if (livePageEl && livePageEl.classList.contains('active')
+        && m.riskConsole && m.riskConsole.loadRiskConsolePage) {
+      m.riskConsole.loadRiskConsolePage(getJSON, window.agentNameEsm || function(id) { return id; }, { background: true })
+        .catch(function(e) { console.warn('[risk-console] background refresh failed', e); });
+    }
 
     // Independent panels that fetch their own data.
     if (m.metrics.loadMetrics) m.metrics.loadMetrics();
@@ -487,13 +465,6 @@ async function loadPageData(pageId) {
       if (m.pipe.renderPipeline) m.pipe.renderPipeline(p, false, '');
     } catch(e) { console.error(e); }
   }
-  else if (pageId === 'portfolio') {
-    try {
-      if (m.portfolio && m.portfolio.loadPortfolioPage) {
-        m.portfolio.loadPortfolioPage(getJSON, window.agentNameEsm || function(id) { return id; });
-      }
-    } catch(e) { console.error(e); }
-  }
   else if (pageId === 'performance-report') {
     try {
       if (m.performanceReport && m.performanceReport.loadPerformanceReport) {
@@ -519,30 +490,16 @@ async function loadPageData(pageId) {
     try { if (m.metrics.loadMetrics) m.metrics.loadMetrics(); } catch(e) { console.error(e); }
   }
   else if (pageId === 'live') {
+    // SSOT Phase 2：持倉風控台（風控營運台 + 組合持倉合併）。資料編排集中在
+    // pages/risk-console.js（先試 /api/dashboard/overview，404/缺欄位 fallback
+    // 回既有 live-status + portfolio-state 雙呼叫）。組合持倉舊網址由路由層
+    // 301 → /admin/live#holdings，此處不再需要 portfolio loader。
     try {
-      var liveResults = await Promise.all([
-        getJSONWithTimeout('/api/dashboard/live-status'),
-        getJSONWithTimeout('/api/dashboard/recommendation-pipeline'),
-        getJSONWithTimeout('/api/dashboard/risk-exposure'),
-        getJSONWithTimeout('/api/dashboard/macro-radar'),
-        getJSONWithTimeout('/api/narrative/events'),
-        getJSONWithTimeout('/api/taiwan/stress-index'),
-        getJSONWithTimeout('/api/narrative/chains'),
-        getJSONWithTimeout('/api/narrative/models'),
-        getJSONWithTimeout('/api/dashboard/capital-phase'),
-        getJSONWithTimeout('/api/dashboard/risk-calibration'),
-        getJSONWithTimeout('/api/macro/snapshot/latest'),
-        getJSONWithTimeout('/api/dashboard/industry-cycle?industry=semiconductor'),
-        getJSONWithTimeout('/api/dashboard/drawdown'),
-      ]);
-      if (m.risk.renderLiveStatus) m.risk.renderLiveStatus(liveResults[0]);
-      if (m.risk.renderRiskCards) m.risk.renderRiskCards(liveResults[2], liveResults[1], liveResults[8]);
-      if (m.risk.renderRiskCalibration) m.risk.renderRiskCalibration(liveResults[9]);
-      if (m.risk.renderRiskCommentary) m.risk.renderRiskCommentary();
-      if (m.dash.renderMacroRadar) m.dash.renderMacroRadar(liveResults[3], liveResults[1]);
-      if (m.narr.renderLiveNarrativeStrip) m.narr.renderLiveNarrativeStrip(liveResults[4], liveResults[5], liveResults[7], liveResults[6]);
-      if (m.risk.renderSemiconductorSentiment) m.risk.renderSemiconductorSentiment(liveResults[10], liveResults[11]);
-      if (m.risk.renderDrawdownPanel) m.risk.renderDrawdownPanel(liveResults[12]);
+      if (m.riskConsole && m.riskConsole.loadRiskConsolePage) {
+        await m.riskConsole.loadRiskConsolePage(getJSON, window.agentNameEsm || function(id) { return id; }, { fresh: true });
+      } else {
+        console.warn('[loadPageData] risk-console module not loaded');
+      }
     } catch(e) { console.error(e); }
   }
   else if (pageId === 'parameters') {
@@ -645,6 +602,11 @@ if (typeof window !== 'undefined') {
     // admin 無此頁 → 直接導向 client 版本，避免深層連結落空。
     if (initialPath === 'capital_causality' || initialPath === 'capital-causality') {
       window.location.replace('/client/capital-causality');
+    } else if (initialPath === 'portfolio') {
+      // SSOT Phase 2：組合持倉併入持倉風控台。伺服器路由層已 301 →
+      // /admin/live#holdings（見 cmd/atlas/api_routes.go）；此處是 esbuild dev
+      // server / build 產物直開（無 Go 路由）時的等效前端 redirect。
+      window.location.replace(basePath + '/live#holdings');
     } else if (PAGE_TITLES[initialPath]) {
       history.replaceState({page: initialPath}, '', basePath + '/' + initialPath);
       switchPage(initialPath, true);

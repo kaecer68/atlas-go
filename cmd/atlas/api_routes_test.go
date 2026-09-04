@@ -163,3 +163,51 @@ func TestPortHealthReport_OmitsZeroPIDAndEmptyError(t *testing.T) {
 		t.Errorf(`"error" must be omitted when Error == ""; got %s`, s)
 	}
 }
+
+// TestRegisterStaticRedirects_PortfolioToRiskConsole guards the SSOT Phase 2
+// (2026-09-04) page merge: /admin/portfolio (組合持倉) was folded into the
+// 持倉風控台 (/admin/live) and its old URL must 301 → /admin/live#holdings so
+// bookmarks/deep links land on the holdings section.
+func TestRegisterStaticRedirects_PortfolioToRiskConsole(t *testing.T) {
+	mux := http.NewServeMux()
+	registerStaticRedirects(mux)
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/admin/portfolio", nil))
+	if rr.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /admin/portfolio status = %d, want 301", rr.Code)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/admin/live#holdings" {
+		t.Errorf("GET /admin/portfolio Location = %q, want /admin/live#holdings", loc)
+	}
+}
+
+func TestRegisterStaticRedirects_Matrix(t *testing.T) {
+	mux := http.NewServeMux()
+	registerStaticRedirects(mux)
+
+	cases := []struct {
+		path string
+		want int
+		loc  string
+	}{
+		{"/", http.StatusMovedPermanently, "/client/"},
+		{"/admin", http.StatusMovedPermanently, "/admin/"},
+		{"/client", http.StatusMovedPermanently, "/client/"},
+		{"/admin_web", http.StatusMovedPermanently, "/admin/"},
+		{"/admin_web/", http.StatusMovedPermanently, "/admin/"},
+		{"/admin/portfolio", http.StatusMovedPermanently, "/admin/live#holdings"},
+		{"/nope", http.StatusNotFound, ""},
+	}
+	for _, tc := range cases {
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if rr.Code != tc.want {
+			t.Errorf("GET %s status = %d, want %d", tc.path, rr.Code, tc.want)
+			continue
+		}
+		if tc.loc != "" && rr.Header().Get("Location") != tc.loc {
+			t.Errorf("GET %s Location = %q, want %q", tc.path, rr.Header().Get("Location"), tc.loc)
+		}
+	}
+}
