@@ -257,9 +257,12 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 	dec := h.RiskGate.LastDecision()
 	if !dec.Recorded.IsZero() {
 		return http.StatusOK, map[string]any{
-			"phase":                 string(dec.Phase),
-			"verdict":               string(dec.Verdict),
-			"reason":                dec.Reason,
+			"phase":   string(dec.Phase),
+			"verdict": string(dec.Verdict),
+			"reason":  dec.Reason,
+			// SSOT Phase 2 field-contract --strict：risk.js 讀 reason_zh；
+			// 欄位就位先行（暫與 reason 同值），值的中文化屬計劃 A-1 後續。
+			"reason_zh":             dec.Reason,
 			"action_type":           string(dec.Action.Type),
 			"action_description":    dec.Action.Description,
 			"mode":                  dec.Mode,
@@ -295,6 +298,7 @@ func (h *Handlers) HandleRiskCommentary(r *http.Request) (int, any) {
 					"phase":                 "session_summary",
 					"verdict":               "UNKNOWN",
 					"reason":                commentary,
+					"reason_zh":             commentary,
 					"action_type":           "none",
 					"action_description":    "RiskGate 重啟後尚無新決策，此評語來自最近一次已持久化之 session_summary（risk_commentary）",
 					"mode":                  "unknown",

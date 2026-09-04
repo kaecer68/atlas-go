@@ -94,7 +94,7 @@ for JS_DIR in "${JS_DIRS[@]}"; do
         confidence_score|oil_pct|vix_level|\
         core_indicators|last_24h|next_run|\
         empty_state|gate_mode|\
-        action_type|action_description|confidence_commentary|\
+        action_type|action_description|confidence_commentary|reason_zh|\
         agent_skill|signals_count|\
         foreign_capital_signal|foreign_investor_net_billions|\
         taiwan_ex_change_pct|taiwan_ex_direction|\

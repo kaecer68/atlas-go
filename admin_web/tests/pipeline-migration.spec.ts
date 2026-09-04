@@ -64,14 +64,33 @@ test('pipeline filter panel toggles and applyFilters is wired', async ({ page })
   expect(wired).toBe(true);
 });
 
-test('portfolio and performance-report pages open on admin without login gate', async ({ page }) => {
+// SSOT Phase 2 (2026-09-04)：組合持倉(/admin/portfolio) 併入持倉風控台
+// (/admin/live, S1–S9)。此測試改驗證合併後的結果：nav 剩 2 個風控入口
+// （持倉風控台 + 績效報告）、組合持倉 nav entry 移除、live 頁骨架齊全。
+test('持倉風控台 (live) opens with merged S1-S9 scaffold; 組合持倉 entry removed', async ({ page }) => {
   await mockCommonEndpoints(page);
   await page.goto('/');
   await page.waitForFunction(() => typeof window.switchPage === 'function');
 
-  await page.evaluate(() => window.switchPage('portfolio', true));
-  await expect(page.locator('#page-portfolio')).toHaveClass(/active/, { timeout: 5000 });
-  await expect(page.locator('#portfolioPageTitle')).toHaveText('📂 組合持倉');
+  // nav：組合持倉入口移除；live 入口改名持倉風控台
+  await expect(page.locator('a[data-page="portfolio"]')).toHaveCount(0);
+  const liveNav = page.locator('a[data-page="live"]');
+  await expect(liveNav).toHaveCount(1);
+  await expect(liveNav).toContainText('持倉風控台');
+
+  await page.evaluate(() => window.switchPage('live', true));
+  await expect(page.locator('#page-live')).toHaveClass(/active/, { timeout: 5000 });
+  await expect(page.locator('#consolePageTitle')).toHaveText('持倉風控台');
+  await expect(page.locator('#pageTitle')).toHaveText('持倉風控台');
+  // S1–S9 骨架
+  await expect(page.locator('#liveRiskCommentaryPanel')).toBeVisible();
+  await expect(page.locator('#consoleCapitalCards')).toBeVisible();
+  await expect(page.locator('#equityChart')).toBeAttached();
+  await expect(page.locator('#holdings')).toBeVisible();
+  await expect(page.locator('#consoleControlDisposition')).toBeVisible();
+  await expect(page.locator('#consoleTradeHistory')).toBeVisible();
+  await expect(page.locator('#consoleMarketContext')).toBeVisible();
+  await expect(page.locator('#consoleSelfMonitor')).toBeVisible();
 
   await page.evaluate(() => window.switchPage('performance-report', true));
   await expect(page.locator('#page-performance-report')).toHaveClass(/active/, { timeout: 5000 });
