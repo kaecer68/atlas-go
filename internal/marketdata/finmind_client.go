@@ -524,6 +524,48 @@ func (c *FinMindClient) GetInstitutionalInvestors(ctx context.Context, symbol st
 	return foreign, domestic, dealer, nil
 }
 
+// GetMarginMaintenanceLatest fetches the most recent whole-market margin
+// maintenance ratio (%) from the FinMind TaiwanTotalExchangeMarginMaintenance
+// dataset at or before endDate. The dataset is a market-wide daily series
+// with no data_id, so one API call returns the whole window — this keeps the
+// live-fill cost at ~1 FinMind call per ingest regardless of weekends or
+// holidays. endDate is "YYYY-MM-DD"; the lookback window is 14 days so the
+// latest published trading day is always covered.
+// Returns (rowDate, ratio, nil) for the latest row, or ErrNoData when the
+// window contains nothing (FinMind releases the ratio after TWSE's evening
+// processing, so same-day morning queries legitimately come back empty).
+func (c *FinMindClient) GetMarginMaintenanceLatest(ctx context.Context, endDate string) (string, float64, error) {
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return "", 0, fmt.Errorf("finmind: parse endDate %q: %w", endDate, err)
+	}
+	start := end.AddDate(0, 0, -14).Format("2006-01-02")
+
+	data, err := c.fetchDataset(ctx, "TaiwanTotalExchangeMarginMaintenance", "", start, endDate)
+	if err != nil {
+		return "", 0, err
+	}
+	if len(data) == 0 {
+		return "", 0, fmt.Errorf("finmind: %w: no margin maintenance ratio up to %s", ErrNoData, endDate)
+	}
+
+	// Rows are date-ascending from FinMind; take the latest parseable row.
+	lastDate := ""
+	ratio := 0.0
+	for _, item := range data {
+		d, _ := item["date"].(string)
+		v, ok := item["TotalExchangeMarginMaintenance"].(float64)
+		if d == "" || !ok {
+			continue
+		}
+		lastDate, ratio = d, v
+	}
+	if lastDate == "" {
+		return "", 0, fmt.Errorf("finmind: margin maintenance ratio field missing up to %s", endDate)
+	}
+	return lastDate, ratio, nil
+}
+
 func (c *FinMindClient) GetStockPrice(ctx context.Context, symbol string, date string) (domain.Quote, error) {
 	data, err := c.fetchDataset(ctx, "TaiwanStockPrice", symbol, date, date)
 	if err != nil {

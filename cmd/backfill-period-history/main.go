@@ -326,7 +326,7 @@ func upsertDay(ctx context.Context, store ledger.HistoricalStore, res dayResult,
 		CapturedAt:      now,
 		IsSynthetic:     1,
 		Source:          sourceName,
-		DetectorVersion: portfolio.PeriodDetectorVersionV2,
+		DetectorVersion: portfolio.PeriodDetectorVersionV3,
 	}
 	if err := store.UpsertPeriod(ctx, pRow); err != nil {
 		return 0, 0, 0, fmt.Errorf("upsert period %s: %w", res.date, err)

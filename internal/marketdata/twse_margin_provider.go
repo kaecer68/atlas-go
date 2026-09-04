@@ -46,6 +46,13 @@ func (t *TWSEMarginBalanceProvider) SetHTTPClient(client *http.Client) {
 	}
 }
 
+// SetBaseURL overrides the TWSE base URL (tests only).
+func (t *TWSEMarginBalanceProvider) SetBaseURL(u string) {
+	if u != "" {
+		t.baseURL = u
+	}
+}
+
 // SetRateLimiter sets a custom rate limiter for tests.
 func (t *TWSEMarginBalanceProvider) SetRateLimiter(l *rate.Limiter) {
 	if l != nil {

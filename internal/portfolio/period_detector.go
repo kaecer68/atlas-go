@@ -62,7 +62,7 @@ type PeriodIndicators struct {
 	TAIEXMA20Slope   float64 // 20日線斜率
 	MarketVolume     float64 // 集中市場成交量
 	MarketVolumeMA20 float64 // 20日均量
-	DayTradeRatio    float64 // 當沖交易佔比（%）
+	DayTradeRatio    float64 // 當沖交易佔比（小數, 0.35 = 35% — 與 macro snapshot day_trade_ratio 同單位）
 
 	// ── 散戶籌碼（第六層）──
 	MarginBalance          float64 // 融資餘額
@@ -186,6 +186,14 @@ type PeriodDetectorState struct {
 // Phase 2's period×strategy matrix splits on this column; rows written
 // before PR-3b keep the DB default "v1".
 const PeriodDetectorVersionV2 = "v2"
+
+// PeriodDetectorVersionV3 stamps period_history rows written after the
+// PR-A day-trade unit fix: PlateauDayTradeMinPct moved from % semantics
+// (35) to decimal semantics (0.35) to match macro snapshot
+// day_trade_ratio (stored as a fraction, e.g. 0.2488). Under v2 the
+// plateau day-trade condition could never fire against live snapshots;
+// v3 restores it. Historical v2 rows keep their stamps.
+const PeriodDetectorVersionV3 = "v3"
 
 // NewStatefulPeriodDetector creates a detector that keeps the P2 debounced
 // state across calls (thread-safe). Use only where a single instance is
@@ -906,7 +914,7 @@ func (d *PeriodDetector) isPlateau(ind PeriodIndicators) bool {
 		passed++
 	}
 
-	// 3. Day trade ratio > 35%
+	// 3. Day trade ratio > 35% (0.35, 小數語意)
 	if ind.DayTradeRatio > d.cfg.PlateauDayTradeMinPct {
 		passed++
 	}
