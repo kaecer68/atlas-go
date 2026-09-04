@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func TestFetchHistoryComputesChangePct(t *testing.T) {
 	end, _ := time.ParseInLocation("2006-01-02", "2026-09-03", time.Local)
 	ch := channel{field: "tsm_adr", symbol: "TSM", ticker: "TEST"}
 
-	bars, err := fetchHistory(context.Background(), srv.Client(), ch, start, end)
+	bars, err := fetchHistory(context.Background(), srv.Client(), nil, ch, start, end)
 	if err != nil {
 		t.Fatalf("fetchHistory: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestFetchHistoryYahooError(t *testing.T) {
 
 	start, _ := time.ParseInLocation("2006-01-02", "2026-09-01", time.Local)
 	end, _ := time.ParseInLocation("2006-01-02", "2026-09-03", time.Local)
-	if _, err := fetchHistory(context.Background(), srv.Client(), channel{ticker: "TEST"}, start, end); err == nil {
+	if _, err := fetchHistory(context.Background(), srv.Client(), nil, channel{ticker: "TEST"}, start, end); err == nil {
 		t.Fatal("want error for yahoo error payload")
 	}
 }
@@ -172,10 +173,109 @@ func TestMergeBarFillsAndSkips(t *testing.T) {
 	}
 }
 
+func TestDefaultChannelsIncludeBDIProxy(t *testing.T) {
+	chans := defaultChannels()
+	if !strings.Contains(chans, "bdi:BDRY") {
+		t.Fatalf("defaultChannels() = %q, want bdi:BDRY proxy channel", chans)
+	}
+}
+
+func TestYahooAuthCrumbAttached(t *testing.T) {
+	var gotCookie, gotReferer, gotCrumb string
+	chartSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie = r.Header.Get("Cookie")
+		gotReferer = r.Header.Get("Referer")
+		gotCrumb = r.URL.Query().Get("crumb")
+		w.Header().Set("Content-Type", "application/json")
+		// Minimal valid one-bar chart so fetchHistory parses past the meta.
+		bar := time.Date(2026, 9, 1, 13, 0, 0, 0, time.UTC).Unix()
+		_, _ = w.Write([]byte(`{"chart":{"result":[{"meta":{"exchangeTimezoneName":"UTC"},` +
+			`"timestamp":[` + strconv.FormatInt(bar, 10) + `],` +
+			`"indicators":{"quote":[{"close":[100.0]}]}}],"error":null}}`))
+	}))
+	t.Cleanup(chartSrv.Close)
+
+	cookieSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "A3", Value: "test-cookie"})
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(cookieSrv.Close)
+
+	crumbSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "A3=test-cookie" {
+			t.Errorf("crumb request cookie = %q", r.Header.Get("Cookie"))
+		}
+		_, _ = w.Write([]byte("test-crumb"))
+	}))
+	t.Cleanup(crumbSrv.Close)
+
+	origCookie, origCrumb, origHosts := yahooCookieURL, yahooCrumbURLTemplate, yahooChartHosts
+	t.Cleanup(func() {
+		yahooCookieURL, yahooCrumbURLTemplate, yahooChartHosts = origCookie, origCrumb, origHosts
+	})
+	yahooCookieURL = cookieSrv.URL
+	yahooCrumbURLTemplate = crumbSrv.URL + "/%s/getcrumb"
+	yahooChartHosts = []string{"localhost"} // host is unused by the fake template
+
+	auth := &yahooAuth{}
+	auth.ensure(context.Background(), chartSrv.Client())
+	if auth.cookie != "A3=test-cookie" || auth.crumb != "test-crumb" {
+		t.Fatalf("auth = %+v, want cookie A3=test-cookie + crumb test-crumb", auth)
+	}
+
+	orig := chartURLTemplate
+	t.Cleanup(func() { chartURLTemplate = orig })
+	chartURLTemplate = chartSrv.URL + "/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d"
+
+	start, _ := time.ParseInLocation("2006-01-02", "2026-09-01", time.Local)
+	end, _ := time.ParseInLocation("2006-01-02", "2026-09-03", time.Local)
+	_, err := fetchHistory(context.Background(), chartSrv.Client(), auth,
+		channel{field: "bdi", ticker: "BDRY"}, start, end)
+	if err != nil {
+		t.Fatalf("fetchHistory: %v", err)
+	}
+	if gotCookie != "A3=test-cookie" {
+		t.Fatalf("chart request cookie = %q", gotCookie)
+	}
+	if gotReferer != "https://finance.yahoo.com/" {
+		t.Fatalf("chart request referer = %q", gotReferer)
+	}
+	if gotCrumb != "test-crumb" {
+		t.Fatalf("chart request crumb = %q", gotCrumb)
+	}
+}
+
+func TestYahooAuthNilIsBare(t *testing.T) {
+	// nil auth must not panic and must not attach Cookie/crumb.
+	var gotCookie, gotCrumb string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie = r.Header.Get("Cookie")
+		gotCrumb = r.URL.Query().Get("crumb")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"chart":{"result":null,"error":null}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	orig := chartURLTemplate
+	t.Cleanup(func() { chartURLTemplate = orig })
+	chartURLTemplate = srv.URL + "/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d"
+
+	start, _ := time.ParseInLocation("2006-01-02", "2026-09-01", time.Local)
+	end, _ := time.ParseInLocation("2006-01-02", "2026-09-03", time.Local)
+	var nilAuth *yahooAuth
+	if _, err := fetchHistory(context.Background(), srv.Client(), nilAuth,
+		channel{ticker: "TEST"}, start, end); err == nil {
+		t.Fatal("want chart error payload to surface as error")
+	}
+	if gotCookie != "" || gotCrumb != "" {
+		t.Fatalf("bare request got cookie=%q crumb=%q", gotCookie, gotCrumb)
+	}
+}
+
 // TestDefaultChannelsCoverYahooBackedFields guards the default -channels list:
 // every Yahoo-chart-backed snapshot field must be present so one default run
-// repairs the full live field set. bdi is the documented exception — Yahoo
-// returns 404 for both .BADI and ^BDIY.
+// repairs the full live field set. bdi maps to the BDRY proxy (Yahoo 404s on
+// .BADI and ^BDIY — see the package comment for the proxy disclosure).
 func TestDefaultChannelsCoverYahooBackedFields(t *testing.T) {
 	got := defaultChannels()
 	for _, want := range []string{
@@ -183,13 +283,10 @@ func TestDefaultChannelsCoverYahooBackedFields(t *testing.T) {
 		"dxy:DX-Y.NYB", "us10y:^TNX", "sox_index:^SOX", "spx_index:^GSPC",
 		"ndx_index:^IXIC", "dji_index:^DJI", "nvda:NVDA", "aapl:AAPL",
 		"msft:MSFT", "oil:CL=F", "gold:GC=F", "silver:SI=F", "copper:HG=F",
-		"jpy:JPY=X", "dram_spot_price:MU",
+		"jpy:JPY=X", "dram_spot_price:MU", "bdi:BDRY",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("default channels %q missing %q", got, want)
 		}
-	}
-	if strings.Contains(got, "bdi:") {
-		t.Errorf("default channels %q must not include bdi (Yahoo 404)", got)
 	}
 }

@@ -29,39 +29,34 @@ const REPO_ROOT = resolve(__dirname, '../../../../');
 const MAIN_JS = readFileSync(resolve(REPO_ROOT, 'admin_web/static/js/main.js'), 'utf8');
 const ALERTS_PAGE_JS = readFileSync(resolve(REPO_ROOT, 'shared_web/static/js/pages/alerts.js'), 'utf8');
 
-function fetchNonCoreSource() {
-  const start = MAIN_JS.indexOf('async function fetchNonCore');
-  assert.ok(start >= 0, 'main.js must define fetchNonCore');
-  // fetchNonCore ends at the closing brace of its own block: find the next
-  // top-level `async function` / `function` / `export` after it.
-  const tail = MAIN_JS.slice(start);
-  const end = tail.search(/\n(?:async function|function|export function|\/\/ ---)/);
-  return end === -1 ? tail : tail.slice(0, end);
-}
+const RISK_CONSOLE_JS = readFileSync(resolve(REPO_ROOT, 'shared_web/static/js/pages/risk-console.js'), 'utf8');
 
-test('fetchNonCore: 不再 fetch 無過濾 /api/alerts', () => {
-  const fn = fetchNonCoreSource();
-  assert.ok(!fn.includes('/api/alerts'), 'fetchNonCore 不得再抓取 /api/alerts (無過濾雙寫來源)');
+// SSOT Phase 2 (2026-09-04)：fetchNonCore 從 main.js 移除——live 頁升級為
+// 持倉風控台後，其背景/進入載入全部集中在 pages/risk-console.js（overview
+// 優先 + 既有端點 fallback）。以下測試改為對新架構的來源層護欄：
+// 1. main.js 不再有無過濾 /api/alerts 抓取、不再操作 alertsPanel。
+// 2. risk-console.js 承接 live 頁五支非核心端點，且不得引入 alerts 雙寫。
+test('main.js: 不再定義 fetchNonCore（已移入 pages/risk-console.js）', () => {
+  assert.ok(!MAIN_JS.includes('async function fetchNonCore'), 'main.js 不應再定義 fetchNonCore');
+  assert.ok(!MAIN_JS.includes('/api/alerts'), 'main.js 不得再抓取 /api/alerts (無過濾雙寫來源)');
+  assert.ok(!MAIN_JS.includes('alertsPanel'), 'main.js 不得再操作 alertsPanel');
+  assert.ok(!MAIN_JS.includes('renderAlerts'), 'main.js 不得再呼叫 renderAlerts');
 });
 
-test('fetchNonCore: 不再操作 alertsPanel (setPanelLoading/setPanelError/renderAlerts)', () => {
-  const fn = fetchNonCoreSource();
-  assert.ok(!fn.includes('alertsPanel'), 'fetchNonCore 不得再操作 alertsPanel');
-  assert.ok(!fn.includes('renderAlerts'), 'fetchNonCore 不得再呼叫 renderAlerts');
-});
-
-test('fetchNonCore: 其餘非核心面板 fetch 保留 (macro/live/risk/phase3)', () => {
-  const fn = fetchNonCoreSource();
+test('risk-console.js: 承接 live 頁非核心端點 (macro/live/risk/phase/capital)', () => {
   for (const ep of [
     '/api/dashboard/macro-radar',
     '/api/dashboard/recommendation-pipeline',
     '/api/dashboard/live-status',
     '/api/dashboard/risk-exposure',
-    '/api/dashboard/phase3-status',
+    '/api/dashboard/capital-phase',
+    '/api/dashboard/portfolio-state',
   ]) {
-    assert.ok(fn.includes(ep), `fetchNonCore 應保留 ${ep}`);
+    assert.ok(RISK_CONSOLE_JS.includes(ep), `risk-console.js 應保留 ${ep}`);
   }
-  assert.ok(!fn.includes('alerts'), 'fetchNonCore 不得再有 alerts 變數/解構');
+  assert.ok(!RISK_CONSOLE_JS.includes('/api/alerts'), 'risk-console.js 不得抓取無過濾 /api/alerts');
+  assert.ok(!RISK_CONSOLE_JS.includes('alertsPanel'), 'risk-console.js 不得操作 alertsPanel');
+  assert.ok(!RISK_CONSOLE_JS.includes('renderAlerts'), 'risk-console.js 不得呼叫 renderAlerts');
 });
 
 test('alerts 頁單一來源: pages/alerts.js loadAlerts 用 status=triggered&page_size=50', () => {

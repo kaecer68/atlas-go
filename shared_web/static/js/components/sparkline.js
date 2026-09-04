@@ -1,6 +1,7 @@
 // sparkline.js — Darwinian weight sparkline + equity curve + agent scoreboard
 // Standalone component, importable into dashboard.js or portfolio pages.
 import { fmtInt, fmtNTD, getThemeColor } from '../shared/utils.js';
+import { renderDualLineChart } from './line-chart.js';
 import { fmtSafeNumber, fmtSafePct } from '../shared/format-metric.js';
 // formatNumber is used for canvas axis labels to avoid scattered toFixed() calls.
 import { pnlProfitColor, pnlLossColor, regimeColor, hexToRgba } from '../shared/color-tokens.js';
@@ -100,109 +101,27 @@ function renderEquityCurve(points) {
  * @param {Array<{value: number, label: string}>} afterTaxPoints - After-tax equity data points
  */
 function renderDualEquityCurve(preTaxPoints, afterTaxPoints) {
+  // SSOT Phase 2 (P2-4)：繪圖邏輯抽至共用 components/line-chart.js；
+  // 本函式保留既有對外合約（target #equityCurvePanel / #equityChart，
+  // 資料不足時自行隱藏面板），供持倉風控台 S3 與舊呼叫點使用。
   const panel = document.getElementById('equityCurvePanel');
   const canvas = document.getElementById('equityChart');
   if (!panel || !canvas) return;
   if (!preTaxPoints || preTaxPoints.length < 2) { panel.style.display = 'none'; return; }
-  panel.style.display = '';
-  
-  const hasAfterTax = afterTaxPoints && afterTaxPoints.length > 0;
-  
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const W = rect.width - 40, H = 220;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-  ctx.scale(dpr, dpr);
-  const pad = {top: 20, right: 20, bottom: 28, left: 80}; // Wider left pad for NT$ labels
-  const chartW = W - pad.left - pad.right, chartH = H - pad.top - pad.bottom;
 
-  const preTaxValues = preTaxPoints.map(p => p.value).filter(Number.isFinite);
-  const afterTaxValues = hasAfterTax ? afterTaxPoints.map(p => p.value).filter(Number.isFinite) : [];
-  const allValues = [...preTaxValues, ...afterTaxValues];
-
-  if (allValues.length === 0) { panel.style.display = 'none'; return; }
-  const minV = Math.min(...allValues), maxV = Math.max(...allValues), range = maxV - minV || 1;
-  ctx.clearRect(0, 0, W, H);
-
-  ctx.fillStyle = hexToRgba(getThemeColor('--panel') || '#13161c', 0.6);
-  ctx.beginPath(); ctx.roundRect(pad.left, pad.top, chartW, chartH, 6); ctx.fill();
-
-  ctx.strokeStyle = hexToRgba(getThemeColor('--text') || '#f0f4f8', 0.05); ctx.lineWidth = 0.5;
-  for (let i = 1; i <= 3; i++) {
-    const y = pad.top + (chartH / 4) * i;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
+  const series = [];
+  if (afterTaxPoints && afterTaxPoints.length > 0) {
+    series.push({ label: '稅後淨值 (After-tax)', color: getThemeColor('--color-warning') || '#f59e0b', points: afterTaxPoints });
   }
+  series.push({ label: '稅前淨值 (Pre-tax)', color: getThemeColor('--accent') || '#4fc1ff', points: preTaxPoints });
 
-  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.6); ctx.font = '10px system-ui'; ctx.textAlign = 'right';
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (chartH / 4) * i;
-    const val = maxV - (range / 4) * i;
-    ctx.fillText(fmtNTD(val), pad.left - 8, y + 3);
-  }
-
-  function drawCurve(points, colorHex) {
-    if (!points || points.length === 0) return;
-    const pts = points.map((p, i) => ({
-      x: pad.left + (i / (points.length - 1)) * chartW,
-      y: pad.top + (1 - (p.value - minV) / range) * chartH
-    }));
-
-    const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-    gradient.addColorStop(0, hexToRgba(colorHex, 0.25));
-    gradient.addColorStop(1, hexToRgba(colorHex, 0.02));
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pad.top + chartH);
-    for (let i = 0; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    ctx.lineTo(pts[pts.length - 1].x, pad.top + chartH);
-    ctx.closePath();
-    ctx.fillStyle = gradient; ctx.fill();
-
-    ctx.save();
-    ctx.shadowColor = hexToRgba(colorHex, 0.4); ctx.shadowBlur = 6;
-    ctx.strokeStyle = colorHex;
-    ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.stroke();
-    ctx.restore();
-
-    if (pts.length <= 30) {
-      ctx.fillStyle = colorHex;
-      pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill(); });
-    }
-  }
-
-  const preTaxColor = getThemeColor('--accent') || '#4fc1ff';
-  const afterTaxColor = getThemeColor('--color-warning') || '#f59e0b';
-
-  if (hasAfterTax) {
-    drawCurve(afterTaxPoints, afterTaxColor); 
-  }
-  drawCurve(preTaxPoints, preTaxColor); 
-
-  ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.5); ctx.font = '9px system-ui'; ctx.textAlign = 'center';
-  const step = Math.max(1, Math.floor(preTaxPoints.length / 6));
-  preTaxPoints.forEach((p, i) => {
-    if (i % step === 0 || i === preTaxPoints.length - 1) {
-      ctx.fillText(p.label, pad.left + (i / (preTaxPoints.length - 1)) * chartW, pad.top + chartH + 18);
-    }
+  const drew = renderDualLineChart({
+    canvas: canvas,
+    yFormat: fmtNTD,
+    series: series,
+    height: 220,
   });
-
-  if (hasAfterTax) {
-    ctx.font = '10px system-ui';
-    ctx.textAlign = 'left';
-    
-    ctx.fillStyle = preTaxColor;
-    ctx.fillRect(pad.left + 10, pad.top + 10, 10, 10);
-    ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.8);
-    ctx.fillText('稅前淨值 (Pre-tax)', pad.left + 25, pad.top + 19);
-    
-    ctx.fillStyle = afterTaxColor;
-    ctx.fillRect(pad.left + 130, pad.top + 10, 10, 10);
-    ctx.fillStyle = hexToRgba(getThemeColor('--muted') || '#b8c4d0', 0.8);
-    ctx.fillText('稅後淨值 (After-tax)', pad.left + 145, pad.top + 19);
-  }
+  panel.style.display = drew ? '' : 'none';
 }
 
 /**

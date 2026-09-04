@@ -297,7 +297,11 @@ export function renderRiskCalibration(data) {
     changesHtml;
 }
 
-export async function renderRiskCommentary(containerOrData) {
+export async function renderRiskCommentary(containerOrData, opts) {
+  // SSOT Phase 2 (P2-2, S1)：支援橫幅模式（opts.banner=true）——風控長評語
+  // 提升為持倉風控台頁首結論條：verdict 徽章 + 中文理由 + 時間 + LLM 信心評語。
+  // 舊卡片模式（banner=false）保留給其他消費端。
+  var banner = !!(opts && opts.banner);
   var el = typeof containerOrData === 'string'
     ? document.getElementById(containerOrData)
     : (containerOrData || document.getElementById('liveRiskCommentary'));
@@ -340,7 +344,15 @@ export async function renderRiskCommentary(containerOrData) {
   var phase = escapeHtml(data.phase || '—');
   var mode = escapeHtml(data.mode || '—');
   var symbol = escapeHtml(data.symbol || '—');
-  var reason = escapeHtml(data.reason || '—');
+  var reason = escapeHtml(data.reason_zh || data.reason || '—');
+  var fallbackReasons = {
+    ALLOW: '風險指標未觸發，維持既有曝險水準',
+    REDUCE: '風險指標惡化，建議降低曝險',
+    BLOCK: '風險指標觸發，阻擋新增曝險',
+    HALT: '熔斷條件觸發，暫停交易',
+    ALERT_ONLY: '警戒等級，僅提示風險'
+  };
+  if (reason === '—') reason = escapeHtml(fallbackReasons[verdict] || '—');
   var actionType = escapeHtml(data.action_type || '—');
   var actionDesc = escapeHtml(data.action_description || '—');
   var recordedAt = data.recorded_at
@@ -349,6 +361,22 @@ export async function renderRiskCommentary(containerOrData) {
   var commentary = data.confidence_commentary
     ? escapeHtml(data.confidence_commentary)
     : '<span style="color:var(--muted)">（LLM 尚未產生信心評語）</span>';
+
+  if (banner) {
+    el.innerHTML =
+      '<div class="risk-banner">' +
+        '<span class="risk-banner-badge" style="background:color-mix(in srgb, ' + verdictColor + ' 15%, transparent);color:' + verdictColor + '">' + verdictLabel + '</span>' +
+        '<div class="risk-banner-body">' +
+          '<div class="risk-banner-reason">' + reason + '</div>' +
+          '<div class="risk-banner-meta"><span>' + phase + ' · ' + mode + (symbol && symbol !== '—' ? ' · ' + symbol : '') + '</span><span>' + recordedAt + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<details class="risk-banner-details" open>' +
+        '<summary style="font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)">🧠 LLM 信心評語 · 行動：' + actionType + (actionDesc && actionDesc !== '—' ? ' / ' + actionDesc : '') + '</summary>' +
+        '<div style="margin-top:6px;padding:10px 14px;background:var(--panel-l2);border-left:3px solid ' + verdictColor + ';border-radius:4px;font-size:13px;line-height:1.6;color:var(--text)">' + commentary + '</div>' +
+      '</details>';
+    return;
+  }
 
   el.innerHTML =
     '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +

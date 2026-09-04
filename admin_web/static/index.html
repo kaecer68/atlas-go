@@ -29,13 +29,15 @@
   <nav role="navigation" aria-label="主要導航">
         <span class="nav-group-label">監控</span>
         <a data-page="home" href="/admin/home" class="active">📊 系統總覽</a>
-        <a data-page="live" href="/admin/live">🛡️ 風控營運台</a>
+        <a data-page="alerts" href="/admin/alerts">🚨 系統警報</a>
 
         <span class="nav-group-label">研究</span>
         <a data-page="capital_models" href="/admin/capital_models">🧠 錢潮模型</a>
-        <a data-page="pipeline" href="/admin/pipeline">🔀 投資管線</a>
-        <a data-page="portfolio" href="/admin/portfolio">📂 組合持倉</a>
+        <!-- SSOT Phase 2（3→2）：組合持倉併入風控營運台 → 持倉風控台
+             （/admin/live 擴充 S1–S9；/admin/portfolio 301 → /admin/live#holdings） -->
         <a data-page="experiments" href="/admin/experiments">🧪 模擬交易</a>
+        <a data-page="pipeline" href="/admin/pipeline">🔀 投資管線</a>
+        <a data-page="live" href="/admin/live">📂 持倉風控台</a>
         <a data-page="performance-report" href="/admin/performance-report">📈 績效報告</a>
         <a data-page="period_matrix" href="/admin/period_matrix">🗺️ 策略×時期</a>
 
@@ -141,33 +143,96 @@
     </div>
 
 
-    <!-- 風控營運台 -->
+    <!-- 持倉風控台（SSOT Phase 2 2026-09-04：風控營運台 + 組合持倉 3→2 合併；
+         /admin/live 擴充為 S1–S9；/admin/portfolio 301 → /admin/live#holdings） -->
     <div class="page" id="page-live">
-      <details class="help-details"><summary><strong>💡 如何解讀本頁</strong></summary>
-        本頁呈現<strong>風控層（風控長／投資長）對 AI 推薦的最終處置結果</strong>。它告訴你：在市場當前體制下，有多少推薦被放行、有多少被推回、以及系統是否觸發熔斷。
-        若風控長阻擋率高，請檢查【宏觀敘事】的外資出逃指數是否飆升（紅燈）；若投資長過濾數量多，請檢查【投資管線】是否有板塊擁擠或風格衝突。
-      </details>
-      <div class="panel wide mb-sm" style="padding:10px var(--space-md);"><h2 style="margin-bottom:4px;">總經敘事脈絡</h2><div id="liveNarrativeStrip" class="empty loading" style="padding:4px 0;">載入中…</div></div>
-      <div class="live-grid">
-        <div class="panel panel--compact"><h2>總經雷達</h2><div id="macroRadar" class="empty loading">載入中…</div></div>
-        <div class="panel panel--compact"><h2>市場廣度 / 半導體景氣</h2><div id="semiconductorSentiment" class="empty loading">載入中…</div></div>
-        <div class="panel panel--compact"><h2>即時狀態</h2><div id="liveStatus" class="empty loading">載入中…</div></div>
-      </div>
-      <div class="panel wide" id="riskCardsPanel" style="display:none;">
-        <h2>風險指標</h2>
-        <div id="riskCards" class="kpi-grid"></div>
-        <div id="drawdownPanel" class="empty loading" style="margin-top:12px">載入中…</div>
-        <div id="riskPositionConcentration"></div>
-        <div id="riskSectorDistribution"></div>
-      </div>
-      <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
-        <h2>自主校準</h2>
-        <div id="riskCalibration" class="empty loading">載入中…</div>
-      </div>
-      <div class="panel wide" id="liveRiskCommentaryPanel" style="display:none;">
-        <h2>🧠 風控長評語（Risk Commentary）</h2>
+      <header class="console-header">
+        <h1 id="consolePageTitle">持倉風控台</h1>
+        <p class="console-header-sub">今日決策一頁答完：風控結論 → 資金水位 → 淨值趨勢 → 風險指標 → 持倉結構 → 市場背景</p>
+      </header>
+
+      <!-- S1 今日風控結論（風控長評語提為頁首橫幅；verdict 徽章 + 中文理由 + 時間） -->
+      <section class="panel wide console-banner" id="liveRiskCommentaryPanel" aria-label="今日風控結論">
+        <h2 class="console-section-title">🧠 今日風控結論</h2>
         <div id="liveRiskCommentary" class="empty loading">載入中…</div>
-      </div>
+      </section>
+
+      <!-- S2 資金水位（4 卡：現金 / 曝險 / 當日損益 / 熔斷狀態） -->
+      <section class="console-section" aria-labelledby="consoleS2Title">
+        <h2 class="console-section-title" id="consoleS2Title">💧 資金水位</h2>
+        <div class="kpi-grid console-kpi-4" id="consoleCapitalCards"><div class="empty loading">載入中…</div></div>
+        <div id="consoleDegradedNote" class="console-degraded-note" hidden></div>
+      </section>
+
+      <!-- S3 淨值趨勢（稅前 / 稅後雙線，共用 line-chart helper） -->
+      <section class="console-section" aria-labelledby="consoleS3Title">
+        <h2 class="console-section-title" id="consoleS3Title">📈 淨值趨勢（稅前 / 稅後）</h2>
+        <div class="panel wide" id="equityCurvePanel">
+          <canvas id="equityChart" height="200"></canvas>
+          <div class="text-xs-muted console-note">資料來源：模擬投組權益曲線（<code>portfolio-state.equity_curve</code>）。</div>
+        </div>
+        <div id="consoleEquityEmptyMsg" class="empty" hidden>尚無淨值歷史（等待模擬場次產生權益曲線）</div>
+      </section>
+
+      <!-- S4 風險指標（VaR95/99、CVaR、最大回撤全期、Rolling Sharpe 30 場次、資金階段、Monte Carlo 壓力） -->
+      <section class="console-section" aria-labelledby="consoleS4Title">
+        <h2 class="console-section-title" id="consoleS4Title">⚠️ 風險指標</h2>
+        <div class="kpi-grid console-kpi-auto" id="consoleRiskCards"><div class="empty loading">載入中…</div></div>
+        <details class="console-details" id="consoleMonteCarloPath">
+          <summary><strong>Monte Carlo 最差路徑</strong><span class="text-muted">1000 條壓力路徑中的最差累積報酬軌跡</span></summary>
+          <div id="consoleWorstPath" class="empty loading">載入中…</div>
+        </details>
+      </section>
+
+      <!-- S5 持倉明細 + 持倉結構（#holdings 錨點：明細含權重%與合計列 + 板塊曝險橫條 + 前 5 大權重） -->
+      <section class="console-section" id="holdings" aria-labelledby="consoleS5Title">
+        <h2 class="console-section-title" id="consoleS5Title">📂 持倉明細與結構</h2>
+        <div class="console-holdings-grid">
+          <div class="panel">
+            <h3 class="console-sub-title">持倉明細</h3>
+            <div id="consolePositionsTable" class="empty loading">載入中…</div>
+          </div>
+          <div class="panel">
+            <h3 class="console-sub-title">持倉結構</h3>
+            <div id="consoleTopConcentration" class="empty loading">載入中…</div>
+            <div id="consoleSectorDistribution" class="empty loading">載入中…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- S6 市場背景（壓力指數 + 敘事 + SOX + 半導體週期；預設半折疊） -->
+      <details class="console-details" id="consoleMarketContext">
+        <summary><strong>🌍 市場背景</strong><span id="consoleMarketSummary" class="text-muted"></span></summary>
+        <div class="panel wide mb-sm">
+          <h3 class="console-sub-title">資金壓力與敘事</h3>
+          <div id="liveNarrativeStrip" class="empty loading">載入中…</div>
+        </div>
+        <div class="panel wide">
+          <h3 class="console-sub-title">SOX 與半導體景氣</h3>
+          <div id="semiconductorSentiment" class="empty loading">載入中…</div>
+        </div>
+      </details>
+
+      <!-- S7 控制層今日處置（原「總經雷達」改名瘦身：funnel + 異常列，明細連結投資管線頁） -->
+      <section class="console-section" aria-labelledby="consoleS7Title">
+        <h2 class="console-section-title" id="consoleS7Title">🛡️ 控制層今日處置</h2>
+        <div id="consoleControlDisposition" class="panel empty loading">載入中…</div>
+      </section>
+
+      <!-- S8 交易時間軸（分頁） -->
+      <section class="console-section" aria-labelledby="consoleS8Title">
+        <h2 class="console-section-title" id="consoleS8Title">🕒 交易時間軸</h2>
+        <div id="consoleTradeHistory" class="panel empty loading">載入中…</div>
+      </section>
+
+      <!-- S9 工程自監控（自主校準，<details> 預設收合） -->
+      <details class="console-details" id="consoleSelfMonitor">
+        <summary><strong>🔧 工程自監控</strong><span class="text-muted">風控閘道自主校準報告</span></summary>
+        <div class="panel wide" id="riskCalibrationPanel" style="display:none;">
+          <h2>自主校準</h2>
+          <div id="riskCalibration" class="empty loading">載入中…</div>
+        </div>
+      </details>
     </div>
 
     <!-- 投資管線（client → admin 遷移，2026-08-23） -->
@@ -229,44 +294,6 @@
         <br><span class="text-muted">註：收盤價為回測當日收盤，作為模擬進場的參考基準。目標價與停損價由 Agent 推薦產生，並在 Simulator 中優先於固定百分比止盈止損。</span>
       </details>
       <div class="panel wide"><h2>最新場次推薦明細</h2><div id="recommendationPipeline" class="empty loading">載入中…</div></div>
-    </div>
-
-    <!-- 組合持倉（client → admin 遷移，2026-08-23） -->
-    <div class="page" id="page-portfolio">
-      <!-- 2026-08-24 UI audit P1-11：頁內大標與 topbar 標題重複 → 移除，
-           保留 id 供測試/外部錨點相容（display:none）。 -->
-      <h1 id="portfolioPageTitle" style="display:none">📂 組合持倉</h1>
-      <div class="kpi-grid" id="portfolioKPIs"></div>
-      <!-- B2 (risk-console Phase 1)：移除 hidden class — auth-form.css
-           .hidden{display:none!important} 會壓過 JS 的 inline display，
-           淨值趨勢 canvas 永久隱藏；顯示與否改由 renderDualEquityCurve 全權控制 -->
-      <div class="panel wide" id="equityCurvePanel">
-        <h2>淨值趨勢</h2>
-        <canvas id="equityChart" height="200"></canvas>
-      </div>
-      <div class="panel wide" id="positionsPanel">
-        <h2>持倉明細</h2>
-        <div id="positionsTable"></div>
-      </div>
-      <div class="panel wide" id="tradeHistoryPanel">
-        <h2>交易時間軸</h2>
-        <div id="tradeHistoryContainer"></div>
-      </div>
-      <div class="panel wide" id="pnlAttributionPanel">
-        <h2>損益歸因 (PnL Attribution)</h2>
-        <div id="pnlAttribution" class="empty loading">載入中…</div>
-      </div>
-      <div class="panel wide"><h2>基準比較</h2><div id="benchmarkComparison" class="loading">載入中…</div></div>
-      <div class="panel wide"><h2>風控閘道</h2><div id="riskGatePanel" class="loading">載入中…</div></div>
-      <div class="panel wide"><h2>風險分析</h2><div id="riskPanel" class="loading">載入中…</div></div>
-      <details class="help-details">
-        <summary><strong>📖 如何解讀本頁</strong></summary>
-        <p><strong>投組稅前淨值</strong> = 可用現金 + 所有持倉市值（未扣除稅負）</p>
-        <p><strong>投組稅後淨值</strong> = 稅前淨值 - 累積稅負（已實現獲利所產生的稅負）</p>
-        <p><strong>淨值趨勢</strong> = 每日回測的投組總值變化曲線（含稅前與稅後）</p>
-        <p>損益為未實現損益，實際損益需待部位平倉後確認。</p>
-        <p class="text-muted text-sm">資料來源：live state store（data/state/live/）。若無持倉資料，代表尚未執行模擬或所有部位已平倉。</p>
-      </details>
     </div>
 
     <!-- 績效報告（client → admin 遷移，2026-08-23；績效不適合對外） -->

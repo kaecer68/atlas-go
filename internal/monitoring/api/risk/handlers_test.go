@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -321,5 +322,37 @@ func TestHandleRiskCommentary_PersistedFallback(t *testing.T) {
 	}
 	if m["verdict"] != "UNKNOWN" {
 		t.Errorf("verdict = %v, want UNKNOWN (honest unknown for persisted text)", m["verdict"])
+	}
+	// SSOT Phase 2 field-contract --strict：reason_zh 必須就位（暫與 reason 同值，
+	// 值的中文化屬計劃 A-1 後續），risk.js 讀 data.reason_zh || data.reason。
+	if m["reason_zh"] != "風險水位穩定，曝險低於閾值，維持現行配置。" {
+		t.Errorf("reason_zh = %v, want persisted risk_commentary", m["reason_zh"])
+	}
+}
+
+// TestHandleRiskCommentary_MemoryDecision_IncludesReasonZh guards the
+// field-contract --strict requirement: the in-memory decision branch must also
+// expose reason_zh (currently equal to reason; A-1 will fill real translations).
+func TestHandleRiskCommentary_MemoryDecision_IncludesReasonZh(t *testing.T) {
+	rg := risk.NewRiskGate(nil, nil, nil)
+	rg.RecordDecision(risk.RiskDecision{
+		Phase:    risk.PhasePreTrade,
+		Verdict:  risk.VerdictAllow,
+		Reason:   "risk metrics within thresholds",
+		Mode:     "NORMAL",
+		Recorded: time.Now(),
+	})
+	h := NewHandlers(t.TempDir()).WithRiskGate(rg)
+	h.WithStore(ledger.NewStore(t.TempDir()))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/risk/commentary", nil)
+	status, body := h.HandleRiskCommentary(req)
+	assertStatus(t, status, http.StatusOK)
+	m := assertJSONKey(t, body, "reason_zh")
+	if m["reason_zh"] != "risk metrics within thresholds" {
+		t.Errorf("reason_zh = %v, want reason value (field staged for A-1)", m["reason_zh"])
+	}
+	if m["source"] != "risk_gate_memory" {
+		t.Errorf("source = %v, want risk_gate_memory", m["source"])
 	}
 }
