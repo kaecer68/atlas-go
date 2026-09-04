@@ -5001,6 +5001,7 @@ export interface twseDayTradingResponse {
   stat: string;
   date: string;
   tables: twseDayTradingTable[];
+  data: string[][];
 }
 
 export interface twseDayTradingTable {
