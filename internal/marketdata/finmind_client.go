@@ -65,8 +65,13 @@ func newFinMindRateLimiter() *rate.Limiter {
 	return rate.NewLimiter(rate.Limit(float64(perHour)/3600.0), burst)
 }
 
-// finmindDailyLimit is the daily quota ceiling for the FinMind free tier.
-// 600/hr × 24 = 14,400/day. We track this with DailyQuotaTracker so concurrent
+// finmindDailyLimit is the observed upstream daily quota cap (used=14400,
+// remaining=0 exhaustion on 2026-09-02). NOTE: this account is a paid
+// sponsorship (active until ~2026-10-03), hourly budget 6000/hr via
+// FINMIND_RATE_LIMIT_PER_HOUR (see finmindRateLimitPerHour) — the hourly
+// limiter paces throughput while this daily tracker bounds total spend.
+// When the sponsorship lapses, upstream reverts to free-tier limits and
+// both values must be revisited. We track this with DailyQuotaTracker so concurrent
 // callers (auto_cycle_update, auto_quote_backfill, channel_health_finmind,
 // tsmc_revenue, ad-hoc lookups) don't collectively exceed it. Without the
 // tracker, cold-start backfill of N symbols × 90 days can blow the daily
