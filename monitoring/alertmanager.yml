@@ -12,19 +12,28 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
-    # atlas.* 所有 severity 都走 webhook
-    - receiver: atlas-webhook-telegram
-      match_re:
-        service: atlas.*
-      group_wait: 10s
-      repeat_interval: 1h
-
-    # 非 atlas 服務的 critical 也走 webhook（避免 service label 不對齊時漏通知）
+    # critical 優先（first-match）：1h 重複
     - receiver: atlas-webhook-telegram
       match:
         severity: critical
       group_wait: 10s
       repeat_interval: 1h
+
+    # atlas.* 其餘（warning/info）：4h 重複
+    # 2026-09-05 降噪（實證: 真實 firing 期間每小時重複同文轟炸 Telegram）——
+    # 持續性告警 4h 提醒一次即可,critical 維持 1h。
+    - receiver: atlas-webhook-telegram
+      match_re:
+        service: atlas.*
+      group_wait: 10s
+      repeat_interval: 4h
+
+    # 非 atlas 服務的 warning 也走 webhook（避免 service label 不對齊時漏通知）
+    - receiver: atlas-webhook-telegram
+      match:
+        severity: warning
+      group_wait: 10s
+      repeat_interval: 4h
 
     # 其他走 placeholder slack（目前不會觸發，等正式 slack webhook 設定後再啟用）
     - receiver: default-slack
