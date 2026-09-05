@@ -55,8 +55,11 @@ func TestMarketVolumeProvider_ParseNormalData(t *testing.T) {
 	if result.MarketVolume != expected {
 		t.Errorf("MarketVolume = %f, want %f", result.MarketVolume, expected)
 	}
-	// FetchLatest 從今天開始往後掃 7 天，會先命中今天
-	today := time.Now().UTC().Format("20060102")
+	// FetchLatest walks back over expected trading days only
+	// (#1767 calendar-aware scan), so on weekends the first hit is
+	// the most recent expected trading day (e.g. Friday), not the
+	// calendar today.
+	today := RecentTradingDays(time.Now().UTC(), 1)[0].Format("20060102")
 	if result.Date != today {
 		t.Errorf("Date = %q, want %s", result.Date, today)
 	}

@@ -44,8 +44,8 @@ func TestCFHypothesisGate(t *testing.T) {
 		{"weekday 08:29 too early", mk("2026-09-07", "08:29"), "", false, "outside_window"},
 		{"weekday 08:00 too early", mk("2026-09-07", "08:00"), "", false, "outside_window"},
 		{"weekday 10:00 too late", mk("2026-09-07", "10:00"), "", false, "outside_window"},
-		{"saturday skipped", mk("2026-09-05", "08:30"), "", false, "weekend"},
-		{"sunday skipped", mk("2026-09-06", "08:30"), "", false, "weekend"},
+		{"saturday in window runs", mk("2026-09-05", "08:30"), "", true, ""},
+		{"sunday in window runs", mk("2026-09-06", "08:30"), "", true, ""},
 		{"already ran today", mk("2026-09-07", "09:00"), "2026-09-07", false, "already_ran_today"},
 		{"ran yesterday, today ok", mk("2026-09-07", "08:45"), "2026-09-04", true, ""},
 	}
