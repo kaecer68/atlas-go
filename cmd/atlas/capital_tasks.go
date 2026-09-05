@@ -200,15 +200,20 @@ func registerCapitalTasks(d capitalDeps) {
 		Interval:  1 * time.Hour,
 		Enabled:   true, // G02 live (FinMind TaiwanDailyShortSaleBalances)
 		Task: func(ctx context.Context) error {
-			// Weekdays after market close (15:00+), once per day.
+			// Weekdays after market close (15:00+ Taipei), once per day.
+			// fix/20260905-task-tz: the gate ran on container-local time
+			// (TZ=UTC in production), so "Hour() < 15" actually opened at
+			// Taipei 23:00 — an 8h post-close delay that also landed the
+			// one daily attempt minutes before the 00:00 TW FinMind quota
+			// reset. The gate now converts via taipeiLocation() and logs
+			// every skip (cf_hypothesis_validation_skipped precedent).
 			now := time.Now()
-			if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+			ok, reason := sblFetchGate(now, sblLastFetchDay)
+			if !ok {
+				logging.Info("capital_tasks", "auto_twse_sbl_skipped", "reason", reason)
 				return nil
 			}
-			if now.Hour() < 15 {
-				return nil
-			}
-			today := now.Format("2006-01-02")
+			today := taipeiDateString(now)
 			if sblLastFetchDay == today {
 				return nil // hourly tick; already fetched today
 			}
@@ -229,7 +234,7 @@ func registerCapitalTasks(d capitalDeps) {
 			return err
 		},
 	})
-	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Taipei, once daily, G02 live)")
+	log.Printf("[Gateway] registered auto_twse_sbl background task (1h interval, 15:00+ Asia/Taipei, once daily, G02 live)")
 
 	// Register auto_sbl_tdcc_history_backfill — one-time 6-month historical
 	// backfill for the two newly wired channels (2026-09-01 user directive:
@@ -296,14 +301,17 @@ func registerCapitalTasks(d capitalDeps) {
 		Interval:  1 * time.Hour,
 		Enabled:   true, // G01 live (FinMind TaiwanStockHoldingSharesPer)
 		Task: func(ctx context.Context) error {
+			// fix/20260905-task-tz: gate ran on container-local time
+			// (TZ=UTC in production) — "Hour() < 10" actually opened at
+			// Taipei 18:00. Now gated on Asia/Taipei 10:00+ (Tue/Fri),
+			// with a skip log on every gated tick.
 			now := time.Now()
-			if wd := now.Weekday(); wd != time.Tuesday && wd != time.Friday {
+			ok, reason := tdccFetchGate(now, tdccLastFetchDay)
+			if !ok {
+				logging.Info("capital_tasks", "auto_tdcc_dispersion_skipped", "reason", reason)
 				return nil
 			}
-			if now.Hour() < 10 {
-				return nil
-			}
-			today := now.Format("2006-01-02")
+			today := taipeiDateString(now)
 			if tdccLastFetchDay == today {
 				return nil
 			}
@@ -325,7 +333,7 @@ func registerCapitalTasks(d capitalDeps) {
 			return err
 		},
 	})
-	log.Printf("[Gateway] registered auto_tdcc_dispersion background task (1h interval, Tue/Fri 10:00+ Taipei, G01 live)")
+	log.Printf("[Gateway] registered auto_tdcc_dispersion background task (1h interval, Tue/Fri 10:00+ Asia/Taipei, G01 live)")
 
 	// Register auto_government_flow — daily refresh of operator-imported
 	// 官股行庫 readings (manifest #E04). No upstream HTTP — just reads the
