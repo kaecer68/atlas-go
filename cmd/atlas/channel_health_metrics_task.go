@@ -72,17 +72,25 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 		staleSec, err := computeChannelStalenessSeconds(rec, now)
 		if err == nil {
 			collector.RecordGauge(MetricChannelDataStalenessSeconds, staleSec, map[string]string{"channel": channelID})
-			// Contract-aware overage: only emitted when staleness exceeds
-			// the contract FreshnessWindow, so the ChannelDataStale alert
+			// Contract-aware overage: how much staleness EXCEEDS the
+			// contract FreshnessWindow, so the ChannelDataStale alert
 			// (expr: overage > 0) fires on real pipeline breakage, not on
 			// legitimate data-timestamp lag or low-frequency snapshots.
+			//
+			// 2026-09-05 修復（實證: twse_replay_sync 恢復後 alert 仍每小時
+			// 重複通知）: overage 必須永遠輸出（窗口內 = 0）。MetricsCollector
+			// 的 gauge 是 last-write-wins 且不清序列——若條件消失就跳過輸出,
+			// 舊樣本會永久凍結在 /metrics,Prometheus 永遠看到 >0,alert
+			// 永遠 firing。輸出 0 讓序列持續更新,alert 自然 resolved。
 			window := apigateway.ChannelContracts().Contract(channelID).FreshnessWindow
 			if window <= 0 {
 				window = apigateway.StaleDataThreshold
 			}
-			if overage := staleSec - window.Seconds(); overage > 0 {
-				collector.RecordGauge(MetricChannelStalenessOverageSeconds, overage, map[string]string{"channel": channelID})
+			overage := staleSec - window.Seconds()
+			if overage < 0 {
+				overage = 0
 			}
+			collector.RecordGauge(MetricChannelStalenessOverageSeconds, overage, map[string]string{"channel": channelID})
 		}
 	}
 	return nil

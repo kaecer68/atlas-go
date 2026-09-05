@@ -152,12 +152,16 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	if !strings.Contains(body, wantOverage) {
 		t.Fatalf("missing overage series %q\n--- full body ---\n%s", wantOverage, body)
 	}
-	for _, absent := range []string{
-		`atlas_channel_staleness_overage_seconds{channel="us10y"}`,
-		`atlas_channel_staleness_overage_seconds{channel="tdcc_equity_dispersion"}`,
+	// 2026-09-05 修復: overage 永遠輸出（窗口內 = 0）——若條件消失就跳過,
+	// MetricsCollector 的 last-write-wins gauge 會凍結舊樣本,Prometheus
+	// 永遠看到 >0,alert 永遠 firing（實證: twse_replay_sync 恢復後仍每小時
+	// 重複通知）。
+	for _, want := range []string{
+		`atlas_channel_staleness_overage_seconds{channel="us10y"} 0`,
+		`atlas_channel_staleness_overage_seconds{channel="tdcc_equity_dispersion"} 0`,
 	} {
-		if strings.Contains(body, absent) {
-			t.Fatalf("unexpected overage series %q (within contract window)\n--- full body ---\n%s", absent, body)
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing zeroed overage series %q\n--- full body ---\n%s", want, body)
 		}
 	}
 	// raw staleness gauge 仍輸出（dashboard 需要）。
