@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -49,8 +50,15 @@ func (a *TAIEXIndexChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 func (a *TAIEXIndexChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
+		// 2026-09-06 修復: 週末/假日/pre-market 為 ErrNoData 等待態 —
+		// status 維持 warn 級以下（與 tdcc/finmind adapter 同語意）,
+		// 不再觸發 ChannelHealthStatusError（實證: 週六全日 error 誤報）。
+		status := "error"
+		if errors.Is(err, marketdata.ErrNoData) {
+			status = "warn"
+		}
 		return HealthStatus{
-			Status:    "error",
+			Status:    status,
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
 			CheckType: "liveness",

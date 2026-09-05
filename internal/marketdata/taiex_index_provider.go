@@ -43,7 +43,13 @@ func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 	// docs/operations/investigation-twse-timeout-2026-08-18.md §3.1).
 	now := twseTAIEXTargetDate()
 	if !isTaiwanTradingDay(now) || now.Hour() < twseMarketOpenHour {
-		return p.fetchFallback(ctx, fmt.Errorf("no published data for %s (weekend/holiday/pre-market)", now.Format("2006-01-02")))
+		// 2026-09-06 修復（實證: 週六 taiex_index 全日 error 告警）:
+		// 非交易日/pre-market 本就是「上游無新資料」的等待態 — 包 ErrNoData
+		// sentinel 讓 gateway 的 ErrNoData 分支 RecordWaiting（status 維持
+		// ok）,而不是走到 error 級 ChannelHealthStatusError。若 TWSE
+		// fallback 也失敗（如 rate limiter 暫時逾時）,複合錯誤仍保留
+		// ErrNoData 鏈,週一開市自然恢復。
+		return p.fetchFallback(ctx, fmt.Errorf("%w: no published data for %s (weekend/holiday/pre-market)", ErrNoData, now.Format("2006-01-02")))
 	}
 
 	if err := yahooSharedLimiter.Wait(ctx); err != nil {

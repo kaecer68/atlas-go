@@ -2,6 +2,7 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -222,6 +223,48 @@ func TestTAIEXIndexProvider_FetchSnapshot_BothSourcesFail(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "taiex_index") {
 		t.Errorf("expected wrapped taiex_index error, got %v", err)
+	}
+}
+
+// TestTAIEXIndexProvider_FetchSnapshot_WeekendBothFail_WrapsErrNoData —
+// 2026-09-06 修復（實證: 週六 taiex_index 全日 error 告警）: 非交易日 yahoo
+// 端本就是「無新資料」等待態,複合錯誤必須包 ErrNoData sentinel,讓 gateway
+// RecordWaiting / adapter HealthCheck 歸 warn,不再觸發 ChannelHealthStatusError。
+func TestTAIEXIndexProvider_FetchSnapshot_WeekendBothFail_WrapsErrNoData(t *testing.T) {
+	ResetSharedTWSEClient()
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	// 2026-09-05 is a Saturday.
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 9, 5, 12, 0, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	_, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error when both sources fail on a weekend")
+	}
+	if !errors.Is(err, ErrNoData) {
+		t.Fatalf("err = %v, want errors.Is(err, ErrNoData) — weekend no-data must be a waiting state", err)
 	}
 }
 
