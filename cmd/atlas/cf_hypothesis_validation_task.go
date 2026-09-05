@@ -15,8 +15,9 @@ package main
 //
 // Cadence: 1h tick, gated to the 08:30–09:59 Taipei window (after the
 // 00:00 FinMind quota reset / overnight backfill, before market open),
-// once per day, weekdays only — trading data does not change on
-// weekends, so weekend ticks are skipped to avoid no-op reports.
+// once per day, every day including weekends — backfill commonly lands
+// on weekends, and a verdict-unchanged rerun stays quiet (one info log
+// line), so weekend ticks carry no noise risk.
 //
 // Governance boundaries (spec §10; plan
 // .omo/plans/2026-09-04-capital-flow-model-plan.md §3):
@@ -58,14 +59,11 @@ import (
 type cfHypothesisAlertFunc func(level monitoring.AlertLevel, message string, meta map[string]any)
 
 // cfHypothesisGate decides whether the task body should do real work at
-// tick `now` (already in Asia/Taipei). Runs once per weekday inside the
+// tick `now` (already in Asia/Taipei). Runs once per day inside the
 // 08:30–09:59 window; lastRunDate ("2006-01-02") is the daily-once
 // guard, set only after a fully successful run. Returns a skip reason
 // for logging.
 func cfHypothesisGate(now time.Time, lastRunDate string) (bool, string) {
-	if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
-		return false, "weekend"
-	}
 	if lastRunDate == now.Format("2006-01-02") {
 		return false, "already_ran_today"
 	}
