@@ -58,10 +58,20 @@ func TestMarketVolumeProvider_ParseNormalData(t *testing.T) {
 	// FetchLatest walks back over expected trading days only
 	// (#1767 calendar-aware scan), so on weekends the first hit is
 	// the most recent expected trading day (e.g. Friday), not the
-	// calendar today.
-	today := RecentTradingDays(time.Now().UTC(), 1)[0].Format("20060102")
-	if result.Date != today {
-		t.Errorf("Date = %q, want %s", result.Date, today)
+	// calendar today. Compare against the scan window instead of a
+	// single "today": the test can straddle a UTC midnight boundary,
+	// where the provider's own time.Now() and this assertion's may
+	// differ by one day (flaky on CI). Three trading days covers any
+	// such crossing.
+	window := map[string]bool{}
+	var windowKeys []string
+	for _, day := range RecentTradingDays(time.Now().UTC(), 3) {
+		key := day.Format("20060102")
+		window[key] = true
+		windowKeys = append(windowKeys, key)
+	}
+	if !window[result.Date] {
+		t.Errorf("Date = %q, want one of recent expected trading days %v", result.Date, windowKeys)
 	}
 }
 
