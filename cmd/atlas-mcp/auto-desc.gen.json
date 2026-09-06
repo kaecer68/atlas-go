@@ -1023,7 +1023,7 @@
   },
   "stock_get_win_rate": {
     "name": "stock_get_win_rate",
-    "description": "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: symbol (+ optional condition_id, rolling_window, asof). No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical.",
+    "description": "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: symbol (+ optional condition_id, rolling_window, asof). Known condition_ids: foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence. DIRECTION SEMANTICS: price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW win_rate / negative avg_forward_return after trigger CONFIRMS the bearish avoid signal, do not read it as a bad condition. No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical.",
     "inputSchema": {
       "properties": {
         "asof": {
@@ -1051,7 +1051,7 @@
   },
   "stock_picker_scan": {
     "name": "stock_picker_scan",
-    "description": "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof. Candidates are filtered to observations \u003e= min_observations, win_rate \u003e= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol.",
+    "description": "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof, direction. Candidates are filtered to observations \u003e= min_observations, win_rate \u003e= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate \u003c= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol.",
     "inputSchema": {
       "properties": {
         "asof": {
@@ -1060,6 +1060,10 @@
         },
         "condition_id": {
           "description": "condition id, e.g. foreign-3d-net-buy or momentum-20d-positive; default: scan across every stockpicker condition",
+          "type": "string"
+        },
+        "direction": {
+          "description": "buy (default) or avoid; use avoid for avoid-semantics conditions such as price-volume-top-divergence — inverts the win-rate filter to win_rate \u003c= min_win_rate and orders weakest forward performance first",
           "type": "string"
         },
         "min_observations": {

@@ -202,6 +202,17 @@ const (
 	ConditionPriceVolumeBottomDivergence DemoConditionID = "price-volume-bottom-divergence"
 )
 
+// IsAvoidCondition reports whether a condition ID has INVERTED win-rate
+// semantics: it fires as an avoid/exit warning (頂背離), so a LOW forward
+// win rate after the trigger confirms the signal. Consumers that rank,
+// filter, or gate on win_rate (stock_picker_scan, the win-rate card, the
+// StockpickerWinrateExecutor eligibility gates) MUST consult this before
+// applying buy-side thresholds — treating an avoid condition as a buy
+// signal inverts its meaning (k3 review 2026-09-07, F1/F3).
+func IsAvoidCondition(id string) bool {
+	return id == string(ConditionPriceVolumeTopDivergence)
+}
+
 // newForeign3DNetBuy builds the foreign-3d-net-buy condition.
 func newForeign3DNetBuy(p config.StockpickerConditionWindow) Condition {
 	return Condition{

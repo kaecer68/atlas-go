@@ -180,6 +180,13 @@ type StockpickerWinrateExecutor struct {
 	CapitalFlow CapitalFlowReportProvider
 	// Source/Window/ConditionID override the default win-rate key and the
 	// flow-gateway condition id. Empty → defaults.
+	//
+	// WARNING: Source MUST point at a buy-semantics condition. Pointing it
+	// at an avoid-semantics condition (stockpicker.IsAvoidCondition, e.g.
+	// price-volume-top-divergence 頂背離) would invert the win_rate >= 0.55
+	// gate into "recommend BUY on stocks whose top-divergence signal FAILED"
+	// — the executor refuses such sources outright (fail-closed, k3 review
+	// 2026-09-07 F3).
 	Source      string
 	Window      string
 	ConditionID string
@@ -219,6 +226,18 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 	symbol := stockpickerSymbol(quote.Symbol) // ledger + flow files key on the bare TWSE code
 	ctx := context.Background()
 
+	// Stage 0: semantic-direction guard (k3 review F3). Avoid-semantics
+	// conditions (頂背離: low forward win rate = signal working) must never
+	// drive a BUY gate whose thresholds assume buy semantics. Fail closed.
+	src := e.source()
+	condID := strings.TrimPrefix(src, "stockpicker-")
+	if stockpicker.IsAvoidCondition(condID) {
+		logging.Debug("stockpicker_winrate", "skip",
+			logging.Symbol(quote.Symbol), "stage", "direction_guard",
+			"source", src, "reason", "avoid-semantics condition cannot drive BUY gate")
+		return domain.Recommendation{}, false
+	}
+
 	// Stage 1: persisted win-rate evidence (read-only).
 	store, closer, err := e.winRateStore()
 	defer closer()
@@ -227,7 +246,7 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 			logging.Symbol(quote.Symbol), "stage", "winrate_db", "err", err)
 		return domain.Recommendation{}, false
 	}
-	summary, found, err := store.LoadWinRate(ctx, symbol, e.source(), e.window())
+	summary, found, err := store.LoadWinRate(ctx, symbol, src, e.window())
 	if err != nil || !found {
 		logging.Debug("stockpicker_winrate", "skip",
 			logging.Symbol(quote.Symbol), "stage", "winrate_load", "found", found, "err", err)

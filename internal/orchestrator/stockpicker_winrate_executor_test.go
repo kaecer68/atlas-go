@@ -542,3 +542,20 @@ func writeStockpickerFlowFile(t *testing.T, tmp string) {
 		t.Fatalf("write flow file: %v", err)
 	}
 }
+
+// TestStockpickerWinrateRecommendAvoidSourceRefused (k3 review F3): pointing
+// Source at an avoid-semantics condition (price-volume-top-divergence 頂背離)
+// must fail closed — otherwise the win_rate >= 0.55 gate would recommend BUY
+// on exactly the stocks whose top-divergence signal FAILED.
+func TestStockpickerWinrateRecommendAvoidSourceRefused(t *testing.T) {
+	e := StockpickerWinrateExecutor{
+		WinRateStore: &mockWinRateStore{summary: eligibleWinRateSummary(), found: true},
+		FlowSource:   mockFlowSource{net: 50000, ok: true},
+		Gateway:      testFlowGateway(),
+		Source:       "stockpicker-price-volume-top-divergence",
+	}
+	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
+	if ok {
+		t.Fatalf("avoid-semantics source must fail closed, got %+v", rec)
+	}
+}
