@@ -69,7 +69,10 @@ func (a *FinMindChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, 
 	_, err := a.client.GetStockPrice(ctx, "2330", yesterday())
 	if err != nil {
 		status := "error"
-		if errors.Is(err, marketdata.ErrQuotaExhausted) {
+		// ErrIPBanned（403 "ip banned"）與 ErrQuotaExhausted 同族：上游
+		// 限流/額度條件，retry_after 後自癒 — warn 不報 error（2026-09-06
+		// 實證：未映射時 finmind 通道誤標 error 30 分鐘）。
+		if errors.Is(err, marketdata.ErrQuotaExhausted) || errors.Is(err, marketdata.ErrIPBanned) {
 			status = "warn"
 		}
 		return HealthStatus{
