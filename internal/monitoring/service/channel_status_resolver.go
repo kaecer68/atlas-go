@@ -36,6 +36,14 @@ func resolveChannelStatusFromStore(
 	case "ok":
 		// Last fetch succeeded — channel is healthy regardless of data age.
 		return "ok", rec.LastFetchAt, ""
+	case "warn":
+		// Transient waiting state (e.g. FinMind daily quota exhausted — the
+		// Gateway records ErrQuotaExhausted as warn, not error). The
+		// registered-channel fallback passes an empty fileStatus, so without
+		// this case a warn record displayed as "未知" on /admin/datachannels.
+		// Report "warn" (待更新) with the stored error attached; the next
+		// scheduled fetch success flips the record to ok and clears it.
+		return "warn", rec.LastFetchAt, rec.LastError
 	case "degraded":
 		// Last fetch failed but cache has valid data — between ok and error.
 		return "degraded", "使用快取: " + rec.LastError, rec.LastError
