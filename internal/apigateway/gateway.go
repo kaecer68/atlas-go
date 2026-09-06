@@ -131,13 +131,16 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		//     （與 adapter_finmind.go HealthCheck / ErrQuotaExhausted 文件語意一致）。
 		//   - ErrFugleQuotaExhausted（Fugle 本機日額度閘 2000/day 用完，00:00 UTC
 		//     重置）→ warn（2026-09-04 實證：額度閘未映射時 fugle 全日 error 告警）。
+		//   - ErrIPBanned（FinMind 403 "ip banned" — 上游 per-IP 限流，
+		//     retry_after 後自癒）→ warn（2026-09-06 實證：未映射時 finmind
+		//     通道 error 30 分鐘並誤發 ChannelHealthStatusError）。
 		if errors.Is(callErr, marketdata.ErrNoData) {
 			_ = g.health.RecordWaiting(channelID)
 			logging.Info("gateway", "channel_waiting_no_data",
 				"channel", channelID, "err", callErr.Error())
 			return nil, callErr
 		}
-		if errors.Is(callErr, marketdata.ErrQuotaExhausted) || errors.Is(callErr, marketdata.ErrFugleQuotaExhausted) {
+		if errors.Is(callErr, marketdata.ErrQuotaExhausted) || errors.Is(callErr, marketdata.ErrFugleQuotaExhausted) || errors.Is(callErr, marketdata.ErrIPBanned) {
 			_ = g.health.Record(channelID, "warn", callErr.Error())
 			logging.Info("gateway", "channel_quota_waiting",
 				"channel", channelID, "err", callErr.Error())

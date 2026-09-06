@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -103,7 +104,28 @@ type FinMindClient struct {
 	// hybrid fallback). Quota-exhaustion and no-data conditions do NOT
 	// trip it — they are budget/holiday conditions, not outages.
 	breaker *providerBreaker
+	// ipBanUntilSec is the unix timestamp until which FinMind has banned
+	// this client's outbound IP (observed 2026-09-06: HTTP 403
+	// {"msg":"ip banned","retry_after":971} after multi-process cron
+	// containers collectively exceeded the per-IP rate on the sponsor
+	// token). While set, fetchDataset short-circuits without an HTTP call
+	// so the ban window is respected instead of hammering a closed door
+	// and tripping the breaker. 0 = no ban. Atomic: fetchDataset is called
+	// concurrently by every FinMind consumer.
+	ipBanUntilSec atomic.Int64
 }
+
+// ErrIPBanned is returned when FinMind has rate-banned this client's
+// outbound IP (HTTP 403 body {"msg":"ip banned","retry_after":N}). Like
+// ErrQuotaExhausted this is a transient upstream throttling condition that
+// self-heals after retry_after — NOT an outage — so callers (gateway
+// channel adapter, HealthCheck) map it to warn/waiting rather than error.
+var ErrIPBanned = fmt.Errorf("finmind: ip banned by upstream (rate limit)")
+
+// finmindIPBanDefaultRetryAfterSec is the fallback ban window when the 403
+// body carries no parseable retry_after. Slightly above the observed 971s
+// so a mis-parse never unblocks early.
+const finmindIPBanDefaultRetryAfterSec = 1020
 
 type FinMindResponse struct {
 	Msg    string           `json:"msg"`
@@ -257,6 +279,18 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	if c.breaker != nil && !c.breaker.shouldTry() {
 		return nil, fmt.Errorf("finmind: %w", ErrFinMindBreakerOpen)
 	}
+	// IP-ban gate: while FinMind has banned this client's outbound IP
+	// (403 "ip banned" — observed 2026-09-06, retry_after 971s), do NOT
+	// spend the rate-limiter budget or the daily quota on requests that
+	// are guaranteed to bounce. Short-circuit as a typed throttling
+	// condition so every consumer (gateway channel, cron backfills,
+	// tsmc_revenue) waits out the ban instead of hammering the closed
+	// door and tripping the breaker. Like quota exhaustion this is a
+	// throttling condition — record breaker success, not failure.
+	if until := c.ipBanUntilSec.Load(); until > time.Now().Unix() {
+		c.breakerRecordSuccess()
+		return nil, fmt.Errorf("finmind: %w (unblocks in %ds)", ErrIPBanned, until-time.Now().Unix())
+	}
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)
 	}
@@ -335,6 +369,32 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		if resp.StatusCode == http.StatusPaymentRequired {
 			c.breakerRecordSuccess()
 			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)
+		}
+		// 403 "ip banned" is FinMind's per-IP rate-limit signal — a
+		// throttling condition that self-heals after retry_after, NOT an
+		// outage. Record the ban window (fetchDataset short-circuits for
+		// its duration) and map to ErrIPBanned so the gateway / adapter
+		// layers treat it like quota exhaustion (warn), not a hard
+		// failure (error alert + breaker trip). Observed in production
+		// 2026-09-06 04:10Z after multi-process cron containers
+		// collectively exceeded the per-IP rate: the untyped 403 marked
+		// the finmind channel error for ~30m and fired
+		// ChannelHealthStatusError even though the ban self-healed.
+		if resp.StatusCode == http.StatusForbidden && strings.Contains(bodyStr, "ip banned") {
+			retryAfter := finmindIPBanDefaultRetryAfterSec
+			var banBody struct {
+				RetryAfter int `json:"retry_after"`
+			}
+			if err := json.Unmarshal([]byte(bodyStr), &banBody); err == nil && banBody.RetryAfter > 0 {
+				retryAfter = banBody.RetryAfter
+			}
+			c.ipBanUntilSec.Store(time.Now().Add(time.Duration(retryAfter) * time.Second).Unix())
+			c.breakerRecordSuccess()
+			logging.Warn("finmind", "ip_banned_short_circuit",
+				"retry_after_sec", retryAfter,
+				"dataset", dataset,
+			)
+			return nil, fmt.Errorf("finmind: %w (retry_after=%ds): %s", ErrIPBanned, retryAfter, bodyStr)
 		}
 		c.breakerRecordFailure()
 		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)

@@ -41,7 +41,10 @@ groups:
 
       - alert: ChannelHealthStatusError
         expr: atlas_channel_health_status == 2
-        for: 0m
+        # 2026-09-06 降噪: for 0m→5m — 單次抓取失敗（如 FinMind 403 ip
+        # banned 16 分鐘內自癒）不應立即觸發 error 級 Telegram。連續 5 分鐘
+        # error 才代表真故障。
+        for: 5m
         labels:
           severity: error
           service: atlas-monitoring

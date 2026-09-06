@@ -142,3 +142,34 @@ func TestGateway_Fetch_RealError_StillRecordsError(t *testing.T) {
 		t.Errorf("Status = %q, want error for a genuine upstream failure", rec.Status)
 	}
 }
+
+// TestGateway_Fetch_ErrIPBanned_RecordsWarn verifies that FinMind's 403
+// "ip banned" per-IP rate-limit signal (typed ErrIPBanned since 2026-09-06)
+// is recorded as "warn" like quota exhaustion — the ban self-heals after
+// retry_after, so it must not page as a ChannelHealthStatusError.
+// 實證 2026-09-06 04:10Z: untyped 403 marked finmind error for ~30m and
+// fired the error alert even though production self-healed.
+func TestGateway_Fetch_ErrIPBanned_RecordsWarn(t *testing.T) {
+	g := newTestGateway(t)
+	channelID := "finmind"
+	banErr := fmt.Errorf("finmind: %w (retry_after=971s): {\"msg\":\"ip banned\"}", marketdata.ErrIPBanned)
+	registerFailingProvider(g, channelID, banErr)
+
+	_, err := g.Fetch(context.Background(), channelID)
+	if err == nil {
+		t.Fatal("Fetch should still surface the ban error to callers")
+	}
+	if !errors.Is(err, marketdata.ErrIPBanned) {
+		t.Fatalf("err = %v, want wrapped marketdata.ErrIPBanned", err)
+	}
+	rec := g.Health().Get(channelID)
+	if rec == nil {
+		t.Fatal("expected health record after fetch")
+	}
+	if rec.Status != "warn" {
+		t.Errorf("Status = %q, want warn (IP ban self-heals after retry_after)", rec.Status)
+	}
+	if rec.LastError == "" {
+		t.Error("LastError should carry the ban reason for the channel page")
+	}
+}
