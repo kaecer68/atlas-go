@@ -50,9 +50,20 @@ function verdict(data) {
   return '<div class="sq-divergence-badge sq-divergence-badge--none">無明顯背離</div>';
 }
 
-export function renderDivergence(state, divergenceResult) {
+export function renderDivergence(state, divergenceResult, coverage) {
   if (state === 'loading' || !divergenceResult) {
     return `<div class="sq-card"><h3 class="sq-card__title">量價背離</h3>${renderSkeleton(3)}</div>`;
+  }
+  // Out-of-scope (TPEX/ETF): the backend answers 200 + coverage note with
+  // an empty payload (same contract as chips/fundamentals/technical).
+  // Render the neutral scope notice — NOT a fake "無明顯背離" reading with
+  // empty numbers. Uses the bundle coverage object (coverage.covered /
+  // coverage.reason — deliberately no snake_case field access, per the
+  // field-contract check).
+  if (coverage && !coverage.covered) {
+    return `<div class="sq-card"><h3 class="sq-card__title">量價背離</h3>
+      <div class="sq-scope-notice">此股票代號不在量價背離涵蓋範圍（涵蓋 TWSE 上市普通股，約 1070 隻）<br><small>${escapeHtml(coverage.reason || '')}</small></div>
+    </div>`;
   }
   if (state === 'error' || divergenceResult.status === 'error') {
     // 503 (insufficient bars / store not configured) is transient — render
@@ -65,15 +76,6 @@ export function renderDivergence(state, divergenceResult) {
   const data = divergenceResult.data;
   if (!data) {
     return `<div class="sq-card"><h3 class="sq-card__title">量價背離</h3>${renderEmptyState('暫無量價背離資料')}</div>`;
-  }
-  // Out-of-scope: the handler answers 200 + coverage_note=NOT_COVERED +
-  // volume_divergence:{empty:true} for TPEX/ETF symbols (same contract as
-  // chips/fundamentals/technical). Render the neutral scope notice — NOT a
-  // fake "無明顯背離" reading with empty numbers.
-  if (data.coverage_note === 'NOT_COVERED' || (data.volume_divergence && data.volume_divergence.empty)) {
-    return `<div class="sq-card"><h3 class="sq-card__title">量價背離</h3>
-      <div class="sq-scope-notice">此股票代號不在量價背離涵蓋範圍（涵蓋 TWSE 上市普通股，約 1070 隻）<br><small>${escapeHtml(data.reason || '')}</small></div>
-    </div>`;
   }
 
   const staleNote = data.trading_day === false

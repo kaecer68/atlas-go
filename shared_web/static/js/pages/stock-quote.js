@@ -57,7 +57,7 @@ function renderContent() {
         ${renderTechnical(state.status, res.technical, res.coverage)}
         ${renderRevenue(state.status, res.monthlyRevenue)}
         ${renderWinRate(state.status, res.winRate, res.coverage)}
-        ${renderDivergence(state.status, res.divergence)}
+        ${renderDivergence(state.status, res.divergence, res.coverage)}
       </div>
     `;
   }
