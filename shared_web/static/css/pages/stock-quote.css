@@ -479,3 +479,8 @@
   line-height: 1.6;
   margin: 0;
 }
+
+/* 反向語義註記（頂背離條件） */
+.sq-winrate-note--avoid {
+  border-left: 3px solid var(--color-warning);
+}

@@ -55,12 +55,24 @@ function statusBadge(status) {
   }
 }
 
+// AVOID-semantics conditions (頂背離): a LOW forward win rate after trigger
+// CONFIRMS the signal — the condition fires as an avoid/exit warning, not a
+// buy signal. Rendered with an inverted badge + inverted return coloring so
+// users don't misread a "good avoid signal" as a "bad condition" (k3 review
+// F2). Keep in sync with stockpicker.IsAvoidCondition.
+const AVOID_CONDITIONS = new Set(['price-volume-top-divergence']);
+
 function renderCondition(cond) {
-  const id = escapeHtml(cond.condition_id || cond.source || '');
+  const rawId = cond.condition_id || cond.source || '';
+  const id = escapeHtml(rawId);
+  const isAvoid = AVOID_CONDITIONS.has(rawId.replace(/^stockpicker-/, ''));
   const badge = statusBadge(cond.calibration_status);
   const calibrating = cond.calibration_status === 'calibrating';
   const observeNote = calibrating
     ? '<div class="sq-winrate-note">樣本數不足，僅供觀察</div>'
+    : '';
+  const avoidNote = isAvoid
+    ? '<div class="sq-winrate-note sq-winrate-note--avoid">反向指標（頂背離）：觸發後勝率越低、前瞻報酬越負，代表「迴避訊號」越有效</div>'
     : '';
 
   const range = (cond.data_start && cond.data_end)
@@ -85,11 +97,14 @@ function renderCondition(cond) {
       </div>
       <div class="sq-tech-row">
         <div class="sq-tech-row__label">平均報酬</div>
-        <div class="sq-tech-row__value ${cond.avg_forward_return > 0 ? 'sq-price-up' : cond.avg_forward_return < 0 ? 'sq-price-down' : 'sq-price-neutral'}">${formatSignedPct(cond.avg_forward_return)}</div>
-        <div class="sq-tech-row__hint sq-price-neutral">${range}</div>
+        <div class="sq-tech-row__value ${isAvoid
+          ? (cond.avg_forward_return < 0 ? 'sq-price-up' : cond.avg_forward_return > 0 ? 'sq-price-down' : 'sq-price-neutral')
+          : (cond.avg_forward_return > 0 ? 'sq-price-up' : cond.avg_forward_return < 0 ? 'sq-price-down' : 'sq-price-neutral')}">${formatSignedPct(cond.avg_forward_return)}</div>
+        <div class="sq-tech-row__hint sq-price-neutral">${range}${isAvoid ? ' · 反向語義' : ''}</div>
       </div>
     </div>
     ${observeNote}
+    ${avoidNote}
   </div>`;
 }
 

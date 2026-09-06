@@ -25,7 +25,7 @@ const (
 func registerStockPickerScanTools(mcpSrv *mcp.Server, s *server) {
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "stock_picker_scan",
-		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
+		Description: autoDescOr("stock_picker_scan", "Scan persisted Phase-4 stock win-rate aggregates across symbols and return the best candidates (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: optional condition_id, rolling_window, min_observations, min_win_rate, top_n (default 10), sort_by (wilson_lower default | win_rate), asof, direction. Candidates are filtered to observations >= min_observations, win_rate >= min_win_rate, calibration_status=eligible, then sorted and truncated to top_n. DIRECTION SEMANTICS: conditions are buy-side by default; condition price-volume-top-divergence (頂背離) is AVOID-semantics — a LOW forward win rate after trigger confirms the bearish signal, so for it pass direction=avoid to invert the filter (win_rate <= max_win_rate, default 0.5) and ordering (weakest forward performance first). Without direction=avoid the default buy filter hides exactly the rows where the avoid signal is strongest (k3 review F1). No stored data returns found=false with a clear message. Alternative: stock_get_win_rate for a single symbol."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockPickerScan)
 }
@@ -38,6 +38,7 @@ type stockPickerScanInput struct {
 	TopN            int     `json:"top_n,omitempty" jsonschema:"maximum number of candidates to return; default 10, capped at 200"`
 	SortBy          string  `json:"sort_by,omitempty" jsonschema:"sort key: wilson_lower (default, sample-size weighted) or win_rate"`
 	AsOf            string  `json:"asof,omitempty" jsonschema:"as-of date YYYY-MM-DD (informational; stored aggregates are returned as-is, never recomputed)"`
+	Direction       string  `json:"direction,omitempty" jsonschema:"buy (default) or avoid; use avoid for avoid-semantics conditions such as price-volume-top-divergence — inverts the win-rate filter to win_rate <= min_win_rate and orders weakest forward performance first"`
 }
 
 // stockPickerScanCandidate is one persisted (symbol, source, window) summary
@@ -63,6 +64,7 @@ type stockPickerScanOutput struct {
 	Found      bool                       `json:"found"`
 	Message    string                     `json:"message,omitempty"`
 	AsOf       string                     `json:"asof,omitempty"`
+	Direction  string                     `json:"direction,omitempty"` // "buy" (default) or "avoid" — echo so consumers can't misread the ranking
 	Total      int                        `json:"total"`
 	Candidates []stockPickerScanCandidate `json:"candidates"`
 }
@@ -99,8 +101,22 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 		return nil, stockPickerScanOutput{}, fmt.Errorf("stock_picker_scan: sort_by %q must be wilson_lower or win_rate", in.SortBy)
 	}
 
+	// direction (k3 review F1): avoid-semantics conditions (頂背離) are
+	// confirmed by LOW forward win rates, so the buy filter
+	// (win_rate >= min) hides exactly the strongest avoid signals. In avoid
+	// mode the filter becomes win_rate <= min_win_rate (reinterpreted as a
+	// ceiling) and ordering flips to weakest-forward-performance first.
+	direction := in.Direction
+	if direction == "" {
+		direction = "buy"
+	}
+	if direction != "buy" && direction != "avoid" {
+		return nil, stockPickerScanOutput{}, fmt.Errorf("stock_picker_scan: direction %q must be buy or avoid", in.Direction)
+	}
+
 	out := stockPickerScanOutput{
 		AsOf:       in.AsOf,
+		Direction:  direction,
 		Candidates: []stockPickerScanCandidate{},
 	}
 
@@ -111,7 +127,7 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 			return nil
 		}
 
-		rows, err := scanWinRateRows(ctx, db, window, in.ConditionID, minObs, minWinRate, sortCol)
+		rows, err := scanWinRateRows(ctx, db, window, in.ConditionID, minObs, minWinRate, sortCol, direction)
 		if err != nil {
 			return fmt.Errorf("stock_picker_scan: query win rates: %w", err)
 		}
@@ -140,7 +156,7 @@ func (s *server) handleStockPickerScan(ctx context.Context, _ *mcp.CallToolReque
 // ordered by sortCol (one of the whitelisted columns wilson_lower|win_rate).
 // It reads stock_win_rate directly — the same persisted aggregates
 // stock_get_win_rate reads — and never recomputes.
-func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string, minObs int, minWinRate float64, sortCol string) ([]stockPickerScanCandidate, error) {
+func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string, minObs int, minWinRate float64, sortCol, direction string) ([]stockPickerScanCandidate, error) {
 	query := `SELECT symbol, source, rolling_window, observations, hits, win_rate,
 		wilson_lower, wilson_upper, confidence, calibration_status,
 		net_cost_rate, avg_forward_return, updated_at
@@ -159,6 +175,17 @@ func scanWinRateRows(ctx context.Context, db *sql.DB, window, conditionID string
 	orderBy := "wilson_lower DESC, symbol ASC"
 	if sortCol == "win_rate" {
 		orderBy = "win_rate DESC, symbol ASC"
+	}
+	if direction == "avoid" {
+		// Avoid semantics (頂背離): the strongest signals are the LOWEST
+		// forward win rates. win_rate >= ? above is the buy-side floor;
+		// replace it with a ceiling and invert the ranking so the most
+		// confidently-bad rows (lowest wilson_upper / win_rate) come first.
+		query = strings.Replace(query, "win_rate >= ?", "win_rate <= ?", 1)
+		orderBy = "wilson_upper ASC, symbol ASC"
+		if sortCol == "win_rate" {
+			orderBy = "win_rate ASC, symbol ASC"
+		}
 	}
 	query += ` ORDER BY ` + orderBy
 

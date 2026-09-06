@@ -453,3 +453,14 @@ func TestCondition_DivergenceParamsFromConfig(t *testing.T) {
 		t.Fatalf("window_days = %v, want 30 from parameters.json", got)
 	}
 }
+
+func TestIsAvoidCondition(t *testing.T) {
+	if !IsAvoidCondition(string(ConditionPriceVolumeTopDivergence)) {
+		t.Fatal("top divergence must be avoid-semantics")
+	}
+	for _, id := range []string{string(ConditionPriceVolumeBottomDivergence), string(ConditionForeign3DNetBuy), string(ConditionMomentum20D), ""} {
+		if IsAvoidCondition(id) {
+			t.Errorf("%q must not be avoid-semantics", id)
+		}
+	}
+}
