@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // ConditionType classifies a condition by the point-in-time data channel it
@@ -155,6 +156,8 @@ func NewDefaultConditionRegistry(params *config.StockpickerConditionsParameters)
 	reg := NewConditionRegistry()
 	_ = reg.Register(newForeign3DNetBuy(cp.Foreign3DNetBuy))
 	_ = reg.Register(newMomentum20D(cp.Momentum20DPosit))
+	_ = reg.Register(newPriceVolumeDivergence(string(ConditionPriceVolumeTopDivergence), cp.PriceVolumeTopDivergence, true))
+	_ = reg.Register(newPriceVolumeDivergence(string(ConditionPriceVolumeBottomDivergence), cp.PriceVolumeBottomDivergence, false))
 	return reg
 }
 
@@ -179,6 +182,25 @@ func NewFundamentalPlaceholder() Condition {
 		eval: evalFundamentalLiveObserveOnly,
 	}
 }
+
+// Divergence condition IDs (feat 2026-09-07, 量價背離 consumption wiring).
+// Both are ConditionTypePrice and PIT-safe: the evaluators pass only the
+// bars[:i+1] prefix they receive to domain.DetectVolumeDivergence, so a
+// historical trigger date t never sees data after t.
+const (
+	// ConditionPriceVolumeTopDivergence fires on 頂背離: close near the
+	// window high while volume declines (vol_ma5 < vol_ma20). Win-rate
+	// semantics are INVERTED vs buy conditions — the signal's value is as
+	// an avoid/exit warning, so a LOW forward win rate after the trigger
+	// confirms the bearish read. Readers of stock_win_rate rows for this
+	// source must apply that lens (documented in the parameters.json
+	// rationale and the 量價背離 card's interpretation).
+	ConditionPriceVolumeTopDivergence DemoConditionID = "price-volume-top-divergence"
+	// ConditionPriceVolumeBottomDivergence fires on 底背離: close near the
+	// window low while volume declines — selling exhaustion, evaluated as a
+	// contrarian-buy candidate (normal win-rate semantics).
+	ConditionPriceVolumeBottomDivergence DemoConditionID = "price-volume-bottom-divergence"
+)
 
 // newForeign3DNetBuy builds the foreign-3d-net-buy condition.
 func newForeign3DNetBuy(p config.StockpickerConditionWindow) Condition {
@@ -239,6 +261,54 @@ func evalMomentum20D(c *Condition, bars []HistoricalBar, _ map[string]FlowPoint,
 		return false
 	}
 	return bars[len(bars)-1].Close/base-1 > threshold
+}
+
+// newPriceVolumeDivergence builds a price/volume divergence condition
+// (量價背離, feat 2026-09-07). top=true builds the 頂背離 (bearish avoid)
+// variant; top=false builds the 底背離 (selling-exhaustion) variant.
+func newPriceVolumeDivergence(id string, p config.StockpickerConditionWindow, top bool) Condition {
+	name := "Price-volume top divergence (頂背離, bearish avoid signal)"
+	if !top {
+		name = "Price-volume bottom divergence (底背離, selling exhaustion)"
+	}
+	return Condition{
+		ID:     id,
+		Name:   name,
+		Type:   ConditionTypePrice,
+		Params: map[string]float64{ParamWindowDays: p.WindowDays.Value, ParamThreshold: p.Threshold.Value},
+		eval: func(c *Condition, bars []HistoricalBar, _ map[string]FlowPoint, _ []string, _ time.Time) bool {
+			return evalPriceVolumeDivergence(c, bars, top)
+		},
+	}
+}
+
+// evalPriceVolumeDivergence fires when domain.DetectVolumeDivergence reports
+// the requested divergence over the last window_days of the PIT bar prefix.
+// The engine passes bars[:i+1] (dated <= t), so the detector — which reads
+// only the bars it is given — stays point-in-time. Fewer than
+// domain.DivergenceVolLongWindow bars or a degenerate panel → no trigger
+// (conservative). HistoricalBar carries only Date/Close/Volume, which is
+// exactly what the detector reads; the conversion is field-for-field.
+func evalPriceVolumeDivergence(c *Condition, bars []HistoricalBar, top bool) bool {
+	window := int(c.Param(ParamWindowDays, 30))
+	if window < 20 {
+		return false
+	}
+	if len(bars) < window {
+		return false
+	}
+	dbars := make([]domain.DailyBar, len(bars))
+	for i, b := range bars {
+		dbars[i] = domain.DailyBar{Date: b.Date, Close: b.Close, Volume: b.Volume}
+	}
+	res, ok := domain.DetectVolumeDivergence(dbars, window)
+	if !ok {
+		return false
+	}
+	if top {
+		return res.TopDivergence
+	}
+	return res.BottomDivergence
 }
 
 // evalFundamentalLiveObserveOnly is the P0-1 PIT red-line placeholder:

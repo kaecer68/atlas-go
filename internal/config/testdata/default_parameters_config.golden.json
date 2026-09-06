@@ -5239,6 +5239,32 @@
           "todo": "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
           "value": 20
         }
+      },
+      "price_volume_bottom_divergence": {
+        "threshold": {
+          "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+          "source": "heuristic",
+          "value": 0
+        },
+        "window_days": {
+          "rationale": "Bottom divergence (底背離) lookback panel in trading days: close near window low while vol_ma5 \u003c vol_ma20 — selling exhaustion read, a contrarian-buy candidate (domain.DetectVolumeDivergence).",
+          "source": "heuristic",
+          "todo": "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+          "value": 30
+        }
+      },
+      "price_volume_top_divergence": {
+        "threshold": {
+          "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+          "source": "heuristic",
+          "value": 0
+        },
+        "window_days": {
+          "rationale": "Top divergence (頂背離) lookback panel in trading days: close near window high while vol_ma5 \u003c vol_ma20 (domain.DetectVolumeDivergence). Win-rate semantics are inverted vs buy conditions: a LOW forward win rate after trigger CONFIRMS the bearish avoid signal.",
+          "source": "heuristic",
+          "todo": "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+          "value": 30
+        }
       }
     },
     "costs": {

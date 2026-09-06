@@ -760,6 +760,12 @@ func (p *ParametersConfig) Validate() error {
 	if p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value < 1 {
 		return fmt.Errorf("stockpicker.conditions.momentum_20d_positive.window_days (%.0f) must be >= 1", p.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Value)
 	}
+	if p.Stockpicker.Conditions.PriceVolumeTopDivergence.WindowDays.Value < 20 {
+		return fmt.Errorf("stockpicker.conditions.price_volume_top_divergence.window_days (%.0f) must be >= 20 (vol MA20 precondition)", p.Stockpicker.Conditions.PriceVolumeTopDivergence.WindowDays.Value)
+	}
+	if p.Stockpicker.Conditions.PriceVolumeBottomDivergence.WindowDays.Value < 20 {
+		return fmt.Errorf("stockpicker.conditions.price_volume_bottom_divergence.window_days (%.0f) must be >= 20 (vol MA20 precondition)", p.Stockpicker.Conditions.PriceVolumeBottomDivergence.WindowDays.Value)
+	}
 	if err := p.validateFlowGateway(); err != nil {
 		return err
 	}

@@ -1612,7 +1612,9 @@
     {
       "fields": [
         "Foreign3DNetBuy StockpickerConditionWindow",
-        "Momentum20DPosit StockpickerConditionWindow"
+        "Momentum20DPosit StockpickerConditionWindow",
+        "PriceVolumeTopDivergence StockpickerConditionWindow",
+        "PriceVolumeBottomDivergence StockpickerConditionWindow"
       ],
       "kind": "struct",
       "name": "StockpickerConditionsParameters"

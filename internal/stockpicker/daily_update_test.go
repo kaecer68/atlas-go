@@ -160,8 +160,8 @@ func TestRunDailyUpdate_WritesOutcomes(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(wd, "data", "state", "stock_win_rate.json")); err != nil {
 		t.Fatalf("state json missing at canonical path: %v", err)
 	}
-	if len(res.Conditions) != 2 {
-		t.Fatalf("conditions = %v, want the two defaults", res.Conditions)
+	if len(res.Conditions) != 4 {
+		t.Fatalf("conditions = %v, want the four defaults (2 demo + 2 divergence)", res.Conditions)
 	}
 }
 

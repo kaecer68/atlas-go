@@ -6,7 +6,8 @@ Select Taiwan stocks whose persisted Phase-4 win-rate data shows a statistically
 
 ## Data Source
 - `stock_get_win_rate` (atlas-mcp, read-only): returns the persisted per-symbol win-rate aggregate for a Taiwan stock symbol (stock_win_rate + stock_signal_outcomes in the stockpicker SQLite ledger; never recomputed).
-- Input: `symbol` (required) + optional `condition_id` (e.g. foreign-3d-net-buy, momentum-20d-positive), `rolling_window` (default 120d), `asof`.
+- Input: `symbol` (required) + optional `condition_id` (e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence), `rolling_window` (default 120d), `asof`.
+- Divergence conditions note: `price-volume-top-divergence` 的勝率語義與買入條件相反 — 觸發後勝率越低，越確認其「偏空/迴避」訊號價值；`price-volume-bottom-divergence` 為一般買入語義（賣壓竭盡後的逆向買點候選）。
 - Output conditions include: `condition_id`, `observations`, `hits`, `win_rate`, `wilson_lower`, `wilson_upper`, `confidence`, `calibration_status`, `avg_forward_return`.
 - `found=false` with no conditions means no stored evidence for the symbol — do not recommend.
 

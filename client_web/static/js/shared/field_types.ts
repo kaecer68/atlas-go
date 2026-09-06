@@ -4055,6 +4055,8 @@ export interface StockpickerConditionWindow {
 export interface StockpickerConditionsParameters {
   foreign_3d_net_buy: StockpickerConditionWindow;
   momentum_20d_positive: StockpickerConditionWindow;
+  price_volume_top_divergence: StockpickerConditionWindow;
+  price_volume_bottom_divergence: StockpickerConditionWindow;
 }
 
 export interface StockpickerCostsParameters {
