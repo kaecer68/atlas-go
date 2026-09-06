@@ -10,6 +10,9 @@ const TTL_MS = {
   // the section fresh across the mid-month publish without hammering
   // the FinMind-backed endpoint (which has a daily quota budget).
   'monthly-revenue': 7 * 24 * 60 * 60 * 1000,
+  // Volume divergence derives from daily bars (same source as technical);
+  // match the technical TTL so the card refreshes after each close.
+  'volume-divergence': 5 * 60 * 1000,
   // Win-rate is recomputed by the daily post-close stockpicker update
   // (scheduler stockpicker_daily_update); 12h TTL keeps the section fresh
   // without hammering the local SQLite-backed endpoint.
@@ -188,4 +191,17 @@ export async function fetchStockBundleWithCoverage(symbol) {
     bundle.coverage = coverage;
   }
   return bundle;
+}
+
+// fetchStockVolumeDivergence calls GET /api/stock/volume_divergence?symbol=X
+// (optionally window, default 30 trading days) and returns the 量價背離
+// reading: top_divergence (價創新高但量縮) / bottom_divergence (價創新低但
+// 量縮) flags plus the raw evidence (close vs window high/low %, vol_ma5 vs
+// vol_ma20) and a zh-TW interpretation. The endpoint 503s when fewer than
+// 20 bars exist — the caller renders a neutral "暫時無法取得" box like the
+// monthly_revenue section.
+export async function fetchStockVolumeDivergence(symbol, window) {
+  let path = `/api/stock/volume_divergence?symbol=${encodeURIComponent(symbol)}`;
+  if (window) path += `&window=${encodeURIComponent(window)}`;
+  return fetchCached('volume-divergence', `${symbol}::${window || 30}`, path);
 }

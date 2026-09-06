@@ -1,4 +1,4 @@
-import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue, fetchStockWinRate } from '../services/stock-api-client.js';
+import { fetchStockBundle, fetchStockBundleWithCoverage, fetchStockMonthlyRevenue, fetchStockWinRate, fetchStockVolumeDivergence } from '../services/stock-api-client.js';
 import { renderMissingState } from '../shared/app-utils.js';
 import { fetchDecisionChain, renderRecommendations, renderExitAlerts, emptyState } from '../components/decision-panels.js';
 import { renderSearch } from '../components/stock-quote-search.js';
@@ -8,6 +8,7 @@ import { renderChips } from '../components/stock-quote-chips.js';
 import { renderTechnical } from '../components/stock-quote-technical.js';
 import { renderRevenue } from '../components/stock-quote-revenue.js';
 import { renderWinRate } from '../components/stock-quote-winrate.js';
+import { renderDivergence } from '../components/stock-quote-divergence.js';
 
 let state = {
   currentSymbol: null,
@@ -56,6 +57,7 @@ function renderContent() {
         ${renderTechnical(state.status, res.technical, res.coverage)}
         ${renderRevenue(state.status, res.monthlyRevenue)}
         ${renderWinRate(state.status, res.winRate)}
+        ${renderDivergence(state.status, res.divergence)}
       </div>
     `;
   }
@@ -105,15 +107,25 @@ async function doSearch(symbol) {
       data: null,
       error: null
     };
+    const divergenceState = {
+      status: 'loading',
+      data: null,
+      error: null
+    };
     state.results.monthlyRevenue = revenueState;
     state.results.winRate = winRateState;
+    state.results.divergence = divergenceState;
     renderContent();
     // Win-rate is a read-only local SQLite read (no external quota), but
     // both sections share the same degrade-gracefully contract: a failed
     // fetch renders a neutral "稍後再試" box instead of breaking the page.
-    const [revenueResult, winRateResult] = await Promise.allSettled([
+    // 量價背離 shares the revenue/win-rate fetch stage: it reads the same
+    // QuoteStore daily bars as /api/stock/technical (no external quota),
+    // and degrades to a neutral box on 503 (< 20 bars).
+    const [revenueResult, winRateResult, divergenceResult] = await Promise.allSettled([
       fetchStockMonthlyRevenue(symbol),
-      fetchStockWinRate(symbol)
+      fetchStockWinRate(symbol),
+      fetchStockVolumeDivergence(symbol)
     ]);
     revenueState.status = revenueResult.status === 'fulfilled' ? 'loaded' : 'error';
     revenueState.data = revenueResult.status === 'fulfilled' ? revenueResult.value : null;
@@ -121,6 +133,9 @@ async function doSearch(symbol) {
     winRateState.status = winRateResult.status === 'fulfilled' ? 'loaded' : 'error';
     winRateState.data = winRateResult.status === 'fulfilled' ? winRateResult.value : null;
     winRateState.error = winRateResult.status === 'fulfilled' ? null : winRateResult.reason.message;
+    divergenceState.status = divergenceResult.status === 'fulfilled' ? 'loaded' : 'error';
+    divergenceState.data = divergenceResult.status === 'fulfilled' ? divergenceResult.value : null;
+    divergenceState.error = divergenceResult.status === 'fulfilled' ? null : divergenceResult.reason.message;
     renderContent();
   }
 

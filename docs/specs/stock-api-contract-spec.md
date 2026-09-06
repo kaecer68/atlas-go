@@ -25,7 +25,7 @@
 
 ### 1.5 Coverage Scope（2026-08-06 v1.4 新增）
 
-stocktools 4 個 endpoint 的涵蓋範圍如下：
+stocktools 4+1 個 endpoint 的涵蓋範圍如下：
 
 | 端點 | 資料源 | Scope 範圍 |
 | --- | --- | --- |
@@ -33,6 +33,7 @@ stocktools 4 個 endpoint 的涵蓋範圍如下：
 | `/api/stock/fundamentals` | `data/fundamentals.json` snapshot | 純 `.TW` 後綴，~1070 隻 TWSE 上市普通股 |
 | `/api/stock/chips` | TWSE T86（`selectType=ALLBUT0999`，排除 99xx） | ~1231 隻上市普通股（不含 ETF/權證） |
 | `/api/stock/technical` | ledger QuoteStore 或 Fugle on-demand | QuoteStore 涵蓋 + Fugle 補抓 |
+| `/api/stock/volume_divergence` | 同 `/technical`（QuoteStore 或 Fugle on-demand，需 ≥20 根 bars） | QuoteStore 涵蓋 + Fugle 補抓 |
 
 **不涵蓋之 symbol**（如上櫃、興櫃、ETF）仍可被呼叫，但 handler 會在每個 endpoint response 內附加結構化欄位：
 
@@ -258,8 +259,66 @@ stocktools 4 個 endpoint 的涵蓋範圍如下：
 - 歷史 bars < 2 → `503 insufficient historical quote data`。
 - 單一指標樣本不足時該欄位值為 `0`（例如資料長度介於 2–19 根時 `sma20=0`），前端應顯示「—」。
 
+
 ---
 
+## §4b `GET /api/stock/volume_divergence`
+
+**Handler**：`internal/stocktools/handler.go::HandleVolumeDivergence`（2026-09-07 新增）
+**資料源**：`ledger.QuoteStore.LoadQuotes()` → `domain.DetectVolumeDivergence()`（純函數，PIT-safe；Fugle on-demand fallback 同 §4）
+
+**Query**：
+
+- `symbol=<digits>`（必填）
+- `window=<int>`（選填；預設 30 交易日，最大 120）
+
+**Response 200**：
+
+```json
+{
+  "symbol": "2330.TW",
+  "latest_date": "2026-09-04",
+  "window_days": 30,
+  "bars_used": 30,
+  "close": 130.0,
+  "window_high": 130.0,
+  "window_low": 100.0,
+  "close_below_high_pct": 0.0,
+  "close_above_low_pct": 30.0,
+  "vol_ma5": 12000.0,
+  "vol_ma20": 21000.0,
+  "volume_declining": true,
+  "top_divergence": true,
+  "bottom_divergence": false,
+  "interpretation": "頂背離：股價接近近30日新高，但成交量遞減（5日均量低於20日均量），上漲動能可能衰竭，持有者宜提高警覺。",
+  "trading_day": false
+}
+```
+
+| 欄位 | 型別 | 語義 |
+| --- | --- | --- |
+| `symbol` | string | QuoteStore 正規化後代碼（`.TW` 後綴） |
+| `latest_date` | string | 最後一根 bar 日期 `YYYY-MM-DD` |
+| `window_days` | int | 實際使用的回看視窗（交易日） |
+| `bars_used` | int | 實際分析的 bar 數（≤ window_days） |
+| `close` | float64 | 最新收盤價 |
+| `window_high` / `window_low` | float64 | 視窗內收盤價最高 / 最低 |
+| `close_below_high_pct` | float64 | 收盤距視窗高點的幅度（%） |
+| `close_above_low_pct` | float64 | 收盤距視窗低點的幅度（%） |
+| `vol_ma5` / `vol_ma20` | float64 | 5 日 / 20 日平均成交量（股） |
+| `volume_declining` | bool | `vol_ma5 < vol_ma20`（背離共同前提） |
+| `top_divergence` | bool | 頂背離：收盤在視窗高點 1% 以內且量能遞減 |
+| `bottom_divergence` | bool | 底背離：收盤在視窗低點 1% 以內且量能遞減 |
+| `interpretation` | string | zh-TW 判讀摘要 |
+| `trading_day` | bool（omitempty） | 僅在非交易日出現且為 `false`（同 §4 Phase C 標記） |
+
+**缺失資料**：
+
+- 歷史 bars < 20（`domain.DivergenceVolLongWindow`）→ `503 insufficient historical quote data`（明確訊息含實際 bar 數）。
+- 價格面板退化（視窗高低點相同，例如長期停牌）→ `503 insufficient or degenerate price/volume panel`。
+- 零成交量面板 → 200 但 `volume_declining=false`（無法判讀量縮）。
+
+---
 ## §5 `GET /api/stock/sector-median-pe`
 
 **Handler**：`internal/stocktools/handler.go::HandleSectorMedianPE`  
@@ -304,6 +363,7 @@ stocktools 4 個 endpoint 的涵蓋範圍如下：
 | `/fundamentals` | 1 天 | 本地 JSON，日變化小 |
 | `/chips` | 1 天 | TWSE T86 每日收盤後更新 |
 | `/technical` | 5 分鐘 | ledger 本地計算結果短期穩定 |
+| `/volume_divergence` | 5 分鐘 | 與 technical 同資料源（日線 bars） |
 | `/sector-median-pe` | 1 天 | 與 fundamentals 同資料源 |
 
 ### 6.4 Symbol 查詢一致性
