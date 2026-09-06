@@ -56,6 +56,21 @@ type capitalDeps struct {
 	capitalFlowStore capitalflow.RollingSampleStore
 }
 
+// finmindBackfillQuotaReserve is the minimum FinMind quota that must remain
+// before the sbl/tdcc history backfill may consume calls. The backfill
+// competes with the live channels (auto_twse_sbl / auto_tdcc_dispersion /
+// finmind) for the shared FinMindClient's DailyQuotaTracker — on 2026-09-04
+// the backfill burned the full 14,400-call daily quota and the live fetches
+// failed with ErrQuotaExhausted all day. The reserve keeps enough budget for
+// the scheduled live fetches regardless of backfill progress.
+const finmindBackfillQuotaReserve = 500
+
+// backfillQuotaAllowed reports whether the history backfill may run given
+// the shared FinMindClient's remaining daily quota. Extracted for testability.
+func backfillQuotaAllowed(remaining int) bool {
+	return remaining >= finmindBackfillQuotaReserve
+}
+
 // registerCapitalTasks wires the capital-flow / margin / export / judge
 // tasks into the BackgroundTaskManager. All tasks here are
 // fire-and-register: a Register error is logged and the task is silently
@@ -252,6 +267,17 @@ func registerCapitalTasks(d capitalDeps) {
 		Task: func(ctx context.Context) error {
 			if cursor.After(time.Now()) {
 				return nil // backfill complete
+			}
+			// FinMind 額度保留閘門（fix/20260906-finmind-quota-reserve）：
+			// backfill 與 live channels（auto_twse_sbl / auto_tdcc_dispersion /
+			// finmind）共用 GetSharedFinMindClient 的 DailyQuotaTracker。
+			// 2026-09-04 實證：backfill 把全日額度燒光（used=14400），
+			// 當日 live fetch 全部 ErrQuotaExhausted。剩餘額度低於保留水位
+			// 時 defer 本 chunk，讓 live 抓取永遠有額度可用。
+			if remaining := marketdata.GetSharedFinMindClient(d.cfg.FinMindAPIKey, d.cfg.WorkDir).QuotaRemaining(); !backfillQuotaAllowed(remaining) {
+				logging.Info("capital_tasks", "backfill_quota_deferred",
+					"remaining", remaining, "reserve", finmindBackfillQuotaReserve)
+				return nil
 			}
 			chunkEnd := cursor.AddDate(0, 1, 0).AddDate(0, 0, -1)
 			if chunkEnd.After(time.Now()) {
