@@ -62,19 +62,27 @@ type BacktestConfig struct {
 // DemoConditionID identifies one of the PR 1c hardcoded demo conditions.
 type DemoConditionID string
 
-// The PR 1c demo condition set. Both conditions consume only PIT data:
-// price bars (momentum) and per-symbol T86 flows (foreign net buy).
-// The configurable condition engine is PR 2a; this list is frozen for 1c.
+// The PR 1c demo condition set, extended 2026-09-07 with the price/volume
+// divergence pair (量價背離). All conditions consume only PIT data: price
+// bars (momentum, divergence) and per-symbol T86 flows (foreign net buy).
+// The configurable condition engine is PR 2a.
 const (
 	ConditionForeign3DNetBuy DemoConditionID = "foreign-3d-net-buy"
 	ConditionMomentum20D     DemoConditionID = "momentum-20d-positive"
 )
 
-// DemoConditions returns the PR 1c demo condition IDs. Fundamentals
-// conditions (value / all_weather) are intentionally absent (P0-1). The
-// condition definitions themselves come from DefaultConditions() (PR 2a).
+// DemoConditions returns the default backtest-eligible condition IDs.
+// Fundamentals conditions (value / all_weather) are intentionally absent
+// (P0-1). The condition definitions themselves come from
+// DefaultConditions() (PR 2a); the divergence pair was added 2026-09-07
+// (both PIT-safe ConditionTypePrice over Date/Close/Volume bars).
 func DemoConditions() []DemoConditionID {
-	return []DemoConditionID{ConditionForeign3DNetBuy, ConditionMomentum20D}
+	return []DemoConditionID{
+		ConditionForeign3DNetBuy,
+		ConditionMomentum20D,
+		ConditionPriceVolumeTopDivergence,
+		ConditionPriceVolumeBottomDivergence,
+	}
 }
 
 // RunBacktest replays conditions over the panel and returns the

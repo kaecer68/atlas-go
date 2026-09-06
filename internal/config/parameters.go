@@ -1327,6 +1327,13 @@ type StockpickerCalibrationParameters struct {
 type StockpickerConditionsParameters struct {
 	Foreign3DNetBuy  StockpickerConditionWindow `json:"foreign_3d_net_buy"`
 	Momentum20DPosit StockpickerConditionWindow `json:"momentum_20d_positive"`
+	// Price-volume divergence conditions (量價背離, feat 2026-09-07):
+	// both read domain.DetectVolumeDivergence over window_days of PIT bars.
+	// WindowDays is the lookback panel; Threshold is unused (divergence is
+	// a structural read, not an aggregate-exceeds-threshold trigger) and
+	// stays 0.
+	PriceVolumeTopDivergence    StockpickerConditionWindow `json:"price_volume_top_divergence"`
+	PriceVolumeBottomDivergence StockpickerConditionWindow `json:"price_volume_bottom_divergence"`
 }
 
 // StockpickerConditionWindow is the numeric parameter set shared by the

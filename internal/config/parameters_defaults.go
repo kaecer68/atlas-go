@@ -91,6 +91,32 @@ func defaultStockpickerParameters() StockpickerParameters {
 					Source:    SourceHeuristic,
 				},
 			},
+			PriceVolumeTopDivergence: StockpickerConditionWindow{
+				WindowDays: ParameterMetadata[float64]{
+					Value:     30,
+					Rationale: "Top divergence (頂背離) lookback panel in trading days: close near window high while vol_ma5 < vol_ma20 (domain.DetectVolumeDivergence). Win-rate semantics are inverted vs buy conditions: a LOW forward win rate after trigger CONFIRMS the bearish avoid signal.",
+					Source:    SourceHeuristic,
+					Todo:      "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+				},
+				Threshold: ParameterMetadata[float64]{
+					Value:     0,
+					Rationale: "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+					Source:    SourceHeuristic,
+				},
+			},
+			PriceVolumeBottomDivergence: StockpickerConditionWindow{
+				WindowDays: ParameterMetadata[float64]{
+					Value:     30,
+					Rationale: "Bottom divergence (底背離) lookback panel in trading days: close near window low while vol_ma5 < vol_ma20 — selling exhaustion read, a contrarian-buy candidate (domain.DetectVolumeDivergence).",
+					Source:    SourceHeuristic,
+					Todo:      "Calibrate: tune window against backtest win rates once OOS samples accumulate.",
+				},
+				Threshold: ParameterMetadata[float64]{
+					Value:     0,
+					Rationale: "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+					Source:    SourceHeuristic,
+				},
+			},
 		},
 		FlowGateway: defaultFlowGatewayParameters(),
 	}
@@ -181,6 +207,12 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Rationale == "" {
 		cfg.Stockpicker.Conditions.Momentum20DPosit = def.Conditions.Momentum20DPosit
+	}
+	if cfg.Stockpicker.Conditions.PriceVolumeTopDivergence.WindowDays.Rationale == "" {
+		cfg.Stockpicker.Conditions.PriceVolumeTopDivergence = def.Conditions.PriceVolumeTopDivergence
+	}
+	if cfg.Stockpicker.Conditions.PriceVolumeBottomDivergence.WindowDays.Rationale == "" {
+		cfg.Stockpicker.Conditions.PriceVolumeBottomDivergence = def.Conditions.PriceVolumeBottomDivergence
 	}
 	// flow_gateway (PR 2b): fill each sub-block whose provenance is missing
 	// so old saved configs (predating the section) resolve to the documented

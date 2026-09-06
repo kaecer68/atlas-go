@@ -209,7 +209,13 @@ func TestBacktest_FundamentalsExcluded(t *testing.T) {
 	for _, id := range DemoConditions() {
 		s := string(id)
 		for _, forbidden := range []string{"pe", "pb", "div", "yield", "value", "all-weather", "fundamental"} {
-			if strings.Contains(s, forbidden) {
+			// Token match on hyphen-delimited parts: "divergence" contains
+			// the substring "div" but is a price/volume condition.
+			tokens := map[string]bool{}
+			for tok := range strings.SplitSeq(s, "-") {
+				tokens[tok] = true
+			}
+			if tokens[forbidden] || (forbidden == "all-weather" && strings.Contains(s, forbidden)) {
 				t.Fatalf("condition %q contains fundamentals keyword %q; fundamentals must stay live_observe_only", s, forbidden)
 			}
 		}

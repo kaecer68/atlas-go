@@ -8115,6 +8115,30 @@
           "rationale": "Momentum must exceed this value to trigger.",
           "source": "heuristic"
         }
+      },
+      "price_volume_top_divergence": {
+        "window_days": {
+          "value": 30,
+          "rationale": "Top divergence (頂背離) lookback panel in trading days: close near window high while vol_ma5 < vol_ma20 (domain.DetectVolumeDivergence, feat 2026-09-07). Win-rate semantics are inverted vs buy conditions: a LOW forward win rate after trigger CONFIRMS the bearish avoid signal.",
+          "source": "heuristic"
+        },
+        "threshold": {
+          "value": 0,
+          "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+          "source": "heuristic"
+        }
+      },
+      "price_volume_bottom_divergence": {
+        "window_days": {
+          "value": 30,
+          "rationale": "Bottom divergence (底背離) lookback panel in trading days: close near window low while vol_ma5 < vol_ma20 — selling exhaustion read, a contrarian-buy candidate (domain.DetectVolumeDivergence, feat 2026-09-07).",
+          "source": "heuristic"
+        },
+        "threshold": {
+          "value": 0,
+          "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
+          "source": "heuristic"
+        }
       }
     },
     "flow_gateway": {

@@ -1374,6 +1374,8 @@
   "price_to_earnings",
   "price_to_high_threshold",
   "price_to_open_threshold",
+  "price_volume_bottom_divergence",
+  "price_volume_top_divergence",
   "primary_flow",
   "primary_hit_rate",
   "primary_theme",
