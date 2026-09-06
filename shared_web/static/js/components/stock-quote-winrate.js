@@ -108,7 +108,7 @@ function renderCondition(cond) {
   </div>`;
 }
 
-export function renderWinRate(state, winRateResult) {
+export function renderWinRate(state, winRateResult, coverage) {
   if (state === 'loading') {
     return `<div class="sq-card"><h3 class="sq-card__title">個股勝率</h3>${renderSkeleton(3)}</div>`;
   }
@@ -122,8 +122,19 @@ export function renderWinRate(state, winRateResult) {
 
   const data = winRateResult.data;
   if (!data || !data.found || !data.conditions || data.conditions.length === 0) {
-    // 200 + found=false: no stored win-rate data for this symbol.
-    return `<div class="sq-card"><h3 class="sq-card__title">個股勝率</h3>${renderEmptyState('暫無勝率資料')}</div>`;
+    // 200 + found=false: no stored win-rate data. Distinguish WHY when the
+    // bundle coverage says the symbol is out of TWSE scope (TPEX/ETF): the
+    // stockpicker backtest universe is quote-symbols with enough bars +
+    // T86 flows (TWSE-scoped), so out-of-scope symbols will NEVER have
+    // data — say so instead of a bare "暫無" that reads like a glitch.
+    // Note: real found=true data is rendered even when coverage says
+    // NOT_COVERED (e.g. 0050 has quotes+flows despite no fundamentals).
+    if (coverage && !coverage.covered) {
+      return `<div class="sq-card"><h3 class="sq-card__title">個股勝率</h3>
+        <div class="sq-scope-notice">此標的暫未納入勝率量測（量測範圍：具備足夠日線與法人籌碼資料的 TWSE 上市普通股）<br><small>${escapeHtml(coverage.reason || '')}</small></div>
+      </div>`;
+    }
+    return `<div class="sq-card"><h3 class="sq-card__title">個股勝率</h3>${renderEmptyState('暫無勝率資料（此個股觸發次數不足或歷史資料涵蓋較短）')}</div>`;
   }
 
   const conditions = data.conditions.map(renderCondition).join('');

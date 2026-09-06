@@ -41,6 +41,13 @@ export function renderRevenue(state, revenueResult) {
     return `<div class="sq-card"><h3 class="sq-card__title">月營收</h3>${renderSkeleton(3)}</div>`;
   }
   if (state === 'error' || revenueResult.status === 'error') {
+    const msg = (revenueResult && revenueResult.error) || '';
+    // Permanent absence (e.g. ETF 0050: "no month revenue data for ...")
+    // is NOT a transient failure — render a scope-aware empty state so
+    // users don't wait for data that will never exist.
+    if (/no month revenue data/i.test(msg)) {
+      return `<div class="sq-card"><h3 class="sq-card__title">月營收</h3>${renderEmptyState('此標的無月營收資料（ETF 或無營收公布義務之標的）')}</div>`;
+    }
     // Quota-exhausted 503 (FinMind daily budget) is transient — render a
     // neutral "稍後再試" instead of an error banner so the page doesn't
     // look broken. All other errors share the same copy.
