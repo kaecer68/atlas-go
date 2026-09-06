@@ -4606,6 +4606,25 @@ export interface ValueYieldExecutorParameters {
   yield_trap_penalty: string;
 }
 
+export interface VolumeDivergenceResult {
+  symbol: string;
+  latest_date: string;
+  window_days: number;
+  bars_used: number;
+  close: number;
+  window_high: number;
+  window_low: number;
+  close_below_high_pct: number;
+  close_above_low_pct: number;
+  vol_ma5: number;
+  vol_ma20: number;
+  volume_declining: boolean;
+  top_divergence: boolean;
+  bottom_divergence: boolean;
+  interpretation: string;
+  trading_day?: boolean | null;
+}
+
 export interface WeightFactorConfig {
   factor: string;
   weight: number;

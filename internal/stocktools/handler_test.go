@@ -954,3 +954,147 @@ func TestHandleQuote_AllProvidersNoData_ReturnsCoverageNote(t *testing.T) {
 		t.Errorf("coverage_note = %v, want %q", body["coverage_note"], CoverageNoteNotCovered)
 	}
 }
+
+// --- 量價背離 (volume_divergence) ---
+
+// mkDivergenceBars builds n relative-date bars ending "today" so they always
+// fall inside the handler's calendar window (same lesson as
+// TestHandleTechnical's SK-22 fix: fixed dates rot as time passes).
+// Price ramps priceFrom→priceTo, volume ramps volFrom→volTo.
+func mkDivergenceBars(priceFrom, priceTo float64, volFrom, volTo int64, n int) []domain.DailyBar {
+	now := time.Now()
+	bars := make([]domain.DailyBar, n)
+	for i := range bars {
+		frac := float64(i) / float64(n-1)
+		bars[i] = domain.DailyBar{
+			Date:   now.AddDate(0, 0, i-n+1),
+			Symbol: "2330.TW",
+			Close:  priceFrom + (priceTo-priceFrom)*frac,
+			Volume: volFrom + int64(float64(volTo-volFrom)*frac),
+		}
+	}
+	return bars
+}
+
+func TestHandleVolumeDivergence_TopDivergenceHappyPath(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	// Price up to a fresh high, volume decaying → 頂背離.
+	if err := store.RecordQuotes(mkDivergenceBars(100, 130, 30000, 10000, 30)); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{QuoteStore: store})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"top_divergence":true`, `"bottom_divergence":false`, `"volume_declining":true`, `"window_days":30`, `"symbol":"2330.TW"`} {
+		if !contains(body, want) {
+			t.Errorf("expected %s in response: %s", want, body)
+		}
+	}
+}
+
+func TestHandleVolumeDivergence_BottomDivergence(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	// Price down to a fresh low, volume decaying → 底背離.
+	if err := store.RecordQuotes(mkDivergenceBars(130, 100, 30000, 10000, 30)); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{QuoteStore: store})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence?symbol=2330&window=30", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !contains(body, `"bottom_divergence":true`) || !contains(body, `"top_divergence":false`) {
+		t.Errorf("expected bottom divergence: %s", body)
+	}
+}
+
+func TestHandleVolumeDivergence_NoDivergenceOnRisingVolume(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	if err := store.RecordQuotes(mkDivergenceBars(100, 130, 10000, 30000, 30)); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{QuoteStore: store})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !contains(body, `"top_divergence":false`) || !contains(body, `"volume_declining":false`) {
+		t.Errorf("expected no divergence with rising volume: %s", body)
+	}
+}
+
+func TestHandleVolumeDivergence_InsufficientBarsReturns503(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	if err := store.RecordQuotes(mkDivergenceBars(100, 110, 1000, 1000, 5)); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{QuoteStore: store})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence?symbol=2330", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 with < 20 bars, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), "insufficient") {
+		t.Errorf("expected explicit insufficient-data message: %s", rec.Body.String())
+	}
+}
+
+func TestHandleVolumeDivergence_MissingSymbol(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleVolumeDivergence_WindowClamped(t *testing.T) {
+	dir := t.TempDir()
+	store := ledger.NewJSONLQuoteStore(dir)
+	if err := store.RecordQuotes(mkDivergenceBars(100, 130, 30000, 10000, 30)); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{QuoteStore: store})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/volume_divergence?symbol=2330&window=99999", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `"window_days":120`) {
+		t.Errorf("expected window clamped to 120: %s", rec.Body.String())
+	}
+}

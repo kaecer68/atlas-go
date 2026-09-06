@@ -33,6 +33,10 @@ export const template = `
         <h3>個股勝率</h3>
         <div class="sq-placeholder">載入勝率資料…</div>
       </div>
+      <div class="sq-section sq-divergence">
+        <h3>量價背離</h3>
+        <div class="sq-placeholder">載入量價背離資料…</div>
+      </div>
     </div>
   </div>
 `;

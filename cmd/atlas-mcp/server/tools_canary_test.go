@@ -134,6 +134,7 @@ var canaryRoutes = map[string]canaryTest{
 	"stock_get_quote":                   {Path: "/api/stock/quote?symbol=2330"},
 	"stock_get_fundamentals":            {Path: "/api/stock/fundamentals?symbol=2330"},
 	"stock_get_technical":               {Path: "/api/stock/technical?symbol=2330&days=10"},
+	"stock_get_volume_divergence":       {Path: "/api/stock/volume_divergence?symbol=2330&window=30", Keys: []string{"symbol", "top_divergence", "bottom_divergence"}},
 	"channel_health":                    {Path: "/api/dashboard/channel-health"},
 	"control_get_audit_log":             {Path: "/api/control/audit-log"},
 	"control_get_active_overrides":      {Path: "/api/control/active-overrides"},

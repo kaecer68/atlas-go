@@ -39,6 +39,12 @@ func registerStockTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("stock_get_monthly_revenue", "Return the most recent published monthly revenue for a Taiwan stock symbol along with YoY% (change_pct, vs same month prior year) and MoM%. Coverage: TWSE 上市 + TPEX 上櫃 + 興櫃 via FinMind TaiwanStockMonthRevenue — broader than the 4 stocktools endpoints which are TWSE-scoped per PR #1477, so TPEX symbols like 3131/3587/6640 return data here even though stock_get_chips/fundamentals mark them NOT_COVERED. HTTP: GET /api/stock/monthly_revenue. Alternative: stock_get_quote, stock_get_chips."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockGetMonthlyRevenue)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "stock_get_volume_divergence",
+		Description: autoDescOr("stock_get_volume_divergence", "Detect 量價背離 (price/volume divergence) for a Taiwan-listed symbol over the last N trading days (default 30): top divergence (價創新高但量縮 — rally losing participation, caution for holders) and bottom divergence (價創新低但量縮 — selling exhausting). Returns boolean flags plus the raw evidence (close vs window high/low %, vol_ma5 vs vol_ma20) and a zh-TW interpretation. Coverage: TWSE-listed common stocks whose bars exist in QuoteStore or are fetchable via Fugle; needs >= 20 bars. HTTP: GET /api/stock/volume_divergence. Alternative: stock_get_technical."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
+	}, s.handleStockGetVolumeDivergence)
 }
 
 type stockSymbolInput struct {
@@ -48,6 +54,11 @@ type stockSymbolInput struct {
 type stockTechnicalInput struct {
 	Symbol string `json:"symbol" jsonschema:"the Taiwan stock symbol, e.g. 2330"`
 	Days   int    `json:"days,omitempty" jsonschema:"number of trading days to include; default 90, max 365"`
+}
+
+type stockVolumeDivergenceInput struct {
+	Symbol string `json:"symbol" jsonschema:"the Taiwan stock symbol, e.g. 2330"`
+	Window int    `json:"window,omitempty" jsonschema:"lookback window in trading days for divergence detection; default 30, max 120"`
 }
 
 type stockChipsInput struct {
@@ -144,6 +155,26 @@ func (s *server) handleStockGetTechnical(ctx context.Context, _ *mcp.CallToolReq
 	q := url.Values{"symbol": {in.Symbol}, "days": {strconv.Itoa(in.Days)}}
 	if err := s.withAudit(ctx, "stock_get_technical", []string{"symbol", "days"}, func() error {
 		return s.cli.Get(ctx, "/api/stock/technical", q, &out.Result)
+	}); err != nil {
+		return nil, stockBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+func (s *server) handleStockGetVolumeDivergence(ctx context.Context, _ *mcp.CallToolRequest, in stockVolumeDivergenceInput) (*mcp.CallToolResult, stockBaseOutput, error) {
+	if in.Symbol == "" {
+		return nil, stockBaseOutput{}, fmt.Errorf("stock_get_volume_divergence: symbol is required")
+	}
+	if in.Window <= 0 {
+		in.Window = 30
+	}
+	if in.Window > 120 {
+		in.Window = 120
+	}
+	var out stockBaseOutput
+	q := url.Values{"symbol": {in.Symbol}, "window": {strconv.Itoa(in.Window)}}
+	if err := s.withAudit(ctx, "stock_get_volume_divergence", []string{"symbol", "window"}, func() error {
+		return s.cli.Get(ctx, "/api/stock/volume_divergence", q, &out.Result)
 	}); err != nil {
 		return nil, stockBaseOutput{}, err
 	}

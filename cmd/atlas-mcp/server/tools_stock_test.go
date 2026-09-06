@@ -112,3 +112,47 @@ func TestHandleStockGetTechnicalClamped(t *testing.T) {
 		t.Fatalf("expected clamped days=365, got %s", rec.query.Get("days"))
 	}
 }
+
+func TestHandleStockGetVolumeDivergence(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"symbol":"2330.TW","top_divergence":true,"bottom_divergence":false}`)
+	_, out, err := s.handleStockGetVolumeDivergence(context.Background(), nil, stockVolumeDivergenceInput{Symbol: "2330"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/volume_divergence" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("symbol") != "2330" {
+		t.Fatalf("symbol=%s", rec.query.Get("symbol"))
+	}
+	if rec.query.Get("window") != "30" {
+		t.Fatalf("window default=%s, want 30", rec.query.Get("window"))
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetVolumeDivergenceMissingSymbol(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+	_, _, err := s.handleStockGetVolumeDivergence(context.Background(), nil, stockVolumeDivergenceInput{})
+	if err == nil {
+		t.Fatal("expected error for missing symbol")
+	}
+}
+
+func TestHandleStockGetVolumeDivergenceWindowClamped(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"symbol":"2330.TW"}`)
+	_, _, err := s.handleStockGetVolumeDivergence(context.Background(), nil, stockVolumeDivergenceInput{Symbol: "2330", Window: 9999})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.query.Get("window") != "120" {
+		t.Fatalf("window clamp=%s, want 120", rec.query.Get("window"))
+	}
+}

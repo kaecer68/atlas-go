@@ -1001,6 +1001,26 @@
       "type": "object"
     }
   },
+  "stock_get_volume_divergence": {
+    "name": "stock_get_volume_divergence",
+    "description": "Detect 量價背離 (price/volume divergence) for a Taiwan-listed symbol over the last N trading days (default 30): top divergence (價創新高但量縮 — rally losing participation, caution for holders) and bottom divergence (價創新低但量縮 — selling exhausting). Returns boolean flags plus the raw evidence (close vs window high/low %, vol_ma5 vs vol_ma20) and a zh-TW interpretation. Coverage: TWSE-listed common stocks whose bars exist in QuoteStore or are fetchable via Fugle; needs \u003e= 20 bars. HTTP: GET /api/stock/volume_divergence. Alternative: stock_get_technical.",
+    "inputSchema": {
+      "properties": {
+        "symbol": {
+          "description": "the Taiwan stock symbol, e.g. 2330",
+          "type": "string"
+        },
+        "window": {
+          "description": "lookback window in trading days for divergence detection; default 30, max 120",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol"
+      ],
+      "type": "object"
+    }
+  },
   "stock_get_win_rate": {
     "name": "stock_get_win_rate",
     "description": "Return the persisted Phase-4 stock win-rate aggregate for a Taiwan stock symbol (read-only; never recomputes). Data source: stockpicker backfill job output (stock_win_rate + stock_signal_outcomes in the SQLite ledger configured via ATLAS_MCP_STOCKPICKER_DB). Input: symbol (+ optional condition_id, rolling_window, asof). No stored data for the symbol returns found=false with a clear message. Alternative: stock_get_quote, stock_get_technical.",

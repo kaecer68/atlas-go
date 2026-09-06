@@ -447,3 +447,35 @@
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* 量價背離 card */
+.sq-divergence-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--editorial-radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.sq-divergence-badge--bearish {
+  background: var(--pnl-loss);
+  color: #fff;
+}
+
+.sq-divergence-badge--bullish {
+  background: var(--pnl-profit);
+  color: #fff;
+}
+
+.sq-divergence-badge--none {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.sq-divergence-interpretation {
+  font-size: var(--text-xs);
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}

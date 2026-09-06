@@ -105,6 +105,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/coverage", shared.Get(h.HandleCoverage))
 	mux.Handle("GET /api/stock/monthly_revenue", shared.Get(h.HandleMonthlyRevenue))
 	mux.Handle("GET /api/stock/win_rate", shared.Get(h.HandleWinRate))
+	mux.Handle("GET /api/stock/volume_divergence", shared.Get(h.HandleVolumeDivergence))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -415,6 +416,93 @@ func rsi(values []float64, n int) float64 {
 	}
 	rs := gains / losses
 	return math.Round((100-100/(1+rs))*100) / 100
+}
+
+// volumeDivergenceMaxWindow caps the lookback window accepted from the
+// query string. 120 trading days (~6 months) is generous for a divergence
+// read and bounds the QuoteStore scan for pathological inputs.
+const volumeDivergenceMaxWindow = 120
+
+// HandleVolumeDivergence serves GET /api/stock/volume_divergence?symbol=X[&window=30].
+//
+// It detects 量價背離 (price/volume divergence) over the most recent window
+// trading days (default 30): 頂背離 (price near window high with declining
+// volume — rally losing participation) and 底背離 (price near window low
+// with declining volume — sell-off exhausting). The pure computation lives
+// in domain.DetectVolumeDivergence so the stockpicker condition registry can
+// consume the same logic point-in-time without importing the HTTP layer.
+//
+// Data path mirrors HandleTechnical: coverage guard → QuoteStore → on-demand
+// Fugle candle fallback with cache-back. Minimum bar count is
+// domain.DivergenceVolLongWindow (20) — below that the volume MA is
+// meaningless and the handler 503s with an explicit message.
+func (h *Handler) HandleVolumeDivergence(r *http.Request) (int, any) {
+	symbol := r.URL.Query().Get("symbol")
+	if symbol == "" {
+		return http.StatusBadRequest, map[string]string{"error": "symbol is required"}
+	}
+	if h.deps.Fundamentals != nil && h.deps.Fundamentals.HasData() {
+		cov := LookupCoverage(symbol, h.deps.Fundamentals)
+		if !cov.Covered {
+			return notCoveredResponse(symbol, cov, map[string]any{"volume_divergence": map[string]any{"empty": true}})
+		}
+	}
+
+	if h.deps.QuoteStore == nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": "quote store not configured"}
+	}
+	window, _ := strconv.Atoi(r.URL.Query().Get("window"))
+	if window <= 0 {
+		window = domain.DivergenceDefaultWindowDays
+	}
+	if window > volumeDivergenceMaxWindow {
+		window = volumeDivergenceMaxWindow
+	}
+
+	// Fetch calendar-day range with buffer: window trading days ≈
+	// window*1.5 calendar days; 2x buffer plus 10 days handles long
+	// holidays without a second round-trip.
+	end := h.now()
+	start := end.AddDate(0, 0, -(window*2 + 10))
+	qsSymbol := symbol
+	if !strings.Contains(symbol, ".") {
+		qsSymbol = symbol + ".TW"
+	}
+	bars, err := h.deps.QuoteStore.LoadQuotes(qsSymbol, start, end)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	if len(bars) < domain.DivergenceVolLongWindow {
+		// On-demand fallback: try Fugle historical candles (same contract
+		// as HandleTechnical).
+		if h.deps.FugleClient != nil {
+			from := start.Format("2006-01-02")
+			to := end.Format("2006-01-02")
+			fetched, fetchErr := h.deps.FugleClient.GetHistoricalCandles(r.Context(), symbol, from, to)
+			if fetchErr == nil && len(fetched) > len(bars) {
+				if recErr := h.deps.QuoteStore.RecordQuotes(fetched); recErr != nil {
+					slog.Warn("stocktools: on-demand quote cache failed", "symbol", symbol, "err", recErr)
+				}
+				bars = fetched
+			}
+		}
+	}
+	if len(bars) < domain.DivergenceVolLongWindow {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": fmt.Sprintf("insufficient historical quote data: need at least %d bars, got %d", domain.DivergenceVolLongWindow, len(bars)),
+		}
+	}
+
+	res, ok := domain.DetectVolumeDivergence(bars, window)
+	if !ok {
+		return http.StatusServiceUnavailable, map[string]string{"error": "insufficient or degenerate price/volume panel for divergence detection"}
+	}
+	// Manifest Phase C parity: mark non-trading-day reads so the card does
+	// not present a stale bar as a live signal.
+	if !marketdata.IsTaiwanTradingDay(h.now()) {
+		res.TradingDay = new(false)
+	}
+	return http.StatusOK, res
 }
 
 // monthlyRevenueMinQuota is the minimum remaining FinMind daily quota
