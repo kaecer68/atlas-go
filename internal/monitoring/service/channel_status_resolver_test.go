@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -76,24 +77,47 @@ func TestResolveChannelStatusFromStore_Error(t *testing.T) {
 	}
 }
 
-// TestResolveChannelStatusFromStore_OtherStatus covers the "warn" case:
-// store has a record but the recorded status is neither ok nor error
-// (e.g. partial / transient). FileStatus should pass through, but
-// LastError from the record should be attached for visibility.
+// TestResolveChannelStatusFromStore_OtherStatus covers store statuses the
+// resolver has no dedicated mapping for (e.g. "inactive"). FileStatus should
+// pass through, but LastError from the record should be attached for
+// visibility.
 func TestResolveChannelStatusFromStore_OtherStatus(t *testing.T) {
 	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
-	if err := store.Record("ch-warn", "warn", "degraded"); err != nil {
-		t.Fatalf("record warn: %v", err)
+	if err := store.Record("ch-inactive", "inactive", "channel disabled"); err != nil {
+		t.Fatalf("record inactive: %v", err)
 	}
-	status, updated, lastErr := resolveChannelStatusFromStore(store, "ch-warn", "ok", "20260611")
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "ch-inactive", "ok", "20260611")
 	if status != "ok" {
-		t.Fatalf("expected fileStatus to pass through for non-ok/error store status, got %q", status)
+		t.Fatalf("expected fileStatus to pass through for unmapped store status, got %q", status)
 	}
 	if updated != "20260611" {
 		t.Fatalf("expected fileUpdated to pass through, got %q", updated)
 	}
-	if lastErr != "degraded" {
+	if lastErr != "channel disabled" {
 		t.Fatalf("expected store LastError to be attached, got %q", lastErr)
+	}
+}
+
+// TestResolveChannelStatusFromStore_Warn is the regression test for the
+// /admin/datachannels "未知" display bug: the Gateway records a transient
+// waiting state (FinMind daily quota exhausted) as "warn", and the
+// registered-channel fallback path passes an empty fileStatus. The resolver
+// must report "warn" (displayed as 待更新) with the stored error attached —
+// not fall through to the empty fileStatus which rendered as "未知".
+func TestResolveChannelStatusFromStore_Warn(t *testing.T) {
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	if err := store.Record("twse_sbl", "warn", "twse_sbl: finmind fetch 2026-09-04: finmind: daily quota exhausted (used=14400, remaining=0)"); err != nil {
+		t.Fatalf("record warn: %v", err)
+	}
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_sbl", "", "")
+	if status != "warn" {
+		t.Fatalf("expected warn override, got %q", status)
+	}
+	if updated == "" {
+		t.Fatalf("expected LastFetchAt as updated, got empty string")
+	}
+	if lastErr == "" || !strings.Contains(lastErr, "quota exhausted") {
+		t.Fatalf("expected quota error attached, got %q", lastErr)
 	}
 }
 
