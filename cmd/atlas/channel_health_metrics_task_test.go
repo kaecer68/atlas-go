@@ -115,7 +115,10 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
 	}{
 		Channels: map[string]*apigateway.ChannelHealthRecord{
-			"us10y": {
+			// 2026-09-07: us10y 改為 derivedIndicatorChannels（us_yahoo 欄位,
+			// 見 TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped）,
+			// 「無契約預設 48h 窗」範例改用中立通道名 us10y_legacy_case。
+			"us10y_legacy_case": {
 				Status:     "ok",
 				LastDataAt: now.Add(-27 * time.Hour).Format(time.RFC3339),
 			},
@@ -157,7 +160,7 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	// 永遠看到 >0,alert 永遠 firing（實證: twse_replay_sync 恢復後仍每小時
 	// 重複通知）。
 	for _, want := range []string{
-		`atlas_channel_staleness_overage_seconds{channel="us10y"} 0`,
+		`atlas_channel_staleness_overage_seconds{channel="us10y_legacy_case"} 0`,
 		`atlas_channel_staleness_overage_seconds{channel="tdcc_equity_dispersion"} 0`,
 	} {
 		if !strings.Contains(body, want) {
@@ -165,8 +168,8 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 		}
 	}
 	// raw staleness gauge 仍輸出（dashboard 需要）。
-	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="us10y"} 97200`) {
-		t.Fatalf("raw staleness gauge for us10y missing\n--- full body ---\n%s", body)
+	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="us10y_legacy_case"} 97200`) {
+		t.Fatalf("raw staleness gauge for us10y_legacy_case missing\n--- full body ---\n%s", body)
 	}
 }
 
@@ -185,5 +188,81 @@ func TestRegisterBackfillTasks_ChannelHealthMetricsRegistered(t *testing.T) {
 	})
 	if _, ok := mgr.Get("channel_health_metrics_export"); !ok {
 		t.Fatal("channel_health_metrics_export task was not registered")
+	}
+}
+
+// TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped —
+// 2026-09-07: vix/us10y 是 us_yahoo 批次通道的指標欄位,不是獨立通道。
+// channel_health.json 的孤兒紀錄（crossmarket callback 只在轉換時寫一次）
+// 讓 staleness 凍結時間戳無限增長 → ChannelDataStale 對健康管線反覆誤報
+// （#1843 之後仍復發）。staleness/latency/overage 序列必須跳過;
+// status gauge 保留（dashboard 顯示用）。
+func TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 7, 14, 0, 0, 0, time.UTC)
+	wrapper := struct {
+		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+	}{
+		Channels: map[string]*apigateway.ChannelHealthRecord{
+			"vix": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-60 * time.Hour).Format(time.RFC3339),
+			},
+			"us10y": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-60 * time.Hour).Format(time.RFC3339),
+			},
+			"us_yahoo": {
+				Status:     "ok",
+				LastDataAt: now.Add(-10 * time.Minute).Format(time.RFC3339),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	collector := monitoring.NewMetricsCollector()
+	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	monitoring.PrometheusHandler(collector).ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	// status gauge 仍輸出
+	mustContain := []string{
+		`atlas_channel_health_status{channel="vix"} 0`,
+		`atlas_channel_health_status{channel="us10y"} 0`,
+	}
+	for _, want := range mustContain {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing /metrics line %q\n--- full body ---\n%s", want, body)
+		}
+	}
+	// staleness/latency/overage 序列不得輸出（誤報源頭）
+	mustAbsent := []string{
+		`atlas_channel_data_staleness_seconds{channel="vix"}`,
+		`atlas_channel_staleness_overage_seconds{channel="vix"}`,
+		`atlas_channel_data_staleness_seconds{channel="us10y"}`,
+		`atlas_channel_staleness_overage_seconds{channel="us10y"}`,
+	}
+	for _, absent := range mustAbsent {
+		if strings.Contains(body, absent) {
+			t.Fatalf("unexpected /metrics line %q for derived indicator channel\n--- full body ---\n%s", absent, body)
+		}
+	}
+	// 真通道 us_yahoo 仍正常輸出
+	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="us_yahoo"} 600`) {
+		t.Fatalf("us_yahoo staleness missing\n--- full body ---\n%s", body)
 	}
 }
