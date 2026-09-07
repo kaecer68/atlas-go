@@ -7,8 +7,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/narrative"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
@@ -691,4 +695,130 @@ func newTestRegistryWithRegimes(t *testing.T) *strategy_techniques.Registry {
 		t.Fatalf("LoadFromBytes: %v", err)
 	}
 	return reg
+}
+
+// TestComputeExitAlerts_TopDivergenceBelowPnlThreshold: a held position with
+// |pnl| <= 5% normally produces NO alert, but a 量價頂背離 reading must
+// surface it with divergence_signal=top (display-only exit warning,
+// 2026-09-07).
+func TestComputeExitAlerts_TopDivergenceBelowPnlThreshold(t *testing.T) {
+	workDir := t.TempDir()
+	ledgerDir := t.TempDir()
+
+	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	os.MkdirAll(liveStateDir, 0o755)
+	portData, _ := json.Marshal(map[string]any{"cash": 500000, "available_cash": 400000})
+	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
+
+	// 2330.TW: cost=100, price=102 → +2% (below the ±5% P&L threshold).
+	positions := []map[string]any{
+		{"symbol": "2330.TW", "quantity": 1, "average_cost": 100.0,
+			"current_price": 102.0, "market_value": 102, "unrealized_pnl": 2},
+	}
+	posData, _ := json.Marshal(positions)
+	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
+
+	// Quote store with a top-divergence panel: price ramping 100→130 (fresh
+	// 30d high) while volume decays 30000→10000 (vol_ma5 < vol_ma20).
+	qs := ledger.NewJSONLQuoteStore(t.TempDir())
+	now := time.Now()
+	bars := make([]domain.DailyBar, 30)
+	for i := range bars {
+		frac := float64(i) / 29.0
+		bars[i] = domain.DailyBar{
+			Date:   now.AddDate(0, 0, i-29),
+			Symbol: "2330.TW",
+			Close:  100 + 30*frac,
+			Volume: int64(30000 - 20000*frac),
+		}
+	}
+	if err := qs.RecordQuotes(bars); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Handlers{
+		WorkDir:            workDir,
+		LedgerDir:          ledgerDir,
+		QuoteStoreProvider: func() ledger.QuoteStore { return qs },
+	}
+	alerts := h.computeExitAlerts()
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert (top divergence below P&L threshold), got %d", len(alerts))
+	}
+	if alerts[0].DivergenceSignal != "top" {
+		t.Errorf("divergence_signal = %q, want top", alerts[0].DivergenceSignal)
+	}
+	if !strings.Contains(alerts[0].Suggestion, "頂背離") {
+		t.Errorf("suggestion missing divergence warning: %q", alerts[0].Suggestion)
+	}
+}
+
+// TestComputeExitAlerts_NoDivergenceNoAlertBelowThreshold: same position
+// without divergence (rising volume) and small P&L → no alert (the
+// divergence dimension must not manufacture alerts).
+func TestComputeExitAlerts_NoDivergenceNoAlertBelowThreshold(t *testing.T) {
+	workDir := t.TempDir()
+	ledgerDir := t.TempDir()
+	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	os.MkdirAll(liveStateDir, 0o755)
+	portData, _ := json.Marshal(map[string]any{"cash": 500000, "available_cash": 400000})
+	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
+	positions := []map[string]any{
+		{"symbol": "2330.TW", "quantity": 1, "average_cost": 100.0,
+			"current_price": 102.0, "market_value": 102, "unrealized_pnl": 2},
+	}
+	posData, _ := json.Marshal(positions)
+	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
+
+	// Rising price with RISING volume → no divergence.
+	qs := ledger.NewJSONLQuoteStore(t.TempDir())
+	now := time.Now()
+	bars := make([]domain.DailyBar, 30)
+	for i := range bars {
+		frac := float64(i) / 29.0
+		bars[i] = domain.DailyBar{
+			Date:   now.AddDate(0, 0, i-29),
+			Symbol: "2330.TW",
+			Close:  100 + 30*frac,
+			Volume: int64(10000 + 20000*frac),
+		}
+	}
+	if err := qs.RecordQuotes(bars); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Handlers{
+		WorkDir:            workDir,
+		LedgerDir:          ledgerDir,
+		QuoteStoreProvider: func() ledger.QuoteStore { return qs },
+	}
+	if alerts := h.computeExitAlerts(); len(alerts) != 0 {
+		t.Fatalf("expected 0 alerts (no divergence, small P&L), got %d: %+v", len(alerts), alerts)
+	}
+}
+
+// TestComputeExitAlerts_NilQuoteStoreProvider: nil provider must leave the
+// P&L-only behavior unchanged (fail-open).
+func TestComputeExitAlerts_NilQuoteStoreProvider(t *testing.T) {
+	workDir := t.TempDir()
+	ledgerDir := t.TempDir()
+	liveStateDir := filepath.Join(workDir, "data/state/live/state")
+	os.MkdirAll(liveStateDir, 0o755)
+	portData, _ := json.Marshal(map[string]any{"cash": 500000, "available_cash": 400000})
+	os.WriteFile(filepath.Join(liveStateDir, "portfolio_state.json"), portData, 0o644)
+	positions := []map[string]any{
+		{"symbol": "2330.TW", "quantity": 1, "average_cost": 100.0,
+			"current_price": 120.0, "market_value": 120, "unrealized_pnl": 20},
+	}
+	posData, _ := json.Marshal(positions)
+	os.WriteFile(filepath.Join(liveStateDir, "positions_current.json"), posData, 0o644)
+
+	h := &Handlers{WorkDir: workDir, LedgerDir: ledgerDir}
+	alerts := h.computeExitAlerts()
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 P&L alert, got %d", len(alerts))
+	}
+	if alerts[0].DivergenceSignal != "" {
+		t.Errorf("nil provider must yield empty divergence_signal, got %q", alerts[0].DivergenceSignal)
+	}
 }

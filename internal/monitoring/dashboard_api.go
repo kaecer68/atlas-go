@@ -1211,6 +1211,13 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		MacroIngestor: a.macroIngestor,
 		WorkDir:       a.workDir,
 		LedgerDir:     a.ledgerDir,
+		// Late-binding quote store for exit-alert divergence checks:
+		// SetQuoteStore may run after this construction (warmup wiring).
+		QuoteStoreProvider: func() ledger.QuoteStore {
+			a.quoteStoreMu.RLock()
+			defer a.quoteStoreMu.RUnlock()
+			return a.quoteStore
+		},
 	}
 	// PR-3d (capital-flow model plan v1.1): display-only period annotation
 	// for the decision-chain 心法 block. The period comes from

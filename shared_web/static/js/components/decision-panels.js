@@ -127,8 +127,14 @@ export function renderExitAlerts(data) {
     // ExitAlert.pnl_pct 為百分點（15.0 = +15%），後端 computeExitAlerts 已轉換。
     const pnlText = pnlValid ? fmtSafeSignedPct(a.pnl_pct) : '—';
     const badgeClass = !pnlValid ? 'muted' : a.pnl_pct >= 10 ? 'up' : a.pnl_pct <= -5 ? 'down' : 'warn';
+    // 量價頂背離警示（display-only, 2026-09-07）：持倉出現頂背離時
+    // 額外標記，即使 P&L 未到閾值也會出現在清單（後端已篩）。
+    const divBadge = a.divergence_signal === 'top'
+      ? '<span class="badge warn" title="價近30日新高但量能遞減">⚠️ 頂背離</span>'
+      : '';
     return `<div class="dc-exit-row">
       <span>🔔 ${renderStockCell(a.symbol)} ${escapeHtml(a.name && a.name !== a.symbol ? a.name : '')}</span>
+      ${divBadge}
       <span class="badge ${badgeClass}">
         ${pnlText}
       </span>
