@@ -196,3 +196,23 @@ func RequireAdmin(h Handler) Handler {
 func AdminPost(h Handler) http.Handler {
 	return Post(RequireAdmin(h))
 }
+
+// AdminGet is a convenience adapter for GET-only admin-protected endpoints.
+func AdminGet(h Handler) http.Handler {
+	return Get(RequireAdmin(h))
+}
+
+// AdminPut is a convenience adapter for PUT-only admin-protected endpoints.
+func AdminPut(h Handler) http.Handler {
+	return Put(RequireAdmin(h))
+}
+
+// Put is a convenience adapter for PUT-only endpoints.
+func Put(h Handler) http.Handler {
+	return Adapt(func(r *http.Request) (int, any) {
+		if r.Method != http.MethodPut {
+			return http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"}
+		}
+		return h(r)
+	})
+}

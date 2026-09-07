@@ -89,7 +89,12 @@ const finmindDailyLimit = 14400
 var ErrQuotaExhausted = fmt.Errorf("finmind: daily quota exhausted")
 
 type FinMindClient struct {
-	apiKey       string
+	apiKey string
+	// keyMu guards apiKey reads/writes: UpdateSharedFinMindAPIKey (issue
+	// #1776 hot reload) swaps the key while in-flight requests read it.
+	// (Pre-#1776 the update wrote under the singleton mutex but reads were
+	// unsynchronized — a latent data race this field fixes.)
+	keyMu        sync.RWMutex
 	httpClient   *http.Client
 	baseURL      string // overridable for tests; defaults to finmindBaseURL
 	rateLimiter  *rate.Limiter
@@ -166,11 +171,25 @@ func GetSharedFinMindClient(apiKey string, stateDir ...string) *FinMindClient {
 // UpdateSharedFinMindAPIKey replaces the API key on the shared client without
 // recreating the rate limiter. Use after rotating the FinMind token at runtime.
 func UpdateSharedFinMindAPIKey(apiKey string) {
-	sharedFinMindClientMu.Lock()
-	defer sharedFinMindClientMu.Unlock()
+	sharedFinMindClientMu.RLock()
+	defer sharedFinMindClientMu.RUnlock()
 	if sharedFinMindClient != nil {
-		sharedFinMindClient.apiKey = apiKey
+		sharedFinMindClient.SetAPIKey(apiKey)
 	}
+}
+
+// SetAPIKey swaps the client API key (thread-safe).
+func (c *FinMindClient) SetAPIKey(key string) {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
+	c.apiKey = key
+}
+
+// currentAPIKey returns the active API key (thread-safe).
+func (c *FinMindClient) currentAPIKey() string {
+	c.keyMu.RLock()
+	defer c.keyMu.RUnlock()
+	return c.apiKey
 }
 
 // ResetSharedFinMindClient clears the singleton (for tests).
@@ -322,8 +341,8 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		return nil, fmt.Errorf("finmind: create request: %w", err)
 	}
 
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if key := c.currentAPIKey(); key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	req.Header.Set("Accept", "application/json")
 

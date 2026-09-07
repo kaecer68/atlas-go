@@ -70,7 +70,10 @@ var ErrFugleBreakerOpen = fmt.Errorf("fugle: circuit breaker open")
 
 // FugleClient Fugle API 客户端
 type FugleClient struct {
-	apiKey       string
+	apiKey string
+	// keyMu guards apiKey reads/writes: UpdateSharedFugleAPIKey (issue
+	// #1776 hot reload) swaps the key while in-flight requests read it.
+	keyMu        sync.RWMutex
 	httpClient   *http.Client
 	baseURL      string
 	rateLimiter  *rate.Limiter
@@ -148,6 +151,32 @@ func ResetSharedFugleClient() {
 	defer sharedFugleClientMu.Unlock()
 	sharedFugleClient = nil
 	sharedFugleClientOnce = sync.Once{}
+}
+
+// UpdateSharedFugleAPIKey replaces the API key on the shared client without
+// recreating the rate limiter, quota tracker, or breaker. Use after rotating
+// the Fugle key at runtime (issue #1776 hot reload). No-op when the shared
+// client has not been created yet.
+func UpdateSharedFugleAPIKey(apiKey string) {
+	sharedFugleClientMu.RLock()
+	defer sharedFugleClientMu.RUnlock()
+	if sharedFugleClient != nil {
+		sharedFugleClient.SetAPIKey(apiKey)
+	}
+}
+
+// SetAPIKey swaps the client API key (thread-safe).
+func (c *FugleClient) SetAPIKey(key string) {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
+	c.apiKey = key
+}
+
+// currentAPIKey returns the active API key (thread-safe).
+func (c *FugleClient) currentAPIKey() string {
+	c.keyMu.RLock()
+	defer c.keyMu.RUnlock()
+	return c.apiKey
 }
 
 // NewFugleClient creates a standalone FugleClient with its own rate limiter.
@@ -247,7 +276,7 @@ func (c *FugleClient) doGet(ctx context.Context, endpoint string) ([]byte, error
 		if err != nil {
 			return nil, fmt.Errorf("create request: %w", err)
 		}
-		req.Header.Set("X-API-KEY", c.apiKey)
+		req.Header.Set("X-API-KEY", c.currentAPIKey())
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -453,7 +482,7 @@ func (c *FugleClient) GetHistoricalCandles(ctx context.Context, symbol, from, to
 	if err != nil {
 		return nil, fmt.Errorf("fugle candles request: %w", err)
 	}
-	req.Header.Set("X-API-KEY", c.apiKey)
+	req.Header.Set("X-API-KEY", c.currentAPIKey())
 
 	// P0-5: shared fetchWithRetry — 429/5xx on the candles path are retried
 	// with Retry-After / exponential backoff (previously a single 429 failed

@@ -23,6 +23,7 @@
 | `eventbus` | 事件匯流排 Publish/Subscribe |
 | `industry` | 產業輪動、供給需求、季節性、週期 |
 | `ledger` | JSONL append-only、OutcomeCount 計算 |
+| `channelsecrets` | 資料通道 API key 加密持久化 + 熱重載（issue #1776；Postgres/SQLite 雙 backend、AES-256-GCM） |
 | `logging` | 統一日誌介面 |
 | `marketdata` | Provider 抽象、TWSE / FinMind / Fugle |
 | `monitoring` | Dashboard API、監控、人工干預入口 |

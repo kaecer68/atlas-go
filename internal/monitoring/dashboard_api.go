@@ -133,42 +133,46 @@ func (d dataQualityAdapter) RunAll(ctx context.Context) *service.DataQualityRepo
 }
 
 type DashboardAPI struct {
-	workDir                    string
-	ledgerDir                  string
-	storeBackend               string
-	sqlitePath                 string
-	baselinePath               string
-	apiAddr                    string // dashboard HTTP listen address for /health shape
-	fubonProxyPort             int    // fubon proxy port for /health shape
-	narrativeEngine            *narrative.NarrativeEngine
-	macroIngestor              *narrative.MacroIngestor
-	macroProvider              marketdata.MacroDataProvider
-	lifecycleMgr               *narrative.EventLifecycleManager
-	geoProvider                geopolitical.GeopoliticalRiskProvider
-	taiwanGeoProvider          geopolitical.GeopoliticalRiskProvider
-	taiwanStressCalc           *narrative.TaiwanStressCalculator
-	reportGenerator            *narrative.ReportGenerator
-	pool                       *pgxpool.Pool
-	industryService            *service.IndustryService
-	metricsCollector           *MetricsCollector
-	metricsHistory             *MetricsHistory
-	lastHistoryPush            atomic.Int64 // unix sec; throttles trend snapshot recording
-	lastHistoryVal             atomic.Int64 // last recorded ScreeningRate * 1e6 (change gate)
-	lastHistoryTotal           atomic.Int64 // last recorded ScreeningTotal (change gate)
-	lastHistoryHeartbeat       atomic.Int64 // unix hour of last heartbeat snapshot
-	healthManager              *portfolio.AgentHealthManager
-	dataQualityChecker         *DataQualityChecker
-	janusEngine                *janus.Engine
-	repo                       *repository.DualWriteRepository
-	taskManager                *taskexec.Manager
-	eventBus                   *eventbus.ChannelEventBus
-	outcomeStore               *DualWriteOutcomeStoreAdapter
-	storageReport              apimetrics.StorageReporter
-	dataFetcher                DataFetcher
-	riskGate                   *risk.RiskGate
-	riskHandlers               *apirisk.Handlers
-	liveHandlers               *apilive.Handlers
-	dashboardHandlers          *apidashboard.Handlers
+	workDir              string
+	ledgerDir            string
+	storeBackend         string
+	sqlitePath           string
+	baselinePath         string
+	apiAddr              string // dashboard HTTP listen address for /health shape
+	fubonProxyPort       int    // fubon proxy port for /health shape
+	narrativeEngine      *narrative.NarrativeEngine
+	macroIngestor        *narrative.MacroIngestor
+	macroProvider        marketdata.MacroDataProvider
+	lifecycleMgr         *narrative.EventLifecycleManager
+	geoProvider          geopolitical.GeopoliticalRiskProvider
+	taiwanGeoProvider    geopolitical.GeopoliticalRiskProvider
+	taiwanStressCalc     *narrative.TaiwanStressCalculator
+	reportGenerator      *narrative.ReportGenerator
+	pool                 *pgxpool.Pool
+	industryService      *service.IndustryService
+	metricsCollector     *MetricsCollector
+	metricsHistory       *MetricsHistory
+	lastHistoryPush      atomic.Int64 // unix sec; throttles trend snapshot recording
+	lastHistoryVal       atomic.Int64 // last recorded ScreeningRate * 1e6 (change gate)
+	lastHistoryTotal     atomic.Int64 // last recorded ScreeningTotal (change gate)
+	lastHistoryHeartbeat atomic.Int64 // unix hour of last heartbeat snapshot
+	healthManager        *portfolio.AgentHealthManager
+	dataQualityChecker   *DataQualityChecker
+	janusEngine          *janus.Engine
+	repo                 *repository.DualWriteRepository
+	taskManager          *taskexec.Manager
+	eventBus             *eventbus.ChannelEventBus
+	outcomeStore         *DualWriteOutcomeStoreAdapter
+	storageReport        apimetrics.StorageReporter
+	dataFetcher          DataFetcher
+	riskGate             *risk.RiskGate
+	riskHandlers         *apirisk.Handlers
+	liveHandlers         *apilive.Handlers
+	dashboardHandlers    *apidashboard.Handlers
+	// channelKeys backs the /api/admin/channel-keys endpoints (issue #1776
+	// Phase 1); late-bound by cmd/atlas/main.go and copied into
+	// dashboardHandlers at RegisterAllRoutes time.
+	channelKeys                apidashboard.ChannelKeysManager
 	latestDrawdown             *portfolio.DrawdownResult
 	drawdownMu                 sync.RWMutex
 	strategyTechniquesHandlers *apistrategies.Handlers
@@ -998,6 +1002,13 @@ func (a *DashboardAPI) SetFugleClient(c *marketdata.FugleClient) {
 	a.fugleClient = c
 }
 
+// SetChannelKeyManager injects the channel-secrets manager for the
+// /api/admin/channel-keys endpoints (issue #1776 Phase 1). Late-bound:
+// call before RegisterAllRoutes.
+func (a *DashboardAPI) SetChannelKeyManager(m apidashboard.ChannelKeysManager) {
+	a.channelKeys = m
+}
+
 // SetFugleAPIKey injects the Fugle API key so warmup can fetch candles
 // from the same config source as the rest of the application.
 func (a *DashboardAPI) SetFugleAPIKey(key string) {
@@ -1550,9 +1561,10 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 	if a.janusEngine != nil {
 		dashboardHandlers.JanusEngine = a.janusEngine
 	}
-	dashboardHandlers.DrawdownProvider = a     // DashboardAPI satisfies DrawdownProvider
-	dashboardHandlers.TaskLivenessProvider = a // DashboardAPI satisfies TaskLivenessProvider (late-bound)
-	dashboardHandlers.SchedulerStatus = a      // DashboardAPI satisfies SchedulerStatusProvider (late-bound)
+	dashboardHandlers.DrawdownProvider = a        // DashboardAPI satisfies DrawdownProvider
+	dashboardHandlers.TaskLivenessProvider = a    // DashboardAPI satisfies TaskLivenessProvider (late-bound)
+	dashboardHandlers.SchedulerStatus = a         // DashboardAPI satisfies SchedulerStatusProvider (late-bound)
+	dashboardHandlers.ChannelKeys = a.channelKeys // issue #1776 (late-bound; nil → 503)
 	dashboardHandlers.RegisterRoutes(mux)
 
 	a.RegisterPerformanceRoutes(mux)
