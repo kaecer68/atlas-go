@@ -233,3 +233,56 @@ func TestSignalWinRate_Empty(t *testing.T) {
 		t.Fatalf("AvgForwardReturn = %v, want 0", got.AvgForwardReturn)
 	}
 }
+
+// --- condition-level (cross-symbol) aggregation (issue #1865) ---
+
+func TestConditionWinRate_CrossSymbol(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-08-01", ForwardReturn: 0.02, CostRate: 0.00585, Source: "stockpicker-momentum-20d-positive"},
+		{Symbol: "2454", TriggerDate: "2026-08-03", ForwardReturn: -0.01, CostRate: 0.00585, Source: "stockpicker-momentum-20d-positive"},
+		{Symbol: "2317", TriggerDate: "2026-08-05", ForwardReturn: 0.03, CostRate: 0.00585, Source: "stockpicker-momentum-20d-positive"},
+		// A different source must be skipped (defensive; the store query
+		// already filters by source).
+		{Symbol: "2330", TriggerDate: "2026-08-05", ForwardReturn: 0.99, CostRate: 0.00585, Source: "stockpicker-foreign-3d-net-buy"},
+	}
+	s := ConditionWinRate("stockpicker-momentum-20d-positive", outcomes, 0.00585, 30, 0.95)
+	if s.Observations != 3 || s.Symbols != 3 {
+		t.Errorf("observations=%d symbols=%d, want 3/3", s.Observations, s.Symbols)
+	}
+	// Hits: 0.02 > 0.00585 ✓, -0.01 ✗, 0.03 ✓ → 2/3
+	if s.Hits != 2 {
+		t.Errorf("hits=%d, want 2", s.Hits)
+	}
+	if s.Direction != "buy" {
+		t.Errorf("direction=%q, want buy", s.Direction)
+	}
+	if s.ConditionID != "momentum-20d-positive" {
+		t.Errorf("condition_id=%q", s.ConditionID)
+	}
+	if s.DataStart != "2026-08-01" || s.DataEnd != "2026-08-05" {
+		t.Errorf("date range %s~%s", s.DataStart, s.DataEnd)
+	}
+	if s.CalibrationStatus != string(CalibrationCalibrating) {
+		t.Errorf("3 obs < 30 min samples must be calibrating, got %q", s.CalibrationStatus)
+	}
+}
+
+func TestConditionWinRate_AvoidDirection(t *testing.T) {
+	outcomes := []SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-08-01", ForwardReturn: -0.05, CostRate: 0.00585, Source: "stockpicker-price-volume-top-divergence"},
+	}
+	s := ConditionWinRate("stockpicker-price-volume-top-divergence", outcomes, 0.00585, 30, 0.95)
+	if s.Direction != "avoid" {
+		t.Errorf("top divergence must carry direction=avoid, got %q", s.Direction)
+	}
+	if s.Hits != 0 || s.WinRate != 0 {
+		t.Errorf("net-negative outcome must not hit: %+v", s)
+	}
+}
+
+func TestConditionWinRate_Empty(t *testing.T) {
+	s := ConditionWinRate("stockpicker-momentum-20d-positive", nil, 0.00585, 30, 0.95)
+	if s.Observations != 0 || s.CalibrationStatus != string(CalibrationCalibrating) {
+		t.Errorf("empty input must be zero calibrating summary, got %+v", s)
+	}
+}

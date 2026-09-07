@@ -156,3 +156,31 @@ func TestHandleStockGetVolumeDivergenceWindowClamped(t *testing.T) {
 		t.Fatalf("window clamp=%s, want 120", rec.query.Get("window"))
 	}
 }
+
+func TestHandleStockGetConditionWinRate(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"found":true,"condition_id":"momentum-20d-positive","direction":"buy","observations":120}`)
+	_, out, err := s.handleStockGetConditionWinRate(context.Background(), nil, stockConditionWinRateInput{ConditionID: "momentum-20d-positive"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/condition_winrate" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("condition_id") != "momentum-20d-positive" || rec.query.Get("rolling_window") != "120d" {
+		t.Fatalf("query=%v", rec.query)
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetConditionWinRateMissingCondition(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+	_, _, err := s.handleStockGetConditionWinRate(context.Background(), nil, stockConditionWinRateInput{})
+	if err == nil {
+		t.Fatal("expected error for missing condition_id")
+	}
+}

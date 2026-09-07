@@ -19,6 +19,7 @@ import (
 
 	_ "modernc.org/sqlite" // driver for the read-only stockpicker SQLite handle
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
@@ -162,4 +163,38 @@ func OpenWinRateDB(path string) (*sql.DB, error) {
 // (.TW / .TWO) — the stockpicker ledger stores bare 4–6 digit codes.
 func stripSymbolSuffix(symbol string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(symbol, ".TW"), ".TWO")
+}
+
+// ConditionWinRateProvider is the minimal read-only interface the
+// /api/stock/condition_winrate handler depends on: one condition-level
+// (cross-symbol) aggregate read. Kept separate from WinRateProvider so the
+// existing per-symbol fakes stay valid (issue #1865).
+type ConditionWinRateProvider interface {
+	// LoadConditionWinRate returns the cross-symbol aggregate for one
+	// source ("stockpicker-<condition-id>") over the rolling window.
+	// found=false when the source has zero stored outcomes in the window.
+	LoadConditionWinRate(ctx context.Context, source, window string) (stockpicker.ConditionWinRateSummary, bool, error)
+}
+
+// LoadConditionWinRate implements ConditionWinRateProvider: it reads raw
+// outcomes across all symbols (symbol="") for the source and aggregates
+// them with the same math as the per-symbol path (stockpicker.ConditionWinRate
+// shares WinRate/WilsonScoreInterval/CalibrationStatusFor with
+// SignalWinRate). Cost rate and min-samples come from the live parameters
+// config, same as the daily aggregation job.
+func (p *SQLiteWinRateProvider) LoadConditionWinRate(ctx context.Context, source, window string) (stockpicker.ConditionWinRateSummary, bool, error) {
+	outcomes, err := stockpicker.LoadOutcomes(ctx, p.db, "", source, window)
+	if err != nil {
+		return stockpicker.ConditionWinRateSummary{}, false, fmt.Errorf("stocktools: load condition outcomes %s: %w", source, err)
+	}
+	if len(outcomes) == 0 {
+		return stockpicker.ConditionWinRateSummary{}, false, nil
+	}
+	params := config.GetParametersConfig()
+	summary := stockpicker.ConditionWinRate(source, outcomes,
+		params.Stockpicker.Costs.RoundTripPct.Value,
+		params.Stockpicker.Calibration.MinSamples.Value,
+		0.95)
+	summary.Window = window
+	return summary, true, nil
 }

@@ -319,6 +319,20 @@ stocktools 4+1 個 endpoint 的涵蓋範圍如下：
 - 零成交量面板 → 200 但 `volume_declining=false`（無法判讀量縮）。
 
 ---
+
+## §4c `GET /api/stock/condition_winrate`
+
+**Handler**：`internal/stocktools/handler.go::HandleConditionWinRate`（2026-09-07, issue #1865）
+**資料源**：stockpicker SQLite ledger `stock_signal_outcomes`（read-only，即時聚合，不重算回測）
+
+**Query**：
+
+- `condition_id=<id>`（必填；foreign-3d-net-buy / momentum-20d-positive / price-volume-top-divergence / price-volume-bottom-divergence）
+- `rolling_window=<label>`（選填；預設 120d）
+
+**Response 200**：`found` + 條件級聚合（跨股票）：`condition_id`、`source`、`direction`（buy/avoid — avoid=反向語義，低勝率=訊號有效）、`observations`、`symbols`、`hits`、`win_rate`、`wilson_lower/upper`、`calibration_status`、`avg_forward_return`、`data_start/end`。無資料 → 200 + `found:false` + `message`。
+
+---
 ## §5 `GET /api/stock/sector-median-pe`
 
 **Handler**：`internal/stocktools/handler.go::HandleSectorMedianPE`  
