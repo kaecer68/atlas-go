@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/admin_web"
 	"github.com/kaecer68/atlas-go/client_web"
 	"github.com/kaecer68/atlas-go/internal/alerting"
@@ -25,6 +27,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/buildinfo"
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/channelsecrets"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/dailyreport"
@@ -445,6 +448,17 @@ func run(args []string, deps appDeps) error {
 	repo := rt.Repository
 	taskManager := rt.TaskManager
 
+	// Issue #1776 Phase 1: persistent + hot-reloaded data-channel API keys.
+	// Build the manager (Postgres in prod / job-local SQLite as dev fallback),
+	// then merge DB overrides over the .env-loaded config BEFORE any consumer
+	// builds clients from cfg (shared clients at ~:764, TSMC revenue, hybrid
+	// provider). DB wins so an admin-set key is not silently reverted by a
+	// redeploy with a stale .env. Failure is non-fatal: keys stay env-sourced
+	// and the admin endpoints report 503.
+	channelKeyMgr := initChannelKeyManager(&cfg, pool)
+
+	// Phase A3: Clean up stale gateway heartbeat alerts on startup.
+
 	// Phase A3: Clean up stale gateway heartbeat alerts on startup.
 	if alertStore != nil {
 		cutoff := time.Now().Add(-24 * time.Hour)
@@ -625,6 +639,13 @@ func run(args []string, deps appDeps) error {
 		}
 
 		dashboard.SetPool(pool)
+		// Issue #1776: admin channel-keys endpoints (late-bound manager;
+		// nil manager → endpoints report 503).
+		dashboard.SetChannelKeyManager(channelKeyMgr)
+		if channelKeyMgr != nil {
+			channelKeyMgr.RegisterApplier("finmind", marketdata.UpdateSharedFinMindAPIKey)
+			channelKeyMgr.RegisterApplier("fugle", marketdata.UpdateSharedFugleAPIKey)
+		}
 		// Manifest #G05: feed the full ChannelRegistry into the admin data-channels
 		// page so it lists every registered adapter (not just the hand-maintained
 		// subset). The list is queried at request time so new adapters picked up
@@ -3117,4 +3138,41 @@ func buildPrismTrainingExecutor(cfg config.Config) (prism.TrainingExecutor, doma
 		return nil, registry
 	}
 	return orchestrator.NewPRISMTrainingExecutor(ds, registry, policy), registry
+}
+
+// initChannelKeyManager builds the channel-secrets manager for issue #1776
+// Phase 1 and merges persisted DB overrides over the env-loaded config.
+// Backend follows cfg.StoreBackend (postgres + pool → Postgres SSoT;
+// otherwise job-local SQLite). Any failure logs a warning and returns nil —
+// the admin endpoints then report 503 and keys stay env-sourced (fail-open
+// for startup, fail-closed for writes).
+func initChannelKeyManager(cfg *config.Config, pool *pgxpool.Pool) *channelsecrets.Manager {
+	ctx := context.Background()
+	store, err := channelsecrets.NewStore(ctx, cfg.StoreBackend, pool, cfg.WorkDir)
+	if err != nil {
+		log.Printf("[ChannelKeys] store init failed (non-fatal): %v", err)
+		return nil
+	}
+	mgr, err := channelsecrets.NewManager(store)
+	if err != nil {
+		log.Printf("[ChannelKeys] manager init failed (non-fatal): %v", err)
+		return nil
+	}
+	overrides := mgr.LoadOverrides(ctx)
+	if overrides == nil {
+		return mgr
+	}
+	if k, ok := overrides["finmind"]; ok {
+		if config.SafeKey(k) != config.SafeKey(cfg.FinMindAPIKey) {
+			log.Printf("[ChannelKeys] DB override applied: finmind (%s -> %s)", config.SafeKey(cfg.FinMindAPIKey), config.SafeKey(k))
+		}
+		cfg.FinMindAPIKey = k
+	}
+	if k, ok := overrides["fugle"]; ok {
+		if config.SafeKey(k) != config.SafeKey(cfg.FugleAPIKey) {
+			log.Printf("[ChannelKeys] DB override applied: fugle (%s -> %s)", config.SafeKey(cfg.FugleAPIKey), config.SafeKey(k))
+		}
+		cfg.FugleAPIKey = k
+	}
+	return mgr
 }

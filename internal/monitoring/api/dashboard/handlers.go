@@ -92,6 +92,11 @@ type Handlers struct {
 	TaskLivenessProvider TaskLivenessProvider
 	SchedulerStatus      SchedulerStatusProvider
 
+	// ChannelKeys backs the /api/admin/channel-keys endpoints (issue #1776
+	// Phase 1: persistent + hot-reloaded data-channel API keys). Late-bound
+	// from cmd/atlas/main.go after the store is opened; nil → 503.
+	ChannelKeys ChannelKeysManager
+
 	// Live backs GET /api/dashboard/overview (SSOT P1-7). It is late-bound by
 	// RegisterAllRoutes after RegisterLiveRoutes created the live handlers;
 	// nil → the overview endpoint reports 503.
@@ -248,6 +253,11 @@ func (h *Handlers) HandleMaturity(r *http.Request) (int, any) {
 func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/dashboard/data-channels", shared.Get(h.HandleDataChannels))
 	mux.Handle("GET /api/dashboard/data-channels/{name}", shared.Get(h.HandleDataChannelDetail))
+	// Issue #1776 Phase 1: persistent + hot-reloaded data-channel API keys
+	// (replaces the os.Setenv placebo removed in #1777). Admin-gated:
+	// X-Admin-Key / Authorization: Admin (shared.RequireAdmin).
+	mux.Handle("GET /api/admin/channel-keys", shared.AdminGet(h.HandleChannelKeysList))
+	mux.Handle("PUT /api/admin/channel-keys/{provider}", shared.AdminPut(h.HandleChannelKeyUpdate))
 	mux.Handle("GET /api/dashboard/data-pipeline", shared.Get(h.HandleDataPipeline))
 	mux.Handle("GET /api/dashboard/drawdown", shared.Get(h.HandleDrawdown))
 	mux.Handle("GET /api/dashboard/channel-fetch-log", shared.Get(h.HandleChannelFetchLog))
