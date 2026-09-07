@@ -834,7 +834,11 @@ func run(args []string, deps appDeps) error {
 			// through %v inside the wrapped error).
 			log.Printf("[StockTools] win-rate store unavailable: %v (GET /api/stock/win_rate will 503)", err)
 		} else {
-			stockDeps.WinRate = stocktools.NewSQLiteWinRateProvider(winRateDB)
+			winRateProvider := stocktools.NewSQLiteWinRateProvider(winRateDB)
+			stockDeps.WinRate = winRateProvider
+			// Condition-level (cross-symbol) aggregate read (issue #1865) —
+			// same read-only ledger handle implements both providers.
+			stockDeps.ConditionWinRate = winRateProvider
 		}
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
