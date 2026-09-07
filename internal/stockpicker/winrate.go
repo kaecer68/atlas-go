@@ -3,6 +3,7 @@ package stockpicker
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // CalibrationStatus 校準狀態。
@@ -150,4 +151,82 @@ func StockWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, co
 // 數學與 SignalWinRate 共用；Source 欄位語意為「策略層級」。
 func StrategyWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) (SignalWinRateSummary, error) {
 	return SignalWinRate(outcomes, costRate, minSamples, confidence)
+}
+
+// ConditionWinRateSummary is a condition-level aggregate: win-rate statistics
+// for one signal source computed across ALL symbols (cross-symbol). It
+// answers "is this condition effective overall?" — the per-symbol
+// SignalWinRateSummary cannot (issue #1865, k3 review F7).
+//
+// Direction semantics: for avoid-semantics conditions
+// (IsAvoidCondition, e.g. price-volume-top-divergence) a LOW WinRate
+// CONFIRMS the signal; Direction echoes "buy"|"avoid" so consumers cannot
+// misread the ranking.
+type ConditionWinRateSummary struct {
+	Source            string  `json:"source"`
+	ConditionID       string  `json:"condition_id"`
+	Direction         string  `json:"direction"` // "buy" (default) or "avoid" (inverted semantics)
+	Window            string  `json:"rolling_window"`
+	Observations      int     `json:"observations"`
+	Symbols           int     `json:"symbols"` // distinct symbols contributing
+	Hits              int     `json:"hits"`
+	WinRate           float64 `json:"win_rate"`
+	WilsonLower       float64 `json:"wilson_lower"`
+	WilsonUpper       float64 `json:"wilson_upper"`
+	Confidence        float64 `json:"confidence"`
+	CalibrationStatus string  `json:"calibration_status"`
+	NetCostRate       float64 `json:"net_cost_rate"`
+	AvgForwardReturn  float64 `json:"avg_forward_return"`
+	DataStart         string  `json:"data_start"` // earliest trigger_date
+	DataEnd           string  `json:"data_end"`   // latest trigger_date
+}
+
+// ConditionWinRate aggregates outcomes across symbols for a single source.
+// Unlike SignalWinRate (which requires a single symbol), grouping here is by
+// source only — that IS the point of the condition-level view. Outcomes from
+// other sources are skipped defensively (a miswired caller must not silently
+// mix conditions). Empty/no-matching input returns a zero summary with
+// calibrating status and no error.
+func ConditionWinRate(source string, outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) ConditionWinRateSummary {
+	condID := strings.TrimPrefix(source, "stockpicker-")
+	summary := ConditionWinRateSummary{
+		Source:      source,
+		ConditionID: condID,
+		Direction:   "buy",
+		Confidence:  confidence,
+		NetCostRate: costRate,
+	}
+	if IsAvoidCondition(condID) {
+		summary.Direction = "avoid"
+	}
+
+	symbols := make(map[string]bool)
+	var totalReturn float64
+	for _, o := range outcomes {
+		if o.Source != source {
+			continue
+		}
+		summary.Observations++
+		symbols[o.Symbol] = true
+		if NetHit(o.ForwardReturn, costRate) {
+			summary.Hits++
+		}
+		totalReturn += o.ForwardReturn
+		if summary.DataStart == "" || o.TriggerDate < summary.DataStart {
+			summary.DataStart = o.TriggerDate
+		}
+		if o.TriggerDate > summary.DataEnd {
+			summary.DataEnd = o.TriggerDate
+		}
+	}
+	if summary.Observations == 0 {
+		summary.CalibrationStatus = string(CalibrationStatusFor(0, minSamples))
+		return summary
+	}
+	summary.Symbols = len(symbols)
+	summary.WinRate = WinRate(summary.Hits, summary.Observations)
+	summary.WilsonLower, summary.WilsonUpper = WilsonScoreInterval(summary.Hits, summary.Observations, confidence)
+	summary.CalibrationStatus = string(CalibrationStatusFor(summary.Observations, minSamples))
+	summary.AvgForwardReturn = totalReturn / float64(summary.Observations)
+	return summary
 }

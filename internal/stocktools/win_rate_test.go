@@ -321,3 +321,118 @@ func TestOpenWinRateDB_ReadOnly(t *testing.T) {
 		t.Fatal("INSERT on read-only handle succeeded; mode=ro is not enforced")
 	}
 }
+
+// ─── condition_winrate handler tests (issue #1865) ─────────────────────────
+
+// TestHandleConditionWinRate_HappyPath verifies the cross-symbol aggregate:
+// two symbols × two outcomes each for the same source must roll up into one
+// condition-level summary (observations=4, symbols=2).
+func TestHandleConditionWinRate_HappyPath(t *testing.T) {
+	db := openWinRateTestDB(t)
+	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-momentum-20d-positive", "120d"))
+	seedWinRate(t, db, sampleWinRateSummary("2454", "stockpicker-momentum-20d-positive", "120d"))
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var out ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !out.Found {
+		t.Fatalf("found=false: %+v", out)
+	}
+	if out.Observations != 4 || out.Symbols != 2 {
+		t.Errorf("observations=%d symbols=%d, want 4/2", out.Observations, out.Symbols)
+	}
+	// seedWinRate outcomes: +0.01 (hit vs 0.00585 cost) and -0.02 (miss) per
+	// symbol → 2 hits / 4 obs = 50%.
+	if out.Hits != 2 || out.WinRate != 0.5 {
+		t.Errorf("hits=%d win_rate=%v, want 2/0.5", out.Hits, out.WinRate)
+	}
+	if out.Direction != "buy" {
+		t.Errorf("direction=%q, want buy", out.Direction)
+	}
+	if out.ConditionID != "momentum-20d-positive" || out.Window != "120d" {
+		t.Errorf("identity fields: %+v", out)
+	}
+	if out.DataStart != "2026-06-01" || out.DataEnd != "2026-08-20" {
+		t.Errorf("date range %s~%s", out.DataStart, out.DataEnd)
+	}
+}
+
+// TestHandleConditionWinRate_AvoidDirection verifies the top-divergence
+// condition carries direction=avoid so consumers cannot misread a low win
+// rate as a bad condition (k3 review F1 semantics carried to the aggregate).
+func TestHandleConditionWinRate_AvoidDirection(t *testing.T) {
+	db := openWinRateTestDB(t)
+	seedWinRate(t, db, sampleWinRateSummary("2330", "stockpicker-price-volume-top-divergence", "120d"))
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=price-volume-top-divergence", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var out ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !out.Found || out.Direction != "avoid" {
+		t.Fatalf("want found+avoid, got %+v", out)
+	}
+}
+
+func TestHandleConditionWinRate_NotFound(t *testing.T) {
+	db := openWinRateTestDB(t)
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=nonexistent", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var out ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Found {
+		t.Fatalf("found=true for unknown condition: %+v", out)
+	}
+	if out.Message == "" {
+		t.Error("expected explanatory message for found=false")
+	}
+}
+
+func TestHandleConditionWinRate_MissingConditionID(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(openWinRateTestDB(t))})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleConditionWinRate_NoProvider(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rec.Code)
+	}
+}

@@ -925,6 +925,26 @@
       "type": "object"
     }
   },
+  "stock_get_condition_winrate": {
+    "name": "stock_get_condition_winrate",
+    "description": "Return the condition-LEVEL (cross-symbol) win-rate aggregate for one stockpicker condition over a rolling window (read-only; aggregates persisted raw outcomes, never recomputes backtests). Answers 'is this condition effective overall?' — the per-symbol stock_get_win_rate cannot (issue #1865). Input: condition_id (required; e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence) + optional rolling_window (default 120d). The response carries direction: buy (default) or avoid — for price-volume-top-divergence (頂背離, avoid) a LOW win_rate / negative avg_forward_return CONFIRMS the signal. No stored outcomes returns found=false. HTTP: GET /api/stock/condition_winrate. Alternative: stock_get_win_rate (per-symbol), stock_picker_scan (cross-symbol per-condition ranking).",
+    "inputSchema": {
+      "properties": {
+        "condition_id": {
+          "description": "the stockpicker condition id, e.g. foreign-3d-net-buy or price-volume-top-divergence",
+          "type": "string"
+        },
+        "rolling_window": {
+          "description": "rolling window label, e.g. 120d; default 120d",
+          "type": "string"
+        }
+      },
+      "required": [
+        "condition_id"
+      ],
+      "type": "object"
+    }
+  },
   "stock_get_fundamentals": {
     "name": "stock_get_fundamentals",
     "description": "Return fundamental metrics (PE, PB, PS, dividend yield, sector) for a Taiwan-listed symbol. Coverage: TWSE-listed common stocks (~1070 names) backed by data/fundamentals.json; out-of-scope symbols return 200 with `coverage_note: NOT_COVERED` instead of zero data. HTTP: GET /api/stock/fundamentals. Alternative: stock_get_quote, stock_get_technical.",
