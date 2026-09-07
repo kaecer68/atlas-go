@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/monitoring/service"
@@ -92,6 +94,13 @@ type Handlers struct {
 	LedgerDir        string
 	StrategyRegistry *strategy_techniques.Registry
 
+	// QuoteStoreProvider supplies the daily-bar quote store used to run
+	// 量價背離 (price/volume divergence) checks on held positions in
+	// computeExitAlerts. It is a provider func (not a field) because the
+	// dashboard injects the QuoteStore late (SetQuoteStore, after route
+	// registration). Nil → divergence checks skipped, P&L alerts unchanged.
+	QuoteStoreProvider func() ledger.QuoteStore
+
 	// PeriodProvider supplies the current seven-period market
 	// classification (PR-3d). When nil or when it returns "", the
 	// decision-chain strategies block shows all active frames unchanged.
@@ -139,6 +148,11 @@ type ExitAlert struct {
 	DaysHeld   int      `json:"days_held"`
 	PnlPct     *float64 `json:"pnl_pct,omitempty"`
 	Suggestion string   `json:"suggestion"`
+	// DivergenceSignal is "top" when the held position shows 量價頂背離
+	// (price near the 30-day high while volume declines — rally losing
+	// participation). Display-only warning; never affects trading logic.
+	// Empty when no divergence or when the quote store is unavailable.
+	DivergenceSignal string `json:"divergence_signal,omitempty"`
 }
 
 // PremarketData holds pre-market key indicator readings.
@@ -419,7 +433,12 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 		// silently filtered out every position — the panel always rendered
 		// "目前沒有需要出場提醒的持倉".
 		pnlPct := pos.PnlPct * 100.0
-		if math.Abs(pnlPct) <= 5.0 {
+
+		// 量價背離維度（display-only, 2026-09-07）：持倉出現頂背離時，
+		// 即使 P&L 未達 ±5% 閾值也要警示 — 這正是頂背離的用途
+		// （「加速放棄」的技術面佐證）。底背離不觸發出場提醒。
+		divergence := h.positionDivergenceSignal(pos.Symbol)
+		if math.Abs(pnlPct) <= 5.0 && divergence == "" {
 			continue
 		}
 
@@ -437,16 +456,56 @@ func (h *Handlers) computeExitAlerts() []ExitAlert {
 			suggestion = "注意虧損擴大"
 		}
 
+		if divergence == "top" {
+			if suggestion != "" {
+				suggestion += "；"
+			}
+			suggestion += "量價頂背離：價近 30 日新高但量能遞減，上漲動能可能衰竭，建議評估減碼"
+		}
+
 		pnl := pnlPct
 		alerts = append(alerts, ExitAlert{
-			Symbol:     pos.Symbol,
-			Name:       resolveSymbolName(pos.Symbol),
-			DaysHeld:   -1, // TODO: not tracked in current position DTO; derive from ledger/trade history
-			PnlPct:     &pnl,
-			Suggestion: suggestion,
+			Symbol:           pos.Symbol,
+			Name:             resolveSymbolName(pos.Symbol),
+			DaysHeld:         -1, // TODO: not tracked in current position DTO; derive from ledger/trade history
+			PnlPct:           &pnl,
+			Suggestion:       suggestion,
+			DivergenceSignal: divergence,
 		})
 	}
 	return alerts
+}
+
+// positionDivergenceSignal returns "top" when the held position's recent
+// 30-trading-day panel shows 量價頂背離 (domain.DetectVolumeDivergence),
+// "" otherwise — including on any data/backend failure (fail-open: a
+// missing quote store must never break the P&L-based alerts).
+func (h *Handlers) positionDivergenceSignal(symbol string) string {
+	if h.QuoteStoreProvider == nil {
+		return ""
+	}
+	qs := h.QuoteStoreProvider()
+	if qs == nil {
+		return ""
+	}
+	// QuoteStore keys carry the exchange suffix ("2330.TW"); bare position
+	// symbols are normalized before lookup.
+	qsSymbol := symbol
+	if !strings.Contains(symbol, ".") {
+		qsSymbol = symbol + ".TW"
+	}
+	// 60 calendar days ≈ 40 trading days — enough for the detector's
+	// 30-day window plus its 20-bar volume-MA precondition.
+	end := time.Now()
+	bars, err := qs.LoadQuotes(qsSymbol, end.AddDate(0, 0, -60), end)
+	if err != nil || len(bars) == 0 {
+		return ""
+	}
+	res, ok := domain.DetectVolumeDivergence(bars, domain.DivergenceDefaultWindowDays)
+	if !ok || !res.TopDivergence {
+		return ""
+	}
+	return "top"
 }
 
 // buildStrategiesSummary projects the strategy_techniques.Registry into

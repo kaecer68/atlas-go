@@ -1252,6 +1252,7 @@ export interface ExitAlert {
   days_held: number;
   pnl_pct?: number | null;
   suggestion: string;
+  divergence_signal?: string;
 }
 
 export interface ExperimentInboxItem {
