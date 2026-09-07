@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // GroupAndSummarize groups outcomes by (symbol, source) and computes one
@@ -79,6 +81,27 @@ func AggregateFromStore(ctx context.Context, outcomesStore *SignalOutcomeStore, 
 		return nil, fmt.Errorf("stockpicker: aggregate load outcomes: %w", err)
 	}
 	summaries := GroupAndSummarize(outcomes, window, costRate, minSamples, confidence)
+
+	// Degradation pass (issue #1864): CalibrationDegraded was previously a
+	// dead state ("由聚合層寫入" with no writer). For each eligible series,
+	// downgrade to degraded when the recent share of outcomes is
+	// significantly worse than the full window (IsDegraded). Thresholds
+	// come from configs/parameters.json → stockpicker.calibration.degraded_*.
+	cal := config.GetParametersConfig().Stockpicker.Calibration
+	groups := make(map[string][]SignalOutcome)
+	for _, o := range outcomes {
+		groups[o.Symbol+"\x00"+o.Source] = append(groups[o.Symbol+"\x00"+o.Source], o)
+	}
+	for i, s := range summaries {
+		if s.CalibrationStatus != CalibrationEligible {
+			continue
+		}
+		if IsDegraded(groups[s.Symbol+"\x00"+s.Source], costRate, confidence,
+			cal.DegradedRecentFraction.Value, cal.DegradedMinRecentObs.Value) {
+			summaries[i].CalibrationStatus = CalibrationDegraded
+		}
+	}
+
 	for _, s := range summaries {
 		if err := winStore.SaveWinRate(ctx, s); err != nil {
 			return nil, fmt.Errorf("stockpicker: aggregate save %s/%s/%s: %w", s.Symbol, s.Source, s.Window, err)

@@ -1596,7 +1596,9 @@
     },
     {
       "fields": [
-        "MinSamples ParameterMetadata[int]"
+        "MinSamples ParameterMetadata[int]",
+        "DegradedRecentFraction ParameterMetadata[float64]",
+        "DegradedMinRecentObs ParameterMetadata[int]"
       ],
       "kind": "struct",
       "name": "StockpickerCalibrationParameters"

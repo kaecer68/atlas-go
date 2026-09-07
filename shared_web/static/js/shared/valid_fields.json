@@ -553,6 +553,8 @@
   "degradation_msg",
   "degraded",
   "degraded_channels",
+  "degraded_min_recent_obs",
+  "degraded_recent_fraction",
   "delta",
   "delta_pct",
   "delta_value",
