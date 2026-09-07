@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
 func sampleOutcomes() []SignalOutcome {
@@ -233,4 +235,114 @@ func TestCostRateFromParams(t *testing.T) {
 func loadParametersForTest(t *testing.T) (*config.ParametersConfig, error) {
 	t.Helper()
 	return config.LoadParametersConfig(filepath.Join("..", "..", "configs", "parameters.json"))
+}
+
+// --- degraded auto-trigger (issue #1864) ---
+
+func TestIsDegraded_RecentCollapse(t *testing.T) {
+	// 60 outcomes: first 40 all win (+5%), last 20 all lose (-5%).
+	// Recent-third Wilson upper must fall below the overall Wilson lower.
+	var outcomes []SignalOutcome
+	for i := 0; i < 60; i++ {
+		ret := 0.05
+		if i >= 40 {
+			ret = -0.05
+		}
+		outcomes = append(outcomes, SignalOutcome{
+			Symbol: "2330", Source: "stockpicker-momentum-20d-positive",
+			TriggerDate:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("2006-01-02"),
+			ForwardReturn: ret, CostRate: 0.00585,
+		})
+	}
+	if !IsDegraded(outcomes, 0.00585, 0.95, 0.34, 10) {
+		t.Fatal("recent collapse must trigger degraded")
+	}
+}
+
+func TestIsDegraded_StableSeries(t *testing.T) {
+	// Uniform 60% win rate — no degradation.
+	var outcomes []SignalOutcome
+	for i := 0; i < 60; i++ {
+		ret := -0.01
+		if i%5 < 3 {
+			ret = 0.02
+		}
+		outcomes = append(outcomes, SignalOutcome{
+			Symbol: "2330", Source: "stockpicker-momentum-20d-positive",
+			TriggerDate:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("2006-01-02"),
+			ForwardReturn: ret, CostRate: 0.00585,
+		})
+	}
+	if IsDegraded(outcomes, 0.00585, 0.95, 0.34, 10) {
+		t.Fatal("stable series must not trigger degraded")
+	}
+}
+
+func TestIsDegraded_InsufficientRecent(t *testing.T) {
+	// Only 20 outcomes → recent third = 6 < minRecentObs(10) → never degraded.
+	var outcomes []SignalOutcome
+	for i := 0; i < 20; i++ {
+		ret := 0.05
+		if i >= 14 {
+			ret = -0.05
+		}
+		outcomes = append(outcomes, SignalOutcome{
+			Symbol: "2330", Source: "stockpicker-momentum-20d-positive",
+			TriggerDate:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("2006-01-02"),
+			ForwardReturn: ret, CostRate: 0.00585,
+		})
+	}
+	if IsDegraded(outcomes, 0.00585, 0.95, 0.34, 10) {
+		t.Fatal("recent window below min observations must not trigger degraded")
+	}
+}
+
+func TestAggregateFromStore_MarksDegraded(t *testing.T) {
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	ctx := context.Background()
+	outStore := NewSignalOutcomeStore(db)
+	winStore := NewWinRateStore(db)
+
+	// 60 outcomes within the last 120 days for (2330, momentum): first 40
+	// win, last 20 lose → degradation must flip eligible → degraded.
+	var outcomes []SignalOutcome
+	for i := 0; i < 60; i++ {
+		ret := 0.05
+		if i >= 40 {
+			ret = -0.05
+		}
+		outcomes = append(outcomes, SignalOutcome{
+			Symbol: "2330", Source: "stockpicker-momentum-20d-positive",
+			TriggerDate:   time.Now().AddDate(0, 0, i-59).Format("2006-01-02"),
+			ForwardReturn: ret, CostRate: 0.00585,
+		})
+	}
+	if err := RecordOutcomes(ctx, db, outcomes); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := AggregateFromStore(ctx, outStore, winStore, "120d", 0.00585, 30, 0.95, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries=%d, want 1", len(summaries))
+	}
+	if summaries[0].CalibrationStatus != CalibrationDegraded {
+		t.Fatalf("status = %q, want degraded (60 obs eligible + recent collapse)", summaries[0].CalibrationStatus)
+	}
+	// The degraded status must persist to the store (executor/scan consume it).
+	stored, found, err := winStore.LoadWinRate(ctx, "2330", "stockpicker-momentum-20d-positive", "120d")
+	if err != nil || !found {
+		t.Fatalf("stored load: found=%v err=%v", found, err)
+	}
+	if stored.CalibrationStatus != CalibrationDegraded {
+		t.Errorf("stored status = %q, want degraded", stored.CalibrationStatus)
+	}
 }

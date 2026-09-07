@@ -1315,9 +1315,18 @@ type StockpickerCostsParameters struct {
 }
 
 // StockpickerCalibrationParameters holds the sample-size gate for
-// calibration status (observations < min_samples → calibrating).
+// calibration status (observations < min_samples → calibrating) plus the
+// degradation detector thresholds (issue #1864: eligible → degraded when
+// the recent-share Wilson upper bound falls below the full-window Wilson
+// lower bound).
 type StockpickerCalibrationParameters struct {
 	MinSamples ParameterMetadata[int] `json:"min_samples"`
+	// DegradedRecentFraction is the trailing share of outcomes (by trigger
+	// order) treated as the "recent" window for degradation detection.
+	DegradedRecentFraction ParameterMetadata[float64] `json:"degraded_recent_fraction"`
+	// DegradedMinRecentObs is the minimum recent-window observations before
+	// the degradation rule may fire (below this there is no evidence).
+	DegradedMinRecentObs ParameterMetadata[int] `json:"degraded_min_recent_obs"`
 }
 
 // StockpickerConditionsParameters holds the tunable parameters of the

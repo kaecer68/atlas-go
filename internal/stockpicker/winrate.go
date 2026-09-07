@@ -3,6 +3,7 @@ package stockpicker
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 )
 
@@ -229,4 +230,48 @@ func ConditionWinRate(source string, outcomes []SignalOutcome, costRate float64,
 	summary.CalibrationStatus = string(CalibrationStatusFor(summary.Observations, minSamples))
 	summary.AvgForwardReturn = totalReturn / float64(summary.Observations)
 	return summary
+}
+
+// IsDegraded reports whether an eligible (symbol, source) series has
+// statistically degraded: the trailing recentFraction of outcomes (by
+// trigger order) has a Wilson UPPER bound below the FULL series' Wilson
+// LOWER bound — non-overlapping confidence intervals, i.e. the recent
+// performance is significantly worse than the long-run record
+// (issue #1864). Returns false when the recent window has fewer than
+// minRecentObs outcomes (insufficient evidence) or when the series is too
+// small to split meaningfully.
+//
+// Pure function; the aggregation layer (AggregateFromStore) is the only
+// writer of CalibrationDegraded, per the CalibrationStatus doc.
+func IsDegraded(outcomes []SignalOutcome, costRate float64, confidence, recentFraction float64, minRecentObs int) bool {
+	if len(outcomes) < 3 || recentFraction <= 0 || recentFraction >= 1 {
+		return false
+	}
+	// Sort by trigger date (LoadOutcomes already orders ASC, but the pure
+	// function must not rely on caller ordering).
+	sorted := make([]SignalOutcome, len(outcomes))
+	copy(sorted, outcomes)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TriggerDate < sorted[j].TriggerDate })
+
+	n := len(sorted)
+	recentN := int(float64(n) * recentFraction)
+	if recentN < minRecentObs {
+		return false
+	}
+	if recentN >= n {
+		return false
+	}
+	recent := sorted[n-recentN:]
+
+	overall, err := SignalWinRate(sorted, costRate, 1, confidence)
+	if err != nil {
+		return false
+	}
+	recentSummary, err := SignalWinRate(recent, costRate, 1, confidence)
+	if err != nil {
+		return false
+	}
+	// minSamples=1 for both sub-computations: the eligibility gate is the
+	// caller's concern; here we only need the Wilson bounds.
+	return recentSummary.WilsonUpper < overall.WilsonLower
 }

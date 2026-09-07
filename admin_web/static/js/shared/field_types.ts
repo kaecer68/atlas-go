@@ -4051,6 +4051,8 @@ export interface StockInfo {
 
 export interface StockpickerCalibrationParameters {
   min_samples: string;
+  degraded_recent_fraction: string;
+  degraded_min_recent_obs: string;
 }
 
 export interface StockpickerConditionWindow {
