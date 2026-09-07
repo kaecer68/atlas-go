@@ -179,6 +179,10 @@ type ConditionWinRateSummary struct {
 	AvgForwardReturn  float64 `json:"avg_forward_return"`
 	DataStart         string  `json:"data_start"` // earliest trigger_date
 	DataEnd           string  `json:"data_end"`   // latest trigger_date
+	// Regime echoes the regime filter the aggregate was computed under
+	// ("" = all regimes). Set by the serving layer; the aggregator leaves
+	// it empty (issue #1863).
+	Regime string `json:"regime,omitempty"`
 }
 
 // ConditionWinRate aggregates outcomes across symbols for a single source.

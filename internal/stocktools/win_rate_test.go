@@ -436,3 +436,65 @@ func TestHandleConditionWinRate_NoProvider(t *testing.T) {
 		t.Fatalf("expected 503, got %d", rec.Code)
 	}
 }
+
+// TestHandleConditionWinRate_RegimeFilter (issue #1863): outcomes tagged
+// with different trigger-date regimes must aggregate separately; the
+// regime query param restricts the aggregate.
+func TestHandleConditionWinRate_RegimeFilter(t *testing.T) {
+	db := openWinRateTestDB(t)
+	ctx := context.Background()
+	// 4 outcomes for the same source: 2 RISK_ON (wins), 2 RISK_OFF (losses).
+	if err := stockpicker.RecordOutcomes(ctx, db, []stockpicker.SignalOutcome{
+		{Symbol: "2330", TriggerDate: "2026-07-01", Source: "stockpicker-momentum-20d-positive", ForwardReturn: 0.05, CostRate: 0.00585, Regime: "RISK_ON"},
+		{Symbol: "2454", TriggerDate: "2026-07-02", Source: "stockpicker-momentum-20d-positive", ForwardReturn: 0.05, CostRate: 0.00585, Regime: "RISK_ON"},
+		{Symbol: "2330", TriggerDate: "2026-08-03", Source: "stockpicker-momentum-20d-positive", ForwardReturn: -0.05, CostRate: 0.00585, Regime: "RISK_OFF"},
+		{Symbol: "2454", TriggerDate: "2026-08-04", Source: "stockpicker-momentum-20d-positive", ForwardReturn: -0.05, CostRate: 0.00585, Regime: "RISK_OFF"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, Deps{ConditionWinRate: NewSQLiteWinRateProvider(db)})
+
+	// Unfiltered: 4 obs, 50% win rate.
+	req := httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	var all ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &all); err != nil {
+		t.Fatal(err)
+	}
+	if all.Observations != 4 || all.WinRate != 0.5 {
+		t.Fatalf("unfiltered: obs=%d wr=%v, want 4/0.5", all.Observations, all.WinRate)
+	}
+	if all.Regime != "" {
+		t.Errorf("unfiltered regime echo = %q, want empty", all.Regime)
+	}
+
+	// RISK_ON only: 2 obs, 100% win rate, regime echoed.
+	req = httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive&regime=RISK_ON", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	var on ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &on); err != nil {
+		t.Fatal(err)
+	}
+	if on.Observations != 2 || on.WinRate != 1.0 {
+		t.Errorf("RISK_ON: obs=%d wr=%v, want 2/1.0", on.Observations, on.WinRate)
+	}
+	if on.Regime != "RISK_ON" {
+		t.Errorf("regime echo = %q, want RISK_ON", on.Regime)
+	}
+
+	// RISK_OFF only: 2 obs, 0% win rate.
+	req = httptest.NewRequest(http.MethodGet, "/api/stock/condition_winrate?condition_id=momentum-20d-positive&regime=RISK_OFF", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	var off ConditionWinRateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &off); err != nil {
+		t.Fatal(err)
+	}
+	if off.Observations != 2 || off.WinRate != 0.0 {
+		t.Errorf("RISK_OFF: obs=%d wr=%v, want 2/0.0", off.Observations, off.WinRate)
+	}
+}

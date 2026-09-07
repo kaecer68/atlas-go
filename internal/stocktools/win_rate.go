@@ -172,8 +172,10 @@ func stripSymbolSuffix(symbol string) string {
 type ConditionWinRateProvider interface {
 	// LoadConditionWinRate returns the cross-symbol aggregate for one
 	// source ("stockpicker-<condition-id>") over the rolling window.
+	// regime ("" = all regimes, or e.g. "RISK_ON") restricts the aggregate
+	// to outcomes whose trigger-date regime matches (issue #1863).
 	// found=false when the source has zero stored outcomes in the window.
-	LoadConditionWinRate(ctx context.Context, source, window string) (stockpicker.ConditionWinRateSummary, bool, error)
+	LoadConditionWinRate(ctx context.Context, source, window, regime string) (stockpicker.ConditionWinRateSummary, bool, error)
 }
 
 // LoadConditionWinRate implements ConditionWinRateProvider: it reads raw
@@ -182,10 +184,23 @@ type ConditionWinRateProvider interface {
 // shares WinRate/WilsonScoreInterval/CalibrationStatusFor with
 // SignalWinRate). Cost rate and min-samples come from the live parameters
 // config, same as the daily aggregation job.
-func (p *SQLiteWinRateProvider) LoadConditionWinRate(ctx context.Context, source, window string) (stockpicker.ConditionWinRateSummary, bool, error) {
+func (p *SQLiteWinRateProvider) LoadConditionWinRate(ctx context.Context, source, window, regime string) (stockpicker.ConditionWinRateSummary, bool, error) {
 	outcomes, err := stockpicker.LoadOutcomes(ctx, p.db, "", source, window)
 	if err != nil {
 		return stockpicker.ConditionWinRateSummary{}, false, fmt.Errorf("stocktools: load condition outcomes %s: %w", source, err)
+	}
+	if regime != "" {
+		// Regime-stratified view (issue #1863): in-memory filter on the
+		// outcome's trigger-date regime. Rows written before regime tagging
+		// (Regime == "") are excluded from filtered views — they cannot be
+		// attributed, and silently pooling them would skew the strata.
+		filtered := outcomes[:0]
+		for _, o := range outcomes {
+			if o.Regime == regime {
+				filtered = append(filtered, o)
+			}
+		}
+		outcomes = filtered
 	}
 	if len(outcomes) == 0 {
 		return stockpicker.ConditionWinRateSummary{}, false, nil
@@ -196,5 +211,6 @@ func (p *SQLiteWinRateProvider) LoadConditionWinRate(ctx context.Context, source
 		params.Stockpicker.Calibration.MinSamples.Value,
 		0.95)
 	summary.Window = window
+	summary.Regime = regime
 	return summary, true, nil
 }

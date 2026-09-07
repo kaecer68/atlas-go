@@ -329,6 +329,7 @@ stocktools 4+1 個 endpoint 的涵蓋範圍如下：
 
 - `condition_id=<id>`（必填；foreign-3d-net-buy / momentum-20d-positive / price-volume-top-divergence / price-volume-bottom-divergence）
 - `rolling_window=<label>`（選填；預設 120d）
+- `regime=<label>`（選填；如 RISK_ON — 只聚合觸發日屬於該 regime 的 outcomes，issue #1863。注意：2026-09-07 前的歷史 outcomes 無 regime 標記，不會進入分層統計）
 
 **Response 200**：`found` + 條件級聚合（跨股票）：`condition_id`、`source`、`direction`（buy/avoid — avoid=反向語義，低勝率=訊號有效）、`observations`、`symbols`、`hits`、`win_rate`、`wilson_lower/upper`、`calibration_status`、`avg_forward_return`、`data_start/end`。無資料 → 200 + `found:false` + `message`。
 

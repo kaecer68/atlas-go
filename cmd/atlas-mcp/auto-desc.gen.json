@@ -934,6 +934,10 @@
           "description": "the stockpicker condition id, e.g. foreign-3d-net-buy or price-volume-top-divergence",
           "type": "string"
         },
+        "regime": {
+          "description": "market regime filter (e.g. RISK_ON); default: all regimes. Only outcomes tagged at trigger time (2026-09-07+) carry regimes",
+          "type": "string"
+        },
         "rolling_window": {
           "description": "rolling window label, e.g. 120d; default 120d",
           "type": "string"

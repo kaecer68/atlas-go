@@ -1403,6 +1403,30 @@ func run(args []string, deps appDeps) error {
 				// 2026-08-28 after Phase 4 deploy).
 				ExpectDB: cfg.StockpickerExpectDB,
 				WorkDir:  cfg.WorkDir,
+				// Regime tagging (issue #1863): regime_history lives in the
+				// backend-aware historical store (Postgres on prod), NOT the
+				// job-local SQLite — wire it explicitly. Latest captured_at
+				// wins per date. Nil historicalStore → loader returns nil →
+				// outcomes keep empty regime (fail-open).
+				RegimeLoader: func(ctx context.Context) map[string]string {
+					if historicalStore == nil {
+						return nil
+					}
+					rows, err := historicalStore.LoadRegimeHistoryAll(ctx, 400)
+					if err != nil || len(rows) == 0 {
+						return nil
+					}
+					m := make(map[string]string, len(rows))
+					best := make(map[string]time.Time, len(rows))
+					for _, row := range rows {
+						if ts, ok := best[row.Date]; ok && row.CapturedAt.Before(ts) {
+							continue
+						}
+						best[row.Date] = row.CapturedAt
+						m[row.Date] = row.Regime
+					}
+					return m
+				},
 			})
 			// fix/20260731-govflow-cadence: shared in-memory CAPTCHA
 			// cooldown. One instance per process, injected into the

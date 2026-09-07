@@ -131,3 +131,42 @@ func TestStockpickerTask_SkipDayReturnsErrTaskSkipped(t *testing.T) {
 		t.Fatalf("err = %v, want ErrTaskSkipped (day already recorded)", err)
 	}
 }
+
+// TestStockpickerTask_RegimeLoaderPassedThrough (issue #1863): the
+// RegimeLoader dep must reach the runner as opts.Regimes; nil loader → nil
+// map (job-local fallback inside RunDailyUpdate).
+func TestStockpickerTask_RegimeLoaderPassedThrough(t *testing.T) {
+	var got stockpicker.RunDailyOptions
+	canned := stockpicker.RunDailyResult{AsOf: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)}
+	want := map[string]string{"2026-03-16": "RISK_ON"}
+	deps := StockpickerUpdateDeps{
+		WorkDir:      "/tmp/x",
+		Now:          fixedNow("2026-03-16 18:30"),
+		TimeZone:     tzAsia,
+		Runner:       fakeRunner(&got, &canned),
+		RegimeLoader: func(context.Context) map[string]string { return want },
+	}
+	if err := StockpickerUpdateTaskFunc(deps)(context.Background()); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if got.Regimes["2026-03-16"] != "RISK_ON" {
+		t.Errorf("runner Regimes = %v, want %v", got.Regimes, want)
+	}
+}
+
+func TestStockpickerTask_NilRegimeLoader(t *testing.T) {
+	var got stockpicker.RunDailyOptions
+	canned := stockpicker.RunDailyResult{AsOf: time.Date(2026, 3, 16, 0, 0, 0, 0, time.UTC)}
+	deps := StockpickerUpdateDeps{
+		WorkDir:  "/tmp/x",
+		Now:      fixedNow("2026-03-16 18:30"),
+		TimeZone: tzAsia,
+		Runner:   fakeRunner(&got, &canned),
+	}
+	if err := StockpickerUpdateTaskFunc(deps)(context.Background()); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if got.Regimes != nil {
+		t.Errorf("nil RegimeLoader must yield nil Regimes (job-local fallback), got %v", got.Regimes)
+	}
+}
