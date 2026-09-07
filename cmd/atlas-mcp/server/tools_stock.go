@@ -45,6 +45,12 @@ func registerStockTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("stock_get_volume_divergence", "Detect 量價背離 (price/volume divergence) for a Taiwan-listed symbol over the last N trading days (default 30): top divergence (價創新高但量縮 — rally losing participation, caution for holders) and bottom divergence (價創新低但量縮 — selling exhausting). Returns boolean flags plus the raw evidence (close vs window high/low %, vol_ma5 vs vol_ma20) and a zh-TW interpretation. Coverage: TWSE-listed common stocks whose bars exist in QuoteStore or are fetchable via Fugle; needs >= 20 bars. HTTP: GET /api/stock/volume_divergence. Alternative: stock_get_technical."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockGetVolumeDivergence)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "stock_get_condition_winrate",
+		Description: autoDescOr("stock_get_condition_winrate", "Return the condition-LEVEL (cross-symbol) win-rate aggregate for one stockpicker condition over a rolling window (read-only; aggregates persisted raw outcomes, never recomputes backtests). Answers 'is this condition effective overall?' — the per-symbol stock_get_win_rate cannot (issue #1865). Input: condition_id (required; e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence) + optional rolling_window (default 120d). The response carries direction: buy (default) or avoid — for price-volume-top-divergence (頂背離, avoid) a LOW win_rate / negative avg_forward_return CONFIRMS the signal. No stored outcomes returns found=false. HTTP: GET /api/stock/condition_winrate. Alternative: stock_get_win_rate (per-symbol), stock_picker_scan (cross-symbol per-condition ranking)."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
+	}, s.handleStockGetConditionWinRate)
 }
 
 type stockSymbolInput struct {
@@ -175,6 +181,29 @@ func (s *server) handleStockGetVolumeDivergence(ctx context.Context, _ *mcp.Call
 	q := url.Values{"symbol": {in.Symbol}, "window": {strconv.Itoa(in.Window)}}
 	if err := s.withAudit(ctx, "stock_get_volume_divergence", []string{"symbol", "window"}, func() error {
 		return s.cli.Get(ctx, "/api/stock/volume_divergence", q, &out.Result)
+	}); err != nil {
+		return nil, stockBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+type stockConditionWinRateInput struct {
+	ConditionID   string `json:"condition_id" jsonschema:"the stockpicker condition id, e.g. foreign-3d-net-buy or price-volume-top-divergence"`
+	RollingWindow string `json:"rolling_window,omitempty" jsonschema:"rolling window label, e.g. 120d; default 120d"`
+}
+
+func (s *server) handleStockGetConditionWinRate(ctx context.Context, _ *mcp.CallToolRequest, in stockConditionWinRateInput) (*mcp.CallToolResult, stockBaseOutput, error) {
+	if in.ConditionID == "" {
+		return nil, stockBaseOutput{}, fmt.Errorf("stock_get_condition_winrate: condition_id is required")
+	}
+	window := in.RollingWindow
+	if window == "" {
+		window = "120d"
+	}
+	var out stockBaseOutput
+	q := url.Values{"condition_id": {in.ConditionID}, "rolling_window": {window}}
+	if err := s.withAudit(ctx, "stock_get_condition_winrate", []string{"condition_id", "rolling_window"}, func() error {
+		return s.cli.Get(ctx, "/api/stock/condition_winrate", q, &out.Result)
 	}); err != nil {
 		return nil, stockBaseOutput{}, err
 	}

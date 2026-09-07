@@ -19,6 +19,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
+	"github.com/kaecer68/atlas-go/internal/stockpicker"
 )
 
 // Deps holds the data providers required by the stocktools handlers.
@@ -58,6 +59,11 @@ type Deps struct {
 	// opened read-only); tests may inject a fake to exercise error paths
 	// without opening SQLite.
 	WinRate WinRateProvider
+	// ConditionWinRate is the read-only condition-level (cross-symbol)
+	// win-rate provider (issue #1865). Optional — when nil,
+	// GET /api/stock/condition_winrate returns 503. Production injects the
+	// same *SQLiteWinRateProvider as WinRate (it implements both).
+	ConditionWinRate ConditionWinRateProvider
 }
 
 // MonthlyRevenueProvider is the minimal interface the
@@ -106,6 +112,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/monthly_revenue", shared.Get(h.HandleMonthlyRevenue))
 	mux.Handle("GET /api/stock/win_rate", shared.Get(h.HandleWinRate))
 	mux.Handle("GET /api/stock/volume_divergence", shared.Get(h.HandleVolumeDivergence))
+	mux.Handle("GET /api/stock/condition_winrate", shared.Get(h.HandleConditionWinRate))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -697,6 +704,54 @@ func (h *Handler) HandleWinRate(r *http.Request) (int, any) {
 		}
 		out.Message = fmt.Sprintf("no stockpicker win-rate data for symbol %s (window %s%s)",
 			symbol, window, scope)
+	}
+	return http.StatusOK, out
+}
+
+// ConditionWinRateResponse is the JSON body of GET
+// /api/stock/condition_winrate. found=false means the condition has no
+// stored outcomes in the window — informational, not an error (same
+// contract as /api/stock/win_rate).
+type ConditionWinRateResponse struct {
+	Found   bool   `json:"found"`
+	Message string `json:"message,omitempty"`
+	stockpicker.ConditionWinRateSummary
+}
+
+// HandleConditionWinRate serves GET
+// /api/stock/condition_winrate?condition_id=X[&rolling_window=120d].
+//
+// It answers "is condition X effective OVERALL?" — the cross-symbol
+// aggregate the per-symbol /api/stock/win_rate cannot provide
+// (issue #1865, k3 review F7). Read-only: aggregates the persisted raw
+// outcomes on the fly (never recomputes backtests). The response carries
+// direction ("buy"|"avoid") so consumers cannot misread avoid-semantics
+// conditions (頂背離: low win rate = signal confirmed).
+func (h *Handler) HandleConditionWinRate(r *http.Request) (int, any) {
+	if h.deps.ConditionWinRate == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "condition win-rate store not configured",
+		}
+	}
+	conditionID := r.URL.Query().Get("condition_id")
+	if conditionID == "" {
+		return http.StatusBadRequest, map[string]string{
+			"error": "condition_id is required (e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence)",
+		}
+	}
+	window := r.URL.Query().Get("rolling_window")
+	if window == "" {
+		window = defaultWinRateWindow
+	}
+
+	source := winRateSourcePrefix + conditionID
+	summary, found, err := h.deps.ConditionWinRate.LoadConditionWinRate(r.Context(), source, window)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+	out := ConditionWinRateResponse{Found: found, ConditionWinRateSummary: summary}
+	if !found {
+		out.Message = fmt.Sprintf("no stored outcomes for condition %s (window %s)", conditionID, window)
 	}
 	return http.StatusOK, out
 }

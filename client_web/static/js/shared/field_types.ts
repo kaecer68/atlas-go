@@ -489,6 +489,11 @@ export interface CompositeCardConfig {
   clamp_max: number;
 }
 
+export interface ConditionWinRateResponse {
+  found: boolean;
+  message?: string;
+}
+
 export interface ConfidenceMixConfig {
   weight_boundary: number;
   weight_freshness: number;
