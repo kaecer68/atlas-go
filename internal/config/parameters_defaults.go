@@ -63,6 +63,16 @@ func defaultStockpickerParameters() StockpickerParameters {
 				Rationale: "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
 				Source:    SourceHeuristic,
 			},
+			DegradedRecentFraction: ParameterMetadata[float64]{
+				Value:     0.34,
+				Rationale: "Trailing share of a (symbol, source) outcome series treated as the recent window for degradation detection (issue #1864): eligible → degraded when the recent window's Wilson UPPER bound falls below the full window's Wilson LOWER bound (non-overlapping 95% CIs = statistically significant decay). One third balances responsiveness vs noise.",
+				Source:    SourceHeuristic,
+			},
+			DegradedMinRecentObs: ParameterMetadata[int]{
+				Value:     10,
+				Rationale: "Minimum recent-window observations before the degradation rule may fire (issue #1864); below this the recent Wilson interval is too wide to prove anything, so the condition stays eligible.",
+				Source:    SourceHeuristic,
+			},
 		},
 		Conditions: StockpickerConditionsParameters{
 			Foreign3DNetBuy: StockpickerConditionWindow{
@@ -200,7 +210,13 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 		cfg.Stockpicker.Costs = def.Costs
 	}
 	if cfg.Stockpicker.Calibration.MinSamples.Rationale == "" {
-		cfg.Stockpicker.Calibration = def.Calibration
+		cfg.Stockpicker.Calibration.MinSamples = def.Calibration.MinSamples
+	}
+	if cfg.Stockpicker.Calibration.DegradedRecentFraction.Rationale == "" {
+		cfg.Stockpicker.Calibration.DegradedRecentFraction = def.Calibration.DegradedRecentFraction
+	}
+	if cfg.Stockpicker.Calibration.DegradedMinRecentObs.Rationale == "" {
+		cfg.Stockpicker.Calibration.DegradedMinRecentObs = def.Calibration.DegradedMinRecentObs
 	}
 	if cfg.Stockpicker.Conditions.Foreign3DNetBuy.WindowDays.Rationale == "" {
 		cfg.Stockpicker.Conditions.Foreign3DNetBuy = def.Conditions.Foreign3DNetBuy

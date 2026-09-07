@@ -8089,6 +8089,16 @@
         "value": 30,
         "rationale": "Minimum samples for eligible calibration status; mirrors capitalflow 30-sample gate (forces.go H-CF-02). Below this the point estimate is not displayed.",
         "source": "heuristic"
+      },
+      "degraded_recent_fraction": {
+        "value": 0.34,
+        "rationale": "Trailing share of a (symbol, source) outcome series treated as the recent window for degradation detection (issue #1864): eligible → degraded when the recent window's Wilson UPPER bound falls below the full window's Wilson LOWER bound (non-overlapping 95% CIs = statistically significant decay). One third balances responsiveness vs noise.",
+        "source": "heuristic"
+      },
+      "degraded_min_recent_obs": {
+        "value": 10,
+        "rationale": "Minimum recent-window observations before the degradation rule may fire (issue #1864); below this the recent Wilson interval is too wide to prove anything, so the condition stays eligible.",
+        "source": "heuristic"
       }
     },
     "conditions": {
