@@ -57,6 +57,11 @@ type StockpickerUpdateDeps struct {
 	DryRun     bool                                                                                            // compute coverage without persisting (observability/debug)
 	Runner     func(ctx context.Context, opts stockpicker.RunDailyOptions) (stockpicker.RunDailyResult, error) // test seam
 	Now        func() time.Time                                                                                // test seam; nil → time.Now
+	// RegimeLoader supplies the trigger-date → regime map for outcome
+	// tagging (issue #1863). nil → the runner falls back to the job-local
+	// SQLite regime_history (dev). Production wires the backend-aware
+	// historical store (regime_history lives in Postgres on prod).
+	RegimeLoader func(ctx context.Context) map[string]string
 }
 
 // RegisterStockpickerUpdateSchedule registers the daily post-close stockpicker
@@ -116,6 +121,10 @@ func StockpickerUpdateTaskFunc(deps StockpickerUpdateDeps) func(context.Context)
 			return fmt.Errorf("stockpicker update: WorkDir is empty")
 		}
 
+		var regimes map[string]string
+		if deps.RegimeLoader != nil {
+			regimes = deps.RegimeLoader(ctx)
+		}
 		res, err := runner(ctx, stockpicker.RunDailyOptions{
 			WorkDir:     deps.WorkDir,
 			Backend:     deps.Backend,
@@ -125,6 +134,7 @@ func StockpickerUpdateTaskFunc(deps StockpickerUpdateDeps) func(context.Context)
 			Universe:    deps.Universe,
 			Conditions:  deps.Conditions,
 			AsOf:        stockpicker.DateOnlyUTC(now),
+			Regimes:     regimes,
 		})
 		if err != nil {
 			return fmt.Errorf("stockpicker update: %w", err)

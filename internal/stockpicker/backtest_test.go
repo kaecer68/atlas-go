@@ -252,3 +252,67 @@ func TestBacktest_NoForwardTruth(t *testing.T) {
 		}
 	}
 }
+
+// --- outcome regime tagging (issue #1863) ---
+
+func TestRunBacktest_FillsRegime(t *testing.T) {
+	// Minimal panel: rising prices so momentum-20d-positive fires.
+	bars := make([]HistoricalBar, 30)
+	for i := range bars {
+		bars[i] = HistoricalBar{
+			Date:   time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i),
+			Close:  100 + float64(i),
+			Volume: 1000,
+		}
+	}
+	panel := &staticPanel{bars: map[string][]HistoricalBar{"2330": bars}}
+	regimes := map[string]string{}
+	for _, b := range bars {
+		regimes[b.Date.Format("2006-01-02")] = "RISK_ON"
+	}
+
+	outcomes, err := RunBacktest(context.Background(), BacktestConfig{
+		Universe: []string{"2330"},
+		Start:    bars[21].Date,
+		End:      bars[24].Date,
+		AsOf:     bars[29].Date,
+		Regimes:  regimes,
+	}, panel, NewDefaultConditionRegistry(nil).All()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcomes) == 0 {
+		t.Fatal("expected outcomes")
+	}
+	for _, o := range outcomes {
+		if o.Regime != "RISK_ON" {
+			t.Errorf("outcome %s/%s regime = %q, want RISK_ON", o.Symbol, o.TriggerDate, o.Regime)
+		}
+	}
+}
+
+func TestRunBacktest_NilRegimesKeepsEmpty(t *testing.T) {
+	bars := make([]HistoricalBar, 30)
+	for i := range bars {
+		bars[i] = HistoricalBar{
+			Date:   time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i),
+			Close:  100 + float64(i),
+			Volume: 1000,
+		}
+	}
+	panel := &staticPanel{bars: map[string][]HistoricalBar{"2330": bars}}
+	outcomes, err := RunBacktest(context.Background(), BacktestConfig{
+		Universe: []string{"2330"},
+		Start:    bars[21].Date,
+		End:      bars[24].Date,
+		AsOf:     bars[29].Date,
+	}, panel, NewDefaultConditionRegistry(nil).All()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range outcomes {
+		if o.Regime != "" {
+			t.Errorf("nil Regimes map must leave regime empty, got %q", o.Regime)
+		}
+	}
+}

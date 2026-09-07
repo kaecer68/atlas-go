@@ -457,3 +457,39 @@ func TestSelectConditions_Defaults(t *testing.T) {
 		t.Fatalf("unknown condition error = %v, want unknown-condition mention", err)
 	}
 }
+
+// TestLoadRegimeMap (issue #1863): regime_history rows become a date→regime
+// map, latest captured_at wins per date; missing table → nil (fail-open).
+func TestLoadRegimeMap(t *testing.T) {
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ledger.InitSchema(db); err != nil {
+		t.Fatalf("init schema: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO regime_history (date, regime, source_session_id, recorded_at, captured_at, is_synthetic, source)
+		 VALUES ('2026-08-03', 'RISK_ON', 's1', '2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z', 0, 'test'),
+		        ('2026-08-04', 'NEUTRAL', 's2', '2026-08-04T10:00:00Z', '2026-08-04T10:00:00Z', 0, 'test')`); err != nil {
+		t.Fatalf("seed regime_history: %v", err)
+	}
+	m := loadRegimeMap(ctx, db)
+	if m["2026-08-03"] != "RISK_ON" || m["2026-08-04"] != "NEUTRAL" {
+		t.Fatalf("regime map wrong: %v", m)
+	}
+}
+
+func TestLoadRegimeMap_MissingTable(t *testing.T) {
+	db, err := ledger.OpenSQLiteDB(":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	// No InitSchema — regime_history absent.
+	if m := loadRegimeMap(context.Background(), db); m != nil {
+		t.Fatalf("missing table must return nil, got %v", m)
+	}
+}

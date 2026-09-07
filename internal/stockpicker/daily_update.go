@@ -76,6 +76,12 @@ type RunDailyOptions struct {
 	Start       time.Time   // first trigger date (zero → AsOf-120d)
 	End         time.Time   // last trigger date (zero → AsOf)
 	Panel       PanelSource // nil → real panel built from WorkDir
+	// Regimes maps trigger date → market regime for outcome tagging
+	// (issue #1863). nil → RunDailyUpdate falls back to the job-local
+	// SQLite regime_history table (dev/CLI); production wires the
+	// backend-aware historical store (regime_history lives in Postgres on
+	// prod) via the scheduler's RegimeLoader.
+	Regimes map[string]string
 }
 
 // RunDailyResult reports what a run did (or why it skipped).
@@ -212,6 +218,17 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 	}
 	symbols := PanelSymbols(panel, opts.Universe)
 
+	// Regime dimension (issue #1863): outcomes carry the market regime of
+	// their trigger date. Injected map wins (production: backend-aware
+	// historical store — regime_history lives in Postgres on prod);
+	// fallback: job-local SQLite (dev/CLI). regime_history rows are
+	// recorded ON their date, so the map is PIT-safe. Missing data → nil
+	// map → Regime stays "" (pre-#1863 behavior), never a hard failure.
+	regimes := opts.Regimes
+	if regimes == nil {
+		regimes = loadRegimeMap(ctx, outcomeDB)
+	}
+
 	cfg := BacktestConfig{
 		Universe:    symbols,
 		Start:       opts.Start,
@@ -220,6 +237,7 @@ func RunDailyUpdate(ctx context.Context, opts RunDailyOptions) (RunDailyResult, 
 		ForwardDays: DefaultForwardDays,
 		CostRate:    costRate,
 		Source:      "stockpicker",
+		Regimes:     regimes,
 	}
 	outcomes, err := RunBacktest(ctx, cfg, panel, conds...)
 	if err != nil {
@@ -466,4 +484,32 @@ func countOutcomesForTriggerDate(ctx context.Context, db *sql.DB, triggerDate ti
 		return 0, fmt.Errorf("count outcomes for trigger date: %w", err)
 	}
 	return n, nil
+}
+
+// loadRegimeMap builds the trigger-date → regime map from regime_history
+// (same job-local SQLite ledger as stock_signal_outcomes; table created by
+// ledger.InitSchema). When multiple rows exist per date, the latest
+// captured_at wins (ORDER BY ... captured_at ASC + map overwrite). Returns
+// nil on any error or when the table is absent — regime tagging is an
+// optional enrichment, never a run blocker (issue #1863).
+func loadRegimeMap(ctx context.Context, db *sql.DB) map[string]string {
+	rows, err := db.QueryContext(ctx,
+		`SELECT date, regime FROM regime_history ORDER BY date ASC, captured_at ASC`)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make(map[string]string)
+	for rows.Next() {
+		var date, regime string
+		if err := rows.Scan(&date, &regime); err != nil {
+			return nil
+		}
+		out[date] = regime
+	}
+	if err := rows.Err(); err != nil || len(out) == 0 {
+		return nil
+	}
+	return out
 }

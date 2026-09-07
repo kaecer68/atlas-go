@@ -744,8 +744,12 @@ func (h *Handler) HandleConditionWinRate(r *http.Request) (int, any) {
 		window = defaultWinRateWindow
 	}
 
+	// Optional regime filter (issue #1863): "RISK_ON" etc. — aggregates only
+	// outcomes whose trigger-date regime matches; empty = all regimes.
+	regime := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("regime")))
+
 	source := winRateSourcePrefix + conditionID
-	summary, found, err := h.deps.ConditionWinRate.LoadConditionWinRate(r.Context(), source, window)
+	summary, found, err := h.deps.ConditionWinRate.LoadConditionWinRate(r.Context(), source, window, regime)
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
 	}

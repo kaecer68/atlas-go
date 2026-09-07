@@ -57,6 +57,12 @@ type BacktestConfig struct {
 	ForwardDays int       // holding period in trading days (default 5)
 	CostRate    float64   // round-trip cost rate fed to NetHit (P0-3)
 	Source      string    // outcome source prefix (default "stockpicker")
+	// Regimes maps trigger date (YYYY-MM-DD) → market regime label
+	// (e.g. RISK_ON), sourced from the regime_history table. Optional:
+	// nil/empty leaves SignalOutcome.Regime empty (pre-#1863 behavior).
+	// The map must be built from data known ON each date (regime_history
+	// rows are recorded on their date), keeping outcomes PIT-safe.
+	Regimes map[string]string
 }
 
 // DemoConditionID identifies one of the PR 1c hardcoded demo conditions.
@@ -168,14 +174,16 @@ func RunBacktest(ctx context.Context, cfg BacktestConfig, panel PanelSource, con
 				if !cond.Eval(prefix, flowByDate, flowDates, t) {
 					continue
 				}
+				triggerDate := t.Format("2006-01-02")
 				out = append(out, SignalOutcome{
 					Symbol:           symbol,
-					TriggerDate:      t.Format("2006-01-02"),
+					TriggerDate:      triggerDate,
 					ForwardReturn:    forwardReturn,
 					NetForwardReturn: forwardReturn - cfg.CostRate,
 					Hit:              NetHit(forwardReturn, cfg.CostRate),
 					CostRate:         cfg.CostRate,
 					Source:           cfg.Source + "-" + cond.ID,
+					Regime:           cfg.Regimes[triggerDate], // "" when unknown (pre-#1863 rows)
 				})
 			}
 		}

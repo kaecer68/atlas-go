@@ -190,6 +190,7 @@ func (s *server) handleStockGetVolumeDivergence(ctx context.Context, _ *mcp.Call
 type stockConditionWinRateInput struct {
 	ConditionID   string `json:"condition_id" jsonschema:"the stockpicker condition id, e.g. foreign-3d-net-buy or price-volume-top-divergence"`
 	RollingWindow string `json:"rolling_window,omitempty" jsonschema:"rolling window label, e.g. 120d; default 120d"`
+	Regime        string `json:"regime,omitempty" jsonschema:"market regime filter (e.g. RISK_ON); default: all regimes. Only outcomes tagged at trigger time (2026-09-07+) carry regimes"`
 }
 
 func (s *server) handleStockGetConditionWinRate(ctx context.Context, _ *mcp.CallToolRequest, in stockConditionWinRateInput) (*mcp.CallToolResult, stockBaseOutput, error) {
@@ -202,6 +203,9 @@ func (s *server) handleStockGetConditionWinRate(ctx context.Context, _ *mcp.Call
 	}
 	var out stockBaseOutput
 	q := url.Values{"condition_id": {in.ConditionID}, "rolling_window": {window}}
+	if in.Regime != "" {
+		q.Set("regime", in.Regime)
+	}
 	if err := s.withAudit(ctx, "stock_get_condition_winrate", []string{"condition_id", "rolling_window"}, func() error {
 		return s.cli.Get(ctx, "/api/stock/condition_winrate", q, &out.Result)
 	}); err != nil {
