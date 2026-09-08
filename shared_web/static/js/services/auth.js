@@ -169,9 +169,57 @@ async function consumeSSOTokenIfPresent() {
   } catch (e) {}
 }
 
+// ─── Track C (2026-09-08): 靜默 SSO ───
+// 會員已在 member.goluck.uk 登入(refresh cookie 在 member 網域)但直接造訪
+// atlas 時,atlas 端無 session,topbar 只能顯示 Login。此處用
+// credentials:'include' 跨 origin 呼叫 go-member 的 session 探測 + sso-token
+// (same-site subdomain,cookie 一定帶上;CORS 白名單在 go-member ALLOWED_ORIGINS),
+// 拿到短期 go-member token 後經 /api/auth/sso(JWKS 驗證)建立 atlas session。
+// 任何一步失敗都靜默放棄,不阻斷瀏覽。
+async function silentMemberSSO() {
+  if (typeof fetch === 'undefined') return false;
+  try {
+    const probe = await fetch(MEMBER_BASE_URL + '/api/v1/auth/session', { credentials: 'include' });
+    if (!probe.ok) return false;
+    const probeData = await probe.json().catch(() => null);
+    if (!probeData || probeData.loggedIn !== true) return false;
+
+    const tokRes = await fetch(MEMBER_BASE_URL + '/api/v1/auth/sso-token', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!tokRes.ok) return false;
+    const tokData = await tokRes.json().catch(() => null);
+    if (!tokData || !tokData.accessToken) return false;
+
+    const data = await getJSON('/api/auth/sso?token=' + encodeURIComponent(tokData.accessToken) + '&redirect=/client/home');
+    if (data && data.ok === 'true') {
+      // atlas HttpOnly session cookie 已設 → 重查 profile 建立 client 端狀態
+      _authChecked = false;
+      _authValid = false;
+      const loggedIn = await isLoggedIn();
+      if (loggedIn) {
+        try {
+          window.history.replaceState({}, '', window.location.pathname + window.location.search);
+        } catch (e) { /* ignore */ }
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    // 靜默 SSO 失敗視同未登入,不阻斷瀏覽
+    return false;
+  }
+}
+
 export async function initAuth() {
   await consumeSSOTokenIfPresent();
-  const loggedIn = await isLoggedIn();
+  let loggedIn = await isLoggedIn();
+  if (!loggedIn && !GUEST_MODE) {
+    // Track C:直接造訪(無 URL token)時,若 member 已登入則靜默建立 atlas session
+    const silentOk = await silentMemberSSO();
+    if (silentOk) loggedIn = true;
+  }
   if (!loggedIn) {
     const token = readCookie('token');
     if (token) {
