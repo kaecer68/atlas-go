@@ -14,8 +14,8 @@
 | Max Drawdown | 3.28% |
 | Starting Value | NT$2,980,000.00 |
 | Ending Value | NT$3,200,000.00 |
-| After-Tax Value | NT$3,197,000.00 |
-| Total Tax Paid | NT$3,000.00 |
+| After-Tax Value | NT$3,198,000.00 |
+| Liquidation Tax Estimate | NT$2,000.00 |
 | Win Rate | 60.0% |
 | Executed Trades | 5 |
 | Total Outcomes | 11 |
@@ -26,6 +26,7 @@
 | Avg Loss | -0.75% |
 | Synthetic Share | 54.5% |
 > Headline trade metrics (win rate / profit factor / avg win / avg loss) reflect **real trades only**; synthetic evaluation trades are excluded.
+> After-tax value = ending value − end-of-period liquidation tax estimate（清倉試算，非實際已繳稅費）。 最後一場 session 無估稅資料，採用最近一場非零清倉估稅。
 
 ## Top Agent Contributions
 

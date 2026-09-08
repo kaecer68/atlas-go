@@ -1180,6 +1180,7 @@ export interface EquityCurvePoint {
   currency?: string;
   after_tax_value?: number;
   tax_paid?: number;
+  tax_basis?: string;
 }
 
 export interface EquityDispersionRecord {
@@ -2842,7 +2843,11 @@ export interface PerformanceReport {
   starting_value: number;
   ending_value: number;
   after_tax_value: number;
+  liquidation_tax_estimate: number;
+  session_liquidation_tax_estimate_sum?: number;
   total_tax_paid: number;
+  tax_basis: string;
+  after_tax_mode: string;
   win_rate: number;
   total_trades: number;
   total_outcomes?: number;

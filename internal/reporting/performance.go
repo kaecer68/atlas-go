@@ -58,6 +58,20 @@ type MonthlyReturn struct {
 	Label      string   `json:"label"`
 }
 
+// Tax provenance enums for the after-tax figure. SessionSummary.TotalTaxPaid
+// is a PER-SESSION LIQUIDATION ESTIMATE (assume current positions sold at
+// current market price), NOT tax actually paid; summing it across sessions
+// double-counts the same portfolio. The after-tax figure therefore prefers
+// the latest session's estimate and records its provenance here.
+const (
+	taxBasisLiquidationEstimate = "liquidation_estimate"
+	taxBasisPreviousSession     = "liquidation_estimate_previous_session"
+	taxBasisUnavailable         = "unavailable"
+
+	afterTaxModeMinusLiquidation = "ending_value_minus_liquidation_estimate"
+	afterTaxModeUnadjusted       = "unadjusted"
+)
+
 // PerformanceReport is the structured performance report for a given period.
 type PerformanceReport struct {
 	Period           string    `json:"period"`
@@ -71,9 +85,33 @@ type PerformanceReport struct {
 	MaxDrawdown      float64   `json:"max_drawdown"`
 	StartingValue    float64   `json:"starting_value"`
 	EndingValue      float64   `json:"ending_value"`
-	AfterTaxValue    float64   `json:"after_tax_value"`
-	TotalTaxPaid     float64   `json:"total_tax_paid"`
-	WinRate          float64   `json:"win_rate"`
+	// AfterTaxValue is ending_value minus the end-of-period liquidation tax
+	// estimate (LiquidationTaxEstimate). It is a liquidation-adjusted value,
+	// not an after-actual-tax value.
+	AfterTaxValue float64 `json:"after_tax_value"`
+	// LiquidationTaxEstimate is the end-of-period liquidation tax estimate —
+	// the latest in-window session's TotalTaxPaid (a "sell everything at
+	// market" estimate), or the most recent non-zero in-window estimate when
+	// the latest session carries no estimate. This is what after_tax_value
+	// subtracts. It is NOT tax actually paid.
+	LiquidationTaxEstimate float64 `json:"liquidation_tax_estimate"`
+	// SessionLiquidationTaxEstimateSum is the sum of per-session liquidation
+	// estimates across the window. Transparency/debugging only; do NOT treat
+	// as tax paid (summing per-day estimates of the same portfolio
+	// double-counts). Note: this field is omitted when the sum is 0, while
+	// the deprecated TotalTaxPaid below is always present — intentional
+	// visibility difference for a debug field vs a compat alias.
+	SessionLiquidationTaxEstimateSum float64 `json:"session_liquidation_tax_estimate_sum,omitempty"`
+	// TotalTaxPaid is DEPRECATED. Kept equal to
+	// SessionLiquidationTaxEstimateSum for backward compatibility; it is NOT
+	// tax actually paid. Prefer LiquidationTaxEstimate.
+	TotalTaxPaid float64 `json:"total_tax_paid"`
+	// TaxBasis is the provenance of the tax figure (see taxBasis* constants).
+	TaxBasis string `json:"tax_basis"`
+	// AfterTaxMode describes how after_tax_value was derived (see
+	// afterTaxMode* constants).
+	AfterTaxMode string  `json:"after_tax_mode"`
+	WinRate      float64 `json:"win_rate"`
 	// TotalTrades (SSOT P1-4) is the count of REAL executed trades in the
 	// report window, read from the ledger trades source (PG trades table on
 	// production). It reconciles with GET /api/dashboard/trade-history.
@@ -214,11 +252,13 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	maxDD := risk.CalculateMaxDrawdown(portfolioValues)
 	calmarRatio := calculateCalmarRatio(annualizedReturn, maxDD)
 
-	var totalTaxPaid float64
-	for _, s := range filtered {
-		totalTaxPaid += s.TotalTaxPaid
-	}
-	afterTaxValue := endingValue - totalTaxPaid
+	// Tax semantics fix (2026-09-08): after_tax_value subtracts only the
+	// end-of-period liquidation estimate, NOT the sum across sessions (the
+	// old sum double-counted the same portfolio's liquidation estimate every
+	// day it was held). The old sum is preserved as the deprecated
+	// total_tax_paid / session_liquidation_tax_estimate_sum.
+	liquidationTaxEstimate, taxBasis, afterTaxMode, summedTaxEstimate := computeTaxEstimate(filtered)
+	afterTaxValue := endingValue - liquidationTaxEstimate
 
 	agentNames := loadAgentDisplayNames()
 
@@ -235,31 +275,35 @@ func GenerateReport(store ledger.OutcomeStore, ledgerPath string, period string)
 	monthlyReturns := calculateMonthlyReturns(filtered, portfolioValues)
 
 	report := &PerformanceReport{
-		Period:              period,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		TotalReturn:         totalReturn,
-		AnnualizedReturn:    annualizedReturn,
-		SharpeRatio:         sharpeRatio,
-		SortinoRatio:        sortinoRatio,
-		CalmarRatio:         calmarRatio,
-		MaxDrawdown:         maxDD,
-		StartingValue:       startingValue,
-		EndingValue:         endingValue,
-		AfterTaxValue:       afterTaxValue,
-		TotalTaxPaid:        totalTaxPaid,
-		WinRate:             winRate,
-		TotalTrades:         totalTrades,
-		TotalOutcomes:       totalOutcomes,
-		RealTradeCount:      realTrades,
-		SyntheticTradeCount: syntheticTrades,
-		ProfitFactor:        profitFactor,
-		AvgWin:              avgWin,
-		AvgLoss:             avgLoss,
-		TopAgents:           topAgents,
-		RegimeBreakdown:     regimeBreakdown,
-		MonthlyReturns:      monthlyReturns,
-		GeneratedAt:         time.Now(),
+		Period:                           period,
+		StartDate:                        startDate,
+		EndDate:                          endDate,
+		TotalReturn:                      totalReturn,
+		AnnualizedReturn:                 annualizedReturn,
+		SharpeRatio:                      sharpeRatio,
+		SortinoRatio:                     sortinoRatio,
+		CalmarRatio:                      calmarRatio,
+		MaxDrawdown:                      maxDD,
+		StartingValue:                    startingValue,
+		EndingValue:                      endingValue,
+		AfterTaxValue:                    afterTaxValue,
+		LiquidationTaxEstimate:           liquidationTaxEstimate,
+		SessionLiquidationTaxEstimateSum: summedTaxEstimate,
+		TotalTaxPaid:                     summedTaxEstimate, // deprecated alias of SessionLiquidationTaxEstimateSum
+		TaxBasis:                         taxBasis,
+		AfterTaxMode:                     afterTaxMode,
+		WinRate:                          winRate,
+		TotalTrades:                      totalTrades,
+		TotalOutcomes:                    totalOutcomes,
+		RealTradeCount:                   realTrades,
+		SyntheticTradeCount:              syntheticTrades,
+		ProfitFactor:                     profitFactor,
+		AvgWin:                           avgWin,
+		AvgLoss:                          avgLoss,
+		TopAgents:                        topAgents,
+		RegimeBreakdown:                  regimeBreakdown,
+		MonthlyReturns:                   monthlyReturns,
+		GeneratedAt:                      time.Now(),
 	}
 	applyReportSource(report, store)
 	return report, nil
@@ -306,7 +350,7 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 	fmt.Fprintf(&sb, "| Starting Value | %s |\n", domain.FormatNTD(report.StartingValue))
 	fmt.Fprintf(&sb, "| Ending Value | %s |\n", domain.FormatNTD(report.EndingValue))
 	fmt.Fprintf(&sb, "| After-Tax Value | %s |\n", domain.FormatNTD(report.AfterTaxValue))
-	fmt.Fprintf(&sb, "| Total Tax Paid | %s |\n", domain.FormatNTD(report.TotalTaxPaid))
+	fmt.Fprintf(&sb, "| Liquidation Tax Estimate | %s |\n", domain.FormatNTD(report.LiquidationTaxEstimate))
 	fmt.Fprintf(&sb, "| Win Rate | %.1f%% |\n", report.WinRate*100)
 	fmt.Fprintf(&sb, "| Executed Trades | %d |\n", report.TotalTrades)
 	fmt.Fprintf(&sb, "| Total Outcomes | %d |\n", report.TotalOutcomes)
@@ -323,6 +367,17 @@ func GenerateMarkdownReport(report *PerformanceReport) string {
 		)
 		sb.WriteString("> Headline trade metrics (win rate / profit factor / avg win / avg loss) reflect **real trades only**; synthetic evaluation trades are excluded.\n")
 	}
+	// Liquidation-estimate annotation (unconditional — must print even when
+	// SyntheticTradeCount == 0, so it lives OUTSIDE the if block above):
+	// after-tax value is a liquidation estimate, never tax actually paid.
+	sb.WriteString("> After-tax value = ending value − end-of-period liquidation tax estimate（清倉試算，非實際已繳稅費）。")
+	switch report.TaxBasis {
+	case taxBasisPreviousSession:
+		sb.WriteString(" 最後一場 session 無估稅資料，採用最近一場非零清倉估稅。")
+	case taxBasisUnavailable:
+		sb.WriteString(" 無可用估稅，稅後價值未調整。")
+	}
+	sb.WriteString("\n")
 	sb.WriteString("\n")
 
 	sb.WriteString("## Top Agent Contributions\n\n")
@@ -406,6 +461,54 @@ func emptyReport(period string) *PerformanceReport {
 		RegimeBreakdown: RegimeBreakdown{Regimes: map[string]RegimePerformance{}},
 		MonthlyReturns:  []MonthlyReturn{},
 		GeneratedAt:     time.Now(),
+		// Provenance on the empty report too: no sessions ⇒ no estimate.
+		TaxBasis:     taxBasisUnavailable,
+		AfterTaxMode: afterTaxModeUnadjusted,
+	}
+}
+
+// computeTaxEstimate derives the end-of-period liquidation tax estimate from
+// the date-sorted, zero-value-filtered summaries (the same slice endingValue
+// comes from). SessionSummary.TotalTaxPaid 是單場清倉估計（假設當日持倉全數以市價
+// 賣出），非實繳稅費；跨日加總會重複計算同一持倉，因此 after_tax_value 只扣期末
+// 單場估計。
+//
+// "最後一筆" 是 filtered[len-1]：SessionID 以固定 8 碼日期前綴升冪排序，字典序 =
+// 時間序；但同日多場（如 -daily vs -intraday）的相對順序由後綴字典序決定，不保證
+// 時序（repo 紀律：Session 日期以 SessionID 為準，不能用 RecordedAt tie-break）。
+//
+// 判別規則（K3 review I1，以 PositionCount 區分零估稅的二義性）：
+//   - last.TotalTaxPaid != 0 → 正常路徑 liquidation_estimate。
+//   - TotalTaxPaid == 0 && PositionCount == 0 → 真空倉，估稅 0 是對的期末值，
+//     仍標 liquidation_estimate（estimate=0，after_tax == ending）。
+//   - TotalTaxPaid == 0 && PositionCount > 0 → 有持倉時證交稅必 > 0，視為舊資料
+//     缺失，回退 window 內最近一場非零估稅 liquidation_estimate_previous_session。
+//   - 全無非零估稅 → unavailable / unadjusted（after_tax_value == ending_value）。
+//
+// summed 永遠回傳逐場加總（舊語意），僅作 total_tax_paid（deprecated）與
+// session_liquidation_tax_estimate_sum 的透明/除錯用途。
+func computeTaxEstimate(filtered []domain.SessionSummary) (estimate float64, basis, mode string, summed float64) {
+	for _, s := range filtered {
+		summed += s.TotalTaxPaid
+	}
+	if len(filtered) == 0 {
+		return 0, taxBasisUnavailable, afterTaxModeUnadjusted, summed
+	}
+	last := filtered[len(filtered)-1]
+	switch {
+	case last.TotalTaxPaid != 0:
+		return last.TotalTaxPaid, taxBasisLiquidationEstimate, afterTaxModeMinusLiquidation, summed
+	case last.PositionCount == 0:
+		// 真空倉：清倉估稅 0 是正確的期末估計值。
+		return 0, taxBasisLiquidationEstimate, afterTaxModeMinusLiquidation, summed
+	default:
+		// 有持倉但估稅為 0 ⇒ 資料缺失，回退最近一場非零估稅。
+		for i := len(filtered) - 2; i >= 0; i-- {
+			if filtered[i].TotalTaxPaid != 0 {
+				return filtered[i].TotalTaxPaid, taxBasisPreviousSession, afterTaxModeMinusLiquidation, summed
+			}
+		}
+		return 0, taxBasisUnavailable, afterTaxModeUnadjusted, summed
 	}
 }
 

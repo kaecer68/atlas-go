@@ -29,7 +29,13 @@ var updateGolden = flag.Bool("update", false, "update golden report files")
 //  2. session-20260714 — RISK_OFF outcomes with outcome-level regimes
 //  3. session-20260716 — synthetic-only session (zero headline contribution)
 //  4. session-20260721 — LEGACY 0-VALUE summary (excluded from equity curve)
-//  5. session-20260722 — NULL-regime summary (PV>0, regime="")
+//  5. session-20260722 — NULL-regime summary (PV>0, regime=""), also the
+//     last session with a MISSING tax estimate (TotalTaxPaid=0 with
+//     positions open) so the golden locks the fallback tax path
+//
+// Tax fixture note (2026-09-08): 20260710 tax=1000, 20260714 tax=2000,
+// 20260716 tax=0 (not last — irrelevant), 20260722 tax=0 + PositionCount=3
+// (missing ⇒ fallback to 20260714's 2000).
 //
 // Fixtures are written straight to disk (bypassing write-time validation)
 // because they represent pre-existing legacy/backfilled data on the read
@@ -39,7 +45,7 @@ func writeGoldenFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	writeGoldenSession(t, dir, "session-20260710-daily", 2_980_000, 100_000, 1_000, domain.RegimeRiskOn, []domain.RecommendationOutcome{
+	writeGoldenSession(t, dir, "session-20260710-daily", 2_980_000, 100_000, 1_000, 3, domain.RegimeRiskOn, []domain.RecommendationOutcome{
 		// Real trades — headline stats must come from these only.
 		{AgentID: "agent-a", Skill: "tech", Layer: "sector", Symbol: "2330", Side: "buy", Window: "session-20260710-daily", ForwardReturn: 0.05, PassedGuards: true},
 		{AgentID: "agent-a", Skill: "tech", Layer: "sector", Symbol: "2330", Side: "buy", Window: "session-20260710-daily", ForwardReturn: 0.03, PassedGuards: true},
@@ -48,20 +54,20 @@ func writeGoldenFixture(t *testing.T) string {
 		{AgentID: "agent-a", Skill: "tech", Layer: "sector", Symbol: "2330", Side: "buy", Window: "session-20260710-daily", ForwardReturn: 0.20, PassedGuards: true, IsSynthetic: true},
 		{AgentID: "agent-b", Skill: "value", Layer: "style", Symbol: "2881", Side: "buy", Window: "session-20260710-daily", ForwardReturn: -0.15, PassedGuards: true, IsSynthetic: true},
 	})
-	writeGoldenSession(t, dir, "session-20260714-daily", 3_050_000, 90_000, 2_000, domain.RegimeRiskOff, []domain.RecommendationOutcome{
+	writeGoldenSession(t, dir, "session-20260714-daily", 3_050_000, 90_000, 2_000, 3, domain.RegimeRiskOff, []domain.RecommendationOutcome{
 		// Outcome-level regime "RISK_OFF" — regime attribution must use the
 		// outcome's own regime (R01), not the window→summary lookup.
 		{AgentID: "agent-c", Skill: "macro", Layer: "macro", Symbol: "0050", Side: "buy", Window: "session-20260714-daily", ForwardReturn: 0.02, PassedGuards: true, Regime: "RISK_OFF"},
 		{AgentID: "agent-c", Skill: "macro", Layer: "macro", Symbol: "0050", Side: "buy", Window: "session-20260714-daily", ForwardReturn: 0.10, PassedGuards: true, IsSynthetic: true, Regime: "RISK_OFF"},
 		{AgentID: "agent-c", Skill: "macro", Layer: "macro", Symbol: "0050", Side: "buy", Window: "session-20260714-daily", ForwardReturn: -0.08, PassedGuards: true, IsSynthetic: true, Regime: "RISK_OFF"},
 	})
-	writeGoldenSession(t, dir, "session-20260716-daily", 2_950_000, 80_000, 0, domain.RegimeNeutral, []domain.RecommendationOutcome{
+	writeGoldenSession(t, dir, "session-20260716-daily", 2_950_000, 80_000, 0, 3, domain.RegimeNeutral, []domain.RecommendationOutcome{
 		// Outcome regime deliberately mismatches the summary regime (NEUTRAL)
 		// — proves outcome.Regime wins over the summary lookup.
 		{AgentID: "agent-d", Skill: "event", Layer: "context", Symbol: "2603", Side: "buy", Window: "session-20260716-daily", ForwardReturn: 0.04, PassedGuards: true, IsSynthetic: true, Regime: "RISK_ON"},
 	})
-	writeGoldenSession(t, dir, "session-20260721-daily", 0, 0, 0, "", nil)
-	writeGoldenSession(t, dir, "session-20260722-daily", 3_200_000, 70_000, 0, "", []domain.RecommendationOutcome{
+	writeGoldenSession(t, dir, "session-20260721-daily", 0, 0, 0, 0, "", nil)
+	writeGoldenSession(t, dir, "session-20260722-daily", 3_200_000, 70_000, 0, 3, "", []domain.RecommendationOutcome{
 		// NULL-regime summary with outcome-level regime — bucket by the
 		// outcome's regime (RISK_OFF), not "unknown".
 		{AgentID: "agent-e", Skill: "quality", Layer: "style", Symbol: "2317", Side: "buy", Window: "session-20260722-daily", ForwardReturn: -0.005, PassedGuards: true, Regime: "RISK_OFF"},
@@ -104,7 +110,14 @@ func writeGoldenTrades(t *testing.T, baseDir, sessionID string, trades []domain.
 	}
 }
 
-func writeGoldenSession(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash, totalTaxPaid float64, regime domain.Regime, outcomes []domain.RecommendationOutcome) {
+// writeGoldenSession writes a fixture session summary. positionCount is set
+// explicitly so the tax-estimate provenance is deterministic (K3 review I1):
+// the fixture's LAST session (20260722) carries TotalTaxPaid == 0 WITH
+// positions open, which the report must treat as a MISSING estimate and fall
+// back to the previous non-zero one — the golden therefore locks the
+// fallback path (tax_basis = liquidation_estimate_previous_session), while
+// the normal/vacant/unavailable paths are locked by unit tests.
+func writeGoldenSession(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash, totalTaxPaid float64, positionCount int, regime domain.Regime, outcomes []domain.RecommendationOutcome) {
 	t.Helper()
 	sessDir := filepath.Join(baseDir, "sessions", sessionID)
 	if err := os.MkdirAll(sessDir, 0o755); err != nil {
@@ -116,6 +129,7 @@ func writeGoldenSession(t *testing.T, baseDir, sessionID string, portfolioValue,
 		EndingCash:     endingCash,
 		PortfolioValue: portfolioValue,
 		OutcomeCount:   len(outcomes),
+		PositionCount:  positionCount,
 		TotalTaxPaid:   totalTaxPaid,
 		RecordedAt:     time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 	}
@@ -202,7 +216,8 @@ func TestGolden_PerformanceReportMarkdown(t *testing.T) {
 
 // TestGolden_ContractAssertions verifies the fixture exercises every guard
 // the golden locks: headline real-only, outcome-level regime attribution,
-// zero-value equity exclusion, synthetic share annotation.
+// zero-value equity exclusion, synthetic share annotation, and the tax
+// fallback path (last session missing its estimate).
 func TestGolden_ContractAssertions(t *testing.T) {
 	dir := writeGoldenFixture(t)
 	report, err := GenerateReport(ledger.NewStore(dir), dir, "all")
@@ -244,6 +259,34 @@ func TestGolden_ContractAssertions(t *testing.T) {
 	}
 	if report.ProfitFactor != 0.10/0.015 {
 		t.Errorf("profit_factor = %v, want %v (real only)", report.ProfitFactor, 0.10/0.015)
+	}
+
+	// Tax semantics (2026-09-08): the golden LOCKS THE FALLBACK PATH — the
+	// last session (20260722) has TotalTaxPaid=0 with positions open, so the
+	// estimate must fall back to 20260714's 2000, NOT sum the window (3000)
+	// and NOT treat the zero as a genuine empty portfolio. The normal /
+	// vacant / unavailable paths are locked by unit tests in
+	// performance_test.go.
+	if report.LiquidationTaxEstimate != 2_000 {
+		t.Errorf("liquidation_tax_estimate = %v, want 2000 (fallback to 20260714)", report.LiquidationTaxEstimate)
+	}
+	if report.AfterTaxValue != 3_198_000 {
+		t.Errorf("after_tax_value = %v, want 3198000 (ending 3200000 − 2000)", report.AfterTaxValue)
+	}
+	if report.SessionLiquidationTaxEstimateSum != 3_000 {
+		t.Errorf("session_liquidation_tax_estimate_sum = %v, want 3000 (old summed semantics, debug only)", report.SessionLiquidationTaxEstimateSum)
+	}
+	if report.TotalTaxPaid != 3_000 {
+		t.Errorf("total_tax_paid = %v, want 3000 (deprecated alias, value unchanged)", report.TotalTaxPaid)
+	}
+	if report.TotalTaxPaid != report.SessionLiquidationTaxEstimateSum {
+		t.Errorf("total_tax_paid (%v) != session_liquidation_tax_estimate_sum (%v) — deprecated alias drifted", report.TotalTaxPaid, report.SessionLiquidationTaxEstimateSum)
+	}
+	if report.TaxBasis != taxBasisPreviousSession {
+		t.Errorf("tax_basis = %q, want %q (fallback path)", report.TaxBasis, taxBasisPreviousSession)
+	}
+	if report.AfterTaxMode != afterTaxModeMinusLiquidation {
+		t.Errorf("after_tax_mode = %q, want %q", report.AfterTaxMode, afterTaxModeMinusLiquidation)
 	}
 
 	// Regime attribution: outcome.Regime wins (R01). The 20260716 summary is

@@ -274,13 +274,25 @@ type CrossFootCheck struct {
 	Difference   float64 `json:"difference"`
 }
 
-// EquityCurvePoint is a single point on the equity curve.
+// taxBasisLiquidationEstimate marks per-point after-tax figures as
+// liquidation estimates (provenance for EquityCurvePoint.TaxBasis).
+const taxBasisLiquidationEstimate = "liquidation_estimate"
+
+// EquityCurvePoint is a single point on the equity curve. AfterTaxValue and
+// TaxPaid are per-point LIQUIDATION ESTIMATES for that session's portfolio
+// (assume the positions sold at market price) — NOT accumulated tax actually
+// paid. Each point is an independent snapshot; never sum TaxPaid across
+// points (that would double-count the same portfolio).
 type EquityCurvePoint struct {
 	Label         string  `json:"label"`
 	Value         float64 `json:"value"`
 	Currency      string  `json:"currency,omitempty"`
 	AfterTaxValue float64 `json:"after_tax_value,omitempty"`
 	TaxPaid       float64 `json:"tax_paid,omitempty"`
+	// TaxBasis is the provenance of the tax fields; set only when TaxPaid is
+	// non-zero, so it moves together with its omitempty siblings (a zero-tax
+	// point renders no tax fields at all).
+	TaxBasis string `json:"tax_basis,omitempty"`
 }
 
 // LoadPortfolioState returns the current portfolio state with positions and equity curve.
@@ -441,13 +453,20 @@ func (s *LiveService) buildEquityCurve() []EquityCurvePoint {
 	}
 	curve := make([]EquityCurvePoint, 0, len(points))
 	for _, p := range points {
-		curve = append(curve, EquityCurvePoint{
+		point := EquityCurvePoint{
 			Label:         p.SessionID,
 			Value:         p.PortfolioValue,
 			Currency:      "TWD",
 			AfterTaxValue: p.PortfolioValue - p.TotalTaxPaid,
 			TaxPaid:       p.TotalTaxPaid,
-		})
+		}
+		// TaxBasis only when TaxPaid != 0 (K3 review I3): keeps provenance in
+		// lockstep with the omitempty tax siblings — a zero-tax point renders
+		// no tax fields at all.
+		if p.TotalTaxPaid != 0 {
+			point.TaxBasis = taxBasisLiquidationEstimate
+		}
+		curve = append(curve, point)
 	}
 	return curve
 }
