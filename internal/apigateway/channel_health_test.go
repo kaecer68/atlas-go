@@ -1,6 +1,8 @@
 package apigateway
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -496,5 +498,45 @@ func TestRecord_SessionCap_ErrorOutsideMarketSession(t *testing.T) {
 	rec = s.Get("fubon")
 	if rec.Status != "error" {
 		t.Fatalf("status = %q, want error (in session, streak 4 >= grace 2)", rec.Status)
+	}
+}
+
+// --- R3 provenance（k3 audit, 2026-09-08）---
+
+// TestRecord_UnregisteredIDMarkedDerived: 寫入未註冊 ID → provenance=derived；
+// 註冊 ID → 空（regular）。
+func TestRecord_UnregisteredIDMarkedDerived(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	_ = s.Record("vix", "ok", "") // vix 不在 channelIDs()（us_yahoo 的指標欄位）
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatalf("vix provenance = %+v, want derived", rec)
+	}
+	_ = s.Record("fubon", "ok", "") // fubon 已註冊
+	if rec := s.Get("fubon"); rec == nil || rec.Provenance != "" {
+		t.Fatalf("fubon provenance = %+v, want empty (registered)", rec)
+	}
+}
+
+// TestLoad_JanitorMarksLegacyOrphans: 舊版 JSON（無 provenance 欄位）載入時
+// 孤兒 ID 自動標 derived（冪等）。
+func TestLoad_JanitorMarksLegacyOrphans(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "channel_health.json")
+	payload := `{"channels":{"vix":{"status":"ok","last_fetch_at":"2026-09-01T00:00:00Z"},"fubon":{"status":"ok","last_fetch_at":"2026-09-01T00:00:00Z"}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewChannelHealthStore(dir)
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatalf("legacy orphan vix: %+v, want provenance derived", rec)
+	}
+	if rec := s.Get("fubon"); rec == nil || rec.Provenance != "" {
+		t.Fatalf("legacy registered fubon: %+v, want empty provenance", rec)
+	}
+	// 冪等：再次 load 不變
+	_ = s.load()
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatal("janitor must be idempotent")
 	}
 }
