@@ -156,6 +156,7 @@ func TestCheckChannelHealth_WithRecords(t *testing.T) {
 		{"fugle", "ok"},
 		{"twse", "warn"},
 		{"yahoo", "error"},
+		{"yahoo", "error"}, // 兩次連續 error → 越過 GraceFailures(2) 成為 derived error
 	} {
 		if err := store.Record(ch.id, ch.status, ""); err != nil {
 			t.Fatalf("Record(%s, %s): %v", ch.id, ch.status, err)

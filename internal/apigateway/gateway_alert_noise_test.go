@@ -123,8 +123,10 @@ func TestGateway_Fetch_ErrFugleQuotaExhausted_RecordsWarn(t *testing.T) {
 
 // TestGateway_Fetch_RealError_StillRecordsError guards the classification
 // boundary: only typed no-data/quota conditions are downgraded; ordinary
-// upstream failures must keep recording "error" so ChannelHealthStatusError
-// still fires on genuine outages.
+// upstream failures count toward the failure streak so
+// ChannelHealthStatusError still fires on genuine outages (after the
+// GraceFailures damping — k3 audit R1: first failure is warn, streak of 2
+// escalates to error; typed no-data/quota never count at all).
 func TestGateway_Fetch_RealError_StillRecordsError(t *testing.T) {
 	g := newTestGateway(t)
 	channelID := "us_yahoo"
@@ -138,8 +140,20 @@ func TestGateway_Fetch_RealError_StillRecordsError(t *testing.T) {
 	if rec == nil {
 		t.Fatal("expected health record after fetch")
 	}
+	if rec.Status != "warn" {
+		t.Errorf("Status = %q, want warn on first genuine failure (damping)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("ConsecutiveFailures = %d, want 1", rec.ConsecutiveFailures)
+	}
+
+	// Second consecutive failure escalates to error — genuine outages page.
+	if _, err := g.Fetch(context.Background(), channelID); err == nil {
+		t.Fatal("Fetch should return the upstream error")
+	}
+	rec = g.Health().Get(channelID)
 	if rec.Status != "error" {
-		t.Errorf("Status = %q, want error for a genuine upstream failure", rec.Status)
+		t.Errorf("Status = %q, want error after streak reaches grace", rec.Status)
 	}
 }
 

@@ -41,20 +41,29 @@ func TestUnifiedHealthStore_Record(t *testing.T) {
 }
 
 func TestUnifiedHealthStore_Record_Error(t *testing.T) {
+	// 2026-09-08 k3 audit R1: status is DERIVED — first failure records
+	// "warn" (does not page), the streak reaching GraceFailures escalates
+	// to "error". Genuine outages still page, one attempt later.
 	s := newTestHealthStore(t)
-	err := s.Record("test_channel", "error", "connection refused")
-	if err != nil {
+	if err := s.Record("test_channel", "error", "connection refused"); err != nil {
 		t.Fatalf("Record failed: %v", err)
 	}
 	rec := s.store.Get("test_channel")
 	if rec == nil {
 		t.Fatal("Get returned nil after Record")
 	}
-	if rec.Status != "error" {
-		t.Errorf("Status = %q, want error", rec.Status)
+	if rec.Status != "warn" {
+		t.Errorf("Status = %q, want warn on first failure (damping)", rec.Status)
 	}
 	if rec.LastError != "connection refused" {
 		t.Errorf("LastError = %q, want connection refused", rec.LastError)
+	}
+	if err := s.Record("test_channel", "error", "connection refused"); err != nil {
+		t.Fatalf("Record failed: %v", err)
+	}
+	rec = s.store.Get("test_channel")
+	if rec.Status != "error" {
+		t.Errorf("Status = %q, want error on 2nd consecutive failure", rec.Status)
 	}
 }
 
@@ -83,7 +92,8 @@ func TestUnifiedHealthStore_Alerts(t *testing.T) {
 	if len(alerts) != 0 {
 		t.Errorf("Alerts on empty store = %d, want 0", len(alerts))
 	}
-	// Record an error - should appear in alerts
+	// Record errors until the derived status escalates to error (grace=2)
+	_ = s.Record("ch1", "error", "timeout")
 	_ = s.Record("ch1", "error", "timeout")
 	alerts = s.Alerts()
 	if len(alerts) != 1 {
@@ -109,12 +119,13 @@ func TestUnifiedHealthStore_Alerts(t *testing.T) {
 func TestUnifiedHealthStore_RecordChannelHealthFromResult_Error(t *testing.T) {
 	s := newTestHealthStore(t)
 	RecordChannelHealthFromResult(s, "ch1", nil, errors.New("fetch failed"))
+	RecordChannelHealthFromResult(s, "ch1", nil, errors.New("fetch failed"))
 	rec := s.Get("ch1")
 	if rec == nil {
 		t.Fatal("Get returned nil after RecordChannelHealthFromResult error")
 	}
 	if rec.Status != "error" {
-		t.Errorf("Status = %q, want error", rec.Status)
+		t.Errorf("Status = %q, want error after streak reaches grace", rec.Status)
 	}
 	if rec.LastError != "fetch failed" {
 		t.Errorf("LastError = %q, want fetch failed", rec.LastError)

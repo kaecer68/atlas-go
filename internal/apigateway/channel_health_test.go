@@ -334,3 +334,118 @@ func TestChannelHealthStore_RecordWaiting_NoPriorSuccess(t *testing.T) {
 		t.Errorf("waiting record surfaced as alert: %+v", alerts)
 	}
 }
+
+// --- 失敗阻尼（k3 audit R1, 2026-09-08）---
+
+// TestRecord_ErrorDamping_FirstFailureIsWarn: 單次 error 嘗試 → derived
+// status=warn（gauge 1）→ ChannelHealthStatusError（status==2）不會響。
+func TestRecord_ErrorDamping_FirstFailureIsWarn(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	if err := s.Record("fubon", "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Record("fubon", "error", "fubon proxy: status 500, body: {\"detail\":\"503: SDK init timed out\"}"); err != nil {
+		t.Fatal(err)
+	}
+	rec := s.Get("fubon")
+	if rec == nil {
+		t.Fatal("no record")
+	}
+	if rec.Status != "warn" {
+		t.Errorf("status = %q, want warn (single transient failure must not page)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("counter = %d, want 1", rec.ConsecutiveFailures)
+	}
+	if rec.LastError == "" {
+		t.Error("last_error must be kept on warn (diagnostics)")
+	}
+}
+
+// TestRecord_ErrorDamping_StreakEscalatesToError: 連續失敗達預設 Grace(2)
+// → derived status=error。
+func TestRecord_ErrorDamping_StreakEscalatesToError(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	_ = s.Record("fubon", "error", "first")
+	_ = s.Record("fubon", "error", "second")
+	rec := s.Get("fubon")
+	if rec.Status != "error" {
+		t.Errorf("status = %q, want error after %d consecutive failures", rec.Status, rec.ConsecutiveFailures)
+	}
+	if rec.ConsecutiveFailures != 2 {
+		t.Errorf("counter = %d, want 2", rec.ConsecutiveFailures)
+	}
+}
+
+// TestRecord_SuccessResetsStreak: 成功歸零 — 恢復後下一次單次失敗又是 warn。
+func TestRecord_SuccessResetsStreak(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	_ = s.Record("fubon", "error", "boom")
+	_ = s.Record("fubon", "ok", "")
+	_ = s.Record("fubon", "error", "transient again")
+	rec := s.Get("fubon")
+	if rec.Status != "warn" {
+		t.Errorf("status = %q, want warn (streak must reset on success)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("counter = %d, want 1", rec.ConsecutiveFailures)
+	}
+}
+
+// TestRecord_WarnAttemptKeepsStreak: breaker-open 的 warn 嘗試不推進、
+// 不歸零計數（資料沒落地，streak 語義保持）。
+func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	_ = s.Record("fubon", "error", "boom")
+	_ = s.Record("fubon", "warn", "breaker open")
+	rec := s.Get("fubon")
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("counter = %d, want 1 (warn attempt must not reset streak)", rec.ConsecutiveFailures)
+	}
+	if rec.Status != "warn" {
+		t.Errorf("status = %q, want warn", rec.Status)
+	}
+}
+
+// TestRecord_GraceFailuresOneImmediateError: 契約顯式 GraceFailures=1 →
+// 單次失敗立即 error（時間敏感通道的逃生門）。
+func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	c := ChannelContracts().Contract("fubon")
+	c.GraceFailures = 1
+	ChannelContracts().Register(c)
+	t.Cleanup(func() {
+		// 還原預設契約（Registry 全域單例）
+		def := DefaultChannelContract("fubon")
+		ChannelContracts().Register(def)
+	})
+	_ = s.Record("fubon", "error", "boom")
+	rec := s.Get("fubon")
+	if rec.Status != "error" {
+		t.Errorf("status = %q, want error with GraceFailures=1", rec.Status)
+	}
+}
+
+// TestRecord_DampingSurvivesReload: 阻尼計數持久化到 disk — 重啟（新
+// store 實例）後 streak 延續，不會因重啟歸零而重新放行單次失敗。
+func TestRecord_DampingSurvivesReload(t *testing.T) {
+	dir := t.TempDir()
+	s1 := NewChannelHealthStore(dir)
+	_ = s1.Record("fubon", "error", "boom")
+	_ = s1.Record("fubon", "error", "boom2")
+
+	s2 := NewChannelHealthStore(dir)
+	_ = s2.Record("fubon", "error", "boom3")
+	rec := s2.Get("fubon")
+	if rec.ConsecutiveFailures != 3 {
+		t.Errorf("counter = %d, want 3 (streak must survive restart)", rec.ConsecutiveFailures)
+	}
+	if rec.Status != "error" {
+		t.Errorf("status = %q, want error", rec.Status)
+	}
+}
