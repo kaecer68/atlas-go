@@ -27,7 +27,7 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
 	}{
 		Channels: map[string]*apigateway.ChannelHealthRecord{
-			"capital_flow": {
+			"twse_capital_flow": {
 				Status:     "ok",
 				LastDataAt: now.Add(-30 * time.Minute).Format(time.RFC3339),
 				LatencyMs:  250,
@@ -36,6 +36,11 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 				Status:      "error",
 				LastFetchAt: now.Add(-2 * 24 * time.Hour).Format(time.RFC3339),
 				LatencyMs:   5000,
+			},
+			"us_yahoo": {
+				Status:     "error",
+				LastDataAt: now.Add(-3 * 24 * time.Hour).Format(time.RFC3339),
+				LatencyMs:  5000,
 			},
 			// Known-issue channel (upstream removed — see
 			// internal/monitoring/known_issues.go): must NOT emit
@@ -68,12 +73,13 @@ func TestExportChannelHealthMetrics_EmitsStalenessLatencyStatus(t *testing.T) {
 	body := rec.Body.String()
 
 	mustContain := []string{
-		`atlas_channel_health_status{channel="capital_flow"} 0`,
-		`atlas_channel_fetch_latency_seconds{channel="capital_flow"} 0.25`,
-		`atlas_channel_data_staleness_seconds{channel="capital_flow"} 1800`,
+		`atlas_channel_health_status{channel="twse_capital_flow"} 0`,
+		`atlas_channel_fetch_latency_seconds{channel="twse_capital_flow"} 0.25`,
+		`atlas_channel_data_staleness_seconds{channel="twse_capital_flow"} 1800`,
 		`atlas_channel_health_status{channel="finmind"} 2`,
 		`atlas_channel_fetch_latency_seconds{channel="finmind"} 5`,
 		`atlas_channel_data_staleness_seconds{channel="finmind"} 172800`,
+		`atlas_channel_data_staleness_seconds{channel="us_yahoo"} 259200`,
 		// known-issue 通道仍輸出 status gauge（dashboard badge 需要），
 		`atlas_channel_health_status{channel="twse_oddlot"} 2`,
 	}
@@ -115,14 +121,16 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
 	}{
 		Channels: map[string]*apigateway.ChannelHealthRecord{
-			// 2026-09-07: us10y 改為 derivedIndicatorChannels（us_yahoo 欄位,
-			// 見 TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped）,
-			// 「無契約預設 48h 窗」範例改用中立通道名 us10y_legacy_case。
-			"us10y_legacy_case": {
+			// 2026-09-07: us10y 改為 derived（us_yahoo 欄位,見
+			// TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped）。
+			// 「預設 48h 窗」範例改用 fugle（契約 FreshnessWindow=0 → 繼承
+			// StaleDataThreshold 48h）。2026-09-08 R3: 通道名一律用
+			// channelIDs() 內的註冊 ID（未註冊 ID 會被 janitor 標 derived 而跳過）。
+			"fugle": {
 				Status:     "ok",
 				LastDataAt: now.Add(-27 * time.Hour).Format(time.RFC3339),
 			},
-			"twse_replay_sync": {
+			"twse_replay": {
 				Status:      "ok",
 				LastFetchAt: now.Add(-6 * 24 * time.Hour).Format(time.RFC3339),
 			},
@@ -150,8 +158,8 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	monitoring.PrometheusHandler(collector).ServeHTTP(rec, req)
 	body := rec.Body.String()
 
-	// twse_replay_sync: 6d staleness - 48h window = 96h overage。
-	wantOverage := `atlas_channel_staleness_overage_seconds{channel="twse_replay_sync"} 345600`
+	// twse_replay: 6d staleness - 72h 契約窗 = 72h overage。
+	wantOverage := `atlas_channel_staleness_overage_seconds{channel="twse_replay"} 259200`
 	if !strings.Contains(body, wantOverage) {
 		t.Fatalf("missing overage series %q\n--- full body ---\n%s", wantOverage, body)
 	}
@@ -160,7 +168,7 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	// 永遠看到 >0,alert 永遠 firing（實證: twse_replay_sync 恢復後仍每小時
 	// 重複通知）。
 	for _, want := range []string{
-		`atlas_channel_staleness_overage_seconds{channel="us10y_legacy_case"} 0`,
+		`atlas_channel_staleness_overage_seconds{channel="fugle"} 0`,
 		`atlas_channel_staleness_overage_seconds{channel="tdcc_equity_dispersion"} 0`,
 	} {
 		if !strings.Contains(body, want) {
@@ -168,8 +176,8 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 		}
 	}
 	// raw staleness gauge 仍輸出（dashboard 需要）。
-	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="us10y_legacy_case"} 97200`) {
-		t.Fatalf("raw staleness gauge for us10y_legacy_case missing\n--- full body ---\n%s", body)
+	if !strings.Contains(body, `atlas_channel_data_staleness_seconds{channel="fugle"} 97200`) {
+		t.Fatalf("raw staleness gauge for fugle missing\n--- full body ---\n%s", body)
 	}
 }
 
@@ -197,6 +205,8 @@ func TestRegisterBackfillTasks_ChannelHealthMetricsRegistered(t *testing.T) {
 // 讓 staleness 凍結時間戳無限增長 → ChannelDataStale 對健康管線反覆誤報
 // （#1843 之後仍復發）。staleness/latency/overage 序列必須跳過;
 // status gauge 保留（dashboard 顯示用）。
+// 2026-09-08 R3: 跳過機制從 hardcode 白名單改為 provenance — load 時
+// janitor 對未註冊 ID 自動標 derived（見 channel_health.go load()）。
 func TestExportChannelHealthMetrics_DerivedIndicatorChannelsSkipped(t *testing.T) {
 	dir := t.TempDir()
 	stateDir := filepath.Join(dir, "data", "state")

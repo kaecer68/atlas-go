@@ -51,23 +51,6 @@ func registerChannelHealthMetricsTask(d backfillDeps) {
 	log.Printf("[Gateway] registered channel_health_metrics_export background task (5m interval)")
 }
 
-// derivedIndicatorChannels are NOT independent gateway channels — they are
-// per-indicator fields inside the us_yahoo batch channel (VIX, US 10Y
-// treasury yield), mirrored into channel_health.json only when the
-// crossmarket degraded-data callback fires (cmd/atlas/main.go USMacroFields
-// recovery path). No scheduled task fetches them, so their last_fetch_at
-// freezes at the last callback transition and staleness computed from it
-// grows forever, so ChannelDataStale fired repeatedly on a HEALTHY pipeline
-// (2026-09-05 #1843 and 2026-09-07: latest.json vix data <1h old while
-// overage reported 16.6h). Failure coverage stays intact:
-//   - fetch-path health: us_yahoo channel (ok/warn/error + staleness)
-//   - per-field failure: crossmarket callback records degraded, surfaced
-//     by ChannelHealthStatusError
-var derivedIndicatorChannels = map[string]bool{
-	"vix":   true,
-	"us10y": true,
-}
-
 // exportChannelHealthMetrics loads channel_health.json and emits gauges.
 func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCollector, now time.Time) error {
 	if collector == nil {
@@ -90,7 +73,10 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 		if monitoring.LookupKnownIssue(channelID) != nil {
 			continue
 		}
-		if derivedIndicatorChannels[channelID] {
+		// R3 (k3 audit): derived indicator records (provenance=derived —
+		// unregistered IDs like vix/us10y, tagged at write/janitor time)
+		// keep the status gauge but skip staleness/latency/overage gauges.
+		if rec.Provenance == apigateway.ProvenanceDerived {
 			continue
 		}
 		if rec.LatencyMs > 0 {

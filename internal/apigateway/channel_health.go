@@ -26,16 +26,41 @@ type ChannelHealthRecord struct {
 	// the channel contract's GraceFailures (issue: 6th false-positive
 	// round, 2026-09-08 k3 audit R1) — a single transient failure (e.g.
 	// one 503 on a 1h-interval task) records warn and must not page.
-	ConsecutiveFailures int      `json:"consecutive_failures,omitempty"`
-	LastFetchAt         string   `json:"last_fetch_at"` // RFC3339
-	LastDataAt          string   `json:"last_data_at,omitempty"`
-	LastError           string   `json:"last_error,omitempty"`
-	LastSuccessAt       string   `json:"last_success_at,omitempty"`
-	RateLimitRemaining  int      `json:"rate_limit_remaining,omitempty"`
-	LatencyMs           int64    `json:"latency_ms,omitempty"`
-	RecordsFetched      int      `json:"records_fetched,omitempty"`
-	SymbolsProcessed    int      `json:"symbols_processed,omitempty"`
-	Errors              []string `json:"errors,omitempty"`
+	ConsecutiveFailures int `json:"consecutive_failures,omitempty"`
+	// Provenance marks records whose channelID is NOT a registered gateway
+	// channel (k3 audit R3): "derived" = per-indicator field mirrored by
+	// another component (e.g. the crossmarket callback writes vix/us10y —
+	// fields of the us_yahoo batch channel). Derived records keep the
+	// status gauge (dashboard badge) but never feed staleness/latency/
+	// overage gauges — their fetch cadence has no dedicated task, so a
+	// frozen last_fetch_at once produced endless ChannelDataStale
+	// false positives (實證 2026-09-05/09-07). Empty = registered channel.
+	Provenance         string   `json:"provenance,omitempty"`
+	LastFetchAt        string   `json:"last_fetch_at"` // RFC3339
+	LastDataAt         string   `json:"last_data_at,omitempty"`
+	LastError          string   `json:"last_error,omitempty"`
+	LastSuccessAt      string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs          int64    `json:"latency_ms,omitempty"`
+	RecordsFetched     int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
+	Errors             []string `json:"errors,omitempty"`
+}
+
+// Provenance values for ChannelHealthRecord.Provenance.
+const (
+	// ProvenanceDerived marks a record whose channelID is not a registered
+	// gateway channel (an indicator field of some other channel).
+	ProvenanceDerived = "derived"
+)
+
+// registeredChannelSet builds the canonical channel-ID set once.
+func registeredChannelSet() map[string]bool {
+	out := make(map[string]bool, len(channelIDs()))
+	for _, id := range channelIDs() {
+		out[id] = true
+	}
+	return out
 }
 
 // ChannelFetchLogEntry captures a single channel fetch event for the recent-fetches ring buffer.
@@ -156,6 +181,16 @@ func (s *ChannelHealthStore) load() error {
 	s.data = wrapper.Channels
 	if s.data == nil {
 		s.data = make(map[string]*ChannelHealthRecord)
+	}
+	// R3 janitor (k3 audit): legacy records written before provenance
+	// tracking — any channelID that is not a registered gateway channel is
+	// a derived indicator; mark it so the metrics export skips its
+	// staleness gauges. Idempotent on every load.
+	registered := registeredChannelSet()
+	for id, rec := range s.data {
+		if rec != nil && rec.Provenance == "" && !registered[id] {
+			rec.Provenance = ProvenanceDerived
+		}
 	}
 	return s.loadFetchLogLocked()
 }
@@ -296,6 +331,11 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 		recNow = s.recordNow()
 	}
 	rec.LastFetchAt = recNow.Format(time.RFC3339)
+	// R3 (k3 audit): writes to unregistered channel IDs are derived
+	// indicator updates, not channel fetches — tag for the metrics export.
+	if _, ok := registeredChannelSet()[channelID]; !ok {
+		rec.Provenance = ProvenanceDerived
+	}
 	switch status {
 	case "ok":
 		rec.ConsecutiveFailures = 0

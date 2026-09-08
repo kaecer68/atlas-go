@@ -1,6 +1,8 @@
 package apigateway
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -337,11 +339,19 @@ func TestChannelHealthStore_RecordWaiting_NoPriorSuccess(t *testing.T) {
 
 // --- 失敗阻尼（k3 audit R1, 2026-09-08）---
 
+// dampingTestClock pins the record clock inside the TW market session
+// (Tuesday 10:00 Taipei) so the R2 session cap is deterministically
+// INACTIVE for damping tests. Tests exercising the cap itself use their
+// own clocks (see TestRecord_SessionCap).
+func dampingTestClock() func() time.Time {
+	return func() time.Time { return time.Date(2026, 9, 8, 10, 0, 0, 0, taipeiLoc) }
+}
+
 // TestRecord_ErrorDamping_FirstFailureIsWarn: 單次 error 嘗試 → derived
 // status=warn（gauge 1）→ ChannelHealthStatusError（status==2）不會響。
 func TestRecord_ErrorDamping_FirstFailureIsWarn(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	if err := s.Record("fubon", "ok", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +377,7 @@ func TestRecord_ErrorDamping_FirstFailureIsWarn(t *testing.T) {
 // → derived status=error。
 func TestRecord_ErrorDamping_StreakEscalatesToError(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "first")
 	_ = s.Record("fubon", "error", "second")
 	rec := s.Get("fubon")
@@ -382,7 +392,7 @@ func TestRecord_ErrorDamping_StreakEscalatesToError(t *testing.T) {
 // TestRecord_SuccessResetsStreak: 成功歸零 — 恢復後下一次單次失敗又是 warn。
 func TestRecord_SuccessResetsStreak(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "boom")
 	_ = s.Record("fubon", "ok", "")
 	_ = s.Record("fubon", "error", "transient again")
@@ -399,7 +409,7 @@ func TestRecord_SuccessResetsStreak(t *testing.T) {
 // 不歸零計數（資料沒落地，streak 語義保持）。
 func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "boom")
 	_ = s.Record("fubon", "warn", "breaker open")
 	rec := s.Get("fubon")
@@ -415,7 +425,7 @@ func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
 // 單次失敗立即 error（時間敏感通道的逃生門）。
 func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	orig := ChannelContracts().Contract("fubon") // 快照原契約（含 MarketSession 標籤）
 	c := orig
 	c.GraceFailures = 1
@@ -436,11 +446,11 @@ func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
 // store 實例）後 streak 延續，不會因重啟歸零而重新放行單次失敗。
 func TestRecord_DampingSurvivesReload(t *testing.T) {
 	dir := t.TempDir()
-	s1 := NewChannelHealthStore(dir)
+	s1 := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s1.Record("fubon", "error", "boom")
 	_ = s1.Record("fubon", "error", "boom2")
 
-	s2 := NewChannelHealthStore(dir)
+	s2 := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s2.Record("fubon", "error", "boom3")
 	rec := s2.Get("fubon")
 	if rec.ConsecutiveFailures != 3 {
@@ -496,5 +506,45 @@ func TestRecord_SessionCap_ErrorOutsideMarketSession(t *testing.T) {
 	rec = s.Get("fubon")
 	if rec.Status != "error" {
 		t.Fatalf("status = %q, want error (in session, streak 4 >= grace 2)", rec.Status)
+	}
+}
+
+// --- R3 provenance（k3 audit, 2026-09-08）---
+
+// TestRecord_UnregisteredIDMarkedDerived: 寫入未註冊 ID → provenance=derived；
+// 註冊 ID → 空（regular）。
+func TestRecord_UnregisteredIDMarkedDerived(t *testing.T) {
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir)
+	_ = s.Record("vix", "ok", "") // vix 不在 channelIDs()（us_yahoo 的指標欄位）
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatalf("vix provenance = %+v, want derived", rec)
+	}
+	_ = s.Record("fubon", "ok", "") // fubon 已註冊
+	if rec := s.Get("fubon"); rec == nil || rec.Provenance != "" {
+		t.Fatalf("fubon provenance = %+v, want empty (registered)", rec)
+	}
+}
+
+// TestLoad_JanitorMarksLegacyOrphans: 舊版 JSON（無 provenance 欄位）載入時
+// 孤兒 ID 自動標 derived（冪等）。
+func TestLoad_JanitorMarksLegacyOrphans(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "channel_health.json")
+	payload := `{"channels":{"vix":{"status":"ok","last_fetch_at":"2026-09-01T00:00:00Z"},"fubon":{"status":"ok","last_fetch_at":"2026-09-01T00:00:00Z"}}}`
+	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewChannelHealthStore(dir)
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatalf("legacy orphan vix: %+v, want provenance derived", rec)
+	}
+	if rec := s.Get("fubon"); rec == nil || rec.Provenance != "" {
+		t.Fatalf("legacy registered fubon: %+v, want empty provenance", rec)
+	}
+	// 冪等：再次 load 不變
+	_ = s.load()
+	if rec := s.Get("vix"); rec == nil || rec.Provenance != ProvenanceDerived {
+		t.Fatal("janitor must be idempotent")
 	}
 }
