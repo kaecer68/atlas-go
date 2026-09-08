@@ -66,8 +66,11 @@ func TestRecordChannelFetch_MultipleChannels(t *testing.T) {
 	}
 
 	recB := wrapper.Channels["channel_b"]
-	if recB == nil || recB.Status != "error" {
-		t.Fatal("channel_b should have status error")
+	if recB == nil || recB.Status != "warn" {
+		t.Fatal("channel_b should have status warn (first failure damped, k3 audit R1)")
+	}
+	if recB.ConsecutiveFailures != 1 {
+		t.Fatalf("expected consecutive_failures 1, got %d", recB.ConsecutiveFailures)
 	}
 	if recB.LastError != "rate limit exceeded" {
 		t.Fatalf("expected last_error 'rate limit exceeded', got %s", recB.LastError)
@@ -92,8 +95,8 @@ func TestRecordChannelFetch_WithErrors(t *testing.T) {
 	if rec == nil {
 		t.Fatal("err_channel not found")
 	}
-	if rec.Status != "error" {
-		t.Fatalf("expected status 'error', got %s", rec.Status)
+	if rec.Status != "warn" {
+		t.Fatalf("expected status 'warn' on first failure (damping), got %s", rec.Status)
 	}
 	if rec.LastError != "connection timeout" {
 		t.Fatalf("expected last_error 'connection timeout', got %s", rec.LastError)
@@ -163,10 +166,13 @@ func TestChannelHealthStore_Record_Error(t *testing.T) {
 	if err := store.Record("fugle", "error", "timeout", WithRecordsFetched(0)); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
+	if err := store.Record("fugle", "error", "timeout", WithRecordsFetched(0)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
 
 	rec := store.Get("fugle")
 	if rec == nil || rec.Status != "error" {
-		t.Fatalf("expected error record, got %+v", rec)
+		t.Fatalf("expected error record after streak reaches grace, got %+v", rec)
 	}
 	if rec.LastError != "timeout" {
 		t.Errorf("last_error = %q, want timeout", rec.LastError)

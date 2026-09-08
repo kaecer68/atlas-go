@@ -62,8 +62,10 @@ func TestResolveChannelStatusFromStore_Ok(t *testing.T) {
 
 func TestResolveChannelStatusFromStore_Error(t *testing.T) {
 	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
-	if err := store.Record("twse_capital_flow", "error", "rate limit exceeded"); err != nil {
-		t.Fatalf("record error: %v", err)
+	for i := 0; i < 2; i++ { // 越過 GraceFailures(2) → derived error（k3 audit R1）
+		if err := store.Record("twse_capital_flow", "error", "rate limit exceeded"); err != nil {
+			t.Fatalf("record error: %v", err)
+		}
 	}
 	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_capital_flow", "ok", "20260611")
 	if status != "error" {

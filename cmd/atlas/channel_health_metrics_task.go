@@ -22,6 +22,10 @@ const (
 	MetricChannelDataStalenessSeconds = "atlas_channel_data_staleness_seconds"
 	MetricChannelFetchLatencySeconds  = "atlas_channel_fetch_latency_seconds"
 	MetricChannelHealthStatus         = "atlas_channel_health_status"
+	// MetricChannelConsecutiveFailures reports the failed-attempt streak
+	// behind the derived status (k3 audit R1, 2026-09-08): lets dashboards
+	// see a channel approaching the error escalation before it pages.
+	MetricChannelConsecutiveFailures = "atlas_channel_consecutive_failures"
 	// MetricChannelStalenessOverageSeconds reports how much the data
 	// staleness EXCEEDS the channel's contract FreshnessWindow (0 = within
 	// contract). The ChannelDataStale alert keys on this instead of the raw
@@ -73,6 +77,9 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 	records := store.All()
 	for channelID, rec := range records {
 		collector.RecordGauge(MetricChannelHealthStatus, healthStatusValue(rec.Status), map[string]string{"channel": channelID})
+		if rec.ConsecutiveFailures > 0 {
+			collector.RecordGauge(MetricChannelConsecutiveFailures, float64(rec.ConsecutiveFailures), map[string]string{"channel": channelID})
+		}
 		// 告警降噪（2026-09-03 盤查）：known-issue 通道（twse_oddlot /
 		// twse_etf / taifex-daily 等，見 monitoring/known_issues.go）的上游
 		// 已停用或遷移，資料永遠不會刷新——staleness/latency gauge 只會讓

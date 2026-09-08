@@ -20,16 +20,22 @@ import (
 // llm_annotator`. Monitoring keeps type aliases for backward compatibility;
 // new code should depend on apigateway directly.
 type ChannelHealthRecord struct {
-	Status             string   `json:"status"`        // ok | warn | error | inactive
-	LastFetchAt        string   `json:"last_fetch_at"` // RFC3339
-	LastDataAt         string   `json:"last_data_at,omitempty"`
-	LastError          string   `json:"last_error,omitempty"`
-	LastSuccessAt      string   `json:"last_success_at,omitempty"`
-	RateLimitRemaining int      `json:"rate_limit_remaining,omitempty"`
-	LatencyMs          int64    `json:"latency_ms,omitempty"`
-	RecordsFetched     int      `json:"records_fetched,omitempty"`
-	SymbolsProcessed   int      `json:"symbols_processed,omitempty"`
-	Errors             []string `json:"errors,omitempty"`
+	Status string `json:"status"` // ok | warn | error | inactive (error is DERIVED — see recordInternal)
+	// ConsecutiveFailures counts failed attempts since the last "ok".
+	// Status escalation warn → error is derived from this counter against
+	// the channel contract's GraceFailures (issue: 6th false-positive
+	// round, 2026-09-08 k3 audit R1) — a single transient failure (e.g.
+	// one 503 on a 1h-interval task) records warn and must not page.
+	ConsecutiveFailures int      `json:"consecutive_failures,omitempty"`
+	LastFetchAt         string   `json:"last_fetch_at"` // RFC3339
+	LastDataAt          string   `json:"last_data_at,omitempty"`
+	LastError           string   `json:"last_error,omitempty"`
+	LastSuccessAt       string   `json:"last_success_at,omitempty"`
+	RateLimitRemaining  int      `json:"rate_limit_remaining,omitempty"`
+	LatencyMs           int64    `json:"latency_ms,omitempty"`
+	RecordsFetched      int      `json:"records_fetched,omitempty"`
+	SymbolsProcessed    int      `json:"symbols_processed,omitempty"`
+	Errors              []string `json:"errors,omitempty"`
 }
 
 // ChannelFetchLogEntry captures a single channel fetch event for the recent-fetches ring buffer.
@@ -254,6 +260,17 @@ func (s *ChannelHealthStore) RecordWaiting(channelID string, opts ...RecordOptio
 // advanceLastSuccess controls whether a successful outcome refreshes
 // LastSuccessAt: ordinary "ok" records advance it; waiting/no-new-data records
 // keep the previous value so freshness anchors stay truthful.
+// recordInternal records ONE attempt outcome. The stored Status is DERIVED,
+// not mirrored (issue: 6th ChannelHealthStatusError false-positive round,
+// 2026-09-08 k3 audit R1): an "error" attempt increments the consecutive
+// failure counter and only escalates the derived status to "error" once the
+// streak reaches the contract's GraceFailures — before that the record shows
+// "warn". Rationale: a single transient failure on a 1h-interval task used to
+// pin status=error until the next attempt (an hour later), making the rule's
+// `for: 5m` hysteresis meaningless and paging on healthy pipelines. Damping
+// scales with the task interval automatically. "warn"/"degraded" attempts
+// pass through unchanged (they already carry non-paging semantics); any "ok"
+// resets the counter.
 func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, advanceLastSuccess bool, opts ...RecordOption) error {
 	_ = s.load()
 	s.mu.Lock()
@@ -262,15 +279,31 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 		rec = &ChannelHealthRecord{}
 		s.data[channelID] = rec
 	}
-	rec.Status = status
 	rec.LastFetchAt = time.Now().Format(time.RFC3339)
-	if status == "ok" {
+	switch status {
+	case "ok":
+		rec.ConsecutiveFailures = 0
+		rec.Status = "ok"
 		rec.LastError = ""
 		rec.Errors = nil // P2: clear stale error text so a healthy channel no longer shows old errors
 		if advanceLastSuccess {
 			rec.LastSuccessAt = rec.LastFetchAt
 		}
-	} else {
+	case "error":
+		rec.ConsecutiveFailures++
+		grace := ChannelContracts().Contract(channelID).EffectiveGraceFailures()
+		if rec.ConsecutiveFailures >= grace {
+			rec.Status = "error"
+		} else {
+			rec.Status = "warn"
+		}
+		rec.LastError = errMsg
+		if errMsg != "" {
+			rec.Errors = []string{errMsg}
+		}
+	default:
+		// warn | degraded | inactive attempts: pass through, streak unchanged.
+		rec.Status = status
 		rec.LastError = errMsg
 		if errMsg != "" {
 			rec.Errors = []string{errMsg}
@@ -318,15 +351,16 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanc
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO channel_health (channel_id, status, last_fetch_at, last_error, last_success_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO channel_health (channel_id, status, last_fetch_at, last_error, last_success_at, consecutive_failures, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (channel_id)
 		DO UPDATE SET status = EXCLUDED.status,
 					  last_fetch_at = EXCLUDED.last_fetch_at,
 					  last_error = EXCLUDED.last_error,
 					  last_success_at = COALESCE(EXCLUDED.last_success_at, channel_health.last_success_at),
+					  consecutive_failures = EXCLUDED.consecutive_failures,
 					  updated_at = EXCLUDED.updated_at
-	`, channelID, status, now, lastErrorPtr, lastSuccessAt, now)
+	`, channelID, status, now, lastErrorPtr, lastSuccessAt, s.data[channelID].ConsecutiveFailures, now)
 	if err != nil {
 		return fmt.Errorf("exec channel health query: %w", err)
 	}

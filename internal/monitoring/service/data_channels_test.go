@@ -70,8 +70,8 @@ func TestChannelHealthStore_Record_UpdateClearsErrorOnOk(t *testing.T) {
 		t.Fatalf("record error: %v", err)
 	}
 	rec := store.Get("ch-errclr")
-	if rec.Status != "error" || rec.LastError != "something broke" {
-		t.Fatalf("expected error status with message, got %q / %q", rec.Status, rec.LastError)
+	if rec.Status != "warn" || rec.LastError != "something broke" {
+		t.Fatalf("expected warn status with message (first failure damped), got %q / %q", rec.Status, rec.LastError)
 	}
 	// Then record ok — LastError must be cleared, LastSuccessAt must be set
 	if err := store.Record("ch-errclr", "ok", ""); err != nil {
@@ -157,8 +157,11 @@ func TestChannelHealthStore_PersistenceRoundTrip(t *testing.T) {
 	if err := store1.Record("ch-a", "ok", ""); err != nil {
 		t.Fatalf("store1 record ch-a: %v", err)
 	}
-	if err := store1.Record("ch-b", "error", "connection refused"); err != nil {
-		t.Fatalf("store1 record ch-b: %v", err)
+	// 兩次連續 error → derived error，同時驗證計數跨實例（重啟）持久化
+	for i := 0; i < 2; i++ {
+		if err := store1.Record("ch-b", "error", "connection refused"); err != nil {
+			t.Fatalf("store1 record ch-b: %v", err)
+		}
 	}
 
 	// Create a new store pointing at the same directory — must load data from file
@@ -231,7 +234,10 @@ func TestChannelHealthStore_Record_MultipleChannelsAllStored(t *testing.T) {
 			t.Fatalf("Record %s: %v", id, err)
 		}
 	}
-	for id, expectedStatus := range entries {
+	// attempt status → derived status: single "error" damps to "warn"
+	// (k3 audit R1); ok/warn attempts pass through unchanged.
+	derived := map[string]string{"alpha": "ok", "beta": "warn", "gamma": "warn", "delta": "ok", "epsilon": "warn"}
+	for id, expectedStatus := range derived {
 		rec := store.Get(id)
 		if rec == nil {
 			t.Fatalf("expected record for %s", id)

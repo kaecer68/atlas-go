@@ -56,6 +56,29 @@ type ChannelContract struct {
 	// Aliases are alternate names for the channel (e.g. "twse-etf" vs the
 	// canonical "twse_etf") accepted by alias resolution.
 	Aliases []string `json:"aliases,omitempty"`
+	// GraceFailures is the number of CONSECUTIVE failed attempts tolerated
+	// before the derived health status escalates warn → error (issue: 6th
+	// ChannelHealthStatusError false-positive round, 2026-09-08 k3 audit R1).
+	// A single transient failure (e.g. one 503 from a 1h-interval health
+	// task) must not page: the record would otherwise pin status=error until
+	// the next attempt, and the rule's `for: 5m` hysteresis is meaningless
+	// when samples only refresh hourly. Damping therefore scales with the
+	// task interval automatically. Zero/negative inherits
+	// DefaultGraceFailures (=2). Attempts with status warn/degraded pass
+	// through unchanged; any "ok" resets the counter.
+	GraceFailures int `json:"grace_failures,omitempty"`
+}
+
+// DefaultGraceFailures is the consecutive-failure tolerance applied when a
+// contract does not set GraceFailures explicitly.
+const DefaultGraceFailures = 2
+
+// EffectiveGraceFailures returns the contract's grace or the default.
+func (c ChannelContract) EffectiveGraceFailures() int {
+	if c.GraceFailures > 0 {
+		return c.GraceFailures
+	}
+	return DefaultGraceFailures
 }
 
 // SuccessCriteria values.
@@ -302,6 +325,13 @@ func (r *ChannelContractRegistry) Validate() []ContractViolation {
 		}
 
 		// Cadence sanity.
+		if c.GraceFailures < 0 {
+			violations = append(violations, ContractViolation{
+				ChannelID: id,
+				Check:     "invalid_grace_failures",
+				Detail:    fmt.Sprintf("GraceFailures = %d must be >= 0 (0 inherits default %d)", c.GraceFailures, DefaultGraceFailures),
+			})
+		}
 		if c.ExpectedRefresh <= 0 {
 			violations = append(violations, ContractViolation{
 				ChannelID: id,

@@ -13,6 +13,10 @@
       "value": "\"none\""
     },
     {
+      "name": "MetricChannelConsecutiveFailures",
+      "value": "\"atlas_channel_consecutive_failures\""
+    },
+    {
       "name": "MetricChannelDataStalenessSeconds",
       "value": "\"atlas_channel_data_staleness_seconds\""
     },
