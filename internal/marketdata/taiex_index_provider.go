@@ -42,7 +42,12 @@ func (p *TAIEXIndexProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapsh
 	// must not be recorded as a failure, so bypass Yahoo entirely (N1 S2,
 	// docs/operations/investigation-twse-timeout-2026-08-18.md §3.1).
 	now := twseTAIEXTargetDate()
-	if !isTaiwanTradingDay(now) || now.Hour() < twseMarketOpenHour {
+	// 2026-09-08 R2 擴充: 開盤過渡期（09:00–09:45）視同 pre-market —
+	// Yahoo 盤中 bar 剛開始累積、limiter 被開盤任務爆發擠壓,實證
+	// 09:14–09:36 連環 fetch 失敗誤報 error 級 Telegram。此窗內最近
+	// 有效收盤價仍是前一交易日,與 pre-market 同語意（ErrNoData 等待態）。
+	openTransition := now.Hour() == twseMarketOpenHour && now.Minute() < 45
+	if !isTaiwanTradingDay(now) || now.Hour() < twseMarketOpenHour || openTransition {
 		// 2026-09-06 修復（實證: 週六 taiex_index 全日 error 告警）:
 		// 非交易日/pre-market 本就是「上游無新資料」的等待態 — 包 ErrNoData
 		// sentinel 讓 gateway 的 ErrNoData 分支 RecordWaiting（status 維持

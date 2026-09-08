@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/taiwanholidays"
 )
 
 // ChannelContract is the per-channel data-source contract that makes the
@@ -67,7 +69,46 @@ type ChannelContract struct {
 	// DefaultGraceFailures (=2). Attempts with status warn/degraded pass
 	// through unchanged; any "ok" resets the counter.
 	GraceFailures int `json:"grace_failures,omitempty"`
+	// MarketSession declares the market-hours dependence of the channel's
+	// upstream: "tw" = Taiwan market session (09:00–13:45 on trading days).
+	// When set, failure escalation (R1 damping) is capped at "warn" outside
+	// the session — upstreams that only publish during market hours
+	// legitimately fail pre-market/at open transition (2026-09-08:
+	// fubon proxy 503 at 08:05 Taipei paged as error). Sustained breakage
+	// still alarms via the staleness-overage path, which is session-blind.
+	// Empty = no session capping.
+	MarketSession string `json:"market_session,omitempty"`
 }
+
+// MarketSessionTW is the Taiwan market session value for MarketSession.
+const MarketSessionTW = "tw"
+
+// Session bounds in minutes-from-midnight Taipei. End is deliberately 13:45
+// (13:30 close + settlement tail) so the daily-update window (15:00+
+// auto_* tasks) stays OUTSIDE the cap — real evening failures still escalate.
+const (
+	twSessionStartMinute = 9 * 60
+	twSessionEndMinute   = 13*60 + 45
+)
+
+// twMarketSessionActive reports whether now falls inside the Taiwan market
+// session (trading day, 09:00–13:45 Taipei).
+func twMarketSessionActive(now time.Time) bool {
+	tpe := now.In(taipeiLoc)
+	if !taiwanholidays.IsTradingDay(tpe) {
+		return false
+	}
+	m := tpe.Hour()*60 + tpe.Minute()
+	return m >= twSessionStartMinute && m <= twSessionEndMinute
+}
+
+var taipeiLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		return time.FixedZone("CST", 8*3600)
+	}
+	return loc
+}()
 
 // DefaultGraceFailures is the consecutive-failure tolerance applied when a
 // contract does not set GraceFailures explicitly.
@@ -518,6 +559,19 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// "twse-etf" so operators referencing the old hyphenated name still
 	// resolve to the canonical channel.
 	live("twse_etf", []string{"TWSE"}, 24*time.Hour, "twse-etf")
+
+	// R2 (k3 audit 2026-09-08): TW market-session channels — their upstreams
+	// only publish during TW market hours, so failures outside the session
+	// (pre-market proxy cold-start, open transition) are capped at warn.
+	// Session-blind staleness overage remains the backstop for real outages.
+	for _, id := range []string{
+		"taiex_index", "twse_capital_flow", "twse_margin", "day_trading",
+		"market_volume", "tw_vol", "twse_sector_index", "fubon", "fugle",
+	} {
+		c := r.Contract(id)
+		c.MarketSession = MarketSessionTW
+		r.Register(c)
+	}
 
 	// ---- file-state channels (HealthSource=file_state / data_freshness) ----
 

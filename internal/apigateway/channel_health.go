@@ -72,6 +72,10 @@ type ChannelHealthStore struct {
 	fetchLog     []ChannelFetchLogEntry
 	pool         *pgxpool.Pool
 
+	// recordNow stamps LastFetchAt and evaluates the R2 market-session cap
+	// during recordInternal. Test seam (WithRecordClock); nil → time.Now.
+	recordNow func() time.Time
+
 	// staleThreshold filters non-ok records from Alerts() when the record's
 	// LastFetchAt is older than this duration from nowFunc(). Set to 0 to
 	// disable filtering (return all records regardless of age). Default:
@@ -110,6 +114,14 @@ func (s *ChannelHealthStore) WithStaleThreshold(d time.Duration) *ChannelHealthS
 	s.mu.Lock()
 	s.staleThreshold = d
 	s.mu.Unlock()
+	return s
+}
+
+// WithRecordClock replaces the clock used by recordInternal (LastFetchAt
+// stamping and the R2 market-session cap). Test seam — production uses
+// time.Now.
+func (s *ChannelHealthStore) WithRecordClock(fn func() time.Time) *ChannelHealthStore {
+	s.recordNow = fn
 	return s
 }
 
@@ -279,7 +291,11 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 		rec = &ChannelHealthRecord{}
 		s.data[channelID] = rec
 	}
-	rec.LastFetchAt = time.Now().Format(time.RFC3339)
+	recNow := time.Now()
+	if s.recordNow != nil {
+		recNow = s.recordNow()
+	}
+	rec.LastFetchAt = recNow.Format(time.RFC3339)
 	switch status {
 	case "ok":
 		rec.ConsecutiveFailures = 0
@@ -296,6 +312,15 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 			rec.Status = "error"
 		} else {
 			rec.Status = "warn"
+		}
+		// R2 session cap (k3 audit): a channel declared market-session
+		// dependent never escalates to error outside its session — those
+		// upstreams legitimately fail pre-market/at open transition.
+		// Sustained breakage alarms via staleness overage (session-blind).
+		if rec.Status == "error" {
+			if ChannelContracts().Contract(channelID).MarketSession == MarketSessionTW && !twMarketSessionActive(recNow) {
+				rec.Status = "warn"
+			}
 		}
 		rec.LastError = errMsg
 		if errMsg != "" {

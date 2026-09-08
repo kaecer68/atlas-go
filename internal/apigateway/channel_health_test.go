@@ -416,13 +416,14 @@ func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
 func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
 	dir := t.TempDir()
 	s := NewChannelHealthStore(dir)
-	c := ChannelContracts().Contract("fubon")
+	orig := ChannelContracts().Contract("fubon") // 快照原契約（含 MarketSession 標籤）
+	c := orig
 	c.GraceFailures = 1
 	ChannelContracts().Register(c)
 	t.Cleanup(func() {
-		// 還原預設契約（Registry 全域單例）
-		def := DefaultChannelContract("fubon")
-		ChannelContracts().Register(def)
+		// 還原原契約（Registry 全域單例；不得用 DefaultChannelContract —
+		// 會抹掉 session 標籤污染後續測試）
+		ChannelContracts().Register(orig)
 	})
 	_ = s.Record("fubon", "error", "boom")
 	rec := s.Get("fubon")
@@ -447,5 +448,53 @@ func TestRecord_DampingSurvivesReload(t *testing.T) {
 	}
 	if rec.Status != "error" {
 		t.Errorf("status = %q, want error", rec.Status)
+	}
+}
+
+// --- R2 契約級 session 感知（k3 audit, 2026-09-08）---
+
+// TestRecord_SessionCap_ErrorOutsideMarketSession: tw 通道在非交易時段
+// 連續失敗不得升級 error（重放 fubon 08:05 盤前 proxy 503 誤報；k3 audit
+// R2）。交易時段內行為不變（streak 達 grace 仍升級）。
+func TestRecord_SessionCap_ErrorOutsideMarketSession(t *testing.T) {
+	// helper 邊界：週六非 session；交易日 08:05 盤前非 session；交易日 10:00 是 session
+	sat := time.Date(2026, 9, 12, 10, 0, 0, 0, taipeiLoc)
+	if twMarketSessionActive(sat) {
+		t.Fatal("Saturday must not be a market session")
+	}
+	pre := time.Date(2026, 9, 8, 8, 5, 0, 0, taipeiLoc)
+	if twMarketSessionActive(pre) {
+		t.Fatal("08:05 on a trading day is pre-market, not session")
+	}
+	if !twMarketSessionActive(time.Date(2026, 9, 8, 10, 0, 0, 0, taipeiLoc)) {
+		t.Fatal("10:00 on a trading day must be session")
+	}
+
+	// fubon 是 1h 間距的盤前健康檢查 — 時鐘固定在週六（非 session）：
+	// 連續 3 次 error 也不得升級 error。
+	dir := t.TempDir()
+	clock := sat
+	s := NewChannelHealthStore(dir).WithRecordClock(func() time.Time { return clock })
+	for i := 0; i < 3; i++ {
+		if err := s.Record("fubon", "error", "proxy 503 SDK init timed out"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := s.Get("fubon")
+	if rec.ConsecutiveFailures != 3 {
+		t.Fatalf("counter = %d, want 3", rec.ConsecutiveFailures)
+	}
+	if rec.Status != "warn" {
+		t.Fatalf("status = %q, want warn (session cap on non-trading day)", rec.Status)
+	}
+
+	// 時鐘推進到週二 10:00（session 內）：下一次失敗越過 grace → error。
+	clock = time.Date(2026, 9, 8, 10, 0, 0, 0, taipeiLoc)
+	if err := s.Record("fubon", "error", "proxy 503"); err != nil {
+		t.Fatal(err)
+	}
+	rec = s.Get("fubon")
+	if rec.Status != "error" {
+		t.Fatalf("status = %q, want error (in session, streak 4 >= grace 2)", rec.Status)
 	}
 }
