@@ -651,7 +651,7 @@
 | `profit_factor` | float64 | 獲利因子（總獲利 / 總虧損） |
 | `avg_win` | float64 | 平均獲利 |
 | `avg_loss` | float64 | 平均虧損 |
-| `source` | string | 後端來源（`postgres` / `jsonl` / 空字串；對應 SSoT 後端：見 [2026-08-23 performance-report SSoT](../../decisions/2026-08-23-performance-report-ssot.md)） |
+| `source` | string | 後端來源（`postgres` / `jsonl` / 空字串；對應 SSoT 後端：見 [2026-08-23 performance-report SSoT](../decisions/2026-08-23-performance-report-ssot.md)） |
 | `degraded` | bool | 是否降級（SSoT 後端不可用時 fallback 至 JSONL；此時值為 best-effort 不可作為權威） |
 | `generated_at` | RFC3339 | 報表產生時間 |
 
