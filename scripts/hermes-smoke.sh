@@ -75,6 +75,28 @@ smoke() {
   return $rc
 }
 
+# The Docker healthcheck only proves the HTTP server is listening; fresh
+# containers may still be inside the background RunWarmup window. During that
+# window, macro-backed endpoints can legitimately return 503 (the canary has
+# the same warmup-grace semantics). Wait once here so this consumer smoke does
+# not race startup, while keeping genuine post-warmup 503s as hard failures.
+warmup_grace="${CANARY_WARMUP_GRACE:-120}"
+explain_status() {
+  docker exec atlas-go curl -sS -m 15 -o /dev/null -w '%{http_code}' \
+    "$ATLAS_URL/api/market/explain" 2>/dev/null || echo 000
+}
+deadline=$((SECONDS + warmup_grace))
+while :; do
+  status="$(explain_status)"
+  [ "$status" = "200" ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "⚠️  /api/market/explain still HTTP ${status} after ${warmup_grace}s warmup grace; continuing with normal smoke assertions"
+    break
+  fi
+  echo "⏳ Waiting for warmup: /api/market/explain HTTP ${status} (${SECONDS}/${warmup_grace}s)"
+  sleep 5
+done
+
 echo "=== Hermes Smoke Test ==="
 echo "  Target: $ATLAS_URL"
 echo ""
