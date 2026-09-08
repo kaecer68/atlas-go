@@ -103,6 +103,45 @@ func TestMonitor_ResolvedConditionStartsNewRow(t *testing.T) {
 	}
 }
 
+// Regression test (#1787 follow-up): ResolveByIdentity persists the resolved
+// state before the condition recurs. A long dedup window makes the race
+// deterministic: the recurrences must start a NEW row instead of silently
+// updating the resolved record.
+func TestMonitor_DedupDoesNotReuseResolvedRecord(t *testing.T) {
+	store := newTestStore(t)
+	m := NewMonitor()
+	m.SetAlertStore(store)
+	m.SetDeduplicator(NewAlertDeduplicator(time.Hour, store))
+
+	md := map[string]any{"task": "alpha"}
+	m.AlertWithBreakdown(AlertLevelWarning, "background_task",
+		"Task alpha is stale", md, nil)
+	recs := waitForRecords(t, store, 1)
+	if recs[0].Status != domain.AlertStatusTriggered {
+		t.Fatalf("first record status = %s, want triggered", recs[0].Status)
+	}
+
+	if n := m.ResolveByIdentity("background_task", "alpha", "task-success"); n != 1 {
+		t.Fatalf("ResolveByIdentity resolved %d, want 1", n)
+	}
+
+	m.AlertWithBreakdown(AlertLevelWarning, "background_task",
+		"Task alpha is stale again", md, nil)
+	recs = waitForRecords(t, store, 2)
+	triggered := 0
+	for _, rec := range recs {
+		if rec.Status == domain.AlertStatusTriggered {
+			triggered++
+			if rec.Count != 1 {
+				t.Errorf("new row count = %d, want 1", rec.Count)
+			}
+		}
+	}
+	if triggered != 1 {
+		t.Fatalf("got %d triggered records after resolve+recurrence, want 1", triggered)
+	}
+}
+
 func TestMonitor_ResolveByIdentity_CategoryWide(t *testing.T) {
 	m, store := newLifecycleTestMonitor(t)
 
