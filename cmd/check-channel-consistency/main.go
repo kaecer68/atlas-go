@@ -26,8 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"gopkg.in/yaml.v3"
+
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
 
 const (
