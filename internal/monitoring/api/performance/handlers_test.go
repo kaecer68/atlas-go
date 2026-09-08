@@ -152,6 +152,8 @@ func TestHandleReport_SnakeCaseJSON(t *testing.T) {
 	snakeCaseFields := []string{
 		"total_return", "annualized_return", "sharpe_ratio", "max_drawdown",
 		"starting_value", "ending_value", "after_tax_value", "total_tax_paid",
+		"liquidation_tax_estimate", "session_liquidation_tax_estimate_sum",
+		"tax_basis", "after_tax_mode",
 		"win_rate", "total_trades", "avg_win", "avg_loss",
 		"top_agents", "regime_breakdown", "monthly_returns",
 	}

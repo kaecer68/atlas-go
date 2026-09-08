@@ -116,7 +116,7 @@ func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 		t.Fatal("equity_curve[0] is not a map")
 	}
 
-	requiredKeys := []string{"label", "value", "currency", "after_tax_value", "tax_paid"}
+	requiredKeys := []string{"label", "value", "currency", "after_tax_value", "tax_paid", "tax_basis"}
 	for _, key := range requiredKeys {
 		if _, ok := point0[key]; !ok {
 			t.Errorf("expected JSON key %q not found in equity_curve[0]", key)
@@ -131,6 +131,9 @@ func TestHandlePortfolioState_EquityCurveFields(t *testing.T) {
 	}
 	if point0["tax_paid"] != 5000.0 {
 		t.Errorf("tax_paid = %v, want 5000.0", point0["tax_paid"])
+	}
+	if point0["tax_basis"] != "liquidation_estimate" {
+		t.Errorf("tax_basis = %v, want liquidation_estimate", point0["tax_basis"])
 	}
 
 	point1, ok := curveSlice[1].(map[string]any)

@@ -56,6 +56,23 @@ func TestGenerateReport_SingleSession(t *testing.T) {
 	if report.AfterTaxValue != 999_000 {
 		t.Errorf("expected after-tax value 999000, got %f", report.AfterTaxValue)
 	}
+	// New tax-semantics fields: a single non-zero session is the normal
+	// liquidation_estimate path, and the deprecated alias equals the sum.
+	if report.LiquidationTaxEstimate != 1000 {
+		t.Errorf("expected liquidation tax estimate 1000, got %f", report.LiquidationTaxEstimate)
+	}
+	if report.SessionLiquidationTaxEstimateSum != 1000 {
+		t.Errorf("expected session liquidation tax estimate sum 1000, got %f", report.SessionLiquidationTaxEstimateSum)
+	}
+	if report.TotalTaxPaid != report.SessionLiquidationTaxEstimateSum {
+		t.Errorf("total_tax_paid (%f) != session_liquidation_tax_estimate_sum (%f) — deprecated alias drifted", report.TotalTaxPaid, report.SessionLiquidationTaxEstimateSum)
+	}
+	if report.TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("expected tax_basis %q, got %q", taxBasisLiquidationEstimate, report.TaxBasis)
+	}
+	if report.AfterTaxMode != afterTaxModeMinusLiquidation {
+		t.Errorf("expected after_tax_mode %q, got %q", afterTaxModeMinusLiquidation, report.AfterTaxMode)
+	}
 	if report.TotalTrades != 1 {
 		t.Errorf("expected 1 executed trade, got %d", report.TotalTrades)
 	}
@@ -104,24 +121,198 @@ func TestGenerateReport_InvalidPeriod(t *testing.T) {
 	}
 }
 
+// TestGenerateReport_MultiDayNoLinearTaxDrift is the core regression for the
+// after-tax semantics fix: three consecutive days holding the SAME portfolio
+// each carry the same liquidation estimate T. The old code summed them
+// (ending − 3T, triple-counting one portfolio); the fixed code subtracts only
+// the end-of-period estimate (ending − T).
+func TestGenerateReport_MultiDayNoLinearTaxDrift(t *testing.T) {
+	tmpDir := t.TempDir()
+	writeSessionWithTax(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 1_000, 3)
+	writeSessionWithTax(t, tmpDir, "session-20260102-daily", 1_000_000, 100_000, 1_000, 3)
+	writeSessionWithTax(t, tmpDir, "session-20260103-daily", 1_000_000, 100_000, 1_000, 3)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.LiquidationTaxEstimate != 1_000 {
+		t.Errorf("liquidation_tax_estimate = %f, want 1000 (latest session only, NOT 3000)", report.LiquidationTaxEstimate)
+	}
+	if report.AfterTaxValue != 999_000 {
+		t.Errorf("after_tax_value = %f, want 999000 (ending − 1000, NOT ending − 3000)", report.AfterTaxValue)
+	}
+	if report.SessionLiquidationTaxEstimateSum != 3_000 {
+		t.Errorf("session_liquidation_tax_estimate_sum = %f, want 3000 (old summed semantics, debug only)", report.SessionLiquidationTaxEstimateSum)
+	}
+	// Deprecated alias invariant (K3 review O2): total_tax_paid must stay
+	// equal to the summed field so a future edit cannot drift one side.
+	if report.TotalTaxPaid != report.SessionLiquidationTaxEstimateSum {
+		t.Errorf("total_tax_paid (%f) != session_liquidation_tax_estimate_sum (%f) — deprecated alias drifted", report.TotalTaxPaid, report.SessionLiquidationTaxEstimateSum)
+	}
+	if report.TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("tax_basis = %q, want %q", report.TaxBasis, taxBasisLiquidationEstimate)
+	}
+	if report.AfterTaxMode != afterTaxModeMinusLiquidation {
+		t.Errorf("after_tax_mode = %q, want %q", report.AfterTaxMode, afterTaxModeMinusLiquidation)
+	}
+}
+
+// TestGenerateReport_LatestZeroTaxFallsBack covers the missing-estimate path
+// (K3 review I1): the latest session reports TotalTaxPaid == 0 WITH open
+// positions, which cannot be a genuine liquidation estimate (stock/ETF
+// transaction tax is always > 0 with holdings). The estimate must fall back
+// to the most recent non-zero in-window estimate and say so via tax_basis.
+func TestGenerateReport_LatestZeroTaxFallsBack(t *testing.T) {
+	tmpDir := t.TempDir()
+	writeSessionWithTax(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 1_000, 3)
+	writeSessionWithTax(t, tmpDir, "session-20260102-daily", 1_010_000, 100_000, 2_000, 3)
+	// Latest session: estimate missing (tax=0) but positions open.
+	writeSessionWithTax(t, tmpDir, "session-20260103-daily", 1_020_000, 100_000, 0, 3)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.LiquidationTaxEstimate != 2_000 {
+		t.Errorf("liquidation_tax_estimate = %f, want 2000 (fallback to previous non-zero session)", report.LiquidationTaxEstimate)
+	}
+	if report.AfterTaxValue != 1_018_000 {
+		t.Errorf("after_tax_value = %f, want 1018000 (ending − 2000)", report.AfterTaxValue)
+	}
+	if report.TaxBasis != taxBasisPreviousSession {
+		t.Errorf("tax_basis = %q, want %q", report.TaxBasis, taxBasisPreviousSession)
+	}
+	if report.AfterTaxMode != afterTaxModeMinusLiquidation {
+		t.Errorf("after_tax_mode = %q, want %q", report.AfterTaxMode, afterTaxModeMinusLiquidation)
+	}
+	if report.TotalTaxPaid != report.SessionLiquidationTaxEstimateSum {
+		t.Errorf("total_tax_paid (%f) != session_liquidation_tax_estimate_sum (%f) — deprecated alias drifted", report.TotalTaxPaid, report.SessionLiquidationTaxEstimateSum)
+	}
+}
+
+// TestGenerateReport_LatestSessionVacantEmptyPortfolio covers the genuine
+// empty-portfolio path (K3 review I1): the latest session has
+// TotalTaxPaid == 0 AND PositionCount == 0, so the zero estimate is the
+// CORRECT end-of-period value — no fallback, normal provenance.
+func TestGenerateReport_LatestSessionVacantEmptyPortfolio(t *testing.T) {
+	tmpDir := t.TempDir()
+	writeSessionWithTax(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 1_000, 3)
+	// Latest session: liquidated everything (no positions, no estimate).
+	writeSessionWithTax(t, tmpDir, "session-20260102-daily", 1_005_000, 0, 0, 0)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.LiquidationTaxEstimate != 0 {
+		t.Errorf("liquidation_tax_estimate = %f, want 0 (genuine empty portfolio)", report.LiquidationTaxEstimate)
+	}
+	if report.AfterTaxValue != report.EndingValue {
+		t.Errorf("after_tax_value = %f, want %f (estimate 0 ⇒ equals ending value)", report.AfterTaxValue, report.EndingValue)
+	}
+	if report.TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("tax_basis = %q, want %q (NOT fallback/unavailable — the zero estimate is real)", report.TaxBasis, taxBasisLiquidationEstimate)
+	}
+	if report.AfterTaxMode != afterTaxModeMinusLiquidation {
+		t.Errorf("after_tax_mode = %q, want %q", report.AfterTaxMode, afterTaxModeMinusLiquidation)
+	}
+}
+
+// TestGenerateReport_NoTaxDataUnavailable covers the no-estimate-at-all path:
+// the only session has TotalTaxPaid == 0 with open positions and no earlier
+// non-zero estimate exists, so the report must be explicit that after_tax
+// was not adjusted.
+func TestGenerateReport_NoTaxDataUnavailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	writeSessionWithTax(t, tmpDir, "session-20260101-daily", 1_000_000, 100_000, 0, 3)
+	writeSessionWithTax(t, tmpDir, "session-20260102-daily", 1_010_000, 100_000, 0, 3)
+
+	report, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if report.AfterTaxValue != report.EndingValue {
+		t.Errorf("after_tax_value = %f, want %f (unadjusted)", report.AfterTaxValue, report.EndingValue)
+	}
+	if report.TaxBasis != taxBasisUnavailable {
+		t.Errorf("tax_basis = %q, want %q", report.TaxBasis, taxBasisUnavailable)
+	}
+	if report.AfterTaxMode != afterTaxModeUnadjusted {
+		t.Errorf("after_tax_mode = %q, want %q", report.AfterTaxMode, afterTaxModeUnadjusted)
+	}
+}
+
+// TestGenerateReport_CutoffChangesLatest verifies the estimate always comes
+// from the LAST session of the *filtered* window: with the "all" period the
+// fallback reaches the older session's estimate, while "30d" excludes it and
+// the report flips to unavailable/unadjusted. Relative dates (K3 review §7.5)
+// — never hard-code dates for cutoff-dependent fixtures.
+func TestGenerateReport_CutoffChangesLatest(t *testing.T) {
+	tmpDir := t.TempDir()
+	now := time.Now()
+	oldDate := now.AddDate(0, 0, -60)
+	newDate := now.AddDate(0, 0, -1)
+
+	oldID := "session-" + oldDate.Format("20060102") + "-daily"
+	newID := "session-" + newDate.Format("20060102") + "-daily"
+	// Old session carries the only non-zero estimate; recent session has an
+	// estimate missing (tax=0) with open positions.
+	writeSessionWithTax(t, tmpDir, oldID, 900_000, 100_000, 800, 2)
+	writeSessionWithTax(t, tmpDir, newID, 1_000_000, 100_000, 0, 2)
+
+	reportAll, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "all")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reportAll.LiquidationTaxEstimate != 800 {
+		t.Errorf("all: liquidation_tax_estimate = %f, want 800 (fallback to older session)", reportAll.LiquidationTaxEstimate)
+	}
+	if reportAll.TaxBasis != taxBasisPreviousSession {
+		t.Errorf("all: tax_basis = %q, want %q", reportAll.TaxBasis, taxBasisPreviousSession)
+	}
+
+	report30d, err := GenerateReport(ledger.NewStore(tmpDir), tmpDir, "30d")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report30d.LiquidationTaxEstimate != 0 {
+		t.Errorf("30d: liquidation_tax_estimate = %f, want 0 (old session outside window)", report30d.LiquidationTaxEstimate)
+	}
+	if report30d.TaxBasis != taxBasisUnavailable {
+		t.Errorf("30d: tax_basis = %q, want %q", report30d.TaxBasis, taxBasisUnavailable)
+	}
+	if report30d.AfterTaxMode != afterTaxModeUnadjusted {
+		t.Errorf("30d: after_tax_mode = %q, want %q", report30d.AfterTaxMode, afterTaxModeUnadjusted)
+	}
+}
+
 func TestGenerateMarkdownReport(t *testing.T) {
 	report := &PerformanceReport{
-		Period:           "all",
-		StartDate:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		EndDate:          time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
-		TotalReturn:      0.05,
-		AnnualizedReturn: 0.80,
-		SortinoRatio:     1.5,
-		CalmarRatio:      26.67,
-		MaxDrawdown:      0.03,
-		StartingValue:    1_000_000,
-		EndingValue:      1_050_000,
-		AfterTaxValue:    1_040_000,
-		TotalTaxPaid:     10_000,
-		WinRate:          0.6,
-		TotalTrades:      10,
-		AvgWin:           0.02,
-		AvgLoss:          -0.01,
+		Period:                           "all",
+		StartDate:                        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndDate:                          time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+		TotalReturn:                      0.05,
+		AnnualizedReturn:                 0.80,
+		SortinoRatio:                     1.5,
+		CalmarRatio:                      26.67,
+		MaxDrawdown:                      0.03,
+		StartingValue:                    1_000_000,
+		EndingValue:                      1_050_000,
+		AfterTaxValue:                    1_040_000,
+		LiquidationTaxEstimate:           10_000,
+		SessionLiquidationTaxEstimateSum: 10_000,
+		TotalTaxPaid:                     10_000, // deprecated alias
+		TaxBasis:                         taxBasisLiquidationEstimate,
+		AfterTaxMode:                     afterTaxModeMinusLiquidation,
+		WinRate:                          0.6,
+		TotalTrades:                      10,
+		AvgWin:                           0.02,
+		AvgLoss:                          -0.01,
 		TopAgents: []AgentContribution{
 			{AgentID: "agent-a", Skill: "tech", Layer: "sector", AggregateForwardReturn: 0.03, WinRate: 0.7, TradeCount: 5, AvgReturn: 0.006},
 		},
@@ -154,6 +345,18 @@ func TestGenerateMarkdownReport(t *testing.T) {
 	}
 	if !strings.Contains(md, "NT$") {
 		t.Error("expected markdown to contain formatted NTD values")
+	}
+	// Tax semantics (2026-09-08): the liquidation estimate row replaces the
+	// misleading "Total Tax Paid" row, and the liquidation-estimate note is
+	// printed unconditionally (outside the synthetic-share if block).
+	if !strings.Contains(md, "Liquidation Tax Estimate") {
+		t.Error("expected markdown to contain 'Liquidation Tax Estimate'")
+	}
+	if strings.Contains(md, "Total Tax Paid") {
+		t.Error("markdown must not contain the deprecated 'Total Tax Paid' row")
+	}
+	if !strings.Contains(md, "清倉試算，非實際已繳稅費") {
+		t.Error("expected markdown to contain the unconditional liquidation-estimate note")
 	}
 }
 
@@ -298,6 +501,14 @@ func TestEmptyReport(t *testing.T) {
 	}
 	if r.MonthlyReturns == nil {
 		t.Error("expected non-nil MonthlyReturns")
+	}
+	// Provenance on the empty report (K3 review O1): no sessions ⇒ the after-tax
+	// figure is unadjusted, and the report must say so explicitly.
+	if r.TaxBasis != taxBasisUnavailable {
+		t.Errorf("expected tax_basis %q, got %q", taxBasisUnavailable, r.TaxBasis)
+	}
+	if r.AfterTaxMode != afterTaxModeUnadjusted {
+		t.Errorf("expected after_tax_mode %q, got %q", afterTaxModeUnadjusted, r.AfterTaxMode)
 	}
 }
 
@@ -672,6 +883,34 @@ func writeSessionWithOutcomes(t *testing.T, baseDir, sessionID string, portfolio
 		if err := enc.Encode(oc); err != nil {
 			t.Fatalf("encode outcome %s: %v", sessionID, err)
 		}
+	}
+}
+
+// writeSessionWithTax writes a session directory whose summary carries an
+// explicit PositionCount, so tax-estimate provenance tests (K3 review I1) can
+// distinguish a genuine empty portfolio (PositionCount == 0, estimate 0 is
+// correct) from a missing estimate (PositionCount > 0, TotalTaxPaid == 0).
+func writeSessionWithTax(t *testing.T, baseDir, sessionID string, portfolioValue, endingCash, totalTaxPaid float64, positionCount int) {
+	t.Helper()
+	sessDir := filepath.Join(baseDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", sessionID, err)
+	}
+	summary := domain.SessionSummary{
+		SessionID:      sessionID,
+		Regime:         domain.RegimeRiskOn,
+		PortfolioValue: portfolioValue,
+		EndingCash:     endingCash,
+		PositionCount:  positionCount,
+		TotalTaxPaid:   totalTaxPaid,
+		RecordedAt:     time.Now(),
+	}
+	summaryData, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", sessionID, err)
+	}
+	if err := os.WriteFile(filepath.Join(sessDir, "summary.json"), summaryData, 0o644); err != nil {
+		t.Fatalf("write summary %s: %v", sessionID, err)
 	}
 }
 

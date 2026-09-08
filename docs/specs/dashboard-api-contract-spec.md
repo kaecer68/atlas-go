@@ -114,7 +114,7 @@
 | `pnl_pct` | float64 | 未實現損益%（相對成本） |
 | `sector` | string | 產業分類（omitempty） |
 
-**EquityCurvePoint**：`label`（session_id）、`value`（總市值）、`currency`、`after_tax_value`、`tax_paid`。
+**EquityCurvePoint**：`label`（session_id）、`value`（總市值）、`currency`、`after_tax_value`、`tax_paid`、`tax_basis`。`after_tax_value` / `tax_paid` 為**逐點清倉估計**（per-point，該場持倉假設以市價賣出），**非實繳稅**；各點為獨立快照，不可跨點加總（會重複計算同一持倉）。`tax_basis` 標註稅額來源，僅在 `tax_paid` 非零時一併輸出。
 
 **CrossFootPnL**：`is_balanced`（差距 < 0.01）、`portfolio_unrealized`、`sum_positions_unrealized`、`difference`。核對對象為「已存快照」的 portfolio-level 與 per-position 未實現損益（同一寫入端檔案內一致性）；KPI 層（`unrealized_pnl_total`/`positions[].unrealized_pnl`）會以 current_price 重算覆寫過期寫入值，兩者不互斥。
 
@@ -610,7 +610,7 @@
 | `snapshots` | array | 每檔個股的稅務快照 |
 | `before_tax_pnl` | float64 | 稅前損益 |
 | `after_tax_pnl` | float64 | 稅後損益 |
-| `total_tax_paid` | float64 | 總稅額 |
+| `total_tax_paid` | float64 | 總稅額（**清倉估計快照，非累積實繳稅**：以當前持倉 × 市價試算 sell-all 的應納稅，非真實繳納紀錄） |
 | `total_dividend_tax` | float64 | 股利稅 |
 | `is_simulated` | bool | 是否為模擬計算（無持股時為 true） |
 | `note` | string | 人類可讀說明 |
@@ -618,6 +618,67 @@
 **TaxSnapshot**：`symbol`、`dividend_tax_rate`、`transaction_tax_rate`、`dividend_tax`、`transaction_tax`、`total_tax`、`after_tax_pnl`。
 
 **缺失資料**：無持股時 `snapshots:[]`、`is_simulated:true`。
+
+---
+
+### §8.2 `GET /api/dashboard/performance-report`
+
+**Handler**：`internal/monitoring/api/performance/handlers.go::HandleReport`
+
+**Query**：
+
+| 參數 | 型別 | 預設 | 說明 |
+| --- | --- | --- | --- |
+| `period` | string | `all` | 報表期間：`30d` / `90d` / `1y` / `all`（大小寫敏感；非法值視為 `all`） |
+
+**Response 200**：
+
+| 欄位 | 型別 | 語義 |
+| --- | --- | --- |
+| `starting_value` | float64 | 期初總市值 |
+| `ending_value` | float64 | 期末總市值 |
+| `after_tax_value` | float64 | 稅後值 = `ending_value − liquidation_tax_estimate`（見下方「稅額語義」） |
+| `liquidation_tax_estimate` | float64 | 期末清倉估計稅（清倉估計，非實繳稅） |
+| `session_liquidation_tax_estimate_sum` | float64 | 逐場清倉估稅加總（**僅供 debug / 透明用途**，不可解讀為實繳稅） |
+| `total_tax_paid` | float64 | **DEPRECATED**：保留舊 sum 數值以維持向下相容，**不可解讀為實繳稅**；新消費者請改讀 `liquidation_tax_estimate` |
+| `tax_basis` | string | 稅額來源（見 `tax_basis` 列舉） |
+| `after_tax_mode` | string | 稅後值計算模式（見 `after_tax_mode` 列舉） |
+| `win_rate` | float64 | 勝率（[0,1]） |
+| `total_trades` | int | 實際下單筆數（SSoT P1-4，production 為 PG `trades` 表；與 `GET /api/dashboard/trade-history` 對齊） |
+| `total_outcomes` | int | 推薦決策數（含 real + synthetic，**非下單筆數**；SSoT P1-4 前此欄位曾被誤用為「總交易數」） |
+| `real_trade_count` | int | 實際成交筆數 |
+| `synthetic_trade_count` | int | 模擬撮合筆數 |
+| `profit_factor` | float64 | 獲利因子（總獲利 / 總虧損） |
+| `avg_win` | float64 | 平均獲利 |
+| `avg_loss` | float64 | 平均虧損 |
+| `source` | string | 後端來源（`postgres` / `jsonl` / 空字串；對應 SSoT 後端：見 [2026-08-23 performance-report SSoT](../decisions/2026-08-23-performance-report-ssot.md)） |
+| `degraded` | bool | 是否降級（SSoT 後端不可用時 fallback 至 JSONL；此時值為 best-effort 不可作為權威） |
+| `generated_at` | RFC3339 | 報表產生時間 |
+
+**稅額語義重點**：
+
+- `after_tax_value = ending_value − liquidation_tax_estimate`：以期末清倉估稅扣減後的市值，**不是實繳稅後值**。
+- `liquidation_tax_estimate`：期末單場清倉估計稅（假設當日持倉全數以市價賣出），**不是實繳稅**，不應跨期加總。
+- `session_liquidation_tax_estimate_sum`：逐場估稅加總（舊語意），**僅供透明 / 除錯用**；因跨日加總會重複計算同一持倉，**不可**當實繳。
+- `total_tax_paid`：DEPRECATED。**數值上**仍等於 `session_liquidation_tax_estimate_sum` 以維持向下相容，**語意上**已不是實繳稅額；新消費者請改讀 `liquidation_tax_estimate`。
+- `tax_basis` 與 `after_tax_mode` 必須配套解讀：見下表。
+
+**`tax_basis` 列舉**：
+
+| 值 | 觸發條件 | 說明 |
+| --- | --- | --- |
+| `liquidation_estimate` | 期末場 `TotalTaxPaid ≠ 0`，或 `TotalTaxPaid == 0 && PositionCount == 0`（**真空倉**：估稅 0 是正確的期末值） | 期末單場清倉估稅 |
+| `liquidation_estimate_previous_session` | 期末場 `TotalTaxPaid == 0 && PositionCount > 0` ⇒ 回退 window 內最近一場非零估稅 | 資料缺失場景的退路（最後一場估稅欄位為 0 但仍持有部位 ⇒ 視為舊資料缺失） |
+| `unavailable` | window 內無任何非零估稅場 | 無法計算稅後值，`after_tax_value == ending_value`，搭配 `after_tax_mode = unadjusted` |
+
+**`after_tax_mode` 列舉**：
+
+| 值 | 配對 `tax_basis` | 說明 |
+| --- | --- | --- |
+| `ending_value_minus_liquidation_estimate` | `liquidation_estimate` / `liquidation_estimate_previous_session` | `after_tax_value = ending_value − liquidation_tax_estimate` |
+| `unadjusted` | `unavailable` | 不調整：`after_tax_value = ending_value` |
+
+**缺失資料**：window 無任何 session 時回傳空報告（`tax_basis = unavailable`、`after_tax_mode = unadjusted`、`after_tax_value = ending_value`）。
 
 ---
 

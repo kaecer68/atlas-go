@@ -19,6 +19,7 @@ func TestEquityCurvePoint_JSONMarshaling(t *testing.T) {
 		Currency:      "TWD",
 		AfterTaxValue: 995000.0,
 		TaxPaid:       5000.0,
+		TaxBasis:      taxBasisLiquidationEstimate,
 	}
 
 	bytes, err := json.Marshal(point)
@@ -31,7 +32,7 @@ func TestEquityCurvePoint_JSONMarshaling(t *testing.T) {
 		t.Fatalf("json.Unmarshal error: %v", err)
 	}
 
-	for _, key := range []string{"label", "value", "currency", "after_tax_value", "tax_paid"} {
+	for _, key := range []string{"label", "value", "currency", "after_tax_value", "tax_paid", "tax_basis"} {
 		if _, ok := decoded[key]; !ok {
 			t.Errorf("expected JSON key %q not found in %v", key, decoded)
 		}
@@ -51,6 +52,9 @@ func TestEquityCurvePoint_JSONMarshaling(t *testing.T) {
 	}
 	if decoded["tax_paid"] != 5000.0 {
 		t.Errorf("tax_paid = %v, want 5000.0", decoded["tax_paid"])
+	}
+	if decoded["tax_basis"] != taxBasisLiquidationEstimate {
+		t.Errorf("tax_basis = %v, want %q", decoded["tax_basis"], taxBasisLiquidationEstimate)
 	}
 }
 
@@ -79,6 +83,9 @@ func TestEquityCurvePoint_Omitempty(t *testing.T) {
 	if _, ok := decoded["tax_paid"]; ok {
 		t.Error("tax_paid should be omitted but was present")
 	}
+	if _, ok := decoded["tax_basis"]; ok {
+		t.Error("tax_basis should be omitted but was present")
+	}
 }
 
 func TestEquityCurvePoint_BackwardCompatibility(t *testing.T) {
@@ -103,6 +110,9 @@ func TestEquityCurvePoint_BackwardCompatibility(t *testing.T) {
 	}
 	if point.TaxPaid != 0 {
 		t.Errorf("TaxPaid = %v, want 0", point.TaxPaid)
+	}
+	if point.TaxBasis != "" {
+		t.Errorf("TaxBasis = %v, want empty string", point.TaxBasis)
 	}
 }
 
@@ -166,6 +176,9 @@ func TestBuildEquityCurve_TaxFieldsPopulated(t *testing.T) {
 	if curve[0].TaxPaid != 5000.0 {
 		t.Errorf("curve[0].TaxPaid = %v, want 5000.0", curve[0].TaxPaid)
 	}
+	if curve[0].TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("curve[0].TaxBasis = %q, want %q", curve[0].TaxBasis, taxBasisLiquidationEstimate)
+	}
 
 	if curve[1].Label != "session-20260414-daily" {
 		t.Errorf("curve[1].Label = %v, want session-20260414-daily", curve[1].Label)
@@ -178,6 +191,9 @@ func TestBuildEquityCurve_TaxFieldsPopulated(t *testing.T) {
 	}
 	if curve[1].TaxPaid != 6000.0 {
 		t.Errorf("curve[1].TaxPaid = %v, want 6000.0", curve[1].TaxPaid)
+	}
+	if curve[1].TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("curve[1].TaxBasis = %q, want %q", curve[1].TaxBasis, taxBasisLiquidationEstimate)
 	}
 }
 
@@ -216,6 +232,11 @@ func TestBuildEquityCurve_ZeroTaxPaid(t *testing.T) {
 	if curve[0].TaxPaid != 0.0 {
 		t.Errorf("curve[0].TaxPaid = %v, want 0.0", curve[0].TaxPaid)
 	}
+	// I3 policy: TaxBasis moves together with the omitempty tax siblings —
+	// a zero-tax point carries no tax provenance field at all.
+	if curve[0].TaxBasis != "" {
+		t.Errorf("curve[0].TaxBasis = %q, want empty (zero-tax point renders no tax fields)", curve[0].TaxBasis)
+	}
 }
 
 func TestBuildEquityCurve_EmptyDir(t *testing.T) {
@@ -240,6 +261,7 @@ func TestEquityCurvePoint_NewFields(t *testing.T) {
 		Currency:      "TWD",
 		AfterTaxValue: 495000.0,
 		TaxPaid:       5000.0,
+		TaxBasis:      taxBasisLiquidationEstimate,
 	}
 
 	if point.Currency != "TWD" {
@@ -250,6 +272,9 @@ func TestEquityCurvePoint_NewFields(t *testing.T) {
 	}
 	if point.TaxPaid != 5000.0 {
 		t.Errorf("TaxPaid = %v, want 5000.0", point.TaxPaid)
+	}
+	if point.TaxBasis != taxBasisLiquidationEstimate {
+		t.Errorf("TaxBasis = %q, want %q", point.TaxBasis, taxBasisLiquidationEstimate)
 	}
 }
 
