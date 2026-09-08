@@ -129,13 +129,24 @@ function renderReportData(data) {
   // 期間中文標籤（KPI 口徑 hint 用）
   const periodZh = { '30d': '近 30 日', '90d': '近 90 日', '1y': '近 1 年', 'all': '全部期間' }[data.period] || '本期間';
 
+  // after_tax_value 語意是「期末清倉估計稅後價值」，非實繳；估稅 hint 依後端 after_tax_mode / tax_basis 標示。
+  const afterTaxModeHint = {
+    'ending_value_minus_liquidation_estimate': '期末清倉估計，非實繳',
+    'unadjusted': '無可用估稅，未調整'
+  }[data.after_tax_mode] || '期末清倉估計，非實繳';
+  const taxBasisHint = {
+    'liquidation_estimate': '最後一場清倉試算，非實繳',
+    'liquidation_estimate_previous_session': '最後一場缺估稅，採用最近一場非零清倉估計',
+    'unavailable': '無可用估稅'
+  }[data.tax_basis] || '清倉試算，非實繳';
+
   const kpis = [
     { label: '總報酬', value: fmtSafePct(data.total_return), sign: data.total_return },
     { label: '年化報酬', value: fmtSafePct(data.annualized_return), sign: data.annualized_return },
     { label: '夏普比率', value: fmtSafeNumber(data.sharpe_ratio, { decimals: 2, useGrouping: true }), hint: '口徑：期間日報酬（AI 表 sharpe_like 不同）' },
     { label: '最大回撤', value: fmtSafeDrawdown(data.max_drawdown), sign: drawdownSign(data.max_drawdown), hint: `${periodZh} · 期間內最大回撤` },
-    { label: '稅後價值', value: fmtNTD(data.after_tax_value) },
-    { label: '累積已繳稅費', value: fmtNTD(data.total_tax_paid), hint: `${periodZh} · 實際已繳（非清倉試算）` },
+    { label: '清倉估計稅後價值', value: fmtNTD(data.after_tax_value), hint: afterTaxModeHint },
+    { label: '期末清倉稅費估計', value: fmtNTD(data.liquidation_tax_estimate), hint: taxBasisHint },
     { label: '勝率', value: fmtSafePct(data.win_rate), sign: data.win_rate },
     { label: '總交易數', value: fmtInt(data.total_trades) }
   ];
