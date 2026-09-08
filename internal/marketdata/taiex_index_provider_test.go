@@ -13,7 +13,7 @@ import (
 func resetTAIEXTwseTargetDate(t *testing.T) {
 	t.Helper()
 	orig := twseTAIEXTargetDate
-	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 9, 0, 0, 0, twseLocation) }
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 10, 0, 0, 0, twseLocation) }
 	t.Cleanup(func() { twseTAIEXTargetDate = orig })
 }
 
@@ -430,5 +430,56 @@ func TestFetchTWSETAIEXFallback_RejectsMismatchedDate(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reported date") {
 		t.Fatalf("expected reported-date mismatch error, got %v", err)
+	}
+}
+
+func TestTAIEXIndexProvider_FetchSnapshot_OpenTransitionBypassesYahoo(t *testing.T) {
+	// 2026-09-08 R2 擴充: 開盤過渡期（09:00–09:45 交易日）視同 pre-market。
+	// 實證 09:14–09:36 連環 fetch 失敗（Yahoo 盤中 bar 剛累積 + limiter 被
+	// 開盤任務爆發擠壓）誤報 error 級 Telegram。此窗內最近有效收盤價仍是
+	// 前一交易日 → 與 pre-market 同語意，繞過 Yahoo、服務前收盤。
+	ResetSharedTWSEClient()
+	twiiCache.reset()
+	defer twiiCache.reset()
+
+	orig := twseTAIEXTargetDate
+	twseTAIEXTargetDate = func() time.Time { return time.Date(2026, 7, 29, 9, 30, 0, 0, twseLocation) }
+	t.Cleanup(func() { twseTAIEXTargetDate = orig })
+
+	yahooCalled := false
+	yahooSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		yahooCalled = true
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer yahooSrv.Close()
+
+	twseSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.RawQuery, "date=20260728") {
+			t.Errorf("expected rolled-back TWSE date 20260728, got %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"stat":"OK","tables":[{"title":"115年07月28日 價格指數(臺灣證券交易所)","fields":["指數","收盤指數","漲跌(+/-)","漲跌點數","漲跌百分比(%)","特殊處理註記"],"data":[["發行量加權股價指數","43,654.84","-","1,195.97","-2.67",""]]}]}`))
+	}))
+	defer twseSrv.Close()
+
+	origTWSEURL := taiexTWSEBaseURL
+	taiexTWSEBaseURL = twseSrv.URL + "/exchangeReport/MI_INDEX"
+	defer func() { taiexTWSEBaseURL = origTWSEURL }()
+
+	origHosts := yahooHosts
+	yahooHosts = []string{strings.TrimPrefix(yahooSrv.URL, "https://")}
+	defer func() { yahooHosts = origHosts }()
+	SetYahooSessionClient(yahooSrv.Client())
+
+	snap, err := NewTAIEXIndexProvider().FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot() during open transition should serve previous trading day, got error = %v", err)
+	}
+	if yahooCalled {
+		t.Error("open-transition FetchSnapshot should bypass Yahoo entirely")
+	}
+	if snap.TAIEX.Value != 43654.84 {
+		t.Errorf("Value = %v, want 43654.84 (previous trading day close)", snap.TAIEX.Value)
 	}
 }

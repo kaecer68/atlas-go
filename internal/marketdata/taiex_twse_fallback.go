@@ -52,7 +52,10 @@ func fetchTWSETAIEXFallback(ctx context.Context) (MacroDataPoint, error) {
 	// day (today's row is not published until ~14:00 CST).
 	now := twseTAIEXTargetDate()
 	target := latestTaiwanTradingDay(now)
-	if isTaiwanTradingDay(now) && now.Hour() < twseMarketOpenHour {
+	// 2026-09-08 R2: 開盤過渡期（09:00–09:45）today MI_INDEX 同樣未發布 —
+	// 目標日期與 pre-market 一樣回溯到前一交易日。
+	openTransition := isTaiwanTradingDay(now) && now.Hour() == twseMarketOpenHour && now.Minute() < 45
+	if isTaiwanTradingDay(now) && (now.Hour() < twseMarketOpenHour || openTransition) {
 		target = latestTaiwanTradingDay(now.AddDate(0, 0, -1))
 	}
 	dateStr := target.Format("20060102")
