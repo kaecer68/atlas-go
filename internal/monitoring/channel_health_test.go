@@ -163,6 +163,9 @@ func TestChannelHealthStore_Record_Error(t *testing.T) {
 	dir := t.TempDir()
 	store := NewChannelHealthStore(dir)
 
+	// fugle 為 tw-session 通道（R2）：用 WithRecordClock 固定在交易時段內
+	//（UTC 02:00 = 台北 10:00），session cap 不干擾升級斷言。
+	store.WithRecordClock(func() time.Time { return time.Date(2026, 9, 8, 2, 0, 0, 0, time.UTC) })
 	if err := store.Record("fugle", "error", "timeout", WithRecordsFetched(0)); err != nil {
 		t.Fatalf("Record: %v", err)
 	}

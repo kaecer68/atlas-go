@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"gopkg.in/yaml.v3"
@@ -60,6 +61,8 @@ func TestGetAllChannelStatuses_FallbackResolvesHealthFromStore(t *testing.T) {
 	if err := store.Record("taifex_institutional", "ok", ""); err != nil {
 		t.Fatalf("record health: %v", err)
 	}
+	// government_flow 為 tw-session 通道（R2）：時鐘固定在交易時段內。
+	store.WithRecordClock(func() time.Time { return time.Date(2026, 9, 8, 2, 0, 0, 0, time.UTC) })
 	for i := 0; i < 2; i++ { // 越過 GraceFailures(2) → derived error（k3 audit R1）
 		if err := store.Record("government_flow", "error", "connection refused"); err != nil {
 			t.Fatalf("record health: %v", err)

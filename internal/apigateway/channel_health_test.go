@@ -339,11 +339,19 @@ func TestChannelHealthStore_RecordWaiting_NoPriorSuccess(t *testing.T) {
 
 // --- 失敗阻尼（k3 audit R1, 2026-09-08）---
 
+// dampingTestClock pins the record clock inside the TW market session
+// (Tuesday 10:00 Taipei) so the R2 session cap is deterministically
+// INACTIVE for damping tests. Tests exercising the cap itself use their
+// own clocks (see TestRecord_SessionCap).
+func dampingTestClock() func() time.Time {
+	return func() time.Time { return time.Date(2026, 9, 8, 10, 0, 0, 0, taipeiLoc) }
+}
+
 // TestRecord_ErrorDamping_FirstFailureIsWarn: 單次 error 嘗試 → derived
 // status=warn（gauge 1）→ ChannelHealthStatusError（status==2）不會響。
 func TestRecord_ErrorDamping_FirstFailureIsWarn(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	if err := s.Record("fubon", "ok", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +377,7 @@ func TestRecord_ErrorDamping_FirstFailureIsWarn(t *testing.T) {
 // → derived status=error。
 func TestRecord_ErrorDamping_StreakEscalatesToError(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "first")
 	_ = s.Record("fubon", "error", "second")
 	rec := s.Get("fubon")
@@ -384,7 +392,7 @@ func TestRecord_ErrorDamping_StreakEscalatesToError(t *testing.T) {
 // TestRecord_SuccessResetsStreak: 成功歸零 — 恢復後下一次單次失敗又是 warn。
 func TestRecord_SuccessResetsStreak(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "boom")
 	_ = s.Record("fubon", "ok", "")
 	_ = s.Record("fubon", "error", "transient again")
@@ -401,7 +409,7 @@ func TestRecord_SuccessResetsStreak(t *testing.T) {
 // 不歸零計數（資料沒落地，streak 語義保持）。
 func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s.Record("fubon", "error", "boom")
 	_ = s.Record("fubon", "warn", "breaker open")
 	rec := s.Get("fubon")
@@ -417,7 +425,7 @@ func TestRecord_WarnAttemptKeepsStreak(t *testing.T) {
 // 單次失敗立即 error（時間敏感通道的逃生門）。
 func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
 	dir := t.TempDir()
-	s := NewChannelHealthStore(dir)
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	orig := ChannelContracts().Contract("fubon") // 快照原契約（含 MarketSession 標籤）
 	c := orig
 	c.GraceFailures = 1
@@ -438,11 +446,11 @@ func TestRecord_GraceFailuresOneImmediateError(t *testing.T) {
 // store 實例）後 streak 延續，不會因重啟歸零而重新放行單次失敗。
 func TestRecord_DampingSurvivesReload(t *testing.T) {
 	dir := t.TempDir()
-	s1 := NewChannelHealthStore(dir)
+	s1 := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s1.Record("fubon", "error", "boom")
 	_ = s1.Record("fubon", "error", "boom2")
 
-	s2 := NewChannelHealthStore(dir)
+	s2 := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
 	_ = s2.Record("fubon", "error", "boom3")
 	rec := s2.Get("fubon")
 	if rec.ConsecutiveFailures != 3 {
