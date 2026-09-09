@@ -2498,9 +2498,9 @@ func run(args []string, deps appDeps) error {
 		authWrappedMux := apishared.AuthMiddleware(mux)
 		finalMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// 2026-09-09: connect-src 加 member.goluck.uk — client_web 靜默 SSO(Track C)
-// 會以 credentials:'include' fetch member 的 /api/v1/auth/session 與
-// /sso-token(CSP 未設 connect-src 時回退 default-src 'self',跨域 fetch 被擋)。
-w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://member.goluck.uk")
+			// 會以 credentials:'include' fetch member 的 /api/v1/auth/session 與
+			// /sso-token(CSP 未設 connect-src 時回退 default-src 'self',跨域 fetch 被擋)。
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://member.goluck.uk")
 			if isPublicPath(r.Method, r.URL.Path) {
 				mux.ServeHTTP(w, r)
 				return
