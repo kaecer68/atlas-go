@@ -398,6 +398,7 @@ ci-quick:
 	              scripts/ci/check_constitution_drift.sh \
 	              scripts/ci/check_data_catalog.sh \
 	              scripts/ci/check_field_contract.sh \
+	              scripts/ci/check_channel_consistency.sh \
 	              scripts/ci/check_docs_governance.sh \
 	              scripts/ci/check_agents_index.sh; do \
 		if [ -f "$$script" ]; then \

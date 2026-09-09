@@ -122,6 +122,16 @@ func (c ChannelContract) EffectiveGraceFailures() int {
 	return DefaultGraceFailures
 }
 
+// EffectiveFreshnessWindow returns the contract's freshness window or the
+// package default when zero. CI and runtime callers must use this helper
+// instead of re-implementing the "0 inherits default" rule.
+func (c ChannelContract) EffectiveFreshnessWindow() time.Duration {
+	if c.FreshnessWindow > 0 {
+		return c.FreshnessWindow
+	}
+	return StaleDataThreshold
+}
+
 // SuccessCriteria values.
 const (
 	// SuccessCriteriaDataPresent: any non-empty payload is success.
