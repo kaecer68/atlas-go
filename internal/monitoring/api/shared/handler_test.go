@@ -663,6 +663,17 @@ func TestIsPublicPath_WhitelistConsistency(t *testing.T) {
 // /api/report/latest (backtest markdown) and /api/reports/latest (daily
 // report JSON, dailyreport module) are DIFFERENT resources; both are
 // public-read, and mutating methods remain rejected.
+// TestIsPublicPath_MarketExplain guards the retail explain endpoint.
+// It is a public GET route per tool-permission-matrix.md ("free"); PR #1596
+// accidentally dropped the /api/market/ prefix when moving the whitelist to
+// authlist.go, causing production AuthMiddleware to return 503 when
+// ATLAS_API_KEY was not configured (main CI hermes-smoke E-01).
+func TestIsPublicPath_MarketExplain(t *testing.T) {
+	if !IsPublicPath(http.MethodGet, "/api/market/explain") {
+		t.Fatal("IsPublicPath(GET, /api/market/explain) = false, want true")
+	}
+}
+
 func TestIsPublicPath_ReportRouteWhitelist(t *testing.T) {
 	t.Setenv("ATLAS_ENV", "production")
 	t.Setenv("ATLAS_API_KEY", "secret-key")

@@ -81,6 +81,7 @@ var AuthFreePrefixPaths = []string{
 	"/api/taiwan/",
 	"/api/narrative/",
 	"/api/macro/",
+	"/api/market/",
 	"/api/alerts/",
 	"/api/synergy/",
 	"/api/cross-market/",

@@ -484,7 +484,7 @@ const SHELL_LOADERS = {
 | `GET` | `/api/capital-flow/summary` | 錢潮摘要 |
 | `GET` | `/api/capital-flow/history` | 錢潮歷史 |
 | `GET` | `/api/capital-flow/historical-snapshot/{date}` | 指定日期快照 |
-| `GET` | `/api/market/explain` | 今日台股解說（需 auth） |
+| `GET` | `/api/market/explain` | 今日台股解說（公開觀測/免費層） |
 | `GET` | `/api/macro/snapshot/latest` | 最新宏觀快照 |
 | `GET` | `/api/macro/snapshot/timeline` | 歷史宏觀快照 |
 | `GET` | `/api/narrative/*` | 敘事事件/鏈/模型 |
