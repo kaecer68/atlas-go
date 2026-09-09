@@ -54,13 +54,14 @@ func (h *Handler) HandleExplain(r *http.Request) (int, any) {
 
 	format := r.URL.Query().Get("format")
 
-	// Fetch market data.
+	// Fetch market data. The product contract is "always return a usable
+	// explanation": if every macro source is unavailable, degrade to an
+	// explicit no-data response instead of hiding the retail endpoint behind
+	// a 503. Callers can still detect the state via Source/Section.
 	snap, err := h.provider.FetchSnapshot(ctx)
 	if err != nil {
 		logging.Warn("marketexplain", "snapshot_failed", "err", err.Error())
-		return http.StatusServiceUnavailable, map[string]string{
-			"error": "無法取得市場資料，請稍後再試",
-		}
+		return http.StatusOK, composeUnavailable(format)
 	}
 
 	// Fetch capital flow summary.
@@ -108,6 +109,26 @@ func compose(snap marketdata.MacroDataSnapshot, cfSummary capitalflow.SummaryRep
 		Headline:    headline,
 		Detail:      strings.Join(sectionBodies(sections), "\n\n"),
 		Sections:    sections,
+	}
+}
+
+// composeUnavailable returns the degraded rule-based response used when the
+// macro snapshot cannot be fetched. It preserves the normal response shape so
+// retail UI and Hermes consumers never receive a hard failure just because
+// upstream market data is temporarily unavailable.
+func composeUnavailable(format string) Explanation {
+	body := "目前無法取得即時市場資料，請稍後再試。"
+	if format == "plain" {
+		body = strings.TrimSpace(body) // no emoji present; keeps plain contract explicit
+	}
+	return Explanation{
+		GeneratedAt: time.Now(),
+		Source:      "rule_based",
+		Headline:    "市場資料暫不可用",
+		Detail:      body,
+		Sections: []Section{
+			{Title: "資料狀態", Body: body},
+		},
 	}
 }
 

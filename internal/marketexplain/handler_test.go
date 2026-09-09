@@ -1,6 +1,10 @@
 package marketexplain
 
 import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -441,5 +445,38 @@ func TestNewHandler_storesDependencies(t *testing.T) {
 	}
 	if h.provider != nil || h.cf != nil {
 		t.Error("NewHandler must store the same pointers it was given")
+	}
+}
+
+type failingMacroProvider struct{}
+
+func (failingMacroProvider) Name() string { return "failing" }
+
+func (failingMacroProvider) FetchSnapshot(context.Context) (marketdata.MacroDataSnapshot, error) {
+	return marketdata.MacroDataSnapshot{}, errors.New("all upstream channels failed")
+}
+
+func TestHandleExplain_DegradesToUsableResponseWhenSnapshotUnavailable(t *testing.T) {
+	handler := NewHandler(failingMacroProvider{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/market/explain", nil)
+	status, body := handler.HandleExplain(req)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (degraded response must not hard-fail)", status)
+	}
+	explanation, ok := body.(Explanation)
+	if !ok {
+		t.Fatalf("body type = %T, want Explanation", body)
+	}
+	if explanation.Headline != "市場資料暫不可用" {
+		t.Errorf("headline = %q, want degraded headline", explanation.Headline)
+	}
+	if explanation.Source != "rule_based" {
+		t.Errorf("source = %q, want rule_based", explanation.Source)
+	}
+	if len(explanation.Sections) == 0 || explanation.Sections[0].Title != "資料狀態" {
+		t.Fatalf("sections = %+v, want explicit 資料狀態 section", explanation.Sections)
+	}
+	if !strings.Contains(explanation.Sections[0].Body, "目前無法取得即時市場資料") {
+		t.Errorf("degraded body missing unavailable marker: %+v", explanation.Sections[0])
 	}
 }
