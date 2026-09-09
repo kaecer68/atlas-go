@@ -3,6 +3,8 @@ package monitoring
 import (
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
 // DedupResult contains the outcome of a dedup check.
@@ -42,17 +44,16 @@ func (d *AlertDeduplicator) Check(dedupKey string) (DedupResult, error) {
 	now := time.Now()
 
 	if lastSeen, ok := d.recent[dedupKey]; ok && now.Sub(lastSeen) < d.window {
-		if d.alertStore != nil {
-			existing, err := d.alertStore.FindByDedupKey(dedupKey)
-			if err == nil && existing != nil {
-				return DedupResult{
-					Skip:            true,
-					ExistingAlertID: existing.ID,
-					NewCount:        existing.Count + 1,
-				}, nil
-			}
+		if d.alertStore == nil {
+			return DedupResult{Skip: true}, nil
 		}
-		return DedupResult{Skip: true}, nil
+		existing, err := d.alertStore.FindByDedupKey(dedupKey)
+		if err != nil || existing == nil || existing.Status == domain.AlertStatusTriggered {
+			return DedupResult{Skip: true}, nil
+		}
+		// The key is recent but its persisted lifecycle is no longer open
+		// (resolved/acknowledged/silenced), so allow a new record.
+		return DedupResult{Skip: false}, nil
 	}
 
 	return DedupResult{Skip: false}, nil
