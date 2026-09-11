@@ -65,7 +65,8 @@ type ProviderImpl interface {
 	Supports(cap Capability) bool
 
 	// Call 執行一次 LLM 呼叫。
-	// 必須遵守：DataClass 閘門、circuit breaker、rate limit、timeout。
+	// 必須遵守：circuit breaker、rate limit、timeout。（DataClass 自 ADR-012 起僅為
+	// 審計 metadata，不再是 provider 閘門；成功但 output 為空會被 Router 視為失敗。）
 	// 回傳 error 時需區分 transient（可重試）vs permanent（不可重試）。
 	Call(ctx context.Context, req Request) (Response, error)
 

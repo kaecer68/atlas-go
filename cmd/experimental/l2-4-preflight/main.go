@@ -165,7 +165,10 @@ func checkParametersJSON() checkResult {
 	}
 }
 
-// checkLLMHealth: GET /api/llm/health, verify router_version v2.1 + providers.
+// checkLLMHealth: GET /api/llm/health, verify router_version v2.1+ + providers.
+// v2.1 = capability router; v2.2 = ADR-012 routing table (DataClass demoted to
+// audit metadata). Both are accepted so the preflight also works against a
+// deployment that has not picked up ADR-012 yet.
 func checkLLMHealth(baseURL string) checkResult {
 	url := strings.TrimRight(baseURL, "/") + "/api/llm/health"
 	resp, err := httpGet(url)
@@ -196,11 +199,11 @@ func checkLLMHealth(baseURL string) checkResult {
 			Message: fmt.Sprintf("JSON parse failed: %v", err),
 		}
 	}
-	if health.RouterVersion != "v2.1" {
+	if health.RouterVersion != "v2.1" && health.RouterVersion != "v2.2" {
 		return checkResult{
-			Name:    "router_version v2.1",
+			Name:    "router_version v2.1+",
 			OK:      false,
-			Message: fmt.Sprintf("got %q, expected v2.1 (LLM_SECTOR_AGENTS_ENABLED requires v2.1+ router)", health.RouterVersion),
+			Message: fmt.Sprintf("got %q, expected v2.1 or v2.2 (LLM_SECTOR_AGENTS_ENABLED requires v2.1+ router)", health.RouterVersion),
 		}
 	}
 	for name, p := range health.Providers {
@@ -213,7 +216,7 @@ func checkLLMHealth(baseURL string) checkResult {
 		}
 	}
 	return checkResult{
-		Name:    "/api/llm/health OK + router v2.1 + providers healthy",
+		Name:    "/api/llm/health OK + router v2.1+ + providers healthy",
 		OK:      true,
 		Message: fmt.Sprintf("providers checked: %d", len(health.Providers)),
 	}

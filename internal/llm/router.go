@@ -104,6 +104,11 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 	spanAttrs := []attribute.KeyValue{
 		attribute.String("llm.capability", string(req.Capability)),
 		attribute.String("llm.data_class", strconv.Itoa(int(req.DataClass))),
+		// Human-readable DataClass for audit/redaction review. The numeric
+		// attribute above is kept unchanged for existing dashboards. Since
+		// ADR-012 DataClass no longer gates any provider, so this span
+		// attribute is the primary place the classification stays visible.
+		attribute.String("llm.data_class_name", req.DataClass.String()),
 	}
 	if req.Options.ForceProvider != nil {
 		spanAttrs = append(spanAttrs, attribute.String("llm.forced_provider", string(*req.Options.ForceProvider)))
@@ -111,7 +116,12 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 	ctx, span := obsotel.StartSpan(ctx, "llm."+string(req.Capability), spanAttrs...)
 	defer span.End()
 
-	// Step 1: ForceProvider bypasses routing table
+	// Step 1: ForceProvider bypasses routing table.
+	//
+	// Deliberate asymmetry with the chain path: an empty output from a forced
+	// provider is returned as-is. A forced call has no next chain member to
+	// fall through to, and ForceProvider is a test/sticky-routing escape hatch
+	// rather than a production capability path.
 	if req.Options.ForceProvider != nil {
 		impl, ok := r.providers[*req.Options.ForceProvider]
 		if !ok {

@@ -14,8 +14,8 @@
 //     failure-attribution callers should use capabilities/failure_attribution
 //     directly via the Router; llm_annotator is retained only for backward
 //     compatibility.
-//   - capabilities/ — typed capability handlers (10 handlers)
-//   - clients/ — HTTP client implementations (DeepSeek, MiniMax)
+//   - capabilities/ — typed capability handlers (11 handlers)
+//   - clients/ — HTTP client implementations (DeepSeek, MiniMax, Kimi)
 //   - schemas/ — typed I/O contracts for each capability
 //
 // Relationship to llm_annotator: llm_annotator is the archived legacy package
@@ -37,7 +37,8 @@
 //   - HealthStatus — provider health snapshot (latency, error rate, availability)
 //   - RoutingChain — ordered chain of providers to try in sequence
 //   - RouterConfig — router configuration (providers, chains, health thresholds)
-//   - DataClass    — data classification for capability routing
+//   - DataClass    — data classification recorded as audit metadata
+//     (since ADR-012 it no longer gates provider selection)
 //   - Options        — per-request options (tracing, retry budget, etc.)
 //   - Usage          — token usage record returned with every response
 //   - LoadRouterConfig     — load a RouterConfig from a YAML file

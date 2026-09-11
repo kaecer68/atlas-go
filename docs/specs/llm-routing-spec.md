@@ -54,7 +54,7 @@
 
 | Capability | 舊值 | 新值 | 理由（一行） |
 |------------|------|------|--------------|
-| `failure_attribution` | （無設定，走 provider 預設） | 2048 | annotator 熱路徑；reasoning 模型最低預算；rule-based fallback 仍為權威 |
+| `failure_attribution` | （無設定，走 provider 預設） | 2048 | Router 路徑的 reasoning 最低預算；rule-based fallback 仍為權威。⚠️ production `/annotate` 目前不走 Router（走 `llm_annotator.KimiClient`，tokens 由其 `Config.MaxTokens` 決定），故此值僅在 Router 路徑生效 |
 | `rationale_generation` | 500 | 2048 | 翻譯輸出含 JSON 外殼；M3 / `deepseek-flash` reasoning 需要預算 |
 | `regime_explanation` | 300 | 2048 | 原值對 reasoning 模型過小，會回空內容；headline 短但 thinking 需預算 |
 | `sentiment_explanation` | 500 | 2048 | 同上 |
@@ -110,8 +110,9 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 |------|------|
 | 失敗判定 | provider error，或 `Output` trim 後為空且無 `ToolCalls` |
 | 續試 | 依鏈序嘗試下一個成員；`Backup2` 為空字串時跳過 |
-| `AttemptedProviders` | 記錄**全部**嘗試過的 provider（含失敗者），供 audit 與 dispute 回答「這筆資料送給了誰」 |
-| `FallbackTriggeredTotal` | 每次由一個鏈成員轉往下一個時遞增 |
+| `ForceProvider` 例外 | 強制指定 provider 時**不套用**空輸出判定（沒有下一鏈成員可續試；該路徑供測試/sticky routing 使用） |
+| `AttemptedProviders` | 記錄**全部被考慮過**的鏈成員（含失敗者、未註冊者與不支援該 capability 者），供 audit 與 dispute 追溯；「未註冊」代表該 provider 未被呼叫 |
+| `FallbackTriggeredTotal` | 每次由一個鏈成員轉往下一個時遞增；因此 primary 未註冊（例如未設 kimi key 時的 code 群組）也會 +1 |
 | 與 `DataClass` 的關係 | 無關；`DataClass` 不再影響 provider 選擇（ADR-012） |
 | 搭配條件 | 所有 capability 的 `max_tokens` 必須 ≥ reasoning 模型最低預算（見 §6.1a） |
 
