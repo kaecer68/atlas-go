@@ -14,12 +14,28 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// lifecycleDedupWindow is the dedup window used by the lifecycle tests. It is
+// deliberately tiny so tests do not pay dedup latency, but that makes the
+// "recurrence after the window" cases timing sensitive: a repeat alert that
+// arrives *inside* the window is suppressed (no count increment), while one
+// that arrives *after* it must reuse the unresolved record and increment the
+// count. waitPastDedupWindow() removes that race.
+const lifecycleDedupWindow = time.Millisecond
+
+// waitPastDedupWindow sleeps past lifecycleDedupWindow so a following alert is
+// guaranteed to exercise the unresolved-record reuse path rather than the
+// in-window suppression path. Without it these tests flake under load / -race
+// (observed: TestMonitor_UnresolvedRecordReuse, 2/10 runs).
+func waitPastDedupWindow() {
+	time.Sleep(5 * lifecycleDedupWindow)
+}
+
 func newLifecycleTestMonitor(t *testing.T) (*Monitor, *AlertStore) {
 	t.Helper()
 	store := newTestStore(t)
 	m := NewMonitor()
 	m.SetAlertStore(store)
-	m.SetDeduplicator(NewAlertDeduplicator(1*time.Millisecond, store))
+	m.SetDeduplicator(NewAlertDeduplicator(lifecycleDedupWindow, store))
 	return m, store
 }
 
@@ -49,6 +65,7 @@ func TestMonitor_UnresolvedRecordReuse(t *testing.T) {
 	m.AlertWithBreakdown(AlertLevelWarning, "background_task",
 		"Task alpha is stale: not run for 5m", md("alpha"), nil)
 	waitForRecords(t, store, 1) // first save must land before recurrence
+	waitPastDedupWindow()       // and the dedup window must have elapsed
 	m.AlertWithBreakdown(AlertLevelWarning, "background_task",
 		"Task alpha is stale: not run for 10m", md("alpha"), nil)
 
@@ -147,6 +164,7 @@ func TestMonitor_ResolveByIdentity_CategoryWide(t *testing.T) {
 
 	m.AlertWithBreakdown(AlertLevelWarning, "evolution", "replay_data_stale", nil, nil)
 	waitForRecords(t, store, 1) // first save must land before recurrence
+	waitPastDedupWindow()       // and the dedup window must have elapsed
 	m.AlertWithBreakdown(AlertLevelWarning, "evolution", "replay_data_unavailable", nil, nil)
 	// Identity-less family: same category+level collapses into one record
 	// whose count grows (#1787 reuse) — that record is what resolves.
