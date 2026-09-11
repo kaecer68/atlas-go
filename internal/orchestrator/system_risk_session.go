@@ -184,7 +184,16 @@ func (s *System) finalizeRiskForensics(result *domain.SimulationResult) {
 	if len(s.Sim().returnHistory) >= RiskForensicsMinSamples {
 		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
 		result.RiskSnapshot = &snap
-		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
+		// The snapshot itself is deterministic and always built (backtest
+		// analytics want it). The LLM performance-forensics hook is a live
+		// monitoring concern and is therefore skipped for caller-injected state
+		// (backtest harnesses): it would cost money, add noise, and make a
+		// deliberately reproducible backtest non-deterministic. Production
+		// daily runs load their state from disk, so injected_state is false and
+		// the hook runs as intended.
+		if !s.Sim().stateInjected {
+			result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
+		}
 		logging.Info("system", "risk_forensics_snapshot",
 			"session", s.Sim().session.ID,
 			"injected_state", s.Sim().stateInjected,

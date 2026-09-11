@@ -4,6 +4,12 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(risk): backtest 不再觸發 LLM 績效鑑識 hook（snapshot 保留）（2026-09-12）
+- **原則**：`RiskSnapshot`（確定性、可用於回測分析）**一律建**；LLM 註解 hook 是「live monitoring」關注點，因此**呼叫端注入狀態（backtest harness）時跳過**。
+- **理由**：(1) 省錢與降噪；(2) 回測必須可重現 —— 一次 LLM 呼叫就讓它變成非確定性；(3) production daily run 從磁碟載入狀態（`injected_state=false`），hook 照常執行。
+- **測試**：`TestFinalizeRiskForensics_SkipsLLMHookForInjectedState`（注入狀態 → hook 0 次但 snapshot 仍建；非注入 → hook 1 次且帶回 commentary）。
+- **可觀測性**：#1895 的 `session` / `injected_state` 欄位讓這件事在 log 上可驗證。
+
 ### fix(risk): 風險鑑識 log 可歸屬（session id + injected_state）（2026-09-12）
 - **問題**：`risk_forensics_pending` / `risk_forensics_snapshot` 兩行只印 `component=system`，無法分辨是「production daily 路徑」還是「backtest harness 自己的 loop」印的（兩者都走同一條 replay 路徑與同一個 helper）。實測時同時看到 `samples=13/14/20`，需要人工比對 state 檔指紋才能歸屬。
 - **修法**：兩行都加上 `session=<session id>` 與 `injected_state=<true|false>`。daily production run 會顯示自己的 session id 且 `injected_state=false`；用 `WithPersistentState()` 注入狀態的 backtest 會顯示 `injected_state=true`。log 因此可直接歸屬，不需要再比對檔案。

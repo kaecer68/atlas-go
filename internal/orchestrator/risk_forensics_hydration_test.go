@@ -293,3 +293,56 @@ func TestLoadedStateIsStillPersisted(t *testing.T) {
 			len(saved.EquityCurve), len(seed.EquityCurve))
 	}
 }
+
+// TestFinalizeRiskForensics_SkipsLLMHookForInjectedState pins the split between
+// the deterministic snapshot and the live-monitoring LLM hook: a backtest
+// harness that injects its own state must not spend money on LLM commentary
+// (nor make a reproducible backtest non-deterministic), while production runs
+// (state loaded from disk) keep calling the hook.
+func TestFinalizeRiskForensics_SkipsLLMHookForInjectedState(t *testing.T) {
+	origHook := risk.PerformanceForensics
+	t.Cleanup(func() { risk.PerformanceForensics = origHook })
+
+	history := make([]float64, 0, RiskForensicsMinSamples+1)
+	equity := make([]float64, 0, RiskForensicsMinSamples+2)
+	value := 1_000_000.0
+	equity = append(equity, value)
+	for i := 0; i < RiskForensicsMinSamples+1; i++ {
+		r := 0.002 * float64((i%5)-2)
+		history = append(history, r)
+		value *= 1 + r
+		equity = append(equity, value)
+	}
+
+	newSys := func(injected bool) *System {
+		sys := newTestSystem(t)
+		sys.Sim().returnHistory = append([]float64(nil), history...)
+		sys.Sim().portfolioHistory = append([]float64(nil), equity...)
+		sys.Sim().stateInjected = injected
+		return sys
+	}
+
+	calls := 0
+	risk.PerformanceForensics = func(_ context.Context, _ any) (string, error) {
+		calls++
+		return "commentary", nil
+	}
+
+	backtestResult := domain.SimulationResult{}
+	newSys(true).finalizeRiskForensics(&backtestResult)
+	if calls != 0 {
+		t.Errorf("injected-state run called the LLM hook %d times, want 0", calls)
+	}
+	if backtestResult.RiskSnapshot == nil {
+		t.Error("injected-state run must still build the deterministic RiskSnapshot")
+	}
+
+	prodResult := domain.SimulationResult{}
+	newSys(false).finalizeRiskForensics(&prodResult)
+	if calls != 1 {
+		t.Errorf("production run called the LLM hook %d times, want 1", calls)
+	}
+	if prodResult.RiskCommentary != "commentary" {
+		t.Errorf("RiskCommentary = %q, want the hook output", prodResult.RiskCommentary)
+	}
+}
