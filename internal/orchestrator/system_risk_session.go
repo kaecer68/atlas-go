@@ -266,6 +266,13 @@ func (s *System) persistPersistentState() error {
 	if (mode != "daily" && mode != "replay") || s.Sim().persistentState == nil {
 		return nil
 	}
+	if s.Sim().stateInjected {
+		// Caller-owned state (WithPersistentState, e.g. a backtest window):
+		// persisting it would overwrite the production simulation state with
+		// the backtest's own series. The caller keeps the state in memory and
+		// carries it across dates itself.
+		return nil
+	}
 	return sim.SavePersistentState(s.Sim().cfg.LedgerDir, s.Sim().persistentState)
 }
 

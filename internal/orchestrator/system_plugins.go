@@ -71,8 +71,14 @@ func (s *System) WithJANUS(j *janus.Engine, pm *prism.PRISMManager) *System {
 // WithPersistentState enables cross-day simulation state carry-over for backtests.
 // The in-process return/portfolio history is seeded from the injected state for
 // the same reason the lazy loader does it (issue #1888).
+//
+// The injected state is owned by the caller and is therefore never written back
+// to <LedgerDir>/simulation_state.json (see SimulationCore.stateInjected): a
+// backtest harness that injects a fresh state must not overwrite the production
+// simulation state.
 func (s *System) WithPersistentState(state *domain.SimulationState) *System {
 	s.Sim().persistentState = state
+	s.Sim().stateInjected = true
 	s.hydrateHistoryFromPersistentState(state)
 	return s
 }

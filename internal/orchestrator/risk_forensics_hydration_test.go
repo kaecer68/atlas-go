@@ -209,3 +209,87 @@ func TestFinalizeRiskForensics_PendingBelowThreshold(t *testing.T) {
 		t.Error("RiskSnapshot must stay nil below the threshold")
 	}
 }
+
+// TestWithPersistentState_DoesNotClobberLedgerState is the regression test for a
+// production data-integrity bug: the weekly window_backtest task injects its own
+// fresh state via WithPersistentState, and the replay run path used to persist
+// that state back to <LedgerDir>/simulation_state.json — silently destroying the
+// production daily-return history (observed on iMac 2026-09-11: the file dropped
+// from 19 returns to 0 while window_backtest was mid-loop).
+func TestWithPersistentState_DoesNotClobberLedgerState(t *testing.T) {
+	dir := t.TempDir()
+	returns := make([]float64, 0, 40)
+	equity := make([]float64, 0, 41)
+	value := 1_000_000.0
+	equity = append(equity, value)
+	for i := 0; i < 40; i++ {
+		r := 0.002 * float64((i%7)-3)
+		returns = append(returns, r)
+		value *= 1 + r
+		equity = append(equity, value)
+	}
+	production := domain.SimulationState{Cash: value, EquityCurve: equity, DailyReturns: returns}
+	if err := sim.SavePersistentState(dir, &production); err != nil {
+		t.Fatalf("SavePersistentState: %v", err)
+	}
+
+	// A backtest-style system: fresh caller-owned state, replay path forced.
+	sys := newTestSystem(t)
+	sys.Sim().cfg.LedgerDir = dir
+	sys.Sim().cfg.ReplaySessionDate = "2026-06-15"
+	sys.Sim().replay = &replay.Dataset{}
+	sys.Sim().session.Mode = "daily"
+	backtestState := domain.NewSimulationState(1_000_000)
+	sys.WithPersistentState(&backtestState)
+
+	if _, err := sys.RunDailySimulation(time.Now()); err != nil {
+		t.Fatalf("RunDailySimulation: %v", err)
+	}
+
+	saved, err := sim.LoadPersistentState(dir)
+	if err != nil {
+		t.Fatalf("LoadPersistentState: %v", err)
+	}
+	if saved == nil {
+		t.Fatal("simulation_state.json disappeared")
+	}
+	if len(saved.DailyReturns) != len(returns) {
+		t.Errorf("persisted daily returns = %d, want the production series (%d) untouched — the injected backtest state must not be written back",
+			len(saved.DailyReturns), len(returns))
+	}
+	if len(saved.EquityCurve) != len(equity) {
+		t.Errorf("persisted equity curve = %d, want %d", len(saved.EquityCurve), len(equity))
+	}
+}
+
+// TestLoadedStateIsStillPersisted guards the other direction: a state that was
+// loaded from disk (not injected) must keep being persisted.
+func TestLoadedStateIsStillPersisted(t *testing.T) {
+	dir := t.TempDir()
+	seed := domain.SimulationState{
+		Cash:         1_000_000,
+		EquityCurve:  []float64{1_000_000, 1_010_000},
+		DailyReturns: []float64{0.01},
+	}
+	if err := sim.SavePersistentState(dir, &seed); err != nil {
+		t.Fatalf("SavePersistentState: %v", err)
+	}
+
+	sys := newTestSystem(t)
+	sys.Sim().cfg.LedgerDir = dir
+	sys.Sim().cfg.ReplaySessionDate = "2026-06-15"
+	sys.Sim().replay = &replay.Dataset{}
+	sys.Sim().session.Mode = "daily"
+
+	if _, err := sys.RunDailySimulation(time.Now()); err != nil {
+		t.Fatalf("RunDailySimulation: %v", err)
+	}
+	saved, err := sim.LoadPersistentState(dir)
+	if err != nil {
+		t.Fatalf("LoadPersistentState: %v", err)
+	}
+	if saved == nil || len(saved.EquityCurve) <= len(seed.EquityCurve) {
+		t.Errorf("persisted equity curve = %v, want it to grow past the seeded %d entries",
+			len(saved.EquityCurve), len(seed.EquityCurve))
+	}
+}
