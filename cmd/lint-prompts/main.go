@@ -102,7 +102,8 @@ func buildRouter() llm.Router {
 	if deepseekKey != "" {
 		base := clients.NewBaseClient(llm.ProviderDeepSeek, clients.BaseClientConfig{})
 		dc := clients.NewDeepSeekClient(deepseekKey, base)
-		adapter := llmAdapters.NewDeepSeekAdapter(dc, "deepseek-v4-pro")
+		adapter := llmAdapters.NewDeepSeekAdapter(dc,
+			clients.ResolveDeepSeekModel(config.GetSecret(clients.DeepSeekModelEnvVar)))
 		_ = router.Register(adapter)
 	}
 

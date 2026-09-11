@@ -38,7 +38,7 @@ func NewCodeReviewAnnotationHandler(router llm.Router) *CodeReviewAnnotationHand
 
 // Handle executes the code review annotation capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassPublic when unset.
+//  2. Defaults DataClass to DataClassNonRegulated when unset.
 //  3. Dispatches through the Router with CapabilityCodeReviewAnnotation.
 //  4. Parses the response into a CodeReviewAnnotationResponse (JSON-first,
 //     then raw string fallback as a single annotation).
@@ -63,7 +63,9 @@ func (h *CodeReviewAnnotationHandler) Handle(
 		Capability: llm.CapabilityCodeReviewAnnotation,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 800},
+		// max_tokens 4096 (was 800): diff 審查需輸出 findings JSON，長 diff 可能產生數十筆標註。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 4096},
 	}
 
 	resp, err := h.router.Call(ctx, req)

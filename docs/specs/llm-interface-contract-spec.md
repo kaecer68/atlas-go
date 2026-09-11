@@ -38,7 +38,12 @@ const (
 )
 
 // DataClass 標記 capability 輸出資料的合規分級。
-// DataClass 在每次 Request 中由呼叫端標明，Router 依此拒絕違規 provider。
+//
+// ⚠️ 本段為 v2.0 設計草稿，**非**目前程式碼的權威定義。實作以
+// `internal/llm/provider.go` 的 int 型別 enum 為準，四個類別為
+// Unmarked / NonRegulated / Regulated / Secret（沒有 public / internal 兩級；
+// capability handler 註解曾誤用這兩個名稱，已於 ADR-012 修正）。
+// ADR-012 起 DataClass 僅為稽核／觀測 metadata，Router 不再依它拒絕任何 provider。
 type DataClass string
 
 const (

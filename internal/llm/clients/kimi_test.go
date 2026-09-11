@@ -3,7 +3,6 @@ package clients
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -124,43 +123,61 @@ func TestKimi_Chat_AuthHeader(t *testing.T) {
 	}
 }
 
-// TestKimi_RejectsRegulatedDataClass verifies that DataClassRegulated
-// causes Chat() to return ErrIncompatibleDataClass.
-func TestKimi_RejectsRegulatedDataClass(t *testing.T) {
+// TestKimi_AcceptsRegulatedDataClass verifies ADR-012: DataClass is audit
+// metadata only, so a DataClassRegulated payload is sent to the API instead of
+// being rejected client-side.
+func TestKimi_AcceptsRegulatedDataClass(t *testing.T) {
+	called := false
+	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("server should not be called for rejected data class")
-		w.WriteHeader(http.StatusOK)
+		called = true
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"kimi-for-coding","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
 	}))
 	defer srv.Close()
 
 	client := NewKimiClient("test-key", newTestBaseClient())
 	client.BaseURL = srv.URL
 
-	_, err := client.Chat(context.Background(), []Message{
-		{Role: "user", Content: "secret stuff"},
+	resp, err := client.Chat(context.Background(), []Message{
+		{Role: "user", Content: "regulated stuff"},
 	}, &ChatOptions{DataClass: llm.DataClassRegulated})
-	if err == nil {
-		t.Fatal("expected error for DataClassRegulated")
+	if err != nil {
+		t.Fatalf("unexpected error for DataClassRegulated: %v", err)
 	}
-	if !errors.Is(err, ErrIncompatibleDataClass) {
-		t.Errorf("expected ErrIncompatibleDataClass, got %v", err)
+	if !called {
+		t.Fatal("expected the API to be called for DataClassRegulated")
+	}
+	if resp.Content != "ok" {
+		t.Errorf("content = %q, want %q", resp.Content, "ok")
+	}
+	if _, leaked := gotBody["data_class"]; leaked {
+		t.Error("data_class must not be sent on the wire (audit metadata stays local)")
 	}
 }
 
-// TestKimi_RejectsSecretDataClass verifies that DataClassSecret also
-// causes Chat() to return ErrIncompatibleDataClass.
-func TestKimi_RejectsSecretDataClass(t *testing.T) {
-	client := NewKimiClient("test-key", newTestBaseClient())
-	client.BaseURL = "http://localhost:1" // won't be reached
+// TestKimi_AcceptsSecretDataClass verifies that DataClassSecret is likewise
+// forwarded rather than rejected (ADR-012).
+func TestKimi_AcceptsSecretDataClass(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"kimi-for-coding","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
+	}))
+	defer srv.Close()
 
-	_, err := client.Chat(context.Background(), []Message{
+	client := NewKimiClient("test-key", newTestBaseClient())
+	client.BaseURL = srv.URL
+
+	if _, err := client.Chat(context.Background(), []Message{
 		{Role: "user", Content: "top secret"},
-	}, &ChatOptions{DataClass: llm.DataClassSecret})
-	if err == nil {
-		t.Fatal("expected error for DataClassSecret")
+	}, &ChatOptions{DataClass: llm.DataClassSecret}); err != nil {
+		t.Fatalf("unexpected error for DataClassSecret: %v", err)
 	}
-	if !errors.Is(err, ErrIncompatibleDataClass) {
-		t.Errorf("expected ErrIncompatibleDataClass, got %v", err)
+	if !called {
+		t.Fatal("expected the API to be called for DataClassSecret")
 	}
 }
 

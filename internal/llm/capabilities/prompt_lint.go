@@ -37,7 +37,7 @@ func NewPromptLintHandler(router llm.Router) *PromptLintHandler {
 
 // Handle executes the prompt lint capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassPublic when unset.
+//  2. Defaults DataClass to DataClassNonRegulated when unset.
 //  3. Dispatches through the Router with CapabilityPromptLint.
 //  4. Parses the response into a PromptLintResponse (JSON-first,
 //     then raw string fallback as a single warning issue).
@@ -62,7 +62,9 @@ func (h *PromptLintHandler) Handle(
 		Capability: llm.CapabilityPromptLint,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 800},
+		// max_tokens 4096 (was 800): lint findings JSON 每檔多筆，需與 code review 同級預算。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 4096},
 	}
 
 	resp, err := h.router.Call(ctx, req)

@@ -35,7 +35,7 @@ func NewSentimentExplanationHandler(router llm.Router) *SentimentExplanationHand
 
 // Handle executes the sentiment explanation capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassPublic when unset.
+//  2. Defaults DataClass to DataClassNonRegulated when unset.
 //  3. Dispatches through the Router with CapabilitySentimentExplanation.
 //  4. Parses the response into a SentimentExplanationResponse (JSON-first,
 //     then raw string fallback as Explanation).
@@ -61,7 +61,9 @@ func (h *SentimentExplanationHandler) Handle(
 		Capability: llm.CapabilitySentimentExplanation,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 500},
+		// max_tokens 2048 (was 500): 情緒解釋段落 + JSON 外殼；原值不足。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)

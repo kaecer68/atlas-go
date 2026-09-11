@@ -1,7 +1,7 @@
 # LLM 整合架構決策紀錄（LLM Decision Log）
 
 > **文件角色**：atlas-go LLM 整合的 ADR（Architecture Decision Record）時序紀錄。每一條都附**理由**與**拒絕的替代方案**。
-> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.1，本文件為其 §10 抽離）
+> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.2，本文件為其 §10 抽離）
 > **新增 ADR 流程**：建立新章節，狀態 = Proposed → Accepted / Superseded；append-only，不覆寫既有紀錄。
 
 ---
@@ -128,7 +128,8 @@
 ### ADR-010（v2.0 新增）：MiniMax M3 Hosted API 的資料主權閘門
 
 - **日期**：v2.0（2026-06）
-- **狀態**：Accepted
+- **狀態**：Superseded by ADR-012（2026-09-11）
+- **後續**：本閘門已由 ADR-012 拆除；`DataClass` 降為稽核 metadata。以下內文保留為歷史紀錄（append-only，不覆寫）。
 - **決策**：MiniMax M3 hosted API（`https://api.minimax.io/v1`）**不得**接收受規範金融資料；`DataClass == Regulated` 的 capability 在路由到 M3 hosted 之前必須先嘗試 self-host M3 或降級到 backup1。
 - **理由**：
   - MiniMax M3 hosted API 的伺服器位於中國境內，受 2017 年《中華人民共和國國家安全法》管轄。
@@ -140,3 +141,33 @@
   - **完全不接 M3**：失去最佳金融 + 繁中模型；PRISM insight、gap description 的品質會下降。
   - **M3 hosted 與 self-host 預設共存**（讓使用者選）：增加設定複雜度；多數使用者會選預設值，違背設計意圖。
   - **完全 self-host M3**：部署成本高（440GB 權重需 GPU 叢集）；短期不可行。
+
+### ADR-011：Capability name 對齊（Phase 2）— 未收錄
+
+> **⚠️ 待補**：`docs/specs/llm-routing-spec.md` §6.1 引用了 ADR-011（Phase 2 capability name 對齊決策，採 Option B — 對齊 code → doc），但本 ADR log 尚未收錄該條目。此處僅為預留位置（append-only 精神），**不代為臆測內容**；補齊時請依上方「新增 ADR 流程」填入完整條目。
+
+### ADR-012（2026-09-11 新增）：拆除 MiniMax DataClass 主權閘門，改以任務可達成率與訂閱額度選模型
+
+- **日期**：2026-09-11
+- **狀態**：Accepted（取代 ADR-010；ADR-009 的能力 guard 不受影響）
+- **決策**：
+  1. **拆除 provider 閘門**：`internal/llm/router.go` 的 `shouldGateProvider()` 與 `Call()` 內兩處呼叫已刪除；`internal/llm/clients/kimi.go` 對 `DataClassRegulated` / `DataClassSecret` 的 `ErrIncompatibleDataClass` 拒收已刪除。**ADR-009 的 `kimiAllowedCaps` 能力 guard 保留不動。**
+  2. **`DataClass` 降為稽核 / 觀測 metadata**：enum 維持 `Unmarked` / `NonRegulated` / `Regulated` / `Secret` 四類；`DataClass` 繼續隨 `Request` 傳遞、記入 metric 與 span，作為日後 redaction 的依據，但**不再阻擋任何 provider**。
+  3. **改以「任務可達成率 + 訂閱額度」選模型**：新路由鏈（三個群組）見 `docs/specs/llm-routing-spec.md` §6.1 —— 敘事 / 解釋 JSON 9 個 capability 以 MiniMax M3 為 primary；程式碼 2 個 capability（`code_review_annotation`、`prompt_lint`）以 kimi-for-coding 為 primary；`contra_attribution` 歸敘事群組。`configs/llm_router.yaml` 與 Go 的 `defaultRoutingTable()` 同步同一份鏈。
+  4. **空輸出視為失敗**：Router 收到 provider「成功但 `Output` trim 後為空」一律視為該 provider 失敗，續試下一個鏈成員；`AttemptedProviders` 記錄全部嘗試過的 provider，`FallbackTriggeredTotal` 遞增。詳見 `docs/specs/llm-routing-spec.md` §6.3a。
+  5. **模型名設定化**：新增環境變數 `LLM_DEEPSEEK_MODEL`（預設 canonical `deepseek-flash` = DeepSeek-V4.1-Flash），取代 `cmd/lint-pr`、`cmd/atlas`、`cmd/lint-prompts` 內硬編碼的 `deepseek-v4-pro`。`internal/llm/clients/deepseek.go` 的 `DefaultModelV4Pro` / `DefaultModelV4Flash` 常數保留但標 deprecated，新增 `DefaultModelV4_1Flash = "deepseek-flash"`。**`deepseek-v4-pro` / `deepseek-pro` 已退役，不得再作為派遣或預設模型。**
+  6. **`max_tokens` 重新校準**：reasoning 模型（M3 / deepseek-flash）需要最低預算，舊值過小會讓 thinking 吃光預算而回空內容。舊值 → 新值明細見 `docs/specs/llm-routing-spec.md` §6.1a。
+- **理由**：
+  1. **閘門沒有主權收益，只有成本**：閘門只擋 MiniMax（上海 / 中國），但被擋下的資料實際落到 DeepSeek（`api.deepseek.com`，杭州）；kimi 為 Moonshot（北京）。三家同屬同一管轄區 → gate 沒有換到任何主權保障，只讓成本變約 5 倍。
+  2. **ADR-010 的核心規則不可實作**：ADR-010 自己寫「`DataClass == Secret` 強制走 self-host」，但程式碼裡根本沒有 self-host provider（`internal/llm/provider.go` 無此常數、亦無任何自架實作）→ 該規則無對應程式碼可實作。
+  3. **閘門的實際效果是能力退化與沉默空輸出**：gate 讓部分 capability 永久失去 primary、掉到 backup；並在 production 造成沉默空輸出 —— primary 被跳過後，backup 以過小的 `max_tokens` 讓 reasoning 吃光預算，回傳成功（success）但 `output` 為空，**呼叫端拿到空字串且無 error**。這也是本次同步校準 `max_tokens` 並將空輸出視為失敗的直接原因。
+  4. **主權控制的粒度錯了**：若真的要「不讓第三方處理」，正確控制是「全供應商一致封鎖」或「self-host」，而不是挑一家廠商擋。此點列入下方 residual risk。
+- **拒絕方案**：
+  - **保留閘門 + 補上 self-host M3**（ADR-010 的長期路徑）：self-host 在本次決策時點未實作；在自架落地前，閘門仍會持續製造沉默空輸出，因此不能作為「不改程式碼」的理由。
+  - **把閘門從 MiniMax 擴大到所有中國境內 provider（MiniMax + DeepSeek + Kimi）**：等於停用全部主力 provider，在 self-host 就緒前不可行。
+  - **只改文件警告、不動程式碼**：gate 的退化行為來自程式碼（provider 被跳過、backup 預算不足），文件警告無法阻止空輸出，必須以程式碼與路由鏈修正。
+- **Residual risk / 未決事項**：
+  1. **主權風險未消除，只是不再由 Router 以「單一 provider 黑名單」處理**。未決：是否改採「全供應商一致封鎖」或「self-host」；self-host 目標模型與部署時程均未定。
+  2. `DataClass` 現為純 metadata；若日後要作為 redaction 的觸發條件，需先確認各 capability 的 `DataClass` 填值正確（現況部分 capability 在未設定時自行預設 `Regulated`）。此屬稽核面向工作，不影響路由。
+  3. **ADR-011（capability name 對齊）未收錄於本 log**：`docs/specs/llm-routing-spec.md` §6.1 已引用，待補（見上方「ADR-011」預留位置）。
+  4. **`contra_attribution` 目前無 handler 實作**：路由鏈已定義（primary minimax / backup1 deepseek / last_resort mock），但無 `max_tokens` 可校準；handler 落地時需另行定義 last resort 語意。

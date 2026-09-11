@@ -39,8 +39,12 @@ type providerHealthJSON struct {
 
 // healthResponse is the top-level JSON response for GET /api/llm/health.
 type healthResponse struct {
-	Providers     map[string]providerHealthJSON `json:"providers"`
-	RouterVersion string                        `json:"router_version"`
+	Providers map[string]providerHealthJSON `json:"providers"`
+	// RouterVersion is the routing-spec revision the live routing table
+	// implements: v2.2 = ADR-012 chains (MiniMax-first narrative group,
+	// Kimi-first code group, deepseek-flash as global fallback, DataClass
+	// demoted to audit metadata).
+	RouterVersion string `json:"router_version"`
 }
 
 // HandleGetHealth returns the health status of all registered LLM providers.
@@ -58,6 +62,6 @@ func (h *Handler) HandleGetHealth(r *http.Request) (int, any) {
 	}
 	return http.StatusOK, healthResponse{
 		Providers:     providers,
-		RouterVersion: "v2.1",
+		RouterVersion: "v2.2",
 	}
 }

@@ -71,6 +71,10 @@ func (h *FailureAttributionHandler) Handle(
 		Capability: llm.CapabilityFailureAttribution,
 		Payload:    payload.FailureContext,
 		DataClass:  dc,
+		// max_tokens 2048 (was provider default): annotator hot path.
+		// rule_based attribution stays authoritative; this is the floor that
+		// keeps a reasoning model from answering with an empty message.
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)

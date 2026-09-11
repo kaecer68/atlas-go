@@ -9,12 +9,18 @@
 > - `Request.Validate()` 在 PR3 新增,統一驗證 `ToolChoice`(reserved keywords 或 registered tool names)。Provider adapter 在 dispatch 前必須呼叫,trust valid input。詳見 `internal/llm/provider.go` 的 `Request.Validate()` docstring。
 > - L2.3 PoC(`SemiconductorLLMAgent` + `DriverAdapter`)是本框架的**第一個 sector agent consumer**,驗證了 end-to-end flow。詳見 [`docs/specs/llm-sector-agent-spec.md`](specs/llm-sector-agent-spec.md)。
 > 維護者：core architecture
-> 版本：v2.1（與 `internal/MATURITY.md` 對齊於 2026-06）
+> 版本：v2.2（與 `internal/MATURITY.md` 對齊於 2026-06）
 >
 > **v2.1 修訂**：
 > 1. 新增 §3.1a「領域上下文：台灣股市慣性特徵」——定義六大台股慣性特徵及其對 capability 輸出的評估影響。
 > 2. Phase 2 新增「台灣股市情境 A/B 評測」任務——用真實台股失效歸因樣本驗證各 provider 對金融領域的適用性。
 > 3. 明確邊界：台灣市場特徵是 capability 輸出評估框架，不影響 Provider 介面/路由/模型選擇。
+>
+> **v2.2 修訂**（2026-09-11）：
+> 1. 拆除 ADR-010 的 MiniMax DataClass 主權閘門（程式碼 + 路由），改以「任務可達成率 + 訂閱額度」選模型。
+> 2. `DataClass` 降為稽核 / 觀測 metadata，不再阻擋任何 provider；enum 維持四類不變。
+> 3. 新增 `ADR-012`（取代 ADR-010），並註記 `ADR-011` 未收錄於 ADR log；DeepSeek 預設模型改為 canonical `deepseek-flash`（V4.1-Flash）。
+> 4. 路由鏈、`max_tokens` 校準（§6.1a）與「空輸出視為失敗」（§6.3a）細節見 [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md)。
 >
 > **v2.1.1 結構抽離**（2026-06）：§4.2-4.5、§6 路由策略、§8 遷移路徑、§10 決策紀錄抽離至獨立文件以降低本檔行數（1770 → 972）：
 > - §4.2-4.5 → [`docs/specs/llm-interface-contract-spec.md`](specs/llm-interface-contract-spec.md)（356 行）
@@ -352,12 +358,16 @@ atlas-go 目前**只有一條** production runtime LLM 呼叫路徑，其餘所�
 
 理由：MiniMax M3 hosted API 受中國 2017 國家安全法管轄。詳見 §9 風險 8 與 ADR-010。
 
+> **⚠️ 已廢止（2026-09-11，ADR-012）**：本原則的**閘門機制已廢止** —— 原「MiniMax 為單一受管制 provider 黑名單」的做法沒有主權收益（DeepSeek / Kimi 同屬同一管轄區），且造成 production 沉默空輸出。`DataClass` 保留為 **audit metadata**（繼續傳遞、記 metric/span，作為日後 redaction 依據），但**不再影響 provider 選擇**。主權風險的後續處理見 §9 風險 8 的 residual risk 註記與 ADR-012。
+
 ---
 
 ## 三、能力分類學（Capability Taxonomy）
 
 > 表頭為必填欄位：**能力名稱 | 觸發時機 | 目前狀態 | 路由優先順序 | 消費者模組 | 優先級 | 成熟度目標**
 > v2.0 起「目標 Provider」改為**路由優先順序**（primary + backup1 + backup2 + last resort），不再是單一 provider。
+
+> **⚠️ 路由欄位已由 ADR-012 取代（2026-09-11）**：下表「路由優先順序」欄保留 v2.0 的歷史內容（含已退役的 DeepSeek V4-Pro）。**權威路由鏈一律以 [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md) §6.1 為準**。
 
 | 能力名稱 | 觸發時機 | 目前狀態 | 路由優先順序（primary → last） | 消費者模組 | 優先級 | 成熟度目標 |
 |----------|----------|----------|-------------------------------|------------|--------|------------|
@@ -404,6 +414,8 @@ atlas-go 的核心應用場景為**台灣股票市場的智慧策略與智慧推
 ### 3.2 能力-模型匹配決策（Capability-Model Matching）
 
 > 本節是 §3 表格的「為什麼」展開。每個 capability 的 primary 選擇都有**對應 §1a 矩陣的評分依據**，不是任意指定。
+>
+> **⚠️ 已由 ADR-012 取代（2026-09-11）**：下表為 v2.0 的歷史決策（DeepSeek V4-Pro 已退役）。現行 primary 選擇以 [`docs/specs/llm-routing-spec.md`](specs/llm-routing-spec.md) §6.1 為權威：敘事 / 解釋 JSON 群組用 MiniMax M3（訂閱額度 + 繁中金融敘事），程式碼群組用 kimi-for-coding（ADR-009），DeepSeek 為全域 fallback（canonical `deepseek-flash`）。
 
 | Capability | Primary | 評分依據（§1a） | 拒絕的替代 |
 |------------|---------|------------------|------------|
@@ -420,9 +432,9 @@ atlas-go 的核心應用場景為**台灣股票市場的智慧策略與智慧推
 
 **核心規則重申**：
 - **K2.7 限縮於 code-related capability**（Code Review Annotation、Agent Prompt Lint 的 code path）。**禁止** 用於 Failure Attribution、Translation、Summary、Headline、Commentary、PRISM Insight、Gap Description。詳見 ADR-009。
-- **DeepSeek V4-Pro 為複雜推理首選**；適用於歸因、旁註、複雜摘要。
-- **DeepSeek V4-Flash 為成本優首選**；適用於翻譯、headline、dev path。
-- **MiniMax M3 為金融/繁中敘事首選**；當資料含受規範金融欄位時應走自架 M3。詳見 ADR-010。
+- **DeepSeek V4-Pro 已退役（2026-09-11，ADR-012）**；不再派遣，亦不作為任何 capability 的 primary 或預設模型。原「複雜推理首選」角色由 canonical `deepseek-flash`（V4.1-Flash）承接。
+- **deepseek-flash（V4.1-Flash）為 deepseek 的預設模型名**；適用於備援、翻譯、headline、dev path，模型名可用 `LLM_DEEPSEEK_MODEL` 覆寫。
+- **MiniMax M3 為金融/繁中敘事首選**；~~當資料含受規範金融欄位時應走自架 M3~~（該規則已廢止，見 ADR-012：`DataClass` 僅為 audit metadata）。
 - **OpenCode-Go 為通用備援**；所有 capability 的 backup2 都是它。
 - **OpenCode-Zen 為 last-mile 備援**；當 OpenCode-Go 也不可用時啟動，但品質保證較低。
 - **Last resort 因 capability 而異**：見 §3 表格「last」欄位。
@@ -880,11 +892,15 @@ groups:
 
 **為何這是 v2.0 必須處理的風險**：v1.0 單一 provider（Kimi/Moonshot）沒有這個顧慮；v2.0 引入 MiniMax M3 後，hosted M3 的管轄風險就成為架構層面的現實問題。**只在文件章節列為「未來考慮」並不足夠**——必須有結構性閘門（DataClass 與 self-host fallback）才能讓 LLM 整合在合規框架下運作。
 
+> **⚠️ v2.2 補註（2026-09-11，ADR-012）**：原緩解 2「DataClass 閘門」**已廢止**，緩解 1「self-host MiniMax M3」的強制要求亦已取消（self-host 從未實作）。閘門只擋 MiniMax（上海），被擋下的資料實際落到 DeepSeek（`api.deepseek.com`，杭州）、kimi 為 Moonshot（北京）——三家同屬同一管轄區，因此閘門沒有主權收益，只讓成本變約 5 倍，並在 production 造成沉默空輸出。
+>
+> **Residual risk（未消除，已明確接受）**：hosted provider 的主權風險仍在。若要真正「不讓第三方處理」，正確控制是**全供應商一致處理（一致封鎖）或 self-host**，而非挑單一廠商擋；具體策略與部署時程列為 ADR-012 的未決事項。緩解 3（redaction layer）、5（audit log 記錄 `DataClass` 與 `AttemptedProviders`）、6（provider 合約審查）、7（定期 review）維持有效，且因 `DataClass` 降為 audit metadata 而更形重要。
+
 ---
 
 ## 十、決策紀錄
 
-> **📦 已抽離**：本節完整內容（ADR-001 至 ADR-010）移至 [`docs/llm-adr-log.md`](llm-adr-log.md)。
+> **📦 已抽離**：本節完整內容（ADR-001 至 ADR-012）移至 [`docs/llm-adr-log.md`](llm-adr-log.md)。
 
 **ADR 新增流程**：建立新章節於 `docs/llm-adr-log.md`，狀態 = Proposed → Accepted / Superseded；append-only，不覆寫既有紀錄。
 ## 附錄 A：本框架未涵蓋的議題（Out of Scope）
@@ -962,12 +978,13 @@ groups:
 
 - **v1.0**（前版文件）：定義 capability 分類學、介面合約、遷移路徑、決策紀錄；採用單一 provider（Kimi/Moonshot）。
 - **v2.0**：補齊三主力模型（Kimi K2.6/K2.7、MiniMax M3、DeepSeek V4-Pro/V4-Flash）+ 兩個備援通道；新增 §1a Model Capability Matrix；§3 改為四級路由鏈；§6 重寫為 multi-provider 路由策略與備援機制；新增 §9 風險 8（資料主權）；ADR-005 重寫，新增 ADR-009（K2.7 限縮）、ADR-010（資料主權閘門）。
-- **v2.1**（本文件）：新增 §3.1a 台灣股市慣性特徵領域上下文；Phase 2 新增台股情境 A/B 評測任務；明確台股特徵為輸出評估框架非 Provider 設計輸入。
+- **v2.1**：新增 §3.1a 台灣股市慣性特徵領域上下文；Phase 2 新增台股情境 A/B 評測任務；明確台股特徵為輸出評估框架非 Provider 設計輸入。
+- **v2.2**（本文件，2026-09-11）：拆除 DataClass 主權閘門（原原則 9 / §9 風險 8 緩解 2）；`DataClass` 降為 audit metadata；改以任務可達成率 + 訂閱額度選模型；新增 ADR-012；DeepSeek 預設改 canonical `deepseek-flash`。
 - **後續版本觸發條件**：
   - `llm_annotator` 晉升 E 級 → 需更新 `§5.3` 晉升路徑與 `internal/MATURITY.md`
   - 新增 capability → 需更新 `§3` 分類學與 `§3.2` 決策表
   - 新增 provider → 需更新 `§1a` 矩陣與 `§6.1` 路由表
-  - 新法規影響資料分類 → 需更新 `§9 風險 8` 與 `ADR-010`
+  - 新法規影響資料分類 → 需更新 `§9 風險 8` 與 `ADR-012`
   - Self-host M3 部署完成 → 需更新 `§1a.3`、`§6.1` 路由表預設值
   - 多 capability 跨模組整合 → 需更新 `§7` 審計軌跡
 - **本文件所有「應」字皆對應 MATURITY 規則或既有 production 行為的對齊承諾；無空泛措辭。**

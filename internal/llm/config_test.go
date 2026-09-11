@@ -321,3 +321,85 @@ routing_chains:
 		}
 	}
 }
+
+// TestDefaultRoutingTable_MatchesYAML keeps configs/llm_router.yaml in sync with
+// defaultRoutingTable() (ADR-012). The YAML mirror is currently not loaded by
+// any cmd — llm.NewDefaultRouter() uses defaultRoutingTable(), and no caller
+// invokes TryLoadRouterConfig — so a drift between the two would silently make
+// the documented chain wrong.
+func TestDefaultRoutingTable_MatchesYAML(t *testing.T) {
+	path := filepath.Join("..", "..", "configs", "llm_router.yaml")
+	yamlCfg, err := LoadRouterConfig(path)
+	if err != nil {
+		t.Fatalf("LoadRouterConfig(%s) error = %v", path, err)
+	}
+	goCfg := defaultRoutingTable()
+
+	if len(yamlCfg.RoutingChains) != len(goCfg.RoutingChains) {
+		t.Fatalf("chain count mismatch: yaml=%d go=%d", len(yamlCfg.RoutingChains), len(goCfg.RoutingChains))
+	}
+	for cap, goChain := range goCfg.RoutingChains {
+		yamlChain, ok := yamlCfg.RoutingChains[cap]
+		if !ok {
+			t.Errorf("capability %q missing from configs/llm_router.yaml", cap)
+			continue
+		}
+		if yamlChain != goChain {
+			t.Errorf("capability %q chain mismatch:\n  yaml = %+v\n  go   = %+v", cap, yamlChain, goChain)
+		}
+	}
+	for cap := range yamlCfg.RoutingChains {
+		if _, ok := goCfg.RoutingChains[cap]; !ok {
+			t.Errorf("capability %q present in YAML but missing from defaultRoutingTable()", cap)
+		}
+	}
+}
+
+// TestDefaultRoutingTable_Groups pins the ADR-012 chain groups: narrative /
+// explanation JSON capabilities start at MiniMax, code capabilities start at
+// Kimi (ADR-009), and DeepSeek is the universal backup / global fallback.
+func TestDefaultRoutingTable_Groups(t *testing.T) {
+	cfg := defaultRoutingTable()
+
+	narrative := []Capability{
+		CapabilityFailureAttribution,
+		CapabilityRationaleGeneration,
+		CapabilityStrategySummary,
+		CapabilityRiskSurfaceExtraction,
+		CapabilityRegimeExplanation,
+		CapabilityPerformanceForensics,
+		CapabilityScenarioSimulation,
+		CapabilitySentimentExplanation,
+		CapabilityConfidenceCommentary,
+		CapabilityContraAttribution,
+	}
+	for _, cap := range narrative {
+		chain := cfg.RoutingChains[cap]
+		if chain.Primary != ProviderMiniMax {
+			t.Errorf("%s: primary = %q, want %q", cap, chain.Primary, ProviderMiniMax)
+		}
+		if chain.Backup1 != ProviderDeepSeek {
+			t.Errorf("%s: backup1 = %q, want %q", cap, chain.Backup1, ProviderDeepSeek)
+		}
+	}
+
+	for _, cap := range []Capability{CapabilityCodeReviewAnnotation, CapabilityPromptLint} {
+		chain := cfg.RoutingChains[cap]
+		if chain.Primary != ProviderKimi {
+			t.Errorf("%s: primary = %q, want %q", cap, chain.Primary, ProviderKimi)
+		}
+		if chain.Backup1 != ProviderMiniMax {
+			t.Errorf("%s: backup1 = %q, want %q", cap, chain.Backup1, ProviderMiniMax)
+		}
+		if chain.Backup2 != ProviderDeepSeek {
+			t.Errorf("%s: backup2 = %q, want %q", cap, chain.Backup2, ProviderDeepSeek)
+		}
+	}
+
+	// DeepSeek is the global fallback: it must appear somewhere in every chain.
+	for cap, chain := range cfg.RoutingChains {
+		if chain.Primary != ProviderDeepSeek && chain.Backup1 != ProviderDeepSeek && chain.Backup2 != ProviderDeepSeek {
+			t.Errorf("%s: DeepSeek (global fallback) is absent from chain %+v", cap, chain)
+		}
+	}
+}

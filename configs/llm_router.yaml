@@ -1,13 +1,28 @@
 # LLM Router Configuration
 # Defines the per-capability three-tier fallback chain (Primary → Backup1 → LastResort).
-# Design source: docs/llm-integration-strategy-framework.md §6.1
+# Design source: docs/specs/llm-routing-spec.md §6.1 (ADR-012)
+#
+# ADR-012 (2026-09-11): provider selection follows per-task achievability plus
+# subscription quota. The old per-provider DataClass sovereignty gate is removed —
+# DataClass is audit/observability metadata only and never blocks a provider.
+#
+# ⚠️ Effective routing at runtime: cmd/atlas, cmd/lint-pr and cmd/lint-prompts build
+# their router with llm.NewDefaultRouter(...), which uses defaultRoutingTable() in
+# internal/llm/router.go. No cmd calls TryLoadRouterConfig yet, so this file is a
+# mirror, not the live source. TestDefaultRoutingTable_MatchesYAML keeps them equal;
+# this file must be updated together with defaultRoutingTable().
 #
 # Provider values:
-#   minimax      — MiniMax M3 (primary capability host; China jurisdiction — gated for DataClassRegulated)
-#   deepseek     — DeepSeek V4-Pro (first backup; strong analytical capabilities)
+#   kimi         — Kimi K2.7 (kimi-for-coding); code capabilities only (ADR-009)
+#   minimax      — MiniMax M3 (narrative/explanation JSON group; 1M context)
+#   deepseek     — DeepSeek V4.1-Flash (canonical model name "deepseek-flash"; global fallback)
 #   mock         — Mock provider (last resort; returns empty output)
 #   opencode_go  — [PLANNED] ProviderOpenCodeGo constant reserved for future use; not in routing chain (no client implementation)
 #   opencode_zen — [PLANNED] ProviderOpenCodeZen constant reserved for future use; not in routing chain
+#
+# Model name: deepseek-v4-pro / deepseek-pro are retired (2026-09-11) and MUST NOT
+# reappear here or in code. The DeepSeek model name is configurable at runtime via
+# LLM_DEEPSEEK_MODEL (default "deepseek-flash").
 #
 # Issue #720 (Wave 11 L2.1 doc audit): OpenCode-Go and OpenCode-Zen providers were
 # referenced in the routing chain but had no client implementation in
@@ -15,19 +30,16 @@
 # Constants retained for forward compatibility; routing chain now skips
 # empty Backup2 (router.go handles "not registered" gracefully).
 #
-# To re-enable 4-tier routing in the future:
-#   1. Implement OpenCodeGoClient / OpenCodeZenClient in internal/llm/clients/
-#   2. Register the providers via NewDefaultRouter(...)
-#   3. Restore backup2: opencode_go entries below
-#
 # Chain semantics:
 #   - primary: required, must be a registered provider
 #   - backup1: optional; empty string skips to last_resort
 #   - backup2: optional (4-tier legacy); empty string skips to last_resort
 #   - last_resort: required, fallback handler
+#   - a provider that returns empty/whitespace-only output (and no tool calls) is
+#     treated as failed and the next chain member is tried (ADR-012)
 
 routing_chains:
-  # strategy.failure_attribution — annotator hot path
+  # strategy.failure_attribution — annotator hot path (narrative/explanation group)
   failure_attribution:
     primary: minimax
     backup1: deepseek
@@ -48,11 +60,11 @@ routing_chains:
     backup2: ""
     last_resort: mock
 
-  # dev.prompt_lint
+  # dev.prompt_lint — code group: kimi (kimi-for-coding) first
   prompt_lint:
-    primary: minimax
-    backup1: deepseek
-    backup2: ""
+    primary: kimi
+    backup1: minimax
+    backup2: deepseek
     last_resort: mock
 
   # orchestrator.prism_cohort_insight
@@ -90,14 +102,14 @@ routing_chains:
     backup2: ""
     last_resort: mock
 
-  # dev.code_review_annotation — U-tier utility
+  # dev.code_review_annotation — code group: kimi (kimi-for-coding) first
   code_review_annotation:
-    primary: minimax
-    backup1: deepseek
-    backup2: ""
+    primary: kimi
+    backup1: minimax
+    backup2: deepseek
     last_resort: mock
 
-  # strategy.contra_attribution — adversarial analysis
+  # strategy.contra_attribution — adversarial narrative analysis
   contra_attribution:
     primary: minimax
     backup1: deepseek

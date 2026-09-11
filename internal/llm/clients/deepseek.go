@@ -9,10 +9,39 @@ import (
 )
 
 // Default DeepSeek model constants.
+//
+// DefaultModelV4_1Flash ("deepseek-flash", DeepSeek-V4.1-Flash) is the
+// canonical model name for new code. The V4-Pro model and its
+// "deepseek-v4-flash" alias are retired (2026-09-11): V4.1-Flash matches
+// V4-Pro quality head-to-head while being several times faster and cheaper,
+// and it is the only one of the two with native multimodal input.
 const (
-	DefaultModelV4Pro   = "deepseek-v4-pro"
+	// DefaultModelV4_1Flash is the canonical DeepSeek model selector.
+	DefaultModelV4_1Flash = "deepseek-flash"
+
+	// Deprecated: V4-Pro is retired (2026-09-11); do not use in new code or
+	// configuration. Retained only so legacy references keep compiling.
+	DefaultModelV4Pro = "deepseek-v4-pro"
+
+	// Deprecated: superseded by DefaultModelV4_1Flash; "deepseek-v4-flash"
+	// only survives as a compatibility alias on the provider side.
 	DefaultModelV4Flash = "deepseek-v4-flash"
 )
+
+// DeepSeekModelEnvVar is the environment variable (resolved through
+// config.GetSecret) that overrides the DeepSeek model name, so switching
+// models no longer requires a code change. Unset/empty means
+// DefaultModelV4_1Flash.
+const DeepSeekModelEnvVar = "LLM_DEEPSEEK_MODEL"
+
+// ResolveDeepSeekModel returns the configured DeepSeek model name, falling
+// back to DefaultModelV4_1Flash when configured is empty.
+func ResolveDeepSeekModel(configured string) string {
+	if configured == "" {
+		return DefaultModelV4_1Flash
+	}
+	return configured
+}
 
 // deepSeekAPIBase is the production API base URL for DeepSeek.
 const deepSeekAPIBase = "https://api.deepseek.com"
@@ -30,7 +59,7 @@ type DeepSeekClient struct {
 	APIKey string
 
 	// DefaultModel is the model used when Chat() is called with model="".
-	// Defaults to DefaultModelV4Pro.
+	// Defaults to DefaultModelV4_1Flash ("deepseek-flash").
 	DefaultModel string
 
 	// BaseURL overrides the API base URL. When empty, the production
@@ -40,9 +69,10 @@ type DeepSeekClient struct {
 }
 
 // NewDeepSeekClient creates a DeepSeekClient wired to the given BaseClient.
-// Use DefaultModelV4Pro for typical inference and DefaultModelV4Flash for
-// latency-sensitive workloads. If apiKey is empty, the client will read
-// LLM_DEEPSEEK_API_KEY from the environment at Chat() time.
+// DefaultModel is set to DefaultModelV4_1Flash ("deepseek-flash"); override
+// it via ResolveDeepSeekModel(config.GetSecret(DeepSeekModelEnvVar)). If
+// apiKey is empty, the client will read LLM_DEEPSEEK_API_KEY from the
+// environment at Chat() time.
 //
 // A nil baseClient is accepted and replaced with a default BaseClient so that
 // callers (e.g., cmd/atlas wiring, cmd/lint-pr) are not required to build the
@@ -54,7 +84,7 @@ func NewDeepSeekClient(apiKey string, baseClient *BaseClient) *DeepSeekClient {
 	return &DeepSeekClient{
 		BaseClient:   baseClient,
 		APIKey:       apiKey,
-		DefaultModel: DefaultModelV4Pro,
+		DefaultModel: DefaultModelV4_1Flash,
 		BaseURL:      deepSeekAPIBase,
 	}
 }

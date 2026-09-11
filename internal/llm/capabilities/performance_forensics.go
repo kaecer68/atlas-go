@@ -62,7 +62,9 @@ func (h *PerformanceForensicsHandler) Handle(
 		Capability: llm.CapabilityPerformanceForensics,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 600},
+		// max_tokens 4096 (was 600): VaR/CVaR/回撤敘事 + calibration，屬長輸出。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 4096},
 	}
 
 	resp, err := h.router.Call(ctx, req)

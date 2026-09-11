@@ -23,7 +23,7 @@ func TestDeepSeek_Chat_Success(t *testing.T) {
 		}
 
 		resp := deepSeekResponseBody{
-			Model: "deepseek-v4-pro",
+			Model: DefaultModelV4_1Flash,
 			Choices: []struct {
 				Message struct {
 					Role    string `json:"role"`
@@ -70,8 +70,8 @@ func TestDeepSeek_Chat_Success(t *testing.T) {
 	if resp.Content != "Hello from DeepSeek!" {
 		t.Errorf("expected content %q, got %q", "Hello from DeepSeek!", resp.Content)
 	}
-	if resp.Model != "deepseek-v4-pro" {
-		t.Errorf("expected model %q, got %q", "deepseek-v4-pro", resp.Model)
+	if resp.Model != DefaultModelV4_1Flash {
+		t.Errorf("expected model %q, got %q", DefaultModelV4_1Flash, resp.Model)
 	}
 	if resp.FinishReason != "stop" {
 		t.Errorf("expected finish_reason %q, got %q", "stop", resp.FinishReason)
@@ -93,7 +93,7 @@ func TestDeepSeek_Chat_AuthHeader(t *testing.T) {
 		}
 
 		resp := deepSeekResponseBody{
-			Model: "deepseek-v4-pro",
+			Model: DefaultModelV4_1Flash,
 			Choices: []struct {
 				Message struct {
 					Role    string `json:"role"`
@@ -128,20 +128,21 @@ func TestDeepSeek_Chat_AuthHeader(t *testing.T) {
 	}
 }
 
-// TestDeepSeek_Chat_ModelDefault verifies the default model is used when
-// model="" is passed.
+// TestDeepSeek_Chat_ModelDefault verifies the default model (the canonical
+// "deepseek-flash") is used when model="" is passed. DeepSeek-V4-Pro is
+// retired, so the client must never default to it.
 func TestDeepSeek_Chat_ModelDefault(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody deepSeekRequestBody
 		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 			t.Errorf("failed to decode request body: %v", err)
 		}
-		if reqBody.Model != DefaultModelV4Pro {
-			t.Errorf("expected model %q, got %q", DefaultModelV4Pro, reqBody.Model)
+		if reqBody.Model != DefaultModelV4_1Flash {
+			t.Errorf("expected model %q, got %q", DefaultModelV4_1Flash, reqBody.Model)
 		}
 
 		resp := deepSeekResponseBody{
-			Model: DefaultModelV4Pro,
+			Model: DefaultModelV4_1Flash,
 			Choices: []struct {
 				Message struct {
 					Role    string `json:"role"`
@@ -198,7 +199,7 @@ func TestDeepSeek_NilBaseClientUsesDefault(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(deepSeekResponseBody{
-			Model: "deepseek-v4-pro",
+			Model: DefaultModelV4_1Flash,
 			Choices: []struct {
 				Message struct {
 					Role    string `json:"role"`
@@ -227,5 +228,31 @@ func TestDeepSeek_NilBaseClientUsesDefault(t *testing.T) {
 	}
 	if resp.Content != "ok" {
 		t.Errorf("expected content %q, got %q", "ok", resp.Content)
+	}
+}
+
+// TestResolveDeepSeekModel covers LLM_DEEPSEEK_MODEL resolution (ADR-012):
+// unset/empty yields the canonical "deepseek-flash"; any other value wins.
+func TestResolveDeepSeekModel(t *testing.T) {
+	if got := ResolveDeepSeekModel(""); got != DefaultModelV4_1Flash {
+		t.Errorf("ResolveDeepSeekModel(\"\") = %q, want %q", got, DefaultModelV4_1Flash)
+	}
+	if got := ResolveDeepSeekModel("deepseek-chat"); got != "deepseek-chat" {
+		t.Errorf("ResolveDeepSeekModel override = %q, want %q", got, "deepseek-chat")
+	}
+	if DeepSeekModelEnvVar != "LLM_DEEPSEEK_MODEL" {
+		t.Errorf("DeepSeekModelEnvVar = %q, want LLM_DEEPSEEK_MODEL", DeepSeekModelEnvVar)
+	}
+}
+
+// TestNewDeepSeekClient_DefaultModelIsCanonical verifies the retired V4-Pro
+// name is not the constructor default any more.
+func TestNewDeepSeekClient_DefaultModelIsCanonical(t *testing.T) {
+	c := NewDeepSeekClient("test-key", newTestBaseClient())
+	if c.DefaultModel != DefaultModelV4_1Flash {
+		t.Errorf("DefaultModel = %q, want %q", c.DefaultModel, DefaultModelV4_1Flash)
+	}
+	if c.DefaultModel == DefaultModelV4Pro {
+		t.Error("DefaultModel must not be the retired V4-Pro constant")
 	}
 }

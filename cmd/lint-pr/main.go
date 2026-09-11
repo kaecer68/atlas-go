@@ -98,7 +98,8 @@ func buildRouter() llm.Router {
 
 	if apiKey := config.GetSecret("LLM_DEEPSEEK_API_KEY"); apiKey != "" {
 		dsClient := clients.NewDeepSeekClient(apiKey, nil)
-		dsAdapter := adapters.NewDeepSeekAdapter(dsClient, "deepseek-v4-pro")
+		dsAdapter := adapters.NewDeepSeekAdapter(dsClient,
+			clients.ResolveDeepSeekModel(config.GetSecret(clients.DeepSeekModelEnvVar)))
 		impls = append(impls, dsAdapter)
 	}
 

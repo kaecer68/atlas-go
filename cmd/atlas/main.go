@@ -2228,7 +2228,8 @@ func run(args []string, deps appDeps) error {
 				if collector != nil {
 					c.Metrics = collector
 				}
-				return llmAdapters.NewDeepSeekAdapter(c, "deepseek-v4-pro")
+				return llmAdapters.NewDeepSeekAdapter(c,
+					clients.ResolveDeepSeekModel(config.GetSecret(clients.DeepSeekModelEnvVar)))
 			})
 			registerProvider("LLM_MINIMAX_API_KEY", func(apiKey string) llm.ProviderImpl {
 				c := clients.NewMiniMaxClient(apiKey, nil)
