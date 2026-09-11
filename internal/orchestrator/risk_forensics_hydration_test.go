@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/risk"
 	"github.com/kaecer68/atlas-go/internal/sim"
 )
@@ -133,5 +134,78 @@ func TestRunDailySimulation_ForensicsHookFiresFromPersistedHistory(t *testing.T)
 	}
 	if result.RiskCommentary != "風險敘事" {
 		t.Errorf("result.RiskCommentary = %q, want the hook output", result.RiskCommentary)
+	}
+}
+
+// TestFinalizeRiskForensics_SharedByBothRunPaths pins the #1888 root cause: the
+// replay/dispatcher path (the one production uses, because a replay session is
+// always resolved) must produce the risk snapshot and invoke the LLM
+// performance-forensics hook exactly like the non-replay path.
+func TestFinalizeRiskForensics_SharedByBothRunPaths(t *testing.T) {
+	dir := t.TempDir()
+	returns := make([]float64, 0, RiskForensicsMinSamples+5)
+	equity := make([]float64, 0, RiskForensicsMinSamples+6)
+	value := 1_000_000.0
+	equity = append(equity, value)
+	for i := 0; i < RiskForensicsMinSamples+5; i++ {
+		r := 0.003 * float64((i%9)-4)
+		returns = append(returns, r)
+		value *= 1 + r
+		equity = append(equity, value)
+	}
+	state := domain.SimulationState{Cash: value, EquityCurve: equity, DailyReturns: returns}
+	if err := sim.SavePersistentState(dir, &state); err != nil {
+		t.Fatalf("SavePersistentState: %v", err)
+	}
+
+	sys := newTestSystem(t)
+	sys.Sim().session.Mode = "daily"
+	sys.Sim().cfg.LedgerDir = dir
+	// Force the replay path: with a replay dataset and a session date,
+	// RunDailySimulation early-returns into runReplaySimulation.
+	sys.Sim().cfg.ReplaySessionDate = "2026-06-15"
+	sys.Sim().replay = &replay.Dataset{}
+
+	origHook := risk.PerformanceForensics
+	t.Cleanup(func() { risk.PerformanceForensics = origHook })
+	calls := 0
+	risk.PerformanceForensics = func(_ context.Context, _ any) (string, error) {
+		calls++
+		return "風險敘事（replay path）", nil
+	}
+
+	if _, err := sys.RunDailySimulation(time.Now()); err != nil {
+		t.Fatalf("RunDailySimulation (replay path): %v", err)
+	}
+	if calls == 0 {
+		t.Fatal("replay path did not invoke the performance-forensics hook: it must share finalizeRiskForensics with the non-replay path")
+	}
+	if sys.Sim().returnHistory == nil || len(sys.Sim().returnHistory) < RiskForensicsMinSamples {
+		t.Errorf("returnHistory len = %d, want >= %d", len(sys.Sim().returnHistory), RiskForensicsMinSamples)
+	}
+}
+
+// TestFinalizeRiskForensics_PendingBelowThreshold covers the observability
+// branch: below the threshold no snapshot is built and no hook runs.
+func TestFinalizeRiskForensics_PendingBelowThreshold(t *testing.T) {
+	sys := newTestSystem(t)
+	sys.Sim().returnHistory = []float64{0.01, 0.02}
+
+	origHook := risk.PerformanceForensics
+	t.Cleanup(func() { risk.PerformanceForensics = origHook })
+	calls := 0
+	risk.PerformanceForensics = func(_ context.Context, _ any) (string, error) {
+		calls++
+		return "should not run", nil
+	}
+
+	result := domain.SimulationResult{}
+	sys.finalizeRiskForensics(&result)
+
+	if calls != 0 {
+		t.Errorf("hook called %d times below the threshold, want 0", calls)
+	}
+	if result.RiskSnapshot != nil {
+		t.Error("RiskSnapshot must stay nil below the threshold")
 	}
 }

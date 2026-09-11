@@ -4,6 +4,12 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(risk): #1888 真正根因 — 風險鑑識區塊只存在於非 replay 路徑（2026-09-12）
+- **真相**：`RunDailySimulation` 在能解析 replay session 時會 early-return 到 `runReplaySimulation`（`system_dispatcher.go`），而 **production 一律走 replay 路徑**。原本「風險快照 + LLM 績效鑑識」的區塊只寫在非 replay 路徑 → 不論 `returnHistory` 累積到幾筆，hook 都**不可能**觸發。
+- **production 證據（本輪實測）**：手動 `POST /admin/trigger-simulation`（新部署 `bd2f36a7`）在 16:44:47 完成（log: `手動觸發場次 session-20260911-daily 產生 0 筆訂單`）、`simulation_state.json` 的 daily_returns 由 18 → 19（證明該路徑確實有 append + persist），但**完全沒有 `risk_forensics_*` log**。
+- **修法**：把該區塊抽成 `System.finalizeRiskForensics()`，兩條路徑都呼叫（`system.go` 非 replay、`system_dispatcher.go` replay）。新增測試 `TestFinalizeRiskForensics_SharedByBothRunPaths`（強制走 replay 路徑，斷言 hook 被呼叫 — 修正前必失敗）、`TestFinalizeRiskForensics_PendingBelowThreshold`。
+- **前一輪的敘述修正**：#1891 說「hook 觸發不到是因為 30 筆 gate 加上歷史未補齊」只對一半 —— 歷史補齊是必要條件，但**沒有把區塊放到 replay 路徑**才是充分原因。
+
 ### fix(llm,risk): #1891 補漏 — 補回未 commit 的 hydration 測試 + 風險鑑識 gate 可觀測性（2026-09-11 深夜）
 - **補回 `internal/orchestrator/risk_forensics_hydration_test.go`**：#1891 的 commit message 聲稱有這些測試，但該檔當時是 untracked（我的 staging 只取了 `git status` 的 ` M` 行，漏掉 `??`），因此合併後的 main 沒有它、GitHub CI 也沒覆蓋到。本 PR 補上。
 - **風險鑑識 gate 可觀測性**：每個 daily run 都會留一行結構化 log —— 未達門檻 `risk_forensics_pending samples=N min_samples=30`，達標且 hook 存在 `risk_forensics_snapshot samples=N var95=… cvar95=… commentary_len=…`。用途：(a) 立刻證明 hydration 生效（production 首次 run 應顯示 samples≈19，而非 1）、(b) 12 個交易日的補齊進度可逐日查核、(c) hook 真正觸發時有時間戳可佐證。
