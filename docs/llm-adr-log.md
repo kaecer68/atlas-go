@@ -209,3 +209,15 @@
 杭州）、Kimi/Moonshot（`api.kimi.com`，北京），同屬一管轄區；目前送出的 payload 為風險指標與訓練統計
 （`RiskSnapshot` 的 VaR/CVaR/回撤、`TrainingResult` 的勝率/Sharpe 等），不含個資或使用者識別資訊——這降低但
 不消除 #1889 的風險。
+
+#### 追加二（2026-09-11 晚）：#1887 / #1888 的處置
+
+- **#1887 `failure_attribution` Router 路徑契約（已修）**：根因是雙軌抽象下的 payload 契約不合——handler 送 `FailureContext` struct，而 MiniMax/DeepSeek adapter 只吃 `[]byte`（messages JSON），唯一能吃 struct 的 `AnnotatorAdapter` 又只用 `ProviderKimi` 註冊且不在該鏈上。
+  修法（不新增任何 prompt 語意）：把 legacy 的 prompt 文字抽成單一來源（`llm_annotator.FailureAttributionSystemPrompt` / `FailureContextPrompt` /
+  `FailureAttributionTemperature`），讓 capability handler 用它組出 messages payload；`RouterAnnotator` 也改走同一個 handler。新增 handler→adapter→httptest 的端到端測試。
+  仍未做（另案）：把 production `/annotate` 由 legacy `KimiClient` 遷移到 Router（`dashboard.SetStrategiesAnnotator` 目前對 `*llm_annotator.KimiClient` 有具體型別斷言）。
+- **#1888 risk forensics hook 觸發不到（已修，方案 A）**：`returnHistory` / `portfolioHistory` 是 per-process 累積，而 `simulation_state.json` 的
+  `EquityCurve` / `DailyReturns` 就是同一組序列（同引擎、同定義）→ 載入持久化狀態時補齊，gate 才可能成立。新增 `RiskForensicsMinSamples = 30` 常數與
+  端到端測試（補齊 35 筆 → 單次 `RunDailySimulation` → hook 被呼叫）。
+  ⚠️ 生產時程：iMac 目前 `daily_returns=18`，每天一次 daily simulation → 約 **12 個交易日**後才會首次產生風險鑑識敘事（此後自癒）。
+- **#1889 主權決策**：仍待決（見下方 residual risk）。

@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
 	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm/schemas"
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 )
 
 // ============================================================================
@@ -905,5 +907,64 @@ func TestDeepSeekAdapter_ContextCancellation(t *testing.T) {
 	_, err := adapter.Call(ctx, req)
 	if err == nil {
 		t.Fatal("expected error from cancelled context, got nil")
+	}
+}
+
+// ============================================================================
+// Test: Failure-attribution Router path end-to-end (issue #1887)
+// ============================================================================
+
+// TestFailureAttribution_RouterPath_EndToEnd verifies the capability-based path
+// now works end to end: the handler renders the shared attribution prompt into
+// chat messages, the MiniMax adapter sends them, and the annotation comes back.
+// Before the #1887 fix the handler sent a raw llm_annotator.FailureContext,
+// which every generic adapter rejected ("expected []byte payload"), so the
+// capability could only ever reach the last-resort handler.
+func TestFailureAttribution_RouterPath_EndToEnd(t *testing.T) {
+	var gotMessages []clients.Message
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []clients.Message `json:"messages"`
+			Model    string            `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		gotMessages = body.Messages
+		if body.Model != clients.DefaultModelMiniMaxM3 {
+			t.Errorf("model = %q, want %q", body.Model, clients.DefaultModelMiniMaxM3)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"MiniMax-M3","choices":[{"message":{"role":"assistant","content":"<think>analyzing</think>\n\n融資餘額未達門檻，屬資料面失效。"},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":10,"total_tokens":30}}`))
+	}))
+	defer srv.Close()
+
+	mmClient := clients.NewMiniMaxClient("test-mm-key", newIntegrationBaseClient())
+	mmClient.BaseURL = srv.URL
+
+	router := llm.NewDefaultRouter(adapters.NewMiniMaxAdapter(mmClient))
+	handler := capabilities.NewFailureAttributionHandler(router)
+
+	resp, err := handler.Handle(context.Background(), capabilities.FailureAttributionPayload{
+		FailureContext: llm_annotator.FailureContext{
+			FrameID:   "margin-balance-extreme",
+			FrameName: "融資餘額極端反轉",
+			Layer:     "L4",
+		},
+	})
+	assertNoError(t, err, "FailureAttributionHandler.Handle")
+
+	if len(gotMessages) != 2 {
+		t.Fatalf("provider received %d messages, want 2 (system + user)", len(gotMessages))
+	}
+	if gotMessages[0].Role != "system" || gotMessages[0].Content != llm_annotator.FailureAttributionSystemPrompt {
+		t.Errorf("system message = %q, want the shared attribution prompt", gotMessages[0].Content)
+	}
+	if !strings.Contains(gotMessages[1].Content, "frame_id=margin-balance-extreme") ||
+		!strings.Contains(gotMessages[1].Content, "融資餘額極端反轉") {
+		t.Errorf("user message does not carry the FailureContext: %q", gotMessages[1].Content)
+	}
+	if resp.Annotation != "融資餘額未達門檻，屬資料面失效。" {
+		t.Errorf("Annotation = %q, want the answer with thinking stripped", resp.Annotation)
 	}
 }

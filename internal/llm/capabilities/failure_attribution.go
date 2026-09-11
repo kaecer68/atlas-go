@@ -15,6 +15,7 @@ import (
 	"errors"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 )
 
@@ -50,14 +51,21 @@ func NewFailureAttributionHandler(router llm.Router) *FailureAttributionHandler 
 }
 
 // Handle executes the failure attribution capability. It:
-//  1. Constructs an llm.Request with CapabilityFailureAttribution and the
-//     payload's FailureContext.
+//  1. Renders the payload's FailureContext into the shared attribution prompt
+//     (llm_annotator.FailureAttributionSystemPrompt / FailureContextPrompt —
+//     one prompt text for both entry points) and constructs an llm.Request
+//     whose Payload is the chat-messages JSON the provider adapters consume.
 //  2. Defaults DataClass to DataClassNonRegulated when unset.
 //  3. Dispatches through the Router.
 //  4. Parses Response.Output into FailureAttributionResponse (first attempting
 //     JSON unmarshal, then falling back to raw string).
 //  5. On all-providers-failed, returns a rule-based fallback
 //     ("rule_based: unable to attribute", Confidence=0).
+//
+// Contract note (issue #1887): the Payload MUST be the []byte messages JSON,
+// because the generic provider adapters (MiniMax, DeepSeek) only accept that
+// shape. The legacy AnnotatorAdapter — the one provider that expects a raw
+// FailureContext — is not part of the failure_attribution chain.
 func (h *FailureAttributionHandler) Handle(
 	ctx context.Context,
 	payload FailureAttributionPayload,
@@ -67,21 +75,28 @@ func (h *FailureAttributionHandler) Handle(
 		dc = llm.DataClassNonRegulated
 	}
 
+	messages := []clients.Message{
+		{Role: "system", Content: llm_annotator.FailureAttributionSystemPrompt},
+		{Role: "user", Content: llm_annotator.FailureContextPrompt(payload.FailureContext)},
+	}
+	payloadBytes, _ := json.Marshal(map[string]any{"messages": messages})
+
 	req := llm.Request{
 		Capability: llm.CapabilityFailureAttribution,
-		Payload:    payload.FailureContext,
+		Payload:    payloadBytes,
 		DataClass:  dc,
 		// max_tokens 2048 (was provider default): ADR-012 reasoning floor so a
 		// model cannot burn the budget in its thinking phase and return an empty
 		// message. rule_based attribution stays authoritative.
+		// temperature 0.2 mirrors the legacy annotator request
+		// (llm_annotator.FailureAttributionTemperature) so both entry points
+		// sample identically.
 		//
-		// Caveat: production POST /api/strategies/{id}/annotate does NOT go
-		// through this handler — it calls llm_annotator.KimiClient directly
-		// (cmd/atlas/main.go dashboard.SetStrategiesAnnotator), whose token
-		// budget comes from llm_annotator.Config.MaxTokens (default 512) and
-		// which has no empty-output guard. This value only applies to Router
-		// callers of CapabilityFailureAttribution.
-		Options: llm.Options{MaxTokens: 2048},
+		// Caveat: production POST /api/strategies/{id}/annotate currently calls
+		// llm_annotator.KimiClient directly (dashboard.SetStrategiesAnnotator)
+		// rather than this handler; migrating that endpoint to the Router is
+		// tracked in issue #1887.
+		Options: llm.Options{MaxTokens: 2048, Temperature: llm_annotator.FailureAttributionTemperature},
 	}
 
 	resp, err := h.router.Call(ctx, req)

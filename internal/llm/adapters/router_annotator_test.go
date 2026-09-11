@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
@@ -145,14 +146,13 @@ func TestRouterAnnotator_CorrectCapability(t *testing.T) {
 			mock.lastReq.DataClass, llm.DataClassNonRegulated)
 	}
 
-	reqFC, ok := mock.lastReq.Payload.(llm_annotator.FailureContext)
+	// The handler renders the FailureContext into chat messages (issue #1887):
+	// the raw struct was unusable by the MiniMax/DeepSeek adapters.
+	payloadBytes, ok := mock.lastReq.Payload.([]byte)
 	if !ok {
-		t.Fatalf("request.Payload type = %T, want llm_annotator.FailureContext", mock.lastReq.Payload)
+		t.Fatalf("request.Payload type = %T, want []byte (messages JSON)", mock.lastReq.Payload)
 	}
-	if reqFC.FrameID != fc.FrameID {
-		t.Errorf("request.Payload.FrameID = %q, want %q", reqFC.FrameID, fc.FrameID)
-	}
-	if reqFC.FrameName != fc.FrameName {
-		t.Errorf("request.Payload.FrameName = %q, want %q", reqFC.FrameName, fc.FrameName)
+	if !strings.Contains(string(payloadBytes), "frame-42") || !strings.Contains(string(payloadBytes), "均值回歸") {
+		t.Errorf("payload does not carry the rendered FailureContext: %s", payloadBytes)
 	}
 }

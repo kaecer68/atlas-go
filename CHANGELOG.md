@@ -4,6 +4,12 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### LLM/Risk — #1887 + #1888 根因修正（2026-09-11 晚）
+- **#1887 failure_attribution Router 路徑可用了**：prompt 文字抽成單一來源（`llm_annotator.FailureAttributionSystemPrompt` / `FailureContextPrompt` / `FailureAttributionTemperature`），capability handler 改送 messages payload（MiniMax/DeepSeek adapter 只吃 `[]byte`），`RouterAnnotator` 走同一 handler；新增端到端測試。**未新增/改動任何 prompt 語意**。
+- **#1888 risk forensics hook 可觸發了（方案 A）**：`ensurePersistentStateLoaded()` / `WithPersistentState()` 會從持久化的 `EquityCurve` / `DailyReturns` 補齊 per-process 的 `returnHistory` / `portfolioHistory`；gate 改用具名常數 `RiskForensicsMinSamples`（30）。新增補齊、不覆蓋既有累積、以及「補齊後單次 RunDailySimulation 即觸發 hook」三個測試。
+  - 生產時程：iMac 目前 `daily_returns=18` → 約 12 個交易日後首次產生風險鑑識敘事。
+- **#1889 主權殘餘風險**：仍待決策（全供應商一致封鎖 / redaction 層 / self-host）。
+
 ### LLM — ADR-012 第二階段：production 實證與根因修正（#1886 follow-up，2026-09-11）
 - **production 實證**：iMac 48h 內 `llm.scenario_simulation` 663 次、`attempted_providers` 全為 `["deepseek"]`、`data_class=2` → 證實 ADR-010 閘門讓 M3 從未上場，該 hook 輸出一直是空的。
 - **annotator 設定修正**：`/api/strategies/{id}/annotate` 原本指向 `api.kimi.com/coding/v1` + `moonshot-v1-8k`（key 卻是 MiniMax CN）→ 實測 HTTP 401。改指向 MiniMax CN + `MiniMax-M3`，token 預算 512 → 2048。

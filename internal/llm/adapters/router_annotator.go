@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/capabilities"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 )
 
@@ -35,23 +36,24 @@ func (r *RouterAnnotator) Name() string {
 	return "router(minimax→deepseek→mock)"
 }
 
-// Annotate implements llm_annotator.Annotator. It wraps the FailureContext into
-// an llm.Request with CapabilityFailureAttribution and DataClassNonRegulated,
-// dispatches through the Router, and returns the response Output.
+// Annotate implements llm_annotator.Annotator. It delegates to the
+// FailureAttribution capability handler so both the Router-facing and the
+// legacy Annotator-facing entry points share one request shape and one prompt
+// (issue #1887). The handler renders the FailureContext into chat messages,
+// which is what the provider adapters (MiniMax, DeepSeek) require.
 //
 // If the router is nil, it returns ("", nil) — a safe no-op.
 func (r *RouterAnnotator) Annotate(ctx context.Context, fc llm_annotator.FailureContext) (string, error) {
 	if r.router == nil {
 		return "", nil
 	}
-	req := llm.Request{
-		Capability: llm.CapabilityFailureAttribution,
-		Payload:    fc,
-		DataClass:  llm.DataClassNonRegulated,
-	}
-	resp, err := r.router.Call(ctx, req)
+	handler := capabilities.NewFailureAttributionHandler(r.router)
+	resp, err := handler.Handle(ctx, capabilities.FailureAttributionPayload{
+		FailureContext: fc,
+		DataClass:      llm.DataClassNonRegulated,
+	})
 	if err != nil {
 		return "", err
 	}
-	return resp.Output, nil
+	return resp.Annotation, nil
 }

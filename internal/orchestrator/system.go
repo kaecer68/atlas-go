@@ -864,7 +864,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
 		}
 	}
-	if len(s.Sim().returnHistory) >= 30 {
+	if len(s.Sim().returnHistory) >= RiskForensicsMinSamples {
 		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
 		result.RiskSnapshot = &snap
 		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)

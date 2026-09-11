@@ -489,17 +489,34 @@ func stripInlineThinking(content string) string {
 }
 
 // buildRequest assembles the OpenAI-compatible chat completions body.
+// FailureAttributionSystemPrompt is the system message for strategy failure
+// attribution. It is exported so the capability-based Router path
+// (internal/llm/capabilities) can send a byte-identical prompt instead of
+// inventing a second one — two prompts for one capability would silently
+// diverge (see issue #1887).
+const FailureAttributionSystemPrompt = "你是 Atlas-Go 台股投資系統的失效歸因助手。" +
+	"請用繁體中文，1-2 句話，解釋為何這條心法在當前資料下未觸發。" +
+	"不要給出投資建議，只描述失效原因。"
+
+// FailureAttributionTemperature is the sampling temperature used for failure
+// attribution, shared by the legacy client and the Router capability handler.
+const FailureAttributionTemperature = 0.2
+
+// FailureContextPrompt renders fc as a single user message (same text the
+// legacy client sends). Exported for the Router capability path.
+func FailureContextPrompt(fc FailureContext) string {
+	return failureContextToPrompt(fc)
+}
+
 func buildRequest(cfg Config, fc FailureContext) map[string]any {
 	return map[string]any{
 		"model":       cfg.Model,
 		"max_tokens":  cfg.MaxTokens,
-		"temperature": 0.2,
+		"temperature": FailureAttributionTemperature,
 		"messages": []map[string]string{
 			{
-				"role": "system",
-				"content": "你是 Atlas-Go 台股投資系統的失效歸因助手。" +
-					"請用繁體中文，1-2 句話，解釋為何這條心法在當前資料下未觸發。" +
-					"不要給出投資建議，只描述失效原因。",
+				"role":    "system",
+				"content": FailureAttributionSystemPrompt,
 			},
 			{
 				"role":    "user",
