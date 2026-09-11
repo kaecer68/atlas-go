@@ -4,6 +4,15 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### LLM Router — ADR-012：拆除 DataClass 主權閘門，改以「任務可達成率 + 訂閱額度」選模型（#1886，2026-09-11）
+- **拆閘門**：`internal/llm/router.go` 刪除 `shouldGateProvider()` 與 `Call()` 內兩處呼叫；`internal/llm/clients/kimi.go` 移除 Regulated/Secret 的 `ErrIncompatibleDataClass` 拒收。ADR-009 的 kimi 能力 guard（僅 `code_review_annotation` / `prompt_lint`）保留。
+- **DataClass 降為稽核 metadata**：繼續隨 `Request` 傳遞、記 metric/span，可作日後 redaction 依據，但不再阻擋任何 provider；enum 四類不變。
+- **路由鏈重配**：敘事/解釋 JSON 9 個 capability → primary MiniMax M3；程式碼 2 個 → primary `kimi-for-coding`（backup M3 → deepseek-flash）；`contra_attribution` 歸敘事群組；全域 fallback canonical `deepseek-flash`。`deepseek-v4-pro` / `deepseek-pro` 退役。`configs/llm_router.yaml` 與 `defaultRoutingTable()` 同步（新增一致性測試）。
+- **空輸出不視為成功**：provider 回傳「成功但 output 空/全空白且無 tool call」時視為失敗，續試下一鏈成員（`AttemptedProviders` 記錄全部嘗試）。
+- **`max_tokens` 校準**：11 個 capability 由 300–800 提升到 2048–4096（reasoning 模型最低預算），逐項附理由。
+- **模型名設定化**：新增 `LLM_DEEPSEEK_MODEL`（預設 `deepseek-flash`），取代 `cmd/atlas`、`cmd/lint-pr`、`cmd/lint-prompts` 三處硬編碼模型名；`DeepSeekClient` 預設模型改為 `deepseek-flash`。
+- **文件**：`docs/specs/llm-routing-spec.md` §6.1 路由表 / §6.1a max_tokens / §6.3 決策順序 / §6.3a 空輸出；`docs/llm-adr-log.md` 新增 ADR-012（ADR-010 標 Superseded）；framework v2.2 修訂註記。
+
 ### Gap 3 — 散戶追蹤/紀律（manifest 系列）
 - **#Gap3-R4 我的追蹤頁**：notification-center 復活 + signal 已讀按鈕（#1494）
 - **#Gap3-R3 userstate HTTP API**：4 條 per-user signal-state 端點（#1493）

@@ -38,14 +38,19 @@ const (
 )
 
 // DataClass 標記 capability 輸出資料的合規分級。
-// DataClass 在每次 Request 中由呼叫端標明，Router 依此拒絕違規 provider。
+//
+// ⚠️ 本段為 v2.0 設計草稿，**非**目前程式碼的權威定義。實作以
+// `internal/llm/provider.go` 的 int 型別 enum 為準，四個類別為
+// Unmarked / NonRegulated / Regulated / Secret（沒有 public / internal 兩級；
+// capability handler 註解曾誤用這兩個名稱，已於 ADR-012 修正）。
+// ADR-012 起 DataClass 僅為稽核／觀測 metadata，Router 不再依它拒絕任何 provider。
 type DataClass string
 
 const (
-	DataClassPublic    DataClass = "public"     // 公開資料；任何 provider 可接收
-	DataClassInternal  DataClass = "internal"   // 內部；non-hosted 偏好但 hosted 可
-	DataClassRegulated DataClass = "regulated"  // 受規範金融資料；hosted M3 禁止
-	DataClassSecret    DataClass = "secret"     // 營業秘密；強制 self-host
+	DataClassUnmarked     DataClass = "unmarked"      // 無分類；視同公開
+	DataClassNonRegulated DataClass = "non_regulated" // 非敏感業務資料；無監理限制
+	DataClassRegulated    DataClass = "regulated"     // 受規範金融資料（例：VaR/ES、PRISM 結果）
+	DataClassSecret       DataClass = "secret"        // 高度敏感；需最高防護
 )
 
 // ProviderImpl 是所有 provider client 必須實作的介面。
@@ -60,7 +65,8 @@ type ProviderImpl interface {
 	Supports(cap Capability) bool
 
 	// Call 執行一次 LLM 呼叫。
-	// 必須遵守：DataClass 閘門、circuit breaker、rate limit、timeout。
+	// 必須遵守：circuit breaker、rate limit、timeout。（DataClass 自 ADR-012 起僅為
+	// 審計 metadata，不再是 provider 閘門；成功但 output 為空會被 Router 視為失敗。）
 	// 回傳 error 時需區分 transient（可重試）vs permanent（不可重試）。
 	Call(ctx context.Context, req Request) (Response, error)
 

@@ -71,6 +71,17 @@ func (h *FailureAttributionHandler) Handle(
 		Capability: llm.CapabilityFailureAttribution,
 		Payload:    payload.FailureContext,
 		DataClass:  dc,
+		// max_tokens 2048 (was provider default): ADR-012 reasoning floor so a
+		// model cannot burn the budget in its thinking phase and return an empty
+		// message. rule_based attribution stays authoritative.
+		//
+		// Caveat: production POST /api/strategies/{id}/annotate does NOT go
+		// through this handler — it calls llm_annotator.KimiClient directly
+		// (cmd/atlas/main.go dashboard.SetStrategiesAnnotator), whose token
+		// budget comes from llm_annotator.Config.MaxTokens (default 512) and
+		// which has no empty-output guard. This value only applies to Router
+		// callers of CapabilityFailureAttribution.
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)

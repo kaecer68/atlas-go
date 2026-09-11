@@ -37,7 +37,7 @@ func NewScenarioSimulationHandler(router llm.Router) *ScenarioSimulationHandler 
 
 // Handle executes the scenario simulation capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassInternal when unset.
+//  2. Defaults DataClass to DataClassRegulated when unset.
 //  3. Dispatches through the Router with CapabilityScenarioSimulation.
 //  4. Parses the response into a ScenarioSimulationResponse (JSON-first,
 //     then raw string fallback as Insight).
@@ -63,7 +63,9 @@ func (h *ScenarioSimulationHandler) Handle(
 		Capability: llm.CapabilityScenarioSimulation,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 600},
+		// max_tokens 4096 (was 600): 訓練結果解釋 + cohort summary 兩欄位長文本。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 4096},
 	}
 
 	resp, err := h.router.Call(ctx, req)

@@ -7,7 +7,7 @@
 //
 // Test categories:
 //  1. Adapter E2E    — httptest → client → adapter → llm.Response
-//  2. Router chain   — mock adapters → routing → fallback → data gate
+//  2. Router chain   — mock adapters → routing → fallback → audit-only DataClass
 //  3. Full chain     — httptest → client → adapter → Router → handler → typed output
 package llm_test
 
@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -112,7 +111,7 @@ func TestDeepSeekAdapter_EndToEnd(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 		resp := map[string]any{
-			"model": "deepseek-v4-pro",
+			"model": clients.DefaultModelV4_1Flash,
 			"choices": []map[string]any{
 				{
 					"message": map[string]string{
@@ -138,7 +137,7 @@ func TestDeepSeekAdapter_EndToEnd(t *testing.T) {
 	client := clients.NewDeepSeekClient("test-ds-key", baseClient)
 	client.BaseURL = srv.URL
 
-	adapter := adapters.NewDeepSeekAdapter(client, clients.DefaultModelV4Pro)
+	adapter := adapters.NewDeepSeekAdapter(client, clients.DefaultModelV4_1Flash)
 
 	// Build a valid payload.
 	payload := mustJSON(t, map[string]any{
@@ -436,10 +435,10 @@ func TestKimiAdapter_EndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("DataClassRegulated rejected by K2.7 client", func(t *testing.T) {
+	t.Run("DataClassRegulated accepted by K2.7 client (ADR-012)", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("server should not be called for DataClassRegulated")
-			http.Error(w, "unexpected", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"model":"kimi-for-coding","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
 		}))
 		defer srv.Close()
 
@@ -460,19 +459,17 @@ func TestKimiAdapter_EndToEnd(t *testing.T) {
 			Options:    llm.Options{MaxTokens: 100}, // ensure buildChatOptions is non-nil
 		}
 
-		_, err := adapter.Call(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected error for DataClassRegulated, got nil")
-		}
-		if !strings.Contains(err.Error(), "incompatible") {
-			t.Errorf("error = %v, want error containing 'incompatible'", err)
+		resp, err := adapter.Call(context.Background(), req)
+		assertNoError(t, err, "KimiAdapter.Call with DataClassRegulated")
+		if resp.Output != "ok" {
+			t.Errorf("Output = %q, want %q", resp.Output, "ok")
 		}
 	})
 
-	t.Run("DataClassSecret rejected by K2.7 client", func(t *testing.T) {
+	t.Run("DataClassSecret accepted by K2.7 client (ADR-012)", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("server should not be called for DataClassSecret")
-			http.Error(w, "unexpected", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"model":"kimi-for-coding","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}`))
 		}))
 		defer srv.Close()
 
@@ -493,12 +490,10 @@ func TestKimiAdapter_EndToEnd(t *testing.T) {
 			Options:    llm.Options{MaxTokens: 100},
 		}
 
-		_, err := adapter.Call(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected error for DataClassSecret, got nil")
-		}
-		if !strings.Contains(err.Error(), "incompatible") {
-			t.Errorf("error = %v, want error containing 'incompatible'", err)
+		resp, err := adapter.Call(context.Background(), req)
+		assertNoError(t, err, "KimiAdapter.Call with DataClassSecret")
+		if resp.Output != "ok" {
+			t.Errorf("Output = %q, want %q", resp.Output, "ok")
 		}
 	})
 }
@@ -576,24 +571,22 @@ func TestRouter_FullChain_AllAdapters(t *testing.T) {
 }
 
 // ============================================================================
-// Test 5: Router — DataClass gate prevents MiniMax fallback
+// Test 5: Router — DataClass does not gate the primary (ADR-012)
 // ============================================================================
 
-// TestRouter_DataClassGate_PreventsFallback verifies that when the routing
-// chain has MiniMax as primary and the request carries DataClassRegulated,
-// MiniMax is skipped entirely and the Router falls through to the next
-// provider in the chain.
+// TestRouter_DataClassDoesNotGatePrimary verifies ADR-012: a request carrying
+// DataClassRegulated is routed to the chain primary (MiniMax) exactly like
+// unmarked data, because DataClass is audit metadata only.
 // Uses CapabilityRiskSurfaceExtraction, whose default chain is
-// MiniMax → DeepSeek → Mock (Backup2 empty, Issue #720). With
-// DataClassRegulated, MiniMax is gated.
-func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
+// MiniMax → DeepSeek → Mock (Backup2 empty, Issue #720).
+func TestRouter_DataClassDoesNotGatePrimary(t *testing.T) {
 	var miniMaxCallCount int
 
-	// MiniMax configured as primary — must NOT be called with regulated data.
+	// MiniMax configured as primary — it MUST be called, gate or no gate.
 	miniMax := &integrationMockProvider{
 		name: llm.ProviderMiniMax,
 		callResp: llm.Response{
-			Output:   "miniMax should not be called",
+			Output:   "minimax handles regulated data (ADR-012)",
 			Provider: llm.ProviderMiniMax,
 		},
 		healthResp: llm.HealthStatus{
@@ -603,13 +596,15 @@ func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 		callCount: &miniMaxCallCount,
 	}
 
-	// DeepSeek as Backup1 — will handle the request.
+	// DeepSeek as Backup1 — must stay unused while the primary answers.
+	var deepseekCallCount int
 	deepseek := &integrationMockProvider{
 		name: llm.ProviderDeepSeek,
 		callResp: llm.Response{
 			Output:   "deepseek handles regulated data",
 			Provider: llm.ProviderDeepSeek,
 		},
+		callCount: &deepseekCallCount,
 		healthResp: llm.HealthStatus{
 			Provider: llm.ProviderDeepSeek,
 			Healthy:  true,
@@ -627,27 +622,22 @@ func TestRouter_DataClassGate_PreventsFallback(t *testing.T) {
 	resp, err := router.Call(context.Background(), req)
 	assertNoError(t, err, "Router.Call with DataClassRegulated")
 
-	// Assert: MiniMax was never called.
-	if miniMaxCallCount > 0 {
-		t.Errorf("MiniMax.Call was invoked %d time(s) but should have been gated for DataClassRegulated", miniMaxCallCount)
+	// Assert: MiniMax WAS called — DataClass must not gate it.
+	if miniMaxCallCount != 1 {
+		t.Errorf("MiniMax.Call was invoked %d time(s), want 1 (no DataClass gate since ADR-012)", miniMaxCallCount)
+	}
+	if deepseekCallCount != 0 {
+		t.Errorf("DeepSeek.Call was invoked %d time(s), want 0 (primary succeeded)", deepseekCallCount)
 	}
 
-	// Assert: Response came from DeepSeek.
-	if resp.Provider != llm.ProviderDeepSeek {
-		t.Errorf("Provider = %q, want %q (MiniMax gated)", resp.Provider, llm.ProviderDeepSeek)
+	// Assert: Response came from MiniMax.
+	if resp.Provider != llm.ProviderMiniMax {
+		t.Errorf("Provider = %q, want %q", resp.Provider, llm.ProviderMiniMax)
 	}
 
-	// Assert: MiniMax is NOT in AttemptedProviders.
-	for _, p := range resp.AttemptedProviders {
-		if p == llm.ProviderMiniMax {
-			t.Errorf("ProviderMiniMax should not appear in AttemptedProviders for DataClassRegulated")
-		}
-	}
-
-	// Assert: DeepSeek IS in AttemptedProviders.
-	foundDeepSeek := slices.Contains(resp.AttemptedProviders, llm.ProviderDeepSeek)
-	if !foundDeepSeek {
-		t.Errorf("ProviderDeepSeek should appear in AttemptedProviders: %v", resp.AttemptedProviders)
+	// Assert: AttemptedProviders is exactly [MiniMax].
+	if len(resp.AttemptedProviders) != 1 || resp.AttemptedProviders[0] != llm.ProviderMiniMax {
+		t.Errorf("AttemptedProviders = %v, want [minimax]", resp.AttemptedProviders)
 	}
 }
 
@@ -746,7 +736,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 	// Setup: httptest server acting as DeepSeek API.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := map[string]any{
-			"model": "deepseek-v4-pro",
+			"model": clients.DefaultModelV4_1Flash,
 			"choices": []map[string]any{
 				{
 					"message": map[string]string{
@@ -772,7 +762,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 	dsClient := clients.NewDeepSeekClient("test-ds-key", baseClient)
 	dsClient.BaseURL = srv.URL
 
-	dsAdapter := adapters.NewDeepSeekAdapter(dsClient, clients.DefaultModelV4Pro)
+	dsAdapter := adapters.NewDeepSeekAdapter(dsClient, clients.DefaultModelV4_1Flash)
 
 	router := llm.NewDefaultRouter(dsAdapter)
 	handler := capabilities.NewRationaleGenerationHandler(router)
@@ -796,7 +786,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 	t.Run("JSON response parsing", func(t *testing.T) {
 		srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := map[string]any{
-				"model": "deepseek-v4-pro",
+				"model": clients.DefaultModelV4_1Flash,
 				"choices": []map[string]any{
 					{
 						"message": map[string]string{
@@ -821,7 +811,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 		ds2 := clients.NewDeepSeekClient("test-ds-key", bc2)
 		ds2.BaseURL = srv2.URL
 
-		adapter2 := adapters.NewDeepSeekAdapter(ds2, clients.DefaultModelV4Pro)
+		adapter2 := adapters.NewDeepSeekAdapter(ds2, clients.DefaultModelV4_1Flash)
 		router2 := llm.NewDefaultRouter(adapter2)
 		handler2 := capabilities.NewRationaleGenerationHandler(router2)
 
@@ -842,7 +832,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 	t.Run("empty output fallback", func(t *testing.T) {
 		srv3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := map[string]any{
-				"model": "deepseek-v4-pro",
+				"model": clients.DefaultModelV4_1Flash,
 				"choices": []map[string]any{
 					{
 						"message": map[string]string{
@@ -863,7 +853,7 @@ func TestRationaleGenerationHandler_ThroughRouter(t *testing.T) {
 		ds3 := clients.NewDeepSeekClient("test-ds-key", bc3)
 		ds3.BaseURL = srv3.URL
 
-		adapter3 := adapters.NewDeepSeekAdapter(ds3, clients.DefaultModelV4Pro)
+		adapter3 := adapters.NewDeepSeekAdapter(ds3, clients.DefaultModelV4_1Flash)
 		router3 := llm.NewDefaultRouter(adapter3)
 		handler3 := capabilities.NewRationaleGenerationHandler(router3)
 
@@ -900,7 +890,7 @@ func TestDeepSeekAdapter_ContextCancellation(t *testing.T) {
 	baseClient := newIntegrationBaseClient()
 	client := clients.NewDeepSeekClient("test-ds-key", baseClient)
 	client.BaseURL = srv.URL
-	adapter := adapters.NewDeepSeekAdapter(client, clients.DefaultModelV4Pro)
+	adapter := adapters.NewDeepSeekAdapter(client, clients.DefaultModelV4_1Flash)
 
 	payload := mustJSON(t, map[string]any{
 		"messages": []map[string]string{

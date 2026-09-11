@@ -72,8 +72,8 @@ func TestHandleGetHealth_Healthy(t *testing.T) {
 	}
 
 	// Check router_version
-	if resp.RouterVersion != "v2.1" {
-		t.Errorf("expected router_version 'v2.1', got %q", resp.RouterVersion)
+	if resp.RouterVersion != "v2.2" {
+		t.Errorf("expected router_version 'v2.2', got %q", resp.RouterVersion)
 	}
 
 	// Check providers count
@@ -192,8 +192,8 @@ func TestHandleGetHealth_Empty(t *testing.T) {
 	if len(resp.Providers) != 0 {
 		t.Errorf("expected empty providers, got %d entries", len(resp.Providers))
 	}
-	if resp.RouterVersion != "v2.1" {
-		t.Errorf("expected router_version 'v2.1', got %q", resp.RouterVersion)
+	if resp.RouterVersion != "v2.2" {
+		t.Errorf("expected router_version 'v2.2', got %q", resp.RouterVersion)
 	}
 }
 

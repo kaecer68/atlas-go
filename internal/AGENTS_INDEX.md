@@ -94,7 +94,7 @@
 | `mcp/anomaly` | MCP audit event 異常偵測（Phase 4 Direction A，僅供 atlas-mcp 消費）|
 | `sectorallocation` | 產業權重單一權威 — 統一三路計算（industry/portfolio/monitoring）為多因子引擎（`docs/specs/sector-allocation-simulation-closure-spec.md`）|
 | `alerting` | Alertmanager webhook 接收（observability 堆疊警報）|
-| `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、DataClass gate）|
+| `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、空輸出視為失敗；DataClass 僅審計 metadata）|
 | `llm_annotator` | LLM 自然語言註解 — strategy_techniques 的 LLM 註解路徑 |
 | `stocktools` | per-symbol 台股查詢端點（quote/fundamentals/chips/technical）|
 | `stockpicker` | **PR 1a/1b/1c/2a** — 個股選股核心：勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job（可設定條件引擎 `conditions.go`，參數自 `parameters.json`；`-conditions`/`-list-conditions` 選條件）；CLI 盤後執行，尚未接 runtime 排程 |
@@ -130,7 +130,7 @@
 | `internal/capitalflow/` | capitalflow + eventdriven + recommender + subscription | 資金流/事件日曆/推薦/認證集群 |
 | `internal/fubonproxy/` | fubonproxy | ProcessManager supervisor F1-F9、Stop/backoff |
 | `internal/live/` | live | broker execution、nonce、EventPositionUpdate |
-| `internal/llm/` | llm | Router唯一入口、DataClass gate、capability SOP |
+| `internal/llm/` | llm | Router唯一入口、空輸出視為失敗、capability SOP（DataClass 僅審計，ADR-012） |
 | `internal/marketdata/` | marketdata | Provider抽象、DecodeJSON、fubon URL guard |
 | `internal/monitoring/` | monitoring + api/shared | Dashboard API、auth whitelist、Wave 9 |
 | `internal/orchestrator/` | orchestrator | Executor路由、PluginHost、ANTIPATTERNS |

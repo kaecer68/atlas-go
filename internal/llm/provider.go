@@ -92,6 +92,24 @@ const (
 	DataClassSecret                        // 3
 )
 
+// String returns the stable lowercase name of the DataClass. It is used for
+// audit metadata (logs, metrics, span attributes) and test names. The four
+// tiers are unchanged by ADR-012; only their enforcement role changed.
+func (dc DataClass) String() string {
+	switch dc {
+	case DataClassUnmarked:
+		return "unmarked"
+	case DataClassNonRegulated:
+		return "non_regulated"
+	case DataClassRegulated:
+		return "regulated"
+	case DataClassSecret:
+		return "secret"
+	default:
+		return "unknown"
+	}
+}
+
 // Request encapsulates a single LLM inference request.
 // The Router receives a Request, selects a capable Provider via the routing
 // table (§6.1), and dispatches the request through ProviderImpl.Call.
@@ -437,5 +455,10 @@ var (
 	// ErrProviderDisabled is returned when the Router's circuit breaker
 	// has excluded the target provider. The request should be retried with
 	// a different provider or after the breaker resets.
+	//
+	// Note (ADR-012): DefaultRouter.Call does not currently return this
+	// error — the DataClass gate was the only path that produced it. The
+	// sentinel is retained for API compatibility and for future
+	// health-based provider gating.
 	ErrProviderDisabled = errors.New("llm: provider is disabled by circuit breaker")
 )

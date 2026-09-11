@@ -35,7 +35,7 @@ func NewRiskSurfaceExtractionHandler(router llm.Router) *RiskSurfaceExtractionHa
 
 // Handle executes the risk surface extraction capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassInternal when unset.
+//  2. Defaults DataClass to DataClassRegulated when unset.
 //  3. Dispatches through the Router with CapabilityRiskSurfaceExtraction.
 //  4. Parses the response into a RiskSurfaceExtractionResponse (JSON-first,
 //     then raw string fallback as EnrichedDescription).
@@ -61,7 +61,9 @@ func (h *RiskSurfaceExtractionHandler) Handle(
 		Capability: llm.CapabilityRiskSurfaceExtraction,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 600},
+		// max_tokens 3072 (was 600): gap 描述抽取 + JSON 結構，欄位數可變。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 3072},
 	}
 
 	resp, err := h.router.Call(ctx, req)

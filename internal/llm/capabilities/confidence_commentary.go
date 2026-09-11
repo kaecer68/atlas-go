@@ -56,7 +56,9 @@ func (h *ConfidenceCommentaryHandler) Handle(
 		Capability: llm.CapabilityConfidenceCommentary,
 		Payload:    payload,
 		DataClass:  input.DataClass,
-		Options:    llm.Options{MaxTokens: 400},
+		// max_tokens 2048 (was 400): 3-4 句繁中 + JSON 外殼；原值不足。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)

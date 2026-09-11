@@ -25,8 +25,10 @@ const kimiEndpoint = "/coding/v1/chat/completions"
 //   - Thinking mode is FORCED ON (thinking: {type: "enabled"} injected into
 //     every request body).
 //   - Temperature is LOCKED to 1.0 regardless of ChatOptions.Temperature.
-//   - DataClassRegulated and DataClassSecret payloads are rejected with
-//     ErrIncompatibleDataClass.
+//
+// DataClass no longer restricts this client (ADR-012): the payload's
+// DataClass is recorded as audit metadata by the caller, and provider
+// selection is driven by capability achievability, not data residency.
 type KimiClient struct {
 	*BaseClient
 
@@ -60,18 +62,10 @@ func NewKimiClient(apiKey string, baseClient *BaseClient) *KimiClient {
 // Chat sends messages to the Kimi K2.7 API and returns a normalized response.
 // The model is always kimi-for-coding; no model parameter is accepted.
 //
-// K2.7 guard: if opts != nil and opts.DataClass is DataClassRegulated or
-// DataClassSecret, Chat returns ErrIncompatibleDataClass immediately.
-// Thinking mode is forced on and temperature is locked to 1.0.
+// Thinking mode is forced on and temperature is locked to 1.0. DataClass is
+// not inspected here (ADR-012 removed the per-provider data-sovereignty gate;
+// DataClass remains audit metadata on the request/response path).
 func (c *KimiClient) Chat(ctx context.Context, messages []Message, opts *ChatOptions) (*ChatResponse, error) {
-	// K2.7 data class guard.
-	if opts != nil {
-		switch opts.DataClass {
-		case llm.DataClassRegulated, llm.DataClassSecret:
-			return nil, fmt.Errorf("kimi: %w: K2.7 does not accept regulated or secret data", ErrIncompatibleDataClass)
-		}
-	}
-
 	apiKey := c.APIKey
 	if apiKey == "" {
 		return nil, fmt.Errorf("kimi: API key not set (caller must pass via NewKimiClient; use config.GetSecret(\"LLM_KIMI_API_KEY\") in main.go wiring)")

@@ -35,7 +35,7 @@ func TestDeepSeekAdapter_ConvertsPayloadToMessages(t *testing.T) {
 	}
 	adapter := &DeepSeekAdapter{
 		client: stub,
-		Model:  "deepseek-v4-pro",
+		Model:  "deepseek-flash",
 	}
 
 	payload, _ := json.Marshal(map[string]any{
@@ -53,8 +53,8 @@ func TestDeepSeekAdapter_ConvertsPayloadToMessages(t *testing.T) {
 	if resp.Output != "ok" {
 		t.Errorf("Call().Output = %q, want %q", resp.Output, "ok")
 	}
-	if capturedModel != "deepseek-v4-pro" {
-		t.Errorf("model = %q, want %q", capturedModel, "deepseek-v4-pro")
+	if capturedModel != "deepseek-flash" {
+		t.Errorf("model = %q, want %q", capturedModel, "deepseek-flash")
 	}
 	if len(capturedMessages) != 2 {
 		t.Fatalf("len(messages) = %d, want 2", len(capturedMessages))
@@ -78,7 +78,7 @@ func TestDeepSeekAdapter_ConvertsResponseToLLMType(t *testing.T) {
 		chatFn: func(_ context.Context, _ string, _ []clients.Message, _ *clients.ChatOptions) (*clients.ChatResponse, error) {
 			return &clients.ChatResponse{
 				Content:      "DeepSeek response",
-				Model:        "deepseek-v4-pro",
+				Model:        "deepseek-flash",
 				Usage:        expectedUsage,
 				FinishReason: "stop",
 			}, nil
@@ -86,7 +86,7 @@ func TestDeepSeekAdapter_ConvertsResponseToLLMType(t *testing.T) {
 	}
 	adapter := &DeepSeekAdapter{
 		client: stub,
-		Model:  "deepseek-v4-pro",
+		Model:  "deepseek-flash",
 	}
 
 	payload, _ := json.Marshal(map[string]any{
@@ -112,7 +112,7 @@ func TestDeepSeekAdapter_ConvertsResponseToLLMType(t *testing.T) {
 // TestDeepSeekAdapter_InvalidPayload verifies that non-[]byte payloads
 // produce an error.
 func TestDeepSeekAdapter_InvalidPayload(t *testing.T) {
-	adapter := NewDeepSeekAdapter(nil, "deepseek-v4-pro")
+	adapter := NewDeepSeekAdapter(nil, "deepseek-flash")
 
 	req := llm.Request{Payload: "not bytes"}
 	_, err := adapter.Call(context.Background(), req)
@@ -124,7 +124,7 @@ func TestDeepSeekAdapter_InvalidPayload(t *testing.T) {
 // TestDeepSeekAdapter_EmptyMessages verifies that a payload with an empty
 // messages array produces an error.
 func TestDeepSeekAdapter_EmptyMessages(t *testing.T) {
-	adapter := NewDeepSeekAdapter(nil, "deepseek-v4-pro")
+	adapter := NewDeepSeekAdapter(nil, "deepseek-flash")
 
 	payload, _ := json.Marshal(map[string]any{"messages": []any{}})
 	req := llm.Request{Payload: payload}
@@ -141,7 +141,7 @@ func TestDeepSeekAdapter_ClientError(t *testing.T) {
 			return nil, fmt.Errorf("upstream failure")
 		},
 	}
-	adapter := &DeepSeekAdapter{client: stub, Model: "deepseek-v4-pro"}
+	adapter := &DeepSeekAdapter{client: stub, Model: "deepseek-flash"}
 
 	payload, _ := json.Marshal(map[string]any{
 		"messages": []map[string]string{{"role": "user", "content": "ping"}},

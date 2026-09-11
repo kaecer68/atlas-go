@@ -34,7 +34,7 @@ func NewStrategySummaryHandler(router llm.Router) *StrategySummaryHandler {
 
 // Handle executes the strategy summary capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassInternal when unset.
+//  2. Defaults DataClass to DataClassRegulated when unset.
 //  3. Dispatches through the Router with CapabilityStrategySummary.
 //  4. Parses the response into a StrategySummaryResponse (JSON-first,
 //     then raw string fallback as Summary).
@@ -60,7 +60,9 @@ func (h *StrategySummaryHandler) Handle(
 		Capability: llm.CapabilityStrategySummary,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 300},
+		// max_tokens 2048 (was 300): 摘要 + JSON 外殼；reasoning 模型最低預算。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)

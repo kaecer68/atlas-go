@@ -19,9 +19,10 @@ type deepSeekChatter interface {
 // llm.ProviderImpl. It bridges the DeepSeek V4 API into the capability-based
 // routing system.
 //
-// Model selection: "deepseek-v4-pro" (default) or "deepseek-v4-flash"
-// (latency-sensitive). If Model is empty, the underlying client falls back
-// to its own DefaultModel.
+// Model selection: the canonical selector is "deepseek-flash"
+// (DeepSeek-V4.1-Flash), normally resolved from LLM_DEEPSEEK_MODEL via
+// clients.ResolveDeepSeekModel. If Model is empty, the underlying client
+// falls back to its own DefaultModel (also "deepseek-flash").
 type DeepSeekAdapter struct {
 	client deepSeekChatter
 	Model  string
@@ -29,7 +30,7 @@ type DeepSeekAdapter struct {
 
 // NewDeepSeekAdapter creates a DeepSeekAdapter wrapping the given client.
 // If model is "", the adapter passes an empty model to the client, which
-// falls back to its own DefaultModel (deepseek-v4-pro).
+// falls back to its own DefaultModel ("deepseek-flash").
 func NewDeepSeekAdapter(client *clients.DeepSeekClient, model string) *DeepSeekAdapter {
 	return &DeepSeekAdapter{client: client, Model: model}
 }

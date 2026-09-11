@@ -24,8 +24,9 @@ type ChatOptions struct {
 	// If nil, the provider's default is used.
 	MaxTokens *int `json:"max_tokens,omitempty"`
 
-	// DataClass classifies the sensitivity of the payload.
-	// Providers may reject requests with incompatible DataClass values.
+	// DataClass classifies the sensitivity of the payload. It is audit
+	// metadata only: after ADR-012 no built-in provider rejects a request
+	// based on DataClass, and the Router does not gate on it.
 	DataClass llm.DataClass `json:"data_class,omitempty"`
 }
 
@@ -47,6 +48,8 @@ type ChatResponse struct {
 }
 
 // ErrIncompatibleDataClass is returned when a provider rejects a request
-// because the payload's DataClass is incompatible with the provider's
-// data governance constraints.
+// because the payload's DataClass is incompatible with the provider's own
+// policy. No built-in client rejects on DataClass since ADR-012 removed the
+// per-provider data-sovereignty gate; the sentinel is retained for
+// third-party ProviderImpl implementations that may still enforce one.
 var ErrIncompatibleDataClass = errors.New("data class incompatible with provider")

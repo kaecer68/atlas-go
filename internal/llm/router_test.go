@@ -2,7 +2,10 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -193,72 +196,44 @@ func TestDefaultRouter_AllFail_LastResort(t *testing.T) {
 	}
 }
 
-// TestDefaultRouter_DataClassGate tests that DataClassRegulated skips ProviderMiniMax.
-func TestDefaultRouter_DataClassGate(t *testing.T) {
-	// Given: a chain where MiniMax is the Primary and deepseek is Backup1,
-	// but the request has DataClassRegulated, so MiniMax should be skipped.
-	deepseekResp := Response{
-		Output:   "deepseek output",
-		Provider: ProviderDeepSeek,
-	}
-	miniMax := &mockProvider{
-		name:    ProviderMiniMax,
-		callErr: nil, // would succeed, but should be skipped
-		callResp: Response{
-			Output:   "minimax should not be called",
-			Provider: ProviderMiniMax,
-		},
-		healthResp: HealthStatus{
-			Provider: ProviderMiniMax,
-			Healthy:  true,
-		},
-	}
-	deepseek := &mockProvider{
-		name:     ProviderDeepSeek,
-		callResp: deepseekResp,
-		healthResp: HealthStatus{
-			Provider: ProviderDeepSeek,
-			Healthy:  true,
-		},
-	}
-
-	// Create router with MiniMax as Primary and DeepSeek as Backup1
-	router := &DefaultRouter{
-		providers: map[Provider]ProviderImpl{
-			ProviderMiniMax:  miniMax,
-			ProviderDeepSeek: deepseek,
-		},
-		routingTable: RouterConfig{
-			RoutingChains: map[Capability]RoutingChain{
-				CapabilityFailureAttribution: {
-					Primary:    ProviderMiniMax,
-					Backup1:    ProviderDeepSeek,
-					Backup2:    ProviderMock,
-					LastResort: ProviderMock,
+// TestDefaultRouter_DataClassDoesNotGateProvider verifies ADR-012: DataClass is
+// audit metadata only, so regulated/secret payloads route to the chain primary
+// (MiniMax) exactly like unmarked data.
+func TestDefaultRouter_DataClassDoesNotGateProvider(t *testing.T) {
+	for _, dc := range []DataClass{DataClassUnmarked, DataClassNonRegulated, DataClassRegulated, DataClassSecret} {
+		t.Run(dc.String(), func(t *testing.T) {
+			miniMax := &mockProvider{
+				name:     ProviderMiniMax,
+				callResp: Response{Output: "minimax output", Provider: ProviderMiniMax},
+				healthResp: HealthStatus{
+					Provider: ProviderMiniMax,
+					Healthy:  true,
 				},
-			},
-		},
-	}
+			}
+			deepseek := &mockProvider{
+				name:     ProviderDeepSeek,
+				callResp: Response{Output: "deepseek output", Provider: ProviderDeepSeek},
+				healthResp: HealthStatus{
+					Provider: ProviderDeepSeek,
+					Healthy:  true,
+				},
+			}
+			router := NewDefaultRouter(miniMax, deepseek)
 
-	// When: calling with DataClassRegulated
-	req := Request{
-		Capability: CapabilityFailureAttribution,
-		DataClass:  DataClassRegulated,
-	}
-	resp, err := router.Call(context.Background(), req)
-	// Then: MiniMax should be skipped, DeepSeek should be used
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// MiniMax should NOT appear in AttemptedProviders because it was gated
-	if resp.Provider != ProviderDeepSeek {
-		t.Errorf("expected ProviderDeepSeek (MiniMax gated), got %v", resp.Provider)
-	}
-	// MiniMax should not be in AttemptedProviders
-	for _, p := range resp.AttemptedProviders {
-		if p == ProviderMiniMax {
-			t.Errorf("ProviderMiniMax should not appear in AttemptedProviders for DataClassRegulated")
-		}
+			resp, err := router.Call(context.Background(), Request{
+				Capability: CapabilityFailureAttribution,
+				DataClass:  dc,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp.Provider != ProviderMiniMax {
+				t.Errorf("DataClass %v: expected ProviderMiniMax (no gate), got %v", dc, resp.Provider)
+			}
+			if len(resp.AttemptedProviders) != 1 || resp.AttemptedProviders[0] != ProviderMiniMax {
+				t.Errorf("DataClass %v: expected only ProviderMiniMax attempted, got %v", dc, resp.AttemptedProviders)
+			}
+		})
 	}
 }
 
@@ -452,61 +427,29 @@ func TestDefaultRouter_Counter_Increment(t *testing.T) {
 	}
 }
 
-// TestDefaultRouter_ForceProvider_RespectsDataClassGate verifies that ForceProvider
-// still respects the DataClass gate (ADR-010). A caller cannot route regulated data
-// to hosted MiniMax M3 by setting ForceProvider=ProviderMiniMax + DataClass=Regulated.
-func TestDefaultRouter_ForceProvider_RespectsDataClassGate(t *testing.T) {
+// TestDefaultRouter_ForceProvider_IgnoresDataClass verifies ADR-012: a forced
+// provider is called even for DataClassRegulated/Secret (the gate that used to
+// return ErrProviderDisabled is gone).
+func TestDefaultRouter_ForceProvider_IgnoresDataClass(t *testing.T) {
 	miniMax := &mockProvider{
-		name: ProviderMiniMax,
-		healthResp: HealthStatus{
-			Provider: ProviderMiniMax,
-			Healthy:  true,
-		},
+		name:       ProviderMiniMax,
+		callResp:   Response{Output: "ok", Provider: ProviderMiniMax},
+		healthResp: HealthStatus{Provider: ProviderMiniMax, Healthy: true},
 	}
 	deepseek := &mockProvider{
-		name: ProviderDeepSeek,
-		healthResp: HealthStatus{
-			Provider: ProviderDeepSeek,
-			Healthy:  true,
-		},
+		name:       ProviderDeepSeek,
+		callResp:   Response{Output: "deepseek ok", Provider: ProviderDeepSeek},
+		healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true},
 	}
 	router := NewDefaultRouter(miniMax, deepseek)
 
-	t.Run("Regulated+ForceProviderMiniMax returns ErrProviderDisabled", func(t *testing.T) {
+	t.Run("Regulated+ForceProviderMiniMax proceeds", func(t *testing.T) {
 		forceM3 := ProviderMiniMax
-		req := Request{
+		resp, err := router.Call(context.Background(), Request{
 			Capability: CapabilityFailureAttribution,
 			DataClass:  DataClassRegulated,
 			Options:    Options{ForceProvider: &forceM3},
-		}
-		_, err := router.Call(context.Background(), req)
-		if !errors.Is(err, ErrProviderDisabled) {
-			t.Fatalf("expected ErrProviderDisabled, got %v", err)
-		}
-	})
-
-	t.Run("Secret+ForceProviderMiniMax returns ErrProviderDisabled", func(t *testing.T) {
-		forceM3 := ProviderMiniMax
-		req := Request{
-			Capability: CapabilityFailureAttribution,
-			DataClass:  DataClassSecret,
-			Options:    Options{ForceProvider: &forceM3},
-		}
-		_, err := router.Call(context.Background(), req)
-		if !errors.Is(err, ErrProviderDisabled) {
-			t.Fatalf("expected ErrProviderDisabled, got %v", err)
-		}
-	})
-
-	t.Run("Unmarked+ForceProviderMiniMax proceeds normally", func(t *testing.T) {
-		miniMax.callResp = Response{Output: "ok", Provider: ProviderMiniMax}
-		forceM3 := ProviderMiniMax
-		req := Request{
-			Capability: CapabilityFailureAttribution,
-			DataClass:  DataClassUnmarked,
-			Options:    Options{ForceProvider: &forceM3},
-		}
-		resp, err := router.Call(context.Background(), req)
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -515,15 +458,28 @@ func TestDefaultRouter_ForceProvider_RespectsDataClassGate(t *testing.T) {
 		}
 	})
 
-	t.Run("NonRegulated+ForceProviderDeepSeek proceeds normally", func(t *testing.T) {
-		deepseek.callResp = Response{Output: "deepseek ok", Provider: ProviderDeepSeek}
+	t.Run("Secret+ForceProviderMiniMax proceeds", func(t *testing.T) {
+		forceM3 := ProviderMiniMax
+		resp, err := router.Call(context.Background(), Request{
+			Capability: CapabilityFailureAttribution,
+			DataClass:  DataClassSecret,
+			Options:    Options{ForceProvider: &forceM3},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Provider != ProviderMiniMax {
+			t.Errorf("expected ProviderMiniMax, got %v", resp.Provider)
+		}
+	})
+
+	t.Run("Regulated+ForceProviderDeepSeek proceeds", func(t *testing.T) {
 		forceDS := ProviderDeepSeek
-		req := Request{
+		resp, err := router.Call(context.Background(), Request{
 			Capability: CapabilityFailureAttribution,
 			DataClass:  DataClassRegulated,
 			Options:    Options{ForceProvider: &forceDS},
-		}
-		resp, err := router.Call(context.Background(), req)
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -531,4 +487,112 @@ func TestDefaultRouter_ForceProvider_RespectsDataClassGate(t *testing.T) {
 			t.Errorf("expected ProviderDeepSeek, got %v", resp.Provider)
 		}
 	})
+}
+
+// TestDefaultRouter_EmptyOutputFallsThroughToBackup verifies ADR-012: a
+// provider that "succeeds" with empty output is treated as failed, so the next
+// chain member is tried and AttemptedProviders records both.
+func TestDefaultRouter_EmptyOutputFallsThroughToBackup(t *testing.T) {
+	for _, blank := range []string{"", "   \n\t "} {
+		t.Run("output="+strconv.Quote(blank), func(t *testing.T) {
+			before := atomic.LoadInt64(FallbackTriggeredTotal)
+
+			primary := &mockProvider{
+				name:       ProviderMiniMax,
+				callResp:   Response{Output: blank, Provider: ProviderMiniMax},
+				healthResp: HealthStatus{Provider: ProviderMiniMax, Healthy: true},
+			}
+			backup := &mockProvider{
+				name:       ProviderDeepSeek,
+				callResp:   Response{Output: "backup output", Provider: ProviderDeepSeek},
+				healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true},
+			}
+			router := NewDefaultRouter(primary, backup)
+
+			resp, err := router.Call(context.Background(), Request{
+				Capability: CapabilityFailureAttribution,
+				DataClass:  DataClassRegulated,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if resp.Output != "backup output" {
+				t.Errorf("expected backup output, got %q", resp.Output)
+			}
+			if resp.Provider != ProviderDeepSeek {
+				t.Errorf("expected ProviderDeepSeek, got %v", resp.Provider)
+			}
+			if len(resp.AttemptedProviders) != 2 ||
+				resp.AttemptedProviders[0] != ProviderMiniMax ||
+				resp.AttemptedProviders[1] != ProviderDeepSeek {
+				t.Errorf("expected [minimax deepseek] attempted, got %v", resp.AttemptedProviders)
+			}
+			if after := atomic.LoadInt64(FallbackTriggeredTotal); after != before+1 {
+				t.Errorf("FallbackTriggeredTotal delta = %d, want 1", after-before)
+			}
+		})
+	}
+}
+
+// TestDefaultRouter_AllEmptyOutputExhaustsChain verifies that a chain whose
+// members all answer with empty output ends in the last-resort handler and
+// still reports every attempted provider (no silent "success").
+func TestDefaultRouter_AllEmptyOutputExhaustsChain(t *testing.T) {
+	chain := []*mockProvider{
+		{name: ProviderMiniMax, callResp: Response{Output: "", Provider: ProviderMiniMax}, healthResp: HealthStatus{Provider: ProviderMiniMax, Healthy: true}},
+		{name: ProviderDeepSeek, callResp: Response{Output: "\n", Provider: ProviderDeepSeek}, healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true}},
+	}
+	router := NewDefaultRouter(chain[0], chain[1])
+
+	resp, err := router.Call(context.Background(), Request{
+		Capability: CapabilityFailureAttribution,
+		DataClass:  DataClassUnmarked,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Provider != ProviderMock {
+		t.Errorf("expected ProviderMock last resort, got %v", resp.Provider)
+	}
+	if resp.Output != "" {
+		t.Errorf("expected empty last-resort output, got %q", resp.Output)
+	}
+	if len(resp.AttemptedProviders) != 2 {
+		t.Errorf("expected both chain members attempted, got %v", resp.AttemptedProviders)
+	}
+}
+
+// TestDefaultRouter_ToolCallOnlyResponseIsSuccess verifies the empty-output
+// check does not break function-calling flows: a response with ToolCalls and no
+// text is a legitimate success.
+func TestDefaultRouter_ToolCallOnlyResponseIsSuccess(t *testing.T) {
+	primary := &mockProvider{
+		name: ProviderMiniMax,
+		callResp: Response{
+			Output:    "",
+			Provider:  ProviderMiniMax,
+			ToolCalls: []ToolCall{{ID: "call_1", Name: "get_weather", Arguments: json.RawMessage(`{}`)}},
+		},
+		healthResp: HealthStatus{Provider: ProviderMiniMax, Healthy: true},
+	}
+	backup := &mockProvider{
+		name:       ProviderDeepSeek,
+		callResp:   Response{Output: "should not be reached", Provider: ProviderDeepSeek},
+		healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true},
+	}
+	router := NewDefaultRouter(primary, backup)
+
+	resp, err := router.Call(context.Background(), Request{
+		Capability: CapabilityFailureAttribution,
+		DataClass:  DataClassUnmarked,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Provider != ProviderMiniMax {
+		t.Errorf("expected ProviderMiniMax (tool call is a valid response), got %v", resp.Provider)
+	}
+	if len(resp.ToolCalls) != 1 {
+		t.Errorf("expected 1 tool call, got %d", len(resp.ToolCalls))
+	}
 }

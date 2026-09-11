@@ -24,9 +24,12 @@ const miniMaxEndpointAnthropic = "/v1/anthropic/chat/completions"
 // MiniMaxClient is an OpenAI-compatible HTTP client for the MiniMax M3 API.
 // It composes a BaseClient for retry, rate-limiting, and circuit-breaking.
 //
-// WARNING: MiniMax is hosted under Chinese national security law.
-// DataClassSecret and DataClassRegulated payloads MUST NOT route to this
-// provider. This restriction is enforced at the Router level.
+// Data residency note: MiniMax is hosted under Chinese national security law,
+// and so are the DeepSeek (Hangzhou) and Kimi/Moonshot (Beijing) upstreams.
+// The Router therefore applies no per-provider data-sovereignty gate
+// (ADR-012); if a deployment must keep data away from third-party
+// infrastructure, that control has to cover all providers or move to
+// self-hosting.
 type MiniMaxClient struct {
 	*BaseClient
 

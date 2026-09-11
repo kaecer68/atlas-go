@@ -1,7 +1,7 @@
 # LLM Provider 路由策略（Provider Routing Strategy）
 
 > **文件角色**：atlas-go LLM 多 Provider 路由 + 備援鏈的完整規格（架構藍圖 §6 抽離）。
-> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.1）
+> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.2）
 > **Maturity 規則**：`internal/MATURITY.md` LLM 相關條目；本文件為 X 級，僅供 reference，不直接 import
 
 ---
@@ -9,32 +9,67 @@
 ## 六、Provider 路由策略
 
 > **v2.0 重寫**：本章由原本的「單一 provider 預設」改為「多 provider 依 capability 路由 + 備援鏈」。每個 capability 的 primary 選擇依 §3.2 決策表，備援鏈依健康度動態降級。
+>
+> **v2.2 修訂（2026-09-11，ADR-012）**：路由鏈改以「任務可達成率 + 訂閱額度」選型，不再以資料管轄區（DataClass）決定 provider；ADR-010 的 DataClass 閘門已拆除，`DataClass` 降為稽核 metadata。路由表、`max_tokens` 校準與「空輸出視為失敗」行為見 §6.1、§6.1a、§6.3a。
 
-### 6.1 路由表（每 capability 的四級鏈）
+### 6.1 路由表（每 capability 的 fallback 鏈）
 
 **Capability column 命名約定**：本表 capability column 採用 `internal/llm/provider.go` 中 Capability 常數的字串值（即 `CapabilityFailureAttribution` 的字面值），Phase 1 開發期使用的 dotted name（如 `strategy.failure_attribution`、`narrative.rationale_translation_fallback`）僅作為 §3 capability taxonomy 的歷史參照，已不具權威性。Phase 2 整合時若 doc scope 與 code scope 不一致（如 `rationale_translation_fallback` vs `rationale_generation`），需另立 ADR 記錄決策（目前 ADR-011 處理六處落差）。
 
 | Capability | Primary | Backup1 | Backup2 | Last Resort |
 |------------|---------|---------|---------|-------------|
-| `failure_attribution` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `rule_based`（`frame.Attribution`） |
-| `rationale_generation` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough`（原字回傳） |
-| `strategy_summary` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `null`（端點回空字串） |
-| `prompt_lint` | DeepSeek V4-Flash | Kimi K2.7 | OpenCode-Go | `pass`（CI 不擋） |
-| `scenario_simulation` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `discard`（不存） |
-| `risk_surface_extraction` | MiniMax M3 | DeepSeek V4-Pro | OpenCode-Go | `passthrough`（保留低覆蓋率原描述） |
-| `regime_explanation` | DeepSeek V4-Flash | MiniMax M3 | OpenCode-Go | `passthrough` |
-| `performance_forensics` | DeepSeek V4-Pro | MiniMax M3 | OpenCode-Go | `passthrough` |
-| `code_review_annotation` | Kimi K2.7 | DeepSeek V4-Flash | OpenCode-Go | `empty`（無註解） |
+| `failure_attribution` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `rule_based`（`frame.Attribution`） |
+| `rationale_generation` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `passthrough`（原字回傳） |
+| `regime_explanation` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `passthrough` |
+| `sentiment_explanation` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `passthrough` |
+| `confidence_commentary` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `empty`（不產生旁註；`ErrAllProvidersFailed` 時 handler 回空回應） |
+| `performance_forensics` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `passthrough` |
+| `risk_surface_extraction` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `passthrough`（保留低覆蓋率原描述） |
+| `scenario_simulation` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `discard`（不存） |
+| `strategy_summary` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | `null`（端點回空字串） |
+| `code_review_annotation` | `kimi (kimi-for-coding)` | `minimax (M3)` | `deepseek (deepseek-flash)` | `empty`（無註解） |
+| `prompt_lint` | `kimi (kimi-for-coding)` | `minimax (M3)` | `deepseek (deepseek-flash)` | `pass`（CI 不擋） |
+| `contra_attribution` | `minimax (M3)` | `deepseek (deepseek-flash)` | （空） | （待定；目前無 handler 實作，Phase 2 落地時定義） |
+
+**三個群組（ADR-012）**：
+- **敘事 / 解釋 JSON（9 個，primary = MiniMax M3）**：`failure_attribution`、`rationale_generation`、`regime_explanation`、`sentiment_explanation`、`confidence_commentary`、`performance_forensics`、`risk_surface_extraction`、`scenario_simulation`、`strategy_summary`。M3 走訂閱額度（邊際成本低）且繁中金融敘事為其強項；backup1 一律為 `deepseek (deepseek-flash)`。
+- **程式碼（2 個，primary = kimi `kimi-for-coding`）**：`code_review_annotation`、`prompt_lint`。ADR-009 的能力 guard 使這兩個 capability 僅 kimi 可承接；未設定 kimi key 時 Router 自動落到 backup1（M3），再落到 backup2（deepseek-flash）。這是唯一使用完整三層鏈的群組。
+- **`contra_attribution`（對抗式敘事分析，第 12 個 capability）**：與敘事群組同鏈（primary minimax / backup1 deepseek / backup2 空 / last_resort mock）。目前**無 handler 實作**，故無 `max_tokens` 可校準。
+- 全域 fallback 模型名一律用 canonical `deepseek-flash`（= DeepSeek-V4.1-Flash）；`deepseek-v4-pro` / `deepseek-pro` **已退役**，不得再作為派遣或預設模型（ADR-012）。
+
+> **Last Resort 欄語意**：本欄記錄「非 provider 的降級行為」（`rule_based` / `passthrough` / `null` / `pass` / `discard` / `empty`）。Phase 1 實作把 last resort 一律落到 `mock` provider 並回空 `Output`；各 capability 的語意化降級屬 Phase 2 handler 範圍（見 `internal/llm/router.go` 的 `defaultRoutingTable()` 註解）。
 
 > **ADR-011**（Phase 2 capability name 對齊決策）：採用 Option B — 對齊 code → doc。Phase 1 開發期間 doc 與 code 曾使用不同的命名空間（doc 用 dotted name、code 用 snake_case enum），Phase 2 統一以 code enum 為權威來源。對齊過程中發現的 scope 差異（如 `narrative.rationale_translation_fallback` 的翻譯補丁概念 vs `rationale_generation` 的 rationale 生成概念）以本 ADR 記錄，Phase 2 adapter 實作時須重新定義兩者的輸入輸出契約。
 
-**為何每列都至少 4 級**：
-- `primary` 對應 §3.2 決策表，與任務特性最佳匹配。
-- `backup1` 通常為「同任務類型的次優模型」；例如 reasoning 類 capability 從 V4-Pro 降級到 M3。
-- `backup2` 統一為 OpenCode-Go（generic multi-model 訂閱），作為「所有上游同時壞掉」前的最後聰明選擇。
-- `last resort` 因 capability 而異：翻譯可 passthrough、摘要可空字串、PRISM 可 discard。
+**鏈長與層級說明（ADR-012）**：
+- `primary` = 任務可達成率最高的模型，且優先使用已付費訂閱額度（敘事群組用 M3、程式碼群組用 kimi）。
+- `backup1` = 跨家族的第一備援；敘事群組由 M3 降級到 `deepseek (deepseek-flash)`，程式碼群組由 kimi 降級到 M3。
+- `backup2` 只保留給程式碼群組（`deepseek (deepseek-flash)`）；其餘群組的 `backup2` 為空字串 → 三層鏈（primary → backup1 → last resort）。
+- `last resort` 因 capability 而異：翻譯可 passthrough、摘要可空字串、PRISM 可 discard（語意見上表與 §6.3a）。
+- **OpenCode-Go / OpenCode-Zen 不在鏈上**：兩者為 reserved 常數，`internal/llm/clients/` 內無 client 實作（Issue #720），因此路由鏈不含 opencode 成員。
+
+### 6.1a `max_tokens` 校準（ADR-012）
+
+> 舊值對 reasoning 模型（M3 / `deepseek-flash`）過小：native thinking 會吃光預算，provider 回傳成功但 `output` 為空（見 §6.3a）。下表為 2026-09-11 定案值。
+
+| Capability | 舊值 | 新值 | 理由（一行） |
+|------------|------|------|--------------|
+| `failure_attribution` | （無設定，走 provider 預設） | 2048 | Router 路徑的 reasoning 最低預算；rule-based fallback 仍為權威。⚠️ production `/annotate` 目前不走 Router（走 `llm_annotator.KimiClient`，tokens 由其 `Config.MaxTokens` 決定），故此值僅在 Router 路徑生效 |
+| `rationale_generation` | 500 | 2048 | 翻譯輸出含 JSON 外殼；M3 / `deepseek-flash` reasoning 需要預算 |
+| `regime_explanation` | 300 | 2048 | 原值對 reasoning 模型過小，會回空內容；headline 短但 thinking 需預算 |
+| `sentiment_explanation` | 500 | 2048 | 同上 |
+| `confidence_commentary` | 400 | 2048 | 3-4 句中文 + JSON 外殼；原值過小 |
+| `performance_forensics` | 600 | 4096 | VaR / CVaR / 回撤敘事 + calibration JSON，屬長輸出 |
+| `risk_surface_extraction` | 600 | 3072 | gap 描述抽取 + JSON 結構 |
+| `scenario_simulation` | 600 | 4096 | 訓練結果解釋 + cohort summary 兩個欄位 |
+| `strategy_summary` | 300 | 2048 | 摘要 + JSON 外殼 |
+| `code_review_annotation` | 800 | 4096 | diff 審查，findings JSON 可長 |
+| `prompt_lint` | 800 | 4096 | lint findings JSON |
+| `contra_attribution` | — | — | 無 handler，無 `max_tokens` 可校準 |
 
 **為何 OpenCode-Zen 不在主鏈上**：OpenCode-Zen 是 last-mile 備援，僅在 OpenCode-Go 也不可用時由 Router 自動啟動；不寫在這張表是為了避免誤導讀者把它當成同級備援。OpenCode-Zen 啟動時所有 capability 自動降級，且會發送 alert（見 §6.5 觸發條件 3）。
+
+> **ADR-012 現況註記**：OpenCode-Go / OpenCode-Zen 目前皆為 reserved 常數（`internal/llm/clients/` 無 client 實作，Issue #720），路由鏈不含兩者；`backup2` 只有程式碼群組使用（`deepseek (deepseek-flash)`）。
 
 ### 6.2 成本與效能矩陣
 
@@ -43,8 +78,8 @@
 | Kimi | K2.7 | $0.95 | $4.00 | 純程式碼生成 | 無金融 / 敘事能力 |
 | Kimi | K2.6 | $0.95 | $4.00 | 通用、K2.7 的 instruct 對應 | 仍非頂級推理 |
 | MiniMax | M3 | $0.30 | $1.20 | 金融、繁中、1M context | 資料主權風險（hosted） |
-| DeepSeek | V4-Pro | 市場報價 | 市場報價 | 推理、繁中、code | HLE、抽象推理仍落後 |
-| DeepSeek | V4-Flash | $0.14 | $0.28 | 成本最低、速度快 | 推理弱 |
+| DeepSeek | ~~V4-Pro~~ | — | — | — | **已退役（2026-09-11，ADR-012）**：不再派遣；品質與 `deepseek-flash` 打平、貴約 5×、慢 5.7–10.6×、不支援圖像輸入 |
+| DeepSeek | V4-Flash（canonical：`deepseek-flash` = V4.1-Flash） | $0.14 | $0.28 | 成本最低、速度快；**deepseek 預設**、全域 fallback | 舊定價；推理弱（V4.1-Flash 已改善，見 ADR-012） |
 | OpenCode-Go | multi-model | 訂閱制 | 訂閱制 | 通用 failover、訂閱可控成本 | 額外 latency、模型不固定 |
 | OpenCode-Zen | multi | 訂閱制 | 訂閱制 | regional fallback | 服務品質較不穩 |
 | Mock | — | 0 | 0 | 測試 | 無生產價值 |
@@ -58,13 +93,28 @@
 Router 在收到 `Request` 後，依下列順序決定 provider：
 
 1. **`Options.ForceProvider` 顯式指定**（測試 / sticky routing）
-2. **`DataClass` 閘門**：若 `DataClass == Regulated` 且候選 provider 為 MiniMax hosted，**自動降級**到自架 M3 或 backup1
-3. **Capability 預設 primary**（§3.2 決策表）
-4. **健康度檢查**：
+2. **Capability 預設 primary**（§6.1 路由表 / §3.2 決策表）
+3. **健康度檢查**：
    - primary circuit breaker open → 降級到 backup1
-   - backup1 circuit breaker open 或 latency > 2× baseline → 降級到 backup2
-   - backup2 也不可用（OpenCode-Go）→ 啟動 OpenCode-Zen + 發 alert
-5. **Mock**：僅當 `Options.Trace == true` 或測試環境變數 `ATLAS_LLM_FORCE_MOCK=1`
+   - backup1 circuit breaker open 或 latency > 2× baseline → 降級到 backup2（若 `backup2` 為空字串則直接到 last resort）
+   - 全部鏈成員失敗 → 執行 last resort（§6.1 表；Phase 1 統一為 `mock`）
+4. **Mock**：僅當 `Options.Trace == true` 或測試環境變數 `ATLAS_LLM_FORCE_MOCK=1`
+
+> **已廢止（ADR-012）**：原步驟 2「`DataClass` 閘門 —— `DataClass == Regulated` 且候選 provider 為 MiniMax hosted 時自動降級到自架 M3 或 backup1」已隨 ADR-010 拆除。`DataClass` 僅為稽核 metadata，不再影響 provider 選擇。
+
+### 6.3a 空輸出視為失敗（ADR-012）
+
+Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一律視為該 provider **失敗**，並續試下一個鏈成員。理由：reasoning 模型（M3 / `deepseek-flash`）在 `max_tokens` 不足時，會把預算全花在 native thinking，回傳成功但 `output` 為空字串——呼叫端若只檢查 `error` 會拿到空氣，卻無從察覺。
+
+| 行為 | 說明 |
+|------|------|
+| 失敗判定 | provider error，或 `Output` trim 後為空且無 `ToolCalls` |
+| 續試 | 依鏈序嘗試下一個成員；`Backup2` 為空字串時跳過 |
+| `ForceProvider` 例外 | 強制指定 provider 時**不套用**空輸出判定（沒有下一鏈成員可續試；該路徑供測試/sticky routing 使用） |
+| `AttemptedProviders` | 記錄**全部被考慮過**的鏈成員（含失敗者、未註冊者與不支援該 capability 者），供 audit 與 dispute 追溯；「未註冊」代表該 provider 未被呼叫 |
+| `FallbackTriggeredTotal` | 每次由一個鏈成員轉往下一個時遞增；因此 primary 未註冊（例如未設 kimi key 時的 code 群組）也會 +1 |
+| 與 `DataClass` 的關係 | 無關；`DataClass` 不再影響 provider 選擇（ADR-012） |
+| 搭配條件 | 所有 capability 的 `max_tokens` 必須 ≥ reasoning 模型最低預算（見 §6.1a） |
 
 ### 6.4 模型專屬路由規則
 
@@ -79,20 +129,21 @@ Router 在收到 `Request` 後，依下列順序決定 provider：
 **K2.6（Kimi Code Plan 通用變體）**：
 - 與 K2.7 同一 endpoint（`api.kimi.com/coding/v1`），但 model id 切換
 - 用於 K2.7 不適用的非程式碼任務；目前 v2.0 路由表未將任何 capability 的 primary 指定為 K2.6
-- 保留以備「V4-Pro 與 M3 同時不可用」時降級使用
+- 保留以備 M3 不可用時降級使用（`V4-Pro` 已退役，ADR-012）
 
-**V4-Pro**：
-- 複雜推理首選（歸因、信心旁註、複雜摘要）
-- 若可用則優先；不可用時降級到 MiniMax M3（推理略弱但金融場景強）
+**V4-Pro（已退役，2026-09-11）**：
+- **不再派遣、不再作為任何 capability 的 primary 或預設模型**（ADR-012）。實測品質與 `deepseek-flash` 打平、貴約 5×、慢 5.7–10.6×、且不支援圖像輸入。
+- 名稱保留僅為 deprecated alias；新程式碼與設定一律用 canonical `deepseek-flash`。
 
-**V4-Flash**：
-- 簡單 + 高量 + 成本敏感任務首選（翻譯、headline、dev path）
-- 推理弱，禁用於歸因 / 信心旁註
+**V4-Flash（canonical `deepseek-flash` = DeepSeek-V4.1-Flash）**：
+- 現為 deepseek 的**預設與 model 名**，也是全域 fallback：敘事 / 解釋群組的 backup1（§6.1）。
+- 多模態（可讀圖）與 1M context；`max_tokens` 需 ≥ reasoning 最低預算（§6.1a），否則回空輸出（§6.3a）。
+- 模型名可由環境變數 `LLM_DEEPSEEK_MODEL` 覆寫（預設 `deepseek-flash`）。
 
 **M3**：
-- 金融 / 繁中敘事首選（PRISM insight、gap description、複雜 fallback）
-- **重要**：`DataClass == Regulated` 時，hosted M3 必須由自架 M3 取代（見 §9 風險 8）
-- 應部署「hosted M3 為預設，自架 M3 為受規範資料 fallback」的雙路徑
+- 金融 / 繁中敘事首選（PRISM insight、gap description、複雜 fallback）；現為敘事 / 解釋群組 9 個 capability 的 primary（§6.1）。
+- **`DataClass` 不再影響 M3 的路由**：原「`DataClass == Regulated` 時 hosted M3 必須由自架 M3 取代」的規則已隨 ADR-010 一併廢止；hosted M3 的主權顧慮改列為 residual risk，由 ADR-012 說明（不再有 provider 層閘門）。
+- 若日後要落實主權控制，方向是「全供應商一致處理或 self-host」，而非僅挑 M3 一家（見 ADR-012 residual risk）。
 
 **OpenCode-Go**：
 - 通用備援；不參與 primary 競爭

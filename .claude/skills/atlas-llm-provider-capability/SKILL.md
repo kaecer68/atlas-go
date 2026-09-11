@@ -12,7 +12,7 @@ target_audience: developer
 
 # Atlas LLM Provider / Capability 新增 SOP
 
-本技能規範在 `atlas-go` 新增 LLM **Provider client** 或 **Capability handler** 的標準步驟，確保 DataClass 閘門、fallback chain、型別契約與測試一併到位。
+本技能規範在 `atlas-go` 新增 LLM **Provider client** 或 **Capability handler** 的標準步驟，確保 fallback chain、`max_tokens` 預算、型別契約與測試一併到位（`DataClass` 自 ADR-012 起僅為審計 metadata，不再閘門 provider）。
 
 ## 何時觸發
 

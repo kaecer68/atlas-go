@@ -34,7 +34,7 @@ func NewRegimeExplanationHandler(router llm.Router) *RegimeExplanationHandler {
 
 // Handle executes the regime explanation capability. It:
 //  1. Serializes the input to JSON for the Router payload.
-//  2. Defaults DataClass to DataClassPublic when unset.
+//  2. Defaults DataClass to DataClassNonRegulated when unset.
 //  3. Dispatches through the Router with CapabilityRegimeExplanation.
 //  4. Parses the response into a RegimeExplanationResponse (JSON-first,
 //     then raw string fallback as Headline).
@@ -60,7 +60,9 @@ func (h *RegimeExplanationHandler) Handle(
 		Capability: llm.CapabilityRegimeExplanation,
 		Payload:    payload,
 		DataClass:  dc,
-		Options:    llm.Options{MaxTokens: 300},
+		// max_tokens 2048 (was 300): 原 300 對 reasoning 模型過小（thinking 吃光即回空内容）；headline 短但需預算。
+		// ADR-012 校準：reasoning 模型（M3 / deepseek-flash）最小預算 2048，短輸出型不低於此。
+		Options: llm.Options{MaxTokens: 2048},
 	}
 
 	resp, err := h.router.Call(ctx, req)
