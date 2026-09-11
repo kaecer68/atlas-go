@@ -179,6 +179,10 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
 		}
 	}
+	// Risk snapshot + LLM forensics hook. Shared with the non-replay path
+	// (system.go) so the capability behaves identically on both — production
+	// always takes this replay path (issue #1888).
+	s.finalizeRiskForensics(&result)
 	if err := s.persistPersistentState(); err != nil {
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}

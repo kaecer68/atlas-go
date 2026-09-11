@@ -864,31 +864,7 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
 		}
 	}
-	// Risk snapshot + LLM forensics hook (issue #1888 option A).
-	//
-	// Both branches are logged on purpose: the hook can only fire once
-	// RiskForensicsMinSamples daily returns exist, and in production that takes
-	// many days after the history was first hydrated. The log line is the
-	// observable proof that (a) hydration restored the series (samples >> 1 on
-	// the first run after a restart) and (b) the hook eventually fired
-	// (risk_forensics_snapshot). Re-check with:
-	//   docker logs --since 72h atlas-go-imac | grep -E 'risk_forensics_(pending|snapshot)'
-	if len(s.Sim().returnHistory) >= RiskForensicsMinSamples {
-		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
-		result.RiskSnapshot = &snap
-		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
-		logging.Info("system", "risk_forensics_snapshot",
-			"samples", len(s.Sim().returnHistory),
-			"var95", snap.VaR95,
-			"cvar95", snap.CVaR95,
-			"commentary_len", len(result.RiskCommentary))
-	} else {
-		logging.Info("system", "risk_forensics_pending",
-			"samples", len(s.Sim().returnHistory),
-			"min_samples", RiskForensicsMinSamples,
-			"source", "hydrated_from_simulation_state",
-			"note", "risk snapshot and LLM forensics hook wait for RiskForensicsMinSamples daily returns")
-	}
+	s.finalizeRiskForensics(&result)
 	if err := s.persistPersistentState(); err != nil {
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)
 	}

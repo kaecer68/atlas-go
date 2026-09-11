@@ -160,6 +160,45 @@ func (s *System) hydrateHistoryFromPersistentState(state *domain.SimulationState
 	}
 }
 
+// finalizeRiskForensics builds the risk snapshot for a completed run and runs
+// the LLM performance-forensics hook once enough history exists.
+//
+// It is called by BOTH run paths — the non-replay path
+// (system.go RunDailySimulation) and the replay/dispatcher path
+// (system_dispatcher.go runReplaySimulation) — because production resolves a
+// replay session and therefore always takes the replay path. Until this was
+// shared, the gate existed only on the non-replay path, so the hook could never
+// fire in production regardless of how much history accumulated (verified on
+// iMac 2026-09-11: a manual /admin/trigger-simulation run completed and
+// persisted a new daily return, yet emitted no risk_forensics line at all).
+//
+// Both branches are logged on purpose: the log line is the observable proof
+// that (a) hydration restored the series (samples >> 1 after a restart) and
+// (b) the hook eventually fired. Re-check with:
+//
+//	docker logs --since 72h atlas-go-imac | grep -E 'risk_forensics_(pending|snapshot)'
+func (s *System) finalizeRiskForensics(result *domain.SimulationResult) {
+	if result == nil {
+		return
+	}
+	if len(s.Sim().returnHistory) >= RiskForensicsMinSamples {
+		snap := risk.ComputeRiskSnapshot(s.Sim().returnHistory, s.Sim().portfolioHistory)
+		result.RiskSnapshot = &snap
+		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
+		logging.Info("system", "risk_forensics_snapshot",
+			"samples", len(s.Sim().returnHistory),
+			"var95", snap.VaR95,
+			"cvar95", snap.CVaR95,
+			"commentary_len", len(result.RiskCommentary))
+		return
+	}
+	logging.Info("system", "risk_forensics_pending",
+		"samples", len(s.Sim().returnHistory),
+		"min_samples", RiskForensicsMinSamples,
+		"source", "hydrated_from_simulation_state",
+		"note", "risk snapshot and LLM forensics hook wait for RiskForensicsMinSamples daily returns")
+}
+
 func (s *System) ensurePersistentStateLoaded() error {
 	mode := s.Sim().session.Mode
 	if (mode != "daily" && mode != "replay") || s.Sim().persistentState != nil {

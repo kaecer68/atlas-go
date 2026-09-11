@@ -29,6 +29,7 @@
 - `System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
 - `LLMSectorAgentsEnabled=true` 但 driver 為 `nil` 時 plugin 為 no-op。
 - **`returnHistory` / `portfolioHistory` 是 per-process 累積**：`ensurePersistentStateLoaded()`（與 `WithPersistentState()`）會用持久化的 `EquityCurve` / `DailyReturns` 補齊，否則每個新 process 都從 0 開始，風險快照與 LLM 績效鑑識 hook（gate = `RiskForensicsMinSamples` = 30 筆日報酬）永遠到不了（issue #1888）。
+  - ⚠️ **兩條 run path 都要走 `finalizeRiskForensics()`**：`RunDailySimulation` 在能解析 replay session 時會 early-return 到 `runReplaySimulation`（`system_dispatcher.go`），而 **production 一律走這條**。曾經只有非 replay 路徑有風險快照/鑑識區塊 → hook 在任何樣本數下都不會觸發。新增或搬移 run path 時，務必確認仍呼叫 `finalizeRiskForensics()`。
   - 觀測：每個 daily run 都會留一行 log — 未達門檻是 `risk_forensics_pending samples=N min_samples=30`，達標且有 hook 是 `risk_forensics_snapshot samples=N var95=… commentary_len=…`。要確認補齊是否生效，看 `samples` 是否遠大於 1（未補齊時每個新 process 只會有 0–1 筆）。
 - 已累積過歷史時補齊為 no-op；補齊的是**副本**，不會 alias 持久化 slice。
 - `SectorAgentLLMDriver` 必須包裝 `PlanDriver` + `ReflectDriver`。
