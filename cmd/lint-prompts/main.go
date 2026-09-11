@@ -87,17 +87,21 @@ func main() {
 	}
 }
 
-// buildRouter creates an LLM Router wired with DeepSeek and MiniMax
-// adapters. Returns nil when neither API key is available.
+// buildRouter creates an LLM Router wired with DeepSeek, MiniMax and (when a
+// key is available) Kimi adapters. Returns nil when no API key is available.
 func buildRouter() llm.Router {
 	deepseekKey := config.GetSecret("LLM_DEEPSEEK_API_KEY")
 	minimaxKey := config.GetSecret("LLM_MINIMAX_API_KEY")
+	kimiKey := config.GetSecret("LLM_KIMI_API_KEY")
 
-	if deepseekKey == "" && minimaxKey == "" {
+	if deepseekKey == "" && minimaxKey == "" && kimiKey == "" {
 		return nil
 	}
 
-	router := llm.NewDefaultRouter()
+	// Routing table comes from configs/llm_router.yaml (or
+	// ATLAS_LLM_ROUTER_CONFIG_PATH), falling back to the built-in table.
+	cfg, _ := llm.ResolveRouterConfig()
+	router := llm.NewDefaultRouterFromConfig(cfg)
 
 	if deepseekKey != "" {
 		base := clients.NewBaseClient(llm.ProviderDeepSeek, clients.BaseClientConfig{})
@@ -112,6 +116,14 @@ func buildRouter() llm.Router {
 		mc := clients.NewMiniMaxClient(minimaxKey, base)
 		adapter := llmAdapters.NewMiniMaxAdapter(mc)
 		_ = router.Register(adapter)
+	}
+
+	// prompt_lint is Kimi-first in the routing table (ADR-012); register the
+	// Kimi adapter when a key is available so the primary is reachable.
+	if kimiKey != "" {
+		base := clients.NewBaseClient(llm.ProviderKimi, clients.BaseClientConfig{})
+		kc := clients.NewKimiClient(kimiKey, base)
+		_ = router.Register(llmAdapters.NewKimiAdapter(kc))
 	}
 
 	return router

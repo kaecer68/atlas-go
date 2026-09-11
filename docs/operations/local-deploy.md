@@ -90,7 +90,7 @@ curl -fsS http://localhost:18080/api/llm/health
 
 預期回傳：
 - `/health`：JSON `{"status":"ok",...}`
-- `/api/llm/health`：JSON `{"providers":{"deepseek":{...},"minimax":{...}},"router_version":"v2.1"}`
+- `/api/llm/health`：JSON `{"providers":{"deepseek":{...},"minimax":{...},"kimi":{...}},"router_version":"v2.2"}`（v2.2 = ADR-012 路由表；`kimi` 這個 key 目前承載 legacy annotator adapter）
 
 ### 部署後驗證腳本
 

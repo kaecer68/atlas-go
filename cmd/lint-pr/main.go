@@ -109,9 +109,20 @@ func buildRouter() llm.Router {
 		impls = append(impls, mmAdapter)
 	}
 
+	// code_review_annotation is Kimi-first in the routing table (ADR-012).
+	// Register the Kimi adapter when a key is available so that primary is
+	// reachable instead of being skipped on every run.
+	if apiKey := config.GetSecret("LLM_KIMI_API_KEY"); apiKey != "" {
+		impls = append(impls, adapters.NewKimiAdapter(clients.NewKimiClient(apiKey, nil)))
+	}
+
 	if len(impls) == 0 {
 		return nil
 	}
 
-	return llm.NewDefaultRouter(impls...)
+	// Routing table comes from configs/llm_router.yaml (or
+	// ATLAS_LLM_ROUTER_CONFIG_PATH); ResolveRouterConfig falls back to the
+	// built-in table when the file is missing or incomplete.
+	cfg, _ := llm.ResolveRouterConfig()
+	return llm.NewDefaultRouterFromConfig(cfg, impls...)
 }

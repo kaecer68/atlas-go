@@ -26,6 +26,10 @@ LLM 整合基礎設施層：capability-based 多 Provider 路由（選型依任�
 
 DeepSeek 模型名由 `LLM_DEEPSEEK_MODEL` 決定（預設 canonical `deepseek-flash` = V4.1-Flash）；`deepseek-v4-pro` / `deepseek-pro` 已退役。
 
+MiniMax M3 會把 native thinking 內嵌在 `message.content`（`<think>…</think>`）；client 已剝除，新增 provider client 時要記得處理（否則 JSON-first parser 會失敗並落到 raw-string）。`llm_annotator` 有同一份私有實作，改動時兩邊要同步。
+
+路由表來源：`llm.ResolveRouterConfig()` 會讀 `configs/llm_router.yaml`（`ATLAS_LLM_ROUTER_CONFIG_PATH` 可覆寫），檔案缺失或不完整時回退內建 `defaultRoutingTable()`，啟動時以 `llm_router_config` log 記錄來源。
+
 ## 觀察窗口
 
 - `SectorAgentLLM.LLM == nil` → runner 回 `ErrNotImplemented`，**預期行為**。

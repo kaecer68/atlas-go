@@ -171,3 +171,41 @@
   2. `DataClass` 現為純 metadata；若日後要作為 redaction 的觸發條件，需先確認各 capability 的 `DataClass` 填值正確（現況部分 capability 在未設定時自行預設 `Regulated`）。此屬稽核面向工作，不影響路由。
   3. **ADR-011（capability name 對齊）未收錄於本 log**：`docs/specs/llm-routing-spec.md` §6.1 已引用，待補（見上方「ADR-011」預留位置）。
   4. **`contra_attribution` 目前無 handler 實作**：路由鏈已定義（primary minimax / backup1 deepseek / last_resort mock），但無 `max_tokens` 可校準；handler 落地時需另行定義 last resort 語意。
+
+
+### ADR-012 追加（2026-09-11，PR #1886 第二階段）：production 實證與後續修正
+
+**production 實證（iMac，48 小時 log）**：`llm.scenario_simulation` 被呼叫 **663 次**，每一次 span 的
+`llm.attempted_providers` 都是 `["deepseek"]`、`llm.data_class` 皆是 `2`（Regulated）——閘門確實讓 M3
+從未上場，且該 hook 的輸出因此在 production 一直是空的。這證實本 ADR 的「沉默空輸出」判斷。
+
+**後續修正**：
+
+1. **annotator（`/api/strategies/{id}/annotate`）設定錯誤**：`cmd/atlas` 以 `llm_annotator` 預設值啟動
+   （BaseURL `https://api.kimi.com/coding/v1`、model `moonshot-v1-8k`），但 key 是 MiniMax CN coding-plan →
+   實測 HTTP **401**，該端點不可能成功。已改為指向 MiniMax CN（`clients.MiniMaxChatBaseV1` + `MiniMax-M3`）
+   並把 token 預算由 512 提到 2048；`llm_annotator` client 與 `/annotate` handler 兩層都改為
+   **空輸出視為失敗**（不再回 HTTP 200 + 空註解，改回 502 + rule-based fallback）。
+2. **M3 回應正規化**：M3 把 native thinking 內嵌在 `message.content`（`<think>…</think>` + 答案）。
+   `internal/llm/clients` 與 `internal/llm_annotator` 的 client 現在剝除該區塊；若 thinking 被 `max_tokens`
+   截斷（有開無關），剝除後為空 → 依本 ADR 的空輸出規則視為失敗。DeepSeek V4.1-Flash 的 thinking 走獨立
+   `reasoning_content`，`content` 本來就乾淨（實測）。
+3. **鏈成員記帳語意**：`Response.AttemptedProviders` 只記**實際被呼叫**的 provider（使其成為可信的
+   「這筆資料送給了誰」依據）；無法被呼叫的成員（未註冊、不支援該 capability）改記在 span 的
+   `llm.skipped_providers`；`FallbackTriggeredTotal` 只在**實際呼叫**非 primary 成員時遞增。
+4. **路由表改由設定檔載入**：`llm.ResolveRouterConfig()` 讀 `configs/llm_router.yaml`
+   （`ATLAS_LLM_ROUTER_CONFIG_PATH` 可覆寫；檔案缺失、格式錯誤或**未涵蓋全部 12 個 capability** 時回退內建
+   `defaultRoutingTable()`），三個 cmd 都改走此路徑並記錄來源。這修掉「YAML 是死的鏡像」的落差。
+
+**未決事項（已開 issue）**：
+
+- #1887 — `CapabilityFailureAttribution` 的 Router 路徑契約不合（`FailureContext` vs `[]byte`；`AnnotatorAdapter`
+  僅以 `ProviderKimi` 註冊且不在該鏈）→ 死路徑，需決定修契約、給 legacy annotator 獨立 provider 槽，或刪除。
+- #1888 — `risk.PerformanceForensics` 在 production **永遠不會被觸發**（`returnHistory ≥ 30` 且該欄位從未持久化／還原；
+  405,710 行 log 內 `llm.performance_forensics` span = 0）→ 需決定還原歷史、改 gate、加驗證入口，或關閉 flag。
+- #1889 — 資料主權 residual risk 的處置（全供應商一致封鎖 / redaction 層 / self-host M3）。
+
+**主權事實補充**：三個上游供應商與端點分別為 MiniMax（`api.minimaxi.com`）、DeepSeek（`api.deepseek.com`，
+杭州）、Kimi/Moonshot（`api.kimi.com`，北京），同屬一管轄區；目前送出的 payload 為風險指標與訓練統計
+（`RiskSnapshot` 的 VaR/CVaR/回撤、`TrainingResult` 的勝率/Sharpe 等），不含個資或使用者識別資訊——這降低但
+不消除 #1889 的風險。

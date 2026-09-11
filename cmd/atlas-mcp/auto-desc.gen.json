@@ -466,7 +466,7 @@
   },
   "llm_get_health": {
     "name": "llm_get_health",
-    "description": "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain.",
+    "description": "LLM router health — provider status (deepseek / minimax M3 / kimi), circuit-breaker, and the live routing-table revision (router_version).",
     "inputSchema": {
       "type": "object"
     }

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
@@ -412,5 +413,48 @@ func TestStrategiesListResponse_Structure(t *testing.T) {
 	}
 	if !bytes.Contains(b, []byte(`"total":0`)) {
 		t.Errorf("missing total: %s", string(b))
+	}
+}
+
+// TestHandlers_Annotate_EmptyOutputIsError verifies ADR-012 behavior: an
+// annotator that returns an empty string with no error must NOT produce
+// HTTP 200 {"annotation":""}. The endpoint returns 502 with the rule-based
+// fallback instead, so callers never see a silent empty annotation.
+func TestHandlers_Annotate_EmptyOutputIsError(t *testing.T) {
+	reg := newTestRegistry(t)
+	h := NewHandlers(reg, nil)
+	h.SetAnnotator(&llm_annotator.MockAnnotator{Response: "   "})
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	code, body := doPOST(t, mux, "/api/strategies/alpha/annotate", map[string]any{})
+	if code == http.StatusOK {
+		t.Fatalf("empty annotation returned %d %v, want a 502 error shape", code, body)
+	}
+	if code != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d", code, http.StatusBadGateway)
+	}
+	if _, hasFallback := body["fallback"]; !hasFallback {
+		t.Errorf("body = %v, want a rule-based fallback field", body)
+	}
+}
+
+// TestHandlers_Annotate_NonEmptyOutputIsOK verifies the happy path still
+// returns HTTP 200 with the annotation.
+func TestHandlers_Annotate_NonEmptyOutputIsOK(t *testing.T) {
+	reg := newTestRegistry(t)
+	h := NewHandlers(reg, nil)
+	h.SetAnnotator(&llm_annotator.MockAnnotator{Response: "\u878d\u8cc7\u9918\u984d\u672a\u904e\u71b1"})
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	code, body := doPOST(t, mux, "/api/strategies/alpha/annotate", map[string]any{})
+	if code != http.StatusOK {
+		t.Fatalf("status = %d (%v), want 200", code, body)
+	}
+	if got, _ := body["annotation"].(string); got == "" {
+		t.Errorf("annotation is empty: %v", body)
 	}
 }

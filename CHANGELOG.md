@@ -4,6 +4,15 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### LLM — ADR-012 第二階段：production 實證與根因修正（#1886 follow-up，2026-09-11）
+- **production 實證**：iMac 48h 內 `llm.scenario_simulation` 663 次、`attempted_providers` 全為 `["deepseek"]`、`data_class=2` → 證實 ADR-010 閘門讓 M3 從未上場，該 hook 輸出一直是空的。
+- **annotator 設定修正**：`/api/strategies/{id}/annotate` 原本指向 `api.kimi.com/coding/v1` + `moonshot-v1-8k`（key 卻是 MiniMax CN）→ 實測 HTTP 401。改指向 MiniMax CN + `MiniMax-M3`，token 預算 512 → 2048。
+- **空輸出視為失敗（補完）**：`llm_annotator` client 與 `/annotate` handler 兩層都改為把空輸出當失敗（不再回 HTTP 200 + 空註解，改回 502 + rule-based fallback）。
+- **M3 回應正規化**：剝除 `message.content` 內嵌的 `<think>…</think>`（`internal/llm/clients`、`internal/llm_annotator`）；被 `max_tokens` 截斷的 thinking 視為空輸出 → 走 fallback。DeepSeek 的 `reasoning_content` 不受影響。
+- **鏈成員記帳語意**：`AttemptedProviders` 只記實際被呼叫者；新增 span `llm.skipped_providers`；`FallbackTriggeredTotal` 只在實際呼叫非 primary 時遞增。
+- **路由表改由設定檔載入**：`llm.ResolveRouterConfig()` 讀 `configs/llm_router.yaml`（`ATLAS_LLM_ROUTER_CONFIG_PATH` 可覆寫），缺失/不完整即回退內建表；三個 cmd 同步。
+- **新增追蹤 issue**：#1887（failure_attribution Router 路徑契約）、#1888（risk forensics hook 在 production 永不觸發）、#1889（資料主權 residual risk 決策）。
+
 ### LLM Router — ADR-012：拆除 DataClass 主權閘門，改以「任務可達成率 + 訂閱額度」選模型（#1886，2026-09-11）
 - **拆閘門**：`internal/llm/router.go` 刪除 `shouldGateProvider()` 與 `Call()` 內兩處呼叫；`internal/llm/clients/kimi.go` 移除 Regulated/Secret 的 `ErrIncompatibleDataClass` 拒收。ADR-009 的 kimi 能力 guard（僅 `code_review_annotation` / `prompt_lint`）保留。
 - **DataClass 降為稽核 metadata**：繼續隨 `Request` 傳遞、記 metric/span，可作日後 redaction 依據，但不再阻擋任何 provider；enum 四類不變。
