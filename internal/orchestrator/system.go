@@ -47,8 +47,19 @@ type SimulationCore struct {
 	replay          *replay.Dataset
 	session         domain.ReplaySession
 	persistentState *domain.SimulationState
-	ctx             context.Context
-	scratchpad      *Scratchpad
+	// stateInjected records that persistentState was supplied by the caller
+	// (WithPersistentState) instead of being loaded from the ledger dir. Such a
+	// state belongs to the caller — a backtest window carries it across dates
+	// itself — so the system must NOT write it back to
+	// <LedgerDir>/simulation_state.json. Doing so silently clobbered the
+	// production simulation state every time the weekly window_backtest task
+	// ran, destroying the daily-return history that the risk snapshot, the
+	// LLM performance-forensics gate and the capital-controller metrics depend
+	// on (observed on iMac 2026-09-11: the file dropped from 19 returns to 0
+	// while window_backtest was running).
+	stateInjected bool
+	ctx           context.Context
+	scratchpad    *Scratchpad
 
 	lastOutcomes     []domain.RecommendationOutcome
 	portfolioHistory []float64

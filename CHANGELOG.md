@@ -4,6 +4,18 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(risk): #1888 第三層根因 — 排程 backtest 靜默覆寫 production simulation_state（2026-09-12）
+- **真相**：`internal/backtest/window.go` 的 `window_backtest`（7 天一次）建立 `domain.NewSimulationState()`（全新空狀態）並用
+  `system.WithPersistentState(&persistentState)` 注入，而 replay 路徑跑完會 `persistPersistentState()` → **把 backtest 自己的區域序列寫回
+  `data/state/simulation_state.json`**，覆蓋掉累積的日報酬歷史，且完全沒有警告。
+- **證據（iMac）**：
+  - 隔夜備份 `data-state/`：`20260908` equity=19/returns=18、`20260909` 19/18、**`20260910` 1/0、`20260911` 1/0** → 覆寫已發生多次。
+  - 即時觀察：`17:09:24 task_started name=window_backtest（start=2026-08-19 end=2026-09-08）`，同時間 `simulation_state.json` 由 19 筆掉到 0。
+  - 這也解釋了為何 `llm.performance_forensics` 永遠是 0：不只要 gate 在正確的路徑上，歷史還每 7 天被清一次。
+- **修法**：`SimulationCore.stateInjected` 標記；`WithPersistentState()` 設旗標；`persistPersistentState()` 對「呼叫端注入的 state」直接 return（呼叫端自己持有、自己跨日延續）。
+  新增 `TestWithPersistentState_DoesNotClobberLedgerState`（修正前必失敗）與 `TestLoadedStateIsStillPersisted`（反向保證：從磁碟載入的 state 仍會持續寫回）。
+- **資料修復待決**：production 目前的 `simulation_state.json` 已被清空（returns=0）。可從 `atlas-backups/data-state/20260909-033000/` 還原（returns=18），需業主同意後執行。
+
 ### fix(risk): #1888 真正根因 — 風險鑑識區塊只存在於非 replay 路徑（2026-09-12）
 - **真相**：`RunDailySimulation` 在能解析 replay session 時會 early-return 到 `runReplaySimulation`（`system_dispatcher.go`），而 **production 一律走 replay 路徑**。原本「風險快照 + LLM 績效鑑識」的區塊只寫在非 replay 路徑 → 不論 `returnHistory` 累積到幾筆，hook 都**不可能**觸發。
 - **production 證據（本輪實測）**：手動 `POST /admin/trigger-simulation`（新部署 `bd2f36a7`）在 16:44:47 完成（log: `手動觸發場次 session-20260911-daily 產生 0 筆訂單`）、`simulation_state.json` 的 daily_returns 由 18 → 19（證明該路徑確實有 append + persist），但**完全沒有 `risk_forensics_*` log**。
