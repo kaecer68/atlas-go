@@ -186,13 +186,20 @@ func (s *System) finalizeRiskForensics(result *domain.SimulationResult) {
 		result.RiskSnapshot = &snap
 		result.RiskCommentary = risk.AnnotateSnapshot(s.Sim().ctx, snap)
 		logging.Info("system", "risk_forensics_snapshot",
+			"session", s.Sim().session.ID,
+			"injected_state", s.Sim().stateInjected,
 			"samples", len(s.Sim().returnHistory),
 			"var95", snap.VaR95,
 			"cvar95", snap.CVaR95,
 			"commentary_len", len(result.RiskCommentary))
 		return
 	}
+	// session / injected_state make the line attributable: a daily production run
+	// logs its own session id with injected_state=false, while a backtest harness
+	// that injects its own state (WithPersistentState) shows injected_state=true.
 	logging.Info("system", "risk_forensics_pending",
+		"session", s.Sim().session.ID,
+		"injected_state", s.Sim().stateInjected,
 		"samples", len(s.Sim().returnHistory),
 		"min_samples", RiskForensicsMinSamples,
 		"source", "hydrated_from_simulation_state",
