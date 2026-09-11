@@ -47,10 +47,10 @@ const (
 type DataClass string
 
 const (
-	DataClassPublic    DataClass = "public"     // 公開資料；任何 provider 可接收
-	DataClassInternal  DataClass = "internal"   // 內部；non-hosted 偏好但 hosted 可
-	DataClassRegulated DataClass = "regulated"  // 受規範金融資料；hosted M3 禁止
-	DataClassSecret    DataClass = "secret"     // 營業秘密；強制 self-host
+	DataClassUnmarked     DataClass = "unmarked"      // 無分類；視同公開
+	DataClassNonRegulated DataClass = "non_regulated" // 非敏感業務資料；無監理限制
+	DataClassRegulated    DataClass = "regulated"     // 受規範金融資料（例：VaR/ES、PRISM 結果）
+	DataClassSecret       DataClass = "secret"        // 高度敏感；需最高防護
 )
 
 // ProviderImpl 是所有 provider client 必須實作的介面。

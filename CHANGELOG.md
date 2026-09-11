@@ -4,7 +4,7 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
-### LLM Router — ADR-012：拆除 DataClass 主權閘門，改以「任務可達成率 + 訂閱額度」選模型（2026-09-11）
+### LLM Router — ADR-012：拆除 DataClass 主權閘門，改以「任務可達成率 + 訂閱額度」選模型（#1886，2026-09-11）
 - **拆閘門**：`internal/llm/router.go` 刪除 `shouldGateProvider()` 與 `Call()` 內兩處呼叫；`internal/llm/clients/kimi.go` 移除 Regulated/Secret 的 `ErrIncompatibleDataClass` 拒收。ADR-009 的 kimi 能力 guard（僅 `code_review_annotation` / `prompt_lint`）保留。
 - **DataClass 降為稽核 metadata**：繼續隨 `Request` 傳遞、記 metric/span，可作日後 redaction 依據，但不再阻擋任何 provider；enum 四類不變。
 - **路由鏈重配**：敘事/解釋 JSON 9 個 capability → primary MiniMax M3；程式碼 2 個 → primary `kimi-for-coding`（backup M3 → deepseek-flash）；`contra_attribution` 歸敘事群組；全域 fallback canonical `deepseek-flash`。`deepseek-v4-pro` / `deepseek-pro` 退役。`configs/llm_router.yaml` 與 `defaultRoutingTable()` 同步（新增一致性測試）。
