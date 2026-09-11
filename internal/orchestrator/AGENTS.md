@@ -28,6 +28,8 @@
 - 推薦進入控制層前須經 `CalculateFactorScoresWithBreakdown`。
 - `System.RunDailySimulation` 應保持無副作用，直到結果寫入 `ledger`。
 - `LLMSectorAgentsEnabled=true` 但 driver 為 `nil` 時 plugin 為 no-op。
+- **`returnHistory` / `portfolioHistory` 是 per-process 累積**：`ensurePersistentStateLoaded()`（與 `WithPersistentState()`）會用持久化的 `EquityCurve` / `DailyReturns` 補齊，否則每個新 process 都從 0 開始，風險快照與 LLM 績效鑑識 hook（gate = `RiskForensicsMinSamples` = 30 筆日報酬）永遠到不了（issue #1888）。
+- 已累積過歷史時補齊為 no-op；補齊的是**副本**，不會 alias 持久化 slice。
 - `SectorAgentLLMDriver` 必須包裝 `PlanDriver` + `ReflectDriver`。
 
 ## 陷阱與反模式

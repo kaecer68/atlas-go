@@ -8,9 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
+	"github.com/kaecer68/atlas-go/internal/llm/clients"
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
 )
 
@@ -216,10 +218,31 @@ func TestFailureAttributionHandler_RoutingChain(t *testing.T) {
 			router.lastReq.DataClass, llm.DataClassRegulated)
 	}
 
-	// Then: the Payload is the FailureContext (not the wrapper)
-	_, ok := router.lastReq.Payload.(llm_annotator.FailureContext)
+	// Then: the Payload is the chat-messages JSON the provider adapters accept
+	// (issue #1887: a raw FailureContext struct was unusable by MiniMax/DeepSeek).
+	payloadBytes, ok := router.lastReq.Payload.([]byte)
 	if !ok {
-		t.Errorf("lastReq.Payload type = %T, want llm_annotator.FailureContext", router.lastReq.Payload)
+		t.Fatalf("lastReq.Payload type = %T, want []byte (messages JSON)", router.lastReq.Payload)
+	}
+	var decoded struct {
+		Messages []clients.Message `json:"messages"`
+	}
+	if err := json.Unmarshal(payloadBytes, &decoded); err != nil {
+		t.Fatalf("payload is not messages JSON: %v", err)
+	}
+	if len(decoded.Messages) != 2 {
+		t.Fatalf("messages = %d, want 2 (system + user)", len(decoded.Messages))
+	}
+	if decoded.Messages[0].Role != "system" || decoded.Messages[0].Content != llm_annotator.FailureAttributionSystemPrompt {
+		t.Errorf("system message = %+v, want the shared attribution prompt", decoded.Messages[0])
+	}
+	if decoded.Messages[1].Role != "user" || !strings.Contains(decoded.Messages[1].Content, "frame_id=frame-routing") {
+		t.Errorf("user message = %+v, want the rendered FailureContext", decoded.Messages[1])
+	}
+	// The sampling temperature mirrors the legacy annotator request.
+	if router.lastReq.Options.Temperature != llm_annotator.FailureAttributionTemperature {
+		t.Errorf("Options.Temperature = %v, want %v",
+			router.lastReq.Options.Temperature, llm_annotator.FailureAttributionTemperature)
 	}
 }
 

@@ -125,6 +125,41 @@ func (s *System) saveSessionPositions(sessionID string, positions []domain.Posit
 	}
 }
 
+// RiskForensicsMinSamples is the minimum number of daily returns required
+// before a risk snapshot (and therefore the LLM performance-forensics hook) is
+// produced. 30 samples is the statistical floor for the historical-simulation
+// VaR the snapshot is built from.
+const RiskForensicsMinSamples = 30
+
+// hydrateHistoryFromPersistentState seeds the in-process return/portfolio
+// history from the persisted simulation state (issue #1888, option A).
+//
+// returnHistory and portfolioHistory are per-process accumulators: before this
+// change every process start began with an empty series, so the VaR snapshot
+// path — and with it the LLM performance-forensics hook, gated on
+// RiskForensicsMinSamples — was unreachable in production, where each entry
+// point creates a fresh System and runs it once. The capital controller's
+// Sharpe/drawdown metrics were starved for the same reason.
+//
+// The persisted EquityCurve/DailyReturns series come from the same engine with
+// the same definitions (portfolio value per run; (V_t - V_{t-1}) / V_{t-1}), so
+// seeding is exact rather than approximate. Values are copied, never aliased,
+// and in-process accumulation is never clobbered.
+func (s *System) hydrateHistoryFromPersistentState(state *domain.SimulationState) {
+	if state == nil || s.Sim() == nil {
+		return
+	}
+	if len(s.Sim().portfolioHistory) > 0 || len(s.Sim().returnHistory) > 0 {
+		return
+	}
+	if n := len(state.EquityCurve); n > 0 {
+		s.Sim().portfolioHistory = append(make([]float64, 0, n), state.EquityCurve...)
+	}
+	if n := len(state.DailyReturns); n > 0 {
+		s.Sim().returnHistory = append(make([]float64, 0, n), state.DailyReturns...)
+	}
+}
+
 func (s *System) ensurePersistentStateLoaded() error {
 	mode := s.Sim().session.Mode
 	if (mode != "daily" && mode != "replay") || s.Sim().persistentState != nil {
@@ -150,6 +185,7 @@ func (s *System) ensurePersistentStateLoaded() error {
 		loaded = &state
 	}
 	s.Sim().persistentState = loaded
+	s.hydrateHistoryFromPersistentState(loaded)
 	return nil
 }
 
