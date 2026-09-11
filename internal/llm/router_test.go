@@ -596,3 +596,79 @@ func TestDefaultRouter_ToolCallOnlyResponseIsSuccess(t *testing.T) {
 		t.Errorf("expected 1 tool call, got %d", len(resp.ToolCalls))
 	}
 }
+
+// TestDefaultRouter_SkippedPrimaryNotInAttemptedProviders pins the ADR-012
+// follow-up accounting rule: AttemptedProviders lists only providers that were
+// actually invoked (so it answers "who received this data?"), while a chain
+// member that could not be invoked at all (not registered) is reported on the
+// span as llm.skipped_providers. The fallback counter still moves, because a
+// real fallback did happen.
+func TestDefaultRouter_SkippedPrimaryNotInAttemptedProviders(t *testing.T) {
+	before := atomic.LoadInt64(FallbackTriggeredTotal)
+
+	backup := &mockProvider{
+		name:       ProviderDeepSeek,
+		callResp:   Response{Output: "deepseek answered", Provider: ProviderDeepSeek},
+		healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true},
+	}
+	// Only the backup is registered; the chain's primary is absent (the
+	// production situation for code capabilities when LLM_KIMI_API_KEY is unset).
+	router := NewDefaultRouter(backup)
+
+	resp, err := router.Call(context.Background(), Request{
+		Capability: CapabilityPromptLint,
+		DataClass:  DataClassNonRegulated,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Output != "deepseek answered" {
+		t.Errorf("Output = %q, want the backup answer", resp.Output)
+	}
+	if len(resp.AttemptedProviders) != 1 || resp.AttemptedProviders[0] != ProviderDeepSeek {
+		t.Errorf("AttemptedProviders = %v, want [deepseek] (kimi was never invoked)", resp.AttemptedProviders)
+	}
+	for _, p := range resp.AttemptedProviders {
+		if p == ProviderKimi {
+			t.Error("skipped provider must not appear in AttemptedProviders")
+		}
+	}
+	if delta := atomic.LoadInt64(FallbackTriggeredTotal) - before; delta != 1 {
+		t.Errorf("FallbackTriggeredTotal delta = %d, want 1 (a real fallback happened)", delta)
+	}
+}
+
+// TestDefaultRouter_UnsupportedProviderSkippedNotCountedAsFallback verifies
+// that a registered provider which does not Support the capability is skipped
+// without inflating the fallback counter or AttemptedProviders.
+func TestDefaultRouter_UnsupportedProviderSkippedNotCountedAsFallback(t *testing.T) {
+	before := atomic.LoadInt64(FallbackTriggeredTotal)
+
+	primary := &mockProvider{
+		name:       ProviderKimi,
+		supported:  map[Capability]bool{CapabilityCodeReviewAnnotation: true, CapabilityPromptLint: true},
+		callResp:   Response{Output: "kimi answered", Provider: ProviderKimi},
+		healthResp: HealthStatus{Provider: ProviderKimi, Healthy: true},
+	}
+	backup := &mockProvider{
+		name:       ProviderDeepSeek,
+		callResp:   Response{Output: "deepseek answered", Provider: ProviderDeepSeek},
+		healthResp: HealthStatus{Provider: ProviderDeepSeek, Healthy: true},
+	}
+	router := NewDefaultRouter(primary, backup)
+
+	// failure_attribution is NOT in the kimi provider's supported set.
+	resp, err := router.Call(context.Background(), Request{
+		Capability: CapabilityFailureAttribution,
+		DataClass:  DataClassUnmarked,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.AttemptedProviders) != 1 || resp.AttemptedProviders[0] != ProviderDeepSeek {
+		t.Errorf("AttemptedProviders = %v, want [deepseek]", resp.AttemptedProviders)
+	}
+	if delta := atomic.LoadInt64(FallbackTriggeredTotal) - before; delta != 1 {
+		t.Errorf("FallbackTriggeredTotal delta = %d, want 1", delta)
+	}
+}

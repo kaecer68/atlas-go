@@ -210,3 +210,49 @@ func TestMiniMax_NilBaseClientUsesDefault(t *testing.T) {
 		t.Errorf("expected content %q, got %q", "ok", resp.Content)
 	}
 }
+
+// TestStripInlineThinking covers MiniMax M3's inline reasoning block removal
+// (ADR-012 follow-up). Real payload sample captured 2026-09-11:
+// content = "<think>The user asked…</think>\n\n好".
+func TestStripInlineThinking(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain answer untouched", `{"commentary":"ok"}`, `{"commentary":"ok"}`},
+		{"inline thinking removed", "<think>let me think</think>\n\n{\"commentary\":\"ok\"}", `{"commentary":"ok"}`},
+		{"leading whitespace tolerated", "  \n<think>a</think>\nanswer", "answer"},
+		{"truncated thinking yields empty", "<think>never finished", ""},
+		{"closing tag without opener kept", "answer</think>", "answer</think>"},
+		{"consecutive blocks removed", "<think>a</think><think>b</think>final", "final"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripInlineThinking(tc.in); got != tc.want {
+				t.Errorf("stripInlineThinking(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMiniMax_Chat_StripsInlineThinking verifies Chat() normalizes away the
+// <think> block so capability handlers receive parseable output.
+func TestMiniMax_Chat_StripsInlineThinking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"MiniMax-M3","choices":[{"message":{"role":"assistant","content":"<think>reasoning here</think>\n\n{\"commentary\":\"final\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`))
+	}))
+	defer srv.Close()
+
+	c := NewMiniMaxClient("test-key", newTestBaseClient())
+	c.BaseURL = srv.URL
+
+	resp, err := c.Chat(context.Background(), "", []Message{{Role: "user", Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Content != `{"commentary":"final"}` {
+		t.Errorf("Content = %q, want the answer without the thinking block", resp.Content)
+	}
+}

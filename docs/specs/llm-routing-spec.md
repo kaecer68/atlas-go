@@ -111,8 +111,9 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 | 失敗判定 | provider error，或 `Output` trim 後為空且無 `ToolCalls` |
 | 續試 | 依鏈序嘗試下一個成員；`Backup2` 為空字串時跳過 |
 | `ForceProvider` 例外 | 強制指定 provider 時**不套用**空輸出判定（沒有下一鏈成員可續試；該路徑供測試/sticky routing 使用） |
-| `AttemptedProviders` | 記錄**全部被考慮過**的鏈成員（含失敗者、未註冊者與不支援該 capability 者），供 audit 與 dispute 追溯；「未註冊」代表該 provider 未被呼叫 |
-| `FallbackTriggeredTotal` | 每次由一個鏈成員轉往下一個時遞增；因此 primary 未註冊（例如未設 kimi key 時的 code 群組）也會 +1 |
+| `AttemptedProviders` | 只記錄**實際被呼叫**的 provider（依序，含失敗者）。這讓該欄位成為可信的 audit 依據 —— 出現在名單裡就代表該 provider 真的收到過這筆請求 |
+| `llm.skipped_providers`（span 專用） | 鏈上「無法被呼叫」的成員（未註冊、或該 capability 不支援）**只記在 span**，不進 `AttemptedProviders`：鏈設定錯誤仍可見，但不會污染 audit |
+| `FallbackTriggeredTotal` | 每次**實際呼叫**非 primary 鏈成員時遞增（primary 被跳過而 backup 被呼叫也算一次，因為 fallback 真的發生了；被跳過的成員本身不計數） |
 | 與 `DataClass` 的關係 | 無關；`DataClass` 不再影響 provider 選擇（ADR-012） |
 | 搭配條件 | 所有 capability 的 `max_tokens` 必須 ≥ reasoning 模型最低預算（見 §6.1a） |
 
@@ -139,6 +140,12 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 - 現為 deepseek 的**預設與 model 名**，也是全域 fallback：敘事 / 解釋群組的 backup1（§6.1）。
 - 多模態（可讀圖）與 1M context；`max_tokens` 需 ≥ reasoning 最低預算（§6.1a），否則回空輸出（§6.3a）。
 - 模型名可由環境變數 `LLM_DEEPSEEK_MODEL` 覆寫（預設 `deepseek-flash`）。
+
+**回應正規化（所有 provider client）**：
+- MiniMax M3 的 CN OpenAI-compatible endpoint 把 native thinking **內嵌在 `message.content`**（`<think>…</think>` + 真正答案），已在 `internal/llm/clients` 與 `internal/llm_annotator` 的 client 剝除；未剝除會讓 JSON-first capability 解析失敗並落到 raw-string fallback（使用者看到推理文字）。
+- 若 thinking 被 `max_tokens` 截斷（有 `<think>` 無 `</think>`），剝除後為空 → 依 §6.3a 視為該 provider 失敗，續試下一鏈成員。
+- DeepSeek V4.1-Flash 的 thinking 走獨立的 `reasoning_content` 欄位，`content` 本來就乾淨，不需剝除（2026-09-11 實測）。
+- 「成功但空輸出」現在在 provider client 層也會被視為失敗（`llm_annotator` 不再回 200 + 空註解）。
 
 **M3**：
 - 金融 / 繁中敘事首選（PRISM insight、gap description、複雜 fallback）；現為敘事 / 解釋群組 9 個 capability 的 primary（§6.1）。

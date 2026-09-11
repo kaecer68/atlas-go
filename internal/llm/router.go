@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	obsotel "github.com/kaecer68/atlas-go/internal/observability/otel"
 )
@@ -148,6 +149,12 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 	// "not registered" branch below.
 	chainProviders := []Provider{chain.Primary, chain.Backup1, chain.Backup2}
 	var attempted []Provider
+	// skipped holds chain members that could not be invoked at all (not
+	// registered, or the provider does not Support this capability). They are
+	// reported on the span only: Response.AttemptedProviders documents the
+	// providers that were actually tried, so an entry there means the provider
+	// really received the request.
+	var skipped []Provider
 
 	for i, providerName := range chainProviders {
 		// Skip empty-string entries (4-tier → 3-tier fallback when Backup2
@@ -156,21 +163,23 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 			continue
 		}
 
-		// Increment fallback counter when trying a backup (not primary)
-		if i > 0 {
-			atomic.AddInt64(FallbackTriggeredTotal, 1)
-		}
-
 		impl, ok := r.providers[providerName]
 		if !ok {
-			attempted = append(attempted, providerName)
+			skipped = append(skipped, providerName)
 			continue
 		}
 
 		// Check provider capability support
 		if !impl.Supports(req.Capability) {
-			attempted = append(attempted, providerName)
+			skipped = append(skipped, providerName)
 			continue
+		}
+
+		// Increment the fallback counter when a non-primary chain member is
+		// actually invoked (i.e. a real fallback happened). Chain members that
+		// were skipped are not counted.
+		if i > 0 {
+			atomic.AddInt64(FallbackTriggeredTotal, 1)
 		}
 
 		attempted = append(attempted, providerName)
@@ -187,19 +196,35 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 			continue
 		}
 
-		providerNames := make([]string, len(attempted))
-		for i, p := range attempted {
-			providerNames[i] = string(p)
-		}
-		span.SetAttributes(attribute.StringSlice("llm.attempted_providers", providerNames))
+		recordChainSpans(span, attempted, skipped)
 		resp.AttemptedProviders = attempted
 		return resp, nil
 	}
 
 	// Step 7: All chain members exhausted — invoke last-resort handler
 	atomic.AddInt64(BackupChainExhaustedTotal, 1)
+	recordChainSpans(span, attempted, skipped)
 	span.SetAttributes(attribute.Bool("llm.exhausted", true))
 	return r.lastResortHandler(attempted), nil
+}
+
+// recordChainSpans records which providers were invoked (attempted) and which
+// chain members could not be invoked at all (skipped) on the active span.
+// skipped is span-only observability: it makes a misconfigured chain (e.g. a
+// primary whose API key is absent) visible without polluting the audit-facing
+// Response.AttemptedProviders list.
+func recordChainSpans(span trace.Span, attempted, skipped []Provider) {
+	names := func(ps []Provider) []string {
+		out := make([]string, len(ps))
+		for i, p := range ps {
+			out[i] = string(p)
+		}
+		return out
+	}
+	span.SetAttributes(attribute.StringSlice("llm.attempted_providers", names(attempted)))
+	if len(skipped) > 0 {
+		span.SetAttributes(attribute.StringSlice("llm.skipped_providers", names(skipped)))
+	}
 }
 
 // isBlankResponse reports whether a provider response carries no usable

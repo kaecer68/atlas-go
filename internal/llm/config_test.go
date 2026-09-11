@@ -3,6 +3,7 @@ package llm
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -400,6 +401,93 @@ func TestDefaultRoutingTable_Groups(t *testing.T) {
 	for cap, chain := range cfg.RoutingChains {
 		if chain.Primary != ProviderDeepSeek && chain.Backup1 != ProviderDeepSeek && chain.Backup2 != ProviderDeepSeek {
 			t.Errorf("%s: DeepSeek (global fallback) is absent from chain %+v", cap, chain)
+		}
+	}
+}
+
+// TestResolveRouterConfig_LoadsRepoFile verifies that the wiring path actually
+// loads configs/llm_router.yaml (ADR-012 follow-up: the file used to be a
+// mirror that no cmd read) and that the loaded table equals the built-in one.
+func TestResolveRouterConfig_LoadsRepoFile(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("..", "..", "configs", "llm_router.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(RouterConfigPathEnv, path)
+
+	cfg, src := ResolveRouterConfig()
+	if !strings.HasPrefix(src, "file ") {
+		t.Fatalf("source = %q, want the file to be used", src)
+	}
+	goCfg := defaultRoutingTable()
+	if len(cfg.RoutingChains) != len(goCfg.RoutingChains) {
+		t.Fatalf("chain count = %d, want %d", len(cfg.RoutingChains), len(goCfg.RoutingChains))
+	}
+	for cap, want := range goCfg.RoutingChains {
+		if got := cfg.RoutingChains[cap]; got != want {
+			t.Errorf("%s chain = %+v, want %+v", cap, got, want)
+		}
+	}
+}
+
+// TestResolveRouterConfig_MissingFileFallsBackToBuiltin verifies the fail-safe
+// behavior: an unusable path never breaks startup.
+func TestResolveRouterConfig_MissingFileFallsBackToBuiltin(t *testing.T) {
+	t.Setenv(RouterConfigPathEnv, filepath.Join(t.TempDir(), "nope.yaml"))
+
+	cfg, src := ResolveRouterConfig()
+	if !strings.HasPrefix(src, "builtin") {
+		t.Errorf("source = %q, want builtin fallback", src)
+	}
+	if len(cfg.RoutingChains) != len(defaultRoutingTable().RoutingChains) {
+		t.Errorf("chain count = %d, want the built-in table", len(cfg.RoutingChains))
+	}
+}
+
+// TestResolveRouterConfig_IncompleteFileFallsBackToBuiltin verifies that a
+// partially-specified file cannot silently disable capabilities.
+func TestResolveRouterConfig_IncompleteFileFallsBackToBuiltin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "partial.yaml")
+	yaml := `
+routing_chains:
+  failure_attribution:
+    primary: minimax
+    backup1: deepseek
+    backup2: ""
+    last_resort: mock
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(RouterConfigPathEnv, path)
+
+	cfg, src := ResolveRouterConfig()
+	if !strings.HasPrefix(src, "builtin") || !strings.Contains(src, "missing") {
+		t.Errorf("source = %q, want a builtin fallback mentioning the missing capabilities", src)
+	}
+	for _, cap := range allCapabilities() {
+		if _, ok := cfg.RoutingChains[cap]; !ok {
+			t.Errorf("fallback table is missing %s", cap)
+		}
+	}
+}
+
+// TestAllCapabilitiesMatchesConstants guards allCapabilities() against drift
+// when a new Capability constant is added.
+func TestAllCapabilitiesMatchesConstants(t *testing.T) {
+	caps := allCapabilities()
+	if len(caps) != 12 {
+		t.Errorf("allCapabilities() returned %d entries, want 12", len(caps))
+	}
+	seen := make(map[Capability]bool, len(caps))
+	for _, c := range caps {
+		if seen[c] {
+			t.Errorf("duplicate capability %q", c)
+		}
+		seen[c] = true
+		if !isKnownCapability(c) {
+			t.Errorf("%q is not known to isKnownCapability", c)
 		}
 	}
 }

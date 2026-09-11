@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
@@ -405,6 +406,16 @@ func (h *Handlers) annotate(r *http.Request) (int, any) {
 	if err != nil {
 		return http.StatusBadGateway, map[string]any{
 			"error":    err.Error(),
+			"fallback": frame.Attribution,
+			"backend":  h.annotator.Name(),
+		}
+	}
+	// ADR-012 follow-up: an empty annotation is a silent failure, not a valid
+	// answer. Return the same explicit error shape as above so callers show the
+	// rule-based fallback instead of an empty string with HTTP 200.
+	if strings.TrimSpace(text) == "" {
+		return http.StatusBadGateway, map[string]any{
+			"error":    "annotator returned empty output",
 			"fallback": frame.Attribution,
 			"backend":  h.annotator.Name(),
 		}

@@ -18,7 +18,7 @@ func registerLLMTraceTools(mcpSrv *mcp.Server, s *server) {
 
 	countedAddTool(mcpSrv, &mcp.Tool{
 		Name:        "llm_get_health",
-		Description: autoDescOr("llm_get_health", "LLM router health — provider status (DeepSeek, MiniMax/M3), circuit-breaker, fallback chain."),
+		Description: autoDescOr("llm_get_health", "LLM router health — provider status (deepseek / minimax M3 / kimi), circuit-breaker, and the live routing-table revision (router_version)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleLLMGetHealth)
 

@@ -218,6 +218,13 @@ var janusEngine *janus.Engine
 // and consumed by the autobacktest attribution pipeline (#1259).
 var strategyFeedbackStore *apistrategies.FeedbackStore
 
+// llmAnnotatorMaxTokens is the token budget for the on-demand strategy
+// annotation path (POST /api/strategies/{id}/annotate). 2048 is the ADR-012
+// floor for reasoning models: the legacy llm_annotator default of 512 was
+// consumed entirely by MiniMax M3's native thinking, which made the annotator
+// return HTTP 200 with an empty annotation.
+const llmAnnotatorMaxTokens = 2048
+
 // isPublicPath determines whether a request bypasses the API-key
 // AuthMiddleware. GET/HEAD/OPTIONS on the public-read whitelist and
 // web UI static assets under /admin/ and /client/ are loaded by the
@@ -2164,7 +2171,21 @@ func run(args []string, deps appDeps) error {
 			var kimi *llm_annotator.KimiClient
 			if apiKey != "" {
 				var err error
-				kimi, err = llm_annotator.NewKimiClient(llm_annotator.Config{APIKey: apiKey, Metrics: collector})
+				// ADR-012 follow-up (2026-09-11): the annotator used to be built
+				// with llm_annotator defaults — BaseURL https://api.kimi.com/coding/v1
+				// and model "moonshot-v1-8k" — while the key is a MiniMax CN
+				// coding-plan key. That combination returned HTTP 401 (verified),
+				// so /api/strategies/{id}/annotate could never succeed. Point the
+				// annotator at MiniMax CN with the M3 model, and give it a token
+				// budget that survives the model's native thinking phase (the
+				// legacy default of 512 produced empty annotations).
+				kimi, err = llm_annotator.NewKimiClient(llm_annotator.Config{
+					APIKey:    apiKey,
+					BaseURL:   clients.MiniMaxChatBaseV1,
+					Model:     clients.DefaultModelMiniMaxM3,
+					MaxTokens: llmAnnotatorMaxTokens,
+					Metrics:   collector,
+				})
 				if err != nil {
 					logging.Warn("main", "kimi_init_failed", "err", err.Error())
 				} else {
@@ -2186,14 +2207,21 @@ func run(args []string, deps appDeps) error {
 			// Phase 1: LLM Router (experimental, X-level). Wraps existing KimiClient via adapter.
 			// Does NOT replace dashboard.SetStrategiesAnnotator(kimi) above — that still receives
 			// the raw *KimiClient required by dashboard_api.go:880 type assertion.
+			// ADR-012 follow-up: the routing table is now read from
+			// configs/llm_router.yaml (ATLAS_LLM_ROUTER_CONFIG_PATH overrides),
+			// falling back to the built-in table when the file is missing or
+			// incomplete. The source is logged so operators can see which table
+			// is live.
+			routerCfg, routerSrc := llm.ResolveRouterConfig()
+			logging.Info("main", "llm_router_config", "source", routerSrc)
 			var llmRouter llm.Router
 			if kimi != nil {
-				llmRouter = llm.NewDefaultRouter(
+				llmRouter = llm.NewDefaultRouterFromConfig(routerCfg,
 					llmAdapters.NewAnnotatorAdapter(kimi, "moonshot-v1-8k"),
 				)
 			} else {
 				// No API key — Router still exists but all Supports() return false.
-				llmRouter = llm.NewDefaultRouter()
+				llmRouter = llm.NewDefaultRouterFromConfig(routerCfg)
 			}
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)

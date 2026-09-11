@@ -44,6 +44,7 @@
 | `ATLAS_AGENT_REGISTRY_PATH` | Agent 註冊表路徑 | `configs/agents.json` |
 | `ATLAS_BASELINE_POLICY_PATH` | Baseline policy 路徑 | `data/state/baseline_policy.json` |
 | `ATLAS_PARAMETERS_CONFIG_PATH` | 參數配置路徑 | `configs/parameters.json` |
+| `ATLAS_LLM_ROUTER_CONFIG_PATH` | LLM Router 路由表設定檔路徑（每個 capability 的 fallback 鏈；檔案缺失/不完整/格式錯誤時自動回退到 `internal/llm.defaultRoutingTable()` 內建表） | `configs/llm_router.yaml` |
 | `ATLAS_PARAMETERS_CONFIG` | 參數配置路徑（別名） | `configs/parameters.json` |
 | `ATLAS_ENGINE_CONFIG` | 引擎配置路徑 | `engine.json` |
 | `ATLAS_YAHOO_ENABLED` | Yahoo Finance 功能開關 | `false` |

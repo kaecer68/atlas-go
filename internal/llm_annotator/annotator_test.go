@@ -592,3 +592,70 @@ func TestKimiClient_Annotate_CacheTTL(t *testing.T) {
 		t.Errorf("expected 2 HTTP requests (TTL=0 → no cache), got %d", requests)
 	}
 }
+
+// TestKimiClient_Annotate_StripsInlineThinking verifies the MiniMax M3 inline
+// reasoning block is removed from annotations (ADR-012 follow-up): verified
+// 2026-09-11 that M3 returns "<think>…</think>\n\n<answer>" in content.
+func TestKimiClient_Annotate_StripsInlineThinking(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"<think>weighing options</think>\n\n融資餘額未過熱"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewKimiClient(Config{APIKey: "test-key", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewKimiClient: %v", err)
+	}
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "x"})
+	if err != nil {
+		t.Fatalf("Annotate: %v", err)
+	}
+	if strings.Contains(got, "<think>") || strings.Contains(got, "weighing options") {
+		t.Errorf("annotation still contains inline thinking: %q", got)
+	}
+	if got != "融資餘額未過熱" {
+		t.Errorf("annotation = %q, want the stripped answer", got)
+	}
+}
+
+// TestKimiClient_Annotate_EmptyContentIsError verifies that HTTP 200 with no
+// usable text is a failure, not a silent empty annotation (ADR-012).
+func TestKimiClient_Annotate_EmptyContentIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":""}}]}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewKimiClient(Config{APIKey: "test-key", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewKimiClient: %v", err)
+	}
+	got, err := c.Annotate(context.Background(), FailureContext{FrameID: "empty"})
+	if err == nil {
+		t.Fatalf("expected an error for empty content, got %q", got)
+	}
+	if got != "" {
+		t.Errorf("annotation = %q, want empty", got)
+	}
+}
+
+// TestKimiClient_Annotate_TruncatedThinkingIsError verifies that thinking which
+// was cut off by max_tokens (opening tag without closing tag) is treated as an
+// empty/failed response rather than leaking reasoning text.
+func TestKimiClient_Annotate_TruncatedThinkingIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"<think>still reasoning and ran out of budget"}}]}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewKimiClient(Config{APIKey: "test-key", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewKimiClient: %v", err)
+	}
+	if got, err := c.Annotate(context.Background(), FailureContext{FrameID: "trunc"}); err == nil {
+		t.Fatalf("expected an error for truncated thinking, got %q", got)
+	}
+}

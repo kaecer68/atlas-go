@@ -7,6 +7,71 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// RouterConfigPathEnv is the environment variable that overrides the routing
+// config file location (whitelisted in configs/allowed_env_vars.md).
+const RouterConfigPathEnv = "ATLAS_LLM_ROUTER_CONFIG_PATH"
+
+// RouterConfigDefaultPath is the canonical routing config location, relative
+// to the process working directory (the Docker image copies configs/ to /app).
+const RouterConfigDefaultPath = "configs/llm_router.yaml"
+
+// ResolveRouterConfig returns the routing table to use at startup, plus a
+// human-readable description of where it came from (for startup logging).
+//
+// Precedence:
+//  1. the file at ATLAS_LLM_ROUTER_CONFIG_PATH (or RouterConfigDefaultPath),
+//     but only when it parses and defines every known capability;
+//  2. the built-in defaultRoutingTable() otherwise.
+//
+// A partially-specified file is rejected on purpose: silently dropping a
+// capability would turn routing misconfiguration into ErrCapabilityNotSupported
+// at request time.
+func ResolveRouterConfig() (RouterConfig, string) {
+	path := os.Getenv(RouterConfigPathEnv)
+	if path == "" {
+		path = RouterConfigDefaultPath
+	}
+
+	cfg, err := LoadRouterConfig(path)
+	if err != nil {
+		return defaultRoutingTable(), "builtin (config " + path + " unusable: " + err.Error() + ")"
+	}
+	if missing := missingCapabilities(cfg); len(missing) > 0 {
+		return defaultRoutingTable(), fmt.Sprintf("builtin (config %s is missing %d capabilit(ies): %v)", path, len(missing), missing)
+	}
+	return cfg, "file " + path
+}
+
+// missingCapabilities returns the capabilities that the routing config does not
+// define. Every capability in this package must be routable.
+func missingCapabilities(cfg RouterConfig) []Capability {
+	var missing []Capability
+	for _, cap := range allCapabilities() {
+		if _, ok := cfg.RoutingChains[cap]; !ok {
+			missing = append(missing, cap)
+		}
+	}
+	return missing
+}
+
+// allCapabilities returns every Capability constant defined in this package.
+func allCapabilities() []Capability {
+	return []Capability{
+		CapabilityFailureAttribution,
+		CapabilityCodeReviewAnnotation,
+		CapabilityPromptLint,
+		CapabilityRationaleGeneration,
+		CapabilityStrategySummary,
+		CapabilityRiskSurfaceExtraction,
+		CapabilityRegimeExplanation,
+		CapabilityScenarioSimulation,
+		CapabilitySentimentExplanation,
+		CapabilityPerformanceForensics,
+		CapabilityContraAttribution,
+		CapabilityConfidenceCommentary,
+	}
+}
+
 // yamlRoutingChain mirrors RoutingChain with YAML-friendly field names.
 type yamlRoutingChain struct {
 	Primary    string `yaml:"primary"`
@@ -94,23 +159,12 @@ func TryLoadRouterConfig(path string) RouterConfig {
 // isKnownCapability returns true when cap is one of the Capability
 // constants defined in this package.
 func isKnownCapability(cap Capability) bool {
-	switch cap {
-	case CapabilityFailureAttribution,
-		CapabilityCodeReviewAnnotation,
-		CapabilityPromptLint,
-		CapabilityRationaleGeneration,
-		CapabilityStrategySummary,
-		CapabilityRiskSurfaceExtraction,
-		CapabilityRegimeExplanation,
-		CapabilityScenarioSimulation,
-		CapabilitySentimentExplanation,
-		CapabilityPerformanceForensics,
-		CapabilityContraAttribution,
-		CapabilityConfidenceCommentary:
-		return true
-	default:
-		return false
+	for _, c := range allCapabilities() {
+		if c == cap {
+			return true
+		}
 	}
+	return false
 }
 
 // isKnownProvider returns true when p is one of the Provider constants

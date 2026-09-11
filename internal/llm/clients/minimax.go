@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kaecer68/atlas-go/internal/llm"
 )
@@ -11,9 +12,24 @@ import (
 // Default MiniMax model constant.
 const DefaultModelMiniMaxM3 = "MiniMax-M3"
 
+// Inline thinking markers used by MiniMax M3 (see stripInlineThinking).
+const (
+	thinkOpenTag  = "<think>"
+	thinkCloseTag = "</think>"
+)
+
 // miniMaxAPIBase is the production API base URL for MiniMax.
 // China: api.minimaxi.com (extra 'i'), International: api.minimax.io
 const miniMaxAPIBase = "https://api.minimaxi.com"
+
+// MiniMaxChatBaseV1 is the OpenAI-compatible v1 base URL (no path suffix).
+// Use it for clients that build their own request URL, e.g.
+// internal/llm_annotator.KimiClient (which appends "/chat/completions").
+//
+// MiniMax is the only usable upstream for annotator-style traffic in this
+// deployment: the legacy "kimi" coding-plan keys are CLI-only and return
+// HTTP 401/403 against api.kimi.com (verified 2026-09-11).
+const MiniMaxChatBaseV1 = miniMaxAPIBase + "/v1"
 
 // miniMaxEndpoint is the relative path for the OpenAI-compatible endpoint.
 const miniMaxEndpointOpenAI = "/v1/chat/completions"
@@ -130,7 +146,7 @@ func (c *MiniMaxClient) Chat(ctx context.Context, model string, messages []Messa
 
 	choice := parsed.Choices[0]
 	return &ChatResponse{
-		Content:      choice.Message.Content,
+		Content:      stripInlineThinking(choice.Message.Content),
 		Model:        parsed.Model,
 		FinishReason: choice.FinishReason,
 		Usage: llm.Usage{
@@ -139,6 +155,33 @@ func (c *MiniMaxClient) Chat(ctx context.Context, model string, messages []Messa
 			TotalTokens:  parsed.Usage.TotalTokens,
 		},
 	}, nil
+}
+
+// stripInlineThinking removes MiniMax M3's inline reasoning block from a
+// response. The CN OpenAI-compatible endpoint returns native thinking inside
+// message.content, wrapped in <think>...</think> and followed by the actual
+// answer (verified 2026-09-11 against api.minimaxi.com: `"<think>The user
+// asked…</think>\n\n好"`). Without this, JSON-first capability parsers fail
+// and fall back to raw-string output, so users would see reasoning text.
+//
+// Unbalanced/truncated thinking (an opening tag with no closing tag) means the
+// model never got to its answer: the result is empty, which the Router treats
+// as a provider failure and falls through to the next chain member.
+func stripInlineThinking(content string) string {
+	s := strings.TrimSpace(content)
+	for {
+		if !strings.HasPrefix(s, thinkOpenTag) {
+			return s
+		}
+		// Find the end of the thinking block. Use the last closing tag so a
+		// nested/duplicated marker inside the reasoning text cannot truncate
+		// the real answer.
+		end := strings.LastIndex(s, thinkCloseTag)
+		if end < 0 {
+			return ""
+		}
+		s = strings.TrimSpace(s[end+len(thinkCloseTag):])
+	}
 }
 
 // miniMaxRequestBody mirrors the OpenAI chat completions request shape.

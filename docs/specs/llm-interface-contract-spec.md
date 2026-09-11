@@ -1,7 +1,7 @@
 # LLM 統一介面合約（Unified Interface Contract）
 
 > **文件角色**：atlas-go LLM 整合的介面定義 + 既有模組接入範例（架構藍圖 §4.2-4.5 抽離）。
-> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.1）
+> **設計權威**：`docs/llm-integration-strategy-framework.md`（v2.2）
 > **Maturity 規則**：`internal/MATURITY.md` LLM 相關條目
 
 ---

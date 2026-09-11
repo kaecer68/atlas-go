@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -445,11 +446,46 @@ func (k *KimiClient) doRequest(ctx context.Context, raw []byte) (string, Usage, 
 	if len(parsed.Choices) == 0 {
 		return "", Usage{}, false, resp.StatusCode, fmt.Errorf("%w: empty choices", ErrUnavailable)
 	}
-	return parsed.Choices[0].Message.Content, Usage{
+	content := stripInlineThinking(parsed.Choices[0].Message.Content)
+	if content == "" {
+		// HTTP 200 with no usable text is a silent failure, not a success:
+		// reasoning models can burn the whole max_tokens budget in their
+		// thinking phase (ADR-012). Fail fast (non-retryable) so the caller
+		// returns an explicit error instead of an empty annotation.
+		return "", Usage{}, false, 0, fmt.Errorf("%w: empty content after thinking-strip (raise MaxTokens)", ErrUnavailable)
+	}
+	return content, Usage{
 		PromptTokens:     parsed.Usage.PromptTokens,
 		CompletionTokens: parsed.Usage.CompletionTokens,
 		TotalTokens:      parsed.Usage.TotalTokens,
 	}, false, resp.StatusCode, nil
+}
+
+// inline thinking markers returned by MiniMax M3 inside message.content
+// (see stripInlineThinking).
+const (
+	thinkOpenTag  = "<think>"
+	thinkCloseTag = "</think>"
+)
+
+// stripInlineThinking removes MiniMax M3's inline reasoning block from a
+// response. The CN OpenAI-compatible endpoint returns native thinking inside
+// message.content, wrapped in <think>...</think> and followed by the answer
+// (verified 2026-09-11). Duplicate of internal/llm/clients.stripInlineThinking
+// so this legacy package stays free of a dependency on internal/llm/clients;
+// keep the two implementations in sync.
+func stripInlineThinking(content string) string {
+	s := strings.TrimSpace(content)
+	for {
+		if !strings.HasPrefix(s, thinkOpenTag) {
+			return s
+		}
+		end := strings.LastIndex(s, thinkCloseTag)
+		if end < 0 {
+			return ""
+		}
+		s = strings.TrimSpace(s[end+len(thinkCloseTag):])
+	}
 }
 
 // buildRequest assembles the OpenAI-compatible chat completions body.
