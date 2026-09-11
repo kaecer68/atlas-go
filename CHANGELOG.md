@@ -4,6 +4,11 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(llm,risk): #1891 補漏 — 補回未 commit 的 hydration 測試 + 風險鑑識 gate 可觀測性（2026-09-11 深夜）
+- **補回 `internal/orchestrator/risk_forensics_hydration_test.go`**：#1891 的 commit message 聲稱有這些測試，但該檔當時是 untracked（我的 staging 只取了 `git status` 的 ` M` 行，漏掉 `??`），因此合併後的 main 沒有它、GitHub CI 也沒覆蓋到。本 PR 補上。
+- **風險鑑識 gate 可觀測性**：每個 daily run 都會留一行結構化 log —— 未達門檻 `risk_forensics_pending samples=N min_samples=30`，達標且 hook 存在 `risk_forensics_snapshot samples=N var95=… cvar95=… commentary_len=…`。用途：(a) 立刻證明 hydration 生效（production 首次 run 應顯示 samples≈19，而非 1）、(b) 12 個交易日的補齊進度可逐日查核、(c) hook 真正觸發時有時間戳可佐證。
+- **docs**：`docs/specs/llm-routing-spec.md` §6.1 明記「production 未設 `LLM_KIMI_API_KEY`（月額度用罄）→ code 群組跳過 kimi 由 M3 承接，屬預期；key 設回即生效」；`internal/orchestrator/AGENTS.md` 補上兩行 gate 觀測說明。
+
 ### LLM/Risk — #1887 + #1888 根因修正（2026-09-11 晚）
 - **#1887 failure_attribution Router 路徑可用了**：prompt 文字抽成單一來源（`llm_annotator.FailureAttributionSystemPrompt` / `FailureContextPrompt` / `FailureAttributionTemperature`），capability handler 改送 messages payload（MiniMax/DeepSeek adapter 只吃 `[]byte`），`RouterAnnotator` 走同一 handler；新增端到端測試。**未新增/改動任何 prompt 語意**。
 - **#1888 risk forensics hook 可觸發了（方案 A）**：`ensurePersistentStateLoaded()` / `WithPersistentState()` 會從持久化的 `EquityCurve` / `DailyReturns` 補齊 per-process 的 `returnHistory` / `portfolioHistory`；gate 改用具名常數 `RiskForensicsMinSamples`（30）。新增補齊、不覆蓋既有累積、以及「補齊後單次 RunDailySimulation 即觸發 hook」三個測試。
