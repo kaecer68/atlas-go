@@ -4,6 +4,12 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### decision(llm): 資料主權處置定案 —— A 案（接受 + 稽核 + 最小化）（2026-09-12）
+- 業主裁定「策略內部邏輯外流」可接受 → `#1889` 以 A 案結案：不因 `DataClass` 封鎖任何 provider。
+- 風險維持在可稽核狀態的機制：`AttemptedProviders`（僅實際呼叫者）、span `llm.skipped_providers`、`llm.data_class` / `llm.data_class_name`；payload 僅衍生／彙總資料（無個資、帳號、憑證）。
+- 升級條件寫入 ADR-012 追加三：payload 含關鍵營業秘密 → 對該 capability 去識別化（D）；要求完全不出境且保留功能 → self-host（C）；法規強制 → 全封鎖（B）。
+- 同步：`docs/llm-adr-log.md`、`docs/specs/llm-routing-spec.md` §6.4。
+
 ### fix(risk): backtest 不再觸發 LLM 績效鑑識 hook（snapshot 保留）（2026-09-12）
 - **原則**：`RiskSnapshot`（確定性、可用於回測分析）**一律建**；LLM 註解 hook 是「live monitoring」關注點，因此**呼叫端注入狀態（backtest harness）時跳過**。
 - **理由**：(1) 省錢與降噪；(2) 回測必須可重現 —— 一次 LLM 呼叫就讓它變成非確定性；(3) production daily run 從磁碟載入狀態（`injected_state=false`），hook 照常執行。

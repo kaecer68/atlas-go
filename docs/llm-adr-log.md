@@ -221,3 +221,22 @@
   端到端測試（補齊 35 筆 → 單次 `RunDailySimulation` → hook 被呼叫）。
   ⚠️ 生產時程：iMac 目前 `daily_returns=18`，每天一次 daily simulation → 約 **12 個交易日**後才會首次產生風險鑑識敘事（此後自癒）。
 - **#1889 主權決策**：仍待決（見下方 residual risk）。
+
+
+#### 追加三（2026-09-12）：資料主權處置決策 = A（接受 + 稽核 + 最小化）
+
+**決策**：業主裁定「策略內部邏輯外流」為**可接受風險** → 採 **A 案**：維持現行 provider 配置（不因資料分級封鎖任何 provider），並以下列機制把風險維持在可稽核狀態：
+
+1. **可歸屬稽核**：`Response.AttemptedProviders`（只列實際被呼叫的 provider）+ span `llm.skipped_providers` + `llm.data_class` / `llm.data_class_name` → 任何時候都能回答「這筆資料送給哪一家」。
+2. **最小化**：送出的 payload 僅為衍生／彙總資料（風險指標、訓練統計、事件情緒、策略名稱與失敗原因），不含個資、帳號、憑證或客戶資料。
+3. **不可自動擴大**：新增 capability 或新增 provider 時，必須回到本 ADR 檢視 payload 內容；`DataClass` 仍隨請求傳遞（不作為閘門）。
+
+**升級條件（不是「永遠不做」，而是「達到下列條件才做」）**：
+
+| 觸發條件 | 應採取 | 具體做法 |
+|---|---|---|
+| 某個 capability 的 payload 被判定含**關鍵營業秘密**（最可能是 `failure_attribution`：frame_id + 條件 + 門檻 + 巨集值） | **D：針對性去識別化** | 只送推導結果（hit/miss、z-score 級距）而非絕對門檻值；以測試鎖住 payload 不含原始門檻 |
+| 業主判定策略內部邏輯**必須完全不出境**，且要保留敘事功能 | **C：self-host** | 為 9 個敘事 capability 部署本地模型（品質低於 M3）；需 GPU 與維運預算，屬專案級工作 |
+| 法規要求「不得讓第三方處理」時 | **B：全供應商一致封鎖** | 只在此時才停用相關 capability（本 ADR 已記錄：這會直接失去功能） |
+
+**為何不是 B**：三家 provider（MiniMax CN / DeepSeek 杭州 / Kimi 北京）同屬一管轄區，逐家封鎖沒有主權收益（ADR-010 的教訓）；且本系統送出的資料不含受監理的個資，「合規」並非真正的約束，真正的約束是營業秘密 —— 而業主已明示接受。
