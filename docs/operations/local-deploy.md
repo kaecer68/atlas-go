@@ -115,3 +115,36 @@ ssh kk@kimac "cd ~/workspace/atlas && git checkout <previous-sha> && make rebuil
 
 > **注意**：iMac 用本地 build image（`atlas-atlas:latest`），Rollback = checkout 舊 commit 重建。
 > 已不使用 ghcr.io tag pinning（舊模式，ghcr 已被本地 build 取代）。
+
+
+## iMac 容器守護腳本（版控正本）
+
+**為什麼要進版控**：`atlas-container-watchdog.sh` 是 iMac 唯一的自動復原機制（容器死掉時把它拉起來），
+但過去只存在於 iMac 的 `~/bin/`，無法回答「iMac 上跑的是哪一版、有沒有漂移」。
+
+**正本位置**
+
+| 檔案 | 用途 |
+|---|---|
+| `scripts/ops/imac-container-watchdog.sh` | 腳本正本（launchd 每 60s 執行） |
+| `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist` | launchd job 正本（`StartInterval` = 60） |
+
+**指令**
+
+```bash
+make imac-watchdog-diff      # 比對 repo 正本與 iMac 版 sha256（漂移檢查，不一致 exit 1）
+make imac-watchdog-install   # 備份 iMac 現有版本 → scp 正本 → bash -n → 重載 launchd → 再驗 sha256
+```
+
+**腳本行為（2026-09-12 起）**
+
+1. **restart ledger**：每 60s 比對 `RestartCount / StartedAt / FinishedAt / ExitCode / OOMKilled / Error`，
+   只要變化就 append 到 `~/Library/Logs/atlas-container-restarts.log`，並記錄**變化前**的值。
+   這解決了「健康狀態下容器被重啟卻無法歸因」的問題（docker 不保留重啟歷史；`docker compose up -d`
+   會 recreate 容器並清掉舊 log）。判讀方式見 issue #1901。
+2. **start-if-down**：容器不是 `running` 才 `docker start`（不 create，避免與 compose 打架），
+   啟動後 5 秒再確認；crash loop 會記 WARN 而不無限重啟。
+3. 所有動作寫入 `~/Library/Logs/atlas-watchdog.log`。
+
+**注意**：本腳本**只**啟動已存在的容器，不負責部署。iMac 部署流程另見
+`docs/operations/pr-lifecycle.md` §5 與 issue #1898（`make rebuild-all` 在 iMac 目前被 guard 擋下，需手打 docker 指令）。
