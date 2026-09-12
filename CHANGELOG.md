@@ -4,6 +4,13 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### decision(llm): Kimi 自 atlas 路由移除（ADR-012 追加四）（2026-09-12）
+- 業主裁定：atlas 執行期**不使用 Kimi、不補 `LLM_KIMI_API_KEY`** —— 本部署只有 coding plan 訂閱，該 key 無法用於 app-level HTTP 呼叫（實測 `api.kimi.com/coding/v1` → 401，同一把 key 打 `api.minimaxi.com` → 200），補了也無法生效。
+- 處置：`code_review_annotation` / `prompt_lint` 的鏈改為 `minimax → deepseek →（空）→ mock`；`cmd/atlas`、`cmd/lint-pr`、`cmd/lint-prompts` 移除 Kimi provider 註冊；`configs/llm_router.yaml` 同步；新增測試 `TestDefaultRoutingTable_KimiNotInAnyChain`。
+- 保留：`clients.KimiClient`、`adapters.KimiAdapter`、ADR-009 的 `kimiAllowedCaps`（未來有可用 key 時只需加回鏈與註冊）。
+- 附帶：`cmd/experimental/l2-4-preflight` 的 `router_version` 檢查由字串等值改為版本比較（>= v2.1），避免每次路由版本遞增就要改碼。
+- 效果：code capability 不再有 `llm.skipped_providers=[kimi]`，lint 每次呼叫不再無意義地累加 `FallbackTriggeredTotal`。
+
 ### decision(llm): 資料主權處置定案 —— A 案（接受 + 稽核 + 最小化）（2026-09-12）
 - 業主裁定「策略內部邏輯外流」可接受 → `#1889` 以 A 案結案：不因 `DataClass` 封鎖任何 provider。
 - 風險維持在可稽核狀態的機制：`AttemptedProviders`（僅實際呼叫者）、span `llm.skipped_providers`、`llm.data_class` / `llm.data_class_name`；payload 僅衍生／彙總資料（無個資、帳號、憑證）。

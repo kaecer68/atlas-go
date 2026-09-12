@@ -13,7 +13,9 @@
 # this file must be updated together with defaultRoutingTable().
 #
 # Provider values:
-#   kimi         — Kimi K2.7 (kimi-for-coding); code capabilities only (ADR-009)
+#   kimi         — Kimi K2.7 (kimi-for-coding); NOT in any chain since ADR-012 addendum 4
+#                  (coding-plan keys cannot be used for app-level HTTP calls). The client and
+#                  the ADR-009 capability guard remain in internal/llm for a future valid key.
 #   minimax      — MiniMax M3 (narrative/explanation JSON group; 1M context)
 #   deepseek     — DeepSeek V4.1-Flash (canonical model name "deepseek-flash"; global fallback)
 #   mock         — Mock provider (last resort; returns empty output)
@@ -60,11 +62,11 @@ routing_chains:
     backup2: ""
     last_resort: mock
 
-  # dev.prompt_lint — code group: kimi (kimi-for-coding) first
+  # dev.prompt_lint — code group: M3 first (Kimi removed by ADR-012 addendum 4)
   prompt_lint:
-    primary: kimi
-    backup1: minimax
-    backup2: deepseek
+    primary: minimax
+    backup1: deepseek
+    backup2: ""
     last_resort: mock
 
   # orchestrator.prism_cohort_insight
@@ -102,11 +104,11 @@ routing_chains:
     backup2: ""
     last_resort: mock
 
-  # dev.code_review_annotation — code group: kimi (kimi-for-coding) first
+  # dev.code_review_annotation — code group: M3 first (Kimi removed by ADR-012 addendum 4)
   code_review_annotation:
-    primary: kimi
-    backup1: minimax
-    backup2: deepseek
+    primary: minimax
+    backup1: deepseek
+    backup2: ""
     last_resort: mock
 
   # strategy.contra_attribution — adversarial narrative analysis

@@ -87,14 +87,14 @@ func main() {
 	}
 }
 
-// buildRouter creates an LLM Router wired with DeepSeek, MiniMax and (when a
-// key is available) Kimi adapters. Returns nil when no API key is available.
+// buildRouter creates an LLM Router wired with DeepSeek and MiniMax adapters.
+// Returns nil when no API key is available. Kimi is intentionally not wired
+// (ADR-012 addendum 4: coding-plan keys cannot drive app-level calls).
 func buildRouter() llm.Router {
 	deepseekKey := config.GetSecret("LLM_DEEPSEEK_API_KEY")
 	minimaxKey := config.GetSecret("LLM_MINIMAX_API_KEY")
-	kimiKey := config.GetSecret("LLM_KIMI_API_KEY")
 
-	if deepseekKey == "" && minimaxKey == "" && kimiKey == "" {
+	if deepseekKey == "" && minimaxKey == "" {
 		return nil
 	}
 
@@ -116,14 +116,6 @@ func buildRouter() llm.Router {
 		mc := clients.NewMiniMaxClient(minimaxKey, base)
 		adapter := llmAdapters.NewMiniMaxAdapter(mc)
 		_ = router.Register(adapter)
-	}
-
-	// prompt_lint is Kimi-first in the routing table (ADR-012); register the
-	// Kimi adapter when a key is available so the primary is reachable.
-	if kimiKey != "" {
-		base := clients.NewBaseClient(llm.ProviderKimi, clients.BaseClientConfig{})
-		kc := clients.NewKimiClient(kimiKey, base)
-		_ = router.Register(llmAdapters.NewKimiAdapter(kc))
 	}
 
 	return router

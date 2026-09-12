@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -199,11 +200,14 @@ func checkLLMHealth(baseURL string) checkResult {
 			Message: fmt.Sprintf("JSON parse failed: %v", err),
 		}
 	}
-	if health.RouterVersion != "v2.1" && health.RouterVersion != "v2.2" {
+	// Compare by version rather than by string equality: pinning the accepted
+	// values broke this preflight every time the router version moved (v2.1 →
+	// v2.2 needed a code change). Anything >= v2.1 is acceptable.
+	if !routerVersionAtLeast(health.RouterVersion, 2, 1) {
 		return checkResult{
 			Name:    "router_version v2.1+",
 			OK:      false,
-			Message: fmt.Sprintf("got %q, expected v2.1 or v2.2 (LLM_SECTOR_AGENTS_ENABLED requires v2.1+ router)", health.RouterVersion),
+			Message: fmt.Sprintf("got %q, expected v2.1 or later (LLM_SECTOR_AGENTS_ENABLED requires v2.1+ router)", health.RouterVersion),
 		}
 	}
 	for name, p := range health.Providers {
@@ -349,4 +353,29 @@ func validateLocalhostURL(rawURL string) error {
 	default:
 		return fmt.Errorf("host %q not in localhost loopback (refused to probe non-local atlas)", host)
 	}
+}
+
+// routerVersionAtLeast reports whether the router_version string reported by
+// /api/llm/health (e.g. "v2.2") is at least major.minor. Unparseable values are
+// rejected so a malformed response cannot silently pass the check.
+func routerVersionAtLeast(version string, major, minor int) bool {
+	v := strings.TrimSpace(version)
+	v = strings.TrimPrefix(v, "v")
+	v = strings.TrimPrefix(v, "V")
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return false
+	}
+	gotMajor, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	gotMinor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	if gotMajor != major {
+		return gotMajor > major
+	}
+	return gotMinor >= minor
 }

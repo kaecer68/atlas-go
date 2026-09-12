@@ -240,3 +240,22 @@
 | 法規要求「不得讓第三方處理」時 | **B：全供應商一致封鎖** | 只在此時才停用相關 capability（本 ADR 已記錄：這會直接失去功能） |
 
 **為何不是 B**：三家 provider（MiniMax CN / DeepSeek 杭州 / Kimi 北京）同屬一管轄區，逐家封鎖沒有主權收益（ADR-010 的教訓）；且本系統送出的資料不含受監理的個資，「合規」並非真正的約束，真正的約束是營業秘密 —— 而業主已明示接受。
+
+
+#### 追加四（2026-09-12）：Kimi 不再納入 atlas 的 provider 設定（決策，非缺陷）
+
+**決策**：atlas 的執行期**不使用 Kimi provider**，且**不補 `LLM_KIMI_API_KEY`**。理由（業主裁定 + 實測）：
+
+- 本部署僅有 Kimi **coding plan** 訂閱，該 key **無法用於 app-level HTTP 呼叫**（實測 `api.kimi.com/coding/v1` 回 **401**；`api.minimaxi.com` 用同一把 key 則 200）—— 補了也無法生效。
+- 既有的 `code_review_annotation` / `prompt_lint` 以 kimi 為 primary 的鏈，等於**永久不可達**：每次呼叫都會在 span 留下 `llm.skipped_providers=[kimi]`，並讓 `FallbackTriggeredTotal` 無意義地 +1，也讓「要不要補 key」這個問題反覆出現。
+
+**處置**：
+
+1. `defaultRoutingTable()` 與 `configs/llm_router.yaml` 的兩個 code capability 改為 **`minimax` → `deepseek` →（空）→ `mock`**（與敘事群組同型，2 層鏈）。
+2. `cmd/atlas`、`cmd/lint-pr`、`cmd/lint-prompts` **移除 Kimi 的 provider 註冊**（先前在 key 存在時註冊）。
+3. **保留** `clients.KimiClient`、`adapters.KimiAdapter` 與 ADR-009 的 `kimiAllowedCaps` 能力 guard（程式碼與測試不動）—— 若日後取得可用於應用流量的 Kimi/Moonshot API key，只需在 `router.go` + `configs/llm_router.yaml` 各加回一行，並恢復註冊。
+4. `docs/specs/llm-routing-spec.md` §6.1 更新；`~/.config/atlas-go/.env`（兩台機器）註解同步為「本部署不使用 Kimi」。
+
+**與 ADR-009 的關係**：ADR-009（K2.7 僅限 code capability）仍然有效且**未被推翻** —— 本追加只是說「本部署沒有可用的 Kimi key，因此鏈上不放它」；若未來有可用 key，K2.7 仍只應服務 code capability。
+
+**開發環境（prime-agent / LiteLLM）**：Kimi 月額度用罄，約兩週後自動恢復；那與 atlas 執行期無關（不同 key/用途）。
