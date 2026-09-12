@@ -2266,13 +2266,11 @@ func run(args []string, deps appDeps) error {
 				}
 				return llmAdapters.NewMiniMaxAdapter(c)
 			})
-			registerProvider("LLM_KIMI_API_KEY", func(apiKey string) llm.ProviderImpl {
-				c := clients.NewKimiClient(apiKey, nil)
-				if collector != nil {
-					c.Metrics = collector
-				}
-				return llmAdapters.NewKimiAdapter(c)
-			})
+			// Kimi is intentionally not registered: the deployment's Kimi
+			// subscription is a coding plan whose key cannot be used for
+			// app-level HTTP calls (ADR-012 addendum 4, 2026-09-12). The client
+			// and the ADR-009 capability guard remain in internal/llm for a
+			// future key that works for application traffic.
 
 			// Wire 4 module hooks (only if flag enabled AND Router exists)
 			if cfg.LLMRationaleTranslationEnabled {

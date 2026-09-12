@@ -33,8 +33,9 @@
 
 **三個群組（ADR-012）**：
 - **敘事 / 解釋 JSON（9 個，primary = MiniMax M3）**：`failure_attribution`、`rationale_generation`、`regime_explanation`、`sentiment_explanation`、`confidence_commentary`、`performance_forensics`、`risk_surface_extraction`、`scenario_simulation`、`strategy_summary`。M3 走訂閱額度（邊際成本低）且繁中金融敘事為其強項；backup1 一律為 `deepseek (deepseek-flash)`。
-- **程式碼（2 個，primary = kimi `kimi-for-coding`）**：`code_review_annotation`、`prompt_lint`。ADR-009 的能力 guard 使這兩個 capability 僅 kimi 可承接；未設定 kimi key 時 Router 自動落到 backup1（M3），再落到 backup2（deepseek-flash）。這是唯一使用完整三層鏈的群組。
-  - **production 現況（2026-09-11 起，屬預期）**：iMac 的 `.env` **未設 `LLM_KIMI_API_KEY`**（Kimi coding plan 月額度用罄；額度恢復後才會設回）。因此 code 群組在 production 會**跳過 kimi**（出現於 span 的 `llm.skipped_providers`）並由 M3 承接，`FallbackTriggeredTotal` 每次 +1。`cmd/lint-pr` / `cmd/lint-prompts` 已在 key 存在時註冊 Kimi adapter，所以 key 一旦設回，primary 立即生效，不需改程式。
+- **程式碼（2 個，primary = MiniMax M3）**：`code_review_annotation`、`prompt_lint` → `minimax (M3)` → `deepseek (deepseek-flash)` →（空）→ `mock`。
+  - **Kimi 已自鏈上移除（ADR-012 追加四，2026-09-12，決策非缺陷）**：本部署只有 Kimi coding plan 訂閱，該 key 無法用於 app-level HTTP 呼叫（實測 `api.kimi.com/coding/v1` 回 401），因此 kimi primary 永久不可達；留著只會產生 `llm.skipped_providers=[kimi]` 與無意義的 `FallbackTriggeredTotal`。
+  - `clients.KimiClient` / `adapters.KimiAdapter` / ADR-009 的 `kimiAllowedCaps` 能力 guard **仍保留**：若日後取得可用於應用流量的 Kimi key，只需在 `internal/llm/router.go` 與 `configs/llm_router.yaml` 各加回一行並恢復 provider 註冊。
 - **`contra_attribution`（對抗式敘事分析，第 12 個 capability）**：與敘事群組同鏈（primary minimax / backup1 deepseek / backup2 空 / last_resort mock）。目前**無 handler 實作**，故無 `max_tokens` 可校準。
 - 全域 fallback 模型名一律用 canonical `deepseek-flash`（= DeepSeek-V4.1-Flash）；`deepseek-v4-pro` / `deepseek-pro` **已退役**，不得再作為派遣或預設模型（ADR-012）。
 

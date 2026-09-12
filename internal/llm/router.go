@@ -295,19 +295,30 @@ func defaultRoutingTable() RouterConfig {
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.code_review_annotation
-			//   kimi-for-coding → M3 → deepseek-flash → empty
+			//   M3 → deepseek-flash → empty
+			//
+			// Kimi is deliberately NOT in this chain (ADR-012 addendum 4,
+			// 2026-09-12): the deployment only has a Kimi *coding-plan*
+			// subscription, whose key cannot be used for app-level HTTP calls
+			// (verified 401 against api.kimi.com), so a kimi primary was
+			// permanently unreachable and only produced skipped-provider noise.
+			// The Kimi client + ADR-009 capability guard stay in the tree; if a
+			// Kimi/Moonshot API key that works for application traffic is ever
+			// provisioned, restore the kimi entry here and in
+			// configs/llm_router.yaml.
 			CapabilityCodeReviewAnnotation: {
-				Primary:    ProviderKimi,
-				Backup1:    ProviderMiniMax,
-				Backup2:    ProviderDeepSeek,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: dev.prompt_lint
-			//   kimi-for-coding → M3 → deepseek-flash → pass
+			//   M3 → deepseek-flash → pass (see the code_review_annotation
+			//   comment above for why Kimi is not in this chain)
 			CapabilityPromptLint: {
-				Primary:    ProviderKimi,
-				Backup1:    ProviderMiniMax,
-				Backup2:    ProviderDeepSeek,
+				Primary:    ProviderMiniMax,
+				Backup1:    ProviderDeepSeek,
+				Backup2:    "",
 				LastResort: ProviderMock,
 			},
 			// doc §6.1: narrative.rationale_translation_fallback

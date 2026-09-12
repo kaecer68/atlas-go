@@ -384,16 +384,20 @@ func TestDefaultRoutingTable_Groups(t *testing.T) {
 		}
 	}
 
+	// Code capabilities are M3-first: Kimi was removed from the chain on
+	// 2026-09-12 (ADR-012 addendum 4) because the deployment's Kimi coding-plan
+	// key cannot be used for app-level HTTP calls, which made a kimi primary
+	// permanently unreachable. See TestDefaultRoutingTable_KimiNotInAnyChain.
 	for _, cap := range []Capability{CapabilityCodeReviewAnnotation, CapabilityPromptLint} {
 		chain := cfg.RoutingChains[cap]
-		if chain.Primary != ProviderKimi {
-			t.Errorf("%s: primary = %q, want %q", cap, chain.Primary, ProviderKimi)
+		if chain.Primary != ProviderMiniMax {
+			t.Errorf("%s: primary = %q, want %q", cap, chain.Primary, ProviderMiniMax)
 		}
-		if chain.Backup1 != ProviderMiniMax {
-			t.Errorf("%s: backup1 = %q, want %q", cap, chain.Backup1, ProviderMiniMax)
+		if chain.Backup1 != ProviderDeepSeek {
+			t.Errorf("%s: backup1 = %q, want %q", cap, chain.Backup1, ProviderDeepSeek)
 		}
-		if chain.Backup2 != ProviderDeepSeek {
-			t.Errorf("%s: backup2 = %q, want %q", cap, chain.Backup2, ProviderDeepSeek)
+		if chain.Backup2 != "" {
+			t.Errorf("%s: backup2 = %q, want empty (2-tier)", cap, chain.Backup2)
 		}
 	}
 
@@ -488,6 +492,19 @@ func TestAllCapabilitiesMatchesConstants(t *testing.T) {
 		seen[c] = true
 		if !isKnownCapability(c) {
 			t.Errorf("%q is not known to isKnownCapability", c)
+		}
+	}
+}
+
+// TestDefaultRoutingTable_KimiNotInAnyChain pins the ADR-012 addendum 4
+// decision: no capability routes to Kimi in this deployment, because the
+// available Kimi subscription is a coding plan whose key cannot be used for
+// app-level HTTP calls. Re-adding a kimi entry is a deliberate 2-file change
+// (internal/llm/router.go + configs/llm_router.yaml) once a usable key exists.
+func TestDefaultRoutingTable_KimiNotInAnyChain(t *testing.T) {
+	for cap, chain := range defaultRoutingTable().RoutingChains {
+		if chain.Primary == ProviderKimi || chain.Backup1 == ProviderKimi || chain.Backup2 == ProviderKimi {
+			t.Errorf("%s: kimi must not appear in the chain (%+v)", cap, chain)
 		}
 	}
 }
