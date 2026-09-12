@@ -142,6 +142,11 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 - 多模態（可讀圖）與 1M context；`max_tokens` 需 ≥ reasoning 最低預算（§6.1a），否則回空輸出（§6.3a）。
 - 模型名可由環境變數 `LLM_DEEPSEEK_MODEL` 覆寫（預設 `deepseek-flash`）。
 
+**資料主權政策（ADR-012 追加三，2026-09-12 定案）**：
+- 採 **A 案**：不因 `DataClass` 封鎖任何 provider（業主已接受「策略內部邏輯外流」風險）。
+- 稽核機制：`AttemptedProviders`（僅列實際呼叫者）、span `llm.skipped_providers`、`llm.data_class` / `llm.data_class_name`。
+- 升級條件：某 capability payload 被判定含關鍵營業秘密 → 對該 capability 做去識別化（D）；業主要求完全不出境且保留功能 → self-host（C）；法規強制 → 全封鎖（B）。
+
 **回應正規化（所有 provider client）**：
 - MiniMax M3 的 CN OpenAI-compatible endpoint 把 native thinking **內嵌在 `message.content`**（`<think>…</think>` + 真正答案），已在 `internal/llm/clients` 與 `internal/llm_annotator` 的 client 剝除；未剝除會讓 JSON-first capability 解析失敗並落到 raw-string fallback（使用者看到推理文字）。
 - 若 thinking 被 `max_tokens` 截斷（有 `<think>` 無 `</think>`），剝除後為空 → 依 §6.3a 視為該 provider 失敗，續試下一鏈成員。
