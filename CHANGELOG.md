@@ -4,6 +4,16 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### chore(ops): iMac watchdog 腳本納入版控（+ 漂移檢查與安裝 target）（2026-09-12）
+- **問題**：`atlas-container-watchdog.sh` 是 iMac 唯一的自動復原機制，但只存在於 iMac 的 `~/bin/`（未版控）→ 無法回答「iMac 上跑的是哪一版、有沒有漂移」。2026-09-12 我改了它的內容（新增 restart ledger）之後，這個問題更明顯：改動只存在單一機器上。
+- **正本**：`scripts/ops/imac-container-watchdog.sh`（腳本）與 `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist`（launchd job）。
+- **Makefile**：
+  - `make imac-watchdog-diff` — 比對 repo 正本與 iMac 版的 sha256，不一致 exit 1（漂移檢查）。
+  - `make imac-watchdog-install` — 先備份 iMac 現有版本、scp 正本、`bash -n` 驗語法、重載 launchd，最後再驗一次 sha256。
+- **修正**：順手修掉腳本內 BASELINE 的 printf 格式字串參數不符（shellcheck SC2183）。
+- **文件**：`docs/operations/local-deploy.md` 新增「iMac 容器守護腳本（版控正本）」章節（含指令、腳本行為、判讀方式與 #1901 的關聯）。
+- **實測**：`make imac-watchdog-install` 執行後 `make imac-watchdog-diff` 顯示兩邊 sha256 一致（bb54b6cb…），launchd 已重載。
+
 ### decision(llm): Kimi 自 atlas 路由移除（ADR-012 追加四）（2026-09-12）
 - 業主裁定：atlas 執行期**不使用 Kimi、不補 `LLM_KIMI_API_KEY`** —— 本部署只有 coding plan 訂閱，該 key 無法用於 app-level HTTP 呼叫（實測 `api.kimi.com/coding/v1` → 401，同一把 key 打 `api.minimaxi.com` → 200），補了也無法生效。
 - 處置：`code_review_annotation` / `prompt_lint` 的鏈改為 `minimax → deepseek →（空）→ mock`；`cmd/atlas`、`cmd/lint-pr`、`cmd/lint-prompts` 移除 Kimi provider 註冊；`configs/llm_router.yaml` 同步；新增測試 `TestDefaultRoutingTable_KimiNotInAnyChain`。

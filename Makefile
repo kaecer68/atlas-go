@@ -95,6 +95,37 @@ sync-imac: ## 同步 iMac production clone + 可選部署 (a2a-sync)
 sync-imac-deploy: ## 同步 + 重建部署 atlas 到 iMac
 	@~/bin/a2a-sync --deploy
 
+# ---- iMac 容器守護（正本在 repo；避免 iMac ~/bin 漂移）----
+# 為什麼需要：這支腳本是 iMac 唯一的自動復原機制，過去只存在於 iMac 的 ~/bin（未版控），
+# 無法回答「iMac 上跑的是哪一版」。2026-09-12 起正本為 scripts/ops/imac-container-watchdog.sh。
+IMAC_HOST ?= kk@kimac
+WATCHDOG_SRC := scripts/ops/imac-container-watchdog.sh
+WATCHDOG_DST := /Users/kk/bin/atlas-container-watchdog.sh
+
+.PHONY: imac-watchdog-diff
+imac-watchdog-diff: ## 比對 iMac watchdog 與 repo 正本的 sha256（漂移檢查）
+	@echo "→ repo 正本: $(WATCHDOG_SRC)"
+	@local_sum=$$(shasum -a 256 $(WATCHDOG_SRC) | awk '{print $$1}'); \
+	remote_sum=$$(ssh -o ConnectTimeout=15 $(IMAC_HOST) "shasum -a 256 $(WATCHDOG_DST) 2>/dev/null | awk '{print \$$1}'"); \
+	echo "  repo  = $$local_sum"; \
+	echo "  iMac  = $${remote_sum:-<missing>}"; \
+	if [ "$$local_sum" = "$$remote_sum" ]; then \
+		echo "  ✅ 一致（無漂移）"; \
+	else \
+		echo "  ❌ 不一致 — 執行 make imac-watchdog-install 同步"; exit 1; \
+	fi
+
+.PHONY: imac-watchdog-install
+imac-watchdog-install: ## 安裝 repo 正本到 iMac ~/bin 並重載 launchd
+	@echo "→ 備份 iMac 現有腳本"
+	@ssh -o ConnectTimeout=15 $(IMAC_HOST) "test -f $(WATCHDOG_DST) && cp -p $(WATCHDOG_DST) $(WATCHDOG_DST).bak-\$$(date +%Y%m%dT%H%M%S) || true"
+	@echo "→ 複製 $(WATCHDOG_SRC) → iMac:$(WATCHDOG_DST)"
+	@scp -q $(WATCHDOG_SRC) $(IMAC_HOST):$(WATCHDOG_DST)
+	@ssh -o ConnectTimeout=15 $(IMAC_HOST) "chmod +x $(WATCHDOG_DST) && bash -n $(WATCHDOG_DST) && echo '  ✅ 語法檢查通過'"
+	@echo "→ 重載 launchd job（plist: scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist）"
+	@ssh -o ConnectTimeout=15 $(IMAC_HOST) "launchctl unload ~/Library/LaunchAgents/com.goluck.atlas-container-watchdog.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/com.goluck.atlas-container-watchdog.plist && echo '  ✅ launchd 已重載'"
+	@$(MAKE) --no-print-directory imac-watchdog-diff
+
 
 bump-version:
 	@read -p "Bump from $(VERSION) to (e.g. 0.0.0.30): " v; \
