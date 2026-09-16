@@ -134,6 +134,7 @@ func NewRateLimitManager() *RateLimitManager {
 			"day_trading":            rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin
 			"market_volume":          rate.NewLimiter(TWSEMarginRate, TWSEMarginBurst), // same tier as TWSE margin/day_trading
 			"bdi":                    rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
+			"us_cpi":                 rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst), // CPI-U is monthly; daily cadence is ample
 			"dram_spot_price":        rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"twse_sector_index":      rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),
 			"taifex_daily":           rate.NewLimiter(ExportStatisticsRate, ExportStatisticsBurst),

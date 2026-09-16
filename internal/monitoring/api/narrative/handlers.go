@@ -77,28 +77,24 @@ func parseFloatQuery(r *http.Request, key string) float64 {
 // from the geoProvider inside BuildMarketNarrativeData and can be overridden
 // by query param.
 func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narrative.MarketNarrativeData {
-	data := narrative.MarketNarrativeData{
-		GeopoliticalGPR:               parseFloatQuery(r, "geopolitical_gpr"),
+	// Query-param overrides. Geo/retail/margin/earnings are query-driven: the
+	// snapshot has no retail-divergence / margin-z / earnings-surprise source,
+	// and a non-zero geopolitical_gpr is an explicit manual override.
+	geoOverride := parseFloatQuery(r, "geopolitical_gpr")
+	queryOnly := narrative.MarketNarrativeData{
 		RetailInstitutionalDivergence: parseFloatQuery(r, "retail_divergence"),
 		MarginZScore:                  parseFloatQuery(r, "margin_zscore"),
 		EarningsSurprisePct:           parseFloatQuery(r, "earnings_surprise_pct"),
 	}
 
+	var data narrative.MarketNarrativeData
 	if snapData, err := h.Svc.BuildMarketNarrativeData(ctx); err == nil {
-		data.US10YChangeBps = snapData.US10YChangeBps
-		data.DXYChangePct = snapData.DXYChangePct
-		data.VIXLevel = snapData.VIXLevel
-		data.USD_TWD_ChangePct = snapData.USD_TWD_ChangePct
-		data.OilChangePct = snapData.OilChangePct
-		data.GoldChangePct = snapData.GoldChangePct
-		data.GoldLevel = snapData.GoldLevel
-		data.JPY_ChangePct = snapData.JPY_ChangePct
-		data.JPYLevel = snapData.JPYLevel
-		data.AICapexSentiment = snapData.AICapexSentiment
-		// Overlay geoProvider result with query-param override (manual override wins).
-		if data.GeopoliticalGPR == 0 {
-			data.GeopoliticalGPR = snapData.GeopoliticalGPR
-		}
+		// Take the WHOLE snapshot projection. Copying a hand-picked subset
+		// silently dropped the extended macro fields the first-principles
+		// detectors need (CPIYoY, SPX/NDX/SOX/BDI/copper/DRAM/export), so
+		// us_earnings_boom / inflation_cool / inflation_moderate could never
+		// fire through this endpoint even when the data was present upstream.
+		data = snapData
 	} else {
 		logging.Warn("narrative_handlers", "snapshot_fallback", logging.Err(err))
 		// Graceful degradation: use query-param defaults for missing fields.
@@ -113,6 +109,35 @@ func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narr
 		data.JPYLevel = parseFloatQuery(r, "jpy_level")
 		data.AICapexSentiment = parseFloatQuery(r, "ai_capex_sentiment")
 	}
+
+	if geoOverride != 0 {
+		data.GeopoliticalGPR = geoOverride
+	}
+	// Extended manual overrides (non-zero wins), mirroring geopolitical_gpr.
+	// These make the first-principles detectors deterministically testable in
+	// production acceptance and give operators a debugging lever when a
+	// detector should have fired: /api/narrative/events?cpi_yoy=2.2&spx_change_pct=1.5
+	if v := parseFloatQuery(r, "cpi_yoy"); v != 0 {
+		data.CPIYoY = v
+	}
+	if v := parseFloatQuery(r, "spx_change_pct"); v != 0 {
+		data.SPXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "ndx_change_pct"); v != 0 {
+		data.NDXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "sox_change_pct"); v != 0 {
+		data.SOXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "bdi_change_pct"); v != 0 {
+		data.BDIChangePct = v
+	}
+	if v := parseFloatQuery(r, "copper_change_pct"); v != 0 {
+		data.CopperChangePct = v
+	}
+	data.RetailInstitutionalDivergence = queryOnly.RetailInstitutionalDivergence
+	data.MarginZScore = queryOnly.MarginZScore
+	data.EarningsSurprisePct = queryOnly.EarningsSurprisePct
 	return data
 }
 

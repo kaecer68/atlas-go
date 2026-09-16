@@ -65,6 +65,9 @@ func main() {
 		marketdata.NewAAPLProvider(),
 		marketdata.NewMSFTProvider(),
 		marketdata.NewTaiwanVolatilityProvider(),
+		// us_cpi seeds MacroDataSnapshot.CPIYoY for the narrative inflation
+		// detectors (inflation_cool / inflation_moderate, spec v0.2 §4).
+		marketdata.NewBLSCPIProvider(),
 	)
 
 	ingestor := narrative.NewMacroIngestor(provider, snapshotDir)
@@ -112,6 +115,7 @@ func main() {
 		recordChannel("us_aapl", "us_aapl")
 		recordChannel("us_msft", "us_msft")
 		recordChannel("tw_vol", "tw_vol")
+		recordChannel("us_cpi", "us_cpi")
 		if len(snap.FailedChannels) > 0 {
 			log.Printf("[MacroIngest] partial failure: providers failed=%v", snap.FailedChannels)
 		}

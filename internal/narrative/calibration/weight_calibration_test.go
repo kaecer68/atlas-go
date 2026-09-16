@@ -121,3 +121,75 @@ func writeSyntheticPair(t *testing.T, macroDir, flowDir, date string, foreignNet
 func itoaFloat(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
+
+// TestWeightCalibrationEngine_LoadHistoricalDataAcceptsSuffixedFlowName is a
+// regression guard for the #1780 file rename: the upstream capital-flow writer
+// emits <YYYYMMDD>_capital_flow.json while this loader historically looked for
+// <YYYYMMDD>.json. In production the recent window therefore paired with
+// nothing and `cmd/calibrate-baselines` failed with "no paired macro/flow
+// records found" — so the baselines file could never be bootstrapped and the
+// stress-index directional signal stayed disabled.
+func TestWeightCalibrationEngine_LoadHistoricalDataAcceptsSuffixedFlowName(t *testing.T) {
+	dir := t.TempDir()
+	macroDir := filepath.Join(dir, "data", "state", "macro")
+	flowDir := filepath.Join(dir, "data", "state", "capital_flow")
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(flowDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same writer contract as production: suffixed flow file names.
+	for _, tc := range []struct {
+		date       string
+		foreignNet float64
+	}{
+		{"2026-09-14", -2},
+		{"2026-09-15", 3},
+	} {
+		macro := `{"us10y":{"value":1},"dxy":{"change_pct":1},"vix":{"value":10},"jpy":{"change_pct":0},"gold":{"change_pct":0},"oil":{"change_pct":0},"foreign_investor_net":{"value":` + itoaFloat(tc.foreignNet) + `},"recorded_at":1}`
+		if err := os.WriteFile(filepath.Join(macroDir, tc.date+".json"), []byte(macro), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		flow := `{"date":"` + tc.date + `","foreign_investor_net":` + itoaFloat(tc.foreignNet) + `,"domestic_fund_net":0,"dealer_net":0,"total_net":` + itoaFloat(tc.foreignNet) + `}`
+		suffixed := filepath.Join(flowDir, strings.ReplaceAll(tc.date, "-", "")+"_capital_flow.json")
+		if err := os.WriteFile(suffixed, []byte(flow), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	recs, err := (&WeightCalibrationEngine{}).LoadHistoricalData(dir, 2)
+	if err != nil {
+		t.Fatalf("load historical data failed for suffixed flow files: %v", err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 paired records, got %d", len(recs))
+	}
+	if recs[0].ForeignNet != -2 || recs[1].ForeignNet != 3 {
+		t.Fatalf("unexpected foreign nets: %v, %v", recs[0].ForeignNet, recs[1].ForeignNet)
+	}
+}
+
+// TestWeightCalibrationEngine_LoadHistoricalDataPrefersLegacyFallback verifies
+// the legacy <YYYYMMDD>.json name still loads when no suffixed file exists.
+func TestWeightCalibrationEngine_LoadHistoricalDataPrefersLegacyFallback(t *testing.T) {
+	dir := t.TempDir()
+	macroDir := filepath.Join(dir, "data", "state", "macro")
+	flowDir := filepath.Join(dir, "data", "state", "capital_flow")
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(flowDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSyntheticPair(t, macroDir, flowDir, "2026-05-17", -2)
+
+	recs, err := (&WeightCalibrationEngine{}).LoadHistoricalData(dir, 1)
+	if err != nil {
+		t.Fatalf("legacy flow name should still load: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(recs))
+	}
+}

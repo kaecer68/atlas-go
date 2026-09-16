@@ -90,7 +90,16 @@ func (e *WeightCalibrationEngine) LoadHistoricalData(workDir string, windowDays 
 			return nil, fmt.Errorf("load historical data: unmarshal macro %s: %w", mf.date, err)
 		}
 
-		flowPath := filepath.Join(flowDir, strings.ReplaceAll(mf.date, "-", "")+".json")
+		compactDate := strings.ReplaceAll(mf.date, "-", "")
+		// #1780: the upstream capital-flow writer renamed daily files to
+		// <YYYYMMDD>_capital_flow.json (twse_capital_flow_provider.go). The
+		// legacy <YYYYMMDD>.json name still exists for older history, so accept
+		// both — otherwise the recent window pairs with nothing and calibration
+		// fails with "no paired macro/flow records found".
+		flowPath := filepath.Join(flowDir, compactDate+"_capital_flow.json")
+		if _, statErr := os.Stat(flowPath); statErr != nil {
+			flowPath = filepath.Join(flowDir, compactDate+".json")
+		}
 		flowData, err := os.ReadFile(flowPath)
 		if err != nil {
 			continue

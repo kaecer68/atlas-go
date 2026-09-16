@@ -71,6 +71,20 @@ func QuotesToNarrativeData(quotes []domain.Quote) narrative.MarketNarrativeData 
 			data.GoldChangePct = (q.Last - q.Open) / q.Open * 100
 		case "JPY=X", "USDJPY=X":
 			data.JPY_ChangePct = (q.Last - q.Open) / q.Open * 100
+		case "SPX", "^GSPC":
+			data.SPXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+		case "NDX", "^IXIC":
+			data.NDXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+		case "DJI", "^DJI":
+			data.DJIIndexChangePct = (q.Last - q.Open) / q.Open * 100
+		case "SOX", "^SOX":
+			data.SOXIndexChangePct = (q.Last - q.Open) / q.Open * 100
+		case "BDI":
+			data.BDIChangePct = (q.Last - q.Open) / q.Open * 100
+		case "COPPER", "HG=F":
+			data.CopperChangePct = (q.Last - q.Open) / q.Open * 100
+		case "TSM", "TSMADR":
+			data.TSMADRChangePct = (q.Last - q.Open) / q.Open * 100
 		}
 	}
 	return data

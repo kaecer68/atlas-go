@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/domain/recommendation"
 	"github.com/kaecer68/atlas-go/internal/domain/shared"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -72,5 +73,46 @@ func TestApplyNarrativeContextWithEvents_NoEventsNoop(t *testing.T) {
 	}
 	if enriched[0].Reason != "plain" {
 		t.Errorf("expected unchanged reason, got %q", enriched[0].Reason)
+	}
+}
+
+// TestQuotesToNarrativeData_ExtendedIndexSymbols guards the wiring for the
+// us_earnings_boom detector (spec v0.2 §4.6): the orchestrator's quote→
+// narrative projection only mapped 6 macro symbols, so SPX/NDX (and the other
+// extended fields) stayed 0 and the detector could never fire in the engine
+// path even though the quotes carried the data.
+func TestQuotesToNarrativeData_ExtendedIndexSymbols(t *testing.T) {
+	quotes := []domain.Quote{
+		{Symbol: "^GSPC", Last: 7616, Open: 7503},
+		{Symbol: "^IXIC", Last: 26186, Open: 25892},
+		{Symbol: "^DJI", Last: 46000, Open: 45900},
+		{Symbol: "^SOX", Last: 5300, Open: 5250},
+		{Symbol: "BDI", Last: 1950, Open: 1900},
+		{Symbol: "HG=F", Last: 4.2, Open: 4.15},
+		{Symbol: "TSM", Last: 210, Open: 208},
+	}
+
+	data := QuotesToNarrativeData(quotes)
+
+	if data.SPXIndexChangePct <= 1.0 {
+		t.Errorf("SPXIndexChangePct = %v, want > 1.0", data.SPXIndexChangePct)
+	}
+	if data.NDXIndexChangePct <= 0 {
+		t.Errorf("NDXIndexChangePct = %v, want > 0", data.NDXIndexChangePct)
+	}
+	if data.DJIIndexChangePct == 0 {
+		t.Error("DJIIndexChangePct not mapped")
+	}
+	if data.SOXIndexChangePct == 0 {
+		t.Error("SOXIndexChangePct not mapped")
+	}
+	if data.BDIChangePct == 0 {
+		t.Error("BDIChangePct not mapped")
+	}
+	if data.CopperChangePct == 0 {
+		t.Error("CopperChangePct not mapped")
+	}
+	if data.TSMADRChangePct == 0 {
+		t.Error("TSMADRChangePct not mapped")
 	}
 }

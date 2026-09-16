@@ -545,6 +545,7 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	live("tej", []string{"TEJ"}, 24*time.Hour)
 	live("exchange_rate", []string{"Frankfurter"}, 24*time.Hour)
 	live("sox_index", []string{"SOX"}, 24*time.Hour)
+	live("us_cpi", []string{"BLS"}, 24*time.Hour)
 	live("dram_spot_price", []string{"DRAM"}, 24*time.Hour)
 	live("twse_sector_index", []string{"TWSE"}, 24*time.Hour)
 	live("day_trading", []string{"TWSE"}, 24*time.Hour)

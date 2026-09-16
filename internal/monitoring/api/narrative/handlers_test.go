@@ -634,3 +634,173 @@ func TestHandleNarrativeModelInventory(t *testing.T) {
 		t.Error("expected workflow in inventory")
 	}
 }
+
+// extendedMacroProvider returns a snapshot carrying the extended macro fields
+// (CPI / SPX / NDX / SOX / BDI / copper / TSM ADR) that the first-principles
+// detectors consume.
+type extendedMacroProvider struct{}
+
+func (extendedMacroProvider) Name() string { return "test-extended-snapshot" }
+func (extendedMacroProvider) FetchSnapshot(_ context.Context) (marketdata.MacroDataSnapshot, error) {
+	now := time.Now().Unix()
+	return marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Symbol: "DXY", Value: 104.5, ChangePct: 0.3, Timestamp: now},
+		US10Y:              marketdata.MacroDataPoint{Symbol: "^TNX", Value: 4.32, ChangePct: 0.05, Timestamp: now},
+		VIX:                marketdata.MacroDataPoint{Symbol: "^VIX", Value: 15.0, ChangePct: -1.0, Timestamp: now},
+		SPXIndex:           marketdata.MacroDataPoint{Symbol: "^GSPC", Value: 7600, ChangePct: 1.5, Timestamp: now},
+		NDXIndex:           marketdata.MacroDataPoint{Symbol: "^IXIC", Value: 26000, ChangePct: 1.1, Timestamp: now},
+		SOXIndex:           marketdata.MacroDataPoint{Symbol: "^SOX", Value: 5200, ChangePct: 2.0, Timestamp: now},
+		Bdi:                marketdata.MacroDataPoint{Symbol: "BDI", Value: 1900, ChangePct: 4.0, Timestamp: now},
+		Copper:             marketdata.MacroDataPoint{Symbol: "HG=F", Value: 4.1, ChangePct: 1.2, Timestamp: now},
+		CPIYoY:             marketdata.MacroDataPoint{Symbol: "CPIAUCSL", Value: 2.2, ChangePct: -0.1, Timestamp: now},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "FOREIGN_NET", Value: -10, Timestamp: now},
+	}, nil
+}
+
+// TestBuildNarrativeData_SnapshotSuccessPath_ExtendedFieldsCarryThrough is a
+// regression guard for a wiring gap found during iMac production acceptance
+// (2026-09-16): buildNarrativeData copied a hand-picked subset of the snapshot
+// projection, so CPIYoY / SPXIndexChangePct / NDXIndexChangePct were always 0
+// and the us_earnings_boom / inflation_cool / inflation_moderate detectors
+// could never fire through this endpoint.
+func TestBuildNarrativeData_SnapshotSuccessPath_ExtendedFieldsCarryThrough(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(extendedMacroProvider{})
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/events", nil)
+	data := h.buildNarrativeData(req.Context(), req)
+
+	if data.SPXIndexChangePct != 1.5 {
+		t.Errorf("SPXIndexChangePct = %v, want 1.5", data.SPXIndexChangePct)
+	}
+	if data.NDXIndexChangePct != 1.1 {
+		t.Errorf("NDXIndexChangePct = %v, want 1.1", data.NDXIndexChangePct)
+	}
+	if data.CPIYoY != 2.2 {
+		t.Errorf("CPIYoY = %v, want 2.2", data.CPIYoY)
+	}
+	if data.SOXIndexChangePct != 2.0 {
+		t.Errorf("SOXIndexChangePct = %v, want 2.0", data.SOXIndexChangePct)
+	}
+	if data.BDIChangePct != 4.0 {
+		t.Errorf("BDIChangePct = %v, want 4.0", data.BDIChangePct)
+	}
+	if data.CopperChangePct != 1.2 {
+		t.Errorf("CopperChangePct = %v, want 1.2", data.CopperChangePct)
+	}
+	// Core fields must keep working (whole-snapshot passthrough regression).
+	if data.DXYChangePct == 0 || data.VIXLevel == 0 {
+		t.Errorf("core fields lost: dxy=%v vix=%v", data.DXYChangePct, data.VIXLevel)
+	}
+}
+
+// TestBuildNarrativeData_QueryOverridesWinOverSnapshot ensures the query-param
+// contract survived the whole-snapshot passthrough refactor.
+func TestBuildNarrativeData_QueryOverridesWinOverSnapshot(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(extendedMacroProvider{})
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/narrative/events?geopolitical_gpr=42&retail_divergence=0.7&margin_zscore=1.4&earnings_surprise_pct=3.5", nil)
+	data := h.buildNarrativeData(req.Context(), req)
+
+	if data.GeopoliticalGPR != 42 {
+		t.Errorf("geopolitical_gpr override lost: got %v", data.GeopoliticalGPR)
+	}
+	if data.RetailInstitutionalDivergence != 0.7 {
+		t.Errorf("retail_divergence lost: got %v", data.RetailInstitutionalDivergence)
+	}
+	if data.MarginZScore != 1.4 {
+		t.Errorf("margin_zscore lost: got %v", data.MarginZScore)
+	}
+	if data.EarningsSurprisePct != 3.5 {
+		t.Errorf("earnings_surprise_pct lost: got %v", data.EarningsSurprisePct)
+	}
+	// Snapshot-only fields must still be present alongside the overrides.
+	if data.SPXIndexChangePct != 1.5 {
+		t.Errorf("snapshot extended field lost when overrides present: got %v", data.SPXIndexChangePct)
+	}
+}
+
+// TestHandleNarrativeEvents_ExtendedSnapshotFiresUSEarningsBoom proves the
+// wiring end-to-end: with SPX +1.5%% / NDX +1.1%% / VIX 15 in the snapshot, the
+// us_earnings_boom detector now fires through the HTTP endpoint.
+func TestHandleNarrativeEvents_ExtendedSnapshotFiresUSEarningsBoom(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(extendedMacroProvider{})
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/narrative/events", nil)
+	_, body := h.HandleNarrativeEvents(req)
+
+	m, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected body type %T", body)
+	}
+	events, ok := m["events"].([]narrative.NarrativeEvent)
+	if !ok {
+		t.Fatalf("unexpected events type %T", m["events"])
+	}
+	var found bool
+	for _, e := range events {
+		if e.Theme == "us_earnings_boom" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("us_earnings_boom did not fire with SPX/NDX/VIX provided; themes=%v", themesOf(events))
+	}
+}
+
+func themesOf(events []narrative.NarrativeEvent) []string {
+	out := make([]string, 0, len(events))
+	for _, e := range events {
+		out = append(out, e.Theme)
+	}
+	return out
+}
+
+// TestBuildNarrativeData_ExtendedOverrides verifies the operator/debug overrides
+// for the extended macro fields (non-zero wins), which make first-principles
+// detectors deterministically verifiable in production acceptance.
+func TestBuildNarrativeData_ExtendedOverrides(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(extendedMacroProvider{})
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/narrative/events?cpi_yoy=1.8&spx_change_pct=2.5&ndx_change_pct=1.7&sox_change_pct=3.1&bdi_change_pct=9.9&copper_change_pct=-4.4", nil)
+	data := h.buildNarrativeData(req.Context(), req)
+
+	if data.CPIYoY != 1.8 {
+		t.Errorf("cpi_yoy override = %v, want 1.8", data.CPIYoY)
+	}
+	if data.SPXIndexChangePct != 2.5 {
+		t.Errorf("spx_change_pct override = %v, want 2.5", data.SPXIndexChangePct)
+	}
+	if data.NDXIndexChangePct != 1.7 {
+		t.Errorf("ndx_change_pct override = %v, want 1.7", data.NDXIndexChangePct)
+	}
+	if data.SOXIndexChangePct != 3.1 {
+		t.Errorf("sox_change_pct override = %v, want 3.1", data.SOXIndexChangePct)
+	}
+	if data.BDIChangePct != 9.9 {
+		t.Errorf("bdi_change_pct override = %v, want 9.9", data.BDIChangePct)
+	}
+	if data.CopperChangePct != -4.4 {
+		t.Errorf("copper_change_pct override = %v, want -4.4", data.CopperChangePct)
+	}
+
+	// Absent overrides must fall back to the snapshot values.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/narrative/events", nil)
+	data2 := h.buildNarrativeData(req2.Context(), req2)
+	if data2.CPIYoY != 2.2 || data2.SPXIndexChangePct != 1.5 {
+		t.Errorf("snapshot values not preserved without overrides: cpi=%v spx=%v", data2.CPIYoY, data2.SPXIndexChangePct)
+	}
+}
