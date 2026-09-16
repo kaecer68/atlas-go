@@ -98,9 +98,13 @@ func (p *BLSCPIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 	// Decoded with an inline anonymous struct on purpose: gentags emits any
 	// file-scope struct that carries json tags into the frontend type bundle,
 	// and these BLS wire types are not part of the API surface.
+	// NOTE: the BLS API returns "message" as an ARRAY of strings (empty on
+	// success, e.g. ["Series does not exist"] on failure) — see the production
+	// failure "cannot unmarshal array into Go struct field .message of type
+	// string" (2026-09-16). Typed as []string on purpose.
 	var wire struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
+		Status  string   `json:"status"`
+		Message []string `json:"message"`
 		Results struct {
 			Series []struct {
 				Data []struct {
@@ -115,7 +119,7 @@ func (p *BLSCPIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, 
 		return MacroDataSnapshot{}, fmt.Errorf("us_cpi unmarshal: %w", err)
 	}
 	if wire.Status != "REQUEST_SUCCEEDED" {
-		return MacroDataSnapshot{}, fmt.Errorf("us_cpi bls status %q: %s", wire.Status, wire.Message)
+		return MacroDataSnapshot{}, fmt.Errorf("us_cpi bls status %q: %s", wire.Status, strings.Join(wire.Message, "; "))
 	}
 	if len(wire.Results.Series) == 0 {
 		return MacroDataSnapshot{}, fmt.Errorf("us_cpi: empty series in response")
