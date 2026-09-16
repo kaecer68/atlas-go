@@ -764,3 +764,43 @@ func themesOf(events []narrative.NarrativeEvent) []string {
 	}
 	return out
 }
+
+// TestBuildNarrativeData_ExtendedOverrides verifies the operator/debug overrides
+// for the extended macro fields (non-zero wins), which make first-principles
+// detectors deterministically verifiable in production acceptance.
+func TestBuildNarrativeData_ExtendedOverrides(t *testing.T) {
+	eng := narrative.NewNarrativeEngine()
+	svc := service.NewNarrativeService(t.TempDir(), eng, nil)
+	svc.SetMacroProvider(extendedMacroProvider{})
+	h := &Handlers{Svc: svc}
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/narrative/events?cpi_yoy=1.8&spx_change_pct=2.5&ndx_change_pct=1.7&sox_change_pct=3.1&bdi_change_pct=9.9&copper_change_pct=-4.4", nil)
+	data := h.buildNarrativeData(req.Context(), req)
+
+	if data.CPIYoY != 1.8 {
+		t.Errorf("cpi_yoy override = %v, want 1.8", data.CPIYoY)
+	}
+	if data.SPXIndexChangePct != 2.5 {
+		t.Errorf("spx_change_pct override = %v, want 2.5", data.SPXIndexChangePct)
+	}
+	if data.NDXIndexChangePct != 1.7 {
+		t.Errorf("ndx_change_pct override = %v, want 1.7", data.NDXIndexChangePct)
+	}
+	if data.SOXIndexChangePct != 3.1 {
+		t.Errorf("sox_change_pct override = %v, want 3.1", data.SOXIndexChangePct)
+	}
+	if data.BDIChangePct != 9.9 {
+		t.Errorf("bdi_change_pct override = %v, want 9.9", data.BDIChangePct)
+	}
+	if data.CopperChangePct != -4.4 {
+		t.Errorf("copper_change_pct override = %v, want -4.4", data.CopperChangePct)
+	}
+
+	// Absent overrides must fall back to the snapshot values.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/narrative/events", nil)
+	data2 := h.buildNarrativeData(req2.Context(), req2)
+	if data2.CPIYoY != 2.2 || data2.SPXIndexChangePct != 1.5 {
+		t.Errorf("snapshot values not preserved without overrides: cpi=%v spx=%v", data2.CPIYoY, data2.SPXIndexChangePct)
+	}
+}

@@ -113,6 +113,28 @@ func (h *Handlers) buildNarrativeData(ctx context.Context, r *http.Request) narr
 	if geoOverride != 0 {
 		data.GeopoliticalGPR = geoOverride
 	}
+	// Extended manual overrides (non-zero wins), mirroring geopolitical_gpr.
+	// These make the first-principles detectors deterministically testable in
+	// production acceptance and give operators a debugging lever when a
+	// detector should have fired: /api/narrative/events?cpi_yoy=2.2&spx_change_pct=1.5
+	if v := parseFloatQuery(r, "cpi_yoy"); v != 0 {
+		data.CPIYoY = v
+	}
+	if v := parseFloatQuery(r, "spx_change_pct"); v != 0 {
+		data.SPXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "ndx_change_pct"); v != 0 {
+		data.NDXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "sox_change_pct"); v != 0 {
+		data.SOXIndexChangePct = v
+	}
+	if v := parseFloatQuery(r, "bdi_change_pct"); v != 0 {
+		data.BDIChangePct = v
+	}
+	if v := parseFloatQuery(r, "copper_change_pct"); v != 0 {
+		data.CopperChangePct = v
+	}
 	data.RetailInstitutionalDivergence = queryOnly.RetailInstitutionalDivergence
 	data.MarginZScore = queryOnly.MarginZScore
 	data.EarningsSurprisePct = queryOnly.EarningsSurprisePct
