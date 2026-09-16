@@ -386,6 +386,70 @@ func (d *tariffShockDetector) Detect(_ context.Context, in DetectorInput) (*Dete
 func (d *tariffShockDetector) PeriodWeight(period domain.MarketPeriod) float64 { return 1.5 }
 
 // ----------------------------------------------------------------------------
+// First-principles causal chains (L5/L6/L7/L8) — spec v0.2 §4.
+// KB pipeline detectors: inflation_cool / us_earnings_boom / inflation_moderate
+// / dollar_softening. Snapshot pipeline: conflict_deescalation.
+// ----------------------------------------------------------------------------
+
+type inflationCoolDetector struct{ baseDetector }
+
+func newInflationCoolDetector() *inflationCoolDetector {
+	return &inflationCoolDetector{baseDetector{theme: "inflation_cool", source: SourceKB, enabled: true}}
+}
+
+func (d *inflationCoolDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
+	return narrativeEventToResult(detectInflationCoolEvent(in.MarketData), d.source), nil
+}
+
+type usEarningsBoomDetector struct{ baseDetector }
+
+func newUSEarningsBoomDetector() *usEarningsBoomDetector {
+	return &usEarningsBoomDetector{baseDetector{theme: "us_earnings_boom", source: SourceKB, enabled: true}}
+}
+
+func (d *usEarningsBoomDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
+	return narrativeEventToResult(detectUSEarningsBoomEvent(in.MarketData), d.source), nil
+}
+
+type inflationModerateDetector struct{ baseDetector }
+
+func newInflationModerateDetector() *inflationModerateDetector {
+	return &inflationModerateDetector{baseDetector{theme: "inflation_moderate", source: SourceKB, enabled: true}}
+}
+
+func (d *inflationModerateDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
+	return narrativeEventToResult(detectInflationModerateEvent(in.MarketData), d.source), nil
+}
+
+type dollarSofteningDetector struct{ baseDetector }
+
+func newDollarSofteningDetector() *dollarSofteningDetector {
+	return &dollarSofteningDetector{baseDetector{theme: "dollar_softening", source: SourceKB, enabled: true}}
+}
+
+func (d *dollarSofteningDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
+	return narrativeEventToResult(detectDollarSofteningEvent(in.MarketData), d.source), nil
+}
+
+// conflictDeescalationDetector runs on the snapshot pipeline (SourceIngestor):
+// ceasefire imprint = energy down + gold down + VIX falling (single snapshot).
+// GPR has no history in the snapshot path, so no GPR-trend condition here.
+type conflictDeescalationDetector struct{ baseDetector }
+
+func newConflictDeescalationDetector() *conflictDeescalationDetector {
+	return &conflictDeescalationDetector{baseDetector{theme: "conflict_deescalation", source: SourceIngestor, enabled: true}}
+}
+
+func (d *conflictDeescalationDetector) Detect(_ context.Context, in DetectorInput) (*DetectionResult, error) {
+	snap := in.MacroSnapshot
+	if snap.Oil.Symbol == "" && snap.Gold.Symbol == "" && snap.VIX.Symbol == "" {
+		return nil, nil
+	}
+	evt := detectConflictDeescalationEventFromSnapshot(snap.Oil, snap.Gold, snap.VIX, detectNow(in))
+	return narrativeEventToResult(evt, d.source), nil
+}
+
+// ----------------------------------------------------------------------------
 // Public constructor — registers all 24 detectors, default-enabled.
 // ----------------------------------------------------------------------------
 
@@ -418,6 +482,11 @@ func NewDefaultDetectorRegistry() *DetectorRegistry {
 	r.MustRegister(newShippingRateSpikeDetector())
 	r.MustRegister(newChinaSlowdownDetector())
 	r.MustRegister(newTaiwanExportBoomDetector())
+	// KB pipeline — first-principles causal chains (spec v0.2 §4)
+	r.MustRegister(newInflationCoolDetector())
+	r.MustRegister(newUSEarningsBoomDetector())
+	r.MustRegister(newInflationModerateDetector())
+	r.MustRegister(newDollarSofteningDetector())
 	// Seasonal — all share detectSeasonalEvent(), filtered by theme
 	r.MustRegister(newSpringFestivalSeasonDetector())
 	r.MustRegister(newElectionCycleDetector())
@@ -425,8 +494,9 @@ func NewDefaultDetectorRegistry() *DetectorRegistry {
 	r.MustRegister(newTechPeakSeasonDetector())
 	r.MustRegister(newYearEndWindowDressingDetector())
 	r.MustRegister(newDividendSeasonDetector())
-	// Snapshot pipeline — only theme without a KB equivalent
+	// Snapshot pipeline — themes without a KB equivalent
 	r.MustRegister(newTariffShockDetector())
+	r.MustRegister(newConflictDeescalationDetector())
 	return r
 }
 
@@ -453,6 +523,11 @@ var (
 	_ Detector = (*taiwanExportBoomDetector)(nil)
 	_ Detector = (*seasonalThemeDetector)(nil)
 	_ Detector = (*tariffShockDetector)(nil)
+	_ Detector = (*inflationCoolDetector)(nil)
+	_ Detector = (*usEarningsBoomDetector)(nil)
+	_ Detector = (*inflationModerateDetector)(nil)
+	_ Detector = (*dollarSofteningDetector)(nil)
+	_ Detector = (*conflictDeescalationDetector)(nil)
 	// marketdata import kept referenced so go.mod / IDE stays consistent
 	_ = marketdata.MacroDataSnapshot{}
 )

@@ -24,7 +24,7 @@ import (
 // allExpectedThemes is the canonical list of 24 trigger themes registered by
 // NewDefaultDetectorRegistry(). Order is irrelevant; the test checks presence.
 var allExpectedThemes = []string{
-	// KB-pipeline (17)
+	// KB-pipeline (21)
 	"US_rates_up",
 	"US_rates_down",
 	"JPY_carry_unwind",
@@ -49,8 +49,14 @@ var allExpectedThemes = []string{
 	"tech_peak_season",
 	"year_end_window_dressing",
 	"dividend_season",
-	// Snapshot-pipeline (1)
+	// KB-pipeline — first-principles causal chains (spec v0.2 §4)
+	"inflation_cool",
+	"us_earnings_boom",
+	"inflation_moderate",
+	"dollar_softening",
+	// Snapshot-pipeline (2)
 	"tariff_shock",
+	"conflict_deescalation",
 }
 
 func TestNewDefaultDetectorRegistry_AllThemesRegistered(t *testing.T) {

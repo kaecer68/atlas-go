@@ -1,6 +1,6 @@
 # internal/narrative/AGENTS.md
 
-**模組快照**：敘事引擎 + KB-pipeline / snapshot-pipeline / InvestmentModel + 24 個 CausalTemplate + DetectorRegistry 抽象層（Stage 5 新增）
+**模組快照**：敘事引擎 + KB-pipeline / snapshot-pipeline / InvestmentModel + 29 個 CausalTemplate（含 2026-09-16 五條第一性因果鏈，spec v0.2）+ DetectorRegistry 抽象層（Stage 5 新增）
 
 ## 核心抽象（Stage 5 重點）
 
@@ -10,7 +10,7 @@
 | `DetectorRegistry` | `detector.go` | 統一註冊 + 並發呼叫所有 enabled detectors |
 | `DetectionResult` | `detector.go` | 統一輸出 (Theme/Severity/Confidence/Source/Metadata)；`ToNarrativeEvent()` 向後相容 |
 | `DetectorInput` | `detector.go` | 同時承載 `MarketNarrativeData` (KB) 與 `MacroDataSnapshot` (snapshot) |
-| `CausalTemplate` | `templates.go` | 24 個 trigger_theme 的硬編碼模板（`DefaultTemplates()`） |
+| `CausalTemplate` | `templates.go` | 29 個 trigger_theme 的硬編碼模板（`DefaultTemplates()`） |
 | `InvestmentModel` | `knowledge_base.go` | 21 個 Darwinian weight 演化模型（`NewNarrativeEngine()`） |
 
 ## 模組陷阱
@@ -34,8 +34,8 @@ Stage 4 PR#2 的 detector_impls.go 把 tariff_shock 透過 ingestor 的 `detectT
 ### 5. import cycle：narrative ← ledger
 `internal/ledger/detector_scan_store.go` 為了 ScanResultRow 使用 `narrative.Severity` / `Source` 型別而 import narrative。**敘事套件的測試不能 import ledger**，否則 cycle。在敘事套件裡要測 SQLite round-trip 就放到 ledger package 測。
 
-### 6. 24 templates 數量是 hard gate
-`detector_e2e_test.go:TestE2E_All24ThemesRegistered` 是 regression guard。新增/刪除 template **必須同步** `templates.go` 的 `DefaultTemplates()`、`detector_impls.go` 的 detector 結構、`detector_e2e_test.go` 的 expectedCount 常數、`detector_impls_test.go` 的 allExpectedThemes slice。
+### 6. 29 templates 數量是 hard gate
+`detector_e2e_test.go:TestE2E_All24ThemesRegistered` 是 regression gate（常數現為 29）。新增/刪除 template **必須同步** `templates.go` 的 `DefaultTemplates()`、`detector_impls.go` 的 detector 結構、`detector_e2e_test.go` 的 expectedCount 常數、`detector_impls_test.go` 的 allExpectedThemes slice。
 
 ## Stage 5 新增的對外介面
 
@@ -52,7 +52,7 @@ DetectorRegistry methods:
     NewDetectorRegistry / Register / MustRegister / Get / List / ListEnabled
     / Themes / Enable / Disable / Len / RunAll
 
-NewDefaultDetectorRegistry() — 一鍵建構 24 個 detector 全啟用（PR#2 入口）
+NewDefaultDetectorRegistry() — 一鍵建構 29 個 detector 全啟用
 ```
 
 ## 驗證指令
@@ -62,3 +62,6 @@ go test -count=1 ./internal/narrative/...  # 80+ tests
 go test -run TestE2E ./internal/narrative/   # PR#5 chain test
 gofmt -l internal/narrative/                # 必須 0
 ```
+
+### 7. Duration 雙地圖技術債（2026-09-16 記錄，未合併）
+`lifecycle.go::DefaultThemeDurations()`（canonical，golden 鎖定）與 `narrative_detectors.go::getThemeDuration`（KB 偵測器建事件用）是兩份獨立地圖，既有主題已有不一致（US_rates_up：14d vs 7d）。新增主題時兩處都要補 case；合併列 backlog。

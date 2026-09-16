@@ -564,8 +564,8 @@ func TestRecalculateTemplateHitRates(t *testing.T) {
 func TestRecalculateAllTemplateHitRates_UpdatesEveryTemplate(t *testing.T) {
 	ne := NewNarrativeEngine()
 	all := ne.kb.ListTemplates()
-	if len(all) != 24 {
-		t.Fatalf("default KB should have 24 templates, got %d", len(all))
+	if len(all) != 29 {
+		t.Fatalf("default KB should have 29 templates, got %d", len(all))
 	}
 
 	const globalHitRate = 0.62

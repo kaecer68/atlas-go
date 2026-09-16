@@ -149,9 +149,15 @@ func narrativeThemeScore(theme string) float64 {
 		return -0.3
 
 	// ── Risk-on themes (positive contribution) ──
+	// Mirror-symmetry tiers (spec v0.2 §7 item 5): +0.5 mirrors the -0.5
+	// strong risk-off tier; +0.3 mirrors the -0.3 mild tier (inflation_spike).
 	case "AI_capex_surge", "US_rates_down", "taiwan_export_boom",
-		"earnings_surprise":
+		"earnings_surprise", "conflict_deescalation", "us_earnings_boom",
+		"dollar_softening":
 		return +0.5
+
+	case "inflation_cool", "inflation_moderate":
+		return +0.3
 
 	// ── Seasonal themes — weight by period sensitivity ──
 	case "spring_festival_season", "election_cycle", "earnings_blackout",

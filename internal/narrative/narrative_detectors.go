@@ -1164,6 +1164,16 @@ func getThemeDuration(theme string) time.Duration {
 		return 30 * 24 * time.Hour
 	case "tariff_shock":
 		return 14 * 24 * time.Hour
+	case "inflation_cool":
+		return 7 * 24 * time.Hour
+	case "conflict_deescalation":
+		return 7 * 24 * time.Hour
+	case "us_earnings_boom":
+		return 7 * 24 * time.Hour
+	case "inflation_moderate":
+		return 7 * 24 * time.Hour
+	case "dollar_softening":
+		return 7 * 24 * time.Hour
 	default:
 		return 7 * 24 * time.Hour
 	}
@@ -1177,4 +1187,157 @@ var nowUTC = func() time.Time {
 var nowUnix = func() int64 {
 	// Overridden in tests.
 	return time.Now().UnixNano()
+}
+
+// ----------------------------------------------------------------------------
+// First-principles causal chains (L5/L6/L7/L8) — spec v0.2 §4.6.
+// KB pipeline: stateless single-point conditions only (no history fields in
+// MarketNarrativeData). Trend/continuation conditions are a documented backlog.
+// ----------------------------------------------------------------------------
+
+// detectInflationCoolEvent is the KB-pipeline detector for inflation_cool
+// (good disinflation). Single-point band condition on CPIYoY; anti-spam relies
+// on lifecycle duration (7d) rather than a stateful "N consecutive days".
+// A stateful trend condition requires DetectorInput history fields (backlog).
+func detectInflationCoolEvent(data MarketNarrativeData) *NarrativeEvent {
+	const cpiCoolThreshold = 2.4
+	if data.CPIYoY <= 0 || data.CPIYoY > cpiCoolThreshold {
+		return nil
+	}
+	params := config.GetParametersConfig().Narrative
+	now := time.Now().UTC()
+	dur := getThemeDuration("inflation_cool")
+	confidence := computeDeviationConfidence(cpiCoolThreshold, data.CPIYoY, params.ConfidenceBaseGeopolitical.Value, params.ConfidenceDeviationCeiling.Value)
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-cpi-cool-%d", nowUnix()),
+		Theme:            "inflation_cool",
+		Region:           "US",
+		Sentiment:        0.5,
+		Confidence:       confidence,
+		ConfidenceSource: "deviation_based_v1",
+		HitRate:          hitRateForTheme("inflation_cool"),
+		CapitalFlow:      "disinflation_risk_on",
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"cpi_yoy":        data.CPIYoY,
+			"cool_threshold": cpiCoolThreshold,
+		},
+	}
+}
+
+// detectUSEarningsBoomEvent is the KB-pipeline proxy detector for
+// us_earnings_boom (spec v0.2 §4.6, k3-adjudicated guardrails):
+// composite condition (SPX and NDX both up AND VIX subdued) to avoid
+// triggering on rate-cut rallies; confidence capped at 0.4; proxy metadata.
+// The authoritative earnings-breadth data source is backlog.
+func detectUSEarningsBoomEvent(data MarketNarrativeData) *NarrativeEvent {
+	const spxThreshold = 1.0
+	spxUp := data.SPXIndexChangePct > spxThreshold
+	ndxUp := data.NDXIndexChangePct > 0
+	vixSubdued := data.VIXLevel > 0 && data.VIXLevel < 25
+	if !(spxUp && ndxUp && vixSubdued) {
+		return nil
+	}
+	now := time.Now().UTC()
+	dur := getThemeDuration("us_earnings_boom")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-us-earn-boom-%d", nowUnix()),
+		Theme:            "us_earnings_boom",
+		Region:           "US",
+		Sentiment:        0.6,
+		Confidence:       0.4, // proxy cap per spec v0.2 §4.6
+		ConfidenceSource: "proxy_composite_v1",
+		HitRate:          hitRateForTheme("us_earnings_boom"),
+		CapitalFlow:      "risk_on",
+		TimeWindow:       "1_week",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "medium",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"spx_change_pct": data.SPXIndexChangePct,
+			"ndx_change_pct": data.NDXIndexChangePct,
+			"vix":            data.VIXLevel,
+			"proxy":          1,
+		},
+	}
+}
+
+// detectInflationModerateEvent is the KB-pipeline event-style detector for
+// inflation_moderate (CPI publication inside target band). Single-shot event
+// semantics: CPI publishes monthly, so the publication cadence throttles this
+// naturally; a persistent "stable rates + moderate CPI" condition is
+// intentionally forbidden (k3 adjudication, spec v0.2 §4.4).
+func detectInflationModerateEvent(data MarketNarrativeData) *NarrativeEvent {
+	const cpiBandUpper = 2.5
+	const cpiBandLower = 1.0
+	if data.CPIYoY <= 0 {
+		return nil
+	}
+	if !(data.CPIYoY >= cpiBandLower && data.CPIYoY <= cpiBandUpper) {
+		return nil
+	}
+	now := time.Now().UTC()
+	dur := getThemeDuration("inflation_moderate")
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-cpi-moderate-%d", nowUnix()),
+		Theme:            "inflation_moderate",
+		Region:           "US",
+		Sentiment:        0.4,
+		Confidence:       0.5,
+		ConfidenceSource: "band_event_v1",
+		HitRate:          hitRateForTheme("inflation_moderate"),
+		CapitalFlow:      "rate_path_clarity",
+		TimeWindow:       "1_month",
+		Timestamp:        now,
+		Duration:         dur,
+		ExpiresAt:        now.Add(dur),
+		Severity:         "low",
+		Status:           "active",
+		SourceData: map[string]float64{
+			"cpi_yoy":    data.CPIYoY,
+			"band_upper": cpiBandUpper,
+			"band_lower": cpiBandLower,
+		},
+	}
+}
+
+// detectDollarSofteningEvent is the KB-pipeline detector for dollar_softening,
+// mirroring detectDollarSurgeKBEvent (DXY < -1.5% vs > +1.5%).
+// Mild USD weakness only feeds US_rates_down; only a strong drop co-fires here.
+func detectDollarSofteningEvent(data MarketNarrativeData) *NarrativeEvent {
+	if data.DXYChangePct < -1.5 {
+		confidence := -data.DXYChangePct / 3.0
+		if confidence > 1.0 {
+			confidence = 1.0
+		}
+		now := time.Now().UTC()
+		dur := getThemeDuration("dollar_softening")
+		return &NarrativeEvent{
+			ID:               fmt.Sprintf("evt-dollar-softening-%d", nowUnix()),
+			Theme:            "dollar_softening",
+			Region:           "US",
+			Sentiment:        0.5,
+			Confidence:       confidence,
+			ConfidenceSource: "deviation_based_v1",
+			HitRate:          hitRateForTheme("dollar_softening"),
+			CapitalFlow:      "em_inflow",
+			TimeWindow:       "1_week",
+			Timestamp:        now,
+			Duration:         dur,
+			ExpiresAt:        now.Add(dur),
+			Severity:         "medium",
+			Status:           "active",
+			SourceData: map[string]float64{
+				"dxy_change_pct": data.DXYChangePct,
+			},
+		}
+	}
+	return nil
 }

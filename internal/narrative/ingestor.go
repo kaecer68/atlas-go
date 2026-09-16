@@ -846,6 +846,54 @@ func detectInflationSpikeEventFromSnapshot(currVIX, currDXY marketdata.MacroData
 	}
 }
 
+// detectConflictDeescalationEventFromSnapshot is the snapshot-pipeline
+// detector for conflict_deescalation (spec v0.2 §4.6). Composite
+// curr/prev-independent single-snapshot condition: energy down + gold down +
+// VIX falling — the observable market imprint of a ceasefire/de-escalation.
+// GPR has no history in the snapshot path (snapshot_converter.go:56), so the
+// condition uses price-action proxies instead of a GPR trend.
+func detectConflictDeescalationEventFromSnapshot(currOil, currGold, currVIX marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
+	if currOil.Symbol == "" && currGold.Symbol == "" && currVIX.Symbol == "" {
+		return nil
+	}
+	energyDown := currOil.Symbol != "" && currOil.ChangePct < -2.0
+	goldDown := currGold.Symbol != "" && currGold.ChangePct < -1.0
+	vixFalling := currVIX.Symbol != "" && currVIX.ChangePct < 0
+	if !(energyDown && goldDown && vixFalling) {
+		return nil
+	}
+	confidence := 0.4
+	if currOil.ChangePct <= -3.0 && currGold.ChangePct <= -1.5 {
+		confidence = 0.6
+	}
+	td := DefaultThemeDurations()
+	dur, ok := td["conflict_deescalation"]
+	if !ok {
+		dur = 7 * 24 * time.Hour
+	}
+	return &NarrativeEvent{
+		ID:               fmt.Sprintf("evt-deescalation-%d", now.UnixNano()),
+		Theme:            "conflict_deescalation",
+		Region:           "Global",
+		Sentiment:        0.6,
+		Confidence:       confidence,
+		ConfidenceSource: "snapshot_composite_v1",
+		HitRate:          hitRateForTheme("conflict_deescalation"),
+		CapitalFlow:      "risk_premium_release",
+		TimeWindow:       "1_week",
+		Duration:         dur,
+		Severity:         "medium",
+		Timestamp:        now,
+		ExpiresAt:        now.Add(dur),
+		Status:           "active",
+		SourceData: map[string]float64{
+			"oil_change_pct":  currOil.ChangePct,
+			"gold_change_pct": currGold.ChangePct,
+			"vix_change_pct":  currVIX.ChangePct,
+		},
+	}
+}
+
 func detectTariffShockEventFromSnapshot(currVIX, currDXY, currSPX marketdata.MacroDataPoint, now time.Time) *NarrativeEvent {
 	params := config.GetParametersConfig().Narrative
 	if currVIX.Symbol == "" {

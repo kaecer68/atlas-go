@@ -9,7 +9,12 @@ export const THEME_LABELS = {
   US_rates_up:    '美升息／鷹派',
   US_rates_down:  '美降息／鴿派',
   dollar_surge:   '美元強勢',
+  dollar_softening: '美元轉弱',
   inflation_spike: '通膨升溫',
+  inflation_cool: '通膨回落',
+  inflation_moderate: '溫和通膨',
+  conflict_deescalation: '戰事降溫',
+  us_earnings_boom: '美股盈利擴張',
 
   // 日本
   JPY_carry_unwind: '日圓套利平倉',
