@@ -12,6 +12,28 @@ import (
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
+// liveModeStartupDeadline bounds how long a test waits for the live pipeline
+// goroutine to reach its wiring point. The previous fixed 500ms single-sample
+// assert made these tests load-dependent: on CI runners the goroutine had not
+// reached the dashboard-API / listenAndServe wiring yet, so the package went
+// red while the same tests pass locally in milliseconds.
+const liveModeStartupDeadline = 10 * time.Second
+
+// liveModeWaitFor polls cond until it is true or timeout elapses. Returns the
+// final cond() result so callers can keep an idiomatic "if !... { t.Fatalf }".
+func liveModeWaitFor(timeout time.Duration, cond func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if cond() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return cond()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestLiveModeBrokerGuardrails(t *testing.T) {
 	deps := appDeps{
 		loadConfig: func() config.Config {
@@ -77,6 +99,11 @@ func TestLiveModeDashboardAPIWiring(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
+		liveModeWaitFor(liveModeStartupDeadline, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return dashboardAPICalled
+		})
 		mu.Lock()
 		wasCalled := dashboardAPICalled
 		dir := capturedLedgerDir
@@ -192,7 +219,7 @@ func TestLiveModeAcceptsDryRunBroker(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if !dashboardAPICalled.Load() {
+		if !liveModeWaitFor(liveModeStartupDeadline, dashboardAPICalled.Load) {
 			t.Fatalf("live mode with dry-run broker should create dashboard API")
 		}
 	case err := <-done:
@@ -274,7 +301,7 @@ func TestLiveModeCallsListenAndServeViaDeps(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if !listenAndServeCalled.Load() {
+		if !liveModeWaitFor(liveModeStartupDeadline, listenAndServeCalled.Load) {
 			t.Fatal("live mode should call deps.listenAndServe (runLiveTrading now routes through the dep)")
 		}
 	case <-done:
@@ -311,7 +338,7 @@ func TestLiveModeWithSwaggerEnabled(t *testing.T) {
 
 	select {
 	case <-time.After(500 * time.Millisecond):
-		if !dashboardAPICalled.Load() {
+		if !liveModeWaitFor(liveModeStartupDeadline, dashboardAPICalled.Load) {
 			t.Fatalf("live mode with swagger should still create dashboard API")
 		}
 	case err := <-done:
