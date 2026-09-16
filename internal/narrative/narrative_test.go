@@ -755,3 +755,31 @@ func findModel(models []InvestmentModel, id string) *InvestmentModel {
 	}
 	return nil
 }
+
+// TestDetectEvents_IncludesFirstPrinciplesThemes is a regression guard for a
+// wiring gap found during iMac production acceptance (2026-09-16): the four new
+// KB detectors were registered in DetectorRegistry but missing from
+// NarrativeEngine.DetectEvents' chain, so every consumer going through
+// DetectEvents (narrative API endpoints, narrative service) never ran them.
+func TestDetectEvents_IncludesFirstPrinciplesThemes(t *testing.T) {
+	config.ResetParametersConfig()
+	ne := NewNarrativeEngine()
+	data := MarketNarrativeData{
+		DXYChangePct:      -2.0, // dollar_softening
+		SPXIndexChangePct: 1.5,  // us_earnings_boom
+		NDXIndexChangePct: 1.1,
+		VIXLevel:          15,
+		CPIYoY:            2.2, // inflation_cool + inflation_moderate band
+	}
+
+	events := ne.DetectEvents(data)
+	themes := make(map[string]bool, len(events))
+	for _, e := range events {
+		themes[e.Theme] = true
+	}
+	for _, want := range []string{"dollar_softening", "us_earnings_boom", "inflation_cool", "inflation_moderate"} {
+		if !themes[want] {
+			t.Errorf("DetectEvents chain missing first-principles theme %q (got %v)", want, themes)
+		}
+	}
+}

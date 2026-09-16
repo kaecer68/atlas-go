@@ -74,6 +74,22 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectDRAMMemoryCycleEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	// First-principles causal chains (spec v0.2 §4). These are also registered
+	// as DetectorRegistry entries, but every consumer that goes through
+	// NarrativeEngine.DetectEvents (narrative API endpoints, narrative
+	// service) needs them in this chain — otherwise they are invisible there.
+	if evt := detectInflationCoolEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectUSEarningsBoomEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectInflationModerateEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
+	if evt := detectDollarSofteningEvent(data); evt != nil {
+		events = append(events, *evt)
+	}
 	return events
 }
 
