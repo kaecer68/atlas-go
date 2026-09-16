@@ -58,6 +58,12 @@ type Handler struct {
 	// predictionStore backs HistoricalHitRate; nil disables the field.
 	predictionStore PredictionHistoryStore
 
+	// nowFn is the clock seam for prediction/cache keys. nil = time.Now.
+	// Test hermeticity: the event calendar generates date-sensitive recurring
+	// events (futures settlement, window dressing), so wall-clock handlers
+	// make prediction summaries date-dependent (time bomb — see #1585).
+	nowFn func() time.Time
+
 	cacheMu      sync.RWMutex
 	cachedReport *PredictionReport
 	cachedKey    string // "YYYY-MM-DD"
@@ -70,6 +76,18 @@ func NewHandler(cal *industry.EventCalendar) *Handler {
 		eventCal:  cal,
 		predictor: NewPredictor(cal),
 	}
+}
+
+// SetNowFn overrides the handler clock (test hermeticity seam).
+func (h *Handler) SetNowFn(fn func() time.Time) {
+	h.nowFn = fn
+}
+
+func (h *Handler) now() time.Time {
+	if h.nowFn != nil {
+		return h.nowFn()
+	}
+	return time.Now()
 }
 
 // SetCapitalFlow wires the predictor's capital flow provider so predictions
@@ -293,7 +311,7 @@ func predictionCacheKey(t time.Time) string {
 
 // HandlePrediction returns the 5-day event-driven capital flow prediction.
 func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
-	now := time.Now()
+	now := h.now()
 	key := predictionCacheKey(now)
 
 	h.cacheMu.RLock()

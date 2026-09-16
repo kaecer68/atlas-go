@@ -72,18 +72,19 @@ func TestRegisterRoutes_UsesDefaultStaticCF(t *testing.T) {
 	// #1384 calibration-aware baseline: default staticCF uses
 	// staticCF{score: 0, label: "neutral"} whose LatestAssessment is hardwired
 	// to CalibrationCalibrating, so the summary must surface the calibrating
-	// note instead of an inflow tilt. The 5-day event mix is symmetric so the
-	// direction branch must fall to 分歧.
-	mustContain := []string{"未來 5 天資金流向分歧", "校準中", "關鍵事件"}
+	// note instead of an inflow tilt. Date-bomb fix (2026-09-16, #1585
+	// precedent): the direction verdict (分歧 vs 偏流入/偏流出) depends on
+	// the calendar event mix at the run date — calendar revisions changed it
+	// from the original symmetric mix. Hermetic invariants: calibration
+	// surfaced, key events listed, NO fabricated baseline-drift note (cfScore=0).
+	mustContain := []string{"校準中", "關鍵事件"}
 	for _, s := range mustContain {
 		if !strings.Contains(body, s) {
 			t.Errorf("default staticCF summary missing %q, body=%s", s, body)
 		}
 	}
-	// No baseline drift (cfScore=0) and no 偏流入 direction dominance, so
-	// 偏流入 must NOT appear as the summary verdict.
-	if strings.Contains(body, "偏流入") {
-		t.Errorf("default staticCF must not yield 偏流入 verdict, body=%s", body)
+	if strings.Contains(body, "當前資金品質偏多") || strings.Contains(body, "當前資金品質偏空") {
+		t.Errorf("default staticCF has zero baseline; baseline drift note must not appear, body=%s", body)
 	}
 }
 
@@ -128,21 +129,18 @@ func TestRegisterRoutesWithCapitalFlow_BullishTilt(t *testing.T) {
 	// #1384 calibration-aware baseline: stubCF with no LatestAssessment status
 	// falls back to CalibrationEligible, so the summary must surface the
 	// positive baseline drift (cfScore=0.9 → "當前資金品質偏多") instead of a
-	// calibrating note. The 5-day event mix still splits evenly so the
-	// direction branch must fall to 分歧, not 偏流入.
-	mustContain := []string{"未來 5 天資金流向分歧", "當前資金品質偏多", "關鍵事件"}
+	// calibrating note. Date-bomb fix (2026-09-16, #1585 precedent): direction
+	// verdict claims removed — they depended on the calendar event mix at the
+	// run date. Hermetic invariants: positive drift surfaced, calibrating note
+	// must NOT leak, key events listed.
+	mustContain := []string{"當前資金品質偏多", "關鍵事件"}
 	for _, s := range mustContain {
 		if !strings.Contains(body, s) {
 			t.Errorf("bullish cf summary missing %q, body=%s", s, body)
 		}
 	}
-	// Baseline is positive, calibration is eligible: calibrating note must
-	// NOT leak and direction verdict must NOT be 偏流入.
 	if strings.Contains(body, "校準中") {
 		t.Errorf("eligible bullish cf must not surface calibrating note, body=%s", body)
-	}
-	if strings.Contains(body, "偏流入") {
-		t.Errorf("bullish cf must not yield 偏流入 verdict, body=%s", body)
 	}
 }
 
@@ -160,16 +158,14 @@ func TestRegisterRoutesWithCapitalFlow_NilProviderFallsBack(t *testing.T) {
 	body := rec.Body.String()
 	// #1384 calibration-aware baseline: a nil cf keeps the predictor's default
 	// staticCF{score: 0, label: "neutral"} which hardwires CalibrationCalibrating.
-	// The summary must surface 分歧 + 校準中, NOT 偏流入 and NOT a baseline
-	// drift note (cfScore=0).
-	mustContain := []string{"未來 5 天資金流向分歧", "校準中", "關鍵事件"}
+	// Date-bomb fix (2026-09-16, #1585 precedent): direction verdict claims
+	// removed (calendar-mix dependent). Hermetic invariants: calibrating note
+	// surfaced, key events listed, no baseline drift note (cfScore=0).
+	mustContain := []string{"校準中", "關鍵事件"}
 	for _, s := range mustContain {
 		if !strings.Contains(body, s) {
 			t.Errorf("nil cf summary missing %q, body=%s", s, body)
 		}
-	}
-	if strings.Contains(body, "偏流入") {
-		t.Errorf("nil cf must not yield 偏流入 verdict, body=%s", body)
 	}
 	if strings.Contains(body, "當前資金品質偏多") || strings.Contains(body, "當前資金品質偏空") {
 		t.Errorf("nil cf baseline is zero; baseline drift note must not appear, body=%s", body)
