@@ -49,6 +49,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"tw_vol":                 false, // ^TWII 3mo bars → volatility_20d
 		"twse_sbl":               false, // G02
 		"tdcc_equity_dispersion": false, // G01
+		"us_cpi":                 false, // BLS CPI-U -> MacroDataSnapshot.CPIYoY
 	}
 
 	for id := range m.limiters {

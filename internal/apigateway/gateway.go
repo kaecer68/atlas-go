@@ -269,5 +269,6 @@ func channelIDs() []string {
 		"us_aapl",
 		"us_msft",
 		"tsm_adr",
+		"us_cpi",
 	}
 }

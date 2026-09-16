@@ -281,6 +281,14 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("bdi", bdiAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "bdi")
 
+	// --- US CPI (BLS CPI-U YoY) ---
+	// feeds MacroDataSnapshot.CPIYoY, consumed by the narrative inflation
+	// detectors (inflation_cool / inflation_moderate, spec v0.2 §4).
+	cpiProvider := marketdata.NewBLSCPIProvider()
+	cpiAdapter := NewUSCPIChannelAdapter(cpiProvider)
+	g.registry.Register("us_cpi", cpiAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "us_cpi")
+
 	// --- Sector Data (TWSE sector classification) ---
 	sectorProvider := marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data"))
 	sectorAdapter := NewSectorDataChannelAdapter(sectorProvider)

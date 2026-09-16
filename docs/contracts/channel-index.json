@@ -1,46 +1,213 @@
 {
-  "canonical_channel_count": 40,
+  "canonical_channel_count": 41,
   "registered_channels": [
-    {"id": "us_yahoo", "source": "query1.finance.yahoo.com", "status": "conditional (YahooEnabled)"},
-    {"id": "twse_replay", "source": "TWSE", "status": "registered"},
-    {"id": "twse_capital_flow", "source": "TWSE / T86", "status": "registered"},
-    {"id": "fugle", "source": "api.fugle.tw", "status": "conditional (FUGLE_API_KEY)"},
-    {"id": "fubon", "source": "api.fubon.com.tw via proxy", "status": "conditional (proxy reachable)"},
-    {"id": "finmind", "source": "api.finmindtrade.com", "status": "conditional (FINMIND_API_KEY)"},
-    {"id": "frankfurter_fx", "source": "api.frankfurter.app", "status": "registered"},
-    {"id": "geopolitical", "source": "RSS / GDELT composite", "status": "registered"},
-    {"id": "twse_margin", "source": "TWSE", "status": "registered"},
-    {"id": "export_statistics", "source": "opendata.customs.gov.tw", "status": "registered"},
-    {"id": "tsmc_revenue", "source": "TWSE / investor", "status": "registered"},
-    {"id": "geopolitical_taiwan", "source": "CNA/LTN/TVBS RSS", "status": "registered"},
-    {"id": "janus_regime", "source": "computed internally", "status": "conditional (janusEngine)"},
-    {"id": "tej", "source": "TEJ", "status": "registered"},
-    {"id": "exchange_rate", "source": "api.frankfurter.dev / ECB", "status": "registered"},
-    {"id": "sox_index", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "dram_spot_price", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "twse_sector_index", "source": "TWSE", "status": "registered"},
-    {"id": "sector_data", "source": "state dir (operator imported)", "status": "file-backed"},
-    {"id": "day_trading", "source": "www.twse.com.tw/exchangeReport/TWTB4U", "status": "registered"},
-    {"id": "market_volume", "source": "www.twse.com.tw/exchangeReport/MI_INDEX?type=MS", "status": "registered"},
-    {"id": "bdi", "source": "quote.cnbc.com", "status": "registered"},
-    {"id": "taifex_daily", "source": "openapi.taifex.com.tw", "status": "registered"},
-    {"id": "taifex_institutional", "source": "openapi.taifex.com.tw", "status": "registered"},
-    {"id": "tdcc_equity_dispersion", "source": "stub /v1/equity-dispersion", "status": "stub"},
-    {"id": "twse_oddlot", "source": "TWSE", "status": "registered"},
-    {"id": "twse_sbl", "source": "stub", "status": "stub"},
-    {"id": "government_flow", "source": "operator-imported state dir", "status": "file-backed"},
-    {"id": "government_broker", "source": "histock.tw/stock/broker8.aspx (media-curated Top60; default since 2026-08-26)", "status": "registered", "note": "legacy TWSE bsr scraper retained behind GOV_BROKER_SOURCE=legacy-scraper; bsr is CAPTCHA-blocked for automated sessions"},
-    {"id": "twse_insider", "source": "TWSE OpenAPI t187ap12_L", "status": "registered"},
-    {"id": "twse_etf", "source": "TWSE", "status": "registered", "note": "endpoint removed 2026-08 (TWT44U → 404), see known_issues twse_etf_upstream_60d"},
-    {"id": "us_spx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "us_ndx", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "us_dji", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "taiex_index", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "tw_vol", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "us_nvda", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "us_aapl", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "us_msft", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"},
-    {"id": "tsm_adr", "source": "Yahoo query1", "status": "conditional (YahooEnabled)"}
+    {
+      "id": "us_yahoo",
+      "source": "query1.finance.yahoo.com",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "twse_replay",
+      "source": "TWSE",
+      "status": "registered"
+    },
+    {
+      "id": "twse_capital_flow",
+      "source": "TWSE / T86",
+      "status": "registered"
+    },
+    {
+      "id": "fugle",
+      "source": "api.fugle.tw",
+      "status": "conditional (FUGLE_API_KEY)"
+    },
+    {
+      "id": "fubon",
+      "source": "api.fubon.com.tw via proxy",
+      "status": "conditional (proxy reachable)"
+    },
+    {
+      "id": "finmind",
+      "source": "api.finmindtrade.com",
+      "status": "conditional (FINMIND_API_KEY)"
+    },
+    {
+      "id": "frankfurter_fx",
+      "source": "api.frankfurter.app",
+      "status": "registered"
+    },
+    {
+      "id": "geopolitical",
+      "source": "RSS / GDELT composite",
+      "status": "registered"
+    },
+    {
+      "id": "twse_margin",
+      "source": "TWSE",
+      "status": "registered"
+    },
+    {
+      "id": "export_statistics",
+      "source": "opendata.customs.gov.tw",
+      "status": "registered"
+    },
+    {
+      "id": "tsmc_revenue",
+      "source": "TWSE / investor",
+      "status": "registered"
+    },
+    {
+      "id": "geopolitical_taiwan",
+      "source": "CNA/LTN/TVBS RSS",
+      "status": "registered"
+    },
+    {
+      "id": "janus_regime",
+      "source": "computed internally",
+      "status": "conditional (janusEngine)"
+    },
+    {
+      "id": "tej",
+      "source": "TEJ",
+      "status": "registered"
+    },
+    {
+      "id": "exchange_rate",
+      "source": "api.frankfurter.dev / ECB",
+      "status": "registered"
+    },
+    {
+      "id": "sox_index",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_cpi",
+      "source": "api.bls.gov",
+      "status": "registered"
+    },
+    {
+      "id": "dram_spot_price",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "twse_sector_index",
+      "source": "TWSE",
+      "status": "registered"
+    },
+    {
+      "id": "sector_data",
+      "source": "state dir (operator imported)",
+      "status": "file-backed"
+    },
+    {
+      "id": "day_trading",
+      "source": "www.twse.com.tw/exchangeReport/TWTB4U",
+      "status": "registered"
+    },
+    {
+      "id": "market_volume",
+      "source": "www.twse.com.tw/exchangeReport/MI_INDEX?type=MS",
+      "status": "registered"
+    },
+    {
+      "id": "bdi",
+      "source": "quote.cnbc.com",
+      "status": "registered"
+    },
+    {
+      "id": "taifex_daily",
+      "source": "openapi.taifex.com.tw",
+      "status": "registered"
+    },
+    {
+      "id": "taifex_institutional",
+      "source": "openapi.taifex.com.tw",
+      "status": "registered"
+    },
+    {
+      "id": "tdcc_equity_dispersion",
+      "source": "stub /v1/equity-dispersion",
+      "status": "stub"
+    },
+    {
+      "id": "twse_oddlot",
+      "source": "TWSE",
+      "status": "registered"
+    },
+    {
+      "id": "twse_sbl",
+      "source": "stub",
+      "status": "stub"
+    },
+    {
+      "id": "government_flow",
+      "source": "operator-imported state dir",
+      "status": "file-backed"
+    },
+    {
+      "id": "government_broker",
+      "source": "histock.tw/stock/broker8.aspx (media-curated Top60; default since 2026-08-26)",
+      "status": "registered",
+      "note": "legacy TWSE bsr scraper retained behind GOV_BROKER_SOURCE=legacy-scraper; bsr is CAPTCHA-blocked for automated sessions"
+    },
+    {
+      "id": "twse_insider",
+      "source": "TWSE OpenAPI t187ap12_L",
+      "status": "registered"
+    },
+    {
+      "id": "twse_etf",
+      "source": "TWSE",
+      "status": "registered",
+      "note": "endpoint removed 2026-08 (TWT44U → 404), see known_issues twse_etf_upstream_60d"
+    },
+    {
+      "id": "us_spx",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_ndx",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_dji",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "taiex_index",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "tw_vol",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_nvda",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_aapl",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "us_msft",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    },
+    {
+      "id": "tsm_adr",
+      "source": "Yahoo query1",
+      "status": "conditional (YahooEnabled)"
+    }
   ],
   "rogue_channels": [],
   "rogue_channels_note": "RESOLVED 2026-07-25: the four FinMind backfill CLIs (backfill-financial-statements, backfill-institutional-investors, backfill-month-revenue, backfill-taifex-oi) were removed in PR #1338. check_constitution.sh now blocks new raw-http + os.Getenv violations.",

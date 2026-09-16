@@ -194,7 +194,7 @@ check_rate_limits() {
     return 1
   fi
 
-	local known_channels=("us_yahoo" "frankfurter_fx" "twse_replay" "twse_capital_flow" "fugle" "fubon" "finmind" "geopolitical" "geopolitical_taiwan" "twse_margin" "export_statistics" "tsmc_revenue" "janus_regime" "tej" "exchange_rate" "sox_index" "sector_data" "dram_spot_price" "twse_sector_index" "day_trading" "bdi" "taifex_daily" "taifex_institutional" "twse_oddlot" "government_flow" "twse_etf" "us_spx" "us_ndx" "us_dji" "taiex_index" "tw_vol" "us_nvda" "us_aapl" "us_msft" "tsm_adr" "twse_sbl" "tdcc_equity_dispersion")
+	local known_channels=("us_yahoo" "frankfurter_fx" "twse_replay" "twse_capital_flow" "fugle" "fubon" "finmind" "geopolitical" "geopolitical_taiwan" "twse_margin" "export_statistics" "tsmc_revenue" "janus_regime" "tej" "exchange_rate" "sox_index" "sector_data" "dram_spot_price" "twse_sector_index" "day_trading" "bdi" "taifex_daily" "taifex_institutional" "twse_oddlot" "government_flow" "twse_etf" "us_spx" "us_ndx" "us_dji" "taiex_index" "tw_vol" "us_nvda" "us_aapl" "us_msft" "tsm_adr" "twse_sbl" "tdcc_equity_dispersion" "us_cpi")
 
   # Single-pass: extract all channel identifiers from limits.go, then check known list
   local configured_channels
