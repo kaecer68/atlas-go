@@ -602,6 +602,10 @@ type RealtimeParameters struct {
 	MaxWeightChange      ParameterMetadata[float64] `json:"max_weight_change"`
 	MinWeight            ParameterMetadata[float64] `json:"min_weight"`
 	UpdateIntervalMs     ParameterMetadata[int]     `json:"update_interval_ms"`
+	// Macro directional evidence thresholds for layer_0 regime inference
+	// (spec v0.2 §6.2): intraday open-to-last change percent.
+	RateMoveThresholdPct ParameterMetadata[float64] `json:"rate_move_threshold_pct"`
+	DXYMoveThresholdPct  ParameterMetadata[float64] `json:"dxy_move_threshold_pct"`
 }
 
 // JanusParameters holds tunable values for the JANUS meta-layer (cross-cohort

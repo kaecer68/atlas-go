@@ -615,6 +615,14 @@ var parameterTable = map[string]paramAccessor{
 		get: func(cfg *ParametersConfig) float64 { return cfg.Realtime.VolatilityThreshold.Value },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Realtime.VolatilityThreshold.Value = v },
 	},
+	"realtime_rate_move_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Realtime.RateMoveThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Realtime.RateMoveThresholdPct.Value = v },
+	},
+	"realtime_dxy_move_threshold_pct": {
+		get: func(cfg *ParametersConfig) float64 { return cfg.Realtime.DXYMoveThresholdPct.Value },
+		set: func(cfg *ParametersConfig, v float64) { cfg.Realtime.DXYMoveThresholdPct.Value = v },
+	},
 	"realtime_volume_spike_threshold": {
 		get: func(cfg *ParametersConfig) float64 { return cfg.Realtime.VolumeSpikeThreshold.Value },
 		set: func(cfg *ParametersConfig, v float64) { cfg.Realtime.VolumeSpikeThreshold.Value = v },

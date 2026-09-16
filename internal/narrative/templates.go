@@ -490,5 +490,106 @@ func DefaultTemplates() []CausalTemplate {
 • 【押注】金融、高股息、內需：資金避風港
 • 【迴避】AI供應鏈、半導體、中小型股：外資持股比重高，關稅衝擊首當其衝`,
 		},
+		{
+			ID:             "通膨回落",
+			Name:           "通膨回落",
+			TriggerTheme:   "inflation_cool",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "CPI/PCE 連續低於預期 → 通膨預期回落", Affected: []string{"通膨預期", "實質利率"}, Impact: -0.6},
+				{Description: "市場定價聯準會鴿派路徑，降息預期升溫", Affected: []string{"美國利率"}, Impact: -0.6},
+				{Description: "折現率下降 → 高估值成長股估值擴張", Affected: []string{"AI供應鏈", "半導體", "中小型股"}, Impact: 0.7},
+				{Description: "外資回流新興亞洲，台股資金面寬鬆", Affected: []string{"外資流向_台股", "台股大盤"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.62,
+			SourceReferences:  []string{"FRED CPI/PCE Series", "Federal Reserve SEP"},
+			Rationale: `inflation_spike 的鏡像鏈。當 CPI/PCE 連續低於預期時，市場會下修通膨預期與聯準會的鷹派路徑，無風險利率的終點預期下移，折現率下降使高估值成長股的估值擴張，外資因美元資產收益率預期下降而回流新興亞洲。
+
+必須區分 good disinflation（需求正常化，股市受惠）與 bad deflation（需求崩潰，盈利下修）——後者由 semiconductor_downturn / china_slowdown 鏈承接，本鏈僅覆蓋前者：
+• 應該【押注】AI供應鏈、半導體、中小型股：對折現率最敏感的板塊，估值擴張彈性最大。
+• 應該【迴避】防禦型板塊（高股息、金融）：資金風險偏好回升時相對報酬落後。`,
+		},
+		{
+			ID:             "戰事降溫",
+			Name:           "戰事降溫",
+			TriggerTheme:   "conflict_deescalation",
+			RequiredRegion: "Global",
+			Steps: []CausalStep{
+				{Description: "停火/談判降溫 → 地緣風險溢酬快速回落", Affected: []string{"地緣政治風險指數"}, Impact: -0.8},
+				{Description: "原油回吐戰爭溢價，能源板塊承壓", Affected: []string{"原油", "能源"}, Impact: -0.7},
+				{Description: "黃金避險溢價消退，回歸美元定價", Affected: []string{"黃金"}, Impact: -0.5},
+				{Description: "風險偏好回升，外資回流，高Beta科技估值修復", Affected: []string{"台股大盤", "AI供應鏈", "外資流向_台股"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.55,
+			SourceReferences:  []string{"Caldara-Iacoviello GPR", "EIA Oil Market Report"},
+			Rationale: `geopolitical_risk_spike 的反向鏈。軍事衝突停火或談判降溫時，地緣風險溢酬快速回落：原油回吐戰爭溢價、黃金避險買盤消退、風險資產估值修復。
+
+HistoricalHitRate 刻意保守（0.55，低於全表最低 0.58）：停火易反覆破裂，de-escalation 的命中率上限天然低於 escalation。
+
+油價下跌需區分「供給中斷解除」（利多，屬本鏈）與「需求崩潰」（利空，由 oil_price_shock 模板的供給/需求判別承接）。配置建議：
+• 【迴避】能源、貴金屬：戰爭溢價與避險溢價直接回吐
+• 【押注】AI供應鏈、高Beta科技：風險偏好回升的估值修復彈性最大`,
+		},
+		{
+			ID:             "美股盈利擴張",
+			Name:           "美股盈利擴張",
+			TriggerTheme:   "us_earnings_boom",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "SPX 財報季超預期比重上升 / EPS 上修廣度擴大", Affected: []string{"美股盈利"}, Impact: 0.7},
+				{Description: "美股風險偏好回升，SPX/NDX 走強", Affected: []string{"SPX", "NDX"}, Impact: 0.6},
+				{Description: "外資風險預算擴大，加碼台股科技權值", Affected: []string{"外資流向_台股", "台股大盤"}, Impact: 0.5},
+				{Description: "終端需求與估值外溢帶動台灣 AI 供應鏈", Affected: []string{"AI供應鏈", "半導體"}, Impact: 0.6},
+			},
+			HistoricalHitRate: 0.50,
+			SourceReferences:  []string{"FactSet Earnings Breadth (proxy-level evidence)", "Ball & Brown (1968) JAR"},
+			Rationale: `盈利驅動的上行與估值驅動（AI_capex_surge）互補：盈利驅動的強勢對利率上行的容忍度較高——分母（折現率）上升時，分子（盈利）同步上修可抵消估值壓縮。這是 L7「盈利增，美股強」的核心含義。
+
+傳導路徑：美股盈利擴張 → 風險偏好回升 → 外資風險預算擴大加碼台股科技權值 → 台灣 AI 供應鏈受終端需求與估值外溢帶動。
+
+注意：當前偵測器以 SPX/NDX 動能複合條件為代理（正式盈利廣度資料源為 backlog），HitRate 0.50 為代理層級估計，非 FactSet 盈利廣度的直接證據。`,
+		},
+		{
+			ID:             "溫和通膨（CPI 落入目標帶）",
+			Name:           "溫和通膨（CPI 落入目標帶）",
+			TriggerTheme:   "inflation_moderate",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "CPI 公布落於央行目標區間 → 利率路徑可預測性上升", Affected: []string{"通膨預期"}, Impact: -0.4},
+				{Description: "殖利率曲線正常化 → 銀行淨息差（NIM）回穩", Affected: []string{"金融", "銀行"}, Impact: 0.6},
+				{Description: "存款流失壓力緩解、信用成本下降", Affected: []string{"金融"}, Impact: 0.4},
+				{Description: "台股金融板塊受惠於確定性溢價", Affected: []string{"金融"}, Impact: 0.5},
+			},
+			HistoricalHitRate: 0.58,
+			SourceReferences:  []string{"FDIC Quarterly Banking Profile", "IMF Global Financial Stability Report"},
+			Rationale: `銀行受惠的關鍵不是通膨水位，而是「利率路徑可預測性提升」的轉換事件。CPI 公布落入目標區間時，聯準會政策路徑的不確定性下降，殖利率曲線正常化使銀行淨息差（NIM）回穩。
+
+事件語義設計：本鏈為 CPI 公布日單次事件觸發（duration 7 天 + cooldown），禁止常駐條件——「利率不動 + CPI 在目標區」是世界多數時間的預設狀態，常駐觸發會造成永久 risk-on 偏置。
+
+與 US_rates_up（急升息 NIM 擴大但信用風險同時升）刻意區分為兩個 trigger。殖利率曲線（2s10s）或 NIM 代理資料源到位前，不做常駐水位觸發（backlog）。`,
+		},
+		{
+			ID:             "美元轉弱",
+			Name:           "美元轉弱",
+			TriggerTheme:   "dollar_softening",
+			RequiredRegion: "US",
+			Steps: []CausalStep{
+				{Description: "美元指數急落跌破區間下緣", Affected: []string{"DXY"}, Impact: -0.6},
+				{Description: "新興市場貨幣回升，外資回流亞洲", Affected: []string{"外資流向_台股"}, Impact: 0.6},
+				{Description: "貴金屬受惠於美元定價反向", Affected: []string{"黃金", "貴金屬"}, Impact: 0.5},
+				{Description: "台幣升值匯率壓力被資金面利多抵消，AI供應鏈估值擴張", Affected: []string{"AI供應鏈", "出口股"}, Impact: 0.4},
+			},
+			HistoricalHitRate: 0.60,
+			SourceReferences:  []string{"Federal Reserve DXY Index", "BIS Triennial Survey"},
+			Rationale: `dollar_surge 的反向鏈。美元急落（DXY 跌破 1.5% 門檻，與 dollar_surge 的 +1.5% 鏡像）是全球資金流動的風險偏好訊號：
+1. 新興市場貨幣回升，外資為追逐匯率與報酬雙利回流亞洲
+2. 貴金屬受惠於美元定價反向（美元弱 = 黃金強，L3 的反向腿）
+3. 台幣升值對出口商有匯率壓力，但資金面利多主導，AI供應鏈估值擴張
+
+配置建議：
+• 【押注】AI供應鏈、外資持股高的科技權值：資金面彈性最大
+• 【押注】貴金屬ETF：美元定價反向的直接受惠者
+• 【注意】出口導向電子股：匯率壓力與資金面利多互相抵消，選個股而非板塊`,
+		},
 	}
 }

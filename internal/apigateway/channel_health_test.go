@@ -548,3 +548,43 @@ func TestLoad_JanitorMarksLegacyOrphans(t *testing.T) {
 		t.Fatal("janitor must be idempotent")
 	}
 }
+
+// TestChannelHealthStore_Get_ToleratesNilValuedEntry is a regression guard for
+// the nil-pointer class fixed on 2026-09-16 (atlas binary E2E startup panic:
+// ChannelHealthStore.recordToDB nil deref, channel_health.go:428).
+//
+// s.data is `map[string]*ChannelHealthRecord`, so a key CAN exist with a nil
+// value: load() unmarshals the persisted JSON straight into the map (a JSON
+// null channel becomes a nil entry; the R3 janitor loop and All() both guard
+// `rec != nil` for exactly this reason). Get() must tolerate it instead of
+// dereferencing nil.
+func TestChannelHealthStore_Get_ToleratesNilValuedEntry(t *testing.T) {
+	dir := t.TempDir()
+	// JSON null for a channel -> map entry with a nil pointer after load().
+	seed := `{"channels": {"ghost_channel": null, "live_channel": {"status": "ok"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "channel_health.json"), []byte(seed), 0o644); err != nil {
+		t.Fatalf("seed channel health file: %v", err)
+	}
+
+	s := NewChannelHealthStoreWithPool(dir, nil)
+
+	if rec := s.Get("ghost_channel"); rec != nil {
+		t.Fatalf("expected nil record for nil-valued entry, got %+v", rec)
+	}
+	// The nil neighbouring entry must not break reads of valid records either.
+	rec := s.Get("live_channel")
+	if rec == nil {
+		t.Fatal("expected live_channel record, got nil")
+	}
+	if rec.Status != "ok" {
+		t.Fatalf("expected status ok, got %q", rec.Status)
+	}
+	// All() must skip the nil entry rather than panic.
+	all := s.All()
+	if _, ok := all["ghost_channel"]; ok {
+		t.Error("All() must skip nil-valued entries")
+	}
+	if _, ok := all["live_channel"]; !ok {
+		t.Error("All() must include valid entries")
+	}
+}

@@ -384,10 +384,14 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 		Timestamp: rec.LastFetchAt,
 		Error:     errMsg,
 	})
+	// Capture the streak while still holding s.mu: load() may replace s.data
+	// (map of pointers) before the DB write below, which would make an
+	// unlocked s.data[channelID] lookup return nil and panic.
+	consecutiveFailures := rec.ConsecutiveFailures
 	s.mu.Unlock()
 
 	if s.pool != nil {
-		dbErr := s.recordToDB(channelID, status, errMsg, advanceLastSuccess)
+		dbErr := s.recordToDB(channelID, status, errMsg, advanceLastSuccess, consecutiveFailures)
 		if dbErr == nil {
 			return s.save()
 		}
@@ -396,7 +400,14 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 	return s.save()
 }
 
-func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanceLastSuccess bool) error {
+// recordToDB writes one optimistic record to the DB. consecutiveFailures is
+// passed in by the caller (captured while holding s.mu) instead of being read
+// from s.data here: s.data is a map of POINTERS that load() replaces wholesale
+// (`s.data = wrapper.Channels`), so an unlocked re-read could return nil and
+// panic the process on startup (atlas binary E2E: ChannelHealthStore.recordToDB
+// nil deref, channel_health.go:428). Callers must pass the streak they already
+// hold.
+func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanceLastSuccess bool, consecutiveFailures int) error {
 	if s.pool == nil {
 		return fmt.Errorf("database pool not initialized")
 	}
@@ -425,7 +436,7 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanc
 					  last_success_at = COALESCE(EXCLUDED.last_success_at, channel_health.last_success_at),
 					  consecutive_failures = EXCLUDED.consecutive_failures,
 					  updated_at = EXCLUDED.updated_at
-	`, channelID, status, now, lastErrorPtr, lastSuccessAt, s.data[channelID].ConsecutiveFailures, now)
+	`, channelID, status, now, lastErrorPtr, lastSuccessAt, consecutiveFailures, now)
 	if err != nil {
 		return fmt.Errorf("exec channel health query: %w", err)
 	}
@@ -453,7 +464,9 @@ func (s *ChannelHealthStore) Get(channelID string) *ChannelHealthRecord {
 	_ = s.load()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if rec, ok := s.data[channelID]; ok {
+	// ok == true does not imply non-nil: s.data is a pointer map and a JSON
+	// round-trip can store a nil value for a key (All() guards the same way).
+	if rec, ok := s.data[channelID]; ok && rec != nil {
 		cp := *rec
 		return &cp
 	}
@@ -550,7 +563,7 @@ func (s *ChannelHealthStore) SyncAllToDB() error {
 		// stores status "ok" but keeps the previous LastSuccessAt — see
 		// RecordWaiting).
 		advance := rec.Status == "ok" && rec.LastSuccessAt == rec.LastFetchAt
-		if err := s.recordToDB(id, rec.Status, errMsg, advance); err != nil {
+		if err := s.recordToDB(id, rec.Status, errMsg, advance, rec.ConsecutiveFailures); err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %v", id, err))
 		}
 	}

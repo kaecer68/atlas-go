@@ -365,11 +365,14 @@ func TestNewTaiwanStressCalculator_AutoLoadsBaselines(t *testing.T) {
 	if calc.baselines == nil {
 		t.Fatal("expected baselines to be auto-loaded from workDir, got nil")
 	}
-	if calc.signalStrategy != SignalHybrid {
-		t.Errorf("expected SignalHybrid after auto-load, got %d", calc.signalStrategy)
+	if calc.signalStrategy != SignalDirectional {
+		t.Errorf("expected SignalDirectional after auto-load (spec v0.2 §5.2 item 6), got %d", calc.signalStrategy)
 	}
-	if !calc.useHybridSignal() {
-		t.Error("expected useHybridSignal() to be true after auto-load")
+	if !calc.useDirectionalSignal() {
+		t.Error("expected useDirectionalSignal() to be true after auto-load")
+	}
+	if !calc.useHybridSignal() && !calc.useDirectionalSignal() {
+		t.Error("baseline-aware max-signal (us10y/oil) must remain enabled after auto-load")
 	}
 }
 
@@ -413,8 +416,8 @@ func TestCalculate_US10YHybridSignal_OnFlatDay(t *testing.T) {
 	}
 
 	calc := NewTaiwanStressCalculator(nil, dir)
-	if !calc.useHybridSignal() {
-		t.Fatal("expected hybrid signal to be enabled after auto-load")
+	if !(calc.useHybridSignal() || calc.useDirectionalSignal()) {
+		t.Fatal("expected baseline-aware max-signal (us10y/oil) after auto-load")
 	}
 
 	// US10Y flat day: ChangePct=0, but value=4.8 deviates from baseline mean 4.0.
@@ -493,4 +496,95 @@ func TestGeoIntensityFromStressComponent(t *testing.T) {
 			t.Errorf("GeoIntensityFromStressComponent(%v) = %v, want ~%v", tt.component, got, tt.want)
 		}
 	}
+}
+
+// --- Directional signal tests (spec v0.2 §5.3) ---
+
+// TestCalculate_DirectionalSignal_DXYDirectionality verifies the first-principles
+// directional asymmetry: USD strengthening adds stress, USD weakening provides
+// relief (negative contribution), under the SignalDirectional strategy.
+func TestCalculate_DirectionalSignal_DXYDirectionality(t *testing.T) {
+	calc := NewTaiwanStressCalculatorWithBaseline(nil, "", &BaselineConfig{}, SignalDirectional)
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 0}
+	base := marketdata.MacroDataSnapshot{
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0},
+		RecordedAt:         1713000000,
+	}
+
+	flat := calc.Calculate(base, marketdata.MacroDataSnapshot{}, geo)
+	relief := calc.Calculate(withDXYChange(base, -2), marketdata.MacroDataSnapshot{}, geo)
+	adverse := calc.Calculate(withDXYChange(base, 2), marketdata.MacroDataSnapshot{}, geo)
+
+	if relief.Score >= flat.Score {
+		t.Fatalf("DXY -2%% (favorable) must lower score: relief=%v flat=%v", relief.Score, flat.Score)
+	}
+	if adverse.Score <= flat.Score {
+		t.Fatalf("DXY +2%% (adverse) must raise score: adverse=%v flat=%v", adverse.Score, flat.Score)
+	}
+
+	// Symmetry sanity: relief magnitude must not exceed adverse magnitude,
+	// because relief is floored while adverse is unbounded (up to +100 clamp).
+	reliefDelta := flat.Score - relief.Score
+	adverseDelta := adverse.Score - flat.Score
+	if reliefDelta > adverseDelta+1e-9 {
+		t.Fatalf("relief magnitude (%v) must not exceed adverse magnitude (%v)", reliefDelta, adverseDelta)
+	}
+}
+
+// TestCalculate_DirectionalSignal_ReliefFloor verifies the pre-weight -50 floor:
+// a huge favorable move cannot contribute less than -50*scale*weight post-weight.
+func TestCalculate_DirectionalSignal_ReliefFloor(t *testing.T) {
+	calc := NewTaiwanStressCalculatorWithBaseline(nil, "", &BaselineConfig{}, SignalDirectional)
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 0}
+	snap := marketdata.MacroDataSnapshot{
+		DXY:                marketdata.MacroDataPoint{Value: 80, ChangePct: -30},
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0},
+		RecordedAt:         1713000000,
+	}
+	idx := calc.Calculate(snap, marketdata.MacroDataSnapshot{}, geo)
+
+	floor := -50 * StressScaleDXY * StressWeightDXY
+	if idx.Components["dxy"] < floor-1e-9 {
+		t.Fatalf("dxy relief component %v below floor %v", idx.Components["dxy"], floor)
+	}
+	if idx.Score < 0 {
+		t.Fatalf("total score clamped at 0, got %v", idx.Score)
+	}
+}
+
+// TestCalculate_DirectionalSignal_TotalReliefBound verifies the aggregate
+// relief bound: full favorable alignment across DXY/JPY/Gold can lower the
+// post-weight score by at most 50 x (scale*w) summed over the three
+// directional components = 50 x (5x0.13 + 10x0.08 + 2x0.06) = 78.5 points
+// (only reachable in extreme tail moves; typical -2% moves relieve ~3.1).
+func TestCalculate_DirectionalSignal_TotalReliefBound(t *testing.T) {
+	calc := NewTaiwanStressCalculatorWithBaseline(nil, "", &BaselineConfig{}, SignalDirectional)
+	geo := geopolitical.GeopoliticalRiskScore{Intensity: 0}
+	base := marketdata.MacroDataSnapshot{
+		US10Y:              marketdata.MacroDataPoint{Value: 4.5},
+		VIX:                marketdata.MacroDataPoint{Value: 20},
+		ForeignInvestorNet: marketdata.MacroDataPoint{Value: 0},
+		RecordedAt:         1713000000,
+	}
+	flat := calc.Calculate(base, marketdata.MacroDataSnapshot{}, geo)
+
+	allFavorable := base
+	allFavorable.DXY = marketdata.MacroDataPoint{Value: 90, ChangePct: -30}
+	allFavorable.JPY = marketdata.MacroDataPoint{Value: 160, ChangePct: -20}
+	allFavorable.Gold = marketdata.MacroDataPoint{Value: 1500, ChangePct: -30}
+	relief := calc.Calculate(allFavorable, marketdata.MacroDataSnapshot{}, geo)
+
+	maxRelief := 50 * (StressScaleDXY*StressWeightDXY + StressScaleJPY*StressWeightJPY + StressScaleGold*StressWeightGold)
+	if flat.Score-relief.Score > maxRelief+1e-9 {
+		t.Fatalf("total relief %v exceeds bound %v", flat.Score-relief.Score, maxRelief)
+	}
+}
+
+func withDXYChange(snap marketdata.MacroDataSnapshot, changePct float64) marketdata.MacroDataSnapshot {
+	snap.DXY = marketdata.MacroDataPoint{Value: 104 + changePct, ChangePct: changePct}
+	return snap
 }

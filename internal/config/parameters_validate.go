@@ -291,6 +291,12 @@ func (p *ParametersConfig) Validate() error {
 	if p.Realtime.VolatilityThreshold.Value <= 0 {
 		return fmt.Errorf("realtime.volatility_threshold (%.3f) must be positive", p.Realtime.VolatilityThreshold.Value)
 	}
+	if p.Realtime.RateMoveThresholdPct.Value <= 0 {
+		return fmt.Errorf("realtime.rate_move_threshold_pct (%.3f) must be positive", p.Realtime.RateMoveThresholdPct.Value)
+	}
+	if p.Realtime.DXYMoveThresholdPct.Value <= 0 {
+		return fmt.Errorf("realtime.dxy_move_threshold_pct (%.3f) must be positive", p.Realtime.DXYMoveThresholdPct.Value)
+	}
 	if p.Realtime.VolumeSpikeThreshold.Value <= 1 {
 		return fmt.Errorf("realtime.volume_spike_threshold (%.3f) must be > 1", p.Realtime.VolumeSpikeThreshold.Value)
 	}

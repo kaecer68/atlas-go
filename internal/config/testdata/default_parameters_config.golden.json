@@ -3741,6 +3741,11 @@
     }
   },
   "realtime": {
+    "dxy_move_threshold_pct": {
+      "rationale": "DXY intraday move (%) triggering layer_0 directional dollar evidence",
+      "source": "heuristic",
+      "value": 0.8
+    },
     "max_weight_change": {
       "rationale": "Maximum 50% weight change per adjustment",
       "source": "heuristic",
@@ -3760,6 +3765,11 @@
       "rationale": "1% price move threshold for signal detection",
       "source": "heuristic",
       "value": 0.01
+    },
+    "rate_move_threshold_pct": {
+      "rationale": "US10Y intraday move (%) triggering layer_0 directional rate evidence; 0.5% ~= 2.2bps",
+      "source": "heuristic",
+      "value": 0.5
     },
     "update_interval_ms": {
       "rationale": "100ms update interval for real-time processing",

@@ -119,7 +119,7 @@ func TestE2E_KBPipeline_AcuteMacroScenario(t *testing.T) {
 func TestE2E_All24ThemesRegistered(t *testing.T) {
 	reg := NewDefaultDetectorRegistry()
 
-	const expectedCount = 24
+	const expectedCount = 29
 	if got := reg.Len(); got != expectedCount {
 		t.Errorf("NewDefaultDetectorRegistry().Len() = %d, want %d", got, expectedCount)
 	}

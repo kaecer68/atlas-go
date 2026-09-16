@@ -143,11 +143,14 @@ func TestNarrativeService_BuildMarketNarrativeData_GeoProviderError(t *testing.T
 func TestNarrativeService_DetectEvents(t *testing.T) {
 	svc := NewNarrativeService("/tmp/work", narrative.NewNarrativeEngine(), narrative.NewReportGenerator())
 	events := svc.DetectEvents(narrative.MarketNarrativeData{})
-	if events == nil {
-		t.Fatal("DetectEvents returned nil")
-	}
-	if len(events) == 0 {
-		t.Error("expected at least 1 event from DetectEvents (always emits default)")
+	// Engine contract (TestDetectEventsNoTrigger): empty narrative data emits
+	// only data-independent seasonal/calendar events, and no synthetic
+	// "default" event exists — nil/empty is a legitimate result. Assert the
+	// real invariant: no non-seasonal event may fire from empty data.
+	for _, e := range events {
+		if e.ConfidenceSource != "calendar_seasonal" && e.ConfidenceSource != "calendar_political" {
+			t.Errorf("empty data emitted non-seasonal event %q (theme=%q)", e.ID, e.Theme)
+		}
 	}
 }
 

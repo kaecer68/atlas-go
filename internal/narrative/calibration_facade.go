@@ -27,9 +27,10 @@ type (
 
 // SignalStrategy constants.
 const (
-	SignalChange = calibration.SignalChange
-	SignalLevel  = calibration.SignalLevel
-	SignalHybrid = calibration.SignalHybrid
+	SignalChange      = calibration.SignalChange
+	SignalLevel       = calibration.SignalLevel
+	SignalHybrid      = calibration.SignalHybrid
+	SignalDirectional = calibration.SignalDirectional
 )
 
 // Stress-index calibration constants.

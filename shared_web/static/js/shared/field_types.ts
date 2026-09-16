@@ -3244,6 +3244,8 @@ export interface RealtimeParameters {
   max_weight_change: string;
   min_weight: string;
   update_interval_ms: string;
+  rate_move_threshold_pct: string;
+  dxy_move_threshold_pct: string;
 }
 
 export interface ReasoningTraceItem {

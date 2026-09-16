@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"math"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -120,5 +121,89 @@ func TestSequentialRegime_Regression(t *testing.T) {
 				t.Errorf("got %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+// --- layer_0 directional macro evidence tests (spec v0.2 §6.5) ---
+
+func TestMacroEvidenceSource_RatesUp_AddsNegativeEvidence(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	quotes := map[string]domain.Quote{
+		// VIX in the neutral band (0.7x-1.5x threshold): score 0, conf 0 —
+		// only the rates sub-evidence votes.
+		"VIX":   {Symbol: "VIX", Last: 0.025, Open: 0.025},
+		"US10Y": {Symbol: "^TNX", Last: 4.6, Open: 4.5}, // +2.2% intraday -> rates up
+	}
+	ev := src.Evidence(quotes, nil)
+	if ev.Score >= 0 {
+		t.Fatalf("rates-up + low VIX must yield negative macro evidence, got %v", ev.Score)
+	}
+	if ev.Confidence <= 0 {
+		t.Fatal("expected positive confidence when directional evidence exists")
+	}
+}
+
+func TestMacroEvidenceSource_RatesDown_AddsPositiveEvidence(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	quotes := map[string]domain.Quote{
+		"VIX":   {Symbol: "VIX", Last: 0.01, Open: 0.01},
+		"US10Y": {Symbol: "^TNX", Last: 4.4, Open: 4.5}, // -2.2% intraday -> rates down
+	}
+	ev := src.Evidence(quotes, nil)
+	if ev.Score <= 0 {
+		t.Fatalf("rates-down + low VIX must yield positive macro evidence, got %v", ev.Score)
+	}
+}
+
+func TestMacroEvidenceSource_ConfirmingSignalsDoNotDilute(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	// VIX crisis (-0.8, conf 0.7) + rates up (-0.4, conf 0.5) + dollar surge (-0.3, conf 0.5):
+	// all same direction -> magnitude must stay >= 0.8 (no weighted-average dilution).
+	quotes := map[string]domain.Quote{
+		"VIX":   {Symbol: "VIX", Last: 0.05, Open: 0.01},
+		"US10Y": {Symbol: "^TNX", Last: 4.6, Open: 4.5},
+		"DXY":   {Symbol: "DXY", Last: 106, Open: 105},
+	}
+	ev := src.Evidence(quotes, nil)
+	if ev.Score > -0.8 {
+		t.Fatalf("confirming risk-off signals must not dilute the strongest sub-signal: got %v", ev.Score)
+	}
+	if ev.Confidence < 0.7 {
+		t.Fatalf("confirming signals must stack confidence, got %v", ev.Confidence)
+	}
+}
+
+func TestMacroEvidenceSource_ConflictedSubEvidence_WeightedAverage(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	// VIX low (+0.4, conf 0.5) vs rates up (-0.4, conf 0.5) -> conflicted branch.
+	quotes := map[string]domain.Quote{
+		"VIX":   {Symbol: "VIX", Last: 0.01, Open: 0.01},
+		"US10Y": {Symbol: "^TNX", Last: 4.6, Open: 4.5},
+	}
+	ev := src.Evidence(quotes, nil)
+	if math.Abs(ev.Score) > 0.4+1e-9 {
+		t.Fatalf("conflicted signals must stay within the max sub-magnitude, got %v", ev.Score)
+	}
+}
+
+func TestMacroEvidenceSource_MissingMacroQuotes_NoPhantomVote(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	// No VIX, no US10Y, no DXY -> confidence 0 (spec v0.2 §6.1, #1785).
+	ev := src.Evidence(map[string]domain.Quote{}, nil)
+	if ev.Confidence != 0 {
+		t.Fatalf("expected zero confidence with no macro quotes, got %v", ev.Confidence)
+	}
+}
+
+func TestMacroEvidenceSource_RatesOnly_StillRealEvidence(t *testing.T) {
+	src := NewMacroEvidenceSource()
+	// No VIX (replay/small-sample), but rates moving: directional evidence
+	// alone is real — must not emit the phantom-neutral pattern.
+	quotes := map[string]domain.Quote{
+		"US10Y": {Symbol: "^TNX", Last: 4.4, Open: 4.5}, // -2.2%
+	}
+	ev := src.Evidence(quotes, nil)
+	if ev.Score <= 0 || ev.Confidence == 0 {
+		t.Fatalf("rates-down without VIX must yield positive evidence with confidence, got score=%v conf=%v", ev.Score, ev.Confidence)
 	}
 }
