@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,9 +16,16 @@ func blsStubServer(t *testing.T, status string, entries string, httpStatus int) 
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
+		// The BLS API emits "message" as an ARRAY of strings (empty on success).
+		// Mirroring the real wire format here is what would have caught the
+		// production unmarshal failure ("cannot unmarshal array ... .message").
+		msg := []string{}
+		if status != "REQUEST_SUCCEEDED" {
+			msg = []string{"stub rejection reason"}
+		}
 		body, _ := json.Marshal(map[string]any{
 			"status":  status,
-			"message": "stub",
+			"message": msg,
 			"Results": map[string]any{
 				"series": []map[string]any{
 					{"seriesID": blsCPISeriesID, "data": json.RawMessage(entries)},
@@ -123,5 +131,47 @@ func TestBLSCPIProvider_ErrorsOnBadResponses(t *testing.T) {
 func TestBLSCPIProvider_Name(t *testing.T) {
 	if got := NewBLSCPIProvider().Name(); got != "us_cpi" {
 		t.Fatalf("Name() = %q, want us_cpi", got)
+	}
+}
+
+// TestBLSCPIProvider_AcceptsArrayShapedMessage is the production regression:
+// the live BLS API returns {"status":"REQUEST_SUCCEEDED","message":[],...}
+// and a string-typed field made every fetch fail with
+// "cannot unmarshal array into Go struct field .message of type string".
+func TestBLSCPIProvider_AcceptsArrayShapedMessage(t *testing.T) {
+	entries := `[
+		{"year":"2026","period":"M08","periodName":"August","value":"329.6"},
+		{"year":"2025","period":"M08","periodName":"August","value":"317.0"}
+	]`
+	// Raw handler (not the shared stub) so the literal wire shape is pinned.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"REQUEST_SUCCEEDED","message":[],"Results":{"series":[{"seriesID":"CUUR0000SA0","data":` + entries + `}]}}`))
+	}))
+	defer srv.Close()
+
+	snap, err := newStubCPIProvider(t, srv).FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("array-shaped message must parse, got: %v", err)
+	}
+	want := (329.6 - 317.0) / 317.0 * 100
+	if diff := snap.CPIYoY.Value - want; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("CPIYoY = %v, want %v", snap.CPIYoY.Value, want)
+	}
+}
+
+// TestBLSCPIProvider_ReportsArrayMessageOnRejection verifies the rejection path
+// joins the array message instead of printing a Go type error.
+func TestBLSCPIProvider_ReportsArrayMessageOnRejection(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"REQUEST_NOT_PROCESSED","message":["Series does not exist","bad id"],"Results":{}}`))
+	}))
+	defer srv.Close()
+
+	_, err := newStubCPIProvider(t, srv).FetchSnapshot(context.Background())
+	if err == nil {
+		t.Fatal("expected error on rejected status")
+	}
+	if !strings.Contains(err.Error(), "Series does not exist") || !strings.Contains(err.Error(), "bad id") {
+		t.Errorf("error should carry the BLS message array, got: %v", err)
 	}
 }
