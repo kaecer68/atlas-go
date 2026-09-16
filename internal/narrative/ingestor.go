@@ -859,7 +859,7 @@ func detectConflictDeescalationEventFromSnapshot(currOil, currGold, currVIX mark
 	energyDown := currOil.Symbol != "" && currOil.ChangePct < -2.0
 	goldDown := currGold.Symbol != "" && currGold.ChangePct < -1.0
 	vixFalling := currVIX.Symbol != "" && currVIX.ChangePct < 0
-	if !(energyDown && goldDown && vixFalling) {
+	if !energyDown || !goldDown || !vixFalling {
 		return nil
 	}
 	confidence := 0.4

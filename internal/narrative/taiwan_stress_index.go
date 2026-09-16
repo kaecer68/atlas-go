@@ -123,7 +123,7 @@ func (c *TaiwanStressCalculator) computeStressComponent(factor string, snap, pre
 	changePct := factorChangePct(factor, snap, prev)
 	// Baseline-aware max-signal applies under both hybrid and directional
 	// strategies (directional only remaps DXY/JPY/Gold to signed relief).
-	if !(c.useHybridSignal() || c.useDirectionalSignal()) {
+	if !c.useHybridSignal() && !c.useDirectionalSignal() {
 		return clampComponent(math.Abs(changePct) * scale)
 	}
 

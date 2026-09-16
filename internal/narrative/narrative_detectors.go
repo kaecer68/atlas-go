@@ -1240,7 +1240,7 @@ func detectUSEarningsBoomEvent(data MarketNarrativeData) *NarrativeEvent {
 	spxUp := data.SPXIndexChangePct > spxThreshold
 	ndxUp := data.NDXIndexChangePct > 0
 	vixSubdued := data.VIXLevel > 0 && data.VIXLevel < 25
-	if !(spxUp && ndxUp && vixSubdued) {
+	if !spxUp || !ndxUp || !vixSubdued {
 		return nil
 	}
 	now := time.Now().UTC()
