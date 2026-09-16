@@ -1389,7 +1389,9 @@
         "WeightAdjustmentRate ParameterMetadata[float64]",
         "MaxWeightChange ParameterMetadata[float64]",
         "MinWeight ParameterMetadata[float64]",
-        "UpdateIntervalMs ParameterMetadata[int]"
+        "UpdateIntervalMs ParameterMetadata[int]",
+        "RateMoveThresholdPct ParameterMetadata[float64]",
+        "DXYMoveThresholdPct ParameterMetadata[float64]"
       ],
       "kind": "struct",
       "name": "RealtimeParameters"

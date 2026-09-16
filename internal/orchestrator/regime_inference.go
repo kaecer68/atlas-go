@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"math"
+
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/narrative"
@@ -26,12 +28,130 @@ func NewMacroEvidenceSource() *MacroEvidenceSource {
 	return &MacroEvidenceSource{}
 }
 
+// macroSubEvidence is one directional sub-signal for the macro layer.
+type macroSubEvidence struct {
+	score      float64
+	confidence float64
+	available  bool
+}
+
+// macroRateEvidence derives the US10Y directional sub-evidence (L1/L2:
+// rate up = discount-rate compression, rate down = capital reflow).
+// ChangePct is the intraday open-to-last move in percent; quote maps carry
+// Last/Open only (spec v0.2 §6.2). Absent quote -> not available (#1785
+// no-phantom-vote: the sub-evidence drops out instead of diluting).
+func macroRateEvidence(quotes map[string]domain.Quote) macroSubEvidence {
+	threshold := config.GetParametersConfig().Realtime.RateMoveThresholdPct.Value
+	if threshold <= 0 {
+		threshold = 0.5
+	}
+	for _, key := range []string{"US10Y", "^TNX"} {
+		if q, ok := quotes[key]; ok && q.Open != 0 {
+			chg := (q.Last - q.Open) / q.Open * 100
+			switch {
+			case chg > threshold:
+				return macroSubEvidence{score: -0.4, confidence: 0.5, available: true}
+			case chg < -threshold:
+				return macroSubEvidence{score: +0.4, confidence: 0.5, available: true}
+			default:
+				return macroSubEvidence{score: 0, confidence: 0, available: true}
+			}
+		}
+	}
+	return macroSubEvidence{}
+}
+
+// macroDollarEvidence derives the DXY directional sub-evidence (L8:
+// dollar surge = EM outflow pressure, dollar softening = inflow relief).
+func macroDollarEvidence(quotes map[string]domain.Quote) macroSubEvidence {
+	threshold := config.GetParametersConfig().Realtime.DXYMoveThresholdPct.Value
+	if threshold <= 0 {
+		threshold = 0.8
+	}
+	for _, key := range []string{"DXY", "^DXY"} {
+		if q, ok := quotes[key]; ok && q.Open != 0 {
+			chg := (q.Last - q.Open) / q.Open * 100
+			switch {
+			case chg > threshold:
+				return macroSubEvidence{score: -0.3, confidence: 0.5, available: true}
+			case chg < -threshold:
+				return macroSubEvidence{score: +0.3, confidence: 0.5, available: true}
+			default:
+				return macroSubEvidence{score: 0, confidence: 0, available: true}
+			}
+		}
+	}
+	return macroSubEvidence{}
+}
+
+// composeMacroEvidence merges sub-evidences per spec v0.2 §6.2: same-direction
+// (all nonzero same sign) -> max magnitude with confidence stacking; opposing
+// signs -> confidence-weighted average with the minimum confidence. This
+// guarantees confirming signals never dilute the strongest sub-signal.
+func composeMacroEvidence(subs []macroSubEvidence) (score, confidence float64) {
+	var signs []int
+	for _, sub := range subs {
+		if sub.available && sub.score != 0 {
+			sign := 1
+			if sub.score < 0 {
+				sign = -1
+			}
+			signs = append(signs, sign)
+		}
+	}
+	conflicted := false
+	for i := 1; i < len(signs); i++ {
+		if signs[i] != signs[0] {
+			conflicted = true
+			break
+		}
+	}
+
+	if !conflicted {
+		// Same direction: take max magnitude, stack a small confidence bonus
+		// for each additional confirming sub-evidence.
+		best := macroSubEvidence{}
+		for _, sub := range subs {
+			if sub.available && sub.score != 0 && math.Abs(sub.score) > math.Abs(best.score) {
+				best = sub
+			}
+		}
+		confirming := 0
+		maxConf := 0.0
+		for _, sub := range subs {
+			if sub.available && sub.score != 0 {
+				if sub.confidence > maxConf {
+					maxConf = sub.confidence
+				}
+				confirming++
+			}
+		}
+		if confirming == 0 {
+			return 0, 0
+		}
+		return best.score, math.Min(1.0, maxConf+0.1*float64(confirming-1))
+	}
+
+	// Conflicted: weighted average by confidence, confidence = min.
+	var num, den, minConf float64
+	for _, sub := range subs {
+		if sub.available && sub.score != 0 {
+			num += sub.score * sub.confidence
+			den += sub.confidence
+			if minConf == 0 || sub.confidence < minConf {
+				minConf = sub.confidence
+			}
+		}
+	}
+	if den == 0 {
+		return 0, 0
+	}
+	return num / den, minConf
+}
+
 func (s *MacroEvidenceSource) Evidence(quotes map[string]domain.Quote, events []narrative.NarrativeEvent) RegimeEvidence {
 	params := config.GetParametersConfig()
 	volThreshold := params.Realtime.VolatilityThreshold.Value
-
-	score := 0.0
-	confidence := 0.3
 
 	// VIX may appear under "VIX" or "^VIX" in the quotes map, depending
 	// on the provider (Yahoo uses ^VIX, synthetic data uses VIX).
@@ -40,24 +160,36 @@ func (s *MacroEvidenceSource) Evidence(quotes map[string]domain.Quote, events []
 	if !ok {
 		vix, ok = quotes["^VIX"]
 	}
+
+	// #1785 baseline: no macro evidence at all -> confidence 0 (no phantom
+	// vote). With the directional subs (spec v0.2 §6) a rates/dollar signal
+	// alone is real evidence, so only the all-absent case stays at 0.
+	var subs []macroSubEvidence
+
 	if ok {
-		if vix.Last > volThreshold*1.5 {
-			score = -0.8
-			confidence = 0.7
-		} else if vix.Last > volThreshold {
-			score = -0.4
-			confidence = 0.5
-		} else if vix.Last < volThreshold*0.7 {
-			score = 0.4
-			confidence = 0.5
+		sub := macroSubEvidence{available: true}
+		switch {
+		case vix.Last > volThreshold*1.5:
+			sub.score, sub.confidence = -0.8, 0.7
+		case vix.Last > volThreshold:
+			sub.score, sub.confidence = -0.4, 0.5
+		case vix.Last < volThreshold*0.7:
+			sub.score, sub.confidence = 0.4, 0.5
+		default:
+			// VIX in neutral band: available but neutral (score 0).
+			sub.confidence = 0
 		}
+		subs = append(subs, sub)
 	} else {
 		// #1785: no VIX in the quote map = no macro evidence at all. The old
 		// code still voted with confidence 0.3 at score 0 — a phantom neutral
 		// vote that diluted real evidence in small-sample simulation contexts.
-		confidence = 0
+		subs = append(subs, macroSubEvidence{})
 	}
 
+	subs = append(subs, macroRateEvidence(quotes), macroDollarEvidence(quotes))
+
+	score, confidence := composeMacroEvidence(subs)
 	return RegimeEvidence{Score: score, Confidence: confidence, Source: "macro", LayerID: "layer_0"}
 }
 

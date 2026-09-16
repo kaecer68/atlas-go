@@ -766,6 +766,12 @@ func mergeRealtimeDefaults(cfg *ParametersConfig) {
 	if r.UpdateIntervalMs.Value == 0 {
 		r.UpdateIntervalMs = def.UpdateIntervalMs
 	}
+	if r.RateMoveThresholdPct.Value == 0 {
+		r.RateMoveThresholdPct = def.RateMoveThresholdPct
+	}
+	if r.DXYMoveThresholdPct.Value == 0 {
+		r.DXYMoveThresholdPct = def.DXYMoveThresholdPct
+	}
 }
 
 func mergeNarrativeConvictionDefaults(cfg *ParametersConfig) {

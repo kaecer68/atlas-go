@@ -87,6 +87,16 @@ func defaultRealtimeParameters() RealtimeParameters {
 			Rationale: "100ms update interval for real-time processing",
 			Source:    SourceHeuristic,
 		},
+		RateMoveThresholdPct: ParameterMetadata[float64]{
+			Value:     0.5,
+			Rationale: "US10Y intraday move (%) triggering layer_0 directional rate evidence; 0.5% ~= 2.2bps",
+			Source:    SourceHeuristic,
+		},
+		DXYMoveThresholdPct: ParameterMetadata[float64]{
+			Value:     0.8,
+			Rationale: "DXY intraday move (%) triggering layer_0 directional dollar evidence",
+			Source:    SourceHeuristic,
+		},
 	}
 }
 
