@@ -207,7 +207,7 @@ Backlog（不在本 spec 範圍）：ForeignForecast 利率特徵、MacroRiskAss
    - `dxy`：利空方向（DXY↑）計正壓力；利多方向（DXY↓）計**負值舒緩項**
    - `gold`：同上（金↑=避險壓力；金↓=舒緩）
    - `jpy`：日圓↑（套利平倉方向）=壓力；日圓↓=舒緩
-2. **Relief cap 單位定義（k3 P1 修正）**：cap 定義在 **pre-weight 0–100 成分制**，每成分舒緩下限 **−50**（即 `component_pre_weight = max(raw, -50)`），再乘權重。以實測權重 DXY=0.13 / JPY=0.08 / Gold=0.06（`calibration/stress_index_config.go:17-24`），post-weight 總舒緩上限 ≈ **−13.5 分**（0–100 制）。這不是 no-op，但也不是無界下移；Alert=30 / High=50 / Crisis=70（L27-29）邊界的穿越量以此為界。
+2. **Relief cap 單位定義（k3 P1 修正 + 實作期數學更正）**：cap 定義在 **pre-weight 0–100 成分制**，每成分舒緩下限 **−50**（`clampComponentDirectional`），再乘 scale 與權重。post-weight 每成分下限 = −50 × scale × weight（以預設值算：dxy −50×5×0.13 = −32.5、jpy −50×10×0.08 = −40、gold −50×2×0.06 = −6）。**修正 k3 估算**：k3 的「post-weight 合計 −13.5 分」把 scale 位置算錯（其兩種讀法都不含 scale 因子）；正確總下限 = 50×(5×0.13+10×0.08+2×0.06) = **−78.5 分**，但僅在極端尾端（DXY −10%、JPY −5%、Gold −25% 同時）才會觸底——**典型 −2% 級利多移動的總舒緩 ≈ −3.1 分**。Alert=30 / High=50 / Crisis=70 閾值的重校幅度以 calibration 對照報告實測為準（常態移動區間位移小、尾部有大下限）。
 3. **`clampComponent` 必須方向化（k3 P1）**：現行 `clampComponent`（`taiwan_stress_index.go:140-148`）把 `v < 0` 夾到 0——directional 路徑必須改用允許負值的 clamp（`[-50, 100]`），否則舒緩項永遠出不了來。Score 總和最後仍 clamp 到 `[0, 100]`。
 4. `oil` 維持 `Abs`：油價下跌有供給解除/需求崩潰雙義（`oil_price_shock` 模板 rationale 已記載判別原則）；方向性交由 `conflict_deescalation` 事件鏈做 cross-factor 調變（phase 2 backlog）。
 5. **閾值重校幅度如實評估（k3 P1）**：方向化後，強 risk-on 情境的分數最多下移 ~13.5 分（0–100 制），Alert=30 邊界可能大量穿越。上線前必跑 calibration 對照（新舊分數分布差異報告），據報告決定閾值是否重定義——**不預設「小幅重校」**。

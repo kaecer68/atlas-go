@@ -19,12 +19,17 @@ import (
 //   - SignalChange (default): uses the raw change-pct or value signal (original behavior).
 //   - SignalLevel: uses the z-score deviation from rolling baseline mean.
 //   - SignalHybrid: uses the signal with the larger absolute magnitude between change and level.
+//   - SignalDirectional: directional stress signal — adverse-direction moves add stress,
+//     favorable-direction moves contribute negative (relief) components with a floor.
+//     The signed/relief-floor logic lives in the stress calculator (taiwan_stress_index.go);
+//     calibration accuracy for this strategy currently falls back to the change signal.
 type SignalStrategy int
 
 const (
-	SignalChange = iota // default: original change-pct signal
-	SignalLevel         // level-based z-score from rolling baseline
-	SignalHybrid        // max(|change|, |level deviation|)
+	SignalChange      = iota // default: original change-pct signal
+	SignalLevel              // level-based z-score from rolling baseline
+	SignalHybrid             // max(|change|, |level deviation|)
+	SignalDirectional        // signed stress with relief floor (stress calculator only)
 )
 
 type CalibrationRecord struct {
@@ -312,6 +317,11 @@ func factorSignalWithStrategy(factor string, snap marketdata.MacroDataSnapshot, 
 		if cfg != nil {
 			return ComputeHybridSignal(factor, snap, foreignNet, cfg)
 		}
+		return factorSignal(factor, snap, foreignNet)
+	case SignalDirectional:
+		// Directional weighting lives in the stress calculator; calibration
+		// accuracy for this strategy falls back to the change signal until a
+		// directional calibration pass is validated.
 		return factorSignal(factor, snap, foreignNet)
 	case SignalLevel:
 		if cfg != nil {

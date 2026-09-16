@@ -48,10 +48,11 @@ type TaiwanStressCalculator struct {
 // Loads runtime weights from the centralized parameters system (config.GetParametersConfig).
 // If workDir is non-empty and persisted baselines exist at
 // workDir/data/state/calibration/baselines.json, the calculator auto-enables
-// hybrid signal (max of |level deviation| and |change_pct|) for
-// DXY/JPY/US10Y/Oil/Gold. Production hot path: callers do not need to
-// invoke NewTaiwanStressCalculatorWithBaseline explicitly. First-run
-// (no baselines file) gracefully falls back to pure change_pct.
+// directional signal (signed stress with relief floor for DXY/JPY/Gold;
+// hybrid max(|level deviation|, |change_pct|) retained for Oil/US10Y) —
+// spec v0.2 §5.2. Production hot path: callers do not need to invoke
+// NewTaiwanStressCalculatorWithBaseline explicitly. First-run (no baselines
+// file) gracefully falls back to pure change_pct.
 func NewTaiwanStressCalculator(geoProvider geopolitical.GeopoliticalRiskProvider, workDir string) *TaiwanStressCalculator {
 	cfg := calibration.LoadWeightsConfig("")
 	calc := &TaiwanStressCalculator{
@@ -62,7 +63,10 @@ func NewTaiwanStressCalculator(geoProvider geopolitical.GeopoliticalRiskProvider
 	if workDir != "" {
 		if bl, err := LoadBaselines(workDir); err == nil && bl != nil {
 			calc.baselines = bl
-			calc.signalStrategy = SignalHybrid
+			// Directional signal supersedes hybrid when baselines exist (spec
+			// v0.2 §5.2 item 6): signed stress directionality is the
+			// production critical path for first-principles regime direction.
+			calc.signalStrategy = SignalDirectional
 		}
 	}
 	return calc
@@ -89,12 +93,37 @@ func (c *TaiwanStressCalculator) useHybridSignal() bool {
 	return c.baselines != nil && c.signalStrategy == SignalHybrid
 }
 
+// useDirectionalSignal returns true when the calculator should use directional
+// (signed) stress components for DXY/JPY/Gold: adverse-direction moves add
+// stress; favorable-direction moves contribute negative relief with a floor
+// (spec v0.2 §5.2). Auto-enabled when baselines exist (NewTaiwanStressCalculator).
+func (c *TaiwanStressCalculator) useDirectionalSignal() bool {
+	return c.baselines != nil && c.signalStrategy == SignalDirectional
+}
+
+// clampComponentDirectional clamps a pre-weight directional component to
+// [-50, 100] (0-100 scale, spec v0.2 §5.2 item 2). The -50 floor bounds the
+// total relief to 0.5 x SUM(directional weights) (approx -13.5 points on the
+// 0-100 scale), keeping the Alert/High/Crisis threshold shifts bounded and
+// re-calibratable.
+func clampComponentDirectional(v float64) float64 {
+	if v > 100 {
+		return 100
+	}
+	if v < -50 {
+		return -50
+	}
+	return v
+}
+
 // computeStressComponent computes a single stress component for the given factor.
 // When hybrid signal is enabled, it returns the larger of |level deviation| and |change_pct|
 // scaled appropriately. Otherwise, it uses the raw changePct.
 func (c *TaiwanStressCalculator) computeStressComponent(factor string, snap, prev marketdata.MacroDataSnapshot, scale float64) float64 {
 	changePct := factorChangePct(factor, snap, prev)
-	if !c.useHybridSignal() {
+	// Baseline-aware max-signal applies under both hybrid and directional
+	// strategies (directional only remaps DXY/JPY/Gold to signed relief).
+	if !(c.useHybridSignal() || c.useDirectionalSignal()) {
 		return clampComponent(math.Abs(changePct) * scale)
 	}
 
@@ -194,7 +223,11 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 		cfg.Weights.JPY, cfg.Weights.Geopolitical, cfg.Weights.Oil, cfg.Weights.Gold
 	tCrisis, tHigh, tAlert := cfg.Thresholds.Crisis, cfg.Thresholds.High, cfg.Thresholds.Alert
 
-	if c.useHybridSignal() {
+	if c.useDirectionalSignal() {
+		// Directional (spec v0.2 §5.2): DXY up = adverse (stress); DXY down =
+		// favorable (relief, negative with -50 pre-weight floor).
+		components["dxy"] = clampComponentDirectional(snap.DXY.ChangePct*scaleDXY) * wDXY
+	} else if c.useHybridSignal() {
 		components["dxy"] = c.computeStressComponent("dxy", snap, prev, scaleDXY) * wDXY
 	} else {
 		dxyComponent := math.Abs(snap.DXY.ChangePct) * scaleDXY
@@ -204,7 +237,10 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 		components["dxy"] = dxyComponent * wDXY
 	}
 
-	if c.useHybridSignal() {
+	if c.useHybridSignal() || c.useDirectionalSignal() {
+		// US10Y is level-based (higher yield = stress, lower = relief) and
+		// NOT directional-remapped: keep hybrid max(|level dev|, |change|)
+		// whenever baselines exist (spec v0.2 §5.2 item 6).
 		components["us10y"] = c.computeStressComponent("us10y", snap, prev, scaleUS10Y) * wUS10Y
 	} else {
 		us10yChange := snap.US10Y.Value
@@ -234,7 +270,10 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	}
 	components["vix"] = vixComponent * wVIX
 
-	if c.useHybridSignal() {
+	if c.useDirectionalSignal() {
+		// Directional: JPY up (carry unwind direction) = stress; JPY down = relief.
+		components["jpy"] = clampComponentDirectional(snap.JPY.ChangePct*scaleJPY) * wJPY
+	} else if c.useHybridSignal() {
 		components["jpy"] = c.computeStressComponent("jpy", snap, prev, scaleJPY) * wJPY
 	} else {
 		jpyChange := math.Abs(snap.JPY.ChangePct)
@@ -251,7 +290,9 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 	geoComponent := geoScore.Intensity * scaleGeo
 	components["geopolitical"] = geoComponent * wGeo
 
-	if c.useHybridSignal() {
+	if c.useHybridSignal() || c.useDirectionalSignal() {
+		// Oil keeps hybrid max-signal (direction-blind by design: oil-down is
+		// supply-resolution relief OR demand-collapse distress — spec §5.2 item 4).
 		components["oil"] = c.computeStressComponent("oil", snap, prev, scaleOil) * wOil
 	} else {
 		oilComponent := math.Abs(snap.Oil.ChangePct) * scaleOil
@@ -261,7 +302,10 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 		components["oil"] = oilComponent * wOil
 	}
 
-	if c.useHybridSignal() {
+	if c.useDirectionalSignal() {
+		// Directional: gold up (risk-off haven demand) = stress; gold down = relief.
+		components["gold"] = clampComponentDirectional(snap.Gold.ChangePct*scaleGold) * wGold
+	} else if c.useHybridSignal() {
 		components["gold"] = c.computeStressComponent("gold", snap, prev, scaleGold) * wGold
 	} else {
 		goldComponent := math.Abs(snap.Gold.ChangePct) * scaleGold
@@ -273,6 +317,15 @@ func (c *TaiwanStressCalculator) Calculate(snap, prev marketdata.MacroDataSnapsh
 
 	score := components["dxy"] + components["us10y"] + components["foreign_flow"] +
 		components["vix"] + components["jpy"] + components["geopolitical"] + components["oil"] + components["gold"]
+
+	// Directional relief can push the total below zero; clamp to [0, 100]
+	// so regime classification stays well-defined (spec v0.2 §5.2 item 3).
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
 
 	regime := "low"
 	switch {
