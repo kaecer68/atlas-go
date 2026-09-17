@@ -106,6 +106,33 @@ func (s *PGFirstOutcomeStore) LoadSessionOutcomes(sessionID string) ([]domain.Re
 	return fallback, nil
 }
 
+// LoadSessionScorecardOutcomes is the slim per-session read used by the
+// performance report: scalar columns only, metadata JSONB never transferred.
+// Falls back to the full JSONL read when postgres is unavailable (degraded).
+func (s *PGFirstOutcomeStore) LoadSessionScorecardOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	slim, ok := s.pg.(interface {
+		LoadSessionScorecardOutcomes(string) ([]domain.RecommendationOutcome, error)
+	})
+	if !ok {
+		// Backend without the slim projection: keep the full read.
+		return s.LoadSessionOutcomes(sessionID)
+	}
+	outcomes, err := slim.LoadSessionScorecardOutcomes(sessionID)
+	if err == nil {
+		s.markDegraded(false)
+		return outcomes, nil
+	}
+	if s.jsonl == nil {
+		return nil, fmt.Errorf("load session scorecard outcomes from postgres: %w", err)
+	}
+	fallback, ferr := s.jsonl.LoadSessionOutcomes(sessionID)
+	if ferr != nil {
+		return nil, fmt.Errorf("postgres unavailable (%v) and jsonl fallback failed: %w", err, ferr)
+	}
+	s.markDegraded(true)
+	return fallback, nil
+}
+
 // ---- the rest of OutcomeStore delegates to PG (write paths). ----
 
 func (s *PGFirstOutcomeStore) RecordOutcomes(outcomes []domain.RecommendationOutcome) error {
