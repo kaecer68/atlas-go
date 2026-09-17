@@ -208,3 +208,25 @@ func TestTimeoutRouteOverrides_CrossMarketLong(t *testing.T) {
 		}
 	}
 }
+
+// TestTimeoutRouteOverrides_PerformanceReportLong locks the fix for the
+// 2026-09-17 incident: a cold performance-report generation loads ~200 sessions
+// and exceeded the 8s default, surfacing as 503 {"degraded":true,"error":
+// "upstream timeout"}. The route (and its export sibling) must carry the long
+// budget; the 60s TTL cache means the long path runs once per window.
+func TestTimeoutRouteOverrides_PerformanceReportLong(t *testing.T) {
+	for _, route := range []string{
+		"/api/dashboard/performance-report",
+		"/api/dashboard/performance-report/export",
+		"/api/report/latest",
+	} {
+		d, ok := timeoutRouteOverrides[route]
+		if !ok {
+			t.Errorf("route %q missing from timeoutRouteOverrides", route)
+			continue
+		}
+		if d != longRequestTimeout {
+			t.Errorf("route %q override = %v, want longRequestTimeout (%v)", route, d, longRequestTimeout)
+		}
+	}
+}

@@ -30,12 +30,18 @@ var timeoutRouteOverrides = map[string]time.Duration{
 	"/api/backtest/run": longRequestTimeout,
 
 	// Daily/periodic reports can be slower than ordinary reads.
-	"/api/reports/latest":          longRequestTimeout,
-	"/api/reports/archive":         longRequestTimeout,
-	"/api/reports/subscribe":       longRequestTimeout,
-	"/api/report/latest":           longRequestTimeout,
-	"/api/report/list":             longRequestTimeout,
-	"/api/dashboard/daily-summary": longRequestTimeout,
+	"/api/reports/latest":    longRequestTimeout,
+	"/api/reports/archive":   longRequestTimeout,
+	"/api/reports/subscribe": longRequestTimeout,
+	"/api/report/latest":     longRequestTimeout,
+	"/api/report/list":       longRequestTimeout,
+
+	// Performance report aggregates every session's outcomes; a cold
+	// generation (empty TTL cache) legitimately exceeds 8s. It is cached for
+	// 60s, so the long budget is only consumed once per window.
+	"/api/dashboard/performance-report":        longRequestTimeout,
+	"/api/dashboard/performance-report/export": longRequestTimeout,
+	"/api/dashboard/daily-summary":             longRequestTimeout,
 
 	// Cross-market fan-out (28 channels) and US-indices can occasionally
 	// exceed 8s on a cache-miss refetch; give them the long budget so a

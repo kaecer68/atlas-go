@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	configpkg "github.com/kaecer68/atlas-go/internal/config"
@@ -564,22 +565,46 @@ type sessionScorecardOutcomeStore interface {
 // (~GBs), which OOM-killed the container in a restart loop (2026-09-17). Stores
 // without the slim method keep the full read.
 func loadAllOutcomes(store ledger.OutcomeStore, summaries []domain.SessionSummary) []domain.RecommendationOutcome {
+	if len(summaries) == 0 {
+		return nil
+	}
 	slim, useSlim := store.(sessionScorecardOutcomeStore)
+
+	// Sessions are independent, and the production ledger has ~200 of them:
+	// loading them sequentially cost one round trip each and pushed a cold
+	// generation past the 8 s request timeout (503 "upstream timeout",
+	// 2026-09-17). Bounded concurrency keeps the DB honest while cutting the
+	// wall time roughly by the worker count.
+	const workers = 8
+	results := make([][]domain.RecommendationOutcome, len(summaries))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, workers)
+	for i := range summaries {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, sessionID string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			var (
+				outcomes []domain.RecommendationOutcome
+				err      error
+			)
+			if useSlim {
+				outcomes, err = slim.LoadSessionScorecardOutcomes(sessionID)
+			} else {
+				outcomes, err = store.LoadSessionOutcomes(sessionID)
+			}
+			if err != nil {
+				return
+			}
+			results[idx] = outcomes
+		}(i, summaries[i].SessionID)
+	}
+	wg.Wait()
+
 	var allOutcomes []domain.RecommendationOutcome
-	for _, s := range summaries {
-		var (
-			outcomes []domain.RecommendationOutcome
-			err      error
-		)
-		if useSlim {
-			outcomes, err = slim.LoadSessionScorecardOutcomes(s.SessionID)
-		} else {
-			outcomes, err = store.LoadSessionOutcomes(s.SessionID)
-		}
-		if err != nil {
-			continue
-		}
-		allOutcomes = append(allOutcomes, outcomes...)
+	for _, chunk := range results {
+		allOutcomes = append(allOutcomes, chunk...)
 	}
 	return allOutcomes
 }
