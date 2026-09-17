@@ -104,7 +104,7 @@
 | 5 | E1+E2: YAML loader + 參數可配置 | 憲章配置可被程式讀取 | ✅ (#1372) |
 | 6 | D1: detector 時期敏感度 | 5 detector 差異化權重 | ✅ (#1372) |
 | 7 | C1+C2: 七大勢力數據源 | 壽險/公司派/散戶上線 | ✅ (#1372 / #1421)；CAPTCHA 為下游依賴 |
-| 8 | D5: RegimeAllocator 六策略 | 六策略×七時期矩陣 | ⚠️ code 完成 (#1372)，**未接 production caller**（ACI 2026-09-04，見 docs/specs/capital-flow-model-audit.md §2.2） |
+| 8 | D5: RegimeAllocator 六策略 | 六策略×七時期矩陣 | ⚠️ code 完成 (#1372)，**未接 production caller**（ACI 2026-09-04；審計原文 `.omo/audit/capital-flow-model-audit.md` §2.2，workspace-private 不隨 repo 追蹤） |
 
 ### 第二批：P1 — 信號不完整（v1.1 全部完成）
 

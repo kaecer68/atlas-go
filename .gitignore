@@ -230,6 +230,12 @@ l2-4-preflight
 logs/
 data/staging/
 internal/narrative/testdata/*.actual.json
+internal/sim/testdata/*.actual.json
+
+# Ad-hoc local `go build -o <name> ./cmd/...` outputs at the repo root
+# (root is whitelist-only per docs/documentation-standard.md).
+/backfill-macro-history
+/chips-ic-study
 
 # Binary freshness protocol (2026-07-21): host-built binaries for sandbox rebuilds
 .build-atlas/

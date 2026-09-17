@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../schemas/data_metadata.schema.json",
+  "name": "taifex_oi",
+  "description": "期貨三大法人買賣（成交量 + 未平倉口數）歷史資料，2021 年由 FinMind TaiwanFuturesInstitutionalInvestors 回填（D07）。TAIFEX OpenAPI 無 date 參數且 futContractsDateDown CSV 拒絕 ≤2023 日期，FinMind 為唯一 Free/Sponsor 歷史來源。",
+  "maturity": "evolving",
+  "data_type": "directory",
+  "format": "YYYY-MM-DD.json（每日一檔；contracts.<futures_id> = InstitutionalFuturesDaily 結構）",
+  "producer_module": "cmd/backfill-taifex-oi-finmind + internal/marketdata",
+  "producer_function": "FinMindFuturesInstitutionalProvider.FetchInstitutionalFuturesRange",
+  "consumer_modules": [
+    "internal/monitoring",
+    "internal/marketdata"
+  ],
+  "schema_ref": null,
+  "catalog_ref": null,
+  "created_date": "2026-08-30",
+  "last_modified": "2026-08-30",
+  "estimated_size": {
+    "files": 244,
+    "growth_rate": "manual backfill only"
+  },
+  "retention_policy": "keep",
+  "tags": [
+    "taifex",
+    "futures",
+    "oi",
+    "finmind",
+    "backfill",
+    "d07"
+  ]
+}
