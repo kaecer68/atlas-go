@@ -3,6 +3,7 @@ package reporting
 import (
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,19 +11,21 @@ import (
 )
 
 // countingOutcomeStore records which per-session read path loadAllOutcomes uses.
+// Counters are atomic: the load path is concurrent (bounded worker pool), so
+// plain ints would race under -race.
 type countingOutcomeStore struct {
 	*fakeSourceStore
-	slimCalls int
-	fullCalls int
+	slimCalls atomic.Int64
+	fullCalls atomic.Int64
 }
 
 func (c *countingOutcomeStore) LoadSessionScorecardOutcomes(string) ([]domain.RecommendationOutcome, error) {
-	c.slimCalls++
+	c.slimCalls.Add(1)
 	return []domain.RecommendationOutcome{{AgentID: "a", Hit: true, ForwardReturn: 0.01}}, nil
 }
 
 func (c *countingOutcomeStore) LoadSessionOutcomes(string) ([]domain.RecommendationOutcome, error) {
-	c.fullCalls++
+	c.fullCalls.Add(1)
 	return nil, nil
 }
 
@@ -39,11 +42,11 @@ func TestLoadAllOutcomes_PrefersSlimPerSessionProjection(t *testing.T) {
 
 	got := loadAllOutcomes(store, summaries)
 
-	if store.slimCalls != 2 {
-		t.Errorf("expected the slim projection per session (2), got %d", store.slimCalls)
+	if got := store.slimCalls.Load(); got != 2 {
+		t.Errorf("expected the slim projection per session (2), got %d", got)
 	}
-	if store.fullCalls != 0 {
-		t.Errorf("full metadata read must not be used when slim is available, got %d", store.fullCalls)
+	if got := store.fullCalls.Load(); got != 0 {
+		t.Errorf("full metadata read must not be used when slim is available, got %d", got)
 	}
 	if len(got) != 2 {
 		t.Errorf("expected 2 outcomes, got %d", len(got))
