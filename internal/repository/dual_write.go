@@ -437,6 +437,21 @@ func (r *DualWriteRepository) QueryOutcomesBySession(ctx context.Context, sessio
 	return r.jsonl.outcomeStore.LoadSessionOutcomes(sessionID)
 }
 
+// QuerySessionScorecardOutcomes is the slim per-session variant used by the
+// performance report: the PG store reads only the scalar scorecard columns
+// (metadata JSONB never transferred). Falls back to the full per-session read
+// when the backend lacks the projection or postgres is unusable — the JSONL
+// files carry the same fields, so results stay equivalent.
+func (r *DualWriteRepository) QuerySessionScorecardOutcomes(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {
+	if r.pgUsable() {
+		outcomes, err := r.pg.QuerySessionScorecardOutcomes(ctx, sessionID)
+		if err == nil && len(outcomes) > 0 {
+			return outcomes, nil
+		}
+	}
+	return r.jsonl.outcomeStore.LoadSessionOutcomes(sessionID)
+}
+
 func (r *DualWriteRepository) QueryOutcomesBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
 	if r.pgUsable() {
 		return r.pg.QueryOutcomesBySymbol(ctx, symbol, start, end)

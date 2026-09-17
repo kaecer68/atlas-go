@@ -226,6 +226,20 @@ func (a *DualWriteOutcomeStoreAdapter) LoadSessionOutcomes(sessionID string) ([]
 	return a.repo.QueryOutcomesBySession(a.ctx, sessionID)
 }
 
+// LoadSessionScorecardOutcomes exposes the slim per-session scorecard
+// projection so the performance report does not pull each session's metadata
+// JSONB (271k rows / 644 MB in production). Reporting prefers this path when
+// the store implements it.
+func (a *DualWriteOutcomeStoreAdapter) LoadSessionScorecardOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	return a.repo.QuerySessionScorecardOutcomes(a.ctx, sessionID)
+}
+
+// DualWriteOutcomeStoreAdapter must expose the slim per-session projection:
+// reporting.loadAllOutcomes asserts on it to avoid the 644 MB metadata read.
+var _ interface {
+	LoadSessionScorecardOutcomes(string) ([]domain.RecommendationOutcome, error)
+} = (*DualWriteOutcomeStoreAdapter)(nil)
+
 func (a *DualWriteOutcomeStoreAdapter) LoadOutcomes() ([]domain.RecommendationOutcome, error) {
 	return a.repo.QueryAllOutcomes(a.ctx)
 }

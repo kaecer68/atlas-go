@@ -71,6 +71,60 @@ func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, session
 	return scanRecommendationOutcomes(rows)
 }
 
+// QuerySessionScorecardOutcomes reads only the scalar scorecard columns for one
+// session (skill/layer/forward_return/hit/regime/recorded_at are extracted with
+// metadata->>'...' operators), so the metadata JSONB blob is never transferred
+// or unmarshalled. The performance report uses it: the full per-session read
+// pulled 644 MB of metadata in production and OOM-killed the container
+// (2026-09-17). Window carries the session ID, matching the full read's
+// semantics.
+func (r *PostgresRepository) QuerySessionScorecardOutcomes(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {
+	const query = `
+		SELECT agent_id,
+		       COALESCE(metadata->>'skill', ''),
+		       COALESCE(metadata->>'layer', ''),
+		       COALESCE((metadata->>'forward_return')::float8, 0),
+		       COALESCE((metadata->>'hit')::boolean, false),
+		       COALESCE(metadata->>'regime', ''),
+		       COALESCE(metadata->>'recorded_at', ''),
+		       time
+		FROM recommendation_outcomes
+		WHERE session_id = $1
+		ORDER BY time DESC`
+	rows, err := r.pool.Query(ctx, query, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query session scorecard outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	var outcomes []domain.RecommendationOutcome
+	for rows.Next() {
+		var o domain.RecommendationOutcome
+		var layer, recordedAtText string
+		var colTime time.Time
+		if err := rows.Scan(
+			&o.AgentID, &o.Skill, &layer,
+			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &colTime,
+		); err != nil {
+			return nil, fmt.Errorf("scan session scorecard outcome: %w", err)
+		}
+		o.Layer = domain.AgentLayer(layer)
+		o.Window = sessionID
+		if recordedAtText == "" {
+			o.RecordedAt = colTime
+		} else if parsed, perr := time.Parse(time.RFC3339Nano, recordedAtText); perr == nil {
+			o.RecordedAt = parsed
+		} else {
+			o.RecordedAt = colTime
+		}
+		outcomes = append(outcomes, o)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("session scorecard outcome rows: %w", rows.Err())
+	}
+	return outcomes, nil
+}
+
 func (r *PostgresRepository) QueryOutcomesBySymbol(ctx context.Context, symbol string, start, end time.Time) ([]domain.RecommendationOutcome, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT time, session_id, symbol, agent_id, agent_layer, conviction, passed_guards, guard_reason, price, metadata,
