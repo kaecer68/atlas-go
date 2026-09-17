@@ -296,6 +296,61 @@ func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOu
 	return outcomes, nil
 }
 
+// LoadSessionScorecardOutcomes is the per-session variant of
+// LoadScorecardOutcomes: same slim scalar projection (metadata JSONB never
+// transferred), scoped by session_id. reporting.loadAllOutcomes uses it so the
+// performance report no longer reads every session's full metadata blob — that
+// accumulation allocated gigabytes per generation and OOM-killed the container
+// (2026-09-17). Window is set from the query parameter, mirroring the full read
+// where Window carries the session ID.
+func (s *PostgresLedgerStore) LoadSessionScorecardOutcomes(sessionID string) ([]domain.RecommendationOutcome, error) {
+	ctx := context.Background()
+	const query = `
+		SELECT agent_id,
+		       COALESCE(metadata->>'skill', ''),
+		       COALESCE(metadata->>'layer', ''),
+		       COALESCE((metadata->>'forward_return')::float8, 0),
+		       COALESCE((metadata->>'hit')::boolean, false),
+		       COALESCE(metadata->>'regime', ''),
+		       COALESCE(metadata->>'recorded_at', ''),
+		       time
+		FROM recommendation_outcomes
+		WHERE session_id = $1
+		ORDER BY time DESC`
+	rows, err := s.pool.Query(ctx, query, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query session scorecard outcomes: %w", err)
+	}
+	defer rows.Close()
+
+	var outcomes []domain.RecommendationOutcome
+	for rows.Next() {
+		var o domain.RecommendationOutcome
+		var layer, recordedAtText string
+		var colTime time.Time
+		if err := rows.Scan(
+			&o.AgentID, &o.Skill, &layer,
+			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &colTime,
+		); err != nil {
+			return nil, fmt.Errorf("scan session scorecard outcome row: %w", err)
+		}
+		o.Layer = domain.AgentLayer(layer)
+		o.Window = sessionID
+		if recordedAtText == "" {
+			o.RecordedAt = colTime
+		} else if parsed, perr := time.Parse(time.RFC3339Nano, recordedAtText); perr == nil {
+			o.RecordedAt = parsed
+		} else {
+			o.RecordedAt = colTime
+		}
+		outcomes = append(outcomes, o)
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("session scorecard outcome rows: %w", rows.Err())
+	}
+	return outcomes, nil
+}
+
 // LoadAllSessionScorecards aggregates all outcomes into scorecards
 // (PostgreSQL is the complete source).
 func (s *PostgresLedgerStore) LoadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {

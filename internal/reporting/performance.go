@@ -549,10 +549,33 @@ func filterSummariesByDate(summaries []domain.SessionSummary, cutoff time.Time) 
 	return filtered
 }
 
+// sessionScorecardOutcomeStore is the optional slim per-session projection
+// (#1780 Phase 1 direction): only the scalar fields the report aggregations
+// consume, with the metadata JSONB never transferred.
+type sessionScorecardOutcomeStore interface {
+	LoadSessionScorecardOutcomes(sessionID string) ([]domain.RecommendationOutcome, error)
+}
+
+// loadAllOutcomes gathers the outcomes of every summary.
+//
+// It prefers the slim per-session projection when the store offers it: the
+// production ledger holds 271,359 outcomes carrying 644 MB of metadata JSONB,
+// and the previous unconditional full read accumulated all of it per generation
+// (~GBs), which OOM-killed the container in a restart loop (2026-09-17). Stores
+// without the slim method keep the full read.
 func loadAllOutcomes(store ledger.OutcomeStore, summaries []domain.SessionSummary) []domain.RecommendationOutcome {
+	slim, useSlim := store.(sessionScorecardOutcomeStore)
 	var allOutcomes []domain.RecommendationOutcome
 	for _, s := range summaries {
-		outcomes, err := store.LoadSessionOutcomes(s.SessionID)
+		var (
+			outcomes []domain.RecommendationOutcome
+			err      error
+		)
+		if useSlim {
+			outcomes, err = slim.LoadSessionScorecardOutcomes(s.SessionID)
+		} else {
+			outcomes, err = store.LoadSessionOutcomes(s.SessionID)
+		}
 		if err != nil {
 			continue
 		}
