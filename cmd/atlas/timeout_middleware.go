@@ -41,7 +41,15 @@ var timeoutRouteOverrides = map[string]time.Duration{
 	// 60s, so the long budget is only consumed once per window.
 	"/api/dashboard/performance-report":        longRequestTimeout,
 	"/api/dashboard/performance-report/export": longRequestTimeout,
-	"/api/dashboard/daily-summary":             longRequestTimeout,
+
+	// Session views enrich every session with its outcomes (one read per
+	// session) and the dashboard polls them; a cold pass exceeded the 8s
+	// default and contributed to the 2026-09-17 OOM/503 incident.
+	"/api/dashboard/sessions":                longRequestTimeout,
+	"/api/dashboard/agent-observatory":       longRequestTimeout,
+	"/api/dashboard/reasoning-trace":         longRequestTimeout,
+	"/api/dashboard/recommendation-pipeline": longRequestTimeout,
+	"/api/dashboard/daily-summary":           longRequestTimeout,
 
 	// Cross-market fan-out (28 channels) and US-indices can occasionally
 	// exceed 8s on a cache-miss refetch; give them the long budget so a

@@ -71,22 +71,34 @@ func (r *PostgresRepository) QueryOutcomesBySession(ctx context.Context, session
 	return scanRecommendationOutcomes(rows)
 }
 
-// QuerySessionScorecardOutcomes reads only the scalar scorecard columns for one
-// session (skill/layer/forward_return/hit/regime/recorded_at are extracted with
-// metadata->>'...' operators), so the metadata JSONB blob is never transferred
-// or unmarshalled. The performance report uses it: the full per-session read
-// pulled 644 MB of metadata in production and OOM-killed the container
-// (2026-09-17). Window carries the session ID, matching the full read's
-// semantics.
+// QuerySessionScorecardOutcomes reads one session's outcomes using only scalar
+// columns: the real columns (symbol, conviction, agent_layer, passed_guards,
+// guard_reason, price, market periods) plus the handful of scalars embedded in
+// the metadata JSONB. The metadata blob itself is never transferred or
+// unmarshalled.
+//
+// This is the per-session counterpart of LoadScorecardOutcomes (#1780 Phase 1)
+// and exists because the full read pulled 644 MB of metadata in production: the
+// dashboard's /api/dashboard/sessions enrichment loop expanded it to ~1 GB per
+// request and OOM-killed the container (2026-09-17). Window carries the session
+// ID, matching the full read's semantics.
 func (r *PostgresRepository) QuerySessionScorecardOutcomes(ctx context.Context, sessionID string) ([]domain.RecommendationOutcome, error) {
 	const query = `
 		SELECT agent_id,
+		       COALESCE(symbol, ''),
+		       COALESCE(conviction, 0),
+		       COALESCE(agent_layer, ''),
+		       COALESCE(passed_guards, false),
+		       COALESCE(guard_reason, ''),
+		       COALESCE(price, 0),
 		       COALESCE(metadata->>'skill', ''),
 		       COALESCE(metadata->>'layer', ''),
 		       COALESCE((metadata->>'forward_return')::float8, 0),
 		       COALESCE((metadata->>'hit')::boolean, false),
 		       COALESCE(metadata->>'regime', ''),
 		       COALESCE(metadata->>'recorded_at', ''),
+		       market_period,
+		       market_period_source,
 		       time
 		FROM recommendation_outcomes
 		WHERE session_id = $1
@@ -100,16 +112,28 @@ func (r *PostgresRepository) QuerySessionScorecardOutcomes(ctx context.Context, 
 	var outcomes []domain.RecommendationOutcome
 	for rows.Next() {
 		var o domain.RecommendationOutcome
-		var layer, recordedAtText string
+		var layer, metadataLayer, recordedAtText string
 		var colTime time.Time
+		var marketPeriod, marketPeriodSource *string
 		if err := rows.Scan(
-			&o.AgentID, &o.Skill, &layer,
-			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &colTime,
+			&o.AgentID, &o.Symbol, &o.Conviction, &layer, &o.PassedGuards,
+			&o.GuardReason, &o.Price, &o.Skill, &metadataLayer, &o.ForwardReturn,
+			&o.Hit, &o.Regime, &recordedAtText, &marketPeriod, &marketPeriodSource,
+			&colTime,
 		); err != nil {
 			return nil, fmt.Errorf("scan session scorecard outcome: %w", err)
 		}
 		o.Layer = domain.AgentLayer(layer)
+		if o.Layer == "" {
+			o.Layer = domain.AgentLayer(metadataLayer)
+		}
 		o.Window = sessionID
+		if marketPeriod != nil {
+			o.MarketPeriod = *marketPeriod
+		}
+		if marketPeriodSource != nil {
+			o.MarketPeriodSource = *marketPeriodSource
+		}
 		if recordedAtText == "" {
 			o.RecordedAt = colTime
 		} else if parsed, perr := time.Parse(time.RFC3339Nano, recordedAtText); perr == nil {

@@ -92,7 +92,7 @@ func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit i
 		}
 	} else {
 		if summary != nil {
-			if o, err := store.LoadSessionOutcomes(summary.SessionID); err != nil {
+			if o, err := loadSessionOutcomesSlim(store, summary.SessionID); err != nil {
 				logging.Warn("pipeline_service", "load_session_outcomes_failed", logging.Err(err))
 			} else {
 				outcomes = o
@@ -166,6 +166,10 @@ func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit i
 // means the slim path is NOT active and the OOM mitigation is not engaged.
 var scorecardSlimServiceFallbackTotal atomic.Int64
 
+// sessionSlimServiceFallbackTotal counts per-session slim reads that fell back
+// to the full metadata read (store lacks the projection, or it errored).
+var sessionSlimServiceFallbackTotal atomic.Int64
+
 // ScorecardSlimServiceFallbackTotal returns the total service-layer
 // slim-projection fallbacks. Exposed for monitoring/alerting consumption.
 func ScorecardSlimServiceFallbackTotal() int64 {
@@ -175,6 +179,30 @@ func ScorecardSlimServiceFallbackTotal() int64 {
 // loadScorecardOutcomes loads the observatory slim projection when the store
 // implements the optional 8-field loader; otherwise it warns, increments the
 // fallback counter, and uses the pre-#1780 full metadata read.
+// loadSessionOutcomesSlim loads one session's outcomes through the slim
+// per-session projection when the store provides it, so hot dashboard paths
+// never transfer or unmarshal the metadata JSONB (644 MB in production,
+// 2026-09-17: the /api/dashboard/sessions enrichment loop expanded it to ~1 GB
+// per request and OOM-killed the container). Stores without the projection fall
+// back to the full read.
+func loadSessionOutcomesSlim(store ledger.OutcomeStore, sessionID string) ([]domain.RecommendationOutcome, error) {
+	if slim, ok := store.(interface {
+		LoadSessionScorecardOutcomes(string) ([]domain.RecommendationOutcome, error)
+	}); ok {
+		outcomes, err := slim.LoadSessionScorecardOutcomes(sessionID)
+		if err == nil {
+			return outcomes, nil
+		}
+		sessionSlimServiceFallbackTotal.Add(1)
+		logging.Warn("pipeline_service", "session_slim_read_failed",
+			"layer", "service",
+			"session_id", sessionID,
+			"store_type", fmt.Sprintf("%T", store),
+			"reason", "slim per-session projection failed; using full metadata read")
+	}
+	return store.LoadSessionOutcomes(sessionID)
+}
+
 func loadScorecardOutcomes(store ledger.OutcomeStore) ([]domain.RecommendationOutcome, error) {
 	if sl, ok := store.(interface {
 		LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)

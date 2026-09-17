@@ -219,6 +219,10 @@ func TestTimeoutRouteOverrides_PerformanceReportLong(t *testing.T) {
 		"/api/dashboard/performance-report",
 		"/api/dashboard/performance-report/export",
 		"/api/report/latest",
+		"/api/dashboard/sessions",
+		"/api/dashboard/agent-observatory",
+		"/api/dashboard/recommendation-pipeline",
+		"/api/dashboard/reasoning-trace",
 	} {
 		d, ok := timeoutRouteOverrides[route]
 		if !ok {
