@@ -41,6 +41,14 @@ services:
       - ./logs:/app/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # 記憶體護欄 (2026-09-17)：/api/report/latest 曾單次配置 ~2.9GB 導致容器
+    # 被 OrbStack VM 的 OOM killer 反覆終止（~5.4 分鐘一輪）。程式面已修
+    # (slim scorecard projection + TTL cache)，此處再加硬上限與較低的 OOM 分數，
+    # 使單一端點失控時不會拖垮 VM 與其餘 15 個容器。
+    # 2g 上限 = 正常用量 (~150-300MB) 的 6 倍以上，留足回測/報告的合理峰值。
+    mem_limit: 2g
+    mem_reservation: 512m
+    oom_score_adj: -500
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18080/health"]
       interval: 30s
