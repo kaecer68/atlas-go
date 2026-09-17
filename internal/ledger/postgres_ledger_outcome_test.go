@@ -470,12 +470,13 @@ func TestPostgresLedgerStore_ScorecardSlimEquivalence(t *testing.T) {
 		}
 	}
 
-	// B2 empty-metadata row: slim must load it (no NULL scan error). Layer and
-	// window are metadata-only in the slim projection, so they read '' for a
-	// '{}' row while the full read pre-fills them from the agent_layer /
-	// session_id columns — production rows written by Record* always carry all
-	// 8 keys in metadata, so this divergence only affects hand-written legacy
-	// rows and is the documented "metadata is the source of truth" semantics.
+	// B2 empty-metadata row: slim must load it (no NULL scan error). Window is
+	// metadata-only in the slim projection, so it reads '' for a '{}' row while
+	// the full read fills it from the session_id column — production rows
+	// written by Record* always carry the key, so this divergence only affects
+	// hand-written legacy rows and is the documented "metadata is the source of
+	// truth" semantics. Layer and the other scalar columns come from their real
+	// columns and must match the full read.
 	var emptyFull, emptySlim *domain.RecommendationOutcome
 	for i := range full {
 		if full[i].AgentID == "slim-equiv-empty" {
@@ -492,9 +493,21 @@ func TestPostgresLedgerStore_ScorecardSlimEquivalence(t *testing.T) {
 	if emptyFull == nil || emptySlim == nil {
 		t.Fatal("empty-metadata row missing from one of the paths")
 	}
-	if emptySlim.Skill != "" || emptySlim.Layer != "" || emptySlim.Window != "" ||
+	// Metadata-only fields still read zero for a '{}' row.
+	if emptySlim.Skill != "" || emptySlim.Window != "" ||
 		emptySlim.ForwardReturn != 0 || emptySlim.Hit || emptySlim.Regime != "" {
-		t.Errorf("slim empty-metadata row: expected zero scalar fields, got %+v", emptySlim)
+		t.Errorf("slim empty-metadata row: expected zero metadata-derived fields, got %+v", emptySlim)
+	}
+	// Scalar real columns are now part of the projection, so the empty-metadata
+	// row matches the full read for them (including the agent_layer fallback
+	// that used to be a documented divergence).
+	if emptySlim.Layer != emptyFull.Layer {
+		t.Errorf("slim empty-metadata layer = %q, want the full read's %q", emptySlim.Layer, emptyFull.Layer)
+	}
+	if emptySlim.Symbol != emptyFull.Symbol || emptySlim.Conviction != emptyFull.Conviction ||
+		emptySlim.Price != emptyFull.Price || emptySlim.PassedGuards != emptyFull.PassedGuards ||
+		emptySlim.GuardReason != emptyFull.GuardReason {
+		t.Errorf("slim empty-metadata columns diverged from the full read:\n  slim=%+v\n  full=%+v", emptySlim, emptyFull)
 	}
 	if emptySlim.RecordedAt.UnixNano() != emptyFull.RecordedAt.UnixNano() {
 		t.Errorf("slim empty-metadata row recorded_at should fall back to the time column (µs): slim=%v full=%v",

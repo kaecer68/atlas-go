@@ -81,7 +81,10 @@ func (s *PeriodMatrixService) Matrix() (*portfolio.PeriodPerformanceMatrix, erro
 		return s.matrixHit, nil
 	}
 
-	outcomes, err := s.store.LoadOutcomesFromSessions()
+	// Prefer the slim projection: the matrix needs only scalar fields, and the
+	// full read transferred the metadata JSONB (644 MB in production —
+	// 2026-09-17 OOM loop), on a 60s cache-miss refill.
+	outcomes, err := ledger.LoadScorecardProjection(s.store)
 	if err != nil {
 		logging.Warn("period_matrix", "load_outcomes_failed", logging.Err(err))
 		return nil, err

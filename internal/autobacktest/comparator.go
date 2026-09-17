@@ -78,7 +78,7 @@ func (c *Comparator) ComparePortfolio() (Comparison, error) {
 }
 
 func (c *Comparator) CompareSharpe() (Comparison, error) {
-	scorecards, _, err := c.store.LoadAllSessionScorecards()
+	scorecards, err := scorecardsFor(c.store)
 	if err != nil {
 		return Comparison{}, err
 	}
@@ -143,4 +143,18 @@ func (c *Comparator) RecentRegimes() ([]domain.Regime, error) {
 		regimes[i] = s.Regime
 	}
 	return regimes, nil
+}
+
+// scorecardsFor prefers the slim scorecard projection when the store provides
+// it, so this pass never transfers the metadata JSONB (644 MB in production,
+// ~1.7 GB heap — the 2026-09-17 OOM loop). Stores without the projection keep
+// their previous read.
+func scorecardsFor(store ledger.OutcomeStore) ([]domain.Scorecard, error) {
+	if slim, ok := store.(ledger.ScorecardOutcomeStore); ok {
+		if outcomes, err := slim.LoadScorecardOutcomes(); err == nil && len(outcomes) > 0 {
+			return ledger.BuildScorecards(outcomes), nil
+		}
+	}
+	scorecards, _, err := store.LoadAllSessionScorecards()
+	return scorecards, err
 }

@@ -153,10 +153,13 @@ func (c *Phase3Controller) AutoPromoteSpawnedAgents() {
 
 	params := config.GetParametersConfig().Orchestrator
 
-	scorecards, _, err := c.ledger.LoadAllSessionScorecards()
+	// Scorecard-only consumer: use the slim projection so this background
+	// promotion pass never transfers the metadata JSONB (2026-09-17 OOM).
+	outcomes, err := ledger.LoadScorecardProjection(c.ledger)
 	if err != nil {
 		return
 	}
+	scorecards := ledger.BuildScorecards(outcomes)
 
 	scorecardByAgent := make(map[string]*domain.Scorecard, len(scorecards))
 	for i := range scorecards {
