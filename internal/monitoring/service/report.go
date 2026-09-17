@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
@@ -53,6 +56,81 @@ type ReportService struct {
 	reportGenerator *narrative.ReportGenerator
 	store           ledger.OutcomeStore
 	periodProvider  PeriodProvider
+
+	// reportTTL bounds how long a rendered /api/report/latest payload is
+	// reused. 0 → defaultLatestReportTTL.
+	reportTTL time.Duration
+
+	// nowFn is the clock seam for tests; nil → time.Now.
+	nowFn func() time.Time
+
+	cacheMu sync.Mutex
+	cached  *latestReportCache
+
+	renderSF singleflight.Group
+}
+
+// latestReportCache holds one rendered report for its TTL window.
+type latestReportCache struct {
+	content   []byte
+	filename  string
+	expiresAt time.Time
+}
+
+// defaultLatestReportTTL is deliberately short: the payload is derived from the
+// newest window summary, so a minute of staleness is harmless, while the render
+// itself is expensive (see LoadLatestReport).
+const defaultLatestReportTTL = 60 * time.Second
+
+// scorecardOutcomeLoader is the optional slim scorecard projection introduced
+// in #1780 Phase 1. Stores that implement it expose only the scalar fields
+// BuildScorecards consumes, so the heavy metadata JSONB is never transferred.
+type scorecardOutcomeLoader interface {
+	LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)
+}
+
+func (s *ReportService) clock() time.Time {
+	if s.nowFn != nil {
+		return s.nowFn()
+	}
+	return time.Now()
+}
+
+func (s *ReportService) latestTTL() time.Duration {
+	if s.reportTTL > 0 {
+		return s.reportTTL
+	}
+	return defaultLatestReportTTL
+}
+
+// WithLatestReportTTL overrides the rendered-report cache TTL (tests, tuning).
+func (s *ReportService) WithLatestReportTTL(d time.Duration) *ReportService {
+	s.reportTTL = d
+	return s
+}
+
+// loadScorecards prefers the slim projection when the store offers it.
+//
+// The full LoadAllSessionScorecards path reads the whole recommendation_outcomes
+// table including the metadata JSONB: 271,359 rows / 644 MB in production
+// (2026-09-17), which expanded to ~2.9 GB of heap per call and OOM-killed the
+// atlas container every ~5.4 minutes. The slim query selects nine scalar columns
+// and never unmarshals the blob.
+func (s *ReportService) loadScorecards() ([]domain.Scorecard, error) {
+	if slim, ok := s.store.(scorecardOutcomeLoader); ok {
+		outcomes, err := slim.LoadScorecardOutcomes()
+		if err == nil {
+			return ledger.BuildScorecards(outcomes), nil
+		}
+		// A slim-read failure must not break the report: fall through to the
+		// full read (slower, but authoritative).
+		logging.Warn("report_service", "scorecard_slim_read_failed", logging.Err(err))
+	}
+	scorecards, _, err := s.store.LoadAllSessionScorecards()
+	if err != nil {
+		return nil, err
+	}
+	return scorecards, nil
 }
 
 // SetPeriodProvider sets an optional callback for period-enriched daily summaries.
@@ -70,20 +148,71 @@ func NewReportService(workDir, ledgerDir string, store ledger.OutcomeStore) *Rep
 	}
 }
 
-// LoadLatestReport returns the content and filename of the most recent backtest report.
+// LoadLatestReport returns the content and filename of the most recent backtest
+// report.
+//
+// The rendered payload is cached for a short TTL and concurrent callers share a
+// single render. Before this, every request re-rendered from the full outcome
+// table: one call cost ~24 s and ~2.9 GB of heap in production, so any client
+// polling the endpoint put the container into an OOM restart loop
+// (2026-09-17, ~5.4 min per cycle). Caching is safe here because the content is
+// a function of the newest window summary, not of the request.
 func (s *ReportService) LoadLatestReport() (content []byte, filename string, err error) {
+	if cached := s.cachedReport(s.clock()); cached != nil {
+		return cached.content, cached.filename, nil
+	}
+
+	v, err, _ := s.renderSF.Do("latest-report", func() (any, error) {
+		// Re-check inside the singleflight: a concurrent caller may have just
+		// filled the cache while this call was queued.
+		if cached := s.cachedReport(s.clock()); cached != nil {
+			return cached, nil
+		}
+		content, name, err := s.renderLatestReport()
+		if err != nil {
+			return nil, err
+		}
+		entry := &latestReportCache{
+			content:   content,
+			filename:  name,
+			expiresAt: s.clock().Add(s.latestTTL()),
+		}
+		s.cacheMu.Lock()
+		s.cached = entry
+		s.cacheMu.Unlock()
+		return entry, nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	entry, ok := v.(*latestReportCache)
+	if !ok || entry == nil {
+		return nil, "", fmt.Errorf("render report: unexpected cache value %T", v)
+	}
+	return entry.content, entry.filename, nil
+}
+
+// cachedReport returns the cached entry when it is still fresh.
+func (s *ReportService) cachedReport(now time.Time) *latestReportCache {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if s.cached == nil || !now.Before(s.cached.expiresAt) {
+		return nil
+	}
+	return s.cached
+}
+
+// renderLatestReport performs the actual (expensive) render.
+func (s *ReportService) renderLatestReport() ([]byte, string, error) {
 	summary, err := s.loadLatestWindowSummary()
 	if err != nil {
 		return nil, "", err
 	}
-
 	report, err := s.renderWindowReport(summary)
 	if err != nil {
 		return nil, "", fmt.Errorf("render report: %w", err)
 	}
-
-	filename = fmt.Sprintf("backtest_%s.md", summary.WindowID)
-	return []byte(report), filename, nil
+	return []byte(report), fmt.Sprintf("backtest_%s.md", summary.WindowID), nil
 }
 
 // LoadReportList returns all backtest report entries sorted by updated_at descending.
@@ -248,7 +377,7 @@ func (s *ReportService) loadAllWindowSummaries() ([]domain.BacktestWindowSummary
 
 func (s *ReportService) renderWindowReport(summary domain.BacktestWindowSummary) (string, error) {
 	store := s.store
-	scorecards, _, err := store.LoadAllSessionScorecards()
+	scorecards, err := s.loadScorecards()
 	if err != nil {
 		return "", fmt.Errorf("load scorecards: %w", err)
 	}
