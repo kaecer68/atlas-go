@@ -290,9 +290,12 @@ func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOu
 		); err != nil {
 			return nil, fmt.Errorf("scan scorecard outcome row: %w", err)
 		}
-		o.Layer = domain.AgentLayer(layer)
+		// Metadata stays the source of truth (the full read unmarshals it over
+		// the column value); the agent_layer column only fills rows whose
+		// metadata lacks the key, e.g. hand-written legacy '{}' rows.
+		o.Layer = domain.AgentLayer(metadataLayer)
 		if o.Layer == "" {
-			o.Layer = domain.AgentLayer(metadataLayer)
+			o.Layer = domain.AgentLayer(layer)
 		}
 		if marketPeriod != nil {
 			o.MarketPeriod = *marketPeriod

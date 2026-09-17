@@ -123,9 +123,11 @@ func (r *PostgresRepository) QuerySessionScorecardOutcomes(ctx context.Context, 
 		); err != nil {
 			return nil, fmt.Errorf("scan session scorecard outcome: %w", err)
 		}
-		o.Layer = domain.AgentLayer(layer)
+		// Metadata first (the full read unmarshals it over the column), with the
+		// agent_layer column as the fallback for rows without the metadata key.
+		o.Layer = domain.AgentLayer(metadataLayer)
 		if o.Layer == "" {
-			o.Layer = domain.AgentLayer(metadataLayer)
+			o.Layer = domain.AgentLayer(layer)
 		}
 		o.Window = sessionID
 		if marketPeriod != nil {
