@@ -230,8 +230,9 @@ type ScorecardOutcomeStore interface {
 	LoadScorecardOutcomes() ([]domain.RecommendationOutcome, error)
 }
 
-// LoadScorecardOutcomes reads only the 8 scalar fields the observatory
-// scorecard pipeline consumes, via a slim JSONB projection instead of the
+// LoadScorecardOutcomes reads only scalar columns the scorecard consumers need
+// (the real columns plus the small set of scalars embedded in metadata), via a
+// slim projection instead of the
 // full-table + full-metadata load (LoadOutcomesFromSessions → scanPGOutcomes,
 // which unmarshals every row's complete metadata JSON ~1.69GB live heap at
 // 63k rows — the #1780 OOM root cause). Semantic equivalence with the full
@@ -249,6 +250,14 @@ func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOu
 	ctx := context.Background()
 	const query = `
 		SELECT agent_id,
+		       COALESCE(symbol, ''),
+		       COALESCE(conviction, 0),
+		       COALESCE(agent_layer, ''),
+		       COALESCE(passed_guards, false),
+		       COALESCE(guard_reason, ''),
+		       COALESCE(price, 0),
+		       market_period,
+		       market_period_source,
 		       COALESCE(metadata->>'skill', ''),
 		       COALESCE(metadata->>'layer', ''),
 		       COALESCE(metadata->>'window', ''),
@@ -256,6 +265,7 @@ func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOu
 		       COALESCE((metadata->>'hit')::boolean, false),
 		       COALESCE(metadata->>'regime', ''),
 		       COALESCE(metadata->>'recorded_at', ''),
+		       COALESCE((metadata->>'is_synthetic')::boolean, false),
 		       time
 		FROM recommendation_outcomes
 		ORDER BY time DESC`
@@ -268,15 +278,28 @@ func (s *PostgresLedgerStore) LoadScorecardOutcomes() ([]domain.RecommendationOu
 	var outcomes []domain.RecommendationOutcome
 	for rows.Next() {
 		var o domain.RecommendationOutcome
-		var layer, recordedAtText string
+		var layer, metadataLayer, recordedAtText string
 		var colTime time.Time
+		var marketPeriod, marketPeriodSource *string
 		if err := rows.Scan(
-			&o.AgentID, &o.Skill, &layer, &o.Window,
-			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &colTime,
+			&o.AgentID, &o.Symbol, &o.Conviction, &layer, &o.PassedGuards,
+			&o.GuardReason, &o.Price, &marketPeriod, &marketPeriodSource,
+			&o.Skill, &metadataLayer, &o.Window,
+			&o.ForwardReturn, &o.Hit, &o.Regime, &recordedAtText, &o.IsSynthetic,
+			&colTime,
 		); err != nil {
 			return nil, fmt.Errorf("scan scorecard outcome row: %w", err)
 		}
 		o.Layer = domain.AgentLayer(layer)
+		if o.Layer == "" {
+			o.Layer = domain.AgentLayer(metadataLayer)
+		}
+		if marketPeriod != nil {
+			o.MarketPeriod = *marketPeriod
+		}
+		if marketPeriodSource != nil {
+			o.MarketPeriodSource = *marketPeriodSource
+		}
 		if recordedAtText == "" {
 			// Metadata has no recorded_at key — mirror the full read, which
 			// keeps the scanned time column value in that case.

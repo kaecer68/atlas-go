@@ -99,7 +99,7 @@ func (s *PipelineService) loadAgentObservatoryUncached(sessionID string, limit i
 			}
 		}
 		if outcomes == nil {
-			outcomes, err = store.LoadOutcomes()
+			outcomes, err = ledger.LoadScorecardProjection(store)
 			if err != nil {
 				return nil, fmt.Errorf("load recommendation outcomes: %w", err)
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/ledger"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 	"github.com/kaecer68/atlas-go/internal/replay"
 	"github.com/kaecer68/atlas-go/internal/reporting"
@@ -98,7 +99,7 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 
 	r.lastState = &persistentState
 
-	scorecards, outcomes, err := r.store.LoadAllSessionScorecards()
+	scorecards, outcomes, err := r.loadAllSessionScorecards()
 	if err != nil {
 		return domain.BacktestWindowSummary{}, err
 	}
@@ -152,8 +153,28 @@ func (r *Runner) Run(startDate, endDate time.Time) (domain.BacktestWindowSummary
 	return summary, nil
 }
 
+// loadAllSessionScorecards prefers the slim scorecard projection so the
+// backtest runner never transfers the metadata JSONB of the whole outcomes
+// table (644 MB in production → ~1.7 GB heap, the 2026-09-17 OOM loop). The
+// slim projection feeds BuildScorecards identically; stores without it fall
+// back to the full read.
+func (r *Runner) loadAllSessionScorecards() ([]domain.Scorecard, []domain.RecommendationOutcome, error) {
+	if slim, ok := r.store.(ledger.ScorecardOutcomeStore); ok {
+		outcomes, err := slim.LoadScorecardOutcomes()
+		if err == nil && len(outcomes) > 0 {
+			return ledger.BuildScorecards(outcomes), outcomes, nil
+		}
+		logging.Warn("backtest_runner", "scorecard_slim_read_failed",
+			"layer", "backtest_runner",
+			"store_type", fmt.Sprintf("%T", r.store),
+			"reason", "slim scorecard projection failed; using full metadata read",
+		)
+	}
+	return r.store.LoadAllSessionScorecards()
+}
+
 func (r *Runner) GenerateReport(summary domain.BacktestWindowSummary) (string, error) {
-	scorecards, _, err := r.store.LoadAllSessionScorecards()
+	scorecards, _, err := r.loadAllSessionScorecards()
 	if err != nil {
 		return "", fmt.Errorf("load scorecards: %w", err)
 	}

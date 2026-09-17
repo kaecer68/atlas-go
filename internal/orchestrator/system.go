@@ -991,14 +991,32 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	return result, nil
 }
 
-func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
-	// Use session-dir outcomes (richest data source) instead of sparse global file.
-	outcomes, err := s.Sim().ledger.LoadOutcomesFromSessions()
-	if err != nil || len(outcomes) == 0 {
-		outcomes, err = s.Sim().ledger.LoadOutcomes()
-		if err != nil {
-			return nil, err
+// loadScorecardOutcomesSlim loads the outcomes needed for scorecard building
+// through the slim projection when the store provides it. Candidate selection
+// consumes only the scalar scorecard fields, and the full read
+// (LoadOutcomesFromSessions) transferred the entire metadata JSONB — 644 MB in
+// production, which expanded to ~1.7 GB of heap and OOM-killed the container
+// every ~5 minutes while the in-container backtest scheduler called this path
+// (2026-09-17). Stores without the projection keep the previous behavior.
+func loadScorecardOutcomesSlim(store ledger.OutcomeStore) ([]domain.RecommendationOutcome, error) {
+	if slim, ok := store.(ledger.ScorecardOutcomeStore); ok {
+		outcomes, serr := slim.LoadScorecardOutcomes()
+		if serr == nil && len(outcomes) > 0 {
+			return outcomes, nil
 		}
+	}
+	// Use session-dir outcomes (richest data source) instead of sparse global file.
+	outcomes, err := store.LoadOutcomesFromSessions()
+	if err != nil || len(outcomes) == 0 {
+		return store.LoadOutcomes()
+	}
+	return outcomes, nil
+}
+
+func (s *System) NextExperimentCandidate() (*domain.Candidate, error) {
+	outcomes, err := loadScorecardOutcomesSlim(s.Sim().ledger)
+	if err != nil {
+		return nil, err
 	}
 	scorecards := ledger.BuildScorecards(outcomes)
 	candidate := domain.SelectWeakestAgent(s.Sim().registry, scorecards)

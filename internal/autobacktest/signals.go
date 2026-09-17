@@ -3,6 +3,7 @@ package autobacktest
 import (
 	"fmt"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 	riskpkg "github.com/kaecer68/atlas-go/internal/risk"
 )
@@ -42,10 +43,11 @@ func NewSignalEngine(ledgerDir string) (*SignalEngine, error) {
 }
 
 func (se *SignalEngine) Evaluate() (Signals, error) {
-	outcomes, err := se.store.LoadOutcomes()
+	outcomes, err := outcomesFor(se.store)
 	if err != nil {
 		return Signals{}, err
 	}
+	scorecards := ledger.BuildScorecards(outcomes)
 
 	var returns []float64
 	for _, o := range outcomes {
@@ -65,11 +67,6 @@ func (se *SignalEngine) Evaluate() (Signals, error) {
 	if n >= 20 {
 		var95 = riskpkg.CalculateVaRPercentile(returns, 0.95)
 		var99 = riskpkg.CalculateVaRPercentile(returns, 0.99)
-	}
-
-	scorecards, _, err := se.store.LoadAllSessionScorecards()
-	if err != nil {
-		return Signals{}, err
 	}
 
 	var recentShort, recentLong float64
@@ -118,4 +115,16 @@ func (se *SignalEngine) Evaluate() (Signals, error) {
 		SharpeLong:  recentLong,
 		DrawdownPct: drawdown,
 	}, nil
+}
+
+// outcomesFor prefers the slim projection when the store provides it (signal
+// evaluation only needs returns/scorecards), so the metadata JSONB is never
+// transferred; stores without it keep the previous flat read.
+func outcomesFor(store ledger.OutcomeStore) ([]domain.RecommendationOutcome, error) {
+	if slim, ok := store.(ledger.ScorecardOutcomeStore); ok {
+		if outcomes, err := slim.LoadScorecardOutcomes(); err == nil && len(outcomes) > 0 {
+			return outcomes, nil
+		}
+	}
+	return store.LoadOutcomes()
 }
