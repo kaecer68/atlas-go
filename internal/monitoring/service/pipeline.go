@@ -811,8 +811,9 @@ func (s *PipelineService) LoadSessions() ([]SessionMeta, error) {
 // LoadSessionsWithTopStrategies loads all session metadata AND enriches each
 // session with its top N strategies ranked by conviction DESC.
 //
-// The enrichment performs one extra LoadSessionOutcomes call per session
-// (N+1 pattern, acceptable since the session count is bounded ~100). Sessions
+// The enrichment performs one extra per-session read per session (N+1 pattern,
+// acceptable since the session count is bounded ~100) through the slim
+// per-session projection, so the metadata JSONB is never transferred. Sessions
 // that fail to enrich (no outcomes in SQLite, store error) get an empty
 // TopStrategies slice rather than failing the entire list — the metadata
 // layer is the primary deliverable.
@@ -838,7 +839,7 @@ func (s *PipelineService) LoadSessionsWithTopStrategies(topN int, limit int) ([]
 	}
 
 	for i := range sessions {
-		outcomes, oerr := s.store.LoadSessionOutcomes(sessions[i].SessionID)
+		outcomes, oerr := loadSessionOutcomesSlim(s.store, sessions[i].SessionID)
 		if oerr != nil {
 			// Skip enrichment for this session; metadata layer still useful.
 			logging.Warn("pipeline_service", "load_session_outcomes_failed",
@@ -935,7 +936,7 @@ func (s *PipelineService) LoadSessionDetail(sessionID string) (*SessionDetail, e
 	// when the session has no outcomes yet.
 	detail.Outcomes = []domain.RecommendationOutcome{}
 	if s.store != nil {
-		outcomes, oerr := s.store.LoadSessionOutcomes(sessionID)
+		outcomes, oerr := loadSessionOutcomesSlim(s.store, sessionID)
 		if oerr != nil {
 			return nil, fmt.Errorf("load session outcomes: %w", oerr)
 		}
