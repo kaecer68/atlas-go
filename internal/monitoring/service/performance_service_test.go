@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/ledger"
 )
 
@@ -178,5 +180,66 @@ func TestPerformanceService_GetRegimeBreakdown_NonExistentDir(t *testing.T) {
 	}
 	if len(breakdown.Regimes) != 0 {
 		t.Errorf("len(Regimes) = %d, want 0 for non-existent dir", len(breakdown.Regimes))
+	}
+}
+
+// countingPerfStore counts summary loads so the cache can be observed without a
+// database.
+type countingPerfStore struct {
+	*mockOutcomeStore
+	summaryCalls int
+}
+
+func (c *countingPerfStore) LoadSessionSummaries() ([]domain.SessionSummary, error) {
+	c.summaryCalls++
+	return nil, nil
+}
+
+// TestPerformanceService_GetPerformanceReport_CachesWithinTTL is the regression
+// for the 2026-09-17 production restart loop: /api/dashboard/performance-report
+// (default period=all) regenerated the report from the full outcome table on
+// every request — 271,359 rows / 644 MB of metadata per pass, and the dashboard
+// calls report + contributions + breakdown, i.e. three passes per page load.
+func TestPerformanceService_GetPerformanceReport_CachesWithinTTL(t *testing.T) {
+	store := &countingPerfStore{mockOutcomeStore: &mockOutcomeStore{}}
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	svc := NewPerformanceService(store, t.TempDir()).WithReportTTL(60 * time.Second)
+	svc.nowFn = func() time.Time { return now }
+
+	for i := 0; i < 3; i++ {
+		if _, err := svc.GetPerformanceReport("all"); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+	}
+	if store.summaryCalls != 1 {
+		t.Fatalf("expected 1 generation within TTL, got %d", store.summaryCalls)
+	}
+
+	// The sibling endpoints must reuse the same cached report.
+	if _, err := svc.GetAgentContributions("all"); err != nil {
+		t.Fatalf("contributions: %v", err)
+	}
+	if _, err := svc.GetRegimeBreakdown("all"); err != nil {
+		t.Fatalf("regime breakdown: %v", err)
+	}
+	if store.summaryCalls != 1 {
+		t.Errorf("contributions/breakdown must reuse the cached report, got %d generations", store.summaryCalls)
+	}
+
+	// A different period is a different cache entry.
+	if _, err := svc.GetPerformanceReport("30d"); err != nil {
+		t.Fatalf("30d: %v", err)
+	}
+	if store.summaryCalls != 2 {
+		t.Errorf("expected a separate generation for period 30d, got %d total", store.summaryCalls)
+	}
+
+	// Past the TTL the report is regenerated.
+	now = now.Add(61 * time.Second)
+	if _, err := svc.GetPerformanceReport("all"); err != nil {
+		t.Fatalf("post-TTL: %v", err)
+	}
+	if store.summaryCalls != 3 {
+		t.Errorf("expected regeneration after TTL, got %d generations", store.summaryCalls)
 	}
 }
