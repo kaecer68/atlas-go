@@ -269,3 +269,6 @@ docs/archive/
 # PR 1c backtest CLI compiled artifact
 /run-stockpicker-backtest
 /cmd/run-stockpicker-backtest/run-stockpicker-backtest
+
+# 2026-09-18: docker-compose 手動備份（部署前快照，不進版控；原本留在工作區被當成未追蹤檔）
+*.bak-*
