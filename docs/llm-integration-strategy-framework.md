@@ -756,7 +756,7 @@ Router 的 `Health()` 與 `/healthz/llm` 端點（提案）提供：
 - 每個 provider 的 breaker state。
 - 每個 capability 的 24h error rate（依 §6.5 的 span 觀測；Prometheus 指標尚未實作，見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)）。
 - 每月 token 用量與估計成本（沿用 `CostReport`，`observability.go:158-197`）。
-- v2.0 新增：每 capability × provider 的 cost breakdown（從 metric label 聚合）。
+- v2.0 新增（**尚未實作**）：每 capability × provider 的 cost breakdown。**現況**：既有 metric（`llm_annotator_requests_total` 等）只帶 `provider` / `outcome` / `status` label，**沒有 `capability` label**，所以這個聚合目前算不出來；見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)。
 
 ```yaml
 # 提案：monitoring/rules/llm_router_recording.yml
@@ -835,7 +835,7 @@ groups:
 3. **Rate limit**：`RatePerSecond` 限制（沿用 `annotator.go:162`）。
 4. **Cache TTL**：rationale translation fallback TTL 24h（同一英文短句 24h 內只送一次）。
 5. **CostReport**：每月產出報告（沿用 `CostReport`，`observability.go:158-197`）。
-6. **v2.0 新增**：每 capability × provider 的 cost breakdown（沿用 §7.3 新 metric），可看出「翻譯用 V4-Flash 還是 M3 哪個便宜」、「歸因走 V4-Pro 還是 M3 哪個 cost-efficient」。
+6. **v2.0 新增（尚未實作）**：每 capability × provider 的 cost breakdown（原寫「沿用 §7.3 新 metric」，但該 metric 與 `capability` label 皆尚未實作，見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)），可看出「翻譯用 V4-Flash 還是 M3 哪個便宜」、「歸因走 V4-Pro 還是 M3 哪個 cost-efficient」。
 
 ### 風險 4：模型棄用（Model Deprecation）
 
