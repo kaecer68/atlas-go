@@ -458,3 +458,47 @@ func TestChannelIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestCacheLayer_SetChannelTTL locks the per-channel TTL override that keeps
+// the 5-minute runtime macro fan-out off us_cpi's 1/hour limiter: an entry for
+// the overridden channel must outlive the layer default, and other channels
+// must keep expiring at the default.
+func TestCacheLayer_SetChannelTTL(t *testing.T) {
+	c := NewCacheLayer()
+	defaultTTL := c.TTLFor("us_yahoo")
+	if defaultTTL != 5*time.Minute {
+		t.Fatalf("layer default TTL = %s, want 5m", defaultTTL)
+	}
+
+	c.SetChannelTTL("us_cpi", 24*time.Hour)
+	if got := c.TTLFor("us_cpi"); got != 24*time.Hour {
+		t.Errorf("us_cpi TTL = %s, want 24h", got)
+	}
+	if got := c.TTLFor("us_yahoo"); got != defaultTTL {
+		t.Errorf("per-channel override leaked: us_yahoo TTL = %s, want %s", got, defaultTTL)
+	}
+
+	res := &FetchResult{Data: []byte(`{"cpi_yoy":{"symbol":"CUUR0000SA0","value":2.9}}`)}
+	c.Set("us_cpi", res)
+	c.Set("us_yahoo", res)
+	// Age both entries past the 5-minute default but inside the 24h override.
+	aged := time.Now().Add(-defaultTTL - time.Minute)
+	c.entries["us_cpi"].cachedAt = aged
+	c.entries["us_yahoo"].cachedAt = aged
+
+	if c.Get("us_cpi") == nil {
+		t.Error("us_cpi entry must survive past the layer default TTL")
+	}
+	if c.Get("us_yahoo") != nil {
+		t.Error("us_yahoo entry must expire at the layer default TTL")
+	}
+
+	// A non-positive TTL restores the default.
+	c.SetChannelTTL("us_cpi", 0)
+	if got := c.TTLFor("us_cpi"); got != defaultTTL {
+		t.Errorf("after clearing the override, us_cpi TTL = %s, want %s", got, defaultTTL)
+	}
+	if c.Get("us_cpi") != nil {
+		t.Error("aged us_cpi entry must expire once the override is cleared")
+	}
+}

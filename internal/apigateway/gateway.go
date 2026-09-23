@@ -4,12 +4,20 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
+
+// usCPICacheTTL is the gateway cache lifetime for the us_cpi channel. It
+// mirrors the channel contract's ExpectedRefresh (24h, channel_contract.go)
+// rather than the layer default (5min, NewCacheLayer) because CPI-U is
+// published monthly and the adapter's limiter allows one upstream call per
+// hour.
+const usCPICacheTTL = 24 * time.Hour
 
 // Gateway is the unified entry point for all data channels.
 type Gateway struct {
@@ -31,6 +39,15 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	// 6. Gateway (needs all)
 
 	cache := NewCacheLayer()
+	// us_cpi (BLS CPI-U YoY): monthly upstream, and its adapter carries a
+	// 1-request/hour limiter (adapter_cpi.go). The runtime macro fan-out runs
+	// every 5 minutes, so leaving this channel on the 5-minute default TTL
+	// would send it to the limiter on every batch. Align the cache lifetime
+	// with the channel contract's ExpectedRefresh
+	// (channel_contract.go: live("us_cpi", ...) = 24h) so the adapter performs
+	// at most one real upstream call per day and the limiter always has a
+	// token available.
+	cache.SetChannelTTL("us_cpi", usCPICacheTTL)
 	health := NewUnifiedHealthStore(filepath.Join(workDir, "data/state"), pool)
 	limiters := NewRateLimitManager()
 	breakers := NewCircuitBreakerManagerWithThresholds(map[string]int{

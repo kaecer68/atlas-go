@@ -17,8 +17,8 @@ import (
 
 // MacroSnapshotCacheTTL controls how long FetchSnapshot results are cached
 // in memory. Set to 60s to balance freshness (browser auto-refresh every 30s)
-// against fan-out cost (~15s for 28 gateway channels). Matches the TTL used
-// by the dailyreport layer for consistency.
+// against fan-out cost (~15s for the 27-channel gateway fan-out). Matches the
+// TTL used by the dailyreport layer for consistency.
 const MacroSnapshotCacheTTL = 60 * time.Second
 
 // macroDataGatewayAdapter implements marketdata.MacroDataProvider using DataFetcher.
@@ -136,6 +136,13 @@ func (a *macroDataGatewayAdapter) fetchFresh(ctx context.Context) (marketdata.Ma
 		{channelID: "market_volume", apply: a.applyMarketVolume},
 		{channelID: "twse_margin", apply: a.applyMargin},
 		{channelID: "day_trading", apply: a.applyDayTradeRatioFromStats},
+		// us_cpi (BLS CPI-U YoY): seeds MacroDataSnapshot.CPIYoY for the
+		// narrative inflation detectors (inflation_cool / inflation_moderate).
+		// Without it the daily cron's cpi_yoy survived only until the next
+		// 5-minute runtime fan-out overwrote data/state/macro/<date>.json.
+		// The gateway caches this channel for 24h (NewGateway) so the
+		// adapter's 1/hour limiter is not hit on every batch.
+		{channelID: "us_cpi", apply: a.applyCPI},
 	}
 
 	var (
@@ -403,6 +410,20 @@ func (a *macroDataGatewayAdapter) applyBDI(snap *marketdata.MacroDataSnapshot, d
 	}
 	if s.Bdi.Symbol != "" {
 		snap.Bdi = s.Bdi
+	}
+}
+
+// applyCPI maps the us_cpi channel payload (the BLS adapter marshals a whole
+// MacroDataSnapshot with only CPIYoY filled) onto the merged snapshot. The
+// Symbol guard keeps a zero-valued payload from clobbering a value another
+// channel may have provided.
+func (a *macroDataGatewayAdapter) applyCPI(snap *marketdata.MacroDataSnapshot, data []byte) {
+	var s marketdata.MacroDataSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.CPIYoY.Symbol != "" {
+		snap.CPIYoY = s.CPIYoY
 	}
 }
 
