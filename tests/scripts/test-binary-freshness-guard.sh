@@ -129,8 +129,11 @@ set -euo pipefail
 counter="${FAKE_DOCKER_COUNTER:?}"
 case "${1:-}" in
   create)
+    # A distinct name per create: "every created container was removed" is only
+    # a real assertion when the names differ.
     n=$(cat "$counter")
-    echo "fake-container-$n"
+    printf '%s\n' "$((n + 1))" >"$counter"
+    printf 'fake-container-%s\n' "$n" | tee -a "${FAKE_DOCKER_CREATE_LOG:?}"
     ;;
   cp)
     destination=${@: -1}
@@ -141,13 +144,17 @@ case "${1:-}" in
     printf 'Commit=%s\n' "${FAKE_DOCKER_HEAD:?}" >"$destination"
     ;;
   rm)
-    echo "$2" >>"${FAKE_DOCKER_RM_LOG:?}"
+    # The checker calls `docker rm -f <name>`; log the NAME, not "-f".
+    printf '%s\n' "${@: -1}" >>"${FAKE_DOCKER_RM_LOG:?}"
     ;;
+  *)
+    : ;;
 esac
 EOF
   chmod +x "$dir/docker"
   printf '0\n' >"$dir/counter"
   : >"$dir/rm.log"
+  : >"$dir/create.log"
   head=$(git -C "$ROOT" rev-parse HEAD)
 
   mkdir -p "$dir/freshness"
@@ -155,6 +162,7 @@ EOF
     FRESHNESS_TMPDIR="$dir/freshness" \
     FAKE_FRESHNESS_TMPDIR="$dir/freshness" \
     FAKE_DOCKER_COUNTER="$dir/counter" \
+    FAKE_DOCKER_CREATE_LOG="$dir/create.log" \
     FAKE_DOCKER_RM_LOG="$dir/rm.log" \
     FAKE_DOCKER_HEAD="$head" \
     "$CHECK" >/dev/null
@@ -168,6 +176,15 @@ EOF
   [ "$expected_rm" -gt 0 ] || fail "could not derive image checks from $CHECK"
   test "$(wc -l <"$dir/rm.log" | tr -d ' ')" -eq "$expected_rm" || \
     fail "successful freshness check did not clean all temporary containers (rm=$(wc -l <"$dir/rm.log" | tr -d ' ') expected=$expected_rm)"
+  # Count alone would also pass while removing the wrong container (the rm log
+  # used to be filled with "-f"): check every created container by name.
+  local created name
+  created=$(wc -l <"$dir/create.log" | tr -d ' ')
+  test "$created" -gt 0 || fail "freshness check created no temporary container (shell would report 0)"
+  while read -r name; do
+    grep -Fxq -- "$name" "$dir/rm.log" || \
+      fail "successful freshness check did not remove temporary container $name"
+  done <"$dir/create.log"
   leftover=$(cd "$dir/freshness" && shopt -s nullglob dotglob && echo *)
   if [ -n "$leftover" ]; then
     fail "freshness check left files in its isolated temporary directory: $leftover"
@@ -408,6 +425,20 @@ run_static_contract_tests() {
   # assert the fixtures resolve to themselves (issue #1927).
   assert_contains "$ROOT/tests/scripts/test-binary-freshness-guard.sh" 'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE'
   assert_contains "$ROOT/tests/scripts/test-binary-freshness-guard.sh" 'rev-parse --show-toplevel'
+  # #1898 bug class: a cron service declared in docker-compose.yml but missing
+  # from CRON_IMAGE_TAGS only blows up at deploy time. The retag expectation
+  # must therefore be derived from compose, never from the Makefile list that
+  # is the thing possibly being wrong.
+  assert_contains "$ROOT/tests/scripts/test-binary-freshness-guard.sh" 'could not derive cron services from docker-compose.yml'
+  # The cleanup assertion must compare container NAMES (the rm log used to be
+  # filled with "-f", so a count-only assertion proved nothing).
+  assert_contains "$ROOT/tests/scripts/test-binary-freshness-guard.sh" 'did not remove temporary container'
+  # session-start must be pinned to the docker-free host/bin rebuild contract.
+  assert_contains "$ROOT/tests/scripts/test-binary-freshness-guard.sh" 'rebuild-host-bin rebuild-atlas-bins rebuild-cron-bins'
+  # Only this hermetic test is wired into ci-gate; the generic test-scripts
+  # target stays opt-in (issue #1927: ci-gate runs from the pre-push hook,
+  # which is exactly where GIT_DIR gets exported).
+  assert_contains "$ROOT/Makefile" 'tests/scripts/test-binary-freshness-guard.sh'
 }
 
 run_cron_retag_test
