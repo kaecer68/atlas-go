@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -26,6 +27,18 @@ type TWSEMarginBalanceProvider struct {
 	baseURL     string
 	rateLimiter *rate.Limiter
 	storageDir  string
+
+	// finmind is optional. When set, it fills MacroDataSnapshot
+	// .MarginMaintenanceRatio from FinMind's whole-market
+	// TaiwanTotalExchangeMarginMaintenance series — TWSE MI_MARGN publishes no
+	// aggregate maintenance ratio (#1924). nil = field stays empty.
+	finmind *FinMindClient
+
+	// ratioFillMu guards lastRatioFillDay, the 1-call/day budget marker for
+	// the FinMind ratio fill (FetchSnapshot* is called concurrently by the
+	// gateway fan-out and the ingest loop).
+	ratioFillMu      sync.Mutex
+	lastRatioFillDay string
 }
 
 // NewTWSEMarginBalanceProvider creates a new TWSE margin balance provider.
@@ -58,6 +71,13 @@ func (t *TWSEMarginBalanceProvider) SetRateLimiter(l *rate.Limiter) {
 	if l != nil {
 		t.rateLimiter = l
 	}
+}
+
+// SetFinMindClient wires the FinMind client used to fill
+// MarginMaintenanceRatio (whole-market series). Pass nil to disable the fill,
+// in which case the field is left empty — same behavior as before #1924.
+func (t *TWSEMarginBalanceProvider) SetFinMindClient(c *FinMindClient) {
+	t.finmind = c
 }
 
 // Name returns the provider name.
@@ -100,19 +120,13 @@ func (t *TWSEMarginBalanceProvider) FetchSnapshotForDate(ctx context.Context, da
 				},
 				RecordedAt: ts,
 			}
-			// Fetch maintenance ratio (best-effort: TWSE endpoint MI_MARGN does not
-			// return the aggregate maintenance ratio; this field is expected to be
-			// empty until a suitable data source is found).
-			if ratio, rerr := t.fetchMaintenanceRatio(ctx, dateStr); rerr == nil {
-				snap.MarginMaintenanceRatio = MacroDataPoint{
-					Symbol:    "TSE_MARGIN_MAINT",
-					Value:     ratio,
-					Timestamp: ts,
-				}
-			} else {
-				logging.Warn("twse_margin_provider", "maintenance_ratio_fetch_failed",
-					logging.Err(rerr), logging.FStr("date", dateStr))
-			}
+			// Maintenance ratio: no TWSE source exists. MI_MARGN never carries
+			// an aggregate ratio — its selectType=ALL second table is a
+			// per-stock 融資融券彙總 whose column 1 is the security NAME, so the
+			// old "read Tables[1].Data[0][1]" probe could only ever fail (#1924).
+			// Fill it from FinMind instead (best-effort; see
+			// fillMaintenanceRatio). d is the trading day that answered above.
+			t.fillMaintenanceRatio(ctx, d, &snap)
 			return snap, nil
 		}
 	}
@@ -195,61 +209,70 @@ func (t *TWSEMarginBalanceProvider) fetchDateExpanded(ctx context.Context, dateS
 	return balance, shortBalance, changePct, shortChangePct, nil
 }
 
-// fetchMaintenanceRatio fetches the aggregate margin maintenance ratio from TWSE.
+// fillMaintenanceRatio fills snap.MarginMaintenanceRatio from FinMind's
+// whole-market TaiwanTotalExchangeMarginMaintenance series (value in %).
 //
-// Endpoint: TWSE MI_MARGN?selectType=ALL.
-// NOTE: As of 2026-07-28 investigation (B4c), TWSE MI_MARGN does NOT return a
-// maintenance ratio table — the actual response only contains margin balance
-// and per-stock detail tables. The aggregate maintenance ratio is not available
-// from this endpoint or the TWSE OpenAPI. This field is expected to remain
-// empty until a suitable data source is identified.
-// Returns the aggregate maintenance ratio (%) for the given date.
-func (t *TWSEMarginBalanceProvider) fetchMaintenanceRatio(ctx context.Context, dateStr string) (float64, error) {
-	if err := t.rateLimiter.Wait(ctx); err != nil {
-		return 0, fmt.Errorf("rate limit wait: %w", err)
+// Why not TWSE: MI_MARGN exposes only 融資/融券 balance tables; its
+// selectType=ALL response adds a per-stock 融資融券彙總 table whose second
+// column is the security name, not a ratio. The previous implementation read
+// Tables[1].Data[0][1] blindly and therefore always failed with a ParseFloat
+// error — which is why MarginMaintenanceRatio stayed empty and the
+// period_detector downturn rule (融資維持率 < 門檻) could never fire (#1924).
+//
+// Best-effort by design: a missing row (weekend, holiday, or before FinMind's
+// evening release), an exhausted quota, or upstream throttling are all
+// "wait" conditions, not outages — they are logged at debug so a normal tick
+// never emits a WARN (the gateway maps ErrNoData to RecordWaiting). Only a
+// genuine upstream failure is logged as WARN.
+//
+// Cost: one FinMind call per successful fill per trading day (the series is
+// market-wide and needs no data_id); lastRatioFillDay dedups the gateway
+// fan-out, which re-fetches this channel many times per day.
+func (t *TWSEMarginBalanceProvider) fillMaintenanceRatio(ctx context.Context, tradeDate time.Time, snap *MacroDataSnapshot) {
+	if t.finmind == nil {
+		return
+	}
+	day := tradeDate.Format("2006-01-02")
+
+	t.ratioFillMu.Lock()
+	filled := t.lastRatioFillDay == day
+	t.ratioFillMu.Unlock()
+	if filled {
+		return
 	}
 
-	url := fmt.Sprintf("%s/zh/exchangeReport/MI_MARGN?response=json&date=%s&selectType=ALL", t.baseURL, dateStr)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	rowDate, ratio, err := t.finmind.GetMarginMaintenanceLatest(ctx, day)
 	if err != nil {
-		return 0, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("http request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("read body: %w", err)
-	}
-
-	var apiResp twseMarginResponse
-	if err := DecodeJSON(bytes.NewReader(body), resp.Header.Get("Content-Type"), &apiResp); err != nil {
-		return 0, fmt.Errorf("decode response: %w", err)
+		switch {
+		case errors.Is(err, ErrNoData):
+			// Not published yet (or no trading day inside the lookback):
+			// expected, retry on the next fetch without noise.
+			logging.Debug("twse_margin_provider", "maintenance_ratio_not_published",
+				logging.Err(err), logging.FStr("end_date", day))
+		case errors.Is(err, ErrQuotaExhausted), errors.Is(err, ErrRateLimited),
+			errors.Is(err, ErrIPBanned), errors.Is(err, ErrFinMindBreakerOpen):
+			// Budget/throttling conditions (P1-7): not outages, self-heal.
+			logging.Debug("twse_margin_provider", "maintenance_ratio_source_waiting",
+				logging.Err(err), logging.FStr("end_date", day))
+		default:
+			logging.Warn("twse_margin_provider", "maintenance_ratio_source_failed",
+				logging.Err(err), logging.FStr("end_date", day))
+		}
+		return
 	}
 
-	if apiResp.Stat != "OK" || len(apiResp.Tables) < 2 {
-		return 0, fmt.Errorf("TWSE maintenance ratio unavailable: stat=%s tables=%d", apiResp.Stat, len(apiResp.Tables))
-	}
+	t.ratioFillMu.Lock()
+	t.lastRatioFillDay = day
+	t.ratioFillMu.Unlock()
 
-	// Table 1 is the maintenance ratio table.
-	// Columns: [日期, 維持率(%)]
-	table := apiResp.Tables[1]
-	if len(table.Data) == 0 || len(table.Data[0]) < 2 {
-		return 0, fmt.Errorf("TWSE maintenance ratio table empty")
+	snap.MarginMaintenanceRatio = MacroDataPoint{
+		Symbol:    "TSE_MARGIN_MAINT",
+		Value:     ratio,
+		Timestamp: time.Now().Unix(),
 	}
-
-	ratioStr := table.Data[0][1]
-	ratio, err := strconv.ParseFloat(strings.TrimSpace(ratioStr), 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse maintenance ratio %q: %w", ratioStr, err)
-	}
-
-	return ratio, nil
+	logging.Info("twse_margin_provider", "maintenance_ratio_filled",
+		logging.FStr("source", "finmind:TaiwanTotalExchangeMarginMaintenance"),
+		logging.FStr("row_date", rowDate), logging.FFloat64("value", ratio))
 }
 
 func (t *TWSEMarginBalanceProvider) saveMargin(dateStr string, balance, shortBalance, changePct, shortChangePct float64) error {
