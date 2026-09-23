@@ -1162,3 +1162,81 @@ func TestMacroDataGatewayAdapter_FanOutDoesNotIncludeTwseETF(t *testing.T) {
 		t.Error("fan-out must NOT probe twse_etf (removed from fetchFresh channel list)")
 	}
 }
+
+func TestApplyCPI(t *testing.T) {
+	a, snap := newApplyFixture()
+	data := []byte(`{"cpi_yoy":{"symbol":"CUUR0000SA0","value":2.9,"change_pct":0.1,"timestamp":1758200000}}`)
+	a.applyCPI(snap, data)
+	if snap.CPIYoY.Symbol != "CUUR0000SA0" {
+		t.Errorf("CPIYoY.Symbol = %q, want CUUR0000SA0", snap.CPIYoY.Symbol)
+	}
+	if snap.CPIYoY.Value != 2.9 {
+		t.Errorf("CPIYoY.Value = %v, want 2.9", snap.CPIYoY.Value)
+	}
+	if snap.CPIYoY.ChangePct != 0.1 {
+		t.Errorf("CPIYoY.ChangePct = %v, want 0.1", snap.CPIYoY.ChangePct)
+	}
+}
+
+func TestApplyCPI_EmptySymbolIsNoOp(t *testing.T) {
+	a, snap := newApplyFixture()
+	snap.CPIYoY = marketdata.MacroDataPoint{Symbol: "KEEP", Value: 9.9}
+
+	a.applyCPI(snap, []byte(`{"cpi_yoy":{"symbol":"","value":0}}`))
+	if snap.CPIYoY.Symbol != "KEEP" || snap.CPIYoY.Value != 9.9 {
+		t.Errorf("zero-valued payload must not clobber the existing value, got %+v", snap.CPIYoY)
+	}
+
+	a.applyCPI(snap, []byte(`not-json`))
+	if snap.CPIYoY.Symbol != "KEEP" {
+		t.Errorf("invalid JSON must not clobber the existing value, got %+v", snap.CPIYoY)
+	}
+}
+
+// TestMacroDataGatewayAdapter_FanOutIncludesUSCPI locks the design-gap fix:
+// the runtime macro fan-out must probe us_cpi and carry CPIYoY into the
+// snapshot, otherwise the 5-minute macro_ingest overwrites the daily cron's
+// cpi_yoy in data/state/macro/<date>.json and the narrative inflation
+// detectors stay inert (CPIYoY <= 0 early-return).
+func TestMacroDataGatewayAdapter_FanOutIncludesUSCPI(t *testing.T) {
+	var mu sync.Mutex
+	requested := make(map[string]bool)
+	fetcher := func(ctx context.Context, channelID string) ([]byte, FetchMeta, error) {
+		mu.Lock()
+		requested[channelID] = true
+		mu.Unlock()
+		if channelID == "us_cpi" {
+			b, _ := json.Marshal(marketdata.MacroDataSnapshot{
+				CPIYoY: marketdata.MacroDataPoint{Symbol: "CUUR0000SA0", Value: 2.9, ChangePct: 0.1, Timestamp: 1758200000},
+			})
+			return b, FetchMeta{}, nil
+		}
+		return nil, FetchMeta{Stale: true, LastError: "stale:test"}, nil
+	}
+
+	gw := NewMacroDataGatewayAdapter(fetcher).(*macroDataGatewayAdapter)
+	snap, err := gw.FetchSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("FetchSnapshot returned error: %v", err)
+	}
+
+	mu.Lock()
+	probed := requested["us_cpi"]
+	probedCount := len(requested)
+	mu.Unlock()
+
+	if !probed {
+		t.Fatal("fan-out must probe us_cpi; without it CPIYoY is dropped from every runtime snapshot")
+	}
+	if snap.CPIYoY.Symbol != "CUUR0000SA0" || snap.CPIYoY.Value != 2.9 {
+		t.Fatalf("snapshot CPIYoY = %+v, want the us_cpi payload", snap.CPIYoY)
+	}
+	// E2 evidence for the PR body.
+	t.Logf("E2 snapshot CPIYoY: %+v (failed=%v stale=%d)", snap.CPIYoY, snap.FailedChannels, len(snap.StaleChannels))
+	// 26 legacy channels + us_cpi. The pre-change code comment said 27, but
+	// the list had held 26 ever since twse_etf was dropped in #1614 — adding
+	// us_cpi makes the documented count true again.
+	if probedCount != 27 {
+		t.Errorf("fan-out probed %d channels, want 27 (26 legacy + us_cpi)", probedCount)
+	}
+}

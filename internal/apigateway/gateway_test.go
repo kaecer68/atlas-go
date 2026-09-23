@@ -2,6 +2,7 @@ package apigateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/janus"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 func newTestGateway(t *testing.T) *Gateway {
@@ -672,5 +674,64 @@ func TestRegisterChannelAdapters_TEJKeyWithoutOptInWritesInactive(t *testing.T) 
 	}
 	if !strings.Contains(rec.LastError, "#1758") {
 		t.Errorf("inactive message should reference #1758, got %q", rec.LastError)
+	}
+}
+
+// TestGateway_USCPICacheTTLMatchesContract locks the wiring that protects the
+// 5-minute runtime macro fan-out from us_cpi's 1-request/hour limiter: the
+// gateway cache lifetime for us_cpi must match the channel contract's
+// ExpectedRefresh (24h) instead of the layer default (5m).
+func TestGateway_USCPICacheTTLMatchesContract(t *testing.T) {
+	g := newTestGateway(t)
+
+	if got := g.cache.TTLFor("us_cpi"); got < 24*time.Hour {
+		t.Errorf("us_cpi cache TTL = %s, want >= 24h (contract ExpectedRefresh; otherwise every 5-minute fan-out reaches the 1/hour limiter)", got)
+	}
+	if got := g.cache.TTLFor("us_yahoo"); got >= 24*time.Hour {
+		t.Errorf("us_yahoo cache TTL = %s, want the 5-minute layer default", got)
+	}
+}
+
+// TestGateway_USCPIFetch_RepeatedTicksDoNotBlock simulates the runtime macro
+// fan-out against the real Gateway + real USCPIChannelAdapter: every tick
+// outlives the cache entry (cache invalidated) while the 1/hour token is
+// already spent, so each tick reaches the adapter's limiter. The tick must
+// return promptly and must still carry the last-known-good CPI payload.
+func TestGateway_USCPIFetch_RepeatedTicksDoNotBlock(t *testing.T) {
+	g := newTestGateway(t)
+	provider := &stubCPIProvider{snap: cpiFixtureSnapshot()}
+	g.registry.Register("us_cpi", &USCPIChannelAdapter{
+		provider: provider,
+		limiter:  rate.NewLimiter(rate.Every(time.Hour), 1),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for tick := 1; tick <= 3; tick++ {
+		// Mirrors the 5-minute fan-out outliving the gateway cache entry.
+		g.cache.Invalidate("us_cpi")
+
+		start := time.Now()
+		res, err := g.Fetch(ctx, "us_cpi")
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Fatalf("tick %d: Fetch returned error: %v", tick, err)
+		}
+		if elapsed > time.Second {
+			t.Fatalf("tick %d blocked for %s; the fan-out must never wait on the hourly limiter", tick, elapsed)
+		}
+
+		var snap marketdata.MacroDataSnapshot
+		if err := json.Unmarshal(res.Data, &snap); err != nil {
+			t.Fatalf("tick %d: unmarshal payload: %v", tick, err)
+		}
+		if snap.CPIYoY.Symbol == "" {
+			t.Fatalf("tick %d: CPIYoY missing from the payload; the runtime snapshot would lose cpi_yoy", tick)
+		}
+	}
+
+	if provider.calls != 1 {
+		t.Errorf("provider calls = %d, want 1: throttled ticks must be served from last-known-good", provider.calls)
 	}
 }
