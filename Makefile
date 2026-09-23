@@ -20,7 +20,7 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
-.PHONY: ci-gate ci-full pre-push import-history ci-quota
+.PHONY: ci-gate ci-full pre-push import-history ci-quota check-production-host
 .PHONY: test-makefile-imac-guard
 
 # ── iMac prod guard (2026-08-27, 修 PR #1695 二次破壞事件) ─────────────────
@@ -394,7 +394,19 @@ test: test-frontend test-backend
 
 lint: lint-backend
 
-ci:
+# ── 生產主機護欄（2026-09-23 事故後新增）────────────────────────────
+# 在生產機（偵測 $HOME/.a2a/PRODUCTION_HOST）上跑 CI/測試會產生真實副作用
+# （呼叫外部服務、寫真 DB、寄真信）。GitHub Actions 會設 CI=true，屬合法路徑。
+# 真的必須在生產機跑：A2A_ALLOW_PROD_CI=1 make ci
+.PHONY: check-production-host
+check-production-host:
+	@if [ -f "$$HOME/.a2a/PRODUCTION_HOST" ] && [ "$${CI:-}" != "true" ] && [ "$${A2A_ALLOW_PROD_CI:-0}" != "1" ]; then \
+		echo "⛔ 這台是生產主機（$$HOME/.a2a/PRODUCTION_HOST）→ 拒絕互動式執行 make ci"; \
+		echo "   請在複製機執行；必要時 A2A_ALLOW_PROD_CI=1 make ci"; \
+		exit 1; \
+	fi
+
+ci: check-production-host
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
 	for script in scripts/ci/check_*.sh; do \
@@ -416,7 +428,7 @@ ci:
 	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
-ci-quick:
+ci-quick: check-production-host
 	@echo "🛡️  Running fast CI checks only (<2s each)..."
 	@failed=0; passed=0; \
 	for script in scripts/ci/check_agent_prompts.sh \
@@ -431,7 +443,8 @@ ci-quick:
 	              scripts/ci/check_field_contract.sh \
 	              scripts/ci/check_channel_consistency.sh \
 	              scripts/ci/check_docs_governance.sh \
-	              scripts/ci/check_agents_index.sh; do \
+	              scripts/ci/check_agents_index.sh \
+	              scripts/ci/check_jev_contract.sh; do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 10 bash $$script > /dev/null 2>&1; then \
