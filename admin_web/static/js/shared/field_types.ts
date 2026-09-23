@@ -941,6 +941,9 @@ export interface DayResult {
   portfolio_value: number;
   daily_pnl: number;
   fallback_events?: string[];
+  session_rerun?: boolean;
+  session_return?: number;
+  session_return_recorded?: boolean;
 }
 
 export interface DayTradingStats {
@@ -3989,6 +3992,9 @@ export interface SimulationResult {
   total_tax_paid: number;
   fallback_events?: string[];
   risk_commentary?: string;
+  session_rerun?: boolean;
+  session_return?: number;
+  session_return_recorded?: boolean;
 }
 
 export interface SimulationState {
@@ -4002,6 +4008,8 @@ export interface SimulationState {
   max_equity: number;
   current_drawdown: number;
   locked_cash: LockedCashEntry[];
+  last_session_date?: string;
+  session_base_value?: number;
 }
 
 export interface SizingParameters {

@@ -171,14 +171,8 @@ func (s *System) runReplaySimulation(sessionDate time.Time) (domain.SimulationRe
 	s.Sim().lastOutcomes = outcomes
 	tw.Record(7, "ledger_write", "OK", map[string]any{"outcomes": len(outcomes)})
 
-	s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
-	if len(s.Sim().portfolioHistory) > 1 {
-		prev := s.Sim().portfolioHistory[len(s.Sim().portfolioHistory)-2]
-		if prev > 0 {
-			dailyReturn := (result.PortfolioValue - prev) / prev
-			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
-		}
-	}
+	// Per-session series update (one entry per trading session, #1900).
+	s.recordSessionHistory(result)
 	// Risk snapshot + LLM forensics hook. Shared with the non-replay path
 	// (system.go) so the capability behaves identically on both — production
 	// always takes this replay path (issue #1888).

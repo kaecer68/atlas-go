@@ -19,6 +19,37 @@ type SimulationState struct {
 	MaxEquity       float64            `json:"max_equity"`
 	CurrentDrawdown float64            `json:"current_drawdown"`
 	LockedCash      []LockedCashEntry  `json:"locked_cash"`
+
+	// LastSessionDate records the trading session (YYYY-MM-DD) the last
+	// DailyReturns/EquityCurve entry belongs to. Without it the series had no
+	// date semantics at all: every RunDailySimulation appended, so several
+	// writers (auto_daily_simulation, stress_test_daily,
+	// POST /admin/trigger-simulation) could push many same-day entries and the
+	// zero returns of those re-runs diluted VaR/CVaR at the tail (#1900).
+	//
+	// Empty means "unknown" — a state file written before the field existed, or
+	// a run whose quotes carry no session date. Unknown is handled by keeping
+	// the legacy append behavior and adopting the semantics on the next dated
+	// run; history is never dropped.
+	LastSessionDate string `json:"last_session_date,omitempty"`
+	// SessionBaseValue is the portfolio value that closed the session *before*
+	// LastSessionDate, i.e. the denominator the dated return of
+	// LastSessionDate was computed from. Re-running that session must recompute
+	// against this same base, not against the value left behind by the earlier
+	// run of the same session.
+	SessionBaseValue float64 `json:"session_base_value,omitempty"`
+}
+
+// SessionDateLayout is the layout of SimulationState.LastSessionDate.
+const SessionDateLayout = "2006-01-02"
+
+// SessionDateKey maps a trading day to the key stored in LastSessionDate.
+// The zero time (quotes without a session date) maps to "", i.e. "unknown".
+func SessionDateKey(day time.Time) string {
+	if day.IsZero() {
+		return ""
+	}
+	return day.Format(SessionDateLayout)
 }
 
 // NewSimulationState initializes a simulation state with starting cash.
@@ -71,6 +102,15 @@ type DayResult struct {
 	PortfolioValue float64       `json:"portfolio_value"`
 	DailyPnL       float64       `json:"daily_pnl"`
 	FallbackEvents []string      `json:"fallback_events,omitempty"`
+
+	// SessionRerun/SessionReturn/SessionReturnRecorded describe how this run
+	// updated the daily-return series (see SimulationState.LastSessionDate).
+	// They are mirrored into domain.SimulationResult fields of the same names
+	// so callers with their own return accumulator can apply the same date
+	// semantics (#1900).
+	SessionRerun          bool    `json:"session_rerun,omitempty"`
+	SessionReturn         float64 `json:"session_return,omitempty"`
+	SessionReturnRecorded bool    `json:"session_return_recorded,omitempty"`
 }
 
 type SimulationReport struct {

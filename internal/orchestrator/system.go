@@ -867,14 +867,8 @@ func (s *System) RunDailySimulation(asOf time.Time) (domain.SimulationResult, er
 	}
 	result.GuardOutcomes = guardOutcomes
 
-	s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
-	if len(s.Sim().portfolioHistory) > 1 {
-		prev := s.Sim().portfolioHistory[len(s.Sim().portfolioHistory)-2]
-		if prev > 0 {
-			dailyReturn := (result.PortfolioValue - prev) / prev
-			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
-		}
-	}
+	// Per-session series update (one entry per trading session, #1900).
+	s.recordSessionHistory(result)
 	s.finalizeRiskForensics(&result)
 	if err := s.persistPersistentState(); err != nil {
 		logging.Warn("System", "failed to persist simulation state", "session_id", s.Sim().session.ID, "err", err)

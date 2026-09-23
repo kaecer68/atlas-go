@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-08-28
+updated: 2026-09-23
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -20,6 +20,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 |------|---------|------|
 | **Replay 格式錯誤** | ledger | Replay 為 **JSONL**（每行獨立 JSON 物件），不是 JSON array。 |
 | **Session 日期不可信賴 `RecordedAt`** | domain | `RecordedAt` 是計算完成時間。排序/比較請以 `SessionID` 中的交易日為準。 |
+| **`DailyReturns` 是「每個交易日一筆」不是「每次執行一筆」** | sim / orchestrator / risk | `domain.SimulationState.DailyReturns`（`data/state/simulation_state.json`）以 `LastSessionDate` 標記最後一筆所屬交易日；同一交易日重跑 **取代最後一筆**，不 append。多個 writer（`auto_daily_simulation`、`stress_test_daily`、`POST /admin/trigger-simulation`）共用同一檔案，若改成 append，同日多筆 ≈0 報酬會塞滿 `ComputeRiskSnapshot` 讀取的 5% 尾端，使 `var95/cvar95` 被 0 主導（#1900）。新增 writer 時必須沿用 `SessionBaseValue`（前一交易日收盤）當分母，否則算出來的不是單日報酬。另注意 `risk.CalculateVaR` 在樣本 <252（`MinObservationsForVaR`）時**一律回 0**，與稀釋無關。 |
 | **JSON tag 大小寫錯誤** | domain / API | API handler 讀取 JSONL 時，若 anonymous struct 的 JSON tag 用了 PascalCase 而 JSON 實際是 snake_case，unmarshal 會靜默失敗。 |
 | **PostgreSQL 保留字** | data / migrations | migration 欄位/表名禁用未加引號的 PG 保留字（`window`/`user`/`order`/`select`/…）；SQLite 接受但 PG 報 `SQLSTATE 42601`（實例：000019 因 `window` 改名 `rolling_window`）。 |
 | **REAL vs DOUBLE PRECISION** | data / migrations | SQLite `REAL` = 8-byte double；PostgreSQL `REAL` = float4 單精度。migration 中任何 float 語意欄必須用 `DOUBLE PRECISION`（兩方言皆接受；SQLite 仍存 REAL）。禁止在 PG 語意欄用 `REAL`，避免無聲精度損失。 |
