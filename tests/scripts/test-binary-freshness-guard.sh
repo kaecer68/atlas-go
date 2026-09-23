@@ -33,8 +33,22 @@ EOF
   if ! make -s -C "$ROOT" "$RETAG_TARGET" DOCKER_BIN="$dir/docker" FAKE_DOCKER_LOG="$dir/docker.log"; then
     fail "Makefile does not provide a working $RETAG_TARGET target"
   fi
-  test "$(wc -l <"$dir/docker.log" | tr -d ' ')" -eq 10 || \
-    fail "$RETAG_TARGET did not create all ten cron image tags"
+  # Drift guard (2026-09-23, #1898): derive the expected set from
+  # docker-compose.yml instead of hardcoding a count. A cron service added to
+  # compose without a matching CRON_IMAGE_TAGS entry used to surface only at
+  # deploy time (atlas-cron-darwinian -> "No such image", Mac Mini 2026-09-23).
+  local expected expected_count produced
+  expected=$(sed -nE 's/^  ((cron|atlas-cron)-[a-z0-9-]+):.*/\1/p' "$ROOT/docker-compose.yml" \
+    | sed 's/^/atlas-/' | sort -u)
+  [ -n "$expected" ] || fail "could not derive cron services from docker-compose.yml"
+  expected_count=$(printf '%s\n' "$expected" | wc -l | tr -d ' ')
+  for tag in $expected; do
+    grep -Fq -- "tag atlas-cron-rebuilt:local ${tag}:latest" "$dir/docker.log" || \
+      fail "$RETAG_TARGET is missing an image tag for compose service $tag"
+  done
+  produced=$(grep -c '^tag ' "$dir/docker.log" || true)
+  test "$produced" -eq "$expected_count" || \
+    fail "$RETAG_TARGET retagged $produced images but docker-compose.yml declares $expected_count cron services"
 }
 run_cleanup_failure_test() {
   local dir
@@ -128,8 +142,15 @@ EOF
     FAKE_DOCKER_HEAD="$head" \
     "$CHECK" >/dev/null
 
-  test "$(wc -l <"$dir/rm.log" | tr -d ' ')" -eq 6 || \
-    fail "successful freshness check did not clean all temporary containers"
+  # Derive the expectation from the script itself (pre-existing drift fixed
+  # 2026-09-23: this used to hardcode 6 while check-binary-freshness.sh inspects
+  # 5 image binaries -> the guard test was red on main). The real invariant is
+  # "every inspected image is cleaned up", not a magic number.
+  local expected_rm
+  expected_rm=$(grep -c '^check_image_binary ' "$CHECK")
+  [ "$expected_rm" -gt 0 ] || fail "could not derive image checks from $CHECK"
+  test "$(wc -l <"$dir/rm.log" | tr -d ' ')" -eq "$expected_rm" || \
+    fail "successful freshness check did not clean all temporary containers (rm=$(wc -l <"$dir/rm.log" | tr -d ' ') expected=$expected_rm)"
   leftover=$(cd "$dir/freshness" && shopt -s nullglob dotglob && echo *)
   if [ -n "$leftover" ]; then
     fail "freshness check left files in its isolated temporary directory: $leftover"
@@ -145,12 +166,15 @@ run_session_start_test() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"${FAKE_MAKE_LOG:?}"
-case "${*: -1}" in
+case "$*" in
   check-binaries)
     n=$(wc -l <"${FAKE_MAKE_LOG}")
     if [ "$n" -eq 1 ]; then exit 1; fi
     ;;
-  rebuild-all) ;;
+  # Current session-start contract (2026-09-23): a stale binary triggers a
+  # host/bin-only rebuild (no docker); the container rebuild stays a manual step
+  # for the operator (see ~/.agents/AGENTS.md docker ban).
+  rebuild-host-bin\ rebuild-atlas-bins\ rebuild-cron-bins) ;;
   *) exit 99 ;;
 esac
 EOF
@@ -179,7 +203,8 @@ EOF
   test "$(wc -l <"$dir/make.log" | tr -d ' ')" -eq 3 || \
     fail "session-start did not run check, rebuild, check"
   sed -n '1p' "$dir/make.log" | grep -Fq -- "check-binaries" || fail "first session-start command was not check-binaries"
-  sed -n '2p' "$dir/make.log" | grep -Fq -- "rebuild-all" || fail "second session-start command was not rebuild-all"
+  sed -n '2p' "$dir/make.log" | grep -Fq -- "rebuild-host-bin rebuild-atlas-bins rebuild-cron-bins" || \
+    fail "second session-start command was not the docker-free host/bin rebuild (got: $(sed -n '2p' "$dir/make.log"))"
   sed -n '3p' "$dir/make.log" | grep -Fq -- "check-binaries" || fail "third session-start command was not check-binaries"
 
   : >"$dir/make.log"

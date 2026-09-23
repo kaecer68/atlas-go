@@ -22,8 +22,21 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # Fresh git repo + the script copied in (so REPO_ROOT resolves inside fixture).
 new_fixture() {
   local tmp
-  tmp=$(mktemp -d)
+  # Explicit template + own-repo assertion (2026-09-23 incident): a bare
+  # `mktemp -d` fixture once had its git commands land in the CALLER's worktree
+  # and rewrote the checked-out branch with fixture commits. The fixture must
+  # therefore (a) be created under an explicit path, and (b) prove it is its own
+  # repository root before any git command runs against it.
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/atlas-frontend-dist-fixture.XXXXXX")
+  # pwd -P normalises macOS /var -> /private/var so the comparison below cannot
+  # fail (or silently pass) on symlinked temp roots.
+  tmp_real=$(cd "$tmp" && pwd -P)
   git init -q "$tmp"
+  fixture_root=$(git -C "$tmp" rev-parse --show-toplevel 2>/dev/null || echo "")
+  [ "$fixture_root" = "$tmp_real" ] || {
+    echo "FAIL: fixture escaped its own directory (root='$fixture_root' tmp_real='$tmp_real')" >&2
+    exit 1
+  }
   git -C "$tmp" config user.email test@atlas.local
   git -C "$tmp" config user.name test
   git -C "$tmp" commit --allow-empty -qm base
