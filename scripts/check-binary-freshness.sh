@@ -140,6 +140,8 @@ check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
     "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
 check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
     "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
+check_image_binary "atlas-prism-worker:latest" /app/atlas-go \
+    "atlas-prism-worker image → /app/atlas-go" "$FRESHNESS_TMPDIR/.prism-worker-freshness-check-$$"
 check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \
     "atlas-cron-rebuilt:local → /app/macro-ingest" "$FRESHNESS_TMPDIR/.macro-ingest-freshness-check-$$"
 
