@@ -167,6 +167,10 @@ type BackgroundTaskManager struct {
 	// completionHandler receives success AND failure outcomes (with duration)
 	// so callers can persist cross-restart liveness. Nil is a no-op.
 	completionHandler TaskCompletionHandler
+	// runCtx is the context captured by Start (nil before Start runs). It lets
+	// RegisterAndStart schedule a task that is registered at runtime, which the
+	// one-shot registry snapshot in Start cannot pick up. Guarded by mu.
+	runCtx context.Context
 	// staggerStartup spreads the first runs of a fresh process start across
 	// a bounded window (see startupStaggerDelay) to avoid the startup
 	// thundering herd against shared rate limiters (#1763). Default true.
@@ -230,6 +234,37 @@ func (m *BackgroundTaskManager) Register(task *ScheduledTask) error {
 	return nil
 }
 
+// RegisterAndStart registers a task and, when the manager is already running,
+// also starts its run loop.
+//
+// Start() snapshots the registry exactly once, so Register() alone is only
+// correct for tasks added before Start(). A self-healing path that registers a
+// task at runtime (e.g. the fubon adapter watch attaching channel_health_fubon
+// after the proxy recovered) MUST use this method: otherwise the task shows up
+// in List() but never executes — "registered on paper, never scheduled", the
+// failure shape this method exists to prevent.
+//
+// Before Start() (runCtx == nil) this is exactly Register(); the task is then
+// picked up by the next Start(). Callers must not invoke it after Stop() (the
+// internal WaitGroup contract), which cannot happen from a task already
+// running inside the manager.
+func (m *BackgroundTaskManager) RegisterAndStart(task *ScheduledTask) error {
+	if err := m.Register(task); err != nil {
+		return err
+	}
+
+	m.mu.RLock()
+	ctx := m.runCtx
+	m.mu.RUnlock()
+	if ctx == nil {
+		return nil
+	}
+
+	m.wg.Add(1)
+	go m.runTask(ctx, task)
+	return nil
+}
+
 // Get returns a registered task.
 func (m *BackgroundTaskManager) Get(name string) (*ScheduledTask, bool) {
 	m.mu.RLock()
@@ -289,14 +324,17 @@ func fnv32a(s string) uint32 {
 
 func (m *BackgroundTaskManager) Start(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
-	m.cancel = cancel
 
-	m.mu.RLock()
+	m.mu.Lock()
+	m.cancel = cancel
+	// Captured under the same lock as the registry snapshot so a concurrent
+	// RegisterAndStart either sees a runnable context or nothing at all.
+	m.runCtx = ctx
 	tasks := make([]*ScheduledTask, 0, len(m.registry))
 	for _, t := range m.registry {
 		tasks = append(tasks, t)
 	}
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	for _, task := range tasks {
 		m.wg.Add(1)
