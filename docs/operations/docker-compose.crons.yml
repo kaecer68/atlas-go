@@ -5,7 +5,7 @@
 services:
   cron-geo-ingest:
     image: atlas-cron:latest
-    container_name: atlas-cron-geo-ingest-imac
+    container_name: atlas-cron-geo-ingest
     restart: unless-stopped
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
@@ -28,7 +28,7 @@ services:
 
   cron-macro-ingest:
     image: atlas-cron:latest
-    container_name: atlas-cron-macro-ingest-imac
+    container_name: atlas-cron-macro-ingest
     restart: unless-stopped
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
@@ -51,7 +51,7 @@ services:
 
   cron-replay-sync:
     image: atlas-cron:latest
-    container_name: atlas-cron-replay-sync-imac
+    container_name: atlas-cron-replay-sync
     restart: unless-stopped
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
@@ -75,7 +75,7 @@ services:
   # D1 決策退役 2026-08-17: Go BTM auto_daily_simulation 已承載真實演化; 本容器為 stub
   # cron-darwinian:
   #   image: atlas-cron:latest
-  #   container_name: atlas-cron-darwinian-imac
+  #   container_name: atlas-cron-darwinian
   #   restart: unless-stopped
   #   environment:
   #     - CRON_SCHEDULE=0 9 * * *
@@ -92,7 +92,7 @@ services:
 
   cron-quote-backfill:
     image: atlas-cron:latest
-    container_name: atlas-cron-quote-backfill-imac
+    container_name: atlas-cron-quote-backfill
     restart: unless-stopped
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
@@ -111,3 +111,11 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       disable: true
+
+# ⚠️ 容器命名（2026-09-23 校正，a2a-dev F17）
+# 本檔（Mac Mini 時代 SSOT）過去沿用 iMac 的 `-imac` 後綴容器名，與**實際在跑的**容器不符：
+#   Mac Mini 上實際為乾淨名（atlas-go / atlas-fubon-proxy / atlas-prometheus /
+#   atlas-grafana / atlas-alertmanager / atlas-cron-*），來源是 docker-compose.yml
+#   （+ crons 服務）。`-imac` 後綴已淘汰，依本檔啟動才不會產生重複容器。
+# 對照：repo 根目錄的 docker-compose.prod.yml / docker-compose.crons.yml **未受版控**，
+#       是 iMac 時代殘留檔，勿再使用（已於本日盤查確認）。
