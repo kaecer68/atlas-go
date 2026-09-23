@@ -104,6 +104,40 @@ var knownIssues = map[string]KnownIssue{
 		DocumentedAt: "2026-08-05T03:50:00Z",
 		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+taifex_daily_alias",
 	},
+
+	// BDI / CNBC empty quote (2026-09-23 dispatch). CNBC's quote service keeps
+	// answering the Baltic Dry Index symbol `.BADI` with a structurally valid
+	// payload that carries no price: no `last` field, open/high/low all
+	// "0.00", provider "CNBC Quote Cache". Verified 2026-09-23 against
+	// https://quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json
+	// with the production User-Agent (atlas-go/1.0): the SAME request at the
+	// SAME minute returns fresh values for .SPX (7764.64), .DJI (51863.69) and
+	// .IXIC (27244.278), so this is neither a UA/Akamai block (that returns an
+	// HTML "Access Denied") nor a network/atlas problem — it is a data-side
+	// upstream outage for one symbol. Root-cause analysis for the gate above:
+	// ~/workspace/atlas-notes/05-decisions/2026-09-23-bdi-cnbc-empty-quote-root-cause.md
+	//
+	// Alternative sources were probed and are unusable: Yahoo `^BDI` and `BDIY`
+	// are delisted, stooq has no BDI symbol. The Baltic Exchange's own index is
+	// licensed and not publicly scrapable. There is therefore no atlas-side fix;
+	// the conscious handling is: provider returns typed marketdata.ErrEmptyQuote
+	// → gateway records the channel as "warn" (not "error") → circuit breaker
+	// treats it as a no-op (empty quotes must not accumulate failures) →
+	// narrative mergeWithPrev keeps the last-known-good Bdi datapoint (3370,
+	// 2026-09-20) so downstream consumers (eventdriven sector_predictor BDI
+	// factor) keep reading a real value instead of zero.
+	//
+	// Impact while upstream stays dark: macro snapshots carry BDI = last good
+	// value (3370 from 2026-09-20) rather than a fresh print; the channel page
+	// shows the warn state with the last-success date, and that badge marks the
+	// condition as externally caused so it is not re-investigated every week.
+	"bdi": {
+		Key:          "bdi_cnbc_empty_quote_2026_09",
+		Title:        "BDI: CNBC `.BADI` returns an empty quote (no last price) since 2026-09-20T08:35Z",
+		Description:  "CNBC's quote service (quote.cnbc.com/quote-html-webservice/quote.htm?symbols=.BADI&output=json) has answered the Baltic Dry Index symbol `.BADI` with a structurally valid but price-less quote since 2026-09-20T08:35Z: HTTP 200, JSON shape intact, no `last` field, open/high/low all \"0.00\", provider \"CNBC Quote Cache\". Confirmed 2026-09-23 from the atlas host with the production User-Agent (atlas-go/1.0): .SPX=7764.64, .DJI=51863.69, .IXIC=27244.278 came back fresh in the same response window, so this is a per-symbol, data-side upstream outage, NOT an Akamai/UA block (which returns HTML Access Denied) and NOT an atlas-side fault. No usable alternative source exists: Yahoo `^BDI` and `BDIY` are delisted and stooq carries no BDI symbol. Atlas-side handling (2026-09-23 fix): BDIProvider returns typed marketdata.ErrEmptyQuote; the gateway records bdi as status warn (not error, no ChannelHealthStatusError page) and the circuit breaker treats expected-empty as a no-op so repeated empty quotes no longer open the channel breaker (they previously did after 3 consecutive ticks and then served \"circuit breaker open for channel bdi\" while task_liveness.macro_cache_bdi accumulated 800+ consecutive failures). The last-known-good BDI value (3370, 2026-09-20) is preserved in macro snapshots via narrative.mergeWithPrev, so downstream BDI-factor consumers keep a real value. Root-cause notes: ~/workspace/atlas-notes/05-decisions/2026-09-23-bdi-cnbc-empty-quote-root-cause.md",
+		DocumentedAt: "2026-09-23T00:00:00Z",
+		TrackingURL:  "https://github.com/kaecer68/atlas-go/issues?q=is%3Aissue+bdi_cnbc_empty_quote",
+	},
 }
 
 // LookupKnownIssue returns the KnownIssue for the given channelID, or

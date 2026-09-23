@@ -53,6 +53,25 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	}, nil
 }
 
+// isExpectedNonFailureErr reports whether a fetch error is an expected
+// "upstream answered, but nothing usable came back" outcome rather than an
+// outage. These outcomes must not accumulate circuit-breaker failures (see
+// CircuitBreaker.Call) while still being surfaced to callers:
+//
+//   - ErrNoData    — upstream has no new data for the requested day yet
+//     (holiday / weekend / weekly snapshot not published). Gateway records
+//     RecordWaiting; the P1-9 taxonomy already declares that ErrNoData must
+//     not trip a breaker (internal/marketdata/errors.go).
+//   - ErrEmptyQuote — upstream returned a structurally valid quote with no
+//     price (CNBC `.BADI`, 2026-09-20T08:35Z onward). Gateway records warn.
+//
+// Everything else (transport errors, HTTP 4xx/5xx, parse failures, empty
+// payload arrays that indicate real breakage) keeps the ordinary failure
+// semantics and still opens the breaker.
+func isExpectedNonFailureErr(err error) bool {
+	return errors.Is(err, marketdata.ErrNoData) || errors.Is(err, marketdata.ErrEmptyQuote)
+}
+
 // Fetch retrieves data from a channel with rate limiting, circuit breaking,
 // health tracking, and caching.
 func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, error) {
@@ -143,6 +162,28 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		if errors.Is(callErr, marketdata.ErrQuotaExhausted) || errors.Is(callErr, marketdata.ErrFugleQuotaExhausted) || errors.Is(callErr, marketdata.ErrIPBanned) {
 			_ = g.health.Record(channelID, "warn", callErr.Error())
 			logging.Info("gateway", "channel_quota_waiting",
+				"channel", channelID, "err", callErr.Error())
+			return nil, callErr
+		}
+		// ErrEmptyQuote（上游有回應、結構合法、但報價沒有價格；實證 CNBC
+		// `.BADI` 自 2026-09-20T08:35Z 起）→ warn。
+		//
+		// 為什麼不是 error：HTTP 200、JSON 與 schema 不變，不是 atlas 端故障，
+		// 標 error 只會讓 ChannelHealthStatusError 每 tick 誤報（同
+		// quota/IP-ban 的降噪處理）。
+		//
+		// 為什麼也不是 ErrNoData 的 waiting(ok)：waiting 會讓 channel 看起來
+		// 正常（status 維持 ok），而 staleness 後備判的是 LastFetchAt，waiting
+		// 每 tick 都更新它 → 掩蓋「連續多日沒有價格」。warn 讓 channel 頁面保留
+		// 黃燈與原因文字，last_success 不推進（斷料天數仍可從 last_success /
+		// task_liveness.consecutive_failures 看出）。
+		//
+		// last-good 值不受影響：本分支不寫快取、不回傳替代值，下游
+		// narrative.mergeWithPrev 以 Symbol=="" 保留前一次成功的 Bdi 數據點
+		// （實證基線：BDI 3370 = 2026-09-20 最後已知值）。
+		if errors.Is(callErr, marketdata.ErrEmptyQuote) {
+			_ = g.health.Record(channelID, "warn", callErr.Error())
+			logging.Info("gateway", "channel_empty_quote",
 				"channel", channelID, "err", callErr.Error())
 			return nil, callErr
 		}

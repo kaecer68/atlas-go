@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
 // =============================================================================
@@ -902,5 +904,71 @@ func TestCircuitBreaker_OverrideHalfOpenLimitReached(t *testing.T) {
 	}
 	if cb.State() != StateClosed {
 		t.Errorf("post-reset: expected StateClosed, got %v", cb.State())
+	}
+}
+
+// =============================================================================
+// Expected-non-failure no-op semantics (2026-09-23 bdi fix)
+// =============================================================================
+
+// TestCircuitBreaker_Call_ExpectedNonFailureIsNoOp pins the accounting rule the
+// bdi incident exposed: an upstream that answers with no usable data
+// (marketdata.ErrNoData / marketdata.ErrEmptyQuote) must be a NO-OP for the
+// breaker — it neither opens the circuit nor resets a real failure streak.
+//
+// The second half is the reason the audit note in
+// internal/marketdata/circuit_breaker.go:53-61 forbids "treat expected-empty as
+// success": a success reset here would have erased the two genuine failures and
+// delayed the breaker another full threshold.
+func TestCircuitBreaker_Call_ExpectedNonFailureIsNoOp(t *testing.T) {
+	cb := NewCircuitBreaker("bdi")
+	realFailure := func() error { return fmt.Errorf("bdi fetch: %w", marketdata.ErrUpstream) }
+	expectedEmpty := func() error { return fmt.Errorf("bdi: missing last price field: %w", marketdata.ErrEmptyQuote) }
+
+	// Two REAL failures: one short of the threshold.
+	for i := range CircuitBreakerFailureThreshold - 1 {
+		if err := cb.Call(realFailure); err == nil {
+			t.Fatalf("real failure %d: expected an error", i)
+		}
+	}
+	if cb.failures != CircuitBreakerFailureThreshold-1 {
+		t.Fatalf("failures = %d, want %d", cb.failures, CircuitBreakerFailureThreshold-1)
+	}
+
+	// A long run of expected-empty replies: no-op, so the streak must survive.
+	for i := range CircuitBreakerFailureThreshold * 5 {
+		err := cb.Call(expectedEmpty)
+		if !errors.Is(err, marketdata.ErrEmptyQuote) {
+			t.Fatalf("empty tick %d: err = %v, want the error returned unchanged", i, err)
+		}
+	}
+	if cb.State() != StateClosed {
+		t.Errorf("state = %v, want StateClosed (expected-empty must not open the breaker)", cb.State())
+	}
+	if cb.failures != CircuitBreakerFailureThreshold-1 {
+		t.Errorf("failures = %d, want %d preserved (expected-empty must not reset a real streak)",
+			cb.failures, CircuitBreakerFailureThreshold-1)
+	}
+
+	// One more REAL failure completes the streak and opens the breaker.
+	_ = cb.Call(realFailure)
+	if cb.State() != StateOpen {
+		t.Errorf("state = %v, want StateOpen once the real streak reaches the threshold", cb.State())
+	}
+}
+
+// TestCircuitBreaker_Call_ErrNoDataIsNoOp mirrors the rule for the P1-9
+// no-data sentinel: waiting-for-publication channels (tdcc weekly snapshot,
+// taiex weekend/pre-market) must not accumulate breaker failures.
+func TestCircuitBreaker_Call_ErrNoDataIsNoOp(t *testing.T) {
+	cb := NewCircuitBreaker("tdcc")
+	for i := range CircuitBreakerFailureThreshold * 3 {
+		err := cb.Call(func() error { return fmt.Errorf("tdcc: %w", marketdata.ErrNoData) })
+		if !errors.Is(err, marketdata.ErrNoData) {
+			t.Fatalf("tick %d: err = %v, want the error returned unchanged", i, err)
+		}
+	}
+	if cb.State() != StateClosed || cb.failures != 0 {
+		t.Errorf("state=%v failures=%d, want closed/0 (ErrNoData is expected, not an outage)", cb.State(), cb.failures)
 	}
 }

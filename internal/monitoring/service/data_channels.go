@@ -45,6 +45,12 @@ func classifyErrorSeverity(err error) string {
 		errors.Is(err, marketdata.ErrRateLimited),
 		errors.Is(err, marketdata.ErrFugleBreakerOpen):
 		return ErrorSeverityWarn
+	case errors.Is(err, marketdata.ErrEmptyQuote):
+		// Upstream answered 200 with a structurally valid quote that carries no
+		// price (CNBC `.BADI`, 2026-09-20 onward). Not atlas breakage and not a
+		// hard outage, but NOT routine off-hours either — keep it warn so the
+		// channel page shows the reason instead of a silent "ok".
+		return ErrorSeverityWarn
 	case errors.Is(err, marketdata.ErrNoData):
 		return ErrorSeverityInfo
 	case errors.Is(err, marketdata.ErrUpstream),

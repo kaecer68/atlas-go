@@ -582,6 +582,16 @@ func TestClassifyErrorSeverity_TypedSentinels(t *testing.T) {
 			expect: ErrorSeverityWarn,
 		},
 		{
+			name:   "empty quote (CNBC .BADI) -> warn",
+			err:    fmt.Errorf("bdi: missing last price field: %w", marketdata.ErrEmptyQuote),
+			expect: ErrorSeverityWarn,
+		},
+		{
+			name:   "empty quote must not be mistaken for no-data",
+			err:    marketdata.ErrEmptyQuote,
+			expect: ErrorSeverityWarn,
+		},
+		{
 			name:   "no-data (holiday) -> info",
 			err:    fmt.Errorf("%w: no TWSE margin balance data available in the last 7 days", marketdata.ErrNoData),
 			expect: ErrorSeverityInfo,

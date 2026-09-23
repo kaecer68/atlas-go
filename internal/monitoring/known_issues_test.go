@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,7 +21,7 @@ import (
 // the dashboard renders the known-issue badge regardless of which form
 // the runtime channel_health record carries.
 func TestLookupKnownIssue_ReturnsRegisteredEntry(t *testing.T) {
-	for _, id := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot", "taifex-daily"} {
+	for _, id := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot", "taifex-daily", "bdi"} {
 		issue := LookupKnownIssue(id)
 		if issue == nil {
 			t.Errorf("%q should have a known issue (PR-C + PR-D), got nil", id)
@@ -84,7 +85,10 @@ func TestKnownIssueChannelIDs(t *testing.T) {
 	// PR-D (2026-08-05) added the dash-separated aliases twse-etf and
 	// twse-oddlot so the dashboard renders known-issue badges on both
 	// the canonical (underscore) and runtime-observed (dash) forms.
-	for _, required := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot"} {
+	// 2026-09-23: "bdi" was added for the CNBC `.BADI` empty-quote outage
+	// (bdi_cnbc_empty_quote_2026_09) — also asserted explicitly in
+	// TestLookupKnownIssue_BDIEmptyQuote.
+	for _, required := range []string{"twse_etf", "twse-etf", "twse_oddlot", "twse-oddlot", "bdi"} {
 		if !got[required] {
 			t.Errorf("required known-issue channel %q not in registry", required)
 		}
@@ -177,5 +181,31 @@ func TestDashboardAPI_ChannelHealthEndpoint_KnownIssueField(t *testing.T) {
 	}
 	if _, ok := fugle["known_issue"]; ok {
 		t.Errorf("fugle is healthy, must NOT include known_issue field")
+	}
+}
+
+// TestLookupKnownIssue_BDIEmptyQuote pins the 2026-09-23 known-issue entry for
+// the CNBC `.BADI` empty-quote outage: the dashboard resolves the badge through
+// LookupKnownIssue, so the key, the date and the two facts an on-call reader
+// needs (this is externally caused; alternative sources are dead) must all be
+// present in the registry.
+func TestLookupKnownIssue_BDIEmptyQuote(t *testing.T) {
+	issue := LookupKnownIssue("bdi")
+	if issue == nil {
+		t.Fatal("bdi must have a known issue declared (CNBC .BADI empty quote, 2026-09-20T08:35Z)")
+	}
+	if issue.Key != "bdi_cnbc_empty_quote_2026_09" {
+		t.Errorf("Key = %q, want bdi_cnbc_empty_quote_2026_09", issue.Key)
+	}
+	if issue.DocumentedAt == "" {
+		t.Error("DocumentedAt must be set (the dashboard shows how long the issue has been known)")
+	}
+	if issue.TrackingURL == "" {
+		t.Error("TrackingURL must be set")
+	}
+	for _, want := range []string{"2026-09-20T08:35Z", "ErrEmptyQuote", "delisted", "mergeWithPrev", "circuit breaker", ".BADI"} {
+		if !strings.Contains(issue.Description, want) {
+			t.Errorf("Description must mention %q so the badge is self-explanatory; got: %s", want, issue.Description)
+		}
 	}
 }
