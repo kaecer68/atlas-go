@@ -157,6 +157,69 @@ func TestPeriodDetector_GeoDecliningTrend(t *testing.T) {
 	}
 }
 
+// TestPeriodDetector_TurnaroundDown_MarginMaintenanceRatio pins the 融資維持率
+// condition to a live-sourced value (#1924). Before the FinMind fill,
+// MacroDataSnapshot.MarginMaintenanceRatio was always empty in production, so
+// this condition could only ever be exercised by hand-written test literals.
+// The two cases below are the same indicators except the ratio, which is what
+// flips 2/6 into 3/6 — the detector really reacts to the ratio.
+func TestPeriodDetector_TurnaroundDown_MarginMaintenanceRatio(t *testing.T) {
+	d := NewPeriodDetectorWithDefaults()
+	threshold := d.cfg.TurnDownMarginMaintRatio
+	if threshold <= 0 {
+		t.Fatalf("TurnDownMarginMaintRatio = %v, want > 0", threshold)
+	}
+
+	// Two non-margin conditions (TWD weakening + SOX below its 50-day MA) so
+	// the margin condition is the deciding third one.
+	base := PeriodIndicators{
+		TWDMA20:     31.5,
+		TWDChange1D: 0.4, // 台幣續貶 → condition 2
+		SOXPrice:    4200,
+		SOXMA50:     5200, // SOX 跌破季線 → condition 4
+	}
+
+	low := base
+	low.MarginMaintenanceRatio = threshold - 10 // 維持率下探 → condition 3
+	lowAss, err := d.DetectAssessment(low)
+	if err != nil {
+		t.Fatalf("DetectAssessment(low ratio): %v", err)
+	}
+	if lowAss.MarketPeriod != domain.PeriodTurnaroundDown {
+		t.Fatalf("margin ratio %v (< %v) should give 3/6 → turnaround_down, got %v",
+			low.MarginMaintenanceRatio, threshold, lowAss.MarketPeriod)
+	}
+	found := false
+	for _, ind := range lowAss.TriggeredIndicators {
+		if ind.Name != "融資維持率" {
+			continue
+		}
+		found = true
+		if !ind.InputAvailable {
+			t.Errorf("融資維持率 InputAvailable = false, want true for a populated ratio")
+		}
+		if !ind.Hit {
+			t.Errorf("融資維持率 Hit = false, want true (value %v < threshold %v)",
+				ind.Value, ind.Threshold)
+		}
+	}
+	if !found {
+		t.Fatalf("assessment is missing the 融資維持率 indicator: %+v", lowAss.TriggeredIndicators)
+	}
+
+	// Same indicators, ratio above the threshold → 2/6 → not turnaround_down.
+	high := base
+	high.MarginMaintenanceRatio = threshold + 10
+	highAss, err := d.DetectAssessment(high)
+	if err != nil {
+		t.Fatalf("DetectAssessment(high ratio): %v", err)
+	}
+	if highAss.MarketPeriod == domain.PeriodTurnaroundDown {
+		t.Errorf("margin ratio %v (>= %v) must not fire turnaround_down, got %v",
+			high.MarginMaintenanceRatio, threshold, highAss.MarketPeriod)
+	}
+}
+
 // TestPeriodDetector_GeoBelowThreshold ensures geopolitical intensity below
 // the turnaround-down threshold does NOT fire the condition on its own.
 func TestPeriodDetector_GeoBelowThreshold(t *testing.T) {

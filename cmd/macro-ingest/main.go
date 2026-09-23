@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/db"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
@@ -49,12 +50,22 @@ func main() {
 		exportProvider.SetExportStatsSaver(repository.NewDualWriteRepository(pool, nil, nil, nil, nil, nil, nil))
 	}
 
+	// Margin maintenance ratio (#1924): TWSE MI_MARGN publishes no aggregate
+	// ratio, so the value comes from FinMind's whole-market series. Optional:
+	// without a key the field simply stays empty (and no WARN is emitted).
+	marginProvider := marketdata.NewTWSEMarginBalanceProvider("")
+	if key := config.Load().FinMindAPIKey; key != "" {
+		marginProvider.SetFinMindClient(marketdata.GetSharedFinMindClient(key, stateDir))
+	} else {
+		log.Println("[MacroIngest] FINMIND_API_KEY not set; margin_maintenance_ratio stays empty")
+	}
+
 	provider := marketdata.NewCompositeMacroProvider(
 		marketdata.NewYahooFinanceMacroProvider(),
 		marketdata.NewFrankfurterFXProvider(),
 		marketdata.NewTWSECapitalFlowProvider(capitalFlowDir),
 		exportProvider,
-		marketdata.NewTWSEMarginBalanceProvider(""),
+		marginProvider,
 		marketdata.NewSOXIndexProvider(),
 		marketdata.NewSPXIndexProvider(),
 		marketdata.NewNDXIndexProvider(),
