@@ -160,6 +160,65 @@ func (s *System) hydrateHistoryFromPersistentState(state *domain.SimulationState
 	}
 }
 
+// recordSessionHistory appends the completed run to the in-process
+// return/portfolio series, applying the same date semantics as the persisted
+// series (issue #1900, see domain.SimulationState.LastSessionDate).
+//
+// A run that re-runs a trading session already present in the series replaces
+// that session's entry; it never appends. Appending is what produced the
+// zero-dominated risk snapshot: the auto_daily_simulation and
+// stress_test_daily tasks plus POST /admin/trigger-simulation share this
+// series, and every run after the first one of a given trading day is flat (same
+// quotes, no new trades), so each re-run added a ~0 return until the lower tail
+// — exactly the percentile ComputeRiskSnapshot reads — was made of same-day
+// zeros (observed: 18 returns grew to 32 within 8 hours and the snapshot
+// reported var95=0 cvar95=0).
+//
+// The append path is unchanged for a new session, including deriving the return
+// from the in-process series.
+func (s *System) recordSessionHistory(result domain.SimulationResult) {
+	if result.SessionRerun {
+		if n := len(s.Sim().portfolioHistory); n > 0 {
+			s.Sim().portfolioHistory[n-1] = result.PortfolioValue
+		} else {
+			s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
+		}
+		// SessionReturnRecorded is false when the session has no return entry
+		// to replace (the very first session has no previous close).
+		if result.SessionReturnRecorded {
+			if n := len(s.Sim().returnHistory); n > 0 {
+				s.Sim().returnHistory[n-1] = result.SessionReturn
+			} else {
+				s.Sim().returnHistory = append(s.Sim().returnHistory, result.SessionReturn)
+			}
+		}
+		sessionDate := ""
+		if st := s.Sim().persistentState; st != nil {
+			sessionDate = st.LastSessionDate
+		}
+		// Guardrail/observability for the manual trigger path: a same-day
+		// re-run is legitimate (it refreshes the session) but it must be
+		// visible, and it no longer grows the series.
+		logging.Warn("system", "same_session_rerun",
+			"session", s.Sim().session.ID,
+			"session_date", sessionDate,
+			"portfolio_value", result.PortfolioValue,
+			"session_return", result.SessionReturn,
+			"return_recorded", result.SessionReturnRecorded,
+			"samples", len(s.Sim().returnHistory),
+			"action", "replaced_last_series_entry")
+		return
+	}
+	s.Sim().portfolioHistory = append(s.Sim().portfolioHistory, result.PortfolioValue)
+	if len(s.Sim().portfolioHistory) > 1 {
+		prev := s.Sim().portfolioHistory[len(s.Sim().portfolioHistory)-2]
+		if prev > 0 {
+			dailyReturn := (result.PortfolioValue - prev) / prev
+			s.Sim().returnHistory = append(s.Sim().returnHistory, dailyReturn)
+		}
+	}
+}
+
 // finalizeRiskForensics builds the risk snapshot for a completed run and runs
 // the LLM performance-forensics hook once enough history exists.
 //

@@ -3,6 +3,7 @@ package sim
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -125,6 +126,87 @@ func TestLoadPersistentState_NilFieldsInitialized(t *testing.T) {
 	}
 	if state.PreviousValues == nil {
 		t.Error("expected PreviousValues to be initialized to empty map")
+	}
+}
+
+// TestLoadPersistentState_LegacyFileWithoutSessionDate covers the #1900
+// migration path: a state file written before last_session_date /
+// session_base_value existed must load without panic, keep its whole history,
+// report an unknown session date, and gain the fields on the next write.
+func TestLoadPersistentState_LegacyFileWithoutSessionDate(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "cash": 1010000,
+  "positions": [],
+  "starting_cash": 1000000,
+  "equity_curve": [1000000, 1010000],
+  "daily_returns": [0.01],
+  "previous_values": {"_portfolio_": 1010000},
+  "max_equity": 1010000,
+  "current_drawdown": 0,
+  "locked_cash": []
+}`
+	path := filepath.Join(dir, "simulation_state.json")
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	state, err := LoadPersistentState(dir)
+	if err != nil {
+		t.Fatalf("legacy state must load: %v", err)
+	}
+	if len(state.DailyReturns) != 1 || len(state.EquityCurve) != 2 {
+		t.Fatalf("legacy history was not preserved: returns=%v equity=%v", state.DailyReturns, state.EquityCurve)
+	}
+	if state.LastSessionDate != "" {
+		t.Errorf("LastSessionDate = %q, want empty (unknown) for a legacy file", state.LastSessionDate)
+	}
+	if state.SessionBaseValue != 0 {
+		t.Errorf("SessionBaseValue = %v, want 0 for a legacy file", state.SessionBaseValue)
+	}
+
+	// Writing the loaded state back adds the fields without touching history.
+	state.LastSessionDate = "2026-09-23"
+	state.SessionBaseValue = 1_010_000
+	if err := SavePersistentState(dir, state); err != nil {
+		t.Fatalf("save migrated state: %v", err)
+	}
+	reloaded, err := LoadPersistentState(dir)
+	if err != nil {
+		t.Fatalf("reload migrated state: %v", err)
+	}
+	if reloaded.LastSessionDate != "2026-09-23" || reloaded.SessionBaseValue != 1_010_000 {
+		t.Errorf("session fields did not round-trip: %q / %v", reloaded.LastSessionDate, reloaded.SessionBaseValue)
+	}
+	if len(reloaded.DailyReturns) != 1 || len(reloaded.EquityCurve) != 2 {
+		t.Errorf("migration changed history: returns=%v equity=%v", reloaded.DailyReturns, reloaded.EquityCurve)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migrated state: %v", err)
+	}
+	if !strings.Contains(string(raw), `"last_session_date": "2026-09-23"`) {
+		t.Errorf("migrated state file does not carry the session date: %s", raw)
+	}
+}
+
+// TestSavePersistentState_OmitsUnknownSessionDate keeps the legacy shape clean:
+// a state that never saw a dated run must not grow spurious JSON keys, so old
+// readers stay happy.
+func TestSavePersistentState_OmitsUnknownSessionDate(t *testing.T) {
+	dir := t.TempDir()
+	state := domain.NewSimulationState(1_000_000)
+
+	if err := SavePersistentState(dir, &state); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "simulation_state.json"))
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if strings.Contains(string(raw), "last_session_date") || strings.Contains(string(raw), "session_base_value") {
+		t.Errorf("undated state must not serialise the session keys: %s", raw)
 	}
 }
 

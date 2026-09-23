@@ -4,6 +4,17 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(risk): daily_returns 具日期語意，同一交易日重跑改為取代（#1900）（2026-09-23）
+- **問題**：`domain.SimulationState.DailyReturns`（`data/state/simulation_state.json`）名義上是日報酬，實際是「每次 `RunDailySimulation` 的報酬」，沒有任何日期 metadata。`auto_daily_simulation`(24h)、`stress_test_daily`(24h)、`POST /admin/trigger-simulation` 共用同一檔案，同日重跑各自 append 一筆；同日重跑通常沒有新交易、報價不變 → append 的那筆 ≈ **0**。實測 8 小時內序列由 18 筆長到 32 筆，尾端被零報酬塞滿，導致風險快照 `var95=0 / cvar95=0`（零報酬佔滿 `ComputeRiskSnapshot` 讀取的 5% 尾端百分位）。
+- **根因**：`sim.Engine.RunDay` 的 step 4 無條件 `append(state.DailyReturns, ...)`，狀態檔沒有「最後一筆屬於哪個交易日」的欄位，因此無法判斷是否為同一交易日。
+- **修正**：
+  - `SimulationState` 新增 `last_session_date`（YYYY-MM-DD）與 `session_base_value`（前一交易日收盤，作為分母）。
+  - `RunDay` 同日重跑時**取代**最後一筆（`EquityCurve` 同步取代）並以 `SessionBaseValue` 重算單日報酬（長度不變）；不同交易日維持原本 append 行為。
+  - `SimulationResult`／`DayResult` 新增 `SessionRerun` / `SessionReturn` / `SessionReturnRecorded`，orchestrator 兩條跑法（`system.go`、`system_dispatcher.go`）共用新的 `recordSessionHistory`，in-process 的 `returnHistory`/`portfolioHistory` 套用同一語意，並在偵測到同日重跑時輸出 `same_session_rerun` WARN log（可觀測，不改變正常路徑行為）。
+  - 舊 state 檔（無日期欄位）載入視為「未知日期」：保留既有序列、不 panic、不清空；下一筆有日期的寫入才建立語意（此後同日重跑即為取代）。
+- **驗證**：新增 `internal/sim/session_date_semantics_test.go`（同日取代／不同日 append／legacy 採用語意／未知日期維持 append）、`internal/sim/state_persistence_test.go` 兩則（legacy 載入 + 來回寫入、未知日期不寫出多餘鍵）、`internal/orchestrator/session_date_semantics_test.go`（252 筆樣本下：舊行為 append 14 筆零報酬 → var95=cvar95=0；修正後長度不變且 var95/cvar95 不再被 0 主導；三個 entry point 同日連跑序列不變、隔日正常 +1）。`go vet ./internal/...` 乾淨；`go test ./internal/{risk,portfolio,domain,orchestrator,sim,backtest,monitoring}/...` 全綠。
+- **未處理（明示）**：修正前的既有零報酬（無法回溯歸屬交易日）不自動清理；`cmd/backfill-var-returns` 產出的狀態仍走「未知日期」安全路徑。
+
 ### chore(ops): iMac watchdog 腳本納入版控（+ 漂移檢查與安裝 target）（2026-09-12）
 - **問題**：`atlas-container-watchdog.sh` 是 iMac 唯一的自動復原機制，但只存在於 iMac 的 `~/bin/`（未版控）→ 無法回答「iMac 上跑的是哪一版、有沒有漂移」。2026-09-12 我改了它的內容（新增 restart ledger）之後，這個問題更明顯：改動只存在單一機器上。
 - **正本**：`scripts/ops/imac-container-watchdog.sh`（腳本）與 `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist`（launchd job）。

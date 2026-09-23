@@ -68,6 +68,15 @@ type SimulationResult struct {
 	TotalTaxPaid   float64       `json:"total_tax_paid"`
 	FallbackEvents []string      `json:"fallback_events,omitempty"`
 	RiskCommentary string        `json:"risk_commentary,omitempty"`
+
+	// SessionRerun reports that this run re-ran a trading session that the
+	// daily-return series already contains, so the series was updated in place
+	// instead of appended to (#1900). SessionReturn is the value written and
+	// SessionReturnRecorded distinguishes "wrote a return entry" from "the
+	// session has no return to record" (no previous close yet).
+	SessionRerun          bool    `json:"session_rerun,omitempty"`
+	SessionReturn         float64 `json:"session_return,omitempty"`
+	SessionReturnRecorded bool    `json:"session_return_recorded,omitempty"`
 }
 
 type ReportSection struct {

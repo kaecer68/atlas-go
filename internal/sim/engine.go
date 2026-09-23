@@ -348,14 +348,17 @@ func (e *Engine) RunWithState(state *domain.SimulationState, regime domain.Regim
 	day := deriveSimDay(quotes)
 	dayResult := e.RunDay(state, day, regime, quotes, recs)
 	result := domain.SimulationResult{
-		Regime:         regime,
-		Orders:         dayResult.Orders,
-		Trades:         dayResult.Trades,
-		Positions:      state.Positions,
-		EndingCash:     state.Cash,
-		PortfolioValue: dayResult.PortfolioValue,
-		GuardOutcomes:  nil,
-		FallbackEvents: dayResult.FallbackEvents,
+		Regime:                regime,
+		Orders:                dayResult.Orders,
+		Trades:                dayResult.Trades,
+		Positions:             state.Positions,
+		EndingCash:            state.Cash,
+		PortfolioValue:        dayResult.PortfolioValue,
+		GuardOutcomes:         nil,
+		FallbackEvents:        dayResult.FallbackEvents,
+		SessionRerun:          dayResult.SessionRerun,
+		SessionReturn:         dayResult.SessionReturn,
+		SessionReturnRecorded: dayResult.SessionReturnRecorded,
 	}
 	if e.taxCalc != nil {
 		e.computeTaxAdjustedResults(&result, state)
@@ -518,12 +521,49 @@ func (e *Engine) RunDay(
 	state.Positions = newPositions
 	state.Cash -= totalCost(buyOrders)
 
-	// 4. Record daily metrics
+	// 4. Record per-session metrics.
+	//
+	// One entry per trading session, not one entry per run (#1900). Several
+	// writers run the same session more than once (auto_daily_simulation,
+	// stress_test_daily and POST /admin/trigger-simulation all append to the
+	// same series), and the runs after the first are flat — same quotes, no new
+	// trades — so each re-run used to push a ~0 return. Those zeros filled the
+	// lower tail of the series and flattened VaR/CVaR to 0.
+	//
+	// When the run repeats the session already recorded in LastSessionDate the
+	// last entry is replaced instead of appended, and the return is recomputed
+	// against SessionBaseValue (the close of the previous session) so the stored
+	// number stays a true one-session return. The legacy behavior is kept when
+	// the session date is unknown ("" — legacy state file or quotes without a
+	// session date): such a run appends and adopts the semantics from then on.
 	portfolioValue := state.PortfolioValue()
-	state.EquityCurve = append(state.EquityCurve, portfolioValue)
 	prevValue := state.PreviousValues["_portfolio_"]
-	if prevValue > 0 {
-		state.DailyReturns = append(state.DailyReturns, (portfolioValue-prevValue)/prevValue)
+	sessionKey := domain.SessionDateKey(day)
+	sessionRerun := sessionKey != "" && state.LastSessionDate == sessionKey
+	sessionReturn := 0.0
+	sessionReturnRecorded := false
+	if sessionRerun {
+		if n := len(state.EquityCurve); n > 0 {
+			state.EquityCurve[n-1] = portfolioValue
+		} else {
+			state.EquityCurve = append(state.EquityCurve, portfolioValue)
+		}
+		if n := len(state.DailyReturns); n > 0 && state.SessionBaseValue > 0 {
+			sessionReturn = (portfolioValue - state.SessionBaseValue) / state.SessionBaseValue
+			state.DailyReturns[n-1] = sessionReturn
+			sessionReturnRecorded = true
+		}
+	} else {
+		state.EquityCurve = append(state.EquityCurve, portfolioValue)
+		if prevValue > 0 {
+			sessionReturn = (portfolioValue - prevValue) / prevValue
+			state.DailyReturns = append(state.DailyReturns, sessionReturn)
+			sessionReturnRecorded = true
+		}
+		if sessionKey != "" {
+			state.SessionBaseValue = prevValue
+			state.LastSessionDate = sessionKey
+		}
 	}
 	state.PreviousValues["_portfolio_"] = portfolioValue
 	if portfolioValue > state.MaxEquity {
@@ -550,6 +590,10 @@ func (e *Engine) RunDay(
 		PortfolioValue: portfolioValue,
 		DailyPnL:       dailyPnL,
 		FallbackEvents: fallbackEvents,
+
+		SessionRerun:          sessionRerun,
+		SessionReturn:         sessionReturn,
+		SessionReturnRecorded: sessionReturnRecorded,
 	}
 }
 
