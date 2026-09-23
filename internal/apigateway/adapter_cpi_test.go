@@ -162,3 +162,156 @@ func TestUSCPIChannelAdapter_Fetch_ShortWaitIsHonored(t *testing.T) {
 		t.Error("a fetch that acquired a token must not be reported stale")
 	}
 }
+
+// --- HealthCheck behavior (must respect the limiter boundary) -------------
+
+// TestUSCPIChannelAdapter_HealthCheck_TokenAvailablePingsUpstream covers the
+// happy path: with a limiter token available, the probe performs a real
+// liveness ping and consumes exactly one token (consistent with Fetch).
+func TestUSCPIChannelAdapter_HealthCheck_TokenAvailablePingsUpstream(t *testing.T) {
+	provider := &stubCPIProvider{snap: cpiFixtureSnapshot()}
+	a := newCPIAdapterWithStub(provider, time.Hour)
+
+	hs, err := a.HealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("HealthCheck: %v", err)
+	}
+	if hs.Status != "ok" {
+		t.Errorf("Status = %q, want ok", hs.Status)
+	}
+	if provider.calls != 1 {
+		t.Errorf("provider calls = %d, want 1 (a token was available, so the probe must ping)", provider.calls)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Errorf("limiter tokens = %v, want < 1 (the real ping consumed the hourly token)", got)
+	}
+}
+
+// TestUSCPIChannelAdapter_HealthCheck_PingFailureIsError keeps liveness
+// honest: when the ping actually reaches BLS and fails, the probe reports
+// "error" (which the health store escalates via GraceFailures).
+func TestUSCPIChannelAdapter_HealthCheck_PingFailureIsError(t *testing.T) {
+	provider := &stubCPIProvider{err: errors.New("bls 503")}
+	a := newCPIAdapterWithStub(provider, time.Hour)
+
+	hs, err := a.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("HealthCheck must return the ping error")
+	}
+	if hs.Status != "error" {
+		t.Errorf("Status = %q, want error", hs.Status)
+	}
+}
+
+// TestUSCPIChannelAdapter_HealthCheck_ThrottledServesLastKnownGood locks the
+// core TODO-1 property: once the hourly token is spent, a health probe must
+// NOT reach BLS and must NOT consume (or even reserve-then-cancel in a racy
+// way) a token — the limiter balance is asserted before and after.
+func TestUSCPIChannelAdapter_HealthCheck_ThrottledServesLastKnownGood(t *testing.T) {
+	provider := &stubCPIProvider{snap: cpiFixtureSnapshot()}
+	a := newCPIAdapterWithStub(provider, time.Hour)
+
+	// Spend the only token on a real fetch so last-known-good exists.
+	if _, err := a.Fetch(context.Background()); err != nil {
+		t.Fatalf("seed Fetch: %v", err)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Fatalf("limiter tokens = %v, want < 1 after the seed fetch", got)
+	}
+
+	start := time.Now()
+	hs, err := a.HealthCheck(context.Background())
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("throttled HealthCheck returned error, want cached ok: %v", err)
+	}
+	if elapsed > cpiLimiterMaxWait {
+		t.Fatalf("throttled HealthCheck blocked for %s, want <= %s", elapsed, cpiLimiterMaxWait)
+	}
+	if hs.Status != "ok" {
+		t.Errorf("Status = %q, want ok (cached data is still the current monthly print)", hs.Status)
+	}
+	if hs.LastError == "" {
+		t.Error("LastError should note the probe was served from cache")
+	}
+	if provider.calls != 1 {
+		t.Errorf("provider calls = %d, want 1: the throttled probe must not reach BLS", provider.calls)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Errorf("limiter tokens = %v, want < 1: HealthCheck must not consume a token when throttled", got)
+	}
+}
+
+// TestUSCPIChannelAdapter_HealthCheck_ThrottledWithoutLastKnownGood covers
+// the cold case: token spent by an earlier failed attempt, nothing cached.
+// The probe must fail fast, stay free, and report "ok" (not "error"/"warn") —
+// mirroring the gateway's ErrNoData → RecordWaiting taxonomy. See the
+// HealthCheck doc comment for the full why-not-error/why-not-warn rationale.
+func TestUSCPIChannelAdapter_HealthCheck_ThrottledWithoutLastKnownGood(t *testing.T) {
+	provider := &stubCPIProvider{snap: cpiFixtureSnapshot()}
+	a := newCPIAdapterWithStub(provider, time.Hour)
+
+	// Consume the token directly; no fetch has ever succeeded.
+	if !a.limiter.Allow() {
+		t.Fatal("expected the first limiter token to be available")
+	}
+
+	start := time.Now()
+	hs, err := a.HealthCheck(context.Background())
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("throttled cold HealthCheck returned error, want ok-with-note: %v", err)
+	}
+	if elapsed > cpiLimiterMaxWait {
+		t.Fatalf("throttled cold HealthCheck blocked for %s, want <= %s", elapsed, cpiLimiterMaxWait)
+	}
+	if hs.Status != "ok" {
+		t.Errorf("Status = %q, want ok (waiting-for-token is not an upstream failure)", hs.Status)
+	}
+	if hs.LastError == "" {
+		t.Error("LastError should explain the probe is waiting for the rate-limit token")
+	}
+	if provider.calls != 0 {
+		t.Errorf("provider calls = %d, want 0: the throttled probe must not reach BLS", provider.calls)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Errorf("limiter tokens = %v, want < 1: HealthCheck must not consume a token when throttled", got)
+	}
+}
+
+// TestUSCPIChannelAdapter_HealthCheck_DoesNotStealFetchToken is the
+// end-to-end TODO-1 regression: a health scan between two fetches must leave
+// the limiter budget untouched, so the second fetch still sees the same
+// balance the first fetch left behind (and serves last-known-good rather
+// than making an extra upstream call).
+func TestUSCPIChannelAdapter_HealthCheck_DoesNotStealFetchToken(t *testing.T) {
+	provider := &stubCPIProvider{snap: cpiFixtureSnapshot()}
+	a := newCPIAdapterWithStub(provider, time.Hour)
+
+	if _, err := a.Fetch(context.Background()); err != nil {
+		t.Fatalf("first Fetch: %v", err)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Fatalf("limiter tokens = %v, want < 1 after the first fetch", got)
+	}
+
+	// Health scan while the limiter is empty: must be free and must not
+	// change the balance the next fetch will observe.
+	if hs, err := a.HealthCheck(context.Background()); err != nil || hs.Status != "ok" {
+		t.Fatalf("interleaved HealthCheck = %+v, %v; want ok, nil", hs, err)
+	}
+	if got := a.limiter.Tokens(); got >= 1 {
+		t.Errorf("limiter tokens after HealthCheck = %v, want < 1 (probe must not steal the budget)", got)
+	}
+
+	second, err := a.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("second Fetch after interleaved HealthCheck: %v", err)
+	}
+	if provider.calls != 1 {
+		t.Errorf("provider calls = %d, want 1: neither the probe nor the throttled fetch may reach BLS", provider.calls)
+	}
+	if !second.Meta.Cached {
+		t.Error("second fetch (limiter still empty) must be served from last-known-good")
+	}
+}

@@ -735,3 +735,26 @@ func TestGateway_USCPIFetch_RepeatedTicksDoNotBlock(t *testing.T) {
 		t.Errorf("provider calls = %d, want 1: throttled ticks must be served from last-known-good", provider.calls)
 	}
 }
+
+// TestGateway_USCPICacheTTL_DrivenByContract locks TODO-3: the us_cpi gateway
+// cache TTL must be driven by the channel contract's ExpectedRefresh (single
+// source of truth), not by a hardcoded mirror that can drift from the
+// contract.
+func TestGateway_USCPICacheTTL_DrivenByContract(t *testing.T) {
+	contract := ChannelContracts().Contract("us_cpi")
+	if contract.ExpectedRefresh <= 0 {
+		t.Fatalf("us_cpi contract ExpectedRefresh = %s, want > 0", contract.ExpectedRefresh)
+	}
+	if got := usCPIChannelCacheTTL(); got != contract.ExpectedRefresh {
+		t.Errorf("usCPIChannelCacheTTL() = %s, want contract ExpectedRefresh %s", got, contract.ExpectedRefresh)
+	}
+
+	g := newTestGateway(t)
+	if got := g.cache.TTLFor("us_cpi"); got != contract.ExpectedRefresh {
+		t.Errorf("gateway cache TTLFor(us_cpi) = %s, want contract ExpectedRefresh %s", got, contract.ExpectedRefresh)
+	}
+	// Guard against an accidental fallback to the 5-minute layer default.
+	if got := g.cache.TTLFor("us_cpi"); got == 5*time.Minute {
+		t.Error("us_cpi cache TTL fell back to the 5-minute layer default")
+	}
+}
