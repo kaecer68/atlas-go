@@ -712,8 +712,14 @@ rebuild-atlas: rebuild-atlas-bins
 		echo "❌ 含 docker 的 rebuild 只能在主 worktree 執行（linked worktree 拒絕）"; exit 1; \
 	fi
 	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker build -t atlas-atlas:local -f Dockerfile.atlas.local .
-	@docker tag atlas-atlas:local atlas-atlas:latest
-	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d atlas
+	@# Every build-only compose service in the "atlas family" runs the same image
+	@# (compose names a build-only image "<project>-<service>"): the `atlas`
+	@# service and `prism-worker` (command `prism worker`). Tag both, otherwise
+	@# `compose up -d` reuses a stale image — 實證 2026-09-23: atlas-prism-worker
+	@# stayed on commit 7126c3a7 while atlas-go moved to 91fd474f, and
+	@# `check-binaries` reported FRESH because it did not cover that image.
+	@for tag in $(ATLAS_IMAGE_TAGS); do docker tag atlas-atlas:local $$tag; done
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d atlas prism-worker
 
 # Rebuild the 6 cron binaries on host.
 # daily-replay-sync/macro-ingest/geo-ingest/
@@ -730,6 +736,11 @@ rebuild-cron-bins: | .build-cron
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-day-evaluator ./cmd/experimental/c07-day-evaluator
 
 # Rebuild cron image + force-recreate all 6 cron containers.
+# Images built from Dockerfile.atlas.local and retagged after the single build.
+# `prism-worker` (compose command `prism worker`) shares the atlas image, so a
+# missing entry here means `compose up -d` silently keeps a stale binary.
+ATLAS_IMAGE_TAGS := atlas-atlas:latest atlas-prism-worker:latest
+
 # Every build-only cron service declared in docker-compose.yml must appear here.
 # Compose names a build-only image "<project>-<service>" (project = repo dir
 # basename = atlas), and rebuild-cron retags the single atlas-cron-rebuilt:local
