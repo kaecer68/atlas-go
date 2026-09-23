@@ -2,14 +2,11 @@ package apigateway
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
-	"github.com/kaecer68/atlas-go/internal/fubonproxy"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -37,49 +34,27 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	}
 
 	// --- Fubon ---
-	// Startup probe: skip registration if the local proxy is not reachable,
-	// avoiding constant connection-refused errors at runtime.
+	// Registration is reachability-gated and SELF-HEALING, not a one-shot
+	// startup decision.
 	//
-	// 雙位址 probe:127.0.0.1 (本機開發,go run in macOS host) 先測,
-	// 再測 fubon-proxy (Docker DNS,容器內).根據結果選取正確的 proxy host:
-	//   - 只有 127.0.0.1 可達 → 叫 SetProxyHost("127.0.0.1")
-	//   - fubon-proxy 可達 → 用預設值(不需覆寫)
-	fubonKey := cfg.FubonAPIKey
-	if fubonKey == "" {
-		fubonKey = config.GetSecret("ATLAS_FUBON_API_KEY")
-	}
-	if fubonKey != "" {
-		fubonPort := fubonproxy.GetFubonProxyPort()
-		localAddr := fmt.Sprintf("127.0.0.1:%d", fubonPort)
-		dockerAddr := fubonproxy.ProxyHostPort()
-
-		// probeAddr 嘗試一次 TCP dial,回傳成功/失敗.
-		probeAddr := func(addr string) bool {
-			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-			if err != nil {
-				return false
-			}
-			_ = conn.Close()
-			return true
-		}
-
-		localOK := probeAddr(localAddr)
-		proxyOK := probeAddr(dockerAddr)
-
-		if !localOK && !proxyOK {
-			logging.Info("apigateway", "fubon_proxy_not_reachable",
-				"msg", fmt.Sprintf("skipping fubon adapter registration — fubon-proxy not reachable on %s or %s", localAddr, dockerAddr))
-		} else {
-			// 若只有本機 loopback 可達,覆寫 proxy host 為 127.0.0.1
-			if localOK && !proxyOK {
-				fubonproxy.SetProxyHost("127.0.0.1")
-				logging.Info("apigateway", "fubon_proxy_host_override",
-					"msg", "fubon-proxy only reachable on 127.0.0.1, overriding proxy host")
-			}
-			fubonClient := marketdata.GetSharedFubonClient()
-			fubonAdapter := NewFubonChannelAdapter(fubonClient)
-			g.registry.Register("fubon", fubonAdapter)
-			logging.Info("apigateway", "adapter_registered", "channel", "fubon")
+	// EnsureFubonAdapter probes both candidate addresses (127.0.0.1 for local
+	// development, fubon-proxy for Docker DNS), overrides the proxy host to
+	// 127.0.0.1 when only loopback answers, and is idempotent — so
+	// FubonAdapterWatchTask (cmd/atlas) can repair a failed startup probe
+	// later.
+	//
+	// 2026-09-21 incident: this probe ran 0.18s before the fubon-proxy
+	// container started listening, the adapter was skipped once and never
+	// retried, and the channel stayed unregistered for the rest of the process
+	// lifetime — fubon data silently stopped while its health record kept
+	// saying "ok". A failed probe is therefore a WARN with an explicit
+	// "will be retried" contract, never a silent skip.
+	if FubonKeyConfigured(cfg) {
+		if !EnsureFubonAdapter(g) {
+			logging.Warn("apigateway", "fubon_proxy_not_reachable",
+				"msg", FubonRegistrationGapMessage()+
+					"; fubon adapter NOT registered — fubon_adapter_watch retries every "+
+					FubonAdapterWatchInterval.String())
 		}
 	}
 

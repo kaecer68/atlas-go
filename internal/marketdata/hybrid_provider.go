@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -47,6 +48,21 @@ type HybridProvider struct {
 
 	breakers map[string]*providerBreaker
 
+	// fubonMu guards fubonProvider and nextFubonArmAt. The Fubon primary can be
+	// armed AFTER construction (see maybeArmFubon): the startup probe is only a
+	// starting condition, because a long-lived provider (runLiveTrading creates
+	// exactly one) must recover when fubon-proxy comes up later. The pointed-to
+	// FubonProvider itself is immutable once created, so returning the pointer
+	// out of the lock is safe.
+	fubonMu sync.RWMutex
+	// nextFubonArmAt is the earliest time the next possibly-reachable re-probe
+	// may run; it bounds the re-probe rate when the proxy stays down.
+	nextFubonArmAt time.Time
+	// fubonProbe is the reachability probe used to arm the Fubon primary.
+	// nil → default TCP dial of fubonproxy.ProxyHostPort() with a 2s timeout.
+	// Overridable in tests.
+	fubonProbe func() bool
+
 	fallbackCount    int
 	lastFallbackAt   time.Time
 	recoveryAttempts int
@@ -55,20 +71,21 @@ type HybridProvider struct {
 }
 
 func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
-	var fubonProvider *FubonProvider
-	// Probe the proxy before creating the client to avoid constant
-	// "connection refused" warnings when the proxy is not running.
+	// The Fubon probe below is only a STARTING condition, not a permanent
+	// verdict: maybeArmFubon() (called from the quote path) re-probes while the
+	// provider is unarmed, so a proxy that starts after this constructor ran is
+	// picked up by the same process instead of being lost forever.
+	//
+	// 2026-09-21 evidence: a 0.18s startup race (atlas-go probed before the
+	// fubon-proxy container listened) permanently disabled the fubon channel
+	// and, on this path, the fubon primary for the whole process lifetime.
+	// Long-lived providers — runLiveTrading builds exactly one and reuses it —
+	// must not be able to lose a data source to one lost race.
 	//
 	// 使用 fubonproxy.ProxyHostPort() 而非硬編碼舊值,
 	// 確保與 cmd/atlas -fubon-port flag 同步(歷史 bug:此處原本硬編碼 18081,
 	// 當 fubon-proxy 跑在 alt-port 時 probe 仍打 18081 → 永遠 "not reachable")。
-	if conn, err := net.DialTimeout("tcp", fubonproxy.ProxyHostPort(), 2*time.Second); err != nil {
-		logging.Info("hybrid_provider", "fubon_proxy_not_reachable", "msg", "skipping fubon fallback — proxy not running")
-	} else {
-		_ = conn.Close()
-		fubonClient := GetSharedFubonClient()
-		fubonProvider = NewFubonProviderWithClient(fubonClient)
-	}
+	// (probe 實作在 probeFubonProxy;預設 TCP dial 2s timeout。)
 
 	var finmindProvider *FinMindProvider
 	if finmindAPIKey != "" {
@@ -86,22 +103,109 @@ func NewHybridProvider(finmindAPIKey, fugleAPIKey string) *HybridProvider {
 
 	breakers := map[string]*providerBreaker{
 		"fugle": newProviderBreaker("fugle", defaultCircuitBreakerConfig()),
-	}
-	if fubonProvider != nil {
-		breakers["fubon"] = newProviderBreaker("fubon", defaultCircuitBreakerConfig())
+		// The fubon breaker exists whether or not the provider is armed yet:
+		// armFubonPrimary() can arm it later, and adding a key to this map after
+		// construction would race with CircuitBreakerStats()/Reset() readers.
+		"fubon": newProviderBreaker("fubon", defaultCircuitBreakerConfig()),
 	}
 
-	return &HybridProvider{
-		fubonProvider:   fubonProvider,
+	p := &HybridProvider{
 		finmindProvider: finmindProvider,
 		fugleProvider:   fugleProvider,
 		twseClient:      GetSharedTWSEClient(),
 		breakers:        breakers,
 	}
+	if !p.armFubonPrimary() {
+		logging.Info("hybrid_provider", "fubon_proxy_not_reachable",
+			"msg", "skipping fubon fallback — proxy not running (will re-probe on the next GetQuotes, at most once per "+hybridFubonArmInterval.String()+")")
+	}
+	return p
+}
+
+// hybridFubonArmInterval bounds how often an unarmed Fubon primary is
+// re-probed. It keeps the "do not hammer a dead proxy" intent of the original
+// one-shot probe while removing the "never try again" part.
+const hybridFubonArmInterval = 2 * time.Minute
+
+// fubon returns the currently armed Fubon provider (nil when unarmed), safe
+// against the lazy arming in maybeArmFubon.
+func (p *HybridProvider) fubon() *FubonProvider {
+	p.fubonMu.RLock()
+	defer p.fubonMu.RUnlock()
+	return p.fubonProvider
+}
+
+// probeFubonProxy reports whether fubon-proxy answers on the shared
+// ProxyHostPort(). Tests inject p.fubonProbe.
+func (p *HybridProvider) probeFubonProxy() bool {
+	if p.fubonProbe != nil {
+		return p.fubonProbe()
+	}
+	conn, err := net.DialTimeout("tcp", fubonproxy.ProxyHostPort(), 2*time.Second)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// armFubonPrimary creates the Fubon provider when the proxy is reachable.
+// Idempotent: an already-armed provider short-circuits without probing.
+func (p *HybridProvider) armFubonPrimary() bool {
+	p.fubonMu.RLock()
+	armed := p.fubonProvider != nil
+	p.fubonMu.RUnlock()
+	if armed {
+		return true
+	}
+
+	// Probe OUTSIDE the lock: a 2s dial must not block Name()/GetQuotes()
+	// readers (and the arm is re-checked under the write lock below).
+	if !p.probeFubonProxy() {
+		return false
+	}
+
+	p.fubonMu.Lock()
+	defer p.fubonMu.Unlock()
+	if p.fubonProvider == nil {
+		p.fubonProvider = NewFubonProviderWithClient(GetSharedFubonClient())
+		logging.Info("hybrid_provider", "fubon_primary_armed",
+			"msg", "fubon-proxy reachable — fubon primary armed")
+	}
+	return true
+}
+
+// maybeArmFubon retries the reachability probe when the Fubon primary is not
+// armed yet, at most once per hybridFubonArmInterval. Called from the quote
+// path so a long-lived provider recovers after a proxy restart or a lost
+// startup race without needing a process restart.
+func (p *HybridProvider) maybeArmFubon() {
+	if p.fubon() != nil {
+		return
+	}
+
+	p.fubonMu.Lock()
+	if p.fubonProvider != nil {
+		p.fubonMu.Unlock()
+		return
+	}
+	now := time.Now()
+	if now.Before(p.nextFubonArmAt) {
+		p.fubonMu.Unlock()
+		return
+	}
+	// Reserve the next attempt before releasing the lock so concurrent callers
+	// cannot all dial at once.
+	p.nextFubonArmAt = now.Add(hybridFubonArmInterval)
+	p.fubonMu.Unlock()
+
+	// armFubonPrimary logs on success; repeated failures stay silent on purpose
+	// (the caller's fallback chain already reports the degraded path).
+	p.armFubonPrimary()
 }
 
 func (p *HybridProvider) Name() string {
-	if p.fubonProvider != nil {
+	if p.fubon() != nil {
 		return "hybrid-fubon"
 	}
 	if p.finmindProvider != nil {
@@ -114,20 +218,28 @@ func (p *HybridProvider) Name() string {
 }
 
 func (p *HybridProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
-	if p.fubonProvider != nil && p.breakers["fubon"].shouldTry() {
-		quotes, err := p.fubonProvider.GetQuotes(ctx, asOf, symbols)
-		if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
-			p.breakers["fubon"].recordSuccess()
-			return quotes, nil
-		}
-		p.breakers["fubon"].recordFailure()
-		logging.Warn("hybrid_provider", "fubon_failed_fallback", logging.Err(err))
-		if p.traceWriter != nil {
-			p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
-				"primary":         "fubon",
-				"fallback_reason": fmt.Sprintf("fubon failed: %v", err),
-				"symbols":         len(symbols),
-			})
+	// Self-healing primary selection: if the Fubon primary was not armed at
+	// construction (proxy not up yet), re-probe here instead of never trying
+	// again. No-op once armed; rate-limited to one probe per
+	// hybridFubonArmInterval while the proxy stays down.
+	p.maybeArmFubon()
+
+	if fp := p.fubon(); fp != nil {
+		if fb, ok := p.breakers["fubon"]; ok && fb.shouldTry() {
+			quotes, err := fp.GetQuotes(ctx, asOf, symbols)
+			if err == nil && len(quotes) > 0 && !p.hasInvalidQuotes(quotes) {
+				fb.recordSuccess()
+				return quotes, nil
+			}
+			fb.recordFailure()
+			logging.Warn("hybrid_provider", "fubon_failed_fallback", logging.Err(err))
+			if p.traceWriter != nil {
+				p.traceWriter.Record(0, "marketdata", "WARN", map[string]any{
+					"primary":         "fubon",
+					"fallback_reason": fmt.Sprintf("fubon failed: %v", err),
+					"symbols":         len(symbols),
+				})
+			}
 		}
 	}
 
@@ -255,10 +367,11 @@ func (p *HybridProvider) GetFugleClient() *FugleClient {
 }
 
 func (p *HybridProvider) GetFubonClient() *FubonClient {
-	if p.fubonProvider == nil {
+	fp := p.fubon()
+	if fp == nil {
 		return nil
 	}
-	return p.fubonProvider.GetClient()
+	return fp.GetClient()
 }
 
 func (p *HybridProvider) SetTraceWriter(tw TraceWriter) {

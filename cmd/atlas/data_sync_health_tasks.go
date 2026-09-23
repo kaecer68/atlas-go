@@ -19,9 +19,14 @@ import (
 )
 
 // registerDataSyncAndHealthTasks wires the data-sync + channel-health probes
-// into the BackgroundTaskManager. All tasks here are fire-and-register: a
-// Register error is logged and the task is silently dropped (matches the
-// existing pattern in main.go for non-critical background work).
+// into the BackgroundTaskManager.
+//
+// Contract (2026-09-23 hardening): every registration goes through
+// registerBackgroundTask, which reports a failed Register instead of dropping
+// it, and prints the "registered …" line only on success. A dropped
+// registration is NOT harmless: a task with a ChannelID whose channel is
+// absent from the gateway is rejected, and the channel then has no periodic
+// refresh at all (see the 2026-09-21 fubon outage in registerBackgroundTask).
 //
 // Required deps:
 //   - taskMgr: task scheduler (must be non-nil; caller already created it)
@@ -39,7 +44,7 @@ func registerDataSyncAndHealthTasks(
 ) {
 	// Register channel_health_sync task (DB sync, not a data fetcher).
 	if pool != nil {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:     "channel_health_sync",
 			Interval: 5 * time.Minute,
 			Enabled:  true,
@@ -47,8 +52,7 @@ func registerDataSyncAndHealthTasks(
 				healthStore := monitoring.NewChannelHealthStoreWithPool(filepath.Join(cfg.WorkDir, "data/state"), pool)
 				return healthStore.SyncAllToDB()
 			},
-		})
-		log.Printf("[Gateway] registered channel_health_sync background task (5m interval)")
+		}, "registered channel_health_sync background task (5m interval)")
 	}
 
 	// Register per-channel US market refresh tasks instead of a single batch
@@ -57,71 +61,72 @@ func registerDataSyncAndHealthTasks(
 	// (yahooIndexLimiter / yahooTechLimiter / ExportStatisticsRate) inside
 	// Gateway.Fetch serialize requests to the same endpoint group, so launching
 	// concurrently does not violate rate limits.
-	for _, ch := range apigateway.USMarketChannels() {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+	usChannels := apigateway.USMarketChannels()
+	usRegistered := 0
+	for _, ch := range usChannels {
+		if registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:      "us_market_refresh_" + ch,
 			ChannelID: ch,
 			Interval:  5 * time.Minute,
 			Enabled:   true,
 			Jitter:    5 * time.Second,
 			Task:      gatewayChannelFetch(gateway, ch),
-		})
+		}, "") {
+			usRegistered++
+		}
 	}
-	log.Printf("[Gateway] registered %d per-channel US market refresh tasks (5m interval)", len(apigateway.USMarketChannels()))
+	// Honest count: a dropped registration must not be reported as registered
+	// (registerBackgroundTask already logged each failure individually).
+	log.Printf("[Gateway] registered %d/%d per-channel US market refresh tasks (5m interval)", usRegistered, len(usChannels))
 
 	// P2 C05: Register auto-fetch tasks for channels without periodic refresh.
 	// These channels were identified in the 2026-07-25 architecture audit as
 	// lacking automated data ingestion.
 
 	// taiex_index — Taiwan weighted index (daily, after TW market close ~14:00 UTC+8).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:      "auto_taiex_index",
 		ChannelID: "taiex_index",
 		Interval:  1 * time.Hour,
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "taiex_index"),
-	})
-	log.Printf("[Gateway] registered auto_taiex_index background task (1h interval)")
+	}, "registered auto_taiex_index background task (1h interval)")
 
 	// exchange_rate — USD/TWD and other FX rates (1h, low volatility).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:      "auto_exchange_rate",
 		ChannelID: "exchange_rate",
 		Interval:  1 * time.Hour,
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "exchange_rate"),
-	})
-	log.Printf("[Gateway] registered auto_exchange_rate background task (1h interval)")
+	}, "registered auto_exchange_rate background task (1h interval)")
 
 	// geopolitical_taiwan — Taiwan news RSS (6h, same as geopolitical).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:      "auto_geopolitical_taiwan",
 		ChannelID: "geopolitical_taiwan",
 		Interval:  6 * time.Hour,
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "geopolitical_taiwan"),
-	})
-	log.Printf("[Gateway] registered auto_geopolitical_taiwan background task (6h interval)")
+	}, "registered auto_geopolitical_taiwan background task (6h interval)")
 
 	// taifex_daily — Taiwan futures market data (1h, after market hours).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:      "auto_taifex_daily",
 		ChannelID: "taifex_daily",
 		Interval:  1 * time.Hour,
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "taifex_daily"),
-	})
-	log.Printf("[Gateway] registered auto_taifex_daily background task (1h interval)")
+	}, "registered auto_taifex_daily background task (1h interval)")
 
 	// twse_insider — TWSE OpenAPI 內部人持股轉讓 (daily after market close ~18:00).
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:      "auto_twse_insider",
 		ChannelID: "twse_insider",
 		Interval:  1 * time.Hour,
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "twse_insider"),
-	})
-	log.Printf("[Gateway] registered auto_twse_insider background task (1h interval)")
+	}, "registered auto_twse_insider background task (1h interval)")
 
 	// Register seasonal_calibration background task. Guard: skip silently if
 	// the calibrate-seasonal binary is not co-located with the current binary
@@ -139,14 +144,13 @@ func registerDataSyncAndHealthTasks(
 				// surface a clear WARN, mirroring the binary-missing guard.
 				log.Printf("[Gateway] seasonal_calibration skipped: replay dataset not found under %s (sync data/replay/finmind_2020_2024.jsonl to enable)", filepath.Join(cfg.WorkDir, "data", "replay"))
 			} else {
-				_ = taskMgr.Register(&apigateway.ScheduledTask{
+				registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 					Name:     "seasonal_calibration",
 					Interval: scheduler.SeasonalCalibrationDefaults.Interval,
 					Jitter:   30 * time.Minute,
 					Enabled:  true,
 					Task:     scheduler.SeasonalCalibrationTaskFuncWithReplay(seasonalBin, replayPath),
-				})
-				log.Printf("[Gateway] registered seasonal_calibration background task (7d interval)")
+				}, "registered seasonal_calibration background task (7d interval)")
 			}
 		} else {
 			log.Printf("[Gateway] seasonal_calibration skipped: binary not found at %s", seasonalBin)
@@ -164,22 +168,21 @@ func registerDataSyncAndHealthTasks(
 		if collector != nil {
 			healthChecker.SetCollector(collector)
 		}
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:     "health_check",
 			Interval: 30 * time.Second,
 			Enabled:  true,
 			Task: func(ctx context.Context) error {
 				return healthChecker.RunOnce(ctx)
 			},
-		})
-		log.Printf("[Gateway] registered health_check background task (30s interval)")
+		}, "registered health_check background task (30s interval)")
 	}
 
 	// Register channel health checks for third-party data providers.
 	// These tasks populate the Gateway health store so the frontend
 	// "信息通道" page can show actual status instead of "未知".
 	if cfg.FugleAPIKey != "" {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:      "channel_health_fugle",
 			ChannelID: "fugle",
 			Interval:  1 * time.Hour,
@@ -195,26 +198,33 @@ func registerDataSyncAndHealthTasks(
 				}
 				return err
 			},
-		})
-		log.Printf("[Gateway] registered channel_health_fugle background task (1h interval)")
+		}, "registered channel_health_fugle background task (1h interval)")
 	}
 
-	if cfg.FubonAPIKey != "" {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
-			Name:      "channel_health_fubon",
-			ChannelID: "fubon",
-			Interval:  1 * time.Hour,
-			Enabled:   true,
-			Task: func(ctx context.Context) error {
-				_, err := gateway.Fetch(ctx, "fubon")
-				return err
-			},
-		})
-		log.Printf("[Gateway] registered channel_health_fubon background task (1h interval)")
+	// Fubon channel health probe + registration self-heal.
+	//
+	// channel_health_fubon can only be registered once the fubon adapter is in
+	// the gateway registry, so a failed startup probe in
+	// apigateway.RegisterChannelAdapters makes this registration fail. Two
+	// changes keep that from becoming a silent data outage (2026-09-21):
+	//  1. registerBackgroundTask reports the failure instead of printing
+	//     "registered …" over a dropped error;
+	//  2. fubon_adapter_watch retries the proxy probe, and once the adapter is
+	//     registered it attaches this same health probe through
+	//     apigateway.FubonHealthProbeTask (one definition, so name/ChannelID/
+	//     interval cannot drift between the startup and self-heal paths).
+	// FubonKeyConfigured (not cfg.FubonAPIKey) keeps the key check in lock-step
+	// with the adapter gate in apigateway.RegisterChannelAdapters — a
+	// secret-only deployment used to register the adapter but no health task.
+	if apigateway.FubonKeyConfigured(cfg) {
+		registerBackgroundTask(taskMgr, apigateway.FubonHealthProbeTask(gateway),
+			"registered channel_health_fubon background task (1h interval)")
+		registerBackgroundTask(taskMgr, apigateway.FubonAdapterWatchTask(taskMgr, gateway),
+			"registered fubon_adapter_watch background task (3m interval, self-heals a missed fubon-proxy startup probe)")
 	}
 
 	if cfg.FinMindAPIKey != "" {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:      "channel_health_finmind",
 			ChannelID: "finmind",
 			Interval:  1 * time.Hour,
@@ -223,13 +233,12 @@ func registerDataSyncAndHealthTasks(
 				_, err := gateway.Fetch(ctx, "finmind")
 				return err
 			},
-		})
-		log.Printf("[Gateway] registered channel_health_finmind background task (1h interval)")
+		}, "registered channel_health_finmind background task (1h interval)")
 	}
 
 	// Register TWSE replay health check (always available, reads from local CSV).
 	{
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:      "channel_health_twse_replay",
 			ChannelID: "twse_replay",
 			Interval:  1 * time.Hour,
@@ -238,13 +247,12 @@ func registerDataSyncAndHealthTasks(
 				_, err := gateway.Fetch(ctx, "twse_replay")
 				return err
 			},
-		})
-		log.Printf("[Gateway] registered channel_health_twse_replay background task (1h interval)")
+		}, "registered channel_health_twse_replay background task (1h interval)")
 	}
 
 	// Register TSMC Revenue task via Gateway.
 	if cfg.FinMindAPIKey != "" {
-		_ = taskMgr.Register(&apigateway.ScheduledTask{
+		registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 			Name:      "tsmc_revenue",
 			ChannelID: "tsmc_revenue",
 			Interval:  24 * time.Hour,
@@ -253,8 +261,7 @@ func registerDataSyncAndHealthTasks(
 				_, err := gateway.Fetch(ctx, "tsmc_revenue")
 				return err
 			},
-		})
-		log.Printf("[Gateway] registered tsmc_revenue background task (24h interval)")
+		}, "registered tsmc_revenue background task (24h interval)")
 	}
 
 	// H06: Register e2e_chain_probe — daily data-freshness probe.
@@ -281,13 +288,12 @@ func registerDataSyncAndHealthTasks(
 		return nil
 	}
 	probeDeps := monitoring.E2EProbeDeps{DataLayerCheck: dataCheck}
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:     "e2e_chain_probe",
 		Interval: 6 * time.Hour,
 		Enabled:  true,
 		Task:     monitoring.E2EProbeTaskFunc(probeDeps),
-	})
-	log.Printf("[Gateway] registered e2e_chain_probe background task (6h interval)")
+	}, "registered e2e_chain_probe background task (6h interval)")
 	// SA11: Dark launch observation — daily count of simulation sessions
 	// since the F06 real-strategy-rankings deployment (2026-07-12).
 	// Logs progress; when ≥20 sessions are accumulated, prints a
@@ -295,7 +301,7 @@ func registerDataSyncAndHealthTasks(
 	// evaluate real-world prediction hit rates.
 	sessionsDir := filepath.Join(cfg.WorkDir, "data", "state", "sessions")
 	sa11Cutoff := "session-20260712"
-	_ = taskMgr.Register(&apigateway.ScheduledTask{
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
 		Name:     "sa11_dark_launch_check",
 		Interval: 24 * time.Hour,
 		Enabled:  true,
@@ -317,8 +323,41 @@ func registerDataSyncAndHealthTasks(
 			}
 			return nil
 		},
-	})
-	log.Printf("[Gateway] registered sa11_dark_launch_check background task (24h interval)")
+	}, "registered sa11_dark_launch_check background task (24h interval)")
+}
+
+// registerBackgroundTask registers a background task and reports the outcome
+// honestly: the operator-facing "registered …" line is printed ONLY when
+// RegisterAndStart returned nil.
+//
+// Why this helper exists (2026-09-21 fubon outage): every registration in this
+// file used to discard the error with `_ =` while still logging success.
+// Register rejects a task whose ChannelID is not present in the gateway
+// registry, so when the fubon adapter was skipped by a startup probe race the
+// channel_health_fubon task was dropped — and the log still claimed
+// "registered channel_health_fubon background task (1h interval)". The gap
+// stayed invisible until the 48h freshness window flipped the channel to
+// stale. NEVER reintroduce `_ = taskMgr.Register(...)` here: a dropped
+// registration means the channel has no periodic refresh at all.
+//
+// RegisterAndStart is used instead of Register so a task registered while the
+// manager is already running (self-heal path: fubon_adapter_watch attaching
+// channel_health_fubon after the proxy recovered) is actually scheduled
+// instead of sitting in the registry map unrun.
+//
+// registeredMsg is the historical operator-facing line, kept verbatim so log
+// greps and runbooks keep working. Pass "" for tasks whose success is
+// summarized by the caller (per-channel loops).
+func registerBackgroundTask(taskMgr *apigateway.BackgroundTaskManager, task *apigateway.ScheduledTask, registeredMsg string) bool {
+	if err := taskMgr.RegisterAndStart(task); err != nil {
+		log.Printf("[Gateway] FAILED to register background task %s (channel %q): %v — task dropped, this channel now has NO periodic refresh",
+			task.Name, task.ChannelID, err)
+		return false
+	}
+	if registeredMsg != "" {
+		log.Printf("[Gateway] %s", registeredMsg)
+	}
+	return true
 }
 
 // gatewayChannelFetch returns a BackgroundTaskFunc that calls gateway.Fetch
