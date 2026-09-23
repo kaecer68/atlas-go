@@ -55,17 +55,22 @@ docker compose ps
 curl -fsS http://localhost:18080/health
 ```
 
-### 情境 B：production 部署（iMac）
+### 情境 B：production 部署（Mac Mini）
+
+> 2026-09-23 更新：production 自 2026-09-22 起為 **Mac Mini**（`kaecer@192.168.0.84`）；iMac（`kk@kimac`）已退役，舊指令一律失效。完整步驟/坑見本檔 §Mac Mini production 部署。
 
 ```bash
 # 1. MacBook: push 你的修改
 git push origin main
 
-# 2. iMac: 同步 + 重建 + 重啟（hermes 可代勞）
-ssh kk@kimac "cd ~/workspace/atlas && git pull origin main && make rebuild-all"
+# 2. Mac Mini: 同步 + 重建 + 重啟（hermes 可代勞）
+ssh kaecer@192.168.0.84
+export PATH="$HOME/.orbstack/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+export GOPROXY=https://goproxy.cn,direct
+cd ~/workspace/atlas && git fetch origin main && git checkout main && git merge --ff-only origin/main && make rebuild-all
 
-# 3. iMac: 驗證正式服務
-curl -fsS http://localhost:18080/health
+# 3. Mac Mini: 驗證正式服務
+curl -fsS http://localhost:18080/health && curl -s localhost:18080/api/version
 ```
 
 > **hermes 代勞**：部署是 hermes（iMac 運維員）的職責。可用 hermes-dispatch skill 派她完成
@@ -110,11 +115,11 @@ docker compose ps --format json | jq -s 'map({name, state, health})'
 ## Rollback
 
 ```bash
-# 退回上一個 commit 並重啟（iMac）
-ssh kk@kimac "cd ~/workspace/atlas && git checkout <previous-sha> && make rebuild-all"
+# 退回上一個 commit 並重啟（Mac Mini）
+ssh kaecer@192.168.0.84 'export PATH="$HOME/.orbstack/bin:/usr/local/bin:$PATH"; cd ~/workspace/atlas && git checkout <previous-sha> && make rebuild-all'
 ```
 
-> **注意**：iMac 用本地 build image（`atlas-atlas:latest`），Rollback = checkout 舊 commit 重建。
+> **注意**：Mac Mini 用本地 build image（`atlas-atlas:latest`），Rollback = checkout 舊 commit 重建。
 > 已不使用 ghcr.io tag pinning（舊模式，ghcr 已被本地 build 取代）。
 
 
