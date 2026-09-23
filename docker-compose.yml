@@ -294,6 +294,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-geo-ingest
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
@@ -325,6 +327,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-macro-ingest
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
@@ -356,6 +360,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-replay-sync
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
@@ -387,6 +393,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-darwinian
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 9 * * *
       - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
@@ -423,6 +431,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-c07-collect
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=30 15 * * 1-5
       - CRON_COMMAND=/app/scripts/c07-collect.sh
@@ -460,6 +470,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-c07-evaluate
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 9 * * 1-5
       - CRON_COMMAND=/app/scripts/c07-evaluate.sh
@@ -498,6 +510,8 @@ services:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     container_name: atlas-cron-quote-backfill
     restart: unless-stopped
+    env_file:
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 3 * * *
       - CRON_COMMAND=/app/cron-quote-backfill
