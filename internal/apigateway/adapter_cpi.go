@@ -162,7 +162,59 @@ func (a *USCPIChannelAdapter) Metadata() ChannelMetadata {
 	return ChannelMetadata{ChannelID: "us_cpi", Country: "美國", Platform: "BLS", APIFormat: "REST JSON", Path: "api.bls.gov", HasLimiter: true}
 }
 
+// HealthCheck reports channel health WITHOUT bypassing the adapter's
+// 1-request/hour limiter. It goes through the same acquire() boundary as
+// Fetch, so a probe can never steal the channel's hourly token from a real
+// fetch — the pre-#1918 behavior pinged BLS directly on every health scan,
+// consuming the channel's only token and throttling the next real Fetch.
+//
+// Status semantics (why not error/warn on throttle):
+//   - Token acquired → real liveness ping; failure is "error" + err,
+//     unchanged from the pre-existing behavior.
+//   - Throttled + last-known-good → "ok": CPI-U is monthly data, so the
+//     cached payload is still the current print. The note records that the
+//     probe was served from cache instead of a live ping.
+//   - Throttled + no last-known-good → "ok" with a "waiting for rate-limit
+//     token" note, deliberately NOT "error" and NOT "warn":
+//   - Not "error": nothing is known to be broken upstream — the channel
+//     simply has not produced data yet (or an earlier attempt consumed
+//     the token and then failed). An "error" attempt would increment
+//     ConsecutiveFailures and, after GraceFailures, page on a transient
+//     cold-start state. The gateway fetch path treats the identical
+//     condition (ErrNoData) as RecordWaiting, i.e. status stays "ok".
+//   - Not "warn": every non-ok status surfaces in Alerts() and would pin
+//     a badge for a condition expected to last up to an hour after each
+//     cold start; it also leaves the failure streak alive instead of
+//     resetting it like "ok" does.
+//
+// The throttled branch never consumes a token: acquire() cancels the
+// reservation, so the probe is free and the next real fetch keeps its budget.
 func (a *USCPIChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
+	delay, err := a.acquire(ctx)
+	if err != nil {
+		return HealthStatus{
+			Status:    "error",
+			LastError: err.Error(),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, err
+	}
+	if delay > 0 {
+		if a.lastKnownGood() != nil {
+			return HealthStatus{
+				Status:    "ok",
+				LastError: "us_cpi: rate limiter throttled health probe; serving last-known-good snapshot (cached data still current)",
+				UpdatedAt: time.Now().Format(time.RFC3339),
+				CheckType: "liveness",
+			}, nil
+		}
+		return HealthStatus{
+			Status:    "ok",
+			LastError: fmt.Sprintf("us_cpi: rate limiter throttled health probe; no last-known-good yet (next token in %s)", delay.Round(time.Millisecond)),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "liveness",
+		}, nil
+	}
 	if _, err := a.provider.FetchSnapshot(ctx); err != nil {
 		return HealthStatus{
 			Status:    "error",

@@ -12,12 +12,16 @@ import (
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
-// usCPICacheTTL is the gateway cache lifetime for the us_cpi channel. It
-// mirrors the channel contract's ExpectedRefresh (24h, channel_contract.go)
-// rather than the layer default (5min, NewCacheLayer) because CPI-U is
-// published monthly and the adapter's limiter allows one upstream call per
-// hour.
-const usCPICacheTTL = 24 * time.Hour
+// usCPIChannelCacheTTL resolves the gateway cache lifetime for the us_cpi
+// channel from the channel contract's ExpectedRefresh (channel_contract.go:
+// live("us_cpi", ...) = 24h) so the cache TTL and the contract stay a single
+// source of truth instead of a hardcoded mirror that can drift. A zero
+// ExpectedRefresh (a contract gap) yields 0, in which case NewGateway leaves
+// the channel on the cache layer's 5-minute default rather than inventing a
+// cadence here.
+func usCPIChannelCacheTTL() time.Duration {
+	return ChannelContracts().Contract("us_cpi").ExpectedRefresh
+}
 
 // Gateway is the unified entry point for all data channels.
 type Gateway struct {
@@ -47,7 +51,9 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 	// (channel_contract.go: live("us_cpi", ...) = 24h) so the adapter performs
 	// at most one real upstream call per day and the limiter always has a
 	// token available.
-	cache.SetChannelTTL("us_cpi", usCPICacheTTL)
+	if ttl := usCPIChannelCacheTTL(); ttl > 0 {
+		cache.SetChannelTTL("us_cpi", ttl)
+	}
 	health := NewUnifiedHealthStore(filepath.Join(workDir, "data/state"), pool)
 	limiters := NewRateLimitManager()
 	breakers := NewCircuitBreakerManagerWithThresholds(map[string]int{
