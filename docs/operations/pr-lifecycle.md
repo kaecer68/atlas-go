@@ -124,19 +124,27 @@ git branch -d <branch>
 
 > **PR merge ≠ PR done**。合併後需 deploy + 在 production 跑驗證 checklist 才能視為 PR 完成。
 
-### 5.1 Docker rebuild（iMac production）
+### 5.1 Docker rebuild（Mac Mini production）
 
-> **部署真相（2026-08-15 方案二）**：production 在 iMac，rebuild 在 iMac 執行。
+> **部署真相（2026-09-23 更新）**：production 已於 **2026-09-22 從 iMac 遷移到 Mac Mini**（`kaecer@192.168.0.84`）；iMac 已退役。本節指令經 2026-09-23 兩次實走驗證。
+> ⚠️ 歷史指令（`ssh kk@kimac …`、`Makefile.prod`、`docker-compose.prod.yml`）**一律失效**；`docker-compose.prod.yml` 仍存在於 `docs/operations/` 但只是歷史產物（其 `atlas` service 沒有 build 段，無法用來重建映像）。
 
 ```bash
-# iMac (production) — rebuild + 重啟
-ssh kk@kimac "cd ~/workspace/atlas && git pull origin main && make rebuild-all"
+# Mac Mini (production) — rebuild + 重啟（實走驗證 2026-09-23）
+ssh kaecer@192.168.0.84
+export PATH="$HOME/.orbstack/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"   # 非互動 shell 沒有 docker
+export GOPROXY=https://goproxy.cn,direct                                   # 本機 router/HITN MITM proxy.golang.org
+cd ~/workspace/atlas
+git fetch origin main && git checkout main && git merge --ff-only origin/main
+make rebuild-all
 
 # MacBook 本機 dev 驗證（不影響 production）
 make rebuild-all   # 在 MacBook 本機跑,起本地容器驗證
 ```
 
-**執行者**：hermes（iMac 運維員）可執行 iMac 的 rebuild（這是她的職責）；MacBook 本機 dev 的
+（repo 目錄 `.env` 需含 `GRAFANA_PORT=3001` 與 `ATLAS_POSTGRES_PORT=55432`；完整步驟與 10 個實踩坑見 `docs/operations/local-deploy.md` §Mac Mini production 部署。）
+
+**執行者**：hermes（**Mac Mini 運維員**，`~/.hermes/hermes-agent/venv/bin/hermes chat -q …`）可執行 Mac Mini 的 rebuild（這是她的職責，2026-09-23 已實走成功）；MacBook 本機 dev 的
 rebuild 由開發 agent / kaecer 執行。兩者皆**不會**直接操作對方機器的 production。
 
 ### 5.2 Binaries 對齊檢查
@@ -144,12 +152,14 @@ rebuild 由開發 agent / kaecer 執行。兩者皆**不會**直接操作對方�
 ```bash
 make check-binaries  # 應顯示 "ALL BINARIES FRESH"
 ```
+> 2026-09-23 更新（#1931）：判準改為「binary 的 buildinfo.Commit 必須包含**最後一個觸及建置輸入**的 commit（`*.go`/`go.mod`/`go.sum`/`Dockerfile*`/`scripts/cron-entrypoint.sh`）」，因此 compose/docs-only 的合併不再誤報 STALE。輸出會印 `last build input: <sha>`。
+> 陷阱：**非互動 ssh 沒有 docker 在 PATH**（`~/.orbstack/bin`），此時會誤報 `image unavailable`；`make check-binaries` 走互動 shell 不受影響。
 
 若不 fresh,等 docker 重建完成。
 
-### 5.3 Production Verification Checklist（每個 PR 都必跑，在 iMac production 上驗證）
+### 5.3 Production Verification Checklist（每個 PR 都必跑，在 Mac Mini production 上驗證）
 
-> **驗證位置**：iMac（`ssh kk@kimac` 後執行，或派 hermes 代勞）。PR author 或 reviewer **MUST 給出
+> **驗證位置**：Mac Mini（`ssh kaecer@192.168.0.84`，或派 hermes 代勞）。PR author 或 reviewer **MUST 給出
 > 3-5 個 curl 指令**針對該 PR 修的 channel / endpoint。例如:
 
 ```bash
