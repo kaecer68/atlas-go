@@ -18,12 +18,22 @@ declare -a MISSING_BUILDINFO=()
 cleanup() {
     local status=$?
     set +e
-    for file in "${TEMP_FILES[@]}"; do
-        rm -f "$file"
-    done
-    for container in "${TEMP_CONTAINERS[@]}"; do
-        "$DOCKER_BIN" rm -f "$container" >/dev/null 2>&1
-    done
+    # Guarded loops: under `set -u`, expanding an EMPTY array
+    # ("${TEMP_FILES[@]}") is an "unbound variable" error on bash < 4.4
+    # (macOS ships 3.2), which made cleanup abort with
+    # "TEMP_FILES[@]: unbound variable" whenever no temp file had been
+    # created yet (2026-09-23: make check-binaries died on the Mac Mini
+    # before printing the summary).
+    if [ "${#TEMP_FILES[@]}" -gt 0 ]; then
+        for file in "${TEMP_FILES[@]}"; do
+            rm -f "$file"
+        done
+    fi
+    if [ "${#TEMP_CONTAINERS[@]}" -gt 0 ]; then
+        for container in "${TEMP_CONTAINERS[@]}"; do
+            "$DOCKER_BIN" rm -f "$container" >/dev/null 2>&1
+        done
+    fi
     # Belt-and-suspenders: catch any atlas.binary-freshness-labeled container
     # the explicit rm loop may have missed (daemon hiccup, race, etc).
     # Runs regardless of TEMP_CONTAINERS contents.
