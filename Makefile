@@ -831,6 +831,9 @@ ci-gate:
 	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
 	@bash scripts/ci/check_critical_tasks.sh
 	@echo "    ✅"
+	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
+	@bash tests/scripts/test-binary-freshness-guard.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""
