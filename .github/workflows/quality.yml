@@ -167,6 +167,19 @@ jobs:
     - name: Check naming conventions
       run: bash scripts/ci/check_case_conflicts.sh --strict
 
+  # Jev usage contract — enforces docs/jev/JEV-USAGE-CONTRACT.md (C1-C5:
+  # User-Agent / timeout / fail-open / choice criteria type / jevkit self-test).
+  # This repo has no Jev (TypeSafe System One) caller today, so the check is a
+  # guard: the first caller cannot land with a transport-level violation that
+  # would fail silently (403) or break the caller (missing try/except).
+  jev-contract:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check Jev usage contract
+      run: bash scripts/ci/check_jev_contract.sh
+
   # Frontend dynamic import consistency — verifies every admin_web/client_web
   # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
   # Catches the silent esbuild plugin fallback failure mode (PR #785 / script from PR #789).
