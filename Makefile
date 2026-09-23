@@ -20,7 +20,7 @@
 .PHONY: build-mcp install-mcp mcp-status setup-mcp install-atlas-mcp-from-release
 .PHONY: dev dev-stop dev-status dev-logs
 .PHONY: status
-.PHONY: ci-gate ci-full pre-push import-history ci-quota
+.PHONY: ci-gate ci-full pre-push import-history ci-quota check-production-host
 .PHONY: test-makefile-imac-guard
 
 # ── iMac prod guard (2026-08-27, 修 PR #1695 二次破壞事件) ─────────────────
@@ -394,7 +394,19 @@ test: test-frontend test-backend
 
 lint: lint-backend
 
-ci:
+# ── 生產主機護欄（2026-09-23 事故後新增）────────────────────────────
+# 在生產機（偵測 $HOME/.a2a/PRODUCTION_HOST）上跑 CI/測試會產生真實副作用
+# （呼叫外部服務、寫真 DB、寄真信）。GitHub Actions 會設 CI=true，屬合法路徑。
+# 真的必須在生產機跑：A2A_ALLOW_PROD_CI=1 make ci
+.PHONY: check-production-host
+check-production-host:
+	@if [ -f "$$HOME/.a2a/PRODUCTION_HOST" ] && [ "$${CI:-}" != "true" ] && [ "$${A2A_ALLOW_PROD_CI:-0}" != "1" ]; then \
+		echo "⛔ 這台是生產主機（$$HOME/.a2a/PRODUCTION_HOST）→ 拒絕互動式執行 make ci"; \
+		echo "   請在複製機執行；必要時 A2A_ALLOW_PROD_CI=1 make ci"; \
+		exit 1; \
+	fi
+
+ci: check-production-host
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
 	for script in scripts/ci/check_*.sh; do \
@@ -416,7 +428,7 @@ ci:
 	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
-ci-quick:
+ci-quick: check-production-host
 	@echo "🛡️  Running fast CI checks only (<2s each)..."
 	@failed=0; passed=0; \
 	for script in scripts/ci/check_agent_prompts.sh \
@@ -431,7 +443,8 @@ ci-quick:
 	              scripts/ci/check_field_contract.sh \
 	              scripts/ci/check_channel_consistency.sh \
 	              scripts/ci/check_docs_governance.sh \
-	              scripts/ci/check_agents_index.sh; do \
+	              scripts/ci/check_agents_index.sh \
+	              scripts/ci/check_jev_contract.sh; do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 10 bash $$script > /dev/null 2>&1; then \
@@ -687,9 +700,10 @@ rebuild-atlas: rebuild-atlas-bins
 		echo '❌ iMac (KiMac) 偵測到 make rebuild-atlas,但 docker 步會用 dev compose 預設值'; \
 		echo '   (POSTGRES_PASSWORD=atlas / port 5432 / container_name atlas-postgres 撞 prod 同名)'; \
 		echo '   會改寫 prod 狀態 (實證:2026-08-26 PR #1695 二次破壞事件)'; \
-		echo '   iMac 是 prod 主機,請改用:'; \
-		echo '     make -f Makefile.prod rebuild-atlas'; \
-		echo '     或 docker compose -f docker-compose.prod.yml up -d atlas'; \
+		echo '   (此 guard 只在本機 hostname=KiMac 時觸發;現行 prod = Mac Mini,hostname KMacMini 不觸發)'; \
+		echo '   現行 prod 部署:在 Mac Mini 執行 make rebuild-all（步驟見 docs/operations/local-deploy.md）'; \
+		echo '   legacy iMac 的 prod compose 在 docs/operations/docker-compose.prod.yml'; \
+		echo '     ⚠ 該 compose 的 atlas service 只有 image、沒有 build 段 -> 不能用來重建映像'; \
 		echo '   確認要在 iMac 跑 dev rebuild:'; \
 		echo '     ALLOW_DEV_REBUILD_ON_IMAC=1 make rebuild-atlas'; \
 		exit 1; \
@@ -716,10 +730,20 @@ rebuild-cron-bins: | .build-cron
 	@$(GOENV_LINUX) $(HOST_GO) build -mod=mod -ldflags="$(LDFLAGS_BF)" -o .build-cron/c07-day-evaluator ./cmd/experimental/c07-day-evaluator
 
 # Rebuild cron image + force-recreate all 6 cron containers.
+# Every build-only cron service declared in docker-compose.yml must appear here.
+# Compose names a build-only image "<project>-<service>" (project = repo dir
+# basename = atlas), and rebuild-cron retags the single atlas-cron-rebuilt:local
+# image to each name before `compose up --no-build`. History: the three
+# atlas-cron-backfill-* services were retired, but atlas-cron-darwinian was
+# dropped from this list in the same cleanup, and cron-darwinian then failed at
+# deploy time ("No such image: atlas-cron-darwinian:latest", 實證 2026-09-23
+# Mac Mini)。tests/scripts/test-binary-freshness-guard.sh 以 docker-compose.yml
+# 為準逐一比對，防止同類漂移再發生。
 CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest \
                    atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest \
                    atlas-cron-replay-sync:latest \
                    atlas-atlas-cron-c07-evaluate:latest \
+                   atlas-cron-darwinian:latest \
                    atlas-cron-macro-ingest:latest
 DOCKER_BIN ?= docker
 
@@ -759,6 +783,23 @@ rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
 #   跨 repo contract check (routes/contracts)
 
 .PHONY: ci-gate
+# Contract tests for repository scripts (tests/scripts/*.sh) — OPT-IN ONLY.
+#
+# NOT wired into ci-gate: on 2026-09-23 a run of these tests inside a linked
+# worktree made the fixture's git commands land in the CALLER's repository and
+# rewrote the current branch with fixture commits (reflog evidence). Until every
+# fixture is proven hermetic, run this target explicitly.
+# Tracking: issue #1927 ("tests/scripts fixtures are not hermetic").
+# test-check-frontend-dist.sh got a defensive own-repo assertion in the same
+# change; the other fixtures still need the same treatment.
+.PHONY: test-scripts
+test-scripts:
+	@echo "  → scripts contract tests (tests/scripts/*.sh; opt-in, see Makefile comment)"
+	@for t in tests/scripts/*.sh; do \
+		bash "$$t" >/dev/null || { echo "    ❌ $$t FAILED"; bash "$$t"; exit 1; }; \
+	done
+	@echo "    ✅"
+
 ci-gate:
 	@echo "🛡️  CI pre-push gate (fast, <30s)..."
 	@echo ""
