@@ -14,6 +14,14 @@
 #   6. --diff with only shared_web change → checks both frontends (exit 1 if stale)
 set -euo pipefail
 
+# git hooks (pre-push/pre-commit) export GIT_DIR, and any throwaway fixture repo
+# created below would then resolve its git commands to the CALLER's repository —
+# on 2026-09-23 that rewrote the caller's branch with fixture commits and set
+# core.bare=true in the caller's .git/config (issue #1927). Unset every GIT_*
+# override so the fixture stays hermetic even when this script runs from a hook.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
+
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SCRIPT="$ROOT/scripts/ci/check_frontend_dist.sh"
 
