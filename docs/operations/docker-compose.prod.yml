@@ -10,7 +10,7 @@
 services:
   atlas:
     image: atlas-atlas:latest
-    container_name: atlas-go-imac
+    container_name: atlas-go
     ports:
       - "18080:18080"
     env_file:
@@ -59,7 +59,7 @@ services:
 
   fubon-proxy:
     image: atlas-fubon-proxy:latest
-    container_name: atlas-fubon-proxy-imac
+    container_name: atlas-fubon-proxy
     ports:
       - "18081:18081"
     env_file:
@@ -108,7 +108,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: atlas-prometheus-imac
+    container_name: atlas-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -126,7 +126,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: atlas-grafana-imac
+    container_name: atlas-grafana
     ports:
       - "3001:3000"
     environment:
@@ -144,7 +144,7 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
-    container_name: atlas-alertmanager-imac
+    container_name: atlas-alertmanager
     ports:
       - "9093:9093"
     # 注入 telegram bot token (PR #1707 — 不 commit token 進 git; 絕對路徑與
@@ -176,3 +176,11 @@ networks:
   atlas-network:
     name: atlas-network
     driver: bridge
+
+# ⚠️ 容器命名（2026-09-23 校正，a2a-dev F17）
+# 本檔（Mac Mini 時代 SSOT）過去沿用 iMac 的 `-imac` 後綴容器名，與**實際在跑的**容器不符：
+#   Mac Mini 上實際為乾淨名（atlas-go / atlas-fubon-proxy / atlas-prometheus /
+#   atlas-grafana / atlas-alertmanager / atlas-cron-*），來源是 docker-compose.yml
+#   （+ crons 服務）。`-imac` 後綴已淘汰，依本檔啟動才不會產生重複容器。
+# 對照：repo 根目錄的 docker-compose.prod.yml / docker-compose.crons.yml **未受版控**，
+#       是 iMac 時代殘留檔，勿再使用（已於本日盤查確認）。
