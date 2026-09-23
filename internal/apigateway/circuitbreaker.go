@@ -119,6 +119,29 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	defer cb.mu.Unlock()
 
 	if err != nil {
+		// Expected-non-failure outcomes are a NO-OP for breaker accounting.
+		//
+		// P1-9 taxonomy (marketdata/errors.go) declares that "upstream answered
+		// but has nothing usable" must NOT trip a breaker — it is not an
+		// outage and retrying is the correct behavior. Until now this breaker
+		// counted every such error, so a channel that answers politely with an
+		// empty payload opened after maxFailures ticks and then served
+		// "circuit breaker open for channel X" forever (實證 2026-09-20: CNBC
+		// `.BADI` empty quotes tripped the bdi breaker; channel_fetch_log showed
+		// the open message while the last good BDI value froze at 3370).
+		//
+		// No-op means: do NOT count a failure, do NOT move the state, and
+		// deliberately do NOT call the success path below either — treating an
+		// expected-empty reply as success would erase a real failure streak
+		// (see marketdata/circuit_breaker.go recordSuccess audit note). The
+		// error is returned unchanged so callers still classify it (gateway
+		// records warn/waiting for these sentinels).
+		//
+		// Half-open note: the probe invocation already consumed one half-open
+		// call slot above; leaving it consumed keeps the probe budget honest.
+		if isExpectedNonFailureErr(err) {
+			return err
+		}
 		cb.failures++
 		cb.lastFailure = cb.timeNow()
 		if cb.failures >= cb.maxFailures {

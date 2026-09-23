@@ -3,6 +3,7 @@ package apigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -49,8 +50,19 @@ func (a *BDIChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 func (a *BDIChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
+		// ErrEmptyQuote (CNBC answers 200 with a quote that has no price —
+		// 2026-09-20T08:35Z onward for .BADI) is an upstream data outage, not
+		// atlas breakage and not a connectivity failure: CNBC is reachable and
+		// the sibling indices on the same endpoint stay fresh. Report warn so
+		// a health-check call does not paint the channel red; genuine failures
+		// (HTTP status, parse errors, empty QuickQuote array) stay "error".
+		// Same convention as adapter_taiex.go's ErrNoData handling.
+		status := "error"
+		if errors.Is(err, marketdata.ErrEmptyQuote) {
+			status = "warn"
+		}
 		return HealthStatus{
-			Status:    "error",
+			Status:    status,
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
 			CheckType: "liveness",

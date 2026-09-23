@@ -2,9 +2,13 @@ package apigateway
 
 import (
 	"context"
+	"strings"
+	"testing"
+
+	"golang.org/x/time/rate"
+
 	"net/http"
 	"net/http/httptest"
-	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
@@ -81,5 +85,75 @@ func TestBDIChannelAdapter_Metadata(t *testing.T) {
 	}
 	if !m.HasLimiter {
 		t.Error("HasLimiter should be true")
+	}
+}
+
+// TestBDIChannelAdapter_HealthCheck_EmptyQuoteIsWarn covers the 2026-09-20
+// CNBC `.BADI` empty-quote outage for the health-check entry point: a quote
+// that carries no price means the upstream is reachable but has no data, so the
+// check must report "warn" (not "error") while still surfacing the reason.
+// Genuine breakage keeps returning "error" — see
+// TestBDIChannelAdapter_HealthCheck_RealFailureIsError.
+func TestBDIChannelAdapter_HealthCheck_EmptyQuoteIsWarn(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Production payload shape since 2026-09-20T08:35Z: no `last`.
+		_, _ = w.Write([]byte(`{"QuickQuoteResult":{"QuickQuote":[{"symbol":".BADI","open":"0.00","high":"0.00","low":"0.00","provider":"CNBC Quote Cache"}]}}`))
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, map[string]any{
+		"marketdata": map[string]any{
+			"bdi_endpoint":        map[string]any{"value": server.URL},
+			"bdi_api_timeout_sec": map[string]any{"value": 10},
+		},
+	})
+
+	old := marketdata.SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { marketdata.SetBDILimiterForTest(old) })
+
+	provider := marketdata.NewBDIProvider()
+	adapter := NewBDIChannelAdapter(provider)
+	status, err := adapter.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("HealthCheck must still return the empty-quote error to the caller")
+	}
+	if status.Status != "warn" {
+		t.Errorf("Status = %q, want warn (upstream answered; only the price is missing)", status.Status)
+	}
+	if !strings.Contains(status.LastError, "missing last price") {
+		t.Errorf("LastError = %q, want it to carry the empty-quote reason", status.LastError)
+	}
+}
+
+// TestBDIChannelAdapter_HealthCheck_RealFailureIsError guards the boundary: a
+// transport/HTTP failure must keep reporting "error" so the fix cannot dampen
+// real outages.
+func TestBDIChannelAdapter_HealthCheck_RealFailureIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("boom"))
+	}))
+	defer server.Close()
+
+	writeParametersJSON(t, map[string]any{
+		"marketdata": map[string]any{
+			"bdi_endpoint":        map[string]any{"value": server.URL},
+			"bdi_api_timeout_sec": map[string]any{"value": 10},
+		},
+	})
+
+	old := marketdata.SetBDILimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	t.Cleanup(func() { marketdata.SetBDILimiterForTest(old) })
+
+	provider := marketdata.NewBDIProvider()
+	adapter := NewBDIChannelAdapter(provider)
+	status, err := adapter.HealthCheck(context.Background())
+	if err == nil {
+		t.Fatal("HealthCheck must return the HTTP error")
+	}
+	if status.Status != "error" {
+		t.Errorf("Status = %q, want error for a genuine HTTP failure", status.Status)
 	}
 }

@@ -40,3 +40,36 @@ var (
 // payload). It wraps ErrNoData so errors.Is(err, ErrNoData) classifies it
 // as a no-data condition (holiday / after-hours) rather than an outage.
 var ErrTWSEEmptyData = fmt.Errorf("twse: empty data response: %w", ErrNoData)
+
+// ErrEmptyQuote is returned by quote-style providers when the upstream
+// answered with a structurally valid payload that carries no price for the
+// requested symbol — the CNBC ".BADI" case (2026-09-20T08:35Z onward): HTTP
+// 200, JSON shape unchanged, QuickQuote present, `last` absent, open/high/low
+// all "0.00", provider "CNBC Quote Cache".
+//
+// Why a fourth sentinel instead of reusing the existing three:
+//
+//	ErrUpstream    — wrong: there is no transport error and no HTTP 4xx/5xx.
+//	ErrSchema      — wrong: the response still parses into the expected shape,
+//	                 so the failure is data-side, not schema-side.
+//	ErrNoData      — wrong FOR A DAILY CHANNEL: ErrNoData means "nothing for
+//	                 the requested day yet" (holiday/weekend/not-yet-published)
+//	                 and maps to the ok/waiting state. A channel whose upstream
+//	                 normally prints every business day would then look "ok"
+//	                 while it has been dark for days (bdi 2026-09-20 → 09-23),
+//	                 and the staleness backstop does not catch it either
+//	                 (staleness compares LastFetchAt, which a waiting record
+//	                 refreshes on every tick).
+//
+// Consumers therefore treat ErrEmptyQuote as an ABNORMAL upstream condition:
+//
+//	gateway            — records the channel as "warn" (visible on the channel
+//	                     page, no ChannelHealthStatusError page) and keeps the
+//	                     last-known-good value downstream (narrative
+//	                     mergeWithPrev carries the previous Bdi data point).
+//	circuit breakers   — expected-empty is a NO-OP for failure accounting: it
+//	                     must not accumulate failures, and it must not reset a
+//	                     real failure streak either (see
+//	                     marketdata/circuit_breaker.go recordSuccess note).
+//	monitoring         — severity "warn" (classifyErrorSeverity).
+var ErrEmptyQuote = errors.New("upstream returned an empty quote")

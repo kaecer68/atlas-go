@@ -103,7 +103,17 @@ func (p *BDIProvider) FetchSnapshot(ctx context.Context) (MacroDataSnapshot, err
 
 	qq := quotes[0]
 	if qq.Last == "" {
-		return MacroDataSnapshot{}, fmt.Errorf("bdi: missing last price field")
+		// Upstream answered with a structurally valid quote that carries no
+		// price. 實證 2026-09-20T08:35Z 起 CNBC 對 .BADI 持續回此形狀
+		// (open/high/low 全 "0.00", provider "CNBC Quote Cache"), 同端點
+		// 的 .SPX/.DJI/.IXIC 同時刻仍正常 → 上游資料端故障, 不是 atlas bug,
+		// 也不是 UA/Akamai 阻擋 (那會回 HTML Access Denied).
+		// Typed ErrEmptyQuote: gateway 記 warn (非 error)、熔斷器 no-op (空報價
+		// 不得累積失敗)、下游以 mergeWithPrev 保留 last-good 值.
+		// 真失敗 (HTTP 錯誤 / JSON 解析失敗 / QuickQuote 空陣列) 語意不變.
+		// Root cause note: ~/workspace/atlas-notes/05-decisions/
+		// 2026-09-23-bdi-cnbc-empty-quote-root-cause.md
+		return MacroDataSnapshot{}, fmt.Errorf("bdi: missing last price field: %w", ErrEmptyQuote)
 	}
 
 	value, err := strconv.ParseFloat(qq.Last, 64)
