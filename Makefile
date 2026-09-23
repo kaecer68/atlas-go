@@ -431,7 +431,8 @@ ci-quick:
 	              scripts/ci/check_field_contract.sh \
 	              scripts/ci/check_channel_consistency.sh \
 	              scripts/ci/check_docs_governance.sh \
-	              scripts/ci/check_agents_index.sh; do \
+	              scripts/ci/check_agents_index.sh \
+	              scripts/ci/check_jev_contract.sh; do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 10 bash $$script > /dev/null 2>&1; then \
