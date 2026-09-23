@@ -147,8 +147,8 @@ make imac-watchdog-install   # 備份 iMac 現有版本 → scp 正本 → bash 
    啟動後 5 秒再確認；crash loop 會記 WARN 而不無限重啟。
 3. 所有動作寫入 `~/Library/Logs/atlas-watchdog.log`。
 
-**注意**：本腳本**只**啟動已存在的容器，不負責部署。iMac 部署流程另見
-`docs/operations/pr-lifecycle.md` §5 與 issue #1898（`make rebuild-all` 在 iMac 目前被 guard 擋下，需手打 docker 指令）。
+**注意**：本腳本**只**啟動已存在的容器，不負責部署。**現行部署入口 = `make rebuild-all`**（Mac Mini，見下方 §Mac Mini production 部署；2026-09-23 由 issue #1898 修好並實走驗證）。
+歷史：`make rebuild-all` 曾在 **iMac** 被 dev-compose guard 擋下（guard 只在本機 hostname=KiMac 時觸發；iMac 已於 2026-09-22 退役），當時需手打 docker 指令。詳見 `docs/operations/pr-lifecycle.md` §5。
 
 ## Mac Mini production 部署（2026-09-23 實走驗證，issue #1898）
 
