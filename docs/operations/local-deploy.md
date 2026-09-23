@@ -1,7 +1,8 @@
 # 部署設定（本機 dev + production 雙機）
 
-> **文件角色**：部署的權威說明。涵蓋 MacBook 本機 dev 與 iMac production 兩種情境。
-> **雙機治理**：開發在 MacBook、production 在 iMac（方案二，2026-08-15 定案）。
+> **文件角色**：部署的權威說明。涵蓋 MacBook 本機 dev 與 Mac Mini production 兩種情境。
+> **雙機治理（2026-09-22 起）**：開發在 MacBook、production 在 **Mac Mini**（`kaecer@192.168.0.84`；iMac 已退役，`KiMac` guard 僅為 legacy 防護）。
+> **Mac Mini 部署實走驗證**：2026-09-23（issue #1898）—— 步驟與 10 個實踩坑見下方 §Mac Mini production 部署。
 > **跨設備總則**：`~/workspace/a2a-dev/docs/governance/雙機治理憲章.md`；iMac 運維手冊：`~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`。
 
 ## 平台架構（方案二真相）
@@ -148,3 +149,48 @@ make imac-watchdog-install   # 備份 iMac 現有版本 → scp 正本 → bash 
 
 **注意**：本腳本**只**啟動已存在的容器，不負責部署。iMac 部署流程另見
 `docs/operations/pr-lifecycle.md` §5 與 issue #1898（`make rebuild-all` 在 iMac 目前被 guard 擋下，需手打 docker 指令）。
+
+## Mac Mini production 部署（2026-09-23 實走驗證，issue #1898）
+
+> 前置：`ssh kaecer@192.168.0.84`。以下每一步都是實測會踩到的點，照抄即可。
+
+```bash
+cd ~/workspace/atlas
+
+# 0) 一次性環境（重開 shell/session 才需重做）
+go env -w GOPROXY=https://goproxy.cn,direct                        # 見坑①
+export PATH="$HOME/.orbstack/bin:/usr/local/bin:$PATH"             # 見坑②
+
+# 1) 對齊 main（若 repo 停在舊 branch，ff-only 會直接失敗）
+git fetch origin main && git checkout main && git merge --ff-only origin/main
+
+# 2) repo 目錄 .env（gitignored）——Mac Mini 的對外埠契約
+printf 'GRAFANA_PORT=3001\nATLAS_POSTGRES_PORT=55432\n' > .env && chmod 600 .env
+
+# 3) 重建（host bin + atlas image + cron image + 全部容器）
+make rebuild-all                                                   # 見坑③④
+
+# 4) 驗收
+curl -s localhost:18080/api/version        # commit 應等於當前 main
+bash ~/bin/macmini-recover.sh              # 期望 48 OK / 0 WARN / 0 FAIL
+make check-binaries                        # 見坑⑦
+```
+
+### 實踩的坑（依序）
+1. **`proxy.golang.org` 被 MITM**：本機 router/HiNet 把它導到 `202.39.161.53` 並以 `safebrowsing.hinet.net` 憑證攔截 → 所有 go build 以 x509 失敗。解：`GOPROXY=https://goproxy.cn,direct`（`Dockerfile.cron` 的 `GOPROXY` build-arg 註解即為同款 workaround）。
+2. **非互動 ssh 沒有 docker**：`docker` 不在 PATH（`~/.orbstack/bin` / `/usr/local/bin`）。
+3. **`ATLAS_GIT_COMMIT` 是 compose 的 `:?` 必填**：`make` 目標會自帶；**裸跑** `docker compose up -d` 必須 `ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose up -d`。
+4. **cron image 必須覆蓋 compose 的每個 build-only cron service**：`CRON_IMAGE_TAGS` 曾漏掉 `atlas-cron-darwinian`（2026-09-23 修）→ 症狀 `No such image: atlas-cron-darwinian:latest`。`tests/scripts/test-binary-freshness-guard.sh` 現在以 `docker-compose.yml` 為準逐一比對。
+5. **`environment:` 的 `${VAR:-}` 會蓋掉 `env_file` 同名字**：曾讓 8 個服務的 `ATLAS_LIVENESS_TOKEN` 變空、cron 的 task_liveness ping 靜默死亡（#1921/#1922 修）。
+6. **host port 契約**：`atlas-postgres` **55432**、`grafana` **3001**（3000 是 gitea）、`redis` 16379、`atlas` 18080、`fubon-proxy` 18081、`onepager` 18090。repo compose 的預設（5432/3000）是 dev 用，靠步驟 2 的 `.env` 覆寫。
+7. **`make check-binaries` 的語意**：比對「binary buildinfo commit vs HEAD」，所以 compose/docs-only commit 也會報 STALE（非真漂移）；script 另有 `TEMP_FILES[@]` 空陣列在 bash 3.2 崩潰的 bug（#1923 修）。
+8. **fresh worktree 缺 gitignored 前端 dist** → `ci-gate` 失敗（`embed: pattern all:dist`）：從主 worktree `cp -r admin_web/dist client_web/dist`。
+9. **golangci-lint cache 會掃到已刪除的相鄰 worktree**（假 issue）→ `golangci-lint cache clean`。
+10. **重開機後一鍵恢復**：`bash ~/bin/macmini-recover.sh`（`imac-recover.sh` 為相容 symlink；MacBook wrapper：`macmini-recover`）。launchd idle 排程 agent（watchdog/orbstack，`state = not running` 且 `last exit = 0`）屬正常。
+
+### Rollback
+```bash
+cd ~/workspace/atlas && git log --oneline -3        # 找上一個已知良好 commit
+git checkout <prev> && make rebuild-all             # 重建並重啟容器（data volume 不動）
+# 只回滾 compose 層：git checkout <prev> -- docker-compose.yml && ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose up -d
+```
