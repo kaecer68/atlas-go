@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 # check-binary-freshness.sh
 #
-# Verifies that every deployed binary's buildinfo.Commit matches HEAD.
+# Verifies that every deployed binary's buildinfo.Commit CONTAINS the last
+# commit that touched a build input (BUILD_INPUT_PATHS below) — it does NOT
+# require equality with HEAD.
+#
+# Why not HEAD: HEAD also moves for commits that cannot possibly invalidate a
+# binary (docker-compose*.yml, docs/**, scripts/** other than
+# cron-entrypoint.sh). Judging against HEAD turned the gate red right after
+# every compose/docs/script commit. Measured on the production host
+# (2026-09-23): the deployed images and host binaries were built at 7126c3a7
+# (#1920, the last commit that touched Go code) while HEAD stood at 17e67439
+# (#1921 compose / #1923 script / #1925 CI+docs) — the old rule reported five
+# STALE binaries and exit 1 for a perfectly deployed system. A gate that is red
+# at both session start and session end stops being a signal: it either forces
+# a pointless rebuild (rebuilding recreates containers — a measured risk on
+# this project) or teaches everyone to ignore it.
+#
 # Temporary Docker containers and extracted files are always cleaned up, including
 # when Docker copy fails or the shell exits early.
 
@@ -43,7 +58,23 @@ cleanup() {
 trap cleanup EXIT
 
 HEAD=$(git rev-parse HEAD 2>/dev/null) || { echo "ERROR: not in a git repo"; exit 2; }
+
+# Build inputs: only these files can change the compiled binaries. Everything
+# else in the tree (docker-compose*.yml, docs/**, Dockerfile-independent
+# scripts) is deployed configuration/documentation, not binary content.
+# - Dockerfile* catches Dockerfile, Dockerfile.cron, Dockerfile.atlas.local, ...
+# - scripts/cron-entrypoint.sh is COPY'd into the cron image, so it is a build input.
+BUILD_INPUT_PATHS=('*.go' 'go.mod' 'go.sum' 'Dockerfile*' 'scripts/cron-entrypoint.sh')
+LAST_BUILD_COMMIT=$(git log -1 --format=%H -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)
+if [ -z "$LAST_BUILD_COMMIT" ]; then
+    # No build-input commit in this clone's history (e.g. very shallow clone).
+    # Fall back to HEAD so the gate still fails closed instead of silently passing.
+    LAST_BUILD_COMMIT=$HEAD
+    echo "WARN: no commit touching build inputs found; falling back to HEAD=$HEAD" >&2
+fi
+
 echo "checking binaries against HEAD=$HEAD"
+echo "last build input commit: $LAST_BUILD_COMMIT"
 echo ""
 
 # Helper: extract buildinfo.Commit from a host binary file.
@@ -53,16 +84,28 @@ extract_commit_host() {
         | sed 's/.*Commit=\([a-f0-9]*\).*/\1/' | grep -E '^[a-f0-9]{7,}$' || echo ""
 }
 
+# A binary is FRESH when its build commit contains the last build-input commit
+# (equal counts as containing) and is itself an ancestor of HEAD. The second
+# check rejects binaries built from a commit that is not part of this branch.
+is_fresh_commit() {
+    local commit=$1
+    # Unknown commit (not fetched in this clone) cannot be proven fresh.
+    git rev-parse --verify --quiet "${commit}^{commit}" >/dev/null 2>&1 || return 1
+    git merge-base --is-ancestor "$LAST_BUILD_COMMIT" "$commit" || return 1
+    git merge-base --is-ancestor "$commit" "$HEAD" || return 1
+    return 0
+}
+
 check_one() {
     local label=$1
     local commit=$2
     if [ -z "$commit" ]; then
         MISSING_BUILDINFO+=("$label (no buildinfo.Commit found)")
         echo "  ⚠ $label: buildinfo.Commit NOT FOUND"
-    elif [ "$commit" = "$HEAD" ]; then
+    elif is_fresh_commit "$commit"; then
         echo "  ✓ $label: $commit"
     else
-        STALE+=("$label: $commit (HEAD=$HEAD)")
+        STALE+=("$label: $commit (last build input=$LAST_BUILD_COMMIT)")
         echo "  ✗ STALE  $label: $commit"
     fi
 }
@@ -113,7 +156,12 @@ fi
 
 echo ""
 echo "=== Summary ==="
-echo "  HEAD: $HEAD"
+echo "  HEAD:              $HEAD"
+echo "  last build input:  $LAST_BUILD_COMMIT"
+echo "  (FRESH = the binary's buildinfo.Commit contains the last build input"
+echo "   commit. Commits that only touch non-build-input files —"
+echo "   docker-compose*.yml, docs/**, scripts/** except cron-entrypoint.sh —"
+echo "   do not require a rebuild.)"
 if [ ${#STALE[@]} -eq 0 ] && [ ${#MISSING_BUILDINFO[@]} -eq 0 ]; then
     echo "  ✓ ALL BINARIES FRESH"
     exit 0
@@ -127,5 +175,7 @@ if [ ${#MISSING_BUILDINFO[@]} -gt 0 ]; then
     printf '    %s\n' "${MISSING_BUILDINFO[@]}"
 fi
 echo ""
-echo "Fix: run 'make rebuild-all' to align binaries with HEAD."
+echo "Fix: a build input (*.go, go.mod, go.sum, Dockerfile*, scripts/cron-entrypoint.sh)"
+echo "     changed after the deployed binaries were built. Run 'make rebuild-all' to"
+echo "     realign the binaries with $LAST_BUILD_COMMIT."
 exit 1
