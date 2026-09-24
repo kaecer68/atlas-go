@@ -4559,6 +4559,12 @@
       ]
     },
     "factor_weight": 1,
+    "industry_hit_rate_consume_enabled": {
+      "rationale": "PR-β gate: enables industry hit-rate consumption chain into sectorallocation recommendation and capital_flow_assessment deprecation. Default off keeps production paths byte-identical with dfc4e3a1; flip to true to start observation window (\u003e=20 sessions, 0 invariant violations).",
+      "source": "experimental",
+      "todo": "Promote to SourceHeuristic after observation window confirms regression-free wiring.",
+      "value": false
+    },
     "linkage_weight": 1,
     "macro_weight": 1,
     "narrative_weight": 1,

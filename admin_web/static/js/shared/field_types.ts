@@ -358,6 +358,7 @@ export interface CapitalFlowAssessment {
   cross_market: DirectionalAssessment;
   primary_flow?: string;
   reasons?: string[];
+  industry_hit_rate_evidence?: IndustryHitRateEvidence | null;
 }
 
 export interface CapitalFlowDetail {
@@ -1937,6 +1938,19 @@ export interface IndustryDetail {
   seasonal_patterns: SeasonalPattern[];
   recommendation: IndustryRecommendation | null;
   regime_context: string;
+}
+
+export interface IndustryHitRateEvidence {
+  source: string;
+  condition_id: string;
+  rolling_window: string;
+  applied: boolean;
+  reason: string;
+  rows_total: number;
+  rows_calibrated: number;
+  mean_wilson_lower: number;
+  max_tilt: number;
+  min_tilt: number;
 }
 
 export interface IndustryLinkageScore {
@@ -3845,6 +3859,7 @@ export interface SectorAllocationConfig {
   macro_weight: number;
   factor_weight: number;
   weight_floor: number;
+  industry_hit_rate_consume_enabled: string;
 }
 
 export interface SectorAttribution {

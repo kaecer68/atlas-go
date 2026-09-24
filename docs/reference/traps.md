@@ -89,6 +89,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Enabled agent 缺少 prompt** | spawning | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI `agent-prompts` job 強制。 |
 | **ScreeningCriteria 靜默過濾** | screener | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 executor **之前**就會被過濾。這是預期行為，不是 bug。 |
 | **Live 交易風險** | live | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
+| **industry_hit_rate_consume_enabled 必須 default off（#1942/#1948）** | sectorallocation / capitalflow | 跨模組 config gate（`configs/parameters.json` → `sector_allocation.industry_hit_rate_consume_enabled`）同時控制 (a) `ComputeProjectedTarget` 的 hit-rate tilts 與 (b) `LatestAssessment` 的 `IndustryHitRateEvidence`。**Default 必須 false**：gate off 時 driver 與 assessment JSON 必須與改動前逐位元相同（`industry_hitrate_byte_identity_test.go` 對改動前 revision 的快照比對）。改 default = 改動下一條 production 路徑，必須另開票經業主核准；promotion 前需 ≥20 sessions 觀察期 + 0 invariant violations + 兩個下游各跑一輪 smoke（見 `docs/specs/industry-hitrate-consumption-spec.md` §6）。 |
 
 ### Baseline / Experiment
 

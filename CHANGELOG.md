@@ -4,6 +4,16 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### feat(sectorallocation/capitalflow): 產業命中率接進消費鏈路（config-gated、預設 off）（#1942/#1948）（2026-09-24）
+- **問題**：canonical 產業級命中率（#1942/#1948，扣成本口徑 Wilson CI + min_samples 校準）除報告端點 `/api/stock/industry_winrate` 外沒有任何 production 消費端 — 命中率不影響 applied 權重，也不影響 capital-flow assessment。
+- **修正**：新增 config gate `sector_allocation.industry_hit_rate_consume_enabled`（預設 **false**）。開啟後：(a) `ComputeProjectedTarget` 把 `calibration_status == eligible` 的 canonical L1 列轉成 `DriverInputs.CapitalFlow` 的 additive tilt（`(WilsonLower-0.5)*0.2`，夾在 ±0.05，`avoid` 反向）；(b) `LatestAssessment` 附上 advisory 的 `industry_hit_rate_evidence`（`applied`/`reason`/rows/`mean_wilson_lower`/tilt 極值）。provider 綁定在 `cmd/atlas`（`stocktools.SectorAllocationHitRateProvider`，read-only canonical 聚合），綁定本身在 gate off 時 inert。
+- **fail-closed**：gate off／未綁 provider／provider error／報告 0 列／無 eligible 列 → 一律不改 driver，並以決定性 `reason`（`disabled`/`no_provider`/`provider_error`/`no_rows`/`insufficient_calibration`）留痕；不以 0 或猜測值替代未達 min_samples 的列（這是與 #1944 系列「inert 閉環」相反的紀律：可讀、可解釋、預設不動）。
+- **逐位元保證**：gate off（含已註冊 provider）與 gate on + fail-closed 兩者的 `ProjectedTarget`，與改動前 revision 產出的快照 `internal/sectorallocation/testdata/production_path_off_baseline.golden.json` **逐位元相同**；assessment 端 evidence 為 `nil` 時 `omitempty` 讓 JSON 維持不變（皆有測試釘住）。
+- **可逆**：唯一開關是 config，翻回 false 於下次 reload 即回基準；不寫入任何歷史資料。
+- **檔案**：`internal/sectorallocation/industry_hitrate_{consume,assessment_decorator,provider_registry}.go`、`internal/capitalflow/{assessment_decorator,types,service}.go`、`internal/stocktools/industry_hitrate_consume_provider.go`、`cmd/atlas/main.go`（1 行 provider 綁定）、`internal/config/{parameters,defaults_engine}.go` + 兩份 golden、`configs/parameters.json`、`docs/specs/industry-hitrate-consumption-spec.md`、`docs/reference/traps.md`，以及對應 `*_test.go`。
+- **未動（明確）**：stockpicker 算式/成本口徑、#1943 canonical taxonomy（只讀）、`Projector` 投影公式、`CalibrationStatus`/`EligibleForAutomation` 語意；沒有新增任何 default-on 參數。
+- **驗證**：`go test ./internal/sectorallocation/... ./internal/capitalflow/... ./internal/stocktools/... -count=1`、`make ci-gate` 全綠。
+
 ### fix(capitalflow): 錢潮驗證／判斷層接線（#1941）（2026-09-24）
 - **問題**：七維錢潮的驗證層與判斷層結構上不可能生效 ——（a）`ComputeCapitalFlowAssessment` **硬寫** `CalibrationStatus="calibrating"`，`EligibleForAutomation()` 永遠 false，連帶 `/api/recommendations` 每則回應都帶 `capital_flow_assessment_calibrating` warning；（b）Stage-3 的 5 個排程任務與 3 個 alert evaluator **只有測試呼叫**，`STAGE3_TASKS_ENABLED` / `STAGE3_ALERTS_ENABLED`（皆預設 true）gate 不到任何東西；（c）`LatestCapitalFlowActual` 每次呼叫都建拋棄式 `capitalflow.NewService(macroProvider, 0, nil)`，rolling window 為空 ⇒ 每維 Z=0，預測 vs 實際比對無意義。
 - **修正**：
