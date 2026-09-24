@@ -47,6 +47,40 @@ type ParameterCitation struct {
 	LastValidated    string   `json:"last_validated"`
 }
 
+// IndustryHitRateConsumeEnabledMetadata is the gate flag for PR-β
+// (2026-09-24, #1942/#1948 industry hit-rate consumption chain).
+// When false (default), the production paths MUST stay byte-identical
+// with dfc4e3a1; root verifies this regression as the backstop safety
+// guarantee. When true, the stockpicker canonical industry hit-rate is
+// allowed to (a) feed into sectorallocation recommendation via WilsonLower-
+// derived per-L1 tilts added to DriverInputs.CapitalFlow, and (b) populate
+// capital_flow_assessment.IndustryHitRateEvidence so the E07 assessment can
+// surface calibrated signal without leaving the "calibrating" CalibrationStatus.
+// Default rationale: gating a config-driven wire through two production
+// surfaces requires an observation window before promotion (mirrors the
+// use_llm_sector_agents gate pattern).
+var IndustryHitRateConsumeEnabledMetadata = ParameterMetadata[bool]{
+	Value: false,
+	Rationale: "PR-β gate (2026-09-24, #1942/#1948): enables industry hit-rate consumption " +
+		"chain into sectorallocation recommendation and capital_flow_assessment " +
+		"deprecation. Default off for byte-identical regression safety vs dfc4e3a1; " +
+		"flip to true to start observation window (>=20 sessions, 0 invariant violations).",
+	Source: SourceExperimental,
+	Todo:   "Promote to SourceHeuristic after observation window confirms regression-free wiring.",
+}
+
+// GetIndustryHitRateConsumeEnabled returns the current value of the
+// industry hit-rate consume gate. Reads from the loaded parameters config
+// (or default-off if not loaded) so production default-off semantics hold
+// even before config load.
+func GetIndustryHitRateConsumeEnabled() bool {
+	cfg := GetParametersConfig()
+	if cfg == nil {
+		return IndustryHitRateConsumeEnabledMetadata.Value
+	}
+	return cfg.SectorAllocation.IndustryHitRateConsumeEnabled.Value
+}
+
 // UseLLMSectorAgents gates the L2.3 PoC SemiconductorLLMAgent
 // (internal/orchestrator/semiconductor_llm_agent.go) behind a
 // feature flag. Default false keeps the deterministic
@@ -1686,6 +1720,22 @@ type SectorAllocationConfig struct {
 	MacroWeight       float64                         `json:"macro_weight"`
 	FactorWeight      float64                         `json:"factor_weight"`
 	WeightFloor       float64                         `json:"weight_floor"`
+	// IndustryHitRateConsumeEnabled gates the consumption chain from the
+	// canonical industry-level hit-rate (#1942/#1948, stockpicker-stage)
+	// into two downstream surfaces (PR-β, 2026-09-24):
+	//   (a) sectorallocation's recommendation path
+	//       (ComputeProjectedTarget / WeightEngine driver inputs) — wires
+	//       hit-rate WilsonLower-derived per-L1 tilts into DriverInputs.
+	//   (b) capital_flow_assessment's deprecation path
+	//       (LatestAssessment / IndustryHitRateEvidence) — populates a
+	//       evidence block when hit-rate report has ≥1 calibrated row,
+	//       allowing the assessment to surface signal without leaving
+	//       its "calibrating" CalibrationStatus.
+	// DEFAULT off: production paths MUST remain byte-identical to
+	// pre-PR-β outputs when this flag is false (root verifies via
+	// before/after regression on dfc4e3a1). Reversibility is the core
+	// safety guarantee — flip back to false to disable.
+	IndustryHitRateConsumeEnabled ParameterMetadata[bool] `json:"industry_hit_rate_consume_enabled"`
 }
 
 type ParametersConfig struct {

@@ -1451,6 +1451,14 @@ func deriveDefaultSectorAllocationConfig() SectorAllocationConfig {
 		MacroWeight:     1.0,
 		FactorWeight:    1.0,
 		WeightFloor:     0.01,
+		// PR-β gate (2026-09-24, #1942/#1948 industry hit-rate consumption chain).
+		// Default off for byte-identical regression safety vs dfc4e3a1.
+		IndustryHitRateConsumeEnabled: ParameterMetadata[bool]{
+			Value:     false,
+			Rationale: "PR-β gate: enables industry hit-rate consumption chain into sectorallocation recommendation and capital_flow_assessment deprecation. Default off keeps production paths byte-identical with dfc4e3a1; flip to true to start observation window (>=20 sessions, 0 invariant violations).",
+			Source:    SourceExperimental,
+			Todo:      "Promote to SourceHeuristic after observation window confirms regression-free wiring.",
+		},
 	}
 }
 

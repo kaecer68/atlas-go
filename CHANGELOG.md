@@ -4,6 +4,15 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### feat(sectorallocation/capitalflow): 產業命中率接進消費鏈路（config-gated、預設 off）（#1942/#1948）（2026-09-24）
+- **問題**：canonical 產業級命中率（#1942/#1948，扣成本口徑 Wilson CI + min_samples 校準）除報告端點 `/api/stock/industry_winrate` 外沒有任何 production 消費端 — 命中率不影響 applied 權重，也不影響 capital-flow assessment。
+- **修正**：新增 config gate `sector_allocation.industry_hit_rate_consume_enabled`（預設 **false**）。開啟後：(a) `ComputeProjectedTarget` 把 `calibration_status == eligible` 的 canonical L1 列轉成 `DriverInputs.CapitalFlow` 的 additive tilt（`(WilsonLower-0.5)*0.2`，夾在 ±0.05，`avoid` 反向）；(b) `LatestAssessment` 附上 advisory 的 `industry_hit_rate_evidence`（`applied`/`reason`/rows/`mean_wilson_lower`/tilt 極值）。provider 綁定在 `cmd/atlas`（`stocktools.SectorAllocationHitRateProvider`，read-only canonical 聚合），綁定本身在 gate off 時 inert。
+- **fail-closed**：gate off／未綁 provider／provider error／報告 0 列／無 eligible 列 → 一律不改 driver，並以決定性 `reason`（`disabled`/`no_provider`/`provider_error`/`no_rows`/`insufficient_calibration`）留痕；不以 0 或猜測值替代未達 min_samples 的列（這是與 #1944 系列「inert 閉環」相反的紀律：可讀、可解釋、預設不動）。
+- **逐位元保證**：gate off（含已註冊 provider）與 gate on + fail-closed 兩者的 `ProjectedTarget`，與改動前 revision 產出的快照 `internal/sectorallocation/testdata/production_path_off_baseline.golden.json` **逐位元相同**；assessment 端 evidence 為 `nil` 時 `omitempty` 讓 JSON 維持不變（皆有測試釘住）。
+- **可逆**：唯一開關是 config，翻回 false 於下次 reload 即回基準；不寫入任何歷史資料。
+- **檔案**：`internal/sectorallocation/industry_hitrate_{consume,assessment_decorator,provider_registry}.go`、`internal/capitalflow/{assessment_decorator,types,service}.go`、`internal/stocktools/industry_hitrate_consume_provider.go`、`cmd/atlas/main.go`（1 行 provider 綁定）、`internal/config/{parameters,defaults_engine}.go` + 兩份 golden、`configs/parameters.json`、`docs/specs/industry-hitrate-consumption-spec.md`、`docs/reference/traps.md`，以及對應 `*_test.go`。
+- **未動（明確）**：stockpicker 算式/成本口徑、#1943 canonical taxonomy（只讀）、`Projector` 投影公式、`CalibrationStatus`/`EligibleForAutomation` 語意；沒有新增任何 default-on 參數。
+- **驗證**：`go test ./internal/sectorallocation/... ./internal/capitalflow/... ./internal/stocktools/... -count=1`、`make ci-gate` 全綠。
 ### fix(monitoring): channel 狀態單一真相 — 過期資料不得回 `ok`（twse_oddlot DB/derived 判定衝突）（2026-09-24）
 - **問題**：同一時刻、同一 channel 出現多個互相矛盾的判定（生產實證 `twse_oddlot`）：`channel_health`（DB）`status=ok last_fetch_at=<5 分鐘前>`、`/api/dashboard/channel-health` `ok`、health summary log `stale`。真實情況是上游 BFI84U 被 TWSE 改用途（2026-08，見 `internal/monitoring/known_issues.go`），最後一次成功抓取停在 2026-09-07。
 - **根因**（三個獨立缺陷）：
@@ -23,6 +32,7 @@
   `alerts.js` badge 改為 tone 驅動（`stale`/`degraded` = amber，不再一律紅「異常」也不再有綠色）、`data-quality-badge.js` 顯示最嚴重狀態自己的 label。
   純前端測試（`node --test shared_web/static/js/__tests__/*.mjs`）471 passed / 0 failed。
 - **未處理（明示）**：`twse_oddlot` 上游已消失的事實**不變**（known-issue 徽章與 `twse_capital_flow` 替代路徑照舊，本 PR 不掩蓋、不恢復）；DB 既有的錯誤 `last_fetch_at` 會在下一次 `channel_health_sync`（≤5 分鐘）被真實值覆蓋，不回填歷史。
+
 ### fix(sectormap): ETF → L1 映射改由投信官網持股推導，取代手寫對應表（#1956 後續）（2026-09-24）
 - **問題**：sector allocation 用 ETF 當產業配置的交易載具，但系統沒有任何一處說得出「這檔 ETF 實際橫跨哪幾個 canonical L1 產業」；每個呼叫端各自憑印象列一組，同一檔 ETF 在不同路徑得到不同 L1 集合 —— 與 #1943 剛消滅的缺陷同型。**已合併的 #1956** 建了表與 metric，但 11 檔 ETF 的 canonical L1 target 是**人工列舉 + 等權**，沒有任何資料來源：`0050.TW` 被指定 8 個 L1、`00940.TW` 4 個，權重一律 `1/N`，`reason` 只寫「PR-α ETF representative」。同一個 `reason` 欄位在 #1943 的規矩裡必須是可查證的資料來源，而等權加權代表「各 L1 曝險相同」，與 TW50 的實際結構（台積電一檔 56%）相反。另外 `internal/sectormap` 沒有任何「上市櫃個股 → 產業」的詞彙，連用真實持股反推產業都做不到。
 - **新增**：

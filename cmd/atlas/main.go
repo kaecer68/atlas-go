@@ -869,6 +869,12 @@ func run(args []string, deps appDeps) error {
 			stockDeps.ConditionWinRate = winRateProvider
 			// Industry-level (canonical L1) aggregate read (issue #1942).
 			stockDeps.IndustryWinRate = winRateProvider
+			// Bind the same read-only aggregate to the industry hit-rate
+			// consumption chain (issues #1942/#1948). Inert by default: the
+			// chain checks sector_allocation.industry_hit_rate_consume_enabled
+			// (false) before every read.
+			sectorallocation.RegisterIndustryHitRateProvider(
+				stocktools.NewSectorAllocationHitRateProvider(winRateProvider))
 		}
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")
