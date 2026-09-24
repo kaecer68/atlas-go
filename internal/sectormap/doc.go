@@ -26,4 +26,6 @@
 // authority stays in internal/industry (SectorID, IsL1, IsL2); the tests in that
 // package assert that this package's canonical lists agree with
 // industry.L1Sectors()/AllSectors().
+//
+// Maturity: evolving
 package sectormap
