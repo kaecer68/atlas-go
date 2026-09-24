@@ -291,6 +291,22 @@ TSM ADR 是跨市場價格訊號。未來可加入 SOX、USD/TWD 等，但新增
 - 需通過 out-of-sample 驗證後才能 `eligible`；
 - 未達門檻時標示「校準中」，不能影響自動策略。
 
+#### 9.5.1 `CalibrationStatus` 的可達路徑（#1941）
+
+`CapitalFlowAssessment.CalibrationStatus` 由 `DeriveCalibrationStatus`（`internal/capitalflow/calibration.go`）推導，不再硬寫：
+
+| 條件 | 結果 | `EligibleForAutomation()` |
+|------|------|---------------------------|
+| `capitalflow.calibration_eligible_override=false`（預設） | `calibrating` | false（行為與 #1941 前逐位元相同） |
+| `=true` 且每個 `data_available=true` 維度都合格（樣本 ≥30 且非 `degraded`） | `eligible` | true |
+| `=true` 但沒有可用維度，或有可用維度不合格 | `degraded`（`Reasons` 指名該維度與樣本數） | false |
+
+- 沒有資料的維度不參與樣本門檻：它由自己所屬分層回報 `Available=false`，不得讓整體狀態永久卡住。
+- 門檻值 = `capitalflow.CalibrationEligibleMinSamples`（30，常數為唯一真相；`ForceExtractor.Score` 與 `ValidateHypothesis05` 皆引用同一常數）；改門檻要改常數 + 測試。
+- 「可用維度合格」的定義 = 該維度樣本數 ≥ 門檻 **且** 未被標為 `degraded`（#1940 R3 的退化參考窗：無離散度即無法標準化，樣本再多也不可用）。只要一個可用維度不合格，整體就只能到 `degraded`。
+- **翻轉程序（人工 gate，CF-INV-13）**：`eligible_recommendation=true` 只由 pre-registered 驗證器寫入 `data/reports/cf-hypotheses-<date>.json`；真正翻 `override` 是一個**引用該報告的 config PR**（計畫 v1.1 §3.3 C4）。驗證器與 CLI **永不**寫 config。
+- `/api/recommendations` 的 warning 直接由 assessment status 推導：`calibrating` → `capital_flow_assessment_calibrating`；`degraded` → `capital_flow_assessment_degraded`（#1941：degraded 不會靜默消失，它有自己的替代訊號）；`eligible` → 兩者皆無。日報／摘要文字同理：`calibrating` 標「校準中」、`degraded` 標「資金流評估異常（樣本不足或無離散度）」。
+
 ---
 
 ## 10. 待驗證假設登錄
@@ -301,6 +317,11 @@ TSM ADR 是跨市場價格訊號。未來可加入 SOX、USD/TWD 等，但新增
 | `H-CF-02` | TSM ADR 對隔日台股方向具資訊力 | ≥252 交易日 | 開盤／收盤方向命中率、regime 分層 | rolling hit rate ≥55% 且樣本充分 | INSUFFICIENT_DATA（2026-09-04；ADR 歷史 ~71 日 < 252；報告 `data/reports/cf-hypotheses-2026-09-04.json`） |
 | `H-CF-03` | 官股代理能改善反轉／護盤辨識 | ≥90 個有效代理日 | 有無官股特徵 A/B | out-of-sample 不劣化且改善明確 | 資料不足 |
 | `H-CF-04` | 現行融資融券代理可代表散戶擁擠 | ≥252 交易日 | 與 TDCC／自然人資料交叉驗證 | 相關與方向穩定 | 未驗證 |
+
+**eligible 翻轉的人工 gate（#1941）**：上述驗證器的 `eligible_recommendation` 只是建議。真正讓
+`CapitalFlowAssessment.CalibrationStatus` 可達 `eligible` 的開關是
+`capitalflow.calibration_eligible_override`（預設 `false`），由引用驗證報告的 config PR 翻轉；
+實作與判定規則見 §9.5.1。
 | `H-CF-05` | 分層模型優於七項平權模型 | ≥252 交易日 | walk-forward 對照、Brier／hit rate／drawdown | 多指標不劣化 | INSUFFICIENT_DATA（2026-09-04；rolling store 評估日 49 < warmup 126；報告 `data/reports/cf-hypotheses-2026-09-04.json`） |
 
 任何 AI Agent 不得把表中的未驗證假設改寫成查證事實。
