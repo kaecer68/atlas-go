@@ -2988,9 +2988,9 @@
       "value": 0.6
     },
     "twse_api_timeout_sec": {
-      "rationale": "HTTP timeout for TWSE API calls; balances responsiveness vs slow responses. N1 S4 (2026-08-18): 15s 在 TWSE 官方慢時段 (07:17–07:58 台北) 實測被 STOCK_DAY_ALL \u003e15s 拖垮，校準至 20s (見 investigation-twse-timeout-2026-08-18.md §3.2)",
-      "source": "heuristic",
-      "todo": "Calibrate: test [10, 30] range based on observed latency distribution",
+      "rationale": "PER-ATTEMPT HTTP timeout for TWSE API calls; bounded retries (marketdata.max_retry_attempts / retry_backoff_ms) sit on top, so this value bounds one attempt, not the whole fetch. N1 S4 (2026-08-18): 15s 在 TWSE 官方慢時段 (07:17–07:58 台北) 實測被 STOCK_DAY_ALL \u003e15s 拖垮，校準至 20s (見 investigation-twse-timeout-2026-08-18.md §3.2)。2026-09-24 生產 (Mac Mini) 實測 20/20 次 200、P50 85ms / P95 158ms / max 170ms → 20s ≈ 126×P95，對正常請求無風險，故維持 20s 不放寬；罕見慢窗改由 GetQuotes 的有界 retry（3 attempts，1s/2s 退避）吸收，而不是讓所有請求的失敗延遲加倍 (見 investigation-twse-replay-sync-timeout-2026-09-24.md)",
+      "source": "empirical",
+      "todo": "Recalibrate together with the retry policy: FetchBudget() = rate-limit slack + attempts*timeout + backoff must stay below the caller's cron window",
       "value": 20
     }
   },

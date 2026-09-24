@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -131,14 +132,36 @@ func main() {
 func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
 	client := marketdata.GetSharedTWSEClient()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Size the deadline from the client's own retry policy (attempts ×
+	// per-attempt timeout + backoff + rate-limit slack). The previous
+	// hardcoded 60s was SHORTER than the 73s the policy needs, so on a slow
+	// TWSE window the context expired mid-retry and the retry policy could
+	// never help (2026-09-24 root cause).
+	budget := client.FetchBudget()
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	log.Println("[DailySync] Fetching today's quotes from TWSE OpenAPI...")
+	dateStr := time.Now().Format("2006-01-02")
+	log.Printf("[DailySync] Fetching today's quotes from TWSE OpenAPI... (context budget %s)", budget.Round(time.Second))
+
+	started := time.Now()
 	quotes, err := client.GetQuotes(ctx)
+	latencyMs := time.Since(started).Milliseconds()
 	if err != nil {
-		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool)
-		return fmt.Errorf("fetch quotes: %w", err)
+		// Degrade, never fake success: this function is the only writer of
+		// the replay CSV, so a failed fetch leaves the file at its previous
+		// content and today's date stays a gap. main() still runs the gap
+		// backfill afterwards, and the next run refetches the date by symbol
+		// (gapBackfillDefaultWindow days), so the gap self-heals.
+		// The channel records a failure ATTEMPT: the health store derives
+		// "warn" for a single failure and escalates to "error" only on a
+		// streak (default GraceFailures=2), which is the intended semantics
+		// for a transient slow upstream. A later successful run resets the
+		// streak and clears the warn.
+		note := fmt.Sprintf("replay CSV left unchanged at its previous content; %s remains a gap for the next run's gap backfill", dateStr)
+		wrapped := fmt.Errorf("fetch quotes: %w (%s)", err, note)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", wrapped.Error(), pool, monitoring.WithLatencyMs(latencyMs))
+		return wrapped
 	}
 
 	targetSymbols := make(map[string]bool)
@@ -146,7 +169,6 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 		targetSymbols[stripSuffix(s)] = true
 	}
 
-	dateStr := time.Now().Format("2006-01-02")
 	var records []csvRecord
 	for _, q := range quotes {
 		code := stripSuffix(q.Symbol)
@@ -165,12 +187,26 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 		})
 	}
 
+	if len(records) == 0 {
+		// Upstream answered OK but produced nothing usable for our symbol set
+		// (schema drift or symbol rename) — recording "ok" here would show a
+		// healthy twse_replay_sync while the CSV gained no row for the
+		// day. Record the non-paging "degraded" state (data did not land, so
+		// LastSuccessAt must not advance) and still fail the run so
+		// task_liveness surfaces it. Sustained breakage also alarms through
+		// the channel's staleness overage.
+		msg := fmt.Sprintf("twse STOCK_DAY_ALL returned %d quotes but none matched the %d replay symbols; replay CSV left unchanged; %s remains a gap",
+			len(quotes), len(targetSymbols), dateStr)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "degraded", msg, pool, monitoring.WithLatencyMs(latencyMs))
+		return errors.New(msg)
+	}
+
 	if err := appendRecords(csvPath, records); err != nil {
-		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool, monitoring.WithLatencyMs(latencyMs))
 		return err
 	}
-	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "ok", "", pool)
-	log.Printf("[DailySync] Appended %d records for %s", len(records), dateStr)
+	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "ok", "", pool, monitoring.WithLatencyMs(latencyMs))
+	log.Printf("[DailySync] Appended %d records for %s (fetch %dms)", len(records), dateStr, latencyMs)
 	return nil
 }
 

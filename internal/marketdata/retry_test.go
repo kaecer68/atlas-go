@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -337,4 +338,148 @@ func (t *fugleHostRewriteTransport) RoundTrip(req *http.Request) (*http.Response
 	r.URL.Scheme = "http"
 	r.URL.Host = strings.TrimPrefix(t.target, "http://")
 	return http.DefaultTransport.RoundTrip(r)
+}
+
+// ---------------------------------------------------------------------------
+// 2026-09-24: transport-error retries.
+//
+// TWSE STOCK_DAY_ALL fails as a per-attempt HTTP client timeout, not as an
+// HTTP status, so the 429/5xx-only policy was dead code for the exact
+// production failure (twse_replay_sync lost a whole daily run to one 20s
+// timeout with no retry). retryConfig.retryTransportErrors opts a caller into
+// retrying transport failures under the same attempt cap and backoff.
+// ---------------------------------------------------------------------------
+
+// slowThenFastServer answers the first `slowCalls` requests after `delay`
+// (long enough to blow a short client timeout) and answers the rest
+// immediately. The handler returns early once the client is gone, so closing
+// the server never blocks on a timed-out request.
+func slowThenFastServer(t *testing.T, slowCalls int32, delay time.Duration, body string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) <= slowCalls {
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	return srv, &calls
+}
+
+func retryTestRequest(t *testing.T, url string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	return req
+}
+
+func TestFetchWithRetry_RetriesTransportTimeoutThenSucceeds(t *testing.T) {
+	srv, calls := slowThenFastServer(t, 2, 300*time.Millisecond, `{"ok":true}`)
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 40 * time.Millisecond, Transport: srv.Client().Transport}
+	cfg := retryConfig{maxAttempts: 3, baseBackoff: time.Millisecond, retryTransportErrors: true}
+	resp, err := fetchWithRetry(context.Background(), client, retryTestRequest(t, srv.URL), cfg)
+	if err != nil {
+		t.Fatalf("fetchWithRetry after 2 timeouts then 200 = error %v, want success", err)
+	}
+	defer resp.Body.Close()
+	if got := calls.Load(); got != 3 {
+		t.Errorf("HTTP attempts = %d, want 3 (2 timeouts + the successful attempt)", got)
+	}
+}
+
+func TestFetchWithRetry_TransportTimeoutHonorsAttemptCap(t *testing.T) {
+	srv, calls := slowThenFastServer(t, math.MaxInt32, 300*time.Millisecond, `{"ok":true}`)
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 40 * time.Millisecond, Transport: srv.Client().Transport}
+	cfg := retryConfig{maxAttempts: 3, baseBackoff: time.Millisecond, retryTransportErrors: true}
+	_, err := fetchWithRetry(context.Background(), client, retryTestRequest(t, srv.URL), cfg)
+	if err == nil {
+		t.Fatal("fetchWithRetry on a permanently slow upstream = nil error, want the timeout")
+	}
+	// The raw transport error must survive: LastError has to keep naming the
+	// upstream cause ("Client.Timeout exceeded while awaiting headers"), not
+	// a generic "gave up" wrapper.
+	if !strings.Contains(err.Error(), "Client.Timeout exceeded") {
+		t.Errorf("error %q should name the upstream timeout", err.Error())
+	}
+	if got := calls.Load(); got != 3 {
+		t.Errorf("HTTP attempts = %d, want exactly 3 (bounded by maxAttempts)", got)
+	}
+}
+
+func TestFetchWithRetry_TransportTimeoutNotRetriedByDefault(t *testing.T) {
+	// Existing callers (FinMind / fugle / export) keep single-attempt
+	// behavior: they classify transport errors themselves.
+	srv, calls := slowThenFastServer(t, math.MaxInt32, 300*time.Millisecond, `{"ok":true}`)
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 40 * time.Millisecond, Transport: srv.Client().Transport}
+	cfg := retryConfig{maxAttempts: 3, baseBackoff: time.Millisecond}
+	if _, err := fetchWithRetry(context.Background(), client, retryTestRequest(t, srv.URL), cfg); err == nil {
+		t.Fatal("fetchWithRetry = nil error, want the transport error")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("HTTP attempts = %d, want 1 (transport retries are opt-in)", got)
+	}
+}
+
+func TestFetchWithRetry_TransportTimeoutStopsWhenContextDone(t *testing.T) {
+	// A caller context that expires during the backoff wait must abort the
+	// retry loop instead of sleeping through its whole budget.
+	srv, calls := slowThenFastServer(t, math.MaxInt32, 500*time.Millisecond, `{"ok":true}`)
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 20 * time.Millisecond, Transport: srv.Client().Transport}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+
+	cfg := retryConfig{maxAttempts: 5, baseBackoff: time.Second, retryTransportErrors: true}
+	start := time.Now()
+	_, err := fetchWithRetry(ctx, client, retryTestRequest(t, srv.URL), cfg)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("fetchWithRetry with an expiring context = nil error, want the transport error")
+	}
+	if !strings.Contains(err.Error(), "Client.Timeout exceeded") {
+		t.Errorf("error %q should report the transport failure, not the bare context error", err.Error())
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("retry loop ran %v, want it cut short by the context deadline (~60ms)", elapsed)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("HTTP attempts = %d, want 1 (deadline hit while waiting for the backoff)", got)
+	}
+}
+
+func TestRetryWait_ExponentialCapAndFloor(t *testing.T) {
+	cases := []struct {
+		name    string
+		cfg     retryConfig
+		attempt int
+		want    time.Duration
+	}{
+		{"first-wait-is-base", retryConfig{baseBackoff: time.Second}, 0, time.Second},
+		{"doubles-each-attempt", retryConfig{baseBackoff: time.Second}, 2, 4 * time.Second},
+		{"uncapped-when-no-max", retryConfig{baseBackoff: time.Second}, 3, 8 * time.Second},
+		{"max-cap-binds", retryConfig{baseBackoff: time.Second, maxBackoff: 3 * time.Second}, 3, 3 * time.Second},
+		{"cap-above-growth-is-inert", retryConfig{baseBackoff: time.Second, maxBackoff: time.Minute}, 1, 2 * time.Second},
+		{"zero-base-floors-at-one-second", retryConfig{}, 0, time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := retryWait(tc.cfg, tc.attempt); got != tc.want {
+				t.Errorf("retryWait(%+v, %d) = %v, want %v", tc.cfg, tc.attempt, got, tc.want)
+			}
+		})
+	}
 }
