@@ -333,6 +333,15 @@ export interface CalibratorResult {
   summary: string;
 }
 
+export interface CanonicalCoverage {
+  universe: number;
+  mapped: number;
+  ratio: number;
+  by_l1: Record<string, number>;
+  unmapped_symbols: string[];
+  l1_sectors_covered: number;
+}
+
 export interface CapexCycleThresholdConfig {
   expansion_capacity_min: number;
   expansion_revenue_min: number;
@@ -2398,6 +2407,9 @@ export interface MapperIndustryClassification {
   level2: MapperIndustrySegment;
   level3: MapperIndustrySegment;
   updated_at: string;
+  canonical_sector_id?: string;
+  canonical_l1?: string;
+  canonical_reason?: string;
 }
 
 export interface MapperIndustrySegment {
@@ -2523,6 +2535,16 @@ export interface MutationBrief {
   generated_at: string;
   pipeline_stage?: string;
   pipeline_action?: string;
+}
+
+export interface NamespaceAudit {
+  namespace: string;
+  declared_keys: number;
+  canonical_keys: number;
+  mapped_keys: number;
+  unmapped_keys: number;
+  unmapped_key_list: string[];
+  covered_canonical_l1: string[];
 }
 
 export interface NarrativeAdjustment {

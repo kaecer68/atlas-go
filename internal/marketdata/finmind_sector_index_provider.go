@@ -46,10 +46,14 @@ type FinMindSectorIndexProvider struct {
 const finmindSectorIndexDataset = "TaiwanStockEvery5SecondsIndex"
 
 // finmindSectorSeries maps the FinMind English series names (kind=twse) to the
-// canonical L1 SectorID set. One source series per canonical ID, matching the
-// 18-ID universe in SectorIndexReader.canonicalSectorIDs. Series not listed
-// here (TAIEX, TPExIndex, sub-indices, 玻璃陶瓷/造紙/橡膠/觀光/文化創意 etc.) are
-// intentionally dropped — they are not part of the canonical 18.
+// canonical L1 SectorID set. One source series per canonical ID. The canonical
+// universe is 20 L1 sectors (SectorIndexReader.canonicalSectorIDs, #1943); this
+// table covers 18 of them — chemicals has no FinMind series and 觀光 (tourism)
+// is dropped even though it exists upstream. The two gaps are asserted
+// explicitly by TestFinMindSectorSeriesMapping and declared in
+// internal/sectormap (NamespaceFinMindSectorSeries). Other series not listed
+// here (TAIEX, TPExIndex, sub-indices, 玻璃陶瓷/造紙/橡膠/文化創意 etc.) are
+// intentionally dropped — they are not canonical L1 sectors.
 var finmindSectorSeries = map[string]string{
 	"Automobile":                   "auto",
 	"BiotechnologyMedicalCare":     "biotech",
