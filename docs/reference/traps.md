@@ -9,6 +9,8 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 
 > 此文件為 `AGENTS.md` 陷阱節的詳細擴充。根 AGENTS.md 僅保留最關鍵的跨模組陷阱；模組特定陷阱請見 `internal/*/AGENTS.md`。
 > 新增 trap 前請確認無重複 (grep 既有條目);新增後更新本檔 `updated` 欄位。
+>
+> **閉環 / 狀態誠實性**：`applied` 只能由消費證據驅動、心法 L1–L5 plugin 是 no-op、`internal/sim` 無輪動鉤子、合成 placeholder 不是 forward return——逐項處置與證據見 [`inert-registry.md`](inert-registry.md)。
 
 ---
 
@@ -119,17 +121,6 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
 | **手動編輯 `field_types.ts` 或 `valid_fields.json`**（存在於 3 個 active web 目錄） | domain / web / 全前端 | 這兩個檔案由 `cmd/gentags` 從 `internal/*/*.go` 的 struct JSON tag 自動產出。`go generate .` 會同時輸出到 **3 個 active web 目錄** (`admin_web/`、`client_web/`、`shared_web/`)。`web/` 已 deprecated，不再由 gentags 更新。<br><br>**禁止手動編輯任何一份** — 任何變更會在下次 `go generate` 被覆寫。<br><br>若需新增/修改/刪除前端可見的欄位或介面:<br>1. 修改對應 Go struct 的 `json:\"...\"` tag(在 `internal/<pkg>/`)<br>2. 跑 `go generate .` 重新產出全部 3 份<br>3. **不要**直接編輯這兩個檔<br><br>違反的後果:`go generate .` 會覆寫你的手動編輯,並且會在 quality.yml 的 `generate` job 報 "uncommitted changes" → frontend PR 全 CI fail。<br><br>防護:`.githooks/pre-commit` Phase 5 自動跑 `go generate .`,若**任一 copy** 有 drift 會**阻擋 commit**。修正方式見 `shared_web/AGENTS.md`「Generated Files」章節。 |
-
-### 閉環 / 狀態誠實性
-
-> 完整清單見 [`inert-registry.md`](inert-registry.md)（inert 登記表 + Batch 2 交接）。
-
-| 陷阱 | 所屬模組 | 說明 |
-|------|---------|------|
-| **「儲存了」不等於「已套用」** | sectorallocation / orchestrator / monitoring | `sector-allocation-plan` 的 `applied` 必須由**消費證據**驅動（spec [`sector-allocation-simulation-closure-spec.md`](../specs/sector-allocation-simulation-closure-spec.md) §8.3）：只有存在 `consumption`（`ConsumptionReceipt`）才是 true，否則為 `false` + `fallback_reason=allocator_unavailable`／`pending_consumption`。**禁止**在 `Store()` 或 handler 硬寫 `applied=true`（`FileClosureStore.Store` 會把呼叫端傳入的 `true` 正規化為 `false`）。`target_note` 只記 target 計算退化（如 `no weight engine`），不是生效狀態。<br><br>**回滾也不行假**：`Delete()`（tombstone）的快照必須從 `Latest()` 與 `LatestSnapshot()` 一併消失，即使它曾被消費也不得當成消費證據——否則 rollback 過的政策會復活（此點在 #1944 Batch 1 首次實作時弄壞過，回歸測試 `policy_rollback_and_legacy_test.go` 守住）。 |
-| **看到 plugin 名稱不等於該層生效（心法 L1–L5）** | orchestrator | `strategy_techniques` plugin 在生產註冊且會收 narrative 事件，但 `ProcessRecommendations` 是 **no-op pass-through**：心法層不影響任何推薦／訂單／權重。機讀旗標 `orchestrator.TechniquesLayerActive=false`，attach log 帶 `pass_through=true`。詳見 [`inert-registry.md`](inert-registry.md) I35。 |
-| **`internal/sim` 沒有輪動鉤子（別再加回來）** | sim / orchestrator | 組合輪動在**推薦層**：`orchestrator.PortfolioRotator`（由 `PositionEvaluator` executor + `WithHeldPositions` 驅動，`executor_collection.go`）。sim engine 內曾有一個從未被賦值的 `RotationFunc`（未匯出欄位、無 setter ⇒ 不可能被注入），已於 #1944 移除。若真要加 engine 內鉤子，必須同時提供生產注入點與「SELL recs 真的改變訂單」的整合測試。 |
-| **合成 placeholder 不是 forward return** | orchestrator | `syntheticPlaceholderReturn`（`system.go`）只在無前瞻資料時寫入 `RecommendationOutcome.ForwardReturn`，且該列 `IsSynthetic=true`。它是 regime 條件化的確定性 placeholder（`forward_return.*` config），**不得**進任何命中率／勝率／排名聚合；canonical 口徑見 [`industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md) H1/H2/H2b。舊版用當日 intraday 當 forward return（與訊號同源、平盤日必 miss）已於 #1944 移除。 |
 
 ---
 
