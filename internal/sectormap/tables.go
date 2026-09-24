@@ -3,6 +3,12 @@ package sectormap
 // decl is the declared disposition of one foreign key. Exactly one of `self`
 // (identity: the key is already canonical) or `targets` (explicit mapping) is
 // set, or neither, which means the key is declared-unmapped.
+//
+// targets is a map so a 1:many mapping with explicit distribution weights is
+// representable (Mapping.Targets sums to 1). No table uses that today: every
+// declared mapping is 1:1, and compound vocabularies (GICS industrials/materials,
+// TWSE 化學生技醫療類指數…) are declared unmapped with candidates instead of
+// having weights invented for them.
 type decl struct {
 	self       bool
 	targets    map[string]float64
@@ -19,11 +25,6 @@ func identReason(reason string) decl { return decl{self: true, reason: reason} }
 // one declares a 1:1 mapping to a single canonical ID.
 func one(target, reason string) decl {
 	return decl{targets: map[string]float64{target: 1.0}, reason: reason}
-}
-
-// dist declares a 1:many mapping with explicit distribution weights.
-func dist(targets map[string]float64, reason string) decl {
-	return decl{targets: targets, reason: reason}
 }
 
 // unmapped declares a key with no canonical target. candidates are canonical IDs

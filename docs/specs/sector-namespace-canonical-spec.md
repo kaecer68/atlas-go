@@ -118,8 +118,8 @@ TWSE `exchangeReport/MI_INDEX` 實際回傳 **37 個** `*類指數` 名稱。本
 2. **禁止隱式 alias**。舊 ID 若仍須讀取，必須在表中顯式宣告（例：`
    marketdata_sector_index_reader_ids` 的 `ai_supply_chain`/`robotics`）。
 3. **未映射必須回報**：回傳 `StatusUnmapped` + `Reason`，呼叫端不得自行猜測。
-4. **1:many 映射必須帶權重**（`Targets` 加總 = 1）。目前**沒有任何** 1:many 條目（`dist()` 未被使用）；
-   GICS 的複合類別一律走 unmapped + candidates，避免發明權重。
+4. **1:many 映射必須帶權重**（`Mapping.Targets` 加總 = 1；型別支援加權分派）。目前**沒有任何** 1:many 條目；
+   GICS/TWSE 的複合類別一律走 unmapped + candidates，避免發明權重。
 5. **漂移必須測試**：上游 config/程式變動而未更新表 → 測試紅燈（§7）。
 
 ### 4.1 樹結構 vs 宣告表的優先序（`SymbolL1Mapper` / `SymbolIndustryMapper`）

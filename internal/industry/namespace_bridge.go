@@ -125,7 +125,7 @@ type NamespaceAudit struct {
 // AuditedNamespaces returns the declared namespaces, sorted.
 func AuditedNamespaces() []ForeignNamespace { return sectormap.Namespaces() }
 
-// AuditNamespace summarises one namespace.
+// AuditNamespace summarizes one namespace.
 func AuditNamespace(ns ForeignNamespace) NamespaceAudit {
 	rep := sectormap.Report(ns)
 	out := NamespaceAudit{
@@ -142,7 +142,7 @@ func AuditNamespace(ns ForeignNamespace) NamespaceAudit {
 	return out
 }
 
-// AuditAllNamespaces summarises every declared namespace.
+// AuditAllNamespaces summarizes every declared namespace.
 func AuditAllNamespaces() []NamespaceAudit {
 	out := make([]NamespaceAudit, 0, len(sectormap.Namespaces()))
 	for _, ns := range sectormap.Namespaces() {

@@ -219,7 +219,7 @@ type NamespaceReport struct {
 	CoveredL2    []string  `json:"covered_canonical_l2"`
 }
 
-// Report summarises one namespace.
+// Report summarizes one namespace.
 func Report(ns Namespace) NamespaceReport {
 	rep := NamespaceReport{
 		Namespace:    ns,
@@ -249,7 +249,7 @@ func Report(ns Namespace) NamespaceReport {
 	return rep
 }
 
-// Reports summarises every declared namespace.
+// Reports summarizes every declared namespace.
 func Reports() []NamespaceReport {
 	out := make([]NamespaceReport, 0, len(tables))
 	for _, ns := range Namespaces() {
