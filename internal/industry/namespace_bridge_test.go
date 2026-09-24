@@ -92,6 +92,37 @@ func TestSectorIDParentL1MatchesSectormap(t *testing.T) {
 	}
 }
 
+// TestDefaultCycleThresholdsVocabularyIsCanonical guards the compiled-in
+// fallback vocabulary: when configs/parameters.json is missing,
+// DefaultParametersConfig() supplies cycle thresholds keyed by industry ID. Those
+// keys must be canonical IDs (plus the documented "_default" entry), otherwise
+// the fallback path would reintroduce a foreign key space (#1943).
+func TestDefaultCycleThresholdsVocabularyIsCanonical(t *testing.T) {
+	cfg := config.DefaultParametersConfig()
+	if cfg == nil {
+		t.Fatal("DefaultParametersConfig() returned nil")
+	}
+	keys := cfg.Industry.CycleThresholds.Value
+	if len(keys) == 0 {
+		t.Fatal("compiled-in cycle_thresholds is empty")
+	}
+	foreign := []string{}
+	for k := range keys {
+		if k == "_default" {
+			continue
+		}
+		if !industry.SectorID(k).IsValid() {
+			foreign = append(foreign, k)
+		}
+	}
+	slices.Sort(foreign)
+	if len(foreign) > 0 {
+		t.Errorf("compiled-in cycle_thresholds contains non-canonical keys: %v", foreign)
+	}
+	t.Logf("compiled-in cycle_thresholds: %d keys (configs/parameters.json declares %d)",
+		len(keys), len(sectormap.Keys(sectormap.NamespaceCycleThresholds)))
+}
+
 // ---------------------------------------------------------------------------
 // Namespace C: the hard-coded representative-stock table is already canonical.
 // ---------------------------------------------------------------------------
@@ -260,14 +291,19 @@ func TestResolveForeign_GICSBaseWeights(t *testing.T) {
 
 func TestResolveForeign_TWSEIndexNamesCoverCanonicalL1(t *testing.T) {
 	seen := map[industry.SectorID]bool{}
+	unmapped := []string{}
 	for _, key := range sectormap.Keys(sectormap.NamespaceTWSESectorIndex) {
 		l1, ok := industry.CanonicalL1FromForeign(industry.NamespaceTWSESectorIndex, key)
 		if !ok {
-			t.Errorf("TWSE name %q does not resolve to a canonical L1 sector", key)
+			unmapped = append(unmapped, key)
 			continue
 		}
 		seen[l1] = true
 	}
+	if len(unmapped) == 0 {
+		t.Error("the live TWSE vocabulary contains names with no canonical L1 target; they must stay declared-unmapped rather than be mapped by guesswork")
+	}
+	t.Logf("TWSE sector-index names: %d mapped, %d declared-unmapped", len(seen), len(unmapped))
 	for _, id := range industry.L1Sectors() {
 		if !seen[id] {
 			t.Errorf("canonical L1 %s has no TWSE sector-index name", id)

@@ -30,9 +30,13 @@ import (
 //	  namespace table in internal/sectormap — e.g. robotics → machinery,
 //	  ai_supply_chain → electronics.
 //
-// Segments that translate to nothing (defensive, high_dividend, small_cap,
-// tech, pcb, thermal, etf_rotation) are recorded by UnmappedSegments() instead
-// of being dropped in silence.
+// Segments that translate to nothing are recorded by UnmappedSegments() instead
+// of being dropped in silence. With the production config that is exactly the
+// five segments whose IDs are size/style/asset-class buckets: defensive,
+// etf_rotation, high_dividend, small_cap, tech. (pcb and thermal sit under the
+// canonical L1 segment electronics, so rank 0 resolves them even though there is
+// no canonical node named pcb/thermal of their own — the key is not canonical,
+// the segment is usable.)
 type SymbolL1Mapper struct {
 	bySymbol  map[string]SectorID
 	unmapped  map[string]string

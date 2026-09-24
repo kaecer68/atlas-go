@@ -17,7 +17,7 @@ func TestCanonicalizeSegmentID(t *testing.T) {
 		{"ai_supply_chain", "ai_supply_chain", "electronics", false},
 		{"robotics", "robotics", "machinery", false},
 		{"leo_satellite", "leo_satellite", "telecom", false},
-		{"cooling", "cooling", "electronics", false},
+		{"cooling", "cooling", "semiconductor", false},
 		{"defensive", "", "", true},
 		{"tech", "", "", true},
 		{"unknown_segment_id", "", "", true},
@@ -100,8 +100,11 @@ func TestSymbolIndustryMapper_SetsCanonicalFields(t *testing.T) {
 	if got.CanonicalSectorID != "server_assembly" {
 		t.Errorf("CanonicalSectorID = %q, want server_assembly", got.CanonicalSectorID)
 	}
-	if got.CanonicalL1 != "electronics" {
-		t.Errorf("CanonicalL1 = %q, want electronics (ai_supply_chain rolls up through the declared table)", got.CanonicalL1)
+	_ = got
+	// server_assembly's declared parent is semiconductor (the authored tree
+	// nests it under semiconductor); the table is required to agree.
+	if got.CanonicalL1 != "semiconductor" {
+		t.Errorf("CanonicalL1 = %q, want semiconductor (declared parent table)", got.CanonicalL1)
 	}
 
 	// A strategy bucket has no canonical L1 sector and must say so instead of

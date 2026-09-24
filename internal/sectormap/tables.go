@@ -134,11 +134,20 @@ var gicsBaseWeightKeys = map[string]decl{
 		"asset_class namespace (cash reserve), not an equity sector; spec §3.2 forbids it in equity_sector_l1"),
 }
 
-// twseSectorIndexKeys maps the TWSE OpenAPI v1 Chinese index names to canonical
-// L1 sectors. Two pairs collapse (電腦及週邊設備 + 電子零組件 → electronics,
-// 電機機械 + 電器電纜 → machinery); the canonical 20-L1 set is nevertheless fully
-// covered by the 22 names.
+// twseSectorIndexKeys maps the TWSE OpenAPI v1 Chinese index names
+// (exchangeReport/MI_INDEX) to canonical L1 sectors.
+//
+// Evidence note (2026-09-24, live MI_INDEX response): the endpoint returns 37
+// names ending in 類指數. This table maps the 20 that have a defensible single
+// canonical L1 target — two pairs collapse (電腦及週邊設備 + 電子零組件 →
+// electronics, 電機機械 + 電器電纜 → machinery) so all 20 canonical L1 sectors
+// are reachable — and declares the remaining 15 as unmapped with reasons, so
+// that marketdata.TWSESectorIndexProvider's silent drop becomes an auditable
+// list. Two names previously declared here (化學工業類指數, 觀光類指數) do NOT
+// exist in the live response; they are kept as historical aliases because old
+// cached files may contain them.
 var twseSectorIndexKeys = map[string]decl{
+	// --- 20 canonical L1 sectors (mapped) ---
 	"半導體類指數":     one("semiconductor", "TWSE industry index name"),
 	"電腦及週邊設備類指數": one("electronics", "TWSE has no separate computer/peripheral L1; canonical electronics is the only home"),
 	"電子零組件類指數":   one("electronics", "TWSE industry index name"),
@@ -156,11 +165,46 @@ var twseSectorIndexKeys = map[string]decl{
 	"紡織纖維類指數":    one("textiles", "TWSE industry index name"),
 	"鋼鐵類指數":      one("steel", "TWSE industry index name"),
 	"汽車類指數":      one("auto", "TWSE industry index name"),
-	"化學工業類指數":    one("chemicals", "TWSE industry index name"),
+	"化學類指數":      one("chemicals", "live TWSE name for the 化學 index; #1943 closed the chemicals gap with this key"),
 	"生技醫療類指數":    one("biotech", "TWSE industry index name"),
 	"建材營造類指數":    one("construction", "TWSE industry index name"),
-	"觀光類指數":      one("tourism", "TWSE industry index name"),
+	"觀光餐旅類指數":    one("tourism", "live TWSE name for the 觀光 index; #1943 closed the tourism gap with this key"),
 	"貿易百貨類指數":    one("retail", "TWSE industry index name"),
+
+	// --- historical aliases, absent from the live response ---
+	"化學工業類指數": one("chemicals", "historical name, not present in the live MI_INDEX response (2026-09-24); kept so cached raw files still resolve"),
+	"觀光類指數":   one("tourism", "historical name, not present in the live MI_INDEX response (2026-09-24); kept so cached raw files still resolve"),
+
+	// --- live TWSE names with no defensible single canonical L1 target ---
+	"電子工業類指數": unmapped("broad electronics-industry index overlapping 電子零組件/光電/其他電子; mapping it would double count",
+		"electronics", "other_electronics", "optoelectronics"),
+	"電子通路類指數": unmapped("electronics distribution channel, not a manufacturing sector",
+		"electronics", "retail"),
+	"資訊服務類指數": unmapped("no canonical IT-services node",
+		"other_electronics", "telecom"),
+	"數位雲端類指數": unmapped("no canonical digital/cloud node",
+		"other_electronics"),
+	"綠能環保類指數": unmapped("no canonical green-energy node",
+		"energy"),
+	"化學生技醫療類指數": unmapped("compound index spanning chemicals and biotech; weights would be invented",
+		"chemicals", "biotech"),
+	"塑膠化工類指數": unmapped("compound index spanning plastics and chemicals; weights would be invented",
+		"plastics", "chemicals"),
+	"玻璃陶瓷類指數": unmapped("no canonical glass/ceramics node",
+		"cement", "chemicals"),
+	"水泥窯製類指數": unmapped("overlaps 水泥類指數; mapping both to cement would double count the same group",
+		"cement"),
+	"造紙類指數": unmapped("no canonical paper node",
+		"plastics", "chemicals"),
+	"橡膠類指數": unmapped("no canonical rubber node",
+		"plastics"),
+	"機電類指數": unmapped("mechanical/electrical engineering group, distinct from 電機機械類指數",
+		"machinery", "construction"),
+	"運動休閒類指數": unmapped("consumer discretionary bucket, not an equity sector",
+		"retail", "textiles", "auto"),
+	"居家生活類指數": unmapped("consumer discretionary bucket, not an equity sector",
+		"retail"),
+	"其他類指數": unmapped("residual bucket of the TWSE taxonomy; has no canonical L1 target by construction"),
 }
 
 // twseSectorIndexLegacyKeys is the deprecated 8-name subset that

@@ -295,9 +295,23 @@ func Test_TWSEMapping_AllValuesAreValidSectorIDs(t *testing.T) {
 	}
 	covered := map[SectorID]bool{}
 	for _, k := range keys {
+		m := ResolveForeign(NamespaceTWSESectorIndex, k)
+		if !m.Materialized() {
+			// Declared-but-unmapped is a first-class state (#1943): the live
+			// TWSE vocabulary has 37 index names, and the ones without a single
+			// defensible canonical L1 target must say so with a reason instead
+			// of being dropped silently by the provider.
+			if m.Status != sectormap.StatusUnmapped {
+				t.Errorf("TWSE index name %q has status %q, want mapped or declared-unmapped", k, m.Status)
+			}
+			if m.Reason == "" {
+				t.Errorf("unmapped TWSE index name %q must carry a reason", k)
+			}
+			continue
+		}
 		id, ok := CanonicalL1FromForeign(NamespaceTWSESectorIndex, k)
 		if !ok {
-			t.Errorf("TWSE index name %q does not resolve to a canonical L1 sector", k)
+			t.Errorf("materialized TWSE index name %q does not resolve to a canonical L1 sector", k)
 			continue
 		}
 		covered[id] = true

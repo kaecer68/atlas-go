@@ -236,6 +236,87 @@ func TestDrift_TWSELegacyAndCanonicalMapsAgree(t *testing.T) {
 	}
 }
 
+func TestDrift_L2ParentL1AgreesWithAuthoredTree(t *testing.T) {
+	split, _ := industrySections(t)
+
+	type segment struct {
+		ID       string `json:"id"`
+		Level    int    `json:"level"`
+		ParentID string `json:"parent_id"`
+	}
+	var tree metaValue[struct {
+		Segments []segment `json:"segments"`
+	}]
+	if err := json.Unmarshal(split["classification_tree"], &tree); err != nil {
+		t.Fatalf("parse classification_tree: %v", err)
+	}
+
+	byID := make(map[string]segment, len(tree.Value.Segments))
+	for _, seg := range tree.Value.Segments {
+		byID[seg.ID] = seg
+	}
+
+	// Issue #1943: a key must not resolve to two different L1 sectors depending
+	// on whether it arrives as a tree segment or as a raw key. The declared
+	// L2 → L1 table therefore has to agree with the tree's authored parent chain.
+	for _, seg := range tree.Value.Segments {
+		if seg.Level == 1 || !IsCanonicalL2(seg.ID) {
+			continue
+		}
+		root := seg.ID
+		for {
+			parent, ok := byID[byID[root].ParentID]
+			if !ok {
+				break
+			}
+			root = parent.ID
+		}
+		wantL1, ok := ParentL1Of(root)
+		if !ok {
+			// The whole subtree rolls up to nothing (e.g. under an asset-class
+			// bucket); nothing to compare.
+			continue
+		}
+		gotL1, ok := ParentL1Of(seg.ID)
+		if !ok {
+			t.Errorf("tree L2 %s (root %s) rolls up to %s but the declared table has no L1 parent for it",
+				seg.ID, root, wantL1)
+			continue
+		}
+		if gotL1 != wantL1 {
+			t.Errorf("tree L2 %s: authored tree chain gives %s (root %s) but the declared L2→L1 table gives %s — the same key would resolve to two different L1 sectors",
+				seg.ID, wantL1, root, gotL1)
+		}
+	}
+}
+
+func TestDrift_TWSETableClosesTheCanonicalGaps(t *testing.T) {
+	// The live TWSE MI_INDEX response (2026-09-24) exposes 化學類指數 and
+	// 觀光餐旅類指數, which is how chemicals and tourism become reachable at all.
+	for _, want := range []string{"chemicals", "tourism"} {
+		found := false
+		for _, key := range Keys(NamespaceTWSESectorIndex) {
+			if id, ok := ResolveL1(NamespaceTWSESectorIndex, key); ok && id == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no declared TWSE index name maps to %s; the canonical gap would reopen", want)
+		}
+	}
+}
+
+func TestDrift_RepresentativeStocksNamespaceMatchesTheGoTable(t *testing.T) {
+	// The Go table is keyed by SectorID, so the namespace declaration must be
+	// exactly the 20 canonical L1 IDs — otherwise the audit under-reports.
+	want := CanonicalL1IDs()
+	got := Keys(NamespaceRepresentativeStocks)
+	if !slices.Equal(got, want) {
+		t.Errorf("industry_representative_stocks declares %v, want the 20 canonical L1 IDs", got)
+	}
+}
+
 // sortedKeys returns the keys of m in ascending order.
 func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))

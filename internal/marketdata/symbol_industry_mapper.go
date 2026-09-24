@@ -477,7 +477,18 @@ func (m *SymbolIndustryMapper) classifyForSymbol(
 		}
 	}
 	if canonicalL1 == "" {
-		canonicalID, canonicalL1, reason = CanonicalizeSegmentID(leafID)
+		// No canonical L1 ancestor: fall back to the declared namespace table,
+		// nearest segment first — the same rank-1 rule as
+		// industry.SymbolL1Mapper.resolveSegmentL1.
+		for i := len(path) - 1; i >= 0; i-- {
+			canonicalID, canonicalL1, reason = CanonicalizeSegmentID(path[i].ID)
+			if canonicalL1 != "" {
+				break
+			}
+		}
+		if canonicalL1 == "" {
+			canonicalID, canonicalL1, reason = CanonicalizeSegmentID(leafID)
+		}
 	}
 	class.CanonicalSectorID = canonicalID
 	class.CanonicalL1 = canonicalL1

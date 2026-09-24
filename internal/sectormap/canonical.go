@@ -55,43 +55,56 @@ var canonicalL2 = []string{
 // declares only the ID set and the layer, not the parent relation, so consumers
 // that must answer "which L1 does this symbol belong to?" had no way to resolve
 // an L2-only segment. The relation is declared here, explicitly, so it can be
-// reviewed and tested instead of guessed:
+// reviewed and tested instead of guessed.
 //
-//   - foundry / server_assembly / cooling / satellite_pcb / ai_supply_chain are
-//     Taiwan electronics supply-chain subsectors → electronics (the pre-#1943
-//     marketdata legacy map agreed for ai_supply_chain).
-//   - robotics / industrial / metal_processing are capital-goods subsectors →
-//     machinery (the pre-#1943 marketdata legacy map agreed for robotics).
-//   - satellite_rf_components is a components subsector → other_electronics.
-//   - leo_satellite / ground_equipment are communications-infrastructure
-//     subsectors → telecom.
-//   - laser_communication is an optical components subsector → optoelectronics.
-//   - mining / copper_industry / precious_metals_recycling are metals →
-//     steel (TWSE 鋼鐵類 covers mining/metal producers).
-//   - rare_earth_specialty is a specialty-materials subsector → chemicals.
-//   - consumer is a broad demand bucket; TWSE maps 消費 to 百貨零售 → retail.
+// Rule (issue #1943): wherever the authored classification tree
+// (configs/parameters/industry.json → classification_tree.parent_id) declares a
+// parent chain for an L2 segment, this table MUST agree with it. Otherwise the
+// same key would resolve to two different L1 sectors depending on whether it
+// came in as a tree segment or as a raw key — exactly the class of defect this
+// package removes. TestDrift_L2ParentL1AgreesWithAuthoredTree enforces the rule.
+// For L2 IDs that are tree Level-1 roots (ai_supply_chain, consumer, industrial,
+// leo_satellite, mining, robotics) the table is the only declaration and the
+// rationale is written per entry.
 //
-// etf_rotation is deliberately absent: it is an asset-class rotation bucket,
-// not an equity industry, so it has no canonical L1 parent. ParentL1Of reports
-// false for it.
+// Rationale per entry:
+//
+//   - ai_supply_chain → electronics: 台灣電子供應鏈, no dedicated canonical L1.
+//     The pre-#1943 marketdata legacy map agreed.
+//   - consumer → retail: broad demand bucket; TWSE maps 消費 to 百貨零售. The
+//     linked sector_symbols.json representative list leans plastics/food instead
+//     — that is a data conflict recorded in the spec, not a mapping decision.
+//   - cooling → semiconductor, server_assembly → semiconductor,
+//     satellite_pcb → telecom, satellite_rf_components → telecom,
+//     laser_communication → telecom: the authored tree parents
+//     (semiconductor / leo_satellite).
+//   - foundry → semiconductor: 晶圓代工.
+//   - ground_equipment → telecom: authored tree parent leo_satellite.
+//   - industrial → machinery, robotics → machinery, metal_processing → machinery:
+//     資本財／機械. metal_processing follows its authored parent mining → steel.
+//   - mining → steel, copper_industry → steel, precious_metals_recycling → steel,
+//     rare_earth_specialty → steel: authored parent mining → steel; TWSE 鋼鐵類
+//     covers mining and metal producers.
+//   - etf_rotation → none: it is an asset-class rotation bucket, not an equity
+//     industry, so it has no canonical L1 parent. ParentL1Of reports false.
 var l2ParentL1 = map[string]string{
 	"ai_supply_chain":           "electronics",
 	"consumer":                  "retail",
-	"cooling":                   "electronics",
+	"cooling":                   "semiconductor",
 	"copper_industry":           "steel",
 	"foundry":                   "semiconductor",
 	"ground_equipment":          "telecom",
 	"industrial":                "machinery",
-	"laser_communication":       "optoelectronics",
+	"laser_communication":       "telecom",
 	"leo_satellite":             "telecom",
-	"metal_processing":          "machinery",
+	"metal_processing":          "steel",
 	"mining":                    "steel",
 	"precious_metals_recycling": "steel",
-	"rare_earth_specialty":      "chemicals",
+	"rare_earth_specialty":      "steel",
 	"robotics":                  "machinery",
-	"satellite_pcb":             "electronics",
-	"satellite_rf_components":   "other_electronics",
-	"server_assembly":           "electronics",
+	"satellite_pcb":             "telecom",
+	"satellite_rf_components":   "telecom",
+	"server_assembly":           "semiconductor",
 }
 
 // CanonicalL1IDs returns the 20 canonical L1 sector IDs in sorted order.

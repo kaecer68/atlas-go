@@ -14,9 +14,15 @@ import (
 
 // canonicalSectorIDs is the stable L1 sector universe used by downstream
 // consumers (period detector / calculator). Issue #1943: it is derived from the
-// shared canonical list instead of a hand-copied 18-entry set. The hand-copied
-// set had silently dropped chemicals and tourism even though
-// TWSESectorIndexProvider emits both (水泥類 / 觀光類 and 化學工業類).
+// shared canonical list instead of a hand-copied 18-entry set, which silently
+// excluded chemicals and tourism.
+//
+// Note (2026-09-24, verified against the live TWSE MI_INDEX response): the two
+// missing IDs were unreachable in practice, not merely rejected on read — the
+// TWSE vocabulary spells them 化學類指數 and 觀光餐旅類指數, while the provider
+// table declared the non-existent names 化學工業類指數 / 觀光類指數. Widening
+// this set alone therefore recovers no data; the names were added to
+// internal/sectormap (NamespaceTWSESectorIndex) in the same change.
 var canonicalSectorIDs = func() map[string]bool {
 	ids := sectormap.CanonicalL1IDs()
 	out := make(map[string]bool, len(ids))
