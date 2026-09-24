@@ -4,6 +4,21 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(capitalflow): 七維輸入層值／日期配對與 CF-INV-06 落實（issue #1940）（2026-09-24）
+- **問題**：七維錢潮（3+2+2）輸入層同時存在「值／日期錯配」與「缺失值寫成 0」兩類缺陷，且都繞過 spec §8.3 / CF-INV-06。
+  - R1：`government_flow` 的 0 值 placeholder 檔（`20260721.json`..`20260728.json`，`source=broker-aggregate`）被當成真實讀值連續 18 個交易日寫入 rolling store；`channel_contract.go` 對 `government_flow` 只要求 `file_exists`，通道因此回報 `ok`。
+  - R2：`Latest()` 只取目錄最新檔、不與日期配對；`Refresh` 又以 refresh 當下的 `deriveTradingDate(RecordedAt)` stamping，產生系統性 +1 交易日位移（09-07←`20260904.json`、09-08←`20260907.json`、…、09-17←`20260916.json`；生產 2026-09-22 已到 +2）。
+  - R3：`rollingWindow.stddev()` 的 `max(0.01, …)` 下限把「無離散度」換成假 epsilon，使退化視窗產生無上限 z：government 2026-08-27 = **−7028.5**、futures 2026-07-21 = **785,200**，經 `foreign.LeadingZ`／`leading_trend`／`dominant_signal` 外流。
+  - 追加（非 issue 原列，生產實證）：同機制在 `institutional` 活體發生 —— 2025-09-17..2026-05-13 共 **148 筆連續 0 值樣本**，使 2026-05-15 的真實讀值 z = **−38.67**。
+- **根因**：兩個自帶日期的 channel（`government_flow` 檔、TAIFEX 期貨 OI session）的讀值日期沒有被使用；「缺資料」與「值為 0」在輸入層未被區分；z 標準化在無離散度時仍除以 clamp 後的小數。
+- **修正**（依 spec 契約，非補丁）：
+  - 新增 `internal/capitalflow/reading_dates.go`：`dimensionSampleDate` 為唯一配對函式，`Service.Refresh`（寫入鍵）、`Service.extractAsOf`（`History` 上界）、`ForceExtractor.Score`（`AsOfTradingDate`）三者共用；`Refresh` 依 key 分組 `UpsertDay`，維持 CF-INV-05。
+  - 新增 `internal/capitalflow/missing_data.go`：`zeroIsMissingDimension` / `usableReading`（淨流量與 OI 水準類 dimension 的 0 = 缺資料，不寫樣本）與 `referenceWindowFor`（已持久化的 0 值樣本不得進入參考窗，比例型 dimension 的 0 保留）。
+  - `types.go`：`stddev()` 回傳真實母體標準差；新增 `windowDispersionUsable`（唯一退化判準）、`maxAbsZScore = 20` backstop；退化窗標 `calibration_status = degraded`。
+  - `apigateway`：`government_flow` 契約由 `file_exists` 改為 `value_nonzero` + `GovernmentFlowAdapter.DataState`（0 值 placeholder → `degraded`，不再是 ok 假象）；`GovernmentFlowReading.HasData()` 為唯一 0 值判準。
+- **驗證**：`internal/capitalflow/{reading_dates,missing_data}_test.go`、`internal/apigateway/adapter_government_flow_test.go`、`channel_contract_test.go`、`internal/marketdata/government_flow_provider_test.go` 新增迴歸測試（0 值不寫入序列、位移檔不得產生當日樣本、同檔重讀只留一筆、讀值不得進入自身參考窗、退化窗不得產生 |z| > 20、148 筆 0 值窗不得產生極端 z）。same-data 重算：government max|z| 7028.46 → 13.95、futures 785200 → 2.73、institutional 38.71 → 7.64；`ComputeResonance` 3 個交易日由 `0.5/mixed` 變 `1.0/bullish`。
+- **未處理（明示）**：dev 與生產 `capital_flow_rolling.json` 既有的 0 值樣本**不回溯刪除**（讀取端已由 `referenceWindowFor` 濾除；寫入端不再產生）。生產 rolling refresh 自 2026-09-22 07:59 起停擺（與本修正無關，需另案追蹤觸發源）。`institutional` 的 148 筆 0 值來源（TWSE T86 該期間的 `DomesticFundNet` 為何持續為 0）未追查，建議另開票。spec 已補 §18.8 與 CF-INV-18。
+
 ### fix(risk): daily_returns 具日期語意，同一交易日重跑改為取代（#1900）（2026-09-23）
 - **問題**：`domain.SimulationState.DailyReturns`（`data/state/simulation_state.json`）名義上是日報酬，實際是「每次 `RunDailySimulation` 的報酬」，沒有任何日期 metadata。`auto_daily_simulation`(24h)、`stress_test_daily`(24h)、`POST /admin/trigger-simulation` 共用同一檔案，同日重跑各自 append 一筆；同日重跑通常沒有新交易、報價不變 → append 的那筆 ≈ **0**。實測 8 小時內序列由 18 筆長到 32 筆，尾端被零報酬塞滿，導致風險快照 `var95=0 / cvar95=0`（零報酬佔滿 `ComputeRiskSnapshot` 讀取的 5% 尾端百分位）。
 - **根因**：`sim.Engine.RunDay` 的 step 4 無條件 `append(state.DailyReturns, ...)`，狀態檔沒有「最後一筆屬於哪個交易日」的欄位，因此無法判斷是否為同一交易日。

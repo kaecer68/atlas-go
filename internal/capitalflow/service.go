@@ -3,7 +3,9 @@ package capitalflow
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -290,6 +292,15 @@ func (s *Service) refreshIfStale() ResonanceResult {
 // a cutoff+last-write-wins overwrite trap (see docs/manifests/
 // 2026-07-20-capital-flow-history-audit.md §證據鏈摘要).
 //
+// Dated-channel keying (CF-INV-18, issue #1940 R2): CF-INV-15 holds
+// for the five same-day channels. The two channels whose reading
+// carries its own date (government_flow's YYYYMMDD.json, TAIFEX
+// futures OI) are keyed by that reading date instead — the government
+// file for day D is only published on D+1, so stamping it D+1 both
+// shifts the value by one session and re-stamps the same file once per
+// calendar day. dimensionSampleDate (reading_dates.go) is the single
+// decision point; see spec §18.8.
+//
 // Non-trading-day skip (CF-INV-16): if the snapshot's date is
 // not a Taiwan trading day per s.eventCalendar.IsTaiwanTradingDay,
 // Refresh returns nil after a skip-and-log — no empty sample is
@@ -306,7 +317,10 @@ func (s *Service) refreshIfStale() ResonanceResult {
 //     instead of silently dropping the day's reading
 //     (spec §8.3 / CF-INV-06);
 //   - store.UpsertDay failure: propagated so callers can decide
-//     whether to retry the same trading date.
+//     whether to retry the same trading date. When dated channels
+//     produce a second key, each key is upserted independently,
+//     ascending; a failure on one key leaves the others written and
+//     the next 5-minute refresh re-derives all of them.
 func (s *Service) Refresh(ctx context.Context) error {
 	if s.store == nil {
 		return fmt.Errorf("capitalflow: Refresh called with nil rolling store")
@@ -330,25 +344,34 @@ func (s *Service) Refresh(ctx context.Context) error {
 	}
 
 	forces := s.extractor.Score(snap, currentDate, nil)
-	var samples []RollingSample
+	// Issue #1940 R2: a dimension whose reading carries its own date must be
+	// persisted under THAT date, not the refresh run's trading day — the
+	// government file for day D is published on D+1, and stamping it D+1 is
+	// exactly the +1 shift the issue reports. Samples are therefore grouped
+	// by key and each key is upserted once, keeping CF-INV-05 ("at most one
+	// sample per (dimension, trading_date)") intact.
+	byDate := make(map[string][]RollingSample, 1)
 	for _, f := range forces {
 		if !f.DataAvailable {
 			continue
 		}
 		unit, sourceID := dimensionSource(f.Force)
-		samples = append(samples, RollingSample{
-			TradingDate: currentDate,
+		key := dimensionSampleDate(snap, f.Force, currentDate)
+		byDate[key] = append(byDate[key], RollingSample{
+			TradingDate: key,
 			Dimension:   f.Force,
 			RawValue:    f.RawValue,
 			Unit:        unit,
 			SourceID:    sourceID,
 		})
 	}
-	if len(samples) == 0 {
+	if len(byDate) == 0 {
 		return fmt.Errorf("capitalflow: Refresh on %s produced no samples (every source channel was empty; spec §8.3 / CF-INV-06 forbids zero-valued fallbacks)", currentDate)
 	}
-	if err := s.store.UpsertDay(ctx, currentDate, samples); err != nil {
-		return fmt.Errorf("capitalflow: Refresh upsert %s: %w", currentDate, err)
+	for _, key := range slices.Sorted(maps.Keys(byDate)) {
+		if err := s.store.UpsertDay(ctx, key, byDate[key]); err != nil {
+			return fmt.Errorf("capitalflow: Refresh upsert %s: %w", key, err)
+		}
 	}
 	return nil
 }
@@ -421,9 +444,14 @@ func (s *Service) extractAsOf(ctx context.Context, snap marketdata.MacroDataSnap
 			ForceForeign, ForceFutures, ForceTSMADR,
 			ForceInstitutional, ForceDealer, ForceGovernment, ForceRetail,
 		} {
-			samples, err := s.store.History(ctx, dim, derivedDate, defaultHistoryLimit)
+			// Issue #1940 R2: for a dated channel the window must end strictly
+			// before the READING's own date, not before the report's trading
+			// day, or the reading ends up inside its own reference window
+			// (spec §8.4) once the write path keys it correctly.
+			bound := dimensionSampleDate(snap, dim, derivedDate)
+			samples, err := s.store.History(ctx, dim, bound, defaultHistoryLimit)
 			if err != nil {
-				return nil, fmt.Errorf("capitalflow: history %s before %s: %w", dim, derivedDate, err)
+				return nil, fmt.Errorf("capitalflow: history %s before %s: %w", dim, bound, err)
 			}
 			history[dim] = samples
 		}

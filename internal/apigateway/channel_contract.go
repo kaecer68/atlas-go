@@ -632,10 +632,20 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// government_flow: operator-imported daily readings (flat YYYYMMDD.json
 	// dir). HealthCheck warns when no reading exists; contract makes the
 	// file-state semantics explicit.
+	//
+	// 2026-09-24 (issue #1940 R1): the success criterion is value_nonzero,
+	// not file_exists. The CAPTCHA-era aggregator wrote
+	// {"total_net":0,"source":"broker-aggregate"} placeholder files
+	// (data/state/government_flow/20260721.json .. 20260728.json) and the
+	// channel reported "ok" for 18 trading days while the capital-flow
+	// pipeline consumed those zeros as genuine readings — the same "ok 假象"
+	// that government_broker already cured with value_nonzero. A zero total
+	// cannot be a real 8-bank aggregate sum, so it now fails the contract
+	// and degrades the channel (GovernmentFlowAdapter.DataState).
 	c = DefaultChannelContract("government_flow")
 	c.SourcePriority = []string{"Operator", "TWSE"}
 	c.HealthSource = HealthSourceFileState
-	c.SuccessCriteria = SuccessCriteriaFileExists
+	c.SuccessCriteria = SuccessCriteriaValueNonzero
 	c.DegradedOnEmpty = true
 	r.Register(c)
 

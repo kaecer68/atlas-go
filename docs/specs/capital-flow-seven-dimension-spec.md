@@ -238,11 +238,14 @@ HTTP、MCP、UI 或 recommender 的讀取請求必須是純讀。相同 source s
 
 rolling window 以 `(dimension, as_of_trading_date)` 去重。重抓同一天只能更新該日值，不能新增第二個樣本。
 
+2026-09-24 補註（issue #1940 R1/R2）：此處的 `as_of_trading_date` 是**該筆讀值所描述的交易日**，不是 refresh 執行當下的交易日。對自帶日期的 channel（`government_flow` 的 `YYYYMMDD.json`、TAIFEX 期貨 OI session）兩者在實務上不同（政府基金檔案於**次一營業日**才發布），以 refresh 日 stamping 會同時產生「位移一天」與「同一份檔重複餵出多筆樣本」兩種症狀。實作見 §18.8（CF-INV-18）。
+
 ### 8.3 參考窗不得混入缺失值
 
 - `data_available=false` 不得 `push(0)`。
 - 假日不補 0。
 - 來源恢復後以實際交易日續接。
+- **讀取端同樣適用**：已持久化的歷史樣本若為缺失值（淨流量／未平倉口數類 dimension 的 `raw_value == 0`），建構參考窗時必須排除，不得只靠寫入端防堵（既有資料無法回溯重寫）。2026-09-24 實證：生產 `institutional` 於 2025-09-17..2026-05-13 存在 148 筆連續 0 值樣本，使 2026-05-15 的真實讀值產生 z = −38.67。
 
 ### 8.4 Z-score 時序
 
@@ -407,7 +410,7 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 | `CF-INV-03` | futures／TSM ADR 不作獨立法人投票 | consensus test |
 | `CF-INV-04` | 相同交易日重複讀取結果完全一致 | idempotency test |
 | `CF-INV-05` | 每個 dimension 每交易日最多一個 rolling sample | persistence round-trip test |
-| `CF-INV-06` | 缺資料不寫入 0、不解讀為 neutral | unavailable test |
+| `CF-INV-06` | 缺資料不寫入 0、不解讀為 neutral | unavailable test（讀寫兩端；落實點見 §18.8） |
 | `CF-INV-07` | 不得以跨單位 raw value 計算共同權重 | unit guard test + legacy weight hidden |
 | `CF-INV-08` | daily／summary／recommender 對同 snapshot 使用同一 QualityAssessment | end-to-end equality test |
 | `CF-INV-09` | actor consensus 的 aligned/opposing 不含 indicator/signal | resonance test |
@@ -416,9 +419,10 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 | `CF-INV-12` | runtime binary version 必須可與部署 commit 對帳 | health endpoint / deployment check |
 | `CF-INV-13` | 未驗證假設只能標示 calibrating，不影響自動策略 | orchestrator feature-gate test |
 | `CF-INV-14` | F05 只消費穩定 `CapitalFlowAssessment`，不直接解讀七筆 raw force | dependency / integration test |
-| `CF-INV-15` | rolling sample 的 `TradingDate` 必須由 snapshot 自身 `RecordedAt` 推導（Asia/Taipei YYYY-MM-DD），不得由 caller wall-clock 推導；避免 cutoff + last-write-wins 覆寫陷阱 | unit test: stub RecordedAt 強制驗證 key |
+| `CF-INV-15` | rolling sample 的 `TradingDate` 必須由 snapshot 自身 `RecordedAt` 推導（Asia/Taipei YYYY-MM-DD），不得由 caller wall-clock 推導；避免 cutoff + last-write-wins 覆寫陷阱。**僅適用於不自帶日期鍵的 channel**（自帶日期者見 CF-INV-18） | unit test: stub RecordedAt 強制驗證 key |
 | `CF-INV-16` | 非交易日（週末／國定假日）Refresh 必須 skip-and-log，不寫入空樣本、不拋 error；nil calendar 視為交易日但記 warn | unit test: Saturday + IsTaiwanTradingDay → 0 samples |
 | `CF-INV-17` | 歷史時間序列 API（如 `/api/capital-flow/historical-snapshot/{date}`）必須對未涵蓋日期回傳 `status: missing` 或 HTTP 404，不得補 0 假資料 | contract test + 端對端 probe |
+| `CF-INV-18` | 自帶日期的 channel（`government_flow` 檔、TAIFEX 期貨 OI session、FinMind OI）必須以**讀值自身日期**作為 `(dimension, trading_date)` key：寫入鍵、讀取窗上界（嚴格早於該日）與 `ForceScore.AsOfTradingDate` 三者必須一致；不得以 refresh run 的交易日 stamping | unit test: 位移檔不得產生當日樣本、同檔重讀只留一筆、讀值不得進入自身參考窗 |
 
 ---
 
@@ -825,3 +829,63 @@ score = tanh(foreignFlow/5e9) * 30 - max(0, VIX-20) * 1.5
 - `/api/dashboard/regime-history` 回 regime_history 表真實時序（90 筆資料）
 - `/api/janus/regime-score` 真的存在，回 macro-derived composite score
 - 結果：每天 regime label（NEUTRAL/RISK_ON/RISK_OFF/TRANSITIONAL）+ 對應 score
+
+---
+
+### 18.8 Dated Input Channels: 值／日期配對與 CF-INV-06 落實點（issue #1940）
+
+#### 18.8.1 問題（2026-09-24 唯讀盤查實證）
+
+七維輸入層有兩個 channel 的讀值自帶日期，且實務上**不等於** refresh 執行當下的交易日：
+
+| dimension | 讀值來源 | 讀值自身日期 | 發布時點 |
+|---|---|---|---|
+| `government` | `data/state/government_flow/YYYYMMDD.json`（8 大行庫分點聚合） | 檔案內 `date` 欄位 | **次一營業日**：`GovernmentBrokerChannelAdapter.Fetch` 以 `PreviousTradingDay(now,1)` 進行聚合，故 `20260904.json` 的 mtime 為 2026-09-07 |
+| `futures` | TAIFEX OpenAPI 期貨三大法人 OI（`Latest` session，API 無日期參數） | response row 的 `Date` | 當日 15:00 之後才轉為當日 session；之前仍是前一 session |
+
+兩者經 `gateway_adapter.applyGovernmentFlow` / `applyTaifexInstitutional` 寫入 snapshot 時，`MacroDataPoint.Timestamp` 都設為**讀值自身日期**（`time.Parse("20060102", …)`）。
+
+修正前，`Service.Refresh` 與 `extractAsOf` 都忽略該 stamp，一律使用 `deriveTradingDate(snap.RecordedAt)`，於是產生三種症狀（issue #1940 R1/R2/R3）：
+
+1. **位移一天**：`government` 樣本日 ← 檔案日 +1（09-07←20260904、09-08←20260907、09-11←20260910、09-14←20260911、09-17←20260916）。
+2. **同一份檔重複餵出多筆樣本**：`20260728.json`（0 值、mtime 07-29）被 07-22 起的 18 個交易日各自 stamp 一次 → `capital_flow_rolling.json` 出現 18 筆連續 `raw_value = 0`；`futures` 亦因前一 session 值被 stamp 到當日而出現 2026-07-17 = 07-20 = −86189 的同值對。
+3. **z 無上限**：視窗退化時 `stddev()` 的 `max(0.01, …)` 下限把「無離散度」換成假 epsilon → government z = −7028.5（2026-08-27）、futures z = 785200（2026-07-21）。
+
+#### 18.8.2 契約（CF-INV-18）
+
+- `dimensionSampleDate(snap, dim, tradingDate)` 是唯一的配對函式：自帶日期的 dimension 回傳讀值自身日期，其餘 dimension 回傳 `tradingDate`；讀值日期晚於 `tradingDate` 時退回 `tradingDate`（不得寫入未來日樣本）。三個呼叫點必須共用它：`Service.Refresh`（寫入鍵）、`Service.extractAsOf`（`History` 上界）、`ForceExtractor.Score`（`AsOfTradingDate`）。
+- 讀值日期取 `MacroDataPoint.Timestamp` 並以 **Asia/Taipei** 格式化，可同時容納 UTC-midnight（現行 gateway）與 Taipei-midnight 兩種 stamp 慣例。
+- `Refresh` 依 key 分組後逐 key `UpsertDay`，維持 CF-INV-05「每 dimension 每交易日最多一筆」。
+
+**為何不是「`Latest()` 與請求日比對」**：對 `government_flow` 而言該比對**永遠不成立**（最新檔永遠是前一營業日），會把整個 dimension 靜默刪除。以讀值自身日期為 key 才能同時保留資料與正確配對，這才是 CF-INV-05／06 的要求。
+
+#### 18.8.3 CF-INV-06 的三個落實點
+
+| 層 | 位置 | 行為 |
+|---|---|---|
+| 寫入閘（channel） | `GovernmentFlowAdapter.Fetch` + `DataState`；`GovernmentFlowReading.HasData()` | `total_net == 0` 視為無讀值：payload `available=false`、不帶 `reading`、通道 `degraded` |
+| 寫入閘（scoring） | `scoreGovernment` / `scoreInstitutional` / `scoreDealer` / `scoreForeign` / `scoreFuturesDeprecated` 的 `usableReading` | 淨流量／未平倉口數類 dimension 的 `raw_value == 0` → `data_available=false`，不寫樣本 |
+| 讀取濾網 | `referenceWindowFor(samples, dim)` | 已持久化的 0 值樣本不得進入參考窗（§8.3），比例型 dimension（retail／tsm_adr）的 0 保留 |
+
+`zeroIsMissingDimension` 定義哪些 dimension 的 0 代表缺資料：`foreign / institutional / dealer / government / futures`（聚合淨額與 OI 水準）；`retail`（`pct_composite`）與 `tsm_adr`（`pct`）的 0 是合法的平盤值。
+
+#### 18.8.4 z 退化保護（CF-INV-06 附則）
+
+- `rollingWindow.stddev()` 回傳**真實**母體標準差（不再 clamp 至 0.01）；`count < 2` 回 0。
+- `windowDispersionUsable(mean, std, raw)` 是唯一的退化判準：`std <= 0` 或 `std < 1e-6 × max(|mean|, |raw|)` → 該窗無法標準化 → z 回 0。
+- `maxAbsZScore = 20` 為backstop 上限：健康資料不會觸及（本次實測活體最大 |z| ≈ 6），只在視窗污染時限制外溢。
+- 退化窗（樣本數 ≥ 2 但無離散度）時 `CalibrationStatus = "degraded"`；遺留缺失值被濾除後樣本不足則維持 `"calibrating"`。兩者都不會讓 z=0 被解讀為「市場平靜」。
+
+#### 18.8.5 驗收證據（same-data 重算，dev `6fed8b8e` + 本修正）
+
+| dimension | 樣本數 | 修前 max\|z\| | 修後 max\|z\| |
+|---|---|---|---|
+| government | 31 | **7,028.46** | 13.95 |
+| futures | 34 | **785,200.00** | 2.73 |
+| institutional | 91 | **38.71** | 7.64 |
+| dealer | 91 | 12.83 | 12.83 |
+| foreign | 91 | 5.94 | 5.94 |
+| tsm_adr | 34 | 2.23 | 2.23 |
+| retail | 34 | 1.46 | 1.46 |
+
+關鍵 probe：`government @2026-08-27` legacy −7028.46 → fixed 0（窗內 18 筆 0 值全數濾除）；`futures @2026-07-21` legacy 785200 → fixed 0（`degraded`）。同資料下 `ComputeResonance` 有 3 個交易日的係數／方向改變：2026-08-27、08-28、09-09 由 `0.5 / mixed` 變為 `1.0 / bullish`。
