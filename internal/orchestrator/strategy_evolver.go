@@ -344,6 +344,15 @@ func (e *StrategyEvolver) GetPositionSizeLimit() float64 {
 // When dependencies are nil (not yet wired or non-replay path), the
 // method falls back to the SA06-safe no-op: returns nil receipt with
 // "closure not wired" reason — no false "applied" is reported.
+//
+// `applied` semantics (fixed in issue #1944 Batch 1, spec §8.3): a persisted
+// snapshot is NOT an applied policy. `applied=true` requires consumption
+// evidence — a consumer (portfolio.SectorBudgetAllocator or equivalent) that
+// read the policy before producing orders and recorded a ConsumptionReceipt.
+// Until such a consumer is registered (sectorallocation.RegisterPolicyConsumer)
+// and consumes, this method returns applied=false with the machine-readable
+// reason `allocator_unavailable`. Only the observation counter still advances,
+// because the snapshot itself is durably persisted.
 func (e *StrategyEvolver) ApplySectorRotation(
 	plan *portfolio.SectorRotationPlan,
 	asOf time.Time,
@@ -397,12 +406,14 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		}
 		target, cerr := e.weightEngine.ComputeProjectedTarget(context.TODO(), drivers)
 		if cerr != nil {
-			snap.FallbackReason = fmt.Sprintf("projection failed: %v", cerr)
+			snap.TargetNote = fmt.Sprintf("projection failed: %v", cerr)
 		} else {
 			snap.Target = target.Target
 		}
 	} else {
-		snap.FallbackReason = "no weight engine"
+		// Target provenance, NOT application status: FallbackReason is
+		// reserved for why the plan is (not) in effect.
+		snap.TargetNote = "no weight engine"
 		// Degraded: use plan allocations as target.
 		snap.Target = make(map[industry.SectorID]float64, len(plan.Allocations))
 		for _, a := range plan.Allocations {
@@ -428,11 +439,20 @@ func (e *StrategyEvolver) ApplySectorRotation(
 	// the applied rotation.
 	if e.closureStateMgr != nil {
 		if recErr := e.closureStateMgr.RecordSession(storedReceipt.ReceiptID); recErr != nil {
-			return storedReceipt, true, fmt.Sprintf("applied (record_session warning: %v)", recErr)
+			return storedReceipt, false, fmt.Sprintf("stored (receipt %s), record_session warning: %v", storedReceipt.ReceiptID, recErr)
 		}
 	}
 
-	return storedReceipt, true, "applied"
+	consumption := sectorallocation.ConsumptionFor(e.closureStore, storedReceipt.ReceiptID)
+	policyApplied, policyReason := sectorallocation.ApplicationStatusFor(consumption)
+	if policyApplied {
+		return storedReceipt, true, "applied"
+	}
+
+	// The snapshot is stored, but nothing consumed it: per spec §8.3 a
+	// stored-but-unconsumed snapshot must not be reported as applied.
+	return storedReceipt, false,
+		fmt.Sprintf("stored (receipt %s), not applied: %s", storedReceipt.ReceiptID, policyReason)
 }
 
 // convertStringMapToSectorIDs converts map[string]float64 to

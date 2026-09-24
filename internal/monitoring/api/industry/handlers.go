@@ -442,13 +442,23 @@ func (h *Handlers) HandleCorrelationLoader(r *http.Request) (int, any) {
 	return http.StatusOK, meta
 }
 
+// HandleSectorAllocationPlan returns the latest persisted sector allocation
+// snapshot.
+//
+// Outward `applied` is derived from consumption evidence, never from the
+// stored JSON and never hard-written (issue #1944 Batch 1, spec §8.3): a
+// snapshot that no allocator consumed is reported as applied=false with
+// fallback_reason=allocator_unavailable. DecorateApplicationStatus is applied
+// here as well as in the store reader so the contract also holds for
+// alternative SnapshotReader implementations.
 func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 	snap, err := h.Svc.GetLatestSectorAllocation(r.Context())
 	if err != nil {
 		return http.StatusServiceUnavailable, map[string]any{
+			"applied":         false,
 			"error":           "snapshot_unavailable",
 			"message":         err.Error(),
-			"fallback_reason": "snapshot_unavailable",
+			"fallback_reason": sectorallocation.FallbackSnapshotUnavailable,
 		}
 	}
 	if snap == nil {
@@ -456,10 +466,11 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 		// staging/dev with no replay data. Return an empty plan with
 		// fallback_reason so the frontend can show a meaningful state.
 		return http.StatusOK, sectorallocation.SectorAllocationSnapshot{
-			FallbackReason: "no_simulation_session",
+			Applied:        false,
+			FallbackReason: sectorallocation.FallbackNoSimulationSession,
 		}
 	}
-	return http.StatusOK, snap
+	return http.StatusOK, sectorallocation.DecorateApplicationStatus(snap)
 }
 
 // --- Sector taxonomy handlers (E-06: HTTP proxy for MCP-in-memory tools) ---
