@@ -554,6 +554,16 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	live("taifex_daily", []string{"TAIFEX"}, 24*time.Hour)
 	live("taifex_institutional", []string{"TAIFEX"}, 24*time.Hour)
 	live("twse_oddlot", []string{"TWSE", "FinMind"}, 24*time.Hour)
+
+	// twse_oddlot (2026-09-24 channel-status-truth): the upstream is gone —
+	// BFI84U was repurposed (2026-08, see internal/monitoring/known_issues.go)
+	// and the adapter reports FetchResult.Stale=true for ErrOddLotUpstreamRemoved.
+	// DegradedOnEmpty makes the gateway record "degraded" with the reason
+	// instead of "ok", so a successful-but-empty lookup can no longer be
+	// indistinguishable from real data on the channel page.
+	oddlotContract := r.Contract("twse_oddlot")
+	oddlotContract.DegradedOnEmpty = true
+	r.Register(oddlotContract)
 	live("twse_insider", []string{"TWSE"}, 24*time.Hour)
 	live("us_spx", []string{"Yahoo"}, 24*time.Hour)
 	live("us_ndx", []string{"Yahoo"}, 24*time.Hour)

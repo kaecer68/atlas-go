@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 )
@@ -179,6 +180,36 @@ func TestCheckChannelHealth_WithRecords(t *testing.T) {
 	}
 	if detail.Error != 1 {
 		t.Errorf("detail.Error = %d, want 1", detail.Error)
+	}
+}
+
+// TestCheckChannelHealth_ExpiredOkCountsAsStale is the Tier-2 half of the
+// 2026-09-24 channel-status-truth fix: the aggregate used to count a raw "ok"
+// record as ok even when its last fetch was 17 days old, so /api/health/aggregate
+// reported a healthy channel_health tier for a channel the health summary called
+// stale. It must now land in the stale bucket instead.
+func TestCheckChannelHealth_ExpiredOkCountsAsStale(t *testing.T) {
+	store := apigateway.NewChannelHealthStore(t.TempDir())
+	store.WithRecordClock(func() time.Time { return time.Now().Add(-17 * 24 * time.Hour) })
+	if err := store.Record("twse_oddlot", "ok", ""); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	store.WithRecordClock(time.Now)
+	if err := store.Record("twse_capital_flow", "ok", ""); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	h := &HealthHandlers{ChannelHealth: store}
+	ok, reason, details := h.checkChannelHealth()
+	if !ok {
+		t.Errorf("ok = false, reason = %q; stale is a warning, not a tier failure", reason)
+	}
+	detail := details.(channelHealthDetail)
+	if detail.Stale != 1 {
+		t.Errorf("detail.Stale = %d, want 1 (17-day-old ok record)", detail.Stale)
+	}
+	if detail.OK != 1 {
+		t.Errorf("detail.OK = %d, want 1 (only the fresh channel)", detail.OK)
 	}
 }
 

@@ -58,8 +58,16 @@ func exportChannelHealthMetrics(workDir string, collector *monitoring.MetricsCol
 	}
 	store := apigateway.NewChannelHealthStore(filepath.Join(workDir, "data/state"))
 	records := store.All()
+	contracts := apigateway.ChannelContracts()
 	for channelID, rec := range records {
-		collector.RecordGauge(MetricChannelHealthStatus, healthStatusValue(rec.Status), map[string]string{"channel": channelID})
+		// Status gauge carries the contract-aware verdict, not the raw record
+		// status (2026-09-24 channel-status-truth): a channel whose last fetch
+		// is older than its freshness window must not be exported as ok while
+		// the admin page and the health summary call it stale. 0=ok,1=warn,
+		// 2=error,3=inactive,4=other — the alert rules only match ==2, so the
+		// stale value (warn) neither pages nor changes any existing rule.
+		status := apigateway.DeriveChannelStatus(&rec, contracts.Contract(channelID), now)
+		collector.RecordGauge(MetricChannelHealthStatus, healthStatusValue(status), map[string]string{"channel": channelID})
 		if rec.ConsecutiveFailures > 0 {
 			collector.RecordGauge(MetricChannelConsecutiveFailures, float64(rec.ConsecutiveFailures), map[string]string{"channel": channelID})
 		}
@@ -130,11 +138,19 @@ func computeChannelStalenessSeconds(rec apigateway.ChannelHealthRecord, now time
 	return staleSec, nil
 }
 
+// healthStatusValue maps a channel status to the atlas_channel_health_status
+// gauge value: 0=ok, 1=warn, 2=error, 3=inactive, 4=other/unmapped.
+//
+// "stale" (derived: last fetch older than the contract freshness window) maps
+// to warn: it is a real warning an operator should see, but it must not page —
+// every alert rule on this gauge matches == 2 (error), and the
+// ok-but-untouched-for-weeks case is already reported by
+// atlas_channel_staleness_overage_seconds.
 func healthStatusValue(status string) float64 {
 	switch status {
 	case "ok":
 		return 0
-	case "warn":
+	case "warn", "stale":
 		return 1
 	case "error":
 		return 2

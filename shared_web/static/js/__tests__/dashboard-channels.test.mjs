@@ -238,3 +238,99 @@ test('market card: 無 regime_source 不渲染來源行', () => {
   const html = renderMarketCard({ regime: 'RISK_OFF' });
   assert.ok(!html.includes('來源：'), '無 regime_source 不應渲染來源行');
 });
+
+// ============================================================================
+// fix/20260924-channel-status-truth: stale / degraded 必須被計入「非正常」
+// ============================================================================
+//
+// 實證 bug: twse_oddlot 的 record 是 ok、但 17 天沒更新 → 後端 derived
+// status=stale（status_text「資料過期」），本 widget 沒有任何 filter 收它，
+// KPI 因此落到「正常」。後端 alerts 陣列目前也只含 error/warn，所以 widget
+// 還必須自己把 stale 通道列出來，否則 KPI 與清單互相矛盾。
+
+// 只取「信息通道預警」KPI 的值（其他卡片也有 text-lg">正常</div>，不能整頁比對）
+function channelKpiValue(html) {
+  const i = html.indexOf('信息通道預警');
+  if (i < 0) return null;
+  const m = html.slice(i).match(/kpi-value text-lg">([^<]*)</);
+  return m ? m[1] : null;
+}
+
+test('widget: stale 通道 → KPI 不得顯示「正常」，改顯示資料過期', () => {
+  const html = renderWidget({
+    channels: [
+      { channel_id: 'us_yahoo', status: 'ok', status_text: '正常' },
+      { channel_id: 'twse_oddlot', status: 'stale', status_text: '資料過期' },
+    ],
+    alerts: [], // 後端 alerts 不含 stale，widget 需自行補列
+  });
+  assert.equal(channelKpiValue(html), '1 筆資料過期', 'KPI 應顯示資料過期，實際: ' + channelKpiValue(html));
+  assert.ok(html.includes('twse_oddlot 資料過期'), 'stale 通道應被列名，實際 HTML: ' + html);
+  assert.ok(!html.includes('所有通道正常'), 'stale 存在時不得顯示所有通道正常');
+  assert.ok(!html.includes('1 筆異常'), 'stale 不得被算成異常');
+});
+
+test('widget: stale 用 amber，不把 KPI 卡片畫成紅框', () => {
+  const html = renderWidget({
+    channels: [{ channel_id: 'twse_oddlot', status: 'stale', status_text: '資料過期' }],
+    alerts: [],
+  });
+  assert.ok(!html.includes('alert-err'), 'stale 不得觸發紅色 alert-err');
+  assert.ok(html.includes('style="border-color:var(--warn)"'), '應改為 amber 邊框，實際: ' + html);
+  assert.ok(html.includes('color:var(--warn)'), '列名文字應用 amber token');
+  assert.ok(!html.includes('color:var(--color-danger)'), 'stale 不得用紅色文字');
+});
+
+test('widget: degraded 通道 → KPI 顯示 1 筆降級，列名用「降級」', () => {
+  const html = renderWidget({
+    channels: [{ channel_id: 'us_yahoo', status: 'degraded', status_text: '降級' }],
+    alerts: [],
+  });
+  assert.equal(channelKpiValue(html), '1 筆降級');
+  assert.ok(html.includes('us_yahoo 降級'));
+});
+
+test('widget: stale + degraded 同時存在 → KPI 標示兩者', () => {
+  const html = renderWidget({
+    channels: [
+      { channel_id: 'a', status: 'stale', status_text: '資料過期' },
+      { channel_id: 'b', status: 'degraded', status_text: '降級' },
+    ],
+    alerts: [],
+  });
+  assert.equal(channelKpiValue(html), '2 筆資料過期/降級');
+});
+
+test('widget: error 仍然優先且維持紅色', () => {
+  const html = renderWidget({
+    channels: [
+      { channel_id: 'twse_etf', status: 'error', status_text: '異常' },
+      { channel_id: 'twse_oddlot', status: 'stale', status_text: '資料過期' },
+    ],
+    alerts: [{ channel_id: 'twse_etf', status: 'error', error: 'boom' }],
+  });
+  assert.equal(channelKpiValue(html), '1 筆異常');
+  assert.ok(html.includes('alert-err'), '有異常時卡片仍為紅框');
+  assert.ok(html.includes('twse_etf 發生異常'));
+  assert.ok(html.includes('twse_oddlot 資料過期'), 'stale 通道仍需列名');
+});
+
+test('widget: 未知狀態通道不得被算成「正常」', () => {
+  const html = renderWidget({
+    channels: [
+      { channel_id: 'us_yahoo', status: 'ok', status_text: '正常' },
+      { channel_id: 'mystery', status: 'no-such-status', status_text: '' },
+    ],
+    alerts: [],
+  });
+  assert.equal(channelKpiValue(html), '1 筆狀態未知', '實際: ' + channelKpiValue(html));
+  assert.ok(!html.includes('所有通道正常'));
+});
+
+test('widget: partial 通道維持「部分異常」計數（回歸）', () => {
+  const html = renderWidget({
+    channels: [{ channel_id: 'twse_etf', status: 'partial', status_text: '部分異常' }],
+    alerts: [],
+  });
+  assert.equal(channelKpiValue(html), '1 筆部分異常');
+});

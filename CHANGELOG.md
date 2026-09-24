@@ -4,6 +4,26 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(monitoring): channel 狀態單一真相 — 過期資料不得回 `ok`（twse_oddlot DB/derived 判定衝突）（2026-09-24）
+- **問題**：同一時刻、同一 channel 出現多個互相矛盾的判定（生產實證 `twse_oddlot`）：`channel_health`（DB）`status=ok last_fetch_at=<5 分鐘前>`、`/api/dashboard/channel-health` `ok`、health summary log `stale`。真實情況是上游 BFI84U 被 TWSE 改用途（2026-08，見 `internal/monitoring/known_issues.go`），最後一次成功抓取停在 2026-09-07。
+- **根因**（三個獨立缺陷）：
+  1. **derived 層漏套契約窗口**：`resolveChannelStatusFromStore` 對任何 `status=="ok"` 一律回 `ok`（註解甚至寫 "healthy regardless of data age"），完全繞過 `FreshnessWindow`；同一份 record 在 `Gateway.Summary()`（`deriveStatusWithContract`）卻是 `stale`。
+  2. **DB 時間戳說謊**：`recordToDB` 以 `time.Now()` 寫入 `last_fetch_at`/`last_success_at`，每 5 分鐘的 `channel_health_sync` 因此把**每個** channel 蓋成「剛剛抓過」，讓 DB 成為第三個真相（也讓任何查 DB 的人/工具誤判資料新鮮度）。
+  3. **空 payload 記成成功**：`twse_oddlot` adapter 對 `ErrNoData`/`ErrOddLotUpstreamRemoved` 回 `FetchResult{Stale:true}`（無 error，不觸發 breaker），`Gateway.Fetch` 不看 `Stale` 就記 `ok`——上游已消失卻與有資料無法區分。
+- **修正**（方案 A+B 混用：記錄為真相 + derived 只做呈現，但判定只有一份）：
+  - 新增 `internal/apigateway/channel_status.go`：`DeriveChannelStatus(rec, contract, now)` 為**唯一**狀態判定（非 `ok` pass-through；`ok` 且 `LastFetchAt` 超過 `EffectiveFreshnessWindow()` → `stale`；時間戳不可解析時保留 `ok`；`Provenance=derived` 的指標紀錄不套用），另有 `DeriveChannelStatusReason`（人類可讀原因，含「資料已 17 天未更新，超過合約更新窗口 48 小時」）。
+  - 所有呈現層改走同一函式：`resolveChannelStatusFromStore`（`/admin/datachannels`、首頁、`data_get_channels`）、`DataChannelService.getHealthFromStore`、`UnifiedHealthStore.deriveStatusWithContract`（→ `Gateway.Summary()` / `StatusSummary` 日誌與 error counter）、`/api/dashboard/channel-health`（derived 判定以既有 `last_error` 欄位表達原因，known-issue 欄位保留）、`/api/health/aggregate` Tier 2（新增 `stale` 計數桶）、`atlas_channel_health_status` gauge。`resolveChannelStatusFromStore` 補上 `stale`/`inactive` case（先前 `inactive` record 落 default 被丟棄 → 頁面顯示「未知」，`twse_etf` 為實例）。
+  - `ChannelHealthSyncValuesFor` + `recordToDB(channelID, status, lastFetchAt, lastSuccessAt, consecutiveFailures)`：DB 的 fact 欄位改寫 record 自己的時間戳，`status` 欄存 derived verdict（與 UI 一致），只有 `updated_at` 是寫入時間。
+  - `FetchOutcomeStatus` + `twse_oddlot` 契約 `DegradedOnEmpty=true`：空/stale payload 記 `degraded` 並附原因；`twse_margin`/`twse_capital_flow` 的「非交易日無新資料」仍記 `ok`（避免週末誤報）。
+  - `StatusText` 補 `stale`「資料過期」與 `degraded`「降級」（先前兩者都 fallback 成「未知」）；`healthStatusValue` 把 `stale` 映射為 warn(1)（現有 4 條 alert rule 只匹配 `== 2`，不改變 page 行為）。
+  - 前端（`datachannels.js`/`dashboard.js`/`alerts.js`/`data-quality-badge.js` 等）：`stale`/`degraded` 不再被算成「正常」，以 amber 呈現。
+- **驗證**：同類掃描（生產 44 筆 record × 契約窗口）→ 修前僅 `twse_oddlot` 為 `ok`-but-expired（413.7h > 48h）；修後兩個層級皆 `stale`。新增測試：`internal/apigateway/channel_status_test.go`（判定表、`FetchOutcomeStatus`、DB mirror 值、PG 端到端 DB 斷言）、`gateway_empty_payload_test.go`、resolver 6 個新 case（含 17 天 `ok` → `stale` 迴歸）、`/api/health/aggregate` stale 桶、`/api/dashboard/channel-health` stale + known-issue 保留、metrics gauge `stale`。
+- **前端**：新增共用 SSOT `shared_web/static/js/shared/channel-status.js`（status → label/tone/是否算「正常」的唯一對映），
+  `datachannels.js` 的「正常」改**正向計數**（原本 `total - error - warn` 會把 `stale`/`degraded` 算成正常）、`dashboard.js` KPI 與
+  `alerts.js` badge 改為 tone 驅動（`stale`/`degraded` = amber，不再一律紅「異常」也不再有綠色）、`data-quality-badge.js` 顯示最嚴重狀態自己的 label。
+  純前端測試（`node --test shared_web/static/js/__tests__/*.mjs`）471 passed / 0 failed。
+- **未處理（明示）**：`twse_oddlot` 上游已消失的事實**不變**（known-issue 徽章與 `twse_capital_flow` 替代路徑照舊，本 PR 不掩蓋、不恢復）；DB 既有的錯誤 `last_fetch_at` 會在下一次 `channel_health_sync`（≤5 分鐘）被真實值覆蓋，不回填歷史。
+
 ### fix(capitalflow): 交易日判定改用權威假日表，修復雷達在交易日凍結（issue #1947）（2026-09-24）
 - **問題**：七維錢潮 rolling store 自 **2026-09-22 07:59** 起停止更新，但 09-23（三）、09-24（四）為正常交易日（2026 中秋＝09-25）。同期 `msg=skip_non_trading_day date=2026-09-24 component=capitalflow` 每 5 分鐘出現，而 `task_liveness.capital_flow_refresh` 的 `consecutive_failures=0`（skip 不是 failure → 沒有任何告警）。上游其實有資料：`taiex ts=2026-09-24 12:55`、`market_volume ts=2026-09-23`、`data/state/capital_flow/20260923_capital_flow.json` 存在。
 - **根因**：`internal/capitalflow/service.go` 的 CF-INV-16 閘門用 `industry.EventCalendar.IsTaiwanTradingDay`，該方法對任何落在 `long_holiday` 事件**區間**內的日期回 `false`；`buildHolidayEvent` 把每個國定假日展開成 `[holiday-3d, holiday+2d]`，2026 中秋（09-25）的區間 = 2026-09-22..09-27，涵蓋 09-23/24/28 等實際交易日。全 repo 僅 capitalflow 這 1 處使用該判定（其餘 19 處用權威的 `marketdata.IsTaiwanTradingDay` / `taiwanholidays.IsTradingDay`）。連假**區間**是事件/情緒窗，不是休市判定。

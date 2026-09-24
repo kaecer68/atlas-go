@@ -150,37 +150,23 @@ func (u *UnifiedHealthStore) StatusSummary() map[string]HealthSummary {
 	return summary
 }
 
-// deriveStatusWithContract downgrades an "ok" record to "stale" when its
-// LastFetchAt is older than the channel contract's FreshnessWindow (default:
-// StaleDataThreshold). Other statuses (error, warn, inactive, degraded) pass
-// through unchanged — they're already alerting on real failures.
-//
-// Returns "stale" if the record is "ok" AND LastFetchAt parses as RFC3339 AND
-// time.Since() exceeds the window. Unparseable timestamps or empty LastFetchAt
-// keep the original status — the channel is broken, but not because of
-// staleness, so mislabeling as "stale" would mislead on-call.
+// deriveStatusWithContract is a thin wrapper over the package-level
+// DeriveChannelStatus, which is the single channel-status judgment shared by
+// every consumer (admin page, home overview, dashboard payload, metrics gauge,
+// DB mirror). Keeping the method means existing callers do not churn; the
+// window/freshness rules live in channel_status.go.
 func (u *UnifiedHealthStore) deriveStatusWithContract(rec *ChannelHealthRecord, contract ChannelContract) string {
-	if rec == nil {
-		return "unknown"
+	return DeriveChannelStatus(rec, contract, u.nowOrWallClock())
+}
+
+// nowOrWallClock returns the store's clock when one was injected (tests) and
+// time.Now otherwise, so a single clock drives both the summary verdict and the
+// record aging rules.
+func (u *UnifiedHealthStore) nowOrWallClock() time.Time {
+	if u != nil && u.store != nil && u.store.nowFunc != nil {
+		return u.store.nowFunc()
 	}
-	if rec.Status != "ok" {
-		return rec.Status
-	}
-	if rec.LastFetchAt == "" {
-		return rec.Status
-	}
-	ts, err := time.Parse(time.RFC3339, rec.LastFetchAt)
-	if err != nil {
-		return rec.Status
-	}
-	window := contract.FreshnessWindow
-	if window <= 0 {
-		window = StaleDataThreshold
-	}
-	if time.Since(ts) > window {
-		return "stale"
-	}
-	return rec.Status
+	return time.Now()
 }
 
 type HealthSummary struct {
