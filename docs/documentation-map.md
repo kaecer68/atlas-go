@@ -134,6 +134,7 @@
 | 檔案 | 用途 | 驗證 |
 |------|------|------|
 | `docs/specs/agent-mcp-server-spec.md` | MCP server 規格（canonical spec） | ✅ |
+| `docs/specs/industry-hitrate-metric-spec.md` | 產業級命中率口徑 SSOT（canonical 定義、聚合鍵、覆蓋率政策、與其他 9 套口徑的裁決；#1942） | ✅ |
 | `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |
 | `docs/specs/agent-mcp-phase4-spec.md` | MCP Phase 4 規格 | ✅ |
 | `docs/specs/agent-loop-state-machine-spec.md` | AgentLoop 狀態機規格 | ✅ |
