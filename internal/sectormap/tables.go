@@ -352,4 +352,5 @@ var tables = map[Namespace]map[string]decl{
 	NamespaceSectorIndexReader:        sectorIndexReaderKeys,
 	NamespaceStrategyTechniqueSectors: strategyTechniqueKeys,
 	NamespaceFinMindSectorSeries:      finmindSectorSeriesKeys,
+	NamespaceETFRepresentatives:       etfRepresentativeKeysMap(),
 }
