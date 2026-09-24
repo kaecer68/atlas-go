@@ -2,7 +2,9 @@ package industry
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sync"
 	"time"
 )
@@ -74,23 +76,110 @@ func defaultCardConfig() CardConfig {
 	}
 }
 
+// resolveCardConfig returns the CardConfig used to build a card.
+//
+// When a calibration tracker has been injected (see
+// SetGlobalCycleCalibration; production wires it from
+// monitoring.IndustryService.SetCycleCalibration) its *observed* per-layer
+// accuracy redistributes the layer weights. Until #1944 Batch 1 the injected
+// tracker was ignored and defaults were returned unconditionally, while
+// IndustryService.SetCycleCalibration documented the opposite — a silent
+// failure: the API exposed calibration metrics that never reached the card.
+//
+// Two rules keep the consumption honest and non-destabilizing:
+//  1. Evidence gate — with no layer metrics (no recorded outcomes) the
+//     defaults are returned unchanged. CalibrateWeights normalises to sum=1,
+//     so consuming an empty tracker would silently rescale the composite
+//     coefficient by 1/0.85 even though nothing was learned.
+//  2. Residual preservation — the funded weight budget stays at the default
+//     sum (0.85; the 0.15 residual is reserved for future layers), so
+//     calibration redistributes *within* the funded layers and cannot change
+//     the composite coefficient scale.
 func resolveCardConfig() CardConfig {
-	return defaultCardConfig()
+	cfg := defaultCardConfig()
+	cal := GetGlobalCycleCalibration()
+	if cal == nil {
+		return cfg
+	}
+	return applyCycleCalibration(cfg, cal)
+}
+
+// applyCycleCalibration returns cfg with layer weights redistributed by the
+// tracker's observed per-layer accuracy, preserving the funded weight sum.
+func applyCycleCalibration(cfg CardConfig, cal *CycleCalibration) CardConfig {
+	if len(cal.GetMetrics()) == 0 {
+		// No observed layer accuracy yet: consume nothing (rule 1).
+		return cfg
+	}
+	baseSum := weightSum(cfg.LayerWeights)
+	if baseSum <= 0 {
+		return cfg
+	}
+	calibrated := cal.CalibrateWeights(cfg.LayerWeights)
+	calibratedSum := weightSum(calibrated)
+	if calibratedSum <= 0 {
+		return cfg
+	}
+	scale := baseSum / calibratedSum
+	adjusted := make(map[string]float64, len(cfg.LayerWeights))
+	largestLayer, largestWeight := "", math.Inf(-1)
+	for layer, w := range cfg.LayerWeights {
+		// Layers the tracker has no opinion about keep their default share.
+		calibratedWeight, known := calibrated[layer]
+		if !known {
+			calibratedWeight = w
+		}
+		adjusted[layer] = calibratedWeight * scale
+		if adjusted[layer] > largestWeight {
+			largestLayer, largestWeight = layer, adjusted[layer]
+		}
+	}
+	// Preserve the funded sum exactly: CalibrateWeights normalises through
+	// normalizeWeights, which rounds each layer to 4 dp, so the rescaled sum
+	// can drift by up to N*5e-5. Absorb that residue into the largest funded
+	// layer (a relative nudge < 1e-3) instead of leaving it to accumulate
+	// across layers.
+	if largestLayer != "" {
+		adjusted[largestLayer] += baseSum - weightSum(adjusted)
+	}
+	cfg.LayerWeights = adjusted
+	return cfg
+}
+
+// weightSum sums weights in a deterministic (sorted-key) order. Floating-point
+// addition is order-dependent and Go map iteration is randomized, so an
+// unordered sum of the same values can differ in the last bits — which would
+// make the balanced rescale in applyCycleCalibration non-deterministic.
+func weightSum(weights map[string]float64) float64 {
+	var sum float64
+	for _, layer := range slices.Sorted(maps.Keys(weights)) {
+		sum += weights[layer]
+	}
+	return sum
 }
 
 // globalCycleCalibration is the singleton calibration tracker injected at
 // application bootstrap. If nil, resolveCardConfig returns defaults.
-var globalCycleCalibration *CycleCalibration
+// Guarded by globalCycleCalibrationMu: injection happens on the bootstrap
+// goroutine while cards are built from request/tick goroutines.
+var (
+	globalCycleCalibrationMu sync.RWMutex
+	globalCycleCalibration   *CycleCalibration
+)
 
 // SetGlobalCycleCalibration injects the calibration tracker into the
-// cycle status card builder. Thread-safe: the calibration instance
-// itself handles internal synchronization.
+// cycle status card builder. The tracker's own metrics are internally
+// synchronized; this mutex guards the injected pointer.
 func SetGlobalCycleCalibration(cal *CycleCalibration) {
+	globalCycleCalibrationMu.Lock()
+	defer globalCycleCalibrationMu.Unlock()
 	globalCycleCalibration = cal
 }
 
 // GetGlobalCycleCalibration returns the current calibration tracker or nil.
 func GetGlobalCycleCalibration() *CycleCalibration {
+	globalCycleCalibrationMu.RLock()
+	defer globalCycleCalibrationMu.RUnlock()
 	return globalCycleCalibration
 }
 

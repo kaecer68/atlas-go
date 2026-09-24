@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
 // ─── test helpers ────────────────────────────────────────────────────────────
@@ -85,23 +89,58 @@ func finmindIndexDay(prices map[string]float64) []finmind5sRow {
 // ─── mapping table ───────────────────────────────────────────────────────────
 
 func TestFinMindSectorSeriesMapping(t *testing.T) {
-	if len(finmindSectorSeries) != 18 {
-		t.Fatalf("finmindSectorSeries has %d entries, want 18", len(finmindSectorSeries))
+	// Issue #1943: the canonical universe is 20 L1 sectors; FinMind exposes 18
+	// series that map onto it. The two gaps are named explicitly instead of
+	// being implied by a hand-copied 18-entry universe.
+	const (
+		wantSeries = 18
+	)
+	if len(finmindSectorSeries) != wantSeries {
+		t.Fatalf("finmindSectorSeries has %d entries, want %d", len(finmindSectorSeries), wantSeries)
 	}
 	seen := make(map[string]string)
 	for series, canonical := range finmindSectorSeries {
 		if !canonicalSectorIDs[canonical] {
-			t.Errorf("series %q maps to %q which is not in canonicalSectorIDs", series, canonical)
+			t.Errorf("series %q maps to %q which is not a canonical L1 sector", series, canonical)
 		}
 		if prev, dup := seen[canonical]; dup {
 			t.Errorf("canonical %q duplicated by series %q and %q", canonical, prev, series)
 		}
 		seen[canonical] = series
 	}
-	// Every canonical 18 ID must be covered exactly once.
+
+	// The gaps must be exactly these two. 觀光 (tourism) exists upstream as a
+	// FinMind series but is dropped by the table (see the comment on
+	// finmindSectorSeries); chemicals has no series at all.
+	missing := []string{}
 	for id := range canonicalSectorIDs {
 		if _, ok := seen[id]; !ok {
-			t.Errorf("canonical sector %q has no FinMind series mapping", id)
+			missing = append(missing, id)
+		}
+	}
+	sort.Strings(missing)
+	if want := []string{"chemicals", "tourism"}; !slices.Equal(missing, want) {
+		t.Errorf("canonical L1 sectors without a FinMind series = %v, want %v", missing, want)
+	}
+
+	// The provider table must agree with the declared namespace inventory.
+	declared := sectormap.Keys(sectormap.NamespaceFinMindSectorSeries)
+	got := make([]string, 0, len(finmindSectorSeries))
+	for series := range finmindSectorSeries {
+		got = append(got, series)
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, declared) {
+		t.Errorf("finmindSectorSeries keys drifted from sectormap: got %v, declared %v", got, declared)
+	}
+	for series, canonical := range finmindSectorSeries {
+		mapped, ok := sectormap.ResolveL1(sectormap.NamespaceFinMindSectorSeries, series)
+		if !ok {
+			t.Errorf("sectormap does not resolve FinMind series %q", series)
+			continue
+		}
+		if mapped != canonical {
+			t.Errorf("FinMind series %q: marketdata says %q, sectormap says %q", series, canonical, mapped)
 		}
 	}
 }
