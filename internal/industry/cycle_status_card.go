@@ -64,7 +64,7 @@ type SentimentBounds struct {
 // so editing composite_card in config had no effect at all. Each field is
 // overridden only when the config value is present/non-zero (merge convention),
 // so a partial or legacy config keeps the defaults below. The shipped config is
-// value-identical to these defaults, so consuming it is behaviour-neutral today.
+// value-identical to these defaults, so consuming it is behavior-neutral today.
 func defaultCardConfig() CardConfig {
 	cfg := CardConfig{
 		LayerWeights: map[string]float64{
