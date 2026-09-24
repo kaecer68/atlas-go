@@ -17,8 +17,8 @@ import (
 // wiring, uniform 1/20 strategic prior, no driver deltas). It was generated at
 // the pre-change revision and reproduces byte-for-byte (sha256
 // cf7cc2c81a6d10369849123fcf5f5b01c090f7ba59ffd652e8d1c0e42838c462) at every
-// origin/main revision it was checked against: 2a4c9a67, 3c250f91, 0c402539
-// and 2504c5ed (the base this branch is merged up to).
+// origin/main revision it was checked against: 2a4c9a67, 3c250f91, 0c402539,
+// 2504c5ed and 2ae7ab33 (all identical, sha256 above).
 //
 // The uniform prior is deliberate: the Projector normalizes by summing a Go map,
 // so a non-uniform target sums in a random order and the last bits of the
