@@ -661,7 +661,12 @@ func (s *Service) LatestAssessment(ctx context.Context) (CapitalFlowAssessment, 
 	if err != nil {
 		return CapitalFlowAssessment{}, fmt.Errorf("capitalflow: build latest assessment: %w", err)
 	}
-	return daily.Assessment, nil
+	// Run registered assessment decorators (industry hit-rate consumption
+	// chain, #1942/#1948). With the config gate off (default) the
+	// sectorallocation decorator returns immediately, and with no decorator
+	// registered at all applyAssessmentDecorators is a true no-op (no copy,
+	// no allocation), so the response stays byte-identical.
+	return applyAssessmentDecorators(daily.Assessment), nil
 }
 
 // dimensionSource returns the (unit, source_id) tuple to attach to

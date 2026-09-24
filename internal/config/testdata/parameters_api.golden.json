@@ -110,6 +110,11 @@
       "results": "(float64)"
     },
     {
+      "name": "GetIndustryHitRateConsumeEnabled",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "GetL2_4Schedule",
       "params": "",
       "results": "(L2_4ScheduleParameters)"
@@ -1481,7 +1486,8 @@
         "NarrativeWeight float64",
         "MacroWeight float64",
         "FactorWeight float64",
-        "WeightFloor float64"
+        "WeightFloor float64",
+        "IndustryHitRateConsumeEnabled ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "SectorAllocationConfig"
@@ -1752,6 +1758,10 @@
     },
     {
       "name": "CalibrationEligibleOverrideMetadata",
+      "type": ""
+    },
+    {
+      "name": "IndustryHitRateConsumeEnabledMetadata",
       "type": ""
     },
     {
