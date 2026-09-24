@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# jev-docs: https://docs.typesafe.ai/primitives  https://docs.typesafe.ai/noul  https://docs.typesafe.ai/score  https://docs.typesafe.ai/choice
+#   ⚠️ 官方未涵蓋（我們的工程實作）：User-Agent 強制（Cloudflare 403）、WAF 降級、
+#       backoff 的 base/jitter/上限、state 截斷（官方只要求 429/529 指數退避 + honor Retry-After）
+#   ⚠️ 已知缺口：noul() 尚未支援官方 `criteria:{true,false}`（見 docs/jev/JEV-USAGE-MAP.md）
 """jevkit — 本生態唯一被認可的 Jev (TypeSafe System One) 呼叫方式。
 
 為什麼要有這支：2026-09 的實測反覆踩到同一批坑（詳見 docs/jev/JEV-USAGE-CONTRACT.md）。
@@ -7,7 +11,8 @@
   1. 必須顯式設定 User-Agent —— TypeSafe 對 Python-urllib 預設 UA 回 403。
   2. `choice` 的 criteria 必須是「字典」{選項: 描述}；傳陣列會 422。
   3. 一次請求多題（fan-out）：官方 13 題一批比逐題便宜 12.2×、快 10×。
-  4. 403/429 要 retry 加 backoff（官方 SDK 預設行為）。
+  4. 429/529 用指數退避並 honor Retry-After header（官方）；403 走 WAF 等義替換降級重送（實測工程政策）。
+  4b. 預設釘住版本 ID（PINNED_MODEL），不用 jev-latest alias；JEV_MODEL 環境變數可覆寫（官方 models.md）。
   5. state 有上限（state + 最長問題 ≤ 32k tokens、整體 ≤ 64k）→ 這裡做保守的字元檢查。
   6. 只算 input token（output 免費）；題目愈多愈划算，state 重複送出則浪費。
   7. 門檻不得照抄 cookbook，必須用**自己的資料**校準（本檔提供 calibrate_threshold）。
@@ -28,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -36,7 +42,15 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
-DEFAULT_MODEL = "jev-latest"           # alias → jev-1.13.0；若已校準門檻，建議改釘版本 ID
+
+# ★ A7：已校準門檻的 caller 必須釘住版本 ID，不要用 alias。
+#   官方（models.md）："If you have tuned confidence thresholds against a specific version,
+#   pin that version's ID instead of the alias" —— alias 會隨官方更新漂移，讓已校準的門檻失效。
+#   實測證據（2026-09-23，MacBook）：GET /v1/models 只列 alias（jev-latest / jev-preview,
+#   release_date 2026-09-10）；以 model="jev-latest" 實際 POST /v1/systemone，
+#   回應 model 欄位 = "jev-1.13.0"。升級版本 → 改 PINNED_MODEL + 重跑門檻校準（走排程）。
+PINNED_MODEL = "jev-1.13.0"          # 版本 ID（非 alias）；查證方式見上方註解
+DEFAULT_MODEL = os.environ.get("JEV_MODEL", PINNED_MODEL)  # 集中設定：JEV_MODEL 可覆寫（staging/實驗）
 UA = "a2a-jevkit/1.0 (+a2a-dev; see docs/jev/JEV-USAGE-CONTRACT.md)"
 KEY_PATH = os.path.expanduser("~/.config/typesafe/api_key")
 
@@ -60,9 +74,19 @@ class JevResult:
 
 
 # ---------------------------------------------------------------- question builders
-def noul(instructions: str) -> Dict[str, Any]:
-    """是非機率題（回 answers[id]['noul']）。"""
-    return {"type": "noul", "instructions": instructions}
+def noul(instructions: str, criteria: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
+    """是非機率題（回 answers[id]['noul']）。
+
+    criteria 可選：官方 noul.md 建議邊界微妙時給 {true: 描述, false: 描述}
+    讓 yes/no 邊界明確（「Make the boundary between yes and no unambiguous」）。
+    傳入時必須是含 'true'/'false' 鍵的 dict，會原樣送給 API。
+    """
+    q: Dict[str, Any] = {"type": "noul", "instructions": instructions}
+    if criteria is not None:
+        if not isinstance(criteria, Mapping) or not {"true", "false"} <= set(criteria):
+            raise TypeError("noul criteria 必須是含 'true'/'false' 鍵的 dict {true: 描述, false: 描述}")
+        q["criteria"] = dict(criteria)
+    return q
 
 
 def score(instructions: str, criteria: Sequence[str]) -> Dict[str, Any]:
@@ -78,6 +102,16 @@ def choice(instructions: str, criteria: Mapping[str, str]) -> Dict[str, Any]:
             "choice.criteria 必須是 dict {選項: 描述}；TypeSafe 對陣列回 422 `Input should be a valid dictionary`。"
             "若你只有一串標籤，請改傳 {標籤: 描述} 或改用 score()。")
     return {"type": "choice", "instructions": instructions, "criteria": dict(criteria)}
+
+def fresh_uid(tag: str = "") -> str:
+    """回傳 throwaway uid（官方 self-consistency cookbook 慣例：每次重複呼叫帶不同 uid 避開伺服器快取）。
+
+    官方做法是把 uid 放進 state 當額外欄位（"as an extra field in the TypeSafe state"），
+    state 本體（post + rubric）保持不變。本函數只產生唯一值，呼叫端自行併入 state：
+        state = {"uid": fresh_uid("s2"), "task": ...}
+    """
+    core = f"{time.time_ns():x}-{random.getrandbits(32):08x}"
+    return f"{tag}:{core}" if tag else core
 
 
 # ★ Cloudflare WAF（實測 2026-09-23，二分定位）：state 含 `curl -s` 的請求會被 403。
@@ -113,6 +147,8 @@ def validate_questions(questions: Mapping[str, Any]) -> None:
             raise TypeError(f"question '{qid}': choice.criteria 必須是 dict")
         if q["type"] == "score" and not isinstance(q.get("criteria"), (list, tuple)):
             raise TypeError(f"question '{qid}': score.criteria 必須是有序清單")
+        if q["type"] == "noul" and "criteria" in q and not isinstance(q["criteria"], Mapping):
+            raise TypeError(f"question '{qid}': noul.criteria 必須是 dict {{true: 描述, false: 描述}}")
         if not str(q.get("instructions", "")).strip():
             raise ValueError(f"question '{qid}' 缺少 instructions（判斷條件要寫在這裡，不是題目 id）")
 
@@ -146,6 +182,34 @@ def _truncate_state(state: Any, budget: int) -> Any:
     if isinstance(state, list):
         return [_truncate_state(v, max(200, budget // max(1, len(state)))) for v in state]
     return state
+
+
+# ★ A2：429/529 退避（官方 api.md / models.md）。官方要求「exponential backoff」+「honor the
+#   retry-after header」；下列 base/jitter/上限為工程參數，官方未涵蓋。
+BACKOFF_BASE_S = 1.0     # 未涵蓋：第一輪退避基數（秒）
+BACKOFF_MAX_S = 30.0     # 未涵蓋：防止異常 Retry-After 值卡死呼叫端
+
+
+def _retry_after_seconds(exc: urllib.error.HTTPError) -> Optional[float]:
+    """讀 Retry-After header（秒）。回 None = 無 header 或非秒數格式（HTTP-date 未涵蓋）。"""
+    headers = getattr(exc, "headers", None) or {}
+    raw = (headers.get("Retry-After") or "").strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, min(BACKOFF_MAX_S, float(raw)))
+    except ValueError:
+        return None
+
+
+def _backoff_seconds(attempt: int) -> float:
+    """指數退避 base*2^(n-1) + jitter（equal jitter：一半固定 + 一半隨機）。
+
+    指數退避本身為官方要求；base/jitter/上限均屬工程政策（官方未涵蓋）。
+    attempt 為 1-indexed（第 1 次重試 → base、第 2 次 → 2*base、第 3 次 → 4*base…）。
+    """
+    delay = BACKOFF_BASE_S * (2 ** (attempt - 1))
+    return min(BACKOFF_MAX_S, delay / 2 + random.uniform(0, delay / 2))
 
 
 def ask(
@@ -206,8 +270,11 @@ def ask(
                     continue
                 time.sleep(1.5 * attempt)
                 continue
-            if exc.code == 429 and attempt <= retries:
-                time.sleep(1.5 * attempt)
+            if exc.code in (429, 529) and attempt <= retries:
+                # 官方（api.md / models.md）：429/529 用 exponential backoff；
+                # 回應帶 Retry-After header 時優先採用。jitter/base/上限是工程參數（未涵蓋）。
+                ra = _retry_after_seconds(exc)
+                time.sleep(ra if ra is not None else _backoff_seconds(attempt))
                 continue
             raise JevError(f"HTTP {exc.code}: {exc.reason}") from exc
         except Exception as exc:                    # noqa: BLE001
