@@ -56,7 +56,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **HiStock broker8 是 media-curated Top60，非官方全分點** | marketdata / apigateway | `government_broker` 通道上游 = `histock.tw/stock/broker8.aspx`（2026-08-26 起）：server-rendered、無 CAPTCHA、`?d=YYYY/MM/DD` 歷史至 2024-06、**僅買超 Top30 + 賣超 Top30**（約 60 檔/日）、金額單位**萬元**（寫檔時 ×10000 換 TWD）、`source: media-curated`。**口徑 ≠ bsr 的 TW50 全分點加總**：z-score 歷史有斷點（2026-08-26 前後分開校準）。輸出契約不變（`YYYYMMDD.json` + `YYYYMMDD_brokers.json`）。 |
 | **TAIFEX large-trader 是 CSV、PutCallRatio 是 JSON——格式不同不要混用** | marketdata / apigateway | TAIFEX OpenAPI 各 endpoint 格式不一致：`/OpenInterestOfLargeTradersFutures` 2026-08-26 起回**帶 BOM 的 CSV**（表頭：日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大/前十大交易人買方/賣方數量,全市場未沖銷部位數；`taifex_daily` 走 `parseLargeTraderCSV` fallback）；`/PutCallRatio` 仍是 JSON；`/DailyMarketReportFutures` 已 302 移除（FetchFutures 已刪除）。新增 TAIFEX endpoint 前先 curl 實測格式。 |
 
-| **產業碼／ETF 持股 → canonical L1** | sectormap / sectorallocation | ①ETF 持股權重合計 ≠ 100%（期貨／現金另計，實測 96.59%–99.71%），不可直接當 L1 向量也不可補 1；②TWSE `產業別` 只回 2 位數字碼，中文名在 ISIN 對照表，**且與 MOPS 舊碼表不同**（`14`=建材營造、`24`=半導體）；③同一 TWSE 產業的「指數名」與「產業碼」必須給同一個 L1（22 組）；④ETF 持股是**具日期快照**，換股後須重跑推導。逐項說明與防護測試見 [`../specs/sector-namespace-canonical-spec.md`](../specs/sector-namespace-canonical-spec.md) §3.3.1。 |
+| **產業碼／ETF 持股 → canonical L1** | sectormap / sectorallocation | ①ETF 持股權重合計 ≠ 100%（期貨／現金另計，實測 96.59%–99.71%），不可直接當 L1 向量也不可補 1；②TWSE `產業別` 只回 2 位數字碼，中文名在 ISIN 對照表，**且與 MOPS 舊碼表不同**（`14`=建材營造、`24`=半導體）；③同一 TWSE 產業的「指數名」與「產業碼」必須給同一個 L1（22 組）；④ETF 持股是**具日期快照**，換股後須重跑推導。逐項說明與防護測試見 [`../specs/sector-namespace-canonical-spec.md`](../specs/sector-namespace-canonical-spec.md) §3.3.1。 ⑤ **`sector_allocation.industry_hit_rate_consume_enabled`（PR-β，跨 sectorallocation+capitalflow）必須維持 default `false`**：開啟後才會把 hit-rate tilts 注入 `ComputeProjectedTarget` 並在 `capitalflow.LatestAssessment` 注入 `IndustryHitRateEvidence`。改 default 影響生產路徑，須另開 ticket 業主核准，不得在本 PR 內改；唯一 SSOT 是 `config.GetIndustryHitRateConsumeEnabled()`。 |
 
 ### Orchestrator / Control
 
@@ -91,7 +91,6 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Enabled agent 缺少 prompt** | spawning | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI `agent-prompts` job 強制。 |
 | **ScreeningCriteria 靜默過濾** | screener | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 executor **之前**就會被過濾。這是預期行為，不是 bug。 |
 | **Live 交易風險** | live | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
-| **industry_hit_rate_consume_enabled 必須 default off（PR-β，#1942/#1948）** | sectorallocation / capitalflow | 跨模組 config gate（`configs/parameters.json` -> `sector_allocation.industry_hit_rate_consume_enabled`）同時控制 **(a) sectorallocation ComputeProjectedTarget 注入 hit-rate tilts** 和 **(b) capitalflow.LatestAssessment 注入 IndustryHitRateEvidence**。**Default 必須 false** — production 路徑與 dfc4e3a1 byte-identical 是 root 驗收的 backstop。**永遠不得**改 default 為 true 而另開 issue：改 default = 影響下一個合併的生產路徑，必須業主核准。要打開：(1) 觀察期 >=20 sessions + 0 invariant violations、(2) 從 default 改起時另開 ticket、(3) 在兩個下游模組各跑一輪 manual smoke 才上線。Gate 開啟後的額外防線：`configs/parameters.json` 該鍵值不被 `defaults_engine.go` 之外的任何地方寫死；`config.GetIndustryHitRateConsumeEnabled()` 是唯一 SSOT。 |
 
 ### Baseline / Experiment
 
