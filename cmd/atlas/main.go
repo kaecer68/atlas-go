@@ -1415,6 +1415,18 @@ func run(args []string, deps appDeps) error {
 			if narrativeEngine != nil {
 				scheduler.RegisterNarrativeWeightUpdateSchedule(taskMgr, narrativeEngine)
 			}
+			// Issue #1945: daily post-close refresh of the per-symbol flow
+			// store (data/state/stock_flows/<symbol>.json). Until this was
+			// registered the store was written only by the manual
+			// cmd/backfill-stockpicker-flows CLI, so it froze at 2026-08-27
+			// while both consumers (the panel backtest and the win-rate flow
+			// gate) kept reading its newest point as fresh data. The task is
+			// incremental (newest stored date + 1 → today), bounded
+			// (stockpickerFlowsMaxSpanDays), and time-gated to the post-close
+			// window on trading days.
+			scheduler.RegisterStockpickerFlowsUpdateSchedule(taskMgr, scheduler.StockpickerFlowsUpdateDeps{
+				WorkDir: cfg.WorkDir,
+			})
 			// Phase 4 (PR 2e): daily post-close stockpicker win-rate update.
 			// WorkDir is required (data/state under it); backend/expect-db
 			// default to the job-local sqlite artifact unless the operator

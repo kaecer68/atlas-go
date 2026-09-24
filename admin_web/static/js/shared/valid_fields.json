@@ -1075,6 +1075,7 @@
   "max_equity",
   "max_exposure",
   "max_fallback_ratio",
+  "max_flow_age_days",
   "max_history",
   "max_history_days",
   "max_history_points",

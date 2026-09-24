@@ -5235,6 +5235,12 @@
     },
     "conditions": {
       "foreign_3d_net_buy": {
+        "max_flow_age_days": {
+          "rationale": "Freshness limit (calendar days) for the per-symbol flow file backing the trigger date (issue #1945): data/state/stock_flows/\u003csymbol\u003e.json stopped being refreshed after 2026-08-27, so every trigger date after the newest flow point silently reused the same frozen window. 7 days covers a weekend plus the Taiwan holiday blocks without hiding a genuinely dead feed.",
+          "source": "heuristic",
+          "todo": "Tighten to 4 once the daily per-symbol flow refresh (stockpicker_flows_update) has a clean track record.",
+          "value": 7
+        },
         "threshold": {
           "rationale": "Cumulative foreign net buy over the window must exceed this value to trigger (PR 2a).",
           "source": "heuristic",
@@ -5248,6 +5254,11 @@
         }
       },
       "momentum_20d_positive": {
+        "max_flow_age_days": {
+          "rationale": "",
+          "source": "",
+          "value": 0
+        },
         "threshold": {
           "rationale": "Momentum must exceed this value to trigger (PR 2a).",
           "source": "heuristic",
@@ -5261,6 +5272,11 @@
         }
       },
       "price_volume_bottom_divergence": {
+        "max_flow_age_days": {
+          "rationale": "",
+          "source": "",
+          "value": 0
+        },
         "threshold": {
           "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
           "source": "heuristic",
@@ -5274,6 +5290,11 @@
         }
       },
       "price_volume_top_divergence": {
+        "max_flow_age_days": {
+          "rationale": "",
+          "source": "",
+          "value": 0
+        },
         "threshold": {
           "rationale": "Unused for divergence conditions (structural read, not aggregate-exceeds-threshold); kept 0 for StockpickerConditionWindow uniformity.",
           "source": "heuristic",

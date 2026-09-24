@@ -8112,6 +8112,12 @@
           "value": 0,
           "rationale": "Cumulative foreign net buy over the window must exceed this value to trigger.",
           "source": "heuristic"
+        },
+        "max_flow_age_days": {
+          "value": 7,
+          "rationale": "Freshness limit (calendar days) for the per-symbol flow file backing the trigger date (issue #1945): data/state/stock_flows/<symbol>.json is written by backfill-stockpicker-flows and stopped being refreshed after 2026-08-27, so every trigger date after the newest flow point silently reused the same frozen 3-day window. 7 days covers a weekend plus the Taiwan holiday blocks without hiding a genuinely dead feed.",
+          "source": "heuristic",
+          "todo": "Tighten to 4 once the daily per-symbol flow refresh (stockpicker_flows_update) has a clean track record."
         }
       },
       "momentum_20d_positive": {

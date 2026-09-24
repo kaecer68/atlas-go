@@ -40,6 +40,25 @@ type FlowPoint struct {
 	ForeignNet float64 `json:"foreign_net"`
 }
 
+// FlowFile is the canonical on-disk shape of
+// data/state/stock_flows/<symbol>.json: one symbol's ascending-dated flow
+// series. Every reader (real_panel.go panel, the stockpicker win-rate
+// executor gate) and the writer (internal/stockflows) uses this type so the
+// JSON tags cannot drift apart.
+type FlowFile struct {
+	Symbol string      `json:"symbol"`
+	Flows  []FlowPoint `json:"flows"`
+}
+
+// Newest returns the newest flow point. Flows are stored ascending by date,
+// so the last element is the latest reading. ok is false for an empty file.
+func (f FlowFile) Newest() (FlowPoint, bool) {
+	if len(f.Flows) == 0 {
+		return FlowPoint{}, false
+	}
+	return f.Flows[len(f.Flows)-1], true
+}
+
 // PanelSource supplies point-in-time historical data to the backtest.
 // Implementations MUST NOT return data dated after the run's as-of date;
 // the engine enforces this and fails the run otherwise.
