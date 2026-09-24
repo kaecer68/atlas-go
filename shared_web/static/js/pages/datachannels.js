@@ -1,6 +1,7 @@
 import { silentGetJSON, notify, postJSON } from '../shared/app-utils.js';
 import { fmtSafeNumber, fmtSafeSignedPct } from '../shared/format-metric.js';
 import { confirmAction } from '../components/confirm-modal.js';
+import { channelStatusMeta } from '../shared/channel-status.js';
 
 export async function loadDataChannels() {
   const data = await silentGetJSON('/api/dashboard/data-channels');
@@ -163,16 +164,26 @@ export function renderDataChannels(data) {
   const allChannels = data.channels || [];
   const { active: channels, disabled: disabledChannels } = splitDisabledChannels(allChannels);
   const disabledIds = new Set(disabledChannels.map(c => c.channel_id));
+  // Status → color/badge comes from the shared SSOT (shared/channel-status.js):
+  // stale → amber + 「資料過期」, degraded → amber + 「降級」, unknown → muted,
+  // never error/red and never green.
   const statusLight = s => {
-    const color = s === 'ok' ? 'var(--status-ok)' : (s === 'warn' ? 'var(--status-warn)' : (s === 'error' ? 'var(--status-err)' : 'var(--status-unknown)'));
+    const color = channelStatusMeta(s).light;
     return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};margin-right:6px;vertical-align:middle"></span>`;
   };
-  const statusClass = s => s === 'ok' ? 'ok' : (s === 'warn' ? 'warn' : (s === 'error' ? 'err' : 'muted'));
+  const statusClass = s => channelStatusMeta(s).badgeClass;
 
-  // Calculate summary stats
+  // Summary stats. 「正常」 is counted POSITIVELY (only ok/expected_delay agree to
+  // it) instead of the old `total - error - warn` subtraction, which silently
+  // reported stale / degraded / partial / unknown channels as 正常 — the
+  // twse_oddlot bug (ok record, 17 days without a successful fetch).
   const total = channels.length;
-  const errorCount = channels.filter(c => c.status === 'error').length;
+  const errorCount = channels.filter(c => channelStatusMeta(c.status).tone === 'err').length; // 異常+部分異常
   const warnCount = channels.filter(c => c.status === 'warn').length;
+  const expiredCount = channels.filter(c => c.status === 'stale' || c.status === 'degraded').length;
+  const normalCount = channels.filter(c => channelStatusMeta(c.status).normal).length;
+  const inactiveCount = channels.filter(c => c.status === 'inactive').length;
+  const unknownCount = channels.filter(c => !channelStatusMeta(c.status).known).length;
 
   // Group by country
   const byCountry = {};
@@ -184,24 +195,25 @@ export function renderDataChannels(data) {
   let html = '';
 
   // Control panel summary
+  const tile = (label, value, color) => `<div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
+      <div class="label">${label}</div>
+      <div class="value" style="color:${color}">${value}</div>
+    </div>`;
   html += `<div class="control-summary">
-    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
-      <div class="label">總通道</div>
-      <div class="value">${total}</div>
-    </div>
-    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
-      <div class="label">異常</div>
-      <div class="value" style="color:var(--color-danger)">${errorCount}</div>
-    </div>
-    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
-      <div class="label">待更新</div>
-      <div class="value" style="color:var(--warn)">${warnCount}</div>
-    </div>
-    <div class="metric" style="background:var(--panel);padding:10px 16px;border-radius:8px;border:1px solid var(--border)">
-      <div class="label">正常</div>
-      <div class="value" style="color:var(--color-success)">${total - errorCount - warnCount}</div>
-    </div>
+    ${tile('總通道', total, 'inherit')}
+    ${tile('異常', errorCount, 'var(--color-danger)')}
+    ${tile('待更新', warnCount, 'var(--warn)')}
+    ${tile('資料過期/降級', expiredCount, 'var(--status-stale)')}
+    ${tile('正常', normalCount, 'var(--color-success)')}
   </div>`;
+  // inactive/unknown are neither normal nor "non-normal" incidents; say so
+  // explicitly so the tiles above are not read as covering every channel.
+  const unaccounted = [];
+  if (inactiveCount > 0) unaccounted.push(`未啟用 ${inactiveCount}`);
+  if (unknownCount > 0) unaccounted.push(`未知 ${unknownCount}`);
+  if (unaccounted.length) {
+    html += `<div class="text-muted text-xs mt-xs">另有未計入通道狀態：${unaccounted.join('、')}（不算正常，也不算異常）</div>`;
+  }
 
   const sevIcon = { info: 'ℹ', warn: '⚠', error: '❌', critical: '🚫' };
   const sevColor = { info: 'var(--muted)', warn: 'var(--warn)', error: 'var(--color-danger)', critical: 'var(--color-danger)' };
@@ -216,9 +228,12 @@ export function renderDataChannels(data) {
       // backend (data/state/channels.json) — the old code keyed off c.status
       // which conflates health with the operator's enable toggle.
       const isEnabled = c.enabled !== false;
+      // Badge text comes from the backend status_text (localized SSOT), falling
+      // back to the shared status label so a known status can never render an
+      // empty pill.
       const statusBadge = !isEnabled
         ? `<span class="badge status-disabled">已停用</span>`
-        : `<span class="badge ${statusClass(c.status)}">${c.status_text}</span>`;
+        : `<span class="badge ${statusClass(c.status)}">${escapeHtml(c.status_text || channelStatusMeta(c.status).label)}</span>`;
       html += `<tr class="${!isEnabled ? 'dc-row-disabled' : ''}">
         <td class="text-center">${statusLight(c.status)}</td>
         <td>${c.platform}</td>
@@ -236,10 +251,23 @@ export function renderDataChannels(data) {
   // operator-disabled channel is a decision, not an incident.
   const visibleAlerts = (data.alerts || []).filter(a => !disabledIds.has(a.channel_id));
   if (visibleAlerts.length) {
-    const statusLabel = s => s === 'error' ? '異常' : (s === 'warn' ? '待更新' : '異常');
-    const statusColor = s => s === 'error' ? 'var(--color-danger)' : 'var(--warn)';
-    html += `<div style="margin-top:14px;padding:10px 12px;background:color-mix(in srgb, var(--color-danger) 8%, transparent);border-left:3px solid var(--color-danger);border-radius:6px">
-      <div style="font-size:13px;font-weight:700;color:var(--color-danger);margin-bottom:6px">需要關注的通道</div>
+    // Alert rows carry the alert's own status; use the shared label so a
+    // stale/degraded row reads 「資料過期」/「降級」in amber instead of being
+    // forced into 「異常」(red) or 「待更新」.
+    const statusLabel = s => channelStatusMeta(s).label;
+    const statusColor = s => {
+      const tone = channelStatusMeta(s).tone;
+      if (tone === 'err') return 'var(--color-danger)';
+      if (tone === 'ok') return 'var(--color-success)';
+      if (tone === 'warn') return 'var(--warn)';
+      return 'var(--muted)';
+    };
+    // Container tone follows the worst row: a stale-only set must not be framed
+    // as an outage (red) — amber for warn/stale/degraded, red only for error.
+    const alertToneColor = visibleAlerts.some(a => channelStatusMeta(a.status).tone === 'err')
+      ? 'var(--color-danger)' : 'var(--warn)';
+    html += `<div style="margin-top:14px;padding:10px 12px;background:color-mix(in srgb, ${alertToneColor} 8%, transparent);border-left:3px solid ${alertToneColor};border-radius:6px">
+      <div style="font-size:13px;font-weight:700;color:${alertToneColor};margin-bottom:6px">需要關注的通道</div>
       ${visibleAlerts.map(a => `<div style="font-size:12px;margin:3px 0"><strong>${escapeHtml(a.channel_id)}</strong>：<span style="color:${statusColor(a.status)}">${a.error || statusLabel(a.status)}</span></div>`).join('')}
     </div>`;
   }

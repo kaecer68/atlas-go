@@ -29,6 +29,41 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(monitoring): channel 狀態單一真相 — 過期資料不得回 `ok`（twse_oddlot DB/derived 判定衝突）（2026-09-24）
+- **問題**：同一時刻、同一 channel 出現多個互相矛盾的判定（生產實證 `twse_oddlot`）：`channel_health`（DB）`status=ok last_fetch_at=<5 分鐘前>`、`/api/dashboard/channel-health` `ok`、health summary log `stale`。真實情況是上游 BFI84U 被 TWSE 改用途（2026-08，見 `internal/monitoring/known_issues.go`），最後一次成功抓取停在 2026-09-07。
+- **根因**（三個獨立缺陷）：
+  1. **derived 層漏套契約窗口**：`resolveChannelStatusFromStore` 對任何 `status=="ok"` 一律回 `ok`（註解甚至寫 "healthy regardless of data age"），完全繞過 `FreshnessWindow`；同一份 record 在 `Gateway.Summary()`（`deriveStatusWithContract`）卻是 `stale`。
+  2. **DB 時間戳說謊**：`recordToDB` 以 `time.Now()` 寫入 `last_fetch_at`/`last_success_at`，每 5 分鐘的 `channel_health_sync` 因此把**每個** channel 蓋成「剛剛抓過」，讓 DB 成為第三個真相（也讓任何查 DB 的人/工具誤判資料新鮮度）。
+  3. **空 payload 記成成功**：`twse_oddlot` adapter 對 `ErrNoData`/`ErrOddLotUpstreamRemoved` 回 `FetchResult{Stale:true}`（無 error，不觸發 breaker），`Gateway.Fetch` 不看 `Stale` 就記 `ok`——上游已消失卻與有資料無法區分。
+- **修正**（方案 A+B 混用：記錄為真相 + derived 只做呈現，但判定只有一份）：
+  - 新增 `internal/apigateway/channel_status.go`：`DeriveChannelStatus(rec, contract, now)` 為**唯一**狀態判定（非 `ok` pass-through；`ok` 且 `LastFetchAt` 超過 `EffectiveFreshnessWindow()` → `stale`；時間戳不可解析時保留 `ok`；`Provenance=derived` 的指標紀錄不套用），另有 `DeriveChannelStatusReason`（人類可讀原因，含「資料已 17 天未更新，超過合約更新窗口 48 小時」）。
+  - 所有呈現層改走同一函式：`resolveChannelStatusFromStore`（`/admin/datachannels`、首頁、`data_get_channels`）、`DataChannelService.getHealthFromStore`、`UnifiedHealthStore.deriveStatusWithContract`（→ `Gateway.Summary()` / `StatusSummary` 日誌與 error counter）、`/api/dashboard/channel-health`（derived 判定以既有 `last_error` 欄位表達原因，known-issue 欄位保留）、`/api/health/aggregate` Tier 2（新增 `stale` 計數桶）、`atlas_channel_health_status` gauge。`resolveChannelStatusFromStore` 補上 `stale`/`inactive` case（先前 `inactive` record 落 default 被丟棄 → 頁面顯示「未知」，`twse_etf` 為實例）。
+  - `ChannelHealthSyncValuesFor` + `recordToDB(channelID, status, lastFetchAt, lastSuccessAt, consecutiveFailures)`：DB 的 fact 欄位改寫 record 自己的時間戳，`status` 欄存 derived verdict（與 UI 一致），只有 `updated_at` 是寫入時間。
+  - `FetchOutcomeStatus` + `twse_oddlot` 契約 `DegradedOnEmpty=true`：空/stale payload 記 `degraded` 並附原因；`twse_margin`/`twse_capital_flow` 的「非交易日無新資料」仍記 `ok`（避免週末誤報）。
+  - `StatusText` 補 `stale`「資料過期」與 `degraded`「降級」（先前兩者都 fallback 成「未知」）；`healthStatusValue` 把 `stale` 映射為 warn(1)（現有 4 條 alert rule 只匹配 `== 2`，不改變 page 行為）。
+  - 前端（`datachannels.js`/`dashboard.js`/`alerts.js`/`data-quality-badge.js` 等）：`stale`/`degraded` 不再被算成「正常」，以 amber 呈現。
+- **驗證**：同類掃描（生產 44 筆 record × 契約窗口）→ 修前僅 `twse_oddlot` 為 `ok`-but-expired（413.7h > 48h）；修後兩個層級皆 `stale`。新增測試：`internal/apigateway/channel_status_test.go`（判定表、`FetchOutcomeStatus`、DB mirror 值、PG 端到端 DB 斷言）、`gateway_empty_payload_test.go`、resolver 6 個新 case（含 17 天 `ok` → `stale` 迴歸）、`/api/health/aggregate` stale 桶、`/api/dashboard/channel-health` stale + known-issue 保留、metrics gauge `stale`。
+- **前端**：新增共用 SSOT `shared_web/static/js/shared/channel-status.js`（status → label/tone/是否算「正常」的唯一對映），
+  `datachannels.js` 的「正常」改**正向計數**（原本 `total - error - warn` 會把 `stale`/`degraded` 算成正常）、`dashboard.js` KPI 與
+  `alerts.js` badge 改為 tone 驅動（`stale`/`degraded` = amber，不再一律紅「異常」也不再有綠色）、`data-quality-badge.js` 顯示最嚴重狀態自己的 label。
+  純前端測試（`node --test shared_web/static/js/__tests__/*.mjs`）471 passed / 0 failed。
+- **未處理（明示）**：`twse_oddlot` 上游已消失的事實**不變**（known-issue 徽章與 `twse_capital_flow` 替代路徑照舊，本 PR 不掩蓋、不恢復）；DB 既有的錯誤 `last_fetch_at` 會在下一次 `channel_health_sync`（≤5 分鐘）被真實值覆蓋，不回填歷史。
+### fix(sectormap): ETF → L1 映射改由投信官網持股推導，取代手寫對應表（#1956 後續）（2026-09-24）
+- **問題**：sector allocation 用 ETF 當產業配置的交易載具，但系統沒有任何一處說得出「這檔 ETF 實際橫跨哪幾個 canonical L1 產業」；每個呼叫端各自憑印象列一組，同一檔 ETF 在不同路徑得到不同 L1 集合 —— 與 #1943 剛消滅的缺陷同型。**已合併的 #1956** 建了表與 metric，但 11 檔 ETF 的 canonical L1 target 是**人工列舉 + 等權**，沒有任何資料來源：`0050.TW` 被指定 8 個 L1、`00940.TW` 4 個，權重一律 `1/N`，`reason` 只寫「PR-α ETF representative」。同一個 `reason` 欄位在 #1943 的規矩裡必須是可查證的資料來源，而等權加權代表「各 L1 曝險相同」，與 TW50 的實際結構（台積電一檔 56%）相反。另外 `internal/sectormap` 沒有任何「上市櫃個股 → 產業」的詞彙，連用真實持股反推產業都做不到。
+- **新增**：
+  - **namespace K `twse_industry_code`**（`internal/sectormap/twse_industry_code.go`）：TWSE OpenAPI `opendata/t187ap03_L`（上市，`產業別`）與 TPEx OpenAPI `mopsfin_t187ap03_O`（上櫃，`SecuritiesIndustryCode`）的 36 個 2 位數字碼，逐 key 顯式處置（22 mapped、14 unmapped+reason+candidates），覆蓋 20/20 canonical L1。中文名取自 TWSE ISIN 產業別對照表並以已知個股交叉驗證（2330→24 半導體業、2603→15 航運業、2912→18 貿易百貨業）。殘差桶 `19 綜合`/`20 其他業` 與 legacy 聚合碼 `13 電子工業` 顯式未映射且**不給 candidate**（給了就是猜）。
+  - **namespace L `sectorallocation_etf_representatives`**（`internal/sectormap/etf_representatives.go`）：`configs/etf_metadata.json` 的 11 檔 ETF，每檔一列 canonical L1 加權曝險，`Reason` 帶完整證據鏈（投信、頁面 URL、資料日、檔數、未覆蓋權重比例）。
+  - **證據快照**（`internal/sectorallocation/testdata/etf_holdings_20260924.json`）：11 檔 ETF 的當日持股明細，全部來自投信官網（元大／富邦／國泰／群益／復華／中信），共 529 筆持股，逐筆附 `industry_code` 與其來源。
+  - **typed view**（`internal/sectorallocation/etf_representatives.go`）：`industry.SectorID` 鍵的存取器與 `ETFL1Coverage()`。
+  - **稽核輸出**：`industry-namespace-audit` 新增 `etf_l1_coverage` 區塊（總數、逐檔 L1、逐檔權重、資料日、來源 URL）。
+- **推導規則（不得靜默）**：ETF 的 L1 權重 = 該 L1 下持股的官網權重 ÷ 可對映持股權重合計；官網只列股票部位（期貨／現金另計，實測 96.59%–99.71%），未映射持股（如電子通路商）**回報但不計入**，未覆蓋比例由 `ETFRepresentative.ReportedWeightPct - MappedWeightPct` 具名揭露。**不補 1、不猜產業。**
+- **結果**：ETF 可觸及 **19/20** canonical L1（僅 `tourism` 未達：這 11 檔當日皆無觀光餐旅持股），逐檔 3–17 個 L1；ETF namespace 的 unmapped = 0。相對 #1956 的 13/20，多出 6 個 L1（`auto`、`biotech`、`construction`、`food`、`other_electronics`、`textiles`）—— 不是「補更多 ETF」，而是**同一批 11 檔 ETF 用真實持股反推**才看得見的曝險（例：00713 持有和泰車、00692 持有大成鋼/遠東新）。#1956 已涵蓋的 13 個 L1 全部保留，沒有任何一個因換算方式改變而消失（`0050.TW` 由手寫 8 個 L1、等權 1/8 改為 11 個 L1、semiconductor 0.696；`00891.TW` 仍是 3 個 L1 但權重由等權 1/3 改為 semiconductor 0.950 / electronics 0.037 / telecom 0.013）。
+- **取代關係（明示）**：#1956 的 `internal/sectormap/etf_representatives.go`／`internal/sectorallocation/etf_representatives.go` 及其測試由本 PR 整檔取代（同一個 namespace ID、同一個 metric 名稱，資料改為推導）。
+
+- **驗證**：`internal/sectormap/twse_industry_code_test.go`（36 碼 = ISIN 對照表、覆蓋 20/20 L1、殘差碼不得對映、**22 組「TWSE 指數名 vs 產業碼」必須給同一個 L1**）、`internal/sectormap/etf_representatives_test.go`（key 集合 = `configs/etf_metadata.json`、無 unmapped、每列帶出處、權重加總 1、覆蓋率 ≥12）、`internal/sectorallocation/etf_representatives_test.go`（**從持股快照重跑推導**並逐值比對宣告表、快照每個 `industry_code` 必為宣告 key、下限 ≥12 由快照獨立計算、typed view 一致）、`cmd/experimental/industry-namespace-audit/main_test.go`（CLI 真的輸出 ≥12 且每列帶證據）。`gofmt` 乾淨、`go vet` 乾淨、`make ci-gate` 綠。
+- **未處理（明示）**：持股快照是 2026-09-24 的**定時快照**，ETF 換股後需重跑推導（測試會紅燈提示）。`tourism` 未達是資料事實而非映射缺陷（這 11 檔 ETF 沒有觀光持股）。`twse_industry_code` 目前只被這條 ETF 路徑消費；把它接成 DB `symbol_industry` 母體來源屬獨立工作（spec §6 缺口 1）。
+
+
 ### fix(capitalflow): 錢潮驗證／判斷層接線（#1941）（2026-09-24）
 - **問題**：七維錢潮的驗證層與判斷層結構上不可能生效 ——（a）`ComputeCapitalFlowAssessment` **硬寫** `CalibrationStatus="calibrating"`，`EligibleForAutomation()` 永遠 false，連帶 `/api/recommendations` 每則回應都帶 `capital_flow_assessment_calibrating` warning；（b）Stage-3 的 5 個排程任務與 3 個 alert evaluator **只有測試呼叫**，`STAGE3_TASKS_ENABLED` / `STAGE3_ALERTS_ENABLED`（皆預設 true）gate 不到任何東西；（c）`LatestCapitalFlowActual` 每次呼叫都建拋棄式 `capitalflow.NewService(macroProvider, 0, nil)`，rolling window 為空 ⇒ 每維 Z=0，預測 vs 實際比對無意義。
 - **修正**：
@@ -39,6 +74,7 @@
   - **預測 vs 實際紀錄**：`Stage3AlertDeps.OnCapitalFlowDriftCompared` 新 hook，market-close 規則每次可比對（hit/miss、含暖機抑制日）都寫一筆 JSONL 觀測記錄 `capital_flow_stage3_drift.jsonl`（在 ledger dir，預設 `data/state/`；上限 1000 筆、原子寫入）。
 - **驗證**：`internal/capitalflow/calibration_test.go`（預設仍 calibrating／override+每維 eligible → eligible 且 gate 開／樣本不足或 per-dim degraded → degraded／缺維度不阻塞／config-driven 全鏈路／未載入 config 保持 false）、`cmd/atlas/stage3_tasks_test.go`（wireStage3 註冊 8 個任務、flag off 不註冊、nil monitor 只跳 alert、`main.go` 呼叫 wireStage3 的原始碼回歸斷言、shared store 下 `LatestCapitalFlowActual().Value != 0`、對照丟棄式 service 恰為 0、空 store 回報 unavailable）、`internal/monitoring/stage3_rules_test.go`（hook 在無 alert 時仍記錄、actual 不可用不記）、`internal/recommender/handler_test.go`（calibrating/degraded/eligible 三態的 warning 對應）。`gofmt`/`gofumpt` 乾淨、`go vet ./...`、`go test ./internal/capitalflow/... ./internal/recommender/... ./cmd/atlas/... ./internal/config/... ./internal/monitoring/... -count=1` 全綠。
 - **行為變更（明示）**：預設值下**無數值語意變更**（assessment status 與 warning 與修正前相同）；新增的 production 行為是 Stage-3 任務開始執行、以及新的觀測 JSONL 檔。要讓 warning 消失／開啟自動化 gate，必須另開引用驗證報告的 config PR 把 `calibration_eligible_override` 設 true；該翻轉會讓 `capitalFlowActionFromPlan` 走出 E07 分支並改變 `weightEngine.ComputeProjectedTarget` 的 drivers，屬真配置語意變更，翻轉 PR 需一併驗 allocation。
+
 
 ### fix(capitalflow): 交易日判定改用權威假日表，修復雷達在交易日凍結（issue #1947）（2026-09-24）
 - **問題**：七維錢潮 rolling store 自 **2026-09-22 07:59** 起停止更新，但 09-23（三）、09-24（四）為正常交易日（2026 中秋＝09-25）。同期 `msg=skip_non_trading_day date=2026-09-24 component=capitalflow` 每 5 分鐘出現，而 `task_liveness.capital_flow_refresh` 的 `consecutive_failures=0`（skip 不是 failure → 沒有任何告警）。上游其實有資料：`taiex ts=2026-09-24 12:55`、`market_volume ts=2026-09-23`、`data/state/capital_flow/20260923_capital_flow.json` 存在。

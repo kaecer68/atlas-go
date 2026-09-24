@@ -1072,6 +1072,68 @@ func TestDashboardAPI_ChannelHealthEndpoint_MissingFile(t *testing.T) {
 	}
 }
 
+// TestDashboardAPI_ChannelHealthEndpoint_ExpiredOkIsStaleAndKeepsKnownIssue —
+// 2026-09-24 channel-status-truth: this endpoint (alerts page + the atlas-mcp
+// channel_health tool) used to publish the raw record status, so a channel whose
+// last successful fetch was 17 days old was reported "ok" while the health
+// summary logged "stale" for the same channel at the same instant. It must now
+// publish the same derived verdict, explain it (through last_error) and keep the
+// known-issue badge (the upstream really is gone — we must not hide that).
+func TestDashboardAPI_ChannelHealthEndpoint_ExpiredOkIsStaleAndKeepsKnownIssue(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, "data/state"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	fetched := time.Now().UTC().Add(-17 * 24 * time.Hour).Round(time.Second)
+	payload := map[string]any{
+		"channels": map[string]any{
+			"twse_oddlot": map[string]any{
+				"status":          "ok",
+				"last_fetch_at":   fetched.Format(time.RFC3339),
+				"last_success_at": fetched.Format(time.RFC3339),
+			},
+		},
+		"updated_at": fetched.Format(time.RFC3339),
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "data/state", "channel_health.json"), data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	d := NewDashboardAPIWithGateway(tmpDir, tmpDir, nil, NoopFetcher())
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/channel-health", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Channels []map[string]any `json:"channels"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Channels) != 1 {
+		t.Fatalf("expected 1 channel, got %d", len(resp.Channels))
+	}
+	ch := resp.Channels[0]
+	if ch["status"] != "stale" {
+		t.Errorf("status = %v, want stale (17-day-old fetch must not read ok)", ch["status"])
+	}
+	if reason, _ := ch["last_error"].(string); reason == "" {
+		t.Error("the derived stale verdict must explain itself through last_error (an existing, contract-registered view field)")
+	}
+	if ch["known_issue"] == nil {
+		t.Error("known_issue badge must survive the derived status (upstream really is gone)")
+	}
+}
+
 func TestHandleAgentNames(t *testing.T) {
 	tmpDir := t.TempDir()
 	configsDir := filepath.Join(tmpDir, "configs")

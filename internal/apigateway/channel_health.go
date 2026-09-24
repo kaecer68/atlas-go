@@ -391,7 +391,15 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 	s.mu.Unlock()
 
 	if s.pool != nil {
-		dbErr := s.recordToDB(channelID, status, errMsg, advanceLastSuccess, consecutiveFailures)
+		// Fact columns come from the record itself (recNow / lastSuccess), never
+		// from a fresh time.Now(): stamping the sync clock into last_fetch_at
+		// made a 17-day-old channel look freshly fetched in the DB (2026-09-24).
+		var lastSuccess *time.Time
+		if advanceLastSuccess {
+			ls := recNow
+			lastSuccess = &ls
+		}
+		dbErr := s.recordToDB(channelID, status, errMsg, recNow, lastSuccess, consecutiveFailures)
 		if dbErr == nil {
 			return s.save()
 		}
@@ -407,7 +415,14 @@ func (s *ChannelHealthStore) recordInternal(channelID, status, errMsg string, ad
 // panic the process on startup (atlas binary E2E: ChannelHealthStore.recordToDB
 // nil deref, channel_health.go:428). Callers must pass the streak they already
 // hold.
-func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanceLastSuccess bool, consecutiveFailures int) error {
+//
+// lastFetchAt / lastSuccessAt are FACTS supplied by the caller (parsed from the
+// record), not timestamps minted here. They used to be time.Now(), which made
+// SyncAllToDB (every 5 min) rewrite last_fetch_at for every channel — so the DB
+// claimed twse_oddlot had been fetched 3 minutes ago while its real last fetch
+// was 17 days old (2026-09-24 channel-status-truth fix). updated_at keeps
+// meaning "when this row was last written".
+func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, lastFetchAt time.Time, lastSuccessAt *time.Time, consecutiveFailures int) error {
 	if s.pool == nil {
 		return fmt.Errorf("database pool not initialized")
 	}
@@ -415,10 +430,8 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanc
 	defer cancel()
 
 	now := time.Now()
-	var lastSuccessAt *time.Time
-	if advanceLastSuccess {
-		ts := now
-		lastSuccessAt = &ts
+	if lastFetchAt.IsZero() {
+		lastFetchAt = now
 	}
 
 	var lastErrorPtr *string
@@ -436,7 +449,7 @@ func (s *ChannelHealthStore) recordToDB(channelID, status, errMsg string, advanc
 					  last_success_at = COALESCE(EXCLUDED.last_success_at, channel_health.last_success_at),
 					  consecutive_failures = EXCLUDED.consecutive_failures,
 					  updated_at = EXCLUDED.updated_at
-	`, channelID, status, now, lastErrorPtr, lastSuccessAt, consecutiveFailures, now)
+	`, channelID, status, lastFetchAt, lastErrorPtr, lastSuccessAt, consecutiveFailures, now)
 	if err != nil {
 		return fmt.Errorf("exec channel health query: %w", err)
 	}
@@ -552,18 +565,29 @@ func (s *ChannelHealthStore) SyncAllToDB() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	now := time.Now()
+	if s.nowFunc != nil {
+		now = s.nowFunc()
+	}
 	var failed []string
 	for id, rec := range s.data {
-		errMsg := ""
-		if rec.Status != "ok" {
-			errMsg = rec.LastError
+		if rec == nil {
+			continue
 		}
-		// Sync mirrors the file semantics: last_success advances only when
-		// the stored record was produced by a real success (a waiting record
-		// stores status "ok" but keeps the previous LastSuccessAt — see
-		// RecordWaiting).
-		advance := rec.Status == "ok" && rec.LastSuccessAt == rec.LastFetchAt
-		if err := s.recordToDB(id, rec.Status, errMsg, advance, rec.ConsecutiveFailures); err != nil {
+		// The mirrored status is the contract-aware VERDICT, not the raw
+		// attempt outcome, so a DB query and every UI surface return the same
+		// string. See ChannelHealthSyncValuesFor.
+		v := ChannelHealthSyncValuesFor(id, rec, now)
+		errMsg := ""
+		if v.Status != StatusOK {
+			errMsg = rec.LastError
+			if errMsg == "" {
+				// A derived verdict without an upstream error text (stale) still
+				// needs to explain itself to whoever reads the DB row.
+				errMsg = DeriveChannelStatusReason(rec, ChannelContracts().Contract(id), now)
+			}
+		}
+		if err := s.recordToDB(v.ChannelID, v.Status, errMsg, v.LastFetchAt, v.LastSuccessAt, v.ConsecutiveFailures); err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %v", id, err))
 		}
 	}
