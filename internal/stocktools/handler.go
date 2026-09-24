@@ -64,6 +64,11 @@ type Deps struct {
 	// GET /api/stock/condition_winrate returns 503. Production injects the
 	// same *SQLiteWinRateProvider as WinRate (it implements both).
 	ConditionWinRate ConditionWinRateProvider
+	// IndustryWinRate is the read-only INDUSTRY-level win-rate provider
+	// (issue #1942). Optional — when nil,
+	// GET /api/stock/industry_winrate returns 503. Production injects the
+	// same *SQLiteWinRateProvider as WinRate (it implements all three).
+	IndustryWinRate IndustryWinRateProvider
 }
 
 // MonthlyRevenueProvider is the minimal interface the
@@ -113,6 +118,7 @@ func RegisterRoutes(mux *http.ServeMux, deps Deps) {
 	mux.Handle("GET /api/stock/win_rate", shared.Get(h.HandleWinRate))
 	mux.Handle("GET /api/stock/volume_divergence", shared.Get(h.HandleVolumeDivergence))
 	mux.Handle("GET /api/stock/condition_winrate", shared.Get(h.HandleConditionWinRate))
+	mux.Handle("GET /api/stock/industry_winrate", shared.Get(h.HandleIndustryWinRate))
 }
 
 // normalizeFundamentalsSymbol maps an API input symbol to the Yahoo-suffix
@@ -757,5 +763,103 @@ func (h *Handler) HandleConditionWinRate(r *http.Request) (int, any) {
 	if !found {
 		out.Message = fmt.Sprintf("no stored outcomes for condition %s (window %s)", conditionID, window)
 	}
+	return http.StatusOK, out
+}
+
+// IndustryWinRateResponse is the JSON body of GET
+// /api/stock/industry_winrate. found=false means the requested
+// (industry_id, source, window) slice has no stored outcomes —
+// informational, not an error (same contract as /api/stock/win_rate and
+// /api/stock/condition_winrate). coverage is populated even when found=false
+// whenever raw outcomes exist: the mapping gap is the answer's most
+// important caveat (issue #1942).
+type IndustryWinRateResponse struct {
+	Found   bool   `json:"found"`
+	Message string `json:"message,omitempty"`
+	stockpicker.IndustryWinRateReport
+}
+
+// HandleIndustryWinRate serves GET /api/stock/industry_winrate
+// ?condition_id=X[&industry_id=semiconductor][&rolling_window=120d][&regime=RISK_ON].
+//
+// It answers "某產業在某期間的命中率＝？" with the canonical cost-aware
+// caliber (per docs/specs/industry-hitrate-metric-spec.md): hit =
+// forward_return - cost_rate > 0 over the fixed holding period, aggregated on
+// the canonical L1 industry, with min_samples + Wilson CI. Without
+// industry_id it returns every industry row for the source (a ranking);
+// with industry_id it returns that single row.
+//
+// Read-only: it aggregates the persisted raw outcomes on the fly and never
+// recomputes a backtest or changes an existing number. condition_id is
+// required because pooling heterogeneous conditions into one "industry hit
+// rate" would recreate exactly the口径 ambiguity this metric exists to
+// remove; call it once per condition when you need several.
+func (h *Handler) HandleIndustryWinRate(r *http.Request) (int, any) {
+	if h.deps.IndustryWinRate == nil {
+		return http.StatusServiceUnavailable, map[string]string{
+			"error": "industry win-rate store not configured",
+		}
+	}
+	conditionID := r.URL.Query().Get("condition_id")
+	if conditionID == "" {
+		return http.StatusBadRequest, map[string]string{
+			"error": "condition_id is required (e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence); the industry aggregate never pools heterogeneous conditions",
+		}
+	}
+
+	// Optional industry filter: one row instead of the full L1 ranking.
+	industryID := ""
+	if raw := r.URL.Query().Get("industry_id"); strings.TrimSpace(raw) != "" {
+		id, ok := CanonicalL1IndustryID(raw)
+		if !ok {
+			return http.StatusBadRequest, map[string]string{
+				"error": fmt.Sprintf("industry_id %q is not a canonical L1 sector (see industry_sector_list; L2 sub-industries have no aggregate yet)", raw),
+			}
+		}
+		industryID = id
+	}
+
+	window := r.URL.Query().Get("rolling_window")
+	if window == "" {
+		window = defaultWinRateWindow
+	}
+	regime := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("regime")))
+
+	source := winRateSourcePrefix + conditionID
+	report, found, err := h.deps.IndustryWinRate.LoadIndustryWinRate(r.Context(), source, window, regime)
+	if err != nil {
+		return http.StatusServiceUnavailable, map[string]string{"error": err.Error()}
+	}
+
+	out := IndustryWinRateResponse{Found: found, IndustryWinRateReport: report}
+	if !found {
+		// Two distinct empty cases (see IndustryWinRateProvider):
+		// (a) the source has no outcomes in the window at all;
+		// (b) it has outcomes, but none in the requested regime stratum — then
+		//     coverage describes the unfiltered read, and saying "no stored
+		//     outcomes" would be misleading.
+		if report.Coverage.TotalObservations > 0 {
+			out.Message = fmt.Sprintf(
+				"condition %s has no outcomes tagged regime %s (window %s); the source has %d observations in other regimes — coverage below describes the unfiltered read",
+				conditionID, regime, window, report.Coverage.TotalObservations)
+			return http.StatusOK, out
+		}
+		out.Message = fmt.Sprintf("no stored outcomes for condition %s (window %s)", conditionID, window)
+		return http.StatusOK, out
+	}
+	if industryID == "" {
+		return http.StatusOK, out
+	}
+
+	row, ok := stockpicker.IndustryWinRateFor(report, industryID)
+	if !ok {
+		out.Found = false
+		out.Industries = []stockpicker.IndustryWinRateSummary{}
+		out.Message = fmt.Sprintf(
+			"condition %s has no mapped observations for industry %s (window %s); mapped coverage is %v%% of %d observations — see coverage.unmapped_symbols",
+			conditionID, industryID, window, report.Coverage.CoveragePct, report.Coverage.TotalObservations)
+		return http.StatusOK, out
+	}
+	out.Industries = []stockpicker.IndustryWinRateSummary{row}
 	return http.StatusOK, out
 }

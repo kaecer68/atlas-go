@@ -184,3 +184,52 @@ func TestHandleStockGetConditionWinRateMissingCondition(t *testing.T) {
 		t.Fatal("expected error for missing condition_id")
 	}
 }
+
+func TestHandleStockGetIndustryWinRate(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"found":true,"condition_id":"momentum-20d-positive","direction":"buy","industries":[]}`)
+	_, out, err := s.handleStockGetIndustryWinRate(context.Background(), nil, stockIndustryWinRateInput{ConditionID: "momentum-20d-positive"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.path != "/api/stock/industry_winrate" {
+		t.Fatalf("path=%s", rec.path)
+	}
+	if rec.query.Get("condition_id") != "momentum-20d-positive" || rec.query.Get("rolling_window") != "120d" {
+		t.Fatalf("query=%v", rec.query)
+	}
+	if rec.query.Get("industry_id") != "" || rec.query.Get("regime") != "" {
+		t.Fatalf("optional filters must be omitted when empty: %v", rec.query)
+	}
+	if out.Result == nil {
+		t.Fatal("expected result")
+	}
+}
+
+func TestHandleStockGetIndustryWinRateWithFilters(t *testing.T) {
+	s, rec, done := newTestHarness(t)
+	defer done()
+	rec.responseBody = []byte(`{"found":true}`)
+	_, _, err := s.handleStockGetIndustryWinRate(context.Background(), nil, stockIndustryWinRateInput{
+		ConditionID:   "momentum-20d-positive",
+		IndustryID:    "半導體",
+		RollingWindow: "60d",
+		Regime:        "RISK_ON",
+	})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if rec.query.Get("industry_id") != "半導體" || rec.query.Get("rolling_window") != "60d" || rec.query.Get("regime") != "RISK_ON" {
+		t.Fatalf("query=%v", rec.query)
+	}
+}
+
+func TestHandleStockGetIndustryWinRateMissingCondition(t *testing.T) {
+	s, _, done := newTestHarness(t)
+	defer done()
+	_, _, err := s.handleStockGetIndustryWinRate(context.Background(), nil, stockIndustryWinRateInput{})
+	if err == nil {
+		t.Fatal("expected error for missing condition_id")
+	}
+}

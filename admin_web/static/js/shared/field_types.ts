@@ -2070,6 +2070,11 @@ export interface IndustrySegmentConfig {
   description?: string;
 }
 
+export interface IndustryWinRateResponse {
+  found: boolean;
+  message?: string;
+}
+
 export interface InsiderAggregate {
   date: string;
   total_declared: number;

@@ -1,13 +1,13 @@
 # atlas-mcp Tool Catalog
 
-> **119 tools**（預設啟用；sampling/elicitation feature-gated 全開時 121）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
+> **122 tools**（預設啟用；sampling/elicitation feature-gated 全開時 124）grouped by functional area. For investor use cases, see [`docs/investor/use-cases/`](../investor/use-cases/).
 > For natural language query examples, see [`docs/investor/query-examples.md`](../investor/query-examples.md).
 
 ## 工具數量
 
-業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + stock_get_win_rate 1 + stock_picker_scan 1 + stock_get_volume_divergence 1 + stock_get_condition_winrate 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **121**（**基礎 121**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 123；啟動期 assert ∈ [117, 125]，見 `cmd/atlas-mcp/server/server.go`）
+業務 110+ + template_detector 2 + audit 4 + audit_state 1 + strategy_for_period 1 + stock_get_monthly_revenue 1 + stock_get_win_rate 1 + stock_picker_scan 1 + stock_get_volume_divergence 1 + stock_get_condition_winrate 1 + stock_get_industry_winrate 1 + Phase 2 alert lifecycle 4 − prism_get_training_results 1（#1527 移除）= **122**（**基礎 122**, **+2** sampling/elicitation feature-gated 預設關閉 → 最多 124；啟動期 assert ∈ [118, 126]，見 `cmd/atlas-mcp/server/server.go`）
 
-## 完整工具 Catalog（122 個 tool 槽位，其中 120 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
+## 完整工具 Catalog（124 個 tool 槽位，其中 122 個預設啟用；Phase 2 與 PR 1/2/3 全部上線）
 
 
 ### Regime（1 個）
@@ -171,7 +171,7 @@
 | `data_get_quality` | 資料品質 metrics |
 | `data_get_field_contract` | Field contract schema |
 
-### Stock（9 個）
+### Stock（10 個）
 | Tool | 用途 |
 |------|------|
 | `stock_get_win_rate` | Phase 4 個股勝率聚合（read-only；從 stockpicker SQLite ledger 讀取，不重新計算；無資料回 found=false） |
@@ -182,6 +182,7 @@
 | `stock_get_technical` | 個股技術面（收盤價、均線、RSI，預設 90 天、上限 365 天） |
 | `stock_get_volume_divergence` | 個股量價背離（頂背離/底背離旗標 + 5/20 日均量證據，預設 30 交易日、上限 120） |
 | `stock_get_condition_winrate` | 條件級跨股票勝率聚合（回答「某條件整體有沒有效」；附 direction=buy/avoid 語義旗標） |
+| `stock_get_industry_winrate` | 產業級命中率聚合（canonical 扣成本口徑，鍵 = canonical L1 × condition × window；附 Wilson CI、coverage 與未映射清單；見 [`../specs/industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md)） |
 | `stock_get_monthly_revenue` | 個股月營收（YoY/MoM，可選月份區間） |
 
 > **API Contract**：[`../specs/stock-api-contract.md`](../specs/stock-api-contract-spec.md) 定義 4 個 `/api/stock/*` endpoint 的 typed schema（含 Symbol normalization 規則、單位、欄位）。
