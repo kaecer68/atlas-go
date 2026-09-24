@@ -87,6 +87,12 @@ func defaultStockpickerParameters() StockpickerParameters {
 					Rationale: "Cumulative foreign net buy over the window must exceed this value to trigger (PR 2a).",
 					Source:    SourceHeuristic,
 				},
+				MaxFlowAgeDays: ParameterMetadata[int]{
+					Value:     7,
+					Rationale: "Freshness limit (calendar days) for the per-symbol flow file backing the trigger date (issue #1945): data/state/stock_flows/<symbol>.json stopped being refreshed after 2026-08-27, so every trigger date after the newest flow point silently reused the same frozen window. 7 days covers a weekend plus the Taiwan holiday blocks without hiding a genuinely dead feed.",
+					Source:    SourceHeuristic,
+					Todo:      "Tighten to 4 once the daily per-symbol flow refresh (stockpicker_flows_update) has a clean track record.",
+				},
 			},
 			Momentum20DPosit: StockpickerConditionWindow{
 				WindowDays: ParameterMetadata[float64]{
@@ -220,6 +226,12 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Stockpicker.Conditions.Foreign3DNetBuy.WindowDays.Rationale == "" {
 		cfg.Stockpicker.Conditions.Foreign3DNetBuy = def.Conditions.Foreign3DNetBuy
+	}
+	// max_flow_age_days (issue #1945): a saved config predating the freshness
+	// guard has a complete window_days/threshold block but no max_flow_age_days
+	// → backfill the field alone (the block-level check above would skip it).
+	if cfg.Stockpicker.Conditions.Foreign3DNetBuy.MaxFlowAgeDays.Rationale == "" {
+		cfg.Stockpicker.Conditions.Foreign3DNetBuy.MaxFlowAgeDays = def.Conditions.Foreign3DNetBuy.MaxFlowAgeDays
 	}
 	if cfg.Stockpicker.Conditions.Momentum20DPosit.WindowDays.Rationale == "" {
 		cfg.Stockpicker.Conditions.Momentum20DPosit = def.Conditions.Momentum20DPosit

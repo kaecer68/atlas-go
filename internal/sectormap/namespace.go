@@ -64,6 +64,15 @@ const (
 	// vocabulary consumed by marketdata.FinMindSectorIndexProvider. It covers 18
 	// of the 20 canonical L1 sectors; chemicals and tourism are documented gaps.
 	NamespaceFinMindSectorSeries Namespace = "finmind_sector_series"
+
+	// NamespaceETFRepresentatives is the PR-α ETF representative vocabulary:
+	// the 11 Taiwan-listed ETFs declared in internal/sectorallocation
+	// (see sectorallocation.ETFRepresentatives). Each entry carries an
+	// explicit 1:many mapping to one or more canonical L1 sector IDs;
+	// the mapping is the audit hook that proves the ETF L1 coverage metric.
+	// Declared as a namespace (not a single identity table) because future
+	// PRs may need to reason about which ETFs map where, including drift.
+	NamespaceETFRepresentatives Namespace = "sectorallocation_etf_representatives"
 )
 
 // Status classifies the disposition of a single foreign key.

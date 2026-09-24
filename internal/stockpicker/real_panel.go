@@ -134,12 +134,6 @@ func (p *RealPanel) Bars(ctx context.Context, symbol string) ([]HistoricalBar, e
 	return nil, nil
 }
 
-// flowFile is the on-disk shape of data/state/stock_flows/<symbol>.json.
-type flowFile struct {
-	Symbol string      `json:"symbol"`
-	Flows  []FlowPoint `json:"flows"`
-}
-
 func (p *RealPanel) Flows(ctx context.Context, symbol string) ([]FlowPoint, error) {
 	data, err := os.ReadFile(filepath.Join(p.flowsDir, symbol+".json"))
 	if err != nil {
@@ -150,7 +144,7 @@ func (p *RealPanel) Flows(ctx context.Context, symbol string) ([]FlowPoint, erro
 		}
 		return nil, fmt.Errorf("read flows %s: %w", symbol, err)
 	}
-	var f flowFile
+	var f FlowFile
 	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("parse flows %s: %w", symbol, err)
 	}

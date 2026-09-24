@@ -580,6 +580,7 @@ var taskDescriptions = map[string]string{
 	"metrics_snapshot":                  "指標快照持久化",
 	"auto_universe_full_rebuild":        "股票宇宙全量重建",
 	"stockpicker_daily_update":          "stockpicker 每日更新",
+	"stockpicker_flows_update":          "stockpicker 個股 T86 flow 每日刷新（#1945）",
 	"auto_gap_detection":                "資料缺口偵測",
 	"window_backtest":                   "窗口回測",
 	"rule_engine_check":                 "規則引擎檢查（30s）",

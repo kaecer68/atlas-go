@@ -1409,6 +1409,13 @@ type StockpickerConditionWindow struct {
 	WindowDays ParameterMetadata[float64] `json:"window_days"`
 	// Threshold is the value the window aggregate must exceed to trigger.
 	Threshold ParameterMetadata[float64] `json:"threshold"`
+	// MaxFlowAgeDays is the freshness limit (calendar days) of the per-symbol
+	// flow file backing a trigger/decision date: when the newest per-symbol
+	// flow point dated <= t is older than this, the flow condition refuses to
+	// trigger instead of silently reusing a stale window (issue #1945).
+	// Only the flow condition (foreign_3d_net_buy) reads it; the price
+	// conditions leave it at 0 (they read bars, not flow files).
+	MaxFlowAgeDays ParameterMetadata[int] `json:"max_flow_age_days,omitempty"`
 }
 
 // FlowGatewayParameters is the stockpicker.flow_gateway section of

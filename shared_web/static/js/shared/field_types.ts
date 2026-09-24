@@ -4101,6 +4101,7 @@ export interface StockpickerCalibrationParameters {
 export interface StockpickerConditionWindow {
   window_days: string;
   threshold: string;
+  max_flow_age_days?: string;
 }
 
 export interface StockpickerConditionsParameters {
