@@ -43,6 +43,23 @@ type report struct {
 	DeclaredAll     industry.CanonicalCoverage  `json:"declared_all_coverage"`
 	Universe        *universeReport             `json:"universe_coverage,omitempty"`
 	GICSBlocked     *gicsReport                 `json:"legacy_gics,omitempty"`
+	ETFL1Coverage   *etfL1CoverageReport        `json:"etf_l1_coverage,omitempty"`
+}
+
+// etfL1CoverageReport 把 sectorallocation.ETFL1Coverage() 的結果與 sectormap 的
+// namespace 報表結合輸出。PR-α 新增 metric。
+type etfL1CoverageReport struct {
+	Count     int                `json:"count"`
+	Symbols   int                `json:"symbols"`
+	L1Covered []string           `json:"l1_covered"`
+	BySymbol  []etfBySymbolEntry `json:"by_symbol"`
+}
+
+// etfBySymbolEntry 把一個 ETF symbol 與其 L1 targets 列出，方便人工抽檢。
+type etfBySymbolEntry struct {
+	Symbol    string             `json:"symbol"`
+	Benchmark string             `json:"benchmark"`
+	L1Targets map[string]float64 `json:"l1_targets"`
 }
 
 type universeReport struct {
@@ -107,6 +124,26 @@ func main() {
 		rep.GICSBlocked = g
 	}
 
+	// PR-α: ETF L1 coverage metric.
+	// SSOT 在 internal/sectormap/etf_representatives.go；sectorallocation 是 wrapper。
+	etfCov := &etfL1CoverageReport{
+		Count:     sectorallocation.ETFL1CoverageCount(),
+		Symbols:   len(sectorallocation.ETFRepresentatives()),
+		L1Covered: stringSliceFromSectorIDs(sectorallocation.ETFL1Coverage()),
+	}
+	for _, r := range sectorallocation.ETFRepresentatives() {
+		m := make(map[string]float64, len(r.L1Targets))
+		for k, v := range r.L1Targets {
+			m[string(k)] = v
+		}
+		etfCov.BySymbol = append(etfCov.BySymbol, etfBySymbolEntry{
+			Symbol:    r.Symbol,
+			Benchmark: r.Benchmark,
+			L1Targets: m,
+		})
+	}
+	rep.ETFL1Coverage = etfCov
+
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -121,6 +158,15 @@ func main() {
 	if rep.DeclaredL1.Mapped != rep.DeclaredL1.Universe {
 		os.Exit(1)
 	}
+}
+
+// stringSliceFromSectorIDs 把 industry.SectorID slice 轉成 string slice。
+func stringSliceFromSectorIDs(ids []industry.SectorID) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = string(id)
+	}
+	return out
 }
 
 func printHuman(rep report) {
@@ -140,6 +186,11 @@ func printHuman(rep report) {
 	if rep.GICSBlocked != nil {
 		fmt.Printf("legacy GICS weights: blocked=%.4f unmapped=%v\n",
 			rep.GICSBlocked.BlockedWt, rep.GICSBlocked.UnmappedKeys)
+	}
+	if rep.ETFL1Coverage != nil {
+		fmt.Printf("ETF L1 coverage: %d/%d symbols cover %d L1 sectors\n",
+			rep.ETFL1Coverage.Symbols, len(rep.ETFL1Coverage.BySymbol), rep.ETFL1Coverage.Count)
+		fmt.Printf("  L1 covered: %v\n", rep.ETFL1Coverage.L1Covered)
 	}
 }
 
