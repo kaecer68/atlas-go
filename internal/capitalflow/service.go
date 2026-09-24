@@ -6,6 +6,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -64,14 +65,13 @@ func deriveTradingDate(recordedAt int64) string {
 // read path (LatestDaily, Summary, QualityScore, refreshIfStale)
 // never calls UpsertDay (BK-15 / spec §8.1 / CF-INV-04).
 //
-// eventCalendar (added in CL-1 fix, spec CF-INV-16) is the
-// Taiwan trading-day calendar used by Refresh to skip non-trading
-// days. Production wiring (cmd/atlas/main.go) passes the shared
-// *industry.EventCalendar instance created at main.go:427.
-// Tests that do not call Refresh may pass nil; Refresh itself
-// performs a defensive nil-check (logs warning, treats as
-// trading day) so a missing calendar never panics in production
-// due to wiring bugs — it just stops filtering weekend data.
+// eventCalendar (added in CL-1 fix, spec CF-INV-16) is the shared
+// *industry.EventCalendar instance created at cmd/atlas/main.go.
+// It is event/sentiment data, NOT the trading-day table: Refresh's
+// CF-INV-16 gate uses marketdata.IsTaiwanTradingDay (the authoritative
+// static+lunar holiday table) and only consults eventCalendar to warn
+// about the long_holiday-window divergence that froze the radar
+// (issue #1947). Passing nil is allowed and simply skips that warning.
 type Service struct {
 	provider      marketdata.MacroDataProvider
 	extractor     *ForceExtractor
@@ -86,6 +86,13 @@ type Service struct {
 	reportMu       sync.RWMutex
 	cachedReport   *DailyReport
 	reportCachedAt time.Time
+
+	// skipMu guards consecutiveSkips, the observable counter for CF-INV-16's
+	// skip-and-log path (issue #1947: the rolling store sat frozen for a week
+	// while task_liveness reported consecutive_failures=0, because a skip is
+	// not a failure and nothing counted it).
+	skipMu           sync.Mutex
+	consecutiveSkips int
 
 	// periodProvider resolves the seven-period market classification for a
 	// trading date (PR-3a). Optional: nil keeps the legacy behavior (no
@@ -279,6 +286,136 @@ func (s *Service) refreshIfStale() ResonanceResult {
 	return s.cachedResonance
 }
 
+// nonTradingSkipStreakWarn is the number of consecutive non-trading-day skips
+// after which the skip itself is escalated to WARN, once (issue #1947). A
+// normal weekend reaches it once per weekend, so the escalation is not
+// periodic noise, while an unexpected run of skips shows up in logs.
+const nonTradingSkipStreakWarn = 3
+
+// recordNonTradingSkip logs a CF-INV-16 skip and maintains the consecutive
+// skip counter.
+//
+// Observability (issue #1947): the production radar was frozen from
+// 2026-09-22 while every layer reported healthy — `skip_non_trading_day` was
+// log INFO, the task ran, and consecutive_failures stayed 0. Two things now
+// make a wrong skip visible:
+//
+//  1. skipAlertLevel escalates to WARN when the snapshot carries capital-flow
+//     inputs (a skip with usable readings is self-contradictory: TWSE
+//     publishes nothing on a holiday, so at least one of the two judgements
+//     is wrong) and when the skip streak first crosses
+//     nonTradingSkipStreakWarn.
+//  2. every skip carries `consecutive_skips`, so a frozen store can be read
+//     straight off the log instead of from the store's mtime.
+func (s *Service) recordNonTradingSkip(date string, snap marketdata.MacroDataSnapshot) {
+	s.skipMu.Lock()
+	s.consecutiveSkips++
+	streak := s.consecutiveSkips
+	s.skipMu.Unlock()
+
+	present := presentCapitalFlowInputs(snap)
+	fields := []any{
+		logging.FStr("date", date),
+		logging.FInt("consecutive_skips", streak),
+		logging.FInt("recorded_at", int(snap.RecordedAt)),
+	}
+	if present != "" {
+		fields = append(fields, logging.FStr("inputs_present", present))
+	}
+	switch skipAlertLevel(present, streak) {
+	case "warn":
+		logging.Warn("capitalflow", "skip_non_trading_day_suspicious", fields...)
+	default:
+		logging.Info("capitalflow", "skip_non_trading_day", fields...)
+	}
+}
+
+// resetNonTradingSkip clears the consecutive-skip counter once a trading day
+// has been reached and the refresh proceeds.
+func (s *Service) resetNonTradingSkip() {
+	s.skipMu.Lock()
+	s.consecutiveSkips = 0
+	s.skipMu.Unlock()
+}
+
+// skipCount returns the current consecutive non-trading-day skip count.
+// Unexported accessor kept for tests and for any future health endpoint that
+// wants to expose "the rolling store has not advanced for N skips".
+func (s *Service) skipCount() int {
+	s.skipMu.Lock()
+	defer s.skipMu.Unlock()
+	return s.consecutiveSkips
+}
+
+// skipAlertLevel returns the log level ("warn" or "info") for a
+// non-trading-day skip. present is the comma-joined list of capital-flow
+// inputs the snapshot carried ("" = none); streak is the 1-based number of
+// consecutive skips including this one.
+//
+// Pure so the escalation policy is unit-testable without a log sink.
+func skipAlertLevel(present string, streak int) string {
+	if present != "" {
+		return "warn"
+	}
+	if streak == nonTradingSkipStreakWarn {
+		return "warn"
+	}
+	return "info"
+}
+
+// presentCapitalFlowInputs lists the capital-flow inputs the snapshot actually
+// carries, or "" when it carries none.
+//
+// A skip is only legitimate when upstream published nothing; any capital-flow
+// input being present on a non-trading day means the calendar judgement is
+// wrong (issue #1947: `government_flow`/`taiex`/`market_volume` were fresh
+// while capitalflow skipped 2026-09-23 and 2026-09-24). The seven dimensions
+// contribute eight channels because retail has two (margin balance + short
+// balance).
+func presentCapitalFlowInputs(snap marketdata.MacroDataSnapshot) string {
+	candidates := []struct {
+		name string
+		ok   bool
+	}{
+		{"foreign", snap.ForeignInvestorNet.Symbol != ""},
+		{"institutional", snap.DomesticFundNet.Symbol != ""},
+		{"dealer", snap.DealerNet.Symbol != ""},
+		{"futures_oi", snap.ForeignFuturesOINet.Symbol != ""},
+		{"government", snap.GovernmentNet.Symbol != ""},
+		{"retail_margin", snap.RetailMarginBalance.Symbol != ""},
+		{"retail_short", snap.RetailShortBalance.Symbol != ""},
+		{"tsm_adr", snap.TSMADR.Symbol != ""},
+	}
+	present := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if c.ok {
+			present = append(present, c.name)
+		}
+	}
+	return strings.Join(present, ",")
+}
+
+// warnIfLongHolidayWindowCoversTradingDay reports the issue #1947 divergence:
+// the authoritative holiday table says "trading day" while the wired
+// industry.EventCalendar reports the date inside a long_holiday window.
+//
+// It only logs. A long_holiday event is a [holiday-3d, holiday+2d] market
+// sentiment window, not a market closure, so it must never suppress the
+// refresh; but the divergence is exactly what froze the radar, so it is
+// worth a WARN while it exists (one line per refresh tick, matching the
+// cadence of the condition).
+func (s *Service) warnIfLongHolidayWindowCoversTradingDay(date time.Time, tradingDate string) {
+	if s.eventCalendar == nil {
+		return
+	}
+	if s.eventCalendar.IsTaiwanTradingDay(date) {
+		return
+	}
+	logging.Warn("capitalflow", "long_holiday_window_covers_trading_day",
+		logging.FStr("date", tradingDate),
+		logging.FStr("hint", "industry.EventCalendar reports a long-holiday window here; marketdata.IsTaiwanTradingDay says trading day (authoritative) and Refresh proceeds (issue #1947)"))
+}
+
 // Refresh fetches a fresh snapshot and persists the available
 // dimensions as RollingSamples for the snapshot's own trading
 // date, exactly once. It is the only writer to s.store (BK-15 /
@@ -302,12 +439,19 @@ func (s *Service) refreshIfStale() ResonanceResult {
 // decision point; see spec §18.8.
 //
 // Non-trading-day skip (CF-INV-16): if the snapshot's date is
-// not a Taiwan trading day per s.eventCalendar.IsTaiwanTradingDay,
-// Refresh returns nil after a skip-and-log — no empty sample is
-// written (CF-INV-06) and no error is raised (avoids noisy
-// retries). A nil eventCalendar degrades to "treat as trading
-// day" with a warning log so a missing-wiring bug surfaces in
-// observability without breaking the hot path.
+// not a Taiwan trading day per marketdata.IsTaiwanTradingDay (the
+// authoritative taiwanholidays table — see issue #1947 for why
+// industry.EventCalendar must not be used here), Refresh returns nil
+// after a skip-and-log — no empty sample is written (CF-INV-06) and
+// no error is raised (avoids noisy retries).
+//
+// Observability of the skip path (issue #1947): every skip logs
+// consecutive_skips, and skipAlertLevel escalates to WARN when the
+// snapshot actually carries capital-flow inputs (a contradictory skip)
+// or when the streak first crosses nonTradingSkipStreakWarn. The gate
+// needs no wiring, so there is no "nil calendar → treat as trading day"
+// degradation any more; a nil eventCalendar only disables the
+// long_holiday-window warning.
 //
 // Errors (wrapped with %w for errors.Is / errors.As):
 //   - nil store: the wiring is incomplete for the write path;
@@ -333,15 +477,24 @@ func (s *Service) Refresh(ctx context.Context) error {
 	recordTime := time.Unix(snap.RecordedAt, 0).In(taipeiZone)
 	currentDate := deriveTradingDate(snap.RecordedAt)
 
-	if s.eventCalendar == nil {
-		logging.Warn("capitalflow", "refresh_no_calendar",
-			logging.FStr("date", currentDate))
-	} else if !s.eventCalendar.IsTaiwanTradingDay(recordTime) {
-		logging.Info("capitalflow", "skip_non_trading_day",
-			logging.FStr("date", currentDate),
-			logging.FInt("recorded_at", int(snap.RecordedAt)))
+	// CF-INV-16 trading-day gate. The authority is marketdata.IsTaiwanTradingDay
+	// (→ internal/taiwanholidays.IsTradingDay), the table 19 other call sites
+	// use. It must NOT be industry.EventCalendar.IsTaiwanTradingDay: that
+	// method returns false for ANY date inside a long_holiday *window*, and
+	// buildHolidayEvent defines every public holiday as a window of
+	// [holiday-3d, holiday+2d]. For 2026 中秋 (09-25) the window is
+	// 2026-09-22..09-27, so 09-23 and 09-24 — both real trading days — were
+	// judged non-trading and the radar stopped advancing from 2026-09-22
+	// (issue #1947; the store last advanced at 09-22 07:59, i.e. just before
+	// the window opened in UTC terms).
+	if !marketdata.IsTaiwanTradingDay(recordTime) {
+		s.recordNonTradingSkip(currentDate, snap)
 		return nil
 	}
+	s.resetNonTradingSkip()
+	// The event calendar is event data, not a holiday table: report the
+	// divergence, never act on it (issue #1947).
+	s.warnIfLongHolidayWindowCoversTradingDay(recordTime, currentDate)
 
 	forces := s.extractor.Score(snap, currentDate, nil)
 	// Issue #1940 R2: a dimension whose reading carries its own date must be

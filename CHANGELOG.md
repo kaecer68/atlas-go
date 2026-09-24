@@ -4,6 +4,16 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(capitalflow): 交易日判定改用權威假日表，修復雷達在交易日凍結（issue #1947）（2026-09-24）
+- **問題**：七維錢潮 rolling store 自 **2026-09-22 07:59** 起停止更新，但 09-23（三）、09-24（四）為正常交易日（2026 中秋＝09-25）。同期 `msg=skip_non_trading_day date=2026-09-24 component=capitalflow` 每 5 分鐘出現，而 `task_liveness.capital_flow_refresh` 的 `consecutive_failures=0`（skip 不是 failure → 沒有任何告警）。上游其實有資料：`taiex ts=2026-09-24 12:55`、`market_volume ts=2026-09-23`、`data/state/capital_flow/20260923_capital_flow.json` 存在。
+- **根因**：`internal/capitalflow/service.go` 的 CF-INV-16 閘門用 `industry.EventCalendar.IsTaiwanTradingDay`，該方法對任何落在 `long_holiday` 事件**區間**內的日期回 `false`；`buildHolidayEvent` 把每個國定假日展開成 `[holiday-3d, holiday+2d]`，2026 中秋（09-25）的區間 = 2026-09-22..09-27，涵蓋 09-23/24/28 等實際交易日。全 repo 僅 capitalflow 這 1 處使用該判定（其餘 19 處用權威的 `marketdata.IsTaiwanTradingDay` / `taiwanholidays.IsTradingDay`）。連假**區間**是事件/情緒窗，不是休市判定。
+- **修正**：
+  - 閘門改用權威表 `marketdata.IsTaiwanTradingDay`（`taiwanholidays.IsTradingDay`）；`industry.EventCalendar` 降級為顧問訊號：權威表說交易日而事件日曆說在連假區間內時，發 `long_holiday_window_covers_trading_day` WARN（只記錄、不阻擋）。
+  - 移除「nil calendar → 視為交易日」的退化路徑（判定不再依賴注入的日曆；nil 僅停用上述顧問 WARN）。
+  - **可觀測性**：每筆 skip 帶 `consecutive_skips` 計數；`skipAlertLevel` 在 (a) skip 但 snapshot 實際帶有七維輸入（休市不可能有上游資料 ⇒ 兩者之一必錯，即本 issue 生產症狀）或 (b) 連續 skip 首次跨越 3 次時升級為 WARN `skip_non_trading_day_suspicious`；成功進入交易日後計數歸零。
+- **驗證**：新增 `internal/capitalflow/trading_day_gate_test.go`（2026-09-22/23/24/28 為交易日、09-25/26/27 為非交易日；生產形狀事件日曆接線下 09-22/23/24 各寫入一筆樣本；真假日/週末仍 skip 且 0 samples；skip 計數累加與歸零；`skipAlertLevel` 表驅動；事件日曆連假區間涵蓋交易日的**前提**測試）。`go test ./...`（除 `cmd/atlas`）與 `make ci-full` 全綠。
+- **未處理（明示）**：生產 `capital_flow_rolling.json` 已凍結期間（09-23/24）的同日維度樣本不會由下一次 refresh 自動補回（Refresh 只寫當日；CF-INV-06 不允許補 0），需以 `ImportHistory`／歷史匯入工具另行 backfill，或接受序列缺該兩日。
+
 ### fix(capitalflow): 七維輸入層值／日期配對與 CF-INV-06 落實（issue #1940）（2026-09-24）
 - **問題**：七維錢潮（3+2+2）輸入層同時存在「值／日期錯配」與「缺失值寫成 0」兩類缺陷，且都繞過 spec §8.3 / CF-INV-06。
   - R1：`government_flow` 的 0 值 placeholder 檔（`20260721.json`..`20260728.json`，`source=broker-aggregate`）被當成真實讀值連續 18 個交易日寫入 rolling store；`channel_contract.go` 對 `government_flow` 只要求 `file_exists`，通道因此回報 `ok`。

@@ -420,7 +420,7 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 | `CF-INV-13` | 未驗證假設只能標示 calibrating，不影響自動策略 | orchestrator feature-gate test |
 | `CF-INV-14` | F05 只消費穩定 `CapitalFlowAssessment`，不直接解讀七筆 raw force | dependency / integration test |
 | `CF-INV-15` | rolling sample 的 `TradingDate` 必須由 snapshot 自身 `RecordedAt` 推導（Asia/Taipei YYYY-MM-DD），不得由 caller wall-clock 推導；避免 cutoff + last-write-wins 覆寫陷阱。**僅適用於不自帶日期鍵的 channel**（自帶日期者見 CF-INV-18） | unit test: stub RecordedAt 強制驗證 key |
-| `CF-INV-16` | 非交易日（週末／國定假日）Refresh 必須 skip-and-log，不寫入空樣本、不拋 error；nil calendar 視為交易日但記 warn | unit test: Saturday + IsTaiwanTradingDay → 0 samples |
+| `CF-INV-16` | 非交易日（週末／國定假日）Refresh 必須 skip-and-log，不寫入空樣本、不拋 error。判定**必須**用權威假日表 `marketdata.IsTaiwanTradingDay`（→ `internal/taiwanholidays.IsTradingDay`），**不得**用 `industry.EventCalendar.IsTaiwanTradingDay`（後者對 `long_holiday` 事件**區間**內任何日期回 false）。跳過必須有可觀測計數（`consecutive_skips`）與告警升級 | unit test: 週末/國定假日 → 0 samples；2026-09-23/24 在連假區間內仍為交易日 → 有 samples（issue #1947） |
 | `CF-INV-17` | 歷史時間序列 API（如 `/api/capital-flow/historical-snapshot/{date}`）必須對未涵蓋日期回傳 `status: missing` 或 HTTP 404，不得補 0 假資料 | contract test + 端對端 probe |
 | `CF-INV-18` | 自帶日期的 channel（`government_flow` 檔、TAIFEX 期貨 OI session、FinMind OI）必須以**讀值自身日期**作為 `(dimension, trading_date)` key：寫入鍵、讀取窗上界（嚴格早於該日）與 `ForceScore.AsOfTradingDate` 三者必須一致；不得以 refresh run 的交易日 stamping | unit test: 位移檔不得產生當日樣本、同檔重讀只留一筆、讀值不得進入自身參考窗 |
 
@@ -522,11 +522,20 @@ main branch 的 E05 欄位存在但活體未輸出。E06 驗收必須記錄 runt
 
 ### 18.2 非交易日 Skip-and-Log（CF-INV-16）
 
-Refresh 在寫入前必須檢查 `eventCalendar.IsTaiwanTradingDay(recordTime)`：
+Refresh 在寫入前必須以**權威假日表**檢查 `marketdata.IsTaiwanTradingDay(recordTime)`（→ `internal/taiwanholidays.IsTradingDay`；與其他 19 個呼叫點同一張表）：
 
-- **是交易日**：走原 UpsertDay 流程。
-- **非交易日**：log info 等級的 `skip_non_trading_day` 訊息後 `return nil`。不寫入空樣本（CF-INV-06），不拋 error（避免吵雜 retry）。
-- **nil calendar**：log warn 等級的 `refresh_no_calendar` 訊息後視為交易日繼續寫入。Nil calendar 不會 panic，目的是讓測試環境與錯誤 wiring 不會阻斷 hot path，但 observability 必須暴露這個退化。
+- **是交易日**：走原 UpsertDay 流程，並將 `consecutive_skips` 歸零。
+- **非交易日**：記錄 `skip_non_trading_day` 後 `return nil`。不寫入空樣本（CF-INV-06），不拋 error（避免吵雜 retry）。每筆 skip 都帶 `consecutive_skips` 計數。
+
+**2026-09-24 修正（issue #1947）**：本節原本指定 `industry.EventCalendar.IsTaiwanTradingDay`，該方法對任何落在 `long_holiday` 事件**區間**內的日期回 `false`，而 `buildHolidayEvent` 把每個國定假日展開成 `[holiday-3d, holiday+2d]` 的區間。2026 中秋（09-25）的區間 = 2026-09-22..09-27，因此 09-23（三）、09-24（四）兩個**交易日**被判為非交易日，生產雷達自 2026-09-22 07:59 起停止推進（store 凍結）。「連假區間」是事件/情緒窗，**不是**休市判定。
+
+事件日曆保留為**顧問訊號**：權威表說交易日、而 `eventCalendar` 說該日在連假區間內時，發 `long_holiday_window_covers_trading_day` WARN（只記錄、不阻擋）。
+
+**可觀測性（issue #1947 追加）**：skip 是「成功但沒進展」，`task_liveness.consecutive_failures` 因此永遠是 0。skip 路徑必須可被發現：
+
+- 每筆 skip 帶 `consecutive_skips`。
+- `skipAlertLevel` 升級為 WARN 的兩種情況：(a) **skip 但 snapshot 實際帶有可用的七維輸入**（休市不可能有上游資料 ⇒ 兩者之一必錯，這正是 2026-09-24 的生產症狀）；(b) 連續 skip 首次跨越 `nonTradingSkipStreakWarn`（=3）時（正常週末只會響一次）。
+- nil `eventCalendar` 僅停用上述顧問 WARN，**不再**是「視為交易日」的退化路徑（判定已不依賴注入的日曆）。
 
 ### 18.3 Historical Snapshot API 契約（CF-INV-17）
 
@@ -889,3 +898,12 @@ score = tanh(foreignFlow/5e9) * 30 - max(0, VIX-20) * 1.5
 | retail | 34 | 1.46 | 1.46 |
 
 關鍵 probe：`government @2026-08-27` legacy −7028.46 → fixed 0（窗內 18 筆 0 值全數濾除）；`futures @2026-07-21` legacy 785200 → fixed 0（`degraded`）。同資料下 `ComputeResonance` 有 3 個交易日的係數／方向改變：2026-08-27、08-28、09-09 由 `0.5 / mixed` 變為 `1.0 / bullish`。
+
+---
+
+### 18.9 交易日判定必須用權威表（CF-INV-16 修正，issue #1947）
+
+`Refresh` 的交易日閘門唯一權威 = `marketdata.IsTaiwanTradingDay`。`industry.EventCalendar.IsTaiwanTradingDay` 只回傳「這天是否在事件區間內」，`long_holiday` 事件的區間由 `buildHolidayEvent` 展開為 `[holiday−3d, holiday+2d]`，涵蓋實際交易日；以它作閘門會在連假前一週靜默停止寫入。修法見 §18.2。
+
+驗收（`internal/capitalflow/trading_day_gate_test.go`）：2026-09-22/23/24/28 判為交易日、09-25（中秋）/09-26/09-27 判為非交易日；生產形狀的事件日曆接線下，09-22/23/24 仍各寫入一筆樣本；skip 計數與告警升級（`skipAlertLevel`）有表驅動測試。
+
