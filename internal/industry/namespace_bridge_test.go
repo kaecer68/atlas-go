@@ -265,7 +265,7 @@ func TestResolveForeign_GICSBaseWeights(t *testing.T) {
 	if !healthcare.Materialized() {
 		t.Fatal("healthcare must map to a canonical sector")
 	}
-	if got, _ := healthcare.Targets[industry.SectorBiotech]; got != 1.0 {
+	if got := healthcare.Targets[industry.SectorBiotech]; got != 1.0 {
 		t.Errorf("healthcare → biotech weight = %v, want 1.0", got)
 	}
 	if healthcare.L1 != industry.SectorBiotech {

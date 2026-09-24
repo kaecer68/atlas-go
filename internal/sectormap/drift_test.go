@@ -99,6 +99,9 @@ func TestDrift_ClassificationTreeKeys(t *testing.T) {
 			violations = append(violations, s.ID)
 		}
 	}
+	if len(violations) > 0 {
+		t.Errorf("classification_tree contains segments outside level 1..3: %v", violations)
+	}
 	assertSameKeys(t, "configs/parameters/industry.json classification_tree",
 		ids, Keys(NamespaceClassificationTree))
 
