@@ -623,8 +623,13 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.FreshnessWindow = 8 * 24 * time.Hour
 	r.Register(c)
 
+	// twse_sbl: 2026-09-24 (fix/20260924-finmind-quota) 起改吃第一方來源
+	// TWSE TWT93U（上市）+ TPEx margin/sbl（上櫃）——與此處宣告的
+	// SourcePriority 一致。修正前契約宣告 TWSE 但 adapter 實際走
+	// FinMind:TaiwanDailyShortSaleBalances（契約與實作不符），且因 FinMind
+	// 日配額被其他消費者用完而使本通道 warn。
 	c = DefaultChannelContract("twse_sbl")
-	c.SourcePriority = []string{"TWSE"}
+	c.SourcePriority = []string{"TWSE", "TPEx", "FinMind"}
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
 	r.Register(c)

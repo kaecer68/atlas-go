@@ -169,7 +169,9 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		// FinMind 日額度耗盡）。兩者皆非通道故障：
 		//   - ErrNoData（上游當下無新資料）→ RecordWaiting：status 維持 ok、
 		//     不更新 last_success、記 info log（週頻快照發布後自然恢復）。
-		//   - ErrQuotaExhausted（FinMind 日額度用完，00:00 TW 自動重置）→ warn
+		//   - ErrQuotaExhausted（FinMind 日額度用完，配額日邊界 00:00 UTC =
+		//     台北 08:00 自動重置；2026-09-24 實證見
+		//     internal/marketdata/daily_quota.go 的 truncate 語意）→ warn
 		//     （與 adapter_finmind.go HealthCheck / ErrQuotaExhausted 文件語意一致）。
 		//   - ErrFugleQuotaExhausted（Fugle 本機日額度閘 2000/day 用完，00:00 UTC
 		//     重置）→ warn（2026-09-04 實證：額度閘未映射時 fugle 全日 error 告警）。
