@@ -144,6 +144,17 @@ TWSE `exchangeReport/MI_INDEX` 實際回傳 **37 個** `*類指數` 名稱。本
 重跑推導**，與 `internal/sectormap` 宣告表逐值比對（容差 = 1e-6 量化格）；覆蓋率下限（≥12）
 另外從快照獨立計算，改宣告表無法讓它鬆動。ETF key 集合與 `configs/etf_metadata.json` 做漂移比對。
 
+### 3.3.1 ETF／產業碼 路徑的四個陷阱（詳細版）
+
+`docs/reference/traps.md` 因行數上限只放一行指向本節；完整說明與防護測試在此。
+
+| # | 陷阱 | 說明 | 防護 |
+|---|---|---|---|
+| 1 | **ETF 持股權重合計 ≠ 100%** | 投信官網持股頁只列**股票部位**；期貨、現金、保證金另計。2026-09-24 實測：0050 股票 99.71%、006208 99.637%、0056 98.36%、00878 97.33%、00929 96.587%。把官網權重直接當 L1 向量會使「100% 曝險」的假設失真；用「補到 1」掩蓋則是把未分類部位偷偷塞進已分類產業。 | 以**可對映持股權重**重新歸一（加總恰為 1）；未覆蓋比例由 `ETFRepresentative.ReportedWeightPct - MappedWeightPct` 具名揭露，並寫進 mapping `Reason`。測試：`TestETFRepresentatives_DerivationMatchesDeclaredTable`、`TestETFRepresentatives_EveryRowCarriesFirstPartyEvidence`。 |
+| 2 | **TWSE 產業別是 2 位數字碼，中文名不在 OpenAPI 回應裡** | `opendata/t187ap03_L`（上市）的 `產業別` 與 TPEx `mopsfin_t187ap03_O`（上櫃）的 `SecuritiesIndustryCode` 只回數字碼。中文名要取 TWSE ISIN 對照表 `https://isin.twse.com.tw/isin/class_i.jsp?kind=1`。**該網頁是 UTF-8 卻宣告 `ms950`**，硬用 Big5 解碼會得到亂碼。**而且它與 MOPS 舊碼表不同**：此處 `14` = 建材營造業、`24` = 半導體業、`25` = 電腦及週邊設備業；套錯碼表會把整個電子業對到營造業。 | 碼表固定在 `internal/sectormap/twse_industry_code.go`（36 key 顯式處置）；用已知個股交叉驗證（2330→24、2603→15、2912→18、2059→28）。測試：`TestTWSESIndustryCodes_MatchThePublishedLegend`。 |
+| 3 | **同一 TWSE 產業的兩種詞彙必須給出同一個 L1** | 「半導體類指數」vs 產業碼 `24`、電腦及週邊設備類指數 vs `25`、電子零組件類指數 vs `28`、電器電纜類指數 vs `06`…共 22 組。兩張表各自漂移時，同一個 TWSE 產業會因資料來源不同落到不同 canonical L1 —— 正是 #1943 要消滅的缺陷。 | `TestDrift_TWSECodeAndIndexNameAgree` 逐一比對這 22 組；`twse_industry_code` 另須覆蓋 20/20 canonical L1。 |
+| 4 | **ETF 持股是快照，不是常態** | ETF 每季調整成分股、權重每日變動。`internal/sectorallocation/testdata/etf_holdings_20260924.json` 是**具日期**的證據快照；`internal/sectormap` 的宣告表由它推導。 | `TestETFSnapshot_IsSelfConsistentEvidence`（每個 `industry_code` 必須是宣告 key、每日權重為正、無重複）與 `TestETFRepresentatives_DerivationMatchesDeclaredTable`（每次測試重跑推導並逐值比對）。換股後若只改宣告表不改快照 → 紅燈。ETF 期貨／槓桿部位**不得**算進 L1 曝險。 |
+
 ## 4. 映射規則（強制）
 
 1. **禁止字串相似／模糊比對**。key 只能有「顯式對映」或「顯式未映射」兩種狀態。
