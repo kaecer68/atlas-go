@@ -69,23 +69,40 @@ func TestSymbolL1Mapper_L2StockResolvesToL1Ancestor(t *testing.T) {
 	}
 }
 
-func TestSymbolL1Mapper_RejectsNonL1Root(t *testing.T) {
+// Issue #1943: an L2 segment with no canonical L1 ancestor used to be skipped
+// in silence (the production tree lost 19 of its 29 segments that way). It now
+// resolves through the declared L2 → L1 parent table, and undeclared L2 IDs are
+// reported by UnmappedSegments() instead of disappearing.
+func TestSymbolL1Mapper_L2WithoutL1AncestorResolvesViaDeclaredParent(t *testing.T) {
 	tree := industry.NewClassificationTree()
-	// only L2 segment without L1 parent
 	tree.AddSegment(&industry.IndustrySegment{
 		ID:                   "foundry",
 		Name:                 "晶圓代工",
 		Level:                industry.Level2,
 		RepresentativeStocks: []string{"5347"},
 	})
+	// pcb is a tree-only research theme with no canonical taxonomy node.
+	tree.AddSegment(&industry.IndustrySegment{
+		ID:                   "pcb",
+		Name:                 "PCB",
+		Level:                industry.Level2,
+		RepresentativeStocks: []string{"2313"},
+	})
 
 	m, err := industry.NewSymbolL1Mapper(tree)
 	if err != nil {
-		t.Fatalf("NewSymbolL1Mapper should tolerate or skip non-L1 segments: %v", err)
+		t.Fatalf("NewSymbolL1Mapper: %v", err)
 	}
-	_, ok := m.ResolveL1("5347")
-	if ok {
-		t.Fatal("L2 segment with no L1 ancestor should NOT resolve")
+	id, ok := m.ResolveL1("5347")
+	if !ok || id != industry.SectorSemiconductor {
+		t.Fatalf("5347 = (%q, %v), want (semiconductor, true) via the declared L2 parent table", id, ok)
+	}
+	if _, ok := m.ResolveL1("2313"); ok {
+		t.Error("pcb has no canonical taxonomy node, so its symbols must not resolve")
+	}
+	unmapped := m.UnmappedSegments()
+	if _, reported := unmapped["pcb"]; !reported {
+		t.Errorf("pcb must be reported as an unmapped segment, got %v", unmapped)
 	}
 }
 

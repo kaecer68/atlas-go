@@ -77,25 +77,30 @@ func TestTWSESectorIndexProvider_FetchSectorIndices(t *testing.T) {
 		t.Errorf("expected index 850.30, got %.2f", fins[0].Index)
 	}
 
-	// Check robotics data
-	if robotics, ok := result["robotics"]; !ok {
-		t.Error("expected robotics data")
-	} else if robotics[0].Index != 420.15 {
-		t.Errorf("expected index 420.15, got %.2f", robotics[0].Index)
+	// 電機機械類指數 must land on canonical machinery, not on the legacy
+	// robotics ID (#1943).
+	if machinery, ok := result["machinery"]; !ok {
+		t.Error("expected machinery data")
+	} else if machinery[0].Index != 420.15 {
+		t.Errorf("expected index 420.15, got %.2f", machinery[0].Index)
+	}
+	if _, ok := result["robotics"]; ok {
+		t.Error("legacy robotics ID must not be emitted any more")
 	}
 
-	// Check ai_supply_chain data
-	if ai, ok := result["ai_supply_chain"]; !ok {
-		t.Error("expected ai_supply_chain data")
-	} else if ai[0].Index != 780.00 {
-		t.Errorf("expected index 780.00, got %.2f", ai[0].Index)
-	}
-
-	// Check electronics data
+	// 電腦及週邊設備類指數 and 電子零組件類指數 both roll up to canonical
+	// electronics. fetchSingleDay keys a day's result by canonical ID, so the
+	// later API row wins and the earlier series is dropped (pre-existing
+	// information loss, unchanged by #1943; see the follow-up note in the PR).
 	if elec, ok := result["electronics"]; !ok {
 		t.Error("expected electronics data")
+	} else if len(elec) != 1 {
+		t.Errorf("expected 1 electronics series per day, got %d", len(elec))
 	} else if elec[0].Index != 340.50 {
-		t.Errorf("expected index 340.50, got %.2f", elec[0].Index)
+		t.Errorf("expected the last electronics row (340.50), got %.2f", elec[0].Index)
+	}
+	if _, ok := result["ai_supply_chain"]; ok {
+		t.Error("legacy ai_supply_chain ID must not be emitted any more")
 	}
 
 	// Check other_electronics data
@@ -119,9 +124,10 @@ func TestTWSESectorIndexProvider_FetchSectorIndices(t *testing.T) {
 		t.Errorf("expected index 920.10, got %.2f", energy[0].Index)
 	}
 
-	// 8 mapped industries expected (weighted index should be filtered out)
-	if len(result) != 8 {
-		t.Errorf("expected 8 industries, got %d: %v", len(result), industryKeys(result))
+	// 7 canonical L1 keys expected: 電腦及週邊設備類 and 電子零組件類 share
+	// electronics, and the weighted index is filtered out.
+	if len(result) != 7 {
+		t.Errorf("expected 7 industries, got %d: %v", len(result), industryKeys(result))
 	}
 }
 
@@ -188,27 +194,36 @@ func TestTWSESectorIndexProvider_CalculateReturns(t *testing.T) {
 func TestMapIndustryName(t *testing.T) {
 	provider := NewTWSESectorIndexProvider("")
 
+	// Issue #1943: the legacy 8-name table is gone. 電腦及週邊設備類 now maps to
+	// electronics (was ai_supply_chain), 電機機械類 to machinery (was robotics),
+	// and the other TWSE index names are no longer thrown away.
 	tests := []struct {
 		input    string
 		expected string
 	}{
 		{"半導體類指數", "semiconductor"},
-		{"電腦及週邊設備類指數", "ai_supply_chain"},
+		{"電腦及週邊設備類指數", "electronics"},
 		{"電子零組件類指數", "electronics"},
 		{"其他電子類指數", "other_electronics"},
 		{"航運類指數", "shipping"},
 		{"金融保險類指數", "financials"},
 		{"油電燃氣類指數", "energy"},
-		{"電機機械類指數", "robotics"},
+		{"電機機械類指數", "machinery"},
+		{"電器電纜類指數", "machinery"},
+		{"水泥類指數", "cement"},
+		{"觀光類指數", "tourism"},
 		{"發行量加權股價指數", ""},
-		{"紡織纖維類指數", ""},
+		{"紡織纖維類指數", "textiles"},
 		{"Unknown Sector", ""},
 	}
 
 	for _, tt := range tests {
-		result := provider.mapIndustryName(tt.input)
-		if result != tt.expected {
-			t.Errorf("mapIndustryName(%q) = %q, want %q", tt.input, result, tt.expected)
+		// Both entry points must now resolve through the same declared table.
+		if got := provider.mapIndustryName(tt.input); got != tt.expected {
+			t.Errorf("mapIndustryName(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+		if got := provider.canonicalL1SectorID(tt.input); got != tt.expected {
+			t.Errorf("canonicalL1SectorID(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
 }

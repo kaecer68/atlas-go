@@ -15,6 +15,8 @@ import (
 	"encoding/json"
 	"sort"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
 func Test_SectorID_AllConstantsUnique(t *testing.T) {
@@ -282,22 +284,57 @@ func Test_DisplayZH_L2HasChineseLabel(t *testing.T) {
 	}
 }
 
-// TWSE mapping validation — guards against drift between mapIndustryName string literals
-// and canonical SectorID constants. If a SectorID is renamed, this test catches the gap.
+// TWSE mapping validation — issue #1943. The TWSE table lives in
+// internal/sectormap now (a single declared table instead of two hard-coded Go
+// maps that disagreed). This test asserts that every TWSE index name resolves to
+// a canonical L1 sector and that the legacy 8-name subset agrees with it.
 func Test_TWSEMapping_AllValuesAreValidSectorIDs(t *testing.T) {
-	vals := []string{
-		"semiconductor",
-		"ai_supply_chain",
-		"electronics",
-		"other_electronics",
-		"shipping",
-		"financials",
-		"energy",
-		"robotics",
+	keys := sectormap.Keys(sectormap.NamespaceTWSESectorIndex)
+	if len(keys) == 0 {
+		t.Fatal("TWSE sector-index namespace declares no keys")
 	}
-	for _, v := range vals {
-		if !SectorID(v).IsValid() {
-			t.Errorf("TWSE mapping value %q is not a valid SectorID (rename or register it)", v)
+	covered := map[SectorID]bool{}
+	for _, k := range keys {
+		m := ResolveForeign(NamespaceTWSESectorIndex, k)
+		if !m.Materialized() {
+			// Declared-but-unmapped is a first-class state (#1943): the live
+			// TWSE vocabulary has 37 index names, and the ones without a single
+			// defensible canonical L1 target must say so with a reason instead
+			// of being dropped silently by the provider.
+			if m.Status != sectormap.StatusUnmapped {
+				t.Errorf("TWSE index name %q has status %q, want mapped or declared-unmapped", k, m.Status)
+			}
+			if m.Reason == "" {
+				t.Errorf("unmapped TWSE index name %q must carry a reason", k)
+			}
+			continue
+		}
+		id, ok := CanonicalL1FromForeign(NamespaceTWSESectorIndex, k)
+		if !ok {
+			t.Errorf("materialized TWSE index name %q does not resolve to a canonical L1 sector", k)
+			continue
+		}
+		covered[id] = true
+	}
+	for _, id := range L1Sectors() {
+		if !covered[id] {
+			t.Errorf("canonical L1 sector %s has no TWSE sector-index name", id)
+		}
+	}
+
+	for _, k := range sectormap.Keys(sectormap.NamespaceTWSESectorIndexLegacy) {
+		legacy, ok := CanonicalL1FromForeign(NamespaceTWSESectorIndexLegacy, k)
+		if !ok {
+			t.Errorf("legacy TWSE name %q does not resolve to a canonical L1 sector", k)
+			continue
+		}
+		canonical, ok := CanonicalL1FromForeign(NamespaceTWSESectorIndex, k)
+		if !ok {
+			t.Errorf("TWSE name %q missing from the canonical TWSE table", k)
+			continue
+		}
+		if legacy != canonical {
+			t.Errorf("TWSE name %q: legacy map says %s, canonical map says %s", k, legacy, canonical)
 		}
 	}
 }
