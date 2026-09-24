@@ -51,7 +51,7 @@
 | `twse_oddlot` | 零股交易 | `TWSEOddLotChannelAdapter` | 5s/2b | — |
 | `twse_etf` | ETF 申購贖回淨額（⚠️ 資料源已移除，見 `internal/monitoring/known_issues.go`） | `TWSEETFChannelAdapter` | 1s/1b | — |
 | `twse_insider` | 內部人持股轉讓 | `TWSEInsiderChannelAdapter` | 5s/1b | `auto_twse_insider` (1h) |
-| `twse_sbl` | 借券賣出餘額（**STUB**，G02） | `TWSESBLChannelAdapter` | 2s/1b | `auto_twse_sbl` (1h, disabled) |
+| `twse_sbl` | 借券賣出餘額（第一方 TWSE TWT93U + TPEx margin/sbl，G02 live） | `TWSESBLChannelAdapter` | 2s/1b | `auto_twse_sbl` (1h) |
 | `export_statistics` | 海關進出口統計 | `ExportStatisticsProvider` | 5s/2b | `auto_export` (12h) |
 
 ### 1.3 TW — 其他台灣資料源（8 通道）
@@ -445,7 +445,7 @@ const SHELL_LOADERS = {
 
 | 化石 | 位置 | 說明 | 風險 |
 |------|------|------|------|
-| `twse_sbl` (G02) | `internal/marketdata/twse_sbl_provider.go` | STUB provider，回傳「endpoint not yet confirmed」 | 移除會讓 dashboard 消失此 channel |
+| `twse_sbl` (G02) | `internal/marketdata/twse_sbl_provider.go` | Live provider（第一方 TWSE TWT93U + TPEx margin/sbl；FinMind 為 fallback） | 移除會讓 dashboard 消失此 channel |
 | `tdcc_equity_dispersion` (G01) | `internal/marketdata/tdcc_provider.go` | STUB provider，回傳「API access not yet configured」 | 同上 |
 | Unused parameters | `internal/config/defaults_portfolio.go` | `BetaRangeMin`, `BetaRangeMax`, `MinTradeSize`, `MinPositionSize`, `TargetBeta` 標示 unused | 可能未來實作 beta constraint |
 | `boolParamAccessor` | `internal/config/param_table.go` | 未使用的 scaffolding，預留 bool 參數支援 | 無消費者 |

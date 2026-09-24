@@ -47,10 +47,27 @@ type QuoteBackfillDeps struct {
 const defaultBackfillStart = "2026-01-01"
 
 // backfillQuotaStopRemaining is the FinMind daily-quota floor at which the
-// backfill task stops pulling more data (P1-12). The scheduler gate keeps a
-// headroom budget for the live channel (auto_cycle_update / channel health)
-// instead of letting a cold-start backfill burn the whole 14400/day ceiling.
-const backfillQuotaStopRemaining = 200
+// bulk backfill stops pulling more data (P1-12). The floor is the headroom
+// budget for every live FinMind consumer (auto_cycle_update, sector index,
+// channel health, taifex institutional, tsmc revenue, TDCC) — instead of
+// letting a cold-start backfill burn the whole 14400/day ceiling.
+//
+// 200 → 1500 (fix/20260924-finmind-quota; 2026-09-24 production evidence):
+// the old 200-call floor was 1.4% of the daily quota. On 2026-09-23 the
+// backfill drained the quota down to that floor by ~08:20Z, the last 200
+// calls were gone by 15:27Z (channel_health.twse_sbl:
+// "finmind: daily quota exhausted (used=14400, remaining=0)"), and the 21:00Z
+// auto_cycle_update round then failed for all 24 industries with
+// kind="quota" (Prometheus atlas_data_aggregator_failures_total). Measured
+// live-consumer demand is ~900–2,700 calls/day and the live tasks run in the
+// second half of the quota day (00:00Z–24:00Z), so a 200-call floor cannot
+// protect them.
+//
+// Cost to the backfill is small: its demand (~44,000 calls = 824 symbols ×
+// ~62 missing trading days) already exceeds the daily quota by ~3×, so it
+// must span several days regardless — reserving 1,500 calls does not add a
+// day, it only stops one task from starving the rest of the platform.
+const backfillQuotaStopRemaining = 1500
 
 // NewQuoteBackfillRunner returns a BTM-compatible runner (func(ctx) error)
 // that backfills missing historical quotes via FinMind for stocks in

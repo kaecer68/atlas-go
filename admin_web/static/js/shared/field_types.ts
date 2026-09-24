@@ -5053,6 +5053,12 @@ export interface tierReport {
   details?: string;
 }
 
+export interface tpexSBLResponse {
+  stat: string;
+  date: string;
+  tables: string[];
+}
+
 export interface tsmcRevenueRecord {
   date: string;
   revenue: number;
@@ -5162,6 +5168,14 @@ export interface twseOpenAPIMeetingRow {
   公司名稱: string;
   開會日期: string;
   "股東常(臨時)會": string;
+}
+
+export interface twseSBLResponse {
+  stat: string;
+  date: string;
+  title: string;
+  fields: string[];
+  data: string[][];
 }
 
 export interface twseT86Response {

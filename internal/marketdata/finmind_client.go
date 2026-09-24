@@ -319,7 +319,10 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	// can hit 1000s of calls per cycle without this gate). When the daily
 	// budget is gone we return ErrQuotaExhausted rather than letting the
 	// HTTP request fail with a misleading 400 status.
-	// P1-7: quota exhaustion is a budget condition (auto-resets at 00:00 TW)
+	// P1-7: quota exhaustion is a budget condition (auto-resets at the
+	// tracker's day boundary: 00:00 process-local, and production containers
+	// run TZ-unset = UTC, i.e. 08:00 Taipei — 2026-09-24 evidence:
+	// data/state/finmind_daily_quota.json last_reset=2026-09-24T00:00:00Z)
 	// — it must NOT trip the breaker, so we reset instead of recording a
 	// failure.
 	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
@@ -382,7 +385,8 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		// paged on-call. Previously only the LOCAL daily-quota gate wrapped
 		// the sentinel; the server-side 402 fell through to the generic
 		// status error below, so channel-health reported "error" for a
-		// budget condition that auto-resets at 00:00 TW.
+		// budget condition that auto-resets at the day boundary (00:00 UTC in
+		// production = 08:00 Taipei).
 		// P1-7: 402 is the server-side quota signal — a budget condition, not
 		// an outage; do NOT trip the breaker (same rule as the local gate).
 		if resp.StatusCode == http.StatusPaymentRequired {
