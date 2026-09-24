@@ -1,7 +1,7 @@
 # Atlas Stock API Contract（前端單一權威來源）
 
-> **文件角色**：定義 `/api/stock/*` 5 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用。
-> **狀態**：v1.4（2026-08-06 新增 §1.5 Coverage Scope、§1.6 Coverage Endpoint、§1.7 變更助記）
+> **文件角色**：定義 `/api/stock/*` 11 個 endpoint 的 HTTP contract（路徑、查詢、回應、錯誤、單位、Source-of-truth），供 client_web 與 atlas-mcp 共用（路由清單：`internal/stocktools/handler.go:111-121`）。
+> **狀態**：v1.5（2026-09-24 新增 §4d `GET /api/stock/industry_winrate`，口徑 SSOT = [`industry-hitrate-metric-spec.md`](industry-hitrate-metric-spec.md)；v1.4 為 2026-08-06 新增 §1.5 Coverage Scope、§1.6 Coverage Endpoint、§1.7 變更助記）
 > **Source-of-truth**：handler 源碼 `internal/stocktools/handler.go` + 各資料源 struct
 
 ---
@@ -25,7 +25,7 @@
 
 ### 1.5 Coverage Scope（2026-08-06 v1.4 新增）
 
-stocktools 4+1 個 endpoint 的涵蓋範圍如下：
+stocktools 的 11 條路由中，**有 `coverage_note` 欄位約定的 5 條**（quote / fundamentals / chips / technical / volume_divergence）涵蓋範圍如下：
 
 | 端點 | 資料源 | Scope 範圍 |
 | --- | --- | --- |
@@ -334,6 +334,34 @@ stocktools 4+1 個 endpoint 的涵蓋範圍如下：
 **Response 200**：`found` + 條件級聚合（跨股票）：`condition_id`、`source`、`direction`（buy/avoid — avoid=反向語義，低勝率=訊號有效）、`observations`、`symbols`、`hits`、`win_rate`、`wilson_lower/upper`、`calibration_status`、`avg_forward_return`、`data_start/end`。無資料 → 200 + `found:false` + `message`。
 
 ---
+
+## §4d `GET /api/stock/industry_winrate`
+
+**Handler**：`internal/stocktools/handler.go::HandleIndustryWinRate`（2026-09-24, issue #1942）
+**資料源**：stockpicker SQLite ledger `stock_signal_outcomes`（read-only，即時聚合，不重算回測）
+**口徑 SSOT**：[`industry-hitrate-metric-spec.md`](industry-hitrate-metric-spec.md)（canonical：`net_forward_return > 0`、5 交易日、成本率 0.585%、≥30 樣本 + Wilson 95% CI，鍵 = canonical L1 × condition × window）
+
+**Query**：
+
+- `condition_id=<id>`（**必填**；foreign-3d-net-buy / momentum-20d-positive / price-volume-top-divergence / price-volume-bottom-divergence。異質條件不池化，多條件請分次呼叫）
+- `industry_id=<id|中文標籤>`（選填；canonical L1，如 `semiconductor` / `半導體` / `金融`。L2 sub-industry 目前無聚合 → 400。省略 = 回傳該 source 全部 L1 列，做為排名視圖）
+- `rolling_window=<label>`（選填；預設 120d）
+- `regime=<label>`（選填；如 RISK_ON — 只聚合觸發日屬於該 regime 的 outcomes；未標記 regime 的歷史 outcomes 不進入分層）
+
+**Response 200**：`found` + 產業級聚合（跨股票、以 canonical L1 為鍵）：`source`、`condition_id`、`direction`（buy/avoid — avoid=反向語義，低勝率=訊號有效）、`rolling_window`、`regime`、`industries[]`（`industry_id`、`industry_name_zh`、`observations`、`symbols`、`hits`、`win_rate`、`wilson_lower/upper`、`confidence`、`calibration_status`、`net_cost_rate`、`avg_forward_return`、`avg_net_forward_return`、`coverage_pct`、`data_start/end`）、`coverage`（`total/mapped/unmapped_observations`、`total/mapped_symbols`、`coverage_pct`、`symbol_coverage_pct`、`unmapped_symbols[]`）。
+
+**契約細節**：
+
+- 未映射到 canonical L1 的 symbol **不進任何產業列**，但一定出現在 `coverage.unmapped_symbols`（不得靜默 drop）。`coverage` 在 `found=false` 時仍會回填。
+- `industry_id` 有值但該產業在此 source/視窗無資料 → 200 + `found:false` + `message`（含覆蓋率），非錯誤。
+- `industry_id` 非法（未知或 L2 sub-industry）→ 400；缺 `condition_id` → 400；provider 未注入 → 503。
+- 無資料 → 200 + `found:false` + `message`（與 `/api/stock/win_rate`、`/api/stock/condition_winrate` 同契約）。
+- 錯誤契約：缺 `condition_id` → 400；`industry_id` 非法（未知 / L2 sub-industry）→ 400；provider 未注入 / ledger 不可讀 / `rolling_window` 格式非法 → 503（沿用 `win_rate`、`condition_winrate` 既有契約）。
+- 認證：與其他 `/api/stock/*` 同為 public path（無 API key）；唯讀，無寫入面。
+- 型別限制：`*_web/static/js/shared/field_types.ts` 的 `IndustryWinRateResponse` 只有自有欄位（`found`/`message`）——field-contract 生成器不展開 embedded struct，`industries`/`coverage` 需前端自行宣告（`ConditionWinRateResponse` 同此行為）。
+
+---
+
 ## §5 `GET /api/stock/sector-median-pe`
 
 **Handler**：`internal/stocktools/handler.go::HandleSectorMedianPE`  

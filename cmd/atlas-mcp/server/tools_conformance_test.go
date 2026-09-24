@@ -30,9 +30,10 @@ func TestMCPAutoDescConformance(t *testing.T) {
 	}
 
 	// Invariant 2: tool count must be stable. Drift > 5 from the
-	// expected ~119 base suggests missing go generate.
-	if n := len(keys); n < 107 || n > 123 {
-		t.Errorf("auto-desc tool count %d outside expected range [107, 123]; run go generate ./cmd/atlas-mcp/... if intentional", n)
+	// expected ~124 (122 non-gated base + 2 sampling/elicitation, after
+	// stock_get_industry_winrate / #1942) suggests missing go generate.
+	if n := len(keys); n < 119 || n > 129 {
+		t.Errorf("auto-desc tool count %d outside expected range [119, 129]; run go generate ./cmd/atlas-mcp/... if intentional", n)
 	}
 
 	// Invariant 3: domain disambiguation cross-references (#1266).

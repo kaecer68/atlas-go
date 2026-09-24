@@ -51,6 +51,12 @@ func registerStockTools(mcpSrv *mcp.Server, s *server) {
 		Description: autoDescOr("stock_get_condition_winrate", "Return the condition-LEVEL (cross-symbol) win-rate aggregate for one stockpicker condition over a rolling window (read-only; aggregates persisted raw outcomes, never recomputes backtests). Answers 'is this condition effective overall?' — the per-symbol stock_get_win_rate cannot (issue #1865). Input: condition_id (required; e.g. foreign-3d-net-buy, momentum-20d-positive, price-volume-top-divergence, price-volume-bottom-divergence) + optional rolling_window (default 120d). The response carries direction: buy (default) or avoid — for price-volume-top-divergence (頂背離, avoid) a LOW win_rate / negative avg_forward_return CONFIRMS the signal. No stored outcomes returns found=false. HTTP: GET /api/stock/condition_winrate. Alternative: stock_get_win_rate (per-symbol), stock_picker_scan (cross-symbol per-condition ranking)."),
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
 	}, s.handleStockGetConditionWinRate)
+
+	countedAddTool(mcpSrv, &mcp.Tool{
+		Name:        "stock_get_industry_winrate",
+		Description: autoDescOr("stock_get_industry_winrate", "Return the INDUSTRY-LEVEL hit-rate aggregate for one stockpicker condition over a rolling window (read-only; aggregates persisted raw outcomes, never recomputes backtests). Answers '某產業某期間的命中率＝？' with the canonical caliber of docs/specs/industry-hitrate-metric-spec.md: hit = net_forward_return > 0 (5-trading-day holding period, cost rate 0.585%), minimum samples + Wilson 95% CI, keyed by canonical L1 industry × condition × window. Input: condition_id (required — conditions are never pooled) + optional industry_id (canonical L1 id or Chinese label, e.g. semiconductor / 半導體; default = every industry row, a ranking) + optional rolling_window (default 120d) + optional regime. Output: industries[] (observations, hits, win_rate, wilson_lower/upper, avg_forward_return, avg_net_forward_return, coverage_pct, calibration_status) plus a coverage block with the unmapped-symbol list — symbols with no canonical L1 mapping are reported, never dropped. found=false means no stored outcomes / no row for that industry (message explains), not an error. Other 'hit rates' in the repo (agent 1-day no-cost, narrative, seasonal, cycle) are DIFFERENT calibers and are NOT this metric. HTTP: GET /api/stock/industry_winrate. Alternative: stock_get_condition_winrate (condition level), stock_get_win_rate (per symbol)."),
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false)},
+	}, s.handleStockGetIndustryWinRate)
 }
 
 type stockSymbolInput struct {
@@ -208,6 +214,37 @@ func (s *server) handleStockGetConditionWinRate(ctx context.Context, _ *mcp.Call
 	}
 	if err := s.withAudit(ctx, "stock_get_condition_winrate", []string{"condition_id", "rolling_window"}, func() error {
 		return s.cli.Get(ctx, "/api/stock/condition_winrate", q, &out.Result)
+	}); err != nil {
+		return nil, stockBaseOutput{}, err
+	}
+	return nil, out, nil
+}
+
+type stockIndustryWinRateInput struct {
+	ConditionID   string `json:"condition_id" jsonschema:"the stockpicker condition id, e.g. momentum-20d-positive or price-volume-top-divergence (required; conditions are never pooled into one industry number)"`
+	IndustryID    string `json:"industry_id,omitempty" jsonschema:"canonical L1 industry id or its Chinese label, e.g. semiconductor or 半導體; default: every industry row (a ranking over all 20 L1 sectors)"`
+	RollingWindow string `json:"rolling_window,omitempty" jsonschema:"rolling window label, e.g. 120d; default 120d"`
+	Regime        string `json:"regime,omitempty" jsonschema:"market regime filter (e.g. RISK_ON); default: all regimes. Only outcomes tagged at trigger time (2026-09-07+) carry regimes"`
+}
+
+func (s *server) handleStockGetIndustryWinRate(ctx context.Context, _ *mcp.CallToolRequest, in stockIndustryWinRateInput) (*mcp.CallToolResult, stockBaseOutput, error) {
+	if in.ConditionID == "" {
+		return nil, stockBaseOutput{}, fmt.Errorf("stock_get_industry_winrate: condition_id is required")
+	}
+	window := in.RollingWindow
+	if window == "" {
+		window = "120d"
+	}
+	var out stockBaseOutput
+	q := url.Values{"condition_id": {in.ConditionID}, "rolling_window": {window}}
+	if in.IndustryID != "" {
+		q.Set("industry_id", in.IndustryID)
+	}
+	if in.Regime != "" {
+		q.Set("regime", in.Regime)
+	}
+	if err := s.withAudit(ctx, "stock_get_industry_winrate", []string{"condition_id", "industry_id", "rolling_window", "regime"}, func() error {
+		return s.cli.Get(ctx, "/api/stock/industry_winrate", q, &out.Result)
 	}); err != nil {
 		return nil, stockBaseOutput{}, err
 	}
