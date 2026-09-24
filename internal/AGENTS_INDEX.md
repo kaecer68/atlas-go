@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：79 個模組（28 S / 33 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：80 個模組（28 S / 34 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
@@ -44,7 +44,7 @@
 | `janus` | JANUS meta-layer — cross-cohort regime 偵測 + PRISM 訓練動態加權 |
 | `live` | **AGENTS.md** — live trading 協調、broker execution、order management、circuit breaking、state 管理 |
 
-### E · Evolving（演進中，32 個）
+### E · Evolving（演進中，33 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -97,7 +97,8 @@
 | `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、空輸出視為失敗；DataClass 僅審計 metadata）|
 | `llm_annotator` | LLM 自然語言註解 — strategy_techniques 的 LLM 註解路徑 |
 | `stocktools` | per-symbol 台股查詢端點（quote/fundamentals/chips/technical）|
-| `stockpicker` | **PR 1a/1b/1c/2a** — 個股選股核心：勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job（可設定條件引擎 `conditions.go`，參數自 `parameters.json`；`-conditions`/`-list-conditions` 選條件）；CLI 盤後執行，尚未接 runtime 排程 |
+| `stockpicker` | **PR 1a/1b/1c/2a** — 個股選股核心：勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job（可設定條件引擎 `conditions.go`，參數自 `parameters.json`；`-conditions`/`-list-conditions` 選條件）；CLI 盤後執行 **+ runtime 排程**（`stockpicker_daily_update`）；flow 檔新鮮度由 `FlowStale` + `max_flow_age_days` 把關（#1945）|
+| `stockflows` | 個股層 T86 flow store（`data/state/stock_flows/<symbol>.json`）維護：CLI（`cmd/backfill-stockpicker-flows`）與排程（`scheduler.stockpicker_flows_update`）共用的唯一實作；idempotent per-date merge + `NewestStoredDate` 增量視窗（#1945）|
 
 ### A · Archived（封存，1 個）
 
