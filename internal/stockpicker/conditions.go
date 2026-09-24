@@ -41,6 +41,11 @@ const (
 	// ParamThreshold is the trigger threshold the window aggregate must
 	// strictly exceed.
 	ParamThreshold = "threshold"
+	// ParamMaxFlowAgeDays is the freshness limit (calendar days) of the
+	// per-symbol flow file backing the trigger date (issue #1945). A window
+	// whose newest flow point is older than this does not fire: without it a
+	// frozen flow file silently reuses the same window for every later date.
+	ParamMaxFlowAgeDays = "max_flow_age_days"
 )
 
 // Condition is a configurable, point-in-time stock-selection rule.
@@ -216,11 +221,15 @@ func IsAvoidCondition(id string) bool {
 // newForeign3DNetBuy builds the foreign-3d-net-buy condition.
 func newForeign3DNetBuy(p config.StockpickerConditionWindow) Condition {
 	return Condition{
-		ID:     string(ConditionForeign3DNetBuy),
-		Name:   "Foreign net buy over window",
-		Type:   ConditionTypeFlow,
-		Params: map[string]float64{ParamWindowDays: p.WindowDays.Value, ParamThreshold: p.Threshold.Value},
-		eval:   evalForeign3DNetBuy,
+		ID:   string(ConditionForeign3DNetBuy),
+		Name: "Foreign net buy over window",
+		Type: ConditionTypeFlow,
+		Params: map[string]float64{
+			ParamWindowDays:     p.WindowDays.Value,
+			ParamThreshold:      p.Threshold.Value,
+			ParamMaxFlowAgeDays: float64(p.MaxFlowAgeDays.Value),
+		},
+		eval: evalForeign3DNetBuy,
 	}
 }
 
@@ -240,6 +249,14 @@ func newMomentum20D(p config.StockpickerConditionWindow) Condition {
 // SearchStrings returns the first index with date >= t; everything before it
 // is dated <= t (PIT). Fewer than window flow dates <= t → no trigger
 // (fail-open, conservative PIT semantics).
+//
+// Freshness guard (issue #1945): the window is taken from the flow series,
+// so for any t after the newest stored flow point the SAME window is reused
+// forever — a frozen flow file silently keeps firing on 4-week-old data.
+// max_flow_age_days (configs/parameters.json → stockpicker.conditions.
+// foreign_3d_net_buy, default DefaultMaxFlowAgeDays) bounds that: when the
+// newest flow point backing t is older than the limit, the condition does
+// not fire instead of manufacturing a stale trigger.
 func evalForeign3DNetBuy(c *Condition, _ []HistoricalBar, flows map[string]FlowPoint, flowDates []string, t time.Time) bool {
 	window := int(c.Param(ParamWindowDays, 3))
 	threshold := c.Param(ParamThreshold, 0)
@@ -250,8 +267,12 @@ func evalForeign3DNetBuy(c *Condition, _ []HistoricalBar, flows map[string]FlowP
 	if idx < window {
 		return false
 	}
+	windowDates := flowDates[idx-window : idx]
+	if FlowStale(windowDates[len(windowDates)-1], t, int(c.Param(ParamMaxFlowAgeDays, DefaultMaxFlowAgeDays))) {
+		return false
+	}
 	var sum float64
-	for _, d := range flowDates[idx-window : idx] {
+	for _, d := range windowDates {
 		sum += flows[d].ForeignNet
 	}
 	return sum > threshold

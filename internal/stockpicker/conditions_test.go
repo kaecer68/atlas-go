@@ -464,3 +464,133 @@ func TestIsAvoidCondition(t *testing.T) {
 		}
 	}
 }
+
+// ── freshness guard (issue #1945) ──────────────────────────────────────
+
+// staleFlowDates returns a flow series whose newest point is `newest` with a
+// positive 3-day sum, so only the freshness guard can stop the trigger.
+func staleFlowDates(newest string) (map[string]FlowPoint, []string) {
+	last, _ := FlowDate(newest)
+	dates := make([]string, 0, 3)
+	flows := make(map[string]FlowPoint, 3)
+	for i := 2; i >= 0; i-- {
+		d := last.AddDate(0, 0, -i).Format("2006-01-02")
+		dates = append(dates, d)
+		flows[d] = FlowPoint{Date: d, ForeignNet: 1000}
+	}
+	return flows, dates
+}
+
+// TestForeign3DNetBuy_StaleFlowDoesNotFire is the regression test for issue
+// #1945: data/state/stock_flows/*.json froze at 2026-08-27, so every trigger
+// date after that silently reused the same 3-day window (08-25..08-27) and
+// recorded fresh stock_signal_outcomes rows derived from 4-week-old flows.
+// The condition must refuse to fire instead.
+func TestForeign3DNetBuy_StaleFlowDoesNotFire(t *testing.T) {
+	flows, flowDates := staleFlowDates("2026-08-27")
+	cond, ok := NewDefaultConditionRegistry(nil).Lookup(string(ConditionForeign3DNetBuy))
+	if !ok {
+		t.Fatalf("registry missing %s", ConditionForeign3DNetBuy)
+	}
+
+	// The condition reads the window strictly before the trigger date, so the
+	// newest flow point used at t is flowDates[idx-1] (2026-08-27 here).
+	// The next session still fires: the window is fresh there.
+	if !cond.Eval(nil, flows, flowDates, mustDate(t, "2026-08-28")) {
+		t.Fatal("trigger one session after the newest flow date = false, want true (fresh window)")
+	}
+	// Exactly at the 7-day default the window is still accepted.
+	if !cond.Eval(nil, flows, flowDates, mustDate(t, "2026-09-03")) {
+		t.Fatal("trigger 7 days after the newest flow date = false, want true (at the limit)")
+	}
+	// One day past the limit the frozen window must NOT back a trigger.
+	if cond.Eval(nil, flows, flowDates, mustDate(t, "2026-09-04")) {
+		t.Fatal("trigger 8 days after the newest flow date = true, want false (stale flow, fail closed)")
+	}
+	// A month later the same frozen window must NOT back a trigger either.
+	if cond.Eval(nil, flows, flowDates, mustDate(t, "2026-09-23")) {
+		t.Fatal("trigger 27 days after the newest flow date = true, want false (stale flow, fail closed)")
+	}
+}
+
+// TestForeign3DNetBuy_MaxFlowAgeDaysParam pins the configured limit: the
+// parameters.json value (7) travels into the condition, and an explicit
+// override is honoured (0 → stockpicker.DefaultMaxFlowAgeDays).
+func TestForeign3DNetBuy_MaxFlowAgeDaysParam(t *testing.T) {
+	flows, flowDates := staleFlowDates("2026-08-27")
+	trigger := mustDate(t, "2026-09-05") // 9 days after the newest flow point
+
+	params := &config.StockpickerConditionsParameters{}
+	params.Foreign3DNetBuy.WindowDays.Value = 3
+	params.Foreign3DNetBuy.MaxFlowAgeDays.Value = 14
+	cond, ok := NewDefaultConditionRegistry(params).Lookup(string(ConditionForeign3DNetBuy))
+	if !ok {
+		t.Fatalf("registry missing %s", ConditionForeign3DNetBuy)
+	}
+	if got := cond.Param(ParamMaxFlowAgeDays, -1); got != 14 {
+		t.Fatalf("Param(%s) = %v, want 14 (from config)", ParamMaxFlowAgeDays, got)
+	}
+	if !cond.Eval(nil, flows, flowDates, trigger) {
+		t.Fatal("9-day-old window with max_flow_age_days=14 = false, want true")
+	}
+
+	params.Foreign3DNetBuy.MaxFlowAgeDays.Value = 3
+	tight, _ := NewDefaultConditionRegistry(params).Lookup(string(ConditionForeign3DNetBuy))
+	if tight.Eval(nil, flows, flowDates, trigger) {
+		t.Fatal("9-day-old window with max_flow_age_days=3 = true, want false")
+	}
+
+	// Unset config value (0) → the package default applies.
+	params.Foreign3DNetBuy.MaxFlowAgeDays.Value = 0
+	backstop, _ := NewDefaultConditionRegistry(params).Lookup(string(ConditionForeign3DNetBuy))
+	if backstop.Eval(nil, flows, flowDates, trigger) {
+		t.Fatal("9-day-old window with max_flow_age_days=0 (default 7) = true, want false")
+	}
+}
+
+// TestBacktest_StaleFlowsProduceNoOutcomes is the end-to-end regression test:
+// a panel whose flow series froze weeks before the trigger window yields no
+// flow-condition outcomes at all, instead of one fabricated trigger per day.
+func TestBacktest_StaleFlowsProduceNoOutcomes(t *testing.T) {
+	bars := make([]HistoricalBar, 0, 12)
+	// First trigger date 8 days after the newest flow point (2026-08-27): the
+	// frozen window is already past the 7-day default on every bar.
+	start := time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 12; i++ {
+		bars = append(bars, HistoricalBar{Date: start.AddDate(0, 0, i), Close: 100, Volume: 1000})
+	}
+	flows, _ := staleFlowDates("2026-08-27")
+	flowSeries := make([]FlowPoint, 0, len(flows))
+	for _, d := range []string{"2026-08-25", "2026-08-26", "2026-08-27"} {
+		flowSeries = append(flowSeries, flows[d])
+	}
+	panel := &staticPanel{
+		bars:  map[string][]HistoricalBar{"2330": bars},
+		flows: map[string][]FlowPoint{"2330": flowSeries},
+	}
+
+	outcomes, err := RunBacktest(context.Background(), BacktestConfig{
+		Universe:    []string{"2330"},
+		Start:       start,
+		End:         start.AddDate(0, 0, 11),
+		AsOf:        start.AddDate(0, 0, 11),
+		ForwardDays: 1,
+		CostRate:    0,
+	}, panel, mustCondition(t, string(ConditionForeign3DNetBuy)))
+	if err != nil {
+		t.Fatalf("RunBacktest: %v", err)
+	}
+	if len(outcomes) != 0 {
+		t.Fatalf("stale flow series produced %d outcome(s) (first %s on %s), want 0",
+			len(outcomes), outcomes[0].Source, outcomes[0].TriggerDate)
+	}
+}
+
+func mustCondition(t *testing.T, id string) Condition {
+	t.Helper()
+	c, ok := NewDefaultConditionRegistry(nil).Lookup(id)
+	if !ok {
+		t.Fatalf("registry missing %s", id)
+	}
+	return *c
+}

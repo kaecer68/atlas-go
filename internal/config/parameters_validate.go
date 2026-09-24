@@ -778,6 +778,12 @@ func (p *ParametersConfig) Validate() error {
 	if p.Stockpicker.Conditions.PriceVolumeBottomDivergence.WindowDays.Value < 20 {
 		return fmt.Errorf("stockpicker.conditions.price_volume_bottom_divergence.window_days (%.0f) must be >= 20 (vol MA20 precondition)", p.Stockpicker.Conditions.PriceVolumeBottomDivergence.WindowDays.Value)
 	}
+	// max_flow_age_days (issue #1945) must stay a positive freshness limit:
+	// 0/absent resolves to stockpicker.DefaultMaxFlowAgeDays at evaluation
+	// time, so a negative value would be silently reinterpreted.
+	if v := p.Stockpicker.Conditions.Foreign3DNetBuy.MaxFlowAgeDays.Value; v < 0 {
+		return fmt.Errorf("stockpicker.conditions.foreign_3d_net_buy.max_flow_age_days (%d) must be >= 0 (0 = use the built-in default)", v)
+	}
 	if err := p.validateFlowGateway(); err != nil {
 		return err
 	}

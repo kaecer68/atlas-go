@@ -20,7 +20,10 @@
 //  3. flow gateway: the latest per-symbol foreign net flow must pass
 //     stockpicker.FlowGateway.Check (internal/stockpicker/validator.go).
 //     Missing flow data fails CLOSED — a candidate without foreign
-//     backing is never recommended ("不誤殺也不亂推").
+//     backing is never recommended ("不誤殺也不亂推"). STALE flow data
+//     (newest point older than MaxFlowAgeDays) fails CLOSED too: the
+//     per-symbol flow file is refreshed by a separate job and silently
+//     frozen between 2026-08-27 and this fix (issue #1945).
 //
 // Injection (all fields nil → production defaults, so the zero value
 // `StockpickerWinrateExecutor{}` is the wiring-free default):
@@ -30,7 +33,9 @@
 //     data/state/atlas.db under WorkDir) with OpenDB (default
 //     stocktools.OpenWinRateDB, mode=ro).
 //   - FlowSource: supplies the latest per-symbol foreign net flow
-//     (FlowPoint.ForeignNet units, 千股); nil reads the flow file.
+//     (FlowPoint.ForeignNet units, 千股) plus its session date; nil reads
+//     the flow file. MaxFlowAgeDays/Now bound how old that point may be
+//     (issue #1945).
 //   - Gateway: stockpicker.FlowGateway; nil → NewDefaultFlowGateway()
 //     (configs/parameters.json → stockpicker.flow_gateway thresholds).
 //   - Source/Window/ConditionID + MinObservations/MinWinRate/MinWilsonLower
@@ -52,8 +57,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -102,9 +109,11 @@ type WinRateStoreReader interface {
 
 // FlowSource supplies the latest per-symbol foreign net flow for the flow
 // gateway. The symbol argument is the bare TWSE code (exchange suffix
-// stripped); the value is FlowPoint.ForeignNet units (千股).
+// stripped); the value is FlowPoint.ForeignNet units (千股) and date is the
+// flow point's YYYY-MM-DD session date, which the executor checks for
+// freshness before the gateway may pass (issue #1945).
 type FlowSource interface {
-	LatestForeignNet(symbol string) (float64, bool)
+	LatestForeignNet(symbol string) (net float64, date string, ok bool)
 }
 
 // CapitalFlowReportProvider supplies the market-wide capitalflow DailyReport
@@ -125,24 +134,24 @@ type fileFlowSource struct {
 }
 
 // LatestForeignNet implements FlowSource. Missing file, empty flow list,
-// or parse failure all report "no data" (the caller fails closed).
-func (s fileFlowSource) LatestForeignNet(symbol string) (float64, bool) {
+// or parse failure all report "no data" (the caller fails closed). The
+// returned date is the newest stored flow point's session date; the
+// freshness verdict stays with the caller (executor) so both the gate and
+// the backtest share one predicate (stockpicker.FlowStale, issue #1945).
+func (s fileFlowSource) LatestForeignNet(symbol string) (float64, string, bool) {
 	data, err := os.ReadFile(filepath.Join(s.flowsDir, stockpickerSymbol(symbol)+".json"))
 	if err != nil {
-		return 0, false
+		return 0, "", false
 	}
-	var f flowFile
-	if err := json.Unmarshal(data, &f); err != nil || len(f.Flows) == 0 {
-		return 0, false
+	var f stockpicker.FlowFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return 0, "", false
 	}
-	return f.Flows[len(f.Flows)-1].ForeignNet, true
-}
-
-// flowFile is the on-disk shape of data/state/stock_flows/<symbol>.json
-// (JSON tags aligned with stockpicker.FlowPoint / real_panel.go).
-type flowFile struct {
-	Symbol string                  `json:"symbol"`
-	Flows  []stockpicker.FlowPoint `json:"flows"`
+	latest, ok := f.Newest()
+	if !ok {
+		return 0, "", false
+	}
+	return latest.ForeignNet, latest.Date, true
 }
 
 // StockpickerWinrateExecutor implements AgentExecutor for the
@@ -166,6 +175,15 @@ type StockpickerWinrateExecutor struct {
 	// FlowDir overrides the flows directory (default
 	// data/state/stock_flows under WorkDir).
 	FlowDir string
+	// MaxFlowAgeDays is the freshness limit (calendar days) of the per-symbol
+	// flow point backing a gate decision (issue #1945). Zero →
+	// stockpicker.DefaultMaxFlowAgeDays, which is also the default encoded in
+	// configs/parameters.json → stockpicker.conditions.foreign_3d_net_buy.
+	// max_flow_age_days. A stale flow point fails the gate CLOSED (the
+	// decision never stands on a 4-week-old file).
+	MaxFlowAgeDays int
+	// Now is the gate's decision clock (freshness reference). nil → time.Now.
+	Now func() time.Time
 	// WorkDir is the base directory for relative data paths. Empty →
 	// ATLAS_WORK_DIR, else ".".
 	WorkDir string
@@ -282,10 +300,23 @@ func (e StockpickerWinrateExecutor) Recommend(agent domain.AgentSpec, quote doma
 
 	// Stage 3: capital-flow gateway — fail closed when the per-symbol
 	// foreign flow is missing (never fabricate backing).
-	net, ok := e.flowSource().LatestForeignNet(symbol)
+	net, flowDate, ok := e.flowSource().LatestForeignNet(symbol)
 	if !ok {
 		logging.Debug("stockpicker_winrate", "skip",
 			logging.Symbol(quote.Symbol), "stage", "flow_missing")
+		return domain.Recommendation{}, false
+	}
+	// Freshness guard (issue #1945): the flow file stopped being refreshed on
+	// 2026-08-27 while this gate kept reading its newest point as "the latest
+	// foreign net flow" — i.e. every later decision stood on 4-week-old data
+	// with no signal that anything was wrong. A stale point now fails the
+	// gate CLOSED and is logged with the offending date.
+	if stockpicker.FlowStale(flowDate, e.now(), e.MaxFlowAgeDays) {
+		logging.Debug("stockpicker_winrate", "skip",
+			logging.Symbol(quote.Symbol), "stage", "flow_stale",
+			"flow_date", flowDate,
+			"max_age_days", e.maxFlowAgeDays(),
+			"reason", "stale per-symbol flow file cannot back a gate decision")
 		return domain.Recommendation{}, false
 	}
 	// Issue #1737: enforce the full two-level gate (個股層 + 市場層) by
@@ -426,6 +457,30 @@ func (e StockpickerWinrateExecutor) flowsDir() string {
 		return e.FlowDir
 	}
 	return filepath.Join(e.workDir(), "data", "state", "stock_flows")
+}
+
+// now returns the gate's decision clock (freshness reference).
+func (e StockpickerWinrateExecutor) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
+}
+
+// maxFlowAgeDays returns the freshness limit: the injected override, else the
+// config-backed value (configs/parameters.json → stockpicker.conditions.
+// foreign_3d_net_buy.max_flow_age_days, the same parameter the backtest
+// condition reads), else stockpicker.DefaultMaxFlowAgeDays. One parameter
+// drives both consumers so a tightened limit cannot apply to only one of
+// them (issue #1945).
+func (e StockpickerWinrateExecutor) maxFlowAgeDays() int {
+	if e.MaxFlowAgeDays > 0 {
+		return e.MaxFlowAgeDays
+	}
+	if v := config.GetParametersConfig().Stockpicker.Conditions.Foreign3DNetBuy.MaxFlowAgeDays.Value; v > 0 {
+		return v
+	}
+	return stockpicker.DefaultMaxFlowAgeDays
 }
 
 func (e StockpickerWinrateExecutor) workDir() string {

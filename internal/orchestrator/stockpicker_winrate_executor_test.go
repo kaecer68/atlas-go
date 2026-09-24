@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -36,14 +37,25 @@ func (m *mockWinRateStore) LoadWinRate(ctx context.Context, symbol, source, wind
 	return m.summary, m.found, nil
 }
 
-// mockFlowSource is a scriptable FlowSource.
+// mockFlowSource is a scriptable FlowSource. date defaults to the current
+// session date so pre-#1945 gate tests keep exercising the flow-gate
+// thresholds instead of the freshness guard; freshness tests set it
+// explicitly.
 type mockFlowSource struct {
-	net float64
-	ok  bool
+	net  float64
+	date string
+	ok   bool
 }
 
-func (m mockFlowSource) LatestForeignNet(symbol string) (float64, bool) {
-	return m.net, m.ok
+func (m mockFlowSource) LatestForeignNet(symbol string) (float64, string, bool) {
+	if !m.ok {
+		return 0, "", false
+	}
+	date := m.date
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	return m.net, date, true
 }
 
 // mockCapitalFlowReportProvider is a scriptable CapitalFlowReportProvider.
@@ -464,7 +476,10 @@ func TestStockpickerWinrateNilDependenciesDefaultBehavior(t *testing.T) {
 	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
 	t.Setenv("ATLAS_WORK_DIR", "")
 
-	e := StockpickerWinrateExecutor{WorkDir: tmp}
+	// Decision clock on the fixture's flow date: the default file FlowSource
+	// read the newest flow point (flowFixtureDate) as fresh, which is the
+	// pre-#1945 behavior for a file that is still being refreshed.
+	e := StockpickerWinrateExecutor{WorkDir: tmp, Now: flowFixtureNow}
 	rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil)
 	if !ok {
 		t.Fatal("Recommend (nil deps, real ledger + flow file) = false, want true")
@@ -496,6 +511,85 @@ func TestStockpickerWinrateNilDependenciesMissingLedger(t *testing.T) {
 	}
 }
 
+// TestStockpickerWinrateStaleFlowFailsClosed (issue #1945): the per-symbol
+// flow file stopped being refreshed on 2026-08-27 while the daily update and
+// this gate kept running. Before the fix the gate read the frozen 2026-08-26
+// point as "the latest foreign net flow" and could recommend on 4-week-old
+// data; now a stale point fails the gate CLOSED (with a debug log) instead of
+// silently standing in for fresh data.
+func TestStockpickerWinrateStaleFlowFailsClosed(t *testing.T) {
+	tmp := t.TempDir()
+	writeStockpickerLedger(t, tmp)
+	writeStockpickerFlowFile(t, tmp) // newest point = flowFixtureDate (2026-08-26)
+
+	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
+	t.Setenv("ATLAS_WORK_DIR", "")
+
+	e := StockpickerWinrateExecutor{
+		WorkDir: tmp,
+		// Default Now (real clock): every decision after the file froze is
+		// stale relative to the newest stored flow point.
+		Now: func() time.Time { return time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC) },
+	}
+	if rec, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+		t.Fatalf("Recommend with stale flow file = %+v, want fail-closed", rec)
+	}
+
+	// Same wiring, decision clock exactly at the freshness boundary: 2026-08-26
+	// + 7 days = 2026-09-02 is still accepted, 2026-09-03 is not.
+	e.Now = func() time.Time { return time.Date(2026, 9, 2, 23, 0, 0, 0, time.UTC) }
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+		t.Fatal("Recommend at the freshness boundary (7 days) = false, want true")
+	}
+	e.Now = func() time.Time { return time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC) }
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+		t.Fatal("Recommend one day past the freshness boundary = true, want false")
+	}
+}
+
+// TestStockpickerWinrateFreshnessMaxAgeOverride pins MaxFlowAgeDays: an
+// operator may tighten the limit (0 → stockpicker.DefaultMaxFlowAgeDays).
+func TestStockpickerWinrateFreshnessMaxAgeOverride(t *testing.T) {
+	tmp := t.TempDir()
+	writeStockpickerLedger(t, tmp)
+	writeStockpickerFlowFile(t, tmp)
+
+	t.Setenv("ATLAS_MCP_STOCKPICKER_DB", "")
+	t.Setenv("ATLAS_WORK_DIR", "")
+
+	now := func() time.Time { return time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC) } // 7 days after the flow point
+	if _, ok := (StockpickerWinrateExecutor{WorkDir: tmp, Now: now}).Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); !ok {
+		t.Fatal("7-day-old point with the default limit = false, want true")
+	}
+	e := StockpickerWinrateExecutor{WorkDir: tmp, Now: now, MaxFlowAgeDays: 3}
+	if _, ok := e.Recommend(stockpickerWinrateAgent(), stockpickerWinrateQuote(), "", domain.Regime(""), nil); ok {
+		t.Fatal("7-day-old point with MaxFlowAgeDays=3 = true, want false")
+	}
+}
+
+// TestFileFlowSourceReturnsNewestFlowDate is the direct read-path evidence for
+// issue #1945: the production FlowSource returns the newest stored point (and
+// its date) straight from data/state/stock_flows/<symbol>.json — it never
+// looked at how old that point is. Freshness is now the caller's decision.
+func TestFileFlowSourceReturnsNewestFlowDate(t *testing.T) {
+	tmp := t.TempDir()
+	writeStockpickerFlowFile(t, tmp)
+
+	src := fileFlowSource{flowsDir: filepath.Join(tmp, "data", "state", "stock_flows")}
+	net, date, ok := src.LatestForeignNet("2330.TW") // suffix-stripping still applies
+	if !ok {
+		t.Fatal("fileFlowSource.LatestForeignNet = not found, want found")
+	}
+	if net != 50000 || date != flowFixtureDate {
+		t.Fatalf("fileFlowSource = (%v, %q), want (50000, %q)", net, date, flowFixtureDate)
+	}
+
+	// Missing symbol → no data (gate fails closed on flow_missing).
+	if _, _, ok := src.LatestForeignNet("9999"); ok {
+		t.Fatal("fileFlowSource for a missing symbol = found, want not found")
+	}
+}
+
 // ── helpers ───────────────────────────────────────────────────────────
 
 // writeStockpickerLedger creates a real read-only-able ledger at
@@ -519,6 +613,19 @@ func writeStockpickerLedger(t *testing.T, tmp string) {
 	}
 }
 
+// flowFixtureDate is the newest flow point written by
+// writeStockpickerFlowFile. It mirrors the production freeze (issue #1945):
+// data/state/stock_flows/*.json stopped at 2026-08-27, so a gate decision
+// dated after that read the 2026-08-26/27 points as "the latest flow".
+const flowFixtureDate = "2026-08-26"
+
+// flowFixtureNow is the decision clock paired with flowFixtureDate: the last
+// day the fixture flow point is fresh, i.e. decisions made while the file was
+// still being refreshed.
+func flowFixtureNow() time.Time {
+	return time.Date(2026, 8, 26, 21, 0, 0, 0, time.UTC)
+}
+
 // writeStockpickerFlowFile creates <tmp>/data/state/stock_flows/2330.json
 // with two ascending-dated flow points; the latest (50000 千股 = 0.5 億股)
 // passes the default foreign threshold.
@@ -528,11 +635,11 @@ func writeStockpickerFlowFile(t *testing.T, tmp string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir flows dir: %v", err)
 	}
-	payload, err := json.Marshal(flowFile{
+	payload, err := json.Marshal(stockpicker.FlowFile{
 		Symbol: "2330",
 		Flows: []stockpicker.FlowPoint{
 			{Date: "2026-08-25", ForeignNet: 30000},
-			{Date: "2026-08-26", ForeignNet: 50000},
+			{Date: flowFixtureDate, ForeignNet: 50000},
 		},
 	})
 	if err != nil {

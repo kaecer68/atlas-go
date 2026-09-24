@@ -1614,7 +1614,8 @@
     {
       "fields": [
         "WindowDays ParameterMetadata[float64]",
-        "Threshold ParameterMetadata[float64]"
+        "Threshold ParameterMetadata[float64]",
+        "MaxFlowAgeDays ParameterMetadata[int]"
       ],
       "kind": "struct",
       "name": "StockpickerConditionWindow"

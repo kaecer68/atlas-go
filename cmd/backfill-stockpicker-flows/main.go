@@ -1,16 +1,18 @@
 // Command backfill-stockpicker-flows backfills per-symbol TWSE T86
 // institutional investor flows into data/state/stock_flows/<symbol>.json.
 //
-// The files are the flow source for run-stockpicker-backtest's real panel:
+// The files are the flow source for the stockpicker panel backtest
+// (internal/stockpicker/real_panel.go) and for the stockpicker win-rate flow
+// gate (internal/orchestrator/stockpicker_winrate_executor.go):
 // {"symbol":"2330","flows":[{"date":"2026-01-05","foreign_net":1500},...]}.
 // foreign_net is the foreign-investor net buy/sell in thousands of shares
 // (provider convention: TWSE raw share counts / 1e3), matching the PR 1c
 // fixture format.
 //
-// The CLI walks every weekday in [start,end] (P1: Taiwan public holidays are
-// simplified to weekends) and fetches the whole market in one T86 request
-// per day. Each day's rows are merged into the per-symbol files keyed by
-// date, so reruns are idempotent.
+// The run logic lives in internal/stockflows so this CLI and the scheduled
+// daily refresh (internal/scheduler stockpicker_flows_update, issue #1945)
+// share one implementation. Use the CLI for the initial backfill and for
+// repairing a gap wider than the scheduler's window.
 //
 // Usage:
 //
@@ -21,26 +23,20 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/stockflows"
 )
 
-const (
-	defaultStart   = "2026-01-01"
-	defaultMinRows = 500
-	defaultSleep   = 3 * time.Second
-)
+const defaultStart = "2026-01-01"
 
-// config carries the CLI flags plus an optional injected provider.
+// config carries the CLI flags.
 type config struct {
 	workDir string
 	start   time.Time
@@ -54,19 +50,23 @@ type config struct {
 	provider *marketdata.TWSECapitalFlowProvider
 }
 
-// dayResult records one date's backfill outcome for the end-of-run summary.
-type dayResult struct {
-	date   string // YYYY-MM-DD
-	rows   int
-	status string // ok / skip / fail
-}
-
 func main() {
 	cfg, err := parseFlags(os.Args[1:])
 	if err != nil {
 		log.Fatalf("backfill-stockpicker-flows: %v", err)
 	}
-	if err := run(context.Background(), cfg); err != nil {
+	res, err := stockflows.Run(context.Background(), stockflows.Config{
+		WorkDir:  cfg.workDir,
+		Start:    cfg.start,
+		End:      cfg.end,
+		DryRun:   cfg.dryRun,
+		Symbols:  cfg.symbols,
+		MinRows:  cfg.minRows,
+		Sleep:    cfg.sleep,
+		Provider: cfg.provider,
+	})
+	printSummary(res, err)
+	if err != nil {
 		log.Fatalf("backfill-stockpicker-flows: %v", err)
 	}
 }
@@ -79,8 +79,8 @@ func parseFlags(args []string) (config, error) {
 		endStr   = fs.String("end", "", "backfill end date YYYY-MM-DD (inclusive; default: today)")
 		dryRun   = fs.Bool("dry-run", false, "print the date list without fetching or writing")
 		symbols  = fs.String("symbols", "", "comma-separated symbol filter (empty = all)")
-		minRows  = fs.Int("min-rows", defaultMinRows, "minimum rows per trading day; fewer fails the run")
-		sleep    = fs.Duration("sleep", defaultSleep, "pause between days (TWSE-friendly throttling)")
+		minRows  = fs.Int("min-rows", stockflows.DefaultMinRows, "minimum rows per trading day; fewer fails the run")
+		sleep    = fs.Duration("sleep", stockflows.DefaultSleep, "pause between days (TWSE-friendly throttling)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
@@ -119,168 +119,29 @@ func parseFlags(args []string) (config, error) {
 	return cfg, nil
 }
 
-// run executes the backfill. It returns an error (main exits non-zero) on
-// the first hard failure: a fetch error that is not ErrNoData, a weekday
-// with fewer than minRows rows, a file write failure, or a verify failure.
-func run(ctx context.Context, cfg config) (err error) {
-	days := weekdays(cfg.start, cfg.end)
-	if cfg.dryRun {
-		for _, d := range days {
-			fmt.Println(d.Format("2006-01-02"))
-		}
-		fmt.Printf("dry-run: %d weekdays in %s..%s; no API calls, no files written\n",
-			len(days), cfg.start.Format("2006-01-02"), cfg.end.Format("2006-01-02"))
-		return nil
-	}
-
-	provider := cfg.provider
-	if provider == nil {
-		provider = marketdata.NewTWSECapitalFlowProvider("")
-	}
-	flowsDir := filepath.Join(cfg.workDir, "data", "state", "stock_flows")
-	if err := os.MkdirAll(flowsDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", flowsDir, err)
-	}
-
-	results := make([]dayResult, 0, len(days))
-	written := map[string]bool{} // symbols whose file exists after the run
-	var flowPoints int
-	defer func() { printSummary(results, written, flowPoints, err) }()
-
-	//nolint:gosec // G706: values are operator-supplied CLI flags on an
-	// admin-run one-shot backfill tool; logging them for diagnostics is
-	// intentional (same justification as cmd/atlas-mcp).
-	log.Printf("backfill-stockpicker-flows: window %s..%s workdir=%s min-rows=%d sleep=%v symbols=%s",
-		cfg.start.Format("2006-01-02"), cfg.end.Format("2006-01-02"), cfg.workDir, cfg.minRows, cfg.sleep, symbolDesc(cfg))
-
-	for _, d := range days {
-		iso := d.Format("2006-01-02")
-		flows, ferr := provider.FetchDateFlows(ctx, d.Format("20060102"))
-		if ferr != nil {
-			if errors.Is(ferr, marketdata.ErrNoData) {
-				// TWSE answered with no data: holiday / not yet published.
-				// Skip, not a failure (anti-fake-success still fails on
-				// weekdays whose data parses to < minRows rows).
-				results = append(results, dayResult{date: iso, rows: 0, status: "skip"})
-				log.Printf("%s rows=0 skip (non-trading day)", iso)
-				continue
-			}
-			results = append(results, dayResult{date: iso, rows: 0, status: "fail"})
-			return fmt.Errorf("fetch %s: %w", iso, ferr)
-		}
-		if len(flows) < cfg.minRows {
-			results = append(results, dayResult{date: iso, rows: len(flows), status: "fail"})
-			return fmt.Errorf("date %s: %d rows < min-rows %d (possible fake success)", iso, len(flows), cfg.minRows)
-		}
-
-		by := groupFlows(flows, cfg.symbols)
-		dayAdded := 0
-		for _, sym := range sortedMapKeys(by) {
-			added, _, merr := mergeSymbolFile(flowsDir, sym, by[sym])
-			if merr != nil {
-				results = append(results, dayResult{date: iso, rows: len(flows), status: "fail"})
-				return fmt.Errorf("date %s: %w", iso, merr)
-			}
-			dayAdded += added
-			written[sym] = true
-		}
-		results = append(results, dayResult{date: iso, rows: len(flows), status: "ok"})
-		log.Printf("%s rows=%d symbols=%d new_points=%d", iso, len(flows), len(by), dayAdded)
-
-		if d != days[len(days)-1] && cfg.sleep > 0 {
-			select {
-			case <-time.After(cfg.sleep):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	}
-
-	// Aggregated fake-success gate (PR review P0): if not a single trading day
-	// produced rows (e.g. every day was ErrNoData from an invalid range, a
-	// systematic stat != OK, or a start before T86's earliest date), the run
-	// must fail loudly instead of printing "result: OK" with 0 files written.
-	if len(written) == 0 {
-		err := fmt.Errorf("no trading day produced data: %d day(s) processed, 0 files written (possible fake success)",
-			len(results))
-		return err
-	}
-
-	if err := verifyFiles(flowsDir, written); err != nil {
-		return err
-	}
-	if flowPoints, err = countFlowPoints(flowsDir); err != nil {
-		return err
-	}
-	return nil
-}
-
-// printSummary reports the per-day rows table, aggregate counts, and the
-// run outcome. It runs on every exit path of run (via defer).
-func printSummary(results []dayResult, written map[string]bool, flowPoints int, runErr error) {
+// printSummary reports the per-day rows table, aggregate counts, and the run
+// outcome. It runs on every exit path (success and failure).
+func printSummary(res stockflows.Result, runErr error) {
 	var ok, skip, fail int
-	for _, r := range results {
-		switch r.status {
-		case "ok":
+	for _, r := range res.Days {
+		switch r.Status {
+		case stockflows.StatusOK:
 			ok++
-		case "skip":
+		case stockflows.StatusSkip:
 			skip++
-		case "fail":
+		case stockflows.StatusFail:
 			fail++
 		}
 	}
 	fmt.Printf("per-day rows:\n")
-	for _, r := range results {
-		fmt.Printf("  %s rows=%d %s\n", r.date, r.rows, r.status)
+	for _, r := range res.Days {
+		fmt.Printf("  %s rows=%d %s\n", r.Date, r.Rows, r.Status)
 	}
 	fmt.Printf("summary: days=%d ok=%d skip=%d fail=%d files_written=%d flow_points=%d\n",
-		len(results), ok, skip, fail, len(written), flowPoints)
+		len(res.Days), ok, skip, fail, len(res.Written), res.FlowPoints)
 	if runErr != nil {
 		fmt.Printf("result: FAILED — %v\n", runErr)
 	} else {
 		fmt.Printf("result: OK\n")
 	}
-}
-
-// weekdays returns every weekday (Mon–Fri) in [start, end]. P1: Taiwan
-// public holidays are simplified to weekends only; a weekday holiday then
-// surfaces as a no-data skip during the fetch.
-func weekdays(start, end time.Time) []time.Time {
-	var days []time.Time
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
-			continue
-		}
-		days = append(days, d)
-	}
-	return days
-}
-
-// groupFlows buckets per-symbol flows, honoring the optional symbol filter.
-func groupFlows(flows []marketdata.SymbolFlow, filter map[string]bool) map[string][]marketdata.SymbolFlow {
-	by := make(map[string][]marketdata.SymbolFlow)
-	for _, f := range flows {
-		if filter != nil && !filter[f.Symbol] {
-			continue
-		}
-		by[f.Symbol] = append(by[f.Symbol], f)
-	}
-	return by
-}
-
-// sortedMapKeys returns the keys of m in ascending order.
-func sortedMapKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func symbolDesc(cfg config) string {
-	if cfg.symbols == nil {
-		return "all"
-	}
-	return strings.Join(sortedMapKeys(cfg.symbols), ",")
 }
