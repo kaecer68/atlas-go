@@ -607,13 +607,18 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.DegradedOnEmpty = true
 	r.Register(c)
 
-	// sector_data: reads data/state/sector_data/sector_data.json. The
-	// provider returns an empty snapshot (no error) when the file is
-	// missing, so the contract requires file_exists + degraded-on-empty
-	// instead of trusting the adapter's ok.
+	// sector_data: reads <workDir>/data/sector_data/sector_data.json
+	// (marketdata.SectorDataDirRel — single authority, issue #1944 Batch 2,
+	// Q6 I14). The provider returns an empty snapshot (no error) when the file
+	// is missing, so the contract requires file_exists + degraded-on-empty
+	// instead of trusting the adapter's ok; the adapter's HealthCheck
+	// additionally reports degraded when the file's own updated_at is missing
+	// or older than this window (72h: the file is refreshed manually/backfill,
+	// so a tighter window would fire on every non-refresh day).
 	c = DefaultChannelContract("sector_data")
 	c.SourcePriority = []string{"TWSE"}
 	c.ExpectedRefresh = 24 * time.Hour
+	c.FreshnessWindow = 72 * time.Hour
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
 	c.DegradedOnEmpty = true

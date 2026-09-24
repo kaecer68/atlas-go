@@ -70,8 +70,16 @@ func (s *server) handleNarrativeGetEvents(ctx context.Context, _ *mcp.CallToolRe
 			if period, nameZH := s.fetchCurrentPeriod(ctx); period != "" {
 				(*out.Result)["current_period"] = period
 				(*out.Result)["current_period_name_zh"] = nameZH
-				(*out.Result)["period_weight_applied"] = true
-				(*out.Result)["period_weight_note"] = "探測器信心度乘以 PeriodWeight(period) 時期權重；詳見 ATLAS_METHODOLOGY.md 附錄 B"
+				// Issue #1944 Batch 2 (hardcoded-"applied" pass): this used to
+				// claim `period_weight_applied: true` unconditionally. Period
+				// weighting lives in internal/narrative/detector.go
+				// (DetectEvents takes no period), and its only production caller
+				// (internal/scheduler/template_detector_scan.go) never sets
+				// CurrentPeriod, while this handler reads /api/narrative/events →
+				// narrative_engine.DetectEvents. The events returned here are
+				// therefore NOT period-weighted; the period is context only.
+				(*out.Result)["period_weight_applied"] = false
+				(*out.Result)["period_weight_note"] = "current_period 僅為情境標註：/api/narrative/events 走 DetectEvents，不套用 PeriodWeight 時期權重。理論見 ATLAS_METHODOLOGY.md 附錄 B"
 			}
 		}
 		return nil

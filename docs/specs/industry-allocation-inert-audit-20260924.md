@@ -1,0 +1,219 @@
+# 產業／配置 inert 閉環再盤點（issue #1944 Batch 2，2026-09-24）
+
+| 項目 | 內容 |
+|---|---|
+| 文件角色 | issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 2 的**權威盤點**：剩餘 inert 項、與 Batch 1 的差異、本批處置與證據、以及仍未處理項（誠實列表） |
+| 基準 | `origin/main` @ `88683f06`（Batch 1 = PR #1950 已併入；#1951/#1953/#1956/#1958/#1960/#1962 已併入） |
+| 上游舊清單 | `~/workspace/atlas-notes/03-system-health/2026-09-24-industry-hitrate-survey.md` §6（Q6, I1–I36）；**本檔為重做，不照抄** |
+| 登記表 | [`../reference/inert-registry.md`](../reference/inert-registry.md)（處置結果登記處；本檔為完整證據） |
+| 相關規格 | [`sector-allocation-simulation-closure-spec.md`](sector-allocation-simulation-closure-spec.md) §8.3、[`industry-hitrate-metric-spec.md`](industry-hitrate-metric-spec.md) |
+
+## 0. 判定法（三問檢查）
+
+對每個候選（欄位／參數／旗標／資料路徑）問：
+
+1. **writer/producer 存在嗎？**（有東西會寫這個值，且在**生產**路徑上）
+2. **consumer 讀嗎？**（有生產程式碼會讀它、且讀了會影響決策／輸出）
+3. **config 旗標有 reader 嗎？狀態欄位有 producer/consumer 配對嗎？**
+
+三者缺一即 inert。嚴重度：**高** = 對外宣稱生效但實際不影響任何決策/輸出且無機讀告警；**中** = 死碼、僅測試覆蓋或監控失效；**低** = 純文件/註解落差。
+
+本批同時複驗兩個特殊類別：
+
+- **硬寫「已生效」**：對外欄位（`applied` / `calibrated` / `*_applied`）是否由實際消費證據推導。
+- **config 影子**：`configs/parameters.json` 有的區塊，程式是否真的有 reader。
+
+## 1. 摘要
+
+| 類別 | 數量 | 說明 |
+|---|---|---|
+| Batch 1 已清（I8/I34/I35/I20/I1） | 5 | 本批複驗仍成立（見 §2） |
+| **本批（Batch 2）修復** | 7 | I22（config 接線 + capex 可達）、I3（merge 補預設 + 視窗語意）、I2（診斷不再丟棄計算）、I14（路徑單一權威）、composite_card（config 接 reader）、以及 3 處硬寫「已生效」（E1/E2/E3）→ §3 |
+| **明示未啟用（不得靜默，加機讀旗標/理由）** | 3 | I10/I11/I33（modulator）、I14 的 bridge、I2（診斷任務宣告 `applied=false`） |
+| **仍 inert（本批未修，誠實列出）** | 22 | I4/I5/I6/I7/I12/I13/I15/I16/I17/I18/I19/I21/I23/I24/I25/I27/I28/I29/I30/I31/I32/I36 → §4 |
+| **本批新發現** | 18 | §5：N-C1..C3（config 影子／假風控）、N-U1..U7（母體管線）、N-P1..P4（預測/LLM）、N-A1..A4（applied trace／死欄位） |
+| 已由其他 PR 修好 | 1 | I26（#1951，44/44 全解出）→ §2 |
+
+生產影響的一句話總結：**產業/配置相關的「宣稱生效」對外欄位，現在全部由消費證據或明示未啟用驅動；上游真正缺的是資料源（母體 quote provider、sector_data 刷新、cycle tracker 真資料），不是接線程式碼。**
+
+
+## 2. 與 Batch 1 的差異
+
+### 2.1 Batch 1 已清項目（本批複驗仍成立）
+
+| ID | Batch 1 處置 | 本批複驗 |
+|---|---|---|
+| I8 | `applied` 改由 `ConsumptionReceipt` 驅動；`Store()` 強制 `applied=false` | **成立**。全鏈複驗：`policy.go:135`（Store 正規化）、`ApplicationStatusFor`/`DecorateApplicationStatus`（`policy.go:415-455`）、`strategy_evolver.go`（`applied=false`）、`monitoring/api/industry/handlers.go`（兩處硬寫皆為 `false`）。**無殘留硬寫 true** |
+| I34 | 移除 `sim.Engine.rotationFunc` 死碼 | 成立（全 repo 無 `rotationFunc` 非註解引用） |
+| I35 | `TechniquesLayerActive=false` + `pass_through=true` log | 成立 |
+| I20 | 合成報酬改 `syntheticPlaceholderReturn` | 成立。**副作用**：`internal/orchestrator/forward_return_fallback.go` 的 `GenerateForwardReturn` 因此變成確定死碼（I18，§5） |
+| I1 | `CycleCalibration` 權重由卡片建構期消費（有 metrics 才重分配） | 接線成立，但**當時無證據**：`WindowSize=0` 使視窗每次被清空。本批修 I3 後，生產確實有 producer（`cmd/atlas/main.go:1668` 的 `auto_daily_simulation` → `RecordCycleCalibrationOutcome`），因此 **I1 在本批後才真正閉環**（≥10 場次後 `CalibrationApplied()` 會變 true）；根因見 §3.2 |
+
+### 2.2 舊清單說 inert、現在其實已修好
+
+| ID | 舊判定 | 現況 | 修好的 PR |
+|---|---|---|---|
+| I26 | `SymbolL1Mapper` 只解出 18 支/5 產業，tree-only L1 全落空 | **FIXED**：兩層解析（rank0 結構祖先 / rank1 顯式映射）+ 未解出者顯式回報。實測 `go test ./internal/industry/ -run TestProductionClassificationTree -v` → `27 L1 representative symbols, 27 mapped to 9 canonical L1 (ratio 1.0000)`、`44 declared symbols overall, 44 mapped (ratio 1.0000)` | #1951 |
+
+### 2.3 舊判定方向對、但性質改變者
+
+| ID | 變化 |
+|---|---|
+| I18 | `GenerateForwardReturn` 由「語意可疑的預留」變成**確定死碼**（I20 已由 placeholder 取代） |
+| I2 | 由「算了只 log」變成「與 I1 接線重複的冗餘計算」 |
+| I31 | 由中升為**高**：`cmd/calibration-validate` 實跑 `OK=false`（7 個 segment 無代表股、exit 1），而 CI job 仍 success 且 `SLACK_WEBHOOK_URL` 為空 → 零告警 |
+| I19 | 舊描述不完整：`use_llm_sector_agents=true` 仍無效，真正原因是 executor first-match-wins（`SemiconductorExecutor` 先註冊且 `Supports` 恆真） |
+| I21 | 舊證據已過期：#1949 已修生產者半邊（`main.go:1449` 排程、`conditions.go:162` 已註冊 `foreign-3d-net-buy`）；缺口轉為「生產未驗」 |
+
+
+## 3. Batch 2 處置與證據
+
+每個高嚴重項的結論（接線／明示未啟用／移除，**無一項靜默**）與可重跑證據如下。
+測試名稱皆可直接 `go test ./internal/<pkg>/ -run <TestName> -v` 複跑。
+
+### 3.1 I22 矽循環三處斷裂 → **接線 + 修正（可達性）**
+
+| 子缺陷 | 舊況（現行 main 實證） | 本批處置 | 證據 |
+|---|---|---|---|
+| config 被忽略 | `getSiliconParams()` 內 `_ = cfg`，註解寫「pending integration」；但 `params.Industry.SiliconCycle`（`parameters.go:786`）存在且 `configs/parameters.json` 已填滿（`revenue_yoy_threshold 0.15` … `capex_cut_threshold 0.1`） | **接線**：逐欄讀 config，僅在非零時覆寫預設（全 0 舊 config 不會把門檻打成 0） | `internal/industry/silicon_cycle.go`（`getSiliconParams`）；`TestGetSiliconParams_ConsumesConfigFile`、`TestGetSiliconParams_AllZeroConfigKeepsDefaults` |
+| capex 條件永不成立 | `ExtractSiliconIndicators` 用硬編碼 `±0.05` 當 capex 訊號，但兩條收縮轉移的條件是 `< -CapexCutThreshold`（預設 `0.10`）⇒ 1→3 與 2→3 **永不觸發** | **修正語意**：優先取 sector_data 的真實 `CapexGrowth.Value`（原本是「有 producer 無 consumer」的欄位），否則用營收 YoY 的**等比例**推估值（`capexProxyScale=1.0`、clamp ±0.50）⇒ 營收 YoY 衰退 ≥10% 即跨過預設門檻 | `silicon_cycle.go`（`capexProxyScale` / `capexProxyClamp` / `ExtractSiliconIndicators`）；`TestExtractSiliconIndicators_CapexReachesCutThreshold`（真實 snapshot 兩步 → `PhaseExpansionConfirmed` → `PhaseContraction`）、`TestExtractSiliconIndicators_PrefersSectorDataCapex`；既有測試期望值同步修正（`coverage_push_test.go` 0.05 → 0.25，該值原本編碼了 bug） |
+| `window_size=0` 清空歷史 | `DetectPhase` 的 `e.history[len-0:]` = 空 ⇒ 零 config 每次清空相位歷史 | **修正語意**：`HistoryWindowSize <= 0` 代表「不修剪」 | `silicon_cycle.go`；`TestPhaseHistoryWindowZeroDoesNotWipe` |
+| **未修（明示）** | `PhiladelphiaSOXIndexYoY` / `GlobalSemiconductorBillingsYoY` 實際是**單日**變動（Yahoo `^SOX` provider，`yahoo_session.go:32` `range=5d`），與名字宣稱的年增率不符，0.40/0.10 門檻語意失真；`TaiwanSemiconductorIndexMA` 無任何 producer（全 repo 只有 struct 與 merge 觸及 `MacroDataSnapshot.TaiwanSemiIndex`）⇒ 1→2 的 MA 分支不可達 | **明示未啟用（機讀常數）**：`SiliconTWIndexProducerAvailable=false`、`SiliconSOXIndicatorIsYoY=false` + doc block；不改門檻（改門檻等於用單日資料冒充年資料） | `silicon_cycle.go`（常數區塊）；`TestSiliconIndicatorProvenance` |
+
+> 影響：`internal/monitoring/dashboard_api.go` 與 `IngestAndUpdateMacro` 皆在生產路徑餵 `ExtractSiliconIndicators`，故本項是**真實生產行為修正**（原本過熱相位只能靠 SOX 分支，而該分支門檻不可達）。
+
+### 3.2 I3 CycleCalibration config 全 0 + 視窗被清空 → **接線（merge 補預設）+ 修正語意**
+
+- 實證：`configs/parameters.json → industry.cycle_calibration.value` 全 0（`min_samples/learning_rate/hit_rate_*/weight_clamp_*/window_size`），`mergeIndustryDefaults`（`parameters_merge.go:462`）**無** CycleCalibration 分支 ⇒ Go 預設（10/0.05/0.55/0.45/0.05/0.40/30）永不生效。
+- 處置：
+  1. `parameters_merge.go` 新增 all-zero → 預設的 merge 規則（與 `SiliconCycle` 同慣例；部分設定者不覆寫）。
+  2. `cycle_calibration.go`：`WindowSize <= 0` = 不修剪視窗（原 `outcomes[len-0:]` 清空）。
+  3. `CalibrateWeights`：退化 clamp 視窗（`WeightClampMax <= WeightClampMin`）視為「未設定校準」，回傳 base weights（否則有 metrics 的層會被 clamp 成 0，反而清空權重）。
+- 證據：`TestMergeIndustryDefaults_CycleCalibrationAllZero`、`TestMergeIndustryDefaults_CycleCalibrationPartialOverride`、`TestShippedConfigCycleCalibrationIsUsable`（**讀真實 `configs/parameters.json`**，斷言 `WindowSize>0`、`MinSamples>0`、clamp 非退化）、`TestCycleCalibration_ZeroWindowSizeKeepsOutcomes`（Batch 1 的 bug-pin 測試依其自身註解改寫為新語意）、`TestApplyCycleCalibration_AllZeroWeightsFallsBackToDefaults`。
+
+### 3.3 I2 `cycle_calibrate` 算了只 log → **明示未啟用（診斷任務）**
+
+- 舊況：`cmd/atlas/calibration_tasks.go:312` 用第三份硬編碼 layer weights 呼叫 `CalibrateWeights`，結果只取 `len()` 進 log 就丟棄；實際生效的權重由 `resolveCardConfig`/`applyCycleCalibration` 產生（Batch 1 I1）。
+- 處置：改為回報**實際生效**的 `EffectiveCardConfig()`，並在 log 明寫 `applied=false`、`fallback_reason=diagnostic_only_no_writeback`；刪除硬編碼副本。
+- 證據：`internal/industry/cycle_status_card.go`（新 exported `EffectiveCardConfig`、`CalibrationApplied`）、`cmd/atlas/calibration_tasks.go`。
+
+### 3.4 對外硬寫「已生效」逐一清查 → **修正 3 處**
+
+| # | 位置 | 舊況 | 處置 | 證據 |
+|---|---|---|---|---|
+| E1 | `cmd/atlas-mcp/server/tools_narrative.go:73` | `period_weight_applied: true` 無條件；且所指機制在生產不可達（`narrative/detector.go` 才套 PeriodWeight，`DetectEvents` 無 period 參數，`template_detector_scan.go` 從未設 `CurrentPeriod`） | 改 `false` + 誠實 note（週期僅情境標註） | `tools_narrative.go`；`go test ./cmd/atlas-mcp/server/` |
+| E2 | `internal/config/calibrator.go:187` | `appliedCount++` 不看 `SetParameter` 回傳值 ⇒ 寫入失敗仍報 `applied N/M`、`Verdict=calibrated` | 先寫入後記錄；失敗 `continue` 並計 `failedCount`；全失敗時 verdict=`failed` | `calibrator.go`；`go test ./internal/config/` |
+| E3 | `internal/monitoring/api/industry/handlers.go:412` | `"calibrated": true`（只要 metrics map 非 nil） | 改由 `industry.CalibrationApplied()`（實際是否重分配權重）推導，並另出 `calibration_metrics` | `handlers.go`、`cycle_status_card.go`；`TestCalibrationApplied_DerivedFromEvidence` |
+
+**其他對外 `applied`/`fallback_reason` 全數無殘留硬寫**（複驗範圍：`internal/sectorallocation`、`internal/monitoring`、`internal/orchestrator`、`cmd/atlas-mcp`、前端 JS）：`projector.go` 的 `ProjectedTarget.FallbackReason` 為死欄位（無 producer/consumer，非狀態冒充）；前端無任何 JS 讀 `applied`/`fallback_reason`。
+
+### 3.5 I14 `sector_data` 路徑不符 → **修正路徑 + 明示未啟用（bridge）**
+
+- 實證（唯一權威常數 `marketdata.SectorDataDirRel` 的新註解即記錄此表）：
+  - `dashboard_api.go:270`、`register_adapters.go:268` 讀 `<workDir>/data/state/sector_data/sector_data.json`
+  - `system.go:424` 傳 `cfg.LedgerDir`（預設 `data/state`）⇒ 讀 `<workDir>/data/state/sector_data.json`
+  - scheduler deps 讀 `<workDir>/sector_data.json`
+  - **實際存在的檔案**是 `<workDir>/data/sector_data/sector_data.json`（`git ls-files` 證實，`updated_at 2026-05-12`）
+- 處置：
+  1. 新增 `marketdata.SectorDataDirRel` + `ResolveSectorDataDir(workDir)`，四個讀取點全部改用。
+  2. provider 保留 graceful degradation（缺檔仍回零 + nil error）但**記錄載入狀態**（`SectorDataState{Path,Found,DataUpdatedAt,Reason}`），apigateway `HealthCheck` 據此回 `degraded`（缺檔／時間戳壞／超過 72h），不再對死通道回 `ok`；contract 補上 `FreshnessWindow=72h`。
+  3. `BridgeSectorDataToCycleTracker` 維持**未接線**並明示：`industry.SectorDataBridgeWired=false`，理由寫在常數註解（唯一輸入是無生產刷新者的人工檔；且 `UpdatePosition` 會把 `EvidenceTier` 從 `estimated` 變成 `empirical`，等於把過期人工檔洗成「實證」）。
+- 證據：`TestResolveSectorDataDirMatchesShippedFile`（權威路徑指向 repo 實際檔案，且三個舊路徑皆不存在）、`TestSectorDataProvider_StateReports{Freshness,Missing,BadInput}`、`TestSectorDataChannelAdapter_HealthCheck/{fresh_file_is_ok,stale_file_is_degraded,missing_file_is_degraded}`。
+
+### 3.6 新發現：`industry.composite_card` 有 config 無 reader → **接線**
+
+- 舊況：`configs/parameters.json → industry.composite_card` 已填滿（layer_weights/sentiment_thresholds/clamp 0.8-1.2），但 `defaultCardConfig()`（`cycle_status_card.go`）回傳硬編碼副本，註解甚至寫「future: add a CompositeCard ParameterMetadata」（該欄位**早已存在**）⇒ 改 config 完全無效。
+- 處置：`defaultCardConfig()` 疊加 config（空/零值保留預設，避免全零 config 讓 clamp 退化成 [0,0]）；因 shipped config 與硬編碼值完全相同，**今日行為中性**。
+- 證據：`internal/industry/cycle_status_card.go`（`applyCompositeCardConfig`）；既有卡片/校準測試全綠 + `go test ./internal/industry/`。
+
+### 3.7 I10/I11/I33 modulator 未註冊 → **明示未啟用**
+
+- 舊況：`IndustryCycleModulator` / `NarrativeConvictionModulator` 的消費端（`executor_collection.go:289-330`：產業相位 delta、CycleStatusCard 綜合情緒、narrative 主題加成）完整存在，但 `WithCycleModulator` / `WithNarrativeModulator` 的唯二呼叫者在測試 ⇒ 產業命中率/相位算完不影響任何決策。
+- 處置（**不接線，理由寫在程式碼**）：`orchestrator.ModulatorWiringActive=false` + 註解說明 wiring 卡在**輸入**而非程式碼（composition 路徑的 `CycleTracker` 只有 config seed；`SetCycleCard` 無生產呼叫者；narrative 主題命中率是手寫常數 I23）。以測試釘住事實，翻轉常數時必須同步改測試與本文件。
+- 證據：`internal/orchestrator/plugin_registry.go`、`plugin_registry_modulator_wiring_test.go`（`TestProductionRegistryLeavesConvictionModulatorsUnwired`、`TestSetCycleCardIsNilByDefaultInProductionShape`）。
+
+
+## 4. 仍 inert 清單（本批未修，逐項證據）
+
+> 這些項目**不再靜默**：全部登記於本節與 [`inert-registry.md`](../reference/inert-registry.md) §Batch 2 剩餘。
+
+| ID | 位置（現行 file:line） | 嚴重度 | 現況證據 | 建議處置 |
+|---|---|---|---|---|
+| I4 | `internal/narrative/sector_predictor.go:49-61`；`internal/eventdriven/handler.go:341` | 中高 | 生產 `NewSectorPredictor(&snap, nil)`；`SetStrategicPrior`/`SetCycleProvider` 零生產呼叫者 ⇒ `overall_baseline` 與 `cycle_position` 貢獻恆 0 | 接線（注入 prior/cycle）或移除該欄位 |
+| I12 | `internal/orchestrator/composition/root.go:217-229` vs `internal/monitoring/dashboard_api.go:546-551` | 高 | composition 路徑的 macro/factor driver 硬寫回 0；且 `SetCompositionRoot`（`dashboard_api.go:213`）**零呼叫者** ⇒ 模擬決策實際吃 stub，dashboard 的真 SeasonalModulation 只有自己用 | 接線 `SetCompositionRoot`（或刪 stub 路徑），兩條路徑輸入需一致 |
+| I13 | `internal/orchestrator/composition/root.go:171` | 高 | `industry.NewCycleTracker()` 只有 config seed；真資料寫在 dashboard 的另一個實例（`dashboard_api.go:355`）⇒ 兩個 tracker 不同步 | 共用單一 tracker 實例（與 I12 同批） |
+| I17 | `internal/industry/seasonal_health.go:107-124,176-186` | 高 | 消費者讀 `calibration_observations/verdict/timestamp`，全 repo 無 producer；實測 health=critical、`total_observations=0`、`verdict={unknown:13}`；4 個 `adjustment_factor` 超出 [0.3,2.5]（含負值）而 `seasonality.go:235` 直接相乘 | 補 per-pattern 校準寫入，或讓 health 對「無觀測」明示（非 critical 假訊號） |
+| I25 | `cmd/atlas/bootstrap_helpers.go:209`（`Quotes: nil`）、`universe_builder.go:416-431` | 高 | 生產 `universe_snapshot.json`（`2026-09-24T06:00:23Z`）：`symbols_built 27 / symbols_ranked 0`、`ranked: []`；根因是排程路徑 quote provider 寫死 nil ⇒ 全數被量價過濾丟棄；下游 watchlist `symbols: null` | 接線真實 quote provider（與新發現 N-U1/N-U4 同批） |
+| I27 | `monitoring/api/live/handlers.go:609`、`monitoring/service/live.go:489`、`monitoring/dashboard_dataloaders.go:84` | 中 | 三份 `buildSymbolSectorMap` 仍 `GetAllSegments()`（Go map range 無序）+ last-write-wins；config 有 6 支股票多重歸屬；未命中回 `"other"`（非 canonical） | 改排序或改讀 canonical 映射（#1943 已提供機制，只讀不改） |
+| I28 | `internal/sectorallocation/namespaces.go:9-95` | 中 | `NamespaceKind`/`L1FinalTarget`/`ThemeExposure` 非測試引用 0（只有定義 + 測試） | 移除或標明 reserved |
+| I29 | `internal/monitoring/universe_scheduler.go:761-783`（`:774` `total = mapped`） | 中 | 覆蓋率告警是恆等式（ratio 恆 1.0）；`main.go:1937-1951` 版分子分母同源 | 分母改用可交易母體全量 |
+| I30 | `.github/workflows/nightly-refresh.yml`（無 commit/push step） | 中 | `backfill-industry-tree` 每夜在 runner 內寫 `configs/parameters.json` 後丟棄；後續 validate 讀未改動的 checkout | 移除或改為開 PR |
+| I31 | `cmd/calibration-validate`、`internal/config/integrity.go:189-231` | 高 | 實跑 `OK=false`（7 個 segment 無代表股、`updated_at` 逾 48h、exit 1），而 CI job 仍 success，且 `SLACK_WEBHOOK_URL` 為空 ⇒ 零告警 | 補代表股 + 讓 CI 真的紅（或明示 advisory） |
+| I32 | `internal/ledger/event_flow_prediction_store.go:24-40` | 中 | 事件流預測紀錄仍無 `sector` 欄位（生產 35 筆 key 實證）；另有 #1948 的 `industry_winrate` 表面（不同口徑，勿混淆） | 落地時補 sector 欄位 |
+| I21 | `internal/orchestrator/stockpicker_winrate_executor.go:73,129-139` | 中 | executor 零值建構 ⇒ source 固定 `stockpicker-foreign-3d-net-buy`；`stock_win_rate` 表中只有 momentum/price-volume 三源（`LoadWinRate found=false`）；`data/state/stock_flows/` 不存在 ⇒ flow gate fail-closed。生產者半邊已由 #1949 修（排程 + 條件註冊） | 生產跑一輪後複驗；必要時補 win-rate 校準產物 |
+| I18 | `internal/industry/validate*.go`、`stockpicker/winrate.go:147,153`、`orchestrator/forward_return_fallback.go` | 中 | `ValidateAllPatterns`/`StockWinRate`/`StrategyWinRate` 連測試都沒有；`GenerateForwardReturn` 已確定死碼 | 移除死碼（本批未動以免擴大 diff） |
+| I19 | `internal/orchestrator/plugin_registry.go:475-483`、`plugin_sector.go:14-16` | 中 | `use_llm_sector_agents=true` 仍無效：executor first-match-wins，`SemiconductorExecutor` 先註冊且 `Supports` 恆真 ⇒ LLM sector agent 不可達 | 修註冊順序/`Supports` 條件，或移除旗標 |
+| I16 | `internal/strategy_techniques/evaluator.go:157-160` | 高 | `Evaluate` 只判 Up/Down ⇒ `Direction=volatile` 恆 0 命中；`strategies/handlers.go:163` 又會把 API hit_rate 覆寫成 0（seed 0.55 → 0） | 補 volatile 判定或明示該類樣本不計 |
+| I23 | `internal/narrative/knowledge_base.go:138,150,162`、`templates.go`、`structural_trend.go` | 高 | 模板/模型 HitRate 為手寫常數，卻以「歷史回測命中率」對外呈現（UI + 文件）；runtime EMA 只存記憶體 | 改標示為「先驗常數」或落地校準 |
+| I24 | `internal/ledger/ledger.go:450` vs `portfolio/darwinian_period_matrix.go:112` | 中高 | `BuildScorecards` 不過濾 `IsSynthetic`；實測 `recommendation_outcomes` 45668 列中 synthetic 25571（56.0%）；postgres slim query 選了欄位卻不 WHERE | 加過濾 + 對外揭露 `synthetic_share` |
+| I5 | `internal/config/config.go:76,156`；`cmd/atlas/main.go:1022-1027` | 高 | `SECTOR_PREDICTION_ENABLED` 預設 false、無部署設定 ⇒ `predictor.go:200` 固定回空陣列（測試斷言 0 筆）；旗標關閉時 c07 collector 也不發告警 | 明示未啟用（env 預設 + 機讀 reason）或開旗標 |
+| I6 | `internal/eventdriven/types.go:101` | 高 | `SectorDayPrediction` 只有 cmd/experimental/c07-* 消費者；ledger 落地型別無 sector 欄位 | 落地 + 對帳（與 I32 同批） |
+| I7 | `internal/marketdata/symbol_industry_mapper.go:182` | 中 | `BuildMapping`/`NewSymbolIndustryMapper` 零呼叫者（生產走 `monitoring.NewTreeBasedMapper`） | 移除死碼 |
+| I15 | `configs/agents.json`、`orchestrator/registry.go` | 中 | `PrimaryMetrics` 只寫不讀（0 reader）；`alpha_hit_rate` 全 repo 無計算 | 實作或移除宣告 |
+| I36 | `docs/decisions/2026-08-21-performance-root-cause-audit.md §2.1` | 中 | 生產 `darwinian_weights.json`（`2026-09-24T05:56:41Z`）21 agents 中僅 6 有訊號、15 個 `total_signals=0` 且權重凍在 0.3 下限 ⇒ 部分回歸（文件稱 08-15 已修） | 另開票追上游 signal 供給 |
+
+## 5. Batch 2 新發現（舊 Q6 清單漏列）
+
+| ID | 位置 | 嚴重度 | 現況證據 | 建議處置 |
+|---|---|---|---|---|
+| N-C1 `max_daily_weight_change` | `internal/config/parameters.go:770`；`configs/parameters.json:5079` | 高 | config 宣告「Maximum 5% daily weight change to prevent excessive volatility」，但**全 repo 無 reader、無實作** ⇒ 假風控（operator 以為有保護） | 實作每日權重變動 clamp，或移除該參數（不得留在 config 假裝生效） |
+| N-C2 `SetCompositionRoot` 零呼叫者 | `internal/monitoring/dashboard_api.go:213` | 中 | 宣告才成立的 composition 綁定從未被呼叫 ⇒ I12/I13 的 stub 輸入是**生產實際**行為 | 與 I12/I13 同批接線 |
+| N-C3 影子參數群 | `industry.event_sentiment_cap` / `event_calendar_rules` / `freshness_scores` | 低-中 | 皆有 config 值但硬編碼副本才是實際使用者 | 接線或標 `deprecated` |
+| N-U1 `--build-universe run` 永遠錯誤 | `cmd/atlas/cmd_universe.go:87-94` | 中 | MockProvider + nil symbols ⇒ 該子命令恆失敗 | 修或移除子命令 |
+| N-U2 未實作的子命令 | `cmd/atlas` help 的 `scrape` | 低 | help 列了但未實作 | 移除宣告 |
+| N-U3 同一 snapshot 兩套 schema | 排程寫 `result/ranked` vs CLI 寫 `build_time/ranked_count` | 中 | 互讀為 0 且靜默 | 統一一套 schema |
+| N-U4 D6 watchlist consumer 不可達 | `cmd/atlas/main.go:2870` | 中 | 依賴恆空的 `ranked` ⇒ 需 `ConsecutiveFailures>=60` 永不成立 | 與 I25 同批 |
+| N-U5 stage3 中性哨兵不可達 | `universe` stage3 `evaluateModelConfidenceDegraded` | 中 | 用 0.5 當中性哨兵，但實際中性為 0 ⇒ 告警不可達 | 修門檻 |
+| N-U6 `historical_hit_rate 12.1%` | 對外欄位 | 中 | 為 producer 寫入 neutral 的產物（33 對帳/4 命中） | 對外揭露口徑 |
+| N-U7 Layer 2.5 流動性排除從未生效 | Layer 2.5 以 nil `QuoteProvider` 建構 | 高 | 流動性排除條件永不成立 | 接線 quote provider（與 I25 同批） |
+| N-P1 LLM sector agent 路徑空轉 | `internal/orchestrator/factory.go:128`、`plugin_adapters.go:292-304` | 中 | 建構後即丟棄、`return recs` | 與 I19 同批 |
+| N-P2 `sector_predictions` 無前端 consumer | `valid_fields.json:1667` 僅型別鏡射 | 中 | 無 UI 讀取 | 明確標示未使用 |
+| N-P3 `NewDriverAdapter` 零非測試呼叫者 | `internal/llm/llm_driver_adapter.go:43` | 中 | plan/reflect 從未注入 | 移除死碼 |
+| N-P4 `Theme=semiconductor_cycle_peak` 無模板 | `internal/narrative/narrative_detectors.go:1062-1104` | 中 | hitRate=0 且 `MatchChains` 不產鏈 ⇒ SOX/DRAM 訊號不影響任何產業 | 補模板或移除 detector |
+| N-A1 11 個 SAC emitter 無呼叫者 | `internal/orchestrator`（`EmitPolicyApplied` 等） | 低 | 全無呼叫者 | 移除 |
+| N-A2 `macro_flow.applied` trace 位置 | `executor_pipeline.go:119` | 低 | 在 `ApplyControl` 之前發出，且 `RequireCROPass=false` 時並不真的套用（生產預設 true，故目前為真） | 移到套用後 |
+| N-A3 `sa_closure_state.json` 欄位無 consumer | `internal/sectorallocation/closure_state.go:167-200` | 中 | `RecordSession` 在 `applied=false` 也照計 ⇒ promotion gate 可在 0 個真正 applied 場次成立（Batch 1 已記錄 SA11.A） | 另票改計數語意 |
+| N-A4 preflight 路徑不符 | `cmd/experimental/sector-allocation-closure-preflight/main.go:167-186` | 中 | 檢查 `<work_dir>/data/state/sector_closure_policy.jsonl`，實際 writer/reader 在 `<work_dir>/data/sector/allocation/` | 抽共用路徑常數（與 §3.5 同手法） |
+
+
+## 6. 驗收證據（可重跑）
+
+```bash
+# 本批新增／改寫的測試（全綠）
+go test ./internal/industry/ -run 'Silicon|Calibration|PhaseHistory|Capex' -v
+go test ./internal/config/  -run 'CycleCalibration' -v
+go test ./internal/marketdata/ -run 'SectorData|ResolveSectorDataDir' -v
+go test ./internal/apigateway/ -run 'SectorData' -v
+go test ./internal/orchestrator/ -run 'Modulator' -v
+go test ./cmd/atlas-mcp/... ./internal/config/ ./internal/industry/ ./internal/marketdata/ ./internal/apigateway/
+```
+
+| 驗收項 | 狀態 |
+|---|---|
+| 盤點表 + issue #1944 留言 | 本檔 §4/§5 + issue 摘要表 |
+| 高嚴重項逐項處置與證據 | §3（I22/I3/I2/I10/I14/E1-E3/composite_card） |
+| `gofmt -l` / `go vet` / `make ci-gate` / GitHub CI | 見 PR 描述 |
+| 無新增參數 | 本批**未新增任何參數**；只把既有 config 接上 reader（I22 silicon_cycle、composite_card、cycle_calibration merge） |
+
+## 7. 範圍與未做（誠實聲明）
+
+- **未動** #1943 已定案的 canonical taxonomy / sectormap 映射（僅唯讀引用）。
+- **未修** 需新資料源的項目：I25/N-U7（母體 quote provider）、I14 的 bridge 接線（需 sector_data 刷新者）、I13/I12（tracker/composition 共用實例）、I17/I23（校準落地）、I24（synthetic 過濾，屬 ledger 口徑票）。
+- **未動** `docs/ATLAS_CONSTITUTION_AUDIT.md` 與 `auditSnapshot`（D1/E3 的 done 宣稱與 E1 的 MCP 旗標有關，但該檔有 `go generate` drift gate 且屬另一治理流程）；改動清單記於 §5 N-*，待另票處理。
+- **未動** `docs/reference/traps.md`（已達 330 行 gate 上限）：本批結論全部寫在本檔與 `inert-registry.md`，traps.md 只在必要時留指標。
+- 每項改動皆最小化：無重構、無刪測試、無放寬斷言；被改寫的兩個測試（`TestExtractSiliconIndicators_TSMC` 期望值、`TestCycleCalibration_ZeroWindowSizeConfigBlocksCalibration` 語意）原本**編碼了本批要修的 bug**，其自身註解即要求修好時同步更新。
+
+## 8. 方法與分工
+
+- 三問檢查逐項重跑於 worktree `~/workspace/atlas-inert-b2`（`origin/main@88683f06`）；生產 artifact 以**唯讀**讀取（`ssh kaecer@kmacmini cat ...`）交叉驗證，未執行任何寫入。
+- 分四叢集平行盤點（config/參數、母體/命名空間、預測/LLM/narrative、對外 applied 欄位），再由本檔彙整；每項證據皆附可重跑的程式碼路徑或命令。

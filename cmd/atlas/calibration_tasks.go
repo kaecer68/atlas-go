@@ -153,7 +153,7 @@ func (d calibrationDeps) registerAutoStrategyEvolution() {
 		Enabled:  true,
 		Task: scheduler.StrategyEvolutionTaskFunc(scheduler.StrategyEvolutionDeps{
 			Dashboard:       d.Dashboard,
-			SectorDataDir:   d.Cfg.WorkDir,
+			SectorDataDir:   marketdata.ResolveSectorDataDir(d.Cfg.WorkDir),
 			MaturityTracker: d.MaturityTracker,
 		}),
 	})
@@ -300,25 +300,27 @@ func (d calibrationDeps) registerCycleCalibrate() {
 		Interval: 24 * time.Hour,
 		Enabled:  true,
 		Task: func(_ context.Context) error {
-			defaultCfg := industry.CardConfig{
-				LayerWeights: map[string]float64{
-					"silicon":        0.25,
-					"business_cycle": 0.20,
-					"seasonal":       0.15,
-					"events":         0.15,
-					"supply_chain":   0.10,
-				},
-			}
-			calibrated := svc.CycleCalibration.CalibrateWeights(defaultCfg.LayerWeights)
+			// This task is diagnostic. Issue #1944 Batch 2 (Q6 I2): it used to
+			// build a local CardConfig copy, run CalibrateWeights on it and drop
+			// the result — a computation with no consumer that duplicated the
+			// hardcoded layer weights. The weights that actually reach the card
+			// are produced by industry.resolveCardConfig (config overlay +
+			// calibration redistribution, Batch 1 I1), so report *those* and say
+			// explicitly that this task applies nothing.
+			applied := industry.EffectiveCardConfig()
 			metrics := svc.CycleCalibration.GetMetrics()
 			logging.Info("cycle_calibrate", "completed",
 				"outcomes", svc.CycleCalibration.GetOutcomeCount(),
-				"layers", len(calibrated))
-			for layer, m := range metrics {
+				"layers", len(metrics),
+				"applied", false,
+				"fallback_reason", "diagnostic_only_no_writeback")
+			for layer, weight := range applied.LayerWeights {
+				entry := metrics[layer]
 				logging.Info("cycle_calibrate", "layer_accuracy",
 					"layer", layer,
-					"accuracy", m.Accuracy,
-					"signals", m.TotalSignals)
+					"weight", weight,
+					"accuracy", entry.Accuracy,
+					"signals", entry.TotalSignals)
 			}
 			return nil
 		},

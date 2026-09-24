@@ -715,7 +715,12 @@ func TestExtractSiliconIndicators_TSMC(t *testing.T) {
 	if math.Abs(ind.GlobalSemiconductorBillingsYoY-(0.30*0.85)) > 1e-9 {
 		t.Fatalf("billings mismatch: %v", ind.GlobalSemiconductorBillingsYoY)
 	}
-	if math.Abs(ind.TSMCCapexGuidance-0.05) > 1e-9 {
+	// Issue #1944 Batch 2 (Q6 I22): the fallback capex proxy is now
+	// proportional to TSMC revenue YoY (scale 1.0, clamped to ±0.50) instead of
+	// a hardcoded ±0.05. The old step value could never reach the configured
+	// contraction threshold (CapexCutThreshold, default 0.10), so the silicon
+	// state machine's capex transitions were unreachable from real data.
+	if math.Abs(ind.TSMCCapexGuidance-0.25) > 1e-9 {
 		t.Fatalf("capex signal mismatch: %v", ind.TSMCCapexGuidance)
 	}
 }

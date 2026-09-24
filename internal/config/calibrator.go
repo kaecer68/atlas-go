@@ -159,6 +159,7 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 
 	var changes []CalibratorChange
 	appliedCount := 0
+	failedCount := 0
 
 	for _, name := range paramNames {
 		current, ok := ie.GetParameter(name)
@@ -176,14 +177,20 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 		}
 
 		conf := calibrationConfidence(deltaPct, result.Observations)
+		// Apply first, report second (issue #1944 Batch 2, E-item): the change
+		// used to be appended and counted even when SetParameter failed, so the
+		// report claimed `applied N/M parameter changes` and Verdict=calibrated
+		// for parameters that were never written.
+		if err := ie.SetParameter(name, best); err != nil {
+			logging.Error("calibrator", "set_parameter_failed",
+				logging.FStr("param", name), logging.Err(err))
+			failedCount++
+			continue
+		}
 		changes = append(changes, CalibratorChange{
 			ParamName: name, Before: current, After: best,
 			DeltaPct: deltaPct, Confidence: conf,
 		})
-		if err := ie.SetParameter(name, best); err != nil {
-			logging.Error("calibrator", "set_parameter_failed",
-				logging.FStr("param", name), logging.Err(err))
-		}
 		appliedCount++
 	}
 
@@ -197,8 +204,13 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 			}
 		}
 		report.Verdict = "calibrated"
-		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%)",
-			appliedCount, len(paramNames), baseline, optScore, improvement)
+		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%, %d set_parameter failures)",
+			appliedCount, len(paramNames), baseline, optScore, improvement, failedCount)
+	} else if failedCount > 0 {
+		// Nothing was written: do not report a benign "stable"/"unchanged" verdict.
+		report.Verdict = "failed"
+		report.Summary = fmt.Sprintf("0/%d parameter changes applied (%d set_parameter failures)",
+			len(paramNames), failedCount)
 	} else if improvement > 0 {
 		report.Verdict = "stable"
 		report.Summary = fmt.Sprintf("no significant changes (improvement=%+.1f%% below threshold)", improvement)

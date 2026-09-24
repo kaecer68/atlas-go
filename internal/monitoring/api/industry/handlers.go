@@ -408,10 +408,17 @@ func (h *Handlers) HandleIndustryCalibration(r *http.Request) (int, any) {
 	}
 
 	cal := h.Svc.CycleCalibration
+	// "calibrated" must mean "calibration evidence redistributed the layer
+	// weights", not "the metrics map was non-nil" (issue #1944 Batch 2,
+	// E-item): a tracker with metrics but no usable clamp window, or with no
+	// per-layer signals, changes nothing. effectiveWeightsChanged compares the
+	// weights the card builder will use against the config defaults.
+	weightsChanged := ind.CalibrationApplied()
 	return http.StatusOK, map[string]any{
-		"calibrated":    true,
-		"outcome_count": cal.GetOutcomeCount(),
-		"layers":        layers,
+		"calibrated":          weightsChanged,
+		"calibration_metrics": len(metrics) > 0,
+		"outcome_count":       cal.GetOutcomeCount(),
+		"layers":              layers,
 	}
 }
 
