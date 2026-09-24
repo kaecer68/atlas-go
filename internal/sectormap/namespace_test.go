@@ -151,6 +151,7 @@ func TestNamespaces_CoversEveryDeclaredVocabulary(t *testing.T) {
 		NamespaceSectorIndexReader,
 		NamespaceStrategyTechniqueSectors,
 		NamespaceFinMindSectorSeries,
+		NamespaceTWSESIndustryCode,
 		NamespaceETFRepresentatives,
 	}
 	got := Namespaces()
@@ -166,6 +167,7 @@ func TestNamespaces_CoversEveryDeclaredVocabulary(t *testing.T) {
 		"marketdata_sector_index_reader_ids",
 		"sectorallocation_etf_representatives",
 		"strategy_technique_sectors",
+		"twse_industry_code",
 		"twse_sector_index_name",
 		"twse_sector_index_name_legacy",
 	}) {

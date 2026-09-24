@@ -1,234 +1,296 @@
 package sectorallocation
 
 import (
-	"sort"
+	"encoding/json"
+	"math"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
-// TestETFRepresentatives_AllTargetsAreCanonical 是 PR-α guardrail：
-// 宣告表內所有 L1 target 必須在 industry.L1Sectors() 中。
-// 任務說明：「不動 internal/industry/sector.go」；本測試確保即使 sector.go 之後
-// 被擴充/縮減，本檔仍會紅燈直到人工對齊。
-func TestETFRepresentatives_AllTargetsAreCanonical(t *testing.T) {
-	if err := ETFL1CoverageMappersAreAllCanonical(); err != nil {
-		t.Fatalf("ETFL1CoverageMappersAreAllCanonical returned error: %v", err)
-	}
+// The declared ETF → canonical L1 table in internal/sectormap is *derived* data.
+// These tests re-run the derivation from the checked-in evidence snapshot, so
+// the table cannot be hand-edited without the evidence and the evidence cannot
+// go stale without the table failing. This is the same "test as specification"
+// pattern the #1943 namespace tables use.
+
+const (
+	etfSnapshotPath  = "testdata/etf_holdings_20260924.json"
+	etfCoverageFloor = 12
+	// quantiseTolerance: the declared weights are quantised to the 1e-6 grid
+	// (largest remainder, so they sum to exactly 1), which bounds the difference
+	// against the exact renormalised derivation.
+	quantiseTolerance = 1e-6 * 1.5
+)
+
+type etfSnapshot struct {
+	SnapshotDate   string                      `json:"snapshot_date"`
+	IndustrySource map[string]json.RawMessage  `json:"industry_source"`
+	Notes          map[string]string           `json:"notes"`
+	ETFs           map[string]etfSnapshotEntry `json:"etfs"`
 }
 
-// TestETFRepresentatives_L1TargetsSumToOne 確保每個 ETF 的 L1Targets map 加總 = 1.0。
-// 1:many mapping 在 spec §4 中明確要求 weight 總和 = 1.0。
-func TestETFRepresentatives_L1TargetsSumToOne(t *testing.T) {
-	for _, r := range ETFRepresentatives() {
-		sum := 0.0
-		for _, w := range r.L1Targets {
-			sum += w
-		}
-		if sum < 0.999999999 || sum > 1.000000001 {
-			t.Errorf("ETF %s L1Targets sum = %.12f, want 1.0", r.Symbol, sum)
-		}
-	}
+type etfSnapshotEntry struct {
+	Name       string            `json:"name"`
+	Benchmark  string            `json:"benchmark"`
+	Issuer     string            `json:"issuer"`
+	SourceURL  string            `json:"source_url"`
+	SourceKind string            `json:"source_kind"`
+	AsOf       string            `json:"as_of"`
+	Extraction string            `json:"extraction"`
+	Holdings   []snapshotHolding `json:"holdings"`
 }
 
-// TestETFRepresentatives_Count 是 PR-α acceptance metric：
-// 任務要求 ETF L1 coverage ≥ 12。
-func TestETFRepresentatives_Count(t *testing.T) {
-	got := ETFL1CoverageCount()
-	if got < 12 {
-		t.Errorf("ETFL1CoverageCount = %d, want >= 12 (PR-α acceptance)", got)
-	}
-	t.Logf("ETFL1CoverageCount = %d (target >= 12)", got)
+type snapshotHolding struct {
+	Symbol         string  `json:"symbol"`
+	Name           string  `json:"name"`
+	WeightPct      float64 `json:"weight_pct"`
+	IndustryCode   string  `json:"industry_code"`
+	IndustrySource string  `json:"industry_source"`
 }
 
-// TestETFRepresentatives_CoverageMatchesL1Sectors 確保所有 L1 target 都來自
-// industry.L1Sectors() 的 20 個 ID，並以 sorted 順序回傳。
-func TestETFRepresentatives_CoverageMatchesL1Sectors(t *testing.T) {
-	coverage := ETFL1Coverage()
-	want := industry.L1Sectors()
-	// 只比對 ETFL1Coverage 內的 IDs 必須是 L1Sectors 的子集
-	validL1 := map[industry.SectorID]struct{}{}
-	for _, id := range want {
-		validL1[id] = struct{}{}
-	}
-	for _, id := range coverage {
-		if _, ok := validL1[id]; !ok {
-			t.Errorf("ETFL1Coverage contains %q which is not in industry.L1Sectors()", id)
-		}
-	}
-	// 也確認 sorted
-	if !sort.SliceIsSorted(coverage, func(i, j int) bool { return coverage[i] < coverage[j] }) {
-		t.Errorf("ETFL1Coverage is not sorted: %v", coverage)
-	}
-}
-
-// TestETFRepresentatives_SymbolsSorted 確保 ETFSymbols() 回傳 sorted 結果。
-func TestETFRepresentatives_SymbolsSorted(t *testing.T) {
-	syms := ETFSymbols()
-	if !sort.SliceIsSorted(syms, func(i, j int) bool { return syms[i] < syms[j] }) {
-		t.Errorf("ETFSymbols not sorted: %v", syms)
-	}
-	if len(syms) != len(ETFRepresentatives()) {
-		t.Errorf("ETFSymbols length %d != ETFRepresentatives length %d", len(syms), len(ETFRepresentatives()))
-	}
-}
-
-// TestETFRepresentatives_DoesNotMutateInternalState 確保呼叫者拿到的是 copy，
-// 改返回值不會污染 SSOT。
-func TestETFRepresentatives_DoesNotMutateInternalState(t *testing.T) {
-	r1 := ETFRepresentatives()
-	r1[0].L1Targets["hacked"] = 0.5
-	r1[0].Symbol = "HACK"
-
-	r2 := ETFRepresentatives()
-	if _, leaked := r2[0].L1Targets["hacked"]; leaked {
-		t.Error("ETFRepresentatives leaked L1Targets map: callers can mutate shared state")
-	}
-	if r2[0].Symbol == "HACK" {
-		t.Error("ETFRepresentatives leaked Symbol field")
-	}
-}
-
-// TestETFRepresentativeLookup_KnownAndUnknown 確認 lookup 行為：
-// 已知 symbol 回 (map, true)；未知 symbol 回 (nil, false)。
-func TestETFRepresentativeLookup_KnownAndUnknown(t *testing.T) {
-	known := "0050.TW"
-	m, ok := ETFRepresentativeLookup(known)
+func loadETFSnapshot(t *testing.T) etfSnapshot {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatalf("ETFRepresentativeLookup(%q) ok=false, want true", known)
+		t.Fatal("runtime.Caller failed")
 	}
-	if len(m) == 0 {
-		t.Errorf("ETFRepresentativeLookup(%q) returned empty map", known)
+	path := filepath.Join(filepath.Dir(thisFile), etfSnapshotPath)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
 	}
-	if _, hasSemi := m[industry.SectorSemiconductor]; !hasSemi {
-		t.Errorf("ETFRepresentativeLookup(%q) missing semiconductor target", known)
+	var snap etfSnapshot
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
 	}
-	// 改 map 不污染 SSOT
-	m["hacked"] = 1.0
-	m2, ok := ETFRepresentativeLookup(known)
-	if !ok {
-		t.Fatal("second lookup failed")
-	}
-	if _, leaked := m2["hacked"]; leaked {
-		t.Error("ETFRepresentativeLookup leaked internal state")
-	}
-
-	unknown := "9999.TW"
-	if _, ok := ETFRepresentativeLookup(unknown); ok {
-		t.Errorf("ETFRepresentativeLookup(%q) ok=true, want false", unknown)
-	}
+	return snap
 }
 
-// TestETFRepresentativeLookup_AllDeclaredSymbolsResolve 確保 ETFSymbols() 中的
-// 每個 symbol 都能成功 lookup，避免宣告不一致。
-func TestETFRepresentativeLookup_AllDeclaredSymbolsResolve(t *testing.T) {
-	for _, sym := range ETFSymbols() {
-		if _, ok := ETFRepresentativeLookup(sym); !ok {
-			t.Errorf("ETFRepresentativeLookup(%q) ok=false for declared symbol", sym)
-		}
-	}
-}
-
-// TestUnknownL1Error_Message 確保 error message 包含 ETF 與 L1 ID，方便排查。
-func TestUnknownL1Error_Message(t *testing.T) {
-	e := &UnknownL1Error{ETF: "9999.TW", L1: "fake_sector"}
-	want := "ETF 9999.TW maps to unknown L1 sector id fake_sector"
-	if got := e.Error(); got != "sectorallocation: "+want {
-		t.Errorf("UnknownL1Error.Error() = %q, want %q", got, "sectorallocation: "+want)
-	}
-}
-
-// TestETFRepresentatives_NoDuplicateSymbols 確保沒有重複的 ETF symbol。
-func TestETFRepresentatives_NoDuplicateSymbols(t *testing.T) {
-	seen := map[string]struct{}{}
-	for _, r := range ETFRepresentatives() {
-		if _, dup := seen[r.Symbol]; dup {
-			t.Errorf("duplicate ETF symbol %q in etfRepresentatives", r.Symbol)
-		}
-		seen[r.Symbol] = struct{}{}
-	}
-}
-
-// TestETFRepresentatives_AllSymbolsHaveTW 是格式護欄：所有 ETF symbol 都必須
-// 以 ".TW" 後綴結尾，與 configs/etf_metadata.json 一致。
-func TestETFRepresentatives_AllSymbolsHaveTW(t *testing.T) {
-	for _, r := range ETFRepresentatives() {
-		if len(r.Symbol) < 4 || r.Symbol[len(r.Symbol)-3:] != ".TW" {
-			t.Errorf("ETF %q does not end with .TW", r.Symbol)
-		}
-	}
-}
-
-// TestETFRepresentatives_AllL1TargetsCoveredByAudit 是 PR-α 與 audit 工具的
-// 整合測試：每個 ETF 至少有一個 L1 target 出現在 ETFL1Coverage()。
-func TestETFRepresentatives_AllL1TargetsCoveredByAudit(t *testing.T) {
-	coverage := map[industry.SectorID]struct{}{}
-	for _, id := range ETFL1Coverage() {
-		coverage[id] = struct{}{}
-	}
-	for _, r := range ETFRepresentatives() {
-		for id := range r.L1Targets {
-			if _, ok := coverage[id]; !ok {
-				t.Errorf("ETF %s targets %q but ETFL1Coverage() does not list it", r.Symbol, id)
-			}
-		}
-	}
-}
-
-// TestETFRepresentatives_AlignsWithSectormap 確保 sectorallocation 與 sectormap
-// 兩邊的 SSOT 對齊：symbols 數、L1 coverage 數、個別 symbol 的 L1 mapping 都必須一致。
-//
-// 任何不一致都會紅燈，強制人工對齊（PR-α 不容許兩份 SSOT）。
-func TestETFRepresentatives_AlignsWithSectormap(t *testing.T) {
-	// 1) Symbol 數對齊
-	symsSalloc := ETFSymbols()
-	symsSector := sectormap.ETFSymbols()
-	if len(symsSalloc) != len(symsSector) {
-		t.Errorf("symbol count mismatch: sectorallocation=%d sectormap=%d", len(symsSalloc), len(symsSector))
-	}
-	for i := range symsSalloc {
-		if symsSalloc[i] != symsSector[i] {
-			t.Errorf("symbol[%d] mismatch: sectorallocation=%q sectormap=%q", i, symsSalloc[i], symsSector[i])
-		}
-	}
-
-	// 2) L1 coverage 對齊
-	covSalloc := ETFL1Coverage()
-	covSector := sectormap.ETFL1Coverage()
-	if len(covSalloc) != len(covSector) {
-		t.Errorf("L1 coverage count mismatch: sectorallocation=%d sectormap=%d", len(covSalloc), len(covSector))
-	}
-	for i := range covSalloc {
-		if string(covSalloc[i]) != covSector[i] {
-			t.Errorf("L1[%d] mismatch: sectorallocation=%q sectormap=%q", i, covSalloc[i], covSector[i])
-		}
-	}
-
-	// 3) 個別 symbol 的 L1 mapping 對齊
-	for _, sym := range symsSalloc {
-		mSalloc, okSalloc := ETFRepresentativeLookup(sym)
-		mSector, okSector := sectormap.ETFRepresentativeLookup(sym)
-		if okSalloc != okSector {
-			t.Errorf("symbol %q lookup ok mismatch: sectorallocation=%v sectormap=%v", sym, okSalloc, okSector)
-		}
-		if !okSalloc {
+// deriveL1 reproduces the derivation that produced the declared table: sum the
+// published weights per canonical L1 sector (via the holding's TWSE/TPEx
+// industry code), drop positions with no canonical target, renormalise.
+func deriveL1(hs []snapshotHolding) (weights map[string]float64, reported, mapped float64) {
+	acc := map[string]float64{}
+	for _, h := range hs {
+		reported += h.WeightPct
+		l1, ok := sectormap.TWSESIndustryCodeL1(h.IndustryCode)
+		if !ok {
 			continue
 		}
-		if len(mSalloc) != len(mSector) {
-			t.Errorf("symbol %q mapping count mismatch: sectorallocation=%d sectormap=%d", sym, len(mSalloc), len(mSector))
+		mapped += h.WeightPct
+		acc[l1] += h.WeightPct
+	}
+	weights = make(map[string]float64, len(acc))
+	for id, w := range acc {
+		weights[id] = w / mapped
+	}
+	return weights, reported, mapped
+}
+
+func TestETFSnapshot_IsSelfConsistentEvidence(t *testing.T) {
+	snap := loadETFSnapshot(t)
+	if len(snap.ETFs) == 0 {
+		t.Fatal("snapshot has no ETFs")
+	}
+	if snap.SnapshotDate == "" {
+		t.Error("snapshot must carry the date the holdings were read")
+	}
+	for _, need := range []string{"listed", "otc", "code_legend"} {
+		if _, ok := snap.IndustrySource[need]; !ok {
+			t.Errorf("snapshot must record the %q industry source with its URL", need)
 		}
-		for id, w := range mSalloc {
-			if wSector, ok := mSector[string(id)]; !ok || w != wSector {
-				t.Errorf("symbol %q L1 %q weight mismatch: sectorallocation=%v sectormap=%v", sym, id, w, wSector)
+	}
+	if len(snap.Notes) == 0 {
+		t.Error("snapshot must explain its own derivation and exclusions")
+	}
+
+	for symbol, e := range snap.ETFs {
+		if e.AsOf == "" || e.Issuer == "" || e.SourceURL == "" || e.Extraction == "" {
+			t.Errorf("%s: issuer/as_of/source_url/extraction must all be recorded", symbol)
+		}
+		if len(e.Holdings) == 0 {
+			t.Errorf("%s: no holdings recorded", symbol)
+			continue
+		}
+		seen := map[string]bool{}
+		for _, h := range e.Holdings {
+			if len(h.Symbol) < 4 || len(h.Symbol) > 6 {
+				t.Errorf("%s: implausible symbol %q", symbol, h.Symbol)
+			}
+			if seen[h.Symbol] {
+				t.Errorf("%s: duplicate holding %q", symbol, h.Symbol)
+			}
+			seen[h.Symbol] = true
+			if h.WeightPct <= 0 {
+				t.Errorf("%s/%s: non-positive weight %v", symbol, h.Symbol, h.WeightPct)
+			}
+			// Every industry code in the evidence must be a declared key of the
+			// industry-code namespace. An undeclared code would be silent drift,
+			// which is exactly what #1943 forbids.
+			if h.IndustryCode == "" || h.IndustrySource == "" {
+				t.Errorf("%s/%s: missing industry_code/industry_source", symbol, h.Symbol)
+				continue
+			}
+			if !slices.Contains(sectormap.Keys(sectormap.NamespaceTWSESIndustryCode), h.IndustryCode) {
+				t.Errorf("%s/%s: industry code %q is not declared in twse_industry_code",
+					symbol, h.Symbol, h.IndustryCode)
 			}
 		}
 	}
+}
 
-	// 4) Canonical guard 對齊
-	if errSalloc := ETFL1CoverageMappersAreAllCanonical(); errSalloc != nil {
-		if errSector := sectormap.ETFL1CoverageMappersAreAllCanonical(); errSector == nil {
-			t.Errorf("sectorallocation canonical guard failed but sectormap passes: %v", errSalloc)
+func TestETFRepresentatives_MatchesTheMetadataSSOT(t *testing.T) {
+	snap := loadETFSnapshot(t)
+	snapSymbols := make([]string, 0, len(snap.ETFs))
+	for s := range snap.ETFs {
+		snapSymbols = append(snapSymbols, s)
+	}
+	slices.Sort(snapSymbols)
+	if got := ETFRepresentativeSymbols(); !slices.Equal(got, snapSymbols) {
+		t.Errorf("declared ETF symbols %v != snapshot symbols %v", got, snapSymbols)
+	}
+	for symbol, e := range snap.ETFs {
+		row, ok := findETF(t, symbol)
+		if !ok {
+			continue
+		}
+		if row.AsOf != e.AsOf {
+			t.Errorf("%s: declared as_of %q but snapshot says %q", symbol, row.AsOf, e.AsOf)
+		}
+		if row.SourceURL != e.SourceURL {
+			t.Errorf("%s: declared source_url %q but snapshot says %q", symbol, row.SourceURL, e.SourceURL)
+		}
+		if row.Issuer != e.Issuer {
+			t.Errorf("%s: declared issuer %q but snapshot says %q", symbol, row.Issuer, e.Issuer)
+		}
+		if row.Holdings != len(e.Holdings) {
+			t.Errorf("%s: declared %d holdings but snapshot has %d", symbol, row.Holdings, len(e.Holdings))
 		}
 	}
+}
+
+func TestETFRepresentatives_DerivationMatchesDeclaredTable(t *testing.T) {
+	snap := loadETFSnapshot(t)
+	for symbol, e := range snap.ETFs {
+		want, reported, mapped := deriveL1(e.Holdings)
+		stored, ok := sectormap.Resolve(sectormap.NamespaceETFRepresentatives, symbol).Targets, true
+		if !ok || len(stored) == 0 {
+			t.Errorf("%s: no declared L1 targets", symbol)
+			continue
+		}
+		if len(stored) != len(want) {
+			t.Errorf("%s: declared %d L1 targets %v but the holdings imply %d %v",
+				symbol, len(stored), sortedIDs(stored), len(want), sortedIDs(want))
+		}
+		for id, w := range want {
+			got, ok := stored[id]
+			if !ok {
+				t.Errorf("%s: holdings imply L1 %q (%.6f) but the declared table omits it", symbol, id, w)
+				continue
+			}
+			if math.Abs(got-w) > quantiseTolerance {
+				t.Errorf("%s/%s: declared %.6f but holdings imply %.6f (tolerance %g)", symbol, id, got, w, quantiseTolerance)
+			}
+		}
+		row, _ := findETF(t, symbol)
+		if math.Abs(row.ReportedWeightPct-reported) > 1e-6 {
+			t.Errorf("%s: declared reported weight %v but holdings sum to %v", symbol, row.ReportedWeightPct, reported)
+		}
+		if math.Abs(row.MappedWeightPct-mapped) > 1e-6 {
+			t.Errorf("%s: declared mapped weight %v but holdings imply %v", symbol, row.MappedWeightPct, mapped)
+		}
+	}
+}
+
+func TestETFL1Coverage_FloorIsBackedByHoldings(t *testing.T) {
+	snap := loadETFSnapshot(t)
+
+	// Independent of the declared table: compute the union straight from the
+	// evidence, so weakening the declared rows cannot weaken this floor.
+	fromEvidence := map[string]bool{}
+	for _, e := range snap.ETFs {
+		w, _, _ := deriveL1(e.Holdings)
+		for id := range w {
+			fromEvidence[id] = true
+		}
+	}
+	if len(fromEvidence) < etfCoverageFloor {
+		t.Fatalf("ETF holdings cover %d canonical L1 sectors (%v), floor is %d",
+			len(fromEvidence), sortedSet(fromEvidence), etfCoverageFloor)
+	}
+
+	declared := ETFL1Coverage()
+	if len(declared) < etfCoverageFloor {
+		t.Fatalf("declared ETF L1 coverage = %d, floor is %d", len(declared), etfCoverageFloor)
+	}
+	if ETFL1CoverageCount() != len(declared) {
+		t.Errorf("ETFL1CoverageCount() = %d but ETFL1Coverage() has %d entries", ETFL1CoverageCount(), len(declared))
+	}
+	for _, id := range declared {
+		if !industry.IsL1(id) {
+			t.Errorf("ETF coverage contains non-L1 sector %q", id)
+		}
+		if !fromEvidence[string(id)] {
+			t.Errorf("declared coverage claims %q but no holding in the evidence snapshot implies it", id)
+		}
+	}
+}
+
+func TestETFRepresentativeLookup_TypedViewMatchesTable(t *testing.T) {
+	for _, row := range ETFRepresentatives() {
+		weights, ok := ETFRepresentativeLookup(row.Symbol)
+		if !ok {
+			t.Errorf("%s: lookup failed although the row is declared", row.Symbol)
+			continue
+		}
+		if len(weights) != len(row.L1Weights) {
+			t.Errorf("%s: typed view has %d keys, row has %d", row.Symbol, len(weights), len(row.L1Weights))
+		}
+		for id, w := range row.L1Weights {
+			if got, ok := weights[id]; !ok || math.Abs(got-w) > 1e-12 {
+				t.Errorf("%s/%s: typed view %v, row %v", row.Symbol, id, weights[id], w)
+			}
+		}
+	}
+	if _, ok := ETFRepresentativeLookup("0050"); ok {
+		t.Error("bare code 0050 must not resolve; the SOOT keys are .TW-suffixed")
+	}
+	if _, ok := ETFRepresentativeLookup("9999.TW"); ok {
+		t.Error("undeclared ETF must not resolve")
+	}
+}
+
+func findETF(t *testing.T, symbol string) (sectormap.ETFRepresentative, bool) {
+	t.Helper()
+	for _, r := range sectormap.ETFRepresentatives() {
+		if r.Symbol == symbol {
+			return r, true
+		}
+	}
+	t.Errorf("%s is not declared in sectormap.NamespaceETFRepresentatives", symbol)
+	return sectormap.ETFRepresentative{}, false
+}
+
+func sortedIDs(m map[string]float64) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func sortedSet(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
 }

@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -43,23 +44,37 @@ type report struct {
 	DeclaredAll     industry.CanonicalCoverage  `json:"declared_all_coverage"`
 	Universe        *universeReport             `json:"universe_coverage,omitempty"`
 	GICSBlocked     *gicsReport                 `json:"legacy_gics,omitempty"`
-	ETFL1Coverage   *etfL1CoverageReport        `json:"etf_l1_coverage,omitempty"`
+	ETF             *etfCoverageReport          `json:"etf_l1_coverage,omitempty"`
 }
 
-// etfL1CoverageReport 把 sectorallocation.ETFL1Coverage() 的結果與 sectormap 的
-// namespace 報表結合輸出。PR-α 新增 metric。
-type etfL1CoverageReport struct {
-	Count     int                `json:"count"`
-	Symbols   int                `json:"symbols"`
-	L1Covered []string           `json:"l1_covered"`
-	BySymbol  []etfBySymbolEntry `json:"by_symbol"`
+// etfCoverageReport is the delivery-vehicle coverage metric: how many canonical
+// L1 sectors the declared ETFs can actually reach, and the per-ETF exposure the
+// number is built from. Both sides come from internal/sectormap, where the rows
+// carry the issuer page and data date they were derived from.
+type etfCoverageReport struct {
+	// Symbols is the number of declared ETFs.
+	Symbols int `json:"symbols"`
+	// L1Covered is the union of canonical L1 sectors reachable from them.
+	L1Covered []string `json:"l1_covered"`
+	// Count is len(L1Covered); the acceptance floor is 12.
+	Count int `json:"count"`
+	// CanonicalL1Total is the taxonomy size, so the reader does not have to know it.
+	CanonicalL1Total int `json:"canonical_l1_total"`
+	// Rows is the per-ETF exposure, sorted by symbol.
+	Rows []etfCoverageRow `json:"rows"`
 }
 
-// etfBySymbolEntry 把一個 ETF symbol 與其 L1 targets 列出，方便人工抽檢。
-type etfBySymbolEntry struct {
-	Symbol    string             `json:"symbol"`
-	Benchmark string             `json:"benchmark"`
-	L1Targets map[string]float64 `json:"l1_targets"`
+type etfCoverageRow struct {
+	Symbol     string             `json:"symbol"`
+	Name       string             `json:"name"`
+	Benchmark  string             `json:"benchmark"`
+	Issuer     string             `json:"issuer"`
+	AsOf       string             `json:"as_of"`
+	SourceURL  string             `json:"source_url"`
+	Holdings   int                `json:"holdings"`
+	L1Covered  []string           `json:"l1_covered"`
+	L1Weights  map[string]float64 `json:"l1_weights"`
+	UnmappedL1 int                `json:"unmapped_l1"`
 }
 
 type universeReport struct {
@@ -124,25 +139,7 @@ func main() {
 		rep.GICSBlocked = g
 	}
 
-	// PR-α: ETF L1 coverage metric.
-	// SSOT 在 internal/sectormap/etf_representatives.go；sectorallocation 是 wrapper。
-	etfCov := &etfL1CoverageReport{
-		Count:     sectorallocation.ETFL1CoverageCount(),
-		Symbols:   len(sectorallocation.ETFRepresentatives()),
-		L1Covered: stringSliceFromSectorIDs(sectorallocation.ETFL1Coverage()),
-	}
-	for _, r := range sectorallocation.ETFRepresentatives() {
-		m := make(map[string]float64, len(r.L1Targets))
-		for k, v := range r.L1Targets {
-			m[string(k)] = v
-		}
-		etfCov.BySymbol = append(etfCov.BySymbol, etfBySymbolEntry{
-			Symbol:    r.Symbol,
-			Benchmark: r.Benchmark,
-			L1Targets: m,
-		})
-	}
-	rep.ETFL1Coverage = etfCov
+	rep.ETF = buildETFReport()
 
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -160,13 +157,45 @@ func main() {
 	}
 }
 
-// stringSliceFromSectorIDs 把 industry.SectorID slice 轉成 string slice。
-func stringSliceFromSectorIDs(ids []industry.SectorID) []string {
-	out := make([]string, len(ids))
-	for i, id := range ids {
-		out[i] = string(id)
+// buildETFReport assembles the ETF L1 coverage block. The ETF representative
+// table is declared in internal/sectormap, so every number here is read, not
+// computed: the audit is checking what the system claims, and the derivation
+// itself is verified by internal/sectorallocation against the holdings snapshot.
+func buildETFReport() *etfCoverageReport {
+	etf := &etfCoverageReport{
+		Symbols:          len(sectorallocation.ETFRepresentativeSymbols()),
+		L1Covered:        sectorIDStrings(sectorallocation.ETFL1Coverage()),
+		Count:            sectorallocation.ETFL1CoverageCount(),
+		CanonicalL1Total: len(sectormap.CanonicalL1IDs()),
+		Rows:             []etfCoverageRow{},
 	}
-	return out
+	for _, r := range sectorallocation.ETFRepresentatives() {
+		l1 := make([]industry.SectorID, 0, len(r.L1Weights))
+		weights := make(map[string]float64, len(r.L1Weights))
+		unmapped := 0
+		for id, w := range r.L1Weights {
+			l1 = append(l1, id)
+			weights[string(id)] = w
+			if !sectormap.IsCanonicalL1(string(id)) {
+				unmapped++
+			}
+		}
+		slices.Sort(l1)
+		etf.Rows = append(etf.Rows, etfCoverageRow{
+			Symbol:     r.Symbol,
+			Name:       r.Name,
+			Benchmark:  r.Benchmark,
+			Issuer:     r.Issuer,
+			AsOf:       r.AsOf,
+			SourceURL:  r.SourceURL,
+			Holdings:   r.Holdings,
+			L1Covered:  sectorIDStrings(l1),
+			L1Weights:  weights,
+			UnmappedL1: unmapped,
+		})
+	}
+	slices.SortFunc(etf.Rows, func(a, b etfCoverageRow) int { return strings.Compare(a.Symbol, b.Symbol) })
+	return etf
 }
 
 func printHuman(rep report) {
@@ -187,11 +216,24 @@ func printHuman(rep report) {
 		fmt.Printf("legacy GICS weights: blocked=%.4f unmapped=%v\n",
 			rep.GICSBlocked.BlockedWt, rep.GICSBlocked.UnmappedKeys)
 	}
-	if rep.ETFL1Coverage != nil {
-		fmt.Printf("ETF L1 coverage: %d/%d symbols cover %d L1 sectors\n",
-			rep.ETFL1Coverage.Symbols, len(rep.ETFL1Coverage.BySymbol), rep.ETFL1Coverage.Count)
-		fmt.Printf("  L1 covered: %v\n", rep.ETFL1Coverage.L1Covered)
+	if rep.ETF != nil {
+		fmt.Printf("ETF L1 coverage: %d/%d canonical L1 reached by %d declared ETFs (floor 12)\n",
+			rep.ETF.Count, rep.ETF.CanonicalL1Total, rep.ETF.Symbols)
+		fmt.Printf("  L1 covered: %v\n", rep.ETF.L1Covered)
+		for _, r := range rep.ETF.Rows {
+			fmt.Printf("  %-10s %-14s %-22s as_of=%s holdings=%-3d L1=%d %v\n",
+				r.Symbol, r.Name, r.Issuer, r.AsOf, r.Holdings, len(r.L1Covered), r.L1Covered)
+		}
 	}
+}
+
+// sectorIDStrings renders SectorIDs as plain strings.
+func sectorIDStrings(ids []industry.SectorID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, string(id))
+	}
+	return out
 }
 
 // readSymbols reads a newline-separated symbol list; blank lines and lines

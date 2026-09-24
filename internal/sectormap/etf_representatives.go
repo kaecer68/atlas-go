@@ -1,331 +1,368 @@
 package sectormap
 
 import (
-	"sort"
+	"maps"
+	"slices"
+	"strconv"
 	"strings"
 )
 
-// ETFRepresentative declares one Taiwan-listed ETF's explicit mapping to one
-// or more canonical L1 sector IDs.
+// ETFRepresentative is one declared ETF → canonical L1 exposure row.
 //
-// SSOT for PR-α (sectorallocation ETF representative expansion):
-//   - 11 ETFs (mirrors configs/etf_metadata.json)
-//   - 1:many L1 mapping per ETF (TW50 spans 8 L1 sectors; 等權重)
-//   - 等權 1:many 是 spec §4 規範的選擇；不可改成主觀權重
+// Why this vocabulary exists: sector allocation needs to know which equity
+// industries a Taiwan-listed ETF spans, because ETFs are the vehicle the
+// allocation layer can trade. Before this table every consumer assembled that
+// answer by hand, so the same ETF had a different L1 set per call site — the
+// failure mode issue #1943 banned for sector keys.
 //
-// Why this lives in sectormap (not sectorallocation):
-//   - sectormap is a leaf package (zero atlas-go project dependencies), so the
-//     table can be reused by audit tools and tests without risk of an import
-//     cycle.
-//   - It also lets the audit CLI report this vocabulary as one more namespace
-//     alongside the 12 already declared in tables.go.
-//   - The sectorallocation package reads from here; it does not own the data.
+// Every row is *derived*, not authored:
 //
-// 護欄（PR-α 任務說明）：
-//   - 不動 internal/industry/sector.go：本檔只引用已存在的 canonical L1 IDs
-//     （canonicalL1 in canonical.go）；新增 ETF 對應不會動 sector.go。
-//   - 每個 L1 target 必須在 canonicalL1 中（編譯期不可表達；測試期
-//     TestETFRepresentatives_AllTargetsAreCanonical 嚴格把關）。
+//  1. holdings come from the issuer's own published portfolio page or API
+//     (SourceURL / AsOf); nothing here is copied from a blog or an estimate;
+//  2. each holding's industry comes from the first-party TWSE/TPEx listed
+//     company industry code (產業別 / SecuritiesIndustryCode);
+//  3. code → canonical L1 is the declared twse_industry_code table.
+//
+// internal/sectorallocation re-runs that derivation from the checked-in
+// snapshot (internal/sectorallocation/testdata/etf_holdings_20260924.json) on
+// every test run, so a hand-edited row or a stale snapshot fails the build
+// instead of silently rotting.
 type ETFRepresentative struct {
-	Symbol    string             // 含 .TW 後綴，例如 "0050.TW"
-	Benchmark string             // benchmark 指數代碼，例如 "TW50"
-	L1Targets map[string]float64 // 1:many mapping to canonical L1 IDs；weight 加總 = 1.0
+	Symbol string `json:"symbol"`
+	Name   string `json:"name"`
+	// Benchmark is the tracked index code from configs/etf_metadata.json.
+	Benchmark string `json:"benchmark"`
+	Issuer    string `json:"issuer"`
+	// AsOf is the data date printed on the issuer's holdings page.
+	AsOf string `json:"as_of"`
+	// SourceURL is the exact first-party page or API the holdings came from.
+	SourceURL string `json:"source_url"`
+	// Holdings is the number of equity positions the issuer published.
+	Holdings int `json:"holdings"`
+	// ReportedWeightPct is the sum of the published per-position weights. It is
+	// below 100 whenever the fund also holds futures, cash or margin.
+	ReportedWeightPct float64 `json:"reported_weight_pct"`
+	// MappedWeightPct is the part of ReportedWeightPct whose industry code
+	// resolves to a canonical L1 sector.
+	MappedWeightPct float64 `json:"mapped_weight_pct"`
+	// L1Targets is the renormalised canonical L1 exposure; it sums to 1.
+	L1Targets map[string]float64 `json:"l1_targets"`
 }
 
+// Evidence renders the audit trail of one row: issuer page, data date, the
+// per-symbol industry source, and how the uncovered weight was handled.
+func (r ETFRepresentative) Evidence() string {
+	unmapped := r.ReportedWeightPct - r.MappedWeightPct
+	if unmapped < 0 {
+		unmapped = 0
+	}
+	return r.Issuer + " published holdings " + r.SourceURL +
+		" (data date " + r.AsOf + ", " + strconv.Itoa(r.Holdings) + " equity positions, " +
+		percent(r.ReportedWeightPct) + "% of NAV) -> per-symbol TWSE/TPEx listed-company" +
+		" industry code (t187ap03_L / mopsfin_t187ap03_O) -> canonical L1 via the" +
+		" twse_industry_code table; positions without a canonical L1 target (" +
+		percent(unmapped) + "% of NAV) are reported and excluded, the remainder renormalised to 1"
+}
+
+// percent renders a weight percentage with up to two decimals.
+func percent(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimSuffix(s, ".")
+	if s == "" {
+		return "0"
+	}
+	return s
+}
+
+// etfRepresentatives is the authoritative list, ordered by ETF symbol.
 var etfRepresentatives = []ETFRepresentative{
 	{
-		Symbol: "0050.TW", Benchmark: "TW50",
-		L1Targets: l1Split([]string{
-			"semiconductor", "electronics", "financials", "shipping",
-			"steel", "telecom", "retail", "machinery",
-		}),
+		Symbol:            "0050.TW",
+		Name:              "元大台灣50",
+		Benchmark:         "TW50",
+		Issuer:            "元大投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.yuantaetfs.com/product/detail/0050/ratio",
+		Holdings:          50,
+		ReportedWeightPct: 99.71,
+		MappedWeightPct:   99.71,
+		L1Targets: map[string]float64{
+			"biotech":           0.00331,
+			"electronics":       0.137398,
+			"energy":            0.000903,
+			"financials":        0.083241,
+			"food":              0.00341,
+			"optoelectronics":   0.005416,
+			"other_electronics": 0.040116,
+			"plastics":          0.010932,
+			"semiconductor":     0.695617,
+			"shipping":          0.002507,
+			"telecom":           0.01715,
+		},
 	},
 	{
-		Symbol: "0056.TW", Benchmark: "TWHDividend",
-		L1Targets: l1Split([]string{
-			"financials", "telecom", "energy", "steel", "plastics", "cement",
-		}),
+		Symbol:            "0056.TW",
+		Name:              "元大高股息",
+		Benchmark:         "TWHDividend",
+		Issuer:            "元大投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.yuantaetfs.com/product/detail/0056/ratio",
+		Holdings:          50,
+		ReportedWeightPct: 98.36,
+		MappedWeightPct:   93.94,
+		L1Targets: map[string]float64{
+			"cement":            0.007026,
+			"electronics":       0.243986,
+			"financials":        0.288588,
+			"food":              0.025229,
+			"machinery":         0.005003,
+			"other_electronics": 0.029274,
+			"plastics":          0.083138,
+			"semiconductor":     0.210347,
+			"shipping":          0.048329,
+			"steel":             0.006813,
+			"telecom":           0.052267,
+		},
 	},
 	{
-		Symbol: "00878.TW", Benchmark: "MSCITWESG",
-		L1Targets: l1Split([]string{
-			"financials", "telecom", "energy", "steel", "chemicals",
-		}),
+		Symbol:            "006208.TW",
+		Name:              "富邦台50",
+		Benchmark:         "TW50",
+		Issuer:            "富邦投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://websys.fsit.com.tw/FubonETF/Fund/Assets.aspx?stkId=006208",
+		Holdings:          50,
+		ReportedWeightPct: 99.6368,
+		MappedWeightPct:   99.6368,
+		L1Targets: map[string]float64{
+			"biotech":           0.003357,
+			"electronics":       0.137096,
+			"energy":            0.000928,
+			"financials":        0.083318,
+			"food":              0.003416,
+			"optoelectronics":   0.005452,
+			"other_electronics": 0.04013,
+			"plastics":          0.010882,
+			"semiconductor":     0.695776,
+			"shipping":          0.00245,
+			"telecom":           0.017195,
+		},
 	},
 	{
-		Symbol: "006208.TW", Benchmark: "TW50",
-		L1Targets: l1Split([]string{
-			"semiconductor", "electronics", "financials", "shipping",
-			"steel", "telecom", "retail",
-		}),
+		Symbol:            "00692.TW",
+		Name:              "富邦公司治理",
+		Benchmark:         "TWCG",
+		Issuer:            "富邦投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://websys.fsit.com.tw/FubonETF/Fund/Assets.aspx?stkId=00692",
+		Holdings:          100,
+		ReportedWeightPct: 99.639,
+		MappedWeightPct:   98.7978,
+		L1Targets: map[string]float64{
+			"biotech":           0.000437,
+			"cement":            0.001035,
+			"chemicals":         0.00034,
+			"construction":      0.000645,
+			"electronics":       0.133602,
+			"financials":        0.105557,
+			"food":              0.000601,
+			"machinery":         0.00356,
+			"optoelectronics":   0.002111,
+			"other_electronics": 0.034102,
+			"plastics":          0.015448,
+			"retail":            0.001808,
+			"semiconductor":     0.676465,
+			"shipping":          0.005124,
+			"steel":             0.000796,
+			"telecom":           0.016133,
+			"textiles":          0.002236,
+		},
 	},
 	{
-		Symbol: "00692.TW", Benchmark: "TWCG",
-		L1Targets: l1Split([]string{
-			"financials", "semiconductor", "electronics", "telecom",
-		}),
+		Symbol:            "00713.TW",
+		Name:              "元大高股息低波動",
+		Benchmark:         "TWHDivLowVol",
+		Issuer:            "元大投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.yuantaetfs.com/product/detail/00713/ratio",
+		Holdings:          50,
+		ReportedWeightPct: 97.7,
+		MappedWeightPct:   90.7,
+		L1Targets: map[string]float64{
+			"auto":          0.023705,
+			"chemicals":     0.012459,
+			"construction":  0.007828,
+			"electronics":   0.082139,
+			"energy":        0.007607,
+			"financials":    0.306064,
+			"food":          0.116538,
+			"retail":        0.076516,
+			"semiconductor": 0.058434,
+			"shipping":      0.057883,
+			"steel":         0.023043,
+			"telecom":       0.169901,
+			"textiles":      0.057883,
+		},
 	},
 	{
-		Symbol: "00713.TW", Benchmark: "TWHDivLowVol",
-		L1Targets: l1Split([]string{
-			"financials", "telecom", "energy", "steel", "cement",
-		}),
+		Symbol:            "00878.TW",
+		Name:              "國泰永續高股息",
+		Benchmark:         "MSCITWESG",
+		Issuer:            "國泰投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://cwapi.cathaysite.com.tw/api/ETF/GetETFDetailStockList?FundCode=CN&SearchDate=2026-09-24&status=1",
+		Holdings:          29,
+		ReportedWeightPct: 97.33,
+		MappedWeightPct:   95.87,
+		L1Targets: map[string]float64{
+			"electronics":   0.271931,
+			"financials":    0.345885,
+			"food":          0.023261,
+			"retail":        0.018045,
+			"semiconductor": 0.207781,
+			"shipping":      0.06029,
+			"telecom":       0.072807,
+		},
 	},
 	{
-		Symbol: "00881.TW", Benchmark: "TW5G",
-		L1Targets: l1Split([]string{
-			"telecom", "optoelectronics", "electronics",
-		}),
+		Symbol:            "00881.TW",
+		Name:              "國泰台灣5G+",
+		Benchmark:         "TW5G",
+		Issuer:            "國泰投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://cwapi.cathaysite.com.tw/api/ETF/GetETFDetailStockList?FundCode=CR&SearchDate=2026-09-24&status=1",
+		Holdings:          30,
+		ReportedWeightPct: 99.09,
+		MappedWeightPct:   98.58,
+		L1Targets: map[string]float64{
+			"electronics":       0.263441,
+			"optoelectronics":   0.0211,
+			"other_electronics": 0.080138,
+			"semiconductor":     0.602353,
+			"telecom":           0.032968,
+		},
 	},
 	{
-		Symbol: "00891.TW", Benchmark: "TWSemi",
-		L1Targets: l1Split([]string{
-			"semiconductor", "optoelectronics", "electronics",
-		}),
+		Symbol:            "00891.TW",
+		Name:              "中信關鍵半導體",
+		Benchmark:         "TWSemi",
+		Issuer:            "中國信託投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.ctbcinvestments.com.tw/API/etf/ETFHoldingWeight?FID=E0017&StartDate=2026-09-24",
+		Holdings:          30,
+		ReportedWeightPct: 98.95,
+		MappedWeightPct:   96.98,
+		L1Targets: map[string]float64{
+			"electronics":   0.037018,
+			"semiconductor": 0.94999,
+			"telecom":       0.012992,
+		},
 	},
 	{
-		Symbol: "00919.TW", Benchmark: "TWHDivSelect",
-		L1Targets: l1Split([]string{
-			"financials", "telecom", "energy", "steel", "machinery",
-		}),
+		Symbol:            "00919.TW",
+		Name:              "群益台灣精選高息",
+		Benchmark:         "TWHDivSelect",
+		Issuer:            "群益投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.capitalfund.com.tw/CFWeb/api/etf/buyback (POST JSON {\"fundId\":\"195\",\"date\":null})",
+		Holdings:          40,
+		ReportedWeightPct: 99.8477,
+		MappedWeightPct:   93.0242,
+		L1Targets: map[string]float64{
+			"auto":              0.003921,
+			"chemicals":         0.003385,
+			"construction":      0.023851,
+			"electronics":       0.218702,
+			"financials":        0.573344,
+			"food":              0.003811,
+			"other_electronics": 0.009471,
+			"semiconductor":     0.070348,
+			"shipping":          0.075063,
+			"steel":             0.002899,
+			"textiles":          0.015205,
+		},
 	},
 	{
-		Symbol: "00929.TW", Benchmark: "TWTechDiv",
-		L1Targets: l1Split([]string{
-			"semiconductor", "electronics", "telecom", "optoelectronics",
-		}),
+		Symbol:            "00929.TW",
+		Name:              "復華台灣科技優息",
+		Benchmark:         "TWTechDiv",
+		Issuer:            "復華投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.fhtrust.com.tw/api/assets?fundID=ETF21&qDate=2026/09/24",
+		Holdings:          50,
+		ReportedWeightPct: 96.587,
+		MappedWeightPct:   85.597,
+		L1Targets: map[string]float64{
+			"electronics":       0.36284,
+			"optoelectronics":   0.08061,
+			"other_electronics": 0.170286,
+			"semiconductor":     0.291541,
+			"telecom":           0.094723,
+		},
 	},
 	{
-		Symbol: "00940.TW", Benchmark: "TWValDiv",
-		L1Targets: l1Split([]string{
-			"financials", "energy", "steel", "machinery",
-		}),
+		Symbol:            "00940.TW",
+		Name:              "元大台灣價值高息",
+		Benchmark:         "TWValDiv",
+		Issuer:            "元大投信",
+		AsOf:              "2026-09-24",
+		SourceURL:         "https://www.yuantaetfs.com/product/detail/00940/ratio",
+		Holdings:          50,
+		ReportedWeightPct: 97.46,
+		MappedWeightPct:   90.75,
+		L1Targets: map[string]float64{
+			"auto":              0.011019,
+			"cement":            0.016859,
+			"electronics":       0.252452,
+			"financials":        0.213554,
+			"food":              0.023361,
+			"machinery":         0.027328,
+			"optoelectronics":   0.08595,
+			"other_electronics": 0.071515,
+			"retail":            0.027328,
+			"semiconductor":     0.15427,
+			"shipping":          0.090138,
+			"telecom":           0.026226,
+		},
 	},
 }
 
-// l1Split 對 1:many L1 mapping 做等權分配；sum = 1.0（spec §4 強制）。
-func l1Split(ids []string) map[string]float64 {
-	out := make(map[string]float64, len(ids))
-	if len(ids) == 0 {
-		return out
-	}
-	w := 1.0 / float64(len(ids))
-	for _, id := range ids {
-		out[id] = w
+// etfRepresentativeKeys adapts the list above to the namespace table format.
+// The Reason carries the full evidence chain, so an operator can audit one row
+// without opening this file.
+var etfRepresentativeKeys = func() map[string]decl {
+	out := make(map[string]decl, len(etfRepresentatives))
+	for _, r := range etfRepresentatives {
+		out[r.Symbol] = decl{targets: maps.Clone(r.L1Targets), reason: r.Evidence()}
 	}
 	return out
-}
+}()
 
-// ETFRepresentatives returns the full declared table as a deep copy. Callers
-// may mutate the returned slice and its L1Targets maps without leaking into
-// the package's SSOT.
+// ETFRepresentatives returns every declared row as a deep copy, ordered by
+// symbol. Callers may mutate the result.
 func ETFRepresentatives() []ETFRepresentative {
 	out := make([]ETFRepresentative, len(etfRepresentatives))
 	for i, r := range etfRepresentatives {
-		m := make(map[string]float64, len(r.L1Targets))
-		for k, v := range r.L1Targets {
-			m[k] = v
-		}
-		out[i] = ETFRepresentative{
-			Symbol:    r.Symbol,
-			Benchmark: r.Benchmark,
-			L1Targets: m,
-		}
+		out[i] = r
+		out[i].L1Targets = maps.Clone(r.L1Targets)
 	}
 	return out
 }
 
-// ETFSymbols returns every declared ETF symbol, sorted.
-func ETFSymbols() []string {
+// ETFRepresentativeSymbols returns the declared ETF symbols, sorted.
+func ETFRepresentativeSymbols() []string {
 	out := make([]string, 0, len(etfRepresentatives))
 	for _, r := range etfRepresentatives {
 		out = append(out, r.Symbol)
 	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(slices.Values(out))
 }
 
-// ETFRepresentativeLookup returns the L1 target map for one ETF symbol and
-// whether the symbol is declared. Returns a defensive copy so the caller may
-// mutate it without leaking into the package SSOT.
-func ETFRepresentativeLookup(symbol string) (map[string]float64, bool) {
-	for _, r := range etfRepresentatives {
-		if r.Symbol == symbol {
-			out := make(map[string]float64, len(r.L1Targets))
-			for k, v := range r.L1Targets {
-				out[k] = v
-			}
-			return out, true
-		}
-	}
-	return nil, false
-}
+// ETFL1Coverage returns the canonical L1 sectors reachable from any declared
+// ETF, sorted. Single source of truth for the "ETF L1 coverage" metric that
+// cmd/experimental/industry-namespace-audit publishes.
+func ETFL1Coverage() []string { return CoveredL1(NamespaceETFRepresentatives, true) }
 
-// ETFL1Coverage returns the union of canonical L1 IDs reached by any declared
-// ETF representative, sorted ascending. SSOT for the audit metric
-// "ETF L1 coverage" surfaced in cmd/experimental/industry-namespace-audit.
-//
-// PR-α acceptance target: ≥ 12. Current implementation produces 13.
-func ETFL1Coverage() []string {
-	seen := map[string]struct{}{}
-	for _, r := range etfRepresentatives {
-		for id := range r.L1Targets {
-			if !IsCanonicalL1(id) {
-				continue
-			}
-			seen[id] = struct{}{}
-		}
-	}
-	out := make([]string, 0, len(seen))
-	for id := range seen {
-		out = append(out, id)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// ETFL1CoverageCount returns the cardinality of ETFL1Coverage() without
-// materializing the slice. Used by tests and audit guard.
-func ETFL1CoverageCount() int {
-	seen := map[string]struct{}{}
-	for _, r := range etfRepresentatives {
-		for id := range r.L1Targets {
-			if !IsCanonicalL1(id) {
-				continue
-			}
-			seen[id] = struct{}{}
-		}
-	}
-	return len(seen)
-}
-
-// ETFL1CoverageMappersAreAllCanonical is a static safety valve: every L1
-// target in the declared table MUST be in canonicalL1 (canonical.go). Returns
-// nil if all targets are canonical, or *UnknownL1Error otherwise.
-//
-// PR-α guardrail（任務說明）：「不動 internal/industry/sector.go」；本函式確保
-// 即便 sector.go 之後被擴充/縮減，本檔仍會紅燈直到人工對齊。
-func ETFL1CoverageMappersAreAllCanonical() error {
-	for _, r := range etfRepresentatives {
-		for id := range r.L1Targets {
-			if !IsCanonicalL1(id) {
-				return &UnknownL1Error{ETF: r.Symbol, L1: id}
-			}
-		}
-	}
-	return nil
-}
-
-// UnknownL1Error is returned by ETFL1CoverageMappersAreAllCanonical when an
-// ETF mapping points at an L1 sector ID that does not exist in canonicalL1.
-// Exported so callers can use errors.As for diagnostics.
-type UnknownL1Error struct {
-	ETF string
-	L1  string
-}
-
-func (e *UnknownL1Error) Error() string {
-	return "sectormap: ETF " + e.ETF + " maps to unknown canonical L1 sector id " + e.L1
-}
-
-// ETFRepresentativeDisposition 把一個 ETF symbol 翻成 Mapping，方便 audit 工具
-// 把它當成 namespace 報表的一部分輸出。每個 ETF 都映射到其 primary L1 target
-// （L1Targets 中按字母序最小的），加上完整的 Targets map。status 一律為 StatusMapped
-// （因為已顯式宣告）。
-//
-// 注意：這是 audit 報表用的視圖，不是 SSOT。SSOT 是 etfRepresentatives 變數。
-func ETFRepresentativeDisposition(symbol string) (Mapping, bool) {
-	rep, ok := ETFRepresentativeLookup(symbol)
-	if !ok {
-		return Mapping{}, false
-	}
-	// 確認每個 L1 都是 canonical
-	valid := map[string]float64{}
-	for id, w := range rep {
-		if IsCanonicalL1(id) {
-			valid[id] = w
-		}
-	}
-	// 計算 primary (依字母序)
-	keys := make([]string, 0, len(valid))
-	for id := range valid {
-		keys = append(keys, id)
-	}
-	sort.Strings(keys)
-	if len(keys) == 0 {
-		return Mapping{
-			Namespace: NamespaceETFRepresentatives,
-			Key:       symbol,
-			Targets:   map[string]float64{},
-			Status:    StatusUnmapped,
-			Reason:    "ETF " + symbol + " has no canonical L1 target",
-		}, true
-	}
-	primary := keys[0]
-	m := Mapping{
-		Namespace: NamespaceETFRepresentatives,
-		Key:       symbol,
-		Targets:   valid,
-		Status:    StatusMapped,
-		Reason:    "PR-α ETF representative; primary L1=" + primary + " (1:many targets, weight=1/" + itoa(len(valid)) + ")",
-	}
-	_ = strings.Builder{} // keep strings import used for future Note variants
-	return m, true
-}
-
-// itoa 是 strconv.Itoa 的極簡替代，避開對 strconv 的依賴以便更易讀。
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
-}
-
-// etfRepresentativeKeysMap 為 tables.go 提供 namespace 註冊：
-// 把每個 ETF symbol 轉成一個具有 primary L1 target 的 decl entry。
-//
-// 此處的 decl 不重複完整的 1:many mapping — 完整資料在 etfRepresentatives 變數，
-// audit 工具透過 ETFRepresentativeDisposition 取得。namespace 報表的 declared
-// keys 數 = len(etfRepresentatives)；這個 helper 確保 key 數一致。
-func etfRepresentativeKeysMap() map[string]decl {
-	out := make(map[string]decl, len(etfRepresentatives))
-	for _, r := range etfRepresentatives {
-		// 取 primary L1 (alphabetical first)
-		var primary string
-		for id := range r.L1Targets {
-			if primary == "" || id < primary {
-				primary = id
-			}
-		}
-		// status = mapped with full targets as map (即使 schema 預期 1:1)
-		// 為了避免破壞既有 schema (Mapping.Primary 取最高 weight)，每個 target 都 weight=1/N
-		out[r.Symbol] = decl{
-			targets: copyTargets(r.L1Targets),
-			reason:  "PR-α ETF representative; primary L1=" + primary + " (1:many mapping in sectorallocation.ETFRepresentatives)",
-		}
-	}
-	return out
-}
-
-func copyTargets(m map[string]float64) map[string]float64 {
-	out := make(map[string]float64, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
-}
+// ETFL1CoverageCount is the cardinality of ETFL1Coverage().
+func ETFL1CoverageCount() int { return len(ETFL1Coverage()) }
