@@ -48,12 +48,13 @@
 
 ---
 
-## E · Evolving（演進中）— 39 packages
+## E · Evolving（演進中）— 40 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
 | Package | 描述 | 關鍵型別/介面 | 備註 |
 |---------|------|--------------|------|
+| `stockflows` | 個股層 T86 flow store（`data/state/stock_flows/<symbol>.json`）維護 — CLI 手動回填與排程每日增量刷新共用的唯一實作；idempotent per-date merge、`NewestStoredDate` 增量視窗、per-day min-rows 反假成功閘門（#1945） | `Run`, `Config`, `MergeSymbolFile`, `NewestStoredDate`, `Dir` | 由 `internal/scheduler`（`stockpicker_flows_update`）與 `cmd/backfill-stockpicker-flows` 共用；API 可能調整 |
 | `autobacktest` | 自動回測 — 定時背景回測任務 | `Runner` | 由 daily monitor pipeline 使用 |
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
 | `capitalflow` | 七維錢潮雷達（3+2+2 分層）分解與共振分析 — 官方actor（外資/投信/自營商）T86 + 行為代理（官股/散戶）proxy + 領先／跨市場訊號（期貨 OI / TSM ADR）Z-score、共振係數、品質分數；`docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport`, `CapitalFlowAssessment` | **v0.0.2.0 升級**：Wave 11 shipped；被 eventdriven/recommender/marketexplain 廣泛使用 |
