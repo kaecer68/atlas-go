@@ -1459,13 +1459,29 @@ func (a *DashboardAPI) RegisterRoutes(mux *http.ServeMux) {
 		}
 		allRecs := healthStore.All()
 		channels := make([]channelHealthResp, 0, len(allRecs))
+		now := time.Now()
 		for id, rec := range allRecs {
+			// Contract-aware verdict (2026-09-24 channel-status-truth): a raw
+			// "ok" record whose last fetch is older than the channel's freshness
+			// window must not be published as ok here. This endpoint feeds the
+			// alerts page and the atlas-mcp channel_health tool, and it used to
+			// disagree with the health summary for the same channel at the same
+			// second (twse_oddlot: ok here, stale there).
+			derived := apigateway.DeriveChannelStatusForID(&rec, id, now)
+			lastError := rec.LastError
+			if derived != rec.Status {
+				// The derived verdict explains itself through the existing view
+				// field last_error, exactly like the warn/degraded/error views do
+				// (a view is not a record edit: channel_health.json keeps the
+				// facts — LastFetchAt / LastSuccessAt / LastError).
+				lastError = apigateway.DeriveChannelStatusReason(&rec, apigateway.ChannelContracts().Contract(id), now)
+			}
 			channels = append(channels, channelHealthResp{
 				ChannelID:          id,
-				Status:             rec.Status,
+				Status:             derived,
 				UpdatedAt:          rec.LastFetchAt,
 				LastDataAt:         rec.LastDataAt,
-				LastError:          rec.LastError,
+				LastError:          lastError,
 				LastSuccessAt:      rec.LastSuccessAt,
 				LatencyMs:          rec.LatencyMs,
 				RateLimitRemaining: rec.RateLimitRemaining,

@@ -127,16 +127,22 @@ func (g *Gateway) Fetch(ctx context.Context, channelID string) (*FetchResult, er
 		g.cache.Set(channelID, result)
 
 		// 5. Record health — contract-aware. A successful fetch is recorded
-		// as "ok" unless the channel's contract requires data-level
-		// validation (file_state / value_nonzero) and the persisted data
-		// state fails SuccessCriteria — then it is recorded as "degraded".
+		// as "ok" unless (a) the adapter flagged the payload as empty/stale and
+		// the contract declares DegradedOnEmpty (twse_oddlot / twse_etf — the
+		// upstream is gone, so "ok" would be a lie; see FetchOutcomeStatus), or
+		// (b) the channel's contract requires data-level validation (file_state
+		// / value_nonzero) and the persisted data state fails SuccessCriteria —
+		// then it is recorded as "degraded".
 		// This cures the government_broker "ok 假象": AggregateDate can
 		// return (nil, nil) when every upstream symbol fails (e.g. all
 		// captcha'd), the adapter surfaces a no_data stub as a successful
 		// fetch, and the old code recorded "ok" while no data ever landed.
-		status, errMsg := "ok", ""
-		if ev := EvaluateContractHealth(ctx, ChannelContracts().Contract(channelID), provider, HealthStatus{Status: "ok"}); ev.Status != "ok" {
-			status, errMsg = ev.Status, ev.LastError
+		contract := ChannelContracts().Contract(channelID)
+		status, errMsg := FetchOutcomeStatus(result, contract)
+		if status == StatusOK {
+			if ev := EvaluateContractHealth(ctx, contract, provider, HealthStatus{Status: "ok"}); ev.Status != "ok" {
+				status, errMsg = ev.Status, ev.LastError
+			}
 		}
 		_ = g.health.Record(channelID, status, errMsg, WithLatencyMs(result.Meta.LatencyMs))
 

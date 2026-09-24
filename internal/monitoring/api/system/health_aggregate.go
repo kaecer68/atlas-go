@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
 	"github.com/kaecer68/atlas-go/internal/portprobe"
@@ -143,7 +144,12 @@ type channelHealthDetail struct {
 	Error    int `json:"error"`
 	Degraded int `json:"degraded"`
 	Inactive int `json:"inactive"`
-	Other    int `json:"other"`
+	// Stale counts channels whose last fetch is older than their contract
+	// freshness window (2026-09-24 channel-status-truth: the tier used to count
+	// such a record as ok, so /api/health/aggregate said "ok" for a channel the
+	// health summary called stale).
+	Stale int `json:"stale"`
+	Other int `json:"other"`
 }
 
 func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
@@ -152,8 +158,9 @@ func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
 	}
 	all := h.ChannelHealth.All()
 	detail := channelHealthDetail{Total: len(all)}
-	for _, rec := range all {
-		switch rec.Status {
+	now := time.Now()
+	for id, rec := range all {
+		switch apigateway.DeriveChannelStatusForID(&rec, id, now) {
 		case "ok":
 			detail.OK++
 		case "warn":
@@ -164,6 +171,8 @@ func (h *HealthHandlers) checkChannelHealth() (bool, string, any) {
 			detail.Degraded++
 		case "inactive":
 			detail.Inactive++
+		case "stale":
+			detail.Stale++
 		default:
 			detail.Other++
 		}

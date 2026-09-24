@@ -160,6 +160,13 @@ func StatusText(status string) string {
 		return "部分異常"
 	case "inactive":
 		return "未啟用"
+	case "stale":
+		// Derived verdict: last fetch is older than the channel contract's
+		// freshness window. Distinct from 待更新 (warn = transient waiting) so
+		// an operator can tell "upstream is gone" from "quota, try later".
+		return "資料過期"
+	case "degraded":
+		return "降級"
 	default:
 		return "未知"
 	}

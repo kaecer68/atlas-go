@@ -4734,6 +4734,7 @@ export interface channelHealthDetail {
   error: number;
   degraded: number;
   inactive: number;
+  stale: number;
   other: number;
 }
 
