@@ -165,6 +165,15 @@ func (s *DataChannelService) getHealthFromStore(channelID, apiKey string) (statu
 	if rec == nil {
 		return "warn", "API Key 已設定，等待首次健康檢查", ""
 	}
+	// Contract-aware verdict (2026-09-24): an "ok" record older than the
+	// channel's freshness window is "stale", exactly as it is everywhere else.
+	// This path used to return the raw record status, so these API-key channels
+	// could report 正常 while the health summary reported stale.
+	now := time.Now()
+	contract := apigateway.ChannelContracts().Contract(channelID)
+	if derived := apigateway.DeriveChannelStatus(rec, contract, now); derived != rec.Status {
+		return derived, rec.LastFetchAt, apigateway.DeriveChannelStatusReason(rec, contract, now)
+	}
 	return rec.Status, rec.LastFetchAt, rec.LastError
 }
 

@@ -3,6 +3,7 @@ import { narrativeThemeLabel } from '../shared/constants.js';
 import { getJSON, notify, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml, fmtInt } from '../shared/utils.js';
 import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeDrawdown } from '../shared/format-metric.js';
+import { channelStatusMeta } from '../shared/channel-status.js';
 
 
 // Main overview dashboard
@@ -63,21 +64,72 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   const errorChannels = sysChannels.filter(c => c.status === 'error');
   const warnChannels = sysChannels.filter(c => c.status === 'warn');
   const partialChannels = sysChannels.filter(c => c.status === 'partial');
+  // `stale` (last successful fetch older than the channel contract's freshness
+  // window) and `degraded` are NOT normal. Before this fix they were counted by
+  // no filter below, so the KPI fell through to「正常」while the channel was
+  // 17 days without data (twse_oddlot, 2026-09-24).
+  const staleChannels = sysChannels.filter(c => c.status === 'stale');
+  const degradedChannels = sysChannels.filter(c => c.status === 'degraded');
+  const expiredChannels = staleChannels.concat(degradedChannels);
+  // One bucket, two labels: name the bucket after whatever is actually in it.
+  const expiredLabel = (staleChannels.length > 0 && degradedChannels.length > 0) ? '資料過期/降級'
+    : (degradedChannels.length > 0 ? '降級' : '資料過期');
   const inactiveChannels = sysChannels.filter(c => c.status === 'inactive');
-  const totalAlerts = errorChannels.length + warnChannels.length + partialChannels.length;
+  // An unknown verdict (no health record) must not pass as normal either.
+  const unknownChannels = sysChannels.filter(c => !channelStatusMeta(c.status).known);
+  const totalAlerts = errorChannels.length + warnChannels.length + partialChannels.length
+    + expiredChannels.length + unknownChannels.length;
+  const errCount = errorChannels.length + partialChannels.length; // red tone
   const channelName = c => c.channel_id || '未知通道';
+  // Row text/color per status: error-ish → red「發生異常」, stale/degraded →
+  // amber with their own label, warn → amber「資料待更新」.
+  const alertRow = (status, id, text) => {
+    const meta = channelStatusMeta(status);
+    const color = meta.tone === 'err' ? 'var(--color-danger)'
+      : (meta.tone === 'warn' ? 'var(--warn)' : 'var(--muted)');
+    const icon = meta.tone === 'err' ? '⚠' : (meta.tone === 'warn' ? '◌' : '•');
+    return `<div style="margin:2px 0;font-size:12px;color:${color}">${icon} ${escapeHtml(id)} ${escapeHtml(text)}</div>`;
+  };
+  const alertRowText = (status, fallback) => {
+    const meta = channelStatusMeta(status);
+    if (meta.tone === 'err') return '發生異常';
+    if (meta.status === 'warn') return fallback;
+    return meta.label;
+  };
+  const namedChannelIds = new Set();
   const alertRows = dcAlerts.map(a => {
-    const isErr = a.status === 'error';
-    return `<div style="margin:2px 0;font-size:12px;color:${isErr ? 'var(--color-danger)' : 'var(--warn)'}">${isErr ? '⚠' : '◌'} ${escapeHtml(a.channel_id)} ${isErr ? '發生異常' : '資料待更新'}</div>`;
+    if (a && a.channel_id) namedChannelIds.add(a.channel_id);
+    return alertRow(a.status, a.channel_id, alertRowText(a.status, '資料待更新'));
   });
+  // The backend alert list only carries error/warn rows today, so a stale
+  // channel would leave the KPI saying「資料過期」with no channel named below it.
+  // Derive the missing rows from the channel list so both halves agree.
+  const derivedRows = [...errorChannels, ...partialChannels, ...expiredChannels, ...warnChannels, ...unknownChannels]
+    .filter(c => !namedChannelIds.has(c.channel_id))
+    .map(c => alertRow(c.status, channelName(c), alertRowText(c.status, '資料待更新')));
+  const rows = alertRows.concat(derivedRows);
   const inactiveHtml = inactiveChannels.length > 0
     ? `<div class="my-xs text-sm text-muted">◌ ${inactiveChannels.map(c => escapeHtml(channelName(c))).join('、')} 未啟用</div>`
     : '';
+  // 'alert-err' paints a red border; a stale/degraded-only state gets an amber
+  // border instead (shared CSS has no alert-warn class, so use the token).
+  const alertCardClass = errCount > 0 ? 'alert-err' : '';
+  const alertCardStyle = (errCount === 0 && totalAlerts > 0) ? ' style="border-color:var(--warn)"' : '';
   const alertHtml = dataChannels == null
     ? '<div class="my-xs text-sm text-muted">◌ 通道狀態載入失敗</div>'
-    : (alertRows.length > 0
-      ? alertRows.join('') + inactiveHtml
-      : (inactiveHtml || '<div class="my-xs text-sm text-success">✓ 所有通道正常</div>'));
+    : (rows.length > 0
+      ? rows.join('') + inactiveHtml
+      : (totalAlerts > 0
+        ? `<div class="my-xs text-sm text-warn">⚠ ${totalAlerts} 個通道需要關注</div>` + inactiveHtml
+        : (inactiveHtml || '<div class="my-xs text-sm text-success">✓ 所有通道正常</div>')));
+  // KPI headline: worst bucket first. Only「正常」when every channel is ok /
+  // expected_delay — stale / degraded / partial / unknown all break that.
+  const channelKpiText = errorChannels.length > 0 ? errorChannels.length + ' 筆異常'
+    : (partialChannels.length > 0 ? partialChannels.length + ' 筆部分異常'
+      : (expiredChannels.length > 0 ? expiredChannels.length + ' 筆' + expiredLabel
+        : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新'
+          : (unknownChannels.length > 0 ? unknownChannels.length + ' 筆狀態未知' : '正常'))));
+
 
   const phaseMap = { simulation: '模擬', paper: '模擬', live: '實盤', full: '全倉' };
   const phaseColor = capitalPhase ? (capitalPhase.can_advance ? 'var(--color-success)' : 'var(--warn)') : 'inherit';
@@ -92,7 +144,7 @@ export function renderOverview(data, agentsData, inbox, overlap, narrativeEvents
   gridRisk.innerHTML = `
     <div class="kpi-card clickable" onclick="openKpiHelp('weakest')"><div class="kpi-label">待改進 AI 策略</div><div class="kpi-value">${agentName(weakest)}</div><div class="kpi-hint">Sharpe-like：<span style="${parseFloat(weakSharpe) < 0 ? 'color:var(--color-danger);font-weight:600' : ''}">${weakSharpe}</span></div></div>
     <div class="kpi-card ${crowdingWarnings.length ? 'alert-err' : ''} clickable" onclick="openKpiHelp('crowding')"><div class="kpi-label">擁擠標的</div><div class="kpi-value text-lg">${crowdingWarnings.length ? crowdingWarnings.length + ' 筆' : '正常'}</div>${crowdingHtml}</div>
-    <div class="kpi-card ${totalAlerts > 0 ? 'alert-err' : ''} clickable" onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${errorChannels.length > 0 ? errorChannels.length + ' 筆異常' : (warnChannels.length > 0 ? warnChannels.length + ' 筆待更新' : (partialChannels.length > 0 ? partialChannels.length + ' 筆部分異常' : '正常'))}</div>${alertHtml}</div>
+    <div class="kpi-card ${alertCardClass} clickable"${alertCardStyle} onclick="switchPage('datachannels')"><div class="kpi-label">信息通道預警</div><div class="kpi-value text-lg">${channelKpiText}</div>${alertHtml}</div>
   `;
   gridSystem.innerHTML = `
     <div class="kpi-card ${!health.replay_data_path_ok ? 'alert-err' : ''} clickable" onclick="${!health.replay_data_path_ok ? "openKpiHelp('replay-missing')" : "switchPage('datachannels')"}"><div class="kpi-label">資料時間</div><div class="kpi-value text-lg">${health.replay_data_latest_date || '未匯入'}</div><div class="kpi-hint">${health.replay_data_path_ok ? `最新回放數據<br>最後模擬：${health.last_window_id || '?'} / ${formatDate(health.last_window_generated_at)}` : '⚠️ 回放資料尚未匯入<br><small style="color:var(--color-danger)">點此查看匯入方式 →</small>'}</div></div>

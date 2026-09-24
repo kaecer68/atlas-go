@@ -82,24 +82,92 @@ func TestResolveChannelStatusFromStore_Error(t *testing.T) {
 	}
 }
 
-// TestResolveChannelStatusFromStore_OtherStatus covers store statuses the
-// resolver has no dedicated mapping for (e.g. "inactive"). FileStatus should
-// pass through, but LastError from the record should be attached for
-// visibility.
-func TestResolveChannelStatusFromStore_OtherStatus(t *testing.T) {
+// TestResolveChannelStatusFromStore_Inactive covers the inactive status: the
+// record's own verdict must be reported (2026-09-24). It used to fall through
+// to the file-age fallback, so /admin/datachannels rendered twse_etf — whose
+// record says inactive with a reason — as an empty status / 未知.
+func TestResolveChannelStatusFromStore_Inactive(t *testing.T) {
 	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
-	if err := store.Record("ch-inactive", "inactive", "channel disabled"); err != nil {
+	if err := store.Record("twse_etf", "inactive", "TWT44U removed upstream (2026-08-10)"); err != nil {
 		t.Fatalf("record inactive: %v", err)
 	}
-	status, updated, lastErr := resolveChannelStatusFromStore(store, "ch-inactive", "ok", "20260611")
-	if status != "ok" {
-		t.Fatalf("expected fileStatus to pass through for unmapped store status, got %q", status)
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_etf", "ok", "20260611")
+	if status != "inactive" {
+		t.Fatalf("expected inactive to be reported, got %q", status)
 	}
-	if updated != "20260611" {
-		t.Fatalf("expected fileUpdated to pass through, got %q", updated)
+	if updated == "20260611" {
+		t.Fatalf("expected the record's LastFetchAt, got the file timestamp %q", updated)
 	}
-	if lastErr != "channel disabled" {
+	if lastErr != "TWT44U removed upstream (2026-08-10)" {
 		t.Fatalf("expected store LastError to be attached, got %q", lastErr)
+	}
+}
+
+// TestResolveChannelStatusFromStore_UnmappedStatusStillFallsBack pins the
+// remaining fallback: a store status the resolver genuinely has no mapping for
+// keeps the file-age verdict, with the record's error attached for visibility.
+func TestResolveChannelStatusFromStore_UnmappedStatusStillFallsBack(t *testing.T) {
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	if err := store.Record("ch-weird", "quantum", "unmapped"); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "ch-weird", "warn", "20260611")
+	if status != "warn" || updated != "20260611" {
+		t.Fatalf("expected fileStatus/fileUpdated fallback, got (%q,%q)", status, updated)
+	}
+	if lastErr != "unmapped" {
+		t.Fatalf("expected store LastError to be attached, got %q", lastErr)
+	}
+}
+
+// TestResolveChannelStatusFromStore_StaleRecordIsNotDropped covers a record
+// written directly as "stale" (adapter_government_broker HealthCheck marks an
+// unusable snapshot stale): it must be reported, not silently replaced by the
+// file-age verdict.
+func TestResolveChannelStatusFromStore_StaleRecordIsNotDropped(t *testing.T) {
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	if err := store.Record("government_broker", "stale", "reading older than 48h"); err != nil {
+		t.Fatalf("record stale: %v", err)
+	}
+	status, _, lastErr := resolveChannelStatusFromStore(store, "government_broker", "ok", "20260611")
+	if status != "stale" {
+		t.Fatalf("expected stale to be reported, got %q", status)
+	}
+	if lastErr != "reading older than 48h" {
+		t.Fatalf("expected the reason attached, got %q", lastErr)
+	}
+}
+
+// TestResolveChannelStatusFromStore_ExpiredOkIsStale is the regression test for
+// the reported symptom: a channel whose record says ok but whose last successful
+// fetch is 17 days old (twse_oddlot, upstream removed) used to read "ok / 正常"
+// on /admin/datachannels while the health summary logged "stale" at the same
+// second. Both must now say stale.
+func TestResolveChannelStatusFromStore_ExpiredOkIsStale(t *testing.T) {
+	store := apigateway.NewChannelHealthStoreWithPool(t.TempDir(), nil)
+	fetched := time.Now().Add(-17 * 24 * time.Hour).UTC().Truncate(time.Second)
+	store.WithRecordClock(func() time.Time { return fetched })
+	if err := store.Record("twse_oddlot", "ok", ""); err != nil {
+		t.Fatalf("record ok: %v", err)
+	}
+	// Back to the real clock for the control case below.
+	store.WithRecordClock(time.Now)
+	status, updated, lastErr := resolveChannelStatusFromStore(store, "twse_oddlot", "ok", "20260907")
+	if status != "stale" {
+		t.Fatalf("expected stale for a 17-day-old ok record, got %q", status)
+	}
+	if updated == "20260907" {
+		t.Fatalf("expected the record's LastFetchAt as updated, got the file timestamp %q", updated)
+	}
+	if lastErr == "" || !strings.Contains(lastErr, "48 小時") {
+		t.Fatalf("expected a reason quoting the freshness window, got %q", lastErr)
+	}
+	// The same clock (now) must not turn a freshly fetched record stale.
+	if err := store.Record("twse_margin", "ok", ""); err != nil {
+		t.Fatalf("record ok: %v", err)
+	}
+	if st, _, _ := resolveChannelStatusFromStore(store, "twse_margin", "warn", "20260907"); st != "ok" {
+		t.Fatalf("fresh record = %q, want ok", st)
 	}
 }
 

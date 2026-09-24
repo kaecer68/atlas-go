@@ -181,6 +181,66 @@ func TestExportChannelHealthMetrics_StalenessOverageRespectsContract(t *testing.
 	}
 }
 
+// TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk —
+// 2026-09-24 channel-status-truth: the status gauge used to export the raw
+// record status, so a channel whose last fetch was 17 days old still exported
+// atlas_channel_health_status 0 (ok) while every other surface called it stale.
+// The gauge now carries the same contract-aware verdict (stale → warning value
+// 1; the alert rules only match == 2, so nothing pages differently).
+func TestExportChannelHealthMetrics_ExpiredOkExportsStaleNotOk(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "data", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	wrapper := struct {
+		Channels map[string]*apigateway.ChannelHealthRecord `json:"channels"`
+	}{
+		Channels: map[string]*apigateway.ChannelHealthRecord{
+			// Registered channel, record says ok, data 17 days old.
+			"twse_oddlot": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-17 * 24 * time.Hour).Format(time.RFC3339),
+			},
+			// Registered channel, freshly fetched: stays ok.
+			"twse_capital_flow": {
+				Status:      "ok",
+				LastFetchAt: now.Add(-5 * time.Minute).Format(time.RFC3339),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "channel_health.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	collector := monitoring.NewMetricsCollector()
+	if err := exportChannelHealthMetrics(dir, collector, now); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	monitoring.PrometheusHandler(collector).ServeHTTP(rec, req)
+	body := rec.Body.String()
+
+	for _, want := range []string{
+		`atlas_channel_health_status{channel="twse_oddlot"} 1`,
+		`atlas_channel_health_status{channel="twse_capital_flow"} 0`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing /metrics line %q\n--- full body ---\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `atlas_channel_health_status{channel="twse_oddlot"} 0`) {
+		t.Fatal("expired ok channel must not be exported as ok")
+	}
+}
+
 func TestExportChannelHealthMetrics_NoCollectorIsNoOp(t *testing.T) {
 	dir := t.TempDir()
 	if err := exportChannelHealthMetrics(dir, nil, time.Now()); err != nil {

@@ -2,6 +2,7 @@
 // Principle: machine handles noise, humans only make decisions.
 import { getJSON, postJSON, notify } from '../shared/app-utils.js';
 import { escapeHtml } from '../shared/utils.js';
+import { channelStatusMeta } from '../shared/channel-status.js';
 
 const STATUS_MAP = {
   triggered: '觸發中',
@@ -156,26 +157,52 @@ function renderHealthSummary() {
   getJSON('/api/dashboard/channel-health').then(data => {
     const channels = data?.channels || [];
     const total = channels.length;
-    const ok = channels.filter(c => c.status === 'ok').length;
+    // Status → label/tone from the shared SSOT (shared/channel-status.js):
+    //   stale    → 資料過期, amber
+    //   degraded → 降級,    amber
+    //   unknown  → 未知,    muted
+    // Amber, never red: "upstream stopped sending" is an attention state, not an
+    // outage. And none of them may be counted as「正常」— the old code knew only
+    // ok/warn/error, so a stale channel both inflated「正常」and wore a red badge.
+    const ok = channels.filter(c => channelStatusMeta(c.status).normal).length;
+    const stale = channels.filter(c => c.status === 'stale').length;
+    const degraded = channels.filter(c => c.status === 'degraded').length;
     const warn = channels.filter(c => c.status === 'warn').length;
-    const err = channels.filter(c => c.status === 'error').length;
+    const err = channels.filter(c => channelStatusMeta(c.status).tone === 'err').length;
+    const attentionCount = channels.filter(c => channelStatusMeta(c.status).needsAttention).length;
+
+    const dot = color => `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color}"></span>`;
+    const chip = (count, label, color) => count > 0
+      ? `<div style="display:flex;gap:4px;align-items:center">${dot(color)}<span class="text-sm">${count} ${label}</span></div>`
+      : '';
 
     const badChannels = channels
-      .filter(c => c.status !== 'ok' && c.status !== 'inactive')
-      .map(c => `<span class="badge err" style="font-size:10px;padding:1px 5px">${escapeHtml(c.channel_id)}</span>`)
+      .filter(c => channelStatusMeta(c.status).needsAttention)
+      .map(c => {
+        const meta = channelStatusMeta(c.status);
+        // last_error explains the channel state: for a DERIVED verdict (e.g. an
+        // `ok` record whose last successful fetch is older than the contract
+        // window → `stale`) the backend puts the derivation reason here
+        // ("資料已 N 天未更新，超過合約更新窗口 …"); for a record's own verdict
+        // (error/warn/degraded) it is the record's original error text.
+        const reason = c.last_error ? ` title="${escapeHtml(c.last_error)}"` : '';
+        return `<span class="badge ${meta.badgeClass}" style="font-size:10px;padding:1px 5px"${reason}>${escapeHtml(c.channel_id)} ${escapeHtml(meta.label)}</span>`;
+      })
       .join(' ') || '<span style="color:var(--muted);font-size:12px">全部正常</span>';
 
     el.innerHTML = `
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;gap:4px;align-items:center">
-          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-success)"></span>
+          ${dot('var(--color-success)')}
           <span class="text-sm">${ok}/${total} 正常</span>
         </div>
-        ${warn > 0 ? `<div style="display:flex;gap:4px;align-items:center"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-warning)"></span><span class="text-sm">${warn} 警告</span></div>` : ''}
-        ${err > 0 ? `<div style="display:flex;gap:4px;align-items:center"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-danger)"></span><span class="text-sm">${err} 異常</span></div>` : ''}
+        ${chip(stale, '資料過期', 'var(--status-stale)')}
+        ${chip(degraded, '降級', 'var(--warn)')}
+        ${chip(warn, '警告', 'var(--color-warning)')}
+        ${chip(err, '異常', 'var(--color-danger)')}
         <div style="margin-left:auto;font-size:11px;color:var(--muted)">上次更新: ${formatTimeShort(data?.updated_at)}</div>
       </div>
-      ${(warn > 0 || err > 0) ? `<div style="margin-top:6px">${badChannels}</div>` : ''}
+      ${attentionCount > 0 ? `<div style="margin-top:6px">${badChannels}</div>` : ''}
     `;
   }).catch(() => {
     el.innerHTML = '<span style="color:var(--muted);font-size:12px">健康狀態載入失敗</span>';

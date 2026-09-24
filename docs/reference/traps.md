@@ -10,7 +10,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 > 此文件為 `AGENTS.md` 陷阱節的詳細擴充。根 AGENTS.md 僅保留最關鍵的跨模組陷阱；模組特定陷阱請見 `internal/*/AGENTS.md`。
 > 新增 trap 前請確認無重複 (grep 既有條目);新增後更新本檔 `updated` 欄位。
 >
-> **閉環 / 狀態誠實性**：`applied` 只能由消費證據驅動、心法 L1–L5 plugin 是 no-op、`internal/sim` 無輪動鉤子、合成 placeholder 不是 forward return——逐項處置與證據見 [`inert-registry.md`](inert-registry.md)。
+> **閉環 / 狀態誠實性**：`applied` 只能由消費證據驅動、心法 L1–L5 plugin 是 no-op、`internal/sim` 無輪動鉤子、合成 placeholder 不是 forward return、`industry_hit_rate_consume_enabled` 等跨模組 config gate 必須 **default off 且 off 時逐位元相同**（#1942/#1948 → #1959）——逐項處置與證據見 [`inert-registry.md`](inert-registry.md)。
 
 ---
 
@@ -68,7 +68,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Darwinian 權重靜默夾制** | portfolio | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | sim | 多次 simulation run 之間不可共用同一個 slice。 |
 | **Yahoo Provider range=1y 產出 YoY 而非 daily change** | marketdata | US 股票/指數 provider 若使用 `range: "1y"` + `prev := closes[0]`，會計算「年增率 (YoY)」而非「日增率 (daily change)」，導致 ChangePct 出現 +84.9% 等荒謬數值。正確模式：`range: "5d"` + `prev := closes[len(closes)-2]`，並對 `abs(changePct) > 30%` 做 bounds reject。詳見 PR #948。 |
-| **`UnifiedHealthStore.StatusSummary` 會把超時的 "ok" 隱性降級為 "stale"** | apigateway | **修法**（PR #1283 修復 #1086 根因）：`StatusSummary()` 走 `deriveStatusWithContract()` 依 per-channel 契約 `FreshnessWindow`（預設繼承 `StaleDataThreshold=48h`）對 `LastFetchAt` 超過 window 的 channel 自動把 status 由 "ok" 降級為 "stale"（`internal/apigateway/health.go:30,120,155`）。**新 trap**：不要在呼叫端寫「`status == "ok" 就不檢查 timestamp`」的程式碼——PR #1283 之前這是 silent failure mode（66+ 天沒 refresh 仍回 "ok"），之後 status 可能是 "stale" 必須顯式處理。對外 contract：`/api/scheduler/status` 等 consumer **必須** switch-case 處理 "stale" 而不是 fallback 到 "ok"。
+| **channel 狀態只有一個判定：`apigateway.DeriveChannelStatus`** | apigateway / monitoring | 2026-09-24（channel-status-truth）：一個 channel 在同一秒曾有四個不同判定 —— record 說 `ok`、`/admin/datachannels` 說 `ok`、health summary log 說 `stale`、`channel_health`（DB）說 `ok` 但 `last_fetch_at` 是 5 分鐘前的 sync 時間（實證 `twse_oddlot`：真實最後成功抓取 2026-09-07，上游 BFI84U 已被 TWSE 改用途）。**唯一權威**是 `internal/apigateway/channel_status.go` 的 `DeriveChannelStatus(rec, contract, now)`：record 非 `ok` 一律 pass-through；`ok` 且 `LastFetchAt` 超過契約 `EffectiveFreshnessWindow()`（預設 `StaleDataThreshold=48h`）→ `stale`；時間戳不可解析→保留 `ok`；`Provenance=derived` 的指標欄位紀錄（vix/us10y）不套用。**所有**呈現層都必須呼叫它：`resolveChannelStatusFromStore`、`getHealthFromStore`、`StatusSummary`/`Gateway.Summary`、`/api/dashboard/channel-health`、`/api/health/aggregate` Tier 2、`atlas_channel_health_status` gauge、`SyncAllToDB` 的 DB mirror。**禁止**在呼叫端寫「`status == "ok"` 就不檢查 timestamp」，也**禁止**自己重算窗口（`deriveStatusWithContract` 已改為 delegate；PR #1283 之前這是 silent failure mode：66+ 天沒 refresh 仍回 "ok"）。新增狀態字串必須同步 `monitoring/service.StatusText`（前端 label）與 `monitoring/rules/*.yml`（目前只有 `== 2` 會 page）。 另一條同源事實：`channel_health` DB 的 `last_fetch_at`/`last_success_at` **是事實欄，不可寫 sync 當下時間**——`recordToDB` 曾以 `time.Now()` 蓋掉，使每 5 分鐘的 `channel_health_sync` 讓每個 channel 看起來「剛抓過」（實證 `twse_oddlot`：record 為 2026-09-07、DB 顯示 3 分鐘前，掩蓋 17 天斷料）。fact 欄位只能來自 record 本身（`ChannelHealthSyncValuesFor`），只有 `updated_at` 代表寫入時間。|
 | **cron-entrypoint.sh weekday 比對需字串轉 int** | cron / data | `cron-entrypoint.sh` 內 `wday` 變數是 `$(date +%w)` 輸出（0-6 字串），比對時若直接與 shell 數字 `6` / `0` 比較會因 string-vs-integer 擴展而失效（如 `"06" != 6`）。正確做法：`wday=$(date +%w | sed 's/^0//')` 或 `[ "$wday" = "0" ]` 改為 `(( wday == 0 ))` 做算術比較。若比對失敗，觀測資料 backfill 邏輯不會觸發，導致 cron image 執行結果缺少 backfill 補資料步驟（PR #1280 修復 #1203）。 |
 
 ### 架構規範（Constitution 違反）
@@ -91,7 +91,6 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Enabled agent 缺少 prompt** | spawning | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI `agent-prompts` job 強制。 |
 | **ScreeningCriteria 靜默過濾** | screener | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 executor **之前**就會被過濾。這是預期行為，不是 bug。 |
 | **Live 交易風險** | live | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
-| **industry_hit_rate_consume_enabled 必須 default off（#1942/#1948）** | sectorallocation / capitalflow | 跨模組 config gate（`configs/parameters.json` → `sector_allocation.industry_hit_rate_consume_enabled`）同時控制 (a) `ComputeProjectedTarget` 的 hit-rate tilts 與 (b) `LatestAssessment` 的 `IndustryHitRateEvidence`。**Default 必須 false**：gate off 時 driver 與 assessment JSON 必須與改動前逐位元相同（`industry_hitrate_byte_identity_test.go` 對改動前 revision 的快照比對）。改 default = 改動下一條 production 路徑，必須另開票經業主核准；promotion 前需 ≥20 sessions 觀察期 + 0 invariant violations + 兩個下游各跑一輪 smoke（見 `docs/specs/industry-hitrate-consumption-spec.md` §6）。 |
 
 ### Baseline / Experiment
 
@@ -328,3 +327,4 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 1. **跨模組**（影響 2+ 模組、無歸屬單一模組）→ 加入本文件
 2. **單一模組** → 加入該模組的 `internal/<mod>/AGENTS.md`
 3. **CI/流程相關** → 可能歸屬 `.github/instructions/` 下的領域守則
+
