@@ -65,13 +65,19 @@ const (
 	// of the 20 canonical L1 sectors; chemicals and tourism are documented gaps.
 	NamespaceFinMindSectorSeries Namespace = "finmind_sector_series"
 
-	// NamespaceETFRepresentatives is the PR-α ETF representative vocabulary:
-	// the 11 Taiwan-listed ETFs declared in internal/sectorallocation
-	// (see sectorallocation.ETFRepresentatives). Each entry carries an
-	// explicit 1:many mapping to one or more canonical L1 sector IDs;
-	// the mapping is the audit hook that proves the ETF L1 coverage metric.
-	// Declared as a namespace (not a single identity table) because future
-	// PRs may need to reason about which ETFs map where, including drift.
+	// NamespaceTWSESIndustryCode is the TWSE/TPEx listed-company industry code
+	// vocabulary: the `產業別` field of TWSE OpenAPI t187ap03_L (上市) and the
+	// `SecuritiesIndustryCode` field of TPEx OpenAPI mopsfin_t187ap03_O (上櫃).
+	// It is the per-symbol industry source that makes an ETF's published
+	// holdings resolvable to canonical L1 sectors without guessing.
+	NamespaceTWSESIndustryCode Namespace = "twse_industry_code"
+
+	// NamespaceETFRepresentatives is the delivery-vehicle vocabulary: each
+	// Taiwan-listed ETF that sector allocation can trade, mapped to the
+	// canonical L1 exposure its published holdings imply. Keys come from
+	// configs/etf_metadata.json; the disposition is derived from the issuer's
+	// holdings page (see internal/sectormap/etf_representatives.go) and is
+	// reported here so the ETF coverage metric is auditable.
 	NamespaceETFRepresentatives Namespace = "sectorallocation_etf_representatives"
 )
 

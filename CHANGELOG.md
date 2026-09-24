@@ -4,6 +4,21 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(sectormap): ETF → L1 映射改由投信官網持股推導，取代手寫對應表（#1956 後續）（2026-09-24）
+- **問題**：sector allocation 用 ETF 當產業配置的交易載具，但系統沒有任何一處說得出「這檔 ETF 實際橫跨哪幾個 canonical L1 產業」；每個呼叫端各自憑印象列一組，同一檔 ETF 在不同路徑得到不同 L1 集合 —— 與 #1943 剛消滅的缺陷同型。**已合併的 #1956** 建了表與 metric，但 11 檔 ETF 的 canonical L1 target 是**人工列舉 + 等權**，沒有任何資料來源：`0050.TW` 被指定 8 個 L1、`00940.TW` 4 個，權重一律 `1/N`，`reason` 只寫「PR-α ETF representative」。同一個 `reason` 欄位在 #1943 的規矩裡必須是可查證的資料來源，而等權加權代表「各 L1 曝險相同」，與 TW50 的實際結構（台積電一檔 56%）相反。另外 `internal/sectormap` 沒有任何「上市櫃個股 → 產業」的詞彙，連用真實持股反推產業都做不到。
+- **新增**：
+  - **namespace K `twse_industry_code`**（`internal/sectormap/twse_industry_code.go`）：TWSE OpenAPI `opendata/t187ap03_L`（上市，`產業別`）與 TPEx OpenAPI `mopsfin_t187ap03_O`（上櫃，`SecuritiesIndustryCode`）的 36 個 2 位數字碼，逐 key 顯式處置（22 mapped、14 unmapped+reason+candidates），覆蓋 20/20 canonical L1。中文名取自 TWSE ISIN 產業別對照表並以已知個股交叉驗證（2330→24 半導體業、2603→15 航運業、2912→18 貿易百貨業）。殘差桶 `19 綜合`/`20 其他業` 與 legacy 聚合碼 `13 電子工業` 顯式未映射且**不給 candidate**（給了就是猜）。
+  - **namespace L `sectorallocation_etf_representatives`**（`internal/sectormap/etf_representatives.go`）：`configs/etf_metadata.json` 的 11 檔 ETF，每檔一列 canonical L1 加權曝險，`Reason` 帶完整證據鏈（投信、頁面 URL、資料日、檔數、未覆蓋權重比例）。
+  - **證據快照**（`internal/sectorallocation/testdata/etf_holdings_20260924.json`）：11 檔 ETF 的當日持股明細，全部來自投信官網（元大／富邦／國泰／群益／復華／中信），共 529 筆持股，逐筆附 `industry_code` 與其來源。
+  - **typed view**（`internal/sectorallocation/etf_representatives.go`）：`industry.SectorID` 鍵的存取器與 `ETFL1Coverage()`。
+  - **稽核輸出**：`industry-namespace-audit` 新增 `etf_l1_coverage` 區塊（總數、逐檔 L1、逐檔權重、資料日、來源 URL）。
+- **推導規則（不得靜默）**：ETF 的 L1 權重 = 該 L1 下持股的官網權重 ÷ 可對映持股權重合計；官網只列股票部位（期貨／現金另計，實測 96.59%–99.71%），未映射持股（如電子通路商）**回報但不計入**，未覆蓋比例由 `ETFRepresentative.ReportedWeightPct - MappedWeightPct` 具名揭露。**不補 1、不猜產業。**
+- **結果**：ETF 可觸及 **19/20** canonical L1（僅 `tourism` 未達：這 11 檔當日皆無觀光餐旅持股），逐檔 3–17 個 L1；ETF namespace 的 unmapped = 0。相對 #1956 的 13/20，多出 6 個 L1（`auto`、`biotech`、`construction`、`food`、`other_electronics`、`textiles`）—— 不是「補更多 ETF」，而是**同一批 11 檔 ETF 用真實持股反推**才看得見的曝險（例：00713 持有和泰車、00692 持有大成鋼/遠東新）。#1956 已涵蓋的 13 個 L1 全部保留，沒有任何一個因換算方式改變而消失（`0050.TW` 由手寫 8 個 L1、等權 1/8 改為 11 個 L1、semiconductor 0.696；`00891.TW` 仍是 3 個 L1 但權重由等權 1/3 改為 semiconductor 0.950 / electronics 0.037 / telecom 0.013）。
+- **取代關係（明示）**：#1956 的 `internal/sectormap/etf_representatives.go`／`internal/sectorallocation/etf_representatives.go` 及其測試由本 PR 整檔取代（同一個 namespace ID、同一個 metric 名稱，資料改為推導）。
+
+- **驗證**：`internal/sectormap/twse_industry_code_test.go`（36 碼 = ISIN 對照表、覆蓋 20/20 L1、殘差碼不得對映、**22 組「TWSE 指數名 vs 產業碼」必須給同一個 L1**）、`internal/sectormap/etf_representatives_test.go`（key 集合 = `configs/etf_metadata.json`、無 unmapped、每列帶出處、權重加總 1、覆蓋率 ≥12）、`internal/sectorallocation/etf_representatives_test.go`（**從持股快照重跑推導**並逐值比對宣告表、快照每個 `industry_code` 必為宣告 key、下限 ≥12 由快照獨立計算、typed view 一致）、`cmd/experimental/industry-namespace-audit/main_test.go`（CLI 真的輸出 ≥12 且每列帶證據）。`gofmt` 乾淨、`go vet` 乾淨、`make ci-gate` 綠。
+- **未處理（明示）**：持股快照是 2026-09-24 的**定時快照**，ETF 換股後需重跑推導（測試會紅燈提示）。`tourism` 未達是資料事實而非映射缺陷（這 11 檔 ETF 沒有觀光持股）。`twse_industry_code` 目前只被這條 ETF 路徑消費；把它接成 DB `symbol_industry` 母體來源屬獨立工作（spec §6 缺口 1）。
+
 ### fix(capitalflow): 錢潮驗證／判斷層接線（#1941）（2026-09-24）
 - **問題**：七維錢潮的驗證層與判斷層結構上不可能生效 ——（a）`ComputeCapitalFlowAssessment` **硬寫** `CalibrationStatus="calibrating"`，`EligibleForAutomation()` 永遠 false，連帶 `/api/recommendations` 每則回應都帶 `capital_flow_assessment_calibrating` warning；（b）Stage-3 的 5 個排程任務與 3 個 alert evaluator **只有測試呼叫**，`STAGE3_TASKS_ENABLED` / `STAGE3_ALERTS_ENABLED`（皆預設 true）gate 不到任何東西；（c）`LatestCapitalFlowActual` 每次呼叫都建拋棄式 `capitalflow.NewService(macroProvider, 0, nil)`，rolling window 為空 ⇒ 每維 Z=0，預測 vs 實際比對無意義。
 - **修正**：
