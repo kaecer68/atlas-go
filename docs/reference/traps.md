@@ -323,3 +323,4 @@ Phase B/C 引入 `internal/subscription`（3-tier JWT 認證）+ `internal/recom
 1. **跨模組**（影響 2+ 模組、無歸屬單一模組）→ 加入本文件
 2. **單一模組** → 加入該模組的 `internal/<mod>/AGENTS.md`
 3. **CI/流程相關** → 可能歸屬 `.github/instructions/` 下的領域守則
+
