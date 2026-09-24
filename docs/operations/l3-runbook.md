@@ -79,7 +79,7 @@ wc -l data/ledger/event_flow_predictions.jsonl
 
 | 故障模式 | 偵測 | 處置 |
 |---------|------|------|
-| **task 完全不再 fire** | `atlas_stage3_task_runs_total{task=X}` 連續 2 週期 = 0 | (1) 檢查 `STAGE3_TASKS_ENABLED` 是否被改成 false;(2) 檢查 BTM `RegisteredTasks` 名單;(3) 重啟 daemon 觀察首次 fire |
+| **task 完全不再 fire** | `atlas_stage3_task_runs_total{task=X}` 連續 2 週期 = 0 | (1) 檢查 `STAGE3_TASKS_ENABLED` 是否被改成 false;(2) 檢查 BTM `RegisteredTasks` 名單;(3) 檢查啟動 log 有無 `wireStage3` 註冊訊息 —— 沒有就是 `main.go` 的 `wireStage3(stage3Deps{...})` call site 掉了（#1941 的根因：函式存在但沒人呼叫）;(4) 重啟 daemon 觀察首次 fire |
 | **task 持續 fail** | `result="failed"` 速率 / `result="success"` 速率 > 5% | audit log 看 `stage3_task_audit` 的 error 訊息:(a) "RefreshEventCalendar dependency is nil" → main.go wiring missing;(b) gateway 5xx → upstream issue;(c) data corruption → check JQ mtime |
 | **alert 從未 fire** | `atlas_stage3_alerts_fired_total{rule=X}` 完全 0 且預期應有資料 | (1) 確認 metric 名稱無 typo;(2) check `monitor.handlers` 是否僅註冊 console,而非外部 SIEM;(3) `Rule=stage3_*` 對應的 deps callback 是不是 nil |
 | **oncestamp JSON 損壞** | 啟動時 `[Stage3] oncestamp store unavailable` log 出現,daemon 退回 in-memory | 直接 `rm data/ledger/stage3_oncestamps.json`(daemon 會 lazy-recreate);本週可能會 double-fire 一次 |
@@ -107,7 +107,9 @@ wc -l data/ledger/event_flow_predictions.jsonl
   - `internal/monitoring/stage3_rules.go` — 5 條 alert rule 評估器
   - `internal/monitoring/startup_metrics.go` — `atlas_stage3_*` metric constants + helpers
   - `internal/ledger/event_flow_prediction_store.go` — ledger (Len() / Size() 用於暖機)
-  - `cmd/atlas/stage3_tasks.go` — main.go wiring
+  - `cmd/atlas/stage3_tasks.go` — main.go wiring（`wireStage3(stage3Deps{...})`，由 `main.go` 的 gateway 區塊呼叫；#1941 前沒有任何 production caller）
+- `cmd/atlas/stage3_drift_record.go` — Stage-3 預測 vs 實際 JSONL 觀測記錄（`data/ledger/capital_flow_stage3_drift.jsonl`，每次 market-close 比對一筆，上限 1000）
+- 資本流實際值來源：shared `capitalflow.Service`（`stage3Deps.capitalFlow`）；不得改建拋棄式 service（空 rolling window ⇒ Z 全 0）
 - Config flags: `internal/config/config.go` 的 `Stage3TasksEnabled` / `Stage3AlertsEnabled`
 - Wave 9 命名規約: [`../reference/traps.md`](../reference/traps.md) § Prometheus Metric 命名空間
 - Oncall 通訊: PR #1128 留言 thread + Slack `#atlas-ops`(緊急 alert storm / panic)

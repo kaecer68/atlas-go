@@ -162,6 +162,12 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 	}
 	assessmentCalibrating := capitalFlowReport != nil &&
 		capitalFlowReport.Assessment.CalibrationStatus == capitalflow.CalibrationCalibrating
+	// Issue #1941: "degraded" must not be silent either. Before the reachable
+	// status path existed only "calibrating" was ever reported; once the human
+	// gate can open, a sample collapse would otherwise remove the calibrating
+	// warning without substituting anything.
+	assessmentDegraded := capitalFlowReport != nil &&
+		capitalFlowReport.Assessment.CalibrationStatus == capitalflow.CalibrationDegraded
 
 	rec := TierRecommendation{
 		Tier: string(tier),
@@ -175,8 +181,11 @@ func (h *Handler) HandleRecommendations(r *http.Request) (int, any) {
 			ActiveNarrativeThemes: narrativeThemesFromProvider(h.narrative),
 		},
 	}
-	if assessmentCalibrating {
+	switch {
+	case assessmentCalibrating:
 		warnings = append(warnings, "capital_flow_assessment_calibrating")
+	case assessmentDegraded:
+		warnings = append(warnings, "capital_flow_assessment_degraded")
 	}
 
 	h.detectRegimeChange(rec.Market.Regime)

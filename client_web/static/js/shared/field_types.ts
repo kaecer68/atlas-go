@@ -333,6 +333,15 @@ export interface CalibratorResult {
   summary: string;
 }
 
+export interface CanonicalCoverage {
+  universe: number;
+  mapped: number;
+  ratio: number;
+  by_l1: Record<string, number>;
+  unmapped_symbols: string[];
+  l1_sectors_covered: number;
+}
+
 export interface CapexCycleThresholdConfig {
   expansion_capacity_min: number;
   expansion_revenue_min: number;
@@ -407,6 +416,7 @@ export interface CapitalflowParameters {
   trend_bearish_threshold: string;
   period_weighted_quality: string;
   action_observation_mode: string;
+  calibration_eligible_override: string;
 }
 
 export interface CardConfig {
@@ -2398,6 +2408,9 @@ export interface MapperIndustryClassification {
   level2: MapperIndustrySegment;
   level3: MapperIndustrySegment;
   updated_at: string;
+  canonical_sector_id?: string;
+  canonical_l1?: string;
+  canonical_reason?: string;
 }
 
 export interface MapperIndustrySegment {
@@ -2523,6 +2536,16 @@ export interface MutationBrief {
   generated_at: string;
   pipeline_stage?: string;
   pipeline_action?: string;
+}
+
+export interface NamespaceAudit {
+  namespace: string;
+  declared_keys: number;
+  canonical_keys: number;
+  mapped_keys: number;
+  unmapped_keys: number;
+  unmapped_key_list: string[];
+  covered_canonical_l1: string[];
 }
 
 export interface NarrativeAdjustment {
@@ -5031,6 +5054,12 @@ export interface tierReport {
   details?: string;
 }
 
+export interface tpexSBLResponse {
+  stat: string;
+  date: string;
+  tables: string[];
+}
+
 export interface tsmcRevenueRecord {
   date: string;
   revenue: number;
@@ -5140,6 +5169,14 @@ export interface twseOpenAPIMeetingRow {
   公司名稱: string;
   開會日期: string;
   "股東常(臨時)會": string;
+}
+
+export interface twseSBLResponse {
+  stat: string;
+  date: string;
+  title: string;
+  fields: string[];
+  data: string[][];
 }
 
 export interface twseT86Response {

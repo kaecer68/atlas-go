@@ -85,16 +85,17 @@ Fetches TWSE industry index data from `openapi.twse.com.tw/v1/exchangeReport/MI_
 
 Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS utilization, SOX index, capex growth. Gracefully degrades to zeros if file missing.
 
-### TWSE SBL — 借券賣出餘額（`twse_sbl`，STUB G02）
+### TWSE SBL — 借券賣出餘額（`twse_sbl`）
 
 | Attribute | Detail |
 |-----------|--------|
-| Source | TWSE（endpoint 待確認） |
-| Status | **STUB (G02)** — `HealthCheck` 回傳 `inactive`；`register_adapters.go:277` 已 stub 註冊，限流已就位但 fetch 邏輯尚未實作 |
-| Rate Limit | 1 req / 2s, burst 1（`limits.go:132`） |
+| Source | **第一方：TWSE「融券借券賣出餘額」TWT93U（上市）+ TPEx `margin/sbl`（上櫃）**；FinMind `TaiwanDailyShortSaleBalances` 僅為 fallback（2026-09-24 起，fix/20260924-finmind-quota） |
+| Status | **LIVE (G02)** — provider 走官方端點，零 FinMind 配額；逐列與 FinMind 資料集比對完全相同（2026-09-23 上市 1301/1301 + 上櫃 931/931；2026-03-02 2157/2157） |
+| Rate Limit | 1 req / 2s, burst 1（`limits.go:132`）；實際共用 `getTWSESharedLimiter()`（3 req/5s）與 TPEx 專用共用桶 |
 | Channel ID | `twse_sbl` |
 | Gateway Adapter | `internal/apigateway/adapter_twse_sbl.go` |
-| Scheduled Task | `auto_twse_sbl`（待啟用） |
+| Provider | `internal/marketdata/twse_sbl_provider.go` + `twse_sbl_firstparty.go` |
+| Scheduled Task | `auto_twse_sbl`（1h tick，台北 15:00+ 每日一次；配額耗盡時 00:00 重置後補抓） |
 
 ### TDCC Equity Dispersion — 集保股權分散（`tdcc_equity_dispersion`，STUB G01）
 

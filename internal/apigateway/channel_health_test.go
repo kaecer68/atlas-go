@@ -3,6 +3,7 @@ package apigateway
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -586,5 +587,92 @@ func TestChannelHealthStore_Get_ToleratesNilValuedEntry(t *testing.T) {
 	}
 	if _, ok := all["live_channel"]; !ok {
 		t.Error("All() must include valid entries")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// twse_replay_sync (2026-09-24): status semantics of the daily replay sync.
+//
+// This channel is NOT in channelIDs() — it is a "derived" sync-job channel, so
+// no explicit contract is registered and DefaultChannelContract applies
+// (GraceFailures default 2, 48h freshness window). That is the right
+// semantics for an upstream that goes slow for a single run: the first failed
+// attempt after a success shows warn (non-paging), a second CONSECUTIVE
+// failure escalates to error, and any success clears both. The
+// 2026-09-24 incident asked to confirm exactly this.
+// ---------------------------------------------------------------------------
+
+// TestChannelHealthStore_TWSEReplaySync_WarnThenSuccessClears pins the
+// contract-less default behavior end to end for the production channel ID: a
+// single transient upstream timeout must not page, and the next successful run
+// must return the channel to ok.
+func TestChannelHealthStore_TWSEReplaySync_WarnThenSuccessClears(t *testing.T) {
+	const upstreamErr = `fetch quotes: Get "https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL": context deadline exceeded ` +
+		`(Client.Timeout exceeded while awaiting headers) (replay CSV left unchanged at its previous content; ` +
+		`2026-09-23 remains a gap for the next run's gap backfill)`
+
+	if got := ChannelContracts().Contract("twse_replay_sync").EffectiveGraceFailures(); got != DefaultGraceFailures {
+		t.Errorf("grace failures = %d, want the default %d (twse_replay_sync registers no explicit contract)",
+			got, DefaultGraceFailures)
+	}
+
+	dir := t.TempDir()
+	s := NewChannelHealthStore(dir).WithRecordClock(dampingTestClock())
+
+	if err := s.Record("twse_replay_sync", "error", upstreamErr); err != nil {
+		t.Fatalf("record error: %v", err)
+	}
+	rec := s.Get("twse_replay_sync")
+	if rec == nil {
+		t.Fatal("no record after the failed sync attempt")
+	}
+	if rec.Status != "warn" {
+		t.Errorf("status = %q, want warn (one 20s upstream timeout must not page)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("consecutive_failures = %d, want 1", rec.ConsecutiveFailures)
+	}
+	if !strings.Contains(rec.LastError, "Client.Timeout exceeded") {
+		t.Errorf("last_error = %q, want the upstream cause preserved", rec.LastError)
+	}
+	if rec.LastSuccessAt != "" {
+		t.Errorf("last_success_at = %q, want empty (no data landed)", rec.LastSuccessAt)
+	}
+
+	// The cron re-runs daily; a success must clear the warn and move the
+	// freshness anchor forward.
+	if err := s.Record("twse_replay_sync", "ok", ""); err != nil {
+		t.Fatalf("record ok: %v", err)
+	}
+	rec = s.Get("twse_replay_sync")
+	if rec.Status != "ok" {
+		t.Errorf("status = %q, want ok after a successful run", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 0 {
+		t.Errorf("consecutive_failures = %d, want 0 after success", rec.ConsecutiveFailures)
+	}
+	if rec.LastError != "" {
+		t.Errorf("last_error = %q, want empty after success", rec.LastError)
+	}
+	if rec.LastSuccessAt == "" {
+		t.Error("last_success_at must advance on success")
+	}
+}
+
+// TestChannelHealthStore_TWSEReplaySync_SustainedFailureEscalates proves the
+// other half: a genuinely stuck sync does still reach error (and therefore the
+// paging rule), so keeping the single-failure case at warn does not blind the
+// alerting.
+func TestChannelHealthStore_TWSEReplaySync_SustainedFailureEscalates(t *testing.T) {
+	s := NewChannelHealthStore(t.TempDir()).WithRecordClock(dampingTestClock())
+	_ = s.Record("twse_replay_sync", "ok", "")
+	_ = s.Record("twse_replay_sync", "error", "boom 1")
+	_ = s.Record("twse_replay_sync", "error", "boom 2")
+	rec := s.Get("twse_replay_sync")
+	if rec.Status != "error" {
+		t.Errorf("status = %q, want error after %d consecutive failures", rec.Status, rec.ConsecutiveFailures)
+	}
+	if rec.ConsecutiveFailures != 2 {
+		t.Errorf("consecutive_failures = %d, want 2", rec.ConsecutiveFailures)
 	}
 }

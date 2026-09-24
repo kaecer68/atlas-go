@@ -80,6 +80,11 @@
       "results": "(bool)"
     },
     {
+      "name": "GetCapitalflowCalibrationEligibleOverride",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "GetCapitalflowPeriodWeightedQuality",
       "params": "",
       "results": "(bool)"
@@ -271,7 +276,8 @@
         "TrendBullishThreshold ParameterMetadata[float64]",
         "TrendBearishThreshold ParameterMetadata[float64]",
         "PeriodWeightedQuality ParameterMetadata[bool]",
-        "ActionObservationMode ParameterMetadata[bool]"
+        "ActionObservationMode ParameterMetadata[bool]",
+        "CalibrationEligibleOverride ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "CapitalflowParameters"
@@ -1741,6 +1747,10 @@
   "vars": [
     {
       "name": "ActionObservationModeMetadata",
+      "type": ""
+    },
+    {
+      "name": "CalibrationEligibleOverrideMetadata",
       "type": ""
     },
     {

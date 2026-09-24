@@ -259,12 +259,13 @@ func mergeStockpickerDefaults(cfg *ParametersConfig) {
 // (e.g. in test environments that never call LoadParametersConfig).
 func defaultCapitalflowParameters() CapitalflowParameters {
 	return CapitalflowParameters{
-		ResonanceCoefficientMax: ResonanceCoefficientMaxMetadata,
-		ResonanceCoefficientMin: ResonanceCoefficientMinMetadata,
-		TrendBullishThreshold:   TrendBullishThresholdMetadata,
-		TrendBearishThreshold:   TrendBearishThresholdMetadata,
-		PeriodWeightedQuality:   PeriodWeightedQualityMetadata,
-		ActionObservationMode:   ActionObservationModeMetadata,
+		ResonanceCoefficientMax:     ResonanceCoefficientMaxMetadata,
+		ResonanceCoefficientMin:     ResonanceCoefficientMinMetadata,
+		TrendBullishThreshold:       TrendBullishThresholdMetadata,
+		TrendBearishThreshold:       TrendBearishThresholdMetadata,
+		PeriodWeightedQuality:       PeriodWeightedQualityMetadata,
+		ActionObservationMode:       ActionObservationModeMetadata,
+		CalibrationEligibleOverride: CalibrationEligibleOverrideMetadata,
 	}
 }
 
@@ -291,5 +292,8 @@ func mergeCapitalflowDefaults(cfg *ParametersConfig) {
 	}
 	if cfg.Capitalflow.ActionObservationMode.Rationale == "" {
 		cfg.Capitalflow.ActionObservationMode = def.ActionObservationMode
+	}
+	if cfg.Capitalflow.CalibrationEligibleOverride.Rationale == "" {
+		cfg.Capitalflow.CalibrationEligibleOverride = def.CalibrationEligibleOverride
 	}
 }

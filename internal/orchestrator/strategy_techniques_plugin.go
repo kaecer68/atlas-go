@@ -10,13 +10,22 @@
 // ProcessRecommendations / PostSimulation) registered via
 // PluginHost.Register from system_plugins.go WithStrategyTechniques.
 //
-// Wave 2 delivers the wiring only — full detector (auto-discovery of
+// Wave 2 delivered the wiring only — full detector (auto-discovery of
 // candidate StrategyFrames) and corrector (hybrid attribution:
 // rule-based + LLM annotation) arrive in Wave 4. Until then
 // PostSimulation is a no-op that records the last seen narrative
 // event buffer size, while ProcessRecommendations is intentionally a
 // pure pass-through so the system can validate wiring without
 // observable side effects.
+//
+// INERT BY DESIGN (verified 2026-09-24, issue #1944 Batch 1): the
+// plugin is registered in production (cmd/atlas/main.go ->
+// WithStrategyTechniques) and subscribes to narrative events, but the
+// L1-L5 心法 (strategy techniques) layer does NOT influence any
+// recommendation, order or weight. Do not read a "strategy_techniques"
+// plugin name in a trace/log as evidence that the 心法 layer is
+// effective. TechniquesLayerActive below is the machine-readable flag
+// (false) and the Attach log line carries pass_through=true.
 package orchestrator
 
 import (
@@ -60,6 +69,16 @@ type strategyTechniquesNarrativeEvent struct {
 	DetectedAt time.Time
 }
 
+// TechniquesLayerActive reports whether the L1-L5 strategy techniques
+// (心法) layer currently changes the recommendation stream.
+//
+// It is false: ProcessRecommendations is a pure pass-through (Wave 2
+// wiring-only scaffold) — every recommendation entering the plugin
+// leaves it byte-identical, so 心法 hit rates cannot feed any decision
+// yet. Flip this constant only together with the detector/corrector
+// wiring AND a test proving recs/orders actually change (issue #1944).
+const TechniquesLayerActive = false
+
 // Name satisfies the Plugin interface. Stable identifier used by
 // PluginHost routing and by main.go logging.
 func (p *strategyTechniquesPlugin) Name() string { return "strategy_techniques" }
@@ -81,7 +100,12 @@ func (p *strategyTechniquesPlugin) Attach(core ServiceRegistry) {
 	p.evtBuf = p.evtBuf[:0]
 	p.mu.Unlock()
 	core.EventBus().Subscribe(eventbus.EventNarrative, p.onNarrativeEvent)
-	logging.Info("strategy_techniques", "attached", "event", string(eventbus.EventNarrative))
+	// pass_through=true is an explicit operator signal: the plugin is
+	// subscribed and buffer-keeping, but the 心法 layer is inert (see
+	// TechniquesLayerActive).
+	logging.Info("strategy_techniques", "attached",
+		"event", string(eventbus.EventNarrative),
+		"pass_through", "true")
 }
 
 // onNarrativeEvent is the eventbus callback invoked on every
@@ -111,13 +135,20 @@ func (p *strategyTechniquesPlugin) onNarrativeEvent(_ context.Context, event eve
 	return nil
 }
 
-// ProcessRecommendations is a no-op pass-through. Wave 4 will
-// implement attribution-aware filtering (e.g. drop recommendations
-// whose sector matches a degraded StrategyFrame).
+// ProcessRecommendations is a no-op pass-through — the 心法 layer is
+// NOT active (TechniquesLayerActive=false). Wave 4 will implement
+// attribution-aware filtering (e.g. drop recommendations whose sector
+// matches a degraded StrategyFrame) and only then may the layer claim
+// effect.
 //
 // Returning the input slice unchanged preserves the contract that
 // Plugin hosts are non-destructive: callers can opt to skip this
 // plugin without changing the recommendation stream.
+//
+// Invariant (pinned by TestStrategyTechniquesPlugin_ProcessRecommendations_IsPassThrough):
+// the returned slice is the SAME slice that came in — no copy, no
+// filtering, no reordering. Do not "improve" this without updating
+// TechniquesLayerActive and the issue #1944 inert registry.
 func (p *strategyTechniquesPlugin) ProcessRecommendations(_ domain.Regime, recs []domain.Recommendation) []domain.Recommendation {
 	return recs
 }
@@ -142,7 +173,9 @@ func (p *strategyTechniquesPlugin) PostSimulation(_ []domain.Quote, _ domain.Reg
 	bufSize := len(p.evtBuf)
 	p.mu.Unlock()
 	if p.registry == nil {
-		logging.Warn("strategy_techniques plugin PostSimulation called with nil registry; ts=%s", ts.Format(time.RFC3339))
+		logging.Warn("strategy_techniques", "post_simulation_nil_registry",
+			"msg", "PostSimulation called with nil registry",
+			"ts", ts.Format(time.RFC3339))
 		return
 	}
 	logging.With("strategy_techniques_plugin").Info("PostSimulation",

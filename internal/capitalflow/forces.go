@@ -92,7 +92,9 @@ func (e *ForceExtractor) Score(
 		f.WeightDeprecated = true
 		f.DisplayName = f.Force.DisplayName()
 		// H-CF-02 / spec §8.4 — a force becomes calibration-eligible once
-		// the rolling history has at least 30 samples. Below the threshold
+		// the rolling history has at least CalibrationEligibleMinSamples
+		// samples (30; the constant is the single source of the floor and is
+		// shared with DeriveCalibrationStatus in calibration.go). Below the threshold
 		// we keep the conservative "calibrating" label so automation stays
 		// gated (CF-INV-13); once SampleCount crosses 30 the per-force
 		// status flips to "eligible".
@@ -105,7 +107,7 @@ func (e *ForceExtractor) Score(
 		switch {
 		case f.DataAvailable && degenerateReferenceWindow(window, f.RawValue):
 			f.CalibrationStatus = CalibrationDegraded
-		case f.SampleCount >= 30:
+		case f.SampleCount >= CalibrationEligibleMinSamples:
 			f.CalibrationStatus = CalibrationEligible
 		default:
 			f.CalibrationStatus = CalibrationCalibrating

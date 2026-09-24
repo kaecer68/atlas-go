@@ -58,8 +58,12 @@ func TestFileClosureStore_StoreAndLatest(t *testing.T) {
 	if latest.MutationReceipt == nil {
 		t.Fatal("mutation receipt is nil")
 	}
-	if !latest.Applied {
-		t.Error("applied should be true after store")
+	// Issue #1944 Batch 1: a persisted snapshot is NOT an applied policy.
+	// Latest() returns the stored row as written; Store() no longer hard-writes
+	// Applied=true (spec §8.3: a display-only snapshot nobody consumed is not
+	// an applied policy).
+	if latest.Applied {
+		t.Error("stored-but-unconsumed snapshot must not be reported as applied")
 	}
 }
 

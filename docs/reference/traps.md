@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-09-23
+updated: 2026-09-24
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -9,6 +9,8 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 
 > 此文件為 `AGENTS.md` 陷阱節的詳細擴充。根 AGENTS.md 僅保留最關鍵的跨模組陷阱；模組特定陷阱請見 `internal/*/AGENTS.md`。
 > 新增 trap 前請確認無重複 (grep 既有條目);新增後更新本檔 `updated` 欄位。
+>
+> **閉環 / 狀態誠實性**：`applied` 只能由消費證據驅動、心法 L1–L5 plugin 是 no-op、`internal/sim` 無輪動鉤子、合成 placeholder 不是 forward return——逐項處置與證據見 [`inert-registry.md`](inert-registry.md)。
 
 ---
 

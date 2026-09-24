@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,9 +77,15 @@ func TestApplySectorRotation_PersistsSnapshot(t *testing.T) {
 		},
 	}
 
+	// Issue #1944 Batch 1: a stored snapshot is not an applied policy. With no
+	// policy consumer wired, ApplySectorRotation must report applied=false and
+	// say why, while still handing back the mutation receipt.
 	receipt, applied, reason := evolver.ApplySectorRotation(plan, asOf, currentAllocs)
-	if !applied {
-		t.Fatalf("expected applied, got %q", reason)
+	if applied {
+		t.Fatalf("stored-but-unconsumed snapshot must not be reported as applied (reason=%q)", reason)
+	}
+	if !strings.Contains(reason, sectorallocation.FallbackAllocatorUnavailable) {
+		t.Fatalf("reason %q must name %s", reason, sectorallocation.FallbackAllocatorUnavailable)
 	}
 	if receipt == nil {
 		t.Fatal("expected non-nil receipt")
@@ -101,8 +108,14 @@ func TestApplySectorRotation_PersistsSnapshot(t *testing.T) {
 	if snap.EffectiveFrom != "2026-07-01" {
 		t.Errorf("expected EffectiveFrom=2026-07-01, got %q", snap.EffectiveFrom)
 	}
-	if snap.FallbackReason != "" && snap.FallbackReason != "no weight engine" {
-		t.Errorf("unexpected fallback reason (want empty or 'no weight engine' when engine not wired): %q", snap.FallbackReason)
+	// Target provenance lives in TargetNote; FallbackReason is reserved for
+	// application status and is derived on read (no consumer wired ⇒
+	// allocator_unavailable).
+	if snap.TargetNote != "no weight engine" {
+		t.Errorf("expected TargetNote='no weight engine' when engine not wired, got %q", snap.TargetNote)
+	}
+	if snap.FallbackReason != sectorallocation.FallbackAllocatorUnavailable {
+		t.Errorf("fallback_reason = %q, want %q", snap.FallbackReason, sectorallocation.FallbackAllocatorUnavailable)
 	}
 	if len(snap.Target) == 0 {
 		t.Error("expected non-empty target map")
@@ -110,8 +123,8 @@ func TestApplySectorRotation_PersistsSnapshot(t *testing.T) {
 	if len(snap.Delta) == 0 {
 		t.Error("expected non-empty delta map")
 	}
-	if !snap.Applied {
-		t.Error("expected Applied=true on persisted snapshot")
+	if snap.Applied {
+		t.Error("persisted snapshot must be stored with applied=false (no consumption evidence yet)")
 	}
 }
 
@@ -164,9 +177,10 @@ func TestApplySectorRotation_DerivesDeltaCorrectly(t *testing.T) {
 		},
 	}
 
-	_, applied, _ := evolver.ApplySectorRotation(plan, asOf, currentAllocs)
-	if !applied {
-		t.Fatal("expected applied")
+	// Rotation is persisted but not applied (no policy consumer wired) — the
+	// target/delta derivation below is what this test pins.
+	if _, applied, reason := evolver.ApplySectorRotation(plan, asOf, currentAllocs); applied {
+		t.Fatalf("expected not applied without consumption evidence (reason=%q)", reason)
 	}
 
 	snap, err := store.Latest()
@@ -212,9 +226,11 @@ func TestApplySectorRotation_RecordSessionBumpsCounter(t *testing.T) {
 		},
 	}
 
-	_, applied, _ := evolver.ApplySectorRotation(plan, asOf, nil)
-	if !applied {
-		t.Fatal("expected applied")
+	// The observation counter advances on durable persistence, independently of
+	// consumption: applied=false must not stop the promotion-window bookkeeping
+	// (the snapshot really was stored).
+	if _, applied, reason := evolver.ApplySectorRotation(plan, asOf, nil); applied {
+		t.Fatalf("expected not applied without consumption evidence (reason=%q)", reason)
 	}
 
 	st := mgr.Get()

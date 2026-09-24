@@ -23,15 +23,6 @@ type TraceWriter interface {
 	Record(step int, layer, status string, meta map[string]any)
 }
 
-// RotationFunc evaluates held positions against BUY candidates and returns SELL
-// recommendations for the weakest holding(s) to make room for new entries.
-type RotationFunc func(
-	positions []domain.Position,
-	recs []domain.Recommendation,
-	quotes map[string]domain.Quote,
-	maxOpenPositions int,
-) []domain.Recommendation
-
 type Engine struct {
 	constraints domain.SimulationConstraints
 	// reserveCashFractionOverride, when non-nil, replaces
@@ -54,7 +45,6 @@ type Engine struct {
 	preTradeGate              *risk.PreTradeGate
 	decisionRecorder          func(risk.RiskDecision)
 	traceWriter               TraceWriter
-	rotationFunc              RotationFunc
 	riskCalculator            RiskCalculator
 }
 
@@ -400,12 +390,18 @@ func (e *Engine) RunDay(
 		}
 	}
 
-	// 1.5. Rotation: evaluate held positions and generate SELL signals to
-	// make room for BUY candidates. Uses live in-simulation portfolio state.
-	if e.rotationFunc != nil && len(state.Positions) > 0 && len(recs) > 0 && e.constraints.MaxOpenPositions > 0 {
-		sellRecs := e.rotationFunc(state.Positions, recs, quoteBySymbol, e.constraints.MaxOpenPositions)
-		recs = append(recs, sellRecs...)
-	}
+	// 1.5. Rotation is NOT performed here. Portfolio rotation runs one layer
+	// up, at the recommendation layer: orchestrator.PortfolioRotator (built
+	// from the PositionEvaluator executors) emits the SELL/REDUCE recs in
+	// internal/orchestrator/executor_collection.go before the sim engine
+	// consumes them. A sim-internal `RotationFunc` hook used to sit at this
+	// spot but was unassignable (unexported field, no setter) and never
+	// assigned anywhere in the module tree => the rotation logic could never
+	// run (issue #1944, Batch 1). It was removed instead of wired, because
+	// wiring it would add a second rotation path on top of the orchestrator
+	// one. If an in-engine hook is ever needed: add the field together with
+	// its production injector AND an integration test proving the emitted
+	// SELL recs change orders.
 
 	// 2. Sell logic
 	if e.constraints.SellLogicEnabled() {

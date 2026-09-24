@@ -38,6 +38,14 @@ type Stage3AlertDeps struct {
 	// Optional; production wiring emits atlas_stage3_alerts_fired_total.
 	OnAlertFired func(ruleID string, level AlertLevel, metadata map[string]any)
 
+	// OnCapitalFlowDriftCompared is invoked by the prediction-drift rule every
+	// time it can compare a prediction against an actual (both hit and miss),
+	// before the alert-cooldown / warmup gates. Production wiring persists a
+	// predicted-vs-actual observation record from it (issue #1941: Stage-3 must
+	// produce prediction-vs-actual records, not only mismatch alerts).
+	// Optional; nil means no observation record is written.
+	OnCapitalFlowDriftCompared func(predicted, actual CapitalFlowSignal)
+
 	// LatestCapitalFlowPrediction returns the most recent capital-flow
 	// prediction as a normalized direction label (manifest #F01: both sides
 	// of the drift comparison are now unit-agnostic). The Value carries the
@@ -233,6 +241,14 @@ func (e *Stage3AlertEvaluator) evaluatePredictionDrift() {
 	if !ok {
 		return
 	}
+
+	// Observation record (#1941): persist the comparison pair before any
+	// alert-cooldown / warmup gate, so the predicted-vs-actual history exists
+	// even on days when the rule stays quiet.
+	if e.deps.OnCapitalFlowDriftCompared != nil {
+		e.deps.OnCapitalFlowDriftCompared(pred, actual)
+	}
+
 	recent := e.deps.RecentEventFlowPredictions(10)
 
 	// Production wiring provides this callback; tests that pre-date the

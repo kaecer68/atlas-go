@@ -48,7 +48,7 @@
 
 ---
 
-## E · Evolving（演進中）— 39 packages
+## E · Evolving（演進中）— 40 packages
 
 核心模組，由 stable 模組間接使用，API 可能仍在調整。
 
@@ -56,6 +56,7 @@
 |---------|------|--------------|------|
 | `autobacktest` | 自動回測 — 定時背景回測任務 | `Runner` | 由 daily monitor pipeline 使用 |
 | `backtest` | 視窗回測 — `Window.Run()` | `Runner` | 由 autobacktest 使用 |
+| `sectormap` | 產業命名空間橋接 leaf 套件（零專案相依）— canonical L1/L2 清單、L2→L1 父層表、12 個命名空間的逐 key 顯式映射（未映射必回報；禁止模糊比對與隱式 alias） | `Resolve()`, `ResolveL1()`, `CanonicalL1IDs()`, `ParentL1Of()` | issue #1943；`docs/specs/sector-namespace-canonical-spec.md`；被 industry/marketdata/sectorallocation 依賴 |
 | `capitalflow` | 七維錢潮雷達（3+2+2 分層）分解與共振分析 — 官方actor（外資/投信/自營商）T86 + 行為代理（官股/散戶）proxy + 領先／跨市場訊號（期貨 OI / TSM ADR）Z-score、共振係數、品質分數；`docs/specs/capital-flow-seven-dimension-spec.md` §4 D-CF-04 | `ForceExtractor`, `ResonanceEngine`, `CapitalFlowReport`, `CapitalFlowAssessment` | **v0.0.2.0 升級**：Wave 11 shipped；被 eventdriven/recommender/marketexplain 廣泛使用 |
 | `db` | PostgreSQL 連線管理 | `DB` | 基礎設施，穩定但未直接出現於 main.go |
 | `domain/shared` | 跨模組純計算函式（Sharpe、Sortino、頻率常數）— canonical 位置，呼叫模組以 type alias re-export 維持向後相容 | `ComputeSharpe`, `ComputeSortino`, `Frequency` | 由 `domain/AGENTS.md:30` 規範；`portfolio`/`reporting` 為薄 wrapper |
