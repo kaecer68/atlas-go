@@ -307,9 +307,11 @@ func TestDrift_TWSETableClosesTheCanonicalGaps(t *testing.T) {
 	}
 }
 
-func TestDrift_RepresentativeStocksNamespaceMatchesTheGoTable(t *testing.T) {
-	// The Go table is keyed by SectorID, so the namespace declaration must be
-	// exactly the 20 canonical L1 IDs — otherwise the audit under-reports.
+func TestDrift_RepresentativeStocksNamespaceIsCanonicalL1(t *testing.T) {
+	// The Go table (industry.DefaultRepresentativeStocks) is keyed by SectorID,
+	// so this namespace must declare exactly the 20 canonical L1 IDs. Combined
+	// with industry.TestDefaultRepresentativeStocksUseCanonicalL1Keys (which
+	// asserts the Go map's keys are canonical L1) the two sides cannot diverge.
 	want := CanonicalL1IDs()
 	got := Keys(NamespaceRepresentativeStocks)
 	if !slices.Equal(got, want) {

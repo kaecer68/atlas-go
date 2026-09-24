@@ -170,7 +170,8 @@ go run ./cmd/experimental/industry-namespace-audit -universe /tmp/twse_symbols.t
 | 5 | GICS `industrials`/`materials`/`real_estate`/`utilities`/`_cash_reserve` 未定案（blocked weight 0.25） | legacy `ComputeWeights` 無法產生合規 L1 向量 | operator 決定投影權重，或停用 legacy 路徑 |
 | 6 | `monitoring.TreeBasedMapper` 仍只吃 `GetLevel1()`，且 `universe_builder` 對未知 symbol 靜默丟棄 | 智慧母體管線覆蓋率失真 | 改用 `industry.SymbolL1Mapper` + `UnmappedSegments()` 回報 |
 | 7 | 前端 mirror 漂移：`shared_web/static/js/shared/sector-display.js` 的 `SUB_INDUSTRY_DISPLAY_ZH` 只有 10 個 L2（後端 18） | UI 顯示退回 snake_case | 補齊並加測試 |
-| 8 | **編譯內建 fallback 與 JSON 不一致**：`DefaultParametersConfig().Industry.CycleThresholds` 有 13 個 key（含 `_default`），JSON 只有 10 個（多出 `etf_rotation`、`leo_satellite`） | config 檔遺失時的有效詞彙不同 | 對齊兩者；已加測試確保 fallback 詞彙全為 canonical ID |
+| 8 | **編譯內建 fallback 與 JSON 不一致**：`DefaultParametersConfig().Industry.CycleThresholds` 有 13 個 key（含 `_default`；實測見 `TestDefaultCycleThresholdsVocabularyIsCanonical` 的 log），JSON 只有 10 個（多出 `etf_rotation`、`leo_satellite`） | config 檔遺失時的有效詞彙不同 | 對齊兩者；已加測試確保 fallback 詞彙全為 canonical ID |
+| 9 | **同一個 key 在不同命名空間的代表股互不相容**：`consumer` 在樹的代表股是 2912/9927（零售），在 `sector_symbols.json` 卻是 1301/1303/1326/1216（3 檔在 fallback 表屬 `plastics`、1 檔屬 `food`） | 同一個「消費」桶在敘事模型與樹路徑指向不同產業 | 需 per-symbol 產業來源（同缺口 1） |
 | 9 | **4 筆 tree vs fallback 表的 symbol 分類衝突**（`TestKnownSymbolClassificationConflicts` 釘住） | 同一 symbol 在兩份 authored 來源屬不同 L1 | 需 per-symbol 產業來源（同缺口 1） |
 
 | # | symbol | tree（經宣告表） | `DefaultRepresentativeStocks()` |
