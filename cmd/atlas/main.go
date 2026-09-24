@@ -1404,6 +1404,29 @@ func run(args []string, deps appDeps) error {
 				capitalFlowStore:  capitalFlowStore,
 			})
 
+			// Issue #1941: Stage 3 (scheduled sync + data-quality alerting)
+			// registration lives here. Until this call existed the
+			// registerStage3* functions in stage3_tasks.go were reachable only
+			// from tests, so STAGE3_TASKS_ENABLED / STAGE3_ALERTS_ENABLED
+			// (both default true) gated nothing and none of the 5 sync tasks
+			// or 3 alert evaluators ever ran in production.
+			//
+			// The capital-flow actuals the drift rule compares now come from
+			// the shared capitalFlowService built above (shared rolling sample
+			// store), not from a throwaway service with an empty window.
+			wireStage3(stage3Deps{
+				taskMgr:          taskMgr,
+				cfg:              cfg,
+				gateway:          gateway,
+				monitor:          monitor,
+				dashboard:        dashboard,
+				eventCalendar:    eventCalendar,
+				predictionLedger: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir),
+				metricsCollector: collector,
+				historicalStore:  historicalStore,
+				capitalFlow:      capitalFlowService,
+			})
+
 			if detectorRegistry != nil && detectorScanStore != nil {
 				macroProvider := func() marketdata.MacroDataSnapshot {
 					snap, _ := dashboard.GetLatestMacroSnapshot()

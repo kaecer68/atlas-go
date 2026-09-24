@@ -650,10 +650,12 @@ func deriveTradingDateFromReport(date time.Time) string {
 // CalibrationStatus="calibrating" because no rolling history has
 // been written yet (Refresh has not run); automation consumers
 // MUST gate on EligibleForAutomation() and stay neutral while
-// the gate is closed. Once Refresh has been called the assessment
-// still reports "calibrating" until H-CF-02 is validated — that
-// flip lives in the per-source calibration pipeline that Task 8
-// will wire.
+// the gate is closed. Since #1941 the status is derived
+// (capitalflow.DeriveCalibrationStatus): it stays "calibrating" while
+// capitalflow.calibration_eligible_override is false (the default), and
+// becomes "eligible" only once that human gate is flipped in a config PR
+// citing a passed H-CF-01/02/05 validation report and every available
+// dimension has >= 30 rolling samples.
 func (s *Service) LatestAssessment(ctx context.Context) (CapitalFlowAssessment, error) {
 	daily, err := s.LatestDaily(ctx)
 	if err != nil {

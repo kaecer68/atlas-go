@@ -203,6 +203,51 @@ func GetCapitalflowPeriodWeightedQuality() bool {
 	return PeriodWeightedQualityMetadata.Value
 }
 
+// CalibrationEligibleOverrideMetadata gates the E07 assessment calibration
+// status flip (capital-flow model plan v1.1 §3.3 / C4, issue #1941):
+//
+//	false (default) → ComputeCapitalFlowAssessment keeps returning
+//	                  CalibrationStatus="calibrating"; EligibleForAutomation()
+//	                  stays closed and /api/recommendations keeps emitting the
+//	                  capital_flow_assessment_calibrating warning because the
+//	                  assessment really is un-calibrated;
+//	true            → the assessment returns "eligible" once every
+//	                  data-available dimension reaches
+//	                  capitalflow.CalibrationEligibleMinSamples (30) rolling
+//	                  samples, and "degraded" when an available dimension's
+//	                  samples are below that floor.
+//
+// The flip is a human gate and is never automatic (CF-INV-13): the
+// pre-registered validator only writes `eligible_recommendation` into
+// data/reports/cf-hypotheses-<date>.json; a config PR that cites that report
+// is what opens the gate. The default (false) keeps behavior bit-identical to
+// the pre-#1941 wiring.
+var CalibrationEligibleOverrideMetadata = ParameterMetadata[bool]{
+	Value: false,
+	Rationale: "Human-gate switch for the E07 assessment calibration status. " +
+		"Default false keeps CalibrationStatus=calibrating so the automation " +
+		"gate and the /api/recommendations warning stay truthful until the " +
+		"pre-registered H-CF-01/02/05 validation report has samples (spec §8.4 / " +
+		"§9.5, CF-INV-13). Setting true is a behavior change: it lets " +
+		"EligibleForAutomation() open once every data-available dimension has " +
+		">=30 rolling samples, which routes sector rotation to the E07 branch.",
+	Source: SourceExperimental,
+	Todo: "Flip only in a config PR that cites a cf-hypotheses-<date>.json " +
+		"report with eligible_recommendation=true and the 30-trading-day " +
+		"observation note; the validator/CLI never writes config itself.",
+}
+
+// GetCapitalflowCalibrationEligibleOverride returns whether the E07
+// assessment may report "eligible". Falls back to
+// CalibrationEligibleOverrideMetadata.Value (false) when config is not loaded,
+// so an unloaded config never opens the automation gate.
+func GetCapitalflowCalibrationEligibleOverride() bool {
+	if cfg := GetParametersConfig(); cfg != nil {
+		return cfg.Capitalflow.CalibrationEligibleOverride.Value
+	}
+	return CalibrationEligibleOverrideMetadata.Value
+}
+
 // ActionObservationModeMetadata gates the capital-flow observation-mode
 // decision log (PR-3c / plan §5.1). Default true: when
 // ApplySectorRotation runs, the E07 capital-flow action is WRITTEN to
@@ -1294,6 +1339,14 @@ type CapitalflowParameters struct {
 	// this PR — a future action→delta mapper design PR adds
 	// capitalflow.mutation_enabled (default off).
 	ActionObservationMode ParameterMetadata[bool] `json:"action_observation_mode"`
+	// CalibrationEligibleOverride is the human gate that makes the E07
+	// assessment's CalibrationStatus reachable (issue #1941; plan §3.3 C4).
+	// Default false keeps ComputeCapitalFlowAssessment at "calibrating"
+	// (bit-identical legacy behavior); true lets it report "eligible" once
+	// every data-available dimension has >= 30 rolling samples, or
+	// "degraded" when they do not. See
+	// CalibrationEligibleOverrideMetadata for the flip procedure.
+	CalibrationEligibleOverride ParameterMetadata[bool] `json:"calibration_eligible_override"`
 }
 
 // StockpickerParameters holds tunable parameters for the stock-picking

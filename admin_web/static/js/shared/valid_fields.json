@@ -256,6 +256,7 @@
   "calibrated",
   "calibration",
   "calibration_baseline_window",
+  "calibration_eligible_override",
   "calibration_enabled",
   "calibration_method",
   "calibration_min_records",

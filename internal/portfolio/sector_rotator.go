@@ -86,10 +86,14 @@ func NewSectorRotatorWithConfig(cfg config.SectorRotationConfig) *SectorRotator 
 // internal/orchestrator/strategy_evolver.go) but is NOT consumed by the
 // allocation math in this function.
 // TODO(capital-flow Phase 3): not consumed here — the E07 branch of
-// capitalFlowActionFromPlan is short-circuited by M1 (CalibrationStatus
-// is hardcoded "calibrating", so EligibleForAutomation() is always
-// false). Wiring the assessment into decisions is planned (see
-// .omo/plans/2026-09-04-capital-flow-model-plan.md B1 / Phase 3);
+// capitalFlowActionFromPlan stays short-circuited while the assessment
+// reports "calibrating". Since #1941 that status is no longer a
+// hardcoded literal: it is derived by capitalflow.DeriveCalibrationStatus
+// and only leaves "calibrating" when the human-gated config parameter
+// capitalflow.calibration_eligible_override is flipped in a config PR
+// citing a passed validation report (default false → gate closed).
+// Wiring the assessment into the allocation math itself is still planned
+// (see .omo/plans/2026-09-04-capital-flow-model-plan.md B1 / Phase 3);
 // until then this parameter is carried for observation only.
 func (r *SectorRotator) GeneratePlan(
 	macroAssessment *narrative.MacroRiskAssessment,

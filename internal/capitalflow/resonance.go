@@ -119,10 +119,12 @@ func ComputeResonance(forces []ForceScore) ResonanceResult {
 // to speak (Available), the direction it sees, the dimensions that
 // voted with / against that direction, and a free-form reasons
 // slice. The overall CapitalFlowAssessment is the assembly
-// ComputeCapitalFlowAssessment(forces) returns; it stays
-// CalibrationStatus="calibrating" until H-CF-02 is validated, and
-// the EligibleForAutomation() method is the canonical CF-INV-13
-// gate.
+// ComputeCapitalFlowAssessment(forces) returns. Its CalibrationStatus is
+// derived by DeriveCalibrationStatus — "calibrating" by default (the
+// human-gated capitalflow.calibration_eligible_override config parameter
+// is false), reachable "eligible"/"degraded" once that gate is opened
+// (#1941 / plan v1.1 §3.3 C4) — and the EligibleForAutomation() method is
+// the canonical CF-INV-13 gate.
 // ---------------------------------------------------------------------------
 
 // computeInstitutionalConsensus reads the three official_actor
@@ -289,13 +291,19 @@ func computeCrossMarketConfirmation(forces []ForceScore) DirectionalAssessment {
 //     overall vote (it is a separate signal consumers opt into).
 //   - Foreign positioning: only when foreign spot + futures both
 //     available; compare spot trend with LeadingTrend.
-//   - Cross-market: Available only after H-CF-02 is validated; in
-//     E07 this is always false (Reasons=["校準中"]).
+//   - Cross-market: Available only after the cross-market dimension
+//     leaves the per-dimension "calibrating" state (H-CF-02).
 //
-// The overall CalibrationStatus stays "calibrating" in E07; the
-// PrimaryFlow field is intentionally empty. We do NOT synthesize a
-// weighted overall score — the brief is explicit that this contract
-// is the assessment face, not an automation action.
+// CalibrationStatus is derived by DeriveCalibrationStatus, not
+// hardcoded (issue #1941): it stays "calibrating" — the pre-#1941
+// behavior, bit-identical — while the human-gated config parameter
+// capitalflow.calibration_eligible_override is false, and becomes
+// reachable ("eligible" / "degraded") once that gate is opened by a
+// config PR citing a validation report (plan v1.1 §3.3 C4 /
+// CF-INV-13). The PrimaryFlow field is intentionally empty. We do
+// NOT synthesize a weighted overall score — the brief is explicit
+// that this contract is the assessment face, not an automation
+// action.
 func ComputeCapitalFlowAssessment(forces []ForceScore) CapitalFlowAssessment {
 	asOf := ""
 	for _, f := range forces {
@@ -304,12 +312,17 @@ func ComputeCapitalFlowAssessment(forces []ForceScore) CapitalFlowAssessment {
 			break
 		}
 	}
-	return CapitalFlowAssessment{
+	status := DeriveCalibrationStatus(forces, config.GetCapitalflowCalibrationEligibleOverride())
+	out := CapitalFlowAssessment{
 		AsOfTradingDate:   asOf,
-		CalibrationStatus: CalibrationCalibrating,
+		CalibrationStatus: status,
 		Institutional:     computeInstitutionalConsensus(forces),
 		Behavioral:        computeBehavioralConfirmation(forces),
 		ForeignPosition:   computeForeignPositioningConfirmation(forces),
 		CrossMarket:       computeCrossMarketConfirmation(forces),
 	}
+	if reason := CalibrationStatusReason(forces, status); reason != "" {
+		out.Reasons = []string{reason}
+	}
+	return out
 }
