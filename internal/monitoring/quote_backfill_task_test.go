@@ -38,7 +38,7 @@ func TestQuoteBackfillRunner_StopsWhenQuotaNearlyExhausted(t *testing.T) {
 	}
 
 	// Pre-seed the quota state file so the client starts with 99/100 used
-	// (1 remaining < backfillQuotaStopRemaining=200).
+	// (1 remaining < backfillQuotaStopRemaining).
 	stateDir := t.TempDir()
 	state := map[string]any{
 		"calls_today": 99,
@@ -62,6 +62,26 @@ func TestQuoteBackfillRunner_StopsWhenQuotaNearlyExhausted(t *testing.T) {
 	}
 	if got := client.QuotaRemaining(); got >= backfillQuotaStopRemaining {
 		t.Fatalf("runner did not stop early: remaining=%d (gate floor=%d)", got, backfillQuotaStopRemaining)
+	}
+}
+
+// fix/20260924-finmind-quota：保留水位必須足夠保護「配額日後半段」才啟動的
+// live 消費者，但也不可把整日配額吃掉（backfill 仍要能推進）。
+func TestQuoteBackfillQuotaFloor_IsMeaningfulAndBounded(t *testing.T) {
+	// finmindDailyLimit is unexported in package marketdata; the daily ceiling
+	// observed in production is 14,400 (internal/marketdata/finmind_client.go).
+	const finmindDailyLimit = 14400
+
+	// 2026-09-23 實證：實測 live 消費者需求約 900–2,700 次/日，且它們在配額日
+	// 後半段才執行 —— 200 的水位讓最後 200 次在 15:27Z 前就被用完。
+	if backfillQuotaStopRemaining < 1000 {
+		t.Fatalf("quota floor %d is too small to protect late-running live consumers (2026-09-23: 200 was exhausted by 15:27Z)",
+			backfillQuotaStopRemaining)
+	}
+	// 不可過度保留：bulk backfill 仍需大部分配額才能推進（需求 ~44,000）。
+	if maxReserve := finmindDailyLimit / 4; backfillQuotaStopRemaining > maxReserve {
+		t.Fatalf("quota floor %d exceeds 25%% of the daily ceiling (%d): the backfill would stall",
+			backfillQuotaStopRemaining, maxReserve)
 	}
 }
 
