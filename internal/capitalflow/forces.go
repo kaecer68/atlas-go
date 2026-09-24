@@ -73,8 +73,15 @@ func (e *ForceExtractor) Score(
 		f.SourceID = prov.SourceID
 		f.Unit = prov.Unit
 		f.ParticipatesInActorConsensus = prov.ParticipatesInActorConsensus
-		f.AsOfTradingDate = tradingDate
-		f.SampleCount = len(history[f.Force])
+		// Issue #1940 R2: a dated channel (government / futures OI) carries
+		// its own reading date, and the force must report THAT date, not
+		// the report's trading day. see reading_dates.go.
+		f.AsOfTradingDate = dimensionSampleDate(snap, f.Force, tradingDate)
+		// Issue #1940 / spec §8.3: the count and the degeneracy check must
+		// both describe the window the Z-score was actually computed
+		// against, i.e. after legacy missing values were filtered out.
+		window := referenceWindowFor(history[f.Force], f.Force)
+		f.SampleCount = len(window)
 		// E07 / spec §7.2 / CF-INV-07: the legacy cross-unit weight
 		// is suppressed. We set Weight=0 and WeightDeprecated=true
 		// here (in addition to applyForceWeights) so callers that
@@ -88,11 +95,19 @@ func (e *ForceExtractor) Score(
 		// the rolling history has at least 30 samples. Below the threshold
 		// we keep the conservative "calibrating" label so automation stays
 		// gated (CF-INV-13); once SampleCount crosses 30 the per-force
-		// status flips to "eligible". The "degraded" path lives in the
-		// calibration pipeline and is not set here.
-		if f.SampleCount >= 30 {
+		// status flips to "eligible".
+		//
+		// Issue #1940 R3: a window that cannot standardize the value (all
+		// samples identical, no usable dispersion) is reported as
+		// "degraded". The Z-score for such a dimension is 0 — see
+		// windowDispersionUsable — and the flag tells consumers that the
+		// neutral reading is "we cannot say", not "the market is calm".
+		switch {
+		case f.DataAvailable && degenerateReferenceWindow(window, f.RawValue):
+			f.CalibrationStatus = CalibrationDegraded
+		case f.SampleCount >= 30:
 			f.CalibrationStatus = CalibrationEligible
-		} else {
+		default:
 			f.CalibrationStatus = CalibrationCalibrating
 		}
 		switch f.Force {
@@ -134,19 +149,19 @@ func (e *ForceExtractor) Extract(snap marketdata.MacroDataSnapshot) []ForceScore
 // the same rule on the futures channel.
 func (e *ForceExtractor) scoreForeign(snap marketdata.MacroDataSnapshot, history map[ForceName][]RollingSample) ForceScore {
 	spotRaw := snap.ForeignInvestorNet.Value
-	spotZ := round(zScoreFromSamples(history[ForceForeign], spotRaw), 3)
+	spotAvailable := snap.ForeignInvestorNet.Symbol != "" && usableReading(ForceForeign, spotRaw)
+	spotZ := round(zScoreFromSamples(referenceWindowFor(history[ForceForeign], ForceForeign), spotRaw), 3)
 	spotTrend := trendFor(spotZ)
 
 	// Leading signal from TAIFEX 三大法人期貨 OI (manifest #E01).
-	// When the channel has no data (Symbol empty), the leading
-	// fields stay at zero and trend is neutral — no history
-	// lookup, no sample is generated for the rolling store
-	// (spec §8.3 / CF-INV-06).
+	// When the channel has no data (Symbol empty) or carries only the
+	// zero sentinel, the leading fields stay at zero and trend is
+	// neutral — no history lookup, no sample is generated for the
+	// rolling store (spec §8.3 / CF-INV-06).
 	var leadingZ float64
 	var leadingTrend string
-	if snap.ForeignFuturesOINet.Symbol != "" {
-		futRaw := snap.ForeignFuturesOINet.Value
-		leadingZ = round(zScoreFromSamples(history[ForceFutures], futRaw), 3)
+	if futRaw := snap.ForeignFuturesOINet.Value; snap.ForeignFuturesOINet.Symbol != "" && usableReading(ForceFutures, futRaw) {
+		leadingZ = round(zScoreFromSamples(referenceWindowFor(history[ForceFutures], ForceFutures), futRaw), 3)
 		leadingTrend = trendFor(leadingZ)
 	} else {
 		leadingTrend = "neutral"
@@ -160,7 +175,7 @@ func (e *ForceExtractor) scoreForeign(snap marketdata.MacroDataSnapshot, history
 		Trend:         spotTrend,
 		LeadingZ:      leadingZ,
 		LeadingTrend:  leadingTrend,
-		DataAvailable: snap.ForeignInvestorNet.Symbol != "",
+		DataAvailable: spotAvailable,
 	}
 }
 
@@ -171,7 +186,7 @@ func (e *ForceExtractor) scoreForeign(snap marketdata.MacroDataSnapshot, history
 // subject. When the underlying channel is empty, the entry is
 // reported as DataAvailable=false (no history lookup, no sample).
 func (e *ForceExtractor) scoreFuturesDeprecated(snap marketdata.MacroDataSnapshot, history map[ForceName][]RollingSample) ForceScore {
-	if snap.ForeignFuturesOINet.Symbol == "" {
+	if snap.ForeignFuturesOINet.Symbol == "" || !usableReading(ForceFutures, snap.ForeignFuturesOINet.Value) {
 		return ForceScore{
 			Force:         ForceFutures,
 			Role:          ForceRoleLeadingIndicator,
@@ -183,7 +198,7 @@ func (e *ForceExtractor) scoreFuturesDeprecated(snap marketdata.MacroDataSnapsho
 		}
 	}
 	raw := snap.ForeignFuturesOINet.Value
-	z := round(zScoreFromSamples(history[ForceFutures], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceFutures], ForceFutures), raw), 3)
 	return ForceScore{
 		Force:         ForceFutures,
 		Role:          ForceRoleLeadingIndicator,
@@ -208,7 +223,7 @@ func (e *ForceExtractor) scoreTSMADR(snap marketdata.MacroDataSnapshot, history 
 		}
 	}
 	raw := snap.TSMADR.ChangePct
-	z := round(zScoreFromSamples(history[ForceTSMADR], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceTSMADR], ForceTSMADR), raw), 3)
 	return ForceScore{
 		Force:         ForceTSMADR,
 		Role:          ForceRoleSentiment,
@@ -221,7 +236,7 @@ func (e *ForceExtractor) scoreTSMADR(snap marketdata.MacroDataSnapshot, history 
 }
 
 func (e *ForceExtractor) scoreInstitutional(snap marketdata.MacroDataSnapshot, history map[ForceName][]RollingSample) ForceScore {
-	if snap.DomesticFundNet.Symbol == "" {
+	if snap.DomesticFundNet.Symbol == "" || !usableReading(ForceInstitutional, snap.DomesticFundNet.Value) {
 		return ForceScore{
 			Force:         ForceInstitutional,
 			Role:          ForceRoleSubject,
@@ -232,7 +247,7 @@ func (e *ForceExtractor) scoreInstitutional(snap marketdata.MacroDataSnapshot, h
 		}
 	}
 	raw := snap.DomesticFundNet.Value
-	z := round(zScoreFromSamples(history[ForceInstitutional], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceInstitutional], ForceInstitutional), raw), 3)
 	return ForceScore{
 		Force:         ForceInstitutional,
 		Role:          ForceRoleSubject,
@@ -244,7 +259,7 @@ func (e *ForceExtractor) scoreInstitutional(snap marketdata.MacroDataSnapshot, h
 }
 
 func (e *ForceExtractor) scoreDealer(snap marketdata.MacroDataSnapshot, history map[ForceName][]RollingSample) ForceScore {
-	if snap.DealerNet.Symbol == "" {
+	if snap.DealerNet.Symbol == "" || !usableReading(ForceDealer, snap.DealerNet.Value) {
 		return ForceScore{
 			Force:         ForceDealer,
 			Role:          ForceRoleSubject,
@@ -255,7 +270,7 @@ func (e *ForceExtractor) scoreDealer(snap marketdata.MacroDataSnapshot, history 
 		}
 	}
 	raw := snap.DealerNet.Value
-	z := round(zScoreFromSamples(history[ForceDealer], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceDealer], ForceDealer), raw), 3)
 	return ForceScore{
 		Force:         ForceDealer,
 		Role:          ForceRoleSubject,
@@ -271,8 +286,19 @@ func (e *ForceExtractor) scoreDealer(snap marketdata.MacroDataSnapshot, history 
 // with DataAvailable=false so the resonance model can distinguish
 // "no data" from "data says neutral" — and so the rolling store
 // never receives a zero-valued government sample (CF-INV-06).
+//
+// Issue #1940 R1: a present-but-zero reading is the other shape of the
+// same violation. The 8-bank aggregate total is an exact integer sum of
+// broker branch flows, so exactly zero TWD is not a market outcome — it
+// is the placeholder the CAPTCHA-era scraper wrote when it could not
+// read upstream (2026-07-21..28 files, source=broker-aggregate). Those
+// 18 zeros entered the rolling store as genuine samples and made the
+// next real reading score z = -7028.5. A zero reading is therefore
+// treated as no data here — the last gate before persistence —
+// independently of the channel adapter's own Available flag, so a
+// persisted macro snapshot cannot reintroduce the sample either.
 func (e *ForceExtractor) scoreGovernment(snap marketdata.MacroDataSnapshot, history map[ForceName][]RollingSample) ForceScore {
-	if snap.GovernmentNet.Symbol == "" {
+	if snap.GovernmentNet.Symbol == "" || !usableReading(ForceGovernment, snap.GovernmentNet.Value) {
 		return ForceScore{
 			Force:         ForceGovernment,
 			Role:          ForceRoleSubject,
@@ -283,7 +309,7 @@ func (e *ForceExtractor) scoreGovernment(snap marketdata.MacroDataSnapshot, hist
 		}
 	}
 	raw := snap.GovernmentNet.Value
-	z := round(zScoreFromSamples(history[ForceGovernment], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceGovernment], ForceGovernment), raw), 3)
 	return ForceScore{
 		Force:         ForceGovernment,
 		Role:          ForceRoleSubject,
@@ -311,7 +337,7 @@ func (e *ForceExtractor) scoreRetail(snap marketdata.MacroDataSnapshot, history 
 		}
 	}
 	raw := snap.RetailMarginBalance.ChangePct + snap.RetailShortBalance.ChangePct
-	z := round(zScoreFromSamples(history[ForceRetail], raw), 3)
+	z := round(zScoreFromSamples(referenceWindowFor(history[ForceRetail], ForceRetail), raw), 3)
 	return ForceScore{
 		Force:         ForceRetail,
 		Role:          ForceRoleSubject,
@@ -395,11 +421,35 @@ func zScoreFromSamples(samples []RollingSample, raw float64) float64 {
 	if len(samples) < 2 {
 		return 0
 	}
+	return sampleWindow(samples).zScore(raw)
+}
+
+// degenerateReferenceWindow reports whether the reference window cannot
+// standardize raw — i.e. zScoreFromSamples returns 0 for lack of
+// dispersion rather than for lack of a move (issue #1940 R3).
+//
+// It applies the same predicate as rollingWindow.zScore
+// (windowDispersionUsable) to the same window, so "z == 0 because the
+// window is degenerate" and calibration_status == "degraded" can never
+// disagree. A window with fewer than two samples is not degenerate: it
+// is uncalibrated, which CalibrationStatus already expresses.
+func degenerateReferenceWindow(samples []RollingSample, raw float64) bool {
+	if len(samples) < 2 {
+		return false
+	}
+	w := sampleWindow(samples)
+	return !windowDispersionUsable(w.mean(), w.stddev(), raw)
+}
+
+// sampleWindow materializes the reference window for statistical use.
+// Callers must pass at least one sample (newRollingWindow(0) has no
+// usable slot for push).
+func sampleWindow(samples []RollingSample) *rollingWindow {
 	w := newRollingWindow(len(samples))
 	for _, s := range samples {
 		w.push(s.RawValue)
 	}
-	return w.zScore(raw)
+	return w
 }
 
 // trendFor labels a Z-score's direction using the configured

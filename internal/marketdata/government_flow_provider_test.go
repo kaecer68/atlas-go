@@ -61,6 +61,38 @@ func TestGovernmentFlowProvider_RejectsUnknownSource(t *testing.T) {
 	}
 }
 
+// TestGovernmentFlowReading_HasData locks the CF-INV-06 zero rule for the
+// 8-bank aggregate (issue #1940 R1): exactly zero total_net is the
+// placeholder the CAPTCHA-era scraper wrote when the fetch failed, so it
+// must not be consumed as an observation.
+func TestGovernmentFlowReading_HasData(t *testing.T) {
+	cases := []struct {
+		name     string
+		totalNet int64
+		want     bool
+	}{
+		{name: "net buy", totalNet: 14705970000, want: true},
+		{name: "net sell", totalNet: -6441260000, want: true},
+		{name: "legacy zero placeholder (20260728.json)", totalNet: 0, want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := (GovernmentFlowReading{TotalNet: c.totalNet}).HasData(); got != c.want {
+				t.Errorf("HasData(total_net=%d) = %v, want %v", c.totalNet, got, c.want)
+			}
+		})
+	}
+}
+
+// TestGovernmentFlowProvider_DataDir documents the accessor used by channel
+// health reporting.
+func TestGovernmentFlowProvider_DataDir(t *testing.T) {
+	dir := t.TempDir()
+	if got := NewGovernmentFlowProvider(dir).DataDir(); got != dir {
+		t.Errorf("DataDir() = %q, want %q", got, dir)
+	}
+}
+
 func TestGovernmentFlowProvider_NoDirIsNotAnError(t *testing.T) {
 	p := NewGovernmentFlowProvider(filepath.Join(t.TempDir(), "nonexistent"))
 	_, ok, err := p.Latest()
