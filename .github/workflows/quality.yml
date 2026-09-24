@@ -180,6 +180,12 @@ jobs:
     - name: Check Jev usage contract
       run: bash scripts/ci/check_jev_contract.sh
 
+    # 2026-09-24 新增：C5 warn-only 回歸測試（網路失敗不阻擋、STRICT 才擋）。
+    # 放在本 job 而非 ci-quick，因為 ci-quick 對每個腳本有 10s timeout，
+    # 本自測會 spawn 3 次 python，容易踩到 timeout 偽失敗。
+    - name: Jev contract C5 warn-only selftest
+      run: bash tests/scripts/test-jev-contract-c5-selftest.sh
+
   # Frontend dynamic import consistency — verifies every admin_web/client_web
   # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
   # Catches the silent esbuild plugin fallback failure mode (PR #785 / script from PR #789).
