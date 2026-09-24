@@ -60,7 +60,7 @@ canonical taxonomy 原本只宣告「ID 集合 + 層級」（`IsL1`/`IsL2`），
 
 ## 3. 命名空間清單與處置
 
-「命名空間」= 一套可作為產業 key 的字串集合。共 **12 套**已宣告，每套都在
+「命名空間」= 一套可作為產業 key 的字串集合。共 **14 套**已宣告，每套都在
 `internal/sectormap/tables.go` 有逐 key 的顯式處置（數字為稽核 CLI 實際輸出）。
 
 | # | namespace | 來源 | key 數 | canonical | mapped | unmapped | 覆蓋 L1 | 處置 |
@@ -77,6 +77,8 @@ canonical taxonomy 原本只宣告「ID 集合 + 層級」（`IsL1`/`IsL2`），
 | H | `marketdata_sector_index_reader_ids` | `SectorIndexReader` | 22 | 20 | 2 | 0 | 20/20 | **保留**：20 canonical L1 + 2 個 legacy 讀取相容 ID |
 | I | `finmind_sector_series` | `marketdata.finmindSectorSeries` | 18 | 0 | 18 | 0 | 18/20 | **保留**：缺 `chemicals`、`tourism`（`觀光` 上游存在但被丟棄） |
 | J | `strategy_technique_sectors` | `data/seeds/strategy_techniques.json` → `sectors` | 20 | 0 | 5 | 15 | 3/20 | **保留 + 標記混用**：15 個是 size/style/asset-class 桶 |
+| K | `twse_industry_code` | TWSE OpenAPI `t187ap03_L` `產業別` / TPEx `mopsfin_t187ap03_O` `SecuritiesIndustryCode` | 36 | 0 | 22 | 14 | 20/20 | **新增（本 PR）**：上市櫃個股產業碼 → canonical L1；見 §3.3 |
+| L | `sectorallocation_etf_representatives` | `configs/etf_metadata.json` 的 11 檔 ETF，權重由投信官網持股明細推導 | 11 | 0 | 11 | 0 | 19/20 | **新增（本 PR）**：ETF → canonical L1 曝險；見 §3.3 |
 
 ### 3.1 未映射（unmapped）清單（必須回報，不得靜默丟棄）
 
@@ -112,6 +114,47 @@ TWSE `exchangeReport/MI_INDEX` 實際回傳 **37 個** `*類指數` 名稱。本
   → `chemicals`/`tourism` 實際上永遠拿不到資料，不只是被讀取端過濾）。live 名稱為
   「化學類指數」「觀光餐旅類指數」，已補入表中；舊名保留以便快取檔案仍可解析。
 
+### 3.3 ETF 產業映射覆蓋率（本 PR 新增）
+
+**問題**：`sectorallocation` 要用 ETF 當作產業配置的交易載具，但系統沒有任何一處說得出
+「這檔 ETF 實際橫跨哪幾個 canonical L1 產業」。每個呼叫端各自憑印象列一組產業，同一檔 ETF
+在不同路徑得到不同的 L1 集合 —— 正是 #1943 禁止的「同一個 key 兩種答案」。
+
+**解法**：把 ETF → L1 曝險變成**可推導、可稽核**的表，三個環節全部有第一方出處：
+
+1. **持股明細**：投信官網（元大、富邦、國泰、群益、復華、中信）當日持股頁／官網 API，
+   資料日 2026-09-24，逐檔記錄在 `internal/sectorallocation/testdata/etf_holdings_20260924.json`。
+2. **個股產業**：TWSE OpenAPI `opendata/t187ap03_L`（上市，`產業別`）與 TPEx OpenAPI
+   `mopsfin_t187ap03_O`（上櫃，`SecuritiesIndustryCode`）——免費、免 key、第一方。
+   上游只給 2 位數字碼，中文名取自 TWSE ISIN 產業別對照表
+   （`https://isin.twse.com.tw/isin/class_i.jsp?kind=1`），並以已知個股交叉驗證。
+3. **碼 → L1**：新增 namespace K（`twse_industry_code`），逐 key 顯式處置：22 個可對映、
+   14 個顯式未映射（殘差桶 `19 綜合` / `20 其他業`、legacy 聚合碼 `13 電子工業`、
+   canonical 無節點者如 `09 造紙工業` / `29 電子通路業`）。
+
+**權重**：ETF 的 L1 權重 = 該 L1 下所有持股的官網權重 ÷（可對映持股權重合計），
+未映射持股（如電子通路商）**回報但不計入**，其權重比例重分配。因此每檔 ETF 的
+`L1Targets` 加總為 1，而未覆蓋比例由 `ETFRepresentative.ReportedWeightPct - MappedWeightPct` 具名揭露。
+
+**結果（2026-09-24 快照，11 檔 ETF）**：ETF 可觸及 **19/20** canonical L1（僅 `tourism` 未達，
+因這 11 檔 ETF 當日均無觀光餐旅持股），逐檔 3–17 個 L1。
+稽核 CLI 新增 `etf_l1_coverage` 區塊輸出此指標。
+
+**防回退**：`internal/sectorallocation/etf_representatives_test.go` 每次測試都**從持股快照
+重跑推導**，與 `internal/sectormap` 宣告表逐值比對（容差 = 1e-6 量化格）；覆蓋率下限（≥12）
+另外從快照獨立計算，改宣告表無法讓它鬆動。ETF key 集合與 `configs/etf_metadata.json` 做漂移比對。
+
+### 3.3.1 ETF／產業碼 路徑的四個陷阱（詳細版）
+
+`docs/reference/traps.md` 因行數上限只放一行指向本節；完整說明與防護測試在此。
+
+| # | 陷阱 | 說明 | 防護 |
+|---|---|---|---|
+| 1 | **ETF 持股權重合計 ≠ 100%** | 投信官網持股頁只列**股票部位**；期貨、現金、保證金另計。2026-09-24 實測：0050 股票 99.71%、006208 99.637%、0056 98.36%、00878 97.33%、00929 96.587%。把官網權重直接當 L1 向量會使「100% 曝險」的假設失真；用「補到 1」掩蓋則是把未分類部位偷偷塞進已分類產業。 | 以**可對映持股權重**重新歸一（加總恰為 1）；未覆蓋比例由 `ETFRepresentative.ReportedWeightPct - MappedWeightPct` 具名揭露，並寫進 mapping `Reason`。測試：`TestETFRepresentatives_DerivationMatchesDeclaredTable`、`TestETFRepresentatives_EveryRowCarriesFirstPartyEvidence`。 |
+| 2 | **TWSE 產業別是 2 位數字碼，中文名不在 OpenAPI 回應裡** | `opendata/t187ap03_L`（上市）的 `產業別` 與 TPEx `mopsfin_t187ap03_O`（上櫃）的 `SecuritiesIndustryCode` 只回數字碼。中文名要取 TWSE ISIN 對照表 `https://isin.twse.com.tw/isin/class_i.jsp?kind=1`。**該網頁是 UTF-8 卻宣告 `ms950`**，硬用 Big5 解碼會得到亂碼。**而且它與 MOPS 舊碼表不同**：此處 `14` = 建材營造業、`24` = 半導體業、`25` = 電腦及週邊設備業；套錯碼表會把整個電子業對到營造業。 | 碼表固定在 `internal/sectormap/twse_industry_code.go`（36 key 顯式處置）；用已知個股交叉驗證（2330→24、2603→15、2912→18、2059→28）。測試：`TestTWSESIndustryCodes_MatchThePublishedLegend`。 |
+| 3 | **同一 TWSE 產業的兩種詞彙必須給出同一個 L1** | 「半導體類指數」vs 產業碼 `24`、電腦及週邊設備類指數 vs `25`、電子零組件類指數 vs `28`、電器電纜類指數 vs `06`…共 22 組。兩張表各自漂移時，同一個 TWSE 產業會因資料來源不同落到不同 canonical L1 —— 正是 #1943 要消滅的缺陷。 | `TestDrift_TWSECodeAndIndexNameAgree` 逐一比對這 22 組；`twse_industry_code` 另須覆蓋 20/20 canonical L1。 |
+| 4 | **ETF 持股是快照，不是常態** | ETF 每季調整成分股、權重每日變動。`internal/sectorallocation/testdata/etf_holdings_20260924.json` 是**具日期**的證據快照；`internal/sectormap` 的宣告表由它推導。 | `TestETFSnapshot_IsSelfConsistentEvidence`（每個 `industry_code` 必須是宣告 key、每日權重為正、無重複）與 `TestETFRepresentatives_DerivationMatchesDeclaredTable`（每次測試重跑推導並逐值比對）。換股後若只改宣告表不改快照 → 紅燈。ETF 期貨／槓桿部位**不得**算進 L1 曝險。 |
+
 ## 4. 映射規則（強制）
 
 1. **禁止字串相似／模糊比對**。key 只能有「顯式對映」或「顯式未映射」兩種狀態。
@@ -145,6 +188,7 @@ TWSE `exchangeReport/MI_INDEX` 實際回傳 **37 個** `*類指數` 名稱。本
 | **映射覆蓋率（declared）** | 系統自己宣告的 representative stock 中，能映到 canonical L1 的比例 | L1 segments：**27 / 27**（修正前 18/27）；全樹 L1+L2：**44 / 44**（修正前 18/44） |
 | **可達 canonical L1 數** | 樹/宣告表能觸及的 L1 種類 | **9**（修正前 5；22 個 aggregatable segment 過去有 19 個被跳過） |
 | **母體覆蓋率（universe）** | 給定 symbol 母體（如 TWSE 上市清單、`universe_snapshot`）中，能映到 canonical L1 的比例 | 由呼叫端提供母體後計算：`industry.ComputeCanonicalCoverage(symbols, mapper)`；生產 `universe_snapshot.json` 2026-09-17 記錄 `symbols_built=27 / symbols_ranked=0`，相對 TWSE 上市普通股母體（約 854 檔）約 **27/854 ≈ 3.2%** |
+| **ETF 可達 canonical L1 數** | 宣告的 ETF 載具（`configs/etf_metadata.json`）經其官網持股推導後，能觸及的 L1 種類 | **19 / 20**（11 檔 ETF，2026-09-24 快照；缺 `tourism`）——見 §3.3 |
 
 > ⚠️ 母體覆蓋率低是**資料覆蓋**問題（代表股只列 27 支），**不是**映射問題。修好命名空間
 > 不會改變 27/854；要提升必須增加 per-symbol 產業來源（DB 目前**完全沒有**個股產業欄位）。
@@ -193,6 +237,10 @@ go run ./cmd/experimental/industry-namespace-audit -universe /tmp/twse_symbols.t
 | `internal/marketdata/twse_sector_index_provider_test.go` | 兩個 TWSE entry point 解析同一表；legacy ID 不再被寫出 |
 | `internal/marketdata/finmind_sector_index_provider_test.go` | 18 系列 = 宣告表；缺的兩個 canonical L1 固定為 `chemicals`/`tourism` |
 | `internal/marketdata/namespace_canonical_test.go` | segment canonical 化（含樹結構優先、宣告表 fallback、bucket 回報理由） |
+| `internal/sectormap/twse_industry_code_test.go` | 產業碼詞彙 = TWSE ISIN 對照表 36 碼（上游改碼即紅燈）；覆蓋 20/20 L1；殘差碼 `13`/`19`/`20` 不得對映；**同一 TWSE 產業的指數名與產業碼必須給出同一個 L1**（22 組比對） |
+| `internal/sectormap/etf_representatives_test.go` | ETF key 集合 = `configs/etf_metadata.json`；namespace 無 unmapped key；每列都帶 issuer/URL/資料日/推導來源；權重皆 canonical L1 且加總 1；**ETF 覆蓋 L1 ≥ 12** |
+| `internal/sectorallocation/etf_representatives_test.go` | **從持股快照重跑推導**並與宣告表逐值比對；快照每個 `industry_code` 都必須是 `twse_industry_code` 的宣告 key；覆蓋率下限 (≥12) 由快照獨立計算（改宣告表無效）；typed view 與 `sectormap` 一致 |
+| `cmd/experimental/industry-namespace-audit/main_test.go` | 稽核 CLI 真的輸出 `etf_l1_coverage`（≥12、無非 canonical key、每列帶出處、權重加總 1） |
 
 ## 8. 相容性
 

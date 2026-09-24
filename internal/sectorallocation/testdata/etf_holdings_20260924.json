@@ -1,0 +1,3875 @@
+{
+ "snapshot_date": "2026-09-24",
+ "industry_source": {
+  "listed": {
+   "dataset": "TWSE OpenAPI opendata/t187ap03_L (上市公司基本資料, 欄位 產業別)",
+   "url": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
+   "upstream_report_date": "1150923",
+   "rows": 1095,
+   "field": "產業別"
+  },
+  "otc": {
+   "dataset": "TPEx OpenAPI mopsfin_t187ap03_O (上櫃公司基本資料, 欄位 SecuritiesIndustryCode)",
+   "url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
+   "upstream_report_date": "1150924",
+   "rows": 893,
+   "field": "SecuritiesIndustryCode"
+  },
+  "code_legend": {
+   "dataset": "TWSE ISIN 產業別代碼對照表",
+   "url": "https://isin.twse.com.tw/isin/class_i.jsp?kind=1",
+   "note": "OpenAPI 只回 2 位數字碼；中文名由此對照表取得，並以已知上市櫃公司交叉驗證。"
+  }
+ },
+ "etfs": {
+  "0050.TW": {
+   "name": "元大台灣50",
+   "benchmark": "TW50",
+   "issuer": "元大投信",
+   "source_url": "https://www.yuantaetfs.com/product/detail/0050/ratio",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2330",
+     "name": "台積電",
+     "weight_pct": 56.0,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 7.2,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2308",
+     "name": "台達電",
+     "weight_pct": 3.41,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海",
+     "weight_pct": 2.83,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投控",
+     "weight_pct": 2.15,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 1.66,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3037",
+     "name": "欣興",
+     "weight_pct": 1.45,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2383",
+     "name": "台光電",
+     "weight_pct": 1.36,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 1.16,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 1.12,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1303",
+     "name": "南亞",
+     "weight_pct": 1.09,
+     "industry_code": "03",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3017",
+     "name": "奇鋐",
+     "weight_pct": 1.05,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 0.98,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 0.92,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2345",
+     "name": "智邦",
+     "weight_pct": 0.87,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2327",
+     "name": "國巨*",
+     "weight_pct": 0.85,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 0.83,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2360",
+     "name": "致茂",
+     "weight_pct": 0.78,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 0.73,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2884",
+     "name": "玉山金",
+     "weight_pct": 0.67,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2059",
+     "name": "川湖",
+     "weight_pct": 0.63,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3443",
+     "name": "創意",
+     "weight_pct": 0.63,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6669",
+     "name": "緯穎",
+     "weight_pct": 0.61,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 0.6,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2408",
+     "name": "南亞科",
+     "weight_pct": 0.6,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 0.57,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3653",
+     "name": "健策",
+     "weight_pct": 0.56,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 0.55,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2886",
+     "name": "兆豐金",
+     "weight_pct": 0.54,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3008",
+     "name": "大立光",
+     "weight_pct": 0.54,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科",
+     "weight_pct": 0.52,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 0.52,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2412",
+     "name": "中華電",
+     "weight_pct": 0.51,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2344",
+     "name": "華邦電",
+     "weight_pct": 0.49,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2892",
+     "name": "第一金",
+     "weight_pct": 0.41,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 0.39,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3665",
+     "name": "貿聯-KY",
+     "weight_pct": 0.39,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2368",
+     "name": "金像電",
+     "weight_pct": 0.36,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4958",
+     "name": "臻鼎-KY",
+     "weight_pct": 0.35,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 0.34,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2449",
+     "name": "京元電子",
+     "weight_pct": 0.33,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6446",
+     "name": "藥華藥",
+     "weight_pct": 0.33,
+     "industry_code": "22",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2395",
+     "name": "研華",
+     "weight_pct": 0.31,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "7769",
+     "name": "鴻勁",
+     "weight_pct": 0.3,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8046",
+     "name": "南電",
+     "weight_pct": 0.29,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5880",
+     "name": "合庫金",
+     "weight_pct": 0.26,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2603",
+     "name": "長榮",
+     "weight_pct": 0.25,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 0.17,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 0.16,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6505",
+     "name": "台塑化",
+     "weight_pct": 0.09,
+     "industry_code": "23",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ],
+   "reported_weight_pct": 99.71,
+   "mapped_weight_pct": 99.71,
+   "extraction": "元大投信 持股比重頁（SPA）渲染後，展開「基金權重-股票」表格的每一列 （商品代碼/商品名稱/商品數量/商品權重），以瀏覽器讀取 DOM"
+  },
+  "0056.TW": {
+   "name": "元大高股息",
+   "benchmark": "TWHDividend",
+   "issuer": "元大投信",
+   "source_url": "https://www.yuantaetfs.com/product/detail/0056/ratio",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "1303",
+     "name": "南亞",
+     "weight_pct": 7.81,
+     "industry_code": "03",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2408",
+     "name": "南亞科",
+     "weight_pct": 4.23,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 4.15,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 4.11,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 3.98,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 3.74,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2344",
+     "name": "華邦電",
+     "weight_pct": 3.67,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 3.6,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 3.58,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2886",
+     "name": "兆豐金",
+     "weight_pct": 3.36,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2603",
+     "name": "長榮",
+     "weight_pct": 2.97,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 2.93,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 2.65,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 2.52,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科",
+     "weight_pct": 2.51,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2884",
+     "name": "玉山金",
+     "weight_pct": 2.5,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 2.37,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 2.28,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 2.2,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 2.14,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 2.1,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海",
+     "weight_pct": 2.09,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 1.88,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3044",
+     "name": "健鼎",
+     "weight_pct": 1.67,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 1.57,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄",
+     "weight_pct": 1.49,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投控",
+     "weight_pct": 1.46,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4938",
+     "name": "和碩",
+     "weight_pct": 1.4,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2376",
+     "name": "技嘉",
+     "weight_pct": 1.38,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5876",
+     "name": "上海商銀",
+     "weight_pct": 1.32,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 1.29,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2449",
+     "name": "京元電子",
+     "weight_pct": 1.26,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6239",
+     "name": "力成",
+     "weight_pct": 1.21,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2356",
+     "name": "英業達",
+     "weight_pct": 1.18,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3702",
+     "name": "大聯大",
+     "weight_pct": 1.1,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2347",
+     "name": "聯強",
+     "weight_pct": 0.93,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2324",
+     "name": "仁寶",
+     "weight_pct": 0.91,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2377",
+     "name": "微星",
+     "weight_pct": 0.73,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6285",
+     "name": "啟碁",
+     "weight_pct": 0.67,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1102",
+     "name": "亞泥",
+     "weight_pct": 0.66,
+     "industry_code": "01",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2474",
+     "name": "可成",
+     "weight_pct": 0.66,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2027",
+     "name": "大成鋼",
+     "weight_pct": 0.64,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2105",
+     "name": "正新",
+     "weight_pct": 0.56,
+     "industry_code": "11",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2353",
+     "name": "宏碁",
+     "weight_pct": 0.55,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1513",
+     "name": "中興電",
+     "weight_pct": 0.47,
+     "industry_code": "05",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3023",
+     "name": "信邦",
+     "weight_pct": 0.43,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2385",
+     "name": "群光",
+     "weight_pct": 0.42,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3005",
+     "name": "神基",
+     "weight_pct": 0.41,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9904",
+     "name": "寶成",
+     "weight_pct": 0.34,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2645",
+     "name": "長榮航太",
+     "weight_pct": 0.28,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ],
+   "reported_weight_pct": 98.36,
+   "mapped_weight_pct": 93.94,
+   "extraction": "元大投信 持股比重頁（SPA）渲染後，展開「基金權重-股票」表格的每一列 （商品代碼/商品名稱/商品數量/商品權重），以瀏覽器讀取 DOM"
+  },
+  "006208.TW": {
+   "name": "富邦台50",
+   "benchmark": "TW50",
+   "issuer": "富邦投信",
+   "source_url": "https://websys.fsit.com.tw/FubonETF/Fund/Assets.aspx?stkId=006208",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "extraction": "官方網站 基金資產(Assets.aspx) 頁面「股票」表格逐列讀取 (BeautifulSoup)；頁面標示『資料日期：YYYY/MM/DD』",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2330",
+     "name": "台積電",
+     "weight_pct": 55.972,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 7.1958,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2308",
+     "name": "台達電",
+     "weight_pct": 3.4109,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海",
+     "weight_pct": 2.8287,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投控",
+     "weight_pct": 2.1448,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 1.6612,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3037",
+     "name": "欣興",
+     "weight_pct": 1.4458,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2383",
+     "name": "台光電",
+     "weight_pct": 1.3584,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 1.157,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 1.1207,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1303",
+     "name": "南亞",
+     "weight_pct": 1.0842,
+     "industry_code": "03",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3017",
+     "name": "奇鋐",
+     "weight_pct": 1.0521,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 0.9746,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 0.921,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2345",
+     "name": "智邦",
+     "weight_pct": 0.8687,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2327",
+     "name": "國巨*",
+     "weight_pct": 0.8447,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 0.8274,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2360",
+     "name": "致茂",
+     "weight_pct": 0.7827,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 0.7338,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2884",
+     "name": "玉山金",
+     "weight_pct": 0.6739,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3443",
+     "name": "創意",
+     "weight_pct": 0.6338,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2059",
+     "name": "川湖",
+     "weight_pct": 0.6293,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6669",
+     "name": "緯穎",
+     "weight_pct": 0.6065,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2408",
+     "name": "南亞科",
+     "weight_pct": 0.5999,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 0.5948,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 0.5672,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3653",
+     "name": "健策",
+     "weight_pct": 0.5578,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 0.5469,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3008",
+     "name": "大立光",
+     "weight_pct": 0.5432,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2886",
+     "name": "兆豐金",
+     "weight_pct": 0.5421,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科",
+     "weight_pct": 0.5191,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 0.5152,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2412",
+     "name": "中華電",
+     "weight_pct": 0.5116,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2344",
+     "name": "華邦電",
+     "weight_pct": 0.4906,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2892",
+     "name": "第一金",
+     "weight_pct": 0.4091,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 0.3928,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3665",
+     "name": "貿聯-KY",
+     "weight_pct": 0.387,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2368",
+     "name": "金像電",
+     "weight_pct": 0.3556,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4958",
+     "name": "臻鼎-KY",
+     "weight_pct": 0.3472,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 0.3404,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6446",
+     "name": "藥華藥",
+     "weight_pct": 0.3345,
+     "industry_code": "22",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2449",
+     "name": "京元電子",
+     "weight_pct": 0.3284,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2395",
+     "name": "研華",
+     "weight_pct": 0.3078,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "7769",
+     "name": "鴻勁",
+     "weight_pct": 0.2984,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8046",
+     "name": "南電",
+     "weight_pct": 0.2872,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5880",
+     "name": "合庫金",
+     "weight_pct": 0.2624,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2603",
+     "name": "長榮",
+     "weight_pct": 0.2441,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 0.173,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 0.16,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6505",
+     "name": "台塑化",
+     "weight_pct": 0.0925,
+     "industry_code": "23",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00692.TW": {
+   "name": "富邦公司治理",
+   "benchmark": "TWCG",
+   "issuer": "富邦投信",
+   "source_url": "https://websys.fsit.com.tw/FubonETF/Fund/Assets.aspx?stkId=00692",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "extraction": "官方網站 基金資產(Assets.aspx) 頁面「股票」表格逐列讀取 (BeautifulSoup)；頁面標示『資料日期：YYYY/MM/DD』",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2330",
+     "name": "台積電",
+     "weight_pct": 52.2735,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 6.9235,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2308",
+     "name": "台達電",
+     "weight_pct": 4.0449,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海",
+     "weight_pct": 2.8464,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投控",
+     "weight_pct": 2.5267,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 1.6991,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3037",
+     "name": "欣興",
+     "weight_pct": 1.5706,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 1.5695,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1303",
+     "name": "南亞",
+     "weight_pct": 1.5262,
+     "industry_code": "03",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2383",
+     "name": "台光電",
+     "weight_pct": 1.4665,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 1.3106,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2408",
+     "name": "南亞科",
+     "weight_pct": 1.2603,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 1.0898,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6669",
+     "name": "緯穎",
+     "weight_pct": 0.9551,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3443",
+     "name": "創意",
+     "weight_pct": 0.9212,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2412",
+     "name": "中華電",
+     "weight_pct": 0.9095,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 0.8631,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3653",
+     "name": "健策",
+     "weight_pct": 0.8178,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 0.7757,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2884",
+     "name": "玉山金",
+     "weight_pct": 0.6535,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8046",
+     "name": "南電",
+     "weight_pct": 0.6469,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2344",
+     "name": "華邦電",
+     "weight_pct": 0.624,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2886",
+     "name": "兆豐金",
+     "weight_pct": 0.5948,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 0.5718,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 0.5396,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科",
+     "weight_pct": 0.5388,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 0.5346,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 0.5199,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 0.5116,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2395",
+     "name": "研華",
+     "weight_pct": 0.5078,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2892",
+     "name": "第一金",
+     "weight_pct": 0.4593,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4958",
+     "name": "臻鼎-KY",
+     "weight_pct": 0.4266,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3665",
+     "name": "貿聯-KY",
+     "weight_pct": 0.3762,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 0.3689,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5880",
+     "name": "合庫金",
+     "weight_pct": 0.3437,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 0.3123,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 0.2998,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2801",
+     "name": "彰銀",
+     "weight_pct": 0.2705,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 0.2667,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3044",
+     "name": "健鼎",
+     "weight_pct": 0.2289,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄",
+     "weight_pct": 0.2252,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2409",
+     "name": "友達",
+     "weight_pct": 0.2086,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1590",
+     "name": "亞德客-KY",
+     "weight_pct": 0.1961,
+     "industry_code": "05",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5876",
+     "name": "上海商銀",
+     "weight_pct": 0.1944,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 0.1833,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2912",
+     "name": "統一超",
+     "weight_pct": 0.1786,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6213",
+     "name": "聯茂",
+     "weight_pct": 0.1748,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2356",
+     "name": "英業達",
+     "weight_pct": 0.1737,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2609",
+     "name": "陽明",
+     "weight_pct": 0.1682,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3702",
+     "name": "大聯大",
+     "weight_pct": 0.1599,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5871",
+     "name": "中租-KY",
+     "weight_pct": 0.151,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2834",
+     "name": "臺企銀",
+     "weight_pct": 0.15,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1504",
+     "name": "東元",
+     "weight_pct": 0.1316,
+     "industry_code": "05",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1402",
+     "name": "遠東新",
+     "weight_pct": 0.1219,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1102",
+     "name": "亞泥",
+     "weight_pct": 0.1023,
+     "industry_code": "01",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2610",
+     "name": "華航",
+     "weight_pct": 0.1004,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2812",
+     "name": "台中銀",
+     "weight_pct": 0.0987,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3706",
+     "name": "神達",
+     "weight_pct": 0.0927,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8210",
+     "name": "勤誠",
+     "weight_pct": 0.0908,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2474",
+     "name": "可成",
+     "weight_pct": 0.0899,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5434",
+     "name": "崇越",
+     "weight_pct": 0.0848,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2353",
+     "name": "宏碁",
+     "weight_pct": 0.0782,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2838",
+     "name": "聯邦銀",
+     "weight_pct": 0.0782,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2855",
+     "name": "統一證",
+     "weight_pct": 0.0748,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2467",
+     "name": "志聖",
+     "weight_pct": 0.0669,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2385",
+     "name": "群光",
+     "weight_pct": 0.0647,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6005",
+     "name": "群益證",
+     "weight_pct": 0.0635,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1476",
+     "name": "儒鴻",
+     "weight_pct": 0.0611,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1229",
+     "name": "聯華",
+     "weight_pct": 0.0594,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9904",
+     "name": "寶成",
+     "weight_pct": 0.0593,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3005",
+     "name": "神基",
+     "weight_pct": 0.0588,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8021",
+     "name": "尖點",
+     "weight_pct": 0.0567,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2633",
+     "name": "台灣高鐵",
+     "weight_pct": 0.0543,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2845",
+     "name": "遠東銀",
+     "weight_pct": 0.0529,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3042",
+     "name": "晶技",
+     "weight_pct": 0.052,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2006",
+     "name": "東和鋼鐵",
+     "weight_pct": 0.0518,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2889",
+     "name": "國票金",
+     "weight_pct": 0.049,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6414",
+     "name": "樺漢",
+     "weight_pct": 0.0442,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3035",
+     "name": "智原",
+     "weight_pct": 0.0435,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6472",
+     "name": "保瑞",
+     "weight_pct": 0.0432,
+     "industry_code": "22",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6214",
+     "name": "精誠",
+     "weight_pct": 0.0418,
+     "industry_code": "30",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9917",
+     "name": "中保科",
+     "weight_pct": 0.0405,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8028",
+     "name": "昇陽半導體",
+     "weight_pct": 0.039,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1477",
+     "name": "聚陽",
+     "weight_pct": 0.0379,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9941",
+     "name": "裕融",
+     "weight_pct": 0.0375,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4766",
+     "name": "南寶",
+     "weight_pct": 0.0336,
+     "industry_code": "21",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2504",
+     "name": "國產",
+     "weight_pct": 0.0295,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8070",
+     "name": "長華*",
+     "weight_pct": 0.0291,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8016",
+     "name": "矽創",
+     "weight_pct": 0.0277,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2211",
+     "name": "長榮鋼",
+     "weight_pct": 0.0268,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1609",
+     "name": "大亞",
+     "weight_pct": 0.024,
+     "industry_code": "06",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2329",
+     "name": "華泰",
+     "weight_pct": 0.0236,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8131",
+     "name": "福懋科",
+     "weight_pct": 0.0218,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2439",
+     "name": "美律",
+     "weight_pct": 0.0157,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6449",
+     "name": "鈺邦",
+     "weight_pct": 0.0155,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3703",
+     "name": "欣陸",
+     "weight_pct": 0.0131,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6024",
+     "name": "群益期",
+     "weight_pct": 0.0131,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2546",
+     "name": "根基",
+     "weight_pct": 0.0126,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9930",
+     "name": "中聯資源",
+     "weight_pct": 0.0121,
+     "industry_code": "35",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5515",
+     "name": "建國",
+     "weight_pct": 0.0085,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00713.TW": {
+   "name": "元大高股息低波動",
+   "benchmark": "TWHDivLowVol",
+   "issuer": "元大投信",
+   "source_url": "https://www.yuantaetfs.com/product/detail/00713/ratio",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 9.61,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 8.23,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2892",
+     "name": "第一金",
+     "weight_pct": 6.93,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2912",
+     "name": "統一超",
+     "weight_pct": 6.2,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2884",
+     "name": "玉山金",
+     "weight_pct": 5.06,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 5.04,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 4.44,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1402",
+     "name": "遠東新",
+     "weight_pct": 3.55,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5876",
+     "name": "上海商銀",
+     "weight_pct": 3.3,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 2.17,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2633",
+     "name": "台灣高鐵",
+     "weight_pct": 2.07,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 1.75,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 1.62,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2006",
+     "name": "東和鋼鐵",
+     "weight_pct": 1.55,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 1.46,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 1.45,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1215",
+     "name": "卜蜂",
+     "weight_pct": 1.29,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2845",
+     "name": "遠東銀",
+     "weight_pct": 1.26,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8464",
+     "name": "億豐",
+     "weight_pct": 1.2,
+     "industry_code": "38",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 1.18,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 1.18,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4915",
+     "name": "致伸",
+     "weight_pct": 1.18,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2377",
+     "name": "微星",
+     "weight_pct": 1.16,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4766",
+     "name": "南寶",
+     "weight_pct": 1.13,
+     "industry_code": "21",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2347",
+     "name": "聯強",
+     "weight_pct": 1.12,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2207",
+     "name": "和泰車",
+     "weight_pct": 1.11,
+     "industry_code": "12",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9917",
+     "name": "中保科",
+     "weight_pct": 1.11,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 1.09,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1210",
+     "name": "大成",
+     "weight_pct": 1.05,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2610",
+     "name": "華航",
+     "weight_pct": 1.05,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2206",
+     "name": "三陽工業",
+     "weight_pct": 1.04,
+     "industry_code": "12",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2606",
+     "name": "裕民",
+     "weight_pct": 1.04,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 1.04,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 1.03,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5434",
+     "name": "崇越",
+     "weight_pct": 1.0,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2376",
+     "name": "技嘉",
+     "weight_pct": 0.99,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6670",
+     "name": "復盛應用",
+     "weight_pct": 0.99,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9939",
+     "name": "宏全",
+     "weight_pct": 0.94,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2458",
+     "name": "義隆",
+     "weight_pct": 0.92,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1477",
+     "name": "聚陽",
+     "weight_pct": 0.88,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1476",
+     "name": "儒鴻",
+     "weight_pct": 0.82,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2850",
+     "name": "新產",
+     "weight_pct": 0.82,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 0.8,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2385",
+     "name": "群光",
+     "weight_pct": 0.77,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3596",
+     "name": "智易",
+     "weight_pct": 0.76,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2903",
+     "name": "遠百",
+     "weight_pct": 0.74,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2504",
+     "name": "國產",
+     "weight_pct": 0.71,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8926",
+     "name": "台汽電",
+     "weight_pct": 0.69,
+     "industry_code": "23",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄",
+     "weight_pct": 0.64,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2015",
+     "name": "豐興",
+     "weight_pct": 0.54,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ],
+   "reported_weight_pct": 97.7,
+   "mapped_weight_pct": 90.7,
+   "extraction": "元大投信 持股比重頁（SPA）渲染後，展開「基金權重-股票」表格的每一列 （商品代碼/商品名稱/商品數量/商品權重），以瀏覽器讀取 DOM"
+  },
+  "00878.TW": {
+   "name": "國泰永續高股息",
+   "benchmark": "MSCITWESG",
+   "issuer": "國泰投信",
+   "source_url": "https://cwapi.cathaysite.com.tw/api/ETF/GetETFDetailStockList?FundCode=CN&SearchDate=2026-09-24&status=1",
+   "source_kind": "issuer_holdings_api",
+   "as_of": "2026-09-24",
+   "extraction": "國泰投信官網 cwapi JSON API GetETFDetailStockList (GET, FundCode+SearchDate), 逐筆取 stockCode/stockName/volumn/weights; 以同站 DownloadETFWeightExcel 官方 xlsx 交叉核對(成分股集合與權重完全相同)",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 9.64,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 9.26,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 6.38,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 5.74,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 4.47,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 4.14,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2603",
+     "name": "長榮",
+     "weight_pct": 4.04,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 3.92,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 3.18,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2880",
+     "name": "華南金",
+     "weight_pct": 3.14,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 3.04,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投控",
+     "weight_pct": 2.85,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科",
+     "weight_pct": 2.83,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 2.69,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2886",
+     "name": "兆豐金",
+     "weight_pct": 2.68,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5347",
+     "name": "世界先進",
+     "weight_pct": 2.59,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 2.46,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 2.45,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 2.38,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 2.34,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 2.23,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2412",
+     "name": "中華電",
+     "weight_pct": 2.19,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4958",
+     "name": "臻鼎-KY",
+     "weight_pct": 2.14,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2376",
+     "name": "技嘉",
+     "weight_pct": 1.97,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5876",
+     "name": "上海商銀",
+     "weight_pct": 1.9,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2356",
+     "name": "英業達",
+     "weight_pct": 1.75,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 1.74,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2912",
+     "name": "統一超",
+     "weight_pct": 1.73,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5871",
+     "name": "中租-KY",
+     "weight_pct": 1.46,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00881.TW": {
+   "name": "國泰台灣5G+",
+   "benchmark": "TW5G",
+   "issuer": "國泰投信",
+   "source_url": "https://cwapi.cathaysite.com.tw/api/ETF/GetETFDetailStockList?FundCode=CR&SearchDate=2026-09-24&status=1",
+   "source_kind": "issuer_holdings_api",
+   "as_of": "2026-09-24",
+   "extraction": "國泰投信官網 cwapi JSON API GetETFDetailStockList (GET, FundCode+SearchDate), 逐筆取 stockCode/stockName/volumn/weights; 以同站 DownloadETFWeightExcel 官方 xlsx 交叉核對(成分股集合與權重完全相同)",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2330",
+     "name": "台積電",
+     "weight_pct": 37.97,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 12.15,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2308",
+     "name": "台達電",
+     "weight_pct": 6.07,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海",
+     "weight_pct": 4.6,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 3.49,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3037",
+     "name": "欣興",
+     "weight_pct": 3.41,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2059",
+     "name": "川湖",
+     "weight_pct": 2.67,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2383",
+     "name": "台光電",
+     "weight_pct": 2.49,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3017",
+     "name": "奇鋐",
+     "weight_pct": 2.29,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3008",
+     "name": "大立光",
+     "weight_pct": 2.08,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2360",
+     "name": "致茂",
+     "weight_pct": 2.01,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創",
+     "weight_pct": 1.62,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2345",
+     "name": "智邦",
+     "weight_pct": 1.61,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 1.56,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6274",
+     "name": "台  燿",
+     "weight_pct": 1.36,
+     "industry_code": "28",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "6223",
+     "name": "旺矽",
+     "weight_pct": 1.36,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3665",
+     "name": "貿聯-KY",
+     "weight_pct": 1.29,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4958",
+     "name": "臻鼎-KY",
+     "weight_pct": 1.21,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 1.13,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2368",
+     "name": "金像電",
+     "weight_pct": 1.09,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2449",
+     "name": "京元電子",
+     "weight_pct": 1.08,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 0.99,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3044",
+     "name": "健鼎",
+     "weight_pct": 0.88,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 0.84,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳",
+     "weight_pct": 0.8,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2313",
+     "name": "華通",
+     "weight_pct": 0.7,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3105",
+     "name": "穩懋",
+     "weight_pct": 0.69,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "4938",
+     "name": "和碩",
+     "weight_pct": 0.62,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6515",
+     "name": "穎崴",
+     "weight_pct": 0.52,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄",
+     "weight_pct": 0.51,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00891.TW": {
+   "name": "中信關鍵半導體",
+   "benchmark": "TWSemi",
+   "issuer": "中國信託投信",
+   "source_url": "https://www.ctbcinvestments.com.tw/API/etf/ETFHoldingWeight?FID=E0017&StartDate=2026-09-24",
+   "source_kind": "issuer_holdings_api",
+   "as_of": "2026-09-24",
+   "extraction": "中信投信官網 API etf/ETFHoldingWeight (POST JSON {FID,StartDate}, token 先由 /API/home/AuthToken 取得); 取 FundAssetsDetail[Code=STOCK].Data 逐筆 code_/name_/qty_/weights_; 以同站 DownloadETFHoldingWeight 官方 xlsx 交叉核對(權重完全相同)",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2330",
+     "name": "台灣積體電路製造",
+     "weight_pct": 38.8,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科技",
+     "weight_pct": 13.76,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3711",
+     "name": "日月光投資控股",
+     "weight_pct": 4.15,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3443",
+     "name": "創意電子",
+     "weight_pct": 3.87,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5274",
+     "name": "信驊科技",
+     "weight_pct": 3.79,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3653",
+     "name": "健策精密工業",
+     "weight_pct": 3.59,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯華電子",
+     "weight_pct": 3.16,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2344",
+     "name": "華邦電子",
+     "weight_pct": 2.97,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6223",
+     "name": "旺矽科技",
+     "weight_pct": 2.31,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2449",
+     "name": "京元電子",
+     "weight_pct": 2.07,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱半導體",
+     "weight_pct": 2.07,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠科技",
+     "weight_pct": 1.76,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3661",
+     "name": "世芯電子",
+     "weight_pct": 1.76,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2408",
+     "name": "南亞科技",
+     "weight_pct": 1.61,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6488",
+     "name": "環球晶圓",
+     "weight_pct": 1.37,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3081",
+     "name": "聯亞光電工業",
+     "weight_pct": 1.26,
+     "industry_code": "27",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3529",
+     "name": "力旺電子",
+     "weight_pct": 1.24,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "6239",
+     "name": "力成科技",
+     "weight_pct": 1.11,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3702",
+     "name": "大聯大控股",
+     "weight_pct": 1.08,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5347",
+     "name": "世界先進積體電路",
+     "weight_pct": 1.02,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3105",
+     "name": "穩懋半導體",
+     "weight_pct": 0.98,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄科技",
+     "weight_pct": 0.89,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6515",
+     "name": "穎崴科技",
+     "weight_pct": 0.84,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6415",
+     "name": "矽力杰",
+     "weight_pct": 0.8,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6147",
+     "name": "頎邦科技",
+     "weight_pct": 0.73,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "6531",
+     "name": "愛普科技",
+     "weight_pct": 0.59,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5483",
+     "name": "中美矽晶製品",
+     "weight_pct": 0.58,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "5269",
+     "name": "祥碩科技",
+     "weight_pct": 0.35,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6789",
+     "name": "采鈺科技股份有限公司",
+     "weight_pct": 0.25,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3532",
+     "name": "台塑勝高科技",
+     "weight_pct": 0.19,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00919.TW": {
+   "name": "群益台灣精選高息",
+   "benchmark": "TWHDivSelect",
+   "issuer": "群益投信",
+   "source_url": "https://www.capitalfund.com.tw/CFWeb/api/etf/buyback (POST JSON {\"fundId\":\"195\",\"date\":null})",
+   "source_kind": "issuer_holdings_api",
+   "as_of": "2026-09-24",
+   "extraction": "官網 申購買回清單(PCF) SPA 所呼叫的同源 JSON API /CFWeb/api/etf/buyback；再以 Playwright 展開全部後讀取 DOM 表格交叉驗證 (40/40 檔一致)。pcf.date2 = 資料日期(淨值日)",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 15.0291,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2882",
+     "name": "國泰金",
+     "weight_pct": 12.5663,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達",
+     "weight_pct": 10.7427,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 10.4021,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 8.7916,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 6.0297,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 5.545,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2603",
+     "name": "長榮",
+     "weight_pct": 4.1302,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 3.2859,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 2.907,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4938",
+     "name": "和碩",
+     "weight_pct": 2.105,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 1.7577,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3293",
+     "name": "鈊象",
+     "weight_pct": 1.4429,
+     "industry_code": "32",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "5871",
+     "name": "中租-KY",
+     "weight_pct": 1.367,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2347",
+     "name": "聯強",
+     "weight_pct": 1.0096,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2855",
+     "name": "統一證",
+     "weight_pct": 1.0008,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1402",
+     "name": "遠東新",
+     "weight_pct": 0.9721,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2474",
+     "name": "可成",
+     "weight_pct": 0.881,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5522",
+     "name": "遠雄",
+     "weight_pct": 0.7072,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2385",
+     "name": "群光",
+     "weight_pct": 0.6271,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2504",
+     "name": "國產",
+     "weight_pct": 0.5986,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2105",
+     "name": "正新",
+     "weight_pct": 0.5928,
+     "industry_code": "11",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2637",
+     "name": "慧洋-KY",
+     "weight_pct": 0.5834,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6121",
+     "name": "新普",
+     "weight_pct": 0.53,
+     "industry_code": "25",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2542",
+     "name": "興富發",
+     "weight_pct": 0.5187,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2606",
+     "name": "裕民",
+     "weight_pct": 0.5114,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8454",
+     "name": "富邦媒",
+     "weight_pct": 0.4912,
+     "industry_code": "36",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1477",
+     "name": "聚陽",
+     "weight_pct": 0.4423,
+     "industry_code": "04",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9910",
+     "name": "豐泰",
+     "weight_pct": 0.4208,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8112",
+     "name": "至上",
+     "weight_pct": 0.4035,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9941",
+     "name": "裕融",
+     "weight_pct": 0.402,
+     "industry_code": "20",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2597",
+     "name": "潤弘",
+     "weight_pct": 0.3942,
+     "industry_code": "14",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6670",
+     "name": "復盛應用",
+     "weight_pct": 0.3675,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1319",
+     "name": "東陽",
+     "weight_pct": 0.3647,
+     "industry_code": "12",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1210",
+     "name": "大成",
+     "weight_pct": 0.3545,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2458",
+     "name": "義隆",
+     "weight_pct": 0.3512,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6890",
+     "name": "來億-KY",
+     "weight_pct": 0.3262,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4763",
+     "name": "材料*-KY",
+     "weight_pct": 0.3149,
+     "industry_code": "21",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4915",
+     "name": "致伸",
+     "weight_pct": 0.3101,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2211",
+     "name": "長榮鋼",
+     "weight_pct": 0.2697,
+     "industry_code": "10",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00929.TW": {
+   "name": "復華台灣科技優息",
+   "benchmark": "TWTechDiv",
+   "issuer": "復華投信",
+   "source_url": "https://www.fhtrust.com.tw/api/assets?fundID=ETF21&qDate=2026/09/24",
+   "source_kind": "issuer_holdings_api",
+   "as_of": "2026-09-24",
+   "extraction": "官網 ETF 詳情頁 基金資產 API (/api/assets) JSON 的 detail[] 中 ftype=股票 逐筆讀取；並與官網同日 Excel (/api/assetsExcel/ETF21/20260924) 50/50 檔、權重逐筆比對一致",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2357",
+     "name": "華碩電腦",
+     "weight_pct": 3.954,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠科技",
+     "weight_pct": 3.821,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2347",
+     "name": "聯強國際",
+     "weight_pct": 3.118,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱半導",
+     "weight_pct": 3.081,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2474",
+     "name": "可成科技",
+     "weight_pct": 3.036,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大哥",
+     "weight_pct": 3.007,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2382",
+     "name": "廣達電腦",
+     "weight_pct": 2.774,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2412",
+     "name": "中華電信",
+     "weight_pct": 2.607,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3231",
+     "name": "緯創資通",
+     "weight_pct": 2.595,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3260",
+     "name": "威剛科技",
+     "weight_pct": 2.577,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3702",
+     "name": "大聯大控",
+     "weight_pct": 2.528,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4904",
+     "name": "遠傳電信",
+     "weight_pct": 2.494,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2404",
+     "name": "漢唐集成",
+     "weight_pct": 2.488,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5434",
+     "name": "崇越科技",
+     "weight_pct": 2.439,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3008",
+     "name": "大立光電",
+     "weight_pct": 2.352,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2376",
+     "name": "技嘉科技",
+     "weight_pct": 2.348,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6409",
+     "name": "旭隼科技",
+     "weight_pct": 2.321,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2377",
+     "name": "微星科技",
+     "weight_pct": 2.251,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5269",
+     "name": "祥碩科技",
+     "weight_pct": 2.212,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3706",
+     "name": "神達控股",
+     "weight_pct": 2.138,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6139",
+     "name": "亞翔工程",
+     "weight_pct": 2.137,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5347",
+     "name": "世界先進",
+     "weight_pct": 2.064,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "6691",
+     "name": "洋基工程",
+     "weight_pct": 2.054,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6278",
+     "name": "台灣表面",
+     "weight_pct": 2.004,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3023",
+     "name": "信邦電子",
+     "weight_pct": 1.981,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5483",
+     "name": "中美矽晶",
+     "weight_pct": 1.89,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3044",
+     "name": "健鼎科技",
+     "weight_pct": 1.882,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯華電子",
+     "weight_pct": 1.762,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3211",
+     "name": "順達科技",
+     "weight_pct": 1.656,
+     "industry_code": "25",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2356",
+     "name": "英業達股",
+     "weight_pct": 1.626,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2317",
+     "name": "鴻海精密",
+     "weight_pct": 1.615,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6257",
+     "name": "矽格股份",
+     "weight_pct": 1.609,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6121",
+     "name": "新普科技",
+     "weight_pct": 1.568,
+     "industry_code": "25",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "3264",
+     "name": "欣銓科技",
+     "weight_pct": 1.48,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2301",
+     "name": "光寶科技",
+     "weight_pct": 1.476,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4966",
+     "name": "譜瑞-KY",
+     "weight_pct": 1.436,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "8112",
+     "name": "至上電子",
+     "weight_pct": 1.431,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8069",
+     "name": "元太科技",
+     "weight_pct": 1.402,
+     "industry_code": "26",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2458",
+     "name": "義隆電子",
+     "weight_pct": 1.358,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6191",
+     "name": "精成科技",
+     "weight_pct": 1.255,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3563",
+     "name": "牧德科技",
+     "weight_pct": 1.142,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3090",
+     "name": "日電貿股",
+     "weight_pct": 0.956,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2352",
+     "name": "佳世達科",
+     "weight_pct": 0.94,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5536",
+     "name": "聖暉工程",
+     "weight_pct": 0.925,
+     "industry_code": "31",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "8422",
+     "name": "可寧衛股",
+     "weight_pct": 0.891,
+     "industry_code": "35",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6548",
+     "name": "長華科技",
+     "weight_pct": 0.87,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "5469",
+     "name": "瀚宇博德",
+     "weight_pct": 0.831,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4915",
+     "name": "致伸科技",
+     "weight_pct": 0.827,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3227",
+     "name": "原相科技",
+     "weight_pct": 0.795,
+     "industry_code": "24",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "8070",
+     "name": "長華電材",
+     "weight_pct": 0.583,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ]
+  },
+  "00940.TW": {
+   "name": "元大台灣價值高息",
+   "benchmark": "TWValDiv",
+   "issuer": "元大投信",
+   "source_url": "https://www.yuantaetfs.com/product/detail/00940/ratio",
+   "source_kind": "issuer_holdings_page",
+   "as_of": "2026-09-24",
+   "holdings_weight_kind": "weight_pct",
+   "holdings": [
+    {
+     "symbol": "2357",
+     "name": "華碩",
+     "weight_pct": 5.31,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3034",
+     "name": "聯詠",
+     "weight_pct": 3.52,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2881",
+     "name": "富邦金",
+     "weight_pct": 3.33,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2618",
+     "name": "長榮航",
+     "weight_pct": 3.32,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2303",
+     "name": "聯電",
+     "weight_pct": 3.07,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2379",
+     "name": "瑞昱",
+     "weight_pct": 2.89,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2892",
+     "name": "第一金",
+     "weight_pct": 2.75,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2891",
+     "name": "中信金",
+     "weight_pct": 2.71,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2404",
+     "name": "漢唐",
+     "weight_pct": 2.7,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2890",
+     "name": "永豐金",
+     "weight_pct": 2.61,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2615",
+     "name": "萬海",
+     "weight_pct": 2.58,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1513",
+     "name": "中興電",
+     "weight_pct": 2.48,
+     "industry_code": "05",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3406",
+     "name": "玉晶光",
+     "weight_pct": 2.39,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3045",
+     "name": "台灣大",
+     "weight_pct": 2.38,
+     "industry_code": "27",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4938",
+     "name": "和碩",
+     "weight_pct": 2.36,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2356",
+     "name": "英業達",
+     "weight_pct": 2.34,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3293",
+     "name": "鈊象",
+     "weight_pct": 2.32,
+     "industry_code": "32",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2610",
+     "name": "華航",
+     "weight_pct": 2.28,
+     "industry_code": "15",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2801",
+     "name": "彰銀",
+     "weight_pct": 2.21,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2883",
+     "name": "凱基金",
+     "weight_pct": 2.15,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1216",
+     "name": "統一",
+     "weight_pct": 2.12,
+     "industry_code": "02",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2885",
+     "name": "元大金",
+     "weight_pct": 2.07,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2912",
+     "name": "統一超",
+     "weight_pct": 2.06,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8069",
+     "name": "元太",
+     "weight_pct": 2.05,
+     "industry_code": "26",
+     "industry_source": "tpex_mopsfin_t187ap03_O"
+    },
+    {
+     "symbol": "2385",
+     "name": "群光",
+     "weight_pct": 1.87,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3706",
+     "name": "神達",
+     "weight_pct": 1.72,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5269",
+     "name": "祥碩",
+     "weight_pct": 1.72,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6414",
+     "name": "樺漢",
+     "weight_pct": 1.58,
+     "industry_code": "25",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2887",
+     "name": "台新新光金",
+     "weight_pct": 1.55,
+     "industry_code": "17",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3023",
+     "name": "信邦",
+     "weight_pct": 1.55,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1102",
+     "name": "亞泥",
+     "weight_pct": 1.53,
+     "industry_code": "01",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3036",
+     "name": "文曄",
+     "weight_pct": 1.51,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6139",
+     "name": "亞翔",
+     "weight_pct": 1.49,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3042",
+     "name": "晶技",
+     "weight_pct": 1.48,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3702",
+     "name": "大聯大",
+     "weight_pct": 1.48,
+     "industry_code": "29",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "3044",
+     "name": "健鼎",
+     "weight_pct": 1.47,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2421",
+     "name": "建準",
+     "weight_pct": 1.43,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "9904",
+     "name": "寶成",
+     "weight_pct": 1.4,
+     "industry_code": "37",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2474",
+     "name": "可成",
+     "weight_pct": 1.38,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6278",
+     "name": "台表科",
+     "weight_pct": 1.3,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2458",
+     "name": "義隆",
+     "weight_pct": 1.2,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "4915",
+     "name": "致伸",
+     "weight_pct": 1.18,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6176",
+     "name": "瑞儀",
+     "weight_pct": 1.04,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2393",
+     "name": "億光",
+     "weight_pct": 1.02,
+     "industry_code": "26",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2454",
+     "name": "聯發科",
+     "weight_pct": 1.02,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "1319",
+     "name": "東陽",
+     "weight_pct": 1.0,
+     "industry_code": "12",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "6196",
+     "name": "帆宣",
+     "weight_pct": 0.92,
+     "industry_code": "31",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "5469",
+     "name": "瀚宇博",
+     "weight_pct": 0.62,
+     "industry_code": "28",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "8016",
+     "name": "矽創",
+     "weight_pct": 0.58,
+     "industry_code": "24",
+     "industry_source": "twse_t187ap03_L"
+    },
+    {
+     "symbol": "2915",
+     "name": "潤泰全",
+     "weight_pct": 0.42,
+     "industry_code": "18",
+     "industry_source": "twse_t187ap03_L"
+    }
+   ],
+   "reported_weight_pct": 97.46,
+   "mapped_weight_pct": 90.75,
+   "extraction": "元大投信 持股比重頁（SPA）渲染後，展開「基金權重-股票」表格的每一列 （商品代碼/商品名稱/商品數量/商品權重），以瀏覽器讀取 DOM"
+  }
+ },
+ "notes": {
+  "why": "Config-locked evidence for the ETF L1 coverage metric. Every holding row was read from the issuer's own page/API on 2026-09-24 and every industry_code comes from the first-party TWSE/TPEx listed-company industry field; nothing here is an estimate.",
+  "derivation": "internal/sectormap derives the declared L1 targets from these rows; internal/sectorallocation re-derives them on every test run (TestETFRepresentatives_DerivationMatchesDeclaredTable), so a hand-edited table or a stale snapshot fails the build.",
+  "excluded": "Weights of positions whose industry code has no canonical L1 target are excluded and the remainder renormalised to 1; the uncovered percentage is reported per ETF in sectormap.ETFRepresentative.ReportedWeightPct - MappedWeightPct.",
+  "other_assets": "ReportedWeightPct is the sum of the equity rows only. Futures, cash and margin balances on the issuer pages are outside this snapshot and outside the L1 vector by construction."
+ }
+}
