@@ -8,48 +8,35 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
 // canonicalSectorIDs is the stable L1 sector universe used by downstream
-// consumers (period detector / calculator). It matches the mapping produced by
-// TWSESectorIndexProvider.canonicalL1SectorID.
-var canonicalSectorIDs = map[string]bool{
-	"auto":              true,
-	"biotech":           true,
-	"cement":            true,
-	"construction":      true,
-	"electronics":       true,
-	"energy":            true,
-	"financials":        true,
-	"food":              true,
-	"machinery":         true,
-	"optoelectronics":   true,
-	"other_electronics": true,
-	"plastics":          true,
-	"retail":            true,
-	"semiconductor":     true,
-	"shipping":          true,
-	"steel":             true,
-	"telecom":           true,
-	"textiles":          true,
-}
-
-// sectorIndexLegacyToCanonical maps the old 8-industry schema IDs to the L1
-// canonical IDs. Other IDs are kept as-is if they are already canonical.
-var sectorIndexLegacyToCanonical = map[string]string{
-	"ai_supply_chain": "electronics",
-	"robotics":        "machinery",
-}
-
-// canonicalSectorID normalizes a raw sector ID to the canonical L1 set. Unknown
-// IDs return an empty string and are dropped by the reader.
-func canonicalSectorID(raw string) string {
-	id := raw
-	if mapped, ok := sectorIndexLegacyToCanonical[id]; ok {
-		id = mapped
+// consumers (period detector / calculator). Issue #1943: it is derived from the
+// shared canonical list instead of a hand-copied 18-entry set. The hand-copied
+// set had silently dropped chemicals and tourism even though
+// TWSESectorIndexProvider emits both (水泥類 / 觀光類 and 化學工業類).
+var canonicalSectorIDs = func() map[string]bool {
+	ids := sectormap.CanonicalL1IDs()
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
 	}
-	if canonicalSectorIDs[id] {
-		return id
+	return out
+}()
+
+// canonicalSectorID normalizes a raw sector ID from a sector_index file to a
+// canonical L1 ID. Legacy 8-industry IDs (ai_supply_chain, robotics) resolve
+// through the declared namespace table in internal/sectormap — the same table
+// the writing side uses, so the two can no longer disagree. Unknown IDs return
+// an empty string and are dropped by the reader.
+func canonicalSectorID(raw string) string {
+	if canonicalSectorIDs[raw] {
+		return raw
+	}
+	if l1, ok := sectormap.ResolveL1(sectormap.NamespaceSectorIndexReader, raw); ok {
+		return l1
 	}
 	return ""
 }
