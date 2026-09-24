@@ -170,7 +170,7 @@ func ValidateHypothesis05(samples map[ForceName][]RollingSample, taiex map[strin
 				DimensionRole:   ComputeForceProvenance(dim).DimensionRole,
 				AsOfTradingDate: d,
 			}
-			if fs.SampleCount >= 30 {
+			if fs.SampleCount >= CalibrationEligibleMinSamples {
 				fs.CalibrationStatus = CalibrationEligible
 			} else {
 				fs.CalibrationStatus = CalibrationCalibrating

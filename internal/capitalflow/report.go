@@ -189,10 +189,15 @@ func buildSummary(resonance ResonanceResult, quality float64, label string, asse
 		parts = append(parts, "偏空格局")
 	}
 
-	// E07 calibration gate — surface the "calibrating" status
-	// so the home-page renderer can show the spec §9.5 pill.
-	if assessment.CalibrationStatus == CalibrationCalibrating {
+	// E07 calibration gate — surface the calibration status so the
+	// home-page renderer can show the spec §9.5 pill. "degraded" (#1941 /
+	// #1940 R3) is a different state from "calibrating" and gets its own
+	// note instead of silently dropping the pill.
+	switch assessment.CalibrationStatus {
+	case CalibrationCalibrating:
 		parts = append(parts, "校準中")
+	case CalibrationDegraded:
+		parts = append(parts, "資金流評估異常（樣本不足或無離散度）")
 	}
 
 	_ = quality
@@ -221,9 +226,13 @@ func buildShortSummary(label string, resonance ResonanceResult, dominant ForceNa
 		parts = append(parts, "勢力對抗")
 	}
 
-	// E07 calibration gate (spec §9.5 / CF-INV-13).
-	if assessment.CalibrationStatus == CalibrationCalibrating {
+	// E07 calibration gate (spec §9.5 / CF-INV-13). "degraded" gets its own
+	// note (see buildSummary).
+	switch assessment.CalibrationStatus {
+	case CalibrationCalibrating:
 		parts = append(parts, "校準中")
+	case CalibrationDegraded:
+		parts = append(parts, "資金流評估異常（樣本不足或無離散度）")
 	}
 
 	return strings.Join(parts, "，") + "。"

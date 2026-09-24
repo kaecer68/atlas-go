@@ -296,3 +296,68 @@ func TestStage3AlertEvaluator_PredictionDrift_NilActualCountCallbackUsesLegacy(t
 		t.Fatalf("legacy mode should not emit warmup metadata")
 	}
 }
+
+// TestStage3AlertEvaluator_DriftComparisonIsRecordedEvenWithoutAlert proves the
+// observation hook added for issue #1941: every evaluated prediction/actual
+// pair is handed to OnCapitalFlowDriftCompared, hit or miss, including when the
+// alert itself is suppressed (warmup gate / cooldown). That is what gives the
+// Stage-3 task a durable prediction-vs-actual record instead of only a
+// mismatch alert.
+func TestStage3AlertEvaluator_DriftComparisonIsRecordedEvenWithoutAlert(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
+
+	var pairs [][2]CapitalFlowSignal
+	deps := Stage3AlertDeps{
+		// Warmup gate active: the alert path returns early, the record must not.
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 0 },
+		RecentEventFlowPredictions: func(days int) []float64 {
+			return []float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5}
+		},
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "bearish", Value: -1.75}, true
+		},
+		OnCapitalFlowDriftCompared: func(predicted, actual CapitalFlowSignal) {
+			pairs = append(pairs, [2]CapitalFlowSignal{predicted, actual})
+		},
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateMarketClose()
+	if len(pairs) != 1 {
+		t.Fatalf("expected 1 recorded comparison, got %d", len(pairs))
+	}
+	if pairs[0][0].Direction != "neutral" || pairs[0][1].Direction != "bearish" || pairs[0][1].Value != -1.75 {
+		t.Errorf("recorded pair = %+v, want the predicted/actual signals preserved", pairs[0])
+	}
+}
+
+// TestStage3AlertEvaluator_DriftComparisonSkippedWhenActualUnavailable: no
+// fabricated comparison when the actual side is missing.
+func TestStage3AlertEvaluator_DriftComparisonSkippedWhenActualUnavailable(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 13, 45, 0, 0, time.UTC)
+
+	recorded := 0
+	deps := Stage3AlertDeps{
+		RecentEventFlowPredictions: func(days int) []float64 { return make([]float64, days) },
+		LatestCapitalFlowPrediction: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{Direction: "neutral", Value: 0.5}, true
+		},
+		LatestCapitalFlowActual: func() (CapitalFlowSignal, bool) {
+			return CapitalFlowSignal{}, false
+		},
+		OnCapitalFlowDriftCompared: func(predicted, actual CapitalFlowSignal) { recorded++ },
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateMarketClose()
+	if recorded != 0 {
+		t.Fatalf("expected no comparison record when the actual is unavailable, got %d", recorded)
+	}
+}

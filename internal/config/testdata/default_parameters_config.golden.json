@@ -174,6 +174,12 @@
       "todo": "After the 30-trading-day observation report passes human review, a separate action→delta mapper design PR decides the next step.",
       "value": true
     },
+    "calibration_eligible_override": {
+      "rationale": "Human-gate switch for the E07 assessment calibration status. Default false keeps CalibrationStatus=calibrating so the automation gate and the /api/recommendations warning stay truthful until the pre-registered H-CF-01/02/05 validation report has samples (spec §8.4 / §9.5, CF-INV-13). Setting true is a behavior change: it lets EligibleForAutomation() open once every data-available dimension has \u003e=30 rolling samples, which routes sector rotation to the E07 branch.",
+      "source": "experimental",
+      "todo": "Flip only in a config PR that cites a cf-hypotheses-\u003cdate\u003e.json report with eligible_recommendation=true and the 30-trading-day observation note; the validator/CLI never writes config itself.",
+      "value": false
+    },
     "period_weighted_quality": {
       "rationale": "Config gate for the period-weighted capital-flow quality score. Default false preserves the legacy equal-weight composite (k3 review B4: switching semantics directly would change the eventdriven baseline input — a hidden behavior change). quality_score_period_weighted is always emitted alongside for the 30-day observation window.",
       "source": "experimental",

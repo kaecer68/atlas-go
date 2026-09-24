@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -620,5 +621,54 @@ func TestBuildRankedBrief_DefensiveNotInYAML(t *testing.T) {
 	cat := advisor.StrategyCategory("defensive")
 	if cat != "" {
 		t.Errorf("StrategyCategory(defensive) = %q, want empty — defensive is NOT a YAML six-strategy ID", cat)
+	}
+}
+
+// TestHandleRecommendations_CalibratingWarningOnlyWhenTrulyCalibrating is the
+// acceptance evidence for issue #1941: the
+// capital_flow_assessment_calibrating warning is derived from the assessment
+// status, so it disappears as soon as the assessment is no longer calibrating
+// (the reachable path added by capitalflow.calibration_eligible_override) and
+// cannot be emitted for a stale/hardcoded reason.
+func TestHandleRecommendations_CalibratingWarningOnlyWhenTrulyCalibrating(t *testing.T) {
+	cases := []struct {
+		name        string
+		status      string
+		wantWarned  bool // capital_flow_assessment_calibrating
+		wantDegrade bool // capital_flow_assessment_degraded
+	}{
+		{name: "calibrating_warns", status: capitalflow.CalibrationCalibrating, wantWarned: true},
+		{name: "eligible_is_silent", status: capitalflow.CalibrationEligible, wantWarned: false},
+		{name: "degraded_gets_its_own_warning", status: capitalflow.CalibrationDegraded, wantWarned: false, wantDegrade: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _ := os.MkdirTemp("", "rec-test-cf-status")
+			defer os.RemoveAll(dir)
+			store, _ := subscription.NewStore(dir)
+
+			cf := &mockCapitalFlow{
+				summary:    "錢潮雷達",
+				assessment: capitalflow.CapitalFlowAssessment{CalibrationStatus: tc.status},
+			}
+			h := NewHandlerWithServices(*store, nil, nil, cf, nil, nil, nil)
+
+			req, _ := http.NewRequest(http.MethodGet, "/api/recommendations", nil)
+			code, data := h.HandleRecommendations(req)
+			if code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", code)
+			}
+			rec := data.(TierRecommendation)
+			warned := strings.Contains(rec.Warning, "capital_flow_assessment_calibrating")
+			if warned != tc.wantWarned {
+				t.Errorf("assessment status %q: warning = %q, want the calibrating warning present=%v",
+					tc.status, rec.Warning, tc.wantWarned)
+			}
+			degraded := strings.Contains(rec.Warning, "capital_flow_assessment_degraded")
+			if degraded != tc.wantDegrade {
+				t.Errorf("assessment status %q: warning = %q, want the degraded warning present=%v",
+					tc.status, rec.Warning, tc.wantDegrade)
+			}
+		})
 	}
 }

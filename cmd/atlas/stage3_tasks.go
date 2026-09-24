@@ -15,7 +15,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventdriven"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/ledger"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	monitoringservice "github.com/kaecer68/atlas-go/internal/monitoring/service"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -29,10 +28,16 @@ type stage3Deps struct {
 	monitor          *monitoring.Monitor
 	dashboard        *monitoring.DashboardAPI
 	eventCalendar    *industry.EventCalendar
-	macroProvider    marketdata.MacroDataProvider
 	predictionLedger ledger.EventFlowPredictionStore
 	metricsCollector *monitoring.MetricsCollector
 	historicalStore  ledger.HistoricalStore
+	// capitalFlow is the process-wide shared *capitalflow.Service built in
+	// main.go around the file-backed rolling sample store. Issue #1941: the
+	// drift rule's LatestCapitalFlowActual MUST read through it. The previous
+	// implementation built a throwaway capitalflow.NewService(macroProvider, 0,
+	// nil) per call, so the rolling window was empty, every dimension Z was 0
+	// and the prediction-vs-actual comparison was meaningless.
+	capitalFlow *capitalflow.Service
 }
 
 // registerStage3Tasks wires the 5 Stage 3 scheduled tasks into BTM.
@@ -152,7 +157,78 @@ func registerStage3AlertTasks(d stage3Deps) {
 		tz = time.UTC
 	}
 
-	alertDeps := monitoring.Stage3AlertDeps{
+	alertDeps := buildStage3AlertDeps(d, tz)
+
+	evaluator := monitoring.NewStage3AlertEvaluator(d.monitor, alertDeps)
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-staleness",
+		Interval: 5 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			evaluator.EvaluateStaleness()
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-staleness background task (5m interval; aligned with .omo/plans/Atlas 錢潮方向預測實作規劃.md § Stage 3.2 spec)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-daily",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			now := time.Now().In(tz)
+			if now.Hour() == 6 && now.Minute() == 30 {
+				evaluator.EvaluateDaily()
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-daily background task (1m interval, fires 06:30)")
+
+	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
+		Name:     "stage3-alert-market-close",
+		Interval: 1 * time.Minute,
+		Enabled:  true,
+		Task: func(ctx context.Context) error {
+			now := time.Now().In(tz)
+			if now.Hour() == 13 && now.Minute() == 45 {
+				evaluator.EvaluateMarketClose()
+			}
+			return nil
+		},
+	})
+	log.Printf("[Gateway] registered stage3-alert-market-close background task (1m interval, fires 13:45)")
+}
+
+// wireStage3 registers the Stage 3 scheduled tasks and alert evaluators for the
+// production process. It is the single call site main.go uses.
+//
+// Issue #1941: registerStage3Tasks / registerStage3AlertTasks were fully
+// implemented but only ever called from tests, so the config flags
+// (STAGE3_TASKS_ENABLED / STAGE3_ALERTS_ENABLED, both default true) gated
+// nothing and the Stage-3 sync + alert tasks never ran in production.
+//
+// NewStage3AlertEvaluator panics on a nil monitor, so the alert wiring is
+// skipped with a loud log line instead of crashing startup when no monitor is
+// available.
+func wireStage3(d stage3Deps) {
+	registerStage3Tasks(d)
+	if d.monitor == nil {
+		log.Printf("[Stage3] alerts skipped: monitor unavailable (STAGE3_ALERTS_ENABLED=%v)", d.cfg.Stage3AlertsEnabled)
+		return
+	}
+	registerStage3AlertTasks(d)
+}
+
+// buildStage3AlertDeps assembles the Stage 3 alert evaluator dependencies from
+// the production deps. Extracted from registerStage3AlertTasks so tests can
+// exercise the individual closures (in particular the capital-flow
+// prediction/actual pair) without standing up the BackgroundTaskManager.
+func buildStage3AlertDeps(d stage3Deps, tz *time.Location) monitoring.Stage3AlertDeps {
+	driftRecorder := newStage3DriftRecorder(d.cfg.LedgerDir)
+
+	return monitoring.Stage3AlertDeps{
 		TimeZone: tz,
 		OnAlertFired: func(ruleID string, severity monitoring.AlertLevel, metadata map[string]any) {
 			monitoring.RecordStage3AlertFired(d.metricsCollector, ruleID, severity)
@@ -238,13 +314,25 @@ func registerStage3AlertTasks(d stage3Deps) {
 				Value:     pred.Confidence,
 			}, true
 		},
+		// Issue #1941: read the realized capital flow through the shared
+		// service (same rolling sample store as every other consumer) instead
+		// of a throwaway service with an empty window. A nil service is
+		// silently unavailable — the drift rule then skips, it never compares
+		// against a fabricated 0.
 		LatestCapitalFlowActual: func() (monitoring.CapitalFlowSignal, bool) {
-			if d.macroProvider == nil {
+			if d.capitalFlow == nil {
 				return monitoring.CapitalFlowSignal{}, false
 			}
-			svc := capitalflow.NewService(d.macroProvider, 0, nil)
-			report, err := svc.LatestDaily(context.Background())
+			report, err := d.capitalFlow.LatestDaily(context.Background())
 			if err != nil {
+				return monitoring.CapitalFlowSignal{}, false
+			}
+			// A shared store that was never written (or lost) leaves every
+			// dimension at SampleCount=0 and every Z at 0, so the
+			// prediction-vs-actual comparison would be meaningless again —
+			// skip the rule instead of comparing against a fabricated zero
+			// (issue #1941).
+			if !hasCalibrationEvidence(report.Forces) {
 				return monitoring.CapitalFlowSignal{}, false
 			}
 			return monitoring.CapitalFlowSignal{
@@ -252,46 +340,26 @@ func registerStage3AlertTasks(d stage3Deps) {
 				Value:     report.QualityScore,
 			}, true
 		},
+		// Issue #1941: durable predicted-vs-actual record produced by the
+		// Stage-3 market-close task, written whether the rule alerts or not.
+		OnCapitalFlowDriftCompared: func(predicted, actual monitoring.CapitalFlowSignal) {
+			if err := driftRecorder.record(time.Now(), predicted, actual); err != nil {
+				log.Printf("[Stage3] drift observation record failed: %v", err)
+			}
+		},
 	}
+}
 
-	evaluator := monitoring.NewStage3AlertEvaluator(d.monitor, alertDeps)
-
-	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-		Name:     "stage3-alert-staleness",
-		Interval: 5 * time.Minute,
-		Enabled:  true,
-		Task: func(ctx context.Context) error {
-			evaluator.EvaluateStaleness()
-			return nil
-		},
-	})
-	log.Printf("[Gateway] registered stage3-alert-staleness background task (5m interval; aligned with .omo/plans/Atlas 錢潮方向預測實作規劃.md § Stage 3.2 spec)")
-
-	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-		Name:     "stage3-alert-daily",
-		Interval: 1 * time.Minute,
-		Enabled:  true,
-		Task: func(ctx context.Context) error {
-			now := time.Now().In(tz)
-			if now.Hour() == 6 && now.Minute() == 30 {
-				evaluator.EvaluateDaily()
-			}
-			return nil
-		},
-	})
-	log.Printf("[Gateway] registered stage3-alert-daily background task (1m interval, fires 06:30)")
-
-	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
-		Name:     "stage3-alert-market-close",
-		Interval: 1 * time.Minute,
-		Enabled:  true,
-		Task: func(ctx context.Context) error {
-			now := time.Now().In(tz)
-			if now.Hour() == 13 && now.Minute() == 45 {
-				evaluator.EvaluateMarketClose()
-			}
-			return nil
-		},
-	})
-	log.Printf("[Gateway] registered stage3-alert-market-close background task (1m interval, fires 13:45)")
+// hasCalibrationEvidence reports whether a DailyReport was scored against a
+// populated rolling window. Dimensions whose source is missing are excluded
+// (DataAvailable=false); at least one available dimension with a non-empty
+// reference window is required (issue #1941: an empty shared store must not be
+// presented as a real "actual" reading).
+func hasCalibrationEvidence(forces []capitalflow.ForceScore) bool {
+	for _, f := range forces {
+		if f.DataAvailable && f.SampleCount > 0 {
+			return true
+		}
+	}
+	return false
 }
