@@ -61,6 +61,7 @@
 | `docs/reference/iteration-gate.md` | 5 Gate 自我檢查規範 | ✅ |
 | `docs/reference/guidelines-index.md` | 規範階層與使用情境路由 | ✅ |
 | `docs/reference/traps.md` | 跨模組陷阱完整參考（單一權威來源） | ✅ |
+| `docs/reference/inert-registry.md` | inert（宣告生效但實際未生效）登記表與 Batch 2 交接 | ✅ |
 | `docs/reference/parameter-system.md` | 參數管理系統（禁止硬編碼） | ✅ |
 | `docs/quickstart.md` | 5 分鐘入門（單一權威） | ✅ |
 | `docs/environment.md` | 外部依賴與環境狀態 | ✅ |
@@ -134,6 +135,7 @@
 | 檔案 | 用途 | 驗證 |
 |------|------|------|
 | `docs/specs/agent-mcp-server-spec.md` | MCP server 規格（canonical spec） | ✅ |
+| `docs/specs/industry-hitrate-metric-spec.md` | 產業級命中率口徑 SSOT（canonical 定義、聚合鍵、覆蓋率政策、與其他 9 套口徑的裁決；#1942） | ✅ |
 | `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |
 | `docs/specs/agent-mcp-phase4-spec.md` | MCP Phase 4 規格 | ✅ |
 | `docs/specs/agent-loop-state-machine-spec.md` | AgentLoop 狀態機規格 | ✅ |

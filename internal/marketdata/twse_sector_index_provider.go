@@ -18,6 +18,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/apigateway/httpclient"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
 // SectorIndexData holds a single day's index value for an industry.
@@ -251,60 +252,33 @@ func (p *TWSESectorIndexProvider) fetchSingleDay(ctx context.Context, date time.
 	return result, nil
 }
 
-// mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to canonical SectorID strings.
-// This mapping is preserved for backward compatibility with the original correlation-calibration
-// consumer that expected IDs such as "ai_supply_chain" and "robotics".
+// mapIndustryName maps TWSE OpenAPI v1 industry names (Chinese) to canonical L1
+// SectorID strings.
+//
+// Issue #1943: this method used to keep a second, 8-entry table that disagreed
+// with canonicalL1SectorID on the same input — 電腦及週邊設備類 mapped to
+// ai_supply_chain here but to electronics there, and 電機機械類 to robotics here
+// but to machinery there. The write side (cmd/backfill-sector-index) therefore
+// emitted non-canonical IDs that the read side (SectorIndexReader) had to alias
+// back, which is exactly the implicit alias the namespace unification removes.
+// Both entry points now share the single declared table in internal/sectormap;
+// old files that still contain ai_supply_chain / robotics remain readable
+// because the reader declares those legacy IDs explicitly.
 func (p *TWSESectorIndexProvider) mapIndustryName(twseName string) string {
-	mapping := map[string]string{
-		"半導體類指數":     "semiconductor",
-		"電腦及週邊設備類指數": "ai_supply_chain",
-		"電子零組件類指數":   "electronics",
-		"其他電子類指數":    "other_electronics",
-		"航運類指數":      "shipping",
-		"金融保險類指數":    "financials",
-		"油電燃氣類指數":    "energy",
-		"電機機械類指數":    "robotics",
-	}
-
-	if id, ok := mapping[twseName]; ok {
-		return id
-	}
-	return ""
+	return p.canonicalL1SectorID(twseName)
 }
 
-// canonicalL1SectorID maps TWSE OpenAPI v1 industry names to the canonical L1 SectorID
-// set defined in internal/industry/sector.go. This is the stable 20-sector universe used
-// by C07 per-sector direction prediction. Unrecognized TWSE names are dropped.
+// canonicalL1SectorID maps TWSE OpenAPI v1 industry names to the canonical L1
+// SectorID set declared in internal/sectormap (22 TWSE index names covering all
+// 20 canonical L1 sectors; 電腦及週邊設備 + 電子零組件 both roll up to
+// electronics, 電機機械 + 電器電纜 both to machinery). Unrecognized TWSE names
+// are dropped.
 func (p *TWSESectorIndexProvider) canonicalL1SectorID(twseName string) string {
-	mapping := map[string]string{
-		"半導體類指數":     "semiconductor",
-		"電腦及週邊設備類指數": "electronics",
-		"電子零組件類指數":   "electronics",
-		"其他電子類指數":    "other_electronics",
-		"光電類指數":      "optoelectronics",
-		"通信網路類指數":    "telecom",
-		"航運類指數":      "shipping",
-		"金融保險類指數":    "financials",
-		"油電燃氣類指數":    "energy",
-		"電機機械類指數":    "machinery",
-		"電器電纜類指數":    "machinery",
-		"水泥類指數":      "cement",
-		"食品類指數":      "food",
-		"塑膠類指數":      "plastics",
-		"紡織纖維類指數":    "textiles",
-		"鋼鐵類指數":      "steel",
-		"汽車類指數":      "auto",
-		"化學工業類指數":    "chemicals",
-		"生技醫療類指數":    "biotech",
-		"建材營造類指數":    "construction",
-		"觀光類指數":      "tourism",
-		"貿易百貨類指數":    "retail",
+	id, ok := sectormap.ResolveL1(sectormap.NamespaceTWSESectorIndex, twseName)
+	if !ok {
+		return ""
 	}
-
-	if id, ok := mapping[twseName]; ok {
-		return id
-	}
-	return ""
+	return id
 }
 
 // CalculateReturns computes daily returns from index values.

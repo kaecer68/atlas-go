@@ -162,6 +162,17 @@ type SectorAllocationSnapshot struct {
 
 `Applied=true` 必須附 receipt；receipt 至少包含 before hash、after hash、changed sector count 與 simulation session ID。
 
+**實作狀態（2026-09-24，#1944 Batch 1）**：本節現在被強制執行，且欄位語意已細分：
+
+| 欄位 | 語意 | 由誰決定 |
+|---|---|---|
+| `applied` | 該快照是否真的進入 allocation／order-sizing 路徑（= §8.3 的 applied） | 只由 `consumption` 證據決定（`sectorallocation.ApplicationStatusFor`） |
+| `consumption` | `ConsumptionReceipt`：哪個 consumer、何時消費 | `ClosureStore.Consume()`（consumer 自己記錄） |
+| `fallback_reason` | 未生效的機讀原因（§9 詞彙：`allocator_unavailable`／`pending_consumption`／`no_simulation_session`／`snapshot_unavailable`） | 狀態衍生，不由 store 硬寫 |
+| `target_note` | target **計算**退化註記（`no weight engine`、`projection failed: ...`） | 寫入時 provenance，與生效狀態無關 |
+
+`FileClosureStore.Store()` **不再**寫入 `applied=true`（呼叫端傳入 `true` 亦會被正規化為 `false`）。consumer 需以 `sectorallocation.RegisterPolicyConsumer(label)` 表明身分；在沒有任何 consumer 註冊前，對外一律 `applied=false` + `fallback_reason=allocator_unavailable`。詳見 [`../reference/inert-registry.md`](../reference/inert-registry.md)（I8）。
+
 ---
 
 ## 5. 權重融合與 constraint projection
@@ -269,6 +280,12 @@ T 日收盤後產生的 sector snapshot 只能建立 `effective_from > as_of_tra
 一份只供展示、未被 allocation/order-sizing path 消費的 snapshot 不算 applied。下一有效 session 必須在產生 orders 前載入 policy，並由端到端測試證明 sector cap、position sizing 或候選配置確實因 policy 改變；receipt 同時記錄 source session、effective session、before/after policy hash 與 changed sector count。
 
 只做 gate 判斷、只寫 log、只保存無 consumer 的狀態，或在同一 session 事後回寫結果都屬違規。sector policy、simulation application 與 CLI simulation 均不得寫入 live state；broker adapter 與真實訂單不在本規格範圍。
+
+**強制點（2026-09-24，#1944 Batch 1）**：
+
+- `StrategyEvolver.ApplySectorRotation` 現在回傳 `applied=false` + `allocator_unavailable`（除非該次寫入的快照已被 consumer 消費）。持久化成功仍會推進 SA11.A 的觀測窗計數，但不得因此宣稱 applied。
+- `GET /api/dashboard/sector-allocation-plan` 的回應在 handler 再套一次狀態衍生（`sectorallocation.DecorateApplicationStatus`），所以任何替代的 `SnapshotReader` 實作也無法繞過本節。
+- 驗收方式：`applied=true` 只在測試注入「有消費證據」的 store 時出現（`strategy_evolver_applied_evidence_test.go`）；無 consumer 時 `fallback_reason=allocator_unavailable`。
 
 ---
 

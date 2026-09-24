@@ -209,6 +209,13 @@ func registerCapitalTasks(d capitalDeps) {
 	// Register auto_twse_sbl — daily fetch of SBL (借券賣出餘額) balances
 	// via FinMind TaiwanDailyShortSaleBalances (G02 live).
 	sblLastFetchDay := ""
+	// sblQuotaDeferredDay records the Taipei day whose fetch was skipped
+	// because the shared FinMind quota was exhausted (fix/20260924-finmind-quota).
+	// It opens the post-reset catch-up window in sblFetchGate: FinMind resets at
+	// 00:00 Taipei, and the deferred day's SBL report was already published the
+	// previous evening, so the first tick after the reset recovers it instead of
+	// waiting for the next 15:00 slot.
+	sblQuotaDeferredDay := ""
 	_ = d.taskMgr.Register(&apigateway.ScheduledTask{
 		Name:      "auto_twse_sbl",
 		ChannelID: "twse_sbl",
@@ -219,31 +226,40 @@ func registerCapitalTasks(d capitalDeps) {
 			// fix/20260905-task-tz: the gate ran on container-local time
 			// (TZ=UTC in production), so "Hour() < 15" actually opened at
 			// Taipei 23:00 — an 8h post-close delay that also landed the
-			// one daily attempt minutes before the 00:00 TW FinMind quota
-			// reset. The gate now converts via taipeiLocation() and logs
+			// one daily attempt in the last hours of the FinMind quota day
+			// (which rolls over at 00:00 UTC = 08:00 Taipei). The gate now
+			// converts via taipeiLocation() and logs
 			// every skip (cf_hypothesis_validation_skipped precedent).
 			now := time.Now()
-			ok, reason := sblFetchGate(now, sblLastFetchDay)
+			ok, reason := sblFetchGate(now, sblLastFetchDay, sblQuotaDeferredDay)
 			if !ok {
 				logging.Info("capital_tasks", "auto_twse_sbl_skipped", "reason", reason)
 				return nil
 			}
 			today := taipeiDateString(now)
-			if sblLastFetchDay == today {
-				return nil // hourly tick; already fetched today
-			}
+			catchUp := sblQuotaCatchUpAllowed(now, sblQuotaDeferredDay)
 			_, err := d.gateway.Fetch(ctx, "twse_sbl")
 			if err == nil {
+				if catchUp {
+					logging.Info("capital_tasks", "auto_twse_sbl_quota_catch_up_ok",
+						"deferred_day", sblQuotaDeferredDay, "day", today)
+				}
 				sblLastFetchDay = today
+				sblQuotaDeferredDay = ""
 				return nil
 			}
-			// 告警降噪（2026-09-03）：FinMind 日額度耗盡是等待態（00:00 TW
-			// 自動重置），不是通道故障——health 已在 gateway 分類為 warn（非
-			// error）。把今日標記為已嘗試，避免 16:00-23:00 每小時重試白燒額度
-			// 並持續製造 task_failed 噪音；隔日 15:00+ 額度重置後自然恢復。
+			// 告警降噪（2026-09-03）：FinMind 日額度耗盡是等待態（配額日邊界
+			// 00:00 UTC = 台北 08:00 自動重置），不是通道故障——health 已在 gateway 分類為 warn（非
+			// error）。標記「延後」而不是「今日已完成」，避免 15:00-23:59 每
+			// 小時重試白燒額度，同時讓 00:00 TW 重置後的第一個 tick 自動補抓
+			// （sblQuotaCatchUpAllowed）。注意：這條路徑自
+			// fix/20260924-finmind-quota 起只在「第一方來源（TWSE TWT93U +
+			// TPEx）也失敗、退回 FinMind fallback 且配額耗盡」時才會走到；
+			// twse_sbl 正常運作已不再消耗 FinMind 配額。
 			if errors.Is(err, marketdata.ErrQuotaExhausted) {
-				sblLastFetchDay = today
-				logging.Warn("capital_tasks", "auto_twse_sbl_quota_skip", "err", err.Error())
+				sblQuotaDeferredDay = today
+				logging.Warn("capital_tasks", "auto_twse_sbl_quota_deferred",
+					"day", today, "err", err.Error())
 				return nil
 			}
 			return err
@@ -268,17 +284,6 @@ func registerCapitalTasks(d capitalDeps) {
 			if cursor.After(time.Now()) {
 				return nil // backfill complete
 			}
-			// FinMind 額度保留閘門（fix/20260906-finmind-quota-reserve）：
-			// backfill 與 live channels（auto_twse_sbl / auto_tdcc_dispersion /
-			// finmind）共用 GetSharedFinMindClient 的 DailyQuotaTracker。
-			// 2026-09-04 實證：backfill 把全日額度燒光（used=14400），
-			// 當日 live fetch 全部 ErrQuotaExhausted。剩餘額度低於保留水位
-			// 時 defer 本 chunk，讓 live 抓取永遠有額度可用。
-			if remaining := marketdata.GetSharedFinMindClient(d.cfg.FinMindAPIKey, d.cfg.WorkDir).QuotaRemaining(); !backfillQuotaAllowed(remaining) {
-				logging.Info("capital_tasks", "backfill_quota_deferred",
-					"remaining", remaining, "reserve", finmindBackfillQuotaReserve)
-				return nil
-			}
 			chunkEnd := cursor.AddDate(0, 1, 0).AddDate(0, 0, -1)
 			if chunkEnd.After(time.Now()) {
 				chunkEnd = time.Now()
@@ -286,6 +291,11 @@ func registerCapitalTasks(d capitalDeps) {
 			// SBL: per-day files via the provider's history walk
 			// (gateway.Fetch only returns the newest snapshot — the
 			// backfill needs every day in the chunk).
+			//
+			// fix/20260924-finmind-quota：SBL 段改吃第一方來源（TWSE TWT93U +
+			// TPEx），不吃 FinMind 配額，因此移到額度閘門之前執行——以前它被
+			// 「保護 live channel 額度」的閘門一起擋住，其實它根本不需要額度。
+			// 已是既存檔案的日期會在 provider 內先跳過（不發 HTTP）。
 			sblProvider, sblErr := d.gateway.Provider("twse_sbl")
 			if sblErr != nil {
 				return sblErr
@@ -295,6 +305,19 @@ func registerCapitalTasks(d capitalDeps) {
 					log.Printf("[Backfill] twse_sbl history chunk %s..%s deferred: %v", cursor.Format("2006-01-02"), chunkEnd.Format("2006-01-02"), err)
 					return err
 				}
+			}
+			// FinMind 額度保留閘門（fix/20260906-finmind-quota-reserve）：
+			// 只保護仍需 FinMind 的段落（TDCC TaiwanStockHoldingSharesPer）。
+			// backfill 與 live channels（auto_tdcc_dispersion / finmind 等）共用
+			// GetSharedFinMindClient 的 DailyQuotaTracker。2026-09-04 實證：
+			// backfill 把全日額度燒光（used=14400），當日 live fetch 全部
+			// ErrQuotaExhausted。剩餘額度低於保留水位時 defer TDCC 段，讓 live
+			// 抓取永遠有額度可用。（TDCC 的第一方替代來源見 PR 後續建議：
+			// 集保中心週快照。）
+			if remaining := marketdata.GetSharedFinMindClient(d.cfg.FinMindAPIKey, d.cfg.WorkDir).QuotaRemaining(); !backfillQuotaAllowed(remaining) {
+				logging.Info("capital_tasks", "backfill_quota_deferred",
+					"segment", "tdcc", "remaining", remaining, "reserve", finmindBackfillQuotaReserve)
+				return nil
 			}
 			// TDCC: monthly chunk via the provider's history method. The
 			// gateway Fetch path only returns the newest snapshot, so the
@@ -347,7 +370,8 @@ func registerCapitalTasks(d capitalDeps) {
 				return nil
 			}
 			// 告警降噪（2026-09-03）：TDCC 股權分散是週頻快照，「walk-back 無
-			// 資料」= 快照尚未發布（等待態）、FinMind 額度耗盡 = 00:00 TW 重置
+			// 資料」= 快照尚未發布（等待態）、FinMind 額度耗盡 = 00:00 UTC
+			// （台北 08:00）重置
 			// ——皆非通道故障。health 已在 gateway 分類（ErrNoData→ok 不更新
 			// last_success；ErrQuotaExhausted→warn），任務回 nil 避免 task_failed
 			// 噪音。不設 tdccLastFetchDay：當日後續 tick 仍會嘗試，捕捉同日晚些

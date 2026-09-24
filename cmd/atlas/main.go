@@ -865,8 +865,10 @@ func run(args []string, deps appDeps) error {
 			winRateProvider := stocktools.NewSQLiteWinRateProvider(winRateDB)
 			stockDeps.WinRate = winRateProvider
 			// Condition-level (cross-symbol) aggregate read (issue #1865) —
-			// same read-only ledger handle implements both providers.
+			// same read-only ledger handle implements all three providers.
 			stockDeps.ConditionWinRate = winRateProvider
+			// Industry-level (canonical L1) aggregate read (issue #1942).
+			stockDeps.IndustryWinRate = winRateProvider
 		}
 		stocktools.RegisterRoutes(mux, stockDeps)
 		log.Printf("[StockTools] registered /api/stock/* routes")

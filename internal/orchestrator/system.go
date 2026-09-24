@@ -1115,28 +1115,56 @@ func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{}
 	return keys
 }
 
-func syntheticForwardReturn(symbol, agentID string, quote domain.Quote, asOf time.Time) float64 {
-	if quote.Open > 0 {
-		intraday := (quote.Last - quote.Open) / quote.Open
-		fr := intraday * 0.8
-		if fr > 0.05 {
-			fr = 0.05
-		}
-		if fr < -0.05 {
-			fr = -0.05
-		}
-		// Neutral fallback: no artificial bias introduced
-		if fr == 0 {
-			fr = 0.0
-		}
-		return fr
+// drawNormalized draws a deterministic value in [-1, 1] for one
+// (agent, symbol, trading day) triple. The trading day is part of the seed so
+// a rolling window is not assembled from a single repeated value
+// (forward_return_fallback.go documents the earlier symbol-only seed bug).
+func drawNormalized(symbol, agentID string, asOf time.Time) float64 {
+	hash := hashString(agentID + "|" + symbol + "|" + asOf.Format("2006-01-02"))
+	return (float64(hash%10000) - 5000) / 5000.0
+}
+
+// syntheticPlaceholderReturn is the placeholder written to
+// RecommendationOutcome.ForwardReturn when no forward-looking data exists:
+// dev/staging runs without a replay dataset (buildSyntheticOutcomes) and
+// symbols missing from the replay dataset (buildReplayOutcomes fallback).
+// Every row produced this way carries IsSynthetic=true.
+//
+// Semantics (issue #1944 Batch 1; this replaces the previous implementation):
+//   - The value is NOT a forward return. It is a deterministic,
+//     regime-conditioned draw from the configured placeholder distribution
+//     (configs/parameters.json -> forward_return.risk_on_* / risk_off_*),
+//     clamped to that regime's band. It carries no forward information, and it
+//     does not reuse the day's price action.
+//   - It MUST NOT be aggregated into any 命中率 / hit-rate / win-rate or
+//     strategy-ranking number. Consumers must exclude IsSynthetic rows; the
+//     canonical (cost-adjusted) metric is defined in
+//     docs/specs/industry-hitrate-metric-spec.md (H1/H2/H2b).
+//
+// Why the previous implementation was wrong: it used the SAME-DAY intraday
+// move ((Last-Open)/Open x 0.8) as the "forward" return. That is not
+// forward-looking, and several agent desks derive their conviction from the
+// same same-day price action, so `Hit = forwardReturn > 0` was computed from
+// the same input as the signal (self-fulfilling). A flat day also produced
+// exactly 0 => Hit=false, a guaranteed miss for a non-event.
+func syntheticPlaceholderReturn(symbol, agentID string, regime domain.Regime, asOf time.Time) float64 {
+	cfg := config.GetParametersConfig()
+	if cfg == nil {
+		cfg = config.DefaultParametersConfig()
 	}
-	// Deterministic distribution branch: agent-scoped seed so different agents
-	// recommending the same symbol draw different synthetic values (A4 L2 —
-	// symbol-only seeding made multi-agent windows byte-identical).
-	hash := hashString(agentID + "|" + symbol)
-	daySeed := int64(asOf.YearDay())
-	return (float64((hash+daySeed)%10000)/10000.0)*0.04 - 0.02
+	params := DefaultFallbackParams(cfg)
+	p := params.RiskOnParams
+	if regime == domain.RegimeRiskOff {
+		p = params.RiskOffParams
+	}
+	fr := p.Mean + drawNormalized(symbol, agentID, asOf)*p.StdDev
+	if fr < p.MinReturn {
+		fr = p.MinReturn
+	}
+	if fr > p.MaxReturn {
+		fr = p.MaxReturn
+	}
+	return fr
 }
 
 func buildParameterSnapshot() *shared.ParameterSnapshot {
@@ -1231,7 +1259,7 @@ func buildSyntheticOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes [
 	outcomes := make([]domain.RecommendationOutcome, 0, len(rawRecs))
 	for _, rec := range rawRecs {
 		quote := quoteMap[rec.Symbol]
-		forwardReturn := syntheticForwardReturn(rec.Symbol, rec.Agent, quote, asOf)
+		forwardReturn := syntheticPlaceholderReturn(rec.Symbol, rec.Agent, domain.Regime(regime), asOf)
 		_, passed := passedSymbols[rec.Symbol]
 		guardReason := ""
 		if !passed {
@@ -1282,7 +1310,7 @@ func buildReplayOutcomes(rawRecs, finalRecs []domain.Recommendation, quotes []do
 		synthetic := false
 		forwardReturn, ok := ds.ForwardReturn(rec.Symbol, asOf, 1)
 		if !ok {
-			forwardReturn = syntheticForwardReturn(rec.Symbol, rec.Agent, quote, asOf)
+			forwardReturn = syntheticPlaceholderReturn(rec.Symbol, rec.Agent, domain.Regime(regime), asOf)
 			synthetic = true
 		}
 		_, passed := passedSymbols[rec.Symbol]

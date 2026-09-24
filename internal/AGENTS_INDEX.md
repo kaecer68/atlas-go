@@ -2,7 +2,8 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：80 個模組（28 S / 34 E / 8 X / 1 A / 7 U）。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：81 個模組（29 S / 33 E / 8 X / 1 A / 9 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）並按實際列數校正 S/U 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
 >
@@ -10,7 +11,7 @@
 
 ## 索引（按成熟度分組）
 
-### S · Stable（穩定生產，28 個）
+### S · Stable（穩定生產，29 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -84,6 +85,7 @@
 
 > 註：24 個 S-tier + 27 個 E-tier 中，`cmd/atlas-mcp/server` 為跨 internal/ 與 cmd/ 的特殊位置；其餘模組位於 `internal/` 下。
 
+| `sectormap` | 產業命名空間橋接 leaf 套件（零專案相依，因 industry→marketdata 不可反向）— canonical L1/L2 清單 + L2→L1 父層表 + 12 個命名空間的逐 key 顯式映射（禁止模糊比對與隱式 alias；未映射必回報）。`docs/specs/sector-namespace-canonical-spec.md`、issue #1943 |
 
 ### X · Experimental（實驗中，8 個）
 
@@ -106,7 +108,7 @@
 |------|------|
 | `swarm` | 目錄已刪除（PR #963）；模擬引擎已降級為 pass-through；保留條目供歷史參考 |
 
-### U · Utility（輔助工具，6 個）
+### U · Utility（輔助工具，9 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -166,6 +168,7 @@
 | 升級 | `stress` | X → E（進入 orchestrator SystemCore live risk evaluation） |
 | 封存 | `swarm` | X → A（目錄已刪除，PR #963） |
 | 新增 | `sectorallocation` | 加入 X-tier（產業權重單一權威，多因子引擎） |
+| 新增 | `sectormap` | 加入 E-tier（產業命名空間橋接 leaf 套件，issue #1943）|
 | 新增 | `calibration` | 加入 U-tier（`cmd/calibrate-parameters`）|
 
 ## cmd/ 索引

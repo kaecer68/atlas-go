@@ -360,10 +360,24 @@ func (w *rollingWindow) mean() float64 {
 	return sum / float64(w.count)
 }
 
-// stddev returns the population standard deviation.
+// stddev returns the population standard deviation of the window.
+//
+// A window with fewer than two values has no dispersion at all, so it
+// returns 0 (not 1.0, and not a clamped epsilon). Callers that need a
+// Z-score must treat a zero standard deviation as "no information"
+// rather than dividing by it — see zScore and CF-INV-06.
+//
+// History note (issue #1940 R3): this function used to clamp the result
+// to max(0.01, std). The clamp did not protect anything: it replaced
+// "zero dispersion" with a fake epsilon, so a constant window turned
+// (raw – mean) into raw×100. The 2026-09-24 audit found live
+// consequences — government z = -7028.5 on 2026-08-27 (window of 18
+// identical zeros) and futures z = 785200 on 2026-07-21 (window of two
+// identical values). Degeneracy is now handled where it is decided
+// (windowDispersionUsable), not by faking a denominator.
 func (w *rollingWindow) stddev() float64 {
 	if w.count < 2 {
-		return 1.0 // avoid division by zero; return 1 so Z = raw – mean
+		return 0
 	}
 	m := w.mean()
 	sumSq := 0.0
@@ -371,16 +385,76 @@ func (w *rollingWindow) stddev() float64 {
 		d := w.values[i] - m
 		sumSq += d * d
 	}
-	return math.Max(0.01, math.Sqrt(sumSq/float64(w.count)))
+	return math.Sqrt(sumSq / float64(w.count))
 }
 
-// zScore computes (v – mean) / stddev.
+// maxAbsZScore caps the standardized deviation produced by zScore.
+//
+// Rationale (issue #1940 R3 / CF-INV-06): a |z| above this bound is not
+// evidence of an extreme market move — it is evidence that the
+// reference window carries no usable dispersion and the division
+// amplified numerical noise. Healthy dimensions stay far below it (the
+// 2026-09-24 audit's live maximum is ~2), so the cap never binds on
+// well-formed data; it is a backstop behind windowDispersionUsable.
+const maxAbsZScore = 20.0
+
+// degenerateStdRatio is the relative dispersion floor below which a
+// window is treated as carrying no usable dispersion.
+//
+// The test is relative to the window's magnitude (max of |mean|, |raw|)
+// because "small" is only meaningful per dimension: futures OI moves in
+// thousands of contracts, retail composite percentages in hundredths.
+// A window whose spread is below ratio × magnitude cannot standardize
+// anything without dividing by numerical noise.
+const degenerateStdRatio = 1e-6
+
+// windowDispersionUsable reports whether (mean, std) can standardize raw
+// without amplifying floating-point noise. A zero, NaN or Inf standard
+// deviation is never usable; a standard deviation below
+// degenerateStdRatio × max(|mean|, |raw|) is also rejected.
+//
+// This is the single degeneracy predicate: zScore and the calibration
+// status in ForceExtractor.Score both call it, so a value that is
+// reported as z = 0 is always reported with calibration_status =
+// "degraded" and vice versa.
+func windowDispersionUsable(mean, std, raw float64) bool {
+	if std <= 0 || math.IsNaN(std) || math.IsInf(std, 0) {
+		return false
+	}
+	scale := math.Max(math.Abs(mean), math.Abs(raw))
+	if scale <= 0 {
+		return true
+	}
+	return std >= degenerateStdRatio*scale
+}
+
+// zScore computes (v – mean) / stddev, or 0 when the window cannot
+// standardize the value.
+//
+// Two guards apply, in order (issue #1940 R3 / CF-INV-06):
+//  1. degenerate dispersion (see windowDispersionUsable) → 0. The
+//     rolling Z-score is a statement about dispersion; with no
+//     dispersion there is no statement to make, so neutral is the only
+//     honest answer. Emitting a pseudo-value here is what produced
+//     z = -7028.5 / z = 785200 in production.
+//  2. |z| > maxAbsZScore → clamped to the cap. A surviving extreme
+//     value stays finite and monotone instead of dominating every
+//     downstream consumer (resonance, dominant-signal, quality score,
+//     stockpicker gates).
 func (w *rollingWindow) zScore(v float64) float64 {
+	m := w.mean()
 	s := w.stddev()
-	if s <= 0 {
+	if !windowDispersionUsable(m, s, v) {
 		return 0
 	}
-	return (v - w.mean()) / s
+	z := (v - m) / s
+	if z > maxAbsZScore {
+		return maxAbsZScore
+	}
+	if z < -maxAbsZScore {
+		return -maxAbsZScore
+	}
+	return z
 }
 
 // ---------------------------------------------------------------------------

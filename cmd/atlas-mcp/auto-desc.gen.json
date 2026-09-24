@@ -965,6 +965,34 @@
       "type": "object"
     }
   },
+  "stock_get_industry_winrate": {
+    "name": "stock_get_industry_winrate",
+    "description": "Return the INDUSTRY-LEVEL hit-rate aggregate for one stockpicker condition over a rolling window (read-only; aggregates persisted raw outcomes, never recomputes backtests). Answers '某產業某期間的命中率＝？' with the canonical caliber of docs/specs/industry-hitrate-metric-spec.md: hit = net_forward_return \u003e 0 (5-trading-day holding period, cost rate 0.585%), minimum samples + Wilson 95% CI, keyed by canonical L1 industry × condition × window. Input: condition_id (required — conditions are never pooled) + optional industry_id (canonical L1 id or Chinese label, e.g. semiconductor / 半導體; default = every industry row, a ranking) + optional rolling_window (default 120d) + optional regime. Output: industries[] (observations, hits, win_rate, wilson_lower/upper, avg_forward_return, avg_net_forward_return, coverage_pct, calibration_status) plus a coverage block with the unmapped-symbol list — symbols with no canonical L1 mapping are reported, never dropped. found=false means no stored outcomes / no row for that industry (message explains), not an error. Other 'hit rates' in the repo (agent 1-day no-cost, narrative, seasonal, cycle) are DIFFERENT calibers and are NOT this metric. HTTP: GET /api/stock/industry_winrate. Alternative: stock_get_condition_winrate (condition level), stock_get_win_rate (per symbol).",
+    "inputSchema": {
+      "properties": {
+        "condition_id": {
+          "description": "the stockpicker condition id, e.g. momentum-20d-positive or price-volume-top-divergence (required; conditions are never pooled into one industry number)",
+          "type": "string"
+        },
+        "industry_id": {
+          "description": "canonical L1 industry id or its Chinese label, e.g. semiconductor or 半導體; default: every industry row (a ranking over all 20 L1 sectors)",
+          "type": "string"
+        },
+        "regime": {
+          "description": "market regime filter (e.g. RISK_ON); default: all regimes. Only outcomes tagged at trigger time (2026-09-07+) carry regimes",
+          "type": "string"
+        },
+        "rolling_window": {
+          "description": "rolling window label, e.g. 120d; default 120d",
+          "type": "string"
+        }
+      },
+      "required": [
+        "condition_id"
+      ],
+      "type": "object"
+    }
+  },
   "stock_get_monthly_revenue": {
     "name": "stock_get_monthly_revenue",
     "description": "Return the most recent published monthly revenue for a Taiwan stock symbol along with YoY% (change_pct, vs same month prior year) and MoM%. Coverage: TWSE 上市 + TPEX 上櫃 + 興櫃 via FinMind TaiwanStockMonthRevenue — broader than the 4 stocktools endpoints which are TWSE-scoped per PR #1477, so TPEX symbols like 3131/3587/6640 return data here even though stock_get_chips/fundamentals mark them NOT_COVERED. HTTP: GET /api/stock/monthly_revenue. Alternative: stock_get_quote, stock_get_chips.",

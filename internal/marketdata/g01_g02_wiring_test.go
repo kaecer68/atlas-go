@@ -3,6 +3,10 @@ package marketdata
 // Tests for the G01/G02 live wiring: both providers fetch full-market
 // datasets from the shared FinMind client.
 //
+// fix/20260924-finmind-quota: the twse_sbl cases here pin the FinMind
+// FALLBACK path (SetFirstPartyEnabled(false)); the official TWSE/TPEx
+// primary path is covered by twse_sbl_firstparty_test.go.
+//
 // EMPIRICAL contract (verified 2026-09-01 against the real API): both
 // TaiwanStockHoldingSharesPer and TaiwanDailyShortSaleBalances return rows
 // ONLY for single-day windows (a multi-day full-market window returns an
@@ -135,6 +139,9 @@ func TestTWSESBLProvider_FetchSBLSummary_MapsFinMindRows(t *testing.T) {
 		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":130,"SBLShortSalesShortSales":20,"SBLShortSalesReturns":30,"date":"2026-08-28"}
 	]`)
 	p := NewTWSESBLProvider(0.5)
+	// fix/20260924-finmind-quota: the official TWSE/TPEx tables are the
+	// primary source; this test covers the FinMind FALLBACK path.
+	p.SetFirstPartyEnabled(false)
 	p.SetFinMindClient(c)
 
 	stats, err := p.FetchSBLSummary(context.Background(), "20260828")
@@ -152,6 +159,8 @@ func TestTWSESBLProvider_FetchSBLSummary_MapsFinMindRows(t *testing.T) {
 
 func TestTWSESBLProvider_NoFinMind_StubError(t *testing.T) {
 	p := NewTWSESBLProvider(0.5)
+	// Both sources unavailable: first-party disabled AND no FinMind client.
+	p.SetFirstPartyEnabled(false)
 	if _, err := p.FetchSBLSummary(context.Background(), "20260828"); err == nil {
 		t.Fatal("expected explicit not-wired error without FinMind client")
 	}
@@ -167,6 +176,8 @@ func TestTWSESBLProvider_HistoryBackfill_WritesDayFiles(t *testing.T) {
 		{"stock_id":"2330","SBLShortSalesCurrentDayBalance":120,"SBLShortSalesShortSales":15,"SBLShortSalesReturns":1,"date":"2026-08-31"}
 	]`)
 	p := NewTWSESBLProvider(0.5)
+	// FinMind fallback path (first-party source disabled).
+	p.SetFirstPartyEnabled(false)
 	p.SetFinMindClient(c)
 	p.SetStorageDir(t.TempDir())
 

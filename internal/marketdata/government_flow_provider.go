@@ -32,6 +32,24 @@ func NewGovernmentFlowProvider(dir string) *GovernmentFlowProvider {
 	return &GovernmentFlowProvider{dir: dir}
 }
 
+// DataDir returns the directory this provider reads readings from. It
+// exists so channel-health reporting (DataState) can name the location
+// without duplicating the wiring path.
+func (p *GovernmentFlowProvider) DataDir() string { return p.dir }
+
+// HasData reports whether the reading carries a real observation.
+//
+// Exactly-zero aggregate flow is not a market outcome: TotalNet is an
+// exact integer sum over the 8 government banks' head-office branches, so
+// a zero value cannot be distinguished from "the fetch failed and the
+// writer stored a placeholder". The CAPTCHA-era scraper did exactly that
+// (data/state/government_flow/20260721.json .. 20260728.json carry
+// {"total_net":0,"source":"broker-aggregate"}), and the pipeline consumed
+// them as genuine readings for 18 trading days (issue #1940 R1). The
+// channel therefore reports a zero reading as "no data", matching the
+// government_broker contract's SuccessCriteriaValueNonzero.
+func (r GovernmentFlowReading) HasData() bool { return r.TotalNet != 0 }
+
 // AllowedSources enumerates accepted source labels per the methodology doc.
 var GovernmentFlowAllowedSources = map[string]bool{
 	"operator-imported": true,

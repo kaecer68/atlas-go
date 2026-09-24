@@ -547,6 +547,11 @@ func (s *IndustryService) GetIndustryOverview(now time.Time) []IndustryOverview 
 // GetLatestSectorAllocation returns the latest persisted simulation-closing
 // snapshot. Returns nil, error when the snapshot reader is unavailable or no
 // snapshot has been persisted yet (SA08 contract).
+//
+// The snapshot is read through sectorallocation.SnapshotReader, whose
+// production implementation derives Applied/FallbackReason from consumption
+// evidence (spec §8.3, issue #1944 Batch 1); the HTTP handler decorates again
+// so custom readers cannot bypass the contract.
 func (s *IndustryService) GetLatestSectorAllocation(ctx context.Context) (*sectorallocation.SectorAllocationSnapshot, error) {
 	if s.snapshotReader == nil {
 		return nil, fmt.Errorf("snapshot reader not configured")
@@ -892,7 +897,11 @@ func (s *IndustryService) UpdateSiliconIndicators(ctx context.Context) error {
 }
 
 // SetCycleCalibration injects the calibration tracker and wires it into
-// the global card builder state so resolveCardConfig picks up calibrated weights.
+// the global card builder state so resolveCardConfig picks up calibrated
+// weights. Consumption contract (issue #1944 Batch 1): the weights are only
+// redistributed once the tracker has recorded layer metrics, and the funded
+// weight sum is preserved, so injecting a tracker with an empty window cannot
+// rescale the composite coefficient.
 func (s *IndustryService) SetCycleCalibration(cal *industry.CycleCalibration) {
 	s.CycleCalibration = cal
 	industry.SetGlobalCycleCalibration(cal)

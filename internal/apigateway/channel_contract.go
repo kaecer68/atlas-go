@@ -623,8 +623,13 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	c.FreshnessWindow = 8 * 24 * time.Hour
 	r.Register(c)
 
+	// twse_sbl: 2026-09-24 (fix/20260924-finmind-quota) 起改吃第一方來源
+	// TWSE TWT93U（上市）+ TPEx margin/sbl（上櫃）——與此處宣告的
+	// SourcePriority 一致。修正前契約宣告 TWSE 但 adapter 實際走
+	// FinMind:TaiwanDailyShortSaleBalances（契約與實作不符），且因 FinMind
+	// 日配額被其他消費者用完而使本通道 warn。
 	c = DefaultChannelContract("twse_sbl")
-	c.SourcePriority = []string{"TWSE"}
+	c.SourcePriority = []string{"TWSE", "TPEx", "FinMind"}
 	c.HealthSource = HealthSourceFileState
 	c.SuccessCriteria = SuccessCriteriaFileExists
 	r.Register(c)
@@ -632,10 +637,20 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	// government_flow: operator-imported daily readings (flat YYYYMMDD.json
 	// dir). HealthCheck warns when no reading exists; contract makes the
 	// file-state semantics explicit.
+	//
+	// 2026-09-24 (issue #1940 R1): the success criterion is value_nonzero,
+	// not file_exists. The CAPTCHA-era aggregator wrote
+	// {"total_net":0,"source":"broker-aggregate"} placeholder files
+	// (data/state/government_flow/20260721.json .. 20260728.json) and the
+	// channel reported "ok" for 18 trading days while the capital-flow
+	// pipeline consumed those zeros as genuine readings — the same "ok 假象"
+	// that government_broker already cured with value_nonzero. A zero total
+	// cannot be a real 8-bank aggregate sum, so it now fails the contract
+	// and degrades the channel (GovernmentFlowAdapter.DataState).
 	c = DefaultChannelContract("government_flow")
 	c.SourcePriority = []string{"Operator", "TWSE"}
 	c.HealthSource = HealthSourceFileState
-	c.SuccessCriteria = SuccessCriteriaFileExists
+	c.SuccessCriteria = SuccessCriteriaValueNonzero
 	c.DegradedOnEmpty = true
 	r.Register(c)
 
