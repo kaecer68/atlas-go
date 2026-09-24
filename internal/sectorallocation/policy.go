@@ -89,8 +89,10 @@ type ClosureStore interface {
 	// error and no receipt (Applied must be false).
 	Store(snap SectorAllocationSnapshot) (*MutationReceipt, error)
 
-	// Latest returns the most recently stored (unconsumed) snapshot,
-	// or nil if none exists.
+	// Latest returns the most recently stored snapshot that is still eligible
+	// as next-session policy — i.e. neither consumed nor deleted — or nil if
+	// none exists. The returned snapshot carries derived status
+	// (DecorateApplicationStatus), never the raw stored `applied` value.
 	Latest() (*SectorAllocationSnapshot, error)
 
 	// Consume marks a snapshot as consumed by recording a
@@ -190,32 +192,34 @@ func (s *FileClosureStore) latestUnlocked() (*SectorAllocationSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Walk backwards to find the most recent unconsumed snapshot.
+	// Walk backwards to find the most recent unconsumed, non-deleted snapshot.
 	for _, row := range slices.Backward(rows) {
-		if !row.consumed() {
-			snap := row.snap
-			return &snap, nil
+		if !row.consumedForAllocator() {
+			return DecorateApplicationStatus(row.snap), nil
 		}
 	}
 	return nil, nil
 }
 
-// newestUnlocked returns the most recently stored snapshot regardless of
-// whether a consumer already consumed it, together with its consumption
-// evidence. The outward reader (LatestSnapshot / dashboard) needs the newest
-// plan *and* whether it was consumed; Latest() intentionally hides consumed
-// rows because the allocator must only pick up an unconsumed policy.
-func (s *FileClosureStore) newestUnlocked() (*SectorAllocationSnapshot, *ConsumptionReceipt, error) {
+// newestUnlocked returns the most recently stored snapshot that was not rolled
+// back, together with its consumption evidence. The outward reader
+// (LatestSnapshot / dashboard) needs the newest plan *and* whether it was
+// consumed, so — unlike Latest() — consumed rows are included; tombstoned
+// (deleted) rows are not.
+func (s *FileClosureStore) newestUnlocked() (*SectorAllocationSnapshot, error) {
 	rows, err := s.readAllLocked()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	for _, row := range slices.Backward(rows) {
+		if row.deleted {
+			continue
+		}
 		snap := row.snap
 		snap.Consumption = row.consumption
-		return &snap, row.consumption, nil
+		return &snap, nil
 	}
-	return nil, nil, nil
+	return nil, nil
 }
 
 // ConsumptionFor returns the consumption receipt recorded for receiptID, or
@@ -324,11 +328,11 @@ type SnapshotReader interface {
 func (s *FileClosureStore) LatestSnapshot() *SectorAllocationSnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	snap, _, err := s.newestUnlocked()
+	snap, err := s.newestUnlocked()
 	if err != nil || snap == nil {
 		return nil
 	}
-	return DecorateApplicationStatus(snap)
+	return DecorateApplicationStatus(*snap)
 }
 
 // ---- application status (consumption evidence) ----------------------------
@@ -383,6 +387,17 @@ func RegisterPolicyConsumer(label string) {
 	policyConsumers = append(policyConsumers, label)
 }
 
+// ResetPolicyConsumers clears the registry. Wiring owners call it on
+// teardown/rollback (and tests use it between cases): registration is a
+// process-global fact, so a removed consumer must be able to restore the
+// honest default (applied=false + allocator_unavailable) instead of leaving a
+// stale "a consumer exists" claim behind.
+func ResetPolicyConsumers() {
+	policyConsumerMu.Lock()
+	defer policyConsumerMu.Unlock()
+	policyConsumers = nil
+}
+
 // RegisteredPolicyConsumers returns the labels registered so far.
 func RegisteredPolicyConsumers() []string {
 	policyConsumerMu.RLock()
@@ -419,23 +434,49 @@ func ConsumptionFor(store ClosureStore, receiptID string) *ConsumptionReceipt {
 	return reader.ConsumptionFor(receiptID)
 }
 
-// DecorateApplicationStatus sets snap.Applied and snap.FallbackReason from
-// consumption evidence (snap.Consumption) and returns snap. It is idempotent,
-// so it can be applied both by the store reader and by the HTTP handler.
+// DecorateApplicationStatus returns a COPY of snap with Applied and
+// FallbackReason derived from consumption evidence (snap.Consumption), and with
+// legacy target notes migrated (see migrateLegacyTargetNote).
 //
-// Pre-condition: none. Post-condition: Applied == (Consumption != nil).
-func DecorateApplicationStatus(snap *SectorAllocationSnapshot) *SectorAllocationSnapshot {
-	if snap == nil {
-		return nil
-	}
-	applied, reason := ApplicationStatusFor(snap.Consumption)
-	snap.Applied = applied
+// It is pure: the input is never mutated, so it is safe to apply both in the
+// store reader and in the HTTP handler, and safe when a SnapshotReader hands
+// out a shared/cached pointer (no cross-request mutation).
+//
+// Pre-condition: none. Post-condition: result.Applied == (Consumption != nil).
+func DecorateApplicationStatus(snap SectorAllocationSnapshot) *SectorAllocationSnapshot {
+	out := snap
+	migrateLegacyTargetNote(&out)
+	applied, reason := ApplicationStatusFor(out.Consumption)
+	out.Applied = applied
 	if applied {
-		snap.FallbackReason = ""
+		out.FallbackReason = ""
 	} else {
-		snap.FallbackReason = reason
+		out.FallbackReason = reason
 	}
-	return snap
+	return &out
+}
+
+// legacyStatusReasons are the values FallbackReason may legitimately hold after
+// decoration; anything else is a pre-#1944 target-computation note that used to
+// be stored in this field.
+var legacyStatusReasons = map[string]bool{
+	"":                           true,
+	FallbackAllocatorUnavailable: true,
+	FallbackPendingConsumption:   true,
+	FallbackNoSimulationSession:  true,
+	FallbackSnapshotUnavailable:  true,
+}
+
+// migrateLegacyTargetNote moves a pre-#1944 target-computation note out of
+// FallbackReason (where Store used to put "no weight engine" /
+// "projection failed: ...") into TargetNote, so existing JSONL rows keep their
+// provenance now that FallbackReason is status-only.
+func migrateLegacyTargetNote(snap *SectorAllocationSnapshot) {
+	if snap == nil || snap.TargetNote != "" || legacyStatusReasons[snap.FallbackReason] {
+		return
+	}
+	snap.TargetNote = snap.FallbackReason
+	snap.FallbackReason = ""
 }
 
 // ---- internal helpers ----------------------------------------------------
@@ -446,10 +487,17 @@ type storedRow struct {
 	// (nil when nothing consumed it). It is the evidence Applied is derived
 	// from — see DecorateApplicationStatus.
 	consumption *ConsumptionReceipt
+	// deleted marks a tombstoned row (Delete = rollback path). A deleted
+	// snapshot must never be served again: not by Latest() (the allocator
+	// would resurrect a rolled-back policy) and not by LatestSnapshot()
+	// (the dashboard would show it as the current plan).
+	deleted bool
 }
 
-// consumed reports whether a consumption receipt exists for this row.
-func (r storedRow) consumed() bool { return r.consumption != nil }
+// consumedForAllocator reports whether this row is no longer eligible as
+// "next-session policy" for Latest(): it was consumed already, or it was
+// rolled back.
+func (r storedRow) consumedForAllocator() bool { return r.consumption != nil || r.deleted }
 
 func (s *FileClosureStore) readAllLocked() ([]storedRow, error) {
 	data, err := os.ReadFile(s.filePath())
@@ -514,12 +562,11 @@ func (s *FileClosureStore) readAllLocked() ([]storedRow, error) {
 			continue
 		}
 		row := storedRow{snap: snap}
-		if c := consumed[snap.MutationReceipt.ReceiptID]; c != nil {
+		row.deleted = tombstoned[snap.MutationReceipt.ReceiptID]
+		// A deleted (rolled-back) snapshot is not consumption evidence, even
+		// when a consumption record exists for it.
+		if c := consumed[snap.MutationReceipt.ReceiptID]; c != nil && !row.deleted {
 			row.consumption = c
-		}
-		// A tombstoned receipt is deleted (rollback path): no consumption.
-		if tombstoned[snap.MutationReceipt.ReceiptID] {
-			row.consumption = nil
 		}
 		rows = append(rows, row)
 	}

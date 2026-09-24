@@ -109,12 +109,13 @@ func TestApplySectorRotation_PersistsSnapshot(t *testing.T) {
 		t.Errorf("expected EffectiveFrom=2026-07-01, got %q", snap.EffectiveFrom)
 	}
 	// Target provenance lives in TargetNote; FallbackReason is reserved for
-	// application status (empty here because the store itself does not decorate).
+	// application status and is derived on read (no consumer wired ⇒
+	// allocator_unavailable).
 	if snap.TargetNote != "no weight engine" {
 		t.Errorf("expected TargetNote='no weight engine' when engine not wired, got %q", snap.TargetNote)
 	}
-	if snap.FallbackReason != "" {
-		t.Errorf("stored record must not carry an application reason, got %q", snap.FallbackReason)
+	if snap.FallbackReason != sectorallocation.FallbackAllocatorUnavailable {
+		t.Errorf("fallback_reason = %q, want %q", snap.FallbackReason, sectorallocation.FallbackAllocatorUnavailable)
 	}
 	if len(snap.Target) == 0 {
 		t.Error("expected non-empty target map")

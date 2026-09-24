@@ -2,7 +2,9 @@ package industry
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sync"
 	"time"
 )
@@ -120,26 +122,38 @@ func applyCycleCalibration(cfg CardConfig, cal *CycleCalibration) CardConfig {
 	}
 	scale := baseSum / calibratedSum
 	adjusted := make(map[string]float64, len(cfg.LayerWeights))
+	largestLayer, largestWeight := "", math.Inf(-1)
 	for layer, w := range cfg.LayerWeights {
-		// Layers the tracker has no opinion about keep their default weight.
-		adjusted[layer] = w
-	}
-	for layer, w := range calibrated {
-		if _, known := cfg.LayerWeights[layer]; !known {
-			continue
+		// Layers the tracker has no opinion about keep their default share.
+		calibratedWeight, known := calibrated[layer]
+		if !known {
+			calibratedWeight = w
 		}
-		// Round like normalizeWeights does (4 dp) so untouched layers keep
-		// their exact default and the funded sum stays stable.
-		adjusted[layer] = math.Round(w*scale*10000) / 10000
+		adjusted[layer] = calibratedWeight * scale
+		if adjusted[layer] > largestWeight {
+			largestLayer, largestWeight = layer, adjusted[layer]
+		}
+	}
+	// Preserve the funded sum exactly: CalibrateWeights normalises through
+	// normalizeWeights, which rounds each layer to 4 dp, so the rescaled sum
+	// can drift by up to N*5e-5. Absorb that residue into the largest funded
+	// layer (a relative nudge < 1e-3) instead of leaving it to accumulate
+	// across layers.
+	if largestLayer != "" {
+		adjusted[largestLayer] += baseSum - weightSum(adjusted)
 	}
 	cfg.LayerWeights = adjusted
 	return cfg
 }
 
+// weightSum sums weights in a deterministic (sorted-key) order. Floating-point
+// addition is order-dependent and Go map iteration is randomized, so an
+// unordered sum of the same values can differ in the last bits — which would
+// make the balanced rescale in applyCycleCalibration non-deterministic.
 func weightSum(weights map[string]float64) float64 {
 	var sum float64
-	for _, w := range weights {
-		sum += w
+	for _, layer := range slices.Sorted(maps.Keys(weights)) {
+		sum += weights[layer]
 	}
 	return sum
 }

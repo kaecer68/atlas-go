@@ -21,9 +21,17 @@ func resetPolicyConsumers() {
 
 func storeFixtureSnapshot(t *testing.T, store *FileClosureStore) *MutationReceipt {
 	t.Helper()
+	return storeFixtureSnapshotDated(t, store, "2026-09-24", "2026-09-25")
+}
+
+// storeFixtureSnapshotDated stores a valid snapshot for a specific trading date.
+// Distinct dates matter: Store() derives the receipt ID from the serialized
+// body, so two byte-identical snapshots share a receipt ID.
+func storeFixtureSnapshotDated(t *testing.T, store *FileClosureStore, asOf, effectiveFrom string) *MutationReceipt {
+	t.Helper()
 	receipt, err := store.Store(SectorAllocationSnapshot{
-		AsOfTradingDate:   "2026-09-24",
-		EffectiveFrom:     "2026-09-25",
+		AsOfTradingDate:   asOf,
+		EffectiveFrom:     effectiveFrom,
 		Target:            map[industry.SectorID]float64{"semiconductor": 0.30},
 		Current:           map[industry.SectorID]float64{"semiconductor": 0.28},
 		Delta:             map[industry.SectorID]float64{"semiconductor": 0.02},
@@ -168,15 +176,17 @@ func TestStoreDoesNotHardWriteApplied(t *testing.T) {
 	}
 }
 
-// TestDecorateApplicationStatus_Idempotent documents that decorating twice (once
-// in the store reader, once in the HTTP handler) cannot change the verdict.
-func TestDecorateApplicationStatus_Idempotent(t *testing.T) {
+// TestDecorateApplicationStatus_PureAndIdempotent documents that decorating
+// twice (once in the store reader, once in the HTTP handler) cannot change the
+// verdict, and that the input must NOT be mutated (a SnapshotReader may hand
+// out a shared pointer; concurrent requests must not write through it).
+func TestDecorateApplicationStatus_PureAndIdempotent(t *testing.T) {
 	resetPolicyConsumers()
 	t.Cleanup(resetPolicyConsumers)
 
-	snap := &SectorAllocationSnapshot{Applied: true, FallbackReason: "stale"}
-	first := DecorateApplicationStatus(snap)
-	second := DecorateApplicationStatus(first)
+	in := SectorAllocationSnapshot{Applied: true, FallbackReason: "stale"}
+	first := DecorateApplicationStatus(in)
+	second := DecorateApplicationStatus(*first)
 
 	if second.Applied {
 		t.Error("Applied must be derived from evidence, not from the incoming value")
@@ -184,7 +194,7 @@ func TestDecorateApplicationStatus_Idempotent(t *testing.T) {
 	if second.FallbackReason != FallbackAllocatorUnavailable {
 		t.Errorf("fallback_reason = %q, want %q", second.FallbackReason, FallbackAllocatorUnavailable)
 	}
-	if DecorateApplicationStatus(nil) != nil {
-		t.Error("nil snapshot must stay nil")
+	if !in.Applied || in.FallbackReason != "stale" {
+		t.Errorf("input mutated by decorator: %+v", in)
 	}
 }

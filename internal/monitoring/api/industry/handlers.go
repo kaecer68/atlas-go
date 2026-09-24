@@ -470,7 +470,7 @@ func (h *Handlers) HandleSectorAllocationPlan(r *http.Request) (int, any) {
 			FallbackReason: sectorallocation.FallbackNoSimulationSession,
 		}
 	}
-	return http.StatusOK, sectorallocation.DecorateApplicationStatus(snap)
+	return http.StatusOK, sectorallocation.DecorateApplicationStatus(*snap)
 }
 
 // --- Sector taxonomy handlers (E-06: HTTP proxy for MCP-in-memory tools) ---
