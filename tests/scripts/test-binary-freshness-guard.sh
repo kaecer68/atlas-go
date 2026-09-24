@@ -16,6 +16,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 CHECK="$ROOT/scripts/check-binary-freshness.sh"
 SESSION_START="$ROOT/scripts/session-start.sh"
 RETAG_TARGET=retag-cron-images
+TMPDIR_ATLAS_SVCS=$(mktemp "${TMPDIR:-/tmp}/atlas-family-svcs.XXXXXX")
 
 fail() {
   echo "FAIL: $*" >&2
@@ -446,6 +447,68 @@ run_cleanup_failure_test
 run_missing_image_test
 run_success_cleanup_test
 run_freshness_rule_tests
+# Static guards for the "atlas family" image tags (2026-09-24, #1938).
+#
+# Why: `rebuild-atlas` builds ONE image (atlas-atlas:local) and retags it for
+# every build-only service in the atlas family; `compose up -d` then reuses the
+# existing tag. If a service is missing from ATLAS_IMAGE_TAGS, compose silently
+# keeps a STALE image and `check-binaries` (which is image-list driven) can still
+# report FRESH. 實證 2026-09-23: atlas-prism-worker 停在 7126c3a7，atlas-go 已
+# 在 91fd474f。
+#
+# Two checks, both derived from the repo (no magic lists):
+#   1) every service in `rebuild-atlas`'s `compose up -d <services>` list has an
+#      ATLAS_IMAGE_TAGS entry ("atlas-<service>:latest");
+#   2) every build-only compose service that is NOT a cron service (cron images
+#      are covered by CRON_IMAGE_TAGS / the retag test) and NOT fubon-proxy
+#      (its own Dockerfile/image) appears in that same up-list — so a newly
+#      added build-only service cannot be silently left untagged.
+run_atlas_family_tag_test() {
+  local up_list declared svc img missing=0
+
+  # Only the rebuild-atlas target block, skipping comment lines (the Makefile has
+  # comments mentioning `compose up -d` earlier, e.g. the iMac guard rationale).
+  # Require the literal `docker compose up -d ...` command form so Makefile
+  # comments (which mention `compose up -d` inside `@#` lines) cannot pollute the
+  # derived list.
+  up_list=$(sed -n '/^rebuild-atlas:/,/^$/p' "$ROOT/Makefile" \
+    | grep -o 'docker compose up -d [^"]*' \
+    | sed 's/^.*docker compose up -d //' | tr ' ' '\n' | grep -E '^[a-z0-9-]+$' \
+    | grep -vE '^(-d|--force-recreate|--no-build)$' | sort -u)
+  [ -n "$up_list" ] || fail "could not derive the rebuild-atlas compose up service list"
+
+  declared=$(grep -m1 '^ATLAS_IMAGE_TAGS :=' "$ROOT/Makefile" | cut -d= -f2- \
+    | tr ' ' '\n' | grep -E ':latest$' | sort -u)
+  [ -n "$declared" ] || fail "Makefile has no ATLAS_IMAGE_TAGS entries"
+
+  # (1) every service the rebuild target brings up must be tagged
+  for svc in $up_list; do
+    case "$svc" in
+      cron-*|atlas-cron-*) continue ;;   # cron family: covered by CRON_IMAGE_TAGS
+    esac
+    printf '%s\n' "$declared" | grep -qx -- "atlas-${svc}:latest" || {
+      echo "    ✗ ATLAS_IMAGE_TAGS missing atlas-${svc}:latest (rebuild-atlas brings up '$svc')" >&2
+      missing=1
+    }
+  done
+  [ "$missing" -eq 0 ] || fail "ATLAS_IMAGE_TAGS does not cover every atlas-family service rebuilt by rebuild-atlas"
+
+  # (2) completeness: no build-only service may be omitted from the up-list
+  awk '
+    /^  [a-z0-9-]+:[[:space:]]*$/ { svc=$1; sub(/:$/, "", svc); next }
+    /dockerfile:/ && svc != "" { print svc; svc="" }
+  ' "$ROOT/docker-compose.yml" | sort -u >"$TMPDIR_ATLAS_SVCS"
+  while IFS= read -r svc; do
+    case "$svc" in
+      cron-*|atlas-cron-*|fubon-proxy) continue ;;
+    esac
+    printf '%s\n' "$up_list" | grep -qx -- "$svc" || \
+      fail "build-only compose service '$svc' is not brought up by rebuild-atlas (add it + its ATLAS_IMAGE_TAGS entry)"
+  done <"$TMPDIR_ATLAS_SVCS"
+  rm -f "$TMPDIR_ATLAS_SVCS"
+}
+
+run_atlas_family_tag_test
 run_session_start_test
 run_static_contract_tests
 
