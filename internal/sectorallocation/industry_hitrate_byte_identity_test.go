@@ -3,21 +3,32 @@ package sectorallocation_test
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
-// TestProductionPath_ByteIdentical_Snapshot is the byte-identity proof for
-// PR-β: with gate OFF (default), the production path must produce output
-// that round-trips through JSON identically with the pre-PR-β reference.
-// Root independently verifies by snapshot-diffing this against the
-// golden file at testdata/production_path_off.golden.json.
+// tolerance for numeric equivalence. TRUE byte-identity is NOT achievable on
+// this path: the engine has map-iteration float non-determinism (adding the
+// same numbers in different orders changes the last bit). Measured drift is
+// exactly 1 ULP (~2.2e-16 relative). See atlas-go issue #1961.
+const productionPathTolerance = 1e-12
+
+// TestProductionPath_GateOff_NumericallyEquivalent is the safety-valve test for
+// PR-β: with the gate OFF (default), the production path must produce output
+// numerically equivalent to the pre-PR-β reference recorded in
+// testdata/production_path_off_pr_beta.golden.json.
 //
-// The snapshot is intentionally narrow (only ProjectedTarget JSON) so the
-// diff is human-readable: any unintentional change to the projection
-// pipeline shows up immediately.
-func TestProductionPath_ByteIdentical_Snapshot(t *testing.T) {
+// Renamed 2026-09-24 from TestProductionPath_ByteIdentical_Snapshot: the old
+// name claimed byte-identity, but (a) it never actually diffed against a golden
+// and (b) byte-identity is unachievable because of map-iteration float
+// non-determinism (issue #1961). This version compares against the golden with
+// a documented tolerance AND keeps the structural invariants (20 L1 keys,
+// weights sum to 1).
+func TestProductionPath_GateOff_NumericallyEquivalent(t *testing.T) {
 	priorMap := makeStrategicPriorForTest(t)
 	engine := sectorallocation.NewDefaultEngineWithProjector(
 		sectorallocation.NewEngineTestConfig(),
@@ -31,20 +42,43 @@ func TestProductionPath_ByteIdentical_Snapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeProjectedTarget failed: %v", err)
 	}
-	data, err := json.MarshalIndent(target, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	t.Logf("Production path JSON (gate OFF, default):\n%s", string(data))
 
+	// --- structural invariants ---
 	if len(target.Target) != 20 {
 		t.Fatalf("must have 20 L1 keys, got %d", len(target.Target))
 	}
-	s := 0.0
+	sum := 0.0
 	for _, v := range target.Target {
-		s += v
+		sum += v
 	}
-	if s < 0.999999999 || s > 1.000000001 {
-		t.Fatalf("sum drift: %.12f", s)
+	if sum < 0.999999999 || sum > 1.000000001 {
+		t.Fatalf("weights must sum to ~1.0, got %.12f", sum)
+	}
+
+	// --- numeric equivalence vs golden (tolerance, not byte-identity) ---
+	goldenPath := filepath.Join("testdata", "production_path_off_pr_beta.golden.json")
+	raw, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden %s: %v", goldenPath, err)
+	}
+	var want struct {
+		Target map[string]float64 `json:"Target"`
+	}
+	if err := json.Unmarshal(raw, &want); err != nil {
+		t.Fatalf("parse golden %s: %v", goldenPath, err)
+	}
+	if len(want.Target) != len(target.Target) {
+		t.Fatalf("golden has %d L1 keys, got %d", len(want.Target), len(target.Target))
+	}
+	for k, got := range target.Target {
+		w, ok := want.Target[string(k)]
+		if !ok {
+			t.Errorf("L1 key %q present in output but missing from golden", k)
+			continue
+		}
+		if math.Abs(got-w) > productionPathTolerance {
+			t.Errorf("L1 %s: got %.17g, golden %.17g, |Δ|=%.3g > tol %.3g",
+				k, got, w, math.Abs(got-w), productionPathTolerance)
+		}
 	}
 }
