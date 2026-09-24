@@ -23,6 +23,18 @@ import (
 
 const (
 	twseAPIBaseURL = constants.TWSEBaseURL
+
+	// twseMaxRetryBackoff caps the exponential wait between TWSE retries.
+	// With the shipped max_retry_attempts=3 the waits are 1s and 2s, so the
+	// cap only binds if someone raises the attempt count: it keeps one fetch
+	// from turning into a multi-minute stall inside a cron run.
+	twseMaxRetryBackoff = 8 * time.Second
+
+	// twseRateLimitWaitAllowance is the wall-clock slack GetQuotes gives the
+	// shared token bucket before it gives up (see the 10s wait timeout in
+	// GetQuotes). Included in FetchBudget so a caller's context deadline
+	// cannot cancel the request while it is still queued behind the limiter.
+	twseRateLimitWaitAllowance = 10 * time.Second
 )
 
 // ─── shared TWSE token bucket (P1-13) ───────────────────────────────────────
@@ -75,6 +87,17 @@ type TWSEClient struct {
 	// this client via GetSharedTWSEClient, so one breaker covers the whole
 	// host. ErrTWSEEmptyData (holiday/no-data) does NOT trip it.
 	breaker *providerBreaker
+	// retryCfg is the retry policy for STOCK_DAY_ALL (GetQuotes): it extends
+	// the shared marketdata.max_retry_attempts / retry_backoff_ms policy with
+	// transport-error retries, because TWSE slow windows fail as per-attempt
+	// client timeouts rather than as HTTP statuses. A zero value disables
+	// retries, which keeps hand-built test clients single-attempt unless
+	// they opt in via SetRetryPolicyForTest.
+	retryCfg retryConfig
+	// perAttemptTimeout mirrors the http.Client.Timeout the client was built
+	// with (the client does not expose it). FetchBudget uses it to size
+	// callers' context deadlines.
+	perAttemptTimeout time.Duration
 }
 
 // TWSEQuote TWSE 行情数据结构
@@ -111,11 +134,14 @@ var (
 // all call sites (hybrid provider, gateway adapters, daily-replay-sync, etc.).
 func GetSharedTWSEClient() *TWSEClient {
 	sharedTWSEClientOnce.Do(func() {
+		timeout := time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second
 		sharedTWSEClient = &TWSEClient{
-			httpClient:  httpclient.NewFactory().NewClient(time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
-			baseURL:     twseAPIBaseURL,
-			rateLimiter: getTWSESharedLimiter(),
-			breaker:     newProviderBreaker("twse", defaultCircuitBreakerConfig()),
+			httpClient:        httpclient.NewFactory().NewClient(timeout),
+			baseURL:           twseAPIBaseURL,
+			rateLimiter:       getTWSESharedLimiter(),
+			breaker:           newProviderBreaker("twse", defaultCircuitBreakerConfig()),
+			retryCfg:          twseRetryConfig(),
+			perAttemptTimeout: timeout,
 		}
 	})
 	return sharedTWSEClient
@@ -138,12 +164,82 @@ func ResetSharedTWSEClient() {
 // Deprecated: Prefer GetSharedTWSEClient() to share one rate-limited client across all call sites.
 func NewTWSEClient() *TWSEClient {
 	params := config.GetParametersConfig()
+	timeout := time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second
 	return &TWSEClient{
-		httpClient:  httpclient.NewFactory().NewClient(time.Duration(params.Marketdata.TWSEAPITimeoutSec.Value) * time.Second),
-		baseURL:     twseAPIBaseURL,
-		rateLimiter: getTWSESharedLimiter(),
-		breaker:     newProviderBreaker("twse", defaultCircuitBreakerConfig()),
+		httpClient:        httpclient.NewFactory().NewClient(timeout),
+		baseURL:           twseAPIBaseURL,
+		rateLimiter:       getTWSESharedLimiter(),
+		breaker:           newProviderBreaker("twse", defaultCircuitBreakerConfig()),
+		retryCfg:          twseRetryConfig(),
+		perAttemptTimeout: timeout,
 	}
+}
+
+// twseRetryConfig is the retry policy for TWSE GETs: the shared
+// marketdata.max_retry_attempts / retry_backoff_ms policy, plus
+// transport-error retries (TWSE slow windows surface as per-attempt timeouts,
+// which the generic policy deliberately does not retry) and a hard backoff
+// cap.
+func twseRetryConfig() retryConfig {
+	cfg := defaultRetryConfig()
+	cfg.retryTransportErrors = true
+	cfg.maxBackoff = twseMaxRetryBackoff
+	return cfg
+}
+
+// retryPolicy returns the effective retry policy for this client, falling
+// back to the production policy when a hand-built client left retryCfg at its
+// zero value. Without the fallback, a client assembled as a struct literal
+// would silently run with retries disabled — the opposite of the intended
+// default for the shared TWSE path.
+func (c *TWSEClient) retryPolicy() retryConfig {
+	if c.retryCfg.maxAttempts <= 0 {
+		return twseRetryConfig()
+	}
+	return c.retryCfg
+}
+
+// SetRetryPolicyForTest replaces the client's retry policy (tests only):
+// attempts is the TOTAL number of HTTP attempts (1 disables retries),
+// baseBackoff the first wait, maxBackoff the cap (0 = uncapped). Transport
+// errors stay retryable, matching production.
+func (c *TWSEClient) SetRetryPolicyForTest(attempts int, baseBackoff, maxBackoff time.Duration) {
+	c.retryCfg = retryConfig{
+		maxAttempts:          attempts,
+		baseBackoff:          baseBackoff,
+		maxBackoff:           maxBackoff,
+		retryTransportErrors: true,
+	}
+}
+
+// SetPerAttemptTimeoutForTest records the per-attempt HTTP timeout that a
+// test's replacement http.Client uses, so FetchBudget stays consistent with
+// the client actually in play (tests only).
+func (c *TWSEClient) SetPerAttemptTimeoutForTest(d time.Duration) {
+	c.perAttemptTimeout = d
+}
+
+// FetchBudget is the wall-clock time a single GetQuotes call can consume when
+// every attempt hits its per-attempt timeout:
+//
+//	twseRateLimitWaitAllowance + attempts*timeout + sum(backoff between them)
+//
+// Callers that wrap GetQuotes in their own context deadline MUST use at least
+// this budget. 2026-09-24: daily-replay-sync used a hardcoded 60s context
+// while the retry policy needs 10s + 3*20s + 3s = 73s, so the context expired
+// in the middle of the retry loop and the retry never got to help.
+func (c *TWSEClient) FetchBudget() time.Duration {
+	cfg := c.retryPolicy()
+	attempts := max(cfg.maxAttempts, 1)
+	timeout := c.perAttemptTimeout
+	if timeout <= 0 {
+		timeout = time.Duration(config.GetParametersConfig().Marketdata.TWSEAPITimeoutSec.Value) * time.Second
+	}
+	budget := twseRateLimitWaitAllowance + time.Duration(attempts)*timeout
+	for attempt := range attempts - 1 {
+		budget += retryWait(cfg, attempt)
+	}
+	return budget
 }
 
 // SetHTTPClient 设置自定义 HTTP 客户端
@@ -171,10 +267,10 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 	if c.breaker != nil && !c.breaker.shouldTry() {
 		return nil, fmt.Errorf("%w: twse circuit breaker open", ErrUpstream)
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, twseRateLimitWaitAllowance)
 	defer cancel()
 	if err := c.rateLimiter.Wait(waitCtx); err != nil {
-		return nil, fmt.Errorf("rate limit wait (10s timeout): %w", err)
+		return nil, fmt.Errorf("rate limit wait (%s timeout): %w", twseRateLimitWaitAllowance, err)
 	}
 
 	endpoint := fmt.Sprintf("%s/exchangeReport/STOCK_DAY_ALL", c.baseURL)
@@ -184,7 +280,17 @@ func (c *TWSEClient) GetQuotes(ctx context.Context) ([]domain.Quote, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// Bounded retry with exponential backoff (2026-09-24). STOCK_DAY_ALL has
+	// rare slow windows (measured P95 ≈0.16s, but 2026-08-18 07:17–07:58
+	// Taipei and 2026-09-23 23:30 Taipei both exceeded the 20s per-attempt
+	// client timeout). A single attempt therefore lost the whole daily
+	// replay sync. Attempts and backoff come from the parameter system
+	// (marketdata.max_retry_attempts / retry_backoff_ms, capped at
+	// twseMaxRetryBackoff); transport timeouts count as retryable because
+	// that is exactly how TWSE fails. Callers must size their own context
+	// with FetchBudget() or the retry loop is cut short.
+	cfg := c.retryPolicy()
+	resp, err := fetchWithRetry(ctx, c.httpClient, req, cfg)
 	if err != nil {
 		c.breakerRecordFailure()
 		return nil, fmt.Errorf("http request: %w", err)

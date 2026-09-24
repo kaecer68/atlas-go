@@ -6,6 +6,8 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,7 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
+	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
 
@@ -279,5 +285,209 @@ func TestGapBackfillWindowDisabled(t *testing.T) {
 	}
 	if len(mock.calledDates()) != 0 {
 		t.Errorf("window=0 still fetched: %v", mock.calledDates())
+	}
+}
+
+// ─── 2026-09-24: degraded sync must not be recorded as ok ───────────────────
+//
+// Production evidence: twse_replay_sync recorded
+// `context deadline exceeded (Client.Timeout exceeded while awaiting headers)`
+// on 2026-09-23T15:30Z (consecutive_failures=1 → derived status warn) because
+// runDailySync used a 60s context while the TWSE client's retry policy needs
+// 73s, and GetQuotes had no retry at all. The CSV was left untouched (correct
+// degrade) but the channel legitimately stayed "warn" for a whole day.
+// These tests pin the three behaviors that must hold:
+//  1. a failed fetch keeps the previous CSV byte-for-byte and records a
+//     NON-ok attempt with a message that says so;
+//  2. a later successful run writes the day and clears the warn;
+//  3. an OK response with zero usable rows is recorded degraded, never ok.
+
+// twseHostRewriteTransport sends the hardcoded www.twse.com.tw request to a
+// local httptest server.
+type twseHostRewriteTransport struct{ target string }
+
+func (t *twseHostRewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.URL.Scheme = "http"
+	r.URL.Host = strings.TrimPrefix(t.target, "http://")
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+// stubSharedTWSEClient points the shared TWSE client at target with an
+// explicit, fast retry policy. It resets the singleton (fresh rate-limit
+// bucket + closed breaker) before and after, so mutations cannot leak.
+func stubSharedTWSEClient(t *testing.T, target string, attempts int) {
+	t.Helper()
+	marketdata.ResetSharedTWSEClient()
+	prevLimiter := marketdata.SetTWSESharedLimiterForTest(rate.NewLimiter(rate.Inf, 0))
+	c := marketdata.GetSharedTWSEClient()
+	c.SetHTTPClient(&http.Client{Timeout: 2 * time.Second, Transport: &twseHostRewriteTransport{target: target}})
+	c.SetRetryPolicyForTest(attempts, time.Millisecond, 0)
+	c.SetPerAttemptTimeoutForTest(2 * time.Second)
+	t.Cleanup(func() {
+		marketdata.SetTWSESharedLimiterForTest(prevLimiter)
+		marketdata.ResetSharedTWSEClient()
+	})
+}
+
+// twseJSONResponse builds a STOCK_DAY_ALL (JSON variant) body for the given
+// quote rows.
+func twseJSONResponse(rows string) string {
+	return `{"stat":"OK","date":"20260924","title":"上市個股日成交資訊",
+		"fields":["Code","Name","TradeVolume","TradeValue","OpeningPrice","HighestPrice","LowestPrice","ClosingPrice","Change","Transaction"],
+		"data":[` + rows + `]}`
+}
+
+const twseRow2330 = `["2330","台積電","81160741","15450000000","190","191.23","189.07","190.64","+0.50","35000"]`
+
+// syncStatusOf reads the derived channel-health record the sync recorded.
+func syncStatusOf(t *testing.T, csvPath string) *monitoring.ChannelHealthRecord {
+	t.Helper()
+	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
+	rec := monitoring.NewChannelHealthStore(stateDir).Get("twse_replay_sync")
+	if rec == nil {
+		t.Fatal("twse_replay_sync was not recorded")
+	}
+	return rec
+}
+
+func TestRunDailySync_FailedFetchKeepsCSVAndRecordsNonOk(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"stat":"fail"}`))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-22"}, []string{"2330"})
+	before, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	err = runDailySync(csvPath, nil)
+	if err == nil {
+		t.Fatal("runDailySync = nil error, want a failure for an upstream 502")
+	}
+	if !strings.Contains(err.Error(), "replay CSV left unchanged") {
+		t.Errorf("error %q must state that the CSV was left unchanged (degrade, not silent success)", err.Error())
+	}
+
+	after, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("re-read csv: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("replay CSV changed on a failed fetch:\nbefore=%s\nafter=%s", before, after)
+	}
+
+	rec := syncStatusOf(t, csvPath)
+	if rec.Status != "warn" {
+		t.Errorf("status = %q, want warn (single failure: non-paging, but never ok)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 1 {
+		t.Errorf("consecutive_failures = %d, want 1", rec.ConsecutiveFailures)
+	}
+	if rec.LastSuccessAt != "" {
+		t.Errorf("last_success_at = %q, want empty (no data landed, so freshness must not advance)", rec.LastSuccessAt)
+	}
+	if !strings.Contains(rec.LastError, "replay CSV left unchanged") {
+		t.Errorf("last_error = %q, want the degrade note", rec.LastError)
+	}
+}
+
+func TestRunDailySync_SuccessAfterFailureClearsWarn(t *testing.T) {
+	csvPath := writeFixtureCSV(t, []string{"2026-09-22"}, []string{"2330"})
+	setLogOutput(t)
+
+	// 1) A slow/erroring upstream records warn.
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer bad.Close()
+	stubSharedTWSEClient(t, bad.URL, 1)
+	if err := runDailySync(csvPath, nil); err == nil {
+		t.Fatal("first runDailySync = nil error, want the 503 failure")
+	}
+	if rec := syncStatusOf(t, csvPath); rec.Status != "warn" {
+		t.Fatalf("status after failure = %q, want warn", rec.Status)
+	}
+
+	// 2) A healthy upstream must write the day and clear the warn — the
+	//    "何時會恢復" question from the incident report.
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(twseJSONResponse(twseRow2330)))
+	}))
+	defer good.Close()
+	stubSharedTWSEClient(t, good.URL, 1)
+
+	if err := runDailySync(csvPath, nil); err != nil {
+		t.Fatalf("second runDailySync = error %v, want success", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	if got := countRowsForDate(t, csvPath, today); got != 1 {
+		t.Errorf("rows for %s = %d, want 1", today, got)
+	}
+	rec := syncStatusOf(t, csvPath)
+	if rec.Status != "ok" {
+		t.Errorf("status after a success = %q, want ok (a success must clear the warn)", rec.Status)
+	}
+	if rec.ConsecutiveFailures != 0 {
+		t.Errorf("consecutive_failures = %d, want 0", rec.ConsecutiveFailures)
+	}
+	if rec.LastError != "" {
+		t.Errorf("last_error = %q, want empty after success", rec.LastError)
+	}
+	if rec.LastSuccessAt == "" {
+		t.Error("last_success_at must advance on success")
+	}
+}
+
+func TestRunDailySync_ZeroUsableRowsIsDegradedNotOk(t *testing.T) {
+	// Upstream answers OK but nothing matches our symbol set (schema drift /
+	// symbol rename): recording ok would show a healthy channel while the CSV
+	// silently gained no row for the day.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(twseJSONResponse(`["9999","不存在","100","100","10","11","9","10","+0.00","1"]`)))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-22"}, []string{"2330"})
+	err := runDailySync(csvPath, nil)
+	if err == nil {
+		t.Fatal("runDailySync = nil error, want a failure when no target symbol was fetched")
+	}
+	if !strings.Contains(err.Error(), "none matched") {
+		t.Errorf("error %q should explain that no replay symbol matched", err.Error())
+	}
+	rec := syncStatusOf(t, csvPath)
+	if rec.Status == "ok" {
+		t.Error("status = ok, want degraded (no data landed)")
+	}
+	if rec.Status != "degraded" {
+		t.Errorf("status = %q, want degraded", rec.Status)
+	}
+	if rec.LastSuccessAt != "" {
+		t.Errorf("last_success_at = %q, want empty", rec.LastSuccessAt)
+	}
+	if got := countRowsForDate(t, csvPath, time.Now().Format("2006-01-02")); got != 0 {
+		t.Errorf("rows written = %d, want 0", got)
+	}
+}
+
+func TestRunDailySyncContextBudgetExceedsLegacyLimit(t *testing.T) {
+	// Guards the root cause: the deadline must be derived from the client's
+	// retry policy, not hardcoded shorter than it needs.
+	marketdata.ResetSharedTWSEClient()
+	t.Cleanup(marketdata.ResetSharedTWSEClient)
+	budget := marketdata.GetSharedTWSEClient().FetchBudget()
+	if budget <= 60*time.Second {
+		t.Errorf("FetchBudget() = %v, want > 60s (the removed hardcoded context)", budget)
 	}
 }
