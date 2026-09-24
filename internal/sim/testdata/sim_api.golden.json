@@ -328,7 +328,6 @@
         "preTradeGate *risk.PreTradeGate",
         "decisionRecorder func(risk.RiskDecision)",
         "traceWriter TraceWriter",
-        "rotationFunc RotationFunc",
         "riskCalculator RiskCalculator"
       ],
       "kind": "struct",
@@ -372,10 +371,6 @@
     {
       "kind": "interface",
       "name": "RiskCalculator"
-    },
-    {
-      "kind": "alias",
-      "name": "RotationFunc"
     },
     {
       "fields": [
