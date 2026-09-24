@@ -59,6 +59,7 @@ func TestChannelContracts_ValidateClean(t *testing.T) {
 // from the 2026-08-23 investigation are present and carry the right semantics:
 //   - twse_replay: data_freshness (not live ping)
 //   - government_broker: file_state + value_nonzero + DegradedOnEmpty (ok 假象 fix)
+//   - government_flow: file_state + value_nonzero + DegradedOnEmpty (issue #1940 R1)
 //   - twse_etf: alias "twse-etf" resolves to canonical "twse_etf"
 //   - finmind: explicit freshness expectations
 //   - taifex_daily: live_ping
@@ -82,6 +83,22 @@ func TestChannelContracts_KeyFields(t *testing.T) {
 	}
 	if !broker.DegradedOnEmpty {
 		t.Error("government_broker should DegradedOnEmpty=true (empty/no_data must surface as degraded, not ok)")
+	}
+
+	// Issue #1940 R1: government_flow is a file-backed channel like
+	// government_broker, and its placeholder files are zero-valued
+	// ("total_net":0), so it must use the same non-zero success criterion
+	// instead of file_exists — otherwise the channel reports ok for 18
+	// trading days while the capital-flow store fills with zero samples.
+	govFlow, _ := registry.Lookup("government_flow")
+	if govFlow.HealthSource != HealthSourceFileState {
+		t.Errorf("government_flow HealthSource = %q, want %q", govFlow.HealthSource, HealthSourceFileState)
+	}
+	if govFlow.SuccessCriteria != SuccessCriteriaValueNonzero {
+		t.Errorf("government_flow SuccessCriteria = %q, want %q (issue #1940 R1: a zero total_net is a placeholder, not data)", govFlow.SuccessCriteria, SuccessCriteriaValueNonzero)
+	}
+	if !govFlow.DegradedOnEmpty {
+		t.Error("government_flow should DegradedOnEmpty=true so a placeholder file degrades the channel")
 	}
 
 	etf, _ := registry.Lookup("twse_etf")
