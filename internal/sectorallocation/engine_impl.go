@@ -320,6 +320,21 @@ func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers Driv
 	drivers.Macro = collectMacroDeltas(ctx, e.macro, drivers.Macro, drivers.MacroAction)
 	drivers.CapitalFlow = collectFactorDeltas(ctx, e.factor, drivers.CapitalFlow)
 
+	// PR-β (2026-09-24, #1942/#1948): wire industry hit-rate consumption into
+	// the recommendation path. When the gate is OFF (default), this is a
+	// byte-identical no-op (the function returns drivers unchanged). When
+	// the gate is ON, hit-rate-derived per-L1 tilts are added to the
+	// CapitalFlow driver map (additive; do not overwrite existing entries).
+	hitRateTilted, err := ApplyIndustryHitRateToDrivers(drivers, GetRegisteredIndustryHitRateProvider(), industryHitRateSource, industryHitRateCondition, industryHitRateRollingWindow)
+	if err == nil {
+		drivers = hitRateTilted
+	}
+	// On err: gate is ON but provider returned error; we tolerate it and
+	// proceed with the unmodified drivers (same behavior as if the gate
+	// were off). The error path is surfaced by the assessment decorator
+	// (industryHitRateAssessmentDecorator) so the deprecation path can
+	// reflect the missing evidence.
+
 	return e.projector.Project(base, drivers)
 }
 

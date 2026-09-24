@@ -284,6 +284,58 @@ type CapitalFlowAssessment struct {
 	CrossMarket       DirectionalAssessment `json:"cross_market"`
 	PrimaryFlow       string                `json:"primary_flow,omitempty"`
 	Reasons           []string              `json:"reasons,omitempty"`
+	// IndustryHitRateEvidence is populated by the sectorallocation-side
+	// consumption chain (PR-β, 2026-09-24, #1942/#1948) ONLY when
+	// configs.sector_allocation.industry_hit_rate_consume_enabled is true.
+	// When the gate is off (default), the field is nil and the field's JSON
+	// `omitempty` tag suppresses it entirely — byte-identical to pre-PR-β
+	// responses (root verifies via regression on dfc4e3a1).
+	//
+	// When populated, it carries enough metadata for downstream consumers
+	// (dashboard, MCP, audit log) to surface that the canonical industry-
+	// level hit-rate has at least one calibrated row without altering
+	// CalibrationStatus itself: the E07 CalibrationStatus remains
+	// "calibrating" until H-CF-02 validates cross-market consensus. The
+	// evidence field is *advisory*, not authoritative.
+	IndustryHitRateEvidence *IndustryHitRateEvidence `json:"industry_hit_rate_evidence,omitempty"`
+}
+
+// IndustryHitRateEvidence is the deprecation-path surface that lets the
+// E07 assessment echo the sectorallocation-side hit-rate consumption. It
+// carries the per-L1 summary stats (rows count, calibrated rows count,
+// mean WilsonLower, etc.) so a consumer can audit WHICH source/condition/
+// window fed the sectorallocation recommendation.
+//
+// The struct lives in capitalflow (not sectorallocation) because the
+// deprecation path's primary consumer is the capitalflow HTTP surface
+// (/api/capital-flow/daily returns the assessment). Producers (sectorallocation
+// or stocktools adapters) copy their computed tilts into this shape.
+type IndustryHitRateEvidence struct {
+	// Source is the stockpicker source id (e.g. "stockpicker-momentum-20d-positive").
+	Source string `json:"source"`
+	// ConditionID is the condition portion of the source (e.g. "momentum-20d-positive").
+	ConditionID string `json:"condition_id"`
+	// RollingWindow is the window key (e.g. "120d").
+	RollingWindow string `json:"rolling_window"`
+	// RowsTotal is the count of L1 industry rows in the underlying report.
+	RowsTotal int `json:"rows_total"`
+	// RowsCalibrated is the count of rows whose CalibrationStatus == "eligible"
+	// (>= min_samples per spec §1.1). Rows below that count are reported but
+	// excluded from the calibrated rows summary.
+	RowsCalibrated int `json:"rows_calibrated"`
+	// MeanWilsonLower is the arithmetic mean of WilsonLower over calibrated rows,
+	// rounded to 4 decimals (matches the stockpicker rounding policy).
+	MeanWilsonLower float64 `json:"mean_wilson_lower"`
+	// MaxTilt / MinTilt are the per-L1 tilt extremes (sectorallocation
+	// IndustryHitRateTilt.TiltMagnitude), useful for dashboard audit
+	// without exposing every row.
+	MaxTilt float64 `json:"max_tilt"`
+	MinTilt float64 `json:"min_tilt"`
+	// Enabled mirrors the gate state at the time the evidence was computed.
+	// True means the chain was active when the assessment was built; false
+	// means the gate was off (and this struct is therefore nil — so the
+	// field's `omitempty` tag suppresses it).
+	Enabled bool `json:"enabled"`
 }
 
 // EligibleForAutomation reports whether the assessment is safe to

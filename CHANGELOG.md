@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased] - 2026-09-25
+
+### feat(sectorallocation/capitalflow): industry hit-rate consumption chain (PR-β, 2026-09-24, #1942/#1948)
+- **目的**：把 stockpicker-stage canonical 扣成本口徑產業級命中率（spec §1.1, WilsonLower-derived）接到兩個下游表面：**（a）sectorallocation recommendation 路徑**（ComputeProjectedTarget / DriverInputs.CapitalFlow additive tilts）與 **（b）capital_flow_assessment deprecation 路徑**（LatestAssessment 額外的 `IndustryHitRateEvidence` 區塊，advisory、不動 CalibrationStatus）。
+- **安全閥（核心）**：`configs/parameters.json` → `sector_allocation.industry_hit_rate_consume_enabled` 預設 **false**。開啟時 root 會獨立驗 config-off 與 dfc4e3a1 **byte-identical**（驗證 source code path: `BuildIndustryHitRateTilt` 第一行 `if !config.GetIndustryHitRateConsumeEnabled() { return nil, nil }`，`ApplyIndustryHitRateToDrivers` 第一行 `if !config.GetIndustryHitRateConsumeEnabled() { return drivers, nil }`，`industryHitRateAssessmentDecorator` 第一行 `if !config.GetIndustryHitRateConsumeEnabled() { return }`，`RegisterAssessmentDecorator` 在沒有呼叫時 `applyAssessmentDecorators` 回傳原值零拷貝）。
+- **新增檔案**：
+  - `internal/sectorallocation/industry_hitrate_consume.go`（IndustryHitRateSummary / IndustryHitRateReport / IndustryHitRateProvider / SectorResolver / IndustryHitRateTilt / BuildIndustryHitRateTilt / TiltToDriverMap / ApplyIndustryHitRateToDrivers）
+  - `internal/sectorallocation/industry_hitrate_assessment_decorator.go`（`init()` 註冊 `industryHitRateAssessmentDecorator` 到 capitalflow，gate-off 時不寫任何東西）
+  - `internal/sectorallocation/industry_hitrate_provider_registry.go`（`RegisterIndustryHitRateProvider` / `ResetIndustryHitRateProvider` / `GetRegisteredIndustryHitRateProvider`，供 cmd/atlas composition root 接 stocktools provider）
+  - `internal/capitalflow/assessment_decorator.go`（`AssessmentDecorator` / `RegisterAssessmentDecorator` / `ResetAssessmentDecorators` / `applyAssessmentDecorators`，被 `Service.LatestAssessment` 呼叫；無註冊時 true no-op）
+  - `internal/sectorallocation/industry_hitrate_consume_test.go`（8 個測試覆蓋 gate-off no-op / 行數學 / 非 L1 拒絕 / ComputeProjectedTarget gate-off byte-identity）
+  - `internal/capitalflow/assessment_decorator_test.go`（nil function toleration / register-reset cycle）
+- **修改檔案**：
+  - `internal/config/parameters.go`：SectorAllocationConfig 新增 `IndustryHitRateConsumeEnabled ParameterMetadata[bool]`；新增 `IndustryHitRateConsumeEnabledMetadata` + `GetIndustryHitRateConsumeEnabled()` 唯一 SSOT。
+  - `internal/config/defaults_engine.go`：`deriveDefaultSectorAllocationConfig` 明確設 default `false` + rationale + source。
+  - `internal/config/testdata/parameters_api.golden.json` + `default_parameters_config.golden.json`：regenerated to include new field + getter + var。
+  - `configs/parameters.json`：在 `sector_allocation` 區塊新增 `industry_hit_rate_consume_enabled: { value: false, ... }`。
+  - `internal/capitalflow/types.go`：`CapitalFlowAssessment` 新增 `IndustryHitRateEvidence *IndustryHitRateEvidence`（omitempty，byte-identical when nil）；新增 `IndustryHitRateEvidence` struct（Source / ConditionID / RollingWindow / RowsTotal / RowsCalibrated / MeanWilsonLower / MaxTilt / MinTilt / Enabled）。
+  - `internal/capitalflow/service.go`：`Service.LatestAssessment` 呼叫 `applyAssessmentDecorators`（無 decorator 時 true no-op）。
+  - `internal/sectorallocation/engine_impl.go`：`ComputeProjectedTarget` 在 `collectFactorDeltas` 之後呼叫 `ApplyIndustryHitRateToDrivers`；err 時容忍，繼續投影（與 gate-off 行為一致）。
+  - `docs/reference/traps.md`：新增 trap 「`industry_hit_rate_consume_enabled 必須 default off`」說明永遠不得改 default + 觀察期紀律。
+- **未動（明確）**：`stockpicker` / `ledger` / `portfolio` 任何檔案（避免 stockpicker -> ledger -> portfolio -> sectorallocation 迴圈）；`cmd/atlas` composition root 尚未接 production provider（屬後續 PR-β promotion gate 任務，由 cmd/atlas owner 在觀察期開始時執行）；`internal/monitoring/service/industry.go` 的 `generateRecommendation` 尚未引用 hit-rate evidence（屬後續 PR-β surface，依賴 dashboard 介面契約）。
+- **驗證（本地）**：`go test ./internal/sectorallocation/... ./internal/capitalflow/... ./internal/stockpicker/... ./internal/stocktools/... ./internal/monitoring/... ./internal/config/...` 全綠；`go build ./internal/...` 成功；`go vet ./...` 0 warnings。
+- **根驗收（將由 root 獨立執行）**：config off 啟動 + 跑現有 regression -> 與 `dfc4e3a1` 逐位元比對；確認 `configs/parameters.json` 中 `industry_hit_rate_consume_enabled` 預設仍為 false；確認沒有新增任何 default-on config。
+
 ## [Unreleased] - 2026-08-07
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。

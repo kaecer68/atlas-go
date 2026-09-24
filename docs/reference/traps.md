@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-09-24
+updated: 2026-09-25
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -89,6 +89,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **Enabled agent 缺少 prompt** | spawning | `configs/agents.json` 中每個 `enabled: true` 都需對應 `prompts/agents/<name>.md`。CI `agent-prompts` job 強制。 |
 | **ScreeningCriteria 靜默過濾** | screener | `configs/agents.json` 中若設定了 `screening_criteria`，標的在進入 executor **之前**就會被過濾。這是預期行為，不是 bug。 |
 | **Live 交易風險** | live | `cmd/atlas` 有 `-allow-live-broker`、`-allow-real-signor` 等旗標，本地測試時切勿意外啟用。 |
+| **industry_hit_rate_consume_enabled 必須 default off（PR-β，#1942/#1948）** | sectorallocation / capitalflow | 跨模組 config gate（`configs/parameters.json` -> `sector_allocation.industry_hit_rate_consume_enabled`）同時控制 **(a) sectorallocation ComputeProjectedTarget 注入 hit-rate tilts** 和 **(b) capitalflow.LatestAssessment 注入 IndustryHitRateEvidence**。**Default 必須 false** — production 路徑與 dfc4e3a1 byte-identical 是 root 驗收的 backstop。**永遠不得**改 default 為 true 而另開 issue：改 default = 影響下一個合併的生產路徑，必須業主核准。要打開：(1) 觀察期 >=20 sessions + 0 invariant violations、(2) 從 default 改起時另開 ticket、(3) 在兩個下游模組各跑一輪 manual smoke 才上線。Gate 開啟後的額外防線：`configs/parameters.json` 該鍵值不被 `defaults_engine.go` 之外的任何地方寫死；`config.GetIndustryHitRateConsumeEnabled()` 是唯一 SSOT。 |
 
 ### Baseline / Experiment
 

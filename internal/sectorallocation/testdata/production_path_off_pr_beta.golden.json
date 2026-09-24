@@ -1,0 +1,38 @@
+{
+  "AsOfTradingDate": "2026-07-17",
+  "Target": {
+    "auto": 0.018749999999999996,
+    "biotech": 0.018749999999999996,
+    "cement": 0.018749999999999996,
+    "chemicals": 0.018749999999999996,
+    "construction": 0.018749999999999996,
+    "electronics": 0.15999999999999998,
+    "energy": 0.018749999999999996,
+    "financials": 0.12999999999999998,
+    "food": 0.018749999999999996,
+    "machinery": 0.018749999999999996,
+    "optoelectronics": 0.018749999999999996,
+    "other_electronics": 0.018749999999999996,
+    "plastics": 0.018749999999999996,
+    "retail": 0.018749999999999996,
+    "semiconductor": 0.32999999999999996,
+    "shipping": 0.07999999999999999,
+    "steel": 0.018749999999999996,
+    "telecom": 0.018749999999999996,
+    "textiles": 0.018749999999999996,
+    "tourism": 0.018749999999999996
+  },
+  "AdjustmentLog": [],
+  "DriverProvenance": {
+    "capital_flow": "",
+    "cycle": "v1.0.0",
+    "linkage": "v1.0.0",
+    "macro": "",
+    "narrative": "v1.0.0",
+    "prior": "StrategicSectorPrior",
+    "seasonal": "v1.0.0",
+    "theme": "v1.0.0"
+  },
+  "ModelVersion": "v0.0.0-canonical",
+  "FallbackReason": ""
+}
