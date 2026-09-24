@@ -58,7 +58,8 @@ type StockpickerFlowsUpdateDeps struct {
 	Now func() time.Time
 	// MaxSpanDays bounds one run's window; <= 0 → stockpickerFlowsMaxSpanDays.
 	MaxSpanDays int
-	// Sleep paces TWSE requests between days; < 0 → stockflows.DefaultSleep.
+	// Sleep paces TWSE requests between days; <= 0 → stockflows.DefaultSleep
+	// (a multi-day catch-up must not fire unpaced requests at TWSE).
 	Sleep time.Duration
 }
 
@@ -106,7 +107,7 @@ func StockpickerFlowsUpdateTaskFunc(deps StockpickerFlowsUpdateDeps) func(contex
 		maxSpan = stockpickerFlowsMaxSpanDays
 	}
 	sleep := deps.Sleep
-	if sleep < 0 {
+	if sleep <= 0 {
 		sleep = stockflows.DefaultSleep
 	}
 

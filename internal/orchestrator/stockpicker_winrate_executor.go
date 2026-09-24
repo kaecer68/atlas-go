@@ -60,6 +60,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/capitalflow"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/stockpicker"
@@ -466,11 +467,18 @@ func (e StockpickerWinrateExecutor) now() time.Time {
 	return time.Now()
 }
 
-// maxFlowAgeDays returns the configured freshness limit, defaulting to
-// stockpicker.DefaultMaxFlowAgeDays when unset.
+// maxFlowAgeDays returns the freshness limit: the injected override, else the
+// config-backed value (configs/parameters.json → stockpicker.conditions.
+// foreign_3d_net_buy.max_flow_age_days, the same parameter the backtest
+// condition reads), else stockpicker.DefaultMaxFlowAgeDays. One parameter
+// drives both consumers so a tightened limit cannot apply to only one of
+// them (issue #1945).
 func (e StockpickerWinrateExecutor) maxFlowAgeDays() int {
 	if e.MaxFlowAgeDays > 0 {
 		return e.MaxFlowAgeDays
+	}
+	if v := config.GetParametersConfig().Stockpicker.Conditions.Foreign3DNetBuy.MaxFlowAgeDays.Value; v > 0 {
+		return v
 	}
 	return stockpicker.DefaultMaxFlowAgeDays
 }
