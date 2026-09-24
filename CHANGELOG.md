@@ -40,18 +40,23 @@
 - **驗證**：`internal/capitalflow/{reading_dates,missing_data}_test.go`、`internal/apigateway/adapter_government_flow_test.go`、`channel_contract_test.go`、`internal/marketdata/government_flow_provider_test.go` 新增迴歸測試（0 值不寫入序列、位移檔不得產生當日樣本、同檔重讀只留一筆、讀值不得進入自身參考窗、退化窗不得產生 |z| > 20、148 筆 0 值窗不得產生極端 z）。same-data 重算：government max|z| 7028.46 → 13.95、futures 785200 → 2.73、institutional 38.71 → 7.64；`ComputeResonance` 3 個交易日由 `0.5/mixed` 變 `1.0/bullish`。
 - **未處理（明示）**：dev 與生產 `capital_flow_rolling.json` 既有的 0 值樣本**不回溯刪除**（讀取端已由 `referenceWindowFor` 濾除；寫入端不再產生）。生產 rolling refresh 自 2026-09-22 07:59 起停擺（與本修正無關，需另案追蹤觸發源）。`institutional` 的 148 筆 0 值來源（TWSE T86 該期間的 `DomesticFundNet` 為何持續為 0）未追查，建議另開票。spec 已補 §18.8 與 CF-INV-18。
 
+### feat(industry): 產業命名空間統一 — canonical taxonomy + 顯式映射表（#1943）（2026-09-24）
+- **問題**：全 repo 同時存在 6 套以上互不相容的產業 key 空間（canonical `SectorID` 20 L1+18 L2、config `classification_tree` 16 L1/29 segment、`industry.default_metrics` 23 key、`sector_symbols.json` 22 key、`sector_allocation.base_weights` GICS 11+1 key、TWSE 指數名的兩份矛盾映射）。同一 symbol／同一 TWSE 名稱在不同路徑得到不同產業 ID；`monitoring.TreeBasedMapper`／`SymbolL1Mapper` 只認「ID 剛好是 canonical L1」的節點，29 個 segment 有 19 個被靜默跳過（生產母體僅 27 支、`symbols_ranked=0`）；legacy `ComputeWeights` 的 GICS key 空間**永遠不可能**通過 `ValidateL1FinalTarget`。
+- **新增**：leaf 套件 `internal/sectormap`（零專案相依，因為 `industry` 已 import `marketdata`，反向不可行）。內含 canonical L1/L2 清單、**新增的 L2→L1 父層表**（硬規則：凡分類樹宣告了父鏈，本表必須一致）、12 個 namespace 的逐 key **顯式**處置（`canonical` / `mapped` / `unmapped`+reason+candidates / `unknown`=drift）。未映射一律回報，禁止字串相似猜測與隱式 alias。
 
 ### fix(risk): daily_returns 具日期語意，同一交易日重跑改為取代（#1900）（2026-09-23）
 - **問題**：`domain.SimulationState.DailyReturns`（`data/state/simulation_state.json`）名義上是日報酬，實際是「每次 `RunDailySimulation` 的報酬」，沒有任何日期 metadata。`auto_daily_simulation`(24h)、`stress_test_daily`(24h)、`POST /admin/trigger-simulation` 共用同一檔案，同日重跑各自 append 一筆；同日重跑通常沒有新交易、報價不變 → append 的那筆 ≈ **0**。實測 8 小時內序列由 18 筆長到 32 筆，尾端被零報酬塞滿，導致風險快照 `var95=0 / cvar95=0`（零報酬佔滿 `ComputeRiskSnapshot` 讀取的 5% 尾端百分位）。
 - **根因**：`sim.Engine.RunDay` 的 step 4 無條件 `append(state.DailyReturns, ...)`，狀態檔沒有「最後一筆屬於哪個交易日」的欄位，因此無法判斷是否為同一交易日。
 - **修正**：
-  - `SimulationState` 新增 `last_session_date`（YYYY-MM-DD）與 `session_base_value`（前一交易日收盤，作為分母）。
-  - `RunDay` 同日重跑時**取代**最後一筆（`EquityCurve` 同步取代）並以 `SessionBaseValue` 重算單日報酬（長度不變）；不同交易日維持原本 append 行為。
-  - `SimulationResult`／`DayResult` 新增 `SessionRerun` / `SessionReturn` / `SessionReturnRecorded`，orchestrator 兩條跑法（`system.go`、`system_dispatcher.go`）共用新的 `recordSessionHistory`，in-process 的 `returnHistory`/`portfolioHistory` 套用同一語意，並在偵測到同日重跑時輸出 `same_session_rerun` WARN log（可觀測，不改變正常路徑行為）。
-  - 舊 state 檔（無日期欄位）載入視為「未知日期」：保留既有序列、不 panic、不清空；下一筆有日期的寫入才建立語意（此後同日重跑即為取代）。
-- **驗證**：新增 `internal/sim/session_date_semantics_test.go`（同日取代／不同日 append／legacy 採用語意／未知日期維持 append）、`internal/sim/state_persistence_test.go` 兩則（legacy 載入 + 來回寫入、未知日期不寫出多餘鍵）、`internal/orchestrator/session_date_semantics_test.go`（252 筆樣本下：舊行為 append 14 筆零報酬 → var95=cvar95=0；修正後長度不變且 var95/cvar95 不再被 0 主導；三個 entry point 同日連跑序列不變、隔日正常 +1）。`go vet ./internal/...` 乾淨；`go test ./internal/{risk,portfolio,domain,orchestrator,sim,backtest,monitoring}/...` 全綠。
-- **未處理（明示）**：修正前的既有零報酬（無法回溯歸屬交易日）不自動清理；`cmd/backfill-var-returns` 產出的狀態仍走「未知日期」安全路徑。
-
+  - `industry.SymbolL1Mapper` 改為兩段解析（rank 0 樹結構優先、rank 1 宣告表換算），真實 config 由 **18 → 44 支 symbol** 映到 canonical L1（L1 代表股 27/27、可達 L1 由 5 → 9 種），並新增 `UnmappedSegments()`（5 個桶：defensive/etf_rotation/high_dividend/small_cap/tech）與 `Conflicts()`（1 筆：2356）；「同 symbol 被兩個 canonical L1 segment 宣告」仍回 error。
+  - `marketdata.TWSESectorIndexProvider`：刪除與 canonical map 矛盾的 legacy 8-key 映射，兩個 entry point 共用同一宣告表（`電腦及週邊設備類`→electronics、`電機機械類`→machinery）。以 live `MI_INDEX` 實測（2026-09-24）修正 TWSE 詞彙：原表列的「化學工業類指數」「觀光類指數」**不存在於 live 回應**，實際名稱為「化學類指數」「觀光餐旅類指數」（已補入，這是 `chemicals`/`tourism` 過去永遠拿不到資料的真正原因）；live 的其餘 15 個名稱宣告為 unmapped（具名可稽核），2 個舊名保留為歷史別名。
+  - `marketdata.SectorIndexReader.canonicalSectorIDs` 由手抄 18 個改為由共用清單推導（補 chemicals/tourism）。
+  - `marketdata.SymbolIndustryMapper` 新增 `CanonicalSectorID`/`CanonicalL1`/`CanonicalReason`（additive，既有 JSON 欄位不動；已重跑 `cmd/gentags`）。
+  - `sectorallocation` 新增 `ProjectLegacyGICSWeights`（GICS→canonical L1 投影，未映射且帶權重時回 `ErrLegacyGICSUnmapped`，blocked weight 0.25）、`FilterL1KeysReport`（取代靜默丟棄）。
+  - 新增覆蓋率指標 `industry.ComputeCanonicalCoverage` / `DeclaredRepresentativeUniverse` 與稽核 CLI `cmd/experimental/industry-namespace-audit`（`-universe <file>` 可算母體覆蓋率）。
+- **文件**：新增 `docs/specs/sector-namespace-canonical-spec.md`（canonical 定義、每個 namespace 處置與未映射清單、覆蓋率定義與現值 27/27 與 27/854≈3.2%、9 項已知缺口與 4 筆已具名 symbol 衝突）。
+- **驗證**：新增漂移守門測試（表 vs 真實 config/seed/程式 key 集合、**宣告 L2→L1 父層 vs 樹父鏈**、TWSE 兩表一致性、FinMind 18 系列與 2 個缺口、GICS 未映射鍵、真實 config 全 symbol 覆蓋、tree vs fallback 的 4 筆衝突集合）。`gofmt -l` 空、`go vet ./...` 乾淨、`make ci-gate` 通過、`go test ./internal/{sectormap,industry,sectorallocation,eventdriven,marketdata}/...` 全綠。
+- **未處理（明示）**：DB 仍無 per-stock 產業欄位（母體覆蓋率上限）；FinMind 缺 chemicals/tourism 系列；TWSE 同日同產業多系列塌縮與 reader last-wins 非決定性；`monitoring.TreeBasedMapper` 與前端 L2 mirror 漂移；編譯內建 `cycle_thresholds` 13 key vs JSON 10 key（見規格 §6）。
 ### chore(ops): iMac watchdog 腳本納入版控（+ 漂移檢查與安裝 target）（2026-09-12）
 - **問題**：`atlas-container-watchdog.sh` 是 iMac 唯一的自動復原機制，但只存在於 iMac 的 `~/bin/`（未版控）→ 無法回答「iMac 上跑的是哪一版、有沒有漂移」。2026-09-12 我改了它的內容（新增 restart ledger）之後，這個問題更明顯：改動只存在單一機器上。
 - **正本**：`scripts/ops/imac-container-watchdog.sh`（腳本）與 `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist`（launchd job）。

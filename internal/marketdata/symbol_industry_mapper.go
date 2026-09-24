@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/sectormap"
 )
 
 // ---------------------------------------------------------------------------
@@ -56,12 +57,55 @@ type MapperIndustrySegment struct {
 }
 
 // MapperIndustryClassification mirrors industry.IndustryClassification.
+//
+// Issue #1943: the Level1/2/3 fields carry the *tree* segment IDs, which are a
+// mix of canonical L1 sectors, canonical L2 sub-industries and strategy buckets
+// (ai_supply_chain, defensive, tech, ...). CanonicalL1 exposes the canonical
+// sector the tree path resolves to, so downstream consumers no longer have to
+// re-derive it. The three fields below are additive; existing JSON keys are
+// unchanged.
 type MapperIndustryClassification struct {
 	Symbol    string                `json:"symbol"`
 	Level1    MapperIndustrySegment `json:"level1"`
 	Level2    MapperIndustrySegment `json:"level2"`
 	Level3    MapperIndustrySegment `json:"level3"`
 	UpdatedAt time.Time             `json:"updated_at"`
+
+	// CanonicalSectorID is the canonical L1/L2 ID the tree path resolves to
+	// (may be an L2 sub-industry, e.g. foundry).
+	CanonicalSectorID string `json:"canonical_sector_id,omitempty"`
+	// CanonicalL1 is the canonical L1 sector. Empty means "cannot be resolved";
+	// callers must treat it as unknown rather than defaulting to a bucket.
+	CanonicalL1 string `json:"canonical_l1,omitempty"`
+	// CanonicalReason explains an empty CanonicalL1.
+	CanonicalReason string `json:"canonical_reason,omitempty"`
+}
+
+// CanonicalizeSegmentID resolves a classification-tree segment ID to its
+// canonical taxonomy position using the declared namespace table in
+// internal/sectormap. It returns the canonical L1/L2 ID (empty when the segment
+// has no canonical node) and the canonical L1 sector (empty when the segment
+// cannot be rolled up to one), plus a reason on failure.
+func CanonicalizeSegmentID(segmentID string) (canonicalID, canonicalL1, reason string) {
+	if segmentID == "" {
+		return "", "", "empty segment ID"
+	}
+	m := sectormap.Resolve(sectormap.NamespaceClassificationTree, segmentID)
+	if id, ok := m.Primary(); ok {
+		canonicalID = id
+	} else {
+		reason = m.Reason
+		if reason == "" {
+			reason = "segment has no canonical taxonomy node"
+		}
+	}
+	if l1, ok := sectormap.ResolveL1(sectormap.NamespaceClassificationTree, segmentID); ok {
+		canonicalL1 = l1
+		reason = ""
+	} else if reason == "" {
+		reason = "segment has no canonical L1 sector"
+	}
+	return canonicalID, canonicalL1, reason
 }
 
 // ClassificationTreeAccessor abstracts access to the industry classification
@@ -409,6 +453,7 @@ func (m *SymbolIndustryMapper) classifyForSymbol(
 	}
 
 	path := m.tree.GetPath(seg.ID)
+	leafID := seg.ID
 	for _, p := range path {
 		switch MapperIndustryLevel(p.Level) {
 		case MapperLevel1:
@@ -418,7 +463,36 @@ func (m *SymbolIndustryMapper) classifyForSymbol(
 		case MapperLevel3:
 			class.Level3 = *p
 		}
+		leafID = p.ID
 	}
+
+	// Canonicalize the deepest segment the tree placed this symbol in. The tree
+	// structural parent wins over the declared L2→L1 table when the two differ,
+	// mirroring industry.SymbolL1Mapper's rank-0 resolution.
+	canonicalID, canonicalL1, reason := "", "", ""
+	for i := len(path) - 1; i >= 0; i-- {
+		if id := MapperIndustryLevel(path[i].Level); id == MapperLevel1 && sectormap.IsCanonicalL1(path[i].ID) {
+			canonicalID, canonicalL1, reason = path[i].ID, path[i].ID, ""
+			break
+		}
+	}
+	if canonicalL1 == "" {
+		// No canonical L1 ancestor: fall back to the declared namespace table,
+		// nearest segment first — the same rank-1 rule as
+		// industry.SymbolL1Mapper.resolveSegmentL1.
+		for i := len(path) - 1; i >= 0; i-- {
+			canonicalID, canonicalL1, reason = CanonicalizeSegmentID(path[i].ID)
+			if canonicalL1 != "" {
+				break
+			}
+		}
+		if canonicalL1 == "" {
+			canonicalID, canonicalL1, reason = CanonicalizeSegmentID(leafID)
+		}
+	}
+	class.CanonicalSectorID = canonicalID
+	class.CanonicalL1 = canonicalL1
+	class.CanonicalReason = reason
 
 	return class
 }

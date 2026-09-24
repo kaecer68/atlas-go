@@ -188,7 +188,8 @@ var finmindDatasetFields = map[string][]fingerprintField{
 	},
 	// D08: sector index 2021 backfill (每5秒指數統計). The provider keeps
 	// kind=twse rows, takes the last print per series as the daily close, and
-	// maps stock_id onto the canonical 18 industries.
+	// maps stock_id onto 18 of the 20 canonical L1 industries (#1943: chemicals
+	// and tourism have no series in finmindSectorSeries).
 	"TaiwanStockEvery5SecondsIndex": {
 		{name: "date", kind: fingerprintString},
 		{name: "time", kind: fingerprintString},
