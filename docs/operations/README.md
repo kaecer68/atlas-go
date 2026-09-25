@@ -35,12 +35,19 @@
 | [cmd-atlas-coverage-policy.md](cmd-atlas-coverage-policy.md) | cmd/atlas 測試覆蓋率政策 |
 | [rss-feed-replacement.md](rss-feed-replacement.md) | RSS feed 替代方案 |
 
+## 事件後續追蹤與已知限制 (Follow-ups)
+
+| 檔案 | 主題 |
+|------|------|
+| [FOLLOWUPS.md](FOLLOWUPS.md) | 待辦 / 已知限制**登記表**（刻意延後且只建議未實作的項目；每個條目附可重現的來源） |
+| [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md) | SmartUniverseBuilder `symbols_ranked=0` 根因調查報告（含 §6.2 未覆蓋缺口 / §8 防再犯檢查 / §9 已知限制） |
+
 ---
 
 ## 命名規範
 
 - **稽核 / 報告**：`audit-<日期>-<主題>.md` 或 `<主題>-<類型>.md`（類型如 `audit` / `runbook` / `verification-report`）
-- **事件後續追蹤**：`<事件名>-followup.md`
+- **事件後續追蹤**：`<事件名>-followup.md`（單一事件）；跨事件的**待辦/已知限制登記**用 [FOLLOWUPS.md](FOLLOWUPS.md)
 - **設計文件**：`docs/specs/`（不在本目錄）
 
 ## 維護原則

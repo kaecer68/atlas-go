@@ -5,8 +5,9 @@
 > **方法**：唯讀生產實測（`docker logs` / Prometheus `/api/v1/query` / `data/state/*.json`）
 > ＋ 原始碼逐行追溯（`git blame` / `git log -S`）
 > **性質**：**純報告，未修改任何生產行為或設定**。修法待業主核准。
-> **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`，commit `939d36a6`）
-> 已實作本報告 §6 的修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值）。
+> **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`）已實作本報告 §6 的
+> 修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值），並已
+> **於 2026-09-25 合併（merge commit `bbce1b4a`）且部署**（見 §9.1 的部署事實）。
 > 本報告**不重寫該修法**，而是提供它的「**為什麼**」：根因證據鏈（§3）、引入方式（§4）、
 > 以及為何三個月來四道防線全部失效（§5）；並列出 #1979 **未覆蓋**的缺口與可直接落地的
 > 告警／檢查條件（§6.2、§8）。
@@ -198,13 +199,15 @@ $ git blame -L 239,239 71771821 -- cmd/atlas/main.go
 
 ## 6. 修法：選項 1+2 **已由 PR #1979 實作**；本報告是其根因與失效防線的完整佐證
 
-> **本節定位**：業主 PR **#1979**（`fix/20260925-inert-batch3`，commit `939d36a6`）已實作本節的
-> 選項 1 + 2。**本報告不重寫該修法**；它提供的是 #1979 的「**為什麼**」——
+> **本節定位（2026-09-25 更新）**：業主 PR **#1979**（`fix/20260925-inert-batch3`）
+> 已實作本節的選項 1 + 2，並**已合併**（merge commit `bbce1b4a`）**且部署**（§9.1）。
+> **本報告不重寫該修法**；它提供的是 #1979 的「**為什麼**」——
 > 根因證據鏈（§3）、引入方式（§4）、以及為何 3 個月沒被任何防線抓到（§5）。
 > §6.2 列出**#1979 未覆蓋的缺口**，並寫成可直接落地的告警條件。
 
-### 6.0 #1979 的內容與交叉引用（★ 已有 in-flight 修法，不得重複實作）
-在寫本報告的同時發現：**另一個未合併的 PR 已經實作選項 1 與選項 2**，並且**獨立得出同一個根因**。
+### 6.0 #1979 的內容與交叉引用（★ 修法已由 #1979 實作並合併，不得重複實作）
+在寫本報告的同時發現：**另一個 PR（#1979）已經實作選項 1 與選項 2**，並且**獨立得出同一個根因**。
+**後續狀態：`bbce1b4a` 已於 2026-09-25 合併進 `main` 並部署**（部署事實見 §9.1）。
 
 ```
 $ git log --all --oneline -S "Quotes:          quotes" -- cmd/atlas/
@@ -529,9 +532,71 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 
 ---
 
-## 9. 已證實 vs 未證實
+## 9. 後續狀態、已知限制與追蹤
 
-### 已證實（證據在 §1–§7 引用的原始輸出／程式碼行）
+### 9.1 部署事實（已證實，唯讀實測）
+
+本報告 §1 的所有事實取自 commit `db0709c1`（gate 開啟後、修法合併前的生產狀態）。
+`#1979` 合併後的最新狀態：
+
+```
+$ ssh kaecer@kmacmini "cd ~/workspace/atlas && git log --oneline -3"
+bbce1b4a fix(inert): issue #1944 Batch 3 — 高嚴重 inert 項逐項結案（接線／明示未啟用／移除） (#1979)
+3ff4fc8a ci(workflows): 監控設定 gate（promtool/amtool，釘版容器）+ PR base guard（任務 I） (#1981)
+6068f5db feat(ci): inert 閉環靜態檢查 + allowlist（#1944 建議 2） (#1980)
+
+$ docker inspect atlas-go --format '{{.Image}} created={{.Created}} started={{.State.StartedAt}}'
+sha256:a06f7d2e… created=2026-09-25T07:09:28.611161904Z started=2026-09-25T07:09:50.54550951Z
+$ docker images atlas-atlas --format '{{.ID}} {{.CreatedAt}} {{.Tag}}'
+a06f7d2e4aba 2026-09-25 15:09:24 +0800 CST latest
+```
+
+- 生產 repo 為 `bbce1b4a`，容器於 **2026-09-25 15:09（台北）重建並重啟**
+  ⇒ **部署標的 = `bbce1b4a`**（部署驗收另記）。
+- `origin/main` 其後前進到 **`47de2381`**（本報告自身的合併）；差異為 **docs-only**
+  ⇒ **功能上與 `bbce1b4a` 無差異**。
+- **修法效果尚未可觀察**：`data/state/universe_snapshot.json` 仍是
+  `timestamp=2026-09-25T06:00:30Z / symbols_ranked=0`，而容器在 07:09Z 才重啟
+  ⇒ 下一次 06:00 UTC（14:00 台北）排程才會產生第一筆 `quotes_status` / `ranked` 證據。
+  **手動 `atlas -build-universe run` 可以提前取得證據，但屬生產執行，需業主核准。**
+
+### 9.2 已知限制 (1)：`Reasons` 只收「未解析列」的理由（**刻意取捨**）
+
+Part 2（`CheckUniverseCoverage`）的 `CoverageReport.Reasons` **只**收錄未解析列
+（`unmapped` / `unknown`）的 `mapping_reason`，不收「已成功映射」那一側的理由。
+
+- **為什麼刻意**：已成功映射的列，其理由多為「canonical L1 X 為唯一對應」這類長中文字串（約 20 條）
+  ⇒ 若全收，alert 與 log 會被灌滿，真正描述缺口的理由反而被淹掉。
+  稽核的目的正是「缺口在哪」，不是「成功的每一條為什麼成功」。
+- **要看完整理由的入口**：
+  `data/state/symbol_industry.json` 的 `unmapped_codes` / `unknown_codes`（含 `code`/`name`/`count`/`reason`）
+  與 `counts`，或每一列 entry 的 `mapping_status` / `mapping_reason`。
+- **若業主要全收**：改動是一行（把已映射列的理由一併 append），但需一併決定 alert 的截斷策略。
+
+### 9.3 已知限制 (2)：`Coverage()` 反映最近一次**成功** Reload（TTL 6h）＝**靜默陳舊**風險
+
+Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySubstrate` 的記憶體視圖，
+該視圖只在 `Reload` 成功時更新，且 TTL 為 6 小時。
+
+- **風險情境**：store 在最後一次成功 Reload **之後**才壞掉 ⇒ 稽核會**繼續沿用舊視圖**，
+  回報一個看起來正常（甚至很好）的比率，直到下一次 Reload 週期才可能改變。
+  這正是本報告 §5、§8.6 在消滅的模式：**檢查回報「有東西」而不是「東西對不對」**。
+- **目前無法區分**「載入失敗」與「載入成功但母體為空」——兩者都可能表現為不可測或舊值。
+- **最小修法建議（**只建議，未實作**）**：
+  1. `Coverage()` 回傳附 **`as_of`**（最近一次成功 Reload 的時間戳），讓稽核能揭露資料年齡；
+  2. 告警端加一條「substrate 最近成功 Reload 超過 N 小時」的規則
+     （與 §6.2 的規則同一組，需先解決 §7.2 的 counter 灌爆或改用 gauge）；
+  3. substrate 曝露 `last_reload_ok` / `load_error`，讓「載入失敗」與「母體為空」可區分。
+- **追蹤**：已記入 `docs/operations/FOLLOWUPS.md`（新條目，未實作）。
+
+### 9.4 其他尚未證實項
+見 §10 的「未證實」清單（`ratio ≈ 0.80` 亦為推得的預期值，尚未在生產觀察到）。
+
+---
+
+## 10. 已證實 vs 未證實
+
+### 已證實（證據在 §1–§7、§9.1 引用的原始輸出／程式碼行）
 1. `ranked=0` 的直接原因是 `deps.Quotes == nil` → Step 3 `else` 分支 → 空 `quoteMap`
    → `applyVolumeAndPriceFilters` 對 1599 檔全部 `continue`。
 2. 該 nil 自 2026-06-22 `71771821`（#630）首次寫入即存在，95 天未被改動；**不是** #1977 造成的。
@@ -554,7 +619,7 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 
 ---
 
-## 10. 附錄：原始輸出
+## 11. 附錄：原始輸出
 
 ### A1 wiring（`cmd/atlas/bootstrap_helpers.go`，origin/main）
 
