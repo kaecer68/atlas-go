@@ -293,6 +293,34 @@
 
 ---
 
+### FU-20260925-12 — 舊明文 DB 密碼已從現行檔案移除，但**輪替**仍待業主決定（另有 2 個檔案未動）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-25
+- **來源**：任務 Q（分支 `fix/secrets-and-monitoring-guard-q`）。
+  **已移除明文的現行檔案**：`docs/operations/docker-compose.prod.yml`（`DATABASE_URL` / `POSTGRES_PASSWORD`）、
+  `docs/operations/docker-compose.crons.yml`（`DATABASE_URL` ×4）、
+  `.claude/skills/atlas-imac-prod-guard/SKILL.md`（復原 SOP 內的字面值）。
+  改法＝一律從 compose 插值／env 檔取值；未提供值時 `${VAR:?...}` **直接讓 `docker compose` 失敗**（fail-closed），
+  不會靜默用錯值。防再犯＝`scripts/secret-scan.sh` 新增 3 個通用憑證樣式 +
+  「可部署設定檔（`*.yml`/`*.yaml`）不降級為 warn-only」，並由
+  `scripts/ci/check_secrets.sh`（CI job `secret-scan`）與 `make ci-static` 把關。
+- **為何仍需輪替**：舊值**已在 git 歷史中**（本 repo 為 PUBLIC ⇒ 永久可見）。
+  「現行檔案不再含明文」**不等於**「憑證安全」；輪替是唯一補救，且屬**業主決定**（見任務 Q 授權範圍）。
+- **仍含同一組明文的現行檔案（本次**未動**，超出授權檔清單）**：
+  `tasks/misleading-mechanisms-fix-plan-ds4pro-20260828.md`、
+  `tasks/stockpicker-misleading-mechanisms-audit-k3-20260828.md`（各 1 行）。
+  兩者皆為 `.md` ⇒ 在 secret-scan 屬 **warn-only**（不擋 CI）；建議與輪替一併處置，或明確標為歷史封存。
+- **附帶發現（a2a-dev，非本 repo）**：新的 DSN 樣式會在 a2a-dev 的 `docs/operations/`（舊 iMac
+  runbook）、`docs/audits/`、`docs/governance/reports/` 等文件命中（warn-only，不擋 CI），
+  是否為真憑證需人工確認 ⇒ 已回報上層，未在本次動任何 a2a-dev 文件。
+- **驗收條件**：業主回覆「已輪替」或「不輪替（接受風險）」並補記於此；`tasks/*.md` 的處置一併決定。
+
+---
+
+---
+
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
@@ -317,8 +345,27 @@
 
 ---
 
+## 已定案的判準（決策紀錄）
+
+### 2026-09-25 — secret-scan 的 block/warn 分界與降噪原則（任務 Q；業主明確背書）
+
+- **可部署設定檔（`*.yml`/`*.yaml`，非 `*.example*`/`*sample*`/`*template*`）→ block 級，即使路徑在 `docs/` 底下。**
+  理由（因果）：`docs/operations/*.yml` 是**會被 `docker compose` 拿去跑**的設定，不是散文；
+  在那裡出現字面憑證就是真外洩 —— 本次外洩（`docker-compose.prod.yml` 的明文 DB 密碼）
+  能長期存活，正是因為它當時落在 warn-only 類別。
+- **散文 `.md`、範例／模板 → 維持 warn-only。**
+  理由（反脆弱）：把散文升成 block 只會逼人不停加 allowlist；**allowlist 一多，護欄就會被繞過**。
+- **降噪設計刻意不排除 `host.docker.internal`**：那正是 prod DSN 的主機，必須保持會被抓到。
+  （排除的是 RFC 2606 保留域名／本機位址／placeholder 字／程式碼取值／純字母且 <16 字的假 key／路徑型 env 預設值。）
+- **`check_monitoring_single_source.py` 的 R2 用行掃描、不引入 YAML 依賴**：GitHub runner 不保證有 PyYAML；
+  限制已明列於該檔檔頭，且生產外側仍有 a2a-dev `scripts/drift-check.sh [9/9]`（`docker inspect`）作為第二道。
+
+---
+
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
   — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
 - [README.md](README.md) — 本目錄索引
+- [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）

@@ -37,7 +37,8 @@
 - 派工：文件 kimi + iMac 操作 hermes/root（過 agent-guard）
 
 ### WP7 — prod 密碼/命名去混淆（P1-4 = D3）
-- `ALTER USER atlas WITH PASSWORD 'atlas_prod_pwd_2026'` + compose（prod/crons）+ SKILL + 兩機 .env 同步
+- `ALTER USER atlas WITH PASSWORD '${POSTGRES_PASSWORD}'` + compose（prod/crons）+ SKILL + 兩機 .env 同步
+  （值取自 `~/.config/atlas-go/.env`；**明文不得寫進任何檔案**，2026-09-25 任務 Q 已把此處的字面值移除）
 - 派工：hermes/root（維護窗口）| 需拍板
 
 ### WP8 — atlas_dev 污染善後（P1-5 = D2）
