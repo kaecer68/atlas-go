@@ -19,9 +19,30 @@ BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 PORT = int(os.environ.get('PORT', '9095'))
 
+PLACEHOLDER_MARKERS = ('__INJECT_AT_INSTALL__', 'REPLACE_ME', 'CHANGEME', '<TOKEN>', 'xxx...')
+
+
+def _reject_placeholder(name, value):
+    """拒絕安裝用 placeholder。
+
+    背景：本 repo 是 PUBLIC，plist 內的 `TELEGRAM_BOT_TOKEN` 只放 placeholder
+    (`__INJECT_AT_INSTALL__`)，真值由 `scripts/alertmanager-webhook/install-webhook.sh`
+    在安裝期注入到 ~/Library/LaunchAgents 的實例。若這裡不擋，服務會「啟動成功但每次送達
+    401」——2026-09-25 的告警沉默事故就是這種靜默失敗（log 才看得到）。
+    """
+    upper = str(value).upper()
+    if any(m in upper for m in PLACEHOLDER_MARKERS):
+        print(
+            'ERROR: %s 仍是安裝用 placeholder（%s）→ 請用 '
+            'scripts/alertmanager-webhook/install-webhook.sh 安裝（會注入真 token）' % (name, value),
+            file=sys.stderr, flush=True)
+        sys.exit(1)
+
+
 if not BOT_TOKEN or not CHAT_ID:
     print('ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set', file=sys.stderr, flush=True)
     sys.exit(1)
+_reject_placeholder('TELEGRAM_BOT_TOKEN', BOT_TOKEN)
 
 URL = 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage'
 NEWLINE = chr(10)
