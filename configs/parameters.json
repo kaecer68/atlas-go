@@ -4087,10 +4087,10 @@
   },
   "industry": {
     "substrate_from_symbol_industry_enabled": {
-      "value": false,
-      "rationale": "Config gate for the per-stock industry substrate (issue #1943, PR 2026-09-24). Default false keeps every consumer byte-identical: symbol->canonical-L1 resolution still comes from the hard-coded representative-stock tables (~27 symbols reachable in production, ~3.2% of the listed universe), so SmartUniverseBuilder builds its ~27-symbol population, sector exposure resolves only those symbols and the coverage audit reports the same numbers as before. When true, wiring installs the first-party symbol_industry field (TWSE t187ap03_L 產業別 + TPEx mopsfin_t187ap03_O SecuritiesIndustryCode, mapped through sectormap namespace twse_industry_code) as the resolver substrate: the population grows to the whole listed market and every unmapped/unknown upstream code stays reported instead of being guessed.",
+      "value": true,
+      "rationale": "Per-stock industry substrate gate. ENABLED 2026-09-25 by owner sign-off (issue #1971, plan A) after a read-only pre-flight showed the pre-gate mapping resolved 0/10 sampled production symbols and universe_snapshot.json reported symbols_ranked=0: the hard-coded representative-stock tables reached only ~27 symbols (~3.2% of the listed universe). The first-party symbol_industry channel (TWSE t187ap03_L 產業別 + TPEx mopsfin_t187ap03_O SecuritiesIndustryCode, mapped through sectormap namespace twse_industry_code) now supplies the per-stock field for the whole listed market: 1988 upstream symbols, 1599 mapped, 379 unmapped codes reported with reasons (never guessed), 10 unknown (TDR code 91), 20/20 canonical L1 reachable. Rollback: set this back to false and restart the atlas process (the gate is read at composition-root wiring time; a hot config reload is not sufficient).",
       "source": "experimental",
-      "todo": "Promote to heuristic after the observation window (20+ sessions, zero invariant violations) confirms the larger population is regression-free; changing the default requires owner sign-off in a separate issue."
+      "todo": "Observation window started 2026-09-25 (issue #1971). Promote to heuristic after >=20 sessions with zero invariant violations (symbol_industry channel ok and fresh, population and L1 coverage as expected, symbols_ranked > 0, sector weights non-zero and summing to 1, stockpicker still recommends, pre-existing channels unaffected, error/latency normal). Any violation => roll back to false and restart."
     },
     "cycle_thresholds": {
       "value": {

@@ -112,7 +112,7 @@ Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS uti
 | DB 欄位 | `symbol_industry` 表（migration `000024`；讀取走 `internal/symbolindustry.NewStore`，Postgres SSoT / job-local SQLite） |
 | Scheduled Task | `auto_symbol_industry`（5 分鐘 tick + 每日 gate；抓取後鏡射進 DB） |
 | Contract | `file_state` + `value_nonzero` + `DegradedOnEmpty=true`（空/缺檔一律 degraded，不回 `ok`） |
-| Consumer（gate: `industry.substrate_from_symbol_industry_enabled`，預設 off） | `composition.Root.SymbolL1Mapper`（sector exposure）、`SmartUniverseBuilder` 母體（27 → per-stock 欄位） |
+| Consumer（gate: `industry.substrate_from_symbol_industry_enabled`，**2026-09-25 起預設 on**，業主簽核 issue #1971） | `composition.Root.SymbolL1Mapper`（sector exposure）、`SmartUniverseBuilder` 母體（27 → per-stock 欄位） |
 | 規格 | [`docs/specs/symbol-industry-substrate-spec.md`](specs/symbol-industry-substrate-spec.md) |
 
 ### TDCC Equity Dispersion — 集保股權分散（`tdcc_equity_dispersion`，STUB G01）
