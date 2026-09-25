@@ -229,7 +229,7 @@ func TestCheckLLMReady_MissingKeyFails(t *testing.T) {
 
 func TestCheckLLMReady_PresentKeyPasses(t *testing.T) {
 	h := &HealthHandlers{}
-	t.Setenv("LLM_DEEPSEEK_API_KEY", "sk-dev-fake-key-for-test")
+	t.Setenv("LLM_DEEPSEEK_API_KEY", "sk-dev-fake-key-for-test") // secret-scan-allow: 單元測試 fixture，非真金鑰（scripts/ci/check_secrets.sh）
 	ok, reason, _ := h.checkLLMReady()
 	if !ok {
 		t.Errorf("ok = false, reason = %q; want true (key 有值)", reason)
