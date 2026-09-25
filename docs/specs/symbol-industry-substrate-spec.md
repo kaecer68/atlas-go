@@ -68,7 +68,7 @@ migration `000024_symbol_industry`（dual-dialect：SQLite 端由 store 的 `ens
 ### 3.3 gate 與消費端
 
 ```
-configs/parameters.json → industry.substrate_from_symbol_industry_enabled   (預設 false)
+configs/parameters.json → industry.substrate_from_symbol_industry_enabled   (2026-09-25 起預設 true；issue #1971 業主簽核，觀察窗 20 sessions，違反不變式即回滾為 false)
 ```
 
 - **off（預設）**：`newSymbolIndustrySubstrate` 回 `nil`；`NewSubstrateIndustryMapper(nil)`

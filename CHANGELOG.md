@@ -4,6 +4,12 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### feat(industry): 啟用 per-stock 產業母體 gate（#1943 後續，issue #1971 業主簽核）（2026-09-25）
+- **背景**：`industry.substrate_from_symbol_industry_enabled` 於 #1965 建好但預設關閉。唯讀 pre-flight（issue #1971）實測生產現況：`universe_snapshot.json` = `symbols_built: 27 / symbols_filtered: 27 / **symbols_ranked: 0**`，且現行代表股映射對 10 檔取樣（含全部 3 檔持倉）**0/10 解出** ⇒ 產業層配置與 universe 選擇實際上沒有可用母體。
+- **變更**：gate 預設由 `false` 改為 `true`（`configs/parameters.json` + `internal/config/defaults_narrative.go`，含 golden 重生）。開啟後改由第一方 `symbol_industry` channel（TWSE `t187ap03_L` + TPEx `mopsfin_t187ap03_O` → `sectormap` namespace `twse_industry_code`）供應 per-stock 產業欄位：實測上游 **1988 檔 / mapped 1599 / unmapped 379（逐碼附 reason，不猜測）/ unknown 10（TDR 91）/ canonical L1 20/20**。
+- **可逆**：改回 `false` + 重啟進程即可（gate 於 composition root 啟動時讀取，熱 reload 不足）。
+- **觀察窗**：20 sessions，7 條不變式（channel ok/當日更新、母體與 L1 覆蓋、`symbols_ranked > 0`、權重非全零且和為 1、stockpicker 仍出推薦、既有 channel 不回歸、錯誤率/延遲正常）；**任一違反即回滾**。
+
 ### feat(industry,symbolindustry,monitoring): per-stock 產業欄位 + 第一方 `symbol_industry` channel（#1943 剩餘瓶頸）（2026-09-25）
 - **問題（#1943 實證）**：產業命名空間已在 #1951 統一（canonical 20 L1/18 L2 + `internal/sectormap` 12 命名空間顯式映射），#1958 也補上個股→產業的權威詞彙（namespace K `twse_industry_code`），但**瓶頸其實是資料母體**：DB 沒有任何 per-stock 產業欄位，symbol→L1 只能靠硬編碼代表股清單，生產實證覆蓋 **27 檔**（`universe_snapshot.json` `symbols_built=27`，約全體上市櫃 1.4%）⇒ 任何產業層數字都不顯著。
 - **新增（三塊，缺一不可）**：
