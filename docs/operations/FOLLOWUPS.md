@@ -293,9 +293,17 @@
 
 ---
 
-### FU-20260925-12 — 舊明文 DB 密碼已從現行檔案移除，但**輪替**仍待業主決定（另有 2 個檔案未動）
+### FU-20260925-12 — 舊明文 DB 密碼已從現行檔案移除；**輪替問題經生產實測結案（不需輪替）**
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **完成日**：2026-09-25
+- **結案依據（生產實測；結論**推翻**原判斷）**：
+  以 **SCRAM 認證路徑**實測（目標必須用**容器自身 IP** 才會命中 `pg_hba.conf` 最後一行
+  `host all all all scram-sha-256`；用 `-h 127.0.0.1` 會命中前面的 **`trust`** 規則 ⇒
+  **測什麼都成功**，是無效測試 ✗）：生產 DB **拒絕**該 18 字元文件值
+  （錯誤為 `password authentication failed`，**不是**「角色不存在」），且**有效的負對照同樣被拒**
+  ⇒ 測試本身有效；另該值引用的 dev 主機**不可達**（iMac 時代的位址）。
+  ⇒ **該值在生產 DB 早已失效、且不是 prod 在用的憑證 ⇒ 不需輪替** ✓。
 - **記錄日期**：2026-09-25
 - **來源**：任務 Q（分支 `fix/secrets-and-monitoring-guard-q`）。
   **已移除明文的現行檔案**：`docs/operations/docker-compose.prod.yml`（`DATABASE_URL` / `POSTGRES_PASSWORD`）、
@@ -305,16 +313,65 @@
   不會靜默用錯值。防再犯＝`scripts/secret-scan.sh` 新增 3 個通用憑證樣式 +
   「可部署設定檔（`*.yml`/`*.yaml`）不降級為 warn-only」，並由
   `scripts/ci/check_secrets.sh`（CI job `secret-scan`）與 `make ci-static` 把關。
-- **為何仍需輪替**：舊值**已在 git 歷史中**（本 repo 為 PUBLIC ⇒ 永久可見）。
-  「現行檔案不再含明文」**不等於**「憑證安全」；輪替是唯一補救，且屬**業主決定**（見任務 Q 授權範圍）。
-- **仍含同一組明文的現行檔案（本次**未動**，超出授權檔清單）**：
-  `tasks/misleading-mechanisms-fix-plan-ds4pro-20260828.md`、
-  `tasks/stockpicker-misleading-mechanisms-audit-k3-20260828.md`（各 1 行）。
-  兩者皆為 `.md` ⇒ 在 secret-scan 屬 **warn-only**（不擋 CI）；建議與輪替一併處置，或明確標為歷史封存。
-- **附帶發現（a2a-dev，非本 repo）**：新的 DSN 樣式會在 a2a-dev 的 `docs/operations/`（舊 iMac
-  runbook）、`docs/audits/`、`docs/governance/reports/` 等文件命中（warn-only，不擋 CI），
-  是否為真憑證需人工確認 ⇒ 已回報上層，未在本次動任何 a2a-dev 文件。
-- **驗收條件**：業主回覆「已輪替」或「不輪替（接受風險）」並補記於此；`tasks/*.md` 的處置一併決定。
+- **為何仍需輪替（歷史推論；已被上方「結案依據」取代）**：舊值**已在 git 歷史中**
+  （本 repo 為 PUBLIC ⇒ 永久可見）。「現行檔案不再含明文」**不等於**「憑證安全」；
+  當初的推論是「輪替是唯一補救」——但生產實測顯示**該值已失效且非 prod 憑證** ⇒ 不需輪替。
+  （此條保留為決策痕跡；方法論教訓見文末「已定案的判準」。）
+- **仍含同一組明文的現行檔案**：`tasks/misleading-mechanisms-fix-plan-ds4pro-20260828.md`、
+  `tasks/stockpicker-misleading-mechanisms-audit-k3-20260828.md`（各 1 行）
+  ⇒ **已於本 repo PR #1996 一併遮罩** ✓（原記錄為「未動，超出授權」）。
+- **附帶發現（a2a-dev，非本 repo）**：新的 DSN 樣式會在 a2a-dev 的舊 iMac runbook、稽核報告與
+  治理報告等文件命中（warn-only，不擋 CI）⇒ **已於 a2a-dev PR #123 清除** ✓（5 檔 8 處，含
+  `secret-scan.sh` 樣式說明註解內的字面值）；唯一**刻意保留**者是 Jev eval 的 baseline 資料
+  ⇒ a2a-dev PR #124 以**具名 allowlist 條目 + 決策紀錄**登錄（理由：改字元會動到實驗基準）。
+- **驗收條件（已滿足）**：業主／root 以**生產實測**回覆「該值已失效、不需輪替」並補記於此；
+  `tasks/*.md` 的處置已完成（#1996 遮罩）✓。
+
+### FU-20260925-13 — 生產 DB 仍跑在 **compose 預設密碼**（字典詞）上（非緊急；需維護窗）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-25
+- **事實（生產實測，2026-09-25）**：
+  - 生產 DB 的**實際**密碼＝compose 的 **fallback 預設值**（5 字元、**字典詞**）。
+    **值不在此記載**；來源即 live `docker-compose.yml` 的 `${DB_PASSWORD:-…}` 預設
+    （`docs/operations/docker-compose.prod.yml` 為同一份設定）。
+  - app 容器 DSN 內嵌值 **== 該實際值** ⇒ app 連線正常（這也是它一直未被發現的原因）。
+- **緩解現況（是緩解，不是修好）**：
+  - DB 埠以 `0.0.0.0:55432` 對外發佈，但 root 實測 **LAN 不可達** ⇒ 目前外部打不到。
+  - `pg_hba.conf` 對 `127.0.0.1/32` 與 `::1/128` 是 **`trust`** ⇒ **本機存取免密**。
+    ⚠️ 這既是緩解也是**陷阱**：在容器內以 `-h 127.0.0.1` 測密碼**一律成功**（見文末判準）。
+- **風險**：只要網路曝露面改變（埠改 bind、加入新網段、SSH tunnel、其他容器同網段），
+  一組**字典詞**密碼即可被猜；而 `trust` 讓「能連到本機」等同「已通過認證」。
+- **建議計畫（未實作；需維護窗、非緊急）**：
+  1. `ALTER USER atlas PASSWORD '<強值>'`
+  2. 同步 `.env` 的 `DATABASE_URL` 與 `DB_PASSWORD`（值一律不進版控）
+  3. 重建受影響容器並以 `docker inspect` 驗 DSN
+  4. 更新 DB 容器的 `POSTGRES_PASSWORD`（僅影響下次 initdb；實際以 `ALTER USER` 為準）
+- **驗收條件**：以**容器自身 IP**（SCRAM 路徑）實測新值可登入、舊的預設值**被拒**，
+  且負對照（明知錯誤的密碼）同樣被拒。
+
+---
+
+### FU-20260925-14 — `check_postgres` 的憑證來源應硬化（避免「過期值靜默生效」）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-25
+- **事實**：`cmd/atlas/check_postgres.go:274` 以 `config.GetSecret("DB_PASSWORD")` 直接組出
+  `DB_PASSWORD=<值>` 傳給 `docker compose`；而該鍵在 `~/.config/atlas-go/.env` 曾是**過期值**
+  （生產實測：DB 以 SCRAM 路徑**拒絕**它）。
+- **今日處置（root，2026-09-25）**：已自 `~/.config/atlas-go/.env` **移除該過期行**
+  （備份 `~/.config/atlas-go/.env.bak-dbpassword-20260925-174749`、權限 600、回退＝一行指令）。
+  移除後該工具會落到 compose 的 `${DB_PASSWORD:-…}`（`:-` 對「未設」與「空」皆生效）
+  ⇒ **現在的行為反而正確** ✓。
+- **為何要硬化**：問題不在「值錯了」，而在**取用方式**——工具直接信任一個**可能過期**的鍵，
+  而且失敗形態是「用了錯的值」而不是「沒有值」（後者至少會吵）。
+- **建議（未實作）**：
+  1. 優先**從 `DATABASE_URL` 解析**（單一來源；DSN 才是 runbook 與 `.env` 的權威）；
+  2. 或取用前**斷言非空且非已知過期值**，並在 log 明示來源檔與鍵名（可稽核）。
+- **驗收條件**：用「故意放一組過期值」的 fixture 驗證：工具必須**失敗或明確警告**，
+  不得靜默帶著錯值繼續（同族：FU-20260925-01 的「回報有東西，而不是東西對不對」）。
+
+---
 
 ---
 
@@ -357,6 +414,16 @@
   理由（反脆弱）：把散文升成 block 只會逼人不停加 allowlist；**allowlist 一多，護欄就會被繞過**。
 - **降噪設計刻意不排除 `host.docker.internal`**：那正是 prod DSN 的主機，必須保持會被抓到。
   （排除的是 RFC 2606 保留域名／本機位址／placeholder 字／程式碼取值／純字母且 <16 字的假 key／路徑型 env 預設值。）
+### 2026-09-25 — 測「密碼認證」之前，必須先確認 `pg_hba` 的認證方式，且**必須有負對照**（元教訓）
+
+- **實例**：本次憑證盤查的第一版在容器內用 `-h 127.0.0.1` 測密碼，得到「兩個值都可登入」的
+  **無效結論**——因為 `pg_hba.conf` 對 `127.0.0.1/32`、`::1/128` 是 **`trust`**（免密），
+  測試根本沒走到密碼驗證。是**負對照**（拿一組明知錯誤的密碼去測，結果也「成功」）把它抓出來的。
+- **正確作法**：目標用**容器自身 IP**（才會命中最後一行 `host all all all scram-sha-256`）；
+  而且任何「認證被拒」的觀測都要附**有效負對照**（已知錯誤的憑證也必須被拒）才算證據。
+- **一般化**：宣稱「X 有效／無效」之前，先證明**測試本身有鑑別力**（能對錯誤輸入說不）。
+  這是本 repo 同日反覆出現的同一族缺陷（false-green / vacuous test），也是「誤判比漏抓更危險」的來源。
+
 - **`check_monitoring_single_source.py` 的 R2 用行掃描、不引入 YAML 依賴**：GitHub runner 不保證有 PyYAML；
   限制已明列於該檔檔頭，且生產外側仍有 a2a-dev `scripts/drift-check.sh [9/9]`（`docker inspect`）作為第二道。
 
