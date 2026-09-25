@@ -23,6 +23,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
 )
@@ -222,4 +223,20 @@ func redirectLog(buf *bytes.Buffer) func() {
 	prev := log.Writer()
 	log.SetOutput(buf)
 	return func() { log.SetOutput(prev) }
+}
+
+// TestMarketdataMockProvider_IsDetectableByPipeline pins the structural
+// contract the mock guard relies on: marketdata.MockProvider (the provider
+// GatewayBackedProvider falls back to when
+// ATLAS_MARKET_DATA_PROVIDER=fugle has no key) must expose IsMock so
+// BuildUniverse can refuse to label its quotes a market verdict.
+func TestMarketdataMockProvider_IsDetectableByPipeline(t *testing.T) {
+	var p monitoring.QuoteProvider = marketdata.NewMockProvider()
+	detector, ok := p.(interface{ IsMock() bool })
+	if !ok {
+		t.Fatalf("%T does not expose IsMock; the universe pipeline would publish fabricated quotes as ranked_trustworthy=true", p)
+	}
+	if !detector.IsMock() {
+		t.Fatalf("%T.IsMock() = false, want true", p)
+	}
 }

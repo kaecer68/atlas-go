@@ -58,6 +58,9 @@ const (
 	QuotesStatusFetchError = "fetch_error"
 	// QuotesStatusEmpty: the provider returned zero quotes without an error.
 	QuotesStatusEmpty = "empty"
+	// QuotesStatusMock: the provider was wired but identifies itself as a mock,
+	// so its (non-empty) answers are fabricated.
+	QuotesStatusMock = "mock"
 )
 
 // RankedFallbackReason values recorded when SymbolsRanked is not a market
@@ -77,7 +80,34 @@ const (
 	// RankedFallbackEmptyFiltered is recorded when the industry filter removed
 	// every gathered symbol.
 	RankedFallbackEmptyFiltered = "empty_filtered"
+	// RankedFallbackQuoteProviderMock is recorded when the wired provider is a
+	// mock: the ranked list would then describe simulated quotes, not the
+	// market, and must never be published as trustworthy.
+	RankedFallbackQuoteProviderMock = "quote_provider_mock"
 )
+
+// mockQuoteProvider is the optional capability a quote provider exposes when it
+// serves fabricated data. marketdata.MockProvider implements it (IsMock).
+//
+// The pipeline keeps QuoteProvider minimal, so this is a structural check
+// rather than an interface requirement. It exists because a mock returns a
+// full, plausible quote set for every requested symbol: without this check the
+// snapshot would record quotes_status=ok and ranked_trustworthy=true on
+// fabricated prices, which is strictly worse than the silent zero this change
+// set out to remove.
+type mockQuoteProvider interface {
+	IsMock() bool
+}
+
+// isMockQuoteProvider reports whether p serves fabricated quotes. A nil or
+// typed-nil provider is not a mock.
+func isMockQuoteProvider(p QuoteProvider) bool {
+	m, ok := p.(mockQuoteProvider)
+	if !ok || m == nil {
+		return false
+	}
+	return m.IsMock()
+}
 
 // UniverseBuildResult captures the outcome of one SmartUniverseBuilder pipeline
 // execution. It is serialized into the snapshot file and surfaced to CLI status
@@ -494,6 +524,10 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 			// untrustworthy input: an empty quote set cannot rank anything.
 			result.QuotesStatus = QuotesStatusEmpty
 			markRankedUntrustworthy(result, RankedFallbackQuoteFetchEmpty)
+		case isMockQuoteProvider(deps.Quotes):
+			// Fabricated quotes must never masquerade as a market verdict.
+			result.QuotesStatus = QuotesStatusMock
+			markRankedUntrustworthy(result, RankedFallbackQuoteProviderMock)
 		default:
 			// Real quote input: the ranked list is a genuine market verdict,
 			// even when it is empty after the volume/price filters.

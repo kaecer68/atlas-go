@@ -473,3 +473,56 @@ func TestRiskExclusionLiquidityEvidence(t *testing.T) {
 		}
 	})
 }
+
+// mockQuoteProviderStub mimics marketdata.MockProvider: it answers every
+// symbol with a fabricated quote and advertises itself via IsMock.
+type mockQuoteProviderStub struct{}
+
+func (mockQuoteProviderStub) GetQuotes(_ context.Context, _ time.Time, symbols []string) ([]domain.Quote, error) {
+	out := make([]domain.Quote, 0, len(symbols))
+	for _, sym := range symbols {
+		out = append(out, domain.Quote{Symbol: sym, Last: 100, Volume: 1_000_000, AsOf: time.Now()})
+	}
+	return out, nil
+}
+
+func (mockQuoteProviderStub) IsMock() bool { return true }
+
+// TestBuildUniverseMockProviderIsNotTrustworthy covers the hazard a real quote
+// provider introduces: marketdata.MockProvider answers with a full, plausible
+// quote set, so the pipeline would otherwise record quotes_status=ok and
+// ranked_trustworthy=true on fabricated prices — a louder lie than the silent
+// zero this lane set out to fix.
+func TestBuildUniverseMockProviderIsNotTrustworthy(t *testing.T) {
+	workDir := tempDir(t)
+	deps := buildDepsFixture(t, workDir)
+	deps.Quotes = mockQuoteProviderStub{}
+
+	result, ranked, err := BuildUniverse(context.Background(), deps, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.QuotesStatus != QuotesStatusMock {
+		t.Errorf("QuotesStatus = %q, want %q", result.QuotesStatus, QuotesStatusMock)
+	}
+	if result.RankedFallbackReason != RankedFallbackQuoteProviderMock {
+		t.Errorf("RankedFallbackReason = %q, want %q",
+			result.RankedFallbackReason, RankedFallbackQuoteProviderMock)
+	}
+	if result.RankedTrustworthy {
+		t.Error("fabricated quotes were published as a trustworthy market verdict")
+	}
+	// The pipeline itself still scores (the ranking is real work on mock input);
+	// only the trust label changes.
+	if result.SymbolsRanked != len(ranked) {
+		t.Errorf("SymbolsRanked = %d, len(ranked) = %d", result.SymbolsRanked, len(ranked))
+	}
+
+	snap, loadErr := LoadUniverseSnapshot(workDir)
+	if loadErr != nil {
+		t.Fatalf("LoadUniverseSnapshot: %v", loadErr)
+	}
+	if snap.Result == nil || snap.Result.RankedTrustworthy {
+		t.Fatalf("snapshot lost the mock label: %+v", snap.Result)
+	}
+}

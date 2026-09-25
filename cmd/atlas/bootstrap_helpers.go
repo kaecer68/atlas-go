@@ -214,7 +214,10 @@ func newUniverseBuilderDeps(
 // cfg.MarketDataProvider == "fugle" but no Fugle API key is configured. That
 // fallback logs a warning through logging.Warn("system", "Fugle API key not
 // configured, falling back to mock provider. DO NOT USE IN PRODUCTION."), so
-// the degraded state is observable; it is not silent.
+// the degraded state is observable; it is not silent. The pipeline also refuses
+// to call mock output a market verdict: BuildUniverse detects the mock through
+// IsMock() and records quotes_status=mock with
+// ranked_fallback_reason=quote_provider_mock instead of ranked_trustworthy=true.
 func newUniverseQuoteProvider(cfg config.Config) monitoring.QuoteProvider {
 	return orchestrator.NewGatewayBackedProvider(cfg)
 }
