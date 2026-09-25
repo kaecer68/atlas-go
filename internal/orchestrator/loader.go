@@ -73,12 +73,16 @@ func (l StaticLoader) LoadControlExecutors() ([]ControlExecutor, error) {
 // modifying this list.
 func builtinAgentExecutors() []AgentExecutor {
 	return []AgentExecutor{
-		SemiconductorExecutor{},
-		// SemiconductorLLMAgent is the L2.3 PoC LLM-driven variant. It
-		// gates itself via Supports() — the deterministic executor above
-		// handles specs when UseLLMSectorAgents is off (the default).
-		// Both coexist; Supports() resolves which one runs per spec.
+		// Registration order is the resolution mechanism: PluginRegistry
+		// .Recommendation is first-match-wins. SemiconductorLLMAgent must
+		// therefore come BEFORE the deterministic executor, otherwise it is
+		// unreachable no matter what UseLLMSectorAgents says (#1944 Batch 4,
+		// item I19). Both coexist; Supports() decides which one claims a spec:
+		//   - flag off (shipped default) → LLM agent declines (or declines
+		//     because no driver is wired) → SemiconductorExecutor serves.
+		//   - flag on + PlanDriver/ReflectDriver wired → LLM agent serves.
 		SemiconductorLLMAgent{},
+		SemiconductorExecutor{},
 		AISupplyChainExecutor{},
 		LEOSatelliteExecutor{},
 		ETFRotationExecutor{},

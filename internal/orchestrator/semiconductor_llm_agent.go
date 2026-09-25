@@ -65,16 +65,37 @@ func (a SemiconductorLLMAgent) metricsLogger() *slog.Logger {
 // semiconductor agents. Must match SemiconductorExecutor.Supports.
 const SemiconductorLLMAgentSkill = "semiconductor_desk"
 
-// Supports satisfies AgentExecutor. Returns true when both:
+// Supports satisfies AgentExecutor. Returns true when all of:
 //   - the spec.Skill matches the semiconductor desk skill, AND
-//   - the UseLLMSectorAgents flag is enabled (config or override).
+//   - the UseLLMSectorAgents flag is enabled (config or override), AND
+//   - both PlanDriver and ReflectDriver are wired.
 //
 // When the flag is off, this returns false and the deterministic
 // SemiconductorExecutor (also in the registry) handles the spec.
+//
+// Why the driver requirement (#1944 Batch 4, item I19): PluginRegistry
+// .Recommendation is first-match-wins, and Recommend returns (zero, false)
+// when a driver is missing. Without this guard, flipping the flag on an
+// unwired registration (loader.go registers the zero value — nothing in
+// production injects drivers, see N-P3 LLMSectorAgentDriverWired=false) would
+// make the LLM agent claim the desk and then silently return no
+// recommendation at all, instead of letting the deterministic executor serve
+// it. "Flag on but not wired" must degrade to the deterministic path, not to
+// silence.
 func (a SemiconductorLLMAgent) Supports(agent domain.AgentSpec) bool {
 	if agent.Skill != SemiconductorLLMAgentSkill {
 		return false
 	}
+	if !a.flagEnabled() {
+		return false
+	}
+	return a.PlanDriver != nil && a.ReflectDriver != nil
+}
+
+// flagEnabled reports the UseLLMSectorAgents gate alone (skill and driver
+// wiring excluded). Kept separate so the gate can be reported without
+// conflating it with driver wiring.
+func (a SemiconductorLLMAgent) flagEnabled() bool {
 	if a.UseLLMOverride != nil {
 		return *a.UseLLMOverride
 	}
