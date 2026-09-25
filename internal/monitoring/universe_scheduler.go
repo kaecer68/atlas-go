@@ -28,6 +28,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
@@ -151,6 +152,24 @@ type UniverseBuildResult struct {
 	// single slow or incomplete chunk cannot take the whole universe down.
 	QuotesChunks       int `json:"quotes_chunks"`
 	QuotesChunksFailed int `json:"quotes_chunks_failed"`
+	// QuotesMissingNoData / QuotesMissingNotCovered / QuotesMissingFetchError /
+	// QuotesMissingNotAttempted classify every requested symbol that came back
+	// without a quote (issue #1986 requirement 3). Only the last two are
+	// acquisition failures; the first two are facts about the market or about
+	// the scope of the sources this deployment reads, and must be auditable
+	// separately so an operator can see whether a gap is ours or upstream's.
+	//
+	//   - quotes_missing_no_data: a source answered authoritatively that the
+	//     symbol has no tradable data (suspended, no trades that day).
+	//   - quotes_missing_not_covered: the symbol is absent from every
+	//     successfully fetched whole-market table (TWSE 上市 + TPEx 上櫃).
+	//   - quotes_missing_fetch_error: transport error, timeout, rate limit,
+	//     quota exhaustion, circuit breaker.
+	//   - quotes_missing_not_attempted: no arm ever asked for the symbol.
+	QuotesMissingNoData       int `json:"quotes_missing_no_data"`
+	QuotesMissingNotCovered   int `json:"quotes_missing_not_covered"`
+	QuotesMissingFetchError   int `json:"quotes_missing_fetch_error"`
+	QuotesMissingNotAttempted int `json:"quotes_missing_not_attempted"`
 	// RankedFallbackReason is non-empty when the ranked list is NOT a market
 	// verdict, and names the reason. Empty means the ranked list reflects real
 	// quote input and may be trusted as-is.
@@ -500,8 +519,9 @@ func (p QuoteFetchPolicy) normalized() QuoteFetchPolicy {
 	return p
 }
 
-// QuoteFetchStats describes how a chunked quote fetch went. Returned by
-// fetchQuotesChunked and copied into UniverseBuildResult.
+// QuoteFetchStats describes how a chunked quote fetch went, including why any
+// requested symbol came back without a quote. Returned by fetchQuotesChunked and
+// copied into UniverseBuildResult.
 type QuoteFetchStats struct {
 	// Requested is the number of symbols asked for.
 	Requested int
@@ -509,6 +529,30 @@ type QuoteFetchStats struct {
 	Chunks int
 	// ChunksFailed is how many of them returned an error.
 	ChunksFailed int
+
+	// Resolved is the number of symbols for which a quote arrived.
+	Resolved int
+	// NoData is the number of symbols a source answered authoritatively as
+	// having no tradable data (suspended, no trades that day). A market fact.
+	NoData int
+	// NotCovered is the number of symbols absent from every successfully
+	// fetched whole-market table: outside the published scope of the venues
+	// this deployment reads. A source-scope fact (issue #1986 requirement 3).
+	NotCovered int
+	// FetchError is the number of symbols that could not be acquired at all
+	// (transport error, timeout, rate limit, quota, circuit breaker).
+	FetchError int
+	// NotAttempted is the number of symbols no arm ever asked for. It is an
+	// acquisition gap, kept separate so a budget skip is not silently read as a
+	// source-scope fact.
+	NotAttempted int
+}
+
+// UnresolvedFailures is the number of requested symbols whose absence is an
+// acquisition failure rather than a market/source fact. It is the number the
+// ranked_trustworthy gate reads.
+func (s QuoteFetchStats) UnresolvedFailures() int {
+	return s.FetchError + s.NotAttempted
 }
 
 // fetchQuotesChunked asks the provider for quotes in bounded chunks.
@@ -517,6 +561,12 @@ type QuoteFetchStats struct {
 // non-nil only when EVERY chunk failed (or the context ended), because a partial
 // result is still useful input for ranking — the caller labels it via
 // QuotesStatusPartial instead of discarding it.
+//
+// Providers that implement marketdata.PartialBatchProvider are asked through
+// GetQuotesBatch, so the statistics can classify each missing symbol. Providers
+// that only implement QuoteProvider are asked through GetQuotes and every
+// symbol they drop is counted as a fetch error: absence from a source that
+// cannot say why it is absent must not be reported as a market fact.
 func fetchQuotesChunked(ctx context.Context, provider QuoteProvider, symbols []string, policy QuoteFetchPolicy) ([]domain.Quote, QuoteFetchStats, error) {
 	policy = policy.normalized()
 	stats := QuoteFetchStats{Requested: len(symbols)}
@@ -546,12 +596,13 @@ func fetchQuotesChunked(ctx context.Context, provider QuoteProvider, symbols []s
 		if policy.ChunkTimeout > 0 {
 			chunkCtx, cancel = context.WithTimeout(ctx, policy.ChunkTimeout)
 		}
-		chunkQuotes, err := provider.GetQuotes(chunkCtx, time.Now(), chunk)
+		batch, err := quoteBatchForChunk(chunkCtx, provider, chunk)
 		if cancel != nil {
 			cancel()
 		}
 		if err != nil {
 			stats.ChunksFailed++
+			stats.FetchError += len(chunk)
 			lastErr = err
 			logging.Warn("universe_scheduler", "quotes_chunk_error",
 				"chunk_index", stats.Chunks-1,
@@ -559,13 +610,48 @@ func fetchQuotesChunked(ctx context.Context, provider QuoteProvider, symbols []s
 				logging.Err(err))
 			continue
 		}
-		quotes = append(quotes, chunkQuotes...)
+		quotes = append(quotes, batch.Quotes...)
+		for _, sym := range chunk {
+			switch batch.Outcomes[sym] {
+			case marketdata.QuoteOutcomeOK:
+				stats.Resolved++
+			case marketdata.QuoteOutcomeNoData:
+				stats.NoData++
+			case marketdata.QuoteOutcomeNotCovered:
+				stats.NotCovered++
+			case marketdata.QuoteOutcomeNotAttempted:
+				stats.NotAttempted++
+			default:
+				stats.FetchError++
+			}
+		}
 	}
 
 	if stats.ChunksFailed == stats.Chunks && stats.Chunks > 0 {
 		return quotes, stats, lastErr
 	}
 	return quotes, stats, nil
+}
+
+// quoteBatchForChunk asks one chunk's provider for quotes and returns the
+// per-symbol verdict.
+//
+// A provider that can classify (marketdata.PartialBatchProvider: the hybrid
+// chain and the whole-market coverage layer) answers for itself. A provider
+// that cannot has every absent symbol recorded as a fetch error: the caller then
+// knows the ranking is incomplete for a reason it cannot verify, which is the
+// honest reading and keeps the old behavior for every un-migrated provider.
+func quoteBatchForChunk(ctx context.Context, provider QuoteProvider, chunk []string) (marketdata.QuoteBatch, error) {
+	if aware, ok := provider.(marketdata.PartialBatchProvider); ok {
+		return aware.GetQuotesBatch(ctx, time.Now(), chunk)
+	}
+	quotes, err := provider.GetQuotes(ctx, time.Now(), chunk)
+	batch := marketdata.NewQuoteBatch(chunk)
+	for _, q := range quotes {
+		batch.Record(q)
+	}
+	batch.Resolve(chunk, marketdata.QuoteOutcomeError)
+	return batch, err
 }
 
 // ── Pipeline orchestrator ────────────────────────────────────────────────
@@ -681,6 +767,10 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		result.QuotesRequested = fetchStats.Requested
 		result.QuotesChunks = fetchStats.Chunks
 		result.QuotesChunksFailed = fetchStats.ChunksFailed
+		result.QuotesMissingNoData = fetchStats.NoData
+		result.QuotesMissingNotCovered = fetchStats.NotCovered
+		result.QuotesMissingFetchError = fetchStats.FetchError
+		result.QuotesMissingNotAttempted = fetchStats.NotAttempted
 		if err != nil {
 			logging.Warn("universe_scheduler", "quotes_fetch_error",
 				"chunks", fetchStats.Chunks,
@@ -712,21 +802,42 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 			// Fabricated quotes must never masquerade as a market verdict.
 			result.QuotesStatus = QuotesStatusMock
 			markRankedUntrustworthy(result, RankedFallbackQuoteProviderMock)
-		case fetchStats.ChunksFailed > 0:
-			// Some chunks failed: the ranked list covers only the symbols whose
-			// quotes arrived. Symbols in the failed chunks are absent, and every
-			// downstream consumer that reads absence as "no longer qualifies"
-			// (the D6 expiry counter) would fabricate failures for them, so the
-			// partial result is explicitly not trustworthy. The ranking is still
-			// computed and persisted for inspection.
+		case fetchStats.ChunksFailed > 0 || fetchStats.UnresolvedFailures() > 0:
+			// The ranked list covers only the symbols whose quotes arrived, and
+			// at least one requested symbol is missing for a reason that is an
+			// acquisition failure rather than a market or source-scope fact:
+			// either a whole chunk failed, or a symbol came back as an error /
+			// was never asked for. Every downstream consumer that reads absence
+			// as "no longer qualifies" (the D6 expiry counter) would fabricate
+			// failures for those symbols, so the partial result is explicitly
+			// not trustworthy. The ranking is still computed and persisted for
+			// inspection.
+			//
+			// Deliberately NOT untrustworthy (issue #1986 requirement 3): the
+			// symbols classified as quotes_missing_no_data or
+			// quotes_missing_not_covered. Those are facts — "that stock did not
+			// trade that day" / "no venue this deployment reads publishes that
+			// symbol" — and a ranking that drops a suspended stock is a correct
+			// market verdict, not an incomplete measurement. They are still
+			// counted and persisted so the coverage gap stays auditable (and
+			// separately alarmed, see the universe coverage alerts).
 			result.QuotesStatus = QuotesStatusPartial
 			if um != nil {
-				um.QuotesErrors.WithLabelValues(stage, "chunk_error").Add(int64(fetchStats.ChunksFailed))
+				if fetchStats.ChunksFailed > 0 {
+					um.QuotesErrors.WithLabelValues(stage, "chunk_error").Add(int64(fetchStats.ChunksFailed))
+				}
+				if n := fetchStats.UnresolvedFailures(); n > 0 {
+					um.QuotesErrors.WithLabelValues(stage, "unresolved").Add(int64(n))
+				}
 			}
 			markRankedUntrustworthy(result, RankedFallbackQuoteFetchPartial,
 				"chunks", fetchStats.Chunks,
 				"chunks_failed", fetchStats.ChunksFailed,
-				"quotes_returned", len(quoteMap))
+				"quotes_returned", len(quoteMap),
+				"missing_fetch_error", fetchStats.FetchError,
+				"missing_not_attempted", fetchStats.NotAttempted,
+				"missing_no_data", fetchStats.NoData,
+				"missing_not_covered", fetchStats.NotCovered)
 		default:
 			// Real quote input: the ranked list is a genuine market verdict,
 			// even when it is empty after the volume/price filters.

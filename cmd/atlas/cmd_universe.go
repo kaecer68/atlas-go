@@ -137,8 +137,13 @@ func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, _ bool, _ string
 		log.Printf("  %-8d  %-8.1f  %-20s  %s%s", i+1, r.Score, r.Industry, r.Symbol, freshTag)
 	}
 	log.Printf("")
-	log.Printf("  Quotes: status=%s returned=%d | trustworthy=%t | fallback_reason=%q",
-		result.QuotesStatus, result.QuotesReturned, result.RankedTrustworthy, result.RankedFallbackReason)
+	log.Printf("  Quotes: status=%s returned=%d/%d chunks=%d failed=%d | trustworthy=%t | fallback_reason=%q",
+		result.QuotesStatus, result.QuotesReturned, result.QuotesRequested,
+		result.QuotesChunks, result.QuotesChunksFailed,
+		result.RankedTrustworthy, result.RankedFallbackReason)
+	log.Printf("  Quotes missing: no_data=%d not_covered=%d fetch_error=%d not_attempted=%d",
+		result.QuotesMissingNoData, result.QuotesMissingNotCovered,
+		result.QuotesMissingFetchError, result.QuotesMissingNotAttempted)
 	log.Printf("")
 
 	if !result.RankedTrustworthy {
@@ -224,8 +229,15 @@ func buildUniverseStatus(cfg config.Config) error {
 	log.Printf("  In universe:   %d", res.SymbolsRanked)
 	log.Printf("  Ranked:        %d", res.SymbolsRanked)
 	log.Printf("  Excluded:      %d", res.SymbolsExcluded)
-	log.Printf("  Quotes:        status=%s returned=%d trustworthy=%t",
-		res.QuotesStatus, res.QuotesReturned, res.RankedTrustworthy)
+	log.Printf("  Quotes:        status=%s returned=%d/%d chunks=%d failed=%d trustworthy=%t",
+		res.QuotesStatus, res.QuotesReturned, res.QuotesRequested,
+		res.QuotesChunks, res.QuotesChunksFailed, res.RankedTrustworthy)
+	// issue #1986: the missing-symbol breakdown is the auditable half of the
+	// quote status — it separates "the market/source has no such quote" from
+	// "we failed to acquire it".
+	log.Printf("  Quotes missing: no_data=%d not_covered=%d fetch_error=%d not_attempted=%d",
+		res.QuotesMissingNoData, res.QuotesMissingNotCovered,
+		res.QuotesMissingFetchError, res.QuotesMissingNotAttempted)
 	if !res.RankedTrustworthy {
 		// Make the ambiguous zero loud: the ranked list is not a market verdict.
 		log.Printf("  !! ranked list is NOT trustworthy: reason=%s", res.RankedFallbackReason)
