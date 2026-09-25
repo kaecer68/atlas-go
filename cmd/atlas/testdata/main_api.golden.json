@@ -104,6 +104,12 @@
       "results": "([]eventdriven.ScanResult, error)"
     },
     {
+      "name": "Coverage",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(industry.SymbolIndustryCoverage)"
+    },
+    {
       "name": "Invalidate",
       "params": "",
       "receiver": "storeSymbolIndustrySubstrate",
