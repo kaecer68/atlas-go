@@ -8,8 +8,9 @@
 > **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`）已實作本報告 §6 的
 > 修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值），並已
 > **於 2026-09-25 合併（merge commit `bbce1b4a`）且部署**（見 §9.1 的部署事實）。
-> 部署後的第一次觀察（授權的手動觸發）已在 §9.1.2–9.1.5：**provider 接線證實生效**，
-> 而 `ranked` 的最終值受**非交易日／上游限流**影響，**仍待定**（§9.1.6）。
+> 部署後的第一次觀察（授權的手動觸發）**已定案**（§9.1.6）：**`symbols_ranked` 由 0 → 150**
+> ⇒ provider 接線**已在生產驗證生效**；但該次 `ranked_trustworthy=false`（休市 + fugle 限流 +
+> Fubon 逾時）⇒ **接線生效 ≠ 排名可信**，需在**交易日**複驗。
 > 本報告**不重寫該修法**，而是提供它的「**為什麼**」：根因證據鏈（§3）、引入方式（§4）、
 > 以及為何三個月來四道防線全部失效（§5）；並列出 #1979 **未覆蓋**的缺口與可直接落地的
 > 告警／檢查條件（§6.2、§8）。
@@ -267,6 +268,9 @@ $ gh pr list --state open
   **完全對齊**，否則會出現「有報價但鍵不匹配」→ 仍為 0（與現況症狀相同，極難察覺）。
 - **風險 D（時序）**：修好報價後 `ranked` 會第一次變成非 0，TopN=150 加上
   `MaxIndustryConcentration=0.40` 會第一次真正作用 ⇒ 這是**行為變更**，需要一次影子比對。
+  **現況（2026-09-25）**：第一次真實執行已發生（`symbols_ranked=150`、`symbols_excluded=130`，
+  見 §9.1.6），但該輪 `ranked_trustworthy=false`（休市 + 上游限流）⇒
+  **行為變更的驗收仍待交易日**。
 
 ### 選項 2（**已由 #1979 實作**）：fail-loud，不要靜默 0
 保留 nil 行為，但讓它**吵**：
@@ -566,7 +570,7 @@ a06f7d2e4aba 2026-09-25 15:09:24 +0800 CST latest
 - 部署任務包含一項**已授權的手動觸發**（趁部署後立即驗證母體管線），於 `07:10Z` 起在容器內執行
   `/app/atlas-go -build-universe run`（bounded ≤ 12 分）。以下 9.1.2–9.1.4 為該次執行的觀察。
 
-#### 9.1.2 結論 ①：**provider 接線已證實生效**（部署前為 mock）
+#### 9.1.2 結論 ①：**provider 接線已證實生效**（部署前為 mock；§9.1.6 於 2026-09-25 生產複驗）
 
 | 觀察（執行者於生產取得） | 意義 |
 |---|---|
@@ -616,17 +620,92 @@ cd1f5b02 fix(monitoring): universe coverage_check 改以第一方母體為分母
   生產日誌目前仍會印舊形狀的 `coverage_check`，**直到下一次部署**才可能改變。
   ⇒ 看到 `main` 已合併**不等於**生產已修（**merged ≠ effective**）。
 
-#### 9.1.6 待定（**尚未定案，不寫數字**）
+#### 9.1.6 **定案**（2026-09-25 授權手動觸發，`full_rebuild=true`）
 
-- **狀態：觀察中。** 手動觸發（`07:09–07:10Z` 起）**仍在執行中**且容器未重啟；本報告完成時
-  **尚未收到定案數字**，因此本節**刻意不寫任何 `ranked` 數值**。
-- **判讀框架已先行寫定（§9.1.3）**：本次觀察的解釋變數是「非交易日 + fugle 限流 + Fubon 逾時」，
-  與「provider 接線是否生效」（§9.1.2，已證實）**必須分開陳述**；在執行結束前不對結果下定論。
-- **`symbols_ranked` 的最終值：待定。** 下一個觀察點為「本次手動觸發結束」或
-  「下一次 06:00 UTC（14:00 台北）排程」；定案後本節會更新為定案值。
-- `ratio ≈ 0.80`（§6）仍是推得的預期值，需在**交易日**以第一方母體重新觀察。
+**快照結果**（唯讀實測 `data/state/universe_snapshot.json`，mtime **2026-09-25T15:31:50（台北）**）：
 
----
+```json
+"result": {
+  "symbols_built": 1599, "symbols_filtered": 1599,
+  "symbols_ranked": 150, "symbols_excluded": 130,
+  "full_rebuild": true,
+  "timestamp": "2026-09-25T07:10:35.181268988Z",
+  "quotes_status": "partial", "quotes_returned": 1301, "quotes_requested": 1599,
+  "quotes_chunks": 32, "quotes_chunks_failed": 2,
+  "ranked_fallback_reason": "quote_fetch_partial", "ranked_trustworthy": false
+}
+```
+`ranked` 陣列長度 = **150** ✓
+
+**同日誌行**（執行者於生產取得）：
+
+```
+scoring_filters input=1599 no_quote=298 zero_volume=0 below_turnover_floor=646 below_price_floor=3 lots_converted=1120 survivors=652
+scoring_ok input=1599 ranked=150
+ranked_not_trustworthy reason=quote_fetch_partial symbols_built=1599 symbols_filtered=1599 quotes_status=partial chunks=32 chunks_failed=2 quotes_returned=1301
+```
+
+**三重自洽（交叉核對）**
+
+| 關係 | 驗算 | 對應欄位 |
+|---|---|---|
+| 1599 − 1301 | = **298** | `no_quote` ✓ |
+| 1599 − (298 + 0 + 646 + 3) | = **652** | `survivors` ✓ |
+| 1599 / 50 | = **32** | `quotes_chunks` ✓（分批大小 50，與 §9.1.2 一致） |
+
+##### 結論 ①：provider 接線**已在生產驗證生效**
+
+| 證據 | 值 |
+|---|---|
+| wiring | `cmd/atlas/bootstrap_helpers.go:277 Quotes: quotes`（來源 `newUniverseQuoteProvider(cfg)`，`:198` / `:221`） |
+| provider | `initialized inner=hybrid-fubon provider_cfg=hybrid` |
+| 結果 | `symbols_ranked` **0 → 150** |
+| 報價 | `quotes_returned = 1301 / 1599` |
+
+⇒ §3 的根因（`Quotes == nil` ⇒ 空 `quoteMap` ⇒ `ranked=0`）**已由生產實測反證**；這也是本報告 §3
+推論的**驗證**（此前的 `ranked=0` 不是市場結論，而是 wiring 缺漏）。
+
+##### 結論 ②：排名**目前不可信**，需交易日複驗
+
+`quotes_status=partial`、`ranked_trustworthy=false`、`ranked_fallback_reason=quote_fetch_partial`、
+`quotes_chunks_failed=2/32`；原因鏈為**三項外在因素**：
+
+1. **2026-09-25 台股休市**（`finmind: asOf 2026-09-25 is not a Taiwan trading day`，與業主權威表一致）；
+2. **fugle 限流**（`rate limit`，服務自身 log 亦有，見 §9.1.4）；
+3. **Fubon proxy `/health` 逾時** → `fubon_failed_fallback`。
+
+⇒ 結論 ① 與 ② **必須分開陳述**：接線生效 ≠ 排名可信。
+
+##### ③ 單位換算正確、不需回退
+
+provider 走 Fubon（回報單位為「張」）且 `lots_converted=1120`
+⇒ 業主設定的回退條件（`lots_converted=0`）**未觸發**。
+
+##### ④ 配額護欄生效
+
+FinMind 配額 `13368 → 13794`（**+426**）；`auto_quote_backfill` 在 remaining `1010 < 1500` 時
+**主動早停**（#1954 保留值）⇒ **配額告警 0**。
+
+##### ⑤ 服務未受影響
+
+容器 **24** 個、**0** 個 not-running、`/api/version` **HTTP 200**、服務 log `ERROR = 0`。
+
+##### ⑥ 下一個觀察點
+
+**2026-09-28（Mon，交易日）06:00Z** 的每日管線 ⇒ 目標 `quotes_status=ok` 且
+`ranked_trustworthy=true`。
+
+##### ⑦ 誠實標註：CLI 結束碼為 **1**
+
+CLI（`/app/atlas-go -build-universe run`）結束碼為 **1**，這是工具以非零碼**誠實表達「結果不可信」**
+（`ranked_trustworthy=false`），**不是崩潰或失敗**；且 **snapshot 確實已寫入**（mtime 15:31:50）。
+**不要把 exit 1 誤讀成失敗。**
+
+##### 紀律註記（含一次預測錯誤的更正）
+
+執行者在觸發前曾預測「休市日 ⇒ `ranked` 會是 0」。**該預測是錯的**：provider 仍取得
+1301/1599 筆報價，排名照樣產出 150。⇒ **不宜在取得實測值前先下結論**。
+這與本報告 §5 的歸因偏差（把 `0` 直接歸因於母體太小）是同一枚硬幣的兩面：**兩種方向的未經驗證結論都會誤導**。
 
 ### 9.2 已知限制 (1)：`Reasons` 只收「未解析列」的理由（**刻意取捨**）
 
@@ -675,11 +754,18 @@ Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySub
 6. `IndustryFilter` 沒有濾掉任何人（`input=1599 output=1599`，無 `TargetLevel1`）。
 7. 快照 `ranked=[]` 與日誌 `ranked=0` 同源（`:412-414` 同一個 slice）。
 8. §7.1–§7.4 四項附帶缺陷（含 §7.2 的算術對帳全部吻合）。
+9. **#1979 的接線在生產已驗證生效**（§9.1.6 結論 ①）：`symbols_ranked` **0 → 150**、
+   `quotes_returned=1301/1599`、`Quotes: quotes`（`bootstrap_helpers.go:277`），
+   且三項自洽對帳（298 / 652 / 32）全部吻合。
+10. **同一輪觀察的三項附帶事實**（§9.1.6）：`lots_converted=1120` ⇒ 單位換算正確、回退條件未觸發；
+    FinMind `13368 → 13794` 且 `auto_quote_backfill` 主動早停 ⇒ 配額護欄生效；
+    服務 24 容器 / 0 not-running / http=200 / ERROR=0 ⇒ 未受影響。
 
 ### 未證實（**不要**當成結論）
-1. **接上 provider 後 `ranked > 0`** —— **尚未定案**。`Quotes` 已由 #1979 接上且
-   「provider 接線生效」已在生產觀察到（§9.1.2），但 `ranked` 的最終值受**非交易日 + fugle 限流 +
-   Fubon 逾時**影響，須待該次手動觸發結束或下一次排程（§9.1.6）。風險見 §6 選項 1 的 A–D。
+1. **接上 provider 後 `ranked > 0`** —— **已定案：`ranked` 由 0 → 150**（§9.1.6 結論 ①，
+   2026-09-25 生產實測）。**仍未證實的是「排名可信」**：該輪 `ranked_trustworthy=false`
+   （休市 + fugle 限流 + Fubon 逾時），需待 **2026-09-28（Mon，交易日）06:00Z** 的每日管線
+   達到 `quotes_status=ok` + `ranked_trustworthy=true` 才能定論（§9.1.6 結論 ②⑥）。
 2. provider 對 1599 檔的實際呼叫數／配額足跡 —— 未量測。
 3. provider 回傳代號與 `substratePopulation` 鍵是否 100% 對齊 —— 未量測。
 4. `Volume/Last` 的單位語意是否與 `volume_floor_twd` 的設計假設一致 —— 未查證。
