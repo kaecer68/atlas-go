@@ -12,8 +12,15 @@
     </array>
     <key>EnvironmentVariables</key>
     <dict>
+        <!-- 機密不得進版控（本 repo 是 PUBLIC）：這裡只放 placeholder，
+             真實 token 由 scripts/alertmanager-webhook/install-webhook.sh 於**安裝時**注入到
+             ~/Library/LaunchAgents/ 的那一份（chmod 600），本檔永遠保持無機密。
+             為什麼是「安裝期注入」而不是改成 TELEGRAM_BOT_TOKEN_FILE：
+             a2a-dev 的 macmini-recover #50 會從**已安裝 plist 的 EnvironmentVariables** 讀
+             TELEGRAM_BOT_TOKEN 做 getMe 有效性檢查 → 換 key 名會讓它變成 WARN（破壞 DoD 48 OK/0 WARN）。
+             詳見同目錄 README.md。 -->
         <key>TELEGRAM_BOT_TOKEN</key>
-        <string>8896320719:AAHijLqpvTpKcOHDDkCNRME8-gERcNqd6QI</string>
+        <string>__INJECT_AT_INSTALL__</string>
         <key>TELEGRAM_CHAT_ID</key>
         <string>8387647295</string>
         <key>PORT</key>
