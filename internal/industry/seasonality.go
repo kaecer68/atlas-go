@@ -580,6 +580,17 @@ func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
 	se.dynamicEnv = modulator
 }
 
+// DynamicEnvModulator returns the macro modulator installed by SetDynamicEnv,
+// or nil when no macro overlay is wired. Exposed so callers that must share the
+// engine's macro state (composition root macro driver adapter) do not have to
+// keep a second reference to the modulator.
+func (se *SeasonalEngine) DynamicEnvModulator() *DynamicEnvModulator {
+	if se == nil {
+		return nil
+	}
+	return se.dynamicEnv
+}
+
 // UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator
 // and updates the rolling baseline. No-op if no modulator is set.
 func (se *SeasonalEngine) UpdateDynamicEnv(snap marketdata.MacroDataSnapshot) {

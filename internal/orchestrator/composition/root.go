@@ -73,7 +73,40 @@ type Root struct {
 
 	// SA11.A: closure state manager for the observation window counter.
 	closureStateMgr *sectorallocation.SACClosureStateManager
+
+	// shared holds the dashboard-owned, data-fed industry driver adapters.
+	// Nil means "no dashboard wired" (tests, CLI paths), in which case
+	// buildWeightEngine falls back to fresh config-seeded components.
+	shared *SharedSectorInputs
 }
+
+// SharedSectorInputs carries the industry driver adapters owned by the
+// monitoring dashboard (the instances that receive real data at runtime) so the
+// composition root consumes the SAME sources instead of constructing fresh
+// config-seeded copies.
+//
+// Why this exists (issue #1944 Batch 3, items I12/I13):
+//   - I13: the root used to build industry.NewCycleTracker() from config seeds
+//     while the dashboard kept a second tracker fed by real updates, so the
+//     simulated and displayed industry state could disagree.
+//   - I12: the root's macro driver adapter returned a hardcoded 0.0 ("no-op
+//     until macro pipeline provides MacroDataSnapshot (future)") even though
+//     the dashboard already runs a DynamicEnvModulator over live macro data.
+//
+// Nil fields keep the fallback behaviour for that single driver only.
+type SharedSectorInputs struct {
+	Cycle    sectorallocation.CycleInputProvider
+	Seasonal sectorallocation.SeasonalInputProvider
+	Linkage  sectorallocation.LinkageInputProvider
+	Macro    sectorallocation.MacroInputProvider
+}
+
+// SectorFactorDriverWired reports whether the composition root has a real
+// per-sector factor tilt provider. It does not: the factor driver is a neutral
+// 0.0 stub because no production provider for per-sector factor tilts exists
+// (issue #1944 Batch 3 I12). Flip this together with factorAdapter below and
+// with docs/reference/inert-registry.md.
+const SectorFactorDriverWired = false
 
 // NewRoot constructs the shared dependency root.
 // It creates the L1 mapper from the default industry classification tree.
@@ -157,6 +190,26 @@ func (r *Root) WithSACClosureStateManager(mgr *sectorallocation.SACClosureStateM
 	return r
 }
 
+// WithSharedSectorInputs installs the dashboard's data-fed driver adapters.
+// Call it before the first BuildSystem; a nil argument (or nil fields) keeps the
+// config-seeded fallback for those drivers.
+func (r *Root) WithSharedSectorInputs(in SharedSectorInputs) *Root {
+	cp := in
+	r.shared = &cp
+	return r
+}
+
+// SharedSectorInputs returns the dashboard-owned driver adapters installed by
+// WithSharedSectorInputs (zero value when none). Wiring tests in this package
+// and in monitoring read it to prove the simulation path and the dashboard share
+// the same industry state (issue #1944 Batch 3 I12/I13).
+func (r *Root) SharedSectorInputs() SharedSectorInputs {
+	if r == nil || r.shared == nil {
+		return SharedSectorInputs{}
+	}
+	return *r.shared
+}
+
 // InjectSectorDeps wires the mapper and exposure calculator into a
 // previously-constructed System. Callers should invoke this after
 // system construction but before the first simulation run.
@@ -230,27 +283,55 @@ func (r *Root) buildWeightEngine() sectorallocation.WeightEngine {
 			return multiplier, maxConf, activeTheme, nil
 		},
 	)
-	// macro adapter — no-op until macro pipeline provides MacroDataSnapshot (future).
-	macroAdapter := sectorallocation.MacroProviderFunc(
-		func(_ context.Context, industryID, _, _ string) (float64, error) {
+	// macro adapter — neutral 0.0 unless the dashboard shares its modulator.
+	// The seasonal engine already folds DynamicEnvModulator.SeasonalModulation
+	// into GetPatternAdjustment (seasonality.go), so a caller that populates the
+	// seasonal AND macro driver deltas at the same time would count the macro
+	// environment twice; that is a caller-side decision, not this adapter's.
+	macroAdapter := sectorallocation.MacroInputProvider(sectorallocation.MacroProviderFunc(
+		func(_ context.Context, _, _, _ string) (float64, error) {
 			return 0.0, nil
 		},
-	)
+	))
 
-	// factor adapter — no-op until factor provider is wired (future).
+	// factor adapter — still a neutral stub: SectorFactorDriverWired is false
+	// because no production per-sector factor tilt provider exists yet. Kept for
+	// the engine contract; it is NOT a claim that factor tilts are applied.
 	factorAdapter := sectorallocation.FactorProviderFunc(
 		func(_ context.Context, _ string) (float64, error) {
 			return 0.0, nil
 		},
 	)
 
+	// Driver adapters actually handed to the engine. Default = fresh
+	// config-seeded components (tests, CLI paths); production main.go calls
+	// WithSharedSectorInputs via DashboardAPI.SetCompositionRoot so the
+	// data-fed dashboard instances win (issue #1944 Batch 3 I12/I13).
+	cycleProvider := sectorallocation.CycleInputProvider(sectorallocation.NewCycleAdapter(cycleTracker))
+	seasonalProvider := sectorallocation.SeasonalInputProvider(sectorallocation.NewSeasonalAdapter(seasonalEngine))
+	linkageProvider := sectorallocation.LinkageInputProvider(sectorallocation.NewLinkageAdapter(linkageAnalyzer, nil))
+	if r.shared != nil {
+		if r.shared.Cycle != nil {
+			cycleProvider = r.shared.Cycle
+		}
+		if r.shared.Seasonal != nil {
+			seasonalProvider = r.shared.Seasonal
+		}
+		if r.shared.Linkage != nil {
+			linkageProvider = r.shared.Linkage
+		}
+		if r.shared.Macro != nil {
+			macroAdapter = r.shared.Macro
+		}
+	}
+
 	return sectorallocation.NewDefaultEngineWithProjector(
 		params.SectorAllocation,
 		prior,
 		projector,
-		sectorallocation.NewCycleAdapter(cycleTracker),
-		sectorallocation.NewSeasonalAdapter(seasonalEngine),
-		sectorallocation.NewLinkageAdapter(linkageAnalyzer, nil),
+		cycleProvider,
+		seasonalProvider,
+		linkageProvider,
 		narrativeAdapter,
 		macroAdapter,
 		factorAdapter,

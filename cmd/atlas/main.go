@@ -669,6 +669,18 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 
+		// Issue #1944 Batch 3 (I12/I13): share the dashboard's data-fed industry
+		// driver adapters with the composition root so the simulation paths
+		// (buildSystemOrFallback → Root.BuildSystem → StrategyEvolver) read the
+		// SAME cycle/seasonal/linkage state the dashboard shows, plus the real
+		// macro modulation. Previously nothing called SetCompositionRoot at all,
+		// so the simulation kept its own config-seeded CycleTracker and a
+		// hardcoded 0.0 macro driver. Must run before the first BuildSystem call.
+		if compositionRoot != nil {
+			dashboard.SetCompositionRoot(compositionRoot)
+			log.Printf("[Composition] dashboard industry inputs shared with composition root (I12/I13)")
+		}
+
 		dashboard.SetPool(pool)
 		// Issue #1776: admin channel-keys endpoints (late-bound manager;
 		// nil manager → endpoints report 503).
