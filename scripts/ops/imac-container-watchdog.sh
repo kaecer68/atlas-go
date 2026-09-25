@@ -38,7 +38,23 @@ STATE_DIR="$HOME/Library/Logs/atlas-watchdog-state"
 RESTART_LEDGER="$HOME/Library/Logs/atlas-container-restarts.log"
 
 # 要監控的容器（space-separated）
-CONTAINERS="atlas-go-imac atlas-postgres"
+#
+# 2026-09-25 修正（監控缺口調查 任務 E；報告 Q3-5(a)）：原值 `atlas-go-imac` 是 iMac
+# 時代的容器名。Mac Mini 上主 API 容器實名為 **`atlas-go`**（`-imac` 後綴在 2026-09-22
+# 遷移後退役），於是本腳本在 Mac Mini 上對主容器完全無效：
+#   docker inspect atlas-go-imac     → 空 → state="" （restart ledger 靜默跳過）
+#   docker start   atlas-go-imac     → Error response from daemon: No such container
+# 實測後果（2026-09-25 11:33）：每 60 秒一行 `WATCH: atlas-go-imac state= -> starting` /
+# `ERROR: docker start atlas-go-imac failed`，各 2,554 行（該 log 共 10,219 行）、
+# 從 2026-09-23T13:37+0800 起持續 45 小時以上。而它是 PR #1695(32h 沉默) 之後唯一的
+# 自動復原機制 → 主 API 容器其實一直沒有復原保護。
+# 對照證據：同一個 60 秒迴圈對 `atlas-postgres`（名字正確）在 ledger 有正常紀錄，
+# 且 `/usr/local/bin/docker` 在 Mac Mini 存在 → 失敗原因就是這個名字，不是缺 docker。
+#
+# 檔名 `imac-container-watchdog.sh` 屬歷史債（launchd label / 安裝路徑 / Makefile
+# target 都指向它）→ **不改檔名**，只在此註明 Mac Mini 的實名。
+# 若要新增受監控容器，請用 `docker ps --format '{{.Names}}'` 的實名。
+CONTAINERS="atlas-go atlas-postgres"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"; }
 
