@@ -1217,6 +1217,19 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    "heuristic",
 			Todo:      "Auto-update: run cmd/backfill-industry-tree after each quarter close to recompute weights from TWSE market cap data. Validate: ensure L1 weights sum to 1.0 and L2 weights per parent sum to 1.0.",
 		},
+		// issue #1943 per-stock industry substrate gate.
+		SubstrateFromSymbolIndustryEnabled: ParameterMetadata[bool]{
+			Value: false,
+			Rationale: "Per-stock industry substrate gate (2026-09-24, issue #1943): the hard-coded " +
+				"representative-stock tables cover only ~27 symbols in production (~3.2% of the listed " +
+				"universe), so every industry-level statistic (sector exposure, SmartUniverse population, " +
+				"coverage audit) is computed on a population too small to be significant. The first-party " +
+				"symbol_industry channel now supplies the per-stock field for the whole listed market. " +
+				"Default off: nothing is installed, every resolver stays byte-identical with the pre-gate " +
+				"revision; flip to true to start the observation window (population >= 800 symbols, 20/20 L1).",
+			Source: SourceExperimental,
+			Todo:   "Promote to SourceHeuristic after an observation window confirms the larger population is regression-free (>=20 sessions, 0 invariant violations).",
+		},
 	}
 }
 

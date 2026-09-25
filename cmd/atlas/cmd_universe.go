@@ -10,6 +10,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
@@ -36,7 +38,7 @@ func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, da
 }
 
 // buildUniverseRun wires the full SmartUniverse pipeline and prints the top N ranked symbols.
-func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string) error {
+func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, _ bool, _ string) error {
 	suCfg := config.GetParametersConfig().SmartUniverse
 
 	log.Printf("[universe] TopN=%d VolumeFloorTWD=%.0f MaxIndustryConc=%.2f",
@@ -47,7 +49,19 @@ func buildUniverseRun(_ *bootstrap.Runtime, cfg config.Config, _ bool, _ string)
 	classTreeAdapter := monitoring.AdaptClassificationTree(classTree)
 	supplyGraph := industry.NewSupplyChainGraph()
 	supplyAdapter := monitoring.AdaptSupplyChainGraph(supplyGraph)
-	mapper := monitoring.NewTreeBasedMapper(classTreeAdapter)
+	// issue #1943: the per-stock industry substrate (nil unless
+	// industry.substrate_from_symbol_industry_enabled is true) lets the CLI
+	// resolve the whole listed market instead of the tree's ~27 representative
+	// stocks — the same wiring the production pipeline uses.
+	var pool *pgxpool.Pool
+	if rt != nil {
+		pool = rt.Pool
+	}
+	substrate := newSymbolIndustrySubstrate(context.Background(), cfg, pool)
+	if substrate != nil {
+		industry.RegisterSymbolIndustryConsumer("cmd/atlas.build-universe")
+	}
+	mapper := monitoring.NewSubstrateIndustryMapper(monitoring.NewTreeBasedMapper(classTreeAdapter), substrate, classTreeAdapter)
 
 	indFilter := monitoring.NewIndustryFilter(mapper, classTreeAdapter, supplyAdapter)
 	indFilter.ExpandSupplyChainDepth = suCfg.SupplyChainExpandDepth.Value

@@ -137,6 +137,7 @@
 | `docs/specs/agent-mcp-server-spec.md` | MCP server 規格（canonical spec） | ✅ |
 | `docs/specs/industry-hitrate-metric-spec.md` | 產業級命中率口徑 SSOT（canonical 定義、聚合鍵、覆蓋率政策、與其他 9 套口徑的裁決；#1942） | ✅ |
 | `docs/specs/industry-hitrate-consumption-spec.md` | 產業命中率消費鏈路接線契約（config gate 語意、fail-closed reason、gate-off 逐位元驗證方法；#1942/#1948） | ✅ |
+| `docs/specs/symbol-industry-substrate-spec.md` | per-stock 產業欄位基質（`symbol_industry` channel、DB 欄位、gate 與消費端、覆蓋率；#1943） | ✅ |
 | `docs/specs/channel-health-status-single-truth-spec.md` | channel 健康狀態單一真相（唯一判定函式、狀態語彙、DB mirror 語意、空 payload 規則） | ✅ |
 
 | `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |

@@ -575,6 +575,26 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	live("us_msft", []string{"Yahoo"}, 24*time.Hour)
 	live("tsm_adr", []string{"Yahoo"}, 24*time.Hour)
 
+	// symbol_industry (issue #1943): the first-party per-stock industry field.
+	// TWSE OpenAPI opendata/t187ap03_L (上市, 產業別) + TPEx
+	// openapi/v1/mopsfin_t187ap03_O (上櫃, SecuritiesIndustryCode) -> canonical
+	// L1 through the declared namespace K table (namespace twse_industry_code,
+	// #1958). No API key, no FinMind quota.
+	//
+	// HealthSource=file_state + SuccessCriteria=value_nonzero + DegradedOnEmpty:
+	// the whole point of this channel is the POPULATION it yields, so an empty
+	// or missing snapshot must surface as degraded, never as a successful "ok"
+	// (the #1953 rule, applied here from day one). Health is a readiness check
+	// on the persisted snapshot; the upstream fetch belongs to the
+	// auto_symbol_industry task.
+	symbolIndustryContract := DefaultChannelContract("symbol_industry")
+	symbolIndustryContract.SourcePriority = []string{"TWSE", "TPEx"}
+	symbolIndustryContract.ExpectedRefresh = 24 * time.Hour
+	symbolIndustryContract.HealthSource = HealthSourceFileState
+	symbolIndustryContract.SuccessCriteria = SuccessCriteriaValueNonzero
+	symbolIndustryContract.DegradedOnEmpty = true
+	r.Register(symbolIndustryContract)
+
 	// twse_etf: upstream TWT44U removed (2026-08-10), registration is
 	// opt-in via TWSE_ETF_API_KEY. Contract keeps the historical alias
 	// "twse-etf" so operators referencing the old hyphenated name still

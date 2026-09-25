@@ -13,6 +13,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/scheduler"
@@ -41,6 +42,7 @@ func registerDataSyncAndHealthTasks(
 	monitor *monitoring.Monitor,
 	pool *pgxpool.Pool,
 	collector *monitoring.MetricsCollector,
+	symbolIndustrySub industry.SymbolIndustrySubstrate,
 ) {
 	// Register channel_health_sync task (DB sync, not a data fetcher).
 	if pool != nil {
@@ -127,6 +129,25 @@ func registerDataSyncAndHealthTasks(
 		Enabled:   true,
 		Task:      gatewayChannelFetch(gateway, "twse_insider"),
 	}, "registered auto_twse_insider background task (1h interval)")
+
+	// symbol_industry (issue #1943) — 第一方 per-stock 產業欄位。
+	//
+	// 5-minute tick with a daily gate (the upstream company-industry table is
+	// date-stamped and changes at most daily): the closure fetches TWSE
+	// t187ap03_L + TPEx mopsfin_t187ap03_O through the gateway, then mirrors the
+	// snapshot into the queryable per-stock field via the backend-aware store.
+	// The 5m interval is deliberate — the ChannelHealthStatusError rules keep
+	// their existing per-cadence `for` values, and check-channel-consistency
+	// requires a task interval that fits inside both the contract freshness
+	// window (24h) and the alert hysteresis (5m).
+	registerBackgroundTask(taskMgr, &apigateway.ScheduledTask{
+		Name:      "auto_symbol_industry",
+		ChannelID: "symbol_industry",
+		Interval:  5 * time.Minute,
+		Enabled:   true,
+		Jitter:    30 * time.Second,
+		Task:      symbolIndustryRefreshTask(gateway, cfg, pool, symbolIndustrySub),
+	}, "registered auto_symbol_industry background task (5m interval, daily refresh gate)")
 
 	// Register seasonal_calibration background task. Guard: skip silently if
 	// the calibrate-seasonal binary is not co-located with the current binary

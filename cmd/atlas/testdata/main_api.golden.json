@@ -104,6 +104,42 @@
       "results": "([]eventdriven.ScanResult, error)"
     },
     {
+      "name": "Invalidate",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": ""
+    },
+    {
+      "name": "Len",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(int)"
+    },
+    {
+      "name": "Lookups",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(int64)"
+    },
+    {
+      "name": "Reload",
+      "params": "(ctx context.Context)",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(error)"
+    },
+    {
+      "name": "ResolveL1",
+      "params": "(symbol string)",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(industry.SectorID, bool)"
+    },
+    {
+      "name": "Symbols",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "([]string)"
+    },
+    {
       "name": "Write",
       "params": "(r autobacktest.AttributionRecord)",
       "receiver": "strategyAttributionAdapter",

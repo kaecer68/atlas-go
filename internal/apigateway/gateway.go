@@ -332,6 +332,7 @@ func channelIDs() []string {
 		"government_broker",
 		"twse_etf",
 		"twse_insider",
+		"symbol_industry",
 		"us_spx",
 		"us_ndx",
 		"us_dji",

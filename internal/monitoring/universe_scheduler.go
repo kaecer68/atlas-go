@@ -23,6 +23,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/screener"
@@ -111,6 +112,14 @@ type UniverseBuilderDeps struct {
 	// supplies &sync.Mutex{} so all task closures share the same lock.
 	// Exported so callers outside this package can wire it.
 	WatchlistMu *sync.Mutex
+
+	// Substrate is the optional per-stock industry field (issue #1943). When
+	// installed it replaces the tree's representative stocks as the universe
+	// population, growing the built universe from ~27 symbols to the whole
+	// listed market. nil (the default, and the only value production uses while
+	// industry.substrate_from_symbol_industry_enabled is false) keeps the
+	// pre-#1943 pipeline exactly as it was.
+	Substrate industry.SymbolIndustrySubstrate
 }
 
 // ── Task factories ───────────────────────────────────────────────────────
@@ -320,7 +329,7 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 	// ── Step 1: Gather all symbols ──────────────────────────────────────
 
-	allSymbols := gatherAllSymbols(deps.Tree, deps.Mapper)
+	allSymbols := gatherAllSymbols(deps.Tree, deps.Mapper, deps.Substrate)
 	result.SymbolsBuilt = len(allSymbols)
 	if result.SymbolsBuilt == 0 {
 		logging.Warn("universe_scheduler", "empty_universe")
@@ -507,10 +516,20 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-// gatherAllSymbols collects every known symbol by iterating Level-1 industries
-// via Tree.GetLevel1 then expanding each via Mapper.GetSymbolsByIndustry.
-// Duplicates are removed and symbols are normalized.
-func gatherAllSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapper) []string {
+// gatherAllSymbols collects every known symbol.
+//
+// With a per-stock industry substrate installed (issue #1943) the population is
+// the substrate's symbol list — the whole listed market (TWSE 上市 + TPEx
+// 上櫃) mapped to canonical L1 — instead of the ~27 representative stocks the
+// classification tree declares. Without one it iterates Level-1 industries via
+// Tree.GetLevel1 and expands each through Mapper.GetSymbolsByIndustry, exactly
+// as before.
+//
+// Duplicates are removed and symbols are normalized in both paths.
+func gatherAllSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapper, substrate industry.SymbolIndustrySubstrate) []string {
+	if population := substratePopulation(substrate); len(population) > 0 {
+		return population
+	}
 	if tree == nil || mapper == nil {
 		return nil
 	}

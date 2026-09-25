@@ -1,5 +1,5 @@
 {
-  "canonical_channel_count": 41,
+  "canonical_channel_count": 42,
   "registered_channels": [
     {
       "id": "us_yahoo",
@@ -155,6 +155,11 @@
     {
       "id": "twse_insider",
       "source": "TWSE OpenAPI t187ap12_L",
+      "status": "registered"
+    },
+    {
+      "id": "symbol_industry",
+      "source": "openapi.twse.com.tw/v1/opendata/t187ap03_L + www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
       "status": "registered"
     },
     {

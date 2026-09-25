@@ -92,6 +92,22 @@ func NewRoot(cfg config.Config) (*Root, error) {
 	}, nil
 }
 
+// WithSymbolIndustrySubstrate installs the per-stock industry field
+// (issue #1943) on the shared symbol -> L1 mapper, so sector exposure and every
+// other SymbolL1Mapper consumer resolve through the whole listed market instead
+// of the classification tree's ~27 representative stocks.
+//
+// It is a no-op for a nil substrate, and wiring must only call it when
+// industry.substrate_from_symbol_industry_enabled is true — installing nothing
+// is what keeps the gate-off run byte-identical.
+func (r *Root) WithSymbolIndustrySubstrate(s industry.SymbolIndustrySubstrate) *Root {
+	if s == nil || r == nil || r.Mapper == nil {
+		return r
+	}
+	r.Mapper.WithSymbolIndustrySubstrate(s)
+	return r
+}
+
 // WithWeightEngine sets the shared WeightEngine on the root.
 // Callers (dashboard or simulation orchestrator) are responsible
 // for wiring the appropriate providers before setting the engine.
