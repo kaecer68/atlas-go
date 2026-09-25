@@ -4,6 +4,17 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### feat(industry,symbolindustry,monitoring): per-stock 產業欄位 + 第一方 `symbol_industry` channel（#1943 剩餘瓶頸）（2026-09-25）
+- **問題（#1943 實證）**：產業命名空間已在 #1951 統一（canonical 20 L1/18 L2 + `internal/sectormap` 12 命名空間顯式映射），#1958 也補上個股→產業的權威詞彙（namespace K `twse_industry_code`），但**瓶頸其實是資料母體**：DB 沒有任何 per-stock 產業欄位，symbol→L1 只能靠硬編碼代表股清單，生產實證覆蓋 **27 檔**（`universe_snapshot.json` `symbols_built=27`，約全體上市櫃 1.4%）⇒ 任何產業層數字都不顯著。
+- **新增（三塊，缺一不可）**：
+  1. **第一方 channel `symbol_industry`**（`internal/marketdata/symbol_industry_firstparty.go` + `internal/apigateway/adapter_symbol_industry.go`）：TWSE OpenAPI `opendata/t187ap03_L`（上市 `產業別`）+ TPEx `mopsfin_t187ap03_O`（上櫃 `SecuritiesIndustryCode`）→ 逐碼走 `sectormap` namespace K（22 mapped / 14 unmapped+reason）→ 原子寫入 `data/state/symbol_industry.json`（entries 依代號排序、位元可重現）。**免 key、不吃 FinMind 配額**；上游漂移（實測 TWSE 出現未宣告的 `91` = TDR 10 檔）以 `unknown` 顯式回報，不猜、不映射。契約 `HealthSource=file_state` + `SuccessCriteria=value_nonzero` + `DegradedOnEmpty=true`（#1953 規矩：空/缺檔一律 degraded，不得回 ok）。
+  2. **可查詢的 per-stock 產業欄位**：migration `000024_symbol_industry`（`symbol_industry` 表）＋ `internal/symbolindustry` store（backend-aware：production Postgres SSoT、CLI/dev 走 job-local SQLite，`NewStore(ctx, cfg.StoreBackend, pool, workDir)`；禁硬編碼 SQLite 路徑）。`auto_symbol_industry` 背景任務（5 分鐘 tick + 每日 gate）抓取後把快照鏡射進 DB，列數相同時不動 DB。
+  3. **真實消費者（禁止 inert）**：gate `industry.substrate_from_symbol_industry_enabled`（**預設 false**）開啟時，wiring 安裝 substrate 給兩個既有消費端 —— `composition.Root.SymbolL1Mapper`（sector exposure/配置）與 `SmartUniverseBuilder`（母體：`gatherAllSymbols` 由代表股改為全市場，`SubstrateIndustryMapper` 以 canonical L1 回答）。並以 `industry.RegisterSymbolIndustryConsumer()` 留下消費證據（#1944 教訓：寫入有、消費無的閉環不得再出現），測試釘住「substrate 真的被呼叫」（`lookups > 0`）。
+- **實測覆蓋率**：上游 2026-09-24/25 快照 = **1988 檔**（上市 1095 + 上櫃 893，0 重疊），**1599 檔**可達 canonical L1、379 檔屬 14 個 unmapped 碼（reason 明確）、10 檔 `91`(TDR) 為未宣告碼（unknown）；**20/20 canonical L1** 全數觸及（半導體 207、電子零組件+電腦週邊 319、光電 116、金融 40、航運 34…）。母體 **27 → 1599**（+59×）。
+- **逐位元/可逆**：gate off 時 `newSymbolIndustrySubstrate` 回 nil，`NewSubstrateIndustryMapper(nil)` 回傳原 mapper，`gatherAllSymbols` 完全不看 substrate ⇒ 既有行為與改動前一致；唯一開關是 config，翻回 false 下次 reload 即回基準，且 substrate 只讀既有資料、不寫歷史。
+- **未動（明確）**：canonical taxonomy 與 `internal/sectormap` 全部映射（只讀；發現缺漏回報不動手，`91` 即為回報項）、`twse_industry_code` 的 22/14 處置、上游 payload 語意；沒有新增 default-on 參數。
+- **檔案**：`internal/marketdata/symbol_industry_firstparty.go`、`internal/apigateway/{adapter_symbol_industry,gateway,channel_contract,register_adapters,limits}.go`、`internal/symbolindustry/{store,snapshot}.go`、`sql/migrations/000024_symbol_industry.{up,down}.sql`、`internal/industry/{symbol_industry_substrate,symbol_l1_mapper}.go`、`internal/monitoring/{industry_substrate,universe_scheduler}.go`、`internal/orchestrator/composition/root.go`、`cmd/atlas/{symbol_industry_substrate,data_sync_health_tasks,cmd_universe,bootstrap_helpers,main}.go`、`internal/config/{parameters,defaults_narrative}.go` + 兩份 golden、`configs/parameters.json`、`docs/contracts/channel-index.json`、`docs/specs/symbol-industry-substrate-spec.md`、`docs/data-sources.md`，以及對應 `*_test.go`。
+- **驗證**：`go test ./internal/{marketdata,apigateway,symbolindustry,industry,monitoring,config}/... ./cmd/atlas/... -count=1`、`make ci-gate`、`make ci-full` 全綠。
 ### fix(ops): `cmd/backfill-var-returns` 補上 `daily_returns` 日期語意並按交易日去重（#1935）
 - **問題**：`cmd/backfill-var-returns` 是 `daily_returns` 的第 4 個 writer（after `auto_daily_simulation`／`stress_test_daily`／`POST /admin/trigger-simulation`），但它只覆寫 `daily_returns`，不寫 `last_session_date`/`session_base_value`（#1900 / PR #1932 建立的日期語意）→ 重建後的檔案退回「無日期語意」；同一交易日存在多個 session 目錄（`session-<YYYYMMDD>-<replay mode>`）時，每個目錄各產生一筆 → 同日重複。
 - **實測（同一 fixture）**：修前 `Sessions: 4, Returns: 3`、無 `last_session_date`；修後 `Sessions: 3 (distinct trading days), Returns: 2`，`last_session_date=2026-09-24`、`session_base_value=1010000`。同日多 session 目錄 300 天的合成案例：修前 599 筆（含 300 筆同日 0 報酬）`var95=0.0000`、`cvar95=-0.0018`；修後 299 筆 `var95=-0.0200`、`cvar95=-0.0200`（同日零報酬不再主導尾端）。
@@ -11,6 +22,7 @@
 - **測試**：新增 `cmd/backfill-var-returns/main_test.go`（9 個測試）：日期語意寫入與非本命令欄位保留、同日去重（`last`/`first`）、連跑兩次序列與位元組不變、單一交易日拒絕且不改檔、`-dry-run` 不寫檔、**重建後引擎同日再跑 → 序列長度不變且報酬以前一交易日收盤重算**（並以修前輸出對照：同日重複 2 筆、`session_rerun=false`）、risk 快照不再被同日零報酬主導、參數形式。
 - **文件**：`docs/specs/sim-engine-spec.md` 新增「daily_returns 序列契約（交易日語意）」與 writer 義務；`docs/reference/traps.md` 既有陷阱列補上第 4 個 writer 與 spec 指標（維持 330 行）；`cmd/REGISTRY.md` 兩列更新。
 - **未動（明確）**：不回溯清理舊檔已存在的同日零報酬；不重建 `equity_curve` 與 `previous_values["_portfolio_"]`；不改 `internal/sim` 的 `RunDay` 語意；不改 production 資料。
+
 
 ### feat(sectorallocation/capitalflow): 產業命中率接進消費鏈路（config-gated、預設 off）（#1942/#1948）（2026-09-24）
 - **問題**：canonical 產業級命中率（#1942/#1948，扣成本口徑 Wilson CI + min_samples 校準）除報告端點 `/api/stock/industry_winrate` 外沒有任何 production 消費端 — 命中率不影響 applied 權重，也不影響 capital-flow assessment。

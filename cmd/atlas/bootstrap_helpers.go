@@ -191,6 +191,7 @@ func newUniverseBuilderDeps(
 	gateway *apigateway.Gateway,
 	um *metrics.UniverseMetrics,
 	suCfg config.SmartUniverseConfig,
+	substrate industry.SymbolIndustrySubstrate,
 ) monitoring.UniverseBuilderDeps {
 	riskFilter := monitoring.NewRiskExclusionFilter(nil, nil, portfolio.NewHistoricalPrices())
 	riskFilter.Configure(suCfg)
@@ -200,8 +201,15 @@ func newUniverseBuilderDeps(
 	)
 	narrativeBridge.Configure(suCfg)
 	factorEngine := portfolio.NewFactorEngine()
+	// issue #1943: with the per-stock industry substrate installed the universe
+	// population is the whole listed market instead of the classification tree's
+	// ~27 representative stocks, and symbols resolve to their canonical L1
+	// sector through the same field. substrate == nil (the gate-off default) is
+	// the pre-#1943 wiring unchanged.
+	treeMapper := monitoring.NewTreeBasedMapper(classTreeAdapter)
 	return monitoring.UniverseBuilderDeps{
-		Mapper:          monitoring.NewTreeBasedMapper(classTreeAdapter),
+		Mapper:          monitoring.NewSubstrateIndustryMapper(treeMapper, substrate, classTreeAdapter),
+		Substrate:       substrate,
 		Tree:            classTreeAdapter,
 		SupplyChain:     monitoring.AdaptSupplyChainGraph(industry.NewSupplyChainGraph()),
 		Screener:        screener.NewEngine(factorEngine, portfolio.NewFundamentalProvider()),

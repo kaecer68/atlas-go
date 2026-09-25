@@ -41,6 +41,32 @@ type SymbolL1Mapper struct {
 	bySymbol  map[string]SectorID
 	unmapped  map[string]string
 	conflicts []SymbolL1Conflict
+
+	// substrate is the optional per-stock industry field (issue #1943). It is
+	// installed only when the config gate
+	// industry.substrate_from_symbol_industry_enabled is true, and it takes
+	// precedence over the hard-coded representative-stock tables because it
+	// covers the whole listed market instead of ~27 symbols. nil = pre-#1943
+	// behavior, byte for byte.
+	substrate SymbolIndustrySubstrate
+}
+
+// WithSymbolIndustrySubstrate installs the per-stock industry substrate and
+// returns the mapper, so wiring can chain it onto
+// NewSymbolL1Mapper / NewSymbolL1MapperWithNamespace. Passing nil removes it.
+//
+// Installation is gate-driven and explicit: this method performs no config
+// lookup, so a caller that ignores the gate cannot accidentally turn the
+// substrate on, and a caller that installs it while the gate is off is
+// impossible by construction (the wiring reads the gate).
+func (m *SymbolL1Mapper) WithSymbolIndustrySubstrate(s SymbolIndustrySubstrate) *SymbolL1Mapper {
+	m.substrate = s
+	return m
+}
+
+// SymbolIndustrySubstrate returns the installed substrate, or nil.
+func (m *SymbolL1Mapper) SymbolIndustrySubstrate() SymbolIndustrySubstrate {
+	return m.substrate
 }
 
 // SymbolL1Claim is one segment's claim on a symbol.
@@ -214,10 +240,31 @@ func resolveSegmentL1(path []*IndustrySegment, ns ForeignNamespace) (SectorID, i
 // ResolveL1 returns the L1 SectorID for the given stock symbol.
 // The symbol is normalized before lookup. Returns (SectorID, true)
 // on match, or ("", false) when unknown.
+//
+// When a per-stock industry substrate is installed (issue #1943) it answers
+// first; the tree-derived table is the fallback, so the resolved population can
+// only grow. Use ResolveL1WithSource when the caller must know which substrate
+// answered.
 func (m *SymbolL1Mapper) ResolveL1(symbol string) (SectorID, bool) {
-	key := normalizeSymbol(symbol)
-	id, ok := m.bySymbol[key]
+	id, _, ok := m.ResolveL1WithSource(symbol)
 	return id, ok
+}
+
+// ResolveL1WithSource is ResolveL1 with the resolution source attached
+// (L1SourceSymbolIndustry / L1SourceRepresentativeStocks). An empty source with
+// ok=false means "unresolved", never "resolved by the default".
+func (m *SymbolL1Mapper) ResolveL1WithSource(symbol string) (SectorID, string, bool) {
+	key := normalizeSymbol(symbol)
+	if m.substrate != nil {
+		if id, ok := m.substrate.ResolveL1(key); ok && id != "" {
+			return id, L1SourceSymbolIndustry, true
+		}
+	}
+	id, ok := m.bySymbol[key]
+	if !ok {
+		return "", "", false
+	}
+	return id, L1SourceRepresentativeStocks, true
 }
 
 // Len returns the number of symbols in the mapping.

@@ -115,6 +115,11 @@
       "results": "(bool)"
     },
     {
+      "name": "GetIndustrySubstrateFromSymbolIndustryEnabled",
+      "params": "",
+      "results": "(bool)"
+    },
+    {
       "name": "GetL2_4Schedule",
       "params": "",
       "results": "(L2_4ScheduleParameters)"
@@ -956,7 +961,8 @@
         "EventSentimentCap ParameterMetadata[float64]",
         "CompositeCard ParameterMetadata[CompositeCardConfig]",
         "SeasonalMultipliers ParameterMetadata[SeasonalMultiplierConfig]",
-        "ClassificationTree ParameterMetadata[ClassificationTreeConfig]"
+        "ClassificationTree ParameterMetadata[ClassificationTreeConfig]",
+        "SubstrateFromSymbolIndustryEnabled ParameterMetadata[bool]"
       ],
       "kind": "struct",
       "name": "IndustryParameters"

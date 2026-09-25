@@ -377,6 +377,17 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	g.registry.Register("twse_insider", insiderAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_insider")
 
+	// symbol_industry (issue #1943) — 第一方 per-stock 產業欄位。TWSE OpenAPI
+	// opendata/t187ap03_L（上市 產業別）+ TPEx openapi/v1/mopsfin_t187ap03_O
+	// （上櫃 SecuritiesIndustryCode）→ canonical L1（sectormap namespace
+	// twse_industry_code，#1958）。免 key、零 FinMind 配額。狀態檔落在
+	// data/state/symbol_industry.json，由 auto_symbol_industry 任務刷新並灌入
+	// per-stock 產業欄位（DB）。
+	symbolIndustryAdapter := NewSymbolIndustryChannelAdapter(filepath.Join(workDir, "data", "state"))
+	g.registry.Register("symbol_industry", symbolIndustryAdapter)
+	logging.Info("apigateway", "adapter_registered", "channel", "symbol_industry",
+		"source", "TWSE:t187ap03_L+TPEx:mopsfin_t187ap03_O", "quota", "none")
+
 	// --- JANUS Regime (internal computed engine, optional) ---
 	if janusEngine != nil {
 		janusAdapter := NewJANUSRegimeChannelAdapter(janusEngine)

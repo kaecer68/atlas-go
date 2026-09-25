@@ -160,7 +160,7 @@ func TestRegisterDataSyncAndHealthTasks_FubonHealthTaskDeferredWithoutAdapter(t 
 	buf := captureLog(t)
 
 	cfg := config.Config{WorkDir: t.TempDir(), FubonAPIKey: "test-fubon-key"}
-	registerDataSyncAndHealthTasks(mgr, cfg, gw, nil, nil, nil)
+	registerDataSyncAndHealthTasks(mgr, cfg, gw, nil, nil, nil, nil)
 
 	if _, found := mgr.Get("channel_health_fubon"); found {
 		t.Error("channel_health_fubon must not be registered while the fubon channel is missing")
@@ -216,7 +216,7 @@ func TestRegisterDataSyncAndHealthTasks_FubonHealthTaskRegisteredWithAdapter(t *
 
 	mgr := apigateway.NewBackgroundTaskManager(gw)
 	buf := captureLog(t)
-	registerDataSyncAndHealthTasks(mgr, cfg, gw, nil, nil, nil)
+	registerDataSyncAndHealthTasks(mgr, cfg, gw, nil, nil, nil, nil)
 
 	healthTask, found := mgr.Get("channel_health_fubon")
 	if !found {

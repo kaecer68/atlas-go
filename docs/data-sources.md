@@ -97,6 +97,24 @@ Reads from `data/sector_data/sector_data.json`. Provides TSMC revenue, CoWoS uti
 | Provider | `internal/marketdata/twse_sbl_provider.go` + `twse_sbl_firstparty.go` |
 | Scheduled Task | `auto_twse_sbl`（1h tick，台北 15:00+ 每日一次；配額耗盡時 00:00 重置後補抓） |
 
+### symbol_industry — per-stock 產業欄位（`symbol_industry`，issue #1943）
+
+| Attribute | Detail |
+|-----------|--------|
+| Source | **第一方：TWSE OpenAPI `opendata/t187ap03_L`（上市，`產業別`）+ TPEx OpenAPI `mopsfin_t187ap03_O`（上櫃，`SecuritiesIndustryCode`）** |
+| Status | **LIVE** — 免 API key、零 FinMind 配額；2026-09-24/25 實測 1988 檔（上市 1095 + 上櫃 893）、1599 檔可達 canonical L1、20/20 L1 觸及 |
+| Mapping | 逐碼走 `internal/sectormap` namespace `twse_industry_code`（22 mapped / 14 unmapped+reason）；未宣告碼（實測 `91`＝TDR）以 `unknown` 回報，**不映射** |
+| Rate Limit | 共用 `getTWSESharedLimiter()` 與 `getTPExSharedLimiter()`（不新增桶） |
+| Channel ID | `symbol_industry` |
+| Gateway Adapter | `internal/apigateway/adapter_symbol_industry.go` |
+| Provider | `internal/marketdata/symbol_industry_firstparty.go` |
+| 狀態檔 | `data/state/symbol_industry.json`（entries 依代號排序、原子寫入、位元可重現） |
+| DB 欄位 | `symbol_industry` 表（migration `000024`；讀取走 `internal/symbolindustry.NewStore`，Postgres SSoT / job-local SQLite） |
+| Scheduled Task | `auto_symbol_industry`（5 分鐘 tick + 每日 gate；抓取後鏡射進 DB） |
+| Contract | `file_state` + `value_nonzero` + `DegradedOnEmpty=true`（空/缺檔一律 degraded，不回 `ok`） |
+| Consumer（gate: `industry.substrate_from_symbol_industry_enabled`，預設 off） | `composition.Root.SymbolL1Mapper`（sector exposure）、`SmartUniverseBuilder` 母體（27 → per-stock 欄位） |
+| 規格 | [`docs/specs/symbol-industry-substrate-spec.md`](specs/symbol-industry-substrate-spec.md) |
+
 ### TDCC Equity Dispersion — 集保股權分散（`tdcc_equity_dispersion`，STUB G01）
 
 | Attribute | Detail |

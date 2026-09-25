@@ -2051,6 +2051,7 @@ export interface IndustryParameters {
   composite_card: string;
   seasonal_multipliers: string;
   classification_tree: string;
+  substrate_from_symbol_industry_enabled: string;
 }
 
 export interface IndustryRecommendation {
@@ -4326,6 +4327,45 @@ export interface SymbolFlow {
   date: string;
 }
 
+export interface SymbolIndustryCodeDisposition {
+  code: string;
+  name?: string;
+  count: number;
+  reason?: string;
+}
+
+export interface SymbolIndustryCounts {
+  total: number;
+  mapped: number;
+  unmapped: number;
+  unknown: number;
+  canonical_l1: number;
+}
+
+export interface SymbolIndustryEntry {
+  symbol: string;
+  company_name?: string;
+  market?: string;
+  industry_code: string;
+  industry_name_zh?: string;
+  canonical_l1?: string;
+  mapping_status: string;
+  mapping_reason?: string;
+  source?: string;
+  as_of?: string;
+}
+
+export interface SymbolIndustrySnapshot {
+  channel: string;
+  updated_at: string;
+  sources: string[];
+  counts: SymbolIndustryCounts;
+  l1_counts: Record<string, number>;
+  unmapped_codes: SymbolIndustryCodeDisposition[];
+  unknown_codes: SymbolIndustryCodeDisposition[];
+  entries: SymbolIndustryEntry[];
+}
+
 export interface SymbolPredictionItem {
   agent_id: string;
   symbol: string;
@@ -5076,6 +5116,12 @@ export interface tpexSBLResponse {
   tables: string[];
 }
 
+export interface tpexSymbolIndustryRow {
+  SecuritiesCompanyCode: string;
+  CompanyName: string;
+  SecuritiesIndustryCode: string;
+}
+
 export interface tsmcRevenueRecord {
   date: string;
   revenue: number;
@@ -5193,6 +5239,12 @@ export interface twseSBLResponse {
   title: string;
   fields: string[];
   data: string[][];
+}
+
+export interface twseSymbolIndustryRow {
+  公司代號: string;
+  公司名稱: string;
+  產業別: string;
 }
 
 export interface twseT86Response {
