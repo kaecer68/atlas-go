@@ -464,6 +464,30 @@ func run(args []string, deps appDeps) error {
 	// and the admin endpoints report 503.
 	channelKeyMgr := initChannelKeyManager(&cfg, pool)
 
+	// issue #1943: per-stock industry substrate.
+	//
+	// The hard-coded representative-stock tables reach ~27 symbols in
+	// production (~3.2% of the listed market), so every industry-level
+	// statistic used to rest on a population too small to be significant. The
+	// first-party `symbol_industry` channel now supplies the per-stock field for
+	// the whole listed market; this installs it as the resolver substrate for
+	// both consumers:
+	//
+	//   - compositionRoot's SymbolL1Mapper  -> sector exposure / allocation
+	//   - newUniverseBuilderDeps (below)    -> SmartUniverse population
+	//
+	// nil unless configs/parameters.json ->
+	// industry.substrate_from_symbol_industry_enabled is true, so the default
+	// run is byte-identical with the pre-#1943 behavior.
+	symbolIndustrySub := newSymbolIndustrySubstrate(context.Background(), cfg, pool)
+	if symbolIndustrySub != nil {
+		industry.RegisterSymbolIndustryConsumer("cmd/atlas.sector_exposure")
+		industry.RegisterSymbolIndustryConsumer("cmd/atlas.universe_builder")
+		if compositionRoot != nil {
+			compositionRoot.WithSymbolIndustrySubstrate(symbolIndustrySub)
+		}
+	}
+
 	// Phase A3: Clean up stale gateway heartbeat alerts on startup.
 
 	// Phase A3: Clean up stale gateway heartbeat alerts on startup.
@@ -1397,7 +1421,7 @@ func run(args []string, deps appDeps) error {
 					paramsCfg.Realtime.UpdateIntervalMs.Value, 60)
 			}
 
-			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool, collector)
+			registerDataSyncAndHealthTasks(taskMgr, cfg, gateway, monitor, pool, collector, symbolIndustrySub)
 
 			registerCapitalTasks(capitalDeps{
 				taskMgr:           taskMgr,
@@ -1936,7 +1960,7 @@ func run(args []string, deps appDeps) error {
 			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
-				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg)
+				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg, symbolIndustrySub)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_universe_refresh",
 					Interval: 1 * time.Minute,
@@ -1947,7 +1971,7 @@ func run(args []string, deps appDeps) error {
 			}
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
-				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg)
+				suDeps := newUniverseBuilderDeps(cfg, classTreeAdapter, gateway, um, suCfg, symbolIndustrySub)
 				_ = taskMgr.Register(&apigateway.ScheduledTask{
 					Name:     "auto_universe_full_rebuild",
 					Interval: 1 * time.Minute,

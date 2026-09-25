@@ -428,8 +428,8 @@ func TestFetchResult_JSONMarshal_OmitsEmptyFallbackAndLastError(t *testing.T) {
 
 func TestChannelIDs(t *testing.T) {
 	ids := channelIDs()
-	if len(ids) != 41 {
-		t.Fatalf("expected 41 channel IDs, got %d", len(ids))
+	if len(ids) != 42 {
+		t.Fatalf("expected 42 channel IDs, got %d", len(ids))
 	}
 
 	expected := []string{
@@ -447,6 +447,8 @@ func TestChannelIDs(t *testing.T) {
 		// us_cpi: BLS CPI-U YoY channel feeding MacroDataSnapshot.CPIYoY for
 		// the narrative inflation detectors (spec v0.2 §4).
 		"us_cpi",
+		// symbol_industry: first-party per-stock industry field (issue #1943).
+		"symbol_industry",
 	}
 	seen := make(map[string]bool)
 	for _, id := range ids {

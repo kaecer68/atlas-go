@@ -81,6 +81,25 @@ func GetIndustryHitRateConsumeEnabled() bool {
 	return cfg.SectorAllocation.IndustryHitRateConsumeEnabled.Value
 }
 
+// GetIndustrySubstrateFromSymbolIndustryEnabled returns the current value of
+// the per-stock industry substrate gate (issue #1943).
+//
+// When true, wiring code installs the first-party `symbol_industry` field as
+// the symbol -> canonical L1 source for industry-level statistics (sector
+// exposure, SmartUniverse population, coverage audits). When false (default)
+// nothing is installed and every resolver keeps its pre-#1943 behavior, i.e.
+// the hard-coded representative-stock tables.
+//
+// Reads from the loaded parameters config (default-off when not loaded) so the
+// default-off semantics hold even before config load.
+func GetIndustrySubstrateFromSymbolIndustryEnabled() bool {
+	cfg := GetParametersConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.Industry.SubstrateFromSymbolIndustryEnabled.Value
+}
+
 // UseLLMSectorAgents gates the L2.3 PoC SemiconductorLLMAgent
 // (internal/orchestrator/semiconductor_llm_agent.go) behind a
 // feature flag. Default false keeps the deterministic
@@ -833,6 +852,15 @@ type IndustryParameters struct {
 	// ClassificationTree defines the complete industry hierarchy (L1/L2/L3).
 	// Previously hardcoded in internal/industry/types.go; now parameter-managed.
 	ClassificationTree ParameterMetadata[ClassificationTreeConfig] `json:"classification_tree"`
+
+	// SubstrateFromSymbolIndustryEnabled gates the per-stock industry
+	// substrate (issue #1943): when true, wiring code installs the first-party
+	// `symbol_industry` channel field as the symbol -> canonical L1 source for
+	// industry-level statistics, replacing the hard-coded representative-stock
+	// tables (which cover ~27 symbols in production, ~3.2% of the listed
+	// universe). Default false: nothing is installed and every resolver is
+	// byte-identical with the pre-gate behavior.
+	SubstrateFromSymbolIndustryEnabled ParameterMetadata[bool] `json:"substrate_from_symbol_industry_enabled"`
 }
 
 // CompositeCardConfig holds tunable parameters for building the CycleStatusCard composite sentiment gauge.

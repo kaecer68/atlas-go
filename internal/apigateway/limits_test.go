@@ -34,6 +34,7 @@ func TestNewRateLimitManager_AllChannels(t *testing.T) {
 		"government_flow":        false,
 		"twse_etf":               false,
 		"twse_insider":           false,
+		"symbol_industry":        false, // issue #1943: per-stock industry field (TWSE t187ap03_L + TPEx)
 		"taifex_daily":           false,
 		"taifex_institutional":   false,
 		"twse_oddlot":            false,

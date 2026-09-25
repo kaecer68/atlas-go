@@ -2808,6 +2808,12 @@
         "shipping_analyst": "shipping"
       }
     },
+    "substrate_from_symbol_industry_enabled": {
+      "rationale": "Per-stock industry substrate gate (2026-09-24, issue #1943): the hard-coded representative-stock tables cover only ~27 symbols in production (~3.2% of the listed universe), so every industry-level statistic (sector exposure, SmartUniverse population, coverage audit) is computed on a population too small to be significant. The first-party symbol_industry channel now supplies the per-stock field for the whole listed market. Default off: nothing is installed, every resolver stays byte-identical with the pre-gate revision; flip to true to start the observation window (population \u003e= 800 symbols, 20/20 L1).",
+      "source": "experimental",
+      "todo": "Promote to SourceHeuristic after an observation window confirms the larger population is regression-free (\u003e=20 sessions, 0 invariant violations).",
+      "value": false
+    },
     "us_exposure_threshold_1": {
       "rationale": "US geographic exposure threshold (50%); triggers initial risk score",
       "source": "heuristic",

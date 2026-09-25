@@ -2,7 +2,7 @@
 
 > 進入 `internal/<mod>/` 工作前，先讀該目錄下的 `AGENTS.md`（或 `CONSTITUTION.md`）。模組特有陷阱寫在裡面，跳過會踩坑。
 >
-> **總計**：81 個模組（29 S / 33 E / 8 X / 1 A / 9 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）並按實際列數校正 S/U 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
+> **總計**：82 個模組（29 S / 33 E / 9 X / 1 A / 9 U）；2026-09-24 新增 `sectormap`（#1943）、`stockflows`（#1945）；2026-09-25 新增 `symbolindustry`（#1943），並按實際列數校正 S/U/X 計數。保留 AGENTS.md 的 hot-path 覆蓋模組共 **15** 個（2026-07-11 從 27 合併精簡，清單見下方）。
 
 > **v0.0.2.0 變更（2026-07-24）**：成熟度重分組——swarm X→A、replay/capitalflow/forecast/retail/strategy_ranker/stress/reporting/subscription 升至 E；sectorallocation 補加入 X；calibration 補加入 U。
 > **2026-08-07 補齊**：16 個實際存在但未索引模組補入（S: constants/experiment/janus/live；E: acceptance/eventquality/marketexplain/methodology/observability/userstate；X: alerting/llm/llm_annotator/stocktools；U: backfill/buildinfo）。
@@ -87,7 +87,7 @@
 
 | `sectormap` | 產業命名空間橋接 leaf 套件（零專案相依，因 industry→marketdata 不可反向）— canonical L1/L2 清單 + L2→L1 父層表 + 12 個命名空間的逐 key 顯式映射（禁止模糊比對與隱式 alias；未映射必回報）。`docs/specs/sector-namespace-canonical-spec.md`、issue #1943 |
 
-### X · Experimental（實驗中，8 個）
+### X · Experimental（實驗中，9 個）
 
 | 模組 | 關鍵主題 |
 |------|---------|
@@ -98,6 +98,7 @@
 | `alerting` | Alertmanager webhook 接收（observability 堆疊警報）|
 | `llm` | **AGENTS.md** — capability-based 多 provider routing（Router 唯一入口、空輸出視為失敗；DataClass 僅審計 metadata）|
 | `llm_annotator` | LLM 自然語言註解 — strategy_techniques 的 LLM 註解路徑 |
+| `symbolindustry` | per-stock 產業欄位持久化 + state 檔快照 reader（issue #1943；`symbol_industry` 表、Postgres SSoT / job-local SQLite 雙 backend）|
 | `stocktools` | per-symbol 台股查詢端點（quote/fundamentals/chips/technical）|
 | `stockpicker` | **PR 1a/1b/1c/2a** — 個股選股核心：勝率數學 + outcome/win-rate 儲存 + PIT 回測聚合 job（可設定條件引擎 `conditions.go`，參數自 `parameters.json`；`-conditions`/`-list-conditions` 選條件）；CLI 盤後執行 **+ runtime 排程**（`stockpicker_daily_update`）；flow 檔新鮮度由 `FlowStale` + `max_flow_age_days` 把關（#1945）|
 | `stockflows` | 個股層 T86 flow store（`data/state/stock_flows/<symbol>.json`）維護：CLI（`cmd/backfill-stockpicker-flows`）與排程（`scheduler.stockpicker_flows_update`）共用的唯一實作；idempotent per-date merge + `NewestStoredDate` 增量視窗（#1945）|
@@ -169,6 +170,7 @@
 | 封存 | `swarm` | X → A（目錄已刪除，PR #963） |
 | 新增 | `sectorallocation` | 加入 X-tier（產業權重單一權威，多因子引擎） |
 | 新增 | `sectormap` | 加入 E-tier（產業命名空間橋接 leaf 套件，issue #1943）|
+| 新增 | `symbolindustry` | 加入 X-tier（per-stock 產業欄位持久化 + 快照 reader，issue #1943）|
 | 新增 | `calibration` | 加入 U-tier（`cmd/calibrate-parameters`）|
 
 ## cmd/ 索引
