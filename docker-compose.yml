@@ -210,6 +210,29 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
 
+  # Prometheus exporters（2026-09-25）—— 供上面 prometheus.yml 的 redis / postgres
+  # scrape job 使用。加它們的原因：原本這兩個 job 指向資料庫裸埠（沒有 /metrics），
+  # 結構上永遠 scrape 失敗 → 兩則 liveness 警報永久 firing，且因告警出口 token
+  # 失效而無人收到。任何一個 exporter 掛掉時，對應的 TargetDown 警報就會正常響。
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: atlas-postgres-exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=disable
+    networks:
+      - atlas-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: atlas-redis-exporter
+    restart: unless-stopped
+    environment:
+      # atlas-redis 無 requirepass（實測 redis-cli ping → PONG）
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - atlas-network
+
   # OpenTelemetry collector — receives OTLP HTTP from atlas, writes
   # traces to TimescaleDB via postgresql exporter.
   otel-collector:
