@@ -141,6 +141,7 @@
 | `docs/jev/JEV-USAGE-CONTRACT.md` | Jev（TypeSafe System One）在本生態的使用契約（傳輸層 / 判斷設計 / 門檻校準 / 評估紀律 / fail-open） | ✅ |
 | `docs/jev/JEV-EVAL-FRAMEWORK.md` | Jev 預測力評估框架契約（task spec 介面、PIT 分離、指標定義、門檻與分級紀律、洩漏探針、擴充介面；#1968） | ✅ |
 | `docs/jev/JEV-EVAL-STAGE1-INDUSTRY-L1.md` | Stage 1 E0 實測：canonical L1 產業層（GT 口徑、窗口與排除理由、分級結論、成本、Stage 2/3 需求；#1968） | ✅ |
+| `docs/jev/JEV-EVAL-STAGE3-EVENTS.md` | Stage 3 E0 實測：排程事件層（事件骨架 GT 重建、品質閘門與排除、六個具名 baseline 與可得性、anchor 分解、洩漏探針、成本；#1968） | ✅ |
 
 | `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |
 | `docs/specs/agent-mcp-phase4-spec.md` | MCP Phase 4 規格 | ✅ |
