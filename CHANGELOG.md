@@ -4,6 +4,14 @@
 
 > 0.0.2.0（2026-07-22）後累積功能補記（2026-08-07 盤查生成）。
 
+### fix(ops): `cmd/backfill-var-returns` 補上 `daily_returns` 日期語意並按交易日去重（#1935）
+- **問題**：`cmd/backfill-var-returns` 是 `daily_returns` 的第 4 個 writer（after `auto_daily_simulation`／`stress_test_daily`／`POST /admin/trigger-simulation`），但它只覆寫 `daily_returns`，不寫 `last_session_date`/`session_base_value`（#1900 / PR #1932 建立的日期語意）→ 重建後的檔案退回「無日期語意」；同一交易日存在多個 session 目錄（`session-<YYYYMMDD>-<replay mode>`）時，每個目錄各產生一筆 → 同日重複。
+- **實測（同一 fixture）**：修前 `Sessions: 4, Returns: 3`、無 `last_session_date`；修後 `Sessions: 3 (distinct trading days), Returns: 2`，`last_session_date=2026-09-24`、`session_base_value=1010000`。同日多 session 目錄 300 天的合成案例：修前 599 筆（含 300 筆同日 0 報酬）`var95=0.0000`、`cvar95=-0.0018`；修後 299 筆 `var95=-0.0200`、`cvar95=-0.0200`（同日零報酬不再主導尾端）。
+- **修正**：`main.go` 改為 typed `domain.SimulationState` round-trip（與 `sim.SavePersistentState` 同 schema，並套用 `sim.LoadPersistentState` 的 nil 正規化），寫入 `last_session_date`（重建序列的最後交易日）與 `session_base_value`（前一交易日收盤，與 `RunDay` 同語意）；session 目錄依交易日去重（預設 `-on-duplicate=last`，即 `recorded_at` 最新者；`first` 為 earliest）；`session_id` 解析改用 `domain.SessionDateFromID`，無法解析時以目錄名回退，兩者皆無 → 略過並 warning；相異交易日 <2 → 報錯且不改檔；新增 `-dry-run`。舊的位置參數形式（`<sessions-dir> <state-file>`）保留，flag 可前可後。
+- **測試**：新增 `cmd/backfill-var-returns/main_test.go`（9 個測試）：日期語意寫入與非本命令欄位保留、同日去重（`last`/`first`）、連跑兩次序列與位元組不變、單一交易日拒絕且不改檔、`-dry-run` 不寫檔、**重建後引擎同日再跑 → 序列長度不變且報酬以前一交易日收盤重算**（並以修前輸出對照：同日重複 2 筆、`session_rerun=false`）、risk 快照不再被同日零報酬主導、參數形式。
+- **文件**：`docs/specs/sim-engine-spec.md` 新增「daily_returns 序列契約（交易日語意）」與 writer 義務；`docs/reference/traps.md` 既有陷阱列補上第 4 個 writer 與 spec 指標（維持 330 行）；`cmd/REGISTRY.md` 兩列更新。
+- **未動（明確）**：不回溯清理舊檔已存在的同日零報酬；不重建 `equity_curve` 與 `previous_values["_portfolio_"]`；不改 `internal/sim` 的 `RunDay` 語意；不改 production 資料。
+
 ### feat(sectorallocation/capitalflow): 產業命中率接進消費鏈路（config-gated、預設 off）（#1942/#1948）（2026-09-24）
 - **問題**：canonical 產業級命中率（#1942/#1948，扣成本口徑 Wilson CI + min_samples 校準）除報告端點 `/api/stock/industry_winrate` 外沒有任何 production 消費端 — 命中率不影響 applied 權重，也不影響 capital-flow assessment。
 - **修正**：新增 config gate `sector_allocation.industry_hit_rate_consume_enabled`（預設 **false**）。開啟後：(a) `ComputeProjectedTarget` 把 `calibration_status == eligible` 的 canonical L1 列轉成 `DriverInputs.CapitalFlow` 的 additive tilt（`(WilsonLower-0.5)*0.2`，夾在 ±0.05，`avoid` 反向）；(b) `LatestAssessment` 附上 advisory 的 `industry_hit_rate_evidence`（`applied`/`reason`/rows/`mean_wilson_lower`/tilt 極值）。provider 綁定在 `cmd/atlas`（`stocktools.SectorAllocationHitRateProvider`，read-only canonical 聚合），綁定本身在 gate off 時 inert。
