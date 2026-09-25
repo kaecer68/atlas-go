@@ -43,6 +43,34 @@ func (p *GatewayBackedProvider) Name() string {
 	return "gateway-backed-" + p.inner.Name()
 }
 
+// GetQuotesBatch implements marketdata.PartialBatchProvider so the universe
+// pipeline receives the per-symbol verdict of the wrapped provider (issue
+// #1986). It applies the same independent rate limiter as GetQuotes: one
+// request either way, so the budget accounting is unchanged.
+func (p *GatewayBackedProvider) GetQuotesBatch(ctx context.Context, asOf time.Time, symbols []string) (marketdata.QuoteBatch, error) {
+	p.initLimiter()
+	if err := p.limiter.Wait(ctx); err != nil {
+		return marketdata.NewQuoteBatch(symbols), fmt.Errorf("gateway-backed provider rate limit: %w", err)
+	}
+
+	p.initProvider()
+
+	batch, err := marketdata.GetQuotesBatch(ctx, p.inner, asOf, symbols, marketdata.QuoteOutcomeError)
+	if err != nil {
+		logging.Error("gateway_provider", "get_quotes_failed",
+			"provider", p.inner.Name(),
+			"symbols", len(symbols),
+			"err", err.Error())
+		return batch, err
+	}
+
+	logging.Info("gateway_provider", "get_quotes_ok",
+		"provider", p.inner.Name(),
+		"symbols", len(batch.Quotes))
+
+	return batch, nil
+}
+
 func (p *GatewayBackedProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols []string) ([]domain.Quote, error) {
 	p.initLimiter()
 	if err := p.limiter.Wait(ctx); err != nil {

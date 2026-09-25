@@ -50,8 +50,12 @@ func TestNewUniverseBuilderDeps_WiresRealQuoteProvider(t *testing.T) {
 	if deps.Quotes == nil {
 		t.Fatal("UniverseBuilderDeps.Quotes is nil: the pipeline would publish symbols_ranked=0 (I25)")
 	}
-	if _, ok := deps.Quotes.(*orchestrator.GatewayBackedProvider); !ok {
-		t.Errorf("Quotes = %T, want *orchestrator.GatewayBackedProvider (the same provider the simulation path uses)", deps.Quotes)
+	cp, ok := deps.Quotes.(*marketdata.CoverageCompletingProvider)
+	if !ok {
+		t.Fatalf("Quotes = %T, want *marketdata.CoverageCompletingProvider", deps.Quotes)
+	}
+	if _, ok := cp.Primary().(*orchestrator.GatewayBackedProvider); !ok {
+		t.Errorf("wrapped provider = %T, want *orchestrator.GatewayBackedProvider (the same provider the simulation path uses)", cp.Primary())
 	}
 	if deps.RiskFilter == nil {
 		t.Fatal("RiskFilter is nil: Layer 2.5 would be skipped entirely")
@@ -119,8 +123,22 @@ func TestNewUniverseQuoteProvider_IsGatewayBacked(t *testing.T) {
 	if p == nil {
 		t.Fatal("newUniverseQuoteProvider returned nil")
 	}
-	if _, ok := p.(*orchestrator.GatewayBackedProvider); !ok {
-		t.Fatalf("provider = %T, want *orchestrator.GatewayBackedProvider", p)
+	cp, ok := p.(*marketdata.CoverageCompletingProvider)
+	if !ok {
+		t.Fatalf("provider = %T, want *marketdata.CoverageCompletingProvider wrapping the gateway-backed provider", p)
+	}
+	if _, ok := cp.Primary().(*orchestrator.GatewayBackedProvider); !ok {
+		t.Fatalf("wrapped provider = %T, want *orchestrator.GatewayBackedProvider", cp.Primary())
+	}
+	// issue #1986: the coverage layer must actually carry the first-party
+	// whole-market source that closes the 上櫃 gap. An empty source list would
+	// silently degrade to TWSE-only coverage (904/1599 measured 2026-09-24).
+	sources := cp.MarketWideSources()
+	if len(sources) == 0 {
+		t.Fatal("coverage layer has no whole-market source: the 上櫃 gap would stay open")
+	}
+	if sources[0].Name() != "tpex_daily_close" {
+		t.Errorf("first whole-market source = %q, want tpex_daily_close", sources[0].Name())
 	}
 }
 
