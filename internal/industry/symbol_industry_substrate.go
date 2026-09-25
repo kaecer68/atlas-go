@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ─── Per-stock industry substrate (issue #1943) ─────────────────────────────
@@ -87,6 +88,64 @@ type SymbolIndustryCoverage struct {
 // unavailable instead of inventing a denominator.
 type SymbolIndustryCoverageReporter interface {
 	Coverage() SymbolIndustryCoverage
+}
+
+// SymbolIndustryCoverageAsOfReporter is a SECOND, independently optional
+// extension of SymbolIndustrySubstrate: the ability to DATE the accounting
+// Coverage() returns.
+//
+// It is a separate interface, not a method added to
+// SymbolIndustryCoverageReporter, for the same reason that one is separate from
+// the port: adding a method to an existing interface breaks every implementation
+// that already satisfies it (and every test that pins its method set). A
+// reporter that cannot date its accounting must not be forced to invent a
+// timestamp -- it simply does not implement this interface, and the consumer
+// reports the age as unknown. Consumers type-assert independently:
+//
+//	if asOf, ok := substrate.(industry.SymbolIndustryCoverageAsOfReporter); ok { ... }
+//
+// Why the age matters: Coverage() answers from the last SUCCESSFUL load, and a
+// failed reload leaves that view in place instead of emptying it (failing closed
+// to the pre-#1943 behavior). So a substrate whose reloads have all failed since
+// the last success keeps reporting a healthy-looking ratio computed from rows it
+// loaded days ago, and the reload TTL does not bound it. Publishing the instant
+// does not fix that; it is what turns "the check returned something" into "the
+// check returned something dated N hours ago" (the #1944 / #1953 / false-green
+// family: a check that reports having data instead of whether the data is
+// right).
+type SymbolIndustryCoverageAsOfReporter interface {
+	// CoverageAsOf returns when the accounting reported by Coverage() was
+	// loaded, and whether such a load has ever succeeded.
+	//
+	// The instant is the load's own wall-clock time, NOT the time the data
+	// itself claims to be from: the upstream company-industry table carries no
+	// per-row timestamp, and the channel snapshot's UpdatedAt describes the
+	// FETCH, not the in-memory view that Coverage() divides. Callers must read
+	// the pair as "how long has this view been serving": ok=false means no
+	// successful load has ever happened (so Upstream is 0 and coverage is not
+	// measurable), NOT that the data is fresh.
+	CoverageAsOf() (time.Time, bool)
+}
+
+// SymbolIndustryReloadErrorReporter is a THIRD, independently optional
+// extension of SymbolIndustrySubstrate: the last reload FAILURE, so an operator
+// can tell "the load failed" apart from "the load succeeded and the population
+// was empty".
+//
+// Both states surface as Upstream == 0 through Coverage(), and they call for
+// opposite responses (fix the store vs. investigate the upstream channel), which
+// is the exact ambiguity the coverage audit cannot resolve on its own. Separate
+// interface, same compatibility rule as above; consumers type-assert
+// independently:
+//
+//	if errReporter, ok := substrate.(industry.SymbolIndustryReloadErrorReporter); ok { ... }
+type SymbolIndustryReloadErrorReporter interface {
+	// LastReloadError returns the message of the most recent FAILED reload, or
+	// "" when the most recent reload succeeded (or none has been attempted).
+	// Implementations must NOT retry a load from this accessor: it reports the
+	// evidence of the last attempt, and a getter that repairs the state it is
+	// asked about erases that evidence.
+	LastReloadError() string
 }
 
 // Resolution sources for SymbolL1Mapper.ResolveL1WithSource.
