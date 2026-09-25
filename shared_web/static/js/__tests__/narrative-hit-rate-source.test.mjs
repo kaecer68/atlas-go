@@ -304,3 +304,22 @@ test('renderCapitalCausality: template badge carries prior label and provenance'
   assert.equal(html.includes('歷史命中率'), false);
   assert.equal(/命中率 0\.0+%/.test(html), false, 'unavailable 的 0 不得顯示為 0.0%');
 });
+
+// ── 靜態 HTML 說明文案（client shell）──────────────────────────────────────
+//
+// client_web/static/index.html 的「如何解讀本頁」原本寫 hit_rate（歷史命中率），
+// 同一個 false claim 只是換了一個檔案。逐字守門，避免它漂回去。
+
+test('client shell help text does not call the narrative hit rate historical', () => {
+  const htmlPath = path.resolve(HERE, '../../../../client_web/static/index.html');
+  const html = readFileSync(htmlPath, 'utf8');
+  assert.equal(
+    html.includes('hit_rate（歷史命中率）') || html.includes('hit_rate(歷史命中率)'),
+    false,
+    'client_web/static/index.html 不得再把 narrative hit_rate 寫成「歷史命中率」',
+  );
+  assert.ok(
+    html.includes('先驗命中率'),
+    'client_web/static/index.html 的因果頁說明應標明 hit_rate 是先驗命中率',
+  );
+});
