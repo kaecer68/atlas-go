@@ -23,13 +23,22 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
+  # 2026-09-25 修正：這兩個 job 原本指向資料庫裸埠（redis:6379 / postgres:5432），
+  # 但資料庫不提供 HTTP /metrics → target 永遠 down → AtlasPostgresTargetDown /
+  # AtlasFubonProxyTargetDown 兩則警報自 2026-09-23 起無限 firing（且因告警出口
+  # token 失效而無人看見）。現在改抓專用 exporter；**job 名保持不變**，
+  # 所以既有 alert 規則（up{job="redis"} == 0 / up{job="postgres"} == 0）無需修改。
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
+    scrape_interval: 15s
 
   - job_name: 'postgres'
     static_configs:
-      - targets: ['postgres:5432']
+      - targets: ['postgres-exporter:9187']
+    metrics_path: /metrics
+    scrape_interval: 15s
 
   - job_name: 'otel-collector'
     static_configs:
