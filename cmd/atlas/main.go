@@ -1063,6 +1063,20 @@ func run(args []string, deps appDeps) error {
 			// T+1 samples). The adapter bridges ledger's record type to the
 			// handler's local PredictionRecord projection.
 			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
+			// I4 cycle half (#1944 Batch 4): inject the authoritative, measured
+			// CycleTracker. The industry service's tracker is the one
+			// auto_cycle_update writes every 6h through CycleTracker.UpdatePosition
+			// with FinMind revenue/profit growth, and the one the composition root
+			// shares (I13). MeasuredCycleProvider drops industries that still only
+			// carry the startup seed, so a config seed is never presented as a
+			// measured cycle position — those stay at the neutral 0.0 that the
+			// unwired state produced.
+			if industrySvc := dashboard.GetIndustryService(); industrySvc != nil && industrySvc.CycleTracker != nil {
+				edHandler.SetSectorCycleProvider(eventdriven.NewMeasuredCycleProvider(industrySvc.CycleTracker))
+				log.Printf("[EventDriven] sector cycle provider wired (measured-only CycleTracker)")
+			} else {
+				log.Printf("[EventDriven] sector cycle provider unavailable; cycle_position contribution stays 0")
+			}
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				// I4 (#1944 Batch 3): the engine.sector_rotation.strategic_prior
