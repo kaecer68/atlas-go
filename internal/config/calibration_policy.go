@@ -149,6 +149,6 @@ type CalibrationValidationOptions struct {
 	// MaxAge bounds file freshness. Zero keeps the caller's default (48h).
 	MaxAge time.Duration
 	// Policy is the validation policy. Nil means: full freshness scope, no
-	// accepted findings — i.e. any finding fails the run (legacy behaviour).
+	// accepted findings — i.e. any finding fails the run (legacy behavior).
 	Policy *CalibrationValidationPolicy
 }

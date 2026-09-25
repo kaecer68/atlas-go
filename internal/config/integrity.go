@@ -217,7 +217,7 @@ const (
 // Calibration freshness scopes.
 const (
 	// CalibrationScopeFull enforces freshness: a stale mtime or a stale/absent
-	// updated_at is an error. This is the default and the legacy behaviour.
+	// updated_at is an error. This is the default and the legacy behavior.
 	CalibrationScopeFull = "full"
 	// CalibrationScopeStructure reports freshness as an observation and only
 	// fails on structural findings. It exists because the CI checkout of
