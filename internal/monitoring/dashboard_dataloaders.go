@@ -80,18 +80,12 @@ func LoadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 	return outcomes, scanner.Err()
 }
 
-// BuildSymbolSectorMap constructs a symbol-to-sector mapping from the industry classifier.
+// BuildSymbolSectorMap constructs a symbol-to-sector mapping from the industry
+// classifier through the shared deterministic index
+// (industry.BuildSymbolSectorIndex) — multi-assigned symbols resolve to the
+// most specific segment instead of to Go map order (#1944 Batch 4, item I27).
 func BuildSymbolSectorMap(classifier *industry.ClassificationTree) map[string]string {
-	m := make(map[string]string)
-	if classifier == nil {
-		return m
-	}
-	for _, seg := range classifier.GetAllSegments() {
-		for _, sym := range seg.RepresentativeStocks {
-			m[sym] = seg.ID
-		}
-	}
-	return m
+	return industry.BuildSymbolSectorIndex(classifier).BySymbol
 }
 
 // Ensure DashboardAPI implements DataLoader interface.

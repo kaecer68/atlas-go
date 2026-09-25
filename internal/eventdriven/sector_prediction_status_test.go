@@ -92,8 +92,11 @@ func TestProductionSectorPredictionStatusFlagOff(t *testing.T) {
 	if st.StrategicPriorApplied {
 		t.Error("status.StrategicPriorApplied must be false when no predictor exists")
 	}
-	if st.CycleProviderWired != SectorCycleProviderWired {
-		t.Errorf("status.CycleProviderWired = %v, want %v", st.CycleProviderWired, SectorCycleProviderWired)
+	// No predictor exists for this request, so the per-request status must
+	// report "no cycle provider" regardless of what production wires globally
+	// (SectorCycleProviderWired == true since #1944 Batch 4).
+	if st.CycleProviderWired {
+		t.Error("status.CycleProviderWired must be false when no predictor exists")
 	}
 	if st.Persisted != SectorPredictionPersisted {
 		t.Errorf("status.Persisted = %v, want %v", st.Persisted, SectorPredictionPersisted)
@@ -139,8 +142,11 @@ func TestSectorPredictionsAreNeverPersisted(t *testing.T) {
 	if SectorPredictionPersistenceReason == "" {
 		t.Fatal("SectorPredictionPersistenceReason must name the blocking schema gap")
 	}
-	if SectorCycleProviderWired {
-		t.Fatal("SectorCycleProviderWired must stay false until one shared, measured CycleTracker is wired (I4/I13)")
+	// I4's cycle half is wired since #1944 Batch 4 (cmd/atlas injects the
+	// industry service's CycleTracker through MeasuredCycleProvider). Keep this
+	// tripwire so the constant cannot silently drift back.
+	if !SectorCycleProviderWired {
+		t.Fatal("SectorCycleProviderWired must be true: cmd/atlas wires MeasuredCycleProvider(industry service CycleTracker) (I4 cycle half)")
 	}
 }
 

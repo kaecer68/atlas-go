@@ -35,6 +35,36 @@ func applyMacroConvictionScaling(recs []domain.Recommendation, adj *macroflow.Ad
 	return out
 }
 
+// macroAdjustmentAppliesTo reports whether the macro-flow adjustment really
+// reaches the recommendation convictions: the control layer must run
+// (policy.RequireCROPass) and there must be at least one recommendation to
+// scale. applyMacroConvictionScaling is called exactly under this condition.
+//
+// This predicate is the single source of truth for that condition: the control
+// layer gates the scaling on it, and executor_pipeline.go decides from it
+// whether the macro_flow reasoning trace may use the word "applied" — so the
+// trace cannot claim an application that did not happen (issue #1944 N-A2: the
+// trace used to be emitted before ApplyControl, and even when RequireCROPass=
+// false skipped the scaling entirely).
+func macroAdjustmentAppliesTo(macroAdjustment *macroflow.AdjustmentResult, recs []domain.Recommendation, policy domain.ExecutionPolicy) bool {
+	return macroAdjustment != nil && len(recs) > 0 && policy.RequireCROPass
+}
+
+// macroAdjustmentSkipReason explains why the macro-flow adjustment was NOT
+// applied. Empty string means it was applied (see macroAdjustmentAppliesTo).
+func macroAdjustmentSkipReason(macroAdjustment *macroflow.AdjustmentResult, recs []domain.Recommendation, policy domain.ExecutionPolicy) string {
+	switch {
+	case macroAdjustment == nil:
+		return "no macro-flow adjustment was computed"
+	case !policy.RequireCROPass:
+		return "control layer bypassed (policy.RequireCROPass=false)"
+	case len(recs) == 0:
+		return "no recommendations to scale"
+	default:
+		return ""
+	}
+}
+
 func clampConvictionInt(v int) int {
 	if v < 0 {
 		return 0
@@ -58,7 +88,13 @@ func applyControlLayerWithOutcomes(registry domain.AgentRegistry, plugins *Plugi
 		}}
 	}
 
-	current := applyMacroConvictionScaling(recs, macroAdjustment)
+	// Macro-flow conviction scaling: gated by macroAdjustmentAppliesTo so the
+	// pipeline's macro_flow trace (which uses the same predicate) can never claim
+	// an application the control layer did not perform.
+	current := recs
+	if macroAdjustmentAppliesTo(macroAdjustment, recs, policy) {
+		current = applyMacroConvictionScaling(recs, macroAdjustment)
+	}
 	outcomes := make([]domain.GuardOutcome, 0)
 	for _, agent := range registry.Agents {
 		if !agent.Enabled || (agent.Layer != domain.LayerControl && agent.Layer != domain.LayerSuperinvestor) {

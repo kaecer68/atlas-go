@@ -115,6 +115,38 @@ type FileClosureStore struct {
 
 const closurePolicyFileName = "sector_closure_policy.jsonl"
 
+// closureStoreDirSegments is the work-dir-relative location of the closure
+// policy store: <work_dir>/data/sector/allocation. It lives under the
+// persistent data/ tree (not data/state) so the file survives container
+// restarts together with the rest of the persistent mount.
+var closureStoreDirSegments = []string{"data", "sector", "allocation"}
+
+// ClosureStoreDirRel returns the work-dir-relative directory of the closure
+// policy store.
+//
+// It is the single source of truth for that location (issue #1944 N-A4). Every
+// writer and reader MUST resolve its directory through this helper or through
+// ResolveClosureStoreDir/ResolveClosureStorePath, so external tooling cannot end
+// up probing a path nothing writes. The regression this replaced: the closure
+// preflight CLI validated <work_dir>/data/state/sector_closure_policy.jsonl,
+// while the production store was created at <work_dir>/data/sector/allocation.
+func ClosureStoreDirRel() string {
+	return filepath.Join(closureStoreDirSegments...)
+}
+
+// ResolveClosureStoreDir returns the closure-store directory for a work dir.
+// Construct the store with
+// NewFileClosureStore(ResolveClosureStoreDir(workDir)).
+func ResolveClosureStoreDir(workDir string) string {
+	return filepath.Join(workDir, ClosureStoreDirRel())
+}
+
+// ResolveClosureStorePath returns the full path of the closure policy file for a
+// work dir — exactly the file FileClosureStore reads from and writes to.
+func ResolveClosureStorePath(workDir string) string {
+	return filepath.Join(ResolveClosureStoreDir(workDir), closurePolicyFileName)
+}
+
 // NewFileClosureStore creates a FileClosureStore rooted at dir.
 func NewFileClosureStore(dir string) *FileClosureStore {
 	return &FileClosureStore{dir: dir}

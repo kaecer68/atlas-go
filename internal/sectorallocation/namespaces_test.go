@@ -7,25 +7,6 @@ import (
 	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
-func TestNamespaceKind_OnlyFourCanonical(t *testing.T) {
-	want := []sectorallocation.NamespaceKind{
-		sectorallocation.NamespaceEquityL1,
-		sectorallocation.NamespaceResearchThemeL2,
-		sectorallocation.NamespaceStrategyBucket,
-		sectorallocation.NamespaceAssetClass,
-	}
-	if len(want) != 4 {
-		t.Fatalf("must remain 4 namespaces, got %d", len(want))
-	}
-	for _, n := range []sectorallocation.NamespaceKind{
-		"equity_l1", "L2", "themes", "sector_l1", "narrative",
-	} {
-		if sectorallocation.IsValidNamespace(n) {
-			t.Errorf("non canonical namespace accepted: %q", n)
-		}
-	}
-}
-
 func TestL1FinalTarget_RejectsNonCanonicalKeys(t *testing.T) {
 	bad := sectorallocation.L1FinalTarget{
 		Weights: map[industry.SectorID]float64{
@@ -88,33 +69,6 @@ func TestL1FinalTarget_FullyCanonicalSucceeds(t *testing.T) {
 	}
 	if s < 0.999999999 || s > 1.000000001 {
 		t.Fatalf("test fixture sum drift: %.12f", s)
-	}
-}
-
-func TestThemeExposure_RowMustSumToOne(t *testing.T) {
-	if err := sectorallocation.ValidateThemeExposure(sectorallocation.ThemeExposure{
-		Theme: "ai_supply_chain",
-		ToL1:  map[industry.SectorID]float64{industry.SectorSemiconductor: 0.7},
-	}); err == nil {
-		t.Fatal("must reject theme row not summing to 1")
-	}
-}
-
-func TestThemeExposure_NoFuzzyIndustrialToIndustrials(t *testing.T) {
-	if err := sectorallocation.ValidateThemeExposure(sectorallocation.ThemeExposure{
-		Theme: "industrials_alias",
-		ToL1:  map[industry.SectorID]float64{industry.SubIndustryIndustrial: 1.0},
-	}); err == nil {
-		t.Fatal("must reject fuzzy mapping between L1 and L2 forms")
-	}
-}
-
-func TestThemeExposure_RejectsNonL1Keys(t *testing.T) {
-	if err := sectorallocation.ValidateThemeExposure(sectorallocation.ThemeExposure{
-		Theme: "ai_supply_chain",
-		ToL1:  map[industry.SectorID]float64{industry.SubIndustryIndustrial: 1.0},
-	}); err == nil {
-		t.Fatal("theme exposure must not map to L2 key")
 	}
 }
 

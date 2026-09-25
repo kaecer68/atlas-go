@@ -1120,8 +1120,9 @@ func buildPassedSymbolKey(finalRecs []domain.Recommendation) map[string]struct{}
 
 // drawNormalized draws a deterministic value in [-1, 1] for one
 // (agent, symbol, trading day) triple. The trading day is part of the seed so
-// a rolling window is not assembled from a single repeated value
-// (forward_return_fallback.go documents the earlier symbol-only seed bug).
+// a rolling window is not assembled from a single repeated value (A4 L2/L3:
+// a symbol-only seed gave every agent the same sample and collapsed the
+// multi-agent window into a few repeated values).
 func drawNormalized(symbol, agentID string, asOf time.Time) float64 {
 	hash := hashString(agentID + "|" + symbol + "|" + asOf.Format("2006-01-02"))
 	return (float64(hash%10000) - 5000) / 5000.0

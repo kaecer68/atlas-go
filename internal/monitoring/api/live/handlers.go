@@ -606,15 +606,10 @@ func loadRecommendationOutcomes(ledgerDir, sessionID string) ([]domain.Recommend
 	return outcomes, scanner.Err()
 }
 
+// buildSymbolSectorMap resolves symbol → segment through the shared
+// deterministic index (industry.BuildSymbolSectorIndex). The previous local
+// copy iterated GetAllSegments() in Go map order, so a multi-assigned symbol
+// got a different label from one run to the next (#1944 Batch 4, item I27).
 func buildSymbolSectorMap(classifier *industry.ClassificationTree) map[string]string {
-	m := make(map[string]string)
-	if classifier == nil {
-		return m
-	}
-	for _, seg := range classifier.GetAllSegments() {
-		for _, sym := range seg.RepresentativeStocks {
-			m[sym] = seg.ID
-		}
-	}
-	return m
+	return industry.BuildSymbolSectorIndex(classifier).BySymbol
 }

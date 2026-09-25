@@ -33,12 +33,51 @@ func TestSemiconductorLLMAgent_Supports_FlagOff(t *testing.T) {
 	}
 }
 
-// TestSemiconductorLLMAgent_Supports_FlagOn verifies that
-// Supports() returns true when the feature flag is on.
-func TestSemiconductorLLMAgent_Supports_FlagOn(t *testing.T) {
-	agent := SemiconductorLLMAgent{UseLLMOverride: truePtr()}
+// TestSemiconductorLLMAgent_Supports_FlagOnWithDrivers verifies that
+// Supports() returns true when the feature flag is on AND both drivers
+// are wired — the only state in which the LLM agent can actually serve
+// the desk (#1944 Batch 4, item I19).
+func TestSemiconductorLLMAgent_Supports_FlagOnWithDrivers(t *testing.T) {
+	mock := NewMockLLMDriver()
+	agent := SemiconductorLLMAgent{
+		PlanDriver:     mock,
+		ReflectDriver:  mock,
+		UseLLMOverride: truePtr(),
+	}
 	if !agent.Supports(makeSpec()) {
-		t.Error("Supports with UseLLMOverride=true: got false, want true")
+		t.Error("Supports with UseLLMOverride=true and both drivers: got false, want true")
+	}
+}
+
+// TestSemiconductorLLMAgent_Supports_FlagOnWithoutDrivers pins the I19
+// safety rule: "flag on but not wired" must NOT claim the desk. The
+// registry's first-match-wins rule plus Recommend's (zero, false) on a
+// missing driver would otherwise silently delete every semiconductor
+// recommendation instead of letting the deterministic executor serve.
+func TestSemiconductorLLMAgent_Supports_FlagOnWithoutDrivers(t *testing.T) {
+	if (SemiconductorLLMAgent{UseLLMOverride: truePtr()}).Supports(makeSpec()) {
+		t.Error("Supports with flag on but no drivers: got true, want false (deterministic executor must keep serving)")
+	}
+	onlyPlan := NewMockLLMDriver()
+	if (SemiconductorLLMAgent{UseLLMOverride: truePtr(), PlanDriver: onlyPlan}).Supports(makeSpec()) {
+		t.Error("Supports with only PlanDriver wired: got true, want false")
+	}
+	onlyReflect := NewMockLLMDriver()
+	if (SemiconductorLLMAgent{UseLLMOverride: truePtr(), ReflectDriver: onlyReflect}).Supports(makeSpec()) {
+		t.Error("Supports with only ReflectDriver wired: got true, want false")
+	}
+}
+
+// TestSemiconductorLLMAgent_FlagEnabledIsSeparateFromSupports verifies the
+// gate and the wiring requirement are reported separately, so "why is the
+// LLM path not serving?" can be answered without reading the registry.
+func TestSemiconductorLLMAgent_FlagEnabledIsSeparateFromSupports(t *testing.T) {
+	agent := SemiconductorLLMAgent{UseLLMOverride: truePtr()}
+	if !agent.flagEnabled() {
+		t.Error("flagEnabled with UseLLMOverride=true: got false, want true")
+	}
+	if agent.Supports(makeSpec()) {
+		t.Error("flagEnabled=true but no drivers: Supports must stay false")
 	}
 }
 

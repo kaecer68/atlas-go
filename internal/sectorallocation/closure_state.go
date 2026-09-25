@@ -25,9 +25,17 @@ type SACClosureStatus struct {
 	// ObservationWindow tracks whether dark-launch observation is active.
 	ObservationWindow ObservationWindow `json:"observation_window"`
 
-	// SessionCount is the number of valid simulation sessions observed
-	// since the observation window started. Promotion requires ≥20.
+	// SessionCount is the number of snapshot-producing sessions observed
+	// since the observation window started. A session that only stored a
+	// snapshot counts here even when nothing consumed the policy.
 	SessionCount int `json:"session_count"`
+
+	// AppliedSessionCount is the number of sessions whose policy was actually
+	// consumed (applied=true with a ConsumptionReceipt). It was added in #1944
+	// Batch 4 / N-A3 because SessionCount alone let the promotion gate pass with
+	// zero genuinely applied sessions — a stored-but-unconsumed snapshot is not
+	// an applied policy (spec §8.3). Promotion requires ≥20 of these.
+	AppliedSessionCount int `json:"applied_session_count"`
 
 	// LastReceiptID is the most recent mutation receipt recorded.
 	LastReceiptID string `json:"last_receipt_id,omitempty"`
@@ -164,6 +172,9 @@ func (m *SACClosureStateManager) StopObservation() error {
 }
 
 // RecordSession increments the session counter and records the receipt.
+//
+// This counts snapshot-producing sessions, NOT applied policies: see
+// RecordAppliedSession and IsPromotable (N-A3).
 func (m *SACClosureStateManager) RecordSession(receiptID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -171,6 +182,20 @@ func (m *SACClosureStateManager) RecordSession(receiptID string) error {
 		m.data = &SACClosureStatus{}
 	}
 	m.data.SessionCount++
+	m.data.LastReceiptID = receiptID
+	return m.save()
+}
+
+// RecordAppliedSession increments the applied-session counter. Call it only with
+// consumption evidence (a ConsumptionReceipt), i.e. when the rotation really was
+// applied. Promotion requires ≥20 applied sessions (N-A3).
+func (m *SACClosureStateManager) RecordAppliedSession(receiptID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.data == nil {
+		m.data = &SACClosureStatus{}
+	}
+	m.data.AppliedSessionCount++
 	m.data.LastReceiptID = receiptID
 	return m.save()
 }
@@ -187,7 +212,12 @@ func (m *SACClosureStateManager) RecordInvariantViolation() error {
 }
 
 // IsPromotable returns true when conditions for promotion are met:
-// ≥20 sessions, 0 violations, observation completed.
+// ≥20 sessions, ≥20 of them actually applied, 0 violations, observation
+// completed.
+//
+// The applied requirement is N-A3 (#1944 Batch 4): before it, recording 20
+// stored-but-unconsumed snapshots was enough to satisfy the gate, even though
+// not a single policy had been consumed.
 func (m *SACClosureStateManager) IsPromotable() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -195,6 +225,7 @@ func (m *SACClosureStateManager) IsPromotable() bool {
 		return false
 	}
 	return m.data.SessionCount >= 20 &&
+		m.data.AppliedSessionCount >= 20 &&
 		m.data.InvariantViolations == 0 &&
 		!m.data.ObservationWindow.Running
 }

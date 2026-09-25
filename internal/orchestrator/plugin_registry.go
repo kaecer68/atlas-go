@@ -504,12 +504,24 @@ func (r *PluginRegistry) Recommendation(agent domain.AgentSpec, quote domain.Quo
 	if len(fq) > 0 && fq[0] != nil {
 		resolved = fq[0]
 	}
-	for _, exec := range r.agentExecutors {
-		if exec.Supports(agent) {
-			return exec.Recommend(agent, quote, prompt, regime, resolved)
-		}
+	if exec, ok := resolveAgentExecutor(r.agentExecutors, agent); ok {
+		return exec.Recommend(agent, quote, prompt, regime, resolved)
 	}
 	return domain.Recommendation{}, false
+}
+
+// resolveAgentExecutor returns the first registered executor that claims the
+// spec (first-match-wins). Order therefore decides routing: an executor that is
+// registered after another executor claiming the same skill is unreachable
+// (#1944 Batch 4, item I19 — SemiconductorLLMAgent used to be registered after
+// the deterministic SemiconductorExecutor and could never run).
+func resolveAgentExecutor(executors []AgentExecutor, agent domain.AgentSpec) (AgentExecutor, bool) {
+	for _, exec := range executors {
+		if exec.Supports(agent) {
+			return exec, true
+		}
+	}
+	return nil, false
 }
 
 func (r *PluginRegistry) ApplyControl(agent domain.AgentSpec, recs []domain.Recommendation, policy domain.ExecutionPolicy, regime domain.Regime) []domain.Recommendation {

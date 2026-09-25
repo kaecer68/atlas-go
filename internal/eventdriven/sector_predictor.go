@@ -55,8 +55,9 @@ func (sp *SectorPredictor) SetStrategicPrior(p *sectorallocation.StrategicSector
 func (sp *SectorPredictor) StrategicPriorApplied() bool { return sp.prior != nil }
 
 // CycleProviderWired reports whether a cycle-score provider is attached. When
-// false, predictSector's `cycle_position` contribution is identically 0. In
-// production this is false by design — see eventdriven.SectorCycleProviderWired.
+// false, predictSector's `cycle_position` contribution is identically 0.
+// Production attaches one (see eventdriven.SectorCycleProviderWired), wrapped in
+// MeasuredCycleProvider so seed-only industries still score 0.
 func (sp *SectorPredictor) CycleProviderWired() bool { return sp.cycle != nil }
 
 // PriorWeight returns the strategic prior weight for sid; 0 if no prior set.

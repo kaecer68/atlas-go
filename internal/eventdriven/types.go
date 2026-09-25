@@ -109,16 +109,16 @@ const (
 
 	// SectorCycleProviderWired reports whether production injects a cycle-score
 	// provider (industry.CycleTracker.GetContinuousPhaseScore) into the
-	// SectorPredictor. false: the two CycleTracker instances that exist at
-	// runtime (orchestrator composition root and monitoring dashboard) are not
-	// synchronized, and the dashboard one is seeded from
-	// industry.default_metrics config rather than measured data (I13). Feeding
-	// either into the predictor would present a config seed as a measured cycle
-	// position. To flip this: (1) make one CycleTracker instance shared and fed
-	// by a real UpdatePosition producer (I13), (2) pass it through
-	// RegisterRoutesWithDetectors → Handler.SetSectorCycleProvider, (3) update
-	// TestProductionSectorPredictionStatusLeavesCycleUnwired.
-	SectorCycleProviderWired = false
+	// SectorPredictor. true since #1944 Batch 4 completed the I4 cycle half:
+	// cmd/atlas injects the industry service's CycleTracker — the instance
+	// auto_cycle_update writes to through UpdatePosition with FinMind-measured
+	// revenue/profit growth, and the instance the composition root shares (I13)
+	// — wrapped in MeasuredCycleProvider so industries that only carry the
+	// startup seed still contribute the neutral 0.0 instead of a seed presented
+	// as a measurement. Flip this back only with a documented reason; the
+	// per-request status still derives from the live predictor
+	// (SectorPredictionStatus.CycleProviderWired).
+	SectorCycleProviderWired = true
 )
 
 // Reasons reported by SectorPredictionStatus.Reason when sector rows are absent.
@@ -152,9 +152,11 @@ type SectorPredictionStatus struct {
 	// only when a sectorallocation.StrategicSectorPrior is attached, which is
 	// what makes the `overall_baseline` driver able to contribute (#1944 item I4).
 	StrategicPriorApplied bool `json:"strategic_prior_applied"`
-	// CycleProviderWired is derived from the predictor's live state. In
-	// production it is false (see SectorCycleProviderWired) and the
-	// `cycle_position` driver can therefore never contribute.
+	// CycleProviderWired is derived from the predictor's live state: true when
+	// Handler.SetSectorCycleProvider was given a provider (production does this
+	// whenever sector prediction is built — see SectorCycleProviderWired), which
+	// is what lets the `cycle_position` driver contribute for industries with
+	// measured evidence (#1944 item I4 cycle half).
 	CycleProviderWired bool `json:"cycle_provider_wired"`
 	// Persisted mirrors SectorPredictionPersisted for this payload.
 	Persisted         bool   `json:"persisted"`
@@ -206,4 +208,24 @@ type HistoricalHitRate struct {
 	HitRate       float64 `json:"hit_rate"` // 0..1; 0 when Samples==0
 	Calibrated    bool    `json:"calibrated"`
 	Reason        string  `json:"reason,omitempty"`
+
+	// NeutralSamples counts reconciled predictions whose predicted direction
+	// was neutral (DirectionSign == 0). A neutral prediction can never be a
+	// directional hit, so it sits in the denominator and drags the rate down
+	// without being an error (N-U6, #1944 Batch 4: production showed 12.1%
+	// built from neutral rows). Exposed so the rate is never read as
+	// "directionally wrong 88% of the time".
+	NeutralSamples int `json:"neutral_samples"`
+	// DirectionalSamples is Samples - NeutralSamples: the rows the rate can
+	// actually judge.
+	DirectionalSamples int `json:"directional_samples"`
+	// HitRateBasis is the machine-readable definition of the ratio. Stable
+	// string so a UI can label the number instead of guessing.
+	HitRateBasis string `json:"hit_rate_basis"`
 }
+
+// HitRateBasisDirectionSign is the only supported basis for
+// HistoricalHitRate.HitRate: hits / samples over T+1-reconciled records, where a
+// hit requires the predicted sign and the realized sign to agree and be
+// non-zero (a neutral prediction is always a miss).
+const HitRateBasisDirectionSign = "t_plus_1_reconciled_direction_sign"

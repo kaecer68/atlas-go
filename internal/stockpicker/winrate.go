@@ -142,18 +142,6 @@ func SignalWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, c
 	return summary, nil
 }
 
-// StockWinRate 股票層級勝率摘要（跨訊號來源聚合的語意，便於未來擴展）。
-// 數學與 SignalWinRate 共用；Source 欄位語意為「股票層級」。
-func StockWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) (SignalWinRateSummary, error) {
-	return SignalWinRate(outcomes, costRate, minSamples, confidence)
-}
-
-// StrategyWinRate 策略層級勝率摘要（跨股票聚合的語意，便於未來擴展）。
-// 數學與 SignalWinRate 共用；Source 欄位語意為「策略層級」。
-func StrategyWinRate(outcomes []SignalOutcome, costRate float64, minSamples int, confidence float64) (SignalWinRateSummary, error) {
-	return SignalWinRate(outcomes, costRate, minSamples, confidence)
-}
-
 // ConditionWinRateSummary is a condition-level aggregate: win-rate statistics
 // for one signal source computed across ALL symbols (cross-symbol). It
 // answers "is this condition effective overall?" — the per-symbol

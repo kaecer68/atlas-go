@@ -121,11 +121,6 @@
         "reason": "僅宣告與註解(params.go:1152)；EventCalendar 用硬編 defaultEventRules()（industry/event_calendar.go:163,417），config 型別未接線。",
         "evidence": "internal/config/parameters.go:840"
       },
-      "industry.event_sentiment_cap": {
-        "class": "legacy-inert",
-        "reason": "reader 僅 merge(defaults_narrative.go:1155)；實際 clamp 硬編 ±0.2/±0.05（industry/event_calendar.go:915-935），未讀此參數。",
-        "evidence": "internal/config/parameters.go:844"
-      },
       "industry.freshness_scores": {
         "class": "legacy-inert",
         "reason": "FreshnessScoresConfig 在 internal/config 外 0 引用；真實 freshness multiplier 硬編 1.0/0.4/0.0（industry/cycle.go:627-631）。",
@@ -743,69 +738,27 @@
       },
       "internal/orchestrator/sector_allocation_closure_metrics.go:EmitFallbackCount": {
         "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitFallbackCount(:64) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:64  test-files=0"
+        "class": "purposely-reserved",
+        "reason": "SA11.B 暗啟動 emitter 仍無呼叫端（#1944 Batch 4 / N-A1 複核）：fallback「累計次數」的權威來源尚不存在（fallback 目前逐次記在 snapshot.fallback 的 reason）⇒ 未接線，避免發明一個沒有來源的計數。",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go   (Batch 4: 7/11 wired)"
       },
       "internal/orchestrator/sector_allocation_closure_metrics.go:EmitLegacyRead": {
         "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitLegacyRead(:59) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:59  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitPolicyApplied": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitPolicyApplied(:49) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:49  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitPolicyConsumed": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitPolicyConsumed(:54) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:54  test-files=0"
+        "class": "purposely-reserved",
+        "reason": "SA11.B 暗啟動 emitter 仍無呼叫端（#1944 Batch 4 / N-A1 複核）：legacy read 事件屬於 LegacyCompatReader 路徑，該 reader 目前只有測試建構（見 internal/sectorallocation/legacy_compat.go:SetSunsetGate 同批登錄）⇒ 沒有誠實的呼叫點。",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go   (Batch 4: 7/11 wired)"
       },
       "internal/orchestrator/sector_allocation_closure_metrics.go:EmitRollbackDrill": {
         "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitRollbackDrill(:69) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:69  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotCurrent": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotCurrent(:29) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:29  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotEnd": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotEnd(:44) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:44  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotFallback": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotFallback(:34) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:34  test-files=0"
+        "class": "purposely-reserved",
+        "reason": "SA11.B 暗啟動 emitter 仍無呼叫端（#1944 Batch 4 / N-A1 複核）：rollback drill 由另一子系統執行（本批未觸），sector rotation 路徑上沒有 drill 事件可發 ⇒ 未接線。",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go   (Batch 4: 7/11 wired)"
       },
       "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotProjection": {
         "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotProjection(:39) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:39  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotStart": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotStart(:19) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:19  test-files=0"
-      },
-      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotTarget": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "NewSACMetrics 與 EmitSnapshotTarget(:24) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
-        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:24  test-files=0"
+        "class": "purposely-reserved",
+        "reason": "SA11.B 暗啟動 emitter 仍無呼叫端（#1944 Batch 4 / N-A1 複核）：本批已把 snapshot.start/current/target/fallback/end 與 policy.consumed/applied 接上 StrategyEvolver.ApplySectorRotation（生產路徑 orchestrator.SystemCore → system_risk_session.go:438），但 projection 需要「被 clamp 的 sector 數」，而 WeightEngine.ComputeProjectedTarget 不回傳該資訊 ⇒ 沒有誠實的呼叫點，未接線（不得傳假 0）。接線前提：讓投影回傳 clamped 統計。",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go   (Batch 4: 7/11 wired)"
       },
       "internal/portfolio/analysis.go:AddTrade": {
         "tier": "test-only",

@@ -272,7 +272,7 @@ func run(args []string, deps appDeps) error {
 	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
-	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|scrape|status")
+	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|status")
 	fubonProxyPort := flags.Int("fubon-port", constants.FubonProxyPort, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
@@ -317,7 +317,7 @@ func run(args []string, deps appDeps) error {
 		// unparseable we fall back to NoOpNextSessionResolver so the
 		// production container never blocks on a missing dataset.
 		closureStore := sectorallocation.NewFileClosureStore(
-			filepath.Join(cfg.WorkDir, "data", "sector", "allocation"),
+			sectorallocation.ResolveClosureStoreDir(cfg.WorkDir),
 		)
 		replayPath := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 		if replayPath == "" {
@@ -1063,6 +1063,20 @@ func run(args []string, deps appDeps) error {
 			// T+1 samples). The adapter bridges ledger's record type to the
 			// handler's local PredictionRecord projection.
 			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
+			// I4 cycle half (#1944 Batch 4): inject the authoritative, measured
+			// CycleTracker. The industry service's tracker is the one
+			// auto_cycle_update writes every 6h through CycleTracker.UpdatePosition
+			// with FinMind revenue/profit growth, and the one the composition root
+			// shares (I13). MeasuredCycleProvider drops industries that still only
+			// carry the startup seed, so a config seed is never presented as a
+			// measured cycle position — those stay at the neutral 0.0 that the
+			// unwired state produced.
+			if industrySvc := dashboard.GetIndustryService(); industrySvc != nil && industrySvc.CycleTracker != nil {
+				edHandler.SetSectorCycleProvider(eventdriven.NewMeasuredCycleProvider(industrySvc.CycleTracker))
+				log.Printf("[EventDriven] sector cycle provider wired (measured-only CycleTracker)")
+			} else {
+				log.Printf("[EventDriven] sector cycle provider unavailable; cycle_position contribution stays 0")
+			}
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
 				// I4 (#1944 Batch 3): the engine.sector_rotation.strategic_prior

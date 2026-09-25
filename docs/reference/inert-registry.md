@@ -3,8 +3,9 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v3（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3） |
-| Batch 2／Batch 3 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；**Batch 3 §9**：高嚴重項逐項處置、新發現 N-A5、仍未處理清單、可重跑證據） |
+| 狀態 | v4（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3 + **Batch 4**） |
+| Batch 2／3／4 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；Batch 3 §9；**Batch 4 §10**：長尾逐項處置、I29 殘留診斷、ledger/nightly 誠實聲明、可重跑證據） |
+| 靜態閘門一致性 | `scripts/ci/inert-baseline.json` = **179** 筆（Batch 4 前 187）。Batch 4 移除：`config-inert industry.event_sentiment_cap`（已接線）＋7 個 `writer-no-consumer` SAC emitter（`EmitSnapshotStart/Target/Current/Fallback/End`、`EmitPolicyConsumed/Applied`）；`check_inert_closure.sh` exit 0、stale 0 |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
 | 上游盤查 | `~/workspace/atlas-notes/03-system-health/2026-09-24-industry-hitrate-survey.md` §6（Q6，I1–I36） |
 | 相關規格 | [`../specs/sector-allocation-simulation-closure-spec.md`](../specs/sector-allocation-simulation-closure-spec.md)（§8.3 application truthfulness）、[`../specs/industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md)（命中率口徑） |
@@ -48,7 +49,7 @@
 | 新 N-C1 | `industry.composite_card` config 已填滿但 `defaultCardConfig()` 回硬編碼副本 | 改 config 無效 | **接線**：`defaultCardConfig()` 疊加 config（空/零值保留預設）；shipped config 與硬編碼值相同 ⇒ 今日行為中性 | `internal/industry/cycle_status_card.go`（`applyCompositeCardConfig`） |
 | 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence` |
 
-### Batch 2 剩餘（原清單；**Batch 3 已逐項複核並就地標註**，見下方 Batch 3 表與 spec §4/§5）
+### Batch 2 剩餘（原清單；Batch 3 已逐項複核並就地標註，**Batch 4 §Batch 4 再複核剩餘項**；見 spec §4/§5/§10）
 
 - **I4/I12/I13** → **Batch 3 已處理**：I12/I13 接線（共享 dashboard 驅動器與 tracker）；I4 prior 接線、cycle 明示未啟用。
 - **I17/I23** → **Batch 3 已處理**：health 明示未知＋消費端 clamp；narrative HitRate 全面加 `hit_rate_source` 來源標記。
@@ -105,12 +106,50 @@
 ### Batch 3 仍未處理（誠實清單）
 
 - **I31 CI 半邊**：需 `.github/workflows/` 一行（加上 freshness 政策裁決：production 主機執行，或 CI 只驗結構）。
-- **I24 / I32 / I30**：ledger 口徑與 workflow 寫入票，未動。
-- **I17 producer 半邊**：per-pattern 校準仍無寫入者（health 只做到誠實未知）。
-- **I4 cycle 半邊**：`SectorCycleProviderWired=false`（predictor 端仍未接權威 tracker）。
+- **I24 / I32 / I30**：ledger 口徑與 workflow 寫入票，Batch 4 仍未動（I30 屬 honesty-batch lane、I32 需 ledger schema 變更；見 §Batch 4）。
+- **I17 producer 半邊** → **Batch 4 已接線**：`cmd/calibrate-seasonal --update` 寫 per-pattern `calibration_observations`／`calibration_verdict`／`calibration_timestamp`（見 §Batch 4）。
+- **I4 cycle 半邊** → **Batch 4 已接線**：`SectorCycleProviderWired=true`＋`MeasuredCycleProvider`（seed-only 產業維持中性 0.0）（見 §Batch 4）。
 - **I23 前端文案**：`shared_web/static/js/pages/narrative.js` 標題仍寫「歷史命中率」（前端 lane）。
 - **I16 (a) 選項**：要真的量測 volatile 需產品先凍結「高波動」門檻定義。
-- **Batch 2 中／低項**：I7 / I18 / I19 / I21 / I27 / I28 / I29 / I36 / N-C3 / N-U2 / N-U5 / N-U6 / N-A1..A4 仍見 spec §4/§5。
+- **Batch 2 中／低項** → **Batch 4 已逐項複核**：I18／I27／I28／N-C3／N-U2／N-U5／N-U6／N-A1（7/11）／N-A2／N-A3／N-A4 已接線或移除；I7／I19 殘留／I29 殘留／I36／I21 仍列在 §Batch 4 誠實清單。
+
+
+## Batch 4（已處置，#1944，2026-09-25）— inert 長尾清掃
+
+> 完整證據、逐項 file:line、可重跑命令與誠實聲明見 [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md) §10。本節只登記**處置結論**與機讀旗標。
+> 基準：`origin/main@1bc4b534`；分支 `fix/20260925-inert-batch4`。每項結論皆為「接線／明示未啟用／移除／仍 inert（附理由）」之一，無一項靜默。
+
+| # | 項目 | 原症狀 | 處置 | 機讀旗標／對外欄位 | 證據 |
+|---|---|---|---|---|---|
+| **I17**（producer 半邊） | per-pattern 校準觀測無寫入者，health 只能報 `unknown` | **接線**（producer） | `cmd/calibrate-seasonal --update` 寫 `calibration_observations`／`calibration_verdict`（`industry.SeasonalVerdict*`）／`calibration_timestamp` | `CalibrationEvidence`（`none`→`measured`）、`VerdictCounts`、`ObservationStatus` | `TestUpdateParametersFileAt_*`、`TestUpdateParametersFileAt_ClosesTheEvidenceLoop` |
+| **I4**（cycle 半邊） | `SectorCycleProviderWired=false`，`cycle_position` 永不貢獻 | **接線**（measured-only） | `eventdriven.MeasuredCycleProvider`＋`cmd/atlas` 注入 industry service 的 `CycleTracker`（6h FinMind 寫入、composition root 共用） | `eventdriven.SectorCycleProviderWired` → **true**；`SectorPredictionStatus.CycleProviderWired` 仍由 live predictor 推導 | `TestMeasuredCycleProvider_DropsSeedOnlyIndustries`、`TestSectorPredictionStatusWiresCycleProvider`、`..._CycleProviderSurvivesRebuild` |
+| **I7** | `NewSymbolIndustryMapper`／`BuildMapping` 零呼叫者 | **仍 inert（lane 邊界）** | 未動（`internal/marketdata/**` 由 quote-reliability lane #1986 持有） | — | `git grep` 只有定義；另票移除 |
+| **I18** | 死碼：`GenerateForwardReturn`、`StockWinRate`、`StrategyWinRate`、`ValidateAllPatterns` | **移除（部分）** | 移除上述四者與其專屬測試；保留仍有使用者的 `hashString`／`ValidateCalibration` 家族 | — | `git grep -nw` 非測試 0 命中 |
+| **I19** | LLM sector agent 因 executor 註冊順序不可達 | **接線（部分）＋明示殘留** | LLM agent 註冊順序移到 deterministic 之前；`Supports` 要求兩個 driver 已注入（flag-on 但未接線時不得靜默吃掉 desk） | `LLMSectorAgentDriverWired=false`（殘留）、`resolveAgentExecutor`（first-match-wins 可測） | `TestBuiltinAgentExecutors_LLMSectorAgentPrecedesDeterministic`、`TestResolveAgentExecutor_LLMAgentClaimsDeskOnlyWhenWired`、`TestSemiconductorLLMAgent_Supports_FlagOnWithoutDrivers` |
+| **I27** | 三份 `buildSymbolSectorMap` 依賴 Go map 順序（last-write-wins） | **接線** | `industry.BuildSymbolSectorIndex` 單一權威（最深 segment 勝出、同深度比 ID） | `SymbolSectorIndex.MultiAssigned`（模糊歸屬可觀測） | `TestBuildSymbolSectorIndex_DeterministicAcrossRuns`、`_MostSpecificSegmentWins`、`_ReportsMultiAssigned` |
+| **I28** | `namespaces.go` 符號無非測試引用 | **移除（部分）** | 移除 `NamespaceKind`／`NamespaceEquityL1`／`NamespaceResearchThemeL2`／`NamespaceStrategyBucket`／`NamespaceAssetClass`／`IsValidNamespace`／`ThemeExposure`／`ValidateThemeExposure`；保留規格守門指名的 `L1FinalTarget`／`ValidateL1FinalTarget` | — | `git grep -nw` 移除項 0 命中 |
+| **I29** | 覆蓋率告警是恆等式 | **已修一半（#1983）＋明示殘留** | `universe_scheduler` 半邊已以第一方母體當分母；`cmd/atlas` 半邊（分母＝分類樹代表股 27、分子＝母體 1,599 ⇒ 永不觸發；`snapshotSymbols==0` 被 `>0` 守衛排除）**本批未修**，診斷見 spec §10.1 | — | 唯讀複核（lane B）；修法：改用 `monitoring.CheckUniverseCoverage` 當唯一判準 |
+| **I36** | 21 agents 中 15 個 `total_signals=0` | **仍 inert（無生產存取）** | 未動 | — | 需生產資料＋上游 signal 供給盤查（另票） |
+| **N-C3** | 影子參數（config 有值、硬編碼才是實作） | **接線 1＋明示 2** | `industry.event_sentiment_cap` 接線（`EventCalendar.sentimentCap()`）；`freshness_scores`／`event_calendar_rules` 標 `NOT WIRED` 並寫明不可原樣接線的原因 | config `rationale` 的 `WIRED`／`NOT WIRED` 宣告 | `TestComputeSentimentAdjustment_ConsumesConfigCap`、`TestShadowParametersDeclarationMatchesConsumers` |
+| **N-U2** | `-build-universe` help 列了未實作的 `scrape` | **移除宣告** | help 改 `run\|map\|status` | — | help 字串 diff；unknown 模式已有明確錯誤 |
+| **N-U5** | stage3 中性哨兵 0.5 與 ledger 的 neutral=0 不符 | **接線** | 中性改 `0`，且要求 `RecentEventFlowPredictionsActualCount ≥ 5`（padding 不是證據） | 警報 metadata `neutral_sign`／`actual_count` | `TestStage3AlertEvaluator_ModelConfidenceDegraded{,_NoAlertOnPadding,_NilActualCountStaysSilent,_HalfIsNotNeutral}` |
+| **N-U6** | `historical_hit_rate` 口徑未揭露（neutral 預測稀釋） | **接線（口徑揭露）** | 新增 `neutral_samples`／`directional_samples`／`hit_rate_basis` | `HitRateBasisDirectionSign`（`t_plus_1_reconciled_direction_sign`） | `TestComputeHistoricalHitRate_DisclosesNeutralBasis`、`_BasisIsSetOnEveryShape` |
+| **N-A1** | 11 個 SAC emitter 全無呼叫者（暗啟動從未執行） | **接線 7/11** | `StrategyEvolver.WithSACMetrics`＋`ApplySectorRotation` 發射 snapshot 生命週期與 policy consumed/applied；composition root 注入 `NewSACMetrics(nil)` | `SACMetrics`＋`SACLifecycleObserver`（測試縫） | `TestApplySectorRotation_EmitsSACLifecycleEvents`、`_NilSACMetricsIsSafe`、`_AppliedEmitsPolicyApplied`；其餘 4 個仍列 baseline 並寫明理由 |
+| **N-A2** | `macro_flow.applied` trace 在 `ApplyControl` 之前 | **接線** | trace 移到套用後；未套用改發 `macro_flow.skipped`＋`applied=false`＋原因 | trace `Action`／`Data.applied`／`Data.not_applied_reason` | `TestExecuteWithContext_MacroFlowTraceIsRecordedAfterApplyControl`、`..._HonestWhenControlLayerBypassed`、`TestMacroAdjustmentAppliesTo` |
+| **N-A3** | `RecordSession` 連 `applied=false` 也計 ⇒ promotion gate 可在 0 applied 場次成立 | **接線** | 新增 `applied_session_count`（只在有 `ConsumptionReceipt` 時遞增）；`IsPromotable()` 要求 ≥20 **applied** 場次 | `sa_closure_state.json` 的 `applied_session_count` | `TestSACClosureStateManager_IsPromotable`（更新：20 筆未消費不得過關） |
+| **N-A4** | preflight 檢查 `data/state/...`，實際 writer 在 `data/sector/allocation/` | **接線** | 唯一權威 `sectorallocation.ResolveClosureStoreDir/Path`；preflight／`cmd/atlas`／`dashboard_api` 共用 | — | `TestClosureStorePathMatchesFileClosureStoreWriteTarget`、`TestClosureStoreConstructionUsesSharedResolver`（AST 防漂移） |
+
+### Batch 4 仍 inert（誠實清單）
+
+- **I7**：死碼仍在 `internal/marketdata/symbol_industry_mapper.go`（lane 邊界，另票）。
+- **I19 殘留**：production 無 driver 注入點（`LLMSectorAgentDriverWired=false`）＋`llmSectorAgentsPlugin` 仍 pass-through（N-P1）⇒ LLM sector agent 仍未真正接線（旗標預設 false）。
+- **I29 殘留**：`cmd/atlas/main.go` 的 `universe_coverage_check` 仍永不觸發（分母/分子不同源、`snapshotSymbols==0` 被守衛排除）。
+- **I30**：`.github/workflows/nightly-refresh.yml` 的 backfill 寫入仍被丟棄（`.github/**` 屬 honesty-batch lane）。
+- **I32**：ledger event-flow prediction 仍無 `sector` 欄位（與 I6 同源，需 schema 變更）。
+- **I36**：`darwinian_weights.json` 15/21 agents 無訊號，需生產資料盤查。
+- **I21**：**待觀察**——生產者半邊已由 #1949 修，消費端 source/window 固定（`stockpicker-foreign-3d-net-buy`／`120d`）；本批無生產存取，未驗證 `stock_win_rate` 與 `data/state/stock_flows/` 是否已生成。
+- **I27 殘留**：symbol→sector 的值仍是 segment ID（非 canonical L1），未命中仍回 `"other"`。
+- **N-A1 殘留**：`snapshot.projection`（需 projector 回傳 clamped 統計）、`legacy.read`、`fallback.count`、`rollback.drill` 四個 emitter 仍無誠實呼叫點（baseline 已寫明理由）。
+- **其他 Batch 2 中／低項**：`ParameterSnapshot.NarrativeHitRates` 無來源標記、`internal/config/configs/parameters.json` 影子副本、超界 `adjustment_factor` 污染源、config validator 允許負值、`domain.Quote.Volume` 單位未在 provider 邊界統一、`I23` 前端文案（前端 lane）、`I16(a)` volatile 門檻需產品定案、`N-P1`／`N-P2`／`N-U6` 之外的 ledger／前端項。
 
 ---
-
