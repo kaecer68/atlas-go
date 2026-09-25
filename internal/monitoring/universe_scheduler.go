@@ -15,7 +15,9 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -36,9 +38,95 @@ var clockFunc = time.Now
 
 // ── Result types ─────────────────────────────────────────────────────────
 
+// Quote-input status values recorded in UniverseBuildResult.QuotesStatus.
+//
+// The values are machine-readable on purpose: issue #1944 Batch 3 found the
+// production artifact reporting symbols_ranked=0 for months while the real
+// cause was a nil UniverseBuilderDeps.Quotes (inert-registry.md I25). Nothing
+// in the snapshot distinguished "no quote provider was wired" from "the market
+// really has no qualifying stock", so the failure was silent.
+const (
+	// QuotesStatusOK: the quote provider returned at least one quote.
+	QuotesStatusOK = "ok"
+	// QuotesStatusNotAttempted: the pipeline returned before Step 3 (no symbols
+	// gathered, or the industry filter removed every candidate).
+	QuotesStatusNotAttempted = "not_attempted"
+	// QuotesStatusProviderUnavailable: UniverseBuilderDeps.Quotes was nil, so
+	// Step 3 was skipped and the volume/price filters dropped every symbol.
+	QuotesStatusProviderUnavailable = "provider_unavailable"
+	// QuotesStatusFetchError: the provider was wired but returned an error.
+	QuotesStatusFetchError = "fetch_error"
+	// QuotesStatusEmpty: the provider returned zero quotes without an error.
+	QuotesStatusEmpty = "empty"
+	// QuotesStatusPartial: some quote chunks failed while others succeeded. The
+	// ranked list is still computed and persisted from the quotes that arrived,
+	// but it covers only part of the universe.
+	QuotesStatusPartial = "partial"
+	// QuotesStatusMock: the provider was wired but identifies itself as a mock,
+	// so its (non-empty) answers are fabricated.
+	QuotesStatusMock = "mock"
+)
+
+// RankedFallbackReason values recorded when SymbolsRanked is not a market
+// verdict. Keep these strings stable: they are consumed by operational
+// tooling and by the tests that pin this contract.
+const (
+	// RankedFallbackQuoteProviderUnavailable is recorded when no quote provider
+	// was wired (the I25 root cause).
+	RankedFallbackQuoteProviderUnavailable = "quote_provider_unavailable"
+	// RankedFallbackQuoteFetchError is recorded when the quote fetch failed.
+	RankedFallbackQuoteFetchError = "quote_fetch_error"
+	// RankedFallbackQuoteFetchEmpty is recorded when the provider answered with
+	// an empty quote set.
+	RankedFallbackQuoteFetchEmpty = "quote_fetch_empty"
+	// RankedFallbackEmptyUniverse is recorded when no symbol was gathered.
+	RankedFallbackEmptyUniverse = "empty_universe"
+	// RankedFallbackEmptyFiltered is recorded when the industry filter removed
+	// every gathered symbol.
+	RankedFallbackEmptyFiltered = "empty_filtered"
+	// RankedFallbackQuoteFetchPartial is recorded when at least one quote chunk
+	// failed: symbols in the failed chunks have no quote, so the ranked list is
+	// incomplete and must not be used to expire symbols (D6).
+	RankedFallbackQuoteFetchPartial = "quote_fetch_partial"
+	// RankedFallbackQuoteProviderMock is recorded when the wired provider is a
+	// mock: the ranked list would then describe simulated quotes, not the
+	// market, and must never be published as trustworthy.
+	RankedFallbackQuoteProviderMock = "quote_provider_mock"
+)
+
+// mockQuoteProvider is the optional capability a quote provider exposes when it
+// serves fabricated data. marketdata.MockProvider implements it (IsMock).
+//
+// The pipeline keeps QuoteProvider minimal, so this is a structural check
+// rather than an interface requirement. It exists because a mock returns a
+// full, plausible quote set for every requested symbol: without this check the
+// snapshot would record quotes_status=ok and ranked_trustworthy=true on
+// fabricated prices, which is strictly worse than the silent zero this change
+// set out to remove.
+type mockQuoteProvider interface {
+	IsMock() bool
+}
+
+// isMockQuoteProvider reports whether p serves fabricated quotes. A nil or
+// typed-nil provider is not a mock.
+func isMockQuoteProvider(p QuoteProvider) bool {
+	m, ok := p.(mockQuoteProvider)
+	if !ok || m == nil {
+		return false
+	}
+	return m.IsMock()
+}
+
 // UniverseBuildResult captures the outcome of one SmartUniverseBuilder pipeline
 // execution. It is serialized into the snapshot file and surfaced to CLI status
 // queries so operators can verify the daily/weekly run at a glance.
+//
+// SymbolsRanked alone is ambiguous: a run with no quote provider produces the
+// same symbols_ranked=0 as a run where every candidate failed the volume/price
+// filters (and produces an empty `ranked` list that downstream consumers, e.g.
+// the D6 watchlist and the coverage alert, silently read as "no symbols").
+// QuotesStatus / RankedFallbackReason / RankedTrustworthy disambiguate it, so
+// symbols_ranked=0 can never again be misread as a market verdict.
 type UniverseBuildResult struct {
 	SymbolsBuilt    int       `json:"symbols_built"`
 	SymbolsFiltered int       `json:"symbols_filtered"`
@@ -46,6 +134,49 @@ type UniverseBuildResult struct {
 	SymbolsExcluded int       `json:"symbols_excluded"`
 	FullRebuild     bool      `json:"full_rebuild"`
 	Timestamp       time.Time `json:"timestamp"`
+
+	// QuotesStatus is what happened at the Step 3 quote fetch. One of the
+	// QuotesStatus* constants.
+	QuotesStatus string `json:"quotes_status"`
+	// QuotesReturned is the number of distinct symbols for which the provider
+	// supplied a quote. 0 with QuotesStatus "ok" is impossible (that case is
+	// reported as "empty"); comparing it against SymbolsFiltered exposes
+	// partial provider coverage that a boolean status cannot express.
+	QuotesReturned int `json:"quotes_returned"`
+	// QuotesRequested is how many symbols the quote fetch asked for.
+	QuotesRequested int `json:"quotes_requested"`
+	// QuotesChunks / QuotesChunksFailed expose the fetch granularity: the
+	// pipeline calls the provider in bounded chunks (see QuoteFetchPolicy) so a
+	// single slow or incomplete chunk cannot take the whole universe down.
+	QuotesChunks       int `json:"quotes_chunks"`
+	QuotesChunksFailed int `json:"quotes_chunks_failed"`
+	// RankedFallbackReason is non-empty when the ranked list is NOT a market
+	// verdict, and names the reason. Empty means the ranked list reflects real
+	// quote input and may be trusted as-is.
+	RankedFallbackReason string `json:"ranked_fallback_reason,omitempty"`
+	// RankedTrustworthy is the boolean form of RankedFallbackReason == "".
+	// Consumers (alerts, dashboards, watchlist maintenance) must treat
+	// symbols_ranked=0 as "universe could not be evaluated" when it is false.
+	RankedTrustworthy bool `json:"ranked_trustworthy"`
+}
+
+// markRankedUntrustworthy records why SymbolsRanked must not be read as a
+// market verdict, and logs it. Every early return and every degraded quote
+// path in BuildUniverse goes through here so the pipeline can never again
+// publish an unexplained zero.
+func markRankedUntrustworthy(result *UniverseBuildResult, reason string, extra ...any) {
+	result.RankedFallbackReason = reason
+	result.RankedTrustworthy = false
+	// Deliberately NOT logging symbols_ranked: every caller runs before Step 4
+	// ranking, so the field is still zero here and the line would read like a
+	// verdict. The persisted snapshot carries the authoritative counts.
+	args := append([]any{
+		"reason", reason,
+		"symbols_built", result.SymbolsBuilt,
+		"symbols_filtered", result.SymbolsFiltered,
+		"quotes_status", result.QuotesStatus,
+	}, extra...)
+	logging.Warn("universe_scheduler", "ranked_not_trustworthy", args...)
 }
 
 // ── D6 Watchlist ──────────────────────────────────────────────────────────
@@ -113,6 +244,11 @@ type UniverseBuilderDeps struct {
 	// Exported so callers outside this package can wire it.
 	WatchlistMu *sync.Mutex
 
+	// QuotePolicy bounds the Step 3 quote fetch granularity. The zero value
+	// means "use the package defaults" (50 symbols per call, 100ms pause,
+	// 60s per-chunk timeout); see QuoteFetchPolicy for why production must not
+	// ask for the whole universe in one call.
+	QuotePolicy QuoteFetchPolicy
 	// Substrate is the optional per-stock industry field (issue #1943). When
 	// installed it replaces the tree's representative stocks as the universe
 	// population, growing the built universe from ~27 symbols to the whole
@@ -277,6 +413,134 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 	}
 }
 
+// ── Quote fetch policy (issue #1944 Batch 3, I25 production-scale follow-up) ──
+
+// QuoteFetchPolicy bounds how the pipeline asks the provider for quotes.
+//
+// Reason (production evidence, 2026-09-25): with the per-stock industry
+// substrate enabled the universe is the whole listed market (1,599 symbols on
+// that day), so Step 3 used to ask for thousands of symbols in one call. Two
+// facts make a single all-symbols call unsafe:
+//
+//   - The fubon-proxy /quotes endpoint loops over the symbol list and issues one
+//     Fubon SDK intraday.quote() call per symbol (services/fubon-proxy/main.py),
+//     so the "batch" HTTP request is really N upstream calls.
+//   - provider.HybridProvider discards the whole batch when any single quote is
+//     incomplete (hasInvalidQuotes) and falls through to the next provider, whose
+//     FinMind implementation issues one HTTP request per symbol
+//     (FinMindProvider.GetQuotes). A single suspended stock therefore used to
+//     cost ~1,599 FinMind requests (~11% of the 14,400/day quota).
+//
+// Chunking bounds both: a slow, failing or incomplete chunk degrades alone, and
+// the per-symbol fallback cost shrinks from the whole universe to one chunk.
+//
+// The zero value means "use the package defaults" so production wiring (and the
+// CLI) does not have to know about any of this.
+type QuoteFetchPolicy struct {
+	// ChunkSize is the maximum number of symbols per provider call.
+	ChunkSize int
+	// Pause spaces consecutive chunks so a per-symbol provider does not see an
+	// instantaneous burst.
+	Pause time.Duration
+	// ChunkTimeout bounds a single chunk call. 0 inherits the caller's context.
+	ChunkTimeout time.Duration
+}
+
+// Default chunking parameters. They are deliberately constants rather than
+// config parameters: they are operational guardrails, not tunable policy, and
+// the values only need to be small enough to bound the blast radius of one
+// provider call.
+const (
+	DefaultQuoteChunkSize    = 50
+	DefaultQuoteChunkPause   = 100 * time.Millisecond
+	DefaultQuoteChunkTimeout = 60 * time.Second
+)
+
+// normalized resolves the zero value to the package defaults. A caller that
+// wants a shorter pause (tests) passes a small positive duration; there is no
+// "disabled" sentinel because an unset policy must never run unpaced in
+// production.
+func (p QuoteFetchPolicy) normalized() QuoteFetchPolicy {
+	if p.ChunkSize <= 0 {
+		p.ChunkSize = DefaultQuoteChunkSize
+	}
+	if p.Pause == 0 {
+		p.Pause = DefaultQuoteChunkPause
+	}
+	if p.ChunkTimeout == 0 {
+		p.ChunkTimeout = DefaultQuoteChunkTimeout
+	}
+	return p
+}
+
+// QuoteFetchStats describes how a chunked quote fetch went. Returned by
+// fetchQuotesChunked and copied into UniverseBuildResult.
+type QuoteFetchStats struct {
+	// Requested is the number of symbols asked for.
+	Requested int
+	// Chunks is the number of provider calls attempted.
+	Chunks int
+	// ChunksFailed is how many of them returned an error.
+	ChunksFailed int
+}
+
+// fetchQuotesChunked asks the provider for quotes in bounded chunks.
+//
+// It returns every quote that arrived plus the fetch statistics. The error is
+// non-nil only when EVERY chunk failed (or the context ended), because a partial
+// result is still useful input for ranking — the caller labels it via
+// QuotesStatusPartial instead of discarding it.
+func fetchQuotesChunked(ctx context.Context, provider QuoteProvider, symbols []string, policy QuoteFetchPolicy) ([]domain.Quote, QuoteFetchStats, error) {
+	policy = policy.normalized()
+	stats := QuoteFetchStats{Requested: len(symbols)}
+	if provider == nil || len(symbols) == 0 {
+		return nil, stats, nil
+	}
+
+	quotes := make([]domain.Quote, 0, len(symbols))
+	var lastErr error
+	for start := 0; start < len(symbols); start += policy.ChunkSize {
+		if err := ctx.Err(); err != nil {
+			return quotes, stats, err
+		}
+		if start > 0 && policy.Pause > 0 {
+			select {
+			case <-time.After(policy.Pause):
+			case <-ctx.Done():
+				return quotes, stats, ctx.Err()
+			}
+		}
+		end := min(start+policy.ChunkSize, len(symbols))
+		chunk := symbols[start:end]
+		stats.Chunks++
+
+		chunkCtx := ctx
+		var cancel context.CancelFunc
+		if policy.ChunkTimeout > 0 {
+			chunkCtx, cancel = context.WithTimeout(ctx, policy.ChunkTimeout)
+		}
+		chunkQuotes, err := provider.GetQuotes(chunkCtx, time.Now(), chunk)
+		if cancel != nil {
+			cancel()
+		}
+		if err != nil {
+			stats.ChunksFailed++
+			lastErr = err
+			logging.Warn("universe_scheduler", "quotes_chunk_error",
+				"chunk_index", stats.Chunks-1,
+				"chunk_size", len(chunk),
+				logging.Err(err))
+			continue
+		}
+		quotes = append(quotes, chunkQuotes...)
+	}
+
+	if stats.ChunksFailed == stats.Chunks && stats.Chunks > 0 {
+		return quotes, stats, lastErr
+	}
+	return quotes, stats, nil
+}
+
 // ── Pipeline orchestrator ────────────────────────────────────────────────
 
 // BuildUniverse runs the complete SmartUniverseBuilder pipeline:
@@ -300,7 +564,10 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 // run (fullRebuild=false) reuses cached mapper data and re-scores only.
 //
 // Nil providers are handled gracefully: the associated step is skipped and
-// the corresponding result counter remains zero.
+// the corresponding result counter remains zero — but never silently. A
+// skipped quote fetch marks the result untrustworthy (QuotesStatus +
+// RankedFallbackReason + RankedTrustworthy) so downstream readers cannot
+// mistake an unevaluated universe for an empty market.
 func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bool) (*UniverseBuildResult, []RankedSymbol, error) {
 	startTime := time.Now()
 	result := &UniverseBuildResult{
@@ -331,8 +598,9 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 	allSymbols := gatherAllSymbols(deps.Tree, deps.Mapper, deps.Substrate)
 	result.SymbolsBuilt = len(allSymbols)
+	result.QuotesStatus = QuotesStatusNotAttempted
 	if result.SymbolsBuilt == 0 {
-		logging.Warn("universe_scheduler", "empty_universe")
+		markRankedUntrustworthy(result, RankedFallbackEmptyUniverse)
 		return result, nil, nil
 	}
 	logging.Info("universe_scheduler", "symbols_gathered",
@@ -360,21 +628,42 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 	}
 
 	if len(filtered) == 0 {
-		logging.Warn("universe_scheduler", "empty_filtered")
+		markRankedUntrustworthy(result, RankedFallbackEmptyFiltered)
 		return result, nil, nil
 	}
 
 	// ── Step 3: Fetch quotes ────────────────────────────────────────────
 
 	var quoteMap map[string]domain.Quote
-	if deps.Quotes != nil {
-		quotes, err := deps.Quotes.GetQuotes(ctx, time.Now(), filtered)
+	if deps.Quotes == nil {
+		// No quote provider: ScoringScreener.applyVolumeAndPriceFilters drops
+		// every symbol (it cannot evaluate volume or price), so SymbolsRanked
+		// is guaranteed to be 0 for a reason that has nothing to do with the
+		// market. Record it explicitly — this is the I25 root cause and it
+		// stayed silent in production until issue #1944 Batch 3.
+		quoteMap = make(map[string]domain.Quote)
+		result.QuotesStatus = QuotesStatusProviderUnavailable
+		markRankedUntrustworthy(result, RankedFallbackQuoteProviderUnavailable)
+		if um != nil {
+			um.QuotesErrors.WithLabelValues(stage, "provider_unavailable").Inc()
+		}
+	} else {
+		// Chunked fetch (see QuoteFetchPolicy): never ask for the whole universe
+		// in one call.
+		quotes, fetchStats, err := fetchQuotesChunked(ctx, deps.Quotes, filtered, deps.QuotePolicy)
+		result.QuotesRequested = fetchStats.Requested
+		result.QuotesChunks = fetchStats.Chunks
+		result.QuotesChunksFailed = fetchStats.ChunksFailed
 		if err != nil {
 			logging.Warn("universe_scheduler", "quotes_fetch_error",
+				"chunks", fetchStats.Chunks,
+				"chunks_failed", fetchStats.ChunksFailed,
 				logging.Err(err))
 			if um != nil {
 				um.QuotesErrors.WithLabelValues(stage, "fetch_error").Inc()
 			}
+			result.QuotesStatus = QuotesStatusFetchError
+			markRankedUntrustworthy(result, RankedFallbackQuoteFetchError, logging.Err(err))
 		}
 		quoteMap = make(map[string]domain.Quote, len(quotes))
 		for _, q := range quotes {
@@ -383,8 +672,40 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 		if quotesFetchedCounter != nil {
 			quotesFetchedCounter.Add(int64(len(quoteMap)))
 		}
-	} else {
-		quoteMap = make(map[string]domain.Quote)
+		result.QuotesReturned = len(quoteMap)
+		switch {
+		case err != nil:
+			// already recorded above (QuotesStatusFetchError).
+		case len(quoteMap) == 0:
+			// A wired provider that answers with nothing is equally
+			// untrustworthy input: an empty quote set cannot rank anything.
+			result.QuotesStatus = QuotesStatusEmpty
+			markRankedUntrustworthy(result, RankedFallbackQuoteFetchEmpty)
+		case isMockQuoteProvider(deps.Quotes):
+			// Fabricated quotes must never masquerade as a market verdict.
+			result.QuotesStatus = QuotesStatusMock
+			markRankedUntrustworthy(result, RankedFallbackQuoteProviderMock)
+		case fetchStats.ChunksFailed > 0:
+			// Some chunks failed: the ranked list covers only the symbols whose
+			// quotes arrived. Symbols in the failed chunks are absent, and every
+			// downstream consumer that reads absence as "no longer qualifies"
+			// (the D6 expiry counter) would fabricate failures for them, so the
+			// partial result is explicitly not trustworthy. The ranking is still
+			// computed and persisted for inspection.
+			result.QuotesStatus = QuotesStatusPartial
+			if um != nil {
+				um.QuotesErrors.WithLabelValues(stage, "chunk_error").Add(int64(fetchStats.ChunksFailed))
+			}
+			markRankedUntrustworthy(result, RankedFallbackQuoteFetchPartial,
+				"chunks", fetchStats.Chunks,
+				"chunks_failed", fetchStats.ChunksFailed,
+				"quotes_returned", len(quoteMap))
+		default:
+			// Real quote input: the ranked list is a genuine market verdict,
+			// even when it is empty after the volume/price filters.
+			result.QuotesStatus = QuotesStatusOK
+			result.RankedTrustworthy = true
+		}
 	}
 
 	// ── Step 4: ScoringScreener ─────────────────────────────────────────
@@ -516,6 +837,14 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+// GatherUniverseSymbols is the exported entry point to the pipeline's symbol
+// population. Non-scheduler callers (the -build-universe CLI) must use it so
+// the CLI and the scheduled pipeline agree on what the universe contains
+// instead of each deriving its own list.
+func GatherUniverseSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapper, substrate industry.SymbolIndustrySubstrate) []string {
+	return gatherAllSymbols(tree, mapper, substrate)
+}
+
 // gatherAllSymbols collects every known symbol.
 //
 // With a per-stock industry substrate installed (issue #1943) the population is
@@ -554,24 +883,51 @@ func gatherAllSymbols(tree ClassificationTreeAccessor, mapper SymbolIndustryMapp
 	return symbols
 }
 
-// saveUniverseSnapshot writes the build result and ranked symbols to
+// UniverseSnapshotPath returns the canonical location of the universe
+// snapshot for a working directory. Every writer and reader of the snapshot
+// must resolve the path through this function so the two can never drift
+// apart (see UniverseSnapshot for the history of that failure).
+func UniverseSnapshotPath(workDir string) string {
+	return filepath.Join(workDir, "data", "state", "universe_snapshot.json")
+}
+
+// UniverseSnapshot is the canonical on-disk shape of the universe snapshot.
+//
+// There is exactly ONE schema. Both the scheduled pipeline (BuildUniverse) and
+// the `atlas -build-universe run` CLI write it through SaveUniverseSnapshot,
+// and every reader — the D6 watchlist (loadPreviousRankedSymbols), the
+// universe-coverage alert in cmd/atlas/main.go, and `-build-universe status` —
+// reads it back through LoadUniverseSnapshot.
+//
+// Before issue #1944 Batch 3 the CLI wrote a second, incompatible schema
+// (build_time / ranked_count / top_symbols) to the same path. Both schemas
+// unmarshal into the other's reader without error, so each reader silently saw
+// zero: the scheduled pipeline lost its previous ranked list (breaking D6
+// tracking) and the CLI status command reported an empty universe (N-U3).
+type UniverseSnapshot struct {
+	// Result carries the run counters and the quote-input evidence fields.
+	Result *UniverseBuildResult `json:"result"`
+	// Ranked is the ordered ranked universe. It is empty when Result is not
+	// trustworthy (see UniverseBuildResult.RankedTrustworthy).
+	Ranked []RankedSymbol `json:"ranked"`
+}
+
+// SaveUniverseSnapshot writes the canonical snapshot (result + ranked) to
 // <workDir>/data/state/universe_snapshot.json, creating directories as needed.
-func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []RankedSymbol) error {
-	outDir := filepath.Join(workDir, "data", "state")
+// It is exported so non-scheduler callers (the -build-universe CLI) emit the
+// same schema instead of inventing their own.
+func SaveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []RankedSymbol) error {
+	outDir := filepath.Dir(UniverseSnapshotPath(workDir))
 	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		return fmt.Errorf("create snapshot directory %q: %w", outDir, err)
 	}
 
-	payload := map[string]any{
-		"result": result,
-		"ranked": ranked,
-	}
-	data, err := json.MarshalIndent(payload, "", "  ")
+	data, err := json.MarshalIndent(UniverseSnapshot{Result: result, Ranked: ranked}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal universe snapshot: %w", err)
 	}
 
-	path := filepath.Join(outDir, "universe_snapshot.json")
+	path := UniverseSnapshotPath(workDir)
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0o640); err != nil {
 		return fmt.Errorf("write universe snapshot tmp %q: %w", tmpPath, err)
@@ -582,27 +938,59 @@ func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []
 	return nil
 }
 
+// LoadUniverseSnapshot reads the canonical snapshot written by
+// SaveUniverseSnapshot. A missing file surfaces as an error wrapping
+// fs.ErrNotExist so callers can distinguish "never ran" from "corrupt".
+func LoadUniverseSnapshot(workDir string) (*UniverseSnapshot, error) {
+	path := UniverseSnapshotPath(workDir)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read universe snapshot %q: %w", path, err)
+	}
+	var snap UniverseSnapshot
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		return nil, fmt.Errorf("unmarshal universe snapshot %q: %w", path, err)
+	}
+	return &snap, nil
+}
+
+// saveUniverseSnapshot is the scheduler-internal alias kept for readability of
+// the pipeline call site. See SaveUniverseSnapshot for the contract.
+func saveUniverseSnapshot(workDir string, result *UniverseBuildResult, ranked []RankedSymbol) error {
+	return SaveUniverseSnapshot(workDir, result, ranked)
+}
+
 // loadPreviousRankedSymbols reads the most recent universe snapshot from disk
 // and extracts just the symbol names from the ranked list. Returns nil when
 // no snapshot exists (first run).
+//
+// It reads the canonical schema through LoadUniverseSnapshot. A snapshot
+// written by a non-canonical writer unmarshals into this shape without error
+// and yields an empty ranked list, which is why N-U3 was silent for so long;
+// UniverseSnapshot documents the single-schema requirement.
 func loadPreviousRankedSymbols(workDir string) []string {
-	path := filepath.Join(workDir, "data", "state", "universe_snapshot.json")
-	raw, err := os.ReadFile(path)
+	snap, err := LoadUniverseSnapshot(workDir)
 	if err != nil {
+		// A missing snapshot is the normal first-run case; anything else
+		// (corrupt JSON, permissions) is worth reporting.
+		if !errors.Is(err, fs.ErrNotExist) {
+			logging.Warn("universe_scheduler", "load_previous_ranked_error",
+				logging.Err(err))
+		}
+		return nil
+	}
+	if snap.Result != nil && !snap.Result.RankedTrustworthy {
+		// The previous ranked list was produced without usable quote input.
+		// Returning it as "previously ranked" would fabricate D6 failures for
+		// every symbol, so treat it as no previous list at all.
+		logging.Warn("universe_scheduler", "load_previous_ranked_untrustworthy",
+			"reason", snap.Result.RankedFallbackReason,
+			"quotes_status", snap.Result.QuotesStatus)
 		return nil
 	}
 
-	var payload struct {
-		Ranked []RankedSymbol `json:"ranked"`
-	}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		logging.Warn("universe_scheduler", "load_previous_ranked_unmarshal_error",
-			logging.Err(err))
-		return nil
-	}
-
-	symbols := make([]string, 0, len(payload.Ranked))
-	for _, r := range payload.Ranked {
+	symbols := make([]string, 0, len(snap.Ranked))
+	for _, r := range snap.Ranked {
 		symbols = append(symbols, normalizeSymbol(r.Symbol))
 	}
 	return symbols

@@ -513,9 +513,11 @@ func (b *CycleStatusCardBuilder) resolveSeasonalLayer(card *CycleStatusCard, ind
 	if industryID != "" {
 		adj = b.seasonalEngine.GetPatternAdjustment(industryID, now)
 	} else {
+		// I17：無指定產業時取活躍 pattern 的平均調整量，同樣先夾進
+		// Darwinian 合法區間，避免超界值（含負值）直接進入 card。
 		var total float64
 		for _, p := range patterns {
-			total += p.AdjustmentFactor
+			total += ClampAdjustmentFactor(p.AdjustmentFactor)
 		}
 		if len(patterns) > 0 {
 			adj = total / float64(len(patterns))

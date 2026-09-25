@@ -110,15 +110,23 @@ func sampleRankedSymbols(n int) []RankedSymbol {
 	return out
 }
 
-// sampleUniverseBuildResult returns a representative UniverseBuildResult.
+// sampleUniverseBuildResult returns a representative (healthy)
+// UniverseBuildResult. It carries the quote-input evidence a real successful
+// run produces: QuotesStatus ok, a non-zero QuotesReturned, and
+// RankedTrustworthy true — a result with RankedTrustworthy == false is by
+// definition "the ranked list is not a market verdict", which is not what this
+// fixture represents (issue #1944 Batch 3 / I25).
 func sampleUniverseBuildResult() *UniverseBuildResult {
 	return &UniverseBuildResult{
-		SymbolsBuilt:    500,
-		SymbolsFiltered: 320,
-		SymbolsRanked:   50,
-		SymbolsExcluded: 5,
-		FullRebuild:     false,
-		Timestamp:       time.Now(),
+		SymbolsBuilt:      500,
+		SymbolsFiltered:   320,
+		SymbolsRanked:     50,
+		SymbolsExcluded:   5,
+		FullRebuild:       false,
+		Timestamp:         time.Now(),
+		QuotesStatus:      QuotesStatusOK,
+		QuotesReturned:    320,
+		RankedTrustworthy: true,
 	}
 }
 

@@ -996,10 +996,15 @@ func defaultIndustryParameters() IndustryParameters {
 			Rationale: "Minimum 3% weight per industry after normalization",
 			Source:    SourceHeuristic,
 		},
+		// N-C1 (issue #1944 Batch 3): declared but NOT enforced. No reader exists
+		// anywhere in the codebase (pinned by TestMaxDailyWeightChangeHasNoConsumer),
+		// so this value caps nothing and must not be shown as an active risk control.
+		// See docs/reference/inert-registry.md (N-C1) before changing this wording.
 		MaxDailyWeightChange: ParameterMetadata[float64]{
 			Value:     0.05,
-			Rationale: "Maximum 5% daily weight change to prevent excessive volatility",
+			Rationale: "DECLARED ONLY / NOT ENFORCED (issue #1944 Batch 3, inert-registry N-C1): no reader exists anywhere in the codebase, so this value caps nothing. It must NOT be presented as an active risk control until a consumer is wired.",
 			Source:    SourceHeuristic,
+			Todo:      "NOT ENFORCED (issue #1944 Batch 3, N-C1): implement or remove. Semantics unowned: the dashboard industry view is a stateless pure function with no previous-day weights, and the simulation path receives no previous target (normalisation happens inside Projector, the single projection owner). Decide per-sector target delta vs portfolio turnover, then implement in one owner with tests and update this metadata.",
 		},
 		LinkageParams: ParameterMetadata[LinkageConfig]{
 			Value: LinkageConfig{

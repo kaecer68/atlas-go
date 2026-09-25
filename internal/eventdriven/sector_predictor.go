@@ -48,6 +48,17 @@ func (sp *SectorPredictor) SetCycleProvider(c cycleScoreProvider) { sp.cycle = c
 // nil prior 會讓 predictSector 對 prior baseline = 0（spec §4.1: nil prior 不得回 fallback）。
 func (sp *SectorPredictor) SetStrategicPrior(p *sectorallocation.StrategicSectorPrior) { sp.prior = p }
 
+// StrategicPriorApplied reports whether a strategic prior is attached. When
+// false, predictSector's `overall_baseline` contribution is identically 0 for
+// every sector (PriorWeight returns 0), so the reported drivers can only come
+// from event/macro inputs (#1944 Batch 3, item I4).
+func (sp *SectorPredictor) StrategicPriorApplied() bool { return sp.prior != nil }
+
+// CycleProviderWired reports whether a cycle-score provider is attached. When
+// false, predictSector's `cycle_position` contribution is identically 0. In
+// production this is false by design — see eventdriven.SectorCycleProviderWired.
+func (sp *SectorPredictor) CycleProviderWired() bool { return sp.cycle != nil }
+
 // PriorWeight returns the strategic prior weight for sid; 0 if no prior set.
 func (sp *SectorPredictor) PriorWeight(sid industry.SectorID) float64 {
 	if sp.prior == nil {

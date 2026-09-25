@@ -124,11 +124,18 @@ type FactorScores struct {
 }
 
 type NarrativeFactorScore struct {
-	Score      float64  `json:"score"`
-	Theme      string   `json:"theme,omitempty"`
-	HitRate    float64  `json:"hit_rate,omitempty"`
-	Confidence float64  `json:"confidence,omitempty"`
-	EventIDs   []string `json:"event_ids,omitempty"`
+	Score   float64 `json:"score"`
+	Theme   string  `json:"theme,omitempty"`
+	HitRate float64 `json:"hit_rate,omitempty"`
+	// HitRateSource is the provenance of HitRate, propagated from the
+	// contributing narrative events: "handwritten_prior" while every active
+	// event carries a hand-authored prior (today's production state),
+	// "replay_eval_in_memory" once any contributor was measured from replay
+	// data in this process. Consumers must not present this average as a
+	// backtest result (#1944 Batch 3, item I23).
+	HitRateSource string   `json:"hit_rate_source,omitempty"`
+	Confidence    float64  `json:"confidence,omitempty"`
+	EventIDs      []string `json:"event_ids,omitempty"`
 }
 
 type IndustryCycleFactorScore struct {

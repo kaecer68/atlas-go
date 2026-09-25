@@ -127,6 +127,13 @@ func (p *Predictor) SetSectorPredictor(sp *SectorPredictor) {
 	p.sectorPredictor = sp
 }
 
+// SectorPredictor returns the attached sector predictor, or nil. Used by the
+// handler to report the live wiring state (strategic prior / cycle provider)
+// on PredictionReport.SectorPredictionStatus instead of hard-coding it.
+func (p *Predictor) SectorPredictor() *SectorPredictor {
+	return p.sectorPredictor
+}
+
 // Predict generates a 5-day capital flow prediction report.
 func (p *Predictor) Predict(now time.Time) PredictionReport {
 	// Get upcoming events

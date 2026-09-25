@@ -7,13 +7,17 @@ import (
 
 // StructuralTrend represents a long-term structural trend that can override macro risks
 type StructuralTrend struct {
-	Name       string    `json:"name"`
-	Theme      string    `json:"theme"`
-	Strength   float64   `json:"strength"`   // 0.0 to 1.0
-	Confidence float64   `json:"confidence"` // 0.0 to 1.0
-	HitRate    float64   `json:"hit_rate"`   // Historical accuracy
-	Evidence   []string  `json:"evidence"`
-	Timestamp  time.Time `json:"timestamp"`
+	Name       string  `json:"name"`
+	Theme      string  `json:"theme"`
+	Strength   float64 `json:"strength"`   // 0.0 to 1.0
+	Confidence float64 `json:"confidence"` // 0.0 to 1.0
+	HitRate    float64 `json:"hit_rate"`   // Historical accuracy
+	// HitRateSource is the provenance of HitRate (see hitrate_provenance.go).
+	// Always handwritten_prior: detectTrends() writes literal constants; no
+	// measurement path exists for structural trends.
+	HitRateSource string    `json:"hit_rate_source"`
+	Evidence      []string  `json:"evidence"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 // StructuralTrendAssessment evaluates structural trends vs macro risks
@@ -131,6 +135,13 @@ func (e *StructuralTrendEngine) detectTrends(sector SectorDataSnapshot) []Struct
 			},
 			Timestamp: time.Now(),
 		})
+	}
+
+	// Every HitRate above is a hand-authored prior literal, never a measured
+	// value — stamp the provenance once instead of repeating it at each
+	// construction site (issue #1944 Batch 3, item I23).
+	for i := range trends {
+		trends[i].HitRateSource = HitRateSourceHandwrittenPrior
 	}
 
 	return trends

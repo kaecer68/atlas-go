@@ -75,8 +75,14 @@ type RiskExclusionFilter struct {
 }
 
 // NewRiskExclusionFilter creates a filter with sensible defaults.
-// All providers are optional; missing providers cause dependent checks to skip.
+// All providers are optional; missing providers cause dependent checks to skip,
+// and every skip appends an INFO RuleDetail naming the cause (see
+// checkLiquidity) so a skipped check is distinguishable from a passing one.
 // Callers should call Configure() after construction to apply parameter overrides.
+//
+// marketDataProvider must be the same instance the universe pipeline uses for
+// its Step 3 quote fetch, otherwise the price/volume filter and the liquidity
+// re-check judge the same symbol from different data (N-U7).
 func NewRiskExclusionFilter(riskMgr RiskManager, marketDataProvider QuoteProvider, priceHistoryProvider HistoricalPriceProvider) *RiskExclusionFilter {
 	return &RiskExclusionFilter{
 		riskMgr:              riskMgr,
@@ -215,9 +221,36 @@ func (f *RiskExclusionFilter) checkDrawdown(symbol string, r *RiskExclusionResul
 	r.RuleResults = append(r.RuleResults, RuleDetail{RuleName: "drawdown_warning", Passed: true, CurrentValue: dd, Threshold: f.drawdownThreshold, Severity: severity(!flagged, dd, f.drawdownThreshold), Message: fmt.Sprintf("%s %d-day max drawdown %.2f%%", symbol, f.drawdownWindow, dd*100)})
 }
 
+// checkLiquidity re-checks the daily traded amount against minDailyAmountTWD.
+//
+// The check can only run with a quote for the symbol. Both skip paths record an
+// explicit RuleDetail with Severity INFO — the same convention
+// checkVaRContribution / checkVolatility / checkDrawdown already use — instead
+// of returning nothing. Before issue #1944 Batch 3 the missing-quote branch
+// returned silently, so the production wiring that passed a nil QuoteProvider
+// (N-U7) made Layer 2.5's liquidity rule inert with no trace in the results.
+//
+// The skip stays a pass (not fail-closed): changing it would alter behavior
+// for every symbol the provider does not cover. This change only makes the
+// skip visible.
 func (f *RiskExclusionFilter) checkLiquidity(symbol string, quoteBySymbol map[string]domain.Quote, r *RiskExclusionResult) {
+	if f.marketDataProvider == nil {
+		r.RuleResults = append(r.RuleResults, RuleDetail{
+			RuleName: "liquidity",
+			Passed:   true,
+			Severity: "INFO",
+			Message:  fmt.Sprintf("%s skipped: quote provider not configured", symbol),
+		})
+		return
+	}
 	q, ok := quoteBySymbol[symbol]
 	if !ok {
+		r.RuleResults = append(r.RuleResults, RuleDetail{
+			RuleName: "liquidity",
+			Passed:   true,
+			Severity: "INFO",
+			Message:  fmt.Sprintf("%s skipped: no quote returned for symbol (quotes available=%d)", symbol, len(quoteBySymbol)),
+		})
 		return
 	}
 	dailyAmount := q.Last * float64(q.Volume)

@@ -292,6 +292,13 @@ export interface CalendarProviderData {
   source: string;
 }
 
+export interface CalibrationFinding {
+  code: string;
+  severity: string;
+  segment?: string;
+  message: string;
+}
+
 export interface CalibrationHealthSummary {
   last_calibrated_at?: string | null;
   pattern_count: number;
@@ -301,6 +308,10 @@ export interface CalibrationHealthSummary {
   out_of_range_count: number;
   health: string;
   reason?: string;
+  calibration_evidence: string;
+  observation_status: string;
+  adjustment_factor_status: string;
+  out_of_range_patterns?: string[];
 }
 
 export interface CalibrationValidation {
@@ -452,6 +463,7 @@ export interface CausalTemplate {
   required_region?: string;
   steps: CausalStep[];
   historical_hit_rate: number;
+  hit_rate_source: string;
   source_references: string[];
   rationale: string;
 }
@@ -2153,6 +2165,7 @@ export interface InvestmentModel {
   recent_prediction: number;
   recent_error: number;
   hit_rate: number;
+  hit_rate_source: string;
   sample_count: number;
   weight: number;
 }
@@ -2599,6 +2612,7 @@ export interface NarrativeEvent {
   confidence: number;
   confidence_source: string;
   hit_rate: number;
+  hit_rate_source: string;
   capital_flow: string;
   time_window: string;
   timestamp: string;
@@ -2617,6 +2631,7 @@ export interface NarrativeFactorScore {
   score: number;
   theme?: string;
   hit_rate?: number;
+  hit_rate_source?: string;
   confidence?: number;
   event_ids?: string[];
 }
@@ -3091,6 +3106,7 @@ export interface PredictionReport {
   etf_estimates: ETFEstimate[];
   revenue_surprises: RevenueSurprise[];
   sector_predictions: SectorDayPrediction[];
+  sector_prediction_status?: SectorPredictionStatus | null;
   summary: string;
   historical_hit_rate?: HistoricalHitRate | null;
 }
@@ -3910,6 +3926,18 @@ export interface SectorPrediction {
   drivers: string[];
 }
 
+export interface SectorPredictionStatus {
+  enabled: boolean;
+  applied: boolean;
+  days: number;
+  sector_rows: number;
+  strategic_prior_applied: boolean;
+  cycle_provider_wired: boolean;
+  persisted: boolean;
+  persistence_reason?: string;
+  reason?: string;
+}
+
 export interface SectorRotationConfig {
   base_allocations: Record<string, number>;
   min_allocation: number;
@@ -4175,6 +4203,9 @@ export interface StrategyFrameSummary {
   measured: boolean;
   last_backtest_date?: string;
   category?: string;
+  hit_rate_scope: string;
+  hit_rate_source: string;
+  volatile_tests: number;
 }
 
 export interface StrategyParameters {
@@ -4256,6 +4287,7 @@ export interface StructuralTrend {
   strength: number;
   confidence: number;
   hit_rate: number;
+  hit_rate_source: string;
   evidence: string[];
   timestamp: string;
 }

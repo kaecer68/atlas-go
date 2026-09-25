@@ -380,6 +380,15 @@ func NewNarrativeEngine() *NarrativeEngine {
 			},
 		},
 	}
+	// Every HitRate literal in the slice above is a hand-authored prior. Stamp
+	// the provenance once here instead of repeating it at each construction
+	// site; EvaluateModels() overwrites it when a replay evaluation actually
+	// runs (issue #1944 Batch 3, item I23).
+	for i := range ne.models {
+		if ne.models[i].HitRateSource == "" {
+			ne.models[i].HitRateSource = HitRateSourceHandwrittenPrior
+		}
+	}
 	ne.UpdateModelWeights()
 	return ne
 }
@@ -643,6 +652,7 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 			hitRate = 1
 		}
 		m.HitRate = hitRate
+		markModelHitRateProvenance(m)
 	}
 
 	ne.UpdateModelWeights()
@@ -651,6 +661,21 @@ func (ne *NarrativeEngine) EvaluateModels(replayPath string) error {
 	ne.evalDone = true
 	ne.evalMu.Unlock()
 	return nil
+}
+
+// markModelHitRateProvenance records where each model's HitRate came from after
+// an evaluation pass. Kept next to EvaluateModels so the two cannot drift:
+// every write to m.HitRate in the evaluation path must be followed by a call
+// here (issue #1944 Batch 3, item I23).
+func markModelHitRateProvenance(m *InvestmentModel) {
+	switch {
+	case m.SampleCount > 0:
+		m.HitRateSource = HitRateSourceReplayEvalInMemory
+	default:
+		// total == 0: EvaluateModels writes the 0.5 neutral sentinel, which is
+		// neither the hand-authored prior nor a measurement.
+		m.HitRateSource = HitRateSourceUnavailableNoSamples
+	}
 }
 
 func (ne *NarrativeEngine) updateTemplateHitRates() {
@@ -664,6 +689,10 @@ func (ne *NarrativeEngine) updateTemplateHitRates() {
 			if tmpl, ok := ne.kb.GetTemplateByTheme(theme); ok {
 				updated := (1-alpha)*tmpl.HistoricalHitRate + alpha*m.HitRate
 				tmpl.HistoricalHitRate = updated
+				// The blended value is derived from an in-memory evaluation
+				// pass and is lost on restart — record that, so the API never
+				// presents it as a durable backtest figure.
+				tmpl.HitRateSource = HitRateSourceReplayEvalInMemory
 				ne.kb.RegisterTemplate(tmpl)
 			}
 		}
@@ -698,6 +727,9 @@ func (ne *NarrativeEngine) RecalculateAllTemplateHitRates(globalHitRate float64)
 			continue
 		}
 		tmpl.HistoricalHitRate = newRate
+		// Same reasoning as updateTemplateHitRates: an in-memory pull toward a
+		// backtest-derived global rate is not a persisted measurement.
+		tmpl.HitRateSource = HitRateSourceReplayEvalInMemory
 		ne.kb.RegisterTemplate(tmpl)
 		updated++
 	}

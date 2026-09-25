@@ -330,6 +330,14 @@ func (e *StrategyEvolver) GetPositionSizeLimit() float64 {
 	return e.GetStrategyConfig().MaxPositionSize
 }
 
+// SectorDriverDeltasSupplied reports whether ApplySectorRotation feeds per-driver
+// delta maps into WeightEngine.ComputeProjectedTarget. It does not (N-A5, issue
+// #1944 Batch 3): only CapitalFlowAction is set, so the projected target equals
+// the strategic prior and the six driver providers are never called on the
+// production simulation path. Flip this together with the pin test
+// TestApplySectorRotation_SuppliesNoDriverDeltas and docs/reference/inert-registry.md.
+const SectorDriverDeltasSupplied = false
+
 // ApplySectorRotation persists a sector allocation snapshot for
 // consumption by the next trading session.
 //
@@ -404,6 +412,17 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		drivers := sectorallocation.DriverInputs{
 			CapitalFlowAction: cfAction,
 		}
+		// N-A5 (issue #1944 Batch 3, new finding): only the capital-flow ACTION is
+		// supplied. Every driver delta map (Cycle/Seasonal/Linkage/Narrative/
+		// Macro/CapitalFlow) stays empty, and the engine applies each provider
+		// only to keys already present in the corresponding map
+		// (sectorallocation.collect*Deltas). So on this path the projection is the
+		// strategic prior re-normalised, and NO driver adapter is ever invoked —
+		// wiring them (see composition.SharedSectorInputs) is a prerequisite but
+		// not sufficient. Pinned by
+		// TestApplySectorRotation_SuppliesNoDriverDeltas; supplying deltas here is
+		// a deliberate behavior change that must flip
+		// SectorDriverDeltasSupplied and update docs/reference/inert-registry.md.
 		target, cerr := e.weightEngine.ComputeProjectedTarget(context.TODO(), drivers)
 		if cerr != nil {
 			snap.TargetNote = fmt.Sprintf("projection failed: %v", cerr)

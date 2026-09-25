@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 )
 
@@ -230,12 +232,17 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 
 	adjustment := 1.0
 	for _, p := range patterns {
+		// I17（issue #1944）：超界的 adjustment_factor（configs/parameters.json
+		// 實測有 4 個，含負值）一律先夾進 Darwinian 合法區間再相乘，不得讓負值
+		// 或爆量倍率靜默流進季節調整。單一權威常數見 seasonal_health.go。
+		factor := ClampAdjustmentFactor(p.AdjustmentFactor)
+
 		// Direct match: industry is explicitly favored or avoided
 		if slices.Contains(p.FavoredIndustries, industryID) {
-			adjustment *= p.AdjustmentFactor
+			adjustment *= factor
 		}
 		if slices.Contains(p.AvoidedIndustries, industryID) {
-			adjustment *= (1.0 / p.AdjustmentFactor)
+			adjustment *= (1.0 / factor)
 		}
 
 		// Supply chain propagation: if our industry is upstream/downstream
@@ -249,12 +256,12 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 				}
 				upstream := se.linkageGraph.GetUpstreamChain(favoredID, 3)
 				if slices.Contains(upstream, industryID) {
-					boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+					boost := 1.0 + (factor-1.0)*decay
 					adjustment *= boost
 				}
 				downstream := se.linkageGraph.GetDownstreamChain(favoredID, 3)
 				if slices.Contains(downstream, industryID) {
-					boost := 1.0 + (p.AdjustmentFactor-1.0)*decay
+					boost := 1.0 + (factor-1.0)*decay
 					adjustment *= boost
 				}
 			}
@@ -266,7 +273,7 @@ func (se *SeasonalEngine) GetPatternAdjustment(industryID string, t time.Time) f
 				}
 				upstream := se.linkageGraph.GetUpstreamChain(avoidedID, 3)
 				if slices.Contains(upstream, industryID) {
-					dampen := 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+					dampen := 1.0 - (1.0-1.0/factor)*decay
 					adjustment *= dampen
 				}
 			}
@@ -361,11 +368,14 @@ func (se *SeasonalEngine) GetIndustryImpact(patternID, industryID string) (impac
 		return "neutral", 1.0
 	}
 
+	// I17：回報值與 GetPatternAdjustment 的實際相乘值必須一致，否則 UI 顯示的
+	// impact 倍率會與真正套用的調整量不符。超界值一律先夾進 Darwinian 區間。
+	factor := ClampAdjustmentFactor(pattern.AdjustmentFactor)
 	if slices.Contains(pattern.FavoredIndustries, industryID) {
-		return "favored", pattern.AdjustmentFactor
+		return "favored", factor
 	}
 	if slices.Contains(pattern.AvoidedIndustries, industryID) {
-		return "avoided", 1.0 / pattern.AdjustmentFactor
+		return "avoided", 1.0 / factor
 	}
 	return "neutral", 1.0
 }
@@ -459,35 +469,37 @@ func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time)
 		return ab
 	}
 
-	// Layer 1: Direct match
+	// Layer 1: Direct match（I17：與 GetPatternAdjustment 相同，超界 factor 先夾）
 	direct := 1.0
 	for _, p := range patterns {
+		factor := ClampAdjustmentFactor(p.AdjustmentFactor)
 		if slices.Contains(p.FavoredIndustries, industryID) {
-			direct *= p.AdjustmentFactor
+			direct *= factor
 		}
 		if slices.Contains(p.AvoidedIndustries, industryID) {
-			direct *= (1.0 / p.AdjustmentFactor)
+			direct *= (1.0 / factor)
 		}
 	}
 	ab.DirectMatch = direct
 
-	// Layer 2: Supply chain
+	// Layer 2: Supply chain（同上，超界 factor 先夾）
 	sc := 1.0
 	if se.linkageGraph != nil {
 		decay := config.GetParametersConfig().Industry.LinkageParams.Value.SeasonalDecayFactor
 		for _, p := range patterns {
+			factor := ClampAdjustmentFactor(p.AdjustmentFactor)
 			for _, favoredID := range p.FavoredIndustries {
 				if industryID == favoredID {
 					continue
 				}
 				for _, id := range se.linkageGraph.GetUpstreamChain(favoredID, 3) {
 					if id == industryID {
-						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+						sc *= 1.0 + (factor-1.0)*decay
 					}
 				}
 				for _, id := range se.linkageGraph.GetDownstreamChain(favoredID, 3) {
 					if id == industryID {
-						sc *= 1.0 + (p.AdjustmentFactor-1.0)*decay
+						sc *= 1.0 + (factor-1.0)*decay
 					}
 				}
 			}
@@ -497,7 +509,7 @@ func (se *SeasonalEngine) GetAdjustmentBreakdown(industryID string, t time.Time)
 				}
 				for _, id := range se.linkageGraph.GetUpstreamChain(avoidedID, 3) {
 					if id == industryID {
-						sc *= 1.0 - (1.0-1.0/p.AdjustmentFactor)*decay
+						sc *= 1.0 - (1.0-1.0/factor)*decay
 					}
 				}
 			}
@@ -553,7 +565,32 @@ func NewSeasonalEngineFromConfig(cfg *config.ParametersConfig) *SeasonalEngine {
 		return &SeasonalEngine{patterns: DefaultSeasonalPatterns()}
 	}
 	patterns := seasonalPatternsFromConfig(cfg.Industry.SeasonalPatterns.Value)
+	// I17（issue #1944）：超界 adjustment_factor 不得靜默。消費端雖然會夾
+	// （ClampAdjustmentFactor），但設定檔本身仍是壞的，必須留下機讀可見的
+	// 執行期告警，指名哪些 pattern 被夾。
+	warnOutOfRangeAdjustmentFactors(patterns)
 	return &SeasonalEngine{patterns: patterns}
+}
+
+// warnOutOfRangeAdjustmentFactors 對 adjustment_factor 超界的 pattern 發出
+// 一次性 warn log（event 名固定，供 log-based 告警指名 pattern id）。
+// patterns 全部合法時不產生任何輸出。
+func warnOutOfRangeAdjustmentFactors(patterns []SeasonalPattern) {
+	var offenders []string
+	for _, p := range patterns {
+		if !IsAdjustmentFactorInRange(p.AdjustmentFactor) {
+			offenders = append(offenders, fmt.Sprintf("%s=%.4f", p.ID, p.AdjustmentFactor))
+		}
+	}
+	if len(offenders) == 0 {
+		return
+	}
+	logging.Warn("industry", "seasonal_adjustment_factor_out_of_range",
+		logging.FStr("bound_low", fmt.Sprintf("%.2f", DarwinianMinAdjustment)),
+		logging.FStr("bound_high", fmt.Sprintf("%.2f", DarwinianMaxAdjustment)),
+		logging.FStr("patterns", strings.Join(offenders, ",")),
+		logging.FStr("action", "clamped_at_consumption"),
+	)
 }
 
 // SetLinkageGraph enables supply-chain-aware seasonal adjustment.
@@ -578,6 +615,17 @@ func (se *SeasonalEngine) SetNarrativeProvider(provider NarrativeSeasonalProvide
 // Passing nil disables dynamic environment overlay (safe default).
 func (se *SeasonalEngine) SetDynamicEnv(modulator *DynamicEnvModulator) {
 	se.dynamicEnv = modulator
+}
+
+// DynamicEnvModulator returns the macro modulator installed by SetDynamicEnv,
+// or nil when no macro overlay is wired. Exposed so callers that must share the
+// engine's macro state (composition root macro driver adapter) do not have to
+// keep a second reference to the modulator.
+func (se *SeasonalEngine) DynamicEnvModulator() *DynamicEnvModulator {
+	if se == nil {
+		return nil
+	}
+	return se.dynamicEnv
 }
 
 // UpdateDynamicEnv pushes a fresh macro snapshot into the environment modulator

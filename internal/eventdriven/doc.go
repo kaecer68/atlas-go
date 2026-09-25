@@ -17,6 +17,14 @@
 //   - GET /api/events/prediction — 5-day capital flow prediction
 //   - GET /api/events/calendar — upcoming event list (wraps EventCalendar)
 //
+// Per-sector predictions (PredictionReport.SectorPredictionStatus, #1944
+// Batch 3): the sector rows are gated by SECTOR_PREDICTION_ENABLED (default
+// false), the strategic L1 prior is wired from
+// engine.sector_rotation.strategic_prior, and no cycle-score provider is wired
+// in production. Sector rows are NOT persisted (the ledger landing type has no
+// sector column). The status block is the machine-readable form of all of that
+// — never infer per-sector state from the mere length of sector_predictions.
+//
 // Package independence: This package is NOT related to eventbus or eventquality
 // despite the shared \"event\" prefix. eventbus is a pub/sub infrastructure layer;
 // eventquality validates event data quality for industry.EventCalendar.

@@ -11,6 +11,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring/api/shared"
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 // PredictionCacheTTL controls how long /api/events/prediction responses
@@ -57,6 +58,19 @@ type Handler struct {
 
 	// predictionStore backs HistoricalHitRate; nil disables the field.
 	predictionStore PredictionHistoryStore
+
+	// sectorPrior / sectorCycle are the optional SectorPredictor inputs. They
+	// live on the Handler (not on a SectorPredictor instance) because
+	// HandlePrediction rebuilds the predictor on every cache miss — a prior set
+	// on the previous instance would be silently dropped (#1944 Batch 3, I4).
+	sectorPrior *sectorallocation.StrategicSectorPrior
+	sectorCycle cycleScoreProvider
+
+	// sectorPredictorOwned is true while the attached sector predictor was
+	// built by HandlePrediction, which is the only case where the handler may
+	// replace it (fail closed). A predictor injected via SetSectorPredictor is
+	// left untouched.
+	sectorPredictorOwned bool
 
 	// nowFn is the clock seam for prediction/cache keys. nil = time.Now.
 	// Test hermeticity: the event calendar generates date-sensitive recurring
@@ -110,9 +124,34 @@ func (h *Handler) SetMacroProvider(mp marketdata.MacroDataProvider) {
 }
 
 // SetSectorPredictor wires a custom sector predictor. nil disables sector
-// predictions (the API still returns an empty slice).
+// predictions (the API still returns an empty slice, with
+// sector_prediction_status.reason set).
 func (h *Handler) SetSectorPredictor(sp *SectorPredictor) {
 	h.predictor.SetSectorPredictor(sp)
+	h.sectorPredictorOwned = false
+}
+
+// SetSectorStrategicPrior injects the typed L1 strategic prior
+// (sectorallocation.LoadStrategicPrior). It is re-applied to every predictor
+// instance HandlePrediction builds. nil leaves the prior unwired, which makes
+// the `overall_baseline` driver contribute 0 (#1944 Batch 3, item I4).
+func (h *Handler) SetSectorStrategicPrior(p *sectorallocation.StrategicSectorPrior) {
+	h.sectorPrior = p
+}
+
+// SetSectorCycleProvider injects a cycle-score provider
+// (industry.CycleTracker.GetContinuousPhaseScore).
+//
+// This is an intentional, documented hook — the cycle half of #1944 Batch 3 I4
+// is deliberately unwired (eventdriven.SectorCycleProviderWired=false): the only
+// trackers available today are config-seeded, so injecting one would present
+// seeds as measurements. The hook lets that wiring be completed without touching
+// this type twice once an authoritative tracker exists.
+//
+// inert-ok[writer-no-consumer]: kept unwired on purpose (see above); the
+// prerequisites are recorded in SectorCycleProviderWired and inert-registry I4.
+func (h *Handler) SetSectorCycleProvider(c cycleScoreProvider) {
+	h.sectorCycle = c
 }
 
 // SetScanStore injects a detector scan store into the predictor so detected
@@ -218,6 +257,34 @@ func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 		out.Calibrated = true
 	}
 	return out
+}
+
+// buildSectorPredictionStatus projects the live sector-prediction wiring state.
+// Nothing here is hard-coded true: Applied is derived from the rows actually
+// produced, and the prior/cycle flags are read off the predictor instance that
+// ran this request (I4/I5/I6).
+func (h *Handler) buildSectorPredictionStatus(reason string, report PredictionReport) *SectorPredictionStatus {
+	status := &SectorPredictionStatus{
+		Enabled:           h.macroProvider != nil,
+		Days:              len(report.SectorPredictions),
+		Persisted:         SectorPredictionPersisted,
+		PersistenceReason: SectorPredictionPersistenceReason,
+	}
+	for _, day := range report.SectorPredictions {
+		status.SectorRows += len(day.Sectors)
+	}
+	status.Applied = status.SectorRows > 0
+	if sp := h.predictor.SectorPredictor(); sp != nil {
+		status.StrategicPriorApplied = sp.StrategicPriorApplied()
+		status.CycleProviderWired = sp.CycleProviderWired()
+	}
+	if !status.Applied {
+		status.Reason = reason
+		if status.Reason == "" {
+			status.Reason = SectorPredictionReasonNotBuilt
+		}
+	}
+	return status
 }
 
 // Predictor returns the underlying Predictor for external wiring (F04).
@@ -333,16 +400,43 @@ func (h *Handler) HandlePrediction(r *http.Request) (int, any) {
 	// Cache miss: rebuild sector predictor if macro provider is wired.
 	// FetchSnapshot is now backed by MacroSnapshotCacheTTL so this
 	// call is fast when the snapshot is warm.
-	if h.macroProvider != nil {
+	// Wiring state for this rebuild. Recomputed per request so the reported
+	// status always reflects the live predictor instead of a cached claim.
+	sectorReason := ""
+	switch h.macroProvider {
+	case nil:
+		// SECTOR_PREDICTION_ENABLED is false (its shipped default), so
+		// cmd/atlas never calls SetMacroProvider and the handler never builds
+		// a predictor (I5). Drop a previously self-built one so it cannot keep
+		// answering; an explicitly injected predictor is left alone.
+		sectorReason = SectorPredictionReasonFlagDisabled
+		if h.sectorPredictorOwned {
+			h.predictor.SetSectorPredictor(nil)
+			h.sectorPredictorOwned = false
+		}
+	default:
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 		snap, err := h.macroProvider.FetchSnapshot(ctx)
-		if err == nil {
-			h.predictor.SetSectorPredictor(NewSectorPredictor(&snap, nil))
+		if err != nil {
+			// Fail closed: a failed snapshot must not silently reuse the
+			// previous predictor's stale snapshot.
+			sectorReason = SectorPredictionReasonMacroUnavailable
+			if h.sectorPredictorOwned {
+				h.predictor.SetSectorPredictor(nil)
+				h.sectorPredictorOwned = false
+			}
+			logging.Warn("eventdriven", "sector_prediction_macro_unavailable", logging.Err(err))
+			break
 		}
+		sp := NewSectorPredictor(&snap, h.sectorCycle)
+		sp.SetStrategicPrior(h.sectorPrior)
+		h.predictor.SetSectorPredictor(sp)
+		h.sectorPredictorOwned = true
 	}
 
 	report := h.predictor.Predict(now)
+	report.SectorPredictionStatus = h.buildSectorPredictionStatus(sectorReason, report)
 
 	// Persist today's prediction to the ledger (the production writer —
 	// F1). At most once per Taipei day: check-then-append guards against

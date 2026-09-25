@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -224,5 +225,118 @@ func TestPeriodReturn_FiniteInputsUnchanged(t *testing.T) {
 	want := math.Pow(1.01, 3) - 1
 	if math.Abs(got-want) > 1e-12 {
 		t.Errorf("periodReturn = %v, want %v", got, want)
+	}
+}
+
+// TestSummarizeCalibrationHealth_NoObservationsIsUnknownNotCritical pins
+// I17(a) (issue #1944): when the per-pattern calibration fields have no
+// producer, TotalObservations stays 0 and the calibration quality is simply
+// unknown. Reporting critical there is a false signal — the reader cannot tell
+// "never calibrated" from "calibrated values are broken".
+//
+// The value-domain fact must NOT disappear: it is reported on its own
+// machine-readable axis (AdjustmentFactorStatus + OutOfRangePatterns).
+func TestSummarizeCalibrationHealth_NoObservationsIsUnknownNotCritical(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "parameters.json")
+	// Mirrors the production configs/parameters.json shape: 13 patterns, zero
+	// calibration_observations, and out-of-range adjustment_factor values.
+	body := `{"industry":{"seasonal_patterns":{"value":[
+		{"id":"dividend_season","adjustment_factor":-0.2634376289519962,"historical_accuracy":0.4,"avg_market_return":-0.0003826577806334154},
+		{"id":"year_end_positioning","adjustment_factor":3.44143401207912,"historical_accuracy":1,"avg_market_return":0.0022324430826447224},
+		{"id":"election_local","adjustment_factor":1.1,"historical_accuracy":0.6,"avg_market_return":0.02}
+	]}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	summary, err := SummarizeCalibrationHealth(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Health == HealthCritical {
+		t.Errorf("Health = %q, want a non-critical status when there are zero observations", summary.Health)
+	}
+	if summary.Health != HealthUnknown {
+		t.Errorf("Health = %q, want %q", summary.Health, HealthUnknown)
+	}
+	if summary.Reason != ReasonNoObservations {
+		t.Errorf("Reason = %q, want %q", summary.Reason, ReasonNoObservations)
+	}
+	if summary.ObservationStatus != ObservationNoObservations {
+		t.Errorf("ObservationStatus = %q, want %q", summary.ObservationStatus, ObservationNoObservations)
+	}
+	if summary.CalibrationEvidence != CalibrationEvidenceNone {
+		t.Errorf("CalibrationEvidence = %q, want %q", summary.CalibrationEvidence, CalibrationEvidenceNone)
+	}
+	// The out-of-range fact must still be visible on its own axis.
+	if summary.AdjustmentFactorStatus != AdjustmentFactorOutOfRange {
+		t.Errorf("AdjustmentFactorStatus = %q, want %q", summary.AdjustmentFactorStatus, AdjustmentFactorOutOfRange)
+	}
+	if summary.DarwinianViolations != 2 {
+		t.Errorf("DarwinianViolations = %d, want 2", summary.DarwinianViolations)
+	}
+	if len(summary.OutOfRangePatterns) != 2 {
+		t.Fatalf("OutOfRangePatterns = %v, want 2 entries", summary.OutOfRangePatterns)
+	}
+	got := strings.Join(summary.OutOfRangePatterns, ",")
+	if got != "dividend_season,year_end_positioning" {
+		t.Errorf("OutOfRangePatterns = %q, want dividend_season,year_end_positioning", got)
+	}
+}
+
+// TestSummarizeCalibrationHealth_NoObservationsInRangeValues covers the clean
+// case: zero observations but all declared values legal. Health must still be
+// unknown (not healthy, not critical) and the value axis must read in_range.
+func TestSummarizeCalibrationHealth_NoObservationsInRangeValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "parameters.json")
+	body := `{"industry":{"seasonal_patterns":{"value":[
+		{"id":"a","adjustment_factor":1.15,"historical_accuracy":0.7,"avg_market_return":0.032}
+	]}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	summary, err := SummarizeCalibrationHealth(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Health != HealthUnknown || summary.Reason != ReasonNoObservations {
+		t.Errorf("got %q/%q, want %q/%q", summary.Health, summary.Reason, HealthUnknown, ReasonNoObservations)
+	}
+	if summary.AdjustmentFactorStatus != AdjustmentFactorInRange {
+		t.Errorf("AdjustmentFactorStatus = %q, want %q", summary.AdjustmentFactorStatus, AdjustmentFactorInRange)
+	}
+	if len(summary.OutOfRangePatterns) != 0 {
+		t.Errorf("OutOfRangePatterns = %v, want empty", summary.OutOfRangePatterns)
+	}
+}
+
+// TestSummarizeCalibrationHealth_MissingAdjustmentFactorIsViolation verifies a
+// missing adjustment_factor is counted and named (it would otherwise read as 0
+// and silently erase the pattern's adjustment).
+func TestSummarizeCalibrationHealth_MissingAdjustmentFactorIsViolation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "parameters.json")
+	body := `{"industry":{"seasonal_patterns":{"value":[
+		{"id":"no_factor","historical_accuracy":0.6,"avg_market_return":0.02,"calibration_observations":5}
+	]}}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	summary, err := SummarizeCalibrationHealth(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.DarwinianViolations != 1 {
+		t.Errorf("DarwinianViolations = %d, want 1", summary.DarwinianViolations)
+	}
+	if summary.AdjustmentFactorStatus != AdjustmentFactorOutOfRange {
+		t.Errorf("AdjustmentFactorStatus = %q, want %q", summary.AdjustmentFactorStatus, AdjustmentFactorOutOfRange)
+	}
+	if len(summary.OutOfRangePatterns) != 1 || summary.OutOfRangePatterns[0] != "no_factor" {
+		t.Errorf("OutOfRangePatterns = %v, want [no_factor]", summary.OutOfRangePatterns)
 	}
 }
