@@ -36,7 +36,7 @@
 | `ATLAS_SQLITE_PATH` | SQLite 資料庫路徑 | `data/state/atlas.db` |
 | `ATLAS_STORE_BACKEND` | 儲存後端 (`jsonl`/`sqlite`/`postgres`) | `jsonl` |
 | `ATLAS_ENV_FILE` | 自訂 `.env` 檔案路徑 | `.env`（目前目錄） |
-| `ATLAS_MARKET_DATA_PROVIDER` | 市場資料提供者選擇 (`twse`/`fugle`/`fubon`/`hybrid`) | `twse` |
+| `ATLAS_MARKET_DATA_PROVIDER` | 市場資料提供者選擇。**有效值只有 `twse`/`fugle`/`hybrid`**（`orchestrator.SupportedMarketDataProviders()` 是 SSOT）。其他值（含 fubon）**沒有 provider 實作**：`selectProvider()` 會回退 `hybrid` 並記 `market_data_provider_unsupported` WARN。fubon 通道只存在於 Python `services/fubon-proxy`，沒有 Go `marketdata.Provider` 包裝它（issue #1944 Batch 4 item 4） | `twse` |
 | `ATLAS_PRIMARY_MARKET` | 主要市場代碼 | `TW` |
 | `ATLAS_REPLAY_MODE` | Replay 模式 (`daily`/`tick`/`weekly`) | `daily` |
 | `ATLAS_REPLAY_DATA_PATH` | Replay CSV 檔案路徑 | `samples/replay/twse_stock_day_all_sample.csv` |
