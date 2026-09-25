@@ -10,10 +10,23 @@ import (
 	"time"
 )
 
-// OnInc is called whenever a DegradedMetrics counter is incremented.
-// counterName is either "degraded_activations" or "provider_errors".
-// labels are supplied in the same order as the counter vector's label names.
-type OnInc func(counterName string, labels []string, value float64)
+// OnInc is called on every increment of a CounterVec.
+//
+// counterName is the series name the sink should record (for DegradedMetrics it
+// is "degraded_activations" / "provider_errors"; for UniverseMetrics it is the
+// full atlas_universe_*_total name).
+//
+// labels carries the counter's real label name/value pairs. It is deliberately a
+// map, not a values-only slice: a consumer that has to reconstruct label names
+// from values invents names that do not exist in the vector (that defect made
+// production expose {daily="failed"} instead of {stage="daily",result="failed"}
+// and dropped the single-label series such as symbols_ranked_total entirely).
+//
+// value is the DELTA contributed by this one event, never the cumulative counter
+// value. Sinks such as monitoring.MetricsCollector.RecordCounter accumulate
+// (existing.Value += value), so forwarding a cumulative value inflates the
+// recorded total to x·N(N+1)/2 after N runs of x instead of x·N.
+type OnInc func(counterName string, labels map[string]string, value float64)
 
 // DegradedMetrics exposes degraded-mode counters for the SOX limiter.
 // It mirrors prometheus.CounterVec semantics using an in-memory counter
@@ -35,7 +48,7 @@ func (d *DegradedMetrics) SetOnInc(fn OnInc) {
 		}
 		cv.OnInc = func(_ string, labels map[string]string, value float64) {
 			if d.onInc != nil {
-				d.onInc(counterName, orderedLabelValues(labels, cv.labelNames), value)
+				d.onInc(counterName, labels, value)
 			}
 		}
 	}
@@ -48,9 +61,12 @@ func (d *DegradedMetrics) SetOnInc(fn OnInc) {
 type CounterVec struct {
 	name       string
 	labelNames []string
-	OnInc      func(name string, labels map[string]string, value float64)
-	mu         sync.Mutex
-	counters   map[string]*Counter
+	// OnInc, when set, receives every increment: the counter name, the counter's
+	// label name/value pairs, and the DELTA of this single event (never the
+	// cumulative value — see OnInc).
+	OnInc    func(name string, labels map[string]string, value float64)
+	mu       sync.Mutex
+	counters map[string]*Counter
 }
 
 // Counter is a single labeled counter.
@@ -61,19 +77,22 @@ type Counter struct {
 	vec    *CounterVec
 }
 
-// Inc increments the counter by one.
+// Inc increments the counter by one and reports the delta (1) to the vector's
+// OnInc callback.
 func (c *Counter) Inc() {
 	c.value.Add(1)
 	if c.vec != nil && c.vec.OnInc != nil {
-		c.vec.OnInc(c.name, c.labels, c.Value())
+		c.vec.OnInc(c.name, c.labels, 1)
 	}
 }
 
-// Add increments the counter by n.
+// Add increments the counter by n and reports the delta (n) to the vector's
+// OnInc callback. Add(0) still reports 0, which creates the series in sinks
+// that only materialize a series on the first event.
 func (c *Counter) Add(n int64) {
 	c.value.Add(n)
 	if c.vec != nil && c.vec.OnInc != nil {
-		c.vec.OnInc(c.name, c.labels, c.Value())
+		c.vec.OnInc(c.name, c.labels, float64(n))
 	}
 }
 
@@ -132,14 +151,6 @@ func labelKey(labels map[string]string) string {
 		parts = append(parts, n, labels[n])
 	}
 	return strings.Join(parts, "\x00")
-}
-
-func orderedLabelValues(labels map[string]string, names []string) []string {
-	values := make([]string, len(names))
-	for i, n := range names {
-		values[i] = labels[n]
-	}
-	return values
 }
 
 func (cv *CounterVec) snapshotSamplesAt(t time.Time) []Sample {
