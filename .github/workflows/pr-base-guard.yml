@@ -1,0 +1,92 @@
+name: PR Base Guard
+
+# 這個 workflow 存在的唯一理由（2026-09-25,任務 I）:
+#   把「PR 目標分支設錯 → 整個 CI 靜默不跑 → required checks 永遠停在 Expected
+#   → merge 被拒」這個故障模式變**大聲**。
+#
+# 為什麼會靜默:ci-cd.yml / quality.yml / constitution.yml 的 on.pull_request 都帶
+#   branches: [main] 或 [main, develop]。GitHub 的 branches 過濾比對的是 PR 的
+#   **base 分支**,base 不匹配時 **不建立任何 workflow run**（連 skipped 記錄都沒有）。
+#   實例:PR #1975 的 base 誤設為上一個任務的分支 fix/monitoring-rules-hardening,
+#   整個 PR 沒有任何 run;改成 main 也不會有 run,因為 base_ref_changed 不是
+#   pull_request 的預設活動類型（opened/synchronize/reopened）→ 只有再推一個新
+#   commit 才會觸發。詳見 docs/operations/pr-lifecycle.md §CI:required checks 卡在 Expected。
+#
+# 這個 workflow **刻意不帶 branches 過濾**（唯一一個），所以任何 base 都會被檢查。
+#
+# 判定:
+#   base ∈ {main, develop}            → pass（正常情況,PR workflows 會跑）
+#   base 是另一個 open PR 的 head 分支 → pass + notice（刻意的 stacked PR;
+#                                        該 PR 本來就不會跑 CI,由上游 PR 承載）
+#   其他（目標分支設錯的徵兆）        → **fail**,附上修法
+#
+# 它不在 branch protection 的 12 個必過檢查內（新增檢查需要改 repo 設定,不在本 PR 範圍）
+# → 它是 tripwire,不是 gate;紅燈本身就是給 operator/agent 的訊號。
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-base-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Check PR base branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_BASE: ${{ github.base_ref }}
+        THIS_PR: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        echo "PR base branch: ${PR_BASE}"
+
+        if [ "${PR_BASE}" = "main" ] || [ "${PR_BASE}" = "develop" ]; then
+          echo "OK: base=${PR_BASE} → PR workflows (ci-cd.yml / quality.yml / constitution.yml) 會正常觸發"
+          exit 0
+        fi
+
+        # 非 main/develop:先判斷是不是刻意的 stacked PR（base = 另一個 open PR 的 head）。
+        STACKED=$(curl -sS --fail \
+          -H "Authorization: Bearer ${GH_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${REPO}/pulls?state=open&per_page=100" \
+          | python3 -c '
+        import json, os, sys
+        base = os.environ["PR_BASE"]
+        this_pr = str(os.environ.get("THIS_PR", ""))
+        prs = json.load(sys.stdin)
+        parents = [str(p["number"]) for p in prs
+                   if p["head"]["ref"] == base and str(p["number"]) != this_pr]
+        print(";".join(parents))
+        ')
+
+        if [ -n "${STACKED}" ]; then
+          echo "::notice title=stacked PR::base=${PR_BASE} 是 open PR #${STACKED} 的 head 分支 → 視為 stacked PR。本 PR 不會觸發 PR workflows,由上游 PR 承載 CI。"
+          exit 0
+        fi
+
+        MSG="PR base 分支是 '${PR_BASE}',不是 main/develop → ci-cd.yml / quality.yml / constitution.yml 的 on.pull_request.branches 過濾不匹配,GitHub 不會建立任何 workflow run"
+        echo "::error title=PR base 不是 main,CI 永遠不會跑::${MSG}"
+        printf '%s\n' \
+          "## ❌ PR base 分支設錯:CI 不會跑" \
+          "" \
+          "${MSG}（連 skipped 記錄都沒有）。" \
+          "" \
+          "後果:branch protection 的 12 個 required checks 永遠停在 \`Expected\`," \
+          "\`gh pr merge\`（連 \`--admin\`）都會被 \`12 of 12 required status checks are expected\` 拒絕。" \
+          "" \
+          "### 修法" \
+          "1. 改 PR 目標分支:\`gh pr edit ${THIS_PR} --base main\`" \
+          "2. **再推一個新 commit**（例:\`git commit --allow-empty -m 'chore(ci): re-trigger workflows'\`）" \
+          "   —— \`base_ref_changed\` 不是 pull_request 的預設活動類型,單改 base 不會產生 run。" \
+          "   替代:close + reopen PR（reopened 是預設類型）。" \
+          "" \
+          "### 若這是刻意的 stacked PR" \
+          "確認 base 是另一個 **open** PR 的 head 分支即可（本 guard 會自動放行）。" \
+          >> "$GITHUB_STEP_SUMMARY"
+        exit 1

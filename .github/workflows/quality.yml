@@ -801,3 +801,53 @@ jobs:
     - name: Check port references against constants/port.go
       run: bash scripts/ci/check_doc_ports.sh
 
+  # ── Monitoring config validation（promtool / amtool）─────────────────────────
+  # 為什麼存在（2026-09-25，任務 I）:promtool check rules / test rules 與
+  # amtool check-config 過去只靠人工在驗證時手跑容器，沒有任何 CI 覆蓋 →
+  # 「結構上不可能 firing 的規則」與「annotation 求值才炸」這兩類缺陷都能進版控
+  # 而無人發現（實例:#1975 依賴不存在的 cAdvisor 指標、#1972 的 {{.Mounts}} 模板
+  # 把 Prometheus log 淹掉 5,075 次）。
+  #
+  # 版本紀律:用**釘版**容器
+  #   prom/prometheus:v3.14.0  /  prom/alertmanager:v0.27.0
+  # = Mac Mini production 實際在跑的同版（2026-09-25 手跑驗證所用的版本）。
+  # 永不用 latest —— 監控語意的 gate 必須測「生產那個版本」，否則測到的是一個
+  # 不存在的環境。
+  #
+  # 護欄:四個 step 全部 blocking。promtool/amtool 的非零 exit code 直接讓 job 紅燈;
+  # **不得**加 `|| true` 或 continue-on-error（那等於讓這條 gate 消失）。
+  # 容器以 image 內建的 nobody 使用者執行（官方 Dockerfile:USER nobody），
+  # 只讀取 checkout 出來的檔案，不會寫回工作區。
+  #
+  # 已知覆蓋缺口（刻意、有紀錄，不是靜默吞掉）:
+  # `promtool check rules` 的 lint（重複規則）**預設非致命**（exit 0），
+  # 而目前 main 上就有一個既存重複（channel_health_latent_staleness.yml 的
+  # ChannelHealthStatusError 四條同名同標籤規則）→ 直接加 `--lint-fatal`
+  # 會讓每一次 CI 紅燈。等重複規則清理後，把本 job 的 `check rules` 改成
+  # `check rules --lint=all --lint-fatal` 即可收緊（見 docs/operations/pr-lifecycle.md
+  # §CI 監控設定 gate）。
+  monitoring-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: promtool check config (scrape_configs + rule_files 全數可載入)
+      run: |
+        docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+          prom/prometheus:v3.14.0 check config monitoring/prometheus.yml
+
+    - name: promtool check rules (六個規則檔逐檔驗證)
+      run: |
+        docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+          prom/prometheus:v3.14.0 check rules monitoring/rules/*.yml
+
+    - name: promtool test rules (unit tests — 驗「該 firing 的真的會 firing」)
+      run: |
+        docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+          prom/prometheus:v3.14.0 test rules monitoring/tests/*.yml
+
+    - name: amtool check-config (Alertmanager route/receiver/inhibit)
+      run: |
+        docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/amtool \
+          prom/alertmanager:v0.27.0 check-config monitoring/alertmanager.yml
