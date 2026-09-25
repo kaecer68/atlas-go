@@ -16,6 +16,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/eventbus"
 	"github.com/kaecer68/atlas-go/internal/industry"
 	"github.com/kaecer68/atlas-go/internal/logging"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/monitoring/metrics"
 	"github.com/kaecer68/atlas-go/internal/orchestrator"
@@ -218,8 +219,22 @@ func newUniverseBuilderDeps(
 // to call mock output a market verdict: BuildUniverse detects the mock through
 // IsMock() and records quotes_status=mock with
 // ranked_fallback_reason=quote_provider_mock instead of ranked_trustworthy=true.
+//
+// issue #1986: the gateway-backed provider is wrapped in
+// marketdata.CoverageCompletingProvider so the residual of each chunk is filled
+// from the first-party 上櫃 daily close table (one request for the whole TPEx
+// market). The universe population is 上市 + 上櫃 (1,599 symbols on 2026-09-25),
+// while TWSE STOCK_DAY_ALL publishes 上市 only — measured 2026-09-24: 904 of the
+// 1,599. Closing the other 695 through the chain's per-symbol arms (FinMind,
+// Fugle, 0.17-0.5 req/s) is impossible inside any chunk timeout, which is how
+// the production run ended at quotes_status=partial. Wrapping is deliberate and
+// universe-only: the end-of-day TPEx table must not feed live trading, which
+// uses selectProvider() directly and is untouched.
 func newUniverseQuoteProvider(cfg config.Config) monitoring.QuoteProvider {
-	return orchestrator.NewGatewayBackedProvider(cfg)
+	return marketdata.NewCoverageCompletingProvider(
+		orchestrator.NewGatewayBackedProvider(cfg),
+		marketdata.GetSharedTPExDailyCloseClient(),
+	)
 }
 
 // newUniverseBuilderDepsWithQuotes is newUniverseBuilderDeps with the quote
