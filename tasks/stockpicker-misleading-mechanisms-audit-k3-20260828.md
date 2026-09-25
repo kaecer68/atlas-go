@@ -22,7 +22,7 @@
 | M8 | 共享 DB 跨測試污染 | **缺失** | 已重現 `TestPostgresLedgerStore_TradesRoundTrip: expected 2 trades, got 4`；所有整合測試共用一個 DB、cleanup 只 DELETE 部分表。|
 | M9 | `docs/data-catalog.md` | **過時** | 寫 PG migration 在 `internal/db/migrations/`（實際 `sql/migrations/`，19 組）。`atlas.db` 條目無「本機 dev artifact」標註。|
 | M10 | .env 環境分離文件 vs 實作 | **矛盾** | `docs/operations/local-deploy.md` 明寫「iMac .env 指向 prod DB（atlas）」，**已 ssh 實錘 iMac 實際指向 `atlas_dev`**。|
-| M11 | 密碼命名說謊 + dev/prod 同實例 | **誤導** | prod DB `atlas`（port 55432）的密碼叫 `atlas_dev_pwd_2026`；`atlas_dev` DB 與 prod **同一個 postgres 實例**、同一 superuser —— 名義隔離，實際零隔離。|
+| M11 | 密碼命名說謊 + dev/prod 同實例 | **誤導** | prod DB `atlas`（port 55432）的密碼是 `***`（字面值不落地；來源 `~/.config/atlas-go/.env` 的 `POSTGRES_PASSWORD`）；`atlas_dev` DB 與 prod **同一個 postgres 實例**、同一 superuser —— 名義隔離，實際零隔離。|
 | M12 | migration 執行無目標守衛 | **缺失** | `run-stockpicker-backtest` 對 source 進來的任何 DATABASE_URL 直接跑 migrate up。無 `SELECT current_database()` 自報、無 `-expect-db` 斷言。|
 
 ### 2.1 integration CI 三缺陷（全部本地重現）
@@ -49,7 +49,7 @@
 | P1-1 store backend fail-loud | store_factory default 分支未知 → error；共用 resolver |
 | P1-2 backtest 目標守衛 | `SELECT current_database()` 自報 + `-expect-db` flag + outcomes job-local 標註 |
 | P1-3 .env 分離 | local-deploy.md 修正 + source .env 前 echo DATABASE_URL 陷阱 |
-| P1-4 密碼改名 | `atlas_dev_pwd_2026` → `atlas_prod_pwd_2026` |
+| P1-4 密碼改名 | `***` → `${POSTGRES_PASSWORD}`（原值不落地；2026-09-25 任務 Q 移除字面值）|
 | P1-5 atlas_dev 善後 | DROP 2 空表 + force 18 或保留（決策 D2） |
 | P1-6 data-catalog 修正 | migration 路徑改 sql/migrations/；atlas.db 標 dev artifact |
 
