@@ -292,6 +292,13 @@ export interface CalendarProviderData {
   source: string;
 }
 
+export interface CalibrationFinding {
+  code: string;
+  severity: string;
+  segment?: string;
+  message: string;
+}
+
 export interface CalibrationHealthSummary {
   last_calibrated_at?: string | null;
   pattern_count: number;

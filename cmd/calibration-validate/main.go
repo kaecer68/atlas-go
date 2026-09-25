@@ -32,8 +32,23 @@ func main() {
 			res.UpdatedAt.Format(time.RFC3339),
 			res.FileMTime.Format(time.RFC3339),
 			res.StaleBy.Truncate(time.Minute))
-		for _, iss := range res.Issues {
-			fmt.Printf("  - %s\n", iss)
+		// Issue #1944 Batch 3 (I31): findings carry stable codes so callers (and
+		// the operator reading the artifact) can classify a failure without
+		// parsing message text. Falls back to the legacy message list when a
+		// caller supplied issues without findings.
+		switch {
+		case len(res.Findings) > 0:
+			for _, f := range res.Findings {
+				if f.Segment != "" {
+					fmt.Printf("  - [%s][%s] segment=%s %s\n", f.Code, f.Severity, f.Segment, f.Message)
+					continue
+				}
+				fmt.Printf("  - [%s][%s] %s\n", f.Code, f.Severity, f.Message)
+			}
+		default:
+			for _, iss := range res.Issues {
+				fmt.Printf("  - %s\n", iss)
+			}
 		}
 	}
 

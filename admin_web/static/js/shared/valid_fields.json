@@ -1689,6 +1689,7 @@
   "sectors",
   "securityStatus",
   "securityType",
+  "segment",
   "segments",
   "sell",
   "sell_value_ratio",
