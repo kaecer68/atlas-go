@@ -284,6 +284,58 @@ type CapitalFlowAssessment struct {
 	CrossMarket       DirectionalAssessment `json:"cross_market"`
 	PrimaryFlow       string                `json:"primary_flow,omitempty"`
 	Reasons           []string              `json:"reasons,omitempty"`
+	// IndustryHitRateEvidence is populated by the sectorallocation-side
+	// consumption chain (issues #1942/#1948, 2026-09-24) ONLY when
+	// configs.parameters.json -> sector_allocation.industry_hit_rate_consume_enabled
+	// is true. When the gate is off (the default) the field is nil and
+	// `omitempty` suppresses the key entirely, so the assessment JSON is
+	// byte-identical with the pre-change revision.
+	//
+	// The block is advisory: it never changes CalibrationStatus or
+	// EligibleForAutomation (the E07 calibration pipeline owns those). It
+	// exists so a consumer can tell "gate off" apart from "gate on but the
+	// canonical industry hit-rate had no calibration-eligible row", which is
+	// the fail-closed case that keeps production on the pre-change path.
+	IndustryHitRateEvidence *IndustryHitRateEvidence `json:"industry_hit_rate_evidence,omitempty"`
+}
+
+// IndustryHitRateEvidence is the assessment-side echo of the industry hit-rate
+// consumption chain. It records WHICH query tuple was read, whether it produced
+// driver tilts, and — when it did not — the reason (fail-closed explanation),
+// plus the per-L1 summary stats the dashboard/MCP surfaces need for audit.
+//
+// The struct lives in capitalflow (not sectorallocation) because the consumer
+// is the capitalflow HTTP surface (/api/capital-flow/daily). Producers
+// (sectorallocation) copy their computed decision into this shape.
+type IndustryHitRateEvidence struct {
+	// Source is the stockpicker source id (e.g. "stockpicker-momentum-20d-positive").
+	Source string `json:"source"`
+	// ConditionID is the condition portion of the source (e.g. "momentum-20d-positive").
+	ConditionID string `json:"condition_id"`
+	// RollingWindow is the window key (e.g. "120d").
+	RollingWindow string `json:"rolling_window"`
+	// Applied is true when at least one calibration-eligible L1 row produced a
+	// driver tilt. False means the pipeline failed closed to the pre-change
+	// behavior; Reason then says why.
+	Applied bool `json:"applied"`
+	// Reason is the machine-readable decision reason: applied / no_rows /
+	// insufficient_calibration / no_provider / provider_error. The string set
+	// is part of the contract (see sectorallocation decision constants).
+	Reason string `json:"reason"`
+	// RowsTotal is the count of industry rows in the underlying report.
+	RowsTotal int `json:"rows_total"`
+	// RowsCalibrated is the count of rows the chain may consume: canonical L1
+	// keys whose CalibrationStatus is "eligible" (>= min_samples). Rows below
+	// that count, and rows with a non-canonical key, are never consumed.
+	RowsCalibrated int `json:"rows_calibrated"`
+	// MeanWilsonLower is the arithmetic mean of WilsonLower over the consumed
+	// rows, rounded to 4 decimals (matches the stockpicker rounding policy).
+	// Zero when nothing was applied.
+	MeanWilsonLower float64 `json:"mean_wilson_lower"`
+	// MaxTilt / MinTilt bound the per-L1 tilt deltas (IndustryHitRateTilt)
+	// without exposing every row. Zero when nothing was applied.
+	MaxTilt float64 `json:"max_tilt"`
+	MinTilt float64 `json:"min_tilt"`
 }
 
 // EligibleForAutomation reports whether the assessment is safe to

@@ -7921,7 +7921,13 @@
     "narrative_weight": 1,
     "macro_weight": 1,
     "factor_weight": 1,
-    "weight_floor": 0.01
+    "weight_floor": 0.01,
+    "industry_hit_rate_consume_enabled": {
+      "value": false,
+      "rationale": "Config gate for the industry hit-rate consumption chain (#1942/#1948, PR 2026-09-24). Default false keeps both production surfaces byte-identical with the pre-change baseline: (a) sectorallocation ComputeProjectedTarget does not tilt drivers from industry hit-rate, and (b) capitalflow LatestAssessment carries no industry_hit_rate_evidence block. When true, calibrated (min_samples 30) industry-level hit-rate rows from the stockpicker canonical aggregate feed per-L1 tilts into sectorallocation and populate the advisory capitalflow evidence block. Insufficient or missing evidence fails closed to the gate-off behaviour and records a reason.",
+      "source": "experimental",
+      "todo": "Promote to heuristic after the observation window (20+ sessions, zero invariant violations) confirms regression-free wiring; changing the default requires owner sign-off in a separate issue."
+    }
   },
   "reporting": {
     "win_rate_threshold": {

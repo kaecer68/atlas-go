@@ -320,6 +320,16 @@ func (e *defaultEngine) ComputeProjectedTarget(ctx context.Context, drivers Driv
 	drivers.Macro = collectMacroDeltas(ctx, e.macro, drivers.Macro, drivers.MacroAction)
 	drivers.CapitalFlow = collectFactorDeltas(ctx, e.factor, drivers.CapitalFlow)
 
+	// Industry hit-rate consumption chain (issues #1942/#1948), config-gated.
+	// Gate off (default) or fail-closed evidence: drivers come back untouched,
+	// so the projection below runs the pre-change path unchanged. Gate on with
+	// calibration-eligible rows: per-L1 deltas are summed into the CapitalFlow
+	// driver. A tolerated provider error is surfaced on the assessment side
+	// (CapitalFlowAssessment.IndustryHitRateEvidence.Reason).
+	if tiltDrivers, tiltErr := ApplyIndustryHitRateToDrivers(drivers, GetRegisteredIndustryHitRateProvider(), industryHitRateSource, industryHitRateCondition, industryHitRateRollingWindow); tiltErr == nil {
+		drivers = tiltDrivers
+	}
+
 	return e.projector.Project(base, drivers)
 }
 

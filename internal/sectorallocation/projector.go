@@ -3,6 +3,7 @@ package sectorallocation
 import (
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
@@ -139,33 +140,46 @@ func (p *Projector) Project(raw map[industry.SectorID]float64, drivers DriverInp
 		"theme":        "v1.0.0",
 		"prior":        "StrategicSectorPrior",
 	}
-	for name, m := range map[string]map[industry.SectorID]float64{
-		"cycle":        drivers.Cycle,
-		"seasonal":     drivers.Seasonal,
-		"linkage":      drivers.Linkage,
-		"narrative":    drivers.Narrative,
-		"macro":        drivers.Macro,
-		"capital_flow": drivers.CapitalFlow,
-		"theme":        drivers.Theme,
-		"prior":        drivers.StrategicPrior,
-	} {
-		for id, delta := range m {
+	// SA-DET-01（issue #1961）：driver 套用順序必須固定，且每個 driver 內部必須以
+	// 固定 key 順序走訪。
+	// 舊寫法把 8 個 driver map 放在一個 map 內走訪，Go 對 map 的迭代順序是隨機的；
+	// 同一 sector 被多個 driver 加總時，IEEE-754 加法不具結合律
+	// （(a+b)+c != a+(b+c)），結果尾位會逐次漂移，AdjustmentLog 的順序也會跟著漂移。
+	driversInApplyOrder := []driverApplication{
+		{"cycle", drivers.Cycle},
+		{"seasonal", drivers.Seasonal},
+		{"linkage", drivers.Linkage},
+		{"narrative", drivers.Narrative},
+		{"macro", drivers.Macro},
+		{"capital_flow", drivers.CapitalFlow},
+		{"theme", drivers.Theme},
+		{"prior", drivers.StrategicPrior},
+	}
+	for _, d := range driversInApplyOrder {
+		for _, id := range sortedSectorIDs(d.weights) {
+			delta := d.weights[id]
 			before := target[id]
 			target[id] = before + delta
 			log = append(log, AdjustmentEvent{
-				Sector: id, Before: before, After: target[id], Reason: name,
+				Sector: id, Before: before, After: target[id], Reason: d.name,
 			})
 		}
 	}
 
 	// 3. clamp + sum 收斂（SA-INV-07）
+	// SA-DET-01（issue #1961）：正規化加總必須以固定 key 順序進行。走訪 map 加總會讓
+	// 20 個 sector 的總和尾位逐次不同（IEEE-754 加法不具結合律），除以總和後全部
+	// sector 同時位移 1 ULP，正是 issue #1961 觀測到的現象。
+	// target 的 key set 在此之後不再變動，故排序一次即可重用。
+	ids := sortedSectorIDs(target)
 	maxIter := p.constraints.MaxIterations
 	if maxIter <= 0 {
 		maxIter = 10
 	}
 	for range maxIter {
 		clamped := false
-		for id, w := range target {
+		for _, id := range ids {
+			w := target[id]
 			if w < 0 {
 				target[id] = 0
 				clamped = true
@@ -181,13 +195,13 @@ func (p *Projector) Project(raw map[industry.SectorID]float64, drivers DriverInp
 		}
 		// normalize sum
 		s := 0.0
-		for _, v := range target {
-			s += v
+		for _, id := range ids {
+			s += target[id]
 		}
 		if s == 0 {
 			return ProjectedTarget{}, fmt.Errorf("Projector: zero sum after clamp")
 		}
-		for id := range target {
+		for _, id := range ids {
 			target[id] = target[id] / s
 		}
 		if !clamped {
@@ -197,8 +211,8 @@ func (p *Projector) Project(raw map[industry.SectorID]float64, drivers DriverInp
 
 	// 4. final sum check
 	s := 0.0
-	for _, v := range target {
-		s += v
+	for _, id := range ids {
+		s += target[id]
 	}
 	if s < (1.0-p.constraints.SumTolerance) || s > (1.0+p.constraints.SumTolerance) {
 		return ProjectedTarget{}, fmt.Errorf("Projector: final sum drift %.12f", s)
@@ -211,4 +225,22 @@ func (p *Projector) Project(raw map[industry.SectorID]float64, drivers DriverInp
 		DriverProvenance: provenance,
 		ModelVersion:     "v0.0.0-canonical",
 	}, nil
+}
+
+// driverApplication 把一個 driver 名稱與其 delta map 綁在一起，作為固定套用順序的一步。
+// 存在理由見 Projector.Project 的 SA-DET-01 註解：map 走訪順序隨機，浮點加法不具結合律。
+type driverApplication struct {
+	name    string
+	weights map[industry.SectorID]float64
+}
+
+// sortedSectorIDs 回傳 map 的 key（字典序），供任何對 map 做浮點累加的迴圈使用。
+// issue #1961：對 map 直接做 `s += v` 會讓結果尾位隨迭代順序漂移；先排序再累加即為決定性。
+func sortedSectorIDs(m map[industry.SectorID]float64) []industry.SectorID {
+	ids := make([]industry.SectorID, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
