@@ -1,0 +1,7 @@
+{
+  "version": "fixture",
+  "demo": {
+    "read_flag": {"value": 1.5, "rationale": "fixture: 有 reader", "source": "heuristic"},
+    "inert_flag": {"value": 2.5, "rationale": "fixture: 故意沒有 reader（baseline 覆蓋）", "source": "heuristic"}
+  }
+}

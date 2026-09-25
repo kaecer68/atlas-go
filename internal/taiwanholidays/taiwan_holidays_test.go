@@ -7,8 +7,29 @@ import (
 
 func TestCoverageYears(t *testing.T) {
 	minY, maxY := CoverageYears()
-	if minY != 2023 || maxY != 2040 {
-		t.Fatalf("coverage = %d-%d, want 2023-2040", minY, maxY)
+	// 2021-2040. The lower bound moved from 2023 to 2021 in issue #1973 D3.
+	if minY != 2021 || maxY != 2040 {
+		t.Fatalf("coverage = %d-%d, want 2021-2040", minY, maxY)
+	}
+}
+
+// TestLunarTables_Completeness is the guard the declared range never had: EVERY
+// year inside CoverageYears must have all four moving holidays, so a hole like
+// the missing 2023 春節 entry (which silently fell back to a 02-01 placeholder
+// while claiming to be verified) cannot come back.
+func TestLunarTables_Completeness(t *testing.T) {
+	minY, maxY := CoverageYears()
+	for y := minY; y <= maxY; y++ {
+		if !VerifiedLunarYear(y) {
+			t.Errorf("year %d is inside the declared coverage %d-%d but has incomplete lunar tables", y, minY, maxY)
+		}
+	}
+	// Just outside the range must be reported as not determinable, not guessed.
+	if VerifiedLunarYear(minY - 1) {
+		t.Errorf("year %d is outside the declared coverage but reported as determinable", minY-1)
+	}
+	if VerifiedLunarYear(maxY + 1) {
+		t.Errorf("year %d is outside the declared coverage but reported as determinable", maxY+1)
 	}
 }
 
@@ -59,12 +80,60 @@ func TestLunarTables_2031_2040(t *testing.T) {
 	}
 }
 
+// TestLunarTables_2021_2023 pins the table block added by issue #1973 D3, which
+// extends the verified range down to 2021 — the earliest year the platform's own
+// TWSE session universe covers.
+//
+// Evidence:
+//   - 2021 dates are cross-checked against first-party TWSE sessions shipped with
+//     the platform (data/state/sector_index, dense for 2021: 244 sessions). The
+//     only weekday dates without a session in 2021 are 01-01, 02-08..02-09
+//     (結算), 02-10..02-12, 02-15..02-16 (春節休市, 初一 = 02-12), 03-01,
+//     04-02, 04-05 (清明 04-04 is a Sunday), 04-30, 06-14 (端午), 09-20..09-21
+//     (中秋 = 09-21), 10-11 and 12-31.
+//   - 2021-2023 were also computed independently with the lunardate library plus
+//     solar-term astronomy — the same method used for the 2031-2040 block.
+//   - 2023 春節初一 (01-22) is the 初一 the TWSE closure span recorded in
+//     springFestivalClosures already lists; it used to be MISSING from the table
+//     even though 2023 was inside the declared verified range.
+func TestLunarTables_2021_2023(t *testing.T) {
+	want := map[string]string{
+		"2021-02-12": "chunjie", "2022-02-01": "chunjie", "2023-01-22": "chunjie",
+		"2021-04-04": "qingming", "2022-04-05": "qingming", "2023-04-05": "qingming",
+		"2021-06-14": "duanwu", "2022-06-03": "duanwu", "2023-06-22": "duanwu",
+		"2021-09-21": "zhongqiu", "2022-09-10": "zhongqiu", "2023-09-29": "zhongqiu",
+	}
+	type acc struct {
+		name string
+		f    func(int) (time.Time, bool)
+	}
+	for _, a := range []acc{
+		{"chunjie", LunarNewYear},
+		{"qingming", TombSweeping},
+		{"duanwu", LunarDragonBoat},
+		{"zhongqiu", LunarMidAutumn},
+	} {
+		for y := 2021; y <= 2023; y++ {
+			d, ok := a.f(y)
+			if !ok {
+				t.Errorf("%s %d: missing from table", a.name, y)
+				continue
+			}
+			key := d.Format("2006-01-02")
+			if kind, exists := want[key]; !exists || kind != a.name {
+				t.Errorf("%s %d = %s, want a %s entry for that year", a.name, y, key, a.name)
+			}
+		}
+	}
+}
+
 // TestHolidaysInYear_FullCoverage pins the complete holiday set for every
 // verified year: 8 base holidays (4 fixed + 4 lunar) plus the TWSE spring
 // festival closure span (settlement days + 除夕~初五 + 補假) for 2023-2026,
 // and the lunar dates must match the canonical accessors.
 func TestHolidaysInYear_FullCoverage(t *testing.T) {
-	for y := 2023; y <= 2040; y++ {
+	minYear, maxYear := CoverageYears()
+	for y := minYear; y <= maxYear; y++ {
 		hs := HolidaysInYear(y)
 		want := 8
 		if closures, ok := springFestivalClosures[y]; ok {
@@ -202,25 +271,50 @@ func TestPreviousTradingDay_MultiDay(t *testing.T) {
 	}
 }
 
-func TestFallbackBeyond2040_ReturnsConventionalDate(t *testing.T) {
-	// 2045 is beyond the verified table (extended to 2040): fallback must
-	// still return a date (conventional), and the trading-day query must
-	// not panic.
-	hs := HolidaysInYear(2045)
-	if len(hs) != 8 {
-		t.Fatalf("2045 holidays = %d, want 8 (conventional fallback)", len(hs))
-	}
-	found := false
-	for _, h := range hs {
-		if h.Name == "春節" && h.Date.Format("2006-01-02") == "2045-02-01" {
-			found = true
+// TestBeyondCoverage_LunarUnavailable replaces the old
+// TestFallbackBeyond2040_ReturnsConventionalDate. Conventional placeholder dates
+// are no longer produced: 2045 春節 is not 02-01, it is simply NOT DETERMINABLE
+// (issue #1973 D3). Only the four fixed-date holidays remain for such a year,
+// and the accessors report ok=false.
+func TestBeyondCoverage_LunarUnavailable(t *testing.T) {
+	for _, year := range []int{2020, 2045} {
+		if VerifiedLunarYear(year) {
+			t.Fatalf("%d: reported as determinable outside coverage", year)
+		}
+		hs := HolidaysInYear(year)
+		want := []string{"元旦", "228和平紀念日", "勞動節", "國慶日"}
+		if len(hs) != len(want) {
+			t.Fatalf("%d holidays = %d, want %d fixed-date only (%+v)", year, len(hs), len(want), hs)
+		}
+		for i, name := range want {
+			if hs[i].Name != name {
+				t.Errorf("%d holiday[%d] = %q, want %q", year, i, hs[i].Name, name)
+			}
+		}
+		// The moving holidays must not be answered at all.
+		if d, ok := LunarNewYear(year); ok {
+			t.Errorf("LunarNewYear(%d) = %s, want ok=false", year, d.Format("2006-01-02"))
+		}
+		if _, ok := TombSweeping(year); ok {
+			t.Errorf("TombSweeping(%d) reported ok=true", year)
+		}
+		if _, ok := LunarDragonBoat(year); ok {
+			t.Errorf("LunarDragonBoat(%d) reported ok=true", year)
+		}
+		if _, ok := LunarMidAutumn(year); ok {
+			t.Errorf("LunarMidAutumn(%d) reported ok=true", year)
 		}
 	}
-	if !found {
-		t.Errorf("2045 spring festival fallback not 2045-02-01: %+v", hs)
+	// No fabricated 春節 / 清明 on the conventional placeholder dates, and the
+	// fixed-date holidays are still holidays (the query must not panic either).
+	if IsHoliday(time.Date(2045, 2, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Error("2045-02-01 must not be reported as 春節: the date is not determinable")
 	}
-	if !IsHoliday(time.Date(2045, 4, 5, 0, 0, 0, 0, time.UTC)) {
-		t.Error("2045-04-05 should be a holiday via fallback")
+	if IsHoliday(time.Date(2045, 4, 5, 0, 0, 0, 0, time.UTC)) {
+		t.Error("2045-04-05 must not be reported as 清明節: the date is not determinable")
+	}
+	if !IsHoliday(time.Date(2045, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Error("2045-01-01 (元旦) is a fixed-date holiday and must remain one")
 	}
 }
 

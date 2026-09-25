@@ -64,8 +64,81 @@ PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summa
 
 - [ ] `make ci-gate` 過
 - [ ] `make ci-full` 過（**不可跳過**）
-- [ ] GitHub CI 全綠
+- [ ] GitHub CI 全綠（含 `monitoring-config`，見 §3.4）
 - [ ] Reviewer approve
+
+### 3.3 PR 整個 CI 都沒跑（required checks 卡在 `Expected`）
+
+> **實證 2026-09-25（PR #1975，任務 I）**。症狀:PR 開好之後 `gh pr checks` 一個檢查都沒有;
+> `gh pr merge --squash --admin` 被拒,訊息是 `12 of 12 required status checks are expected`,
+> 而 `gh run list --branch <branch>` 是空的。
+
+**真因（不是 `paths` 過濾）**:三個 PR workflow（`ci-cd.yml`、`quality.yml`、`constitution.yml`）
+的 `on.pull_request.branches` 只允許 `main` / `develop`。GitHub 的 `branches` 過濾比對的是
+**PR 的 base 分支**;不匹配時 GitHub **不建立任何 workflow run**——連 `skipped` 記錄都沒有
+（所以「檢查清單裡沒東西」與「job 被 skip」是兩件不同的事）。#1975 的 base 被設成上一個任務
+的分支 `fix/monitoring-rules-hardening`（原意是 stacked PR，但任務其實已完成、要直接進 main）,
+因此整個 PR 沒有任何 run。
+
+**為什麼「把 base 改成 main」當下也沒用**:`base_ref_changed` **不是** `pull_request` 的預設
+活動類型（預設只有 `opened` / `synchronize` / `reopened`）→ 只改 base 不會觸發任何 workflow。
+#1975 當時是再推一個空 commit（`synchronize`）才讓 3 個 workflow 跑起來,12 項 required
+checks 才回報（35 pass）。
+
+**診斷指令（唯讀，30 秒定案）**:
+
+```bash
+BR=fix/example-branch
+gh run list --branch "$BR"                                   # 空 = 完全沒有 run
+gh api "repos/:owner/:repo/actions/runs?head_sha=<sha>"      # total_count 0
+gh api repos/:owner/:repo/commits/<sha>/check-runs           # total_count 0
+gh api repos/:owner/:repo/branches/main/protection \
+  --jq '.required_status_checks.contexts'                    # 12 個 job 名（不是 workflow 名）
+# base 變更史（誰把 base 改掉、改前是什麼）:
+gh api graphql -f query='{repository(owner:"<owner>",name:"<repo>"){pullRequest(number:<N>){
+  timelineItems(itemTypes:[BASE_REF_CHANGED_EVENT,HEAD_REF_FORCE_PUSHED_EVENT]){nodes{
+  __typename ... on BaseRefChangedEvent{createdAt previousRefName currentRefName}}}}}}'
+```
+
+**處置（依序）**:
+
+1. 若 base 設錯:`gh pr edit <N> --base main`,**然後再推一個新 commit**
+   （`git commit --allow-empty -m 'chore(ci): re-trigger workflows' && git push`）
+   或 close + reopen PR。只改 base 不會產生 run。
+2. 若 base 是刻意的（stacked PR）:CI 不會跑在這一顆 PR 上,由上游 PR 承載;不要為了讓
+   required checks 出現而亂改 `branches` 過濾。
+
+**為什麼不從 repo 端「拿掉 `branches` 過濾」根治**:`branches` 過濾同時扮演安全網——
+PR base 設錯時 CI 完全不跑 + required checks 永遠停在 `Expected` → **merge 被擋住**,
+「目標分支設錯」就不會靜默變成「合併到錯的分支」。真正的問題是這個訊號太隱晦
+（只丟一句 `12 of 12 required status checks are expected`）。因此改為加裝 tripwire:
+`.github/workflows/pr-base-guard.yml`（唯一一個不帶 `branches` 過濾的 workflow）在 PR
+base 既不是 `main`/`develop`、也不是另一個 open PR 的 head 分支時**直接紅燈**,並把上面的
+修法貼進 step summary。
+
+### 3.4 監控設定 gate（promtool / amtool）
+
+`quality.yml` 的 `monitoring-config` job（2026-09-25 任務 I 新增）對 `monitoring/**`
+做四件事,全部 **blocking**（不得加 `|| true` / `continue-on-error`）:
+
+| step | 指令（容器內） | 抓什麼 |
+|------|----------------|--------|
+| check config | `promtool check config monitoring/prometheus.yml` | scrape_configs 語法 + `rule_files` 全部可載入 |
+| check rules | `promtool check rules monitoring/rules/*.yml` | 逐檔規則語法 / 表達式合法性 |
+| test rules | `promtool test rules monitoring/tests/*.yml` | **該 firing 的真的會 firing**（合成序列）+ annotation render 結果 |
+| check-config | `amtool check-config monitoring/alertmanager.yml` | route / receiver / inhibit 結構 |
+
+- **版本紀律**:用釘版容器 `prom/prometheus:v3.14.0`、`prom/alertmanager:v0.27.0`
+  （= Mac Mini production 同版）,永不用 `latest`。容器以 image 內建 `nobody` 執行,只讀工作區。
+- **為什麼需要 `test rules`**:`promtool check rules` 只看 YAML/表達式語法,驗不到
+  「結構上不可能 firing」（依賴不存在的指標源、regex 匹配不到生產容器名）與
+  「annotation 求值才炸」（#1972 的 `{{.Mounts}}`）——這兩類都進過版控且沒被發現。
+  測試檔在 `monitoring/tests/`,改規則文案/標籤時 expectation 會紅（刻意:強迫確認規則還真的會 firing）。
+- **已知覆蓋缺口（有紀錄、非靜默吞掉）**:`promtool check rules` 的 lint（重複規則）
+  **預設非致命**（exit 0）;目前 `main` 上有一個既存重複——
+  `monitoring/rules/channel_health_latent_staleness.yml` 的 `ChannelHealthStatusError`
+  四條同名同標籤規則。清理後把該 step 改成
+  `promtool check rules --lint=all --lint-fatal ...` 即可收緊（`--lint-fatal` 讓 lint 以 exit 3 失敗）。
 
 ## 4. PR-Merge — 合併到 main
 
@@ -202,3 +275,4 @@ PR 視為完成 **必須**所有三項：
 | 日期 | 修訂 | 作者 |
 |------|------|------|
 | 2026-08-05 | 初版建立,因 2026-08-05 v3.0 PR-F #1457 半失敗教訓 | kaecer dispatch + AI agent |
+| 2026-09-25 | 新增 §3.3（PR base 設錯 → CI 靜默不跑 / required checks 卡在 Expected 的真因、診斷與處置 + `pr-base-guard` tripwire）、§3.4（promtool/amtool 監控 gate）;起因 PR #1975 任務 I | kaecer dispatch + AI agent |

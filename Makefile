@@ -459,6 +459,27 @@ ci-quick: check-production-host
 	echo "✅ CI-quick: $$passed passed, ❌ $$failed failed"; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
+# ---- inert 閉環靜態檢查（#1944 建議 2，2026-09-25）----
+# 目的：攔下「有寫入、無消費」的新增閉環（config 沒有 reader／writer 沒有 consumer／
+#       claim 欄位硬寫 true）。規格：docs/specs/inert-static-check-spec.md
+#       allowlist：scripts/ci/inert-baseline.json（每項 reason 必填）
+#   make inert-check           檢查 + hermetic 回歸測試（~10s）
+#   make inert-check-selftest  只跑回歸測試（fixture，不碰 git／production／Go toolchain）
+#   make inert-check-update    把新違規寫進 baseline（reason 留 TODO，人工填寫後才 commit）
+.PHONY: inert-check inert-check-selftest inert-check-update
+
+inert-check-selftest:
+	@echo "  → inert closure regression tests（hermetic fixtures）"
+	@bash tests/scripts/test-inert-closure.sh
+
+inert-check: inert-check-selftest
+	@echo "  → inert closure static check（config / writer / claim）"
+	@bash scripts/ci/check_inert_closure.sh
+
+inert-check-update:
+	@python3 scripts/ci/check_inert_closure.py --root . --update-baseline
+	@echo "   → 請編輯 scripts/ci/inert-baseline.json 填寫 reason（TODO 開頭會讓檢查變紅）"
+
 ci-slow:
 	@echo "🛡️  Running slow CI checks (data_naming/layer3/markdown_links)..."
 	@for script in scripts/ci/check_data_naming.sh \
@@ -785,7 +806,8 @@ rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
 #
 # 與 GitHub CI 對應關係：
 #   ci-gate     → fmt + build + generate + naming + frontend-imports + field-contract +
-#                  agent-prompts + constitution + channel-index + agents-md-drift
+#                  agent-prompts + constitution + channel-index + agents-md-drift +
+#                  inert-closure（#1944 建議 2）
 #   ci-full     → ci-gate + lint (golangci-lint) + staticcheck + test + race + coverage +
 #                  cmd/atlas integration + ci (all scripts) + ci-slow + orphan check
 #
@@ -844,6 +866,9 @@ ci-gate:
 	@echo "    ✅"
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
+	@echo "    ✅"
+	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
+	@bash scripts/ci/check_inert_closure.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick

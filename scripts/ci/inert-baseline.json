@@ -1,0 +1,1088 @@
+{
+  "version": 1,
+  "entries": {
+    "claim-not-consumed": {
+      "parameters_calibrated@ParametersCalibrated": {
+        "class": "metadata-only",
+        "reason": "cmd/parameter-health-check 的報告以 json.MarshalIndent 輸出（main.go:71），欄位只經 JSON tag 消費；main.go:200 累加後直接輸出，production 無顯式讀取點",
+        "evidence": "cmd/parameter-health-check/main.go:15  writes=1"
+      }
+    },
+    "claim-not-derived": {
+      "calibrated@Calibrated": {
+        "class": "guarded",
+        "reason": "Calibrated:true 只在樣本數≥MinSamplesForCalibration 且命中率≥MinHitRateForCalibration 後才寫（internal/forecast/foreign_forecast.go:209/218/225）；同檔 188/199 行為 false 分支 → 靜態檢查未做守衛分析（已知誤報）",
+        "evidence": "internal/forecast/foreign_forecast.go:225"
+      }
+    },
+    "config-inert": {
+      "alert.alert_sla_critical_sec": {
+        "class": "legacy-inert",
+        "reason": "唯一 reader 是 validate(parameters_validate.go:59)；SLA 消費端 GetSLAStats(alert_sla.go:45) 無 production caller，只有測試。",
+        "evidence": "internal/config/parameters.go:1368"
+      },
+      "alert.alert_sla_error_sec": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:62 的範圍檢查；SLAParameters(alert_sla.go:16) 只被 _test 建構，值無行為效果。",
+        "evidence": "internal/config/parameters.go:1369"
+      },
+      "alert.alert_sla_warning_sec": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:65；SLAParameters.WarningSec 無非測試呼叫端，故接了參數也無效。",
+        "evidence": "internal/config/parameters.go:1370"
+      },
+      "alert.heartbeat_ttl_minutes": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:56；CleanupStaleHeartbeats(heartbeat_cleanup.go:23) 無 caller，health.go:65 也未套用 TTL。",
+        "evidence": "internal/config/parameters.go:1363"
+      },
+      "alert.sla_violation_meta_alert": {
+        "class": "legacy-inert",
+        "reason": "全 repo 無 reader（grep MetaAlert 0 命中）；只在 defaults_engine.go:607 產生、parameters_merge.go:337 合併，發送端不存在。",
+        "evidence": "internal/config/parameters.go:1371"
+      },
+      "alert.slippage_error_bps": {
+        "class": "legacy-inert",
+        "reason": "消費端 NewTradeSlippageConsumer 只有 _test caller（trade_slippage_consumer.go:42），production 從未建構，config 值無人讀。",
+        "evidence": "internal/config/parameters.go:1351"
+      },
+      "alert.slippage_warning_bps": {
+        "class": "legacy-inert",
+        "reason": "同 error 版：consumer 未接線（trade_slippage_consumer.go:42 僅測試呼叫），值無 consumer（validate:35 除外）。",
+        "evidence": "internal/config/parameters.go:1352"
+      },
+      "alert.system_metrics_interval_sec": {
+        "class": "legacy-inert",
+        "reason": "唯一 reader 是 parameters_validate.go:44；實際快照任務硬編 60s（cmd/atlas/operations_tasks.go:391），SystemMetrics.Start 已成空函式。",
+        "evidence": "internal/config/parameters.go:1353"
+      },
+      "engine.drawdown.sector_constraints_carry_trade_unwind": {
+        "class": "consumed-indirectly",
+        "reason": "經 EngineDrawdownParameters.ToConfig()(parameters.go:1922-1926) 轉換後由 risk/macro_aware_drawdown.go:95 消費；欄位改名 CarryUnwind 造成靜態檢查漏看。",
+        "evidence": "internal/config/parameters.go:560"
+      },
+      "engine.drawdown.sector_constraints_sector_rotation": {
+        "reason": "在 internal/config 內由 ToConfig 轉換器讀取（parameters.go:1927 `p.SectorConstraintsSectorRotate.Value`），下游以 domain config 消費；本檢查不把 package 內讀取當 reader → 已知誤報（另：欄位名 Rotate 與其他結構的 Rotation 不一致，待正名）",
+        "evidence": "internal/config/parameters.go:1918",
+        "class": "consumed-indirectly"
+      },
+      "engine.strategy_evolution.configs": {
+        "class": "legacy-inert",
+        "reason": "ToConfig(parameters.go:1967) 傳出但 NewStrategyEvolverWithConfig(strategy_evolver.go:93) 丟棄 cfg.Configs；五態值硬編在 GetStrategyConfig(:242-300)。",
+        "evidence": "internal/config/parameters.go:1627"
+      },
+      "factor_weight.regime_bear_momentum": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:642；無 bear 分支（factor_weight_engine.go:180 switch），屬未接線參數。",
+        "evidence": "internal/config/parameters.go:1180"
+      },
+      "factor_weight.regime_bear_quality": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:640；bear 態在 factor_weight_engine.go:180 無分支，值不會被套用。",
+        "evidence": "internal/config/parameters.go:1178"
+      },
+      "factor_weight.regime_bear_value": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:641；引擎以 RISK_ON/RISK_OFF/high_vol 為鍵，bear 參數無 consumer。",
+        "evidence": "internal/config/parameters.go:1179"
+      },
+      "factor_weight.regime_bull_momentum": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:637；factor_weight_engine.go:190-230 只讀 RiskOn*/RiskOff*，bull/bear 無分支，high-vol 值硬編。",
+        "evidence": "internal/config/parameters.go:1175"
+      },
+      "factor_weight.regime_bull_quality": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:638；factor_weight_engine.go:190-230 無 bull 態分支，參數不影響任何權重。",
+        "evidence": "internal/config/parameters.go:1176"
+      },
+      "factor_weight.regime_bull_value": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:639；FactorWeightEngine.OnRegimeChange(factor_weight_engine.go:180) 只吃 RiskOn/RiskOff/high_vol。",
+        "evidence": "internal/config/parameters.go:1177"
+      },
+      "factor_weight.regime_high_vol_inst_sent": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:645；highVolInst=-0.02 硬編於 factor_weight_engine.go:196，未接 config。",
+        "evidence": "internal/config/parameters.go:1183"
+      },
+      "factor_weight.regime_high_vol_liquidity": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:643；high-vol 值硬編 highVolLiq=0.05（factor_weight_engine.go:194），未讀 config。",
+        "evidence": "internal/config/parameters.go:1181"
+      },
+      "factor_weight.regime_high_vol_momentum": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 parameters_validate.go:644；highVolMom=-0.03 硬編於 factor_weight_engine.go:195，config 值未使用。",
+        "evidence": "internal/config/parameters.go:1182"
+      },
+      "industry.event_calendar_rules": {
+        "class": "legacy-inert",
+        "reason": "僅宣告與註解(params.go:1152)；EventCalendar 用硬編 defaultEventRules()（industry/event_calendar.go:163,417），config 型別未接線。",
+        "evidence": "internal/config/parameters.go:840"
+      },
+      "industry.event_sentiment_cap": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 merge(defaults_narrative.go:1155)；實際 clamp 硬編 ±0.2/±0.05（industry/event_calendar.go:915-935），未讀此參數。",
+        "evidence": "internal/config/parameters.go:844"
+      },
+      "industry.freshness_scores": {
+        "class": "legacy-inert",
+        "reason": "FreshnessScoresConfig 在 internal/config 外 0 引用；真實 freshness multiplier 硬編 1.0/0.4/0.0（industry/cycle.go:627-631）。",
+        "evidence": "internal/config/parameters.go:814"
+      },
+      "industry.max_daily_weight_change": {
+        "class": "legacy-inert",
+        "reason": "config 內外皆無 reader；權重流程只有 weightFloor 下限（monitoring/service/industry.go:536-549），無每日變動上限。",
+        "evidence": "internal/config/parameters.go:823"
+      },
+      "narrative.calibration_validation_pct": {
+        "class": "legacy-inert",
+        "reason": "reader 僅 merge(defaults_narrative.go:200)；narrative_calibrator.go:49 用固定區間計分，未實作 80/20 驗證切分。",
+        "evidence": "internal/config/parameters.go:664"
+      },
+      "narrative.event_ttl_multiplier": {
+        "class": "legacy-inert",
+        "reason": "config 外 0 引用；TTL 硬編在 getThemeDuration switch（narrative_detectors.go:1137-1160），map 值不被讀取。",
+        "evidence": "internal/config/parameters.go:669"
+      },
+      "narrative.sox_index_drop_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數取代：narrative_detectors.go:1046 const soxThreshold=5.0、ingestor.go:984 -5.0；config 欄位無 production reader。",
+        "evidence": "internal/config/parameters.go:637"
+      },
+      "reporting.sharpe_min_samples": {
+        "class": "legacy-inert",
+        "reason": "唯一 reader 是 parameters.go:2145 驗證；實作硬編 MinSamples:5 與 len(returns)>=5（reporting/performance.go:809-811）。",
+        "evidence": "internal/config/parameters.go:1847"
+      },
+      "risk.sector_constraints_carry_trade_unwind": {
+        "class": "legacy-inert",
+        "reason": "Risk 副本無消費端：defaults_portfolio.go:525 產生、merge_more.go:354 合併，但引擎只讀 Drawdown 副本（macro_aware_drawdown.go:122）。",
+        "evidence": "internal/config/parameters.go:560"
+      },
+      "risk_gate.in_trade.monitor_interval_sec": {
+        "class": "legacy-inert",
+        "reason": "NewInTradeGate(internal/risk/in_trade.go:23-31) 只取 5 個欄位、不含本項；同 struct 其他欄位有 reader，此欄位無。",
+        "evidence": "internal/config/parameters.go:1561"
+      },
+      "risk_gate.post_trade.evaluation_interval_hours": {
+        "class": "legacy-inert",
+        "reason": "NewPostTradeGate(post_trade.go:23-28) 未取本欄位；盤後評估排程另硬編，config 值無 consumer。",
+        "evidence": "internal/config/parameters.go:1655"
+      },
+      "risk_gate.pre_trade.min_adv_ratio": {
+        "class": "legacy-inert",
+        "reason": "NewPreTradeGate(pre_trade.go:29-36) 未取本欄位；ADV 流動性檢查未實作（internal/risk 內 grep ADV 無命中）。",
+        "evidence": "internal/config/parameters.go:1555"
+      },
+      "sector_allocation.citation.dependencies": {
+        "class": "metadata-only",
+        "reason": "純 metadata：只在 defaults_engine.go:1362 寫入；同 repo 其他 Dependencies 命中皆為無關註解（optimizer_math.go:8 等）。",
+        "evidence": "internal/config/parameters.go:46"
+      },
+      "sector_allocation.citation.last_validated": {
+        "class": "metadata-only",
+        "reason": "純 provenance 字串；只有 defaults_engine.go:1363/defaults_market.go:204 寫入，消費僅 JSON 輸出（cmd/parameter-health-check 以 map 讀）。",
+        "evidence": "internal/config/parameters.go:47"
+      },
+      "sector_allocation.citation.source_reference": {
+        "class": "metadata-only",
+        "reason": "以 raw JSON 消費：industry/seasonal_calibrator.go:288-293 讀 citation.source_reference 作 data_source fallback，無 Go 欄位讀取。",
+        "evidence": "internal/config/parameters.go:42"
+      },
+      "sector_allocation.citation.source_type": {
+        "class": "metadata-only",
+        "reason": "ParameterCitation 的 provenance 欄位；Go 端只在 defaults_engine.go:1357 產生，消費僅靠 JSON 序列化（API/快照輸出）。",
+        "evidence": "internal/config/parameters.go:41"
+      },
+      "sector_allocation.citation.update_policy": {
+        "class": "metadata-only",
+        "reason": "純 metadata：只在 defaults_engine.go:1360 寫入，讀取發生在 JSON 序列化/parameters API 輸出。",
+        "evidence": "internal/config/parameters.go:44"
+      },
+      "sector_allocation.citation.validation_method": {
+        "class": "metadata-only",
+        "reason": "純 metadata：只在 defaults_engine.go:1361 寫入，無 Go reader，僅序列化輸出。",
+        "evidence": "internal/config/parameters.go:45"
+      },
+      "sector_executor.growth_momentum.trend_confirmation_penalty": {
+        "class": "legacy-inert",
+        "reason": "plugin_style.go:87 硬編 -15（等於 config 預設）；欄位只在 defaults_portfolio.go:861 產生，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1325"
+      },
+      "sector_executor.technical_breakout.catch_up_boost": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCatchUpBoost（orchestrator/plugin_sector.go:562）被 plugin_style.go:382 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1318"
+      },
+      "sector_executor.technical_breakout.catch_up_lower_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCatchUpLowerThreshold（orchestrator/plugin_sector.go:563）被 plugin_style.go:381 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1319"
+      },
+      "sector_executor.technical_breakout.catch_up_upper_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCatchUpUpperThreshold（orchestrator/plugin_sector.go:564）被 plugin_style.go:381 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1320"
+      },
+      "sector_executor.technical_breakout.close_strength_penalty": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCloseStrengthPenalty（orchestrator/plugin_sector.go:552）被 plugin_style.go:357 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1308"
+      },
+      "sector_executor.technical_breakout.close_strength_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCloseStrengthThreshold（orchestrator/plugin_sector.go:553）被 plugin_style.go:356 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1309"
+      },
+      "sector_executor.technical_breakout.close_strength_tolerance": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbCloseStrengthTolerance（orchestrator/plugin_sector.go:554）被 plugin_style.go:358 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1310"
+      },
+      "sector_executor.technical_breakout.confirmation_boost": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbConfirmationBoost（orchestrator/plugin_sector.go:560）被 plugin_style.go:379 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1316"
+      },
+      "sector_executor.technical_breakout.confirmation_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbConfirmationThreshold（orchestrator/plugin_sector.go:561）被 plugin_style.go:378 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1317"
+      },
+      "sector_executor.technical_breakout.default_volume_floor": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbDefaultVolumeFloor（orchestrator/plugin_sector.go:545）被 Plugin_style.go:353 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1301"
+      },
+      "sector_executor.technical_breakout.late_breakout_penalty": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbLateBreakoutPenalty（orchestrator/plugin_sector.go:558）被 plugin_style.go:376 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1314"
+      },
+      "sector_executor.technical_breakout.late_breakout_threshold": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbLateBreakoutThreshold（orchestrator/plugin_sector.go:559）被 plugin_style.go:375 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1315"
+      },
+      "sector_executor.technical_breakout.low_volume_boost": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbLowVolumeBoost（orchestrator/plugin_sector.go:549）被 plugin_style.go:385 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1305"
+      },
+      "sector_executor.technical_breakout.low_volume_floor": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbLowVolumeFloor（orchestrator/plugin_sector.go:548）被 plugin_style.go:384 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1304"
+      },
+      "sector_executor.technical_breakout.open_rejection_penalty": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbOpenRejectionPenalty（orchestrator/plugin_sector.go:557）被 plugin_style.go:373 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1313"
+      },
+      "sector_executor.technical_breakout.relaxed_volume_floor": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbRelaxedVolumeFloor（orchestrator/plugin_sector.go:547）被 plugin_style.go:342 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1303"
+      },
+      "sector_executor.technical_breakout.strict_volume_floor": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbStrictVolumeFloor（orchestrator/plugin_sector.go:546）被 plugin_style.go:345 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1302"
+      },
+      "sector_executor.technical_breakout.surge_boost": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbSurgeBoost（orchestrator/plugin_sector.go:555）被 plugin_style.go:367 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1311"
+      },
+      "sector_executor.technical_breakout.surge_penalty": {
+        "class": "legacy-inert",
+        "reason": "硬編常數 tbSurgePenalty（orchestrator/plugin_sector.go:556）被 plugin_style.go:369 使用；config 欄位僅 defaults/merge 讀，production 無 reader。",
+        "evidence": "internal/config/parameters.go:1312"
+      }
+    },
+    "writer-no-consumer": {
+      "internal/apigateway/health.go:RecordChannelHealthFromResult": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "便利 wrapper 唯一呼叫端為 health_test.go:119；production 記健康走 UnifiedHealthStore.Record（gateway.go:147/163）",
+        "evidence": "internal/apigateway/health.go:87  test-files=1"
+      },
+      "internal/bootstrap/dashboard.go:RegisterDashboardRoutes": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "無任何呼叫端；production 走 dashboard.RegisterAllRoutes（cmd/atlas/main.go:907），此為 bootstrap 抽出後的重複註冊",
+        "evidence": "internal/bootstrap/dashboard.go:22  test-files=0"
+      },
+      "internal/dailyreport/tracker.go:SetVerifier": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述 test seam（tracker.go:143）；production 由 NewTracker 注入 NewMarketClaimVerifier（tracker.go:139）",
+        "evidence": "internal/dailyreport/tracker.go:144  test-files=1"
+      },
+      "internal/eventbus/eventbus.go:PublishCalibrationCompleted": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "SSE 已訂閱（sse_handler_subscriptions.go:62），producer 卻在 9d2f3b26 被移除：calibration_tasks.go:610 校準後不再 Publish",
+        "evidence": "internal/eventbus/eventbus.go:1046  test-files=1"
+      },
+      "internal/eventbus/eventbus.go:PublishConvictionClamping": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "EventConvictionClamping 無任何訂閱者，唯一呼叫端 eventbus_test.go:659；production 走 clamping_logger（system.go:615）",
+        "evidence": "internal/eventbus/eventbus.go:783  test-files=1"
+      },
+      "internal/eventbus/eventbus.go:PublishIndustryCalendarEvent": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "SSE 已訂閱（sse_handler_subscriptions.go:54），producer 於 9d2f3b26 從 main.go 日曆任務移除 → 事件永不發佈",
+        "evidence": "internal/eventbus/eventbus.go:1020  test-files=1"
+      },
+      "internal/eventbus/eventbus.go:SetEventThrottle": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "唯一呼叫端 eventbus_test.go:1069；throttleConfigs 恆空 → allowEvent 全放行（eventbus.go:620），PD-3 節流在 production 未啟用",
+        "evidence": "internal/eventbus/eventbus.go:633  test-files=1"
+      },
+      "internal/eventbus/sse_bridge.go:AddClient": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "NewSSEBridge 無 production 建構端（僅 sse_bridge_test.go）；SSE 實作改走 monitoring/api/events，整型別未被使用",
+        "evidence": "internal/eventbus/sse_bridge.go:31  test-files=1"
+      },
+      "internal/eventbus/sse_bridge.go:RemoveClient": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "同 SSEBridge：無 production 建構端（僅 sse_bridge_test.go 呼叫 NewSSEBridge），RemoveClient 僅測試使用",
+        "evidence": "internal/eventbus/sse_bridge.go:46  test-files=1"
+      },
+      "internal/eventdriven/handler.go:RegisterRoutesWithCapitalFlow": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "production 走 RegisterRoutesWithDetectors（main.go:1047）；此中階 wrapper 自 6b72b5eb 後只剩測試（handler_inject_test.go:65）",
+        "evidence": "internal/eventdriven/handler.go:237  test-files=1"
+      },
+      "internal/eventdriven/handler.go:SetNowFn": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述 test hermeticity seam（handler.go:81）；now() 預設走 time.Now（handler.go:90）",
+        "evidence": "internal/eventdriven/handler.go:82  test-files=1"
+      },
+      "internal/eventdriven/predictor.go:SetNarrativeRegistry": {
+        "tier": "dead",
+        "class": "test-seam",
+        "reason": "建構時已注入 NewDefaultDetectorRegistry（predictor.go:94）；此 setter 僅 narrative_inject_test.go 替換用",
+        "evidence": "internal/eventdriven/predictor.go:120  test-files=0"
+      },
+      "internal/eventdriven/sector_predictor.go:SetMacroSnapshot": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "production 以 NewSectorPredictor(&snap,nil) 重建（handler.go:341）；SetMacroSnapshot 僅 sector_predictor_test.go 使用，屬冗餘 API",
+        "evidence": "internal/eventdriven/sector_predictor.go:41  test-files=1"
+      },
+      "internal/eventdriven/sector_predictor.go:SetStrategicPrior": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "handler.go:341 重建 SectorPredictor 未注入 prior（無 SetStrategicPrior）→ PriorWeight 恆 0（sector_predictor.go:92）",
+        "evidence": "internal/eventdriven/sector_predictor.go:49  test-files=1"
+      },
+      "internal/globalmarket/global_market.go:DisableMarket": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "NewGlobalMarketManager 唯一呼叫端在 globalmarket_test.go；整個 globalmarket 在 production 無建構端，此 setter 僅測試用",
+        "evidence": "internal/globalmarket/global_market.go:308  test-files=1"
+      },
+      "internal/globalmarket/global_market.go:EnableMarket": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "NewGlobalMarketManager 無 production 呼叫端（僅 globalmarket_test.go），EnableMarket 僅測試使用，型別整體未接線",
+        "evidence": "internal/globalmarket/global_market.go:290  test-files=1"
+      },
+      "internal/globalmarket/global_market.go:SetCorrelation": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "SetCorrelation 無非測試呼叫端；gmm.correlation 建後從未填入（:107）→ GetCrossMarketCorrelation（:389）恆回預設 0.5",
+        "evidence": "internal/globalmarket/global_market.go:560  test-files=1"
+      },
+      "internal/globalmarket/global_market.go:UpdateSPXTWSECorrelation": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "全 repo 無呼叫端（含測試）；GlobalMarketManager 未在 production 建構（唯一 NewGlobalMarketManager 在測試）",
+        "evidence": "internal/globalmarket/global_market.go:532  test-files=0"
+      },
+      "internal/industry/dynamic_env.go:UpdateBaseline": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "全 repo 無呼叫端（含測試）；production 用 NewDynamicEnvModulator（dashboard_api.go:433）+ UpdateRollingBaseline（:444）",
+        "evidence": "internal/industry/dynamic_env.go:46  test-files=0"
+      },
+      "internal/industry/linkage.go:SetSupplyChainGraph": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 由 NewLinkageAnalyzer 自動載入 configs/supply_chain_graph.json（linkage.go:717）；此 setter 僅測試注入（linkage_test.go:403）",
+        "evidence": "internal/industry/linkage.go:767  test-files=3"
+      },
+      "internal/industry/odm_channel.go:RegisterProvider": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "production 傳 odmChannel=nil（dashboard_api.go:479 not wired），/api/dashboard/industry-odm-channel 恆回零值（service/industry.go:951）",
+        "evidence": "internal/industry/odm_channel.go:110  test-files=1"
+      },
+      "internal/industry/odm_channel.go:SetUSCapexShock": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "ODMChannel 未接線（dashboard_api.go:479 nil）→ usCapexShock 恆 0，CalculateTransmission（odm_channel.go:197）無外部衝擊輸入",
+        "evidence": "internal/industry/odm_channel.go:121  test-files=1"
+      },
+      "internal/industry/risk.go:AddCustomerConcentration": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 由 NewRiskMonitor 載入 DefaultCustomerConcentrations（risk.go:81）；此 setter 僅測試擴充資料（risk_test.go）",
+        "evidence": "internal/industry/risk.go:103  test-files=1"
+      },
+      "internal/janus/engine.go:RecordHealthTo": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "唯一呼叫端 janus_test.go；production 由 gateway 記錄 janus_regime 健康（main.go:2131）+ StaleDataThreshold（apigateway/health.go:30）",
+        "evidence": "internal/janus/engine.go:365  test-files=1"
+      },
+      "internal/ledger/transaction.go:WriteSession": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "唯一呼叫端 transaction_test.go；production 以 Store.RecordSessionSummary（ledger.go:239）等 per-file 寫入 sessions/<id>/",
+        "evidence": "internal/ledger/transaction.go:45  test-files=1"
+      },
+      "internal/live/agent_runner.go:ApplyRiskFilters": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "system 由 NewAgentRunner(...,nil,...) 注入（orchestrator.go:166）且無 setter → 恆回 system not initialized；唯一呼叫端 agent_runner_test.go:273",
+        "evidence": "internal/live/agent_runner.go:221  test-files=1"
+      },
+      "internal/live/circuit_breaker.go:SetRules": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 用 NewCircuitBreaker 的 DefaultCircuitBreakerRules（circuit_breaker.go:85）；SetRules 僅測試替換規則",
+        "evidence": "internal/live/circuit_breaker.go:100  test-files=2"
+      },
+      "internal/live/orchestrator.go:SetBroker": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production broker 由 resolveBrokerMode(config) 決定（orchestrator.go:138）；SetBroker 僅 orchestrator_test.go:305 使用",
+        "evidence": "internal/live/orchestrator.go:208  test-files=1"
+      },
+      "internal/live/orchestrator.go:SetCircuitBreaker": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 於 NewOrchestrator 內建 CB（orchestrator.go:155）；SetCircuitBreaker 僅 orchestrator_test.go:375 使用",
+        "evidence": "internal/live/orchestrator.go:201  test-files=1"
+      },
+      "internal/live/order_manager.go:SetPortfolioValueProvider": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "portfolioValueFn 恆 nil → recordFillToRiskGate 早退（order_manager.go:114），RiskGate.RecordFill 在 production 從未被餵入",
+        "evidence": "internal/live/order_manager.go:101  test-files=1"
+      },
+      "internal/live/risk_gate.go:SetHaltTrading": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "唯一呼叫端為測試（order_manager_test.go:332）；production halt 由 CB.CanPlaceOrder（execution.go:59）決定，haltTrading 無 writer",
+        "evidence": "internal/live/risk_gate.go:76  test-files=2"
+      },
+      "internal/live/risk_gate.go:SyncRiskGateFromCircuitBreaker": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "doc 說 orchestrator 應定期呼叫（risk_gate.go:95），但全 repo 無呼叫端 → cb→gate halt/VaR 同步（:101-103）從未發生",
+        "evidence": "internal/live/risk_gate.go:97  test-files=0"
+      },
+      "internal/live/scheduler.go:SetSystem": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "s.system 只寫不讀（scheduler.go:81），production 無呼叫端（僅 scheduler_test.go:75）→ 注入點無任何效果",
+        "evidence": "internal/live/scheduler.go:74  test-files=1"
+      },
+      "internal/live/store/store.go:RecordEvent": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "唯一呼叫端 store_test.go:217；production 從未寫入 events_*.jsonl，且 s.events 無讀取端（store.go:342）",
+        "evidence": "internal/live/store/store.go:236  test-files=1"
+      },
+      "internal/marketdata/bdi_provider.go:SetBDILimiterForTest": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "函式名與註解明示 ForTest（bdi_provider.go:21）；production 只用預設 bdiSharedLimiter（:19）",
+        "evidence": "internal/marketdata/bdi_provider.go:23  test-files=3"
+      },
+      "internal/marketdata/calendar_provider.go:AddProvider": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 以 NewCompositeCalendarProvider 變參建構（main.go:475）；AddProvider 僅 twse_calendar_provider_test.go 使用",
+        "evidence": "internal/marketdata/calendar_provider.go:74  test-files=1"
+      },
+      "internal/marketdata/etf_nav_provider.go:SetScraper": {
+        "tier": "dead",
+        "class": "test-seam",
+        "reason": "production 用 WithScraper（orchestrator/composition.go:68）；SetScraper（etf_nav_provider.go:191）僅測試，屬執行期替代入口",
+        "evidence": "internal/marketdata/etf_nav_provider.go:191  test-files=0"
+      },
+      "internal/marketdata/exchangerate_provider.go:SetCachePath": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述 for tests（exchangerate_provider.go:88）；production 走 defaultExchangeRateCachePath（:60）",
+        "evidence": "internal/marketdata/exchangerate_provider.go:89  test-files=1"
+      },
+      "internal/marketdata/finmind_client.go:SetQuotaLimit": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "無 production 呼叫端（.SetLimit 僅測試）；配額由 NewDailyQuotaTracker 依 finmindDailyLimit 設定（finmind_client.go:82）",
+        "evidence": "internal/marketdata/finmind_client.go:279  test-files=2"
+      },
+      "internal/marketdata/finmind_client.go:UpdateSharedFinMindAPIKey": {
+        "tier": "test-only",
+        "class": "consumed-indirectly",
+        "reason": "以函式值註冊：channelKeyMgr.RegisterApplier(\"finmind\", ...)（cmd/atlas/main.go:677），經 channelsecrets/manager.go:131 動態呼叫",
+        "evidence": "internal/marketdata/finmind_client.go:173  test-files=2"
+      },
+      "internal/marketdata/finmind_intraday.go:Save5SecIndexToLedger": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "唯一呼叫端 finmind_intraday_test.go:229，且 FetchTaiwan5SecIndex（:49）亦無 production 呼叫端 → 5 秒指數鏈路未接線",
+        "evidence": "internal/marketdata/finmind_intraday.go:144  test-files=1"
+      },
+      "internal/marketdata/fubon_client.go:SetHealthClient": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 由建構函式設定 healthClient（fubon_client.go:140）；SetHealthClient 僅 fubon_client_test.go/adapter_fubon_test.go",
+        "evidence": "internal/marketdata/fubon_client.go:152  test-files=2"
+      },
+      "internal/marketdata/fugle_client.go:UpdateSharedFugleAPIKey": {
+        "tier": "test-only",
+        "class": "consumed-indirectly",
+        "reason": "以函式值註冊：RegisterApplier(\"fugle\", ...)（cmd/atlas/main.go:678），由 channelsecrets 熱替換 fan-out（manager.go:131）呼叫",
+        "evidence": "internal/marketdata/fugle_client.go:160  test-files=1"
+      },
+      "internal/marketdata/government_broker_aggregator.go:SetCaptchaCooldown": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述 tests only（government_broker_aggregator.go:223）；唯一呼叫端 government_broker_aggregator_test.go",
+        "evidence": "internal/marketdata/government_broker_aggregator.go:225  test-files=1"
+      },
+      "internal/marketdata/hybrid_provider.go:SetTraceWriter": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "traceWriter 全 repo 無呼叫端（含測試）；main.go:2872 建 HybridProvider 未注入 → fallback WARN trace（:237/253/275）恆不產生",
+        "evidence": "internal/marketdata/hybrid_provider.go:377  test-files=0"
+      },
+      "internal/marketdata/symbol_industry_firstparty.go:SetBaseURLs": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述（測試）（symbol_industry_firstparty.go:199）；production 使用預設端點（同檔 :72）",
+        "evidence": "internal/marketdata/symbol_industry_firstparty.go:200  test-files=2"
+      },
+      "internal/marketdata/twse_openapi.go:SetPerAttemptTimeoutForTest": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "函式名與註解明示 ForTest（twse_openapi.go:215）；production perAttemptTimeout 走建構預設",
+        "evidence": "internal/marketdata/twse_openapi.go:218  test-files=2"
+      },
+      "internal/marketdata/twse_openapi.go:SetRetryPolicyForTest": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "函式名與註解明示 ForTest（twse_openapi.go:202）；production retryCfg 走建構預設",
+        "evidence": "internal/marketdata/twse_openapi.go:206  test-files=2"
+      },
+      "internal/marketdata/twse_openapi.go:SetTWSESharedLimiterForTest": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "函式名與註解明示 ForTest（twse_openapi.go:70）；production 使用共用 twseSharedLimiter",
+        "evidence": "internal/marketdata/twse_openapi.go:72  test-files=6"
+      },
+      "internal/marketdata/twse_sbl_firstparty.go:SetTPExSharedLimiterForTest": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "函式名與註解明示 ForTest（twse_sbl_firstparty.go:121）；production 使用共用 tpexSharedLimiter",
+        "evidence": "internal/marketdata/twse_sbl_firstparty.go:123  test-files=5"
+      },
+      "internal/marketdata/twse_sbl_provider.go:SetFirstPartyEnabled": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "建構時預設 true（twse_sbl_provider.go:126）；只有測試關閉（g01_g02_wiring_test.go:144 等）",
+        "evidence": "internal/marketdata/twse_sbl_provider.go:145  test-files=2"
+      },
+      "internal/marketdata/twse_sbl_provider.go:SetTPExBaseURL": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解自述 for testing（twse_sbl_provider.go:332）；production 使用預設 tpexURL",
+        "evidence": "internal/marketdata/twse_sbl_provider.go:333  test-files=1"
+      },
+      "internal/marketdata/yahoo_macro_provider.go:SetYahooLimiterForTest": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "全 repo 無呼叫端（含測試）；測試改由 SetYahooSessionClient 把 limiter 換成 Inf（yahoo_session.go:592）",
+        "evidence": "internal/marketdata/yahoo_macro_provider.go:34  test-files=0"
+      },
+      "internal/marketdata/yahoo_session.go:SetYahooSessionClient": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解明示 Only used in tests（yahoo_session.go:564-565），會注入 test-crumb 並重置 breaker/快取",
+        "evidence": "internal/marketdata/yahoo_session.go:566  test-files=15"
+      },
+      "internal/monitoring/api/strategies/handlers.go:SetRegistry": {
+        "tier": "dead",
+        "class": "test-seam",
+        "reason": "production 以 apistrategies.NewHandlers(stRegistry,...) 注入（main.go:2206）；SetRegistry 僅測試使用",
+        "evidence": "internal/monitoring/api/strategies/handlers.go:47  test-files=0"
+      },
+      "internal/monitoring/dashboard_api.go:SetCompositionRoot": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "production 呼叫端於 3ae7992e 移除；root.WithWeightEngine 唯一呼叫端只剩此函式（dashboard_api.go:218），SA06 共享引擎未接",
+        "evidence": "internal/monitoring/dashboard_api.go:213  test-files=0"
+      },
+      "internal/monitoring/dashboard_api.go:SetCorrelationSetter": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "InvokeCorrelationSetter 無 production 呼叫端，setter 僅測試（dashboard_api_test.go:703）→ optimizer 的 SPX-TWSE ρ 回饋未接線",
+        "evidence": "internal/monitoring/dashboard_api.go:1985  test-files=1"
+      },
+      "internal/monitoring/dashboard_api.go:SetCrisisModeSetter": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "production 已在 VIX>=35 時 invoke（operations_tasks.go:290），但 setter 未註冊（僅測試）→ optimizer crisis mode 永不啟動",
+        "evidence": "internal/monitoring/dashboard_api.go:1971  test-files=1"
+      },
+      "internal/monitoring/dashboard_api.go:SetFugleAPIKey": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 改走 dashboard.SetFugleClient（main.go:837）；a.fugleAPIKey 無讀取端，setter 僅測試（dashboard_api_test.go:1913）",
+        "evidence": "internal/monitoring/dashboard_api.go:1014  test-files=1"
+      },
+      "internal/monitoring/metrics.go:RecordAlert": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "唯一呼叫端 metrics_test.go:31；production 無 producer → alertsTriggered 恆 0，alert_trigger_rate 門檻（metrics.go:520）永不觸發",
+        "evidence": "internal/monitoring/metrics.go:182  test-files=1"
+      },
+      "internal/monitoring/metrics.go:RecordHistogram": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "histograms 只寫不讀（metrics.go:133）；不在 GetMetricsSnapshot（:275）也不持久化，唯一呼叫端 monitoring_test.go:166",
+        "evidence": "internal/monitoring/metrics.go:129  test-files=1"
+      },
+      "internal/monitoring/narrative_bridge.go:SetFetcher": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 用 NewNarrativeEventBridgeWithFetcher（cmd/atlas/bootstrap_helpers.go:198）；SetFetcher 僅 narrative_bridge_test.go",
+        "evidence": "internal/monitoring/narrative_bridge.go:229  test-files=1"
+      },
+      "internal/monitoring/service/narrative.go:SetGeoProvider": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "RegisterNarrativeRoutes 只設 macroProvider（dashboard_api.go:1658）未設 geo（037a6c09 移除）→ GPR overlay（narrative.go:66）永不生效",
+        "evidence": "internal/monitoring/service/narrative.go:46  test-files=1"
+      },
+      "internal/narrative/knowledge_base.go:RecalculateAllTemplateHitRates": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "同檔 RecalculateTemplateHitRates(:676) 已被 cmd/atlas/stage3_tasks.go:98 接線；此 Stage4 版(:686) 僅 narrative_test.go 呼叫 → 應補接線或移除",
+        "evidence": "internal/narrative/knowledge_base.go:686  test-files=1"
+      },
+      "internal/narrative/knowledge_base.go:RecordStressIndex": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "註解(:800-802) 自陳供測試/未來 persistence adapter；production 走 monitoring/service/narrative.go:174 的 ledger LoadStressHistory，engine ring 僅 fallback",
+        "evidence": "internal/narrative/knowledge_base.go:803  test-files=1"
+      },
+      "internal/narrative/knowledge_base.go:SetWeightAuditHook": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "weightHook 在 production 被讀(:514-518)，但 setter 零呼叫端（audit.go:67 的 logger 工廠也無呼叫者）→ 權重變更稽核永不觸發",
+        "evidence": "internal/narrative/knowledge_base.go:49  test-files=0"
+      },
+      "internal/narrative/knowledge_base_templates.go:SetTemplateAuditHook": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "auditHook 在 production 被讀(knowledge_base_templates.go:66-70)，但 setter 零呼叫端 → 模板註冊稽核永不觸發",
+        "evidence": "internal/narrative/knowledge_base_templates.go:45  test-files=0"
+      },
+      "internal/narrative/taiwan_stress_index.go:ApplyCalibratedScales": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "零呼叫端（含測試）；weightsConfig 由建構子 :57 LoadWeightsConfig 自參數系統載入，Scaling 讀端 :218-220 已有來源 → runtime override 冗餘",
+        "evidence": "internal/narrative/taiwan_stress_index.go:358  test-files=0"
+      },
+      "internal/narrative/taiwan_stress_index.go:SetRegimeConfig": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "regimeConfig 讀端 :182-184 在 production 生效，但全 repo 無任何設值端（建構子 :56-88 也不設）→ VIX regime 權重永不上線",
+        "evidence": "internal/narrative/taiwan_stress_index.go:381  test-files=0"
+      },
+      "internal/orchestrator/alpha_discovery.go:SetFactorThreshold": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "factorThreshold 由建構子設 0.4(:22)，production 於 composition.go:297 建構；setter 僅 alpha_discovery_test.go:15/56/76 調整",
+        "evidence": "internal/orchestrator/alpha_discovery.go:27  test-files=1"
+      },
+      "internal/orchestrator/loader.go:RegisterControl": {
+        "tier": "test-only",
+        "class": "consumed-indirectly",
+        "reason": "loader.go:12-18,49-50 自陳 out-of-tree ControlExecutor 注入點，經 WithExecutorLoader(system.go:337)→composition.go:351 注入，倉庫內無呼叫端",
+        "evidence": "internal/orchestrator/loader.go:51  test-files=1"
+      },
+      "internal/orchestrator/loader.go:RegisterRegime": {
+        "tier": "test-only",
+        "class": "consumed-indirectly",
+        "reason": "同上機制：loader.go:43-45 為 out-of-tree RegimeExecutor 注入點，經 WithExecutorLoader(system.go:337)/composition.go:351 傳入 NewPluginRegistry，倉庫內無呼叫端",
+        "evidence": "internal/orchestrator/loader.go:45  test-files=1"
+      },
+      "internal/orchestrator/phase3_controller.go:SetMetaLearner": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "metaLearner 在 production 被讀(:198 GetTopStrategies)，但 setter 零呼叫端 → 策略優化(meta-learning)路徑永停用",
+        "evidence": "internal/orchestrator/phase3_controller.go:66  test-files=0"
+      },
+      "internal/orchestrator/phase3_metrics.go:SaveMetrics": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "消費者已上線：monitoring/service/system.go:69 LoadPhase3Metrics 讀 data/state/phase3_metrics.json(:28)；但 SaveMetrics(:79) 零呼叫端 → 永遠讀不到檔",
+        "evidence": "internal/orchestrator/phase3_metrics.go:79  test-files=0"
+      },
+      "internal/orchestrator/plugin_host.go:AttachAll": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "僅 plugin_host_test.go:83 呼叫；production 用 Register(plugin_host.go:15-23) 於註冊時即 Attach，AttachAll 只是測試補掛",
+        "evidence": "internal/orchestrator/plugin_host.go:26  test-files=1"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitFallbackCount": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitFallbackCount(:64) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:64  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitLegacyRead": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitLegacyRead(:59) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:59  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitPolicyApplied": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitPolicyApplied(:49) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:49  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitPolicyConsumed": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitPolicyConsumed(:54) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:54  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitRollbackDrill": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitRollbackDrill(:69) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:69  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotCurrent": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotCurrent(:29) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:29  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotEnd": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotEnd(:44) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:44  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotFallback": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotFallback(:34) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:34  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotProjection": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotProjection(:39) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:39  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotStart": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotStart(:19) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:19  test-files=0"
+      },
+      "internal/orchestrator/sector_allocation_closure_metrics.go:EmitSnapshotTarget": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "NewSACMetrics 與 EmitSnapshotTarget(:24) 全無呼叫端（grep 僅本檔）；fc8506bc 交付的 SA11.B 暗啟動 11 事件從未發射 → 應接線或移除",
+        "evidence": "internal/orchestrator/sector_allocation_closure_metrics.go:24  test-files=0"
+      },
+      "internal/portfolio/analysis.go:AddTrade": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "PostTradeAnalyzer 只在 analysis_test.go 建構(NewPostTradeAnalyzer:55 無 production 呼叫端)；AddTrade(:62) 無 production 餵入 → 盤後分析(:406) 不可達",
+        "evidence": "internal/portfolio/analysis.go:62  test-files=1"
+      },
+      "internal/portfolio/darwinian_weights.go:ResetAgent": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "僅 darwinian_weights_test.go:595 呼叫；production 由 auto_reset_stuck_agent(:492) 與 SetWeight(system_risk_session.go:513) 處理重置",
+        "evidence": "internal/portfolio/darwinian_weights.go:956  test-files=1"
+      },
+      "internal/portfolio/darwinian_weights.go:SaveReport": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "僅 darwinian_weights_test.go:586 覆蓋呼叫；production 落檔走 Save()(system.go:943)，report JSON 無任何讀者 → 冗餘可移除",
+        "evidence": "internal/portfolio/darwinian_weights.go:1173  test-files=1"
+      },
+      "internal/portfolio/etf_analysis.go:AddMetadata": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 走整批 LoadMetadata(orchestrator/composition.go:169)；AddMetadata(:60) 僅 etf_analysis_test.go 單筆注入",
+        "evidence": "internal/portfolio/etf_analysis.go:60  test-files=1"
+      },
+      "internal/portfolio/factor_bridge.go:SetForceRetailZScore": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "forceRetailZScore 在 production 被讀(:93)，但 setter 零呼叫端 → capitalflow→portfolio 的 C6 P1 零售反向指標未接線",
+        "evidence": "internal/portfolio/factor_bridge.go:51  test-files=0"
+      },
+      "internal/portfolio/factor_engine_constructors.go:SetCycleCardBuilder": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "cycleProv 在 production 被讀(factor_engine_aggregate.go:163)，setter 零呼叫端；production 只走 WithIndustryCycleProvider(composition.go:198)",
+        "evidence": "internal/portfolio/factor_engine_constructors.go:116  test-files=0"
+      },
+      "internal/portfolio/factor_weight_engine.go:RemoveEvent": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "僅 factor_weight_engine_test.go:121 呼叫；production 由 Update()(:442-451) 依 status 清 activeEvents，eventWeights 只對 active 事件生效(:113)",
+        "evidence": "internal/portfolio/factor_weight_engine.go:414  test-files=1"
+      },
+      "internal/portfolio/factor_weight_engine.go:SetBaseWeights": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "全 repo 無呼叫端；baseWeights 由 NewFactorWeightEngine(:61-70) 取自參數且 GetWeights(:87-91) 每次重讀 config → 無消費者的死碼",
+        "evidence": "internal/portfolio/factor_weight_engine.go:159  test-files=0"
+      },
+      "internal/portfolio/optimizer.go:SetAgentWeights": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "agentWeights 在 production 被讀(optimizer_pipeline.go:55-75)，但 production 無任何寫入端 → agent 加權恆 1.0；僅 optimizer_test.go:484 驗證過",
+        "evidence": "internal/portfolio/optimizer.go:165  test-files=1"
+      },
+      "internal/portfolio/optimizer.go:SetConstraints": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "constraints 由 newOptimizerWithParams(:98-107) 自 config parameters 取得；setter 僅 optimizer_test.go 注入測試約束",
+        "evidence": "internal/portfolio/optimizer.go:128  test-files=1"
+      },
+      "internal/portfolio/optimizer.go:SetCrisisMode": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "crisisMode 讀端 optimizer_pipeline.go:230；operations_tasks.go:290 已於 VIX>=35 觸發，但註冊端 SetCrisisModeSetter(dashboard_api.go:1971) 無人呼叫",
+        "evidence": "internal/portfolio/optimizer.go:209  test-files=0"
+      },
+      "internal/portfolio/optimizer.go:SetCrossMarketCorrelation": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "crossMarketRho 在 production 被讀(optimizer_pipeline.go:255)，setter 零呼叫端；替代 WithCrossMarketCorrelation(:199) 亦無呼叫端",
+        "evidence": "internal/portfolio/optimizer.go:224  test-files=0"
+      },
+      "internal/portfolio/optimizer.go:SetFactorWeights": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "production 由 params 初始化(:109-119)，且 Optimize(:254-256) 恆被 factorWeightEngine.GetWeights 覆寫；setter 僅 optimizer_test.go 使用",
+        "evidence": "internal/portfolio/optimizer.go:179  test-files=1"
+      },
+      "internal/portfolio/optimizer.go:SetStyleWeights": {
+        "tier": "test-only",
+        "class": "dead",
+        "reason": "styleWeights 全 repo 無讀取端（僅 :78 宣告/:118 初始化/:175 寫入），setter 只有 optimizer_test.go:450 覆蓋 → 死碼可移除",
+        "evidence": "internal/portfolio/optimizer.go:172  test-files=1"
+      },
+      "internal/portfolio/regime.go:SetThresholds": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "portfolio.RegimeDetector 只被 IntegratedAllocator(:351) 建構，而該型別僅測試使用(NewIntegratedAllocator:348 無 production 呼叫端) → 門檻(:319) 在 production 不可達",
+        "evidence": "internal/portfolio/regime.go:335  test-files=1"
+      },
+      "internal/portfolio/regime.go:UpdateAndDetect": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "NewIntegratedAllocator(:348) 無 production 呼叫端，整個偵測+配置整合入口僅 regime_test.go:194 使用 → 應接線或移除",
+        "evidence": "internal/portfolio/regime.go:356  test-files=1"
+      },
+      "internal/portfolio/regime.go:UpdateConfig": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "RegimeAllocator 的建構點(:134、style.go:217) 皆在僅測試使用的型別內 → configs 覆寫無 production 消費者",
+        "evidence": "internal/portfolio/regime.go:240  test-files=1"
+      },
+      "internal/portfolio/risk_manager.go:AddPosition": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "NewRiskManager(:95) 只被 *_test.go 呼叫；部位風控(:209) 在 production 不可達，風控實際走 internal/risk → 應接線或移除",
+        "evidence": "internal/portfolio/risk_manager.go:209  test-files=1"
+      },
+      "internal/portfolio/risk_manager.go:UpdatePortfolioValue": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "NewRiskManager 僅測試建構；其 publishDrawdownBreach(:195-199) 是 monitoring/drawdown_consumer.go 訂閱的 drawdown 事件來源，兩端皆未接線",
+        "evidence": "internal/portfolio/risk_manager.go:137  test-files=2"
+      },
+      "internal/portfolio/sizing.go:SetCorrelationThreshold": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "portfolio.Sizer 僅測試建構（NewSizer:57、NewSizerFromConfig:72 皆無 production 呼叫端）→ correlationThreshold(:104) 在 production 不可達",
+        "evidence": "internal/portfolio/sizing.go:104  test-files=1"
+      },
+      "internal/portfolio/sizing.go:UpdateADV": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "Sizer 僅測試建構 → advCache(:335) 無 production 寫入端；getADV(:359) 在 production 不可達，流動性上限形同無效",
+        "evidence": "internal/portfolio/sizing.go:335  test-files=1"
+      },
+      "internal/portfolio/sizing.go:UpdateATR": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "Sizer 僅測試建構 → atrCache(:342) 無 production 寫入端；getATR(:369) 在 production 不可達",
+        "evidence": "internal/portfolio/sizing.go:342  test-files=1"
+      },
+      "internal/portfolio/sizing.go:UpdateVolatility": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "Sizer 僅測試建構 → volatilities(:312) 無 production 寫入端；getVolatility(:349) 恆回 DefaultVolatility",
+        "evidence": "internal/portfolio/sizing.go:312  test-files=1"
+      },
+      "internal/portfolio/style.go:SetParameters": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "StyleRotationDetector 只由 StyleRotationStrategy(style.go:216) 建構，而該策略僅 style_test.go 使用 → threshold(:39) 在 production 不可達",
+        "evidence": "internal/portfolio/style.go:39  test-files=1"
+      },
+      "internal/portfolio/style.go:UpdateAndRotate": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "NewStyleRotationStrategy(:214) 無 production 呼叫端，僅 style_test.go:43 使用 → 風格輪動在 production 不可達",
+        "evidence": "internal/portfolio/style.go:222  test-files=1"
+      },
+      "internal/portfolio/volatility_manager.go:ApplySmoothing": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "NewVolatilityManager(:64) 只被 volatility_manager_test.go 呼叫；smoothingFactor 僅本函式使用 → 平滑化在 production 不可達",
+        "evidence": "internal/portfolio/volatility_manager.go:323  test-files=1"
+      },
+      "internal/portfolio/volatility_manager.go:UpdateReturns": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "VolatilityManager 僅測試建構 → returnsHistory(:96) 無 production 餵入；GARCH 預測與波動調整在 production 不可達",
+        "evidence": "internal/portfolio/volatility_manager.go:87  test-files=1"
+      },
+      "internal/prism/prism_manager.go:ClearQueue": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "僅 prism_test.go:149 呼叫；production(cmd/atlas/main.go:689/3136) 只用 Start/Stop/ScheduleTraining，佇列重啟即清空，無 flush 需求",
+        "evidence": "internal/prism/prism_manager.go:477  test-files=1"
+      },
+      "internal/realtime/regime_adapter.go:ApplyToRecommendation": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "RealTimeAdapter 雖在 cmd/atlas/main.go:1419 建構，但 production 只呼叫 IngestData/Start/Stop；GetAgentWeight 與本函式皆無 production 讀者 → RT 權重未進建議鏈",
+        "evidence": "internal/realtime/regime_adapter.go:617  test-files=1"
+      },
+      "internal/realtime/regime_adapter.go:SetRegimeChangeCallback": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "onRegimeChange 在 production 被讀(:327)，但 setter 零呼叫端，且 production 也無 RegisterAgent(:424) 呼叫 → 回呼永不觸發",
+        "evidence": "internal/realtime/regime_adapter.go:491  test-files=0"
+      },
+      "internal/reflexivity/reflexivity_engine.go:ApplyReflexivityAdjustment": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "ReflexivityEngine 由 factory.go:103 建構，但 production 只讀 GetActiveLoops(phase3_metrics.go:66)；調整函式零呼叫端 → 迴路不影響建議",
+        "evidence": "internal/reflexivity/reflexivity_engine.go:507  test-files=1"
+      },
+      "internal/reflexivity/reflexivity_engine.go:UpdateLoopStatus": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "僅 reflexivity_test.go:303 呼叫；production 由 updateOrCreateLoop(:263) 自動管理 loop 狀態，人工改狀態只測試需要",
+        "evidence": "internal/reflexivity/reflexivity_engine.go:355  test-files=1"
+      },
+      "internal/reflexivity/reflexivity_engine.go:UpdateReality": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "reality 只在測試餵入（RegisterBias(:479) 亦僅由 ProcessRecommendations 呼叫，而後者僅 integration_test.go:332）→ evaluateFeedbackLoops(:209) 永無輸入",
+        "evidence": "internal/reflexivity/reflexivity_engine.go:198  test-files=1"
+      },
+      "internal/replay/version.go:WriteVersion": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "讀端已上線：internal/config/config.go:209-212 讀 data/replay/VERSION 決定 replay 路徑；寫端(:50) 零呼叫端 → 該檔在 production 從不產生",
+        "evidence": "internal/replay/version.go:50  test-files=1"
+      },
+      "internal/repository/dual_write.go:UpdateAlert": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "無任何呼叫端，且無介面要求此簽章（AlertStore 介面用 Update(id,fn)，dual_write.go:141）→ 無消費者的死碼",
+        "evidence": "internal/repository/dual_write.go:389  test-files=0"
+      },
+      "internal/risk/audit_subscriber.go:SetSessionID": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "cmd/atlas/main.go:754/2961 建 subscriber 但丟棄回傳值；sessionID 空則 persistEvent 直接 return(:80-83) → risk_events.jsonl 永不寫入",
+        "evidence": "internal/risk/audit_subscriber.go:60  test-files=1"
+      },
+      "internal/scheduler/auto_rollback.go:RecordCalibration": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "註解(:88) 要求套用校準前呼叫；production 由 cmd/atlas/capital_tasks.go:85 跑 RunDaily，但 lastCalibSnapshot(:128/:209) 永為 0 → 校準回滾永不觸發",
+        "evidence": "internal/scheduler/auto_rollback.go:90  test-files=1"
+      },
+      "internal/sectorallocation/legacy_compat.go:SetSunsetGate": {
+        "tier": "dead",
+        "class": "legacy-inert",
+        "reason": "sunset 讀端僅 PromotionGate(:114-115)，而整個 LegacyCompatReader 只被測試建構(NewLegacyCompatReader:74 無 production 呼叫端)；setter 零呼叫端 → gate 永遠 false",
+        "evidence": "internal/sectorallocation/legacy_compat.go:51  test-files=0"
+      },
+      "internal/sectorallocation/policy.go:RegisterPolicyConsumer": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "註解(:370-375) 明示 wiring code 必須呼叫以維持 applied 狀態為真（issue #1944 Batch 1）；production 無呼叫端 → policy 狀態永遠回報 allocator_unavailable",
+        "evidence": "internal/sectorallocation/policy.go:376  test-files=1"
+      },
+      "internal/sim/dynamic_threshold.go:SetBaseThreshold": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "baseThreshold 由建構子設 0.70(:45)；production 走 SetRiskAppetite(system.go:819/832)，setter 僅 dynamic_threshold_test.go:165 使用",
+        "evidence": "internal/sim/dynamic_threshold.go:127  test-files=1"
+      },
+      "internal/strategy/allocator.go:SetCaps": {
+        "tier": "test-only",
+        "class": "test-seam",
+        "reason": "maxWeight/minWeight 由建構子設 0.50/0.05(:34-35)；setter 僅 allocator_test.go:38/80 調整，production 沿用預設上限",
+        "evidence": "internal/strategy/allocator.go:41  test-files=1"
+      },
+      "internal/strategy/allocator.go:UpdateShadowReturns": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "shadowReturns 只由本 setter 寫(:198)，production 從不餵入 → estimateVolatility(:81-83) 恆回預設 0.20，風險平價失效",
+        "evidence": "internal/strategy/allocator.go:193  test-files=1"
+      },
+      "internal/subscription/store.go:SetTier": {
+        "tier": "dead",
+        "class": "dead",
+        "reason": "全 repo 無呼叫端；tier 實際來自 JWT claims(auth.go:362 mapMemberTier)，且無其他 SQL 寫入路徑（僅 :120 本身）→ 死碼",
+        "evidence": "internal/subscription/store.go:119  test-files=0"
+      },
+      "internal/tax/taiwan_tax.go:ApplyToSeries": {
+        "tier": "test-only",
+        "class": "legacy-inert",
+        "reason": "TaiwanCostModel 僅測試建構(NewTaiwanCostModel:207 無 production 呼叫端)；production 稅費走 TaiwanTaxCalculator(sim/engine.go:68) → 來回成本未接線",
+        "evidence": "internal/tax/taiwan_tax.go:231  test-files=1"
+      }
+    }
+  }
+}

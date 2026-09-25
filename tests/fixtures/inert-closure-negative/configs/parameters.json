@@ -1,0 +1,4 @@
+{
+  "version": "fixture-negative",
+  "neg": {"unread_flag": {"value": 9, "rationale": "fixture: 沒有 reader", "source": "heuristic"}}
+}

@@ -613,8 +613,19 @@ func TestDynamicEnvModulator_ShippingSeasonalModulation(t *testing.T) {
 
 func TestEventCalendar_LunarCoverageAndProviderUpdate(t *testing.T) {
 	minYear, maxYear := GetLunarCoverageYears()
-	if minYear != 2023 || maxYear != 2040 {
-		t.Fatalf("unexpected lunar coverage: %d-%d (single-source taiwanholidays table extended to 2040)", minYear, maxYear)
+	// 2021-2040: the lower bound moved to 2021 in #1973 D3, the earliest year the
+	// platform's own TWSE session universe covers, so the lunar dates can be
+	// checked against first-party market closures.
+	if minYear != 2021 || maxYear != 2040 {
+		t.Fatalf("unexpected lunar coverage: %d-%d (single-source taiwanholidays table)", minYear, maxYear)
+	}
+	// Every year inside the declared range must be fully determinable: a hole in
+	// the tables (2023 春節 used to be missing) would silently reintroduce the
+	// placeholder behaviour this coverage promise exists to prevent.
+	for y := minYear; y <= maxYear; y++ {
+		if !LunarYearDeterminable(y) {
+			t.Errorf("year %d is inside the declared coverage %d-%d but not determinable", y, minYear, maxYear)
+		}
 	}
 
 	cal := NewEventCalendar()
