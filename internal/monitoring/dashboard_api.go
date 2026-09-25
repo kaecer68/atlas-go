@@ -267,7 +267,7 @@ func NewDashboardAPI(workDir, ledgerDir string, metricsCollector *MetricsCollect
 	providers = append(providers, marketdata.NewTWSEMarginBalanceProvider(filepath.Join(workDir, "data/state/margin")))
 	providers = append(providers, marketdata.NewExportStatisticsProvider(filepath.Join(workDir, constants.StateExport)))
 	// Sector data from local cache (graceful degradation if file missing).
-	providers = append(providers, marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data")))
+	providers = append(providers, marketdata.NewSectorDataProvider(marketdata.ResolveSectorDataDir(workDir)))
 	// TSMC Revenue from FinMind (overwrites cached sector data when available).
 	if cfg.FinMindAPIKey != "" {
 		providers = append(providers, marketdata.NewTSMCRevenueProvider(cfg.FinMindAPIKey))

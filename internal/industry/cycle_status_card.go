@@ -7,6 +7,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 // SiliconIndicatorSnapshot captures key silicon cycle indicators at a point in time,
@@ -55,8 +57,16 @@ type SentimentBounds struct {
 
 // defaultCardConfig returns sensible defaults.
 // Weights sum to 0.85, leaving 0.15 residual for future layers.
+//
+// ParametersConfig.Industry.CompositeCard is the config authority for these
+// values (issue #1944 Batch 2, new inert item): the field ships populated in
+// configs/parameters.json, but this function used to return hardcoded copies,
+// so editing composite_card in config had no effect at all. Each field is
+// overridden only when the config value is present/non-zero (merge convention),
+// so a partial or legacy config keeps the defaults below. The shipped config is
+// value-identical to these defaults, so consuming it is behavior-neutral today.
 func defaultCardConfig() CardConfig {
-	return CardConfig{
+	cfg := CardConfig{
 		LayerWeights: map[string]float64{
 			"silicon":        0.25,
 			"business_cycle": 0.20,
@@ -74,6 +84,64 @@ func defaultCardConfig() CardConfig {
 		ClampMin: 0.80,
 		ClampMax: 1.20,
 	}
+	return applyCompositeCardConfig(cfg)
+}
+
+// applyCompositeCardConfig overlays ParametersConfig.Industry.CompositeCard onto
+// cfg. Fields that are unset in config (empty map / zero value) keep the
+// hardcoded default, so an all-zero or legacy config cannot collapse the
+// throttle window to [0, 0] or drop every layer weight.
+func applyCompositeCardConfig(cfg CardConfig) CardConfig {
+	p := config.GetParametersConfig()
+	if p == nil {
+		return cfg
+	}
+	cc := p.Industry.CompositeCard.Value
+	if len(cc.LayerWeights) > 0 {
+		cfg.LayerWeights = maps.Clone(cc.LayerWeights)
+	}
+	if len(cc.SentimentThresholds) > 0 {
+		thresholds := make(map[string]SentimentBounds, len(cc.SentimentThresholds))
+		for label, bounds := range cc.SentimentThresholds {
+			thresholds[label] = SentimentBounds{Min: bounds.Min, Max: bounds.Max}
+		}
+		cfg.SentimentThresholds = thresholds
+	}
+	if cc.ClampMin != 0 {
+		cfg.ClampMin = cc.ClampMin
+	}
+	if cc.ClampMax != 0 {
+		cfg.ClampMax = cc.ClampMax
+	}
+	return cfg
+}
+
+// EffectiveCardConfig returns the CardConfig the card builder will actually use
+// (config overlay + calibration redistribution). Exported so diagnostics — e.g.
+// the cycle_calibrate background task — can report the applied weights instead
+// of a discarded local copy (issue #1944 Batch 2, Q6 I2).
+func EffectiveCardConfig() CardConfig {
+	return resolveCardConfig()
+}
+
+// CalibrationApplied reports whether calibration evidence actually
+// redistributed the layer weights, i.e. whether the effective config differs
+// from the config/default baseline. Callers that expose an outward "calibrated"
+// flag must derive it from this instead of from "the metrics map was non-nil"
+// (issue #1944 Batch 2, E-item): a tracker with samples but an unusable clamp
+// window, or with samples for layers that are not funded, changes nothing.
+func CalibrationApplied() bool {
+	base := defaultCardConfig()
+	effective := resolveCardConfig()
+	if len(base.LayerWeights) != len(effective.LayerWeights) {
+		return true
+	}
+	for layer, weight := range base.LayerWeights {
+		if math.Abs(effective.LayerWeights[layer]-weight) > 1e-12 {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveCardConfig returns the CardConfig used to build a card.

@@ -3,7 +3,8 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v1（2026-09-24，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1） |
+| 狀態 | v2（2026-09-24，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2） |
+| Batch 2 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（剩餘項、新發現 N-*、可重跑證據） |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
 | 上游盤查 | `~/workspace/atlas-notes/03-system-health/2026-09-24-industry-hitrate-survey.md` §6（Q6，I1–I36） |
 | 相關規格 | [`../specs/sector-allocation-simulation-closure-spec.md`](../specs/sector-allocation-simulation-closure-spec.md)（§8.3 application truthfulness）、[`../specs/industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md)（命中率口徑） |
@@ -33,18 +34,29 @@
 
 現況（2026-09-24）：沒有任何 producer 呼叫 `RegisterPolicyConsumer`，因此對外一律 `applied=false` + `fallback_reason=allocator_unavailable`；無 session 時維持 `fallback_reason=no_simulation_session`。
 
-## Batch 2（未處置，等 #1943 併入後另開票）
+## Batch 2（已處置，#1944，2026-09-24）
 
-> 依 #1944 指示，Batch 2 與 [#1943](https://github.com/kaecer68/atlas-go/issues/1943)（產業命名空間統一）動到同一批檔案／key 空間，故不在 Batch 1。權威清單仍以 issue #1944 與 Q6 報告為準。
+> 完整證據、差異表與逐項 file:line 見 [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 權威盤點）。本節只登記**處置結論**。
 
-1. **產業 key 空間相依（必須與 #1943 同批）**：I26 `SymbolL1Mapper` 只解出 18 支/5 產業、I27 三份 `buildSymbolSectorMap`（map range 非決定性）、I28 `sectorallocation/namespaces.go` 只有型別無 runtime consumer、I7 FinMind `BuildMapping` 無呼叫者、I12/I13 composition 路徑 macro/factor driver 硬寫 0 與 CycleTracker 只吃 config seed。
-2. **`sector_data` 橋接路徑**：I14 `BridgeSectorDataToCycleTracker` 僅測試呼叫 + provider 讀不存在的 `data/state/sector_data/`（缺檔回零且 `err=nil`）。
-3. **sectorallocation 其餘 inert**：I9 prior 晉升閘門（`StartObservation`／`IsPromotable` 僅測試）、I10 `IndustryCycleModulator`／`NarrativeConvictionModulator` 未註冊、I11/I33 `SetCycleCard` 無生產呼叫、I8 的**接線**（把 `SectorBudgetAllocator` 接成真正的 consumer，並呼叫 `RegisterPolicyConsumer`）、I4/I5/I6/I19 產業預測與 LLM sector agents 預設關閉。
-4. **Batch 1 相鄰、但屬行為變更或需另票**：
-   - I3：`industry.cycle_calibration` config 全 0（`min_samples=0`、clamp 0..0、`window_size=0`）⇒ 視窗每次被清空、clamp 視窗退化；Batch 1 只加了「無證據不動權重／全零權重回預設」的護欄，補預設值需另票。
-   - I18：`internal/orchestrator/forward_return_fallback.go` 的 `GenerateForwardReturn` 無生產呼叫者，且其「有 quote 就用 intraday × 0.9」與 I20 同一語意問題 ⇒ 應與本表 I20 的 placeholder 合併成單一實作（含測試改寫）。
-   - I20（剩餘部分）：產業桌 conviction 仍由 `Last > Open` 推導（與命中判定同源）；改動會影響決策，需另票。
-   - I24：`ledger.BuildScorecards` 不過濾 `IsSynthetic`，與 `darwinian_period_matrix` 的嚴格過濾不一致 ⇒ synthetic placeholder 仍可能污染 scorecard。另：`syntheticPlaceholderReturn` 不看 `rec.Side`，因此 SELL（看空且正確）也會被 `Hit = forwardReturn > 0` 記成 miss——這與「synthetic 列不得進命中率聚合」一併處理。
-   - SA11.A 觀測窗（2026-09-24 獨立複驗新增）：`ApplySectorRotation` 持久化成功就會 `RecordSession`，即使 `applied=false`（無消費證據）也照計 ⇒ promotion gate（`IsPromotable` = `SessionCount>=20` …）可能在 **0 個真正 applied 場次**下成立，與 spec §8.3 的精神衝突。目前無生產呼叫端（`internal/sectorallocation/closure_state.go:167-200`），故未在本批改動計數語意（屬 gate 行為變更，需另票）。
-   - preflight 路徑不符（2026-09-24 獨立複驗新增）：`cmd/experimental/sector-allocation-closure-preflight/main.go:167-186`（與 `:63` 的操作訊息）檢查 `<work_dir>/data/state/sector_closure_policy.jsonl`，但實際 writer/reader 是 `<work_dir>/data/sector/allocation/`（`cmd/atlas/main.go:319`、`internal/monitoring/dashboard_api.go:564`）⇒ 依該工具/runbook 排查的 operator 會看一個系統永遠不寫的檔案。屬 pre-existing，本批未改（需抽共用路徑常數），列入 Batch 2。
-5. **其餘（Q6 之 I2、I15–I17、I21–I23、I25、I29–I32、I36）**：未在 Batch 1 觸碰，逐項狀態見 Q6 報告。
+| # | 項目 | 原症狀 | 處置 | 證據 |
+|---|---|---|---|---|
+| I22 | 矽循環三處斷裂：config 被忽略（`_ = cfg`）、capex 訊號硬編碼 ±0.05 永遠跨不過 `< -0.10` 門檻、`window_size=0` 清空相位歷史 | 過熱相位與收縮轉移在生產不可達 | **接線 + 修正**：`getSiliconParams()` 讀 `industry.silicon_cycle`（僅非零覆寫）；capex 優先取 `MacroDataSnapshot.CapexGrowth`（原為有 producer 無 consumer 的欄位），否則用營收 YoY 等比例推估（`capexProxyScale=1.0`、clamp ±0.50）⇒ 衰退 ≥10% 即跨門檻；`HistoryWindowSize<=0` = 不修剪 | `internal/industry/silicon_cycle.go`；測試 `TestGetSiliconParams_ConsumesConfigFile`、`TestExtractSiliconIndicators_CapexReachesCutThreshold`、`TestExtractSiliconIndicators_PrefersSectorDataCapex`、`TestPhaseHistoryWindowZeroDoesNotWipe`、`TestSiliconIndicatorProvenance`。**未修（明示）**：SOX/billings 實為單日變動（`SiliconSOXIndicatorIsYoY=false`）、TW semi index 無 producer（`SiliconTWIndexProducerAvailable=false`） |
+| I3 | `industry.cycle_calibration` config 全 0，`WindowSize=0` 使 `RecordOutcome` 每次清空視窗 ⇒ metrics 永遠空 | I1 的接線在生產無證據 | **merge 補預設 + 語意修正**：`mergeIndustryDefaults` 新增 all-zero → 預設（10/0.05/0.55/0.45/0.05/0.40/30）；`WindowSize<=0` = 不修剪；`WeightClampMax<=WeightClampMin` 視為未設定校準（回傳 base weights，不清空） | `internal/config/parameters_merge.go`、`internal/industry/cycle_calibration.go`；測試 `TestMergeIndustryDefaults_CycleCalibrationAllZero`、`TestShippedConfigCycleCalibrationIsUsable`、`TestCycleCalibration_ZeroWindowSizeKeepsOutcomes`。**I1 因此在本批後才真正閉環**（生產 producer = `auto_daily_simulation` → `RecordCycleCalibrationOutcome`） |
+| I2 | `cycle_calibrate` 用第三份硬編碼權重呼叫 `CalibrateWeights` 後只 log `len()` 就丟棄 | 算了沒消費 | **明示未啟用（診斷）**：改回報實際生效的 `EffectiveCardConfig()`，log 明寫 `applied=false` / `fallback_reason=diagnostic_only_no_writeback`；刪除硬編碼副本 | `cmd/atlas/calibration_tasks.go`、`internal/industry/cycle_status_card.go`（`EffectiveCardConfig`） |
+| I14 | 四個讀取點各讀不同路徑（`data/state/sector_data`、`<ledgerDir>`、`<workDir>/sector_data.json`），實際檔案在 `data/sector_data/`；bridge 僅測試呼叫；缺檔回零 `err=nil` | 通道靜默死亡 | **修正路徑 + 明示未啟用（bridge）**：新增唯一權威 `marketdata.SectorDataDirRel` / `ResolveSectorDataDir()`，四個讀取點改用；provider 記錄載入狀態（`SectorDataState`），apigateway `HealthCheck` 對缺檔／壞時間戳／超過 72h 回 `degraded`；`SectorDataBridgeWired=false`（理由：唯一輸入是無生產刷新者的人工檔，且會把 `EvidenceTier` 由 `estimated` 洗成 `empirical`） | `internal/marketdata/sector_data_provider.go`、`internal/apigateway/adapter_sector_data.go`、`channel_contract.go`、`internal/industry/sector_data_bridge.go`；測試 `TestResolveSectorDataDirMatchesShippedFile`、`TestSectorDataProvider_State*`、`TestSectorDataChannelAdapter_HealthCheck` |
+| I10/I11/I33 | `IndustryCycleModulator`/`NarrativeConvictionModulator` 從未註冊（`With*` 只有測試呼叫）；`SetCycleCard` 無生產呼叫者 | 產業相位／主題命中率算完不影響決策 | **明示未啟用**：`orchestrator.ModulatorWiringActive=false` + 理由（wiring 卡在上游輸入：tracker 只有 config seed、narrative hit rate 是手寫常數） | `internal/orchestrator/plugin_registry.go`；測試 `TestProductionRegistryLeavesConvictionModulatorsUnwired` |
+| 新 N-C1 | `industry.composite_card` config 已填滿但 `defaultCardConfig()` 回硬編碼副本 | 改 config 無效 | **接線**：`defaultCardConfig()` 疊加 config（空/零值保留預設）；shipped config 與硬編碼值相同 ⇒ 今日行為中性 | `internal/industry/cycle_status_card.go`（`applyCompositeCardConfig`） |
+| 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence` |
+
+### Batch 2 剩餘（仍 inert，未修；逐項 file:line 與建議見 spec §4/§5）
+
+- **I4/I12/I13**：產業預測 prior 恆 0、composition 路徑 macro/factor driver 硬寫 0、`CycleTracker` 只有 config seed（且 `SetCompositionRoot` 零呼叫者）。
+- **I17/I23**：季節 pattern per-pattern 校準欄位無 producer、narrative 模板 HitRate 是手寫常數卻對外稱「歷史回測命中率」。
+- **I25/N-U1..U7**：智慧母體 quote provider 寫死 nil ⇒ `symbols_ranked=0`（生產 artifact 實證）、Layer 2.5 流動性排除從未生效。
+- **I5/I6/I19/I32/N-P1..P4**：產業預測整條預設關閉且無落地、LLM sector agent 因 executor 註冊順序不可達、`NewDriverAdapter` 死碼。
+- **I24/I31/I16**：`BuildScorecards` 未過濾 synthetic（生產 56%）、`calibration-validate` 實跑 `OK=false` 但 CI 仍 success、心法 `volatile` 恆 0 命中。
+- **I21/I36**：選股勝率 executor 在現行資料下 inert（生產者半邊已由 #1949 修）、Darwinian 15/21 agent 無訊號（部分回歸）。
+- **I18/I27/I28/I29/I30/I7/I15**：死碼與監控/覆蓋率失效。
+- **新 N-C1（`max_daily_weight_change` 假風控，高）**、N-A2/N-A3/A4（applied trace 位置、`RecordSession` 在 applied=false 也計數、preflight 路徑不符）。
+
+> 未修項一律已登記（本表 + spec §4/§5），不留在註解口頭帶過。

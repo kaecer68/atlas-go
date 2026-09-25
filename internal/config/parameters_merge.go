@@ -492,6 +492,18 @@ func mergeIndustryDefaults(cfg *ParametersConfig) {
 		i.SiliconCycle.Value.IndexMAPercentThreshold == 0 {
 		i.SiliconCycle = def.SiliconCycle
 	}
+	// CycleCalibration: issue #1944 Batch 1 found the shipped
+	// configs/parameters.json carries an all-zero block (min_samples=0,
+	// learning_rate=0, clamp 0..0, window_size=0). The zero window cleared the
+	// outcome buffer on every write, so the layer-accuracy metrics that the
+	// card builder consumes could never be non-empty. All-zero is the "not
+	// configured" sentinel here — partial blocks (e.g. only clamped weights
+	// zeroed) are left untouched.
+	if i.CycleCalibration.Value.MinSamples == 0 &&
+		i.CycleCalibration.Value.LearningRate == 0 &&
+		i.CycleCalibration.Value.WindowSize == 0 {
+		i.CycleCalibration = def.CycleCalibration
+	}
 	if i.EventSentimentCap.Value == 0 {
 		i.EventSentimentCap = def.EventSentimentCap
 	}

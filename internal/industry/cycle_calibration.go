@@ -63,7 +63,13 @@ func (c *CycleCalibration) RecordOutcome(sessionID string, date time.Time, layer
 	}
 
 	c.outcomes = append(c.outcomes, outcome)
-	if len(c.outcomes) > c.config.WindowSize {
+	// WindowSize <= 0 means "keep every outcome" rather than "keep none":
+	// the previous unguarded expression evaluated to c.outcomes[len-0:] =
+	// empty, so the zero-valued config shipped in configs/parameters.json
+	// cleared the window on every recorded outcome and GetMetrics() could
+	// never see a single sample (issue #1944 Batch 1 found the symptom;
+	// Batch 2 Q6 I3 fixes the semantic).
+	if c.config.WindowSize > 0 && len(c.outcomes) > c.config.WindowSize {
 		c.outcomes = c.outcomes[len(c.outcomes)-c.config.WindowSize:]
 	}
 
@@ -85,6 +91,17 @@ func (c *CycleCalibration) CalibrateWeights(baseWeights map[string]float64) map[
 	maps.Copy(calibrated, baseWeights)
 
 	if len(c.outcomes) < c.config.MinSamples {
+		return calibrated
+	}
+
+	// A degenerate clamp window (WeightClampMax <= WeightClampMin, e.g. the
+	// all-zero block that configs/parameters.json shipped before issue #1944
+	// Batch 2) would clamp every layer that has metrics to the same value and
+	// blank the caller's weights. Treat it as "calibration not configured" and
+	// return the base weights untouched; the merge layer fills code defaults for
+	// an all-zero block (internal/config/parameters_merge.go), so this guard only
+	// covers partially-zero or hand-edited configs.
+	if c.config.WeightClampMax <= c.config.WeightClampMin {
 		return calibrated
 	}
 
