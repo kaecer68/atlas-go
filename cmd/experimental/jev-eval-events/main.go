@@ -362,28 +362,38 @@ func run(args []string, stdout io.Writer) error {
 	return nil
 }
 
-// Data-quality gate reasons. Both are hard evidence that the occurrence's own
+// Data-quality gate reasons. Each is hard evidence that the occurrence's own
 // dates are not usable ground truth, so the occurrence is dropped rather than
 // evaluated with a label that is known to be wrong.
+//
+// All three describe defects that were reported by this exporter and fixed for
+// issue #1973 (internal/industry + internal/taiwanholidays). They are kept as
+// REGRESSION DETECTORS: on the 2021 window the fixed calendar exports all 60
+// in-window occurrences with dropped(peak_outside=0 inverted=0 lunar=0), where
+// it used to drop 14 + 4 + 8 = 26 of 61. A non-zero counter below now means the
+// defect came back, not that the gate needs loosening.
 const (
-	// reasonPeakOutsideWindow: industry.EventCalendar.buildMonthlyEvent sets
-	// PeakDate from rule.ComputePeakDate(year), which for the two year-anchored
-	// monthly rules (futures_settlement, investor_conference) is a single fixed
-	// date for every month. 11 of 12 futures_settlement and 3 of 4
-	// investor_conference occurrences therefore carry a "peak" that is not
-	// inside their own window, i.e. not their peak at all.
+	// reasonPeakOutsideWindow: an occurrence whose PeakDate is not inside its own
+	// [StartDate, EndDate] has no peak at all, so it cannot be peak-anchored
+	// ground truth. The producer was buildMonthlyEvent, which reused the
+	// year-anchored rule.ComputePeakDate for every month of the two monthly rules
+	// (11/12 futures_settlement and 3/4 investor_conference occurrences in 2021).
 	reasonPeakOutsideWindow = "peak_outside_own_window"
-	// reasonInvertedWindow: the occurrence's own window is malformed
-	// (StartDate after EndDate), so industry.EventCalendar.DetectActiveEvents can
-	// never report it active. 4 of 4 position_building occurrences in 2021 have
-	// this shape (their EndDate is derived from a different week helper than
-	// their StartDate), so the occurrence is not evaluable at all.
+	// reasonInvertedWindow: an occurrence whose own window is malformed
+	// (StartDate after EndDate) can never be reported active by
+	// industry.EventCalendar.DetectActiveEvents, so it is not evaluable at all.
+	// The producer was buildPositionBuildingEvent, whose EndDate came from a
+	// different week helper than its StartDate (4/4 2021 occurrences).
 	reasonInvertedWindow = "inverted_window"
 	// reasonUnverifiedLunar: the lunar tables behind the moving Taiwan holidays
-	// (春節 / 清明 / 端午 / 中秋) are only verified from
-	// industry.GetLunarCoverageYears(); before that year the calendar falls back
-	// to conventional placeholders, so a `long_holiday` occurrence in such a
-	// year is not the real holiday.
+	// (春節 / 清明 / 端午 / 中秋) are verified from
+	// industry.GetLunarCoverageYears(); outside that range the date is NOT
+	// determinable and industry omits the occurrence instead of dating it with a
+	// conventional placeholder, so a `long_holiday` occurrence in such a year is
+	// either absent or a real holiday. This gate stays conservative for the whole
+	// event type because `long_holiday` mixes four lunar dates with four fixed
+	// ones (元旦/228/勞動節/國慶日) that cannot be told apart from outside the
+	// package.
 	reasonUnverifiedLunar = "unverified_lunar_calendar"
 )
 

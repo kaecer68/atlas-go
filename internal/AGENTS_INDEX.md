@@ -116,7 +116,7 @@
 | `importer` | CSV → JSONL 資料匯入 |
 | `testdb` | PG 整合測試單一 DATABASE_URL 政策（CI fail-loud / 本地 skip，M6 2026-08-28）|
 | `taskexec` | 非同步任務執行 Manager |
-| `taiwanholidays` | **v0.0.2.0 新** — 台灣交易日曆單一來源（P1-8：lunar/固定假日表合併，2023-2040） |
+| `taiwanholidays` | **v0.0.2.0 新** — 台灣交易日曆單一來源（P1-8：lunar/固定假日表合併，2021-2040；表外年份不可判定、不猜日期） |
 | `liveness` | 任務活性心跳 — task_liveness upsert store、staleness monitor、cron ping 端點（Phase 1, 2026-08-17）|
 | `calibration` | 參數校準純邏輯 — GARCH/VaR/Darwinian/Factor 推斷（`cmd/calibrate-parameters`）|
 | `backfill` | ledger 狀態一次性修復工具（drift from canonical）|

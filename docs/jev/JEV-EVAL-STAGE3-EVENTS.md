@@ -84,6 +84,8 @@ Python task spec（`scripts/jev_eval/specs/event_calendar.py`）把兩份檔案*
 | `inverted_window` | 4（position_building） | `buildPositionBuildingEvent`：`StartDate=lastWeekStart(month)`、`EndDate=lastTwoWeekStart(month)−1`，2021 產生 `StartDate > EndDate`（例：`2021-06-24 .. 2021-06-16`）。`DetectActiveEvents` 永遠不會回報它 active ⇒ 該 occurrence 整體不可評估。 |
 | `unverified_lunar_calendar` | 8（全部 `long_holiday`） | 農曆表只驗證到 `industry.GetLunarCoverageYears() = 2023..2040`；2021 走**慣例 placeholder**（春節→2/1、清明→4/5、端午→6/10、中秋→9/20）。實測 2021 春節真值 2/12、端午 6/14、中秋 9/21 ⇒ 移動型假日日期不可信。因無法從套件外區分「農曆推導」與「固定日期」假日，**保守起見整型別排除**；固定日期者（元旦/228/勞動節/國慶日）為附帶損失，代價僅 4 列。 |
 
+> **後續處置（2026-09-25，issue #1973）**：上表三類的**產生器已修正**，本表的「擋掉 26 筆」是修正前快照，保留作為歷史證據。修正後同一個 2021 視窗 `dropped(peak_outside=0 inverted=0 lunar=0)`、`exported 34 → 60`（`futures_settlement` 1→12、`position_building` 0→4、`long_holiday` 0→8）。閘門本身**不放寬**，改作回歸偵測器；契約、不可判定語意與 before/after 對照見 [`../specs/event-calendar-date-invariants-spec.md`](../specs/event-calendar-date-invariants-spec.md)。
+
 被排除的**資料源**：
 
 | 來源 | 排除理由 |
