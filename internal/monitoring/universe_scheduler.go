@@ -58,6 +58,10 @@ const (
 	QuotesStatusFetchError = "fetch_error"
 	// QuotesStatusEmpty: the provider returned zero quotes without an error.
 	QuotesStatusEmpty = "empty"
+	// QuotesStatusPartial: some quote chunks failed while others succeeded. The
+	// ranked list is still computed and persisted from the quotes that arrived,
+	// but it covers only part of the universe.
+	QuotesStatusPartial = "partial"
 	// QuotesStatusMock: the provider was wired but identifies itself as a mock,
 	// so its (non-empty) answers are fabricated.
 	QuotesStatusMock = "mock"
@@ -80,6 +84,10 @@ const (
 	// RankedFallbackEmptyFiltered is recorded when the industry filter removed
 	// every gathered symbol.
 	RankedFallbackEmptyFiltered = "empty_filtered"
+	// RankedFallbackQuoteFetchPartial is recorded when at least one quote chunk
+	// failed: symbols in the failed chunks have no quote, so the ranked list is
+	// incomplete and must not be used to expire symbols (D6).
+	RankedFallbackQuoteFetchPartial = "quote_fetch_partial"
 	// RankedFallbackQuoteProviderMock is recorded when the wired provider is a
 	// mock: the ranked list would then describe simulated quotes, not the
 	// market, and must never be published as trustworthy.
@@ -135,6 +143,13 @@ type UniverseBuildResult struct {
 	// reported as "empty"); comparing it against SymbolsFiltered exposes
 	// partial provider coverage that a boolean status cannot express.
 	QuotesReturned int `json:"quotes_returned"`
+	// QuotesRequested is how many symbols the quote fetch asked for.
+	QuotesRequested int `json:"quotes_requested"`
+	// QuotesChunks / QuotesChunksFailed expose the fetch granularity: the
+	// pipeline calls the provider in bounded chunks (see QuoteFetchPolicy) so a
+	// single slow or incomplete chunk cannot take the whole universe down.
+	QuotesChunks       int `json:"quotes_chunks"`
+	QuotesChunksFailed int `json:"quotes_chunks_failed"`
 	// RankedFallbackReason is non-empty when the ranked list is NOT a market
 	// verdict, and names the reason. Empty means the ranked list reflects real
 	// quote input and may be trusted as-is.
@@ -152,11 +167,13 @@ type UniverseBuildResult struct {
 func markRankedUntrustworthy(result *UniverseBuildResult, reason string, extra ...any) {
 	result.RankedFallbackReason = reason
 	result.RankedTrustworthy = false
+	// Deliberately NOT logging symbols_ranked: every caller runs before Step 4
+	// ranking, so the field is still zero here and the line would read like a
+	// verdict. The persisted snapshot carries the authoritative counts.
 	args := append([]any{
 		"reason", reason,
 		"symbols_built", result.SymbolsBuilt,
 		"symbols_filtered", result.SymbolsFiltered,
-		"symbols_ranked", result.SymbolsRanked,
 		"quotes_status", result.QuotesStatus,
 	}, extra...)
 	logging.Warn("universe_scheduler", "ranked_not_trustworthy", args...)
@@ -227,6 +244,11 @@ type UniverseBuilderDeps struct {
 	// Exported so callers outside this package can wire it.
 	WatchlistMu *sync.Mutex
 
+	// QuotePolicy bounds the Step 3 quote fetch granularity. The zero value
+	// means "use the package defaults" (50 symbols per call, 100ms pause,
+	// 60s per-chunk timeout); see QuoteFetchPolicy for why production must not
+	// ask for the whole universe in one call.
+	QuotePolicy QuoteFetchPolicy
 	// Substrate is the optional per-stock industry field (issue #1943). When
 	// installed it replaces the tree's representative stocks as the universe
 	// population, growing the built universe from ~27 symbols to the whole
@@ -391,6 +413,134 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 	}
 }
 
+// ── Quote fetch policy (issue #1944 Batch 3, I25 production-scale follow-up) ──
+
+// QuoteFetchPolicy bounds how the pipeline asks the provider for quotes.
+//
+// Reason (production evidence, 2026-09-25): with the per-stock industry
+// substrate enabled the universe is the whole listed market (1,599 symbols on
+// that day), so Step 3 used to ask for thousands of symbols in one call. Two
+// facts make a single all-symbols call unsafe:
+//
+//   - The fubon-proxy /quotes endpoint loops over the symbol list and issues one
+//     Fubon SDK intraday.quote() call per symbol (services/fubon-proxy/main.py),
+//     so the "batch" HTTP request is really N upstream calls.
+//   - provider.HybridProvider discards the whole batch when any single quote is
+//     incomplete (hasInvalidQuotes) and falls through to the next provider, whose
+//     FinMind implementation issues one HTTP request per symbol
+//     (FinMindProvider.GetQuotes). A single suspended stock therefore used to
+//     cost ~1,599 FinMind requests (~11% of the 14,400/day quota).
+//
+// Chunking bounds both: a slow, failing or incomplete chunk degrades alone, and
+// the per-symbol fallback cost shrinks from the whole universe to one chunk.
+//
+// The zero value means "use the package defaults" so production wiring (and the
+// CLI) does not have to know about any of this.
+type QuoteFetchPolicy struct {
+	// ChunkSize is the maximum number of symbols per provider call.
+	ChunkSize int
+	// Pause spaces consecutive chunks so a per-symbol provider does not see an
+	// instantaneous burst.
+	Pause time.Duration
+	// ChunkTimeout bounds a single chunk call. 0 inherits the caller's context.
+	ChunkTimeout time.Duration
+}
+
+// Default chunking parameters. They are deliberately constants rather than
+// config parameters: they are operational guardrails, not tunable policy, and
+// the values only need to be small enough to bound the blast radius of one
+// provider call.
+const (
+	DefaultQuoteChunkSize    = 50
+	DefaultQuoteChunkPause   = 100 * time.Millisecond
+	DefaultQuoteChunkTimeout = 60 * time.Second
+)
+
+// normalized resolves the zero value to the package defaults. A caller that
+// wants a shorter pause (tests) passes a small positive duration; there is no
+// "disabled" sentinel because an unset policy must never run unpaced in
+// production.
+func (p QuoteFetchPolicy) normalized() QuoteFetchPolicy {
+	if p.ChunkSize <= 0 {
+		p.ChunkSize = DefaultQuoteChunkSize
+	}
+	if p.Pause == 0 {
+		p.Pause = DefaultQuoteChunkPause
+	}
+	if p.ChunkTimeout == 0 {
+		p.ChunkTimeout = DefaultQuoteChunkTimeout
+	}
+	return p
+}
+
+// QuoteFetchStats describes how a chunked quote fetch went. Returned by
+// fetchQuotesChunked and copied into UniverseBuildResult.
+type QuoteFetchStats struct {
+	// Requested is the number of symbols asked for.
+	Requested int
+	// Chunks is the number of provider calls attempted.
+	Chunks int
+	// ChunksFailed is how many of them returned an error.
+	ChunksFailed int
+}
+
+// fetchQuotesChunked asks the provider for quotes in bounded chunks.
+//
+// It returns every quote that arrived plus the fetch statistics. The error is
+// non-nil only when EVERY chunk failed (or the context ended), because a partial
+// result is still useful input for ranking — the caller labels it via
+// QuotesStatusPartial instead of discarding it.
+func fetchQuotesChunked(ctx context.Context, provider QuoteProvider, symbols []string, policy QuoteFetchPolicy) ([]domain.Quote, QuoteFetchStats, error) {
+	policy = policy.normalized()
+	stats := QuoteFetchStats{Requested: len(symbols)}
+	if provider == nil || len(symbols) == 0 {
+		return nil, stats, nil
+	}
+
+	quotes := make([]domain.Quote, 0, len(symbols))
+	var lastErr error
+	for start := 0; start < len(symbols); start += policy.ChunkSize {
+		if err := ctx.Err(); err != nil {
+			return quotes, stats, err
+		}
+		if start > 0 && policy.Pause > 0 {
+			select {
+			case <-time.After(policy.Pause):
+			case <-ctx.Done():
+				return quotes, stats, ctx.Err()
+			}
+		}
+		end := min(start+policy.ChunkSize, len(symbols))
+		chunk := symbols[start:end]
+		stats.Chunks++
+
+		chunkCtx := ctx
+		var cancel context.CancelFunc
+		if policy.ChunkTimeout > 0 {
+			chunkCtx, cancel = context.WithTimeout(ctx, policy.ChunkTimeout)
+		}
+		chunkQuotes, err := provider.GetQuotes(chunkCtx, time.Now(), chunk)
+		if cancel != nil {
+			cancel()
+		}
+		if err != nil {
+			stats.ChunksFailed++
+			lastErr = err
+			logging.Warn("universe_scheduler", "quotes_chunk_error",
+				"chunk_index", stats.Chunks-1,
+				"chunk_size", len(chunk),
+				logging.Err(err))
+			continue
+		}
+		quotes = append(quotes, chunkQuotes...)
+	}
+
+	if stats.ChunksFailed == stats.Chunks && stats.Chunks > 0 {
+		return quotes, stats, lastErr
+	}
+	return quotes, stats, nil
+}
+
 // ── Pipeline orchestrator ────────────────────────────────────────────────
 
 // BuildUniverse runs the complete SmartUniverseBuilder pipeline:
@@ -498,9 +648,16 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 			um.QuotesErrors.WithLabelValues(stage, "provider_unavailable").Inc()
 		}
 	} else {
-		quotes, err := deps.Quotes.GetQuotes(ctx, time.Now(), filtered)
+		// Chunked fetch (see QuoteFetchPolicy): never ask for the whole universe
+		// in one call.
+		quotes, fetchStats, err := fetchQuotesChunked(ctx, deps.Quotes, filtered, deps.QuotePolicy)
+		result.QuotesRequested = fetchStats.Requested
+		result.QuotesChunks = fetchStats.Chunks
+		result.QuotesChunksFailed = fetchStats.ChunksFailed
 		if err != nil {
 			logging.Warn("universe_scheduler", "quotes_fetch_error",
+				"chunks", fetchStats.Chunks,
+				"chunks_failed", fetchStats.ChunksFailed,
 				logging.Err(err))
 			if um != nil {
 				um.QuotesErrors.WithLabelValues(stage, "fetch_error").Inc()
@@ -528,6 +685,21 @@ func BuildUniverse(ctx context.Context, deps UniverseBuilderDeps, fullRebuild bo
 			// Fabricated quotes must never masquerade as a market verdict.
 			result.QuotesStatus = QuotesStatusMock
 			markRankedUntrustworthy(result, RankedFallbackQuoteProviderMock)
+		case fetchStats.ChunksFailed > 0:
+			// Some chunks failed: the ranked list covers only the symbols whose
+			// quotes arrived. Symbols in the failed chunks are absent, and every
+			// downstream consumer that reads absence as "no longer qualifies"
+			// (the D6 expiry counter) would fabricate failures for them, so the
+			// partial result is explicitly not trustworthy. The ranking is still
+			// computed and persisted for inspection.
+			result.QuotesStatus = QuotesStatusPartial
+			if um != nil {
+				um.QuotesErrors.WithLabelValues(stage, "chunk_error").Add(int64(fetchStats.ChunksFailed))
+			}
+			markRankedUntrustworthy(result, RankedFallbackQuoteFetchPartial,
+				"chunks", fetchStats.Chunks,
+				"chunks_failed", fetchStats.ChunksFailed,
+				"quotes_returned", len(quoteMap))
 		default:
 			// Real quote input: the ranked list is a genuine market verdict,
 			// even when it is empty after the volume/price filters.

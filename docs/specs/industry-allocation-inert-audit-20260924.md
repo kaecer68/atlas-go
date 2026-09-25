@@ -238,7 +238,7 @@ go test ./cmd/atlas-mcp/... ./internal/config/ ./internal/industry/ ./internal/m
 | **I12** composition 路徑 driver 硬寫 0 | **接線**（macro 取真值；factor 明示仍為 stub） | `internal/orchestrator/composition/root.go`、`internal/monitoring/dashboard_api.go`、`internal/industry/seasonality.go`（新增 `DynamicEnvModulator()` getter） | `TestSetCompositionRoot_SharesDashboardIndustryState`（macro tilt == dashboard modulator tilt == −0.05，非硬寫 0.0）、`TestBuildWeightEngine_UsesSharedSectorInputs` | 新增 `composition.SectorFactorDriverWired=false`：factor driver 仍是中立 0（無生產 provider），已明示不宣稱生效 |
 | **I13** 兩個 `CycleTracker` 不同步 | **接線**（共用 dashboard 實例） | 同上 + `cmd/atlas/main.go`（`SetCompositionRoot` 首次真的被呼叫） | 同一測試：wiring 後更新 dashboard tracker，root engine 的 cycle multiplier 隨之變動；`go test -race` 乾淨 | `SetCompositionRoot` 不再注入 dashboard 的 legacy engine（無 Projector ⇒ `ComputeProjectedTarget` 會失敗），改為共享**輸入** |
 | **I31** `calibration-validate` 失敗被吞 | **判定機讀化（本批）；CI 吞失敗半邊明示未生效**（需 workflow 一行，見 §9.2） | `internal/config/integrity.go`、`cmd/calibration-validate/main.go` | `TestValidateCalibration_FindingsAreClassified`（7 子案例）、`TestShippedConfigIntegrityFindingsAreClassified`（對出貨 config 做 exact-set 斷言）；實跑輸出見 §9.4 | `--format=json` 新增 `Findings[]{code,severity,segment,message}`（13 個穩定 code）；`Issues` 保留、exit code 仍為 1 |
-| **I25** 母體 quote provider 寫死 nil | **接線** | `cmd/atlas/bootstrap_helpers.go`、`internal/monitoring/universe_scheduler.go`、`cmd/atlas/cmd_universe.go` | `TestNewUniverseBuilderDeps_WiresRealQuoteProvider`、`TestBuildUniverseQuotesStatusOK`（ranked>0）、`TestBuildUniverseNilQuoteProviderIsExplicit` | snapshot 新增 `quotes_status`/`quotes_returned`/`ranked_fallback_reason`/`ranked_trustworthy`：`symbols_ranked=0` 不再能被誤讀為「市場沒有合格股」 |
+| **I25** 母體 quote provider 寫死 nil | **接線（+ 生產尺度 chunked fetch）** | `cmd/atlas/bootstrap_helpers.go`、`internal/monitoring/universe_scheduler.go`（`QuoteFetchPolicy`／`fetchQuotesChunked`）、`cmd/atlas/cmd_universe.go` | `TestNewUniverseBuilderDeps_WiresRealQuoteProvider`、`TestBuildUniverseQuotesStatusOK`、`TestBuildUniverseNilQuoteProviderIsExplicit`、**`TestBuildUniverse_ProductionScaleChunkedFetchRanksSymbols`（1,599 檔 fixture → `input=1599 ranked=150 chunks=32`，見 §9.6）**、`TestFetchQuotesChunked_BoundsProviderCallSize`、`TestBuildUniverse_PartialQuoteFetchIsExplicit` | snapshot 新增 `quotes_status`/`quotes_returned`/`quotes_requested`/`quotes_chunks`/`quotes_chunks_failed`/`ranked_fallback_reason`/`ranked_trustworthy`；`quotes_status=partial` + `ranked_trustworthy=false`（部分 chunk 失敗時）⇒ 不再能被誤讀為「市場沒有合格股」 |
 | **N-U7** Layer 2.5 流動性永不生效 | **接線 + 不靜默** | `internal/monitoring/risk_exclusion.go`、`cmd/atlas/bootstrap_helpers.go`、`cmd/atlas/cmd_universe.go` | `TestRiskExclusionLiquidityEvidence`（skip 留下 INFO `RuleDetail`；低於門檻 → `fail_reasons` 含 `liquidity`）、`TestNewUniverseBuilderDepsWithQuotes_SharesProviderWithRiskFilter` | 仍**非** fail-closed：缺資料只揭露、不擋股 |
 | **N-U1** `-build-universe run` 恆失敗 | **接線**（改走真實 provider + 共用母體，mock 路徑移除） | `cmd/atlas/cmd_universe.go` | `TestBuildUniverseStatus_ReadsCanonicalSnapshot`、`TestBuildUniverseStatus_RejectsLegacySchema`；CLI 端無端到端測試（需真實網路）⇒ **弱證據**，已標明 | untrustworthy 時 CLI 回非零退出（明示） |
 | **N-U3** 同一 snapshot 兩套 schema | **統一（單一權威）** | `internal/monitoring/universe_scheduler.go`（`UniverseSnapshotPath`/`SaveUniverseSnapshot`/`LoadUniverseSnapshot`） | `TestSnapshotSchemaIsSingleAndCanonical`、`TestBuildUniverseStatus_RejectsLegacySchema`（明確報 `incompatible schema`，不再靜默 0） | 舊 schema 檔在部署後第一次讀取會被判不可信（少一輪 D6，自我修復） |
@@ -259,6 +259,7 @@ go test ./cmd/atlas-mcp/... ./internal/config/ ./internal/industry/ ./internal/m
 | ID | 內容 | 嚴重度 | 處置 |
 |---|---|---|---|
 | **N-A5** | `ApplySectorRotation`（`internal/orchestrator/strategy_evolver.go:404`）是 `ComputeProjectedTarget` **唯一**生產呼叫者，但只帶 `CapitalFlowAction`；engine 的 `collect*Deltas` 只對「已存在的 key」套用 provider ⇒ **六個 driver adapter 在此路徑上永遠不會被呼叫**，投影等於 strategic prior | 高 | **明示未啟用**：`orchestrator.SectorDriverDeltasSupplied=false` + 釘樁測試 `TestApplySectorRotation_SuppliesNoDriverDeltas`（recording adapters 0 次呼叫 + `target == prior`）。要供給 delta 是行為變更，需同 commit 翻常數與更新本表 |
+| **全市場 quote 抓取的 N+1 成本** | 1,599 檔母體下，fubon-proxy `/quotes` 逐檔呼叫上游（`services/fubon-proxy/main.py`），且 `HybridProvider` 只要一批中有一個不完整 quote 就整批 fallback 到 `FinMindProvider.GetQuotes`（逐檔一次 HTTP）⇒ 一檔停牌股可造成 ~1,599 次 FinMind 請求（≈14,400/日配額的 11%） | 高 | **已接線緩解**：`QuoteFetchPolicy`／`fetchQuotesChunked` 分批（預設 50 檔、100ms 間隔、60s/chunk），把 fallback 成本限制在單一 chunk；部分失敗明示 `quotes_status=partial`（§9.6）。**未修**：provider 內部的逐檔 fallback 行為本身（marketdata lane） |
 | **I31 的 CI 半邊** | `nightly-refresh.yml` 以 `set +e` + 非最後一個指令的 `cat` 取值 ⇒ step 恆 success；Slack 步驟在 `SLACK_WEBHOOK_URL` 未設時 `exit 0` ⇒ 零告警。本批禁動 `.github/**`（lane 邊界） | 高 | **明示未生效**（本檔 §9.1 I31 + §9.3）。精確修法（待 CI lane 套用）：在 `cat validate-result.json` 之後加 `if [ "$(jq -r '.OK' validate-result.json 2>/dev/null)" != "true" ]; then echo "::warning::calibration validation failed"; exit 1; fi`。**前提**：需先裁定 freshness 政策——(a) 該檢查移到真正會被刷新的 production 主機執行，或 (b) 只驗結構、freshness 交給 production 監控（CI 檢出貨 checkout 的 `updated_at` 結構上不可能新鮮，見 I30） |
 | **超界 `adjustment_factor` 的來源不明** | `cmd/calibrate-seasonal --update` 本身有超界守門（`validateCalibrationResult`），所以 production config 那 4 個超界值不是（或早於）該工具寫入 ⇒ 存在一條不受守門保護的參數寫入路徑 | 中高 | 本批只在**消費端** clamp + 具名 warn，未追污染源（超出 lane 範圍）；**建議另開票** |
 | **config validator 允許負 `adjustment_factor`** | `internal/config/parameters_validate.go` 只檢查 `!= 0`，實證 production 有 2 個負值通過載入 | 中 | **刻意未改**：改成 `[0.3,2.5]` 會讓現行 production config 驗證失敗（等於擋啟動）。需與上一列一起處理 |
@@ -316,5 +317,56 @@ make ci-gate
 - 三問檢查重跑於 worktree `~/workspace/atlas-inert-b3`（`origin/main@f7fcd74d`）；三個子 lane 各在獨立 worktree／branch 作業，由 root cherry-pick 併入（生成檔衝突以 `go generate ./...` 重生成解決）。
 - 未執行任何寫入 production 的動作；未動 `.github/**`、`scripts/ci/**`、`internal/sectormap/**`、`internal/symbolindustry/**`。
 - `docs/reference/traps.md` 維持 330 行（已達 gate 上限）：本批結論全部在本檔與 `inert-registry.md`，未新增 trap 列。
+
+
+### 9.6 I25 生產尺度覆核（2026-09-25，業主提供生產實證後追加）
+
+**生產實證（2026-09-25 06:00Z 每日母體重建，業主提供）**
+
+```
+06:00:30.523  symbols_gathered count=1599               ← per-stock 產業母體 gate 已生效（27 → 1599）
+06:00:30.525  industry_filter_ok input=1599 output=1599
+06:00:30.525  scoring_ok input=1599 ranked=0            ← 無 quote ⇒ 量價過濾把 1599 檔全數拒絕
+```
+
+`Quotes: nil` 使 `quoteMap` 為空，`ScoringScreener.applyVolumeAndPriceFilters` 對「沒有 quote 的 symbol」直接 `continue` ⇒ `symbols_ranked=0`。gate 讓母體由 27 成長到 1,599，但沒有 quote 就無法排名。
+
+**本批追加的生產尺度防護（`QuoteFetchPolicy` / `fetchQuotesChunked`）**
+
+單次「全市場」quote 呼叫在生產上不安全，兩個實證：
+
+| 事實 | 來源 | 後果 |
+|---|---|---|
+| fubon-proxy `/quotes` 端點是**逐檔迴圈**（`for symbol in symbol_list: client.intraday.quote(symbol=symbol)`） | `services/fubon-proxy/main.py` | 一次「批次」HTTP 請求其實是 N 次上游呼叫；1,599 檔 = 1,599 次 |
+| `HybridProvider` 只要批次內**任一** quote 不完整（`hasInvalidQuotes` → `QuoteComplete`）就丟棄整批並 fallback；下一個 provider 的 `FinMindProvider.GetQuotes` 是**逐檔一次 HTTP** | `internal/marketdata/hybrid_provider.go`、`internal/marketdata/finmind_client.go` | 一檔停牌股即可讓整批 fallback 成 ~1,599 次 FinMind 請求（≈ 每日 14,400 配額的 11%） |
+
+處置（**不新增 config 參數**，常數即護欄）：
+
+- `internal/monitoring/universe_scheduler.go` 新增 `QuoteFetchPolicy{ChunkSize, Pause, ChunkTimeout}`（零值 = 50 檔／100ms／60s）與 `fetchQuotesChunked()`：Step 3 改為**分批**呼叫 provider，並在 chunk 之間留間隔。
+- 單一 chunk 逾時／失敗只讓該 chunk 退化（`quotes_chunk_error` warn），不拖垮整個母體；per-symbol fallback 成本由「整個母體」縮到「一個 chunk（≤50 檔）」。
+- 部分失敗 ⇒ `quotes_status=partial` + `ranked_fallback_reason=quote_fetch_partial` + `ranked_trustworthy=false`（排名仍計算並落地供檢視，但**不得**當 D6 基準：失敗 chunk 的 symbol 缺席會被誤判為「不再合格」而累積 60 日失敗）。
+- 全部 chunk 失敗 ⇒ `quotes_status=fetch_error` + 不信任（維持既有語意）。
+
+**生產尺度證據（本批新增測試，真實輸出）**
+
+```
+go test ./internal/monitoring/ -run TestBuildUniverse_ProductionScaleChunkedFetchRanksSymbols -v
+  symbols_gathered count=1599
+  industry_filter_ok input=1599 output=1599
+  scoring_ok input=1599 ranked=150
+  input=1599 ranked=150 chunks=32 chunks_failed=0 quotes_returned=1599 quotes_status=ok
+```
+
+**gate off 時的語意（業主第 3 點）**：quote provider **無條件**接線，因此 gate off（`substrate=nil`）時母體回到分類樹的 ~27 檔代表股，但同樣會抓 quote ⇒ `symbols_ranked` 由 0 變成 >0。這是刻意的（`symbols_ranked=0` 從來不是「市場沒有合格股」的合法表達，而是 I25 的 bug 症狀），已在 spec §9.1 與 PR body 明示；snapshot 的 `quotes_status`/`ranked_trustworthy` 讓兩種 gate 狀態都可稽核。
+
+**排名是否還有其他阻擋因素（業主第 5 點，逐項複核）**
+
+| 環節 | 是否阻擋 | 證據 |
+|---|---|---|
+| `applyVolumeAndPriceFilters`（`VolumeFloorTWD`／`PriceMin`） | **是（唯一真阻擋）** | 需要 `q.Volume × q.Last ≥ 10M TWD` 且 `q.Last ≥ 10`。provider 必須提供 Volume：TWSE `STOCK_DAY_ALL` 以「成交股數」填 `Volume`（`internal/marketdata/twse_openapi.go` `convertToQuote`）✓；Fubon proxy 用 SDK `tradeVolume`（單位需確認，見 §9.2 待辦） |
+| `screener.Engine.ScreenUniverse` | 否 | `ScreeningCriteria` 全零 ⇒ `HasFilters()==false` ⇒ `ScreenDetailed` 直接 pass（`internal/screener/screener.go`） |
+| `scoreAndRank`（分數為空即剔除） | 否 | `portfolio.FactorEngine.CalculateAllScores` 對任何 symbol 都回非空（momentum/value/quality/agent 四項無需外部資料）；但 adapter 傳 `bridgeInputs=nil` ⇒ `volume`/`foreign_flow` 分項恆 0（僅壓低分數，不剔除） |
+| `ApplyConcentrationCap` / `TopN` | 否（只設上限） | 1,599 檔 ranking 後取 `MaxIndustryConcentration` 上限再取 `TopN`；實測 ranked=150（= TopN） |
+
 
 ---
