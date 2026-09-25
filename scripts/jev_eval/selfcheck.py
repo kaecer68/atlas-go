@@ -151,6 +151,52 @@ class ScoringChecks(unittest.TestCase):
         self.assertIsNone(scores["2021-03-01:b"])
 
 
+class DecisionLog(unittest.TestCase):
+    """每筆 case 的稽核列（分數/門檻/決定/延遲/tokens/成本）必須存在且一致。"""
+
+    def test_decision_rows_carry_threshold_and_cost(self):
+        from scripts.jev_eval.cli import decision_rows
+        from scripts.jev_eval.spec import Case, Request, SpecBuild
+
+        cases = [
+            Case(case_id="d:a", request_id="judge:d", group_id="d", gt=True, baselines={}, meta={"question_id": "a"}),
+            Case(case_id="d:b", request_id="judge:d", group_id="d", gt=False, baselines={}, meta={"question_id": "b"}),
+        ]
+        build = SpecBuild(
+            requests=[Request(request_id="judge:d", state={}, questions={}, case_ids=["d:a", "d:b"])],
+            cases=cases,
+            meta={},
+        )
+        judgments = {
+            "judge:d": {"ok": True, "model": "jev-1.13.0", "tokens": 1000, "latency_ms": 800,
+                        "answers": {"a": {"type": "noul", "noul": 0.8}, "b": {"type": "noul", "noul": 0.2}}}
+        }
+        scores = runner.score_cases(build, judgments)
+        rows = decision_rows(build, judgments, scores, 0.5, price_per_mtok=0.042)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["decision"], True)
+        self.assertEqual(rows[1]["decision"], False)
+        self.assertEqual(rows[0]["threshold"], 0.5)
+        self.assertEqual(rows[0]["latency_ms"], 800)
+        # cost is allocated per case (Jev bills per request, not per question)
+        self.assertEqual(rows[0]["allocated_tokens"], 500)
+        self.assertAlmostEqual(rows[0]["allocated_cost_usd"], 500 / 1_000_000 * 0.042, places=10)
+
+    def test_decision_rows_mark_failed_request(self):
+        from scripts.jev_eval.cli import decision_rows
+        from scripts.jev_eval.spec import Case, Request, SpecBuild
+
+        build = SpecBuild(
+            requests=[Request(request_id="judge:d", state={}, questions={}, case_ids=["d:a"])],
+            cases=[Case(case_id="d:a", request_id="judge:d", group_id="d", gt=True, baselines={}, meta={"question_id": "a"})],
+            meta={},
+        )
+        rows = decision_rows(build, {"judge:d": {"ok": False, "error": "boom"}}, runner.score_cases(build, {"judge:d": {"ok": False}}), 0.5, price_per_mtok=0.042)
+        self.assertFalse(rows[0]["ok"])
+        self.assertIsNone(rows[0]["score"])
+        self.assertIsNone(rows[0]["decision"])
+
+
 class MetricMath(unittest.TestCase):
     # E -------------------------------------------------------------------
     def test_wilson_matches_go_reference(self):

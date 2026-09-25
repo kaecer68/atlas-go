@@ -42,6 +42,52 @@ def _load_spec(name: str) -> TaskSpec:
     return SPECS[name]
 
 
+def decision_rows(
+    build,
+    judgments,
+    scores,
+    threshold,
+    *,
+    price_per_mtok: float,
+) -> List[Dict[str, Any]]:
+    """One auditable line per case: score, threshold, decision, latency, tokens, cost.
+
+    This is the per-case log the contract asks for (§5.4 可觀測). Cost is the
+    request's input-token cost allocated evenly over the cases that request
+    answered, because Jev bills per request, not per question.
+    """
+    cases_per_request: Dict[str, int] = {}
+    for case in build.cases:
+        cases_per_request[case.request_id] = cases_per_request.get(case.request_id, 0) + 1
+    rows: List[Dict[str, Any]] = []
+    for case in build.cases:
+        row = judgments.get(case.request_id) or {}
+        n_cases = max(1, cases_per_request.get(case.request_id, 1))
+        tokens = int(row.get("tokens", 0) or 0)
+        score = scores.get(case.case_id)
+        rows.append(
+            {
+                "case_id": case.case_id,
+                "request_id": case.request_id,
+                "group_id": case.group_id,
+                "gt": bool(case.gt),
+                "score": None if score is None else round(float(score), 6),
+                "threshold": threshold,
+                "decision": None if score is None else bool(score >= threshold),
+                "baselines": {k: (None if v is None else float(v)) for k, v in case.baselines.items()},
+                "ok": bool(row.get("ok", False)),
+                "error": row.get("error"),
+                "model": row.get("model"),
+                "latency_ms": row.get("latency_ms"),
+                "request_tokens": tokens,
+                "allocated_tokens": int(round(tokens / n_cases)),
+                "allocated_cost_usd": round(tokens / n_cases / 1_000_000 * price_per_mtok, 8),
+                "repeat": row.get("repeat", 0),
+            }
+        )
+    return rows
+
+
 def _observations(build, judgments, repeat_aggregate: str = "first") -> List[metrics_mod.Observation]:
     scores = runner.score_cases(build, judgments, repeat_aggregate=repeat_aggregate)
     out: List[metrics_mod.Observation] = []
@@ -86,6 +132,19 @@ def _build_and_metrics(args, *, log=print) -> Dict[str, Any]:
         "requests": len(judgments),
         "failed_requests": sum(1 for row in judgments.values() if not row.get("ok")),
     }
+    scores = runner.score_cases(build, judgments, repeat_aggregate=getattr(args, "repeat_aggregate", "first"))
+    rows = decision_rows(
+        build,
+        judgments,
+        scores,
+        payload["threshold_calibration"].get("used_threshold"),
+        price_per_mtok=float(manifest.get("price_per_mtok", runner.DEFAULT_PRICE_PER_MTOK)),
+    )
+    with open(os.path.join(args.out_dir, "cases_scored.jsonl"), "w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    payload["cases_scored_jsonl"] = os.path.join(args.out_dir, "cases_scored.jsonl")
+
     payload["manifest_summary"] = {
         "spec": manifest.get("spec"),
         "spec_version": manifest.get("spec_version"),
