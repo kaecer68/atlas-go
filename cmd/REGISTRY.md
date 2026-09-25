@@ -81,7 +81,7 @@
 | `cmd/backfill-fundamentals-ps-sector` | 修補 fundamentals.json 缺少的 PS/Sector 欄位 | —（stdlib only） | ✅ Utility |
 | `cmd/backfill-summaries` | 補建 orphan session 的 summary.json | backfill, config | ✅ Utility |
 | `cmd/reconcile-sessions` | PG vs JSONL session summary 對帳 — 對稱差報告 + `-apply` 回填單邊缺口 (B6) | reconcile, ledger, repository, config | ✅ Utility |
-| `cmd/backfill-var-returns` | 將 session summary 聚合進 VaR return 計算 | —（stdlib only） | ⚠️ Utility |
+| `cmd/backfill-var-returns` | 由 session summary 重建 VaR 日報酬序列：依交易日去重、寫入 `last_session_date`/`session_base_value`（#1935；契約見 `docs/specs/sim-engine-spec.md`） | domain | ✅ Utility |
 | `cmd/backfill-margin-history` | TWSE 融資餘額歷史回填（2024-07 起，data/state/margin/*_margin.json，one-shot） | narrative, marketdata, constants | ✅ Utility |
 | `cmd/backfill-period-history` | R9 — period_history/regime_history 歷史回填（macro snapshot 逐日 → enrich → DetectPeriod + stress regime，SQLite/PG upsert，dry-run） | monitoring, portfolio, narrative, ledger, marketdata | ✅ Utility |
 | `cmd/backfill-event-calendar` | R7 — event_calendar_history 歷史回填（TWSE OpenAPI 當年 + MSCI 2023-2026 static 季度調整，SQLite/PG upsert，dry-run，idempotent） | marketdata, ledger | ✅ Utility |
@@ -194,7 +194,7 @@
 
 | Binary | 疑慮 | 建議 |
 |--------|------|------|
-| `cmd/backfill-var-returns` | 只依賴 stdlib，寫入 session summary 聚合 | 確認是否有 cron 調用 |
+| `cmd/backfill-var-returns` | 全 repo 無呼叫端（2026-09-25 盤查） | 保留為運維工具；writer 契約與測試已補（#1935） |
 | `cmd/realtime-quote` | 需要 Redis + Fugle API Key；live trading path 受 `live-trading.guardrails` 管制 | 確認是否仍在使用 |
 
 ---
