@@ -74,6 +74,21 @@ type StrategyEvolver struct {
 	// be — record-only, never executed (plan §5.1 / k3 B1: the action is
 	// label-only; the terminal decision is decision-inert in Phase 3).
 	cfObserver ObservationLogger
+
+	// sacMetrics is the SA11.B dark-launch emitter. When non-nil,
+	// ApplySectorRotation emits the snapshot/policy lifecycle events on the
+	// path that actually builds and stores a policy (N-A1, #1944 Batch 4:
+	// before this the 11 emitters had no caller at all, so the observation
+	// window the runbook describes never ran). Emission is fail-soft: it
+	// never blocks or mutates the rotation.
+	sacMetrics *SACMetrics
+}
+
+// WithSACMetrics wires the SA11.B dark-launch emitter used by
+// ApplySectorRotation. nil keeps the path silent (the pre-#1944 Batch 4 state).
+func (e *StrategyEvolver) WithSACMetrics(m *SACMetrics) *StrategyEvolver {
+	e.sacMetrics = m
+	return e
 }
 
 // WithCapitalFlowObserver wires the PR-3c observation-mode logger. The
@@ -398,6 +413,13 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		Applied:           false,
 		Current:           convertStringMapToSectorIDs(currentAllocs),
 	}
+	// N-A1 (#1944 Batch 4): the SA11.B dark-launch emitters fire on the real
+	// policy lifecycle. They existed since fc8506bc but had no caller, so the
+	// observation window the runbook describes never actually ran.
+	sessionID := snap.AsOfTradingDate
+	e.sacMetrics.EmitSnapshotStart(sessionID)
+	e.sacMetrics.EmitSnapshotCurrent(sessionID, len(currentAllocs) > 0, sumSectorValues(currentAllocs))
+
 	// Compute projected target from WeightEngine (SA04 single source).
 	if e.weightEngine != nil {
 		cfAction := capitalFlowActionFromPlan(plan)
@@ -447,11 +469,18 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		snap.Delta[sector] = tgt - cur
 	}
 
+	e.sacMetrics.EmitSnapshotTarget(sessionID, len(snap.Target), sumSectorValues(snap.Target))
+	if snap.TargetNote != "" {
+		e.sacMetrics.EmitSnapshotFallback(sessionID, snap.TargetNote)
+	}
+
 	// Persist the snapshot.
 	storedReceipt, err := e.closureStore.Store(snap)
 	if err != nil {
+		e.sacMetrics.EmitSnapshotEnd(sessionID, false)
 		return nil, false, fmt.Sprintf("store failed: %v", err)
 	}
+	e.sacMetrics.EmitSnapshotEnd(sessionID, true)
 
 	// SA11.A: bump the observation counter. Failures here are warnings
 	// (the snapshot is already durably persisted) and do not roll back
@@ -464,7 +493,11 @@ func (e *StrategyEvolver) ApplySectorRotation(
 
 	consumption := sectorallocation.ConsumptionFor(e.closureStore, storedReceipt.ReceiptID)
 	policyApplied, policyReason := sectorallocation.ApplicationStatusFor(consumption)
+	if consumption != nil {
+		e.sacMetrics.EmitPolicyConsumed(sessionID, storedReceipt.ReceiptID)
+	}
 	if policyApplied {
+		e.sacMetrics.EmitPolicyApplied(sessionID, storedReceipt.ReceiptID, countNonZero(snap.Delta))
 		return storedReceipt, true, "applied"
 	}
 
@@ -472,6 +505,28 @@ func (e *StrategyEvolver) ApplySectorRotation(
 	// stored-but-unconsumed snapshot must not be reported as applied.
 	return storedReceipt, false,
 		fmt.Sprintf("stored (receipt %s), not applied: %s", storedReceipt.ReceiptID, policyReason)
+}
+
+// sumSectorValues totals a sector value map. Zero when the map is empty, which
+// is exactly what the SA11.B emitters must report for "no exposure supplied".
+func sumSectorValues[T ~string](m map[T]float64) float64 {
+	var sum float64
+	for _, v := range m {
+		sum += v
+	}
+	return sum
+}
+
+// countNonZero counts the sectors whose delta is non-zero, i.e. the sectors the
+// policy would actually move.
+func countNonZero[T ~string](m map[T]float64) int {
+	n := 0
+	for _, v := range m {
+		if v != 0 {
+			n++
+		}
+	}
+	return n
 }
 
 // convertStringMapToSectorIDs converts map[string]float64 to

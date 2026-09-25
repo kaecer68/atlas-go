@@ -383,7 +383,11 @@ func (r *Root) BuildSystem(
 		evolver.WithClosureStore(r.closureStore).
 			WithSessionResolver(r.sessionResolver).
 			WithSectorWeightEngine(r.weightEngine).
-			WithSACClosureStateManager(r.closureStateMgr)
+			WithSACClosureStateManager(r.closureStateMgr).
+			// N-A1 (#1944 Batch 4): the SA11.B dark-launch emitter had no
+			// caller anywhere, so the observation window never ran. nil logger
+			// → slog.Default (fail-soft, log-only).
+			WithSACMetrics(orchestrator.NewSACMetrics(nil))
 	}
 
 	return system, nil
