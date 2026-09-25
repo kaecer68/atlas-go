@@ -447,6 +447,27 @@ func (s *Store) UpdatePromptExperimentResult(experimentID string, result domain.
 	return s.RecordPromptExperimentResult(experimentID, result)
 }
 
+// BuildScorecards aggregates per-agent performance scorecards.
+//
+// Only REAL rows are aggregated (issue #1944 Batch 4, item I24). A row with
+// IsSynthetic=true carries the deterministic placeholder forward return
+// produced by orchestrator.syntheticPlaceholderReturn — it is not
+// forward-looking information at all, so aggregating it published a HitRate /
+// Sharpe / IS-OOS that mixed measurement with a placeholder. Production
+// measured 25,571 of 45,668 recommendation_outcomes rows (56.0%) as synthetic,
+// which is why this filter is unconditional rather than opt-in.
+//
+// Consequences of the filter:
+//   - Every statistic on the returned scorecard is computed from real rows only,
+//     and SyntheticObservations / SyntheticShare disclose how many rows were
+//     dropped so the exclusion is auditable rather than silent.
+//   - An agent whose rows are ALL synthetic gets no scorecard. Emitting one
+//     would publish zeros that read as "0% accuracy" when the truth is
+//     "no measurement"; the drop is logged
+//     (ledger.scorecard_agent_dropped_all_synthetic) instead.
+//   - OOS splitting (portfolio.Split) also runs on the real rows, so the
+//     IS/OOS ratio no longer trivially compares two halves of the same
+//     placeholder distribution.
 func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard {
 	type agg struct {
 		agentID      string
@@ -454,6 +475,7 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 		layer        string
 		returns      []float64
 		hits         int
+		synthetic    int
 		windows      map[string]struct{}
 		dailyReturns map[string]float64
 		dailyCounts  map[string]int
@@ -475,6 +497,11 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 			}
 			byAgent[key] = entry
 		}
+		if outcome.IsSynthetic {
+			// Placeholder row: counted for disclosure, never aggregated.
+			entry.synthetic++
+			continue
+		}
 		entry.returns = append(entry.returns, outcome.ForwardReturn)
 		entry.outcomes = append(entry.outcomes, outcome)
 		if outcome.Hit {
@@ -488,7 +515,15 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 	}
 
 	scorecards := make([]domain.Scorecard, 0, len(byAgent))
+	droppedAllSynthetic := 0
 	for _, entry := range byAgent {
+		if len(entry.returns) == 0 {
+			// No real row for this agent: no measurement exists, so there is
+			// no truthful scorecard to publish. Skipped silently is not an
+			// option — the aggregate count is logged below.
+			droppedAllSynthetic++
+			continue
+		}
 		avg := mean(entry.returns)
 		// Deterministic per-window order (B4, #1780 Phase 1 review): daily is
 		// fed into order-dependent sharpeTrendSlope/maxDrawdown, and ranging
@@ -604,7 +639,18 @@ func BuildScorecards(outcomes []domain.RecommendationOutcome) []domain.Scorecard
 			OverfitReason:            overfitReason,
 			RollingSharpeTrend:       trendSlope,
 			OosSampleWarning:         oosSampleWarning,
+			SyntheticObservations:    entry.synthetic,
+			SyntheticShare:           syntheticShare(entry.synthetic, n),
 		})
+	}
+	if droppedAllSynthetic > 0 {
+		// Visible, not silent: these agents have zero real outcomes, so the
+		// caller receives no scorecard for them at all.
+		logging.Warn("ledger", "scorecard_agent_dropped_all_synthetic",
+			"agents", droppedAllSynthetic,
+			"total_agents", len(byAgent),
+			"reason", "agent has zero non-synthetic outcomes; a scorecard would publish placeholder-derived numbers",
+		)
 	}
 
 	slices.SortFunc(scorecards, func(a, b domain.Scorecard) int {
@@ -642,6 +688,18 @@ func ratio(hitCount, total int) float64 {
 		return 0
 	}
 	return float64(hitCount) / float64(total)
+}
+
+// syntheticShare is the fraction of an agent's outcome rows that were dropped
+// from its scorecard because they were synthetic (see BuildScorecards, issue
+// #1944 Batch 4 / I24). Returns 0 when nothing was dropped, so a scorecard built
+// entirely from real rows reports 0.0 rather than NaN.
+func syntheticShare(synthetic, real int) float64 {
+	total := synthetic + real
+	if total == 0 {
+		return 0
+	}
+	return float64(synthetic) / float64(total)
 }
 
 func sharpeTrendSlope(values []float64) float64 {
