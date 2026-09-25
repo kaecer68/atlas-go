@@ -272,7 +272,7 @@ func run(args []string, deps appDeps) error {
 	verboseMode := flags.Bool("verbose", false, "enable color-coded terminal trace output during simulation")
 	dateOverride := flags.String("date", "", "override simulation session date (format: 2006-01-02)")
 	checkIntegrity := flags.Bool("check-integrity", false, "check configs/parameters.json integrity and exit")
-	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|scrape|status")
+	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|status")
 	fubonProxyPort := flags.Int("fubon-port", constants.FubonProxyPort, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL)")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)

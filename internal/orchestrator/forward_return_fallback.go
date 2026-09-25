@@ -2,12 +2,13 @@ package orchestrator
 
 import (
 	"hash/fnv"
-	"math"
 
 	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// DistributionParams is one regime's placeholder return band: a mean, a
+// spread, and hard clamps. It models NO forward information — see
+// syntheticPlaceholderReturn in system.go for the only consumer.
 type DistributionParams struct {
 	Mean      float64
 	StdDev    float64
@@ -20,6 +21,13 @@ type ForwardReturnFallback struct {
 	RiskOffParams DistributionParams
 }
 
+// DefaultFallbackParams returns the two regime bands of the synthetic
+// placeholder distribution, read from configs/parameters.json
+// (forward_return.risk_on_* / risk_off_*).
+//
+// The name is historical: these params feed the placeholder written to
+// RecommendationOutcome.ForwardReturn when no forward-looking data exists
+// (issues #1944 I20/I18). They do not model a forward return.
 func DefaultFallbackParams(cfg *config.ParametersConfig) ForwardReturnFallback {
 	return ForwardReturnFallback{
 		RiskOnParams: DistributionParams{
@@ -37,55 +45,14 @@ func DefaultFallbackParams(cfg *config.ParametersConfig) ForwardReturnFallback {
 	}
 }
 
-// GenerateForwardReturn produces a forward-return proxy for a recommendation.
-// agentID scopes the synthetic distribution seed so different agents drawing
-// a fallback for the same symbol get different values (A4 L2: the seed used
-// to be symbol-only, which made every agent recommending the same symbol
-// receive byte-identical forward returns).
-func GenerateForwardReturn(symbol, agentID string, quote domain.Quote, regime domain.Regime, fallback ForwardReturnFallback) float64 {
-	if quote.Open > 0 && quote.Last > 0 {
-		intraday := (quote.Last - quote.Open) / quote.Open
-
-		fr := intraday
-		if fr > 0.05 {
-			fr = 0.05
-		}
-		if fr < -0.05 {
-			fr = -0.05
-		}
-
-		if math.Abs(fr) < 0.001 {
-			return generateFromDistribution(symbol, agentID, regime, fallback)
-		}
-
-		return fr * 0.9
-	}
-
-	return generateFromDistribution(symbol, agentID, regime, fallback)
-}
-
-func generateFromDistribution(symbol, agentID string, regime domain.Regime, fallback ForwardReturnFallback) float64 {
-	params := fallback.RiskOnParams
-	if regime == domain.RegimeRiskOff {
-		params = fallback.RiskOffParams
-	}
-
-	// Agent-scoped seed: the same symbol drawn by different agents must yield
-	// different samples, otherwise multi-agent windows collapse into a few
-	// repeated values and the rolling Sharpe explodes (A4 L2/L3).
-	hash := hashString(agentID + "|" + symbol)
-	normalized := (float64(hash%10000) - 5000) / 5000.0
-	fr := params.Mean + normalized*params.StdDev
-
-	if fr < params.MinReturn {
-		fr = params.MinReturn
-	}
-	if fr > params.MaxReturn {
-		fr = params.MaxReturn
-	}
-	return fr
-}
-
+// hashString is the deterministic, non-cryptographic seed used by
+// drawNormalized (system.go) to build the placeholder draw.
+//
+// It exists because of the A4 L2/L3 seed bug: a symbol-only seed made every
+// agent recommending the same symbol draw byte-identical values, collapsing a
+// multi-agent window into a few repeated samples and exploding the rolling
+// Sharpe. Callers must fold the agent (and, for the placeholder, the trading
+// day) into the input.
 func hashString(s string) int64 {
 	h := fnv.New64a()
 	h.Write([]byte(s))

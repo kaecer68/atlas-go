@@ -381,11 +381,3 @@ func ValidateCalibration(p SeasonalPattern, industryReturns map[string]map[strin
 	result.Pass = result.TestAccuracy >= result.TrainAccuracy-margin
 	return result
 }
-
-func ValidateAllPatterns(engine *SeasonalEngine, industryReturns map[string]map[string]float64, startYear, endYear int, testFraction, margin float64) []ValidationResult {
-	out := make([]ValidationResult, 0)
-	for _, p := range engine.GetAllPatterns() {
-		out = append(out, ValidateCalibration(p, industryReturns, startYear, endYear, testFraction, margin))
-	}
-	return out
-}
