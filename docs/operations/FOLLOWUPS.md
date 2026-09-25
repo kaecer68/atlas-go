@@ -79,11 +79,15 @@
       現有可用的機器可讀標記只有 snapshot 的 `result.quotes_status="not_attempted"`（未曝露成指標）。
   - **(e) `symbols_ranked_total` 的 stage 在生產無法區分**（label 配對缺陷使該 family 無標籤，
     兩個 stage 共用同一個 series）⇒ weekly 成功一次就會遮蔽「daily 評分死亡」≥ 6 天。
-    **不可**在標籤缺陷修好前加 stage matcher（那會讓規則對現行的無標籤 series 完全不 match
-    = 零偵測）；見 FU-20260925-06。
+    **2026-09-25 更新：已由 #1989 修復**（回呼改傳真標籤 map ⇒ 單標籤 series 不再被丟掉，
+    `symbols_ranked_total` 現在帶 `stage`）⇒ 缺口本身關閉。
+    ⚠️ **但規則層的結論在過渡期內不變、只是理由換了**：TSDB 在 **≤ 6 天**內仍同時保有舊的
+    **無標籤** series（`[6d]` 視窗的長度），期間加 `{stage="daily"}` 會讓舊 series 完全不
+    match = 漏報 ⇒ 仍**不可**加 stage matcher；最早可加的時間見 FU-20260925-11。
   - **(f)** 共同後果：整組規則是「有產出但產出是空的」的偵測器，**不是**萬能心跳。
 - **驗收條件**：（a）（b）各有一條新規則或其等價的 Go 端訊號；（d）-`empty_universe` 有一條
-  Go 端心跳指標；（e）在 label 修好後能把 daily/weekly 分開判定。
+  Go 端心跳指標；（e）已由 #1989 修復，剩下的驗收是「過渡期結束後能把 daily/weekly 分開判定」
+  （FU-20260925-11）。
 
 ---
 
@@ -98,9 +102,13 @@
   1. `AtlasUniverseCoverageBelowFloor`：**沒有 ratio 形態的 series**。只能拿
      `coverage_mapped_total / coverage_total` 相除，但那是「產業母體映射覆蓋」這個**不同維度**
      的訊號（本案是評分階段）；而且累積比值與視窗比值的語意需要現場校準 ⇒ 建議另開一張票。
-  2. `AtlasUniverseRunsPerDayHigh`：`increase()` 在這族**被灌爆的 counter** 上**不等於執行次數**
-     （第 N 輪貢獻的是 N，不是 1 ⇒ 單日兩跑在 N 大時會算出 5、7…），門檻 `> 2` 會隨天數自然誤報。
-     需先修 counter 語意（任務 N），或改用 `_last` / gauge 形態。
+  2. `AtlasUniverseRunsPerDayHigh`：**理由已於 2026-09-25 隨 #1989 改變**。原本的阻礙是
+     「`increase()` 在灌爆的 counter 上不等於執行次數」（第 N 輪貢獻 N，不是 1），
+     #1989 改傳 per-event delta 後該成因消失。**仍未落地**，現在的前置條件是：
+     ① 要數「執行次數」必須先確定所選 series 在**每一次**執行（含失敗與 Step 1/2
+     early-return）都恰好 +1 —— 這是 Go 層的性質，需要測試釘住，不是規則層能保證的；
+     ② 單日門檻需要交易日/假日語意（與 FU-20260925-02 的缺口 (a) 同一張票）。
+     或改用 `_last` / gauge 形態與專用 runs 計數器。
   3. `AtlasUniverseGateInvariantViolated`：與第 1 條**同源**（同一個 expression，只差 severity 與
      `for:`）。不為同一個根因發兩條會各自 paging 的規則；#1971 gate 的 rollback 政策寫在
      `configs/parameters.json` 的 todo，屬業主裁決 —— 若決定自動化，把第 1 條的 severity 升為
@@ -131,40 +139,44 @@
 
 ### FU-20260925-05 — `alignToTarget` 的時區環境相依（註解與行為不一致）
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-25
+- **狀態**：`done`
+- **記錄日期**：2026-09-25 ／ **完成於**：2026-09-25（#1989，任務 N）
 - **來源**：任務 M 實證（規則檔檔頭 (2)）；`cmd/atlas` 內的註解寫「06:00 TW」，
   而容器**不設 `TZ`** ⇒ `alignToTarget` 的 06:00 實際是 **06:00 UTC = 14:00 台北**。
-- **風險**：**註解是錯的，行為是對的** —— 這種不一致最容易讓人照註解去查錯時段
+- **風險（當時）**：**註解是錯的，行為是對的** —— 這種不一致最容易讓人照註解去查錯時段
   （例如在台北時間 06:00 查「為什麼沒跑」，而排程根本還沒到）。
-  已被本團隊實際引用過一次（規則視窗 `[6d]` 的推導就是靠正確的 UTC 事實）。
-- **最小修法建議**：把 `cmd/atlas` 內「06:00 TW」的註解改成「06:00 UTC（容器不設 TZ）＝ 14:00 台北」，
-  或在 compose 明確設 `TZ=Asia/Taipei` 並同步改註解與規則視窗推導。**兩者只能選一**。
-- **指向**：任務 N（counter/label/語意修正包）一起處理，避免同一檔案兩次改動。
-- **驗收條件**：註解、`docker-compose.prod.yml` 的 TZ 設定、以及規則檔的視窗推導三者一致。
+- **實際修法（#1989 選了更強的做法）**：不是改註解了事，而是把觸發時刻**釘死成瞬間** ——
+  `alignToTarget` 改成以 `14:00 Asia/Taipei`（= 06:00 UTC）為目標並用瞬間比較
+  （`universeLocation()`，載不到 IANA tzdata 時用固定 +08:00 後備），
+  日/週兩個 task 的 weekday 判斷也改用同一個時區；`cmd/atlas` 的註解同步改成
+  「14:00 TW = 06:00 UTC」。compose 仍**刻意不設** `TZ`（觸發已與它無關）。
+- **驗收條件**：註解、觸發時刻、規則檔的視窗推導三者一致 ⇒ **已達成**：
+  規則檔檔頭 (2) 段與第 4/5 條的註解都已改成「06:00 UTC(= 14:00 台北)、不隨環境 TZ 漂移」。
 
 ---
 
 ### FU-20260925-06 — 本包（任務 O）之後才能做的事：counter 灌爆與 label 修復是前置條件
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-25
+- **狀態**：`open`（**前置條件已於 2026-09-25 由 #1989 滿足**，剩下的是後續項）
+- **記錄日期**：2026-09-25 ／ **更新**：2026-09-25（#1989 進 main）
 - **來源**：任務 M 的檔頭 (1)(3) 段 + 任務 O 的規則設計約束
-- **現況**：`atlas_universe_*` 這族 counter 被自身累積值灌爆
-  （`internal/monitoring/metrics/degraded.go` 的 `Counter.Inc/Add` 回呼傳的是**累積值**
-  `c.Value()`，而 `internal/monitoring/metrics.go` 的 `RecordCounter` 是**累加**語意
-  ⇒ 第 N 輪之後的輸出 = `x·N(N+1)/2`），而且 label 配對缺陷讓 `symbols_ranked_total` 無標籤
-  （`cmd/atlas/main.go` 的 `onInc` 把標籤**值**清單兩兩配成 name=value）。
-- **順序依賴（硬性）**：
-  1. **counter 灌爆修正（任務 N）先落地** —— 否則任何絕對值門檻、任何 `increase()` 當「執行次數」
-     的用法、以及**啟用持久化 collector**（見 FU-20260925-08）都會放大既有錯誤。
-  2. **label 修復（任務 N）之後**才可以加 stage matcher（`stage="daily"`）——
-     在現行「無標籤 series」上加 `{stage="daily"}` 會讓規則完全不 match，把偵測換成零偵測。
-  3. 上述兩項都完成後，才輪到：`symbols_ranked_total` 的 stage 隔離（缺口 (e)）、
-     `AtlasUniverseCoverageBelowFloor`（FU-20260925-03 第 1 項）、
-     `AtlasUniverseRunsPerDayHigh`（同第 2 項）。
-- **驗收條件**：任務 N 的 PR 內附「灌爆前/後同一天同一時段的數值對照」；label 修好後，
-  `symbols_ranked_total` 帶 `stage` 標籤且第 1 條的 exp 在 promtool 測試中被更新為帶 matcher 的版本。
+- **原現況（歷史）**：`atlas_universe_*` 被自身累積值灌爆（回呼傳 `c.Value()` × `RecordCounter`
+  累加 ⇒ `x·N(N+1)/2`），且 label 配對缺陷讓 `symbols_ranked_total` 無標籤。
+- **#1989 已落地**：回呼改傳 **per-event delta**、標籤改傳**真名 map**
+  （`internal/monitoring/metrics_bridge.go` 的 `CollectorOnInc`，兩處 wiring 共用）⇒ 兩個缺陷都關閉。
+- **仍待辦（順序依賴仍在，只是換了內容）**：
+  1. **別名不得提早移除**：TSDB 在 **≤ 6 天**內同時保有舊標籤形狀 ⇒ 第 2 條的
+     `{daily=…}` / `{weekly=…}` union 在過渡期內**仍必要**（見 FU-20260925-11）。
+  2. **stage matcher 仍不可提早加**：同樣是過渡期理由（舊**無標籤** series 仍在）
+     ⇒ 最早在舊形狀離場後才可加（FU-20260925-11）。
+  3. 之後才輪到：`symbols_ranked_total` 的 stage 隔離、`AtlasUniverseCoverageBelowFloor`
+     （FU-20260925-03 第 1 項）、`AtlasUniverseRunsPerDayHigh`（同第 2 項）。
+  4. **持久化 collector（FU-20260925-08）的硬性前置條件已解除**（灌爆已修），可視為可做的下一步。
+- **本檔的事實陳述已同步**：`monitoring/rules/atlas_universe_scoring_alerts.yml` 的檔頭與
+  第 1–5 條註解/annotations 已在同一個 PR（任務 O 的 re-sync）改成「歷史缺陷 + 過渡期注意」，
+  expr 與 labels 一律未動。
+- **驗收條件**：舊標籤形狀的最後樣本離開 6 天視窗後，（a）可評估移除別名、（b）可加 stage matcher；
+  兩者都要附「過渡期結束」的證據（TSDB 查詢舊形狀回空）。
 
 ---
 
@@ -252,6 +264,35 @@
 
 ---
 
+### FU-20260925-11 — #1989 的**標籤過渡期**：舊形狀離場前，別名不可移除、stage matcher 不可加
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-25（#1989 進 main 後建立）
+- **來源**：`internal/monitoring/metrics_bridge.go` 的 `CollectorOnInc`（#1989）；
+  `monitoring/rules/atlas_universe_scoring_alerts.yml` 檔頭 (3) 段與缺口 (e) 段
+- **現況**：`/metrics` 現在曝露的是**真標籤名**（`{stage="daily",result="failed"}`、
+  `{stage="daily"}`）；但 Prometheus 的 TSDB 對「舊形狀」的 series 不會立刻消失 ——
+  舊形狀的最後一個樣本會留在視窗內，而本檔的視窗是 `[6d]`。
+  ⇒ **過渡期 ≤ 6 天**內，兩組形狀**同時存在**（`{daily="failed"}` 與
+  `{stage="daily",result="failed"}`）。
+- **兩個「不可提早做」的動作（硬性）**：
+  1. **不可移除別名**：第 2 條的 `{daily="passed"}` / `{weekly="passed"}` union 在過渡期內
+     仍**必要**（不是「無害但冗餘」）。移除 ⇒ 舊 series 落在判定之外 ⇒ 漏報。
+  2. **不可加 stage matcher**：第 1 條若加 `{stage="daily"}` ⇒ 舊的**無標籤** series 完全不
+     match ⇒ 變成零偵測（2026-09-25 曾把這條寫成「缺陷修好前不可加」，現在的理由換成
+     「過渡期內不可加」）。
+  ⇒ 規則檔的檔頭與第 5 條註解都已改成這個**有時限的說法**（不是永久禁令）。
+- **最早可評估的時間**：舊形狀的**最後一個樣本**離開 `[6d]` 視窗之後（本次部署在
+  2026-09-25，估 ≈ **2026-10-01 之後**；以 TSDB 查詢舊形狀回空為準，不要憑日期猜）。
+- **屆時要一起做的**：① 移除第 2 條的舊別名運算元；② 評估第 1 條加 `{stage="daily"}`
+  以真正隔離 daily/weekly（缺口 (e) 的完整關閉）；③ 同步更新 promtool 測試的
+  `exp_alerts`（expectation 是逐字比對）。
+- **驗收條件**：`count({__name__=~"atlas_universe_.*",daily=~".+"})` 等舊形狀查詢回空，
+  且移除別名 / 加 matcher 後 promtool 測試全綠、且用「合成舊形狀序列」證明移除後會漏報
+  （負向對照）—— 換句話說：**先證明舊形狀真的沒了，才動規則**。
+
+---
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
@@ -262,13 +303,17 @@
    以及 snapshot（`data/state/universe_snapshot.json`）。
 2. **手動執行 `-build-universe run` 不會更新 Prometheus 的 `atlas_universe_*`**
    （原因：FU-20260925-09）⇒ 「手動跑成功」與「監控看到活動」是兩件事，不可互相證明。
-3. **三條 universe 告警在 metric 缺陷修好前的預期分類**（2026-09-25 實證，07:31:50Z：
+3. **三條 universe 告警在 metric 缺陷期間的預期分類**（2026-09-25 實證，07:31:50Z：
    `ranked=150`、`quotes_returned=1301`）：
    - `AtlasUniverseRankedZero` ＝ **真陽性**
    - `AtlasUniverseScreeningAllRejected` / `AtlasUniverseQuotesMissing` ＝
      **metric 缺陷期間的預期假陽性（unexpected-false-positive）**
    判讀時先確認 metric 面的缺陷狀態，再決定這三條是訊號還是假象；
    任務 O 新增的第 4/5 條同理（它們的 peer gate / 分工就是為了不製造新的假象）。
+   ⚠️ **適用範圍（2026-09-25 更新）**：這段只適用於**修復前的歷史判讀** ——
+   counter 灌爆與 label 配對缺陷已由 **#1989** 於 2026-09-25 修復。
+   修復之後若又看到 `AtlasUniverseScreeningAllRejected` / `AtlasUniverseQuotesMissing`，
+   那是**真訊號**，不要再用這條註記把它當假陽性。
 
 ---
 

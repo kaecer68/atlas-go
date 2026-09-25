@@ -128,8 +128,8 @@ tests:
              grep -rn "symbols_screened_total" internal/monitoring/
              (正確位置:`internal/monitoring/metrics/universe.go` 的 name 欄位 +
               `internal/monitoring/universe_scheduler.go` 的 `um.SymbolsScreened...Add`)。
-          5. ⚠️ 不要用 counter 絕對值判斷(這族被自身累積值灌爆,見檔頭 (1))。
-            本條與數值無關,只看 family 在不在。
+          5. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界;歷史上的灌爆缺陷已由
+            #1989 於 2026-09-25 修復,見檔頭 (1))。本條與數值無關,只看 family 在不在。
         runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md
   - eval_time: 60m
     alertname: AtlasUniverseEmptyFiltered
@@ -192,7 +192,9 @@ tests:
              因為 Step 3 根本沒跑)。
           2. 看 `filtered_total` 的**兩個桶**對不對:
              curl -s localhost:18080/metrics | grep '^atlas_universe_symbols_filtered_total'
-             industry_filter 桶應該在 0 附近(它被 Add 的是 len(filtered) = 0),
+             industry_filter 桶應該在 0 附近 —— 在 empty_filtered 期間它**真的是 0**
+             (每次被 Add 的都是 len(filtered) = 0;#1989 之後該桶反映真值,
+             所以它為 0 是事實、不是缺陷),
              dropped 桶應該 ≈ 母體大小(例:1599)。對照日誌:
              docker logs atlas-go --since 48h 2>&1 | grep -E 'symbols_gathered|industry_filter_ok'
              (`industry_filter_ok` 會印 input=1599 output=0)
@@ -210,7 +212,8 @@ tests:
           5. 若容器重啟後**每一次**執行都停在 Step 2,`symbols_screened_total` 從來沒有
              存在過 ⇒ 本條不成立,**改由第 4 條 firing**(那是刻意的分工:一個負責
              「family 不存在」、一個負責「family 存在但零增量」)。
-          6. ⚠️ 不要用 counter 絕對值當門檻(灌爆缺陷,見檔頭 (1))。
+          6. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界;灌爆缺陷已由 #1989 於
+             2026-09-25 修復,見檔頭 (1))。
         runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md
   - eval_time: 60m
     alertname: AtlasUniverseScreenedFamilyMissing
@@ -293,8 +296,8 @@ tests:
              grep -rn "symbols_screened_total" internal/monitoring/
              (正確位置:`internal/monitoring/metrics/universe.go` 的 name 欄位 +
               `internal/monitoring/universe_scheduler.go` 的 `um.SymbolsScreened...Add`)。
-          5. ⚠️ 不要用 counter 絕對值判斷(這族被自身累積值灌爆,見檔頭 (1))。
-            本條與數值無關,只看 family 在不在。
+          5. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界;歷史上的灌爆缺陷已由
+            #1989 於 2026-09-25 修復,見檔頭 (1))。本條與數值無關,只看 family 在不在。
         runbook_url: https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md
   - eval_time: 60m
     alertname: AtlasUniverseEmptyFiltered

@@ -307,8 +307,13 @@ $ gh pr list --state open
 >   （Step 2 early-return）→ **已落地**為同檔第 4/5 條（任務 O，PR
 >   `feat/monitoring-gaps-and-ttl-o`）；`empty_universe` **仍不覆蓋**（需 Go 端心跳指標）。
 > - 本節草案 (3)(4)(5) → **刻意仍未落地**，理由（不是遺漏）逐條寫在同檔檔頭與
->   `FOLLOWUPS.md` 的 FU-20260925-03；前置條件（先修 §7.2 灌爆、先修 label）寫在
->   FU-20260925-06。
+>   `FOLLOWUPS.md` 的 FU-20260925-03。
+> - **2026-09-25 後續（#1989，任務 N）**：§7.2 的 counter 灌爆與 §7.3 的 TZ 相依**都已修復**
+>   （回呼改傳 per-event delta、標籤改傳真名 map、觸發時刻釘成 `14:00 Asia/Taipei`
+>   的瞬間）。因此 FU-20260925-06 的兩個「硬性前置條件」**已解除**；
+>   但草案 (4) 的理由換了（要數「執行次數」需先釘住 series 每次執行恰好 +1），
+>   而 (3)(5) 的理由不變。**過渡期注意**：TSDB 在 ≤ 6 天內仍同時保有舊標籤形狀
+>   ⇒ 別名不可提早移除、stage matcher 不可提早加（FU-20260925-11）。
 > - **標籤事實修正**：草案用的是「最後一次執行」的 `_last` 形態；生產**沒有**這種 series，
 >   只有 `_total` counter，且該族被自身累積值灌爆（§7.2）⇒ 落地版的判定一律只用
 >   `increase(...)` 的「零 / 非零」，檔頭 (1) 明文禁止改回「大於某個數字」的門檻。
@@ -421,6 +426,12 @@ groups:
   （本容器存活期間沒有 `coverage_check` label 的 series ⇒ 該區塊在本輪未執行。）
 
 ### 7.2 `atlas_universe_*` 計數器被自己的累積值灌爆（quadratic）
+
+> **後續狀態（2026-09-25）**：**已由 #1989（任務 N）修復** —— `OnInc` 回呼改傳
+> per-event delta（`Inc`→1、`Add(n)`→n），並集中在
+> `internal/monitoring/metrics_bridge.go` 的 `CollectorOnInc`（兩處 wiring 共用）。
+> 本節的數值保留為「修復前實際觀測」的證據。
+> ⚠️ 修復**不等於**可以用絕對值門檻：這是無上界的累積 counter（見規則檔檔頭 (1)）。
 `internal/monitoring/metrics/degraded.go:73-78`：
 
 ```go
@@ -456,6 +467,12 @@ func (c *Counter) Add(n int64) {
   同一族的觀測管線缺陷。
 
 ### 7.3 `alignToTarget` 使用**容器時區**，實際觸發時間是 06:00 UTC（= 14:00 台北），非 06:00 TW
+
+> **後續狀態（2026-09-25）**：**已由 #1989（任務 N）修復** —— 觸發時刻改為寫死的
+> `14:00 Asia/Taipei`（= 06:00 UTC）並以瞬間比較（`universeLocation()`），
+> 日/週 task 的 weekday 判斷也用同一個時區 ⇒ 不再隨 host/container `TZ` 漂移；
+> `cmd/atlas` 的註解同步更正。**觸發的瞬間與本節記述相同（06:00 UTC）**，
+> 也就是這次修的是「可讀性與漂移風險」，不是排程時間。
 `internal/monitoring/universe_scheduler.go:621-630`：
 
 ```go
