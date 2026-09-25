@@ -1,5 +1,12 @@
-# iMac production — atlas 完整 stack (C-pg1 + monitoring)
-# 使用: cd /Users/kk/workspace/atlas && docker compose -f docker-compose.prod.yml up -d
+# Mac Mini production — atlas 完整 stack 文件化參考 (C-pg1 + monitoring)
+# 使用: cd ~/workspace/atlas && docker compose -f docker-compose.prod.yml up -d
+#
+# ⚠️ 本檔是「文件化參考」，**不是**目前 live 容器的定義來源：
+#   Mac Mini 上實際在跑的所有容器（atlas-go / atlas-prometheus / atlas-alertmanager /
+#   atlas-grafana / atlas-cron-*）其 compose 檔案是 **repo 根的 `docker-compose.yml`**
+#   （以 `docker inspect` 的 `com.docker.compose.project.config_files` 可查證）；
+#   monitoring 掛載在那裡寫成 `./monitoring/…`（相對 repo 根）。
+#   本檔的 monitoring 掛載源一律以 repo 的 `monitoring/`（唯一權威樹）為準。
 #
 # 架構 (C-pg1):
 # - postgres: atlas-postgres container (:55432, timescale, 獨立)
@@ -14,7 +21,7 @@ services:
     ports:
       - "18080:18080"
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - ATLAS_ENV=production
       - ATLAS_LOG_LEVEL=info
@@ -63,11 +70,11 @@ services:
     ports:
       - "18081:18081"
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - FUBON_PROXY_PORT=18081
     volumes:
-      - /Users/kk/.config/atlas-go/.fubon-env:/home/appuser/.config/atlas-go/.fubon-env:ro
+      - ${HOME}/.config/atlas-go/.fubon-env:/home/appuser/.config/atlas-go/.fubon-env:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -111,9 +118,16 @@ services:
     container_name: atlas-prometheus
     ports:
       - "9090:9090"
+    # ⚠️ monitoring 設定只有一棵權威樹 = repo 的 `monitoring/`（2026-09-25 加註）。
+    #    `~/workspace/atlas-monitoring/` 是 **iMac 時代的歷史殘留**，**不是**生產掛載源 ✗；
+    #    2026-08-27 就有人把 target-down 規則寫進那棵錯的樹 → 生產 Prometheus 27 天沒載入。
+    #    改任何 monitoring 設定前，先看實際掛載源：
+    #      docker inspect atlas-prometheus atlas-alertmanager \
+    #        --format '{{.Name}} :: {{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}'
+    #    `scripts/drift-check.sh` [9/9] 會自動斷言掛載源落在 repo 的 `monitoring/`。
     volumes:
-      - /Users/kk/workspace/atlas-monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - /Users/kk/workspace/atlas-monitoring/rules:/etc/prometheus/rules:ro
+      - ${HOME}/workspace/atlas/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${HOME}/workspace/atlas/monitoring/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -129,15 +143,17 @@ services:
     container_name: atlas-grafana
     ports:
       - "3001:3000"
+    # dashboards / provisioning / datasources 權威樹 = repo 的 `monitoring/grafana/`。
+    # ✗ 不要用 `~/workspace/atlas-monitoring/grafana/`（iMac 時代歷史殘留，非生產掛載源）。
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - /Users/kk/workspace/atlas-monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - /Users/kk/workspace/atlas-monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - /Users/kk/workspace/atlas-monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ${HOME}/workspace/atlas/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ${HOME}/workspace/atlas/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ${HOME}/workspace/atlas/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -147,12 +163,14 @@ services:
     container_name: atlas-alertmanager
     ports:
       - "9093:9093"
+    # alertmanager.yml 權威樹 = repo 的 `monitoring/alertmanager.yml`。
+    # ✗ 不要用 `~/workspace/atlas-monitoring/alertmanager.yml`（iMac 時代歷史殘留）。
     # 注入 telegram bot token (PR #1707 — 不 commit token 進 git; 絕對路徑與
     # atlas/fubon-proxy 同模式, 避免 env_file 相對路徑依 compose 位置解析)
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     volumes:
-      - /Users/kk/workspace/atlas-monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${HOME}/workspace/atlas/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
