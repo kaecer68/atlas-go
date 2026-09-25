@@ -554,16 +554,23 @@ func (c *TWSEClient) GetDailyQuote(ctx context.Context, date string, symbol stri
 }
 
 // convertToQuote 将 TWSE 数据转换为 domain.Quote
+//
+// STOCK_DAY_ALL 的數值欄位必須容忍千分位逗號：舊版 JSON 形狀（fields/data）
+// 輸出 "22,871,974" / "1,566.00"，CSV 形狀（2026-06-30 起）目前不含逗號但無
+// 契約保證。convertDailyRowToQuote 一直都有 stripCommas，這裡漏了 —— 而
+// Volume 解析失敗是**靜默**的（`volume, _ :=`），會留 0；0 乘價格後必然低於
+// universe 的 NT$10M 成交量門檻，於是整批股票無聲落榜（與 #1944 I25 同一類
+// 失敗：看似市場判決，其實是解析缺陷）。故與 convertDailyRowToQuote 對齊。
 func (c *TWSEClient) convertToQuote(twse TWSEQuote) (domain.Quote, error) {
-	last, err := strconv.ParseFloat(twse.ClosingPrice, 64)
+	last, err := strconv.ParseFloat(stripCommas(twse.ClosingPrice), 64)
 	if err != nil {
 		return domain.Quote{}, fmt.Errorf("parse closing price: %w", err)
 	}
 
-	open, _ := strconv.ParseFloat(twse.OpeningPrice, 64)
-	high, _ := strconv.ParseFloat(twse.HighestPrice, 64)
-	low, _ := strconv.ParseFloat(twse.LowestPrice, 64)
-	volume, _ := strconv.ParseInt(twse.TradeVolume, 10, 64)
+	open, _ := strconv.ParseFloat(stripCommas(twse.OpeningPrice), 64)
+	high, _ := strconv.ParseFloat(stripCommas(twse.HighestPrice), 64)
+	low, _ := strconv.ParseFloat(stripCommas(twse.LowestPrice), 64)
+	volume, _ := strconv.ParseInt(stripCommas(strings.TrimSpace(twse.TradeVolume)), 10, 64)
 
 	return domain.Quote{
 		Symbol:     twse.Code,

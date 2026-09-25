@@ -18,6 +18,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
@@ -393,7 +394,18 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 		normalizedUniverse[i] = normalizeSymbol(sym)
 	}
 
-	survivors := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	survivors, stats := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	// "0 ranked" has several very different causes and one of them (a quote
+	// provider that answers without a volume field) already looked like a
+	// market verdict once — issue #1944 I25. The breakdown is logged on every
+	// run so a filter wipe-out is attributable from the production log alone.
+	logging.Info("universe_builder", "scoring_filters",
+		"input", stats.Input,
+		"no_quote", stats.NoQuote,
+		"zero_volume", stats.ZeroVolume,
+		"below_turnover_floor", stats.BelowTurnoverFloor,
+		"below_price_floor", stats.BelowPriceFloor,
+		"survivors", stats.Passed)
 
 	// Binary pass/fail via the injected screener.
 	// Per screener contract errors are non-fatal; fall back to the survivors.
@@ -411,24 +423,73 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 	return ranked
 }
 
+// filterStats attributes every symbol that left the Layer-2 volume/price
+// filter to exactly one cause, so the operator can tell "the provider sent no
+// volume field" (a provider/unit defect) apart from "the market is thin" (a
+// genuine verdict). The two produced the same empty ranking before.
+type filterStats struct {
+	// Input is the number of candidate symbols handed to the filter.
+	Input int
+	// NoQuote counts symbols the provider returned no quote for. The default
+	// TWSE provider covers listed names only, so the 上櫃 part of the
+	// population lands here.
+	NoQuote int
+	// ZeroVolume counts symbols whose quote carries Volume == 0 (未成交 rows
+	// and any provider that does not populate the field). A provider-wide
+	// zero is indistinguishable from a thin market without this counter.
+	ZeroVolume int
+	// BelowTurnoverFloor counts symbols whose Volume*Last is under
+	// VolumeFloorTWD while carrying a non-zero volume.
+	BelowTurnoverFloor int
+	// BelowPriceFloor counts symbols priced under PriceMin.
+	BelowPriceFloor int
+	// Passed is the number of survivors.
+	Passed int
+}
+
 // applyVolumeAndPriceFilters drops symbols that lack quotes or fail the
-// approximate-TWD-volume or last-price thresholds.
-func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes map[string]domain.Quote) []string {
+// approximate-TWD-volume or last-price thresholds, and reports why.
+func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes map[string]domain.Quote) ([]string, filterStats) {
+	stats := filterStats{Input: len(universe)}
 	var survivors []string
 	for _, sym := range universe {
 		q, ok := quotes[sym]
 		if !ok {
+			stats.NoQuote++
 			continue
 		}
-		// Approximate TWD volume: Volume * Last. Proper ADV would require
-		// HistoricalPrices; see SP4 §9.
+		if q.Volume == 0 {
+			stats.ZeroVolume++
+			continue
+		}
+		// Approximate TWD volume: Volume * Last. This product is only a TWD
+		// turnover if Volume is a SHARE count (股), which is what the TWSE
+		// first-party field 成交股數 carries. It is NOT true for every
+		// provider: the Fugle and Fubon market-data clients report
+		// 成交張數 (LOTS) for regular-board stocks (official docs: "整股：成交
+		// 張數"; fubon-neo embeds the Fugle marketdata client), and
+		// server-side they put that value into domain.Quote.Volume unchanged.
+		// A lot-denominated quote understates turnover 1000x, so with a
+		// Fugle/Fubon quote behind the pipeline this floor drops nearly the
+		// whole population and the resulting small ranking is NOT a market
+		// verdict. Tracked in the scale report for issue #1944 I25; the fix is
+		// a provider-boundary normalisation, which is a cross-module decision
+		// (ledger history, dashboard display, screener criteria all read the
+		// same field).
+		// Proper ADV would require HistoricalPrices; see SP4 §9.
 		approxTWD := float64(q.Volume) * q.Last
-		if approxTWD < s.VolumeFloorTWD || q.Last < s.PriceMin {
+		if approxTWD < s.VolumeFloorTWD {
+			stats.BelowTurnoverFloor++
+			continue
+		}
+		if q.Last < s.PriceMin {
+			stats.BelowPriceFloor++
 			continue
 		}
 		survivors = append(survivors, sym)
 	}
-	return survivors
+	stats.Passed = len(survivors)
+	return survivors, stats
 }
 
 // scoreAndRank produces RankedSymbol entries with weighted scores and
