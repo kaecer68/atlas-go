@@ -145,7 +145,7 @@ func resolveTAIEXValue(snapshots []marketdata.MacroDataSnapshot, i int) float64 
 //     counted in VolatileTests only — they are NOT added to TotalTests and NOT
 //     counted as misses.
 //   - Any other (unset/unknown) Direction falls back to the up/down path so
-//     behaviour for existing registries is unchanged.
+//     behavior for existing registries is unchanged.
 //
 // Edge cases:
 //   - fewer than forwardLookback+1 snapshots → skip evaluation (return 0/0/0)

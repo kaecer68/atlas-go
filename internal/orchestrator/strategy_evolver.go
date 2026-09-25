@@ -421,7 +421,7 @@ func (e *StrategyEvolver) ApplySectorRotation(
 		// wiring them (see composition.SharedSectorInputs) is a prerequisite but
 		// not sufficient. Pinned by
 		// TestApplySectorRotation_SuppliesNoDriverDeltas; supplying deltas here is
-		// a deliberate behaviour change that must flip
+		// a deliberate behavior change that must flip
 		// SectorDriverDeltasSupplied and update docs/reference/inert-registry.md.
 		target, cerr := e.weightEngine.ComputeProjectedTarget(context.TODO(), drivers)
 		if cerr != nil {

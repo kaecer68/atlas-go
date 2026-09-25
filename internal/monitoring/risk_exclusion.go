@@ -230,7 +230,7 @@ func (f *RiskExclusionFilter) checkDrawdown(symbol string, r *RiskExclusionResul
 // returned silently, so the production wiring that passed a nil QuoteProvider
 // (N-U7) made Layer 2.5's liquidity rule inert with no trace in the results.
 //
-// The skip stays a pass (not fail-closed): changing it would alter behaviour
+// The skip stays a pass (not fail-closed): changing it would alter behavior
 // for every symbol the provider does not cover. This change only makes the
 // skip visible.
 func (f *RiskExclusionFilter) checkLiquidity(symbol string, quoteBySymbol map[string]domain.Quote, r *RiskExclusionResult) {

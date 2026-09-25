@@ -93,7 +93,7 @@ type Root struct {
 //     until macro pipeline provides MacroDataSnapshot (future)") even though
 //     the dashboard already runs a DynamicEnvModulator over live macro data.
 //
-// Nil fields keep the fallback behaviour for that single driver only.
+// Nil fields keep the fallback behavior for that single driver only.
 type SharedSectorInputs struct {
 	Cycle    sectorallocation.CycleInputProvider
 	Seasonal sectorallocation.SeasonalInputProvider

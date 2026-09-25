@@ -18,7 +18,7 @@ import (
 // used by several agents is not computed anywhere in this repo.
 //
 // The field is kept because the agent registry schema is shared with the
-// dashboard/prompt layer; the declaration is therefore explicitly labelled
+// dashboard/prompt layer; the declaration is therefore explicitly labeled
 // inert instead of silently implying that agents are scored on those metrics.
 // This constant is pinned by a test so the status cannot drift back to
 // "assumed active" without evidence.

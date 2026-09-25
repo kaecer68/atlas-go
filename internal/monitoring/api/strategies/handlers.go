@@ -214,7 +214,7 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 				// Never overwrite hit_rate with 0 here — that would turn
 				// "not measurable" into a fake "zero hit rate". Keep the
 				// registry prior and declare its scope/source instead
-				// (requirement: prior constants must be labelled).
+				// (requirement: prior constants must be labeled).
 				s.HitRateScope = HitRateScopeVolatileOnly
 				s.HitRateSource = HitRateSourceSeed
 			}
