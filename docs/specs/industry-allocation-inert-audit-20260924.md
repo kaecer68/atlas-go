@@ -500,3 +500,28 @@ go test ./internal/orchestrator/ -run 'MarketDataProvider|SelectProvider|Allowed
 | `TestAllowedEnvVarsDocDoesNotClaimFubon` | 直接讀 `configs/allowed_env_vars.md`：該列必須列出 `` `twse`/`fugle`/`hybrid` ``，且不得再把 `fubon` 寫成 backticked 值（文件漂回舊說法即紅燈） |
 
 **與 §9.6 的關係**：§9.6 已記載「`ATLAS_MARKET_DATA_PROVIDER=fubon` 不是 `selectProvider` 的分支 … 會靜默落到 hybrid，而 `configs/allowed_env_vars.md` 卻把它列為合法值」。本節即該事實的處置。
+
+### 10.4 I23 前端文案 → **接線（來源標記 → 前端呈現）+ 文案改正**
+
+| 項目 | 內容 |
+|---|---|
+| 舊況（現行 main 實證） | `shared_web/static/js/pages/narrative.js` 的模型卡與模板表頭寫「歷史命中率」（`fmtSafePct(m.hit_rate)`，且固定用 `--color-success` 上綠色）；`capital-models.js` 同一個 `/api/narrative/models` 資料源也寫「歷史命中率」；`capital-causality.js` 的模板 badge 寫「命中率」；`client_web/static/index.html` 的因果頁說明寫 `hit_rate（歷史命中率）`。但 shipped 值 **100% 是手寫先驗常數**（`internal/narrative/templates.go` 的 24 個 `HistoricalHitRate` 字面值、`knowledge_base.go` 的 model `HitRate`），唯一的量測路徑（replay 評估）只在記憶體重算且不持久化 |
+| 後端契約（#1979 / Batch 3 I23，本批只讀） | `hit_rate_source` 已貫穿 `InvestmentModel`（`/api/narrative/models` → `models[].hit_rate_source`）與 `CausalTemplate`（`/api/narrative/templates` → `templates[].hit_rate_source`）；權威定義 `internal/narrative/hitrate_provenance.go`（`handwritten_prior`/`replay_eval_in_memory`/`unavailable_no_samples`/`unavailable_no_template`/`not_populated`/`mixed`）。**本批未新增後端欄位** |
+| 處置 | 新增單一權威前端 helper `shared_web/static/js/shared/narrative-hit-rate.js`（來源字串 → 對外文字／badge／tooltip／顏色；未知或欄位缺失回「來源不明」），三個頁面共用；主標籤改為 **`先驗命中率`**（刻意不含「歷史」「回測」「實測」「勝率」「已量測」），並在值旁呈現來源 badge；`unavailable_*`／`not_populated` 的 0 一律呈現「無法量測／未知」而**非 0%**（0 代表未知，不是零準確率）；先驗數值不再用綠／紅上色（避免暗示已量測績效） |
+| 逐檔 before → after | `narrative.js` 模型卡：`歷史命中率 65.0%`（綠/紅）→ `先驗命中率 65.0%` ＋ badge `手寫先驗，未校準`（muted）；`narrative.js` 模板表頭／儲存格：`歷史命中率` / `55.0%`（固定綠）→ `先驗命中率` / `55.0% / 手寫先驗，未校準`；`capital-models.js`：`歷史命中率` → `先驗命中率` ＋來源 badge；`capital-causality.js`：badge `命中率 55.0%` → `先驗命中率 55.0%` ＋ badge `手寫先驗，未校準`；`client_web/static/index.html`：`hit_rate（歷史命中率）` → `hit_rate（先驗命中率 — 手寫先驗常數，尚未回測校準；來源另見 hit_rate_source）` |
+
+**證據（可重跑）**
+
+```bash
+cd admin_web && npm run test        # 1..492 / # pass 492 / # fail 0
+bash scripts/ci/build_all_frontends.sh
+bash scripts/ci/check_field_contract.sh --strict
+bash scripts/ci/check_frontend_imports.sh
+npx playwright test tests/capital-pages.spec.js   # 2 passed（未改該測試）
+```
+
+| 測試名 | 釘住的行為 |
+|---|---|
+| `narrative-hit-rate-source.test.mjs`（21 個） | (a) 六個來源映射 ＋ 未知 fallback；(b) 先驗文案**不含**「歷史／回測／實測／勝率／已量測」且主標籤為 `先驗命中率`；(c) 0 值在 `unavailable_*`／`not_populated` **不得**出現 `0.0%`（結構式 `/>0\.0+%</` 斷言）；(d) 三頁必 import helper、不得再出現「歷史命中率」、不得未帶來源就格式化 hit_rate；(e) stub-DOM 直呼 `renderCapitalModels`／`renderCapitalCausality` 驗證實際輸出文字；(f) `client_web/static/index.html` 逐字守門 |
+
+**弱證據（明示）**：`replay_eval_in_memory` / `not_populated` / `mixed` 三種來源在 shipped 資料不會出現（100% `handwritten_prior`），其文案只有單元測試覆蓋、**無真實 API 樣本驗證**；`capital-causality.js` 的驗證靠 stub DOM（非完整瀏覽器 SPA 路徑）。
