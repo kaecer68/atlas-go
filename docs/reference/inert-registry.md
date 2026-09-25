@@ -3,8 +3,8 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | 「producer 有、consumer 無」「狀態宣稱生效但實際 inert」「死碼」的**單一登記處**，避免同一類缺陷（靜默失效）反覆被發現又重新遺忘 |
-| 狀態 | v2（2026-09-24，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2） |
-| Batch 2 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（剩餘項、新發現 N-*、可重跑證據） |
+| 狀態 | v3（2026-09-25，issue [#1944](https://github.com/kaecer68/atlas-go/issues/1944) Batch 1 + Batch 2 + Batch 3） |
+| Batch 2／Batch 3 權威盤點 | [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md)（Batch 2 §4/§5；**Batch 3 §9**：高嚴重項逐項處置、新發現 N-A5、仍未處理清單、可重跑證據） |
 | 判定法 | 對每個欄位／參數／旗標問三題：**有 producer 嗎？有 consumer 讀嗎？有測試嗎？** 三者缺一即列入 |
 | 上游盤查 | `~/workspace/atlas-notes/03-system-health/2026-09-24-industry-hitrate-survey.md` §6（Q6，I1–I36） |
 | 相關規格 | [`../specs/sector-allocation-simulation-closure-spec.md`](../specs/sector-allocation-simulation-closure-spec.md)（§8.3 application truthfulness）、[`../specs/industry-hitrate-metric-spec.md`](../specs/industry-hitrate-metric-spec.md)（命中率口徑） |
@@ -48,15 +48,67 @@
 | 新 N-C1 | `industry.composite_card` config 已填滿但 `defaultCardConfig()` 回硬編碼副本 | 改 config 無效 | **接線**：`defaultCardConfig()` 疊加 config（空/零值保留預設）；shipped config 與硬編碼值相同 ⇒ 今日行為中性 | `internal/industry/cycle_status_card.go`（`applyCompositeCardConfig`） |
 | 新 E1-E3 | 對外硬寫「已生效」：`period_weight_applied: true`（MCP narrative）、`appliedCount++` 不看 `SetParameter` 錯誤、`"calibrated": true` 無條件 | 對外宣稱生效 | **修正**：E1 改 `false` + 誠實 note；E2 先寫入後記錄（全失敗 verdict=`failed`）；E3 改由 `industry.CalibrationApplied()` 推導 | `cmd/atlas-mcp/server/tools_narrative.go`、`internal/config/calibrator.go`、`internal/monitoring/api/industry/handlers.go`；測試 `TestCalibrationApplied_DerivedFromEvidence` |
 
-### Batch 2 剩餘（仍 inert，未修；逐項 file:line 與建議見 spec §4/§5）
+### Batch 2 剩餘（原清單；**Batch 3 已逐項複核並就地標註**，見下方 Batch 3 表與 spec §4/§5）
 
-- **I4/I12/I13**：產業預測 prior 恆 0、composition 路徑 macro/factor driver 硬寫 0、`CycleTracker` 只有 config seed（且 `SetCompositionRoot` 零呼叫者）。
-- **I17/I23**：季節 pattern per-pattern 校準欄位無 producer、narrative 模板 HitRate 是手寫常數卻對外稱「歷史回測命中率」。
-- **I25/N-U1..U7**：智慧母體 quote provider 寫死 nil ⇒ `symbols_ranked=0`（生產 artifact 實證）、Layer 2.5 流動性排除從未生效。
-- **I5/I6/I19/I32/N-P1..P4**：產業預測整條預設關閉且無落地、LLM sector agent 因 executor 註冊順序不可達、`NewDriverAdapter` 死碼。
-- **I24/I31/I16**：`BuildScorecards` 未過濾 synthetic（生產 56%）、`calibration-validate` 實跑 `OK=false` 但 CI 仍 success、心法 `volatile` 恆 0 命中。
-- **I21/I36**：選股勝率 executor 在現行資料下 inert（生產者半邊已由 #1949 修）、Darwinian 15/21 agent 無訊號（部分回歸）。
-- **I18/I27/I28/I29/I30/I7/I15**：死碼與監控/覆蓋率失效。
-- **新 N-C1（`max_daily_weight_change` 假風控，高）**、N-A2/N-A3/A4（applied trace 位置、`RecordSession` 在 applied=false 也計數、preflight 路徑不符）。
+- **I4/I12/I13** → **Batch 3 已處理**：I12/I13 接線（共享 dashboard 驅動器與 tracker）；I4 prior 接線、cycle 明示未啟用。
+- **I17/I23** → **Batch 3 已處理**：health 明示未知＋消費端 clamp；narrative HitRate 全面加 `hit_rate_source` 來源標記。
+- **I25/N-U1/N-U3/N-U4/N-U7** → **Batch 3 已處理**：quote provider 接線、snapshot schema 統一、D6 可達、liquidity skip 可見。**N-U2/N-U5/N-U6 仍未處理**。
+- **I5/I6/N-P3/N-P4** → **Batch 3 已處理**（明示未啟用／明示未落地／明示 reserved／明示無模板）。**I19/I32/N-P1/N-P2 仍未處理**。
+- **I16/I31** → **Batch 3 已處理**（I16 明示方向不可量測＋對外 scope；I31 判定機讀化，**CI 吞失敗半邊明示未生效**）。**I24 仍未處理**。
+- **I15** → **Batch 3 已處理**（明示未啟用）。**I7/I18 仍未處理**。
+- **I21/I36/I18/I27/I28/I29/I30**：仍未處理（見 spec §4）。
+- **N-C1** → **Batch 3 已處理**（明示未啟用＋防再犯契約）。**N-C3/N-A1..A4 仍未處理**。
 
 > 未修項一律已登記（本表 + spec §4/§5），不留在註解口頭帶過。
+
+## Batch 3（已處置，#1944，2026-09-25）
+
+> 完整證據、逐項 file:line、可重跑命令與「仍未處理」清單見 [`../specs/industry-allocation-inert-audit-20260924.md`](../specs/industry-allocation-inert-audit-20260924.md) §9。本節只登記**處置結論**與機讀旗標。
+> 基準：`origin/main@f7fcd74d`；分支 `fix/20260925-inert-batch3`。每項結論皆為「接線／明示未啟用／移除」之一，無一項靜默。
+
+| # | 項目 | 原症狀 | 處置 | 機讀旗標／對外欄位 | 證據 |
+|---|---|---|---|---|---|
+| **N-C1** | `industry.max_daily_weight_change` 假風控 | config 宣告 5% 日權重變動上限，全 repo 無 reader ⇒ operator 以為有保護 | **明示未啟用**（值 0.05 與行為不變）：`rationale`/`todo` 明寫 `NOT ENFORCED` + 語意未定的原因 | `GET /api/parameters/metadata` 的 `rationale`/`todo` | `TestShippedConfigMaxDailyWeightChangeIsDeclaredUnenforced`、`TestMaxDailyWeightChangeHasNoConsumer`（掃非測試碼 0 reader，reader 出現即紅燈） |
+| **I12** | composition 路徑 macro/factor driver 硬寫 0 | 模擬路徑吃 stub，dashboard 的真 SeasonalModulation 只有自己用 | **接線**：新增 `composition.SharedSectorInputs` + `Root.WithSharedSectorInputs`；macro tilt 改由 dashboard `DynamicEnvModulator` 推導 | `SectorFactorDriverWired=false`（factor 仍中立 0，明示） | `TestSetCompositionRoot_SharesDashboardIndustryState`（tilt == modulator tilt == −0.05）、`TestBuildWeightEngine_UsesSharedSectorInputs` |
+| **I13** | 兩個 `CycleTracker` 不同步 | root 自建 config-seeded tracker，真資料在 dashboard 另一個實例 | **接線**：`DashboardAPI.SetCompositionRoot`（原本零呼叫者）改為共享 dashboard 的 cycle/seasonal/linkage/macro 輸入；`cmd/atlas/main.go` 首次呼叫 | — | 同上（wiring 後改 dashboard tracker，root engine multiplier 隨之變動）；`-race` 乾淨 |
+| **N-C2** | `SetCompositionRoot` 零呼叫者 | 宣告才成立的綁定從未被呼叫 | **已解**（由 I12/I13 一併處理） | — | 見 I12/I13 |
+| **I31** | `calibration-validate` 實跑 `OK=false` 但 CI step 仍 success、Slack 未設 | 失敗被吞、零告警 | **判定機讀化**（本批）＋**CI 半邊明示未生效**： nightly job 的 `set +e` + 非最終 `cat` 使 step 恆 success；修法需 `.github/**` 一行（本批 lane 邊界），精確 patch 與前提見 spec §9.2 | `--format=json` 新增 `Findings[]{code,severity,segment,message}`（13 code）；`Issues` 保留、exit 仍 1 | `TestValidateCalibration_FindingsAreClassified`、`TestShippedConfigIntegrityFindingsAreClassified`（出貨 config exact-set） |
+| **I25** | 母體 quote provider 寫死 nil ⇒ `symbols_ranked=0` | 排程路徑無 quote ⇒ 全數被量價過濾丟棄 | **接線**：`newUniverseQuoteProvider` → `orchestrator.NewGatewayBackedProvider`；CLI `-build-universe run` 改走同一管線 | snapshot `quotes_status`/`quotes_returned`/`ranked_fallback_reason`/`ranked_trustworthy` | `TestNewUniverseBuilderDeps_WiresRealQuoteProvider`、`TestBuildUniverseQuotesStatusOK`、`TestBuildUniverseNilQuoteProviderIsExplicit` |
+| **N-U7** | Layer 2.5 流動性排除從未生效 | nil quote provider ⇒ 檢查永遠 skip 且無痕跡 | **接線**（與 I25 共用 provider）＋**skip 不再靜默**（INFO `RuleDetail`） | `RuleDetail`（`liquidity`） | `TestRiskExclusionLiquidityEvidence`、`TestNewUniverseBuilderDepsWithQuotes_SharesProviderWithRiskFilter` |
+| **N-U1** | `--build-universe run` 永遠錯誤 | MockProvider + nil symbols ⇒ 恆失敗 | **接線**（移除 mock 路徑，委派 `monitoring.BuildUniverse`） | untrustworthy 時 CLI 非零退出 | `TestBuildUniverseStatus_ReadsCanonicalSnapshot`／`_RejectsLegacySchema`（CLI 端無端到端測試，弱證據） |
+| **N-U3** | 同一 snapshot 兩套 schema（互讀為 0） | 排程與 CLI 各寫一套，讀方靜默 0 | **統一**：`UniverseSnapshotPath`／`SaveUniverseSnapshot`／`LoadUniverseSnapshot` 單一權威 | 舊 schema 讀取回明確 `incompatible schema` | `TestSnapshotSchemaIsSingleAndCanonical`、`TestBuildUniverseStatus_RejectsLegacySchema` |
+| **N-U4** | D6 watchlist consumer 不可達 | 依賴恆空 `ranked` ⇒ 門檻永不成立 | **接線**（隨 I25+N-U3 生效）；coverage alert 亦改用 canonical reader | — | `TestD6WatchlistChainReachable`（`consecutive_failures=60` 真的累積） |
+| **I16** | 心法 `volatile` 恆 0 命中 | `Evaluate` 只判 up/down；handler 又把 API hit_rate 硬寫 0 | **明示「方向不可量測」**＋對外標籤（volatile 樣本不入命中率分母、不計 miss） | `hit_rate_scope`（`up_down`/`volatile_only`/`unmeasured`）、`hit_rate_source`（`seed`/`feedback_store`/`snapshot_evaluator`）、`volatile_tests` | `TestConditionEvaluator_VolatileNotCountedAsMiss`、`TestToSummary_VolatileFrameNotOverwrittenToZero`、`TestHandlers_ListStrategies_ExposesVolatileScope` |
+| **I17** | 季節 per-pattern 校準無 producer；health 對「無觀測」報 critical；4 個超界 `adjustment_factor` 直接相乘 | 假 critical 訊號 + 超界值（含負值）污染調整倍率 | **明示未知**（`unknown`/`reason=no_observations`）＋**消費端 clamp**（負值視為中性 1.0、上限 2.5）＋具名 warn | `adjustment_factor_status`、`out_of_range_patterns`、`calibration_evidence`、`observation_status` | `TestSummarizeCalibrationHealth_NoObservationsIsUnknownNotCritical`、`TestGetPatternAdjustment_ClampsOutOfRangeFactors`、`TestClampAdjustmentFactor` |
+| **I23** | narrative 模板/模型 `HitRate` 是手寫常數，卻對外稱「歷史回測」 | 先驗常數冒充量測值 | **接線（來源標記）**：新增 `hit_rate_source` 貫穿 templates/models/events/aggregate | `hit_rate_source`（`handwritten_prior`/`replay_eval_in_memory`/`unavailable_no_samples`/`unavailable_no_template`/`not_populated`）；aggregate `Formula` 帶來源 | `TestDefaultTemplatesCarryPriorHitRateSource`、`TestInvestmentModelsStartAsHandwrittenPrior`、`TestUpdateTemplateHitRatesRelabelsSource`、`TestAggregateHitRateSourceForEvents` |
+| **I4** | 預測 prior 恆 0（且 cache miss 會把 prior 洗掉） | `SetStrategicPrior` 零生產呼叫者；rebuild 用 `NewSectorPredictor(&snap, nil)` 覆蓋 | **prior 接線**（rebuild 重新套用）＋**cycle 明示未啟用** | `StrategicPriorApplied()`／`CycleProviderWired()`；`eventdriven.SectorCycleProviderWired=false` | `TestSectorPredictionStatusWiresStrategicPrior`、`TestStrategicPriorDrivesOverallBaselineDriver` |
+| **I5** | `SECTOR_PREDICTION_ENABLED` 預設 false、無部署設定、旗標關閉也不告警 | 整條產業預測靜默關閉 | **明示未啟用（機讀）**（預設值未改） | `PredictionReport.SectorPredictionStatus`（`enabled`/`applied`/`days`/`sector_rows`/`strategic_prior_applied`/`cycle_provider_wired`/`reason`）；c07 collector 讀此 reason | `TestProductionSectorPredictionStatusFlagOff`、`TestSectorPredictionStatusJSONContract`；部署檔掃描 0 命中 |
+| **I6** | `SectorDayPrediction` 無落地 | 只有 experimental 消費者，ledger 型別無 sector 欄位 | **明示未落地（機讀）**（未動 storage schema） | `SectorPredictionPersisted=false` + `persistence_reason` | `TestSectorPredictionsAreNeverPersisted`、`internal/ledger/event_flow_prediction_sector_gap_test.go`（反射釘住無 sector 欄位） |
+| **I15** | `PrimaryMetrics` 只寫不讀 | 宣告了 metric 卻無計算 | **明示未啟用** | `orchestrator.AgentPrimaryMetricsWired=false` | `TestAgentPrimaryMetrics_HasNoNonTestReader` |
+| **N-P3** | `NewDriverAdapter` 零非測試呼叫者 | plan/reflect 從未注入 | **明示 reserved**（不移除：唯一實作且有既有測試） | `LLMSectorAgentDriverWired=false` | `TestDriverAdapterReserved_HasNoNonTestCaller`（AST 掃描） |
+| **N-P4** | `Theme=semiconductor_cycle_peak` 無模板 | SOX/DRAM 訊號不影響任何產業 | **明示（機讀）** | `ThemesWithoutTemplate`；事件 `hit_rate_source=unavailable_no_template` | `TestThemesWithoutTemplateMatchesKB`、`TestSemiconductorCyclePeakEventCannotReachAnySector` |
+
+### Batch 3 新發現／決策（須另票或另一 lane）
+
+| ID | 內容 | 嚴重度 | 處置 |
+|---|---|---|---|
+| **N-A5** | `ApplySectorRotation` 是 `ComputeProjectedTarget` 唯一生產呼叫者，卻只帶 `CapitalFlowAction` ⇒ 六個 driver delta map 全空、adapter 永不被呼叫、投影恆等 strategic prior | 高 | **明示未啟用**：`orchestrator.SectorDriverDeltasSupplied=false` + 釘樁測試 `TestApplySectorRotation_SuppliesNoDriverDeltas` |
+| I31 CI 半邊 | nightly workflow 吞掉 validate 失敗、Slack 未設即跳過 | 高 | **明示未生效**（`scripts/ci/**`、`.github/**` 屬另一 lane）；精確 patch 見 spec §9.2 |
+| 超界 `adjustment_factor` 來源不明 | `cmd/calibrate-seasonal --update` 有守門，故 production 的 4 個超界值來自（或早於）不受守門保護的寫入路徑 | 中高 | 本批只做消費端 clamp；**建議另票追污染源** |
+| config validator 允許負 `adjustment_factor` | `parameters_validate.go` 只檢查 `!= 0`（實證有 2 個負值載入成功） | 中 | **刻意未改**（會擋掉現行 production 啟動）；與上一列一起處理 |
+| mock provider 被標成可信 | `selectProvider` 無 key 時回 `MockProvider`（假 quote 完整） | 中 | **已接線**：`IsMock()` → `quotes_status=mock`／`ranked_trustworthy=false` |
+| `ParameterSnapshot.NarrativeHitRates` 無來源標記 | theme hit rates 來自 config 常數集 | 中 | **未處理**（登記於此） |
+| `internal/config/configs/parameters.json` 影子副本 | 與 `configs/parameters.json` 不同、無 Go caller，還會誤導 `findRepoRoot` 探測 | 低-中 | **未處理**（刪除需確認部署腳本未引用） |
+
+### Batch 3 仍未處理（誠實清單）
+
+- **I31 CI 半邊**：需 `.github/workflows/` 一行（加上 freshness 政策裁決：production 主機執行，或 CI 只驗結構）。
+- **I24 / I32 / I30**：ledger 口徑與 workflow 寫入票，未動。
+- **I17 producer 半邊**：per-pattern 校準仍無寫入者（health 只做到誠實未知）。
+- **I4 cycle 半邊**：`SectorCycleProviderWired=false`（predictor 端仍未接權威 tracker）。
+- **I23 前端文案**：`shared_web/static/js/pages/narrative.js` 標題仍寫「歷史命中率」（前端 lane）。
+- **I16 (a) 選項**：要真的量測 volatile 需產品先凍結「高波動」門檻定義。
+- **Batch 2 中／低項**：I7 / I18 / I19 / I21 / I27 / I28 / I29 / I36 / N-C3 / N-U2 / N-U5 / N-U6 / N-A1..A4 仍見 spec §4/§5。
+
+---
+
