@@ -1,5 +1,8 @@
 # monitoring/rules/atlas_universe_scoring_alerts.yml
 # 建立:2026-09-25(任務 M)。**只新增規則**,不改任何既有規則、不改任何 Go 程式碼。
+# 2026-09-25(任務 O)追加第 4/5 條(覆蓋缺口 (c) 與 (d)-`empty_filtered`)。
+#   仍然是「只新增規則」:第 1/2/3 條的 expr、labels、annotations **一個字都沒有改**,
+#   語意不變(由 promtool test rules 的既有 case A-J 逐字比對把關)。
 #
 # 為什麼存在 —— 「母體評分失效會響」這一維在生產是**零偵測**:
 #   生產實例(2026-06-22 起):`UniverseBuilderDeps.Quotes` 在 wiring 是常數 nil
@@ -112,8 +115,10 @@
 #       (需要假日曆)。(2) 段有精確的 flap/盲窗數字。)
 #   (b) 「整條 pipeline 完全沒跑」而不是「跑了但空轉」,需要一條排程心跳/absent() 規則。
 #   (c) `atlas_universe_symbols_screened_total` 這個 family 被整體改名/移除 ⇒ 三條都沉默
-#       (活動側無法成立)。**可用純規則覆蓋**(不需要 Go):一條 `absent(...)` 型的存在性規則
-#       (與 AtlasScrapeJobMissing 同族)。**尚未落地**,建議登錄為 follow-up。
+#       (活動側無法成立)。**已於 2026-09-25(任務 O)落地為第 4 條**:`absent(...)` 型的存在性
+#       規則(與 AtlasScrapeJobMissing 同族),但**加了 peer gate**(理由見第 4 條的長註解:
+#       容器重啟後整個 `atlas_universe_*` 命名空間會暫時消失,裸 `absent()` 會每次重啟誤報)。
+#       殘餘缺口:若 `symbols_filtered_total` 也一起被改名/移除,gate 會跟著關閉,見文末 (g)。
 #   (d) pipeline 在 Step 1/2 early-return ⇒ 所有 counter 存在但永不增加 ⇒ 三條都沉默。
 #       兩個變體的成本不同(2026-09-25 獨立驗證以合成序列實測):
 #         - **empty_filtered**(industry filter 把整個母體濾掉)⇒ **可用純規則覆蓋**:
@@ -121,7 +126,14 @@
 #           `if len(filtered) == 0 { return }`),而 `symbols_screened_total` 不會動 ⇒
 #             (sum(increase(atlas_universe_symbols_filtered_total[6d])) or vector(0)) > 0
 #             and (sum(increase(atlas_universe_symbols_screened_total[6d])) or vector(0)) == 0
-#           **尚未落地**,建議登錄為 follow-up(本 PR 只做任務指定的三條)。
+#           **已於 2026-09-25(任務 O)落地為第 5 條**(`AtlasUniverseEmptyFiltered`)。
+#           ⚠️ 落地版**刻意把右側的 `or vector(0)` 拿掉**(草案有):草案那個寫法會讓
+#             「`screened` family 根本不存在」也滿足右側 ⇒ 與第 4 條同時 firing 且給出
+#             互相矛盾的 triage。拿掉之後兩條變成互斥分工(family 不存在 vs 存在但零增量),
+#             代價是「容器重啟後每一次執行都停在 Step 2」的情形改由第 4 條接手,不是漏洞。
+#           注意左側之所以非零,靠的是 `filtered_total` 的 **dropped 桶**
+#           (= len(allSymbols) − len(filtered) > 0):`industry_filter` 桶在這種情形下是 `Add(0)`,
+#           在灌爆語意下**永遠是 0**,單看它規則會永不成立(完整推導見第 5 條的長註解)。
 #         - **empty_universe**(Step 1 就 0 檔)⇒ 真的需要 Go:`gatheredCounter.Add` 在
 #           `if SymbolsBuilt == 0 { return }` **之後** ⇒ 整個 pipeline 不動任何 counter。
 #           現有可用的機器可讀標記是 snapshot 的 `result.quotes_status="not_attempted"`
@@ -133,6 +145,16 @@
 #       在標籤缺陷修好之前,第 1 條無法把 daily stage 單獨隔離(也不該加 stage matcher ——
 #       那會讓規則對現行的無標籤 series 完全不 match,變成零偵測)。
 #   (f) 上述 (a)-(e) 的共同後果:本檔是「有產出但產出是空的」的偵測器,**不是**萬能心跳。
+#   (g) 2026-09-25(任務 O)新增的第 4/5 條也有各自的殘餘缺口(刻意,不是遺漏):
+#       - 第 4 條的 peer gate 用 `atlas_universe_symbols_filtered_total`。若某次改名**同時**
+#         動到 `screened` 與 `filtered`,gate 與判定會一起消失 ⇒ 沉默。實務上改名是一族一族
+#         做的;而且 `ranked` 被改名時第 1 條仍會 firing、`quotes_fetched` 被改名時第 3 條
+#         仍會 firing(兩條的右側都有 `or vector(0)`,把「family 不存在」也判成 0),
+#         所以真正的盲區只有「`screened` 與 `filtered` 同時消失」。
+#       - 第 5 條只覆蓋「`screened` 存在但 6 天零增量」的 empty_filtered 形狀;若容器重啟後
+#         每一次執行都停在 Step 2,`screened` 從未存在 ⇒ 改由第 4 條 firing(分工,見第 5 條)。
+#       - 全部規則(新舊)都不覆蓋 `empty_universe`(Step 1 就 0 檔):需要 Go 端新增心跳指標
+#         (`gathered_total` 的 Add 在 `if SymbolsBuilt == 0 { return }` **之後** ⇒ 真的沒有訊號)。
 
 groups:
   - name: atlas_universe_scoring
@@ -314,4 +336,185 @@ groups:
                result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
                —— 這是最快的一步(不用猜)。
             5. 修好之後本條會自動 resolve(下一次執行增加 quotes_fetched series)。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+
+      # ══ 4.（2026-09-25 任務 O）篩選訊號 family 整體消失 ════════════════════════════
+      # 覆蓋缺口 (c):`atlas_universe_symbols_screened_total` 被改名/移除 ⇒ 第 1/2/3 條
+      # 的「活動側」全部恆為 0 ⇒ 三條**同時沉默**,而 up / 容器存活 / scrape 那類規則完全
+      # 看不到(服務活得好好的、也知道 pipeline 有跑,只是訊號名字不見了)。
+      #
+      # ── 為什麼不是裸的 `absent(atlas_universe_symbols_screened_total)`(改動前必讀)──
+      # 裸 absent() 在**健康**系統上會誤報,理由是生產的 /metrics 沒有跨重啟保存:
+      #   `cmd/atlas/main.go:452` 的 `collector = rt.MetricsCollector`,
+      #   而 `internal/bootstrap/bootstrapper.go:33 InitMetrics()` 回的是
+      #   `monitoring.NewMetricsCollector()` → `NewMetricsCollectorWithPath("")` ⇒ **in-memory**,
+      #   `replayFromFile` 根本不會被呼叫(`dashboard_api.go` 的
+      #   `newPersistedMetricsCollector` 只在 collector == nil 時才走)。
+      #   `/metrics` 由 `cmd/atlas/api_routes.go:157 PrometheusHandler(collector)` 提供,
+      #   而 series 是**第一次 Add 才建立**(`CounterVec.WithLabelValues` 只建內部物件,
+      #   真正讓 family 出現在 /metrics 的是 OnInc → RecordCounter)。
+      # ⇒ 容器一重啟,整個 `atlas_universe_*` 命名空間會消失,直到**下一次 pipeline 執行**
+      #   才回來;daily 是每個交易日 06:00Z,所以空窗可長達 24h(週五跑完才重啟 ⇒ 到下週二 = 95h;
+      #   連假更久)。裸 absent() 會在每一次部署/重啟後誤報一次,是最糟的那種新規則。
+      #
+      # ⇒ 因此加了一個 **peer gate**:只有「母體組建的 Step 2 確實跑過(filtered_total 有 series)」
+      #   才判定 screened 的缺席。重啟後兩者一起不存在 ⇒ 不 fire;只有 screened 單獨消失 ⇒ fire。
+      #
+      # ── 為什麼 gate 用 `filtered` 而不是「整個命名空間有任何 series」────────────
+      # 用廣的 gate(`count({__name__=~"atlas_universe_.+"}) > 0`)會讓本條在
+      # 「Step 1/2 early-return」時也 firing —— 那與第 5 條(empty_filtered)、以及缺口 (d) 的
+      # `empty_universe` 是**同一個根因**,值班的人會同時收到兩份指向不同方向的 triage,
+      # 正是檔頭 (5) 要避免的「同源不重複 paging」。
+      # 用 `filtered` 當 gate 則與第 5 條形成**互斥分工**:
+      #   · screened 不存在(gate 成立)⇒ 本條;  · screened 存在但零增量 ⇒ 第 5 條。
+      # 副作用(刻意、已評估):容器重啟後若「每一次」執行都停在 Step 2,`screened` 從未存在,
+      # 本條會以「family 消失」的文案 firing —— 所以下面的 triage **第 2 步就是先分辨
+      # 「是不是根本沒走到篩選階段」**,不要求值班的人先假設是改名。
+      - alert: AtlasUniverseScreenedFamilyMissing
+        expr: |
+          absent(atlas_universe_symbols_screened_total)
+          and on()
+          count(atlas_universe_symbols_filtered_total) > 0
+        # 30 分鐘:與第 1/2/3 條同一個 pending 窗。另外 Prometheus 對「不再被回報但 target
+        # 仍 up」的 series 不會發 stale marker,是靠 5 分鐘的 lookback delta 才從 instant
+        # vector 消失 ⇒ 30m 也順便吸收這 5 分鐘的判定延遲。
+        # 本條**沒有**視窗參數:它判斷的是「狀態」(family 在不在),不是「6 天內有沒有增量」,
+        # 所以不受檔頭 (2) 的 [6d] 規則約束(那條規則管的是 increase() 的左右同視窗)。
+        for: 30m
+        labels:
+          severity: warning
+          service: atlas
+          component: universe-monitoring
+          wave: "9.2"
+          incident_ref: "universe-scoring-gap-20260925"
+        annotations:
+          summary: "universe 篩選訊號 family 消失:symbols_screened_total 不存在(filtered_total 仍有 series)"
+          description: |
+            `atlas_universe_symbols_screened_total` 這個 metric family 在過去 30 分鐘內
+            **完全不存在**(不是值為 0),而同族的 `atlas_universe_symbols_filtered_total`
+            仍有 series ⇒ atlas-go 的 /metrics 還活著、母體組建的 Step 2 也確實執行過,
+            但「篩選階段」這條訊號整個不見了。
+
+            這代表什麼 —— 這是本檔前三條規則的**單點失能**:
+            第 1/2/3 條的「活動側」全部是 `increase(atlas_universe_symbols_screened_total[...])`,
+            這個 family 一消失,三條的活動側恆為 0 ⇒ **三條同時沉默**。而 up{job=...} /
+            AtlasGoTargetDown / AtlasScrapeJobMissing 全部照不到(服務活著、pipeline 有跑,
+            只是訊號的名字不見了)。2026-09-25 監控缺口調查把這列為缺口 (c)。
+
+            兩個可能原因(照下面順序查,**不要**一開始就假設是改名):
+            (a) **metric family 被改名或移除**(本條的主要目標):程式碼把 `symbols_screened_total`
+                改名、或整段 Add 被刪掉。
+            (b) **pipeline 根本沒走到篩選階段**(Step 1/2 early-return):`symbols_screened_total`
+                是在 Step 4 才 Add 的,母體 0 檔(`empty_universe`)或 industry filter 全滅
+                (`empty_filtered`)時它不會被建立。這是缺口 (d) 的形狀。
+
+            先查什麼(依序):
+            1. **先分辨 (b) 再懷疑 (a)** —— 最快的一步是看快照:
+               data/state/universe_snapshot.json 的 result.quotes_status
+                 not_attempted        ⇒ 在 Step 1/2 就 early-return ⇒ 是 (b),不是改名;
+                                        接著看 result.ranked_fallback_reason:
+                                          empty_universe ⇒ 母體 0 檔(分類樹/映射面整批失效)
+                                          empty_filtered ⇒ industry filter 把整個母體濾掉
+                 provider_unavailable / fetch_error / empty / ok ⇒ 有走到 Step 3,
+                                        那 screened 缺席就高度指向 (a)
+               (若部署還沒含 #1979,這幾個欄位可能不存在,改用第 3 步的日誌。)
+            2. family 是不是只是換了名字(只在第 1 步指向 (a) 之後才做):
+               curl -s localhost:18080/metrics | grep -E '^atlas_universe_' | sort
+               跟下面四個名字對一下:
+                 atlas_universe_symbols_gathered_total / symbols_filtered_total /
+                 symbols_screened_total / symbols_ranked_total
+               有同義的新名字 ⇒ 把 monitoring/rules/ 裡**所有**用到舊名字的地方一起改
+               (只改一條會讓規則之間互相矛盾)。
+            3. 日誌(確認有沒有走到 Step 4):
+               docker logs atlas-go --since 48h 2>&1 | grep -E 'symbols_gathered|industry_filter_ok|scoring_ok'
+               缺 `scoring_ok` ⇒ 沒走到 Step 4(Step 1/2 early-return 或 Step 3 之後就結束)。
+            4. 程式碼是否仍會 Add 這個名字:
+               grep -rn "symbols_screened_total" internal/monitoring/
+               (正確位置:`internal/monitoring/metrics/universe.go` 的 name 欄位 +
+                `internal/monitoring/universe_scheduler.go` 的 `um.SymbolsScreened...Add`)。
+            5. ⚠️ 不要用 counter 絕對值判斷(這族被自身累積值灌爆,見檔頭 (1))。
+              本條與數值無關,只看 family 在不在。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+
+      # ══ 5.（2026-09-25 任務 O）Step 2 early-return:industry filter 把母體整批濾掉 ══
+      # 覆蓋缺口 (d) 的 `empty_filtered` 形狀:counter 存在但**永不增加** ⇒ 第 1/2/3 條的
+      # 活動側恆為 0 ⇒ 三條同時沉默(與缺口 (c) 的後果相同,但機制完全不同:這裡指標
+      # 沒有消失,是 pipeline 每次都在 Step 2 就 return)。
+      #
+      # ── 機制(改動前必讀;這是本條成立的全部依據)────────────────────────────
+      # internal/monitoring/universe_scheduler.go 的 BuildUniverse:
+      #   Step 2 先 `um.SymbolsFiltered.WithLabelValues(stage,"industry_filter").Add(len(filtered))`
+      #         與 `um.SymbolsFiltered.WithLabelValues(stage,"dropped").Add(len(allSymbols)-len(filtered))`,
+      #   **之後**才 `if len(filtered) == 0 { markRankedUntrustworthy(result, RankedFallbackEmptyFiltered); return }`。
+      #   Step 4 的 `um.SymbolsScreened...Add(...)` 因此在這種情形下**一次都不會被呼叫**
+      #   (連 Add(0) 都沒有)⇒ `symbols_screened_total` 存在但不增。
+      # ⚠️ 左側之所以非零,靠的是 **dropped 桶**:`industry_filter` 桶在 `filtered == 0` 時是
+      #   `Add(0)` ⇒ 在檔頭 (1) 的灌爆語意下(輸出 = 累積值相加)它**永遠是 0**;
+      #   能證明「Step 2 跑過」的是 `dropped = len(allSymbols) − len(filtered) > 0`。
+      #   本條用 label 無關的 `sum(increase(...))` 把兩個桶一起算進來,所以成立;
+      #   若有人把左側改成只看 `{reason="industry_filter"}`,規則會變成**結構上永不 firing**。
+      #
+      # ── 為什麼右側**故意不寫** `or vector(0)`(與第 1/2/3 條不同)──────────────
+      # `sum(<empty>)` 在 family 不存在時回**空集合**,`空 == 0` 也回空 ⇒ 本條不成立。
+      # 這是與第 4 條的**分工**,不是遺漏:
+      #   · `screened` 不存在   ⇒ 第 4 條負責(文案講的是「family 消失」);
+      #   · `screened` 存在、6 天內零增量 ⇒ 本條負責(Step 2 被跳過)。
+      # 兩條都寫 `or vector(0)` 會讓「family 被改名」同時點亮兩條,值班的人拿到兩份矛盾
+      # 的 triage(一份叫他查改名、一份叫他查 filter),那就是檔頭 (5) 要避免的同源重複 paging。
+      #
+      # ── 與第 1/2/3 條一致的約束 ─────────────────────────────────────────────
+      # 兩側同一個 `[6d]` 視窗(檔頭 (2)):休市衰減時兩側同時歸零 ⇒ 不誤報。
+      # 只用 `increase()` 的「零/非零」判定,不用任何絕對值門檻(檔頭 (1))。
+      - alert: AtlasUniverseEmptyFiltered
+        expr: |
+          (sum(increase(atlas_universe_symbols_filtered_total[6d])) or vector(0)) > 0
+          and
+          sum(increase(atlas_universe_symbols_screened_total[6d])) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: atlas
+          component: universe-screening
+          wave: "9.2"
+          incident_ref: "universe-scoring-gap-20260925"
+        annotations:
+          summary: "universe 篩選從未被執行:6 天內 filtered 有活動,但 symbols_screened 零增量"
+          description: |
+            過去 6 天內 `atlas_universe_symbols_filtered_total` 有增量(母體組建確實跑過、
+            Step 2 的 industry filter 確實被呼叫),但同一視窗內
+            `atlas_universe_symbols_screened_total` **一次都沒有增加**
+            ⇒ pipeline 每次都停在 Step 2 的 early-return,永遠沒有走到篩選/評分階段。
+
+            這代表什麼:
+            - 這是 `empty_filtered` 形狀:`IndustryFilter.Filter` 把整個母體濾成 0 檔 ⇒
+              `if len(filtered) == 0 { ... return }` ⇒ Step 3/4/5 全部不會執行。
+            - 對下游的後果與 `ranked=0` 相同(母體空),但**前三條規則看不到**,因為它們的
+              活動側是 `increase(symbols_screened_total)`,而這個 counter 在這條路徑上
+              永遠不會被 Add ⇒ 三條同時沉默。2026-09-25 監控缺口調查把這列為缺口 (d)。
+
+            先查什麼(依序):
+            1. 快照 data/state/universe_snapshot.json 的 result.ranked_fallback_reason
+               = `empty_filtered` 就是本條的形狀(此時 result.quotes_status 是 `not_attempted`,
+               因為 Step 3 根本沒跑)。
+            2. 看 `filtered_total` 的**兩個桶**對不對:
+               curl -s localhost:18080/metrics | grep '^atlas_universe_symbols_filtered_total'
+               industry_filter 桶應該在 0 附近(它被 Add 的是 len(filtered) = 0),
+               dropped 桶應該 ≈ 母體大小(例:1599)。對照日誌:
+               docker logs atlas-go --since 48h 2>&1 | grep -E 'symbols_gathered|industry_filter_ok'
+               (`industry_filter_ok` 會印 input=1599 output=0)
+            3. 為什麼每一檔都被濾掉 —— `IndustryFilter.Filter` 對**每一檔**都
+               `Mapper.GetClassification()` 失敗就會走到這裡(`internal/monitoring/universe_builder.go`),
+               而 Step 1 的母體可以來自別的來源(substrate 有 population 時不走 mapper)
+               ⇒ 會出現「gathered 非 0 但 filtered = 0」的組合。要查的是**映射面**:
+               分類樹/映射器/substrate 是否整批失效(例如 substrate 沒載入、gate 被關掉、
+               或代號正規化後鍵不匹配)。查快照的 result.symbols_built 與
+               `symbols_gathered_total` 是否非 0 來確認 Step 1 是好的。
+            4. 確認兩個「整批濾掉」的開關沒被誤開(生產目前皆為預設關閉):
+               `IndustryFilter.TargetLevel1`(空 = 關)與 `ExcludeCyclicalityLow`(預設 false);
+               見 `NewIndustryFilter` 的預設值註解。若有人把它們打開而值配置錯誤,
+               就會一次濾掉整個母體。
+            5. 若容器重啟後**每一次**執行都停在 Step 2,`symbols_screened_total` 從來沒有
+               存在過 ⇒ 本條不成立,**改由第 4 條 firing**(那是刻意的分工:一個負責
+               「family 不存在」、一個負責「family 存在但零增量」)。
+            6. ⚠️ 不要用 counter 絕對值當門檻(灌爆缺陷,見檔頭 (1))。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
