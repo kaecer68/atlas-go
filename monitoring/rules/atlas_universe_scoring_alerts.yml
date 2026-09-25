@@ -7,7 +7,14 @@
 #   走 else 分支(空 quoteMap)⇒ `ScoringScreener.applyVolumeAndPriceFilters` 對每個 symbol
 #   在「quotes 查不到就 continue」短路 ⇒ survivors=0 → passed=0 → ranked=0。
 #   結果:`atlas_universe_symbols_ranked_total` **連續 3 個月為 0 而無人得知**。
-#   (接線修法見 #1979;修正報告見 runbook_url。本檔是**偵測**,不重複修法。)
+#   (接線修法 #1979 已於 2026-09-25 合併並部署,merge `bbce1b4a`;修正報告見 runbook_url。
+#    本檔是**偵測**,不重複修法。)
+#
+#   ⚠️ **部署後的預期行為(2026-09-25 實測,務必先讀)**:#1979 之後 `Quotes` 已接真實 provider
+#   (`cmd/atlas/bootstrap_helpers.go` 的 `Quotes: quotes`),實測 `ranked` 由 0 → 150、
+#   `quotes_returned` 1301/1599、`lots_converted` 1120 ⇒ **本檔三條規則的常態是「靜默」**。
+#   若它們 firing,那不是「已知的舊缺陷」而是**回歸**(或是假日/長休市的視窗語意,見下方 (2))。
+#   歷史上的 nil wiring(`bootstrap_helpers.go:217`,2026-06-22~09-25)是這些規則的**設計動機**,不是現況。
 #
 #   四道本該響的防線當時全部失效(2026-09-25 唯讀實證;完整報告見 runbook_url):
 #     1. `universe_coverage_check` 用 symbols_built / TotalClassifiedSymbols ⇒ 數學上不可能
@@ -150,7 +157,7 @@ groups:
             這代表什麼:
             - ranked 是 sector allocation / stockpicker 等下游的母體來源;ranked 空 = 母體空。
               生產目前沒有任何 ranked 消費者,所以下游不會壞 —— **只有外部監看抓得到**。
-            - 已知生產根因(2026-06-22 起,連續 3 個月):UniverseBuilderDeps.Quotes 是常數 nil
+            - 歷史根因(2026-06-22 起,連續 3 個月;**已由 #1979 修復並於 2026-09-25 部署**):UniverseBuilderDeps.Quotes 是常數 nil
               ⇒ BuildUniverse Step 3 走 else 分支(空 quoteMap)⇒ 每個 symbol 在
               「quotes 查不到就 continue」短路 ⇒ survivors=0 → passed=0 → ranked=0。
             - 與 #1971 gate 的觀察窗不變量 `symbols_ranked > 0` 直接相關:本條 firing 就是
@@ -163,7 +170,8 @@ groups:
             1. 評分階段日誌:docker logs atlas-go --since 48h 2>&1 | grep -E "scoring_ok|daily_refresh_ok|weekly_rebuild_ok"
                看 input=.. ranked=..。（scoring_ok 只是 INFO、沒有門檻,要看數字）
             2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
-               wiring 若是 nil(bootstrap_helpers.go:217)就是這個症狀的根因（#1979 已修,確認部署版本是否含它）。
+               正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
+               就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
             3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
                回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
             4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
@@ -264,8 +272,8 @@ groups:
               對每個 symbol 都在「quotes 查不到就 continue」短路 ⇒ survivors=0 ⇒ passed=0
               ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
             - 兩個分支要分辨(這是本條的重點):
-              (a) **provider 沒接上**:`cmd/atlas/bootstrap_helpers.go:217` 的 `Quotes: nil`
-                  ⇒ 指標 series 根本不存在(生產現況:實查 /metrics 沒有這個 family)。
+              (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
+                  bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
               (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
                   `quotes_fetch_error` WARN 與 `atlas_universe_quotes_errors_total{daily="fetch_error"}`。
               兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
