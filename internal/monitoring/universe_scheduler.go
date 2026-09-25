@@ -360,6 +360,15 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 		// is measurable the report says so instead of printing a green 1.00
 		// (the pre-2026-09 audit set total = mapped).
 		coverage := CheckUniverseCoverage(deps.Substrate, deps.Mapper, deps.Tree, 0.50)
+		// FU-20260925-01: age the audit in the log line itself, so staleness is
+		// visible without a new metric or alert rule. as_of unknown (the zero
+		// instant) means no successful substrate load has ever been observed;
+		// it is logged as "unknown" / -1 and never as "now".
+		coverageAsOf, coverageAgeHours := "unknown", float64(-1)
+		if !coverage.AsOf.IsZero() {
+			coverageAsOf = coverage.AsOf.UTC().Format(time.RFC3339)
+			coverageAgeHours = time.Since(coverage.AsOf).Hours()
+		}
 		logging.Info("universe_scheduler", "coverage_check",
 			"source", coverage.Source,
 			"mapped", coverage.Mapped,
@@ -368,7 +377,10 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 			"unknown", coverage.Unknown,
 			"ratio", fmt.Sprintf("%.2f", coverage.Ratio),
 			"available", coverage.Available,
-			"reasons", strings.Join(coverage.Reasons, "; "))
+			"reasons", strings.Join(coverage.Reasons, "; "),
+			"as_of", coverageAsOf,
+			"data_age_hours", coverageAgeHours,
+			"load_error", coverage.LoadError)
 		if coverage.Alert != "" {
 			logging.Warn("universe_scheduler", "coverage_alert",
 				"alert", coverage.Alert)
@@ -446,6 +458,15 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 		// is measurable the report says so instead of printing a green 1.00
 		// (the pre-2026-09 audit set total = mapped).
 		coverage := CheckUniverseCoverage(deps.Substrate, deps.Mapper, deps.Tree, 0.50)
+		// FU-20260925-01: age the audit in the log line itself, so staleness is
+		// visible without a new metric or alert rule. as_of unknown (the zero
+		// instant) means no successful substrate load has ever been observed;
+		// it is logged as "unknown" / -1 and never as "now".
+		coverageAsOf, coverageAgeHours := "unknown", float64(-1)
+		if !coverage.AsOf.IsZero() {
+			coverageAsOf = coverage.AsOf.UTC().Format(time.RFC3339)
+			coverageAgeHours = time.Since(coverage.AsOf).Hours()
+		}
 		logging.Info("universe_scheduler", "coverage_check",
 			"source", coverage.Source,
 			"mapped", coverage.Mapped,
@@ -454,7 +475,10 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 			"unknown", coverage.Unknown,
 			"ratio", fmt.Sprintf("%.2f", coverage.Ratio),
 			"available", coverage.Available,
-			"reasons", strings.Join(coverage.Reasons, "; "))
+			"reasons", strings.Join(coverage.Reasons, "; "),
+			"as_of", coverageAsOf,
+			"data_age_hours", coverageAgeHours,
+			"load_error", coverage.LoadError)
 		if coverage.Alert != "" {
 			logging.Warn("universe_scheduler", "coverage_alert",
 				"alert", coverage.Alert)
@@ -1373,6 +1397,24 @@ type CoverageReport struct {
 	Unknown  int
 	// Reasons carries the distinct reasons the unresolved rows report.
 	Reasons []string
+	// AsOf is the instant the accounting above was loaded, when the installed
+	// substrate can date it (industry.SymbolIndustryCoverageAsOfReporter).
+	//
+	// The ZERO VALUE means "no successful substrate load has ever been
+	// observed", which must be read as NOT MEASURABLE, never as fresh: the
+	// numbers above come from an in-memory view whose reload TTL is hours long,
+	// so a store that broke after the last successful load keeps being divided
+	// into a healthy-looking Ratio. Publishing the instant is what lets an
+	// operator age the report; on its own it neither fixes nor hides anything.
+	AsOf time.Time
+	// LoadError is the message of the last FAILED substrate reload, and "" when
+	// the last reload succeeded (or no substrate reported it).
+	//
+	// It exists to separate the two states that both show up as Upstream == 0:
+	// "the load failed" (fix the store) and "the load succeeded but the upstream
+	// population was empty" (investigate the channel). Neither is measurable,
+	// and they need opposite responses.
+	LoadError string
 	// Ratio is Mapped/Upstream; 0 when !Available.
 	Ratio float64
 	// Alert is non-empty when the coverage must be looked at: either it is not
@@ -1396,6 +1438,13 @@ const coverageSourceUnavailable = "unavailable"
 //     Upstream/Mapped/Unmapped/Unknown/Reasons come from the reporter, and
 //     Ratio = Mapped/Upstream. Upstream == 0 (nothing loaded / empty channel)
 //     is NOT full coverage: it is reported as unavailable with an alert.
+//   - AsOf and LoadError are filled ONLY when the substrate additionally
+//     implements industry.SymbolIndustryCoverageAsOfReporter /
+//     industry.SymbolIndustryReloadErrorReporter, which are independent and
+//     optional. A substrate that cannot date its accounting leaves AsOf at its
+//     zero value (unknown age) and one that cannot report a failure leaves
+//     LoadError empty; neither changes Available, the numbers, the Ratio or the
+//     Alert.
 //   - no substrate, or a substrate that does not report coverage: Available =
 //     false, Source = "unavailable", Ratio = 0, and an explicit alert saying the
 //     first-party population is not measurable. The alert names the legacy
@@ -1428,6 +1477,22 @@ func CheckUniverseCoverage(substrate industry.SymbolIndustrySubstrate, mapper Sy
 	report.Unmapped = cov.Unmapped
 	report.Unknown = cov.Unknown
 	report.Reasons = append([]string(nil), cov.Reasons...)
+
+	// Staleness visibility (FU-20260925-01): both assertions are OPTIONAL and
+	// independent, so a reporter that cannot date its accounting (or cannot
+	// report a failure) leaves the zero values in place and changes nothing
+	// else in this report -- no number, no Alert. Filled before the
+	// not-measurable return below on purpose: "Upstream == 0 AND a load error"
+	// is the diagnostic, and dropping the error there would hide it exactly
+	// when it is most useful.
+	if asOfReporter, ok := substrate.(industry.SymbolIndustryCoverageAsOfReporter); ok {
+		if asOf, known := asOfReporter.CoverageAsOf(); known {
+			report.AsOf = asOf
+		}
+	}
+	if errReporter, ok := substrate.(industry.SymbolIndustryReloadErrorReporter); ok {
+		report.LoadError = errReporter.LastReloadError()
+	}
 
 	if report.Upstream <= 0 {
 		report.Alert = fmt.Sprintf(

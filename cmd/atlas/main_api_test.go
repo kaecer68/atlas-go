@@ -38,6 +38,13 @@ import (
 // substrate, and an unexported method would not be visible outside package main,
 // so the audit could never read the first-party population (see #1943).
 //
+// The staleness entries added on the same day are
+// (*storeSymbolIndustrySubstrate).CoverageAsOf() (time.Time, bool) and
+// (*storeSymbolIndustrySubstrate).LastReloadError() string (FU-20260925-01).
+// They MUST be exported for the same reason: the coverage audit reaches them by
+// type assertion on the installed substrate, and an unexported method would
+// satisfy neither optional interface outside package main.
+//
 // Anything else is package-private and protected by the per-function
 // test files (run_simulation_test.go, run_live_test.go,
 // run_simulation_mode_test.go, load_calibration_orders_test.go).

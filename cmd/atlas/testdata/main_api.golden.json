@@ -110,10 +110,22 @@
       "results": "(industry.SymbolIndustryCoverage)"
     },
     {
+      "name": "CoverageAsOf",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(time.Time, bool)"
+    },
+    {
       "name": "Invalidate",
       "params": "",
       "receiver": "storeSymbolIndustrySubstrate",
       "results": ""
+    },
+    {
+      "name": "LastReloadError",
+      "params": "",
+      "receiver": "storeSymbolIndustrySubstrate",
+      "results": "(string)"
     },
     {
       "name": "Len",

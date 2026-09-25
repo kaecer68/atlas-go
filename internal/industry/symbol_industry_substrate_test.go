@@ -2,6 +2,7 @@ package industry_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
@@ -79,6 +80,57 @@ func TestSymbolL1Mapper_SubstratePrecedence(t *testing.T) {
 	}
 	if _, ok := mapper.ResolveL1("6116"); ok {
 		t.Fatal("6116 must be unresolved again after clearing the substrate")
+	}
+}
+
+// coverageOnlySubstrate answers the port plus the OPTIONAL coverage reporter,
+// and nothing else: it stands in for every reporter written before the staleness
+// getters existed.
+type coverageOnlySubstrate struct{ stubSubstrate }
+
+func (coverageOnlySubstrate) Coverage() industry.SymbolIndustryCoverage {
+	return industry.SymbolIndustryCoverage{}
+}
+
+// asOfOnlySubstrate answers the port plus ONE staleness getter.
+type asOfOnlySubstrate struct{ stubSubstrate }
+
+func (asOfOnlySubstrate) CoverageAsOf() (time.Time, bool) { return time.Time{}, false }
+
+// TestSymbolIndustryCoverageExtensionsAreOptional pins WHY the staleness getters
+// sit in their own interfaces instead of on SymbolIndustryCoverageReporter.
+//
+// Why it has teeth: the compatibility rule that makes Coverage() optional in the
+// first place is "no existing implementation has to grow a method", and it is
+// also what lets a consumer ask each question separately (a substrate may date
+// its accounting but have nothing to say about failures). Bundling either getter
+// into SymbolIndustryCoverageReporter, or the two getters into one interface,
+// would break every implementation that answers only the smaller question --
+// this test fails the moment somebody does that, and it fails for the plain port
+// implementation too.
+func TestSymbolIndustryCoverageExtensionsAreOptional(t *testing.T) {
+	port := industry.SymbolIndustrySubstrate(&stubSubstrate{})
+	if _, ok := port.(industry.SymbolIndustryCoverageReporter); ok {
+		t.Fatal("SymbolIndustryCoverageReporter must stay optional: the read-side port does not answer it")
+	}
+
+	reporter := industry.SymbolIndustrySubstrate(&coverageOnlySubstrate{})
+	if _, ok := reporter.(industry.SymbolIndustryCoverageReporter); !ok {
+		t.Fatal("a substrate that reports coverage must satisfy SymbolIndustryCoverageReporter")
+	}
+	if _, ok := reporter.(industry.SymbolIndustryCoverageAsOfReporter); ok {
+		t.Fatal("reporting the accounting must not imply being able to date it (separate interfaces)")
+	}
+	if _, ok := reporter.(industry.SymbolIndustryReloadErrorReporter); ok {
+		t.Fatal("reporting the accounting must not imply reporting a load failure (separate interfaces)")
+	}
+
+	asOf := industry.SymbolIndustrySubstrate(&asOfOnlySubstrate{})
+	if _, ok := asOf.(industry.SymbolIndustryCoverageAsOfReporter); !ok {
+		t.Fatal("a substrate that dates its accounting must satisfy SymbolIndustryCoverageAsOfReporter")
+	}
+	if _, ok := asOf.(industry.SymbolIndustryReloadErrorReporter); ok {
+		t.Fatal("the two staleness getters are independent: one must not imply the other")
 	}
 }
 

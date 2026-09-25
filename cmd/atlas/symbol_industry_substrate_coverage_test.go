@@ -204,3 +204,101 @@ func TestStoreSubstrateCoverage_FailedLoadReportsNothing(t *testing.T) {
 		t.Fatalf("a failed load must install no symbols, got %d", got)
 	}
 }
+
+// ─── staleness visibility: CoverageAsOf / LastReloadError ─────────────────
+// (FU-20260925-01: Coverage() answers from the last SUCCESSFUL load, so a store
+// that broke afterwards keeps being audited through a stale view.)
+
+// TestStoreSubstrateCoverageAsOf_DatesTheLastSuccessfulLoad pins the contract the
+// coverage audit needs to age its own numbers.
+//
+// Why these assertions have teeth:
+//   - "never loaded" must be reported as FALSE, not as the current time. A
+//     reporter that dated itself with time.Now() would make every stale view
+//     look fresh, which is the exact false-green shape the audit exists to stop.
+//   - as_of must MOVE on a successful load and NOT move on a failed one: the
+//     second half is the production failure (store breaks after the last good
+//     load, view keeps being served), and a getter that returned the latest
+//     attempt time would hide it.
+//   - LastReloadError must be non-empty after a failure and "" after a
+//     subsequent success, because Reload clears loadErr on success; without that
+//     half, a recovered substrate would keep reporting a permanent error.
+func TestStoreSubstrateCoverageAsOf_DatesTheLastSuccessfulLoad(t *testing.T) {
+	loadFailure := errors.New("db down")
+	store := &coverageFakeStore{
+		loadErr: loadFailure,
+		entries: []symbolindustry.Entry{
+			{Symbol: "1101", CanonicalL1: "cement", MappingStatus: symbolindustry.StatusMapped},
+			{Symbol: "2330", CanonicalL1: "semiconductor", MappingStatus: symbolindustry.StatusMapped},
+			{Symbol: "2801", MappingStatus: symbolindustry.StatusUnmapped, MappingReason: "residual bucket"},
+		},
+	}
+	sub := &storeSymbolIndustrySubstrate{ttl: time.Hour, now: time.Now, store: store}
+
+	// The store is down: no successful load has EVER happened, so the instant is
+	// unknown (zero/false) even though the load was just attempted.
+	if asOf, ok := sub.CoverageAsOf(); ok || !asOf.IsZero() {
+		t.Fatalf("CoverageAsOf() = (%v, %v) before any successful load, want (zero, false)", asOf, ok)
+	}
+	// The failure itself must be named, and it must survive CoverageAsOf having
+	// taken (and failed) the reload decision: that pairing is what separates
+	// "the load failed" from "the population was empty".
+	if got := sub.LastReloadError(); got != loadFailure.Error() {
+		t.Fatalf("LastReloadError() = %q, want %q", got, loadFailure.Error())
+	}
+	if cov := sub.Coverage(); cov.Upstream != 0 || cov.Resolved != 0 {
+		t.Fatalf("a failed load must report nothing, got %+v", cov)
+	}
+
+	// Both optional interfaces are what the audit type-asserts for.
+	if _, ok := industry.SymbolIndustrySubstrate(sub).(industry.SymbolIndustryCoverageAsOfReporter); !ok {
+		t.Fatal("the store substrate must implement the optional as-of reporter")
+	}
+	if _, ok := industry.SymbolIndustrySubstrate(sub).(industry.SymbolIndustryReloadErrorReporter); !ok {
+		t.Fatal("the store substrate must implement the optional reload-error reporter")
+	}
+
+	// Recovery: the rows arrive and the next reload succeeds.
+	store.loadErr = nil
+	before := time.Now()
+	asOf, ok := sub.CoverageAsOf()
+	after := time.Now()
+	if !ok {
+		t.Fatal("CoverageAsOf() must report a known instant after a successful load")
+	}
+	if asOf.IsZero() {
+		t.Fatal("a successful load must produce a non-zero instant")
+	}
+	if asOf.Before(before) || asOf.After(after) {
+		t.Fatalf("as_of = %v, want it inside [%v, %v] (the load's own clock, not a constant)", asOf, before, after)
+	}
+	if got := sub.LastReloadError(); got != "" {
+		t.Fatalf("LastReloadError() = %q after a successful load, want \"\"", got)
+	}
+	// The dated accounting is the one Coverage() divides: same view, no re-read.
+	cov := sub.Coverage()
+	if cov.Upstream != 3 || cov.Resolved != 2 {
+		t.Fatalf("Coverage() = %+v, want Upstream=3 Resolved=2", cov)
+	}
+
+	// The FU-20260925-01 scenario: the store breaks AFTER the last successful
+	// load. ttl=0 forces the next call to take the reload decision, so this is
+	// not a "the cache happened to be fresh" false pass.
+	sub.ttl = 0
+	store.loadErr = loadFailure
+	staleAsOf, ok := sub.CoverageAsOf()
+	if !ok {
+		t.Fatal("a failed reload must not erase the last successful load's instant")
+	}
+	if !staleAsOf.Equal(asOf) {
+		t.Fatalf("as_of moved from %v to %v across a FAILED reload; it must date the last SUCCESS", asOf, staleAsOf)
+	}
+	if got := sub.LastReloadError(); got != loadFailure.Error() {
+		t.Fatalf("LastReloadError() = %q after the store broke, want %q", got, loadFailure.Error())
+	}
+	// ... and the stale view is still served, which is precisely why the age has
+	// to be visible: the ratio the audit publishes describes these old rows.
+	if cov := sub.Coverage(); cov.Upstream != 3 || cov.Resolved != 2 {
+		t.Fatalf("Coverage() = %+v after a failed reload, want the cached 3/2 view", cov)
+	}
+}

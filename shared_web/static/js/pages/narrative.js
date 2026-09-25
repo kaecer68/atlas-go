@@ -3,6 +3,14 @@ import { narrativeThemeLabel } from '../shared/constants.js';
 import { renderEmptyState, sortNarrativeEvents } from '../shared/app-utils.js';
 import { escapeHtml, fmtInt } from '../shared/utils.js';
 import { fmtSafeNumber, fmtSafePct, fmtSafeSignedPct, fmtSafeSigned } from '../shared/format-metric.js';
+import {
+  HIT_RATE_FIELD_LABEL,
+  HIT_RATE_FIELD_TOOLTIP,
+  hitRateDisplayInfo,
+  hitRateTextColor,
+  pickHitRateSource,
+  pickHitRateValue,
+} from '../shared/narrative-hit-rate.js';
 
 /**
  * 包裝 renderEmptyState，附加可執行的行動按鈕。
@@ -412,6 +420,9 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
       modelsEl.innerHTML = list.map((m, idx) => {
         const w = m.weight || 0;
         const e = m.recent_error || 0;
+        // 命中率是 narrative 模組的手寫先驗常數（未校準），不是回測／歷史實測值，
+        // 因此文案（先驗命中率）與來源標記都由 shared/narrative-hit-rate.js 決定。
+        const hitInfo = hitRateDisplayInfo(pickHitRateValue(m), pickHitRateSource(m));
         const weightPct = fmtSafeNumber(w, { percent: true, decimals: 1, suffix: '%' });
         const weightColor = w >= 0.5 ? 'var(--color-success)' : (w >= 0.25 ? 'var(--color-warning)' : 'var(--color-danger)');
         const errColor = e <= 0.3 ? 'var(--color-success)' : (e <= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)');
@@ -431,9 +442,10 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
               <span class="min-w-40 text-right">${fmtSafeNumber(m.weight, { decimals: 2, useGrouping: true })}</span>
             </div>
           </div>
-          <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
-            <span>歷史命中率</span>
-            <span style="color:${typeof m.hit_rate === 'number' && Number.isFinite(m.hit_rate) ? ((m.hit_rate >= 0.7 ? 'var(--color-success)' : (m.hit_rate >= 0.5 ? 'var(--color-warning)' : 'var(--color-danger)'))) : 'var(--muted)'};font-weight:700">${fmtSafePct(m.hit_rate)}</span>
+          <div style="margin:6px 0;display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted)">
+            <span title="${escapeHtml(HIT_RATE_FIELD_TOOLTIP)}">${escapeHtml(HIT_RATE_FIELD_LABEL)}</span>
+            <span style="color:${hitRateTextColor(hitInfo)};font-weight:700" title="${escapeHtml(hitInfo.note)}">${escapeHtml(hitInfo.text)}</span>
+            <span class="badge muted" title="${escapeHtml(hitInfo.note)}">${escapeHtml(hitInfo.badge)}</span>
           </div>
           <div style="margin:6px 0;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
             <span>近期預測報酬差</span>
@@ -461,17 +473,25 @@ export function renderNarrativePage(snapshot, stress, events, chains, models, te
     if (!items.length) { templatesEl.innerHTML = renderActionEmptyState('無模板資料', '模板庫會隨著策略演化自動累積。', [{label: '查看投資心法', page: 'strategies'}]); }
     else {
       templatesEl.innerHTML = `<table class="template-table">
-        <thead><tr><th style="width:40%">模板名稱</th><th style="width:12%">歷史命中率</th><th style="width:36%">資料來源</th><th style="width:12%">操作</th></tr></thead>
+        <thead><tr><th style="width:40%">模板名稱</th><th style="width:12%" title="${escapeHtml(HIT_RATE_FIELD_TOOLTIP)}">${escapeHtml(HIT_RATE_FIELD_LABEL)}</th><th style="width:36%">資料來源</th><th style="width:12%">操作</th></tr></thead>
         <tbody>
-          ${items.map((t, idx) => `<tr>
+          ${items.map((t, idx) => {
+            // 模板命中率同樣是手寫先驗（internal/narrative/templates.go），
+            // 顯示值與來源標記一律走 shared/narrative-hit-rate.js。
+            const tplHit = hitRateDisplayInfo(pickHitRateValue(t), pickHitRateSource(t));
+            return `<tr>
             <td><span style="font-weight:600;color:var(--text)">${escapeHtml(templateName(t.name))}</span></td>
-            <td><span style="font-weight:500;color:var(--color-success)">${fmtSafePct(t.historical_hit_rate)}</span></td>
+            <td>
+              <div style="font-weight:500;color:${hitRateTextColor(tplHit)}" title="${escapeHtml(tplHit.note)}">${escapeHtml(tplHit.text)}</div>
+              <div class="text-muted" style="font-size:11px" title="${escapeHtml(tplHit.note)}">${escapeHtml(tplHit.badge)}</div>
+            </td>
             <td class="text-muted text-xs">${escapeHtml((t.source_references || []).join(', '))}</td>
             <td><button id="tmpl-btn-${idx}" onclick="toggleTemplateAccordion(${idx})" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer">展開 ▼</button></td>
           </tr>
           <tr id="tmpl-rationale-${idx}" class="hidden">
             <td colspan="4" style="background:var(--bg);padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-left:3px solid var(--accent)">${escapeHtml(t.rationale || '暫無論述')}</td>
-          </tr>`).join('')}
+          </tr>`;
+          }).join('')}
         </tbody>
       </table>`;
     }

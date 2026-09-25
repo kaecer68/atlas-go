@@ -292,6 +292,12 @@ export interface CalendarProviderData {
   source: string;
 }
 
+export interface CalibrationAcceptedFinding {
+  code: string;
+  segment?: string;
+  reason: string;
+}
+
 export interface CalibrationFinding {
   code: string;
   severity: string;
@@ -324,6 +330,19 @@ export interface CalibrationValidation {
   degradation_msg?: string;
   validation_size: number;
   training_size: number;
+}
+
+export interface CalibrationValidationPolicy {
+  scope: string;
+  note?: string;
+  accepted: CalibrationAcceptedFinding[];
+}
+
+export interface CalibrationValidationResult {
+  scope: string;
+  freshness_enforced: boolean;
+  error_count: number;
+  observation_count: number;
 }
 
 export interface CalibratorChange {
@@ -3755,6 +3774,8 @@ export interface Scorecard {
   after_tax_pnl?: number | null;
   rolling_sharpe_trend: number;
   oos_sample_warning?: string;
+  synthetic_observations: number;
+  synthetic_share: number;
 }
 
 export interface ScreeningCriteria {

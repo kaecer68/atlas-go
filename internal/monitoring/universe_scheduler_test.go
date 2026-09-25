@@ -623,6 +623,152 @@ func TestCheckUniverseCoverage_HonestRatio(t *testing.T) {
 	})
 }
 
+// ─────────────────── 4b. Coverage staleness visibility ───────────────────
+// (FU-20260925-01: the audit divides a view that is only refreshed by a
+// SUCCESSFUL reload, so "the check returned something" is not "the data is
+// current". These two cases pin the additive half: the age and the last load
+// failure reach the report when the substrate can answer for them, and nothing
+// else in the report moves.)
+
+// staleCoverageSubstrate is a reporting substrate that ALSO implements the two
+// independent, optional staleness extensions. It embeds coverageSubstrate so the
+// numbers it reports are produced by the same helper the other coverage cases
+// use -- the only difference between the two substrates is the extra pair of
+// methods.
+type staleCoverageSubstrate struct {
+	*coverageSubstrate
+	asOf      time.Time
+	asOfKnown bool
+	loadErr   string
+}
+
+func (s *staleCoverageSubstrate) CoverageAsOf() (time.Time, bool) { return s.asOf, s.asOfKnown }
+
+func (s *staleCoverageSubstrate) LastReloadError() string { return s.loadErr }
+
+// TestCheckUniverseCoverage_StalenessIsVisibleWhenTheSubstrateCanDateIt is the
+// positive control for the pure addition.
+//
+// Why it has teeth: the numbers in this case are GREEN (upstream == mapped, ratio
+// 1.00, no alert), which is exactly the state FU-20260925-01 describes -- the
+// store broke after the last good load and the audit keeps dividing the view it
+// already had. If the audit did not surface the age and the failure, this report
+// would be indistinguishable from a genuinely healthy one.
+func TestCheckUniverseCoverage_StalenessIsVisibleWhenTheSubstrateCanDateIt(t *testing.T) {
+	loadedAt := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	sub := &staleCoverageSubstrate{
+		coverageSubstrate: newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 10, Resolved: 10}),
+		asOf:              loadedAt,
+		asOfKnown:         true,
+		loadErr:           "db down",
+	}
+
+	rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.50)
+
+	if !rep.AsOf.Equal(loadedAt) {
+		t.Fatalf("AsOf = %v, want the instant the accounting was loaded (%v)", rep.AsOf, loadedAt)
+	}
+	if rep.LoadError != "db down" {
+		t.Fatalf("LoadError = %q, want the last reload failure", rep.LoadError)
+	}
+	// The addition must not touch the audit's verdict: this view IS fully
+	// covered by the rows it holds; it is the AGE that is the problem.
+	if !rep.Available || rep.Ratio != 1.0 || rep.Alert != "" {
+		t.Fatalf("a fully covered stale view keeps its verdict, got %+v", rep)
+	}
+
+	// Same substrate, extension methods absent: every pre-existing field must be
+	// identical, so the only difference the addition can produce is AsOf /
+	// LoadError. That is the "does not change existing semantics" proof.
+	base := CheckUniverseCoverage(sub.coverageSubstrate, &mockMapper{}, legacyTree(), 0.50)
+	if !base.AsOf.IsZero() || base.LoadError != "" {
+		t.Fatalf("a substrate that cannot date its accounting must leave zero values, got %+v", base)
+	}
+	if base.Available != rep.Available || base.Source != rep.Source ||
+		base.Upstream != rep.Upstream || base.Mapped != rep.Mapped ||
+		base.Unmapped != rep.Unmapped || base.Unknown != rep.Unknown ||
+		base.Ratio != rep.Ratio || base.Alert != rep.Alert {
+		t.Fatalf("the optional extensions changed an existing field: base=%+v extended=%+v", base, rep)
+	}
+}
+
+// TestCheckUniverseCoverage_StalenessExtensionsAreOptional is the negative
+// control: the pre-existing reporter satisfies neither extension, and the report
+// must stay byte-identical to the pre-change behavior. It also pins the two
+// decisions the consumer makes about the extension answers.
+func TestCheckUniverseCoverage_StalenessExtensionsAreOptional(t *testing.T) {
+	t.Run("plain_reporter_keeps_the_existing_report", func(t *testing.T) {
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{
+			Upstream: 10, Resolved: 7, Unmapped: 2, Unknown: 1,
+			Reasons: []string{"residual bucket (19/20)", "code not declared (upstream drift)"},
+		})
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.90)
+
+		if !rep.AsOf.IsZero() {
+			t.Fatalf("AsOf = %v, want the zero value when the substrate cannot date its accounting", rep.AsOf)
+		}
+		if rep.LoadError != "" {
+			t.Fatalf("LoadError = %q, want \"\" when the substrate cannot report a failure", rep.LoadError)
+		}
+		// Byte-for-byte the pre-existing accounting and wording: the audit line an
+		// operator reads must not change shape because two optional getters were
+		// added elsewhere.
+		if !rep.Available || rep.Source != industry.L1SourceSymbolIndustry {
+			t.Fatalf("report = %+v, want the measurable symbol_industry source", rep)
+		}
+		if rep.Upstream != 10 || rep.Mapped != 7 || rep.Unmapped != 2 || rep.Unknown != 1 || rep.Ratio != 0.7 {
+			t.Fatalf("report = %+v, want 10/7/2/1 with ratio 0.7", rep)
+		}
+		want := "coverage 70.00% below threshold 90.00% (upstream=10 mapped=7 unmapped=2 unknown=1)"
+		if rep.Alert != want {
+			t.Fatalf("Alert = %q, want %q (unchanged wording)", rep.Alert, want)
+		}
+	})
+
+	t.Run("as_of_unknown_is_not_a_timestamp", func(t *testing.T) {
+		// The bool is authoritative: an implementation that answers "no successful
+		// load" must not have its value copied into the report, so a refactor to
+		// `report.AsOf, _ = ...` would be caught here.
+		sub := &staleCoverageSubstrate{
+			coverageSubstrate: newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 4, Resolved: 4}),
+			asOf:              time.Now(),
+			asOfKnown:         false,
+		}
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.50)
+
+		if !rep.AsOf.IsZero() {
+			t.Fatalf("AsOf = %v, want the zero value when CoverageAsOf reports ok=false", rep.AsOf)
+		}
+		if !rep.Available || rep.Ratio != 1.0 {
+			t.Fatalf("an unknown age must not change the audit's numbers, got %+v", rep)
+		}
+	})
+
+	t.Run("load_error_survives_the_not_measurable_return", func(t *testing.T) {
+		// Upstream == 0 AND a named failure is the diagnostic this pair exists
+		// for; returning early before filling the fields would drop it exactly
+		// when it explains why the population is empty.
+		sub := &staleCoverageSubstrate{
+			coverageSubstrate: newCoverageSubstrate(industry.SymbolIndustryCoverage{}),
+			loadErr:           "db down",
+		}
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, nil, 0.50)
+
+		if rep.Available || rep.Ratio != 0 {
+			t.Fatalf("an empty population must stay not measurable, got %+v", rep)
+		}
+		if rep.LoadError != "db down" {
+			t.Fatalf("LoadError = %q, want the failure to survive the early return", rep.LoadError)
+		}
+		if !strings.Contains(rep.Alert, "not measurable") {
+			t.Fatalf("Alert = %q, want the unchanged not-measurable message", rep.Alert)
+		}
+	})
+}
+
 // ─────────────────── 5. Snapshot + Load roundtrip ────────────────────────
 
 // TestSnapshotRoundtrip verifies that saveUniverseSnapshot writes a file

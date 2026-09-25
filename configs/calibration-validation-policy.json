@@ -1,0 +1,41 @@
+{
+  "scope": "structure",
+  "note": "CI scope policy (issue #1944 Batch 4, item I31). Scope=structure means the nightly job validates the classification tree only: the checkout ships configs/parameters.json, so its updated_at can never be inside max-age and enforcing freshness in CI produced a verdict that carried no information. Freshness must be checked where the file is actually refreshed (production host): atlas-validate --path=configs/parameters.json --max-age=48h --format=json. Findings listed in accepted are reported as observations; anything else fails the run.",
+  "accepted": [
+    {
+      "code": "L1_NO_REPRESENTATIVES",
+      "segment": "etf_rotation",
+      "reason": "Size/style/asset-class bucket without an equity representative by design; internal/industry's canonical mapper reports it as unmapped (no canonical L1 translation). Adding members here would also change cmd/backfill-industry-tree weights, so it is a taxonomy decision, not a nightly-CI one."
+    },
+    {
+      "code": "L1_NO_REPRESENTATIVES",
+      "segment": "defensive",
+      "reason": "Size/style/asset-class bucket without an equity representative by design; internal/industry's canonical mapper reports it as unmapped (no canonical L1 translation). Adding members here would also change cmd/backfill-industry-tree weights, so it is a taxonomy decision, not a nightly-CI one."
+    },
+    {
+      "code": "L1_NO_REPRESENTATIVES",
+      "segment": "high_dividend",
+      "reason": "Size/style/asset-class bucket without an equity representative by design; internal/industry's canonical mapper reports it as unmapped (no canonical L1 translation). Adding members here would also change cmd/backfill-industry-tree weights, so it is a taxonomy decision, not a nightly-CI one."
+    },
+    {
+      "code": "L1_NO_REPRESENTATIVES",
+      "segment": "small_cap",
+      "reason": "Size/style/asset-class bucket without an equity representative by design; internal/industry's canonical mapper reports it as unmapped (no canonical L1 translation). Adding members here would also change cmd/backfill-industry-tree weights, so it is a taxonomy decision, not a nightly-CI one."
+    },
+    {
+      "code": "L1_NO_REPRESENTATIVES",
+      "segment": "tech",
+      "reason": "Size/style/asset-class bucket without an equity representative by design; internal/industry's canonical mapper reports it as unmapped (no canonical L1 translation). Adding members here would also change cmd/backfill-industry-tree weights, so it is a taxonomy decision, not a nightly-CI one."
+    },
+    {
+      "code": "L2_NO_REPRESENTATIVES",
+      "segment": "pcb",
+      "reason": "Members are declared in configs/sector_symbols.json (sectormap namespace sector_symbols), not in the parameters tree. Adding them here would also change cmd/backfill-industry-tree weights and the per-segment FinMind fetches."
+    },
+    {
+      "code": "L2_NO_REPRESENTATIVES",
+      "segment": "thermal",
+      "reason": "Members are declared in configs/sector_symbols.json (sectormap namespace sector_symbols), not in the parameters tree. Adding them here would also change cmd/backfill-industry-tree weights and the per-segment FinMind fetches."
+    }
+  ]
+}

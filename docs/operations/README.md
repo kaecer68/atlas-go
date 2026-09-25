@@ -42,6 +42,14 @@
 | [FOLLOWUPS.md](FOLLOWUPS.md) | 待辦 / 已知限制**登記表**（刻意延後且只建議未實作的項目；每個條目附可重現的來源） |
 | [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md) | SmartUniverseBuilder `symbols_ranked=0` 根因調查報告（含 §6.2 未覆蓋缺口 / §8 防再犯檢查 / §9 已知限制） |
 
+> **驗收判讀（2026-09-25 實證；已實際造成一次誤判，含 root 本人）**：部署／重啟後
+> atlas-go 的 `/metrics` 是 **in-memory**（`internal/bootstrap/bootstrapper.go` 的 `InitMetrics()`）
+> ⇒ **app 指標 family 會消失，直到下一次排程執行**（daily universe 最多 24 小時；跨週末/連假更久）。
+> 所以驗收時看到 `curl -s localhost:18080/metrics | grep atlas_universe` 回 **0 不等於 wiring 壞掉**；
+> 而且手動跑 `-build-universe run` **不會**更新 Prometheus 的 `atlas_universe_*`
+> （CLI 自建 deps、不寫入服務 collector）。判讀規則與證據見
+> [FOLLOWUPS.md](FOLLOWUPS.md) 的「判讀註記」與 FU-20260925-07 / FU-20260925-09。
+
 ---
 
 ## 命名規範
