@@ -32,9 +32,9 @@ func TestDegradedModeProviderErrorCounter_Increments(t *testing.T) {
 func TestDegradedMetrics_OnIncCallback(t *testing.T) {
 	m := NewDegradedMetrics()
 	var gotName string
-	var gotLabels []string
+	var gotLabels map[string]string
 	var gotValue float64
-	m.SetOnInc(func(name string, labels []string, value float64) {
+	m.SetOnInc(func(name string, labels map[string]string, value float64) {
 		gotName = name
 		gotLabels = labels
 		gotValue = value
@@ -45,12 +45,104 @@ func TestDegradedMetrics_OnIncCallback(t *testing.T) {
 	if gotName != "degraded_activations" {
 		t.Fatalf("callback name = %q, want degraded_activations", gotName)
 	}
-	wantLabels := []string{"crossmarket", "snapshot_stale"}
+	// Label NAMES must come from the vector, never from the values: the
+	// production defect paired values positionally and emitted
+	// {"crossmarket": "snapshot_stale"} instead of the real label names.
+	wantLabels := map[string]string{"service": "crossmarket", "reason": "snapshot_stale"}
 	if !reflect.DeepEqual(gotLabels, wantLabels) {
 		t.Fatalf("callback labels = %v, want %v", gotLabels, wantLabels)
 	}
 	if gotValue != 1.0 {
 		t.Fatalf("callback value = %v, want 1.0", gotValue)
+	}
+}
+
+// TestCounterVec_OnIncReportsDeltaNotCumulative pins the sink contract that
+// production violated: MetricsCollector.RecordCounter ACCUMULATES, so the
+// callback must report the per-event delta. Reporting the cumulative value
+// turned "N runs of x" into x·N(N+1)/2 (production measured
+// symbols_screened_total{daily="failed"} = 4797 = 1599 + 3198 after 2 runs).
+func TestCounterVec_OnIncReportsDeltaNotCumulative(t *testing.T) {
+	const (
+		runs       = 3
+		perRun     = int64(1599)
+		cumulative = perRun * runs * (runs + 1) / 2 // 9588 — the buggy total
+	)
+
+	um := NewUniverseMetrics()
+	var deltas []float64
+	um.SetOnInc(func(_ string, _ map[string]string, value float64) {
+		deltas = append(deltas, value)
+	})
+
+	counter := um.SymbolsScreened.WithLabelValues("daily", "failed")
+	for range runs {
+		counter.Add(perRun)
+	}
+
+	if len(deltas) != runs {
+		t.Fatalf("callback fired %d times, want %d", len(deltas), runs)
+	}
+	var total float64
+	for i, d := range deltas {
+		if d != float64(perRun) {
+			t.Fatalf("delta[%d] = %v, want %v (cumulative values inflate the sink)", i, d, perRun)
+		}
+		total += d
+	}
+	if want := float64(perRun * runs); total != want {
+		t.Fatalf("forwarded total = %v, want %v (buggy cumulative total would be %v)", total, want, cumulative)
+	}
+
+	// Negative control: the counter's own accounting must stay cumulative. Sinks
+	// accumulate, so changing Counter to set-semantics would break them.
+	if got := counter.Value(); got != float64(perRun*runs) {
+		t.Fatalf("counter.Value() = %v, want %v (counter must keep accumulating)", got, perRun*runs)
+	}
+}
+
+// TestCounterVec_OnIncReportsOnePerInc covers the Inc() path (delta 1).
+func TestCounterVec_OnIncReportsOnePerInc(t *testing.T) {
+	dm := NewDegradedMetrics()
+	var total float64
+	dm.SetOnInc(func(_ string, _ map[string]string, value float64) {
+		total += value
+	})
+
+	c := dm.ProviderErrors.WithLabelValues("crossmarket", "fetch_timeout")
+	for range 4 {
+		c.Inc()
+	}
+
+	if total != 4 {
+		t.Fatalf("forwarded total = %v, want 4", total)
+	}
+	if got := c.Value(); got != 4 {
+		t.Fatalf("counter.Value() = %v, want 4", got)
+	}
+}
+
+// TestCounterVec_AddZeroStillReportsZero guards the Add(0) contract the universe
+// pipeline relies on to materialise a series with no increment (e.g.
+// symbols_ranked_total{stage="daily"} = 0 after a run that ranked nothing).
+func TestCounterVec_AddZeroStillReportsZero(t *testing.T) {
+	um := NewUniverseMetrics()
+	var (
+		fired int
+		value float64 = -1
+	)
+	um.SetOnInc(func(_ string, _ map[string]string, v float64) {
+		fired++
+		value = v
+	})
+
+	um.SymbolsRanked.WithLabelValues("daily").Add(0)
+
+	if fired != 1 {
+		t.Fatalf("callback fired %d times, want 1", fired)
+	}
+	if value != 0 {
+		t.Fatalf("reported value = %v, want 0", value)
 	}
 }
 
