@@ -12,9 +12,15 @@ import (
 // evaluator would score the model against its own leak.
 func TestComputeFeatures_PointInTime(t *testing.T) {
 	series := []seriesPoint{
-		{"2021-01-04", 1.0}, {"2021-01-05", -0.5}, {"2021-01-06", 2.0},
-		{"2021-01-07", 0.25}, {"2021-01-08", -1.5}, {"2021-01-11", 3.0},
-		{"2021-01-12", 0.5}, {"2021-01-13", -0.75}, {"2021-01-14", 1.25},
+		{"2021-01-04", 1.0},
+		{"2021-01-05", -0.5},
+		{"2021-01-06", 2.0},
+		{"2021-01-07", 0.25},
+		{"2021-01-08", -1.5},
+		{"2021-01-11", 3.0},
+		{"2021-01-12", 0.5},
+		{"2021-01-13", -0.75},
+		{"2021-01-14", 1.25},
 		{"2021-01-15", -0.25},
 	}
 	cut := 6
@@ -57,10 +63,7 @@ func TestBuildPanel_Caliber(t *testing.T) {
 		returns[d] = map[string]float64{"semiconductor": rates[i]}
 	}
 	cost := 0.00585
-	rows, outcomes, seen, err := buildPanel(dates, dates, []string{"semiconductor"}, returns, 5, 5, cost, "test-source")
-	if err != nil {
-		t.Fatalf("buildPanel: %v", err)
-	}
+	rows, outcomes, seen := buildPanel(dates, dates, []string{"semiconductor"}, returns, 5, 5, cost, "test-source")
 	if len(seen) != 1 || seen[0] != "semiconductor" {
 		t.Fatalf("seen = %v", seen)
 	}

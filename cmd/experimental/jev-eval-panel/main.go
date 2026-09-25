@@ -19,7 +19,7 @@
 //
 //	Each row carries two structurally separate blocks:
 //	  pit      — features knowable at that date's close (trailing returns,
-//	             realised volatility, distance from the 60-day high). Computed
+//	             realized volatility, distance from the 60-day high). Computed
 //	             from returns with date <= t only.
 //	  forward  — the ground truth: the cost-adjusted forward return over the
 //	             fixed holding period (5 trading sessions) and its hit flag.
@@ -83,9 +83,9 @@ type PitFeatures struct {
 	TrailingReturn5DPct  float64 `json:"ret_5d_pct"`
 	TrailingReturn20DPct float64 `json:"ret_20d_pct"`
 	TrailingReturn60DPct float64 `json:"ret_60d_pct"`
-	// RealisedVol20DPct is the sample standard deviation of the daily returns
+	// RealizedVol20DPct is the sample standard deviation of the daily returns
 	// over the last 20 sessions (percent).
-	RealisedVol20DPct float64 `json:"vol_20d_pct"`
+	RealizedVol20DPct float64 `json:"vol_20d_pct"`
 	// DistanceFromHigh60DPct is how far below the trailing 60-session high the
 	// reconstructed level sits at t (percent, <= 0).
 	DistanceFromHigh60DPct float64 `json:"dist_high_60d_pct"`
@@ -245,10 +245,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 	sort.Strings(industryIDs)
 
-	rows, outcomes, seen, err := buildPanel(seriesDates, windowDates, industryIDs, returns, *forwardDays, *minHistory, rate, *source)
-	if err != nil {
-		return err
-	}
+	rows, outcomes, seen := buildPanel(seriesDates, windowDates, industryIDs, returns, *forwardDays, *minHistory, rate, *source)
 	if len(rows) == 0 {
 		return fmt.Errorf("panel is empty: no (date, industry) row had both %d trailing sessions and %d forward sessions", *minHistory, *forwardDays)
 	}
@@ -317,9 +314,11 @@ func resolveCaliber(paramsPath string, costRate float64, minSamples int) (float6
 
 // buildPanel computes PIT features and forward truth for every
 // (in-window date × industry) that has enough history and forward data.
+// It cannot fail: a row without trailing history or forward truth is simply
+// not emitted, and the caller treats an empty panel as its own error.
 func buildPanel(seriesDates, windowDates, industryIDs []string, returns map[string]map[string]float64,
-	forwardDays, minHistory int, costRate float64, source string) ([]PanelRow, []stockpicker.SignalOutcome, []string, error) {
-
+	forwardDays, minHistory int, costRate float64, source string,
+) ([]PanelRow, []stockpicker.SignalOutcome, []string) {
 	// Position of each date in the full series so "next N sessions" is exact.
 	pos := make(map[string]int, len(seriesDates))
 	for i, d := range seriesDates {
@@ -431,7 +430,7 @@ func buildPanel(seriesDates, windowDates, industryIDs []string, returns map[stri
 		}
 		return rows[i].IndustryID < rows[j].IndustryID
 	})
-	return rows, outcomes, seen, nil
+	return rows, outcomes, seen
 }
 
 // computeFeatures derives every PIT feature from hist (returns dated <= date).
@@ -444,7 +443,7 @@ func computeFeatures(hist []seriesPoint) PitFeatures {
 	f.TrailingReturn5DPct = compoundTail(ret, 5)
 	f.TrailingReturn20DPct = compoundTail(ret, 20)
 	f.TrailingReturn60DPct = compoundTail(ret, 60)
-	f.RealisedVol20DPct = sampleStd(tail(ret, 20))
+	f.RealizedVol20DPct = sampleStd(tail(ret, 20))
 	f.DistanceFromHigh60DPct = distanceFromHigh(tail(ret, 60))
 	return f
 }
@@ -530,7 +529,9 @@ func writeJSONL(path string, rows []PanelRow) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
+	// Read-only resource release: the project convention drops Close errors on
+	// read paths, and the explicit flush below reports a failed write first.
+	defer func() { _ = f.Close() }()
 	w := bufio.NewWriter(f)
 	enc := json.NewEncoder(w)
 	for _, r := range rows {
@@ -557,14 +558,17 @@ func writeJSON(path string, v any) error {
 }
 
 func printSummary(w io.Writer, s panelSummary, rows int) {
-	fmt.Fprintf(w, "jev-eval-panel: %d rows, %d industries, %s..%s\n", rows, len(s.IndustriesSeen), s.DateStart, s.DateEnd)
-	fmt.Fprintf(w, "caliber: hold=%d sessions, cost=%.5f, min_samples=%d, confidence=%.2f\n", s.HoldDays, s.CostRate, s.MinSamples, s.Confidence)
-	fmt.Fprintf(w, "%-22s %6s %6s %8s %8s %8s %-14s\n", "industry", "obs", "hits", "win_rate", "wilson_lo", "wilson_hi", "calibration")
+	// stdout summaries are best-effort: a broken pipe must not mask the real
+	// exit status of the export, so write errors are dropped explicitly.
+	emit := func(format string, args ...any) { _, _ = fmt.Fprintf(w, format, args...) }
+	emit("jev-eval-panel: %d rows, %d industries, %s..%s\n", rows, len(s.IndustriesSeen), s.DateStart, s.DateEnd)
+	emit("caliber: hold=%d sessions, cost=%.5f, min_samples=%d, confidence=%.2f\n", s.HoldDays, s.CostRate, s.MinSamples, s.Confidence)
+	emit("%-22s %6s %6s %8s %8s %8s %-14s\n", "industry", "obs", "hits", "win_rate", "wilson_lo", "wilson_hi", "calibration")
 	for _, r := range s.Industries {
-		fmt.Fprintf(w, "%-22s %6d %6d %8.4f %8.4f %8.4f %-14s\n",
+		emit("%-22s %6d %6d %8.4f %8.4f %8.4f %-14s\n",
 			r.IndustryID, r.Observations, r.Hits, r.WinRate, r.WilsonLower, r.WilsonUpper, r.CalibrationStatus)
 	}
-	fmt.Fprintf(w, "coverage: %d/%d observations (%.2f%%), %d/%d industries\n",
+	emit("coverage: %d/%d observations (%.2f%%), %d/%d industries\n",
 		s.Coverage.MappedObservations, s.Coverage.TotalObservations, s.Coverage.CoveragePct,
 		s.Coverage.MappedSymbols, s.Coverage.TotalSymbols)
 }
