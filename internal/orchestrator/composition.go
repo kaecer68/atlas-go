@@ -284,11 +284,16 @@ func buildPortfolioManager(runtimeParams *portfolio.RuntimeParameters, registry 
 			score = 1.0
 		}
 		return &domain.NarrativeFactorScore{
-			Score:      score,
-			Theme:      themes[0],
-			HitRate:    totalHit / n,
-			Confidence: totalConf / n,
-			EventIDs:   eventIDs,
+			Score:   score,
+			Theme:   themes[0],
+			HitRate: totalHit / n,
+			// The average above is taken over narrative events whose HitRate is
+			// a hand-authored prior (today: all of them). Propagate the label
+			// instead of letting the aggregate look like a measured hit rate
+			// (#1944 Batch 3, item I23).
+			HitRateSource: narrative.AggregateHitRateSourceForEvents(events),
+			Confidence:    totalConf / n,
+			EventIDs:      eventIDs,
 		}
 	})
 

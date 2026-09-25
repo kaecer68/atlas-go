@@ -1065,6 +1065,22 @@ func run(args []string, deps appDeps) error {
 			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
+				// I4 (#1944 Batch 3): the engine.sector_rotation.strategic_prior
+				// config block is the documented C07 seed for this predictor
+				// ("C07 heuristic seed (event-driven sector predictor prior)").
+				// Before this wiring the predictor was always built with a nil
+				// prior, so the `overall_baseline` contribution was identically
+				// 0. LoadStrategicPrior validates the 20 canonical L1 IDs and
+				// sum=1; on failure fall back to nil (unwired) rather than
+				// failing startup, and say so in the log.
+				if paramsCfg := config.GetParametersConfig(); paramsCfg != nil {
+					if prior, err := sectorallocation.LoadStrategicPrior(paramsCfg); err != nil {
+						log.Printf("[EventDriven] sector strategic prior unavailable (%v); overall_baseline contribution stays 0", err)
+					} else {
+						edHandler.SetSectorStrategicPrior(prior)
+						log.Printf("[EventDriven] sector strategic prior wired (source=%s status=%s)", prior.Source, prior.CalibrationStatus)
+					}
+				}
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
 			} else {
 				log.Printf("[EventDriven] sector predictions disabled (set SECTOR_PREDICTION_ENABLED=true to enable)")

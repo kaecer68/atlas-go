@@ -167,9 +167,18 @@ func (fe *FactorEngine) CalculateAllScoresWithBreakdown(
 
 	if narProv != nil {
 		if nfs := narProv(symbol); nfs != nil {
+			source := nfs.HitRateSource
+			if source == "" {
+				// Defensive: a provider that predates the provenance field.
+				source = "unknown"
+			}
 			nar = domain.FactorScoreItem{
-				Score:     nfs.Score,
-				Formula:   fmt.Sprintf("narrative(theme=%s, hit_rate=%.2f)", nfs.Theme, nfs.HitRate),
+				Score: nfs.Score,
+				// hit_rate_source is written into the formula so the outward
+				// breakdown never shows a bare hit rate: today the value is an
+				// average over hand-authored narrative priors, not a backtest
+				// figure (#1944 Batch 3, item I23).
+				Formula:   fmt.Sprintf("narrative(theme=%s, hit_rate=%.2f, hit_rate_source=%s)", nfs.Theme, nfs.HitRate, source),
 				RawInputs: map[string]float64{"theme_hit_rate": nfs.HitRate, "confidence": nfs.Confidence},
 			}
 			result[FactorNarrative] = nar.Score

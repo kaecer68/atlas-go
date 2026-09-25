@@ -81,9 +81,86 @@ type SectorPrediction struct {
 }
 
 // SectorDayPrediction groups all L1 sector predictions for a single forecast date.
+//
+// Persistence: NOT persisted. The ledger landing type
+// (ledger.EventFlowPredictionRecord) has no sector column and the handler's
+// persistTodayPrediction() writes only the day-1 whole-market flow, so sector
+// rows are recomputed per request and cannot be reconciled T+1 (#1944 Batch 3,
+// item I6). SectorPredictionPersisted / SectorPredictionPersistenceReason below
+// are the machine-readable form of that fact.
 type SectorDayPrediction struct {
 	Date    string             `json:"date"`
 	Sectors []SectorPrediction `json:"sectors"`
+}
+
+// Per-sector prediction wiring facts (#1944 Batch 3, items I4/I5/I6).
+//
+// These constants are the machine-readable record of what the event-driven
+// sector predictor does NOT do in production. They are asserted by
+// sector_prediction_status_test.go; flipping one requires updating that test
+// and the corresponding entry in docs/reference/inert-registry.md.
+const (
+	// SectorPredictionPersisted reports whether SectorDayPrediction rows are
+	// written anywhere durable. false: the ledger schema has no sector column
+	// (I6), so predictions vanish on the next request.
+	SectorPredictionPersisted = false
+	// SectorPredictionPersistenceReason explains the false above.
+	SectorPredictionPersistenceReason = "ledger_event_flow_prediction_record_has_no_sector_column"
+
+	// SectorCycleProviderWired reports whether production injects a cycle-score
+	// provider (industry.CycleTracker.GetContinuousPhaseScore) into the
+	// SectorPredictor. false: the two CycleTracker instances that exist at
+	// runtime (orchestrator composition root and monitoring dashboard) are not
+	// synchronized, and the dashboard one is seeded from
+	// industry.default_metrics config rather than measured data (I13). Feeding
+	// either into the predictor would present a config seed as a measured cycle
+	// position. To flip this: (1) make one CycleTracker instance shared and fed
+	// by a real UpdatePosition producer (I13), (2) pass it through
+	// RegisterRoutesWithDetectors → Handler.SetSectorCycleProvider, (3) update
+	// TestProductionSectorPredictionStatusLeavesCycleUnwired.
+	SectorCycleProviderWired = false
+)
+
+// Reasons reported by SectorPredictionStatus.Reason when sector rows are absent.
+const (
+	// SectorPredictionReasonFlagDisabled — SECTOR_PREDICTION_ENABLED is false
+	// (its shipped default), so cmd/atlas never wires the macro provider and
+	// the predictor is never built. I5.
+	SectorPredictionReasonFlagDisabled = "sector_prediction_disabled_by_flag"
+	// SectorPredictionReasonMacroUnavailable — the flag is on but the macro
+	// snapshot fetch failed, so no predictor could be built for this request.
+	SectorPredictionReasonMacroUnavailable = "macro_snapshot_unavailable"
+	// SectorPredictionReasonNotBuilt — no predictor is attached to the handler.
+	SectorPredictionReasonNotBuilt = "sector_predictor_not_attached"
+)
+
+// SectorPredictionStatus makes the sector-prediction wiring state visible on
+// the prediction report. Without it a disabled flag surfaced as a silent
+// `sector_predictions: []` — indistinguishable from "computed, no signal"
+// (#1944 Batch 3, item I5).
+type SectorPredictionStatus struct {
+	// Enabled is true when the handler is allowed to build a predictor, i.e.
+	// the SECTOR_PREDICTION_ENABLED gate in cmd/atlas wired a macro provider.
+	Enabled bool `json:"enabled"`
+	// Applied is true only when sector rows were actually produced for this
+	// report. Never hard-coded.
+	Applied bool `json:"applied"`
+	// Days / SectorRows are the produced shape (0 when !Applied).
+	Days       int `json:"days"`
+	SectorRows int `json:"sector_rows"`
+	// StrategicPriorApplied is derived from the predictor's live state: true
+	// only when a sectorallocation.StrategicSectorPrior is attached, which is
+	// what makes the `overall_baseline` driver able to contribute (#1944 item I4).
+	StrategicPriorApplied bool `json:"strategic_prior_applied"`
+	// CycleProviderWired is derived from the predictor's live state. In
+	// production it is false (see SectorCycleProviderWired) and the
+	// `cycle_position` driver can therefore never contribute.
+	CycleProviderWired bool `json:"cycle_provider_wired"`
+	// Persisted mirrors SectorPredictionPersisted for this payload.
+	Persisted         bool   `json:"persisted"`
+	PersistenceReason string `json:"persistence_reason,omitempty"`
+	// Reason is set only when !Applied.
+	Reason string `json:"reason,omitempty"`
 }
 
 // PredictionReport is the complete 5-day event-driven prediction.
@@ -99,7 +176,13 @@ type PredictionReport struct {
 	ETFEstimates      []ETFEstimate         `json:"etf_estimates"`
 	RevenueSurprises  []RevenueSurprise     `json:"revenue_surprises"`
 	SectorPredictions []SectorDayPrediction `json:"sector_predictions"`
-	Summary           string                `json:"summary"`
+	// SectorPredictionStatus reports whether per-sector predictions were
+	// produced and, when not, the machine-readable reason. Always populated
+	// (nil only for reports built outside the handler) so a disabled
+	// SECTOR_PREDICTION_ENABLED flag is visible instead of a silent empty
+	// array (#1944 Batch 3, items I4/I5/I6).
+	SectorPredictionStatus *SectorPredictionStatus `json:"sector_prediction_status,omitempty"`
+	Summary                string                  `json:"summary"`
 
 	// HistoricalHitRate is the realized directional hit rate over the
 	// recent window of completed (T+1-reconciled) predictions. nil when

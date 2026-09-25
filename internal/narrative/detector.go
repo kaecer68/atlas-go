@@ -91,12 +91,16 @@ func (r DetectionResult) ToNarrativeEvent() NarrativeEvent {
 		Theme:            r.Theme,
 		Confidence:       r.Confidence,
 		ConfidenceSource: string(r.Source),
-		Severity:         string(r.Severity),
-		Timestamp:        r.DetectedAt,
-		SourceData:       numericMetadata(r.Metadata),
-		Duration:         getThemeDuration(r.Theme),
-		ExpiresAt:        r.DetectedAt.Add(getThemeDuration(r.Theme)),
-		Status:           "active",
+		// HitRate is left at 0 by this projection, so label it as "not
+		// populated" rather than letting a 0 read as a measured/probabilistic
+		// hit rate (#1944 Batch 3, item I23).
+		HitRateSource: HitRateSourceNotPopulated,
+		Severity:      string(r.Severity),
+		Timestamp:     r.DetectedAt,
+		SourceData:    numericMetadata(r.Metadata),
+		Duration:      getThemeDuration(r.Theme),
+		ExpiresAt:     r.DetectedAt.Add(getThemeDuration(r.Theme)),
+		Status:        "active",
 	}
 }
 

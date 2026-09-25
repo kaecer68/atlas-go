@@ -20,6 +20,11 @@
 //   - Theme (e.g. US_rates_up, AI_capex_surge)
 //   - Confidence [0,1] + ConfidenceSource
 //   - HitRate MUST come from hitRateForTheme() (never computed manually)
+//   - HitRateSource labels that value's provenance (see hitrate_provenance.go):
+//     detectors always yield handwritten_prior (the shipped prior table) or
+//     unavailable_no_template when no template exists. The runtime EMA in
+//     EvaluateModels/updateTemplateHitRates is in-memory only, so nothing here
+//     is a durable backtest figure (#1944 Batch 3, item I23).
 //   - SourceData (mandatory, original trigger values)
 //   - Duration / ExpiresAt
 //   - Severity (low/medium/high/critical → ±5/10/20/30% factor weight adjustment)

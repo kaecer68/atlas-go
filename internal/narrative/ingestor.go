@@ -442,6 +442,9 @@ func detectEventsFromSnapshot(curr, prev marketdata.MacroDataSnapshot, div *Dive
 		events = append(events, *event)
 	}
 
+	// Same labeling as NarrativeEngine.DetectEvents: the snapshot ingestor
+	// pipeline reads HitRate from hitRateForTheme() (the prior table) too.
+	stampDetectorHitRateProvenance(events)
 	return events
 }
 

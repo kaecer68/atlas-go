@@ -2,8 +2,15 @@ package narrative
 
 // DefaultTemplates returns the built-in causal narrative templates.
 // sync: TriggerTheme values must match shared_web/static/js/shared/theme-labels.js THEME_LABELS keys.
+//
+// Every HistoricalHitRate literal below is a HAND-AUTHORED PRIOR, not a
+// realized backtest figure. The stamping loop at the end of this function
+// therefore labels each template with HitRateSource=handwritten_prior; it is
+// asserted by TestDefaultTemplatesCarryPriorHitRateSource and must not be
+// removed without also removing the label from /api/narrative/templates
+// (issue #1944 Batch 3, item I23).
 func DefaultTemplates() []CausalTemplate {
-	return []CausalTemplate{
+	templates := []CausalTemplate{
 		{
 			ID:             "美國升息 / 鷹派聯準會",
 			Name:           "美國升息 / 鷹派聯準會",
@@ -592,4 +599,10 @@ HistoricalHitRate 刻意保守（0.55，低於全表最低 0.58）：停火易�
 • 【注意】出口導向電子股：匯率壓力與資金面利多互相抵消，選個股而非板塊`,
 		},
 	}
+	for i := range templates {
+		if templates[i].HitRateSource == "" {
+			templates[i].HitRateSource = HitRateSourceHandwrittenPrior
+		}
+	}
+	return templates
 }
