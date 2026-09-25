@@ -485,18 +485,12 @@ func calculateMaxDrawdownFromEquityCurve(curve []EquityCurvePoint) float64 {
 	return risk.CalculateMaxDrawdown(values)
 }
 
-// buildSymbolSectorMap builds a symbol→sector mapping from the classifier.
+// buildSymbolSectorMap builds a symbol→sector mapping from the classifier
+// through the shared deterministic index (industry.BuildSymbolSectorIndex);
+// multi-assigned symbols no longer depend on Go map iteration order
+// (#1944 Batch 4, item I27).
 func (s *LiveService) buildSymbolSectorMap() map[string]string {
-	m := make(map[string]string)
-	if s.Classifier == nil {
-		return m
-	}
-	for _, seg := range s.Classifier.GetAllSegments() {
-		for _, sym := range seg.RepresentativeStocks {
-			m[sym] = seg.ID
-		}
-	}
-	return m
+	return industry.BuildSymbolSectorIndex(s.Classifier).BySymbol
 }
 
 // getSectorForSymbol looks up the sector for a symbol from the pre-built map.
