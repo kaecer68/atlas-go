@@ -71,12 +71,28 @@ const (
 )
 
 // CalibrationEvidence 標明 per-pattern 校準證據是否存在（機讀）。
-// 注意：calibration_observations / calibration_verdict / calibration_timestamp
-// 這三個 per-pattern 欄位目前全 repo 沒有 producer（issue #1944 / I17），
-// 因此實務上只會看到 CalibrationEvidenceNone。
+// calibration_observations / calibration_verdict / calibration_timestamp 這三個
+// per-pattern 欄位的 producer 是 `cmd/calibrate-seasonal --update`
+// （`updateParametersFileAt`，需真 replay 資料才會寫；issue #1944 Batch 4 / I17）。
+// 在 operator 跑過該工具之前，這三個欄位不存在 ⇒ 一律 CalibrationEvidenceNone。
 const (
 	CalibrationEvidenceNone    = "none"
 	CalibrationEvidencePresent = "measured"
+)
+
+// SeasonalVerdict* 是 per-pattern 校準裁決的字彙表（機讀）。
+// producer 是 cmd/calibrate-seasonal --update；consumer 是
+// CalibrationHealthSummary.VerdictCounts（只計數，不驗值），因此這組常數是
+// 兩端共用詞彙的單一權威。
+const (
+	// SeasonalVerdictCalibrated：有足夠觀測且值域合法，校準值已寫回 config。
+	SeasonalVerdictCalibrated = "calibrated"
+	// SeasonalVerdictInsufficientSamples：觀測數低於 --update-threshold，值未套用。
+	SeasonalVerdictInsufficientSamples = "insufficient_samples"
+	// SeasonalVerdictOutOfRange：觀測足夠但值域不合法（未通過守門），值未套用。
+	SeasonalVerdictOutOfRange = "out_of_range"
+	// SeasonalVerdictNoObservations：該 pattern 這次沒有任何觀測。
+	SeasonalVerdictNoObservations = "no_observations"
 )
 
 // ObservationStatus 為校準觀測量的機讀狀態。
@@ -277,10 +293,11 @@ func extractSeasonalPatterns(root map[string]any) ([]map[string]any, seasonalDat
 // 進入此函式前先處理 missing / malformed / empty 等前置情境）。
 func deriveHealth(s *CalibrationHealthSummary) (HealthStatus, HealthReason) {
 	// 「無觀測」優先於值域判定（issue #1944 / I17）：
-	// calibration_observations / calibration_verdict / calibration_timestamp
-	// 這三個 per-pattern 欄位全 repo 沒有 producer，所以 TotalObservations == 0
-	// 時「校準品質」本身不可知。此時若沿用值域判定把它報成 critical，dashboard
-	// 只會看到 critical 卻無法分辨「沒校準」與「校準值壞了」——這就是假訊號。
+	// calibration_observations / calibration_verdict / calibration_timestamp 的
+	// producer 是 cmd/calibrate-seasonal --update（需真 replay 與足夠觀測）。
+	// 在 operator 跑過之前，TotalObservations == 0 ⇒「校準品質」本身不可知。
+	// 此時若沿用值域判定把它報成 critical，dashboard 只會看到 critical 卻無法
+	// 分辨「沒校準」與「校準值壞了」——這就是假訊號。
 	//
 	// 值域問題不會被掩蓋：AdjustmentFactorStatus（out_of_range）、
 	// DarwinianViolations 與 OutOfRangePatterns 都照實回報，消費者可依需要

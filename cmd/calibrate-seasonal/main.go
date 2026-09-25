@@ -62,7 +62,7 @@ func run(args []string) error {
 		if *replayPath == "" {
 			return fmt.Errorf("calibrate-seasonal: refusing --update with synthetic 2024 fallback data; rerun with --replay <path> to supply real stock returns before writing to configs/parameters.json")
 		}
-		if err := updateParametersFile(results, *updateThreshold, *replayPath); err != nil {
+		if err := updateParametersFileAt(constants.ParametersFile, results, *updateThreshold, *replayPath); err != nil {
 			return fmt.Errorf("update parameters: %w", err)
 		}
 	}
@@ -84,9 +84,23 @@ func run(args []string) error {
 	return nil
 }
 
-func updateParametersFile(results []industry.SeasonalCalibration, threshold int, dataSource string) error {
-	paramsPath := constants.ParametersFile
-
+// updateParametersFileAt writes calibration results back into the seasonal
+// patterns of the parameters file at paramsPath.
+//
+// Producer contract (issue #1944 Batch 4, item I17): besides the calibrated
+// values (historical_accuracy / avg_market_return / adjustment_factor), every
+// pattern that has a calibration result also gets the three per-pattern
+// evidence fields the seasonal health consumer reads
+// (internal/industry/seasonal_health.go):
+//
+//	calibration_observations (number of observations behind the value)
+//	calibration_verdict      (calibrated | insufficient_samples |
+//	                          out_of_range | no_observations)
+//	calibration_timestamp    (RFC3339, when this pattern was evaluated)
+//
+// Before this producer existed, CalibrationEvidence could only ever be "none"
+// and the dashboard health was permanently `unknown`/no_observations.
+func updateParametersFileAt(paramsPath string, results []industry.SeasonalCalibration, threshold int, dataSource string) error {
 	data, err := os.ReadFile(paramsPath)
 	if err != nil {
 		return fmt.Errorf("read parameters.json: %w", err)
@@ -129,6 +143,7 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 
 	var updated []string
 	var skipped []string
+	now := time.Now().UTC()
 
 	for i, patternObj := range patternsArray {
 		pattern, ok := patternObj.(map[string]any)
@@ -147,29 +162,35 @@ func updateParametersFile(results []industry.SeasonalCalibration, threshold int,
 			continue
 		}
 
+		// Per-pattern evidence is written even when the calibrated values are
+		// NOT applied: "5 observations were behind this pattern" and "this
+		// pattern was evaluated with 0 observations" are both facts the health
+		// consumer needs in order to stop reporting an unknowable calibration
+		// quality as if it were fine (I17).
+		pattern["calibration_observations"] = result.ObservationCount
+		pattern["calibration_timestamp"] = now.Format(time.RFC3339)
+		verdict := industry.SeasonalVerdictCalibrated
+
 		if result.ObservationCount == 0 {
+			verdict = industry.SeasonalVerdictNoObservations
 			skipped = append(skipped, fmt.Sprintf("%s (zero observations)", patternID))
-			continue
-		}
-
-		if result.ObservationCount < threshold {
+		} else if result.ObservationCount < threshold {
+			verdict = industry.SeasonalVerdictInsufficientSamples
 			skipped = append(skipped, fmt.Sprintf("%s (observations %d < threshold %d)", patternID, result.ObservationCount, threshold))
-			continue
-		}
-
-		if violations := validateCalibrationResult(result); len(violations) > 0 {
+		} else if violations := validateCalibrationResult(result); len(violations) > 0 {
+			verdict = industry.SeasonalVerdictOutOfRange
 			skipped = append(skipped, fmt.Sprintf("%s (calibration out of range: %v)", patternID, violations))
-			continue
+		} else {
+			pattern["historical_accuracy"] = result.ObservedAccuracy
+			pattern["avg_market_return"] = result.ObservedAvgReturn
+			pattern["adjustment_factor"] = result.ObservedAdjustment
+			updated = append(updated, patternID)
 		}
 
-		pattern["historical_accuracy"] = result.ObservedAccuracy
-		pattern["avg_market_return"] = result.ObservedAvgReturn
-		pattern["adjustment_factor"] = result.ObservedAdjustment
+		pattern["calibration_verdict"] = verdict
 		patternsArray[i] = pattern
-		updated = append(updated, patternID)
 	}
 
-	now := time.Now().UTC()
 	seasonalPatterns["calibration_timestamp"] = now.Format(time.RFC3339)
 	seasonalPatterns["last_calibrated"] = now.Format(time.RFC3339)
 	if dataSource != "" {
