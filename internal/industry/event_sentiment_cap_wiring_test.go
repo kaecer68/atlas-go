@@ -30,7 +30,7 @@ func TestComputeSentimentAdjustment_ConsumesConfigCap(t *testing.T) {
 		t.Errorf("no-config adjustment = %v, want %v", got, defaultEventSentimentCap)
 	}
 
-	// Shipped config value → same result (behaviour-neutral wiring).
+	// Shipped config value → same result (behavior-neutral wiring).
 	shipped := config.DefaultParametersConfig()
 	shippedCal := &EventCalendar{config: shipped}
 	shippedCap := shipped.Industry.EventSentimentCap.Value
@@ -66,11 +66,11 @@ func TestComputeSentimentAdjustment_ConsumesConfigCap(t *testing.T) {
 }
 
 // TestShippedEventSentimentCapMatchesHardcodedDefault documents that the wiring
-// above is behaviour-neutral for the shipped config.
+// above is behavior-neutral for the shipped config.
 func TestShippedEventSentimentCapMatchesHardcodedDefault(t *testing.T) {
 	shipped := config.DefaultParametersConfig().Industry.EventSentimentCap.Value
 	if math.Abs(shipped-defaultEventSentimentCap) > 1e-9 {
-		t.Fatalf("shipped industry.event_sentiment_cap = %v, hardcoded default = %v — the wiring is no longer behaviour-neutral; report it in the PR body",
+		t.Fatalf("shipped industry.event_sentiment_cap = %v, hardcoded default = %v — the wiring is no longer behavior-neutral; report it in the PR body",
 			shipped, defaultEventSentimentCap)
 	}
 }

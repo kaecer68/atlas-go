@@ -25,7 +25,7 @@ const cycleEvidenceEmpirical = "empirical"
 // Injecting the tracker raw would present a config seed as a measured cycle
 // position for every industry the data task has not covered yet; returning the
 // neutral 0.0 for those keeps the predictor's cycle_position contribution
-// identical to the unwired behaviour until real data exists.
+// identical to the unwired behavior until real data exists.
 type MeasuredCycleProvider struct {
 	src CyclePhaseSource
 }

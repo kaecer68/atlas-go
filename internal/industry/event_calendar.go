@@ -1382,7 +1382,7 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) (CalendarEv
 
 // defaultEventSentimentCap is the fallback used when no parameters config is
 // loaded. It equals the shipped industry.event_sentiment_cap value, so wiring
-// the config knob through sentimentCap() is behaviour-neutral for every
+// the config knob through sentimentCap() is behavior-neutral for every
 // existing caller (#1944 Batch 4 / N-C3).
 const defaultEventSentimentCap = 0.05
 

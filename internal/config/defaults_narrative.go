@@ -929,7 +929,7 @@ func defaultIndustryParameters() IndustryParameters {
 		// internal/industry/cycle.go BuildConfidenceBreakdown (empirical=1.0 /
 		// estimated=0.4 / insufficient=0.0), and this struct maps a DataFreshness
 		// enum that path no longer uses, so wiring it unchanged would change
-		// behaviour. parameters_shadow_declarations_test.go fails if a reader
+		// behavior. parameters_shadow_declarations_test.go fails if a reader
 		// appears while this declaration still says NOT WIRED.
 		FreshnessScores: ParameterMetadata[FreshnessScoresConfig]{
 			Value: FreshnessScoresConfig{
@@ -1172,7 +1172,7 @@ func defaultIndustryParameters() IndustryParameters {
 		// (internal/industry/event_calendar.go) as the ±cap of
 		// computeSentimentAdjustment. The former hardcoded 0.05 is now only the
 		// fallback when no config is loaded; the shipped value equals it, so the
-		// wiring is behaviour-neutral today.
+		// wiring is behavior-neutral today.
 		EventSentimentCap: ParameterMetadata[float64]{
 			Value:     0.05,
 			Rationale: "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. WIRED (#1944 Batch 4 / N-C3): read by EventCalendar.sentimentCap() in industry/event_calendar.go; the hardcoded 0.05 is only the no-config fallback.",
