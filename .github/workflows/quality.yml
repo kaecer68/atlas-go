@@ -186,6 +186,22 @@ jobs:
     - name: Jev contract C5 warn-only selftest
       run: bash tests/scripts/test-jev-contract-c5-selftest.sh
 
+  # inert 閉環靜態檢查（issue #1944 建議 2）— 「有寫入、無消費」的靜態閘門：
+  # (a) config 旗標有 reader、(b) writer 有 consumer、(c) 「已生效」欄位由證據推導／有 consumer。
+  # 無 path filter：docs-或 scripts-only 的 PR 也要跑（檢查 <10s；回歸測試為 hermetic fixture）。
+  # 既有歷史項由 scripts/ci/inert-baseline.json 覆蓋（每項 reason 必填；stale 只警告不紅燈）。
+  # 規格：docs/specs/inert-static-check-spec.md
+  inert-closure:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check inert closures (config / writer / claim)
+      run: bash scripts/ci/check_inert_closure.sh
+
+    - name: Inert closure regression tests (hermetic fixtures)
+      run: bash tests/scripts/test-inert-closure.sh
+
   # Frontend dynamic import consistency — verifies every admin_web/client_web
   # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
   # Catches the silent esbuild plugin fallback failure mode (PR #785 / script from PR #789).
