@@ -2,21 +2,17 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
-	"os"
-	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kaecer68/atlas-go/internal/bootstrap"
 	"github.com/kaecer68/atlas-go/internal/config"
-	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
-	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/screener"
@@ -37,7 +33,27 @@ func runBuildUniverse(rt *bootstrap.Runtime, cfg config.Config, verbose bool, da
 	}
 }
 
-// buildUniverseRun wires the full SmartUniverse pipeline and prints the top N ranked symbols.
+// buildUniverseRun runs the full SmartUniverse pipeline once and prints the
+// top ranked symbols.
+//
+// It delegates to monitoring.BuildUniverse so that this sub-command and the
+// scheduled auto_universe_refresh / auto_universe_full_rebuild tasks share one
+// implementation, one quote provider and one snapshot schema. Two issues
+// (issue #1944 Batch 3) came from this function re-implementing the pipeline:
+//
+//   - N-U1: it called marketdata.NewMockProvider() with a nil symbol list, so
+//     GetQuotes returned an empty slice and the sub-command failed 100% of the
+//     time with "universe: no quotes available".
+//   - N-U3: it persisted a second, incompatible snapshot schema
+//     (build_time / ranked_count / top_symbols) to the same path the scheduler
+//     writes (result / ranked). Both directions unmarshalled without error and
+//     silently read zero, so the CLI clobbered the scheduler's ranked list
+//     (breaking D6 watchlist tracking) and the coverage alert input.
+//
+// The universe population now comes from monitoring.GatherUniverseSymbols
+// (classification tree + industry substrate), the same source the scheduler
+// uses, and the quotes come from the same gateway-backed provider the
+// simulation path uses.
 func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, _ bool, _ string) error {
 	suCfg := config.GetParametersConfig().SmartUniverse
 
@@ -63,88 +79,49 @@ func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, _ bool, _ string
 	}
 	mapper := monitoring.NewSubstrateIndustryMapper(monitoring.NewTreeBasedMapper(classTreeAdapter), substrate, classTreeAdapter)
 
-	indFilter := monitoring.NewIndustryFilter(mapper, classTreeAdapter, supplyAdapter)
-	indFilter.ExpandSupplyChainDepth = suCfg.SupplyChainExpandDepth.Value
+	// ── Wire factor engine and screener ────────────────────────────────────
+	factorEngine := portfolio.NewFactorEngine()
+	scr := screener.NewEngine(factorEngine, portfolio.NewFundamentalProvider())
 
-	// ── Wire factor engine and screener ─────────────────────────────────────
-	factorEng := portfolio.NewFactorEngine()
-	fundProv := portfolio.NewFundamentalProvider()
-	scr := screener.NewEngine(factorEng, fundProv)
-	adaptedFE := monitoring.AdaptFactorEngine(factorEng)
-
-	scoring := monitoring.NewScoringScreener(scr, adaptedFE)
-	scoring.TopN = suCfg.TopN.Value
-	scoring.VolumeFloorTWD = suCfg.VolumeFloorTWD.Value
-	scoring.MaxIndustryConcentration = suCfg.MaxIndustryConcentration.Value
-	scoring.PriceMin = suCfg.PriceMinimum.Value
-	if suCfg.FactorScoreMaxAgeDays.Value > 0 {
-		scoring.FactorScoreMaxAge = time.Duration(suCfg.FactorScoreMaxAgeDays.Value) * 24 * time.Hour
-	}
-	scoring.Weights = monitoring.ScreenerWeights{
-		PE:          suCfg.PEWeight.Value,
-		PB:          suCfg.PBWeight.Value,
-		Volume:      suCfg.VolumeWeight.Value,
-		Momentum:    suCfg.MomentumWeight.Value,
-		Quality:     suCfg.QualityWeight.Value,
-		ForeignFlow: suCfg.ForeignFlowWeight.Value,
-	}
-
-	// ── Wire risk exclusion filter ──────────────────────────────────────────
-	// RiskManager and QuoteProvider are nil (optional — dependent checks skip).
-	// Apply SmartUniverseConfig overrides (5 risk thresholds) via Configure().
-	hp := portfolio.NewHistoricalPrices()
-	riskFilter := monitoring.NewRiskExclusionFilter(nil, nil, hp)
+	// ── Wire the real quote provider (N-U1) ────────────────────────────────
+	quoteProvider := newUniverseQuoteProvider(cfg)
+	// Layer 2.5 shares the very same provider instance (N-U7), so the liquidity
+	// re-check and the Step 3 price/volume filter never disagree about a symbol.
+	riskFilter := monitoring.NewRiskExclusionFilter(nil, quoteProvider, portfolio.NewHistoricalPrices())
 	riskFilter.Configure(suCfg)
 
-	// ── Build universe of TWSE symbols ──────────────────────────────────────
-	// Gather all symbols from the market data provider.
-	mdProvider := marketdata.NewMockProvider()
-	quotes, err := mdProvider.GetQuotes(context.Background(), time.Now(), nil)
+	deps := monitoring.UniverseBuilderDeps{
+		Mapper:      mapper,
+		Tree:        classTreeAdapter,
+		SupplyChain: supplyAdapter,
+		Screener:    scr,
+		FactorEng:   monitoring.AdaptFactorEngine(factorEngine),
+		Quotes:      quoteProvider,
+		RiskFilter:  riskFilter,
+		// NarrativeBridge stays nil on purpose: a manual CLI run must not
+		// scrape external RSS/news feeds. Layer 3 is therefore skipped here;
+		// the scheduled tasks own that step.
+		NarrativeBridge: nil,
+		Config:          suCfg,
+		WorkDir:         cfg.WorkDir,
+		WatchlistMu:     &universeWatchlistMu,
+		Substrate:       substrate,
+	}
+
+	// fullRebuild=true: a manual invocation is a fresh run, matching the
+	// weekly rebuild stage (and the widest universe).
+	result, ranked, err := monitoring.BuildUniverse(context.Background(), deps, true)
 	if err != nil {
-		return fmt.Errorf("fetch quotes: %w", err)
+		return fmt.Errorf("build universe: %w", err)
 	}
-	if len(quotes) == 0 {
-		log.Printf("[universe] WARNING: no quotes returned from market data provider")
-		return fmt.Errorf("universe: no quotes available")
-	}
-
-	allSymbols := make([]string, 0, len(quotes))
-	quoteMap := make(map[string]domain.Quote, len(quotes))
-	for _, q := range quotes {
-		allSymbols = append(allSymbols, q.Symbol)
-		quoteMap[q.Symbol] = q
+	if result == nil {
+		return errors.New("build universe: nil result")
 	}
 
-	// ── Layer 1: Industry filter ────────────────────────────────────────────
-	candidates := indFilter.Filter(allSymbols)
-	log.Printf("[universe] Layer 1 (IndustryFilter): %d → %d candidates", len(allSymbols), len(candidates))
+	log.Printf("[universe] symbols built=%d filtered=%d ranked=%d excluded=%d",
+		result.SymbolsBuilt, result.SymbolsFiltered, result.SymbolsRanked, result.SymbolsExcluded)
 
-	// ── Layer 2: Scoring + ranking ──────────────────────────────────────────
-	ranked := scoring.Rank(candidates, quoteMap)
-	log.Printf("[universe] Layer 2 (ScoringScreener): %d → %d ranked", len(candidates), len(ranked))
-
-	// ── Layer 2.5: Risk exclusion ───────────────────────────────────────────
-	rankedSymbols := make([]string, len(ranked))
-	for i, r := range ranked {
-		rankedSymbols[i] = r.Symbol
-	}
-	exResults, _ := riskFilter.Filter(rankedSymbols)
-
-	excludedCount := 0
-	for _, er := range exResults {
-		if !er.Passed {
-			excludedCount++
-		}
-	}
-	log.Printf("[universe] Layer 2.5 (RiskExclusion): %d excluded", excludedCount)
-
-	// ── Persist snapshot ────────────────────────────────────────────────────
-	snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
-	if err := persistUniverseSnapshot(snapshotPath, ranked, allSymbols, excludedCount); err != nil {
-		log.Printf("[universe] WARNING: failed to persist snapshot: %v", err)
-	}
-
-	// ── Print top 20 results ────────────────────────────────────────────────
+	// Print the top 20 results.
 	log.Printf("")
 	log.Printf("── Smart Universe: Top %d ──────────────────────────────────────────────", len(ranked))
 	log.Printf("")
@@ -160,9 +137,18 @@ func buildUniverseRun(rt *bootstrap.Runtime, cfg config.Config, _ bool, _ string
 		log.Printf("  %-8d  %-8.1f  %-20s  %s%s", i+1, r.Score, r.Industry, r.Symbol, freshTag)
 	}
 	log.Printf("")
-	log.Printf("  Total in universe: %d | Filtered: %d | Ranked: %d | Excluded: %d",
-		len(allSymbols), len(allSymbols)-len(candidates), len(ranked), excludedCount)
+	log.Printf("  Quotes: status=%s returned=%d | trustworthy=%t | fallback_reason=%q",
+		result.QuotesStatus, result.QuotesReturned, result.RankedTrustworthy, result.RankedFallbackReason)
 	log.Printf("")
+
+	if !result.RankedTrustworthy {
+		// Do not let a run that could not evaluate the universe look like a
+		// successful run with zero qualifying stocks (I25).
+		return fmt.Errorf(
+			"universe: ranked list is not trustworthy (reason=%s, quotes_status=%s, quotes_returned=%d, built=%d, filtered=%d) — no snapshot reflects a market verdict",
+			result.RankedFallbackReason, result.QuotesStatus, result.QuotesReturned,
+			result.SymbolsBuilt, result.SymbolsFiltered)
+	}
 	return nil
 }
 
@@ -215,96 +201,46 @@ func buildUniverseMap(cfg config.Config) error {
 	return nil
 }
 
-// buildUniverseStatus reads the universe snapshot and prints build stats.
+// buildUniverseStatus reads the canonical universe snapshot and prints build
+// stats, including the quote-input evidence fields.
 func buildUniverseStatus(cfg config.Config) error {
-	snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
-	snap, err := loadUniverseSnapshot(snapshotPath)
+	snap, err := monitoring.LoadUniverseSnapshot(cfg.WorkDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("[universe status] no snapshot found at %s — run 'universe run' first", snapshotPath)
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Printf("[universe status] no snapshot found at %s — run 'universe run' first",
+				monitoring.UniverseSnapshotPath(cfg.WorkDir))
 			return nil
 		}
 		return fmt.Errorf("load snapshot: %w", err)
 	}
+	if snap.Result == nil {
+		return errors.New("load snapshot: snapshot has no result block (incompatible schema?)")
+	}
+	res := snap.Result
 
 	log.Printf("── Universe Snapshot ──────────────────────────────────────────────────")
-	log.Printf("  Build time:    %s", snap.BuildTime)
-	log.Printf("  Total symbols: %d", snap.TotalSymbols)
-	log.Printf("  In universe:   %d", snap.SymbolsInUniverse)
-	log.Printf("  Ranked:        %d", snap.RankedCount)
-	log.Printf("  Excluded:      %d", snap.ExcludedCount)
-	if snap.RankedCount > 0 {
+	log.Printf("  Build time:    %s", res.Timestamp.Format(time.RFC3339))
+	log.Printf("  Total symbols: %d", res.SymbolsBuilt)
+	log.Printf("  In universe:   %d", res.SymbolsRanked)
+	log.Printf("  Ranked:        %d", res.SymbolsRanked)
+	log.Printf("  Excluded:      %d", res.SymbolsExcluded)
+	log.Printf("  Quotes:        status=%s returned=%d trustworthy=%t",
+		res.QuotesStatus, res.QuotesReturned, res.RankedTrustworthy)
+	if !res.RankedTrustworthy {
+		// Make the ambiguous zero loud: the ranked list is not a market verdict.
+		log.Printf("  !! ranked list is NOT trustworthy: reason=%s", res.RankedFallbackReason)
+	}
+	if len(snap.Ranked) > 0 {
 		log.Printf("")
 		log.Printf("  Top 10 scored symbols:")
-		top := snap.TopSymbols
-		sort.Slice(top, func(i, j int) bool { return top[i].Score > top[j].Score })
-		limit := min(10, len(top))
+		// snap.Ranked is stored in rank order (descending score), so the first
+		// entries are already the top ones.
+		limit := min(10, len(snap.Ranked))
 		for i := range limit {
-			log.Printf("    %-8s  %-8.1f  %s", top[i].Symbol, top[i].Score, top[i].Industry)
+			r := snap.Ranked[i]
+			log.Printf("    %-8s  %-8.1f  %s", r.Symbol, r.Score, r.Industry)
 		}
 	}
 	log.Printf("────────────────────────────────────────────────────────────────────────")
 	return nil
-}
-
-// ── Snapshot persistence ──────────────────────────────────────────────────────
-
-type universeSnapshot struct {
-	BuildTime         string           `json:"build_time"`
-	TotalSymbols      int              `json:"total_symbols"`
-	SymbolsInUniverse int              `json:"symbols_in_universe"`
-	FilteredCount     int              `json:"filtered_count"`
-	RankedCount       int              `json:"ranked_count"`
-	ExcludedCount     int              `json:"excluded_count"`
-	TopSymbols        []snapshotSymbol `json:"top_symbols"`
-}
-
-type snapshotSymbol struct {
-	Symbol   string  `json:"symbol"`
-	Score    float64 `json:"score"`
-	Industry string  `json:"industry"`
-}
-
-func persistUniverseSnapshot(path string, ranked []monitoring.RankedSymbol, allSymbols []string, excludedCount int) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("create snapshot directory: %w", err)
-	}
-
-	top := make([]snapshotSymbol, 0, len(ranked))
-	for _, r := range ranked {
-		top = append(top, snapshotSymbol{Symbol: r.Symbol, Score: r.Score, Industry: r.Industry})
-	}
-
-	snap := universeSnapshot{
-		BuildTime:         time.Now().Format(time.RFC3339),
-		TotalSymbols:      len(allSymbols),
-		SymbolsInUniverse: len(ranked),
-		FilteredCount:     len(allSymbols) - len(ranked) - excludedCount,
-		RankedCount:       len(ranked),
-		ExcludedCount:     excludedCount,
-		TopSymbols:        top,
-	}
-
-	data, err := json.MarshalIndent(snap, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal snapshot: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0o640); err != nil {
-		return fmt.Errorf("write snapshot: %w", err)
-	}
-	log.Printf("[universe] snapshot persisted to %s", path)
-	return nil
-}
-
-func loadUniverseSnapshot(path string) (*universeSnapshot, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var snap universeSnapshot
-	if err := json.Unmarshal(data, &snap); err != nil {
-		return nil, fmt.Errorf("unmarshal snapshot: %w", err)
-	}
-	return &snap, nil
 }

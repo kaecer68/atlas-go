@@ -2014,16 +2014,12 @@ func run(args []string, deps appDeps) error {
 					}
 					// Count total symbols from the shared classification tree.
 					totalSymbols := monitoring.TotalClassifiedSymbols(classTreeAdapter)
-					// Load universe snapshot and count built symbols.
-					snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
+					// Load universe snapshot and count built symbols, through
+					// the canonical reader so this alert reads the same schema
+					// the scheduler and the -build-universe CLI write (N-U3).
 					snapshotSymbols := 0
-					if data, rErr := os.ReadFile(snapshotPath); rErr == nil {
-						var snapshot struct {
-							Result monitoring.UniverseBuildResult `json:"result"`
-						}
-						if err := json.Unmarshal(data, &snapshot); err == nil {
-							snapshotSymbols = snapshot.Result.SymbolsBuilt
-						}
+					if snap, sErr := monitoring.LoadUniverseSnapshot(cfg.WorkDir); sErr == nil && snap.Result != nil {
+						snapshotSymbols = snap.Result.SymbolsBuilt
 					}
 					if totalSymbols > 0 {
 						coveragePct := float64(snapshotSymbols) / float64(totalSymbols) * 100
