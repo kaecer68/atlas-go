@@ -25,13 +25,18 @@ type Stage3AlertDeps struct {
 	// given date.
 	EventCalendarEventCount func(date time.Time) int
 
-	// RecentEventFlowPredictions returns the last N event-flow prediction
-	// confidence values. A value of 0.5 means neutral / no signal.
+	// RecentEventFlowPredictions returns the last N event-flow predictions as
+	// ledger DirectionSign magnitudes: inflow -> +confidence,
+	// outflow -> -confidence, neutral -> 0 (issue #1944 N-U5). The production
+	// wiring pads the slice with 0.5 when the ledger is empty or unreadable, so
+	// the slice is NOT evidence on its own — pair it with
+	// RecentEventFlowPredictionsActualCount.
 	RecentEventFlowPredictions func(days int) []float64
 
 	// RecentEventFlowPredictionsActualCount counts ledger-backed (not
 	// 0.5-padded) records returned by RecentEventFlowPredictions. Used by
-	// the prediction-drift rule to gate alerts until enough history exists.
+	// the prediction-drift rule and the model-confidence-degraded rule to gate
+	// alerts until enough real history exists.
 	RecentEventFlowPredictionsActualCount func(days int) int
 
 	// OnAlertFired is invoked after each alert fires past its cooldown.
@@ -197,17 +202,55 @@ func (e *Stage3AlertEvaluator) evaluateEventCalendarSparse() {
 	}
 }
 
+// modelConfidenceNeutralSign is the neutral sentinel of the []float64 slice
+// returned by Stage3AlertDeps.RecentEventFlowPredictions. Those values are
+// ledger.EventFlowPredictionRecord.DirectionSign, whose encoding is
+// "inflow" -> +Confidence, "outflow" -> -Confidence, anything else -> 0
+// (internal/ledger/event_flow_prediction_store.go, func DirectionSign;
+// the production dep is wired in cmd/atlas/stage3_tasks.go).
+//
+// Issue #1944 N-U5: this rule used 0.5 as the "neutral" sentinel, but 0.5 is
+// the value of the *padding* the production wiring returns when the prediction
+// ledger is empty or unreadable. The old predicate therefore fired a false
+// "neutral for 5 consecutive days" alert on padded (i.e. missing) data, while a
+// genuinely neutral model — five records whose DirectionSign is 0 — could never
+// fire it. Neutral is 0, not 0.5.
+const modelConfidenceNeutralSign = 0.0
+
+// modelConfidenceNeutralEpsilon absorbs float noise around the neutral sign.
+const modelConfidenceNeutralEpsilon = 1e-9
+
+// modelConfidenceMinSamples is the number of consecutive neutral predictions
+// required before the model-confidence-degraded rule may alert.
+const modelConfidenceMinSamples = 5
+
+// evaluateModelConfidenceDegraded alerts when the event-flow model has
+// predicted "neutral" on modelConfidenceMinSamples consecutive evaluations.
+//
+// Evidence gate (issue #1944 N-U5): the value slice alone cannot distinguish a
+// neutral model from "no data" — the production wiring pads it with 0.5 when the
+// ledger has no records. The rule therefore evaluates only when
+// RecentEventFlowPredictionsActualCount reports at least
+// modelConfidenceMinSamples ledger-backed records. A nil callback, or a count
+// below the threshold, means "not measurable" and the rule stays silent rather
+// than alerting on padding (padding is not evidence).
 func (e *Stage3AlertEvaluator) evaluateModelConfidenceDegraded() {
 	if e.deps.RecentEventFlowPredictions == nil {
 		return
 	}
-	predictions := e.deps.RecentEventFlowPredictions(5)
-	if len(predictions) < 5 {
+	if e.deps.RecentEventFlowPredictionsActualCount == nil {
+		return
+	}
+	if e.deps.RecentEventFlowPredictionsActualCount(modelConfidenceMinSamples) < modelConfidenceMinSamples {
+		return
+	}
+	predictions := e.deps.RecentEventFlowPredictions(modelConfidenceMinSamples)
+	if len(predictions) < modelConfidenceMinSamples {
 		return
 	}
 	allNeutral := true
 	for _, p := range predictions {
-		if math.Abs(p-0.5) > 1e-6 {
+		if math.Abs(p-modelConfidenceNeutralSign) > modelConfidenceNeutralEpsilon {
 			allNeutral = false
 			break
 		}
@@ -217,8 +260,12 @@ func (e *Stage3AlertEvaluator) evaluateModelConfidenceDegraded() {
 	}
 	if e.checkCooldown("model-confidence-degraded", 24*time.Hour) {
 		e.emitAndTrack("model-confidence-degraded", AlertLevelWarning, "stage3_model_confidence",
-			"event flow prediction has been neutral for 5 consecutive days",
-			map[string]any{"consecutive_neutral_days": len(predictions)})
+			fmt.Sprintf("event flow prediction has been neutral for %d consecutive days", len(predictions)),
+			map[string]any{
+				"consecutive_neutral_days": len(predictions),
+				"neutral_sign":             modelConfidenceNeutralSign,
+				"actual_count":             e.deps.RecentEventFlowPredictionsActualCount(modelConfidenceMinSamples),
+			})
 	}
 }
 

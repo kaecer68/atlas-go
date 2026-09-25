@@ -109,32 +109,6 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 		macroFlowResult = ctx.MacroFlow.ComputeAdjustment(ctx.MacroDataSnapshot, regimeToRiskLevel(regime, ctx.Period))
 	}
 
-	if macroFlowResult != nil && ctx.Scratchpad != nil {
-		ctx.Scratchpad.Record(ReasoningTrace{
-			SessionID: ctx.SessionID,
-			Timestamp: time.Now().UTC(),
-			Phase:     PhaseMacroFlow,
-			Step:      6,
-			Component: "macroflow",
-			Action:    "macro_flow.applied",
-			Reasoning: fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
-				macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
-				macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash),
-			Data: map[string]any{
-				"risk_level": string(macroFlowResult.RiskLevel),
-				"is_stress":  macroFlowResult.IsStress,
-				"defensive":  macroFlowResult.Adjustment.Defensive,
-				"aggressive": macroFlowResult.Adjustment.Aggressive,
-				"cash":       macroFlowResult.Adjustment.Cash,
-				"reasoning":  macroFlowResult.Reasoning,
-			},
-			Confidence: -1,
-			// B5 P1: causal chain layer tracing
-			LayerID:       "layer_0", // 全球資金總開關
-			LayerParentID: "layer_root",
-		})
-	}
-
 	// Stage gating: skip momentum crash protection during RISK_OFF regime.
 	if regime != domain.RegimeRiskOff {
 		raw = ctx.MomentumCrashProtection.Apply(raw, quoteBySymbol, ctx.Policy)
@@ -155,6 +129,49 @@ func ExecuteWithContext(ctx ExecutionContext) ResearchResult {
 	}
 
 	final, guardOutcomes := ctx.ControlLayer.ApplyControl(registry, ctx.Plugins, controlInput, ctx.Policy, regime, ctx.Scratchpad, ctx.SessionID, macroFlowResult)
+
+	// ── MacroFlow reasoning trace (issue #1944 N-A2) ──
+	// Recorded AFTER the control layer ran, so the trace describes what actually
+	// happened to the convictions instead of announcing an intent. The control
+	// layer applies the adjustment via applyMacroConvictionScaling; when it is
+	// bypassed (RequireCROPass=false) or there was nothing to scale, the trace
+	// says so and never uses the word "applied".
+	if macroFlowResult != nil && ctx.Scratchpad != nil {
+		applied := macroAdjustmentAppliesTo(macroFlowResult, controlInput, ctx.Policy)
+		skipReason := macroAdjustmentSkipReason(macroFlowResult, controlInput, ctx.Policy)
+		action := "macro_flow.skipped"
+		reasoning := fmt.Sprintf("macro_flow NOT applied: %s", skipReason)
+		if applied {
+			action = "macro_flow.applied"
+			reasoning = fmt.Sprintf("macro_flow applied: risk_level=%s defensive=%+.1f%% aggressive=%+.1f%% cash=%+.1f%%",
+				macroFlowResult.RiskLevel, macroFlowResult.Adjustment.Defensive,
+				macroFlowResult.Adjustment.Aggressive, macroFlowResult.Adjustment.Cash)
+		}
+		ctx.Scratchpad.Record(ReasoningTrace{
+			SessionID: ctx.SessionID,
+			Timestamp: time.Now().UTC(),
+			Phase:     PhaseMacroFlow,
+			Step:      6,
+			Component: "macroflow",
+			Action:    action,
+			Reasoning: reasoning,
+			Data: map[string]any{
+				"applied":            applied,
+				"not_applied_reason": skipReason,
+				"risk_level":         string(macroFlowResult.RiskLevel),
+				"is_stress":          macroFlowResult.IsStress,
+				"defensive":          macroFlowResult.Adjustment.Defensive,
+				"aggressive":         macroFlowResult.Adjustment.Aggressive,
+				"cash":               macroFlowResult.Adjustment.Cash,
+				"reasoning":          macroFlowResult.Reasoning,
+			},
+			Confidence: -1,
+			// B5 P1: causal chain layer tracing
+			LayerID:       "layer_0", // 全球資金總開關
+			LayerParentID: "layer_root",
+		})
+	}
+
 	return ResearchResult{
 		MacroFlowAdjustment:  macroFlowResult,
 		Regime:               regime,

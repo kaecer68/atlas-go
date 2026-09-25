@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/kaecer68/atlas-go/internal/sectorallocation"
 )
 
 type checkResult struct {
@@ -60,7 +62,7 @@ func main() {
 			Name:    "first simulation session produces closure snapshot with receipt",
 			OK:      false,
 			Manual:  true,
-			Message: "operator: run 1 simulation session; verify data/state/sector_closure_policy.jsonl contains a valid MutationReceipt with non-empty receipt_id and sha256",
+			Message: "operator: run 1 simulation session; verify data/sector/allocation/sector_closure_policy.jsonl contains a valid MutationReceipt with non-empty receipt_id and sha256",
 		},
 	}
 
@@ -156,18 +158,28 @@ func checkParametersJSON(workDir string) checkResult {
 	}
 }
 
-// checkClosureStore: data/state/ directory is writable and the closure
-// policy file can be created.
+// closureStorePath returns the closure policy file this preflight validates. It
+// resolves through internal/sectorallocation, the same helper production uses to
+// build the store, so the checklist can never probe a path nothing writes
+// (issue #1944 N-A4: it used to check
+// <work_dir>/data/state/sector_closure_policy.jsonl while the store lives in
+// <work_dir>/data/sector/allocation).
+func closureStorePath(workDir string) string {
+	return sectorallocation.ResolveClosureStorePath(workDir)
+}
+
+// checkClosureStore: the closure store directory is writable and the closure
+// policy file can be created at the path production actually uses.
 func checkClosureStore(workDir string) checkResult {
-	stateDir := filepath.Join(workDir, "data", "state")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+	storeDir := sectorallocation.ResolveClosureStoreDir(workDir)
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
 		return checkResult{
-			Name:    "data/state/ writable",
+			Name:    "closure store directory writable",
 			OK:      false,
-			Message: fmt.Sprintf("cannot create/write to %s: %v", stateDir, err),
+			Message: fmt.Sprintf("cannot create/write to %s: %v", storeDir, err),
 		}
 	}
-	policyPath := filepath.Join(stateDir, "sector_closure_policy.jsonl")
+	policyPath := closureStorePath(workDir)
 	// Test write: create empty file to verify permissions.
 	f, err := os.OpenFile(policyPath, os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -185,7 +197,7 @@ func checkClosureStore(workDir string) checkResult {
 	return checkResult{
 		Name:    "closure store file writable",
 		OK:      true,
-		Message: fmt.Sprintf("%s is writable", policyPath),
+		Message: fmt.Sprintf("%s is writable (same path FileClosureStore uses)", policyPath),
 	}
 }
 

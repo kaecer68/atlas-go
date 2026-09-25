@@ -124,13 +124,18 @@ func TestStage3AlertEvaluator_EventCalendarSparse_SkipsNonTradingDay(t *testing.
 	}
 }
 
+// TestStage3AlertEvaluator_ModelConfidenceDegraded pins the fixed predicate for
+// issue #1944 N-U5: the neutral sentinel is the ledger's neutral encoding 0
+// (inflow -> +conf, outflow -> -conf, neutral -> 0), NOT 0.5. The assertion was
+// flipped from the bug-pinned version, which fed five 0.5 values (the padding
+// value) and expected an alert.
 func TestStage3AlertEvaluator_ModelConfidenceDegraded(t *testing.T) {
 	monitor := newStage3TestMonitor(t)
 	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
 	deps := Stage3AlertDeps{
-		RecentEventFlowPredictions: func(days int) []float64 {
-			return []float64{0.5, 0.5, 0.5, 0.5, 0.5}
-		},
+		// Five ledger-backed records, all neutral (DirectionSign == 0).
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0, 0, 0, 0, 0} },
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 5 },
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
@@ -138,7 +143,7 @@ func TestStage3AlertEvaluator_ModelConfidenceDegraded(t *testing.T) {
 	eval.EvaluateDaily()
 	alerts := captureHistory(monitor)
 	if len(alerts) != 1 {
-		t.Fatalf("expected 1 alert, got %d", len(alerts))
+		t.Fatalf("expected 1 alert for a genuinely neutral model, got %d", len(alerts))
 	}
 	if alerts[0].Level != AlertLevelWarning {
 		t.Fatalf("expected warning level, got %v", alerts[0].Level)
@@ -146,15 +151,19 @@ func TestStage3AlertEvaluator_ModelConfidenceDegraded(t *testing.T) {
 	if !strings.Contains(alerts[0].Message, "neutral") {
 		t.Fatalf("expected message to mention neutral, got %q", alerts[0].Message)
 	}
+	if got := alerts[0].Metadata["actual_count"]; got != 5 {
+		t.Errorf("metadata actual_count=%v, want 5", got)
+	}
 }
 
 func TestStage3AlertEvaluator_ModelConfidenceDegraded_SkipsIfActive(t *testing.T) {
 	monitor := newStage3TestMonitor(t)
 	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
 	deps := Stage3AlertDeps{
-		RecentEventFlowPredictions: func(days int) []float64 {
-			return []float64{0.5, 0.5, 0.5, 0.5, 0.6}
-		},
+		// The last record is a real inflow prediction (DirectionSign 0.6), so the
+		// model is not neutral.
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0, 0, 0, 0, 0.6} },
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 5 },
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
@@ -169,9 +178,8 @@ func TestStage3AlertEvaluator_ModelConfidenceDegraded_NeedsFiveDays(t *testing.T
 	monitor := newStage3TestMonitor(t)
 	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
 	deps := Stage3AlertDeps{
-		RecentEventFlowPredictions: func(days int) []float64 {
-			return []float64{0.5, 0.5, 0.5} // only 3 days
-		},
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0, 0, 0} }, // only 3 days
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 3 },
 	}
 	eval := NewStage3AlertEvaluator(monitor, deps)
 	eval.now = func() time.Time { return now }
@@ -179,6 +187,65 @@ func TestStage3AlertEvaluator_ModelConfidenceDegraded_NeedsFiveDays(t *testing.T
 	eval.EvaluateDaily()
 	if len(captureHistory(monitor)) != 0 {
 		t.Fatalf("expected no alert with fewer than 5 predictions, got %d", len(captureHistory(monitor)))
+	}
+}
+
+// TestStage3AlertEvaluator_ModelConfidenceDegraded_NoAlertOnPadding is the
+// regression test for the false alert half of issue #1944 N-U5: when the
+// prediction ledger has no records the production wiring pads the slice with
+// 0.5 values. Padding is absence of evidence, so the rule must stay silent.
+func TestStage3AlertEvaluator_ModelConfidenceDegraded_NoAlertOnPadding(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
+	deps := Stage3AlertDeps{
+		// Exactly what cmd/atlas/stage3_tasks.go returns for an empty ledger.
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0.5, 0.5, 0.5, 0.5, 0.5} },
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 0 },
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateDaily()
+	if got := len(captureHistory(monitor)); got != 0 {
+		t.Fatalf("0.5 padding with 0 real records must not fire a neutral alert, got %d", got)
+	}
+}
+
+// TestStage3AlertEvaluator_ModelConfidenceDegraded_NilActualCountStaysSilent:
+// without the evidence counter the rule cannot tell padding from data, so it
+// must not claim a degraded model.
+func TestStage3AlertEvaluator_ModelConfidenceDegraded_NilActualCountStaysSilent(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
+	deps := Stage3AlertDeps{
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0, 0, 0, 0, 0} },
+		RecentEventFlowPredictionsActualCount: nil,
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateDaily()
+	if got := len(captureHistory(monitor)); got != 0 {
+		t.Fatalf("nil actual-count callback must not fire a neutral alert, got %d", got)
+	}
+}
+
+// TestStage3AlertEvaluator_ModelConfidenceDegraded_HalfIsNotNeutral documents the
+// other half of the bug: 0.5 is a real (positive) signed magnitude, not the
+// neutral sentinel, so a ledger holding five 0.5 records is NOT a degraded model.
+func TestStage3AlertEvaluator_ModelConfidenceDegraded_HalfIsNotNeutral(t *testing.T) {
+	monitor := newStage3TestMonitor(t)
+	now := time.Date(2026, 7, 13, 6, 30, 0, 0, time.UTC)
+	deps := Stage3AlertDeps{
+		RecentEventFlowPredictions:            func(days int) []float64 { return []float64{0.5, 0.5, 0.5, 0.5, 0.5} },
+		RecentEventFlowPredictionsActualCount: func(days int) int { return 5 },
+	}
+	eval := NewStage3AlertEvaluator(monitor, deps)
+	eval.now = func() time.Time { return now }
+
+	eval.EvaluateDaily()
+	if got := len(captureHistory(monitor)); got != 0 {
+		t.Fatalf("0.5 is inflow-with-0.5-confidence, not neutral: expected no alert, got %d", got)
 	}
 }
 

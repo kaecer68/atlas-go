@@ -317,7 +317,7 @@ func run(args []string, deps appDeps) error {
 		// unparseable we fall back to NoOpNextSessionResolver so the
 		// production container never blocks on a missing dataset.
 		closureStore := sectorallocation.NewFileClosureStore(
-			filepath.Join(cfg.WorkDir, "data", "sector", "allocation"),
+			sectorallocation.ResolveClosureStoreDir(cfg.WorkDir),
 		)
 		replayPath := os.Getenv("ATLAS_REPLAY_DATA_PATH")
 		if replayPath == "" {
