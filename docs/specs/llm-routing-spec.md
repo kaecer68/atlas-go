@@ -115,7 +115,7 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 | `ForceProvider` 例外 | 強制指定 provider 時**不套用**空輸出判定（沒有下一鏈成員可續試；該路徑供測試/sticky routing 使用） |
 | `AttemptedProviders` | 只記錄**實際被呼叫**的 provider（依序，含失敗者）。這讓該欄位成為可信的 audit 依據 —— 出現在名單裡就代表該 provider 真的收到過這筆請求 |
 | `llm.skipped_providers`（span 專用） | 鏈上「無法被呼叫」的成員（未註冊、或該 capability 不支援）**只記在 span**，不進 `AttemptedProviders`：鏈設定錯誤仍可見，但不會污染 audit |
-| `FallbackTriggeredTotal` | 每次**實際呼叫**非 primary 鏈成員時遞增（primary 被跳過而 backup 被呼叫也算一次，因為 fallback 真的發生了；被跳過的成員本身不計數）。**實作現況**：`internal/llm/router.go:53` 的 package-level `int64`（`atomic.AddInt64`），**無 label、未 expose、無 Prometheus 讀者**，目前只有 `router_test.go` 讀它（見 §6.5 與 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)） |
+| `FallbackTriggeredTotal` | 每次**實際呼叫**非 primary 鏈成員時遞增（primary 被跳過而 backup 被呼叫也算一次，因為 fallback 真的發生了；被跳過的成員本身不計數）。**實作現況**：`internal/llm/router.go` 的 package-level `int64`（`atomic.AddInt64`）仍是 process 內真相（`router_test.go` 讀它），同一事件自 2026-09-25 起鏡射為 `llm_router_fallback_triggered_total{capability,to_provider[,from_provider]}`（issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)，見 §6.5） |
 | 與 `DataClass` 的關係 | 無關；`DataClass` 不再影響 provider 選擇（ADR-012） |
 | 搭配條件 | 所有 capability 的 `max_tokens` 必須 ≥ reasoning 模型最低預算（見 §6.1a） |
 
@@ -214,18 +214,27 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
                                                            （passthrough / 空字串 / rule_based / discard）
 ```
 
-#### 備援觀測（目前為 span-only）
+#### 備援觀測（span + Prometheus counter）
 
-**現況：只有 span，沒有 Prometheus 指標。** Router 對外沒有任何 metric 出口——沒有 metric 名稱、沒有 label、沒有 `/metrics` 讀者。
+Router 有兩種對外觀測出口：注入式 Prometheus counter（issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)，2026-09-25 實作）與 span 屬性。
 
-程式碼中實際存在的只有 `internal/llm/router.go:53-55` 的兩個 package-level 計數器：
+**Prometheus counters**（名稱定義於 `internal/llm/metrics.go`，由 `DefaultRouter.WithMetrics` 注入；`cmd/atlas/main.go` 在 `collector != nil` 時注入 `*monitoring.MetricsCollector`，注入前 `internal/llm` 不依賴 Prometheus client）：
 
-- `FallbackTriggeredTotal`（`router.go:182` 以 `atomic.AddInt64` 遞增）
-- `BackupChainExhaustedTotal`（`router.go:205` 以 `atomic.AddInt64` 遞增）
+| Metric | 型別 | Labels | 語意 |
+|--------|------|--------|------|
+| `llm_router_fallback_triggered_total` | counter | `capability`（必備）、`to_provider`（必備）、`from_provider`（選備） | 每次**實際呼叫**非 primary 鏈成員時 +1（被 skip 的成員不計數）。同一事件亦遞增 package-level `FallbackTriggeredTotal` |
+| `llm_router_backup_chain_exhausted_total` | counter | `capability`（必備） | 所有可用鏈成員都失敗、改由 last resort 回應時 +1。同一事件亦遞增 package-level `BackupChainExhaustedTotal` |
 
-兩者都是 `new(int64)`，**無 label、未 expose、無 Prometheus 端點**；唯一的讀者是 `internal/llm/router_test.go`（`atomic.LoadInt64`）。它們不是 expvar，也不在任何 collector 中註冊。
+- `to_provider` = **正要被呼叫**的鏈成員。
+- `from_provider` = **剛剛失敗**的成員（`attempted` 的最後一個；provider error 與 §6.3a 的空輸出失敗都算）。**primary 被 skip（未註冊／不支援該 capability）導致沒有任何成員失敗時，這個 label key 不存在**——不假造 `"unknown"` 之類的佔位值。因此同一 metric 會有兩種 label 形狀，查詢請用 `sum by (capability)` 或 `sum without (from_provider)`。
+- `backup_chain_exhausted` **刻意不加 provider label**：鏈耗盡的語意就是「沒有 provider 服務成功」，provider 維度在此必為空；per-provider 分解已在 `fallback_triggered_total{to_provider=...}`。
+- 命名沿用 LLM 域既有慣例（`llm_annotator_requests_total`、`llm_client_requests_total`），**不加** `atlas_` 前綴（`atlas_` 是 `internal/monitoring` 自有指標的慣例）。
+- 注入是 nil-safe：未呼叫 `WithMetrics` 或注入 nil 時，行為與 #1926 之前完全相同（既有測試不需修改）。
+- 這兩個 counter 沒有 recording rule 或 alert rule：先讓指標在 `/metrics` 上被驗證一段時間，再依實測基線決定告警門檻（避免重演「規則引用不存在指標」的 #925 類事故）。
 
-目前真正可查的是 span 屬性（`internal/llm/router.go:105-115` 與 `recordChainSpans`）：
+**Package-level 計數器仍然存在**：`internal/llm/router.go` 的 `FallbackTriggeredTotal` / `BackupChainExhaustedTotal`（`atomic.AddInt64`）維持 process 內真相，仍由 `router_test.go` 讀取；上面的 counter 是同一事件鏡射出的 metric。
+
+**span 屬性**（`internal/llm/router.go` 與 `recordChainSpans`，不變）：
 
 - `llm.capability`、`llm.data_class`、`llm.data_class_name`（audit / redaction 檢視用）
 - `llm.forced_provider`（僅 `ForceProvider` 路徑）
@@ -233,9 +242,7 @@ Router 收到 provider「**呼叫成功但 `Output` trim 後為空**」時，一
 - `llm.skipped_providers`（鏈上無法被呼叫的成員，span-only）
 - `llm.exhausted`（`true` = 已走到 last resort）
 
-**以下 Prometheus 指標名稱在程式碼中不存在**（本節舊版曾把它們當成現況列出，已移除）：`llm_router_provider_health`、`llm_router_fallback_triggered_total`、`llm_router_backup_chain_exhausted_total`、`llm_router_opencode_zen_activated_total`。另外，per-provider health 探測迴圈（見下方「復原流程」所述）與 OpenCode-Zen 啟動 alert 亦尚未實作。
-
-> **Follow-up（metrics 接線）**：issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)。做法是先在 `internal/llm` 定義 `MetricsRecorder` 介面（形狀對齊 `internal/llm/clients/metrics.go` 與 `internal/llm_annotator/observability.go` 的 `RecordCounter` / `RecordGauge`），由 `DefaultRouter` 以注入方式接收（未注入 = nil-safe no-op，`internal/llm` 不直接依賴 Prometheus client），再由 `cmd/atlas` 接上 `internal/monitoring/metrics.go` 的 `MetricsCollector`。在該 issue 完成前，本節不列出任何「可查詢」的 metric 名稱。
+**仍未實作（本節明確不宣稱）**：`llm_router_provider_health` 與 `llm_router_opencode_zen_activated_total` 底層資料不存在——沒有 per-provider health 探測迴圈（見下方「復原流程」），`ProviderOpenCodeZen` 也只是 `[PLANNED]` 常數、無 client 實作（Issue #720），因此不實作、也不在文件裡宣稱。
 
 #### 復原流程
 

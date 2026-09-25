@@ -754,7 +754,7 @@ type CapabilityRecord struct {
 
 Router 的 `Health()` 與 `/healthz/llm` 端點（提案）提供：
 - 每個 provider 的 breaker state。
-- 每個 capability 的 24h error rate（依 §6.5 的 span 觀測；Prometheus 指標尚未實作，見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)）。
+- 每個 capability 的 24h error rate（依 §6.5 的 span 觀測與 `llm_router_fallback_triggered_total` counter；per-provider health 指標仍未實作，見 §6.5 與 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)）。
 - 每月 token 用量與估計成本（沿用 `CostReport`，`observability.go:158-197`）。
 - v2.0 新增（**尚未實作**）：每 capability × provider 的 cost breakdown。**現況**：既有 metric（`llm_annotator_requests_total` 等）只帶 `provider` / `outcome` / `status` label，**沒有 `capability` label**，所以這個聚合目前算不出來；見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)。
 
@@ -777,7 +777,9 @@ groups:
         expr: sum by (capability, from_provider, to_provider) (rate(llm_router_fallback_triggered_total[1h]))
 ```
 
-> **註記（2026-09-23）**：本提案的 `llm:provider:health` 與 `llm:fallback:triggered:rate1h` 兩條規則依賴 `llm_router_provider_health` 與 `llm_router_fallback_triggered_total`，這兩個指標**尚未實作**——`internal/llm` 目前只有 span 觀測，加上兩個未 expose、無 label 的 package-level 計數器（`FallbackTriggeredTotal` / `BackupChainExhaustedTotal`）。接線計畫見 issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)。同區塊的 `llm_annotator_*` 規則不受影響（那些指標已存在且已在 `monitoring/rules/llm_annotator_recording.yml` 使用）。
+> **註記（2026-09-25 更新；原文為 2026-09-23）**：`llm:fallback:triggered:rate1h` 依賴的 `llm_router_fallback_triggered_total` **已實作**（issue [#1926](https://github.com/kaecer68/atlas-go/issues/1926)；名稱定義於 `internal/llm/metrics.go`，labels 為 `capability` / `to_provider` / 選備 `from_provider`，由 `DefaultRouter.WithMetrics` 注入 `*monitoring.MetricsCollector`，詳見 `docs/specs/llm-routing-spec.md` §6.5）。`llm:provider:health` 依賴的 `llm_router_provider_health` **仍未實作**（程式碼中沒有 per-provider health 探測迴圈，`Health()` 只被 `/api/llm/health` 直接查詢）。
+>
+> 本區塊的兩條 `llm_router_*` 規則本身**尚未建立**（`monitoring/rules/llm_router_recording.yml` 不存在）：先讓 counter 在 `/metrics` 上累積實測基線，再決定 recording / alert 門檻，避免重演「規則引用不存在或尚未有人讀的指標」這類事故。同區塊的 `llm_annotator_*` 規則不受影響（那些指標已存在且已在 `monitoring/rules/llm_annotator_recording.yml` 使用）。
 
 ### 7.4 資料保留政策
 
