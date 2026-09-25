@@ -7,6 +7,7 @@
 | 上位規範 | [`JEV-USAGE-CONTRACT.md`](JEV-USAGE-CONTRACT.md)（§1 傳輸、§2 判斷設計、§3 門檻、§4 評估紀律、§5 生產整合） |
 | 實作 | `scripts/jev_eval/`（Python 框架）+ `cmd/experimental/jev-eval-panel/`（Go：canonical 口徑的 GT/特徵匯出） |
 | Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
+| Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
 | Stage 3 結果 | [`JEV-EVAL-STAGE3-EVENTS.md`](JEV-EVAL-STAGE3-EVENTS.md)（事件層；另新增 `cmd/experimental/jev-eval-events` 匯出事件骨架與平台事件調整量） |
 | 已量測的成本 | 台股產業層 E0：3240 cases / 180 requests = **$0.0456**（1,085,311 input tokens @ $0.042/Mtok）。事件層 E0：1656 cases / 92 requests = **$0.0297**；探針 +$0.0088 |
 
@@ -70,6 +71,7 @@ class TaskSpec:
   requests.jsonl    # 每次呼叫一列：fingerprint, ok, model, tokens, latency_ms, attempts, answers
   cases.jsonl       # 每個 case 一列：gt + baselines + meta（PIT 特徵與 GT 區塊都留檔供稽核）
   metrics.json      # 指標（由 requests.jsonl + spec 重建，不重打 API）
+  cases_scored.jsonl# 逐筆稽核列：score / threshold / decision / latency_ms / tokens / 成本分攤
   report.md         # 人看的報告（含分級結論）
 ```
 
@@ -77,6 +79,7 @@ class TaskSpec:
 - `score` / `report` 子命令**完全不呼叫 API**：指標可反覆重算、可換門檻重看，成本為零。
 - `--offline` 明確禁止呼叫（CI/離線環境可用）。
 - fail-open（§5.1）：任何傳輸或 API 錯誤記 `ok=false` 並繼續；該 request 的 case 分數是 `None`（**不是 0.0**——「沒答」與「答 0」是不同證據）。
+- `cases_scored.jsonl` 是契約 §5.4「可觀測」的落地面：每筆 case 一列，含**分數、門檻、決定、延遲、tokens、成本**（成本依 request 輸入 token 平均分攤到該 request 回答的 case 數，因為 Jev 以 request 計費而非以題計費）。
 
 ---
 
