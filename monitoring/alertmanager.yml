@@ -12,6 +12,33 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # ── canary 專用 route（**必須放第一個**；Alertmanager 是 first-match）──────────
+    # 2026-09-25（任務 F）新增。對象 = 「Alertmanager → webhook(:9095) → Telegram」
+    # 這條**送達鏈**的端到端穿透證明（不是「某個服務是否活著」的證明）。
+    # 注入者:a2a-dev 的 scripts/ops/alerting-canary.sh（macmini-recover 檢查 #50 會呼叫它）。
+    # 它 POST 一筆帶 canary="true" 的合成警報到 /api/v2/alerts（TTL 短、注入式、
+    # 驗證後即消），然後斷言 ~/Library/Logs/atlas-webhook.err.log 出現**新的**
+    # `OK sent` 行 —— 那行就是「Alertmanager 送出 → webhook 收到 → Telegram API 回 200」
+    # 的完整證據（因此不需要讀 bot 訊息）。
+    #
+    # 為什麼要專用 route / receiver，而不是讓 canary 走一般 route:
+    #  1) group_by 用 canary_run（腳本每次注入都帶不同的唯一標籤值）→ 每次注入自成一個
+    #     group、group_wait 0s → 立刻送達。若沿用一般 route（group_by=alertname,service,
+    #     provider），第二次注入會被視為「加進已通知過的 group」→ 要等 group_interval
+    #     (5m) 才送，讓 canary 偽失敗。驗證工具本身不可靠 = 下一個沉默缺口。
+    #  2) receiver 名稱不同 → Telegram 訊息本文的 `Receiver:` 欄位會寫
+    #     atlas-canary-webhook，人一眼就知道這是 canary、不是事故。
+    #  3) 與生產 route 解耦:以後調 production 的 group/repeat 參數不會弄死 canary。
+    # receiver 指向**同一個** webhook URL（生產 bus 本體）—— canary 要證明的就是這條 bus，
+    # 不另開替代路徑（另開路徑正是報告裡「單點故障」的反面教材）。
+    - receiver: atlas-canary-webhook
+      match:
+        canary: "true"
+      group_by: [canary_run]
+      group_wait: 0s
+      group_interval: 10s
+      repeat_interval: 24h
+
     # critical 優先（first-match）：1h 重複
     - receiver: atlas-webhook-telegram
       match:
@@ -53,6 +80,16 @@ receivers:
     webhook_configs:
       - url: 'http://host.docker.internal:9095/alert'
         send_resolved: true
+
+  # canary 專用（2026-09-25 任務 F）:與 atlas-webhook-telegram 指向**同一個** webhook
+  # （同一條實際 bus、同一個 bot token），差別只有兩點:
+  # - receiver 名稱不同 → 讓 Telegram 訊息可辨識（Receiver: atlas-canary-webhook）
+  # - send_resolved: false → 每次注入只產生 1 則訊息（canary 有短 TTL，resolved 通知無意義）
+  # 契約:label canary="true" 由 a2a-dev scripts/ops/alerting-canary.sh 注入。
+  - name: atlas-canary-webhook
+    webhook_configs:
+      - url: 'http://host.docker.internal:9095/alert'
+        send_resolved: false
 
   # Telegram（備援方案，等 alertmanager 修好可切回）
   - name: atlas-telegram

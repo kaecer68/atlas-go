@@ -4,12 +4,14 @@
 # Prometheus 已 scrape 到 atlas-go job up=0,但 alertmanager /api/v2/alerts = [],
 # 完全沒有告警接到通知 — target-down 沒有對應 rule。
 #
-# 本檔案加 5 條 alert:
+# 本檔案加 5 條 alert（2026-09-25 任務 F 已把清單與實際生效的規則對齊）:
 # - AtlasGoTargetDown         : up==0 for 2m → critical (atlas-go 是主要 API)
 # - AtlasPostgresTargetDown   : up==0 for 5m → critical (postgres 是依賴)
 # - AtlasFubonProxyTargetDown : up==0 for 5m → warning  (影響報價但不擋 API)
 # - AtlasScrapeJobMissing     : absent(up{job=...}) for 5m → critical (job 被整個移除 = 零偵測)
-# - AtlasGoContainerRestartLoop: restart count 激增 → warning (atlas-go 一直 crash loop)
+# - AtlasGoScrapeFlapping     : changes(up{job="atlas-go"}[10m]) > 3 → warning (scrape 反覆失敗)
+# - (已停用, 註解保留) AtlasContainerRestartLoop → 依賴不存在的 cAdvisor 指標、且 regex
+#   匹配不到生產容器名 atlas-go → 見檔內該區塊的長註解與重新啟用條件
 #
 # 2026-09-25（監控缺口調查 任務 E）本檔修 3 件事，理由見 monitoring-gap 報告:
 # 1. 修 annotation 模板錯誤:內文直接寫 docker --format '{{.Mounts}}' 會被 Go template
@@ -22,6 +24,17 @@
 # 2. 新增 AtlasScrapeJobMissing:補「job 從 prometheus.yml 被整個移除」這一維。原本
 #    up{job="X"} == 0 在 job 消失時恆為空集合 → 警報永遠不會 firing（零偵測、且無跡象）。
 # 3. 標題清單的 AtlasContainerRestarting 正名為實際規則名 AtlasGoContainerRestartLoop。
+#
+# 2026-09-25（監控缺口調查 任務 F）本檔再修 2 件事:
+# 4. 停用 AtlasGoContainerRestartLoop —— 它依賴 cAdvisor 的 container_last_seen，而全機
+#    沒有 cAdvisor（實測 2026-09-25），所以從進版控（2026-08-27）起就結構上不可能 firing。
+#    額外兩層問題:name=~".+atlas-go.+" 匹配不到生產容器實名 `atlas-go`（regex 要求前後
+#    各 ≥1 字元）；且 increase() 用在 container_last_seen（gauge=最後看到的 unix 時間戳）
+#    上本身就是語意錯誤。一條永不評估的規則比沒有規則更危險（看起來有保護、實際零偵測）
+#    → 整段註解保留 + 寫明重新啟用條件（見檔案後段）。
+# 5. 新增 AtlasGoScrapeFlapping 作為「用真的存在的指標源」的替代:改看 Prometheus 自己
+#    一定有的 up{job="atlas-go"}。語意、已知盲點、以及為什麼不能冒用 restart 之名
+#    都寫在該規則的註解裡。
 #
 # 與 AtlasDBInitFailure (atlas_startup_anomaly_alerts.yml) 互補:
 # - AtlasDBInitFailure 監聽 atlas-go 內部 emit 的 counter (PR-926 schema)
@@ -142,8 +155,81 @@ groups:
                不要留下「看起來有保護、實際零偵測」的空規則
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/monitoring/prometheus.yml"
 
-      - alert: AtlasGoContainerRestartLoop
-        expr: increase(container_last_seen{name=~".+atlas-go.+", image=~".+atlas-atlas.+"} [10m]) > 3
+      # ══════════════════════════════════════════════════════════════════════════
+      # 2026-09-25（任務 F）AtlasGoContainerRestartLoop —— 停用 + 以可信來源取代
+      # ══════════════════════════════════════════════════════════════════════════
+      # 【為什麼停用】原 expr:
+      #   increase(container_last_seen{name=~".+atlas-go.+", image=~".+atlas-atlas.+"} [10m]) > 3
+      # 三個各自獨立的理由讓它**結構上不可能 firing**（外觀有保護、實際零偵測）:
+      #  1) 指標源不存在。container_last_seen 由 cAdvisor 提供，而本機沒有 cAdvisor。
+      #     實測（2026-09-25，Mac Mini，唯讀）:
+      #       docker ps -a | grep -i cadvisor                 → 無
+      #       Prometheus {__name__=~"container_.*"}           → 空集合
+      #       curl localhost:18080/metrics                    → 只有 7 個 metric family（見 2)）
+      #  2) 就算補上 cAdvisor，regex 也匹配不到生產容器。name=~".+atlas-go.+" 要求
+      #     `atlas-go` **前後各至少 1 個字元**，而生產容器實名就是 `atlas-go`
+      #     （docker ps --format '{{.Names}}' → atlas-go；image=atlas-atlas）。
+      #     已修正為 name=~".*atlas-go.*"。為什麼用 `.*` 而不是等值比對:
+      #     cAdvisor 的 name 標籤通常帶前導斜線（例如 /atlas-go 或 /docker/atlas-go），
+      #     等值 name="atlas-go" 反而會 miss。信心 M（本機沒有 cAdvisor 可實際取樣標籤值）。
+      #  3) 運算式語意本身錯。container_last_seen 是「最後一次看到容器的 unix 時間戳」
+      #     （gauge，不是 counter）→ 對它取 increase() 沒有意義。偵測重啟該用
+      #     changes(container_start_time_seconds[10m])。
+      #
+      # 【本機真正在跑的重啟偵測在哪】不是 Prometheus，是主機層 launchd watchdog:
+      #   ~/bin/atlas-container-watchdog.sh（plist com.goluck.atlas-container-watchdog，每 60s）
+      #   它以 docker inspect 的 RestartCount/StartedAt/FinishedAt/ExitCode/OOMKilled 逐次比對，
+      #   有變化就 append 到 ledger: ~/Library/Logs/atlas-container-restarts.log（RESTART-DETECT 行）。
+      #   → 這條偵測是活的（實測 2026-09-25，ledger 有正常紀錄）。它的缺口是
+      #     「偵測到但不會通知」（只寫 log，不發 Telegram）——已在監控缺口報告列出，非本 PR 範圍。
+      #
+      # 【重新啟用條件（任一達成才把下面註解打開）】
+      #   (a) 部署 cAdvisor（新服務 + compose 變更 + 容器重啟，超出本 PR 護欄）後，用正確運算式:
+      #         expr: changes(container_start_time_seconds{name=~".*atlas-go.*"}[10m]) > 3
+      #   (b) 由 atlas-go 匯出程序啟動時間後，用:
+      #         expr: changes(process_start_time_seconds{job="atlas-go"}[10m]) > 3
+      #       現況:atlas-go 的 /metrics **沒有** process_start_time_seconds（實測 2026-09-25
+      #       只有 7 個 family:atlas_channel_health_status / atlas_channel_health_errors_total /
+      #       atlas_channel_fetch_latency_seconds / atlas_channel_data_staleness_seconds /
+      #       atlas_channel_staleness_overage_seconds / llm_client_requests_total /
+      #       llm_client_latency_seconds）。對照組:同一個 Prometheus 裡
+      #       process_start_time_seconds 目前只存在於 job=prometheus / redis / postgres
+      #       （後兩者是 exporter 自帶的 Go collector）。
+      #   **在那之前本規則保持停用。留一條永不評估的規則比留空更危險（#1972 的教訓）。**
+      # - alert: AtlasGoContainerRestartLoop
+      #   expr: increase(container_last_seen{name=~".*atlas-go.*", image=~".*atlas-atlas.*"}[10m]) > 3
+      #   for: 0m
+      #   labels:
+      #     severity: warning
+      #     service: atlas
+      #     component: api
+      #     wave: "9.2"
+      #     incident_ref: "PR#1695-20260826"
+      #   annotations:
+      #     summary: "atlas-go container 10 分鐘內重啟超過 3 次"
+      #     description: |
+      #       atlas-go container 在 10 分鐘內重啟超過 3 次（PR #1695 期間 RestartCount 13 次）。
+      #       立即檢查:
+      #       1. docker inspect atlas-go --format '{{ "{{.RestartCount}}" }} {{ "{{.State.Status}}" }}'
+      #       2. tail -20 ~/Library/Logs/atlas-container-restarts.log   # watchdog 的 restart ledger
+      #       3. docker logs atlas-go --tail 30 | grep -E 'ERROR|FATAL|panic'
+      #     runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
+
+      # ── 2026-09-25（任務 F）新增:用「真的存在」的指標源監聽 atlas-go 反覆失敗 ──────
+      # 動機:上面那條停用後，Prometheus 側就沒有任何「atlas-go 在兩次 scrape 之間反覆
+      # 掉線又回來」的偵測（AtlasGoTargetDown 只抓「連續 2 分鐘都失敗」）。本規則改看
+      # Prometheus 自己一定有的 up 指標，**不依賴任何 exporter / cAdvisor**，所以能 firing。
+      # 語意（請照字面理解，不要當成 restart counter）:
+      #   10 分鐘內 up{job="atlas-go"} 的取樣值變化次數 > 3。一次「掉線再回來」= 2 次變化
+      #   （1→0 與 0→1），所以 > 3 等於「至少 2 次掉線又回來」。
+      # 典型成因:① 容器 restart loop（每次重啟都有一段 scrape 失敗視窗）② scrape 路徑
+      #   本身的問題（DNS / port / network / 目標行程被重啟）。
+      # 已知盲點（**這就是它不能取代 RestartCount 的地方，也是為什麼不冒用 restart 之名**）:
+      #   - 重啟若快到沒有任何一次 scrape 落在「已死」視窗內（job scrape_interval=10s），
+      #     它不會 firing。權威偵測仍是主機層 watchdog 的 restart ledger。
+      #   - 兩次無害的 scrape blip 也會觸發 → 刻意的取捨（severity=warning、4h 才重複一次）。
+      - alert: AtlasGoScrapeFlapping
+        expr: changes(up{job="atlas-go"}[10m]) > 3
         for: 0m
         labels:
           severity: warning
@@ -152,13 +238,19 @@ groups:
           wave: "9.2"
           incident_ref: "PR#1695-20260826"
         annotations:
-          summary: "atlas-go container 10 分鐘內重啟超過 3 次"
+          summary: "atlas-go scrape 10 分鐘內反覆失敗（疑似容器 restart loop）"
           description: |
-            atlas-go container 在 10 分鐘內 scrape 數次出現超過 3 次重啟 (PR #1695 期間
-            RestartCount 13 次,仍持續 crash loop)。
-            常見原因:DB 密碼錯誤、port 衝突、binary panic、env 改寫後沒重啟。
+            Prometheus 對 job=atlas-go (target=atlas:18080) 的 scrape 在 10 分鐘內
+            至少有 2 次「掉線又回來」:atlas-go 反覆不可用，但每次都在 2 分鐘內恢復
+            （所以不會觸發 AtlasGoTargetDown 的 up==0 for 2m）。
+            常見原因:容器 restart loop（DB 密碼錯誤 / port 衝突 / binary panic），
+            或 scrape 路徑本身出問題（DNS / port / 容器被 recreate）。
             立即檢查:
-            1. docker inspect atlas-go-imac --format '{{ "{{.RestartCount}}" }} {{ "{{.State.Status}}" }}'
-            2. docker logs atlas-go-imac --tail 30 | grep -E 'ERROR|FATAL|panic'
-            3. 如 13+ 次仍在 loop → 停下來查 root cause,不要無限重啟
+            1. docker inspect atlas-go --format '{{ "{{.RestartCount}}" }} {{ "{{.State.Status}}" }} {{ "{{.State.StartedAt}}" }}'
+            2. tail -20 ~/Library/Logs/atlas-container-restarts.log
+               （主機層 watchdog 每 60s 落檔的 restart ledger；RESTART-DETECT 行含 new/prev）
+            3. docker logs atlas-go --tail 30 2>&1 | grep -E 'ERROR|FATAL|panic'
+            4. 確認 scrape 路徑:curl -s localhost:18080/metrics | head -3
+            注意:本規則只看得到「scrape 反覆失敗」。要分辨是重啟還是網路問題，
+            以第 1、2 步的 RestartCount / ledger 為準。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"

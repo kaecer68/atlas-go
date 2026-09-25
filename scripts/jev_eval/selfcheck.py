@@ -32,6 +32,7 @@ if _REPO_ROOT not in sys.path:
 from scripts.jev_eval import metrics as metrics_mod
 from scripts.jev_eval import runner
 from scripts.jev_eval.spec import Case, Request, SpecBuild
+from scripts.jev_eval.specs.event_calendar import EventCalendarSpec
 from scripts.jev_eval.specs.industry_l1 import IndustryL1Spec
 
 
@@ -285,6 +286,130 @@ class EvaluationFlow(unittest.TestCase):
         )
         self.assertEqual(verdict["verdict"], "未驗證")
         self.assertIn("leakage cap", verdict["detail"])
+
+
+def _event_row(event_id, event_type, direction, anchor, kind="peak", affected=None, start=None, end=None):
+    return {
+        "event_id": event_id,
+        "event_type": event_type,
+        "name": event_type,
+        "description": event_type,
+        "direction": direction,
+        "base_weight": 0.5,
+        "decay_days": 3,
+        "affected_industries": affected or [],
+        "window_start": start or anchor,
+        "peak_date": anchor,
+        "window_end": end or anchor,
+        "anchor_kind": kind,
+        "nominal_anchor_date": anchor,
+        "anchor_date": anchor,
+        "anchor_shift_days": 0,
+        "sessions_from_window_start": 0,
+        "sessions_anchor_to_window_end": 0,
+        "calendar_year": 2021,
+    }
+
+
+class EventLayerFixture(unittest.TestCase):
+    """Stage-3 spec: the event skeleton must not leak the outcome, and the
+    platform's own prior must abstain exactly where the platform does."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="jev-eval-events-selfcheck-")
+        self.panel = os.path.join(self.dir, "panel.jsonl")
+        self.events = os.path.join(self.dir, "events.jsonl")
+        self.adjustments = os.path.join(self.dir, "adjustments.jsonl")
+        panel_rows = []
+        for d in range(1, 9):
+            date = f"2021-06-{d + 9:02d}"
+            panel_rows.append(_panel_row(date, "semiconductor", 1.0 + d, -1.0, fwd_hit=(d % 2 == 0), back_hit=(d % 3 == 0)))
+            panel_rows.append(_panel_row(date, "financials", -1.0 - d, 2.0, fwd_hit=(d % 3 == 0), back_hit=(d % 2 == 0), name="金融保險"))
+        with open(self.panel, "w", encoding="utf-8") as fh:
+            for row in panel_rows:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        event_rows = [
+            _event_row("msci_rebalance_2021_05", "msci_rebalance", "neutral", "2021-06-10", affected=["semiconductor"]),
+            _event_row("ex_dividend_2021", "ex_dividend", "bullish", "2021-06-11", kind="start", affected=["financials"]),
+        ]
+        with open(self.events, "w", encoding="utf-8") as fh:
+            for row in event_rows:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        with open(self.adjustments, "w", encoding="utf-8") as fh:
+            for d in range(1, 9):
+                date = f"2021-06-{d + 9:02d}"
+                for iid in ("semiconductor", "financials"):
+                    fh.write(json.dumps({"date": date, "industry_id": iid, "event_adjustment": 0.004}) + "\n")
+
+    def _args(self, **over):
+        args = {
+            "events": self.events,
+            "panel": self.panel,
+            "adjustments": self.adjustments,
+        }
+        args.update(over)
+        return args
+
+    # A -------------------------------------------------------------------
+    def test_event_state_hides_ground_truth(self):
+        build = EventCalendarSpec().build(self._args())
+        state_text = json.dumps(build.requests[0].state, ensure_ascii=False)
+        for banned in ("forward", "backward", "hit", "net_return"):
+            self.assertNotIn(banned, state_text)
+        self.assertFalse(hasattr(EventCalendarSpec.view(build.cases[0]), "gt"))
+
+    # B -------------------------------------------------------------------
+    def test_event_build_is_deterministic(self):
+        spec = EventCalendarSpec()
+        a = spec.build(self._args())
+        b = spec.build(self._args())
+        self.assertEqual(
+            [r.fingerprint("jev-1.13.0") for r in a.requests],
+            [r.fingerprint("jev-1.13.0") for r in b.requests],
+        )
+        self.assertEqual([c.to_json() for c in a.cases], [c.to_json() for c in b.cases])
+
+    # C -------------------------------------------------------------------
+    def test_leakage_state_carries_no_prices_and_no_event_details(self):
+        build = EventCalendarSpec().build(self._args(mode="leakage"))
+        text = json.dumps(build.requests[0].state, ensure_ascii=False)
+        for banned in ("ret_5d", "trailing_return", "vol", "session_return", "below_60", "event_type", "msci"):
+            self.assertNotIn(banned, text)
+        self.assertTrue(all(not c.baselines for c in build.cases))
+
+    def test_leakage_ground_truth_is_the_backward_window(self):
+        judge = EventCalendarSpec().build(self._args()).cases_by_id()
+        probe = EventCalendarSpec().build(self._args(mode="leakage")).cases_by_id()
+        shared = sorted(set(judge) & set(probe))
+        self.assertTrue(shared)
+        self.assertEqual(probe[shared[0]].gt, bool(judge[shared[0]].meta["backward"]["backward_hit"]))
+
+    # D -------------------------------------------------------------------
+    def test_prior_abstains_where_the_platform_declares_no_direction(self):
+        cases = EventCalendarSpec().build(self._args()).cases
+        neutral = [c for c in cases if c.meta["event_direction"] == "neutral"]
+        bullish = [c for c in cases if c.meta["event_direction"] == "bullish"]
+        self.assertTrue(neutral and bullish)
+        for c in neutral:
+            self.assertIsNone(c.baselines["event_direction_prior"])
+        # affected industry -> full weight; everything else -> 0.3 spillover
+        for c in bullish:
+            expected = 1.0 if c.meta["industry_id"] == "financials" else 0.3
+            self.assertAlmostEqual(c.baselines["event_direction_prior"], expected)
+
+    def test_unconditional_baseline_is_constant(self):
+        cases = EventCalendarSpec().build(self._args()).cases
+        self.assertEqual({c.baselines["unconditional_always_up"] for c in cases}, {0.5})
+
+    def test_unavailable_baseline_is_null_not_a_proxy(self):
+        cases = EventCalendarSpec().build(self._args()).cases
+        name = "platform_eventdriven_t1_capital_flow_direction"
+        self.assertTrue(all(c.baselines[name] is None for c in cases))
+        obs = [
+            metrics_mod.Observation(c.case_id, c.group_id, c.gt, 0.6, dict(c.baselines)) for c in cases
+        ]
+        result = metrics_mod.evaluate(obs, baseline_names=(name,), bootstrap_iterations=20)
+        self.assertFalse(result["evaluation"]["baselines"][name]["available"])
 
 
 if __name__ == "__main__":
