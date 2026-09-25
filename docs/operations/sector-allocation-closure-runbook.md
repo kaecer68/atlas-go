@@ -14,7 +14,7 @@
 
 符合 L2.4 5-condition hard gate 模式（`docs/operations/l2-4-runbook.md` §3）：
 - ✅ Feature flag `sector_allocation_closure_enabled` 預設 off
-- ✅ SACMetrics 11 events 全部觀察中
+- ✅ SACMetrics 事件觀察中（**7/11 已接線**：#1944 Batch 4 起由 `StrategyEvolver.ApplySectorRotation` + composition root 發射 `sac.snapshot.start/current/target/fallback/end` 與 `sac.policy.consumed/applied`；未接線者 `snapshot.projection`（需 projector 回傳 clamped 統計）、`legacy.read`、`fallback.count`、`rollback.drill`，理由見 docs/reference/inert-registry.md §Batch 4。在此之前 11 個 emitter 全無呼叫者，本行原稱「全部觀察中」與實況不符）
 - ✅ No live mutations during observation
 - ✅ Rollback drill 通過
 - ✅ Operator sign-off

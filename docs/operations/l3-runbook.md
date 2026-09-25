@@ -35,7 +35,7 @@ curl -s http://localhost:18080/metrics | grep '^atlas_stage3_alerts_fired_total'
 | `data-staleness-warning` | 偶發(個別 channel 抓資料慢) | > 2/day 持續 1 週 → 該 channel 有結構性問題 |
 | `data-staleness-critical` | 極少(>6 小時無資料) | > 1/week 持續 → channel health check 失效 |
 | `event-calendar-sparse` | 228 / 春節 / 國慶 *前後* 不應 fire(已 typeFilter 修) | 真的 fire 了 → `internal/industry/event_calendar.go:895` 的 typeFilter 重新驗證 |
-| `model-confidence-degraded` | 0/run(ledger 有資料 → 不應 fire) | 持續 fire → `LatestCapitalFlowPrediction` 永遠回中性值,predictor 有 bug |
+| `model-confidence-degraded` | 0/run（#1944 Batch 4 起語意為：需要 ≥5 筆 **已對帳** 紀錄且預測符號全為中性 `DirectionSign == 0` 才 fire；ledger 空時的 0.5 padding 不再算證據） | 持續 fire → `LatestCapitalFlowPrediction` 永遠回中性值,predictor 有 bug |
 | `prediction-drift` | 0/run(暖機期間) | 暖機結束後突然 fire → 檢查 actual vs prediction 的數值差距 |
 | `prediction-drift-insufficient-history` | boot 後前 5 天 | 6 天後仍 fire → `predictionLedger.Len()` 沒在增長,predictor 沒被叫 |
 
