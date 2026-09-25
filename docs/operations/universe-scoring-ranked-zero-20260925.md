@@ -5,8 +5,12 @@
 > **方法**：唯讀生產實測（`docker logs` / Prometheus `/api/v1/query` / `data/state/*.json`）
 > ＋ 原始碼逐行追溯（`git blame` / `git log -S`）
 > **性質**：**純報告，未修改任何生產行為或設定**。修法待業主核准。
-> **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`，commit `939d36a6`）
-> 已實作本報告 §6 的修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值）。
+> **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`）已實作本報告 §6 的
+> 修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值），並已
+> **於 2026-09-25 合併（merge commit `bbce1b4a`）且部署**（見 §9.1 的部署事實）。
+> 部署後的第一次觀察（授權的手動觸發）**已定案**（§9.1.6）：**`symbols_ranked` 由 0 → 150**
+> ⇒ provider 接線**已在生產驗證生效**；但該次 `ranked_trustworthy=false`（休市 + fugle 限流 +
+> Fubon 逾時）⇒ **接線生效 ≠ 排名可信**，需在**交易日**複驗。
 > 本報告**不重寫該修法**，而是提供它的「**為什麼**」：根因證據鏈（§3）、引入方式（§4）、
 > 以及為何三個月來四道防線全部失效（§5）；並列出 #1979 **未覆蓋**的缺口與可直接落地的
 > 告警／檢查條件（§6.2、§8）。
@@ -198,13 +202,15 @@ $ git blame -L 239,239 71771821 -- cmd/atlas/main.go
 
 ## 6. 修法：選項 1+2 **已由 PR #1979 實作**；本報告是其根因與失效防線的完整佐證
 
-> **本節定位**：業主 PR **#1979**（`fix/20260925-inert-batch3`，commit `939d36a6`）已實作本節的
-> 選項 1 + 2。**本報告不重寫該修法**；它提供的是 #1979 的「**為什麼**」——
+> **本節定位（2026-09-25 更新）**：業主 PR **#1979**（`fix/20260925-inert-batch3`）
+> 已實作本節的選項 1 + 2，並**已合併**（merge commit `bbce1b4a`）**且部署**（§9.1）。
+> **本報告不重寫該修法**；它提供的是 #1979 的「**為什麼**」——
 > 根因證據鏈（§3）、引入方式（§4）、以及為何 3 個月沒被任何防線抓到（§5）。
 > §6.2 列出**#1979 未覆蓋的缺口**，並寫成可直接落地的告警條件。
 
-### 6.0 #1979 的內容與交叉引用（★ 已有 in-flight 修法，不得重複實作）
-在寫本報告的同時發現：**另一個未合併的 PR 已經實作選項 1 與選項 2**，並且**獨立得出同一個根因**。
+### 6.0 #1979 的內容與交叉引用（★ 修法已由 #1979 實作並合併，不得重複實作）
+在寫本報告的同時發現：**另一個 PR（#1979）已經實作選項 1 與選項 2**，並且**獨立得出同一個根因**。
+**後續狀態：`bbce1b4a` 已於 2026-09-25 合併進 `main` 並部署**（部署事實見 §9.1）。
 
 ```
 $ git log --all --oneline -S "Quotes:          quotes" -- cmd/atlas/
@@ -237,7 +243,8 @@ $ gh pr list --state open
 1. 本報告的 §3 根因得到**第二個獨立來源**確認（不是只有本 session 的推論）。
 2. §6 選項 1、2 **不必重新實作**，應改為「審核 #1979 是否覆蓋 §6 的風險 A–D」。
 3. **#1979 沒有動 `CheckUniverseCoverage`**（`git show 939d36a6:internal/monitoring/universe_scheduler.go`
-   仍是 `total = mapped`）⇒ §7.1 的 false green 仍是**未修**狀態，與 #1979 不重疊。
+   仍是 `total = mapped`）⇒ §7.1 的 false green 與 #1979 **不重疊**；該 false green 另由 PR **#1983**
+   修正，並已於 2026-09-25 **合併**（squash commit **`cd1f5b02`**；**尚未部署**，見 §9.1.7）。
 4. 併發風險：`#1979` 與 `universe_coverage_check` 修正（另案）都改
    `internal/monitoring/universe_scheduler.go`；實測 `git merge-tree` 兩分支**無衝突**
    （`git merge-tree --write-tree` 乾淨，合併後同時含 `quotes_status`/`ranked_trustworthy`
@@ -261,6 +268,9 @@ $ gh pr list --state open
   **完全對齊**，否則會出現「有報價但鍵不匹配」→ 仍為 0（與現況症狀相同，極難察覺）。
 - **風險 D（時序）**：修好報價後 `ranked` 會第一次變成非 0，TopN=150 加上
   `MaxIndustryConcentration=0.40` 會第一次真正作用 ⇒ 這是**行為變更**，需要一次影子比對。
+  **現況（2026-09-25）**：第一次真實執行已發生（`symbols_ranked=150`、`symbols_excluded=130`，
+  見 §9.1.6），但該輪 `ranked_trustworthy=false`（休市 + 上游限流）⇒
+  **行為變更的驗收仍待交易日**。
 
 ### 選項 2（**已由 #1979 實作**）：fail-loud，不要靜默 0
 保留 nil 行為，但讓它**吵**：
@@ -385,6 +395,9 @@ groups:
 - 量的是**舊的代表股母體 27 檔**，而 pipeline 已改用 1599 檔的 substrate 母體 ⇒ 兩者不同母體。
 - `ratio` 在 27 檔、1599 檔、甚至母體塌成 3 檔時都會是 1.00；`alert` 只在 `mapped==0` 時才有機會出現。
 - **影響**：這是「覆蓋率」告警的唯一來源，等於**不存在**。
+- **現況（2026-09-25）**：本項已由 PR **#1983**（`fix/universe-coverage-substrate`）修正並合併
+  （squash commit **`cd1f5b02`**）——分母改為第一方上游母體、無母體可測時明確回報不可測（§9.3）。
+  **但尚未部署**（生產容器的 image 建於 `bbce1b4a`；見 §9.1.7）。
 - **與 §3 根因的關係（明確回答）**：**不是同一個 bug**。`1.00` 來自 `total = mapped`（恆等式），
   與 `Quotes` 是否 nil 無關；即使報價接好、`ranked=1599`，這個 1.00 仍會照印。
   ⇒ 修 coverage **不會遮住** `ranked=0`，兩者是獨立缺陷。
@@ -529,9 +542,208 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 
 ---
 
-## 9. 已證實 vs 未證實
+## 9. 後續狀態、已知限制與追蹤
 
-### 已證實（證據在 §1–§7 引用的原始輸出／程式碼行）
+### 9.1 部署事實與第一次修法後的觀察（已證實）
+
+#### 9.1.1 部署事實（唯讀實測）
+
+本報告 §1 的所有事實取自 commit `db0709c1`（gate 開啟後、修法合併前的生產狀態）。
+`#1979` 合併後的最新狀態：
+
+```
+$ ssh kaecer@kmacmini "cd ~/workspace/atlas && git log --oneline -3"
+bbce1b4a fix(inert): issue #1944 Batch 3 — 高嚴重 inert 項逐項結案（接線／明示未啟用／移除） (#1979)
+3ff4fc8a ci(workflows): 監控設定 gate（promtool/amtool，釘版容器）+ PR base guard（任務 I） (#1981)
+6068f5db feat(ci): inert 閉環靜態檢查 + allowlist（#1944 建議 2） (#1980)
+
+$ docker inspect atlas-go --format '{{.Image}} created={{.Created}} started={{.State.StartedAt}}'
+sha256:a06f7d2e… created=2026-09-25T07:09:28.611161904Z started=2026-09-25T07:09:50.54550951Z
+$ docker images atlas-atlas --format '{{.ID}} {{.CreatedAt}} {{.Tag}}'
+a06f7d2e4aba 2026-09-25 15:09:24 +0800 CST latest
+```
+
+- 生產 repo 為 `bbce1b4a`，容器於 **2026-09-25 15:09（台北）重建並重啟**
+  ⇒ **部署標的 = `bbce1b4a`**（部署驗收另記）。
+- `origin/main` 其後前進到 **`47de2381`**（本報告自身的合併）；差異為 **docs-only**
+  ⇒ **功能上與 `bbce1b4a` 無差異**。
+- 部署任務包含一項**已授權的手動觸發**（趁部署後立即驗證母體管線），於 `07:10Z` 起在容器內執行
+  `/app/atlas-go -build-universe run`（bounded ≤ 12 分）。以下 9.1.2–9.1.4 為該次執行的觀察。
+
+#### 9.1.2 結論 ①：**provider 接線已證實生效**（部署前為 mock；§9.1.6 於 2026-09-25 生產複驗）
+
+| 觀察（執行者於生產取得） | 意義 |
+|---|---|
+| `initialized inner=hybrid-fubon provider_cfg=hybrid` | 真實 provider 已建立；**部署前** CLI 路徑用的是 `marketdata.NewMockProvider()`（§4 第 4 點） |
+| `get_quotes_ok provider=hybrid-fubon symbols=50` / `symbols=39` | 報價實際抓回，且**分批（50/批）**生效 ⇒ 對 1599 檔母體的抓取形狀符合 #1979 的設計 |
+
+⇒ 這是本報告 §3 根因（`Quotes == nil` ⇒ 空 `quoteMap` ⇒ `ranked=0`）的**正面反證**：
+同一條程式路徑在接線後確實能取得報價。
+
+#### 9.1.3 結論 ②：`ranked` 的實際值受**資料可得性**影響，**不是** wiring 失敗
+
+| 觀察 | 意義 |
+|---|---|
+| `finmind: asOf 2026-09-25 is not a Taiwan trading day (weekend or holiday)` | ★ **2026-09-25 非台股交易日**（當日為國定假日）⇒ 該日「當日報價」在資料源端本來就不存在 |
+| `fetch_failed symbol=1605 err="rate limit wait: rate limited" component=fugle` | fugle 端限流 |
+| `health_probe_failed "fubon proxy: … /health: context deadline exceeded"` + `fubon_failed_fallback` | Fubon proxy 逾時 → 回退 |
+
+**明確的判讀紀律**：`ranked` 偏低（甚至為 0）在這種組合下**不可**記為 wiring 失敗。
+必須先排除「非交易日 / 上游限流 / 回退」這三類資料可得性因素，否則就是把 §5 的歸因偏差
+再犯一次（`0` 被誤讀成「市場沒有合格標的」）。
+
+#### 9.1.4 配額與限流的範圍（不是 CLI 造成的偶發）
+
+| 項 | 觀察 | 意義 |
+|---|---|---|
+| FinMind 配額 | `13368 → 13390`（**+22**） | 分批化 + 非交易日拒答**成功保護了 FinMind**（1599 檔未逐檔打） |
+| Fugle 配額 | `236 → 439`（**+203**） | 壓力**落在 fugle**（被當成回退來源反覆嘗試） |
+| 服務自身 log（30 分窗） | `rate limit` 出現 **19 行**；`level=ERROR` **0 行** | ⇒ 「fugle 限流」是**持續性**狀況，**不是** CLI 造成的偶發 |
+
+#### 9.1.5 服務本體全程健康（本次手動觸發未造成中斷）
+
+執行者實測：**24 個容器、0 個 not-running**、`/api/version` **HTTP 200**、服務 log `ERROR = 0`。
+
+#### 9.1.7 coverage 修正（PR #1983）已合併但**尚未部署**
+
+```
+$ git log --oneline origin/main -2
+cd1f5b02 fix(monitoring): universe coverage_check 改以第一方母體為分母，移除 total=mapped 的假綠 (#1943) (#1983)
+47de2381 docs(operations): 調查報告 — SmartUniverseBuilder symbols_ranked=0（唯讀根因，未修） (#1982)
+```
+
+- **程式碼狀態**：`CheckUniverseCoverage` 的誠實版（分母＝第一方上游母體；無母體時
+  `Available=false` + 「not measurable」）已在 `main`（`cd1f5b02`，2026-09-25 合併）。
+- **部署狀態**：**尚未部署**。本次部署標的由業主指定為 **`bbce1b4a`**，容器 image 建於
+  **2026-09-25 15:09（台北）**（`started=2026-09-25T07:09:50Z`，§9.1.1）
+  ⇒ **`cd1f5b02`（coverage 修正）與 `47de2381`（本報告的 docs 合併）都不在本次部署內**。
+  生產日誌目前仍會印舊形狀的 `coverage_check`，**直到下一次部署**才可能改變。
+  ⇒ 看到 `main` 已合併**不等於**生產已修（**merged ≠ effective**）。
+
+#### 9.1.6 **定案**（2026-09-25 授權手動觸發，`full_rebuild=true`）
+
+**快照結果**（唯讀實測 `data/state/universe_snapshot.json`，mtime **2026-09-25T15:31:50（台北）**）：
+
+```json
+"result": {
+  "symbols_built": 1599, "symbols_filtered": 1599,
+  "symbols_ranked": 150, "symbols_excluded": 130,
+  "full_rebuild": true,
+  "timestamp": "2026-09-25T07:10:35.181268988Z",
+  "quotes_status": "partial", "quotes_returned": 1301, "quotes_requested": 1599,
+  "quotes_chunks": 32, "quotes_chunks_failed": 2,
+  "ranked_fallback_reason": "quote_fetch_partial", "ranked_trustworthy": false
+}
+```
+`ranked` 陣列長度 = **150** ✓
+
+**同日誌行**（執行者於生產取得）：
+
+```
+scoring_filters input=1599 no_quote=298 zero_volume=0 below_turnover_floor=646 below_price_floor=3 lots_converted=1120 survivors=652
+scoring_ok input=1599 ranked=150
+ranked_not_trustworthy reason=quote_fetch_partial symbols_built=1599 symbols_filtered=1599 quotes_status=partial chunks=32 chunks_failed=2 quotes_returned=1301
+```
+
+**三重自洽（交叉核對）**
+
+| 關係 | 驗算 | 對應欄位 |
+|---|---|---|
+| 1599 − 1301 | = **298** | `no_quote` ✓ |
+| 1599 − (298 + 0 + 646 + 3) | = **652** | `survivors` ✓ |
+| 1599 / 50 | = **32** | `quotes_chunks` ✓（分批大小 50，與 §9.1.2 一致） |
+
+##### 結論 ①：provider 接線**已在生產驗證生效**
+
+| 證據 | 值 |
+|---|---|
+| wiring | `cmd/atlas/bootstrap_helpers.go:277 Quotes: quotes`（來源 `newUniverseQuoteProvider(cfg)`，`:198` / `:221`） |
+| provider | `initialized inner=hybrid-fubon provider_cfg=hybrid` |
+| 結果 | `symbols_ranked` **0 → 150** |
+| 報價 | `quotes_returned = 1301 / 1599` |
+
+⇒ §3 的根因（`Quotes == nil` ⇒ 空 `quoteMap` ⇒ `ranked=0`）**已由生產實測反證**；這也是本報告 §3
+推論的**驗證**（此前的 `ranked=0` 不是市場結論，而是 wiring 缺漏）。
+
+##### 結論 ②：排名**目前不可信**，需交易日複驗
+
+`quotes_status=partial`、`ranked_trustworthy=false`、`ranked_fallback_reason=quote_fetch_partial`、
+`quotes_chunks_failed=2/32`；原因鏈為**三項外在因素**：
+
+1. **2026-09-25 台股休市**（`finmind: asOf 2026-09-25 is not a Taiwan trading day`，與業主權威表一致）；
+2. **fugle 限流**（`rate limit`，服務自身 log 亦有，見 §9.1.4）；
+3. **Fubon proxy `/health` 逾時** → `fubon_failed_fallback`。
+
+⇒ 結論 ① 與 ② **必須分開陳述**：接線生效 ≠ 排名可信。
+
+##### ③ 單位換算正確、不需回退
+
+provider 走 Fubon（回報單位為「張」）且 `lots_converted=1120`
+⇒ 業主設定的回退條件（`lots_converted=0`）**未觸發**。
+
+##### ④ 配額護欄生效
+
+FinMind 配額 `13368 → 13794`（**+426**）；`auto_quote_backfill` 在 remaining `1010 < 1500` 時
+**主動早停**（#1954 保留值）⇒ **配額告警 0**。
+
+##### ⑤ 服務未受影響
+
+容器 **24** 個、**0** 個 not-running、`/api/version` **HTTP 200**、服務 log `ERROR = 0`。
+
+##### ⑥ 下一個觀察點
+
+**2026-09-28（Mon，交易日）06:00Z** 的每日管線 ⇒ 目標 `quotes_status=ok` 且
+`ranked_trustworthy=true`。
+
+##### ⑦ 誠實標註：CLI 結束碼為 **1**
+
+CLI（`/app/atlas-go -build-universe run`）結束碼為 **1**，這是工具以非零碼**誠實表達「結果不可信」**
+（`ranked_trustworthy=false`），**不是崩潰或失敗**；且 **snapshot 確實已寫入**（mtime 15:31:50）。
+**不要把 exit 1 誤讀成失敗。**
+
+##### 紀律註記（含一次預測錯誤的更正）
+
+執行者在觸發前曾預測「休市日 ⇒ `ranked` 會是 0」。**該預測是錯的**：provider 仍取得
+1301/1599 筆報價，排名照樣產出 150。⇒ **不宜在取得實測值前先下結論**。
+這與本報告 §5 的歸因偏差（把 `0` 直接歸因於母體太小）是同一枚硬幣的兩面：**兩種方向的未經驗證結論都會誤導**。
+
+### 9.2 已知限制 (1)：`Reasons` 只收「未解析列」的理由（**刻意取捨**）
+
+Part 2（`CheckUniverseCoverage`）的 `CoverageReport.Reasons` **只**收錄未解析列
+（`unmapped` / `unknown`）的 `mapping_reason`，不收「已成功映射」那一側的理由。
+
+- **為什麼刻意**：已成功映射的列，其理由多為「canonical L1 X 為唯一對應」這類長中文字串（約 20 條）
+  ⇒ 若全收，alert 與 log 會被灌滿，真正描述缺口的理由反而被淹掉。
+  稽核的目的正是「缺口在哪」，不是「成功的每一條為什麼成功」。
+- **要看完整理由的入口**：
+  `data/state/symbol_industry.json` 的 `unmapped_codes` / `unknown_codes`（含 `code`/`name`/`count`/`reason`）
+  與 `counts`，或每一列 entry 的 `mapping_status` / `mapping_reason`。
+- **若業主要全收**：改動是一行（把已映射列的理由一併 append），但需一併決定 alert 的截斷策略。
+
+### 9.3 已知限制 (2)：`Coverage()` 反映最近一次**成功** Reload（TTL 6h）＝**靜默陳舊**風險
+
+Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySubstrate` 的記憶體視圖，
+該視圖只在 `Reload` 成功時更新，且 TTL 為 6 小時。
+
+- **風險情境**：store 在最後一次成功 Reload **之後**才壞掉 ⇒ 稽核會**繼續沿用舊視圖**，
+  回報一個看起來正常（甚至很好）的比率，直到下一次 Reload 週期才可能改變。
+  這正是本報告 §5、§8.6 在消滅的模式：**檢查回報「有東西」而不是「東西對不對」**。
+- **目前無法區分**「載入失敗」與「載入成功但母體為空」——兩者都可能表現為不可測或舊值。
+- **最小修法建議（**只建議，未實作**）**：
+  1. `Coverage()` 回傳附 **`as_of`**（最近一次成功 Reload 的時間戳），讓稽核能揭露資料年齡；
+  2. 告警端加一條「substrate 最近成功 Reload 超過 N 小時」的規則
+     （與 §6.2 的規則同一組，需先解決 §7.2 的 counter 灌爆或改用 gauge）；
+  3. substrate 曝露 `last_reload_ok` / `load_error`，讓「載入失敗」與「母體為空」可區分。
+- **追蹤**：已記入 `docs/operations/FOLLOWUPS.md`（條目 **FU-20260925-01**，狀態 `open`，未實作）。
+
+### 9.4 其他尚未證實項
+見 §10 的「未證實」清單（`ratio ≈ 0.80` 亦為推得的預期值，尚未在生產觀察到）。
+
+---
+
+## 10. 已證實 vs 未證實
+
+### 已證實（證據在 §1–§7、§9.1 引用的原始輸出／程式碼行）
 1. `ranked=0` 的直接原因是 `deps.Quotes == nil` → Step 3 `else` 分支 → 空 `quoteMap`
    → `applyVolumeAndPriceFilters` 對 1599 檔全部 `continue`。
 2. 該 nil 自 2026-06-22 `71771821`（#630）首次寫入即存在，95 天未被改動；**不是** #1977 造成的。
@@ -542,9 +754,18 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 6. `IndustryFilter` 沒有濾掉任何人（`input=1599 output=1599`，無 `TargetLevel1`）。
 7. 快照 `ranked=[]` 與日誌 `ranked=0` 同源（`:412-414` 同一個 slice）。
 8. §7.1–§7.4 四項附帶缺陷（含 §7.2 的算術對帳全部吻合）。
+9. **#1979 的接線在生產已驗證生效**（§9.1.6 結論 ①）：`symbols_ranked` **0 → 150**、
+   `quotes_returned=1301/1599`、`Quotes: quotes`（`bootstrap_helpers.go:277`），
+   且三項自洽對帳（298 / 652 / 32）全部吻合。
+10. **同一輪觀察的三項附帶事實**（§9.1.6）：`lots_converted=1120` ⇒ 單位換算正確、回退條件未觸發；
+    FinMind `13368 → 13794` 且 `auto_quote_backfill` 主動早停 ⇒ 配額護欄生效；
+    服務 24 容器 / 0 not-running / http=200 / ERROR=0 ⇒ 未受影響。
 
 ### 未證實（**不要**當成結論）
-1. **接上 provider 後 `ranked > 0`** —— 未實作、未量測。風險見 §6 選項 1 的 A–D。
+1. **接上 provider 後 `ranked > 0`** —— **已定案：`ranked` 由 0 → 150**（§9.1.6 結論 ①，
+   2026-09-25 生產實測）。**仍未證實的是「排名可信」**：該輪 `ranked_trustworthy=false`
+   （休市 + fugle 限流 + Fubon 逾時），需待 **2026-09-28（Mon，交易日）06:00Z** 的每日管線
+   達到 `quotes_status=ok` + `ranked_trustworthy=true` 才能定論（§9.1.6 結論 ②⑥）。
 2. provider 對 1599 檔的實際呼叫數／配額足跡 —— 未量測。
 3. provider 回傳代號與 `substratePopulation` 鍵是否 100% 對齊 —— 未量測。
 4. `Volume/Last` 的單位語意是否與 `volume_floor_twd` 的設計假設一致 —— 未查證。
@@ -554,7 +775,7 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 
 ---
 
-## 10. 附錄：原始輸出
+## 11. 附錄：原始輸出
 
 ### A1 wiring（`cmd/atlas/bootstrap_helpers.go`，origin/main）
 
