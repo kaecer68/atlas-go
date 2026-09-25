@@ -1,9 +1,33 @@
 ---
 name: atlas-imac-prod-guard
-description: "Use when on iMac (KiMac) before any docker compose / docker rm / make rebuild operation that could affect prod containers. Validates that current state (container_name, image, port, password) matches the documented prod SSOT in docker-compose.prod.yml. Triggers: iMac rebuild, docker rm atlas-*, make rebuild-all, make rebuild-atlas, docker compose up -d, PR #1695 follow-up"
+description: "[已退役 / RETIRED 2026-09-22 — iMac 已出售，本流程一律不可照做；改用 docs/operations/MACMINI-RECOVER.md + a2a-dev scripts/prod-guard.sh] 歷史記錄：iMac (KiMac) 上的 docker compose / docker rm / make rebuild 前置護欄（比對 container_name / image / port / password 與 docs/operations/docker-compose.prod.yml）。Triggers: iMac rebuild, docker rm atlas-*, make rebuild-all, make rebuild-atlas, docker compose up -d, PR #1695 follow-up"
 ---
 
-# atlas-imac-prod-guard (2026-08-27)
+# atlas-imac-prod-guard (2026-08-27) — ⛔ 已退役（2026-09-22）
+
+> ## ⛔ 本 skill 已退役，內容**不可照做**
+>
+> **退役理由**：iMac (KiMac) 已於 **2026-09-22 出售退役**；生產主機改為 **Mac Mini**
+> （`ssh kaecer@kmacmini`／`KMacMini.local`）。本檔所有指令都以 iMac 為前提，現在**全部失效**：
+>
+> | 本檔寫的 | 現況 |
+> |---|---|
+> | `ssh kk@kimac`、`/Users/kk/...` | ✗ 該帳號/主機不存在；現為 `kaecer@kmacmini`、`/Users/kaecer/...` |
+> | `LocalHostName == KiMac` 為觸發條件 | ✗ 現為 `KMacMini.local` |
+> | `make rebuild-all` / `make rebuild-atlas` / `Makefile.prod` | ✗ 已移除 |
+> | `docs/operations/iMac-RUNBOOK.md`、`IMAC-STARTUP-SOP.md` | ✗ 檔案已刪除（iMac 退役時一併移除） |
+> | live 容器由 `docker-compose.prod.yml` 起 | ✗ 實際由 repo 根的 `docker-compose.yml` 起（`docker inspect` 可查證） |
+>
+> **現行對應做法（改用這些）**：
+> - 生產主機護欄：a2a-dev `scripts/prod-guard.sh`（偵測 `~/.a2a/PRODUCTION_HOST`；
+>   **不要在生產機跑 CI/重建**）。
+> - 復原與重開機：`docs/operations/MACMINI-RECOVER.md`、a2a-dev `scripts/macmini-recover.sh`。
+> - 部署：a2a-dev `docs/deployment/MACMINI-DEPLOY-RUNBOOK.md`。
+> - 監控設定樹：**只有一棵權威樹 = repo 的 `monitoring/`** ✗ `~/workspace/atlas-monitoring/`
+>   （歷史殘留）；詳見 `.claude/skills/atlas-monitoring-observability/`。
+>
+> 本檔保留為 **歷史事故記錄**（PR #1695 的 postgres 覆蓋事件，是真實教訓：compose 檔共用
+> `container_name` 且沒帶 `-f` ⇒ 用 dev 預設值覆蓋 prod 容器）。**不要刪除本檔的歷史敘述**。
 
 ## 問題背景
 
@@ -33,10 +57,11 @@ description: "Use when on iMac (KiMac) before any docker compose / docker rm / m
 
 ```bash
 hostname
-scutil --get LocalHostName   # iMac 應回 "KiMac"
+scutil --get LocalHostName   # 已退役：iMac 應回 "KiMac"（該機已出售）
 ```
 
 **`LocalHostName != KiMac`** → 跳過 skill（MacBook / Linux / CI 不適用）。
+**2026-09-22 起一律結果都是「跳過」**——本 skill 已退役，見頂部警示。
 
 ### 2. 抓 SSOT
 
@@ -94,7 +119,10 @@ cat ~/.config/atlas-go/.env  # 對應欄
 | `atlas-postgres` 沒有 `POSTGRES_PASSWORD` env 或密碼不對 | ⚠️ 直接 ALTER USER（POSTGRES_PASSWORD 只在 initdb 時生效）|
 | `atlas-go-imac` RestartCount=13+ 還在 crash loop | ⚠️ 不要無限重啟，先 root cause |
 
-## 復原 SOP（建議搭配 [iMac-RUNBOOK.md](https://github.com/kaecer68/atlas-go/blob/main/docs/operations/iMac-RUNBOOK.md)）
+## 復原 SOP（⛔ 歷史記錄 — iMac 專用，已失效；現行走 `docs/operations/MACMINI-RECOVER.md`）
+
+> 下列步驟帶 `/Users/kk/...` 與 `ssh kk@kimac`，在 2026-09-22 之後**無法執行**。
+> 保留原樣只為還原當時處置（教訓是「用 prod compose 明確指定 `-f` 才 `up -d`」）。
 
 1. `ssh kk@kimac "ps -p 1008 -o command"` 確認 ssh tunnel 是否 rogue（若是 `ssh -L 55432:...`，`kill 1008`）
 3. `cd /Users/kk/workspace/atlas && /usr/local/bin/docker compose -f docker-compose.prod.yml stop postgres`
@@ -107,11 +135,12 @@ cat ~/.config/atlas-go/.env  # 對應欄
 
 ## 相關文件
 
-- `docs/operations/iMac-RUNBOOK.md`（日常排障）
-- `docs/operations/IMAC-STARTUP-SOP.md`（重開機 SOP）
-- `docs/operations/docker-compose.prod.yml`（prod SSOT）
-- AGENTS.md（測 high頻陷阱）
-- `.claude/skills/atlas-monitoring-observability/`（alert chain 健康）
+- ✗ `docs/operations/iMac-RUNBOOK.md`（**已刪除**，iMac 退役）
+- ✗ `docs/operations/IMAC-STARTUP-SOP.md`（**已刪除**，iMac 退役）
+- `docs/operations/MACMINI-RECOVER.md`（**現行**：Mac Mini 復原）
+- `docs/operations/docker-compose.prod.yml`（prod **文件化參考**；live 定義是 repo 根 `docker-compose.yml`）
+- AGENTS.md（高頻陷阱）
+- `.claude/skills/atlas-monitoring-observability/`（alert chain 健康 + monitoring 單一設定樹）
 
 ## 配套 PR
 

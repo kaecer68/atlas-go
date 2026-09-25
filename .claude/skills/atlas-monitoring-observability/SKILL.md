@@ -14,6 +14,44 @@ atlas-go 啟動流程曾有兩個系統性盲點:
 
 ---
 
+## ⚠️ 監控設定 SSOT：只有一棵權威樹（2026-09-25 加註）
+
+Prometheus / Alertmanager / Grafana 的設定與 rules **只有一棵權威樹 = repo 的 `monitoring/`**：
+
+| 權威檔案（✓ 唯一 SSOT） | 生產實際掛載（`docker inspect` 實查，2026-09-25） |
+|---|---|
+| `monitoring/prometheus.yml` | → `/etc/prometheus/prometheus.yml`（容器 `atlas-prometheus`） |
+| `monitoring/rules/`（7 檔） | → `/etc/prometheus/rules`（容器 `atlas-prometheus`） |
+| `monitoring/alertmanager.yml` | → `/etc/alertmanager/alertmanager.yml`（容器 `atlas-alertmanager`） |
+| `monitoring/grafana/` | → `/var/lib/grafana/dashboards`、`/etc/grafana/provisioning/*`、`/etc/grafana/provisioning/datasources`（容器 `atlas-grafana`） |
+
+掛載宣告在 repo 根的 **`docker-compose.yml`**（寫成 `./monitoring/…`，相對 repo 根）——
+那才是 live 容器的 compose 檔案（`docker inspect` 的 `com.docker.compose.project.config_files` 可查證）。
+
+> ⚠️ `~/workspace/atlas-monitoring/` 是 **iMac 時代的歷史殘留**，**不是**生產掛載源 ✗；
+> 它的 `rules/` 只有 5 檔（repo 有 7 檔）⇒ 往那裡改設定等於改了沒人讀的檔案。
+> 改監控設定前先確認實際掛載源：
+>
+> ```bash
+> docker inspect atlas-prometheus atlas-alertmanager \
+>   --format '{{.Name}} :: {{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}'
+> # 來源必須落在 <repo>/monitoring/（例：/Users/<you>/workspace/atlas/monitoring/rules）
+> ```
+
+**這不是假想風險（2026-08-27 實證事故）**：有人把「補 target-down 規則」的修法寫進
+`~/workspace/atlas-monitoring/rules/`（錯的樹）✗，而生產 Prometheus 讀的是 repo 的
+`monitoring/rules/` ✓ ⇒ 該規則**在生產 27 天從未被載入**（2026-08-27 進版控 →
+2026-09-23T08:44:14Z 才第一次被評估）。完整時間線見 a2a-dev
+`docs/operations/atlas-monitoring-gap-20260925.md`。
+
+**改 rule 後的驗證（缺一不可）**：
+1. 檔案落在 **repo** 的 `monitoring/rules/`（`git status` 要看到它）。
+2. 容器真的載入：`docker exec atlas-prometheus promtool check rules /etc/prometheus/rules/<file>.yml`
+   或查 `curl -s localhost:9090/api/v1/rules | ...`。
+3. 自動護欄：`bash scripts/drift-check.sh`（a2a-dev）的 `[9/9]` 會斷言容器掛載源 == repo `monitoring/`。
+
+---
+
 ## 索引地圖
 
 ### 設計文件(spec)
@@ -220,4 +258,7 @@ go test -run TestTaiwanRSSGeopoliticalProvider_FetchScore ./internal/narrative/ 
 
 ## 版本歷史
 
+- **2026-09-25**:**新增「監控設定 SSOT：只有一棵權威樹」章節** — 權威樹 = repo 的 `monitoring/`;
+  `~/workspace/atlas-monitoring/` 為 iMac 時代歷史殘留（非生產掛載源）。附 2026-08-27 事故
+  （規則寫進錯的樹 ⇒ 生產 27 天未載入）與 `docker inspect` 確認法。對應任務 P（消滅雙設定樹指引錯誤）。
 - **2026-07-03**:初版建立,整合 PR-926 / 928 / 929 / 930 / 931 決策

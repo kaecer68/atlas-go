@@ -10,7 +10,7 @@ services:
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/geo-ingest -work-dir /app
@@ -33,7 +33,7 @@ services:
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 8 * * *
       - CRON_COMMAND=/app/macro-ingest -work-dir /app
@@ -56,7 +56,7 @@ services:
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=30 15 * * *
       - CRON_COMMAND=/app/daily-replay-sync -csv /app/data/replay/tw_extended_90days.csv
@@ -97,7 +97,7 @@ services:
     # 注入 shared secrets（ATLAS_LIVENESS_TOKEN 等）——compose interpolation
     # 不讀 ~/.config/atlas-go/.env，故用 env_file（同 alertmanager 模式）。
     env_file:
-      - /Users/kk/.config/atlas-go/.env
+      - ${HOME}/.config/atlas-go/.env
     environment:
       - CRON_SCHEDULE=0 3 * * *
       - CRON_COMMAND=/app/cron-quote-backfill
