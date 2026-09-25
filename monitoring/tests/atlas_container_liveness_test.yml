@@ -1,0 +1,175 @@
+# monitoring/tests/atlas_container_liveness_test.yml
+#
+# promtool unit tests（`promtool test rules`）for
+# monitoring/rules/atlas_container_liveness_alerts.yml
+#
+# 為什麼需要這個檔案（2026-09-25）:
+#   1. `promtool check rules` 只看 YAML/規則語法。**結構上不可能 firing 的規則**
+#      （依賴不存在的指標源、regex 匹配不到生產容器名、對 gauge 取 increase）以及
+#      annotation 模板求值失敗（#1972 的 {{.Mounts}} 事件）都驗不到 —— 兩者都是
+#      「看起來有保護、實際零偵測」。只有 `promtool test rules` 能以合成序列驗證
+#      「該 firing 的會 firing」與「annotation render 出來長什麼樣」。
+#   2. 這些 expectation 是**完整**比對:labels + annotations 都要與規則檔一致
+#      → 規則檔的文案或標籤被改動時這裡會紅（刻意如此:改文案必須同步改測試，
+#        改動當下就會被強迫確認「這條規則還真的會 firing 嗎」）。
+#
+# 執行方式（CI: quality.yml 的 monitoring-config job；本機同樣指令可跑）:
+#   promtool test rules monitoring/tests/*.yml
+#
+# 版本必須與生產一致: prom/prometheus:v3.14.0（見 quality.yml 的釘版註解）。
+
+rule_files:
+  - ../rules/atlas_container_liveness_alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ── A: #1975 任務 F 新增的 flapping 規則 —— 「用真的存在的指標源」的代表案例。同時驗證
+  # 會 firing（10m 內 >3 次變化）與不會誤報（1 次 blip）。
+  - name: "AtlasGoScrapeFlapping fires on >3 scrape changes in 10m, quiet on one blip"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '1 0 1 0 1 0 1 0 1 0 1 0'
+      - series: 'up{job="postgres"}'
+        values: '1x12'
+      - series: 'up{job="redis"}'
+        values: '1x12'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: AtlasGoScrapeFlapping
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: AtlasGoScrapeFlapping
+        exp_alerts:
+        - exp_labels:
+            alertname: AtlasGoScrapeFlapping
+            component: "api"
+            incident_ref: "PR#1695-20260826"
+            job: "atlas-go"
+            service: "atlas"
+            severity: "warning"
+            wave: "9.2"
+          exp_annotations:
+            summary: "atlas-go scrape 10 分鐘內反覆失敗（疑似容器 restart loop）"
+            description: |
+              Prometheus 對 job=atlas-go (target=atlas:18080) 的 scrape 在 10 分鐘內
+              至少有 2 次「掉線又回來」:atlas-go 反覆不可用，但每次都在 2 分鐘內恢復
+              （所以不會觸發 AtlasGoTargetDown 的 up==0 for 2m）。
+              常見原因:容器 restart loop（DB 密碼錯誤 / port 衝突 / binary panic），
+              或 scrape 路徑本身出問題（DNS / port / 容器被 recreate）。
+              立即檢查:
+              1. docker inspect atlas-go --format '{{.RestartCount}} {{.State.Status}} {{.State.StartedAt}}'
+              2. tail -20 ~/Library/Logs/atlas-container-restarts.log
+                 （主機層 watchdog 每 60s 落檔的 restart ledger；RESTART-DETECT 行含 new/prev）
+              3. docker logs atlas-go --tail 30 2>&1 | grep -E 'ERROR|FATAL|panic'
+              4. 確認 scrape 路徑:curl -s localhost:18080/metrics | head -3
+              注意:本規則只看得到「scrape 反覆失敗」。要分辨是重啟還是網路問題，
+              以第 1、2 步的 RestartCount / ledger 為準。
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
+  # ── B: #1972 修的 annotation 模板轉義 —— promtool check rules 驗不到（YAML 合法、只有求值時炸），
+  # 這條測試是它唯一的回歸網（見規則檔內註解）。
+  - name: "AtlasPostgresTargetDown fires and renders the escaped {{.Mounts}} literally"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '1x10'
+      - series: 'up{job="postgres"}'
+        values: '0x10'
+      - series: 'up{job="redis"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: AtlasPostgresTargetDown
+        exp_alerts:
+        - exp_labels:
+            alertname: AtlasPostgresTargetDown
+            component: "database"
+            incident_ref: "PR#1695-20260826"
+            job: "postgres"
+            service: "atlas"
+            severity: "critical"
+            wave: "9.2"
+          exp_annotations:
+            summary: "atlas-postgres (timescale) scrape 連續 5 分鐘失敗"
+            description: |
+              postgres job (target=postgres:5432) 連續 5 分鐘 scrape 失敗。
+              通常原因:容器 exited、port 衝突、容器被誤刪重建。
+              立即檢查:
+              1. docker ps --filter name=atlas-postgres
+              2. docker logs atlas-postgres --tail 50
+              3. 確認 volume 仍掛 prod volume (atlas-postgres-data, NOT atlas_postgres-data 底線版):
+                 docker inspect atlas-postgres --format '{{.Mounts}}'
+              4. 容器不存在時依 .claude/skills/atlas-imac-prod-guard/ 復原 SOP 重建
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
+  # ── C: #1972 任務 E 的 absent() 補零偵測 —— 只移除 postgres job，atlas-go/redis 仍在，
+  # 驗證它是 per-job 判定（三段 absent() 而非單一 absent(up{job=~".*"})）。
+  - name: "AtlasScrapeJobMissing fires per-job when a scrape job disappears"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '1x10'
+      - series: 'up{job="redis"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: AtlasScrapeJobMissing
+        exp_alerts:
+        - exp_labels:
+            alertname: AtlasScrapeJobMissing
+            component: "monitoring"
+            incident_ref: "monitoring-gap-20260925"
+            job: "postgres"
+            service: "atlas"
+            severity: "critical"
+            wave: "9.2"
+          exp_annotations:
+            summary: "scrape job postgres 從 Prometheus target 集合消失"
+            description: |
+              Prometheus 的 target 集合裡完全找不到 job=postgres，已持續 5 分鐘。
+              意義:該 job 的 scrape 設定被移除或改名的機率極高（也可能是 Prometheus
+              掛掉、或規則檔/設定檔沒被載入）。這正是「零偵測」情境 —— 依賴
+              up{job="..."} == 0 的 target-down 警報此時是空集合，該服務真的掛掉
+              也不會告警，而其他健康檢查仍然全綠。
+              立即檢查:
+              1. 確認 job 是否還在 target 集合裡:
+                 curl -s localhost:9090/api/v1/targets | python3 -c 'import json,sys; print(sorted(t["labels"]["job"] for t in json.load(sys.stdin)["data"]["activeTargets"]))'
+              2. 比對版控的 monitoring/prometheus.yml 與容器實際掛載的那一份是否一致
+                 （雙設定樹漂移:曾發生規則檔 27 天沒進到真正在跑的部署路徑）
+              3. 若確實是刻意移除該 job → 同步清掉依賴它的 alert 規則，
+                 不要留下「看起來有保護、實際零偵測」的空規則
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/monitoring/prometheus.yml"
+  # ── D: target-down 基本盤（up==0 for 2m）。
+  - name: "AtlasGoTargetDown fires after 2m of up==0"
+    interval: 1m
+    input_series:
+      - series: 'up{job="atlas-go"}'
+        values: '0x5'
+      - series: 'up{job="postgres"}'
+        values: '1x5'
+      - series: 'up{job="redis"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AtlasGoTargetDown
+        exp_alerts:
+        - exp_labels:
+            alertname: AtlasGoTargetDown
+            component: "api"
+            incident_ref: "PR#1695-20260826"
+            job: "atlas-go"
+            service: "atlas"
+            severity: "critical"
+            wave: "9.2"
+          exp_annotations:
+            summary: "atlas-go Prometheus scrape 連續 2 分鐘失敗"
+            description: |
+              atlas.goluck.uk backend (Prometheus job=atlas-go, target=atlas:18080) 連續 2 分鐘
+              scrape 失敗。直接證據:Prometheus up==0;間接證據:https://atlas.goluck.uk/health 回 5xx。
+              立即檢查:
+              1. docker ps --filter name=atlas-go-imac (容器是否 exited/crash loop?)
+              2. docker logs atlas-go-imac --tail 50 (DB connection / port 衝突 / panic?)
+              3. 確認 iMac 端 atlas-postgres 健康:docker ps --filter name=atlas-postgres
+              4. 確認 55432 port 未被 rogue ssh tunnel 佔用:lsof -iTCP:55432
+              實證:2026-08-26 PR #1695 事件 silent 32 小時,因缺本 rule。
+            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/iMac-RUNBOOK.md"
