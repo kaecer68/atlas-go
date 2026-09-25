@@ -72,8 +72,10 @@ type storeSymbolIndustrySubstrate struct {
 }
 
 var (
-	_ industry.SymbolIndustrySubstrate        = (*storeSymbolIndustrySubstrate)(nil)
-	_ industry.SymbolIndustryCoverageReporter = (*storeSymbolIndustrySubstrate)(nil)
+	_ industry.SymbolIndustrySubstrate            = (*storeSymbolIndustrySubstrate)(nil)
+	_ industry.SymbolIndustryCoverageReporter     = (*storeSymbolIndustrySubstrate)(nil)
+	_ industry.SymbolIndustryCoverageAsOfReporter = (*storeSymbolIndustrySubstrate)(nil)
+	_ industry.SymbolIndustryReloadErrorReporter  = (*storeSymbolIndustrySubstrate)(nil)
 )
 
 // ResolveL1 implements industry.SymbolIndustrySubstrate.
@@ -118,6 +120,55 @@ func (s *storeSymbolIndustrySubstrate) Coverage() industry.SymbolIndustryCoverag
 	cov := s.coverage
 	cov.Reasons = append([]string(nil), s.coverage.Reasons...)
 	return cov
+}
+
+// CoverageAsOf implements industry.SymbolIndustryCoverageAsOfReporter.
+//
+// It dates the accounting Coverage() publishes: the instant of the last
+// SUCCESSFUL Reload, i.e. the wall-clock time the cached view was read from the
+// store -- NOT the time the data itself claims, which the in-memory view does
+// not carry (the channel snapshot's UpdatedAt dates the FETCH; Coverage() is
+// computed from what the store holds now).
+//
+// ok=false means no load has ever succeeded: the view is empty, Upstream is 0,
+// and the audit reads that as "not measurable". It must never be read as fresh.
+// Once a load succeeds the instant is stable until the NEXT successful one, so
+// a store that broke after the last success keeps reporting an instant that
+// grows older -- which is exactly how the audit sees the staleness (the reload
+// TTL is 6h, so an as_of older than that is a failed or skipped reload).
+//
+// It takes the same reload decision Coverage() takes, so the instant always
+// dates the very accounting Coverage() would return; a getter that answered
+// from a not-yet-taken decision would report "never loaded" for an installed
+// substrate. It does NOT take the decision for LastReloadError(): retrying
+// inside that accessor would clear the failure it is asked to report.
+func (s *storeSymbolIndustrySubstrate) CoverageAsOf() (time.Time, bool) {
+	s.ensureLoaded()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loadedAt.IsZero() {
+		return time.Time{}, false
+	}
+	return s.loadedAt, true
+}
+
+// LastReloadError implements industry.SymbolIndustryReloadErrorReporter.
+//
+// It reports the message of the last FAILED Reload and "" once a reload
+// succeeds (Reload clears loadErr on success), which is what lets an operator
+// tell "the load failed" apart from "the load succeeded and the upstream
+// population was empty": both leave Upstream at 0, and they call for opposite
+// responses.
+//
+// No reload is attempted here on purpose -- reading the evidence of the last
+// attempt must not repair the state it reports.
+func (s *storeSymbolIndustrySubstrate) LastReloadError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loadErr == nil {
+		return ""
+	}
+	return s.loadErr.Error()
 }
 
 // Len returns the cached population size (no reload decision, for tests and
