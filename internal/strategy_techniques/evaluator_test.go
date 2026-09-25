@@ -279,3 +279,89 @@ func TestResolveField_ZeroSymbol(t *testing.T) {
 		t.Errorf("value = %f, want 0", val)
 	}
 }
+
+// makeVolatileSnapshot builds a snapshot with TAIEX and DXY set, which is the
+// minimal shape needed to exercise a volatile-direction frame (I16).
+func makeVolatileSnapshot(taiex, dxy float64) marketdata.MacroDataSnapshot {
+	s := marketdata.MacroDataSnapshot{}
+	if taiex != 0 {
+		s.TAIEX = marketdata.MacroDataPoint{Symbol: "TAIEX", Value: taiex}
+	}
+	if dxy != 0 {
+		s.DXY = marketdata.MacroDataPoint{Symbol: "DXY", Value: dxy}
+	}
+	return s
+}
+
+// TestConditionEvaluator_VolatileNotCountedAsMiss pins I16 (issue #1944):
+// Direction=volatile predicts high volatility, not a direction, so its triggers
+// must not be scored against the directional hit rate. Before the fix every
+// volatile trigger was an automatic miss, which drove the outward hit_rate to 0.
+func TestConditionEvaluator_VolatileNotCountedAsMiss(t *testing.T) {
+	e := NewConditionEvaluator()
+
+	frame := StrategyFrame{
+		ID:        "test-volatile",
+		Direction: DirectionVolatile,
+		Conditions: []Condition{
+			{Field: "DXY", Operator: "gt", Value: 100},
+		},
+	}
+
+	// 4 snapshots, lookback 1 → 3 matching triggers with mixed forward returns.
+	snapshots := []marketdata.MacroDataSnapshot{
+		makeVolatileSnapshot(10000, 105),
+		makeVolatileSnapshot(10200, 106),
+		makeVolatileSnapshot(10100, 107),
+		makeVolatileSnapshot(10800, 106),
+	}
+
+	result := e.Evaluate(frame, snapshots, 1)
+
+	if result.VolatileTests != 3 {
+		t.Errorf("VolatileTests = %d, want 3", result.VolatileTests)
+	}
+	if result.TotalTests != 0 {
+		t.Errorf("TotalTests = %d, want 0 (volatile samples must not enter the hit-rate denominator)", result.TotalTests)
+	}
+	if result.TotalHits != 0 {
+		t.Errorf("TotalHits = %d, want 0", result.TotalHits)
+	}
+	if result.DirectionScored {
+		t.Error("DirectionScored = true, want false when no up/down samples exist")
+	}
+}
+
+// TestConditionEvaluator_UpDirectionStillScored guards that the volatile
+// exclusion did not change up/down semantics.
+func TestConditionEvaluator_UpDirectionStillScored(t *testing.T) {
+	e := NewConditionEvaluator()
+
+	frame := StrategyFrame{
+		ID:         "test-up",
+		Direction:  DirectionUp,
+		Conditions: []Condition{{Field: "DXY", Operator: "gt", Value: 100}},
+	}
+
+	snapshots := []marketdata.MacroDataSnapshot{
+		makeVolatileSnapshot(10000, 105),
+		makeVolatileSnapshot(10200, 106),
+		makeVolatileSnapshot(10100, 107),
+		makeVolatileSnapshot(10800, 106),
+	}
+
+	result := e.Evaluate(frame, snapshots, 1)
+
+	if result.TotalTests != 3 {
+		t.Errorf("TotalTests = %d, want 3", result.TotalTests)
+	}
+	if result.TotalHits != 2 {
+		t.Errorf("TotalHits = %d, want 2 (10000→10200 up, 10100→10800 up)", result.TotalHits)
+	}
+	if result.VolatileTests != 0 {
+		t.Errorf("VolatileTests = %d, want 0 for an up frame", result.VolatileTests)
+	}
+	if !result.DirectionScored {
+		t.Error("DirectionScored = false, want true when up/down samples exist")
+	}
+}

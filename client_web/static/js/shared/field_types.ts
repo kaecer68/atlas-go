@@ -308,6 +308,10 @@ export interface CalibrationHealthSummary {
   out_of_range_count: number;
   health: string;
   reason?: string;
+  calibration_evidence: string;
+  observation_status: string;
+  adjustment_factor_status: string;
+  out_of_range_patterns?: string[];
 }
 
 export interface CalibrationValidation {
@@ -4182,6 +4186,9 @@ export interface StrategyFrameSummary {
   measured: boolean;
   last_backtest_date?: string;
   category?: string;
+  hit_rate_scope: string;
+  hit_rate_source: string;
+  volatile_tests: number;
 }
 
 export interface StrategyParameters {

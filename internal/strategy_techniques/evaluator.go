@@ -25,10 +25,24 @@ import (
 // EvalResult is the output of evaluating a StrategyFrame against
 // historical macro data.
 type EvalResult struct {
-	StrategyID string  `json:"strategy_id"`
-	TotalTests int     `json:"total_tests"`
-	TotalHits  int     `json:"total_hits"`
-	HitRate    float64 `json:"hit_rate"`
+	StrategyID string `json:"strategy_id"`
+	// TotalTests 是進入命中率分母的觸發樣本數：只有 Direction=up/down
+	// （以及未設定方向的預設路徑）會累計。Direction=volatile 的樣本不在此
+	// 分母內（見 VolatileTests）。
+	TotalTests int `json:"total_tests"`
+	TotalHits  int `json:"total_hits"`
+	// HitRate 只在 DirectionScored 為 true 時有方向意義。
+	HitRate float64 `json:"hit_rate"`
+	// VolatileTests 是 Direction=volatile 且條件成立的觸發樣本數
+	// （issue #1944 / I16）。volatile 策略預期的是「高波動」，不是漲跌，
+	// 本評估器的方向命中率對它沒有判定依據，因此這些樣本既不進 TotalTests
+	// 分母、也不計為 miss —— 在修正前它們等於「必然落空」，會把對外
+	// hit_rate 壓成 0。
+	VolatileTests int `json:"volatile_tests"`
+	// DirectionScored 為 false 表示本次評估沒有任何可評分（up/down）樣本，
+	// 因此 HitRate 在語意上是「未定義」而非「零命中率」。呼叫端必須用這個
+	// 旗標區分兩者，不得把 HitRate=0 當成量測結果。
+	DirectionScored bool `json:"direction_scored"`
 }
 
 // ConditionEvaluator evaluates StrategyFrame conditions against
@@ -82,6 +96,9 @@ func (e *ConditionEvaluator) EvaluateReturns(
 		case DirectionDown:
 			strategyReturn = -marketReturn
 		case DirectionVolatile:
+			// 波動率策略的報酬代理：取絕對值。這與 Evaluate 的方向命中率是
+			// 兩個不同的量（issue #1944 / I16）：Evaluate 不評分 volatile
+			// 樣本，這裡仍保留 |return| 供 Sharpe 類指標使用。
 			strategyReturn = math.Abs(marketReturn)
 		default:
 			strategyReturn = marketReturn
@@ -120,9 +137,20 @@ func resolveTAIEXValue(snapshots []marketdata.MacroDataSnapshot, i int) float64 
 //
 // Returns EvalResult with aggregated hit/miss counts.
 //
+// Direction semantics (issue #1944 / I16):
+//   - DirectionUp / DirectionDown: a trigger day counts toward TotalTests; a hit
+//     requires the forward return sign to match.
+//   - DirectionVolatile: the frame predicts high volatility, not a direction, so
+//     the directional hit rate has no basis to score it. Those triggers are
+//     counted in VolatileTests only — they are NOT added to TotalTests and NOT
+//     counted as misses.
+//   - Any other (unset/unknown) Direction falls back to the up/down path so
+//     behaviour for existing registries is unchanged.
+//
 // Edge cases:
 //   - fewer than forwardLookback+1 snapshots → skip evaluation (return 0/0/0)
-//   - TAIEX value is zero at the forward point → treat as non-hit
+//   - TAIEX value is zero at the forward point → trigger still counts toward
+//     TotalTests for up/down frames (unchanged legacy semantics) but is not a hit
 //   - condition with unknown operator → skip (log warning in caller)
 func (e *ConditionEvaluator) Evaluate(
 	frame StrategyFrame,
@@ -141,6 +169,15 @@ func (e *ConditionEvaluator) Evaluate(
 		if !e.matchesAll(frame.Conditions, current) {
 			continue
 		}
+
+		// I16: volatile frames predict high volatility, not a direction. Their
+		// triggers are counted separately and never enter the hit-rate
+		// denominator, so they cannot be scored as automatic misses.
+		if frame.Direction == DirectionVolatile {
+			result.VolatileTests++
+			continue
+		}
+
 		result.TotalTests++
 
 		// Check forward return against strategy direction.
@@ -162,6 +199,7 @@ func (e *ConditionEvaluator) Evaluate(
 
 	if result.TotalTests > 0 {
 		result.HitRate = float64(result.TotalHits) / float64(result.TotalTests)
+		result.DirectionScored = true
 	}
 
 	return result

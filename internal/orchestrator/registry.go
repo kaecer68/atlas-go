@@ -9,6 +9,21 @@ import (
 	"github.com/kaecer68/atlas-go/internal/domain"
 )
 
+// AgentPrimaryMetricsWired reports whether domain.AgentSpec.PrimaryMetrics
+// influences any runtime decision. It is false (issue #1944 / I15): a repo-wide
+// search for non-test readers of the field finds only writer paths — the field
+// declaration itself, this seed registry, configs/agents.json (unmarshalled
+// generically, so the field name never appears in the loader), and clone/inherit
+// writes in internal/spawning/agent_factory.go. The metric name "alpha_hit_rate"
+// used by several agents is not computed anywhere in this repo.
+//
+// The field is kept because the agent registry schema is shared with the
+// dashboard/prompt layer; the declaration is therefore explicitly labelled
+// inert instead of silently implying that agents are scored on those metrics.
+// This constant is pinned by a test so the status cannot drift back to
+// "assumed active" without evidence.
+const AgentPrimaryMetricsWired = false
+
 // SeedRegistry returns a hardcoded development-seed agent registry.
 // This is a FALLBACK only — when no config sources are available. In production,
 // the canonical agent definitions come from configs/agents.json (and optional

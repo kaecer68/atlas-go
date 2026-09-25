@@ -107,10 +107,43 @@ type StrategyFrameSummary struct {
 	// been recorded for this strategy via the FeedbackStore. False
 	// means the strategy is enabled but never validated against
 	// real backtest data (manifest #F07 / #1259).
+	//
+	// Measured only reports that an attribution record exists. Whether
+	// HitRate is a directional measurement is answered by HitRateScope /
+	// HitRateSource (issue #1944 / I16): a record can exist while the
+	// strategy has zero scorable samples.
 	Measured         bool   `json:"measured"`
 	LastBacktestDate string `json:"last_backtest_date,omitempty"` // ISO date of latest attribution
 	Category         string `json:"category,omitempty"`
+
+	// HitRateScope 說明 HitRate 的可評分範圍（issue #1944 / I16）：
+	//   up_down       → 由 up/down 方向樣本算出，可直接當命中率使用
+	//   volatile_only → 只有 volatile 樣本；方向不可判定，HitRate 不具方向意義
+	//   unmeasured    → 沒有任何可評分樣本
+	// HitRate=0 時只有這個欄位能區分「未量測」「方向不可判定」與「真的零命中」。
+	HitRateScope string `json:"hit_rate_scope"`
+	// HitRateSource 標明 HitRate 的來源（消費證據驅動，不得假裝已量測）：
+	//   snapshot_evaluator → 由行情快照評估器即時計算
+	//   feedback_store     → 由 validate API / 回測累積的 feedback 記錄
+	//   seed               → registry 的先驗常數，不是量測值
+	HitRateSource string `json:"hit_rate_source"`
+	// VolatileTests 為 Direction=volatile 的觸發樣本數；依 I16 不進 HitRate 分母。
+	VolatileTests int `json:"volatile_tests"`
 }
+
+// HitRateSource* 標籤（對外 hit_rate_source 欄位的合法值）。
+const (
+	HitRateSourceSnapshotEvaluator = "snapshot_evaluator"
+	HitRateSourceFeedbackStore     = "feedback_store"
+	HitRateSourceSeed              = "seed"
+)
+
+// HitRateScope* 標籤（對外 hit_rate_scope 欄位的合法值）。
+const (
+	HitRateScopeUpDown       = "up_down"
+	HitRateScopeVolatileOnly = "volatile_only"
+	HitRateScopeUnmeasured   = "unmeasured"
+)
 
 func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameSummary {
 	s := StrategyFrameSummary{
@@ -130,6 +163,10 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 		Sectors:     f.Sectors,
 		Regimes:     f.Regimes,
 		Attribution: f.Attribution,
+		// 預設最保守：registry seed 的 HitRate 是先驗常數，不是量測值。
+		// 只有下面的 feedback store 或快照評估器帶實際消費證據時才改寫。
+		HitRateScope:  HitRateScopeUnmeasured,
+		HitRateSource: HitRateSourceSeed,
 	}
 	// Fill category from methodology advisor (E5b).
 	if h.methodologyAdvisor != nil {
@@ -153,6 +190,8 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 				s.HitRate = rec.HitRate
 				s.TotalTests = rec.TotalTests
 				s.TotalHits = rec.TotalHits
+				s.HitRateScope = HitRateScopeUpDown
+				s.HitRateSource = HitRateSourceFeedbackStore
 			}
 		}
 	}
@@ -160,10 +199,25 @@ func (h *Handlers) toSummary(f strategy_techniques.StrategyFrame) StrategyFrameS
 	// This fixes stale seed values and stale feedback records caused by
 	// evaluator bugs or missing data.
 	if h.SnapshotEvaluator != nil {
-		if result := h.SnapshotEvaluator.Evaluate(f); result != nil && result.TotalTests > 0 {
-			s.HitRate = result.HitRate
-			s.TotalTests = result.TotalTests
-			s.TotalHits = result.TotalHits
+		if result := h.SnapshotEvaluator.Evaluate(f); result != nil {
+			s.VolatileTests = result.VolatileTests
+			switch {
+			case result.TotalTests > 0:
+				s.HitRate = result.HitRate
+				s.TotalTests = result.TotalTests
+				s.TotalHits = result.TotalHits
+				s.HitRateScope = HitRateScopeUpDown
+				s.HitRateSource = HitRateSourceSnapshotEvaluator
+			case result.VolatileTests > 0:
+				// I16: volatile frames predict high volatility, not a
+				// direction, so the evaluator produces no directional score.
+				// Never overwrite hit_rate with 0 here — that would turn
+				// "not measurable" into a fake "zero hit rate". Keep the
+				// registry prior and declare its scope/source instead
+				// (requirement: prior constants must be labelled).
+				s.HitRateScope = HitRateScopeVolatileOnly
+				s.HitRateSource = HitRateSourceSeed
+			}
 		}
 	}
 	return s

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/llm_annotator"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/strategy_techniques"
 )
 
@@ -456,5 +457,152 @@ func TestHandlers_Annotate_NonEmptyOutputIsOK(t *testing.T) {
 	}
 	if got, _ := body["annotation"].(string); got == "" {
 		t.Errorf("annotation is empty: %v", body)
+	}
+}
+
+// volatileSeedJSON is a minimal registry with one volatile-direction frame and
+// one up-direction frame, both using a resolvable macro field (DXY) so the
+// snapshot evaluator actually triggers (issue #1944 / I16).
+const volatileSeedJSON = `[
+  {"id":"strait","name":"strait","layer":"L5","summary":"taiwan strait tension",
+   "direction":"volatile","risk":"high","source":"manual","status":"active",
+   "attribution_mode":"rule_based","hit_rate":0.55,"total_tests":12,"total_hits":7,
+   "conditions":[{"field":"DXY","operator":"gt","value":100,"string_value":"","timeframe":"1D","source":"us_yahoo"}]},
+  {"id":"risk-on","name":"risk-on","layer":"L1","summary":"weak dollar",
+   "direction":"up","risk":"medium","source":"manual","status":"active",
+   "attribution_mode":"rule_based","hit_rate":0.9,"total_tests":4,"total_hits":3,
+   "conditions":[{"field":"DXY","operator":"gt","value":100,"string_value":"","timeframe":"1D","source":"us_yahoo"}]}
+]`
+
+func macroDP(v float64) marketdata.MacroDataPoint {
+	return marketdata.MacroDataPoint{Symbol: "x", Value: v}
+}
+
+func volatileTestSnapshots() []marketdata.MacroDataSnapshot {
+	return []marketdata.MacroDataSnapshot{
+		{TAIEX: macroDP(10000), DXY: macroDP(105)},
+		{TAIEX: macroDP(10200), DXY: macroDP(106)},
+		{TAIEX: macroDP(10100), DXY: macroDP(107)},
+		{TAIEX: macroDP(10800), DXY: macroDP(106)},
+	}
+}
+
+func volatileTestHandlers(t *testing.T) (*Handlers, *strategy_techniques.Registry) {
+	t.Helper()
+	reg, err := strategy_techniques.LoadFromBytes([]byte(volatileSeedJSON))
+	if err != nil {
+		t.Fatalf("LoadFromBytes: %v", err)
+	}
+	h := NewHandlers(reg, nil)
+	h.SnapshotEvaluator = strategy_techniques.NewMacroSnapshotEvaluator(volatileTestSnapshots(), 1)
+	return h, reg
+}
+
+// TestToSummary_VolatileFrameNotOverwrittenToZero pins I16 (issue #1944):
+// handlers.go used to overwrite hit_rate with the evaluator's 0 for a volatile
+// frame (seed 0.55 → 0). The frame must instead keep the prior value and declare
+// that the prior is not a directional measurement.
+func TestToSummary_VolatileFrameNotOverwrittenToZero(t *testing.T) {
+	h, reg := volatileTestHandlers(t)
+	frame, err := reg.FindByID("strait")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sum := h.toSummary(*frame)
+
+	if sum.HitRate != 0.55 {
+		t.Errorf("HitRate = %v, want 0.55 (registry prior preserved, never overwritten with a fake 0)", sum.HitRate)
+	}
+	if sum.VolatileTests != 3 {
+		t.Errorf("VolatileTests = %d, want 3", sum.VolatileTests)
+	}
+	if sum.HitRateScope != HitRateScopeVolatileOnly {
+		t.Errorf("HitRateScope = %q, want %q", sum.HitRateScope, HitRateScopeVolatileOnly)
+	}
+	if sum.HitRateSource != HitRateSourceSeed {
+		t.Errorf("HitRateSource = %q, want %q (a prior constant must be labelled)", sum.HitRateSource, HitRateSourceSeed)
+	}
+	if sum.Measured {
+		t.Error("Measured = true, want false (no feedback record was written)")
+	}
+}
+
+// TestToSummary_UpFrameIsEvaluatorMeasured verifies the up/down path still
+// reports a real measurement with an explicit source and scope.
+func TestToSummary_UpFrameIsEvaluatorMeasured(t *testing.T) {
+	h, reg := volatileTestHandlers(t)
+	frame, err := reg.FindByID("risk-on")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sum := h.toSummary(*frame)
+
+	if sum.HitRateScope != HitRateScopeUpDown {
+		t.Errorf("HitRateScope = %q, want %q", sum.HitRateScope, HitRateScopeUpDown)
+	}
+	if sum.HitRateSource != HitRateSourceSnapshotEvaluator {
+		t.Errorf("HitRateSource = %q, want %q", sum.HitRateSource, HitRateSourceSnapshotEvaluator)
+	}
+	if sum.TotalTests != 3 || sum.TotalHits != 2 {
+		t.Errorf("TotalTests/TotalHits = %d/%d, want 3/2", sum.TotalTests, sum.TotalHits)
+	}
+	if sum.HitRate != 2.0/3.0 {
+		t.Errorf("HitRate = %v, want 2/3", sum.HitRate)
+	}
+	if sum.VolatileTests != 0 {
+		t.Errorf("VolatileTests = %d, want 0", sum.VolatileTests)
+	}
+}
+
+// TestToSummary_WithoutEvaluatorLabelsSeedPrior verifies that when no evaluator
+// is wired the outward hit_rate is labelled as an unmeasured registry prior.
+func TestToSummary_WithoutEvaluatorLabelsSeedPrior(t *testing.T) {
+	reg, err := strategy_techniques.LoadFromBytes([]byte(volatileSeedJSON))
+	if err != nil {
+		t.Fatalf("LoadFromBytes: %v", err)
+	}
+	frame, err := reg.FindByID("risk-on")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sum := (&Handlers{registry: reg}).toSummary(*frame)
+
+	if sum.HitRateScope != HitRateScopeUnmeasured {
+		t.Errorf("HitRateScope = %q, want %q", sum.HitRateScope, HitRateScopeUnmeasured)
+	}
+	if sum.HitRateSource != HitRateSourceSeed {
+		t.Errorf("HitRateSource = %q, want %q", sum.HitRateSource, HitRateSourceSeed)
+	}
+	if sum.HitRate != 0.9 {
+		t.Errorf("HitRate = %v, want the untouched seed 0.9", sum.HitRate)
+	}
+}
+
+// TestHandlers_ListStrategies_ExposesVolatileScope verifies the new fields reach
+// the HTTP response so consumers can tell "volatile: not measurable" apart from
+// a real zero hit rate.
+func TestHandlers_ListStrategies_ExposesVolatileScope(t *testing.T) {
+	h, _ := volatileTestHandlers(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	code, body := doGET(t, mux, "/api/strategies/strait")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%v", code, body)
+	}
+	if body["hit_rate_scope"] != HitRateScopeVolatileOnly {
+		t.Errorf("hit_rate_scope = %v, want %q", body["hit_rate_scope"], HitRateScopeVolatileOnly)
+	}
+	if body["hit_rate_source"] != HitRateSourceSeed {
+		t.Errorf("hit_rate_source = %v, want %q", body["hit_rate_source"], HitRateSourceSeed)
+	}
+	if got, ok := body["volatile_tests"].(float64); !ok || int(got) != 3 {
+		t.Errorf("volatile_tests = %v, want 3", body["volatile_tests"])
+	}
+	if body["hit_rate"] == 0.0 {
+		t.Errorf("hit_rate = %v, must not be overwritten to 0", body["hit_rate"])
 	}
 }
