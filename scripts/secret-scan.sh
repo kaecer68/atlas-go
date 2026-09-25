@@ -2,16 +2,19 @@
 # secret-scan.sh — 掃「tracked 檔」的機密樣式（public repo 護欄）
 #
 # ⚠️ 本檔是 **a2a-dev `scripts/secret-scan.sh` 的整檔副本**（SSOT 在那邊）。
-#    上游版本: a2a-dev @ fix/secret-scan-config-coverage-q c5693bf, sha256 e1aa4bc6bb7cc3100ba4dc0a8577c82913936d6fbf95478297c975217d4cf050
+#    上游版本: a2a-dev @ fix/redact-dev-literals-q2 4b332b1, sha256 8f4666252e41361975d846de4f05d41328bf978209c7cd5dd0d8fd8b5f533356
 #    為何用「副本」而不是「引用上游」：① 本 repo 是 **PUBLIC**，CI 不該為了掃描去 clone 另一個 repo
 #    （多一條網路依賴 + 供應鏈面）② 兩個 repo 都要能在**離線**狀態跑完 CI ③ 副本同步成本極低（整檔覆蓋）。
 #    同步方式：`cp <a2a-dev>/scripts/secret-scan.sh scripts/secret-scan.sh` 後更新上面的 sha256。
 #    漂移偵測：兩份 sha256 不同即代表需要人工確認（本行即為錨點）。
 #
-#    2026-09-25（任務 Q）同步：新增 url_with_inline_credential / config_secret_literal /
+#    2026-09-25（任務 Q）同步 ①：新增 url_with_inline_credential / config_secret_literal /
 #    env_default_secret_literal 三個通用樣式，並把「可部署設定檔（*.yml/*.yaml，非範例）」
 #    從 warn-only 改成 block 級 —— 本 repo 的 docs/operations/docker-compose.{prod,crons}.yml
 #    就是靠這條才被抓到明文 DB 密碼。
+#    同步 ②：新增 SENTINEL_VALUE 過濾 —— 全大寫＋底線且不含數字的值（`PROXY_MANAGED` 這類
+#    語意旗標）不算機密。它曾讓 `${OPENAI_API_KEY:-PROXY_MANAGED}` 被誤判成明文憑證，
+#    而「拿掉模板預設值」的修法會**改變行為**（誤判比漏抓更危險）。
 #
 #
 # 為什麼需要它：a2a-dev / atlas-go 都是 **PUBLIC** repo，任何一次誤 commit 就是**永久外洩**
@@ -93,7 +96,7 @@ PATTERNS = [
      re.compile(r"\$\{[A-Za-z_]*(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|APIKEY|API_KEY|PRIVATE_KEY|CREDENTIAL)[A-Za-z_]*:[-=]([^}\s]{12,})\}", re.I)),
     # ③ 設定檔內的 secret 字面值：KEY=value / KEY: value，值 ≥12 字、非插值、非 placeholder
     #    為什麼門檻這麼高（寧可少抓不要噪音）：`POSTGRES_PASSWORD=atlas`（dev 預設，5 字）
-    #    與 `${...}` 插值都不該命中；`atlas_prod_pwd_2026`（19 字）才會命中 ✓
+    #    與 `${...}` 插值都不該命中；`POSTGRES_PASSWORD=<19 字、含數字的字面值>` 才會命中 ✓
     ("config_secret_literal",
      #    邊界用 (?<![A-Za-z0-9]) / (?![A-Za-z0-9]) 而**不是** \b —— 否則 `POSTGRES_PASSWORD=`
      #    這種（底線前綴）在 `\bPASSWORD\b` 下不成立（`_` 是 word 字元）→ 漏抓最常見的真實形狀。
@@ -192,16 +195,36 @@ PLACEHOLDER_WORDS = ("test", "invalid", "dummy", "fake", "sample", "example", "p
                      "changeme", "redacted", "xxxx", "your-", "your_", "none", "todo")
 # 程式碼取值（`p.config.APIKey`、`os.environ.X`）不是字面機密 → 這種「點串」形狀排除。
 DOTTED_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
+# **sentinel 值**：全大寫 + 底線、且**不含數字**（`PROXY_MANAGED`、`MANAGED_BY_PROXY` 這類
+# 「語意旗標」）。真憑證幾乎不會長這樣；但含數字的 `PROD_PASSWORD_2026` 仍會被攔 ✓。
+# 2026-09-25 實證：`OPENAI_API_KEY="${OPENAI_API_KEY:-PROXY_MANAGED}"` 被誤判成機密，
+# 導致有人打算「拿掉預設值」——那會**改變模板行為**（未設值時就沒有 fallback）⇒ 修掃描器，
+# 不是改模板（誤判比漏抓更危險：它會讓人為了消噪音而破壞正確的東西）。
+SENTINEL_VALUE = re.compile(r"^[A-Z][A-Z_]*$")
+
+def _value_of(name, matched):
+    """取出「值」的部分（供 sentinel/placeholder 判斷用）。"""
+    if name == "url_with_inline_credential":
+        seg = matched.split("://", 1)[-1]
+        return seg.split("@", 1)[0].split(":", 1)[-1]
+    if name == "config_secret_literal":
+        v = matched.split("=", 1)[1] if "=" in matched else matched.split(":", 1)[1]
+        return v.strip().strip("\"'")
+    if name == "env_default_secret_literal":
+        m = re.search(r":[-=]([^}\s]+)\}", matched)
+        return m.group(1) if m else ""
+    return ""
 
 def synthetic(name, matched):
     low = matched.lower()
     if any(w in low for w in PLACEHOLDER_WORDS):
         return True
+    value = _value_of(name, matched)
+    if value and SENTINEL_VALUE.match(value):
+        return True
     if name == "url_with_inline_credential":
         return any(h in low for h in SYNTHETIC_HOSTS)
     if name == "config_secret_literal":
-        value = matched.split("=", 1)[1] if "=" in matched else matched.split(":", 1)[1]
-        value = value.strip().strip("\"'")
         if DOTTED_IDENT.match(value):          # 程式碼取值 p.config.APIKey
             return True
         # 純字母且 <16 字 → 視為假 key（2026-09-25 實測：某 LiteLLM proxy 的 dummy key 為

@@ -111,6 +111,11 @@ must_pass  "D5 \${VAR} 插值不誤擋"              "docs/ops/compose.prod.yml"
 must_pass  "D6 *.example.yml 維持 warn-only"      "docs/ops/compose.example.yml" "      - POSTGRES_PASSWORD=${FAKE_PW}"
 must_pass  "D7 合成測試 DSN（example.com）不誤擋" "internal/x_test.go" 't.Setenv("DATABASE_URL", "postgres://alice:secretpw1@db.example.com:5432/atlas")'
 must_pass  "D8 程式碼取值（p.config.APIKey）不誤擋" "internal/ws.go" "auth.Data.APIKey = p.config.APIKey"
+# sentinel（全大寫+底線、無數字）是語意旗標，不是憑證 ⇒ 不誤擋。
+# 2026-09-25 實證：`OPENAI_API_KEY="${OPENAI_API_KEY:-PROXY_MANAGED}"` 曾被誤判成機密，
+# 差點導致「拿掉模板預設值」這種**改變行為**的錯誤修法。誤判比漏抓更危險。
+must_pass  "D9 sentinel env 預設值（PROXY_MANAGED）不誤擋" "configs/wrappers/w.template.sh" 'OPENAI_API_KEY="${OPENAI_API_KEY:-PROXY_MANAGED}"'
+must_pass  "D10 全大寫 sentinel 在 password 欄位也不誤擋" "docs/ops/c.yml" "      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-PROXY_MANAGED}"
 
 # ── C. 輸出遮蔽 ──────────────────────────────────────────────────
 rm -rf "$TMP/src" "$TMP/docs"; mkdir -p "$TMP/src"
