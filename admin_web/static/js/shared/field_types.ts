@@ -1832,6 +1832,9 @@ export interface HistoricalHitRate {
   hit_rate: number;
   calibrated: boolean;
   reason?: string;
+  neutral_samples: number;
+  directional_samples: number;
+  hit_rate_basis: string;
 }
 
 export interface HumanIntervention {

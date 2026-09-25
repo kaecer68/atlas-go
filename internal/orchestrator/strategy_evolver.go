@@ -498,6 +498,13 @@ func (e *StrategyEvolver) ApplySectorRotation(
 	}
 	if policyApplied {
 		e.sacMetrics.EmitPolicyApplied(sessionID, storedReceipt.ReceiptID, countNonZero(snap.Delta))
+		// N-A3 (#1944 Batch 4): only a consumed policy advances the
+		// applied-session counter the promotion gate reads.
+		if e.closureStateMgr != nil {
+			if recErr := e.closureStateMgr.RecordAppliedSession(storedReceipt.ReceiptID); recErr != nil {
+				return storedReceipt, true, fmt.Sprintf("applied (receipt %s), record_applied_session warning: %v", storedReceipt.ReceiptID, recErr)
+			}
+		}
 		return storedReceipt, true, "applied"
 	}
 

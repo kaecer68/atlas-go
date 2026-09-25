@@ -208,4 +208,24 @@ type HistoricalHitRate struct {
 	HitRate       float64 `json:"hit_rate"` // 0..1; 0 when Samples==0
 	Calibrated    bool    `json:"calibrated"`
 	Reason        string  `json:"reason,omitempty"`
+
+	// NeutralSamples counts reconciled predictions whose predicted direction
+	// was neutral (DirectionSign == 0). A neutral prediction can never be a
+	// directional hit, so it sits in the denominator and drags the rate down
+	// without being an error (N-U6, #1944 Batch 4: production showed 12.1%
+	// built from neutral rows). Exposed so the rate is never read as
+	// "directionally wrong 88% of the time".
+	NeutralSamples int `json:"neutral_samples"`
+	// DirectionalSamples is Samples - NeutralSamples: the rows the rate can
+	// actually judge.
+	DirectionalSamples int `json:"directional_samples"`
+	// HitRateBasis is the machine-readable definition of the ratio. Stable
+	// string so a UI can label the number instead of guessing.
+	HitRateBasis string `json:"hit_rate_basis"`
 }
+
+// HitRateBasisDirectionSign is the only supported basis for
+// HistoricalHitRate.HitRate: hits / samples over T+1-reconciled records, where a
+// hit requires the predicted sign and the realized sign to agree and be
+// non-zero (a neutral prediction is always a miss).
+const HitRateBasisDirectionSign = "t_plus_1_reconciled_direction_sign"

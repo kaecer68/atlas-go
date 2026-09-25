@@ -228,25 +228,34 @@ func (h *Handler) computeHistoricalHitRate() *HistoricalHitRate {
 	if err != nil || len(records) == 0 {
 		return nil
 	}
-	samples, hits := 0, 0
+	samples, hits, neutral := 0, 0, 0
 	for _, r := range records {
 		if r.ActualCapturedAt == nil {
 			continue // not yet T+1-reconciled
 		}
 		samples++
+		if r.DirectionSign == 0 {
+			// N-U6: the prediction had no direction, so it cannot be a
+			// directional hit. It stays in the denominator and is disclosed
+			// separately instead of being hidden inside the ratio.
+			neutral++
+		}
 		if (r.DirectionSign > 0 && r.ActualSign > 0) || (r.DirectionSign < 0 && r.ActualSign < 0) {
 			hits++
 		}
 	}
 	if samples == 0 {
-		return &HistoricalHitRate{WindowRecords: hitRateWindow, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: fmt.Sprintf("校準中（樣本 0/%d）", MinHitSamples)}
+		return &HistoricalHitRate{WindowRecords: hitRateWindow, Samples: 0, Hits: 0, HitRate: 0, Calibrated: false, Reason: fmt.Sprintf("校準中（樣本 0/%d）", MinHitSamples), HitRateBasis: HitRateBasisDirectionSign}
 	}
 	hr := float64(hits) / float64(samples)
 	out := &HistoricalHitRate{
-		WindowRecords: hitRateWindow,
-		Samples:       samples,
-		Hits:          hits,
-		HitRate:       hr,
+		WindowRecords:      hitRateWindow,
+		Samples:            samples,
+		Hits:               hits,
+		HitRate:            hr,
+		NeutralSamples:     neutral,
+		DirectionalSamples: samples - neutral,
+		HitRateBasis:       HitRateBasisDirectionSign,
 	}
 	if samples < MinHitSamples {
 		out.Calibrated = false

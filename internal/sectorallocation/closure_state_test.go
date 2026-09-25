@@ -130,9 +130,23 @@ func TestSACClosureStateManager_IsPromotable(t *testing.T) {
 
 	_ = m.StopObservation()
 
-	// Now promotable: ≥20 sessions, 0 violations, observation stopped
+	// N-A3 (#1944 Batch 4): 20 stored-but-unconsumed sessions are NOT enough —
+	// a stored snapshot is not an applied policy (spec §8.3).
+	if m.IsPromotable() {
+		t.Fatal("should not be promotable with 0 applied sessions")
+	}
+
+	for range 20 {
+		_ = m.RecordAppliedSession("receipt")
+	}
+
+	// Now promotable: ≥20 sessions, ≥20 applied, 0 violations, observation stopped
 	if !m.IsPromotable() {
 		t.Fatal("should be promotable")
+	}
+
+	if got := m.Get().AppliedSessionCount; got != 20 {
+		t.Fatalf("AppliedSessionCount = %d, want 20", got)
 	}
 
 	// Add a violation → not promotable
