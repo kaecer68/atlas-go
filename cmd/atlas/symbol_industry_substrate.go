@@ -19,6 +19,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,12 +65,16 @@ type storeSymbolIndustrySubstrate struct {
 	mu          sync.Mutex
 	l1BySymbol  map[string]string
 	symbols     []string
+	coverage    industry.SymbolIndustryCoverage
 	loadedAt    time.Time
 	loadErr     error
 	lookupCount int64
 }
 
-var _ industry.SymbolIndustrySubstrate = (*storeSymbolIndustrySubstrate)(nil)
+var (
+	_ industry.SymbolIndustrySubstrate        = (*storeSymbolIndustrySubstrate)(nil)
+	_ industry.SymbolIndustryCoverageReporter = (*storeSymbolIndustrySubstrate)(nil)
+)
 
 // ResolveL1 implements industry.SymbolIndustrySubstrate.
 func (s *storeSymbolIndustrySubstrate) ResolveL1(symbol string) (industry.SectorID, bool) {
@@ -92,6 +98,26 @@ func (s *storeSymbolIndustrySubstrate) Symbols() []string {
 		return nil
 	}
 	return append([]string(nil), s.symbols...)
+}
+
+// Coverage implements industry.SymbolIndustryCoverageReporter.
+//
+// It answers from the accounting computed during the last successful Reload,
+// i.e. from the same rows that produced Symbols(): upstream population the
+// channel saw, the resolved part, and the unresolved buckets with their
+// reasons. No file is re-read and no upstream code is re-mapped here, so the
+// audit cannot disagree with the population the pipeline actually uses.
+//
+// A failed or not-yet-performed load leaves Upstream at 0, which the audit
+// reads as "coverage is not measurable" rather than as 100 % coverage -- an
+// empty view must never look like a green one.
+func (s *storeSymbolIndustrySubstrate) Coverage() industry.SymbolIndustryCoverage {
+	s.ensureLoaded()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cov := s.coverage
+	cov.Reasons = append([]string(nil), s.coverage.Reasons...)
+	return cov
 }
 
 // Len returns the cached population size (no reload decision, for tests and
@@ -170,13 +196,73 @@ func (s *storeSymbolIndustrySubstrate) Reload(ctx context.Context) error {
 		byL1[e.Symbol] = e.CanonicalL1
 		symbols = append(symbols, e.Symbol)
 	}
+	// The coverage accounting is derived here, from the same `entries` the
+	// population loop above walks: this loader is the only component that sees
+	// BOTH the upstream rows (1988 in production) and the resolved ones (1599),
+	// so it is the only place that can produce an honest denominator without
+	// re-reading a file or re-mapping a code.
+	coverage := symbolIndustryCoverageFromEntries(entries)
 	s.mu.Lock()
 	s.l1BySymbol = byL1
 	s.symbols = symbols
+	s.coverage = coverage
 	s.loadedAt = s.now()
 	s.loadErr = nil
 	s.mu.Unlock()
 	return nil
+}
+
+// symbolIndustryCoverageFromEntries buckets the store's rows into the
+// industry.SymbolIndustryCoverage accounting.
+//
+// Pure on purpose: the bucketing is the part worth unit-testing (status
+// constants and the "resolved == installed" invariant), and it must be testable
+// without a database or a live channel.
+//
+//   - Upstream  = every row the store holds = the upstream rows the first-party
+//     channel saw. Rows the channel could not classify are COUNTED here, which
+//     is the whole point: they are the missing population.
+//   - Resolved  = the rows with a canonical L1 answer, i.e. exactly the rows
+//     Reload installs into the substrate (same predicate), so the audit's
+//     numerator is the pipeline's population by construction.
+//   - Unmapped / Unknown = bucketed by MappingStatus with the
+//     internal/symbolindustry status constants (no re-typed literals).
+//   - Reasons   = the distinct non-empty MappingReason values of the rows that
+//     are NOT resolved. This restriction is DELIBERATE: a resolved row's reason
+//     documents why its mapping is sound ("canonical L1 cement 為唯一對應"), and
+//     carrying ~20 of those strings into every audit line would drown the
+//     reasons that describe a gap. The complete per-row reasons stay available
+//     in the channel snapshot (data/state/symbol_industry.json: entries[].mapping_reason
+//     plus the unmapped_codes / unknown_codes dispositions).
+func symbolIndustryCoverageFromEntries(entries []symbolindustry.Entry) industry.SymbolIndustryCoverage {
+	cov := industry.SymbolIndustryCoverage{Upstream: len(entries)}
+	reasons := make(map[string]struct{})
+	for _, e := range entries {
+		resolved := e.Symbol != "" && e.CanonicalL1 != ""
+		if resolved {
+			cov.Resolved++
+		}
+		switch e.MappingStatus {
+		case symbolindustry.StatusUnmapped:
+			cov.Unmapped++
+		case symbolindustry.StatusUnknown:
+			cov.Unknown++
+		}
+		if resolved {
+			continue
+		}
+		if reason := strings.TrimSpace(e.MappingReason); reason != "" {
+			reasons[reason] = struct{}{}
+		}
+	}
+	if len(reasons) > 0 {
+		cov.Reasons = make([]string, 0, len(reasons))
+		for reason := range reasons {
+			cov.Reasons = append(cov.Reasons, reason)
+		}
+		slices.Sort(cov.Reasons)
+	}
+	return cov
 }
 
 // newSymbolIndustrySubstrate returns the per-stock industry substrate when the
