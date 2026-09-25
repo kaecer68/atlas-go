@@ -1973,18 +1973,16 @@ func run(args []string, deps appDeps) error {
 				log.Printf("[Gateway] registered ml_retrain background task (24h interval, DISABLED D2)")
 			}
 
-			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline (06:00 TW, trading days).
-			// Fires every minute but only executes when alignToTarget(06:00) and isTradingDay() both pass.
+			// Register auto_universe_refresh — daily SmartUniverseBuilder pipeline
+			// (14:00 Asia/Taipei = 06:00 UTC, trading days).
+			// Fires every minute but only executes when alignToTarget(14:00 TW) and isTradingDay() both pass.
 			// The task closure is raw func(ctx context.Context) error to avoid monitoring ↔ apigateway
 			// circular import; callers assign directly to apigateway.ScheduledTask.Task.
 			um := metrics.NewUniverseMetrics()
-			um.SetOnInc(func(name string, labels []string, value float64) {
-				labelMap := make(map[string]string, len(labels)/2)
-				for i := 0; i+1 < len(labels); i += 2 {
-					labelMap[labels[i]] = labels[i+1]
-				}
-				collector.RecordCounter(name, value, labelMap)
-			})
+			// Mirror into the collector that backs /metrics: per-event delta plus
+			// the vector's real label names (see monitoring.CollectorOnInc for the
+			// two defects this replaced).
+			um.SetOnInc(monitoring.CollectorOnInc(collector))
 			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
@@ -1995,7 +1993,7 @@ func run(args []string, deps appDeps) error {
 					Enabled:  true,
 					Task:     monitoring.NewDailyUniverseRefreshTask(suDeps),
 				})
-				log.Printf("[Gateway] registered auto_universe_refresh background task (1m interval, 06:00 TW trigger)")
+				log.Printf("[Gateway] registered auto_universe_refresh background task (1m interval, 14:00 TW = 06:00 UTC trigger)")
 			}
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
@@ -2006,7 +2004,7 @@ func run(args []string, deps appDeps) error {
 					Enabled:  true,
 					Task:     monitoring.NewWeeklyUniverseRebuildTask(suDeps),
 				})
-				log.Printf("[Gateway] registered auto_universe_full_rebuild background task (1m interval, Mon 06:00 TW trigger)")
+				log.Printf("[Gateway] registered auto_universe_full_rebuild background task (1m interval, Mon 14:00 TW = 06:00 UTC trigger)")
 			}
 
 			_ = taskMgr.Register(&apigateway.ScheduledTask{
@@ -2069,7 +2067,10 @@ func run(args []string, deps appDeps) error {
 					return nil
 				},
 			})
-			log.Printf("[Gateway] registered universe_coverage_check background task (1m interval, 06:00 TW trigger)")
+			// This task has its own time source (Asia/Taipei below), independent of
+			// monitoring.alignToTarget: it fires at 06:00 Taipei = 22:00 UTC the
+			// previous day, NOT at the 14:00 Taipei / 06:00 UTC universe trigger.
+			log.Printf("[Gateway] registered universe_coverage_check background task (1m interval, 06:00 Asia/Taipei = 22:00 UTC previous day trigger)")
 
 			// Register auto_quote_backfill — daily incremental backfill of historical
 			// daily bars for all stocks in fundamentals.json with PE>0. Stocks already
