@@ -43,7 +43,14 @@ fi
 DEST="$SANDBOX/Library/LaunchAgents/com.goluck.atlas-webhook-to-telegram.plist"
 if [ -f "$DEST" ]; then ok "B2 已安裝 plist"; else bad "B2 找不到已安裝 plist"; fi
 
-MODE="$(stat -f '%Lp' "$DEST" 2>/dev/null || stat -c '%a' "$DEST" 2>/dev/null)"
+# ⚠️ 平台差異：**GNU `stat -f` 是「檔案系統」模式**（不是 BSD 的「自訂格式」）✗
+# 2026-09-25 實證：GH CI（ubuntu-latest）上 `stat -f '%Lp'` 會把檔案系統資訊印到 stdout 並回非 0，
+# 於是 `||` 再跑 `stat -c '%a'` 把 "600" 接在後面 ⇒ 多行字串 ≠ "600" ⇒ 假失敗 ✗。
+# 正確順序：先 GNU 的 `-c`，失敗才退 BSD 的 `-f`（macOS 上 `stat -c` 乾淨失敗、無 stdout ✓）。
+file_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
+}
+MODE="$(file_mode "$DEST")"
 if [ "$MODE" = "600" ]; then ok "B3 已安裝 plist mode=600（原本 644 是同機可讀 ✗）"
 else bad "B3 已安裝 plist mode=$MODE（期望 600）"; fi
 
