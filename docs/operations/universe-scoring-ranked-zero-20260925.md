@@ -242,7 +242,8 @@ $ gh pr list --state open
 1. 本報告的 §3 根因得到**第二個獨立來源**確認（不是只有本 session 的推論）。
 2. §6 選項 1、2 **不必重新實作**，應改為「審核 #1979 是否覆蓋 §6 的風險 A–D」。
 3. **#1979 沒有動 `CheckUniverseCoverage`**（`git show 939d36a6:internal/monitoring/universe_scheduler.go`
-   仍是 `total = mapped`）⇒ §7.1 的 false green 仍是**未修**狀態，與 #1979 不重疊。
+   仍是 `total = mapped`）⇒ §7.1 的 false green 與 #1979 **不重疊**；該 false green 另由 PR **#1983**
+   修正，並已於 2026-09-25 **合併**（squash commit **`cd1f5b02`**；**尚未部署**，見 §9.1.7）。
 4. 併發風險：`#1979` 與 `universe_coverage_check` 修正（另案）都改
    `internal/monitoring/universe_scheduler.go`；實測 `git merge-tree` 兩分支**無衝突**
    （`git merge-tree --write-tree` 乾淨，合併後同時含 `quotes_status`/`ranked_trustworthy`
@@ -390,6 +391,9 @@ groups:
 - 量的是**舊的代表股母體 27 檔**，而 pipeline 已改用 1599 檔的 substrate 母體 ⇒ 兩者不同母體。
 - `ratio` 在 27 檔、1599 檔、甚至母體塌成 3 檔時都會是 1.00；`alert` 只在 `mapped==0` 時才有機會出現。
 - **影響**：這是「覆蓋率」告警的唯一來源，等於**不存在**。
+- **現況（2026-09-25）**：本項已由 PR **#1983**（`fix/universe-coverage-substrate`）修正並合併
+  （squash commit **`cd1f5b02`**）——分母改為第一方上游母體、無母體可測時明確回報不可測（§9.3）。
+  **但尚未部署**（生產容器的 image 建於 `bbce1b4a`；見 §9.1.7）。
 - **與 §3 根因的關係（明確回答）**：**不是同一個 bug**。`1.00` 來自 `total = mapped`（恆等式），
   與 `Quotes` 是否 nil 無關；即使報價接好、`ranked=1599`，這個 1.00 仍會照印。
   ⇒ 修 coverage **不會遮住** `ranked=0`，兩者是獨立缺陷。
@@ -596,6 +600,19 @@ a06f7d2e4aba 2026-09-25 15:09:24 +0800 CST latest
 
 執行者實測：**24 個容器、0 個 not-running**、`/api/version` **HTTP 200**、服務 log `ERROR = 0`。
 
+#### 9.1.7 coverage 修正（PR #1983）已合併但**尚未部署**
+
+```
+$ git log --oneline origin/main -2
+cd1f5b02 fix(monitoring): universe coverage_check 改以第一方母體為分母，移除 total=mapped 的假綠 (#1943) (#1983)
+47de2381 docs(operations): 調查報告 — SmartUniverseBuilder symbols_ranked=0（唯讀根因，未修） (#1982)
+```
+
+- **程式碼狀態**：`CheckUniverseCoverage` 的誠實版（分母＝第一方上游母體；無母體時
+  `Available=false` + 「not measurable」）已在 `main`（`cd1f5b02`，2026-09-25 合併）。
+- **部署狀態**：**尚未部署**。生產容器的 image 建於 `bbce1b4a`（§9.1.1），不含本修正
+  ⇒ 生產日誌目前仍會印舊形狀的 `coverage_check`，直到下一次部署。
+
 #### 9.1.6 待定（**尚未定案，不寫數字**）
 
 - **`symbols_ranked` 的最終值：待定。** 手動觸發在 `07:10Z` 起仍在執行中且容器未重啟
@@ -631,7 +648,7 @@ Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySub
   2. 告警端加一條「substrate 最近成功 Reload 超過 N 小時」的規則
      （與 §6.2 的規則同一組，需先解決 §7.2 的 counter 灌爆或改用 gauge）；
   3. substrate 曝露 `last_reload_ok` / `load_error`，讓「載入失敗」與「母體為空」可區分。
-- **追蹤**：已記入 `docs/operations/FOLLOWUPS.md`（新條目，未實作）。
+- **追蹤**：已記入 `docs/operations/FOLLOWUPS.md`（條目 **FU-20260925-01**，狀態 `open`，未實作）。
 
 ### 9.4 其他尚未證實項
 見 §10 的「未證實」清單（`ratio ≈ 0.80` 亦為推得的預期值，尚未在生產觀察到）。
