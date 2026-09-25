@@ -154,35 +154,66 @@ func TestIsTradingDay(t *testing.T) {
 
 // ─────────────────── 2. alignToTarget ────────────────────────────────────
 
-// TestAlignToTarget verifies that alignToTarget returns true only when the
-// current time is within ±1 minute of the target hour and minute.
+// triggerAt returns the pipeline trigger instant for the given Asia/Taipei
+// calendar date, expressed in loc.
+//
+// 14:00 Asia/Taipei == 06:00 UTC, so the same instant can be written as
+// 2026-06-16T06:00Z, 2026-06-16T14:00+08:00 or 2026-06-15T20:00-10:00. Tests are
+// built from this helper so they pin the INSTANT rather than one environment's
+// wall clock (the 2026-09-25 defect was exactly that the trigger followed the
+// host/container TZ).
+func triggerAt(y int, m time.Month, d int, loc *time.Location) time.Time {
+	return time.Date(y, m, d, universeTriggerHourTW, 0, 0, 0, universeLocation()).In(loc)
+}
+
+// TestAlignToTarget verifies that alignToTarget returns true only when the given
+// instant is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC), whatever location
+// the caller attaches to that instant.
 func TestAlignToTarget(t *testing.T) {
-	// Use a fixed location for deterministic tests.
-	loc := time.FixedZone("TW", 8*3600) // UTC+8
+	tw := time.FixedZone("TW", 8*3600)     // UTC+8, same offset as Asia/Taipei
+	hst := time.FixedZone("HST", -10*3600) // UTC-10: the trigger instant falls on the previous calendar day
 	tests := []struct {
 		name string
 		t    time.Time
 		want bool
 	}{
 		{
-			name: "exact_match_at_0600",
-			t:    time.Date(2026, 6, 16, 6, 0, 0, 0, loc),
+			// Pins the production instant: 06:00 UTC (no TZ env in the container).
+			name: "exact_trigger_instant_utc",
+			t:    triggerAt(2026, 6, 16, time.UTC),
 			want: true,
 		},
 		{
-			name: "one_minute_off_0601",
-			t:    time.Date(2026, 6, 16, 6, 1, 1, 0, loc),
+			name: "exact_trigger_instant_taipei_1400",
+			t:    triggerAt(2026, 6, 16, tw),
+			want: true,
+		},
+		{
+			name: "same_instant_in_utc_minus_10",
+			t:    triggerAt(2026, 6, 16, hst),
+			want: true,
+		},
+		{
+			name: "one_minute_off_1401",
+			t:    triggerAt(2026, 6, 16, tw).Add(61 * time.Second),
 			want: false,
 		},
 		{
-			name: "week_boundary_monday_0600",
-			t:    time.Date(2026, 6, 15, 6, 0, 0, 0, loc), // Monday
+			name: "week_boundary_monday_trigger",
+			t:    triggerAt(2026, 6, 15, tw), // Monday
 			want: true,
 		},
 		{
 			name: "already_aligned_59s_diff",
-			t:    time.Date(2026, 6, 16, 6, 0, 59, 0, loc),
+			t:    triggerAt(2026, 6, 16, tw).Add(59 * time.Second),
 			want: true,
+		},
+		{
+			// The old comment claimed 06:00 Taipei was the trigger. It never was:
+			// 06:00 Taipei is 22:00 UTC on the previous day, 8 hours early.
+			name: "misread_0600_taipei_is_not_the_trigger",
+			t:    time.Date(2026, 6, 16, 6, 0, 0, 0, tw),
+			want: false,
 		},
 	}
 	for _, tt := range tests {
@@ -192,6 +223,46 @@ func TestAlignToTarget(t *testing.T) {
 				t.Fatalf("alignToTarget(%v) = %v, want %v", tt.t, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAlignToTarget_InstantNotLocation asserts the trigger is instant-based: one
+// fixed instant expressed in several locations must always be aligned. This is
+// the regression net for "setting TZ on the container silently moved the job".
+func TestAlignToTarget_InstantNotLocation(t *testing.T) {
+	instant := time.Date(2026, 12, 15, 6, 0, 0, 0, time.UTC) // Tuesday 06:00 UTC = 14:00 Taipei
+
+	locs := map[string]*time.Location{
+		"UTC":          time.UTC,
+		"asia_taipei":  universeLocation(),
+		"fixed_plus8":  time.FixedZone("TW", 8*3600),
+		"utc_minus_10": time.FixedZone("HST", -10*3600),
+		"utc_plus_13":  time.FixedZone("TOT", 13*3600),
+		"denver":       time.FixedZone("MST", -7*3600),
+	}
+	for name, loc := range locs {
+		t.Run(name, func(t *testing.T) {
+			if !alignToTarget(instant.In(loc)) {
+				t.Fatalf("alignToTarget(%v) = false, want true: the trigger must not depend on the location of the instant", instant.In(loc))
+			}
+		})
+	}
+
+	// And the instant 8 hours off in either direction must NOT be aligned.
+	for _, off := range []time.Duration{-8 * time.Hour, 8 * time.Hour} {
+		if alignToTarget(instant.Add(off).In(universeLocation())) {
+			t.Fatalf("alignToTarget(trigger%+v) = true, want false", off)
+		}
+	}
+}
+
+// TestUniverseLocation_Offset pins the fallback zone used when the IANA database
+// is unavailable (Alpine images without tzdata): it must be +08:00, never UTC.
+func TestUniverseLocation_Offset(t *testing.T) {
+	loc := universeLocation()
+	_, offset := time.Date(2026, 6, 16, 0, 0, 0, 0, loc).Zone()
+	if offset != taipeiOffsetSeconds {
+		t.Fatalf("universeLocation() offset = %d, want %d", offset, taipeiOffsetSeconds)
 	}
 }
 
@@ -918,31 +989,31 @@ func TestWatchlistMuConcurrent(t *testing.T) {
 	}
 
 	loc := time.FixedZone("TW", 8*3600)
-	monday0600 := time.Date(2026, 6, 15, 6, 0, 0, 0, loc)  // Monday 06:00 TW
-	tuesday0600 := time.Date(2026, 6, 16, 6, 0, 0, 0, loc) // Tuesday 06:00 TW
+	mondayTrigger := triggerAt(2026, 6, 15, loc)  // Monday 14:00 TW = 06:00 UTC
+	tuesdayTrigger := triggerAt(2026, 6, 16, loc) // Tuesday 14:00 TW = 06:00 UTC
 
 	// Use atomic.Value so clockFunc can be set safely from concurrent goroutines
 	// without racing on the package-level var itself.
 	var clockVal atomic.Value
-	clockVal.Store(monday0600)
+	clockVal.Store(mondayTrigger)
 	defer func() { clockFunc = time.Now }()
 	clockFunc = func() time.Time { return clockVal.Load().(time.Time) }
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Weekly: Monday 06:00 → triggers weekly rebuild.
+	// Weekly: Monday trigger → triggers weekly rebuild.
 	go func() {
 		defer wg.Done()
-		clockVal.Store(monday0600)
+		clockVal.Store(mondayTrigger)
 		fn := NewWeeklyUniverseRebuildTask(deps)
 		_ = fn(context.Background())
 	}()
 
-	// Daily: Tuesday 06:00 → triggers daily refresh.
+	// Daily: Tuesday trigger → triggers daily refresh.
 	go func() {
 		defer wg.Done()
-		clockVal.Store(tuesday0600)
+		clockVal.Store(tuesdayTrigger)
 		fn := NewDailyUniverseRefreshTask(deps)
 		_ = fn(context.Background())
 	}()
@@ -954,15 +1025,16 @@ func TestWatchlistMuConcurrent(t *testing.T) {
 // ─────────────────── 8. Closure time-gating via clockFunc ─────────────────
 
 // TestDailyRefreshTimeGating verifies that the daily refresh closure skips
-// execution on Monday, triggers on Tuesday at 06:00, and skips at 06:01.
+// execution on Monday, triggers on Tuesday at the trigger instant, and skips one
+// minute later.
 func TestDailyRefreshTimeGating(t *testing.T) {
 	loc := time.FixedZone("TW", 8*3600)
 	deps := buildDepsFixture(t, tempDir(t))
 
-	t.Run("monday_0600_skip", func(t *testing.T) {
+	t.Run("monday_trigger_skip", func(t *testing.T) {
 		defer func() { clockFunc = time.Now }()
-		monday0600 := time.Date(2026, 6, 15, 6, 0, 0, 0, loc)
-		clockFunc = func() time.Time { return monday0600 }
+		mondayTrigger := triggerAt(2026, 6, 15, loc)
+		clockFunc = func() time.Time { return mondayTrigger }
 
 		fn := NewDailyUniverseRefreshTask(deps)
 		err := fn(context.Background())
@@ -976,13 +1048,13 @@ func TestDailyRefreshTimeGating(t *testing.T) {
 		}
 	})
 
-	t.Run("tuesday_0600_triggers_build", func(t *testing.T) {
+	t.Run("tuesday_trigger_triggers_build", func(t *testing.T) {
 		workDir := tempDir(t)
 		deps2 := buildDepsFixture(t, workDir)
 
 		defer func() { clockFunc = time.Now }()
-		tuesday0600 := time.Date(2026, 6, 16, 6, 0, 0, 0, loc)
-		clockFunc = func() time.Time { return tuesday0600 }
+		tuesdayTrigger := triggerAt(2026, 6, 16, loc)
+		clockFunc = func() time.Time { return tuesdayTrigger }
 
 		fn := NewDailyUniverseRefreshTask(deps2)
 		err := fn(context.Background())
@@ -996,13 +1068,13 @@ func TestDailyRefreshTimeGating(t *testing.T) {
 		}
 	})
 
-	t.Run("tuesday_0601_skip_outside_window", func(t *testing.T) {
+	t.Run("tuesday_plus_61s_skip_outside_window", func(t *testing.T) {
 		workDir := tempDir(t)
 		deps3 := buildDepsFixture(t, workDir)
 
 		defer func() { clockFunc = time.Now }()
-		tuesday0601 := time.Date(2026, 6, 16, 6, 1, 1, 0, loc)
-		clockFunc = func() time.Time { return tuesday0601 }
+		tuesdayLate := triggerAt(2026, 6, 16, loc).Add(61 * time.Second)
+		clockFunc = func() time.Time { return tuesdayLate }
 
 		fn := NewDailyUniverseRefreshTask(deps3)
 		err := fn(context.Background())
@@ -1017,18 +1089,74 @@ func TestDailyRefreshTimeGating(t *testing.T) {
 	})
 }
 
+// TestUniverseTrigger_InstantIndependentOfClockLocation is the closure-level net
+// for the 2026-09-25 timezone defect: one fixed instant, expressed in several
+// locations, must trigger the same run in each of them.
+//
+// Before the fix the gate was built from now.Location() at 06:00, so attaching
+// TZ=Asia/Taipei to the container moved the trigger 8 hours earlier (22:00 UTC the
+// previous day), and a far-west TZ also changed the weekday the gate observed.
+func TestUniverseTrigger_InstantIndependentOfClockLocation(t *testing.T) {
+	locations := []struct {
+		name string
+		loc  *time.Location
+	}{
+		{"utc_default", time.UTC},
+		{"asia_taipei", universeLocation()},
+		{"utc_minus_10_previous_calendar_day", time.FixedZone("HST", -10*3600)},
+		{"utc_plus_13_same_calendar_day", time.FixedZone("TOT", 13*3600)},
+	}
+
+	// Tuesday 06:00 UTC = Tuesday 14:00 Taipei → daily refresh runs.
+	dailyInstant := time.Date(2026, 12, 15, 6, 0, 0, 0, time.UTC)
+	// Monday 06:00 UTC = Monday 14:00 Taipei → weekly rebuild runs.
+	weeklyInstant := time.Date(2026, 12, 14, 6, 0, 0, 0, time.UTC)
+
+	for _, tt := range locations {
+		t.Run("daily/"+tt.name, func(t *testing.T) {
+			workDir := tempDir(t)
+			deps := buildDepsFixture(t, workDir)
+			defer func() { clockFunc = time.Now }()
+			clock := dailyInstant.In(tt.loc)
+			clockFunc = func() time.Time { return clock }
+
+			if err := NewDailyUniverseRefreshTask(deps)(context.Background()); err != nil {
+				t.Fatalf("daily refresh: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(workDir, "data", "state", "universe_snapshot.json")); err != nil {
+				t.Fatalf("the same instant did not trigger the daily run when expressed in %v: %v", tt.loc, err)
+			}
+		})
+
+		t.Run("weekly/"+tt.name, func(t *testing.T) {
+			workDir := tempDir(t)
+			deps := buildDepsFixture(t, workDir)
+			defer func() { clockFunc = time.Now }()
+			clock := weeklyInstant.In(tt.loc)
+			clockFunc = func() time.Time { return clock }
+
+			if err := NewWeeklyUniverseRebuildTask(deps)(context.Background()); err != nil {
+				t.Fatalf("weekly rebuild: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(workDir, "data", "state", "universe_snapshot.json")); err != nil {
+				t.Fatalf("the same instant did not trigger the weekly run when expressed in %v: %v", tt.loc, err)
+			}
+		})
+	}
+}
+
 // TestWeeklyRebuildTimeGating verifies that the weekly rebuild closure
-// only triggers on Monday at 06:00.
+// only triggers on Monday at the trigger instant.
 func TestWeeklyRebuildTimeGating(t *testing.T) {
 	loc := time.FixedZone("TW", 8*3600)
 
-	t.Run("monday_0600_triggers_rebuild", func(t *testing.T) {
+	t.Run("monday_trigger_triggers_rebuild", func(t *testing.T) {
 		workDir := tempDir(t)
 		deps := buildDepsFixture(t, workDir)
 
 		defer func() { clockFunc = time.Now }()
-		monday0600 := time.Date(2026, 6, 15, 6, 0, 0, 0, loc)
-		clockFunc = func() time.Time { return monday0600 }
+		mondayTrigger := triggerAt(2026, 6, 15, loc)
+		clockFunc = func() time.Time { return mondayTrigger }
 
 		fn := NewWeeklyUniverseRebuildTask(deps)
 		err := fn(context.Background())
@@ -1046,8 +1174,8 @@ func TestWeeklyRebuildTimeGating(t *testing.T) {
 		deps := buildDepsFixture(t, workDir)
 
 		defer func() { clockFunc = time.Now }()
-		tuesday0600 := time.Date(2026, 6, 16, 6, 0, 0, 0, loc)
-		clockFunc = func() time.Time { return tuesday0600 }
+		tuesdayTrigger := triggerAt(2026, 6, 16, loc)
+		clockFunc = func() time.Time { return tuesdayTrigger }
 
 		fn := NewWeeklyUniverseRebuildTask(deps)
 		err := fn(context.Background())
@@ -1201,18 +1329,23 @@ func TestCheckD6ExpiryCorruptWatchlist(t *testing.T) {
 // absolute-valued in the implementation).
 func TestAlignToTargetNegativeDiff(t *testing.T) {
 	loc := time.FixedZone("TW", 8*3600)
+	target := triggerAt(2026, 6, 16, loc) // 14:00 Taipei = 06:00 UTC
 
 	t.Run("30s_before_target", func(t *testing.T) {
-		tm := time.Date(2026, 6, 16, 5, 59, 30, 0, loc)
-		if !alignToTarget(tm) {
-			t.Fatal("05:59:30 should be within ±1min of 06:00")
+		if !alignToTarget(target.Add(-30 * time.Second)) {
+			t.Fatal("30s before the trigger should be within ±1min")
 		}
 	})
 
 	t.Run("61s_before_target", func(t *testing.T) {
-		tm := time.Date(2026, 6, 16, 5, 58, 59, 0, loc)
-		if alignToTarget(tm) {
-			t.Fatal("05:58:59 should NOT be within ±1min of 06:00")
+		if alignToTarget(target.Add(-61 * time.Second)) {
+			t.Fatal("61s before the trigger should NOT be within ±1min")
+		}
+	})
+
+	t.Run("61s_after_target", func(t *testing.T) {
+		if alignToTarget(target.Add(61 * time.Second)) {
+			t.Fatal("61s after the trigger should NOT be within ±1min")
 		}
 	})
 }
