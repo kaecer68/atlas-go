@@ -3,7 +3,7 @@
 | 項目 | 內容 |
 |---|---|
 | 文件角色 | **規範（normative）**：任何「Jev 對某個預測目標是否有用」的評估都必須走本框架；同時是 Stage 2/3 的擴充介面契約 |
-| 狀態 | v1（2026-09-25，issue [#1966](https://github.com/kaecer68/atlas-go/issues/1966)） |
+| 狀態 | v1（2026-09-25，issue [#1968](https://github.com/kaecer68/atlas-go/issues/1968)） |
 | 上位規範 | [`JEV-USAGE-CONTRACT.md`](JEV-USAGE-CONTRACT.md)（§1 傳輸、§2 判斷設計、§3 門檻、§4 評估紀律、§5 生產整合） |
 | 實作 | `scripts/jev_eval/`（Python 框架）+ `cmd/experimental/jev-eval-panel/`（Go：canonical 口徑的 GT/特徵匯出） |
 | Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |

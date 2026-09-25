@@ -5,7 +5,7 @@
 | 問題 | 「Jev 的判斷，對 **canonical L1 產業層**的 5 交易日、扣成本後 forward 方向，是否攜帶資訊？相對平台既有產業層訊號是否有增量？」 |
 | 階段 | Stage 1（E0：**shadow 評估，不接任何生產決策路徑**）。E2（接線）不在本階段範圍 |
 | 框架 | [`JEV-EVAL-FRAMEWORK.md`](JEV-EVAL-FRAMEWORK.md)（可重用評估框架本體） |
-| Issue | [#1966](https://github.com/kaecer68/atlas-go/issues/1966) |
+| Issue | [#1968](https://github.com/kaecer68/atlas-go/issues/1968) |
 | 日期 | 2026-09-25 |
 | 模型 | `jev-1.13.0`（pin 版本 ID，非 alias） |
 | **分級結論** | **未驗證（no statistically distinguishable signal）** |

@@ -1,5 +1,5 @@
 // Command jev-eval-panel exports the canonical industry (L1) prediction panel
-// consumed by the Jev shadow-evaluation framework (Stage 1 / E0, issue #1966).
+// consumed by the Jev shadow-evaluation framework (Stage 1 / E0, issue #1968).
 //
 // Why this exists
 //

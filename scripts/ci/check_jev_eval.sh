@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# check_jev_eval.sh — Jev 評估框架的 CI 閘門（2026-09-25, issue #1966）
+# check_jev_eval.sh — Jev 評估框架的 CI 閘門（2026-09-25, issue #1968）
 #
 # 規範：docs/jev/JEV-EVAL-FRAMEWORK.md
 # 檢查項：
