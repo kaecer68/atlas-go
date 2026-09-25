@@ -3,10 +3,23 @@
 // Stage 6 PR#2：admin_web「錢潮模型」頁。
 // 從 GET /api/narrative/models 讀 narrative engine 的 active models，
 // 以卡片呈現權重、近期誤差、命中率與最近訊號；點擊卡片展開詳細推理。
+//
+// 「命中率」欄位（issue #1944 Batch 4, item I23）：後端 shipped 值是
+// internal/narrative/knowledge_base.go 的手寫先驗常數（hit_rate_source =
+// handwritten_prior），不是回測量測值，因此標籤用「先驗命中率」＋來源標記，
+// 文案與 0 值處理一律走 shared/narrative-hit-rate.js。
 
 import { silentGetJSON, escapeHtml, renderEmptyState, renderErrorState } from '../shared/app-utils.js';
 import { modelName, sectorName } from '../names.js';
 import { fmtSafePct, fmtSafeNumber } from '../shared/format-metric.js';
+import {
+  HIT_RATE_FIELD_LABEL,
+  HIT_RATE_FIELD_TOOLTIP,
+  hitRateDisplayInfo,
+  hitRateTextColor,
+  pickHitRateSource,
+  pickHitRateValue,
+} from '../shared/narrative-hit-rate.js';
 
 const RETRY_ID = 'capital-models';
 
@@ -47,10 +60,9 @@ export function renderCapitalModels(data) {
   const cards = models.map(function (m, idx) {
     const weight = typeof m.weight === 'number' ? m.weight : 0;
     const pct = totalWeight > 0 ? (weight / totalWeight) * 100 : 0;
-    const hitRate = m.hit_rate;
-    const hitDisplay = isNoDataHitRate(hitRate)
-      ? '<span class="text-muted">無資料</span>'
-      : fmtSafePct(hitRate, 1);
+    const hitInfo = hitRateDisplayInfo(pickHitRateValue(m), pickHitRateSource(m));
+    const hitDisplay = '<span style="color:' + hitRateTextColor(hitInfo) + '" title="'
+      + escapeHtml(hitInfo.note) + '">' + escapeHtml(hitInfo.text) + '</span>';
     const lastSignal = signalLabel(m.recent_prediction);
     const recentError = fmtSafeNumber(m.recent_error, { decimals: 3 });
 
@@ -69,8 +81,11 @@ export function renderCapitalModels(data) {
       +     '<div class="cm-card__metric-value">' + recentError + '</div>'
       +   '</div>'
       +   '<div class="cm-card__metric">'
-      +     '<div class="cm-card__metric-label">歷史命中率</div>'
+      +     '<div class="cm-card__metric-label" title="' + escapeHtml(HIT_RATE_FIELD_TOOLTIP) + '">'
+      +       escapeHtml(HIT_RATE_FIELD_LABEL) + '</div>'
       +     '<div class="cm-card__metric-value">' + hitDisplay + '</div>'
+      +     '<div class="text-muted" style="font-size:10px" title="' + escapeHtml(hitInfo.note) + '">'
+      +       escapeHtml(hitInfo.badge) + '</div>'
       +   '</div>'
       +   '<div class="cm-card__metric">'
       +     '<div class="cm-card__metric-label">最近訊號</div>'
@@ -114,13 +129,6 @@ function signalLabel(value) {
   if (value > 0) return '看漲';
   if (value < 0) return '看跌';
   return '中性';
-}
-
-function isNoDataHitRate(hitRate) {
-  if (hitRate === null || hitRate === undefined || Number.isNaN(hitRate)) return true;
-  if (typeof hitRate === 'number' && (hitRate === 0 || hitRate === 0 / 1)) return true;
-  if (typeof hitRate === 'string' && (hitRate === '0' || hitRate === '0/0')) return true;
-  return false;
 }
 
 function renderSectorChips(sectors) {

@@ -196,6 +196,21 @@ type Scorecard struct {
 	// OosSampleWarning is set when train or test split has insufficient
 	// samples (e.g. "insufficient_test_samples: 3 < 5").
 	OosSampleWarning string `json:"oos_sample_warning,omitempty"`
+
+	// SyntheticObservations counts this agent's outcome rows that were EXCLUDED
+	// from every statistic above because IsSynthetic=true (issue #1944 Batch 4,
+	// item I24). Those rows carry the deterministic placeholder forward return
+	// (orchestrator.syntheticPlaceholderReturn), not a realized forward return,
+	// and production recorded 25,571 of 45,668 rows (56%) as synthetic — so
+	// aggregating them published a polluted HitRate/Sharpe/IS-OOS. A scorecard is
+	// emitted only when at least one real row exists; an agent with nothing but
+	// synthetic rows gets no scorecard (unknown, never "0% accuracy"). This field
+	// is the audit trail for the exclusion.
+	SyntheticObservations int `json:"synthetic_observations"`
+	// SyntheticShare is SyntheticObservations / (Observations +
+	// SyntheticObservations) for this agent, in [0,1). It is the outward
+	// disclosure that the numbers above are built from the real subset only.
+	SyntheticShare float64 `json:"synthetic_share"`
 }
 
 // RegimeBreakdown is the per-agent stratification of performance metrics

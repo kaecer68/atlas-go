@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
@@ -250,8 +252,48 @@ func selectProvider(cfg config.Config) marketdata.Provider {
 	case "hybrid", "":
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	default:
+		// Unsupported value: no provider is registered for it. This used to be
+		// a silent fallthrough, so ATLAS_MARKET_DATA_PROVIDER=fubon (still
+		// documented as valid in configs/allowed_env_vars.md) quietly produced a
+		// hybrid provider — an operator could believe they were on fubon-proxy
+		// while every quote came from TWSE/FinMind/Fugle (issue #1944 Batch 4,
+		// item 4). Hybrid stays the fallback because it is the safe default, but
+		// the mismatch is now stated.
+		logging.Warn("system", "market_data_provider_unsupported",
+			"configured", cfg.MarketDataProvider,
+			"supported", strings.Join(SupportedMarketDataProviders(), ","),
+			"fallback", "hybrid",
+			"reason", "no provider implementation is registered for this value; see configs/allowed_env_vars.md",
+		)
 		return marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)
 	}
+}
+
+// supportedMarketDataProviders is the closed set selectProvider() has a branch
+// for. It is the single source of truth for the documented value list in
+// configs/allowed_env_vars.md, and every entry here must have a matching case in
+// selectProvider — TestSupportedMarketDataProvidersMatchesSelectProvider pins it.
+//
+// "fubon" is deliberately NOT a member: the fubon channel exists only as the
+// Python services/fubon-proxy FastAPI service (internal/fubonproxy manages its
+// lifecycle) and no marketdata.Provider implementation wraps it, so claiming it
+// as a provider value would be a false claim (#1944 Batch 4, item 4).
+var supportedMarketDataProviders = []string{"twse", "fugle", "hybrid"}
+
+// SupportedMarketDataProviders returns the values ATLAS_MARKET_DATA_PROVIDER
+// actually selects on, sorted. Anything else falls back to hybrid with a
+// market_data_provider_unsupported warning.
+func SupportedMarketDataProviders() []string {
+	return slices.Clone(supportedMarketDataProviders)
+}
+
+// IsSupportedMarketDataProvider reports whether value selects a provider branch.
+// The empty string selects the hybrid default, so it is supported.
+func IsSupportedMarketDataProvider(value string) bool {
+	if value == "" {
+		return true
+	}
+	return slices.Contains(supportedMarketDataProviders, value)
 }
 
 func (s *System) resolveReplayDate() (time.Time, bool) {

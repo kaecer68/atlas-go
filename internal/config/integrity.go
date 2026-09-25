@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -125,6 +126,11 @@ func CheckParamsIntegrity(path string) []error {
 // CalibrationValidationResult captures the outcome of a post-backfill calibration
 // integrity check. Used by the nightly-refresh workflow to detect a half-applied
 // run (TWSE proxy fetched but ClassificationTree not actually updated) and alert.
+//
+// OK is derived from the ERROR-severity findings only (see
+// ValidateCalibrationWithOptions). Observation-severity findings are reported but
+// do not fail the run, so a caller can distinguish "the tree regressed" from
+// "the tree is as expected but this checkout cannot be fresh".
 type CalibrationValidationResult struct {
 	OK            bool
 	Issues        []string
@@ -140,6 +146,27 @@ type CalibrationValidationResult struct {
 	// without parsing message text (issue #1944 Batch 3, item I31). Issues is kept
 	// for backward compatibility and always mirrors Findings' messages.
 	Findings []CalibrationFinding
+
+	// Scope is the freshness policy the run was evaluated under:
+	// CalibrationScopeFull (default) or CalibrationScopeStructure. Under
+	// CalibrationScopeStructure the freshness codes are reported as observations
+	// because a fresh checkout structurally cannot carry a fresh updated_at.
+	Scope string `json:"scope"`
+	// FreshnessEnforced is true when a stale/never-recorded updated_at fails the
+	// run. It is the machine-readable form of the freshness policy decision
+	// (issue #1944 Batch 4, item I31).
+	FreshnessEnforced bool `json:"freshness_enforced"`
+	// ErrorCount / ObservationCount split Findings by severity. OK is true iff
+	// ErrorCount == 0. Observations are accepted findings — either accepted
+	// explicitly by the policy, or freshness findings on a structure-scope run.
+	// They stay in Findings so an accepted defect is visible, never silent.
+	ErrorCount       int `json:"error_count"`
+	ObservationCount int `json:"observation_count"`
+
+	// raw holds findings before severity classification. Unexported and never
+	// serialized: it only exists so collection and policy evaluation can be
+	// separate steps.
+	raw []CalibrationFinding
 }
 
 // CalibrationFindingCode is a stable identifier for one integrity finding.
@@ -177,8 +204,80 @@ const (
 
 // CalibrationFinding severity values.
 const (
+	// CalibrationSeverityError fails the run. Everything not explicitly
+	// downgraded by a policy is an error — the default is fail-closed.
 	CalibrationSeverityError = "error"
+	// CalibrationSeverityObservation is reported but does not fail the run. It is
+	// used for (a) freshness findings when the run is evaluated under
+	// CalibrationScopeStructure, and (b) findings matched by an explicit accepted
+	// entry of the validation policy (issue #1944 Batch 4, item I31).
+	CalibrationSeverityObservation = "observation"
 )
+
+// Calibration freshness scopes.
+const (
+	// CalibrationScopeFull enforces freshness: a stale mtime or a stale/absent
+	// updated_at is an error. This is the default and the legacy behavior.
+	CalibrationScopeFull = "full"
+	// CalibrationScopeStructure reports freshness as an observation and only
+	// fails on structural findings. It exists because the CI checkout of
+	// configs/parameters.json is shipped with the repository, so its updated_at
+	// can never be within max-age — enforcing freshness there produced a run that
+	// could not distinguish "config is stale" from "the nightly job is a no-op"
+	// (issue #1944 I30/I31). Freshness must be checked where the file is actually
+	// refreshed, i.e. on the production host.
+	CalibrationScopeStructure = "structure"
+)
+
+// freshnessFindingCodes are the updated_at / mtime findings. They are the only
+// codes downgraded to observations by CalibrationScopeStructure.
+var freshnessFindingCodes = map[CalibrationFindingCode]bool{
+	CalibrationFindingMTimeStale:     true,
+	CalibrationFindingUpdatedAtStale: true,
+	CalibrationFindingUpdatedAtZero:  true,
+}
+
+// IsFreshnessFinding reports whether code is a file-freshness finding (mtime or
+// updated_at) rather than a structural defect of the classification tree.
+func IsFreshnessFinding(code CalibrationFindingCode) bool {
+	return freshnessFindingCodes[code]
+}
+
+// knownCalibrationFindingCodes is the closed set of codes ValidateCalibration can
+// emit. A policy that names a code outside this set is rejected at load time, so
+// a typo cannot silently accept a real finding.
+var knownCalibrationFindingCodes = map[CalibrationFindingCode]bool{
+	CalibrationFindingParamsStatFailed:    true,
+	CalibrationFindingMTimeStale:          true,
+	CalibrationFindingParamsReadFailed:    true,
+	CalibrationFindingParamsInvalidJSON:   true,
+	CalibrationFindingUpdatedAtZero:       true,
+	CalibrationFindingUpdatedAtStale:      true,
+	CalibrationFindingSegmentsEmpty:       true,
+	CalibrationFindingL1EmptyID:           true,
+	CalibrationFindingL1NoRepresentatives: true,
+	CalibrationFindingL2EmptyParentID:     true,
+	CalibrationFindingL2UnknownParentID:   true,
+	CalibrationFindingL2NoRepresentatives: true,
+	CalibrationFindingNoL1Segments:        true,
+}
+
+// CalibrationFindingCodes returns the closed set of known finding codes, sorted
+// for deterministic output. Callers use it to validate policy files.
+func CalibrationFindingCodes() []CalibrationFindingCode {
+	out := make([]CalibrationFindingCode, 0, len(knownCalibrationFindingCodes))
+	for code := range knownCalibrationFindingCodes {
+		out = append(out, code)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// IsKnownCalibrationFindingCode reports whether code is a code that
+// ValidateCalibration can actually emit.
+func IsKnownCalibrationFindingCode(code CalibrationFindingCode) bool {
+	return knownCalibrationFindingCodes[code]
+}
 
 // CalibrationFinding is one integrity finding with its class, severity, the
 // segment it concerns (empty when the finding is file-wide) and the human message.
@@ -189,18 +288,48 @@ type CalibrationFinding struct {
 	Message  string                 `json:"message"`
 }
 
-// addFinding records a finding and mirrors its message into the legacy Issues
-// slice, keeping the JSON contract backward compatible.
+// addFinding records a raw finding. Severity and OK are decided afterwards by
+// finalizeFindings, because whether a finding fails the run depends on the
+// validation policy (issue #1944 Batch 4, item I31).
 func (r *CalibrationValidationResult) addFinding(code CalibrationFindingCode, segment, format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	r.OK = false
-	r.Issues = append(r.Issues, msg)
-	r.Findings = append(r.Findings, CalibrationFinding{
-		Code:     code,
-		Severity: CalibrationSeverityError,
-		Segment:  segment,
-		Message:  msg,
+	r.raw = append(r.raw, CalibrationFinding{
+		Code:    code,
+		Segment: segment,
+		Message: fmt.Sprintf(format, args...),
 	})
+}
+
+// finalizeFindings classifies the raw findings under the given policy and fills
+// the outward slices. It mirrors every message into Issues in collection order,
+// keeping the legacy JSON contract byte-compatible for the default (no policy)
+// path.
+func (r *CalibrationValidationResult) finalizeFindings(policy *CalibrationValidationPolicy) {
+	r.Scope = CalibrationScopeFull
+	if policy != nil {
+		r.Scope = policy.EffectiveScope()
+	}
+	r.FreshnessEnforced = r.Scope != CalibrationScopeStructure
+	r.OK = true
+	for _, f := range r.raw {
+		switch {
+		case !r.FreshnessEnforced && IsFreshnessFinding(f.Code):
+			// Freshness is out of scope for this run: still reported, never silent.
+			f.Severity = CalibrationSeverityObservation
+		case policy != nil && policy.Accepts(f.Code, f.Segment):
+			f.Severity = CalibrationSeverityObservation
+		default:
+			f.Severity = CalibrationSeverityError
+		}
+		if f.Severity == CalibrationSeverityError {
+			r.ErrorCount++
+			r.OK = false
+		} else {
+			r.ObservationCount++
+		}
+		r.Issues = append(r.Issues, f.Message)
+		r.Findings = append(r.Findings, f)
+	}
+	r.raw = nil
 }
 
 // ValidateCalibration checks that params.json at path reflects a fresh, structurally
@@ -212,13 +341,51 @@ func (r *CalibrationValidationResult) addFinding(code CalibrationFindingCode, se
 // maxAge bounds file freshness: if the file's mtime is older than now-maxAge,
 // ValidateCalibration reports OK=false with a "file is stale" issue. A typical
 // nightly workflow passes maxAge=48h to absorb weekend gaps.
+//
+// This is the fail-closed entry point (full freshness scope, no accepted
+// findings): every finding is an error. Use ValidateCalibrationWithOptions when
+// a validation policy is in play.
 func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidationResult, error) {
+	return ValidateCalibrationWithOptions(path, CalibrationValidationOptions{MaxAge: maxAge})
+}
+
+// defaultCalibrationMaxAge mirrors the historical 48h default and absorbs
+// weekend gaps.
+const defaultCalibrationMaxAge = 48 * time.Hour
+
+// ValidateCalibrationWithOptions is ValidateCalibration plus a validation policy
+// (issue #1944 Batch 4, item I31).
+//
+// The policy decides two things: whether freshness is part of this run's scope,
+// and which known findings are accepted. Everything not accepted still fails the
+// run, so the gate keeps its teeth while a checkout that structurally cannot be
+// fresh no longer produces a verdict nobody can act on. Accepted findings stay in
+// Findings with severity "observation" — accepted is visible, never silent.
+func ValidateCalibrationWithOptions(path string, opts CalibrationValidationOptions) (*CalibrationValidationResult, error) {
+	maxAge := opts.MaxAge
+	if maxAge <= 0 {
+		maxAge = defaultCalibrationMaxAge
+	}
+	if opts.Policy != nil {
+		if err := opts.Policy.Validate(); err != nil {
+			return nil, fmt.Errorf("calibration validation policy: %w", err)
+		}
+	}
+	res := collectCalibrationFindings(path, maxAge)
+	res.finalizeFindings(opts.Policy)
+	return res, nil
+}
+
+// collectCalibrationFindings runs every check and records raw findings. It does
+// not decide severities or OK — that is finalizeFindings' job — so the same
+// checks serve both the fail-closed and the policy-scoped entry points.
+func collectCalibrationFindings(path string, maxAge time.Duration) *CalibrationValidationResult {
 	res := &CalibrationValidationResult{OK: true}
 
 	info, err := os.Stat(path)
 	if err != nil {
 		res.addFinding(CalibrationFindingParamsStatFailed, "", "params.json stat failed: %v", err)
-		return res, nil
+		return res
 	}
 	res.FileMTime = info.ModTime()
 	res.StaleBy = time.Since(res.FileMTime) - maxAge
@@ -230,13 +397,13 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 	data, err := os.ReadFile(path)
 	if err != nil {
 		res.addFinding(CalibrationFindingParamsReadFailed, "", "params.json read failed: %v", err)
-		return res, nil
+		return res
 	}
 
 	var cfg ParametersConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		res.addFinding(CalibrationFindingParamsInvalidJSON, "", "params.json invalid JSON: %v", err)
-		return res, nil
+		return res
 	}
 
 	res.UpdatedAt = cfg.UpdatedAt
@@ -251,7 +418,7 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 	res.SegmentsCount = len(segments)
 	if len(segments) == 0 {
 		res.addFinding(CalibrationFindingSegmentsEmpty, "", "Industry.ClassificationTree.Value.Segments is empty")
-		return res, nil
+		return res
 	}
 
 	l1IDs := make(map[string]bool)
@@ -283,5 +450,5 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 		res.addFinding(CalibrationFindingNoL1Segments, "", "no L1 (top-level) segments found")
 	}
 
-	return res, nil
+	return res
 }

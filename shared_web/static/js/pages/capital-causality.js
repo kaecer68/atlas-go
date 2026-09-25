@@ -3,11 +3,23 @@
 // Stage 6 PR#2：admin_web「錢潮因果」頁。
 // 從 GET /api/narrative/templates 讀因果模板，依 trigger_theme 篩選，
 // 以 <details> 展開每個 template 的因果步驟。
+//
+// summary 的命中率 badge（issue #1944 Batch 4, item I23）：後端 shipped 值是
+// internal/narrative/templates.go 的手寫先驗常數（hit_rate_source =
+// handwritten_prior），不是回測量測值，因此文案用「先驗命中率」＋來源標記，
+// 映射一律走 shared/narrative-hit-rate.js。
 
 import { silentGetJSON, escapeHtml, renderEmptyState, renderErrorState } from '../shared/app-utils.js';
 import { templateName } from '../names.js';
 import { narrativeThemeLabel } from '../shared/constants.js';
-import { fmtSafePct } from '../shared/format-metric.js';
+import {
+  HIT_RATE_FIELD_LABEL,
+  HIT_RATE_FIELD_TOOLTIP,
+  hitRateDisplayInfo,
+  hitRateTextColor,
+  pickHitRateSource,
+  pickHitRateValue,
+} from '../shared/narrative-hit-rate.js';
 
 let _allTemplates = [];
 let _allModels = [];
@@ -138,7 +150,10 @@ function renderTemplateList() {
   });
 
   list.innerHTML = filtered.map(function (t) {
-    const hitRate = t.hit_rate != null ? t.hit_rate : t.historical_hit_rate;
+    const hitInfo = hitRateDisplayInfo(pickHitRateValue(t), pickHitRateSource(t));
+    const hitBadgeText = hitInfo.hasNumber
+      ? HIT_RATE_FIELD_LABEL + ' ' + hitInfo.text
+      : hitInfo.text;
     const steps = Array.isArray(t.steps) && t.steps.length > 0
       ? t.steps.map(function (s) {
           const label = typeof s === 'string'
@@ -160,7 +175,10 @@ function renderTemplateList() {
       '<details class="cc-item">'
       + '<summary class="cc-item__summary">'
       +   '<span>' + escapeHtml(templateName(t.name || t.id || '-')) + '</span>'
-      +   '<span class="badge info">命中率 ' + fmtSafePct(hitRate, 1) + '</span>'
+      +   '<span class="badge info" style="color:' + hitRateTextColor(hitInfo) + '" title="'
+      +     escapeHtml(HIT_RATE_FIELD_TOOLTIP) + '">' + escapeHtml(hitBadgeText) + '</span>'
+      +   '<span class="badge muted" title="' + escapeHtml(hitInfo.note) + '">'
+      +     escapeHtml(hitInfo.badge) + '</span>'
       +   modelBadge
       + '</summary>'
       + '<div class="cc-item__body">'
