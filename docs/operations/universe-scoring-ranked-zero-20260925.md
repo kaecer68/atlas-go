@@ -8,6 +8,8 @@
 > **與 PR #1979 的關係**：業主 PR **#1979**（`fix/20260925-inert-batch3`）已實作本報告 §6 的
 > 修法選項 1 + 2（接上真實 quote provider、讓 `ranked=0` 不再是靜默值），並已
 > **於 2026-09-25 合併（merge commit `bbce1b4a`）且部署**（見 §9.1 的部署事實）。
+> 部署後的第一次觀察（授權的手動觸發）已在 §9.1.2–9.1.5：**provider 接線證實生效**，
+> 而 `ranked` 的最終值受**非交易日／上游限流**影響，**仍待定**（§9.1.6）。
 > 本報告**不重寫該修法**，而是提供它的「**為什麼**」：根因證據鏈（§3）、引入方式（§4）、
 > 以及為何三個月來四道防線全部失效（§5）；並列出 #1979 **未覆蓋**的缺口與可直接落地的
 > 告警／檢查條件（§6.2、§8）。
@@ -534,7 +536,9 @@ coverage 用 `built` 而非 `ranked`、規則集完全不引用該子系統、�
 
 ## 9. 後續狀態、已知限制與追蹤
 
-### 9.1 部署事實（已證實，唯讀實測）
+### 9.1 部署事實與第一次修法後的觀察（已證實）
+
+#### 9.1.1 部署事實（唯讀實測）
 
 本報告 §1 的所有事實取自 commit `db0709c1`（gate 開啟後、修法合併前的生產狀態）。
 `#1979` 合併後的最新狀態：
@@ -555,10 +559,50 @@ a06f7d2e4aba 2026-09-25 15:09:24 +0800 CST latest
   ⇒ **部署標的 = `bbce1b4a`**（部署驗收另記）。
 - `origin/main` 其後前進到 **`47de2381`**（本報告自身的合併）；差異為 **docs-only**
   ⇒ **功能上與 `bbce1b4a` 無差異**。
-- **修法效果尚未可觀察**：`data/state/universe_snapshot.json` 仍是
-  `timestamp=2026-09-25T06:00:30Z / symbols_ranked=0`，而容器在 07:09Z 才重啟
-  ⇒ 下一次 06:00 UTC（14:00 台北）排程才會產生第一筆 `quotes_status` / `ranked` 證據。
-  **手動 `atlas -build-universe run` 可以提前取得證據，但屬生產執行，需業主核准。**
+- 部署任務包含一項**已授權的手動觸發**（趁部署後立即驗證母體管線），於 `07:10Z` 起在容器內執行
+  `/app/atlas-go -build-universe run`（bounded ≤ 12 分）。以下 9.1.2–9.1.4 為該次執行的觀察。
+
+#### 9.1.2 結論 ①：**provider 接線已證實生效**（部署前為 mock）
+
+| 觀察（執行者於生產取得） | 意義 |
+|---|---|
+| `initialized inner=hybrid-fubon provider_cfg=hybrid` | 真實 provider 已建立；**部署前** CLI 路徑用的是 `marketdata.NewMockProvider()`（§4 第 4 點） |
+| `get_quotes_ok provider=hybrid-fubon symbols=50` / `symbols=39` | 報價實際抓回，且**分批（50/批）**生效 ⇒ 對 1599 檔母體的抓取形狀符合 #1979 的設計 |
+
+⇒ 這是本報告 §3 根因（`Quotes == nil` ⇒ 空 `quoteMap` ⇒ `ranked=0`）的**正面反證**：
+同一條程式路徑在接線後確實能取得報價。
+
+#### 9.1.3 結論 ②：`ranked` 的實際值受**資料可得性**影響，**不是** wiring 失敗
+
+| 觀察 | 意義 |
+|---|---|
+| `finmind: asOf 2026-09-25 is not a Taiwan trading day (weekend or holiday)` | ★ **2026-09-25 非台股交易日**（當日為國定假日）⇒ 該日「當日報價」在資料源端本來就不存在 |
+| `fetch_failed symbol=1605 err="rate limit wait: rate limited" component=fugle` | fugle 端限流 |
+| `health_probe_failed "fubon proxy: … /health: context deadline exceeded"` + `fubon_failed_fallback` | Fubon proxy 逾時 → 回退 |
+
+**明確的判讀紀律**：`ranked` 偏低（甚至為 0）在這種組合下**不可**記為 wiring 失敗。
+必須先排除「非交易日 / 上游限流 / 回退」這三類資料可得性因素，否則就是把 §5 的歸因偏差
+再犯一次（`0` 被誤讀成「市場沒有合格標的」）。
+
+#### 9.1.4 配額與限流的範圍（不是 CLI 造成的偶發）
+
+| 項 | 觀察 | 意義 |
+|---|---|---|
+| FinMind 配額 | `13368 → 13390`（**+22**） | 分批化 + 非交易日拒答**成功保護了 FinMind**（1599 檔未逐檔打） |
+| Fugle 配額 | `236 → 439`（**+203**） | 壓力**落在 fugle**（被當成回退來源反覆嘗試） |
+| 服務自身 log（30 分窗） | `rate limit` 出現 **19 行**；`level=ERROR` **0 行** | ⇒ 「fugle 限流」是**持續性**狀況，**不是** CLI 造成的偶發 |
+
+#### 9.1.5 服務本體全程健康（本次手動觸發未造成中斷）
+
+執行者實測：**24 個容器、0 個 not-running**、`/api/version` **HTTP 200**、服務 log `ERROR = 0`。
+
+#### 9.1.6 待定（**尚未定案，不寫數字**）
+
+- **`symbols_ranked` 的最終值：待定。** 手動觸發在 `07:10Z` 起仍在執行中且容器未重啟
+  ⇒ 本次結果**尚未定案**；下一個觀察點為「本次手動觸發結束」或「下一次 06:00 UTC（14:00 台北）排程」。
+- `ratio ≈ 0.80`（§6）仍是推得的預期值，需在**交易日**以第一方母體重新觀察。
+
+---
 
 ### 9.2 已知限制 (1)：`Reasons` 只收「未解析列」的理由（**刻意取捨**）
 
@@ -609,7 +653,9 @@ Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySub
 8. §7.1–§7.4 四項附帶缺陷（含 §7.2 的算術對帳全部吻合）。
 
 ### 未證實（**不要**當成結論）
-1. **接上 provider 後 `ranked > 0`** —— 未實作、未量測。風險見 §6 選項 1 的 A–D。
+1. **接上 provider 後 `ranked > 0`** —— **尚未定案**。`Quotes` 已由 #1979 接上且
+   「provider 接線生效」已在生產觀察到（§9.1.2），但 `ranked` 的最終值受**非交易日 + fugle 限流 +
+   Fubon 逾時**影響，須待該次手動觸發結束或下一次排程（§9.1.6）。風險見 §6 選項 1 的 A–D。
 2. provider 對 1599 檔的實際呼叫數／配額足跡 —— 未量測。
 3. provider 回傳代號與 `substratePopulation` 鍵是否 100% 對齊 —— 未量測。
 4. `Volume/Last` 的單位語意是否與 `volume_floor_twd` 的設計假設一致 —— 未查證。
