@@ -39,7 +39,7 @@ Fugle 有 **5 個消費層**，全部共用同一個 `GetSharedFugleClient` sing
 
 ## 3. 交易日機制接入點（假日/非交易日防範）
 
-`isTaiwanTradingDay`（`internal/marketdata/calendar.go`，含 2023-2030 農曆假日表）**必須接入**所有「以當日為 asOf 的行情取得路徑」：
+`isTaiwanTradingDay`（`internal/marketdata/calendar.go`，含 2021-2040 農曆假日表；表外年份不可判定，不猜日期，見 [`../specs/event-calendar-date-invariants-spec.md`](../specs/event-calendar-date-invariants-spec.md) §5）**必須接入**所有「以當日為 asOf 的行情取得路徑」：
 
 | 已接入 | 路徑 |
 |--------|------|

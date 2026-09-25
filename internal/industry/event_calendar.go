@@ -126,15 +126,22 @@ func (e CalendarEvent) String() string {
 
 // EventRule defines how to compute event dates dynamically for a given year.
 type EventRule struct {
-	EventType          string
-	Name               string
-	ComputeStartDate   func(year int) time.Time
-	ComputeEndDate     func(year int) time.Time
-	ComputePeakDate    func(year int) time.Time
-	Direction          string
-	BaseWeight         float64
-	DecayDays          int
-	AffectedIndustries []string
+	EventType        string
+	Name             string
+	ComputeStartDate func(year int) time.Time
+	ComputeEndDate   func(year int) time.Time
+	ComputePeakDate  func(year int) time.Time
+	// ComputePeakDateInMonth computes the peak of ONE monthly occurrence of the
+	// rule. It is required for rules that are instantiated once per month
+	// (futures_settlement, investor_conference): ComputePeakDate is year-scoped,
+	// so a per-month instantiation that used it carried the same date in every
+	// month (D1 of issue #1973). Rules not instantiated per month may leave it
+	// nil.
+	ComputePeakDateInMonth func(year int, month time.Month) time.Time
+	Direction              string
+	BaseWeight             float64
+	DecayDays              int
+	AffectedIndustries     []string
 }
 
 // EventCalendar is the engine that manages Taiwan market calendar events.
@@ -279,11 +286,19 @@ func (tec *EventCalendar) filterByQualityGate(events []CalendarEvent) []Calendar
 // ---------------------------------------------------------------------------
 //
 // P1-8: these maps are DERIVED from the single-source internal/taiwanholidays
-// package (verified 2023-2040). They exist as package-level maps so existing
-// callers (event rules, tests) keep indexing by year; the canonical data lives
-// in taiwanholidays and cannot drift. Out-of-range years fall back to the
-// conventional dates below (same conventions as before).
+// package (verified range: see GetLunarCoverageYears). They exist as
+// package-level maps so existing callers (event rules, tests) keep indexing by
+// year; the canonical data lives in taiwanholidays and cannot drift.
+//
+// #1973 D3: an out-of-range year no longer falls back to a conventional date.
+// A missing key now means "not determinable" and the affected rule omits its
+// occurrence (see LunarYearDeterminable) instead of fabricating a date that
+// downstream consumers cannot distinguish from a verified one.
 
+// A missing key means the year is outside the verified lunar range: the rule
+// builders below treat it as "not determinable" and omit the occurrence instead
+// of substituting a placeholder date (issue #1973 D3). The canonical data lives
+// in taiwanholidays and cannot drift.
 var (
 	// lunarNewYearDates maps year to lunar new year (春節) date in Asia/Taipei.
 	lunarNewYearDates = taiwanholidays.LunarNewYearDates()
@@ -295,12 +310,23 @@ var (
 	tombSweepingDates = taiwanholidays.TombSweepingDates()
 )
 
-// GetLunarCoverageYears returns the effective coverage range of the lunar calendar
-// system. Since ST-8 (lunar automation), the range is effectively unbounded;
-// the returned values indicate the verified hardcoded cache range (2023-2030).
-// Callers should treat any year as computable.
+// GetLunarCoverageYears returns the verified coverage range of the lunar
+// calendar tables. Only years inside it can produce the moving holidays
+// (春節/清明/端午/中秋); outside it those dates are NOT determinable and the
+// calendar omits the occurrences rather than inventing a date (issue #1973 D3).
+// Consumers that need a complete event population MUST compare their year with
+// this range (or call LunarYearDeterminable) and treat the rest as
+// "not determinable", not as "no event".
 func GetLunarCoverageYears() (int, int) {
 	return taiwanholidays.CoverageYears()
+}
+
+// LunarYearDeterminable reports whether the moving (lunar) Taiwan holidays can
+// be determined for year — i.e. whether the lunar tables are verified for it.
+// When it returns false, `spring_festival` and the four lunar `long_holiday`
+// occurrences generate NO event for that year, by design.
+func LunarYearDeterminable(year int) bool {
+	return taiwanholidays.VerifiedLunarYear(year)
 }
 
 // taiwanHoliday is a fixed-date or lookup-based Taiwan public holiday.
@@ -311,34 +337,19 @@ type taiwanHoliday struct {
 	Day     int                      // used when Compute is nil
 }
 
+// taiwanPublicHolidays lists the holidays that produce one long_holiday
+// occurrence each. A `Compute` holiday returns the zero time when the year is
+// outside the verified lunar range; the occurrence is then omitted rather than
+// given a conventional placeholder date (issue #1973 D3), so `Compute` must
+// never substitute a guessed date.
 var taiwanPublicHolidays = []taiwanHoliday{
 	{Name: "元旦", Month: 1, Day: 1},
-	{Name: "春節", Compute: func(y int) time.Time {
-		if d, ok := lunarNewYearDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 2, 1, 0, 0, 0, 0, time.UTC)
-	}},
+	{Name: "春節", Compute: func(y int) time.Time { return lunarNewYearDates[y] }},
 	{Name: "228和平紀念日", Month: 2, Day: 28},
-	{Name: "清明節", Compute: func(y int) time.Time {
-		if d, ok := tombSweepingDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 4, 5, 0, 0, 0, 0, time.UTC)
-	}},
+	{Name: "清明節", Compute: func(y int) time.Time { return tombSweepingDates[y] }},
 	{Name: "勞動節", Month: 5, Day: 1},
-	{Name: "端午節", Compute: func(y int) time.Time {
-		if d, ok := lunarDragonBoatDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 6, 10, 0, 0, 0, 0, time.UTC)
-	}},
-	{Name: "中秋節", Compute: func(y int) time.Time {
-		if d, ok := lunarMidAutumnDates[y]; ok {
-			return d
-		}
-		return time.Date(y, 9, 20, 0, 0, 0, 0, time.UTC)
-	}},
+	{Name: "端午節", Compute: func(y int) time.Time { return lunarDragonBoatDates[y] }},
+	{Name: "中秋節", Compute: func(y int) time.Time { return lunarMidAutumnDates[y] }},
 	{Name: "國慶日", Month: 10, Day: 10},
 }
 
@@ -363,6 +374,24 @@ func thirdFriday(year int, month time.Month) time.Time {
 // thirdWednesday returns the 3rd Wednesday of the given month.
 func thirdWednesday(year int, month time.Month) time.Time {
 	return nthWeekdayOfMonth(year, month, time.Wednesday, 3)
+}
+
+// addDaysIfSet shifts d by days and returns the zero time when d is unset. It
+// keeps a rule's derived dates (e.g. spring festival start/end) "not
+// determinable" whenever the base date is (issue #1973 D3).
+func addDaysIfSet(d time.Time, days int) time.Time {
+	if d.IsZero() {
+		return time.Time{}
+	}
+	return d.AddDate(0, 0, days)
+}
+
+// midMonth returns the 15th of the given month — the conventional peak of a
+// season that spans a whole calendar month (see EventRule.ComputePeakDateInMonth).
+// Day 15 exists in every Gregorian month, so the result is always inside the
+// month's own [first, last] window.
+func midMonth(year int, month time.Month) time.Time {
+	return time.Date(year, month, 15, 0, 0, 0, 0, time.UTC)
 }
 
 // lastBusinessDay returns the last business day of the given month.
@@ -411,6 +440,63 @@ func dateInRange(t, start, end time.Time) bool {
 }
 
 // ---------------------------------------------------------------------------
+// Occurrence date invariants (issue #1973)
+// ---------------------------------------------------------------------------
+
+// Reasons an occurrence can fail the date invariants. Both are semantic errors,
+// not cosmetics: they make the occurrence unusable as event ground truth.
+const (
+	// InvariantReasonInvertedWindow: StartDate > EndDate, so
+	// dateInRange(now, StartDate, EndDate) can never match and
+	// DetectActiveEvents / GetEventAdjustment / GetCompositeEventSentiment never
+	// see the occurrence at all.
+	InvariantReasonInvertedWindow = "inverted_window"
+	// InvariantReasonPeakOutsideWindow: PeakDate lies outside
+	// [StartDate, EndDate], so every consumer that reads PeakDate as "the day of
+	// this occurrence" (toRawEvent.EffectiveDate, GetEventTimeline's Active
+	// marker, any peak-anchored backtest or evaluation) measures a date that is
+	// not part of the occurrence.
+	InvariantReasonPeakOutsideWindow = "peak_outside_window"
+)
+
+// DateInvariantViolation is one occurrence whose own three dates contradict
+// each other.
+type DateInvariantViolation struct {
+	EventID string
+	Reason  string
+	Start   time.Time
+	Peak    time.Time
+	End     time.Time
+}
+
+// CheckDateInvariants returns one violation per occurrence that breaks
+//
+//	StartDate <= EndDate  and  StartDate <= PeakDate <= EndDate
+//
+// It is the guard behind issue #1973 D1 (a year-fixed peak reused by every
+// monthly occurrence) and D2 (a window built from two different week anchors,
+// which inverted Start/End). RefreshEvents logs every violation it finds; the
+// invariant tests assert the list stays empty for the supported years.
+func CheckDateInvariants(events []CalendarEvent) []DateInvariantViolation {
+	var violations []DateInvariantViolation
+	for _, evt := range events {
+		switch {
+		case evt.EndDate.Before(evt.StartDate):
+			violations = append(violations, DateInvariantViolation{
+				EventID: evt.ID, Reason: InvariantReasonInvertedWindow,
+				Start: evt.StartDate, Peak: evt.PeakDate, End: evt.EndDate,
+			})
+		case evt.PeakDate.Before(evt.StartDate) || evt.PeakDate.After(evt.EndDate):
+			violations = append(violations, DateInvariantViolation{
+				EventID: evt.ID, Reason: InvariantReasonPeakOutsideWindow,
+				Start: evt.StartDate, Peak: evt.PeakDate, End: evt.EndDate,
+			})
+		}
+	}
+	return violations
+}
+
+// ---------------------------------------------------------------------------
 // Default event rules
 // ---------------------------------------------------------------------------
 
@@ -418,26 +504,22 @@ func defaultEventRules() map[string]EventRule {
 	rules := make(map[string]EventRule)
 
 	// Spring Festival (春節前後) — bullish before and after
+	// All three dates come from the verified lunar new year. When the year is
+	// outside the verified range they are the zero time, and RefreshEvents
+	// omits the occurrence instead of evaluating a fabricated 02-01 peak
+	// (issue #1973 D3: 2021 春節 was reported as 02-01, real 02-12, and the
+	// invented window 01-27..02-11 missed the actual holiday entirely).
 	rules["spring_festival"] = EventRule{
 		EventType: "spring_festival",
 		Name:      "春節前後",
 		ComputePeakDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC)
+			return lunarNewYearDates[year]
 		},
 		ComputeStartDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d.AddDate(0, 0, -5)
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -5)
+			return addDaysIfSet(lunarNewYearDates[year], -5)
 		},
 		ComputeEndDate: func(year int) time.Time {
-			if d, ok := lunarNewYearDates[year]; ok {
-				return d.AddDate(0, 0, 10)
-			}
-			return time.Date(year, 2, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, 10)
+			return addDaysIfSet(lunarNewYearDates[year], 10)
 		},
 		Direction:          "bullish",
 		BaseWeight:         0.60,
@@ -578,6 +660,12 @@ func defaultEventRules() map[string]EventRule {
 		ComputePeakDate: func(year int) time.Time {
 			return time.Date(year, time.July, 15, 0, 0, 0, 0, time.UTC)
 		},
+		// One occurrence per season month (Jan/Apr/Jul/Oct); the season peak of
+		// each is mid-month. The July value is unchanged (7/15), the other three
+		// months now peak in their own month instead of reusing 7/15 (D1, #1973).
+		ComputePeakDateInMonth: func(year int, month time.Month) time.Time {
+			return midMonth(year, month)
+		},
 		Direction:          "bullish",
 		BaseWeight:         0.60,
 		DecayDays:          14,
@@ -667,6 +755,11 @@ func defaultEventRules() map[string]EventRule {
 		ComputePeakDate: func(year int) time.Time {
 			return thirdWednesday(year, time.June)
 		},
+		// Settlement is the 3rd Wednesday OF THAT MONTH, so the per-month
+		// occurrence must peak on its own month's 3rd Wednesday (D1, #1973).
+		ComputePeakDateInMonth: func(year int, month time.Month) time.Time {
+			return thirdWednesday(year, month)
+		},
 		Direction:          "bearish",
 		BaseWeight:         0.60,
 		DecayDays:          2,
@@ -727,10 +820,15 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 			continue
 		}
 
-		// Handle long holidays — one event per public holiday
+		// Handle long holidays — one event per public holiday. A holiday whose
+		// date is not determinable for the year (lunar holiday outside the
+		// verified range) is skipped by the builder, never dated with a guess.
 		if rule.EventType == "long_holiday" {
 			for _, h := range taiwanPublicHolidays {
-				evt := tec.buildHolidayEvent(rule, h, year)
+				evt, ok := tec.buildHolidayEvent(rule, h, year)
+				if !ok {
+					continue
+				}
 				allEvents = append(allEvents, evt)
 			}
 			continue
@@ -808,12 +906,33 @@ func (tec *EventCalendar) RefreshEvents(now time.Time) {
 			continue
 		}
 
-		// Default: single event for the year
-		evt := tec.buildSingleEvent(rule, year)
+		// Default: single event for the year. A rule whose dates are not
+		// determinable (spring_festival outside the verified lunar range) is
+		// skipped rather than dated with a placeholder (D3, #1973).
+		evt, ok := tec.buildSingleEvent(rule, year)
+		if !ok {
+			continue
+		}
 		allEvents = append(allEvents, evt)
 	}
 
 	allEvents = tec.filterByQualityGate(allEvents)
+
+	// Invariant guard (#1973): every occurrence must satisfy
+	// StartDate <= PeakDate <= EndDate. The violations this catches are exactly
+	// the two shapes the issue reports (a year-fixed peak outside the
+	// occurrence's window, and an inverted window that DetectActiveEvents can
+	// never match), so a future rule change cannot reintroduce them silently.
+	for _, v := range CheckDateInvariants(allEvents) {
+		logging.Warn("event_calendar", "event_date_invariant_violation",
+			"event_id", v.EventID,
+			"reason", v.Reason,
+			"start", v.Start.Format("2006-01-02"),
+			"peak", v.Peak.Format("2006-01-02"),
+			"end", v.End.Format("2006-01-02"),
+		)
+	}
+
 	tec.events = allEvents
 }
 
@@ -954,6 +1073,31 @@ func (tec *EventCalendar) GetAllEvents() []CalendarEvent {
 // Event construction helpers
 // ---------------------------------------------------------------------------
 
+// dateUnavailableWarned tracks (event type, year) pairs already reported as not
+// determinable, so repeated calendar refreshes do not log the same gap.
+var dateUnavailableWarned sync.Map
+
+// warnEventDateUnavailable reports once per (event type, year) that an
+// occurrence was omitted because its date cannot be determined. Omission is
+// deliberate: a guessed date is indistinguishable from a verified one
+// downstream, which is exactly how a placeholder 2021 春節 peak reached
+// consumers (issue #1973 D3). The occurrence is therefore never generated.
+func warnEventDateUnavailable(eventType, name string, year int) {
+	key := fmt.Sprintf("%s/%d", eventType, year)
+	if _, loaded := dateUnavailableWarned.LoadOrStore(key, true); loaded {
+		return
+	}
+	minYear, maxYear := GetLunarCoverageYears()
+	logging.Warn("event_calendar", "event_date_unavailable",
+		"event_type", eventType,
+		"name", name,
+		"year", year,
+		"lunar_verified_from", minYear,
+		"lunar_verified_to", maxYear,
+		"note", "occurrence omitted: its date is not determinable for this year (no fabricated placeholder)",
+	)
+}
+
 func (tec *EventCalendar) buildEventFromRule(rule EventRule, year int, month time.Month) CalendarEvent {
 	startDate := lastTwoWeekStart(year, month)
 	endDate := time.Date(year, month+1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
@@ -979,9 +1123,17 @@ func (tec *EventCalendar) buildEventFromRule(rule EventRule, year int, month tim
 	}
 }
 
+// buildMonthlyEvent builds ONE monthly occurrence of a rule. The occurrence's
+// window is its own calendar month, so its peak must be inside that month:
+// rule.ComputePeakDate is year-scoped and therefore only usable when the rule
+// does not claim the month (D1 of issue #1973 — using it for every month made
+// 11/12 futures_settlement and 3/4 investor_conference occurrences carry a peak
+// that belonged to another month).
 func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time.Month) CalendarEvent {
-	peakDate := rule.ComputePeakDate(year)
-	// For generic monthly events, set peak mid-month
+	peakDate := midMonth(year, month)
+	if rule.ComputePeakDateInMonth != nil {
+		peakDate = rule.ComputePeakDateInMonth(year, month)
+	}
 	startDate := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(year, month+1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
 	if month == time.December {
@@ -1006,12 +1158,20 @@ func (tec *EventCalendar) buildMonthlyEvent(rule EventRule, year int, month time
 	}
 }
 
-func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, year int) CalendarEvent {
+// buildHolidayEvent builds one long_holiday occurrence around holiday h. It
+// reports ok=false (and logs once) when the holiday's date is not determinable
+// for year — i.e. a lunar holiday outside the verified range — so the
+// occurrence is omitted instead of being dated with a placeholder (D3, #1973).
+func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, year int) (CalendarEvent, bool) {
 	var holidayDate time.Time
 	if h.Compute != nil {
 		holidayDate = h.Compute(year)
 	} else {
 		holidayDate = time.Date(year, time.Month(h.Month), h.Day, 0, 0, 0, 0, time.UTC)
+	}
+	if holidayDate.IsZero() {
+		warnEventDateUnavailable(rule.EventType, h.Name, year)
+		return CalendarEvent{}, false
 	}
 
 	startDate := holidayDate.AddDate(0, 0, -3)
@@ -1032,12 +1192,24 @@ func (tec *EventCalendar) buildHolidayEvent(rule EventRule, h taiwanHoliday, yea
 		DecayDays:           rule.DecayDays,
 		AffectedIndustries:  rule.AffectedIndustries,
 		SentimentAdjustment: 0.0,
-	}
+	}, true
 }
 
+// buildPositionBuildingEvent builds one 卡位行情 occurrence: the week that
+// immediately PRECEDES the quarter-end window-dressing window (window_dressing
+// covers the last two weeks of the month), so the position-building window
+// closes the day before that window opens.
+//
+// D2 of issue #1973: the previous implementation took StartDate from
+// lastWeekStart (start of the LAST week of the month) and EndDate from
+// lastTwoWeekStart (two weeks before month end) minus one day. The second anchor
+// is 8 days earlier than the first, so every occurrence had
+// StartDate > EndDate and dateInRange could never match it: the event type was
+// effectively inert (DetectActiveEvents / GetEventAdjustment always 0).
 func (tec *EventCalendar) buildPositionBuildingEvent(rule EventRule, year int, month time.Month) CalendarEvent {
-	startDate := lastWeekStart(year, month)
-	windowStart := lastTwoWeekStart(year, month)
+	dressingStart := lastTwoWeekStart(year, month) // == window_dressing's StartDate
+	endDate := dressingStart.AddDate(0, 0, -1)     // last day before the dressing window
+	startDate := endDate.AddDate(0, 0, -6)         // a 7-day window ending there
 
 	return CalendarEvent{
 		ID:                  fmt.Sprintf("%s_%d_%02d", rule.EventType, year, month),
@@ -1049,7 +1221,7 @@ func (tec *EventCalendar) buildPositionBuildingEvent(rule EventRule, year int, m
 		BaseWeight:          rule.BaseWeight,
 		Active:              false,
 		StartDate:           startDate,
-		EndDate:             windowStart.AddDate(0, 0, -1),
+		EndDate:             endDate,
 		PeakDate:            startDate.AddDate(0, 0, 2),
 		DecayDays:           rule.DecayDays,
 		AffectedIndustries:  rule.AffectedIndustries,
@@ -1172,7 +1344,20 @@ func (tec *EventCalendar) buildRevenueEvent(rule EventRule, year int, month time
 	}
 }
 
-func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEvent {
+// buildSingleEvent builds the one occurrence a year-scoped rule produces. It
+// reports ok=false (and logs once) when the rule's dates are not determinable
+// (zero), which today only happens for spring_festival in a year outside the
+// verified lunar range — the occurrence is then omitted rather than dated with
+// a placeholder (D3, #1973).
+func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) (CalendarEvent, bool) {
+	startDate := rule.ComputeStartDate(year)
+	endDate := rule.ComputeEndDate(year)
+	peakDate := rule.ComputePeakDate(year)
+	if startDate.IsZero() || endDate.IsZero() || peakDate.IsZero() {
+		warnEventDateUnavailable(rule.EventType, rule.Name, year)
+		return CalendarEvent{}, false
+	}
+
 	return CalendarEvent{
 		ID:                  fmt.Sprintf("%s_%d", rule.EventType, year),
 		Name:                rule.Name,
@@ -1182,13 +1367,13 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) CalendarEve
 		Direction:           rule.Direction,
 		BaseWeight:          rule.BaseWeight,
 		Active:              false,
-		StartDate:           rule.ComputeStartDate(year),
-		EndDate:             rule.ComputeEndDate(year),
-		PeakDate:            rule.ComputePeakDate(year),
+		StartDate:           startDate,
+		EndDate:             endDate,
+		PeakDate:            peakDate,
 		DecayDays:           rule.DecayDays,
 		AffectedIndustries:  rule.AffectedIndustries,
 		SentimentAdjustment: 0.0,
-	}
+	}, true
 }
 
 // ---------------------------------------------------------------------------

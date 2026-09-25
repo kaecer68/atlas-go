@@ -81,25 +81,38 @@ func TestIndustryEcosystemIntegration(t *testing.T) {
 		t.Error("expected events for 2026")
 	}
 
-	// Refresh for a year outside the original hardcoded range
+	// Refresh for a year whose lunar tables are NOT verified. The deterministic
+	// (fixed-date and rule-based) events must still be produced, but the calendar
+	// must NOT invent a spring festival / lunar holiday date for that year
+	// (issue #1973 D3): the moving holidays are "not determinable" there, which
+	// LunarYearDeterminable reports, and the occurrences are omitted instead of
+	// being dated with a conventional placeholder.
 	now2049 := time.Date(2049, 2, 10, 0, 0, 0, 0, time.UTC)
+	if LunarYearDeterminable(2049) {
+		t.Fatal("2049 is outside the verified lunar range and must not be determinable")
+	}
 	cal.RefreshEvents(now2049)
 	events2049 := cal.GetAllEvents()
 	if len(events2049) == 0 {
-		t.Error("expected events for 2049 (lunar auto-computation)")
+		t.Error("expected the non-lunar events for 2049")
 	}
-
-	// Verify spring festival is active around lunar new year 2049
-	active := cal.DetectActiveEvents(now2049)
-	hasSpring := false
-	for _, e := range active {
-		if len(e.ID) >= len("spring_festival") && e.ID[:len("spring_festival")] == "spring_festival" {
-			hasSpring = true
-			break
+	longHolidays := 0
+	for _, e := range events2049 {
+		if e.EventType == string(EventSpringFestival) {
+			t.Errorf("spring_festival must be omitted for 2049 (lunar table unverified), got %s", e.ID)
+		}
+		if e.EventType == string(EventLongHoliday) {
+			longHolidays++
+			for _, lunar := range []string{"春節", "清明節", "端午節", "中秋節"} {
+				if e.Name == "連假 - "+lunar {
+					t.Errorf("lunar long_holiday %q must be omitted for 2049, got %s", lunar, e.ID)
+				}
+			}
 		}
 	}
-	if !hasSpring {
-		t.Error("expected spring_festival active near 2049 lunar new year")
+	// Only the four fixed-date holidays (元旦/228/勞動節/國慶日) remain.
+	if longHolidays != 4 {
+		t.Errorf("2049 long_holiday occurrences = %d, want 4 fixed-date only", longHolidays)
 	}
 
 	// 7. End-to-end: event adjustment for a known industry
