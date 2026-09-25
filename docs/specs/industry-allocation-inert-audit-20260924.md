@@ -350,12 +350,41 @@ make ci-gate
 **生產尺度證據（本批新增測試，真實輸出）**
 
 ```
+# 1) pipeline 層（stub provider，CI 永遠可跑）
 go test ./internal/monitoring/ -run TestBuildUniverse_ProductionScaleChunkedFetchRanksSymbols -v
-  symbols_gathered count=1599
-  industry_filter_ok input=1599 output=1599
+  symbols_gathered count=1599 / industry_filter_ok input=1599 output=1599
   scoring_ok input=1599 ranked=150
   input=1599 ranked=150 chunks=32 chunks_failed=0 quotes_returned=1599 quotes_status=ok
+
+# 2) 生產 wiring（cmd/atlas：newUniverseBuilderDepsWithQuotes + BuildUniverse）
+#    母體清單 = cmd/atlas/testdata/universe_scale_symbols.txt（第一方 symbol_industry
+#    通道實抓：total=1988 mapped=1599 unmapped=379，與生產 count=1599 一致）
+go test ./cmd/atlas/ -run TestBuildUniverseProductionScale_RealSymbolList -v
+  symbols_gathered count=1599 / industry_filter_ok input=1599 output=1599
+  scoring_filters input=1599 no_quote=219 zero_volume=0 below_turnover_floor=58 below_price_floor=0 lots_converted=0 survivors=1322
+  scoring_ok input=1599 ranked=150
+  quotes: status=ok returned=1380 excluded=0 ranked_trustworthy=true
+  fetch_widths=[50 ×31, 49, 150]   ← Step 3 分批；最後 150 是 Layer 2.5 的風險複核
+
+# 3) 真實 provider 端到端（env-gated，預設 skip；本機唯讀打公開 TWSE 端點，未觸生產機）
+ATLAS_TEST_UNIVERSE_LIVE=1 go test ./cmd/atlas -run ProductionScale_LiveQuoteProvider -v
+  get_quotes_ok provider=hybrid-twse symbols=900
+  scoring_ok input=1599 ranked=150   ← 真實 1,599 檔母體 + 真實第一方報價不再歸零
 ```
+
+**成交量單位（第二個阻擋因素，本批已接線換算）**
+
+| 事實 | 證據 |
+|---|---|
+| TWSE（第一方）的 `Volume` 是**股**（成交股數） | `internal/marketdata/twse_openapi.go` `convertToQuote`；live 實測 `max_volume=542,503,236`（股）且 `成交金額 ≈ volume × price` |
+| Fugle / fubon-neo 的 `Volume` 是**張**（成交張數） | Fugle 官方 Candles 文件「整股：成交張數」；官方 Quote 範例 `tradeValue 31,019,803,000 ÷ tradeVolume 54,538 = avgPrice 568.77 × 1000`（若為股則與同 payload 的 310 億金額自相矛盾）；`services/fubon-proxy/main.py` 直接把 `total.tradeVolume` 當 volume 回傳 |
+| 後果 | 量價過濾用 `Volume × Last` 對 NT$10M 門檻 ⇒ 以「張」計的報價把門檻實質變成 **NT$10bn**，中型股以下幾乎全滅，且 `quotes_status` 仍為 `ok`（靜默） |
+
+處置：在**導出 TWD 量能的那一處**做 provider 來源別換算（`internal/monitoring/universe_builder.go` 的 `quoteVolumeLotSources` / `quoteVolumeInShares`：`fugle`／`fugle_candles`／`fubon` ×1000，其餘（`twse`／`finmind`／未知來源）視為股，行為與過去完全相同），換算筆數記入 `filterStats.LotsConverted` 與 `scoring_filters` 的 `lots_converted`，讓單位不符不再靜默。證據：`TestQuoteVolumeInShares_TranslatesLotsProviders`、`TestTurnoverFloor_IsUnitInvariant`（同一筆交易以「張」或「股」表述必須得到相同判定）、`TestTurnoverFloor_LotsQuoteBelowFloorStillDrops`（換算不會讓門檻失效）、`TestFilterStatsLotsConvertedIsRecorded`。
+
+**追蹤（未修，需另票）**：`domain.Quote.Volume` 目前**一個欄位兩種單位**。正解是在 provider 邊界統一（Fugle×1000、Fubon proxy×1000），但那同時影響 ①`screener` 的 `VolumeIntraday` 條件語意、②`ledger` 已存的歷史 quote（會出現新舊混單位）、③dashboard/stocktools 顯示（台股慣例顯示「張」）⇒ 屬跨模組契約決策；本批只做上述單點換算並留下 tripwire 測試（`internal/marketdata/twse_stock_day_all_volume_test.go`）。
+
+**其他覆蓋率事實（明示，未修）**：預設 `ATLAS_MARKET_DATA_PROVIDER=twse` 的 `STOCK_DAY_ALL` 只含上市，1,599 檔母體中僅 **900 檔**有報價（`no_quote=699`，44%）⇒ 上櫃（TPEx）半邊結構性無法進排名（缺 TPEx 日行情來源）；`hybrid` 路徑可涵蓋但成本較高。`ATLAS_MARKET_DATA_PROVIDER=fubon` 不是 `selectProvider` 的分支（只有 fugle/twse/hybrid/default），會靜默落到 hybrid，而 `configs/allowed_env_vars.md` 卻把它列為合法值。
 
 **gate off 時的語意（業主第 3 點）**：quote provider **無條件**接線，因此 gate off（`substrate=nil`）時母體回到分類樹的 ~27 檔代表股，但同樣會抓 quote ⇒ `symbols_ranked` 由 0 變成 >0。這是刻意的（`symbols_ranked=0` 從來不是「市場沒有合格股」的合法表達，而是 I25 的 bug 症狀），已在 spec §9.1 與 PR body 明示；snapshot 的 `quotes_status`/`ranked_trustworthy` 讓兩種 gate 狀態都可稽核。
 

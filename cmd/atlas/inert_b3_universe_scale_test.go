@@ -385,9 +385,31 @@ func runProductionScalePipeline(t *testing.T, symbols []string, source string) {
 		t.Errorf("industry_filter_ok output = %d, want %d (the production filter passes the whole population)",
 			result.SymbolsFiltered, scalePopulation)
 	}
-	if provider.RequestedMax != scalePopulation {
-		t.Errorf("quote provider was asked for at most %d symbols, want the whole filtered population %d (calls: %v)",
-			provider.RequestedMax, scalePopulation, provider.RequestedPerCall)
+	// Step 3 must still cover the WHOLE filtered population, but in bounded
+	// chunks: the pipeline asks the provider for at most
+	// monitoring.DefaultQuoteChunkSize symbols per call because a single
+	// all-population request is unsafe (the fubon-proxy "batch" endpoint is a
+	// per-symbol loop, and a single incomplete quote makes HybridProvider fall
+	// back to a per-symbol provider). This assertion originally pinned "one call
+	// for the whole population", which was the pre-chunking shape; the intent —
+	// no symbol is left unasked — is preserved and strengthened by also pinning
+	// the per-call bound.
+	chunk := monitoring.DefaultQuoteChunkSize
+	wantStep3Calls := (scalePopulation + chunk - 1) / chunk
+	if len(provider.RequestedPerCall) < wantStep3Calls {
+		t.Fatalf("Step 3 made %d quote calls, want %d chunked calls covering %d symbols",
+			len(provider.RequestedPerCall), wantStep3Calls, scalePopulation)
+	}
+	covered := 0
+	for i, width := range provider.RequestedPerCall[:wantStep3Calls] {
+		if width > chunk {
+			t.Errorf("Step 3 call %d asked for %d symbols, want <= %d (chunk bound)", i, width, chunk)
+		}
+		covered += width
+	}
+	if covered != scalePopulation {
+		t.Errorf("Step 3 asked for %d symbols across %d chunks, want the whole filtered population %d (calls: %v)",
+			covered, wantStep3Calls, scalePopulation, provider.RequestedPerCall)
 	}
 	if result.QuotesStatus != monitoring.QuotesStatusOK {
 		t.Errorf("quotes_status = %q, want %q", result.QuotesStatus, monitoring.QuotesStatusOK)

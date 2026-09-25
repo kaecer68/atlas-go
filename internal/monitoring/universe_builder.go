@@ -405,6 +405,7 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 		"zero_volume", stats.ZeroVolume,
 		"below_turnover_floor", stats.BelowTurnoverFloor,
 		"below_price_floor", stats.BelowPriceFloor,
+		"lots_converted", stats.LotsConverted,
 		"survivors", stats.Passed)
 
 	// Binary pass/fail via the injected screener.
@@ -443,8 +444,51 @@ type filterStats struct {
 	BelowTurnoverFloor int
 	// BelowPriceFloor counts symbols priced under PriceMin.
 	BelowPriceFloor int
+	// LotsConverted counts quotes whose provider reports 成交張數 (LOTS) and
+	// therefore had to be converted to shares before the turnover comparison
+	// (see quoteVolumeLotSources). A non-zero value on a run that ranks
+	// normally is expected for Fugle/Fubon-backed providers; a value equal to
+	// the input size means every quote came from such a provider.
+	LotsConverted int
 	// Passed is the number of survivors.
 	Passed int
+}
+
+// quoteVolumeLotSources names the provider Sources whose Quote.Volume is a LOT
+// (成交張數) count instead of a SHARE (成交股數) count.
+//
+// Evidence (issue #1944 Batch 3, I25 production-scale report): the Fugle
+// market-data REST quote reports `volume` as 成交張數 for regular-board stocks
+// (official docs: "整股：成交張數"), which its own published sample confirms —
+// tradeValue 31,019,803,000 / tradeVolume 54,538 = avgPrice 568.77 × 1000 — and
+// `fubon-neo` embeds the same Fugle market-data client, so services/fubon-proxy
+// passes the identical value through. The first-party TWSE source puts 成交股數
+// (shares) in the same field, and so do the FinMind and mock providers.
+//
+// This table is therefore a translation applied exactly where a TWD magnitude is
+// derived (turnover = Volume × Last), not a claim that the field has one meaning:
+// the canonical fix is to normalise at the provider boundary so that
+// domain.Quote.Volume has a single unit everywhere, which also touches ledger
+// history, dashboard display and screener criteria — registered as a follow-up
+// (see docs/specs/industry-allocation-inert-audit-20260924.md §9.2/§9.6).
+var quoteVolumeLotSources = map[string]bool{
+	"fugle":         true,
+	"fugle_candles": true,
+	"fubon":         true,
+}
+
+// quoteVolumeLotsPerShare is the conversion factor between the two units.
+const quoteVolumeLotsPerShare = 1000
+
+// quoteVolumeInShares returns the share-denominated volume of q, plus whether a
+// lots→shares conversion was applied. An empty or unknown Source is treated as
+// shares (the first-party TWSE convention) so the behavior for every provider
+// that does not declare itself here stays exactly as it was.
+func quoteVolumeInShares(q domain.Quote) (int64, bool) {
+	if quoteVolumeLotSources[strings.ToLower(strings.TrimSpace(q.Source))] {
+		return q.Volume * quoteVolumeLotsPerShare, true
+	}
+	return q.Volume, false
 }
 
 // applyVolumeAndPriceFilters drops symbols that lack quotes or fail the
@@ -462,22 +506,18 @@ func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes m
 			stats.ZeroVolume++
 			continue
 		}
-		// Approximate TWD volume: Volume * Last. This product is only a TWD
-		// turnover if Volume is a SHARE count (股), which is what the TWSE
-		// first-party field 成交股數 carries. It is NOT true for every
-		// provider: the Fugle and Fubon market-data clients report
-		// 成交張數 (LOTS) for regular-board stocks (official docs: "整股：成交
-		// 張數"; fubon-neo embeds the Fugle marketdata client), and
-		// server-side they put that value into domain.Quote.Volume unchanged.
-		// A lot-denominated quote understates turnover 1000x, so with a
-		// Fugle/Fubon quote behind the pipeline this floor drops nearly the
-		// whole population and the resulting small ranking is NOT a market
-		// verdict. Tracked in the scale report for issue #1944 I25; the fix is
-		// a provider-boundary normalisation, which is a cross-module decision
-		// (ledger history, dashboard display, screener criteria all read the
-		// same field).
+		// Approximate TWD volume: Volume * Last, with the provider's unit
+		// translated to shares first (quoteVolumeInShares). Without that
+		// translation a lot-denominated Fugle/Fubon quote understates turnover
+		// 1000x and this floor silently drops nearly the whole population —
+		// the same class of failure as I25 itself. Conversions are counted in
+		// stats.LotsConverted and logged, so a unit mismatch stays visible.
 		// Proper ADV would require HistoricalPrices; see SP4 §9.
-		approxTWD := float64(q.Volume) * q.Last
+		volumeShares, converted := quoteVolumeInShares(q)
+		if converted {
+			stats.LotsConverted++
+		}
+		approxTWD := float64(volumeShares) * q.Last
 		if approxTWD < s.VolumeFloorTWD {
 			stats.BelowTurnoverFloor++
 			continue
