@@ -139,6 +139,9 @@
 | `docs/specs/industry-hitrate-consumption-spec.md` | 產業命中率消費鏈路接線契約（config gate 語意、fail-closed reason、gate-off 逐位元驗證方法；#1942/#1948） | ✅ |
 | `docs/specs/symbol-industry-substrate-spec.md` | per-stock 產業欄位基質（`symbol_industry` channel、DB 欄位、gate 與消費端、覆蓋率；#1943） | ✅ |
 | `docs/specs/channel-health-status-single-truth-spec.md` | channel 健康狀態單一真相（唯一判定函式、狀態語彙、DB mirror 語意、空 payload 規則） | ✅ |
+| `docs/jev/JEV-USAGE-CONTRACT.md` | Jev（TypeSafe System One）在本生態的使用契約（傳輸層 / 判斷設計 / 門檻校準 / 評估紀律 / fail-open） | ✅ |
+| `docs/jev/JEV-EVAL-FRAMEWORK.md` | Jev 預測力評估框架契約（task spec 介面、PIT 分離、指標定義、門檻與分級紀律、洩漏探針、擴充介面；#1968） | ✅ |
+| `docs/jev/JEV-EVAL-STAGE1-INDUSTRY-L1.md` | Stage 1 E0 實測：canonical L1 產業層（GT 口徑、窗口與排除理由、分級結論、成本、Stage 2/3 需求；#1968） | ✅ |
 
 | `docs/specs/agent-mcp-phase3-residual-spec.md` | MCP Phase 3 殘留項目 | ✅ |
 | `docs/specs/agent-mcp-phase4-spec.md` | MCP Phase 4 規格 | ✅ |

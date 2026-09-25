@@ -4,11 +4,24 @@
 # Prometheus 已 scrape 到 atlas-go job up=0,但 alertmanager /api/v2/alerts = [],
 # 完全沒有告警接到通知 — target-down 沒有對應 rule。
 #
-# 本檔案加 4 條 alert:
-# - AtlasGoTargetDown        : up==0 for 2m → critical (atlas-go 是主要 API)
-# - AtlasPostgresTargetDown  : up==0 for 5m → critical (postgres 是依賴)
-# - AtlasFubonProxyTargetDown: up==0 for 5m → warning  (影響報價但不擋 API)
-# - AtlasContainerRestarting : restart count 激增 → warning (atlas-go 一直 crash loop)
+# 本檔案加 5 條 alert:
+# - AtlasGoTargetDown         : up==0 for 2m → critical (atlas-go 是主要 API)
+# - AtlasPostgresTargetDown   : up==0 for 5m → critical (postgres 是依賴)
+# - AtlasFubonProxyTargetDown : up==0 for 5m → warning  (影響報價但不擋 API)
+# - AtlasScrapeJobMissing     : absent(up{job=...}) for 5m → critical (job 被整個移除 = 零偵測)
+# - AtlasGoContainerRestartLoop: restart count 激增 → warning (atlas-go 一直 crash loop)
+#
+# 2026-09-25（監控缺口調查 任務 E）本檔修 3 件事，理由見 monitoring-gap 報告:
+# 1. 修 annotation 模板錯誤:內文直接寫 docker --format '{{.Mounts}}' 會被 Go template
+#    引擎當成動作 → 每次規則評估都 "Expanding alert template failed"（實測 5,075 次，
+#    把 Prometheus log 淹掉、遮蔽其他警告）。go template 沒有轉義字元，唯一寫法是
+#    {{ "..." }} → render 出字面 {{.Mounts}}，原指令仍可複製貼上。
+#    同病者:AtlasPostgresTargetDown 的 {{.Mounts}}、AtlasGoContainerRestartLoop 的
+#    {{.RestartCount}}/{{.State.Status}}（後者因依賴不存在的 cAdvisor 指標、從未 firing，
+#    所以尚未在 log 爆量，但一旦 firing 就會重演）。
+# 2. 新增 AtlasScrapeJobMissing:補「job 從 prometheus.yml 被整個移除」這一維。原本
+#    up{job="X"} == 0 在 job 消失時恆為空集合 → 警報永遠不會 firing（零偵測、且無跡象）。
+# 3. 標題清單的 AtlasContainerRestarting 正名為實際規則名 AtlasGoContainerRestartLoop。
 #
 # 與 AtlasDBInitFailure (atlas_startup_anomaly_alerts.yml) 互補:
 # - AtlasDBInitFailure 監聽 atlas-go 內部 emit 的 counter (PR-926 schema)
@@ -51,6 +64,15 @@ groups:
           component: database
           wave: "9.2"
           incident_ref: "PR#1695-20260826"
+        # ⚠️ 模板轉義（2026-09-25 修）:description 是 block scalar、不能在裡面寫註解，
+        # 所以說明放在這裡。內文直接寫 docker --format '{{.Mounts}}' 時，Go template
+        # 會把 {{.Mounts}} 當成「取欄位 .Mounts」的動作 → 欄位不存在 → 每次規則評估
+        # 都留一筆 "Expanding alert template failed"（實測累積 5,075 次；Prometheus log
+        # 被這條噪音淹沒、其他警告被遮蔽）。
+        # Go template 沒有轉義字元，唯一修法是字串常值 {{ "{{.Mounts}}" }} →
+        # render 後輸出字面 {{.Mounts}}，原指令仍可複製貼上。
+        # 注意:promtool check rules 驗不到這類錯誤（YAML/規則語法都合法，只有求值時才炸）
+        # → 用 promtool test rules 的 exp_annotations 驗 render 結果。
         annotations:
           summary: "atlas-postgres (timescale) scrape 連續 5 分鐘失敗"
           description: |
@@ -60,7 +82,7 @@ groups:
             1. docker ps --filter name=atlas-postgres
             2. docker logs atlas-postgres --tail 50
             3. 確認 volume 仍掛 prod volume (atlas-postgres-data, NOT atlas_postgres-data 底線版):
-               docker inspect atlas-postgres --format '{{.Mounts}}'
+               docker inspect atlas-postgres --format '{{ "{{.Mounts}}" }}'
             4. 容器不存在時依 .claude/skills/atlas-imac-prod-guard/ 復原 SOP 重建
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
 
@@ -80,6 +102,46 @@ groups:
             立即檢查:docker ps --filter name=atlas-redis (host port 16379)
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/iMac-RUNBOOK.md"
 
+      # ── 2026-09-25 新增（監控缺口調查 任務 E；報告 Q3-1 / Q4 建議 3）──────────────
+      # 動機:上面三條 target-down 規則都是 `up{job="X"} == 0`。當某個 job 被從
+      # prometheus.yml 的 scrape_configs 整個移除（2026-09-25 就是這樣處理那兩個
+      # 指到資料庫裸埠的壞 job），`up{job="X"}` 變成空集合 → `... == 0` 也恆為
+      # 空集合 → 警報從「一直 firing」變成「永遠不會 firing」:偵測能力歸零，而且
+      # 沒有任何跡象（假警報被換成零偵測）。absent() 補上「job 本身不存在」這一維。
+      #
+      # 為什麼寫三段 absent() 而不是 absent(up{job=~"atlas-go|postgres|redis"}):
+      # 後者的語意是「整個比對結果為空才回傳一個元素」→ 三個 job 必須同時消失才
+      # 觸發，單獨少一個不會。三段版是 per-job 判定；而且 absent() 會把 selector
+      # 的等號比對標籤（job）合成到輸出，警報因此帶得出「消失的是哪一個 job」。
+      - alert: AtlasScrapeJobMissing
+        expr: |
+          absent(up{job="atlas-go"})
+          or absent(up{job="postgres"})
+          or absent(up{job="redis"})
+        for: 5m
+        labels:
+          severity: critical
+          service: atlas
+          component: monitoring
+          wave: "9.2"
+          incident_ref: "monitoring-gap-20260925"
+        annotations:
+          summary: "scrape job {{ $labels.job }} 從 Prometheus target 集合消失"
+          description: |
+            Prometheus 的 target 集合裡完全找不到 job={{ $labels.job }}，已持續 5 分鐘。
+            意義:該 job 的 scrape 設定被移除或改名的機率極高（也可能是 Prometheus
+            掛掉、或規則檔/設定檔沒被載入）。這正是「零偵測」情境 —— 依賴
+            up{job="..."} == 0 的 target-down 警報此時是空集合，該服務真的掛掉
+            也不會告警，而其他健康檢查仍然全綠。
+            立即檢查:
+            1. 確認 job 是否還在 target 集合裡:
+               curl -s localhost:9090/api/v1/targets | python3 -c 'import json,sys; print(sorted(t["labels"]["job"] for t in json.load(sys.stdin)["data"]["activeTargets"]))'
+            2. 比對版控的 monitoring/prometheus.yml 與容器實際掛載的那一份是否一致
+               （雙設定樹漂移:曾發生規則檔 27 天沒進到真正在跑的部署路徑）
+            3. 若確實是刻意移除該 job → 同步清掉依賴它的 alert 規則，
+               不要留下「看起來有保護、實際零偵測」的空規則
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/monitoring/prometheus.yml"
+
       - alert: AtlasGoContainerRestartLoop
         expr: increase(container_last_seen{name=~".+atlas-go.+", image=~".+atlas-atlas.+"} [10m]) > 3
         for: 0m
@@ -96,7 +158,7 @@ groups:
             RestartCount 13 次,仍持續 crash loop)。
             常見原因:DB 密碼錯誤、port 衝突、binary panic、env 改寫後沒重啟。
             立即檢查:
-            1. docker inspect atlas-go-imac --format '{{.RestartCount}} {{.State.Status}}'
+            1. docker inspect atlas-go-imac --format '{{ "{{.RestartCount}}" }} {{ "{{.State.Status}}" }}'
             2. docker logs atlas-go-imac --tail 30 | grep -E 'ERROR|FATAL|panic'
             3. 如 13+ 次仍在 loop → 停下來查 root cause,不要無限重啟
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/.claude/skills/atlas-imac-prod-guard/SKILL.md"
