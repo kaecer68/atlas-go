@@ -381,12 +381,6 @@
         "reason": "production 以 NewSectorPredictor(&snap,nil) 重建（handler.go:341）；SetMacroSnapshot 僅 sector_predictor_test.go 使用，屬冗餘 API",
         "evidence": "internal/eventdriven/sector_predictor.go:41  test-files=1"
       },
-      "internal/eventdriven/sector_predictor.go:SetStrategicPrior": {
-        "tier": "test-only",
-        "class": "legacy-inert",
-        "reason": "handler.go:341 重建 SectorPredictor 未注入 prior（無 SetStrategicPrior）→ PriorWeight 恆 0（sector_predictor.go:92）",
-        "evidence": "internal/eventdriven/sector_predictor.go:49  test-files=1"
-      },
       "internal/globalmarket/global_market.go:DisableMarket": {
         "tier": "test-only",
         "class": "dead",
@@ -632,12 +626,6 @@
         "class": "test-seam",
         "reason": "production 以 apistrategies.NewHandlers(stRegistry,...) 注入（main.go:2206）；SetRegistry 僅測試使用",
         "evidence": "internal/monitoring/api/strategies/handlers.go:47  test-files=0"
-      },
-      "internal/monitoring/dashboard_api.go:SetCompositionRoot": {
-        "tier": "dead",
-        "class": "legacy-inert",
-        "reason": "production 呼叫端於 3ae7992e 移除；root.WithWeightEngine 唯一呼叫端只剩此函式（dashboard_api.go:218），SA06 共享引擎未接",
-        "evidence": "internal/monitoring/dashboard_api.go:213  test-files=0"
       },
       "internal/monitoring/dashboard_api.go:SetCorrelationSetter": {
         "tier": "test-only",

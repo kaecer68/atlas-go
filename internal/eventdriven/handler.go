@@ -140,9 +140,16 @@ func (h *Handler) SetSectorStrategicPrior(p *sectorallocation.StrategicSectorPri
 }
 
 // SetSectorCycleProvider injects a cycle-score provider
-// (industry.CycleTracker.GetContinuousPhaseScore). Production does NOT call
-// this — see eventdriven.SectorCycleProviderWired for the reason and the
-// prerequisites (#1944 Batch 3, item I4 / upstream I13).
+// (industry.CycleTracker.GetContinuousPhaseScore).
+//
+// This is an intentional, documented hook — the cycle half of #1944 Batch 3 I4
+// is deliberately unwired (eventdriven.SectorCycleProviderWired=false): the only
+// trackers available today are config-seeded, so injecting one would present
+// seeds as measurements. The hook lets that wiring be completed without touching
+// this type twice once an authoritative tracker exists.
+//
+// inert-ok[writer-no-consumer]: kept unwired on purpose (see above); the
+// prerequisites are recorded in SectorCycleProviderWired and inert-registry I4.
 func (h *Handler) SetSectorCycleProvider(c cycleScoreProvider) {
 	h.sectorCycle = c
 }
