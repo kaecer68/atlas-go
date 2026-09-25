@@ -51,19 +51,19 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **bsr.twse.com.tw 已死（CAPTCHA 全擋）** | marketdata / apigateway | TWSE 券商分點頁 `bsr.twse.com.tw/bshtm` 對所有自動化 session 回 CAPTCHA（2026-07-31 起漸進，2026-08 全面）。BK-13 爬蟲（2026-07-22 上線）因此**從未產出非零資料**——每日寫 `total_net=0` 假成功，直到 2026-08-23 value_nonzero contract 才誠實報錯。**不要再走這條路**；government_broker 上游已是 HiStock（見下條）。舊爬蟲保留於 `GOV_BROKER_SOURCE=legacy-scraper` opt-in（預設關閉）。 |
-| **HiStock broker8 是 media-curated Top60，非官方全分點** | marketdata / apigateway | `government_broker` 通道上游 = `histock.tw/stock/broker8.aspx`（2026-08-26 起）：server-rendered、無 CAPTCHA、`?d=YYYY/MM/DD` 歷史至 2024-06、**僅買超 Top30 + 賣超 Top30**（約 60 檔/日）、金額單位**萬元**（寫檔時 ×10000 換 TWD）、`source: media-curated`。**口徑 ≠ bsr 的 TW50 全分點加總**：z-score 歷史有斷點（2026-08-26 前後分開校準）。輸出契約不變（`YYYYMMDD.json` + `YYYYMMDD_brokers.json`）。 |
+| **`government_broker` 上游：`bsr.twse.com.tw` 已死（CAPTCHA 全擋）→ 現為 HiStock media-curated Top60** | marketdata / apigateway | ①舊路徑 `bsr.twse.com.tw/bshtm`（TW50 全分點加總）自 2026-07-31 起漸進被 CAPTCHA 全擋、2026-08 全面失效；BK-13 爬蟲（2026-07-22 上線）因此**從未產出非零資料**——每日寫 `total_net=0` 假成功，直到 2026-08-23 value_nonzero contract 才誠實報錯。**不要再走這條路**；舊爬蟲只保留於 `GOV_BROKER_SOURCE=legacy-scraper` opt-in（預設關閉）。②現行上游 = `histock.tw/stock/broker8.aspx`（2026-08-26 起）：server-rendered、無 CAPTCHA、`?d=YYYY/MM/DD` 歷史至 2024-06、**僅買超 Top30 + 賣超 Top30**（約 60 檔/日）、金額單位**萬元**（寫檔時 ×10000 換 TWD）、`source: media-curated`。③**口徑 ≠ bsr 的 TW50 全分點加總**：z-score 歷史有斷點（2026-08-26 前後分開校準）。輸出契約不變（`YYYYMMDD.json` + `YYYYMMDD_brokers.json`）。 |
 | **TAIFEX large-trader 是 CSV、PutCallRatio 是 JSON——格式不同不要混用** | marketdata / apigateway | TAIFEX OpenAPI 各 endpoint 格式不一致：`/OpenInterestOfLargeTradersFutures` 2026-08-26 起回**帶 BOM 的 CSV**（表頭：日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大/前十大交易人買方/賣方數量,全市場未沖銷部位數；`taifex_daily` 走 `parseLargeTraderCSV` fallback）；`/PutCallRatio` 仍是 JSON；`/DailyMarketReportFutures` 已 302 移除（FetchFutures 已刪除）。新增 TAIFEX endpoint 前先 curl 實測格式。 |
 
 | **產業碼／ETF 持股 → canonical L1** | sectormap / sectorallocation | ①ETF 持股權重合計 ≠ 100%（期貨／現金另計，實測 96.59%–99.71%），不可直接當 L1 向量也不可補 1；②TWSE `產業別` 只回 2 位數字碼，中文名在 ISIN 對照表，**且與 MOPS 舊碼表不同**（`14`=建材營造、`24`=半導體）；③同一 TWSE 產業的「指數名」與「產業碼」必須給同一個 L1（22 組）；④ETF 持股是**具日期快照**，換股後須重跑推導。逐項說明與防護測試見 [`../specs/sector-namespace-canonical-spec.md`](../specs/sector-namespace-canonical-spec.md) §3.3.1。 |
+
+| **報價 fallback 會把單一缺檔放大成整個 chunk 逾時；「來源沒這檔」≠「取得失敗」** | marketdata / monitoring | `HybridProvider` 舊行為是「批次內任一 quote 不完整就丟掉整批」再依序 fallback，而 fallback 到的 FinMind/Fugle 都是**逐檔一次 HTTP**（免費層 0.17–0.5 req/s）⇒ 一個缺檔 symbol 就能讓 50 檔 chunk 用完全部 60 秒。生產實證（2026-09-25 07:10Z）：fubon-proxy 28 個 chunk **全回 200**，但 proxy log 的呼叫間隔是 4–6 秒與 **59–61 秒**交替，`quotes_chunks_failed=2`、`quotes_returned=1301/1599`，且 FinMind 日配額被打到 14,361/14,400——同時舊 `recordFailure()` 在「批次不完整」時就記失敗，讓 fubon breaker 開啟 5 分鐘（32 個 chunk 只有 28 次 fubon 呼叫）⇒ `ranked_trustworthy=false`（#1986）。規則：①fallback 只問**尚未解決的殘量**（`QuoteBatch.Missing`），不得重問整批；②逐檔 arm 有殘量上限（8）與自身 deadline（10 秒）；③「來源沒這檔」（`no_data`/`not_covered`）與「取得失敗」（`fetch_error`/`not_attempted`）必須分開計數，**只有後者**能讓 `ranked_trustworthy=false`；④TWSE `STOCK_DAY_ALL` 只有上市（實測 904/1599），上櫃缺口必須由**全市場**第一方表（TPEx 每日收盤行情，1 次 request，+689 檔）補，不能靠逐檔 arm。細節見 [`docs/specs/universe-quote-reliability-spec.md`](../specs/universe-quote-reliability-spec.md)。 |
 
 ### Orchestrator / Control
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
 | **GuardOutcomes 與 outcomes 必須對齊** | orchestrator | 控制層（CIO）輸出應**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
-| **OutcomeCount 必須是單場次數量** | ledger | `RecordSessionSummary` 絕對不可用 `ledger.LoadOutcomes()`（讀取全域檔案）來填 `OutcomeCount`。 |
-| **同一件事不可有三種算法** | orchestrator | 放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算。 |
+| **`OutcomeCount` / 通過筆數必須是單場次、單一權威來源** | ledger / orchestrator | ①`RecordSessionSummary` 絕對不可用 `ledger.LoadOutcomes()`（讀取全域檔案）來填 `OutcomeCount`。②放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算；`GuardOutcomes` 與 `outcomes` 必須對齊，控制層（CIO）輸出必須**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
 | **Darwinian 權重靜默夾制** | portfolio | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | sim | 多次 simulation run 之間不可共用同一個 slice。 |
 | **Yahoo Provider range=1y 產出 YoY 而非 daily change** | marketdata | US 股票/指數 provider 若使用 `range: "1y"` + `prev := closes[0]`，會計算「年增率 (YoY)」而非「日增率 (daily change)」，導致 ChangePct 出現 +84.9% 等荒謬數值。正確模式：`range: "5d"` + `prev := closes[len(closes)-2]`，並對 `abs(changePct) > 30%` 做 bounds reject。詳見 PR #948。 |

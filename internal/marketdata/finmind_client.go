@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -468,6 +469,13 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 // timeout elapses.
 var ErrFinMindBreakerOpen = fmt.Errorf("finmind: circuit breaker open")
 
+// ErrNoDataForSymbol marks an authoritative "the source has no row for this
+// symbol" answer — FinMind returns HTTP 200 with an empty dataset for a symbol
+// that did not trade on the requested date. It is deliberately distinct from a
+// transport/quota error so the quote chain can classify the symbol as no_data
+// instead of reporting an acquisition failure (issue #1986).
+var ErrNoDataForSymbol = fmt.Errorf("no data for symbol")
+
 // breakerRecordSuccess / breakerRecordFailure are nil-safe breaker wrappers
 // (hand-constructed FinMindClient values in tests may have a nil breaker).
 // P1-7 semantics: quota exhaustion and no-data DO NOT count as failures.
@@ -661,7 +669,9 @@ func (c *FinMindClient) GetStockPrice(ctx context.Context, symbol string, date s
 	}
 
 	if len(data) == 0 {
-		return domain.Quote{}, fmt.Errorf("finmind: no price data for %s on %s", symbol, date)
+		// Wrapped in ErrNoDataForSymbol so a caller can tell "the source has no
+		// such row" (a market fact) from "the request failed" (issue #1986).
+		return domain.Quote{}, fmt.Errorf("finmind: no price data for %s on %s: %w", symbol, date, ErrNoDataForSymbol)
 	}
 
 	item := data[0]
@@ -782,6 +792,47 @@ func (p *FinMindProvider) GetQuotes(ctx context.Context, asOf time.Time, symbols
 		return nil, fmt.Errorf("finmind: all symbols failed: %w", lastErr)
 	}
 	return quotes, nil
+}
+
+// GetQuotesBatch implements PartialBatchProvider: it walks the symbols and
+// reports, per symbol, whether FinMind answered with a row, answered "no row"
+// (ErrNoDataForSymbol → QuoteOutcomeNoData) or failed (QuoteOutcomeError).
+//
+// The per-symbol walk is unavoidable here — FinMind's price dataset is
+// per-symbol — which is exactly why the hybrid chain only ever sends this arm a
+// small residual (see hybridNarrowResidualMax) instead of a whole chunk.
+func (p *FinMindProvider) GetQuotesBatch(ctx context.Context, asOf time.Time, symbols []string) (QuoteBatch, error) {
+	batch := NewQuoteBatch(symbols)
+	if !isTaiwanTradingDay(asOf) {
+		// A non-trading day is not "no data for this symbol": it says nothing
+		// about the symbol itself, so every symbol is an acquisition gap.
+		err := fmt.Errorf("finmind: asOf %s is not a Taiwan trading day (weekend or holiday)", asOf.Format("2006-01-02"))
+		batch.Resolve(symbols, QuoteOutcomeError)
+		return batch, err
+	}
+	date := asOf.Format("2006-01-02")
+
+	var lastErr error
+	for _, symbol := range symbols {
+		quote, err := p.client.GetStockPrice(ctx, symbol, date)
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrNoDataForSymbol):
+				batch.SetOutcome(symbol, QuoteOutcomeNoData)
+			default:
+				logging.Error("finmind", "fetch_failed", "symbol", symbol, logging.Err(err))
+				batch.SetOutcome(symbol, QuoteOutcomeError)
+				lastErr = err
+			}
+			continue
+		}
+		batch.RecordFor(symbol, quote)
+	}
+
+	if len(batch.Quotes) == 0 && lastErr != nil {
+		return batch, fmt.Errorf("finmind: all symbols failed: %w", lastErr)
+	}
+	return batch, nil
 }
 
 func (p *FinMindProvider) GetClient() *FinMindClient {
