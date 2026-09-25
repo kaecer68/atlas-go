@@ -46,6 +46,49 @@ type SymbolIndustrySubstrate interface {
 	Symbols() []string
 }
 
+// SymbolIndustryCoverage is the first-party `symbol_industry` channel's own
+// accounting of the population it saw, reported by the component that loads it.
+//
+// It exists because a coverage audit needs a denominator that is not derived
+// from the numerator (the pre-existing audit set total = mapped, so its ratio
+// was 1.00 by construction and could never alert). The numbers here come from
+// the upstream rows themselves:
+//
+//   - Upstream is the upstream population the channel saw: every row the
+//     first-party fetch produced (TWSE t187ap03_L 上市 + TPEx mopsfin_t187ap03_O
+//     上櫃), whether or not it could be classified.
+//   - Resolved is the part of Upstream that carries a canonical L1 answer. It is
+//     exactly the population the pipeline builds from (the substrate's Symbols).
+//   - Unmapped and Unknown are the two documented unresolved reasons: a declared
+//     code without a defensible single canonical L1 target, and a code that is
+//     not declared at all (upstream drift). They are reported, never imputed.
+//   - Reasons carries the distinct reason strings the unresolved rows carry, so
+//     an operator can see WHY the population is short without opening a file.
+type SymbolIndustryCoverage struct {
+	Upstream int
+	Resolved int
+	Unmapped int
+	Unknown  int
+	Reasons  []string
+}
+
+// SymbolIndustryCoverageReporter is an OPTIONAL extension of
+// SymbolIndustrySubstrate: it is deliberately NOT part of the port, so no
+// existing implementation has to grow a method and no consumer can depend on it
+// by accident. Consumers type-assert:
+//
+//	if reporter, ok := substrate.(industry.SymbolIndustryCoverageReporter); ok { ... }
+//
+// Only a substrate that is aware of the FIRST-PARTY upstream population can
+// answer it: reporting Upstream requires knowing the rows that the channel saw
+// but could not resolve, and a table-driven or tree-driven implementation has
+// never seen them. An implementation that cannot answer must simply not
+// implement the interface -- the consumer then reports the coverage as
+// unavailable instead of inventing a denominator.
+type SymbolIndustryCoverageReporter interface {
+	Coverage() SymbolIndustryCoverage
+}
+
 // Resolution sources for SymbolL1Mapper.ResolveL1WithSource.
 const (
 	// L1SourceRepresentativeStocks: the answer came from the hard-coded

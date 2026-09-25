@@ -19,12 +19,24 @@ import (
 // .go file in this package. The test walks all non-test .go files and
 // aggregates their exported API into a single snapshot for comparison.
 //
-// As of 2026-06-22 the locked exported surface is two symbols:
+// The surface grew with the extracted types whose methods must stay callable
+// from other packages (route registration, template detection, recommender
+// wiring, the prediction-capital accessors, the capital-channel writers and the
+// symbol-industry substrate). The golden file is the authoritative list; the
+// two oldest entries were:
 //
 //	(*experimentMonitorAdapter).Alert(string, string, string, map[string]any)
 //	    (in bootstrap_helpers.go)
 //	RegisterAdminRoutes(*http.ServeMux, config.Config)
 //	    (in admin_routes.go)
+//
+// The substrate entry added on 2026-09-25 is
+// (*storeSymbolIndustrySubstrate).Coverage() industry.SymbolIndustryCoverage
+// (in symbol_industry_substrate.go). It MUST be exported rather than unexported:
+// the audit consumer satisfies the OPTIONAL interface
+// industry.SymbolIndustryCoverageReporter by type assertion on the installed
+// substrate, and an unexported method would not be visible outside package main,
+// so the audit could never read the first-party population (see #1943).
 //
 // Anything else is package-private and protected by the per-function
 // test files (run_simulation_test.go, run_live_test.go,
