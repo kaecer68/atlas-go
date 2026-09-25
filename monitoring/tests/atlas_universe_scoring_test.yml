@@ -12,6 +12,9 @@
 #
 # expectation 是**完整比對**（labels + annotations 逐字）:規則檔的文案或標籤被改動時這裡會紅,
 # 改動當下就被強迫確認「這條規則還真的會 firing 嗎、文案還對嗎」。
+# ⚠️ 因此:**改規則檔的文案（annotation）時,本檔必須在同一個 commit 同步更新**;
+#   否則 gate 會紅在「annotation 逐字差異」而不是語意差異 —— 2026-09-25 獨立驗證就曾在
+#   兩檔不同步的瞬間看到 case H 紅燈（exp=舊文案 / got=新文案）,那是預期行為、不是缺陷。
 #
 # 十個 case 各自對應一個「真實可能發生」的世界:
 #   A 生產實際形狀（daily= 標籤、ranked 恆 0、無 quotes）─── 三條都必須 firing（含 for:30m pending 驗證）
@@ -176,10 +179,18 @@ tests:
                 兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
               先查什麼(依序):
+              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+                 result.quotes_status:
+                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-                 完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
               3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
@@ -328,10 +339,18 @@ tests:
                 兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
               先查什麼(依序):
+              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+                 result.quotes_status:
+                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-                 完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
               3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
@@ -476,10 +495,18 @@ tests:
                 兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
               先查什麼(依序):
+              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+                 result.quotes_status:
+                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-                 完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
               3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
@@ -535,10 +562,18 @@ tests:
                 兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
               先查什麼(依序):
+              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+                 result.quotes_status:
+                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-                 完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
               3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
@@ -700,10 +735,18 @@ tests:
                 兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
               先查什麼(依序):
+              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+                 result.quotes_status:
+                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-                 完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
               3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的

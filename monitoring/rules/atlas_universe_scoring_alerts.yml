@@ -76,9 +76,10 @@
 #     兩側同視窗是刻意的:兩側的證據必須一起衰減,否則會出現「活動側還沒過期、產出側已過期」
 #     的假陽性(2026-09-25 獨立驗證的 F-1:第 3 條原本左側用當下值、右側用視窗,在 >4 天
 #     休市期間對**健康**pipeline 誤報 71 小時,且診斷文案是錯的)。
-#     已知缺口(需要假日曆或新指標,屬另一張票):**連假 ≥ 7 天**(例如農曆年)活動側仍會
-#     歸零 ⇒ 本檔不評估;「整條 pipeline 完全沒跑」;以及 pipeline 在 Step 1/2 early-return
-#     (`empty_universe` / `empty_filtered`,所有 counter 存在但永不增加)—— 見文末缺口清單。
+#     已知缺口(需要假日曆或新指標,屬另一張票):見文末清單。門檻的精確說法是
+#     **相鄰兩次執行間隔 > 144h(6 天)**:等於 144h 時餘裕為零(會 flap 約 45 分鐘,
+#     Alertmanager 會先發 resolve),大於 144h 時盲窗 = 間隔 − 144h(7 天 ⇒ 24h 假 recovery)。
+#     實務:5 天連假(週五→週三)安全、6 天(週五→週四)開始 flap、7 天(週五→下週五)24h 假 recovery。
 #
 # (3) **標籤別名(`daily=` / `weekly=` vs `stage=`+`result=`),且不可用 `or` 串接判斷式**。
 #     生產目前觀測到的是 `{daily="failed"}` / `{daily="passed"}`,而 `symbols_ranked_total`
@@ -107,13 +108,26 @@
 # - `channel_health_latent_staleness.yml`:監看資料通道的新鮮度,與母體評分無關。
 #
 # ── 已知缺口(刻意不覆蓋;每項都已用合成序列證實會沉默)────────────────────────
-#   (a) 連假 ≥ 7 天(農曆年)活動側歸零 ⇒ 本檔不評估(需要假日曆)。
+#   (a) 連假 ≥ 6 天(**相鄰兩次執行間隔 > 144h**;農曆年就是這個情形)活動側歸零 ⇒ 本檔不評估
+#       (需要假日曆)。(2) 段有精確的 flap/盲窗數字。)
 #   (b) 「整條 pipeline 完全沒跑」而不是「跑了但空轉」,需要一條排程心跳/absent() 規則。
 #   (c) `atlas_universe_symbols_screened_total` 這個 family 被整體改名/移除 ⇒ 三條都沉默
-#       (活動側無法成立)。需要一條「指標存在性」規則(與 AtlasScrapeJobMissing 同族)。
-#   (d) pipeline 在 Step 1/2 early-return(`empty_universe` / `empty_filtered`:分類樹或
-#       industry filter 壞掉)⇒ 所有 counter 存在但永不增加 ⇒ 三條都沉默。這比 (c) 更容易
-#       發生;要抓它需要一個「跑到 Step 4」的心跳指標(Go 變更,不在本 PR 範圍)。
+#       (活動側無法成立)。**可用純規則覆蓋**(不需要 Go):一條 `absent(...)` 型的存在性規則
+#       (與 AtlasScrapeJobMissing 同族)。**尚未落地**,建議登錄為 follow-up。
+#   (d) pipeline 在 Step 1/2 early-return ⇒ 所有 counter 存在但永不增加 ⇒ 三條都沉默。
+#       兩個變體的成本不同(2026-09-25 獨立驗證以合成序列實測):
+#         - **empty_filtered**(industry filter 把整個母體濾掉)⇒ **可用純規則覆蓋**:
+#           `symbols_filtered_total` 的 Add 在 early-return **之前**(Step 2 先 `Add` 才
+#           `if len(filtered) == 0 { return }`),而 `symbols_screened_total` 不會動 ⇒
+#             (sum(increase(atlas_universe_symbols_filtered_total[6d])) or vector(0)) > 0
+#             and (sum(increase(atlas_universe_symbols_screened_total[6d])) or vector(0)) == 0
+#           **尚未落地**,建議登錄為 follow-up(本 PR 只做任務指定的三條)。
+#         - **empty_universe**(Step 1 就 0 檔)⇒ 真的需要 Go:`gatheredCounter.Add` 在
+#           `if SymbolsBuilt == 0 { return }` **之後** ⇒ 整個 pipeline 不動任何 counter。
+#           現有可用的機器可讀標記是 snapshot 的 `result.quotes_status="not_attempted"`
+#           (但沒有曝光成指標)。
+#       ⇒ 診斷時**第 0 步**先看 snapshot 的 `quotes_status`:`not_attempted` 就是
+#         「Step 1/2 early-return」,不是 quotes 缺失;不要照 quotes 缺失的步驟查。
 #   (e) ranked 的 stage 在生產**無法區分**(label 配對缺陷使 `symbols_ranked_total` 無標籤,
 #       兩個 stage 共用同一個 series)⇒ weekly 只要成功一次,就會遮蔽「daily 評分死亡」。
 #       在標籤缺陷修好之前,第 1 條無法把 daily stage 單獨隔離(也不該加 stage matcher ——
@@ -246,6 +260,9 @@ groups:
       # (Quotes == nil)。修好之後本條會在下一次執行自動 resolve。
       # ⚠️ 兩側必須同視窗(獨立驗證的 F-1):曾經用「本 process 期間跑過」的當下值當左側,
       #    結果在 > 4 天休市期間對**健康** pipeline 誤報約 71 小時(左側不會衰減、右側會)。
+      # 副作用(已評估、可接受):兩側同視窗之後,本條**不再**在容器重啟時自動沉默;而且
+      #    「剛部署修好 provider」時會多響 ≤ 24 小時(要等下一次執行增加 quotes_fetched 才
+      #    resolve)—— 這是「不在健康系統上假報」換來的代價(獨立驗證以重啟序列實測確認)。
       - alert: AtlasUniverseQuotesMissing
         expr: |
           (
@@ -279,10 +296,18 @@ groups:
               兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
 
             先查什麼(依序):
+            0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
+               result.quotes_status:
+                 not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
+                                        全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
+                 provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
             1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-            2. 指標在不在:curl -s localhost:18080/metrics | grep -E "universe_quotes_(fetched|errors)"
-               完全沒有輸出 ⇒ 走的是 (a),去看 wiring:
+            2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
+               回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
                grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+               ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
+               建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
+               `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
             3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
                與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
             4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
