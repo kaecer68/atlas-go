@@ -44,11 +44,21 @@ type Router interface {
 type DefaultRouter struct {
 	providers    map[Provider]ProviderImpl
 	routingTable RouterConfig
+	// metrics is the injected observability sink for the fallback counters.
+	// nil means "no metrics" and is handled by recordCounter. Set it at
+	// construction time via WithMetrics; the router does not guard this field
+	// with a mutex (Register already assumes build-then-use).
+	metrics MetricsRecorder
 }
 
 // Package-level counters for internal observability.
 // These are plain int64 pointers (not expvar-registered); they can be
 // read by tests and replaced by production metric registration later.
+//
+// They are kept alongside the injected MetricsRecorder (see WithMetrics and
+// internal/llm/metrics.go): the int64s stay the in-process truth read by
+// router_test.go, while the same two events are mirrored to the recorder as
+// llm_router_fallback_triggered_total / llm_router_backup_chain_exhausted_total.
 var (
 	FallbackTriggeredTotal    = new(int64)
 	BackupChainExhaustedTotal = new(int64)
@@ -78,6 +88,40 @@ func NewDefaultRouterFromConfig(config RouterConfig, impls ...ProviderImpl) *Def
 		providers:    providers,
 		routingTable: config,
 	}
+}
+
+// WithMetrics injects the observability sink used for the router's fallback
+// counters (issue #1926) and returns r so it can be chained onto a constructor:
+//
+//	router := llm.NewDefaultRouterFromConfig(cfg, impls...).WithMetrics(collector)
+//
+// A functional-option constructor was rejected because the existing
+// constructors already use their variadic slot for ProviderImpl arguments;
+// adding a second variadic or changing both signatures would touch every call
+// site for no behavioral gain. RouterConfig was rejected as the carrier
+// because it is a YAML-serializable project config (configs/llm_router.yaml)
+// and a runtime object does not belong in it.
+//
+// Call this during construction, before the router serves traffic: the field
+// is written without a lock, matching the existing Register contract
+// (build-then-use). A nil recorder means "no metrics" and is valid.
+func (r *DefaultRouter) WithMetrics(m MetricsRecorder) *DefaultRouter {
+	r.metrics = m
+	return r
+}
+
+// recordCounter emits one increment to the injected recorder. It is nil-safe on
+// both the router and the recorder, so a DefaultRouter built without
+// WithMetrics behaves exactly as it did before metrics injection existed.
+//
+// Callers must pass a freshly built label map and must not mutate it after the
+// call: internal/monitoring.MetricsCollector stores the map in the metric entry
+// (monitoring/metrics.go).
+func (r *DefaultRouter) recordCounter(name string, labels map[string]string) {
+	if r == nil || r.metrics == nil {
+		return
+	}
+	r.metrics.RecordCounter(name, 1, labels)
 }
 
 // Register adds a ProviderImpl to the router's provider set, keyed by
@@ -177,9 +221,12 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 
 		// Increment the fallback counter when a non-primary chain member is
 		// actually invoked (i.e. a real fallback happened). Chain members that
-		// were skipped are not counted.
+		// were skipped are not counted, so this line is also the single place
+		// that decides whether a fallback is observable.
 		if i > 0 {
 			atomic.AddInt64(FallbackTriggeredTotal, 1)
+			r.recordCounter(MetricRouterFallbackTriggered,
+				fallbackLabels(req.Capability, providerName, attempted))
 		}
 
 		attempted = append(attempted, providerName)
@@ -203,6 +250,9 @@ func (r *DefaultRouter) Call(ctx context.Context, req Request) (Response, error)
 
 	// Step 7: All chain members exhausted — invoke last-resort handler
 	atomic.AddInt64(BackupChainExhaustedTotal, 1)
+	r.recordCounter(MetricRouterBackupChainExhausted, map[string]string{
+		metricLabelCapability: string(req.Capability),
+	})
 	recordChainSpans(span, attempted, skipped)
 	span.SetAttributes(attribute.Bool("llm.exhausted", true))
 	return r.lastResortHandler(attempted), nil

@@ -2266,6 +2266,16 @@ func run(args []string, deps appDeps) error {
 				// No API key — Router still exists but all Supports() return false.
 				llmRouter = llm.NewDefaultRouterFromConfig(routerCfg)
 			}
+			// Issue #1926: mirror the router's fallback counters onto /metrics.
+			// collector is nil when the monitoring collector was not built, and a
+			// typed-nil *MetricsCollector stored in the interface would panic on
+			// the first record, so guard before injecting. Without a recorder the
+			// router behaves exactly as before (nil-safe no-op).
+			if collector != nil {
+				if defaultRouter, ok := llmRouter.(*llm.DefaultRouter); ok {
+					defaultRouter.WithMetrics(collector)
+				}
+			}
 			llmHealthHandler := llmHealth.NewHandler(llmRouter)
 			llmHealthHandler.RegisterRoutes(mux)
 
