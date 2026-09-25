@@ -31,6 +31,7 @@ import (
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/monitoring"
 )
 
@@ -167,18 +168,33 @@ type scaleQuoteProvider struct {
 }
 
 func (p *scaleQuoteProvider) GetQuotes(_ context.Context, _ time.Time, symbols []string) ([]domain.Quote, error) {
+	batch, err := p.GetQuotesBatch(context.Background(), time.Time{}, symbols)
+	return batch.Quotes, err
+}
+
+// GetQuotesBatch declares this stub's scope explicitly (issue #1986).
+//
+// The stub models a whole-market source with a bounded scope: it answers for the
+// first scaleQuotedCoverage symbols (the TWSE-covered part of the population)
+// and does not publish the rest. Before #1986 it simply dropped them, which the
+// pipeline could not distinguish from a failed acquisition; it now reports
+// not_covered, exactly as the real TWSE STOCK_DAY_ALL arm does for 上櫃 names.
+// The scale assertions below pin that count so a source that shrinks its scope
+// silently cannot pass as a complete answer.
+func (p *scaleQuoteProvider) GetQuotesBatch(_ context.Context, _ time.Time, symbols []string) (marketdata.QuoteBatch, error) {
 	p.Calls++
 	p.RequestedPerCall = append(p.RequestedPerCall, len(symbols))
 	if len(symbols) > p.RequestedMax {
 		p.RequestedMax = len(symbols)
 	}
-	out := make([]domain.Quote, 0, len(symbols))
+	batch := marketdata.NewQuoteBatch(symbols)
 	for _, sym := range symbols {
 		if q, ok := p.quotes[sym]; ok {
-			out = append(out, q)
+			batch.Record(q)
 		}
 	}
-	return out, nil
+	batch.Resolve(symbols, marketdata.QuoteOutcomeNotCovered)
+	return batch, nil
 }
 
 // newScaleQuoteProvider builds quotes for the first scaleQuotedCoverage symbols
@@ -315,12 +331,35 @@ func TestBuildUniverseProductionScale_LiveQuoteProvider(t *testing.T) {
 	t.Logf("symbols_gathered count=%d", result.SymbolsBuilt)
 	t.Logf("industry_filter_ok input=%d output=%d", result.SymbolsBuilt, result.SymbolsFiltered)
 	t.Logf("scoring_ok input=%d ranked=%d", result.SymbolsFiltered, result.SymbolsRanked)
-	t.Logf("quotes: status=%s returned=%d excluded=%d ranked_trustworthy=%v",
-		result.QuotesStatus, result.QuotesReturned, result.SymbolsExcluded, result.RankedTrustworthy)
+	t.Logf("quotes: status=%s returned=%d/%d chunks=%d failed=%d excluded=%d ranked_trustworthy=%v",
+		result.QuotesStatus, result.QuotesReturned, result.QuotesRequested,
+		result.QuotesChunks, result.QuotesChunksFailed,
+		result.SymbolsExcluded, result.RankedTrustworthy)
+	t.Logf("quotes missing: no_data=%d not_covered=%d fetch_error=%d not_attempted=%d",
+		result.QuotesMissingNoData, result.QuotesMissingNotCovered,
+		result.QuotesMissingFetchError, result.QuotesMissingNotAttempted)
 
 	if result.QuotesStatus != monitoring.QuotesStatusOK {
 		t.Fatalf("live quotes_status = %q (fallback %q): the upstream call did not produce usable quotes",
 			result.QuotesStatus, result.RankedFallbackReason)
+	}
+	if result.QuotesChunksFailed != 0 {
+		t.Fatalf("live quotes_chunks_failed = %d, want 0: a chunk must not blow its budget at production scale",
+			result.QuotesChunksFailed)
+	}
+	// issue #1986 requirement 3: whatever did not come back must be classified,
+	// and every requested symbol must be accounted for exactly once.
+	accounted := result.QuotesReturned + result.QuotesMissingNoData +
+		result.QuotesMissingNotCovered + result.QuotesMissingFetchError +
+		result.QuotesMissingNotAttempted
+	if accounted != result.QuotesRequested {
+		t.Errorf("returned + missing = %d, want quotes_requested %d (an unaccounted symbol is an invisible gap)",
+			accounted, result.QuotesRequested)
+	}
+	if result.QuotesMissingFetchError != 0 || result.QuotesMissingNotAttempted != 0 {
+		t.Errorf("live run has %d fetch errors and %d unattempted symbols; every missing symbol must be a "+
+			"market or source-scope fact, not an acquisition failure",
+			result.QuotesMissingFetchError, result.QuotesMissingNotAttempted)
 	}
 	if result.SymbolsRanked <= 0 {
 		t.Fatalf("live ranked = 0 at production scale with a real provider")
@@ -429,6 +468,22 @@ func runProductionScalePipeline(t *testing.T, symbols []string, source string) {
 	}
 	if result.SymbolsBuilt < scaleQuotedCoverage {
 		t.Fatalf("fixture broken: population %d smaller than the quoted coverage %d", result.SymbolsBuilt, scaleQuotedCoverage)
+	}
+
+	// issue #1986 requirement 3: the symbols this source does not publish must
+	// be *reported* as out-of-scope, not silently dropped, and must not be
+	// counted as acquisition failures.
+	wantNotCovered := result.SymbolsFiltered - scaleQuotedCoverage
+	if result.QuotesMissingNotCovered != wantNotCovered {
+		t.Errorf("quotes_missing_not_covered = %d, want %d (population %d - published %d)",
+			result.QuotesMissingNotCovered, wantNotCovered, result.SymbolsFiltered, scaleQuotedCoverage)
+	}
+	if result.QuotesMissingFetchError != 0 || result.QuotesMissingNotAttempted != 0 {
+		t.Errorf("fetch_error = %d, not_attempted = %d, want 0/0: a bounded-scope source is not a failed acquisition",
+			result.QuotesMissingFetchError, result.QuotesMissingNotAttempted)
+	}
+	if result.QuotesMissingNoData != 0 {
+		t.Errorf("quotes_missing_no_data = %d, want 0 (this stub never declares no-data)", result.QuotesMissingNoData)
 	}
 
 	// The snapshot every downstream reader consumes must carry the same result.
