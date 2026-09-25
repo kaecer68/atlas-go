@@ -4,9 +4,14 @@
 // func(ctx context.Context) error closures (compatible with
 // apigateway.BackgroundTaskFunc) registered by cmd/atlas/main.go.
 //
-// Two tasks are exposed:
-//   - Daily refresh (incremental): trading days, 06:00 TW
-//   - Weekly rebuild (full): Mondays, 06:00 TW
+// Two tasks are exposed (both gated on the same trigger instant):
+//   - Daily refresh (incremental): trading days (Tue–Fri), 14:00 Asia/Taipei
+//   - Weekly rebuild (full): Mondays, 14:00 Asia/Taipei
+//
+// 14:00 Asia/Taipei is 06:00 UTC, the instant that has been in effect in
+// production since the tasks were introduced: the atlas container sets no TZ, so
+// time.Local there is UTC. The gate is written in Taipei time and compares
+// instants, so setting TZ on the host/container can no longer move the trigger.
 //
 // Both delegate to BuildUniverse, which gathers all symbols, runs the full
 // pipeline, and persists the ranked result to data/state/universe_snapshot.json.
@@ -285,8 +290,8 @@ type UniverseBuilderDeps struct {
 // signature is used here to avoid a circular monitoring ↔ apigateway import).
 // It fires once per minute but only executes the incremental pipeline when:
 //
-//   - The current day is a trading day (Mon–Fri).
-//   - The wall-clock time is within ±1 minute of 06:00 Taiwan time.
+//   - The current day is a trading day (Mon–Fri) in Asia/Taipei.
+//   - The wall-clock time is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC).
 //
 // Registration example (caller casts in main.go):
 //
@@ -299,12 +304,17 @@ type UniverseBuilderDeps struct {
 func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		now := clockFunc()
-		if !isTradingDay(now) {
+		// Every gate decision is made in the pipeline's own timezone: the trigger
+		// instant is fixed (06:00 UTC), so the weekday of that instant must not
+		// depend on the host/container TZ either. Production runs with TZ unset,
+		// where UTC and Asia/Taipei agree on the weekday for this instant.
+		local := now.In(universeLocation())
+		if !isTradingDay(local) {
 			logging.Debug("universe_scheduler", "daily_skip_non_trading",
-				"day", now.Weekday().String())
+				"day", local.Weekday().String())
 			return nil
 		}
-		if now.Weekday() == time.Monday {
+		if local.Weekday() == time.Monday {
 			logging.Debug("universe_scheduler", "daily_skip_monday",
 				"note", "weekly rebuild handles Monday")
 			return nil
@@ -379,8 +389,8 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 // full universe rebuild (clearing cached state, re-fetching all data). It
 // fires once per minute but only executes when:
 //
-// - Today is Monday.
-// - The wall-clock time is within ±1 minute of 06:00 Taiwan time.
+// - Today is Monday in Asia/Taipei.
+// - The wall-clock time is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC).
 //
 // The return type is raw func(ctx context.Context) error to avoid a
 // circular monitoring ↔ apigateway import; callers assign it directly to
@@ -388,9 +398,11 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		now := clockFunc()
-		if now.Weekday() != time.Monday {
+		// See the daily task: gate on the pipeline's timezone, not the host TZ.
+		local := now.In(universeLocation())
+		if local.Weekday() != time.Monday {
 			logging.Debug("universe_scheduler", "weekly_skip_not_monday",
-				"day", now.Weekday().String())
+				"day", local.Weekday().String())
 			return nil
 		}
 		if !alignToTarget(now) {
@@ -1144,10 +1156,45 @@ func isTradingDay(t time.Time) bool {
 	}
 }
 
-// alignToTarget returns true when now is within ±1 minute of 06:00 local
-// time (Taiwan stock market open).
+// Universe pipeline trigger time, expressed in the pipeline's own timezone.
+//
+// universeTriggerHourTW = 14 (Asia/Taipei) == 06:00 UTC, which is the instant
+// that actually fires in production. 14:00 Taipei is *after* the 13:30 close, so
+// the pipeline runs on the previous session's data — this constant documents the
+// observed behavior, it does not change it.
+const (
+	taipeiTZName          = "Asia/Taipei"
+	taipeiOffsetSeconds   = 8 * 60 * 60
+	universeTriggerHourTW = 14
+)
+
+// universeLocation returns the timezone the pipeline's schedule is expressed in
+// (Asia/Taipei).
+//
+// Taiwan has been on a fixed +08:00 offset without DST since 1979, so the fixed
+// zone is exact; it exists only as a fallback for minimal images that cannot load
+// the IANA database (Alpine without tzdata). Failing loudly is not an option here
+// — the previous code silently used the host TZ instead, which is the defect this
+// guards against — and a UTC fallback would shift the trigger by 8 hours.
+func universeLocation() *time.Location {
+	if loc, err := time.LoadLocation(taipeiTZName); err == nil {
+		return loc
+	}
+	return time.FixedZone(taipeiTZName, taipeiOffsetSeconds)
+}
+
+// alignToTarget returns true when now is within ±1 minute of the pipeline trigger
+// instant (14:00 Asia/Taipei == 06:00 UTC).
+//
+// The comparison is instant-based: now may carry any location, the trigger instant
+// does not move with it. Until 2026-09-25 the target was built from
+// now.Location() at 06:00, so the real trigger silently followed the host/container
+// TZ (production runs with no TZ, i.e. 06:00 UTC = 14:00 Taipei, while the comment
+// claimed 06:00 Taipei "market open" — the market opens at 09:00).
 func alignToTarget(now time.Time) bool {
-	target := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, now.Location())
+	loc := universeLocation()
+	local := now.In(loc)
+	target := time.Date(local.Year(), local.Month(), local.Day(), universeTriggerHourTW, 0, 0, 0, loc)
 	diff := now.Sub(target)
 	if diff < 0 {
 		diff = -diff

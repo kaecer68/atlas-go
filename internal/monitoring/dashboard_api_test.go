@@ -1222,12 +1222,29 @@ func TestRegisterCrossMarketRoutes_DegradedMetricsOnIncWired(t *testing.T) {
 
 	dm.DegradedActivations.WithLabelValues("crossmarket", "snapshot_stale").Inc()
 
-	m, ok := collector.GetMetric("degraded_activations", map[string]string{"crossmarket": "snapshot_stale"})
+	// The collector receives the vector's real label names ("service"/"reason").
+	// Until 2026-09-25 this test asserted the defective pairing
+	// {"crossmarket": "snapshot_stale"}, i.e. the label VALUES were used as label
+	// NAMES.
+	m, ok := collector.GetMetric("degraded_activations",
+		map[string]string{"service": "crossmarket", "reason": "snapshot_stale"})
 	if !ok {
 		t.Fatalf("expected degraded_activations metric to be recorded in collector")
 	}
 	if m.Value != 1.0 {
 		t.Fatalf("expected metric value 1.0, got %v", m.Value)
+	}
+
+	// Second increment: the collector accumulates, so a cumulative callback
+	// would record 3 here (1 + 2) instead of 2.
+	dm.DegradedActivations.WithLabelValues("crossmarket", "snapshot_stale").Inc()
+	m2, ok := collector.GetMetric("degraded_activations",
+		map[string]string{"service": "crossmarket", "reason": "snapshot_stale"})
+	if !ok {
+		t.Fatal("expected degraded_activations metric after the second increment")
+	}
+	if m2.Value != 2.0 {
+		t.Fatalf("expected metric value 2.0 after two increments, got %v (3 = cumulative forwarding)", m2.Value)
 	}
 }
 

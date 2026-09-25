@@ -26,6 +26,8 @@ type UniverseMetrics struct {
 }
 
 // SetOnInc installs a callback that is invoked on every counter increment.
+// The callback receives the atlas_universe_* series name, the counter's real
+// label name/value pairs and the per-event DELTA (see OnInc).
 // Calling SetOnInc multiple times replaces the previous callback.
 func (m *UniverseMetrics) SetOnInc(fn OnInc) {
 	m.onInc = fn
@@ -35,7 +37,7 @@ func (m *UniverseMetrics) SetOnInc(fn OnInc) {
 		}
 		cv.OnInc = func(_ string, labels map[string]string, value float64) {
 			if m.onInc != nil {
-				m.onInc(counterName, orderedLabelValues(labels, cv.labelNames), value)
+				m.onInc(counterName, labels, value)
 			}
 		}
 	}

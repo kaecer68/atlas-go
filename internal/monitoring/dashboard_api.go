@@ -1772,13 +1772,7 @@ func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 	}
 
 	dm := metrics.NewDegradedMetrics()
-	dm.SetOnInc(func(name string, labels []string, value float64) {
-		labelMap := make(map[string]string, len(labels)/2)
-		for i := 0; i+1 < len(labels); i += 2 {
-			labelMap[labels[i]] = labels[i+1]
-		}
-		a.metricsCollector.RecordCounter(name, value, labelMap)
-	})
+	dm.SetOnInc(CollectorOnInc(a.metricsCollector))
 	a.crossMarketSvc.SetDegradedMetrics(dm)
 	mux.HandleFunc("/api/degraded", metrics.HandleDegraded(dm))
 	mux.HandleFunc("/api/llm_annotator/cost", metrics.HandleCost(func() *llm_annotator.KimiClient { return a.kimiClient }, 0.001))
