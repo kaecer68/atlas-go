@@ -7,7 +7,8 @@
 | 上位規範 | [`JEV-USAGE-CONTRACT.md`](JEV-USAGE-CONTRACT.md)（§1 傳輸、§2 判斷設計、§3 門檻、§4 評估紀律、§5 生產整合） |
 | 實作 | `scripts/jev_eval/`（Python 框架）+ `cmd/experimental/jev-eval-panel/`（Go：canonical 口徑的 GT/特徵匯出） |
 | Stage 1 結果 | [`JEV-EVAL-STAGE1-INDUSTRY-L1.md`](JEV-EVAL-STAGE1-INDUSTRY-L1.md) |
-| 已量測的成本 | 台股產業層 E0：3240 cases / 180 requests = **$0.0456**（1,085,311 input tokens @ $0.042/Mtok） |
+| Stage 3 結果 | [`JEV-EVAL-STAGE3-EVENTS.md`](JEV-EVAL-STAGE3-EVENTS.md)（事件層；另新增 `cmd/experimental/jev-eval-events` 匯出事件骨架與平台事件調整量） |
+| 已量測的成本 | 台股產業層 E0：3240 cases / 180 requests = **$0.0456**（1,085,311 input tokens @ $0.042/Mtok）。事件層 E0：1656 cases / 92 requests = **$0.0297**；探針 +$0.0088 |
 
 ---
 
@@ -152,6 +153,10 @@ Jev 為 2026-09-10 釋出的模型（`jev-1.13.0`）。任何 2021 視窗的回�
 5. **窗口與成本預算**：先算 requests × 平均 tokens × 單價，再決定窗口（E0 的 3240 cases 只需 $0.046）。
 
 spec 放在 `scripts/jev_eval/specs/<name>.py`，於 `cli.py::SPECS` 註冊；`selfcheck.py` 至少要加「PIT 分離」與「決定性」兩項。
+
+已實作者可作為模板：`specs/industry_l1.py`（Stage 1，GT = panel 的 `forward` 區塊）與 `specs/event_calendar.py`（Stage 3，GT = 事件骨架 × 同一份 panel，以錨點日期 join）。**事件層的額外一條紀律**：GT 的日期骨架必須與報酬 GT **分開匯出、在 spec 內 join**，這樣兩邊各自可稽核、各自可重跑；並且匯出器必須內建**品質閘門**（見下）而不是讓壞日期靜默進入評估。
+
+> **匯出器的品質閘門（Stage 3 教訓）**：GT 骨架的「日期正確」不是自動成立的。`cmd/experimental/jev-eval-events` 內建 `-quality-gate`（預設開），擋掉三類**已被證明不可用**的 occurrence：peak 落在自己窗口之外（`buildMonthlyEvent` 的年份固定 peak）、窗口反轉（`StartDate > EndDate`）、以及農曆表未驗證年份（`GetLunarCoverageYears()`）的移動型假日。擋掉的數量一律寫進 summary；`-quality-gate=false` 可重現「未過濾」版本以便稽核。詳見 `JEV-EVAL-STAGE3-EVENTS.md` §1.3。
 
 ---
 

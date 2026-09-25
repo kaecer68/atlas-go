@@ -27,13 +27,13 @@ python3 scripts/jev_eval/selfcheck.py >/dev/null 2>&1 || {
 }
 
 if command -v go >/dev/null 2>&1; then
-    echo "jev-eval: panel exporter unit tests"
-    go test ./cmd/experimental/jev-eval-panel/ >/dev/null || {
-        echo "❌ jev-eval-panel 測試失敗"
+    echo "jev-eval: exporter unit tests (panel + events)"
+    go test ./cmd/experimental/jev-eval-panel/ ./cmd/experimental/jev-eval-events/ >/dev/null || {
+        echo "❌ jev-eval 匯出器測試失敗（panel 或 events）"
         exit 1
     }
 else
-    echo "⚠ 找不到 go，略過 panel exporter 測試"
+    echo "⚠ 找不到 go，略過 exporter 測試"
 fi
 
 echo "✅ JEV-EVAL OK"
