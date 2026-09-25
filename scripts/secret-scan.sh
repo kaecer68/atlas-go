@@ -2,11 +2,17 @@
 # secret-scan.sh — 掃「tracked 檔」的機密樣式（public repo 護欄）
 #
 # ⚠️ 本檔是 **a2a-dev `scripts/secret-scan.sh` 的整檔副本**（SSOT 在那邊）。
-#    上游版本: a2a-dev @ feat/ops-hardening-g 8c8145d, sha256 da728f43d87c46c19e11ff2e43cdce7f6d85df0babc9396211c58f133f480729
+#    上游版本: a2a-dev @ fix/secret-scan-config-coverage-q c5693bf, sha256 e1aa4bc6bb7cc3100ba4dc0a8577c82913936d6fbf95478297c975217d4cf050
 #    為何用「副本」而不是「引用上游」：① 本 repo 是 **PUBLIC**，CI 不該為了掃描去 clone 另一個 repo
 #    （多一條網路依賴 + 供應鏈面）② 兩個 repo 都要能在**離線**狀態跑完 CI ③ 副本同步成本極低（整檔覆蓋）。
 #    同步方式：`cp <a2a-dev>/scripts/secret-scan.sh scripts/secret-scan.sh` 後更新上面的 sha256。
 #    漂移偵測：兩份 sha256 不同即代表需要人工確認（本行即為錨點）。
+#
+#    2026-09-25（任務 Q）同步：新增 url_with_inline_credential / config_secret_literal /
+#    env_default_secret_literal 三個通用樣式，並把「可部署設定檔（*.yml/*.yaml，非範例）」
+#    從 warn-only 改成 block 級 —— 本 repo 的 docs/operations/docker-compose.{prod,crons}.yml
+#    就是靠這條才被抓到明文 DB 密碼。
+#
 #
 # 為什麼需要它：a2a-dev / atlas-go 都是 **PUBLIC** repo，任何一次誤 commit 就是**永久外洩**
 # （歷史不會消失，且 bot token 之類的憑證無法「刪 commit 就回收」）。此腳本把「機密不進版控」
@@ -22,6 +28,11 @@
 # 三種降噪機制（缺一就會變成噪音 → 被繞過）:
 #   ① 路徑類別：文件/範例類（*.md、docs/**、*.example、*sample*、*template* …）預設 **warn-only**：
 #      會列出來但不讓 CI 失敗（文件裡寫 `sk-xxxx` 範例是正當需求）。`--strict` 才把它們算失敗。
+#      **例外：可部署的設定檔（*.yml / *.yaml，且非 *.example*/*sample*/*template*）一律 block 級** ✓
+#      —— 理由：docs/ 底下的 compose/設定 YAML 是**會被拿去跑/部署**的檔，不是散文；
+#      在那裡出現字面憑證就是真的外洩，不該只印警告。2026-09-25 實證：
+#      `docs/operations/docker-compose.prod.yml` 的 `DATABASE_URL` / `POSTGRES_PASSWORD` 預設值
+#      帶明文 DB 密碼，而舊掃描器既沒涵蓋它、也沒有能命中的樣式（兩者都補）。
 #   ② 行內豁免：同一行含 `secret-scan-allow` 註解 → 該行跳過（必須寫理由）。
 #   ③ allowlist 檔：`scripts/secret-scan-allowlist.txt` 逐條 `glob [pattern…] # 理由`。
 #
@@ -61,6 +72,37 @@ PATTERNS = [
     ("private_key_block",  re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("slack_token",        re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
     ("google_api_key",     re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    # ── 2026-09-25 新增（任務 Q）────────────────────────────────────────
+    # 為什麼要加：上面全是「特定廠商憑證形狀」，抓不到**通用**的自架服務憑證
+    # （DB 連線字串內嵌密碼、設定檔內的 password/secret 字面值）——那正是
+    # docs/operations/docker-compose.prod.yml 當時外洩的形狀。
+    #
+    # ② URL 內嵌 userinfo 密碼：`scheme://user:secret@host`  # secret-scan-allow: 本行是樣式說明文字（非真憑證）
+    #    密碼段 ≥6 字且**不得以 $ % { " ' ` 開頭** → `${DB_PASSWORD:-atlas}` 這類插值不會誤命中 ✓
+    #    （尾端一併納入 host：噪音過濾需要看主機才能排除 RFC 2606 / 本機的測試 DSN，
+    #      否則 `alice:secret@db.example.com` 這種 fixture 會變成噪音）
+    ("url_with_inline_credential",
+     re.compile(r"[a-z][a-z0-9+.\-]{2,15}://[^:@\s/\"']{1,64}:[^@\s/\"'$%{`]{6,}@[A-Za-z0-9._\-]+", re.I)),
+    # ④ `${VAR:-<default>}` 內的預設值：預設值寫成機密字面值 → 一樣是「現行檔案含明文」
+    #    （2026-09-25 實證：`POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-<19 字密碼>}` 逃過前三條）
+    #    門檻 12 字 + 噪音過濾（排除含 / 或空白者，例如 `${ATLAS_CONFIG_DIR:-/app/configs}`）
+    #    ⚠️ 變數名必須**看起來像機密**（PASSWORD/TOKEN/SECRET/…）——否則 `${MACMINI_HOST:-…}`、
+    #    `${CANARY_WHY:-…}`、`${CONTAINER:-…}` 這類「長但不是機密」的預設值會變成噪音
+    #    （2026-09-25 實測：不加這道濾網 → a2a-dev 13 筆、atlas 12 筆全假警報）。
+    ("env_default_secret_literal",
+     re.compile(r"\$\{[A-Za-z_]*(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|APIKEY|API_KEY|PRIVATE_KEY|CREDENTIAL)[A-Za-z_]*:[-=]([^}\s]{12,})\}", re.I)),
+    # ③ 設定檔內的 secret 字面值：KEY=value / KEY: value，值 ≥12 字、非插值、非 placeholder
+    #    為什麼門檻這麼高（寧可少抓不要噪音）：`POSTGRES_PASSWORD=atlas`（dev 預設，5 字）
+    #    與 `${...}` 插值都不該命中；`atlas_prod_pwd_2026`（19 字）才會命中 ✓
+    ("config_secret_literal",
+     #    邊界用 (?<![A-Za-z0-9]) / (?![A-Za-z0-9]) 而**不是** \b —— 否則 `POSTGRES_PASSWORD=`
+     #    這種（底線前綴）在 `\bPASSWORD\b` 下不成立（`_` 是 word 字元）→ 漏抓最常見的真實形狀。
+     re.compile(r"(?i)(?<![A-Za-z0-9])(?:password|passwd|pwd|secret|client_secret|api[_-]?key|apikey"
+                r"|auth[_-]?token|access[_-]?token|bot[_-]?token|private[_-]?key|db[_-]?pass)(?![A-Za-z0-9])"
+                r"\s*[:=]\s*[\"']?"
+                r"(?![$<{%\s])"
+                r"(?!(?i:change|example|placeholder|redacted|dummy|sample|fake|test|dev|admin|root|password|secret|none|null|unset|todo|xxxx|your))"
+                r"[A-Za-z0-9][A-Za-z0-9._@!#%^&*+\-]{11,}[\"']?\s*$")),
 ]
 
 # ── 路徑類別 ──────────────────────────────────────────────────────────
@@ -71,6 +113,12 @@ WARN_ONLY_GLOBS = [
     "*.example", ".env.example", "*.example.*", "*.sample", "*sample*", "*.template", "*template*",
     "*.json.sample", "*fixtures*",
 ]
+# 可部署的設定檔：即使在 docs/ 底下也**不**降級為 warn-only（見檔頭 ① 的例外說明）。
+CONFIG_GLOBS = ["*.yml", "*.yaml", "*.yml.j2", "*.yaml.j2"]
+# 但「範例／模板」類的設定檔仍維持 warn-only（它們的用途就是放假值）。
+CONFIG_EXAMPLE_GLOBS = ["*.example", "*.example.*", "*.sample", "*sample*", "*.template", "*template*",
+                        "*fixtures*", ".env.example"]
+
 # 直接跳過：不可能是手寫機密的產生物／二進位。
 SKIP_GLOBS = [
     "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.ico", "*.pdf", "*.zip", "*.gz", "*.tar",
@@ -130,6 +178,42 @@ def allowed(path, name):
 def mask(s):
     return s[:4] + "…" + s[-4:] if len(s) > 12 else "…"
 
+# ── 噪音過濾（只作用於 2026-09-25 新增的兩個「通用」樣式）──────────────────
+# 為什麼需要：廠商憑證樣式（ghp_/sk-/AKIA…）本身就是高信心；但「URL 內嵌密碼」與
+# 「設定檔 secret 字面值」是**形狀**規則，若不過濾會誤抓測試 fixture 與程式碼取值，
+# 一旦有噪音就會被繞過（allowlist 濫用）→ 護欄等於沒有。過濾條件全部寫在下面。
+NOISE_FILTERED = {"url_with_inline_credential", "config_secret_literal", "env_default_secret_literal"}
+# 明確的合成主機（RFC 2606 保留域名 / 本機 / 測試常見字串）：這些不是「外洩」。
+# 注意：**不**含 `host.docker.internal`（那正是 prod DSN 用的主機 ⇒ 必須保持會被抓到 ✓）。
+SYNTHETIC_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]",
+                   "example.com", "example.org", "example.net", "db.invalid",
+                   "nonexistent", "invalid")
+PLACEHOLDER_WORDS = ("test", "invalid", "dummy", "fake", "sample", "example", "placeholder",
+                     "changeme", "redacted", "xxxx", "your-", "your_", "none", "todo")
+# 程式碼取值（`p.config.APIKey`、`os.environ.X`）不是字面機密 → 這種「點串」形狀排除。
+DOTTED_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
+
+def synthetic(name, matched):
+    low = matched.lower()
+    if any(w in low for w in PLACEHOLDER_WORDS):
+        return True
+    if name == "url_with_inline_credential":
+        return any(h in low for h in SYNTHETIC_HOSTS)
+    if name == "config_secret_literal":
+        value = matched.split("=", 1)[1] if "=" in matched else matched.split(":", 1)[1]
+        value = value.strip().strip("\"'")
+        if DOTTED_IDENT.match(value):          # 程式碼取值 p.config.APIKey
+            return True
+        # 純字母且 <16 字 → 視為假 key（2026-09-25 實測：某 LiteLLM proxy 的 dummy key 為
+        # 「8 字母 + ./-」形狀，13 字且無數字；真憑證幾乎都含數字或更長）。
+        # 註：**仍然攔**含數字者與 ≥16 字者 ⇒ `POSTGRES_PASSWORD=<19 字含數字>` 照樣被抓 ✓。
+        if not any(ch.isdigit() for ch in value) and len(value) < 16:
+            return True
+        return False
+    if name == "env_default_secret_literal":
+        return "/" in matched or "\\" in matched   # `/app/configs`、`C:\\x` 這類路徑預設值不是機密
+    return False
+
 files = tracked_files()
 block_hits, warn_hits, skipped_bin = [], [], 0
 for rel in files:
@@ -149,12 +233,17 @@ for rel in files:
     except Exception:
         continue
     warn_only = matches(rel, WARN_ONLY_GLOBS)
+    # 例外：可部署的設定檔（*.yml/*.yaml，非範例/模板）→ block 級，即使路徑命中 warn-only glob。
+    if matches(rel, CONFIG_GLOBS) and not matches(rel, CONFIG_EXAMPLE_GLOBS):
+        warn_only = False
     for lineno, line in enumerate(text.splitlines(), 1):
         if "secret-scan-allow" in line:      # 行內豁免（須寫理由）
             continue
         for name, rx in PATTERNS:
             m = rx.search(line)
             if not m:
+                continue
+            if name in NOISE_FILTERED and synthetic(name, m.group(0)):
                 continue
             if allowed(rel, name):
                 continue

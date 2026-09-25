@@ -400,6 +400,47 @@ jobs:
         echo "✅ 負向證明通過（掃描器確實會擋）"
         git reset -q scripts/__negtest_secret__.py && rm -f scripts/__negtest_secret__.py
 
+  # Monitoring single source of truth — PR-stage guard.
+  # 2026-08-27 incident: a rule fix was written into the WRONG tree
+  # (~/workspace/atlas-monitoring/ instead of <repo>/monitoring/) and therefore never
+  # reached production for 27 days (2026-08-27 -> 2026-09-23T08:44:14Z).
+  # a2a-dev drift-check [9/9] asserts the same invariant from OUTSIDE production with
+  # `docker inspect`; this job catches it at PR time (no docker, no production access).
+  # Blocking on purpose: no `|| true`, no continue-on-error.
+  monitoring-single-source:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check monitoring config has exactly one source of truth
+      run: bash scripts/ci/check_monitoring_single_source.sh
+
+    - name: Regression tests (hermetic fixtures, no docker needed)
+      run: bash tests/scripts/test-monitoring-single-source.sh
+
+    # 負向證明：證明這個 job 在**真的 repo 內容**上仍然會擋（不是只會印 PASS）。
+    # 造一個掛載指回舊樹的「已 tracked」compose → 檢查必須 exit 1。
+    # 為什麼要這步：tempdir fixture 只證明程式邏輯；這裡證明 repo 級路徑也有效
+    # （與 secret-scan job 的 negative proof 同一套路）。字面值刻意用相鄰字串相接，
+    # 免得本 workflow 自己被 R3（舊樹路徑引用）掃到。
+    # 檔名刻意用 `docker-compose.*` 開頭 ⇒ 同時觸發 R2（掛載源落點）與 R3（舊樹引用），
+    # 兩條規則都被這一步釘住（實測 R2 + R3 各報一筆）。
+    - name: Negative proof — a legacy second-tree mount must be blocked
+      run: |
+        printf '%s\n' \
+          'services:' \
+          '  prometheus:' \
+          '    volumes:' \
+          '      - ~/workspace/'"atlas-monitoring"'/prometheus.yml:/etc/prometheus/prometheus.yml:ro' \
+          > scripts/docker-compose.__negtest__.yml
+        git add -f scripts/docker-compose.__negtest__.yml
+        if bash scripts/ci/check_monitoring_single_source.sh; then
+          echo "❌ 負向證明失敗：指向第二棵樹的掛載竟未被擋下"
+          exit 1
+        fi
+        echo "✅ 負向證明通過（檢查確實會擋）"
+        git reset -q scripts/docker-compose.__negtest__.yml && rm -f scripts/docker-compose.__negtest__.yml
+
   # MCP tool count doc-code alignment — prevents drift between
   # docs/reference/tool-catalog.md documents the expected tool count; actual AddTool registrations
   mcp-tool-count:

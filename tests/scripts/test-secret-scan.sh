@@ -4,6 +4,8 @@
 # 兩件事必須同時成立，否則這個護欄會「看起來有、實際沒用」：
 #   A. **負向**：真的憑證形狀（telegram bot token / sk- / ghp_ / AKIA / PRIVATE KEY）必被擋 exit=1。
 #   B. **不誤擋**：文件（*.md）、範例（*.example）、行內 `secret-scan-allow`、allowlist 不得讓 CI 失敗。
+#   另加 D. **通用憑證形狀**（DSN 內嵌密碼／設定檔 secret 字面值／env 預設值）＋
+#      「可部署設定檔（*.yml/*.yaml）不降級為 warn-only」的路徑政策（2026-09-25 任務 Q）。
 #   另加 C. **輸出遮蔽**：命中值只留前 4 後 4，不得把完整憑證印進 log（log 本身也是外洩面）。
 #
 # 做法：在 tempdir 造合成檔案，用 `--root "$TMP"` 掃（不動真 repo；tempdir 無 git → scanner 走 find）。
@@ -89,6 +91,26 @@ rm -f "$TMP/allowlist.txt"
 
 # 乾淨檔案
 must_pass  "B8 乾淨檔案通過（exit=0）" "src/b8.py" "print('hello, no secrets here')"
+
+# ── D. 通用憑證形狀 + 可部署設定檔的路徑政策（2026-09-25 任務 Q 新增）───────
+# 為什麼要這組：舊樣式表只有「廠商憑證形狀」（telegram/sk-/ghp_/AKIA…），抓不到**自架服務的通用憑證**
+# （DB 連線字串內嵌密碼、設定檔內 password/secret 字面值）——那正是
+# docs/operations/docker-compose.prod.yml 當時外洩的形狀；而且 *.yml 在 docs/ 底下當時也算 warn-only。
+# 這組同時釘住「**不誤擋**」：插值、範例設定檔、合成測試 DSN、程式碼取值都不得讓 CI 紅。
+# 合成假值刻意**不含** test/fake/sample 等字（掃描器會把含這些字的命中視為合成值而略過 ——
+# 這是刻意的降噪設計，所以測試值要用「像真憑證的形狀」才能證明護欄有牙齒）。
+FAKE_PW="Zq7""Xk92LmQ7pR4t"
+FAKE_DSN="postgres://atlas:${FAKE_PW}@host.docker.internal:55432/atlas?sslmode=disable"
+
+must_block "D1 .yml 內 DSN 嵌明文密碼被擋"      "docs/ops/compose.prod.yml" "      - DATABASE_URL=${FAKE_DSN}" "url_with_inline_credential"
+must_block "D2 .yml 內 password 字面值被擋"      "docs/ops/compose.prod.yml" "      - POSTGRES_PASSWORD=${FAKE_PW}" "config_secret_literal"
+must_block "D3 .yml 內 env 預設值寫死密碼被擋"   "docs/ops/compose.prod.yml" "      - POSTGRES_PASSWORD=\${POSTGRES_PASSWORD:-${FAKE_PW}}" "env_default_secret_literal"
+must_block "D4 docs/**/*.yml 不降級為 warn-only" "docs/ops/extra.yaml"       "password: ${FAKE_PW}" "config_secret_literal"
+
+must_pass  "D5 \${VAR} 插值不誤擋"              "docs/ops/compose.prod.yml"   "      - POSTGRES_PASSWORD=\${POSTGRES_PASSWORD:-atlas}"
+must_pass  "D6 *.example.yml 維持 warn-only"      "docs/ops/compose.example.yml" "      - POSTGRES_PASSWORD=${FAKE_PW}"
+must_pass  "D7 合成測試 DSN（example.com）不誤擋" "internal/x_test.go" 't.Setenv("DATABASE_URL", "postgres://alice:secretpw1@db.example.com:5432/atlas")'
+must_pass  "D8 程式碼取值（p.config.APIKey）不誤擋" "internal/ws.go" "auth.Data.APIKey = p.config.APIKey"
 
 # ── C. 輸出遮蔽 ──────────────────────────────────────────────────
 rm -rf "$TMP/src" "$TMP/docs"; mkdir -p "$TMP/src"

@@ -444,7 +444,8 @@ ci-quick: check-production-host
 	              scripts/ci/check_channel_consistency.sh \
 	              scripts/ci/check_docs_governance.sh \
 	              scripts/ci/check_agents_index.sh \
-	              scripts/ci/check_jev_contract.sh; do \
+	              scripts/ci/check_jev_contract.sh \
+	              scripts/ci/check_monitoring_single_source.sh; do \
 		if [ -f "$$script" ]; then \
 			echo "  → $$script"; \
 			if timeout 10 bash $$script > /dev/null 2>&1; then \
@@ -869,6 +870,9 @@ ci-gate:
 	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh
+	@echo "    ✅"
+	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
+	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick

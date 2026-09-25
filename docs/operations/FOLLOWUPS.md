@@ -42,6 +42,29 @@
   3. substrate 曝露 `last_reload_ok` / `load_error`，區分「載入失敗」與「母體為空」。
 - **驗收條件**：稽核輸出可看到資料年齡；且「store 壞掉」在一個 Reload TTL 內會被告警指出。
 
+### FU-20260925-02 — 舊明文 DB 密碼已從現行檔案移除，但**輪替**仍待業主決定（另有 2 個檔案未動）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-25
+- **來源**：任務 Q（分支 `fix/secrets-and-monitoring-guard-q`）。
+  **已移除明文的現行檔案**：`docs/operations/docker-compose.prod.yml`（`DATABASE_URL` / `POSTGRES_PASSWORD`）、
+  `docs/operations/docker-compose.crons.yml`（`DATABASE_URL` ×4）、
+  `.claude/skills/atlas-imac-prod-guard/SKILL.md`（復原 SOP 內的字面值）。
+  改法＝一律從 compose 插值／env 檔取值；未提供值時 `${VAR:?...}` **直接讓 `docker compose` 失敗**（fail-closed），
+  不會靜默用錯值。防再犯＝`scripts/secret-scan.sh` 新增 3 個通用憑證樣式 +
+  「可部署設定檔（`*.yml`/`*.yaml`）不降級為 warn-only」，並由
+  `scripts/ci/check_secrets.sh`（CI job `secret-scan`）與 `make ci-static` 把關。
+- **為何仍需輪替**：舊值**已在 git 歷史中**（本 repo 為 PUBLIC ⇒ 永久可見）。
+  「現行檔案不再含明文」**不等於**「憑證安全」；輪替是唯一補救，且屬**業主決定**（見任務 Q 授權範圍）。
+- **仍含同一組明文的現行檔案（本次**未動**，超出授權檔清單）**：
+  `tasks/misleading-mechanisms-fix-plan-ds4pro-20260828.md`、
+  `tasks/stockpicker-misleading-mechanisms-audit-k3-20260828.md`（各 1 行）。
+  兩者皆為 `.md` ⇒ 在 secret-scan 屬 **warn-only**（不擋 CI）；建議與輪替一併處置，或明確標為歷史封存。
+- **附帶發現（a2a-dev，非本 repo）**：新的 DSN 樣式會在 a2a-dev 的 `docs/operations/`（舊 iMac
+  runbook）、`docs/audits/`、`docs/governance/reports/` 等文件命中（warn-only，不擋 CI），
+  是否為真憑證需人工確認 ⇒ 已回報上層，未在本次動任何 a2a-dev 文件。
+- **驗收條件**：業主回覆「已輪替」或「不輪替（接受風險）」並補記於此；`tasks/*.md` 的處置一併決定。
+
 ---
 
 ## 相關文件
@@ -49,3 +72,4 @@
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
   — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
 - [README.md](README.md) — 本目錄索引
+- [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
