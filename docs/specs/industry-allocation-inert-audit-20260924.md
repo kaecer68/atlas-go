@@ -8,6 +8,7 @@
 | 登記表 | [`../reference/inert-registry.md`](../reference/inert-registry.md)（處置結果登記處；本檔為完整證據） |
 | 相關規格 | [`sector-allocation-simulation-closure-spec.md`](sector-allocation-simulation-closure-spec.md) §8.3、[`industry-hitrate-metric-spec.md`](industry-hitrate-metric-spec.md) |
 | **Batch 3** | 本檔 §9（2026-09-25，`origin/main@f7fcd74d`）：高嚴重項逐項處置、Batch 3 新發現（N-A5、I31 的 CI 半邊等）、仍未處理清單 |
+| **Batch 4** | 本檔 §10（2026-09-25，`origin/main@1bc4b534`）：對外誠實與 false claim 修正四項 — I23 前端文案、I24 scorecard synthetic 過濾、I31 CI 半邊＋freshness 政策裁決、`ATLAS_MARKET_DATA_PROVIDER=fubon` 誤導 |
 
 ## 0. 判定法（三問檢查）
 
@@ -271,11 +272,11 @@ go test ./cmd/atlas-mcp/... ./internal/config/ ./internal/industry/ ./internal/m
 
 ### 9.3 Batch 3 仍未處理（誠實清單）
 
-- **I31 的 CI 半邊**：如上，需 workflow 一行 + freshness 政策裁決（`.github/**` 不在本 lane）。
-- **I24**（`BuildScorecards` 未過濾 `IsSynthetic`，生產 56%）、**I32**（ledger 事件流預測無 `sector` 欄位）、**I30**（nightly backfill 寫入被丟棄）**未動**：屬 ledger／workflow 口徑票。
+- **I31 的 CI 半邊**：如上，需 workflow 一行 + freshness 政策裁決（`.github/**` 不在本 lane）。→ **Batch 4 已處理（§10.2）**：CI 只驗結構、失敗真的失敗、freshness 移到 production 主機。
+- **I24**（`BuildScorecards` 未過濾 `IsSynthetic`，生產 56%）、**I32**（ledger 事件流預測無 `sector` 欄位）、**I30**（nightly backfill 寫入被丟棄）**未動**：屬 ledger／workflow 口徑票。→ **I24 已由 Batch 4 處理（§10.1）**；**I32 仍未動**；**I30 仍未處理**（§10.2 只讓其後果可見）。
 - **I17 的 producer 半邊**：per-pattern `calibration_observations/verdict/timestamp` 仍無寫入者；本批只讓 health 對「無觀測」誠實。補寫入需歷史回測寫回流程。
 - **I4 的 cycle 半邊**：`SectorCycleProviderWired=false`；注入需先確定用哪個 tracker 作權威（I13 本批已讓 composition 與 dashboard 共用，predictor 端仍未接）。
-- **I23 前端文案**：`shared_web/static/js/pages/narrative.js` 欄位標題仍寫「歷史命中率」——前端 lane 負責。
+- **I23 前端文案**：`shared_web/static/js/pages/narrative.js` 欄位標題仍寫「歷史命中率」——前端 lane 負責。→ **Batch 4 已處理（§10.4）**。
 - **I16 的 (a) 選項**：volatile 若要真的量測，需產品先凍結「高波動」門檻定義（本批不猜門檻）。
 - **仍未處理的 Batch 2 中/低項**：I7/I18/I19/I21/I27/I28/I29/I30/I36/N-C3/N-U2/N-U5/N-U6/N-A1..A4（見 §4/§5）。
 
@@ -399,3 +400,103 @@ ATLAS_TEST_UNIVERSE_LIVE=1 go test ./cmd/atlas -run ProductionScale_LiveQuotePro
 
 
 ---
+
+## 10. Batch 4（issue #1944，2026-09-25）— 對外誠實與 false claim 修正（剩餘批次 A）
+
+| 項目 | 內容 |
+|---|---|
+| 範圍 | Batch 3 §9.3「仍未處理」中**直接影響對外可信度**的四項：**I23 前端文案**、**I24 scorecard 未過濾 synthetic**、**I31 CI 半邊**、**`ATLAS_MARKET_DATA_PROVIDER=fubon` 誤導** |
+| 基準 | `origin/main` @ `1bc4b534`；分支 `fix/20260925-honesty-batch`（worktree `/tmp/atlas-honesty`） |
+| lane 邊界 | 未動 `internal/marketdata/`、`internal/orchestrator/gateway_provider.go`（quote-reliability lane）、`docs/reference/inert-registry.md`（inert-batch4-registry lane）；`docs/reference/traps.md` 維持 330 行上限未新增列 |
+| 判定 | 沿用 §0 三問檢查。I23 為「接線（來源標記→前端呈現）」；I24 為「接線（明確過濾 + 對外揭露）」；I31 為「讓失敗真的失敗 + freshness 政策裁決」；fubon 為「移除 + 明示」 |
+
+### 10.1 I24 `BuildScorecards` 未過濾 synthetic → **明確過濾 + 對外揭露**
+
+| 項目 | 內容 |
+|---|---|
+| 舊況（現行 main 實證） | `internal/ledger/ledger.go` 的 `BuildScorecards` 把**每一列** outcome 都聚合進 HitRate / SharpeLike / MaxDrawdown / IS-OOS；生產 `recommendation_outcomes` 45,668 列中 synthetic 25,571 列（**56.0%**）。synthetic 列的 `ForwardReturn` 是 `orchestrator.syntheticPlaceholderReturn` 的確定性佔位值（Batch 1 I20 語意），不是前向報酬 |
+| 為何是 false claim | `syntheticPlaceholderReturn` 的 doc block 自己寫明「**MUST NOT** be aggregated into any 命中率 / hit-rate / win-rate or strategy-ranking number」，但唯一供給 scorecard 的函式沒有做這件事 ⇒ 對外 `hit_rate`/`sharpe` 是「量測 + 佔位分布」的混合 |
+| 對照組（同 repo 既有正確做法） | `internal/portfolio/darwinian_period_matrix.go:112` 的 `BuildPeriodPerformanceMatrix` 第一行守衛就是 `o.IsSynthetic → continue`；`internal/strategy/shadow_evaluator.go:47` 同樣跳過。`BuildScorecards` 是漏掉的那一個 |
+| 處置 | ① `BuildScorecards` 對 `outcome.IsSynthetic` 列改為 `continue`（只計數、不聚合），所有統計只由真實列計算；② `domain.Scorecard` 新增對外欄位 `synthetic_observations`（被排除列數）與 `synthetic_share`（`synthetic/(synthetic+real)`）作為**排除的稽核軌跡**；③ **全 synthetic 的 agent 不發 scorecard**（舊行為會發一張全 0 的卡 ⇒ 對 naive consumer 是新的 false claim「0% 準確率」；0 在此代表未知），改記 `WARN ledger.scorecard_agent_dropped_all_synthetic`（agents / total_agents / reason），保持「不靜默」 |
+| 未改（明示） | `postgres_ledger.go` 的 slim query（`LoadScorecardOutcomes`）仍**不**在 SQL 端 `WHERE is_synthetic = false`：過濾放在 Go 的單一入口，避免同一語意在兩個查詢裡各寫一份；該欄位本來就有被 SELECT（`metadata->>'is_synthetic'`）所以 Go 端過濾在生產路徑上真的生效（slim 與 full 讀取都會帶到 `IsSynthetic`） |
+
+**證據（可重跑）**
+
+```bash
+go test ./internal/ledger/ -run 'Synthetic' -v
+```
+
+| 測試名 | 釘住的行為 |
+|---|---|
+| `TestBuildScorecards_ExcludesSyntheticRows` | 2 真實 + 3 synthetic ⇒ `observations=2`、`synthetic_observations=3`、`synthetic_share=0.6`、`windows=2`、`hit_rate=0.5`（聚合全部會是 0.8）、`average_return=0.04` |
+| `TestBuildScorecards_SyntheticRowsCannotChangeRealStatistics` | 對固定真實集合**追加** synthetic 列後，`HitRate/AverageReturn/SharpeLike/MaxDrawdown/TStat/HitRateTStat/IsSharpe/OosSharpe/IsOosRatio/RollingSharpeTrend` 必須**逐位元不變**（I24 的回歸守衛） |
+| `TestBuildScorecards_AllSyntheticAgentIsOmitted` | 只有 synthetic 列的 agent 不得到 scorecard（未知 ≠ 0 準確率） |
+| `TestBuildScorecards_RealOnlyAgentDisclosesZeroShare` | 全真實的 agent 對外揭露 `0/0.0`，不是缺欄位 |
+| `TestScorecardSyntheticDisclosureJSONContract` | 對外 JSON key `synthetic_observations`/`synthetic_share` 存在，且既有 `observations` 未消失 |
+
+對外影響：`internal/monitoring/service/agent_observatory.go`、`internal/monitoring/service/report.go`、`internal/backtest/window.go`、`internal/autobacktest/comparator.go`、`internal/autobacktest/signals.go`、`internal/orchestrator/phase3_controller.go`、`internal/orchestrator/system.go`（`NextExperimentCandidate`）、`internal/repository/postgres_audit.go` 全部同步改吃「真實列 only」的數字（它們都是同一個 `ledger.BuildScorecards`）。`internal/orchestrator/{prism,adversarial}_executor.go` 自行建構 outcome（`IsSynthetic` 預設 false），行為不變。
+
+### 10.2 I31 的 CI 半邊 → **讓失敗真的失敗 + freshness 政策裁決**
+
+| 項目 | 內容 |
+|---|---|
+| 舊況（現行 main 實證） | `.github/workflows/nightly-refresh.yml` 的 validate step 用 `set +e` + 非最終的 `cat`（`$?` 讀到的是 `cat`/`echo` 的退出碼）⇒ step 恆 success；Slack step 在 `SLACK_WEBHOOK_URL` 未設時 `exit 0` ⇒ **零告警**。同檔 backfill step 的 `\|\| echo` 讓 `steps.backfill.conclusion` 永遠不是 `failure`，Slack 條件因此永不成立 |
+| 為何不能只加 `exit 1` | `cmd/calibration-validate` 對出貨的 `configs/parameters.json` 實跑 `OK=false`（exit 1），其中兩類是**結構上不可能消除**的：(a) `UPDATED_AT_STALE` — CI 驗的是 checkout 帶進來的檔案，`updated_at 2026-07-06`（I30：backfill 在 runner 內的寫入被丟棄，永遠不會被 commit）；(b) 7 個 by-design 的 `L1/L2_NO_REPRESENTATIVES`（`internal/config/integrity.go` 的 code 註解已記載）。直接讓它紅 ⇒ 每晚固定紅燈，跟永遠綠一樣沒有資訊 |
+| **freshness 政策裁決（本批定案）** | **CI 只驗結構**；**freshness 由 production 主機執行**（檔案真的被刷新的地方）。CI 命令：`atlas-validate --path=configs/parameters.json --policy=configs/calibration-validation-policy.json --format=json`；production 命令：`atlas-validate --path=configs/parameters.json --max-age=48h --format=json`（scope=full，exit 1 必須接上生產監控） |
+| 處置 | ① 新增 policy 檔 `configs/calibration-validation-policy.json`：宣告 `scope` 與 `accepted`（by-design findings，**每項必填 reason**，code 必須落在封閉集合、reason 不得是空/TODO，否則載入即失敗）；② `config.ValidateCalibrationWithOptions` + `CalibrationValidationPolicy`（fail-closed：無 policy 時行為與舊 `ValidateCalibration` 完全一致）；③ finding 新增 severity `observation`：scope=structure 時的 freshness findings、以及被 accepted 匹配的 findings 都是 observation，**仍列在 `Findings`**（可見、不靜默），其餘一律 error 並讓 `OK=false`；④ CLI 新增 `--policy`，輸出多出 `scope`/`freshness_enforced`/`error_count`/`observation_count` 與 `status`（`passed`/`passed_with_observations`/`failed`/`failed_structure`）；⑤ workflow：step 的 exit code **就是** `atlas-validate` 的 exit code（不再經管線讀 `$?`；錯誤級 findings 發 `::error::`、觀測級發 `::warning::` annotation ⇒ **零設定就有告警**，不依賴 Slack）；⑥ backfill step 移除 `\|\| echo`（`continue-on-error` 已足以保持 job 前進），改由後續 step 以 `steps.backfill.outcome != 'success'` 發 `::warning::`；⑦ Slack 仍為選配，未設定時發 `::warning::` 而非靜默 `exit 0`，且條件改看 `steps.*.outcome`（`conclusion` 在 `continue-on-error` 下永遠是 success） |
+
+**證據（可重跑）**
+
+```bash
+# 出貨 config + 出貨 policy ⇒ 結構通過、8 筆全是 observation、exit 0
+go build -o /tmp/atlas-validate ./cmd/calibration-validate
+/tmp/atlas-validate --path=configs/parameters.json --policy=configs/calibration-validation-policy.json
+# OK=true scope=structure freshness_enforced=false errors=0 observations=8 status=passed_with_observations
+
+# fail-closed 預設（無 policy）⇒ 與 Batch 3 完全相同：8 errors、exit 1
+/tmp/atlas-validate --path=configs/parameters.json
+# OK=false scope=full freshness_enforced=true errors=8 observations=0 status=failed
+
+# 新結構性缺陷仍會紅：清掉 semiconductor 的代表股
+/tmp/atlas-validate --path=/tmp/mutated-params.json --policy=configs/calibration-validation-policy.json
+# OK=false ... errors=1 observations=8 status=failed_structure  →  exit 1，且該 segment 標成 [error]
+
+go test ./internal/config/ -run 'Policy|ValidateCalibration|Freshness|Finding' -v
+```
+
+| 測試名 | 釘住的行為 |
+|---|---|
+| `TestValidateCalibrationWithOptions_NoPolicyMatchesLegacy` | 無 policy ⇒ scope=full、0 observations、全部 severity=error、`Issues` 與 `Findings` 逐項 mirror、`OK` 與舊函式一致（防止「忘記傳 policy」變成放寬閘門） |
+| `TestShippedConfigUnderShippedPolicyPassesStructureOnly` | 出貨 config + 出貨 policy ⇒ `OK=true`、`errors=0`、`observations=8`，且 freshness 仍以 observation 出現 |
+| `TestShippedPolicyAcceptsOnlyByDesignFindings` | accepted 集合是**精確集合**（5 個 L1 + 2 個 L2），且 policy 不得硬接受任何 freshness code |
+| `TestValidateCalibrationWithOptions_NewStructuralFindingFails` | 清掉 `semiconductor` 代表股 ⇒ `OK=false`、`errors=1`，該 finding severity=error（閘門有牙齒） |
+| `TestValidateCalibrationWithOptions_FullScopePolicyEnforcesFreshness` | 同一個 policy 檔改成 `scope=full` ⇒ freshness 變 error、`OK=false`（production 側語意） |
+| `TestCalibrationValidationPolicy_ValidateFailsClosed` | 9 個子案例：未知 scope / 未知 code / 空 code / 缺 reason / TODO reason / 空白 reason 全部拒絕 |
+| `TestCalibrationFindingCodes_AreClosedAndSorted` | code 集合封閉為 13 個且排序（新增 code 必須同步更新 policy 契約） |
+| `TestValidateCalibrationWithOptions_ZeroMaxAgeUsesDefault` | `MaxAge=0` 回退 48h，不會退化成「全部過期」 |
+| `TestCalibrationValidationResult_JSONContract` | JSON key `OK`/`Issues`/`Findings`/`scope`/`freshness_enforced`/`error_count`/`observation_count` 與 finding 的 `severity` |
+
+**仍未做（誠實）**：production 主機上的 freshness 檢查尚未接到既有監控（屬部署/監控 lane，不在本 PR）；I30（backfill 寫入被丟棄 ⇒ 本 job 無法刷新任何東西）未修，本 PR 只讓它的後果可見。
+
+### 10.3 `ATLAS_MARKET_DATA_PROVIDER=fubon` 誤導 → **移除 + 明示**
+
+| 項目 | 內容 |
+|---|---|
+| 舊況（現行 main 實證） | `selectProvider`（`internal/orchestrator/system_dispatcher.go`）只有 `fugle`/`twse`/`hybrid`/`""` 分支，`default` 直接回 `NewHybridProvider` 且**無任何訊號**；`configs/allowed_env_vars.md` 的 `ATLAS_MARKET_DATA_PROVIDER` 卻把 `fubon` 列為合法值 |
+| 為何不做「實作該分支」 | fubon 通道只存在於 Python `services/fubon-proxy`（Go 側 `internal/fubonproxy` 只管理其生命週期，**沒有** `marketdata.Provider` 包裝它）。實作一個 provider 必須動 `internal/marketdata/`，那是另一條 lane（quote-reliability，#1986）的領域，本批禁動 |
+| 處置（擇一並說明理由） | **從合法清單移除並明示**：① 新增機器可讀 SSOT `orchestrator.supportedMarketDataProviders`（`twse`/`fugle`/`hybrid`）與 `SupportedMarketDataProviders()`／`IsSupportedMarketDataProvider()`；② `default` 分支補 `WARN system.market_data_provider_unsupported`（帶 `configured`/`supported`/`fallback=hybrid`/`reason`），**只加這個 log，未重構 switch 其他部分**，hybrid 仍是安全 fallback；③ `configs/allowed_env_vars.md` 該列改寫為「有效值只有 `twse`/`fugle`/`hybrid`」，並寫明 fubon 沒有實作、會回退 hybrid 並 WARN |
+| 未改（明示） | `ATLAS_MARKET_DATA_PROVIDER` 的值本身仍**不做啟動期驗證**（打錯字仍只是 WARN + hybrid，不是開機失敗）。理由：把它變成啟動錯誤會讓既有部署（可能含未知值）直接起不來，屬部署決策，需另票 |
+
+**證據（可重跑）**
+
+```bash
+go test ./internal/orchestrator/ -run 'MarketDataProvider|SelectProvider|AllowedEnvVars' -v
+```
+
+| 測試名 | 釘住的行為 |
+|---|---|
+| `TestSupportedMarketDataProvidersMatchesSelectProvider` | SSOT 集合 == `{twse, fugle, hybrid}`、回傳複本（不可被呼叫端擴充）、`""` 視為支援、`fubon`/`yahoo`/`mock`/`FUGLE` 皆不支援 |
+| `TestSelectProvider_FubonFallsBackToHybridNotMock` | `fubon` ⇒ hybrid provider（**不是** MockProvider，mock 會回傳完整假報價） |
+| `TestAllowedEnvVarsDocDoesNotClaimFubon` | 直接讀 `configs/allowed_env_vars.md`：該列必須列出 `` `twse`/`fugle`/`hybrid` ``，且不得再把 `fubon` 寫成 backticked 值（文件漂回舊說法即紅燈） |
+
+**與 §9.6 的關係**：§9.6 已記載「`ATLAS_MARKET_DATA_PROVIDER=fubon` 不是 `selectProvider` 的分支 … 會靜默落到 hybrid，而 `configs/allowed_env_vars.md` 卻把它列為合法值」。本節即該事實的處置。

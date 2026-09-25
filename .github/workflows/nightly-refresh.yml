@@ -9,6 +9,23 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# 本 workflow 的判定性（issue #1944 Batch 4, item I31）：
+#   舊寫法用 `set +e` + 非最終的 `cat` 取值，且 Slack 步驟在 SLACK_WEBHOOK_URL 未設時
+#   `exit 0` ⇒ step 恆 success、零告警，失敗（含 cmd/calibration-validate 實跑 OK=false / exit 1）
+#   永遠不會被看見。
+#   現在：①step 的 exit code 就是 atlas-validate 的 exit code（不再被吞）；
+#         ②觀測級發現（freshness + 已知 by-design）用 GitHub annotation 標成 warning；
+#         ③錯誤級發現用 `::error::` annotation，且 exit 1 讓 job 真的紅 →
+#           零設定（不用 Slack webhook）就有告警；
+#         ④Slack 仍為選配，未設定時改發 annotation 而非靜默跳過。
+#
+#   freshness 政策（Batch 4 決定）：**CI 只驗結構**（--policy=configs/calibration-validation-policy.json，
+#   scope=structure）。理由：CI 驗的是 checkout 帶進來的 configs/parameters.json，其 updated_at
+#   結構上不可能落在 max-age 內（I30：backfill 在 runner 內寫入的結果會被丟棄）。freshness 必須在
+#   檔案真的被刷新的地方檢查，即 production 主機：
+#       atlas-validate --path=configs/parameters.json --max-age=48h --format=json
+#   該命令的 exit 1 必須被 production 監控接到（見 docs/specs/industry-allocation-inert-audit-20260924.md §10）。
+
 jobs:
   backfill-and-validate:
     runs-on: ubuntu-latest
@@ -39,9 +56,16 @@ jobs:
       env:
         ATLAS_ENV: production
         ATLAS_DATA_DIR: ./data
-      run: |
-        ./atlas-backfill || echo "backfill exited non-zero; will still run integrity check"
+      # No `|| echo`: swallowing the failure here made steps.backfill.outcome
+      # permanently 'success'. `continue-on-error` already keeps the job going,
+      # and the outcome is now truthful (annotated in the next step).
+      run: ./atlas-backfill
       continue-on-error: true
+
+    - name: Annotate backfill outcome
+      if: always() && steps.backfill.outcome != 'success'
+      run: |
+        echo "::warning::industry-tree backfill did not succeed (outcome=${{ steps.backfill.outcome }}); the integrity check below therefore reads the checked-out configs/parameters.json unchanged (see issue #1944 I30 — this job cannot persist a refresh)."
 
     - name: Build validation binary
       run: go build -o atlas-validate ./cmd/calibration-validate
@@ -49,10 +73,40 @@ jobs:
     - name: Run post-backfill integrity check
       id: validate
       run: |
-        set +e
-        ./atlas-validate --path=configs/parameters.json --max-age=48h --format=json > validate-result.json
-        echo "validate-exit=$?" >> "$GITHUB_OUTPUT"
-        cat validate-result.json
+        # Capture the real exit code of atlas-validate. Never read `$?` after a
+        # pipeline: that reports the last command's status and turns a failure
+        # into a false green.
+        status=0
+        ./atlas-validate \
+          --path=configs/parameters.json \
+          --policy=configs/calibration-validation-policy.json \
+          --format=json > validate-result.json || status=$?
+
+        cat validate-result.json || true
+
+        # A missing/unparsable verdict must fail the step: the `?` below would
+        # otherwise degrade to "no annotations".
+        if ! jq -e '.Findings' validate-result.json > /dev/null 2>&1; then
+          echo "::error::validate-result.json has no Findings — atlas-validate did not produce a usable verdict (exit=$status)"
+          exit 1
+        fi
+
+        # Accepted/observational findings stay visible in the Actions UI without
+        # a configured webhook. NOTE the key is `Findings` (capital F): that field
+        # carries no json tag, unlike the lowercase `scope` / `error_count` /
+        # `observation_count` siblings.
+        jq -r '.Findings[]? | select(.severity=="observation")
+               | "::warning::[" + .code + "]" + (if .segment then " segment=" + .segment else "" end) + " " + .message' \
+          validate-result.json || true
+        jq -r '.Findings[]? | select(.severity=="error")
+               | "::error::[" + .code + "]" + (if .segment then " segment=" + .segment else "" end) + " " + .message' \
+          validate-result.json || true
+
+        if [ "$(jq -r '.OK' validate-result.json 2>/dev/null)" != "true" ]; then
+          echo "::error::calibration validation failed with unexpected findings (scope=$(jq -r '.scope' validate-result.json 2>/dev/null), errors=$(jq -r '.error_count' validate-result.json 2>/dev/null)); full result is attached as the nightly-calibration-validation artifact"
+        fi
+
+        exit "$status"
 
     - name: Upload validation result artifact
       if: always()
@@ -62,13 +116,17 @@ jobs:
         path: validate-result.json
         retention-days: 30
 
+    # Slack is optional. When SLACK_WEBHOOK_URL is unset the failure is still
+    # visible: the failing step above turns the job red and the ::error::
+    # annotation is rendered on the run summary. Previously this step `exit 0`d
+    # silently, which is why a failing validate produced zero alerts.
     - name: Slack alert on failure
-      if: hashFiles('validate-result.json') != '' && (steps.validate.outputs.validate-exit != '0' || steps.backfill.conclusion == 'failure')
+      if: always() && (steps.validate.outcome != 'success' || steps.backfill.outcome != 'success')
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       run: |
         if [ -z "$SLACK_WEBHOOK_URL" ]; then
-          echo "SLACK_WEBHOOK_URL not configured; skipping alert"
+          echo "::warning::SLACK_WEBHOOK_URL not configured; nightly alert delivered as GitHub annotations only (validate=${{ steps.validate.outcome }}, backfill=${{ steps.backfill.outcome }})"
           exit 0
         fi
         payload=$(jq -nc \
