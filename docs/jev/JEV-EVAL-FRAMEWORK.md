@@ -160,6 +160,8 @@ spec 放在 `scripts/jev_eval/specs/<name>.py`，於 `cli.py::SPECS` 註冊；`s
 已實作者可作為模板：`specs/industry_l1.py`（Stage 1，GT = panel 的 `forward` 區塊）與 `specs/event_calendar.py`（Stage 3，GT = 事件骨架 × 同一份 panel，以錨點日期 join）。**事件層的額外一條紀律**：GT 的日期骨架必須與報酬 GT **分開匯出、在 spec 內 join**，這樣兩邊各自可稽核、各自可重跑；並且匯出器必須內建**品質閘門**（見下）而不是讓壞日期靜默進入評估。
 
 > **匯出器的品質閘門（Stage 3 教訓）**：GT 骨架的「日期正確」不是自動成立的。`cmd/experimental/jev-eval-events` 內建 `-quality-gate`（預設開），擋掉三類**已被證明不可用**的 occurrence：peak 落在自己窗口之外（`buildMonthlyEvent` 的年份固定 peak）、窗口反轉（`StartDate > EndDate`）、以及農曆表未驗證年份（`GetLunarCoverageYears()`）的移動型假日。擋掉的數量一律寫進 summary；`-quality-gate=false` 可重現「未過濾」版本以便稽核。詳見 `JEV-EVAL-STAGE3-EVENTS.md` §1.3。
+>
+> **後續（2026-09-25, issue #1973）**：三類閘門所對應的**產生器已修正**（月別 peak、窗口方向、農曆表覆蓋 + 不可判定），閘門因此改為**回歸偵測器**（保留不放寬）：同一個 2021 視窗現在 `dropped(peak_outside=0 inverted=0 lunar=0)`、`exported 34 → 60`。契約與證據見 [`../specs/event-calendar-date-invariants-spec.md`](../specs/event-calendar-date-invariants-spec.md)。
 
 ---
 
