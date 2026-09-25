@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "entries": {
+    "config-inert": {
+      "demo.inert_flag": {
+        "reason": "fixture：故意留一個沒有 reader 的參數，驗證 baseline 覆蓋後檢查不紅燈",
+        "evidence": "internal/config/parameters.go:8"
+      }
+    },
+    "writer-no-consumer": {
+      "internal/demo/writers.go:SetInertWriter": {
+        "reason": "fixture：故意留一個沒有呼叫端的 writer，驗證 baseline 覆蓋機制",
+        "tier": "dead",
+        "evidence": "internal/demo/writers.go:11"
+      }
+    },
+    "claim-not-derived": {
+      "applied@Applied": {
+        "reason": "fixture：故意硬寫 Applied:true，驗證 claim-not-derived 的 baseline 覆蓋機制",
+        "evidence": "internal/demo/claims.go:17"
+      }
+    }
+  }
+}
