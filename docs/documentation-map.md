@@ -168,6 +168,7 @@
 | `docs/specs/dashboard-api-contract-spec.md` | Dashboard API 合約 | ✅ |
 | `docs/specs/dashboard-metrics-ssot-spec.md` | 管理台指標單一事實源（SSOT）：三頁指標口徑統一、資料分層與後端落實契約 | ✅ |
 | `docs/specs/sector-allocation-simulation-closure-spec.md` | Canonical sector allocation、legacy 遷移、simulation application 與 F06 close-out 契約 | ✅ |
+| `docs/specs/sectorallocation-determinism-spec.md` | sectorallocation projection 決定性契約（SA-DET-01）：map 走訪順序造成的 ±1 ULP 漂移、修法與回歸閘門 | ✅ |
 | `docs/specs/guest-mode-spec.md` | Guest mode 規格 | ✅ |
 
 ### 📋 數據標準

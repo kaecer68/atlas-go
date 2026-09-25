@@ -265,7 +265,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	logging.Info("apigateway", "adapter_registered", "channel", "us_cpi")
 
 	// --- Sector Data (TWSE sector classification) ---
-	sectorProvider := marketdata.NewSectorDataProvider(filepath.Join(workDir, "data/state/sector_data"))
+	sectorProvider := marketdata.NewSectorDataProvider(marketdata.ResolveSectorDataDir(workDir))
 	sectorAdapter := NewSectorDataChannelAdapter(sectorProvider)
 	g.registry.Register("sector_data", sectorAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "sector_data")

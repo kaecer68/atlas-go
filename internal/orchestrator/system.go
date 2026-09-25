@@ -421,7 +421,10 @@ func NewSystemWithEventBus(cfg config.Config, eventBus *eventbus.ChannelEventBus
 		return nil, fmt.Errorf("create store: %w", err)
 	}
 
-	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(cfg.LedgerDir)
+	// Sector data lives under the work dir, NOT under LedgerDir: passing
+	// cfg.LedgerDir made the provider read <ledgerDir>/sector_data.json, which
+	// nothing writes (issue #1944 Batch 2, Q6 I14).
+	macroRiskEngine, structuralTrendEngine, macroDrawdownEngine, sectorDataProvider := buildMacroEngines(marketdata.ResolveSectorDataDir(cfg.WorkDir))
 
 	simCore := buildSimulationCore(cfg, registry, policy, ds, optimizer, store)
 	simCore.factorEngine = factorEngine

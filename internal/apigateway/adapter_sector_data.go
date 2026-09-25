@@ -43,18 +43,53 @@ func (a *SectorDataChannelAdapter) Fetch(ctx context.Context) (*FetchResult, err
 	}}, nil
 }
 
+// HealthCheck reports the verdict for the sector_data channel.
+//
+// Issue #1944 Batch 2 (Q6 I14): the provider degrades gracefully (missing file →
+// zero snapshot, nil error), so this check used to return "ok" for a channel
+// whose backing file does not exist — a green light on a dead channel. It now
+// reads the provider's load state and reports StatusDegraded with the resolved
+// path and the file's own updated_at whenever the data is missing, malformed or
+// older than the contract's freshness window.
 func (a *SectorDataChannelAdapter) HealthCheck(ctx context.Context) (HealthStatus, error) {
 	_, err := a.provider.FetchSnapshot(ctx)
 	if err != nil {
 		return HealthStatus{
-			Status:    "error",
+			Status:    StatusError,
 			LastError: err.Error(),
 			UpdatedAt: time.Now().Format(time.RFC3339),
 			CheckType: "readiness",
 		}, err
 	}
+
+	state := a.provider.State()
+	window := ChannelContracts().Contract("sector_data").EffectiveFreshnessWindow()
+	switch {
+	case !state.Found:
+		return HealthStatus{
+			Status:    StatusDegraded,
+			LastError: fmt.Sprintf("sector_data.json not loaded (%s): %s", state.Reason, state.Path),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "readiness",
+		}, nil
+	case state.DataUpdatedAt.IsZero():
+		return HealthStatus{
+			Status:    StatusDegraded,
+			LastError: fmt.Sprintf("sector_data.json has no usable updated_at (%s): %s", state.Reason, state.Path),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "readiness",
+		}, nil
+	case window > 0 && time.Since(state.DataUpdatedAt) > window:
+		return HealthStatus{
+			Status: StatusDegraded,
+			LastError: fmt.Sprintf("sector_data.json stale: updated_at=%s age=%s > %s (%s)",
+				state.DataUpdatedAt.Format(time.RFC3339), time.Since(state.DataUpdatedAt).Round(time.Hour), window, state.Path),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			CheckType: "readiness",
+		}, nil
+	}
 	return HealthStatus{
-		Status:    "ok",
+		Status:    StatusOK,
 		UpdatedAt: time.Now().Format(time.RFC3339),
 		CheckType: "readiness",
 	}, nil
@@ -63,5 +98,8 @@ func (a *SectorDataChannelAdapter) HealthCheck(ctx context.Context) (HealthStatu
 func (a *SectorDataChannelAdapter) RateLimit() *rate.Limiter { return a.limiter }
 
 func (a *SectorDataChannelAdapter) Metadata() ChannelMetadata {
-	return ChannelMetadata{ChannelID: "sector_data", Country: "台灣", Platform: "TWSE", APIFormat: "CSV/JSON", Path: "data/state/sector_data", HasLimiter: false}
+	// Path is the single-authority location (marketdata.SectorDataDirRel);
+	// it used to advertise data/state/sector_data, which nothing writes
+	// (issue #1944 Batch 2, Q6 I14).
+	return ChannelMetadata{ChannelID: "sector_data", Country: "台灣", Platform: "TWSE", APIFormat: "CSV/JSON", Path: marketdata.SectorDataDirRel, HasLimiter: false}
 }

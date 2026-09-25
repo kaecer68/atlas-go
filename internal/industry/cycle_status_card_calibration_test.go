@@ -120,25 +120,30 @@ func TestResolveCardConfig_EvidenceRedistributesWeights(t *testing.T) {
 	}
 }
 
-// TestCycleCalibration_ZeroWindowSizeConfigBlocksCalibration pins the reason the
-// I1 wiring has no effect in production today (issue #1944 Batch 2 item I3):
-// configs/parameters.json ships industry.cycle_calibration all-zero, and
-// WindowSize=0 makes RecordOutcome drop every outcome on the same call
-// (outcomes[len-0:] == outcomes[len:] == empty), so the tracker can never build
-// layer metrics and the evidence gate keeps the default weights.
+// TestCycleCalibration_ZeroWindowSizeKeepsOutcomes pins the fixed semantics of
+// a zero window (issue #1944 Batch 2 item I3; Batch 1 pinned the bug):
+// WindowSize <= 0 now means "keep every outcome" instead of
+// outcomes[len-0:] == empty, which used to drop the sample the caller had just
+// recorded and kept the layer metrics permanently empty.
 //
-// If this test starts failing, I3 was fixed: update docs/reference/inert-registry.md
-// (I1/I3 rows) and the I1 evidence accordingly.
-func TestCycleCalibration_ZeroWindowSizeConfigBlocksCalibration(t *testing.T) {
-	cal := NewCycleCalibration(config.CycleCalibrationConfig{}) // = shipped config value
+// The all-zero config shipped in configs/parameters.json is ALSO merged up to
+// the code defaults (MinSamples=10, WindowSize=30) since Batch 2, so the
+// production tracker accumulates samples; see
+// internal/config/parameters_merge.go and
+// TestMergeIndustryDefaults_CycleCalibrationAllZero.
+//
+// The safety half of the old test is preserved below: even with samples
+// present, an all-zero clamp/hit-rate config must not blank the card weights.
+func TestCycleCalibration_ZeroWindowSizeKeepsOutcomes(t *testing.T) {
+	cal := NewCycleCalibration(config.CycleCalibrationConfig{}) // all-zero block
 	for i := range 20 {
 		cal.RecordOutcome("sess", time.Now(), map[string]float64{"silicon": 0.9}, 0.01+float64(i)*1e-6)
 	}
-	if cal.GetOutcomeCount() != 0 {
-		t.Fatalf("WindowSize=0 no longer wipes the window: %d outcomes retained", cal.GetOutcomeCount())
+	if cal.GetOutcomeCount() != 20 {
+		t.Fatalf("WindowSize=0 must not trim the window: %d outcomes retained, want 20", cal.GetOutcomeCount())
 	}
-	if len(cal.GetMetrics()) != 0 {
-		t.Fatalf("WindowSize=0 no longer blocks metrics: %d layers", len(cal.GetMetrics()))
+	if len(cal.GetMetrics()) == 0 {
+		t.Fatal("WindowSize=0 must not block metrics")
 	}
 
 	withCalibration(t, cal)
@@ -179,8 +184,11 @@ func TestApplyCycleCalibration_AllZeroWeightsFallsBackToDefaults(t *testing.T) {
 	}, 0.01)
 
 	base := defaultCardConfig()
-	if got := cal.CalibrateWeights(base.LayerWeights); weightSum(got) != 0 {
-		t.Fatalf("expected the zero clamp window to blank calibrated weights, got %+v", got)
+	// Batch 2: a degenerate clamp window is now a no-op inside CalibrateWeights
+	// (WeightClampMax <= WeightClampMin), so the base weights survive instead of
+	// being clamped to 0 for every layer that has metrics.
+	if got := cal.CalibrateWeights(base.LayerWeights); !reflect.DeepEqual(got, base.LayerWeights) {
+		t.Fatalf("degenerate clamp window must not alter weights, got %+v", got)
 	}
 	if got := applyCycleCalibration(base, cal); !reflect.DeepEqual(got, base) {
 		t.Fatalf("all-zero calibration must fall back to defaults, got %+v", got.LayerWeights)

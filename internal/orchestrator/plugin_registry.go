@@ -286,6 +286,33 @@ func (r *PluginRegistry) WithAgentHealthManager(m *portfolio.AgentHealthManager)
 	return r
 }
 
+// ModulatorWiringActive reports whether production wires the conviction
+// modulators into the plugin registry. It does not (issue #1944 Batch 2,
+// Q6 I10/I11/I33 — decided "明示未啟用", not wired).
+//
+// The pipeline in executor_collection.go applies the modulators' steps whenever
+// plugins.cycleModulator / plugins.narrativeModulator are non-nil (industry
+// cycle phase deltas + CycleStatusCard composite sentiment + narrative theme
+// boosts all write ConvictionBreakdown steps). The only callers of
+// WithCycleModulator / WithNarrativeModulator are tests
+// (plugin_registry_coverage_test.go), so nothing an upstream industry metric
+// computes today reaches conviction, sizing or orders.
+//
+// Wiring is blocked on the *inputs*, not on this code:
+//   - IndustryCycleModulator needs a CycleTracker with positions for the mapped
+//     industries; the production composition path seeds the tracker from config
+//     defaults (industry.NewCycleTracker → initializeDefaultPositions), and
+//     SetCycleCard (Q6 I11) has no production caller either, so wiring today
+//     would apply seed-derived phases as if they were observed.
+//   - NarrativeConvictionModulator needs narrative events with Status=="active"
+//     plus configured theme hit rates; those rates are hand-written constants
+//     (Q6 I23), so the same laundering concern applies.
+//
+// TestProductionRegistryLeavesConvictionModulatorsUnwired pins the fact: wiring
+// them (or changing this constant) must update that test and
+// docs/specs/industry-allocation-inert-audit-20260924.md together.
+const ModulatorWiringActive = false
+
 func (r *PluginRegistry) WithCycleModulator(m *IndustryCycleModulator) *PluginRegistry {
 	r.cycleModulator = m
 	return r
