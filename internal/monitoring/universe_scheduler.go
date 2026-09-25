@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -324,18 +325,31 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 			}
 		}
 
-		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
+		// Coverage audit against the FIRST-PARTY population (issue #1943):
+		// the denominator is the upstream `symbol_industry` rows, the numerator
+		// is the part with a canonical L1 answer. When no first-party population
+		// is measurable the report says so instead of printing a green 1.00
+		// (the pre-2026-09 audit set total = mapped).
+		coverage := CheckUniverseCoverage(deps.Substrate, deps.Mapper, deps.Tree, 0.50)
 		logging.Info("universe_scheduler", "coverage_check",
-			"mapped", mapped,
-			"total", total,
-			"ratio", fmt.Sprintf("%.2f", ratio))
-		if alert != "" {
+			"source", coverage.Source,
+			"mapped", coverage.Mapped,
+			"upstream", coverage.Upstream,
+			"unmapped", coverage.Unmapped,
+			"unknown", coverage.Unknown,
+			"ratio", fmt.Sprintf("%.2f", coverage.Ratio),
+			"available", coverage.Available,
+			"reasons", strings.Join(coverage.Reasons, "; "))
+		if coverage.Alert != "" {
 			logging.Warn("universe_scheduler", "coverage_alert",
-				"alert", alert)
+				"alert", coverage.Alert)
 		}
 		if deps.UniverseMetrics != nil {
-			deps.UniverseMetrics.CoverageMapped.WithLabelValues("daily", "all").Add(int64(mapped))
-			deps.UniverseMetrics.CoverageTotal.WithLabelValues("daily", "all").Add(int64(total))
+			// Label values are unchanged (dashboards depend on them); only the
+			// meaning of the pair changes: the denominator is the upstream
+			// population instead of the mapped count itself.
+			deps.UniverseMetrics.CoverageMapped.WithLabelValues("daily", "all").Add(int64(coverage.Mapped))
+			deps.UniverseMetrics.CoverageTotal.WithLabelValues("daily", "all").Add(int64(coverage.Upstream))
 		}
 
 		return nil
@@ -395,18 +409,31 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 			}
 		}
 
-		mapped, total, ratio, alert := CheckUniverseCoverage(deps.Mapper, deps.Tree, 0.50)
+		// Coverage audit against the FIRST-PARTY population (issue #1943):
+		// the denominator is the upstream `symbol_industry` rows, the numerator
+		// is the part with a canonical L1 answer. When no first-party population
+		// is measurable the report says so instead of printing a green 1.00
+		// (the pre-2026-09 audit set total = mapped).
+		coverage := CheckUniverseCoverage(deps.Substrate, deps.Mapper, deps.Tree, 0.50)
 		logging.Info("universe_scheduler", "coverage_check",
-			"mapped", mapped,
-			"total", total,
-			"ratio", fmt.Sprintf("%.2f", ratio))
-		if alert != "" {
+			"source", coverage.Source,
+			"mapped", coverage.Mapped,
+			"upstream", coverage.Upstream,
+			"unmapped", coverage.Unmapped,
+			"unknown", coverage.Unknown,
+			"ratio", fmt.Sprintf("%.2f", coverage.Ratio),
+			"available", coverage.Available,
+			"reasons", strings.Join(coverage.Reasons, "; "))
+		if coverage.Alert != "" {
 			logging.Warn("universe_scheduler", "coverage_alert",
-				"alert", alert)
+				"alert", coverage.Alert)
 		}
 		if deps.UniverseMetrics != nil {
-			deps.UniverseMetrics.CoverageMapped.WithLabelValues("weekly", "all").Add(int64(mapped))
-			deps.UniverseMetrics.CoverageTotal.WithLabelValues("weekly", "all").Add(int64(total))
+			// Label values are unchanged (dashboards depend on them); only the
+			// meaning of the pair changes: the denominator is the upstream
+			// population instead of the mapped count itself.
+			deps.UniverseMetrics.CoverageMapped.WithLabelValues("weekly", "all").Add(int64(coverage.Mapped))
+			deps.UniverseMetrics.CoverageTotal.WithLabelValues("weekly", "all").Add(int64(coverage.Upstream))
 		}
 
 		return nil
@@ -1160,33 +1187,123 @@ func inferredIndustry(sym string, mapper SymbolIndustryMapper) string {
 
 // ── Coverage Check ────────────────────────────────────────────────────────
 
-// CheckUniverseCoverage computes the percentage of total symbols that are
-// mapped to Level-1 industries. Returns mapped, total, ratio, and an alert
-// message when the ratio falls below the threshold.
+// CoverageReport is the outcome of one universe coverage audit.
 //
-// A nil mapper or tree returns 0, 0, 0 with an alert.
-func CheckUniverseCoverage(mapper SymbolIndustryMapper, tree ClassificationTreeAccessor, threshold float64) (mapped int, total int, ratio float64, alert string) {
-	if mapper == nil || tree == nil {
-		return 0, 0, 0, "mapper or tree not available"
+// The audit exists to answer one question honestly: how much of the population
+// the first-party `symbol_industry` channel saw was actually classified? The
+// pre-2026-09 audit could not answer it -- it set total = mapped, so Ratio was
+// 1.00 by construction and the alert could never fire (production logged
+// `coverage_check mapped=27 total=27 ratio=1.00` right after the daily refresh
+// while the pipeline had already moved to a 1599-symbol population).
+type CoverageReport struct {
+	// Available is false when no first-party population is measurable. In that
+	// case the other numeric fields carry no coverage meaning and Alert is set:
+	// not measurable must be reported as such, never as 100 %.
+	Available bool
+	// Source is "symbol_industry" when the audit ran against the first-party
+	// population, and "unavailable" otherwise.
+	Source string
+	// Upstream is the denominator: the upstream rows the first-party channel
+	// saw (TWSE 上市 + TPEx 上櫃 company/industry reports).
+	Upstream int
+	// Mapped is the numerator: rows with a canonical L1 answer, which is
+	// exactly the population the pipeline builds from.
+	Mapped int
+	// Unmapped / Unknown are the two documented unresolved reasons (declared
+	// code without a defensible canonical L1; code not declared at all).
+	Unmapped int
+	Unknown  int
+	// Reasons carries the distinct reasons the unresolved rows report.
+	Reasons []string
+	// Ratio is Mapped/Upstream; 0 when !Available.
+	Ratio float64
+	// Alert is non-empty when the coverage must be looked at: either it is not
+	// measurable or it fell below the threshold.
+	Alert string
+}
+
+// coverageSourceUnavailable marks an audit that could not measure the
+// first-party population. The other source value is
+// industry.L1SourceSymbolIndustry ("symbol_industry"), reused so the audit and
+// the resolver report the same source name.
+const coverageSourceUnavailable = "unavailable"
+
+// CheckUniverseCoverage audits how much of the first-party `symbol_industry`
+// population the substrate could resolve to a canonical L1 sector.
+//
+// Semantics (deliberate audit-only change, see the PR body):
+//
+//   - substrate installed AND implements
+//     industry.SymbolIndustryCoverageReporter: Source = "symbol_industry",
+//     Upstream/Mapped/Unmapped/Unknown/Reasons come from the reporter, and
+//     Ratio = Mapped/Upstream. Upstream == 0 (nothing loaded / empty channel)
+//     is NOT full coverage: it is reported as unavailable with an alert.
+//   - no substrate, or a substrate that does not report coverage: Available =
+//     false, Source = "unavailable", Ratio = 0, and an explicit alert saying the
+//     first-party population is not measurable. The alert names the legacy
+//     representative-stock table (TotalClassifiedSymbols) and the population the
+//     pipeline would build instead, so nobody mistakes either for a market-wide
+//     denominator.
+//
+// mapper and tree are used only to describe that fallback population; this
+// function never changes the population, the scoring or the ordering. A nil
+// mapper or tree is tolerated (a nil tree yields 0 legacy symbols).
+func CheckUniverseCoverage(substrate industry.SymbolIndustrySubstrate, mapper SymbolIndustryMapper, tree ClassificationTreeAccessor, threshold float64) CoverageReport {
+	report := CoverageReport{Source: coverageSourceUnavailable}
+
+	if substrate == nil {
+		report.Alert = coverageUnavailableAlert(
+			"no per-stock industry substrate is installed", substrate, mapper, tree)
+		return report
 	}
-	allSymbols := make(map[string]bool)
-	for _, seg := range tree.GetLevel1() {
-		for _, sym := range mapper.GetSymbolsByIndustry(seg.ID) {
-			allSymbols[normalizeSymbol(sym)] = true
-		}
+	reporter, ok := substrate.(industry.SymbolIndustryCoverageReporter)
+	if !ok {
+		report.Alert = coverageUnavailableAlert(
+			"the installed substrate does not report the first-party population", substrate, mapper, tree)
+		return report
 	}
-	mapped = len(allSymbols)
-	// Total is approximated as mapped; in a full implementation this would come
-	// from a separate universe source (e.g., TWSE listing count).
-	total = mapped
-	if total == 0 {
-		return mapped, total, 0, "no symbols found in any industry"
+
+	cov := reporter.Coverage()
+	report.Source = industry.L1SourceSymbolIndustry
+	report.Upstream = cov.Upstream
+	report.Mapped = cov.Resolved
+	report.Unmapped = cov.Unmapped
+	report.Unknown = cov.Unknown
+	report.Reasons = append([]string(nil), cov.Reasons...)
+
+	if report.Upstream <= 0 {
+		report.Alert = fmt.Sprintf(
+			"coverage not measurable: the first-party symbol_industry population is empty (upstream=%d resolved=%d)",
+			report.Upstream, report.Mapped)
+		return report
 	}
-	ratio = float64(mapped) / float64(total)
-	if ratio < threshold {
-		alert = fmt.Sprintf("coverage %.2f%% below threshold %.2f%%", ratio*100, threshold*100)
+
+	report.Available = true
+	report.Ratio = float64(report.Mapped) / float64(report.Upstream)
+	if report.Ratio < threshold {
+		report.Alert = fmt.Sprintf(
+			"coverage %.2f%% below threshold %.2f%% (upstream=%d mapped=%d unmapped=%d unknown=%d)",
+			report.Ratio*100, threshold*100,
+			report.Upstream, report.Mapped, report.Unmapped, report.Unknown)
 	}
-	return mapped, total, ratio, alert
+	return report
+}
+
+// coverageUnavailableAlert describes an audit that could not measure the
+// first-party population. The message must leave no room for a green reading:
+// it states that coverage is unknown, then the two numbers an operator might be
+// tempted to use instead -- the population the pipeline would build right now
+// (population) and the legacy representative-stock table the classification tree
+// declares (legacy) -- and says plainly that neither is a market-wide
+// denominator.
+func coverageUnavailableAlert(reason string, substrate industry.SymbolIndustrySubstrate, mapper SymbolIndustryMapper, tree ClassificationTreeAccessor) string {
+	population := len(gatherAllSymbols(tree, mapper, substrate))
+	legacy := TotalClassifiedSymbols(tree)
+	return fmt.Sprintf(
+		"coverage not measurable: %s, so the upstream market-wide population is unknown; "+
+			"the pipeline population is now %d symbols and the legacy representative-stock table declares %d, "+
+			"neither of which is a market-wide denominator",
+		reason, population, legacy)
 }
 
 // TotalClassifiedSymbols counts the total number of representative stocks across

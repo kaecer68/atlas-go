@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
 // ─────────────────── test helpers ──────────────────────────────────────────
@@ -338,76 +340,214 @@ func TestCheckD6Expiry(t *testing.T) {
 
 // ─────────────────── 4. CheckUniverseCoverage ────────────────────────────
 
-// TestCheckUniverseCoverage verifies the coverage ratio computation and
-// alert messaging across normal, nil-dependency, and zero-symbol cases.
-func TestCheckUniverseCoverage(t *testing.T) {
-	t.Run("full_coverage_ratio_one", func(t *testing.T) {
-		mapper := &mockMapper{
-			byIndustry: map[string][]string{
-				"semiconductor": {"2330", "2317"},
-				"tech":          {"2454"},
-			},
-		}
-		tree := newFakeTree([]IndustrySegment{
-			{ID: "semiconductor", Name: "半導體"},
-			{ID: "tech", Name: "科技"},
+// coverageSubstrate is a substrate that also reports the first-party population
+// (industry.SymbolIndustryCoverageReporter). It embeds fakeSubstrate so the
+// population and resolution behaviour stay the ones the pipeline uses; only the
+// accounting is faked here.
+type coverageSubstrate struct {
+	*fakeSubstrate
+	coverage industry.SymbolIndustryCoverage
+}
+
+func (c *coverageSubstrate) Coverage() industry.SymbolIndustryCoverage {
+	out := c.coverage
+	out.Reasons = slices.Clone(c.coverage.Reasons)
+	return out
+}
+
+func newCoverageSubstrate(cov industry.SymbolIndustryCoverage) *coverageSubstrate {
+	symbols := map[string]industry.SectorID{}
+	for i := 0; i < cov.Resolved; i++ {
+		symbols[fmt.Sprintf("%04d", 1000+i)] = "semiconductor"
+	}
+	return &coverageSubstrate{fakeSubstrate: newFakeSubstrate(symbols), coverage: cov}
+}
+
+// legacyTree is the classification tree the pre-#1943 pipeline used: it
+// declares representative stocks, which is exactly the wrong denominator.
+func legacyTree() *fakeTree {
+	return newFakeTree([]IndustrySegment{
+		{ID: "semiconductor", Name: "半導體", Level: 1, RepresentativeStocks: []string{"2330", "2317", "2454"}},
+		{ID: "tech", Name: "科技", Level: 1, RepresentativeStocks: []string{"2357"}},
+	})
+}
+
+// TestCheckUniverseCoverage_HonestRatio is the regression test for the false
+// green. The pre-2026-09 audit set total = mapped, so production logged
+// `coverage_check mapped=27 total=27 ratio=1.00` while the pipeline had already
+// moved to a 1599-symbol population: the ratio could not be anything but 1.00
+// and the alert could never fire.
+//
+// The NEGATIVE CONTROL is the first case: a first-party population of 10 rows
+// with 7 resolved MUST produce ratio 0.7 and an alert.
+func TestCheckUniverseCoverage_HonestRatio(t *testing.T) {
+	t.Run("negative_control_partial_coverage_is_not_green", func(t *testing.T) {
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{
+			Upstream: 10,
+			Resolved: 7,
+			Unmapped: 2,
+			Unknown:  1,
+			Reasons:  []string{"residual bucket (19/20)", "code not declared (upstream drift)"},
 		})
 
-		mapped, total, ratio, alert := CheckUniverseCoverage(mapper, tree, 0.50)
-		if mapped != 3 || total != 3 {
-			t.Fatalf("expected mapped=3 total=3, got %d/%d", mapped, total)
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.90)
+
+		if !rep.Available {
+			t.Fatalf("a reporting substrate must be measurable, got %+v", rep)
 		}
-		if ratio != 1.0 {
-			t.Fatalf("expected ratio=1.0, got %.4f", ratio)
+		if rep.Source != industry.L1SourceSymbolIndustry {
+			t.Fatalf("Source = %q, want %q", rep.Source, industry.L1SourceSymbolIndustry)
 		}
-		if alert != "" {
-			t.Fatalf("expected no alert, got %q", alert)
+		if rep.Upstream != 10 || rep.Mapped != 7 {
+			t.Fatalf("Upstream/Mapped = %d/%d, want 10/7", rep.Upstream, rep.Mapped)
+		}
+		if rep.Ratio != 0.7 {
+			t.Fatalf("Ratio = %.4f, want 0.7 (the audit must not be 1.00 by construction)", rep.Ratio)
+		}
+		if rep.Ratio == 1.0 {
+			t.Fatal("ratio 1.00 here IS the false green the audit exists to prevent")
+		}
+		// The unresolved counts are the whole point of the alert: they say HOW
+		// the population fell short, not just that it did.
+		if rep.Unmapped != 2 || rep.Unknown != 1 {
+			t.Fatalf("Unmapped/Unknown = %d/%d, want 2/1", rep.Unmapped, rep.Unknown)
+		}
+		if len(rep.Reasons) != 2 {
+			t.Fatalf("Reasons = %q, want the two unresolved reasons", rep.Reasons)
+		}
+		if !strings.Contains(rep.Alert, "below threshold") {
+			t.Fatalf("Alert = %q, want the threshold message shape", rep.Alert)
+		}
+		for _, want := range []string{"unmapped=2", "unknown=1", "upstream=10", "mapped=7"} {
+			if !strings.Contains(rep.Alert, want) {
+				t.Fatalf("Alert = %q, want it to carry %q", rep.Alert, want)
+			}
 		}
 	})
 
-	t.Run("nil_mapper_or_tree_returns_alert", func(t *testing.T) {
-		_, _, ratio, alert := CheckUniverseCoverage(nil, nil, 0.50)
-		if ratio != 0 {
-			t.Fatalf("expected ratio=0, got %.4f", ratio)
+	t.Run("gate_off_is_not_measurable_not_green", func(t *testing.T) {
+		tree := legacyTree()
+
+		rep := CheckUniverseCoverage(nil, &mockMapper{}, tree, 0.50)
+
+		if rep.Available {
+			t.Fatalf("no substrate means no measurable population, got %+v", rep)
 		}
-		if !strings.Contains(strings.ToLower(alert), "mapper") {
-			t.Fatalf("expected alert about missing mapper/tree, got %q", alert)
+		if rep.Source != "unavailable" {
+			t.Fatalf("Source = %q, want \"unavailable\"", rep.Source)
+		}
+		if rep.Ratio != 0 {
+			t.Fatalf("Ratio = %.4f, want 0 when unavailable", rep.Ratio)
+		}
+		if rep.Ratio == 1.0 {
+			t.Fatal("RB-1944: the gate-off audit must never report 1.00")
+		}
+		if rep.Mapped != 0 {
+			t.Fatalf("Mapped = %d, want 0 when unavailable", rep.Mapped)
+		}
+		if !strings.Contains(rep.Alert, "not measurable") {
+			t.Fatalf("Alert = %q, want an explicit not-measurable message", rep.Alert)
+		}
+		// The alert must name the legacy table so nobody uses it as a
+		// market-wide denominator.
+		if want := fmt.Sprintf("%d", TotalClassifiedSymbols(tree)); !strings.Contains(rep.Alert, want) {
+			t.Fatalf("Alert = %q, want the legacy representative-stock count %s", rep.Alert, want)
 		}
 	})
 
-	t.Run("below_threshold_triggers_alert", func(t *testing.T) {
-		mapper := &mockMapper{
-			byIndustry: map[string][]string{
-				"semiconductor": {"2330"},
-			},
-		}
-		tree := newFakeTree([]IndustrySegment{
-			{ID: "semiconductor", Name: "半導體"},
-		})
+	t.Run("substrate_without_reporter_is_not_measurable", func(t *testing.T) {
+		// A plain substrate knows its population but not the upstream rows it
+		// could not resolve, so it cannot answer the audit. It must not be
+		// silently treated as full coverage.
+		sub := newFakeSubstrate(map[string]industry.SectorID{"2330": "semiconductor"})
 
-		_, _, ratio, alert := CheckUniverseCoverage(mapper, tree, 1.5)
-		if ratio != 1.0 {
-			t.Fatalf("expected ratio=1.0, got %.4f", ratio)
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.50)
+
+		if rep.Available || rep.Ratio != 0 {
+			t.Fatalf("a non-reporting substrate must be unavailable with ratio 0, got %+v", rep)
 		}
-		if !strings.Contains(alert, "below threshold") {
-			t.Fatalf("expected 'below threshold' alert, got %q", alert)
+		if !strings.Contains(rep.Alert, "not measurable") {
+			t.Fatalf("Alert = %q, want an explicit not-measurable message", rep.Alert)
 		}
 	})
 
-	t.Run("zero_symbols_returns_alert", func(t *testing.T) {
-		mapper := &mockMapper{
-			byIndustry: map[string][]string{},
-		}
-		tree := newFakeTree([]IndustrySegment{
-			{ID: "semiconductor", Name: "半導體"},
-		})
+	t.Run("empty_first_party_population_is_not_green", func(t *testing.T) {
+		// Loaded nothing (channel has never run / table empty): upstream 0 is
+		// NOT 100 % coverage.
+		rep := CheckUniverseCoverage(newCoverageSubstrate(industry.SymbolIndustryCoverage{}), &mockMapper{}, nil, 0.50)
 
-		_, _, ratio, alert := CheckUniverseCoverage(mapper, tree, 0.50)
-		if ratio != 0 {
-			t.Fatalf("expected ratio=0, got %.4f", ratio)
+		if rep.Available || rep.Ratio != 0 {
+			t.Fatalf("empty population must be unavailable with ratio 0, got %+v", rep)
 		}
-		if !strings.Contains(alert, "no symbols") {
-			t.Fatalf("expected 'no symbols' alert, got %q", alert)
+		if !strings.Contains(rep.Alert, "not measurable") {
+			t.Fatalf("Alert = %q, want an explicit not-measurable message", rep.Alert)
+		}
+	})
+
+	t.Run("full_coverage_ratio_one_without_alert", func(t *testing.T) {
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 1599, Resolved: 1599})
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, legacyTree(), 0.50)
+
+		if !rep.Available {
+			t.Fatalf("a reporting substrate must be measurable, got %+v", rep)
+		}
+		if rep.Ratio != 1.0 {
+			t.Fatalf("Ratio = %.4f, want 1.0", rep.Ratio)
+		}
+		if rep.Upstream != rep.Mapped {
+			t.Fatalf("Upstream/Mapped = %d/%d, want equal", rep.Upstream, rep.Mapped)
+		}
+		if rep.Alert != "" {
+			t.Fatalf("full coverage must not alert, got %q", rep.Alert)
+		}
+	})
+
+	t.Run("threshold_is_inclusive", func(t *testing.T) {
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 10, Resolved: 5, Unmapped: 5})
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, nil, 0.50)
+
+		if rep.Ratio != 0.5 {
+			t.Fatalf("Ratio = %.4f, want 0.5", rep.Ratio)
+		}
+		if rep.Alert != "" {
+			t.Fatalf("ratio == threshold must not alert, got %q", rep.Alert)
+		}
+	})
+
+	t.Run("above_threshold_ratio_alerts", func(t *testing.T) {
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 10, Resolved: 10})
+
+		rep := CheckUniverseCoverage(sub, &mockMapper{}, nil, 1.5)
+
+		if rep.Ratio != 1.0 {
+			t.Fatalf("Ratio = %.4f, want 1.0", rep.Ratio)
+		}
+		if !strings.Contains(rep.Alert, "below threshold") {
+			t.Fatalf("Alert = %q, want the threshold message shape", rep.Alert)
+		}
+	})
+
+	t.Run("nil_mapper_and_tree_are_tolerated", func(t *testing.T) {
+		// The audit no longer depends on the legacy tree/mapper for its
+		// numbers; they are only used to describe the fallback population.
+		sub := newCoverageSubstrate(industry.SymbolIndustryCoverage{Upstream: 4, Resolved: 3, Unmapped: 1})
+
+		measurable := CheckUniverseCoverage(sub, nil, nil, 0.90)
+		if !measurable.Available || measurable.Ratio != 0.75 {
+			t.Fatalf("nil legacy deps must not break a measurable audit, got %+v", measurable)
+		}
+		if !strings.Contains(measurable.Alert, "below threshold") {
+			t.Fatalf("Alert = %q, want a threshold alert", measurable.Alert)
+		}
+
+		unavailable := CheckUniverseCoverage(nil, nil, nil, 0.50)
+		if unavailable.Available || unavailable.Ratio != 0 {
+			t.Fatalf("nil everything must be unavailable with ratio 0, got %+v", unavailable)
+		}
+		if !strings.Contains(unavailable.Alert, "not measurable") {
+			t.Fatalf("Alert = %q, want an explicit not-measurable message", unavailable.Alert)
 		}
 	})
 }
