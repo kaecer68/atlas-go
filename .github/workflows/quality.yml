@@ -853,7 +853,7 @@ jobs:
         docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
           prom/prometheus:v3.14.0 check config monitoring/prometheus.yml
 
-    - name: promtool check rules (六個規則檔逐檔驗證)
+    - name: promtool check rules (所有規則檔逐檔驗證)
       run: |
         docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
           prom/prometheus:v3.14.0 check rules monitoring/rules/*.yml
