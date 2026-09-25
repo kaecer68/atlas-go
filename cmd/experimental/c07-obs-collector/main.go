@@ -53,6 +53,21 @@ const (
 type predictionReport struct {
 	Predictions       []flowPrediction      `json:"predictions"`
 	SectorPredictions []sectorDayPrediction `json:"sector_predictions"`
+	// SectorPredictionStatus is the machine-readable wiring state added by
+	// #1944 Batch 3 (I5). Optional: an older server omits it.
+	SectorPredictionStatus *sectorPredictionStatus `json:"sector_prediction_status"`
+}
+
+// sectorPredictionStatus mirrors eventdriven.SectorPredictionStatus. Defined
+// locally so the experimental collector does not import the server package.
+type sectorPredictionStatus struct {
+	Enabled           bool   `json:"enabled"`
+	Applied           bool   `json:"applied"`
+	Days              int    `json:"days"`
+	SectorRows        int    `json:"sector_rows"`
+	Persisted         bool   `json:"persisted"`
+	PersistenceReason string `json:"persistence_reason"`
+	Reason            string `json:"reason"`
 }
 
 type flowPrediction struct {
@@ -150,6 +165,18 @@ func collectMetrics(baseURL, date string) (*metrics, error) {
 	latency1 := time.Since(start).Milliseconds()
 
 	if len(report.SectorPredictions) == 0 {
+		// Prefer the API's machine-readable reason over guessing from the empty
+		// array (I5). Fall back to the legacy wording when the server predates
+		// sector_prediction_status.
+		note := "flag off (SECTOR_PREDICTION_ENABLED not set or false)"
+		if st := report.SectorPredictionStatus; st != nil {
+			note = "sector predictions absent: " + st.Reason
+			if st.Persisted {
+				note += "; persisted"
+			} else if st.PersistenceReason != "" {
+				note += "; not persisted (" + st.PersistenceReason + ")"
+			}
+		}
 		return &metrics{
 			Date:                 date,
 			SectorCount:          0,
@@ -158,7 +185,7 @@ func collectMetrics(baseURL, date string) (*metrics, error) {
 			ConfidenceViolations: 0,
 			PanicCount:           0,
 			SpotCheckCount:       0,
-			Notes:                "flag off (SECTOR_PREDICTION_ENABLED not set or false)",
+			Notes:                note,
 			FlagOff:              true,
 		}, nil
 	}

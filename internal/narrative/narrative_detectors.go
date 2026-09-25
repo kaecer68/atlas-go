@@ -90,6 +90,9 @@ func (ne *NarrativeEngine) DetectEvents(data MarketNarrativeData) []NarrativeEve
 	if evt := detectDollarSofteningEvent(data); evt != nil {
 		events = append(events, *evt)
 	}
+	// Label where every event's HitRate came from before handing the slice to
+	// callers (events API, eventbus, factor engine, dashboard narrative).
+	stampDetectorHitRateProvenance(events)
 	return events
 }
 

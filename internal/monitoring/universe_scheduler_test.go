@@ -516,8 +516,22 @@ func TestBuildUniverseIntegration(t *testing.T) {
 			t.Fatal("expected non-nil result")
 		}
 		// Without quotes, ScoringScreener drops all symbols due to missing quotes.
-		// That's expected graceful degradation.
-		_ = ranked
+		// That's expected graceful degradation — but it must be *labelled*
+		// degradation (issue #1944 Batch 3 / I25), never a bare zero that a
+		// reader could mistake for "the market has no qualifying stock".
+		if result.QuotesStatus != QuotesStatusProviderUnavailable {
+			t.Errorf("QuotesStatus = %q, want %q", result.QuotesStatus, QuotesStatusProviderUnavailable)
+		}
+		if result.RankedFallbackReason != RankedFallbackQuoteProviderUnavailable {
+			t.Errorf("RankedFallbackReason = %q, want %q",
+				result.RankedFallbackReason, RankedFallbackQuoteProviderUnavailable)
+		}
+		if result.RankedTrustworthy {
+			t.Error("RankedTrustworthy = true although no quote provider was wired")
+		}
+		if len(ranked) != 0 {
+			t.Errorf("expected ranked=0 without quotes, got %d", len(ranked))
+		}
 	})
 
 	t.Run("risk_filter_wired_pass_through", func(t *testing.T) {

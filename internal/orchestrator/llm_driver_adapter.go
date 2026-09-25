@@ -10,6 +10,16 @@ import (
 	"github.com/kaecer68/atlas-go/internal/llm/prompts"
 )
 
+// LLMSectorAgentDriverWired reports whether a production caller constructs the
+// plan/reflect DriverAdapter. It is false (issue #1944 / N-P3, related to I19):
+// NewDriverAdapter has no non-test caller, so the L2.3 sector-agent
+// plan/reflect loop always runs with nil drivers and falls back to the stub.
+// DriverAdapter is kept as the intended production wiring — reserved, not active.
+//
+// Flip this to true only together with an actual production call site and
+// evidence that the sector-agent loop runs through it.
+const LLMSectorAgentDriverWired = false
+
 // DriverAdapter implements PlanDriver and ReflectDriver by
 // delegating to a concrete llm.ProviderImpl and parsing the
 // textual response into structured types. It is the production

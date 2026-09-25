@@ -63,5 +63,15 @@ go test -run TestE2E ./internal/narrative/   # PR#5 chain test
 gofmt -l internal/narrative/                # 必須 0
 ```
 
-### 7. Duration 雙地圖技術債（2026-09-16 記錄，未合併）
+### 7. 命中率來源標記不可移除（#1944 Batch 3, I23）
+`InvestmentModel.HitRate` / `CausalTemplate.HistoricalHitRate` / `NarrativeEvent.HitRate` / `StructuralTrend.HitRate` 都是**手寫先驗常數**（`knowledge_base.go`、`templates.go`、`structural_trend.go`）；唯一的量測路徑（`EvaluateModels` → `updateTemplateHitRates`）**只存在記憶體**、重啟即失效、且**從不寫回 `hitRateForTheme()` 的靜態表**。
+
+因此每個欄位都帶一個 `hit_rate_source`（值見 `hitrate_provenance.go`），由 `hitrate_provenance_test.go` 釘住：
+- `handwritten_prior`：手寫先驗（detector 事件一律如此）
+- `replay_eval_in_memory`：本行程由 replay 評估算出（未落地）
+- `unavailable_no_samples` / `unavailable_no_template` / `not_populated`：無證據
+
+改動任何一個 HitRate 的寫入點時，**必須同步**更新來源標記與該測試；對外欄位不得再出現無來源的命中率。另外 `ThemesWithoutTemplate` 列出無模板、因此不影響任何產業的 detector 主題（N-P4，目前為 `semiconductor_cycle_peak`）。
+
+### 8. Duration 雙地圖技術債（2026-09-16 記錄，未合併）
 `lifecycle.go::DefaultThemeDurations()`（canonical，golden 鎖定）與 `narrative_detectors.go::getThemeDuration`（KB 偵測器建事件用）是兩份獨立地圖，既有主題已有不一致（US_rates_up：14d vs 7d）。新增主題時兩處都要補 case；合併列 backlog。

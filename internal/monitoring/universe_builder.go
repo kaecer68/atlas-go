@@ -18,6 +18,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/domain"
 	"github.com/kaecer68/atlas-go/internal/industry"
+	"github.com/kaecer68/atlas-go/internal/logging"
 	"github.com/kaecer68/atlas-go/internal/portfolio"
 	"github.com/kaecer68/atlas-go/internal/screener"
 )
@@ -393,7 +394,19 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 		normalizedUniverse[i] = normalizeSymbol(sym)
 	}
 
-	survivors := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	survivors, stats := s.applyVolumeAndPriceFilters(normalizedUniverse, normalizedQuotes)
+	// "0 ranked" has several very different causes and one of them (a quote
+	// provider that answers without a volume field) already looked like a
+	// market verdict once — issue #1944 I25. The breakdown is logged on every
+	// run so a filter wipe-out is attributable from the production log alone.
+	logging.Info("universe_builder", "scoring_filters",
+		"input", stats.Input,
+		"no_quote", stats.NoQuote,
+		"zero_volume", stats.ZeroVolume,
+		"below_turnover_floor", stats.BelowTurnoverFloor,
+		"below_price_floor", stats.BelowPriceFloor,
+		"lots_converted", stats.LotsConverted,
+		"survivors", stats.Passed)
 
 	// Binary pass/fail via the injected screener.
 	// Per screener contract errors are non-fatal; fall back to the survivors.
@@ -411,24 +424,112 @@ func (s *ScoringScreener) Rank(universe []string, quotes map[string]domain.Quote
 	return ranked
 }
 
+// filterStats attributes every symbol that left the Layer-2 volume/price
+// filter to exactly one cause, so the operator can tell "the provider sent no
+// volume field" (a provider/unit defect) apart from "the market is thin" (a
+// genuine verdict). The two produced the same empty ranking before.
+type filterStats struct {
+	// Input is the number of candidate symbols handed to the filter.
+	Input int
+	// NoQuote counts symbols the provider returned no quote for. The default
+	// TWSE provider covers listed names only, so the 上櫃 part of the
+	// population lands here.
+	NoQuote int
+	// ZeroVolume counts symbols whose quote carries Volume == 0 (未成交 rows
+	// and any provider that does not populate the field). A provider-wide
+	// zero is indistinguishable from a thin market without this counter.
+	ZeroVolume int
+	// BelowTurnoverFloor counts symbols whose Volume*Last is under
+	// VolumeFloorTWD while carrying a non-zero volume.
+	BelowTurnoverFloor int
+	// BelowPriceFloor counts symbols priced under PriceMin.
+	BelowPriceFloor int
+	// LotsConverted counts quotes whose provider reports 成交張數 (LOTS) and
+	// therefore had to be converted to shares before the turnover comparison
+	// (see quoteVolumeLotSources). A non-zero value on a run that ranks
+	// normally is expected for Fugle/Fubon-backed providers; a value equal to
+	// the input size means every quote came from such a provider.
+	LotsConverted int
+	// Passed is the number of survivors.
+	Passed int
+}
+
+// quoteVolumeLotSources names the provider Sources whose Quote.Volume is a LOT
+// (成交張數) count instead of a SHARE (成交股數) count.
+//
+// Evidence (issue #1944 Batch 3, I25 production-scale report): the Fugle
+// market-data REST quote reports `volume` as 成交張數 for regular-board stocks
+// (official docs: "整股：成交張數"), which its own published sample confirms —
+// tradeValue 31,019,803,000 / tradeVolume 54,538 = avgPrice 568.77 × 1000 — and
+// `fubon-neo` embeds the same Fugle market-data client, so services/fubon-proxy
+// passes the identical value through. The first-party TWSE source puts 成交股數
+// (shares) in the same field, and so do the FinMind and mock providers.
+//
+// This table is therefore a translation applied exactly where a TWD magnitude is
+// derived (turnover = Volume × Last), not a claim that the field has one meaning:
+// the canonical fix is to normalise at the provider boundary so that
+// domain.Quote.Volume has a single unit everywhere, which also touches ledger
+// history, dashboard display and screener criteria — registered as a follow-up
+// (see docs/specs/industry-allocation-inert-audit-20260924.md §9.2/§9.6).
+var quoteVolumeLotSources = map[string]bool{
+	"fugle":         true,
+	"fugle_candles": true,
+	"fubon":         true,
+}
+
+// quoteVolumeLotsPerShare is the conversion factor between the two units.
+const quoteVolumeLotsPerShare = 1000
+
+// quoteVolumeInShares returns the share-denominated volume of q, plus whether a
+// lots→shares conversion was applied. An empty or unknown Source is treated as
+// shares (the first-party TWSE convention) so the behavior for every provider
+// that does not declare itself here stays exactly as it was.
+func quoteVolumeInShares(q domain.Quote) (int64, bool) {
+	if quoteVolumeLotSources[strings.ToLower(strings.TrimSpace(q.Source))] {
+		return q.Volume * quoteVolumeLotsPerShare, true
+	}
+	return q.Volume, false
+}
+
 // applyVolumeAndPriceFilters drops symbols that lack quotes or fail the
-// approximate-TWD-volume or last-price thresholds.
-func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes map[string]domain.Quote) []string {
+// approximate-TWD-volume or last-price thresholds, and reports why.
+func (s *ScoringScreener) applyVolumeAndPriceFilters(universe []string, quotes map[string]domain.Quote) ([]string, filterStats) {
+	stats := filterStats{Input: len(universe)}
 	var survivors []string
 	for _, sym := range universe {
 		q, ok := quotes[sym]
 		if !ok {
+			stats.NoQuote++
 			continue
 		}
-		// Approximate TWD volume: Volume * Last. Proper ADV would require
-		// HistoricalPrices; see SP4 §9.
-		approxTWD := float64(q.Volume) * q.Last
-		if approxTWD < s.VolumeFloorTWD || q.Last < s.PriceMin {
+		if q.Volume == 0 {
+			stats.ZeroVolume++
+			continue
+		}
+		// Approximate TWD volume: Volume * Last, with the provider's unit
+		// translated to shares first (quoteVolumeInShares). Without that
+		// translation a lot-denominated Fugle/Fubon quote understates turnover
+		// 1000x and this floor silently drops nearly the whole population —
+		// the same class of failure as I25 itself. Conversions are counted in
+		// stats.LotsConverted and logged, so a unit mismatch stays visible.
+		// Proper ADV would require HistoricalPrices; see SP4 §9.
+		volumeShares, converted := quoteVolumeInShares(q)
+		if converted {
+			stats.LotsConverted++
+		}
+		approxTWD := float64(volumeShares) * q.Last
+		if approxTWD < s.VolumeFloorTWD {
+			stats.BelowTurnoverFloor++
+			continue
+		}
+		if q.Last < s.PriceMin {
+			stats.BelowPriceFloor++
 			continue
 		}
 		survivors = append(survivors, sym)
 	}
-	return survivors
+	stats.Passed = len(survivors)
+	return survivors, stats
 }
 
 // scoreAndRank produces RankedSymbol entries with weighted scores and

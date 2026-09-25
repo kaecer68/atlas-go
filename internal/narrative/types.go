@@ -4,21 +4,25 @@ import "time"
 
 // NarrativeEvent represents a detected macro event that may trigger causal chains.
 type NarrativeEvent struct {
-	ID               string             `json:"id"`
-	Theme            string             `json:"theme"`      // e.g., "US_rates_up"
-	Region           string             `json:"region"`     // e.g., "US", "Global", "Asia"
-	Sentiment        float64            `json:"sentiment"`  // -1.0 (very negative) to +1.0
-	Confidence       float64            `json:"confidence"` // 0.0 to 1.0
-	ConfidenceSource string             `json:"confidence_source"`
-	HitRate          float64            `json:"hit_rate"`
-	CapitalFlow      string             `json:"capital_flow"` // e.g., "flight_to_USD", "risk_off"
-	TimeWindow       string             `json:"time_window"`  // "immediate", "1_week", "1_month"
-	Timestamp        time.Time          `json:"timestamp"`
-	SourceData       map[string]float64 `json:"source_data,omitempty"`
-	Duration         time.Duration      `json:"duration"`
-	ExpiresAt        time.Time          `json:"expires_at"`
-	Severity         string             `json:"severity"`
-	Status           string             `json:"status"`
+	ID               string  `json:"id"`
+	Theme            string  `json:"theme"`      // e.g., "US_rates_up"
+	Region           string  `json:"region"`     // e.g., "US", "Global", "Asia"
+	Sentiment        float64 `json:"sentiment"`  // -1.0 (very negative) to +1.0
+	Confidence       float64 `json:"confidence"` // 0.0 to 1.0
+	ConfidenceSource string  `json:"confidence_source"`
+	HitRate          float64 `json:"hit_rate"`
+	// HitRateSource is the provenance of HitRate (see hitrate_provenance.go).
+	// Detector-produced events always carry handwritten_prior — the value is
+	// the hand-authored table captured at package init, never a measured rate.
+	HitRateSource string             `json:"hit_rate_source"`
+	CapitalFlow   string             `json:"capital_flow"` // e.g., "flight_to_USD", "risk_off"
+	TimeWindow    string             `json:"time_window"`  // "immediate", "1_week", "1_month"
+	Timestamp     time.Time          `json:"timestamp"`
+	SourceData    map[string]float64 `json:"source_data,omitempty"`
+	Duration      time.Duration      `json:"duration"`
+	ExpiresAt     time.Time          `json:"expires_at"`
+	Severity      string             `json:"severity"`
+	Status        string             `json:"status"`
 
 	TaxonomyL1 TaxonomyL1 `json:"taxonomy_l1"`
 	TaxonomyL2 TaxonomyL2 `json:"taxonomy_l2"`
@@ -58,8 +62,13 @@ type CausalTemplate struct {
 	RequiredRegion    string       `json:"required_region,omitempty"`
 	Steps             []CausalStep `json:"steps"`
 	HistoricalHitRate float64      `json:"historical_hit_rate"`
-	SourceReferences  []string     `json:"source_references"`
-	Rationale         string       `json:"rationale"`
+	// HitRateSource is the provenance of HistoricalHitRate (see
+	// hitrate_provenance.go): handwritten_prior for the shipped table,
+	// replay_eval_in_memory after an in-process EMA update. It exists so no
+	// caller presents the prior as a realized backtest hit rate.
+	HitRateSource    string   `json:"hit_rate_source"`
+	SourceReferences []string `json:"source_references"`
+	Rationale        string   `json:"rationale"`
 }
 
 // CausalChain is an instantiated causal chain from a specific event.
@@ -87,6 +96,11 @@ type InvestmentModel struct {
 	RecentPrediction float64  `json:"recent_prediction"`
 	RecentError      float64  `json:"recent_error"` // lower is better
 	HitRate          float64  `json:"hit_rate"`     // 1 - RecentError, clamped to [0, 1]
-	SampleCount      int      `json:"sample_count"` // valid favored-vs-avoided comparisons in the lookback window
-	Weight           float64  `json:"weight"`
+	// HitRateSource is the provenance of HitRate (see hitrate_provenance.go).
+	// handwritten_prior until EvaluateModels() runs in this process, then
+	// replay_eval_in_memory (or unavailable_no_samples when the replay window
+	// yielded no usable comparison). Never persisted across restarts.
+	HitRateSource string  `json:"hit_rate_source"`
+	SampleCount   int     `json:"sample_count"` // valid favored-vs-avoided comparisons in the lookback window
+	Weight        float64 `json:"weight"`
 }

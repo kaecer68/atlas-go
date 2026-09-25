@@ -60,7 +60,15 @@ func NewKnowledgeBase() *KnowledgeBase {
 }
 
 // RegisterTemplate adds or replaces a template.
+//
+// A template registered without an explicit HitRateSource is labeled
+// HitRateSourceHandwrittenPrior: the only values ever registered without a
+// source are the shipped priors, and an unlabeled hit rate is exactly the
+// defect this closes (issue #1944 Batch 3, item I23).
 func (kb *KnowledgeBase) RegisterTemplate(t CausalTemplate) {
+	if t.HitRateSource == "" {
+		t.HitRateSource = HitRateSourceHandwrittenPrior
+	}
 	kb.mu.Lock()
 	kb.templates[t.ID] = t
 	hook := kb.auditHook

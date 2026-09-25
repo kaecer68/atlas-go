@@ -208,15 +208,50 @@ type DashboardAPI struct {
 	schedulerProvider    apidashboard.SchedulerStatusProvider
 }
 
-// SetCompositionRoot wires the dashboard's shared WeightEngine into the
-// composition root so that simulation paths (SA08+) can consume the same engine.
+// SetCompositionRoot shares the dashboard's data-fed industry driver adapters
+// with the composition root so simulation paths (SA08+) read the SAME industry
+// state the dashboard shows (issue #1944 Batch 3, items I12/I13).
+//
+// Before this change the root kept its own config-seeded industry.CycleTracker
+// and returned a hardcoded 0.0 macro tilt, so the two paths could disagree, and
+// nothing called this method at all — the simulation path silently ran on stub
+// inputs. Wiring the *dashboard* engine in directly is not an option: the
+// dashboard builder returns the legacy NewDefaultEngine (no Projector), and
+// StrategyEvolver.ApplySectorRotation calls ComputeProjectedTarget, which the
+// projector-less engine rejects outright.
+//
+// The macro driver is fed from the dashboard's DynamicEnvModulator (the instance
+// SeasonalEngine also uses), replacing the previous hardcoded 0.0.
 func (d *DashboardAPI) SetCompositionRoot(root *composition.Root) {
 	if d.industryService == nil || root == nil {
 		return
 	}
-	if d.industryService.WeightEngine != nil {
-		root.WithWeightEngine(d.industryService.WeightEngine)
+	svc := d.industryService
+	root.WithSharedSectorInputs(composition.SharedSectorInputs{
+		Cycle:    sectorallocation.NewCycleAdapter(svc.CycleTracker),
+		Seasonal: sectorallocation.NewSeasonalAdapter(svc.SeasonalEngine),
+		Linkage:  sectorallocation.NewLinkageAdapter(svc.LinkageAnalyzer, nil),
+		Macro:    dashboardMacroTiltProvider(svc.SeasonalEngine),
+	})
+}
+
+// dashboardMacroTiltProvider adapts the dashboard's macro-aware seasonal
+// modulator into the engine's MacroInputProvider shape (tilt, not multiplier).
+// Returns nil when no modulator is wired, which keeps the engine's neutral
+// macro driver instead of inventing a value.
+func dashboardMacroTiltProvider(seasonalEngine *industry.SeasonalEngine) sectorallocation.MacroInputProvider {
+	if seasonalEngine == nil || seasonalEngine.DynamicEnvModulator() == nil {
+		return nil
 	}
+	return sectorallocation.MacroProviderFunc(
+		func(_ context.Context, industryID, _, _ string) (float64, error) {
+			mod := seasonalEngine.DynamicEnvModulator()
+			if mod == nil {
+				return 0.0, nil
+			}
+			return mod.SeasonalModulation(industryID) - 1.0, nil
+		},
+	)
 }
 
 // NewDashboardAPI creates a DashboardAPI backed by CompositeMacroProvider.

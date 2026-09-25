@@ -134,6 +134,73 @@ type CalibrationValidationResult struct {
 	UpdatedAt     time.Time
 	FileMTime     time.Time
 	StaleBy       time.Duration
+
+	// Findings classifies every entry in Issues with a stable machine-readable
+	// code and the affected segment, so callers can distinguish finding classes
+	// without parsing message text (issue #1944 Batch 3, item I31). Issues is kept
+	// for backward compatibility and always mirrors Findings' messages.
+	Findings []CalibrationFinding
+}
+
+// CalibrationFindingCode is a stable identifier for one integrity finding.
+// Callers MUST switch on the code, never on the message text.
+type CalibrationFindingCode string
+
+// Calibration finding codes. Every code currently carries SeverityError: this
+// batch classifies findings, it does not downgrade any of them. Two codes are
+// known to fire on by-design configuration in this repository — see
+// docs/reference/inert-registry.md (I31) for the evidence and the open decision:
+//
+//	L1_NO_REPRESENTATIVES — the five size/style/asset-class buckets
+//	  (defensive, etf_rotation, high_dividend, small_cap, tech) have no equity
+//	  representatives by design; internal/industry's canonical mapper reports them
+//	  as unmapped (no canonical L1 translation).
+//	L2_NO_REPRESENTATIVES — pcb and thermal declare their members in
+//	  configs/sector_symbols.json (sectormap namespace sector_symbols), not in the
+//	  parameters tree, so adding members here would also change
+//	  cmd/backfill-industry-tree weights and per-segment FinMind fetches.
+const (
+	CalibrationFindingParamsStatFailed    CalibrationFindingCode = "PARAMS_STAT_FAILED"
+	CalibrationFindingMTimeStale          CalibrationFindingCode = "MTIME_STALE"
+	CalibrationFindingParamsReadFailed    CalibrationFindingCode = "PARAMS_READ_FAILED"
+	CalibrationFindingParamsInvalidJSON   CalibrationFindingCode = "PARAMS_INVALID_JSON"
+	CalibrationFindingUpdatedAtZero       CalibrationFindingCode = "UPDATED_AT_ZERO"
+	CalibrationFindingUpdatedAtStale      CalibrationFindingCode = "UPDATED_AT_STALE"
+	CalibrationFindingSegmentsEmpty       CalibrationFindingCode = "SEGMENTS_EMPTY"
+	CalibrationFindingL1EmptyID           CalibrationFindingCode = "L1_EMPTY_ID"
+	CalibrationFindingL1NoRepresentatives CalibrationFindingCode = "L1_NO_REPRESENTATIVES"
+	CalibrationFindingL2EmptyParentID     CalibrationFindingCode = "L2_EMPTY_PARENT_ID"
+	CalibrationFindingL2UnknownParentID   CalibrationFindingCode = "L2_UNKNOWN_PARENT_ID"
+	CalibrationFindingL2NoRepresentatives CalibrationFindingCode = "L2_NO_REPRESENTATIVES"
+	CalibrationFindingNoL1Segments        CalibrationFindingCode = "NO_L1_SEGMENTS"
+)
+
+// CalibrationFinding severity values.
+const (
+	CalibrationSeverityError = "error"
+)
+
+// CalibrationFinding is one integrity finding with its class, severity, the
+// segment it concerns (empty when the finding is file-wide) and the human message.
+type CalibrationFinding struct {
+	Code     CalibrationFindingCode `json:"code"`
+	Severity string                 `json:"severity"`
+	Segment  string                 `json:"segment,omitempty"`
+	Message  string                 `json:"message"`
+}
+
+// addFinding records a finding and mirrors its message into the legacy Issues
+// slice, keeping the JSON contract backward compatible.
+func (r *CalibrationValidationResult) addFinding(code CalibrationFindingCode, segment, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	r.OK = false
+	r.Issues = append(r.Issues, msg)
+	r.Findings = append(r.Findings, CalibrationFinding{
+		Code:     code,
+		Severity: CalibrationSeverityError,
+		Segment:  segment,
+		Message:  msg,
+	})
 }
 
 // ValidateCalibration checks that params.json at path reflects a fresh, structurally
@@ -150,47 +217,40 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 
 	info, err := os.Stat(path)
 	if err != nil {
-		res.OK = false
-		res.Issues = append(res.Issues, fmt.Sprintf("params.json stat failed: %v", err))
+		res.addFinding(CalibrationFindingParamsStatFailed, "", "params.json stat failed: %v", err)
 		return res, nil
 	}
 	res.FileMTime = info.ModTime()
 	res.StaleBy = time.Since(res.FileMTime) - maxAge
 	if res.StaleBy > 0 {
-		res.OK = false
-		res.Issues = append(res.Issues, fmt.Sprintf("params.json mtime %s is stale by %s (threshold %s)",
-			res.FileMTime.Format(time.RFC3339), res.StaleBy.Truncate(time.Minute), maxAge))
+		res.addFinding(CalibrationFindingMTimeStale, "", "params.json mtime %s is stale by %s (threshold %s)",
+			res.FileMTime.Format(time.RFC3339), res.StaleBy.Truncate(time.Minute), maxAge)
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		res.OK = false
-		res.Issues = append(res.Issues, fmt.Sprintf("params.json read failed: %v", err))
+		res.addFinding(CalibrationFindingParamsReadFailed, "", "params.json read failed: %v", err)
 		return res, nil
 	}
 
 	var cfg ParametersConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		res.OK = false
-		res.Issues = append(res.Issues, fmt.Sprintf("params.json invalid JSON: %v", err))
+		res.addFinding(CalibrationFindingParamsInvalidJSON, "", "params.json invalid JSON: %v", err)
 		return res, nil
 	}
 
 	res.UpdatedAt = cfg.UpdatedAt
 	if res.UpdatedAt.IsZero() {
-		res.OK = false
-		res.Issues = append(res.Issues, "params.json has zero updated_at — calibration never recorded")
+		res.addFinding(CalibrationFindingUpdatedAtZero, "", "params.json has zero updated_at — calibration never recorded")
 	} else if time.Since(res.UpdatedAt) > maxAge {
-		res.OK = false
-		res.Issues = append(res.Issues, fmt.Sprintf("params.json updated_at %s is stale by %s (threshold %s)",
-			res.UpdatedAt.Format(time.RFC3339), time.Since(res.UpdatedAt).Truncate(time.Minute), maxAge))
+		res.addFinding(CalibrationFindingUpdatedAtStale, "", "params.json updated_at %s is stale by %s (threshold %s)",
+			res.UpdatedAt.Format(time.RFC3339), time.Since(res.UpdatedAt).Truncate(time.Minute), maxAge)
 	}
 
 	segments := cfg.Industry.ClassificationTree.Value.Segments
 	res.SegmentsCount = len(segments)
 	if len(segments) == 0 {
-		res.OK = false
-		res.Issues = append(res.Issues, "Industry.ClassificationTree.Value.Segments is empty")
+		res.addFinding(CalibrationFindingSegmentsEmpty, "", "Industry.ClassificationTree.Value.Segments is empty")
 		return res, nil
 	}
 
@@ -200,33 +260,27 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 		case 1:
 			res.L1Count++
 			if s.ID == "" {
-				res.OK = false
-				res.Issues = append(res.Issues, "L1 segment has empty ID")
+				res.addFinding(CalibrationFindingL1EmptyID, s.Name, "L1 segment has empty ID")
 			}
 			l1IDs[s.ID] = true
 			if len(s.RepresentativeStocks) == 0 {
-				res.OK = false
-				res.Issues = append(res.Issues, fmt.Sprintf("L1 segment %q has no RepresentativeStocks", s.ID))
+				res.addFinding(CalibrationFindingL1NoRepresentatives, s.ID, "L1 segment %q has no RepresentativeStocks", s.ID)
 			}
 		case 2:
 			res.L2Count++
 			if s.ParentID == "" {
-				res.OK = false
-				res.Issues = append(res.Issues, fmt.Sprintf("L2 segment %q has empty ParentID", s.ID))
+				res.addFinding(CalibrationFindingL2EmptyParentID, s.ID, "L2 segment %q has empty ParentID", s.ID)
 			} else if !l1IDs[s.ParentID] {
-				res.OK = false
-				res.Issues = append(res.Issues, fmt.Sprintf("L2 segment %q references unknown ParentID %q", s.ID, s.ParentID))
+				res.addFinding(CalibrationFindingL2UnknownParentID, s.ID, "L2 segment %q references unknown ParentID %q", s.ID, s.ParentID)
 			}
 			if len(s.RepresentativeStocks) == 0 {
-				res.OK = false
-				res.Issues = append(res.Issues, fmt.Sprintf("L2 segment %q has no RepresentativeStocks", s.ID))
+				res.addFinding(CalibrationFindingL2NoRepresentatives, s.ID, "L2 segment %q has no RepresentativeStocks", s.ID)
 			}
 		}
 	}
 
 	if res.L1Count == 0 {
-		res.OK = false
-		res.Issues = append(res.Issues, "no L1 (top-level) segments found")
+		res.addFinding(CalibrationFindingNoL1Segments, "", "no L1 (top-level) segments found")
 	}
 
 	return res, nil

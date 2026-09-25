@@ -669,6 +669,18 @@ func run(args []string, deps appDeps) error {
 			dashboard = deps.newDashboardAPI(cfg.WorkDir, cfg.LedgerDir, collector)
 		}
 
+		// Issue #1944 Batch 3 (I12/I13): share the dashboard's data-fed industry
+		// driver adapters with the composition root so the simulation paths
+		// (buildSystemOrFallback → Root.BuildSystem → StrategyEvolver) read the
+		// SAME cycle/seasonal/linkage state the dashboard shows, plus the real
+		// macro modulation. Previously nothing called SetCompositionRoot at all,
+		// so the simulation kept its own config-seeded CycleTracker and a
+		// hardcoded 0.0 macro driver. Must run before the first BuildSystem call.
+		if compositionRoot != nil {
+			dashboard.SetCompositionRoot(compositionRoot)
+			log.Printf("[Composition] dashboard industry inputs shared with composition root (I12/I13)")
+		}
+
 		dashboard.SetPool(pool)
 		// Issue #1776: admin channel-keys endpoints (late-bound manager;
 		// nil manager → endpoints report 503).
@@ -1053,6 +1065,22 @@ func run(args []string, deps appDeps) error {
 			edHandler.SetPredictionStore(&predictionHistoryAdapter{inner: ledger.NewJSONLEventFlowPredictionStore(cfg.LedgerDir)})
 			if cfg.SectorPredictionEnabled {
 				edHandler.SetMacroProvider(macroProvider)
+				// I4 (#1944 Batch 3): the engine.sector_rotation.strategic_prior
+				// config block is the documented C07 seed for this predictor
+				// ("C07 heuristic seed (event-driven sector predictor prior)").
+				// Before this wiring the predictor was always built with a nil
+				// prior, so the `overall_baseline` contribution was identically
+				// 0. LoadStrategicPrior validates the 20 canonical L1 IDs and
+				// sum=1; on failure fall back to nil (unwired) rather than
+				// failing startup, and say so in the log.
+				if paramsCfg := config.GetParametersConfig(); paramsCfg != nil {
+					if prior, err := sectorallocation.LoadStrategicPrior(paramsCfg); err != nil {
+						log.Printf("[EventDriven] sector strategic prior unavailable (%v); overall_baseline contribution stays 0", err)
+					} else {
+						edHandler.SetSectorStrategicPrior(prior)
+						log.Printf("[EventDriven] sector strategic prior wired (source=%s status=%s)", prior.Source, prior.CalibrationStatus)
+					}
+				}
 				log.Printf("[EventDriven] sector predictions enabled with macro provider")
 			} else {
 				log.Printf("[EventDriven] sector predictions disabled (set SECTOR_PREDICTION_ENABLED=true to enable)")
@@ -2002,16 +2030,12 @@ func run(args []string, deps appDeps) error {
 					}
 					// Count total symbols from the shared classification tree.
 					totalSymbols := monitoring.TotalClassifiedSymbols(classTreeAdapter)
-					// Load universe snapshot and count built symbols.
-					snapshotPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_snapshot.json")
+					// Load universe snapshot and count built symbols, through
+					// the canonical reader so this alert reads the same schema
+					// the scheduler and the -build-universe CLI write (N-U3).
 					snapshotSymbols := 0
-					if data, rErr := os.ReadFile(snapshotPath); rErr == nil {
-						var snapshot struct {
-							Result monitoring.UniverseBuildResult `json:"result"`
-						}
-						if err := json.Unmarshal(data, &snapshot); err == nil {
-							snapshotSymbols = snapshot.Result.SymbolsBuilt
-						}
+					if snap, sErr := monitoring.LoadUniverseSnapshot(cfg.WorkDir); sErr == nil && snap.Result != nil {
+						snapshotSymbols = snap.Result.SymbolsBuilt
 					}
 					if totalSymbols > 0 {
 						coveragePct := float64(snapshotSymbols) / float64(totalSymbols) * 100

@@ -2445,8 +2445,9 @@
       "value": 0.2
     },
     "max_daily_weight_change": {
-      "rationale": "Maximum 5% daily weight change to prevent excessive volatility",
+      "rationale": "DECLARED ONLY / NOT ENFORCED (issue #1944 Batch 3, inert-registry N-C1): no reader exists anywhere in the codebase, so this value caps nothing. It must NOT be presented as an active risk control until a consumer is wired.",
       "source": "heuristic",
+      "todo": "NOT ENFORCED (issue #1944 Batch 3, N-C1): implement or remove. Semantics unowned: the dashboard industry view is a stateless pure function with no previous-day weights, and the simulation path receives no previous target (normalisation happens inside Projector, the single projection owner). Decide per-sector target delta vs portfolio turnover, then implement in one owner with tests and update this metadata.",
       "value": 0.05
     },
     "news_impact_multiplier": {
