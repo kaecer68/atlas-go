@@ -1380,9 +1380,29 @@ func (tec *EventCalendar) buildSingleEvent(rule EventRule, year int) (CalendarEv
 // Sentiment computation
 // ---------------------------------------------------------------------------
 
+// defaultEventSentimentCap is the fallback used when no parameters config is
+// loaded. It equals the shipped industry.event_sentiment_cap value, so wiring
+// the config knob through sentimentCap() is behaviour-neutral for every
+// existing caller (#1944 Batch 4 / N-C3).
+const defaultEventSentimentCap = 0.05
+
+// sentimentCap returns the per-event sentiment cap: industry.event_sentiment_cap
+// when a config is loaded and the value is positive, otherwise the hardcoded
+// default. Before #1944 Batch 4 the value was hardcoded here (0.05) while the
+// config declared the same number, so the knob was inert — changing the config
+// had no effect.
+func (tec *EventCalendar) sentimentCap() float64 {
+	if tec != nil && tec.config != nil {
+		if capValue := tec.config.Industry.EventSentimentCap.Value; capValue > 0 {
+			return capValue
+		}
+	}
+	return defaultEventSentimentCap
+}
+
 // computeSentimentAdjustment calculates the sentiment adjustment for an event
 // given the current time. The adjustment decays linearly from the peak date
-// and is capped at ±0.05.
+// and is capped at ±industry.event_sentiment_cap (default ±0.05).
 func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time.Time) float64 {
 	// Direction multiplier
 	dirMul := 1.0
@@ -1407,13 +1427,14 @@ func (tec *EventCalendar) computeSentimentAdjustment(evt CalendarEvent, now time
 		decayFactor = math.Max(0, 1.0-daysFromPeak/float64(evt.DecayDays))
 	}
 
-	// Base weight * direction * decay, capped at ±0.05
-	adjustment := evt.BaseWeight * dirMul * decayFactor * 0.05
-	if adjustment > 0.05 {
-		adjustment = 0.05
+	// Base weight * direction * decay, capped at ±cap (config-driven, N-C3).
+	capValue := tec.sentimentCap()
+	adjustment := evt.BaseWeight * dirMul * decayFactor * capValue
+	if adjustment > capValue {
+		adjustment = capValue
 	}
-	if adjustment < -0.05 {
-		adjustment = -0.05
+	if adjustment < -capValue {
+		adjustment = -capValue
 	}
 	return math.Round(adjustment*10000) / 10000
 }

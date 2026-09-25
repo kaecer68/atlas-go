@@ -924,13 +924,24 @@ func defaultIndustryParameters() IndustryParameters {
 			Source:    SourceHeuristic,
 			Todo:      "Calibrate: test [0.005, 0.02] range for floor impact on portfolio stability",
 		},
+		// NOT WIRED (#1944 Batch 4 / N-C3): nothing outside internal/config reads
+		// this block. The live quality multiplier is hardcoded by EvidenceTier in
+		// internal/industry/cycle.go BuildConfidenceBreakdown (empirical=1.0 /
+		// estimated=0.4 / insufficient=0.0), and this struct maps a DataFreshness
+		// enum that path no longer uses, so wiring it unchanged would change
+		// behaviour. parameters_shadow_declarations_test.go fails if a reader
+		// appears while this declaration still says NOT WIRED.
 		FreshnessScores: ParameterMetadata[FreshnessScoresConfig]{
 			Value: FreshnessScoresConfig{
 				ScoreLive: 1.0, ScoreRecent: 0.8, ScoreStale: 0.4,
 				ScoreFallback: 0.2, ScoreDefault: 0.3,
 			},
-			Rationale: "Maps DataFreshness enum to confidence weights",
-			Source:    SourceHeuristic,
+			Rationale: "Maps DataFreshness enum to confidence weights. NOT WIRED (#1944 Batch 4 / N-C3): " +
+				"no reader outside internal/config; the runtime quality multiplier is hardcoded by EvidenceTier in " +
+				"industry/cycle.go BuildConfidenceBreakdown (empirical=1.0 / estimated=0.4 / insufficient=0.0).",
+			Source: SourceHeuristic,
+			Todo: "Wire only after reconciling the DataFreshness enum with EvidenceTier, or replace this block with " +
+				"the evidence-tier weights; until then it is documentation.",
 		},
 		PhaseScores: ParameterMetadata[PhaseScoresConfig]{
 			Value: PhaseScoresConfig{
@@ -1157,9 +1168,14 @@ func defaultIndustryParameters() IndustryParameters {
 				ValidationMethod: "backtest_phase_accuracy",
 			},
 		},
+		// WIRED (#1944 Batch 4 / N-C3): consumed by EventCalendar.sentimentCap()
+		// (internal/industry/event_calendar.go) as the ±cap of
+		// computeSentimentAdjustment. The former hardcoded 0.05 is now only the
+		// fallback when no config is loaded; the shipped value equals it, so the
+		// wiring is behaviour-neutral today.
 		EventSentimentCap: ParameterMetadata[float64]{
 			Value:     0.05,
-			Rationale: "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. Based on empirical observation that even major Taiwan market events (elections, MSCI rebalance, earnings season) rarely move broad market >3% in a single day, making ±5% a conservative but meaningful cap.",
+			Rationale: "Cap per-event sentiment adjustment at ±5% to prevent any single calendar event from dominating the composite cycle sentiment. WIRED (#1944 Batch 4 / N-C3): read by EventCalendar.sentimentCap() in industry/event_calendar.go; the hardcoded 0.05 is only the no-config fallback.",
 			Source:    SourceHeuristic,
 			Todo:      "Backtest calibration: compute distribution of actual TWSE returns during historical calendar events and set cap at the 95th percentile of excess returns.",
 		},

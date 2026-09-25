@@ -121,12 +121,7 @@
         "reason": "僅宣告與註解(params.go:1152)；EventCalendar 用硬編 defaultEventRules()（industry/event_calendar.go:163,417），config 型別未接線。",
         "evidence": "internal/config/parameters.go:840"
       },
-      "industry.event_sentiment_cap": {
-        "class": "legacy-inert",
-        "reason": "reader 僅 merge(defaults_narrative.go:1155)；實際 clamp 硬編 ±0.2/±0.05（industry/event_calendar.go:915-935），未讀此參數。",
-        "evidence": "internal/config/parameters.go:844"
-      },
-      "industry.freshness_scores": {
+            "industry.freshness_scores": {
         "class": "legacy-inert",
         "reason": "FreshnessScoresConfig 在 internal/config 外 0 引用；真實 freshness multiplier 硬編 1.0/0.4/0.0（industry/cycle.go:627-631）。",
         "evidence": "internal/config/parameters.go:814"
