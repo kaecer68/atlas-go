@@ -91,6 +91,12 @@ func exportCalibrationFreshnessMetrics(workDir string, collector *monitoring.Met
 
 // calibrationParametersPath 解析受監控的校準產物路徑。
 //
+// ⚠️ 刻意**只**監控 SSOT（`configs/parameters.json`），不監控 PR #2013 之後的校準 overlay
+// （`data/state/parameters.calibrated.json`）：SSOT 是受版控、經人工審查的基準，
+// 「它多久沒被刷新」回答的是「校準迴圈還有沒有在動」；overlay 是 runtime 自適應的產物，
+// 其新鮮度是 per-entry 的 `calibrated_at`，需要另一套判定語意（見 FU-20260926-10 殘留面 1b）。
+// 這也是為什麼這裡優先用 `config.GetParametersConfigPath()`（它仍指 SSOT）而不是硬編路徑。
+//
 // 權威來源是應用自己在用的那一個（`config.GetParametersConfigPath()`，即
 // `internal/config/parameters.go` 的 `parametersPath`；生產的寫入者用的也是它，
 // 見 FU-20260926-07）；只有在它還沒被設定時才回退到 workDir 的慣例路徑

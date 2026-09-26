@@ -726,6 +726,12 @@
     門檻由實測 cadence（24h 主、6h/1h 例外）決定。
   - **驗收條件**：連續 `stable` 的多輪（產物不變）必須**不**觸發任何告警；
     而任務真的停止執行時必須有告警 —— 負對照：不得再靠「產物年齡」推論任務死活。
+- **殘留面 1b（與 #2013 的交互，已複驗）**：`risk_gate_calibrate` 的寫入已由 PR #2013 遷到
+  `data/state/parameters.calibrated.json`（overlay），SSOT 保持 pristine ⇒ 本條監控的
+  「SSOT 超過 48h」仍然有意義（其他校準器仍寫 SSOT，清單見 FU-20260926-07 第 3 點），
+  但**看不到 risk 校準是否停滯**。要涵蓋它需要第二個判定語意（per-entry `calibrated_at`），
+  不是把本族的 `max-age` 套上去就好；`config.GetParametersConfigPath()` 仍指 SSOT
+  （複驗：`internal/config/calibration_overlay.go:186`），所以本族沒有被無聲換對象。
 - **殘留面 2：結構性 finding 仍未進生產監控** —— `L1/L2_NO_REPRESENTATIVES` 之類由 CI 的
   `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
   parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產

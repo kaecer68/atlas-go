@@ -225,4 +225,16 @@ docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
    以 `_ok` 為準。
 6. **生產 image 沒有 `atlas-validate`**：這條政策命令需要在 image 外執行（或用
    `go build ./cmd/calibration-validate`）；本 PR 未查證是否有人這樣做過。
-7. **未驗證於生產**：本次只交付接線與本機/promtool 證據；生產驗收（§4）待部署後執行。
+7. **只觀測 SSOT（`configs/parameters.json`），不觀測校準 overlay**：PR #2013（2026-09-26 併入 main）
+   把 `risk_gate_calibrate → risk.SelfCalibrate` 的寫入從 SSOT 改成
+   `data/state/parameters.calibrated.json`（`constants.StateParametersCalibrated`，bind mount 內、跨重建存活），
+   SSOT 保持 pristine。
+   - 因此本族的 `_ok` 量的是「**SSOT 是否仍被刷新**」——#2013 之後刷 SSOT 的是**其他**校準器
+     （`internal/config/calibrator.go:200`、`internal/portfolio/factor_weight_calibrator.go:148`、
+     `internal/orchestrator/calibration_engine.go:330`、
+     `cmd/atlas/calibration_tasks.go:165` 的 `industry.RecalibrateThresholds`；清單見 FU-20260926-07 第 3 點）。
+   - 「**risk 校準有沒有在跑**」不再反映在 SSOT 的年齡上 ⇒ 要看 overlay 的 `calibrated_at`
+     （`jq` 讀 `data/state/parameters.calibrated.json`）。要把它變成告警是一個**後續項**
+     （FU-20260926-10 殘留面），不在本 PR：本 PR 的前提是「SSOT 仍會被校準任務改寫」，
+     而 #2013 之後這仍成立（只是寫入者少了一條）。
+8. **未驗證於生產**：本次只交付接線與本機/promtool 證據；生產驗收（§4）待部署後執行。

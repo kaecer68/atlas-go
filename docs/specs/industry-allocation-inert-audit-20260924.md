@@ -767,7 +767,26 @@ atlas_calibration_freshness_age_seconds{artifact="parameters"} 3900.000000
 | m7 第 2 條 `for: 15m` → `30m` | K | `FAILED` |
 | m8 規則側加回 `or vector(0)` | A、B | `FAILED` |
 
-### 12.6 完成／未完成（誠實）
+### 12.6 與同批另一條線（PR #2013 的校準 overlay）的交互（**已複驗**）
+
+本 PR 開發期間，`risk_gate_calibrate` 的寫入被 PR #2013（2026-09-26 併入 main）從
+`configs/parameters.json` 遷移到 `data/state/parameters.calibrated.json`（overlay），SSOT 保持 pristine。
+本 PR merge main 後複驗了三件事：
+
+1. **`config.GetParametersConfigPath()` 仍指向 SSOT**（`internal/config/calibration_overlay.go:186` 用它當
+   overlay 的 SSOT 基準）⇒ 本族的檢查對象沒有被無聲換成 overlay。
+2. **SSOT 仍會被其他校準器刷新** ⇒ 「SSOT 超過 48h」仍是有意義的訊號（寫入者清單見
+   FU-20260926-07 第 3 點：`internal/config/calibrator.go:200`、
+   `internal/portfolio/factor_weight_calibrator.go:148`、`internal/orchestrator/calibration_engine.go:330`、
+   `cmd/atlas/calibration_tasks.go:165`）。#2013 拿走的是其中**一條**寫入者，不是全部。
+3. **overlay 的新鮮度不在本族範圍**：「risk 校準有沒有在跑」現在要看
+   `data/state/parameters.calibrated.json` 的 `calibrated_at`（`jq` 或結構化 log
+   `overlay_entry_applied`）。本 PR **沒有**為它加指標（那會需要另一個判定語意：
+   per-entry 的 `calibrated_at` 而非單一檔案的 `updated_at`），列為 FU-20260926-10 的殘留面。
+
+上述三點已寫進 runbook §5（第 7 點）與第 1 條規則的 triage（第 2 步）。
+
+### 12.7 完成／未完成（誠實）
 
 **完成**
 - production 端的新鮮度檢查已接上既有監控：指標（5 個 gauge）+ 3 條規則 + 探針心跳，全部走既有管線與既有規則樹；契約收斂為單一常數（`config.DefaultCalibrationMaxAge`）；文件（本節＋runbook）與 FOLLOWUPS（FU-20260926-10）同步；`scripts/ci/check_critical_tasks.sh` 把匯出任務列為關鍵任務（被 DCE 移除 ⇒ 監控整體消失而 CI 全綠，這正是要防的形狀）。

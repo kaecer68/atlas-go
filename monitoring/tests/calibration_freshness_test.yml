@@ -105,14 +105,18 @@ tests:
                  docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/configs/parameters.json | head -1
                  值為 null/空 ⇒ 是「從未記錄校準時間」（此時 age 序列**不會**有值,
                  別去 grep 它）;有值 ⇒ 是「舊」。
-              2. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
+              2. 它是不是「本來就不該被刷新」:#2013 之後 `risk_gate_calibrate` 的寫入改到
+                 `data/state/parameters.calibrated.json`（overlay）,SSOT 保持 pristine ⇒
+                 本條量的是「其他校準器還有沒有在刷 SSOT」。要看 risk 校準,改看 overlay 的
+                 calibrated_at（jq/結構化 log `overlay_entry_applied`）。
+              3. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
                  docker logs atlas-go --since 72h 2>&1 | grep -E "self_calibrate|verdict"
                  連續多輪 verdict=stable / "no adjustments needed" ⇒ 產物沒有變舊的理由,
                  要查的是「校準到底有沒有在跑」而不是資料源。
-              3. 檢查任務本身是否照常執行（心跳,與產物無關）:
+              4. 檢查任務本身是否照常執行（心跳,與產物無關）:
                  docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_freshness_checked_timestamp_seconds
                  落後遠大於 300s ⇒ 先看 CalibrationFreshnessExporterDown 的 triage。
-              4. 檔案的實際時間戳:
+              5. 檔案的實際時間戳:
                  docker exec atlas-go stat -Lc '%y %n' /app/configs/parameters.json
                  （mtime 是 `_ok` 判定的一部分;`cp -p` 之類的還原會讓它變舊）
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
@@ -165,14 +169,18 @@ tests:
                  docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/configs/parameters.json | head -1
                  值為 null/空 ⇒ 是「從未記錄校準時間」（此時 age 序列**不會**有值,
                  別去 grep 它）;有值 ⇒ 是「舊」。
-              2. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
+              2. 它是不是「本來就不該被刷新」:#2013 之後 `risk_gate_calibrate` 的寫入改到
+                 `data/state/parameters.calibrated.json`（overlay）,SSOT 保持 pristine ⇒
+                 本條量的是「其他校準器還有沒有在刷 SSOT」。要看 risk 校準,改看 overlay 的
+                 calibrated_at（jq/結構化 log `overlay_entry_applied`）。
+              3. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
                  docker logs atlas-go --since 72h 2>&1 | grep -E "self_calibrate|verdict"
                  連續多輪 verdict=stable / "no adjustments needed" ⇒ 產物沒有變舊的理由,
                  要查的是「校準到底有沒有在跑」而不是資料源。
-              3. 檢查任務本身是否照常執行（心跳,與產物無關）:
+              4. 檢查任務本身是否照常執行（心跳,與產物無關）:
                  docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_freshness_checked_timestamp_seconds
                  落後遠大於 300s ⇒ 先看 CalibrationFreshnessExporterDown 的 triage。
-              4. 檔案的實際時間戳:
+              5. 檔案的實際時間戳:
                  docker exec atlas-go stat -Lc '%y %n' /app/configs/parameters.json
                  （mtime 是 `_ok` 判定的一部分;`cp -p` 之類的還原會讓它變舊）
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
@@ -454,14 +462,18 @@ tests:
                  docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/configs/parameters.json | head -1
                  值為 null/空 ⇒ 是「從未記錄校準時間」（此時 age 序列**不會**有值,
                  別去 grep 它）;有值 ⇒ 是「舊」。
-              2. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
+              2. 它是不是「本來就不該被刷新」:#2013 之後 `risk_gate_calibrate` 的寫入改到
+                 `data/state/parameters.calibrated.json`（overlay）,SSOT 保持 pristine ⇒
+                 本條量的是「其他校準器還有沒有在刷 SSOT」。要看 risk 校準,改看 overlay 的
+                 calibrated_at（jq/結構化 log `overlay_entry_applied`）。
+              3. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
                  docker logs atlas-go --since 72h 2>&1 | grep -E "self_calibrate|verdict"
                  連續多輪 verdict=stable / "no adjustments needed" ⇒ 產物沒有變舊的理由,
                  要查的是「校準到底有沒有在跑」而不是資料源。
-              3. 檢查任務本身是否照常執行（心跳,與產物無關）:
+              4. 檢查任務本身是否照常執行（心跳,與產物無關）:
                  docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_freshness_checked_timestamp_seconds
                  落後遠大於 300s ⇒ 先看 CalibrationFreshnessExporterDown 的 triage。
-              4. 檔案的實際時間戳:
+              5. 檔案的實際時間戳:
                  docker exec atlas-go stat -Lc '%y %n' /app/configs/parameters.json
                  （mtime 是 `_ok` 判定的一部分;`cp -p` 之類的還原會讓它變舊）
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
