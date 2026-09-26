@@ -50,6 +50,21 @@ func IsTaiwanTradingDay(t time.Time) bool {
 	return taiwanholidays.IsTradingDay(t)
 }
 
+// TaiwanLocation returns the exchange's timezone (Asia/Taipei). Date arithmetic
+// for exchange data MUST be done in exchange-local time: the production cron
+// containers set no TZ env (docker-compose.yml, "cron containers intentionally
+// set no TZ"), so time.Now() inside them is UTC and its calendar date can
+// differ from the exchange's near midnight. Falls back to a fixed UTC+8 zone
+// when the tz database is unavailable (distroless image without tzdata) — a
+// fixed offset still yields the correct Taipei calendar date, which a UTC
+// fallback would not.
+func TaiwanLocation() *time.Location {
+	if loc, err := time.LoadLocation("Asia/Taipei"); err == nil {
+		return loc
+	}
+	return time.FixedZone("CST", 8*60*60)
+}
+
 // RecentTradingDays returns up to n most recent expected Taiwan trading days
 // (inclusive of now's own day when that is a trading day), most recent first.
 // Data-source scan loops use this instead of blind calendar-day walks so

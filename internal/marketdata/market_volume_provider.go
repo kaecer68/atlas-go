@@ -150,17 +150,3 @@ func (p *MarketVolumeProvider) fetchDate(ctx context.Context, dateStr string) (*
 		Date:         dateStr,
 	}, nil
 }
-
-// twseMIIndexResponse mirrors the TWSE MI_INDEX JSON response.
-type twseMIIndexResponse struct {
-	Stat   string        `json:"stat"`
-	Date   string        `json:"date"`
-	Tables []twseMITable `json:"tables"`
-}
-
-type twseMITable struct {
-	Title  string     `json:"title"`
-	Fields []string   `json:"fields"`
-	Data   [][]string `json:"data"`
-	Notes  []string   `json:"notes"`
-}
