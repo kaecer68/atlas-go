@@ -373,6 +373,23 @@ jobs:
     - name: Check markdown links
       run: bash scripts/ci/check_markdown_links.sh
 
+  # FOLLOWUPS 條目 id 唯一性 —— 2026-09-26 同一天內**三次撞號**：兩個 lane 幾乎同時 push，
+  # 各自「新增前都查了最大號」✓ 但**對方在查完之後才併入** ✗ ⇒ 同一條目被迫連續改號（-01→-08→-09）。
+  # 唯一性**只在單一檔案內成立** ⇒ 單檔檢查即可抓到「合併後撞號」（不需要跨 PR 狀態）。
+  # 刻意**不**斷言「必須 max+1」（刻意留空號／分階段合併會誤判）。
+  followups-unique-ids:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check FOLLOWUPS ids are unique (single-file)
+      run: bash scripts/ci/check_followups_unique_ids.sh
+
+    # 負向證明（hermetic fixture；tempdir + FOLLOWUPS_FILE 注入，不碰真檔）：
+    # 兩個同號 → 必須 exit 1；檔案不存在 → exit 1；0 個 `### FU-…`（格式漂移）→ exit 1。
+    - name: Negative proof — duplicated / missing / drifted ids must be blocked
+      run: bash tests/scripts/test-followups-unique-ids.sh
+
   # Secret scan — this repo is PUBLIC: a committed credential is leaked forever.
   # Precedent: scripts/alertmanager-webhook/*.plist carried a plaintext telegram bot token
   # from 2026-08-27 until 2026-09-25 (the alert chain was silent for ~42h because of it).
