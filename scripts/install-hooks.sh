@@ -74,13 +74,21 @@ TEST_MSG_FILE=$(mktemp)
 trap 'rm -f "$TEST_MSG_FILE"' EXIT
 echo "feat(P0-1): this should be rejected" > "$TEST_MSG_FILE"
 
-if sh "$HOOK_PATH" "$TEST_MSG_FILE" >/dev/null 2>&1; then
+# ⚠️ 精確斷言（issue #2011）：契約是「拒絕 ⇒ exit 1」。舊寫法 `if sh hook ...; then FAIL else ✅` 會把
+# exit 2（hook 語法壞掉）、126/127（hook 不存在／不可執行）也當成「正確拒絕」⇒ 自我測試形同虛設。
+hook_rc=0
+sh "$HOOK_PATH" "$TEST_MSG_FILE" >/dev/null 2>&1 || hook_rc=$?
+if [ "$hook_rc" -eq 0 ]; then
   echo "❌ FAIL: hook did NOT reject 'feat(P0-1):' — uppercase scope passed"
   echo "   Hook content may have been corrupted. Inspect: ${HOOK_PATH}"
   exit 1
-else
-  echo "✅ Hook correctly rejected 'feat(P0-1):' — uppercase scope caught"
 fi
+if [ "$hook_rc" -ne 1 ]; then
+  echo "❌ FAIL: hook 以非預期結束碼 ${hook_rc} 結束（契約是拒絕 ⇒ exit 1；2/126/127 代表 hook 本身壞了）"
+  echo "   Inspect: ${HOOK_PATH}"
+  exit 1
+fi
+echo "✅ Hook correctly rejected 'feat(P0-1):' — uppercase scope caught (exit=1)"
 
 echo ""
 echo "✅ All hooks installed and verified."

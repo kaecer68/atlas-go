@@ -52,7 +52,7 @@ file_mode() {
 }
 MODE="$(file_mode "$DEST")"
 if [ "$MODE" = "600" ]; then ok "B3 已安裝 plist mode=600（原本 644 是同機可讀 ✗）"
-else bad "B3 已安裝 plist mode=$MODE（期望 600）"; fi
+else bad "B3 已安裝 plist mode=${MODE}（期望 600）"; fi
 
 INJ="$(python3 - "$DEST" <<'PY'
 import plistlib, sys
@@ -72,19 +72,35 @@ if grep -qF "$FAKE_TOKEN" "$TMP/out.txt"; then bad "B7 安裝輸出洩漏 token 
 else ok "B7 安裝輸出不含 token（僅遮蔽顯示）"; fi
 
 # ── C. 壞輸入必須失敗 ─────────────────────────────────────────────
-bad_case() { # bad_case <說明> <args…>
-  local desc="$1"; shift
-  if bash "$INSTALLER" --no-load --home "$TMP/home2" "$@" > "$TMP/bad.txt" 2>&1; then
-    bad "$desc（期望非 0，得到 0）"
-  else
-    ok "$desc"
+# ── C. 壞輸入必須失敗（**精確**：exit=2 = 輸入驗證失敗；不是「非 0 就算拒絕」）──────
+# 為什麼要精確斷言（issue #2011 / #2013 同族）：
+#   ① 舊寫法 `if bash "$INSTALLER" ...; then bad; else ok; fi` 把 exit 127（腳本被刪）也算「拒絕」；
+#   ② 舊寫法用 `--home "$TMP/home2"`（**不存在**的目錄）⇒ 安裝器在 `[ -d "$HOME_DIR" ]` 就 exit 2，
+#      案例其實**從沒走到 token 驗證**，卻印 ✅（「為錯的原因而通過」＝假綠）。
+#      現在先 mkdir home2，並加驗「失敗訊息要是我們宣稱的那個原因」。
+bad_case() { # bad_case <說明> <訊息必含> <args…>
+  local desc="$1" needle="$2"; shift 2
+  mkdir -p "$TMP/home2"
+  local rc=0
+  bash "$INSTALLER" --no-load --home "$TMP/home2" "$@" > "$TMP/bad.txt" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    bad "${desc}（期望 exit=2，得到 0：竟接受了壞輸入）"; sed 's/^/     /' "$TMP/bad.txt" | head -5; return
   fi
+  if [ "$rc" -ne 2 ]; then
+    bad "${desc}（期望 exit=2（輸入驗證失敗），得到 $rc ⇒ 非預期結束碼，不是「拒絕了」）"
+    sed 's/^/     /' "$TMP/bad.txt" | head -5; return
+  fi
+  if ! grep -qF -- "$needle" "$TMP/bad.txt"; then
+    bad "${desc}（exit=2 但訊息不含「${needle}」⇒ 拒絕的原因不是我們宣稱的那個）"
+    sed 's/^/     /' "$TMP/bad.txt" | head -5; return
+  fi
+  ok "${desc}（exit=2：${needle}）"
 }
 printf '%s\n' '__INJECT_AT_INSTALL__' > "$TMP/placeholder"; chmod 600 "$TMP/placeholder"
-bad_case "C1 placeholder 當 token → 拒絕" --token-file "$TMP/placeholder"
+bad_case "C1 placeholder 當 token → 拒絕" "placeholder" --token-file "$TMP/placeholder"
 printf '%s\n' 'not-a-telegram-token' > "$TMP/bad-token"
-bad_case "C2 形狀不對的 token → 拒絕" --token-file "$TMP/bad-token"
-bad_case "C3 完全不給來源 → 拒絕（不會靜默裝出壞服務）" --home "$TMP/home2" --token-file "$TMP/missing-file"
+bad_case "C2 形狀不對的 token → 拒絕" "形狀" --token-file "$TMP/bad-token"
+bad_case "C3 指定了不存在的 token 檔 → 拒絕（不會靜默裝出壞服務）" "--token-file 不存在" --token-file "$TMP/missing-file"
 
 # ── D. --from-env-file 與既有 plist 備份 ──────────────────────────
 printf 'PORT=9095\nTELEGRAM_BOT_TOKEN="%s"\n' "$FAKE_TOKEN" > "$TMP/.env"
@@ -101,5 +117,5 @@ if [ "$fail" -eq 0 ]; then
   echo "✅ install-webhook selftest PASS（$pass 項）"
   exit 0
 fi
-echo "❌ install-webhook selftest FAIL（pass=$pass fail=$fail）"
+echo "❌ install-webhook selftest FAIL（pass=${pass} fail=${fail}）"
 exit 1
