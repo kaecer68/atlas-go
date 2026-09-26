@@ -101,7 +101,7 @@ EOF
   DOCKER_BIN="$dir/docker" FAKE_DOCKER_RM_LOG="$dir/rm.log" "$CHECK" >/dev/null 2>&1 || rc=$?
   case "$rc" in
     0)        fail "freshness check unexpectedly succeeded when docker cp failed" ;;
-    2|126|127) fail "freshness check 沒跑起來（exit=$rc）——這不是「正確地失敗」" ;;
+    2|126|127) fail "freshness check 沒跑起來（exit=${rc}）——這不是「正確地失敗」" ;;
   esac
   grep -Fxq -- 'rm -f fake-freshness-container' "$dir/rm.log" || \
     fail "freshness check did not remove container after docker cp failure"
@@ -124,7 +124,7 @@ EOF
   DOCKER_BIN="$dir/docker" "$CHECK" >/dev/null 2>&1 || rc=$?
   case "$rc" in
     0)        fail "freshness check unexpectedly succeeded when images were unavailable" ;;
-    2|126|127) fail "freshness check 沒跑起來（exit=$rc）——這不是「正確地失敗」" ;;
+    2|126|127) fail "freshness check 沒跑起來（exit=${rc}）——這不是「正確地失敗」" ;;
   esac
 }
 

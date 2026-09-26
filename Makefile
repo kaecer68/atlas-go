@@ -357,7 +357,7 @@ lint-backend:
 	@# 兩種壞法疊在一起：rc 被吞 + 根本沒掃到檔案）。改用 repo 根目錄（與 ci-gate 的 `gofmt -l .` 一致）。
 	@gofmt_out="$$(gofmt -l .)"; gofmt_rc=$$?; \
 	if [ "$$gofmt_rc" -ne 0 ]; then \
-		echo "    ❌ gofmt 執行失敗（rc=$$gofmt_rc）——這不是「乾淨」"; \
+		echo "    ❌ gofmt 執行失敗（rc=$${gofmt_rc}）——這不是「乾淨」"; \
 		exit 1; \
 	fi; \
 	if [ -n "$$gofmt_out" ]; then \
@@ -909,6 +909,10 @@ ci-gate:
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"
+	@echo "  → 全形字元緊鄰變數展開的靜態檢查（移植自 a2a-dev）＋自我測試"
+	@bash scripts/ci/check_fullwidth_var_expansion.sh
+	@bash tests/scripts/test-fullwidth-var-expansion.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""
@@ -957,15 +961,35 @@ ci-full: ci-gate ci-constitution
 	@$(MAKE) --no-print-directory ci-slow
 	@echo "    ✅"
 	@echo "  → coverage threshold (≥60%)"
-	@go test -coverprofile=/tmp/atlas-ci-full-coverage.out $$(go list ./... | grep -v '/cmd/atlas$$') > /dev/null 2>&1; \
-	COVERAGE=$$(go tool cover -func=/tmp/atlas-ci-full-coverage.out | awk '/^total:/ {print $$3}' | tr -d '\r' | sed 's/%//'); \
-	echo "    Total coverage: $${COVERAGE}%"; \
-	if echo "$$COVERAGE 60" | awk '{exit !($$1 < $$2)}'; then \
-		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
-		rm -f /tmp/atlas-ci-full-coverage.out; \
+	@set -e; \
+	COV_PROFILE=/tmp/atlas-ci-full-coverage.out; \
+	COV_LOG=/tmp/atlas-ci-full-coverage.log; \
+	COV_FUNC_LOG=/tmp/atlas-ci-full-coverage-func.log; \
+	rm -f "$${COV_PROFILE}" "$${COV_FUNC_LOG}"; \
+	if ! go test -coverprofile="$${COV_PROFILE}" $$(go list ./... | grep -v '/cmd/atlas$$') > "$${COV_LOG}" 2>&1; then \
+		echo "    ❌ go test 失敗（覆蓋率步驟）— log: $${COV_LOG}"; \
+		tail -n 40 "$${COV_LOG}"; \
 		exit 1; \
 	fi; \
-	rm -f /tmp/atlas-ci-full-coverage.out
+	if [ ! -s "$${COV_PROFILE}" ]; then \
+		echo "    ❌ 取不到覆蓋率：coverprofile 缺失或為空（$${COV_PROFILE}）"; \
+		exit 1; \
+	fi; \
+	if ! go tool cover -func="$${COV_PROFILE}" > "$${COV_FUNC_LOG}" 2>&1; then \
+		echo "    ❌ 取不到覆蓋率：go tool cover 解析失敗 — log: $${COV_FUNC_LOG}"; \
+		tail -n 20 "$${COV_FUNC_LOG}"; \
+		exit 1; \
+	fi; \
+	COVERAGE=$$(awk '/^total:/ {print $$3}' "$${COV_FUNC_LOG}" | tr -d '\r' | sed 's/%//'); \
+	echo "    Total coverage: $${COVERAGE}%"; \
+	case "$${COVERAGE}" in \
+		''|*[!0-9.]*) echo "    ❌ 取不到覆蓋率：COVERAGE 非數字（$${COVERAGE}）"; exit 1 ;; \
+	esac; \
+	if awk -v c="$${COVERAGE}" 'BEGIN{exit !(c+0 < 60)}'; then \
+		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
+		exit 1; \
+	fi; \
+	rm -f "$${COV_PROFILE}" "$${COV_LOG}" "$${COV_FUNC_LOG}"
 	@echo "    ✅"
 	@echo "  → orphan artifact check"
 	@ORPHANS=""; \
