@@ -973,6 +973,9 @@ ci-gate: embed-dirs
 	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
 	@bash tests/scripts/test-embed-dirs.sh
 	@echo "    ✅"
+	@echo "  → agent-guard PreToolUse 接線契約測試（hermetic：只餵 payload，不執行危險指令）"
+	@bash tests/scripts/test-agent-hook-wiring.sh
+	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh
 	@echo "    ✅"

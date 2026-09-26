@@ -43,6 +43,14 @@ if [[ "${ATLAS_ENV:-development}" == "production" && -z "${ATLAS_HOOK_MODE:-}" ]
 fi
 
 # Helpers
+#
+# NOTE (machine-readable output contract): the first line emitted by block()
+# starts with one of the two markers below. `.agent-hooks/pretooluse-deny-dangerous.sh`
+# (the PreToolUse adapter registered in `.claude/settings.json`) tells "blocked"
+# from "guard broke" by matching them, so do not reword them without updating the
+# adapter and tests/scripts/test-agent-hook-wiring.sh. The two markers are:
+#   enforce mode -> "DENIED (enforce mode):"      (this function exits 1)
+#   warn mode    -> "WARNING (warn mode):"        (this function exits 0)
 block() {
   local reason="$1"
   if [[ "$MODE" == "enforce" ]]; then
@@ -77,7 +85,14 @@ if [[ -z "$CHECK" && "$DRY_RUN" -eq 0 ]]; then
 fi
 
 # Pattern checks
-normalized="${CHECK,,}"
+# Lowercase with `tr`, not `${CHECK,,}`: this script is invoked through
+# `#!/usr/bin/env bash`, which on stock macOS resolves to bash 3.2 and
+# `${var,,}` is a bash 4 feature. Under bash 3.2 the expansion aborts the
+# script with "bad substitution" (exit 1) for EVERY command - i.e. the guard
+# would report benign commands as blocked. See
+# tests/scripts/test-agent-hook-wiring.sh (runs the whole verdict matrix under
+# the system bash) for the regression proof.
+normalized="$(printf '%s' "$CHECK" | tr '[:upper:]' '[:lower:]')"
 
 # 1. Direct push to protected branches.
 if [[ "$normalized" =~ git[[:space:]]+push[[:space:]]+ && "$normalized" =~ (main|master)([[:space:]]|$) && ! "$normalized" =~ --no-verify ]]; then
