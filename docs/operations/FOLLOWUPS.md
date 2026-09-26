@@ -413,8 +413,9 @@
 
 - **定位（root 2026-09-26 定案）**：本條**不是**與 `FU-20260926-01` 平行的待辦 ⇒
   **`-01` 是待辦（已 `done`，由 PR #2006 實作）**、**本條是它的實作／驗收記錄**。
-  記錄本身隨 PR #2006 交付；下方「殘留面」三項仍是 `open` 的後續硬化方向，故本條狀態維持 `open`。
-- **狀態**：`open`（僅指下列三項殘留面；實作／驗收部分已完成）
+  記錄本身隨 PR #2006 交付；下方「殘留面」三項中 **殘留 1 已於 #2014 完成**，殘留 2／3 仍是後續
+  硬化方向，故本條狀態維持 `open`。
+- **狀態**：`open`（僅指殘留 2／3；實作／驗收部分與殘留 1 已完成）
 - **記錄日期**：2026-09-26
 - **編號說明（本條改號兩次）**：本條隨 PR #2006 建立，原號 `FU-20260926-01`；
   **第一次撞號** = [#2005](https://github.com/kaecer68/atlas-go/pull/2005) 併入 main 的
@@ -432,17 +433,28 @@
 - **來源**：`fix/finmind-quota-honor-402-r`（FinMind 402 ⇒ 當日額度 latch 持久化 + ceiling 14400→12000
   + upstream body 去機密）。生產事實：2026-09-26 02:10Z `auto_quote_backfill`（824 檔）跑到
   `calls_today≈12500` 時上游回 402 `Requests reach the upper limit`（且該 body 回帶 `token_tail`）。
-- **殘留 1（跨行程可見性）**：latch 寫在 `data/state/finmind_daily_quota.json`，但**只在 client 建構時讀取**
-  ——同一台機器上**已存在**的其他行程（例如另一顆 cron 容器、或長命 process 內另一份 client）
-  不會立即看到別人的 latch，要等它自己撞一次 402 才會跟上。成本有界（每個行程浪費 1 次呼叫），
-  但「一次 402 就全平台停手」的性質只在單一共享 process/state dir 下成立。
-  **硬化方向**：latch 寫入後以短 TTL（例如 30s）重讀 state file，或把 latch 暴露成共享訊號
-  （檔案 mtime / metric），讓多行程在一個週期內收斂。
+- **殘留 1（跨行程可見性）— `done`**（2026-09-26，issue [#2014](https://github.com/kaecer68/atlas-go/issues/2014)，
+  PR [#2021](https://github.com/kaecer68/atlas-go/pull/2021)、branch `fix/20260926-finmind-quota-cross-process`）：原狀是 latch 寫在
+  `data/state/finmind_daily_quota.json` 卻**只在 client 建構時讀取** ⇒ 同機其他行程（另一顆 cron 容器、
+  或長命 process 內另一份 client）不會立刻看到別人的 latch，要等它自己撞一次 402 才跟上。
+  **已改為**：`DailyQuotaTracker` 的每一次讀與每一次遞增都在 `<state>.lock` 的 flock 之下進行
+  read-modify-write，latch／計數／`Remaining()` 一律以 state file 為權威 ⇒ 一個行程 latch 後，
+  其他行程在下一次呼叫即可見（不再需要「短 TTL 重讀」這種折衷）。同時修掉同源的更嚴重缺陷：
+  跨 process 的**上限**原本只是「每個 process 各自的上限」。**邊界（誠實）**：這只保證共用同一
+  state dir 的行程（同機同 volume）；另一台機器各自的 state dir 不受此鎖約束。
 - **殘留 2（上游真實上限未知）**：12,500 是**觀測到的拒絕點**，不是 FinMind 公布的上限；
   12000 這個 ceiling 是人工留 500 餘裕的估計值。目前以 `FINMIND_DAILY_LIMIT` 覆寫 +
   `finmindObservedUpstreamRefusalLimit` 常數 + 測試（`TestFinMindQuotaCeiling_StaysBelowObservedUpstreamRefusal`）
   把「不得超過觀測拒絕點」寫死，但**沒有自動校準**。
   **硬化方向**：連續多日記錄「首次 402 時的 calls_today」並回報，作為下一次調整 ceiling 的證據。
+  **2026-09-26 新增反證（未收斂，僅登記）**：`#2014` 盤查時發現，本地計數器停在 `calls_today=12982`
+  的那一秒（2026-09-26T14:20:15+08:00）**同目錄的 `data/state/tsmc_revenue/11509_revenue.json` 也被寫入**，
+  而該檔只在 `TSMCRevenueProvider.FetchSnapshot` 的**成功**路徑才寫（失敗走 cache fallback、不寫檔）
+  ⇒ 那一天「本地 12,982」時上游仍正常回應；同日 04:05Z–06:05Z 也有 `no data for symbol`（HTTP 200 但空）
+  而非 402。因此 **12,500 是否真是「日配額牆」存疑**——本地 counter 記的是**嘗試**（402 被拒也 +1，
+  而 `fetchWithRetry` 的重試不 +1），與上游自己的用量本來就不是同一個數。**尚未否證/證實**：
+  02:10Z 那次的 response body 已隨舊容器消失，唯讀手段取不到 ⇒ 需要 FinMind 後台用量或一次受控實驗。
+  **在收斂前不要據此調升 ceiling**（維持 12000 與 `FinMindDailyLimit()` 單一讀取點）。
 - **殘留 3（探針語意）**：latch 期間 `QuotaRemaining()==0`，`channel_health_finmind` 因此仍以
   一般 quota 訊息呈現；「本地自己停手」與「上游已宣告今日結束」目前只靠錯誤字串
   （`upstream-exhausted … reason=…`）區分。
@@ -1020,6 +1032,43 @@
      `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
 - **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
   （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+---
+
+### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：2026-09-26 推送 PR #2029（`fix/ci-swallowed-errors`，commit `e2e1b0de`）時，pre-push hook 的
+  `make ci-full` 在 `make ci-gate` → `ci-quick` 階段紅：
+  `❌ FAILED: scripts/ci/check_jev_contract.sh`（`✅ CI-quick: 14 passed, ❌ 1 failed`）。
+- **現況（實測，皆為本機可重現）**：
+  1. 該檢查**會真的對外呼叫 Jev**：單獨執行輸出
+     `✓ 實際呼叫 OK: noul=0.93 model=jev-1.13.0 tokens=281 445ms attempts=1`
+     （`✓ jevkit 自測通過`）。
+  2. **失敗後單獨重跑 2 次都是 exit 0**（`✅ Jev 契約檢查通過`）。
+  3. 同一個 patch 在**數分鐘前**的另一次 push 中，`make ci-full` **全綠**
+     （log 含 `✅ ci-full passed` 與 coverage step `Total coverage: 70.4%`），
+     且兩次 patch 內容 sha256 **逐位元組相同**（`62a6f43caf94ddacbf9e…`）。
+  4. 當次改動只有 `.github/workflows/daily-maintenance.yml`，與該檢查無關。
+- **判定：這是外部相依（Jev 服務／網路）造成的間歇性紅燈**，不是確定性缺陷。
+  因此「紅燈本身」沒有問題（不可靜默吞掉），問題在於**它坐在 pre-push 的阻擋路徑上**。
+- **風險**：誤紅會擋住合法推送 ⇒ 實務壓力會逼人用 `git push --no-verify`（**連 `make ci-gate` 都跳過**），
+  結果是**真正的**紅燈更容易被忽略 —— 與本 session 在修的同族（gate 靜默失效／閘門可信度流失）互為表裡。
+  同日已有兩次同型：本票（`check_jev_contract.sh`）與 FU-20260926-17（`internal/fubonproxy` 時序 flake）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：離線化**。以 hermetic fixture／stub 取代真呼叫；repo 已有同型前例
+     （`tests/scripts/*` 與 `scripts/ci/negative-proof-lib.sh` 的 fixture 式負向證明）。
+     若真呼叫仍要保留，應移到**非阻擋** lane（nightly 或 `workflow_dispatch`），
+     **不要**放在 pre-push／PR 必經路徑上。
+  2. **次選：明示外部相依 + 有界重試 + 記錄**。重試 N 次，每次都要**寫出**第 k 次失敗／逾時的
+     訊息與最終判定（`::warning::` 或步驟輸出），並在腳本檔頭明列「本檢查需外網」。
+  3. 不論選哪個：**不得**在 pre-push 路徑加 `|| true` / `continue-on-error`
+     （那正好是本 session 正在修的同族 false-green）。
+- **驗收條件（供實作者）**：在有外網阻斷的環境（例如 `http_proxy` 指向黑洞）跑
+  `make ci-gate`，行為必須**明示原因**且**不因外部 flake 而擋住合法 push**
+  （離線化版本的期望：該檢查不依賴外網即可判定；重試版本的期望：輸出可區分「契約不符」與「連不上」）。
+- **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
 
 ---
 

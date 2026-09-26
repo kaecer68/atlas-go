@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -263,11 +264,24 @@ func TestDailyQuotaTracker_UpstreamLatch_Lifecycle(t *testing.T) {
 		t.Errorf("UpstreamExhaustion() = (%v, %q, %v), want the persisted reason and observation time", exhausted, reason, at)
 	}
 
-	// Rollover: rewind the day (same package, so the field is reachable) and
-	// the latch must clear — both in memory and on disk.
-	reloaded.mu.Lock()
-	reloaded.lastReset = time.Now().Truncate(24*time.Hour).AddDate(0, 0, -1)
-	reloaded.mu.Unlock()
+	// Rollover: since #2014 the state file is the authority, so simulate the day
+	// change the way production sees it — the persisted state belongs to an
+	// earlier quota day — and the latch must clear.
+	yesterday := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	rolled := QuotaState{
+		CallsToday:        0,
+		LastReset:         yesterday,
+		UpstreamExhausted: true,
+		UpstreamReason:    `{"msg":"Requests reach the upper limit"}`,
+		UpstreamAt:        yesterday.Add(2 * time.Hour).Format(time.RFC3339),
+	}
+	rolledRaw, marshalErr := json.Marshal(rolled)
+	if marshalErr != nil {
+		t.Fatalf("marshal rolled state: %v", marshalErr)
+	}
+	if writeErr := os.WriteFile(filepath.Join(dir, "finmind_daily_quota.json"), rolledRaw, 0o644); writeErr != nil {
+		t.Fatalf("write rolled state: %v", writeErr)
+	}
 
 	if reloaded.UpstreamExhausted() {
 		t.Error("latch must clear when the quota day rolls over")
@@ -520,5 +534,64 @@ func TestFinMindDailyLimit_EnvOverride(t *testing.T) {
 		if got := finmindDailyLimitResolved(); got != finmindDailyLimit {
 			t.Errorf("FINMIND_DAILY_LIMIT=%q resolved to %d, want the default %d", bad, got, finmindDailyLimit)
 		}
+	}
+}
+
+// TestFinMindQuotaOpsScript_ReportsQuotaUnknown drives the pre-market ops check
+// against a state file carrying the #2014 fail-closed marker. The script must
+// NOT print a comfortable "0/12000 (0%)" — that is exactly the silent pass the
+// marker exists to prevent — and under --strict it must fail.
+func TestFinMindQuotaOpsScript_ReportsQuotaUnknown(t *testing.T) {
+	bashPath, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not available")
+	}
+	script := filepath.Join("..", "..", "scripts", "ci", "check_finmind_quota.sh")
+	if _, statErr := os.Stat(script); statErr != nil {
+		t.Fatalf("stat %s: %v", script, statErr)
+	}
+
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "finmind_daily_quota.json")
+	marker, err := json.Marshal(QuotaState{
+		CallsToday:         0,
+		LastReset:          time.Now().UTC().Truncate(24 * time.Hour),
+		QuotaUnknown:       true,
+		QuotaUnknownReason: "parse finmind_daily_quota.json: unexpected end of JSON input",
+	})
+	if err != nil {
+		t.Fatalf("marshal marker: %v", err)
+	}
+	if err := os.WriteFile(stateFile, marker, 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	out, runErr := exec.Command(bashPath, script, "--state-file", stateFile, "--strict").CombinedOutput()
+	text := string(out)
+	if !strings.Contains(text, "quota-unknown") {
+		t.Errorf("ops check did not report the quota-unknown marker:\n%s", text)
+	}
+	if strings.Contains(text, "(0%)") {
+		t.Errorf("ops check reported an apparently-healthy 0%% from an UNKNOWN counter:\n%s", text)
+	}
+	if runErr == nil {
+		t.Errorf("--strict must fail while the day is latched as quota-unknown; output:\n%s", text)
+	}
+
+	// Control: the same script on a healthy same-day counter still works and
+	// exits 0, so the new branch cannot have swallowed the normal path.
+	healthy, err := json.Marshal(QuotaState{CallsToday: 100, LastReset: time.Now().UTC().Truncate(24 * time.Hour)})
+	if err != nil {
+		t.Fatalf("marshal healthy: %v", err)
+	}
+	if err := os.WriteFile(stateFile, healthy, 0o644); err != nil {
+		t.Fatalf("write healthy: %v", err)
+	}
+	okOut, okErr := exec.Command(bashPath, script, "--state-file", stateFile, "--strict").CombinedOutput()
+	if okErr != nil {
+		t.Errorf("healthy counter must pass --strict: %v\n%s", okErr, okOut)
+	}
+	if !strings.Contains(string(okOut), "100/") {
+		t.Errorf("healthy counter output = %q, want the calls/limit line", okOut)
 	}
 }
