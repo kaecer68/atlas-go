@@ -126,6 +126,13 @@
   週一由 `auto_universe_full_rebuild`（weekly）跑。所以要驗「修好後的常態」必須挑一個
   週一 06:00Z（= 14:00 台北；容器不設 TZ，見 FU-20260925-05）**且是交易日**的日子 ——
   2026-09-28 是最近的這種日子（`-simulate` / 交易日曆另可交叉驗證）。
+- **日曆更正（2026-09-26 記錄）**：**09-26 不可當成複驗日** —— 2026-09-26 是**週六**，且
+  **2026 中秋＝09-25（週五，休市）** ⇒ 09-24（四）之後的下一個交易日就是 **09-28（一）**。
+  權威判定（`internal/taiwanholidays`，以一次性探針 `go test ./internal/taiwanholidays/` 產出後**已刪除**）：
+  `09-24 Thu true`／`09-25 Fri IsHoliday=true`／`09-26 Sat false`／`09-27 Sun false`／`09-28 Mon true`。
+  ⇒ 本條的 `2026-09-28（週一）06:00Z` **維持有效**；且撰寫時（2026-09-26T03:40Z）該時刻**尚未到**
+  ⇒ 狀態維持 `open`（本條**尚未**複驗，勿把 09-25/09-26 當成已複驗的日子）。
+  （同族事實：`CHANGELOG.md:91`「2026 中秋＝09-25」。）
 - **要驗什麼**：`data/state/universe_snapshot.json` 的
   `result.quotes_status == "ok"` **且** `result.ranked_trustworthy == true`；
   並確認 `symbols_ranked` > 0。這兩個欄位是 #1979 之後專為本案加的機器可讀判定
@@ -354,7 +361,15 @@
     （`docs/operations/docker-compose.prod.yml` 為同一份設定）。
   - app 容器 DSN 內嵌值 **== 該實際值** ⇒ app 連線正常（這也是它一直未被發現的原因）。
 - **緩解現況（是緩解，不是修好）**：
-  - DB 埠以 `0.0.0.0:55432` 對外發佈，但 root 實測 **LAN 不可達** ⇒ 目前外部打不到。
+  - ~~DB 埠以 `0.0.0.0:55432` 對外發佈，但 root 實測 **LAN 不可達** ⇒ 目前外部打不到。~~
+    **更正（2026-09-26）：上述「緩解」已失效且敘述錯誤** —— `docker port atlas-postgres` 實測
+    `5432/tcp -> 0.0.0.0:55432`（＋`[::]:55432`）；root 以 Tailscale（`kmacmini` = 100.65.194.77）
+    實測 **55432 可達**，且對 DB 做認證：**負對照**（明知錯誤的值）被拒 ✓、真實值（= compose 預設字典詞）
+    可登入 ⚠️ ⇒ 「遠端免認證可達」＋「loopback 免密」的組合是真的存在過的。
+    修法見 PR #2004（`docker-compose.yml` 的 postgres 埠發佈改為 `127.0.0.1:${ATLAS_POSTGRES_PORT:-5432}:5432`，
+    **尚未部署**；in-stack 的 atlas／6 個 cron／postgres-exporter 都走 docker 網路名 `postgres:5432`，不受影響）。
+    與本條的密碼輪替**互補而非互斥**：綁 loopback 讓「遠端整類」消失，但 `pg_hba` 對 `127.0.0.1/32` 是 `trust`
+    ⇒ 輪替防不到本機路徑；反之輪替也不能取代 bind。
   - `pg_hba.conf` 對 `127.0.0.1/32` 與 `::1/128` 是 **`trust`** ⇒ **本機存取免密**。
     ⚠️ 這既是緩解也是**陷阱**：在容器內以 `-h 127.0.0.1` 測密碼**一律成功**（見文末判準）。
 - **風險**：只要網路曝露面改變（埠改 bind、加入新網段、SSH tunnel、其他容器同網段），
@@ -411,6 +426,168 @@
   （`upstream-exhausted … reason=…`）區分。
   **硬化方向**：把 latch 狀態（bool + observed_at）納入 channel-health 記錄/指標，
   讓儀表板不必解析錯誤字串。
+
+---
+
+### FU-20260926-01 — FinMind 上游 402 早於本地護欄：`finmindDailyLimit=14400` 與 1,500 保留值都太高
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **事實（root 生產實測，2026-09-26）**：`auto_quote_backfill` 於 02:10Z 啟動、載入 824 symbols；
+  配額計數器 01:0xZ ≈ 35 → 02:1xZ ≈ **12,500**，此時**上游已回 402**（`Requests reach the upper limit`）。
+- **為何護欄沒擋住**：本地兩道門檻都在真實上限**之上** ——
+  - `internal/marketdata/finmind_client.go:83` `const finmindDailyLimit = 14400`（同檔註解自述為
+    「observed upstream daily quota cap (used=14400, remaining=0 exhaustion on 2026-09-02)」）；
+  - `internal/monitoring/quote_backfill_task.go:70` `const backfillQuotaStopRemaining = 1500`
+    ⇒ 早停點 = 已用 **12,900**（14400 − 1500），**晚於**上游實際 402（≈12,500）
+    ⇒ #1954 的保留值停損**永遠不會觸發**（該設計的前提「真上限 = 14,400」不成立）。
+  - 同一段註解也寫著該帳號是**贊助方案（active until ~2026-10-03）**、小時預算 6000/hr
+    ⇒ 常數與真上限的關係**隨方案變動**，硬編值必然過時。
+- **建議（未實作）**：① **以上游 402 為準** —— `ErrQuotaExhausted` 應能「標記當日耗盡 + 當日不再嘗試 + 退避」，
+  不靠本地 counter 猜；② 14400／1500 改為可設定並在 log 印出「本次用的上限值與來源」；
+  ③ 402 時記一筆「上游回報的上限」量測，供下次校準常數。
+- **驗收條件**：上游 402 之後，backfill **當日不再發送**且 log 明示 `upstream 402 at used=N`；
+  負對照：本地 counter 未到門檻時，也不得在 402 之後繼續重試同一 dataset。
+
+---
+
+### FU-20260926-02 — FinMind 錯誤回應回帶 `token_tail`，而 log 與錯誤字串**原文照抄**整段 body
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **事實（程式碼）**：`internal/marketdata/finmind_client.go:373-381` 在非 200 時讀 body（上限 512B）並
+  `logging.Warn("finmind", "fetch_non_2xx", "body", bodyStr, …)` **原文進 log**；
+  `:395` 再把同一段 body 併進錯誤字串（`fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)`）
+  ⇒ 一路帶進 channel health／BTM task 的錯誤訊息。
+- **為何是機密問題**：FinMind 的錯誤 envelope **會回帶 token 尾碼**（測試 fixture 早已記載此形狀：
+  `internal/marketdata/finmind_client_extra_test.go:924-929`
+  `{"msg":"Token is illegal.","status":400,"token_tail":"...stale-key"}`）；root 在生產 402 回應上**實測看到 `token_tail`**。
+  尾碼可利用性低（本 repo 為 PUBLIC，log 也可能被貼進 PR／issue），但它是**機密片段**，不應出現在 log／錯誤訊息／貼文。
+- **建議（未實作）**：① 寫 log 與組錯誤字串之前**遮蔽已知敏感鍵**（至少 `token_tail`；用白名單比黑名單安全）；
+  ② 保留可診斷性：遮蔽後仍要能分辨「token 失效」與「配額耗盡」（例：只留尾 2 碼）；
+  ③ 業主**評估輪替 FinMind token**（非緊急）。
+- **驗收條件**：以含 `token_tail` 的 fixture 驅動 fetch ⇒ log 與 error **皆不含**原值；
+  負對照：`msg`／`status` 仍完整可見（不得為了遮蔽而讓錯誤不可診斷）。
+
+---
+
+### FU-20260926-03 — `seasonal_calibration` **有排程且真的在生產跑**；但校準結果寫進**容器內** `/app/configs`（不回流版控、重建即失）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **事實（生產實測）**：
+  - 排程**存在**：`cmd/atlas/data_sync_health_tasks.go:152-176` 註冊 `seasonal_calibration`
+    （`Interval: scheduler.SeasonalCalibrationDefaults.Interval`，7d）。前置條件是
+    ① image 內有 `calibrate-seasonal` ② `data/replay/finmind_2020_2024.jsonl` 存在 —— **兩者都成立**
+    （`/app/calibrate-seasonal`、host 與容器皆有 `data/replay/finmind_2020_2024.jsonl`）。生產 log：
+    `2026-09-26T02:05:12.772Z registered seasonal_calibration background task (7d interval)`、
+    `02:06:58.816Z task_started name=seasonal_calibration`、`02:06:58.942Z exec_ok binary=/app/calibrate-seasonal output_len=4024`。
+  - 傳給二進位的參數由 `internal/scheduler/seasonal_task.go:84-95` 決定：**固定 `-update`**，有 replay 時再加 `--replay <path>`。
+  - **寫入位置是容器內**：`docker inspect atlas-go` 的 Mounts 只有 `data`／`reports`／`logs`（`configs` **不在**其中），
+    `docker diff atlas-go` 顯示 `C /app/configs/parameters.json` 與 `A /app/configs/parameters.json.snapshot.bak`
+    ⇒ 校準只改**容器可寫層**：容器一重建就回到 image 的值（本日 02:04Z 就重建過一次），**永不回流版控**。
+  - 反面：**在 host clone 手動跑** `-update` 才會寫 tracked 檔
+    （`cmd/calibrate-seasonal/main.go:63`；目標是 `constants.ParametersFile` = `configs/parameters.json`）
+    ⇒ 弄髒 clone、擋 `git pull --ff-only`。**該禁令只適用 host CLI，不是排程**
+    （實測 host `git status --porcelain` 只有 `?? finmind_daily_quota.json`，未被排程弄髒 ✓）。
+- **資料品質前提（root 實測）**：synthetic 與真實 replay 差異大
+  （synthetic `{overstated:11,understated:2}` vs real `{validated:6,overstated:6,understated:1}`）
+  ⇒ 用 synthetic 判定等於寫錯 11 條；`-update` 沒有 `--replay` 會被**硬拒**（護欄存在 ✓）。
+- **建議（未實作）**：① 選定**單一條正規流程**：開發端 `--update -replay data/replay/merged.csv` → commit → PR → 部署
+  （可考慮 CI 定期開 PR），或把容器 `/app/configs` 改成**有回流路徑**的機制；
+  ② 不論選哪條，都要留下「本次改了哪些係數、值從哪來、誰審過」的痕跡（目前完全沒有）。
+- **驗收條件**：任一輪校準都能回答上述三問；且生產不會出現「跑過但沒有任何痕跡」。
+
+---
+
+### FU-20260926-04 — 季節調整係數超界（4 個 pattern；消費端已夾，**版控設定檔本身**仍是壞的）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **事實（生產 log，2026-09-26T02:04:03Z 與 02:04:24Z 各一次）**：
+  `seasonal_adjustment_factor_out_of_range bound_low=0.30 bound_high=2.50
+  patterns="dividend_season=-0.2634,summer_electricity=-0.2883,ai_infrastructure_buildout=2.5555,year_end_positioning=3.4414"
+  action=clamped_at_consumption`
+- **來源是版控值，不是執行期產物**：`configs/parameters.json` 的 `industry.seasonal_patterns.value`
+  實際值為 `dividend_season=-0.2634376289519962`、`summer_electricity=-0.2883015395477875`、
+  `ai_infrastructure_buildout=2.555461115152644`、`year_end_positioning=3.44143401207912`
+  （與 WARN 的 4 個 offender 完全對應）⇒ **版控的設定檔就是超界的**，不是某次校準才寫壞。
+- **語意**：`internal/industry/seasonality.go:563-597`（I17／issue #1944）—— 超界值在**消費端被夾**
+  （`ClampAdjustmentFactor`），所以不會直接算錯，但設定檔仍是壞的；該 warn 是**刻意設計的機讀痕跡**。
+- **風險**：warn 只在**啟動時**出現（`NewSeasonalEngineFromConfig`）⇒ 不會持續告警；
+  被夾幅度不小（例 `year_end_positioning=3.4414` → 2.50），而「被夾」本身沒有任何持久化痕跡。
+- **建議（未實作）**：① 4 個 pattern 逐一定調（是校準輸入壞、還是 bound 太窄？）；
+  ② 把「被夾」寫進 startup 以外的痕跡（config 檢查腳本或 metrics），不要只在 log 一閃。
+- **驗收條件**：`configs/parameters.json` 內所有 `adjustment_factor` 落在 0.30–2.50；
+  或放寬 bound 時附明確理由與紀錄。
+
+---
+
+### FU-20260926-05 — sector 預測**未持久化**（`persisted:false` + 具名 reason）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **事實（生產實測，2026-09-26）**：`GET /api/events/prediction` 回應內
+  `sector_prediction_status = {"enabled":true,"applied":true,"days":5,"sector_rows":100,
+  "strategic_prior_applied":false,"cycle_provider_wired":true,"persisted":false,
+  "persistence_reason":"ledger_event_flow_prediction_record_has_no_sector_column"}`。
+- **程式碼對應**：`internal/eventdriven/types.go:107-108` 定義該 reason 常數；`internal/eventdriven/handler.go:278`
+  在寫入時填入；`types.go:162` 是 `Persisted bool \`json:"persisted"\`` 欄位。
+- **影響**：預測**算得出來、也套用了**（`applied:true`, `cycle_provider_wired:true`），但**沒有落盤** ⇒
+  事後無法重建「當時預測了什麼」，與「回測／歸因需要當時的預測」直接衝突（同族：FU-20260925-07／08 的
+  「算得出來但看不到」）。
+- **建議（未修）**：ledger 記錄需要一個 sector 維度欄位（或另存一份帶 sector 的列），
+  否則任何「預測 vs 實際」的對帳都只能靠 log。
+- **驗收條件**：同一支 API 回 `persisted:true`（且 DB 內查得到該筆），負對照：`persistence_reason` 不再是
+  `..._has_no_sector_column`。
+
+---
+
+### FU-20260926-06 — industry／cycle 狀態的 **live 讀取配方**（供驗收；含「此端點唯讀免 token」的實測）
+
+- **狀態**：`open`（不是待辦，是**驗收配方**登記）
+- **記錄日期**：2026-09-26
+- **配方（生產實測，2026-09-26，唯讀）**：
+  ```
+  docker exec atlas-go sh -c 'curl -s -o /tmp/pred.json -w "%{http_code}\n" \
+      -H "Authorization: Bearer $ATLAS_API_KEY" http://127.0.0.1:18080/api/events/prediction'
+  # → HTTP 200；token 留在容器內用，不落地、不列印
+  ```
+  要看的欄位：`sector_prediction_status.cycle_provider_wired`（本次 `true`）、
+  `.applied`、`.persisted`／`.persistence_reason`（見 FU-20260926-05）。
+- **同時記錄的事實（避免下次誤判 auth）**：`/api/events/` 屬 **public-read 白名單**
+  （`internal/monitoring/api/shared/authlist.go` 的 `AuthFreeExactPaths`／`AuthFreePrefixPaths`）
+  ⇒ **唯讀 GET/HEAD/OPTIONS 不需要 token**（實測：**不帶** `Authorization` 也回 200）；
+  POST/PUT/DELETE/PATCH 仍要 API key。⇒ 驗收時「沒帶 token 也 200」**不是** auth 失效。
+- **驗收條件**：任何「industry／cycle 有沒有接線」的結論，都要附上述指令的原始回應欄位（不得只憑推論）。
+
+---
+
+### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值；寫入者在容器內、不回流）
+
+- **狀態**：`open`（**根因未定；第一步＝鑑定寫入者**）
+- **記錄日期**：2026-09-26
+- **事實（生產唯讀實測，2026-09-26）**：
+  - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
+    `/app/configs/parameters.json` ⇒ sha256 `b203485f…`，與 host repo `configs/parameters.json` **byte-identical**、
+    JSON 相等（35 個頂層鍵）。
+  - **running 容器內的不是那份**：`docker exec … sha256sum /app/configs/parameters.json` ⇒ `2c939dd0…`；
+    其 `updated_at = 2026-09-26T03:08:44.90062791Z`，而容器 `Created = 2026-09-26T02:04:02Z`
+    （image built `02:03:58Z`，`/api/version` 回 `commit 7b4451bd…`）⇒ 該檔在**啟動後被改寫**。
+  - 差異（以 JSON 樹比）：**葉節點 4,841 vs 4,780（生產多 61）**、**16 個值不同**，例如
+    `risk/max_daily_loss_pct.value` `0.03 → 0.0108`、`risk/max_position_size.value` `0.15 → 0.054`
+    （兩者 `last_calibrated` 都是 `2026-09-26T03:08:44Z`）、`industry/cycle_calibration/value/*` 由 `0` 變成
+    一組具體值（10／0.05／0.55／0.45／0.05／0.4／30）；多出來的多屬「程式碼預設值具象化」。
+  - 容器內同目錄另有 `parameters.json.snapshot.bak`（`docker diff` 顯示 `C /app/configs`、`C …/parameters.json`、
+    `A …/parameters.json.snapshot.bak`），而 `configs` **不在** bind mount（只有 `data`／`reports`／`logs`）。
+- **影響**：「**版控的 `configs/parameters.json` ＝ 生產實際生效的參數**」這個假設**不成立**：
+  repo 那份相對生產是**過期／缺值**的（反向也成立：生產那份不在 git 裡）。任何「改 config 就會生效」、
+  或「讀 repo 檔就能推論生產行為」的結論都要先打折扣。
+- **建議（未做）**：① 先**鑑定寫入者**（03:08:44Z 是哪個 task／函式；盤點 `config` 的寫回與 snapshot 還原路徑）；
+  ② 再決定修法（寫回版控？還是明確宣告「執行期自主參數」並提供漂移偵測）；
+  ③ 至少在文件與 runbook 標明「生產有效值 ≠ repo 值」。
+- **驗收條件**：能回答「誰在何時寫了這個檔、寫入是否會丟鍵或具象化預設值」，且漂移有顯性痕跡
+  （負對照：不得只靠「檔案看起來正常」判定）。
 
 ---
 
