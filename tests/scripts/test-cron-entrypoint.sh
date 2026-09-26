@@ -33,10 +33,13 @@ assert_match() {
 }
 
 assert_nomatch() {
-  local sched=$1 now=$2
-  if run_matcher "$sched" "$now"; then
-    fail "expected NO MATCH for schedule '$sched' at '$now'"
-  fi
+  local sched=$1 now=$2 rc=0
+  run_matcher "$sched" "$now" || rc=$?
+  # 精確斷言（issue #2011）:entrypoint 的契約是 **0=match / 1=no-match**（見其檔頭註解）。
+  # 舊寫法 `if run_matcher; then fail; fi` 把 2（用法錯）、127（腳本不存在）也算「正確地不匹配」。
+  if [ "$rc" -eq 1 ]; then return 0; fi
+  if [ "$rc" -eq 0 ]; then fail "expected NO MATCH for schedule '$sched' at '$now'"; fi
+  fail "entrypoint 非預期結束碼 rc=$rc（契約是 0=match / 1=no-match）for '$sched' at '$now'"
 }
 
 # ── P0-E' regression: zero-padded now vs non-padded schedule field ──

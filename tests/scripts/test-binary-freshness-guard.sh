@@ -94,9 +94,15 @@ EOF
   chmod +x "$dir/docker"
   : >"$dir/rm.log"
 
-  if DOCKER_BIN="$dir/docker" FAKE_DOCKER_RM_LOG="$dir/rm.log" "$CHECK" >/dev/null 2>&1; then
-    fail "freshness check unexpectedly succeeded when docker cp failed"
-  fi
+  # 精確化（issue #2011）：舊寫法 `if "$CHECK"; then fail; fi` 把**任何**非 0（含 2=用法錯、
+  # 126/127=根本沒跑起來）都當成「正確地失敗」。這裡的失敗碼不固定（假 docker 的 `cp` 回 42，
+  # 會被往上傳），所以斷言「非 0、且不是代表『沒跑起來』的 2/126/127」。
+  local rc=0
+  DOCKER_BIN="$dir/docker" FAKE_DOCKER_RM_LOG="$dir/rm.log" "$CHECK" >/dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0)        fail "freshness check unexpectedly succeeded when docker cp failed" ;;
+    2|126|127) fail "freshness check 沒跑起來（exit=$rc）——這不是「正確地失敗」" ;;
+  esac
   grep -Fxq -- 'rm -f fake-freshness-container' "$dir/rm.log" || \
     fail "freshness check did not remove container after docker cp failure"
 }
@@ -114,9 +120,12 @@ case "${1:-}" in
 esac
 EOF
   chmod +x "$dir/docker"
-  if DOCKER_BIN="$dir/docker" "$CHECK" >/dev/null 2>&1; then
-    fail "freshness check unexpectedly succeeded when images were unavailable"
-  fi
+  local rc=0
+  DOCKER_BIN="$dir/docker" "$CHECK" >/dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0)        fail "freshness check unexpectedly succeeded when images were unavailable" ;;
+    2|126|127) fail "freshness check 沒跑起來（exit=$rc）——這不是「正確地失敗」" ;;
+  esac
 }
 
 run_success_cleanup_test() {
