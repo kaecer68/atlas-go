@@ -306,10 +306,10 @@ A 相外加一次 `merge-tree` 與一次 `git log --name-only`）。
 
 ### 表 C：已知殘留（不由本 PR 修）
 
-- `.github/workflows/quality.yml` 的 `revert-guard` job **註解與 step 名稱**仍寫著 v1 的框架
-  （「照現狀合併就會回退」「stale branch deleting a shared asset must be blocked」）。
-  該檔在本 PR 期間由其他工作佔用、不得修改 ⇒ 由該檔的後續維護者更新；**行為**不受影響
-  （step 只呼叫本目錄的兩支腳本，介面未變）。
+- ~~`.github/workflows/quality.yml` 的 `revert-guard` job 註解與 step 名稱仍寫著 v1 框架~~
+  **已解除（#2046 / E18 併入 2026-09-26）**：註解與 step 名稱已改為 v2 框架；更正實測兩句 v1 字串在
+  `quality.yml` 內 `grep -c` 皆為 **0**（唯一殘留是刻意保留的歷史證據行）。`remediation-manifest.md`
+  與 `FOLLOWUPS.md` 的 `E18` 條目仍記為「待派」，屬 root 單一寫者，本次未動。
 - 隔壁兩支負向證明（`secret-scan`、`monitoring-single-source`）仍是
   `if bash <check>; then …` 寫法（任何非零 exit 都算「擋下了」）；`--strict` 之外的 WARN 語意變更
   不影響它們。建議另開 PR 統一改成「恰好 exit 1」斷言。
