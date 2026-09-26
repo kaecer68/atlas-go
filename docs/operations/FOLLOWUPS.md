@@ -1453,6 +1453,37 @@
 ---
 
 
+---
+
+### FU-20260926-25 — manifest 收尾：**E13/E14 結案（複查後撤銷）＋ E15 重新定性 ＋ 新增 E17–E20**（全部由 root 實查，非採信回報）
+
+- **狀態**：`open`（E17/E18/E19/E20 待派；E13/E14 已結案）
+- **記錄日期**：2026-09-26
+- **對應**：`docs/operations/remediation-manifest.md` §3（同 PR 更新）、§6 對帳表
+- **來源（可重現，全部由 root 實跑）**：
+  - **E13 → 結案**：`grep -n 'IMAC_HOST\|WATCHDOG_DST' Makefile` ⇒ `IMAC_HOST ?= kaecer@kmacmini`（105–107 行已具名記錄 E13，屬 #2031）；
+    實跑 `make imac-watchdog-diff` 舊因（`ssh: Could not resolve hostname kimac`）**已消失** ⇒ **原描述不成立，撤銷**。
+  - **E14 → 結案**：`grep -c -iE 'kk@kimac|iMac' docs/reference/traps.md .github/workflows/quality.yml` ⇒ **0 / 0** ⇒ 無殘留，不需派工。
+  - **E15 → 重新定性**：`~/.prime/agent/models.json:140` 確有 provider `"kimac"`，但其 `baseUrl` 已是 `http://kmacmini:4000/v1`
+    ⇒ **僅名稱歷史債、路由正確**（低風險）；原描述的懸空 symlink `~/bin/imac-recover` 以 `[ -e ]` 複查**不存在**
+    ⇒ **不可重現，不登記為事實**（依「因果主張最小否證」紀律）。
+  - **E17（新增，排程空轉）**：`head -12 scripts/darwinian_adjust.sh` ⇒ 檔頭自述 `DEPRECATED — D1 決策退役 2026-08-17`、
+    核心計算註解於 L101；實跑 `bash scripts/darwinian_adjust.sh` ⇒ **rc=1**；`grep -rn 'darwinian_adjust'` ⇒
+    `docker-compose.yml:453` `CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply`（容器 `atlas-cron-darwinian`、`0 9 * * *`）
+    ⇒ **排程有、實際不做且失敗**。
+  - **E18（新增，文案）**：`grep -c` 於 `quality.yml` ⇒ 「照現狀合併就會回退」**1**、
+    「a stale branch deleting a shared asset must be blocked」**1**（行為正確，僅文字沿用已被 k3 否證的 v1 框架）。
+  - **E19（新增，孤兒群）**：對 11 支候選腳本以 `grep -rl` 掃 `Makefile`/`.github/workflows`/`docker-compose*.yml`/`scripts/`
+    ⇒ **10 支 0 個可叫用引用**；`verify-manifest.sh` 唯一引用來自**同樣 0 引用的** `verify-atlas.sh:82`（孤兒互叫）。
+  - **E20（新增，生產↔repo 不一致・操作性）**：`make imac-watchdog-diff` ⇒ `❌ 不一致`、`exit 2`；
+    `ssh kmacmini shasum -a 256` ⇒ 遠端 `424944ce`（85 行、Sep 25）vs repo `70ee1a45`（104 行、#2031）；
+    `diff` 判定 ⇒ **37 行差異全為註解、非註解 0 行 ⇒ 行為零風險**。
+- **殘項／後續**：
+  1. **E20 的修法**（`make imac-watchdog-install`）是**跨機器執行** ⇒ 依政策**交 a2a-dev**，root 不直接執行。
+  2. E17 需在「移除排程」與「讓 stub 明確 no-op + log」之間擇一（需 owner 決定方向）。
+  3. E18/E19 皆等 `quality.yml` / owner 讓出後處理（E18 串行在 E6 之後）。
+  4. 本條目**不含**任何未經實跑的推論；被否證的 E13/E14 原描述已在 manifest §3 以刪除線保留，避免日後重複盤查。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
