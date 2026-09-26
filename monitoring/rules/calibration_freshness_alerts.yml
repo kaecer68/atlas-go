@@ -1,0 +1,215 @@
+# monitoring/rules/calibration_freshness_alerts.yml
+# 建立:2026-09-26（issue #1944 / I31 的 **production 半邊**;PR #1991 的「未完成項 1」）。
+#
+# 為什麼存在
+# ----------
+# PR #1991 處理了 I31 的 CI 半邊（`calibration-validate` 的 exit code 不再被吞、
+# 零設定就有 `::error::` annotation），並在那個 PR 的「未完成」段明示：
+#
+#   production 側的 freshness 檢查尚未接上監控（本 PR 只提供命令與政策）。
+#
+# 而「那條命令」在生產上其實**沒有常駐的可執行路徑**：`cmd/calibration-validate`
+# 是 CI 現場 build 的（`.github/workflows/nightly-refresh.yml` 的
+# `go build -o atlas-validate ./cmd/calibration-validate`），
+# 本 repo 的 Dockerfile 並沒有把它放進 image（實查指令見 runbook §1）。
+# ⇒ 在這次接線之前，「`configs/parameters.json` 已不新鮮」在生產上是**零觀測**：
+# 不是「值班忘了跑」，而是沒有東西會跑。
+# 本檔就是那個觀測面的判讀層（指標由 Go 側匯出，見下一段）。
+#
+# 這三條規則看的是 Go 側匯出的 gauge 族（`internal/monitoring/calibration_freshness.go`，
+# 由背景任務 `calibration_freshness_metrics_export` 每 5 分鐘輸出，
+# `cmd/atlas/calibration_freshness_metrics_task.go`）：
+#
+#   atlas_calibration_freshness_ok{artifact="parameters"}
+#       1 = 新鮮（沒有任何 freshness finding）;0 = 超過契約 / 從未記錄校準時間 /
+#       **檢查本身無法評估**（fail-closed）
+#   atlas_calibration_freshness_run_ok{artifact="parameters"}
+#       1 = 檢查可以評估產物;0 = 不行（stat/讀取/JSON 解析失敗）
+#   atlas_calibration_freshness_age_seconds{artifact="parameters"}
+#       產物自述的最後校準時間（updated_at）距今幾秒（只有可評估時才輸出）
+#   atlas_calibration_last_calibrated_timestamp_seconds{artifact="parameters"}
+#       Unix 秒;**0 = 從未記錄校準時間**（明確哨兵值,不是 1970 年）
+#   atlas_calibration_freshness_checked_timestamp_seconds{artifact="parameters"}
+#       檢查最後一次執行的 Unix 秒（探針心跳）
+#
+# 「是否新鮮」的門檻**不在本檔**：它由 `monitoring.CalibrationFreshnessContract`
+# 決定,而那**就是** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 的預設值
+# = production 命令的 `--max-age=48h`）⇒ 全 repo 只有一個數字,CLI 與監控不可能漂移
+# （Go 測試 `TestCalibrationFreshnessContractMatchesCLIAndRunbook` 會讀 CLI 原始碼與
+# runbook 把這件事釘住）。
+#
+# ⚠️ 判讀三條的共同前提（**先看這個再看任何數字**）
+# -------------------------------------------------
+#   1. `atlas_calibration_freshness_run_ok` = 0 ⇒ **age 與 last_calibrated 是凍結樣本**,
+#      不代表現況（gauge 是 last-write-wins、collector 不移除序列,所以無法評估之後
+#      `/metrics` 上仍留著最後一次可評估時的值）。此時只有第 2 條的 triage 有意義。
+#   2. 沒有任何一條規則拿 age / last_calibrated 做**判定**（本檔的 expr 只看
+#      `_ok` / `_run_ok`）⇒ 凍結值不會製造誤報;它只是會被值班的人讀到。
+#   3. `_ok` 與 age 量的不是同一件事:`_ok` 是 CLI 的 freshness 判定（updated_at
+#      **與檔案 mtime** 都看）,age 只看 updated_at。以 `cp -p` 還原舊檔時
+#      mtime 舊（`_ok`=0）而 updated_at 新（age 小）——**以 `_ok` 為準**。
+#
+# ⚠️ 另一條判讀前提：假陽性形狀（2026-09-26 實證;不是 bug,不要回報成 bug）
+# ----------------------------------------------------------------------
+# 校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`:只有
+# `len(report.Changes) > 0` 才呼叫 `LockedSaveWithRollback`),因此一個**已收斂**
+# 的系統可能連續多輪 `verdict=stable` 而合法地超過 48h 不改寫檔案。
+# ⇒ 看到 `CalibrationArtifactStale` firing 時,**第一件事不是查資料源,是查校準任務的
+#    verdict**。真正的「校準任務有沒有在跑」心跳指標目前**不存在**,屬另一張票
+#    （`docs/operations/FOLLOWUPS.md` FU-20260926-10）;本檔先給可量測的部分。
+
+groups:
+  - name: calibration_freshness
+    rules:
+      # ══ 1. 產物不新鮮（warning,不是 error）══════════════════════════════════
+      # 為什麼是 warning:產物年齡是「校準活動」的**上界**而不是直接量測（見上面的
+      # 假陽性段）,單獨一個 stale 不足以證明 pipeline 壞掉 ⇒ 要被人看見,但不該
+      # 用 error 的語氣叫人半夜起床。真正無法判定時由第 2 條以 error 負責。
+      #
+      # 為什麼要 `and run_ok == 1`:沒有這一半,「檢查讀不到檔案」會被讀成
+      # 「產物很舊」—— 兩者需要完全相反的行動（前者查檔案/權限/路徑,後者查校準任務）。
+      # 標籤比對用預設（兩側都是 artifact="parameters"）,不需要 on()。
+      #
+      # for: 1h（12 個匯出週期）:這個量一天最多變一次,1 小時的持續時間濾掉
+      # 「單一輪的讀取抖動」而幾乎不延遲真正的發現。
+      #
+      # ⚠️ 第 2 條的 `for` 是 15m:當 run_ok 由 1 翻 0 時本條會立刻 resolve,而第 2 條
+      # 要累積 15m 才 firing ⇒ 中間最多有 15 分鐘「兩條都不 firing」的交接窗。
+      # 這是刻意的取捨（不讓同一個根因被兩條規則各自 paging）,已在 promtool 測試
+      # 的案例 K 寫成可執行的規格,並記在 runbook §5「已知限制」。
+      - alert: CalibrationArtifactStale
+        expr: |
+          atlas_calibration_freshness_ok{artifact="parameters"} == 0
+          and
+          atlas_calibration_freshness_run_ok{artifact="parameters"} == 1
+        for: 1h
+        labels:
+          severity: warning
+          service: atlas
+          component: calibration-freshness
+          incident_ref: "issue-1944-i31"
+        annotations:
+          summary: "校準產物 parameters.json 已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
+          description: |
+            `configs/parameters.json` 出現了 freshness finding（`atlas_calibration_freshness_ok` = 0）,
+            兩種子狀態:**超過契約**（`updated_at` 或檔案 mtime 比 48h 舊）
+            或**從未記錄校準時間**（`updated_at` 為零）。
+            契約 = `monitoring.CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
+            = production 命令的 `--max-age=48h`。檢查本身可以評估
+            （`atlas_calibration_freshness_run_ok{artifact="parameters"}` = 1）
+            ⇒ 這**不是**讀取/解析失敗;是哪一種子狀態看下面的第 1 步。
+
+            先查什麼（依序,不要跳到資料源）:
+            0. 確認不是「無法評估」:run_ok 必須是 1。若它是 0,age 是凍結樣本,
+               請走 CalibrationFreshnessUnverifiable 的 triage。
+            1. 看是「舊」還是「從未記錄」:
+               docker exec atlas-go grep -o '"updated_at": *"[^"]*"' /app/configs/parameters.json | head -1
+               值為 null/空 ⇒ 是「從未記錄校準時間」（此時 age 序列**不會**有值,
+               別去 grep 它）;有值 ⇒ 是「舊」。
+            2. 它是不是「本來就不該被刷新」:#2013 之後 `risk_gate_calibrate` 的寫入改到
+               `data/state/parameters.calibrated.json`（overlay）,SSOT 保持 pristine ⇒
+               本條量的是「其他校準器還有沒有在刷 SSOT」。要看 risk 校準,改看 overlay 的
+               calibrated_at（jq/結構化 log `overlay_entry_applied`）。
+            3. ⚠️ 假陽性第一順位:校準是「有變更才寫」⇒ 已收斂的系統會合法地不寫檔。
+               docker logs atlas-go --since 72h 2>&1 | grep -E "self_calibrate|verdict"
+               連續多輪 verdict=stable / "no adjustments needed" ⇒ 產物沒有變舊的理由,
+               要查的是「校準到底有沒有在跑」而不是資料源。
+            4. 檢查任務本身是否照常執行（心跳,與產物無關）:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep atlas_calibration_freshness_checked_timestamp_seconds
+               落後遠大於 300s ⇒ 先看 CalibrationFreshnessExporterDown 的 triage。
+            5. 檔案的實際時間戳:
+               docker exec atlas-go stat -Lc '%y %n' /app/configs/parameters.json
+               （mtime 是 `_ok` 判定的一部分;`cp -p` 之類的還原會讓它變舊）
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
+
+      # ══ 2. 檢查本身無法評估（error;fail-closed）══════════════════════════════
+      # 「解析不到值／檢查失敗」不得靜默通過（#2009 的同族缺陷）。
+      # 這一條與第 1 條**互斥**:第 1 條要求 run_ok==1,本條要求 run_ok==0
+      # ⇒ 同一個根因不會有兩條規則各自 paging。
+      #
+      # for: 15m（3 個匯出週期）:檔案寫入是 tmp+rename 的原子替換,正常的讀取不會
+      # 失敗（沒有 torn read）⇒ 15m 足以濾掉單一輪的環境抖動,同時把「第 1 條 resolve →
+      # 本條 firing」的交接窗壓到 ≤15 分鐘（見第 1 條的註解）。
+      - alert: CalibrationFreshnessUnverifiable
+        expr: atlas_calibration_freshness_run_ok{artifact="parameters"} == 0
+        for: 15m
+        labels:
+          severity: error
+          service: atlas
+          component: calibration-freshness
+          incident_ref: "issue-1944-i31"
+        annotations:
+          summary: "校準產物的新鮮度無法判定（檢查讀不到/解不開 parameters.json）"
+          description: |
+            背景任務 `calibration_freshness_metrics_export` 連續 15 分鐘無法評估
+            `configs/parameters.json`（stat 失敗 / 讀取失敗 / JSON 不合法）。
+            此時 freshness 是**未知**,不是「新鮮」也不是「不新鮮」——
+            `atlas_calibration_freshness_ok{artifact="parameters"}` 是 0（fail-closed）,
+            且 `atlas_calibration_freshness_age_seconds` /
+            `atlas_calibration_last_calibrated_timestamp_seconds` 是**凍結的舊值**。
+
+            先查什麼（依序）:
+            1. 檔案在不在、權限對不對:
+               docker exec atlas-go ls -l /app/configs/parameters.json
+            2. 日誌上有一則結構化 WARN 直接說明原因（code=PARAMS_STAT_FAILED /
+               PARAMS_READ_FAILED / PARAMS_INVALID_JSON）與 finding 數:
+               docker logs atlas-go --since 2h 2>&1 | grep artifact_unverifiable
+            3. JSON 是否不合法（通常是半寫入或人為編輯;生產 image 沒有 python/jq,
+               用 grep 看開頭結尾與 updated_at 欄位）:
+               docker exec atlas-go head -c 200 /app/configs/parameters.json
+               docker exec atlas-go tail -c 80 /app/configs/parameters.json
+            4. 若檔案其實正常:檢查路徑是否指向別的地方（權威來源是應用自己的
+               `config.GetParametersConfigPath()`,不是硬編的 /app/configs）。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
+
+      # ══ 3. 匯出任務沒在跑 / 指標族消失（warning）══════════════════════════════
+      # 覆蓋「檢查停了」這個與產物本身無關的失效模式（任務被移除、panic、
+      # 指標被改名）。沒有這一條,前兩條會以「序列凍結」的方式靜默。
+      #
+      # 為什麼用 `up{job="atlas-go"} == 1` 當閘門:服務沒在跑時
+      # atlas_container_liveness_alerts.yml 的 AtlasGoTargetDown 已在 2 分鐘內 paging,
+      # 這裡再叫一次只是重複（本 repo 對同一個根因重複 paging 有明確紀律）。
+      #
+      # 兩個 arm:
+      #   · absent(...)        —— 序列完全消失（指標改名/移除、任務從未執行）
+      #   · time() - ts > 1800 —— 序列還在但心跳停了 30 分鐘（6 個匯出週期沒跑）
+      # for: 15m 是第二道、獨立的護欄（條件本身要再持續 3 個週期）。
+      - alert: CalibrationFreshnessExporterDown
+        expr: |
+          (
+            absent(atlas_calibration_freshness_checked_timestamp_seconds)
+            or
+            time() - atlas_calibration_freshness_checked_timestamp_seconds > 1800
+          )
+          and on()
+          (up{job="atlas-go"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: atlas
+          component: calibration-freshness
+          incident_ref: "issue-1944-i31"
+        annotations:
+          summary: "校準新鮮度匯出任務沒有心跳（指標族缺席或超過 30 分鐘未執行）"
+          description: |
+            `atlas_calibration_freshness_checked_timestamp_seconds` 缺席,或距今已超過
+            1800 秒（= 6 個 5 分鐘匯出週期）,而同一個 job 的 `up{job="atlas-go"}` 仍為 1
+            ⇒ atlas-go 活著、`/metrics` 還回得出東西,但這個檢查不再更新。
+
+            這代表什麼:`CalibrationArtifactStale` / `CalibrationFreshnessUnverifiable`
+            此刻的輸出**不可信**（所有序列都凍結在最後一次執行時的狀態,包含 age 與
+            last_calibrated）,先修本條再讀那兩條。
+
+            先查什麼（依序）:
+            1. 指標是不是換了名字或整族不見了:
+               docker exec atlas-go curl -s localhost:18080/metrics | grep '^atlas_calibration_'
+            2. 任務有沒有被註冊（`registerBackfillTasks` 的接線回歸）:
+               grep -rn "calibration_freshness_metrics_export" cmd/atlas/
+               日誌應有 `registered calibration_freshness_metrics_export background task`。
+               （`scripts/ci/check_critical_tasks.sh` 也把這個 task 名列為關鍵任務:
+               它被 compiler DCE/遮蔽移除時,CI 會紅在 strings 檢查。）
+            3. 任務有沒有執行過、有沒有錯誤:
+               docker logs atlas-go --since 6h 2>&1 | grep -E "calibration_freshness|task_failed"
+            4. 服務其實沒在跑（閘門的邊界）:本條 firing 時 `up{job="atlas-go"}` 必須是 1;
+               若同時是 0,先看 AtlasGoTargetDown,不要查這裡。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/calibration-freshness-runbook.md"
