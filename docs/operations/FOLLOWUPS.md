@@ -669,9 +669,17 @@
   `calibration_freshness_metrics_export`（`cmd/atlas/calibration_freshness_metrics_task.go`，5 分鐘）
   評估，重用 `config.ValidateCalibration`（CLI 用的同一個判定），輸出
   `atlas_calibration_freshness_*` 五個 gauge；規則在
-  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool 10 案例含 5 個負向對照），
+  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool **11 案例**含 6 個負向對照
+  與 1 個「已知交接窗」；另做 8 項變異測試全部被咬住），
   落地說明在 [`calibration-freshness-runbook.md`](calibration-freshness-runbook.md)。
-  契約 = 48h = production CLI 的 `--max-age=48h`（**同一個政策只有一個數字**）。
+  契約收斂為**單一常數** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 預設值
+  = production 命令的 48h）。
+- **順帶查實（影響本條的判讀）**：政策上的 production 命令 `atlas-validate` **沒有隨 image 出貨**
+  ——`cmd/calibration-validate` 是 CI 現場 build 的，本 repo 的 Dockerfile 只把
+  `atlas-go`/`atlas-mcp`/`calibrate-seasonal`/`daily-replay-sync` 放進 `/app`，且 image 內
+  **沒有** `python3`/`jq`/`node`（實查指令見 runbook §1）。⇒ 在本 PR 之前，生產上「資料已不新鮮」
+  是**零觀測**（不是值班忘了跑，而是沒有東西會跑）；所有 triage 指令已改為 image 內確實存在的
+  `grep`/`stat`/`head`/`tail`/`curl`。
 - **殘留面 1（本條的主要缺口）：沒有「校準任務已執行」的心跳指標**
   - 現況：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`：
     `if len(report.Changes) > 0` 才 `LockedSaveWithRollback`）⇒ `updated_at` 的年齡是
@@ -690,6 +698,15 @@
   `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
   parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產
   也跑一次，並決定 accepted 集合在生產的語意（屬政策裁決）。
+- **已知且刻意的行為（不是缺陷，不要「順手」改掉）**：
+  1. **凍結樣本**：`_run_ok=0`（無法評估）之後，`age`/`last_calibrated` 仍以最後一次可評估的
+     值留在 `/metrics`（collector 是 last-write-wins 且不移除序列）。沒有任何規則拿它們做判定
+     （判定只看 `_ok`/`_run_ok`）⇒ 不會誤報；但**判讀順序**必須是「先 `_run_ok` 再 `_ok`
+     再 `age`」（runbook §2.1）。行為由
+     `TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries` 釘住。
+  2. **≤15 分鐘交接窗**：`_run_ok` 由 1 翻 0 時，第 1 條立刻 resolve、第 2 條要累積 15m
+     才 firing ⇒ 窗內兩條都不 firing。這是「同一個根因不重複 paging」的取捨，
+     已寫成 promtool 案例 K；要縮窗就改第 2 條的 `for` 並同步該案例。
 - **殘留面 3：生產驗收未執行**（本 PR 不得動 production）。部署後照 runbook §4：
   `curl -s localhost:18080/metrics | grep '^atlas_calibration_'`、
   `curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*'`，

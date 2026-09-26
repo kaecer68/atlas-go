@@ -11,12 +11,25 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
+
+// testNow 回傳「現在」並截到秒。
+//
+// ⚠️ 為什麼測試用真時鐘而不是固定的假時間：`config.ValidateCalibration` 內部用
+// `time.Since(...)`（真實時鐘）判定 mtime/updated_at 是否過期，本檔的 `Fresh` 就是
+// 「有沒有 freshness finding」⇒ 若測試注入一個與真時鐘差好幾個小時的 `now`，
+// 判定會跟著真時鐘漂移（假 now 在過去 ⇒ 相對於真 now 變成「過期」）。測試必須讓
+// fixture 與真時鐘對齊；`now` 只用來計算本檔自己報出的 `age`（可精確對齊到秒）。
+func testNow() time.Time { return time.Now().UTC().Truncate(time.Second) }
 
 // calibrationFreshnessFixture 產生一份「結構上有效」的最小 parameters.json。
 // 只放 ValidateCalibration 真的會讀的欄位（updated_at +
 // industry.classification_tree.value.segments），不複製整份出貨設定 ——
 // 這一族測的是**新鮮度**，結構性 finding 由 internal/config 的測試負責。
+//
+// mtime 非零時會把檔案時間戳設成該值（模擬 `cp -p` 還原出來的舊 mtime）。
 func calibrationFreshnessFixture(t *testing.T, updatedAt time.Time, mtime time.Time) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -53,6 +66,12 @@ func calibrationFreshnessFixture(t *testing.T, updatedAt time.Time, mtime time.T
 	return path
 }
 
+// gaugeLine 產生 Prometheus exposition 的單行預期值（`PrometheusHandler` 的
+// 數值格式是 `%.6f`，所以斷言要跟著那個格式，不能只比整數）。
+func gaugeLine(name string, v float64) string {
+	return fmt.Sprintf(`%s{artifact="%s"} %.6f`, name, CalibrationArtifactParameters, v)
+}
+
 // scrapeCalibrationFreshness 回傳 /metrics 的輸出（走生產同一條 handler 路徑）。
 func scrapeCalibrationFreshness(t *testing.T, c *MetricsCollector) string {
 	t.Helper()
@@ -60,12 +79,6 @@ func scrapeCalibrationFreshness(t *testing.T, c *MetricsCollector) string {
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	PrometheusHandler(c).ServeHTTP(rec, req)
 	return rec.Body.String()
-}
-
-// gaugeLine 產生 Prometheus exposition 的單行預期值（`PrometheusHandler` 的
-// 數值格式是 `%.6f`，所以斷言要跟著那個格式，不能只比整數）。
-func gaugeLine(name string, v float64) string {
-	return fmt.Sprintf(`%s{artifact="%s"} %.6f`, name, CalibrationArtifactParameters, v)
 }
 
 // seriesLine 取出某個 metric 的單行輸出；不存在時回空字串（= 缺席，這在
@@ -80,7 +93,7 @@ func seriesLine(body, name string) string {
 }
 
 func TestObserveCalibrationFreshness_FreshArtifactIsFresh(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	updatedAt := now.Add(-65 * time.Minute) // 生產實測的健康值（FU-20260926-07）
 	path := calibrationFreshnessFixture(t, updatedAt, time.Time{})
 
@@ -91,7 +104,10 @@ func TestObserveCalibrationFreshness_FreshArtifactIsFresh(t *testing.T) {
 		t.Fatalf("RunOK=false (code=%q)，預期可評估", obs.UnverifiableCode)
 	}
 	if !obs.Fresh {
-		t.Fatalf("Fresh=false，預期新鮮（age=%.0fs）", obs.AgeSeconds)
+		t.Fatalf("Fresh=false (code=%q)，預期新鮮（age=%.0fs）", obs.FreshnessCode, obs.AgeSeconds)
+	}
+	if obs.FreshnessCode != "" {
+		t.Errorf("新鮮時 FreshnessCode 應為空，got %q", obs.FreshnessCode)
 	}
 	if got, want := obs.AgeSeconds, 65*60.0; got != want {
 		t.Errorf("AgeSeconds=%v，want %v", got, want)
@@ -113,8 +129,8 @@ func TestObserveCalibrationFreshness_FreshArtifactIsFresh(t *testing.T) {
 }
 
 func TestObserveCalibrationFreshness_StaleArtifactFlipsOK(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
-	// 版控那份 parameters.json 的實測年齡：updated_at 2026-07-06T01:43:01+08:00。
+	now := testNow()
+	// 版控那份 parameters.json 的實測年齡：updated_at 2026-07-06T01:43:01+08:00 ≈ 82.8 天。
 	updatedAt := now.Add(-72 * time.Hour)
 	path := calibrationFreshnessFixture(t, updatedAt, time.Time{})
 
@@ -126,6 +142,9 @@ func TestObserveCalibrationFreshness_StaleArtifactFlipsOK(t *testing.T) {
 	}
 	if obs.Fresh {
 		t.Fatal("Fresh 應為 false：72h > 48h 契約")
+	}
+	if got := string(obs.FreshnessCode); got != "UPDATED_AT_STALE" {
+		t.Errorf("FreshnessCode=%q，want UPDATED_AT_STALE", got)
 	}
 	body := scrapeCalibrationFreshness(t, c)
 	if want := gaugeLine(MetricCalibrationFreshnessOK, 0); !strings.Contains(body, want) {
@@ -141,10 +160,44 @@ func TestObserveCalibrationFreshness_StaleArtifactFlipsOK(t *testing.T) {
 	}
 }
 
-// 這是 fail-closed 的核心案例：產物說「我從來沒有被校準過」時，
+// 「CLI 說不新鮮、監控說新鮮」是這條接線最不能出現的矛盾（本檔頭與 runbook 都
+// 把它列為單一政策的要求）。mtime 舊但 updated_at 新（`cp -p` 還原一份舊檔）是
+// 唯一會讓兩邊分開的形狀 ⇒ 判定必須跟 CLI 一樣是 **不新鮮**（mtimes 也是
+// `ValidateCalibration` 的 freshness finding 之一）。
+func TestObserveCalibrationFreshness_MtimeStaleMatchesCLI(t *testing.T) {
+	now := testNow()
+	path := calibrationFreshnessFixture(t, now.Add(-30*time.Minute), now.Add(-72*time.Hour))
+
+	cli, err := config.ValidateCalibration(path, CalibrationFreshnessContract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obs := ObserveCalibrationFreshness(NewMetricsCollector(), path, now)
+
+	if obs.Fresh != cli.OK {
+		t.Errorf("gauge 判定（fresh=%v）與 CLI（OK=%v）不一致 —— 兩者必須同源", obs.Fresh, cli.OK)
+	}
+	if obs.Fresh {
+		t.Fatal("mtime 過期時必須判為不新鮮（與 CLI 一致）")
+	}
+	if got := string(obs.FreshnessCode); got != "MTIME_STALE" {
+		t.Errorf("FreshnessCode=%q，want MTIME_STALE", got)
+	}
+	// age 只反映 updated_at ⇒ 在這種形狀下 age 小是**正確**的，但它不是判定值。
+	if obs.AgeSeconds > 3600 {
+		t.Errorf("AgeSeconds=%v，updated_at 只有 30 分鐘前，age 應小", obs.AgeSeconds)
+	}
+	c := NewMetricsCollector()
+	ObserveCalibrationFreshness(c, path, now)
+	if want := gaugeLine(MetricCalibrationFreshnessAgeSeconds, 1800); !strings.Contains(scrapeCalibrationFreshness(t, c), want) {
+		t.Errorf("/metrics 缺少 %q（age 仍只反映 updated_at）", want)
+	}
+}
+
+// 這是 fail-closed 的核心案例之一：產物說「我從來沒有被校準過」時，
 // 既不能算新鮮、也不能算「不知道」。
 func TestObserveCalibrationFreshness_NeverCalibratedIsNotFresh(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	path := calibrationFreshnessFixture(t, time.Time{}, time.Time{})
 
 	c := NewMetricsCollector()
@@ -155,6 +208,9 @@ func TestObserveCalibrationFreshness_NeverCalibratedIsNotFresh(t *testing.T) {
 	}
 	if obs.Fresh {
 		t.Fatal("Fresh 應為 false：沒有記錄校準時間不得算新鮮")
+	}
+	if got := string(obs.FreshnessCode); got != "UPDATED_AT_ZERO" {
+		t.Errorf("FreshnessCode=%q，want UPDATED_AT_ZERO", got)
 	}
 	if !obs.LastCalibrated.IsZero() {
 		t.Errorf("LastCalibrated=%v，want zero", obs.LastCalibrated)
@@ -169,7 +225,7 @@ func TestObserveCalibrationFreshness_NeverCalibratedIsNotFresh(t *testing.T) {
 }
 
 func TestObserveCalibrationFreshness_MissingFileIsUnverifiable(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	c := NewMetricsCollector()
 	obs := ObserveCalibrationFreshness(c, filepath.Join(t.TempDir(), "absent.json"), now)
 
@@ -192,16 +248,58 @@ func TestObserveCalibrationFreshness_MissingFileIsUnverifiable(t *testing.T) {
 			t.Errorf("/metrics 缺少 %q\n%s", want, body)
 		}
 	}
-	// 沒有可信時間時，這兩個量必須缺席而不是輸出假的 0/巨大值。
+	// 第一次執行（全新的 collector）時這兩個量必須缺席而不是輸出假的 0/巨大值。
 	for _, name := range []string{MetricCalibrationFreshnessAgeSeconds, MetricCalibrationLastCalibratedTimestamp} {
 		if line := seriesLine(body, name); line != "" {
-			t.Errorf("%s 在無法評估時不得輸出，got %q", name, line)
+			t.Errorf("%s 在無法評估時不得**新寫入**，got %q", name, line)
 		}
 	}
 }
 
+// ⚠️ 這是**已知且刻意**的行為（檔頭「凍結樣本的語意」）：gauge 是 last-write-wins
+// 且 collector 不會移除序列 ⇒ 由「可評估」變成「無法評估」之後，`/metrics` 上仍留著
+// 最後一次可評估時的 age / last_calibrated。
+//
+// 為什麼可以接受：判定（`_ok` / `_run_ok`）每一輪都被覆寫，且**沒有任何規則**拿
+// age / last_calibrated 做判定 ⇒ 凍結值不會製造誤報；它只會被值班的人讀到，所以
+// runbook 明確要求「先看 run_ok 再讀 age」。
+//
+// 本測試存在的目的：把這個取捨釘成可執行的規格（有人若以為「不輸出 = 序列消失」
+// 而據此改文案或改規則，這裡會紅）。
+func TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries(t *testing.T) {
+	now := testNow()
+	path := calibrationFreshnessFixture(t, now.Add(-65*time.Minute), time.Time{})
+	c := NewMetricsCollector()
+
+	ObserveCalibrationFreshness(c, path, now) // 第一輪：可評估、新鮮
+	body1 := scrapeCalibrationFreshness(t, c)
+	if !strings.Contains(body1, gaugeLine(MetricCalibrationFreshnessAgeSeconds, 3900)) {
+		t.Fatalf("第一輪必須輸出 age=3900\n%s", body1)
+	}
+
+	// 第二輪：檔案消失（無法評估）。collector 仍持有第一輪的 age 序列。
+	ObserveCalibrationFreshness(c, filepath.Join(t.TempDir(), "gone.json"), now.Add(6*time.Minute))
+	body2 := scrapeCalibrationFreshness(t, c)
+
+	if want := gaugeLine(MetricCalibrationFreshnessRunOK, 0); !strings.Contains(body2, want) {
+		t.Errorf("run_ok 必須被覆寫成 0，缺少 %q\n%s", want, body2)
+	}
+	if want := gaugeLine(MetricCalibrationFreshnessOK, 0); !strings.Contains(body2, want) {
+		t.Errorf("ok 在無法評估時必須是 0（fail-closed），缺少 %q\n%s", want, body2)
+	}
+	if want := gaugeLine(MetricCalibrationFreshnessCheckedTimestamp, float64(now.Add(6*time.Minute).Unix())); !strings.Contains(body2, want) {
+		t.Errorf("心跳必須被覆寫成最新的執行時間，缺少 %q\n%s", want, body2)
+	}
+	// 凍結樣本：值仍是第一輪的 3900（**不是**重算過的 4260）。
+	if !strings.Contains(body2, gaugeLine(MetricCalibrationFreshnessAgeSeconds, 3900)) {
+		t.Errorf("已知行為：age 序列會凍結在第一輪的值，缺少 %q\n%s",
+			gaugeLine(MetricCalibrationFreshnessAgeSeconds, 3900), body2)
+	}
+	t.Logf("已知行為：無法評估後 age 序列仍以凍結值留在 /metrics（判讀順序見 runbook §2）")
+}
+
 func TestObserveCalibrationFreshness_InvalidJSONIsUnverifiable(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	path := filepath.Join(t.TempDir(), "parameters.json")
 	if err := os.WriteFile(path, []byte("{ this is not json"), 0o644); err != nil {
 		t.Fatal(err)
@@ -222,7 +320,7 @@ func TestObserveCalibrationFreshness_InvalidJSONIsUnverifiable(t *testing.T) {
 // 這裡模擬「啟動後第一次跑（檔案還沒被校準任務產生）→ 之後補上檔案」，
 // 並斷言兩輪之間 series 只有被覆寫、沒有消失或增生。
 func TestObserveCalibrationFreshness_WholeFamilyPresentFromFirstRun(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	c := NewMetricsCollector()
 
 	missing := filepath.Join(t.TempDir(), "absent.json")
@@ -265,7 +363,7 @@ func TestObserveCalibrationFreshness_WholeFamilyPresentFromFirstRun(t *testing.T
 }
 
 func TestObserveCalibrationFreshness_NilCollectorIsSafe(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	path := calibrationFreshnessFixture(t, now.Add(-time.Hour), time.Time{})
 
 	obs := ObserveCalibrationFreshness(nil, path, now)
@@ -275,8 +373,10 @@ func TestObserveCalibrationFreshness_NilCollectorIsSafe(t *testing.T) {
 }
 
 func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
-	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	now := testNow()
 	// 用可注入的 maxAge 走到契約邊界，不必等 48 小時。
+	// ⚠️ 刻意不測「剛好等於契約」：判定在 `ValidateCalibration` 內用真時鐘做
+	// `time.Since(...) > maxAge`，相差幾個微秒就會落在另一側 ⇒ 那種案例必然 flaky。
 	cases := []struct {
 		name   string
 		age    time.Duration
@@ -284,8 +384,7 @@ func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
 		fresh  bool
 	}{
 		{"契約內", 47 * time.Hour, 48 * time.Hour, true},
-		{"剛好等於契約", 48 * time.Hour, 48 * time.Hour, true}, // <= 才算新鮮
-		{"超過契約 1 秒", 48*time.Hour + time.Second, 48 * time.Hour, false},
+		{"超過契約 1 分鐘", 48*time.Hour + time.Minute, 48 * time.Hour, false},
 		{"未來時間戳夾到 0", -time.Hour, 48 * time.Hour, true},
 	}
 	for _, tc := range cases {
@@ -293,7 +392,8 @@ func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
 			path := calibrationFreshnessFixture(t, now.Add(-tc.age), time.Time{})
 			obs := observeCalibrationFreshness(NewMetricsCollector(), CalibrationArtifactParameters, path, tc.maxAge, now)
 			if obs.Fresh != tc.fresh {
-				t.Errorf("Fresh=%v，want %v（age=%.0fs, contract=%.0fs）", obs.Fresh, tc.fresh, obs.AgeSeconds, tc.maxAge.Seconds())
+				t.Errorf("Fresh=%v，want %v（age=%.0fs, contract=%.0fs, code=%q）",
+					obs.Fresh, tc.fresh, obs.AgeSeconds, tc.maxAge.Seconds(), obs.FreshnessCode)
 			}
 			if obs.AgeSeconds < 0 {
 				t.Errorf("AgeSeconds=%v，不得為負", obs.AgeSeconds)
@@ -308,27 +408,43 @@ func TestObserveCalibrationFreshness_ContractBoundary(t *testing.T) {
 //
 // 為什麼要跑真檔：其餘案例都是合成 fixture，只有這一條會在使用者真的把
 // parameters.json 改成讀不動/解不開（例如巨大的結構變更或編碼問題）時紅燈。
-// 用 `-v` 執行會印出目前這份的觀察值（run_ok / age / last_calibrated），
+// 用 `-v` 執行會印出目前這份的觀察值（run_ok / fresh / age / last_calibrated），
 // 是 runbook §4「驗收」那組命令的本機對照。
 func TestObserveCalibrationFreshness_ShippedArtifactIsEvaluable(t *testing.T) {
 	path := filepath.Join("..", "..", "configs", "parameters.json")
 	if _, err := os.Stat(path); err != nil {
 		t.Skipf("出貨設定檔不存在（非完整 checkout）: %v", err)
 	}
-	obs := ObserveCalibrationFreshness(NewMetricsCollector(), path, time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC))
+	obs := ObserveCalibrationFreshness(NewMetricsCollector(), path, testNow())
 	if !obs.RunOK {
 		t.Fatalf("出貨的 parameters.json 必須可評估，got code=%q", obs.UnverifiableCode)
 	}
-	t.Logf("shipped artifact: fresh=%v age_seconds=%.0f last_calibrated=%v findings=%d",
-		obs.Fresh, obs.AgeSeconds, obs.LastCalibrated.UTC().Format(time.RFC3339), len(obs.Findings))
+	t.Logf("shipped artifact: fresh=%v freshness_code=%q age_seconds=%.0f last_calibrated=%v findings=%d",
+		obs.Fresh, obs.FreshnessCode, obs.AgeSeconds, obs.LastCalibrated.UTC().Format(time.RFC3339), len(obs.Findings))
 }
 
-// 出貨契約（48h）必須與 CLI/文件一致：這是「同一個政策只有一個數字」的
-// 漂移守門。分兩邊釘住 —— Go 常數本身，以及 runbook 寫的 production 命令。
-func TestCalibrationFreshnessContractMatchesRunbook(t *testing.T) {
-	if CalibrationFreshnessContract != 48*time.Hour {
-		t.Fatalf("CalibrationFreshnessContract=%v，want 48h", CalibrationFreshnessContract)
+// 出貨契約必須只有一個數字：`CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
+// = CLI 的 `--max-age` 預設值。這條測試同時讀 CLI 原始碼與 runbook，兩邊任一漂移即紅燈。
+func TestCalibrationFreshnessContractMatchesCLIAndRunbook(t *testing.T) {
+	if CalibrationFreshnessContract != config.DefaultCalibrationMaxAge {
+		t.Fatalf("CalibrationFreshnessContract=%v，必須等於 config.DefaultCalibrationMaxAge=%v",
+			CalibrationFreshnessContract, config.DefaultCalibrationMaxAge)
 	}
+	if CalibrationFreshnessContract != 48*time.Hour {
+		t.Fatalf("CalibrationFreshnessContract=%v，want 48h（改這個值＝改政策，必須同時更新 runbook 與 CLI）", CalibrationFreshnessContract)
+	}
+
+	cli, err := os.ReadFile(filepath.Join("..", "..", "cmd", "calibration-validate", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cli), `flag.Duration("max-age", config.DefaultCalibrationMaxAge`) {
+		t.Error("CLI 的 --max-age 預設值必須引用 config.DefaultCalibrationMaxAge（不得再寫一份字面值）")
+	}
+	if strings.Contains(string(cli), "48 * time.Hour") {
+		t.Error("CLI 不得再保有第二份 48h 字面值（政策只有一個數字）")
+	}
+
 	runbook := filepath.Join("..", "..", "docs", "operations", "calibration-freshness-runbook.md")
 	data, err := os.ReadFile(runbook)
 	if err != nil {
@@ -352,15 +468,27 @@ func TestCalibrationFreshnessContractMatchesRunbook(t *testing.T) {
 	}
 }
 
-// 規則檔引用的每一個 atlas_calibration_* 指標名都必須真的由本檔輸出。
+// 規則檔**expr** 引用的每一個 atlas_calibration_* 指標名都必須真的由本檔輸出。
 // promtool 抓不到這一類缺陷：規則引用一個**不存在**的指標時不會語法錯誤，
 // 只會永遠沉默（false-green 的經典形狀）。
+//
+// ⚠️ 掃描前先去掉 YAML 註解：註解裡提到指標名（triage 文案）不算「被規則引用」，
+// 否則測試會誤以為 age / last_calibrated 有判定側消費者。
 func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 	rulesPath := filepath.Join("..", "..", "monitoring", "rules", "calibration_freshness_alerts.yml")
 	data, err := os.ReadFile(rulesPath)
 	if err != nil {
 		t.Fatalf("讀取規則檔失敗: %v", err)
 	}
+	var exprLines []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		exprLines = append(exprLines, line)
+	}
+	exprs := strings.Join(exprLines, "\n")
+
 	emitted := map[string]bool{
 		MetricCalibrationFreshnessOK:               true,
 		MetricCalibrationFreshnessRunOK:            true,
@@ -368,9 +496,9 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 		MetricCalibrationLastCalibratedTimestamp:   true,
 		MetricCalibrationFreshnessCheckedTimestamp: true,
 	}
-	refs := regexp.MustCompile(`atlas_calibration_[a-z_]+`).FindAllString(string(data), -1)
+	refs := regexp.MustCompile(`atlas_calibration_[a-z_]+`).FindAllString(exprs, -1)
 	if len(refs) == 0 {
-		t.Fatal("規則檔沒有引用任何 atlas_calibration_* 指標")
+		t.Fatal("規則檔（非註解部分）沒有引用任何 atlas_calibration_* 指標")
 	}
 	seen := map[string]bool{}
 	for _, r := range refs {
@@ -384,7 +512,7 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 		got = append(got, r)
 	}
 	sort.Strings(got)
-	t.Logf("規則檔引用的指標: %v", got)
+	t.Logf("規則 expr 引用的指標: %v", got)
 }
 
 // 規則檔必須真的有牙齒（不是只有指標名對得上）：至少一條規則的 expr 引用
@@ -394,7 +522,14 @@ func TestCalibrationFreshnessRulesCoverFailClosedAndAbsence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	var keep []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		keep = append(keep, line)
+	}
+	text := strings.Join(keep, "\n")
 	for _, want := range []struct {
 		what   string
 		needle string

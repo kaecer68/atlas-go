@@ -70,14 +70,20 @@ func exportCalibrationFreshnessMetrics(workDir string, collector *monitoring.Met
 		logging.Warn("calibration_freshness", "artifact_unverifiable",
 			"path", path,
 			"code", string(obs.UnverifiableCode),
+			"findings", len(obs.Findings),
 			"reason", "freshness unknown — 檢查無法評估產物（fail-closed：run_ok=0）",
 		)
 	case !obs.Fresh:
-		logging.Warn("calibration_freshness", "artifact_stale",
+		// event 用 artifact_not_fresh 而不是 artifact_stale：這個狀態包含
+		// 「超過契約」與「從未記錄校準時間」兩種，日誌不應該替值班的人選邊。
+		logging.Warn("calibration_freshness", "artifact_not_fresh",
 			"path", path,
+			"code", string(obs.FreshnessCode),
 			"age_seconds", obs.AgeSeconds,
+			"have_age", obs.HaveAge,
 			"contract_hours", int(monitoring.CalibrationFreshnessContract.Hours()),
 			"last_calibrated", formatCalibrationTimestamp(obs.LastCalibrated),
+			"findings", len(obs.Findings),
 		)
 	}
 	return obs
