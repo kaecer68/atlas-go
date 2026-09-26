@@ -600,7 +600,7 @@
 
 ### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值）；**寫入者已定位＝應用自身 calibration 任務**（runtime 自適應、不回流版控、重建即失）
 
-- **狀態**：`open`（**寫入者已定位（2026-09-26）；缺口＝不回流版控 ＋ 容器重建即失；待業主確認是否 intended**）
+- **狀態**：`in-progress`（**寫入者已定位（2026-09-26）；守門 ＋ 持久化 ＋ 可見性已實作（本 PR），待合併與部署後才 `done`**）
 - **記錄日期**：2026-09-26
 - **事實（生產唯讀實測，2026-09-26）**：
   - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
@@ -637,6 +637,38 @@
   （比對 image 內那份與 effective 那份，不同就告警）並在 runbook 標明「生產有效值 ≠ repo 值」；
   ③ 保留可稽核的寫入痕跡（目前只有 `last_calibrated` 時間戳）。
 - **驗收條件**：能回答「誰在何時寫了這個檔的哪些鍵」＋漂移有顯性痕跡（負對照：不得只靠「檔案看起來正常」判定）。
+
+### 修復（2026-09-26，本 PR：`fix/calibration-drift-floor-and-overlay`；**尚未合併／部署**）
+
+真根因有**兩層**，修法順序不可顛倒（先擋漂移，否則持久化只會把漂移值鎖住）：
+
+1. **漂移本身被現行守門允許** ✗ — `internal/risk/self_calibrate.go` 的相對窗
+   `[current*0.3, current*3.0]` 是**每輪速率限制**而非守門：每輪縮 ≤3× 永遠在窗內，累積就無限下行；
+   共享絕對下限 `0.005` 只擋住終點、擋不住過程（`0.0108 > 0.005`）。
+   ⇒ 改為**逐參數 sanity floor**（`calibrationSanityFloor`）：
+   `risk_max_position_size 0.12`（= repo 內已文件化的最保守持倉比例
+   `engine.strategy_evolution.configs.value.cautious.max_position_size`）、
+   `risk_max_daily_loss_pct 0.03`（= SSOT 值本身，"3% max daily loss"）。
+   低於 floor 一律拒絕；**已在 floor 之下**的既有值（舊版寫入的部署）走 recovery：
+   接受 `[floor, floor*3]` 讓它一輪爬回 sane 值（不凍結在漂移值）。
+   拒絕不再只是 `fmt.Printf`，而是 `report.Rejected` ＋ 結構化 WARN。
+2. **持久化與可見性** ✗ — 校準值原本寫回 `configs/parameters.json`（**不在 bind mount**）。
+   ⇒ 改寫到 **`data/state/parameters.calibrated.json`**（= `constants.StateParametersCalibrated`，
+   在 `${WORKDIR}/data` 這個**已掛載**的樹內），`configs/parameters.json` **保持 pristine 作為 SSOT**；
+   啟動時由 `config.ApplyCalibratedOverlayLayer` 疊在 SSOT 之上（`config.GetParametersConfig` /
+   `ReloadParametersConfig` / `cmd/atlas/main.go` / `parameters` API handler 皆走
+   `LoadEffectiveParametersConfig`）。
+   - 可見性：每個套用項以結構化 log 同時輸出 `ssot` 與 `effective`（＋ `ratio`）；`ratio` 落在
+     單輪窗 `[0.3x, 3x]` 之外 ⇒ 額外 WARN。被 floor 拒絕的提案走 `report.Rejected`。
+   - **特例（刻意的 fail-closed）**：overlay 條目記錄它疊在哪個 SSOT 值上；若 SSOT 值後來被改
+     （charter 編輯）⇒ 該條目**失效並移除** ＋ WARN，人工審查過的 charter 永遠優先於過期的 runtime 適應。
+   - **風險（已在 PR 說明）**：校準值變成「跨容器重建存活」（這正是本條要的），
+     因此以前「重建即重置回 repo 值」的意外剎車消失；漂移的上限現在由 (1) 的 floor 承擔。
+3. **仍未涵蓋（後續）**：其他校準器仍寫 `configs/parameters.json`
+   （`internal/config/calibrator.go:200`、`internal/portfolio/factor_weight_calibrator.go:148`、
+   `internal/orchestrator/calibration_engine.go:330`、`cmd/atlas/calibration_tasks.go:165` 的
+   `industry.RecalibrateThresholds`）；它們的寫入**一樣**在容器重建時遺失、且對 git 不可見。
+   本 PR 只遷移 `risk_gate_calibrate → risk.SelfCalibrate` 這條（觀測到漂移的那條）。
 
 ---
 

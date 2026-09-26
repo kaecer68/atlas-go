@@ -27,6 +27,13 @@ const (
 	StateSessions           = StateDir + "/sessions"            // session snapshots (OOS outcomes)
 	StateParameterSnapshots = StateDir + "/parameter-snapshots" // parameter calibration snapshots
 
+	// StateParametersCalibrated is the runtime calibration overlay for
+	// configs/parameters.json (FU-20260926-07): the self-calibration loops write
+	// their adapted tunables here instead of rewriting the image-baked SSOT file,
+	// so the adaptation lives on the bind-mounted data/ tree (it survives a
+	// container recreate) and the SSOT stays diffable against it.
+	StateParametersCalibrated = StateDir + "/parameters.calibrated.json"
+
 	// Other configuration and data paths:
 	AgentsConfigPath    = "configs/agents.json"                // agent registry
 	ReplayCSVPath       = "data/replay/tw_extended_90days.csv" // default replay CSV universe

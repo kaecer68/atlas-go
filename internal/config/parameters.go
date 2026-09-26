@@ -2170,8 +2170,12 @@ func SetParametersConfigPath(path string) {
 // ReloadParametersConfig re-reads the parameters JSON file and replaces the
 // singleton configuration. Useful for hot-reload without server restart.
 // Returns any parse or validation error.
+//
+// It re-applies the calibrated overlay, so a reload returns the process to
+// "SSOT + overlay" (the effective configuration) rather than silently dropping
+// the adaptations the calibration loops wrote.
 func ReloadParametersConfig() error {
-	cfg, err := LoadParametersConfig(parametersPath)
+	cfg, err := LoadEffectiveParametersConfig(parametersPath)
 	if err != nil {
 		return fmt.Errorf("reload parameters: %w", err)
 	}
