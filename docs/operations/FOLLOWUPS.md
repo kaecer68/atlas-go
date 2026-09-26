@@ -1077,6 +1077,54 @@
 
 ---
 
+---
+
+### FU-20260926-22 — `internal/apigateway` 的 `TestBackgroundTaskManager_RunTask_AppliesStartupJitter` 機率性假紅：**full jitter 單次抽樣落在 1ms 以下**（≈0.2%/次；**不是**負載相依）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：修 `FU-20260926-17`（fubonproxy flaky）時，同一 worktree 跑 `make ci-full` 第一次紅在此測試（同一次 run 的其他 package 全綠）。
+  本票**尚未收錄進** `docs/operations/remediation-manifest.md`（該檔屬 #2026／另一 lane）⇒ **不於本 PR 改 manifest**。
+- **事實（實測，2026-09-26，worktree `fix/20260926-fubonproxy-flake-hermetic2`，macOS arm64 / go1.26.4）**：
+  - 失敗輸出（`make ci-full` → `Makefile:951-952` 的 `go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')`）：
+    ```
+    --- FAIL: TestBackgroundTaskManager_RunTask_AppliesStartupJitter (0.00s)
+        background_test.go:1368: subsequent run (LastRun non-zero): elapsed=331.459µs, expected ≥ 1ms. Jitter should be applied.
+    FAIL	github.com/kaecer68/atlas-go/internal/apigateway	52.464s
+    ```
+  - **機制（程式碼事實，非推論）**：`internal/apigateway/background.go:444` 是
+    `jitter := time.Duration(rand.Int63n(int64(task.Jitter)))` ⇒ **full jitter（均勻分布 `[0, Jitter)`）**；
+    測試 `background_test.go:1307-1310` 取 `targetJitter=500ms`、`minElapsed=1ms`、`maxElapsed=700ms`，
+    並在 Phase B（`task.SetLastRun(now-2h)` ⇒ LastRun 非零）以**單次** wall-clock 量測斷言 `elapsed ≥ 1ms`（`:1366-1370`）。
+    ⇒ 單次抽樣 < 1ms 的機率 ＝ 1ms / 500ms ＝ **0.2%／次**，與 `CHANGELOG.md:1074` 自載的「偽陽性率 ≈ 0.2%」一致。
+  - **判定：不是負載相依**（我先前口頭假設「負載造成」已**被否證**）：機率來自**單次隨機抽樣**，與並行負載無關；
+    負載只會讓 `elapsed` 偏大 ⇒ 更不容易紅。
+  - **機制探針（可複現；暫時改測試常數後已還原，`git status` 乾淨）**：把 `targetJitter` 由 `500ms` 改成 `5ms`
+    （jitter 窗口縮 100 倍、抽樣分布不變）⇒ 同一個斷言立刻大量紅，且簽名完全相同：
+    `-count=60` ⇒ **10 FAIL / 50 PASS**（≈16.7%，與「抽到 < ~0.83ms」的理論值 ≈16.6% 相符），
+    失敗樣本 `elapsed=172µs / 211µs / 553µs / 599µs / 684µs` 全部 < 1ms
+    ⇒ 紅燈確實源自**抽樣值**，不是排程抖動、也不是環境負載。
+  - **與 `FU-20260926-17` 無關**：那條只改 `internal/fubonproxy/manager_test.go`（別的 package 的/test 檔）⇒ 不可能影響本測試；
+    且該次 `make ci-full` 的 race 步驟裡 `internal/fubonproxy` 是綠的，本套件才是唯一紅燈。
+- **重跑證據（本機，2026-09-26）**：
+  - `go test -race -count=10 -run 'TestBackgroundTaskManager_RunTask_AppliesStartupJitter' -v ./internal/apigateway/` ⇒ **exit 0，10/10 PASS**。
+  - `go test -race -count=200 -run '…' -v ./internal/apigateway/` ⇒ **exit 0，200/200 PASS**（與 0.2%/次 一致：200 次的期望紅燈 ≈ 0.4 次）。
+  - 整條 race 指令單跑：`ATLAS_STORE_BACKEND=sqlite go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')` ⇒ **exit 0（181 packages ok、0 FAIL）**。
+- **風險**：它坐在 `make ci-full`／pre-push 的**必經路徑**上 ⇒ 0.2%/次的假紅會擋合法 push
+  （與 `FU-20260926-17`、`FU-20260926-21` 同族：閘門可信度流失 ⇒ 逼人用 `--no-verify`）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：把 jitter 抽樣做成可注入 seam**（同 repo 已有同型做法：`restartInitialDelayForTest`、`portprobe.lsofPath`），
+     測試固定抽樣值 ⇒ 斷言回到**決定性**，同時保住「jitter 被誤刪 ⇒ 立即紅」的 regression 能力。
+  2. **次選：統計式改寫**：對 N 次抽樣取統計量（如 20 次取 max ≥ 1ms、且每次 ≤ 700ms），
+     並把偽陽率寫成 `0.2%^N`（N=20 ⇒ ~8e-62）；**只放大 `minElapsed` 不算修**（會讓「抖動被移除」更難被抓到）。
+  3. **另一條路：不靠 wall-clock**：改觀測「確實走了 jitter 分支」的可觀測事實（事件／欄位／log），
+     並在測試內**明確界定 jitter 上界**（full jitter 的上界 ＝ `task.Jitter` 本身 ＝ 500ms）。
+  4. **不需改 production 行為**：full jitter 是刻意的 thundering-herd 防護（`background.go:184` 附近的註記）；
+     本票是**測試可測性**問題。
+- **驗收條件**：在 `make ci-full` 的實際條件下該測試連續 ≥ 200 次 0 紅；
+  **負對照**：移除 `background.go:443` 的 `!task.LastRun().IsZero() && task.Jitter > 0`（jitter 不再套用）⇒ 該測試**仍必須紅**。
+- **不可動**：`docs/operations/remediation-manifest.md`（另一 lane 的 SSOT）、`.githooks/pre-push`（`FU-20260926-15` 佔用）。
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
