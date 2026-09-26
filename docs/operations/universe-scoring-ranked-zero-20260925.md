@@ -727,6 +727,19 @@ FinMind 配額 `13368 → 13794`（**+426**）；`auto_quote_backfill` 在 remai
 **2026-09-28（Mon，交易日）06:00Z** 的每日管線 ⇒ 目標 `quotes_status=ok` 且
 `ranked_trustworthy=true`。
 
+> ❗**更正（2026-09-26）**：上句的「2026-09-28（Mon，**交易日**）」**已被推翻** ——
+> 09-28 是**孔子誕辰紀念日／教師節（依規定放假 1 日 ⇒ 休市）**，權威來源＝TWSE 官方 API
+> （`/rwd/zh/holidaySchedule/holidaySchedule?response=json&date=20260101` ⇒
+> `["2026-09-28","孔子誕辰紀念日/ 教師節","依規定放假1日。"]`）⇒ 該日**不會產生新的交易 session**，
+> 不可能是有效觀察點 ⇒ **最早可複驗的交易日＝2026-09-29（週二）06:00Z**。
+> 第二件要更正的事：09-28 是**週一**，而 daily **顯式跳過週一**
+> （`internal/monitoring/universe_scheduler.go` 的 `now.Weekday() == time.Monday` 分支）⇒
+> 原本寫的「每日管線」在 09-28 本來就不會跑；該日由 weekly 負責，而現行 main 的 weekly
+> 仍只判斷「週一」（weekday-only）⇒ 休市日不會自動 skip（假日 gate 見 open PR #2054）。
+> 若需要 **weekly（全量重建）** 路徑，下一個「是交易日的週一」＝ **2026-10-05 06:00Z**。
+> 原句**保留以維持可追溯性**（僅加註，不刪除）；同一更正同步於
+> `docs/operations/FOLLOWUPS.md` 的 `FU-20260925-04`。
+
 ##### ⑦ 誠實標註：CLI 結束碼為 **1**
 
 CLI（`/app/atlas-go -build-universe run`）結束碼為 **1**，這是工具以非零碼**誠實表達「結果不可信」**
@@ -846,6 +859,11 @@ Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySub
    2026-09-25 生產實測）。**仍未證實的是「排名可信」**：該輪 `ranked_trustworthy=false`
    （休市 + fugle 限流 + Fubon 逾時），需待 **2026-09-28（Mon，交易日）06:00Z** 的每日管線
    達到 `quotes_status=ok` + `ranked_trustworthy=true` 才能定論（§9.1.6 結論 ②⑥）。
+   > ❗**更正（2026-09-26）**：句中「2026-09-28（Mon，**交易日**）」**已被推翻** ——
+   > 09-28 為教師節**休市**（TWSE 官方 API；見 §9.1.6 ⑥ 的更正），且該日是**週一**、
+   > daily 顯式跳過週一 ⇒ 不會有「每日管線」結果可看。
+   > **最早可複驗的交易日＝2026-09-29（週二）06:00Z**；需要 weekly 路徑則為 **2026-10-05 06:00Z**。
+   > 原句保留（僅加註，不刪除）。同步 `docs/operations/FOLLOWUPS.md` 的 `FU-20260925-04`。
 2. provider 對 1599 檔的實際呼叫數／配額足跡 —— 未量測。
 3. provider 回傳代號與 `substratePopulation` 鍵是否 100% 對齊 —— 未量測。
 4. `Volume/Last` 的單位語意是否與 `volume_floor_twd` 的設計假設一致 —— 未查證。
