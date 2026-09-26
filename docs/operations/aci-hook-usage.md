@@ -110,7 +110,8 @@ AC: atlas-go ACI routing — 你正要讀/改/搜 hot-path Go 檔(屬 internal/ 
 | `.githooks/pre-push` | git push | hard block push main / 空 push |
 | `scripts/session-start.sh` (`.claude/settings.json`) | session 開頭 | binary freshness gate |
 | **`.agent-hooks/aci-read-prompt.sh` (this)** | **PreToolUse** | **soft reminder for ACI routing** |
-| `.agent-hooks/deny-dangerous.sh` | 顯式呼叫 | hard block for state-mutating / secrets / production |
+| `.agent-hooks/pretooluse-deny-dangerous.sh` (`.claude/settings.json`, tracked) | 每次 Bash tool call | adapter:把 Bash 指令交給 `deny-dangerous.sh`,自動化 hard-block 判定 |
+| `.agent-hooks/deny-dangerous.sh` | 顯式呼叫 + 上述 adapter | hard block for state-mutating / secrets / production |
 
 ## 卸載
 
@@ -151,8 +152,30 @@ agent 在下一個 session 看到 footgun 清單時會自己複習。
 
 ## 對團隊的影響
 
-這個 PR **不強制**全 atlas 團隊啟用 hook。`.claude/settings.json`
-(team-shared) 未被修改;`.claude/settings.local.json` (per-user) 由各
-開發者自行決定是否建立。
+ACI routing hook 仍是 **per-user**:`.claude/settings.json`(team-shared)沒有它的
+entry;`.claude/settings.local.json` 由各開發者自行決定是否建立。想試的人照
+「完整設定」建立即可。
 
-如果其他開發者想試,直接照「完整設定」建立即可,不需要動 .git-tracked 檔案。
+## hard layer(agent-guard)已自動接線(2026-09-26 E5)
+
+`.agent-hooks/deny-dangerous.sh` 過去是「完整但**從未被自動呼叫**」的死守門:
+AGENTS.md 只要求 agent 自己跑 `./agent-guard --check`。現在它的 PreToolUse adapter
+(`.agent-hooks/pretooluse-deny-dangerous.sh`)註冊在 **tracked** 的
+`.claude/settings.json`(matcher `Bash`)⇒ 本 repo 內**每次 Bash tool call** 都會經過
+`deny-dangerous.sh`,不需要任何 per-user 安裝步驟。
+
+| 情境 | 模式 | 行為 |
+|------|------|------|
+| 本機 dev worktree(預設) | `warn` | 注入明確警告給模型與使用者,**不擋** |
+| `export ATLAS_HOOK_MODE=enforce` | `enforce` | 擋下(hook exit 2) |
+| `ATLAS_ENV=production` 且未設 `ATLAS_HOOK_MODE` | `enforce` | 同上 |
+| guard 執行失敗 / payload 壞掉 | 任意 | **fail-open**(放行)+ stderr 告警 |
+
+```bash
+# 切成 enforce(單一 session,不必改檔)
+export ATLAS_HOOK_MODE=enforce
+```
+
+完整說明、rollback(從 `.claude/settings.json` 移除 `PreToolUse` 段)與 bash 3.2 依賴注意事項:
+[`.agent-hooks/README.md`](../../.agent-hooks/README.md) §模式政策與 rollback。
+契約測試:`tests/scripts/test-agent-hook-wiring.sh`(已納入 `make ci-gate`)。

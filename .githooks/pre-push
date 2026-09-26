@@ -2,10 +2,19 @@
 # .githooks/pre-push — Block pushes before they reach the remote
 #
 # Gates:
+#   0.  Refresh origin/main — **fail-closed**. Every gate below is diff-based
+#       against origin/main; running them against a missing/stale ref produced a
+#       green signal that meant nothing (a look-green, checked-nothing push).
+#   0b. Host binary freshness (`bin/atlas`, `bin/atlas-mcp`) — only when this
+#       push moves a build input. Rule + paths + fix hints come from
+#       `scripts/check-binary-freshness.sh --host-only` (one freshness rule in
+#       this repo, not two; and it never invokes docker, a push must not need a
+#       daemon). Clones without bin/ (fresh/linked worktrees) are not judged.
 #   1.  `make ci-gate`  (~30s) — fast gate, always runs (gofmt/build/vet/gen-drift/ci-quick)
 #   1b. `make ci-full`  (~5-8 min) — full local suite (lint/staticcheck/test/race/coverage);
 #       runs when the diff contains code (non-docs). Avoids push→CI-fail round trips.
 #       Overrides: PRE_PUSH_FULL=always 強制全量 / never 跳過 / auto 依 diff 判定(預設)
+#   1c. frontend dist freshness (frontend changes only)
 #   2.  Local branch HEAD == origin/main → nothing meaningful to push
 #   3.  Zero file diff vs origin/main      → PR will be closed as redundant
 #       (this is the exact failure mode that produced PR #799)
@@ -23,6 +32,52 @@ if [ "$remote" != "origin" ]; then
   exit 0
 fi
 
+# Resolve the repo from the hook's own location, not from cwd: the gates below
+# call repo-relative scripts, and `make check-binaries` resolves bin/ from the
+# script's own directory.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+# ── Gate 0: refresh origin/main (fail-closed) ─────────────────────
+# 2026-09-26 (E4): this used to `exit 0` when the fetch failed, i.e. it silently
+# allowed the push while skipping ci-full AND every diff-based gate (frontend
+# dist, HEAD==origin/main, zero-diff). A gate that turns green because it could
+# not run is worse than no gate. Now: refuse and say how to bypass explicitly.
+if ! fetch_out=$(git fetch origin main 2>&1); then
+  echo ""
+  echo "❌ pre-push: cannot fetch origin/main — push refused (fail-closed)."
+  echo "   原因：本 hook 的每一個 diff 閘門（frontend dist、ci-full 範圍、"
+  echo "   HEAD==origin/main、zero-diff）都以 origin/main 為基準。取不到它，"
+  echo "   這些檢查只能對著過期的 ref 跑，結果一定是『看起來綠、實際沒檢查』。"
+  if [ -n "$fetch_out" ]; then
+    echo "   git fetch 說："
+    printf '%s\n' "$fetch_out" | sed 's/^/     /'
+  fi
+  echo "   修復：恢復對 origin 的讀取權（先試 git ls-remote origin main）"
+  echo "         或明示繞過：git push --no-verify"
+  echo ""
+  exit 1
+fi
+
+# ── Gate 0b: host binary freshness (build inputs only, no docker) ──
+# 2026-09-26 (FU-20260926-15): source had moved ahead of bin/atlas-mcp and the
+# push still went through. Only the host-side build outputs are judged, and only
+# when this push carries a build-input change (`--diff-base origin/main`).
+host_out=""
+if ! host_out=$(bash scripts/check-binary-freshness.sh --host-only --diff-base origin/main 2>&1); then
+  echo ""
+  echo "❌ pre-push: host binary freshness gate FAILED（宿主端 bin/atlas* 落後原始碼）."
+  echo ""
+  printf '%s\n' "$host_out"
+  echo ""
+  echo "   修復（純 go build，不含 docker）:"
+  echo "     make rebuild-host-bin   # bin/atlas-mcp"
+  echo "     make build-backend      # bin/atlas"
+  echo "   或明示繞過：git push --no-verify"
+  echo ""
+  exit 1
+fi
+
 # ── Gate 1: CI preflight ──────────────────────────────────────────
 # make ci-gate covers: gofmt, go build, go vet, go generate drift,
 # and fast CI scripts. ~30s, catches 90% of CI failures.
@@ -33,13 +88,6 @@ if ! make ci-gate 2>&1; then
   echo "   Bypass with: git push --no-verify"
   echo ""
   exit 1
-fi
-
-# ── Gate 1b: full CI preflight for code changes ──────────────────
-# Fast-fetch origin/main so diffs are accurate.
-if ! git fetch origin main --quiet 2>/dev/null; then
-  echo "⚠️  pre-push: cannot fetch origin/main — skipping ci-full/redundancy checks"
-  exit 0
 fi
 
 # ── Gate 1c: frontend dist freshness (frontend changes only) ─────
@@ -63,7 +111,12 @@ if git diff --name-only origin/main...HEAD 2>/dev/null | grep -qE '\.(go|ts|tsx|
 fi
 
 mode="${PRE_PUSH_FULL:-auto}"
-if [ "$mode" = "always" ] || { [ "$mode" = "auto" ] && [ "$code_changed" -eq 1 ]; }; then
+if [ "$mode" = "never" ]; then
+  # An override that skips a required gate must SAY SO. Before 2026-09-26 this
+  # branch printed nothing: the push went out with no trace that ci-full never
+  # ran — the same silent-skip shape as the E4 fetch fail-open.
+  echo "ℹ️  pre-push: PRE_PUSH_FULL=never — ci-full 明示跳過（ci-gate 已通過；這是使用者覆寫）"
+elif [ "$mode" = "always" ] || { [ "$mode" = "auto" ] && [ "$code_changed" -eq 1 ]; }; then
   echo ""
   echo "🧪 pre-push: diff 含程式碼變更 → 跑 make ci-full (~5-8 min)..."
   echo "   （PRE_PUSH_FULL=always/never 可覆寫; docs-only diff 自動只跑 ci-gate）"
@@ -75,7 +128,7 @@ if [ "$mode" = "always" ] || { [ "$mode" = "auto" ] && [ "$code_changed" -eq 1 ]
     echo ""
     exit 1
   fi
-elif [ "$mode" != "never" ]; then
+else
   echo "ℹ️  pre-push: docs-only diff — ci-gate 已足夠（ci-full 跳過）"
 fi
 
@@ -105,5 +158,5 @@ if [ "$diff_count" -eq 0 ]; then
   exit 1
 fi
 
-echo "✅ pre-push: ci-gate passed, $diff_count file(s) differ from origin/main — push allowed"
+echo "✅ pre-push: origin/main refreshed, host binaries fresh (or N/A), ci-gate passed, $diff_count file(s) differ from origin/main — push allowed"
 exit 0

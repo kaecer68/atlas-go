@@ -828,11 +828,13 @@ ATLAS_IMAGE_TAGS := atlas-atlas:latest atlas-prism-worker:latest
 # deploy time ("No such image: atlas-cron-darwinian:latest", 實證 2026-09-23
 # Mac Mini)。tests/scripts/test-binary-freshness-guard.sh 以 docker-compose.yml
 # 為準逐一比對，防止同類漂移再發生。
+# 2026-09-26（E17）: cron-darwinian 服務本身已從 docker-compose.yml 移除，故其
+# tag 與 rebuild-cron 的 compose up 清單一併移除。守門要求 tag 數量與 compose
+# 的 build-only cron service 數量**相等** ⇒ 留著多餘的 tag 也會紅燈。
 CRON_IMAGE_TAGS := atlas-cron-quote-backfill:latest \
                    atlas-cron-geo-ingest:latest atlas-atlas-cron-c07-collect:latest \
                    atlas-cron-replay-sync:latest \
                    atlas-atlas-cron-c07-evaluate:latest \
-                   atlas-cron-darwinian:latest \
                    atlas-cron-macro-ingest:latest
 DOCKER_BIN ?= docker
 
@@ -846,7 +848,7 @@ rebuild-cron: rebuild-cron-bins
 	fi
 	@$(DOCKER_BIN) build -t atlas-cron-rebuilt:local -f Dockerfile.cron.local .
 	@$(MAKE) retag-cron-images
-	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-darwinian cron-geo-ingest atlas-cron-c07-collect 
+	@ATLAS_GIT_COMMIT=$(GIT_COMMIT) docker compose up -d --force-recreate --no-build cron-macro-ingest cron-quote-backfill cron-replay-sync atlas-cron-c07-evaluate cron-geo-ingest atlas-cron-c07-collect 
 
 # Full rebuild: host bin + atlas image + cron images.
 rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
@@ -968,8 +970,14 @@ ci-gate: embed-dirs
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
 	@echo "    ✅"
+	@echo "  → pre-push 閘門契約測試（E4 fail-closed fetch ＋ FU-20260926-15 host binary 新鮮度；hermetic fixtures）"
+	@bash tests/scripts/test-prepush-gates.sh
+	@echo "    ✅"
 	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
 	@bash tests/scripts/test-embed-dirs.sh
+	@echo "    ✅"
+	@echo "  → agent-guard PreToolUse 接線契約測試（hermetic：只餵 payload，不執行危險指令）"
+	@bash tests/scripts/test-agent-hook-wiring.sh
 	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh

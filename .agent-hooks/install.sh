@@ -4,10 +4,12 @@
 # Usage:
 #   bash .agent-hooks/install.sh
 #
-# This makes the deny-dangerous hook available for agent sessions and
-# optionally wires it into the shell environment. Git hooks are installed
-# via scripts/install-hooks.sh (pre-existing); this script is for the
-# agent-side guardrails.
+# This makes the deny-dangerous hook available for agent sessions (alias +
+# executable bits). The automatic PreToolUse wiring is NOT done here: it lives
+# in the tracked `.claude/settings.json` (see .agent-hooks/README.md), so every
+# clone/worktree has it without running anything.
+# Git hooks are installed via scripts/install-hooks.sh (pre-existing); this
+# script is for the agent-side guardrails.
 
 set -euo pipefail
 
@@ -20,6 +22,7 @@ echo "Installing agent hooks from ${HOOK_DIR}..."
 
 # Ensure both hooks are executable.
 chmod +x "${HOOK_DIR}/deny-dangerous.sh"
+chmod +x "${HOOK_DIR}/pretooluse-deny-dangerous.sh"
 chmod +x "${HOOK_DIR}/aci-read-prompt.sh"
 
 # Repo-root alias ./agent-guard is TRACKED in git since 2026-09-27 (a small
@@ -46,6 +49,16 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "   Install: brew install jq    # macOS"
   echo "           sudo apt install jq   # Debian/Ubuntu"
   echo "   Without jq, the hook silently skips (graceful degradation)."
+fi
+
+# The hard-block layer is registered in the tracked .claude/settings.json, so it
+# is active in every session without any per-user step. Confirm it is still there.
+SETTINGS_SHARED="${REPO_ROOT}/.claude/settings.json"
+if grep -q "pretooluse-deny-dangerous.sh" "${SETTINGS_SHARED}" 2>/dev/null; then
+  echo "✓ .claude/settings.json registers the PreToolUse agent-guard hook (active for every session; default mode: warn)"
+else
+  echo "⚠️  .claude/settings.json no longer registers .agent-hooks/pretooluse-deny-dangerous.sh"
+  echo "   → the deny-dangerous guard is NOT on the effective path; re-add the PreToolUse entry."
 fi
 
 # Inform the user about the soft-prompt hook activation.

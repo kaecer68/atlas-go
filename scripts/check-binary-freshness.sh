@@ -19,13 +19,58 @@
 #
 # Temporary Docker containers and extracted files are always cleaned up, including
 # when Docker copy fails or the shell exits early.
+#
+# Modes (2026-09-26, FU-20260926-15):
+#   (default)                 Docker images + host binaries. Requires docker.
+#   --host-only               Host binaries ONLY. Never invokes docker at all, so
+#                             it is safe inside the pre-push hook (a push must not
+#                             depend on a docker daemon) and on the dev box.
+#   --diff-base <ref>         Additionally skip the whole check when the push
+#                             origin/<ref>...HEAD moves NO build input: a push
+#                             that cannot invalidate a binary must not be blocked
+#                             by a binary that was already stale. Without this
+#                             flag the check always evaluates the binaries.
+#
+# The host binaries are judged with exactly the same rule as the images
+# (buildinfo.Commit must contain LAST_BUILD_COMMIT, and be an ancestor of HEAD),
+# so there is one freshness rule in this repo, not two.
 
 set -euo pipefail
 
+HOST_ONLY=0
+DIFF_BASE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --host-only) HOST_ONLY=1 ;;
+        --diff-base)
+            shift
+            [ $# -gt 0 ] || { echo "ERROR: --diff-base needs a ref" >&2; exit 2; }
+            DIFF_BASE=$1
+            ;;
+        --diff-base=*) DIFF_BASE=${1#--diff-base=} ;;
+        -h|--help)
+            sed -n '2,40p' "$0"
+            exit 0
+            ;;
+        *)
+            echo "ERROR: unknown argument: $1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 FRESHNESS_TMPDIR="${FRESHNESS_TMPDIR:-${TMPDIR:-/tmp}}"
+# Host-native build outputs only (Makefile: build-backend → bin/atlas,
+# build-mcp / rebuild-host-bin → bin/atlas-mcp). Deliberately an explicit list,
+# not a glob: bin/atlas-linux is a legacy cross-build artifact nothing rebuilds,
+# and *.bak-* files are backups — neither is a host deploy target, so neither
+# may block a push.
+HOST_BINARIES=('bin/atlas' 'bin/atlas-mcp')
 declare -a TEMP_CONTAINERS=()
 declare -a TEMP_FILES=()
+HOST_CHECKED=0   # host binaries actually evaluated (0 ⇒ nothing to judge)
 
 declare -a STALE=()
 declare -a MISSING_BUILDINFO=()
@@ -51,8 +96,12 @@ cleanup() {
     fi
     # Belt-and-suspenders: catch any atlas.binary-freshness-labeled container
     # the explicit rm loop may have missed (daemon hiccup, race, etc).
-    # Runs regardless of TEMP_CONTAINERS contents.
-    "$DOCKER_BIN" container prune -f --filter "label=atlas.binary-freshness=true" >/dev/null 2>&1 || true
+    # Runs regardless of TEMP_CONTAINERS contents — but NEVER in --host-only
+    # mode: that mode must not touch docker at all (no daemon required, and
+    # `docker ... prune` mutates host state).
+    if [ "$HOST_ONLY" -eq 0 ]; then
+        "$DOCKER_BIN" container prune -f --filter "label=atlas.binary-freshness=true" >/dev/null 2>&1 || true
+    fi
     exit "$status"
 }
 trap cleanup EXIT
@@ -131,35 +180,72 @@ check_image_binary() {
     check_one "$label" "$(extract_commit_host "$tmp_bin")"
 }
 
-echo "=== Docker images ==="
-check_image_binary "atlas-atlas:latest" /app/atlas-go \
-    "atlas-atlas image → /app/atlas-go" "$FRESHNESS_TMPDIR/.atlas-go-freshness-check-$$"
-check_image_binary "atlas-atlas:latest" /app/atlas-mcp \
-    "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
-check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
-    "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
-check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
-    "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
-check_image_binary "atlas-prism-worker:latest" /app/atlas-go \
-    "atlas-prism-worker image → /app/atlas-go" "$FRESHNESS_TMPDIR/.prism-worker-freshness-check-$$"
-check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \
-    "atlas-cron-rebuilt:local → /app/macro-ingest" "$FRESHNESS_TMPDIR/.macro-ingest-freshness-check-$$"
+if [ "$HOST_ONLY" -eq 0 ]; then
+    echo "=== Docker images ==="
+    check_image_binary "atlas-atlas:latest" /app/atlas-go \
+        "atlas-atlas image → /app/atlas-go" "$FRESHNESS_TMPDIR/.atlas-go-freshness-check-$$"
+    check_image_binary "atlas-atlas:latest" /app/atlas-mcp \
+        "atlas-atlas image → /app/atlas-mcp" "$FRESHNESS_TMPDIR/.atlas-mcp-freshness-check-$$"
+    check_image_binary "atlas-atlas:latest" /app/daily-replay-sync \
+        "atlas-atlas image → /app/daily-replay-sync" "$FRESHNESS_TMPDIR/.daily-replay-sync-freshness-check-$$"
+    check_image_binary "atlas-atlas:latest" /app/calibrate-seasonal \
+        "atlas-atlas image → /app/calibrate-seasonal" "$FRESHNESS_TMPDIR/.calibrate-seasonal-freshness-check-$$"
+    check_image_binary "atlas-prism-worker:latest" /app/atlas-go \
+        "atlas-prism-worker image → /app/atlas-go" "$FRESHNESS_TMPDIR/.prism-worker-freshness-check-$$"
+    check_image_binary "atlas-cron-rebuilt:local" /app/macro-ingest \
+        "atlas-cron-rebuilt:local → /app/macro-ingest" "$FRESHNESS_TMPDIR/.macro-ingest-freshness-check-$$"
 
-echo ""
+    echo ""
+fi
+
 echo "=== Host binaries ==="
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HOST_ATLAS_MCP="$REPO_ROOT/bin/atlas-mcp"
-if [ -f "$HOST_ATLAS_MCP" ]; then
-    check_one "bin/atlas-mcp" "$(extract_commit_host "$HOST_ATLAS_MCP")"
-else
-    echo "  ⚠ bin/atlas-mcp not found at $HOST_ATLAS_MCP (skipping)"
+
+# --diff-base <ref>: a push that carries no build-input change cannot make a
+# host binary stale (it was already stale, if it was), so it must not be
+# blocked by one. The build-input list below is the single definition; the
+# pathspec is reused verbatim so predicate and rule cannot drift.
+if [ -n "$DIFF_BASE" ]; then
+    if ! git rev-parse --verify --quiet "${DIFF_BASE}^{commit}" >/dev/null 2>&1; then
+        echo "ERROR: --diff-base ${DIFF_BASE} does not resolve in this repo" >&2
+        exit 2
+    fi
+    changed=$(git diff --name-only "${DIFF_BASE}...HEAD" -- "${BUILD_INPUT_PATHS[@]}" 2>/dev/null || true)
+    if [ -z "$changed" ]; then
+        echo "  ℹ no build input changed in ${DIFF_BASE}...HEAD → host binary freshness not required for this push"
+        echo "  ✓ (host binaries are judged only when the push can change them)"
+        exit 0
+    fi
+    echo "  build input(s) changed in ${DIFF_BASE}...HEAD:"
+    while IFS= read -r changed_file; do
+        [ -n "$changed_file" ] && echo "    - $changed_file"
+    done <<<"$changed"
+fi
+
+# One host binary evaluated per iteration; a clone without bin/ (fresh worktree,
+# or a machine that never built here) has nothing to judge and must NOT be
+# blocked — that is the "not found (skipping)" branch, kept deliberately soft.
+for host_rel in "${HOST_BINARIES[@]}"; do
+    host_path="$REPO_ROOT/$host_rel"
+    if [ -f "$host_path" ]; then
+        HOST_CHECKED=$((HOST_CHECKED + 1))
+        check_one "$host_rel" "$(extract_commit_host "$host_path")"
+    else
+        echo "  ⚠ $host_rel not found at $host_path (skipping)"
+    fi
+done
+if [ "$HOST_CHECKED" -eq 0 ]; then
+    echo "  ℹ no host binaries in this clone → nothing to judge (gate not applicable)"
 fi
 
 echo ""
 echo "=== Summary ==="
 echo "  HEAD:              $HEAD"
 echo "  last build input:  $LAST_BUILD_COMMIT"
+if [ "$HOST_ONLY" -eq 1 ]; then
+    echo "  mode:              --host-only (docker not consulted)"
+fi
 echo "  (FRESH = the binary's buildinfo.Commit contains the last build input"
 echo "   commit. Commits that only touch non-build-input files —"
 echo "   docker-compose*.yml, docs/**, scripts/** except cron-entrypoint.sh —"
@@ -177,7 +263,15 @@ if [ ${#MISSING_BUILDINFO[@]} -gt 0 ]; then
     printf '    %s\n' "${MISSING_BUILDINFO[@]}"
 fi
 echo ""
-echo "Fix: a build input (*.go, go.mod, go.sum, Dockerfile*, scripts/cron-entrypoint.sh)"
-echo "     changed after the deployed binaries were built. Run 'make rebuild-all' to"
-echo "     realign the binaries with $LAST_BUILD_COMMIT."
+if [ "$HOST_ONLY" -eq 1 ]; then
+    echo "Fix: a build input (*.go, go.mod, go.sum, Dockerfile*, scripts/cron-entrypoint.sh)"
+    echo "     changed after the HOST binaries were built. Rebuild them (pure go build):"
+    echo "       make rebuild-host-bin   # bin/atlas-mcp"
+    echo "       make build-backend      # bin/atlas"
+    echo "     (or: make build-mcp for bin/atlas-mcp; this check never touches docker)"
+else
+    echo "Fix: a build input (*.go, go.mod, go.sum, Dockerfile*, scripts/cron-entrypoint.sh)"
+    echo "     changed after the deployed binaries were built. Run 'make rebuild-all' to"
+    echo "     realign the binaries with $LAST_BUILD_COMMIT."
+fi
 exit 1
