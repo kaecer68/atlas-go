@@ -283,4 +283,5 @@ func registerBackfillTasks(d backfillDeps) {
 	log.Printf("[Gateway] registered auto_gap_detection background task (24h interval)")
 
 	registerChannelHealthMetricsTask(d)
+	registerCalibrationFreshnessMetricsTask(d)
 }
