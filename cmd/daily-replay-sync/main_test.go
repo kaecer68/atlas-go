@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -372,6 +374,50 @@ func twseJSONResponse(rows string) string {
 
 const twseRow2330 = `["2330","台積電","81160741","15450000000","190","191.23","189.07","190.64","+0.50","35000"]`
 
+// ─── MI_INDEX fixture builders (the date-addressed source) ──────────────────
+//
+// Since 2026-09-26 runDailySync fetches the whole market from MI_INDEX with a
+// date parameter and writes the DATA DATE the payload itself declares. These
+// helpers build that shape; the production-shaped copy lives in
+// testdata/mi_index_20260924_replay44.json (a real 2026-09-24 response trimmed
+// to the 44 replay codes).
+
+const miIndexFields = `["證券代號","證券名稱","成交股數","成交筆數","成交金額","開盤價","最高價","最低價","收盤價","漲跌(+/-)","漲跌價差","最後揭示買價","最後揭示買量","最後揭示賣價","最後揭示賣量","本益比"]`
+
+// miIndexSyncResponse renders a MI_INDEX payload whose 每日收盤行情 title carries
+// dataDate — the provenance stamp runDailySync guards on. `rows` are
+// miIndexSyncRow values.
+func miIndexSyncResponse(t *testing.T, dataDate string, rows ...string) string {
+	t.Helper()
+	d, err := time.ParseInLocation("2006-01-02", dataDate, marketdata.TaiwanLocation())
+	if err != nil {
+		t.Fatalf("miIndexSyncResponse date %q: %v", dataDate, err)
+	}
+	title := fmt.Sprintf("%d年%02d月%02d日", d.Year()-1911, int(d.Month()), d.Day())
+	return fmt.Sprintf(`{"stat":"OK","date":%q,"tables":[
+		{"title":%q,"fields":["指數","收盤指數"],"data":[["發行量加權股價指數","48,024.60"]]},
+		{"title":%q,"fields":%s,"data":[%s]}]}`,
+		d.Format("20060102"),
+		title+" 價格指數(臺灣證券交易所)",
+		title+" 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
+		miIndexFields, strings.Join(rows, ","))
+}
+
+// miIndexSyncRow renders one 每日收盤行情 row. The price varies with the code
+// length so validateRecord does not spam WARN lines about a zero price change.
+func miIndexSyncRow(code string) string {
+	last := 100 + float64(len(code))
+	return fmt.Sprintf(`[%q,"測試股","15,000,000","1,000","1,500,000","%.2f","%.2f","%.2f","%.2f","+","0.50","0","0","0","0","0"]`,
+		code, last, last+1, last-1, last)
+}
+
+// syncClient returns the shared TWSE client the tests stubbed through
+// stubSharedTWSEClient. runDailySync takes its fetcher as an argument so a test
+// can also inject a fake.
+func syncClient() dailySyncFetcher {
+	return marketdata.GetSharedTWSEClient()
+}
+
 // syncStatusOf reads the derived channel-health record the sync recorded.
 func syncStatusOf(t *testing.T, csvPath string) *monitoring.ChannelHealthRecord {
 	t.Helper()
@@ -397,7 +443,7 @@ func TestRunDailySync_FailedFetchKeepsCSVAndRecordsNonOk(t *testing.T) {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	err = runDailySync(csvPath, nil, at(t, tradingDayDate))
+	err = runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient())
 	if err == nil {
 		t.Fatal("runDailySync = nil error, want a failure for an upstream 502")
 	}
@@ -438,7 +484,7 @@ func TestRunDailySync_SuccessAfterFailureClearsWarn(t *testing.T) {
 	}))
 	defer bad.Close()
 	stubSharedTWSEClient(t, bad.URL, 1)
-	if err := runDailySync(csvPath, nil, at(t, tradingDayDate)); err == nil {
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient()); err == nil {
 		t.Fatal("first runDailySync = nil error, want the 503 failure")
 	}
 	if rec := syncStatusOf(t, csvPath); rec.Status != "warn" {
@@ -449,12 +495,12 @@ func TestRunDailySync_SuccessAfterFailureClearsWarn(t *testing.T) {
 	//    "何時會恢復" question from the incident report.
 	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(twseJSONResponse(twseRow2330)))
+		_, _ = w.Write([]byte(miIndexSyncResponse(t, tradingDayDate, miIndexSyncRow("2330"))))
 	}))
 	defer good.Close()
 	stubSharedTWSEClient(t, good.URL, 1)
 
-	if err := runDailySync(csvPath, nil, at(t, tradingDayDate)); err != nil {
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient()); err != nil {
 		t.Fatalf("second runDailySync = error %v, want success", err)
 	}
 
@@ -482,14 +528,14 @@ func TestRunDailySync_ZeroUsableRowsIsDegradedNotOk(t *testing.T) {
 	// silently gained no row for the day.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(twseJSONResponse(`["9999","不存在","100","100","10","11","9","10","+0.00","1"]`)))
+		_, _ = w.Write([]byte(miIndexSyncResponse(t, tradingDayDate, miIndexSyncRow("9999"))))
 	}))
 	defer srv.Close()
 	stubSharedTWSEClient(t, srv.URL, 1)
 	setLogOutput(t)
 
 	csvPath := writeFixtureCSV(t, []string{"2026-09-22"}, []string{"2330"})
-	err := runDailySync(csvPath, nil, at(t, tradingDayDate))
+	err := runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient())
 	if err == nil {
 		t.Fatal("runDailySync = nil error, want a failure when no target symbol was fetched")
 	}
@@ -549,7 +595,7 @@ func TestRunDailySync_SkipsClosedMarket(t *testing.T) {
 				t.Fatalf("read fixture: %v", err)
 			}
 
-			if err := runDailySync(csvPath, nil, at(t, closed)); err != nil {
+			if err := runDailySync(csvPath, nil, at(t, closed), syncClient()); err != nil {
 				t.Fatalf("runDailySync on closed market %s = %v, want nil (a closed market is not a failure)", closed, err)
 			}
 
@@ -570,5 +616,248 @@ func TestRunDailySync_SkipsClosedMarket(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "not a Taiwan trading day") {
 		t.Errorf("logs must state that the day was skipped, got: %s", logs.String())
+	}
+}
+
+// TestRunDailySync_WritesTheDataDateThePayloadDeclares pins the corrected
+// writer contract: the Date column comes from the response, never from the
+// clock. Before the fix the same run stamped the payload with time.Now() and
+// produced a row dated 2026-09-26 holding the 2026-09-24 close.
+func TestRunDailySync_WritesTheDataDateThePayloadDeclares(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(miIndexSyncResponse(t, tradingDayDate, miIndexSyncRow("2330"))))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-23"}, []string{"2330"})
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient()); err != nil {
+		t.Fatalf("runDailySync: %v", err)
+	}
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != 1 {
+		t.Errorf("rows for %s = %d, want 1 (the payload's own data date)", tradingDayDate, got)
+	}
+	rec := syncStatusOf(t, csvPath)
+	if rec.Status != "ok" || rec.LastSuccessAt == "" {
+		t.Errorf("channel record = status %q last_success_at %q, want ok with a timestamp", rec.Status, rec.LastSuccessAt)
+	}
+}
+
+// TestRunDailySync_RefusesPayloadForAnotherDate is the negative proof for the
+// response-date guard. A payload that describes 2026-09-17 while 2026-09-24 was
+// requested is exactly what an always-latest upstream answers with (the
+// pre-fix STOCK_DAY_ALL behavior) — storing it would date the 09-17 close as
+// 09-24 and push the replay calendar onto a day the exchange never traded.
+//
+// Removing the guard makes this test fail: the CSV then gains a 2026-09-24 row
+// carrying 09-17 prices and the channel records "ok".
+func TestRunDailySync_RefusesPayloadForAnotherDate(t *testing.T) {
+	const staleDate = "2026-09-17"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(miIndexSyncResponse(t, staleDate, miIndexSyncRow("2330"))))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-16"}, []string{"2330"})
+	before, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	err = runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient())
+	if err == nil {
+		t.Fatal("a payload for another date = nil error, want a refusal")
+	}
+	for _, want := range []string{staleDate, tradingDayDate, "refusing to write a mis-dated row"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q must mention %q", err.Error(), want)
+		}
+	}
+
+	after, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("re-read csv: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("replay CSV changed on a mis-dated payload:\nbefore=%s\nafter=%s", before, after)
+	}
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != 0 {
+		t.Errorf("rows written for %s = %d, want 0", tradingDayDate, got)
+	}
+	rec := syncStatusOf(t, csvPath)
+	if rec.Status == "ok" {
+		t.Error("status = ok although no data landed — a mis-dated payload must not look healthy")
+	}
+	if rec.LastSuccessAt != "" {
+		t.Errorf("last_success_at = %q, want empty (nothing landed)", rec.LastSuccessAt)
+	}
+}
+
+// TestRunDailySync_FiltersTheRealPayloadToTheReplayUniverse runs the sync
+// against a real 2026-09-24 MI_INDEX response trimmed to the 44 replay codes
+// (testdata/). It pins three things at once:
+//   - the `tables` envelope is parsed (the pre-fix flat fields/data parser read
+//     0 rows from this body),
+//   - column naming maps onto the CSV schema (Date,Code,Name,TradeVolume,
+//     Open,High,Low,Close),
+//   - the replay-symbol filter still drops everything else (the fixture holds
+//     44 codes; orchestrator.DefaultSymbols() is 41 here — the 3 CSV-only codes
+//     1216/2357/3231 must not be written).
+func TestRunDailySync_FiltersTheRealPayloadToTheReplayUniverse(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("testdata", "mi_index_20260924_replay44.json"))
+	if err != nil {
+		t.Fatalf("read testdata payload: %v", err)
+	}
+	var fixture struct {
+		Tables []struct {
+			Fields []string   `json:"fields"`
+			Data   [][]string `json:"data"`
+		} `json:"tables"`
+	}
+	if err := json.Unmarshal(body, &fixture); err != nil {
+		t.Fatalf("fixture is not valid JSON: %v", err)
+	}
+	var fixtureCodes []string
+	for _, tbl := range fixture.Tables {
+		for _, f := range tbl.Fields {
+			if f == "證券代號" {
+				for _, row := range tbl.Data {
+					fixtureCodes = append(fixtureCodes, row[0])
+				}
+			}
+		}
+	}
+	if len(fixtureCodes) != 44 {
+		t.Fatalf("fixture carries %d codes, want the 44 replay codes", len(fixtureCodes))
+	}
+	if !marketdata.IsTaiwanTradingDay(at(t, tradingDayDate)) {
+		t.Fatalf("%s must be a trading day for this fixture", tradingDayDate)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-23"}, []string{"2330"})
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate), syncClient()); err != nil {
+		t.Fatalf("runDailySync against the real payload: %v", err)
+	}
+
+	targets := orchestrator.DefaultSymbols()
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != len(targets) {
+		t.Errorf("rows for %s = %d, want %d (every replay symbol present in the 44-code payload)", tradingDayDate, got, len(targets))
+	}
+	written := make(map[string]bool)
+	records, err := loadCSV(csvPath)
+	if err != nil {
+		t.Fatalf("loadCSV: %v", err)
+	}
+	for _, r := range records {
+		if r.Date == tradingDayDate {
+			written[r.Code] = true
+		}
+	}
+	for _, sym := range targets {
+		code := stripSuffix(sym)
+		if !written[code] {
+			t.Errorf("replay symbol %s missing from the CSV although the payload contains it", code)
+		}
+	}
+	// Codes the payload has but the replay universe does not: dropped.
+	for _, code := range []string{"1216", "2357", "3231"} {
+		if written[code] {
+			t.Errorf("non-replay code %s was written (44-code payload must still be filtered)", code)
+		}
+	}
+	// Spot-check the mapping against the real payload (values are the ones the
+	// live 2026-09-24 response carried).
+	var got *csvRecord
+	for i := range records {
+		if records[i].Date == tradingDayDate && records[i].Code == "2330" {
+			got = &records[i]
+		}
+	}
+	if got == nil {
+		t.Fatal("2330 row not written")
+	}
+	if got.TradeVolume != 14557662 || got.Open != 2480 || got.High != 2490 || got.Low != 2470 || got.Close != 2475 {
+		t.Errorf("2330 row = %+v, want the live 2026-09-24 values (volume 14557662, O 2480, H 2490, L 2470, C 2475)", *got)
+	}
+}
+
+// TestRunDailySync_SyntheticWeekWritesOnlyTradingDays is the phantom-row
+// regression measurement, done entirely on fixtures (no production data is
+// touched). A fake upstream mirrors MI_INDEX's real behaviour — a payload whose
+// title date equals the requested date on trading days, the Chinese "no data"
+// stat on closed ones — and is replayed across 2026-09-21..09-27, the week that
+// contains the 09-25 中秋節 holiday and the 09-26/27 weekend production wrote
+// phantoms for.
+//
+// The assertion that matters for "no phantom rows any more" is the second one:
+// every written date satisfies marketdata.IsTaiwanTradingDay, which is the same
+// authority cmd/clean-replay-weekends classifies with (classifyDate:
+// weekend → holiday via IsTaiwanTradingDay → trading). A CSV in which no date
+// fails that predicate is one the repo's own cleaning tool removes 0 rows from.
+func TestRunDailySync_SyntheticWeekWritesOnlyTradingDays(t *testing.T) {
+	var mu sync.Mutex
+	requested := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		date := r.URL.Query().Get("date")
+		mu.Lock()
+		requested[date]++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		day, err := time.ParseInLocation("20060102", date, marketdata.TaiwanLocation())
+		if err != nil || !marketdata.IsTaiwanTradingDay(day) {
+			_, _ = w.Write([]byte(`{"stat":"很抱歉，沒有符合條件的資料!","type":"ALLBUT0999"}`))
+			return
+		}
+		_, _ = w.Write([]byte(miIndexSyncResponse(t, day.Format("2006-01-02"), miIndexSyncRow("2330"))))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-18"}, []string{"2330"})
+	var wrote []string
+	for day := 21; day <= 27; day++ {
+		date := fmt.Sprintf("2026-09-%02d", day)
+		if err := runDailySync(csvPath, nil, at(t, date), syncClient()); err != nil {
+			t.Fatalf("runDailySync(%s) = %v, want nil", date, err)
+		}
+		if countRowsForDate(t, csvPath, date) > 0 {
+			wrote = append(wrote, date)
+		}
+	}
+
+	want := []string{"2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"}
+	if !reflect.DeepEqual(wrote, want) {
+		t.Errorf("dates written = %v, want %v (09-25 中秋節 and the 09-26/27 weekend must not be written)", wrote, want)
+	}
+	for _, date := range wrote {
+		day, err := time.ParseInLocation("2006-01-02", date, marketdata.TaiwanLocation())
+		if err != nil || !marketdata.IsTaiwanTradingDay(day) {
+			t.Errorf("phantom row written for non-trading day %s", date)
+		}
+	}
+
+	// One token-bucket slot per trading day: closed days are refused before any
+	// HTTP call, so the upstream never sees them.
+	if len(requested) != len(want) {
+		t.Errorf("upstream request dates = %v, want exactly %v", requested, want)
+	}
+	for _, date := range []string{"20260925", "20260926", "20260927"} {
+		if n := requested[date]; n != 0 {
+			t.Errorf("upstream called %d time(s) on closed day %s, want 0", n, date)
+		}
 	}
 }

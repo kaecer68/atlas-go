@@ -29,6 +29,20 @@ type dailyQuoteFetcher interface {
 	GetDailyQuote(ctx context.Context, date, symbol string) (domain.Quote, error)
 }
 
+// dailySyncFetcher is the subset of marketdata.TWSEClient the daily sync needs.
+//
+// It is date-addressed on purpose: the whole phantom-row defect came from a
+// source (STOCK_DAY_ALL) that has no date parameter, so the writer had nothing
+// to stamp a row with except time.Now(). GetQuotesForDate returns the date the
+// PAYLOAD describes, which is what makes a mis-dated row detectable.
+//
+// FetchBudget stays on the interface so the caller-sized context deadline keeps
+// being derived from the real client's retry policy (2026-09-24 root cause).
+type dailySyncFetcher interface {
+	GetQuotesForDate(ctx context.Context, date string) (marketdata.DatedQuotes, error)
+	FetchBudget() time.Duration
+}
+
 // gapBackfillDefaultWindow is the default look-back window (calendar days)
 // for the post-sync gap backfill. Cron runs daily; 5 calendar days covers the
 // previous trading week, so a single-day API failure is retried within days.
@@ -113,15 +127,22 @@ func main() {
 
 	client := marketdata.GetSharedTWSEClient()
 
+	// One exchange-local clock for every date decision in this run: the CSV's
+	// date column IS the replay trading calendar, so a UTC date (the cron
+	// containers set no TZ) could shift it near midnight. The production cron
+	// slot (15:30 UTC = 23:30 Asia/Taipei) agrees in both zones; a manual run
+	// at another hour must not depend on that coincidence.
+	now := time.Now().In(marketdata.TaiwanLocation())
+
 	// Daily sync first (existing cron behavior). On failure we still run the
 	// gap backfill below — a failed today-fetch must not block recovery of
 	// older gaps — and report the sync failure via a non-zero exit afterwards.
 	var syncErr error
-	if err := runDailySync(*csvPath, pool, time.Now()); err != nil {
+	if err := runDailySync(*csvPath, pool, now, client); err != nil {
 		log.Printf("[DailySync] failed: %v (continuing with gap backfill)", err)
 		syncErr = err
 	}
-	if err := runGapBackfill(*csvPath, *backfillWindow, time.Now(), client); err != nil {
+	if err := runGapBackfill(*csvPath, *backfillWindow, now, client); err != nil {
 		log.Fatalf("gap backfill failed: %v", err)
 	}
 	if syncErr != nil {
@@ -129,7 +150,7 @@ func main() {
 	}
 }
 
-func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
+func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time, client dailySyncFetcher) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
 
 	// Exchange-local date. The production cron containers set no TZ env, so
@@ -164,7 +185,6 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 		return nil
 	}
 
-	client := marketdata.GetSharedTWSEClient()
 	// Size the deadline from the client's own retry policy (attempts ×
 	// per-attempt timeout + backoff + rate-limit slack). The previous
 	// hardcoded 60s was SHORTER than the 73s the policy needs, so on a slow
@@ -174,10 +194,11 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	log.Printf("[DailySync] Fetching %s quotes from TWSE OpenAPI... (context budget %s)", dateStr, budget.Round(time.Second))
+	log.Printf("[DailySync] Fetching %s quotes from TWSE MI_INDEX type=ALLBUT0999 (one request) ... (context budget %s)",
+		dateStr, budget.Round(time.Second))
 
 	started := time.Now()
-	quotes, err := client.GetQuotes(ctx)
+	res, err := client.GetQuotesForDate(ctx, target.Format("20060102"))
 	latencyMs := time.Since(started).Milliseconds()
 	if err != nil {
 		// Degrade, never fake success: this function is the only writer of
@@ -196,19 +217,38 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 		return wrapped
 	}
 
+	// Response-date guard. The date written to the CSV must be the trading day
+	// the payload describes, never the requested or the local date: a
+	// "latest-only" upstream (STOCK_DAY_ALL ignores any date) would otherwise
+	// label the previous session's prices with today's date, which is exactly
+	// the phantom-row defect. Refuse the payload instead of writing it.
+	//
+	// Precedent: marketdata/twse_sector_index_provider.go blocks the
+	// latest-only MI_INDEX openapi variant rather than storing fake dates, and
+	// internal/bot has the "apply latest due item to today's session would
+	// fabricate a fill" guard. Both exist because a plausible-looking wrong
+	// date is invisible downstream.
+	if res.DataDate != dateStr {
+		msg := fmt.Sprintf("twse MI_INDEX answered for %s while %s was requested; refusing to write a mis-dated row (replay CSV left unchanged)", res.DataDate, dateStr)
+		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "degraded", msg, pool, monitoring.WithLatencyMs(latencyMs))
+		return errors.New(msg)
+	}
+
 	targetSymbols := make(map[string]bool)
 	for _, s := range orchestrator.DefaultSymbols() {
 		targetSymbols[stripSuffix(s)] = true
 	}
 
 	var records []csvRecord
-	for _, q := range quotes {
+	for _, q := range res.Quotes {
 		code := stripSuffix(q.Symbol)
 		if !targetSymbols[code] {
 			continue
 		}
 		records = append(records, csvRecord{
-			Date:        dateStr,
+			// The payload's own date — guarded above to equal the requested
+			// exchange date. Never time.Now().
+			Date:        res.DataDate,
 			Code:        code,
 			Name:        stockNameMap[code],
 			TradeVolume: q.Volume,
@@ -227,8 +267,8 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 		// LastSuccessAt must not advance) and still fail the run so
 		// task_liveness surfaces it. Sustained breakage also alarms through
 		// the channel's staleness overage.
-		msg := fmt.Sprintf("twse STOCK_DAY_ALL returned %d quotes but none matched the %d replay symbols; replay CSV left unchanged; %s remains a gap",
-			len(quotes), len(targetSymbols), dateStr)
+		msg := fmt.Sprintf("twse MI_INDEX %s returned %d quotes but none matched the %d replay symbols; replay CSV left unchanged; %s remains a gap",
+			res.DataDate, len(res.Quotes), len(targetSymbols), dateStr)
 		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "degraded", msg, pool, monitoring.WithLatencyMs(latencyMs))
 		return errors.New(msg)
 	}
@@ -238,7 +278,7 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 		return err
 	}
 	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "ok", "", pool, monitoring.WithLatencyMs(latencyMs))
-	log.Printf("[DailySync] Appended %d records for %s (fetch %dms)", len(records), dateStr, latencyMs)
+	log.Printf("[DailySync] Appended %d records for %s (data date %s, fetch %dms)", len(records), dateStr, res.DataDate, latencyMs)
 	return nil
 }
 
@@ -261,6 +301,15 @@ func runBackfill(csvPath, startStr, endStr string) error {
 
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		dateStr := d.Format("2006-01-02")
+		if !marketdata.IsTaiwanTradingDay(d) {
+			// Same reasoning as runDailySync: the CSV's date column IS the
+			// replay trading calendar. auto_backfill only rolls its range ends
+			// off weekends, so a holiday inside the range lands here — and the
+			// upstream has no rows for it anyway, so the only thing 44 symbol
+			// requests would buy is a slower no-op.
+			log.Printf("[Backfill] skip %s: not a Taiwan trading day", dateStr)
+			continue
+		}
 		apiDateStr := d.Format("20060102") // TWSE API expects YYYYMMDD format
 		log.Printf("[Backfill] Processing %s...", dateStr)
 
