@@ -75,14 +75,32 @@ if [ "$QUICK" = false ]; then
   run_check "go test" go test ./...
 
   # Coverage (exclude cmd/atlas — heavy integration)
+  # 空值/非數字必須明確 FAIL（不依賴 awk 對空字串的比較語意）— issue #2009
   run_check "coverage threshold (>=60%)" bash -c '
+    set -e
     go test -coverprofile=coverage.out $(go list ./... | grep -v "/cmd/atlas$")
-    COVERAGE=$(go tool cover -func=coverage.out | grep total | awk "{print \$3}" | tr -d "\r" | sed "s/%//")
-    echo "Total coverage: $COVERAGE%"
-    if echo "$COVERAGE 60" | awk "{exit !(\$1 < \$2)}"; then
+    if [ ! -s coverage.out ]; then
+      echo "❌ 取不到覆蓋率：coverprofile 缺失或為空（coverage.out）— 測試失敗或未產生覆蓋率"
+      exit 1
+    fi
+    if ! go tool cover -func=coverage.out > /tmp/atlas-local-ci-coverage-func.log 2>&1; then
+      echo "❌ 取不到覆蓋率：go tool cover 解析失敗 — log: /tmp/atlas-local-ci-coverage-func.log"
+      tail -n 20 /tmp/atlas-local-ci-coverage-func.log
+      exit 1
+    fi
+    COVERAGE=$(awk "/^total:/ {print \$3}" /tmp/atlas-local-ci-coverage-func.log | tr -d "\r" | sed "s/%//")
+    echo "Total coverage: ${COVERAGE}%"
+    case "${COVERAGE}" in
+      ""|*[!0-9.]*)
+        echo "❌ 取不到覆蓋率：COVERAGE 非數字（${COVERAGE}）"
+        exit 1
+        ;;
+    esac
+    if awk -v c="${COVERAGE}" "BEGIN{exit !(c+0 < 60)}"; then
       echo "Coverage is below 60% threshold"
       exit 1
     fi
+    rm -f /tmp/atlas-local-ci-coverage-func.log
   '
 fi
 
