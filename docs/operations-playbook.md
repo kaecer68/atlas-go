@@ -452,7 +452,7 @@ Governance and operations verifiers are enforced in CI as dedicated jobs in `.gi
 - job: `governance`
 - job: `operations`
 
-For branch protection, require both status checks `ci / governance` and `ci / operations` so promote/reject/revert logic, replay determinism, M5 scenario verification, and M8 operations drills cannot regress silently.
+For branch protection, keep the required status checks that cover this logic (the workflow job names are `governance` and `operations`; the older `ci / governance` and `ci / operations` strings are NOT valid check names and would never report). `setup_branch_protection.sh` derives the required list from the live protection config instead of a hardcoded list, so the governance and operations jobs cannot silently drop out and promote/reject/revert logic, replay determinism, M5 scenario verification, and M8 operations drills cannot regress silently.
 
 ### Branch Protection Setup (GitHub)
 
@@ -468,11 +468,14 @@ Preferred path (automation + guided approval):
 
 The setup script includes anti-misconfiguration checks:
 
-- always starts in dry-run mode
+- always starts in dry-run mode (no PATCH/PUT is sent without `--apply`)
+- derives the required status checks from the live protection config (no hardcoded list)
 - shows current protection config before proposing changes
 - explains option-level trade-offs and risk consequences
+- refuses a plan that removes an existing required check or weakens a setting (exit 20) unless `--allow-downgrade` is given
+- refuses required check names no workflow job / check run reports (exit 21) unless `--allow-unknown-checks` is given
 - requires explicit final confirmation before apply
-- creates a pre-apply snapshot under `data/state/branch-protection-snapshots/`
+- creates a pre-apply snapshot under `data/state/branch-protection-snapshots/` before the write call
 
 Optional snapshot location override:
 
@@ -496,15 +499,15 @@ Restore mode anti-misconfiguration checks:
 - snapshot target must match current repository and branch
 - snapshot must contain a valid `protection` object
 - restore mode still requires explicit human confirmation before apply
+- restore mode goes through the same downgrade guard: a snapshot that drops an existing required check is refused (exit 20) unless `--allow-downgrade` is given
 
 Recommended repository setting path:
 
 1. GitHub repository -> Settings -> Branches
 2. Add or edit branch protection rule for `main`
 3. Enable `Require status checks to pass before merging`
-4. Select required checks:
-   - `ci / governance`
-   - `ci / operations`
+4. Select required checks (or let `setup_branch_protection.sh` keep the live list;
+   the workflow job names are `governance` and `operations`)
 5. Optional but recommended:
    - Enable `Require branches to be up to date before merging`
    - Enable `Require conversation resolution before merging`
@@ -512,8 +515,8 @@ Recommended repository setting path:
 
 Quick verification checklist after saving:
 
-- PR Checks tab shows both `ci / governance` and `ci / operations`
-- Merge button stays blocked until both checks pass
+- PR Checks tab shows the `governance` and `operations` checks (and any other required context)
+- Merge button stays blocked until every required check passes
 - Failed operations or governance jobs block merge as expected
 
 The CI governance job runs strict mode by default:
