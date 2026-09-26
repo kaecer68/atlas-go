@@ -9,8 +9,10 @@ go build ./... && go test ./...
 # Format check (must pass)
 test -z "$(gofmt -l .)"
 
-# Pre-commit hooks
-cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Git hooks (installs commit-msg / pre-commit / pre-push; sets core.hooksPath=.githooks)
+bash scripts/install-hooks.sh
+# NOTE: scripts/hooks/pre-commit is a DEPRECATED no-op stub (exit 0) — do not copy it
+# into .git/hooks/; it makes it look like hooks are installed when they are not.
 ```
 
 > **新 worktree 第一次建置**（`git worktree add ...`）：先跑 **`make embed-dirs`**。
