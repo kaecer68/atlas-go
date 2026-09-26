@@ -140,7 +140,7 @@
 | `docs/specs/symbol-industry-substrate-spec.md` | per-stock 產業欄位基質（`symbol_industry` channel、DB 欄位、gate 與消費端、覆蓋率；#1943） | ✅ |
 | `docs/specs/channel-health-status-single-truth-spec.md` | channel 健康狀態單一真相（唯一判定函式、狀態語彙、DB mirror 語意、空 payload 規則） | ✅ |
 | `docs/specs/universe-quote-reliability-spec.md` | Universe 報價鏈可靠性（殘量 fallback、逐檔 arm 護欄與實測參數、no_data/not_covered 與 fetch_error 的信任閘門、全市場覆蓋層與 TPEx 表；#1986） | ✅ |
-| `docs/specs/branch-revert-guard-spec.md` | 落後分支語意回退靜態檢查（判定規則、severity 分級、allowlist、誠實邊界；#1993）| ✅ |
+| `docs/specs/branch-revert-guard-spec.md` | 合併結果驗證 + diff 衛生閘門（evil merge＝FAIL、落後假刪除＝WARN；`merge-tree` 判定、allowlist、誠實邊界；#1993）| ✅ |
 | `docs/jev/JEV-USAGE-CONTRACT.md` | Jev（TypeSafe System One）在本生態的使用契約（傳輸層 / 判斷設計 / 門檻校準 / 評估紀律 / fail-open） | ✅ |
 | `docs/jev/JEV-EVAL-FRAMEWORK.md` | Jev 預測力評估框架契約（task spec 介面、PIT 分離、指標定義、門檻與分級紀律、洩漏探針、擴充介面；#1968） | ✅ |
 | `docs/jev/JEV-EVAL-STAGE1-INDUSTRY-L1.md` | Stage 1 E0 實測：canonical L1 產業層（GT 口徑、窗口與排除理由、分級結論、成本、Stage 2/3 需求；#1968） | ✅ |

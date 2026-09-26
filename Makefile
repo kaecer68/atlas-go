@@ -509,12 +509,15 @@ inert-check-update:
 	@python3 scripts/ci/check_inert_closure.py --root . --update-baseline
 	@echo "   → 請編輯 scripts/ci/inert-baseline.json 填寫 reason（TODO 開頭會讓檢查變紅）"
 
-# ---- 落後分支語意回退檢查（#1993，2026-09-26）----
-# 目的：PR 分支落後 main 時，GitHub 的 MERGEABLE 只保證「能自動合併」，但 diff 會把 main 上
-#       其他 PR 最近的改動顯示成「刪除」⇒ 照現狀合併就是回退他人已合併的修正
-#       （本 session 實證 #1974/#1979/#1990/#1991/#1994，全靠人工比對才發現）。
+# ---- 合併結果驗證 + diff 衛生閘門（#1993，2026-09-26）----
+# FAIL（evil merge）：用 `git merge-tree --write-tree` 算「併進 main 之後長怎樣」，若會改掉 main
+#       上「本 PR 沒以普通 commit 引進」的內容 ⇒ 那是真的回退（唯一現實成因：落後分支在本地
+#       解衝突時解錯）。修法：gh pr update-branch（遇衝突會拒絕）。
+# WARN（diff 衛生）：分支落後 main 時 diff 會把別人已合併的改動顯示成刪除。⚠️ 那不是回退
+#       （merge／squash／rebase 都走三方合併、保留 main 的版本），但會誤導 review／agent
+#       （本 session 實證 #1974/#1979/#1990/#1991/#1994）。這一相不擋 CI；--strict 給本機用。
 #       規格：docs/specs/branch-revert-guard-spec.md
-#       allowlist：scripts/ci/revert-guard-allowlist.json（每項 reason 必填）
+#       allowlist：scripts/ci/revert-guard-allowlist.json（每項 reason 必填；只豁免 WARN 相）
 #   make revert-guard           自我測試 + 檢查（base=origin/main, head=HEAD）
 #   make revert-guard-selftest  只跑 hermetic 回歸測試（真 git fixture，不連網、不碰 production）
 .PHONY: revert-guard revert-guard-selftest
@@ -524,7 +527,7 @@ revert-guard-selftest:
 	@bash tests/scripts/test-revert-guard.sh
 
 revert-guard: revert-guard-selftest
-	@echo "  → 落後分支語意回退檢查（#1993）"
+	@echo "  → 合併結果驗證 + diff 衛生檢查（#1993）"
 	@bash scripts/ci/check_revert_guard.sh
 
 ci-slow:
