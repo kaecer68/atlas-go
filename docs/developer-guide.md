@@ -13,6 +13,14 @@ test -z "$(gofmt -l .)"
 cp scripts/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
+> **新 worktree 第一次建置**（`git worktree add ...`）：先跑 **`make embed-dirs`**。
+> `admin_web/embed.go` 與 `client_web/embed.go` 用 `//go:embed all:dist`，而新鮮 worktree 內
+> `admin_web/dist`、`client_web/dist` 不存在 ⇒ `go build ./...`（連帶 `go vet` / `go generate` /
+> `go test`）會以 `pattern all:dist: no matching files found` 失敗。
+> 該目標**冪等**、只在目錄不存在時建立 gitignored 佔位（`.keep`），且 `make ci-gate` 與
+> `make test-backend` 已自動帶上它；在 `CI` 環境（`CI` 非空）為 **no-op** —— CI 的真 `dist/`
+> 來自 frontend 建置步驟，缺了仍然會紅（不遮蔽真失敗）。
+
 ## Binary Freshness 檢查（make check-binaries）
 
 Binary freshness 將「宣稱完成」與「正在執行的 binary 是否來自目前 `HEAD`」綁在一起。修改 Go binary 來源、frontend build、Dockerfile/build args、image tag，或重建 host binary 後，應在 push、promotion 與 release 前執行；純文件修改不需要執行。
