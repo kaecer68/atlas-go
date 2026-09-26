@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job 正本（Repo 版）↔ Mac Mini ~/Library/LaunchAgents/（安裝版）。
+  2026-09-26：路徑由 iMac 時代的 /Users/kk 改為 Mac Mini 的 /Users/kaecer，
+  與 Mac Mini 實際安裝的那一份逐欄比對一致（ssh kmacmini cat ... 實查）。
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -7,16 +12,16 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/kk/bin/atlas-container-watchdog.sh</string>
+        <string>/Users/kaecer/bin/atlas-container-watchdog.sh</string>
     </array>
     <key>StartInterval</key>
     <integer>60</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/kk/Library/Logs/atlas-watchdog.out.log</string>
+    <string>/Users/kaecer/Library/Logs/atlas-watchdog.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/kk/Library/Logs/atlas-watchdog.err.log</string>
+    <string>/Users/kaecer/Library/Logs/atlas-watchdog.err.log</string>
     <key>ProcessType</key>
     <string>Background</string>
 </dict>

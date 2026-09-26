@@ -48,7 +48,8 @@ services:
       # ATLAS_SKIP_DOCKER=1: 關閉 atlas-go binary 的「password repair」自癒邏輯
       # (會嘗試 docker CLI 改 DB 密碼,在 prod 危險)。2026-08-26 PR #1695 事件中
       # log 顯示 "attempted password repair; docker CLI not found" 是這條路徑
-      # 的 prod 不安全訊號。詳見 .claude/skills/atlas-imac-prod-guard/。
+      # 的 prod 不安全訊號。詳見 .claude/skills/atlas-imac-prod-guard/SKILL.md
+      # （該 skill 已標 RETIRED，只留事件歷史說明；現行主機 = Mac Mini，見 docs/operations/local-deploy.md）。
       - ATLAS_SKIP_DOCKER=1
       - DATABASE_URL=postgres://atlas:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in the shell env or the repo-root .env (gitignored); never hardcode it here}@host.docker.internal:55432/atlas?sslmode=disable
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:6379/8
@@ -99,7 +100,8 @@ services:
   # 注意:此 service 補上原本 prod compose 缺的 postgres 管理入口,讓 prod DB
   # 不再依賴手動 docker run。掛的 volume 名稱必須維持 atlas-postgres-data (無底線,
   # 對應原本手動建的 prod volume;底線版 atlas_postgres-data 是 dev 用,87MB,
-  # 不要混用)。port 55432:5432 對齊 iMac-RUNBOOK.md 文件化值。
+  # 不要混用)。port 55432:5432 對齊 docs/operations/local-deploy.md §Mac Mini production 部署
+  # （host port 契約；2026-09-23 起 production = Mac Mini，iMac-RUNBOOK.md 已退役）。
   postgres:
     image: timescale/timescaledb:2.26.4-pg15
     container_name: atlas-postgres

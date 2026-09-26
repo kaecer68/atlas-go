@@ -632,7 +632,8 @@ jobs:
       with:
         go-version-file: go.mod
     # Dockerfile.atlas.local COPYs these 4 host-built binaries from .build-atlas/.
-    # CI runners are linux/amd64 (unlike the iMac arm64 `make rebuild-atlas-bins`),
+    # CI runners are linux/amd64 (unlike the arm64 production host's `make rebuild-atlas-bins`;
+    # production = Mac Mini, 2026-09-22 起取代 iMac),
     # so build with GOARCH=amd64 here.
     - name: Build atlas binaries for Dockerfile.atlas.local (linux/amd64)
       env:
@@ -718,7 +719,8 @@ jobs:
       with:
         go-version-file: go.mod
     # Dockerfile.atlas.local COPYs these 4 host-built binaries from .build-atlas/.
-    # CI runners are linux/amd64 (unlike the iMac arm64 `make rebuild-atlas-bins`),
+    # CI runners are linux/amd64 (unlike the arm64 production host's `make rebuild-atlas-bins`;
+    # production = Mac Mini, 2026-09-22 起取代 iMac),
     # so build with GOARCH=amd64 here.
     - name: Build atlas binaries for Dockerfile.atlas.local (linux/amd64)
       env:
