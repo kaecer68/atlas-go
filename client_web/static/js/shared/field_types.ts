@@ -3218,6 +3218,9 @@ export interface QuotaSnapshot {
 export interface QuotaState {
   calls_today: number;
   last_reset: string;
+  upstream_exhausted?: boolean;
+  upstream_reason?: string;
+  upstream_at?: string;
 }
 
 export interface Quote {

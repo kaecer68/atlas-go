@@ -60,9 +60,17 @@ type capitalDeps struct {
 // before the sbl/tdcc history backfill may consume calls. The backfill
 // competes with the live channels (auto_twse_sbl / auto_tdcc_dispersion /
 // finmind) for the shared FinMindClient's DailyQuotaTracker — on 2026-09-04
-// the backfill burned the full 14,400-call daily quota and the live fetches
-// failed with ErrQuotaExhausted all day. The reserve keeps enough budget for
-// the scheduled live fetches regardless of backfill progress.
+// the backfill burned the full daily quota and the live fetches failed with
+// ErrQuotaExhausted all day. The reserve keeps enough budget for the
+// scheduled live fetches regardless of backfill progress.
+//
+// The reserve is a slice of the LOCAL ceiling (marketdata.FinMindDailyLimit,
+// 12,000 since fix/finmind-quota-honor-402-r) and it is checked against
+// QuotaRemaining(), which reports 0 for the rest of the day once FinMind has
+// answered 402 — so an upstream refusal defers this backfill immediately,
+// restarts included. Never raise the ceiling to make the reserve "fit": the
+// ceiling is set below the ~12,500 point where the upstream actually refuses
+// (2026-09-26 evidence), and the reserve must stay under it.
 const finmindBackfillQuotaReserve = 500
 
 // backfillQuotaAllowed reports whether the history backfill may run given

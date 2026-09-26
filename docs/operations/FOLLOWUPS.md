@@ -388,6 +388,30 @@
 - **驗收條件**：用「故意放一組過期值」的 fixture 驗證：工具必須**失敗或明確警告**，
   不得靜默帶著錯值繼續（同族：FU-20260925-01 的「回報有東西，而不是東西對不對」）。
 
+### FU-20260926-01 — FinMind 402 latch 的三個殘留面（跨行程可見性／上游真實上限未知／探針語意）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：`fix/finmind-quota-honor-402-r`（FinMind 402 ⇒ 當日額度 latch 持久化 + ceiling 14400→12000
+  + upstream body 去機密）。生產事實：2026-09-26 02:10Z `auto_quote_backfill`（824 檔）跑到
+  `calls_today≈12500` 時上游回 402 `Requests reach the upper limit`（且該 body 回帶 `token_tail`）。
+- **殘留 1（跨行程可見性）**：latch 寫在 `data/state/finmind_daily_quota.json`，但**只在 client 建構時讀取**
+  ——同一台機器上**已存在**的其他行程（例如另一顆 cron 容器、或長命 process 內另一份 client）
+  不會立即看到別人的 latch，要等它自己撞一次 402 才會跟上。成本有界（每個行程浪費 1 次呼叫），
+  但「一次 402 就全平台停手」的性質只在單一共享 process/state dir 下成立。
+  **硬化方向**：latch 寫入後以短 TTL（例如 30s）重讀 state file，或把 latch 暴露成共享訊號
+  （檔案 mtime / metric），讓多行程在一個週期內收斂。
+- **殘留 2（上游真實上限未知）**：12,500 是**觀測到的拒絕點**，不是 FinMind 公布的上限；
+  12000 這個 ceiling 是人工留 500 餘裕的估計值。目前以 `FINMIND_DAILY_LIMIT` 覆寫 +
+  `finmindObservedUpstreamRefusalLimit` 常數 + 測試（`TestFinMindQuotaCeiling_StaysBelowObservedUpstreamRefusal`）
+  把「不得超過觀測拒絕點」寫死，但**沒有自動校準**。
+  **硬化方向**：連續多日記錄「首次 402 時的 calls_today」並回報，作為下一次調整 ceiling 的證據。
+- **殘留 3（探針語意）**：latch 期間 `QuotaRemaining()==0`，`channel_health_finmind` 因此仍以
+  一般 quota 訊息呈現；「本地自己停手」與「上游已宣告今日結束」目前只靠錯誤字串
+  （`upstream-exhausted … reason=…`）區分。
+  **硬化方向**：把 latch 狀態（bool + observed_at）納入 channel-health 記錄/指標，
+  讓儀表板不必解析錯誤字串。
+
 ---
 
 ---

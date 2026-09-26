@@ -873,7 +873,8 @@ func run(args []string, deps appDeps) error {
 		// Monthly revenue endpoint (stock_get_monthly_revenue MCP tool) —
 		// reuse the same TSMCRevenueProvider used by the tsmc_revenue
 		// macro channel (register_adapters.go:163) so both share the
-		// FinMind singleton client + 14400/day QuotaRegistry tracker.
+		// FinMind singleton client + the daily QuotaRegistry tracker
+		// (marketdata.FinMindDailyLimit, 12000 since fix/finmind-quota-honor-402-r).
 		// Without this wiring the endpoint 503s in production.
 		if cfg.FinMindAPIKey != "" {
 			stockDeps.Revenue = marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"))

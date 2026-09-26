@@ -930,7 +930,8 @@ func TestFinMindClient_fetchDataset_Non2xx_CapturesBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewFinMindClient("stale-key")
+	const staleKey = "stale-key-abc123"
+	c := NewFinMindClientWithStateDir(staleKey, t.TempDir())
 	c.httpClient = &http.Client{
 		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
 	}
@@ -942,8 +943,16 @@ func TestFinMindClient_fetchDataset_Non2xx_CapturesBody(t *testing.T) {
 	if !strings.Contains(err.Error(), "Token is illegal") {
 		t.Errorf("error %q must contain the real FinMind reason 'Token is illegal' so operators can diagnose without re-reading logs", err.Error())
 	}
-	if !strings.Contains(err.Error(), "stale-key") {
-		t.Errorf("error %q must include the token_tail hint so we can see WHICH env key is broken", err.Error())
+	// SECURITY (2026-09-26): this assertion used to REQUIRE the token
+	// fragment in the error ("must include the token_tail hint so we can see
+	// WHICH env key is broken"). That hint is a slice of the live API key —
+	// it ended up in channel-health records and logs. The error must now
+	// carry the operator-actionable reason and NOTHING credential-shaped.
+	if strings.Contains(err.Error(), "token_tail") {
+		t.Errorf("error %q must not contain the token_tail field", err.Error())
+	}
+	if strings.Contains(err.Error(), "...stale-key") || strings.Contains(err.Error(), staleKey) {
+		t.Errorf("error %q leaks a token fragment", err.Error())
 	}
 }
 
@@ -1015,7 +1024,10 @@ func TestFinMindClient_fetchDataset_402_WrapsErrQuotaExhausted(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewFinMindClient("k")
+	// Isolated state dir: the 402 latches the quota day (persisted), and this
+	// test must not poison the shared data/state file for the rest of the
+	// package (see TestFinMindClient_Upstream402_LatchesQuotaForRestOfDay).
+	c := NewFinMindClientWithStateDir("k", t.TempDir())
 	c.httpClient = &http.Client{
 		Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport},
 	}

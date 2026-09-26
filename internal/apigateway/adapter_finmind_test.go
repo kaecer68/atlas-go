@@ -178,7 +178,11 @@ func TestFinMindChannelAdapter_HealthCheck_Server402_MapsToWarn(t *testing.T) {
 
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
+	// Isolated state dir: the 402 latches the quota day and PERSISTS it
+	// (fix/finmind-quota-honor-402-r). Sharing data/state with the rest of
+	// the package would make every later FinMind test short-circuit for the
+	// remainder of the quota day.
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
 	adapter := NewFinMindChannelAdapter(client)

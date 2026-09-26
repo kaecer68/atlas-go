@@ -523,8 +523,10 @@ func (h *Handler) HandleVolumeDivergence(r *http.Request) (int, any) {
 // A single FetchSnapshotForSymbol call may issue up to 3 FinMind requests
 // (current month + same month prior year + same month prior month for
 // MoM), so the handler fails-soft at 3 to avoid returning a partial
-// response mid-quota. Tuned against finmindDailyLimit=14400 in
-// internal/marketdata/finmind_client.go:41.
+// response mid-quota. Tuned against the daily ceiling in
+// internal/marketdata/finmind_client.go (12000 since
+// fix/finmind-quota-honor-402-r, i.e. below the ~12500 point where FinMind
+// actually refuses the day).
 const monthlyRevenueMinQuota = 3
 
 // HandleMonthlyRevenue returns the most recent published monthly revenue
@@ -542,7 +544,7 @@ const monthlyRevenueMinQuota = 3
 // budget is below monthlyRevenueMinQuota remaining. This is fail-soft
 // to prevent the handler from issuing up to 3 calls and partially
 // exhausting the budget (causing later requests to fail with the
-// generic 14400/day exhausted error).
+// generic daily-quota-exhausted error).
 func (h *Handler) HandleMonthlyRevenue(r *http.Request) (int, any) {
 	if h.deps.Revenue == nil {
 		return http.StatusServiceUnavailable, map[string]string{

@@ -348,7 +348,7 @@ tests:
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
-              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
+              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 12000)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
                  result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
@@ -490,7 +490,7 @@ tests:
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
-              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
+              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 12000)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
                  result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
@@ -683,7 +683,7 @@ tests:
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
-              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
+              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 12000)
                  與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
               4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
                  result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
