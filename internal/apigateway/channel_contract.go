@@ -534,6 +534,29 @@ func buildChannelContractRegistry() *ChannelContractRegistry {
 	live("twse_capital_flow", []string{"TWSE", "FinMind"}, 24*time.Hour)
 	live("fugle", []string{"Fugle"}, time.Hour)
 	live("fubon", []string{"Fubon"}, time.Hour)
+	// finmind (issue #1999): the channel probe asks for the most recent Taiwan
+	// TRADING day (adapter: finmindProbeDate → taiwanholidays.PreviousTradingDay),
+	// never "yesterday minus weekend", so a 休市日 / 週末 / 盤前 probe can no
+	// longer fail for "no price data for a closed session" — it asks for a
+	// session that has already been published.
+	//
+	// No-data semantics for this channel are therefore NOT #1953's "non-trading
+	// day ⇒ ok" (which twse_margin / twse_capital_flow use for a day the
+	// calendar already explains): since the probe date is a trading day, an
+	// empty answer is never calendar-explained. The adapter re-classifies
+	// FinMind's per-symbol "no row" answer (marketdata.ErrNoDataForSymbol) as
+	// marketdata.ErrEmptyQuote → Gateway.Fetch records WARN (reason visible,
+	// no page: the ChannelHealthStatusError rules match status == 2 only),
+	// consecutive_failures does not grow, last_success_at does not move, and
+	// the breaker is a no-op. A DAILY channel whose upstream prints every
+	// business day must not read "ok" while it is dark (marketdata/errors.go).
+	//
+	// Sustained unexplained no-data is caught by the channel's own 1h probe
+	// task (channel_health_finmind → background-task alert after 3 consecutive
+	// failures), NOT by the freshness window: this channel never sets
+	// last_data_at, and DeriveChannelStatus anchors on LastFetchAt, so
+	// atlas_channel_staleness_overage_seconds stays 0 for finmind.
+	// Only real faults (transport, 4xx/5xx, schema change) escalate to "error".
 	live("finmind", []string{"FinMind"}, 24*time.Hour)
 	live("frankfurter_fx", []string{"Frankfurter"}, 24*time.Hour)
 	live("geopolitical", []string{"GDELT", "RSS"}, 6*time.Hour)
