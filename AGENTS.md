@@ -15,7 +15,7 @@
 - **CI 強制**：`gofmt` / `go vet` / `staticcheck` / `golangci-lint` / `gosec`
 - **覆蓋率門檻**：60%
 - **啟動入口**：[`docs/quickstart.md`](docs/quickstart.md)
-- **雙機治理**：production 在 iMac（`atlas.goluck.uk`）、開發在 MacBook；跨設備規則見 `~/workspace/a2a-dev/docs/governance/雙機治理憲章.md` 與 `~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`；部署到 iMac 前必讀 `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md`
+- **雙機治理**：production 在 **Mac Mini**（`ssh kmacmini`；對外 `atlas.goluck.uk`）、開發在 MacBook；跨設備規則見 `~/workspace/a2a-dev/docs/governance/雙機治理憲章.md` 與 `~/workspace/a2a-dev/docs/operations/MACMINI-RECOVER.md`；部署前必讀 `~/workspace/a2a-dev/docs/deployment/MACMINI-DEPLOY-RUNBOOK.md`（iMac 已 2026-09-22 退役，`IMAC-*` 文件僅存歷史）
 
 ## 內容歸屬與防膨脹規則
 
