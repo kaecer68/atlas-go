@@ -262,6 +262,12 @@
   ⇒ 告警在「只有 CLI 路徑成功」的世界裡**會持續 firing 且是對的**（指標面確實 6 天沒有增量），
   但**快照是綠的** —— 判讀時必須分開看兩邊，不要用快照推翻指標。
   #1995 只讓 `atlas_universe_*` 的 family 一定存在（`WarmUp()`），不改變本條。
+- **2026-09-26（本輪缺陷收斂批次複查；結論不變：仍 `open`）**：以 worktree HEAD `81e4fe62` 實測 ——
+  CLI 路徑 `cmd/atlas/cmd_universe.go`（全檔 258 行）**0 命中** `NewUniverseMetrics` / `SetOnInc` / `UniverseMetrics`；
+  唯一的服務端接線仍在 `cmd/atlas/main.go:2007-2017`（`metrics.NewUniverseMetrics()` →
+  `um.SetOnInc(monitoring.CollectorOnInc(collector))` → `um.WarmUp()`）。
+  ⇒ CLI 跑成功時，`atlas_universe_*` 中帶 `result="passed"` 的 series
+  （`internal/monitoring/metrics/universe.go:93`、`:96`）**不會前進**：手動驗證與告警觀測仍分屬兩個世界。
 - **與 FU-20260925-08 的順序關係**：若要「統一寫入持久化 collector」來消除斷鏈，
   **仍須先修 counter 灌爆**（同 FU-20260925-08 的前置條件），否則 replay 會把 CLI 那一次的累積值
   也算進去。
@@ -814,6 +820,169 @@
 - **驗收條件（本條整體）**：生產上 `atlas_calibration_freshness_*` 有值、三條規則已載入、
   且「資料不新鮮」在無人記得跑 CLI 的情況下也會被看見。
 
+### FU-20260926-13 — `empty_universe`（Step 1 就 0 檔）在 Prometheus 面**完全沒有訊號**：整條 pipeline 不動任何 counter
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **A2**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（該檔隨 #2026 併入 main，故刻意不加反引號以免 markdown-links 誤判）。
+  本票在該 manifest §2/§3 **未列**（最接近的 §3 E11 是「`symbols_excluded` 無排除原因細分」，主題不同）
+  ⇒ 本票為**新增登記**，請 root 決定是否補進 manifest §3。
+- **事實（實測行號，2026-09-26，worktree HEAD `81e4fe62`）**：
+  - 原因常數存在：`internal/monitoring/universe_scheduler.go:89-90`（`RankedFallbackEmptyUniverse = "empty_universe"`）。
+  - **early-return 發生在計數之前**：`internal/monitoring/universe_scheduler.go:751-754`
+    （`if result.SymbolsBuilt == 0 { markRankedUntrustworthy(result, RankedFallbackEmptyUniverse); return result, nil, nil }`），
+    而 `gatheredCounter.Add(...)` 在 `:758-760` ⇒ 這條路徑**真的不動任何 counter**。
+  - 同檔 `:750` 有 `result.QuotesStatus = QuotesStatusNotAttempted`，是目前**唯一**的機器可讀標記，
+    但它只寫進 snapshot（`data/state/universe_snapshot.json`），**未曝露成指標**。
+  - 規則檔自述此缺口：`monitoring/rules/atlas_universe_scoring_alerts.yml:207-210`
+    （「`gatheredCounter.Add` 在 `if SymbolsBuilt == 0 { return }` **之後** ⇒ 整個 pipeline 不動任何 counter」），
+    並在 `:233` 再述「全部規則（新舊）都不覆蓋 `empty_universe`：需要 Go 端新增心跳指標」。
+  - 這個缺口是**刻意且有測試釘住**的：`monitoring/tests/atlas_universe_scoring_gaps_test.yml:436`
+    （負向對照 3：WarmUp 建立的整族都在、都零增量 ⇒ 六條都不 firing）。
+- **為何先開票、不實作**：修法要**同時動三處**且屬跨檔功能新增 ——
+  ① 指標面（`internal/monitoring/metrics/universe.go` 的 series 清單 `:85-100` ＋ `WarmUp()` `:137`）；
+  ② alert rule（`monitoring/rules/atlas_universe_scoring_alerts.yml`）；
+  ③ promtool 測試（`monitoring/tests/atlas_universe_scoring_gaps_test.yml` 的負向對照 3 必須改寫）。
+  它也會碰到與 #1995 同一族的指標契約 ⇒ 不是本輪的 bounded 修正，先登記。
+- **驗收條件**：生產上「Step 1 就 0 檔」當日必須有一條**真陽性**告警（或至少一個會前進的 series）；
+  **負對照**：`SymbolsBuilt > 0` 的正常執行不得觸發；且「整條 pipeline 沒跑」（同族缺口 (b)）
+  不得被本票的規則誤報成 `empty_universe`（兩者需要相反的 triage）。
+
+---
+
+### FU-20260926-14 — Telegram bot token（實際名稱 `TELEGRAM_BOT_TOKEN`）無 hot-reload：輪替只能靠重載 launchd plist
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **B13**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（§2/§3 未列 ⇒ 新增登記）。
+- **事實（實測，2026-09-26）**：
+  - **對照組：資料通道 key 與 MCP token 都有 hot-reload**
+    - channel key：`cmd/atlas/main.go:700`
+      （`channelKeyMgr.RegisterApplier("finmind", marketdata.UpdateSharedFinMindAPIKey)`）；
+      套用端 `internal/marketdata/finmind_client.go:374-379`（`SetAPIKey`，thread-safe 換 key，不重建 rate limiter）；
+      機制自述 `internal/channelsecrets/doc.go:2`、`:8`（issue #1776 Phase 1：persist → 熱套用到 live client）。
+    - MCP token：`cmd/atlas-mcp/server/token_admin_handler.go:32`（`POST /api/admin/mcp/tokens/<id>/rotate`）。
+  - **env 名稱是 `TELEGRAM_BOT_TOKEN`**（**不是** `ATLAS_TELEGRAM_BOT_TOKEN`；後者在 repo 內 0 命中，
+    唯一出現處是另一份文件的示例名 `docs/modules/alert-system.md:21`）。
+  - 兩個消費端、**兩者都在啟動時讀一次**：
+    ① `scripts/alertmanager-webhook/atlas-alertmanager-webhook-to-telegram.py:18`
+      （`BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')`，module 層讀取 ⇒ 換 token 必須重啟行程）；
+    ② `monitoring/alertmanager.yml:97`（`bot_token: ${TELEGRAM_BOT_TOKEN}`）⇒ Alertmanager 自己也要 reload/restart。
+  - 注入路徑是**安裝期寫進 LaunchAgent plist**：
+    `scripts/alertmanager-webhook/com.goluck.atlas-webhook-to-telegram.plist:22-23`
+    （`TELEGRAM_BOT_TOKEN` = `__INJECT_AT_INSTALL__`），由 `scripts/alertmanager-webhook/install-webhook.sh`
+    寫入 `~/Library/LaunchAgents/` 那一份（`:152`）並 `launchctl bootout` + `bootstrap`（`:159-164`）。
+  - **刻意不用 file-based token**：plist `:18-20` 與 `install-webhook.sh:10-12` 明寫理由 ——
+    a2a-dev 的 macmini-recover #50 會從**已安裝 plist 的 EnvironmentVariables** 讀 `TELEGRAM_BOT_TOKEN` 做 `getMe` 檢查，
+    **換 key 名會讓它變成 WARN**（破壞 DoD 48 OK/0 WARN）。
+- **為何先開票、不實作**：這不是漏一行，而是**需要先裁決介面**：
+  ① 引入 `TELEGRAM_BOT_TOKEN_FILE`（**必須同時改 a2a-dev 的檢查腳本** ⇒ 跨 repo）；
+  ② 加 SIGHUP 或 admin rotate 端點（跨 process、跨兩類 handler）；
+  ③ 接受「輪替＝重跑 install 腳本」但把步驟納入 runbook。
+  三個方向的半徑都大於本輪 bounded 修正 ⇒ 先登記。
+- **驗收條件**：能在**不重建 image** 的前提下完成一次 token 輪替（若最終決定「必須重載 plist」，
+  則該步驟必須寫進 runbook 並可被非作者照做）；輪替後 a2a-dev 的 `getMe` 檢查**仍為 OK**（不得因換 key 名退化成 WARN）；
+  **負對照**：輪替後舊 token 在 BotFather 端撤銷必須立刻失效（不得出現「新舊都能用」）。
+
+---
+
+### FU-20260926-15 — `.githooks/pre-push` 沒有 host binary 新鮮度閘門：source 已前進但 `bin/atlas-mcp` 仍舊也能 push
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **B14**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+  **與 manifest §3 E4 的關係**：E4 是**同一個檔**的另一個缺口（`pre-push` 取不到 `origin/main` 就放行）。
+  本票是**不同缺口**（完全沒有 binary 新鮮度檢查）⇒ 修法需協調，但不是重複開票。
+- **事實（實測，2026-09-26）**：
+  - `.githooks/pre-push` 現有閘門：`make ci-gate`（`:29`）、`scripts/ci/check_frontend_dist.sh`（`:50`）、
+    `make ci-full`（`:70`）、Gate 2 HEAD == `origin/main`（`:82-94`）、Gate 3 zero diff（`:96-106`）。
+    全檔 **0 命中** `rebuild` 或 `check-binaries`。
+  - 目標存在且會檢驗：**`Makefile:733` `rebuild-host-bin:`**（只重建 host `bin/atlas-mcp`）；
+    `Makefile:710-711` `check-binaries:` → `scripts/check-binary-freshness.sh`；`Makefile:729` `check: check-binaries`。
+  - 檢查腳本對「檔案不存在」是**軟出口**：`scripts/check-binary-freshness.sh:152-157`
+    （`if [ -f "$HOST_ATLAS_MCP" ] … else echo "  ⚠ bin/atlas-mcp not found at … (skipping)"`）⇒ 不存在**不算失敗**。
+  - 同族文件已承認這個形狀：`docs/developer-guide.md:66`（「host `bin/atlas-mcp` 缺失但檢查仍綠 ⇒ 執行 `make rebuild-host-bin` 後重跑」）。
+- **為何先開票、不實作**：修法要動 `.githooks/`（**共用檔**，同檔正由 manifest §3 E4 那一線處理），
+  而且要先把**閘門政策**定下來：pre-push 是否強制 `rebuild-host-bin`（會弄動 working tree 產物、也拖慢 push）、
+  或只把 `check-binaries` 的 skip 改成 fail-closed、或維持現狀但把責任明文寫給 session-start。
+  政策未定就改 ＝ 有機會製造第二個 false-green（或第二個誤紅）⇒ 先登記。
+- **驗收條件**：在 source 領先 `bin/atlas-mcp` 的狀態下 push **必須**得到可行動的紅燈
+  （或明確記錄此為刻意不防、並指出替代路徑）；
+  **負對照**：`bin/atlas-mcp` 與 HEAD 一致時**不得**誤紅、也不得為此多付明顯時間成本。
+
+---
+
+### FU-20260926-16 — 季節性校準的**污染源歸因**仍未定調（4 個超界 `adjustment_factor` 是哪來的）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號「**A5 殘**」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+- **與 FU-20260926-04 的關係（先講清楚，避免重複計數）**：`-04` 登錄的是「**值本身**是壞的 ＋ 消費端被夾沒有任何痕跡」；
+  本票**只認領「歸因／定調」這一半**（是校準輸入壞？是 bound 太窄？還是有別的寫入端？），且**不重複** `-04` 的驗收條件。
+  **若 root 判定兩者同源，請把本票併入 `-04` 並將本票標 `done`。**
+- **事實（實測，worktree HEAD `81e4fe62`）**：
+  - 版控檔仍是壞的：`configs/parameters.json:4602`（`dividend_season = -0.2634376289519962`）、
+    `:4686`（`summer_electricity = -0.2883015395477875`）、`:4729`（`ai_infrastructure_buildout = 2.555461115152644`）、
+    `:4772`（`year_end_positioning = 3.44143401207912`）。合法區間 `[0.3, 2.5]` ＝
+    `internal/industry/seasonal_health.go:16-17`（`DarwinianMinAdjustment` / `DarwinianMaxAdjustment`）。
+  - 消費端確實會夾：`internal/industry/seasonal_health.go:32`（`ClampAdjustmentFactor`）、
+    `:41`（`IsAdjustmentFactorInRange`）；一次性 warn 在 `internal/industry/seasonality.go:578-594`
+    （由 `NewSeasonalEngineFromConfig`（`:563-573`）呼叫）。
+  - **寫入端的守門早就在**：`cmd/calibrate-seasonal/main.go:180` 呼叫 `validateCalibrationResult`
+    （定義 `:408-425`，三軸：`adjustment_factor` 對 Darwinian 區間、`historical_accuracy ∈ [0,1]`、`avg_market_return ∈ [-1,1]`）；
+    超界時**不寫** `adjustment_factor`，只記 verdict（`:180-188`）
+    ⇒ **現行 `-update` 路徑結構上不可能產生這 4 個值**，污染源必在「守門之前」或「另一個寫入端」。
+  - **兩個已實測的歸因陷阱（本票存在的直接理由）**：
+    - ① `git blame` **不能**當歸因證據：`10f019a1`（2026-08-28「reformat parameters.json to repo 2-space format」）
+      是純重排（`git show --stat`：8107 insertions / 8107 deletions），4 行現在都 blame 到它
+      ⇒ 拿它推論「值是那時寫入的」是**錯的**（已否證）。
+    - ② 本 clone 是 **shallow**（`git rev-parse --is-shallow-repository` = `true`）：
+      `git log -S "3.44143401207912" -- configs/parameters.json` 只回得到 `07a3f85f`（2026-06-15, PR #532），
+      而該 commit 在本地**沒有 parent 物件**（`git show 07a3f85f^` ⇒ `invalid object name`）
+      ⇒ 「首次寫入的 commit」在此 clone 內**不可證**。
+    - ③ 另一個直覺陷阱（**已排除**）：這 4 個 pattern 沒有 `calibration_verdict` 欄位，看起來像「不是校準器寫的」——
+      但 `calibration_verdict` 是 `183ed65c`（2026-09-26, PR #1990）才加進寫入端的
+      ⇒ **缺欄位不代表寫入者不是校準器**，不要用這點下結論。
+- **為何先開票、不實作**：定調需要**量測**：用 `data/replay/finmind_2020_2024.jsonl` 重跑這 4 個 pattern，
+  比對「校準觀測值」與 ① bound ② 現值 的關係；且要先把 shallow clone 補成完整歷史（或明確放棄 blame 路線）才有歸因證據。
+  這是研究型工作、不是 bounded 修正，而且**直接改值會把現場洗掉** ⇒ 先登記。
+- **驗收條件**：能對這 4 個值逐個回答「誰寫的（哪一個寫入端／哪一次執行）」，或明確結論「不可證」並給出替代防線；
+  **在定調完成前不得改動 `configs/parameters.json` 的這 4 個值**（保留現場）。
+
+---
+
+### FU-20260926-17 — `internal/fubonproxy` 測試 flaky：`TestProcessManager_Supervise_RestartFailureCap` 距寫死的 3s 上限只剩約 0.2–0.4s
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號「fubonproxy flaky」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+  manifest §3 E8 是**另一支** flaky（`WalkDir("internal")` 撞 apigateway 的相對 `data/`）⇒ 本票不是重複。
+- **事實（實測，worktree HEAD `81e4fe62`，macOS arm64 / go1.26.4）**：
+  - 失敗訊息出處：`internal/fubonproxy/manager_test.go:1345`
+    （`t.Fatal("supervisor did not exit within 3s")`），位於 helper `waitForSupervisorDone`（`:1333-1347`），**上限寫死 3s**。
+  - 使用者：`internal/fubonproxy/manager_test.go:1475`
+    （`TestProcessManager_Supervise_RestartFailureCap`，定義 `:1444`）與 `:1433`（yield-to-external-proxy 測試）。
+  - **本機實測（2026-09-26）**：
+    - `go test ./internal/fubonproxy/ -run 'TestProcessManager_Supervise_…' -count=5` ⇒ **5/5 PASS**，
+      但每次 **2.61–2.63s**；log 內單次 `process_started`(17:09:14.826) → `stopped`(17:09:17.400) ＝ **2.574s**。
+    - `ATLAS_STORE_BACKEND=sqlite go test -race -count=3 …` ⇒ 3/3 PASS，但 **2.79s / 2.72s / 2.63s**
+      ⇒ 距 3s 只剩約 **0.2s**。
+  - **成本為何固定約 2.6s**：`internal/fubonproxy/manager.go:62` `maxRestartFailures = 5`，
+    每輪前有 `sleep 0.3` 的假 proxy（`manager_test.go:1449`）＋ backoff 10ms（`:1325-1326`）
+    ⇒ 5 輪 ≈ 2.4s，加健康檢查與收尾 ≈ 2.6s。**餘裕比一次排程抖動還小。**
+  - **為何在 `make ci-full` 會紅的機制**：`Makefile:947` 跑的是
+    `go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')` ⇒ **全 package 並行 ＋ race detector**；
+    本票的測量只跑了**單一 package**，並行負載下只會更慢。這解釋「單獨重跑 ok、`make ci-full` 紅」。
+  - **附帶觀察（同一次 log）**：`restart_foreign_port port=… pid=9927 cmd=fubonproxy.test`
+    —— 被判為「外部佔用者」的其實是**測試行程自己**（`:1473` 的 `bindPort` 在行程內綁埠）。
+    不是缺陷，但會讓 triage 的人誤判「有外部程序在搶 port」。
+- **為何先開票、不實作**：flaky 要先**量化**（重現率、`make ci-full` 併發下的分布），並裁定修法方向：
+  ① 提高 helper 上限（會連「真的卡死」一起放寬）；② 改成事件驅動等待（要動 supervisor 的觀測面）；
+  ③ 把固定 `sleep 0.3` 與 backoff 參數化／縮短（最小改動，但要先證明仍測到同一件事）。
+  直接改測試＝可能把真紅一起吃掉 ⇒ 先登記。
+- **驗收條件**：在 `make ci-full` 的實際併發條件下，該測試連續 N 輪（建議 ≥ 20）不再出現
+  `supervisor did not exit within 3s`；**負對照**：把 supervisor 改成真的不退出時，該測試**仍必須紅**。
+
 ---
 
 ---
@@ -863,6 +1032,43 @@
      `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
 - **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
   （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+---
+
+### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：2026-09-26 推送 PR #2029（`fix/ci-swallowed-errors`，commit `e2e1b0de`）時，pre-push hook 的
+  `make ci-full` 在 `make ci-gate` → `ci-quick` 階段紅：
+  `❌ FAILED: scripts/ci/check_jev_contract.sh`（`✅ CI-quick: 14 passed, ❌ 1 failed`）。
+- **現況（實測，皆為本機可重現）**：
+  1. 該檢查**會真的對外呼叫 Jev**：單獨執行輸出
+     `✓ 實際呼叫 OK: noul=0.93 model=jev-1.13.0 tokens=281 445ms attempts=1`
+     （`✓ jevkit 自測通過`）。
+  2. **失敗後單獨重跑 2 次都是 exit 0**（`✅ Jev 契約檢查通過`）。
+  3. 同一個 patch 在**數分鐘前**的另一次 push 中，`make ci-full` **全綠**
+     （log 含 `✅ ci-full passed` 與 coverage step `Total coverage: 70.4%`），
+     且兩次 patch 內容 sha256 **逐位元組相同**（`62a6f43caf94ddacbf9e…`）。
+  4. 當次改動只有 `.github/workflows/daily-maintenance.yml`，與該檢查無關。
+- **判定：這是外部相依（Jev 服務／網路）造成的間歇性紅燈**，不是確定性缺陷。
+  因此「紅燈本身」沒有問題（不可靜默吞掉），問題在於**它坐在 pre-push 的阻擋路徑上**。
+- **風險**：誤紅會擋住合法推送 ⇒ 實務壓力會逼人用 `git push --no-verify`（**連 `make ci-gate` 都跳過**），
+  結果是**真正的**紅燈更容易被忽略 —— 與本 session 在修的同族（gate 靜默失效／閘門可信度流失）互為表裡。
+  同日已有兩次同型：本票（`check_jev_contract.sh`）與 FU-20260926-17（`internal/fubonproxy` 時序 flake）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：離線化**。以 hermetic fixture／stub 取代真呼叫；repo 已有同型前例
+     （`tests/scripts/*` 與 `scripts/ci/negative-proof-lib.sh` 的 fixture 式負向證明）。
+     若真呼叫仍要保留，應移到**非阻擋** lane（nightly 或 `workflow_dispatch`），
+     **不要**放在 pre-push／PR 必經路徑上。
+  2. **次選：明示外部相依 + 有界重試 + 記錄**。重試 N 次，每次都要**寫出**第 k 次失敗／逾時的
+     訊息與最終判定（`::warning::` 或步驟輸出），並在腳本檔頭明列「本檢查需外網」。
+  3. 不論選哪個：**不得**在 pre-push 路徑加 `|| true` / `continue-on-error`
+     （那正好是本 session 正在修的同族 false-green）。
+- **驗收條件（供實作者）**：在有外網阻斷的環境（例如 `http_proxy` 指向黑洞）跑
+  `make ci-gate`，行為必須**明示原因**且**不因外部 flake 而擋住合法 push**
+  （離線化版本的期望：該檢查不依賴外網即可判定；重試版本的期望：輸出可區分「契約不符」與「連不上」）。
+- **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
 
 ---
 
