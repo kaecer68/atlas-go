@@ -23,6 +23,12 @@ go run ./cmd/revert-baseline --list
 
 Full setup guide: [`docs/quickstart.md`](docs/quickstart.md)
 
+> **New worktree?** Run **`make embed-dirs`** once. `admin_web/embed.go` / `client_web/embed.go`
+> use `//go:embed all:dist`, so `go build ./...` fails in a fresh `git worktree`
+> (`pattern all:dist: no matching files found`). The target is idempotent and only creates
+> gitignored dev placeholders; `make ci-gate` / `make test-backend` run it automatically, and in
+> CI it is a no-op (the real `dist/` comes from the frontend build step).
+
 ## Atlas as MCP Server
 
 atlas-go doubles as a **MCP (Model Context Protocol) server** with **117 tools** (111 business + 2 template_detector + 4 audit + lifecycle tools),
