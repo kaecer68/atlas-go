@@ -349,7 +349,24 @@ test-integration:
 
 lint-backend:
 	@echo "🔍 Linting Go backend..."
-	@command -v gofmt >/dev/null && gofmt -l $(GO_PKGS) | (read; if [ $$? -ne 0 ]; then echo "❌ gofmt issues found"; exit 1; fi) || echo "  (gofmt skipped)"
+	@# ⚠️ 舊寫法 `gofmt -l | (read; if [ $$? -ne 0 ])` 的 $$? 是 **read** 的（不是 gofmt 的），
+	@# 而且整串被 `|| echo "(gofmt skipped)"` 吞掉 ⇒ 真的有格式問題時也只印 skipped 並回 0
+	@# （閘門看似存在、實際不可能紅；issue #2011 同族的「別命名為 gate 的裝飾品」）。
+	@command -v gofmt >/dev/null 2>&1 || { echo "    ❌ gofmt 不存在（Go toolchain 未安裝？）——閘門不得靜默消失"; exit 1; }
+	@# 註：gofmt 不吃 Go 的 `...` pattern（GO_PKGS 對它會 `lstat ... no such file` 且輸出空 ⇒ 舊寫法
+	@# 兩種壞法疊在一起：rc 被吞 + 根本沒掃到檔案）。改用 repo 根目錄（與 ci-gate 的 `gofmt -l .` 一致）。
+	@gofmt_out="$$(gofmt -l .)"; gofmt_rc=$$?; \
+	if [ "$$gofmt_rc" -ne 0 ]; then \
+		echo "    ❌ gofmt 執行失敗（rc=$$gofmt_rc）——這不是「乾淨」"; \
+		exit 1; \
+	fi; \
+	if [ -n "$$gofmt_out" ]; then \
+		echo "    ❌ gofmt 格式不符："; \
+		echo "$$gofmt_out"; \
+		echo "    執行 gofmt -w <檔案> 後重跑"; \
+		exit 1; \
+	fi; \
+	echo "    ✅ gofmt 乾淨（gofmt -l . 無輸出）"
 	go vet $(GO_PKGS)
 
 # ---- CAL-1: rolling-store history import ----
@@ -426,6 +443,10 @@ ci: check-production-host
 	echo ""; \
 	echo "✅ CI: $$passed passed, ❌ $$failed failed, ⏱️  $$skipped timed out"; \
 	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
+	if [ $$passed -eq 0 ]; then \
+		echo "    ❌ 0 支檢查被執行（glob 沒對到 scripts/ci/check_*.sh？）⇒『什麼都沒跑』不是通過"; \
+		exit 1; \
+	fi; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
 ci-quick: check-production-host
@@ -446,18 +467,25 @@ ci-quick: check-production-host
 	              scripts/ci/check_agents_index.sh \
 	              scripts/ci/check_jev_contract.sh \
 	              scripts/ci/check_monitoring_single_source.sh; do \
-		if [ -f "$$script" ]; then \
-			echo "  → $$script"; \
-			if timeout 10 bash $$script > /dev/null 2>&1; then \
-				passed=$$((passed+1)); \
-			else \
-				echo "    ❌ FAILED: $$script"; \
-				failed=$$((failed+1)); \
-			fi; \
+		if [ ! -f "$$script" ]; then \
+			echo "    ❌ 清單中的 $$script 不存在（改名／搬移？）⇒ 少跑一支不能算通過"; \
+			failed=$$((failed+1)); \
+			continue; \
+		fi; \
+		echo "  → $$script"; \
+		if timeout 10 bash $$script > /dev/null 2>&1; then \
+			passed=$$((passed+1)); \
+		else \
+			echo "    ❌ FAILED: $$script"; \
+			failed=$$((failed+1)); \
 		fi; \
 	done; \
 	echo ""; \
 	echo "✅ CI-quick: $$passed passed, ❌ $$failed failed"; \
+	if [ $$passed -eq 0 ]; then \
+		echo "    ❌ 0 支檢查被執行 ⇒『什麼都沒跑』不是通過"; \
+		exit 1; \
+	fi; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
 # ---- inert 閉環靜態檢查（#1944 建議 2，2026-09-25）----
@@ -865,6 +893,9 @@ ci-gate:
 	@echo "  → FOLLOWUPS 條目 id 唯一性（單檔；兩個 lane 撞號 ⇒ FAIL）"
 	@bash scripts/ci/check_followups_unique_ids.sh
 	@bash tests/scripts/test-followups-unique-ids.sh
+	@echo "    ✅"
+	@echo "  → 負向證明 harness 自我測試（#2011；餵 exit 127/2 必須紅燈）"
+	@bash tests/scripts/test-negative-proofs.sh
 	@echo "    ✅"
 	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
 	@bash scripts/ci/check_critical_tasks.sh

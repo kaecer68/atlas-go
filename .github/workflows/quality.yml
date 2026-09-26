@@ -406,16 +406,12 @@ jobs:
     # 造一個含合成（無效）憑證的 tracked 檔 → 掃描器必須 exit 1。
     # 為什麼要這步 ✗：2026-09-25 實測過一次「掃描器在 CI 環境因平台差異而假失敗／假通過」
     # （GNU `stat -f` 語意不同）；只靠 tempdir 自測不足以證明 repo 級路徑也有效 ✓。
+    # ⚠️ 實作在 scripts/ci/secret-scan-negative-proof.sh（issue #2011）：舊的 inline 寫法把
+    #    「非 0」當成「擋下了」⇒ 掃描器被改名（127）或參數寫錯（2）時照樣印 ✅（假綠）。
+    #    現在改為**精確斷言 rc==1**；「餵 127/2 必須紅燈」的正反案例由
+    #    tests/scripts/test-negative-proofs.sh（下面的 negative-proof-harness job）釘住。
     - name: Negative proof — a staged fake credential must be blocked
-      run: |
-        printf '%s\n' 'BOT_TOKEN=1234567890:'"FAKEfakeFAKEfakeFAKEfakeFAKEfake12345" > scripts/__negtest_secret__.py
-        git add -f scripts/__negtest_secret__.py
-        if bash scripts/secret-scan.sh; then
-          echo "❌ 負向證明失敗：含假憑證的 tracked 檔竟未被擋下"
-          exit 1
-        fi
-        echo "✅ 負向證明通過（掃描器確實會擋）"
-        git reset -q scripts/__negtest_secret__.py && rm -f scripts/__negtest_secret__.py
+      run: bash scripts/ci/secret-scan-negative-proof.sh
 
   # Monitoring single source of truth — PR-stage guard.
   # 2026-08-27 incident: a rule fix was written into the WRONG tree
@@ -442,21 +438,23 @@ jobs:
     # 免得本 workflow 自己被 R3（舊樹路徑引用）掃到。
     # 檔名刻意用 `docker-compose.*` 開頭 ⇒ 同時觸發 R2（掛載源落點）與 R3（舊樹引用），
     # 兩條規則都被這一步釘住（實測 R2 + R3 各報一筆）。
+    # ⚠️ 實作在 scripts/ci/monitoring-single-source-negative-proof.sh（issue #2011）：理由同
+    #    secret-scan 那一步（舊 inline 寫法把 exit 127/2 當成「擋下了」）。改為**精確斷言 rc==1**
+    #    —— 本檢查的 exit 2 是**用法錯誤**（`--root` 不存在），永遠不可算「擋下」。
     - name: Negative proof — a legacy second-tree mount must be blocked
-      run: |
-        printf '%s\n' \
-          'services:' \
-          '  prometheus:' \
-          '    volumes:' \
-          '      - ~/workspace/'"atlas-monitoring"'/prometheus.yml:/etc/prometheus/prometheus.yml:ro' \
-          > scripts/docker-compose.__negtest__.yml
-        git add -f scripts/docker-compose.__negtest__.yml
-        if bash scripts/ci/check_monitoring_single_source.sh; then
-          echo "❌ 負向證明失敗：指向第二棵樹的掛載竟未被擋下"
-          exit 1
-        fi
-        echo "✅ 負向證明通過（檢查確實會擋）"
-        git reset -q scripts/docker-compose.__negtest__.yml && rm -f scripts/docker-compose.__negtest__.yml
+      run: bash scripts/ci/monitoring-single-source-negative-proof.sh
+
+  # 負向證明的**自我測試**（issue #2011）：把「測試本身有沒有鑑別力」變成 CI 斷言。
+  # 對兩支負向證明各餵「命令不存在(127)」「用法錯誤(2)」「根本沒擋(0)」三種情境 → 必須紅燈；
+  # 並驗「真命令仍綠」與「受測腳本被刪時 fail-closed」。全程在 $TMPDIR 的 throwaway repo 內
+  # （不動本 repo、不碰 production）。
+  negative-proof-harness:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Negative-proof harness self-test (exit 127/2 must be RED)
+      run: bash tests/scripts/test-negative-proofs.sh
 
   # MCP tool count doc-code alignment — prevents drift between
   # docs/reference/tool-catalog.md documents the expected tool count; actual AddTool registrations

@@ -89,19 +89,21 @@ scenario1_fresh_passes() {
 scenario2_stale_fails() {
   local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
   make_frontend "$tmp" admin_web stale
-  if bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1; then
-    fail "scenario2: stale dist should exit 1"
-  fi
-  echo "  ✓ scenario2: stale dist fails"
+  # 精確斷言（issue #2011）：「擋下」= exit 1。exit 2（用法錯誤）/126/127（腳本不存在）
+  # 都不是「擋下了」—— 舊寫法 `if ...; then fail; fi` 會把它們當成成功。
+  local rc=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 1 ]; then fail "scenario2: stale dist should exit 1, got $rc"; fi
+  echo "  ✓ scenario2: stale dist fails (exit=1)"
 }
 
 scenario3_missing_fails() {
   local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
   make_frontend "$tmp" admin_web missing
-  if bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1; then
-    fail "scenario3: missing dist should exit 1"
-  fi
-  echo "  ✓ scenario3: missing dist fails"
+  local rc=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" admin_web >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 1 ]; then fail "scenario3: missing dist should exit 1, got $rc"; fi
+  echo "  ✓ scenario3: missing dist fails (exit=1)"
 }
 
 scenario4_pure_go_diff_skips() {
@@ -120,9 +122,9 @@ scenario5_frontend_diff_checks() {
   local tmp; tmp=$(new_fixture); trap 'rm -rf "$tmp"' RETURN
   make_frontend "$tmp" admin_web stale
   git -C "$tmp" add -A && git -C "$tmp" commit -qm "feat(web): admin change (stale dist)"
-  if bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD >/dev/null 2>&1; then
-    fail "scenario5: frontend diff + stale dist should exit 1"
-  fi
+  local rc=0
+  bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 1 ]; then fail "scenario5: frontend diff + stale dist should exit 1, got $rc"; fi
   # rebuild → fresh
   touch -t 203001010000 "$tmp/admin_web/dist/js/main.js"
   bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD >/dev/null 2>&1 || \
@@ -137,9 +139,9 @@ scenario6_shared_web_change_checks_both() {
   mkdir -p "$tmp/shared_web/static/js/pages"
   echo '// page' >"$tmp/shared_web/static/js/pages/demo.js"
   git -C "$tmp" add -A && git -C "$tmp" commit -qm "feat(web): shared page"
-  local out
-  out=$(bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD 2>&1) && \
-    fail "scenario6: shared_web change with stale dists should exit 1"
+  local out rc=0
+  out=$(bash "$tmp/scripts/ci/check_frontend_dist.sh" --diff main~1...HEAD 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "scenario6: shared_web change with stale dists should exit 1, got $rc"
   echo "$out" | grep -q "admin_web: dist 過期" || fail "scenario6: expected admin_web stale, got: $out"
   echo "$out" | grep -q "client_web: dist 過期" || fail "scenario6: expected client_web stale, got: $out"
   echo "  ✓ scenario6: shared_web change checks both frontends"
