@@ -349,9 +349,17 @@ func ValidateCalibration(path string, maxAge time.Duration) (*CalibrationValidat
 	return ValidateCalibrationWithOptions(path, CalibrationValidationOptions{MaxAge: maxAge})
 }
 
-// defaultCalibrationMaxAge mirrors the historical 48h default and absorbs
+// DefaultCalibrationMaxAge mirrors the historical 48h default and absorbs
 // weekend gaps.
-const defaultCalibrationMaxAge = 48 * time.Hour
+//
+// It is exported because it is now a **cross-package policy value**, not an
+// internal default: `cmd/calibration-validate` uses it as the `--max-age` flag
+// default, and `internal/monitoring` uses it as the alerting contract
+// (`CalibrationFreshnessContract`). Three independent copies of "48 * time.Hour"
+// would let the CLI verdict and the monitoring verdict drift apart — exactly the
+// contradiction (CLI says stale, monitoring says fresh) this contract exists to
+// prevent.
+const DefaultCalibrationMaxAge = 48 * time.Hour
 
 // ValidateCalibrationWithOptions is ValidateCalibration plus a validation policy
 // (issue #1944 Batch 4, item I31).
@@ -364,7 +372,7 @@ const defaultCalibrationMaxAge = 48 * time.Hour
 func ValidateCalibrationWithOptions(path string, opts CalibrationValidationOptions) (*CalibrationValidationResult, error) {
 	maxAge := opts.MaxAge
 	if maxAge <= 0 {
-		maxAge = defaultCalibrationMaxAge
+		maxAge = DefaultCalibrationMaxAge
 	}
 	if opts.Policy != nil {
 		if err := opts.Policy.Validate(); err != nil {

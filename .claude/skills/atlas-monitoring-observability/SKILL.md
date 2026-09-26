@@ -21,7 +21,7 @@ Prometheus / Alertmanager / Grafana 的設定與 rules **只有一棵權威樹 =
 | 權威檔案（✓ 唯一 SSOT） | 生產實際掛載（`docker inspect` 實查，2026-09-25） |
 |---|---|
 | `monitoring/prometheus.yml` | → `/etc/prometheus/prometheus.yml`（容器 `atlas-prometheus`） |
-| `monitoring/rules/`（7 檔） | → `/etc/prometheus/rules`（容器 `atlas-prometheus`） |
+| `monitoring/rules/`（8 檔，2026-09-26 起） | → `/etc/prometheus/rules`（容器 `atlas-prometheus`） |
 | `monitoring/alertmanager.yml` | → `/etc/alertmanager/alertmanager.yml`（容器 `atlas-alertmanager`） |
 | `monitoring/grafana/` | → `/var/lib/grafana/dashboards`、`/etc/grafana/provisioning/*`、`/etc/grafana/provisioning/datasources`（容器 `atlas-grafana`） |
 
@@ -29,7 +29,7 @@ Prometheus / Alertmanager / Grafana 的設定與 rules **只有一棵權威樹 =
 那才是 live 容器的 compose 檔案（`docker inspect` 的 `com.docker.compose.project.config_files` 可查證）。
 
 > ⚠️ `~/workspace/atlas-monitoring/` 是 **iMac 時代的歷史殘留**，**不是**生產掛載源 ✗；
-> 它的 `rules/` 只有 5 檔（repo 有 7 檔）⇒ 往那裡改設定等於改了沒人讀的檔案。
+> 它的 `rules/` 只有 5 檔（repo 當時 7 檔，2026-09-26 起 8 檔）⇒ 往那裡改設定等於改了沒人讀的檔案。
 > 改監控設定前先確認實際掛載源：
 >
 > ```bash

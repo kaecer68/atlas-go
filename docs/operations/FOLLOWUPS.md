@@ -717,6 +717,70 @@
 
 ---
 
+### FU-20260926-10 — I31 的 production 半邊：新鮮度已接上既有監控（本 PR）；**仍缺「校準任務心跳」指標**，產物年齡可能誤報
+
+- **狀態**：`open`（**程式面已交付**；生產驗收與殘留面 1 待做）
+- **記錄日期**：2026-09-26
+- **來源**：issue #1944 / I31；PR #1991 的「未完成項 1」；分支
+  `fix/20260926-calibration-freshness-monitoring`（worktree `~/workspace/atlas-calib-freshness`，
+  base `origin/main@df726b89`）。
+- **已完成（本 PR）**：`configs/parameters.json` 的新鮮度由背景任務
+  `calibration_freshness_metrics_export`（`cmd/atlas/calibration_freshness_metrics_task.go`，5 分鐘）
+  評估，重用 `config.ValidateCalibration`（CLI 用的同一個判定），輸出
+  `atlas_calibration_freshness_*` 五個 gauge；規則在
+  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool **11 案例**含 6 個負向對照
+  與 1 個「已知交接窗」；另做 8 項變異測試全部被咬住），
+  落地說明在 [`calibration-freshness-runbook.md`](calibration-freshness-runbook.md)。
+  契約收斂為**單一常數** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 預設值
+  = production 命令的 48h）。
+- **順帶查實（影響本條的判讀）**：政策上的 production 命令 `atlas-validate` **沒有隨 image 出貨**
+  ——`cmd/calibration-validate` 是 CI 現場 build 的，本 repo 的 Dockerfile 只把
+  `atlas-go`/`atlas-mcp`/`calibrate-seasonal`/`daily-replay-sync` 放進 `/app`，且 image 內
+  **沒有** `python3`/`jq`/`node`（實查指令見 runbook §1）。⇒ 在本 PR 之前，生產上「資料已不新鮮」
+  是**零觀測**（不是值班忘了跑，而是沒有東西會跑）；所有 triage 指令已改為 image 內確實存在的
+  `grep`/`stat`/`head`/`tail`/`curl`。
+- **殘留面 1（本條的主要缺口）：沒有「校準任務已執行」的心跳指標**
+  - 現況：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`：
+    `if len(report.Changes) > 0` 才 `LockedSaveWithRollback`）⇒ `updated_at` 的年齡是
+    「校準活動」的**上界**，不是直接量測。一個已收斂、連續多輪 `verdict=stable` 的系統
+    會合法地超過 48h 不改寫檔案 ⇒ `CalibrationArtifactStale` 可能誤報。
+  - 為何現在只做到這樣：要給出直接訊號必須接到 `cmd/atlas/calibration_tasks.go` 的
+    18 個任務（1 inner + 17 top-level）並定義「執行成功」語意（含 early-return 與
+    maturity gate），那是另一個範圍；本 PR 先交付可量測的部分並把誤報形狀寫進
+    runbook §3.1 的第一順位排查。
+  - **修法（未實作）**：新增 `atlas_calibration_task_last_run_timestamp_seconds{task=…}`
+    （或沿用 completion handler）＋一條「校準任務超過 N 小時未執行」的規則；
+    門檻由實測 cadence（24h 主、6h/1h 例外）決定。
+  - **驗收條件**：連續 `stable` 的多輪（產物不變）必須**不**觸發任何告警；
+    而任務真的停止執行時必須有告警 —— 負對照：不得再靠「產物年齡」推論任務死活。
+- **殘留面 1b（與 #2013 的交互，已複驗）**：`risk_gate_calibrate` 的寫入已由 PR #2013 遷到
+  `data/state/parameters.calibrated.json`（overlay），SSOT 保持 pristine ⇒ 本條監控的
+  「SSOT 超過 48h」仍然有意義（其他校準器仍寫 SSOT，清單見 FU-20260926-07 第 3 點），
+  但**看不到 risk 校準是否停滯**。要涵蓋它需要第二個判定語意（per-entry `calibrated_at`），
+  不是把本族的 `max-age` 套上去就好；`config.GetParametersConfigPath()` 仍指 SSOT
+  （複驗：`internal/config/calibration_overlay.go:186`），所以本族沒有被無聲換對象。
+- **殘留面 2：結構性 finding 仍未進生產監控** —— `L1/L2_NO_REPRESENTATIVES` 之類由 CI 的
+  `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
+  parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產
+  也跑一次，並決定 accepted 集合在生產的語意（屬政策裁決）。
+- **已知且刻意的行為（不是缺陷，不要「順手」改掉）**：
+  1. **凍結樣本**：`_run_ok=0`（無法評估）之後，`age`/`last_calibrated` 仍以最後一次可評估的
+     值留在 `/metrics`（collector 是 last-write-wins 且不移除序列）。沒有任何規則拿它們做判定
+     （判定只看 `_ok`/`_run_ok`）⇒ 不會誤報；但**判讀順序**必須是「先 `_run_ok` 再 `_ok`
+     再 `age`」（runbook §2.1）。行為由
+     `TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries` 釘住。
+  2. **≤15 分鐘交接窗**：`_run_ok` 由 1 翻 0 時，第 1 條立刻 resolve、第 2 條要累積 15m
+     才 firing ⇒ 窗內兩條都不 firing。這是「同一個根因不重複 paging」的取捨，
+     已寫成 promtool 案例 K；要縮窗就改第 2 條的 `for` 並同步該案例。
+- **殘留面 3：生產驗收未執行**（本 PR 不得動 production）。部署後照 runbook §4：
+  `curl -s localhost:18080/metrics | grep '^atlas_calibration_'`、
+  `curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*'`，
+  並確認 `atlas_calibration_freshness_ok` 在生產為 1（生產檔案實測約 65 分鐘前被改寫）。
+- **驗收條件（本條整體）**：生產上 `atlas_calibration_freshness_*` 有值、三條規則已載入、
+  且「資料不新鮮」在無人記得跑 CLI 的情況下也會被看見。
+
+---
+
 ---
 
 ---
