@@ -57,9 +57,13 @@ services:
       # expansion would shadow the env_file value (2026-09-23 deploy incident:
       # all cron containers got an empty token and their liveness pings died).
       - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
-      # Broker nonce store uses the dev atlas-redis instance. Host port
-      # 16379 mirrors docker-compose.yml's redis ports mapping (dev only;
-      # prod uses host.docker.internal:6379 → litellm-redis).
+      # Broker nonce store 的 Redis URL。⚠️ 2026-09-26 生產實測更正原先的註解：
+      #   ① 生產**沒有**用 litellm-redis —— 容器實際值就是下面這行（host port 16379 → 本檔的 atlas-redis）；
+      #   ② 但 `ATLAS_BROKER_NONCE_STORE` **未設**（預設 `memory`，`internal/config/config.go:134`）
+      #      ⇒ 這行 URL 目前**不生效**（atlas-redis 的 keyspace 實測為空）。
+      #   ③ 本檔的 redis 埠已改綁 `127.0.0.1`（見下方 redis service）⇒ 若日後有人把
+      #      `ATLAS_BROKER_NONCE_STORE` 設成 `redis`，請同時把這裡改成 docker 網路名
+      #      `redis://redis:6379/8`（**同一顆 atlas-redis**），不要讓容器依賴 host 的 loopback 埠。
       - ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:16379/8
     volumes:
       - ./data:/app/data
@@ -144,7 +148,23 @@ services:
     # prod (docker-compose.prod.yml) intentionally does NOT use this
     # service — it shares the host's litellm-redis at host.docker.internal:6379.
     ports:
-      - "16379:6379"
+      # 只綁 loopback（2026-09-26，與同檔 postgres 同一處理）。分類準則：
+      # **是否持有憑證／是否可寫**？Redis 兩者皆非 —— `redis-server --appendonly yes`
+      # **無 requirepass**（實測 `redis-cli ping` → PONG，未帶任何認證），屬「無憑證的可寫資料庫」
+      # ⇒ 與 DB 同類、綁 loopback；反之唯讀儀表板（Grafana/Prometheus/Alertmanager）與 API
+      # （18080/18081，經 Cloudflare tunnel 對外）維持 0.0.0.0。
+      # 為什麼安全（2026-09-26 生產實測，不是推論）：
+      #   - in-stack 消費者沒有任何一個走這個 host 埠：`redis-exporter` 用 docker 網路名
+      #     `redis://redis:6379`；6 個 cron 容器完全沒有 redis env；`atlas-go` 雖有
+      #     `ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:16379/8`，
+      #     但 `ATLAS_BROKER_NONCE_STORE` **未設**（預設 `memory`，見 `internal/config/config.go:134`）
+      #     ⇒ 該 URL **不生效**；實測 atlas-redis 的 keyspace 為空（`dbsize` = 0）。
+      #   - 仍存在一個**潛在**依賴：若有人把 `ATLAS_BROKER_NONCE_STORE` 設成 `redis`，
+      #     上列 URL 就會依賴「容器能否連到 host 的 loopback-bound 埠」（OrbStack 上未實證）。
+      #     正確解＝把該 URL 改成 docker 網路名 `redis://redis:6379/8`（**同一顆 atlas-redis**）。
+      #     （另一條線：prod compose 註解聲稱共用 litellm-redis@6379，那是 `~/code/infra/compose.yaml`
+      #     的容器，不屬本 repo，且其 6379 同樣無密碼。）
+      - "127.0.0.1:16379:6379"
     volumes:
       - redis-data:/data
     networks:
