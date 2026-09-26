@@ -11,6 +11,9 @@
 # 做法：在 tempdir 造合成檔案，用 `--root "$TMP"` 掃（不動真 repo；tempdir 無 git → scanner 走 find）。
 # ⚠️ 本檔內所有假憑證都用「相鄰字串相接」組出，讓測試檔**本身**不含可被自己命中的字面值。
 # ⚠️ 掃描器內部呼叫 git 前會 sanitize GIT_*（SOP ★37：git hook 注入 GIT_DIR 會讓 fixture 假 PASS）。
+# ⚠️ 本副本相對上游（a2a-dev tests/secret-scan-selftest.sh）在 2026-09-26 收緊了一件事：
+#    負向案例改為**精確斷言 exit=1**（issue #2011）；exit 2/126/127 一律視為「測試本身失敗」，
+#    不再算「擋下了」。上游同步時請一併帶上。
 #
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # tests/scripts/ → repo root
@@ -39,8 +42,16 @@ must_block() {
   local desc="$1" fn="$2" body="$3" pat="$4"
   rm -rf "$TMP/src" "$TMP/docs"; mkdir -p "$(dirname "$TMP/$fn")"
   printf '%s\n' "$body" > "$TMP/$fn"
-  if scan_run 0; then
-    bad "${desc}（期望 exit=1，得到 0）"; sed 's/^/     /' "$TMP/out.txt" | head -3; return
+  # ⚠️ 精確斷言（issue #2011）：「擋下」的定義是**恰好 exit=1**。exit 2（用法錯誤）、
+  # 126/127（掃描器跑不起來）都**不是**「擋下了」——舊寫法 `if scan_run; then 失敗; fi`
+  # 把它們全當成成功，於是掃描器被改名時這條負向測試照樣印 ✅（假綠）。
+  local rc=0
+  scan_run 0 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    bad "${desc}（期望 exit=1，得到 0：掃描器根本沒擋）"; sed 's/^/     /' "$TMP/out.txt" | head -3; return
+  fi
+  if [ "$rc" -ne 1 ]; then
+    bad "${desc}（期望 exit=1，得到 $rc ⇒ 非預期結束碼，不是「擋下了」）"; sed 's/^/     /' "$TMP/out.txt" | head -3; return
   fi
   if grep -q "\[$pat\]" "$TMP/out.txt"; then ok "${desc}（exit=1，樣式 [$pat]）"
   else bad "${desc}（有擋但沒報 [$pat]）"; sed 's/^/     /' "$TMP/out.txt" | head -5; fi
@@ -68,8 +79,10 @@ must_block "A5 PRIVATE KEY block 被擋"          "src/a5.pem" "$PK_HEAD"       
 must_pass  "B1 文件（*.md）內的 token 預設不擋 CI（warn-only）" "docs/note.md" "範例: $TG_TOKEN"
 # strict 模式必須把文件命中算失敗（否則文件類就永久無護欄）
 rm -rf "$TMP/src" "$TMP/docs"; mkdir -p "$TMP/docs"; printf '%s\n' "範例: $TG_TOKEN" > "$TMP/docs/note.md"
-if scan_run 1; then bad "B2 --strict 時文件命中仍 ASCII 通過（應失敗）"
-else ok "B2 --strict 時文件命中會失敗"; fi
+rc_strict=0; scan_run 1 || rc_strict=$?
+if [ "$rc_strict" -eq 1 ]; then ok "B2 --strict 時文件命中會失敗（exit=1）"
+elif [ "$rc_strict" -eq 0 ]; then bad "B2 --strict 時文件命中仍 ASCII 通過（應 exit=1，得到 0）"
+else bad "B2 --strict 得到非預期 exit=${rc_strict}（不是「擋下了」）"; fi
 grep -q "文件/範例類命中" "$TMP/out.txt" && ok "B3 warn-only 命中會被明確標示" || bad "B3 未標示 warn-only 類別"
 
 # 範例檔（.example）同樣 warn-only
@@ -85,8 +98,10 @@ printf '%s\n' "src/b6.sh telegram_bot_token   # 合成測試資料（無效值�
 must_pass  "B6 allowlist（glob+樣式名）可豁免" "src/b6.sh" "TOKEN=$TG_TOKEN"
 # allowlist 只豁免列出的樣式名 → 換一種樣式不可豁免
 printf '%s\n' "src/b6.sh openai_sk_key   # 只豁免 sk-,不豁免 telegram" > "$TMP/allowlist.txt"
-if scan_run 0; then bad "B7 allowlist 僅針對指定樣式（telegram 仍應被擋）"
-else ok "B7 allowlist 依樣式名精準豁免（未列樣式仍擋）"; fi
+rc_b7=0; scan_run 0 || rc_b7=$?
+if [ "$rc_b7" -eq 1 ]; then ok "B7 allowlist 依樣式名精準豁免（未列樣式仍擋，exit=1）"
+elif [ "$rc_b7" -eq 0 ]; then bad "B7 allowlist 僅針對指定樣式（telegram 仍應被擋，得到 0）"
+else bad "B7 得到非預期 exit=${rc_b7}（不是「擋下了」）"; fi
 rm -f "$TMP/allowlist.txt"
 
 # 乾淨檔案

@@ -46,6 +46,17 @@ pos() {
 
 echo "=== SA12.A Negative Evidence Checks ==="
 
+# ⚠️ fail-closed 前置（issue #2011）:這支腳本有 11 條「**必須 0 命中**」的負面證據檢查，
+# 而所有計數都走 `grep -rl "$pat" internal/ ... | wc -l`。若 `internal/` 被搬走／改名，
+# 或 grep 因為任何理由回空 ⇒ 每條都數到 0 ⇒ **11 條全部 PASS**（「找不到」被當成「不存在」）。
+# 所以先證明「掃描面」真的存在且有內容，再開始判定。
+[ -d internal ] || { echo "❌ 找不到 internal/（cwd=$(pwd)）⇒ 0 命中不是『沒有殘留』，是『沒掃到東西』"; exit 1; }
+scanned=$(grep -rl "" internal/ --include="*.go" 2>/dev/null | wc -l | tr -d ' ')
+if [ "${scanned:-0}" -eq 0 ]; then
+  echo "❌ internal/ 底下找不到任何 *.go（grep 失效或被改名）⇒ 後續 0 命中沒有意義"; exit 1
+fi
+echo "（掃描面：internal/**/*.go 共 ${scanned} 檔）"
+
 neg "01 legacy fake ApplySectorRotation"        'Sector rotation applied for'
 neg "02 duplicate _sectorWeights map (SA02)"     '_sectorWeights'
 neg "03 unused sectorWeight function (SA02)"      'func sectorWeight'
@@ -65,7 +76,7 @@ if [[ "$count" -eq 2 ]]; then
     printf "PASS  12 ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED in cmd/ (found=%d)\n" "$count"
     passed=$((passed + 1))
 else
-    printf "FAIL  12 ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED in cmd/ (found=%d, expected=1)\n" "$count"
+    printf "FAIL  12 ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED in cmd/ (found=%d, expected=2)\n" "$count"
     failed=$((failed + 1))
 fi
 
