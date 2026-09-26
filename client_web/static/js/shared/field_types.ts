@@ -320,6 +320,32 @@ export interface CalibrationHealthSummary {
   out_of_range_patterns?: string[];
 }
 
+export interface CalibrationOverlay {
+  version: string;
+  updated_at: string;
+  source?: string;
+  entries: Record<string, CalibrationOverlayEntry>;
+}
+
+export interface CalibrationOverlayDiff {
+  name: string;
+  ssot: number;
+  effective: number;
+  before: number;
+  ratio: number;
+  calibrated_at: string;
+  method?: string;
+}
+
+export interface CalibrationOverlayEntry {
+  value: number;
+  before: number;
+  ssot: number;
+  calibrated_at: string;
+  method?: string;
+  rationale?: string;
+}
+
 export interface CalibrationValidation {
   old_config: StressIndexWeightsConfig;
   new_config: StressIndexWeightsConfig;

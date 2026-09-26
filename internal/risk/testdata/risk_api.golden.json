@@ -732,6 +732,7 @@
         "SessionSpan string",
         "Evaluated int",
         "Changes []ParameterChange",
+        "Rejected []ParameterRejection",
         "Errors []string",
         "Verdict string",
         "Summary string"
@@ -974,6 +975,17 @@
       ],
       "kind": "struct",
       "name": "ParameterChange"
+    },
+    {
+      "fields": [
+        "Name string",
+        "Current float64",
+        "Proposed float64",
+        "Floor float64",
+        "Reason string"
+      ],
+      "kind": "struct",
+      "name": "ParameterRejection"
     },
     {
       "fields": [
