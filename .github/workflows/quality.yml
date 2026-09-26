@@ -420,6 +420,48 @@ jobs:
     - name: Negative proof — duplicated / missing / drifted ids must be blocked
       run: bash tests/scripts/test-followups-unique-ids.sh
 
+  # F28 護欄：`$VAR` 緊接非 ASCII（全形）字元 —— 2026-09-26 實證：UTF-8 locale 下 bash 會把該字元的
+  # **第一個位元組**吃進變數名（`bash -c 'set -u; V=1; echo "$V`＋全形括號`"'` ⇒ `V<xEF>: unbound
+  # variable`）⇒ `set -u` 腳本那一行**永遠**崩潰（訊息永遠印不出來）；沒開 `set -u` 則靜默吞掉變數值。
+  # ⚠️ 平台 + locale 相依（`LC_ALL=C` 不發作、linux/glibc 亦不發作）⇒ **執行期測試永遠抓不到**。
+  # **移植自 a2a-dev** 的既有守門 `scripts/check-fullwidth-var-expansion.py`（tokenizer 原樣沿用），
+  # atlas-go 端擴充檔案類型（`*.sh` / `Makefile` / `*.mk` / `*.py` / YAML 的 `run:` 區塊）。
+  fullwidth-var-expansion:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Check no `$VAR` immediately followed by a multi-byte character
+      run: bash scripts/ci/check_fullwidth_var_expansion.sh
+
+    # 負向證明（**精確 exit code**，#2011/#2020 的教訓：只斷言「非 0」會把 127/2 也當成擋下了）。
+    # fixture 內容以**八進位轉義**生成（`\044`=`$`、`\357\274\210`=全形字元首位元組）：
+    # 本 workflow 自身不得含該字面樣式，否則掃描器會抓到自己的 fixture 產生器（a2a-dev 同款做法）。
+    - name: Negative proof — an injected fixture must be blocked (exact rc=1)
+      run: |
+        set -uo pipefail
+        F=scripts/__negtest_fwvar__.sh
+        trap 'rm -f "$F"' EXIT
+        printf 'set -u\nV=abc\necho "\044V\357\274\210x"\n' > "$F"
+        rc=0
+        bash scripts/ci/check_fullwidth_var_expansion.sh > /tmp/fw.out 2>&1 || rc=$?
+        echo "[neg] 注入後 rc=${rc}（期望 1）"; sed 's/^/     /' /tmp/fw.out
+        if [ "$rc" -ne 1 ]; then
+          echo "❌ 負向證明失敗：期望精確 exit 1（擋下），得到 ${rc}（127/126/2 都不算擋下）"
+          exit 1
+        fi
+        grep -q '__negtest_fwvar__.sh' /tmp/fw.out || { echo "❌ rc=1 但訊息沒指出我們的 fixture ⇒ 為錯的原因而通過"; exit 1; }
+        rm -f "$F"
+        rc2=0
+        bash scripts/ci/check_fullwidth_var_expansion.sh > /tmp/fw2.out 2>&1 || rc2=$?
+        echo "[pos] 移除後 rc=${rc2}（期望 0）"; sed 's/^/     /' /tmp/fw2.out
+        if [ "$rc2" -ne 0 ]; then
+          echo "❌ 移除 fixture 後仍紅燈（rc=${rc2}）⇒ 檢查不乾淨或有殘留"
+          exit 1
+        fi
+        echo "✅ 負向證明通過（注入 rc=1；移除 rc=0）"
+
+
   # Secret scan — this repo is PUBLIC: a committed credential is leaked forever.
   # Precedent: scripts/alertmanager-webhook/*.plist carried a plaintext telegram bot token
   # from 2026-08-27 until 2026-09-25 (the alert chain was silent for ~42h because of it).
@@ -517,11 +559,11 @@ jobs:
           fi
           DOC_MAX=$((DOC_MIN + DOC_MAX))
           if [ "$CODE_COUNT" -lt "$DOC_MIN" ] || [ "$CODE_COUNT" -gt "$DOC_MAX" ]; then
-            echo "ERROR: docs/reference/tool-catalog.md says $DOC_MIN–$DOC_MAX tools, but code registers $CODE_COUNT tools."
+            echo "ERROR: docs/reference/tool-catalog.md says ${DOC_MIN}–${DOC_MAX} tools, but code registers $CODE_COUNT tools."
             echo "Update tool-catalog.md, or fix tool registration drift."
             exit 1
           fi
-          echo "OK: doc ($DOC_MIN–$DOC_MAX) matches code ($CODE_COUNT registered tools via countedAddTool wrapper)."
+          echo "OK: doc (${DOC_MIN}–${DOC_MAX}) matches code ($CODE_COUNT registered tools via countedAddTool wrapper)."
 
   # atlas-mcp docs consistency — authoritative MCP docs must use correct
   # env var names, keep AGENTS.md under the line cap, and propagate the
