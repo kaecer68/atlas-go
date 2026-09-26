@@ -430,11 +430,15 @@ check-production-host:
 		exit 1; \
 	fi
 
+# `make ci` 的 glob 跳過清單：*task_liveness* 需要 --tasks（無參數即用法錯誤、刻意 fail-closed），
+# 它不是「掃 repo 型」檢查，而是由 .github/workflows/daily-maintenance.yml 帶參數呼叫。它的契約
+# （逐項判定 + workflow 契約）由 tests/scripts/test-check-task-liveness.sh 在 ci-gate 與 quality.yml
+# 的 daily-maintenance-contract job 以 hermetic（不連網）方式覆蓋 ⇒ 此處跳過是**有覆蓋**的跳過。
 ci: check-production-host
 	@echo "🛡️  Running quick CI checks (slow scripts in 'make ci-slow')..."
 	@failed=0; passed=0; skipped=0; \
 	for script in scripts/ci/check_*.sh; do \
-		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*) continue;; esac; \
+		case "$$script" in *data_naming*|*layer3_*|*markdown_links*|*critical_tasks*|*finmind_quota*|*task_liveness*) continue;; esac; \
 		if [ ! -f "$$script" ]; then continue; fi; \
 		echo "  → $$script"; \
 		if timeout 30 bash "$$script" > /dev/null 2>&1; then \
@@ -979,6 +983,9 @@ ci-gate: embed-dirs
 	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
+	@echo "    ✅"
+	@echo "  → daily-maintenance 活性檢查契約測試（hermetic，不連網；E21）"
+	@bash tests/scripts/test-check-task-liveness.sh
 	@echo "    ✅"
 	@echo "  → 全形字元緊鄰變數展開的靜態檢查（移植自 a2a-dev）＋自我測試"
 	@bash scripts/ci/check_fullwidth_var_expansion.sh

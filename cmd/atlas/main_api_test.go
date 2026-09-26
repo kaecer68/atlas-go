@@ -45,6 +45,13 @@ import (
 // type assertion on the installed substrate, and an unexported method would
 // satisfy neither optional interface outside package main.
 //
+// The entry added on 2026-09-26 (E21) is (*usageError).Error() string — the
+// error returned when the command line cannot be dispatched (an unrecognized
+// positional argument such as `atlas-go weights adjust --apply`). It is
+// exported because `error` requires an exported Error method; the type itself
+// stays unexported, and no other package consumes it. Its behaviour is locked
+// by cli_dispatch_test.go.
+//
 // Anything else is package-private and protected by the per-function
 // test files (run_simulation_test.go, run_live_test.go,
 // run_simulation_mode_test.go, load_calibration_orders_test.go).

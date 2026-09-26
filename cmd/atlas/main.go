@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -195,6 +197,16 @@ type appDeps struct {
 
 func main() {
 	if err := run(os.Args[1:], defaultAppDeps()); err != nil {
+		// E21: an undispatchable command line (unknown positional argument)
+		// must never look like a successful run. Print usage to stderr and
+		// exit non-zero (2 = usage error, matching the convention of most
+		// Unix tools) instead of falling through to a default mode.
+		var usageErr *usageError
+		if errors.As(err, &usageErr) {
+			// Best-effort usage output (a broken stderr must not mask the exit code).
+			_, _ = fmt.Fprintln(os.Stderr, usageErr.Error())
+			os.Exit(2)
+		}
 		log.Fatalf("%v", err)
 	}
 }
@@ -205,6 +217,101 @@ func main() {
 // flag-based (-api, -live, -simulate, -build-universe).
 func isPrismWorkerCmd(args []string) bool {
 	return len(args) >= 2 && args[0] == "prism" && args[1] == "worker"
+}
+
+// positionalCommand is the dispatch target derived from the positional
+// (non-flag) arguments that remain after flag parsing.
+type positionalCommand int
+
+const (
+	// commandDefault is the flag-driven path: -api / -live / -simulate /
+	// -build-universe, or no positional argument at all (which keeps the
+	// historical default of a one-shot simulation, see run()'s tail).
+	commandDefault positionalCommand = iota
+	// commandPrismWorker is the "prism worker" daemon subcommand.
+	commandPrismWorker
+	// commandHelp prints usage and exits 0. An explicit -h/-help anywhere on
+	// the command line requests help, including after a subcommand
+	// ("prism worker --help" must not start a daemon by surprise).
+	commandHelp
+)
+
+// usageError reports a command line that cannot be dispatched. main() prints
+// it verbatim to stderr and exits 2.
+//
+// E21 root cause: before this type existed the only positional subcommand
+// ("prism worker") was checked, everything else was silently ignored and run()
+// fell through to the default simulation path. `.github/workflows/
+// daily-maintenance.yml` invoked seven such non-existent commands
+// (`weights adjust`, `prism status`, `reflexivity report`, ...) for months:
+// every run was green, every artifact was empty.
+type usageError struct {
+	reason string
+	usage  string
+}
+
+func (e *usageError) Error() string {
+	return e.reason + "\n\n" + e.usage
+}
+
+// cliUsage builds the CLI help text. The flag section is generated from the
+// live FlagSet so it can never drift from the actual flags.
+func cliUsage(flags *flag.FlagSet) string {
+	var buf bytes.Buffer
+	flags.SetOutput(&buf)
+	flags.PrintDefaults()
+	flags.SetOutput(io.Discard)
+
+	return cliUsageHeader + "\nFlags:\n" + buf.String()
+}
+
+// cliUsageHeader documents the modes and the positional-subcommand contract.
+const cliUsageHeader = `atlas — Atlas Go trading platform CLI
+
+Usage:
+  atlas [flags]                     run a one-shot simulation (default with no positional args)
+  atlas -simulate [flags]           run one-shot daily simulation and exit
+  atlas -api [flags]                start the dashboard API server
+  atlas -live [flags]               start the live trading orchestrator
+  atlas -build-universe MODE        run the SmartUniverse pipeline (run|map|status)
+  atlas -check-integrity            validate configs/parameters.json and exit
+  atlas prism worker                run the PRISM training-queue worker daemon
+  atlas -version                    print the build version and exit
+
+Note: "prism worker" is the ONLY positional subcommand. Any other positional
+argument (for example "weights adjust --apply" or "prism status") is rejected
+with a non-zero exit code — it does NOT fall back to the default simulation.`
+
+// classifyPositionalArgs maps the post-flag positional args to a dispatch
+// target. usage is embedded in the returned error so the caller can print the
+// full help without rebuilding it.
+//
+// Contract (E21):
+//   - no positional args         -> commandDefault (flag-driven mode)
+//   - "prism worker"             -> commandPrismWorker
+//   - -h/-help/--help anywhere   -> commandHelp (exit 0)
+//   - anything else positional   -> usageError (never a silent fallback)
+func classifyPositionalArgs(args []string, usage string) (positionalCommand, error) {
+	for _, a := range args {
+		switch a {
+		case "-h", "-help", "--help":
+			return commandHelp, nil
+		}
+	}
+	switch {
+	case len(args) == 0:
+		return commandDefault, nil
+	case isPrismWorkerCmd(args):
+		return commandPrismWorker, nil
+	default:
+		return commandDefault, &usageError{
+			reason: fmt.Sprintf(
+				"unknown command: atlas %s\n\"prism worker\" is the only positional subcommand; every other mode is selected with a flag.",
+				strings.Join(args, " "),
+			),
+			usage: usage,
+		}
+	}
 }
 
 // janusEngine is the global janus.Engine instance, populated by run() when
@@ -275,11 +382,29 @@ func run(args []string, deps appDeps) error {
 	buildUniverseMode := flags.String("build-universe", "", "run SmartUniverseBuilder pipeline: run|map|status")
 	fubonProxyPort := flags.Int("fubon-port", constants.FubonProxyPort, "fubon-proxy Python 服務 listen port(同時決定 /health URL 與 FubonClient proxy URL)")
 	if err := flags.Parse(args); err != nil {
+		// -h/-help is a request for help, not a failure: print usage, exit 0.
+		if errors.Is(err, flag.ErrHelp) {
+			// Best-effort help output; the exit status is what callers act on.
+			_, _ = fmt.Fprintln(os.Stdout, cliUsage(flags))
+			return nil
+		}
 		return fmt.Errorf("parse flags: %w", err)
 	}
 	if *versionFlag {
 		info := buildinfo.Current()
 		fmt.Printf("atlas %s (commit %s, built %s, %s)\n", info.Version, info.Commit, info.BuildTime, info.GoVersion)
+		return nil
+	}
+	// E21: reject unrecognized positional arguments BEFORE any bootstrap work
+	// (config load, compose root, fubon-proxy port injection). Historically
+	// they were dropped, so `atlas-go weights adjust --apply` ran a one-shot
+	// simulation and exited 0 — a silent no-op that kept CI green for months.
+	cmd, cmdErr := classifyPositionalArgs(flags.Args(), cliUsage(flags))
+	if cmdErr != nil {
+		return cmdErr
+	}
+	if cmd == commandHelp {
+		_, _ = fmt.Fprintln(os.Stdout, cliUsage(flags))
 		return nil
 	}
 	// -fubon-port flag 注入 fubonproxy 內部 listen port(單一真相來源);
@@ -373,7 +498,8 @@ func run(args []string, deps appDeps) error {
 	// does not need the full runtime (no API server, no live trading
 	// bootstrap, no Postgres pre-flight). Route it before the heavy
 	// init so a misconfigured DB does not block worker startup.
-	if isPrismWorkerCmd(flags.Args()) {
+	// The target was resolved by classifyPositionalArgs above (E21).
+	if cmd == commandPrismWorker {
 		return runPrismWorker(cfg, deps)
 	}
 
