@@ -11,6 +11,19 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"${CLAUDE_PROJECT_DIR:-}\" ] && [ -f \"$CLAUDE_PROJECT_DIR/.agent-hooks/pretooluse-deny-dangerous.sh\" ]; then bash \"$CLAUDE_PROJECT_DIR/.agent-hooks/pretooluse-deny-dangerous.sh\"; fi",
+            "timeout": 10,
+            "statusMessage": "agent-guard: checking command against deny-dangerous rules..."
+          }
+        ]
+      }
     ]
   }
 }
