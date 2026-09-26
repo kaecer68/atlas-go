@@ -31,8 +31,8 @@
 |---|---|---|---|---|
 | E1 | coverage 門檻空值 fail-open | `Makefile` + `ci-cd.yml` + `quality.yml` + `local-ci.sh` | 他線 `atlas-cov-fix` | 在飛（**佔用 Makefile/quality.yml**）|
 | E2 | 負向證明把 exit 127/2 當「擋下了」 | 10 處 | — | ✅ 已併（#2020/#2022）|
-| E3 | `timeout(124)` 只計 skipped ⇒ 掛住的檢查仍讓 `make ci` 回 0 | `Makefile` ci 段 | **無**（等 E1 讓出）| 待派（串行在 E1 後）|
-| E4 | pre-push 取不到 `origin/main` 即放行 4 gate | `.githooks/pre-push` | **無** | 待派（可並行：無人佔用）|
+| E3 | `timeout(124)` 只計 skipped ⇒ 掛住的檢查仍讓 `make ci` 回 0 | `Makefile` ci 段 | **他線（已登記 `FU-20260926-12`，#2028）** | **不重複** |
+| E4 | pre-push 取不到 `origin/main` 即放行 4 gate | `.githooks/pre-push` | **無** | ⚠️ **與 `FU-20260926-15` 同檔 ⇒ 串行** |
 | E5 | 危險指令 hook 預設 warn | `.agent-hooks/deny-dangerous.sh` | **無** | 待派（可並行）|
 | E6 | `--warn-only` 使 job 不可能紅；shellcheck/frontend-smoke skip 出口 | `quality.yml` 等 | **無**（等 E1/#2003 讓出）| 待派（串行）|
 | E7 | `$VAR（` 全形括號併入變數名（`set -u` 崩潰）| `check_finmind_quota.sh:65` | 他線 `atlas-shnonascii` | 在飛（不重複）|
@@ -51,3 +51,33 @@
 ## §5 明示不排（既有 backlog，不自動派工）
 
 `#1944` inert 殘項（需 bounded 清單）、`#1756`、`#1659`
+
+---
+
+## §6 與 `FOLLOWUPS.md` 的 FU registry 的關係（對帳 2026-09-26，避免兩套追蹤）
+
+**現況**：本表（D/E 分類 + 擁有者）與 `docs/operations/FOLLOWUPS.md` 的 `FU-<date>-NN`（詳細紀錄）**並存**。分工：
+- **本表 = 分類/擁有者/狀態視圖**（回答「誰在做什麼、什麼沒人做」）
+- **FU registry = 逐項詳細紀錄**（現象、證據、處置、殘項）
+- **規則**：本表的每一項**必須**對應一個 FU 號或 PR；反之不要求（registry 可能有本表尚未收納的項）
+
+### 已對帳（2026-09-26，main `905b4e95`，現有最大號 `FU-20260926-17`）
+
+| 本表 | 對應 FU / PR | 備註 |
+|---|---|---|
+| **E3**（`make ci` timeout 124 只計 skipped）| **`FU-20260926-12`** | **他線已登記**（#2028）⇒ 本表不重複派遣 |
+| E4（`.githooks/pre-push` 取不到 origin/main 即放行）| 無（但 **`FU-20260926-15` 也在同一檔**：pre-push 缺 host binary 新鮮度閘門）| ⚠️ **同檔衝突 ⇒ 必須串行**（先讓 FU-15 落地或用同一 PR）|
+| E8（flaky：`WalkDir("internal")` × apigateway 相對 `data/`）| 無 | `FU-20260926-17`（fubonproxy）是**另一個** flaky，**不重複** |
+| E2（負向證明假綠）| ✅ #2020 / #2022 | 已結案 |
+| D3（校準漂移）| `FU-20260926-16`（季節校準污染源）+ #2017 | 相關但不同面 |
+
+### `FU-` 號段分配規則（**強制，修正本表 §1 的過時配置**）
+
+> **新增 FU 前必須先 `git fetch origin main` 並取當前最大號 +1**；**不得**用先前分配的號（本 session 已兩次撞號：`-10`、以及本表的 `-12/-13/-14` 在被使用前就被他線取走）。
+> 並在 **同一 PR 內**同時更新本表 §3/E 與 registry，避免兩套號不一致。
+
+| lane / child | 分配號 |
+|---|---|
+| `fix-E8-E9-flaky-sa12` | **FU-20260926-18（E8）、-19（E9）** |
+| `fix-E10-retired-imac` | **FU-20260926-20**（原配置 -14 已被 Telegram token 取走）|
+| 其他 lane | 各自 fetch 後取 max+1 |
