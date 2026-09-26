@@ -8,23 +8,31 @@ import (
 
 func TestNewFugleChannelAdapter(t *testing.T) {
 	client := &marketdata.FugleClient{}
-	a := NewFugleChannelAdapter(client)
+	workDir := t.TempDir()
+	a := NewFugleChannelAdapter(client, workDir)
 	if a == nil {
 		t.Fatal("NewFugleChannelAdapter returned nil")
 	}
 	if a.client != client {
 		t.Error("client not set correctly")
 	}
+	if a.snapshotBase != workDir {
+		t.Errorf("snapshotBase = %q, want %q (the snapshot base must be injected, not CWD-relative)", a.snapshotBase, workDir)
+	}
 }
 
 func TestNewFinMindChannelAdapter(t *testing.T) {
 	client := &marketdata.FinMindClient{}
-	a := NewFinMindChannelAdapter(client)
+	workDir := t.TempDir()
+	a := NewFinMindChannelAdapter(client, workDir)
 	if a == nil {
 		t.Fatal("NewFinMindChannelAdapter returned nil")
 	}
 	if a.client != client {
 		t.Error("client not set correctly")
+	}
+	if a.snapshotBase != workDir {
+		t.Errorf("snapshotBase = %q, want %q (the snapshot base must be injected, not CWD-relative)", a.snapshotBase, workDir)
 	}
 }
 

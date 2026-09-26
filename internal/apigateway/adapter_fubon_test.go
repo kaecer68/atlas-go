@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -55,7 +57,8 @@ func TestFubonChannelAdapter_Fetch(t *testing.T) {
 	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
 	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
 
-	adapter := NewFubonChannelAdapter(client)
+	snapshotBase := t.TempDir()
+	adapter := NewFubonChannelAdapter(client, snapshotBase)
 	res, err := adapter.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
@@ -65,6 +68,11 @@ func TestFubonChannelAdapter_Fetch(t *testing.T) {
 	}
 	if res.Meta.ChannelID != "fubon" {
 		t.Errorf("ChannelID = %q, want fubon", res.Meta.ChannelID)
+	}
+	// Snapshot must land under the injected work dir, never under the CWD
+	// (see saveSnapshot / FU-20260926-18).
+	if _, err := os.Stat(filepath.Join(snapshotBase, "data", "state", "fubon", "latest.json")); err != nil {
+		t.Errorf("Fetch() did not snapshot under the injected work dir: %v", err)
 	}
 }
 
@@ -88,7 +96,7 @@ func TestFubonChannelAdapter_HealthCheck(t *testing.T) {
 	client.SetHTTPClient(withClientMockTransport(server, "fubon-proxy:18081"))
 	client.SetHealthClient(withClientMockTransport(server, "fubon-proxy:18081"))
 
-	adapter := NewFubonChannelAdapter(client)
+	adapter := NewFubonChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err != nil {
 		t.Fatalf("HealthCheck() error = %v", err)
@@ -114,7 +122,7 @@ func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
 	client := marketdata.NewFubonClient()
 	client.SetHTTPClient(withClientMockTransport(server, "fubon-proxy:18081"))
 
-	adapter := NewFubonChannelAdapter(client)
+	adapter := NewFubonChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err == nil {
 		t.Fatal("expected error on failed health check")
@@ -127,7 +135,7 @@ func TestFubonChannelAdapter_HealthCheck_Failure(t *testing.T) {
 func TestFubonChannelAdapter_RateLimit(t *testing.T) {
 	writeParametersJSON(t, nil)
 	client := marketdata.NewFubonClient()
-	adapter := NewFubonChannelAdapter(client)
+	adapter := NewFubonChannelAdapter(client, t.TempDir())
 	if adapter.RateLimit() == nil {
 		t.Fatal("RateLimit() returned nil")
 	}

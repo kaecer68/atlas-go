@@ -15,11 +15,15 @@ import (
 // FugleChannelAdapter adapts a FugleClient to the DataProvider interface.
 type FugleChannelAdapter struct {
 	client *marketdata.FugleClient
+	// snapshotBase is the configured work dir the L3 channel snapshot is
+	// written under (injected; see saveSnapshot for why never CWD-relative).
+	snapshotBase string
 }
 
 // NewFugleChannelAdapter creates a new adapter for the Fugle channel.
-func NewFugleChannelAdapter(client *marketdata.FugleClient) *FugleChannelAdapter {
-	return &FugleChannelAdapter{client: client}
+// workDir is the configured work dir; it MUST be non-empty (see saveSnapshot).
+func NewFugleChannelAdapter(client *marketdata.FugleClient, workDir string) *FugleChannelAdapter {
+	return &FugleChannelAdapter{client: client, snapshotBase: workDir}
 }
 
 // Fetch retrieves a quote for 1476 (聚亨, Fugle test symbol) as a health check sample.
@@ -35,7 +39,7 @@ func (a *FugleChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 		return nil, fmt.Errorf("fugle marshal: %w", err)
 	}
 	limiter := a.RateLimit()
-	saveSnapshot("fugle", data)
+	saveSnapshot(a.snapshotBase, "fugle", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{

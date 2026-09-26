@@ -114,7 +114,9 @@ func EnsureFubonAdapter(g *Gateway) bool {
 			"msg", "fubon-proxy only reachable on 127.0.0.1, overriding proxy host")
 	}
 
-	g.registry.Register("fubon", NewFubonChannelAdapter(marketdata.GetSharedFubonClient()))
+	// The adapter gets the gateway's configured work dir: its Fetch persists the
+	// L3 channel snapshot (see saveSnapshot), which must not follow the CWD.
+	g.registry.Register("fubon", NewFubonChannelAdapter(marketdata.GetSharedFubonClient(), g.WorkDir()))
 	logging.Info("apigateway", "adapter_registered", "channel", "fubon")
 	return true
 }

@@ -15,14 +15,19 @@ import (
 // FinMindChannelAdapter adapts a FinMindClient to the DataProvider interface.
 type FinMindChannelAdapter struct {
 	client *marketdata.FinMindClient
+	// snapshotBase is the configured work dir (config.Config.WorkDir) the
+	// L3 channel snapshot is written under. It is injected, never derived from
+	// the process CWD: see saveSnapshot for why a relative path is forbidden.
+	snapshotBase string
 	// now is the clock used to pick the probe date. Nil means time.Now; tests
 	// set it to replay a 休市日 / 交易日盤前 probe deterministically (#1999).
 	now func() time.Time
 }
 
 // NewFinMindChannelAdapter creates a new adapter for the FinMind channel.
-func NewFinMindChannelAdapter(client *marketdata.FinMindClient) *FinMindChannelAdapter {
-	return &FinMindChannelAdapter{client: client, now: time.Now}
+// workDir is the configured work dir; it MUST be non-empty (see saveSnapshot).
+func NewFinMindChannelAdapter(client *marketdata.FinMindClient, workDir string) *FinMindChannelAdapter {
+	return &FinMindChannelAdapter{client: client, snapshotBase: workDir, now: time.Now}
 }
 
 // clock returns the adapter's time source (nil-safe: a hand-constructed
@@ -120,7 +125,7 @@ func (a *FinMindChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error)
 		return nil, fmt.Errorf("finmind marshal: %w", err)
 	}
 	limiter := a.RateLimit()
-	saveSnapshot("finmind", data)
+	saveSnapshot(a.snapshotBase, "finmind", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{

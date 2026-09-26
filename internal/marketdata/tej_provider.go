@@ -89,10 +89,19 @@ var (
 // GetSharedTEJClient returns a singleton TEJClient that all components
 // share. Using a single client ensures one token bucket enforces the
 // rate limit across all call sites. The apiKey is used only on first
-// call; subsequent calls ignore it.
-func GetSharedTEJClient(apiKey string) *TEJClient {
+// call; subsequent calls ignore it. The stateDir is captured once for the
+// shared DailyQuotaTracker, exactly like GetSharedFinMindClient /
+// GetSharedFugleClient; omitting it keeps the historical relative
+// "data/state" default, so production callers MUST pass the configured work
+// dir (a CWD-relative quota file is a silent path bug — see the E8 note on
+// apigateway.saveSnapshot).
+func GetSharedTEJClient(apiKey string, stateDir ...string) *TEJClient {
+	dir := "data/state"
+	if len(stateDir) > 0 && stateDir[0] != "" {
+		dir = stateDir[0]
+	}
 	sharedTEJClientOnce.Do(func() {
-		sharedTEJClient = newTEJClientInternal(apiKey)
+		sharedTEJClient = newTEJClientInternal(apiKey, dir)
 	})
 	return sharedTEJClient
 }
@@ -112,7 +121,7 @@ func ResetSharedTEJClient() {
 //
 // Deprecated: use GetSharedTEJClient for production code.
 func NewTEJClient(apiKey string) *TEJClient {
-	return newTEJClientInternal(apiKey)
+	return newTEJClientInternal(apiKey, "data/state")
 }
 
 // SetHTTPClient sets a custom HTTP client for tests.
@@ -123,10 +132,11 @@ func (c *TEJClient) SetHTTPClient(client *http.Client) {
 }
 
 // newTEJClientInternal creates a TEJ API client (shared implementation).
-func newTEJClientInternal(apiKey string) *TEJClient {
+// stateDir is where the DailyQuotaTracker persists its state file.
+func newTEJClientInternal(apiKey, stateDir string) *TEJClient {
 	params := config.GetParametersConfig()
 	dailyLimit := getTEJDailyLimit()
-	tracker := NewDailyQuotaTracker("tej", "data/state", dailyLimit)
+	tracker := NewDailyQuotaTracker("tej", stateDir, dailyLimit)
 	// P2-18: register the tracker with the global QuotaRegistry so the
 	// dashboard / channel-health page shows TEJ alongside FinMind/Fugle in
 	// one Snapshot() once the key is revived. FinMind and Fugle register in

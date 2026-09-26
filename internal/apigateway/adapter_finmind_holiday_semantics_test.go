@@ -95,10 +95,10 @@ func newFinmindAdapter(t *testing.T, now time.Time, u *finmindFakeUpstream) *Fin
 	t.Helper()
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(u.server, "api.finmindtrade.com"))
 
-	adapter := NewFinMindChannelAdapter(client)
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 	adapter.now = func() time.Time { return now }
 	return adapter
 }
