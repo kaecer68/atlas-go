@@ -137,7 +137,7 @@
 | `FUBON_PERSONAL_ID` | Fubon 個人 ID（DMA 登入） | Fubon |
 | `FINMIND_API_KEY` / `FINMIND_TOKEN` | FinMind API 金鑰（Sponsor token 亦經此；backfill CLI 兩者皆接受） | FinMind |
 | `FINMIND_RATE_LIMIT_PER_HOUR` | FinMind 本地每小時請求預算（free tier 600；Sponsor 6000，#1742） | FinMind |
-| `FINMIND_DAILY_LIMIT` | FinMind 本地**每日**呼叫上限覆寫（預設 12000，見 `internal/marketdata/finmind_client.go` `finmindDailyLimit`；2026-09-26 由 14400 下修，因上游在 ~12500 就回 402）。設定高於觀測拒絕點會記 WARN。未設 → 用常數 | FinMind |
+| `FINMIND_DAILY_LIMIT` | FinMind 本地**每日**呼叫上限覆寫（預設 12000，見 `internal/marketdata/finmind_client.go` `finmindDailyLimit`；2026-09-26 由 14400 下修，因上游在 ~12500 就回 402）。設定高於觀測拒絕點會記 WARN。未設 → 用常數。**適用範圍（#2014）**：此上限是「**共用同一個 state dir** 的所有 process 的**合計**」——`data/state/finmind_daily_quota.json` 以 `<state>.lock` 的 flock 做 read-modify-write；**不同主機／不同 state dir 各自獨立計數**，不是帳號級保證。互斥靠該檔案系統的 advisory lock（flock）：NFS/SMB 等不保證，換 FS／runtime 需重測 | FinMind |
 | `TEJ_API_KEY` | TEJ API 金鑰 | TEJ |
 
 ---
