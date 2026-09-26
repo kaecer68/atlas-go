@@ -1,182 +1,36 @@
 #!/bin/bash
 #
-# DEPRECATED — D1 決策退役 2026-08-17
+# DEPRECATED — D1 決策退役 2026-08-17 / E17 改為明示 no-op 2026-09-26
 #
-# 真實 Darwinian 演化已遷移至 Go BTM: internal/portfolio/darwinian_weights.go
-# 的 auto_daily_simulation (由 Go 側 cron 觸發, 產出 darwinian_history.jsonl)。
-# 本 shell script 僅為占位 stub，結構完整但核心計算已註解 (L101 "# would calculate")。
-# 用途: 保留脚本框架供日後參考，不承擔實際執行。
+# 真實 Darwinian 演化在 Go 側，本檔不承擔任何計算:
+#   - 實作: internal/portfolio/darwinian_weights.go (DarwinianWeightManager)
+#   - BTM 任務: auto_daily_simulation（「每日模擬場次執行」, 任務名稱表見
+#     internal/apigateway/background.go）
+#   - 產出: data/state/darwinian_history.jsonl
 #
-# Darwinian Weight Daily Adjustment Script
-# Atlas-GIC Style: Adjusts agent weights based on rolling Sharpe performance
+# 為何本檔還存在: docker-compose.yml 的 atlas-cron-darwinian 服務仍以
+#   CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply（CRON_SCHEDULE=0 9 * * *）
+# 呼叫本檔。移除該容器屬生產拓撲變更，故保留服務、只把腳本改成明示 no-op。
 #
-# Usage: ./scripts/darwinian_adjust.sh [--dry-run] [--reset]
+# 舊行為（E17 修掉的就是這個）: 參數解析器只認 --dry-run / --reset，收到 --apply 即
+#   "Unknown option: --apply" 並 exit 1 ⇒ cron 每日在 /var/log/cron/cron.log 留下
+#   一次靜默失敗，並回報 liveness exit_code=1。
 #
-
+# 新行為: 任何參數一律接受、一律 no-op、一律 exit 0，並印出可 grep 的訊息。
+#   看到下面這行代表排程正常運作，不是故障。
+#
+# Usage: ./scripts/darwinian_adjust.sh [--apply] [--dry-run] [--reset]
+#   （所有參數都被接受並忽略；本檔不讀寫任何檔案、不產生 report）
+#
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CONFIGS_DIR="${PROJECT_ROOT}/configs"
-WEIGHTS_FILE="${CONFIGS_DIR}/darwinian_weights.json"
-REPORTS_DIR="${PROJECT_ROOT}/data/reports"
-LOGS_DIR="${PROJECT_ROOT}/logs"
+# 參數一律接受並忽略（--apply / --dry-run / --reset / 未知參數皆同）:
+# 退役 stub 的退出碼不應隨呼叫端參數而變（E17 要求 4）。
+: "$@"
 
-# Create directories if needed
-mkdir -p "${CONFIGS_DIR}" "${REPORTS_DIR}" "${LOGS_DIR}"
+printf '[%s] darwinian_adjust: DEPRECATED — Go auto_daily_simulation handles this; no-op exit 0\n' \
+    "$(date '+%Y-%m-%d %H:%M:%S')"
+printf '[%s] darwinian_adjust: real implementation = internal/portfolio/darwinian_weights.go (BTM task auto_daily_simulation); no-op here is expected, not a failure\n' \
+    "$(date '+%Y-%m-%d %H:%M:%S')"
 
-DRY_RUN=false
-RESET=false
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --reset)
-            RESET=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: $0 [--dry-run] [--reset]"
-            exit 1
-            ;;
-    esac
-done
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
-
-# Check if running during market hours (Taiwan: 9:00-13:30)
-check_market_hours() {
-    local hour=$(date +%H)
-    local min=$(date +%M)
-    local current_time=$((10#$hour * 60 + 10#$min))
-    local market_open=$((9 * 60))      # 9:00
-    local market_close=$((13 * 60 + 30)) # 13:30
-    
-    if [[ $current_time -ge $market_open && $current_time -le $market_close ]]; then
-        log "WARNING: Running during Taiwan market hours (9:00-13:30)"
-        log "Consider running after market close for consistency"
-    fi
-}
-
-# Perform Darwinian weight adjustment
-adjust_weights() {
-    log "Starting Darwinian weight adjustment..."
-    
-    if [[ "$RESET" == true ]]; then
-        log "RESET mode: All weights will be reset to neutral (1.0)"
-        if [[ "$DRY_RUN" == false ]]; then
-            # Create backup
-            if [[ -f "${WEIGHTS_FILE}" ]]; then
-                cp "${WEIGHTS_FILE}" "${WEIGHTS_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
-            fi
-            
-            # Reset weights by modifying the JSON file
-            if command -v jq &> /dev/null; then
-                jq '.weights |= with_entries(.value.weight = 1.0)' "${WEIGHTS_FILE}" > "${WEIGHTS_FILE}.tmp" && \
-                    mv "${WEIGHTS_FILE}.tmp" "${WEIGHTS_FILE}"
-            else
-                log "ERROR: jq not installed. Cannot reset weights."
-                exit 1
-            fi
-        fi
-        log "All agent weights reset to neutral (1.0)"
-        return
-    fi
-    
-    # Check if weights file exists
-    if [[ ! -f "${WEIGHTS_FILE}" ]]; then
-        log "Weights file not found: ${WEIGHTS_FILE}"
-        log "Run a backtest or initialize the system first"
-        exit 1
-    fi
-    
-    # Generate adjustment report
-    local report_file="${REPORTS_DIR}/darwinian_adjustment_$(date +%Y%m%d).json"
-    
-    if command -v jq &> /dev/null; then
-        # Extract current weights and calculate adjustments
-        log "Calculating performance quartiles..."
-        
-        # This is a simplified version - the actual Go implementation
-        # would calculate rolling Sharpe and adjust weights
-        # Here we just log the current state
-        
-        log "Current weight distribution:"
-        jq -r '.weights | to_entries | sort_by(.value.weight) | 
-            .[] | "  \(.key): \(.value.weight) (Sharpe: \(.value.rolling_sharpe // 0))"' \
-            "${WEIGHTS_FILE}" 2>/dev/null || log "  (No weights data available)"
-    fi
-    
-    log "Weight adjustment completed"
-    log "Report saved to: ${report_file}"
-}
-
-# Generate weight distribution report
-generate_report() {
-    local report_file="${REPORTS_DIR}/darwinian_report_$(date +%Y%m%d_%H%M%S).md"
-    
-    cat > "${report_file}" << EOF
-# Darwinian Weights Report
-
-**Generated:** $(date '+%Y-%m-%d %H:%M:%S')
-**Mode:** $([[ "$DRY_RUN" == true ]] && echo "DRY RUN" || echo "LIVE")
-
-## Weight Distribution
-
-| Agent | Layer | Weight | Rolling Sharpe | Signals |
-|-------|-------|--------|------------------|----------|
-EOF
-
-    if [[ -f "${WEIGHTS_FILE}" ]] && command -v jq &> /dev/null; then
-        jq -r '.weights | to_entries | sort_by(.value.weight) | reverse | 
-            .[] | "| \(.key) | \(.value.layer // "unknown") | \(.value.weight) | \(.value.rolling_sharpe // "N/A") | \(.value.total_signals // 0) |"' \
-            "${WEIGHTS_FILE}" >> "${report_file}" 2>/dev/null || true
-    else
-        echo "| (No data available) | - | - | - | - |" >> "${report_file}"
-    fi
-
-    cat >> "${report_file}" << EOF
-
-## Interpretation
-
-- **Weight 2.0-2.5**: Agent is "shouting" - highest confidence, strong performance
-- **Weight 1.0-1.9**: Above neutral - good performance
-- **Weight 0.5-0.9**: Below neutral - underperforming
-- **Weight 0.3-0.5**: Agent is "whispering" - weak performance, minimal influence
-
-## Next Steps
-
-1. Review top performers for potential prompt optimization
-2. Consider disabling agents stuck at minimum weight (0.3) for 20+ days
-3. Monitor agents near maximum weight (2.5) for mean reversion risk
-
-EOF
-
-    log "Report generated: ${report_file}"
-}
-
-# Main execution
-main() {
-    log "=== Darwinian Weight Adjustment ==="
-    log "Project root: ${PROJECT_ROOT}"
-    log "Weights file: ${WEIGHTS_FILE}"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        log "DRY RUN mode - no changes will be made"
-    fi
-    
-    check_market_hours
-    adjust_weights
-    generate_report
-    
-    log "=== Adjustment Complete ==="
-}
-
-main "$@"
+exit 0
