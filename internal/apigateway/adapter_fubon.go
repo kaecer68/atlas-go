@@ -15,13 +15,18 @@ import (
 type FubonChannelAdapter struct {
 	client  *marketdata.FubonClient
 	limiter *rate.Limiter
+	// snapshotBase is the configured work dir the L3 channel snapshot is
+	// written under (injected; see saveSnapshot for why never CWD-relative).
+	snapshotBase string
 }
 
 // NewFubonChannelAdapter creates a new adapter for the Fubon channel.
-func NewFubonChannelAdapter(client *marketdata.FubonClient) *FubonChannelAdapter {
+// workDir is the configured work dir; it MUST be non-empty (see saveSnapshot).
+func NewFubonChannelAdapter(client *marketdata.FubonClient, workDir string) *FubonChannelAdapter {
 	return &FubonChannelAdapter{
-		client:  client,
-		limiter: rate.NewLimiter(FugleBasicRate, FugleBasicBurst), // same tier as Fugle
+		client:       client,
+		limiter:      rate.NewLimiter(FugleBasicRate, FugleBasicBurst), // same tier as Fugle
+		snapshotBase: workDir,
 	}
 }
 
@@ -39,7 +44,7 @@ func (a *FubonChannelAdapter) Fetch(ctx context.Context) (*FetchResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fubon marshal: %w", err)
 	}
-	saveSnapshot("fubon", data)
+	saveSnapshot(a.snapshotBase, "fubon", data)
 	return &FetchResult{
 		Data: data,
 		Meta: FetchMetadata{

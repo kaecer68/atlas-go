@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -50,10 +52,11 @@ func TestFinMindChannelAdapter_Fetch(t *testing.T) {
 
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
-	adapter := NewFinMindChannelAdapter(client)
+	snapshotBase := t.TempDir()
+	adapter := NewFinMindChannelAdapter(client, snapshotBase)
 	res, err := adapter.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
@@ -63,6 +66,12 @@ func TestFinMindChannelAdapter_Fetch(t *testing.T) {
 	}
 	if res.Meta.ChannelID != "finmind" {
 		t.Errorf("ChannelID = %q, want finmind", res.Meta.ChannelID)
+	}
+	// The L3 snapshot must land under the injected work dir (that injection is
+	// the fix for FU-20260926-18: a CWD-relative write puts it inside the repo
+	// tree under `go test`).
+	if _, err := os.Stat(filepath.Join(snapshotBase, "data", "state", "finmind", "latest.json")); err != nil {
+		t.Errorf("Fetch() did not snapshot under the injected work dir: %v", err)
 	}
 }
 
@@ -76,10 +85,10 @@ func TestFinMindChannelAdapter_HealthCheck(t *testing.T) {
 
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
-	adapter := NewFinMindChannelAdapter(client)
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err != nil {
 		t.Fatalf("HealthCheck() error = %v", err)
@@ -97,10 +106,10 @@ func TestFinMindChannelAdapter_HealthCheck_Failure(t *testing.T) {
 
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
-	adapter := NewFinMindChannelAdapter(client)
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err == nil {
 		t.Fatal("expected error on 500 response")
@@ -113,8 +122,8 @@ func TestFinMindChannelAdapter_HealthCheck_Failure(t *testing.T) {
 func TestFinMindChannelAdapter_RateLimit(t *testing.T) {
 	writeParametersJSON(t, nil)
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
-	adapter := NewFinMindChannelAdapter(client)
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 	if adapter.RateLimit() == nil {
 		t.Fatal("RateLimit() returned nil")
 	}
@@ -134,8 +143,8 @@ func TestFinMindChannelAdapter_RateLimit(t *testing.T) {
 // is intentionally unexported — the gate is enforced inside the package).
 func TestFinMindChannelAdapter_HealthCheck_QuotaExhausted_MapsToWarn(t *testing.T) {
 	marketdata.ResetSharedFinMindClient()
-	client := marketdata.NewFinMindClient("test-key")
-	adapter := NewFinMindChannelAdapter(client)
+	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 
 	// Drive the gate to the exhausted state. We can't reach quotaTracker
 	// from outside the marketdata package, so we instead verify the
@@ -185,7 +194,7 @@ func TestFinMindChannelAdapter_HealthCheck_Server402_MapsToWarn(t *testing.T) {
 	client := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
-	adapter := NewFinMindChannelAdapter(client)
+	adapter := NewFinMindChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err == nil {
 		t.Fatal("expected error on 402 response")

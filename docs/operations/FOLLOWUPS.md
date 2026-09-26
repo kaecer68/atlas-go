@@ -1167,6 +1167,77 @@
 - **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
 
 ---
+### FU-20260926-18 — E8：`internal/config` 的 `WalkDir("internal")` 偶發假紅（apigateway 測試在 repo 樹內寫／刪相對 `data/`）
+
+- **狀態**：`done`
+- **記錄日期**：2026-09-26
+- **完成於**：本 PR（`fix/20260926-flaky-and-sa12`）
+- **徵狀**：`go test ./...` 偶發紅燈，且失敗的是**無關的** package：
+  `internal/config/parameters_shadow_declarations_test.go:104` →
+  `walk .../internal: open .../internal/apigateway/data: no such file or directory`。
+- **根因（兩段；已用「flapping dir」在 1.9s 內確定性複現，非猜測）**：
+  1. `internal/apigateway/register_adapters.go` 的 `saveSnapshot(channelID, data)` 以**相對路徑**
+     `data/state/<channelID>/latest.json` 寫檔（= process CWD；`go test` 下 CWD 是 package 目錄）
+     ⇒ adapter 測試把 `internal/apigateway/data/…` 寫進 repo 樹。
+  2. `internal/apigateway/adapter_finmind_util_test.go` 的 `TestSaveSnapshot` 用
+     `defer os.RemoveAll("data")` 把整個目錄刪掉。
+  ⇒ 跨 package 並行時，config 的嚴格 walker 會撞上「目錄存在又消失」的窗口（`WalkDir` 的 readdir
+     得到 ENOENT）⇒ **假紅**。同型嚴格 walker 另有 `internal/config/parameters_inert_declarations_test.go:85`。
+- **修法（修根因；**未**放寬/刪除任何斷言、未動 config 的 walker）**：
+  - `saveSnapshot(workDir, channelID, data)`：base dir **注入**；`workDir == ""` 時**拒絕寫入**（warn），
+    不退回 CWD 相對路徑。
+  - finmind / fugle / fubon adapter 建構子收 `workDir`；fubon 自癒註冊路徑改用
+    `Gateway.WorkDir()`（`Gateway` 新增 `workDir` 欄位＋accessor）。
+  - 測試端全面注入 `t.TempDir()`（adapter work dir ＋ quota state dir），移除 `RemoveAll("data")`；
+    `TestSaveSnapshot` 改斷言「寫在注入目錄」＋「CWD 下不得出現 `data/`」＋「空 workDir 必須拒絕」；
+    三個 adapter 的 Fetch 測試新增「snapshot 真的落在注入目錄」斷言。
+  - 同類修正：`GetSharedTEJClient` 收 `stateDir`（與 finmind/fugle 一致）、新增
+    `NewFugleClientWithStateDir`；`register_adapters.go` 一律傳 `filepath.Join(workDir, "data", "state")`。
+  - 找出並修掉第二個 writer：`adapter_tsmc_revenue_test.go` 先建 provider 才建 shared client，
+    而 `GetSharedFinMindClient` 的 state dir 由**第一次呼叫**（sync.Once）決定 ⇒ 被釘在相對
+    `data/state`。改為先建 shared client（注入 temp dir）再建 provider。
+    （以 509 個 top-level 測試逐一掃描確認：清空後只有這兩個測試會產生 `internal/apigateway/data`。）
+- **驗收**：`go test ./internal/... -count=1` 連跑 3 次全綠；跑完 `internal/apigateway` ＋ `internal/config`
+  後 `internal/apigateway/data` 不存在、`git status` 乾淨（見 PR body）。
+- **殘留（同類、未修；另需決策）**：`internal/marketdata` 的**自有**測試仍會留下
+  `internal/marketdata/data/state/*_daily_quota.json`（`NewFinMindClient` / `NewFugleClient` /
+  `NewTEJClient` 的預設 state dir 是相對 `data/state`）。**沒有 deletor** ⇒ 不造成假紅，
+  但屬同一類「測試污染 repo 樹」；要清掉需在該 package 的測試全面注入 temp state dir。
+
+---
+
+### FU-20260926-19 — E9：`sa12-negative-evidence.sh` 在 main 固定 2 條 FAIL 且**沒接進任何 gate**
+
+- **狀態**：`done`
+- **記錄日期**：2026-09-26
+- **完成於**：本 PR（`fix/20260926-flaky-and-sa12`）
+- **量測（改前，main；`bash scripts/ci/sa12-negative-evidence.sh` ⇒ exit 1，10 PASS / 2 FAIL）**：
+  - `FAIL 08 unversioned CapitalFlowAction (found=3, expected=2)`
+  - `FAIL 09 synthetic ranking literal (found=5, expected=1)`
+- **根因（腳本側）**：舊檔名不符 `make ci` 的 `scripts/ci/check_*.sh` glob，也不在任何 workflow 內；
+  2026-07-19 建立後**從未被任何 gate 執行**，因此「命中檔案數 == N」型斷言腐化而無人察覺。
+- **判定**：兩條 FAIL 皆為**過時期望（假陽性）**，N 是被**合法的後續程式碼**撐破：
+  - 08：2026-07-27 (#1372) 起 `internal/orchestrator/strategy_evolver.go:611` 開始消費 canonical
+    的 `sectorallocation.CapitalFlowActionRiskOn`（SA-INV-09 想要的方向）⇒ 3 檔。
+    真正的風險（出現第三份 taxonomy、或 deprecated `capitalflow.*` enum 長出消費者）**不存在**。
+  - 09：2026-07-24 (2282122b) 之後陸續有檔案合法標註或**排除** synthetic 列
+    （F06「只使用 non-synthetic outcome」，實作見 `internal/portfolio/darwinian_period_matrix.go:115`）
+    ⇒ 5 檔；風險（synthetic 餵進 ranking）**不存在**。
+- **二選一決定：採 (a)「修到 PASS 並接進既有 job」**（不是停用）：
+  - 08 改量「定義點恰好兩份」；新增 08b「deprecated `capitalflow.CapitalFlowAction*` 零 production 消費者」；
+    09 改量「`"synthetic"` 不與 rank/score/weight 同現」；新增 09b「F06 排除守門存在（>=1，`atleast`）」。
+    改後 14/14 PASS（`bash scripts/ci/check_sa12_negative_evidence.sh` ⇒ exit 0）。
+  - 接線：**改名** `sa12-negative-evidence.sh` → `scripts/ci/check_sa12_negative_evidence.sh`，
+    由 `make ci` 的既有 glob 自動納入；`make ci` 由 `make ci-full` 呼叫，而 `make ci-full`
+    是 `.githooks/pre-push` 與 PR lifecycle 的 MUST gate。**未動 `Makefile`／`quality.yml`**（本輪由他 lane 佔用）。
+  - **已知限制（已寫進腳本檔頭）**：GitHub Actions 端**沒有任何 workflow 呼叫 `make ci`**
+    （實測 `grep -rn "make ci" .github/workflows/` 無命中）⇒ 這是 local/pre-PR gate，
+    不是 GitHub required check。要讓它在 GH 端變紅燈必須改 `quality.yml`（本輪已被佔用）⇒ 留待後續。
+- **附帶發現（未修；需另一次決策）**：同族的 `scripts/verify-sector-allocation-closure.sh` 自 2026-07
+  (#1255 manifest lifecycle) 起就 **exit 2**：它依賴的 manifest（原本放在 `docs/manifests/`
+  之下、檔名為 `2026-07-18-sector-allocation-simulation-closure` ＋ `.md`）已被刪除且未歸檔 ⇒
+  該 verifier 的 17 條檢查自那時起實際上沒有跑過（含 check 16 的檔案存在檢查；本 PR 已更新其檔名）。
+
 
 ---
 

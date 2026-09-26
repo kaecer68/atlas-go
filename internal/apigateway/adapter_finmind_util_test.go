@@ -1,6 +1,7 @@
 package apigateway
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,22 +84,50 @@ func mustTaipei(t *testing.T) *time.Location {
 	return loc
 }
 
+// TestSaveSnapshot pins the saveSnapshot contract: the L3 snapshot is written
+// under the INJECTED work dir, and nothing is ever written relative to the
+// process CWD.
+//
+// This replaces the previous version of this test, which wrote into the
+// package directory (os.RemoveAll("data") in a defer) — that write/delete pair
+// is what made internal/config's `WalkDir("internal")`
+// (parameters_shadow_declarations_test.go) fail intermittently under
+// `go test ./...`: another package's strict repo-tree walk hit the window in
+// which internal/apigateway/data existed and then did not. See
+// saveSnapshot's doc comment and FU-20260926-18.
 func TestSaveSnapshot(t *testing.T) {
-	// saveSnapshot uses "data/state/<channelID>/latest.json" relative path
-	// We need to ensure the test runs from a clean state
+	workDir := t.TempDir()
 	channelID := "test_channel_test"
-	defer func() {
-		_ = os.RemoveAll("data")
-	}()
 
-	saveSnapshot(channelID, []byte(`{"test": true}`))
+	saveSnapshot(workDir, channelID, []byte(`{"test": true}`))
 
-	expectedPath := filepath.Join("data", "state", channelID, "latest.json")
+	expectedPath := filepath.Join(workDir, "data", "state", channelID, "latest.json")
 	data, err := os.ReadFile(expectedPath)
 	if err != nil {
-		t.Fatalf("saveSnapshot failed to write file: %v", err)
+		t.Fatalf("saveSnapshot failed to write under the injected work dir: %v", err)
 	}
 	if string(data) != `{"test": true}` {
 		t.Errorf("saveSnapshot wrote %q, want {\"test\": true}", string(data))
+	}
+
+	// The tree must stay clean: no CWD-relative "data" directory may appear.
+	cwdPath := filepath.Join("data", "state", channelID)
+	if _, err := os.Stat(cwdPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("saveSnapshot wrote into the process CWD (%s exists): %v; the repo tree must not be touched", cwdPath, err)
+	}
+}
+
+// TestSaveSnapshotRefusesEmptyWorkDir is the fail-closed half of the contract:
+// an empty work dir must NOT fall back to the CWD-relative "data/state"
+// (which under `go test` is inside the repo tree), so a caller that forgets to
+// inject the work dir cannot silently re-create the flake.
+func TestSaveSnapshotRefusesEmptyWorkDir(t *testing.T) {
+	channelID := "test_channel_empty_workdir"
+
+	saveSnapshot("", channelID, []byte(`{"test": true}`))
+
+	cwdPath := filepath.Join("data", "state", channelID)
+	if _, err := os.Stat(cwdPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("saveSnapshot with an empty work dir wrote %s; it must refuse instead: %v", cwdPath, err)
 	}
 }

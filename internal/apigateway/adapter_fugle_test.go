@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kaecer68/atlas-go/internal/marketdata"
@@ -52,10 +54,11 @@ func TestFugleChannelAdapter_Fetch(t *testing.T) {
 	defer server.Close()
 
 	writeParametersJSON(t, nil)
-	client := marketdata.NewFugleClient("test-key")
+	client := marketdata.NewFugleClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.fugle.tw"))
 
-	adapter := NewFugleChannelAdapter(client)
+	snapshotBase := t.TempDir()
+	adapter := NewFugleChannelAdapter(client, snapshotBase)
 	res, err := adapter.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
@@ -65,6 +68,11 @@ func TestFugleChannelAdapter_Fetch(t *testing.T) {
 	}
 	if res.Meta.ChannelID != "fugle" {
 		t.Errorf("ChannelID = %q, want fugle", res.Meta.ChannelID)
+	}
+	// Snapshot must land under the injected work dir, never under the CWD
+	// (see saveSnapshot / FU-20260926-18).
+	if _, err := os.Stat(filepath.Join(snapshotBase, "data", "state", "fugle", "latest.json")); err != nil {
+		t.Errorf("Fetch() did not snapshot under the injected work dir: %v", err)
 	}
 }
 
@@ -83,10 +91,10 @@ func TestFugleChannelAdapter_HealthCheck(t *testing.T) {
 	defer server.Close()
 
 	writeParametersJSON(t, nil)
-	client := marketdata.NewFugleClient("test-key")
+	client := marketdata.NewFugleClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.fugle.tw"))
 
-	adapter := NewFugleChannelAdapter(client)
+	adapter := NewFugleChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err != nil {
 		t.Fatalf("HealthCheck() error = %v", err)
@@ -103,10 +111,10 @@ func TestFugleChannelAdapter_HealthCheck_Failure(t *testing.T) {
 	defer server.Close()
 
 	writeParametersJSON(t, nil)
-	client := marketdata.NewFugleClient("test-key")
+	client := marketdata.NewFugleClientWithStateDir("test-key", t.TempDir())
 	client.SetHTTPClient(withClientMockTransport(server, "api.fugle.tw"))
 
-	adapter := NewFugleChannelAdapter(client)
+	adapter := NewFugleChannelAdapter(client, t.TempDir())
 	status, err := adapter.HealthCheck(context.Background())
 	if err == nil {
 		t.Fatal("expected error on 500 response")
@@ -118,8 +126,8 @@ func TestFugleChannelAdapter_HealthCheck_Failure(t *testing.T) {
 
 func TestFugleChannelAdapter_RateLimit(t *testing.T) {
 	writeParametersJSON(t, nil)
-	client := marketdata.NewFugleClient("test-key")
-	adapter := NewFugleChannelAdapter(client)
+	client := marketdata.NewFugleClientWithStateDir("test-key", t.TempDir())
+	adapter := NewFugleChannelAdapter(client, t.TempDir())
 	if adapter.RateLimit() == nil {
 		t.Fatal("RateLimit() returned nil")
 	}
