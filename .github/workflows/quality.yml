@@ -493,6 +493,22 @@ jobs:
     - name: Negative proof — duplicated / missing / drifted ids must be blocked
       run: bash tests/scripts/test-followups-unique-ids.sh
 
+  # Daily-maintenance 可觀測性閘門的契約測試（E21）。本 job 刻意**只跑 hermetic 測試、不連網**：
+  # 真實端點由 .github/workflows/daily-maintenance.yml 的每日排程查詢；把外網相依放進 PR 必經路徑
+  # 會重演 FU-20260926-21（check_jev_contract 因外部服務 flake 擋住合法 push，反而逼人用
+  # `--no-verify`）。被測標的是 scripts/ci/check_task_liveness.sh：抓不到快照必須 exit 2（不是綠燈）、
+  # 任務逾期／缺席／停用／從未成功必須 exit 1、且 daily-maintenance.yml 的 fail-closed 契約
+  # （三個 job 呼叫本檢查、三個 upload 維持 if-no-files-found: error、沒有 `|| true`、
+  # 不再呼叫不存在的 CLI 子命令）不得被回退。
+  daily-maintenance-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Contract tests for the daily-maintenance liveness gate (hermetic, no network)
+      run: bash tests/scripts/test-check-task-liveness.sh
+
   # F28 護欄：`$VAR` 緊接非 ASCII（全形）字元 —— 2026-09-26 實證：UTF-8 locale 下 bash 會把該字元的
   # **第一個位元組**吃進變數名（`bash -c 'set -u; V=1; echo "$V`＋全形括號`"'` ⇒ `V<xEF>: unbound
   # variable`）⇒ `set -u` 腳本那一行**永遠**崩潰（訊息永遠印不出來）；沒開 `set -u` 則靜默吞掉變數值。
