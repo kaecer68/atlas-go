@@ -862,6 +862,10 @@ ci-gate:
 	@bash scripts/ci/check_agents_md_drift.sh
 	@bash scripts/ci/check_doc_links.sh
 	@echo "    ✅"
+	@echo "  → FOLLOWUPS 條目 id 唯一性（單檔；兩個 lane 撞號 ⇒ FAIL）"
+	@bash scripts/ci/check_followups_unique_ids.sh
+	@bash tests/scripts/test-followups-unique-ids.sh
+	@echo "    ✅"
 	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
 	@bash scripts/ci/check_critical_tasks.sh
 	@echo "    ✅"
