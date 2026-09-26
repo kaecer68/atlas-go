@@ -1,6 +1,6 @@
 ---
 name: atlas-imac-prod-guard
-description: "[已退役 / RETIRED 2026-09-22 — iMac 已出售，本流程一律不可照做；改用 docs/operations/MACMINI-RECOVER.md + a2a-dev scripts/prod-guard.sh] 歷史記錄：iMac (KiMac) 上的 docker compose / docker rm / make rebuild 前置護欄（比對 container_name / image / port / password 與 docs/operations/docker-compose.prod.yml）。Triggers: iMac rebuild, docker rm atlas-*, make rebuild-all, make rebuild-atlas, docker compose up -d, PR #1695 follow-up"
+description: "[已退役 / RETIRED 2026-09-22 — iMac 已出售，本流程一律不可照做；改用 a2a-dev `docs/operations/MACMINI-RECOVER.md` + a2a-dev `scripts/prod-guard.sh`] 歷史記錄：iMac (KiMac) 上的 docker compose / docker rm / make rebuild 前置護欄（比對 container_name / image / port / password 與 docs/operations/docker-compose.prod.yml）。Triggers: iMac rebuild, docker rm atlas-*, make rebuild-all, make rebuild-atlas, docker compose up -d, PR #1695 follow-up"
 ---
 
 # atlas-imac-prod-guard (2026-08-27) — ⛔ 已退役（2026-09-22）
@@ -21,7 +21,9 @@ description: "[已退役 / RETIRED 2026-09-22 — iMac 已出售，本流程一�
 > **現行對應做法（改用這些）**：
 > - 生產主機護欄：a2a-dev `scripts/prod-guard.sh`（偵測 `~/.a2a/PRODUCTION_HOST`；
 >   **不要在生產機跑 CI/重建**）。
-> - 復原與重開機：`docs/operations/MACMINI-RECOVER.md`、a2a-dev `scripts/macmini-recover.sh`。
+> - 復原與重開機：a2a-dev `docs/operations/MACMINI-RECOVER.md`、Mac Mini `~/bin/macmini-recover.sh`
+>   （repo 版 = a2a-dev `scripts/macmini-recover.sh`）。**atlas-go repo 內沒有 MACMINI-RECOVER.md**
+>   （2026-09-26 修正：原字面 `docs/operations/MACMINI-RECOVER.md` 在此 repo 是 dead link）。
 > - 部署：a2a-dev `docs/deployment/MACMINI-DEPLOY-RUNBOOK.md`。
 > - 監控設定樹：**只有一棵權威樹 = repo 的 `monitoring/`** ✗ `~/workspace/atlas-monitoring/`
 >   （歷史殘留）；詳見 `.claude/skills/atlas-monitoring-observability/`。
@@ -119,7 +121,7 @@ cat ~/.config/atlas-go/.env  # 對應欄
 | `atlas-postgres` 沒有 `POSTGRES_PASSWORD` env 或密碼不對 | ⚠️ 直接 ALTER USER（POSTGRES_PASSWORD 只在 initdb 時生效）|
 | `atlas-go-imac` RestartCount=13+ 還在 crash loop | ⚠️ 不要無限重啟，先 root cause |
 
-## 復原 SOP（⛔ 歷史記錄 — iMac 專用，已失效；現行走 `docs/operations/MACMINI-RECOVER.md`）
+## 復原 SOP（⛔ 歷史記錄 — iMac 專用，已失效；現行走 a2a-dev `docs/operations/MACMINI-RECOVER.md`）
 
 > 下列步驟帶 `/Users/kk/...` 與 `ssh kk@kimac`，在 2026-09-22 之後**無法執行**。
 > 原檔曾把 DB 密碼寫死在本檔（公開 repo ✗）；2026-09-25 已改為從 `~/.config/atlas-go/.env`
@@ -140,7 +142,8 @@ cat ~/.config/atlas-go/.env  # 對應欄
 
 - ✗ `docs/operations/iMac-RUNBOOK.md`（**已刪除**，iMac 退役）
 - ✗ `docs/operations/IMAC-STARTUP-SOP.md`（**已刪除**，iMac 退役）
-- `docs/operations/MACMINI-RECOVER.md`（**現行**：Mac Mini 復原）
+- a2a-dev `~/workspace/a2a-dev/docs/operations/MACMINI-RECOVER.md`（**現行**：Mac Mini 復原；
+  該檔**不在**本 repo，2026-09-26 修正前此處是 dead link）
 - `docs/operations/docker-compose.prod.yml`（prod **文件化參考**；live 定義是 repo 根 `docker-compose.yml`）
 - AGENTS.md（高頻陷阱）
 - `.claude/skills/atlas-monitoring-observability/`（alert chain 健康 + monitoring 單一設定樹）

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ⛔ 已淘汰，勿用（2026-09-26 標記） — 本檔是未被任何檔案引用的舊副本。
+  正本 = scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist
+         （被 docs/operations/local-deploy.md 與 Makefile 的 launchd 重載步驟引用）。
+  差異：本檔的 3 個路徑仍是 iMac 時代使用者 /Users/kk（Mac Mini = /Users/kaecer），
+        照它安裝到主機只會讓 launchd 找不到程式（或不寫出 log）。
+  保留此檔僅為歷史；現行安裝/漂移檢查見 docs/operations/local-deploy.md §容器守護腳本。
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>

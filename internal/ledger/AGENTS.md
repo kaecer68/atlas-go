@@ -11,7 +11,7 @@
 |---------|----------------------|------|---------|---------|
 | **jsonl** | `jsonl`（預設） | legacy 檔案導向 store | 無 backend 設置時的 fallback；快速本機測試；不依賴 DB | 無索引、無事務、跨 process 不友好；`Store` 以 `baseDir` 為根目錄寫入 `*.jsonl` |
 | **sqlite** | `sqlite` | 本機 dev 關聯式 store | 開發/單機測試；驗證關聯式 schema 但不想起 PG | 檔案 = `data/state/atlas.db`（`ATLAS_SQLITE_PATH`）；WAL mode；多 process 共用仍有風險 |
-| **postgres** | `postgres` | production SSoT | docker compose / iMac production；多 writer、多 reader | 需先 `SetPostgresPool(*pgxpool.Pool)`，否則 factory 報錯 |
+| **postgres** | `postgres` | production SSoT | docker compose / **Mac Mini** production（2026-09-22 起；iMac 已退役）；多 writer、多 reader | 需先 `SetPostgresPool(*pgxpool.Pool)`，否則 factory 報錯 |
 
 production 部署（`ATLAS_STORE_BACKEND=postgres`）以 PostgreSQL 為權威來源；`data/state/atlas.db` 在 prod 上只是空殼或不存在，禁止把 SQLite 路徑當成固定資料來源。
 

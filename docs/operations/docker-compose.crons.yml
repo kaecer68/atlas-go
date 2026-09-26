@@ -1,4 +1,4 @@
-# iMac production — atlas cron services (C-pg1)
+# Mac Mini production — atlas cron services (C-pg1)（2026-09-22 起 production = Mac Mini；iMac 已退役）
 # 使用: docker compose -f docker-compose.prod.yml -f docker-compose.crons.yml up -d
 # 注意: crons 連 host.docker.internal 的 atlas-postgres (:55432) 和 atlas-go (:18080)
 
