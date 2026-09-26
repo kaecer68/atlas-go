@@ -1023,7 +1023,11 @@
 
 ---
 
-### FU-20260926-14 — atlas-go 的 iMac 殘留清理（任務 E10）：A 類已改 Mac Mini；**2 個 watchdog 操作入口仍指向不存在的 `kk@kimac`（在禁改檔內）**
+### FU-20260926-20 — atlas-go 的 iMac 殘留清理（任務 E10）：A 類已改 Mac Mini；**2 個 watchdog 操作入口仍指向不存在的 `kk@kimac`（在禁改檔內）**
+
+> **號段說明（撞號處置）**：本條目原配置為 `FU-20260926-14`，但該號在併入前已被他線的
+> 「Telegram bot token 無 hot-reload」條目取走（race）⇒ 依 `docs/operations/remediation-manifest.md`
+> §6 的強制分配表改為 **`FU-20260926-20`**（表內明載 lane `fix-E10-retired-imac` = -20）。
 
 - **狀態**：`open`（殘留項落在禁改檔與 B 類，需另一條 lane）
 - **記錄日期**：2026-09-26
