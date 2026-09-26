@@ -11,6 +11,15 @@
 #
 # 用法：bash tests/scripts/test-revert-guard.sh
 set -uo pipefail
+
+# ⚠️ 本檔會建 throwaway git repo。Git 會把 GIT_DIR（與朋友）export 給 hook，所以
+# 「被 hook 呼叫」的那一次，每個 fixture git 命令都會打到**呼叫者的 repo**：2026-09-26
+# 的 pre-push（`make ci-gate`）就是這樣把 fixture 的 commit（"base（PR 分岔點）" 等）
+# 直接 commit 到 main 上（與 #1927 同一個坑）。先丟掉會選 repo 的環境變數，讓每個 git
+# 呼叫只認自己的 cwd；下方 mkrepo 另有 own-repo 斷言，洩漏時直接失敗、絕不 commit。
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHECK="$ROOT/scripts/ci/check_revert_guard.py"
 TMP="$(mktemp -d)"; trap 'rm -rf "${TMP}"' EXIT
@@ -24,9 +33,19 @@ test -f "$CHECK" || { echo "❌ 找不到 $CHECK"; exit 1; }
 
 # ── fixture：真 git repo ─────────────────────────────────────────────
 # 共用資產與一般檔各一，讓「severity 由檔案類別決定」這件事被釘住。
+# Physical（symlink 解開）路徑：macOS 的 /var 與 /private/var 是同一處，字串比對會掩蓋洩漏。
+physical_path() { ( cd "$1" 2>/dev/null && pwd -P ); }
+
 mkrepo() {
   rm -rf "${TMP}/fx"; mkdir -p "${TMP}/fx"; cd "${TMP}/fx" || exit 1
   git init -q -b main .
+  # Own-repo 斷言（#1927 同款）：若 GIT_DIR 洩漏，上面這行不會建出 ${TMP}/fx/.git，
+  # 而後面的 fixture commit 會落到呼叫者的分支上。寧可現在大聲失敗，也不要 commit。
+  test -d "${TMP}/fx/.git" || { echo "❌ fixture repo 沒有 .git（GIT_DIR 洩漏？）" >&2; exit 1; }
+  test "$(git rev-parse --show-toplevel)" = "$(physical_path "${TMP}/fx")" || {
+    echo "❌ fixture repo 沒有解析到自己（GIT_DIR 洩漏？）—— 拒絕建立 fixture commit" >&2; exit 1; }
+  test "$(physical_path "${TMP}/fx")" != "$(physical_path "${ROOT}")" || {
+    echo "❌ fixture repo 解析到呼叫者的 checkout —— 拒絕建立 fixture commit" >&2; exit 1; }
   git config user.email ci@test.invalid; git config user.name ci
   mkdir -p monitoring .github/workflows docs/reference scripts/ci configs internal/foo
   printf 'route:\n  receiver: default\n'                > monitoring/alertmanager.yml

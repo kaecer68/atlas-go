@@ -18,8 +18,21 @@ PR 分支落後 `main` 時：
 - `gh pr view --json mergeable` 回 `MERGEABLE`（沒有文字衝突）；
 - 但 `git diff origin/main <PR head>` 把 `main` 上**其他 PR 最近的改動**顯示成「刪除」——
   分支的樹還是分岔當時的舊版本；
-- 於是「Files changed」看起來像本 PR 刪了別人的修正，而 **squash／rebase merge 會把
-  `base..head` 當成一個 patch 套到 `main` 上**，那些「假刪除」就真的被套用 ⇒ 回退他人已合併的修正。
+- 於是這個 PR 看起來像「正在刪掉別人已合併的修正」。
+
+危險性由三件事決定（第 2、3 項是本 PR 內以 git 實測，見 §7）：
+
+1. `mergeable` / `MERGEABLE` 只回答「**能不能**自動合併」，對「會不會刪掉別人的東西」一言不發。
+2. **不是**每次落後合併都會自動回退：對「分支沒動過的檔」，`git merge --squash` 與 rebase 走三方合併
+   （merge-base 的版本 = 分支版本），會**保留** `main` 的版本。把這點講清楚比誇大危害重要。
+3. 但**以 patch 形式落地**就會真的刪掉：對 `main` 執行 `git diff <base>..<head> | git apply`
+   （把 PR diff 當 patch 套用、或依此「修正」）後，`main` 那一行消失（§7 實測）。
+   而「以 patch 形式落地」與「用肉眼/agent 讀這個 diff」正是同一份不誠實的 diff。
+4. 分支**真的動過該檔**時更難：diff 混合了「本 PR 自己的改動」與「落後造成的假刪除」，
+   人與 agent 都無法可靠分辨；而且 squash 之後的審查紀錄會把他人改動記成本 PR 刪的。
+
+因此本檢查的目標不是「證明每次合併都會回退」，而是**讓 diff 在 review／落地之前就誠實**：
+落後就對齊（`gh pr update-branch`），這是本 session 三次實證後的實際處置。
 
 2026-09-26 單一 session 內實證 5 個 PR（全部靠人工 `git diff --numstat` + `git log origin/main -- <file>`
 交叉比對才發現，再以 `gh pr update-branch` 修正）：
@@ -131,6 +144,15 @@ scripts-only 的 PR 也會跑）：
    為什麼要這步：hermetic fixture 只證明程式邏輯，這步證明**CI 的 ref 解析與真 repo 歷史**也能擋
    （與 `secret-scan` / `monitoring-single-source` job 的 negative proof 同一套路）。
 
+回歸測試是 **hook-safe 的 hermetic fixture**：`tests/scripts/test-revert-guard.sh` 會建 throwaway git repo，
+所以它必須 `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR …`（git 對
+**linked worktree** 的 hook 會 export 絕對路徑的 `GIT_DIR`），並在建立 fixture repo 後斷言它解析到
+**自己**（洩漏時大聲失敗、不 commit）。這是 issue #1927 的既有要求；2026-09-26 本 PR 的第一版測試漏了
+這一步，一次 pre-push 就把 fixture commit 送進被推的分支並移動 `refs/heads/main`（見
+[`../operations/pr-lifecycle.md`](../operations/pr-lifecycle.md) §2.4）。驗證方式：在沙箱的 linked
+worktree 上跑真 `pre-push`（修好後 27/27 PASS 且 refs 不動；故意拿掉 `unset` 則 fixture commit 落在
+`refs/heads/main` 與被推分支上）。
+
 效能（2026-09-26 量測，MacBook）：**0.05–0.2s**（含 Python 啟動；每個候選檔 2–3 次 git 呼叫，
 候選數通常只有個位數）。設計上 diff 只跑兩次（`--name-status`、`--numstat`），不對每個檔案掃 repo。
 
@@ -209,5 +231,8 @@ scripts-only 的 PR 也會跑）：
 | 既有 main 不誤報 | 對齊 `origin/main` 的 `HEAD` | exit 0（WARN 0 筆）|
 | 執行時間 | 上述三種情境 | 0.05s / 0.13s / 0.51s（皆 < 30s）|
 | CI 接入 | `.github/workflows/quality.yml` → `revert-guard` job（PR 事件必跑，含負向證明） | GitHub CI 全綠（含 `inert-closure`）|
+| 機制實測 A：`git merge --squash` 對「分支沒動過的檔」 | temp repo：main 加一行到 `monitoring/am.yml`，落後分支只動 `g.txt` → `git merge --squash` | 合併後 `monitoring/am.yml` **保留** main 的那一行（三方合併）⇒ 不對此誇大 |
+| 機制實測 B：patch 形式落地 | 同上情境 → `git diff main..feat \| git apply`（在 main 上） | `monitoring/am.yml` 變成只剩 `a1` ⇒ main 的那一行**被刪掉**（`apply OK` 但內容回退）|
+| hook 環境下仍 hermetically 有效 | 沙箱 linked worktree + 真 `pre-push` hook 跑 `bash tests/scripts/test-revert-guard.sh` | 修好後 27/27 PASS、`refs/heads/*` 未被 fixture 動到；刻意還原成沒有 `unset GIT_*` 的版本則 fixture commit 落到 `refs/heads/main`（`m2: 其他 PR 已合併的改動`）與被推分支（重現 #1927 型事故，證明這道防護有必要）|
 
 allowlist 現況（真檔）：0 筆（本 PR 未需要任何豁免 —— 需要豁免才代表閘門被繞過）。

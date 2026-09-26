@@ -48,6 +48,33 @@ PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summa
 - **Root Cause** — 為什麼壞（事實為本,不是猜測,link 到 issue / log / source code）
 - **Verification** — 跑了什麼 test,結果是什麼（含 `make ci-full` 結果 + production 驗收 checklist 適用時）
 
+### 2.4 pre-push hook 的環境陷阱（linked worktree 會 export `GIT_DIR`）
+
+`git push` 跑 `.githooks/pre-push` 時，git 會把 **`GIT_DIR` 以絕對路徑 export 給 hook**——
+在 **linked worktree**（`git worktree add`）裡，值是 `<main>/.git/worktrees/<name>`。
+後果：任何在 hook 裡執行的測試，只要它建立 throwaway git repo（`git init` / `git -C <temp> …`），
+這些命令會**打到呼叫者的 repo**（cwd 被當成 work tree）⇒ fixture 的 commit 直接落到**正在 push 的
+分支**上，甚至移動 `refs/heads/main`。
+
+- 2026-09-23（issue #1927）：`test-binary-freshness-guard.sh` 的 fixture commit 落上被推的分支。
+- 2026-09-26（issue #1993 工作）：`test-revert-guard.sh` 第一版沒有防護，一次 pre-push 把
+  `refs/heads/main` 移到 fixture commit（`8c926b2b`）並改寫被推的分支；`main` 需以
+  `git update-ref refs/heads/main <正確 sha>` 還原，並清掉 fixture 順手寫進 `.git/config` 的
+  `core.bare`）與 `[user]`（`ci@test.invalid`）。**沒有 push 出去**（hook 自己失敗了）才沒有擴散。
+
+**寫測試的強制要求**（fixture repo 一律如此）：
+
+```bash
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
+# 並且在建立 fixture repo 後斷言它解析到自己（洩漏時大聲失敗、絕不 commit）：
+test -d "$FIXTURE/.git" || fail "GIT_DIR leak?"
+test "$(git -C "$FIXTURE" rev-parse --show-toplevel)" = "$(cd "$FIXTURE" && pwd -P)" || fail "GIT_DIR leak?"
+```
+
+參考實作：`tests/scripts/test-binary-freshness-guard.sh`、`tests/scripts/test-check-frontend-dist.sh`、
+`tests/scripts/test-revert-guard.sh`。
+
 ## 3. PR-Review — Reviewer 檢查
 
 ### 3.1 Reviewer 必看
@@ -318,4 +345,5 @@ PR 視為完成 **必須**所有三項：
 |------|------|------|
 | 2026-08-05 | 初版建立,因 2026-08-05 v3.0 PR-F #1457 半失敗教訓 | kaecer dispatch + AI agent |
 | 2026-09-25 | 新增 §3.3（PR base 設錯 → CI 靜默不跑 / required checks 卡在 Expected 的真因、診斷與處置 + `pr-base-guard` tripwire）、§3.4（promtool/amtool 監控 gate）;起因 PR #1975 任務 I | kaecer dispatch + AI agent |
+| 2026-09-26 | 新增 §2.4（pre-push hook 在 linked worktree export GIT_DIR ⇒ 建 throwaway repo 的測試會把 fixture commit 送進呼叫者的 repo；#1927 同款，2026-09-26 再犯一次）;起因 issue #1993 工作 | kaecer dispatch + AI agent |
 | 2026-09-26 | 新增 §3.5（落後分支回退 guard：`MERGEABLE` 仍會回退他人已合併的改動、診斷指令、`gh pr update-branch` 處置、`revert-guard` CI 閘門與其誠實邊界）;起因 issue #1993（單一 session 實證 #1974／#1979／#1990／#1991／#1994） | kaecer dispatch + AI agent |
