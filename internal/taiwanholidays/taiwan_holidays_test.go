@@ -165,9 +165,10 @@ func TestHolidaysInYear_FullCoverage(t *testing.T) {
 
 func TestHolidaysInYear_2026(t *testing.T) {
 	hs := HolidaysInYear(2026)
-	// 4 fixed + 4 lunar + 6 spring-closure + 4 adjusted-leave (2/27, 4/6, 10/9, 10/26)
-	if len(hs) != 18 {
-		t.Fatalf("2026 holidays = %d, want 18 (got %+v)", len(hs), hs)
+	// 4 fixed + 4 lunar + 6 spring-closure + 7 adjusted-leave
+	// (2/27, 4/3 兒童節補假, 4/6, 9/28 教師節, 10/9, 10/26, 12/25 行憲紀念日)
+	if len(hs) != 21 {
+		t.Fatalf("2026 holidays = %d, want 21 (got %+v)", len(hs), hs)
 	}
 	dates := map[string]bool{}
 	for _, h := range hs {

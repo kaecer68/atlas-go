@@ -6,7 +6,13 @@
 //
 // Two tasks are exposed (both gated on the same trigger instant):
 //   - Daily refresh (incremental): trading days (Tue–Fri), 14:00 Asia/Taipei
-//   - Weekly rebuild (full): Mondays, 14:00 Asia/Taipei
+//   - Weekly rebuild (full): trading-day Mondays, 14:00 Asia/Taipei
+//
+// "Trading day" means the single-source Taiwan calendar
+// (marketdata.IsTaiwanTradingDay → internal/taiwanholidays) — weekends AND public
+// holidays. This file used to carry its own weekday-only predicate; it ran the
+// pipeline on 附市日 (2026-09-28, the first weekday 教師節 after the 2025
+// restoration, was the case found) and is deleted instead of kept in sync.
 //
 // 14:00 Asia/Taipei is 06:00 UTC, the instant that has been in effect in
 // production since the tasks were introduced: the atlas container sets no TZ, so
@@ -39,7 +45,7 @@ import (
 )
 
 // clockFunc is the time source for scheduler closures. Tests may override
-// it to deterministically trigger time-gated branches (isTradingDay,
+// it to deterministically trigger time-gated branches (trading-day gate,
 // alignToTarget, Monday skip). Defaults to time.Now.
 var clockFunc = time.Now
 
@@ -290,7 +296,8 @@ type UniverseBuilderDeps struct {
 // signature is used here to avoid a circular monitoring ↔ apigateway import).
 // It fires once per minute but only executes the incremental pipeline when:
 //
-//   - The current day is a trading day (Mon–Fri) in Asia/Taipei.
+//   - The current day is a Taiwan trading day in Asia/Taipei: a weekday that is
+//     not a public holiday (marketdata.IsTaiwanTradingDay → internal/taiwanholidays).
 //   - The wall-clock time is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC).
 //
 // Registration example (caller casts in main.go):
@@ -309,9 +316,14 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 		// depend on the host/container TZ either. Production runs with TZ unset,
 		// where UTC and Asia/Taipei agree on the weekday for this instant.
 		local := now.In(universeLocation())
-		if !isTradingDay(local) {
+		// Single-source judgement: marketdata.IsTaiwanTradingDay delegates to
+		// internal/taiwanholidays, so a weekday that is a public holiday (2026-09-28
+		// 教師節, 2026-10-09 國慶補假, ...) is not a trading day here.
+		if !marketdata.IsTaiwanTradingDay(local) {
 			logging.Debug("universe_scheduler", "daily_skip_non_trading",
-				"day", local.Weekday().String())
+				"date", local.Format("2006-01-02"),
+				"weekday", local.Weekday().String(),
+				"criterion", "marketdata.IsTaiwanTradingDay")
 			return nil
 		}
 		if local.Weekday() == time.Monday {
@@ -401,8 +413,16 @@ func NewDailyUniverseRefreshTask(deps UniverseBuilderDeps) func(ctx context.Cont
 // full universe rebuild (clearing cached state, re-fetching all data). It
 // fires once per minute but only executes when:
 //
-// - Today is Monday in Asia/Taipei.
-// - The wall-clock time is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC).
+//   - Today is Monday in Asia/Taipei.
+//   - Today is a Taiwan trading day: a Monday public holiday (教師節 2026-09-28,
+//     行憲紀念日 2026-12-25, ...) is skipped with an explicit
+//     `weekly_skip_holiday` log — the market is closed, so a full rebuild would
+//     only re-snapshot the previous session's quotes.
+//   - The wall-clock time is within ±1 minute of 14:00 Asia/Taipei (06:00 UTC).
+//
+// The trading-day check runs after alignToTarget on purpose: the closure fires
+// every minute, and the holiday decision is only worth one log line at the
+// trigger instant instead of 60.
 //
 // The return type is raw func(ctx context.Context) error to avoid a
 // circular monitoring ↔ apigateway import; callers assign it directly to
@@ -419,6 +439,14 @@ func NewWeeklyUniverseRebuildTask(deps UniverseBuilderDeps) func(ctx context.Con
 		}
 		if !alignToTarget(now) {
 			return nil // silent skip
+		}
+		if !marketdata.IsTaiwanTradingDay(local) {
+			logging.Info("universe_scheduler", "weekly_skip_holiday",
+				"date", local.Format("2006-01-02"),
+				"weekday", local.Weekday().String(),
+				"criterion", "marketdata.IsTaiwanTradingDay",
+				"note", "market closed — no new session to rebuild from")
+			return nil
 		}
 
 		logging.Info("universe_scheduler", "weekly_rebuild_start")
@@ -1168,16 +1196,6 @@ func loadPreviousRankedSymbols(workDir string) []string {
 		symbols = append(symbols, normalizeSymbol(r.Symbol))
 	}
 	return symbols
-}
-
-// isTradingDay returns true when t falls on a weekday (Mon–Fri).
-func isTradingDay(t time.Time) bool {
-	switch t.Weekday() {
-	case time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday:
-		return true
-	default:
-		return false
-	}
 }
 
 // Universe pipeline trigger time, expressed in the pipeline's own timezone.
