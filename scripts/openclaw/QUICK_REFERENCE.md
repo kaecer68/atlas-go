@@ -56,12 +56,14 @@
 # M8 + strict governance in one run
 ./scripts/openclaw/verify_operations_gate.sh --with-governance
 
-# Guided branch protection setup (default dry-run)
+# 看目前能回報的 check 名稱（live contexts + workflow job 名稱 + 近期 check runs）
+./scripts/openclaw/setup_branch_protection.sh --list-known-checks
+
+# Guided branch protection setup（預設 dry-run；不加參數＝維持現行 live 設定）
 ./scripts/openclaw/setup_branch_protection.sh
 
 # Apply branch protection after review
 ./scripts/openclaw/setup_branch_protection.sh --apply
-
 
 # Apply with custom snapshot backup directory
 ./scripts/openclaw/setup_branch_protection.sh --apply --backup-dir data/state/custom-branch-protection-backups
@@ -72,6 +74,24 @@
 # Restore from snapshot and apply
 ./scripts/openclaw/setup_branch_protection.sh --restore-from data/state/branch-protection-snapshots/<snapshot>.json --apply
 ```
+
+### 🛡️ Branch protection（預設＝維持現狀；有防降級守門）
+
+**預設 required checks = 從 live branch protection 推導**（不再硬編清單）：
+
+- 不加 `--checks` ⇒ 計畫就是「保留現行全部 required contexts」；只有 `--checks` 或 `--restore-from` 才會換清單。
+- `--profile` 只調布林/審核數；`derive`（預設）＝全部沿用 live 值。contexts 一律來自 live 或 `--checks`。
+- 舊版的硬編 `ci / governance,ci / operations` **已被移除**：那些字串不是現行 context 名（現行是 `governance` / `operations`），套用後會變成一輩子不會回報的 context，PR 永久卡住。
+
+**防降級守門（fail-closed）**：
+
+- 計畫若會**移除任何現有 context**，或**弱化**（`strict` true→false、審核數下降、`enforce_admins` true→false、conversation resolution 關閉、dismiss stale 關閉、code owner 關閉、push restrictions 移除）⇒ **拒絕執行並列出將被移除/弱化的項目**。
+- 只有明確加 `--allow-downgrade` 才會放行（會印 `[warning]` 提醒這是降低保護）。
+- context 名稱**必須存在**於 live contexts／workflow job 名稱／近期 check runs，否則拒絕（`--allow-unknown-checks` 才放行）。
+  ⚠️ 風險：不存在的 context 永遠不會回報 ⇒ 每個 PR 都被卡住；所以預設拒絕。
+- `--apply` 前**一律自動快照**到 `data/state/branch-protection-snapshots/`（PUT 會整份覆蓋，快照先落地才呼叫 API）。
+
+**Exit codes**：`0` 成功｜`1` 一般錯誤｜`20` 降級被拒｜`21` 未知 check 被拒｜`22` 無 live checks 可推導｜`23` 快照失敗｜`24` dry-run 期間嘗試寫入 API（內部不變式）。
 
 ### 🔍 狀態檢查
 
@@ -221,7 +241,8 @@ data/
 ├── state/
 │   ├── baseline_policy.json      # 當前策略版本
 │   ├── experiments.jsonl         # 實驗記錄
-│   └── experiments/              # 實驗結果
+│   ├── experiments/              # 實驗結果
+│   └── branch-protection-snapshots/  # --apply 前的 branch protection 快照
 ├── replay/                       # 回放數據
 └── mutation-briefs/              # Mutation 建議
 ```
@@ -232,6 +253,7 @@ data/
 - ✅ **預設需要確認**（可加 `--yes` 跳過）
 - ✅ **支援 `--dry-run` 預覽**
 - ✅ **所有操作可追蹤**（記錄在 experiments.jsonl）
+- ✅ **branch protection 預設 dry-run，且拒絕會降級/未知 context 的計畫**（見上方 🛡️ 段）
 
 ## 需要幫助？
 
