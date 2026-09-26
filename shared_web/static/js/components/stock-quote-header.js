@@ -25,6 +25,10 @@ export function renderHeader(state, quoteResult, chipsResult, coverage) {
   const hasOpen = typeof quote.open === 'number' && Number.isFinite(quote.open) && quote.open !== 0;
   const change = hasLast && hasOpen ? quote.last - quote.open : null;
   const changePct = hasLast && hasOpen ? (change / quote.open * 100) : null;
+  // API contract (#1987): quote.volume is ALWAYS 成交股數 (shares) at every
+  // provider boundary. The ÷1000 here is the DISPLAY-layer conversion to the
+  // 台股 convention of showing 張 — do NOT remove it when touching unit code;
+  // removing it re-introduces a 1000× display error in the other direction.
   const volumeLots = typeof quote.volume === 'number' && Number.isFinite(quote.volume)
     ? Math.floor(quote.volume / 1000)
     : null;
