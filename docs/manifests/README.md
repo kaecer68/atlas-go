@@ -10,16 +10,12 @@ Copy `TEMPLATE.md` to `.omo/manifests/` and name it `YYYY-MM-DD-<short-audit-nam
 
 ## Verification
 
-Run the external verifier before declaring a manifest complete:
+**There is no automated verifier.** `scripts/verify-manifest.sh` was deleted on 2026-09-27 because it could not fail:
 
-```bash
-./scripts/verify-manifest.sh .omo/manifests/YYYY-MM-DD-<short-audit-name>.md
-```
+- Its `Status == done` → non-empty `Notes` check never fired. The awk trim used a two-argument `gsub(/^[ \t]+|[ \t]+$/, "")`, which rewrites `$0`, not the field, so the extracted status kept its surrounding spaces (`" done "`), the `!= "done"` test was always true, and **every row was skipped**. A manifest row with `Status: done` and an empty `Notes` column still returned `OK` with exit 0.
+- Its input lives in gitignored `.omo/`, so a clean clone has nothing to verify in the first place.
 
-The verifier checks:
-
-- Every invariant row with `Status: done` has non-empty evidence in the `Notes` column.
-- Phase D close-out items are populated when any invariant is done.
+Completion is therefore reviewed by the owner, against the version-controlled records in `docs/operations/remediation-manifest.md` and `docs/operations/FOLLOWUPS.md`. The lifecycle is described in `docs/documentation-standard.md` §Manifest 生命週期.
 
 ## Commit & PR Discipline
 

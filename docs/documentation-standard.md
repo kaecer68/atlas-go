@@ -82,7 +82,7 @@ docs/
 
 `docs/manifests/` 目錄**僅保留兩個永久治理文件**：
 
-- `README.md` — manifest 機制說明、建立流程、驗證工具使用方式
+- `README.md` — manifest 機制說明、建立流程
 - `TEMPLATE.md` — invariant tracker 標準模板（Phase A/B/C/D + Backlog + Commit Discipline）
 
 **個別 manifest（審計/修復追蹤文件）不應放在 `docs/manifests/`**。它們是 transient investigation artifacts，應放在 `.omo/manifests/`（見下方 `.omo/` 白名單）。
@@ -94,7 +94,7 @@ docs/
 | **建立** | `.omo/manifests/YYYY-MM-DD-slug.md` | 從 `docs/manifests/TEMPLATE.md` 複製 |
 | **進行中** | `.omo/manifests/` | 正常編輯、commit、PR |
 | **完成** | 判斷後處理 | 見下方 promotion 路徑 |
-| **PR merge** | 自動清理 | `scripts/verify-manifest.sh` 檢查；完成後決定歸檔或刪除 |
+| **PR merge** | 手動 | 完成後決定歸檔或刪除（**無自動驗證器**：`scripts/verify-manifest.sh` 已於 2026-09-27 刪除，見下方說明） |
 
 #### Manifest 完成後 Promotion 路徑
 
@@ -104,6 +104,8 @@ Manifest done →
   ├─ 有 6 個月教學價值（重大 bug 的根因分析、架構決策教訓）→ 提煉進 docs/ 對應目錄；僅內部參考 → .omo/audit/YYYY-MM-DD-slug.md
   └─ 無長期價值（單純修復追蹤）→ 刪除（git reflog 可恢復）
 ```
+
+**為何沒有自動驗證器（2026-09-27）**：原本的外部驗證器 `scripts/verify-manifest.sh` 已刪除，理由是它的核心檢查**恆不觸發**——awk 的 `gsub(/^[ \t]+|[ \t]+$/, "")` 只給 2 個參數（改的是 `$0` 而非欄位），所以 `$7` 永遠帶著空白（`" done "`），`:39` 的 `!= "done"` 恆真，**每一列都被 `continue` 跳過**；實測「Status=done + Notes 空」仍回 `OK` 且 exit 0。它讀取的 manifest 又位於 gitignored `.omo/`（乾淨 clone 沒有對象可驗）。因此 manifest 完成狀態改由 owner 於 `docs/operations/remediation-manifest.md` 與 `docs/operations/FOLLOWUPS.md` 這兩個受版控的文件審閱。
 
 #### 自動化檢查
 

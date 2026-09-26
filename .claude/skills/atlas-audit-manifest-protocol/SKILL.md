@@ -56,7 +56,9 @@ Phase D — Close out
 
 ## Manifest Format
 
-Create the manifest at `docs/manifests/YYYY-MM-DD-<audit-name>.md` or `docs/manifests/<feature>-audit.md`.
+Create the manifest at `.omo/manifests/YYYY-MM-DD-<audit-name>.md` or `.omo/manifests/<feature>-audit.md`.
+
+**Not** under `docs/manifests/` — that directory holds only `README.md` + `TEMPLATE.md`, and `scripts/ci/check_docs_governance.sh` (mounted on `make ci-quick`) blocks the push if an individual manifest lands there.
 
 Use the template at `docs/manifests/TEMPLATE.md`.
 
@@ -98,7 +100,7 @@ Catch yourself thinking any of these? STOP.
   - Examples: `fix(manifest): #B01 remove duplicated event rendering`, `feat(manifest): #C03 add direction probability distribution`
 - **One commit per ID** unless the change is purely documentation or a single logical fix spans multiple files.
 - **No commit without acceptance criteria passing** for that ID.
-- **PR body must reference the manifest**: `See docs/manifests/YYYY-MM-DD-<audit-name>.md`
+- **PR body must reference the manifest**: `See .omo/manifests/YYYY-MM-DD-<audit-name>.md`
 - **No direct push to main** — always open a PR and wait for CI green.
 
 ---
@@ -156,7 +158,7 @@ If you cannot check all boxes, do not claim the work is done. Tell the user what
 User: "The daily report shows RISK_ON but system health says RISK_OFF."
 
 1. Load this skill.
-2. Create `docs/manifests/2026-07-16-regime-divergence-audit.md`.
+2. Create `.omo/manifests/2026-07-16-regime-divergence-audit.md`.
 3. Phase A: `systematic-debugging` → `gitnexus-debugging` → identify root cause: `defaultProvider.FetchMacro()` hardcodes `GlobalOverview.Status = "RISK_ON"`.
 4. Phase B: `writing-plans` → ID A02: inject real regime provider, acceptance: daily_report and system health agree.
 5. Phase C: `atlas-pre-change-protocol` → implement → commit `fix(manifest): #A02 inject real regime source into daily report`.

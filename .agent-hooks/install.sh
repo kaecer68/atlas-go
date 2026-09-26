@@ -25,12 +25,11 @@ chmod +x "${HOOK_DIR}/deny-dangerous.sh"
 chmod +x "${HOOK_DIR}/pretooluse-deny-dangerous.sh"
 chmod +x "${HOOK_DIR}/aci-read-prompt.sh"
 
-# Symlink a convenient alias in the repo root (gitignored by convention).
-# Users can call ./agent-guard instead of .agent-hooks/deny-dangerous.sh.
-if [[ ! -e "${REPO_ROOT}/agent-guard" ]]; then
-  ln -s "${HOOK_DIR}/deny-dangerous.sh" "${REPO_ROOT}/agent-guard"
-  echo "  Created alias: ./agent-guard"
-fi
+# Repo-root alias ./agent-guard is TRACKED in git since 2026-09-27 (a small
+# wrapper script, not a symlink — see its header for why). It therefore exists
+# in every clone and worktree; just keep it executable.
+chmod +x "${REPO_ROOT}/agent-guard"
+echo "  Alias ready: ./agent-guard (tracked)"
 
 # Print usage.
 echo ""

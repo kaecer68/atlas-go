@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# agent-guard — repo-root entry point for the deny-dangerous agent guardrail.
+#
+# AGENTS.md instructs agents to run `./agent-guard --check '<command>'` before
+# any state-changing command. Until 2026-09-27 this was a gitignored,
+# machine-local symlink created by `.agent-hooks/install.sh`, so fresh clones
+# and fresh `git worktree` checkouts did not have it — the documented command
+# simply did not exist there, even though `./agent-guard` was in the "high
+# frequency traps" table.
+#
+# This file is a WRAPPER on purpose, not a symlink. Verified 2026-09-27: when a
+# script is reached through a symlink (relative or absolute), bash sets
+# BASH_SOURCE[0] to the *invoked* path, so `deny-dangerous.sh` derives
+# SCRIPT_DIR=<repo root> and REPO_ROOT=<parent of repo root> — measured
+# REPO_ROOT=/Users/kaecer/workspace instead of .../workspace/atlas. Both
+# variables are currently unused inside deny-dangerous.sh, but a guardrail
+# should not carry a latent path bug. Exec'ing the real file makes it report
+# BASH_SOURCE[0]=<repo>/.agent-hooks/deny-dangerous.sh and hence the correct
+# repo root, including when invoked as `../agent-guard` from a subdirectory.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${HERE}/.agent-hooks/deny-dangerous.sh" "$@"
