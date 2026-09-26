@@ -788,12 +788,15 @@ staticcheck ./...                               # Additional lint
 # Unified governance strict mode: fail if M5 has no scenario diversity
 ./scripts/openclaw/verify_governance_gates.sh --require-scenario-diversity
 
-# Required CI status checks for branch protection
-# - ci / governance
-# - ci / operations
+# Required CI status checks for branch protection are DERIVED from the live
+# protection config (no hardcoded list). Add --checks to override, but a plan
+# that removes an existing context is refused unless --allow-downgrade is given.
 
 # Guided branch protection setup (safe default: dry-run)
 ./scripts/openclaw/setup_branch_protection.sh
+
+# See the check names this repo can report (workflow jobs + live + recent runs)
+./scripts/openclaw/setup_branch_protection.sh --list-known-checks
 
 # Apply branch protection after interactive confirmation
 ./scripts/openclaw/setup_branch_protection.sh --apply
