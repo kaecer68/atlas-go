@@ -29,12 +29,15 @@ import (
 //
 // The tracker now treats the state file as the single authority: every read
 // happens under an exclusive cross-process lock (flock) and every increment is
-// a locked read-modify-write, so the ceiling bounds the SUM over all processes
-// that share the file. Measured on the production host (2026-09-26, three
-// containers sharing one host directory, ceiling 200 each):
+// a bounded locked read-modify-write, so the ceiling bounds the SUM over all
+// processes that share the file. Measured on the production host (2026-09-26,
+// three containers on one host directory, ceiling 200 each, all three
+// constructing their tracker at the same moment):
 //
-//	before: 3 × 200 calls actually spent, file said 200
-//	after:   200 calls actually spent, file said 200
+//	before: 600 calls spent (the per-process model can overspend up to
+//	        N × ceiling — how much depends on when each process starts),
+//	        and the file kept only one process's 200
+//	after:  200 calls spent, file said 200
 //
 // The file lock is advisory and local to one filesystem: it covers exactly the
 // processes that share the state directory (production: every atlas container
@@ -94,11 +97,44 @@ type DailyQuotaTracker struct {
 	// loggedErr deduplicates the operator-facing log line: the same failure is
 	// logged once per distinct message instead of once per refused call.
 	loggedErr string
+	// pendingLog carries a log line out of the locked section. Logging while
+	// holding the cross-process lock would let a blocked stderr (or a slow
+	// handler) stall every other process waiting on the same lock, so the
+	// message is only emitted after both locks are released.
+	pendingLog *quotaLogEntry
+	// loggedStateDir guards the one-off "we had to create the state directory"
+	// warning.
+	loggedStateDir bool
+	// writeBroken is the last failure to PERSIST the counter. It stays set
+	// until a write succeeds: while it is set the shareable count cannot be
+	// advanced, so Remaining() reports 0 (fail closed) even though the file is
+	// still readable — a readable but unwritable counter must not look like
+	// available budget.
+	writeBroken error
 }
 
+// quotaLogEntry is a deferred log line (see DailyQuotaTracker.pendingLog).
+type quotaLogEntry struct {
+	event string
+	kv    []any
+	warn  bool
+}
+
+// quotaLockRetryInterval / quotaLockTimeout bound how long a caller waits for
+// the cross-process lock. The wait MUST be bounded: flock has no timeout, so a
+// holder that is alive but wedged (paused container, stalled write, blocked
+// stderr) would otherwise block every caller — including the 5-second index
+// endpoint — forever. On timeout the tracker fails closed (refuse the call),
+// which costs a cache fallback, never an over-spend.
+const (
+	quotaLockRetryInterval = 50 * time.Millisecond
+	quotaLockTimeout       = 2 * time.Second
+)
+
 // ErrQuotaStateUnavailable reports that the persisted quota counter could not
-// be established (unreadable, uncreatable, or a platform without advisory file
-// locking). Callers must treat it as "budget unknown" and fail closed.
+// be established (unreadable, uncreatable, locked by a wedged process, or a
+// platform without advisory file locking). Callers must treat it as
+// "budget unknown" and fail closed.
 var ErrQuotaStateUnavailable = errors.New("daily quota state unavailable")
 
 // ErrQuotaStateCorrupt reports that the persisted quota counter exists but
@@ -172,31 +208,37 @@ func (t *DailyQuotaTracker) AllowCall() bool {
 // reserve) stop immediately after an upstream refusal — including right after a
 // restart.
 func (t *DailyQuotaTracker) Remaining() int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if err := t.refreshLocked(); err != nil {
-		return 0
-	}
-	if t.upstreamExhausted {
-		return 0
-	}
-	if remaining := t.dailyLimit - t.callsToday; remaining > 0 {
-		return remaining
-	}
-	return 0
+	remaining := 0
+	t.readThrough(func(err error) {
+		if err != nil {
+			remaining = 0 // fail closed: budget unknown is not budget available
+			return
+		}
+		if t.upstreamExhausted {
+			remaining = 0
+			return
+		}
+		if r := t.dailyLimit - t.callsToday; r > 0 {
+			remaining = r
+		}
+	})
+	return remaining
 }
 
 // CallsToday returns the number of calls made today across every process
-// sharing this state file, as of the last successful read. When the state is
-// unusable it returns the last known value (never a silent 0) and StateErr()
-// explains why.
+// sharing this state file, as of the last successful read.
+//
+// When the state is unusable it returns the last value it successfully read —
+// which is 0 for a process that never managed to read the file at all. That
+// value is therefore NOT evidence of "nothing used today": callers that render
+// it must also show StateErr() (QuotaEntry.StateError carries it into the
+// registry snapshot), otherwise a broken counter reads as an idle one.
 func (t *DailyQuotaTracker) CallsToday() int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	_ = t.refreshLocked()
-	return t.callsToday
+	used := 0
+	t.readThrough(func(error) {
+		used = t.callsToday
+	})
+	return used
 }
 
 // StateErr returns the reason the tracker is failing closed, or nil when the
@@ -247,22 +289,24 @@ func (t *DailyQuotaTracker) MarkUpstreamExhausted(reason string) {
 // UpstreamExhausted reports whether the provider has told us that today's
 // quota is gone. The latch clears when the quota day rolls over.
 func (t *DailyQuotaTracker) UpstreamExhausted() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	_ = t.refreshLocked()
-	return t.upstreamExhausted
+	latched := false
+	t.readThrough(func(error) {
+		latched = t.upstreamExhausted
+	})
+	return latched
 }
 
 // UpstreamExhaustion returns the latch together with the sanitized upstream
 // reason and the time it was observed, so callers can explain WHY every call
 // is being refused (instead of a bare "quota exhausted").
 func (t *DailyQuotaTracker) UpstreamExhaustion() (bool, string, time.Time) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	_ = t.refreshLocked()
-	return t.upstreamExhausted, t.upstreamReason, t.upstreamAt
+	var exhausted bool
+	var reason string
+	var at time.Time
+	t.readThrough(func(error) {
+		exhausted, reason, at = t.upstreamExhausted, t.upstreamReason, t.upstreamAt
+	})
+	return exhausted, reason, at
 }
 
 // SetLimit updates the daily limit (e.g., when tier changes).
@@ -287,8 +331,17 @@ func (t *DailyQuotaTracker) SetLimit(limit int) {
 // which case the tracker fails closed and err carries the reason.
 func (t *DailyQuotaTracker) update(fn func(st *QuotaState) bool) (bool, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
+	allowed, err := t.updateFileLocked(fn)
+	pending := t.takePendingLogLocked()
+	t.mu.Unlock()
+	emitQuotaLog(pending)
+	return allowed, err
+}
 
+// updateFileLocked is update's body; the caller must hold t.mu and MUST NOT
+// call any other tracker method while it runs (flock is not recursive — a
+// nested call would wait on itself until quotaLockTimeout).
+func (t *DailyQuotaTracker) updateFileLocked(fn func(st *QuotaState) bool) (bool, error) {
 	unlock, err := t.lockState()
 	if err != nil {
 		t.recordStateErrLocked(err)
@@ -296,13 +349,13 @@ func (t *DailyQuotaTracker) update(fn func(st *QuotaState) bool) (bool, error) {
 	}
 	defer unlock()
 
-	st, err := t.readStateLocked()
+	st, raw, err := t.readStateLocked()
 	if err != nil {
 		if errors.Is(err, ErrQuotaStateCorrupt) {
-			// Durable fail-closed: quarantine the unparsable file and leave an
-			// explicit marker for the current quota day so that a restart (or
-			// the next process) cannot read "no file" as "0 calls used".
-			if qErr := t.quarantineCorruptStateLocked(err); qErr != nil {
+			// Durable fail-closed: replace the unparsable file with an explicit
+			// marker for the current quota day so that a restart (or the next
+			// process) cannot read "no file" as "0 calls used".
+			if qErr := t.quarantineCorruptStateLocked(raw, err); qErr != nil {
 				err = errors.Join(err, qErr)
 			}
 		}
@@ -328,9 +381,11 @@ func (t *DailyQuotaTracker) update(fn func(st *QuotaState) bool) (bool, error) {
 			// We already decided to spend, but we cannot record it: refusing is
 			// the only option that keeps the ceiling honest. It is also the
 			// difference between "counter broken" and "counter silently 0".
+			t.writeBroken = err
 			t.recordStateErrLocked(err)
 			return false, err
 		}
+		t.writeBroken = nil
 	}
 	// A rollover observed while refusing is deliberately not written back: the
 	// reset is idempotent and the next writer persists it.
@@ -340,10 +395,23 @@ func (t *DailyQuotaTracker) update(fn func(st *QuotaState) bool) (bool, error) {
 	return allowed, nil
 }
 
-// refreshLocked re-reads the authoritative state so getters never report
+// readThrough runs fn while holding t.mu with a freshly read authoritative
+// state, and emits any deferred log line after releasing it.
+func (t *DailyQuotaTracker) readThrough(fn func(err error)) {
+	t.mu.Lock()
+	err := t.refreshFileLocked()
+	pending := t.takePendingLogLocked()
+	fn(err)
+	t.mu.Unlock()
+	emitQuotaLog(pending)
+}
+
+// refreshFileLocked re-reads the authoritative state so getters never report
 // another process's stale view. It is read-only: repairing a corrupt file is
-// done by update (the path that matters for actually spending budget).
-func (t *DailyQuotaTracker) refreshLocked() error {
+// done by update (the path that matters for actually spending budget). The
+// caller must hold t.mu and MUST NOT call other tracker methods while it runs
+// (flock is not recursive).
+func (t *DailyQuotaTracker) refreshFileLocked() error {
 	unlock, err := t.lockState()
 	if err != nil {
 		t.recordStateErrLocked(err)
@@ -351,7 +419,7 @@ func (t *DailyQuotaTracker) refreshLocked() error {
 	}
 	defer unlock()
 
-	st, err := t.readStateLocked()
+	st, _, err := t.readStateLocked()
 	if err != nil {
 		t.recordStateErrLocked(err)
 		return err
@@ -367,6 +435,10 @@ func (t *DailyQuotaTracker) refreshLocked() error {
 		t.recordStateErrLocked(stateErr)
 		return stateErr
 	}
+	if t.writeBroken != nil {
+		t.recordStateErrLocked(t.writeBroken)
+		return t.writeBroken
+	}
 	t.clearStateErrLocked()
 	return nil
 }
@@ -379,16 +451,55 @@ func (t *DailyQuotaTracker) refreshLocked() error {
 // The lock is advisory, so it binds only the processes that cooperate — which
 // is exactly the atlas containers sharing one data/state directory.
 func (t *DailyQuotaTracker) lockState() (func(), error) {
-	if err := os.MkdirAll(filepath.Dir(t.stateFile), 0o755); err != nil {
-		return nil, fmt.Errorf("%w: create state dir %s: %v", ErrQuotaStateUnavailable, filepath.Dir(t.stateFile), err)
+	dir := filepath.Dir(t.stateFile)
+	preExisting := true
+	if _, statErr := os.Stat(dir); errors.Is(statErr, os.ErrNotExist) {
+		preExisting = false
 	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("%w: create state dir %s: %v", ErrQuotaStateUnavailable, dir, err)
+	}
+	if !preExisting && !t.loggedStateDir {
+		// The counter directory did not exist: nothing else can have written
+		// today's count there, and this process just made its own private one.
+		// If the shared data volume is mounted the directory will always exist,
+		// so this is either a genuinely first-ever run or a path/WorkDir
+		// mistake — and in the second case the ceiling silently becomes
+		// per-process again, which is the defect #2014 fixed. Warn loudly
+		// instead of letting it pass unnoticed.
+		t.loggedStateDir = true
+		t.pendingLog = &quotaLogEntry{warn: true, event: "daily_quota_state_dir_created", kv: []any{
+			"provider", t.provider,
+			"state_file", t.StateFile(),
+			"state_dir", dir,
+			"note", "created by this process; if the shared state volume is mounted this path should already exist (otherwise the daily ceiling is only per-process)",
+		}}
+	}
+
 	f, err := os.OpenFile(t.lockFile, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
+		if !preExisting {
+			_ = os.Remove(dir) // do not leave an empty private directory behind
+		}
 		return nil, fmt.Errorf("%w: open lock file %s: %v", ErrQuotaStateUnavailable, t.lockFile, err)
 	}
-	if err := lockFileExclusive(f); err != nil {
-		_ = f.Close()
-		return nil, fmt.Errorf("%w: lock %s: %v", ErrQuotaStateUnavailable, t.lockFile, err)
+
+	deadline := time.Now().Add(quotaLockTimeout)
+	for {
+		locked, lockErr := tryLockFile(f)
+		if lockErr != nil {
+			_ = f.Close()
+			return nil, fmt.Errorf("%w: lock %s: %v", ErrQuotaStateUnavailable, t.lockFile, lockErr)
+		}
+		if locked {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = f.Close()
+			return nil, fmt.Errorf("%w: lock %s not acquired within %s (holder wedged or overrunning)",
+				ErrQuotaStateUnavailable, t.lockFile, quotaLockTimeout)
+		}
+		time.Sleep(quotaLockRetryInterval)
 	}
 	return func() {
 		_ = unlockFile(f)
@@ -401,37 +512,34 @@ func (t *DailyQuotaTracker) lockState() (func(), error) {
 // A missing state file on an existing state directory is an honest fresh start
 // (0 calls used). Anything else that prevents the on-disk truth from being
 // established is an error — never a silent zero.
-func (t *DailyQuotaTracker) readStateLocked() (QuotaState, error) {
+func (t *DailyQuotaTracker) readStateLocked() (QuotaState, []byte, error) {
 	raw, err := os.ReadFile(t.stateFile)
 	if errors.Is(err, os.ErrNotExist) {
-		dir := filepath.Dir(t.stateFile)
-		if _, statErr := os.Stat(dir); statErr != nil {
-			// WorkDir is wrong / the runtime state volume is not mounted.
-			// Treating that as "no calls used today" would disable the guard
-			// exactly when the deployment is broken.
-			return QuotaState{}, fmt.Errorf("%w: state dir %s is not usable: %v",
-				ErrQuotaStateUnavailable, dir, statErr)
-		}
-		return QuotaState{CallsToday: 0, LastReset: quotaDay(time.Now())}, nil
+		// The directory was provisioned by lockState before this call, so a
+		// missing file means "the shared counter does not exist yet" — an
+		// honest fresh start. lockState warns when it had to create the
+		// directory itself, which is the case where this could be a private,
+		// non-shared counter instead.
+		return QuotaState{CallsToday: 0, LastReset: quotaDay(time.Now())}, nil, nil
 	}
 	if err != nil {
-		return QuotaState{}, fmt.Errorf("%w: read %s: %v", ErrQuotaStateUnavailable, t.stateFile, err)
+		return QuotaState{}, nil, fmt.Errorf("%w: read %s: %v", ErrQuotaStateUnavailable, t.stateFile, err)
 	}
 
 	var st QuotaState
 	if err := json.Unmarshal(raw, &st); err != nil {
-		return QuotaState{}, fmt.Errorf("%w: parse %s (%d bytes): %v",
+		return QuotaState{}, raw, fmt.Errorf("%w: parse %s (%d bytes): %v",
 			ErrQuotaStateCorrupt, t.stateFile, len(raw), err)
 	}
 	if st.LastReset.IsZero() {
-		return QuotaState{}, fmt.Errorf("%w: %s has no last_reset (cannot tell which quota day it describes)",
+		return QuotaState{}, raw, fmt.Errorf("%w: %s has no last_reset (cannot tell which quota day it describes)",
 			ErrQuotaStateCorrupt, t.stateFile)
 	}
 	if st.CallsToday < 0 {
-		return QuotaState{}, fmt.Errorf("%w: %s has negative calls_today (%d)",
+		return QuotaState{}, raw, fmt.Errorf("%w: %s has negative calls_today (%d)",
 			ErrQuotaStateCorrupt, t.stateFile, st.CallsToday)
 	}
-	return st, nil
+	return st, raw, nil
 }
 
 // writeStateLocked persists state atomically (tmp + rename). Callers must hold
@@ -459,11 +567,14 @@ func (t *DailyQuotaTracker) writeStateLocked(st QuotaState) error {
 // quarantineCorruptStateLocked moves an unparsable state file aside and writes
 // the explicit "usage unknown" marker for the current quota day. Callers must
 // hold the lock and must have failed readStateLocked with ErrQuotaStateCorrupt.
-func (t *DailyQuotaTracker) quarantineCorruptStateLocked(cause error) error {
-	quarantinePath := fmt.Sprintf("%s.corrupt-%s", t.stateFile, time.Now().UTC().Format("20060102T150405Z"))
-	if err := os.Rename(t.stateFile, quarantinePath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("%w: quarantine %s: %v", ErrQuotaStateUnavailable, t.stateFile, err)
-	}
+func (t *DailyQuotaTracker) quarantineCorruptStateLocked(raw []byte, cause error) error {
+	// ORDER MATTERS: the marker is written FIRST (atomically, over the corrupt
+	// file) and the forensic copy is taken afterwards. Renaming the bad file
+	// away first would leave a window in which no state file exists, and
+	// readStateLocked treats "no file" as a fresh day — i.e. a crash (or simply
+	// a failed marker write) between the two steps would silently reopen the
+	// whole day's budget. With this order the state file always exists: either
+	// the marker, or the untouched corrupt file (still fail-closed).
 	marker := QuotaState{
 		CallsToday:         0,
 		LastReset:          quotaDay(time.Now()),
@@ -471,16 +582,32 @@ func (t *DailyQuotaTracker) quarantineCorruptStateLocked(cause error) error {
 		QuotaUnknownReason: clampForError(cause.Error(), 240),
 	}
 	if err := t.writeStateLocked(marker); err != nil {
-		return err
+		return fmt.Errorf("%w: write fail-closed marker over %s: %v", ErrQuotaStateUnavailable, t.stateFile, err)
 	}
-	logging.Error("marketdata", "daily_quota_state_corrupt",
+
+	backupErr := error(nil)
+	if raw != nil { // nil means "no file at all"; an empty file is still evidence
+		backupPath := fmt.Sprintf("%s.corrupt-%s", t.stateFile, time.Now().UTC().Format("20060102T150405Z"))
+		if err := quotaWriteBackup(backupPath, raw); err != nil {
+			// The day is already durably closed; a failed forensic copy must
+			// not reopen it, so this is reported alongside, not instead.
+			backupErr = fmt.Errorf("%w: back up corrupt copy to %s: %v", ErrQuotaStateUnavailable, backupPath, err)
+		}
+	}
+	t.pendingLog = &quotaLogEntry{event: "daily_quota_state_corrupt", kv: []any{
 		"provider", t.provider,
 		"state_file", t.stateFile,
-		"quarantined_to", quarantinePath,
 		"error", clampForError(cause.Error(), 240),
-		"action", "day latched as quota-unknown (fail closed); fix/remove the file to restore service",
-	)
-	return nil
+		"action", "day marked quota_unknown (fail closed until the quota day rolls over); the marker file is the repair target",
+	}}
+	return backupErr
+}
+
+// quotaWriteBackup writes the forensic copy of a corrupt counter file. It is a
+// package variable so tests can force the failure path: a failed backup must
+// never reopen the quota day.
+var quotaWriteBackup = func(path string, raw []byte) error {
+	return os.WriteFile(path, raw, 0o644)
 }
 
 // applyLocked mirrors a durable state into the in-memory cache.
@@ -497,9 +624,10 @@ func (t *DailyQuotaTracker) applyLocked(st QuotaState) {
 	}
 }
 
-// recordStateErrLocked remembers a fail-closed condition and logs it once per
-// distinct message (a refused call happens on every probe; the operator does
-// not need the same line every 5 seconds).
+// recordStateErrLocked remembers a fail-closed condition and queues ONE log
+// line per distinct message (a refused call happens on every probe; the
+// operator does not need the same line every 5 seconds). The line is only
+// emitted once the locks are released — see DailyQuotaTracker.pendingLog.
 func (t *DailyQuotaTracker) recordStateErrLocked(err error) {
 	if err == nil {
 		return
@@ -510,16 +638,38 @@ func (t *DailyQuotaTracker) recordStateErrLocked(err error) {
 		return
 	}
 	t.loggedErr = msg
-	logging.Error("marketdata", "daily_quota_state_unusable",
+	t.pendingLog = &quotaLogEntry{event: "daily_quota_state_unusable", kv: []any{
 		"provider", t.provider,
 		"state_file", t.stateFile,
 		"error", clampForError(msg, 240),
-	)
+	}}
 }
 
 func (t *DailyQuotaTracker) clearStateErrLocked() {
 	t.stateErr = nil
 	t.loggedErr = ""
+}
+
+// takePendingLogLocked removes and returns the queued log line. Caller must
+// hold t.mu.
+func (t *DailyQuotaTracker) takePendingLogLocked() *quotaLogEntry {
+	p := t.pendingLog
+	t.pendingLog = nil
+	return p
+}
+
+// emitQuotaLog writes a queued log line. It must be called with NO lock held:
+// logging under the cross-process lock would let a blocked stderr stall every
+// other process waiting on the same lock.
+func emitQuotaLog(p *quotaLogEntry) {
+	if p == nil {
+		return
+	}
+	if p.warn {
+		logging.Warn("marketdata", p.event, p.kv...)
+		return
+	}
+	logging.Error("marketdata", p.event, p.kv...)
 }
 
 // quotaDay is the quota-day boundary an instant belongs to: a UTC-aligned 24h

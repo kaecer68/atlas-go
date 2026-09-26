@@ -13,6 +13,6 @@ import (
 // honest answer is "cannot guarantee, therefore do not spend".
 var errLockUnsupported = errors.New("advisory file locking (flock) is not available on this platform")
 
-func lockFileExclusive(*os.File) error { return errLockUnsupported }
+func tryLockFile(*os.File) (bool, error) { return false, errLockUnsupported }
 
 func unlockFile(*os.File) error { return nil }

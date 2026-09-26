@@ -3234,6 +3234,7 @@ export interface QuotaEntry {
   state_file?: string;
   updated_at: string;
   exhausted: boolean;
+  state_error?: string;
 }
 
 export interface QuotaSnapshot {

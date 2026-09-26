@@ -1835,6 +1835,7 @@
   "stat",
   "state",
   "state_changed_at",
+  "state_error",
   "state_file",
   "statistically_significant",
   "status",
