@@ -129,7 +129,8 @@ func TestDataAggregator_ExtractProfitAndClampGrowth(t *testing.T) {
 func TestDataAggregator_RecalibrateThresholds(t *testing.T) {
 	dir := t.TempDir()
 	revenuePath := filepath.Join(dir, "revenue.jsonl")
-	configPath := filepath.Join(dir, "params.json")
+	ssotPath := filepath.Join(dir, "configs", "parameters.json")
+	overlayPath := filepath.Join(dir, "data", "state", "parameters.calibrated.json")
 
 	records := []revenueRecord{
 		{StockID: "2330.TW", Revenue: 100.0, RevenueYear: 2023, RevenueMonth: 1, Date: "2023-01-01"},
@@ -147,30 +148,108 @@ func TestDataAggregator_RecalibrateThresholds(t *testing.T) {
 	}
 	_ = f.Close()
 
-	if err := os.WriteFile(configPath, []byte(`{"industry":{}}`), 0o644); err != nil {
+	// The SSOT keeps the reviewed block: the calibrator writes next to it, not
+	// into it (FU-20260926-07).
+	ssotJSON := `{"industry":{"cycle_thresholds":{"value":{"consumer":{"expansion_revenue_pct":0.08,"expansion_profit_pct":0.1,"recovery_revenue_pct":0.03,"recovery_profit_pct":0.05,"mature_revenue_pct":0.01,"mature_profit_pct":0.02}},"todo":"Calibrate from historical revenue cycles"}}}`
+	if err := os.MkdirAll(filepath.Dir(ssotPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ssotPath, []byte(ssotJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := RecalibrateThresholds(revenuePath, configPath); err != nil {
+	previousSSOT := config.GetParametersConfigPath()
+	previousOverlay := config.GetCalibratedOverlayPath()
+	config.SetParametersConfigPath(ssotPath)
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer func() {
+		config.SetParametersConfigPath(previousSSOT)
+		config.SetCalibratedOverlayPath(previousOverlay)
+	}()
+
+	if err := RecalibrateThresholds(revenuePath); err != nil {
 		t.Fatalf("RecalibrateThresholds failed: %v", err)
 	}
 
-	out, err := os.ReadFile(configPath)
+	// (1) The SSOT file must be untouched.
+	after, err := os.ReadFile(ssotPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cfg map[string]any
-	if err := json.Unmarshal(out, &cfg); err != nil {
+	if string(after) != ssotJSON {
+		t.Fatalf("SSOT document rewritten by the calibrator:\nbefore=%s\nafter=%s", ssotJSON, after)
+	}
+
+	// (2) The overlay must carry the calibrated thresholds.
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay was not written")
+	}
+	if got := ov.Entries["industry.cycle_thresholds.source"].Value; got != "percentile_based" {
+		t.Fatalf("overlay source = %v, want percentile_based", got)
+	}
+	entry, ok := ov.Entries[CycleThresholdPath("semiconductor")]
+	if !ok {
+		t.Fatalf("overlay has no entry for semiconductor: %+v", ov.Entries)
+	}
+	value, ok := entry.Value.(map[string]any)
+	if !ok {
+		t.Fatalf("semiconductor entry value = %#v, want an object", entry.Value)
+	}
+	if _, ok := value["expansion_revenue_pct"]; !ok {
+		t.Fatalf("semiconductor thresholds incomplete: %#v", value)
+	}
+
+	// (3) Layering the overlay on the SSOT must produce the effective config.
+	src, err := config.LoadParametersSource(ssotPath)
+	if err != nil {
+		t.Fatalf("LoadParametersSource: %v", err)
+	}
+	effective, report := config.ApplyCalibratedOverlayLayer(src.Config, src.Raw)
+	if len(report.Unknown) != 0 || len(report.Invalidated) != 0 {
+		t.Fatalf("overlay did not apply cleanly: unknown=%v invalidated=%v", report.Unknown, report.Invalidated)
+	}
+	got, ok := effective.Industry.CycleThresholds.Value["semiconductor"]
+	if !ok {
+		t.Fatalf("effective cycle thresholds missing semiconductor: %+v", effective.Industry.CycleThresholds.Value)
+	}
+	if got.ExpansionRevenuePct <= 0 {
+		t.Fatalf("effective semiconductor thresholds not applied: %+v", got)
+	}
+	if effective.Industry.CycleThresholds.Source != "percentile_based" {
+		t.Fatalf("effective source = %q, want percentile_based", effective.Industry.CycleThresholds.Source)
+	}
+}
+
+// TestDataAggregator_RecalibrateThresholds_NoOverlayPathIsLoud pins the
+// fail-loud contract: without a registered overlay path the calibration must not
+// pretend to have persisted anything.
+func TestDataAggregator_RecalibrateThresholds_NoOverlayPathIsLoud(t *testing.T) {
+	dir := t.TempDir()
+	revenuePath := filepath.Join(dir, "revenue.jsonl")
+	records := []revenueRecord{
+		{StockID: "2330.TW", Revenue: 100.0, RevenueYear: 2023, RevenueMonth: 1, Date: "2023-01-01"},
+		{StockID: "2330.TW", Revenue: 120.0, RevenueYear: 2024, RevenueMonth: 1, Date: "2024-01-01"},
+	}
+	f, err := os.Create(revenuePath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	industryCfg := cfg["industry"].(map[string]any)
-	ct := industryCfg["cycle_thresholds"].(map[string]any)
-	if ct["source"] != "percentile_based" {
-		t.Fatalf("expected percentile based thresholds, got %v", ct["source"])
+	enc := json.NewEncoder(f)
+	for _, r := range records {
+		_ = enc.Encode(r)
 	}
-	value := ct["value"].(map[string]any)
-	if _, ok := value["semiconductor"]; !ok {
-		t.Fatalf("expected semiconductor thresholds, got %v", value)
+	_ = f.Close()
+
+	previousOverlay := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath(previousOverlay)
+
+	if err := RecalibrateThresholds(revenuePath); err == nil {
+		t.Fatal("RecalibrateThresholds with no overlay path = nil error, want error")
 	}
 }
 

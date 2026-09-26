@@ -290,13 +290,14 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 
-	// FU-20260926-07: the risk self-calibration loop adapts a few tunables at
-	// runtime. It persists them to the calibrated-parameters overlay under the
-	// bind-mounted data/ tree — NOT to configs/parameters.json, which is baked
-	// into the image, is not mounted, and therefore lost the adaptation on every
-	// container recreate. Register the overlay path before anything can read the
-	// parameters singleton; configs/parameters.json stays the reviewed SSOT and
-	// the overlay is layered on top of it.
+	// FU-20260926-07: the runtime calibration loops (risk gate, factor weights,
+	// RSI-tw, industry cycle thresholds, and the generic parameter calibrator)
+	// adapt tunables at runtime. They persist to the calibrated-parameters
+	// overlay under the bind-mounted data/ tree — NOT to configs/parameters.json,
+	// which is baked into the image, is not mounted, and therefore lost every
+	// adaptation on a container recreate. Register the overlay path before
+	// anything can read the parameters singleton; configs/parameters.json stays
+	// the reviewed SSOT and the overlay is layered on top of it.
 	config.SetCalibratedOverlayPath(config.CalibrationOverlayPath(cfg.WorkDir))
 
 	// SA06: composition root for shared dependency wiring.

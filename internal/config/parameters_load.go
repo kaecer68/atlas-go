@@ -8,37 +8,83 @@ import (
 	"strings"
 )
 
+// ParametersSource is the SSOT document a ParametersConfig was parsed from.
+type ParametersSource struct {
+	// Raw is the JSON document the config was parsed from. It is nil when the
+	// SSOT file does not exist (the config is then the built-in default).
+	Raw []byte
+	// Config is the parsed, defaults-merged, validated configuration.
+	Config *ParametersConfig
+	// Dir is true when the SSOT is a directory of per-category files.
+	Dir bool
+}
+
 // LoadParametersConfig loads parameters from the given path.
 // If path is a directory, loads from configs/parameters/<category>.json files.
 // If path is a file, loads the single JSON file (backward compatible).
 // If neither exists, returns the default configuration.
+//
+// This is the raw SSOT read: it never applies the calibrated overlay. Callers
+// that need the configuration the process runs on must use
+// LoadEffectiveParametersConfig (FU-20260926-07).
 func LoadParametersConfig(path string) (*ParametersConfig, error) {
-	info, err := os.Stat(path)
+	_, cfg, _, err := loadParametersSource(path)
+	return cfg, err
+}
+
+// LoadParametersSource returns the raw SSOT document together with the config
+// parsed from it. The raw bytes are what dotted-path overlay entries patch.
+func LoadParametersSource(path string) (*ParametersSource, error) {
+	raw, cfg, dir, err := loadParametersSource(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultParametersConfig(), nil
+		return nil, err
+	}
+	return &ParametersSource{Raw: raw, Config: cfg, Dir: dir}, nil
+}
+
+// loadParametersSource reads and parses the SSOT at path, returning the raw
+// document as well. A missing file is not an error: it yields the built-in
+// default configuration and a nil document.
+func loadParametersSource(path string) (raw []byte, cfg *ParametersConfig, dir bool, err error) {
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return nil, DefaultParametersConfig(), false, nil
 		}
-		return nil, fmt.Errorf("read parameters config: %w", err)
+		return nil, nil, false, fmt.Errorf("read parameters config: %w", statErr)
 	}
 
 	if info.IsDir() {
 		parametersConfigDir = path
-		return loadParametersDir(path)
+		merged, mergeErr := marshalParametersDir(path)
+		if mergeErr != nil {
+			return nil, nil, true, mergeErr
+		}
+		cfg, parseErr := parseParametersBytes(merged)
+		if parseErr != nil {
+			return nil, nil, true, parseErr
+		}
+		return merged, cfg, true, nil
 	}
+
 	parametersConfigDir = "" // not in directory mode
-	return loadParametersFile(path)
+	data, readErr := os.ReadFile(path)
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			return nil, DefaultParametersConfig(), false, nil
+		}
+		return nil, nil, false, fmt.Errorf("read parameters config: %w", readErr)
+	}
+	cfg, parseErr := parseParametersBytes(data)
+	if parseErr != nil {
+		return nil, nil, false, parseErr
+	}
+	return data, cfg, false, nil
 }
 
-// loadParametersFile loads from a single JSON file (legacy mode).
-func loadParametersFile(path string) (*ParametersConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultParametersConfig(), nil
-		}
-		return nil, fmt.Errorf("read parameters config: %w", err)
-	}
-
+// parseParametersBytes parses, merges defaults into, and validates a parameters
+// document.
+func parseParametersBytes(data []byte) (*ParametersConfig, error) {
 	var cfg ParametersConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse parameters config: %w", err)
@@ -53,10 +99,32 @@ func loadParametersFile(path string) (*ParametersConfig, error) {
 	return &cfg, nil
 }
 
+// loadParametersFile loads from a single JSON file (legacy mode).
+func loadParametersFile(path string) (*ParametersConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultParametersConfig(), nil
+		}
+		return nil, fmt.Errorf("read parameters config: %w", err)
+	}
+	return parseParametersBytes(data)
+}
+
 // loadParametersDir loads from a directory of per-category JSON files.
 // Each file is named <category>.json (e.g. darwinian.json, factor.json).
 // _meta.json carries version + updated_at.
 func loadParametersDir(dir string) (*ParametersConfig, error) {
+	merged, err := marshalParametersDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	return parseParametersBytes(merged)
+}
+
+// marshalParametersDir merges the per-category files of a parameters directory
+// into one JSON document.
+func marshalParametersDir(dir string) ([]byte, error) {
 	data := make(map[string]json.RawMessage)
 
 	entries, err := os.ReadDir(dir)
@@ -90,19 +158,7 @@ func loadParametersDir(dir string) (*ParametersConfig, error) {
 		merged = append(merged, raw...)
 	}
 	merged = append(merged, '}')
-
-	var cfg ParametersConfig
-	if err := json.Unmarshal(merged, &cfg); err != nil {
-		return nil, fmt.Errorf("parse merged parameters: %w", err)
-	}
-
-	mergeAllDefaults(&cfg)
-
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("validate parameters config: %w", err)
-	}
-
-	return &cfg, nil
+	return merged, nil
 }
 
 // mergeAllDefaults applies all category-level default merges.

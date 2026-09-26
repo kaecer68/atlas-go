@@ -618,7 +618,7 @@
 
 ### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值）；**寫入者已定位＝應用自身 calibration 任務**（runtime 自適應、不回流版控、重建即失）
 
-- **狀態**：`in-progress`（**寫入者已定位（2026-09-26）；守門 ＋ 持久化 ＋ 可見性已實作（本 PR），待合併與部署後才 `done`**）
+- **狀態**：`in-progress`（**寫入者已定位（2026-09-26）；守門 ＋ 持久化 ＋ 可見性 + 全部 runtime 寫入端遷移已實作，待合併與部署後才 `done`**）
 - **記錄日期**：2026-09-26
 - **事實（生產唯讀實測，2026-09-26）**：
   - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
@@ -682,11 +682,36 @@
      （charter 編輯）⇒ 該條目**失效並移除** ＋ WARN，人工審查過的 charter 永遠優先於過期的 runtime 適應。
    - **風險（已在 PR 說明）**：校準值變成「跨容器重建存活」（這正是本條要的），
      因此以前「重建即重置回 repo 值」的意外剎車消失；漂移的上限現在由 (1) 的 floor 承擔。
-3. **仍未涵蓋（後續）**：其他校準器仍寫 `configs/parameters.json`
-   （`internal/config/calibrator.go:200`、`internal/portfolio/factor_weight_calibrator.go:148`、
-   `internal/orchestrator/calibration_engine.go:330`、`cmd/atlas/calibration_tasks.go:165` 的
-   `industry.RecalibrateThresholds`）；它們的寫入**一樣**在容器重建時遺失、且對 git 不可見。
-   本 PR 只遷移 `risk_gate_calibrate → risk.SelfCalibrate` 這條（觀測到漂移的那條）。
+3. **其餘 runtime 寫入端（2026-09-26 第二批，`feat/calibration-overlay-all-writers`）**：全部改走同一個 overlay ✓
+   - `internal/config/calibrator.go`（`CalibrateParameters`，5 個 task 呼叫者）→ named entries
+   - `internal/portfolio/factor_weight_calibrator.go`（`applyFactorWeights`）→ dotted path
+     `factor_weight.base_weights.value`（整張 8 因子表；SSOT 驗證要求完整集合，故不可部分 patch）
+   - `internal/retail/calibration.go`（`CalibrateRSITw`）→ dotted path `rsi_tw.<param>.value` ＋
+     `rsi_tw.last_calibrated_score.*`
+   - `internal/industry/data_aggregator.go`（`RecalibrateThresholds`，任務 ＋ admin route）→ dotted path
+     `industry.cycle_thresholds.source/calibrated_at/value.<industryID>`；**簽章改為 `RecalibrateThresholds(revenuePath)`**
+     （不再接受 configPath ⇒ 未來呼叫者無法不小心寫回 SSOT）
+   - overlay 文件格式升級為 **v2**：條目可為 named tunable（純量）或 **dotted JSON path**（任意 JSON），
+     . 兩者共用同一份文件／同一組 fail-closed 規則（未知鍵/路徑移除＋WARN、SSOT 基準變動 ⇒ 失效移除＋WARN、
+     未註冊路徑＝完全停用）。dotted path 規則：**容器必須存在、落葉可新增**（打錯段落名會被擋）。
+4. **刻意仍寫 SSOT（不是缺口）**：
+   - CLI 工具（`cmd/calibrate-parameters`、`cmd/calibrate-rsi-tw --update`、`cmd/calibrate-seasonal --update`、
+     `cmd/calibrate-thresholds`、`cmd/backfill-industry-tree`）：人工在 checkout 執行 ⇒ 寫入是**可審查的 git diff** ✓。
+   - admin parameters API（`POST /api/parameters`、`/api/parameters/rollback`）：人工編輯 SSOT 的介面 ✓。
+5. **生產不可達、刻意未遷移（不為死碼整齊而動）**：
+   - `internal/orchestrator/calibration_engine.go` 的 `ApplyToConfig`/`ApplyToConfigPath`：**無任何 production caller**
+     （`grep -rn 'ApplyToConfig' internal/ cmd/` 只回定義；`CalibrationEngine` 只被用於 `Calibrate`）。
+   - `internal/scheduler/auto_rollback.go:274`（`RestoreFromBackup(GetParametersConfigPath())`）：由
+     `checkCalibrationDegradation` 觸發，而 `AutoRollback.RecordCalibration`（唯一設定 `lastCalibSnapshot` 者）
+     在 production **無呼叫者**（只有測試）。
+   - ⚠️ 若日後有人接線這兩條，**必須**改走 overlay（否則本條缺口原地復活）。
+   - `docs/calibration-loop.md` 已同步記錄「誰還寫 SSOT（刻意的）」清單。
+6. **admin API 與 overlay 的互動（僅記錄，未改）**：`POST /api/parameters` 的讀寫基準是
+   `h.params`（SSOT 視圖）⇒ **不會**把 overlay 值寫進 SSOT ✓。但 `POST /api/parameters/rollback`
+   走 `SnapshotStore.RollbackToSnapshot`（直接換掉**單例**＝effective 那份）再把單例寫回 SSOT
+   ⇒ 該次 rollback 會把當下 overlay 的值一併寫進 SSOT；之後 overlay 條目會因「SSOT 基準變動」而失效
+   （charter 勝）✓ 不會卡死，但被 overlay 的鍵會回到 snapshot 的內容。若要語意精確一致，
+   需讓 rollback 同時處理 overlay（後續）。
 
 ---
 

@@ -162,7 +162,6 @@ func (d calibrationDeps) registerAutoStrategyEvolution() {
 
 func (d calibrationDeps) registerAutoThresholdCalibrate() {
 	revenuePath := filepath.Join(d.Cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-	configPath := filepath.Join(d.Cfg.WorkDir, "configs", "parameters.json")
 	_ = d.TaskMgr.Register(&apigateway.ScheduledTask{
 		Name:     "auto_threshold_calibrate",
 		Interval: 24 * time.Hour,
@@ -178,7 +177,7 @@ func (d calibrationDeps) registerAutoThresholdCalibrate() {
 			if _, err := os.Stat(revenuePath); os.IsNotExist(err) {
 				return nil
 			}
-			return industry.RecalibrateThresholds(revenuePath, configPath)
+			return industry.RecalibrateThresholds(revenuePath)
 		},
 	})
 	log.Printf("[Gateway] registered auto_threshold_calibrate background task (24h interval, checks 1st of month)")

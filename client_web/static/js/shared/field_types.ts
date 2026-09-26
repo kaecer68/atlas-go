@@ -328,19 +328,21 @@ export interface CalibrationOverlay {
 }
 
 export interface CalibrationOverlayDiff {
-  name: string;
-  ssot: number;
-  effective: number;
-  before: number;
-  ratio: number;
+  key: string;
+  path?: string;
+  ssot?: string;
+  effective: string;
+  before?: string;
+  ratio?: number;
   calibrated_at: string;
   method?: string;
 }
 
 export interface CalibrationOverlayEntry {
-  value: number;
-  before: number;
-  ssot: number;
+  path?: string;
+  value: string;
+  before?: string;
+  ssot?: OverlaySSOTBaseline | null;
   calibrated_at: string;
   method?: string;
   rationale?: string;
@@ -2843,6 +2845,11 @@ export interface OrchestratorParameters {
   use_ml_scoring: string;
   use_llm_sector_agents: string;
   l2_4_schedule: L2_4ScheduleParameters;
+}
+
+export interface OverlaySSOTBaseline {
+  present: boolean;
+  value?: string;
 }
 
 export interface OverviewResponse {
