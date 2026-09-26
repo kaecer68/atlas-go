@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -167,8 +168,11 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time, client dail
 	// repeats its own. A row written for a Saturday therefore pushes the
 	// calendar onto a day the exchange never traded: NextTradingSession(09-24)
 	// answers 09-25 (休市), the real 09-24 samples lose their forward return,
-	// and monitoring/service.checkReplayHealth — which reads the CSV's LAST
-	// line — reports the phantom date as fresh forever.
+	// and monitoring/service.checkReplayHealth — which derives freshness from
+	// the CSV's LAST line, i.e. the newest APPENDED row — reports the phantom
+	// date as fresh forever. (Because the writers only ever append, that last
+	// line is not necessarily the newest DATE: a gap backfill that runs after
+	// the daily sync appends older dates. Left as is here; see the follow-ups.)
 	//
 	// GetQuotes() (STOCK_DAY_ALL) takes NO date parameter: on a closed market
 	// it replays the previous trading day's rows, which is precisely how the
@@ -182,6 +186,12 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time, client dail
 	if !marketdata.IsTaiwanTradingDay(target) {
 		log.Printf("[DailySync] %s is not a Taiwan trading day (%s) — no fetch, replay CSV left unchanged",
 			dateStr, target.Weekday())
+		// The calendar is the sole gate for all three writers (this guard,
+		// runGapBackfill and runBackfill share IsTaiwanTradingDay), so a date
+		// the calendar wrongly calls closed is never fetched by ANY of them.
+		// The skip is therefore logged, not silent, and the calendar's known
+		// gaps are tracked in the follow-ups (internal/taiwanholidays is missing
+		// 9 real closure days) — it must not be edited here.
 		return nil
 	}
 
@@ -273,13 +283,47 @@ func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time, client dail
 		return errors.New(msg)
 	}
 
-	if err := appendRecords(csvPath, records); err != nil {
+	written, err := appendRecords(csvPath, records)
+	if err != nil {
 		monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "error", err.Error(), pool, monitoring.WithLatencyMs(latencyMs))
 		return err
 	}
 	monitoring.RecordChannelFetchWithPool(stateDir, "twse_replay_sync", "ok", "", pool, monitoring.WithLatencyMs(latencyMs))
-	log.Printf("[DailySync] Appended %d records for %s (data date %s, fetch %dms)", len(records), dateStr, res.DataDate, latencyMs)
+	log.Printf("[DailySync] appended %d new rows for %s (data date %s, %d of %d candidates already present, fetch %dms)",
+		written, dateStr, res.DataDate, len(records)-written, len(records), latencyMs)
+	if written == 0 {
+		// Every candidate was already in the CSV: a re-run, not a failure —
+		// but say so, because "ok" plus no log line is how a real no-write
+		// regression would hide.
+		log.Printf("[DailySync] %s already complete in the CSV; nothing to append", res.DataDate)
+	}
+	if missing := missingTargetSymbols(res.Quotes, targetSymbols); len(missing) > 0 {
+		// Partial coverage stays "ok" by design (a suspended symbol is a
+		// legitimate intraday gap, and DefaultSymbols() merges codes from the
+		// CSV itself, so a delisted code would alarm forever), but it must not
+		// be SILENT: 2026-09-24's payload carries 16 rows whose 收盤價 is "--"
+		// and those are dropped by the quote conversion.
+		log.Printf("[WARN] [DailySync] %s: %d of %d replay symbols missing from the payload: %s",
+			res.DataDate, len(missing), len(targetSymbols), strings.Join(missing, ","))
+	}
 	return nil
+}
+
+// missingTargetSymbols returns the target symbols the payload did not yield a
+// usable quote for, sorted for stable logs.
+func missingTargetSymbols(quotes []domain.Quote, target map[string]bool) []string {
+	seen := make(map[string]bool, len(quotes))
+	for _, q := range quotes {
+		seen[stripSuffix(q.Symbol)] = true
+	}
+	var missing []string
+	for code := range target {
+		if !seen[code] {
+			missing = append(missing, code)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func runBackfill(csvPath, startStr, endStr string) error {
@@ -299,6 +343,15 @@ func runBackfill(csvPath, startStr, endStr string) error {
 	ctx := context.Background()
 	symbols := orchestrator.DefaultSymbols()
 
+	// Dates actually attempted (trading days only) and the ones that produced
+	// nothing. A trading day with 0 rows means the upstream answered nothing
+	// for a day that traded — that is a failure, not an empty market. It used
+	// to be a plain log line followed by `return nil`, and auto_backfill reads
+	// ONLY the exit code (cmd/atlas/operations_tasks.go: a nil error logs
+	// "backfill success"), so a total upstream outage looked like a successful
+	// backfill (measured 2026-09-26 with a 503 stub: err=nil, 0 rows written).
+	var attempted, emptyDates []string
+
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		dateStr := d.Format("2006-01-02")
 		if !marketdata.IsTaiwanTradingDay(d) {
@@ -310,6 +363,7 @@ func runBackfill(csvPath, startStr, endStr string) error {
 			log.Printf("[Backfill] skip %s: not a Taiwan trading day", dateStr)
 			continue
 		}
+		attempted = append(attempted, dateStr)
 		apiDateStr := d.Format("20060102") // TWSE API expects YYYYMMDD format
 		log.Printf("[Backfill] Processing %s...", dateStr)
 
@@ -332,15 +386,24 @@ func runBackfill(csvPath, startStr, endStr string) error {
 				Close:       quote.Last,
 			})
 		}
-		if len(records) > 0 {
-			if err := appendRecords(csvPath, records); err != nil {
-				return fmt.Errorf("append %s: %w", dateStr, err)
-			}
-			log.Printf("[Backfill] Appended %d records for %s", len(records), dateStr)
-		} else {
-			log.Printf("[Backfill] No data available for %s", dateStr)
+		if len(records) == 0 {
+			log.Printf("[Backfill] no data for %s (a trading day; the upstream returned nothing for all %d symbols)", dateStr, len(symbols))
+			emptyDates = append(emptyDates, dateStr)
+			continue
 		}
+		written, err := appendRecords(csvPath, records)
+		if err != nil {
+			return fmt.Errorf("append %s: %w", dateStr, err)
+		}
+		log.Printf("[Backfill] appended %d new rows for %s (%d of %d candidates already present)",
+			written, dateStr, len(records)-written, len(records))
 	}
+
+	if len(emptyDates) > 0 {
+		return fmt.Errorf("backfill fetched 0 rows for %d of %d trading day(s) (%s): the upstream failed, this is not an empty market",
+			len(emptyDates), len(attempted), strings.Join(emptyDates, ", "))
+	}
+	log.Printf("[Backfill] done: %d trading day(s) in range, 0 empty", len(attempted))
 	return nil
 }
 
@@ -412,10 +475,11 @@ func runGapBackfill(csvPath string, window int, now time.Time, client dailyQuote
 			continue
 		}
 
-		if err := appendRecords(csvPath, records); err != nil {
+		written, err := appendRecords(csvPath, records)
+		if err != nil {
 			return fmt.Errorf("gap backfill append %s: %w", dateStr, err)
 		}
-		log.Printf("[GapBackfill] Appended %d records for %s", len(records), dateStr)
+		log.Printf("[GapBackfill] appended %d new rows for %s (%d of %d candidates already present)", written, dateStr, len(records)-written, len(records))
 		appendedDays++
 	}
 
@@ -455,15 +519,21 @@ func buildPrevCloseByCode(existing []csvRecord) map[string]float64 {
 	return prev
 }
 
-func appendRecords(csvPath string, records []csvRecord) error {
+// appendRecords appends the records that are not already present (dedup key
+// Date+Code) and returns how many rows it ACTUALLY wrote. Callers must log that
+// count, not len(records): a re-run over the same day writes 0 new rows, and
+// logging the input length makes an operator believe data landed (measured
+// 2026-09-26: a second run printed "Appended 41 records" while the CSV was
+// byte-identical).
+func appendRecords(csvPath string, records []csvRecord) (int, error) {
 	if len(records) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	// Load existing data for deduplication
 	existing, err := loadCSV(csvPath)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("load csv: %w", err)
+		return 0, fmt.Errorf("load csv: %w", err)
 	}
 
 	// Create dedup key set
@@ -478,8 +548,10 @@ func appendRecords(csvPath string, records []csvRecord) error {
 	// Append new records, skipping duplicates
 	f, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("open csv: %w", err)
+		return 0, fmt.Errorf("open csv: %w", err)
 	}
+	// The close error is checked explicitly at the end (a deferred Close whose
+	// error is dropped can hide a truncated tail while the caller records ok).
 	defer func() { _ = f.Close() }()
 
 	writer := csv.NewWriter(f)
@@ -488,6 +560,7 @@ func appendRecords(csvPath string, records []csvRecord) error {
 		_ = writer.Write([]string{"Date", "Code", "Name", "TradeVolume", "Open", "High", "Low", "Close"})
 	}
 
+	written := 0
 	for _, r := range records {
 		key := r.Date + "," + r.Code
 		if seen[key] {
@@ -506,9 +579,16 @@ func appendRecords(csvPath string, records []csvRecord) error {
 		})
 		seen[key] = true
 		prevCloseByCode[r.Code] = r.Close
+		written++
 	}
 	writer.Flush()
-	return writer.Error()
+	if err := writer.Error(); err != nil {
+		return written, err
+	}
+	if err := f.Close(); err != nil {
+		return written, fmt.Errorf("close csv: %w", err)
+	}
+	return written, nil
 }
 
 func loadCSV(path string) ([]csvRecord, error) {

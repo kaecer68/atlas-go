@@ -274,7 +274,19 @@ func main() {
 			}
 		}
 		totalRows += len(bars)
-		fmt.Printf(" [%d records]\n", len(bars))
+		switch {
+		case len(bars) > 0:
+			fmt.Printf(" [%d records]\n", len(bars))
+		case len(quotes) > 0:
+			// Rows came back but none was usable: every close was 0/"--"
+			// (suspended) or all of them are already in -merge-with. A re-run
+			// is idempotent so this is not a failure, but it must never print a
+			// bare "0 records" — that is the wording that let a 0-row bug pass
+			// for weeks.
+			fmt.Printf(" [0 new records — %d rows fetched, all already present or without a usable close]\n", len(quotes))
+		default:
+			fmt.Printf(" [0 rows returned]\n")
+		}
 
 		time.Sleep(5 * time.Second)
 	}

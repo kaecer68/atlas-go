@@ -411,6 +411,15 @@ func miIndexSyncRow(code string) string {
 		code, last, last+1, last-1, last)
 }
 
+// compactDate turns a YYYYMMDD API date into the YYYY-MM-DD used in the fixture
+// map, or "" when the shape is unexpected.
+func compactDate(date string) string {
+	if len(date) != 8 {
+		return ""
+	}
+	return date[0:4] + "-" + date[4:6] + "-" + date[6:8]
+}
+
 // syncClient returns the shared TWSE client the tests stubbed through
 // stubSharedTWSEClient. runDailySync takes its fetcher as an argument so a test
 // can also inject a fake.
@@ -772,11 +781,25 @@ func TestRunDailySync_FiltersTheRealPayloadToTheReplayUniverse(t *testing.T) {
 			t.Errorf("replay symbol %s missing from the CSV although the payload contains it", code)
 		}
 	}
-	// Codes the payload has but the replay universe does not: dropped.
-	for _, code := range []string{"1216", "2357", "3231"} {
-		if written[code] {
-			t.Errorf("non-replay code %s was written (44-code payload must still be filtered)", code)
+	// Codes the payload has but the replay universe does not: dropped. Derived
+	// from the two sets (not hardcoded) so the assertion cannot rot if
+	// DefaultSymbols() gains or loses CSV-merged codes.
+	targetSet := make(map[string]bool, len(targets))
+	for _, sym := range targets {
+		targetSet[stripSuffix(sym)] = true
+	}
+	var outside int
+	for _, code := range fixtureCodes {
+		if targetSet[code] {
+			continue
 		}
+		outside++
+		if written[code] {
+			t.Errorf("non-replay code %s was written (the %d-code payload must still be filtered)", code, len(fixtureCodes))
+		}
+	}
+	if outside == 0 {
+		t.Fatal("the fixture carries no code outside DefaultSymbols(): the filter assertion is vacuous in this environment")
 	}
 	// Spot-check the mapping against the real payload (values are the ones the
 	// live 2026-09-24 response carried).
@@ -808,6 +831,15 @@ func TestRunDailySync_FiltersTheRealPayloadToTheReplayUniverse(t *testing.T) {
 // weekend → holiday via IsTaiwanTradingDay → trading). A CSV in which no date
 // fails that predicate is one the repo's own cleaning tool removes 0 rows from.
 func TestRunDailySync_SyntheticWeekWritesOnlyTradingDays(t *testing.T) {
+	// Bodies are pre-rendered: the handler runs on the server's goroutine, so
+	// it must not call t.Fatalf (only t.Errorf is safe from another goroutine).
+	closedBody := []byte(`{"stat":"很抱歉，沒有符合條件的資料!","type":"ALLBUT0999"}`)
+	bodies := map[string][]byte{}
+	for day := 21; day <= 27; day++ {
+		date := fmt.Sprintf("2026-09-%02d", day)
+		bodies[date] = []byte(miIndexSyncResponse(t, date, miIndexSyncRow("2330")))
+	}
+
 	var mu sync.Mutex
 	requested := map[string]int{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -816,12 +848,11 @@ func TestRunDailySync_SyntheticWeekWritesOnlyTradingDays(t *testing.T) {
 		requested[date]++
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		day, err := time.ParseInLocation("20060102", date, marketdata.TaiwanLocation())
-		if err != nil || !marketdata.IsTaiwanTradingDay(day) {
-			_, _ = w.Write([]byte(`{"stat":"很抱歉，沒有符合條件的資料!","type":"ALLBUT0999"}`))
+		if body, ok := bodies[compactDate(date)]; ok {
+			_, _ = w.Write(body)
 			return
 		}
-		_, _ = w.Write([]byte(miIndexSyncResponse(t, day.Format("2006-01-02"), miIndexSyncRow("2330"))))
+		_, _ = w.Write(closedBody)
 	}))
 	defer srv.Close()
 	stubSharedTWSEClient(t, srv.URL, 1)
@@ -859,5 +890,146 @@ func TestRunDailySync_SyntheticWeekWritesOnlyTradingDays(t *testing.T) {
 		if n := requested[date]; n != 0 {
 			t.Errorf("upstream called %d time(s) on closed day %s, want 0", n, date)
 		}
+	}
+}
+
+// ─── STOCK_DAY stub (runBackfill's per-symbol path) ─────────────────────────
+
+// stockDayStub serves the STOCK_DAY (per-symbol, monthly) shape GetDailyQuote
+// parses: a flat fields/data payload whose rows start with the ROC date, and
+// returns the row for the date the caller asked for. It counts requests.
+func stockDayStub(t *testing.T, calls *int64) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(calls, 1)
+		date := r.URL.Query().Get("date")
+		d, err := time.ParseInLocation("20060102", date, marketdata.TaiwanLocation())
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		roc := fmt.Sprintf("%d/%02d/%02d", d.Year()-1911, int(d.Month()), d.Day())
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"stat":"OK","date":%q,"title":"個股日成交資訊",
+			"fields":["日期","成交股數","成交金額","開盤價","最高價","最低價","收盤價","漲跌價差","成交筆數","註記"],
+			"data":[[%q,"15,000,000","1,500,000","100.00","105.00","99.00","104.00","+1.00","1,000",""]]}`,
+			date, roc)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestRunBackfillSkipsNonTradingDays pins the closed-market guard added to
+// runBackfill: the replay CSV's date column is the replay trading calendar, and
+// auto_backfill's `end` only rolls weekends off, so holidays do reach this
+// loop. A range made only of closed days is "nothing to do", not a failure —
+// and it must cost ZERO API calls (44 symbols × N dates otherwise).
+func TestRunBackfillSkipsNonTradingDays(t *testing.T) {
+	var calls int64
+	srv := stockDayStub(t, &calls)
+	stubSharedTWSEClient(t, srv.URL, 1)
+	logs := setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-18"}, []string{"2330"})
+	// 2026-09-25 is 中秋節; 09-26/27 are the weekend.
+	if err := runBackfill(csvPath, holidayDate, weekendDate); err != nil {
+		t.Fatalf("a range with no trading day = %v, want nil (nothing to do is not a failure)", err)
+	}
+	if got := atomic.LoadInt64(&calls); got != 0 {
+		t.Errorf("upstream calls = %d, want 0 for a all-closed range", got)
+	}
+	for _, date := range []string{holidayDate, weekendDate} {
+		if got := countRowsForDate(t, csvPath, date); got != 0 {
+			t.Errorf("rows written for closed day %s = %d, want 0", date, got)
+		}
+	}
+	if !strings.Contains(logs.String(), "not a Taiwan trading day") {
+		t.Errorf("logs must state the skip, got: %s", logs.String())
+	}
+}
+
+// TestRunBackfillWritesTradingDays is the happy path for the guard's coverage:
+// a trading day in range is fetched per symbol and written once.
+func TestRunBackfillWritesTradingDays(t *testing.T) {
+	var calls int64
+	srv := stockDayStub(t, &calls)
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-18"}, []string{"2330"})
+	if err := runBackfill(csvPath, tradingDayDate, tradingDayDate); err != nil {
+		t.Fatalf("runBackfill: %v", err)
+	}
+	targets := orchestrator.DefaultSymbols()
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != len(targets) {
+		t.Errorf("rows for %s = %d, want %d (one per replay symbol)", tradingDayDate, got, len(targets))
+	}
+	if got := atomic.LoadInt64(&calls); got != int64(len(targets)) {
+		t.Errorf("upstream calls = %d, want %d (one per symbol)", got, len(targets))
+	}
+}
+
+// TestRunBackfillFailsLoudlyWhenATradingDayYieldsNoRows is the negative proof
+// for the silent-success the review found: a whole-range upstream outage used
+// to log "No data available" and `return nil`, and auto_backfill reads ONLY the
+// exit code — so a total outage was recorded as "backfill success".
+func TestRunBackfillFailsLoudlyWhenATradingDayYieldsNoRows(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	setLogOutput(t)
+
+	csvPath := writeFixtureCSV(t, []string{"2026-09-18"}, []string{"2330"})
+	before, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	err = runBackfill(csvPath, tradingDayDate, tradingDayDate)
+	if err == nil {
+		t.Fatal("a trading day with 0 rows = nil error, want a failure (auto_backfill logs 'backfill success' on nil)")
+	}
+	if !strings.Contains(err.Error(), tradingDayDate) || !strings.Contains(err.Error(), "0 rows") {
+		t.Errorf("error %q must name the date and the empty result", err.Error())
+	}
+	after, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("re-read csv: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Errorf("CSV changed although nothing was fetched:\nbefore=%s\nafter=%s", before, after)
+	}
+}
+
+// TestAppendRecordsReportsRowsActuallyWritten pins the log contract: a re-run
+// over an already-complete day writes nothing, and the count must say so
+// instead of echoing len(records) (measured 2026-09-26: a second run printed
+// "Appended 41 records" over a byte-identical CSV).
+func TestAppendRecordsReportsRowsActuallyWritten(t *testing.T) {
+	csvPath := writeFixtureCSV(t, []string{"2026-09-23"}, []string{"2330"})
+	records := []csvRecord{
+		{Date: "2026-09-24", Code: "2330", Name: "台積電", TradeVolume: 1, Open: 100, High: 101, Low: 99, Close: 100.5},
+		{Date: "2026-09-24", Code: "2317", Name: "鴻海", TradeVolume: 2, Open: 200, High: 201, Low: 199, Close: 200.5},
+	}
+
+	written, err := appendRecords(csvPath, records)
+	if err != nil {
+		t.Fatalf("first appendRecords: %v", err)
+	}
+	if written != 2 {
+		t.Errorf("first call wrote %d rows, want 2", written)
+	}
+
+	again, err := appendRecords(csvPath, records)
+	if err != nil {
+		t.Fatalf("second appendRecords: %v", err)
+	}
+	if again != 0 {
+		t.Errorf("second call wrote %d rows, want 0 (dedup by Date+Code)", again)
+	}
+	if got := len(loadDateKeys(t, csvPath)); got != 3 {
+		t.Errorf("CSV holds %d date:code keys, want 3 (1 fixture + 2 appended, no duplicates)", got)
 	}
 }

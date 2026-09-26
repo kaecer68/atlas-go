@@ -20,11 +20,12 @@ import (
 // STOCK_DAY_ALL (GetQuotes) answers with "today's" snapshot and accepts NO
 // date parameter: on a closed market it simply replays the previous trading
 // day's rows. Any caller that stamps the payload with time.Now() therefore
-// writes phantom rows for weekends and holidays (2026-09-26 incident: the
-// replay CSV held 1150924 rows labelled 2026-09-26, and the CSV's date column
-// IS the replay trading calendar, so the phantom dates poisoned
-// NextTradingSession, ForwardReturn's duplicate-row guard and the twse_replay
-// freshness reading).
+// writes phantom rows for weekends and holidays (2026-09-27 incident: on
+// Saturday 2026-09-26 the endpoint answered with rows whose date column read
+// 1150924 — ROC year 115 (2026), month 09, day 24 — while the caller labelled
+// them 2026-09-26. The CSV's date column IS the replay trading calendar, so
+// those phantom dates poisoned NextTradingSession, ForwardReturn's
+// duplicate-row guard and the twse_replay freshness reading).
 //
 // MI_INDEX is date-addressed and honest. Measured 2026-09-26 against the live
 // endpoint:

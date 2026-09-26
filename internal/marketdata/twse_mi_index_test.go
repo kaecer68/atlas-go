@@ -15,8 +15,9 @@ import (
 // 2026-09-26: replay phantom rows → date-addressed MI_INDEX source.
 //
 // STOCK_DAY_ALL (GetQuotes) takes NO date parameter: on a closed market it
-// replays the previous trading day's rows (verified live 2026-09-26: the first
-// data column of the response was 1150924 = 2026-09-24, a Saturday). The
+// replays the previous trading day's rows (verified live on Saturday
+// 2026-09-26: the first data column of the response was the ROC date 1150924 =
+// 2026-09-24, the previous Thursday). The
 // replay writer stamped those rows with time.Now(), so the CSV gained a
 // phantom row set for every closed day since 2026-08-29 — and the CSV's date
 // column IS the replay trading calendar.
