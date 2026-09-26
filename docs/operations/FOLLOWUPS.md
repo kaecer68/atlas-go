@@ -708,6 +708,15 @@
   同型命中另有 `scripts/ops/imac-container-watchdog.sh:32`（**僅註解**，無害，不需修）。
   重現：`grep -rnP '\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]' --include=*.sh --include=Makefile .`
   （`set -u` 下會崩潰；未開 `set -u` 時會**靜默吃掉變數值**，例如 `count=$N筆` 印成 `count=筆`）。
+- **2026-09-26（後續 PR 進度）**：**未修 ① 已落地** —— `scripts/ci/check_finmind_quota.sh:65` 改為 `${STATE_FILE}`，
+  且同型全掃後另修 `tests/scripts/test-install-webhook.sh:55/78/104`、`.github/workflows/quality.yml`（`mcp-tool-count`
+  的 `$DOC_MIN–$DOC_MAX`）與**本條目併入後才出現**的 3 處（`tests/scripts/test-binary-freshness-guard.sh:104/127`、
+  `tests/scripts/test-cron-entrypoint.sh:42`）。更重要的是把它變成**機制**：
+  `scripts/ci/check_shell_var_nonascii.{sh,py}`（靜態掃 `*.sh`）＋ self-test
+  `tests/scripts/test-shell-var-nonascii.sh`（27 項、精確 exit code）＋ `quality.yml` 的 `shell-var-nonascii` job
+  ＋ `make ci-gate`，例外清單 `scripts/ci/shell-var-nonascii-baseline.txt`（現況空）。
+  該檢查是**唯一**能擋下這類 bug 的手段：實測 macOS+UTF-8 locale 崩潰、`LC_ALL=C` 與 linux/glibc/musl **皆不發作**
+  ⇒ 只在 ubuntu 上跑的 CI **永遠不會紅**。
 - **未修 ②**：`Makefile` coverage 段（`#2009`）的「門檻變數為空 ⇒ 比較反向通過」由另票處理（本 PR 未動該段）。
 - **未修 ③（觀察，非缺陷）**：`.github/workflows/ci-cd.yml` 的 gosec 用 `-no-fail`、
   `vuln-scan.yml` 的 govulncheck 以 `|| true` + advisory-only SARIF 上傳 ⇒ **這兩個安全掃描永遠不會讓 pipeline 紅**
@@ -796,7 +805,7 @@
 
 ---
 
-### FU-20260926-11 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
+### FU-20260926-12 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
 
 - **狀態**：`open`
 - **記錄日期**：2026-09-26
