@@ -3,6 +3,8 @@
 > 審計範圍：Phase 4 選股層開發（2026-08-27~28）連續踩坑 5+1 件的系統性根因。
 > 方法：逐檔盤查 + 本地重現（起 CI 同規格 timescaledb:2.14.2-pg15 容器跑 `-tags=integration`）+ 查閱 CI 失敗 log + ssh 驗證 iMac .env 實際值。
 > 註：本文件於 2026-08-28 kernel 中斷後由 root agent 依對話記錄重建存檔（原始檔因未 commit 遺失）。
+>
+> ⚠️ 歷史紀錄（原值保留）：本文所述的 `ssh kk@kimac` 與其 `~/.config/atlas-go/.env` 實查值，皆為 2026-09-22 前的 iMac；該機已退役出售，現行 production 為 `kaecer@kmacmini`。
 
 ## 1. 總體結論
 

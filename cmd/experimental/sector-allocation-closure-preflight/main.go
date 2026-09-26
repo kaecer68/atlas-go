@@ -202,15 +202,17 @@ func checkClosureStore(workDir string) checkResult {
 }
 
 // checkWeightSource: source must be permanently locked as "heuristic".
-// The closure verifier enforces this until empirical validation completes.
+//
+// NOTE (2026-09-26): the former closure verifier (scripts/verify-sector-allocation-closure.sh) is
+// DISABLED — it does NOT enforce this at build time (see docs/operations/FOLLOWUPS.md
+// FU-20260926-23 / docs/operations/remediation-manifest.md E16). The lock is enforced by the Go unit
+// tests in internal/config and internal/sectorallocation. This preflight item is a reporting stub:
+// it always reports OK and does not read the configuration.
 func checkWeightSource() checkResult {
-	// This is enforced by the closure verifier script at build time.
-	// At preflight time, we verify the WeightEngine configuration
-	// uses source=heuristic (not empirical/calibrated).
 	return checkResult{
 		Name:    "weight source locked as heuristic",
 		OK:      true,
-		Message: "enforced by closure verifier (scripts/verify-sector-allocation-closure.sh Checks 5/11/17); calibration_status=calibrating until SA11 promotion",
+		Message: "lock enforced by Go unit tests (internal/config, internal/sectorallocation); the closure verifier script is DISABLED (FU-20260926-23 / E16); calibration_status=calibrating until SA11 promotion",
 	}
 }
 
