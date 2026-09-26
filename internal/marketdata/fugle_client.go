@@ -185,6 +185,18 @@ func (c *FugleClient) currentAPIKey() string {
 func NewFugleClient(apiKey string) *FugleClient {
 	return newFugleClient(apiKey, "data/state")
 }
+
+// NewFugleClientWithStateDir creates a standalone FugleClient whose
+// DailyQuotaTracker persists under the given stateDir instead of the
+// default CWD-relative "data/state". Test-only convenience, mirroring
+// NewFinMindClientWithStateDir: a test that points this at t.TempDir()
+// cannot leave a quota file inside the repo tree (see the E8 note on
+// apigateway.saveSnapshot — a stray repo-tree directory is what made
+// internal/config's WalkDir("internal") flake).
+func NewFugleClientWithStateDir(apiKey, stateDir string) *FugleClient {
+	return newFugleClient(apiKey, stateDir)
+}
+
 func newFugleClient(apiKey string, stateDir string) *FugleClient {
 	params := config.GetParametersConfig()
 	limit := getFugleRateLimit()

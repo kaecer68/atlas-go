@@ -27,8 +27,11 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- Fugle ---
 	if cfg.FugleAPIKey != "" {
-		fugleClient := marketdata.GetSharedFugleClient(cfg.FugleAPIKey)
-		fugleAdapter := NewFugleChannelAdapter(fugleClient)
+		// The state dir is injected (not the CWD-relative default) for the same
+		// reason as the channel snapshot: the quota file belongs under the
+		// configured work dir.
+		fugleClient := marketdata.GetSharedFugleClient(cfg.FugleAPIKey, stateDirFor(workDir))
+		fugleAdapter := NewFugleChannelAdapter(fugleClient, workDir)
 		g.registry.Register("fugle", fugleAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "fugle")
 	}
@@ -60,8 +63,8 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 
 	// --- FinMind ---
 	if cfg.FinMindAPIKey != "" {
-		finmindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey)
-		finmindAdapter := NewFinMindChannelAdapter(finmindClient)
+		finmindClient := marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey, stateDirFor(workDir))
+		finmindAdapter := NewFinMindChannelAdapter(finmindClient, workDir)
 		g.registry.Register("finmind", finmindAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "finmind")
 	}
@@ -94,7 +97,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 		// PR-2: fill margin_maintenance_ratio from FinMind when TWSE has none
 		// (shared singleton client + DailyQuotaTracker; ~1 call/day via the
 		// adapter's daily dedup).
-		marginAdapter.SetFinMindClient(marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey))
+		marginAdapter.SetFinMindClient(marketdata.GetSharedFinMindClient(cfg.FinMindAPIKey, stateDirFor(workDir)))
 	}
 	g.registry.Register("twse_margin", marginAdapter)
 	logging.Info("apigateway", "adapter_registered", "channel", "twse_margin")
@@ -123,7 +126,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	// TEJ_ENABLED=true. With a key but no TEJ_ENABLED the channel records
 	// inactive（暫不開通）instead of erroring forever.
 	if tejKey := config.GetSecret("TEJ_API_KEY"); tejKey != "" && config.GetSecret("TEJ_ENABLED") == "true" {
-		tejClient := marketdata.GetSharedTEJClient(tejKey)
+		tejClient := marketdata.GetSharedTEJClient(tejKey, stateDirFor(workDir))
 		tejAdapter := NewTEJChannelAdapter(tejClient)
 		g.registry.Register("tej", tejAdapter)
 		logging.Info("apigateway", "adapter_registered", "channel", "tej")
@@ -355,7 +358,7 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	if finmindKey == "" {
 		finmindKey = config.GetSecret("FINMIND_API_KEY")
 	}
-	finmindShared := marketdata.GetSharedFinMindClient(finmindKey)
+	finmindShared := marketdata.GetSharedFinMindClient(finmindKey, stateDirFor(workDir))
 	sblAdapter := NewTWSESBLChannelAdapter()
 	sblAdapter.SetFinMindClient(finmindShared)
 	sblAdapter.SetStorageDir(filepath.Join(workDir, "data", "state", "sbl"))
@@ -398,8 +401,42 @@ func RegisterChannelAdapters(g *Gateway, workDir string, cfg config.Config, janu
 	return nil
 }
 
-func saveSnapshot(channelID string, data []byte) {
-	dir := filepath.Join("data", "state", channelID)
+// stateDirFor returns the "<workDir>/data/state" directory every runtime state
+// file and channel snapshot lives under. Single definition on purpose: the
+// adapters and the shared marketdata clients must not drift into using the
+// CWD-relative "data/state" default of the older clients (see saveSnapshot).
+func stateDirFor(workDir string) string {
+	return filepath.Join(workDir, "data", "state")
+}
+
+// saveSnapshot persists a channel's latest raw payload to the L3 disk layer
+// (docs/architecture.md): <workDir>/data/state/<channelID>/latest.json.
+//
+// workDir (= config.Config.WorkDir) is injected by the adapter, never resolved
+// from the process CWD. Why that matters (2026-09-26, E8 / FU-20260926-18):
+// under `go test` the CWD of every package is its own directory INSIDE the repo
+// tree, so the old hardcoded relative path made adapter tests create
+// `internal/apigateway/data/...` in the working tree — and
+// adapter_finmind_util_test.go used to delete that directory again. While
+// `go test ./...` ran packages in parallel, internal/config's
+// parameters_shadow_declarations_test.go walked `internal/` and hit the window
+// where the directory vanished:
+//
+//	walk .../internal: open .../internal/apigateway/data: no such file or directory
+//
+// i.e. a flaky false-red in a package that had nothing to do with the culprit.
+// Injecting the directory removes the shared mutable resource instead of
+// retrying around it; the config walker stays strict on purpose.
+//
+// An empty workDir is REFUSED (warn, no write) rather than falling back to "."
+// so a caller that forgets the injection cannot silently recreate the bug.
+func saveSnapshot(workDir, channelID string, data []byte) {
+	if workDir == "" {
+		logging.Warn("apigateway", "snapshot_skipped", "channel", channelID,
+			"reason", "empty work dir: refusing to write a CWD-relative snapshot")
+		return
+	}
+	dir := filepath.Join(workDir, "data", "state", channelID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}

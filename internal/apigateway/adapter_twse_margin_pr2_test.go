@@ -69,7 +69,7 @@ func TestTWSEMarginChannelAdapter_Fetch_FillsMaintenanceRatioFromFinMind(t *test
 	provider.SetHTTPClient(twse.Client())
 	provider.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
 
-	fc := marketdata.NewFinMindClient("test-key")
+	fc := marketdata.NewFinMindClientWithStateDir("test-key", t.TempDir())
 	fc.SetBaseURL(finmind.URL)
 	fc.SetRateLimiter(rate.NewLimiter(rate.Inf, 0))
 

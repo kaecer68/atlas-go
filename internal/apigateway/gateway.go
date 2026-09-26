@@ -30,6 +30,11 @@ type Gateway struct {
 	breakers *CircuitBreakerManager
 	health   *UnifiedHealthStore
 	cache    *CacheLayer
+	// workDir is the configured work dir (config.Config.WorkDir). Adapters
+	// created by the self-healing registration paths read it via WorkDir() so
+	// their on-disk artifacts land under the configured dir instead of the
+	// process CWD (see saveSnapshot).
+	workDir string
 }
 
 // NewGateway creates a fully initialized gateway.
@@ -73,7 +78,19 @@ func NewGateway(workDir string, pool *pgxpool.Pool) (*Gateway, error) {
 		breakers: breakers,
 		health:   health,
 		cache:    cache,
+		workDir:  workDir,
 	}, nil
+}
+
+// WorkDir returns the configured work dir the gateway was built with. It is
+// the base directory for every on-disk artifact a channel adapter writes
+// (snapshots, state files) and it is what keeps those writes independent of
+// the process CWD — see saveSnapshot and EnsureFubonAdapter.
+func (g *Gateway) WorkDir() string {
+	if g == nil {
+		return ""
+	}
+	return g.workDir
 }
 
 // isExpectedNonFailureErr reports whether a fetch error is an expected

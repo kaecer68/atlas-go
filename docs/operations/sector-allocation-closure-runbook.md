@@ -7,7 +7,7 @@
 1. **Simulation sessions**: 確認 ≥20 valid simulation sessions 完成
 2. **Benchmark data**: TAIEX daily returns 已載入 `FileTAIEXBenchmarkProvider`
 3. **Legacy reads**: `sac.legacy.read` counter == 0
-4. **Negative evidence**: `sa12-negative-evidence.sh` all 0 hits
+4. **Negative evidence**: `scripts/ci/check_sa12_negative_evidence.sh` 全數 PASS
 5. **Mutation count**: Live mutation count == 0
 
 ## Promotion Gate
@@ -66,6 +66,6 @@ curl -i http://localhost:18080/api/dashboard/sector-allocation-plan
 
 - 三個 drills 必須在 promotion 前、feature flag 預設 off 且 rollback 指令可用的 staging／受控 production 環境逐項通過；任一失敗都先保持 flag off，不得進場。
 - 將日期、三個 trigger、執行動作、HTTP status／error code、`ranking` 長度與 legacy `BaseWeights` 結果寫入 SA11.B 私有 observation log。drill 產生的 snapshot、benchmark 變更與 flag 狀態必須復原。
-- 通過後才進入至少 20 個 valid simulation sessions 的 dark launch 觀察期；期間持續檢查 11 個 `SACMetrics` events、`sa12-negative-evidence.sh` 為 0 hits，且 live mutation count 為 0。
+- 通過後才進入至少 20 個 valid simulation sessions 的 dark launch 觀察期；期間持續檢查 11 個 `SACMetrics` events、`scripts/ci/check_sa12_negative_evidence.sh` 全數 PASS（檔名 2026-09-26 由 `sa12-negative-evidence.sh` 改名，以納入 `make ci` 的 `scripts/ci/check_*.sh` glob；內含 0 命中條目、定義點計數條目與正向守門條目，見該檔檔頭），且 live mutation count 為 0。
 - 觀察期間若任一已驗證情境回歸，依 Drill 1 立即關閉 flag 回到 legacy reader；修復後先重跑受影響 drill，再累積新的有效 sessions，不可直接 promotion。
 - promotion gate 的 rollback drill 必須為「本輪」結果；由其他版本、staging 或未記錄 side effect 的舊紀錄不可替代。

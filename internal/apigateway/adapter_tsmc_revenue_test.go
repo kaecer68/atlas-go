@@ -52,8 +52,17 @@ func TestTSMCRevenueChannelAdapter_Fetch(t *testing.T) {
 	defer server.Close()
 
 	marketdata.ResetSharedFinMindClient()
-	provider := marketdata.NewTSMCRevenueProviderWithStorage("test-key", t.TempDir())
-	client := marketdata.GetSharedFinMindClient("test-key")
+	// Order matters. GetSharedFinMindClient captures its DailyQuotaTracker state
+	// dir on the FIRST call (sync.Once), and NewTSMCRevenueProviderWithStorage
+	// calls it WITHOUT a dir — so building the provider first pins the tracker to
+	// the default CWD-relative "data/state" and the quota file lands inside the
+	// repo tree (internal/apigateway/data/...; that stray directory is what made
+	// the internal/config walkers flake — see saveSnapshot / FU-20260926-18).
+	// Build the singleton with the injected temp dir first; the provider then
+	// reuses it.
+	stateDir := t.TempDir()
+	client := marketdata.GetSharedFinMindClient("test-key", stateDir)
+	provider := marketdata.NewTSMCRevenueProviderWithStorage("test-key", stateDir)
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
 	a := NewTSMCRevenueChannelAdapter(provider)
@@ -78,8 +87,17 @@ func TestTSMCRevenueChannelAdapter_HealthCheck(t *testing.T) {
 	defer server.Close()
 
 	marketdata.ResetSharedFinMindClient()
-	provider := marketdata.NewTSMCRevenueProviderWithStorage("test-key", t.TempDir())
-	client := marketdata.GetSharedFinMindClient("test-key")
+	// Order matters. GetSharedFinMindClient captures its DailyQuotaTracker state
+	// dir on the FIRST call (sync.Once), and NewTSMCRevenueProviderWithStorage
+	// calls it WITHOUT a dir — so building the provider first pins the tracker to
+	// the default CWD-relative "data/state" and the quota file lands inside the
+	// repo tree (internal/apigateway/data/...; that stray directory is what made
+	// the internal/config walkers flake — see saveSnapshot / FU-20260926-18).
+	// Build the singleton with the injected temp dir first; the provider then
+	// reuses it.
+	stateDir := t.TempDir()
+	client := marketdata.GetSharedFinMindClient("test-key", stateDir)
+	provider := marketdata.NewTSMCRevenueProviderWithStorage("test-key", stateDir)
 	client.SetHTTPClient(withClientMockTransport(server, "api.finmindtrade.com"))
 
 	a := NewTSMCRevenueChannelAdapter(provider)
