@@ -202,6 +202,58 @@ jobs:
     - name: Inert closure regression tests (hermetic fixtures)
       run: bash tests/scripts/test-inert-closure.sh
 
+  # 落後分支語意回退檢查（issue #1993）— 2026-09-26
+  # 背景：PR 分支落後 main 時 `gh pr view` 顯示 MERGEABLE（**沒有文字衝突**），但 diff 會把
+  # main 上其他 PR 最近的改動顯示成「刪除」⇒ 照現狀合併就會回退他人已合併的修正。
+  # 單一 session 內實證 5 個 PR（#1974 monitoring/alertmanager.yml −37；
+  # #1979 .github/workflows/* −92/−66；#1990 internal/monitoring/* −41/−62；
+  # #1991/#1994 metrics_bridge(.go/_test.go) −41/−136），每次都靠人工 `git diff --numstat`
+  # + `git log origin/main -- <file>` 才發現，再以 `gh pr update-branch` 修正。
+  # 無 path filter：docs-或 scripts-only 的 PR 也會跑（檢查 <1s；回歸測試為 hermetic git fixture）。
+  # 規格：docs/specs/branch-revert-guard-spec.md；allowlist：scripts/ci/revert-guard-allowlist.json
+  revert-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        fetch-depth: 0
+
+    # 兩個 ref 都必須**明示**取得：pull_request 事件預設 checkout 的是合成 merge ref
+    # (refs/pull/<N>/merge)，那個 commit 的第一個 parent 就是 base tip、樹已含 main
+    # ⇒ diff 永不含「落後的假刪除」⇒ 檢查會永遠 PASS（假綠）。
+    # 檢查本身也會拒絕合成 merge ref（exit 2, fail-loud），這裡負責把正確的 ref 餵給它。
+    - name: Fetch base branch and this PR's real head
+      run: |
+        set -euo pipefail
+        BASE="refs/remotes/origin/${{ github.base_ref }}"
+        git fetch --no-tags --force origin "+refs/heads/${{ github.base_ref }}:${BASE}"
+        git fetch --no-tags --force origin \
+          "+refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr-head"
+        echo "base=${BASE} $(git rev-parse --short "${BASE}")"
+        echo "head=refs/remotes/origin/pr-head $(git rev-parse --short refs/remotes/origin/pr-head)"
+
+    - name: Regression tests (hermetic git fixtures, no network)
+      run: bash tests/scripts/test-revert-guard.sh
+
+    - name: Check the PR branch does not revert other PRs' changes
+      run: |
+        bash scripts/ci/check_revert_guard.sh \
+          --base "refs/remotes/origin/${{ github.base_ref }}" \
+          --head refs/remotes/origin/pr-head
+
+    # 負向證明：用**真的 repo 歷史**造一個「落後分支刪掉共用資產」的合成 commit，要求檢查
+    # **以 exit 1 擋下**（腳本：scripts/ci/revert-guard-negative-proof.sh，含 exit code 精確斷言）。
+    # 為什麼要這步：hermetic fixture 只證明程式邏輯，這步證明 CI 的 ref 解析與真 repo 歷史也能擋
+    # （與 secret-scan / monitoring-single-source job 的 negative proof 同一套路）。
+    # ⚠️ 2026-09-26 首版是 inline 版：它把工作樹 checkout 到舊 commit，於是**檢查腳本在該 commit
+    # 不存在** ⇒ `bash: ...: No such file or directory`（127）⇒ `if ! cmd` 把它當成「擋下了」而印 ✅
+    # （假綠）。現在的版本用 plumbing 造 commit（不動工作樹、不動 ref），並斷言 exit code **恰好 1**，
+    # 127/2 都會讓這個 step 紅燈。
+    - name: Negative proof — a stale branch deleting a shared asset must be blocked
+      run: bash scripts/ci/revert-guard-negative-proof.sh "refs/remotes/origin/${{ github.base_ref }}"
+
   # Frontend dynamic import consistency — verifies every admin_web/client_web
   # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
   # Catches the silent esbuild plugin fallback failure mode (PR #785 / script from PR #789).
