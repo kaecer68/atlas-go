@@ -539,9 +539,9 @@
 
 ---
 
-### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值；寫入者在容器內、不回流）
+### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值）；**寫入者已定位＝應用自身 calibration 任務**（runtime 自適應、不回流版控、重建即失）
 
-- **狀態**：`open`（**根因未定；第一步＝鑑定寫入者**）
+- **狀態**：`open`（**寫入者已定位（2026-09-26）；缺口＝不回流版控 ＋ 容器重建即失；待業主確認是否 intended**）
 - **記錄日期**：2026-09-26
 - **事實（生產唯讀實測，2026-09-26）**：
   - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
@@ -556,14 +556,46 @@
     一組具體值（10／0.05／0.55／0.45／0.05／0.4／30）；多出來的多屬「程式碼預設值具象化」。
   - 容器內同目錄另有 `parameters.json.snapshot.bak`（`docker diff` 顯示 `C /app/configs`、`C …/parameters.json`、
     `A …/parameters.json.snapshot.bak`），而 `configs` **不在** bind mount（只有 `data`／`reports`／`logs`）。
-- **影響**：「**版控的 `configs/parameters.json` ＝ 生產實際生效的參數**」這個假設**不成立**：
-  repo 那份相對生產是**過期／缺值**的（反向也成立：生產那份不在 git 裡）。任何「改 config 就會生效」、
-  或「讀 repo 檔就能推論生產行為」的結論都要先打折扣。
-- **建議（未做）**：① 先**鑑定寫入者**（03:08:44Z 是哪個 task／函式；盤點 `config` 的寫回與 snapshot 還原路徑）；
-  ② 再決定修法（寫回版控？還是明確宣告「執行期自主參數」並提供漂移偵測）；
-  ③ 至少在文件與 runbook 標明「生產有效值 ≠ repo 值」。
-- **驗收條件**：能回答「誰在何時寫了這個檔、寫入是否會丟鍵或具象化預設值」，且漂移有顯性痕跡
-  （負對照：不得只靠「檔案看起來正常」判定）。
+### 寫入者鑑定（2026-09-26 更新：**已定位**）
+**寫入者 ＝ 應用自身的 calibration 背景任務群**（`cmd/atlas/calibration_tasks.go`；同檔自述 18 個任務＝1 inner ＋ 17 top-level），屬 **by design 的 runtime 自適應校準**，**不是隨機 bug**：
+- `cmd/atlas/calibration_tasks.go:165` `configPath := filepath.Join(d.Cfg.WorkDir, "configs", "parameters.json")`
+  → `auto_threshold_calibrate`（每月 1 日 03:00 台北）走 `industry.RecalibrateThresholds(revenuePath, configPath)`。
+- `cmd/atlas/calibration_tasks.go:265` `risk_gate_calibrate`（24h）→ `d.RiskGate.SelfCalibrate(...)` →
+  `internal/risk/self_calibrate.go:197` `config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath())`
+  ⇒ **這就是觀測到的 `risk/*` 值在 `2026-09-26T03:08:44Z` 被改寫的路徑**（與檔內 `last_calibrated` 時間戳一致）。
+- 檔案寫入本體：`internal/config/parameters.go:2293 Save` / `:2419 LockedSaveWithRollback`（tmp 檔 ＋ rename，並產生
+  `parameters.json.snapshot.bak` ⇒ 與 `docker diff` 觀察到的 `A …snapshot.bak` 一致）；
+  路徑權威 = `internal/config/parameters.go:2183 GetParametersConfigPath()`。
+
+### 真正的缺口（不是「誰寫的」，而是「寫完之後」）
+1. **不回流版控**：寫入發生在容器可寫層（`configs` 不在 bind mount）⇒ git 永遠看不到。
+2. **容器重建即失**：每次部署（image 重build ＋ 容器重建）都回到 image 內的值。
+   **反差樣本（2026-09-26 實測）**：`risk/max_daily_loss_pct` 容器 `0.0108` vs repo `0.03`、
+   `risk/max_position_size` 容器 `0.054` vs repo `0.15` ⇒ **重建後風控會「放寬」回 repo 值**（不是收緊）。
+- ⚠️ **待業主確認是否 intended**：若「runtime 自適應校準」是預期行為，則 repo 值只是**出廠預設**，
+  但必須留下「誰在何時把哪個參數改成什麼」的痕跡；若不是，則寫入需回流或停用。
+- **建議（未做）**：① 先做政策決定（回流版控 vs 明確宣告 runtime-only）；② 不論選哪條，都加**啟動時的漂移偵測**
+  （比對 image 內那份與 effective 那份，不同就告警）並在 runbook 標明「生產有效值 ≠ repo 值」；
+  ③ 保留可稽核的寫入痕跡（目前只有 `last_calibrated` 時間戳）。
+- **驗收條件**：能回答「誰在何時寫了這個檔的哪些鍵」＋漂移有顯性痕跡（負對照：不得只靠「檔案看起來正常」判定）。
+
+---
+
+### FU-20260926-08 — `ATLAS_BROKER_NONCE_REDIS_URL` 與「已改綁 loopback 的 16379」之間的**潛在**依賴（目前惰性）
+
+- **狀態**：`open`（**目前不生效**；任何人要開啟 Redis nonce store 前**先讀本條**）
+- **記錄日期**：2026-09-26
+- **事實**：`docker-compose.yml` 的 `redis` 埠已改綁 `127.0.0.1:16379:6379`（PR #2004）；同檔 atlas service 仍保有
+  `ATLAS_BROKER_NONCE_REDIS_URL=redis://host.docker.internal:16379/8` ⇒ 一旦有人設 `ATLAS_BROKER_NONCE_STORE=redis`，
+  就會依賴「**容器能否連到 host 的 loopback-bound 埠**」——OrbStack 官方文件只說 `host.docker.internal` 可連「Mac 上的 server」，
+  **未保證** loopback-only bind 可達（本機未實證，也不在生產做實驗）。
+- **為何現在無害（2026-09-26 生產實測）**：`ATLAS_BROKER_NONCE_STORE` **未設** ⇒ 預設 `memory`
+  （`internal/config/config.go:134`）⇒ 該 URL **惰性**；`~/.config/atlas-go/.env` 的 `^ATLAS_BROKER` 鍵數 = **0**；
+  `atlas-redis` 的 `dbsize` = **0**（keyspace 空）⇒ 目前沒有任何 in-stack 消費者在用 16379。
+- **修法（未做；改 app env 需重建 atlas-go，故先登錄）**：把該 URL 改成 docker 網路名
+  **`redis://redis:6379/8`**（**同一顆 atlas-redis**，語意等價），不要讓容器依賴 host 的 loopback 埠。
+- **驗收條件**：若啟用 `ATLAS_BROKER_NONCE_STORE=redis`，URL 必須走 docker 網路名且**容器重建後** broker nonce 仍正常；
+  負對照：不得以「host 埠在 Mac 上 curl 得到」當成容器可達的證據。
 
 ---
 
