@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -596,6 +597,70 @@ func TestCalibrationSanityFloorFor(t *testing.T) {
 			t.Errorf("calibrationSanityFloorFor(%s) = %v, want %v", name, got, want)
 		}
 	}
+}
+
+// TestPersistCalibrationOverlay_WritesOverlayFile covers the persistence half of
+// FU-20260926-07: an accepted change must land in the calibrated-parameters
+// overlay (under the bind-mounted data/ tree), not in the SSOT file.
+func TestPersistCalibrationOverlay_WritesOverlayFile(t *testing.T) {
+	overlayPath := filepath.Join(t.TempDir(), "parameters.calibrated.json")
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer config.SetCalibratedOverlayPath("")
+
+	now := time.Date(2026, 9, 26, 3, 8, 44, 0, time.UTC)
+	persistCalibrationOverlay(&CalibrationReport{
+		Changes: []ParameterChange{
+			{
+				Name:       "risk_max_position_size",
+				Before:     0.15,
+				After:      0.13,
+				Rationale:  "baseline_score=0.5000, optimized_score=0.6000 (+20.0% delta). 30 sessions evaluated.",
+				Confidence: "high",
+			},
+		},
+	}, now)
+
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay file was not written")
+	}
+	if ov.Source != "risk_gate_calibrate" {
+		t.Errorf("source = %q, want risk_gate_calibrate", ov.Source)
+	}
+	entry, ok := ov.Entries["risk_max_position_size"]
+	if !ok {
+		t.Fatalf("entry risk_max_position_size missing: %+v", ov.Entries)
+	}
+	if entry.Value != 0.13 {
+		t.Errorf("entry value = %v, want 0.13", entry.Value)
+	}
+	if entry.Before != 0.15 {
+		t.Errorf("entry before = %v, want 0.15", entry.Before)
+	}
+	if entry.Method != "bayesian_optimization" {
+		t.Errorf("entry method = %q, want bayesian_optimization", entry.Method)
+	}
+	if !entry.CalibratedAt.Equal(now) {
+		t.Errorf("entry calibrated_at = %v, want %v", entry.CalibratedAt, now)
+	}
+	if !strings.Contains(entry.Rationale, "optimized_score") {
+		t.Errorf("entry rationale = %q, want the calibration rationale", entry.Rationale)
+	}
+}
+
+// TestPersistCalibrationOverlay_DisabledPathIsNotFatal covers a process without
+// a registered overlay path (e.g. a tool that only runs the loop in-memory): the
+// write must be skipped loudly, never panic.
+func TestPersistCalibrationOverlay_DisabledPathIsNotFatal(t *testing.T) {
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath("")
+
+	persistCalibrationOverlay(&CalibrationReport{
+		Changes: []ParameterChange{{Name: "risk_max_position_size", Before: 0.15, After: 0.13}},
+	}, time.Now())
 }
 
 func TestSelfCalibrate_Concurrent(t *testing.T) {

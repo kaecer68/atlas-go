@@ -211,7 +211,18 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		applyCalibrationChange(ie, name, best, report)
 	}
 
-	// Persist calibrated parameters to disk so they survive server restarts.
+	// Persist calibrated parameters to disk so the adaptation survives a container
+	// recreate.
+	//
+	// FU-20260926-07: this used to write configs/parameters.json in place (after
+	// SnapshotToBackup). That file is baked into the image and is NOT
+	// bind-mounted, so the write landed in the container's writable layer: it
+	// never reached git, it was lost on the next container recreate, and while
+	// the container ran nothing could distinguish the reviewed SSOT value from
+	// the adapted one. The adaptation now goes to the calibrated-parameters
+	// overlay under the bind-mounted data/ tree and is layered back on top of the
+	// SSOT at load time (config.ApplyCalibratedOverlayLayer), so the SSOT file
+	// stays pristine and diffable.
 	if len(report.Changes) > 0 {
 		now := time.Now()
 		for _, name := range paramNames {
@@ -220,15 +231,7 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 				config.SetRiskCalibrationMetadata(name, now, "bayesian_optimization")
 			}
 		}
-		if p := config.GetParametersConfigPath(); p != "" {
-			if err := config.SnapshotToBackup(p); err != nil {
-				fmt.Printf("self_calibrate: snapshot_to_backup failed: %v\n", err)
-			}
-		}
-		if err := config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
-			// Non-fatal: calibration results remain valid in memory.
-			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
-		}
+		persistCalibrationOverlay(report, now)
 	}
 
 	if len(report.Changes) == 0 {
@@ -400,6 +403,55 @@ func classifyDelta(deltaPct float64, nSessions int) string {
 	default:
 		return "low"
 	}
+}
+
+// persistCalibrationOverlay writes the accepted risk-threshold changes to the
+// calibrated-parameters overlay (FU-20260926-07). See the persistence block in
+// SelfCalibrate for why the SSOT file is deliberately left untouched.
+//
+// Each entry records the SSOT value it is layered on, so a later reviewed edit
+// of configs/parameters.json invalidates a stale adaptation instead of being
+// silently overridden. A disabled overlay path is not an error — the calibrated
+// values still apply in memory for this process — but it is logged loudly,
+// because it means the adaptation is lost on restart.
+func persistCalibrationOverlay(report *CalibrationReport, now time.Time) {
+	path := config.GetCalibratedOverlayPath()
+	entries := make(map[string]config.CalibrationOverlayEntry, len(report.Changes))
+	for _, c := range report.Changes {
+		// One extra SSOT read per accepted parameter per round (daily): it keeps
+		// the reconciliation baseline exact instead of derived from live state.
+		ssot, _ := config.SSOTParameterValue(c.Name)
+		entries[c.Name] = config.CalibrationOverlayEntry{
+			Value:        c.After,
+			Before:       c.Before,
+			SSOT:         ssot,
+			CalibratedAt: now,
+			Method:       "bayesian_optimization",
+			Rationale:    c.Rationale,
+		}
+	}
+
+	if path == "" {
+		logging.Warn("self_calibrate", "calibration_overlay_disabled",
+			"detail", "no calibrated-parameters overlay path registered; calibrated values apply in memory only and will not survive a restart")
+		return
+	}
+
+	ov, err := config.UpdateCalibrationOverlay(path, "risk_gate_calibrate", entries)
+	if err != nil {
+		logging.Error("self_calibrate", "calibration_overlay_write_failed",
+			logging.FStr("path", path), logging.Err(err))
+		return
+	}
+	for _, c := range report.Changes {
+		logging.Info("self_calibrate", "calibration_persisted",
+			logging.FStr("param", c.Name),
+			logging.FFloat64("before", c.Before),
+			logging.FFloat64("after", c.After),
+			logging.FStr("path", path))
+	}
+	logging.Info("self_calibrate", "calibration_overlay_written",
+		logging.FStr("path", path), logging.FInt("entries", len(ov.Entries)))
 }
 
 // validateCalibrationBounds checks whether the proposed value is within
