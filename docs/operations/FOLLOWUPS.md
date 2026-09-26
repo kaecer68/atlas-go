@@ -1125,6 +1125,84 @@
   **負對照**：移除 `background.go:443` 的 `!task.LastRun().IsZero() && task.Jitter > 0`（jitter 不再套用）⇒ 該測試**仍必須紅**。
 - **不可動**：`docs/operations/remediation-manifest.md`（另一 lane 的 SSOT）、`.githooks/pre-push`（`FU-20260926-15` 佔用）。
 
+### FU-20260926-23 — `scripts/verify-sector-allocation-closure.sh`：**從未被執行過**的死 gate（依賴檔 #1255 移出 repo ＋ `check()` eval bug ⇒ 今 exit 2、呼叫端 0）⇒ **明示停用**（E16）
+
+- **狀態**：`open`（本 PR 只做「明示停用＋登記」；真正重啟的條件見下方「驗收條件」）
+- **記錄日期**：2026-09-26
+- **來源**：root 交辦（atlas-go 小任務）。本 PR：`fix/20260926-dead-gate-closure`（worktree `atlas-deadgate`，base `origin/main` `0cc32d16`）。
+  對應 `docs/operations/remediation-manifest.md` §3 **E16**。
+- **量測（實跑，非推論）**：
+  - `bash scripts/verify-sector-allocation-closure.sh` ⇒ `FAIL: manifest docs/manifests/sector-allocation-simulation-closure-manifest.md not found` ⇒ **rc=2**。
+  - **依賴檔去向**：`docs/manifests/` 的兩個 manifest 都在 **#1255**（`bcc06abc`「docs governance overhaul」）被移出 `docs/`；
+    現存 `.omo/manifests/`（**gitignored**：`.gitignore:67-68`）。`scripts/ci/check_docs_governance.sh:9-10` 明文
+    「`docs/manifests/` 只允許 README.md + TEMPLATE.md；個別 manifest 必須放 `.omo/manifests/`」
+    ⇒ **搬回去會讓 `make ci` 變紅**（而 `.omo/` 在 fresh clone / CI 不存在 ⇒ 指向它也一樣 exit 2）。
+  - **呼叫端 = 0**：`grep -rn 'verify-sector-allocation-closure'`（排除 `.omo/` 歷史計畫）只命中
+    `cmd/experimental/sector-allocation-closure-preflight/main.go:206-214` 的**字串訊息**（該檔**無** `exec.Command`）與本檔自身。
+    且 `scripts/*.sh` 不在 `make ci` 的 glob 內（`Makefile:429` 只掃 `scripts/ci/check_*.sh`）。
+  - **第 2 個獨立損壞點（比依賴檔更早）**：`b252b10c`（#1250）把 `check()` 的 `eval "$@"` 改成 `"$@"`，
+    但呼叫端仍傳**整串 shell 字串**（`check "07 …" "grep -qE '…' '$MANIFEST'"`）⇒ `result=$("$@" 2>&1)`
+    把整串當命令名 ⇒ **rc=127**，配 `set -e` 在第一個 check 就中止。
+    最小重現：`bash -c 'set -euo pipefail; r=$("grep -qE x /etc/hosts" 2>&1); echo after'` ⇒ 未印 `after` 即離開（127）；
+    改回 `eval` 則 PASS。
+    ⇒ **#06–#17 這 12 條自 #1250 起就從未執行**（早於 #1255 的檔案搬移）。17 條中真正跑得動的只有
+    「SA00–SA12 表格列存在」的 grep 迴圈，而它只印 stdout、不計入 `passes`。
+  - **17 條逐項量測**（把 manifest 複製回 `.omo` 並把 `eval` 模擬回來後的「假想結果」：13 列 + 12 條 check **全 PASS** ——
+    但這些 PASS 全是空的，見最後一欄）：
+
+| # | 斷言 | 資料來源 | 現在還適用嗎 |
+|---|---|---|---|
+| 01–05 | manifest 有 `SA00`–`SA12` 共 13 個表格列（腳本標為「Check 1-5」）| `.omo` manifest（gitignored）| **不適用**：資料源在 CI 不存在；SA00–SA12 已全數 shipped（`internal/sectorallocation/`、`docs/specs/sector-allocation-simulation-closure-spec.md` 均在版控）|
+| 06 | SA12 狀態 done/implemented | 同上 | **不適用**（同 01–05）|
+| 07 | SA06 done | 同上 | **不適用** |
+| 08 | SA08 done | 同上 | **不適用** |
+| 09 | retail manifest F05 為 `**done**` | `.omo/manifests/2026-07-17-retail-positioning-gap-fix-manifest.md`（gitignored）| **不適用**：外層 `[[ -f ]]` 讓它在檔案不存在時**連 skipped 都不算**（永遠靜默跳過）|
+| 10 | manifest 無 `source=empirical` | 同上 | **已被 Go 取代**：`SourceHeuristic` 預設 + 單元測試（`internal/config`、`internal/sectorallocation`）|
+| 11 | manifest 無 `calibration_status=calibrated` | 同上 | **已被 Go 取代**（同上；`internal/config/parameters.go:1939-1941` 型別註記 + tests）|
+| 12 | manifest 有 `## Binding Invariants` | 同上 | **不適用**：純文字結構檢查，對象是 gitignored 檔 |
+| 13 | manifest 含 `SA-INV-20` | 同上 | **標的已不存在**：`SA-INV-20` 在 origin/main **只出現在本腳本**（spec 與程式碼皆無）|
+| 14 | manifest 含 `ATLAS_SECTOR_ALLOCATION_CLOSURE_ENABLED` | 同上 | **已被更好來源取代**：`configs/allowed_env_vars.md:51`（受版控）+ `cmd/atlas/main.go:2853`；但 repo **沒有**「env 變數是否登記」的自動檢查 |
+| 15 | manifest 含 `SA-INV-11` | 同上 | **標的已不存在**（同 13）|
+| 16 | `scripts/ci/sa12-negative-evidence.sh` 存在 | 檔案系統 | **假信心**：該腳本存在但**零呼叫端**（唯一引用者就是本檔）且自身 2 條 FAIL ⇒ 已由 **E9** 覆蓋（不重複派遣）|
+| 17 | `internal/orchestrator/composition/root_test.go` 存在 | 檔案系統 | **已被更強機制取代**：`go test ./...` 真的會執行它；存在性不是守門 |
+
+- **決定：(b) 明示停用**（`scripts/verify-sector-allocation-closure.sh` 改為 no-op，印出 `⛔ 已停用` 理由後 `exit 0`），理由：
+  1. **(a) 的依賴檔無法合法存在**：唯一的 manifest 路徑受 docs governance 明文禁止，`.omo/` 又不受版控 ⇒ 任何「修好並接線」的版本在 CI 仍會 exit 2，只會製造第二個假 gate。
+  2. **語意已被取代**：#10/#11 有 Go 層鎖定 + 測試；#17 由 `go test ./...` 真執行；#13/#15 的標的（`SA-INV-11/20`）在 repo 內不存在；#01–#09 的資料源在 CI 不存在。
+  3. **接點受佔用 / 需政策決定**：`Makefile` 與 `.github/workflows/quality.yml` 由 E1 lane 佔用（§1）；若要真接線，最自然的接點是 `scripts/ci/check_*.sh` glob ⇒ 但那需要先有一個**受版控**的驗證標的（政策決定，非本票範圍）。
+  4. **不留靜默 exit 2**：停用後任何人不小心手動跑它都會看到明確的 `DISABLED` 訊息（不再有「它好像有在守」的錯覺）。
+  5. 附帶：`cmd/experimental/sector-allocation-closure-preflight/main.go` 的訊息原本宣稱「enforced by closure verifier」——
+     那是**假的**，已同步改成誠實描述（並註明該 preflight 項是永遠回報 OK 的 stub）。
+- **同族掃描（`scripts/*.sh`（非 `scripts/ci/`）＋ `tasks/*.sh`；只登記、不修）**：
+  - `tasks/*.sh` **不存在**（`tasks/` 只有 2 個 `.md`）⇒ 該半邊 N/A。
+  - 判定法：受版控檔案中的「執行路徑呼叫端」＝ `Makefile` / `*.sh` / `*.yml` / `*.yaml` / `*.go`（排除文件與自身）；
+    另做 `bash -n` 全檢，並對**安全子集**實跑取 rc。
+  - 全 28 支 `bash -n` 皆 OK（無語法錯）。清單：
+
+| 腳本 | 執行路徑呼叫端 | 實跑 rc | 判定 |
+|---|---|---|---|
+| `verify-manifest.sh` | 1（**呼叫者 `verify-atlas.sh` 本身是孤兒**）| 2（無參數＝usage）| ⚠️ **遞移孤兒**；docstring 仍指向 docs governance 已禁的 `docs/manifests/*.md` |
+| `verify-atlas.sh` | **0** | 未跑（`go build/vet/test` 全量；fresh worktree 另有 `//go:embed` 前置）| ⚠️ **孤兒**（「一鍵驗證」卻無人叫）|
+| `coverage.sh` | **0** | 未跑（`go test ./...` 全量）| ⚠️ **孤兒**（60% 門檻與 CI coverage gate 重複，見 E1 lane）|
+| `daily-twse-fetch.sh` | **0** | 未跑（連外抓 TWSE＋寫 `data/`）| ⚠️ **孤兒**（cron/compose 皆未見）|
+| `install-soak-automation.sh` | **0** | 未跑（`launchctl` 會動本機 LaunchAgents）| ⚠️ **孤兒** |
+| `reflexivity_report.sh` | **0** | 未跑（`gh` 連外）| ⚠️ **孤兒** |
+| `sync-darwinian.sh` | **0** | 未跑（`ssh`/`rsync`/`docker`）| ⚠️ **孤兒**（跨機同步 ⇒ 疑退役 iMac 遺留，與 **E10** 同族）|
+| `prism_manage.sh` | **0** | 0（`status`）| 孤兒（手動 ops 工具）|
+| `spawning_manage.sh` | **0** | 0（`status`）| 孤兒（手動 ops 工具）|
+| `generate_replay_data.sh` | **0** | 0 | 孤兒但可跑（產 sample replay CSV）|
+| `cleanup-manifests.sh` | **0** | 0（fresh worktree 無 `.omo` ⇒ 直接 no-op）| 孤兒（harness 私有工具）|
+| `darwinian_adjust.sh` | 2（`docker-compose.yml`、`docs/operations/docker-compose.crons.yml`）| **1**（`--dry-run`：`configs/darwinian_weights.json` 不存在）| ⚠️ 檔頭自述 **DEPRECATED stub**，卻仍掛在 cron compose ⇒ 「排程有、實際不做」（**同族：gate 看似存在**）|
+
+- **驗收條件（要真的重啟才算 done）**：
+  1. 驗證標的改讀**受版控** artifact（例：`docs/specs/sector-allocation-simulation-closure-spec.md` 的契約段、
+     `configs/allowed_env_vars.md` 的 env 登記、以及 `internal/sectorallocation/*_test.go` 的存在＋真的被 `go test` 跑），**不得**讀 `.omo/`。
+  2. 以 `scripts/ci/check_*.sh` 命名接入（自動進 `Makefile:429` 的 glob），或由既有 workflow job 明確呼叫。
+  3. **負對照**：把被驗的 artifact 弄壞（例：把 spec 的契約段移除）⇒ 該檢查**必須變紅**；修好 ⇒ 變綠（兩向都要有 log）。
+  4. 停用橫幅與本票同時移除（不得留著 no-op 又宣稱有 gate）。
+- **不可動（已遵守）**：`Makefile`、`.github/workflows/quality.yml`、`docs/reference/traps.md`（他人/他線佔用）；
+  未動 production、未 merge、未放寬或刪任何測試。
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
