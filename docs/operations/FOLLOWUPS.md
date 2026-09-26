@@ -958,7 +958,9 @@
 
 ### FU-20260926-15 — `.githooks/pre-push` 沒有 host binary 新鮮度閘門：source 已前進但 `bin/atlas-mcp` 仍舊也能 push
 
-- **狀態**：`open`
+- **狀態**：`done`
+- **完成於**：2026-09-27（PR **#2049**，main `0ce6e48f` → 後續 `14a3da03`）
+- **實作**：`.githooks/pre-push` 新增 **Gate 0b** `bash scripts/check-binary-freshness.sh --host-only --diff-base origin/main`；`--host-only` 完全不碰 docker、`--diff-base` 重用既有 `BUILD_INPUT_PATHS`（predicate 不會漂移）；只判 `bin/atlas`＋`bin/atlas-mcp`；純 docs push 不擋；**無 `bin/` 的 clone 軟跳過**。附 hermetic 契約測試 `tests/scripts/test-prepush-gates.sh`（7 組案例，含「同一組 binary 不給 `--diff-base` 時 rc=1」的控制組）＋ mutation test。
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號 **B14**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
   **與 manifest §3 E4 的關係**：E4 是**同一個檔**的另一個缺口（`pre-push` 取不到 `origin/main` 就放行）。
@@ -1647,6 +1649,32 @@
 - **備註**：本票**不**主張 `long_holiday` 的語意要改成「交易日」語意 —— 語意變更需 owner 裁決。
 
 ---
+
+---
+
+### FU-20260926-30 — 最終狀態同步：**E4/E19/E21/E24/E25/E27/E28 結案、新增 E29/E30/E31、FU-15 標 done**（root 單一寫者）
+
+- **狀態**：`open`（E29/E30/E31 待派或待 owner 決定；其餘皆已結案）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（7 列結案 ＋ 新增 3 列）、§6 對帳表
+- **本次結案（root 逐項複驗，非採信回報）**：
+  - **E19 → #2052**（`14a3da03`）：**刪 10 支**（6 支無殘餘價值 ＋ `verify-manifest.sh` ＋ soak 鏈 3 支）；**`agent-guard` 改為 tracked wrapper（非 symlink）** —— child 以實驗證明 rel/abs symlink 都使 `BASH_SOURCE` 推導的 `REPO_ROOT` **高錯一層**，wrapper `exec` 真檔才正確 ⇒ **它推翻了我建議的 symlink 方案**；`.gitignore` 的 `/agent-guard` 條目同時移除。連帶編輯 `deploy-staging.sh`（4 步→3 步）。
+  - **E21 → #2053**（`88f6b33d`）：CLI 未知位置參數 **exit 2 ＋ usage**；三個 job 改用 daemon 公開端點。**它也未照我給的兩個選項**（退役／改寫 CLI），而是「改用真實來源並**保留 job**」，理由是 **GitHub runner 是唯一局外觀察者** ⇒ 比我的選項更強。
+  - **E24 → #2052**：整條 soak 鏈刪除。**root 另已處置本機**：`launchctl bootout`（rc=0）＋ plist 改名 `.DISABLED-20260927` ＋ 133 MB log 歸檔；停前 `runs=39838`、每 60 秒約 5 次重生。
+  - **E25 → #2057**（`a3d54321`）：非交易日不抓不寫 ＋ 改帶日期 MI_INDEX ＋ 回應日期守門 ＋ 修 `fetch-historical` envelope。**root 親驗數值等價**：`MI_INDEX(20260917)` 與舊路徑寫出的 CSV 對 0050/2317/2330 之 volume 與 OHLC **逐欄相同**。**資料面**（既有 396 列）須**部署後**清理。
+  - **E27 → #2052**：刪 `verify-manifest.sh` ＋ 修 2 處失效文件引用。
+  - **E28 → #2054**（`db7fdb44`）：補關鍵休市日 ＋ **weekly 加假日 gate**（`weekly_skip_holiday`）＋ daily 改用單一來源。**root 行為測試**（臨時 worktree 跑 `IsTradingDay`，非字串比對）：09-28／12-25／09-25／10-09／10-26／04-03／05-01／06-19 皆正確；**仍缺 3 個過去日期**（`2026-01-02`、`02-11`、`02-23`）。
+  - **E4 ＋ FU-20260926-15 → #2049**：fail-closed ＋ Gate 0b；併同修掉一個**無聲死亡**（測試以 rc=1、stdout/stderr 皆 0 bytes 結束 ⇒ 不可行動的假紅）。
+- **本次新增**：
+  - **E29** replay 路徑三個同型「靜默成功」缺陷（`checkReplayHealth` 讀最後一行／`MarketVolumeProvider` 用請求日當資料日／`degraded` 不自我升級）—— `#2057` 只登記未動。
+  - **E30** `git push --delete <branch>` 被 pre-push **Gate 3**（zero diff vs origin/main）誤擋 ⇒ 刪遠端分支必須 `--no-verify`（刪分支沒有內容可守）。
+  - **E31** `scripts/hooks/pre-commit` = DEPRECATED `exit 0` stub、0 呼叫端 ⇒ 待 owner 決定刪除。
+- **殘項／後續**：
+  1. **部署要求**已交 a2a-dev：`main ≥ db7fdb44`（同時含 #2054 與 #2057）＋ `--remove-orphans`（E17）＋ 部署後 replay CSV 清理（預期 396 列）＋ JSONL 重建；**預期現象**：09-28 weekly 不重建（教師節休市，`weekly_skip_holiday` 為正確行為）、下一次 weekly ＝ **2026-10-05**。
+  2. **決定性驗收 ＝ 2026-09-29（週二）06:00Z**（daily 增量；root 已行為驗證該日為交易日）。
+  3. **E26**（生產 `Calibration` 告警未載入）仍交 a2a-dev 查載入面。
+  4. **待 owner**：E23（guard 是否收緊）、liveness `cron_darwinian` 殘留列（一次性 SQL）、E29/E30/E31 的處置、`cleanup-manifests.sh`。
+- **方法論註記**：本輪**三次**由 child 推翻我的指示（E21 的選路、E19 的 symlink vs wrapper、E25 的來源切換範圍），且我**兩次攔下自己的驗證方法錯誤**（落後工作樹／字串比對）⇒ 兩者都源於同一紀律：**先實測再定調，且不把未驗證的推論寫成事實**。
 
 ## 相關文件
 
