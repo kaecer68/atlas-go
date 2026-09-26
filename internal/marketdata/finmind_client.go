@@ -485,6 +485,19 @@ func (c *FinMindClient) quotaGateError() error {
 	if c.quotaTracker.AllowCall() {
 		return nil
 	}
+	// The shared counter itself is unusable (unreadable, unparsable, or a
+	// platform without file locking): today's usage is UNKNOWN, so the call is
+	// refused and the reason must not be mistakable for "we spent today's
+	// budget" (#2014 requirement 3; same family as #2009, where an empty value
+	// silently passed). It stays wrapped in ErrQuotaExhausted on purpose: every
+	// existing consumer (channel warn mapping, cache fallback, the
+	// atlas_data_aggregator_failures_total{kind="quota"} metric) keeps working,
+	// while the message and the tracker's own Error log carry the distinct
+	// signal.
+	if stateErr := c.quotaTracker.StateErr(); stateErr != nil {
+		return fmt.Errorf("finmind: %w (quota-state-unusable, remaining=0, error=%s)",
+			ErrQuotaExhausted, clampForError(stateErr.Error(), 240))
+	}
 	used := c.quotaTracker.CallsToday()
 	if exhausted, reason, at := c.quotaTracker.UpstreamExhaustion(); exhausted {
 		if reason == "" {
