@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/industry"
 )
 
@@ -73,7 +74,7 @@ func TestUpdateParametersFileAt_WritesPerPatternCalibrationEvidence(t *testing.T
 
 	// threshold 3 → p_insufficient (2 < 3) must be skipped, p_out_of_range is
 	// rejected by the range guard, only p_calibrated may be written back.
-	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv"); err != nil {
+	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv", config.WritebackSSOT); err != nil {
 		t.Fatalf("updateParametersFileAt: %v", err)
 	}
 
@@ -146,7 +147,7 @@ func TestUpdateParametersFileAt_ClosesTheEvidenceLoop(t *testing.T) {
 		{PatternID: "p_no_observations", ObservationCount: 0},
 		{PatternID: "p_out_of_range", ObservationCount: 6, ObservedAdjustment: 9.0},
 	}
-	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv"); err != nil {
+	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv", config.WritebackSSOT); err != nil {
 		t.Fatalf("updateParametersFileAt: %v", err)
 	}
 
@@ -168,5 +169,110 @@ func TestUpdateParametersFileAt_ClosesTheEvidenceLoop(t *testing.T) {
 	}
 	if after.VerdictCounts[industry.SeasonalVerdictNoObservations] != 1 {
 		t.Errorf("VerdictCounts[no_observations] = %d, want 1", after.VerdictCounts[industry.SeasonalVerdictNoObservations])
+	}
+}
+
+// TestUpdateParametersFileAt_OverlayModeDoesNotWriteSSOT is the FU-20260926-07
+// contract for this CLI: the daemon spawns it *inside the container*, where
+// configs/ is not bind-mounted. In overlay mode the SSOT file must be left
+// byte-identical and the calibrated leaves must land in the overlay under data/.
+func TestUpdateParametersFileAt_OverlayModeDoesNotWriteSSOT(t *testing.T) {
+	path := writeTempParameters(t)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlayPath := filepath.Join(t.TempDir(), "data", "state", "parameters.calibrated.json")
+
+	previous := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer config.SetCalibratedOverlayPath(previous)
+
+	results := []industry.SeasonalCalibration{
+		{PatternID: "p_calibrated", ObservationCount: 7, ObservedAccuracy: 0.71, ObservedAvgReturn: 0.032, ObservedAdjustment: 1.4},
+	}
+	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv", config.WritebackOverlay); err != nil {
+		t.Fatalf("updateParametersFileAt(overlay): %v", err)
+	}
+
+	// (1) SSOT untouched.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("SSOT document rewritten in overlay mode:\nbefore=%s\nafter=%s", before, after)
+	}
+
+	// (2) The calibrated array landed in the overlay.
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay was not written")
+	}
+	entry, ok := ov.Entries["industry.seasonal_patterns.value"]
+	if !ok {
+		t.Fatalf("overlay has no seasonal_patterns entry: %+v", ov.Entries)
+	}
+	patterns, ok := entry.Value.([]any)
+	if !ok {
+		t.Fatalf("entry value = %#v, want an array", entry.Value)
+	}
+	found := false
+	for _, item := range patterns {
+		pattern, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if pattern["id"] == "p_calibrated" && pattern["adjustment_factor"] == 1.4 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("calibrated pattern not present in the overlay value: %#v", patterns)
+	}
+
+	// (3) The entry records the SSOT it was diffed against, so a later reviewed
+	// edit of the SSOT invalidates it instead of being overridden.
+	if entry.SSOT == nil || !entry.SSOT.Present {
+		t.Errorf("entry baseline = %+v, want the SSOT array", entry.SSOT)
+	}
+	if entry.Method != "calibrate_seasonal" {
+		t.Errorf("entry method = %q, want calibrate_seasonal", entry.Method)
+	}
+	// (Round-tripping the overlay through the loader is covered by the config
+	// package tests; this fixture is deliberately too small to pass the full
+	// parameters validation.)
+}
+
+// TestUpdateParametersFileAt_OverlayModeWithoutPathFailsLoudly pins the
+// fail-loud rule: asking for overlay mode without a registered overlay path must
+// not silently fall back to rewriting the SSOT.
+func TestUpdateParametersFileAt_OverlayModeWithoutPathFailsLoudly(t *testing.T) {
+	path := writeTempParameters(t)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	previous := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath(previous)
+
+	results := []industry.SeasonalCalibration{
+		{PatternID: "p_calibrated", ObservationCount: 7, ObservedAccuracy: 0.71, ObservedAvgReturn: 0.032, ObservedAdjustment: 1.4},
+	}
+	if err := updateParametersFileAt(path, results, 3, "/tmp/replay.csv", config.WritebackOverlay); err == nil {
+		t.Fatal("overlay mode without a registered overlay path = nil error, want error")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Error("SSOT document was rewritten even though overlay mode failed")
 	}
 }

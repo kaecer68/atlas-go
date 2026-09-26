@@ -656,8 +656,12 @@ func (d calibrationDeps) registerAutoCalibrate() {
 		Jitter:   4 * time.Hour,
 		Enabled:  true,
 		Task: func(ctx context.Context) error {
+			// --writeback=overlay (FU-20260926-07): this runs inside the container,
+			// where configs/ is not bind-mounted. (The task cannot run there at all
+			// today — the image has no Go toolchain — so this is a guard: if it is
+			// ever wired to a working binary it must not rewrite the SSOT.)
 			cmd := exec.CommandContext(ctx, "go", "run", "./cmd/calibrate-parameters",
-				"--module=darwinian")
+				"--module=darwinian", "--writeback=overlay")
 			cmd.Dir = d.Cfg.WorkDir
 			out, err := cmd.CombinedOutput()
 			if err != nil {

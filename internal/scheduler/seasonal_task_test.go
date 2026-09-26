@@ -3,6 +3,10 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,5 +109,39 @@ func TestSeasonalCalibrationTaskFunc_EmptyPath(t *testing.T) {
 	fn := SeasonalCalibrationTaskFunc("")
 	if err := fn(context.Background()); err == nil {
 		t.Fatal("expected error for empty binary path")
+	}
+}
+
+// TestRunSeasonalCalibrationWithReplay_PassesOverlayWriteback is the
+// FU-20260926-07 contract for the spawner: the daemon starts this binary inside
+// the container, so it MUST ask for overlay writeback. Without the flag the child
+// would rewrite the container's /app/configs/parameters.json (not bind-mounted =>
+// lost on the next container recreate, invisible to git).
+func TestRunSeasonalCalibrationWithReplay_PassesOverlayWriteback(t *testing.T) {
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	script := filepath.Join(dir, "fake-calibrate-seasonal")
+	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + argsFile + "\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake binary: %v", err)
+	}
+
+	if err := runSeasonalCalibrationWithReplay(context.Background(), script, "/tmp/replay.jsonl"); err != nil {
+		t.Fatalf("runSeasonalCalibrationWithReplay: %v", err)
+	}
+
+	raw, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("read captured args: %v", err)
+	}
+	args := strings.Fields(string(raw))
+	if !slices.Contains(args, "-update") {
+		t.Errorf("args = %v, want -update", args)
+	}
+	if !slices.Contains(args, "-writeback=overlay") {
+		t.Errorf("args = %v, want -writeback=overlay (in-container writeback must use the overlay)", args)
+	}
+	if !slices.Contains(args, "--replay") {
+		t.Errorf("args = %v, want --replay", args)
 	}
 }

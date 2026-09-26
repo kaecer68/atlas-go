@@ -14,13 +14,38 @@ import (
 
 var dryRun = flag.Bool("dry-run", false, "print computed weights without saving")
 
+var writebackFlag = flag.String("writeback", string(config.WritebackSSOT), config.WritebackFlagUsage)
+
 func main() {
 	flag.Parse()
+
+	writeback, err := config.ParseCalibrationWriteback(*writebackFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if workDir, err := os.Getwd(); err == nil {
+		if err := writeback.RegisterForWorkDir(workDir); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
 
 	cfg := config.GetParametersConfig()
 	if cfg == nil {
 		fmt.Fprintf(os.Stderr, "config not initialized; run from project root with parameters.json available\n")
 		os.Exit(1)
+	}
+
+	// Snapshot the configuration as loaded: overlay mode diffs it against the
+	// updated one so only the recomputed tree is persisted.
+	var base *config.ParametersConfig
+	if writeback.IsOverlay() {
+		base, err = config.CloneParametersConfig(cfg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
 	treeCfg := cfg.Industry.ClassificationTree.Value
@@ -127,10 +152,35 @@ func main() {
 
 	cfg.Industry.ClassificationTree = updated
 
-	if err := cfg.TryLockedSaveWithRollback(constants.ParametersFile, 30*time.Second); err != nil {
+	if err := persistClassificationTree(cfg, base, writeback); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to save config (skipping): %v\n", err)
 		return
 	}
+}
 
+// persistClassificationTree writes the recomputed classification tree.
+//
+// ssot mode (default: a human on a checkout) rewrites configs/parameters.json so
+// the change is a reviewable git diff. overlay mode (container/cron) writes the
+// changed leaves to the calibrated-parameters overlay under the bind-mounted
+// data/ tree instead, because a write to configs/ inside a container lands in the
+// writable layer: invisible to git and lost on the next container recreate
+// (FU-20260926-07). An overlay-mode run without a registered overlay path fails
+// loudly rather than silently falling back to the SSOT.
+func persistClassificationTree(cfg, base *config.ParametersConfig, writeback config.CalibrationWriteback) error {
+	if writeback.IsOverlay() {
+		changed, err := config.WriteConfigOverlay("backfill_industry_tree", base, cfg, time.Now())
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\nWrote %d changed value(s) to %s (configs/parameters.json untouched).\n",
+			changed, config.GetCalibratedOverlayPath())
+		return nil
+	}
+
+	if err := cfg.TryLockedSaveWithRollback(constants.ParametersFile, 30*time.Second); err != nil {
+		return err
+	}
 	fmt.Println("\nConfig saved successfully.")
+	return nil
 }

@@ -1,6 +1,7 @@
 package calibration
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -123,7 +124,7 @@ func TestRun(t *testing.T) {
 	}
 	writeJSONL(t, jsonlPath, lines)
 
-	report, err := Run(tmp, "garch", jsonlPath, true, false)
+	report, err := Run(tmp, "garch", jsonlPath, true, false, config.WritebackSSOT)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,8 +135,72 @@ func TestRun(t *testing.T) {
 		t.Error("missing dry-run notice")
 	}
 
-	_, err = Run(tmp, "unknown", jsonlPath, true, false)
+	_, err = Run(tmp, "unknown", jsonlPath, true, false, config.WritebackSSOT)
 	if err == nil {
 		t.Fatal("expected error for unknown module")
+	}
+}
+
+// TestRun_OverlayWritebackDoesNotWriteSSOT is the FU-20260926-07 contract for
+// this command: in overlay mode the SSOT file must stay byte-identical and the
+// calibrated leaves must land in the overlay under data/.
+func TestRun_OverlayWritebackDoesNotWriteSSOT(t *testing.T) {
+	tmp := t.TempDir()
+	jsonlPath := filepath.Join(tmp, "returns.jsonl")
+	lines := make([]map[string]float64, 35)
+	for i := range lines {
+		lines[i] = map[string]float64{"return": 0.01 * float64(i)}
+	}
+	writeJSONL(t, jsonlPath, lines)
+
+	ssotPath := filepath.Join(tmp, "configs", "parameters.json")
+	if err := os.MkdirAll(filepath.Dir(ssotPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ssotJSON := `{"garch":{"omega":{"value":0.0001},"alpha":{"value":0.1},"beta":{"value":0.8}}}`
+	if err := os.WriteFile(ssotPath, []byte(ssotJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	overlayPath := config.CalibrationOverlayPath(tmp)
+
+	previousSSOT := config.GetParametersConfigPath()
+	previousOverlay := config.GetCalibratedOverlayPath()
+	config.SetParametersConfigPath(ssotPath)
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer func() {
+		config.SetParametersConfigPath(previousSSOT)
+		config.SetCalibratedOverlayPath(previousOverlay)
+	}()
+
+	report, err := Run(tmp, "garch", jsonlPath, false, false, config.WritebackOverlay)
+	if err != nil {
+		t.Fatalf("Run(overlay): %v", err)
+	}
+	// The report proves the run routed to the overlay (it names the overlay path),
+	// independent of whether this particular input produced a change.
+	if !strings.Contains(report, "configs/parameters.json untouched") || !strings.Contains(report, overlayPath) {
+		t.Errorf("report does not show the overlay route: %s", report)
+	}
+
+	after, err := os.ReadFile(ssotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != ssotJSON {
+		t.Errorf("SSOT document rewritten in overlay mode:\nbefore=%s\nafter=%s", ssotJSON, after)
+	}
+
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov != nil {
+		// When this input does produce changes, they must be the calibrated garch
+		// leaves — never a wholesale copy of the document.
+		for path := range ov.Entries {
+			if !strings.HasPrefix(path, "garch.") {
+				t.Errorf("overlay entry %q is not a calibrated garch leaf: %+v", path, ov.Entries)
+			}
+		}
 	}
 }

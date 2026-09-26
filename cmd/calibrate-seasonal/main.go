@@ -31,9 +31,22 @@ func run(args []string) error {
 	endYear := fs.Int("end", 2026, "End year for backtest window")
 	outputJSON := fs.Bool("json", false, "Output results as JSON")
 	replayPath := fs.String("replay", "", "Path to replay data (CSV/JSONL). When set, uses actual stock returns aggregated by industry instead of synthetic data.")
-	update := fs.Bool("update", false, "Write calibration results back to configs/parameters.json")
+	update := fs.Bool("update", false, "Write calibration results back to configs/parameters.json (see -writeback)")
 	updateThreshold := fs.Int("update-threshold", 3, "Minimum observations required to update a pattern")
+	writebackFlag := fs.String("writeback", string(config.WritebackSSOT), config.WritebackFlagUsage)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	writeback, err := config.ParseCalibrationWriteback(*writebackFlag)
+	if err != nil {
+		return err
+	}
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = "."
+	}
+	if err := writeback.RegisterForWorkDir(workDir); err != nil {
 		return err
 	}
 
@@ -62,7 +75,7 @@ func run(args []string) error {
 		if *replayPath == "" {
 			return fmt.Errorf("calibrate-seasonal: refusing --update with synthetic 2024 fallback data; rerun with --replay <path> to supply real stock returns before writing to configs/parameters.json")
 		}
-		if err := updateParametersFileAt(constants.ParametersFile, results, *updateThreshold, *replayPath); err != nil {
+		if err := updateParametersFileAt(constants.ParametersFile, results, *updateThreshold, *replayPath, writeback); err != nil {
 			return fmt.Errorf("update parameters: %w", err)
 		}
 	}
@@ -100,7 +113,7 @@ func run(args []string) error {
 //
 // Before this producer existed, CalibrationEvidence could only ever be "none"
 // and the dashboard health was permanently `unknown`/no_observations.
-func updateParametersFileAt(paramsPath string, results []industry.SeasonalCalibration, threshold int, dataSource string) error {
+func updateParametersFileAt(paramsPath string, results []industry.SeasonalCalibration, threshold int, dataSource string, writeback config.CalibrationWriteback) error {
 	data, err := os.ReadFile(paramsPath)
 	if err != nil {
 		return fmt.Errorf("read parameters.json: %w", err)
@@ -109,6 +122,15 @@ func updateParametersFileAt(paramsPath string, results []industry.SeasonalCalibr
 	var params map[string]any
 	if err := json.Unmarshal(data, &params); err != nil {
 		return fmt.Errorf("parse parameters.json: %w", err)
+	}
+
+	// Overlay mode diffs the document as loaded against the updated one, so only
+	// the calibrated leaves are persisted and the SSOT file is never written.
+	var baseDoc map[string]any
+	if writeback.IsOverlay() {
+		if err := json.Unmarshal(data, &baseDoc); err != nil {
+			return fmt.Errorf("parse parameters.json (baseline): %w", err)
+		}
 	}
 
 	industrySection, ok := params["industry"].(map[string]any)
@@ -218,16 +240,24 @@ func updateParametersFileAt(paramsPath string, results []industry.SeasonalCalibr
 	cite["calibration_method"] = "backtest_empirical"
 	seasonalPatterns["citation"] = cite
 
-	out, err := json.MarshalIndent(params, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal updated parameters: %w", err)
-	}
+	if writeback.IsOverlay() {
+		changed, err := config.WriteDocumentOverlay("calibrate_seasonal", baseDoc, params, time.Now())
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "\nWrote %d calibrated value(s) to %s (configs/parameters.json untouched):\n",
+			changed, config.GetCalibratedOverlayPath())
+	} else {
+		out, err := json.MarshalIndent(params, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal updated parameters: %w", err)
+		}
 
-	if err := config.LockedWriteFileWithRollback(paramsPath, out); err != nil {
-		return fmt.Errorf("write parameters.json: %w", err)
+		if err := config.LockedWriteFileWithRollback(paramsPath, out); err != nil {
+			return fmt.Errorf("write parameters.json: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "\nUpdated parameters.json:\n")
 	}
-
-	fmt.Fprintf(os.Stderr, "\nUpdated parameters.json:\n")
 	for _, id := range updated {
 		fmt.Fprintf(os.Stderr, "  ✓ %s\n", id)
 	}

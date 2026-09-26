@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -20,9 +21,19 @@ func main() {
 }
 
 func run() error {
+	workback := flag.String("writeback", string(configpkg.WritebackSSOT), configpkg.WritebackFlagUsage)
+	flag.Parse()
+	mode, err := configpkg.ParseCalibrationWriteback(*workback)
+	if err != nil {
+		return err
+	}
+
 	workDir, _ := os.Getwd()
 	revenuePath := filepath.Join(workDir, "data", "replay", "month_revenue.jsonl")
 	configPath := filepath.Join(workDir, "configs", "parameters.json")
+	if err := mode.RegisterForWorkDir(workDir); err != nil {
+		return err
+	}
 
 	results, err := industry.CalibrateThresholdsFromFile(revenuePath)
 	if err != nil {
@@ -38,15 +49,19 @@ func run() error {
 			r.IndustryID, r.SampleSize, r.P25*100, r.P50*100, r.P75*100)
 	}
 
-	fmt.Println("\nWriting calibrated thresholds to parameters.json...")
-	if err := writeConfig(configPath, results); err != nil {
+	if mode.IsOverlay() {
+		fmt.Printf("\nWriting calibrated thresholds to %s (configs/parameters.json untouched)...\n", configpkg.GetCalibratedOverlayPath())
+	} else {
+		fmt.Println("\nWriting calibrated thresholds to parameters.json...")
+	}
+	if err := writeConfig(configPath, results, mode); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	fmt.Println("Done.")
 	return nil
 }
 
-func writeConfig(configPath string, results []industry.CalibrationResult) error {
+func writeConfig(configPath string, results []industry.CalibrationResult, mode configpkg.CalibrationWriteback) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -54,6 +69,16 @@ func writeConfig(configPath string, results []industry.CalibrationResult) error 
 	var config map[string]any
 	if err := json.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("parse config: %w", err)
+	}
+
+	// Overlay mode diffs the document as loaded against the updated one: only the
+	// calibrated leaves are persisted, and configs/parameters.json is never
+	// written (it is not bind-mounted inside a container).
+	var base map[string]any
+	if mode.IsOverlay() {
+		if err := json.Unmarshal(data, &base); err != nil {
+			return fmt.Errorf("parse config (baseline): %w", err)
+		}
 	}
 	industryCfg, _ := config["industry"].(map[string]any)
 	if industryCfg == nil {
@@ -84,6 +109,11 @@ func writeConfig(configPath string, results []industry.CalibrationResult) error 
 			"mature_profit_pct":     math.Round(r.P25*10000) / 10000,
 		}
 	}
+	if mode.IsOverlay() {
+		_, err := configpkg.WriteDocumentOverlay("calibrate_thresholds", base, config, time.Now())
+		return err
+	}
+
 	out, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
