@@ -197,12 +197,7 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 	if appliedCount > 0 {
 		now := time.Now()
 		markCalibrated(params, paramNames, "bayesian_optimization", &now)
-		if p := GetParametersConfigPath(); p != "" {
-			if err := params.TryLockedSaveWithRollback(p, 30*time.Second); err != nil {
-				logging.Error("calibrator", "save_failed",
-					logging.FStr("path", p), logging.Err(err))
-			}
-		}
+		persistCalibratorChanges(changes, now)
 		report.Verdict = "calibrated"
 		report.Summary = fmt.Sprintf("applied %d/%d parameter changes (baseline=%.4f → optimized=%.4f, %+.1f%%, %d set_parameter failures)",
 			appliedCount, len(paramNames), baseline, optScore, improvement, failedCount)
@@ -228,6 +223,60 @@ func CalibrateParameters(ctx context.Context, calibrator ParameterCalibrator, ev
 //   - baseline > 0: (opt - baseline) / baseline * 100
 //   - baseline < 0: (opt - baseline) / (-baseline) * 100 (relative to |baseline|)
 //   - baseline ≈ 0: returns (opt - baseline) * 100 (absolute change as pseudo-%)
+//
+// calibratorOverlaySource identifies this writer in the overlay document.
+const calibratorOverlaySource = "calibrate_parameters"
+
+// persistCalibratorChanges writes the accepted changes to the
+// calibrated-parameters overlay (FU-20260926-07) instead of rewriting
+// configs/parameters.json.
+//
+// The SSOT file is deliberately left untouched: configs/ is not bind-mounted, so
+// a write there landed in the container's writable layer (invisible to git, lost
+// on the next container recreate). The adaptation now lands in the overlay under
+// the bind-mounted data/ tree and is layered back on top of the SSOT at load
+// time; each entry records the SSOT value it was computed from, so a later
+// reviewed charter edit invalidates a stale adaptation.
+//
+// Provenance note: the in-memory ParametersConfig still carries the
+// `last_calibrated` / `calibration_method` metadata fields, but they are no
+// longer persisted to the SSOT file. The durable provenance is the overlay
+// entry (calibrated_at / method / rationale) plus the structured logs emitted
+// here.
+func persistCalibratorChanges(changes []CalibratorChange, at time.Time) {
+	if len(changes) == 0 {
+		return
+	}
+	path := GetCalibratedOverlayPath()
+	if path == "" {
+		logging.Warn("calibrator", "calibration_overlay_disabled",
+			"detail", "no calibrated-parameters overlay path registered; calibrated values apply in memory only and will not survive a restart")
+		return
+	}
+	entries := make(map[string]CalibrationOverlayEntry, len(changes))
+	for _, c := range changes {
+		rationale := fmt.Sprintf("baseline delta %+.1f%% (confidence %s) from bayesian optimization over the configured evaluator",
+			c.DeltaPct, c.Confidence)
+		entries[c.ParamName] = CalibratedEntryForParameter(
+			c.ParamName, c.After, c.Before, "bayesian_optimization", rationale, at)
+	}
+	ov, err := UpdateCalibrationOverlay(path, calibratorOverlaySource, entries)
+	if err != nil {
+		logging.Error("calibrator", "calibration_overlay_write_failed",
+			logging.FStr("path", path), logging.Err(err))
+		return
+	}
+	for _, c := range changes {
+		logging.Info("calibrator", "calibration_persisted",
+			logging.FStr("param", c.ParamName),
+			logging.FFloat64("before", c.Before),
+			logging.FFloat64("after", c.After),
+			logging.FStr("path", path))
+	}
+	logging.Info("calibrator", "calibration_overlay_written",
+		logging.FStr("path", path), logging.FInt("entries", len(ov.Entries)))
+}
+
 func computeImprovementPct(baseline, opt float64) float64 {
 	const epsilon = 1e-10
 	switch {

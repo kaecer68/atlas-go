@@ -110,16 +110,17 @@ func handleAdminReloadConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminCalibrateThresholds re-runs industry.RecalibrateThresholds
-// against the latest month_revenue.jsonl and writes the result back to
-// parameters.json. POST only.
+// against the latest month_revenue.jsonl. The result is written to the
+// calibrated-parameters overlay (data/state/parameters.calibrated.json), NOT to
+// configs/parameters.json, which stays the reviewed SSOT (FU-20260926-07).
+// POST only.
 func handleAdminCalibrateThresholds(w http.ResponseWriter, r *http.Request, cfg config.Config) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	revenuePath := filepath.Join(cfg.WorkDir, "data", "replay", "month_revenue.jsonl")
-	configPath := filepath.Join(cfg.WorkDir, "configs", "parameters.json")
-	if err := industry.RecalibrateThresholds(revenuePath, configPath); err != nil {
+	if err := industry.RecalibrateThresholds(revenuePath); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		//nolint:errcheck

@@ -50,7 +50,27 @@ git 看不到、容器重建即失、且在容器活著時**無法分辨**「SSO
 - **失效（fail-closed）**：overlay 條目記錄它疊在哪個 SSOT 值上；SSOT 值被改（人工 charter 編輯）
   ⇒ 該條目**失效並移除** ＋ WARN。人工審查的 charter 永遠優先於過期的 runtime 適應。
 - **運維**：`jq . risk/…` 對照兩檔即可看出「實際生效值 vs repo 值」；要放棄校準回到出廠值，
-  刪除 overlay 檔（或其中一條 `entries.<param>`）後重啟即可。
+  刪除 overlay 檔（或其中一條 `entries.<key>`）後重啟即可。
+
+### 條目的兩種形狀
+
+| 形狀 | 鍵 | 值 | 寫入者 |
+|------|----|----|--------|
+| **named tunable**（`path` 空） | parameter table 名（`internal/config/param_table.go`），如 `risk_max_position_size` | 純量 float | `risk_gate_calibrate`（`risk.SelfCalibrate`）、`calibrate_parameters`（`config.CalibrateParameters`） |
+| **dotted path**（`path` 有值） | parameters.json 內的點狀路徑，如 `industry.cycle_thresholds.value` | 任意 JSON（可為物件／字串／數字） | `factor_weight_calibrate`（`portfolio.CalibrateWeights`）、`rsi_tw_calibrate`（`retail.CalibrateRSITw`）、`auto_threshold_calibrate`（`industry.RecalibrateThresholds`） |
+
+dotted path 的形狀在**文件層**套用：先 patch SSOT 的 JSON 文件、再解析回設定，因此不需要把巢狀／map
+形狀的欄位塞進 parameter table。**容器必須存在、落葉可以新増**（新校準出的產業可以新增；
+`industry.cycle_thresolds` 這種打錯的段落名會被拒絕並告警 ✓）。
+
+### 誰還寫 SSOT（刻意的）
+
+- **CLI 工具**（`cmd/calibrate-parameters`、`cmd/calibrate-rsi-tw --update`、`cmd/calibrate-seasonal --update`、
+  `cmd/calibrate-thresholds`、`cmd/backfill-industry-tree`）：人工在 checkout 上執行，寫入 SSOT 會變成**可審查的 git diff** ✓ 刻意保留。
+- **admin parameters API**（`POST /api/parameters`、`/api/parameters/rollback`）：人工編輯 SSOT 的介面 ✓ 刻意保留。
+- **生產不可達的寫入端**（2026-09-26 實證：無任何 production caller）：`orchestrator.CalibrationEngine.ApplyToConfig`
+  （走 `TryLockedSaveWithRollback`）與 `scheduler.AutoRollback` 的 `revert_calibration`（走 `RestoreFromBackup`）。
+  **未遷移**（不為死碼整齊而動）；若日後接線，必須改走 overlay —— 見 `docs/operations/FOLLOWUPS.md` FU-20260926-07。
 
 ## 校準下限（sanity floor，防多輪漂移）
 
