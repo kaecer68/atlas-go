@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/constants"
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
@@ -30,30 +33,6 @@ type HistoricalBar struct {
 	Low    float64 `json:"low"`
 	Close  float64 `json:"close"`
 	Volume int64   `json:"volume"`
-}
-
-type TWSEQuote struct {
-	Code         string `json:"Code"`
-	Name         string `json:"Name"`
-	TradeVolume  string `json:"TradeVolume"`
-	TradeValue   string `json:"TradeValue"`
-	OpeningPrice string `json:"OpeningPrice"`
-	HighestPrice string `json:"HighestPrice"`
-	LowestPrice  string `json:"LowestPrice"`
-	ClosingPrice string `json:"ClosingPrice"`
-	Change       string `json:"Change"`
-	Transaction  string `json:"Transaction"`
-}
-
-// MIINDEXResponse wraps the TWSE MI_INDEX endpoint response format.
-// Unlike STOCK_DAY_ALL (flat array, no date support), MI_INDEX accepts
-// the date parameter and returns historical data for any trading day.
-type MIINDEXResponse struct {
-	Stat   string     `json:"stat"`
-	Date   string     `json:"date"`
-	Title  string     `json:"title"`
-	Fields []string   `json:"fields"`
-	Data   [][]string `json:"data"`
 }
 
 type Fetcher struct {
@@ -79,13 +58,32 @@ func NewFetcher() *Fetcher {
 	}
 }
 
-// FetchDay fetches all stock quotes for a specific trading date
-// using TWSE MI_INDEX endpoint (which accepts historical date parameter).
-func (f *Fetcher) FetchDay(ctx context.Context, date time.Time) ([]TWSEQuote, error) {
+// FetchDay fetches every listed stock's quotes for one trading date from the
+// TWSE MI_INDEX endpoint, which accepts a historical date parameter.
+//
+// 2026-09-26: this function used to decode a FLAT `fields`/`data` envelope.
+// MI_INDEX actually answers with `{stat, date, tables:[…]}`, and only the
+// 每日收盤行情 section holds per-symbol rows — so `len(wrapper.Data) == 0` was
+// true for every date, the tool wrote nothing, printed `[0 records]` and exited
+// 0. A silent success is the worst possible failure mode here: it is
+// indistinguishable from "the exchange had no data". The envelope is now owned
+// by marketdata.ParseMIIndexDailyQuotes, shared with cmd/daily-replay-sync, and
+// the two outcomes are separated:
+//
+//   - closed market / unpublished date → ErrTWSEEmptyData (expected, no rows)
+//   - stat=OK but no daily table, or an unparseable envelope → error
+//     (a schema change must never look like an empty day)
+//
+// The payload's own title date must match the requested date (provenance
+// guard, same as cmd/daily-replay-sync): writing rows stamped with the
+// requested date while the prices belong to another session is how the replay
+// dataset acquires phantom dates.
+func (f *Fetcher) FetchDay(ctx context.Context, date time.Time) ([]marketdata.TWSEQuote, error) {
 	if err := f.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait: %w", err)
 	}
 
+	wantDate := date.Format("2006-01-02")
 	dateStr := formatYYYYMMDD(date)
 	url := fmt.Sprintf("%s/exchangeReport/MI_INDEX?type=ALLBUT0999&date=%s&response=json", f.baseURL, dateStr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -103,35 +101,18 @@ func (f *Fetcher) FetchDay(ctx context.Context, date time.Time) ([]TWSEQuote, er
 		return nil, fmt.Errorf("api error: status %d", resp.StatusCode)
 	}
 
-	var wrapper MIINDEXResponse
-	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	if wrapper.Stat != "OK" || len(wrapper.Data) == 0 {
-		return nil, nil
+	dataDate, quotes, err := marketdata.ParseMIIndexDailyQuotes(body)
+	if err != nil {
+		return nil, err
 	}
-
-	// MI_INDEX returns fields as 2D string arrays: [Code, Name, Volume, Value, Open, High, Low, Close, Change, TxCount]
-	quotes := make([]TWSEQuote, 0, len(wrapper.Data))
-	for _, row := range wrapper.Data {
-		if len(row) < 10 {
-			continue
-		}
-		quotes = append(quotes, TWSEQuote{
-			Code:         row[0],
-			Name:         row[1],
-			TradeVolume:  row[2],
-			TradeValue:   row[3],
-			OpeningPrice: row[4],
-			HighestPrice: row[5],
-			LowestPrice:  row[6],
-			ClosingPrice: row[7],
-			Change:       row[8],
-			Transaction:  row[9],
-		})
+	if dataDate != wantDate {
+		return nil, fmt.Errorf("MI_INDEX answered for %s while %s was requested; refusing to use a mis-dated payload", dataDate, wantDate)
 	}
-
 	return quotes, nil
 }
 
@@ -232,6 +213,12 @@ func main() {
 	dates := tradingDates(start, end)
 	total := len(dates)
 
+	// 2026-09-26: the run summary used to be a single "Done." line, so a whole
+	// range that fetched nothing (the flat-envelope parse bug) exited 0 and
+	// looked like a successful run against a quiet market. Failures are now
+	// counted and the exit code carries them.
+	var totalRows, emptyDates, failedDates int
+
 	for i, d := range dates {
 		fmt.Printf("Fetched %s (%d/%d)", d.Format("2006-01-02"), i+1, total)
 
@@ -239,8 +226,18 @@ func main() {
 		quotes, err := fetcher.FetchDay(ctx, d)
 		cancel()
 
+		if errors.Is(err, marketdata.ErrTWSEEmptyData) {
+			// Closed market (public holiday — tradingDates already drops
+			// weekends) or a date the exchange has not published. Nothing to
+			// write, and not a failure.
+			fmt.Printf(" [no data (non-trading day or not published)]\n")
+			emptyDates++
+			time.Sleep(5 * time.Second)
+			continue
+		}
 		if err != nil {
 			fmt.Printf(" [SKIP - error: %v]\n", err)
+			failedDates++
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -271,14 +268,34 @@ func main() {
 		if len(bars) > 0 {
 			if err := appendJSONL(*output, bars); err != nil {
 				fmt.Printf(" [SKIP - write error: %v]\n", err)
+				failedDates++
 				time.Sleep(5 * time.Second)
 				continue
 			}
 		}
-		fmt.Printf(" [%d records]\n", len(bars))
+		totalRows += len(bars)
+		switch {
+		case len(bars) > 0:
+			fmt.Printf(" [%d records]\n", len(bars))
+		case len(quotes) > 0:
+			// Rows came back but none was usable: every close was 0/"--"
+			// (suspended) or all of them are already in -merge-with. A re-run
+			// is idempotent so this is not a failure, but it must never print a
+			// bare "0 records" — that is the wording that let a 0-row bug pass
+			// for weeks.
+			fmt.Printf(" [0 new records — %d rows fetched, all already present or without a usable close]\n", len(quotes))
+		default:
+			fmt.Printf(" [0 rows returned]\n")
+		}
 
 		time.Sleep(5 * time.Second)
 	}
 
-	fmt.Printf("\nDone. Data saved to %s\n", *output)
+	fmt.Printf("\nDone. %d rows written to %s (%d dates with no data, %d failed)\n",
+		totalRows, *output, emptyDates, failedDates)
+	if failedDates > 0 {
+		fmt.Fprintf(os.Stderr, "\nERROR: %d of %d dates failed — see the [SKIP - error] lines above. A changed upstream shape must never look like an empty market.\n",
+			failedDates, total)
+		os.Exit(1)
+	}
 }
