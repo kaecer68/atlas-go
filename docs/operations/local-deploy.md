@@ -4,20 +4,20 @@
 > **雙機治理（2026-09-22 起）**：開發在 MacBook、production 在 **Mac Mini**（`kaecer@kmacmini`；iMac 已退役，`KiMac` guard 僅為 legacy 防護）。
 > **跨機一律用 Tailscale 名稱 `kmacmini`**（MagicDNS，解析為 Tailscale IP）；LAN IP 僅在 MacBook 位於同一網段時可用，外出時失效。
 > **Mac Mini 部署實走驗證**：2026-09-23（issue #1898）—— 步驟與 10 個實踩坑見下方 §Mac Mini production 部署。
-> **跨設備總則**：`~/workspace/a2a-dev/docs/governance/雙機治理憲章.md`；iMac 運維手冊：`~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`。
+> **跨設備總則**：`~/workspace/a2a-dev/docs/governance/雙機治理憲章.md`；Mac Mini 運維手冊：`~/workspace/a2a-dev/docs/operations/MACMINI-RECOVER.md`（iMac 時代的 `IMAC-RUNBOOK.md` 已退役，勿引用）。
 
 ## 平台架構（方案二真相）
 
 ```
-MacBook (kaecer) = 唯一開發機           iMac (kk) = 唯一 production 部署機
+MacBook (kaecer) = 唯一開發機           Mac Mini (kaecer@kmacmini) = 唯一 production 部署機
   ├─ code 編輯 / 測試 / PR               ├─ atlas 11 容器 + litellm 2 容器
   ├─ git push → GitHub                   ├─ git pull（只讀 clone，不 push）
   └─ 本機 dev 驗證（可 build/run）        └─ docker build + compose up（hermes 運維）
 ```
 
-- **映像來源（production）**：iMac **本地 build**（`atlas-atlas:latest`），**不是** ghcr.io pull。
-- **部署流程**：MacBook push → iMac `git pull` → iMac `make rebuild-all`（或 hermes 代勞）。
-- **本機 dev（MacBook）**：可用 `make rebuild-all` 起本地容器驗證（不影響 iMac production，不同機器）。
+- **映像來源（production）**：Mac Mini **本地 build**（`atlas-atlas:latest`），**不是** ghcr.io pull。
+- **部署流程**：MacBook push → Mac Mini `git pull` → Mac Mini `make rebuild-all`（或 hermes 代勞）。
+- **本機 dev（MacBook）**：可用 `make rebuild-all` 起本地容器驗證（不影響 Mac Mini production，不同機器）。
 
 ## 環境變數（統一由 `~/.config/atlas-go/.env` 載入）
 
@@ -36,7 +36,7 @@ MacBook (kaecer) = 唯一開發機           iMac (kk) = 唯一 production 部�
 | `LLM_RISK_FORENSICS_ENABLED` | 啟用 `CapabilityPerformanceForensics` | default `false` |
 | `LLM_SECTOR_AGENTS_ENABLED` | 啟用 `SectorAgentLLM` Plan→ToolCall→Reflect loop（Issue #719 wired） | default `false` |
 
-> **兩機 .env 分離（2026-08-28 修正）**：MacBook 與 iMac 的 `~/.config/atlas-go/.env` 都指向 **dev DB（`atlas_dev`）**；production DB（`atlas`）的 DSN **只存在 gateway 容器環境**（`docs/operations/docker-compose.prod.yml`），**不進 .env**——讓任何「source .env 的 CLI」永遠碰不到 prod DB。**不可互相覆蓋**。
+> **兩機 .env 分離（2026-08-28 修正）**：MacBook 與 Mac Mini 的 `~/.config/atlas-go/.env` 都指向 **dev DB（`atlas_dev`）**；production DB（`atlas`）的 DSN **只存在 gateway 容器環境**（`docs/operations/docker-compose.prod.yml`），**不進 .env**——讓任何「source .env 的 CLI」永遠碰不到 prod DB。**不可互相覆蓋**。
 >
 > ⚠️ **陷阱**：source `.env` 跑任何會 migrate 的 CLI 前，先 `echo $DATABASE_URL` 確認目標 DB（曾發生 migration 19 誤套到 atlas_dev 的事件，2026-08-28）。
 
@@ -74,14 +74,14 @@ cd ~/workspace/atlas && git fetch origin main && git checkout main && git merge 
 curl -fsS http://localhost:18080/health && curl -s localhost:18080/api/version
 ```
 
-> **hermes 代勞**：部署是 hermes（iMac 運維員）的職責。可用 hermes-dispatch skill 派她完成
+> **hermes 代勞**：部署是 hermes（Mac Mini 運維員）的職責。可用 hermes-dispatch skill 派她完成
 > `git pull → make rebuild-all → 驗證 /health → 回報`。
 
 > ⚠️ **Darwinian state 同步（2026-08-27 起）**：`data/state/darwinian_history.jsonl` 不是 git
 > tracked，部署不會自動帶過去。任何會**重建/重啟 atlas-go 或 atlas-cron-darwinian 容器**的部署，
 > 先跑 `~/workspace/atlas/scripts/sync-darwinian.sh`（union merge，只增不減），
 > 並遵守「sync 前容器必須停」的硬性規定（避免 torn line）。完整章節見
-> a2a-dev `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1。
+> a2a-dev `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1（**iMac 時代文件，已退役，僅供歷史對照**）。
 
 ## 部署驗證
 
@@ -124,24 +124,51 @@ ssh kaecer@kmacmini 'export PATH="$HOME/.orbstack/bin:/usr/local/bin:$PATH"; cd 
 > 已不使用 ghcr.io tag pinning（舊模式，ghcr 已被本地 build 取代）。
 
 
-## iMac 容器守護腳本（版控正本）
+## 容器守護腳本（版控正本）
 
-**為什麼要進版控**：`atlas-container-watchdog.sh` 是 iMac 唯一的自動復原機制（容器死掉時把它拉起來），
-但過去只存在於 iMac 的 `~/bin/`，無法回答「iMac 上跑的是哪一版、有沒有漂移」。
+> 2026-09-26 更新：production 為 **Mac Mini**（2026-09-22 起）。腳本／Makefile target 名稱仍帶
+> `imac-` 前綴屬**歷史債**（launchd label、安裝路徑、Makefile target 都指向它）→ 不改檔名。
+
+**為什麼要進版控**：`atlas-container-watchdog.sh` 是 production 唯一的自動復原機制（容器死掉時把它拉起來），
+但過去只存在於主機的 `~/bin/`，無法回答「主機上跑的是哪一版、有沒有漂移」。
 
 **正本位置**
 
 | 檔案 | 用途 |
 |---|---|
-| `scripts/ops/imac-container-watchdog.sh` | 腳本正本（launchd 每 60s 執行） |
+| `scripts/ops/imac-container-watchdog.sh` | 腳本正本（launchd 每 60s 執行；Mac Mini 安裝位置 = `~/bin/atlas-container-watchdog.sh`） |
 | `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist` | launchd job 正本（`StartInterval` = 60） |
+
+⛔ **不要用** `docs/operations/watchdog/atlas-container-watchdog.sh`：那是**未被引用的舊副本**
+（盤查：`git grep 'operations/watchdog' origin/main` = 0 命中；本 PR 新增的說明行本身會命中，故須指定 ref）。
+內容仍監控已退役容器名 `atlas-go-imac`。正本只有上面那一份。
 
 **指令**
 
 ```bash
-make imac-watchdog-diff      # 比對 repo 正本與 iMac 版 sha256（漂移檢查，不一致 exit 1）
-make imac-watchdog-install   # 備份 iMac 現有版本 → scp 正本 → bash -n → 重載 launchd → 再驗 sha256
+make imac-watchdog-diff      # 比對 repo 正本與主機版 sha256（漂移檢查，不一致 exit 1）
+make imac-watchdog-install   # 備份主機現有版本 → scp 正本 → bash -n → 重載 launchd → 再驗 sha256
 ```
+
+> ⚠️ **這兩個 target 目前壞的（2026-09-26 實跑實證，未修）**：`Makefile` 的預設值仍是 iMac 時代的
+> `IMAC_HOST ?= kk@kimac` 與 `WATCHDOG_DST := /Users/kk/bin/...`（`kk@kimac` 帳號/主機不存在）。
+> 實跑輸出：`ssh: Could not resolve hostname kimac: nodename nor servname provided, or not known`
+> → `make imac-watchdog-diff` exit 2。修 `Makefile` 屬另一條 lane（本 PR 護欄禁止改動）→ 在它修好前，用等價的手動指令：
+>
+> ```bash
+> # 漂移檢查（Mac Mini 的實際安裝路徑 = ~/bin/atlas-container-watchdog.sh）
+> ssh kmacmini 'shasum -a 256 ~/bin/atlas-container-watchdog.sh'
+> shasum -a 256 scripts/ops/imac-container-watchdog.sh
+> # 安裝（先備份 → 複製 → bash -n → 重載 launchd）
+> ssh kmacmini 'cp -p ~/bin/atlas-container-watchdog.sh ~/bin/atlas-container-watchdog.sh.bak-$(date +%Y%m%dT%H%M%S)'
+> scp scripts/ops/imac-container-watchdog.sh kmacmini:~/bin/atlas-container-watchdog.sh
+> ssh kmacmini 'chmod +x ~/bin/atlas-container-watchdog.sh && bash -n ~/bin/atlas-container-watchdog.sh \
+>   && launchctl unload ~/Library/LaunchAgents/com.goluck.atlas-container-watchdog.plist 2>/dev/null; \
+>   launchctl load ~/Library/LaunchAgents/com.goluck.atlas-container-watchdog.plist'
+> ```
+>
+> **未驗證**：上面的手動指令本次任務沒有實際執行（不碰 production）；`ssh kmacmini ls ~/bin/atlas-container-watchdog.sh`
+> 已實查存在（2026-09-25 11:25 版）。
 
 **腳本行為（2026-09-12 起）**
 

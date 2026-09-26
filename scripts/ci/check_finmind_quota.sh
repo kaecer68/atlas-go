@@ -16,7 +16,7 @@
 #   bash scripts/ci/check_finmind_quota.sh --state-file <path> --limit 12000 --warn-pct 90
 #   環境變數: FINMIND_DAILY_LIMIT / FINMIND_WARN_PCT 可覆寫預設
 #
-# cron 建議（iMac, 週一開市前 08:00 UTC+8）:
+# cron 建議（production = Mac Mini, 週一開市前 08:00 UTC+8；2026-09-26 由 iMac 更新）:
 #   0 0 * * 1 cd ~/workspace/atlas && bash scripts/ci/check_finmind_quota.sh --strict \
 #     || logger -t finmind-quota "⚠ FinMind quota ≥90% — 開市前需確認 key/quota"
 #

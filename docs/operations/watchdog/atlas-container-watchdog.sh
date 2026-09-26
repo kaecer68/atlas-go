@@ -1,4 +1,17 @@
 #!/bin/bash
+# ⛔ 已淘汰，勿用（2026-09-26 標記） — 本檔是**未被任何檔案引用**的舊副本
+#   （盤查：`git grep 'operations/watchdog' origin/main` = 0 命中；本 PR 新增的說明行本身會命中，故須指定 ref）。
+#   正本 = scripts/ops/imac-container-watchdog.sh（**唯一**被 Makefile target
+#   `imac-watchdog-diff` / `imac-watchdog-install` 引用、也是文件指向的那一份）。
+#   差異：
+#     1. 本檔停在 2026-08-27 初版：**沒有 restart ledger**（正本 2026-09-12 起有，
+#        見 #1901），因此無法回答「健康狀態下容器被重啟」這類問題。
+#     2. `CONTAINERS` 仍是已退役的 `atlas-go-imac`。Mac Mini 上主 API 容器實名 = `atlas-go`
+#        （`-imac` 後綴 2026-09-22 遷移後淘汰）→ 照本檔安裝只會每 60s 對不存在的容器
+#        `docker start`，log 爆量且零復原能力。正本已於 2026-09-25 修正為 `atlas-go`。
+#   安裝位置（Mac Mini）= ~/bin/atlas-container-watchdog.sh（實查存在，2026-09-25 11:25 版）。
+#   保留此檔僅為歷史；現行說明見 docs/operations/local-deploy.md §容器守護腳本（版控正本）。
+#
 # atlas-container-watchdog.sh — 檢查 atlas 核心容器是否存活，不跑就啟動
 # 由 launchd com.goluck.atlas-container-watchdog 每 60s 觸發
 # 2026-08-27 建立（PR #1695 事件後 32h silent 的教訓：容器死了沒人拉）

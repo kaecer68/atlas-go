@@ -251,9 +251,11 @@ openssl rand -hex 32
 
 ## 4. Deployment
 
-> **部署真相（2026-08-15 方案二定案）**：開發在 MacBook、production 在 iMac。
-> iMac 用**本地 build image**（`atlas-atlas:latest`），**不使用 ghcr.io pull**（舊模式已淘汰）。
-> 完整部署流程見 [`docs/operations/local-deploy.md`](../operations/local-deploy.md)。
+> **部署真相（2026-08-15 方案二定案；2026-09-26 更新主機）**：開發在 MacBook、production 在 **Mac Mini**
+> （`ssh kmacmini`；iMac 已於 2026-09-22 退役出售，舊的 `kk@kimac` 指令一律失效）。
+> Mac Mini 用**本地 build image**（`atlas-atlas:latest`），**不使用 ghcr.io pull**（舊模式已淘汰）。
+> 完整部署流程見 [`docs/operations/local-deploy.md`](../operations/local-deploy.md) §Mac Mini production 部署
+> （2026-09-23 實走驗證；同 [`docs/operations/pr-lifecycle.md`](../operations/pr-lifecycle.md) §5）。
 
 ### 4.1 Local dev (MacBook — 本機驗證)
 
@@ -266,16 +268,19 @@ docker compose ps
 curl -fsS http://localhost:18080/health
 ```
 
-> 本機容器與 iMac production 不同機器、不同 port 空間，**互不影響**。驗證完可 `docker compose down` 停止。
+> 本機容器與 Mac Mini production 不同機器、不同 port 空間，**互不影響**。驗證完可 `docker compose down` 停止。
 
-### 4.2 Production (iMac — 唯一部署機)
+### 4.2 Production (Mac Mini — 唯一部署機)
 
-**流程**：MacBook push → iMac `git pull` → iMac `make rebuild-all` → 驗證。
+**流程**：MacBook push → Mac Mini `git pull` → Mac Mini `make rebuild-all` → 驗證。
 
 ```bash
-# On the production host (iMac)
+# On the production host (Mac Mini)
+ssh kmacmini
+export PATH="$HOME/.orbstack/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"   # 非互動 shell 沒有 docker
+export GOPROXY=https://goproxy.cn,direct                                   # 本機 router/HiNet MITM proxy.golang.org
 cd ~/workspace/atlas
-git pull origin main
+git fetch origin main && git checkout main && git merge --ff-only origin/main
 make rebuild-all
 
 # Verify
@@ -284,7 +289,10 @@ curl -fsS http://localhost:18080/health
 curl -fsS http://localhost:18080/api/llm/health
 ```
 
-> **hermes 代勞**：部署是 hermes（iMac 運維員）的職責，可透過 hermes-dispatch skill 派她執行
+> repo 目錄 `.env`（gitignored）需含 `GRAFANA_PORT=3001` 與 `ATLAS_POSTGRES_PORT=55432`；完整步驟與
+> 10 個實踩坑見 [`docs/operations/local-deploy.md`](../operations/local-deploy.md) §Mac Mini production 部署。
+
+> **hermes 代勞**：部署是 hermes（**Mac Mini 運維員**）的職責，可透過 hermes-dispatch skill 派她執行
 > `git pull → make rebuild-all → 驗證 → 回報`。
 >
 > **Note**: atlas-go is a **single-host Docker deployment**, not a Kubernetes cluster. For multi-host / cloud-managed, you'd need to refactor `docker-compose.yml` to a Helm chart or similar.
