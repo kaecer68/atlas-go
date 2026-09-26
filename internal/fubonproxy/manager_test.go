@@ -1067,19 +1067,23 @@ func TestProcessManager_LogWriter_StderrSurfacedAtInfoLevel(t *testing.T) {
 // 互相不衝突（依賴 Go test 內建單 goroutine 序列執行；不使用 t.Parallel）。
 // ============================================================================
 
-// reserveEphemeralPort binds 0.0.0.0:0 to obtain an OS-assigned ephemeral port,
-// overrides package-level proxyListenPort for the duration of the test, and
-// registers a cleanup to restore the original port value.
+// reserveEphemeralPort binds 127.0.0.1:0 to obtain a system-assigned ephemeral
+// port, overrides package-level proxyListenPort for the duration of the test,
+// and registers a cleanup to restore the original port value.
 //
-// We bind the IPv4 wildcard (not 127.0.0.1) so that portprobe.Probe(), which
-// also attempts a wildcard bind, sees the port as occupied. The caller owns the
-// returned listener and must close it (or hand it to an http.Server).
+// The port is requested on loopback because loopback is the address the code
+// under test uses: probeProxyPort() probes 127.0.0.1:<port> and the tests build
+// healthURL from 127.0.0.1 as well. portprobe.Probe() tests that exact address
+// first, so a loopback listener is enough to be seen as occupied — and a
+// loopback-only reservation cannot collide with the wildcard ports that other
+// processes (or a concurrently running test binary) may need. The caller owns
+// the returned listener and must close it (or hand it to an http.Server).
 //
 // Because proxyListenPort is a package-level var, this helper is not safe for
 // t.Parallel() tests.
 func reserveEphemeralPort(t *testing.T) (net.Listener, int) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "0.0.0.0:0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to bind ephemeral port: %v", err)
 	}
@@ -1113,12 +1117,13 @@ func bindEphemeralPort(t *testing.T, h http.Handler) (*http.Server, int) {
 	return srv, port
 }
 
-// bindPort starts an http.Server on a specific IPv4 wildcard port. It is used
-// by tests that need to occupy the same port both before and after
-// ProcessManager.Start().
+// bindPort starts an http.Server on a specific loopback port. It is used by
+// tests that need to occupy the same port that reserveEphemeralPort handed out
+// (see withFreeEphemeralPort), so it binds 127.0.0.1 for the same reason that
+// helper does.
 func bindPort(t *testing.T, port int, h http.Handler) *http.Server {
 	t.Helper()
-	ln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		t.Fatalf("failed to bind port %d: %v", port, err)
 	}
@@ -1330,6 +1335,40 @@ func setFastRestartBackoff(t *testing.T) {
 	})
 }
 
+// ============================================================================
+// Deterministic supervisor-exit wait (FU-20260926-17)
+//
+// 舊版 waitForSupervisorDone 用寫死的 3s 上限；但 supervise() 走到「重啟失敗上限」
+// 之前必須先做完 maxRestartFailures 輪 probe，該上限因此落在這條路徑正常耗時分布
+// 的中間（閒置主機 2.63–2.92s、ci-full 併發負載 3.24–3.67s）⇒ 間歇性假紅。
+// 修法：等待改為事件驅動（條件 = m.done 關閉，supervisor 真的退出），時間上限則
+// 由 supervisor 必須完成的工作量推導，而不是一個與工作量無關的秒數。
+// ============================================================================
+
+// probeCycleBudget 是 supervise() 單一輪「重啟失敗」嘗試的成本上限：
+//   - 一次 portprobe.Probe()：對被佔用的 port，Probe 會把 /health 重試 5 次、
+//     每次間隔 100ms（portprobe.classifyOccupied）才判定 foreign，之後再呼叫
+//     lsof 取佔用者；
+//   - 一次 restart backoff（測試內為 restartBackoffDelayForTest = 10ms）。
+//
+// 本機實測（macOS arm64）：閒置 0.40–0.70s／輪，`go test -race` 且 ci-full 全
+// package 並行時最高約 0.9s／輪 ⇒ 取 2s 保留約 2× 餘裕，又不會寬到掩蓋真的卡死。
+const probeCycleBudget = 2 * time.Second
+
+// recentEventTail 是逾時診斷訊息最多帶出的時間軸事件數，避免把整個 100 筆的
+// ring buffer 倒進測試輸出。
+const recentEventTail = 5
+
+// supervisorExitBudget 是 waitForSupervisorDone 的安全網上限，涵蓋 supervisor
+// 真正必須完成的工作：maxRestartFailures 輪 probe、踩到上限的那一輪，以及假
+// proxy 退出的時間（gatedFakeProxy 以檔案交握放行，成本 < 0.2s）。
+func supervisorExitBudget() time.Duration {
+	return time.Duration(maxRestartFailures+1)*probeCycleBudget + time.Second
+}
+
+// waitForSupervisorDone 等待 supervise() goroutine 結束（m.done 關閉）。
+// 條件驅動：supervisor 一退出就立刻返回；supervisorExitBudget() 只是安全網，
+// 逾時才代表 supervisor 真的沒有退出（負對照：讓 cap 失效 ⇒ 這裡必須紅）。
 func waitForSupervisorDone(t *testing.T, m *ProcessManager) {
 	t.Helper()
 	var doneCh chan struct{}
@@ -1339,11 +1378,27 @@ func waitForSupervisorDone(t *testing.T, m *ProcessManager) {
 	if doneCh == nil {
 		t.Fatal("supervisor not started")
 	}
+
+	budget := supervisorExitBudget()
 	select {
 	case <-doneCh:
-	case <-time.After(3 * time.Second):
-		t.Fatal("supervisor did not exit within 3s")
+		return
+	case <-time.After(budget):
 	}
+
+	// 逾時：只讀取受 m.mu 保護的欄位，避免與仍在跑的 supervisor 產生 data race
+	// （restartFailures 在 manager.go 的失敗路徑是無鎖遞增的，不可在此讀取）。
+	m.mu.Lock()
+	running := m.running
+	lastErr := m.lastErr
+	tail := append([]TimelineEvent(nil), m.events...)
+	m.mu.Unlock()
+	if len(tail) > recentEventTail {
+		tail = tail[len(tail)-recentEventTail:]
+	}
+	t.Fatalf("supervisor did not exit within %v "+
+		"(derived budget: %d probe cycles x %v per cycle + 1s): running=%v lastErr=%q last_events=%v",
+		budget, maxRestartFailures+1, probeCycleBudget, running, lastErr, tail)
 }
 
 // TestProcessManager_Restart_PortFree_CanProceed 驗證 port 空閒時，
@@ -1392,17 +1447,39 @@ func TestProcessManager_Restart_PortForeign_Retries(t *testing.T) {
 	}
 }
 
+// gatedFakeProxy 寫一個「等到 releaseFlag 出現才結束」的假 proxy script，回傳其路徑。
+//
+// 舊版寫 `#!/bin/sh\nsleep 0.3\n`（yield 測試用 0.5）：那讓「佔用者是否已經綁好
+// port」取決於主機負載 —— 若 supervisor 先看到空閒的 port，它會直接重新 spawn，
+// 測試就不再測到原本那條路徑。檔案交握把順序固定下來：測試先 bindPort() 佔住
+// port，再呼叫 releaseFakeProxy() 放行子行程結束。
+func gatedFakeProxy(t *testing.T, dir, releaseFlag string) string {
+	t.Helper()
+	scriptPath := filepath.Join(dir, "fake_proxy.sh")
+	script := fmt.Sprintf("#!/bin/sh\nwhile [ ! -f '%s' ]; do sleep 0.05; done\n", releaseFlag)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake script: %v", err)
+	}
+	return scriptPath
+}
+
+// releaseFakeProxy 建立 gatedFakeProxy 正在等待的旗標檔，放行子行程結束。
+func releaseFakeProxy(t *testing.T, releaseFlag string) {
+	t.Helper()
+	if err := os.WriteFile(releaseFlag, []byte("go\n"), 0o600); err != nil {
+		t.Fatalf("write release flag: %v", err)
+	}
+}
+
 // TestProcessManager_Supervise_YieldsToExternalHealthyProxy 驗證：當原本的
-// proxy 程序結束後，supervise() 重啟前發現 port 18081 已有外部 healthy proxy，
+// proxy 程序結束後，supervise() 重啟前發現 port 已有外部 healthy proxy，
 // 會放棄重啟並結束 supervisor goroutine。
 func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 	setFastRestartBackoff(t)
 
 	tmpDir := t.TempDir()
-	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
-	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 0.5\n"), 0o755); err != nil {
-		t.Fatalf("write fake script: %v", err)
-	}
+	releaseFlag := filepath.Join(tmpDir, "release")
+	fakeScript := gatedFakeProxy(t, tmpDir, releaseFlag)
 
 	port := withFreeEphemeralPort(t)
 
@@ -1412,7 +1489,11 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// ctx 不設期限：本測試唯一的時間上限是 waitForSupervisorDone 的推導上限。
+	// 原版用 5s 期限，那是第二個「與工作量無關的秒數」—— supervise() 每輪開頭會
+	// select m.ctx.Done()，期限先到就會在抵達判定點前提前退出，變成另一種假紅。
+	// 收尾（殺子行程、關 supervisor）由 t.Cleanup(m.Stop()) 負責。
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if err := m.Start(ctx); err != nil {
@@ -1429,6 +1510,7 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	bindPort(t, port, handler)
+	releaseFakeProxy(t, releaseFlag)
 
 	waitForSupervisorDone(t, m)
 
@@ -1439,16 +1521,14 @@ func TestProcessManager_Supervise_YieldsToExternalHealthyProxy(t *testing.T) {
 	}
 }
 
-// TestProcessManager_Supervise_RestartFailureCap 驗證：當 port 18081 持續被
-// 外部進程佔用，連續重啟失敗達 maxRestartFailures 次後 supervisor 會放棄。
+// TestProcessManager_Supervise_RestartFailureCap 驗證：當 port 持續被外部進程
+// 佔用，連續重啟失敗達 maxRestartFailures 次後 supervisor 會放棄。
 func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 	setFastRestartBackoff(t)
 
 	tmpDir := t.TempDir()
-	fakeScript := filepath.Join(tmpDir, "fake_proxy.sh")
-	if err := os.WriteFile(fakeScript, []byte("#!/bin/sh\nsleep 0.3\n"), 0o755); err != nil {
-		t.Fatalf("write fake script: %v", err)
-	}
+	releaseFlag := filepath.Join(tmpDir, "release")
+	fakeScript := gatedFakeProxy(t, tmpDir, releaseFlag)
 
 	port := withFreeEphemeralPort(t)
 
@@ -1458,7 +1538,9 @@ func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 		healthURL:  fmt.Sprintf("http://127.0.0.1:%d/health", port),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// ctx 不設期限（理由同 yield 測試）：5s 期限會與「5 輪 probe」競爭，且它不是
+	// 這條路徑的語意上限；真正的上限由 waitForSupervisorDone 依工作量推導。
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if err := m.Start(ctx); err != nil {
@@ -1471,6 +1553,7 @@ func TestProcessManager_Supervise_RestartFailureCap(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	bindPort(t, port, handler)
+	releaseFakeProxy(t, releaseFlag)
 
 	waitForSupervisorDone(t, m)
 
