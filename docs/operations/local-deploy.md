@@ -1,7 +1,8 @@
 # 部署設定（本機 dev + production 雙機）
 
 > **文件角色**：部署的權威說明。涵蓋 MacBook 本機 dev 與 Mac Mini production 兩種情境。
-> **雙機治理（2026-09-22 起）**：開發在 MacBook、production 在 **Mac Mini**（`kaecer@192.168.0.84`；iMac 已退役，`KiMac` guard 僅為 legacy 防護）。
+> **雙機治理（2026-09-22 起）**：開發在 MacBook、production 在 **Mac Mini**（`kaecer@kmacmini`；iMac 已退役，`KiMac` guard 僅為 legacy 防護）。
+> **跨機一律用 Tailscale 名稱 `kmacmini`**（MagicDNS，解析為 Tailscale IP）；LAN IP 僅在 MacBook 位於同一網段時可用，外出時失效。
 > **Mac Mini 部署實走驗證**：2026-09-23（issue #1898）—— 步驟與 10 個實踩坑見下方 §Mac Mini production 部署。
 > **跨設備總則**：`~/workspace/a2a-dev/docs/governance/雙機治理憲章.md`；iMac 運維手冊：`~/workspace/a2a-dev/docs/operations/iMac-RUNBOOK.md`。
 
@@ -57,14 +58,14 @@ curl -fsS http://localhost:18080/health
 
 ### 情境 B：production 部署（Mac Mini）
 
-> 2026-09-23 更新：production 自 2026-09-22 起為 **Mac Mini**（`kaecer@192.168.0.84`）；iMac（`kk@kimac`）已退役，舊指令一律失效。完整步驟/坑見本檔 §Mac Mini production 部署。
+> 2026-09-23 更新：production 自 2026-09-22 起為 **Mac Mini**（`kaecer@kmacmini`）；iMac（`kk@kimac`）已退役，舊指令一律失效。完整步驟/坑見本檔 §Mac Mini production 部署。
 
 ```bash
 # 1. MacBook: push 你的修改
 git push origin main
 
 # 2. Mac Mini: 同步 + 重建 + 重啟（hermes 可代勞）
-ssh kaecer@192.168.0.84
+ssh kaecer@kmacmini
 export PATH="$HOME/.orbstack/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 export GOPROXY=https://goproxy.cn,direct
 cd ~/workspace/atlas && git fetch origin main && git checkout main && git merge --ff-only origin/main && make rebuild-all
@@ -116,7 +117,7 @@ docker compose ps --format json | jq -s 'map({name, state, health})'
 
 ```bash
 # 退回上一個 commit 並重啟（Mac Mini）
-ssh kaecer@192.168.0.84 'export PATH="$HOME/.orbstack/bin:/usr/local/bin:$PATH"; cd ~/workspace/atlas && git checkout <previous-sha> && make rebuild-all'
+ssh kaecer@kmacmini 'export PATH="$HOME/.orbstack/bin:/usr/local/bin:$PATH"; cd ~/workspace/atlas && git checkout <previous-sha> && make rebuild-all'
 ```
 
 > **注意**：Mac Mini 用本地 build image（`atlas-atlas:latest`），Rollback = checkout 舊 commit 重建。
@@ -157,7 +158,7 @@ make imac-watchdog-install   # 備份 iMac 現有版本 → scp 正本 → bash 
 
 ## Mac Mini production 部署（2026-09-23 實走驗證，issue #1898）
 
-> 前置：`ssh kaecer@192.168.0.84`。以下每一步都是實測會踩到的點，照抄即可。
+> 前置：`ssh kaecer@kmacmini`。以下每一步都是實測會踩到的點，照抄即可。
 
 ```bash
 cd ~/workspace/atlas
