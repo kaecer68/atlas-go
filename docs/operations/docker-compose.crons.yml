@@ -72,23 +72,16 @@ services:
     healthcheck:
       disable: true
 
-  # D1 決策退役 2026-08-17: Go BTM auto_daily_simulation 已承載真實演化; 本容器為 stub
-  # cron-darwinian:
-  #   image: atlas-cron:latest
-  #   container_name: atlas-cron-darwinian
-  #   restart: unless-stopped
-  #   environment:
-  #     - CRON_SCHEDULE=0 9 * * *
-  #     - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-  #     - DATABASE_URL=postgres://atlas:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in the shell env or the repo-root .env (gitignored); never hardcode it here}@host.docker.internal:55432/atlas?sslmode=disable
-  #   volumes:
-  #     - ./data:/app/data
-  #     - ./reports:/app/reports
-  #     - ./logs:/app/logs
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   healthcheck:
-  #     disable: true
+  # D1 決策退役 2026-08-17 / E17 實體移除 2026-09-26:
+  # cron-darwinian 服務與其退役的 shell stub 已一併刪除（`Makefile` 的
+  # CRON_IMAGE_TAGS 與 rebuild-cron 的 compose up 清單同步移除；守門
+  # tests/scripts/test-binary-freshness-guard.sh 要求兩邊數量相等）。
+  # 真實 Darwinian 演化由 Go BTM `auto_daily_simulation` 承載，見
+  # internal/portfolio/darwinian_weights.go。請勿再於本檔或 repo 根
+  # docker-compose.yml 復活此服務。
+  # 生產注意：`docker compose up -d`（不帶 --remove-orphans）不會移除既有容器，
+  # 舊的 atlas-cron-darwinian 會繼續以 restart: unless-stopped 跑舊 image，
+  # 需 `docker compose up -d --remove-orphans` 或 `docker rm -f atlas-cron-darwinian`。
 
   cron-quote-backfill:
     image: atlas-cron:latest

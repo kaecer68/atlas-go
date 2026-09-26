@@ -78,7 +78,7 @@ curl -fsS http://localhost:18080/health && curl -s localhost:18080/api/version
 > `git pull → make rebuild-all → 驗證 /health → 回報`。
 
 > ⚠️ **Darwinian state 同步（2026-08-27 起）**：`data/state/darwinian_history.jsonl` 不是 git
-> tracked，部署不會自動帶過去。任何會**重建/重啟 atlas-go 或 atlas-cron-darwinian 容器**的部署，
+> tracked，部署不會自動帶過去。任何會**重建/重啟 atlas-go 容器**的部署，
 > 先跑 `~/workspace/atlas/scripts/sync-darwinian.sh`（union merge，只增不減），
 > 並遵守「sync 前容器必須停」的硬性規定（避免 torn line）。完整章節見
 > a2a-dev `~/workspace/a2a-dev/docs/deployment/IMAC-DEPLOY-RUNBOOK.md` §2.1（**iMac 時代文件，已退役，僅供歷史對照**）。
@@ -216,6 +216,7 @@ make check-binaries                        # 見坑⑦
 2. **非互動 ssh 沒有 docker**：`docker` 不在 PATH（`~/.orbstack/bin` / `/usr/local/bin`）。
 3. **`ATLAS_GIT_COMMIT` 是 compose 的 `:?` 必填**：`make` 目標會自帶；**裸跑** `docker compose up -d` 必須 `ATLAS_GIT_COMMIT=$(git rev-parse HEAD) docker compose up -d`。
 4. **cron image 必須覆蓋 compose 的每個 build-only cron service**：`CRON_IMAGE_TAGS` 曾漏掉 `atlas-cron-darwinian`（2026-09-23 修）→ 症狀 `No such image: atlas-cron-darwinian:latest`。`tests/scripts/test-binary-freshness-guard.sh` 現在以 `docker-compose.yml` 為準逐一比對。
+   **反向同樣會紅**：移除某個 cron service 時，必須同時刪 `CRON_IMAGE_TAGS` 的對應 tag 與 `rebuild-cron` 的 `compose up --no-build` 服務清單（守門要求兩邊數量相等）；`cron-darwinian` 於 2026-09-26（E17）依此整併移除。
 5. **`environment:` 的 `${VAR:-}` 會蓋掉 `env_file` 同名字**：曾讓 8 個服務的 `ATLAS_LIVENESS_TOKEN` 變空、cron 的 task_liveness ping 靜默死亡（#1921/#1922 修）。
 6. **host port 契約**：`atlas-postgres` **55432**、`grafana` **3001**（3000 是 gitea）、`redis` 16379、`atlas` 18080、`fubon-proxy` 18081、`onepager` 18090。repo compose 的預設（5432/3000）是 dev 用，靠步驟 2 的 `.env` 覆寫。
 7. **`make check-binaries` 的語意**：比對「binary buildinfo commit vs HEAD」，所以 compose/docs-only commit 也會報 STALE（非真漂移）；script 另有 `TEMP_FILES[@]` 空陣列在 bash 3.2 崩潰的 bug（#1923 修）。
