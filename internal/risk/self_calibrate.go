@@ -418,17 +418,11 @@ func persistCalibrationOverlay(report *CalibrationReport, now time.Time) {
 	path := config.GetCalibratedOverlayPath()
 	entries := make(map[string]config.CalibrationOverlayEntry, len(report.Changes))
 	for _, c := range report.Changes {
-		// One extra SSOT read per accepted parameter per round (daily): it keeps
-		// the reconciliation baseline exact instead of derived from live state.
-		ssot, _ := config.SSOTParameterValue(c.Name)
-		entries[c.Name] = config.CalibrationOverlayEntry{
-			Value:        c.After,
-			Before:       c.Before,
-			SSOT:         ssot,
-			CalibratedAt: now,
-			Method:       "bayesian_optimization",
-			Rationale:    c.Rationale,
-		}
+		// The entry resolves its own SSOT baseline (one extra SSOT read per
+		// accepted parameter per round, i.e. daily), which keeps the
+		// reconciliation baseline exact instead of derived from live state.
+		entries[c.Name] = config.CalibratedEntryForParameter(
+			c.Name, c.After, c.Before, "bayesian_optimization", c.Rationale, now)
 	}
 
 	if path == "" {

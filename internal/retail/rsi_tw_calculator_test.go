@@ -749,3 +749,124 @@ func TestSetParams(t *testing.T) {
 		t.Errorf("SetParams didn't persist: got %f, want 999", stored.C1VeryBullishThreshold.Value)
 	}
 }
+
+// writeRSITwMacroFixture writes the macro snapshots CalibrateRSITw needs.
+func writeRSITwMacroFixture(t *testing.T, dir string, days int) {
+	t.Helper()
+	macroDir := filepath.Join(dir, "data", "state", "macro")
+	if err := os.MkdirAll(macroDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := range days {
+		ts := time.Date(2026, 7, 1+i, 8, 0, 0, 0, time.UTC)
+		data := map[string]any{
+			"recorded_at":           ts.Format(time.RFC3339),
+			"retail_margin_balance": map[string]any{"value": 5000.0 + float64(i)*100},
+			"vix":                   map[string]any{"value": 22.0 + float64(i%5)},
+			"foreign_investor_net":  map[string]any{"value": 1_000_000_000.0},
+			"domestic_fund_net":     map[string]any{"value": 500_000_000.0},
+		}
+		raw, _ := json.Marshal(data)
+		if err := os.WriteFile(filepath.Join(macroDir, fmt.Sprintf("2026-07-%02d.json", 1+i)), raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(macroDir, "latest.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCalibrateRSITw_PersistsToOverlayNotSSOT is the FU-20260926-07 contract for
+// the RSI-tw calibrator: the calibrated parameters and the last score land in the
+// calibrated-parameters overlay under the mounted data/ tree, while
+// configs/parameters.json (the reviewed SSOT) stays byte-identical.
+func TestCalibrateRSITw_PersistsToOverlayNotSSOT(t *testing.T) {
+	dir := t.TempDir()
+	writeRSITwMacroFixture(t, dir, 15)
+
+	ssotPath := filepath.Join(dir, "configs", "parameters.json")
+	if err := os.MkdirAll(filepath.Dir(ssotPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ssotJSON := `{"rsi_tw":{"a1_weight":{"value":0.25},"last_calibrated_score":{"value":0,"source":"heuristic"}}}`
+	if err := os.WriteFile(ssotPath, []byte(ssotJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	overlayPath := config.CalibrationOverlayPath(dir)
+
+	previousSSOT := config.GetParametersConfigPath()
+	previousOverlay := config.GetCalibratedOverlayPath()
+	config.SetParametersConfigPath(ssotPath)
+	config.SetCalibratedOverlayPath(overlayPath)
+	config.ResetParametersConfig()
+	defer func() {
+		config.SetParametersConfigPath(previousSSOT)
+		config.SetCalibratedOverlayPath(previousOverlay)
+		config.ResetParametersConfig()
+	}()
+
+	report, err := CalibrateRSITw(dir)
+	if err != nil {
+		t.Fatalf("CalibrateRSITw: %v", err)
+	}
+
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay was not written")
+	}
+	if ov.Source != "rsi_tw_calibrate" {
+		t.Errorf("overlay source = %q, want rsi_tw_calibrate", ov.Source)
+	}
+
+	const scorePath = "rsi_tw.last_calibrated_score.value"
+	scoreEntry, ok := ov.Entries[scorePath]
+	if !ok {
+		t.Fatalf("overlay has no %s entry: %+v", scorePath, ov.Entries)
+	}
+	if got, ok := scoreEntry.Value.(float64); !ok || got != report.Score {
+		t.Errorf("persisted score = %#v, want %v", scoreEntry.Value, report.Score)
+	}
+	if _, ok := ov.Entries["rsi_tw.last_calibrated_score.source"]; !ok {
+		t.Errorf("overlay missing score source entry: %+v", ov.Entries)
+	}
+
+	// Every reported change must be reproducible from the overlay.
+	for _, ch := range report.Changes {
+		p := "rsi_tw." + ch.Parameter + ".value"
+		entry, ok := ov.Entries[p]
+		if !ok {
+			t.Errorf("overlay missing entry for reported change %s: %+v", p, ov.Entries)
+			continue
+		}
+		if got, ok := entry.Value.(float64); !ok || got != ch.After {
+			t.Errorf("overlay %s = %#v, want %v", p, entry.Value, ch.After)
+		}
+	}
+
+	// The SSOT file must be untouched.
+	after, err := os.ReadFile(ssotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != ssotJSON {
+		t.Errorf("SSOT document rewritten by the RSI-tw calibrator:\nbefore=%s\nafter=%s", ssotJSON, after)
+	}
+}
+
+// TestCalibrateRSITw_NoOverlayPathIsNotFatal pins the disabled-overlay behaviour:
+// the report is still returned, nothing is persisted, nothing panics.
+func TestCalibrateRSITw_NoOverlayPathIsNotFatal(t *testing.T) {
+	dir := t.TempDir()
+	writeRSITwMacroFixture(t, dir, 15)
+
+	previousOverlay := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath(previousOverlay)
+
+	if _, err := CalibrateRSITw(dir); err != nil {
+		t.Fatalf("CalibrateRSITw with no overlay path: %v", err)
+	}
+}

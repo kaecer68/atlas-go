@@ -6,7 +6,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/constants"
@@ -42,20 +45,48 @@ import (
 // The overlay is opt-in per process (SetCalibratedOverlayPath). With no path
 // registered the loader behaves exactly as before, so tests and one-shot tools
 // can never pick up a stray file.
+//
+// # Two kinds of entry
+//
+//   - Named tunable (Path empty): the map key is a parameter-table name
+//     (internal/config/param_table.go) and the value is a scalar float64. Used by
+//     the calibrators whose parameter space is the table (risk self-calibration,
+//     config.CalibrateParameters). Applied to the parsed struct.
+//   - Dotted path (Path set): an explicit path into the parameters document
+//     (e.g. "industry.cycle_thresholds.value"), with an arbitrary JSON value.
+//     Used by calibrators that write nested blocks (factor weights, RSI-tw
+//     scores, conviction thresholds, industry cycle thresholds). Applied to the
+//     SSOT document before it is parsed, so nested and map-shaped values are
+//     possible without teaching the parameter table about them.
+//
+// Both kinds share the same document, the same fail-closed rules and the same
+// reporting.
 
 // calibrationOverlayVersion is the schema version of the overlay document.
-const calibrationOverlayVersion = "1"
+const calibrationOverlayVersion = "2"
 
-// CalibrationOverlayEntry is one adapted tunable.
+// OverlaySSOTBaseline is the SSOT state an overlay entry was reconciled
+// against. A nil baseline means "not reconciled yet" (the entry was written by a
+// process that has not loaded it since); Present=false means the path/value did
+// not exist in the SSOT at reconciliation time.
+type OverlaySSOTBaseline struct {
+	Present bool `json:"present"`
+	Value   any  `json:"value,omitempty"`
+}
+
+// CalibrationOverlayEntry is one adapted tunable or nested path.
 type CalibrationOverlayEntry struct {
-	// Value is the calibrated (effective) value.
-	Value float64 `json:"value"`
-	// Before is the effective value this adaptation replaced.
-	Before float64 `json:"before"`
-	// SSOT is the configs/parameters.json value this entry was last reconciled
-	// against (0 = not reconciled yet, i.e. written by a process that has not
-	// restarted since). It is what makes a later charter edit detectable.
-	SSOT float64 `json:"ssot"`
+	// Path is the dotted JSON path inside the SSOT document. Empty = the map key
+	// is a parameter-table name (named tunable).
+	Path string `json:"path,omitempty"`
+	// Value is the calibrated (effective) value. float64 for named tunables, any
+	// JSON value for path entries.
+	Value any `json:"value"`
+	// Before is the effective value this adaptation replaced (audit only).
+	Before any `json:"before,omitempty"`
+	// SSOT is the SSOT state this entry was last reconciled against (nil = not
+	// reconciled yet). It is what makes a later charter edit detectable.
+	SSOT *OverlaySSOTBaseline `json:"ssot,omitempty"`
 	// CalibratedAt is when the adaptation was computed.
 	CalibratedAt time.Time `json:"calibrated_at"`
 	// Method names the calibration routine that produced the value
@@ -144,9 +175,9 @@ func SaveCalibrationOverlay(path string, ov *CalibrationOverlay) error {
 //
 // The merge is deliberate: a calibration round reports only the tunables it
 // actually changed, so a plain overwrite would silently drop the entries a
-// previous round wrote and revert those parameters to the SSOT value. An entry
-// that already exists keeps its reconciliation baseline unless the caller
-// supplies a fresh one.
+// previous round (or another calibrator) wrote and revert those values to the
+// SSOT. An entry that already exists keeps its reconciliation baseline unless
+// the caller supplies a fresh one.
 func UpdateCalibrationOverlay(path, source string, entries map[string]CalibrationOverlayEntry) (*CalibrationOverlay, error) {
 	if path == "" {
 		return nil, fmt.Errorf("calibration overlay path is empty")
@@ -158,11 +189,14 @@ func UpdateCalibrationOverlay(path, source string, entries map[string]Calibratio
 	if ov == nil {
 		ov = &CalibrationOverlay{Entries: map[string]CalibrationOverlayEntry{}}
 	}
-	for name, entry := range entries {
-		if prev, ok := ov.Entries[name]; ok && entry.SSOT == 0 {
+	for key, entry := range entries {
+		if prev, ok := ov.Entries[key]; ok && entry.SSOT == nil {
 			entry.SSOT = prev.SSOT
 		}
-		ov.Entries[name] = entry
+		if entry.CalibratedAt.IsZero() {
+			entry.CalibratedAt = time.Now()
+		}
+		ov.Entries[key] = entry
 	}
 	if source != "" {
 		ov.Source = source
@@ -174,34 +208,75 @@ func UpdateCalibrationOverlay(path, source string, entries map[string]Calibratio
 	return ov, nil
 }
 
-// SSOTParameterValue returns a parameter's value as written in the SSOT file,
-// ignoring the overlay. It re-reads the file so callers get the on-disk truth
-// rather than this process's live (possibly overlaid) value, which is exactly
-// what an overlay entry needs as its reconciliation baseline.
-func SSOTParameterValue(name string) (float64, bool) {
+// CalibratedEntryForParameter builds a named-tunable entry, resolving its SSOT
+// baseline from the SSOT file. A baseline that cannot be resolved is left nil
+// ("not reconciled yet") — the loader records it on the next start.
+func CalibratedEntryForParameter(name string, value, before float64, method, rationale string, at time.Time) CalibrationOverlayEntry {
+	return CalibrationOverlayEntry{
+		Value:        value,
+		Before:       before,
+		SSOT:         SSOTParameterBaseline(name),
+		CalibratedAt: at,
+		Method:       method,
+		Rationale:    rationale,
+	}
+}
+
+// CalibratedEntryForPath builds a dotted-path entry, resolving its SSOT baseline
+// from the SSOT document (Present=false when the path has no value there).
+func CalibratedEntryForPath(path string, value, before any, method, rationale string, at time.Time) CalibrationOverlayEntry {
+	return CalibrationOverlayEntry{
+		Path:         path,
+		Value:        value,
+		Before:       before,
+		SSOT:         SSOTPathBaseline(path),
+		CalibratedAt: at,
+		Method:       method,
+		Rationale:    rationale,
+	}
+}
+
+// SSOTParameterBaseline returns a named tunable's value as written in the SSOT
+// file, ignoring the overlay, or nil when it cannot be resolved.
+func SSOTParameterBaseline(name string) *OverlaySSOTBaseline {
 	accessor, ok := parameterTable[name]
 	if !ok {
-		return 0, false
+		return nil
 	}
-	path := GetParametersConfigPath()
-	if path == "" {
-		return 0, false
-	}
-	cfg, err := LoadParametersConfig(path)
+	_, cfg, _, err := loadParametersSource(GetParametersConfigPath())
 	if err != nil || cfg == nil {
-		return 0, false
+		return nil
 	}
-	return accessor.get(cfg), true
+	return &OverlaySSOTBaseline{Present: true, Value: accessor.get(cfg)}
+}
+
+// SSOTPathBaseline returns the value at a dotted path in the SSOT document,
+// ignoring the overlay, or nil when the document or the path cannot be read.
+func SSOTPathBaseline(path string) *OverlaySSOTBaseline {
+	raw, _, _, err := loadParametersSource(GetParametersConfigPath())
+	if err != nil || len(raw) == 0 {
+		return nil
+	}
+	doc, err := decodeParametersDocument(raw)
+	if err != nil {
+		return nil
+	}
+	value, ok := getJSONPath(doc, path)
+	if !ok {
+		return &OverlaySSOTBaseline{Present: false}
+	}
+	return &OverlaySSOTBaseline{Present: true, Value: value}
 }
 
 // CalibrationOverlayDiff is one applied adaptation, carrying both the SSOT and
 // the effective value so the caller can report the drift it just layered in.
 type CalibrationOverlayDiff struct {
-	Name         string    `json:"name"`
-	SSOT         float64   `json:"ssot"`
-	Effective    float64   `json:"effective"`
-	Before       float64   `json:"before"`
-	Ratio        float64   `json:"ratio"`
+	Key          string    `json:"key"`
+	Path         string    `json:"path,omitempty"`
+	SSOT         any       `json:"ssot,omitempty"`
+	Effective    any       `json:"effective"`
+	Before       any       `json:"before,omitempty"`
+	Ratio        float64   `json:"ratio,omitempty"`
 	CalibratedAt time.Time `json:"calibrated_at"`
 	Method       string    `json:"method,omitempty"`
 }
@@ -210,33 +285,35 @@ type CalibrationOverlayDiff struct {
 type CalibrationOverlayReport struct {
 	Path        string
 	Applied     []CalibrationOverlayDiff
-	Unknown     []string // entries naming a parameter the parameter table does not know
+	Unknown     []string // entries whose parameter/path does not exist in the SSOT
 	Invalidated []string // entries dropped because the SSOT value moved
 	Reconciled  bool     // the on-disk overlay was rewritten
 	Err         error
 }
 
-// AppliedNames returns the names of the parameters the overlay changed.
-func (r CalibrationOverlayReport) AppliedNames() []string {
-	names := make([]string, 0, len(r.Applied))
+// AppliedKeys returns the map keys of the entries the overlay changed.
+func (r CalibrationOverlayReport) AppliedKeys() []string {
+	keys := make([]string, 0, len(r.Applied))
 	for _, d := range r.Applied {
-		names = append(names, d.Name)
+		keys = append(keys, d.Key)
 	}
-	return names
+	return keys
 }
 
 // ApplyCalibratedOverlayLayer layers the registered overlay onto cfg and returns
-// a report of what changed.
+// the (possibly replaced) configuration plus a report of what changed. ssotRaw is
+// the SSOT document cfg was parsed from (nil when the SSOT file is missing); it
+// is what dotted-path entries are applied to.
 //
 // It is deliberately non-fatal: an unreadable or malformed overlay is logged and
 // ignored, so a broken overlay can never stop the process from starting on the
-// SSOT values. Entries for unknown parameters are dropped (they cannot be
-// applied, and keeping them would only hide a typo), and entries whose SSOT
-// baseline moved are dropped so a reviewed charter edit wins.
-func ApplyCalibratedOverlayLayer(cfg *ParametersConfig) CalibrationOverlayReport {
+// SSOT values. Entries naming an unknown parameter or path are dropped (they
+// cannot be applied, and keeping them would only hide a typo), and entries whose
+// SSOT baseline moved are dropped so a reviewed charter edit wins.
+func ApplyCalibratedOverlayLayer(cfg *ParametersConfig, ssotRaw []byte) (*ParametersConfig, CalibrationOverlayReport) {
 	report := CalibrationOverlayReport{Path: GetCalibratedOverlayPath()}
 	if cfg == nil || report.Path == "" {
-		return report
+		return cfg, report
 	}
 
 	ov, err := LoadCalibrationOverlay(report.Path)
@@ -244,88 +321,151 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig) CalibrationOverlayReport
 		report.Err = err
 		logging.Warn("calibration_overlay", "overlay_unreadable",
 			logging.FStr("path", report.Path), logging.Err(err))
-		return report
+		return cfg, report
 	}
 	if ov == nil || len(ov.Entries) == 0 {
-		return report
+		return cfg, report
 	}
 
-	names := make([]string, 0, len(ov.Entries))
-	for name := range ov.Entries {
-		names = append(names, name)
+	keys := make([]string, 0, len(ov.Entries))
+	for key := range ov.Entries {
+		keys = append(keys, key)
 	}
-	sort.Strings(names)
+	sort.Strings(keys)
 
 	reconcile := false
-	for _, name := range names {
-		entry := ov.Entries[name]
-		accessor, ok := parameterTable[name]
+
+	// ---- phase 1: dotted-path entries patch the SSOT document ----
+	pathKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if ov.Entries[key].Path != "" {
+			pathKeys = append(pathKeys, key)
+		}
+	}
+	var doc map[string]any
+	patched := false
+	if len(pathKeys) > 0 {
+		doc, err = decodeParametersDocument(ssotRaw)
+		if err != nil {
+			// No SSOT document to patch: the entries cannot be validated against
+			// the SSOT, so they are dropped loudly rather than applied blind.
+			for _, key := range pathKeys {
+				report.Unknown = append(report.Unknown, key)
+				delete(ov.Entries, key)
+				reconcile = true
+				logging.Warn("calibration_overlay", "overlay_path_entry_dropped_no_ssot_document",
+					logging.FStr("key", key), logging.FStr("path", ov.Entries[key].Path), logging.Err(err))
+			}
+		} else {
+			for _, key := range pathKeys {
+				entry := ov.Entries[key]
+				if !containerExists(doc, entry.Path) {
+					report.Unknown = append(report.Unknown, key)
+					delete(ov.Entries, key)
+					reconcile = true
+					logging.Warn("calibration_overlay", "overlay_entry_unknown_path",
+						logging.FStr("key", key), logging.FStr("path", entry.Path))
+					continue
+				}
+				curve, _ := getJSONPath(doc, entry.Path)
+				if !baselineMatches(entry.SSOT, curve) {
+					report.Invalidated = append(report.Invalidated, key)
+					delete(ov.Entries, key)
+					reconcile = true
+					logging.Warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
+						logging.FStr("key", key), logging.FStr("path", entry.Path),
+						logging.FStr("reconciled_against", describeBaseline(entry.SSOT)),
+						logging.FStr("ssot_now", describeJSONValue(curve)))
+					continue
+				}
+				if !setJSONPath(doc, entry.Path, entry.Value) {
+					report.Unknown = append(report.Unknown, key)
+					delete(ov.Entries, key)
+					reconcile = true
+					logging.Warn("calibration_overlay", "overlay_entry_path_not_settable",
+						logging.FStr("key", key), logging.FStr("path", entry.Path))
+					continue
+				}
+				patched = true
+				diff := newOverlayDiff(key, entry, curve)
+				report.Applied = append(report.Applied, diff)
+				logOverlayApplication(diff)
+				if entry.SSOT == nil {
+					entry.SSOT = baselineOf(curve)
+					ov.Entries[key] = entry
+					reconcile = true
+				}
+			}
+		}
+	}
+	if patched {
+		out, err := json.Marshal(doc)
+		if err != nil {
+			report.Err = fmt.Errorf("marshal patched parameters document: %w", err)
+			logging.Error("calibration_overlay", "overlay_patch_marshal_failed", logging.Err(err))
+			return cfg, report
+		}
+		patchedCfg, err := parseParametersBytes(out)
+		if err != nil {
+			// Fail closed: keep the SSOT configuration rather than running on a
+			// document we cannot validate.
+			report.Err = err
+			logging.Error("calibration_overlay", "overlay_patch_parse_failed", logging.Err(err))
+			return cfg, report
+		}
+		cfg = patchedCfg
+	}
+
+	// ---- phase 2: named tunables, applied through the parameter table ----
+	// Re-derive the key list: phase 1 may have dropped entries, and a dropped key
+	// must not be re-read as a zero-valued named entry here.
+	keys = keys[:0]
+	for key := range ov.Entries {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		entry := ov.Entries[key]
+		if entry.Path != "" {
+			continue
+		}
+		accessor, ok := parameterTable[key]
 		if !ok {
-			report.Unknown = append(report.Unknown, name)
-			delete(ov.Entries, name)
+			report.Unknown = append(report.Unknown, key)
+			delete(ov.Entries, key)
 			reconcile = true
 			logging.Warn("calibration_overlay", "overlay_entry_unknown_parameter",
-				logging.FStr("param", name), logging.FStr("path", report.Path))
+				logging.FStr("param", key), logging.FStr("path", report.Path))
 			continue
 		}
-
 		ssot := accessor.get(cfg)
-		if entry.SSOT != 0 && !almostEqual(entry.SSOT, ssot) {
-			// The SSOT value moved after this entry was reconciled (a reviewed
-			// edit to configs/parameters.json, or an unrelated calibrator that
-			// still writes that file). The adaptation was derived from the old
-			// value, so it is stale: drop it, let the charter win, and say so.
-			report.Invalidated = append(report.Invalidated, name)
-			delete(ov.Entries, name)
+		if !baselineMatches(entry.SSOT, ssot) {
+			report.Invalidated = append(report.Invalidated, key)
+			delete(ov.Entries, key)
 			reconcile = true
 			logging.Warn("calibration_overlay", "overlay_entry_invalidated_ssot_moved",
-				logging.FStr("param", name),
-				logging.FFloat64("reconciled_against", entry.SSOT),
-				logging.FFloat64("ssot_now", ssot),
-				logging.FFloat64("overlay_value", entry.Value))
+				logging.FStr("param", key),
+				logging.FStr("reconciled_against", describeBaseline(entry.SSOT)),
+				logging.FStr("ssot_now", describeJSONValue(ssot)),
+				logging.FStr("overlay_value", describeJSONValue(entry.Value)))
 			continue
 		}
-
-		accessor.set(cfg, entry.Value)
-
-		ratio := 0.0
-		if ssot != 0 {
-			ratio = entry.Value / ssot
+		value, ok := numericValue(entry.Value)
+		if !ok {
+			report.Unknown = append(report.Unknown, key)
+			delete(ov.Entries, key)
+			reconcile = true
+			logging.Warn("calibration_overlay", "overlay_entry_non_numeric_parameter",
+				logging.FStr("param", key), logging.FStr("value", describeJSONValue(entry.Value)))
+			continue
 		}
-		report.Applied = append(report.Applied, CalibrationOverlayDiff{
-			Name:         name,
-			SSOT:         ssot,
-			Effective:    entry.Value,
-			Before:       entry.Before,
-			Ratio:        ratio,
-			CalibratedAt: entry.CalibratedAt,
-			Method:       entry.Method,
-		})
-
-		// Operational visibility (requirement 3 above): every applied entry is
-		// announced with both values. A ratio outside the calibration loops'
-		// documented per-round window [0.3x, 3x] means the overlay is not the
-		// product of a single accepted step — a human should look.
-		logging.Info("calibration_overlay", "overlay_entry_applied",
-			logging.FStr("param", name),
-			logging.FFloat64("ssot", ssot),
-			logging.FFloat64("effective", entry.Value),
-			logging.FFloat64("ratio", ratio),
-			logging.FStr("method", entry.Method),
-			logging.FStr("calibrated_at", entry.CalibratedAt.Format(time.RFC3339)))
-		if ssot != 0 && (ratio < 1.0/3.0 || ratio > 3.0) {
-			logging.Warn("calibration_overlay", "overlay_entry_outside_single_step_window",
-				logging.FStr("param", name),
-				logging.FFloat64("ssot", ssot),
-				logging.FFloat64("effective", entry.Value),
-				logging.FFloat64("ratio", ratio))
-		}
-
-		if entry.SSOT == 0 {
-			// First startup after this entry was written: record the SSOT it is
-			// layered on, so a later charter edit can invalidate it.
-			entry.SSOT = ssot
-			ov.Entries[name] = entry
+		accessor.set(cfg, value)
+		diff := newOverlayDiff(key, entry, ssot)
+		report.Applied = append(report.Applied, diff)
+		logOverlayApplication(diff)
+		if entry.SSOT == nil {
+			entry.SSOT = baselineOf(ssot)
+			ov.Entries[key] = entry
 			reconcile = true
 		}
 	}
@@ -346,7 +486,7 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig) CalibrationOverlayReport
 			logging.FInt("invalidated", len(report.Invalidated)),
 			logging.FInt("unknown", len(report.Unknown)))
 	}
-	return report
+	return cfg, report
 }
 
 // LoadEffectiveParametersConfig loads the SSOT parameters file and layers the
@@ -354,17 +494,213 @@ func ApplyCalibratedOverlayLayer(cfg *ParametersConfig) CalibrationOverlayReport
 // actually runs on; LoadParametersConfig stays the raw SSOT read used by audit
 // paths (integrity checks, diffing, tooling).
 func LoadEffectiveParametersConfig(path string) (*ParametersConfig, error) {
-	cfg, err := LoadParametersConfig(path)
+	raw, cfg, _, err := loadParametersSource(path)
 	if err != nil {
 		return nil, err
 	}
-	ApplyCalibratedOverlayLayer(cfg)
-	return cfg, nil
+	effective, _ := ApplyCalibratedOverlayLayer(cfg, raw)
+	return effective, nil
 }
 
-// almostEqual compares two parameter values with a tolerance that absorbs the
-// float64 round-trip through JSON without hiding a real change.
-func almostEqual(a, b float64) bool {
-	scale := math.Max(1, math.Max(math.Abs(a), math.Abs(b)))
-	return math.Abs(a-b) <= 1e-9*scale
+// newOverlayDiff builds the audit/visibility record for one applied entry.
+func newOverlayDiff(key string, entry CalibrationOverlayEntry, ssot any) CalibrationOverlayDiff {
+	diff := CalibrationOverlayDiff{
+		Key:          key,
+		Path:         entry.Path,
+		SSOT:         ssot,
+		Effective:    entry.Value,
+		Before:       entry.Before,
+		CalibratedAt: entry.CalibratedAt,
+		Method:       entry.Method,
+	}
+	if ssotNum, ok := numericValue(ssot); ok {
+		if effNum, ok := numericValue(entry.Value); ok && ssotNum != 0 {
+			diff.Ratio = effNum / ssotNum
+		}
+	}
+	return diff
+}
+
+// logOverlayApplication reports one applied entry with both values. A numeric
+// ratio outside the calibration loops' documented per-round window [0.3x, 3x]
+// means the overlay is not the product of a single accepted step — a human
+// should look.
+func logOverlayApplication(diff CalibrationOverlayDiff) {
+	logging.Info("calibration_overlay", "overlay_entry_applied",
+		logging.FStr("key", diff.Key),
+		logging.FStr("json_path", diff.Path),
+		logging.FStr("ssot", describeJSONValue(diff.SSOT)),
+		logging.FStr("effective", describeJSONValue(diff.Effective)),
+		logging.FFloat64("ratio", diff.Ratio),
+		logging.FStr("method", diff.Method),
+		logging.FStr("calibrated_at", diff.CalibratedAt.Format(time.RFC3339)))
+	if diff.Ratio != 0 && (diff.Ratio < 1.0/3.0 || diff.Ratio > 3.0) {
+		logging.Warn("calibration_overlay", "overlay_entry_outside_single_step_window",
+			logging.FStr("key", diff.Key),
+			logging.FStr("ssot", describeJSONValue(diff.SSOT)),
+			logging.FStr("effective", describeJSONValue(diff.Effective)),
+			logging.FFloat64("ratio", diff.Ratio))
+	}
+}
+
+// baselineOf wraps a value found in the SSOT.
+func baselineOf(v any) *OverlaySSOTBaseline {
+	return &OverlaySSOTBaseline{Present: true, Value: v}
+}
+
+// baselineMatches reports whether an entry's recorded SSOT baseline still
+// describes the current SSOT value. A nil baseline means "not reconciled yet"
+// and always matches (the loader records it).
+func baselineMatches(baseline *OverlaySSOTBaseline, current any) bool {
+	if baseline == nil {
+		return true
+	}
+	if !baseline.Present {
+		return current == nil
+	}
+	return sameJSONValue(baseline.Value, current)
+}
+
+// describeBaseline renders a baseline for logs.
+func describeBaseline(baseline *OverlaySSOTBaseline) string {
+	if baseline == nil {
+		return "<not reconciled>"
+	}
+	if !baseline.Present {
+		return "<absent>"
+	}
+	return describeJSONValue(baseline.Value)
+}
+
+// describeJSONValue renders any JSON value compactly for logs.
+func describeJSONValue(v any) string {
+	if v == nil {
+		return "<absent>"
+	}
+	switch t := v.(type) {
+	case string:
+		return t
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
+	case bool:
+		return strconv.FormatBool(t)
+	}
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(encoded)
+}
+
+// numericValue extracts a float from an overlay/SSOT value.
+func numericValue(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case float32:
+		return float64(t), true
+	case int:
+		return float64(t), true
+	case int64:
+		return float64(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// sameJSONValue compares two JSON-decoded values.
+func sameJSONValue(a, b any) bool {
+	aNum, aOK := numericValue(a)
+	bNum, bOK := numericValue(b)
+	if aOK || bOK {
+		if !aOK || !bOK {
+			return false
+		}
+		return math.Abs(aNum-bNum) <= 1e-9*math.Max(1, math.Max(math.Abs(aNum), math.Abs(bNum)))
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+// decodeParametersDocument decodes a parameters document into a generic JSON
+// map. A nil or empty document is an error: there is nothing to patch against.
+func decodeParametersDocument(raw []byte) (map[string]any, error) {
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("no parameters document to patch")
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("decode parameters document: %w", err)
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("parameters document is not a JSON object")
+	}
+	return doc, nil
+}
+
+// containerExists reports whether every segment of path except the last exists
+// in doc and is a JSON object. The leaf itself may be absent: calibration loops
+// legitimately create new leaves (e.g. a newly calibrated industry) inside an
+// existing SSOT section, while a wrong section name must still be detected.
+func containerExists(doc map[string]any, path string) bool {
+	segments := strings.Split(path, ".")
+	if len(segments) == 0 || segments[0] == "" {
+		return false
+	}
+	var current any = doc
+	for _, segment := range segments[:len(segments)-1] {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return false
+		}
+		next, ok := obj[segment]
+		if !ok {
+			return false
+		}
+		current = next
+	}
+	_, ok := current.(map[string]any)
+	return ok
+}
+
+// getJSONPath returns the value at a dotted path. It fails when any segment
+// (including the last) is missing or when an intermediate segment is not an
+// object. Only object segments are supported (no array indexing).
+func getJSONPath(doc map[string]any, path string) (any, bool) {
+	if path == "" {
+		return nil, false
+	}
+	var current any = doc
+	for _, segment := range strings.Split(path, ".") {
+		obj, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		next, ok := obj[segment]
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+// setJSONPath sets the value at a dotted path. The container must already exist
+// (see containerExists); the leaf is created when absent.
+func setJSONPath(doc map[string]any, path string, value any) bool {
+	if !containerExists(doc, path) {
+		return false
+	}
+	segments := strings.Split(path, ".")
+	obj := doc
+	for _, segment := range segments[:len(segments)-1] {
+		next, ok := obj[segment].(map[string]any)
+		if !ok {
+			return false
+		}
+		obj = next
+	}
+	obj[segments[len(segments)-1]] = value
+	return true
 }

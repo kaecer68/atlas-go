@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 type CalibratedOrder struct {
@@ -139,18 +140,64 @@ func applyFactorWeights(w map[FactorType]float64) {
 	if params.FactorWeight.BaseWeights.Value == nil {
 		params.FactorWeight.BaseWeights.Value = make(map[string]float64)
 	}
+	before := make(map[string]float64, len(params.FactorWeight.BaseWeights.Value))
+	maps.Copy(before, params.FactorWeight.BaseWeights.Value)
+
 	for ft, v := range w {
 		params.FactorWeight.BaseWeights.Value[string(ft)] = v
 	}
 	now := time.Now()
 	params.FactorWeight.BaseWeights.LastCalibrated = &now
 	params.FactorWeight.BaseWeights.CalibrationMethod = "bayesian_search"
-	if p := config.GetParametersConfigPath(); p != "" {
-		if err := config.SnapshotToBackup(p); err != nil {
-			fmt.Printf("calibrator: snapshot_to_backup failed: %v\n", err)
-		}
-		_ = params.LockedSaveWithRollback(p)
+
+	persistFactorWeights(before, now)
+}
+
+// persistFactorWeights writes the factor weights to the calibrated-parameters
+// overlay (FU-20260926-07) instead of rewriting configs/parameters.json.
+//
+// configs/ is not bind-mounted, so the old in-place write landed in the
+// container's writable layer: invisible to git and lost on every container
+// recreate. The overlay lives under the bind-mounted data/ tree and is layered
+// back on top of the SSOT at load time.
+//
+// The complete weight map is written as a single entry: the search changes
+// several factors at once and the SSOT validation requires the full eight-factor
+// set, so a partial patch would be rejected when the overlay is applied. The
+// timestamp/method leaves carry the provenance the SSOT block used to hold.
+func persistFactorWeights(before map[string]float64, at time.Time) {
+	params := config.GetParametersConfig()
+	if params == nil {
+		return
 	}
+	path := config.GetCalibratedOverlayPath()
+	if path == "" {
+		logging.Warn("factor_weight_calibrate", "calibration_overlay_disabled",
+			"detail", "no calibrated-parameters overlay path registered; calibrated weights apply in memory only and will not survive a restart")
+		return
+	}
+	const weightsPath = "factor_weight.base_weights.value"
+	entries := map[string]config.CalibrationOverlayEntry{
+		weightsPath: config.CalibratedEntryForPath(
+			weightsPath, params.FactorWeight.BaseWeights.Value, before, "bayesian_search",
+			"eight-factor weights re-searched against historical order outcomes", at),
+		"factor_weight.base_weights.last_calibrated": config.CalibratedEntryForPath(
+			"factor_weight.base_weights.last_calibrated", at.Format(time.RFC3339), nil, "bayesian_search",
+			"timestamp of the factor weight search", at),
+		"factor_weight.base_weights.calibration_method": config.CalibratedEntryForPath(
+			"factor_weight.base_weights.calibration_method", "bayesian_search", nil, "bayesian_search",
+			"method that produced the factor weights", at),
+	}
+	ov, err := config.UpdateCalibrationOverlay(path, "factor_weight_calibrate", entries)
+	if err != nil {
+		logging.Error("factor_weight_calibrate", "calibration_overlay_write_failed",
+			logging.FStr("path", path), logging.Err(err))
+		return
+	}
+	logging.Info("factor_weight_calibrate", "calibration_persisted",
+		logging.FStr("path", path),
+		logging.FInt("factors", len(params.FactorWeight.BaseWeights.Value)),
+		logging.FInt("entries", len(ov.Entries)))
 }
 
 func searchWeights(orders []CalibratedOrder, current map[FactorType]float64) (map[FactorType]float64, float64, error) {

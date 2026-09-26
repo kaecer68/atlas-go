@@ -166,19 +166,71 @@ func CalibrateRSITw(workDir string) (*CalibrationReport, error) {
 		GetCalculator().SetParams(cfg.RSITw)
 	}
 
-	// Persist last calibrated score so PreTradeGate is non-zero after restart.
+	// Persist the calibrated values (and the last score) so PreTradeGate is
+	// non-zero after a restart.
 	cfg := config.GetParametersConfig()
 	cfg.RSITw.LastCalibratedScore.Value = report.Score
 	cfg.RSITw.LastCalibratedScore.Source = config.SourceCalibrated
 	cfg.RSITw.LastCalibratedScore.LastCalibrated = &report.Timestamp
-	if err := cfg.LockedSaveWithRollback(filepath.Join(workDir, "configs", "parameters.json")); err != nil {
-		logging.Error("rsi_tw_calibrate", "save_params_failed", "err", err.Error())
-		return report, fmt.Errorf("save calibrated params: %w", err)
+	if err := persistRSITwCalibration(report); err != nil {
+		return report, err
 	}
 
 	// Persist calibration report for API/history
 	saveCalibrationReport(workDir, report)
 	return report, nil
+}
+
+// persistRSITwCalibration writes the calibrated RSI-tw parameters to the
+// calibrated-parameters overlay (FU-20260926-07) instead of rewriting
+// configs/parameters.json.
+//
+// configs/ is not bind-mounted, so the old in-place write landed in the
+// container's writable layer: invisible to git and lost on every container
+// recreate. The overlay lives under the bind-mounted data/ tree and is layered
+// back on top of the SSOT at load time, entry by entry.
+//
+// A process without a registered overlay path (tests, one-shot tools) keeps the
+// calibrated values in memory only; that is logged loudly but is not an error,
+// because the caller cannot do anything about it. A registered path that cannot
+// be written IS an error: the result would silently vanish on restart.
+func persistRSITwCalibration(report *CalibrationReport) error {
+	path := config.GetCalibratedOverlayPath()
+	if path == "" {
+		logging.Warn("rsi_tw_calibrate", "calibration_overlay_disabled",
+			"detail", "no calibrated-parameters overlay path registered; calibrated values apply in memory only and will not survive a restart")
+		return nil
+	}
+
+	at := report.Timestamp
+	entries := make(map[string]config.CalibrationOverlayEntry, len(report.Changes)+3)
+	for _, ch := range report.Changes {
+		p := "rsi_tw." + ch.Parameter + ".value"
+		rationale := fmt.Sprintf("grid search over %d samples, improvement %.2f%% (evidence %s)",
+			ch.SampleSize, ch.ImprovementPct*100, ch.EvidenceQuality)
+		entries[p] = config.CalibratedEntryForPath(p, ch.After, ch.Before, ch.CalibrationMethod, rationale, at)
+	}
+
+	const scorePath = "rsi_tw.last_calibrated_score.value"
+	entries[scorePath] = config.CalibratedEntryForPath(scorePath, report.Score, nil, "grid_search_10pct",
+		"score of the last calibration run (PreTradeGate reads it after a restart)", at)
+	const scoreSourcePath = "rsi_tw.last_calibrated_score.source"
+	entries[scoreSourcePath] = config.CalibratedEntryForPath(scoreSourcePath, string(config.SourceCalibrated), nil,
+		"grid_search_10pct", "provenance of the last calibration score", at)
+	const scoreTimePath = "rsi_tw.last_calibrated_score.last_calibrated"
+	entries[scoreTimePath] = config.CalibratedEntryForPath(scoreTimePath, at.Format(time.RFC3339), nil,
+		"grid_search_10pct", "timestamp of the last calibration run", at)
+
+	if _, err := config.UpdateCalibrationOverlay(path, "rsi_tw_calibrate", entries); err != nil {
+		logging.Error("rsi_tw_calibrate", "calibration_overlay_write_failed",
+			logging.FStr("path", path), logging.Err(err))
+		return fmt.Errorf("save calibrated params: %w", err)
+	}
+	logging.Info("rsi_tw_calibrate", "calibration_persisted",
+		logging.FStr("path", path),
+		logging.FInt("changes", len(report.Changes)),
+		logging.FFloat64("score", report.Score))
+	return nil
 }
 
 func applyChange(p *config.RSITwParameters, ch CalibrationMetadata) {

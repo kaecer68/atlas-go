@@ -2,11 +2,9 @@ package industry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -391,7 +389,20 @@ func extractProfit(data map[string]float64) float64 {
 	return 0
 }
 
-func RecalibrateThresholds(revenuePath, configPath string) error {
+// RecalibrateThresholds recomputes the per-industry cycle thresholds and
+// persists them to the calibrated-parameters overlay (FU-20260926-07).
+//
+// It used to rewrite configs/parameters.json in place. That file is baked into
+// the image and configs/ is not bind-mounted, so the write landed in the
+// container's writable layer: invisible to git, lost on the next container
+// recreate, and impossible to tell apart from the reviewed SSOT while the
+// container ran. The overlay lives under the bind-mounted data/ tree and is
+// layered back on top of the SSOT at load time.
+//
+// The path is the process-wide registered overlay (config.SetCalibratedOverlayPath);
+// callers must not pass a file path any more, so a future caller cannot
+// accidentally reintroduce the SSOT write.
+func RecalibrateThresholds(revenuePath string) error {
 	results, err := CalibrateThresholdsFromFile(revenuePath)
 	if err != nil {
 		return fmt.Errorf("recalibrate: %w", err)
@@ -399,38 +410,41 @@ func RecalibrateThresholds(revenuePath, configPath string) error {
 	if len(results) == 0 {
 		return fmt.Errorf("recalibrate: no data available")
 	}
-	return writeCalibratedConfig(configPath, results)
+	return writeCalibratedOverlay(results)
 }
 
-func writeCalibratedConfig(configPath string, results []CalibrationResult) error {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("read config: %w", err)
+// CycleThresholdPath returns the dotted parameters.json path of one industry's
+// calibrated cycle thresholds. Exported so tests can assert against the same
+// path the calibrator writes.
+func CycleThresholdPath(industryID string) string {
+	return "industry.cycle_thresholds.value." + industryID
+}
+
+// writeCalibratedOverlay persists the calibrated cycle thresholds to the
+// calibrated-parameters overlay (FU-20260926-07).
+//
+// Three entries carry what the old in-place rewrite of parameters.json did:
+// the provenance string, the calibration timestamp, and one entry per industry
+// with its six percentile thresholds. The SSOT block keeps whatever it shipped
+// with (including its `todo` annotation), because the SSOT is not this loop's to
+// rewrite.
+func writeCalibratedOverlay(results []CalibrationResult) error {
+	path := configpkg.GetCalibratedOverlayPath()
+	if path == "" {
+		return fmt.Errorf("recalibrate: no calibrated-parameters overlay path registered")
 	}
-	var config map[string]any
-	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("parse config: %w", err)
-	}
-	industryCfg, _ := config["industry"].(map[string]any)
-	if industryCfg == nil {
-		industryCfg = make(map[string]any)
-		config["industry"] = industryCfg
-	}
-	ct, _ := industryCfg["cycle_thresholds"].(map[string]any)
-	if ct == nil {
-		ct = make(map[string]any)
-		industryCfg["cycle_thresholds"] = ct
-	}
-	ct["source"] = "percentile_based"
-	ct["calibrated_at"] = time.Now().Format(time.RFC3339)
-	delete(ct, "todo")
-	value, _ := ct["value"].(map[string]any)
-	if value == nil {
-		value = make(map[string]any)
-		ct["value"] = value
-	}
+	now := time.Now()
+	const provenance = "per-industry thresholds derived from historical revenue and profit growth percentiles"
+
+	entries := make(map[string]configpkg.CalibrationOverlayEntry, len(results)+2)
+	entries["industry.cycle_thresholds.source"] = configpkg.CalibratedEntryForPath(
+		"industry.cycle_thresholds.source", "percentile_based", nil, "percentile_based", provenance, now)
+	entries["industry.cycle_thresholds.calibrated_at"] = configpkg.CalibratedEntryForPath(
+		"industry.cycle_thresholds.calibrated_at", now.Format(time.RFC3339), nil, "percentile_based", provenance, now)
+
 	for _, r := range results {
-		value[r.IndustryID] = map[string]float64{
+		p := CycleThresholdPath(r.IndustryID)
+		value := map[string]float64{
 			"expansion_revenue_pct": math.Round(r.P75*10000) / 10000,
 			"expansion_profit_pct":  math.Round(r.P75*10000) / 10000,
 			"recovery_revenue_pct":  math.Round(r.P50*10000) / 10000,
@@ -438,13 +452,17 @@ func writeCalibratedConfig(configPath string, results []CalibrationResult) error
 			"mature_revenue_pct":    math.Round(r.P25*10000) / 10000,
 			"mature_profit_pct":     math.Round(r.P25*10000) / 10000,
 		}
+		rationale := fmt.Sprintf("P25/P50/P75 of revenue and profit growth over %d samples", r.SampleSize)
+		entries[p] = configpkg.CalibratedEntryForPath(p, value, nil, "percentile_based", rationale, now)
 	}
-	out, err := json.MarshalIndent(config, "", "  ")
+
+	ov, err := configpkg.UpdateCalibrationOverlay(path, "auto_threshold_calibrate", entries)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return fmt.Errorf("recalibrate: write overlay: %w", err)
 	}
-	out = append(out, '\n')
-	return configpkg.LockedWriteFileWithRollback(configPath, out)
+	logging.Info("auto_threshold_calibrate", "calibration_persisted",
+		"path", path, "industries", len(results), "entries", len(ov.Entries))
+	return nil
 }
 
 // classifyFinMindError 把 FinMind API / transport error 分類到 monitoring.MetricDataAggregatorFailures 的
