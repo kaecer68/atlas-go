@@ -167,7 +167,21 @@ EOF
   : >"$dir/create.log"
   head=$(git -C "$ROOT" rev-parse HEAD)
 
-  mkdir -p "$dir/freshness"
+  # Isolation (2026-09-26): run an isolated COPY of the checker. It derives
+  # REPO_ROOT from its own path and then inspects <REPO_ROOT>/bin/atlas*, so
+  # running the checkout's script made this test depend on the CALLER's host
+  # binaries. With a stale bin/atlas-mcp the checker exits 1 here — and because
+  # this invocation had no `|| rc=$?` under `set -e`, the whole suite died at
+  # this line with rc=1 and EMPTY stdout+stderr: `make ci-gate` (gate 1 of
+  # .githooks/pre-push) printed only "❌ make ci-gate FAILED" and every push from
+  # that clone was blocked with no explanation and no way to act on it
+  # (measured 2026-09-26 in the shared clone: bin/atlas-mcp=acdff93c while the
+  # last build input was 92c3c823). What is under test here is TEMPORARY
+  # CLEANUP, not the caller's binaries, so the checker must not see them.
+  mkdir -p "$dir/tool" "$dir/freshness"
+  cp "$CHECK" "$dir/tool/check-binary-freshness.sh"
+
+  local rc=0
   DOCKER_BIN="$dir/docker" \
     FRESHNESS_TMPDIR="$dir/freshness" \
     FAKE_FRESHNESS_TMPDIR="$dir/freshness" \
@@ -175,14 +189,21 @@ EOF
     FAKE_DOCKER_CREATE_LOG="$dir/create.log" \
     FAKE_DOCKER_RM_LOG="$dir/rm.log" \
     FAKE_DOCKER_HEAD="$head" \
-    "$CHECK" >/dev/null
+    bash "$dir/tool/check-binary-freshness.sh" >/dev/null || rc=$?
+  test "$rc" -eq 0 || fail "freshness check exited $rc in the cleanup-success fixture (this line must never kill the suite silently)"
 
   # Derive the expectation from the script itself (pre-existing drift fixed
   # 2026-09-23: this used to hardcode 6 while check-binary-freshness.sh inspects
   # 5 image binaries -> the guard test was red on main). The real invariant is
   # "every inspected image is cleaned up", not a magic number.
   local expected_rm
-  expected_rm=$(grep -c '^check_image_binary ' "$CHECK")
+  # Indentation-tolerant (2026-09-26): the image checks are now inside
+  # `if [ "$HOST_ONLY" -eq 0 ]; then ...`, so a `^check_image_binary` anchor
+  # silently derived 0 — and because a zero-match `grep -c` exits 1, the plain
+  # `$(...)` assignment under `set -e` killed the suite with empty output (the
+  # same silent-death class this file was fixed for above). `|| true` + a
+  # whitespace-tolerant pattern make the derivation immune to both.
+  expected_rm=$(grep -cE '^[[:space:]]*check_image_binary ' "$CHECK" || true)
   [ "$expected_rm" -gt 0 ] || fail "could not derive image checks from $CHECK"
   test "$(wc -l <"$dir/rm.log" | tr -d ' ')" -eq "$expected_rm" || \
     fail "successful freshness check did not clean all temporary containers (rm=$(wc -l <"$dir/rm.log" | tr -d ' ') expected=$expected_rm)"
