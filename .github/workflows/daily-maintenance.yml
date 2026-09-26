@@ -9,44 +9,50 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# 2026-09-26（E21）：本 workflow 的三個 job 原本每天呼叫 7 個**不存在**的 atlas CLI 子命令
+# （`weights adjust --apply`、`weights report`、`prism status/balance/report`、
+# `reflexivity report/alert`）。CLI（cmd/atlas/main.go）當時只認位置子命令 `prism worker`，
+# 其餘 positional args 一律**靜默丟棄**並落到預設的 one-shot simulation ⇒ 七個命令全部
+# exit 0、三個 artifact 永遠是空的（「每天都綠、什麼都沒做」）。同一 PR 已在 CLI 端硬化：
+# 無法識別的位置參數 ⇒ 印 usage 並以 exit 2 結束，因此那些呼叫現在會**大聲失敗**而不是 no-op。
+#
+# 語意修正（換成真實來源，而不是把紅燈關掉）：那些報告的真實生產者一直是 **daemon 內的背景
+# 任務**（`prism_training` 6h、`prism_auto_balancer` 5m、`auto_daily_simulation`、
+# `evolution_health`；見 internal/apigateway/background.go 與 cmd/atlas/main.go 的 BTM 註冊）。
+# 三個 job 因此改為向 daemon **對外公開**的活性端點取得訊號
+# （GET /api/dashboard/task-liveness；`/api/dashboard/` 在 public-read 白名單內 ⇒ 免 API key，
+# 由 GitHub-hosted runner 直接查詢），並對「自己領域的必要任務」做真實斷言。
+# 為什麼要外部 vantage point：daemon 自己的 staleness 告警（internal/liveness/staleness.go
+# → alertmanager → Telegram）與被監控對象同生共死；GitHub runner 是唯一的局外觀察者，
+# 「整台主機／tunnel／daemon 掛掉」時仍會留下紅燈與 artifact。
+#
+# fail-closed 不變：#2029 移除的 `|| true` 與 `if-no-files-found: error` 全部保留；
+# 抓不到快照（連線失敗／非 200／JSON 壞／`status=degraded`／`tasks` 為空）一律 exit 2，
+# 並且**不寫** artifact —— 看不到快照不得等於綠燈。
+#
+# 三個 job 不再需要 Node／Go toolchain（原本為了跑「什麼都沒做」的 CLI 而 build 前端＋binary）。
+
 jobs:
   darwinian-adjust:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
-      with:
-        node-version: '22'
-
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
-
-    - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-      with:
-        go-version-file: go.mod
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Build
-      run: go build -o atlas-go ./cmd/atlas
-
-    - name: Run Darwinian Adjustment
+    # Darwinian 權重的真實來源 = 每日 auto simulation（internal/orchestrator/system.go 在
+    # session 收盤時 RecordOutcomeAt → PerformDailyAdjustment → Save → AppendSnapshot）
+    # 加上 evolution loop 的健康檢查（evolution_health，proposal/judge/promote/revert 四柱）。
+    # CI 端**不再**自己「跑一次調整」——那條路徑（scripts/darwinian_adjust.sh）已於組態層退役。
+    - name: "Darwinian maintenance tasks are alive (real source: daemon task-liveness)"
       env:
-        ATLAS_ENV: production
-        ATLAS_DATA_DIR: ./data
+        # 可選覆蓋；空字串 ⇒ 檢查腳本回退到內建的生產端點常數。
+        ATLAS_TASK_LIVENESS_URL: ${{ vars.ATLAS_TASK_LIVENESS_URL }}
       run: |
-        # 2026-09-26: 原本每個維護命令都接 `|| true` ⇒ 任一失敗都不會讓 step/job 變紅
-        # （同族「靜默失效」，見 #1944 / #2009）。實測：run 36222354977 的這一步是
-        # success，但 3 個報告 artifact 全部沒產生
-        # （log: `No files were found with the provided path: reports/darwinian_*.json`），
-        # 且連續 3 次 run 的 artifacts total_count = 0 ⇒「每天都綠、什麼都沒做」。
-        # 現改為 fail-closed：命令非 0 ⇒ 步驟紅燈（真實訊號，不再吞）。
-        ./atlas-go weights adjust --apply
-        ./atlas-go weights report
+        bash scripts/ci/check_task_liveness.sh \
+          --label darwinian \
+          --tasks auto_daily_simulation,evolution_health \
+          --artifact reports/darwinian_liveness.json \
+          --summary-file "${GITHUB_STEP_SUMMARY:-}"
 
     - name: Upload weights report
       uses: actions/upload-artifact@v4
@@ -56,91 +62,65 @@ jobs:
         # 2026-09-26：原本沒有 if-no-files-found（預設 = warn）＋ 步驟層 continue-on-error: true
         # ⇒「報告產不出來」只是一個 warning，job 照樣綠。實測（真實 run 36222354977）該步每次都印
         #   `##[warning]No files were found with the provided path: reports/darwinian_*.json`
-        # ⇒ 這個 job 從來沒產出過報告、卻一直是 success。
-        # 現改為 fail-closed：if-no-files-found: error（用真的 actions/upload-artifact@v4 程式碼
-        # 在本機 A/B 實測：warn ⇒ node exit 0；error ⇒ node exit 1），並移除步驟層
-        # continue-on-error（否則步驟紅、job 仍綠，等於沒改）。
+        # 現維持 fail-closed：if-no-files-found: error（用真的 actions/upload-artifact@v4 程式碼
+        # 在本機 A/B 實測：warn ⇒ node exit 0；error ⇒ node exit 1），且沒有步驟層 continue-on-error。
         if-no-files-found: error
 
   prism-maintenance:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
-      with:
-        node-version: '22'
-
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
-
-    - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-      with:
-        go-version-file: go.mod
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Build
-      run: go build -o atlas-go ./cmd/atlas
-
-    - name: PRISM Daily Tasks
+    # PRISM 的真實來源 = daemon 的 `prism_training`（6h，replay-backed executor 產 cohort 指標）
+    # 與 `prism_auto_balancer`（5m，PRISM 佇列再平衡）。CI 端原本呼叫的
+    # `prism status/balance/report` 子命令從未存在（`prism worker` 才是唯一支援的位置子命令）。
+    - name: "PRISM maintenance tasks are alive (real source: daemon task-liveness)"
       env:
-        ATLAS_ENV: production
+        ATLAS_TASK_LIVENESS_URL: ${{ vars.ATLAS_TASK_LIVENESS_URL }}
       run: |
-        # 同上：取消 `|| true`（fail-closed）。
-        ./atlas-go prism status
-        ./atlas-go prism balance
-        ./atlas-go prism report
+        bash scripts/ci/check_task_liveness.sh \
+          --label prism \
+          --tasks prism_training,prism_auto_balancer \
+          --artifact reports/prism_liveness.json \
+          --summary-file "${GITHUB_STEP_SUMMARY:-}"
 
     - name: Upload PRISM report
       uses: actions/upload-artifact@v4
       with:
         name: prism-report
         path: reports/prism_*.json
-        # 同上：if-no-files-found: error + 移除 continue-on-error（fail-closed）。
+        # 同上：維持 if-no-files-found: error（fail-closed），無步驟層 continue-on-error。
         if-no-files-found: error
 
   reflexivity-analysis:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4
-      with:
-        node-version: '22'
-
-    - name: Build frontends
-      run: bash scripts/ci/build_all_frontends.sh
-
-    - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-      with:
-        go-version-file: go.mod
-
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Build
-      run: go build -o atlas-go ./cmd/atlas
-
-    - name: Run Reflexivity Analysis
+    # Reflexivity 的真實來源 = 每日 auto simulation：internal/orchestrator/composition.go
+    # 的 buildSimEngine 掛上 5 條 reflexivity 規則（PriceToFundamentals / PnLBehavior /
+    # NarrativeFlows / MarketPolicy / ReversalDetection），由 internal/sim/engine.go 在每次
+    # 交易前套用。`reflexivity report/alert` 子命令從未存在；真正的分析在每日模擬內完成，
+    # 所以本 job 斷言的是「產出該分析的那個任務還活著」。
+    # （artifact 用 .md：本 job 的 upload glob 是 reports/reflexivity_*.md。）
+    - name: "Reflexivity-producing simulation task is alive (real source: daemon task-liveness)"
       env:
-        ATLAS_ENV: production
+        ATLAS_TASK_LIVENESS_URL: ${{ vars.ATLAS_TASK_LIVENESS_URL }}
       run: |
-        # 同上：取消 `|| true`（fail-closed）。
-        ./atlas-go reflexivity report
-        ./atlas-go reflexivity alert
+        bash scripts/ci/check_task_liveness.sh \
+          --label reflexivity \
+          --tasks auto_daily_simulation \
+          --artifact reports/reflexivity_liveness.md \
+          --summary-file "${GITHUB_STEP_SUMMARY:-}"
 
     - name: Upload Reflexivity report
       uses: actions/upload-artifact@v4
       with:
         name: reflexivity-report
         path: reports/reflexivity_*.md
-        # 同上：if-no-files-found: error + 移除 continue-on-error（fail-closed）。
+        # 同上：維持 if-no-files-found: error（fail-closed），無步驟層 continue-on-error。
         if-no-files-found: error
 
   cleanup:
