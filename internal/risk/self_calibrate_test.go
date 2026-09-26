@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -425,6 +426,241 @@ func TestSelfCalibrateBounds_AbsoluteFloorPreventsDrift(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateCalibrationBoundsForParam_ProductionDriftSequence is the
+// regression test for the drift FU-20260926-07 observed in production: every
+// round stayed inside the relative window [current*0.3, current*3.0] and above
+// the old shared 0.5% floor, so the optimizer was free to walk a risk limit
+// down round after round. The observed steps were
+// max_daily_loss_pct 0.03 → 0.0108 and max_position_size 0.15 → 0.054 (both
+// ≈0.36×). This test feeds a shrinking sequence back into the guard (as the
+// loop does) and requires the walk to be stopped at a named round while the
+// non-overlay values never leave the sane band.
+func TestValidateCalibrationBoundsForParam_ProductionDriftSequence(t *testing.T) {
+	cases := []struct {
+		name      string
+		param     string
+		start     float64 // SSOT value the walk starts from
+		factor    float64 // per-round shrink proposed by the optimizer
+		wantRound int     // round (1-based) at which the guard must reject
+		wantFloor float64 // the parameter's sanity floor
+	}{
+		{
+			name:      "daily loss, production step 0.36x rejected immediately",
+			param:     "risk_max_daily_loss_pct",
+			start:     0.03,
+			factor:    0.36, // 0.03 → 0.0108, the value found in the production container
+			wantRound: 1,
+			wantFloor: 0.03,
+		},
+		{
+			name:      "position size, production step 0.36x rejected immediately",
+			param:     "risk_max_position_size",
+			start:     0.15,
+			factor:    0.36, // 0.15 → 0.054, the value found in the production container
+			wantRound: 1,
+			wantFloor: 0.12,
+		},
+		{
+			name:      "position size, creeping 0.87x steps rejected on the second round",
+			param:     "risk_max_position_size",
+			start:     0.15,
+			factor:    0.87, // 0.15 → 0.1305 accepted, 0.1305 → 0.1135 below the floor
+			wantRound: 2,
+			wantFloor: 0.12,
+		},
+		{
+			name:      "daily loss, creeping 0.9x steps rejected on the first round",
+			param:     "risk_max_daily_loss_pct",
+			start:     0.03,
+			factor:    0.9, // 0.03 → 0.027: inside the relative window, below the floor
+			wantRound: 1,
+			wantFloor: 0.03,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			current := c.start
+			acceptedRounds := 0
+			rejectedRound := 0
+
+			for round := 1; round <= 8; round++ {
+				proposed := current * c.factor
+
+				// Counterfactual (negative control, in-test): the pre-fix guard is
+				// the relative window plus the shared 0.5% floor. It accepts this
+				// step, which is precisely how production drifted. If the sanity
+				// floor is removed from validateCalibrationBoundsForParam, the guard
+				// below stops rejecting and the assertions after the loop fail.
+				if !validateCalibrationBounds(current, proposed) {
+					t.Fatalf("round %d: expected the legacy relative-only guard to ACCEPT %.6f → %.6f (%s); the test no longer models the production drift",
+						round, current, proposed, c.param)
+				}
+
+				if validateCalibrationBoundsForParam(c.param, current, proposed) {
+					current = proposed
+					acceptedRounds++
+					continue
+				}
+				rejectedRound = round
+				break
+			}
+
+			if rejectedRound != c.wantRound {
+				t.Errorf("%s: drift rejected at round %d, want %d (accepted %d rounds, effective value now %.6f)",
+					c.param, rejectedRound, c.wantRound, acceptedRounds, current)
+			}
+			if current < c.wantFloor {
+				t.Errorf("%s: effective value %.6f drifted below the sanity floor %.6f", c.param, current, c.wantFloor)
+			}
+		})
+	}
+}
+
+// TestValidateCalibrationBoundsForParam_AllowsSaneSteps pins the behavior the
+// floor must NOT break: the SSOT value itself, a single tighten down to the
+// floor, and a modest tighten/loosen inside the rate limit stay accepted.
+func TestValidateCalibrationBoundsForParam_AllowsSaneSteps(t *testing.T) {
+	cases := []struct {
+		name     string
+		param    string
+		current  float64
+		proposed float64
+		want     bool
+	}{
+		{"ssot value unchanged accepted", "risk_max_position_size", 0.15, 0.15, true},
+		{"daily loss ssot value unchanged accepted", "risk_max_daily_loss_pct", 0.03, 0.03, true},
+		{"position tighten exactly to floor accepted", "risk_max_position_size", 0.15, 0.12, true},
+		{"position modest tighten accepted", "risk_max_position_size", 0.15, 0.14, true},
+		{"position modest loosen accepted", "risk_max_position_size", 0.15, 0.30, true},
+		{"position below floor rejected", "risk_max_position_size", 0.15, 0.1199, false},
+		{"position loose 3x bound still enforced", "risk_max_position_size", 0.15, 0.46, false},
+		{"daily loss any tighten rejected", "risk_max_daily_loss_pct", 0.03, 0.029, false},
+		{"daily loss modest loosen accepted", "risk_max_daily_loss_pct", 0.03, 0.04, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := validateCalibrationBoundsForParam(c.param, c.current, c.proposed); got != c.want {
+				t.Errorf("validateCalibrationBoundsForParam(%s, %v, %v) = %v, want %v",
+					c.param, c.current, c.proposed, got, c.want)
+			}
+		})
+	}
+}
+
+// TestValidateCalibrationBoundsForParam_RecoversFromDriftedValue covers the
+// deployment state that predates the floor: the container's effective value is
+// already pathological. The relative window must not freeze that value — a
+// recovery into [floor, floor*3] has to be accepted, while absurd loosening is
+// still refused.
+func TestValidateCalibrationBoundsForParam_RecoversFromDriftedValue(t *testing.T) {
+	cases := []struct {
+		name     string
+		param    string
+		current  float64
+		proposed float64
+		want     bool
+	}{
+		{"drifted daily loss recovers to ssot", "risk_max_daily_loss_pct", 0.0108, 0.03, true},
+		{"drifted daily loss recovers inside floor band", "risk_max_daily_loss_pct", 0.0108, 0.09, true},
+		{"drifted daily loss cannot jump absurdly high", "risk_max_daily_loss_pct", 0.0108, 0.20, false},
+		{"drifted daily loss cannot shrink further", "risk_max_daily_loss_pct", 0.0108, 0.0108, false},
+		{"drifted position recovers to floor", "risk_max_position_size", 9.14e-6, 0.12, true},
+		{"drifted position recovers to floor band top", "risk_max_position_size", 9.14e-6, 0.36, true},
+		{"drifted position cannot jump absurdly high", "risk_max_position_size", 9.14e-6, 0.37, false},
+		{"unset parameter accepts a value at the floor", "risk_max_position_size", 0, 0.12, true},
+		{"unset parameter rejects a value below the floor", "risk_max_position_size", 0, 0.05, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := validateCalibrationBoundsForParam(c.param, c.current, c.proposed); got != c.want {
+				t.Errorf("validateCalibrationBoundsForParam(%s, %v, %v) = %v, want %v",
+					c.param, c.current, c.proposed, got, c.want)
+			}
+		})
+	}
+}
+
+// TestCalibrationSanityFloorFor documents the floor table itself: the named
+// floors are anchored to values already documented in the repository, and
+// unknown tunables keep the historical 0.5% catch-all.
+func TestCalibrationSanityFloorFor(t *testing.T) {
+	cases := map[string]float64{
+		"risk_max_position_size":  0.12,
+		"risk_max_daily_loss_pct": 0.03,
+		"some_unlisted_parameter": defaultCalibrationFloor,
+	}
+	for name, want := range cases {
+		if got := calibrationSanityFloorFor(name); got != want {
+			t.Errorf("calibrationSanityFloorFor(%s) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// TestPersistCalibrationOverlay_WritesOverlayFile covers the persistence half of
+// FU-20260926-07: an accepted change must land in the calibrated-parameters
+// overlay (under the bind-mounted data/ tree), not in the SSOT file.
+func TestPersistCalibrationOverlay_WritesOverlayFile(t *testing.T) {
+	overlayPath := filepath.Join(t.TempDir(), "parameters.calibrated.json")
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer config.SetCalibratedOverlayPath("")
+
+	now := time.Date(2026, 9, 26, 3, 8, 44, 0, time.UTC)
+	persistCalibrationOverlay(&CalibrationReport{
+		Changes: []ParameterChange{
+			{
+				Name:       "risk_max_position_size",
+				Before:     0.15,
+				After:      0.13,
+				Rationale:  "baseline_score=0.5000, optimized_score=0.6000 (+20.0% delta). 30 sessions evaluated.",
+				Confidence: "high",
+			},
+		},
+	}, now)
+
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay file was not written")
+	}
+	if ov.Source != "risk_gate_calibrate" {
+		t.Errorf("source = %q, want risk_gate_calibrate", ov.Source)
+	}
+	entry, ok := ov.Entries["risk_max_position_size"]
+	if !ok {
+		t.Fatalf("entry risk_max_position_size missing: %+v", ov.Entries)
+	}
+	if entry.Value != 0.13 {
+		t.Errorf("entry value = %v, want 0.13", entry.Value)
+	}
+	if entry.Before != 0.15 {
+		t.Errorf("entry before = %v, want 0.15", entry.Before)
+	}
+	if entry.Method != "bayesian_optimization" {
+		t.Errorf("entry method = %q, want bayesian_optimization", entry.Method)
+	}
+	if !entry.CalibratedAt.Equal(now) {
+		t.Errorf("entry calibrated_at = %v, want %v", entry.CalibratedAt, now)
+	}
+	if !strings.Contains(entry.Rationale, "optimized_score") {
+		t.Errorf("entry rationale = %q, want the calibration rationale", entry.Rationale)
+	}
+}
+
+// TestPersistCalibrationOverlay_DisabledPathIsNotFatal covers a process without
+// a registered overlay path (e.g. a tool that only runs the loop in-memory): the
+// write must be skipped loudly, never panic.
+func TestPersistCalibrationOverlay_DisabledPathIsNotFatal(t *testing.T) {
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath("")
+
+	persistCalibrationOverlay(&CalibrationReport{
+		Changes: []ParameterChange{{Name: "risk_max_position_size", Before: 0.15, After: 0.13}},
+	}, time.Now())
 }
 
 func TestSelfCalibrate_Concurrent(t *testing.T) {
