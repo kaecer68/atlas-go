@@ -150,10 +150,12 @@ make imac-watchdog-diff      # 比對 repo 正本與主機版 sha256（漂移檢
 make imac-watchdog-install   # 備份主機現有版本 → scp 正本 → bash -n → 重載 launchd → 再驗 sha256
 ```
 
-> ⚠️ **這兩個 target 目前壞的（2026-09-26 實跑實證，未修）**：`Makefile` 的預設值仍是 iMac 時代的
-> `IMAC_HOST ?= kk@kimac` 與 `WATCHDOG_DST := /Users/kk/bin/...`（`kk@kimac` 帳號/主機不存在）。
-> 實跑輸出：`ssh: Could not resolve hostname kimac: nodename nor servname provided, or not known`
-> → `make imac-watchdog-diff` exit 2。修 `Makefile` 屬另一條 lane（本 PR 護欄禁止改動）→ 在它修好前，用等價的手動指令：
+> ✅ **2026-09-26 起這兩個 target 可用（PR #2041）**：`Makefile` 的預設值已由 iMac 時代的
+> `IMAC_HOST ?= kk@kimac`／`WATCHDOG_DST := /Users/kk/bin/...`（`kk@kimac` 帳號/主機不存在）
+> 改為 `IMAC_HOST ?= kaecer@kmacmini`／`WATCHDOG_DST := /Users/kaecer/bin/atlas-container-watchdog.sh`。
+> （修好前的實跑症狀：`ssh: Could not resolve hostname kimac: nodename nor servname provided, or not known` → `make imac-watchdog-diff` exit 2。）
+>
+> 下面的等價手動指令保留，供不方便用 `make` 時參考：
 >
 > ```bash
 > # 漂移檢查（Mac Mini 的實際安裝路徑 = ~/bin/atlas-container-watchdog.sh）
