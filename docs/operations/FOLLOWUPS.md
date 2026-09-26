@@ -897,6 +897,9 @@
 - **驗收條件**：在 source 領先 `bin/atlas-mcp` 的狀態下 push **必須**得到可行動的紅燈
   （或明確記錄此為刻意不防、並指出替代路徑）；
   **負對照**：`bin/atlas-mcp` 與 HEAD 一致時**不得**誤紅、也不得為此多付明顯時間成本。
+- **相關（2026-09-26 追加）**：全新 worktree 的 `//go:embed all:dist` 死結（`admin_web/dist`／
+  `client_web/dist` 不存在 ⇒ `go build ./...` 紅 ⇒ 新 lane 第一次 push 被擋）——同屬
+  **host/worktree 環境前置**，修在另一 PR（`make embed-dirs`）。
 
 ---
 
