@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/marketdata/twse"
 )
 
@@ -219,7 +221,7 @@ func TestExistingKeysNonexistent(t *testing.T) {
 }
 
 func TestQuotesFilteredByZeroClose(t *testing.T) {
-	quotes := []TWSEQuote{
+	quotes := []marketdata.TWSEQuote{
 		{Code: "2330", ClosingPrice: "1000"},
 		{Code: "2317", ClosingPrice: "0"},
 		{Code: "2303", ClosingPrice: ""},
@@ -288,20 +290,37 @@ func TestAppendJSONL(t *testing.T) {
 	}
 }
 
-func TestFetchDayIntegration(t *testing.T) {
-	mockResponse := MIINDEXResponse{
-		Stat:   "OK",
-		Date:   "20260102",
-		Title:  "每日收盤行情(全部)",
-		Fields: []string{"證券代號", "證券名稱", "成交股數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"},
-		Data: [][]string{
-			{"2330", "台積電", "10,000,000", "10,000,000,000", "1000", "1010", "990", "1005", "+5", "5,000"},
-			{"2317", "鴻海", "5,000,000", "500,000,000", "200", "205", "198", "202", "+2", "3,000"},
-			{"0000", "不良股", "0", "0", "0", "0", "0", "0", "0", "0"},
-		},
-	}
+// miIndexTestFields is the real 每日收盤行情 header (measured 2026-09-24).
+var miIndexTestFields = []string{"證券代號", "證券名稱", "成交股數", "成交筆數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌(+/-)", "漲跌價差", "最後揭示買價", "最後揭示買量", "最後揭示賣價", "最後揭示賣量", "本益比"}
 
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// miIndexTestBody renders the shape MI_INDEX actually returns: an index
+// section followed by the 每日收盤行情 section, all inside `tables`.
+//
+// The pre-2026-09-26 test fixture fabricated a flat `fields`/`data` envelope
+// that the real endpoint has never returned, which is why the suite stayed
+// green while production fetched 0 rows every day.
+func miIndexTestBody(titleDate string, rows ...string) []byte {
+	body := fmt.Sprintf(`{"stat":"OK","date":"20260102","tables":[
+		{"title":%q,"fields":["指數","收盤指數"],"data":[["發行量加權股價指數","23,000.00"]]},
+		{"title":%q,"fields":[%s],"data":[%s]}]}`,
+		titleDate+" 價格指數(臺灣證券交易所)",
+		titleDate+" 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
+		quoteFields(miIndexTestFields), strings.Join(rows, ","))
+	return []byte(body)
+}
+
+func quoteFields(fields []string) string {
+	quoted := make([]string, 0, len(fields))
+	for _, f := range fields {
+		quoted = append(quoted, fmt.Sprintf("%q", f))
+	}
+	return strings.Join(quoted, ",")
+}
+
+// newMIINDEXTestFetcher points a Fetcher at a stub MI_INDEX server.
+func newMIINDEXTestFetcher(t *testing.T, body []byte) *Fetcher {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "MI_INDEX") {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -310,58 +329,92 @@ func TestFetchDayIntegration(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		if r.URL.Query().Get("date") == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_, _ = w.Write(body)
 	}))
-	defer mockServer.Close()
-
-	fetcher := &Fetcher{
+	t.Cleanup(srv.Close)
+	return &Fetcher{
 		client:      &http.Client{Timeout: 10 * time.Second},
-		baseURL:     mockServer.URL,
+		baseURL:     srv.URL,
 		rateLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
+}
 
-	d := time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local)
-	quotes, err := fetcher.FetchDay(context.Background(), d)
+func TestFetchDayDecodesTheMIINDEXTablesEnvelope(t *testing.T) {
+	body := miIndexTestBody("115年01月02日",
+		`["2330","台積電","10,000,000","5,000","10,000,000,000","1000","1010","990","1005","+","5","0","0","0","0","0"]`,
+		`["2317","鴻海","5,000,000","3,000","500,000,000","200","205","198","202","+","2","0","0","0","0","0"]`,
+		`["0000","不良股","0","0","0","0","0","0","0","-","0","0","0","0","0","0"]`,
+	)
+	fetcher := newMIINDEXTestFetcher(t, body)
+
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
 	if err != nil {
 		t.Fatalf("FetchDay failed: %v", err)
 	}
-
 	if len(quotes) != 3 {
 		t.Fatalf("expected 3 quotes (including 0000), got %d", len(quotes))
 	}
-	if quotes[0].Code != "2330" {
-		t.Errorf("quote[0].Code = %s, want 2330", quotes[0].Code)
-	}
-	if quotes[0].ClosingPrice != "1005" {
-		t.Errorf("quote[0].ClosingPrice = %s, want 1005", quotes[0].ClosingPrice)
+	if quotes[0].Code != "2330" || quotes[0].ClosingPrice != "1005" || quotes[0].TradeVolume != "10,000,000" {
+		t.Errorf("quote[0] = %+v, want the 2330 row from the 每日收盤行情 section", quotes[0])
 	}
 	if quotes[2].Code != "0000" {
 		t.Errorf("quote[2].Code = %s, want 0000", quotes[2].Code)
 	}
 }
 
-func TestMIINDEXStatNotOK(t *testing.T) {
-	mockResponse := MIINDEXResponse{Stat: "ERROR", Data: nil}
+func TestFetchDayClosedMarketIsEmptyNotAnError(t *testing.T) {
+	// Live behaviour for a holiday/weekend date: HTTP 200 with the Chinese
+	// "no data" stat and no tables.
+	body := []byte(`{"stat":"很抱歉，沒有符合條件的資料!","type":"ALLBUT0999"}`)
+	fetcher := newMIINDEXTestFetcher(t, body)
 
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
-	}))
-	defer mockServer.Close()
-
-	fetcher := &Fetcher{
-		client:      &http.Client{Timeout: 10 * time.Second},
-		baseURL:     mockServer.URL,
-		rateLimiter: rate.NewLimiter(rate.Inf, 1),
-	}
-
-	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
-	if err != nil {
-		t.Fatalf("FetchDay should not error on stat != OK: %v", err)
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 3, 0, 0, 0, 0, time.Local))
+	if !errors.Is(err, marketdata.ErrTWSEEmptyData) {
+		t.Fatalf("FetchDay on a closed market = (%v, %v), want ErrTWSEEmptyData", quotes, err)
 	}
 	if len(quotes) != 0 {
-		t.Errorf("expected 0 quotes for stat=ERROR, got %d", len(quotes))
+		t.Errorf("expected 0 quotes for a closed market, got %d", len(quotes))
+	}
+}
+
+func TestFetchDayRejectsAMisDatedPayload(t *testing.T) {
+	// The payload describes 2026-01-05 while 2026-01-02 was requested: the
+	// always-latest-upstream shape. Stamping those prices with the requested
+	// date is how the replay dataset acquires phantom dates.
+	body := miIndexTestBody("115年01月05日",
+		`["2330","台積電","10,000,000","5,000","10,000,000,000","1000","1010","990","1005","+","5","0","0","0","0","0"]`)
+	fetcher := newMIINDEXTestFetcher(t, body)
+
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatal("FetchDay accepted a payload for another date")
+	}
+	if !strings.Contains(err.Error(), "2026-01-05") || !strings.Contains(err.Error(), "2026-01-02") {
+		t.Errorf("error %q must name both dates", err.Error())
+	}
+	if len(quotes) != 0 {
+		t.Errorf("expected no quotes from a mis-dated payload, got %d", len(quotes))
+	}
+}
+
+func TestFetchDayRejectsTheLegacyFlatEnvelope(t *testing.T) {
+	// Regression guard for the silent-success bug: the flat `fields`/`data`
+	// shape (what this tool used to expect, and what its old test fabricated)
+	// must fail loudly instead of yielding 0 rows with a nil error.
+	body := []byte(`{"stat":"OK","date":"20260102","title":"每日收盤行情(全部)","fields":["證券代號","證券名稱"],"data":[["2330","台積電"]]}`)
+	fetcher := newMIINDEXTestFetcher(t, body)
+
+	quotes, err := fetcher.FetchDay(context.Background(), time.Date(2026, 1, 2, 0, 0, 0, 0, time.Local))
+	if err == nil {
+		t.Fatalf("legacy flat envelope produced %d quotes with no error, want a loud failure", len(quotes))
+	}
+	if !strings.Contains(err.Error(), "schema change") {
+		t.Errorf("error %q must name the schema change", err.Error())
 	}
 }
 
