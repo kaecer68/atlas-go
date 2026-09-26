@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,11 +98,14 @@ type DailyQuotaTracker struct {
 	// loggedErr deduplicates the operator-facing log line: the same failure is
 	// logged once per distinct message instead of once per refused call.
 	loggedErr string
-	// pendingLog carries a log line out of the locked section. Logging while
+	// pendingLogs carries log lines out of the locked section. Logging while
 	// holding the cross-process lock would let a blocked stderr (or a slow
-	// handler) stall every other process waiting on the same lock, so the
-	// message is only emitted after both locks are released.
-	pendingLog *quotaLogEntry
+	// handler) stall every other process waiting on the same lock, so messages
+	// are only emitted after both locks are released. It is a slice, not a
+	// single slot: one operation can legitimately produce two lines (the
+	// corruption report AND the fail-closed reason), and dropping either would
+	// hide the only operator-facing repair hint.
+	pendingLogs []*quotaLogEntry
 	// loggedStateDir guards the one-off "we had to create the state directory"
 	// warning.
 	loggedStateDir bool
@@ -254,6 +258,29 @@ func (t *DailyQuotaTracker) StateErr() error {
 // single authority (diagnostics, channel health, ops scripts).
 func (t *DailyQuotaTracker) StateFile() string { return t.stateFile }
 
+// usageSnapshot reads the shared state ONCE and returns the registry view, so
+// a dashboard snapshot does not pay the cross-process lock twice per provider
+// (with a wedged holder each acquisition can cost up to quotaLockTimeout).
+func (t *DailyQuotaTracker) usageSnapshot() (used, limit, remaining int, stateErr error) {
+	t.readThrough(func(err error) {
+		stateErr = err
+		used = t.callsToday
+		limit = t.dailyLimit
+		if err != nil {
+			remaining = 0
+			return
+		}
+		if t.upstreamExhausted {
+			remaining = 0
+			return
+		}
+		if r := t.dailyLimit - t.callsToday; r > 0 {
+			remaining = r
+		}
+	})
+	return used, limit, remaining, stateErr
+}
+
 // MarkUpstreamExhausted latches "the provider itself said today's quota is
 // gone" until the quota day rolls over, and persists it.
 //
@@ -330,11 +357,16 @@ func (t *DailyQuotaTracker) SetLimit(limit int) {
 // the budget is exhausted, and (false, err) when the state is unusable — in
 // which case the tracker fails closed and err carries the reason.
 func (t *DailyQuotaTracker) update(fn func(st *QuotaState) bool) (bool, error) {
-	t.mu.Lock()
-	allowed, err := t.updateFileLocked(fn)
-	pending := t.takePendingLogLocked()
-	t.mu.Unlock()
-	emitQuotaLog(pending)
+	var allowed bool
+	var err error
+	var pending []*quotaLogEntry
+	func() {
+		t.mu.Lock()
+		defer t.mu.Unlock() // a panic in fn must not leave t.mu locked forever
+		allowed, err = t.updateFileLocked(fn)
+		pending = t.takePendingLogsLocked()
+	}()
+	emitQuotaLogs(pending)
 	return allowed, err
 }
 
@@ -398,12 +430,14 @@ func (t *DailyQuotaTracker) updateFileLocked(fn func(st *QuotaState) bool) (bool
 // readThrough runs fn while holding t.mu with a freshly read authoritative
 // state, and emits any deferred log line after releasing it.
 func (t *DailyQuotaTracker) readThrough(fn func(err error)) {
-	t.mu.Lock()
-	err := t.refreshFileLocked()
-	pending := t.takePendingLogLocked()
-	fn(err)
-	t.mu.Unlock()
-	emitQuotaLog(pending)
+	var pending []*quotaLogEntry
+	func() {
+		t.mu.Lock()
+		defer t.mu.Unlock() // a panic in fn must not leave t.mu locked forever
+		pending = t.takePendingLogsLocked()
+		fn(t.refreshFileLocked())
+	}()
+	emitQuotaLogs(pending)
 }
 
 // refreshFileLocked re-reads the authoritative state so getters never report
@@ -468,19 +502,20 @@ func (t *DailyQuotaTracker) lockState() (func(), error) {
 		// per-process again, which is the defect #2014 fixed. Warn loudly
 		// instead of letting it pass unnoticed.
 		t.loggedStateDir = true
-		t.pendingLog = &quotaLogEntry{warn: true, event: "daily_quota_state_dir_created", kv: []any{
+		t.pendingLogs = append(t.pendingLogs, &quotaLogEntry{warn: true, event: "daily_quota_state_dir_created", kv: []any{
 			"provider", t.provider,
 			"state_file", t.StateFile(),
 			"state_dir", dir,
 			"note", "created by this process; if the shared state volume is mounted this path should already exist (otherwise the daily ceiling is only per-process)",
-		}}
+		}})
 	}
 
+	// NOTE: the directory is deliberately NOT removed again if the lock file
+	// cannot be opened. Removing it could race another process that is about to
+	// use the same (empty) shared directory and hand it a transient ENOENT;
+	// leaving an empty directory behind costs nothing.
 	f, err := os.OpenFile(t.lockFile, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		if !preExisting {
-			_ = os.Remove(dir) // do not leave an empty private directory behind
-		}
 		return nil, fmt.Errorf("%w: open lock file %s: %v", ErrQuotaStateUnavailable, t.lockFile, err)
 	}
 
@@ -579,7 +614,7 @@ func (t *DailyQuotaTracker) quarantineCorruptStateLocked(raw []byte, cause error
 		CallsToday:         0,
 		LastReset:          quotaDay(time.Now()),
 		QuotaUnknown:       true,
-		QuotaUnknownReason: clampForError(cause.Error(), 240),
+		QuotaUnknownReason: clampForError(quotaStateReason(cause), 240),
 	}
 	if err := t.writeStateLocked(marker); err != nil {
 		return fmt.Errorf("%w: write fail-closed marker over %s: %v", ErrQuotaStateUnavailable, t.stateFile, err)
@@ -594,13 +629,27 @@ func (t *DailyQuotaTracker) quarantineCorruptStateLocked(raw []byte, cause error
 			backupErr = fmt.Errorf("%w: back up corrupt copy to %s: %v", ErrQuotaStateUnavailable, backupPath, err)
 		}
 	}
-	t.pendingLog = &quotaLogEntry{event: "daily_quota_state_corrupt", kv: []any{
+	t.pendingLogs = append(t.pendingLogs, &quotaLogEntry{event: "daily_quota_state_corrupt", kv: []any{
 		"provider", t.provider,
 		"state_file", t.stateFile,
 		"error", clampForError(cause.Error(), 240),
 		"action", "day marked quota_unknown (fail closed until the quota day rolls over); the marker file is the repair target",
-	}}
+	}})
 	return backupErr
+}
+
+// quotaStateReason strips the sentinel prefix from a state error so a reason
+// stored in the marker and re-wrapped by the reader does not read
+// "daily quota state corrupt: daily quota state corrupt: ...".
+func quotaStateReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	for _, sentinel := range []error{ErrQuotaStateCorrupt, ErrQuotaStateUnavailable} {
+		msg = strings.TrimPrefix(msg, sentinel.Error()+": ")
+	}
+	return msg
 }
 
 // quotaWriteBackup writes the forensic copy of a corrupt counter file. It is a
@@ -638,11 +687,11 @@ func (t *DailyQuotaTracker) recordStateErrLocked(err error) {
 		return
 	}
 	t.loggedErr = msg
-	t.pendingLog = &quotaLogEntry{event: "daily_quota_state_unusable", kv: []any{
+	t.pendingLogs = append(t.pendingLogs, &quotaLogEntry{event: "daily_quota_state_unusable", kv: []any{
 		"provider", t.provider,
 		"state_file", t.stateFile,
 		"error", clampForError(msg, 240),
-	}}
+	}})
 }
 
 func (t *DailyQuotaTracker) clearStateErrLocked() {
@@ -650,26 +699,28 @@ func (t *DailyQuotaTracker) clearStateErrLocked() {
 	t.loggedErr = ""
 }
 
-// takePendingLogLocked removes and returns the queued log line. Caller must
+// takePendingLogsLocked removes and returns the queued log lines. Caller must
 // hold t.mu.
-func (t *DailyQuotaTracker) takePendingLogLocked() *quotaLogEntry {
-	p := t.pendingLog
-	t.pendingLog = nil
+func (t *DailyQuotaTracker) takePendingLogsLocked() []*quotaLogEntry {
+	p := t.pendingLogs
+	t.pendingLogs = nil
 	return p
 }
 
-// emitQuotaLog writes a queued log line. It must be called with NO lock held:
-// logging under the cross-process lock would let a blocked stderr stall every
-// other process waiting on the same lock.
-func emitQuotaLog(p *quotaLogEntry) {
-	if p == nil {
-		return
+// emitQuotaLogs writes the queued log lines. It must be called with NO lock
+// held: logging under the cross-process lock would let a blocked stderr stall
+// every other process waiting on the same lock.
+func emitQuotaLogs(pending []*quotaLogEntry) {
+	for _, p := range pending {
+		if p == nil {
+			continue
+		}
+		if p.warn {
+			logging.Warn("marketdata", p.event, p.kv...)
+			continue
+		}
+		logging.Error("marketdata", p.event, p.kv...)
 	}
-	if p.warn {
-		logging.Warn("marketdata", p.event, p.kv...)
-		return
-	}
-	logging.Error("marketdata", p.event, p.kv...)
 }
 
 // quotaDay is the quota-day boundary an instant belongs to: a UTC-aligned 24h

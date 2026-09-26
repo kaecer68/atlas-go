@@ -119,12 +119,12 @@ func (r *QuotaRegistry) Snapshot() QuotaSnapshot {
 // free function (not a method) so tests can build entries directly without
 // going through a live tracker.
 func quotaEntryFromTracker(provider string, t *DailyQuotaTracker) QuotaEntry {
-	used := t.CallsToday()
-	remaining := t.Remaining()
-	limit := t.dailyLimit
+	// One locked read for all three numbers: taking the cross-process lock
+	// twice per provider multiplies the worst case when a holder is wedged.
+	used, limit, remaining, stateErr := t.usageSnapshot()
 	stateError := ""
-	if err := t.StateErr(); err != nil {
-		stateError = clampForError(err.Error(), 240)
+	if stateErr != nil {
+		stateError = clampForError(stateErr.Error(), 240)
 	}
 	return QuotaEntry{
 		Provider:   provider,

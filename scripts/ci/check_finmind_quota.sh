@@ -67,7 +67,8 @@ if grep -q '"quota_unknown"[[:space:]]*:[[:space:]]*true' "$STATE_FILE"; then
   echo "❌ finmind quota: $STATE_FILE 被標記為 quota-unknown — 今日用量不可知，DailyQuotaTracker 正 fail-closed（不放行呼叫）"
   REASON="$(grep -o '"quota_unknown_reason"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*"[[:space:]]*:[[:space:]]*"//; s/"$//')"
   [ -n "$REASON" ] && echo "   原因: $REASON"
-  echo "   處置: 檢視後修復/移除該檔（可先看同目錄的 *.corrupt-* 隔離檔）；配額日跨日後會自動恢復"
+  echo "   處置: 修復目標就是這個 marker 檔（內含 quota_unknown_reason）。**不要刪除它** —— 刪掉等於把當日已用量與上游 latch 一起歸零，之後會重複噴到牆。"
+  echo "         正常復原：等配額日跨日（00:00Z = 台北 08:00）自動解除；期間請以快取資料為準。同目錄若有 *.corrupt-* 是損壞前的原檔副本，僅供診斷。"
   if [ "$STRICT" -eq 1 ]; then exit 1; else exit 0; fi
 fi
 

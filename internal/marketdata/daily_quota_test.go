@@ -1,8 +1,10 @@
 package marketdata
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // TestDailyQuotaTracker_Remaining tests the Remaining method.
@@ -670,5 +674,39 @@ func TestDailyQuotaTracker_LockIsNotRecursive(t *testing.T) {
 	}
 	if locked {
 		t.Error("a second fd in the same process acquired the lock: flock is not recursive, so the tracker must never re-enter it")
+	}
+}
+
+// TestDailyQuotaTracker_CorruptStateEmitsBothLogLines guards the deferred-log
+// queue: the corruption report (which carries the operator's repair hint) and
+// the fail-closed reason are produced by the same operation, so a single-slot
+// queue silently swallowed the actionable one. Logging must also happen after
+// the locks are released, which this exercises end to end.
+func TestDailyQuotaTracker_CorruptStateEmitsBothLogLines(t *testing.T) {
+	var buf bytes.Buffer
+	previous := logging.Default()
+	logging.SetLogger(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { logging.SetLogger(previous) })
+
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "loglines_daily_quota.json")
+	if err := os.WriteFile(stateFile, []byte("{not json"), 0o644); err != nil {
+		t.Fatalf("seed corrupt state: %v", err)
+	}
+
+	tracker := NewDailyQuotaTracker("loglines", dir, 100)
+	if tracker.AllowCall() {
+		t.Fatal("corrupt state must refuse the call")
+	}
+
+	emitted := buf.String()
+	if !strings.Contains(emitted, "daily_quota_state_corrupt") {
+		t.Errorf("the corruption report was not emitted (it carries the repair hint):\n%s", emitted)
+	}
+	if !strings.Contains(emitted, "repair target") {
+		t.Errorf("the repair hint is missing from the emitted logs:\n%s", emitted)
+	}
+	if !strings.Contains(emitted, "daily_quota_state_unusable") {
+		t.Errorf("the fail-closed reason was not emitted:\n%s", emitted)
 	}
 }
