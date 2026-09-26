@@ -25,8 +25,13 @@ atlas-validate --path=configs/parameters.json --max-age=48h --format=json
 ```bash
 docker run --rm --entrypoint /bin/sh atlas-atlas:latest -c 'ls /app'
 # atlas-go  atlas-mcp  calibrate-seasonal  daily-replay-sync  configs  data  logs  prompts  reports  scripts  sql
-docker run --rm --entrypoint /bin/sh atlas-atlas:latest -c 'command -v python3 jq node'
-# 三個都 MISSING（sh / grep / sed / awk / cat / ls / stat / curl 有）
+
+# ⚠️ 逐個查，不要寫成 `command -v python3 jq node`（dash 的 builtin 對多個名字只回第一個，
+#    會把「有 python3」誤判成「有」）。
+docker run --rm --entrypoint /bin/sh atlas-atlas:latest -c 'command -v python3 || echo python3-MISSING'
+# python3-MISSING（jq / node 同樣 MISSING）
+docker run --rm --entrypoint /bin/sh atlas-atlas:latest -c 'command -v grep || echo grep-MISSING'
+# /bin/grep（stat / head / tail / curl / sed / awk / cat / ls 都在）
 ```
 
 ⇒ 在本次接線之前，生產上「`configs/parameters.json` 已不新鮮」是**零觀測**：
@@ -82,7 +87,7 @@ docker run --rm --entrypoint /bin/sh atlas-atlas:latest -c 'command -v python3 j
 | 基線 | 值 | 來源 |
 |---|---|---|
 | 生產「健康」 | 容器啟動後約 **65 分鐘**就被校準任務改寫 | 2026-09-26 唯讀盤查：`Created=02:04:02Z` vs `updated_at=2026-09-26T03:08:44.90062791Z`（`FOLLOWUPS.md` FU-20260926-07） |
-| 生產「壞掉」 | 約 **82.8 天**（image 內 `/app/configs/parameters.json` 的 `updated_at=2026-07-06`；本 PR 對出貨檔實跑 `age_seconds=7150619` ≈ 82.8 天） | 同上；也正是 issue #1944 I30 的形狀（nightly backfill 的寫入被丟棄） |
+| 生產「壞掉」 | 約 **82.8 天**（image 內 `/app/configs/parameters.json` 的 `updated_at=2026-07-06`；本 PR 對出貨檔實跑 ≈82.8 天，`age_seconds` 隨時間增加，重跑測試會印當下的值） | 同上；也正是 issue #1944 I30 的形狀（nightly backfill 的寫入被丟棄） |
 | 校準任務 cadence | 主要 **24h**（17 個 top-level 任務；`auto_cycle_update` 6h、`regime_calibrate` 1h） | `cmd/atlas/calibration_tasks.go` |
 
 48h 落在兩者之間（對健康值 ~44×、對壞值 ~41×），且 = 兩個 24h 週期，
@@ -181,7 +186,8 @@ curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*' | sort -u
 # 4) 反例（**不要**在生產上動參數檔；在 repo checkout 上驗證匯出器與 CLI 的判定一致）
 go test ./internal/monitoring/ -run 'CalibrationFreshness' -v
 # 出貨檔的實測值會印在 TestObserveCalibrationFreshness_ShippedArtifactIsEvaluable 的輸出，
-# 例如（2026-09-26）：fresh=false freshness_code="UPDATED_AT_STALE" age_seconds=7150619 last_calibrated=2026-07-05T17:43:01Z
+# 例如（2026-09-26 量測；age_seconds 隨時間增加，數字不是固定值）：
+#   fresh=false freshness_code="UPDATED_AT_STALE" age_seconds≈7150619 last_calibrated=2026-07-05T17:43:01Z
 # fixture 的邊界與 fail-closed 案例由 TestObserveCalibrationFreshness_ContractBoundary /
 # _StaleArtifactFlipsOK / _MissingFileIsUnverifiable / _UnverifiableFreezesLastKnownSeries 覆蓋。
 go run ./cmd/calibration-validate --path=configs/parameters.json --format=json | head -20   # CLI 側

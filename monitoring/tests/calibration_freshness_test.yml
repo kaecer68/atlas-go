@@ -88,14 +88,15 @@ tests:
             component: "calibration-freshness"
             incident_ref: "issue-1944-i31"
           exp_annotations:
-            summary: "校準產物 parameters.json 已不新鮮（契約 48h；值仍可評估）"
+            summary: "校準產物 parameters.json 已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
             description: |
-              `configs/parameters.json` 沒有任何 freshness finding 之外的狀態,
-              也就是它超過了契約（`atlas_calibration_freshness_ok` = 0,
+              `configs/parameters.json` 出現了 freshness finding（`atlas_calibration_freshness_ok` = 0）,
+              兩種子狀態:**超過契約**（`updated_at` 或檔案 mtime 比 48h 舊）
+              或**從未記錄校準時間**（`updated_at` 為零）。
               契約 = `monitoring.CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
-              = production 命令的 `--max-age=48h`）。檢查本身可以評估
+              = production 命令的 `--max-age=48h`。檢查本身可以評估
               （`atlas_calibration_freshness_run_ok{artifact="parameters"}` = 1）
-              ⇒ 這**不是**讀取/解析失敗。
+              ⇒ 這**不是**讀取/解析失敗;是哪一種子狀態看下面的第 1 步。
 
               先查什麼（依序,不要跳到資料源）:
               0. 確認不是「無法評估」:run_ok 必須是 1。若它是 0,age 是凍結樣本,
@@ -147,14 +148,15 @@ tests:
             component: "calibration-freshness"
             incident_ref: "issue-1944-i31"
           exp_annotations:
-            summary: "校準產物 parameters.json 已不新鮮（契約 48h；值仍可評估）"
+            summary: "校準產物 parameters.json 已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
             description: |
-              `configs/parameters.json` 沒有任何 freshness finding 之外的狀態,
-              也就是它超過了契約（`atlas_calibration_freshness_ok` = 0,
+              `configs/parameters.json` 出現了 freshness finding（`atlas_calibration_freshness_ok` = 0）,
+              兩種子狀態:**超過契約**（`updated_at` 或檔案 mtime 比 48h 舊）
+              或**從未記錄校準時間**（`updated_at` 為零）。
               契約 = `monitoring.CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
-              = production 命令的 `--max-age=48h`）。檢查本身可以評估
+              = production 命令的 `--max-age=48h`。檢查本身可以評估
               （`atlas_calibration_freshness_run_ok{artifact="parameters"}` = 1）
-              ⇒ 這**不是**讀取/解析失敗。
+              ⇒ 這**不是**讀取/解析失敗;是哪一種子狀態看下面的第 1 步。
 
               先查什麼（依序,不要跳到資料源）:
               0. 確認不是「無法評估」:run_ok 必須是 1。若它是 0,age 是凍結樣本,
@@ -435,14 +437,15 @@ tests:
             component: "calibration-freshness"
             incident_ref: "issue-1944-i31"
           exp_annotations:
-            summary: "校準產物 parameters.json 已不新鮮（契約 48h；值仍可評估）"
+            summary: "校準產物 parameters.json 已不新鮮（超過 48h 契約 或 從未記錄校準時間；值仍可評估）"
             description: |
-              `configs/parameters.json` 沒有任何 freshness finding 之外的狀態,
-              也就是它超過了契約（`atlas_calibration_freshness_ok` = 0,
+              `configs/parameters.json` 出現了 freshness finding（`atlas_calibration_freshness_ok` = 0）,
+              兩種子狀態:**超過契約**（`updated_at` 或檔案 mtime 比 48h 舊）
+              或**從未記錄校準時間**（`updated_at` 為零）。
               契約 = `monitoring.CalibrationFreshnessContract` = `config.DefaultCalibrationMaxAge`
-              = production 命令的 `--max-age=48h`）。檢查本身可以評估
+              = production 命令的 `--max-age=48h`。檢查本身可以評估
               （`atlas_calibration_freshness_run_ok{artifact="parameters"}` = 1）
-              ⇒ 這**不是**讀取/解析失敗。
+              ⇒ 這**不是**讀取/解析失敗;是哪一種子狀態看下面的第 1 步。
 
               先查什麼（依序,不要跳到資料源）:
               0. 確認不是「無法評估」:run_ok 必須是 1。若它是 0,age 是凍結樣本,

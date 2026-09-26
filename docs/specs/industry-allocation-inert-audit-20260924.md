@@ -691,7 +691,7 @@ runbook 把這件事釘住（也禁止再出現第二份 `48 * time.Hour` 字面
 | 基線 | 值 | 來源 |
 |---|---|---|
 | 生產「健康」 | 容器啟動後約 **65 分鐘**就被改寫 | `Created=02:04:02Z` vs `updated_at=2026-09-26T03:08:44.9Z`（FU-20260926-07） |
-| 生產「壞掉」 | 約 **82.8 天**（本 PR 對出貨檔實跑 `age_seconds=7150619`） | FU-20260926-07 + 本 PR 的真輸入測試 |
+| 生產「壞掉」 | 約 **82.8 天**（本 PR 對出貨檔實跑；`age_seconds` 隨時間增加，非固定值） | FU-20260926-07 + 本 PR 的真輸入測試 |
 | 校準任務 cadence | 主要 24h（17 個 top-level；6h/1h 例外） | `cmd/atlas/calibration_tasks.go` |
 
 48h 落在兩者之間（對健康值 ~44×、對壞值 ~41×），且 = 兩個 24h 週期（吸收一次失敗週期與週末）。
@@ -721,6 +721,7 @@ docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
 ```
 
 **真輸入的正反案例（本 PR 實跑，非合成 fixture）**
+（`age_seconds` 是量測當下的值，隨時間增加 ⇒ 重跑會得到更大的數字；其餘欄位是穩定的）
 
 ```
 # 反例：出貨的 configs/parameters.json（updated_at 2026-07-05T17:43:01Z）

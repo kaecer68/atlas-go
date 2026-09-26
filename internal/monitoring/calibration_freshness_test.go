@@ -472,8 +472,9 @@ func TestCalibrationFreshnessContractMatchesCLIAndRunbook(t *testing.T) {
 // promtool 抓不到這一類缺陷：規則引用一個**不存在**的指標時不會語法錯誤，
 // 只會永遠沉默（false-green 的經典形狀）。
 //
-// ⚠️ 掃描前先去掉 YAML 註解：註解裡提到指標名（triage 文案）不算「被規則引用」，
-// 否則測試會誤以為 age / last_calibrated 有判定側消費者。
+// ⚠️ 掃描前先去掉 `#` 註解。注意:annotation 區塊的散文仍會被掃到（`#` 之外的 YAML 內容），
+// 所以本測試保證的是「規則檔（含 triage 文案）提到的名字都存在」，**不是**
+// 「每個名字都被 expr 使用」——後者要靠人工與 promtool 案例。
 func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 	rulesPath := filepath.Join("..", "..", "monitoring", "rules", "calibration_freshness_alerts.yml")
 	data, err := os.ReadFile(rulesPath)
@@ -512,7 +513,7 @@ func TestCalibrationFreshnessRulesReferenceEmittedMetrics(t *testing.T) {
 		got = append(got, r)
 	}
 	sort.Strings(got)
-	t.Logf("規則 expr 引用的指標: %v", got)
+	t.Logf("規則檔（去掉 YAML 註解後，含 expr 與 triage 文案）引用的指標: %v", got)
 }
 
 // 規則檔必須真的有牙齒（不是只有指標名對得上）：至少一條規則的 expr 引用
