@@ -177,7 +177,17 @@ services:
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4
     ports:
-      - "${ATLAS_POSTGRES_PORT:-5432}:5432"
+      # 只綁 loopback（2026-09-26）。此處原本是 `"${ATLAS_POSTGRES_PORT:-5432}:5432"`
+      # ⇒ 會發佈到 0.0.0.0（＋[::]），而 prod 的 repo-root `.env` 把
+      # ATLAS_POSTGRES_PORT 設成 55432 ⇒ DB 裸埠經 Tailscale/LAN 可達。
+      # 生產實測（kmacmini=100.65.194.77，2026-09-26）：55432 可達；且該 DB 密碼
+      # 是 compose 的字典詞預設值、`pg_hba` 對 127.0.0.1/32 又是 `trust`
+      # ⇒ 「遠端可達」加上「本機免密」等於只要碰得到埠就通過認證。
+      # 綁 127.0.0.1 讓「遠端整類」直接消失，比輪替密碼有效（輪替防不到
+      # 127.0.0.1 的 trust 路徑）。本檔所有 in-stack 消費者（atlas、6 個 cron、
+      # postgres-exporter）都走 docker 網路名 `postgres:5432`，不受此改動影響。
+      # 背景：docs/operations/FOLLOWUPS.md FU-20260925-13。
+      - "127.0.0.1:${ATLAS_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
