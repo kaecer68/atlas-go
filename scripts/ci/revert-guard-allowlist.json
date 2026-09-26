@@ -1,0 +1,13 @@
+{
+  "_doc": [
+    "落後分支語意回退檢查（check_revert_guard.py，issue #1993）的豁免清單。",
+    "每筆格式：{\"path\": <路徑或 glob>, \"reason\": <必填>, \"ticket\": <選填>, \"added\": <選填 YYYY-MM-DD>}。",
+    "reason 空白或以 TODO 開頭 ⇒ 檢查失敗（豁免本身必須有理由，且要寫到別人能自行驗證）。",
+    "不再命中的條目只印 stale 警告、不讓 CI 紅燈（跨 PR 耦合：不該因為忘了刪一行而被擋）。",
+    "只用於『本 PR 真的要刪／改某檔，而 main 上該檔又有本分支沒有的改動』的個案；",
+    "常見情況的正解是 gh pr update-branch 後重跑，不是登錄這裡。",
+    "規格：docs/specs/branch-revert-guard-spec.md"
+  ],
+  "version": 1,
+  "entries": []
+}

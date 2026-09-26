@@ -999,7 +999,7 @@
 
 ### FU-20260926-17 — `internal/fubonproxy` 測試 flaky：`TestProcessManager_Supervise_RestartFailureCap` 距寫死的 3s 上限只剩約 0.2–0.4s
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **修復**：PR #2033（測試 hermetic 化：系統配發埠＋決定性等待）
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號「fubonproxy flaky」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
@@ -1293,6 +1293,60 @@
   4. 停用橫幅與本票同時移除（不得留著 no-op 又宣稱有 gate）。
 - **不可動（已遵守）**：`Makefile`、`.github/workflows/quality.yml`、`docs/reference/traps.md`（他人/他線佔用）；
   未動 production、未 merge、未放寬或刪任何測試。
+
+---
+
+### FU-20260926-24 — `internal/startup` 的 `TestPreflight_MixFreeAndForeign_ReturnsFirstForeign` 埠競爭假紅：**「free」位址是 reserve→release 出來的**（TOCTOU）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：另一條 lane 於 2026-09-26 多次被它擋在 `make ci-full`（既有繞道 `PRE_PUSH_FULL=never`，不緊急）；本票**只登記、不實作**（避免同時開太多戰場）。
+  **與 `FU-20260926-17`（fubonproxy）不同族**：那條是「寫死上限落在工作分布內／單次抽樣」的**機率性**紅；
+  本條是**位址真的被佔用**（reserve→release→re-check 的 TOCTOU）＋「佔用者查詢」的第二個時間窗。
+- **事實**：
+  - 症狀（外部 lane 實測）：`TestPreflight_MixFreeAndForeign_ReturnsFirstForeign` ⇒
+    `127.0.0.1:50379 is held by an unknown process`；負對照：單跑 `go test ./internal/startup/ -count=1` ⇒ `ok 1.44s`（exit 0）。
+- **機制（本次親驗，非推論）**：
+  - `internal/startup/preflight_test.go` 的 `freeAddr(t)`：`net.Listen("tcp","127.0.0.1:0")` 取到埠後**立刻 `ln.Close()`**，
+    回傳的位址只在**該瞬間**是 free；測試稍後才呼叫 `Preflight()` 讓 `portprobe.Probe` **重新判定** ⇒ reserve→release→re-check 的 TOCTOU。
+    而 `make ci-full` 跑的是 `go test … $(go list ./...)`（**全 package 並行**）⇒ 其他 package 的 test binary 也在高頻 reserve/release `127.0.0.1:0`，
+    本測試剛釋放的埠完全可能在「釋放」與「重新判定」之間被（暫態）拿走。
+  - 為何訊息是「**unknown** process」而不是帶 PID 的 foreign（`internal/startup/preflight.go:168-173` 的 `actionableForeignError`，
+    `occupant.PID <= 0` 分支）：`portprobe.Probe` 是**先** `net.Listen` 撞 EADDRINUSE、
+    **再**重試 `/health` 5 次 × 100ms（≈400ms，`portprobe.classifyOccupied`）**之後**才呼叫 lsof 取佔用者；
+    若佔用者在那 ~400ms 內已釋放（暫態 listener），lsof 就找不到 PID ⇒ `Occupant{PID:0}` ⇒ 這句訊息。
+    ⇒ 這裡其實有**兩個**時間窗：①位址被搶、②佔用者在查 PID 前消失。
+  - 紅的是哪條斷言：該訊息是由**第一個（本應 free 的）claim `atlas-http`** 產生 ⇒ `Preflight` 回的是它的錯誤，
+    測試的 `strings.Contains(err.Error(), "fubonproxy")` 就不成立 ⇒ 紅在 `expected first foreign error, got: …`（正是被引用的那個片段）。
+  - **決定性探針（可複現；臨時測試檔已刪，`git status` 乾淨）**：在 package 內加臨時測試 ——
+    `addr := freeAddr(t)` → goroutine `net.Listen("tcp", addr)` 持有 250ms 後 `Close()` → 呼叫 `Preflight`。輸出：
+    ```
+    PROBE addr=127.0.0.1:51922 err=atlas-http address 127.0.0.1:51922 is held by an unknown process; identify it with `lsof -nP -iTCP:127.0.0.1:51922 -sTCP:LISTEN` and stop it
+    ```
+    ⇒ 簽名**逐字相同**（含 `unknown process` 與 `lsof` 提示）⇒ 機制確定。
+  - 位址族不一致（輔助成因）：`freeAddr()` 走 `127.0.0.1:0`（loopback），但 `occupyAddr()` 綁 `0.0.0.0:<port>`（wildcard）。
+  - **自然重現未達成（照實）**：我外加「高頻 reserve/release `127.0.0.1:0` 的 churner」並 4 個 process 並行跑
+    `go test -count=8 -run TestPreflight ./internal/startup/`（共 32 輪）⇒ **全部 exit 0、0 次 `unknown process`** ⇒ 自然紅是低頻事件，只能靠上面的探針證明機制。
+- **為何先開票、不實作**：本條坐在 `make ci-full` 必經路徑上，但修法要改「free 位址怎麼取得」的測試設計；
+  且今日多條 lane 正在同檔（`FOLLOWUPS.md`）編輯 ⇒ 先登記、由 root 排程。
+- **建議方向（只建議，未實作）**：
+  1. **首選：讓「free」不再靠 reserve→release**。`freeAddr` 回傳的位址改成測試用不到的**哨兵** `127.0.0.1:0`：
+     已實測 `portprobe.Probe("127.0.0.1:0")` ⇒ `state=0`（free）、occupant 空、`err=nil`，且
+     `Preflight([]PortClaim{{Component:"atlas-http", Addr:"127.0.0.1:0"}})` 連 9 次皆回 `nil`（`net.Listen(":0")` 每呼叫必成功 ⇒ 無 TOCTOU、不需佔用/釋放）。
+     ⚠️ 這只適用於「**語意上只要 free**」的 claim（測試替身），不是 production 位址；`portFromAddr("…:0")==0` 也要留意（僅影響 zombie 分支的訊息）。
+     foreign 那一側則改為**一次綁定、永不釋放**（`net.Listen("127.0.0.1:0")` 直接交給 `http.Server`，即 `internal/fubonproxy` 的 `bindEphemeralPort` 形狀），
+     **不要** `freeAddr` 之後再 `occupyAddr` 重綁同一個埠。
+  2. 或走既有 **seam**：`preflight.go` 已有 package-level `probeFn`（另有 `killFn`／`isFubonZombieFn`）⇒ 可注入
+     「free claims 回 `StateFree`、foreign claim 轉呼叫真 `portprobe.Probe`」的 stub，完全移除真實埠競爭；
+     並**保留**一個只含 foreign claim 的整合測試（真 listener、不釋放、測到 actionable error 與 PID）以維持真實路徑覆蓋。
+  3. **禁止**：把真失敗吞成 `t.Skip`／`|| true`（真被佔用時**仍必須紅**）；也**禁止**只放大門檻。
+     若最終仍要重試，必須限制在**明確界定的外部競爭**、且輸出能區分「真的被佔用（有 PID）」與「暫態佔用者已消失（PID=0）」。
+  4. 順手統一位址族：測試佔用者改綁 loopback（與 `probeProxyPort`／`Probe` 先檢查的 `127.0.0.1:<port>` 一致），避免 loopback/wildcard 混用。
+- **驗收條件**：在 `make ci-full` 的實際條件下（全 package 並行；建議**外加**高頻 `127.0.0.1:0` reserve/release 的 churner 當加壓器）
+  該測試與整個 `internal/startup` package **連續 ≥10 輪 0 紅**；
+  **負對照**：用真 listener 佔住某個 claim 的位址**並持續持有** ⇒ `Preflight` **仍必須**回報該 claim 的 actionable error（不得變 nil、不得 skip）。
+- **不可動**：`.githooks/pre-push`（`FU-20260926-15`）、`Makefile` ci 段（`FU-20260926-12`／E3）、`quality.yml`、
+  `docs/reference/traps.md`、`docs/operations/remediation-manifest.md`（另一 lane 的 SSOT）。
 
 ## 判讀註記（讀告警與做驗收前必讀）
 

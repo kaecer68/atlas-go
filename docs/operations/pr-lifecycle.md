@@ -48,6 +48,33 @@ PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summa
 - **Root Cause** — 為什麼壞（事實為本,不是猜測,link 到 issue / log / source code）
 - **Verification** — 跑了什麼 test,結果是什麼（含 `make ci-full` 結果 + production 驗收 checklist 適用時）
 
+### 2.4 pre-push hook 的環境陷阱（linked worktree 會 export `GIT_DIR`）
+
+`git push` 跑 `.githooks/pre-push` 時，git 會把 **`GIT_DIR` 以絕對路徑 export 給 hook**——
+在 **linked worktree**（`git worktree add`）裡，值是 `<main>/.git/worktrees/<name>`。
+後果：任何在 hook 裡執行的測試，只要它建立 throwaway git repo（`git init` / `git -C <temp> …`），
+這些命令會**打到呼叫者的 repo**（cwd 被當成 work tree）⇒ fixture 的 commit 直接落到**正在 push 的
+分支**上，甚至移動 `refs/heads/main`。
+
+- 2026-09-23（issue #1927）：`test-binary-freshness-guard.sh` 的 fixture commit 落上被推的分支。
+- 2026-09-26（issue #1993 工作）：`test-revert-guard.sh` 第一版沒有防護，一次 pre-push 把
+  `refs/heads/main` 移到 fixture commit（`8c926b2b`）並改寫被推的分支；`main` 需以
+  `git update-ref refs/heads/main <正確 sha>` 還原，並清掉 fixture 順手寫進 `.git/config` 的
+  `core.bare`）與 `[user]`（`ci@test.invalid`）。**沒有 push 出去**（hook 自己失敗了）才沒有擴散。
+
+**寫測試的強制要求**（fixture repo 一律如此）：
+
+```bash
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
+# 並且在建立 fixture repo 後斷言它解析到自己（洩漏時大聲失敗、絕不 commit）：
+test -d "$FIXTURE/.git" || fail "GIT_DIR leak?"
+test "$(git -C "$FIXTURE" rev-parse --show-toplevel)" = "$(cd "$FIXTURE" && pwd -P)" || fail "GIT_DIR leak?"
+```
+
+參考實作：`tests/scripts/test-binary-freshness-guard.sh`、`tests/scripts/test-check-frontend-dist.sh`、
+`tests/scripts/test-revert-guard.sh`。
+
 ## 3. PR-Review — Reviewer 檢查
 
 ### 3.1 Reviewer 必看
@@ -64,7 +91,7 @@ PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summa
 
 - [ ] `make ci-gate` 過
 - [ ] `make ci-full` 過（**不可跳過**）
-- [ ] GitHub CI 全綠（含 `monitoring-config`，見 §3.4）
+- [ ] GitHub CI 全綠（含 `monitoring-config` §3.4、`revert-guard` §3.5）
 - [ ] Reviewer approve
 
 ### 3.3 PR 整個 CI 都沒跑（required checks 卡在 `Expected`）
@@ -139,6 +166,63 @@ base 既不是 `main`/`develop`、也不是另一個 open PR 的 head 分支時*
   `monitoring/rules/channel_health_latent_staleness.yml` 的 `ChannelHealthStatusError`
   四條同名同標籤規則。清理後把該 step 改成
   `promtool check rules --lint=all --lint-fatal ...` 即可收緊（`--lint-fatal` 讓 lint 以 exit 3 失敗）。
+
+### 3.5 合併結果驗證 + diff 衛生 guard（revert-guard）
+
+> **實證 2026-09-26（單一 session 內 5 個 PR／6 次）**。症狀:PR 分支落後 `main` 時,
+> `git diff origin/main <branch>` 把 `main` 上**其他 PR 最近的改動顯示成刪除**（review／agent 會
+> 誤判「這個 PR 在刪別人的東西」）。
+> ⚠️ **但這不是回退**:對「分支沒動過的檔」,merge commit／`git merge --squash`（＝GitHub 的 squash
+> 按鈕）／rebase 都走三方合併（merge-base 的版本＝分支版本）⇒ **保留** `main` 的版本。
+> 真正的危害是**這份 diff 對讀者說謊**;唯一真的會刪的是「把 two-dot diff 當 patch 套用」
+> （`git diff <base>..<head> | git apply`）。
+> **唯一會真的回退 `main` 的路徑是 evil merge**:落後分支在本地 `git merge origin/main` 解衝突時
+> 解錯（或 `-X ours/theirs` 硬吞）,把 `main` 的修正悄悄丟掉——此時分支「已對齊」、diff 乾淨,
+> 但合併真的把 `main` 的修正退回舊版。
+
+| PR | 被顯示成刪除的他人改動 |
+|---|---|
+| #1974 | `monitoring/alertmanager.yml`（−37）|
+| #1979 | `.github/workflows/pr-base-guard.yml`（−92）、`quality.yml`（−66）|
+| #1990 | `internal/monitoring/metrics_bridge.go`（−41）、`internal/monitoring/universe_scheduler.go`（−62）|
+| #1991 / #1994 | `internal/monitoring/metrics_bridge.go`（−41）、`metrics_bridge_test.go`（−136）、`.claude/skills/.../SKILL.md`（−41）|
+
+**為什麼 `MERGEABLE` 幫不上忙**:它只回答「**能不能**自動合併」,不回答「合併本身**會不會弄丟 `main` 上的東西**」
+（那是上面兩個相各自回答的問題)。
+
+**診斷指令（唯讀,<1 秒;不必等 CI、也不必連 GitHub）**:
+
+```bash
+git fetch origin main
+git diff --numstat origin/main <branch>        # added==0 && deleted>0 的檔案 = 嫌疑（純刪除）
+git log -1 --no-merges origin/main -- <file>   # 該檔在 main 上最後的改動是誰;不是本 PR 引進的 ⇒ 那條刪除是假象
+```
+
+**處置（依序）**:
+
+1. `gh pr update-branch <PR>`（本地等效:`git fetch origin main && git merge origin/main`,或 `git pull --ff-only`）
+   → 重跑檢查,假刪除消失。**本地解衝突時不要猜、不要用 `-X ours/theirs` 硬吞**（解錯＝evil merge,
+   `main` 的修正會被悄悄丟掉;`gh pr update-branch` 遇衝突會直接拒絕,所以它不會產生 evil merge）。
+2. 若本 PR **真的要刪**該檔:先 update-branch,再把刪除重新套用一次（否則會把 `main` 的新改動一起帶走）。
+3. 例外才登 `scripts/ci/revert-guard-allowlist.json`（`reason` 必填,寫到別人能自行驗證）。
+
+**閘門(`quality.yml` 的 `revert-guard` job,2026-09-26 起）**——兩個相,結論相反:
+
+| 相 | 判定 | 結果 |
+|---|---|---|
+| **合併結果驗證** | `git merge-tree --write-tree <base> <head>` 算合併結果樹 T,再 `git diff <base> <T>`;對「本 PR 沒以**普通 commit** 引進」的路徑,合併結果必須完全等於 `base`（不同 ⇒ **evil merge**）| **FAIL** |
+| **diff 衛生** | `git diff <base> <head>` 的「純刪除／整檔刪除」且該檔在 `base` 上有本分支沒有的改動（= 落後的假刪除）| **WARN**（不擋；`--strict` 才失敗）|
+
+共用資產(`.github/`、`monitoring/`、`configs/`、`docs/reference/`、`scripts/ci/`、`Makefile`、
+`docker-compose*.yml`)在 WARN 相只是**訊息優先序**（最容易誤導人 ⇒ 先列）,不再是 FAIL —— 本 repo
+已強制 require-up-to-date,再讓它紅只是重複保護並製造 treadmill。`gh pr update-branch` 遇衝突會
+**拒絕**（⇒ 不會產生 evil merge）,**本地 merge 遇衝突不要猜**。
+job 內附負向證明:用**真的 repo 歷史**以 plumbing 造一個「已對齊的 evil merge」合成 commit
+（不動工作樹、不動 ref）,`git merge-tree` 證明合併結果真的少掉那個檔,檢查必須以 **exit 1** 擋下。
+本機可用 `make revert-guard` 先跑（`make ci-gate` 也涵蓋）。規格與**誠實邊界**見
+[`../specs/branch-revert-guard-spec.md`](../specs/branch-revert-guard-spec.md)。
+**它抓不到**:evil merge 落在本 PR 也改過的路徑上（最大盲區）、同一檔案內的部分回退（`added>0`
+的混合 hunk）、`main` 純修改共用資產（形狀依賴）、分支已對齊但內容仍矛盾、非 git 可見的回退。
 
 ## 4. PR-Merge — 合併到 main
 
@@ -277,3 +361,5 @@ PR 視為完成 **必須**所有三項：
 |------|------|------|
 | 2026-08-05 | 初版建立,因 2026-08-05 v3.0 PR-F #1457 半失敗教訓 | kaecer dispatch + AI agent |
 | 2026-09-25 | 新增 §3.3（PR base 設錯 → CI 靜默不跑 / required checks 卡在 Expected 的真因、診斷與處置 + `pr-base-guard` tripwire）、§3.4（promtool/amtool 監控 gate）;起因 PR #1975 任務 I | kaecer dispatch + AI agent |
+| 2026-09-26 | 新增 §2.4（pre-push hook 在 linked worktree export GIT_DIR ⇒ 建 throwaway repo 的測試會把 fixture commit 送進呼叫者的 repo；#1927 同款，2026-09-26 再犯一次）;起因 issue #1993 工作 | kaecer dispatch + AI agent |
+| 2026-09-26 | 新增 §3.5（合併結果驗證 + diff 衛生閘門：落後分支的 diff 會顯示假刪除但**不會回退**、唯一真回退是 evil merge、診斷指令、`gh pr update-branch` 處置、`revert-guard` CI 閘門與其誠實邊界）;起因 issue #1993（單一 session 實證 #1974／#1979／#1990／#1991／#1994） | kaecer dispatch + AI agent |

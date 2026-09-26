@@ -1,0 +1,40 @@
+{
+  "_doc": [
+    "測試 fixture（tests/scripts/test-revert-guard.sh 的 P1）：證明『有理由的豁免』可以把落後分支的",
+    "共用資產回退降級成 allowlisted，而不是讓檢查失效——reason 必填是這個機制的骨幹。",
+    "本檔路徑刻意放在 tests/fixtures/，不進 scripts/ci/revert-guard-allowlist.json（真 allowlist）。"
+  ],
+  "version": 1,
+  "entries": [
+    {
+      "path": "monitoring/alertmanager.yml",
+      "reason": "fixture：測試豁免機制本身；真 repo 的正解是 gh pr update-branch",
+      "ticket": "#1993",
+      "added": "2026-09-26"
+    },
+    {
+      "path": ".github/workflows/quality.yml",
+      "reason": "fixture：同上（共用資產以目錄前綴判定）",
+      "ticket": "#1993",
+      "added": "2026-09-26"
+    },
+    {
+      "path": "docs/reference/*",
+      "reason": "fixture：同時驗證 glob 形式的 path 比對",
+      "ticket": "#1993",
+      "added": "2026-09-26"
+    },
+    {
+      "path": "scripts/ci/check_x.sh",
+      "reason": "fixture：同上",
+      "ticket": "#1993",
+      "added": "2026-09-26"
+    },
+    {
+      "path": "configs/parameters.json",
+      "reason": "fixture：同上",
+      "ticket": "#1993",
+      "added": "2026-09-26"
+    }
+  ]
+}
