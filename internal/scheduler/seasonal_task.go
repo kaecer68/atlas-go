@@ -83,7 +83,13 @@ func runSeasonalCalibrationWithReplay(ctx context.Context, binaryPath, replayPat
 		return fmt.Errorf("seasonal calibration: binary path is empty")
 	}
 
-	args := []string{"-update"}
+	// -writeback=overlay (FU-20260926-07): this binary is spawned by the daemon
+	// *inside the container*, where configs/ is not bind-mounted. Writing
+	// configs/parameters.json there would land in the container's writable layer
+	// (invisible to git, lost on the next container recreate); overlay mode
+	// persists to data/state/parameters.calibrated.json instead and leaves the
+	// reviewed SSOT untouched.
+	args := []string{"-update", "-writeback=overlay"}
 	if replayPath != "" {
 		args = append(args, "--replay", replayPath)
 	}

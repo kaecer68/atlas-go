@@ -2,7 +2,12 @@ package main
 
 import (
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/kaecer68/atlas-go/internal/config"
 )
 
 func TestPercentile_Empty(t *testing.T) {
@@ -93,5 +98,92 @@ func TestComputeDistribution_FullStats(t *testing.T) {
 	}
 	if len(stats.Samples) != 5 {
 		t.Fatalf("expected 5 samples, got %d", len(stats.Samples))
+	}
+}
+
+// TestApplyCalibration_OverlayModeDoesNotWriteSSOT is the FU-20260926-07
+// contract for this CLI: in overlay mode the SSOT file stays byte-identical and
+// the calibrated RSI-tw VIX buckets land in the overlay under data/.
+func TestApplyCalibration_OverlayModeDoesNotWriteSSOT(t *testing.T) {
+	dir := t.TempDir()
+	ssotPath := filepath.Join(dir, "configs", "parameters.json")
+	if err := os.MkdirAll(filepath.Dir(ssotPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ssotJSON := `{"rsi_tw":{"a4_vix_thresholds":{"value":[15,20,25]},"a4_vix_scores":{"value":[0.5,0.3,0.1]}}}`
+	if err := os.WriteFile(ssotPath, []byte(ssotJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	overlayPath := config.CalibrationOverlayPath(dir)
+
+	previous := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath(overlayPath)
+	defer config.SetCalibratedOverlayPath(previous)
+
+	result := calibrationResult{
+		SampleSize:      12,
+		VIXThresholds:   []float64{12, 17, 22, 27},
+		VIXScores:       []float64{0.9, 0.6, 0.3, 0.1},
+		VIXDistribution: vixDistributionStats{Mean: 20, StdDev: 3},
+	}
+	if err := applyCalibration(dir, result, config.WritebackOverlay); err != nil {
+		t.Fatalf("applyCalibration(overlay): %v", err)
+	}
+
+	after, err := os.ReadFile(ssotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != ssotJSON {
+		t.Errorf("SSOT document rewritten in overlay mode:\nbefore=%s\nafter=%s", ssotJSON, after)
+	}
+
+	ov, err := config.LoadCalibrationOverlay(overlayPath)
+	if err != nil {
+		t.Fatalf("LoadCalibrationOverlay: %v", err)
+	}
+	if ov == nil {
+		t.Fatal("overlay was not written")
+	}
+	entry, ok := ov.Entries["rsi_tw.a4_vix_thresholds.value"]
+	if !ok {
+		t.Fatalf("overlay missing the calibrated VIX thresholds: %+v", ov.Entries)
+	}
+	values, ok := entry.Value.([]any)
+	if !ok || len(values) != 4 {
+		t.Fatalf("entry value = %#v, want the 4 calibrated thresholds", entry.Value)
+	}
+	if _, ok := ov.Entries["rsi_tw.a4_vix_scores.value"]; !ok {
+		t.Errorf("overlay missing the calibrated VIX scores: %+v", ov.Entries)
+	}
+}
+
+// TestApplyCalibration_SSOTModeStillWritesFile pins the default for a human on a
+// checkout: the parameters file is rewritten.
+func TestApplyCalibration_SSOTModeStillWritesFile(t *testing.T) {
+	dir := t.TempDir()
+	ssotPath := filepath.Join(dir, "configs", "parameters.json")
+	if err := os.MkdirAll(filepath.Dir(ssotPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ssotPath, []byte(`{"rsi_tw":{"a4_vix_thresholds":{"value":[15,20,25]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	previous := config.GetCalibratedOverlayPath()
+	config.SetCalibratedOverlayPath("")
+	defer config.SetCalibratedOverlayPath(previous)
+
+	result := calibrationResult{SampleSize: 12, VIXThresholds: []float64{12, 17, 22}, VIXScores: []float64{0.9, 0.6, 0.3}}
+	if err := applyCalibration(dir, result, config.WritebackSSOT); err != nil {
+		t.Fatalf("applyCalibration(ssot): %v", err)
+	}
+
+	after, err := os.ReadFile(ssotPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), "12") {
+		t.Errorf("ssot mode did not persist the calibrated thresholds: %s", after)
 	}
 }

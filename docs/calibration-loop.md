@@ -63,6 +63,20 @@ dotted path 的形狀在**文件層**套用：先 patch SSOT 的 JSON 文件、�
 形狀的欄位塞進 parameter table。**容器必須存在、落葉可以新増**（新校準出的產業可以新增；
 `industry.cycle_thresolds` 這種打錯的段落名會被拒絕並告警 ✓）。
 
+### CLI／cron 的落點（`-writeback`）
+
+CLI 工具**預設**寫 SSOT（人工在 checkout 執行 ⇒ 可審查的 git diff ✓），但**容器內執行的必須**走 overlay：
+
+| 情境 | 指令 | 落點 |
+|------|------|------|
+| 人工在 checkout | `calibrate-* …`（預設 `-writeback=ssot`） | `configs/parameters.json` ✓（git diff 可審查） |
+| 容器／排程 | `calibrate-seasonal -update -writeback=overlay`（由 `internal/scheduler/seasonal_task.go` 生成 ⇒ **強制** ✓） | `data/state/parameters.calibrated.json` ✓；SSOT 不動 ✓ |
+
+- 共用實作：`internal/config/calibration_writeback.go` —— 以「本次載入的 SSOT 文件」為 baseline 做 JSON diff，
+  只把**被改到的葉節點**寫成 overlay 條目（陣列／物件整塊視為一個葉節點 ✓）。
+- **要求 `overlay` 卻沒有註冊 overlay 路徑 ⇒ 高聲失敗** ✓（不靜默回退去寫 SSOT ✗）。
+- 條目名稱含 `.` 的路徑無法用點狀定位 ⇒ WARN 列出，不亂寫 ✓。
+
 ### 誰還寫 SSOT（刻意的）
 
 - **CLI 工具**（`cmd/calibrate-parameters`、`cmd/calibrate-rsi-tw --update`、`cmd/calibrate-seasonal --update`、

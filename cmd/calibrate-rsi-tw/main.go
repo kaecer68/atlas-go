@@ -60,8 +60,17 @@ func run(args []string) error {
 	workDir := fs.String("work-dir", ".", "Working directory (path to atlas root)")
 	outputPath := fs.String("output", "", "Output JSON path (default: stdout)")
 	dryRun := fs.Bool("dry-run", false, "Dry run: print report, do not update parameters")
-	updateParams := fs.Bool("update", false, "Update configs/parameters.json with calibrated values")
+	updateParams := fs.Bool("update", false, "Update configs/parameters.json with calibrated values (see -writeback)")
+	writebackFlag := fs.String("writeback", string(config.WritebackSSOT), config.WritebackFlagUsage)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	writeback, err := config.ParseCalibrationWriteback(*writebackFlag)
+	if err != nil {
+		return err
+	}
+	if err := writeback.RegisterForWorkDir(*workDir); err != nil {
 		return err
 	}
 
@@ -77,10 +86,14 @@ func run(args []string) error {
 	result := calibrate(snapshots)
 
 	if *updateParams && !*dryRun {
-		if err := applyCalibration(*workDir, result); err != nil {
+		if err := applyCalibration(*workDir, result, writeback); err != nil {
 			return fmt.Errorf("apply calibration: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "Updated %s/configs/parameters.json with calibrated VIX values\n", *workDir)
+		if writeback.IsOverlay() {
+			fmt.Fprintf(os.Stderr, "Wrote calibrated VIX values to %s (configs/parameters.json untouched)\n", config.GetCalibratedOverlayPath())
+		} else {
+			fmt.Fprintf(os.Stderr, "Updated %s/configs/parameters.json with calibrated VIX values\n", *workDir)
+		}
 	}
 
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -216,7 +229,7 @@ func computeDistribution(vals []float64) vixDistributionStats {
 	}
 }
 
-func applyCalibration(workDir string, result calibrationResult) error {
+func applyCalibration(workDir string, result calibrationResult, writeback config.CalibrationWriteback) error {
 	paramsPath := filepath.Join(workDir, "configs", "parameters.json")
 	cfg, err := config.LoadParametersConfig(paramsPath)
 	if err != nil {
@@ -224,6 +237,16 @@ func applyCalibration(workDir string, result calibrationResult) error {
 		cfg = config.DefaultParametersConfig()
 	}
 	cfg.UpdatedAt = time.Now()
+
+	// Snapshot the configuration as loaded: overlay mode diffs it against the
+	// calibrated one, so only the changed leaves are persisted.
+	var base *config.ParametersConfig
+	if writeback.IsOverlay() {
+		base, err = config.CloneParametersConfig(cfg)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Only update if we have enough data confidence.
 	if result.SampleSize >= 10 {
@@ -238,6 +261,10 @@ func applyCalibration(workDir string, result calibrationResult) error {
 		cfg.RSITw.A4VixScores.CalibrationMethod = "even_spacing_6_buckets"
 	}
 
+	if writeback.IsOverlay() {
+		_, err := config.WriteConfigOverlay("calibrate_rsi_tw", base, cfg, time.Now())
+		return err
+	}
 	return cfg.LockedSaveWithRollback(paramsPath)
 }
 

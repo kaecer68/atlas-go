@@ -694,11 +694,29 @@
    - overlay 文件格式升級為 **v2**：條目可為 named tunable（純量）或 **dotted JSON path**（任意 JSON），
      . 兩者共用同一份文件／同一組 fail-closed 規則（未知鍵/路徑移除＋WARN、SSOT 基準變動 ⇒ 失效移除＋WARN、
      未註冊路徑＝完全停用）。dotted path 規則：**容器必須存在、落葉可新增**（打錯段落名會被擋）。
-4. **刻意仍寫 SSOT（不是缺口）**：
-   - CLI 工具（`cmd/calibrate-parameters`、`cmd/calibrate-rsi-tw --update`、`cmd/calibrate-seasonal --update`、
-     `cmd/calibrate-thresholds`、`cmd/backfill-industry-tree`）：人工在 checkout 執行 ⇒ 寫入是**可審查的 git diff** ✓。
+4. **CLI／容器寫入端（2026-09-26 第三批，`feat/calibration-overlay-cli-writers`）**：
+   - **真缺口（容器內執行）**：`seasonal_calibration` 背景任務（7d）以**子行程**執行 `calibrate-seasonal -update`
+     （`internal/scheduler/seasonal_task.go`；映像內只有這一支 CLI：`Dockerfile` `COPY …/calibrate-seasonal /app/`）
+     ⇒ 它原本會寫 `/app/configs/parameters.json`（**不在 bind mount**）✗。
+     處置：新增 `-writeback` flag（`ssot` 預設／`overlay`）＋ 生成端**強制** `-writeback=overlay`（有測試斷言 args ✓）。
+   - **同一個 flag 也給其他 CLI**（`calibrate-rsi-tw`、`calibrate-thresholds`、`calibrate-parameters`、
+     `backfill-industry-tree`）：預設 `ssot`（人工在 checkout ⇒ 可審查 git diff ✓ 不變），需要時可 `-writeback=overlay`。
+     ⚠️ 這四支**不在** image 內（Dockerfile 只 ship `calibrate-seasonal`）⇒ 目前只能人工執行 ✓；
+     給 flag 是為了「若日後 ship 進映像」時不必再改一次 ✓，而不是現行缺口。
+   - `auto_calibrate` 任務（`go run ./cmd/calibrate-parameters`）已加 `--writeback=overlay` ✓；但該路徑在容器內
+     **本來就跑不動**（映像無 Go toolchain）⇒ 這是防護，不是行為變更（未把它改成 in-process ✗，避免**默默啟用**一個
+     從未在生產跑過的校準）。
+   - overlay 路由的共用實作：`internal/config/calibration_writeback.go`（`ParseCalibrationWriteback`／
+     `RegisterForWorkDir`／`WriteDocumentOverlay`／`WriteConfigOverlay`／`DiffParametersDocuments`）：
+     以「本次載入的 SSOT 文件」為 baseline 做 JSON diff ⇒ 只落**被改到的葉節點**；未註冊 overlay 路徑而要求
+     `overlay` 時**高聲失敗**（不靜默回退寫 SSOT ✗）；條目名稱含 `.` 的路徑無法定位 ⇒ WARN 列出（不亂寫）。
+   - **修正一項事實**：`docker-compose.yml` 的 `cron-darwinian`（每日 09:00）跑的是 `scripts/darwinian_adjust.sh`，
+     該檔自述 **DEPRECATED（2026-08-17）** 且寫的是 `configs/darwinian_weights.json`（**不是** `parameters.json`）
+     ⇒ 與本條無關 ✓（本條的容器內證據是 `seasonal_calibration` ✓）。
+5. **刻意仍寫 SSOT（不是缺口）**：
+   - CLI 工具**預設**行為（人工在 checkout 執行）：`-writeback` 預設 `ssot` ⇒ 寫入是**可審查的 git diff** ✓。
    - admin parameters API（`POST /api/parameters`、`/api/parameters/rollback`）：人工編輯 SSOT 的介面 ✓。
-5. **生產不可達、刻意未遷移（不為死碼整齊而動）**：
+6. **生產不可達、刻意未遷移（不為死碼整齊而動）**：
    - `internal/orchestrator/calibration_engine.go` 的 `ApplyToConfig`/`ApplyToConfigPath`：**無任何 production caller**
      （`grep -rn 'ApplyToConfig' internal/ cmd/` 只回定義；`CalibrationEngine` 只被用於 `Calibrate`）。
    - `internal/scheduler/auto_rollback.go:274`（`RestoreFromBackup(GetParametersConfigPath())`）：由
@@ -706,7 +724,7 @@
      在 production **無呼叫者**（只有測試）。
    - ⚠️ 若日後有人接線這兩條，**必須**改走 overlay（否則本條缺口原地復活）。
    - `docs/calibration-loop.md` 已同步記錄「誰還寫 SSOT（刻意的）」清單。
-6. **admin API 與 overlay 的互動（僅記錄，未改）**：`POST /api/parameters` 的讀寫基準是
+7. **admin API 與 overlay 的互動（僅記錄，未改）**：`POST /api/parameters` 的讀寫基準是
    `h.params`（SSOT 視圖）⇒ **不會**把 overlay 值寫進 SSOT ✓。但 `POST /api/parameters/rollback`
    走 `SnapshotStore.RollbackToSnapshot`（直接換掉**單例**＝effective 那份）再把單例寫回 SSOT
    ⇒ 該次 rollback 會把當下 overlay 的值一併寫進 SSOT；之後 overlay 條目會因「SSOT 基準變動」而失效
