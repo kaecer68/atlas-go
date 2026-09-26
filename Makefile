@@ -339,7 +339,7 @@ install-atlas-mcp-from-release:
 	if [ -n "$(VERSION)" ]; then VERSION_FLAG="--version $(VERSION)"; fi; \
 	./scripts/install-atlas-mcp-from-release.sh $$VERSION_FLAG
 
-test-backend:
+test-backend: embed-dirs
 	@echo "🧪 Testing Go backend..."
 	go test $(GO_PKGS)
 
@@ -844,6 +844,42 @@ rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
 #   Docker build/push (multi-platform)、deploy、gosec SARIF upload、
 #   跨 repo contract check (routes/contracts)
 
+# 可注入的目錄清單（供 hermetic 測試用 EMBED_DIRS=... 覆寫；預設＝repo 內兩個 embed 目錄）
+EMBED_DIRS ?= admin_web/dist client_web/dist
+
+# ── 本機 worktree bootstrap：`//go:embed all:dist` 的前置目錄 ────────────────────
+# 為什麼需要：`admin_web/embed.go` 與 `client_web/embed.go` 使用 `//go:embed all:dist`
+#   ⇒ 只要 `admin_web/dist` 或 `client_web/dist` **不存在**，`go build ./...`
+#     （連帶 `go vet` / `go generate` / `go test`）就會失敗：
+#       `pattern all:dist: no matching files found`
+#   「全新 worktree」（`git worktree add`）第一次跑本機閘門時**必然**遇到
+#   ⇒ 每一條新 lane 的第一次 push 都被擋（2026-09-26 一天內 3 次同型事故）。
+# 設計邊界（不可違反）：
+#   ① 只在目錄**不存在**時建立空佔位（`.keep`）⇒ 冪等；目錄已存在就完全不動它。
+#   ② CI **不受影響、也不可被遮蔽**：CI 的真 dist 來自 frontend 建置步驟；本目標在
+#      CI 環境（環境變數 `CI` 非空）時**什麼都不做** ⇒ CI 若真缺 dist，`go build` 仍會紅。
+#   ③ 不在 `go build` / `embed` 上做任何手腳（不放寬 pattern、不吞錯誤）。
+# 相關：`FU-20260926-15`（host/worktree 環境前置，同族）。
+.PHONY: embed-dirs
+embed-dirs:
+	@if [ -n "$${CI:-}" ]; then \
+		echo "  → embed-dirs: CI 環境（CI=$${CI}）⇒ 跳過（真 dist 由 frontend 建置流程產生）"; \
+	else \
+		created=""; \
+		for d in $(EMBED_DIRS); do \
+			if [ ! -d "$${d}" ]; then \
+				mkdir -p "$${d}"; \
+				touch "$${d}/.keep"; \
+				created="$${created} $${d}"; \
+			fi; \
+		done; \
+		if [ -n "$${created}" ]; then \
+			echo "  → embed-dirs: 已建立本機 dev 佔位:$${created}（各含 .keep，冪等）"; \
+			echo "     ⚠️  這只是本機 dev 佔位（//go:embed all:dist 需要目錄存在）；正式建置請跑"; \
+			echo "         make build-frontend —— 真 dist 會覆蓋它。"; \
+		fi; \
+	fi
+
 .PHONY: ci-gate
 # Contract tests for repository scripts (tests/scripts/*.sh) — OPT-IN ONLY.
 #
@@ -862,7 +898,8 @@ test-scripts:
 	done
 	@echo "    ✅"
 
-ci-gate:
+# 本機閘門（含 pre-push 路徑）先 bootstrap embed 目錄；CI 內為 no-op（見 embed-dirs）
+ci-gate: embed-dirs
 	@echo "🛡️  CI pre-push gate (fast, <30s)..."
 	@echo ""
 	@echo "  → gofmt check"
@@ -902,6 +939,9 @@ ci-gate:
 	@echo "    ✅"
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
+	@echo "    ✅"
+	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
+	@bash tests/scripts/test-embed-dirs.sh
 	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh
