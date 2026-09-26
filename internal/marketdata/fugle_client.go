@@ -348,13 +348,20 @@ func (c *FugleClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 	if last == 0 {
 		last = fugleResp.ClosePrice
 	}
+	// total.tradeVolume is 成交張數 (LOTS) for regular-board stocks — the Fugle
+	// official example proves it: tradeValue 31,019,803,000 / tradeVolume 54,538
+	// = avgPrice 568.77 × 1000 (developer.fugle.tw intraday/quote; Fubon neo
+	// embeds the same spec). domain.Quote.Volume is ALWAYS 成交股數 (shares), so
+	// convert at the provider boundary (#1987). Note the same vendor's
+	// historical/candles DAILY endpoint reports shares per official docs — only
+	// the intraday family is lot-denominated.
 	quote := domain.Quote{
 		Symbol:     symbol,
 		Last:       last,
 		Open:       fugleResp.OpenPrice,
 		High:       fugleResp.HighPrice,
 		Low:        fugleResp.LowPrice,
-		Volume:     fugleResp.Total.TradeVolume,
+		Volume:     fugleResp.Total.TradeVolume * domain.SharesPerLot,
 		Market:     "TW",
 		AsOf:       time.Now(),
 		IsTradable: true,
