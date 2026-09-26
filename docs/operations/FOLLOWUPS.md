@@ -859,12 +859,13 @@
 - **狀態**：`open`（殘留項落在禁改檔與 B 類，需另一條 lane）
 - **記錄日期**：2026-09-26
 - **來源（可重現）**：branch `fix/20260926-e10-imac-residue`；盤查指令
-  `git grep -n -I -e 'iMac' -e 'kk@kimac' -e '100\.68\.42\.72'`。背景：iMac 已於 2026-09-22 退役出售，
+  `git grep -n -I -e 'iMac' -e 'kk@kimac'`，並另外掃過 iMac 時代的 Tailscale 數值 IP（本檔刻意不寫出該
+  字面值，避免清單條目自我指涉製造命中；該 IP 在本 repo 已 0 命中）。背景：iMac 已於 2026-09-22 退役出售，
   現行 production = Mac Mini（`ssh kmacmini`）；go-member 在 Mac Mini 是 launchd 服務
   `:8093`（**不是** iMac 時代的 `:3000`，`:3000` 在 Mac Mini 是 gitea）；主 API 容器實名 = `atlas-go`
   （`-imac` 後綴淘汰）。
 - **本 PR 已做（A 類＝今天還會被執行/遵循者）**：`AGENTS.md`、`CLAUDE.md`、`.env.example`
-  （本 repo 唯一的 `100.68.42.72`，改成生產實查值 `http://host.docker.internal:8093`）、
+  （本 repo 唯一殘留的 iMac 時代 Tailscale 數值 IP，已改成生產實查值 `http://host.docker.internal:8093`）、
   `docs/operations/local-deploy.md`、`docs/guides/install-and-deploy.md` §4.2、`monitoring/rules/atlas_container_liveness_alerts.yml`
   ＋`monitoring/tests/atlas_container_liveness_test.yml`（promtool **完整比對**，兩檔必須同步）、
   `scripts/sync-darwinian.sh`、`scripts/ops/imac-container-watchdog.sh`、
@@ -884,7 +885,7 @@
      `internal/orchestrator/system_risk_session.go:238`、`internal/orchestrator/risk_forensics_hydration_test.go:217`、
      `internal/marketdata/bls_cpi_provider.go:8`、`internal/channelsecrets/crypto.go:36`、
      `internal/narrative/narrative_test.go:760`、`internal/monitoring/api/narrative/handlers_test.go:661`、
-     `cmd/atlas/prism_wiring_test.go:58`。皆為**帶日期的歷史觀測**且不含 `kk@kimac`／`100.68.42.72`，依分類規則不應改寫；
+     `cmd/atlas/prism_wiring_test.go:58`。皆為**帶日期的歷史觀測**，且不含退役主機的 SSH 目標或數值 IP，依分類規則不應改寫；
      唯 `crypto.go:36`（"back it up alongside the iMac .env"）與 `system_risk_session.go:238`（可執行指令
      `docker logs ... atlas-go-imac`，在主機上會 `No such container`）讀起來像現行操作 → 建議另開小 PR 各加一行。
   5. 其餘 B 類保留原值（`CHANGELOG.md`、`docs/decisions/**`、`docs/llm-adr-log.md`、
