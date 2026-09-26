@@ -21,7 +21,8 @@
 #     || logger -t finmind-quota "⚠ FinMind quota ≥90% — 開市前需確認 key/quota"
 #
 # 退出碼: 0 = ok / state file 不存在（非 prod 或 tracker 未初始化）
-#         1 = --strict 且 quota ≥ warn-pct，或 state file 解析失敗
+#         1 = --strict 且 quota ≥ warn-pct，或 state file 解析失敗，
+#             或 state file 被標記 quota-unknown（#2014：用量不可知 ⇒ fail-closed）
 # =============================================================================
 set -euo pipefail
 
@@ -55,6 +56,19 @@ done
 if [ ! -f "$STATE_FILE" ]; then
   echo "finmind quota: state file not found ($STATE_FILE) — 跳過（非 prod 或 tracker 未初始化）"
   exit 0
+fi
+
+# #2014: a state file carrying `quota_unknown: true` is a deliberate fail-closed
+# marker — the previous counter file was corrupt (or unreadable), so TODAY'S
+# USAGE IS UNKNOWN and DailyQuotaTracker is refusing calls on purpose. Printing
+# "0/12000 (0%)" here would be the same silent pass the marker exists to
+# prevent, so report it as a problem instead.
+if grep -q '"quota_unknown"[[:space:]]*:[[:space:]]*true' "$STATE_FILE"; then
+  echo "❌ finmind quota: $STATE_FILE 被標記為 quota-unknown — 今日用量不可知，DailyQuotaTracker 正 fail-closed（不放行呼叫）"
+  REASON="$(grep -o '"quota_unknown_reason"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*"[[:space:]]*:[[:space:]]*"//; s/"$//')"
+  [ -n "$REASON" ] && echo "   原因: $REASON"
+  echo "   處置: 檢視後修復/移除該檔（可先看同目錄的 *.corrupt-* 隔離檔）；配額日跨日後會自動恢復"
+  if [ "$STRICT" -eq 1 ]; then exit 1; else exit 0; fi
 fi
 
 # 解析 {"calls_today":N,"last_reset":"..."} — 純 grep/sed，零依賴

@@ -3247,6 +3247,8 @@ export interface QuotaState {
   upstream_exhausted?: boolean;
   upstream_reason?: string;
   upstream_at?: string;
+  quota_unknown?: boolean;
+  quota_unknown_reason?: string;
 }
 
 export interface Quote {

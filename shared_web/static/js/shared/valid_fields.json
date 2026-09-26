@@ -1472,6 +1472,8 @@
   "quality_volatility_std",
   "quality_weight",
   "quantity",
+  "quota_unknown",
+  "quota_unknown_reason",
   "quote_covered",
   "ranked",
   "ranked_brief",

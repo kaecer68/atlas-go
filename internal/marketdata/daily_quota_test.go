@@ -1,9 +1,13 @@
 package marketdata
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // TestDailyQuotaTracker_Remaining tests the Remaining method.
@@ -146,15 +150,184 @@ func TestDailyQuotaTracker_AllowCallIncrementsCounter(t *testing.T) {
 	}
 }
 
-// TestDailyQuotaTracker_NewWithInvalidStateDir tests creation with an invalid state directory.
-func TestDailyQuotaTracker_NewWithInvalidStateDir(t *testing.T) {
-	// Should not panic even if dir is invalid; it will just not persist
+// TestDailyQuotaTracker_InvalidStateDirFailsClosed pins the #2014 fail-closed
+// contract: an unusable state directory means today's usage is UNKNOWN, so the
+// tracker must not hand out budget.
+//
+// Before #2014 this case silently reported "100 remaining" — a quota guard that
+// announces a full budget exactly when it cannot read its own counter is the
+// #2009 "empty value passes" failure mode, one level down.
+func TestDailyQuotaTracker_InvalidStateDirFailsClosed(t *testing.T) {
 	tracker := NewDailyQuotaTracker("test_invalid", "/nonexistent/path", 100)
 	if tracker == nil {
 		t.Fatal("tracker should not be nil")
 	}
-	if got := tracker.Remaining(); got != 100 {
-		t.Errorf("expected 100 remaining on new tracker, got %d", got)
+	if got := tracker.Remaining(); got != 0 {
+		t.Errorf("Remaining() = %d with an unusable state dir, want 0 (fail closed)", got)
+	}
+	if tracker.AllowCall() {
+		t.Error("AllowCall() must refuse when the shared counter cannot be established")
+	}
+	if err := tracker.StateErr(); !errors.Is(err, ErrQuotaStateUnavailable) {
+		t.Errorf("StateErr() = %v, want ErrQuotaStateUnavailable", err)
+	}
+}
+
+// TestDailyQuotaTracker_CorruptStateFailsClosed covers every shape of "the
+// counter file exists but cannot be trusted". Each case must (a) refuse calls,
+// (b) report 0 remaining, (c) expose a distinct reason, and (d) keep refusing
+// after a restart — a restart must not turn "usage unknown" into "0 used".
+func TestDailyQuotaTracker_CorruptStateFailsClosed(t *testing.T) {
+	cases := []struct {
+		name  string
+		body  string
+		limit int
+	}{
+		{name: "truncated json", body: `{"calls_today": 12`, limit: 100},
+		{name: "empty file", body: ``, limit: 100},
+		{name: "not an object", body: `[]`, limit: 100},
+		{name: "missing last_reset", body: `{"calls_today": 7}`, limit: 100},
+		{name: "negative calls_today", body: `{"calls_today": -3, "last_reset": "` + time.Now().UTC().Format(time.RFC3339) + `"}`, limit: 100},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			provider := "corrupt"
+			stateFile := filepath.Join(dir, provider+"_daily_quota.json")
+			if err := os.WriteFile(stateFile, []byte(tc.body), 0o644); err != nil {
+				t.Fatalf("write corrupt state: %v", err)
+			}
+
+			tracker := NewDailyQuotaTracker(provider, dir, tc.limit)
+			if got := tracker.Remaining(); got != 0 {
+				t.Errorf("Remaining() = %d on corrupt state, want 0", got)
+			}
+			if tracker.AllowCall() {
+				t.Error("AllowCall() must refuse on corrupt state (no silent 0-and-pass)")
+			}
+			if err := tracker.StateErr(); !errors.Is(err, ErrQuotaStateCorrupt) {
+				t.Errorf("StateErr() = %v, want ErrQuotaStateCorrupt", err)
+			}
+
+			// AllowCall is the path that repairs: the bad file is set aside and
+			// an explicit marker is written for the current quota day.
+			raw, err := os.ReadFile(stateFile)
+			if err != nil {
+				t.Fatalf("read marker: %v", err)
+			}
+			var marker QuotaState
+			if err := json.Unmarshal(raw, &marker); err != nil {
+				t.Fatalf("marker is not valid JSON (%s): %v", raw, err)
+			}
+			if !marker.QuotaUnknown {
+				t.Errorf("marker = %s, want quota_unknown=true", raw)
+			}
+			if marker.CallsToday != 0 {
+				t.Errorf("marker calls_today = %d, want 0 (usage is unknown, not invented)", marker.CallsToday)
+			}
+			quarantined, err := filepath.Glob(stateFile + ".corrupt-*")
+			if err != nil {
+				t.Fatalf("glob quarantine: %v", err)
+			}
+			if len(quarantined) != 1 {
+				t.Errorf("quarantine files = %v, want exactly one", quarantined)
+			}
+			if len(quarantined) == 1 {
+				kept, readErr := os.ReadFile(quarantined[0])
+				if readErr != nil {
+					t.Fatalf("read quarantined file: %v", readErr)
+				}
+				if string(kept) != tc.body {
+					t.Errorf("quarantined content = %q, want the original %q (forensics)", kept, tc.body)
+				}
+			}
+
+			// Durability: a restart must NOT restore the budget.
+			restarted := NewDailyQuotaTracker(provider, dir, tc.limit)
+			if restarted.AllowCall() {
+				t.Error("a restarted tracker must still refuse: the quota day is latched as unknown")
+			}
+			if got := restarted.Remaining(); got != 0 {
+				t.Errorf("restarted Remaining() = %d, want 0", got)
+			}
+			if err := restarted.StateErr(); !errors.Is(err, ErrQuotaStateCorrupt) {
+				t.Errorf("restarted StateErr() = %v, want ErrQuotaStateCorrupt", err)
+			}
+			if !strings.Contains(restarted.StateErr().Error(), stateFile) {
+				t.Errorf("StateErr() = %q, want it to name the state file", restarted.StateErr())
+			}
+		})
+	}
+}
+
+// TestDailyQuotaTracker_CorruptStateRecoversNextQuotaDay proves the fail-closed
+// marker is day-scoped like the upstream latch: it must not become a permanent
+// kill switch.
+func TestDailyQuotaTracker_CorruptStateRecoversNextQuotaDay(t *testing.T) {
+	dir := t.TempDir()
+	provider := "corrupt_rollover"
+	stateFile := filepath.Join(dir, provider+"_daily_quota.json")
+	if err := os.WriteFile(stateFile, []byte("{not json"), 0o644); err != nil {
+		t.Fatalf("write corrupt state: %v", err)
+	}
+
+	tracker := NewDailyQuotaTracker(provider, dir, 10)
+	if tracker.AllowCall() {
+		t.Fatal("corrupt state must refuse")
+	}
+
+	// Rewrite the marker with YESTERDAY's quota day, which is what the next day
+	// looks like from the tracker's point of view.
+	yesterday := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	rolled := QuotaState{CallsToday: 0, LastReset: yesterday, QuotaUnknown: true, QuotaUnknownReason: "previous corruption"}
+	raw, err := json.Marshal(rolled)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(stateFile, raw, 0o644); err != nil {
+		t.Fatalf("rewrite state: %v", err)
+	}
+
+	if !tracker.AllowCall() {
+		t.Fatalf("a new quota day must be usable again, StateErr=%v", tracker.StateErr())
+	}
+	if got := tracker.CallsToday(); got != 1 {
+		t.Errorf("CallsToday() = %d after the rollover, want 1", got)
+	}
+	if err := tracker.StateErr(); err != nil {
+		t.Errorf("StateErr() = %v after the rollover, want nil", err)
+	}
+}
+
+// TestDailyQuotaTracker_StateIsRereadFromDisk proves the counter is no longer a
+// snapshot taken once at construction (#2014): a value written by another
+// process after this tracker was built is visible immediately.
+func TestDailyQuotaTracker_StateIsRereadFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	provider := "reread"
+	stateFile := filepath.Join(dir, provider+"_daily_quota.json")
+
+	reader := NewDailyQuotaTracker(provider, dir, 100)
+	if got := reader.CallsToday(); got != 0 {
+		t.Fatalf("fresh CallsToday() = %d, want 0", got)
+	}
+
+	// Another process spends 9 calls (written straight to the shared file).
+	other := QuotaState{CallsToday: 9, LastReset: time.Now().UTC().Truncate(24 * time.Hour)}
+	raw, err := json.Marshal(other)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(stateFile, raw, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if got := reader.CallsToday(); got != 9 {
+		t.Errorf("CallsToday() = %d after another process spent 9, want 9 (read once at construction was the bug)", got)
+	}
+	if got := reader.Remaining(); got != 91 {
+		t.Errorf("Remaining() = %d, want 91", got)
 	}
 }
 
