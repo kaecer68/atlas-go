@@ -253,6 +253,10 @@ func (f *RiskExclusionFilter) checkLiquidity(symbol string, quoteBySymbol map[st
 		})
 		return
 	}
+	// q.Volume is 成交股數 (shares) by the #1987 provider-boundary contract, so
+	// Last × Volume is the real daily TWD amount. (Before #1987 Fugle/Fubon
+	// quotes arrived in 張 and this check was 1000x stricter than intended —
+	// production excluded 130/150 symbols; see issue #1987.)
 	dailyAmount := q.Last * float64(q.Volume)
 	passed := dailyAmount >= f.minDailyAmount
 	if !passed {

@@ -237,13 +237,18 @@ func (c *FubonClient) GetQuote(ctx context.Context, symbol string) (domain.Quote
 		return domain.Quote{}, fmt.Errorf("fubon proxy: decode response: %w", err)
 	}
 
+	// The proxy passes the Fubon SDK's total.tradeVolume through unchanged
+	// (services/fubon-proxy/main.py), and that field is 成交張數 (LOTS) — Fubon
+	// neo embeds the Fugle market-data spec whose official example shows
+	// tradeValue = tradeVolume × avgPrice × 1000. domain.Quote.Volume is ALWAYS
+	// 成交股數 (shares), so convert at the provider boundary (#1987).
 	quote := domain.Quote{
 		Symbol:     symbol,
 		Last:       fubonResp.Last,
 		Open:       fubonResp.Open,
 		High:       fubonResp.High,
 		Low:        fubonResp.Low,
-		Volume:     int64(fubonResp.Volume),
+		Volume:     int64(fubonResp.Volume) * domain.SharesPerLot,
 		Market:     "TW",
 		AsOf:       time.Now(),
 		IsTradable: fubonResp.IsOpen && !fubonResp.IsClose,
@@ -318,13 +323,14 @@ func (c *FubonClient) GetQuotes(ctx context.Context, symbols []string) ([]domain
 
 	quotes := make([]domain.Quote, 0, len(fubonResps))
 	for _, r := range fubonResps {
+		// Same lots→shares boundary conversion as GetQuote (#1987).
 		quotes = append(quotes, domain.Quote{
 			Symbol:     r.Symbol,
 			Last:       r.Last,
 			Open:       r.Open,
 			High:       r.High,
 			Low:        r.Low,
-			Volume:     int64(r.Volume),
+			Volume:     int64(r.Volume) * domain.SharesPerLot,
 			Market:     "TW",
 			AsOf:       time.Now(),
 			IsTradable: r.IsOpen && !r.IsClose,

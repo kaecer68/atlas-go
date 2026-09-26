@@ -98,7 +98,7 @@
 | 超界 `adjustment_factor` 來源不明 | `cmd/calibrate-seasonal --update` 有守門，故 production 的 4 個超界值來自（或早於）不受守門保護的寫入路徑 | 中高 | 本批只做消費端 clamp；**建議另票追污染源** |
 | config validator 允許負 `adjustment_factor` | `parameters_validate.go` 只檢查 `!= 0`（實證有 2 個負值載入成功） | 中 | **刻意未改**（會擋掉現行 production 啟動）；與上一列一起處理 |
 | 全市場 quote 抓取 N+1（fubon-proxy 逐檔 + Hybrid→FinMind 逐檔 fallback） | 一檔不完整 quote 可造成 ~1,599 次 FinMind 請求（≈11% 日配額） | **已緩解**（chunked fetch，fallback 成本限單一 chunk）；provider 內部逐檔行為未改（marketdata lane；spec §9.2/§9.6） |
-| `domain.Quote.Volume` 一欄兩種單位（TWSE=股、Fugle/Fubon=張，差 1000×） | 以「張」計的報價把 NT$10M 量價門檻實質變成 NT$10bn ⇒ 中型股以下靜默全滅（`quotes_status` 仍 ok） | **已接線換算**（`quoteVolumeLotSources`／`quoteVolumeInShares`，只在導出 TWD 量能處；`lots_converted` 對外可稽核）；**provider 邊界統一未修**（跨 ledger/顯示/screener 契約，需另票） |
+| `domain.Quote.Volume` 一欄兩種單位（TWSE=股、Fugle/Fubon=張，差 1000×） | 以「張」計的報價把 NT$10M 量價門檻實質變成 NT$10bn ⇒ 中型股以下靜默全滅（`quotes_status` 仍 ok）；live 管線更讓 `shouldReducePosition` 等絕對門檻全滅 | **已由 #1987 根治**：provider 邊界統一為股（fugle/fubon/fugle-ws ×`domain.SharesPerLot`），消費端換算表 `quoteVolumeLotSources`／`quoteVolumeInShares`／`lots_converted` 全數刪除；邊界由 `provider_volume_contract_test.go` 逐 provider 釘住 |
 | mock provider 被標成可信 | `selectProvider` 無 key 時回 `MockProvider`（假 quote 完整） | 中 | **已接線**：`IsMock()` → `quotes_status=mock`／`ranked_trustworthy=false` |
 | `ParameterSnapshot.NarrativeHitRates` 無來源標記 | theme hit rates 來自 config 常數集 | 中 | **未處理**（登記於此） |
 | `internal/config/configs/parameters.json` 影子副本 | 與 `configs/parameters.json` 不同、無 Go caller，還會誤導 `findRepoRoot` 探測 | 低-中 | **未處理**（刪除需確認部署腳本未引用） |
