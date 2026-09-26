@@ -712,9 +712,12 @@
   且同型全掃後另修 `tests/scripts/test-install-webhook.sh:55/78/104`、`.github/workflows/quality.yml`（`mcp-tool-count`
   的 `$DOC_MIN–$DOC_MAX`）與**本條目併入後才出現**的 3 處（`tests/scripts/test-binary-freshness-guard.sh:104/127`、
   `tests/scripts/test-cron-entrypoint.sh:42`）。更重要的是把它變成**機制**：
-  `scripts/ci/check_shell_var_nonascii.{sh,py}`（靜態掃 `*.sh`）＋ self-test
-  `tests/scripts/test-shell-var-nonascii.sh`（27 項、精確 exit code）＋ `quality.yml` 的 `shell-var-nonascii` job
-  ＋ `make ci-gate`，例外清單 `scripts/ci/shell-var-nonascii-baseline.txt`（現況空）。
+  `scripts/ci/check_fullwidth_var_expansion.{sh,py}`＋ self-test
+  `tests/scripts/test-fullwidth-var-expansion.sh`（30 項、精確 exit code 1/0/2）＋ `quality.yml` 的
+  `fullwidth-var-expansion` job ＋ `make ci-gate`。該掃描器**移植自 a2a-dev 既有的同名守門**
+  （`scripts/check-fullwidth-var-expansion.py`，tokenizer 原樣沿用；a2a-dev 是這個陷阱的原生守門），
+  atlas-go 端擴充檔案類型：`*.sh` / `Makefile` / `*.mk` / `*.py` / **YAML 的 `run:` 區塊**
+  （只掃區塊：整檔掃會被 YAML 的 `name:` 與引號污染 tokenizer 狀態而誤報）。
   該檢查是**唯一**能擋下這類 bug 的手段：實測 macOS+UTF-8 locale 崩潰、`LC_ALL=C` 與 linux/glibc/musl **皆不發作**
   ⇒ 只在 ubuntu 上跑的 CI **永遠不會紅**。
 - **未修 ②**：`Makefile` coverage 段（`#2009`）的「門檻變數為空 ⇒ 比較反向通過」由另票處理（本 PR 未動該段）。

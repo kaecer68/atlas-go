@@ -357,7 +357,7 @@ lint-backend:
 	@# 兩種壞法疊在一起：rc 被吞 + 根本沒掃到檔案）。改用 repo 根目錄（與 ci-gate 的 `gofmt -l .` 一致）。
 	@gofmt_out="$$(gofmt -l .)"; gofmt_rc=$$?; \
 	if [ "$$gofmt_rc" -ne 0 ]; then \
-		echo "    ❌ gofmt 執行失敗（rc=$$gofmt_rc）——這不是「乾淨」"; \
+		echo "    ❌ gofmt 執行失敗（rc=$${gofmt_rc}）——這不是「乾淨」"; \
 		exit 1; \
 	fi; \
 	if [ -n "$$gofmt_out" ]; then \
@@ -909,9 +909,9 @@ ci-gate:
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"
-	@echo "  → shell 展開緊接非 ASCII 的靜態檢查＋自我測試（UTF-8 locale 下必然 unbound variable）"
-	@bash scripts/ci/check_shell_var_nonascii.sh
-	@bash tests/scripts/test-shell-var-nonascii.sh
+	@echo "  → 全形字元緊鄰變數展開的靜態檢查（移植自 a2a-dev）＋自我測試"
+	@bash scripts/ci/check_fullwidth_var_expansion.sh
+	@bash tests/scripts/test-fullwidth-var-expansion.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
