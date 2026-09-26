@@ -139,10 +139,18 @@ scripts-only 的 PR 也會跑）：
 2. 明示抓兩個 ref：`refs/heads/<base>` 與 `refs/pull/<N>/head`（**不用**預設的 merge ref，理由見 §2.5）；
 3. 跑 hermetic 回歸測試；
 4. 跑檢查（gate）；
-5. **負向證明**：用真的 repo 歷史造一個落後分支——從「`main` 上最後一次動共用資產的那個 commit 的
-   parent」開分支，再刪掉該 commit 動過的共用資產檔 ⇒ 檢查必須 exit 1。
+5. **負向證明**（[`../../scripts/ci/revert-guard-negative-proof.sh`](../../scripts/ci/revert-guard-negative-proof.sh)）：
+   取 `base` 上最後一次動共用資產的 commit（`LAST_SHARED`），用**暫存 index + `git write-tree` /
+   `commit-tree`** 造一個「parent = `LAST_SHARED^`、內容 = parent 減掉該檔」的合成 commit
+   （**不切換工作樹、不動任何 ref**），再要求檢查**以 exit 1 擋下**。
    為什麼要這步：hermetic fixture 只證明程式邏輯，這步證明**CI 的 ref 解析與真 repo 歷史**也能擋
    （與 `secret-scan` / `monitoring-single-source` job 的 negative proof 同一套路）。
+
+   ⚠️ **負向證明本身必須做 exit code 精確斷言**：首版是 inline 版，它把工作樹 checkout 到舊 commit，
+   於是檢查腳本在該 commit 不存在 ⇒ `bash: …: No such file or directory`（127）⇒ `if ! cmd` 把它算成
+   「擋下了」並印 ✅ ——**一次假綠**（2026-09-26 首次 PR CI 的 log 實證）。修法兩道並用：
+   工作樹不動（腳本一定在）+ 斷言 `rc -eq 1`（127／2 都會讓 step 紅燈）。
+   通則：負向證明的判定是「**恰好**回報預期的失敗碼」，不是「非 0」。
 
 回歸測試是 **hook-safe 的 hermetic fixture**：`tests/scripts/test-revert-guard.sh` 會建 throwaway git repo，
 所以它必須 `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR …`（git 對
@@ -233,6 +241,7 @@ worktree 上跑真 `pre-push`（修好後 27/27 PASS 且 refs 不動；故意拿
 | CI 接入 | `.github/workflows/quality.yml` → `revert-guard` job（PR 事件必跑，含負向證明） | GitHub CI 全綠（含 `inert-closure`）|
 | 機制實測 A：`git merge --squash` 對「分支沒動過的檔」 | temp repo：main 加一行到 `monitoring/am.yml`，落後分支只動 `g.txt` → `git merge --squash` | 合併後 `monitoring/am.yml` **保留** main 的那一行（三方合併）⇒ 不對此誇大 |
 | 機制實測 B：patch 形式落地 | 同上情境 → `git diff main..feat \| git apply`（在 main 上） | `monitoring/am.yml` 變成只剩 `a1` ⇒ main 的那一行**被刪掉**（`apply OK` 但內容回退）|
+| CI 首跑（PR #2003）real 證據 | `gh run view --job 108330136748 --log` | `base=refs/remotes/origin/main 7c79a4ab` / `head=refs/remotes/origin/pr-head 25c0be55`；hermetic `27 項 PASS`；`✅ revert-guard PASS（0.02s）`；job 13s。**同一份 log 也抓到負向證明首版的假綠**（127 被當成擋下），修好後本機重跑：合成 commit 刪 `docs/reference/traps.md` ⇒ `exit 1` ✅，把 check 換成 exit 127 的假腳本 ⇒ `::error title=負向證明失敗 … 實際 exit 127`（step 紅燈）|
 | hook 環境下仍 hermetically 有效 | 沙箱 linked worktree + 真 `pre-push` hook 跑 `bash tests/scripts/test-revert-guard.sh` | 修好後 27/27 PASS、`refs/heads/*` 未被 fixture 動到；刻意還原成沒有 `unset GIT_*` 的版本則 fixture commit 落到 `refs/heads/main`（`m2: 其他 PR 已合併的改動`）與被推分支（重現 #1927 型事故，證明這道防護有必要）|
 
 allowlist 現況（真檔）：0 筆（本 PR 未需要任何豁免 —— 需要豁免才代表閘門被繞過）。

@@ -243,30 +243,16 @@ jobs:
           --base "refs/remotes/origin/${{ github.base_ref }}" \
           --head refs/remotes/origin/pr-head
 
-    # 負向證明：用**真的 repo 歷史**造一個落後分支——從「main 上最後一次動共用資產的那個
-    # commit 的 parent」開分支，再把該 commit 動過的共用資產檔刪掉 ⇒ 檢查必須 exit 1。
-    # 為什麼要這步：hermetic fixture 只證明程式邏輯；這裡證明 CI 的 ref 解析（base/pr-head）
-    # 與真正 repo 的歷史也能擋（與 secret-scan / monitoring-single-source 的 negative proof 同套路）。
+    # 負向證明：用**真的 repo 歷史**造一個「落後分支刪掉共用資產」的合成 commit，要求檢查
+    # **以 exit 1 擋下**（腳本：scripts/ci/revert-guard-negative-proof.sh，含 exit code 精確斷言）。
+    # 為什麼要這步：hermetic fixture 只證明程式邏輯，這步證明 CI 的 ref 解析與真 repo 歷史也能擋
+    # （與 secret-scan / monitoring-single-source job 的 negative proof 同一套路）。
+    # ⚠️ 2026-09-26 首版是 inline 版：它把工作樹 checkout 到舊 commit，於是**檢查腳本在該 commit
+    # 不存在** ⇒ `bash: ...: No such file or directory`（127）⇒ `if ! cmd` 把它當成「擋下了」而印 ✅
+    # （假綠）。現在的版本用 plumbing 造 commit（不動工作樹、不動 ref），並斷言 exit code **恰好 1**，
+    # 127/2 都會讓這個 step 紅燈。
     - name: Negative proof — a stale branch deleting a shared asset must be blocked
-      run: |
-        set -euo pipefail
-        BASE="refs/remotes/origin/${{ github.base_ref }}"
-        SPEC=(.github monitoring configs docs/reference Makefile 'docker-compose*.yml' scripts/ci)
-        LAST_SHARED=$(git log --no-merges -n1 --format=%H "${BASE}" -- "${SPEC[@]}")
-        test -n "${LAST_SHARED}" || { echo "❌ 找不到動過共用資產的 main commit"; exit 1; }
-        FILE=$(git diff --name-only --diff-filter=ACM "${LAST_SHARED}^" "${LAST_SHARED}" -- "${SPEC[@]}" | head -1)
-        test -n "${FILE}" || { echo "❌ 找不到候選共用資產檔"; exit 1; }
-        echo "負向證明：${LAST_SHARED:0:8} 動過 ${FILE}；從其 parent 開分支並刪掉該檔"
-        git checkout -q --detach "${LAST_SHARED}^"
-        git checkout -q -B __negtest_revert_guard__
-        rm -f "${FILE}"
-        git add -A -- "${FILE}"
-        git -c user.name=ci -c user.email=ci@example.invalid commit -q -m "negtest: 落後分支刪除共用資產"
-        if bash scripts/ci/check_revert_guard.sh --base "${BASE}" --head __negtest_revert_guard__; then
-          echo "❌ 負向證明失敗：落後分支刪除共用資產竟未被擋下"
-          exit 1
-        fi
-        echo "✅ 負向證明通過（檢查確實會擋）"
+      run: bash scripts/ci/revert-guard-negative-proof.sh "refs/remotes/origin/${{ github.base_ref }}"
 
   # Frontend dynamic import consistency — verifies every admin_web/client_web
   # dynamic import('./pages/xxx.js') resolves to an existing shared_web page.
