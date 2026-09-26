@@ -1023,6 +1023,43 @@
 
 ---
 
+### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：2026-09-26 推送 PR #2029（`fix/ci-swallowed-errors`，commit `e2e1b0de`）時，pre-push hook 的
+  `make ci-full` 在 `make ci-gate` → `ci-quick` 階段紅：
+  `❌ FAILED: scripts/ci/check_jev_contract.sh`（`✅ CI-quick: 14 passed, ❌ 1 failed`）。
+- **現況（實測，皆為本機可重現）**：
+  1. 該檢查**會真的對外呼叫 Jev**：單獨執行輸出
+     `✓ 實際呼叫 OK: noul=0.93 model=jev-1.13.0 tokens=281 445ms attempts=1`
+     （`✓ jevkit 自測通過`）。
+  2. **失敗後單獨重跑 2 次都是 exit 0**（`✅ Jev 契約檢查通過`）。
+  3. 同一個 patch 在**數分鐘前**的另一次 push 中，`make ci-full` **全綠**
+     （log 含 `✅ ci-full passed` 與 coverage step `Total coverage: 70.4%`），
+     且兩次 patch 內容 sha256 **逐位元組相同**（`62a6f43caf94ddacbf9e…`）。
+  4. 當次改動只有 `.github/workflows/daily-maintenance.yml`，與該檢查無關。
+- **判定：這是外部相依（Jev 服務／網路）造成的間歇性紅燈**，不是確定性缺陷。
+  因此「紅燈本身」沒有問題（不可靜默吞掉），問題在於**它坐在 pre-push 的阻擋路徑上**。
+- **風險**：誤紅會擋住合法推送 ⇒ 實務壓力會逼人用 `git push --no-verify`（**連 `make ci-gate` 都跳過**），
+  結果是**真正的**紅燈更容易被忽略 —— 與本 session 在修的同族（gate 靜默失效／閘門可信度流失）互為表裡。
+  同日已有兩次同型：本票（`check_jev_contract.sh`）與 FU-20260926-17（`internal/fubonproxy` 時序 flake）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：離線化**。以 hermetic fixture／stub 取代真呼叫；repo 已有同型前例
+     （`tests/scripts/*` 與 `scripts/ci/negative-proof-lib.sh` 的 fixture 式負向證明）。
+     若真呼叫仍要保留，應移到**非阻擋** lane（nightly 或 `workflow_dispatch`），
+     **不要**放在 pre-push／PR 必經路徑上。
+  2. **次選：明示外部相依 + 有界重試 + 記錄**。重試 N 次，每次都要**寫出**第 k 次失敗／逾時的
+     訊息與最終判定（`::warning::` 或步驟輸出），並在腳本檔頭明列「本檢查需外網」。
+  3. 不論選哪個：**不得**在 pre-push 路徑加 `|| true` / `continue-on-error`
+     （那正好是本 session 正在修的同族 false-green）。
+- **驗收條件（供實作者）**：在有外網阻斷的環境（例如 `http_proxy` 指向黑洞）跑
+  `make ci-gate`，行為必須**明示原因**且**不因外部 flake 而擋住合法 push**
+  （離線化版本的期望：該檢查不依賴外網即可判定；重試版本的期望：輸出可區分「契約不符」與「連不上」）。
+- **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
+
+---
+
 ## 判讀註記（讀告警與做驗收前必讀）
 
 以下三則不是待辦，而是**判讀規則**：已實際造成過一次誤判（含 root 本人），所以寫進登記表。
