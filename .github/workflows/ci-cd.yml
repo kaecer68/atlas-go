@@ -76,9 +76,27 @@ jobs:
 
     - name: Check coverage threshold (≥ 60%)
       run: |
-        COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '\r' | sed 's/%//')
+        # 空值/非數字必須明確 FAIL（不依賴 awk 對空字串的比較語意）— issue #2009
+        set -euo pipefail
+        COV_TMP="${RUNNER_TEMP:-/tmp}"
+        if [ ! -s coverage.out ]; then
+          echo "::error::取不到覆蓋率：coverprofile 缺失或為空（coverage.out）— 測試失敗或未產生覆蓋率"
+          exit 1
+        fi
+        if ! go tool cover -func=coverage.out > "${COV_TMP}/coverage-func.log" 2>&1; then
+          echo "::error::取不到覆蓋率：go tool cover 解析失敗（log: ${COV_TMP}/coverage-func.log）"
+          tail -n 20 "${COV_TMP}/coverage-func.log"
+          exit 1
+        fi
+        COVERAGE=$(awk '/^total:/ {print $3}' "${COV_TMP}/coverage-func.log" | tr -d '\r' | sed 's/%//')
         echo "Total coverage: ${COVERAGE}%"
-        if echo "$COVERAGE 60" | awk '{exit !($1 < $2)}'; then
+        case "${COVERAGE}" in
+          ''|*[!0-9.]*)
+            echo "::error::取不到覆蓋率：COVERAGE 非數字（${COVERAGE}）"
+            exit 1
+            ;;
+        esac
+        if awk -v c="${COVERAGE}" 'BEGIN{exit !(c+0 < 60)}'; then
           echo "::error::Coverage ${COVERAGE}% is below 60% threshold"
           exit 1
         fi
