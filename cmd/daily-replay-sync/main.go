@@ -117,7 +117,7 @@ func main() {
 	// gap backfill below — a failed today-fetch must not block recovery of
 	// older gaps — and report the sync failure via a non-zero exit afterwards.
 	var syncErr error
-	if err := runDailySync(*csvPath, pool); err != nil {
+	if err := runDailySync(*csvPath, pool, time.Now()); err != nil {
 		log.Printf("[DailySync] failed: %v (continuing with gap backfill)", err)
 		syncErr = err
 	}
@@ -129,8 +129,41 @@ func main() {
 	}
 }
 
-func runDailySync(csvPath string, pool *pgxpool.Pool) error {
+func runDailySync(csvPath string, pool *pgxpool.Pool, now time.Time) error {
 	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
+
+	// Exchange-local date. The production cron containers set no TZ env, so
+	// time.Now() inside them is UTC (docker-compose.yml: "cron containers
+	// intentionally set no TZ env") — near midnight that is a different
+	// calendar date from the exchange's.
+	target := now.In(marketdata.TaiwanLocation())
+	dateStr := target.Format("2006-01-02")
+
+	// Closed-market guard (2026-09-26). The CSV's date column IS the replay
+	// trading calendar: replay_session_resolver.go and
+	// capitalflow.LoadReplayTradingDates both derive the trading-date set from
+	// it, and twse_csv.go ForwardReturn drops a sample whose next-date bar
+	// repeats its own. A row written for a Saturday therefore pushes the
+	// calendar onto a day the exchange never traded: NextTradingSession(09-24)
+	// answers 09-25 (休市), the real 09-24 samples lose their forward return,
+	// and monitoring/service.checkReplayHealth — which reads the CSV's LAST
+	// line — reports the phantom date as fresh forever.
+	//
+	// GetQuotes() (STOCK_DAY_ALL) takes NO date parameter: on a closed market
+	// it replays the previous trading day's rows, which is precisely how the
+	// phantoms were written. Refuse the day before spending a token-bucket
+	// slot.
+	//
+	// No channel-health record either: recording "ok" would advance
+	// LastSuccessAt although no data landed — the very lie the failure paths
+	// below avoid — and recording a failure would alarm on a day the exchange
+	// is simply shut. The last trading day's record stands untouched.
+	if !marketdata.IsTaiwanTradingDay(target) {
+		log.Printf("[DailySync] %s is not a Taiwan trading day (%s) — no fetch, replay CSV left unchanged",
+			dateStr, target.Weekday())
+		return nil
+	}
+
 	client := marketdata.GetSharedTWSEClient()
 	// Size the deadline from the client's own retry policy (attempts ×
 	// per-attempt timeout + backoff + rate-limit slack). The previous
@@ -141,8 +174,7 @@ func runDailySync(csvPath string, pool *pgxpool.Pool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	dateStr := time.Now().Format("2006-01-02")
-	log.Printf("[DailySync] Fetching today's quotes from TWSE OpenAPI... (context budget %s)", budget.Round(time.Second))
+	log.Printf("[DailySync] Fetching %s quotes from TWSE OpenAPI... (context budget %s)", dateStr, budget.Round(time.Second))
 
 	started := time.Now()
 	quotes, err := client.GetQuotes(ctx)

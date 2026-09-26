@@ -172,7 +172,7 @@ func TestGetQuotesForDate_OneDatedRequestReturnsTheWholeMarket(t *testing.T) {
 	}
 	// Date-addressed fetch: the only meaningful timestamp is the trading date,
 	// pinned to the 13:30 TWSE close.
-	wantAsOf := time.Date(2026, 9, 24, 13, 30, 0, 0, twseExchangeLocation())
+	wantAsOf := time.Date(2026, 9, 24, 13, 30, 0, 0, TaiwanLocation())
 	if !q.AsOf.Equal(wantAsOf) {
 		t.Errorf("AsOf = %s, want %s", q.AsOf, wantAsOf)
 	}

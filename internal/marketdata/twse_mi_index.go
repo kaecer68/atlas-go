@@ -285,7 +285,7 @@ func (c *TWSEClient) GetQuotesForDate(ctx context.Context, date string) (DatedQu
 	// The fetch is date-addressed, so the only meaningful timestamp is the
 	// trading date; the time-of-day is pinned to the 13:30 TWSE close.
 	dataDay, _ := time.Parse("2006-01-02", dataDate)
-	asOf := time.Date(dataDay.Year(), dataDay.Month(), dataDay.Day(), 13, 30, 0, 0, twseExchangeLocation())
+	asOf := time.Date(dataDay.Year(), dataDay.Month(), dataDay.Day(), 13, 30, 0, 0, TaiwanLocation())
 
 	rows := table.QuoteRows()
 	quotes := make([]domain.Quote, 0, len(rows))
@@ -306,17 +306,6 @@ func (c *TWSEClient) GetQuotesForDate(ctx context.Context, date string) (DatedQu
 
 	c.breakerRecordSuccess()
 	return DatedQuotes{DataDate: dataDate, Quotes: quotes}, nil
-}
-
-// twseExchangeLocation returns the exchange's timezone (Asia/Taipei), falling
-// back to UTC when the tz database is absent — e.g. a distroless image without
-// tzdata. The fallback shifts only the time-of-day of a date-addressed quote,
-// never the date, because the date is taken from the payload.
-func twseExchangeLocation() *time.Location {
-	if loc, err := time.LoadLocation("Asia/Taipei"); err == nil {
-		return loc
-	}
-	return time.UTC
 }
 
 // ParseMIIndexDailyQuotes decodes a raw MI_INDEX body and returns the

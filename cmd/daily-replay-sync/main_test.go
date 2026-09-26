@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,6 +132,37 @@ func countRowsForDate(t *testing.T, path, date string) int {
 		}
 	}
 	return n
+}
+
+// ─── deterministic clock ────────────────────────────────────────────────────
+//
+// 2026-09-24 is a Thursday trading day; 2026-09-25 is 中秋節 (Friday holiday)
+// and 2026-09-26/27 are a weekend. Every write-path test must inject a trading
+// day, otherwise runDailySync's closed-market guard skips it and the test
+// asserts nothing (before the guard existed these tests silently depended on
+// the wall clock, and 2 of every 7 days they cannot pass).
+
+const (
+	tradingDayDate = "2026-09-24"
+	holidayDate    = "2026-09-25" // 中秋節
+	weekendDate    = "2026-09-26" // Saturday
+)
+
+// at returns a time on `date` at 23:30 Taipei — the production cron slot
+// (docker-compose.yml CRON 15:30 UTC = 23:30 Asia/Taipei).
+func at(t *testing.T, date string) time.Time {
+	t.Helper()
+	d, err := time.ParseInLocation("2006-01-02 15:04", date+" 23:30", marketdata.TaiwanLocation())
+	if err != nil {
+		t.Fatalf("parse %s: %v", date, err)
+	}
+	return d
+}
+
+// syncStateDir mirrors the state directory runDailySync writes channel health
+// to (two levels up from the CSV, then /state).
+func syncStateDir(csvPath string) string {
+	return filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
 }
 
 // setLogOutput redirects the stdlib log used by daily-replay-sync to a
@@ -343,8 +375,7 @@ const twseRow2330 = `["2330","台積電","81160741","15450000000","190","191.23"
 // syncStatusOf reads the derived channel-health record the sync recorded.
 func syncStatusOf(t *testing.T, csvPath string) *monitoring.ChannelHealthRecord {
 	t.Helper()
-	stateDir := filepath.Join(filepath.Dir(filepath.Dir(csvPath)), "state")
-	rec := monitoring.NewChannelHealthStore(stateDir).Get("twse_replay_sync")
+	rec := monitoring.NewChannelHealthStore(syncStateDir(csvPath)).Get("twse_replay_sync")
 	if rec == nil {
 		t.Fatal("twse_replay_sync was not recorded")
 	}
@@ -366,7 +397,7 @@ func TestRunDailySync_FailedFetchKeepsCSVAndRecordsNonOk(t *testing.T) {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	err = runDailySync(csvPath, nil)
+	err = runDailySync(csvPath, nil, at(t, tradingDayDate))
 	if err == nil {
 		t.Fatal("runDailySync = nil error, want a failure for an upstream 502")
 	}
@@ -407,7 +438,7 @@ func TestRunDailySync_SuccessAfterFailureClearsWarn(t *testing.T) {
 	}))
 	defer bad.Close()
 	stubSharedTWSEClient(t, bad.URL, 1)
-	if err := runDailySync(csvPath, nil); err == nil {
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate)); err == nil {
 		t.Fatal("first runDailySync = nil error, want the 503 failure")
 	}
 	if rec := syncStatusOf(t, csvPath); rec.Status != "warn" {
@@ -423,13 +454,12 @@ func TestRunDailySync_SuccessAfterFailureClearsWarn(t *testing.T) {
 	defer good.Close()
 	stubSharedTWSEClient(t, good.URL, 1)
 
-	if err := runDailySync(csvPath, nil); err != nil {
+	if err := runDailySync(csvPath, nil, at(t, tradingDayDate)); err != nil {
 		t.Fatalf("second runDailySync = error %v, want success", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
-	if got := countRowsForDate(t, csvPath, today); got != 1 {
-		t.Errorf("rows for %s = %d, want 1", today, got)
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != 1 {
+		t.Errorf("rows for %s = %d, want 1 (the injected exchange date, not the wall clock)", tradingDayDate, got)
 	}
 	rec := syncStatusOf(t, csvPath)
 	if rec.Status != "ok" {
@@ -459,7 +489,7 @@ func TestRunDailySync_ZeroUsableRowsIsDegradedNotOk(t *testing.T) {
 	setLogOutput(t)
 
 	csvPath := writeFixtureCSV(t, []string{"2026-09-22"}, []string{"2330"})
-	err := runDailySync(csvPath, nil)
+	err := runDailySync(csvPath, nil, at(t, tradingDayDate))
 	if err == nil {
 		t.Fatal("runDailySync = nil error, want a failure when no target symbol was fetched")
 	}
@@ -476,7 +506,7 @@ func TestRunDailySync_ZeroUsableRowsIsDegradedNotOk(t *testing.T) {
 	if rec.LastSuccessAt != "" {
 		t.Errorf("last_success_at = %q, want empty", rec.LastSuccessAt)
 	}
-	if got := countRowsForDate(t, csvPath, time.Now().Format("2006-01-02")); got != 0 {
+	if got := countRowsForDate(t, csvPath, tradingDayDate); got != 0 {
 		t.Errorf("rows written = %d, want 0", got)
 	}
 }
@@ -489,5 +519,56 @@ func TestRunDailySyncContextBudgetExceedsLegacyLimit(t *testing.T) {
 	budget := marketdata.GetSharedTWSEClient().FetchBudget()
 	if budget <= 60*time.Second {
 		t.Errorf("FetchBudget() = %v, want > 60s (the removed hardcoded context)", budget)
+	}
+}
+
+// TestRunDailySync_SkipsClosedMarket is the negative proof for the phantom-row
+// defect (2026-09-26). The replay CSV's date column IS the replay trading
+// calendar, so a row written on a day the exchange never traded is not "stale
+// data" — it is a corrupted calendar. Production evidence: the CSV carried rows
+// dated 2026-08-29, 08-30, 09-05, 09-06, 09-12, 09-13, 09-19, 09-20 and the
+// 09-25 中秋節 — 44 symbols each — every one of them holding the 2026-09-24
+// close, because STOCK_DAY_ALL ignores any notion of "which day" and
+// runDailySync stamped the payload with time.Now().
+func TestRunDailySync_SkipsClosedMarket(t *testing.T) {
+	var calls int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(twseJSONResponse(twseRow2330)))
+	}))
+	defer srv.Close()
+	stubSharedTWSEClient(t, srv.URL, 1)
+	logs := setLogOutput(t)
+
+	for _, closed := range []string{weekendDate, holidayDate} {
+		t.Run(closed, func(t *testing.T) {
+			csvPath := writeFixtureCSV(t, []string{tradingDayDate}, []string{"2330"})
+			before, err := os.ReadFile(csvPath)
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+
+			if err := runDailySync(csvPath, nil, at(t, closed)); err != nil {
+				t.Fatalf("runDailySync on closed market %s = %v, want nil (a closed market is not a failure)", closed, err)
+			}
+
+			after, err := os.ReadFile(csvPath)
+			if err != nil {
+				t.Fatalf("re-read csv: %v", err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Errorf("replay CSV changed on closed market %s:\nbefore=%s\nafter=%s", closed, before, after)
+			}
+			if got := atomic.LoadInt64(&calls); got != 0 {
+				t.Errorf("HTTP requests on %s = %d, want 0 (a fetch cannot be scoped to the day, so it would return another day's rows)", closed, got)
+			}
+			if rec := monitoring.NewChannelHealthStore(syncStateDir(csvPath)).Get("twse_replay_sync"); rec != nil {
+				t.Errorf("channel record written on %s (status=%q): a closed market must not advance LastSuccessAt", closed, rec.Status)
+			}
+		})
+	}
+	if !strings.Contains(logs.String(), "not a Taiwan trading day") {
+		t.Errorf("logs must state that the day was skipped, got: %s", logs.String())
 	}
 }
