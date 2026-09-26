@@ -199,12 +199,13 @@ git branch -d <branch>
 
 ### 5.1 Docker rebuild（Mac Mini production）
 
-> **部署真相（2026-09-23 更新）**：production 已於 **2026-09-22 從 iMac 遷移到 Mac Mini**（`kaecer@192.168.0.84`）；iMac 已退役。本節指令經 2026-09-23 兩次實走驗證。
+> **部署真相（2026-09-23 更新）**：production 已於 **2026-09-22 從 iMac 遷移到 Mac Mini**（`kaecer@kmacmini`）；iMac 已退役。本節指令經 2026-09-23 兩次實走驗證。
+> **跨機一律用 Tailscale 名稱 `kmacmini`**（MagicDNS，解析為 Tailscale IP）；LAN IP 僅在 MacBook 位於同一網段時可用，外出時失效。
 > ⚠️ 歷史指令（`ssh kk@kimac …`、`Makefile.prod`、`docker-compose.prod.yml`）**一律失效**；`docker-compose.prod.yml` 仍存在於 `docs/operations/` 但只是歷史產物（其 `atlas` service 沒有 build 段，無法用來重建映像）。
 
 ```bash
 # Mac Mini (production) — rebuild + 重啟（實走驗證 2026-09-23）
-ssh kaecer@192.168.0.84
+ssh kaecer@kmacmini
 export PATH="$HOME/.orbstack/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"   # 非互動 shell 沒有 docker
 export GOPROXY=https://goproxy.cn,direct                                   # 本機 router/HITN MITM proxy.golang.org
 cd ~/workspace/atlas
@@ -232,7 +233,7 @@ make check-binaries  # 應顯示 "ALL BINARIES FRESH"
 
 ### 5.3 Production Verification Checklist（每個 PR 都必跑，在 Mac Mini production 上驗證）
 
-> **驗證位置**：Mac Mini（`ssh kaecer@192.168.0.84`，或派 hermes 代勞）。PR author 或 reviewer **MUST 給出
+> **驗證位置**：Mac Mini（`ssh kaecer@kmacmini`，或派 hermes 代勞）。PR author 或 reviewer **MUST 給出
 > 3-5 個 curl 指令**針對該 PR 修的 channel / endpoint。例如:
 
 ```bash
