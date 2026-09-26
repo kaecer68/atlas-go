@@ -42,13 +42,13 @@
 | E11 | `symbols_excluded` 無排除原因細分 | universe snapshot | **無** | 待派（小，可掛任一 child）|
 | E12 | production `/annotate` 未收斂到 Router | `internal/llm` + dashboard | **無** | 待排（需 scoping）|
 | E16 | **死 gate**：`scripts/verify-sector-allocation-closure.sh` 依賴的 manifest 已於 #1255 移出 `docs/`（現於 gitignored `.omo/`）＋ `check()` 的 `eval` 被移除（#1250）⇒ 今 `exit 2`、**呼叫端 0** ⇒ **明示停用為 no-op** | `scripts/verify-sector-allocation-closure.sh`；附帶誠實化 `cmd/experimental/sector-allocation-closure-preflight/main.go` 的假宣稱 | **`fix/20260926-dead-gate-closure`（本 PR）** | ✅ **已併**（#2037，11:24Z）；腳本明示停用（`⛔ 已停用（DISABLED）`、rc=0），依賴檔不可回復的理由見 `FU-20260926-23` |
-| E13 | ~~`Makefile` `IMAC_HOST ?= kk@kimac` ⇒ `make imac-watchdog-diff` 必失敗~~ **已修** | `Makefile:105-108` | **#2031** | ✅ 併入後由 #2031 修；root 實測舊因（`Could not resolve hostname kimac`）已消失，值為 `kaecer@kmacmini` |
+| E13 | ~~`Makefile` `IMAC_HOST ?= kk@kimac` ⇒ `make imac-watchdog-diff` 必失敗~~ **已修** | `Makefile:105-108` | ✅ **#2041**（13:42Z）| 修法：`IMAC_HOST ?= kaecer@kmacmini`、`WATCHDOG_DST := /Users/kaecer/bin/…`（`#2043`/`#2044` 補文件）。root 實測舊因（`Could not resolve hostname kimac`）已消失。⚠️ **本表原記「隨 #2031 修」係歸因錯誤**，2026-09-26 由 root 以 `git log -- Makefile` 核對更正 |
 | E14 | ~~`traps.md` / `quality.yml` 未掃退役主機殘留~~ **複查無殘留** | 同左 | — | ✅ 不需派工（root 複查 2026-09-26：兩檔 `kk@kimac|iMac` **0 命中**）|
 | E15 | **活設定殘留（非 repo）**：`~/.prime/agent/models.json:140` 的 provider 名仍叫 `kimac` | 工作站設定（非 repo）| **無** | 待決（低風險：其 `baseUrl` 已是 `http://kmacmini:4000/v1` ⇒ **僅名稱歷史債、路由正確**）。⚠️ 原描述的懸空 symlink `~/bin/imac-recover` **複查不存在、不可重現 ⇒ 不登記為事實** |
 | E17 | **排程空轉**：`scripts/darwinian_adjust.sh` 自述 `DEPRECATED` stub（核心計算註解於 L101），**實跑 rc=1**，但 `docker-compose.yml:453` 仍以 `CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply`（容器 `atlas-cron-darwinian`，`0 9 * * *`）**實際排程** | `scripts/darwinian_adjust.sh` + `docker-compose.yml:453` | **無** | 待派（root 2026-09-26 實查：stub header + `rc=1` + 呼叫端 grep；處置二選一：移除排程或讓 stub 明確 no-op+log）|
 | E18 | `.github/workflows/quality.yml` 的 `revert-guard` job **註解與 step 名稱仍是 v1（被否證的）框架**：「照現狀合併就會回退」×1、「a stale branch deleting a shared asset must be blocked」×1；行為正確（僅呼叫兩支腳本）| `quality.yml` | **無**（等 E6/`atlas-cov-fix` 讓出）| 待派（純文字，−0 行為風險；root 複查：兩句各 1 命中）|
 | E19 | **孤兒腳本群**：10 支在 `Makefile`/`.github/workflows`/`docker-compose*`/`scripts/` 中 **0 個可叫用引用**（`verify-atlas.sh`、`coverage.sh`、`daily-twse-fetch.sh`、`install-soak-automation.sh`、`reflexivity_report.sh`、`sync-darwinian.sh`、`prism_manage.sh`、`spawning_manage.sh`、`generate_replay_data.sh`、`cleanup-manifests.sh`）；`verify-manifest.sh` 唯一引用來自**同樣 0 引用的** `verify-atlas.sh`（孤兒互叫）⇒ 實質死碼 | `scripts/` | **無** | 待決（保留或刪除需 owner 決定；root 2026-09-26 實查引用數）|
-| E20 | **生產↔repo 不一致（操作性，非程式缺陷）**：Mac Mini 的 `/Users/kaecer/bin/atlas-container-watchdog.sh`（85 行、`424944ce`、Sep 25）≠ repo 正本（104 行、`70ee1a45`、#2031）⇒ `make imac-watchdog-diff` **exit 2**（檢查正確地報漂移）| 生產主機 + `scripts/ops/imac-container-watchdog.sh` | **無** | 待派（root 實測 diff：**37 行差異全為註解、非註解 0 行 ⇒ 行為零風險**）；處置＝`make imac-watchdog-install`（**跨機器執行 ⇒ 依政策交 a2a-dev**）|
+| E20 | ~~生產↔repo watchdog 不一致~~ **已解除**（操作經驗保留）：修好前 Mac Mini（`424944ce`、85 行）≠ repo 正本（`70ee1a45`、104 行）⇒ `make imac-watchdog-diff` **exit 2** | 生產主機 + `scripts/ops/imac-container-watchdog.sh` | —（已解除）| ✅ root 於 main `b1fc524d` 複測：`✅ 一致（無漂移）` **rc=0**、兩側 sha256 均 `cdb4a7d6`（已由跨機器 `make imac-watchdog-install` 收斂）。**診斷價值保留**：當時的 exit 2 被文件（`#2043`/`#2044`「兩個 target 都可直接跑」）讀成「target 壞」，實為檢查**正確地**報漂移；「可用」≠「必 exit 0」——本項為該區別的實證 |
 
 ## §4 系統性稽核結論（2026-09-26，防止重複盤查）
 
@@ -82,9 +82,10 @@
 | **D4**（revert-guard 重設計）| ✅ **#2003**（12:25Z 併入）| root 複驗：守門=1、`merge-tree`=13、`traps.md`=329 行、evil-merge 負向證明 exit 1 |
 | **E8/E9**（flaky + sa12）| ✅ **#2036**（13:24Z 併入）| root 解衝突（第二次為 3 檔；`verify-sector-allocation-closure.sh` 取 main 停用版）|
 | **E10**（退役 iMac 殘留）| ✅ **#2031**（11:11Z）＋殘留 `FU-20260926-20` | A 類已改 Mac Mini；B 類（2 個 watchdog 入口）待另一條 lane |
-| **E13**（`IMAC_HOST` 必失敗）| ✅ 隨 **#2031** 修（`Makefile:105-108` 已具名記錄）| root 實測舊因已消失 |
+| **E13**（`IMAC_HOST` 必失敗）| ✅ **#2041**（13:42Z；`#2043`/`#2044` 補文件）| ⚠️ 原記「隨 #2031 修」係**歸因錯誤**，已更正 |
 | **E16**（死 gate）| ✅ **#2037**（11:24Z）＋ **`FU-20260926-23`** | 明示停用＋登記重啟條件 |
 | **E17/E18/E19/E20**（本次新增）| **`FU-20260926-25`** | 本表 §3 與 registry **同 PR** 更新 |
+| **E20**（watchdog 漂移）| ✅ 已解除（root 於 `b1fc524d` 複測 rc=0）| 更正與複測記於 **`FU-20260926-26`** |
 
 ### `FU-` 號段分配規則（**強制，修正本表 §1 的過時配置**）
 

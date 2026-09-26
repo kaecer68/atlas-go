@@ -1479,7 +1479,7 @@
 - **記錄日期**：2026-09-26
 - **對應**：`docs/operations/remediation-manifest.md` §3（同 PR 更新）、§6 對帳表
 - **來源（可重現，全部由 root 實跑）**：
-  - **E13 → 結案**：`grep -n 'IMAC_HOST\|WATCHDOG_DST' Makefile` ⇒ `IMAC_HOST ?= kaecer@kmacmini`（105–107 行已具名記錄 E13，屬 #2031）；
+  - **E13 → 結案**：`grep -n 'IMAC_HOST\|WATCHDOG_DST' Makefile` ⇒ `IMAC_HOST ?= kaecer@kmacmini`（105–107 行已具名記錄 E13）——⚠️ **歸因更正**：修者為 **#2041**（13:42Z），非 #2031（原記錯誤，2026-09-26 由 root 以 `git log -- Makefile` 核對更正）；
     實跑 `make imac-watchdog-diff` 舊因（`ssh: Could not resolve hostname kimac`）**已消失** ⇒ **原描述不成立，撤銷**。
   - **E14 → 結案**：`grep -c -iE 'kk@kimac|iMac' docs/reference/traps.md .github/workflows/quality.yml` ⇒ **0 / 0** ⇒ 無殘留，不需派工。
   - **E15 → 重新定性**：`~/.prime/agent/models.json:140` 確有 provider `"kimac"`，但其 `baseUrl` 已是 `http://kmacmini:4000/v1`
@@ -1493,7 +1493,7 @@
     「a stale branch deleting a shared asset must be blocked」**1**（行為正確，僅文字沿用已被 k3 否證的 v1 框架）。
   - **E19（新增，孤兒群）**：對 11 支候選腳本以 `grep -rl` 掃 `Makefile`/`.github/workflows`/`docker-compose*.yml`/`scripts/`
     ⇒ **10 支 0 個可叫用引用**；`verify-manifest.sh` 唯一引用來自**同樣 0 引用的** `verify-atlas.sh:82`（孤兒互叫）。
-  - **E20（新增，生產↔repo 不一致・操作性）**：`make imac-watchdog-diff` ⇒ `❌ 不一致`、`exit 2`；
+  - **E20（新增 → 同日已解除）**：`make imac-watchdog-diff` ⇒ `❌ 不一致`、`exit 2`；**同日補測（main `b1fc524d`）：`✅ 一致（無漂移）` rc=0（兩側 `cdb4a7d6`）⇒ 已由跨機器 `make imac-watchdog-install` 收斂**；
     `ssh kmacmini shasum -a 256` ⇒ 遠端 `424944ce`（85 行、Sep 25）vs repo `70ee1a45`（104 行、#2031）；
     `diff` 判定 ⇒ **37 行差異全為註解、非註解 0 行 ⇒ 行為零風險**。
 - **殘項／後續**：
@@ -1501,6 +1501,31 @@
   2. E17 需在「移除排程」與「讓 stub 明確 no-op + log」之間擇一（需 owner 決定方向）。
   3. E18/E19 皆等 `quality.yml` / owner 讓出後處理（E18 串行在 E6 之後）。
   4. 本條目**不含**任何未經實跑的推論；被否證的 E13/E14 原描述已在 manifest §3 以刪除線保留，避免日後重複盤查。
+
+---
+
+### FU-20260926-26 — 更正與複測：**E13 歸因改為 #2041（原記 #2031 係錯誤）**；**E20 watchdog 漂移已解除**
+
+- **狀態**：`done`（純文件更正 + 複測，無程式變更）
+- **記錄日期**：2026-09-26
+- **對應**：`docs/operations/remediation-manifest.md` §3（E13、E20 列）、§6 對帳表；同 PR 更新
+- **① E13 歸因更正（原記載錯誤）**：
+  - 原記（`FU-20260926-25` / manifest §3、§6）：E13「**隨 #2031 修**」。
+  - 核對指令：`git log --format='%h %ad %s' --date=short origin/main -- Makefile`
+    ⇒ `12edcec0 2026-09-26 fix(ops): E13 Makefile 退役 iMac 殘留 — IMAC_HOST/WATCHDOG_DST 預設改指 Mac Mini (#2041)`
+    ＋ `gh pr diff 2041` ⇒ `-IMAC_HOST ?= kk@kimac` → `+IMAC_HOST ?= kaecer@kmacmini`、
+    `-WATCHDOG_DST := /Users/kk/bin/…` → `+WATCHDOG_DST := /Users/kaecer/bin/…`。
+  - **結論**：修者為 **#2041**（13:42Z 併入）；`#2043`/`#2044` 補文件。**原歸因錯誤，已更正**（觀察無誤、歸因有誤）。
+- **② E20 已解除（同日複測）**：
+  - 原觀測（main `12edcec0`）：repo `70ee1a45`（104 行）≠ Mac Mini `424944ce`（85 行、Sep 25）⇒ `make imac-watchdog-diff` `exit 2`；
+    diff 判定 37 行差異**全為註解、非註解 0 行**。
+  - 複測（main `b1fc524d`）：`make imac-watchdog-diff` ⇒ `✅ 一致（無漂移）` **rc=0**、兩側 sha256 均 `cdb4a7d6`
+    ⇒ 已由**跨機器** `make imac-watchdog-install` 收斂（依政策該執行由 a2a-dev 承接，root 只複測）。
+- **③ 保留的診斷價值（避免後人誤讀）**：
+  `#2043`/`#2044` 的文件寫「兩個 target 都可直接跑」；**「可用」≠「必 exit 0」**——
+  修好後 `imac-watchdog-diff` 的 `exit 2` 代表**真的偵測到漂移**（本項即為實例），
+  與修好前的「host 不存在 ⇒ 必失敗」是**兩種不同意義的 exit 2**。判讀時必須先看輸出訊息（`❌ 不一致` vs `Could not resolve hostname`）。
+- **教訓（本次適用於本專案全體）**：**觀察正確 ≠ 歸因正確**。寫進 SSOT 的因果（「X 由 Y 修」）必須以 `git log -- <file>` 指認到**引入該變更的 commit/PR**，不可用相鄰時序代替。
 
 ## 相關文件
 
