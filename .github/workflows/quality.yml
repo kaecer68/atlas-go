@@ -288,18 +288,30 @@ jobs:
 
     - name: Check coverage threshold
       run: |
-        COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '\r' | sed 's/%//')
+        # 空值/非數字必須明確 FAIL（不依賴 awk 對空字串的比較語意）— issue #2009
+        set -euo pipefail
+        COV_TMP="${RUNNER_TEMP:-/tmp}"
+        if [ ! -s coverage.out ]; then
+          echo "取不到覆蓋率：coverprofile 缺失或為空（coverage.out）— 測試失敗或未產生覆蓋率"
+          exit 1
+        fi
+        if ! go tool cover -func=coverage.out > "${COV_TMP}/coverage-func.log" 2>&1; then
+          echo "取不到覆蓋率：go tool cover 解析失敗（log: ${COV_TMP}/coverage-func.log）"
+          tail -n 20 "${COV_TMP}/coverage-func.log"
+          exit 1
+        fi
+        COVERAGE=$(awk '/^total:/ {print $3}' "${COV_TMP}/coverage-func.log" | tr -d '\r' | sed 's/%//')
         echo "Total coverage: ${COVERAGE}%"
-        if echo "$COVERAGE 60" | awk '{exit !($1 < $2)}'; then
+        case "${COVERAGE}" in
+          ''|*[!0-9.]*)
+            echo "取不到覆蓋率：COVERAGE 非數字（${COVERAGE}）"
+            exit 1
+            ;;
+        esac
+        if awk -v c="${COVERAGE}" 'BEGIN{exit !(c+0 < 60)}'; then
           echo "Coverage is below 60% threshold"
           exit 1
         fi
-
-  # Maturity label consistency — ensures all internal/ packages have
-  # valid Maturity: tags in doc.go and MATURITY.md is consistent.
-  maturity:
-    runs-on: ubuntu-latest
-    steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
     - name: Check maturity label consistency
@@ -365,6 +377,12 @@ jobs:
       run: bash scripts/ci/check_agent_prompts.sh
 
   # Markdown link check — ensures internal documentation links are valid
+  #
+  # ⚠️ 這個 job **同時承載 FOLLOWUPS id 唯一性守門**（2026-09-26 起，見下方最後一個 step）。
+  #    理由：它**已經是** branch protection 的 required context（app_id=15368）且**無 path filter**
+  #    （push + PR 都會跑）⇒ 把守門掛在這裡，即使 required 設定被變更／重置，仍會被擋下。
+  #    為什麼要雙保險 ✗：獨立的 `followups-unique-ids` job 不是 required context ⇒ 它的紅燈
+  #    **抓得到但擋不住**（2026-09-26 第 4 次撞號的實證，見下一個 job 的註解）。
   markdown-links:
     runs-on: ubuntu-latest
     steps:
@@ -373,10 +391,34 @@ jobs:
     - name: Check markdown links
       run: bash scripts/ci/check_markdown_links.sh
 
-  # FOLLOWUPS 條目 id 唯一性 —— 2026-09-26 同一天內**三次撞號**：兩個 lane 幾乎同時 push，
-  # 各自「新增前都查了最大號」✓ 但**對方在查完之後才併入** ✗ ⇒ 同一條目被迫連續改號（-01→-08→-09）。
+    # 雙保險（檔案版；`required contexts` 是設定版）。判定邏輯**完全沿用同一支腳本**，
+    # 這裡不做任何重複實作，也不改那支腳本的判定：
+    #   scripts/ci/check_followups_unique_ids.sh
+    # 失敗時明確標示是哪一個檢查紅燈，避免只看到 "markdown-links failed" 而誤判來源。
+    # 精確 rc：只把非 0 當「擋下」，並把原 rc 原樣往上拋（不把 2/126/127 當成「擋下了」）。
+    - name: Check FOLLOWUPS entry ids are unique (required-carrier)
+      run: |
+        set +e
+        bash scripts/ci/check_followups_unique_ids.sh
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
+          echo "::error title=FOLLOWUPS id 重複::scripts/ci/check_followups_unique_ids.sh rc=${rc} —— 本 step 掛在 required context 'markdown-links' 上，會擋住 merge（不是只印紅燈）。"
+          exit "${rc}"
+        fi
+
+  # FOLLOWUPS 條目 id 唯一性 —— 2026-09-26 同一天內**四次撞號**：兩個 lane 幾乎同時 push，
+  # 各自「新增前都查了最大號」✓ 但**對方在查完之後才併入** ✗ ⇒ 同一條目被迫連續改號（-01→-08→-09→-11）。
   # 唯一性**只在單一檔案內成立** ⇒ 單檔檢查即可抓到「合併後撞號」（不需要跨 PR 狀態）。
   # 刻意**不**斷言「必須 max+1」（刻意留空號／分階段合併會誤判）。
+  #
+  # ⚠️ 這個 job **必須列入 branch protection 的 required contexts**（app_id=15368，strict=true），
+  #    否則它**抓得到但擋不住** ✗ —— 第 4 次撞號（同號 FU-20260926-10；#2020 × #2016）就是這樣發生的：
+  #      run 36230044707（event=pull_request, PR #2020）**唯一失敗的 job 就是本 job** ✓（update-branch
+  #      後立刻抓到），但當時本 job 不在 required 清單 ⇒ PR 仍在 08:39:59 被合併 ⇒ main 變紅
+  #      （push run 36230458122，同一個 job 失敗）。
+  #    本 job 已於 2026-09-26 列入 required contexts；另有一份**檔案版**雙保險掛在 required context
+  #    `markdown-links` 的 step「Check FOLLOWUPS entry ids are unique (required-carrier)」
+  #    ⇒ required 設定若被變更／重置，仍會由既有的 required context 執行到（共用同一支腳本，無重複實作）。
   followups-unique-ids:
     runs-on: ubuntu-latest
     steps:
