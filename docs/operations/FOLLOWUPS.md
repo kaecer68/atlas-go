@@ -117,21 +117,48 @@
 
 ---
 
-### FU-20260925-04 — 2026-09-28（週一）交易日 06:00Z 部署後複驗
+### FU-20260925-04 — 部署後複驗：最早可複驗日＝2026-09-29（週二）06:00Z（原訂 09-28，已更正）
 
 - **狀態**：`open`
 - **記錄日期**：2026-09-25
 - **為何是這一天**：`auto_universe_refresh`（daily）**顯式跳過週一**
   （`internal/monitoring/universe_scheduler.go` 的 `now.Weekday() == time.Monday` 分支），
   週一由 `auto_universe_full_rebuild`（weekly）跑。所以要驗「修好後的常態」必須挑一個
-  週一 06:00Z（= 14:00 台北；容器不設 TZ，見 FU-20260925-05）**且是交易日**的日子 ——
-  2026-09-28 是最近的這種日子（`-simulate` / 交易日曆另可交叉驗證）。
+  06:00Z（= 14:00 台北；容器不設 TZ，見 FU-20260925-05）**且是交易日**的日子 ——
+  ~~2026-09-28 是最近的這種日子~~ **✗ 已被推翻，見下方「更正（2026-09-26 第二次）」**。
+- **❗ 更正（2026-09-26 第二次；原訂日期作廢）**：`2026-09-28`（週一）是
+  **孔子誕辰紀念日／教師節，依規定放假 1 日 ⇒ 休市** ⇒ 該日**不會產生新的交易 session**，
+  不可能滿足本條驗收條件 ⇒ **原訂的「2026-09-28（週一）06:00Z」作廢**；
+  **最早可複驗的交易日＝2026-09-29（週二）06:00Z**（下一班車）。
+  更正原因：前一版把 09-28 當成交易日，讀的是 `internal/taiwanholidays` 的 **`IsTradingDay`** 欄位；
+  當時（以及現行 main）的假日表**缺**教師節 ⇒ 該函式對 09-28 回 **`true`** ⇒ **是資料缺口，不是探針答錯**。
+  權威來源改以 **TWSE 官方 API** 為準（2026-09-26 實測，`stat:"ok"`，標題「115 年市場開休市日期」）：
+  `curl -sS 'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json&date=20260101'`
+  ⇒ `["2026-09-28","孔子誕辰紀念日/ 教師節","依規定放假1日。"]`；清單內**無** 09-29 ⇒ 09-29 為交易日。
+- **根因（2026-09-26 於 main `0ce6e48f` 實測；一次性探針，跑完已刪）**：
+  `IsTradingDay` 的資料來自 `internal/taiwanholidays`（`fixedHolidays` ＋ `adjustedHolidays` ＋ 農曆表），
+  而 `fixedHolidays` **不含**教師節、`adjustedHolidays[2026]` **也不含** 09-28 ⇒
+  `2026-09-28 Mon IsHoliday=false IsTradingDay=true`（**錯**）；
+  同日 `2026-12-25 Fri IsHoliday=false IsTradingDay=true`（**亦錯**，行憲紀念日放假1日）；
+  `2026-09-29 Tue IsTradingDay=true` ✓、`2026-10-05 Mon IsTradingDay=true` ✓。
+  ⇒ **修法在 SSOT（`internal/taiwanholidays`），不在排程的判斷式**；由 open PR **#2054**
+  （`fix/holiday-aware-universe-gate`：補 2025/2026 休市日 ＋ weekly 假日 gate）承接。
+- **⚠️ 排程事實（勿讀成「該日一定什麼都不會跑」）**：現行 main 的 `isTradingDay` 仍是 **weekday-only**
+  （`internal/monitoring/universe_scheduler.go`）⇒ **2026-09-28（週一）weekly 仍會執行**，
+  但休市日不可能產出可信排名 ⇒ 該日 snapshot **不可當複驗證據**。
+  要「daily 與 weekly 都不執行」需等 **#2054** 合併（daily 改 `marketdata.IsTaiwanTradingDay`、weekly 加假日 gate）。
+  另外 **09-29 是週二 ⇒ 走 daily（增量）路徑**；若要一併驗 **weekly（全量重建）**路徑，
+  下一個「是交易日的週一」＝ **2026-10-05 06:00Z**（TWSE 2026 清單中 10-05 無休市）。
 - **日曆更正（2026-09-26 記錄）**：**09-26 不可當成複驗日** —— 2026-09-26 是**週六**，且
-  **2026 中秋＝09-25（週五，休市）** ⇒ 09-24（四）之後的下一個交易日就是 **09-28（一）**。
+  **2026 中秋＝09-25（週五，休市）** ⇒ ~~09-24（四）之後的下一個交易日就是 **09-28（一）**~~
+  **✗ 此句已被推翻：09-28（一）本身也是休市日 ⇒ 09-24（四）之後的下一個交易日是 09-29（二）。**
   權威判定（`internal/taiwanholidays`，以一次性探針 `go test ./internal/taiwanholidays/` 產出後**已刪除**）：
   `09-24 Thu true`／`09-25 Fri IsHoliday=true`／`09-26 Sat false`／`09-27 Sun false`／`09-28 Mon true`。
-  ⇒ 本條的 `2026-09-28（週一）06:00Z` **維持有效**；且撰寫時（2026-09-26T03:40Z）該時刻**尚未到**
-  ⇒ 狀態維持 `open`（本條**尚未**複驗，勿把 09-25/09-26 當成已複驗的日子）。
+  ~~⇒ 本條的 `2026-09-28（週一）06:00Z` **維持有效**；~~
+  **✗ 該結論已於同日（第二次更正，見上）被 TWSE 官方 API 推翻：09-28 為休市日。**
+  誤判來源＝把 `IsTradingDay` 的 `true` 讀成「是交易日」，而該函式當時的假日表缺教師節。
+  該時刻（2026-09-26T03:40Z 撰寫時）**尚未到** ⇒ 狀態仍維持 `open`
+  （本條**尚未**複驗，勿把 09-25/09-26 當成已複驗的日子）。
   （同族事實：`CHANGELOG.md:91`「2026 中秋＝09-25」。）
 - **要驗什麼**：`data/state/universe_snapshot.json` 的
   `result.quotes_status == "ok"` **且** `result.ranked_trustworthy == true`；
@@ -1526,6 +1553,100 @@
   修好後 `imac-watchdog-diff` 的 `exit 2` 代表**真的偵測到漂移**（本項即為實例），
   與修好前的「host 不存在 ⇒ 必失敗」是**兩種不同意義的 exit 2**。判讀時必須先看輸出訊息（`❌ 不一致` vs `Could not resolve hostname`）。
 - **教訓（本次適用於本專案全體）**：**觀察正確 ≠ 歸因正確**。寫進 SSOT 的因果（「X 由 Y 修」）必須以 `git log -- <file>` 指認到**引入該變更的 commit/PR**，不可用相鄰時序代替。
+
+---
+
+### FU-20260926-27 — manifest 狀態同步：**E5/E18 結案、E4/E19/E21–E28 登記**（含 8 項新發現；root 單一寫者）
+
+- **狀態**：`open`（E22/E23/E26/E28 未派或待決；其餘在飛或已結案）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（E4/E5/E18/E19 更新 ＋ 新增 E21–E28）、§6 對帳表
+- **本次結案（root 複驗過）**：
+  - **E5** → **#2048**（`fe779473`）：原記「預設 warn」**經查為誤** —— 實況是**死守門**（`.claude/settings.json` 只有 `SessionStart`、無 `PreToolUse`；唯一 PreToolUse 在 gitignored `.claude/settings.local.json`）。修法＝tracked `settings.json` 加 `PreToolUse`→薄 adapter（pattern 邏輯無第二份）＋修 `${CHECK,,}`（bash 4；macOS `/bin/bash` 3.2 對**每個**指令 `bad substitution`，root 以 `3.2.57` 實測確認）＋11 組契約測試納入 `make ci-gate`。
+  - **E18** → **#2046**（`2404dbe2`）：`quality.yml` v1 文案清零（root 複查 main 兩句 0/0）；spec 殘留條目由 **#2050** 更新。
+- **本次新增（證據見 manifest §3 各列）**：
+  - **E21** CLI 靜默忽略未知子命令 ⇒ `daily-maintenance` 三 job 跑模擬（**#2053** armed；root 複驗公開 task-liveness `200／114 tasks／stale_count=0`，CI run `36255705561` 四 job 全 success）。**注意**：child **未照我給的兩個選項**（退役／改寫），而是**改用真實來源並保留 job** —— 理由（daemon 自身告警與被監控對象同主機、GitHub runner 是唯一局外觀察者）**比我的選項更強**。
+  - **E22** `Makefile:1042-1046` coverage 共用 `/tmp` ⇒ 同機多 worktree 併發**假紅**（root 複驗；與 E4/FU-15 同族）。
+  - **E23** guard 切 `enforce` 的三個實測誤擋面（`secret` 一字即擋／prod worktree 擋 `docker compose build|up`（部署路徑）／擋 `go test`）。
+  - **E24** staging soak 鏈：2026-07-15 的 7 天 soak、期限已過、**2026-08-15 專案宣告「無 staging」**、Day-7 收尾未執行（`post-soak-cleanup.sh` 一生只跑過 `--dry-run`）。**root 已停本機 LaunchAgent**（停前 `runs=39838`、每 60 秒約 5 次重生、log 133 MB、報告停於 09-17）。
+  - **E25** replay 幻影列：非交易日以 `time.Now()` 蓋章寫入 ⇒ 生產 **396 列／9 天（自 2026-08-29）**；連鎖使 `auto_backfill` 卡死、CSV→JSONL 自 2026-08-24 停擺。修復在飛（`fix-replay-dated-source`）。
+  - **E26** 生產 Prometheus **Calibration 告警未載入**（Rule 檔在容器內、`/api/v1/rules` 0 命中）⇒ **#2016 的校準監控實際無效**；同一查核**正面確認 `Universe` 6 條已載入**（週一 #1995 驗收可行）。
+  - **E27** `verify-manifest.sh` 假綠（`gsub` 只給 2 參數 ⇒ 改 `$0`、每列 continue；root 實測 `done`＋空 Notes ⇒ `OK` exit 0）＋驗的檔在 gitignored `.omo/` ⇒ 刪除並修 2 處文件引用。
+  - **E28** `internal/taiwanholidays` 缺 9 個真實休市（颱風假等）⇒ **刻意延後至週一驗收後**（會改變 `IsTradingDay`）。
+- **殘項／後續**：
+  1. **E22/E23** 需 owner 決定或等 `Makefile` 讓出（E1 佔用）。
+  2. **E24/E25/E27** 目錄內外均須在對應 PR 併入後，於本 registry 補「已併」與實測輸出。
+  3. **E26** 由 a2a-dev 查「規則未載入」的根因（載入面 vs repo 面）。
+  4. **liveness 殘留列**：`cron_darwinian` 仍存在於 liveness store（`internal/liveness/store.go` 無 Delete、端點只寫不刪）⇒ 需一次性 SQL 清除，屬**生產寫入**，待 owner 決定。
+- **方法論註記（本次三次「派遣前重新定性」的成果）**：E5（死守門 ≠ 預設 warn）、E13（歸因錯：修者是 #2041 非 #2031）、E19（孤兒 ≠ 死碼：3 支有操作性引用）⇒ 已固化為「先重新定性再派遣」紀律。
+### FU-20260926-28 — `make ci-full` 的 coverage profile 走**共用** `/tmp` 路徑：其他 lane 的 `rm -f` 讓本 lane 假紅（「coverprofile 缺失或為空」）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源（多 lane 同日並行實測）**：本機 `make ci-full`（由 `.githooks/pre-push` gate 1b 觸發）在**最後一步**紅：
+  `❌ 取不到覆蓋率：coverprofile 缺失或為空（/tmp/atlas-ci-full-coverage.out）`，
+  而**同一輪**的 ci-gate／golangci-lint／staticcheck／`go test`／`go test -race`／`cmd/atlas`／`ci-slow` **全綠**
+  ⇒ 不是程式碼或測試的問題。
+- **缺陷本體（`Makefile:1042-1071`）**：profile 與 log 的路徑是**硬編的共用路徑**（無 PID、無 `mktemp`）：
+  - 起點 `rm -f "$${COV_PROFILE}" "$${COV_FUNC_LOG}"`（:1047）；
+  - 成功路徑結尾再 `rm -f "$${COV_PROFILE}" "$${COV_LOG}" "$${COV_FUNC_LOG}"`（:1071）。
+  ⇒ 本機同時有 20+ worktree、多個 lane 跑同一個 target 時，**別人的 `rm -f` 會刪掉自己正在寫的 profile**。
+- **機制（2026-09-26 最小實驗，可複現）**：`go test -coverprofile=<path>` **在測試一開始就建立該檔**
+  （1 秒後即存在、大小 10 bytes＝`mode:` 檔頭），並在**同一個 inode** 上於結束時才寫內容 ⇒
+  測試進行中若該路徑被刪除，`go test` **仍 exit 0**，但結束後檔案**不存在**：
+  - **負向（共用路徑）**：測試中 `rm -f` 該路徑 ⇒ 跑完 `FILE_ABSENT_AFTER_RUN`、`go test` rc=0
+    ⇒ recipe 的 `[ ! -s "${COV_PROFILE}" ]`（:1053-1056）判紅，訊息與 pre-push 觀察到的**完全一致**。
+  - **正向（隔離路徑）**：同一份工作改用 `/tmp/cov-self.out`，同時另一行程持續 `rm -f` 共用路徑
+    ⇒ `go test` rc=0、`go tool cover -func` 得到 `total: 86.2%`（單一 package 子集）
+    ⇒ **路徑一隔離就消失**（另一 lane 以相同手法自證 repo 全量 `total: 70.5%`）。
+  ⇒ 這**不是毫秒級競態**：**視窗＝整段 `go test` 的執行時間**（全量約數分鐘）⇒ 兩個 lane 時間重疊就會中。
+- **影響面**：本機 pre-push／`make ci-full` 的**假紅燈**；會誘使人 `--no-verify` 或無意義重跑，
+  對「閘門必須可信」是負面誘因（與本 repo 同日反覆出現的 false-green／假紅同族）。
+  **不影響 GitHub CI**（runner 上同時只有一個 job），且**不是** #2009 修過的 fail-closed 缺陷。
+- **修法方向（只建議、未實作；本 PR 刻意不動 `Makefile`）**：
+  1. profile／log 改**每 process 唯一**：`COV_PROFILE=$$(mktemp -t atlas-ci-full-coverage.XXXXXX.out)`
+     （或至少帶 `$$` PID），並以 `trap 'rm -f …' EXIT` 或結尾 `rm -f` 收尾清理。
+  2. **必須保留**「取不到覆蓋率 ⇒ 非零」的 fail-closed（#2009 已修，**不得回退**）：
+     `[ ! -s "${COV_PROFILE}" ]` 與 `go tool cover` 解析失敗兩條都要留；60% 閾值不變。
+  3. 建議 `COV_LOG` 一併唯一化 —— 共用 log 會讓失敗訊息對不上真正的那一輪。
+- **同一缺陷的另一處登記（[#2055](https://github.com/kaecer68/atlas-go/pull/2055) 併入後補記）**：`docs/operations/remediation-manifest.md` 的 **E22** 記的是**同一件事**
+  （`Makefile:1042-1046` coverage 共用 `/tmp` ⇒ 同機多 worktree 併發假紅，與 E4/FU-20260926-15 同族，root 複驗）
+  ⇒ 兩者**同源、修法共用**；本票的角色是補上**最小實驗（機制）**與**fail-closed 不得回退**的驗收條件。
+- **為何不順手改（本 PR 的界線）**：開票當下**有兩個 open PR 正在編 `Makefile`**
+  （#2049 同日稍後合併、#2053 仍 open）⇒ 依指派界線**只開票、不改檔**，避免同日多 lane 互踩。
+- **驗收條件**：兩個 lane 同時跑 `make ci-full` 時任一 lane 都不會因覆蓋率步驟紅；
+  且刻意讓 `go test` 階段的 profile 被外部刪除時，該 lane **仍必須**以非零碼失敗（fail-closed 不回退）。
+- **負向證明（修完後必須具備）**：profile 指向不存在的路徑／產出空 profile ⇒ **必須 `exit 1`**（不得靜默通過）。
+
+---
+
+### FU-20260926-29 — `internal/industry/event_calendar.go` 是**第二份**假日名稱清單：缺教師節／行憲紀念日 ⇒ `long_holiday` 視窗 2026 不含 09-28
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：同日 `FU-20260925-04` 的 TWSE 官方 API 比對（09-28 教師節休市）順帶盤出的**第二處**假日清單。
+- **現況**：`internal/industry/event_calendar.go:345-354` 的 `taiwanPublicHolidays` 自帶一份清單
+  （`元旦`／`春節`／`228和平紀念日`／`清明節`／`勞動節`／`端午節`／`中秋節`／`國慶日`）。
+  其中**農曆日期已委派 SSOT**（`:304-310`，P1-8 去重：`taiwanholidays.LunarNewYearDates()` 等），
+  但**固定日期那 4 筆（元旦／228／勞動節／國慶日）仍是本地硬編**，且整份清單**缺**
+  `教師節 09-28`、`行憲紀念日 12-25`（2025 起復為放假日）、`光復節 10-25`。
+- **影響（已核對程式碼）**：`buildHolidayEvent`（`event_calendar.go:1166-1200`）對清單每一筆產生
+  `[holidayDate-3, holidayDate+2]` 的 `long_holiday` 視窗 ⇒ 2026 年的視窗**不含 09-28**（也缺 10-25／12-25）
+  ⇒ 事件日曆與 SSOT（`internal/taiwanholidays`）**不一致**；以事件日曆判斷「長假前後」的消費端在這些日子會拿到錯的視窗。
+  對照同日實測：**SSOT 自己當時也缺**這兩天（`IsTradingDay(2026-09-28)=true`、`IsTradingDay(2026-12-25)=true`，**皆為錯**），
+  該資料缺口由 open PR **#2054** 補（`adjustedHolidays[2026]` 加 09-28／12-25）
+  ⇒ **本票要在 #2054 之後才有意義**：#2054 修 SSOT 的資料，本票修**第二份清單的漂移**。
+- **修法方向（只建議，未實作）**：
+  1. 讓 `taiwanPublicHolidays` 的四筆固定日期**也**由 `internal/taiwanholidays` 提供。
+     **import 方向不成環 —— 已確認**：`event_calendar.go:15` **已經** import `internal/taiwanholidays`，
+     而該套件只 import `internal/logging`（`grep -rn 'atlas-go/internal' internal/taiwanholidays/*.go` 僅 1 筆）。
+  2. 或者，至少在清單旁**明確標註**「本表用途不同（事件日曆的長假視窗，非交易日判定）
+     ＋ 已與 SSOT 對齊清單」，並補一個**漂移測試**（同名假日與 SSOT 逐項比對）。
+- **驗收條件**：`internal/industry` 的 `long_holiday` 視窗在 2026 年含 09-28（教師節），
+  或該清單有明示的「用途不同＋已對齊」註記且有測試釘住與 SSOT 的一致性。
+- **備註**：本票**不**主張 `long_holiday` 的語意要改成「交易日」語意 —— 語意變更需 owner 裁決。
+
+---
 
 ## 相關文件
 
