@@ -116,41 +116,13 @@ func buildDepsFixture(t *testing.T, workDir string) UniverseBuilderDeps {
 	}
 }
 
-// ─────────────────── 1. isTradingDay ─────────────────────────────────────
-
-// TestIsTradingDay verifies that isTradingDay returns true for weekdays
-// and false for weekends.
-func TestIsTradingDay(t *testing.T) {
-	tests := []struct {
-		name string
-		t    time.Time
-		want bool
-	}{
-		{
-			name: "tuesday_wartrue",
-			t:    time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC), // Tuesday
-			want: true,
-		},
-		{
-			name: "saturday_returns_false",
-			t:    time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC), // Saturday
-			want: false,
-		},
-		{
-			name: "sunday_returns_false",
-			t:    time.Date(2026, 6, 21, 10, 0, 0, 0, time.UTC), // Sunday
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isTradingDay(tt.t)
-			if got != tt.want {
-				t.Fatalf("isTradingDay(%v) = %v, want %v", tt.t.Weekday(), got, tt.want)
-			}
-		})
-	}
-}
+// ─────────────────── 1. trading-day gate ─────────────────────────────────
+//
+// This package no longer owns a trading-day predicate: the gate delegates to
+// marketdata.IsTaiwanTradingDay (→ internal/taiwanholidays). The closure-level
+// tests for weekdays, weekends and public holidays — including the negative
+// control for the removed weekday-only check — live in
+// universe_scheduler_holiday_test.go.
 
 // ─────────────────── 2. alignToTarget ────────────────────────────────────
 

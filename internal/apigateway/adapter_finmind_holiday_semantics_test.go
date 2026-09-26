@@ -143,9 +143,14 @@ func mustParseTaipei(t *testing.T, ts string) time.Time {
 // requireFixtureCalendar asserts the calendar facts the fixtures rely on, so a
 // drift in internal/taiwanholidays fails loudly instead of silently weakening
 // the suite.
+//
+// 2026-09-28 used to be asserted as a TRADING day here. That was wrong: the
+// TWSE 開休市日期 calendar for 115 年 lists it as 孔子誕辰紀念日/教師節 (a Monday
+// closure), and the pre-market case has therefore moved to 2026-10-12, the first
+// Monday session after the 國慶 holiday.
 func requireFixtureCalendar(t *testing.T) {
 	t.Helper()
-	nonTrading := []string{"2026-09-25", "2026-09-26", "2026-09-27"}
+	nonTrading := []string{"2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28"}
 	for _, day := range nonTrading {
 		d, err := time.Parse("2006-01-02", day)
 		if err != nil {
@@ -155,9 +160,16 @@ func requireFixtureCalendar(t *testing.T) {
 			t.Fatalf("fixture requires %s to be a non-trading day (#1999 production evidence)", day)
 		}
 	}
-	d, _ := time.Parse("2006-01-02", "2026-09-28")
-	if !taiwanholidays.IsTradingDay(d) {
-		t.Fatal("fixture requires 2026-09-28 to be a trading day (pre-market case)")
+	// The pre-market case needs a genuine trading day plus the previous trading
+	// day the probe must land on, both taken from the same authoritative calendar.
+	for _, day := range []string{"2026-10-12", "2026-10-08"} {
+		d, err := time.Parse("2006-01-02", day)
+		if err != nil {
+			t.Fatalf("bad fixture %q: %v", day, err)
+		}
+		if !taiwanholidays.IsTradingDay(d) {
+			t.Fatalf("fixture requires %s to be a trading day (pre-market case)", day)
+		}
 	}
 }
 
@@ -214,10 +226,11 @@ func TestFinMindChannel_HolidayProbe_NotError(t *testing.T) {
 // trading day and stay "ok".
 func TestFinMindChannel_TradingDayPreMarketProbe_NotError(t *testing.T) {
 	requireFixtureCalendar(t)
-	// 2026-09-28 is a Monday trading day; 09:01 Taipei is before the open.
-	now := mustParseTaipei(t, "2026-09-28T09:01:00+08:00")
+	// 2026-10-12 is a Monday trading day (the first session after the 國慶
+	// holiday); 09:01 Taipei is before the open.
+	now := mustParseTaipei(t, "2026-10-12T09:01:00+08:00")
 	if !taiwanholidays.IsTradingDay(now) {
-		t.Fatal("fixture requires 2026-09-28 09:01 Taipei to be a trading day")
+		t.Fatal("fixture requires 2026-10-12 09:01 Taipei to be a trading day")
 	}
 	u := newFinmindFakeUpstream(t, respondFinMindRow)
 	g := newFinmindChannelGateway(t, now, u)
@@ -227,10 +240,10 @@ func TestFinMindChannel_TradingDayPreMarketProbe_NotError(t *testing.T) {
 	}
 
 	dates := u.requestedDates()
-	if len(dates) != 1 || dates[0] != "2026-09-24" {
-		t.Fatalf("probe dates = %v, want [2026-09-24] (previous trading day; 09-25 is a holiday)", dates)
+	if len(dates) != 1 || dates[0] != "2026-10-08" {
+		t.Fatalf("probe dates = %v, want [2026-10-08] (previous trading day; 10-09/10-10 are holidays, 10-11 is a Sunday)", dates)
 	}
-	rec := logFinmindRecord(t, g, "交易日盤前 probe (2026-09-28 Mon 09:01 Taipei)")
+	rec := logFinmindRecord(t, g, "交易日盤前 probe (2026-10-12 Mon 09:01 Taipei)")
 	if rec.Status != StatusOK {
 		t.Errorf("Status = %q, want ok", rec.Status)
 	}

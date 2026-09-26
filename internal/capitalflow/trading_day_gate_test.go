@@ -48,7 +48,8 @@ func TestTradingDayTable_Issue1947Dates(t *testing.T) {
 		{"2026-09-25", false, "Mid-Autumn Festival (中秋)"},
 		{"2026-09-26", false, "Saturday"},
 		{"2026-09-27", false, "Sunday"},
-		{"2026-09-28", true, "Monday — first trading day after the holiday"},
+		{"2026-09-28", false, "Monday — 孔子誕辰紀念日/教師節 (a 115 年 TWSE closure; weekday-only gates ran here)"},
+		{"2026-09-29", true, "Tuesday — first trading day after the 中秋/教師節 weekend"},
 	}
 	for _, c := range cases {
 		t.Run(c.date, func(t *testing.T) {
@@ -162,8 +163,9 @@ func TestRefresh_SkipCounterResetsOnTradingDay(t *testing.T) {
 			ForeignInvestorNet: marketdata.MacroDataPoint{Symbol: "ForeignInvestorNet", Value: 120},
 		}
 	}
-	// 2026-09-25 (holiday) then 09-26/27 (weekend) then 09-28 (trading day).
-	for _, date := range []string{"2026-09-25", "2026-09-26"} {
+	// 2026-09-25 (中秋) then 09-26/27 (weekend) then 09-28 (教師節 — a holiday
+	// too, so the streak keeps growing) then 09-29 (the first real session).
+	for _, date := range []string{"2026-09-25", "2026-09-26", "2026-09-28"} {
 		svc := NewServiceWithStore(&stubProvider{snap: snap(date)}, 0, store, nil)
 		if err := svc.Refresh(ctx); err != nil {
 			t.Fatalf("Refresh(%s): %v", date, err)
@@ -172,9 +174,9 @@ func TestRefresh_SkipCounterResetsOnTradingDay(t *testing.T) {
 			t.Errorf("after one skip on %s consecutiveSkips = %d, want %d", date, got, want)
 		}
 	}
-	svc := NewServiceWithStore(&stubProvider{snap: snap("2026-09-28")}, 0, store, nil)
+	svc := NewServiceWithStore(&stubProvider{snap: snap("2026-09-29")}, 0, store, nil)
 	if err := svc.Refresh(ctx); err != nil {
-		t.Fatalf("Refresh(2026-09-28): %v", err)
+		t.Fatalf("Refresh(2026-09-29): %v", err)
 	}
 	if got := svc.skipCount(); got != 0 {
 		t.Errorf("consecutiveSkips = %d after a trading-day refresh, want 0", got)
