@@ -90,10 +90,11 @@ func registerExtra(mux *http.ServeMux) {
 }
 EOF
 
-  local output
-  if output=$(bash "$tmp/scripts/check-routes.sh" 2>&1); then
-    fail "scenario2: expected FAIL on real duplicate, got exit 0"
-  fi
+  # 精確斷言（issue #2011）：「擋下」= exit 1（`fail()` 用 1）。exit 2（用法錯誤）/126/127
+  # （腳本不存在）都不是「擋下了」—— 舊寫法只驗「非 0」，靠下面的內容斷言才沒誤判。
+  local output rc=0
+  output=$(bash "$tmp/scripts/check-routes.sh" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "scenario2: expected FAIL on real duplicate, got exit $rc"
   echo "$output" | grep -q "DUPLICATE: /api/health" || \
     fail "scenario2: duplicate not reported:\n$output"
   echo "  ✓ scenario2: real non-test duplicate still FAILs"

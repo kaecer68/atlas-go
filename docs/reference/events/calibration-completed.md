@@ -149,7 +149,16 @@ if dashEventBus != nil {
     summary: "校準帶來顯著參數優化（{{ $value | humanizePercentage }}）"
 ```
 
-> 註：監控指標 `atlas_calibration_*` 待 Wave 8 收尾後開新 issue 設計（不在本 PR scope）。
+> 註：上面三條是**示例**，其中引用的 `atlas_calibration_completed_total` /
+> `atlas_calibration_completed_last_success_timestamp` / `atlas_calibration_optimized_score` /
+> `atlas_calibration_baseline_score` **至今仍未實作**（校準事件落地時一併設計）。
+>
+> ⚠️ 前綴區分（2026-09-26 起）：已實作的是 **`atlas_calibration_freshness_*`**
+> 與 **`atlas_calibration_last_calibrated_timestamp_seconds`** —— 那一族監控的是
+> **校準產物 `configs/parameters.json` 的新鮮度**（issue #1944 I31 production 半邊），
+> 不是本檔描述的「校準事件／verdict」。判讀時不要混用；定義見
+> [`docs/operations/calibration-freshness-runbook.md`](../../operations/calibration-freshness-runbook.md)
+> 與 `internal/monitoring/calibration_freshness.go`。
 
 ---
 

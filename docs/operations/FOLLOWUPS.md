@@ -700,12 +700,171 @@
 - **驗收條件**：若啟用 `ATLAS_BROKER_NONCE_STORE=redis`，URL 必須走 docker 網路名且**容器重建後** broker nonce 仍正常；
   負對照：不得以「host 埠在 Mac 上 curl 得到」當成容器可達的證據。
 
+### FU-20260926-11 — 「負向證明的非預期 exit code」殘留盤查：1 處未修（`check_finmind_quota.sh`）＋ 一類 `$VAR（` 展開陷阱
+
+- **狀態**：`open`（同族多數已在 issue #2011 的 PR 修掉；本條追蹤**刻意未修**與**另票處理**的殘留）
+- **記錄日期**：2026-09-26
+- **來源**：issue #2011（PR #2003 的設計審查發現）＋ 本條所列可重現的 grep 命令
+- **已修（同 PR 交付）**：`.github/workflows/quality.yml` 的 `secret-scan` / `monitoring-single-source`
+  兩處 **inline** 負向證明抽成 `scripts/ci/*-negative-proof.sh`，改為精確斷言 `rc==1`
+  （共用斷言庫 `scripts/ci/negative-proof-lib.sh`；自我測試 `tests/scripts/test-negative-proofs.sh` 餵 127/2 必須紅燈）。
+  同一族順手收緊：`tests/scripts/test-secret-scan.sh`（`must_block`/B2/B7）、`test-check-frontend-dist.sh`
+  （scenario2/3/5/6）、`test-check-routes.sh`（scenario2）、`test-install-webhook.sh`（C1–C3）；
+  `Makefile` 的 `ci` / `ci-quick` 加「**0 支檢查被執行 ⇒ 失敗**」（空集合不得算通過）。
+- **未修 ①（bash 變數展開，非 exit-code 問題但同屬「訊息/判定誠實性」）**：
+  `scripts/ci/check_finmind_quota.sh:65` 的 `echo "❌ finmind quota: 無法解析 $STATE_FILE（calls_today 缺失）"`
+  —— `$STATE_FILE` 後面**緊接全角「（」**，bash 會把該非 ASCII 字元併入變數名
+  （實測 bash 3.2 與 5.3 皆然）⇒ 在 `set -euo pipefail` 下變成 `unbound variable` 崩潰，
+  使用者看到的是 shell 錯誤而不是這句可行動訊息。**修法＝改成 `${STATE_FILE}`（1 字元）**；
+  本次未改以避免與進行中的 FinMind lane 衝突。
+  同型命中另有 `scripts/ops/imac-container-watchdog.sh:32`（**僅註解**，無害，不需修）。
+  重現：`grep -rnP '\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]' --include=*.sh --include=Makefile .`
+  （`set -u` 下會崩潰；未開 `set -u` 時會**靜默吃掉變數值**，例如 `count=$N筆` 印成 `count=筆`）。
+- **2026-09-26（後續 PR 進度）**：**未修 ① 已落地** —— `scripts/ci/check_finmind_quota.sh:65` 改為 `${STATE_FILE}`，
+  且同型全掃後另修 `tests/scripts/test-install-webhook.sh:55/78/104`、`.github/workflows/quality.yml`（`mcp-tool-count`
+  的 `$DOC_MIN–$DOC_MAX`）與**本條目併入後才出現**的 3 處（`tests/scripts/test-binary-freshness-guard.sh:104/127`、
+  `tests/scripts/test-cron-entrypoint.sh:42`）。更重要的是把它變成**機制**：
+  `scripts/ci/check_fullwidth_var_expansion.{sh,py}`＋ self-test
+  `tests/scripts/test-fullwidth-var-expansion.sh`（30 項、精確 exit code 1/0/2）＋ `quality.yml` 的
+  `fullwidth-var-expansion` job ＋ `make ci-gate`。該掃描器**移植自 a2a-dev 既有的同名守門**
+  （`scripts/check-fullwidth-var-expansion.py`，tokenizer 原樣沿用；a2a-dev 是這個陷阱的原生守門），
+  atlas-go 端擴充檔案類型：`*.sh` / `Makefile` / `*.mk` / `*.py` / **YAML 的 `run:` 區塊**
+  （只掃區塊：整檔掃會被 YAML 的 `name:` 與引號污染 tokenizer 狀態而誤報）。
+  該檢查是**唯一**能擋下這類 bug 的手段：實測 macOS+UTF-8 locale 崩潰、`LC_ALL=C` 與 linux/glibc/musl **皆不發作**
+  ⇒ 只在 ubuntu 上跑的 CI **永遠不會紅**。
+- **未修 ②**：`Makefile` coverage 段（`#2009`）的「門檻變數為空 ⇒ 比較反向通過」由另票處理（本 PR 未動該段）。
+- **未修 ③（觀察，非缺陷）**：`.github/workflows/ci-cd.yml` 的 gosec 用 `-no-fail`、
+  `vuln-scan.yml` 的 govulncheck 以 `|| true` + advisory-only SARIF 上傳 ⇒ **這兩個安全掃描永遠不會讓 pipeline 紅**
+  （兩檔檔頭都明寫了理由）。若哪天要把它們變成真正的 gate，需要另票。
+- **驗收條件**：任何**新增**的「證明某閘門會擋」測試，都必須同時餵「命令不存在(127)」與「用法錯誤(2)」
+  並確認**紅燈**（範本：`tests/scripts/test-negative-proofs.sh`）；只驗「非 0」不算。
+- **未修 ④（觀察，非本 PR 範圍；本次 CI 被它擋下）**：`internal/config` 的
+  `TestShadowParametersDeclarationMatchesConsumers` 會 `filepath.WalkDir("internal")` 且
+  **error 一律往上拋**（`internal/config/parameters_shadow_declarations_test.go:44-47,71-73`），
+  而 `go test ./...` 是**跨 package 並行**；`internal/apigateway/register_adapters.go:401` 的
+  `saveSnapshot` 寫的是**相對路徑** `data/state/<channel>`（package 測試的 CWD 下 =
+  `internal/apigateway/data/…`），`internal/apigateway/adapter_finmind_util_test.go:91` 又會
+  `os.RemoveAll("data")` ⇒ 該目錄在 walk 期間「出現又消失」，walker 讀不到就硬失敗：
+  `walk …/internal: open …/internal/apigateway/data: no such file or directory`。
+  這是**flaky 假紅**（同 commit 重跑會過；本機 main 與本分支跑同一支測試皆 PASS）。
+  修法方向（未做）：walker 對 `fs.ErrNotExist` 寬容，或把該寫入路徑改成 `t.TempDir()`
+  （別再依賴 CWD 相對路徑）。
+
 ---
+
+### FU-20260926-10 — I31 的 production 半邊：新鮮度已接上既有監控（本 PR）；**仍缺「校準任務心跳」指標**，產物年齡可能誤報
+
+- **狀態**：`open`（**程式面已交付**；生產驗收與殘留面 1 待做）
+- **記錄日期**：2026-09-26
+- **來源**：issue #1944 / I31；PR #1991 的「未完成項 1」；分支
+  `fix/20260926-calibration-freshness-monitoring`（worktree `~/workspace/atlas-calib-freshness`，
+  base `origin/main@df726b89`）。
+- **已完成（本 PR）**：`configs/parameters.json` 的新鮮度由背景任務
+  `calibration_freshness_metrics_export`（`cmd/atlas/calibration_freshness_metrics_task.go`，5 分鐘）
+  評估，重用 `config.ValidateCalibration`（CLI 用的同一個判定），輸出
+  `atlas_calibration_freshness_*` 五個 gauge；規則在
+  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool **11 案例**含 6 個負向對照
+  與 1 個「已知交接窗」；另做 8 項變異測試全部被咬住），
+  落地說明在 [`calibration-freshness-runbook.md`](calibration-freshness-runbook.md)。
+  契約收斂為**單一常數** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 預設值
+  = production 命令的 48h）。
+- **順帶查實（影響本條的判讀）**：政策上的 production 命令 `atlas-validate` **沒有隨 image 出貨**
+  ——`cmd/calibration-validate` 是 CI 現場 build 的，本 repo 的 Dockerfile 只把
+  `atlas-go`/`atlas-mcp`/`calibrate-seasonal`/`daily-replay-sync` 放進 `/app`，且 image 內
+  **沒有** `python3`/`jq`/`node`（實查指令見 runbook §1）。⇒ 在本 PR 之前，生產上「資料已不新鮮」
+  是**零觀測**（不是值班忘了跑，而是沒有東西會跑）；所有 triage 指令已改為 image 內確實存在的
+  `grep`/`stat`/`head`/`tail`/`curl`。
+- **殘留面 1（本條的主要缺口）：沒有「校準任務已執行」的心跳指標**
+  - 現況：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`：
+    `if len(report.Changes) > 0` 才 `LockedSaveWithRollback`）⇒ `updated_at` 的年齡是
+    「校準活動」的**上界**，不是直接量測。一個已收斂、連續多輪 `verdict=stable` 的系統
+    會合法地超過 48h 不改寫檔案 ⇒ `CalibrationArtifactStale` 可能誤報。
+  - 為何現在只做到這樣：要給出直接訊號必須接到 `cmd/atlas/calibration_tasks.go` 的
+    18 個任務（1 inner + 17 top-level）並定義「執行成功」語意（含 early-return 與
+    maturity gate），那是另一個範圍；本 PR 先交付可量測的部分並把誤報形狀寫進
+    runbook §3.1 的第一順位排查。
+  - **修法（未實作）**：新增 `atlas_calibration_task_last_run_timestamp_seconds{task=…}`
+    （或沿用 completion handler）＋一條「校準任務超過 N 小時未執行」的規則；
+    門檻由實測 cadence（24h 主、6h/1h 例外）決定。
+  - **驗收條件**：連續 `stable` 的多輪（產物不變）必須**不**觸發任何告警；
+    而任務真的停止執行時必須有告警 —— 負對照：不得再靠「產物年齡」推論任務死活。
+- **殘留面 1b（與 #2013 的交互，已複驗）**：`risk_gate_calibrate` 的寫入已由 PR #2013 遷到
+  `data/state/parameters.calibrated.json`（overlay），SSOT 保持 pristine ⇒ 本條監控的
+  「SSOT 超過 48h」仍然有意義（其他校準器仍寫 SSOT，清單見 FU-20260926-07 第 3 點），
+  但**看不到 risk 校準是否停滯**。要涵蓋它需要第二個判定語意（per-entry `calibrated_at`），
+  不是把本族的 `max-age` 套上去就好；`config.GetParametersConfigPath()` 仍指 SSOT
+  （複驗：`internal/config/calibration_overlay.go:186`），所以本族沒有被無聲換對象。
+- **殘留面 2：結構性 finding 仍未進生產監控** —— `L1/L2_NO_REPRESENTATIVES` 之類由 CI 的
+  `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
+  parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產
+  也跑一次，並決定 accepted 集合在生產的語意（屬政策裁決）。
+- **已知且刻意的行為（不是缺陷，不要「順手」改掉）**：
+  1. **凍結樣本**：`_run_ok=0`（無法評估）之後，`age`/`last_calibrated` 仍以最後一次可評估的
+     值留在 `/metrics`（collector 是 last-write-wins 且不移除序列）。沒有任何規則拿它們做判定
+     （判定只看 `_ok`/`_run_ok`）⇒ 不會誤報；但**判讀順序**必須是「先 `_run_ok` 再 `_ok`
+     再 `age`」（runbook §2.1）。行為由
+     `TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries` 釘住。
+  2. **≤15 分鐘交接窗**：`_run_ok` 由 1 翻 0 時，第 1 條立刻 resolve、第 2 條要累積 15m
+     才 firing ⇒ 窗內兩條都不 firing。這是「同一個根因不重複 paging」的取捨，
+     已寫成 promtool 案例 K；要縮窗就改第 2 條的 `for` 並同步該案例。
+- **殘留面 3：生產驗收未執行**（本 PR 不得動 production）。部署後照 runbook §4：
+  `curl -s localhost:18080/metrics | grep '^atlas_calibration_'`、
+  `curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*'`，
+  並確認 `atlas_calibration_freshness_ok` 在生產為 1（生產檔案實測約 65 分鐘前被改寫）。
+- **驗收條件（本條整體）**：生產上 `atlas_calibration_freshness_*` 有值、三條規則已載入、
+  且「資料不新鮮」在無人記得跑 CLI 的情況下也會被看見。
 
 ---
 
 ---
 
+---
+
+### FU-20260926-12 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源（可重現）**：`Makefile:409-429`（`ci:` target 的 `for script in scripts/ci/check_*.sh` 迴圈）。
+  取**同一個迴圈形狀**（只把 glob 換成 fixture、`timeout 30` 縮成 `1`）：
+
+  ```bash
+  # ① 造 fixture（hang.sh 永遠跑不完；ok.sh 正常）
+  d=$(mktemp -d)
+  printf '#!/usr/bin/env bash\nsleep 5\n' > "$d/hang.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n'  > "$d/ok.sh"
+  # ② 把 Makefile:409-429 的迴圈貼成 "$d/Makefile"，只改兩處：
+  #    for script in scripts/ci/check_*.sh  →  for script in hang.sh ok.sh
+  #    timeout 30                           →  timeout 1
+  # ③ 跑它
+  make -C "$d" ci; echo "rc=$?"
+  # 實測輸出（2026-09-26，macOS + GNU timeout）：
+  #   → hang.sh
+  #       TIMEOUT (>1s): hang.sh
+  #   → ok.sh
+  #   CI: 1 passed, 0 failed, 1 timed out
+  #   rc=0        ← 掛住的檢查沒有讓閘門變紅
+  ```
+- **現況**：`timeout` 回 124 時只 `skipped=$((skipped+1))`，而收尾只檢查 `failed > 0`
+  ⇒ **一支永遠跑不完的檢查**（等網路、等鎖、等 docker）在 `make ci` 眼裡等於「通過」。
+- **風險**：false-green 家族（#2011）。`make ci` 是本機與 GH Actions 都會跑的閘門 ⇒
+  「檢查掛住」不會讓任何人變紅，只會在多跑幾次之後被當成雜訊忽略。
+- **影響面**：只有 `ci:` 這一段。`ci-quick`（`Makefile:431+`）用 `if timeout 10 …; then passed; else FAILED`
+  —— 124 落 `else` ⇒ **會紅**，不受影響；`ci-gate` 是逐支明列（沒有 timeout/吞碼）。
+- **最小修法建議（只建議，未實作；需業主定 policy）**：三選一 ——
+  ① 124 ⇒ 計入 `failed`（fail-closed，最直白）；
+  ② 保留 `skipped` 但**收尾時 `skipped > 0` 也 exit 非 0**（可先量：30s 預算對現有 `check_*.sh` 夠不夠）；
+  ③ 對已知慢的檢查改成明列清單＋較長 timeout，其餘一律 fail-closed。
+  **取捨**：`make ci` 是每天跑的路徑，①/② 都可能讓「合法的慢檢查」在負載高的機器上誤紅 ⇒
+  要先有 timeout 預算的量測，不是直接改。
+- **為何不納入本 PR（`$VAR` 緊接非 ASCII 的靜態閘門）**：
+  ① 主題不同（一個是展開語法，一個是**閘門政策**）；
+  ② 會改到 `make ci` 這段所有人每天都跑的路徑 ⇒ 回滾半徑大；
+  ③ 同一個迴圈區域正由 **PR #2020**（`fix/20260926-negative-proof-exact-rc`）改動（在 `make ci` 收尾加
+     `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
+- **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
+  （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+---
 
 ## 判讀註記（讀告警與做驗收前必讀）
 

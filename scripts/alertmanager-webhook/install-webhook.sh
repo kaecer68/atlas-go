@@ -93,7 +93,10 @@ EOS
   exit 2
 fi
 case "$TOKEN" in
-  *"$PLACEHOLDER"*) echo "❌ 提供的 token 就是 placeholder（$PLACEHOLDER）" >&2; exit 2 ;;
+  # ⚠️ 變數展開一律加 ${} 大括號：bash 會把緊跟其後的非 ASCII 字元（例：全角「（」）
+  #    當成變數名的一部分 ⇒ `$PLACEHOLDER）` 會展開成未定義變數，在 `set -u` 下直接崩潰，
+  #    使用者看到的是 "unbound variable" 而不是下面這句可行動訊息（2026-09-26 issue #2011 實測）。
+  *"$PLACEHOLDER"*) echo "❌ 提供的 token 就是 placeholder（${PLACEHOLDER}）" >&2; exit 2 ;;
 esac
 if ! printf '%s' "$TOKEN" | grep -Eq '^[0-9]{8,12}:[A-Za-z0-9_-]{30,}$'; then
   echo "❌ token 形狀不像 telegram bot token（應為 <digits>:<35 字元>）；長度=${#TOKEN}" >&2

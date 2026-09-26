@@ -13,7 +13,7 @@ import (
 
 func main() {
 	path := flag.String("path", constants.ParametersFile, "path to params.json to validate")
-	maxAge := flag.Duration("max-age", 48*time.Hour, "max age for params.json before it's considered stale")
+	maxAge := flag.Duration("max-age", config.DefaultCalibrationMaxAge, "max age for params.json before it's considered stale")
 	format := flag.String("format", "text", "output format: text|json")
 	policyPath := flag.String("policy", "", "path to a validation policy JSON (scope + accepted findings). "+
 		"Empty = fail-closed: full freshness scope, no accepted findings, every finding fails the run")
