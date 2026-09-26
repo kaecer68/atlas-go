@@ -770,6 +770,54 @@ Part 2 的 substrate 稽核入口 `Coverage()` 讀的是 `storeSymbolIndustrySub
 ### 9.4 其他尚未證實項
 見 §10 的「未證實」清單（`ratio ≈ 0.80` 亦為推得的預期值，尚未在生產觀察到）。
 
+### 9.5 後續（2026-09-26，issue #1995）：`/metrics` 上的「指標族缺失」與「值真的是 0」必須分開判讀
+
+本節是 §7.2（counter 灌爆）之後的**第二個指標面缺陷**，也是本報告發佈後才發生的生產事件；
+它的價值是把「curl 回 0」這個觀察**拆成兩個互斥的世界**（本節只記錄事實與修法，不重複 §1–§7 的根因分析）。
+
+**現象（2026-09-25，唯讀實證）**：生產 `59743a92` 上
+`curl -s localhost:18080/metrics | grep -c '^atlas_universe_'` = **0**，而同一時間：
+- 同端點的其他家族正常（`atlas_channel_health_status` 等 180+ 個 `atlas_*` 序列）；
+- 母體管線本身健康（`universe_snapshot.json`：`symbols_built=1599`、`symbols_ranked=150`、
+  `quotes_status=ok`、`ranked_trustworthy=true`，`timestamp=2026-09-25T17:01:40Z`）；
+- 三條新告警（§6.2 落地的 `AtlasUniverse*`）**全部 firing**。
+
+**根因（兩層，缺一不可）**：
+
+1. **series 是「第一次增量」才建立的，而 collector 是 in-memory**（與 FU-20260925-07 同一件事）：
+   `CounterVec.WithLabelValues` 只建內部物件，真正讓 family 出現在 `/metrics` 的是
+   `OnInc` → `MetricsCollector.RecordCounter`（`internal/monitoring/metrics_bridge.go` 的
+   `CollectorOnInc`）。collector 由 `bootstrap.InitMetrics()`（→ `NewMetricsCollector()`，無持久化）
+   提供，而 daily/weekly pipeline 每個交易日只跑 **06:00Z** 一次 ⇒
+   **每一次重啟（部署）之後，整個 `atlas_universe_*` 命名空間會缺席直到下一次排程執行**
+   （本次實測：2026-09-25T07:14Z 重啟 → 缺席約 **71 小時**，直到下一個排程執行）。
+2. **規則的 `or vector(0)` 把「缺資料」與「值為 0」判成同一件事**：
+   `(sum(increase(X[6d])) or vector(0)) == 0` 在 `X` 完全沒有樣本時也成立 ⇒
+   三條規則以「pipeline 空轉」的文案 firing，把值班的人送去查一個沒有問題的子系統。
+
+**修法（本節對應的變更）**：
+
+- Go：`internal/monitoring/metrics/universe.go` 新增 `UniverseMetrics.WarmUp()` —— 在**每次啟動**
+  就把整族（含 error 桶與 `coverage_check`）以 `Add(0)` 建立；由 `cmd/atlas/main.go` 在
+  `um.SetOnInc(...)` **之後**呼叫。自此「family 不存在」只剩「被改名/移除」或「服務沒在跑」。
+- 規則：第 1/2/3 條的**判定側**移除 `or vector(0)`（沒有資料 ⇒ 沉默），並新增第 6 條
+  `AtlasUniverseMetricsFamilyMissing`（`absent(ranked|quotes_fetched)` 且 `up{job="atlas-go"} == 1`）
+  以正確的文案報告缺席。辨識方法寫在 `monitoring/rules/atlas_universe_scoring_alerts.yml`
+  檔頭「部署後的預期行為」段。
+
+**判讀（照順序，不要跳）**：
+1. `curl -s localhost:18080/metrics | grep -c '^atlas_universe_'`
+   - `0` 且 `up{job="atlas-go"} == 1` ⇒ **指標族缺失**（第 6 條的形狀），查指標名字/接線，**不要**查 pipeline；
+   - `0` 且 `up == 0` ⇒ 服務掛了，看 `AtlasGoTargetDown`。
+2. `> 0` 時才去 Prometheus 問「有沒有樣本」：
+   `count_over_time(atlas_universe_symbols_ranked_total[6d])` —— 有樣本且計數值恆定 ⇒ **值真的是 0**
+   （才是本報告 §1–§7 的那個世界）；完全沒有樣本 ⇒ 取樣/視窗問題。
+
+**本次未關閉的殘餘缺口**（不重複登記，沿用既有條目）：
+- **值**不跨重啟保存（family 只以 0 回來）⇒ 持久化 collector 仍在 **FU-20260925-08** 的前置條件之後；
+- 手動 `-build-universe run` 仍不寫入服務 collector（本次事件的 `ranked=150` 快照就是這條路徑產生的，
+  指標面看不到）⇒ **FU-20260925-09** 仍 `open`。
+
 ---
 
 ## 10. 已證實 vs 未證實

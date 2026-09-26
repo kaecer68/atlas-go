@@ -57,6 +57,92 @@ func (m *UniverseMetrics) SetOnInc(fn OnInc) {
 	wireOnInc(m.CoverageTotal, "atlas_universe_coverage_total")
 }
 
+// Universe stage label values. They are the first label of every series in
+// this family and are part of the exposed contract: callers (WarmUp, the
+// scheduler, the coverage check) must not invent new spellings.
+const (
+	UniverseStageDaily         = "daily"
+	UniverseStageWeekly        = "weekly"
+	UniverseStageCoverageCheck = "coverage_check"
+)
+
+// universeSeriesSpec is one labeled series of the atlas_universe_* family.
+type universeSeriesSpec struct {
+	counter *CounterVec
+	values  []string
+}
+
+// warmUpSeries returns every series the universe pipeline can produce: both
+// scheduled stages (daily/weekly, see internal/monitoring/universe_scheduler.go)
+// plus the coverage check task (cmd/atlas/main.go). The second label of the
+// two-label vectors enumerates the buckets the pipeline adds to, including the
+// error buckets that only appear on a bad run — a series that can exist must be
+// listed here, otherwise it stays invisible after a restart (see WarmUp).
+func (m *UniverseMetrics) warmUpSeries() []universeSeriesSpec {
+	specs := make([]universeSeriesSpec, 0, 64)
+	for _, stage := range []string{UniverseStageDaily, UniverseStageWeekly} {
+		specs = append(specs,
+			universeSeriesSpec{m.SymbolsGathered, []string{stage}},
+			universeSeriesSpec{m.SymbolsFiltered, []string{stage, "industry_filter"}},
+			universeSeriesSpec{m.SymbolsFiltered, []string{stage, "dropped"}},
+			universeSeriesSpec{m.QuotesFetched, []string{stage}},
+			universeSeriesSpec{m.QuotesErrors, []string{stage, "provider_unavailable"}},
+			universeSeriesSpec{m.QuotesErrors, []string{stage, "fetch_error"}},
+			universeSeriesSpec{m.QuotesErrors, []string{stage, "chunk_error"}},
+			universeSeriesSpec{m.QuotesErrors, []string{stage, "unresolved"}},
+			universeSeriesSpec{m.SymbolsScreened, []string{stage, "passed"}},
+			universeSeriesSpec{m.SymbolsScreened, []string{stage, "failed"}},
+			universeSeriesSpec{m.SymbolsRanked, []string{stage}},
+			universeSeriesSpec{m.RiskChecked, []string{stage, "passed"}},
+			universeSeriesSpec{m.RiskChecked, []string{stage, "excluded"}},
+			universeSeriesSpec{m.RiskErrors, []string{stage, "filter_error"}},
+			universeSeriesSpec{m.NarrativeEventsScraped, []string{stage}},
+			universeSeriesSpec{m.NarrativeErrors, []string{stage, "scrape_error"}},
+			universeSeriesSpec{m.NarrativeErrors, []string{stage, "cache_save_error"}},
+			universeSeriesSpec{m.SnapshotPersisted, []string{stage}},
+			universeSeriesSpec{m.PipelineDurationSeconds, []string{stage}},
+			universeSeriesSpec{m.CoverageMapped, []string{stage, "all"}},
+			universeSeriesSpec{m.CoverageTotal, []string{stage, "all"}},
+		)
+	}
+	specs = append(specs,
+		universeSeriesSpec{m.CoverageMapped, []string{UniverseStageCoverageCheck, "all"}},
+		universeSeriesSpec{m.CoverageTotal, []string{UniverseStageCoverageCheck, "all"}},
+	)
+	return specs
+}
+
+// WarmUp materializes every series of this family with value 0, so /metrics
+// exposes atlas_universe_* from process start instead of only after the first
+// pipeline run (issue #1995).
+//
+// Why it is needed: a series appears on /metrics only when its counter is first
+// incremented. CounterVec.WithLabelValues just builds the in-memory counter;
+// the series is created by the OnInc callback reaching the MetricsCollector
+// that PrometheusHandler scrapes (see CollectorOnInc). The collector is
+// in-memory (bootstrap.InitMetrics -> NewMetricsCollector, no persistence) and
+// the pipeline runs at most once per trading day (06:00 UTC, Tue-Fri; the
+// weekly rebuild covers Monday). Production measurement 2026-09-25: the
+// container restarted at 07:14Z and the whole family stayed absent from
+// /metrics for the following ~71h, until the next scheduled run. During that
+// window `grep -c '^atlas_universe_' /metrics` is 0 on a healthy system, which
+// makes "the family is missing" mean "a restart happened", not "the metric was
+// renamed or the pipeline stopped".
+//
+// Add(0) is deliberate: it reports a zero DELTA to OnInc (see Counter.Add), so
+// the series materializes in the sink without fabricating an increment.
+//
+// Call it *after* SetOnInc; before SetOnInc the zero deltas are not forwarded
+// anywhere and no series is created.
+func (m *UniverseMetrics) WarmUp() {
+	if m == nil {
+		return
+	}
+	for _, s := range m.warmUpSeries() {
+		s.counter.WithLabelValues(s.values...).Add(0)
+	}
+}
+
 // UniverseSnapshot is a point-in-time view of all universe pipeline counters.
 type UniverseSnapshot struct {
 	Timestamp               time.Time

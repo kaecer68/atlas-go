@@ -106,6 +106,83 @@ func TestCollectorOnInc_UniverseSeriesShape(t *testing.T) {
 	})
 }
 
+// TestCollectorOnInc_WarmUpExposesFamilyBeforeAnyRun is the end-to-end
+// regression test for issue #1995: on /metrics, the whole atlas_universe_*
+// family used to be absent until the first pipeline run after a restart.
+//
+// Production evidence (2026-09-25): container restarted at 07:14Z, the family
+// stayed absent for ~71h (until the next scheduled run), and because the alert
+// rules read `sum(increase(...)) or vector(0)`, "no data" was scored as "0" —
+// three alerts fired on a healthy pipeline whose counters simply had not been
+// touched yet.
+//
+// The test drives the same artifact the alerts' operators inspect (the
+// Prometheus text body) through the same wiring production uses.
+func TestCollectorOnInc_WarmUpExposesFamilyBeforeAnyRun(t *testing.T) {
+	collector := NewMetricsCollector()
+	um := metrics.NewUniverseMetrics()
+	um.SetOnInc(CollectorOnInc(collector))
+
+	scrape := func() string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		PrometheusHandler(collector).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+		return rec.Body.String()
+	}
+	countUniverseLines := func(body string) int {
+		n := 0
+		for _, line := range strings.Split(body, "\n") {
+			if strings.HasPrefix(line, "atlas_universe_") {
+				n++
+			}
+		}
+		return n
+	}
+
+	if got := countUniverseLines(scrape()); got != 0 {
+		t.Fatalf("before WarmUp the family already had %d lines: the test can no longer show the defect", got)
+	}
+
+	um.WarmUp()
+
+	body := scrape()
+	if got := countUniverseLines(body); got == 0 {
+		t.Fatal("after WarmUp /metrics still exposes no atlas_universe_* series (issue #1995 is back)")
+	}
+	for _, want := range []string{
+		`atlas_universe_symbols_gathered_total{stage="daily"} 0.000000`,
+		`atlas_universe_symbols_filtered_total{reason="dropped",stage="daily"} 0.000000`,
+		`atlas_universe_quotes_fetched_total{stage="daily"} 0.000000`,
+		`atlas_universe_symbols_screened_total{result="failed",stage="daily"} 0.000000`,
+		`atlas_universe_symbols_screened_total{result="passed",stage="daily"} 0.000000`,
+		`atlas_universe_symbols_ranked_total{stage="daily"} 0.000000`,
+		`atlas_universe_symbols_ranked_total{stage="weekly"} 0.000000`,
+		`atlas_universe_coverage_mapped_total{industry="all",stage="coverage_check"} 0.000000`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics is missing %q", want)
+		}
+	}
+
+	// A later run still accumulates on top of the warmed series (the warm-up
+	// must not shadow or reset anything).
+	um.SymbolsScreened.WithLabelValues("daily", "failed").Add(1449)
+	um.SymbolsScreened.WithLabelValues("daily", "passed").Add(150)
+	um.SymbolsRanked.WithLabelValues("daily").Add(150)
+
+	body = scrape()
+	for _, want := range []string{
+		`atlas_universe_symbols_screened_total{result="failed",stage="daily"} 1449.000000`,
+		`atlas_universe_symbols_screened_total{result="passed",stage="daily"} 150.000000`,
+		`atlas_universe_symbols_ranked_total{stage="daily"} 150.000000`,
+		`atlas_universe_symbols_ranked_total{stage="weekly"} 0.000000`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("after a run, /metrics is missing %q", want)
+		}
+	}
+}
+
 // TestCollectorOnInc_DegradedSeriesShape covers the second production wiring
 // (DegradedMetrics → /metrics) through the same bridge.
 func TestCollectorOnInc_DegradedSeriesShape(t *testing.T) {

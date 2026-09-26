@@ -9,6 +9,15 @@
 #   舊文案把它們寫成「目前現況」⇒ 對值班的人是**錯的資訊**(會照著不存在的缺陷去查)。
 #   本次**只改事實陳述**:expr、labels、視窗、`for:`、門檻一律不動;
 #   `{daily=…}` / `{weekly=…}` 別名**刻意保留**(理由見 (3) 段:TSDB 過渡期 ≤ 6 天)。
+# 2026-09-26(任務 P / issue #1995,v2 語意修正)本檔做**一次 expr 語意修正 + 新增第 6 條**:
+#   · 第 1/2/3 條的**判定側**移除 `or vector(0)` ⇒「缺資料」不再被當成「值真的是 0」,
+#     規則沒有資料時沉默(回空集合),改由第 6 條以「指標族缺失」的文案負責。
+#   · 新增第 6 條 `AtlasUniverseMetricsFamilyMissing`(ranked / quotes_fetched family 消失,
+#     以 `up{job="atlas-go"} == 1` 為閘門;`screened` 缺席仍由第 4 條負責,不重複 paging)。
+#   · 第 1/2/3 條的「活動側」與第 4/5 條的 expr、視窗、`for:`、門檻**一律不動**。
+#   · Go 側修法(同一個 PR):`UniverseMetrics.WarmUp()` 在啟動時把整族以 0 先建立,
+#     讓「family 不存在」不再等於「重啟後還沒跑過」(生產實測缺席約 71h)。
+#   · 辨識方法(缺資料 vs 值為 0)寫在下方「部署後的預期行為」段,是本次的主要交付之一。
 #
 # 為什麼存在 —— 「母體評分失效會響」這一維在生產是**零偵測**:
 #   生產實例(2026-06-22 起):`UniverseBuilderDeps.Quotes` 在 wiring 是常數 nil
@@ -24,6 +33,32 @@
 #   `quotes_returned` 1301/1599、`lots_converted` 1120 ⇒ **本檔三條規則的常態是「靜默」**。
 #   若它們 firing,那不是「已知的舊缺陷」而是**回歸**(或是假日/長休市的視窗語意,見下方 (2))。
 #   歷史上的 nil wiring(`bootstrap_helpers.go:217`,2026-06-22~09-25)是這些規則的**設計動機**,不是現況。
+#
+#   ⚠️ **「指標族缺失」與「值真的是 0」是兩件事;分不出來就會製造永久假警報(issue #1995,2026-09-26 定案)**
+#   為什麼寫在這裡 —— 這是值班第一眼要做的分流,做錯會往完全錯誤的子系統查:
+#   `or vector(0)` 讓 `sum(<空集合>)` 變成 0,而 0 在判定側的語意是「量測到 ranked 完全沒有增量」。
+#   只要 series 在 TSDB 的 [6d] 視窗內**整體不存在**(被改名/移除、遙測中斷、或本檔的
+#   輸入指標根本沒被匯出),第 1/2/3 條就會以「pipeline 空轉」的文案 firing ——
+#   但真正的事實是「沒有資料」,不是「資料說 0」。
+#   ⇒ 本次修法(兩邊一起做才完整):
+#     (i) **規則側**:第 1/2/3 條的判定側移除 `or vector(0)` ⇒ 沒有資料就沉默(不再宣稱 0);
+#         缺席改由第 6 條 `AtlasUniverseMetricsFamilyMissing` 以正確的文案報告。
+#     (ii) **Go 側**:`UniverseMetrics.WarmUp()`(`internal/monitoring/metrics/universe.go`,
+#         由 `cmd/atlas/main.go` 在 `SetOnInc` 之後呼叫)在**每次啟動**就把整族以 0 建立。
+#   ⇒ 修好之後「family 不存在」只剩兩個意思:**指標真的被改名/移除**,或**服務沒在跑**。
+#   **分流步驟(照順序,不要跳)**:
+#     1. `curl -s localhost:18080/metrics | grep -c '^atlas_universe_'`
+#        · `0`,且 `up{job="atlas-go"} == 1`(服務活著、scrape 正常)⇒ **指標族缺失**:
+#          看第 6 條的 triage(#1995 修復前,這一格在**每一次容器重啟後**都成立,
+#          因為 series 是「第一次增量」才建立的,而 pipeline 一天只跑一次 06:00Z;
+#          2026-09-25 07:14Z 重啟後生產實測缺席約 71 小時,直到下一次排程執行)。
+#        · `up{job="atlas-go"} == 0` ⇒ 服務掛了,先看 `AtlasGoTargetDown`,不要查母體。
+#     2. `> 0`(指標族在)⇒ 才去 Prometheus 問「值真的是 0,還是這 6 天沒有樣本」:
+#        `count_over_time(atlas_universe_symbols_ranked_total[6d])`
+#          有樣本且計數值恆定 ⇒ **真的 0**(第 1 條的目標情形,照第 1 條的 triage 查 pipeline);
+#          完全沒有樣本       ⇒ 是**取樣/視窗問題**,不要照 pipeline 的步驟查。
+#        (⚠️ 不要用 `sum(increase(...)) == 0` 反推「有沒有樣本」—— 那正是 `or vector(0)`
+#         把兩者混為一談的地方;`count_over_time` 才是「有沒有樣本」的直接量測。)
 #
 #   四道本該響的防線當時全部失效(2026-09-25 唯讀實證;完整報告見 runbook_url):
 #     1. `universe_coverage_check` 用 symbols_built / TotalClassifiedSymbols ⇒ 數學上不可能
@@ -186,12 +221,15 @@
 #   (f) 上述 (a)-(e) 的共同後果:本檔是「有產出但產出是空的」的偵測器,**不是**萬能心跳。
 #   (g) 2026-09-25(任務 O)新增的第 4/5 條也有各自的殘餘缺口(刻意,不是遺漏):
 #       - 第 4 條的 peer gate 用 `atlas_universe_symbols_filtered_total`。若某次改名**同時**
-#         動到 `screened` 與 `filtered`,gate 與判定會一起消失 ⇒ 沉默。實務上改名是一族一族
-#         做的;而且 `ranked` 被改名時第 1 條仍會 firing、`quotes_fetched` 被改名時第 3 條
-#         仍會 firing(兩條的右側都有 `or vector(0)`,把「family 不存在」也判成 0),
-#         所以真正的盲區只有「`screened` 與 `filtered` 同時消失」。
-#       - 第 5 條只覆蓋「`screened` 存在但 6 天零增量」的 empty_filtered 形狀;若容器重啟後
-#         每一次執行都停在 Step 2,`screened` 從未存在 ⇒ 改由第 4 條 firing(分工,見第 5 條)。
+#         動到 `screened` 與 `filtered`,gate 與判定會一起消失 ⇒ 本條沉默。
+#         (#1995 之前這種情形沒有規則接手 —— 第 1/3 條的右側靠 `or vector(0)` 把
+#          「family 不存在」判成 0 而順帶 firing,代價是同一件事被用錯誤的文案報告。
+#          修法之後那兩條不再宣稱 0,改由第 6 條負責:它的判定是 `ranked` / `quotes_fetched`
+#          的缺席,與 `screened`/`filtered` 無關 ⇒ 「整族被改名」一定有規則會響,
+#          而且文案正確。)
+#       - 第 5 條只覆蓋「`screened` 存在但 6 天零增量」的 empty_filtered 形狀。
+#         (#1995 之後 `WarmUp()` 在啟動時就建立 `screened`,所以「從未存在」的形狀也自動
+#          落進第 5 條 —— 它現在以「存在但零增量」出現;第 4 條只在 `screened` 真的被移除時 firing。)
 #       - 全部規則(新舊)都不覆蓋 `empty_universe`(Step 1 就 0 檔):需要 Go 端新增心跳指標
 #         (`gathered_total` 的 Add 在 `if SymbolsBuilt == 0 { return }` **之後** ⇒ 真的沒有訊號)。
 
@@ -206,12 +244,16 @@ groups:
       # ⇒ 評分階段沒有產出母體。
       # 為什麼兩個條件都要:只看「ranked 增量 = 0」會在週末/連假/服務剛重啟(技術性空窗)時誤報;
       # 加上「同視窗內有 screening 活動」才代表「pipeline 真的跑了,但評分空轉」。
+      # ⚠️ 判定側(ranked)自 2026-09-26(#1995)**不再**寫 `or vector(0)`:沒有樣本時
+      # `sum(increase(...))` 回空集合 ⇒ 本條沉默,由第 6 條以「指標族缺失」的文案報告。
+      # 若把 `or vector(0)` 加回去,「指標族被改名/移除」會被誤判成「ranked=0」而給出
+      # 錯誤的 triage(送去查 pipeline),那正是 #1995 的假警報形狀。
       - alert: AtlasUniverseRankedZero
         expr: |
           (
             (sum(increase(atlas_universe_symbols_screened_total[6d])) or vector(0)) > 0
             and
-            (sum(increase(atlas_universe_symbols_ranked_total[6d])) or vector(0)) == 0
+            sum(increase(atlas_universe_symbols_ranked_total[6d])) == 0
           )
         # 30 分鐘純粹是吸收重啟/scrape 抖動的 pending 窗;條件的本質是**持續狀態**
         # (ranked 已 6 天沒動),不需要更長的前置等待。
@@ -250,16 +292,23 @@ groups:
             2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
                正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
                就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
-            3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
-               回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
+            3. 交叉證據(⚠️ 2026-09-26 起語意已變,見檔頭「部署後的預期行為」):
+               curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+               · 有 series 但 increment 為 0 ⇒ Step 3 的 quotes 分支沒貢獻任何報價
+                 (可能是走 else(provider 沒接上),也可能是接了但回空 —— 看第 3 條)。
+               · **沒有 series** ⇒ 這是「指標族缺失」,不是 Step 3 的判定:
+                 修復前 series 只在第一次增量才建立(重啟後會整族消失),
+                 修復後由 `UniverseMetrics.WarmUp()` 在啟動時就建立 ⇒ 缺席即指向
+                 第 6 條(改名/移除或服務沒在跑),不要拿它推論 quotes 分支。
             4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
                result.quotes_status / result.ranked_trustworthy / result.ranked_fallback_reason
                —— 這三個欄位就是為本案加的機器可讀判定。
             5. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界 ⇒ 固定數字會隨天數失效)。
                歷史上的灌爆缺陷(x·N(N+1)/2;實測只跑 2 輪顯示 4797)已由 #1989 於 2026-09-25
                修復,但禁令不變。本規則只看 increase() 是否為 0,與這件事無關。
-            6. 若本指標 family 整體消失(被改名/移除),ranked 側計為 0 ⇒ 一樣會 firing
-               (刻意如此:指標消失也是零偵測的一種)。
+            6. 若本指標 family 整體消失(被改名/移除),本條**不會** firing —— 判定側沒有
+               `or vector(0)`,沒有資料就不宣稱「量測到 0」(#1995)。缺席由第 6 條
+               `AtlasUniverseMetricsFamilyMissing` 負責,照那一條的 triage 查指標名字,不要查 pipeline。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
 
       # ══ 2. 篩選全滅:有篩選活動,但 passed 完全沒有增量 ══════════════════════════
@@ -280,7 +329,7 @@ groups:
                increase(atlas_universe_symbols_screened_total{result="passed"}[6d])
                or increase(atlas_universe_symbols_screened_total{daily="passed"}[6d])
                or increase(atlas_universe_symbols_screened_total{weekly="passed"}[6d])
-             ) or vector(0)) == 0
+             )) == 0
           )
         for: 30m
         labels:
@@ -320,10 +369,13 @@ groups:
       #   左:「同一視窗內 pipeline 跑過」(screened 有任何增量)。
       #   右:「同一視窗內 quotes_fetched 完全沒有增量」⇒ quotes 分支沒執行,或執行了但回 0 筆。
       # 為什麼是決定性訊號:`atlas_universe_quotes_fetched_total` 是 Step 3 的 `if deps.Quotes != nil`
-      # 分支內**唯一**會建立 series 的地方(`universe_scheduler.go:383-385`,即使 0 筆、即使 fetch
-      # error 也會 `Add(0)`),而 `symbols_ranked_total` 以 `Add(0)` 存在 ⇒ 生產觀測到
-      # 「ranked series 存在、quotes_fetched series 不存在」就只有一個可能:走的是 else 分支
-      # (Quotes == nil)。修好之後本條會在下一次執行自動 resolve。
+      # 分支內唯一會記錄報價筆數的地方(`universe_scheduler.go` 的 `quotesFetchedCounter.Add(...)`,
+      # 即使 0 筆、即使 fetch error 也會 Add)⇒ 在同一視窗內 screening 有活動、而這個 counter
+      # **完全沒有增量**,就代表 Step 3 沒有貢獻任何報價(走了 else 分支,或接了但回空)。
+      # ⚠️ 2026-09-26(#1995)起 `UniverseMetrics.WarmUp()` 會在**每次啟動**就把這個 series
+      # 以 0 建立 ⇒ 「series 不存在」不再等於「走了 else 分支」(那是修復前的推理,見
+      # 下方 triage 第 2 步)。判定仍然成立,只是證據從「series 在不在」換成「增量是否為 0」。
+      # 修好之後本條會在下一次執行自動 resolve(quotes_fetched 一旦有增量)。
       # ⚠️ 兩側必須同視窗(獨立驗證的 F-1):曾經用「本 process 期間跑過」的當下值當左側,
       #    結果在 > 4 天休市期間對**健康** pipeline 誤報約 71 小時(左側不會衰減、右側會)。
       # 副作用(已評估、可接受):兩側同視窗之後,本條**不再**在容器重啟時自動沉默;而且
@@ -334,7 +386,7 @@ groups:
           (
             (sum(increase(atlas_universe_symbols_screened_total[6d])) or vector(0)) > 0
             and
-            (sum(increase(atlas_universe_quotes_fetched_total[6d])) or vector(0)) == 0
+            sum(increase(atlas_universe_quotes_fetched_total[6d])) == 0
           )
         for: 30m
         labels:
@@ -356,7 +408,10 @@ groups:
               ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
             - 兩個分支要分辨(這是本條的重點):
               (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                  bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
+                  bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ quotes 分支從未被執行,
+                  該 series 只有 0 增量。
+                  (⚠️ #1995 修復前這個形狀的旁證是「series 根本不存在」;修復後 series 由
+                   `UniverseMetrics.WarmUp()` 在啟動時建立,兩者改用增量區分。)
               (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
                   `quotes_fetch_error` WARN 與
                   `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
@@ -371,9 +426,11 @@ groups:
                                         全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
                  provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
             1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-            2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-               回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
+            2. 指標有沒有增量:curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+               有 series 但沒有任何增量 ⇒ 走的是 (a),去看 wiring:
                grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+               (修復前這一步是靠「series 不存在」判定;修復後 series 一律存在,
+                改成比對 increment —— 沒有樣本的情況另外由第 6 條負責,不要在這裡推論。)
                ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
@@ -417,6 +474,16 @@ groups:
       # 副作用(刻意、已評估):容器重啟後若「每一次」執行都停在 Step 2,`screened` 從未存在,
       # 本條會以「family 消失」的文案 firing —— 所以下面的 triage **第 2 步就是先分辨
       # 「是不是根本沒走到篩選階段」**,不要求值班的人先假設是改名。
+      #
+      # ── 2026-09-26(#1995 修復後)這個副作用的形狀消失了,但 gate 保留 ───────────────
+      # `UniverseMetrics.WarmUp()` 現在在**每次啟動**就把整個 family(含 `screened` 的
+      # passed/failed 兩個桶)以 0 建立 ⇒ 上面「重啟後兩者一起不存在」與「Step 2 永遠 early-return
+      # 導致 screened 從未存在」兩種形狀**都不再產生缺席**,缺席只剩一個意思:
+      # 服務沒在跑、或這個 metric 真的被改名/移除。gate 因此仍然有意義 ——
+      # 它把「app 沒在跑 / 整族被移除」排除在外(那由第 6 條與 AtlasGoTargetDown 負責),
+      # 只在「同族的 filtered 還在」時才判定 screened 的缺席。
+      # 互斥分工也因此更乾淨:  · screened 缺席 ⇒ 本條;
+      #                       · screened 存在但零增量 ⇒ 第 5 條(含修復前的「從未存在」形狀)。
       - alert: AtlasUniverseScreenedFamilyMissing
         expr: |
           absent(atlas_universe_symbols_screened_total)
@@ -451,17 +518,27 @@ groups:
             兩個可能原因(照下面順序查,**不要**一開始就假設是改名):
             (a) **metric family 被改名或移除**(本條的主要目標):程式碼把 `symbols_screened_total`
                 改名、或整段 Add 被刪掉。
-            (b) **pipeline 根本沒走到篩選階段**(Step 1/2 early-return):`symbols_screened_total`
-                是在 Step 4 才 Add 的,母體 0 檔(`empty_universe`)或 industry filter 全滅
-                (`empty_filtered`)時它不會被建立。這是缺口 (d) 的形狀。
+            (b) **服務/遙測中斷** ⇒ 整個 `atlas_universe_*` 都不會被回報,此時同族的
+                `filtered_total` 也會一起消失 ⇒ peer gate 不成立、本條**不會** firing
+                (那是 AtlasGoTargetDown / 第 6 條的轄區)。
+            ⚠️ 2026-09-26(#1995)起還有一個已被移除的舊可能原因:過去 `symbols_screened_total`
+            是 Step 4 才第一次被 Add 的,所以「容器重啟後從未走到 Step 4」或
+            「每次都停在 Step 2(`empty_filtered`)」會讓它**從未存在** ⇒ 舊版本會在這裡 firing。
+            `UniverseMetrics.WarmUp()` 現在在每次啟動就把 passed/failed 兩個桶以 0 建立,
+            因此那種形狀不再產生缺席;它會以「存在但零增量」出現在**第 5 條**,不是本條。
 
             先查什麼(依序):
-            1. **先分辨 (b) 再懷疑 (a)** —— 最快的一步是看快照:
+            0. **確認服務在跑**:`up{job="atlas-go"}` 是否為 1(或直接
+               `curl -s localhost:18080/metrics | grep -c '^atlas_'` 是否有輸出)。
+               服務掛掉時本條的 peer gate 就不成立(不會 firing),若它是 firing 就代表
+               /metrics 還活著 ⇒ 進入下一步。
+            1. **先看 Step 2 有沒有跑過,再懷疑改名** —— 最快的一步是看快照:
                data/state/universe_snapshot.json 的 result.quotes_status
-                 not_attempted        ⇒ 在 Step 1/2 就 early-return ⇒ 是 (b),不是改名;
+                 not_attempted        ⇒ 在 Step 1/2 就 early-return;
                                         接著看 result.ranked_fallback_reason:
                                           empty_universe ⇒ 母體 0 檔(分類樹/映射面整批失效)
                                           empty_filtered ⇒ industry filter 把整個母體濾掉
+                                        (#1995 之後這種形狀改由第 5 條報告,不是本條)
                  provider_unavailable / fetch_error / empty / ok ⇒ 有走到 Step 3,
                                         那 screened 缺席就高度指向 (a)
                (若部署還沒含 #1979,這幾個欄位可能不存在,改用第 3 步的日誌。)
@@ -563,9 +640,90 @@ groups:
                `IndustryFilter.TargetLevel1`(空 = 關)與 `ExcludeCyclicalityLow`(預設 false);
                見 `NewIndustryFilter` 的預設值註解。若有人把它們打開而值配置錯誤,
                就會一次濾掉整個母體。
-            5. 若容器重啟後**每一次**執行都停在 Step 2,`symbols_screened_total` 從來沒有
-               存在過 ⇒ 本條不成立,**改由第 4 條 firing**(那是刻意的分工:一個負責
-               「family 不存在」、一個負責「family 存在但零增量」)。
+            5. 若容器重啟後**每一次**執行都停在 Step 2,本條**仍然成立**:
+               #1995 之後 `UniverseMetrics.WarmUp()` 在啟動時就把 `screened` 的
+               passed/failed 兩個桶以 0 建立 ⇒ 這個形狀以「存在但零增量」出現,
+               正是本條要抓的 empty_filtered(第 4 條只在 `screened` 真的被移除時 firing)。
             6. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界;灌爆缺陷已由 #1989 於
                2026-09-25 修復,見檔頭 (1))。
+          runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+
+      # ══ 6.（2026-09-26 任務 P / issue #1995）評分輸入指標族缺失 ═════════════════════
+      # 覆蓋 #1995 的核心缺陷:第 1/2/3 條的判定側原本寫 `or vector(0)`,把
+      # 「TSDB 在 [6d] 視窗內完全沒有這個 series」與「量測到的增量為 0」判成同一件事。
+      # 本次把 `or vector(0)` 從判定側移除(沒有資料 ⇒ 沉默),缺席改由本條以正確的文案報告。
+      #
+      # 為什麼只蓋 `ranked` 與 `quotes_fetched`,不含 `screened`:
+      #   `screened` 的缺席已經是第 4 條的職責(peer gate 用 `filtered`),同一個根因不重複
+      #   paging 是檔頭 (5) 的硬約束。兩條合起來的覆蓋:
+      #     · 服務在跑 + `screened` 缺席              ⇒ 第 4 條
+      #     · 服務在跑 + `ranked`/`quotes_fetched` 缺席 ⇒ 本條
+      #     · 整族一起缺席(改名/移除)                 ⇒ 本條(第 4 條的 peer gate 不成立而沉默)
+      #     · 服務沒在跑                                ⇒ 兩條都沉默,由 AtlasGoTargetDown 負責
+      #
+      # 為什麼要用 `up{job="atlas-go"} == 1` 當閘門:
+      #   第 1/2/3 條的輸入來自 TSDB,缺席有兩個來源 —— (i) 指標被改名/移除;
+      #   (ii) 服務沒在跑、scrape 拿不到(此時 `up{job="atlas-go"} == 0`,AtlasGoTargetDown
+      #   已在 2 分鐘內 paging,見 atlas_container_liveness_alerts.yml)。閘門把 (ii) 排除,
+      #   讓本條只報「服務活著,但訊號不見了」。
+      #
+      # ── 與 Go 側修法的關係(改動前必讀)─────────────────────────────────────────
+      # `UniverseMetrics.WarmUp()`(`internal/monitoring/metrics/universe.go`,由
+      # `cmd/atlas/main.go` 在 `SetOnInc` 之後呼叫)在每次啟動就把整族以 0 建立 ⇒
+      # 「重啟後還沒跑過第一次 pipeline」不再產生缺席(修復前生產實測缺席約 71 小時:
+      # 2026-09-25T07:14Z 重啟 → 下一次排程執行)。因此本條 firing 是**結構性**訊號,
+      # 不是「還沒跑」。
+      - alert: AtlasUniverseMetricsFamilyMissing
+        expr: |
+          (
+            absent(atlas_universe_symbols_ranked_total)
+            or absent(atlas_universe_quotes_fetched_total)
+          )
+          and on()
+          (up{job="atlas-go"} == 1)
+        for: 30m
+        labels:
+          severity: warning
+          service: atlas
+          component: universe-monitoring
+          wave: "9.2"
+          incident_ref: "universe-scoring-gap-20260925"
+        annotations:
+          summary: "universe 評分輸入指標族缺失:ranked / quotes_fetched series 不存在(服務仍在跑)"
+          description: |
+            `atlas_universe_symbols_ranked_total` 或 `atlas_universe_quotes_fetched_total`
+            在過去 30 分鐘內**完全不存在**(不是值為 0),而同一個 job 的
+            `up{job="atlas-go"}` 仍為 1 ⇒ atlas-go 還活著、/metrics 還回得出東西,
+            但本檔第 1/2/3 條的判定輸入不見了。
+
+            這代表什麼 —— 這是「零偵測」的另一種形狀,而且**與 pipeline 是否空轉無關**:
+            - 第 1/2/3 條的判定側現在沒有 `or vector(0)`(見檔頭「部署後的預期行為」),
+              沒有資料時它們沉默 ⇒ 這個缺席由本條單獨負責,不會出現兩份互相矛盾的 triage。
+            - 修復前(#1995)這個狀態**每一次容器重啟後都會出現**,因為 series 是「第一次增量」
+              才建立的,而 pipeline 一天只跑一次(06:00Z)。當時的規則是靠 `or vector(0)` 把它
+              誤判成「ranked=0 / 篩選全滅 / 報價缺失」,把值班的人送去查沒有問題的 pipeline。
+              修復後 `UniverseMetrics.WarmUp()` 在啟動時就把整族以 0 建立 ⇒ 缺席只剩下面三個原因。
+
+            先查什麼(依序):
+            1. 指標是不是換了名字:
+               curl -s localhost:18080/metrics | grep -E '^atlas_universe_' | sort
+             跟五個核心名字對一下:
+               atlas_universe_symbols_gathered_total / symbols_filtered_total /
+               symbols_screened_total / symbols_ranked_total / quotes_fetched_total
+             有同義的新名字 ⇒ 把 `monitoring/rules/` 與 `monitoring/tests/` **所有**引用舊名的
+             地方一起改(只改一條會讓規則之間互相矛盾),並同步更新本檔的 triage 文案。
+            2. 服務是不是其實沒在跑(閘門的邊界):
+               本條 firing 時 `up{job="atlas-go"}` 必須是 1。若它同時是 0,那是 scrape 的問題,
+               先看 AtlasGoTargetDown,不要查母體 pipeline。
+            3. `WarmUp()` 是否還在接線上(回歸檢查):
+               grep -rn "WarmUp()" cmd/atlas/main.go internal/monitoring/metrics/universe.go
+             正確位置:`cmd/atlas/main.go` 緊接在 `um.SetOnInc(...)` 之後呼叫 `um.WarmUp()`。
+             少了它,本條會在**每一次部署後**誤報(直到下一次 pipeline 執行)。
+            4. 程式碼是否仍會寫這兩個名字:
+               grep -rn "symbols_ranked_total\|quotes_fetched_total" internal/monitoring/
+             (正確位置:`internal/monitoring/metrics/universe.go` 的 name 欄位 +
+              `internal/monitoring/universe_scheduler.go` 的 `rankedCounter.Add` 與
+              `quotesFetchedCounter.Add`)。
+            5. ⚠️ 不要用 counter 絕對值判斷(累積 counter 沒有上界;歷史上的灌爆缺陷已由
+              #1989 於 2026-09-25 修復,見檔頭 (1))。本條與數值無關,只看 series 在不在。
           runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"

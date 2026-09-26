@@ -216,11 +216,9 @@ test -n "$(grep -c '/api/llm/health' cmd/atlas/main.go)" || \
 
 **回歸偵測**:CI `generate` job 已檢查 Go struct JSON tag drift;建議加 `monitoring/rules/*` 對 metric 名稱的 grep guard(Issue #927 那種 dead reference 自動偵測)。
 
-**參考**:
-- PR #926:commit `9d9a1502`
-- Issue #927:`channel_errors_total` dead code 案例
-- `docs/specs/wave9-observability-spec.md` §5
-- `internal/monitoring/startup_metrics.go`
+**陷阱(2026-09-26,issue #1995)**:series 只在**第一次 increment** 時才出現在 `/metrics`(`CounterVec.WithLabelValues` 只建內部物件,真正曝露它的是 `OnInc` → `RecordCounter`),而 collector 是 in-memory ⇒ **每次重啟整個 family 消失**,直到下一次事件才算數(低頻 family 可長達數天,看起來像 wiring 壞掉)。**修法**:啟動時主動以 `Add(0)` 建立要曝露的 family(例:`UniverseMetrics.WarmUp()`),並確保 `absent()`/`or vector(0)` 類規則不把「沒有樣本」當成「值為 0」—— 缺資料與 0 必須分開判讀(見 `monitoring/rules/atlas_universe_scoring_alerts.yml` 檔頭)。
+
+**參考**:PR #926 (`9d9a1502`)、Issue #927 (`channel_errors_total` dead code 案例)、`docs/specs/wave9-observability-spec.md` §5、`internal/monitoring/startup_metrics.go`
 
 ---
 
