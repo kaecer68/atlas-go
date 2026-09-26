@@ -32,7 +32,7 @@
 | E1 | coverage 門檻空值 fail-open | `Makefile` + `ci-cd.yml` + `quality.yml` + `local-ci.sh` | 他線 `atlas-cov-fix` | 在飛（**佔用 Makefile/quality.yml**）|
 | E2 | 負向證明把 exit 127/2 當「擋下了」 | 10 處 | — | ✅ 已併（#2020/#2022）|
 | E3 | `timeout(124)` 只計 skipped ⇒ 掛住的檢查仍讓 `make ci` 回 0 | `Makefile` ci 段 | **他線（已登記 `FU-20260926-12`，#2028）** | **不重複** |
-| E4 | pre-push 取不到 `origin/main` 即放行 4 gate | `.githooks/pre-push` | **#2049**（armed）| ⚠️ 與 `FU-20260926-15` **同檔 ⇒ 同一 PR 處理**（host binary 新鮮度閘門一併接上）。root 實查確認 fail-open：`git fetch` 失敗 ⇒ `exit 0` 並跳過 ci-full/redundancy |
+| E4 | pre-push 取不到 `origin/main` 即放行 4 gate | `.githooks/pre-push` | ✅ **#2049**（已併）| 與 `FU-20260926-15` **同一 PR 處理**（host binary 新鮮度閘門一併接上）。root 實查確認 fail-open：`git fetch` 失敗 ⇒ `exit 0` 並跳過 ci-full/redundancy |
 | E5 | ~~危險指令 hook 預設 warn~~ **實為「死守門」**：`.claude/settings.json` 只有 `SessionStart`、**無 `PreToolUse`** ⇒ **沒有任何機制自動呼叫** `deny-dangerous.sh`（唯一 PreToolUse 在 **gitignored** 的 `.claude/settings.local.json`）；且該腳本用 `${CHECK,,}`（bash 4）⇒ macOS bash 3.2 **對每個指令誤判** | `.agent-hooks/` ＋ `.claude/settings.json` | **#2048** | ✅ **已併**（`fe779473`）：tracked `settings.json` 加 `PreToolUse`→薄 adapter（pattern 邏輯無第二份）、bash 3.2 語法修為 `tr`、`tests/scripts/test-agent-hook-wiring.sh`（11 組契約）納入 `make ci-gate`；**維持 warn 為預設**（見 E23）|
 | E6 | `--warn-only` 使 job 不可能紅；shellcheck/frontend-smoke skip 出口 | `quality.yml` 等 | **無**（等 E1/#2003 讓出）| 待派（串行）|
 | E7 | `$VAR（` 全形括號併入變數名（`set -u` 崩潰）| `check_finmind_quota.sh:65` | 他線 `atlas-shnonascii` | 在飛（不重複）|
@@ -96,7 +96,7 @@
 | **E20**（watchdog 漂移）| ✅ 已解除（root 於 `b1fc524d` 複測 rc=0）| 更正與複測記於 **`FU-20260926-26`** |
 | **E5**（死守門：`deny-dangerous` 從未被自動呼叫）| ✅ **#2048**（`fe779473`；PR 含 bash 3.2 修正）| 維持 `warn` 預設的誤擋面另立 **E23** |
 | **E18**（quality.yml v1 文案）| ✅ **#2046**（`2404dbe2`）＋ **#2050** 更新 spec 殘留 | root 複查 main：v1 字串 0/0 |
-| **E4**（pre-push fail-open）＋ `FU-20260926-15` | **#2049**（armed，同 PR 處理）| 同檔 ⇒ 必須同一 PR |
+| **E4**（pre-push fail-open）＋ `FU-20260926-15` | ✅ **#2049**（已併）| 同檔 ⇒ 同一 PR 處理 |
 | **E21**（CLI 靜默忽略未知子命令）| **#2053**（armed）| root 複驗：公開 task-liveness 200／114 tasks／stale=0；CI run `36255705561` 四 job 全 success |
 | **E22**（`Makefile` coverage 共用 `/tmp` 假紅）| 無（**串行**：`Makefile` coverage 段由 E1 名義佔用）| 同族於 E4/FU-15 |
 | **E23**（guard 切 enforce 的誤擋面）| 無（需 owner 決定）| 現行決策＝維持 `warn` |
