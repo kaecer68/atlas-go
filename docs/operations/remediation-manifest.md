@@ -23,7 +23,7 @@
 | D1 | FinMind 配額未約束跨 process 總量（`used=12982 > 上限 12000`；並致 `auto_cycle_update` 產業循環斷料）| root 親查生產 log + `finmind_client.go:420` 在建構子內建 tracker（**per-process**）| **PR #2021** | 待 root 驗收 |
 | D2 | Fubon 量能語意未定義（同標的同日少 6–11%；0050 66,000 vs 70,488 張）| k3 盤查量測；消費者以 `.Volume` 算周轉率/門檻（`cmd/backfill-industry-tree:42`、`cmd/experimental/plugin-e2e:42`）| 無 | **待量測判定**（快照 vs 累計）|
 | D3 | 校準漂移偵測（生效值 vs 出廠值不可觀測；風控曾靜默由嚴→寬）| root 親查（overlay 在 bind mount；生產 `0.0108` vs repo `0.03`）| 他線 `atlas-calib-fix` + **#2017** | 在飛（不重複）|
-| D4 | revert-guard 設計修正（改為 diff 衛生 WARN + evil-merge FAIL）| kimi-k3 設計審查裁定 | **#2003** | 解衝突中 |
+| D4 | revert-guard 設計修正（改為 diff 衛生 WARN + evil-merge FAIL）| kimi-k3 設計審查裁定 | **#2003** | ✅ **已併**（#2003，12:25Z）；root 併入後複驗：`Makefile` 守門 `check_followups_unique_ids`=1、`check_revert_guard.py` 的 `merge-tree` 引用=13、`traps.md`=329 行 ≤330、evil-merge 負向證明實跑 exit 1 |
 
 ## §3 明確錯誤清單（E）— 局部、可列舉、不需重構
 
@@ -36,12 +36,19 @@
 | E5 | 危險指令 hook 預設 warn | `.agent-hooks/deny-dangerous.sh` | **無** | 待派（可並行）|
 | E6 | `--warn-only` 使 job 不可能紅；shellcheck/frontend-smoke skip 出口 | `quality.yml` 等 | **無**（等 E1/#2003 讓出）| 待派（串行）|
 | E7 | `$VAR（` 全形括號併入變數名（`set -u` 崩潰）| `check_finmind_quota.sh:65` | 他線 `atlas-shnonascii` | 在飛（不重複）|
-| E8 | flaky 假紅：`WalkDir("internal")` 撞 apigateway 測試的相對 `data/` | `parameters_shadow_declarations_test.go` ↔ `register_adapters.go:401` | **本線 `fix/20260926-flaky-and-sa12`** | ✅ 修（**PR #2036**，FU-20260926-18）修法：`saveSnapshot` base dir 注入＋測試全面 `t.TempDir()`；未放寬 walker |
-| E9 | `sa12-negative-evidence.sh` 2 條 FAIL 且未接 CI | 同上腳本 | **本線 `fix/20260926-flaky-and-sa12`** | ✅ 量測判定為過時期望 → 改量不變式並改名 `check_sa12_negative_evidence.sh` 由 `make ci` glob 納入（**PR #2036**，FU-20260926-19）|
-| E10 | 退役 iMac 殘留：`bin/a2a status` 永遠 offline + 30+ 處引用 | `bin/a2a`、docs、skills、a2a-dev | **`fix-E10-retired-imac`**（atlas-go PR **#2031**；a2a-dev PR 待開）→ registry **`FU-20260926-20`** | **在飛**（a2a-dev `bin/a2a` 三態探測＋45 條自測；atlas-go 20 檔；`Makefile`/`quality.yml`/`traps.md` 為禁改檔 ⇒ 殘留已登記在同 FU 的「仍存在的殘留」段） |
+| E8 | flaky 假紅：`WalkDir("internal")` 撞 apigateway 測試的相對 `data/` | `parameters_shadow_declarations_test.go` ↔ `register_adapters.go:401` | **本線 `fix/20260926-flaky-and-sa12`** | ✅ **已併**（#2036，13:24Z）；root 解衝突（取分支版）後複驗：`go test ./internal/config/ ./internal/apigateway/` 綠且跑完 **repo 樹不留 `internal/apigateway/data`** |
+| E9 | `sa12-negative-evidence.sh` 2 條 FAIL 且未接 CI | 同上腳本 | **本線 `fix/20260926-flaky-and-sa12`** | ✅ **已併**（#2036）；`scripts/ci/check_sa12_negative_evidence.sh` root 實跑 **14/14 PASS** |
+| E10 | 退役 iMac 殘留：`bin/a2a status` 永遠 offline + 30+ 處引用 | `bin/a2a`、docs、skills、a2a-dev | **`fix-E10-retired-imac`**（atlas-go PR **#2031**；a2a-dev PR 待開）→ registry **`FU-20260926-20`** | ✅ **已併**（#2031，11:11Z）；殘留（2 個 watchdog 操作入口）登記於 `FU-20260926-20`；root 複驗 `100.68.42.72`=0 命中、`Makefile` 取值已改 `kaecer@kmacmini` |
 | E11 | `symbols_excluded` 無排除原因細分 | universe snapshot | **無** | 待派（小，可掛任一 child）|
 | E12 | production `/annotate` 未收斂到 Router | `internal/llm` + dashboard | **無** | 待排（需 scoping）|
-| E16 | **死 gate**：`scripts/verify-sector-allocation-closure.sh` 依賴的 manifest 已於 #1255 移出 `docs/`（現於 gitignored `.omo/`）＋ `check()` 的 `eval` 被移除（#1250）⇒ 今 `exit 2`、**呼叫端 0** ⇒ **明示停用為 no-op** | `scripts/verify-sector-allocation-closure.sh`；附帶誠實化 `cmd/experimental/sector-allocation-closure-preflight/main.go` 的假宣稱 | **`fix/20260926-dead-gate-closure`（本 PR）** | 待 root 驗收（重啟條件見 `FU-20260926-23`）|
+| E16 | **死 gate**：`scripts/verify-sector-allocation-closure.sh` 依賴的 manifest 已於 #1255 移出 `docs/`（現於 gitignored `.omo/`）＋ `check()` 的 `eval` 被移除（#1250）⇒ 今 `exit 2`、**呼叫端 0** ⇒ **明示停用為 no-op** | `scripts/verify-sector-allocation-closure.sh`；附帶誠實化 `cmd/experimental/sector-allocation-closure-preflight/main.go` 的假宣稱 | **`fix/20260926-dead-gate-closure`（本 PR）** | ✅ **已併**（#2037，11:24Z）；腳本明示停用（`⛔ 已停用（DISABLED）`、rc=0），依賴檔不可回復的理由見 `FU-20260926-23` |
+| E13 | ~~`Makefile` `IMAC_HOST ?= kk@kimac` ⇒ `make imac-watchdog-diff` 必失敗~~ **已修** | `Makefile:105-108` | **#2031** | ✅ 併入後由 #2031 修；root 實測舊因（`Could not resolve hostname kimac`）已消失，值為 `kaecer@kmacmini` |
+| E14 | ~~`traps.md` / `quality.yml` 未掃退役主機殘留~~ **複查無殘留** | 同左 | — | ✅ 不需派工（root 複查 2026-09-26：兩檔 `kk@kimac|iMac` **0 命中**）|
+| E15 | **活設定殘留（非 repo）**：`~/.prime/agent/models.json:140` 的 provider 名仍叫 `kimac` | 工作站設定（非 repo）| **無** | 待決（低風險：其 `baseUrl` 已是 `http://kmacmini:4000/v1` ⇒ **僅名稱歷史債、路由正確**）。⚠️ 原描述的懸空 symlink `~/bin/imac-recover` **複查不存在、不可重現 ⇒ 不登記為事實** |
+| E17 | **排程空轉**：`scripts/darwinian_adjust.sh` 自述 `DEPRECATED` stub（核心計算註解於 L101），**實跑 rc=1**，但 `docker-compose.yml:453` 仍以 `CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply`（容器 `atlas-cron-darwinian`，`0 9 * * *`）**實際排程** | `scripts/darwinian_adjust.sh` + `docker-compose.yml:453` | **無** | 待派（root 2026-09-26 實查：stub header + `rc=1` + 呼叫端 grep；處置二選一：移除排程或讓 stub 明確 no-op+log）|
+| E18 | `.github/workflows/quality.yml` 的 `revert-guard` job **註解與 step 名稱仍是 v1（被否證的）框架**：「照現狀合併就會回退」×1、「a stale branch deleting a shared asset must be blocked」×1；行為正確（僅呼叫兩支腳本）| `quality.yml` | **無**（等 E6/`atlas-cov-fix` 讓出）| 待派（純文字，−0 行為風險；root 複查：兩句各 1 命中）|
+| E19 | **孤兒腳本群**：10 支在 `Makefile`/`.github/workflows`/`docker-compose*`/`scripts/` 中 **0 個可叫用引用**（`verify-atlas.sh`、`coverage.sh`、`daily-twse-fetch.sh`、`install-soak-automation.sh`、`reflexivity_report.sh`、`sync-darwinian.sh`、`prism_manage.sh`、`spawning_manage.sh`、`generate_replay_data.sh`、`cleanup-manifests.sh`）；`verify-manifest.sh` 唯一引用來自**同樣 0 引用的** `verify-atlas.sh`（孤兒互叫）⇒ 實質死碼 | `scripts/` | **無** | 待決（保留或刪除需 owner 決定；root 2026-09-26 實查引用數）|
+| E20 | **生產↔repo 不一致（操作性，非程式缺陷）**：Mac Mini 的 `/Users/kaecer/bin/atlas-container-watchdog.sh`（85 行、`424944ce`、Sep 25）≠ repo 正本（104 行、`70ee1a45`、#2031）⇒ `make imac-watchdog-diff` **exit 2**（檢查正確地報漂移）| 生產主機 + `scripts/ops/imac-container-watchdog.sh` | **無** | 待派（root 實測 diff：**37 行差異全為註解、非註解 0 行 ⇒ 行為零風險**）；處置＝`make imac-watchdog-install`（**跨機器執行 ⇒ 依政策交 a2a-dev**）|
 
 ## §4 系統性稽核結論（2026-09-26，防止重複盤查）
 
@@ -62,7 +69,7 @@
 - **FU registry = 逐項詳細紀錄**（現象、證據、處置、殘項）
 - **規則**：本表的每一項**必須**對應一個 FU 號或 PR；反之不要求（registry 可能有本表尚未收納的項）
 
-### 已對帳（2026-09-26，main `905b4e95`，現有最大號 `FU-20260926-17`）
+### 已對帳（2026-09-26 更新：main `12edcec0`，現有最大號 `FU-20260926-25`）
 
 | 本表 | 對應 FU / PR | 備註 |
 |---|---|---|
@@ -72,6 +79,12 @@
 | E2（負向證明假綠）| ✅ #2020 / #2022 | 已結案 |
 | **E16**（死 gate：`verify-sector-allocation-closure.sh` 明示停用）| **`FU-20260926-23`** | 本表 §3 與 registry **同 PR** 更新 |
 | D3（校準漂移）| `FU-20260926-16`（季節校準污染源）+ #2017 | 相關但不同面 |
+| **D4**（revert-guard 重設計）| ✅ **#2003**（12:25Z 併入）| root 複驗：守門=1、`merge-tree`=13、`traps.md`=329 行、evil-merge 負向證明 exit 1 |
+| **E8/E9**（flaky + sa12）| ✅ **#2036**（13:24Z 併入）| root 解衝突（第二次為 3 檔；`verify-sector-allocation-closure.sh` 取 main 停用版）|
+| **E10**（退役 iMac 殘留）| ✅ **#2031**（11:11Z）＋殘留 `FU-20260926-20` | A 類已改 Mac Mini；B 類（2 個 watchdog 入口）待另一條 lane |
+| **E13**（`IMAC_HOST` 必失敗）| ✅ 隨 **#2031** 修（`Makefile:105-108` 已具名記錄）| root 實測舊因已消失 |
+| **E16**（死 gate）| ✅ **#2037**（11:24Z）＋ **`FU-20260926-23`** | 明示停用＋登記重啟條件 |
+| **E17/E18/E19/E20**（本次新增）| **`FU-20260926-25`** | 本表 §3 與 registry **同 PR** 更新 |
 
 ### `FU-` 號段分配規則（**強制，修正本表 §1 的過時配置**）
 
@@ -83,4 +96,5 @@
 | `fix-E8-E9-flaky-sa12` | **FU-20260926-18（E8）、-19（E9）** |
 | `fix-E10-retired-imac` | **FU-20260926-20**（原配置 -14 已被 Telegram token 取走）|
 | `fix/20260926-dead-gate-closure` | **FU-20260926-23**（E16）|
+| **`docs/20260926-manifest-e-status`（root，manifest 收尾）** | **`FU-20260926-25`**（E17/E18/E19/E20）|
 | 其他 lane | 各自 fetch 後取 max+1 |
