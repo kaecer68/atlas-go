@@ -1527,6 +1527,32 @@
   與修好前的「host 不存在 ⇒ 必失敗」是**兩種不同意義的 exit 2**。判讀時必須先看輸出訊息（`❌ 不一致` vs `Could not resolve hostname`）。
 - **教訓（本次適用於本專案全體）**：**觀察正確 ≠ 歸因正確**。寫進 SSOT 的因果（「X 由 Y 修」）必須以 `git log -- <file>` 指認到**引入該變更的 commit/PR**，不可用相鄰時序代替。
 
+---
+
+### FU-20260926-27 — manifest 狀態同步：**E5/E18 結案、E4/E19/E21–E28 登記**（含 8 項新發現；root 單一寫者）
+
+- **狀態**：`open`（E22/E23/E26/E28 未派或待決；其餘在飛或已結案）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（E4/E5/E18/E19 更新 ＋ 新增 E21–E28）、§6 對帳表
+- **本次結案（root 複驗過）**：
+  - **E5** → **#2048**（`fe779473`）：原記「預設 warn」**經查為誤** —— 實況是**死守門**（`.claude/settings.json` 只有 `SessionStart`、無 `PreToolUse`；唯一 PreToolUse 在 gitignored `.claude/settings.local.json`）。修法＝tracked `settings.json` 加 `PreToolUse`→薄 adapter（pattern 邏輯無第二份）＋修 `${CHECK,,}`（bash 4；macOS `/bin/bash` 3.2 對**每個**指令 `bad substitution`，root 以 `3.2.57` 實測確認）＋11 組契約測試納入 `make ci-gate`。
+  - **E18** → **#2046**（`2404dbe2`）：`quality.yml` v1 文案清零（root 複查 main 兩句 0/0）；spec 殘留條目由 **#2050** 更新。
+- **本次新增（證據見 manifest §3 各列）**：
+  - **E21** CLI 靜默忽略未知子命令 ⇒ `daily-maintenance` 三 job 跑模擬（**#2053** armed；root 複驗公開 task-liveness `200／114 tasks／stale_count=0`，CI run `36255705561` 四 job 全 success）。**注意**：child **未照我給的兩個選項**（退役／改寫），而是**改用真實來源並保留 job** —— 理由（daemon 自身告警與被監控對象同主機、GitHub runner 是唯一局外觀察者）**比我的選項更強**。
+  - **E22** `Makefile:1042-1046` coverage 共用 `/tmp` ⇒ 同機多 worktree 併發**假紅**（root 複驗；與 E4/FU-15 同族）。
+  - **E23** guard 切 `enforce` 的三個實測誤擋面（`secret` 一字即擋／prod worktree 擋 `docker compose build|up`（部署路徑）／擋 `go test`）。
+  - **E24** staging soak 鏈：2026-07-15 的 7 天 soak、期限已過、**2026-08-15 專案宣告「無 staging」**、Day-7 收尾未執行（`post-soak-cleanup.sh` 一生只跑過 `--dry-run`）。**root 已停本機 LaunchAgent**（停前 `runs=39838`、每 60 秒約 5 次重生、log 133 MB、報告停於 09-17）。
+  - **E25** replay 幻影列：非交易日以 `time.Now()` 蓋章寫入 ⇒ 生產 **396 列／9 天（自 2026-08-29）**；連鎖使 `auto_backfill` 卡死、CSV→JSONL 自 2026-08-24 停擺。修復在飛（`fix-replay-dated-source`）。
+  - **E26** 生產 Prometheus **Calibration 告警未載入**（Rule 檔在容器內、`/api/v1/rules` 0 命中）⇒ **#2016 的校準監控實際無效**；同一查核**正面確認 `Universe` 6 條已載入**（週一 #1995 驗收可行）。
+  - **E27** `verify-manifest.sh` 假綠（`gsub` 只給 2 參數 ⇒ 改 `$0`、每列 continue；root 實測 `done`＋空 Notes ⇒ `OK` exit 0）＋驗的檔在 gitignored `.omo/` ⇒ 刪除並修 2 處文件引用。
+  - **E28** `internal/taiwanholidays` 缺 9 個真實休市（颱風假等）⇒ **刻意延後至週一驗收後**（會改變 `IsTradingDay`）。
+- **殘項／後續**：
+  1. **E22/E23** 需 owner 決定或等 `Makefile` 讓出（E1 佔用）。
+  2. **E24/E25/E27** 目錄內外均須在對應 PR 併入後，於本 registry 補「已併」與實測輸出。
+  3. **E26** 由 a2a-dev 查「規則未載入」的根因（載入面 vs repo 面）。
+  4. **liveness 殘留列**：`cron_darwinian` 仍存在於 liveness store（`internal/liveness/store.go` 無 Delete、端點只寫不刪）⇒ 需一次性 SQL 清除，屬**生產寫入**，待 owner 決定。
+- **方法論註記（本次三次「派遣前重新定性」的成果）**：E5（死守門 ≠ 預設 warn）、E13（歸因錯：修者是 #2041 非 #2031）、E19（孤兒 ≠ 死碼：3 支有操作性引用）⇒ 已固化為「先重新定性再派遣」紀律。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
