@@ -93,8 +93,10 @@ check "15 SA-INV-11 (receipt required)" \
     "grep -qE 'SA-INV-11' '$MANIFEST'"
 
 # Check 16: negative evidence script exists
-check "16 sa12-negative-evidence.sh exists" \
-    "test -f scripts/ci/sa12-negative-evidence.sh"
+# 2026-09-26 (E9): 舊檔名 sa12-negative-evidence.sh 不符 `make ci` 的
+# scripts/ci/check_*.sh glob ⇒ 沒有任何 gate 跑它。改名後納入既有 glob。
+check "16 check_sa12_negative_evidence.sh exists" \
+    "test -f scripts/ci/check_sa12_negative_evidence.sh"
 
 # Check 17: composition root tests exist
 check "17 composition root tests" \

@@ -54,7 +54,7 @@ func TestMarketDataBackedAdaptersFetchAndHealthCheckUseInjectedHTTPClient(t *tes
 			name: "tej",
 			adapter: func(client *http.Client, _ string) DataProvider {
 				marketdata.ResetSharedTEJClient()
-				p := marketdata.GetSharedTEJClient("test-key")
+				p := marketdata.GetSharedTEJClient("test-key", t.TempDir())
 				p.SetHTTPClient(client)
 				return &TEJChannelAdapter{client: p, limiter: rate.NewLimiter(rate.Inf, 1)}
 			},
