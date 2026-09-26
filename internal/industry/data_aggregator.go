@@ -22,7 +22,7 @@ import (
 //   - 涵蓋台灣月營收 publish lag（TWSE 月營收通常次月 10 號前 publish）— 8 月初跑會抓 7 月，7 月初跑會抓 6 月
 //   - 涵蓋 quarterly financial statement filing lag (45 days after quarter end)
 //   - 對 FinMind daily quota 用量：每 +1 attempt × 2 calls × 35 stocks = +70 calls per run
-//     (4 runs/day → +280 calls/day，佔 14400 daily quota 約 2%)
+//     (4 runs/day → +280 calls/day，佔 12000 daily quota 約 2%)
 //
 // 若要拉長到 4-6 個月應對邊緣 publish 延遲，需先驗證：
 //  1. production 的 "no_data" kind metric 是否在月初高峰（1-10 號）顯著上升

@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-09-25
+updated: 2026-09-26
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -41,7 +41,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **FinMind server 402 ≠ `ErrQuotaExhausted`** | marketdata / industry | server-side 402 (`{"msg":"Requests reach the upper limit"}`) 與本地 `marketdata.ErrQuotaExhausted` (14400/day tracker) 是**兩個不同 error**。`fetchDataset` 對 402 只回 `fmt.Errorf("finmind: status 402, body: ...")` 不 wrap sentinel。診斷「FinMind 撞牆」必須看 `fetch_non_2xx status=402` log,不能只看 quota counter。 |
+| **FinMind server 402 = 上游已宣告「今日額度沒了」——必須 latch,不能只當一次 error** | marketdata / industry | ①**現況(2026-09-26,fix/finmind-quota-honor-402-r)**:`fetchDataset` 收到 402(或 body 含 `upper limit`)會 (a) wrap `marketdata.ErrQuotaExhausted`(P0-1 起,不再是裸 `status 402` 字串),(b) **把當日額度 latch 成 exhausted 並持久化**到 `data/state/finmind_daily_quota.json` (`upstream_exhausted:true`),之後所有呼叫(含 5 秒指數端點)在本地短路、不發 HTTP,跨日才解除。**重啟不會忘記**——2026-09-26 就是「重啟後 backfill 又開跑、再撞一次 402」。②**本地 ceiling 只是猜測,402 才是答案**:`finmindDailyLimit` 曾是 14400(2026-09-02 觀測),但上游 2026-09-26 在 **~12,500** 就開始拒絕 ⇒ 以 14400 推算的所有止損點(backfill 1500 floor → 12900 才停、`check_finmind_quota.sh` 90% 警告 → 12960)全部落在牆的**後面**。現值 **12000**(觀測拒絕點 12500 之下留 500 餘裕),可用 `FINMIND_DAILY_LIMIT` 覆寫;`marketdata.FinMindDailyLimit()` 是跨套件唯一讀取點。③診斷「FinMind 撞牆」不要只看 quota counter,要看 `daily_quota_upstream_exhausted` / `fetch_non_2xx status=402` log 與 state file 的 `upstream_exhausted` / `upstream_reason`。 |
 | **rate limiter 本地失敗會被 fallback 吞掉** | industry / marketdata | `fetchRevenueYoY`/`fetchProfitYoY` 的月份/季度 fallback loop 曾把 `ErrRateLimited` (5s ctx vs 6s token) 吞成「no data in last 3 months」→ metric 誤報 `no_data`。2026-08-06 HF-1 修復 (透傳 + 10s ctx)。**教訓**: fallback loop 吞 error 前必須判斷是否 quota/rate-limit 類 — 見 `isFinMindQuotaOrRateLimited()`。 |
 | **排程器 24h 整點多 task 同步觸發** | scheduler / apigateway | `auto_cycle_update` (6h) + `auto_quote_backfill` (24h) + `channel_health_finmind` (1h) 在整點同時觸發會瞬間耗盡 rate limiter burst (60)。修排程錯開前,任何新增的固定間隔 FinMind caller 都應檢查是否與既有 task 整點對齊。 |
 

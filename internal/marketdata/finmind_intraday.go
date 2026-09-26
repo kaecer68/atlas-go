@@ -50,10 +50,11 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("finmind 5sec index: rate limit wait: %w", ErrRateLimited)
 	}
-	// P1-11: daily-quota gate — same AllowCall check as fetchDataset so this
-	// endpoint cannot bypass the 14400/day ceiling.
-	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
-		return nil, fmt.Errorf("finmind 5sec index: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
+	// P1-11: daily-quota gate — the same gate as fetchDataset (local ceiling
+	// AND the upstream 402 latch), so this endpoint neither bypasses the
+	// day's budget nor keeps calling after FinMind said the quota is gone.
+	if err := c.quotaGateError(); err != nil {
+		return nil, fmt.Errorf("finmind 5sec index: %w", err)
 	}
 
 	endpoint := fmt.Sprintf("%s/data", finmindBaseURL)
@@ -86,7 +87,15 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
-		return nil, fmt.Errorf("finmind 5sec index: status %d, body: %s", resp.StatusCode, bodyStr)
+		// Secret hygiene + daily-quota latch, same as fetchDataset: FinMind
+		// echoes an API-key fragment in `token_tail`, and a 402 here means
+		// the day is spent for every consumer of the shared tracker.
+		safeBody := sanitizeFinMindBody(bodyStr, c.currentAPIKey())
+		if resp.StatusCode == http.StatusPaymentRequired || finmindQuotaBody(safeBody) {
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(resp.StatusCode, safeBody))
+			return nil, fmt.Errorf("finmind 5sec index: %w (upstream HTTP %d): %s", ErrQuotaExhausted, resp.StatusCode, safeBody)
+		}
+		return nil, fmt.Errorf("finmind 5sec index: status %d, body: %s", resp.StatusCode, safeBody)
 	}
 
 	body, err := io.ReadAll(resp.Body)

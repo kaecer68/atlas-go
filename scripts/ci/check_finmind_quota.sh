@@ -13,7 +13,7 @@
 # 用法:
 #   bash scripts/ci/check_finmind_quota.sh                 # 只輸出,exit 0
 #   bash scripts/ci/check_finmind_quota.sh --strict        # ≥90% → exit 1（cron 用）
-#   bash scripts/ci/check_finmind_quota.sh --state-file <path> --limit 14400 --warn-pct 90
+#   bash scripts/ci/check_finmind_quota.sh --state-file <path> --limit 12000 --warn-pct 90
 #   環境變數: FINMIND_DAILY_LIMIT / FINMIND_WARN_PCT 可覆寫預設
 #
 # cron 建議（iMac, 週一開市前 08:00 UTC+8）:
@@ -27,7 +27,15 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STATE_FILE="${STATE_FILE:-$REPO_ROOT/data/state/finmind_daily_quota.json}"
-LIMIT="${FINMIND_DAILY_LIMIT:-14400}"   # internal/marketdata/finmind_client.go finmindDailyLimit
+# LIMIT must track internal/marketdata/finmind_client.go finmindDailyLimit — it is
+# the number this script divides by to decide "how close are we to the wall".
+# 14400 → 12000 (fix/finmind-quota-honor-402-r, 2026-09-26): the upstream began
+# refusing at ~12,500 calls, so the old default under-reported pressure — at
+# 12,500 calls it printed "12500/14400 (86%)", i.e. below the 90% warn
+# threshold, while FinMind was already answering 402. A Go test
+# (TestFinMindQuotaOpsScript_DefaultMatchesCeiling) fails if this drifts from
+# the constant again.
+LIMIT="${FINMIND_DAILY_LIMIT:-12000}"
 WARN_PCT="${FINMIND_WARN_PCT:-90}"
 STRICT=0
 

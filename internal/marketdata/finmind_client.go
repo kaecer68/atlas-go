@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/time/rate"
 
@@ -67,20 +69,73 @@ func newFinMindRateLimiter() *rate.Limiter {
 	return rate.NewLimiter(rate.Limit(float64(perHour)/3600.0), burst)
 }
 
-// finmindDailyLimit is the observed upstream daily quota cap (used=14400,
-// remaining=0 exhaustion on 2026-09-02). NOTE: this account is a paid
-// sponsorship (active until ~2026-10-03), hourly budget 6000/hr via
-// FINMIND_RATE_LIMIT_PER_HOUR (see finmindRateLimitPerHour) — the hourly
-// limiter paces throughput while this daily tracker bounds total spend.
-// When the sponsorship lapses, upstream reverts to free-tier limits and
-// both values must be revisited. We track this with DailyQuotaTracker so concurrent
-// callers (auto_cycle_update, auto_quote_backfill, channel_health_finmind,
-// tsmc_revenue, ad-hoc lookups) don't collectively exceed it. Without the
-// tracker, cold-start backfill of N symbols × 90 days can blow the daily
-// quota in a single scheduled run, leaving the channel dead for the rest of
-// the day (regression: commit 35642c13 switched auto_quote_backfill from Fugle
-// to FinMind, multiplying the call volume against this single channel).
-const finmindDailyLimit = 14400
+// finmindObservedUpstreamRefusalLimit is the call count at which FinMind
+// ACTUALLY refused this account: on 2026-09-26 02:10Z the shared tracker
+// stood at 12,500 calls for the quota day when the upstream answered
+// 402 `finmind: daily quota exhausted: {"msg":"Requests reach the upper
+// limit. ..."}` on the auto_quote_backfill run (824 symbols).
+//
+// This is an OBSERVATION, not a budget. The local ceiling must stay strictly
+// below it (see finmindDailyLimit) so the platform stops itself instead of
+// discovering the wall with a 402, and so every "reserve" derived from the
+// ceiling keeps the headroom it claims to keep.
+const finmindObservedUpstreamRefusalLimit = 12500
+
+// finmindDailyLimit is the LOCAL daily call ceiling enforced by the shared
+// DailyQuotaTracker. We track this so concurrent callers (auto_cycle_update,
+// auto_quote_backfill, channel_health_finmind, tsmc_revenue, ad-hoc lookups)
+// don't collectively exceed it: without the tracker, a cold-start backfill of
+// N symbols × 90 days blows the daily quota in a single scheduled run and
+// leaves the channel dead for the rest of the day (regression: commit
+// 35642c13 switched auto_quote_backfill from Fugle to FinMind, multiplying
+// the call volume against this single channel).
+//
+// 14400 → 12000 (fix/finmind-quota-honor-402-r, 2026-09-26 production
+// evidence): 14400 was inferred from a 2026-09-02 exhaustion (used=14400) and
+// was stale — the upstream now refuses at ~12,500. Every stop-loss built on
+// 14400 was therefore past the real wall: the auto_quote_backfill floor of
+// 1,500 calls only stopped at 12,900 calls, i.e. ~400 calls AFTER FinMind had
+// already started answering 402, so the backfill spent its day burning
+// guaranteed failures and the shared budget. The ceiling is now 12,000 — 500
+// calls (4%) below the observed refusal point — so the local gate trips
+// first, and downstream reserves (1,500 for the backfill, 500 for the
+// sbl/tdcc history backfill) are measured against a number that is actually
+// usable. Anything derived from this constant must be re-derived when the
+// upstream tier changes: override the ceiling with FINMIND_DAILY_LIMIT
+// instead of editing the constant blindly, and never raise it above
+// finmindObservedUpstreamRefusalLimit to make a test or an incident "pass".
+const finmindDailyLimit = 12000
+
+// finmindDailyLimitResolved returns the effective local daily ceiling: the
+// FINMIND_DAILY_LIMIT env var when it holds a positive integer, else
+// finmindDailyLimit. Mirrors finmindRateLimitPerHour so a tier change is a
+// config change, not a rebuild.
+func finmindDailyLimitResolved() int {
+	v := strings.TrimSpace(os.Getenv("FINMIND_DAILY_LIMIT"))
+	if v == "" {
+		return finmindDailyLimit
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return finmindDailyLimit
+	}
+	if n > finmindObservedUpstreamRefusalLimit {
+		// Loud, not fatal: raising the ceiling past the point where the
+		// upstream demonstrably refuses re-creates the 2026-09-26 incident.
+		logging.Warn("marketdata", "finmind_daily_limit_override_above_observed_refusal",
+			"override", n,
+			"observed_refusal", finmindObservedUpstreamRefusalLimit,
+			"default", finmindDailyLimit,
+		)
+	}
+	return n
+}
+
+// FinMindDailyLimit exposes the effective local daily ceiling so other
+// packages (monitoring backfill floors, cmd/atlas reserve gates, their tests)
+// can be written against the single source of truth instead of copying the
+// number — the 2026-09-26 incident was in part three copies of "14400".
+func FinMindDailyLimit() int { return finmindDailyLimitResolved() }
 
 // ErrQuotaExhausted is returned by fetchDataset when the daily quota is gone.
 // Callers should treat this as a transient, scheduled-skippable condition —
@@ -132,6 +187,143 @@ var ErrIPBanned = fmt.Errorf("finmind: ip banned by upstream (rate limit)")
 // body carries no parseable retry_after. Slightly above the observed 971s
 // so a mis-parse never unblocks early.
 const finmindIPBanDefaultRetryAfterSec = 1020
+
+// finmindRedacted replaces secret material in anything derived from an
+// upstream response before it reaches a log line, an error string, or the
+// on-disk quota state.
+const finmindRedacted = "[REDACTED]"
+
+// finmindSecretJSONKeys lists the upstream JSON fields that carry secret
+// material. FinMind echoes a fragment of the caller's API key back on auth
+// and quota errors — `{"msg":"Token is illegal.","status":400,
+// "token_tail":"...abc"}` and, observed in production 2026-09-26, on the 402
+// quota response as well. Any code path that surfaces raw upstream text must
+// run it through sanitizeFinMindBody first, otherwise a token fragment lands
+// in channel-health records, error strings and logs.
+var finmindSecretJSONKeys = []string{
+	"token_tail",
+	"token",
+	"api_key",
+	"apikey",
+	"authorization",
+	"access_token",
+	"password",
+}
+
+// finmindSecretKeyRe matches the `"key": "value"` shape of the fields above in
+// bodies that do not parse as JSON (truncated bodies — the 512-byte cap can
+// cut an envelope in half — HTML error pages, plain text). The whole pair,
+// key included, is replaced: the field NAME is dropped too, so a log line or
+// an error string can never be mistaken for a place to look for the value.
+var finmindSecretKeyRe = regexp.MustCompile(`(?i)"?(?:token_tail|token|api_key|apikey|authorization|access_token|password)"?[\s]*[:=][\s]*("[^"]*"|[^",}\s]+)`)
+
+// sanitizeFinMindBody removes secret material from a raw upstream body.
+//
+// It redacts (a) JSON object members whose key is listed in
+// finmindSecretJSONKeys — recursively, so nested envelopes are covered — and
+// (b) any literal occurrence of the API keys passed in secrets. The literal
+// rule only applies to values of at least 8 bytes: shorter strings would
+// mangle unrelated text (a 1-byte key would gut every message), and real
+// FinMind tokens are JWT-sized. Bodies shorter than that bound are still
+// covered by the field redaction above.
+//
+// The result keeps everything an operator needs ("Token is illegal.",
+// "Requests reach the upper limit") while dropping the credential fragment.
+func sanitizeFinMindBody(body string, secrets ...string) string {
+	out := scrubFinMindJSONSecrets(body)
+	for _, s := range secrets {
+		if len(s) >= 8 {
+			out = strings.ReplaceAll(out, s, finmindRedacted)
+		}
+	}
+	return out
+}
+
+// scrubFinMindJSONSecrets redacts the known secret fields in body, preferring
+// a structural (JSON) rewrite and falling back to a textual scrub.
+func scrubFinMindJSONSecrets(body string) string {
+	var decoded any
+	if err := json.Unmarshal([]byte(body), &decoded); err == nil {
+		if !redactFinMindSecretsInValue(decoded) {
+			return body
+		}
+		if reencoded, err := json.Marshal(decoded); err == nil {
+			return string(reencoded)
+		}
+		return body
+	}
+	return finmindSecretKeyRe.ReplaceAllString(body, finmindRedacted)
+}
+
+// redactFinMindSecretsInValue walks a decoded JSON value and DROPS every
+// object member whose key is secret-looking (the member is removed, not merely
+// masked, so the field name cannot hint at where to look). Reports whether
+// anything changed.
+func redactFinMindSecretsInValue(v any) bool {
+	changed := false
+	switch node := v.(type) {
+	case map[string]any:
+		for k, child := range node {
+			if isFinMindSecretKey(k) {
+				delete(node, k)
+				changed = true
+				continue
+			}
+			if redactFinMindSecretsInValue(child) {
+				changed = true
+			}
+		}
+	case []any:
+		for _, child := range node {
+			if redactFinMindSecretsInValue(child) {
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+// isFinMindSecretKey reports whether a JSON member key carries secret material.
+func isFinMindSecretKey(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	for _, secret := range finmindSecretJSONKeys {
+		if normalized == secret {
+			return true
+		}
+	}
+	return false
+}
+
+// finmindUpstreamQuotaReason renders the reason stored with the upstream quota
+// latch: status + sanitized body, so the persisted reason (and every error that
+// replays it) says WHICH signal fired.
+func finmindUpstreamQuotaReason(status int, body string) string {
+	return fmt.Sprintf("upstream HTTP %d: %s", status, body)
+}
+
+// finmindQuotaBody reports whether upstream text is the DAILY-quota verdict
+// ("Requests reach the upper limit", the string FinMind sends with 402) as
+// opposed to a per-request throttle or a free-tier notice. Only this text may
+// latch the whole quota day as exhausted.
+func finmindQuotaBody(body string) bool {
+	return strings.Contains(strings.ToLower(body), "upper limit")
+}
+
+// clampForError bounds an upstream-derived string before it is embedded in an
+// error or persisted to the quota state file, so one verbose upstream body
+// cannot produce an unbounded error (or a state file) later on.
+func clampForError(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	// Cut on a rune boundary so the result stays valid UTF-8.
+	cut := max
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "..."
+}
 
 type FinMindResponse struct {
 	Msg    string           `json:"msg"`
@@ -225,7 +417,7 @@ func NewFinMindClientWithStateDir(apiKey, stateDir string) *FinMindClient {
 // singleton accessor and the standalone constructor. It wires the shared
 // DailyQuotaTracker so all call sites share one daily counter.
 func newFinMindClientInternal(apiKey, stateDir string) *FinMindClient {
-	tracker := NewDailyQuotaTracker("finmind", stateDir, finmindDailyLimit)
+	tracker := NewDailyQuotaTracker("finmind", stateDir, finmindDailyLimitResolved())
 	// Register the tracker with the global QuotaRegistry so the dashboard's
 	// channel-health page and the future /api/dashboard/quota endpoint see
 	// FinMind alongside Fugle in one Snapshot() — addressing kaecer's
@@ -266,12 +458,54 @@ func (c *FinMindClient) QuotaUsed() int {
 }
 
 // QuotaRemaining returns the unused portion of today's FinMind budget.
-// Returns the full daily limit when no tracker is configured.
+// Returns the full daily limit when no tracker is configured, and 0 while
+// the upstream latch is set (the provider said today's budget is gone).
 func (c *FinMindClient) QuotaRemaining() int {
 	if c.quotaTracker == nil {
-		return finmindDailyLimit
+		return finmindDailyLimitResolved()
 	}
 	return c.quotaTracker.Remaining()
+}
+
+// quotaGateError returns a typed ErrQuotaExhausted error when the shared
+// daily budget is unavailable, or nil when the call may proceed. One
+// implementation for every FinMind entry point (fetchDataset, the 5-second
+// index endpoint) so the local ceiling and the upstream latch produce the
+// same operator-facing classification and message shape.
+//
+// The pre-2026-09-26 message shape ("finmind: daily quota exhausted
+// (used=%d, remaining=%d)") is preserved verbatim for the local-ceiling case;
+// the latch case adds the upstream reason and the observation time, which is
+// what tells an operator the difference between "we stopped ourselves" and
+// "FinMind is refusing every call today".
+func (c *FinMindClient) quotaGateError() error {
+	if c.quotaTracker == nil {
+		return nil
+	}
+	if c.quotaTracker.AllowCall() {
+		return nil
+	}
+	used := c.quotaTracker.CallsToday()
+	if exhausted, reason, at := c.quotaTracker.UpstreamExhaustion(); exhausted {
+		if reason == "" {
+			reason = "upstream refused a call (quota signal)"
+		}
+		return fmt.Errorf("finmind: %w (upstream-exhausted, used=%d, remaining=0, observed_at=%s, reason=%s)",
+			ErrQuotaExhausted, used, at.UTC().Format(time.RFC3339), clampForError(reason, 200))
+	}
+	return fmt.Errorf("finmind: %w (used=%d, remaining=%d)", ErrQuotaExhausted, used, c.quotaTracker.Remaining())
+}
+
+// markDailyQuotaExhausted latches the upstream quota refusal on the shared
+// tracker. The latch is persisted (see DailyQuotaTracker.MarkUpstreamExhausted)
+// so every later call — and every process that starts after a restart —
+// short-circuits at quotaGateError instead of spending a request on a 402.
+// reason must already be sanitized.
+func (c *FinMindClient) markDailyQuotaExhausted(reason string) {
+	if c.quotaTracker == nil {
+		return
+	}
+	c.quotaTracker.MarkUpstreamExhausted(reason)
 }
 
 // SetQuotaLimit overrides the daily ceiling (e.g., when the FinMind tier
@@ -315,20 +549,27 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		return nil, fmt.Errorf("finmind: rate limit wait: %w", ErrRateLimited)
 	}
 	// Daily-quota gate: every call site funnels through fetchDataset, so a
-	// single AllowCall check protects the whole channel from cold-start
-	// bursts (commit 35642c13 switched auto_quote_backfill to FinMind, which
-	// can hit 1000s of calls per cycle without this gate). When the daily
-	// budget is gone we return ErrQuotaExhausted rather than letting the
-	// HTTP request fail with a misleading 400 status.
+	// single check protects the whole channel from cold-start bursts (commit
+	// 35642c13 switched auto_quote_backfill to FinMind, which can hit 1000s
+	// of calls per cycle without this gate). When the daily budget is gone we
+	// return ErrQuotaExhausted rather than letting the HTTP request fail with
+	// a misleading 400 status.
+	//
+	// The gate covers BOTH exhaustions (see quotaGateError): the local
+	// ceiling, and the upstream latch set when FinMind itself answered 402.
+	// The latch is what makes the gate durable across restarts — on
+	// 2026-09-26 a restart cleared the in-memory counter, the backfill ran
+	// again, and the platform re-discovered the wall one 402 at a time.
+	//
 	// P1-7: quota exhaustion is a budget condition (auto-resets at the
 	// tracker's day boundary: 00:00 process-local, and production containers
 	// run TZ-unset = UTC, i.e. 08:00 Taipei — 2026-09-24 evidence:
 	// data/state/finmind_daily_quota.json last_reset=2026-09-24T00:00:00Z)
 	// — it must NOT trip the breaker, so we reset instead of recording a
 	// failure.
-	if c.quotaTracker != nil && !c.quotaTracker.AllowCall() {
+	if err := c.quotaGateError(); err != nil {
 		c.breakerRecordSuccess()
-		return nil, fmt.Errorf("finmind: %w (used=%d, remaining=%d)", ErrQuotaExhausted, c.quotaTracker.CallsToday(), c.quotaTracker.Remaining())
+		return nil, err
 	}
 
 	endpoint := fmt.Sprintf("%s/data", c.baseURL)
@@ -373,9 +614,14 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		if bodyStr == "" {
 			bodyStr = "(empty body)"
 		}
+		// Secret hygiene: the upstream body is logged and wrapped into errors
+		// below, and FinMind echoes a fragment of the API key back in
+		// `token_tail` (seen in production on the 2026-09-26 402 quota
+		// response). Scrub before it reaches any sink.
+		safeBody := sanitizeFinMindBody(bodyStr, c.currentAPIKey())
 		logging.Warn("finmind", "fetch_non_2xx",
 			"status", resp.StatusCode,
-			"body", bodyStr,
+			"body", safeBody,
 			"dataset", dataset,
 			"data_id", dataId,
 		)
@@ -390,9 +636,24 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		// production = 08:00 Taipei).
 		// P1-7: 402 is the server-side quota signal — a budget condition, not
 		// an outage; do NOT trip the breaker (same rule as the local gate).
-		if resp.StatusCode == http.StatusPaymentRequired {
+		//
+		// fix/finmind-quota-honor-402-r (2026-09-26): a 402 also LATCHES the
+		// day as exhausted (persisted in finmind_daily_quota.json). The local
+		// ceiling is a guess about the upstream tier; the 402 is the upstream
+		// telling us the answer. Before this, the tracker kept counting past
+		// the refusal point, every subsequent call spent a doomed request,
+		// and a restart re-opened the flood. The same latch fires for a
+		// 2xx-with-"upper limit" envelope reached below.
+		if resp.StatusCode == http.StatusPaymentRequired || finmindQuotaBody(safeBody) {
+			// The latch reason carries the upstream STATUS as well as the body
+			// (finmindUpstreamQuotaReason): it is persisted and replayed in
+			// every later error, so an operator reading a channel-health
+			// record after a restart must be able to tell "FinMind answered
+			// 402" from "we hit our own local ceiling" without re-reading the
+			// body — the two have different remedies.
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(resp.StatusCode, safeBody))
 			c.breakerRecordSuccess()
-			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, bodyStr)
+			return nil, fmt.Errorf("finmind: %w (upstream HTTP %d): %s", ErrQuotaExhausted, resp.StatusCode, safeBody)
 		}
 		// 403 "ip banned" is FinMind's per-IP rate-limit signal — a
 		// throttling condition that self-heals after retry_after, NOT an
@@ -418,10 +679,10 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 				"retry_after_sec", retryAfter,
 				"dataset", dataset,
 			)
-			return nil, fmt.Errorf("finmind: %w (retry_after=%ds): %s", ErrIPBanned, retryAfter, bodyStr)
+			return nil, fmt.Errorf("finmind: %w (retry_after=%ds): %s", ErrIPBanned, retryAfter, safeBody)
 		}
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, bodyStr)
+		return nil, fmt.Errorf("finmind: status %d, body: %s", resp.StatusCode, safeBody)
 	}
 
 	var finmindResp FinMindResponse
@@ -432,7 +693,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 
 	if finmindResp.Status != 200 {
 		c.breakerRecordFailure()
-		return nil, fmt.Errorf("finmind: API error: %s", finmindResp.Msg)
+		return nil, fmt.Errorf("finmind: API error: %s", sanitizeFinMindBody(finmindResp.Msg, c.currentAPIKey()))
 	}
 
 	// Free-tier throttling masquerades as success: FinMind answers HTTP 200
@@ -445,7 +706,18 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 	// as a quota condition — a budget state that resets, not an outage.
 	if finmindResp.Msg != "" && finmindResp.Msg != "success" && len(finmindResp.Data) == 0 {
 		c.breakerRecordSuccess()
-		return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, finmindResp.Msg)
+		safeMsg := sanitizeFinMindBody(finmindResp.Msg, c.currentAPIKey())
+		// A 2xx envelope can carry the same daily-quota verdict as the 402
+		// ("Requests reach the upper limit") when the upstream throttles
+		// inside a 200. Latch it exactly like the 402 — but only that
+		// message: other non-"success" envelopes with empty data (free-tier
+		// notices, per-dataset "no data") are classified as quota without
+		// claiming the whole day is spent, so a single empty dataset cannot
+		// disable the channel until midnight.
+		if finmindQuotaBody(safeMsg) {
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(finmindResp.Status, safeMsg))
+		}
+		return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, safeMsg)
 	}
 
 	// P2-15: response schema fingerprint — warn the moment the upstream

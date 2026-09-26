@@ -256,8 +256,9 @@ $ gh pr list --state open
 （`marketdata.NewHybridProvider(cfg.FinMindAPIKey, cfg.FugleAPIKey)`，與 `main.go:2872` 同源），
 必要時加一層 adapter 滿足 `monitoring.QuoteProvider`。
 
-- **風險 A（成本/配額）**：每日一次對 ~1599 檔取報價。FinMind 有日配額
-  （`finmindDailyLimit = 14400`，`internal/marketdata/finmind_client.go:82`）且實測同日
+- **風險 A（成本/配額）**：每日一次對 ~1599 檔取報價。FinMind 有日配額（本文撰寫時
+  `finmindDailyLimit = 14400`；**2026-09-26 起為 12000** —— 上游在 ~12,500 就回 402，
+  見 `fix/finmind-quota-honor-402-r` 與 `docs/reference/traps.md` FinMind 段）且實測同日
   `quote_backfill` 曾因剩餘配額不足而 early-stop（`stopping early: FinMind quota remaining 1463 < 1500`）。
   Fugle 免費層亦有額度。**必須先離線量測**「1599 檔在現行 provider 下的實際呼叫數與配額足跡」。
 - **風險 B（語意）**：`applyVolumeAndPriceFilters` 用 `q.Volume * q.Last` 近似成交金額，

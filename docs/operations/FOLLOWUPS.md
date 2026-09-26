@@ -403,12 +403,71 @@
 - **驗收條件**：用「故意放一組過期值」的 fixture 驗證：工具必須**失敗或明確警告**，
   不得靜默帶著錯值繼續（同族：FU-20260925-01 的「回報有東西，而不是東西對不對」）。
 
+### FU-20260926-09 — `FU-20260926-01` 的實作／驗收記錄（latch＋持久化＋token 遮蔽）
+
+- **定位（root 2026-09-26 定案）**：本條**不是**與 `FU-20260926-01` 平行的待辦 ⇒
+  **`-01` 是待辦（已 `done`，由 PR #2006 實作）**、**本條是它的實作／驗收記錄**。
+  記錄本身隨 PR #2006 交付；下方「殘留面」三項仍是 `open` 的後續硬化方向，故本條狀態維持 `open`。
+- **狀態**：`open`（僅指下列三項殘留面；實作／驗收部分已完成）
+- **記錄日期**：2026-09-26
+- **編號說明（本條改號兩次）**：本條隨 PR #2006 建立，原號 `FU-20260926-01`；
+  **第一次撞號** = [#2005](https://github.com/kaecer68/atlas-go/pull/2005) 併入 main 的
+  `FU-20260926-01..07`（追平 main `788045dd` 時改為 `-08`）；**第二次撞號** =
+  [#2008](https://github.com/kaecer68/atlas-go/pull/2008) 併入 main 的同號 `-08`
+  （追平 main `b5fca3a5` 時改為本號 `-09`）。root 已定案本號（不再改動）。
+- **編號現況**：`grep -o "^### FU-[0-9-]*" docs/operations/FOLLOWUPS.md | sort | uniq -d` 必須為空
+  （追平 main 後已驗；見 PR #2006 說明）。
+- **實作範圍（= `FU-20260926-01` 的 ① ② ＋ 驗收條件；並涵蓋 `FU-20260926-02` 的 token 洩漏）**：
+  `fetchDataset`／`FetchTaiwan5SecIndex` 收到 402（或 body/msg 含 `upper limit`）⇒ latch 當日額度耗盡
+  並持久化 ⇒ 之後本地短路、不發 HTTP、跨日解除；`Remaining()` 期間回 0 ⇒ 所有保留水位立即停止（重啟亦然）；
+  ceiling 12000 + `FINMIND_DAILY_LIMIT` + `marketdata.FinMindDailyLimit()` 單一讀取點；
+  上游 body 一律經 `sanitizeFinMindBody()`（`token_tail` 等欄位整段刪除）。
+  證據（測試、負對照、exit code）見 PR #2006 說明。
+- **來源**：`fix/finmind-quota-honor-402-r`（FinMind 402 ⇒ 當日額度 latch 持久化 + ceiling 14400→12000
+  + upstream body 去機密）。生產事實：2026-09-26 02:10Z `auto_quote_backfill`（824 檔）跑到
+  `calls_today≈12500` 時上游回 402 `Requests reach the upper limit`（且該 body 回帶 `token_tail`）。
+- **殘留 1（跨行程可見性）**：latch 寫在 `data/state/finmind_daily_quota.json`，但**只在 client 建構時讀取**
+  ——同一台機器上**已存在**的其他行程（例如另一顆 cron 容器、或長命 process 內另一份 client）
+  不會立即看到別人的 latch，要等它自己撞一次 402 才會跟上。成本有界（每個行程浪費 1 次呼叫），
+  但「一次 402 就全平台停手」的性質只在單一共享 process/state dir 下成立。
+  **硬化方向**：latch 寫入後以短 TTL（例如 30s）重讀 state file，或把 latch 暴露成共享訊號
+  （檔案 mtime / metric），讓多行程在一個週期內收斂。
+- **殘留 2（上游真實上限未知）**：12,500 是**觀測到的拒絕點**，不是 FinMind 公布的上限；
+  12000 這個 ceiling 是人工留 500 餘裕的估計值。目前以 `FINMIND_DAILY_LIMIT` 覆寫 +
+  `finmindObservedUpstreamRefusalLimit` 常數 + 測試（`TestFinMindQuotaCeiling_StaysBelowObservedUpstreamRefusal`）
+  把「不得超過觀測拒絕點」寫死，但**沒有自動校準**。
+  **硬化方向**：連續多日記錄「首次 402 時的 calls_today」並回報，作為下一次調整 ceiling 的證據。
+- **殘留 3（探針語意）**：latch 期間 `QuotaRemaining()==0`，`channel_health_finmind` 因此仍以
+  一般 quota 訊息呈現；「本地自己停手」與「上游已宣告今日結束」目前只靠錯誤字串
+  （`upstream-exhausted … reason=…`）區分。
+  **硬化方向**：把 latch 狀態（bool + observed_at）納入 channel-health 記錄/指標，
+  讓儀表板不必解析錯誤字串。
+
 ---
 
 ### FU-20260926-01 — FinMind 上游 402 早於本地護欄：`finmindDailyLimit=14400` 與 1,500 保留值都太高
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-26
+- **完成於**：2026-09-26，**已由 #2006 的 latch 實作**（PR [#2006](https://github.com/kaecer68/atlas-go/pull/2006)
+  `fix/finmind-quota-honor-402-r`，head `b74d8692`；**未 merge、未部署**——狀態的最終確認在部署驗收後）。
+  實作／驗收記錄見 `FU-20260926-09`（本條是待辦、那條是證據，不是兩條平行待辦）。
+- **實作對照本條建議**：
+  - ①「以上游 402 為準」⇒ `DailyQuotaTracker` upstream latch：402（或 body/msg 含 `upper limit`）
+    ⇒ 標記當日耗盡＋**持久化**（`data/state/finmind_daily_quota.json` 的
+    `upstream_exhausted` / `upstream_reason` / `upstream_at`）⇒ 之後所有呼叫在**本地短路、不發 HTTP**，
+    跨日才解除；`Remaining()` 期間回 0 ⇒ backfill 1,500 與 sbl/tdcc 500 保留水位立即停止（**重啟也一樣**）。
+  - ②「14400／1500 改為可設定並印出來源」⇒ ceiling **12000**（新增觀測常數
+    `finmindObservedUpstreamRefusalLimit = 12500`，ceiling 嚴格在其下、留 500 餘裕）＋ `FINMIND_DAILY_LIMIT`
+    覆寫 ＋ `marketdata.FinMindDailyLimit()` 跨套件單一讀取點（原 3 份複製的 14400 已收斂）；
+    覆寫高於觀測拒絕點會記 WARN。
+  - ③「402 時記一筆量測供校準」⇒ latch 持久化 `upstream_at` ＋ `upstream_reason`（含上游 status），
+    但**自動校準仍未做** ⇒ 見 `FU-20260926-09` 殘留 2。
+- **驗收條件對照**：①「上游 402 之後，backfill 當日不再發送且 log 明示 `upstream 402 at used=N`」⇒
+  錯誤字串為 `finmind: daily quota exhausted (upstream-exhausted, used=N, remaining=0, observed_at=…,
+  reason=upstream HTTP 402: {…})`，且測試以 **upstream hit count** 證明不再發送（402 後再打 20 次，
+  上游總 hit 數仍為 1）✓；② 負對照（拿掉短路）⇒ 測試 FAILED：
+  `21 upstream requests escaped the latch; want 1 (the single 402)` ✓。
 - **事實（root 生產實測，2026-09-26）**：`auto_quote_backfill` 於 02:10Z 啟動、載入 824 symbols；
   配額計數器 01:0xZ ≈ 35 → 02:1xZ ≈ **12,500**，此時**上游已回 402**（`Requests reach the upper limit`）。
 - **為何護欄沒擋住**：本地兩道門檻都在真實上限**之上** ——

@@ -68,9 +68,12 @@ func TestQuoteBackfillRunner_StopsWhenQuotaNearlyExhausted(t *testing.T) {
 // fix/20260924-finmind-quota：保留水位必須足夠保護「配額日後半段」才啟動的
 // live 消費者，但也不可把整日配額吃掉（backfill 仍要能推進）。
 func TestQuoteBackfillQuotaFloor_IsMeaningfulAndBounded(t *testing.T) {
-	// finmindDailyLimit is unexported in package marketdata; the daily ceiling
-	// observed in production is 14,400 (internal/marketdata/finmind_client.go).
-	const finmindDailyLimit = 14400
+	// Use the single source of truth instead of a copied number: the ceiling
+	// lived in three places as "14400" before fix/finmind-quota-honor-402-r,
+	// which is exactly how the 2026-09-26 stale-limit incident happened
+	// (the upstream started refusing at ~12,500 while every reserve
+	// calculation still assumed 14,400).
+	finmindDailyLimit := marketdata.FinMindDailyLimit()
 
 	// 2026-09-23 實證：實測 live 消費者需求約 900–2,700 次/日，且它們在配額日
 	// 後半段才執行 —— 200 的水位讓最後 200 次在 15:27Z 前就被用完。
