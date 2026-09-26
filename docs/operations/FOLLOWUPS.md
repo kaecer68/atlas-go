@@ -1040,6 +1040,54 @@
 
 ---
 
+### FU-20260926-20 — atlas-go 的 iMac 殘留清理（任務 E10）：A 類已改 Mac Mini；**2 個 watchdog 操作入口仍指向不存在的 `kk@kimac`（在禁改檔內）**
+
+> **號段說明（撞號處置）**：本條目原配置為 `FU-20260926-14`，但該號在併入前已被他線的
+> 「Telegram bot token 無 hot-reload」條目取走（race）⇒ 依 `docs/operations/remediation-manifest.md`
+> §6 的強制分配表改為 **`FU-20260926-20`**（表內明載 lane `fix-E10-retired-imac` = -20）。
+
+- **狀態**：`open`（殘留項落在禁改檔與 B 類，需另一條 lane）
+- **記錄日期**：2026-09-26
+- **來源（可重現）**：branch `fix/20260926-e10-imac-residue`；盤查指令
+  `git grep -n -I -e 'iMac' -e 'kk@kimac'`，並另外掃過 iMac 時代的 Tailscale 數值 IP（本檔刻意不寫出該
+  字面值，避免清單條目自我指涉製造命中；該 IP 在本 repo 已 0 命中）。背景：iMac 已於 2026-09-22 退役出售，
+  現行 production = Mac Mini（`ssh kmacmini`）；go-member 在 Mac Mini 是 launchd 服務
+  `:8093`（**不是** iMac 時代的 `:3000`，`:3000` 在 Mac Mini 是 gitea）；主 API 容器實名 = `atlas-go`
+  （`-imac` 後綴淘汰）。
+- **本 PR 已做（A 類＝今天還會被執行/遵循者）**：`AGENTS.md`、`CLAUDE.md`、`.env.example`
+  （本 repo 唯一殘留的 iMac 時代 Tailscale 數值 IP，已改成生產實查值 `http://host.docker.internal:8093`）、
+  `docs/operations/local-deploy.md`、`docs/guides/install-and-deploy.md` §4.2、`monitoring/rules/atlas_container_liveness_alerts.yml`
+  ＋`monitoring/tests/atlas_container_liveness_test.yml`（promtool **完整比對**，兩檔必須同步）、
+  `scripts/sync-darwinian.sh`、`scripts/ops/imac-container-watchdog.sh`、
+  `scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist`（`/Users/kk`→`/Users/kaecer`，與 Mac Mini
+  實際安裝檔逐欄一致）、`docs/operations/docker-compose.{prod,crons}.yml`（加註）、
+  `docs/operations/watchdog/*`（淘汰告示，**不刪檔**）、
+  `.claude/skills/atlas-imac-prod-guard/SKILL.md`）（4 處指向不存在的 Mac Mini 復原文件 dead link；該檔只存在於
+  a2a-dev，路徑 `~/workspace/a2a-dev/docs/operations/MACMINI-RECOVER.md`，本 repo 沒有）。
+  B 類（歷史紀錄）**只加註記、不改歷史值**。
+- **仍存在的殘留（未修，需另一條 lane）**：
+  1. `Makefile:101` `IMAC_HOST ?= kk@kimac` 與 `Makefile:103` `WATCHDOG_DST := /Users/kk/bin/atlas-container-watchdog.sh`
+     ⇒ 兩個 watchdog target **必然失敗**（實跑：`ssh: Could not resolve hostname kimac`，`make imac-watchdog-diff` exit 2）。
+     `Makefile` 在本任務屬禁改檔；`docs/operations/local-deploy.md` 已補上等價的手動指令。
+  2. `Makefile` 其餘 iMac 措辭（`sync-imac`、`sync-imac-deploy`、`test-makefile-imac-guard`、guard 訊息）同屬同檔禁改。
+  3. `docs/reference/traps.md` 與 `.github/workflows/quality.yml` 屬禁改檔 ⇒ **本任務未掃描、未處置**（可能有同類殘留）。
+  4. `internal/**`、`cmd/**` 的 Go 註解（B 類，本次**未動**）：`internal/orchestrator/system.go:58`、
+     `internal/orchestrator/system_risk_session.go:238`、`internal/orchestrator/risk_forensics_hydration_test.go:217`、
+     `internal/marketdata/bls_cpi_provider.go:8`、`internal/channelsecrets/crypto.go:36`、
+     `internal/narrative/narrative_test.go:760`、`internal/monitoring/api/narrative/handlers_test.go:661`、
+     `cmd/atlas/prism_wiring_test.go:58`。皆為**帶日期的歷史觀測**，且不含退役主機的 SSH 目標或數值 IP，依分類規則不應改寫；
+     唯 `crypto.go:36`（"back it up alongside the iMac .env"）與 `system_risk_session.go:238`（可執行指令
+     `docker logs ... atlas-go-imac`，在主機上會 `No such container`）讀起來像現行操作 → 建議另開小 PR 各加一行。
+  5. 其餘 B 類保留原值（`CHANGELOG.md`、`docs/decisions/**`、`docs/llm-adr-log.md`、
+     `docs/operations/investigation-twse-timeout-2026-08-18.md`、`tasks/**`、`.gitignore` 註解、
+     `docker-compose.yml:144` 的舊檔名）；其中 `tasks/stockpicker-misleading-mechanisms-audit-k3-20260828.md`
+     依規則已加**一行**歷史註記（該檔含 `kk@kimac`）。
+- **風險**：無 runtime 風險（純文件/註解/CI 註解）。唯一的行為面殘留是上述 `make imac-watchdog-*`：
+  它是**硬失敗**（不是靜默錯），且文件已寫明手動等價指令，故不緊急。
+- **最小修法建議（只建議，未實作）**：`Makefile` 兩行各改一個值
+  （`IMAC_HOST ?= kmacmini`、`WATCHDOG_DST := /Users/kaecer/bin/atlas-container-watchdog.sh`），
+  **target 名稱保留**（`imac-` 前綴是歷史債；改名會動 launchd label 與既有文件）。
+
 ### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
 
 - **狀態**：`open`

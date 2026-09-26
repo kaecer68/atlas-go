@@ -1,12 +1,17 @@
 #!/bin/bash
 #
-# scripts/sync-darwinian.sh — Merge MacBook(dev) Darwinian state into iMac(prod).
+# scripts/sync-darwinian.sh — Merge MacBook(dev) Darwinian state into Mac Mini(prod).
 #
 # Background (2026-08-27):
 #   darwinian_history.jsonl is an append-only evolution asset, but data/state/
-#   is NOT git-tracked. The first iMac deploy (2026-08-15) started a brand-new
-#   history file on iMac; the 94-day MacBook history (2026-05-21 → 2026-08-14)
-#   was never migrated. See DARWINIAN_DUAL_MACHINE_DIVERGENCE.md.
+#   is NOT git-tracked. The first production deploy (2026-08-15, on the now
+#   retired iMac) started a brand-new history file there; the 94-day MacBook
+#   history (2026-05-21 → 2026-08-14) was never migrated.
+#   See DARWINIAN_DUAL_MACHINE_DIVERGENCE.md.
+#
+# Peer host (2026-09-26): production is Mac Mini — `kmacmini` (Tailscale MagicDNS).
+#   The old `kk@kimac` / `/Users/kk/...` peer no longer exists (iMac retired
+#   2026-09-22); do not hardcode numeric IPs, use the MagicDNS name.
 #
 # This script performs a UNION merge (dedupe by line, stable sort by timestamp),
 # so it is monotonic: merged line count >= max(source counts). It never drops
@@ -16,13 +21,13 @@
 # Requirements:
 #   - target atlas must be STOPPED before running (docker compose down) to
 #     avoid torn lines from an in-flight O_APPEND.
-#   - ssh access to the peer (default kk@kimac).
+#   - ssh access to the peer (default kmacmini).
 #
 # Usage:
 #   scripts/sync-darwinian.sh [--dry-run] [--force] [--local-only] [--peer HOST:PATH]
 #
 # Defaults:
-#   --peer      kk@kimac:/Users/kk/workspace/atlas/data/state
+#   --peer      kmacmini:/Users/kaecer/workspace/atlas/data/state
 #   local       /Users/kaecer/workspace/atlas/data/state  (MacBook dev)
 #
 
@@ -32,14 +37,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 LOCAL_DIR="${PROJECT_ROOT}/data/state"
-PEER="kk@kimac"
-PEER_DIR="/Users/kk/workspace/atlas/data/state"
+PEER="kmacmini"
+PEER_DIR="/Users/kaecer/workspace/atlas/data/state"
 DRY_RUN=false
 FORCE=false
 LOCAL_ONLY=false
 
 usage() {
-  sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [[ $# -gt 0 ]]; do

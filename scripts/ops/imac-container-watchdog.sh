@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# scripts/ops/imac-container-watchdog.sh — iMac production 容器守護腳本（版控正本）
+# scripts/ops/imac-container-watchdog.sh — production 容器守護腳本（版控正本）
 #
-# 為什麼在 repo 裡：這支腳本是 iMac 唯一的自動復原機制，先前只存在於
-# iMac 的 ~/bin/（未版控），造成「改了哪一版、有沒有漂移」無法回答。
+# 為什麼在 repo 裡：這支腳本是 production 唯一的自動復原機制，先前只存在於
+# 主機的 ~/bin/（未版控），造成「改了哪一版、有沒有漂移」無法回答。
 #
-# 安裝（iMac）：
-#   make imac-watchdog-install          # scp 到 iMac 的 ~/bin 並重載 launchd
-#   make imac-watchdog-diff             # 比對 repo 版與 iMac 版的 sha256（漂移檢查）
+# 安裝（production = **Mac Mini**，2026-09-26 更新；檔名與 Makefile target 的 `imac-`
+# 前綴屬歷史債，不改）：
+#   make imac-watchdog-install          # scp 到 Mac Mini 的 ~/bin 並重載 launchd
+#   make imac-watchdog-diff             # 比對 repo 版與主機版的 sha256（漂移檢查）
+#   ⚠️ 這兩個 target 目前壞的（2026-09-26 實跑）：Makefile 的 IMAC_HOST 預設仍是
+#      `kk@kimac`（該帳號/主機不存在）→ `ssh: Could not resolve hostname kimac`。
+#      修 Makefile 屬另一條 lane；等價手動指令見
+#      docs/operations/local-deploy.md §容器守護腳本（版控正本）。
+#   安裝位置（Mac Mini）= ~/bin/atlas-container-watchdog.sh（實查存在，2026-09-25 版）。
 #
 # 由 launchd com.goluck.atlas-container-watchdog 每 60s 觸發
 # （plist 正本：scripts/ops/launchd/com.goluck.atlas-container-watchdog.plist）
