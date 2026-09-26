@@ -878,6 +878,10 @@ ci-gate:
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"
+	@echo "  → shell 展開緊接非 ASCII 的靜態檢查＋自我測試（UTF-8 locale 下必然 unbound variable）"
+	@bash scripts/ci/check_shell_var_nonascii.sh
+	@bash tests/scripts/test-shell-var-nonascii.sh
+	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
 	@echo ""

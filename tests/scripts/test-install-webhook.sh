@@ -52,7 +52,7 @@ file_mode() {
 }
 MODE="$(file_mode "$DEST")"
 if [ "$MODE" = "600" ]; then ok "B3 已安裝 plist mode=600（原本 644 是同機可讀 ✗）"
-else bad "B3 已安裝 plist mode=$MODE（期望 600）"; fi
+else bad "B3 已安裝 plist mode=${MODE}（期望 600）"; fi
 
 INJ="$(python3 - "$DEST" <<'PY'
 import plistlib, sys
@@ -75,7 +75,7 @@ else ok "B7 安裝輸出不含 token（僅遮蔽顯示）"; fi
 bad_case() { # bad_case <說明> <args…>
   local desc="$1"; shift
   if bash "$INSTALLER" --no-load --home "$TMP/home2" "$@" > "$TMP/bad.txt" 2>&1; then
-    bad "$desc（期望非 0，得到 0）"
+    bad "${desc}（期望非 0，得到 0）"
   else
     ok "$desc"
   fi
@@ -101,5 +101,5 @@ if [ "$fail" -eq 0 ]; then
   echo "✅ install-webhook selftest PASS（$pass 項）"
   exit 0
 fi
-echo "❌ install-webhook selftest FAIL（pass=$pass fail=$fail）"
+echo "❌ install-webhook selftest FAIL（pass=${pass} fail=${fail}）"
 exit 1
