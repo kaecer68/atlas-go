@@ -16,6 +16,13 @@ type QuotaEntry struct {
 	StateFile string `json:"state_file,omitempty"` // path to the persistent counter file
 	UpdatedAt string `json:"updated_at"`           // RFC3339 timestamp of last AllowCall
 	Exhausted bool   `json:"exhausted"`            // true when Used >= Limit
+	// StateError explains that the counter itself is unusable (#2014) — the
+	// budget is UNKNOWN and the tracker is failing closed. It is carried here
+	// because `used` alone cannot express this: a process that never managed to
+	// read the shared file reports used=0 with remaining=0/exhausted=true, and
+	// without this field the dashboard would show "0 calls used" for a broken
+	// counter. Never treat `used` as evidence when this is set.
+	StateError string `json:"state_error,omitempty"`
 }
 
 // QuotaSnapshot is a unified read-only view across every registered provider.
@@ -112,16 +119,21 @@ func (r *QuotaRegistry) Snapshot() QuotaSnapshot {
 // free function (not a method) so tests can build entries directly without
 // going through a live tracker.
 func quotaEntryFromTracker(provider string, t *DailyQuotaTracker) QuotaEntry {
-	used := t.CallsToday()
-	remaining := t.Remaining()
-	limit := t.dailyLimit
+	// One locked read for all three numbers: taking the cross-process lock
+	// twice per provider multiplies the worst case when a holder is wedged.
+	used, limit, remaining, stateErr := t.usageSnapshot()
+	stateError := ""
+	if stateErr != nil {
+		stateError = clampForError(stateErr.Error(), 240)
+	}
 	return QuotaEntry{
-		Provider:  provider,
-		Used:      used,
-		Limit:     limit,
-		Remaining: remaining,
-		UpdatedAt: time.Now().Format(time.RFC3339),
-		Exhausted: remaining == 0,
+		Provider:   provider,
+		Used:       used,
+		Limit:      limit,
+		Remaining:  remaining,
+		UpdatedAt:  time.Now().Format(time.RFC3339),
+		Exhausted:  remaining == 0,
+		StateError: stateError,
 	}
 }
 
