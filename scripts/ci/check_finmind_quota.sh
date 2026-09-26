@@ -62,7 +62,7 @@ CALLS="$(grep -o '"calls_today"[[:space:]]*:[[:space:]]*[0-9]*' "$STATE_FILE" | 
 LAST_RESET="$(grep -o '"last_reset"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | head -1 | sed 's/.*"[[:space:]]*:[[:space:]]*"//; s/"$//')"
 
 if ! [[ "$CALLS" =~ ^[0-9]+$ ]]; then
-  echo "❌ finmind quota: 無法解析 $STATE_FILE（calls_today 缺失）"
+  echo "❌ finmind quota: 無法解析 ${STATE_FILE}（calls_today 缺失）"
   [ "$STRICT" -eq 1 ] && exit 1 || exit 0
 fi
 
