@@ -433,39 +433,6 @@ services:
     healthcheck:
       disable: true
 
-  # Daily cron job for Darwinian weights adjustment
-  cron-darwinian:
-    build:
-      context: .
-      dockerfile: Dockerfile.cron
-      args:
-        GIT_COMMIT: ${ATLAS_GIT_COMMIT:?ATLAS_GIT_COMMIT must be set to the source commit}
-        # GOPROXY build-arg override: work around transparent-proxy TLS MITM
-        # on proxy.golang.org (Hinet safebrowsing cert). Build with
-        #   GOPROXY=https://goproxy.cn,direct docker compose build
-        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
-    container_name: atlas-cron-darwinian
-    restart: unless-stopped
-    env_file:
-      - ${HOME}/.config/atlas-go/.env
-    environment:
-      - CRON_SCHEDULE=0 9 * * *
-      - CRON_COMMAND=/app/scripts/darwinian_adjust.sh --apply
-      - CRON_TASK_NAME=cron_darwinian
-      - ATLAS_LIVENESS_URL=http://atlas-go:18080/api/internal/task-liveness
-      - DATABASE_URL=postgres://atlas:${DB_PASSWORD:-atlas}@postgres:5432/atlas?sslmode=prefer
-    volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    networks:
-      - atlas-network
-    depends_on:
-      - atlas
-      - postgres
-    healthcheck:
-      disable: true
-
   # C07 sector prediction observation — daily collector (weekdays 15:30).
   # Runs scripts/c07-collect.sh: pulls /api/events/prediction, computes JSD /
   # latency / confidence / sector count, appends a row to the obs log, and
