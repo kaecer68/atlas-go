@@ -53,7 +53,14 @@ jobs:
       with:
         name: darwinian-report
         path: reports/darwinian_*.json
-      continue-on-error: true
+        # 2026-09-26：原本沒有 if-no-files-found（預設 = warn）＋ 步驟層 continue-on-error: true
+        # ⇒「報告產不出來」只是一個 warning，job 照樣綠。實測（真實 run 36222354977）該步每次都印
+        #   `##[warning]No files were found with the provided path: reports/darwinian_*.json`
+        # ⇒ 這個 job 從來沒產出過報告、卻一直是 success。
+        # 現改為 fail-closed：if-no-files-found: error（用真的 actions/upload-artifact@v4 程式碼
+        # 在本機 A/B 實測：warn ⇒ node exit 0；error ⇒ node exit 1），並移除步驟層
+        # continue-on-error（否則步驟紅、job 仍綠，等於沒改）。
+        if-no-files-found: error
 
   prism-maintenance:
     runs-on: ubuntu-latest
@@ -93,7 +100,8 @@ jobs:
       with:
         name: prism-report
         path: reports/prism_*.json
-      continue-on-error: true
+        # 同上：if-no-files-found: error + 移除 continue-on-error（fail-closed）。
+        if-no-files-found: error
 
   reflexivity-analysis:
     runs-on: ubuntu-latest
@@ -132,7 +140,8 @@ jobs:
       with:
         name: reflexivity-report
         path: reports/reflexivity_*.md
-      continue-on-error: true
+        # 同上：if-no-files-found: error + 移除 continue-on-error（fail-closed）。
+        if-no-files-found: error
 
   cleanup:
     runs-on: ubuntu-latest
