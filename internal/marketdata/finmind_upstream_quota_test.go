@@ -483,3 +483,31 @@ func TestFinMindQuotaOpsScript_DefaultMatchesCeiling(t *testing.T) {
 		t.Errorf("%s default %d is at or above the observed upstream refusal point %d", path, scriptDefault, finmindObservedUpstreamRefusalLimit)
 	}
 }
+
+// TestFinMindDailyLimit_EnvOverride pins the config path for requirement (2):
+// a tier change must be a config change, and an invalid value must fall back
+// to the constant (never to an unbounded or zero ceiling).
+func TestFinMindDailyLimit_EnvOverride(t *testing.T) {
+	t.Setenv("FINMIND_DAILY_LIMIT", "9000")
+	if got := finmindDailyLimitResolved(); got != 9000 {
+		t.Errorf("finmindDailyLimitResolved() = %d, want 9000 from FINMIND_DAILY_LIMIT", got)
+	}
+	if got := FinMindDailyLimit(); got != 9000 {
+		t.Errorf("FinMindDailyLimit() = %d, want 9000", got)
+	}
+	// The override must reach the tracker a client actually builds.
+	c := NewFinMindClientWithStateDir("k", t.TempDir())
+	if got := c.QuotaRemaining(); got != 9000 {
+		t.Errorf("QuotaRemaining() = %d, want the overridden ceiling 9000", got)
+	}
+
+	// Invalid values fall back to the constant — a typo must not disable the
+	// daily gate (an empty/garbage ceiling would either block everything or
+	// nothing).
+	for _, bad := range []string{"", "abc", "0", "-5", "9000x"} {
+		t.Setenv("FINMIND_DAILY_LIMIT", bad)
+		if got := finmindDailyLimitResolved(); got != finmindDailyLimit {
+			t.Errorf("FINMIND_DAILY_LIMIT=%q resolved to %d, want the default %d", bad, got, finmindDailyLimit)
+		}
+	}
+}
