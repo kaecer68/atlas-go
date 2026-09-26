@@ -974,6 +974,9 @@ ci-gate: embed-dirs
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
 	@echo "    ✅"
+	@echo "  → pre-push 閘門契約測試（E4 fail-closed fetch ＋ FU-20260926-15 host binary 新鮮度；hermetic fixtures）"
+	@bash tests/scripts/test-prepush-gates.sh
+	@echo "    ✅"
 	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
 	@bash tests/scripts/test-embed-dirs.sh
 	@echo "    ✅"
