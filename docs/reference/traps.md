@@ -1,6 +1,6 @@
 ---
 title: traps.md — 高危陷阱參考
-updated: 2026-09-25
+updated: 2026-09-26
 status: active
 referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 ---
@@ -62,7 +62,6 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 
 | 陷阱 | 所屬模組 | 說明 |
 |------|---------|------|
-| **GuardOutcomes 與 outcomes 必須對齊** | orchestrator | 控制層（CIO）輸出應**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
 | **`OutcomeCount` / 通過筆數必須是單場次、單一權威來源** | ledger / orchestrator | ①`RecordSessionSummary` 絕對不可用 `ledger.LoadOutcomes()`（讀取全域檔案）來填 `OutcomeCount`。②放行/過濾筆數必須由單一權威來源（如 `GuardOutcomes`）計算，前端不可各自重算；`GuardOutcomes` 與 `outcomes` 必須對齊，控制層（CIO）輸出必須**保留原始 Agent ID**，不可覆寫為自己的 ID，否則 `PassedGuards` 會全部變 `false`。 |
 | **Darwinian 權重靜默夾制** | portfolio | 權重限制在 `[0.3, 2.5]`，超界會靜默正規化，不報錯。 |
 | **重複使用 mutable `[]Recommendation`** | sim | 多次 simulation run 之間不可共用同一個 slice。 |
@@ -118,6 +117,7 @@ referenced_by: 15+ 份文件 (docs/specs, docs/operations, .omo/investigations)
 | **`atlas-go` 啟動 postgres race 一定要用 `depends_on: condition: service_healthy`** | apigateway / deploy | `docker-compose.yml` 的 `atlas` service 若不依賴 postgres/redis healthcheck,docker compose 預設**平行**起所有服務 → atlas 啟動時 ping postgres 還沒 ready → `SQLSTATE 57P03 (database system is starting up)` → bootstrap 走 warning 路徑但首次連線失敗。修法:`atlas:` 加 `depends_on: postgres: condition: service_healthy`(及 redis),前提是 postgres/redis **必須有 healthcheck**(postgres 用 `pg_isready`,redis 用 `redis-cli ping`)。沒 healthcheck 就無法等 service_healthy,docker compose 會直接報「no healthcheck configured」失敗。 |
 | **本機 dev 不要 `docker compose up -d fubon-proxy`** | fubonproxy | 若 docker compose 起了 fubon-proxy(在 18081),又 `go run` atlas-go,ProcessManager 透過 `internal/portprobe.Probe` 看到 port 18081 已有 healthy fubon-proxy → 跳過 spawn(這步是對的);**但**如果 dev 時 docker fubon-proxy 還沒 healthy(例如剛 restart 中),`Probe` 進入 foreign 分支 → ProcessManager 拒絕 spawn 並回 actionable error(不啟動自己的副本,避免 EADDRINUSE)→ supervisor loop。**最簡單**:dev 時 `docker compose up -d postgres redis`(省略 fubon-proxy),完全讓 ProcessManager 管。若 production 部署已驗證 docker fubon-proxy + `host.docker.internal:18081` 通了,維持 docker compose 統一管理也行,但 dev 不要混用。<br><br>**PR #943 變更**：fubon-proxy 的 `/health` 端點改為快速 process-only check（不呼叫上游 Fubon API，永遠回 200 只要 FastAPI 活著）。若需驗證上游連線，改用 `/health/deep`。Dockerfile HEALTHCHECK 也改用 `/health`，container 不再因上游短暫斷線顯示 unhealthy。 |
 | **fubon-proxy `/health` 不再驗證上游連線** | fubonproxy | PR #943 後 `/health` 改為 process-only check（快速回 200），不再呼叫上游 Fubon API。若程式碼（如 ProcessManager `IsHealthy()`）依賴 `/health` 回 503 來判斷上游異常，需改用 `/health/deep` 或 fubon-proxy log 來偵測。**但** ProcessManager 的既有邏輯（/health=200 = proxy 活著、port 被正常佔用 → 跳過 spawn）反而因此**正確性提升** — 不再因上游故障將活的 proxy 誤判為 foreign port。 |
+| **PR 分支落後 `main`：`MERGEABLE` 仍會把他人已合併的改動顯示成刪除（並真的回退）** | 跨模組 / CI | `gh pr view` 的 `mergeable` 只保證「能自動合併」，不保證「不會刪掉別人的東西」。分支落後時 `git diff origin/main <head>` 會把 main 上其他 PR 最近的改動顯示成**刪除**（`added==0 && deleted>0` 的檔案就是嫌疑），而 squash／rebase merge 是把 `base..head` 當 patch 套用 ⇒ 真的刪掉別人的修正（2026-09-26 單一 session 實證 5 個 PR：#1974／#1979／#1990／#1991／#1994）。診斷：`git diff --numstat origin/main <branch>` + `git log -1 --no-merges origin/main -- <file>`；處置：`gh pr update-branch <PR>`。CI 閘門 `revert-guard`（`quality.yml`，2026-09-26 起）會在 PR 上擋下共用資產的假刪除；規格與誠實邊界見 [`../specs/branch-revert-guard-spec.md`](../specs/branch-revert-guard-spec.md)。 |
 
 ### Build Pipeline / 程式碼生成
 

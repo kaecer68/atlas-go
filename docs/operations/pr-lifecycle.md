@@ -64,7 +64,7 @@ PR body **MUST 含三段**（對應 `.github/PULL_REQUEST_TEMPLATE.md` 的 Summa
 
 - [ ] `make ci-gate` 過
 - [ ] `make ci-full` 過（**不可跳過**）
-- [ ] GitHub CI 全綠（含 `monitoring-config`，見 §3.4）
+- [ ] GitHub CI 全綠（含 `monitoring-config` §3.4、`revert-guard` §3.5）
 - [ ] Reviewer approve
 
 ### 3.3 PR 整個 CI 都沒跑（required checks 卡在 `Expected`）
@@ -139,6 +139,48 @@ base 既不是 `main`/`develop`、也不是另一個 open PR 的 head 分支時*
   `monitoring/rules/channel_health_latent_staleness.yml` 的 `ChannelHealthStatusError`
   四條同名同標籤規則。清理後把該 step 改成
   `promtool check rules --lint=all --lint-fatal ...` 即可收緊（`--lint-fatal` 讓 lint 以 exit 3 失敗）。
+
+### 3.5 落後分支回退 guard（revert-guard）
+
+> **實證 2026-09-26（單一 session 內 5 個 PR／6 次）**。症狀:PR 分支落後 `main` 時
+> `gh pr view --json mergeable` 回 `MERGEABLE`（**沒有文字衝突**）,但「Files changed」把 `main` 上
+> **其他 PR 最近的改動顯示成刪除**;若照現狀合併（尤其 squash／rebase merge 是把 `base..head`
+> 當一個 patch 套到 `main`）就會**真的回退他人已合併的修正**。
+
+| PR | 被顯示成刪除的他人改動 |
+|---|---|
+| #1974 | `monitoring/alertmanager.yml`（−37）|
+| #1979 | `.github/workflows/pr-base-guard.yml`（−92）、`quality.yml`（−66）|
+| #1990 | `internal/monitoring/metrics_bridge.go`（−41）、`internal/monitoring/universe_scheduler.go`（−62）|
+| #1991 / #1994 | `internal/monitoring/metrics_bridge.go`（−41）、`metrics_bridge_test.go`（−136）、`.claude/skills/.../SKILL.md`（−41）|
+
+**為什麼 `MERGEABLE` 幫不上忙**:它只回答「**能不能**自動合併」,不回答「合併後**會不會刪掉別人的東西**」。
+
+**診斷指令（唯讀,<1 秒;不必等 CI、也不必連 GitHub）**:
+
+```bash
+git fetch origin main
+git diff --numstat origin/main <branch>        # added==0 && deleted>0 的檔案 = 嫌疑（純刪除）
+git log -1 --no-merges origin/main -- <file>   # 該檔在 main 上最後的改動是誰;不是本 PR 引進的就是被回退
+```
+
+**處置（依序）**:
+
+1. `gh pr update-branch <PR>`（本地等效:`git fetch origin main && git merge origin/main`,或 `git pull --ff-only`）
+   → 重跑檢查,假刪除消失。
+2. 若本 PR **真的要刪**該檔:先 update-branch,再把刪除重新套用一次（否則會把 `main` 的新改動一起帶走）。
+3. 例外才登 `scripts/ci/revert-guard-allowlist.json`（`reason` 必填,寫到別人能自行驗證）。
+
+**閘門(`quality.yml` 的 `revert-guard` job,2026-09-26 起）**:對 `git diff --numstat <base> <head>`
+的每個「純刪除／整檔刪除」檔案,再查該檔在 `base` 上是否有**本分支沒有的**改動（= 落後造成的假刪除）;
+命中的**共用資產**(`.github/`、`monitoring/`、`configs/`、`docs/reference/`、`scripts/ci/`、`Makefile`、
+`docker-compose*.yml`)→ **FAIL**,其餘 → WARN（附檔案、`main` 上該檔最後的 commit、修法）。
+job 內附負向證明:用**真的 repo 歷史**造一個落後分支（從 `main` 最後一次動共用資產的 commit 的 parent
+開分支 + 刪掉該 commit 動過的檔）,檢查必須擋下。本機可用 `make revert-guard` 先跑
+（`make ci-gate` 也涵蓋）。規格與**誠實邊界**見
+[`../specs/branch-revert-guard-spec.md`](../specs/branch-revert-guard-spec.md)。
+**它抓不到**:同一檔案內的部分回退（diff 出現 `added>0` 的混合 hunk）、分支已對齊但內容仍矛盾、
+非 git 可見的回退。
 
 ## 4. PR-Merge — 合併到 main
 
@@ -276,3 +318,4 @@ PR 視為完成 **必須**所有三項：
 |------|------|------|
 | 2026-08-05 | 初版建立,因 2026-08-05 v3.0 PR-F #1457 半失敗教訓 | kaecer dispatch + AI agent |
 | 2026-09-25 | 新增 §3.3（PR base 設錯 → CI 靜默不跑 / required checks 卡在 Expected 的真因、診斷與處置 + `pr-base-guard` tripwire）、§3.4（promtool/amtool 監控 gate）;起因 PR #1975 任務 I | kaecer dispatch + AI agent |
+| 2026-09-26 | 新增 §3.5（落後分支回退 guard：`MERGEABLE` 仍會回退他人已合併的改動、診斷指令、`gh pr update-branch` 處置、`revert-guard` CI 閘門與其誠實邊界）;起因 issue #1993（單一 session 實證 #1974／#1979／#1990／#1991／#1994） | kaecer dispatch + AI agent |

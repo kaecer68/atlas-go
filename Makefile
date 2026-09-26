@@ -481,6 +481,24 @@ inert-check-update:
 	@python3 scripts/ci/check_inert_closure.py --root . --update-baseline
 	@echo "   → 請編輯 scripts/ci/inert-baseline.json 填寫 reason（TODO 開頭會讓檢查變紅）"
 
+# ---- 落後分支語意回退檢查（#1993，2026-09-26）----
+# 目的：PR 分支落後 main 時，GitHub 的 MERGEABLE 只保證「能自動合併」，但 diff 會把 main 上
+#       其他 PR 最近的改動顯示成「刪除」⇒ 照現狀合併就是回退他人已合併的修正
+#       （本 session 實證 #1974/#1979/#1990/#1991/#1994，全靠人工比對才發現）。
+#       規格：docs/specs/branch-revert-guard-spec.md
+#       allowlist：scripts/ci/revert-guard-allowlist.json（每項 reason 必填）
+#   make revert-guard           自我測試 + 檢查（base=origin/main, head=HEAD）
+#   make revert-guard-selftest  只跑 hermetic 回歸測試（真 git fixture，不連網、不碰 production）
+.PHONY: revert-guard revert-guard-selftest
+
+revert-guard-selftest:
+	@echo "  → revert guard regression tests（hermetic git fixtures）"
+	@bash tests/scripts/test-revert-guard.sh
+
+revert-guard: revert-guard-selftest
+	@echo "  → 落後分支語意回退檢查（#1993）"
+	@bash scripts/ci/check_revert_guard.sh
+
 ci-slow:
 	@echo "🛡️  Running slow CI checks (data_naming/layer3/markdown_links)..."
 	@for script in scripts/ci/check_data_naming.sh \
@@ -873,6 +891,12 @@ ci-gate:
 	@echo "    ✅"
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
+	@echo "    ✅"
+	@echo "  → revert-guard 自我測試（hermetic git fixtures；#1993）"
+	@bash tests/scripts/test-revert-guard.sh
+	@echo "    ✅"
+	@echo "  → 落後分支語意回退檢查（#1993；allowlist 見 scripts/ci/revert-guard-allowlist.json）"
+	@bash scripts/ci/check_revert_guard.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
 	@$(MAKE) --no-print-directory ci-quick
