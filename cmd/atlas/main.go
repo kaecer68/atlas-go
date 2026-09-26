@@ -1997,6 +1997,12 @@ func run(args []string, deps appDeps) error {
 			// the vector's real label names (see monitoring.CollectorOnInc for the
 			// two defects this replaced).
 			um.SetOnInc(monitoring.CollectorOnInc(collector))
+			// Materialize the whole atlas_universe_* family now. Series are created
+			// by the first increment, and the pipeline runs at most once per trading
+			// day, so without this every restart leaves /metrics without the family
+			// until the next scheduled run (issue #1995: 71h blind window after the
+			// 2026-09-25T07:14Z restart). Must stay after SetOnInc — see WarmUp.
+			um.WarmUp()
 			classTreeAdapter := monitoring.AdaptClassificationTree(industry.DefaultClassification())
 			{
 				suCfg := config.GetParametersConfig().SmartUniverse
@@ -2061,8 +2067,8 @@ func run(args []string, deps appDeps) error {
 									"coverage_pct":     coveragePct,
 								})
 						}
-						um.CoverageMapped.WithLabelValues("coverage_check", "all").Add(int64(snapshotSymbols))
-						um.CoverageTotal.WithLabelValues("coverage_check", "all").Add(int64(totalSymbols))
+						um.CoverageMapped.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(snapshotSymbols))
+						um.CoverageTotal.WithLabelValues(metrics.UniverseStageCoverageCheck, "all").Add(int64(totalSymbols))
 					}
 					// Check D6 watchlist size.
 					watchlistPath := filepath.Join(cfg.WorkDir, "data", "state", "universe_watchlist.json")

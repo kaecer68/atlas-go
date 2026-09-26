@@ -17,20 +17,31 @@
 #   兩檔不同步的瞬間看到 case H 紅燈（exp=舊文案 / got=新文案）,那是預期行為、不是缺陷。
 #
 # 十個 case 各自對應一個「真實可能發生」的世界:
-#   A 生產實際形狀（daily= 標籤、ranked 恆 0、無 quotes）─── 三條都必須 firing（含 for:30m pending 驗證）
+#   A 生產實際形狀（daily= 標籤、ranked 恆 0、quotes_fetched family 缺席）
+#       ── 第 1/2 條 firing（值真的是 0）、第 3 條**沉默**（#1995:family 缺席不是「量測到 0」，
+#          由第 6 條負責報告，見 gaps 檔 O/R；含 for:30m pending 驗證）
 #   B 健康形狀（passed/ranked/quotes 都有增量）───────────── 三條都必須**不** firing（負向對照 1）
-#   C 修好標籤後的形狀（stage=/result=）──────────────────── 三條都必須 firing（別名 matcher 的理由）
+#   C 修好標籤後的形狀（stage=/result=，quotes 亦有 series 但零增量）
+#       ── 三條都必須 firing（別名 matcher 的理由；第 3 條這裡靠「有 series 但增量為 0」成立）
 #   D 完全沒有活動（全 0:週末/連假/剛重啟）───────────────── 三條都必須**不** firing（負向對照 2）
-#   E ranked family 整體消失但篩選有活動 ─────────────────── 三條都必須 firing（拒絕「零偵測」）
+#   E ranked family 整體消失但 screened/passed 仍有樣本 ───── 第 2 條必須 firing（passed 量測為 0）、
+#       第 1/3 條**沉默**（#1995:ranked 缺席不算「量測到 ranked=0」；缺席由 gaps 檔 O/R 的第 6 條報告）
 #   F quotes 有 series 但恆 0（provider 有接但回空）──────── 第 3 條必須 firing，第 1/2 條不得 firing
 #   G 休市衰減（健康 pipeline 的增量已在 6d 視窗之外）───── 三條都必須**不** firing（F-1 回歸）
-#   H 只有 weekly stage 有活動（週一 full rebuild）───────── 三條都必須 firing（F-2 回歸；別名要含 weekly）
+#   H 只有 weekly stage 有活動（週一 full rebuild；quotes 亦有 series）── 三條都必須 firing（F-2 回歸；別名要含 weekly）
 #   I 殘留 result= series 恆 0 而 daily= 真實通過 ────────── 三條都必須**不** firing（F-3 回歸）
 #   J 只有 weekly stage 有活動且 weekly passed > 0 ────────── 三條都必須**不** firing（負向對照 3;
 #     釘住「weekly 別名」:刪掉它第 2 條會假 firing —— 這是 case H 抓不到的洞,獨立驗證指出後補上）
 #
 # G/H/I 是 2026-09-25 獨立驗證子代理（M-verify）找到的缺陷的回歸網 —— 沒有它們,
 # 那三個修法會被「下次有人把寫法改回去」而無聲失效。
+#
+# ⚠️ 2026-09-26（任務 P / issue #1995）語意修正:第 1/2/3 條的**判定側**移除了 `or vector(0)`
+#    ⇒ 「輸入 series 不存在」不再被算成「增量為 0」。因此本檔有兩格被重新指向（A 的第 3 條、
+#    E 的第 1/3 條改成 **silent**),另外 C/H 補上 quotes series 以維持「三條都 firing」的原意。
+#    缺席本身改由第 6 條 `AtlasUniverseMetricsFamilyMissing` 負責（case O/R 在 gaps 檔）;
+#    這次修正**沒有**放寬任何一格:每個「該 firing」的形狀都仍然有規則在 firing,
+#    只是負責的規則換成文案正確的那一條。
 #
 # ⚠️ 關於「負向對照要真的有牙齒」:in-file 的 must-not-fire case（B/D/F/G/I）只能在「規則過寬」時
 #    紅燈;它無法證明「規則變成永不 firing」這一類變異會被抓到。因此另有**變異測試**
@@ -103,16 +114,23 @@ tests:
               2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
                  正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
                  就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
-              3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
-                 回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
+              3. 交叉證據(⚠️ 2026-09-26 起語意已變,見檔頭「部署後的預期行為」):
+                 curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 · 有 series 但 increment 為 0 ⇒ Step 3 的 quotes 分支沒貢獻任何報價
+                   (可能是走 else(provider 沒接上),也可能是接了但回空 —— 看第 3 條)。
+                 · **沒有 series** ⇒ 這是「指標族缺失」,不是 Step 3 的判定:
+                   修復前 series 只在第一次增量才建立(重啟後會整族消失),
+                   修復後由 `UniverseMetrics.WarmUp()` 在啟動時就建立 ⇒ 缺席即指向
+                   第 6 條(改名/移除或服務沒在跑),不要拿它推論 quotes 分支。
               4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
                  result.quotes_status / result.ranked_trustworthy / result.ranked_fallback_reason
                  —— 這三個欄位就是為本案加的機器可讀判定。
               5. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界 ⇒ 固定數字會隨天數失效)。
                  歷史上的灌爆缺陷(x·N(N+1)/2;實測只跑 2 輪顯示 4797)已由 #1989 於 2026-09-25
                  修復,但禁令不變。本規則只看 increase() 是否為 0,與這件事無關。
-              6. 若本指標 family 整體消失(被改名/移除),ranked 側計為 0 ⇒ 一樣會 firing
-                 (刻意如此:指標消失也是零偵測的一種)。
+              6. 若本指標 family 整體消失(被改名/移除),本條**不會** firing —— 判定側沒有
+                 `or vector(0)`,沒有資料就不宣稱「量測到 0」(#1995)。缺席由第 6 條
+                 `AtlasUniverseMetricsFamilyMissing` 負責,照那一條的 triage 查指標名字,不要查 pipeline。
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
       - eval_time: 25m
         alertname: AtlasUniverseScreeningAllRejected
@@ -156,55 +174,7 @@ tests:
         exp_alerts: []
       - eval_time: 60m
         alertname: AtlasUniverseQuotesMissing
-        exp_alerts:
-        - exp_labels:
-            alertname: "AtlasUniverseQuotesMissing"
-            component: "universe-quotes"
-            incident_ref: "universe-scoring-gap-20260925"
-            service: "atlas"
-            severity: "warning"
-            wave: "9.2"
-          exp_annotations:
-            summary: "universe pipeline 跑了但沒有任何報價資料(provider 缺失或回空)"
-            description: |
-              SmartUniverseBuilder 在過去 6 天內至少完成過一次執行(screening 有增量),
-              但同一段期間 `atlas_universe_quotes_fetched_total` 完全沒有增量
-              —— 也就是 Step 3 拿到的 quoteMap 不是空的、就是整個 quotes 分支沒被執行。
-              
-              這代表什麼:
-              - quotes 是評分階段唯一的 Volume/Last 來源;沒有它,`applyVolumeAndPriceFilters`
-                對每個 symbol 都在「quotes 查不到就 continue」短路 ⇒ survivors=0 ⇒ passed=0
-                ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
-              - 兩個分支要分辨(這是本條的重點):
-                (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
-                (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
-                    `quotes_fetch_error` WARN 與
-                    `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
-                    (#1989 修好標籤配對後的真實形狀;過渡期 ≤ 6 天內舊形狀
-                     `{daily="fetch_error"}` 的 series 仍在 TSDB 裡)。
-                兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
-              
-              先查什麼(依序):
-              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
-                 result.quotes_status:
-                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
-                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
-                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
-              1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
-                 grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
-                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
-                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
-                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
-              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
-                 與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
-              4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
-                 result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
-                 —— 這是最快的一步(不用猜)。
-              5. 修好之後本條會自動 resolve(下一次執行增加 quotes_fetched series)。
-            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+        exp_alerts: []
   - name: "B 健康形狀（passed/ranked/quotes 都有增量）:三條都不得 firing（負向對照 1）"
     interval: 1m
     input_series:
@@ -235,6 +205,8 @@ tests:
       - series: 'atlas_universe_symbols_screened_total{stage="daily",result="passed"}'
         values: '0x120'
       - series: 'atlas_universe_symbols_ranked_total{stage="daily"}'
+        values: '0x120'
+      - series: 'atlas_universe_quotes_fetched_total{stage="daily"}'
         values: '0x120'
     alert_rule_test:
       - eval_time: 60m
@@ -275,16 +247,23 @@ tests:
               2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
                  正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
                  就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
-              3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
-                 回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
+              3. 交叉證據(⚠️ 2026-09-26 起語意已變,見檔頭「部署後的預期行為」):
+                 curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 · 有 series 但 increment 為 0 ⇒ Step 3 的 quotes 分支沒貢獻任何報價
+                   (可能是走 else(provider 沒接上),也可能是接了但回空 —— 看第 3 條)。
+                 · **沒有 series** ⇒ 這是「指標族缺失」,不是 Step 3 的判定:
+                   修復前 series 只在第一次增量才建立(重啟後會整族消失),
+                   修復後由 `UniverseMetrics.WarmUp()` 在啟動時就建立 ⇒ 缺席即指向
+                   第 6 條(改名/移除或服務沒在跑),不要拿它推論 quotes 分支。
               4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
                  result.quotes_status / result.ranked_trustworthy / result.ranked_fallback_reason
                  —— 這三個欄位就是為本案加的機器可讀判定。
               5. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界 ⇒ 固定數字會隨天數失效)。
                  歷史上的灌爆缺陷(x·N(N+1)/2;實測只跑 2 輪顯示 4797)已由 #1989 於 2026-09-25
                  修復,但禁令不變。本規則只看 increase() 是否為 0,與這件事無關。
-              6. 若本指標 family 整體消失(被改名/移除),ranked 側計為 0 ⇒ 一樣會 firing
-                 (刻意如此:指標消失也是零偵測的一種)。
+              6. 若本指標 family 整體消失(被改名/移除),本條**不會** firing —— 判定側沒有
+                 `or vector(0)`,沒有資料就不宣稱「量測到 0」(#1995)。缺席由第 6 條
+                 `AtlasUniverseMetricsFamilyMissing` 負責,照那一條的 triage 查指標名字,不要查 pipeline。
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
       - eval_time: 60m
         alertname: AtlasUniverseScreeningAllRejected
@@ -343,7 +322,10 @@ tests:
                 ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
               - 兩個分支要分辨(這是本條的重點):
                 (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
+                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ quotes 分支從未被執行,
+                    該 series 只有 0 增量。
+                    (⚠️ #1995 修復前這個形狀的旁證是「series 根本不存在」;修復後 series 由
+                     `UniverseMetrics.WarmUp()` 在啟動時建立,兩者改用增量區分。)
                 (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
                     `quotes_fetch_error` WARN 與
                     `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
@@ -358,9 +340,11 @@ tests:
                                           全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
                    provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
+              2. 指標有沒有增量:curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 有 series 但沒有任何增量 ⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 (修復前這一步是靠「series 不存在」判定;修復後 series 一律存在,
+                  改成比對 increment —— 沒有樣本的情況另外由第 6 條負責,不要在這裡推論。)
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
@@ -401,53 +385,7 @@ tests:
     alert_rule_test:
       - eval_time: 60m
         alertname: AtlasUniverseRankedZero
-        exp_alerts:
-        - exp_labels:
-            alertname: "AtlasUniverseRankedZero"
-            component: "universe-scoring"
-            incident_ref: "universe-scoring-gap-20260925"
-            service: "atlas"
-            severity: "warning"
-            wave: "9.2"
-          exp_annotations:
-            summary: "universe 評分空轉:6 天內有篩選活動,但 symbols_ranked 增量為 0"
-            description: |
-              SmartUniverseBuilder 的評分階段在過去 6 天內沒有產出任何 ranked symbol,
-              但同一段期間 screening 階段確實有活動(symbols_screened 有增量)
-              —— 意思是:pipeline 有跑,評分卻空轉。
-              
-              這代表什麼:
-              - ranked 是 sector allocation / stockpicker 等下游的母體來源;ranked 空 = 母體空。
-                生產目前沒有任何 ranked 消費者,所以下游不會壞 —— **只有外部監看抓得到**。
-              - 歷史根因(2026-06-22 起,連續 3 個月;**已由 #1979 修復並於 2026-09-25 部署**):UniverseBuilderDeps.Quotes 是常數 nil
-                ⇒ BuildUniverse Step 3 走 else 分支(空 quoteMap)⇒ 每個 symbol 在
-                「quotes 查不到就 continue」短路 ⇒ survivors=0 → passed=0 → ranked=0。
-              - 與 #1971 gate 的觀察窗不變量 `symbols_ranked > 0` 直接相關:本條 firing 就是
-                那個不變量被違反。rollback 政策寫在 configs/parameters.json 的 todo(業主裁決)。
-              - 遮蔽注意(歷史缺口 (e),**已由 #1989 於 2026-09-25 修復**):修復前 ranked series
-                因標籤配對缺陷而沒有標籤 ⇒ 兩個 stage 共用同一個 counter,weekly 只要成功產出過
-                ranked 就會遮蔽「daily 評分死亡」最多 6 天。修復後 `symbols_ranked_total` 帶
-                `stage` 標籤;但過渡期(≤ 6 天 = 本檔的視窗長度)Prometheus 仍同時保有舊的
-                **無標籤** series ⇒ 那段期間聚合值仍可能被 weekly 遮蔽,判讀時要看 `stage`。
-                三條一起看:只有本條沉默而第 2/3 條 firing 時,優先懷疑報價(quotes)階段。
-              
-              先查什麼(依序):
-              1. 評分階段日誌:docker logs atlas-go --since 48h 2>&1 | grep -E "scoring_ok|daily_refresh_ok|weekly_rebuild_ok"
-                 看 input=.. ranked=..。（scoring_ok 只是 INFO、沒有門檻,要看數字）
-              2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
-                 正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
-                 就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
-              3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
-                 回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
-              4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
-                 result.quotes_status / result.ranked_trustworthy / result.ranked_fallback_reason
-                 —— 這三個欄位就是為本案加的機器可讀判定。
-              5. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界 ⇒ 固定數字會隨天數失效)。
-                 歷史上的灌爆缺陷(x·N(N+1)/2;實測只跑 2 輪顯示 4797)已由 #1989 於 2026-09-25
-                 修復,但禁令不變。本規則只看 increase() 是否為 0,與這件事無關。
-              6. 若本指標 family 整體消失(被改名/移除),ranked 側計為 0 ⇒ 一樣會 firing
-                 (刻意如此:指標消失也是零偵測的一種)。
-            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+        exp_alerts: []
       - eval_time: 60m
         alertname: AtlasUniverseScreeningAllRejected
         exp_alerts:
@@ -484,55 +422,7 @@ tests:
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
       - eval_time: 60m
         alertname: AtlasUniverseQuotesMissing
-        exp_alerts:
-        - exp_labels:
-            alertname: "AtlasUniverseQuotesMissing"
-            component: "universe-quotes"
-            incident_ref: "universe-scoring-gap-20260925"
-            service: "atlas"
-            severity: "warning"
-            wave: "9.2"
-          exp_annotations:
-            summary: "universe pipeline 跑了但沒有任何報價資料(provider 缺失或回空)"
-            description: |
-              SmartUniverseBuilder 在過去 6 天內至少完成過一次執行(screening 有增量),
-              但同一段期間 `atlas_universe_quotes_fetched_total` 完全沒有增量
-              —— 也就是 Step 3 拿到的 quoteMap 不是空的、就是整個 quotes 分支沒被執行。
-              
-              這代表什麼:
-              - quotes 是評分階段唯一的 Volume/Last 來源;沒有它,`applyVolumeAndPriceFilters`
-                對每個 symbol 都在「quotes 查不到就 continue」短路 ⇒ survivors=0 ⇒ passed=0
-                ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
-              - 兩個分支要分辨(這是本條的重點):
-                (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
-                (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
-                    `quotes_fetch_error` WARN 與
-                    `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
-                    (#1989 修好標籤配對後的真實形狀;過渡期 ≤ 6 天內舊形狀
-                     `{daily="fetch_error"}` 的 series 仍在 TSDB 裡)。
-                兩者對下游的後果完全相同(空 quoteMap ⇒ ranked=0),所以都該 firing。
-              
-              先查什麼(依序):
-              0.(**若部署已含 #1979**,最快的一步)看快照 data/state/universe_snapshot.json 的
-                 result.quotes_status:
-                   not_attempted        ⇒ pipeline 在 Step 1/2 就 early-return(母體空或行業 filter
-                                          全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
-                   provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
-              1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
-                 grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
-                 ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
-                 建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
-                 `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
-              3. 有 series 但值為 0 ⇒ 走的是 (b):查 provider 額度/憑證(FinMind 日配額 14400)
-                 與代號正規化(normalizeSymbol 後鍵不匹配也會回空)。
-              4. 若部署已含 #1979:快照 data/state/universe_snapshot.json 的
-                 result.quotes_status 會直接寫 `provider_unavailable` / `fetch_error` / `empty`
-                 —— 這是最快的一步(不用猜)。
-              5. 修好之後本條會自動 resolve(下一次執行增加 quotes_fetched series)。
-            runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
+        exp_alerts: []
   - name: "F quotes_fetched series 存在但恆 0（provider 有接但回空）:第 3 條必須 firing，第 1/2 條不得 firing"
     interval: 1m
     input_series:
@@ -574,7 +464,10 @@ tests:
                 ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
               - 兩個分支要分辨(這是本條的重點):
                 (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
+                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ quotes 分支從未被執行,
+                    該 series 只有 0 增量。
+                    (⚠️ #1995 修復前這個形狀的旁證是「series 根本不存在」;修復後 series 由
+                     `UniverseMetrics.WarmUp()` 在啟動時建立,兩者改用增量區分。)
                 (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
                     `quotes_fetch_error` WARN 與
                     `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
@@ -589,9 +482,11 @@ tests:
                                           全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
                    provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
+              2. 指標有沒有增量:curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 有 series 但沒有任何增量 ⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 (修復前這一步是靠「series 不存在」判定;修復後 series 一律存在,
+                  改成比對 increment —— 沒有樣本的情況另外由第 6 條負責,不要在這裡推論。)
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。
@@ -646,6 +541,8 @@ tests:
         values: '0x300'
       - series: 'atlas_universe_symbols_ranked_total'
         values: '0x300'
+      - series: 'atlas_universe_quotes_fetched_total{stage="weekly"}'
+        values: '0x300'
     alert_rule_test:
       - eval_time: 48h
         alertname: AtlasUniverseRankedZero
@@ -685,16 +582,23 @@ tests:
               2. Quotes provider 是否被接上:grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
                  正確值是 `Quotes: quotes`;若又變回 nil(歷史上的 bootstrap_helpers.go:217)
                  就是回歸 —— 2026-06-22~09-25 的實例就是這個形狀。
-              3. 交叉證據:curl -s localhost:18080/metrics | grep -c universe_quotes_fetched_total
-                 回 0(series 根本不存在)⇒ Step 3 的 quotes 分支從未執行(走的是 else)。
+              3. 交叉證據(⚠️ 2026-09-26 起語意已變,見檔頭「部署後的預期行為」):
+                 curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 · 有 series 但 increment 為 0 ⇒ Step 3 的 quotes 分支沒貢獻任何報價
+                   (可能是走 else(provider 沒接上),也可能是接了但回空 —— 看第 3 條)。
+                 · **沒有 series** ⇒ 這是「指標族缺失」,不是 Step 3 的判定:
+                   修復前 series 只在第一次增量才建立(重啟後會整族消失),
+                   修復後由 `UniverseMetrics.WarmUp()` 在啟動時就建立 ⇒ 缺席即指向
+                   第 6 條(改名/移除或服務沒在跑),不要拿它推論 quotes 分支。
               4. 若部署已含 #1979:直接看快照 data/state/universe_snapshot.json 的
                  result.quotes_status / result.ranked_trustworthy / result.ranked_fallback_reason
                  —— 這三個欄位就是為本案加的機器可讀判定。
               5. ⚠️ 不要用 counter 絕對值當門檻(累積 counter 沒有上界 ⇒ 固定數字會隨天數失效)。
                  歷史上的灌爆缺陷(x·N(N+1)/2;實測只跑 2 輪顯示 4797)已由 #1989 於 2026-09-25
                  修復,但禁令不變。本規則只看 increase() 是否為 0,與這件事無關。
-              6. 若本指標 family 整體消失(被改名/移除),ranked 側計為 0 ⇒ 一樣會 firing
-                 (刻意如此:指標消失也是零偵測的一種)。
+              6. 若本指標 family 整體消失(被改名/移除),本條**不會** firing —— 判定側沒有
+                 `or vector(0)`,沒有資料就不宣稱「量測到 0」(#1995)。缺席由第 6 條
+                 `AtlasUniverseMetricsFamilyMissing` 負責,照那一條的 triage 查指標名字,不要查 pipeline。
             runbook_url: "https://github.com/kaecer68/atlas-go/blob/main/docs/operations/universe-scoring-ranked-zero-20260925.md"
       - eval_time: 48h
         alertname: AtlasUniverseScreeningAllRejected
@@ -753,7 +657,10 @@ tests:
                 ⇒ ranked=0。**這是 ranked=0 的直接原因**,不是間接推論。
               - 兩個分支要分辨(這是本條的重點):
                 (a) **provider 沒接上(回歸)**:wiring 是 `Quotes: nil`(2026-06-22~09-25 的歷史值在
-                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ 指標 series 根本不存在。
+                    bootstrap_helpers.go:217;#1979 部署後應為 `Quotes: quotes`)⇒ quotes 分支從未被執行,
+                    該 series 只有 0 增量。
+                    (⚠️ #1995 修復前這個形狀的旁證是「series 根本不存在」;修復後 series 由
+                     `UniverseMetrics.WarmUp()` 在啟動時建立,兩者改用增量區分。)
                 (b) **provider 有接但回空或回錯**:series 存在但值為 0,且通常伴隨
                     `quotes_fetch_error` WARN 與
                     `atlas_universe_quotes_errors_total{stage="daily",error_type="fetch_error"}`
@@ -768,9 +675,11 @@ tests:
                                           全滅)—— **不是** quotes 缺失,改查分類樹/industry filter;
                    provider_unavailable ⇒ (a);fetch_error / empty ⇒ (b);ok ⇒ 看 ranked_trustworthy。
               1. 有沒有 fetch error:docker logs atlas-go --since 48h 2>&1 | grep -E "quotes_fetch|quotes_provider|quotes_status"
-              2. 指標在不在:curl -s localhost:18080/metrics | grep universe_quotes_fetched_total
-                 回 0 行(series 根本不存在)⇒ 走的是 (a),去看 wiring:
+              2. 指標有沒有增量:curl -s localhost:18080/metrics | grep '^atlas_universe_quotes_fetched_total'
+                 有 series 但沒有任何增量 ⇒ 走的是 (a),去看 wiring:
                  grep -n "Quotes:" cmd/atlas/bootstrap_helpers.go
+                 (修復前這一步是靠「series 不存在」判定;修復後 series 一律存在,
+                  改成比對 increment —— 沒有樣本的情況另外由第 6 條負責,不要在這裡推論。)
                  ⚠️ 不要拿 universe_quotes_errors_total 當 (a) 的判據:#1979 之後連 nil 分支也會
                  建立該 family(universe_scheduler.go 的 QuotesStatusProviderUnavailable 分支會
                  `QuotesErrors{...="provider_unavailable"}.Inc()`)—— 它有輸出反而是 (a) 的陽性證據。

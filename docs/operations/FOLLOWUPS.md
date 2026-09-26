@@ -182,8 +182,9 @@
 
 ### FU-20260925-07 — metrics collector 是 in-memory（原 FU-A）：每次重啟 `/metrics` 的 app 指標歸零
 
-- **狀態**：`open`
-- **記錄日期**：2026-09-25
+- **狀態**：`done`（**2026-09-26 由 issue #1995 的修法關閉「family 消失」這一半**；
+  「數值不跨重啟」仍 `open`，由 FU-20260925-08 的持久化 collector 追蹤）
+- **記錄日期**：2026-09-25 ／ **完成於**：2026-09-26（issue #1995 修法）
 - **來源**：`internal/bootstrap/bootstrapper.go` 的 `InitMetrics()`（→
   `monitoring.NewMetricsCollector()` → `NewMetricsCollectorWithPath("")`，`persistencePath = ""`
   ⇒ `replayFromFile` 不會被呼叫）；`cmd/atlas/main.go` 的 `collector := rt.MetricsCollector`；
@@ -199,8 +200,17 @@
 - **這正是任務 O 第 4 條加 peer gate 的原因**：裸 `absent()` 會在每一次健康的重啟後誤報一次。
 - **最小修法建議**：讓服務的 collector 跨重啟保存（見 FU-20260925-08 的前置條件），
   或在驗收文件/腳本明確排除這個空窗（見下方「判讀註記」）。
+  第三條路（**2026-09-26 實際採用**）：在啟動時就把要曝露的 family **主動建立** ——
+  `UniverseMetrics.WarmUp()`（`internal/monitoring/metrics/universe.go`，由 `cmd/atlas/main.go`
+  在 `um.SetOnInc(...)` 之後呼叫）以 `Add(0)` 建立整族 ⇒ 重啟後 `/metrics` 立刻有
+  `atlas_universe_*`（值為 0），不必等下一次排程執行。**不改** collector 的持久化語意，
+  因此沒有 FU-20260925-08 的 replay 風險。
 - **驗收條件**：重啟後 `/metrics` 仍含 `atlas_universe_*`（family 集合與重啟前一致），
   且數值不會因一次重啟而整批消失。
+  ⇒ **已達成（family 集合）**：重啟後 family 集合一致、值為 0；
+  **未達成（數值連續性）**：counter 值仍歸零（Prometheus 對 counter reset 的處理是正確的，
+  但「重啟前後數值連續」需要持久化 collector）⇒ 該半邊留在 FU-20260925-08。
+  同一修法也讓任務 O 第 4 條的 peer gate 語意更乾淨（缺口只剩「真的被改名/移除」）。
 
 ---
 
@@ -238,6 +248,13 @@
   ① 為什麼「snapshot 成功」不能推翻「Prometheus 沒動」；② 為什麼驗收要看 snapshot **與**
   指標兩邊。它也是任務 O 第 4 條 peer gate 的另一個理由（重啟空窗 + CLI 不寫入 = 指標面
   可以長期沒有 universe 資料，而系統其實健康）。
+- **2026-09-26 補充（issue #1995 調查）**：本條**未被** #1995 的修法關閉，而且又有一次實例 ——
+  2026-09-25T17:01:40Z 的手動/部署後執行產生 `ranked=150` 的快照
+  （`universe_snapshot.json` 的 `timestamp`），但 Prometheus 對 `atlas_universe_symbols_ranked_total`
+  的樣本自 09-25T06:59Z 起就沒有更新（`increase(ranked[6d]) == 0`）。
+  ⇒ 告警在「只有 CLI 路徑成功」的世界裡**會持續 firing 且是對的**（指標面確實 6 天沒有增量），
+  但**快照是綠的** —— 判讀時必須分開看兩邊，不要用快照推翻指標。
+  #1995 只讓 `atlas_universe_*` 的 family 一定存在（`WarmUp()`），不改變本條。
 - **與 FU-20260925-08 的順序關係**：若要「統一寫入持久化 collector」來消除斷鏈，
   **仍須先修 counter 灌爆**（同 FU-20260925-08 的前置條件），否則 replay 會把 CLI 那一次的累積值
   也算進去。
