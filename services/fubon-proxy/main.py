@@ -155,6 +155,11 @@ def _unwrap(result):
     return None
 
 def convert_quote(symbol: str, data: dict) -> QuoteResponse:
+    # volume stays the RAW wire value (成交張數 / lots, Fubon SDK
+    # total.tradeVolume — same Fugle market-data spec). The lots→shares
+    # conversion lives at the Go provider boundary
+    # (internal/marketdata/fubon_client.go, domain.SharesPerLot, #1987), so
+    # this proxy remains a dumb transport with a single conversion owner.
     return QuoteResponse(
         symbol=symbol, name=data.get("name", ""),
         last=data.get("closePrice", 0.0), open=data.get("openPrice", 0.0),
