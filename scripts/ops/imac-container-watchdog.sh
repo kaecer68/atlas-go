@@ -8,10 +8,10 @@
 # 前綴屬歷史債，不改）：
 #   make imac-watchdog-install          # scp 到 Mac Mini 的 ~/bin 並重載 launchd
 #   make imac-watchdog-diff             # 比對 repo 版與主機版的 sha256（漂移檢查）
-#   ⚠️ 這兩個 target 目前壞的（2026-09-26 實跑）：Makefile 的 IMAC_HOST 預設仍是
-#      `kk@kimac`（該帳號/主機不存在）→ `ssh: Could not resolve hostname kimac`。
-#      修 Makefile 屬另一條 lane；等價手動指令見
-#      docs/operations/local-deploy.md §容器守護腳本（版控正本）。
+#   ✅ 2026-09-26 起可用（PR #2041）：Makefile 的 `IMAC_HOST` 已由退役的 `kk@kimac`
+#      改指 `kaecer@kmacmini`，`WATCHDOG_DST` 改指 Mac Mini 的實查安裝路徑
+#      `/Users/kaecer/bin/atlas-container-watchdog.sh` ⇒ 上面兩個 target 都可直接跑。
+#      等價手動指令另見 docs/operations/local-deploy.md §容器守護腳本（版控正本）。
 #   安裝位置（Mac Mini）= ~/bin/atlas-container-watchdog.sh（實查存在，2026-09-25 版）。
 #
 # 由 launchd com.goluck.atlas-container-watchdog 每 60s 觸發
