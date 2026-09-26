@@ -981,7 +981,7 @@
 
 ### FU-20260926-17 — `internal/fubonproxy` 測試 flaky：`TestProcessManager_Supervise_RestartFailureCap` 距寫死的 3s 上限只剩約 0.2–0.4s
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **修復**：PR #2033（測試 hermetic 化：系統配發埠＋決定性等待）
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號「fubonproxy flaky」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
