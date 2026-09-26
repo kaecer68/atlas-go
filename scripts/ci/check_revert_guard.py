@@ -286,19 +286,58 @@ def ordinary_paths(base, head, cwd=None):
 
     這是本閘門的意圖判準：普通 commit 才算本 PR 的意圖；merge commit 的衝突解法不算
     ——那正是「解衝突解錯」會留下痕跡的地方。
+
+    **rename 要展開**（`-M --name-status`）：本 PR 若是把 `a.txt` 改名成 `c.txt`，舊名
+    `a.txt` 也算本 PR 動過的路徑，否則「合併結果少了 `a.txt`」會被誤判成 evil merge
+    （實際上那是 git 把本 PR 的改動重導到新名字上──正常合併）。
     """
     _, mb = git(["merge-base", base, head], cwd=cwd, check=False)
     mb = mb.strip()
     if not mb:
         return set(), ""
-    _, out = git(["log", "--no-merges", "--pretty=format:", "--name-only",
+    _, out = git(["log", "--no-merges", "-M", "--pretty=format:", "--name-status",
                   "%s..%s" % (mb, head)], cwd=cwd, check=False)
     owned = set()
     for line in out.splitlines():
-        line = line.strip()
-        if line:
-            owned.add(line)
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        status = parts[0][:1]
+        if status == "R" and len(parts) >= 3:
+            owned.add(parts[1])          # 舊名
+            owned.add(parts[2])          # 新名
+        else:
+            owned.add(parts[-1])
     return owned, mb
+
+
+def main_rename_targets(base, mb, cwd=None):
+    """回傳 {新路徑: 舊路徑}：`main` 在 `mb..base` 之間的 rename（`-M` 啟發式）。
+
+    main 端 rename + 本 PR 改的是舊名時，合併結果會在新名字上出現差異（git 把本 PR 的改動
+    重導到新名字）——那是正常合併，不是 evil merge。
+    """
+    if not mb:
+        return {}
+    _, out = git(["diff", "--name-status", "-M", "--diff-filter=R", mb, base], cwd=cwd, check=False)
+    out_map = {}
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3 and parts[0][:1] == "R":
+            out_map[parts[2]] = parts[1]
+    return out_map
+
+
+def tree_blobs(rev, cwd=None):
+    """回傳 {path: blob_sha}（單一 git 呼叫；rename 重導向判定用）。"""
+    _, out = git(["ls-tree", "-r", rev], cwd=cwd, check=False)
+    blobs = {}
+    for line in out.splitlines():
+        meta, _, path = line.partition("\t")
+        fields = meta.split()
+        if path and len(fields) >= 3 and fields[1] == "blob":
+            blobs[path] = fields[2]
+    return blobs
 
 
 CONFLICT_LINE = re.compile(r"^[0-7]{6} [0-9a-f]{40} [123]\t(.+)$")
@@ -362,6 +401,14 @@ def evaluate_evil_merge(base, head, cwd=None):
     info["owned_paths"] = len(owned)
     info["merge_base"] = mb
     info["checked"] = True
+    # main 端 rename 的重導向：main 把 `q` 改名成 `p`（`p` 在 base 的內容 == `q` 在 merge-base
+    # 的內容），而本 PR 動的是舊名 `q` ⇒ 合併結果在 `p` 上的差異是 git 把本 PR 的改動**重導到
+    # 新名字**（正常合併），不是 evil merge。少了這個判定就會大規模假紅（rename 在大型 repo 常見）。
+    mb_blobs = tree_blobs(mb, cwd=cwd) if mb else {}
+    base_blobs = tree_blobs(base, cwd=cwd)
+    owned_blob_ids = {mb_blobs[q] for q in owned if q in mb_blobs}
+    main_renames = main_rename_targets(base, mb, cwd=cwd)
+    info["rerouted_paths"] = []
 
     _, ns = git(["diff", "--name-status", "--no-renames", base, mr["tree"]], cwd=cwd, check=False)
     _, numstat = git(["diff", "--numstat", "--no-renames", base, mr["tree"]], cwd=cwd, check=False)
@@ -378,6 +425,12 @@ def evaluate_evil_merge(base, head, cwd=None):
         status, path = parts[0][:1], parts[-1]
         if path in owned:
             continue                      # 本 PR 的普通 commit 動過 ⇒ 那是它的意圖（見 spec §5 盲區）
+        if path in main_renames and main_renames[path] in owned:
+            info["rerouted_paths"].append(path)
+            continue                      # main 端 rename 的重導向（不是 evil merge）
+        if path in base_blobs and base_blobs[path] in owned_blob_ids:
+            info["rerouted_paths"].append(path)
+            continue                      # 同上（內容等價的 rename，退而求其次的判定）
         kind = {"D": "merge-deletes", "A": "merge-adds", "M": "merge-modifies"}.get(status, "merge-modifies")
         added, deleted = stats.get(path, ("?", "?"))
         fails.append({
@@ -532,6 +585,9 @@ def render_text(out, base, head, fails, warns, exempted, stale, notices, info, e
             % entry.get("path"))
     for n in notices:
         out("  ℹ️  %s" % n)
+    if info.get("rerouted_paths"):
+        out("  ℹ️  %s 的差異來自 **main 端 rename 的重導向**（git 把本 PR 對舊路徑的改動套到新名字上）"
+            "⇒ 不算 evil merge。" % ", ".join(sorted(info["rerouted_paths"])[:5]))
 
     if fails:
         out("")

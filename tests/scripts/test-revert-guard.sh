@@ -58,6 +58,7 @@ mkrepo() {
   printf '#!/bin/sh\necho ci\n'                         > scripts/ci/check_x.sh
   printf '{"version": 1}\n'                             > configs/parameters.json
   printf '# project\n'                                  > README.md
+  printf 'line1\nline2\nline3\nline4\nline5\nline6\n'  > model.txt
   printf 'package foo\n'                                > internal/foo/foo.go
   git add -A; git commit -q -m "base（PR 分岔點）"
 }
@@ -222,6 +223,48 @@ run_case "R4 main rename 共用資產 → WARN 且 exit 0（新檔名上報）" 
 python3 "$CHECK" --base main --head feat > "${TMP}/out.txt" 2>&1
 expect_out "R4b 在新檔名上報假刪除" 'scripts/ci/check_guard\.sh'
 expect_out "R4c 訊息明確提示 main 端 rename" 'main 可能是把該檔 rename'
+
+# ── R7：rename 的重導向不該被誤判成 evil merge（釘住假紅）────────────
+# R7a：main 端把 model.txt rename 成 model2.txt 並改它，本 PR 改的是舊名 model.txt。
+# 合併結果會在**新名字**上出現差異（git 把本 PR 的改動重導到新名字）——那是正常合併，
+# 不是 evil merge。少了這個判定，rename 會造成大規模假紅（第一版就是這樣）。
+mkrepo
+git checkout -q -b feat
+printf 'line1\nline2 PR-EDIT\nline3\nline4\nline5\nline6\n' > model.txt
+git add -A; git commit -q -m "feat: 改 model.txt"
+git checkout -q main
+git mv model.txt model2.txt
+printf 'line1\nline2\nline3\nline4 MAIN-EDIT\nline5\nline6\n' > model2.txt
+git add -A; git commit -q -m "m2: rename model.txt -> model2.txt 並改它"
+run_case "R7a main 端 rename（重導向）→ 不誤判 evil merge" 0 --base main --head feat --quiet
+python3 "$CHECK" --base main --head feat --json > "${TMP}/out.json" 2>&1
+if python3 - "${TMP}/out.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert d["fail"] == [], d["fail"]
+assert d["merge"]["rerouted_paths"] == ["model2.txt"], d["merge"]
+PY
+then ok "R7a2 --json：差異被歸類為 rename 重導向（不是 evil merge）"
+else bad "R7a2 rename 重導向沒有被正確歸類"; sed 's/^/       /' "${TMP}/out.json" | head -25; fi
+
+# R7b：反方向——本 PR 把 model.txt rename 成 model3.txt，main 改的是舊名 model.txt。
+mkrepo
+git checkout -q -b feat
+git mv model.txt model3.txt
+printf 'line1\nline2\nline3\nline4\nline5\nline6\nPR-EDIT\n' > model3.txt
+git add -A; git commit -q -m "feat: rename model.txt -> model3.txt 並改它"
+git checkout -q main
+printf 'line1\nline2\nline3\nline4 MAIN-EDIT\nline5\nline6\n' > model.txt
+git add -A; git commit -q -m "m2: 改 model.txt"
+run_case "R7b PR 端 rename（重導向）→ 不誤判 evil merge" 0 --base main --head feat --quiet
+python3 "$CHECK" --base main --head feat --json > "${TMP}/out.json" 2>&1
+if python3 - "${TMP}/out.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert d["fail"] == [], d["fail"]
+PY
+then ok "R7b2 沒有 FAIL（合併結果把本 PR 的改動套到新名字上）"
+else bad "R7b2 出現 FAIL"; sed 's/^/       /' "${TMP}/out.json" | head -25; fi
 
 # ── 正向：不該誤報 ───────────────────────────────────────────────
 mkrepo; stale_branch

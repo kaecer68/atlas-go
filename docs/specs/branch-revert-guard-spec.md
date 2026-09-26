@@ -98,6 +98,13 @@ diff 就不會是純刪除；分支完全沒碰該檔時，diff 的刪除**必�
 3. 對 `git diff --name-status --no-renames <base> <T>` 的每個路徑 p：
    **p ∉ owned 且 `base:p` ≠ `T:p` ⇒ FAIL**（exit 1），訊息附 merge-tree 樹 sha、merge-base、
    numstat、以及「本 PR 的普通 commit 從未動過該檔」。
+   兩個**豁免**（否則 rename 會造成大規模假紅；`R7` 釘住）：
+   * 本 PR 端 rename：`owned` 由 `git log --no-merges -M --name-status` 取得，rename 的**舊名與
+     新名都算 owned**（本 PR 把 `a.txt` 改名成 `c.txt`，則「合併結果少了 `a.txt`」是 git 把改動
+     重導到新名字，不是 evil merge）。
+   * `main` 端 rename：若 p 是 `git diff -M --diff-filter=R <mb> <base>` 的 rename **新名**，
+     而它的舊名 ∈ `owned` ⇒ 跳過（並在輸出列一則 `ℹ️` 說明差異來自 rename 重導向）。
+     內容等價的退路：`base:p` 的 blob 等於某個 owned 路徑在 `mb` 的 blob ⇒ 同樣跳過。
 
 為什麼這是對的：合併的正確語意是「`base` ＋ 這個 PR 自己的改動」。未被本 PR 的普通 commit 碰過的
 路徑，合併結果就必須逐位元等於 `base`；不同 ⇒ 有人把 `main` 的內容弄丟了，而唯一能造成這件事的
@@ -110,6 +117,8 @@ diff 就不會是純刪除；分支完全沒碰該檔時，diff 的刪除**必�
 - `branch_touched_file`（B 相）：以 merge-base 的 blob 對照 head 的 blob。`False` ⇒ 分支根本沒碰
   這個檔 ⇒ diff 裡的刪除 100% 是 `main` 上別人近期的改動（經典案例）；`True` ⇒ 分支動過該檔
   （例如真的刪掉它）⇒ 提示「可能是刻意的刪除」。
+- `rerouted_paths`（A 相）：被判定為「rename 重導向」而豁免的路徑（§2.4），列在 JSON 與輸出
+  （可稽核：不是靜默放行）。
 - `possible_rename_from`（B 相，`file-deleted` 候選才查）：若 diff 同時有「新增且**自 fork 以來
   沒被本分支動過**」的路徑 Q，則附提示「本分支還留著舊路徑 Q ⇒ `main` 可能是把該檔 rename
   （這裡報的是新檔名）」。只用「沒動過」的舊路徑當證據，避免把本 PR 自己新增的檔案誤當舊路徑。
@@ -232,15 +241,18 @@ A 相外加一次 `merge-tree` 與一次 `git log --name-only`）。
 4. **`main` 端 rename 共用資產**：落後分支會在**新檔名**上被判 `file-deleted`（語意上沒有東西被刪，
    訊息易誤導）。§2.5 的 `possible_rename_from` 會在偵測到「自 fork 以來沒動過的舊路徑」時加一句
    提示（R4 釘住），但**修法仍是 update-branch**。
-5. **git < 2.38** 沒有 `merge-tree --write-tree` ⇒ A 相無法判定 ⇒ 本檢查 **fail-closed（exit 2）**，
+5. **rename 重導向的路徑**（§2.4 的兩個豁免）：這些路徑被排除在 A 相之外 ⇒ 若 evil merge 剛好
+   落在這種「main／本 PR 對同一檔案做過 rename 且本 PR 另一端也動過」的路徑上，本檢查看不到。
+   取捨：rename 在大型 repo 很常見，而**假紅（擋正常 PR）比漏報這種窄情境嚴重得多**（R7 釘住）。
+6. **git < 2.38** 沒有 `merge-tree --write-tree` ⇒ A 相無法判定 ⇒ 本檢查 **fail-closed（exit 2）**，
    不回報通過。CI（ubuntu-latest ≥ 2.43）與本機（2.52）都高於門檻。
-6. **分支已對齊 `main` 但內容仍矛盾**：例如 cherry-pick 出不同實作。那要靠測試與 review。
-7. **非 git 可見的回退**：production 上的檔案、DB 內容、config map、另一個 repo（前端、Hermes）。
-8. **極端 cherry-pick**：分支把 `main` 的某次改動 cherry-pick 成新 sha（內容相同），之後又真的刪掉
+7. **分支已對齊 `main` 但內容仍矛盾**：例如 cherry-pick 出不同實作。那要靠測試與 review。
+8. **非 git 可見的回退**：production 上的檔案、DB 內容、config map、另一個 repo（前端、Hermes）。
+9. **極端 cherry-pick**：分支把 `main` 的某次改動 cherry-pick 成新 sha（內容相同），之後又真的刪掉
    那些行 ⇒ B 相會判成落後。用 allowlist 明示（本檢查不比對內容等效性）。
-9. **不判斷 `base` 本身對不對**：PR base 設錯（stacked PR）由
+10. **不判斷 `base` 本身對不對**：PR base 設錯（stacked PR）由
    [`pr-base-guard.yml`](../../.github/workflows/pr-base-guard.yml) 負責。
-10. **`--strict` 之外的 WARN 不紅燈**：B 相只警告；要不要對齊仍靠人讀輸出。
+11. **`--strict` 之外的 WARN 不紅燈**：B 相只警告；要不要對齊仍靠人讀輸出。
 
 因此：本檢查是**必要不充分**。它把「人工跑兩條 git 指令」變成自動閘門 + 一個真正的合併結果檢查，
 但不保證「合併後一切正常」。
@@ -278,7 +290,8 @@ A 相外加一次 `merge-tree` 與一次 `git log --name-only`）。
 | **R3** 過期的合成 merge ref（`parents[0]` 是 base 的祖先但 ≠ base） | 同上（`R3`／`R3b`） | **exit 0**（不拒絕）＋ `ℹ️` 提示「可能是過期的合成 merge ref」；**新鮮**的合成 ref 仍 exit 2（`N5`）|
 | **R4** `main` rename 共用資產 | 同上（`R4`／`R4b`／`R4c`） | exit 0（WARN 在新檔名上），訊息明確提示「`main` 可能是把該檔 rename」|
 | **R5** 本 PR 對齊前的 head `2247fc6c` vs 當時 `main` `bfd2352d`（scenario 記錄） | `python3 scripts/ci/check_revert_guard.py --base bfd2352d --head 2247fc6c --allowlist /dev/null` | v1：`⚠️ 2 筆 WARN`、exit 0（訊息句「併他人已合併的修正會被回退」是錯的）；v2：`⚠️ 2 筆 WARN`（`adapter_finmind_holiday_semantics_test.go`、`channel_contract.go`）、exit 0，訊息改為「是 diff 假象，合併會保留 main 的版本」 |
-| **R6** 全部納入 | `bash tests/scripts/test-revert-guard.sh` | **44/44 PASS**（E1–E3／L1–L2／R1／R3／R4／P1–P6／N3／N4／N5）|
+| **R7** rename 的兩向（main 端 rename + 本 PR 改舊名；本 PR rename + main 改舊名）| 同上（`R7a`／`R7b`）| exit 0、**無 FAIL**（差異被歸類為 rename 重導向 `rerouted_paths`）。這一條是**本 PR 自己在開發中實測到的假紅**：樸素的「未 owned 路徑不得改變」不變式在 rename 上會誤判（R7 釘住）|
+| **R6** 全部納入 | `bash tests/scripts/test-revert-guard.sh` | **48/48 PASS**（E1–E3／L1–L2／R1／R3／R4／R7／P1–P6／N3／N4／N5）|
 | 既有 negative proof（真 repo 歷史，走 CI 的 ref 解析） | `bash scripts/ci/revert-guard-negative-proof.sh origin/main` | 合成「已對齊的 evil merge」head ⇒ `merge-tree` 結果樹 == 合成樹 ⇒ 檢查 **exit 1**，輸出指出 `evil merge` ＋ `.github/CODEOWNERS`；腳本另斷言「恰好 1」 |
 | 本 PR 自己的 head | `bash scripts/ci/check_revert_guard.sh`（base=origin/main） | exit 0；`✅ revert-guard PASS（無 evil merge、無落後假刪除）`，耗時 0.15s |
 | 執行時間 | 上述情境 | 0.09–0.3s（皆 < 30s）|
