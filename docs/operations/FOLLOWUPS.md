@@ -855,3 +855,7 @@
   — SmartUniverseBuilder `symbols_ranked=0` 根因報告（含 §6.2 缺口與 §8 防再犯檢查建議）
 - [README.md](README.md) — 本目錄索引
 - [local-deploy.md](local-deploy.md) — 部署與 `.env` 分工（prod DSN 為何不放 `.env`）
+
+### FU-20260926-11
+
+- 負向證明：注入重複 id（臨時分支，跑完即刪）
