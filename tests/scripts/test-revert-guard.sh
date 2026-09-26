@@ -26,7 +26,6 @@ TMP="$(mktemp -d)"; trap 'rm -rf "${TMP}"' EXIT
 pass=0; fail=0
 ok()  { echo "  ✅ $1"; pass=$((pass+1)); }
 bad() { echo "  ❌ $1"; fail=$((fail+1)); }
-GIT="git -c user.email=ci@test.invalid -c user.name=ci"
 
 command -v git >/dev/null 2>&1 || { echo "❌ 需要 git"; exit 1; }
 test -f "$CHECK" || { echo "❌ 找不到 $CHECK"; exit 1; }

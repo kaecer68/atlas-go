@@ -12,7 +12,7 @@
 # exit code: 0 = PASS（可能含 WARN）；1 = FAIL；2 = 用法／環境錯誤（含 base ref 解不到）
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || { echo "❌ 無法進入 repo 根目錄：$REPO_ROOT" >&2; exit 2; }
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "❌ 需要 python3 才能執行 revert-guard 檢查"
