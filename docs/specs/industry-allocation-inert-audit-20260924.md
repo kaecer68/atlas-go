@@ -608,3 +608,135 @@ make ci-gate
 - lane A（`inert4-deadcode`，commit `75942de7`）：I18／I28／N-U2 死碼移除；lane B（`inert4-alerts`，commit `5cd5f29b`）：N-U5／N-A2／N-A4 與 I29 唯讀複核。兩 lane 各自 worktree／branch，root cherry-pick 併入後重跑全部受影響套件。
 - 本批**未**執行任何寫入 production 的動作；`docs/reference/traps.md` 維持原行數（未新增列，細節在本檔）。
 
+## 12. Batch 4-A 的第二半（issue #1944，2026-09-26）— **I31 的 production 半邊：freshness 接上既有監控**
+
+| 項目 | 內容 |
+|---|---|
+| 範圍 | §10.2「仍未做（誠實）」的第一項：**production 主機上的 freshness 檢查尚未接上既有監控** |
+| 基準 | `origin/main` @ `df726b89`；分支 `fix/20260926-calibration-freshness-monitoring`（worktree `~/workspace/atlas-calib-freshness`） |
+| 判定 | 沿用 §0 三問檢查。結論是**接線**（既有 metric 管線 + 既有規則樹），不是新造監控系統，也不是文件宣告 |
+| 禁區（未動） | `internal/marketdata/**`（quote-reliability lane）、`.github/workflows/**`（CI 半邊已由 #1991 完成）、`docs/reference/traps.md`（維持 328 行，未新增列）、production |
+
+### 12.1 掛載點的選擇（以及為什麼不用 channel health 契約）
+
+| 候選 | 判定 | 理由 |
+|---|---|---|
+| **`cmd/atlas` 背景任務 + `internal/monitoring` 既有 metrics/告警規則** | **採用** | 與 `channel_health_metrics_export`、`atlas_universe_*` 完全同一條管線：`apigateway.BackgroundTaskManager` → `monitoring.MetricsCollector.RecordGauge` → `/metrics`（`PrometheusHandler`）→ `monitoring/prometheus.yml` 既有的 10s 抓取 → `monitoring/rules/*.yml`（權威樹）。Prometheus/Alertmanager 設定**一個字都不用改** |
+| `channel health` 契約（`atlas_channel_staleness_overage_seconds` + `ChannelDataStale`） | **不採用** | 語意不合：`ChannelContracts()`（`internal/apigateway/channel_contract.go`）描述的是 **gateway 抓取的外部資料通道**，記錄由 adapter 寫入 `data/state/channel_health.json`；`configs/parameters.json` 是**應用自己寫的校準產物**，不是任何 adapter 抓回來的資料。硬塞一個合成 channel 記錄等於在通道健康報表上宣稱一個不存在的抓取通道（`DeriveChannelStatus`、後台通道清單、`cmd/check-channel-consistency` 都會把它當真）——正是本 session 反覆在修的「宣告與事實不符」 |
+| 部署期 CLI + textfile collector | **不採用** | 要動 production（新增 cron／collector），且外部 cron 的失敗在 atlas 的監控裡看不到；背景任務順便把「檢查有沒有在跑」變成可觀測 |
+
+判定面**重用** `config.ValidateCalibration`（`cmd/calibration-validate` 用的同一個函式）⇒ 不會出現第二套 staleness 語意。
+
+### 12.2 指標族（`internal/monitoring/calibration_freshness.go`，label 只有 `artifact="parameters"`）
+
+| 指標 | 語意 |
+|---|---|
+| `atlas_calibration_freshness_ok` | 1 = 新鮮（可評估且記錄的校準時間在契約內）；**0 = 其他一切情況（含「無法評估」）** ⇒ fail-closed |
+| `atlas_calibration_freshness_run_ok` | 1 = 檢查能評估產物；0 = 不能（stat/讀取/JSON 失敗）。區分「真的舊」與「不知道」 |
+| `atlas_calibration_freshness_age_seconds` | **落後多少**（秒，產物自述的 `updated_at` 距今）；只在有記錄時間時輸出 |
+| `atlas_calibration_last_calibrated_timestamp_seconds` | **最後一次成功校準時間**；`0` = 從未記錄（明確哨兵值） |
+| `atlas_calibration_freshness_checked_timestamp_seconds` | 檢查最後一次執行時間（探針心跳） |
+
+設計約束（每一條對應一個已發生過的缺陷）：
+
+1. **不得等到第一次 increment 才存在**（#1995）：整族是 gauge，且 `_ok` / `_run_ok` / `_checked_timestamp_seconds` **每一輪無條件輸出**；任務第一次執行受 `startupStaggerDelay` 限制（interval=5m ⇒ 上限 30s），不是 1 天，所以沒有「重啟後缺席 71 小時」那種視窗。
+2. **缺席要有規則負責**：另有一條 `absent()` 規則（以 `up{job="atlas-go"}` 為閘門）覆蓋「任務停止執行」與「指標被改名/移除」。
+3. **fail-closed**：檢查本身失敗 ⇒ `run_ok=0` **且** `_ok=0`（未知不得當成新鮮），由專屬規則以 severity=error 發出。
+4. **狀態必須持續覆寫**：`MetricsCollector` 的 gauge 是 last-write-wins 且不清序列 ⇒ 條件消失就跳過輸出會讓舊樣本永久凍結（`channel_health_metrics_task.go` 的檔內註解記載過這個坑）。只有「值真的不存在」的 `age` / `last_calibrated` 在無法判定時刻意不輸出。
+5. **缺席 ≠ 0**：本族**沒有任何**規則用 `or vector(0)`；無法評估時 `age` 缺席，該狀態由 `run_ok` 規則單獨負責，不會被讀成「很舊」。
+
+### 12.3 契約（48h）與告警（`monitoring/rules/calibration_freshness_alerts.yml`）
+
+契約 = Go 的 `monitoring.CalibrationFreshnessContract` = production CLI 的
+`atlas-validate --path=configs/parameters.json --max-age=48h`（**同一個政策只有一個數字**；
+規則檔刻意不重寫門檻。Go 測試 `TestCalibrationFreshnessContractMatchesRunbook` 讀
+`docs/operations/calibration-freshness-runbook.md` 來擋漂移）。
+
+實測基線（不是照抄別的規則）：
+
+| 基線 | 值 | 來源 |
+|---|---|---|
+| 生產「健康」 | 容器啟動後約 **65 分鐘**就被改寫 | `Created=02:04:02Z` vs `updated_at=2026-09-26T03:08:44.9Z`（FU-20260926-07） |
+| 生產「壞掉」 | 約 **82.8 天**（本 PR 對出貨檔實跑：`age_seconds=7150619`） | FU-20260926-07 + 本 PR 的真輸入測試 |
+| 校準任務 cadence | 主要 24h（17 個 top-level；6h/1h 例外） | `cmd/atlas/calibration_tasks.go` |
+
+48h 落在兩者之間（對健康值 ~48×、對壞值 ~40×），且 = 兩個 24h 週期（吸收一次失敗週期與週末）。
+
+| 告警 | severity | 條件 | for |
+|---|---|---|---|
+| `CalibrationArtifactStale` | warning | `_ok == 0` **且** `_run_ok == 1` | 1h |
+| `CalibrationFreshnessUnverifiable` | error | `_run_ok == 0` | 30m |
+| `CalibrationFreshnessExporterDown` | warning | `absent(_checked_timestamp_seconds)` 或 `time() - _checked_timestamp_seconds > 1800`，`and on() up{job="atlas-go"} == 1` | 15m |
+
+三條**互斥分工**（`_ok==0 且 run_ok==1` / `run_ok==0` / 探針缺席）：同一個根因不會有兩條
+規則各自 paging；服務掛掉時三條都沉默（由 `AtlasGoTargetDown` 負責）。
+
+### 12.4 驗收證據（可重跑）
+
+```bash
+# Go 側（真輸入 + 正反案例 + fail-closed）
+go test ./internal/monitoring/ -run CalibrationFreshness -v
+go test ./cmd/atlas/ -run 'CalibrationFreshness|CalibrationParametersPath' -v
+
+# 規則面：語法 + 「該 firing 的真的會 firing」
+docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+  prom/prometheus:v3.14.0 check rules monitoring/rules/calibration_freshness_alerts.yml
+docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool \
+  prom/prometheus:v3.14.0 test rules monitoring/tests/calibration_freshness_test.yml
+```
+
+**真輸入的正反案例（本 PR 實跑，非合成 fixture）**
+
+```
+# 反例：出貨的 configs/parameters.json（updated_at 2026-07-05T17:43:01Z）
+shipped artifact: fresh=false age_seconds=7150619 last_calibrated=2026-07-05T17:43:01Z findings=8
+atlas_calibration_freshness_ok{artifact="parameters"} 0.000000
+atlas_calibration_freshness_run_ok{artifact="parameters"} 1.000000
+atlas_calibration_freshness_age_seconds{artifact="parameters"} 7150618.850603
+atlas_calibration_last_calibrated_timestamp_seconds{artifact="parameters"} 1783273381.000000
+
+# 正例：同一份內容、updated_at 改成 65 分鐘前（生產實測的寫入節奏）
+fresh=true age_seconds=3900 last_calibrated=2026-09-26T10:55:00Z
+atlas_calibration_freshness_ok{artifact="parameters"} 1.000000
+atlas_calibration_freshness_run_ok{artifact="parameters"} 1.000000
+atlas_calibration_freshness_age_seconds{artifact="parameters"} 3900.000000
+```
+
+（反例的完整指令與後續是 `internal/monitoring/calibration_freshness_test.go` 的
+`TestObserveCalibrationFreshness_ShippedArtifactIsEvaluable`（`-v` 會印上面那行），
+以及 `TestObserveCalibrationFreshness_StaleArtifactFlipsOK`。）
+
+**promtool 單元測試：10 個案例（5 個負向對照）** — `SUCCESS`
+
+| 案例 | 世界 | 斷言 |
+|---|---|---|
+| A | 新鮮、可評估 | 三條全沉默 |
+| B | 過期 72h（可評估） | 只有第 1 條 firing |
+| C | `last_calibrated=0`、沒有 age | 第 1 條 firing（0 是哨兵，不是「沒資料」） |
+| D | `run_ok=0`（讀不到） | 第 2 條 firing，**第 1 條必須沉默** |
+| E | 心跳凍結（序列還在） | 第 3 條 firing（`time()-ts` 那個 arm） |
+| F | 整族缺席 + 服務在跑 | 第 3 條 firing（`absent()` 那個 arm） |
+| G | 整族缺席 + 服務沒在跑 | 三條全沉默（不與 `AtlasGoTargetDown` 重複 paging） |
+| H | 心跳落後 25 分鐘（未達 1800s） | 第 3 條沉默（門檻負向對照） |
+| I | 過期只持續 30 分鐘 | 第 1 條沉默（`for: 1h` 負向對照） |
+| J | 無法評估只持續 10 分鐘 | 第 2 條沉默（`for: 30m` 負向對照） |
+
+**變異測試（證明測試網有牙齒；原始輸出見 PR 說明）**
+
+| 變異 | 要求紅燈的案例 | 結果 |
+|---|---|---|
+| m1 第 1 條拿掉 `and run_ok == 1` | D | `FAILED`（D：第 1 條誤報） |
+| m2 第 3 條拿掉 `up{job="atlas-go"} == 1` 閘門 | G | `FAILED` |
+| m3 第 2 條 `== 0` 改成 `== 1` | A / B | `FAILED` |
+| m4 第 1 條 `for: 1h` → `0m` | I | `FAILED` |
+| m5 第 3 條 `1800` → `3600` | E | `FAILED` |
+
+### 12.5 完成／未完成（誠實）
+
+**完成**
+- production 端的新鮮度檢查已接上既有監控：指標（5 個 gauge）+ 3 條規則 + 1 條探針心跳，全部走既有管線與既有規則樹；文件（本節＋`docs/operations/calibration-freshness-runbook.md`）與 FOLLOWUPS（FU-20260926-10）同步。
+
+**未完成（明示，不靜默）**
+- **生產驗收未執行**：本 PR 只交付接線與本機/promtool 證據；`curl /metrics`、Prometheus 規則載入、告警實際狀態要在部署後才驗（runbook §4 有逐步命令）。
+- **「校準任務有沒有在跑」沒有心跳指標**：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`），所以產物年齡只是活動的**上界** ⇒ `CalibrationArtifactStale` 對「已收斂、連續 verdict=stable」的系統可能誤報。要接到 18 個校準任務才能給出直接訊號（FU-20260926-10）。
+- **結構性 finding 仍未進生產監控**：`L1/L2_NO_REPRESENTATIVES` 之類由 CI 的 policy 負責；生產端的結構漂移目前沒有自動訊號。

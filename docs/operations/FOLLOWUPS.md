@@ -658,6 +658,47 @@
 
 ---
 
+### FU-20260926-10 — I31 的 production 半邊：新鮮度已接上既有監控（本 PR）；**仍缺「校準任務心跳」指標**，產物年齡可能誤報
+
+- **狀態**：`open`（**程式面已交付**；生產驗收與殘留面 1 待做）
+- **記錄日期**：2026-09-26
+- **來源**：issue #1944 / I31；PR #1991 的「未完成項 1」；分支
+  `fix/20260926-calibration-freshness-monitoring`（worktree `~/workspace/atlas-calib-freshness`，
+  base `origin/main@df726b89`）。
+- **已完成（本 PR）**：`configs/parameters.json` 的新鮮度由背景任務
+  `calibration_freshness_metrics_export`（`cmd/atlas/calibration_freshness_metrics_task.go`，5 分鐘）
+  評估，重用 `config.ValidateCalibration`（CLI 用的同一個判定），輸出
+  `atlas_calibration_freshness_*` 五個 gauge；規則在
+  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool 10 案例含 5 個負向對照），
+  落地說明在 [`calibration-freshness-runbook.md`](calibration-freshness-runbook.md)。
+  契約 = 48h = production CLI 的 `--max-age=48h`（**同一個政策只有一個數字**）。
+- **殘留面 1（本條的主要缺口）：沒有「校準任務已執行」的心跳指標**
+  - 現況：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`：
+    `if len(report.Changes) > 0` 才 `LockedSaveWithRollback`）⇒ `updated_at` 的年齡是
+    「校準活動」的**上界**，不是直接量測。一個已收斂、連續多輪 `verdict=stable` 的系統
+    會合法地超過 48h 不改寫檔案 ⇒ `CalibrationArtifactStale` 可能誤報。
+  - 為何現在只做到這樣：要給出直接訊號必須接到 `cmd/atlas/calibration_tasks.go` 的
+    18 個任務（1 inner + 17 top-level）並定義「執行成功」語意（含 early-return 與
+    maturity gate），那是另一個範圍；本 PR 先交付可量測的部分並把誤報形狀寫進
+    runbook §3.1 的第一順位排查。
+  - **修法（未實作）**：新增 `atlas_calibration_task_last_run_timestamp_seconds{task=…}`
+    （或沿用 completion handler）＋一條「校準任務超過 N 小時未執行」的規則；
+    門檻由實測 cadence（24h 主、6h/1h 例外）決定。
+  - **驗收條件**：連續 `stable` 的多輪（產物不變）必須**不**觸發任何告警；
+    而任務真的停止執行時必須有告警 —— 負對照：不得再靠「產物年齡」推論任務死活。
+- **殘留面 2：結構性 finding 仍未進生產監控** —— `L1/L2_NO_REPRESENTATIVES` 之類由 CI 的
+  `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
+  parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產
+  也跑一次，並決定 accepted 集合在生產的語意（屬政策裁決）。
+- **殘留面 3：生產驗收未執行**（本 PR 不得動 production）。部署後照 runbook §4：
+  `curl -s localhost:18080/metrics | grep '^atlas_calibration_'`、
+  `curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*'`，
+  並確認 `atlas_calibration_freshness_ok` 在生產為 1（生產檔案實測約 65 分鐘前被改寫）。
+- **驗收條件（本條整體）**：生產上 `atlas_calibration_freshness_*` 有值、三條規則已載入、
+  且「資料不新鮮」在無人記得跑 CLI 的情況下也會被看見。
+
+---
+
 ---
 
 ---
