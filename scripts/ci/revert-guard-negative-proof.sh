@@ -47,7 +47,11 @@ git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null || {
     echo "::error::base ref 解不到：${BASE}"; exit 1; }
 
 # 挑一個 base 上真實存在的共用資產檔（被刪掉才有意義）。
-FILE="$(git ls-tree -r --name-only "${BASE}" -- "${SPEC[@]}" | head -1)"
+# ⚠️ 不要用 `| head -1`：本腳本有 `set -o pipefail`，`head` 讀到第一行就關閉管線 ⇒ 輸出量超過
+# 管線緩衝區時 `git` 收到 SIGPIPE ⇒ pipeline 回 **141**（128+13）⇒ `set -e` 讓整個腳本以 141 收場。
+# 2026-09-26 CI 實證：GitHub runner（git 2.55）上這個 step 直接 `exit code 141`（本機 macOS 因為
+# 時序/緩衝區沒重現，所以本機是綠的）。`sed -n '1p'` 會把輸入讀完，不會讓上游吃到 SIGPIPE。
+FILE="$(git ls-tree -r --name-only "${BASE}" -- "${SPEC[@]}" | sed -n '1p')"
 test -n "${FILE}" || { echo "::error::${BASE} 的樹裡找不到共用資產檔（無法造負向案例）"; exit 1; }
 
 PARENT2="$(git rev-parse "${BASE}^")"
@@ -65,7 +69,7 @@ NEG="$(git -c user.name=ci -c user.email=ci@example.invalid \
 echo "合成 head=${NEG:0:8}（merge commit：parents=${PARENT2:0:8} + ${BASE_SHORT}；tree 已移除 ${FILE}）"
 
 # 額外證據：merge-tree 的結果樹就是這個合成樹（即「合併結果真的少了 ${FILE}」）。
-MT="$(git merge-tree --write-tree "${BASE}" "${NEG}" | head -1)"
+MT="$(git merge-tree --write-tree "${BASE}" "${NEG}" | sed -n '1p')"   # 同上：不用 head（pipefail）
 echo "merge-tree --write-tree ${BASE_SHORT} ${NEG:0:8} = ${MT:0:12}（合成樹 ${TREE:0:12}）"
 if [ "${MT}" != "${TREE}" ]; then
     echo "::error::merge-tree 的結果樹與合成樹不同（證據不成立）"; exit 1

@@ -105,15 +105,15 @@ run_case() {   # name expected_rc [check args...]
   python3 "$CHECK" "$@" > "${TMP}/out.txt" 2>&1
   local rc=$?
   if [ "${rc}" = "${exp}" ]; then ok "${name}（exit=${rc}）"
-  else bad "${name}（exit=${rc}，期望 ${exp}）"; sed 's/^/       /' "${TMP}/out.txt" | head -12; fi
+  else bad "${name}（exit=${rc}，期望 ${exp}）"; sed 's/^/       /' "${TMP}/out.txt" | sed -n '1,12p'; fi
 }
 expect_out() { # name 'grep pattern'
   if grep -qE "$2" "${TMP}/out.txt"; then ok "$1"
-  else bad "$1（輸出找不到：$2）"; sed 's/^/       /' "${TMP}/out.txt" | head -12; fi
+  else bad "$1（輸出找不到：$2）"; sed 's/^/       /' "${TMP}/out.txt" | sed -n '1,12p'; fi
 }
 expect_no_out() { # name 'grep pattern'
   if grep -qE "$2" "${TMP}/out.txt"; then
-    bad "$1（輸出**不該**出現：$2）"; sed 's/^/       /' "${TMP}/out.txt" | head -12
+    bad "$1（輸出**不該**出現：$2）"; sed 's/^/       /' "${TMP}/out.txt" | sed -n '1,12p'
   else ok "$1"; fi
 }
 
@@ -144,7 +144,7 @@ assert d["merge"]["checked"] is True and d["merge"]["owned_paths"] >= 1, d["merg
 assert d["warn"] == [], d["warn"]
 PY
 then ok "E2 --json：evil-merge 判定與 merge-tree 證據完整"
-else bad "E2 --json 結構不完整"; sed 's/^/       /' "${TMP}/out.json" | head -20; fi
+else bad "E2 --json 結構不完整"; sed 's/^/       /' "${TMP}/out.json" | sed -n '1,20p'; fi
 # 對照組：同一個 fixture 去掉「解衝突解錯」這一步（正常對齊）⇒ 不得 FAIL。
 mkrepo; pr_own_work
 git checkout -q main; printf 'route:\n  receiver: default\n  group_by: [x]\n' > monitoring/alertmanager.yml
@@ -178,7 +178,7 @@ for v in d["warn"]:
 assert d["merge"]["checked"] is True, d["merge"]
 PY
 then ok "L1h --json 結構完整（fail 空 / warn 分類 / commit 資訊）"
-else bad "L1h --json 結構不完整"; sed 's/^/       /' "${TMP}/out.json" | head -20; fi
+else bad "L1h --json 結構不完整"; sed 's/^/       /' "${TMP}/out.json" | sed -n '1,20p'; fi
 
 # 落後分支刪掉整個共用資產檔（branch_touched_file=True 的分支）⇒ 仍是 WARN，不擋。
 mkrepo; stale_branch; git checkout -q feat; git rm -q scripts/ci/check_x.sh
@@ -202,7 +202,7 @@ assert d["fail"] == [] and d["warn"] == [], (d["fail"], d["warn"])
 # 純修改在 two-dot diff 裡是 added=1 deleted=1（不是純刪除）⇒ 形狀依賴，刻意釘住。
 PY
 then ok "R1b 落後但 main 只做純修改 ⇒ 完全無 finding（形狀依賴，已釘住）"
-else bad "R1b 出現 finding（覆蓋率漂移了）"; sed 's/^/       /' "${TMP}/out.json" | head -20; fi
+else bad "R1b 出現 finding（覆蓋率漂移了）"; sed 's/^/       /' "${TMP}/out.json" | sed -n '1,20p'; fi
 
 # ── R3：過期的合成 merge ref（parents[0] 是 base 的祖先但 ≠ base）─────
 mkrepo; stale_branch
@@ -245,7 +245,7 @@ assert d["fail"] == [], d["fail"]
 assert d["merge"]["rerouted_paths"] == ["model2.txt"], d["merge"]
 PY
 then ok "R7a2 --json：差異被歸類為 rename 重導向（不是 evil merge）"
-else bad "R7a2 rename 重導向沒有被正確歸類"; sed 's/^/       /' "${TMP}/out.json" | head -25; fi
+else bad "R7a2 rename 重導向沒有被正確歸類"; sed 's/^/       /' "${TMP}/out.json" | sed -n '1,25p'; fi
 
 # R7b：反方向——本 PR 把 model.txt rename 成 model3.txt，main 改的是舊名 model.txt。
 mkrepo
@@ -264,7 +264,7 @@ d = json.load(open(sys.argv[1], encoding="utf-8"))
 assert d["fail"] == [], d["fail"]
 PY
 then ok "R7b2 沒有 FAIL（合併結果把本 PR 的改動套到新名字上）"
-else bad "R7b2 出現 FAIL"; sed 's/^/       /' "${TMP}/out.json" | head -25; fi
+else bad "R7b2 出現 FAIL"; sed 's/^/       /' "${TMP}/out.json" | sed -n '1,25p'; fi
 
 # ── 正向：不該誤報 ───────────────────────────────────────────────
 mkrepo; stale_branch
@@ -333,6 +333,22 @@ run_case "N5 合成 merge ref → exit 2（拒絕假綠）" 2 --base main --head
 python3 "$CHECK" --base main --head "${SYNTH}" > "${TMP}/out.txt" 2>&1
 expect_out "N5b 說明為何拒絕" '假綠'
 git checkout -q main
+
+# ── NP：負向證明的「pipefail × SIGPIPE」靜態守門 ─────────────────────
+# 2026-09-26 CI 實證：`set -o pipefail` 之下 `cmd | head -1`，只要 cmd 的輸出超過管線緩衝區，
+# head 讀到第一行就關閉管線 ⇒ cmd 吃 SIGPIPE ⇒ pipeline 回 **141**（128+13）⇒ `set -e` 讓整個
+# step 以 141 失敗（本機 macOS 時序不同、未必重現，CI runner 直接中）。修法是讓下游把輸入讀完
+# （`sed -n '1p'`）。這條靜態檢查不會重現競態，而是把這個寫法擋在門外。
+NP="$ROOT/scripts/ci/revert-guard-negative-proof.sh"
+# 只看非註解行（`^[^#]*`）：說明這個陷阱的註解本身會提到 '| head'。
+if grep -qE '^[^#]*\|[[:space:]]*head' "$NP"; then
+  bad "NP1 負向證明出現 '| head' 管線（pipefail ⇒ SIGPIPE ⇒ exit 141）"
+  grep -nE '^[^#]*\|[[:space:]]*head' "$NP" | sed -n '1,5p' | sed 's/^/       /'
+else ok "NP1 負向證明沒有 '| head' 管線（pipefail × SIGPIPE 的 141 已避開）"; fi
+if grep -q 'set -euo pipefail' "$NP"; then ok "NP2 負向證明仍設 pipefail（NP1 才有意義）"
+else bad "NP2 負向證明少了 pipefail ⇒ NP1 失去意義"; fi
+if grep -qE '"\$\{RC\}" -ne 1' "$NP"; then ok "NP3 負向證明仍斷言 exit code 恰好等於 1"
+else bad "NP3 負向證明沒有「恰好 1」的斷言（負向證明的重點）"; fi
 
 echo ""
 if [ "${fail}" -eq 0 ]; then

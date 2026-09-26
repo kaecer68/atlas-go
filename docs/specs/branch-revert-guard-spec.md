@@ -170,6 +170,14 @@ scripts-only 的 PR 也會跑）：
    最後要求檢查 **以 exit 1 擋下**，且輸出指出 `evil merge` 與該檔名。
    為什麼要這步：hermetic fixture 只證明程式邏輯，這步證明**CI 的 ref 解析與真 repo 歷史**也能擋。
 
+   ⚠️ **負向證明自己也會踩 `pipefail` × SIGPIPE**：2026-09-26 這支腳本在 CI 以 **exit 141**
+   （128+13 = SIGPIPE）失敗——`git ls-tree … | head -1` 在輸出超過管線緩衝區時讓 `git` 吃 SIGPIPE，
+   `set -o pipefail` 把 141 傳成整個 step 的失敗碼（本機 macOS 因時序/緩衝區沒重現，本機是綠的）。
+   修法：下游改成把輸入讀完的 `sed -n '1p'`。回歸測試另加靜態守門 `NP1`（非註解行不得出現
+   `| head`）、`NP2`（仍設 pipefail，NP1 才有意義）、`NP3`（仍斷言「恰好 exit 1」）。
+   同族通則：`pipefail` 之下任何「提早關閉管線」的下游（`head`、`grep -q` 之後接大輸出…）都可能
+   把成功變成 141。
+
    ⚠️ **負向證明本身必須做 exit code 精確斷言**：v1 是 inline 版，它把工作樹 checkout 到舊 commit，
    於是檢查腳本在該 commit 不存在 ⇒ `bash: …: No such file or directory`（127）⇒ `if ! cmd` 把它算成
    「擋下了」並印 ✅ ——**一次假綠**（2026-09-26 首次 PR CI 的 log 實證）。修法三道並用：
@@ -267,7 +275,7 @@ A 相外加一次 `merge-tree` 與一次 `git log --name-only`）。
 4. B 相 + `branch_touched_file = True` ⇒ 本 PR 真的動過該檔：先 update-branch 再重新套用你的改動；
    真的必須維持現狀才登 allowlist（`reason` 必填）。
 5. 若規則本身造成系統性誤報 ⇒ 改規則（並更新本規格 §2／§5），不要用 allowlist 掩蓋。
-6. 改完 `bash tests/scripts/test-revert-guard.sh` 必須全綠（44 項），`make ci-gate` 必須綠。
+6. 改完 `bash tests/scripts/test-revert-guard.sh` 必須全綠（51 項），`make ci-gate` 必須綠。
 
 ## 7. 驗收證據（2026-09-26，本檢查落地 PR）
 
@@ -291,7 +299,7 @@ A 相外加一次 `merge-tree` 與一次 `git log --name-only`）。
 | **R4** `main` rename 共用資產 | 同上（`R4`／`R4b`／`R4c`） | exit 0（WARN 在新檔名上），訊息明確提示「`main` 可能是把該檔 rename」|
 | **R5** 本 PR 對齊前的 head `2247fc6c` vs 當時 `main` `bfd2352d`（scenario 記錄） | `python3 scripts/ci/check_revert_guard.py --base bfd2352d --head 2247fc6c --allowlist /dev/null` | v1：`⚠️ 2 筆 WARN`、exit 0（訊息句「併他人已合併的修正會被回退」是錯的）；v2：`⚠️ 2 筆 WARN`（`adapter_finmind_holiday_semantics_test.go`、`channel_contract.go`）、exit 0，訊息改為「是 diff 假象，合併會保留 main 的版本」 |
 | **R7** rename 的兩向（main 端 rename + 本 PR 改舊名；本 PR rename + main 改舊名）| 同上（`R7a`／`R7b`）| exit 0、**無 FAIL**（差異被歸類為 rename 重導向 `rerouted_paths`）。這一條是**本 PR 自己在開發中實測到的假紅**：樸素的「未 owned 路徑不得改變」不變式在 rename 上會誤判（R7 釘住）|
-| **R6** 全部納入 | `bash tests/scripts/test-revert-guard.sh` | **48/48 PASS**（E1–E3／L1–L2／R1／R3／R4／R7／P1–P6／N3／N4／N5）|
+| **R6** 全部納入 | `bash tests/scripts/test-revert-guard.sh` | **51/51 PASS**（E1–E3／L1–L2／R1／R3／R4／R7／P1–P6／N3／N4／N5／NP1–NP3）|
 | 既有 negative proof（真 repo 歷史，走 CI 的 ref 解析） | `bash scripts/ci/revert-guard-negative-proof.sh origin/main` | 合成「已對齊的 evil merge」head ⇒ `merge-tree` 結果樹 == 合成樹 ⇒ 檢查 **exit 1**，輸出指出 `evil merge` ＋ `.github/CODEOWNERS`；腳本另斷言「恰好 1」 |
 | 本 PR 自己的 head | `bash scripts/ci/check_revert_guard.sh`（base=origin/main） | exit 0；`✅ revert-guard PASS（無 evil merge、無落後假刪除）`，耗時 0.15s |
 | 執行時間 | 上述情境 | 0.09–0.3s（皆 < 30s）|
