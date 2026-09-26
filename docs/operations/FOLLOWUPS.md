@@ -942,9 +942,11 @@
 ### FU-20260926-17 — `internal/fubonproxy` 測試 flaky：`TestProcessManager_Supervise_RestartFailureCap` 距寫死的 3s 上限只剩約 0.2–0.4s
 
 - **狀態**：`open`
+- **修復**：PR #2033（測試 hermetic 化：系統配發埠＋決定性等待）
 - **記錄日期**：2026-09-26
 - **來源**：本輪缺陷收斂批次（代號「fubonproxy flaky」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
-  manifest §3 E8 是**另一支** flaky（`WalkDir("internal")` 撞 apigateway 的相對 `data/`）⇒ 本票不是重複。
+  manifest §3 E8 是**另一支** flaky（`WalkDir("internal")` 撞 apigateway 的相對 `data/`）⇒ 本票不是重複；
+  與 `FU-20260926-18`（E8，`internal/config` 的 `WalkDir`）為**不同** flaky，勿合併處理。
 - **事實（實測，worktree HEAD `81e4fe62`，macOS arm64 / go1.26.4）**：
   - 失敗訊息出處：`internal/fubonproxy/manager_test.go:1345`
     （`t.Fatal("supervisor did not exit within 3s")`），位於 helper `waitForSupervisorDone`（`:1333-1347`），**上限寫死 3s**。
