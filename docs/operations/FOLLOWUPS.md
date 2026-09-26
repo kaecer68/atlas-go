@@ -713,7 +713,7 @@
 - **驗收條件**：若啟用 `ATLAS_BROKER_NONCE_STORE=redis`，URL 必須走 docker 網路名且**容器重建後** broker nonce 仍正常；
   負對照：不得以「host 埠在 Mac 上 curl 得到」當成容器可達的證據。
 
-### FU-20260926-10 — 「負向證明的非預期 exit code」殘留盤查：1 處未修（`check_finmind_quota.sh`）＋ 一類 `$VAR（` 展開陷阱
+### FU-20260926-11 — 「負向證明的非預期 exit code」殘留盤查：1 處未修（`check_finmind_quota.sh`）＋ 一類 `$VAR（` 展開陷阱
 
 - **狀態**：`open`（同族多數已在 issue #2011 的 PR 修掉；本條追蹤**刻意未修**與**另票處理**的殘留）
 - **記錄日期**：2026-09-26
@@ -739,6 +739,17 @@
   （兩檔檔頭都明寫了理由）。若哪天要把它們變成真正的 gate，需要另票。
 - **驗收條件**：任何**新增**的「證明某閘門會擋」測試，都必須同時餵「命令不存在(127)」與「用法錯誤(2)」
   並確認**紅燈**（範本：`tests/scripts/test-negative-proofs.sh`）；只驗「非 0」不算。
+- **未修 ④（觀察，非本 PR 範圍；本次 CI 被它擋下）**：`internal/config` 的
+  `TestShadowParametersDeclarationMatchesConsumers` 會 `filepath.WalkDir("internal")` 且
+  **error 一律往上拋**（`internal/config/parameters_shadow_declarations_test.go:44-47,71-73`），
+  而 `go test ./...` 是**跨 package 並行**；`internal/apigateway/register_adapters.go:401` 的
+  `saveSnapshot` 寫的是**相對路徑** `data/state/<channel>`（package 測試的 CWD 下 =
+  `internal/apigateway/data/…`），`internal/apigateway/adapter_finmind_util_test.go:91` 又會
+  `os.RemoveAll("data")` ⇒ 該目錄在 walk 期間「出現又消失」，walker 讀不到就硬失敗：
+  `walk …/internal: open …/internal/apigateway/data: no such file or directory`。
+  這是**flaky 假紅**（同 commit 重跑會過；本機 main 與本分支跑同一支測試皆 PASS）。
+  修法方向（未做）：walker 對 `fs.ErrNotExist` 寬容，或把該寫入路徑改成 `t.TempDir()`
+  （別再依賴 CWD 相對路徑）。
 
 ---
 
