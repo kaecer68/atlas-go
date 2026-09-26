@@ -39,8 +39,14 @@ jobs:
         ATLAS_ENV: production
         ATLAS_DATA_DIR: ./data
       run: |
-        ./atlas-go weights adjust --apply || true
-        ./atlas-go weights report || true
+        # 2026-09-26: 原本每個維護命令都接 `|| true` ⇒ 任一失敗都不會讓 step/job 變紅
+        # （同族「靜默失效」，見 #1944 / #2009）。實測：run 36222354977 的這一步是
+        # success，但 3 個報告 artifact 全部沒產生
+        # （log: `No files were found with the provided path: reports/darwinian_*.json`），
+        # 且連續 3 次 run 的 artifacts total_count = 0 ⇒「每天都綠、什麼都沒做」。
+        # 現改為 fail-closed：命令非 0 ⇒ 步驟紅燈（真實訊號，不再吞）。
+        ./atlas-go weights adjust --apply
+        ./atlas-go weights report
 
     - name: Upload weights report
       uses: actions/upload-artifact@v4
@@ -77,9 +83,10 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go prism status || true
-        ./atlas-go prism balance || true
-        ./atlas-go prism report || true
+        # 同上：取消 `|| true`（fail-closed）。
+        ./atlas-go prism status
+        ./atlas-go prism balance
+        ./atlas-go prism report
 
     - name: Upload PRISM report
       uses: actions/upload-artifact@v4
@@ -116,8 +123,9 @@ jobs:
       env:
         ATLAS_ENV: production
       run: |
-        ./atlas-go reflexivity report || true
-        ./atlas-go reflexivity alert || true
+        # 同上：取消 `|| true`（fail-closed）。
+        ./atlas-go reflexivity report
+        ./atlas-go reflexivity alert
 
     - name: Upload Reflexivity report
       uses: actions/upload-artifact@v4
