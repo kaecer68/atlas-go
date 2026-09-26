@@ -112,8 +112,21 @@ func finmindMockServer(mode string) *httptest.Server {
 }
 
 func newFaultToleranceAggregator(mode string) (*DataAggregator, *httptest.Server) {
+	return newFaultToleranceAggregatorInDir(mode, "data/state")
+}
+
+// newFaultToleranceAggregatorInDir wires the aggregator against a mock
+// upstream and a FinMind client whose daily-quota state lives in stateDir.
+//
+// The "quota" mode answers 402 "Requests reach the upper limit", which since
+// fix/finmind-quota-honor-402-r LATCHES the quota day as exhausted and
+// PERSISTS it. Callers that exercise that mode must pass t.TempDir(), or the
+// latch leaks through data/state/finmind_daily_quota.json into every later
+// test in this package that shares the default dir (observed: a later
+// no-data classification test saw kind="quota" instead of "no_data").
+func newFaultToleranceAggregatorInDir(mode, stateDir string) (*DataAggregator, *httptest.Server) {
 	srv := finmindMockServer(mode)
-	client := marketdata.NewFinMindClient("test-key")
+	client := marketdata.NewFinMindClientWithStateDir("test-key", stateDir)
 	client.SetBaseURL(srv.URL)
 	client.SetRateLimiter(rate.NewLimiter(rate.Inf, 1))
 	a := NewDataAggregator(NewCycleTracker(), faultToleranceTree(), client, nil)
@@ -196,7 +209,7 @@ func TestAggregateAllIndustriesReport_AllNoDataSkipped(t *testing.T) {
 // ErrQuotaExhausted sentinel (fixes the misleading "no valid data for industry
 // X" last_error that masked quota as no_data).
 func TestAggregateAllIndustriesReport_QuotaStillFailsRound(t *testing.T) {
-	a, srv := newFaultToleranceAggregator("quota")
+	a, srv := newFaultToleranceAggregatorInDir("quota", t.TempDir())
 	defer srv.Close()
 
 	report, err := a.AggregateAllIndustriesReport(context.Background())
@@ -219,7 +232,7 @@ func TestAggregateAllIndustriesReport_QuotaStillFailsRound(t *testing.T) {
 // error classifies as quota (not no_data) so telemetry and the aggregate
 // last_error tell the truth.
 func TestAggregateIndustry_QuotaErrorNotMaskedAsNoData(t *testing.T) {
-	a, srv := newFaultToleranceAggregator("quota")
+	a, srv := newFaultToleranceAggregatorInDir("quota", t.TempDir())
 	defer srv.Close()
 
 	err := a.AggregateIndustry(context.Background(), "has_data")

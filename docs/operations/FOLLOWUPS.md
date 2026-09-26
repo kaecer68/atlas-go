@@ -262,6 +262,12 @@
   ⇒ 告警在「只有 CLI 路徑成功」的世界裡**會持續 firing 且是對的**（指標面確實 6 天沒有增量），
   但**快照是綠的** —— 判讀時必須分開看兩邊，不要用快照推翻指標。
   #1995 只讓 `atlas_universe_*` 的 family 一定存在（`WarmUp()`），不改變本條。
+- **2026-09-26（本輪缺陷收斂批次複查；結論不變：仍 `open`）**：以 worktree HEAD `81e4fe62` 實測 ——
+  CLI 路徑 `cmd/atlas/cmd_universe.go`（全檔 258 行）**0 命中** `NewUniverseMetrics` / `SetOnInc` / `UniverseMetrics`；
+  唯一的服務端接線仍在 `cmd/atlas/main.go:2007-2017`（`metrics.NewUniverseMetrics()` →
+  `um.SetOnInc(monitoring.CollectorOnInc(collector))` → `um.WarmUp()`）。
+  ⇒ CLI 跑成功時，`atlas_universe_*` 中帶 `result="passed"` 的 series
+  （`internal/monitoring/metrics/universe.go:93`、`:96`）**不會前進**：手動驗證與告警觀測仍分屬兩個世界。
 - **與 FU-20260925-08 的順序關係**：若要「統一寫入持久化 collector」來消除斷鏈，
   **仍須先修 counter 灌爆**（同 FU-20260925-08 的前置條件），否則 replay 會把 CLI 那一次的累積值
   也算進去。
@@ -403,12 +409,83 @@
 - **驗收條件**：用「故意放一組過期值」的 fixture 驗證：工具必須**失敗或明確警告**，
   不得靜默帶著錯值繼續（同族：FU-20260925-01 的「回報有東西，而不是東西對不對」）。
 
+### FU-20260926-09 — `FU-20260926-01` 的實作／驗收記錄（latch＋持久化＋token 遮蔽）
+
+- **定位（root 2026-09-26 定案）**：本條**不是**與 `FU-20260926-01` 平行的待辦 ⇒
+  **`-01` 是待辦（已 `done`，由 PR #2006 實作）**、**本條是它的實作／驗收記錄**。
+  記錄本身隨 PR #2006 交付；下方「殘留面」三項中 **殘留 1 已於 #2014 完成**，殘留 2／3 仍是後續
+  硬化方向，故本條狀態維持 `open`。
+- **狀態**：`open`（僅指殘留 2／3；實作／驗收部分與殘留 1 已完成）
+- **記錄日期**：2026-09-26
+- **編號說明（本條改號兩次）**：本條隨 PR #2006 建立，原號 `FU-20260926-01`；
+  **第一次撞號** = [#2005](https://github.com/kaecer68/atlas-go/pull/2005) 併入 main 的
+  `FU-20260926-01..07`（追平 main `788045dd` 時改為 `-08`）；**第二次撞號** =
+  [#2008](https://github.com/kaecer68/atlas-go/pull/2008) 併入 main 的同號 `-08`
+  （追平 main `b5fca3a5` 時改為本號 `-09`）。root 已定案本號（不再改動）。
+- **編號現況**：`grep -o "^### FU-[0-9-]*" docs/operations/FOLLOWUPS.md | sort | uniq -d` 必須為空
+  （追平 main 後已驗；見 PR #2006 說明）。
+- **實作範圍（= `FU-20260926-01` 的 ① ② ＋ 驗收條件；並涵蓋 `FU-20260926-02` 的 token 洩漏）**：
+  `fetchDataset`／`FetchTaiwan5SecIndex` 收到 402（或 body/msg 含 `upper limit`）⇒ latch 當日額度耗盡
+  並持久化 ⇒ 之後本地短路、不發 HTTP、跨日解除；`Remaining()` 期間回 0 ⇒ 所有保留水位立即停止（重啟亦然）；
+  ceiling 12000 + `FINMIND_DAILY_LIMIT` + `marketdata.FinMindDailyLimit()` 單一讀取點；
+  上游 body 一律經 `sanitizeFinMindBody()`（`token_tail` 等欄位整段刪除）。
+  證據（測試、負對照、exit code）見 PR #2006 說明。
+- **來源**：`fix/finmind-quota-honor-402-r`（FinMind 402 ⇒ 當日額度 latch 持久化 + ceiling 14400→12000
+  + upstream body 去機密）。生產事實：2026-09-26 02:10Z `auto_quote_backfill`（824 檔）跑到
+  `calls_today≈12500` 時上游回 402 `Requests reach the upper limit`（且該 body 回帶 `token_tail`）。
+- **殘留 1（跨行程可見性）— `done`**（2026-09-26，issue [#2014](https://github.com/kaecer68/atlas-go/issues/2014)，
+  PR [#2021](https://github.com/kaecer68/atlas-go/pull/2021)、branch `fix/20260926-finmind-quota-cross-process`）：原狀是 latch 寫在
+  `data/state/finmind_daily_quota.json` 卻**只在 client 建構時讀取** ⇒ 同機其他行程（另一顆 cron 容器、
+  或長命 process 內另一份 client）不會立刻看到別人的 latch，要等它自己撞一次 402 才跟上。
+  **已改為**：`DailyQuotaTracker` 的每一次讀與每一次遞增都在 `<state>.lock` 的 flock 之下進行
+  read-modify-write，latch／計數／`Remaining()` 一律以 state file 為權威 ⇒ 一個行程 latch 後，
+  其他行程在下一次呼叫即可見（不再需要「短 TTL 重讀」這種折衷）。同時修掉同源的更嚴重缺陷：
+  跨 process 的**上限**原本只是「每個 process 各自的上限」。**邊界（誠實）**：這只保證共用同一
+  state dir 的行程（同機同 volume）；另一台機器各自的 state dir 不受此鎖約束。
+- **殘留 2（上游真實上限未知）**：12,500 是**觀測到的拒絕點**，不是 FinMind 公布的上限；
+  12000 這個 ceiling 是人工留 500 餘裕的估計值。目前以 `FINMIND_DAILY_LIMIT` 覆寫 +
+  `finmindObservedUpstreamRefusalLimit` 常數 + 測試（`TestFinMindQuotaCeiling_StaysBelowObservedUpstreamRefusal`）
+  把「不得超過觀測拒絕點」寫死，但**沒有自動校準**。
+  **硬化方向**：連續多日記錄「首次 402 時的 calls_today」並回報，作為下一次調整 ceiling 的證據。
+  **2026-09-26 新增反證（未收斂，僅登記）**：`#2014` 盤查時發現，本地計數器停在 `calls_today=12982`
+  的那一秒（2026-09-26T14:20:15+08:00）**同目錄的 `data/state/tsmc_revenue/11509_revenue.json` 也被寫入**，
+  而該檔只在 `TSMCRevenueProvider.FetchSnapshot` 的**成功**路徑才寫（失敗走 cache fallback、不寫檔）
+  ⇒ 那一天「本地 12,982」時上游仍正常回應；同日 04:05Z–06:05Z 也有 `no data for symbol`（HTTP 200 但空）
+  而非 402。因此 **12,500 是否真是「日配額牆」存疑**——本地 counter 記的是**嘗試**（402 被拒也 +1，
+  而 `fetchWithRetry` 的重試不 +1），與上游自己的用量本來就不是同一個數。**尚未否證/證實**：
+  02:10Z 那次的 response body 已隨舊容器消失，唯讀手段取不到 ⇒ 需要 FinMind 後台用量或一次受控實驗。
+  **在收斂前不要據此調升 ceiling**（維持 12000 與 `FinMindDailyLimit()` 單一讀取點）。
+- **殘留 3（探針語意）**：latch 期間 `QuotaRemaining()==0`，`channel_health_finmind` 因此仍以
+  一般 quota 訊息呈現；「本地自己停手」與「上游已宣告今日結束」目前只靠錯誤字串
+  （`upstream-exhausted … reason=…`）區分。
+  **硬化方向**：把 latch 狀態（bool + observed_at）納入 channel-health 記錄/指標，
+  讓儀表板不必解析錯誤字串。
+
 ---
 
 ### FU-20260926-01 — FinMind 上游 402 早於本地護欄：`finmindDailyLimit=14400` 與 1,500 保留值都太高
 
-- **狀態**：`open`
+- **狀態**：`done`
 - **記錄日期**：2026-09-26
+- **完成於**：2026-09-26，**已由 #2006 的 latch 實作**（PR [#2006](https://github.com/kaecer68/atlas-go/pull/2006)
+  `fix/finmind-quota-honor-402-r`，head `b74d8692`；**未 merge、未部署**——狀態的最終確認在部署驗收後）。
+  實作／驗收記錄見 `FU-20260926-09`（本條是待辦、那條是證據，不是兩條平行待辦）。
+- **實作對照本條建議**：
+  - ①「以上游 402 為準」⇒ `DailyQuotaTracker` upstream latch：402（或 body/msg 含 `upper limit`）
+    ⇒ 標記當日耗盡＋**持久化**（`data/state/finmind_daily_quota.json` 的
+    `upstream_exhausted` / `upstream_reason` / `upstream_at`）⇒ 之後所有呼叫在**本地短路、不發 HTTP**，
+    跨日才解除；`Remaining()` 期間回 0 ⇒ backfill 1,500 與 sbl/tdcc 500 保留水位立即停止（**重啟也一樣**）。
+  - ②「14400／1500 改為可設定並印出來源」⇒ ceiling **12000**（新增觀測常數
+    `finmindObservedUpstreamRefusalLimit = 12500`，ceiling 嚴格在其下、留 500 餘裕）＋ `FINMIND_DAILY_LIMIT`
+    覆寫 ＋ `marketdata.FinMindDailyLimit()` 跨套件單一讀取點（原 3 份複製的 14400 已收斂）；
+    覆寫高於觀測拒絕點會記 WARN。
+  - ③「402 時記一筆量測供校準」⇒ latch 持久化 `upstream_at` ＋ `upstream_reason`（含上游 status），
+    但**自動校準仍未做** ⇒ 見 `FU-20260926-09` 殘留 2。
+- **驗收條件對照**：①「上游 402 之後，backfill 當日不再發送且 log 明示 `upstream 402 at used=N`」⇒
+  錯誤字串為 `finmind: daily quota exhausted (upstream-exhausted, used=N, remaining=0, observed_at=…,
+  reason=upstream HTTP 402: {…})`，且測試以 **upstream hit count** 證明不再發送（402 後再打 20 次，
+  上游總 hit 數仍為 1）✓；② 負對照（拿掉短路）⇒ 測試 FAILED：
+  `21 upstream requests escaped the latch; want 1 (the single 402)` ✓。
 - **事實（root 生產實測，2026-09-26）**：`auto_quote_backfill` 於 02:10Z 啟動、載入 824 symbols；
   配額計數器 01:0xZ ≈ 35 → 02:1xZ ≈ **12,500**，此時**上游已回 402**（`Requests reach the upper limit`）。
 - **為何護欄沒擋住**：本地兩道門檻都在真實上限**之上** ——
@@ -541,7 +618,7 @@
 
 ### FU-20260926-07 — 生產**實際生效**的 `/app/configs/parameters.json` 與版控那份**不同**（差 61 個葉節點、16 個值）；**寫入者已定位＝應用自身 calibration 任務**（runtime 自適應、不回流版控、重建即失）
 
-- **狀態**：`open`（**寫入者已定位（2026-09-26）；缺口＝不回流版控 ＋ 容器重建即失；待業主確認是否 intended**）
+- **狀態**：`in-progress`（**寫入者已定位（2026-09-26）；守門 ＋ 持久化 ＋ 可見性已實作（本 PR），待合併與部署後才 `done`**）
 - **記錄日期**：2026-09-26
 - **事實（生產唯讀實測，2026-09-26）**：
   - **image 內的是對的**：以 `docker create atlas-atlas`（**不啟動**）+ `docker cp` 取出
@@ -579,6 +656,38 @@
   ③ 保留可稽核的寫入痕跡（目前只有 `last_calibrated` 時間戳）。
 - **驗收條件**：能回答「誰在何時寫了這個檔的哪些鍵」＋漂移有顯性痕跡（負對照：不得只靠「檔案看起來正常」判定）。
 
+### 修復（2026-09-26，本 PR：`fix/calibration-drift-floor-and-overlay`；**尚未合併／部署**）
+
+真根因有**兩層**，修法順序不可顛倒（先擋漂移，否則持久化只會把漂移值鎖住）：
+
+1. **漂移本身被現行守門允許** ✗ — `internal/risk/self_calibrate.go` 的相對窗
+   `[current*0.3, current*3.0]` 是**每輪速率限制**而非守門：每輪縮 ≤3× 永遠在窗內，累積就無限下行；
+   共享絕對下限 `0.005` 只擋住終點、擋不住過程（`0.0108 > 0.005`）。
+   ⇒ 改為**逐參數 sanity floor**（`calibrationSanityFloor`）：
+   `risk_max_position_size 0.12`（= repo 內已文件化的最保守持倉比例
+   `engine.strategy_evolution.configs.value.cautious.max_position_size`）、
+   `risk_max_daily_loss_pct 0.03`（= SSOT 值本身，"3% max daily loss"）。
+   低於 floor 一律拒絕；**已在 floor 之下**的既有值（舊版寫入的部署）走 recovery：
+   接受 `[floor, floor*3]` 讓它一輪爬回 sane 值（不凍結在漂移值）。
+   拒絕不再只是 `fmt.Printf`，而是 `report.Rejected` ＋ 結構化 WARN。
+2. **持久化與可見性** ✗ — 校準值原本寫回 `configs/parameters.json`（**不在 bind mount**）。
+   ⇒ 改寫到 **`data/state/parameters.calibrated.json`**（= `constants.StateParametersCalibrated`，
+   在 `${WORKDIR}/data` 這個**已掛載**的樹內），`configs/parameters.json` **保持 pristine 作為 SSOT**；
+   啟動時由 `config.ApplyCalibratedOverlayLayer` 疊在 SSOT 之上（`config.GetParametersConfig` /
+   `ReloadParametersConfig` / `cmd/atlas/main.go` / `parameters` API handler 皆走
+   `LoadEffectiveParametersConfig`）。
+   - 可見性：每個套用項以結構化 log 同時輸出 `ssot` 與 `effective`（＋ `ratio`）；`ratio` 落在
+     單輪窗 `[0.3x, 3x]` 之外 ⇒ 額外 WARN。被 floor 拒絕的提案走 `report.Rejected`。
+   - **特例（刻意的 fail-closed）**：overlay 條目記錄它疊在哪個 SSOT 值上；若 SSOT 值後來被改
+     （charter 編輯）⇒ 該條目**失效並移除** ＋ WARN，人工審查過的 charter 永遠優先於過期的 runtime 適應。
+   - **風險（已在 PR 說明）**：校準值變成「跨容器重建存活」（這正是本條要的），
+     因此以前「重建即重置回 repo 值」的意外剎車消失；漂移的上限現在由 (1) 的 floor 承擔。
+3. **仍未涵蓋（後續）**：其他校準器仍寫 `configs/parameters.json`
+   （`internal/config/calibrator.go:200`、`internal/portfolio/factor_weight_calibrator.go:148`、
+   `internal/orchestrator/calibration_engine.go:330`、`cmd/atlas/calibration_tasks.go:165` 的
+   `industry.RecalibrateThresholds`）；它們的寫入**一樣**在容器重建時遺失、且對 git 不可見。
+   本 PR 只遷移 `risk_gate_calibrate → risk.SelfCalibrate` 這條（觀測到漂移的那條）。
+
 ---
 
 ### FU-20260926-08 — `ATLAS_BROKER_NONCE_REDIS_URL` 與「已改綁 loopback 的 16379」之間的**潛在**依賴（目前惰性）
@@ -597,12 +706,424 @@
 - **驗收條件**：若啟用 `ATLAS_BROKER_NONCE_STORE=redis`，URL 必須走 docker 網路名且**容器重建後** broker nonce 仍正常；
   負對照：不得以「host 埠在 Mac 上 curl 得到」當成容器可達的證據。
 
+### FU-20260926-11 — 「負向證明的非預期 exit code」殘留盤查：1 處未修（`check_finmind_quota.sh`）＋ 一類 `$VAR（` 展開陷阱
+
+- **狀態**：`open`（同族多數已在 issue #2011 的 PR 修掉；本條追蹤**刻意未修**與**另票處理**的殘留）
+- **記錄日期**：2026-09-26
+- **來源**：issue #2011（PR #2003 的設計審查發現）＋ 本條所列可重現的 grep 命令
+- **已修（同 PR 交付）**：`.github/workflows/quality.yml` 的 `secret-scan` / `monitoring-single-source`
+  兩處 **inline** 負向證明抽成 `scripts/ci/*-negative-proof.sh`，改為精確斷言 `rc==1`
+  （共用斷言庫 `scripts/ci/negative-proof-lib.sh`；自我測試 `tests/scripts/test-negative-proofs.sh` 餵 127/2 必須紅燈）。
+  同一族順手收緊：`tests/scripts/test-secret-scan.sh`（`must_block`/B2/B7）、`test-check-frontend-dist.sh`
+  （scenario2/3/5/6）、`test-check-routes.sh`（scenario2）、`test-install-webhook.sh`（C1–C3）；
+  `Makefile` 的 `ci` / `ci-quick` 加「**0 支檢查被執行 ⇒ 失敗**」（空集合不得算通過）。
+- **未修 ①（bash 變數展開，非 exit-code 問題但同屬「訊息/判定誠實性」）**：
+  `scripts/ci/check_finmind_quota.sh:65` 的 `echo "❌ finmind quota: 無法解析 $STATE_FILE（calls_today 缺失）"`
+  —— `$STATE_FILE` 後面**緊接全角「（」**，bash 會把該非 ASCII 字元併入變數名
+  （實測 bash 3.2 與 5.3 皆然）⇒ 在 `set -euo pipefail` 下變成 `unbound variable` 崩潰，
+  使用者看到的是 shell 錯誤而不是這句可行動訊息。**修法＝改成 `${STATE_FILE}`（1 字元）**；
+  本次未改以避免與進行中的 FinMind lane 衝突。
+  同型命中另有 `scripts/ops/imac-container-watchdog.sh:32`（**僅註解**，無害，不需修）。
+  重現：`grep -rnP '\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]' --include=*.sh --include=Makefile .`
+  （`set -u` 下會崩潰；未開 `set -u` 時會**靜默吃掉變數值**，例如 `count=$N筆` 印成 `count=筆`）。
+- **2026-09-26（後續 PR 進度）**：**未修 ① 已落地** —— `scripts/ci/check_finmind_quota.sh:65` 改為 `${STATE_FILE}`，
+  且同型全掃後另修 `tests/scripts/test-install-webhook.sh:55/78/104`、`.github/workflows/quality.yml`（`mcp-tool-count`
+  的 `$DOC_MIN–$DOC_MAX`）與**本條目併入後才出現**的 3 處（`tests/scripts/test-binary-freshness-guard.sh:104/127`、
+  `tests/scripts/test-cron-entrypoint.sh:42`）。更重要的是把它變成**機制**：
+  `scripts/ci/check_fullwidth_var_expansion.{sh,py}`＋ self-test
+  `tests/scripts/test-fullwidth-var-expansion.sh`（30 項、精確 exit code 1/0/2）＋ `quality.yml` 的
+  `fullwidth-var-expansion` job ＋ `make ci-gate`。該掃描器**移植自 a2a-dev 既有的同名守門**
+  （`scripts/check-fullwidth-var-expansion.py`，tokenizer 原樣沿用；a2a-dev 是這個陷阱的原生守門），
+  atlas-go 端擴充檔案類型：`*.sh` / `Makefile` / `*.mk` / `*.py` / **YAML 的 `run:` 區塊**
+  （只掃區塊：整檔掃會被 YAML 的 `name:` 與引號污染 tokenizer 狀態而誤報）。
+  該檢查是**唯一**能擋下這類 bug 的手段：實測 macOS+UTF-8 locale 崩潰、`LC_ALL=C` 與 linux/glibc/musl **皆不發作**
+  ⇒ 只在 ubuntu 上跑的 CI **永遠不會紅**。
+- **未修 ②**：`Makefile` coverage 段（`#2009`）的「門檻變數為空 ⇒ 比較反向通過」由另票處理（本 PR 未動該段）。
+- **未修 ③（觀察，非缺陷）**：`.github/workflows/ci-cd.yml` 的 gosec 用 `-no-fail`、
+  `vuln-scan.yml` 的 govulncheck 以 `|| true` + advisory-only SARIF 上傳 ⇒ **這兩個安全掃描永遠不會讓 pipeline 紅**
+  （兩檔檔頭都明寫了理由）。若哪天要把它們變成真正的 gate，需要另票。
+- **驗收條件**：任何**新增**的「證明某閘門會擋」測試，都必須同時餵「命令不存在(127)」與「用法錯誤(2)」
+  並確認**紅燈**（範本：`tests/scripts/test-negative-proofs.sh`）；只驗「非 0」不算。
+- **未修 ④（觀察，非本 PR 範圍；本次 CI 被它擋下）**：`internal/config` 的
+  `TestShadowParametersDeclarationMatchesConsumers` 會 `filepath.WalkDir("internal")` 且
+  **error 一律往上拋**（`internal/config/parameters_shadow_declarations_test.go:44-47,71-73`），
+  而 `go test ./...` 是**跨 package 並行**；`internal/apigateway/register_adapters.go:401` 的
+  `saveSnapshot` 寫的是**相對路徑** `data/state/<channel>`（package 測試的 CWD 下 =
+  `internal/apigateway/data/…`），`internal/apigateway/adapter_finmind_util_test.go:91` 又會
+  `os.RemoveAll("data")` ⇒ 該目錄在 walk 期間「出現又消失」，walker 讀不到就硬失敗：
+  `walk …/internal: open …/internal/apigateway/data: no such file or directory`。
+  這是**flaky 假紅**（同 commit 重跑會過；本機 main 與本分支跑同一支測試皆 PASS）。
+  修法方向（未做）：walker 對 `fs.ErrNotExist` 寬容，或把該寫入路徑改成 `t.TempDir()`
+  （別再依賴 CWD 相對路徑）。
+
 ---
+
+### FU-20260926-10 — I31 的 production 半邊：新鮮度已接上既有監控（本 PR）；**仍缺「校準任務心跳」指標**，產物年齡可能誤報
+
+- **狀態**：`open`（**程式面已交付**；生產驗收與殘留面 1 待做）
+- **記錄日期**：2026-09-26
+- **來源**：issue #1944 / I31；PR #1991 的「未完成項 1」；分支
+  `fix/20260926-calibration-freshness-monitoring`（worktree `~/workspace/atlas-calib-freshness`，
+  base `origin/main@df726b89`）。
+- **已完成（本 PR）**：`configs/parameters.json` 的新鮮度由背景任務
+  `calibration_freshness_metrics_export`（`cmd/atlas/calibration_freshness_metrics_task.go`，5 分鐘）
+  評估，重用 `config.ValidateCalibration`（CLI 用的同一個判定），輸出
+  `atlas_calibration_freshness_*` 五個 gauge；規則在
+  `monitoring/rules/calibration_freshness_alerts.yml`（3 條，promtool **11 案例**含 6 個負向對照
+  與 1 個「已知交接窗」；另做 8 項變異測試全部被咬住），
+  落地說明在 [`calibration-freshness-runbook.md`](calibration-freshness-runbook.md)。
+  契約收斂為**單一常數** `config.DefaultCalibrationMaxAge`（= CLI `--max-age` 預設值
+  = production 命令的 48h）。
+- **順帶查實（影響本條的判讀）**：政策上的 production 命令 `atlas-validate` **沒有隨 image 出貨**
+  ——`cmd/calibration-validate` 是 CI 現場 build 的，本 repo 的 Dockerfile 只把
+  `atlas-go`/`atlas-mcp`/`calibrate-seasonal`/`daily-replay-sync` 放進 `/app`，且 image 內
+  **沒有** `python3`/`jq`/`node`（實查指令見 runbook §1）。⇒ 在本 PR 之前，生產上「資料已不新鮮」
+  是**零觀測**（不是值班忘了跑，而是沒有東西會跑）；所有 triage 指令已改為 image 內確實存在的
+  `grep`/`stat`/`head`/`tail`/`curl`。
+- **殘留面 1（本條的主要缺口）：沒有「校準任務已執行」的心跳指標**
+  - 現況：校準寫入是**有變更才寫**（`internal/risk/self_calibrate.go`：
+    `if len(report.Changes) > 0` 才 `LockedSaveWithRollback`）⇒ `updated_at` 的年齡是
+    「校準活動」的**上界**，不是直接量測。一個已收斂、連續多輪 `verdict=stable` 的系統
+    會合法地超過 48h 不改寫檔案 ⇒ `CalibrationArtifactStale` 可能誤報。
+  - 為何現在只做到這樣：要給出直接訊號必須接到 `cmd/atlas/calibration_tasks.go` 的
+    18 個任務（1 inner + 17 top-level）並定義「執行成功」語意（含 early-return 與
+    maturity gate），那是另一個範圍；本 PR 先交付可量測的部分並把誤報形狀寫進
+    runbook §3.1 的第一順位排查。
+  - **修法（未實作）**：新增 `atlas_calibration_task_last_run_timestamp_seconds{task=…}`
+    （或沿用 completion handler）＋一條「校準任務超過 N 小時未執行」的規則；
+    門檻由實測 cadence（24h 主、6h/1h 例外）決定。
+  - **驗收條件**：連續 `stable` 的多輪（產物不變）必須**不**觸發任何告警；
+    而任務真的停止執行時必須有告警 —— 負對照：不得再靠「產物年齡」推論任務死活。
+- **殘留面 1b（與 #2013 的交互，已複驗）**：`risk_gate_calibrate` 的寫入已由 PR #2013 遷到
+  `data/state/parameters.calibrated.json`（overlay），SSOT 保持 pristine ⇒ 本條監控的
+  「SSOT 超過 48h」仍然有意義（其他校準器仍寫 SSOT，清單見 FU-20260926-07 第 3 點），
+  但**看不到 risk 校準是否停滯**。要涵蓋它需要第二個判定語意（per-entry `calibrated_at`），
+  不是把本族的 `max-age` 套上去就好；`config.GetParametersConfigPath()` 仍指 SSOT
+  （複驗：`internal/config/calibration_overlay.go:186`），所以本族沒有被無聲換對象。
+- **殘留面 2：結構性 finding 仍未進生產監控** —— `L1/L2_NO_REPRESENTATIVES` 之類由 CI 的
+  `--policy=configs/calibration-validation-policy.json` 負責；生產端的結構漂移（有人手改
+  parameters.json）目前仍無自動訊號。修法：加一個結構面的 gauge 或讓既有 policy 在生產
+  也跑一次，並決定 accepted 集合在生產的語意（屬政策裁決）。
+- **已知且刻意的行為（不是缺陷，不要「順手」改掉）**：
+  1. **凍結樣本**：`_run_ok=0`（無法評估）之後，`age`/`last_calibrated` 仍以最後一次可評估的
+     值留在 `/metrics`（collector 是 last-write-wins 且不移除序列）。沒有任何規則拿它們做判定
+     （判定只看 `_ok`/`_run_ok`）⇒ 不會誤報；但**判讀順序**必須是「先 `_run_ok` 再 `_ok`
+     再 `age`」（runbook §2.1）。行為由
+     `TestObserveCalibrationFreshness_UnverifiableFreezesLastKnownSeries` 釘住。
+  2. **≤15 分鐘交接窗**：`_run_ok` 由 1 翻 0 時，第 1 條立刻 resolve、第 2 條要累積 15m
+     才 firing ⇒ 窗內兩條都不 firing。這是「同一個根因不重複 paging」的取捨，
+     已寫成 promtool 案例 K；要縮窗就改第 2 條的 `for` 並同步該案例。
+- **殘留面 3：生產驗收未執行**（本 PR 不得動 production）。部署後照 runbook §4：
+  `curl -s localhost:18080/metrics | grep '^atlas_calibration_'`、
+  `curl -s localhost:9090/api/v1/rules | grep -o 'Calibration[A-Za-z]*'`，
+  並確認 `atlas_calibration_freshness_ok` 在生產為 1（生產檔案實測約 65 分鐘前被改寫）。
+- **驗收條件（本條整體）**：生產上 `atlas_calibration_freshness_*` 有值、三條規則已載入、
+  且「資料不新鮮」在無人記得跑 CLI 的情況下也會被看見。
+
+### FU-20260926-13 — `empty_universe`（Step 1 就 0 檔）在 Prometheus 面**完全沒有訊號**：整條 pipeline 不動任何 counter
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **A2**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（該檔隨 #2026 併入 main，故刻意不加反引號以免 markdown-links 誤判）。
+  本票在該 manifest §2/§3 **未列**（最接近的 §3 E11 是「`symbols_excluded` 無排除原因細分」，主題不同）
+  ⇒ 本票為**新增登記**，請 root 決定是否補進 manifest §3。
+- **事實（實測行號，2026-09-26，worktree HEAD `81e4fe62`）**：
+  - 原因常數存在：`internal/monitoring/universe_scheduler.go:89-90`（`RankedFallbackEmptyUniverse = "empty_universe"`）。
+  - **early-return 發生在計數之前**：`internal/monitoring/universe_scheduler.go:751-754`
+    （`if result.SymbolsBuilt == 0 { markRankedUntrustworthy(result, RankedFallbackEmptyUniverse); return result, nil, nil }`），
+    而 `gatheredCounter.Add(...)` 在 `:758-760` ⇒ 這條路徑**真的不動任何 counter**。
+  - 同檔 `:750` 有 `result.QuotesStatus = QuotesStatusNotAttempted`，是目前**唯一**的機器可讀標記，
+    但它只寫進 snapshot（`data/state/universe_snapshot.json`），**未曝露成指標**。
+  - 規則檔自述此缺口：`monitoring/rules/atlas_universe_scoring_alerts.yml:207-210`
+    （「`gatheredCounter.Add` 在 `if SymbolsBuilt == 0 { return }` **之後** ⇒ 整個 pipeline 不動任何 counter」），
+    並在 `:233` 再述「全部規則（新舊）都不覆蓋 `empty_universe`：需要 Go 端新增心跳指標」。
+  - 這個缺口是**刻意且有測試釘住**的：`monitoring/tests/atlas_universe_scoring_gaps_test.yml:436`
+    （負向對照 3：WarmUp 建立的整族都在、都零增量 ⇒ 六條都不 firing）。
+- **為何先開票、不實作**：修法要**同時動三處**且屬跨檔功能新增 ——
+  ① 指標面（`internal/monitoring/metrics/universe.go` 的 series 清單 `:85-100` ＋ `WarmUp()` `:137`）；
+  ② alert rule（`monitoring/rules/atlas_universe_scoring_alerts.yml`）；
+  ③ promtool 測試（`monitoring/tests/atlas_universe_scoring_gaps_test.yml` 的負向對照 3 必須改寫）。
+  它也會碰到與 #1995 同一族的指標契約 ⇒ 不是本輪的 bounded 修正，先登記。
+- **驗收條件**：生產上「Step 1 就 0 檔」當日必須有一條**真陽性**告警（或至少一個會前進的 series）；
+  **負對照**：`SymbolsBuilt > 0` 的正常執行不得觸發；且「整條 pipeline 沒跑」（同族缺口 (b)）
+  不得被本票的規則誤報成 `empty_universe`（兩者需要相反的 triage）。
+
+---
+
+### FU-20260926-14 — Telegram bot token（實際名稱 `TELEGRAM_BOT_TOKEN`）無 hot-reload：輪替只能靠重載 launchd plist
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **B13**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**（§2/§3 未列 ⇒ 新增登記）。
+- **事實（實測，2026-09-26）**：
+  - **對照組：資料通道 key 與 MCP token 都有 hot-reload**
+    - channel key：`cmd/atlas/main.go:700`
+      （`channelKeyMgr.RegisterApplier("finmind", marketdata.UpdateSharedFinMindAPIKey)`）；
+      套用端 `internal/marketdata/finmind_client.go:374-379`（`SetAPIKey`，thread-safe 換 key，不重建 rate limiter）；
+      機制自述 `internal/channelsecrets/doc.go:2`、`:8`（issue #1776 Phase 1：persist → 熱套用到 live client）。
+    - MCP token：`cmd/atlas-mcp/server/token_admin_handler.go:32`（`POST /api/admin/mcp/tokens/<id>/rotate`）。
+  - **env 名稱是 `TELEGRAM_BOT_TOKEN`**（**不是** `ATLAS_TELEGRAM_BOT_TOKEN`；後者在 repo 內 0 命中，
+    唯一出現處是另一份文件的示例名 `docs/modules/alert-system.md:21`）。
+  - 兩個消費端、**兩者都在啟動時讀一次**：
+    ① `scripts/alertmanager-webhook/atlas-alertmanager-webhook-to-telegram.py:18`
+      （`BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')`，module 層讀取 ⇒ 換 token 必須重啟行程）；
+    ② `monitoring/alertmanager.yml:97`（`bot_token: ${TELEGRAM_BOT_TOKEN}`）⇒ Alertmanager 自己也要 reload/restart。
+  - 注入路徑是**安裝期寫進 LaunchAgent plist**：
+    `scripts/alertmanager-webhook/com.goluck.atlas-webhook-to-telegram.plist:22-23`
+    （`TELEGRAM_BOT_TOKEN` = `__INJECT_AT_INSTALL__`），由 `scripts/alertmanager-webhook/install-webhook.sh`
+    寫入 `~/Library/LaunchAgents/` 那一份（`:152`）並 `launchctl bootout` + `bootstrap`（`:159-164`）。
+  - **刻意不用 file-based token**：plist `:18-20` 與 `install-webhook.sh:10-12` 明寫理由 ——
+    a2a-dev 的 macmini-recover #50 會從**已安裝 plist 的 EnvironmentVariables** 讀 `TELEGRAM_BOT_TOKEN` 做 `getMe` 檢查，
+    **換 key 名會讓它變成 WARN**（破壞 DoD 48 OK/0 WARN）。
+- **為何先開票、不實作**：這不是漏一行，而是**需要先裁決介面**：
+  ① 引入 `TELEGRAM_BOT_TOKEN_FILE`（**必須同時改 a2a-dev 的檢查腳本** ⇒ 跨 repo）；
+  ② 加 SIGHUP 或 admin rotate 端點（跨 process、跨兩類 handler）；
+  ③ 接受「輪替＝重跑 install 腳本」但把步驟納入 runbook。
+  三個方向的半徑都大於本輪 bounded 修正 ⇒ 先登記。
+- **驗收條件**：能在**不重建 image** 的前提下完成一次 token 輪替（若最終決定「必須重載 plist」，
+  則該步驟必須寫進 runbook 並可被非作者照做）；輪替後 a2a-dev 的 `getMe` 檢查**仍為 OK**（不得因換 key 名退化成 WARN）；
+  **負對照**：輪替後舊 token 在 BotFather 端撤銷必須立刻失效（不得出現「新舊都能用」）。
+
+---
+
+### FU-20260926-15 — `.githooks/pre-push` 沒有 host binary 新鮮度閘門：source 已前進但 `bin/atlas-mcp` 仍舊也能 push
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號 **B14**）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+  **與 manifest §3 E4 的關係**：E4 是**同一個檔**的另一個缺口（`pre-push` 取不到 `origin/main` 就放行）。
+  本票是**不同缺口**（完全沒有 binary 新鮮度檢查）⇒ 修法需協調，但不是重複開票。
+- **事實（實測，2026-09-26）**：
+  - `.githooks/pre-push` 現有閘門：`make ci-gate`（`:29`）、`scripts/ci/check_frontend_dist.sh`（`:50`）、
+    `make ci-full`（`:70`）、Gate 2 HEAD == `origin/main`（`:82-94`）、Gate 3 zero diff（`:96-106`）。
+    全檔 **0 命中** `rebuild` 或 `check-binaries`。
+  - 目標存在且會檢驗：**`Makefile:733` `rebuild-host-bin:`**（只重建 host `bin/atlas-mcp`）；
+    `Makefile:710-711` `check-binaries:` → `scripts/check-binary-freshness.sh`；`Makefile:729` `check: check-binaries`。
+  - 檢查腳本對「檔案不存在」是**軟出口**：`scripts/check-binary-freshness.sh:152-157`
+    （`if [ -f "$HOST_ATLAS_MCP" ] … else echo "  ⚠ bin/atlas-mcp not found at … (skipping)"`）⇒ 不存在**不算失敗**。
+  - 同族文件已承認這個形狀：`docs/developer-guide.md:66`（「host `bin/atlas-mcp` 缺失但檢查仍綠 ⇒ 執行 `make rebuild-host-bin` 後重跑」）。
+- **為何先開票、不實作**：修法要動 `.githooks/`（**共用檔**，同檔正由 manifest §3 E4 那一線處理），
+  而且要先把**閘門政策**定下來：pre-push 是否強制 `rebuild-host-bin`（會弄動 working tree 產物、也拖慢 push）、
+  或只把 `check-binaries` 的 skip 改成 fail-closed、或維持現狀但把責任明文寫給 session-start。
+  政策未定就改 ＝ 有機會製造第二個 false-green（或第二個誤紅）⇒ 先登記。
+- **驗收條件**：在 source 領先 `bin/atlas-mcp` 的狀態下 push **必須**得到可行動的紅燈
+  （或明確記錄此為刻意不防、並指出替代路徑）；
+  **負對照**：`bin/atlas-mcp` 與 HEAD 一致時**不得**誤紅、也不得為此多付明顯時間成本。
+- **相關（2026-09-26 追加）**：全新 worktree 的 `//go:embed all:dist` 死結（`admin_web/dist`／
+  `client_web/dist` 不存在 ⇒ `go build ./...` 紅 ⇒ 新 lane 第一次 push 被擋）——同屬
+  **host/worktree 環境前置**，修在 PR #2034（`make embed-dirs`）。
+
+---
+
+### FU-20260926-16 — 季節性校準的**污染源歸因**仍未定調（4 個超界 `adjustment_factor` 是哪來的）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號「**A5 殘**」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+- **與 FU-20260926-04 的關係（先講清楚，避免重複計數）**：`-04` 登錄的是「**值本身**是壞的 ＋ 消費端被夾沒有任何痕跡」；
+  本票**只認領「歸因／定調」這一半**（是校準輸入壞？是 bound 太窄？還是有別的寫入端？），且**不重複** `-04` 的驗收條件。
+  **若 root 判定兩者同源，請把本票併入 `-04` 並將本票標 `done`。**
+- **事實（實測，worktree HEAD `81e4fe62`）**：
+  - 版控檔仍是壞的：`configs/parameters.json:4602`（`dividend_season = -0.2634376289519962`）、
+    `:4686`（`summer_electricity = -0.2883015395477875`）、`:4729`（`ai_infrastructure_buildout = 2.555461115152644`）、
+    `:4772`（`year_end_positioning = 3.44143401207912`）。合法區間 `[0.3, 2.5]` ＝
+    `internal/industry/seasonal_health.go:16-17`（`DarwinianMinAdjustment` / `DarwinianMaxAdjustment`）。
+  - 消費端確實會夾：`internal/industry/seasonal_health.go:32`（`ClampAdjustmentFactor`）、
+    `:41`（`IsAdjustmentFactorInRange`）；一次性 warn 在 `internal/industry/seasonality.go:578-594`
+    （由 `NewSeasonalEngineFromConfig`（`:563-573`）呼叫）。
+  - **寫入端的守門早就在**：`cmd/calibrate-seasonal/main.go:180` 呼叫 `validateCalibrationResult`
+    （定義 `:408-425`，三軸：`adjustment_factor` 對 Darwinian 區間、`historical_accuracy ∈ [0,1]`、`avg_market_return ∈ [-1,1]`）；
+    超界時**不寫** `adjustment_factor`，只記 verdict（`:180-188`）
+    ⇒ **現行 `-update` 路徑結構上不可能產生這 4 個值**，污染源必在「守門之前」或「另一個寫入端」。
+  - **兩個已實測的歸因陷阱（本票存在的直接理由）**：
+    - ① `git blame` **不能**當歸因證據：`10f019a1`（2026-08-28「reformat parameters.json to repo 2-space format」）
+      是純重排（`git show --stat`：8107 insertions / 8107 deletions），4 行現在都 blame 到它
+      ⇒ 拿它推論「值是那時寫入的」是**錯的**（已否證）。
+    - ② 本 clone 是 **shallow**（`git rev-parse --is-shallow-repository` = `true`）：
+      `git log -S "3.44143401207912" -- configs/parameters.json` 只回得到 `07a3f85f`（2026-06-15, PR #532），
+      而該 commit 在本地**沒有 parent 物件**（`git show 07a3f85f^` ⇒ `invalid object name`）
+      ⇒ 「首次寫入的 commit」在此 clone 內**不可證**。
+    - ③ 另一個直覺陷阱（**已排除**）：這 4 個 pattern 沒有 `calibration_verdict` 欄位，看起來像「不是校準器寫的」——
+      但 `calibration_verdict` 是 `183ed65c`（2026-09-26, PR #1990）才加進寫入端的
+      ⇒ **缺欄位不代表寫入者不是校準器**，不要用這點下結論。
+- **為何先開票、不實作**：定調需要**量測**：用 `data/replay/finmind_2020_2024.jsonl` 重跑這 4 個 pattern，
+  比對「校準觀測值」與 ① bound ② 現值 的關係；且要先把 shallow clone 補成完整歷史（或明確放棄 blame 路線）才有歸因證據。
+  這是研究型工作、不是 bounded 修正，而且**直接改值會把現場洗掉** ⇒ 先登記。
+- **驗收條件**：能對這 4 個值逐個回答「誰寫的（哪一個寫入端／哪一次執行）」，或明確結論「不可證」並給出替代防線；
+  **在定調完成前不得改動 `configs/parameters.json` 的這 4 個值**（保留現場）。
+
+---
+
+### FU-20260926-17 — `internal/fubonproxy` 測試 flaky：`TestProcessManager_Supervise_RestartFailureCap` 距寫死的 3s 上限只剩約 0.2–0.4s
+
+- **狀態**：`open`
+- **修復**：PR #2033（測試 hermetic 化：系統配發埠＋決定性等待）
+- **記錄日期**：2026-09-26
+- **來源**：本輪缺陷收斂批次（代號「fubonproxy flaky」）；SSOT＝**PR #2026 的缺陷收斂 manifest（docs/operations/remediation-manifest.md）**。
+  manifest §3 E8 是**另一支** flaky（`WalkDir("internal")` 撞 apigateway 的相對 `data/`）⇒ 本票不是重複；
+  與 `FU-20260926-18`（E8，`internal/config` 的 `WalkDir`）為**不同** flaky，勿合併處理。
+- **事實（實測，worktree HEAD `81e4fe62`，macOS arm64 / go1.26.4）**：
+  - 失敗訊息出處：`internal/fubonproxy/manager_test.go:1345`
+    （`t.Fatal("supervisor did not exit within 3s")`），位於 helper `waitForSupervisorDone`（`:1333-1347`），**上限寫死 3s**。
+  - 使用者：`internal/fubonproxy/manager_test.go:1475`
+    （`TestProcessManager_Supervise_RestartFailureCap`，定義 `:1444`）與 `:1433`（yield-to-external-proxy 測試）。
+  - **本機實測（2026-09-26）**：
+    - `go test ./internal/fubonproxy/ -run 'TestProcessManager_Supervise_…' -count=5` ⇒ **5/5 PASS**，
+      但每次 **2.61–2.63s**；log 內單次 `process_started`(17:09:14.826) → `stopped`(17:09:17.400) ＝ **2.574s**。
+    - `ATLAS_STORE_BACKEND=sqlite go test -race -count=3 …` ⇒ 3/3 PASS，但 **2.79s / 2.72s / 2.63s**
+      ⇒ 距 3s 只剩約 **0.2s**。
+  - **成本為何固定約 2.6s**：`internal/fubonproxy/manager.go:62` `maxRestartFailures = 5`，
+    每輪前有 `sleep 0.3` 的假 proxy（`manager_test.go:1449`）＋ backoff 10ms（`:1325-1326`）
+    ⇒ 5 輪 ≈ 2.4s，加健康檢查與收尾 ≈ 2.6s。**餘裕比一次排程抖動還小。**
+  - **為何在 `make ci-full` 會紅的機制**：`Makefile:947` 跑的是
+    `go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')` ⇒ **全 package 並行 ＋ race detector**；
+    本票的測量只跑了**單一 package**，並行負載下只會更慢。這解釋「單獨重跑 ok、`make ci-full` 紅」。
+  - **附帶觀察（同一次 log）**：`restart_foreign_port port=… pid=9927 cmd=fubonproxy.test`
+    —— 被判為「外部佔用者」的其實是**測試行程自己**（`:1473` 的 `bindPort` 在行程內綁埠）。
+    不是缺陷，但會讓 triage 的人誤判「有外部程序在搶 port」。
+- **為何先開票、不實作**：flaky 要先**量化**（重現率、`make ci-full` 併發下的分布），並裁定修法方向：
+  ① 提高 helper 上限（會連「真的卡死」一起放寬）；② 改成事件驅動等待（要動 supervisor 的觀測面）；
+  ③ 把固定 `sleep 0.3` 與 backoff 參數化／縮短（最小改動，但要先證明仍測到同一件事）。
+  直接改測試＝可能把真紅一起吃掉 ⇒ 先登記。
+- **驗收條件**：在 `make ci-full` 的實際併發條件下，該測試連續 N 輪（建議 ≥ 20）不再出現
+  `supervisor did not exit within 3s`；**負對照**：把 supervisor 改成真的不退出時，該測試**仍必須紅**。
 
 ---
 
 ---
 
+---
+
+### FU-20260926-12 — `make ci` 把「掛住（timeout 124）」算成 skipped ⇒ 閘門回 0（**已可複現**，未修）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源（可重現）**：`Makefile:409-429`（`ci:` target 的 `for script in scripts/ci/check_*.sh` 迴圈）。
+  取**同一個迴圈形狀**（只把 glob 換成 fixture、`timeout 30` 縮成 `1`）：
+
+  ```bash
+  # ① 造 fixture（hang.sh 永遠跑不完；ok.sh 正常）
+  d=$(mktemp -d)
+  printf '#!/usr/bin/env bash\nsleep 5\n' > "$d/hang.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n'  > "$d/ok.sh"
+  # ② 把 Makefile:409-429 的迴圈貼成 "$d/Makefile"，只改兩處：
+  #    for script in scripts/ci/check_*.sh  →  for script in hang.sh ok.sh
+  #    timeout 30                           →  timeout 1
+  # ③ 跑它
+  make -C "$d" ci; echo "rc=$?"
+  # 實測輸出（2026-09-26，macOS + GNU timeout）：
+  #   → hang.sh
+  #       TIMEOUT (>1s): hang.sh
+  #   → ok.sh
+  #   CI: 1 passed, 0 failed, 1 timed out
+  #   rc=0        ← 掛住的檢查沒有讓閘門變紅
+  ```
+- **現況**：`timeout` 回 124 時只 `skipped=$((skipped+1))`，而收尾只檢查 `failed > 0`
+  ⇒ **一支永遠跑不完的檢查**（等網路、等鎖、等 docker）在 `make ci` 眼裡等於「通過」。
+- **風險**：false-green 家族（#2011）。`make ci` 是本機與 GH Actions 都會跑的閘門 ⇒
+  「檢查掛住」不會讓任何人變紅，只會在多跑幾次之後被當成雜訊忽略。
+- **影響面**：只有 `ci:` 這一段。`ci-quick`（`Makefile:431+`）用 `if timeout 10 …; then passed; else FAILED`
+  —— 124 落 `else` ⇒ **會紅**，不受影響；`ci-gate` 是逐支明列（沒有 timeout/吞碼）。
+- **最小修法建議（只建議，未實作；需業主定 policy）**：三選一 ——
+  ① 124 ⇒ 計入 `failed`（fail-closed，最直白）；
+  ② 保留 `skipped` 但**收尾時 `skipped > 0` 也 exit 非 0**（可先量：30s 預算對現有 `check_*.sh` 夠不夠）；
+  ③ 對已知慢的檢查改成明列清單＋較長 timeout，其餘一律 fail-closed。
+  **取捨**：`make ci` 是每天跑的路徑，①/② 都可能讓「合法的慢檢查」在負載高的機器上誤紅 ⇒
+  要先有 timeout 預算的量測，不是直接改。
+- **為何不納入本 PR（`$VAR` 緊接非 ASCII 的靜態閘門）**：
+  ① 主題不同（一個是展開語法，一個是**閘門政策**）；
+  ② 會改到 `make ci` 這段所有人每天都跑的路徑 ⇒ 回滾半徑大；
+  ③ 同一個迴圈區域正由 **PR #2020**（`fix/20260926-negative-proof-exact-rc`）改動（在 `make ci` 收尾加
+     `passed -eq 0` 守衛）⇒ 一起改會製造衝突與「兩個 false-green 混在一起」的審查困難。
+- **驗收條件**：在 `scripts/ci/` 放一支 `sleep 31` 的 `check_*.sh` ⇒ `make ci` 必須回非 0
+  （或至少在 timeout 發生時讓 job 變紅），且正常情況下 `skipped` 不增加。
+
+---
+
+### FU-20260926-21 — `scripts/ci/check_jev_contract.sh` **會真的連外呼叫 Jev 服務**：外部服務／網路一 flake 就紅 ⇒ 擋住合法 push（同日第二次同型事故）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：2026-09-26 推送 PR #2029（`fix/ci-swallowed-errors`，commit `e2e1b0de`）時，pre-push hook 的
+  `make ci-full` 在 `make ci-gate` → `ci-quick` 階段紅：
+  `❌ FAILED: scripts/ci/check_jev_contract.sh`（`✅ CI-quick: 14 passed, ❌ 1 failed`）。
+- **現況（實測，皆為本機可重現）**：
+  1. 該檢查**會真的對外呼叫 Jev**：單獨執行輸出
+     `✓ 實際呼叫 OK: noul=0.93 model=jev-1.13.0 tokens=281 445ms attempts=1`
+     （`✓ jevkit 自測通過`）。
+  2. **失敗後單獨重跑 2 次都是 exit 0**（`✅ Jev 契約檢查通過`）。
+  3. 同一個 patch 在**數分鐘前**的另一次 push 中，`make ci-full` **全綠**
+     （log 含 `✅ ci-full passed` 與 coverage step `Total coverage: 70.4%`），
+     且兩次 patch 內容 sha256 **逐位元組相同**（`62a6f43caf94ddacbf9e…`）。
+  4. 當次改動只有 `.github/workflows/daily-maintenance.yml`，與該檢查無關。
+- **判定：這是外部相依（Jev 服務／網路）造成的間歇性紅燈**，不是確定性缺陷。
+  因此「紅燈本身」沒有問題（不可靜默吞掉），問題在於**它坐在 pre-push 的阻擋路徑上**。
+- **風險**：誤紅會擋住合法推送 ⇒ 實務壓力會逼人用 `git push --no-verify`（**連 `make ci-gate` 都跳過**），
+  結果是**真正的**紅燈更容易被忽略 —— 與本 session 在修的同族（gate 靜默失效／閘門可信度流失）互為表裡。
+  同日已有兩次同型：本票（`check_jev_contract.sh`）與 FU-20260926-17（`internal/fubonproxy` 時序 flake）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：離線化**。以 hermetic fixture／stub 取代真呼叫；repo 已有同型前例
+     （`tests/scripts/*` 與 `scripts/ci/negative-proof-lib.sh` 的 fixture 式負向證明）。
+     若真呼叫仍要保留，應移到**非阻擋** lane（nightly 或 `workflow_dispatch`），
+     **不要**放在 pre-push／PR 必經路徑上。
+  2. **次選：明示外部相依 + 有界重試 + 記錄**。重試 N 次，每次都要**寫出**第 k 次失敗／逾時的
+     訊息與最終判定（`::warning::` 或步驟輸出），並在腳本檔頭明列「本檢查需外網」。
+  3. 不論選哪個：**不得**在 pre-push 路徑加 `|| true` / `continue-on-error`
+     （那正好是本 session 正在修的同族 false-green）。
+- **驗收條件（供實作者）**：在有外網阻斷的環境（例如 `http_proxy` 指向黑洞）跑
+  `make ci-gate`，行為必須**明示原因**且**不因外部 flake 而擋住合法 push**
+  （離線化版本的期望：該檢查不依賴外網即可判定；重試版本的期望：輸出可區分「契約不符」與「連不上」）。
+- **不可動**：`.githooks/pre-push` 本身（該檔已由 FU-20260926-15 佔用）。
+
+---
+
+---
+
+### FU-20260926-22 — `internal/apigateway` 的 `TestBackgroundTaskManager_RunTask_AppliesStartupJitter` 機率性假紅：**full jitter 單次抽樣落在 1ms 以下**（≈0.2%/次；**不是**負載相依）
+
+- **狀態**：`open`
+- **記錄日期**：2026-09-26
+- **來源**：修 `FU-20260926-17`（fubonproxy flaky）時，同一 worktree 跑 `make ci-full` 第一次紅在此測試（同一次 run 的其他 package 全綠）。
+  本票**尚未收錄進** `docs/operations/remediation-manifest.md`（該檔屬 #2026／另一 lane）⇒ **不於本 PR 改 manifest**。
+- **事實（實測，2026-09-26，worktree `fix/20260926-fubonproxy-flake-hermetic2`，macOS arm64 / go1.26.4）**：
+  - 失敗輸出（`make ci-full` → `Makefile:951-952` 的 `go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')`）：
+    ```
+    --- FAIL: TestBackgroundTaskManager_RunTask_AppliesStartupJitter (0.00s)
+        background_test.go:1368: subsequent run (LastRun non-zero): elapsed=331.459µs, expected ≥ 1ms. Jitter should be applied.
+    FAIL	github.com/kaecer68/atlas-go/internal/apigateway	52.464s
+    ```
+  - **機制（程式碼事實，非推論）**：`internal/apigateway/background.go:444` 是
+    `jitter := time.Duration(rand.Int63n(int64(task.Jitter)))` ⇒ **full jitter（均勻分布 `[0, Jitter)`）**；
+    測試 `background_test.go:1307-1310` 取 `targetJitter=500ms`、`minElapsed=1ms`、`maxElapsed=700ms`，
+    並在 Phase B（`task.SetLastRun(now-2h)` ⇒ LastRun 非零）以**單次** wall-clock 量測斷言 `elapsed ≥ 1ms`（`:1366-1370`）。
+    ⇒ 單次抽樣 < 1ms 的機率 ＝ 1ms / 500ms ＝ **0.2%／次**，與 `CHANGELOG.md:1074` 自載的「偽陽性率 ≈ 0.2%」一致。
+  - **判定：不是負載相依**（我先前口頭假設「負載造成」已**被否證**）：機率來自**單次隨機抽樣**，與並行負載無關；
+    負載只會讓 `elapsed` 偏大 ⇒ 更不容易紅。
+  - **機制探針（可複現；暫時改測試常數後已還原，`git status` 乾淨）**：把 `targetJitter` 由 `500ms` 改成 `5ms`
+    （jitter 窗口縮 100 倍、抽樣分布不變）⇒ 同一個斷言立刻大量紅，且簽名完全相同：
+    `-count=60` ⇒ **10 FAIL / 50 PASS**（≈16.7%，與「抽到 < ~0.83ms」的理論值 ≈16.6% 相符），
+    失敗樣本 `elapsed=172µs / 211µs / 553µs / 599µs / 684µs` 全部 < 1ms
+    ⇒ 紅燈確實源自**抽樣值**，不是排程抖動、也不是環境負載。
+  - **與 `FU-20260926-17` 無關**：那條只改 `internal/fubonproxy/manager_test.go`（別的 package 的/test 檔）⇒ 不可能影響本測試；
+    且該次 `make ci-full` 的 race 步驟裡 `internal/fubonproxy` 是綠的，本套件才是唯一紅燈。
+- **重跑證據（本機，2026-09-26）**：
+  - `go test -race -count=10 -run 'TestBackgroundTaskManager_RunTask_AppliesStartupJitter' -v ./internal/apigateway/` ⇒ **exit 0，10/10 PASS**。
+  - `go test -race -count=200 -run '…' -v ./internal/apigateway/` ⇒ **exit 0，200/200 PASS**（與 0.2%/次 一致：200 次的期望紅燈 ≈ 0.4 次）。
+  - 整條 race 指令單跑：`ATLAS_STORE_BACKEND=sqlite go test -race -count=1 $(go list ./... | grep -v '/cmd/atlas$')` ⇒ **exit 0（181 packages ok、0 FAIL）**。
+- **風險**：它坐在 `make ci-full`／pre-push 的**必經路徑**上 ⇒ 0.2%/次的假紅會擋合法 push
+  （與 `FU-20260926-17`、`FU-20260926-21` 同族：閘門可信度流失 ⇒ 逼人用 `--no-verify`）。
+- **建議方向（只建議，未實作）**：
+  1. **首選：把 jitter 抽樣做成可注入 seam**（同 repo 已有同型做法：`restartInitialDelayForTest`、`portprobe.lsofPath`），
+     測試固定抽樣值 ⇒ 斷言回到**決定性**，同時保住「jitter 被誤刪 ⇒ 立即紅」的 regression 能力。
+  2. **次選：統計式改寫**：對 N 次抽樣取統計量（如 20 次取 max ≥ 1ms、且每次 ≤ 700ms），
+     並把偽陽率寫成 `0.2%^N`（N=20 ⇒ ~8e-62）；**只放大 `minElapsed` 不算修**（會讓「抖動被移除」更難被抓到）。
+  3. **另一條路：不靠 wall-clock**：改觀測「確實走了 jitter 分支」的可觀測事實（事件／欄位／log），
+     並在測試內**明確界定 jitter 上界**（full jitter 的上界 ＝ `task.Jitter` 本身 ＝ 500ms）。
+  4. **不需改 production 行為**：full jitter 是刻意的 thundering-herd 防護（`background.go:184` 附近的註記）；
+     本票是**測試可測性**問題。
+- **驗收條件**：在 `make ci-full` 的實際條件下該測試連續 ≥ 200 次 0 紅；
+  **負對照**：移除 `background.go:443` 的 `!task.LastRun().IsZero() && task.Jitter > 0`（jitter 不再套用）⇒ 該測試**仍必須紅**。
+- **不可動**：`docs/operations/remediation-manifest.md`（另一 lane 的 SSOT）、`.githooks/pre-push`（`FU-20260926-15` 佔用）。
 
 ## 判讀註記（讀告警與做驗收前必讀）
 

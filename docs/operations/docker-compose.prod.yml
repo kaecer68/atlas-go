@@ -111,7 +111,11 @@ services:
       - TS_TUNE_MEMORY=2GB
       - TS_TUNE_NUM_CPUS=4
     ports:
-      - "55432:5432"
+      # 只綁 loopback（2026-09-26，與 repo-root `docker-compose.yml` 對齊）：
+      # DB 裸埠不該對 LAN/Tailscale 發佈（生產實測 55432 經 Tailscale 可達）。
+      # 本檔若被照檔頭指令使用（`docker compose -f docker-compose.prod.yml up -d`），
+      # 這個 bind 同樣生效，避免同一個洞被兩份 compose 各自重現。
+      - "127.0.0.1:55432:5432"
     volumes:
       - atlas-postgres-data:/var/lib/postgresql/data
     networks:

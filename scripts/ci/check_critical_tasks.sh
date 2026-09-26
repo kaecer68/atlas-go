@@ -32,6 +32,11 @@ cd "$REPO_ROOT"
 # 新增檢查項時：確認 task 名只在註冊點出現（grep -r '<name>' 全 repo）。
 CRITICAL_TASKS=(
   "template_detector_scan" # 2026-08-10 DCE 事故（:= 遮蔽）；binary 唯一 literal（實證 0→2）
+  # 2026-09-26（#1944 I31 production 半邊）：新鮮度監控的匯出任務。它被 DCE/遮蔽移除
+  # 的症狀是「監控整個消失而 CI 全綠」——正是本檢查要抓的形狀。
+  # binary 內只出現在註冊點與同一函式的 log（`cmd/atlas/calibration_freshness_metrics_task.go`），
+  # 兩者同生同滅；測試檔與文件中的字串不進 binary（已實查）。
+  "calibration_freshness_metrics_export"
 )
 
 BIN="$(mktemp)"

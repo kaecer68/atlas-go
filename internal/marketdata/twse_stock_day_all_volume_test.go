@@ -10,8 +10,11 @@ package marketdata
 // therefore part of the universe contract:
 //
 //	TWSE STOCK_DAY_ALL : 成交股數 (SHARES) — www.twse.com.tw/exchangeReport/STOCK_DAY_ALL
-//	Fugle              : total.tradeVolume  (same share count, fugle_client.go:357)
-//	Fubon proxy        : total.tradeVolume  (services/fubon-proxy/main.py:162)
+//	Fugle              : wire total.tradeVolume is LOTS → client x1000 (fugle_client.go GetQuote)
+//	Fubon proxy        : wire total.tradeVolume is LOTS → client x1000 (fubon_client.go GetQuote/GetQuotes)
+//
+// After #1987 every provider hands consumers a share-denominated Quote.Volume;
+// see the "Cross-provider unit contract" section below.
 //
 // The hermetic tests below pin the TWSE side without a network call; the live
 // test (env-gated, skipped by default) re-measures the real endpoint.
@@ -167,32 +170,38 @@ func TestTWSEStockDayAll_LiveVolumeUnitStats(t *testing.T) {
 	}
 }
 
-// ── Cross-provider unit gap (verified 2026-09-25) ───────────────────────────
+// ── Cross-provider unit contract (#1987, 2026-09-26) ────────────────────────
 //
-// TWSE reports SHARES, Fugle/Fubon report LOTS. The two providers therefore
-// disagree by 1000x on domain.Quote.Volume, and
-// monitoring.ScoringScreener.applyVolumeAndPriceFilters multiplies that field
-// by the last price to compare against its NT$10M turnover floor.
+// The upstream WIRE units still differ by provider — TWSE reports SHARES,
+// Fugle/Fubon intraday report LOTS — but domain.Quote.Volume no longer does:
+// every provider normalises to 成交股數 (shares) at the boundary, so consumers
+// read Volume at face value. The tests below pin BOTH halves of that contract:
+//
+//  1. the upstream unit evidence (why the x1000 exists and must not be
+//     removed), and
+//  2. the new client behaviour (wire lots -> Quote.Volume shares).
 //
 // Official sources:
 //
-//	Fugle  Candles: data[0].volume — "Ｋ線成交量（整股：成交張數；興櫃股票及盤中
-//	        零股：成交股數；指數：成交金額）"
-//	         https://developer.fugle.tw/docs/data/http-api/intraday/candles/
-//	Fugle  Quote example: total.tradeValue=31,019,803,000,
-//	         total.tradeVolume=54,538, avgPrice=568.77 → tradeValue/tradeVolume
-//	         = avgPrice x 1000, i.e. tradeVolume counts LOTS.
+//	Fugle  intraday/quote example: total.tradeValue=31,019,803,000,
+//	       total.tradeVolume=54,538, avgPrice=568.77 → tradeValue/tradeVolume
+//	       = avgPrice x 1000, i.e. the wire tradeVolume counts LOTS.
+//	Fugle  intraday/candles: "整股：成交張數" (minute bars, LOTS) —
+//	       https://developer.fugle.tw/docs/data/http-api/intraday/candles/
+//	Fugle  historical/candles: "整股標的：分K為「張」，日／週／月K為成交股數"
+//	       — daily bars are SHARES (verified against TWSE 成交股數 in
+//	       production: 110/110 exact matches, issue #1987 survey).
 //	Fubon  富邦新一代 API docs are the same Fugle marketdata spec
-//	         (SDK path fubon_neo.fugle_marketdata...): identical field list,
-//	         identical example, same "整股：成交張數" note.
-//	         https://www.fbs.com.tw/TradeAPI/docs/market-data/http-api/intraday/quote/
-//
-// The tests below pin the CURRENT, unnormalised behaviour so the gap cannot
-// change silently. They are tripwires, not endorsements.
+//	       (SDK path fubon_neo.fugle_marketdata...): identical field list,
+//	       identical example, same "整股：成交張數" note.
+//	       https://www.fbs.com.tw/TradeAPI/docs/market-data/http-api/intraday/quote/
 
-// TestFugleTradeVolumeIsLots_DocumentedUnitGap decodes the official Fugle quote
-// example and shows, arithmetically, that total.tradeVolume is a LOT count.
-func TestFugleTradeVolumeIsLots_DocumentedUnitGap(t *testing.T) {
+// TestFugleTradeVolumeIsLots_UpstreamEvidence decodes the official Fugle quote
+// example and shows, arithmetically, that the WIRE total.tradeVolume is a LOT
+// count. This is the evidence for the boundary conversion: if a Fugle API
+// change ever makes this ratio stop being ~1000, the client's x1000 must be
+// re-evaluated.
+func TestFugleTradeVolumeIsLots_UpstreamEvidence(t *testing.T) {
 	// Verbatim fields from the official example (2330, 2023-05-29).
 	const (
 		exampleTradeValue  = 31_019_803_000.0
@@ -209,8 +218,13 @@ func TestFugleTradeVolumeIsLots_DocumentedUnitGap(t *testing.T) {
 		t.Fatalf("tradeValue/tradeVolume/avgPrice = %.3f, want 1000 (lots): the upstream unit convention changed — "+
 			"re-read the Fugle/Fubon docs before touching the providers", ratio)
 	}
+}
 
-	// And that is what the client hands to domain.Quote.Volume: the raw field.
+// TestFugleClientNormalisesLotsToShares pins the #1987 boundary contract on the
+// REST quote path: the same official-example payload that carries
+// tradeVolume=54,538 (lots) on the wire must surface as
+// Quote.Volume = 54,538,000 (shares).
+func TestFugleClientNormalisesLotsToShares(t *testing.T) {
 	const officialExampleBody = `{"date":"2023-05-29","type":"EQUITY","exchange":"TWSE","market":"TSE",` +
 		`"symbol":"2330","name":"台積電","closePrice":568,"avgPrice":568.77,"lastPrice":568,` +
 		`"total":{"tradeValue":31019803000,"tradeVolume":54538,"transaction":9530}}`
@@ -228,30 +242,22 @@ func TestFugleTradeVolumeIsLots_DocumentedUnitGap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQuote: %v", err)
 	}
-	if q.Volume != exampleTradeVolume {
-		t.Fatalf("Quote.Volume = %d, want the raw tradeVolume %d. If the client was changed to normalise to shares, "+
-			"do the same for the Fubon proxy (fubon_client.go) and TWSE (twse_openapi.go) and update every consumer "+
-			"(screener VolumeIntraday, ledger quote history, dashboard display) in the same change.",
-			q.Volume, exampleTradeVolume)
+	const wantShares = 54_538 * 1000
+	if q.Volume != wantShares {
+		t.Fatalf("Quote.Volume = %d, want %d (wire tradeVolume 54,538 lots x domain.SharesPerLot)", q.Volume, wantShares)
 	}
-	// The payload's own money field settles it: 54,538 lots x 1000 shares x
-	// NT$568 = NT$31.0bn = tradeValue. Reading Volume as shares would give
-	// NT$31M, three orders of magnitude below the payload's own tradeValue.
-	if normalised := float64(q.Volume) * 1000 * q.Last; normalised < 30.5e9 || normalised > 31.5e9 {
-		t.Errorf("normalised (x1000) turnover = %.0f, want ~NT$31bn (tradeValue from the same payload)", normalised)
+	// Cross-check against the payload's own money field: 54,538,000 shares x
+	// NT$568 = NT$31.0bn = tradeValue. A share-read WITHOUT the conversion
+	// would give NT$31M, three orders of magnitude below tradeValue.
+	if turnover := float64(q.Volume) * q.Last; turnover < 30.5e9 || turnover > 31.5e9 {
+		t.Errorf("turnover = %.0f, want ~NT$31bn (= the payload's own tradeValue)", turnover)
 	}
-	if asShares := float64(q.Volume) * q.Last; asShares >= 31e6 {
-		t.Errorf("share-read turnover = %.0f, want ~NT$31M — far from the payload's tradeValue", asShares)
-	}
-	t.Logf("Quote.Volume=%d is LOTS; normalising to shares for the universe turnover floor needs x1000 (TWSE path already returns shares)",
-		q.Volume)
 }
 
-// TestFubonClientTradeVolumeIsLots_DocumentedUnitGap pins the same gap on the
-// proxy path: services/fubon-proxy/main.py maps the Fubon SDK's
-// total.tradeVolume into volume, and fubon_client.go puts it into
-// domain.Quote.Volume unchanged.
-func TestFubonClientTradeVolumeIsLots_DocumentedUnitGap(t *testing.T) {
+// TestFubonClientNormalisesLotsToShares pins the same contract on the proxy
+// path: services/fubon-proxy/main.py maps the Fubon SDK's total.tradeVolume
+// (lots) into volume, and fubon_client.go must convert it to shares.
+func TestFubonClientNormalisesLotsToShares(t *testing.T) {
 	const proxyBody = `{"symbol":"2330","last":568,"open":574,"high":574,"low":564,` +
 		`"volume":54538,"is_open":false,"is_close":true,"source":"fubon"}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -268,17 +274,17 @@ func TestFubonClientTradeVolumeIsLots_DocumentedUnitGap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQuote: %v", err)
 	}
-	if q.Volume != 54_538 {
-		t.Fatalf("Quote.Volume = %d, want the proxy's raw 54538 (lots)", q.Volume)
+	const wantShares = 54_538 * 1000
+	if q.Volume != wantShares {
+		t.Fatalf("Quote.Volume = %d, want %d (proxy volume 54,538 lots x domain.SharesPerLot)", q.Volume, wantShares)
 	}
-	// As lots this mega-cap still clears the NT$10M floor (NT$31M), so the
-	// gap does not announce itself on 台積電; it wipes the mid and small caps,
-	// whose true turnover sits between NT$10M and NT$10bn.
-	asLots := float64(q.Volume) * q.Last
-	asShares := float64(q.Volume) * 1000 * q.Last
-	t.Logf("same payload read as lots = NT$%.0f, as shares = NT$%.0f (1000x gap)", asLots, asShares)
-	if asShares/asLots != 1000 {
-		t.Errorf("unit gap = %v, want exactly 1000", asShares/asLots)
+	// As shares this mega-cap clears the NT$10M floor with its real turnover
+	// (~NT$31bn); the unit fix is what lets mid/small caps be judged by the
+	// same yardstick instead of a 1000x-tighter one.
+	asShares := float64(q.Volume) * q.Last
+	t.Logf("same payload normalised to shares = NT$%.0f turnover", asShares)
+	if asShares < 30.5e9 || asShares > 31.5e9 {
+		t.Errorf("turnover = %.0f, want ~NT$31bn", asShares)
 	}
 }
 

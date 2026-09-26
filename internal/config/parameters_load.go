@@ -143,9 +143,14 @@ func mergeAllDefaults(cfg *ParametersConfig) {
 }
 
 // GetParametersConfig returns the singleton parameters configuration.
+//
+// The singleton is the configuration the process runs on, so it carries the
+// calibrated overlay (FU-20260926-07): LoadParametersConfig reads the SSOT file,
+// ApplyCalibratedOverlayLayer layers the runtime adaptations on top. When no
+// overlay path is registered the result is byte-for-byte the SSOT read.
 func GetParametersConfig() *ParametersConfig {
 	if parametersConfig == nil {
-		cfg, err := LoadParametersConfig(parametersPath)
+		cfg, err := LoadEffectiveParametersConfig(parametersPath)
 		if err != nil {
 			return DefaultParametersConfig()
 		}

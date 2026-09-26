@@ -67,6 +67,16 @@ const defaultBackfillStart = "2026-01-01"
 // ~62 missing trading days) already exceeds the daily quota by ~3×, so it
 // must span several days regardless — reserving 1,500 calls does not add a
 // day, it only stops one task from starving the rest of the platform.
+//
+// fix/finmind-quota-honor-402-r (2026-09-26): the floor is a slice of the
+// LOCAL ceiling, so it is only as good as that ceiling. With the ceiling
+// corrected from 14,400 to 12,000 (FinMind started refusing at ~12,500) this
+// floor now stops the backfill at 10,500 calls — 2,000 below the wall. The
+// old arithmetic stopped it at 12,900, i.e. ~400 calls PAST the point where
+// the upstream was already answering 402, which is how the 02:10Z run burned
+// the day's budget on guaranteed failures. The relationship to enforce is
+// "floor < ceiling < observed upstream refusal", and the daily ceiling is read
+// from marketdata.FinMindDailyLimit (see TestQuoteBackfillQuotaFloor_*).
 const backfillQuotaStopRemaining = 1500
 
 // NewQuoteBackfillRunner returns a BTM-compatible runner (func(ctx) error)

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/config"
+	"github.com/kaecer68/atlas-go/internal/logging"
 )
 
 // SessionOutcome is a lightweight snapshot of a past trading session
@@ -46,9 +48,24 @@ type CalibrationReport struct {
 	SessionSpan string            `json:"session_span"`
 	Evaluated   int               `json:"orders_evaluated"`
 	Changes     []ParameterChange `json:"changes"`
-	Errors      []string          `json:"errors,omitempty"`
-	Verdict     string            `json:"verdict"`
-	Summary     string            `json:"summary"`
+	// Rejected lists proposals the sanity floor refused. A blocked drift is
+	// reported with the same weight as an applied change: "nothing changed"
+	// must not be the only trace of a guard that just stopped the optimizer
+	// from walking a risk limit down.
+	Rejected []ParameterRejection `json:"rejected,omitempty"`
+	Errors   []string             `json:"errors,omitempty"`
+	Verdict  string               `json:"verdict"`
+	Summary  string               `json:"summary"`
+}
+
+// ParameterRejection records a proposed calibration value that was refused
+// before it could be applied (see calibrationSanityFloor).
+type ParameterRejection struct {
+	Name     string  `json:"name"`
+	Current  float64 `json:"current"`
+	Proposed float64 `json:"proposed"`
+	Floor    float64 `json:"floor"`
+	Reason   string  `json:"reason"`
 }
 
 // ParameterChange records a single parameter adjustment with rationale.
@@ -153,9 +170,23 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		current, _ := ie.GetParameter(name)
 		best := result.ParamValues[name]
 
-		if !validateCalibrationBounds(current, best) {
-			fmt.Printf("self_calibrate: %s value %.6f rejected (outside [%.6f, %.6f])\n",
-				name, best, current*0.3, current*3.0)
+		if !validateCalibrationBoundsForParam(name, current, best) {
+			floor := calibrationSanityFloorFor(name)
+			reason := fmt.Sprintf(
+				"proposed %.6f is below the sanity floor %.6f for this parameter (relative window was [%.6f, %.6f])",
+				best, floor, current*0.3, current*3.0)
+			report.Rejected = append(report.Rejected, ParameterRejection{
+				Name:     name,
+				Current:  current,
+				Proposed: best,
+				Floor:    floor,
+				Reason:   reason,
+			})
+			logging.Warn("self_calibrate", "calibration_rejected_sanity_floor",
+				logging.FStr("param", name),
+				logging.FFloat64("current", current),
+				logging.FFloat64("proposed", best),
+				logging.FFloat64("floor", floor))
 			continue
 		}
 
@@ -180,7 +211,18 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 		applyCalibrationChange(ie, name, best, report)
 	}
 
-	// Persist calibrated parameters to disk so they survive server restarts.
+	// Persist calibrated parameters to disk so the adaptation survives a container
+	// recreate.
+	//
+	// FU-20260926-07: this used to write configs/parameters.json in place (after
+	// SnapshotToBackup). That file is baked into the image and is NOT
+	// bind-mounted, so the write landed in the container's writable layer: it
+	// never reached git, it was lost on the next container recreate, and while
+	// the container ran nothing could distinguish the reviewed SSOT value from
+	// the adapted one. The adaptation now goes to the calibrated-parameters
+	// overlay under the bind-mounted data/ tree and is layered back on top of the
+	// SSOT at load time (config.ApplyCalibratedOverlayLayer), so the SSOT file
+	// stays pristine and diffable.
 	if len(report.Changes) > 0 {
 		now := time.Now()
 		for _, name := range paramNames {
@@ -189,15 +231,7 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 				config.SetRiskCalibrationMetadata(name, now, "bayesian_optimization")
 			}
 		}
-		if p := config.GetParametersConfigPath(); p != "" {
-			if err := config.SnapshotToBackup(p); err != nil {
-				fmt.Printf("self_calibrate: snapshot_to_backup failed: %v\n", err)
-			}
-		}
-		if err := config.GetParametersConfig().LockedSaveWithRollback(config.GetParametersConfigPath()); err != nil {
-			// Non-fatal: calibration results remain valid in memory.
-			fmt.Printf("self_calibrate: failed to persist parameters: %v\n", err)
-		}
+		persistCalibrationOverlay(report, now)
 	}
 
 	if len(report.Changes) == 0 {
@@ -206,6 +240,11 @@ func (g *RiskGate) SelfCalibrate(ctx context.Context, provider CalibrationProvid
 			"risk gate thresholds optimal (baseline=%.4f). no adjustments needed across %d sessions.",
 			baseline, len(sessions),
 		)
+		if len(report.Rejected) > 0 {
+			report.Summary += fmt.Sprintf(
+				" %d proposal(s) rejected by the sanity floor: %s.",
+				len(report.Rejected), describeRejections(report.Rejected))
+		}
 	} else {
 		report.Verdict = "calibrated"
 		report.Summary = fmt.Sprintf(
@@ -366,11 +405,64 @@ func classifyDelta(deltaPct float64, nSessions int) string {
 	}
 }
 
+// persistCalibrationOverlay writes the accepted risk-threshold changes to the
+// calibrated-parameters overlay (FU-20260926-07). See the persistence block in
+// SelfCalibrate for why the SSOT file is deliberately left untouched.
+//
+// Each entry records the SSOT value it is layered on, so a later reviewed edit
+// of configs/parameters.json invalidates a stale adaptation instead of being
+// silently overridden. A disabled overlay path is not an error — the calibrated
+// values still apply in memory for this process — but it is logged loudly,
+// because it means the adaptation is lost on restart.
+func persistCalibrationOverlay(report *CalibrationReport, now time.Time) {
+	path := config.GetCalibratedOverlayPath()
+	entries := make(map[string]config.CalibrationOverlayEntry, len(report.Changes))
+	for _, c := range report.Changes {
+		// One extra SSOT read per accepted parameter per round (daily): it keeps
+		// the reconciliation baseline exact instead of derived from live state.
+		ssot, _ := config.SSOTParameterValue(c.Name)
+		entries[c.Name] = config.CalibrationOverlayEntry{
+			Value:        c.After,
+			Before:       c.Before,
+			SSOT:         ssot,
+			CalibratedAt: now,
+			Method:       "bayesian_optimization",
+			Rationale:    c.Rationale,
+		}
+	}
+
+	if path == "" {
+		logging.Warn("self_calibrate", "calibration_overlay_disabled",
+			"detail", "no calibrated-parameters overlay path registered; calibrated values apply in memory only and will not survive a restart")
+		return
+	}
+
+	ov, err := config.UpdateCalibrationOverlay(path, "risk_gate_calibrate", entries)
+	if err != nil {
+		logging.Error("self_calibrate", "calibration_overlay_write_failed",
+			logging.FStr("path", path), logging.Err(err))
+		return
+	}
+	for _, c := range report.Changes {
+		logging.Info("self_calibrate", "calibration_persisted",
+			logging.FStr("param", c.Name),
+			logging.FFloat64("before", c.Before),
+			logging.FFloat64("after", c.After),
+			logging.FStr("path", path))
+	}
+	logging.Info("self_calibrate", "calibration_overlay_written",
+		logging.FStr("path", path), logging.FInt("entries", len(ov.Entries)))
+}
+
 // validateCalibrationBounds checks whether the proposed value is within
 // [current*0.3, current*3.0]. When current is zero the check is skipped
 // (no meaningful bound to compare against). This prevents the bug class
 // where repeated Bayesian optimization converges to near-zero values that
 // are 20× outside any sane operating range.
+//
+// This is the generic, parameter-agnostic rule. Production callers must use
+// validateCalibrationBoundsForParam, which adds the per-parameter sanity floor
+// that this function cannot express (see calibrationSanityFloor).
 func validateCalibrationBounds(current, proposed float64) bool {
 	// Absolute floor: relative bounds (current*0.3 ~ current*3.0) alone let
 	// the optimizer drift to absurdly small values (e.g. max_position_size
@@ -378,7 +470,7 @@ func validateCalibrationBounds(current, proposed float64) bool {
 	// This floor matches the documented sane scale (15% position / 3% daily
 	// loss): anything below 0.5% is a pathological drift, not a genuine
 	// optimum, so reject it regardless of current.
-	const absFloor = 0.005 // 0.5% — sane lower bound for both params
+	const absFloor = defaultCalibrationFloor
 
 	// Relative bounds stay as the primary acceptance rule.
 	if current == 0 {
@@ -392,4 +484,96 @@ func validateCalibrationBounds(current, proposed float64) bool {
 		return false
 	}
 	return proposed >= lower && proposed <= upper
+}
+
+// defaultCalibrationFloor is the parameter-agnostic catch-all floor (0.5%):
+// nothing in the risk parameter space is meaningfully below it. Tunables with a
+// documented operating envelope carry a named, higher floor in
+// calibrationSanityFloor.
+const defaultCalibrationFloor = 0.005
+
+// calibrationSanityFloor is the absolute floor per tunable: the lowest value
+// that is still a genuine operating point rather than an artifact of the
+// optimizer's surrogate score.
+//
+// Why a floor is needed at all (FU-20260926-07): the relative window
+// [current*0.3, current*3.0] is a per-round rate limit, not a guard. A value
+// that shrinks by less than 3× stays inside the window *every* round, so the
+// optimizer can walk a risk limit down indefinitely. That is exactly what
+// production did: risk.max_daily_loss_pct 0.03 → 0.0108 (0.36×, inside
+// [0.009, 0.09]) and risk.max_position_size 0.15 → 0.054 (0.36×, inside
+// [0.045, 0.45]). Every single step was "allowed"; only the accumulated drift
+// was pathological. The previous shared 0.5% floor did not stop it because
+// 0.0108 > 0.005 — it only bounded where the walk could end, not that it
+// happened.
+//
+// The floors below are not invented here; they are anchored to values already
+// documented in this repository, so the guard can be reviewed against the
+// system's own charter:
+//
+//   - risk_max_position_size = 0.12 — the most conservative position size the
+//     system itself documents (engine.strategy_evolution.configs.value.cautious
+//     .max_position_size in configs/parameters.json). Below it the gate has left
+//     the documented operating envelope. The SSOT value is 0.15, so the loop can
+//     still tighten once (0.15 → 0.12) but cannot walk to 0.054.
+//   - risk_max_daily_loss_pct = 0.03 — the SSOT value itself ("3% max daily
+//     loss"). A tighter daily loss limit halts trading earlier. This loop scores
+//     replayed orders, so it can measure "was blocking right?" but it cannot
+//     price the cost of a spurious halt; a tightening is therefore unvalidated
+//     by construction and must be a deliberate charter edit in
+//     configs/parameters.json, not an automatic drift.
+//
+// Why a floor and not an evidence ratchet ("accept a sub-floor value only after
+// N consecutive rounds")? A ratchet still ends below the sane value — it only
+// takes longer — and it would need per-parameter state that outlives the
+// process, i.e. exactly the kind of derived state this change is trying to make
+// legible. The floor is stateless, deterministic and testable, and the escape
+// hatch is explicit (edit the SSOT value, which is a reviewed diff).
+var calibrationSanityFloor = map[string]float64{
+	"risk_max_position_size":  0.12,
+	"risk_max_daily_loss_pct": 0.03,
+}
+
+// calibrationSanityFloorFor returns the sanity floor for a tunable. Tunables
+// without a named floor fall back to defaultCalibrationFloor (0.5%), i.e. the
+// historical behavior.
+func calibrationSanityFloorFor(name string) float64 {
+	if f, ok := calibrationSanityFloor[name]; ok {
+		return f
+	}
+	return defaultCalibrationFloor
+}
+
+// validateCalibrationBoundsForParam reports whether `proposed` is an acceptable
+// next value for the named tunable whose live value is `current`. Two rules,
+// both must hold:
+//
+//  1. the absolute sanity floor for that parameter (never below it), and
+//  2. the per-round relative window [current*0.3, current*3.0].
+//
+// Recovery: when the live value is itself below the floor (state written by a
+// build that predates the floor, i.e. an already-drifted deployment), the
+// relative window is meaningless — 0.3× of a pathological value cannot express
+// a sane bound — so the floor becomes the baseline and any proposal inside
+// [floor, floor*3] is accepted. That lets a drifted parameter climb back to a
+// sane value in one round instead of being frozen at the drifted value.
+func validateCalibrationBoundsForParam(name string, current, proposed float64) bool {
+	floor := calibrationSanityFloorFor(name)
+	if proposed < floor {
+		return false
+	}
+	if current < floor {
+		return proposed <= floor*3.0
+	}
+	return validateCalibrationBounds(current, proposed)
+}
+
+// describeRejections renders rejections as "name proposed (floor)" for the
+// calibration report summary.
+func describeRejections(rejections []ParameterRejection) string {
+	parts := make([]string, 0, len(rejections))
+	for _, r := range rejections {
+		parts = append(parts, fmt.Sprintf("%s proposed %.6f < floor %.6f", r.Name, r.Proposed, r.Floor))
+	}
+	return strings.Join(parts, "; ")
 }

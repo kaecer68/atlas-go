@@ -318,13 +318,19 @@ func (p *FugleWebSocketProvider) handleMessage(msg fugleWSMessage) {
 }
 
 func (p *FugleWebSocketProvider) tradeToQuote(trade fugleWSTradeData) domain.Quote {
+	// The trades channel's volume (成交總量) follows Fugle's intraday convention
+	// for regular-board stocks: 成交張數 (lots) — the same unit the REST
+	// intraday/quote endpoint documents and its official example proves. The
+	// WebSocket docs do not state the unit explicitly, so this conversion is a
+	// documented inference (#1987): VERIFY against TWSE 成交股數 before wiring
+	// this provider into a production path (today it has none).
 	return domain.Quote{
 		Symbol:     trade.Symbol,
 		Last:       trade.Price,
 		Open:       trade.Open,
 		High:       trade.High,
 		Low:        trade.Low,
-		Volume:     trade.Volume,
+		Volume:     trade.Volume * domain.SharesPerLot,
 		Market:     "TW",
 		AsOf:       time.Now(),
 		IsTradable: !trade.IsTrial,

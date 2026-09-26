@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -131,7 +133,12 @@ func TestFinMind_ErrorBody_Includes402Quota(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewFinMindClient("k")
+	// Isolated state dir: a 402 now LATCHES the quota day as exhausted
+	// (fix/finmind-quota-honor-402-r), so this test must not write that latch
+	// into the shared data/state/finmind_daily_quota.json — every later test
+	// in the package that uses the default dir would short-circuit.
+	dir := t.TempDir()
+	c := newFinMindClientInternal("k", dir)
 	c.httpClient = &http.Client{Transport: &rewriteTransport{target: ts.URL, inner: http.DefaultTransport}}
 	c.rateLimiter = newUnlimitedLimiter()
 	c.retryCfg = retryConfig{maxAttempts: 1}
@@ -145,5 +152,14 @@ func TestFinMind_ErrorBody_Includes402Quota(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "upper limit") {
 		t.Errorf("402 body not captured: %v", err)
+	}
+	// The 402 must latch the day durably (persisted in the isolated dir).
+	if !c.quotaTracker.UpstreamExhausted() {
+		t.Error("402 must latch the quota day as upstream-exhausted")
+	}
+	if raw, readErr := os.ReadFile(filepath.Join(dir, "finmind_daily_quota.json")); readErr != nil {
+		t.Errorf("quota state not persisted: %v", readErr)
+	} else if !strings.Contains(string(raw), `"upstream_exhausted":true`) {
+		t.Errorf("quota state missing the upstream latch: %s", raw)
 	}
 }

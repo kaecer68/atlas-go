@@ -290,6 +290,15 @@ func run(args []string, deps appDeps) error {
 
 	cfg := deps.loadConfig()
 
+	// FU-20260926-07: the risk self-calibration loop adapts a few tunables at
+	// runtime. It persists them to the calibrated-parameters overlay under the
+	// bind-mounted data/ tree — NOT to configs/parameters.json, which is baked
+	// into the image, is not mounted, and therefore lost the adaptation on every
+	// container recreate. Register the overlay path before anything can read the
+	// parameters singleton; configs/parameters.json stays the reviewed SSOT and
+	// the overlay is layered on top of it.
+	config.SetCalibratedOverlayPath(config.CalibrationOverlayPath(cfg.WorkDir))
+
 	// SA06: composition root for shared dependency wiring.
 	// Elevated to run() level so it is visible to -live/-simulate paths.
 	var compositionRoot *composition.Root
@@ -657,7 +666,9 @@ func run(args []string, deps appDeps) error {
 		if err != nil {
 			log.Printf("[AgentHealth] failed to create health store: %v", err)
 		}
-		paramsCfg, err := config.LoadParametersConfig(cfg.ParametersConfigPath)
+		// Effective configuration (SSOT + calibrated overlay), so the runtime
+		// parameters agree with what the risk gate reads from the singleton.
+		paramsCfg, err := config.LoadEffectiveParametersConfig(cfg.ParametersConfigPath)
 		if err != nil {
 			log.Printf("[Parameters] failed to load parameters config: %v", err)
 		}
@@ -873,7 +884,8 @@ func run(args []string, deps appDeps) error {
 		// Monthly revenue endpoint (stock_get_monthly_revenue MCP tool) —
 		// reuse the same TSMCRevenueProvider used by the tsmc_revenue
 		// macro channel (register_adapters.go:163) so both share the
-		// FinMind singleton client + 14400/day QuotaRegistry tracker.
+		// FinMind singleton client + the daily QuotaRegistry tracker
+		// (marketdata.FinMindDailyLimit, 12000 since fix/finmind-quota-honor-402-r).
 		// Without this wiring the endpoint 503s in production.
 		if cfg.FinMindAPIKey != "" {
 			stockDeps.Revenue = marketdata.NewTSMCRevenueProviderWithStorage(cfg.FinMindAPIKey, filepath.Join(cfg.WorkDir, "data/state/tsmc_revenue"))

@@ -339,7 +339,7 @@ install-atlas-mcp-from-release:
 	if [ -n "$(VERSION)" ]; then VERSION_FLAG="--version $(VERSION)"; fi; \
 	./scripts/install-atlas-mcp-from-release.sh $$VERSION_FLAG
 
-test-backend:
+test-backend: embed-dirs
 	@echo "🧪 Testing Go backend..."
 	go test $(GO_PKGS)
 
@@ -349,7 +349,24 @@ test-integration:
 
 lint-backend:
 	@echo "🔍 Linting Go backend..."
-	@command -v gofmt >/dev/null && gofmt -l $(GO_PKGS) | (read; if [ $$? -ne 0 ]; then echo "❌ gofmt issues found"; exit 1; fi) || echo "  (gofmt skipped)"
+	@# ⚠️ 舊寫法 `gofmt -l | (read; if [ $$? -ne 0 ])` 的 $$? 是 **read** 的（不是 gofmt 的），
+	@# 而且整串被 `|| echo "(gofmt skipped)"` 吞掉 ⇒ 真的有格式問題時也只印 skipped 並回 0
+	@# （閘門看似存在、實際不可能紅；issue #2011 同族的「別命名為 gate 的裝飾品」）。
+	@command -v gofmt >/dev/null 2>&1 || { echo "    ❌ gofmt 不存在（Go toolchain 未安裝？）——閘門不得靜默消失"; exit 1; }
+	@# 註：gofmt 不吃 Go 的 `...` pattern（GO_PKGS 對它會 `lstat ... no such file` 且輸出空 ⇒ 舊寫法
+	@# 兩種壞法疊在一起：rc 被吞 + 根本沒掃到檔案）。改用 repo 根目錄（與 ci-gate 的 `gofmt -l .` 一致）。
+	@gofmt_out="$$(gofmt -l .)"; gofmt_rc=$$?; \
+	if [ "$$gofmt_rc" -ne 0 ]; then \
+		echo "    ❌ gofmt 執行失敗（rc=$${gofmt_rc}）——這不是「乾淨」"; \
+		exit 1; \
+	fi; \
+	if [ -n "$$gofmt_out" ]; then \
+		echo "    ❌ gofmt 格式不符："; \
+		echo "$$gofmt_out"; \
+		echo "    執行 gofmt -w <檔案> 後重跑"; \
+		exit 1; \
+	fi; \
+	echo "    ✅ gofmt 乾淨（gofmt -l . 無輸出）"
 	go vet $(GO_PKGS)
 
 # ---- CAL-1: rolling-store history import ----
@@ -426,6 +443,10 @@ ci: check-production-host
 	echo ""; \
 	echo "✅ CI: $$passed passed, ❌ $$failed failed, ⏱️  $$skipped timed out"; \
 	echo "    (slow scripts excluded — run 'make ci-slow' separately for those)"; \
+	if [ $$passed -eq 0 ]; then \
+		echo "    ❌ 0 支檢查被執行（glob 沒對到 scripts/ci/check_*.sh？）⇒『什麼都沒跑』不是通過"; \
+		exit 1; \
+	fi; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
 ci-quick: check-production-host
@@ -446,18 +467,25 @@ ci-quick: check-production-host
 	              scripts/ci/check_agents_index.sh \
 	              scripts/ci/check_jev_contract.sh \
 	              scripts/ci/check_monitoring_single_source.sh; do \
-		if [ -f "$$script" ]; then \
-			echo "  → $$script"; \
-			if timeout 10 bash $$script > /dev/null 2>&1; then \
-				passed=$$((passed+1)); \
-			else \
-				echo "    ❌ FAILED: $$script"; \
-				failed=$$((failed+1)); \
-			fi; \
+		if [ ! -f "$$script" ]; then \
+			echo "    ❌ 清單中的 $$script 不存在（改名／搬移？）⇒ 少跑一支不能算通過"; \
+			failed=$$((failed+1)); \
+			continue; \
+		fi; \
+		echo "  → $$script"; \
+		if timeout 10 bash $$script > /dev/null 2>&1; then \
+			passed=$$((passed+1)); \
+		else \
+			echo "    ❌ FAILED: $$script"; \
+			failed=$$((failed+1)); \
 		fi; \
 	done; \
 	echo ""; \
 	echo "✅ CI-quick: $$passed passed, ❌ $$failed failed"; \
+	if [ $$passed -eq 0 ]; then \
+		echo "    ❌ 0 支檢查被執行 ⇒『什麼都沒跑』不是通過"; \
+		exit 1; \
+	fi; \
 	if [ $$failed -gt 0 ]; then exit 1; fi
 
 # ---- inert 閉環靜態檢查（#1944 建議 2，2026-09-25）----
@@ -834,6 +862,42 @@ rebuild-all: rebuild-host-bin rebuild-atlas rebuild-cron
 #   Docker build/push (multi-platform)、deploy、gosec SARIF upload、
 #   跨 repo contract check (routes/contracts)
 
+# 可注入的目錄清單（供 hermetic 測試用 EMBED_DIRS=... 覆寫；預設＝repo 內兩個 embed 目錄）
+EMBED_DIRS ?= admin_web/dist client_web/dist
+
+# ── 本機 worktree bootstrap：`//go:embed all:dist` 的前置目錄 ────────────────────
+# 為什麼需要：`admin_web/embed.go` 與 `client_web/embed.go` 使用 `//go:embed all:dist`
+#   ⇒ 只要 `admin_web/dist` 或 `client_web/dist` **不存在**，`go build ./...`
+#     （連帶 `go vet` / `go generate` / `go test`）就會失敗：
+#       `pattern all:dist: no matching files found`
+#   「全新 worktree」（`git worktree add`）第一次跑本機閘門時**必然**遇到
+#   ⇒ 每一條新 lane 的第一次 push 都被擋（2026-09-26 一天內 3 次同型事故）。
+# 設計邊界（不可違反）：
+#   ① 只在目錄**不存在**時建立空佔位（`.keep`）⇒ 冪等；目錄已存在就完全不動它。
+#   ② CI **不受影響、也不可被遮蔽**：CI 的真 dist 來自 frontend 建置步驟；本目標在
+#      CI 環境（環境變數 `CI` 非空）時**什麼都不做** ⇒ CI 若真缺 dist，`go build` 仍會紅。
+#   ③ 不在 `go build` / `embed` 上做任何手腳（不放寬 pattern、不吞錯誤）。
+# 相關：`FU-20260926-15`（host/worktree 環境前置，同族）。
+.PHONY: embed-dirs
+embed-dirs:
+	@if [ -n "$${CI:-}" ]; then \
+		echo "  → embed-dirs: CI 環境（CI=$${CI}）⇒ 跳過（真 dist 由 frontend 建置流程產生）"; \
+	else \
+		created=""; \
+		for d in $(EMBED_DIRS); do \
+			if [ ! -d "$${d}" ]; then \
+				mkdir -p "$${d}"; \
+				touch "$${d}/.keep"; \
+				created="$${created} $${d}"; \
+			fi; \
+		done; \
+		if [ -n "$${created}" ]; then \
+			echo "  → embed-dirs: 已建立本機 dev 佔位:$${created}（各含 .keep，冪等）"; \
+			echo "     ⚠️  這只是本機 dev 佔位（//go:embed all:dist 需要目錄存在）；正式建置請跑"; \
+			echo "         make build-frontend —— 真 dist 會覆蓋它。"; \
+		fi; \
+	fi
+
 .PHONY: ci-gate
 # Contract tests for repository scripts (tests/scripts/*.sh) — OPT-IN ONLY.
 #
@@ -852,7 +916,8 @@ test-scripts:
 	done
 	@echo "    ✅"
 
-ci-gate:
+# 本機閘門（含 pre-push 路徑）先 bootstrap embed 目錄；CI 內為 no-op（見 embed-dirs）
+ci-gate: embed-dirs
 	@echo "🛡️  CI pre-push gate (fast, <30s)..."
 	@echo ""
 	@echo "  → gofmt check"
@@ -880,11 +945,21 @@ ci-gate:
 	@bash scripts/ci/check_agents_md_drift.sh
 	@bash scripts/ci/check_doc_links.sh
 	@echo "    ✅"
+	@echo "  → FOLLOWUPS 條目 id 唯一性（單檔；兩個 lane 撞號 ⇒ FAIL）"
+	@bash scripts/ci/check_followups_unique_ids.sh
+	@bash tests/scripts/test-followups-unique-ids.sh
+	@echo "    ✅"
+	@echo "  → 負向證明 harness 自我測試（#2011；餵 exit 127/2 必須紅燈）"
+	@bash tests/scripts/test-negative-proofs.sh
+	@echo "    ✅"
 	@echo "  → 關鍵背景任務存在於 binary（DCE 防再犯，2026-08-10 事故）"
 	@bash scripts/ci/check_critical_tasks.sh
 	@echo "    ✅"
 	@echo "  → binary freshness guard contract tests（唯一 hermetic 的 tests/scripts 測試；見 #1927）"
 	@bash tests/scripts/test-binary-freshness-guard.sh
+	@echo "    ✅"
+	@echo "  → embed-dirs 契約測試（hermetic：只用 mktemp 目錄，不建 git worktree）"
+	@bash tests/scripts/test-embed-dirs.sh
 	@echo "    ✅"
 	@echo "  → inert 閉環靜態檢查（#1944 建議 2；allowlist 見 scripts/ci/inert-baseline.json）"
 	@bash scripts/ci/check_inert_closure.sh
@@ -892,10 +967,14 @@ ci-gate:
 	@echo "  → monitoring 單一設定樹自我測試（hermetic fixtures；PR 階段攔『改錯棵』）"
 	@bash tests/scripts/test-monitoring-single-source.sh
 	@echo "    ✅"
-	@echo "  → revert-guard 自我測試（hermetic git fixtures；#1993）"
+	@echo "  → 全形字元緊鄰變數展開的靜態檢查（移植自 a2a-dev）＋自我測試"
+	@bash scripts/ci/check_fullwidth_var_expansion.sh
+	@bash tests/scripts/test-fullwidth-var-expansion.sh
+	@echo "    ✅"
+	@echo "  → 合併結果/ diff 衛生閘門自我測試（hermetic git fixtures；#1993）"
 	@bash tests/scripts/test-revert-guard.sh
 	@echo "    ✅"
-	@echo "  → 落後分支語意回退檢查（#1993；allowlist 見 scripts/ci/revert-guard-allowlist.json）"
+	@echo "  → 落後分支 diff 衛生 + evil-merge 檢查（#1993；allowlist 見 scripts/ci/revert-guard-allowlist.json）"
 	@bash scripts/ci/check_revert_guard.sh
 	@echo "    ✅"
 	@echo "  → fast CI scripts"
@@ -946,15 +1025,35 @@ ci-full: ci-gate ci-constitution
 	@$(MAKE) --no-print-directory ci-slow
 	@echo "    ✅"
 	@echo "  → coverage threshold (≥60%)"
-	@go test -coverprofile=/tmp/atlas-ci-full-coverage.out $$(go list ./... | grep -v '/cmd/atlas$$') > /dev/null 2>&1; \
-	COVERAGE=$$(go tool cover -func=/tmp/atlas-ci-full-coverage.out | awk '/^total:/ {print $$3}' | tr -d '\r' | sed 's/%//'); \
-	echo "    Total coverage: $${COVERAGE}%"; \
-	if echo "$$COVERAGE 60" | awk '{exit !($$1 < $$2)}'; then \
-		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
-		rm -f /tmp/atlas-ci-full-coverage.out; \
+	@set -e; \
+	COV_PROFILE=/tmp/atlas-ci-full-coverage.out; \
+	COV_LOG=/tmp/atlas-ci-full-coverage.log; \
+	COV_FUNC_LOG=/tmp/atlas-ci-full-coverage-func.log; \
+	rm -f "$${COV_PROFILE}" "$${COV_FUNC_LOG}"; \
+	if ! go test -coverprofile="$${COV_PROFILE}" $$(go list ./... | grep -v '/cmd/atlas$$') > "$${COV_LOG}" 2>&1; then \
+		echo "    ❌ go test 失敗（覆蓋率步驟）— log: $${COV_LOG}"; \
+		tail -n 40 "$${COV_LOG}"; \
 		exit 1; \
 	fi; \
-	rm -f /tmp/atlas-ci-full-coverage.out
+	if [ ! -s "$${COV_PROFILE}" ]; then \
+		echo "    ❌ 取不到覆蓋率：coverprofile 缺失或為空（$${COV_PROFILE}）"; \
+		exit 1; \
+	fi; \
+	if ! go tool cover -func="$${COV_PROFILE}" > "$${COV_FUNC_LOG}" 2>&1; then \
+		echo "    ❌ 取不到覆蓋率：go tool cover 解析失敗 — log: $${COV_FUNC_LOG}"; \
+		tail -n 20 "$${COV_FUNC_LOG}"; \
+		exit 1; \
+	fi; \
+	COVERAGE=$$(awk '/^total:/ {print $$3}' "$${COV_FUNC_LOG}" | tr -d '\r' | sed 's/%//'); \
+	echo "    Total coverage: $${COVERAGE}%"; \
+	case "$${COVERAGE}" in \
+		''|*[!0-9.]*) echo "    ❌ 取不到覆蓋率：COVERAGE 非數字（$${COVERAGE}）"; exit 1 ;; \
+	esac; \
+	if awk -v c="$${COVERAGE}" 'BEGIN{exit !(c+0 < 60)}'; then \
+		echo "    ❌ Coverage $${COVERAGE}% 低於 60% 閾值"; \
+		exit 1; \
+	fi; \
+	rm -f "$${COV_PROFILE}" "$${COV_LOG}" "$${COV_FUNC_LOG}"
 	@echo "    ✅"
 	@echo "  → orphan artifact check"
 	@ORPHANS=""; \

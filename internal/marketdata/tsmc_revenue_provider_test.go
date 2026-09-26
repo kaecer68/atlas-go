@@ -324,14 +324,14 @@ func TestTSMCRevenueProvider_QuotaRemaining(t *testing.T) {
 	client := newFinMindClientInternal("test-key", t.TempDir())
 	p := &TSMCRevenueProvider{client: client}
 	remaining := p.QuotaRemaining()
-	if remaining != 14400 {
-		t.Errorf("QuotaRemaining() = %d, want 14400 (full daily limit on fresh tracker)", remaining)
+	if want := finmindDailyLimitResolved(); remaining != want {
+		t.Errorf("QuotaRemaining() = %d, want %d (full daily limit on fresh tracker)", remaining, want)
 	}
 
 	// After one AllowCall, remaining should drop by 1.
 	client.quotaTracker.AllowCall()
-	if got := p.QuotaRemaining(); got != 14399 {
-		t.Errorf("QuotaRemaining() after 1 call = %d, want 14399", got)
+	if want := finmindDailyLimitResolved() - 1; p.QuotaRemaining() != want {
+		t.Errorf("QuotaRemaining() after 1 call = %d, want %d", p.QuotaRemaining(), want)
 	}
 
 	// Nil client must not panic — return 0 (signals "not configured" to

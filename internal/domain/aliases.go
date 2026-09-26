@@ -36,6 +36,10 @@ const (
 	SideReduce = shared.SideReduce
 )
 
+// SharesPerLot re-exports the Quote.Volume unit contract factor
+// (see shared.Quote.Volume). 1 張 = 1,000 股.
+const SharesPerLot = shared.SharesPerLot
+
 type (
 	Quote                    = shared.Quote
 	FactorScoreItem          = shared.FactorScoreItem

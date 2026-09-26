@@ -320,6 +320,32 @@ export interface CalibrationHealthSummary {
   out_of_range_patterns?: string[];
 }
 
+export interface CalibrationOverlay {
+  version: string;
+  updated_at: string;
+  source?: string;
+  entries: Record<string, CalibrationOverlayEntry>;
+}
+
+export interface CalibrationOverlayDiff {
+  name: string;
+  ssot: number;
+  effective: number;
+  before: number;
+  ratio: number;
+  calibrated_at: string;
+  method?: string;
+}
+
+export interface CalibrationOverlayEntry {
+  value: number;
+  before: number;
+  ssot: number;
+  calibrated_at: string;
+  method?: string;
+  rationale?: string;
+}
+
 export interface CalibrationValidation {
   old_config: StressIndexWeightsConfig;
   new_config: StressIndexWeightsConfig;
@@ -3208,6 +3234,7 @@ export interface QuotaEntry {
   state_file?: string;
   updated_at: string;
   exhausted: boolean;
+  state_error?: string;
 }
 
 export interface QuotaSnapshot {
@@ -3218,6 +3245,11 @@ export interface QuotaSnapshot {
 export interface QuotaState {
   calls_today: number;
   last_reset: string;
+  upstream_exhausted?: boolean;
+  upstream_reason?: string;
+  upstream_at?: string;
+  quota_unknown?: boolean;
+  quota_unknown_reason?: string;
 }
 
 export interface Quote {

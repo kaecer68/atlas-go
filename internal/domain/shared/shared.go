@@ -61,13 +61,23 @@ const (
 	SideReduce Side = "REDUCE"
 )
 
+// SharesPerLot converts 成交張數 (lots) to 成交股數 (shares): 1 張 = 1,000 股.
+// Providers whose upstream reports lots (Fugle/Fubon intraday) MUST multiply by
+// this factor at the boundary so the Quote.Volume contract below holds.
+const SharesPerLot = 1000
+
 // Quote represents a market data snapshot for a single symbol.
 type Quote struct {
-	Symbol     string    `json:"symbol"`
-	Last       float64   `json:"last"`
-	Open       float64   `json:"open"`
-	High       float64   `json:"high"`
-	Low        float64   `json:"low"`
+	Symbol string  `json:"symbol"`
+	Last   float64 `json:"last"`
+	Open   float64 `json:"open"`
+	High   float64 `json:"high"`
+	Low    float64 `json:"low"`
+	// Volume is ALWAYS 成交股數 (shares), regardless of provider — this is the
+	// single-unit contract (#1987). Providers reporting 成交張數 (lots) convert
+	// at the boundary via SharesPerLot; consumers must NOT re-convert by Source.
+	// Display layers that follow the 台股 convention of showing 張 divide by
+	// SharesPerLot at render time only.
 	Volume     int64     `json:"volume"`
 	Market     string    `json:"market"`
 	AsOf       time.Time `json:"as_of"`
