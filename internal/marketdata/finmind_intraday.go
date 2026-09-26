@@ -92,8 +92,8 @@ func (c *FinMindClient) FetchTaiwan5SecIndex(ctx context.Context, date string) (
 		// the day is spent for every consumer of the shared tracker.
 		safeBody := sanitizeFinMindBody(bodyStr, c.currentAPIKey())
 		if resp.StatusCode == http.StatusPaymentRequired || finmindQuotaBody(safeBody) {
-			c.markDailyQuotaExhausted(safeBody)
-			return nil, fmt.Errorf("finmind 5sec index: %w: %s", ErrQuotaExhausted, safeBody)
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(resp.StatusCode, safeBody))
+			return nil, fmt.Errorf("finmind 5sec index: %w (upstream HTTP %d): %s", ErrQuotaExhausted, resp.StatusCode, safeBody)
 		}
 		return nil, fmt.Errorf("finmind 5sec index: status %d, body: %s", resp.StatusCode, safeBody)
 	}

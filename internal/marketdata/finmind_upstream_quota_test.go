@@ -83,6 +83,11 @@ func TestFinMindClient_Upstream402_LatchesQuotaForRestOfDay(t *testing.T) {
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("upstream hits after the 402 = %d, want 1", got)
 	}
+	// The error must name the upstream signal, not just "quota exhausted":
+	// FU-20260926-01's acceptance condition asks for "upstream 402 at used=N".
+	if !strings.Contains(err.Error(), "upstream HTTP 402") {
+		t.Errorf("402 error must state the upstream status, got %v", err)
+	}
 
 	// (2) …and it LATCHES the day: later calls never reach the network.
 	for i := range 5 {
@@ -125,6 +130,12 @@ func TestFinMindClient_Upstream402_LatchesQuotaForRestOfDay(t *testing.T) {
 	// operator sees used=… in the error.
 	if !strings.Contains(err.Error(), "upstream-exhausted") {
 		t.Errorf("post-restart error should explain WHY (upstream-exhausted), got %v", err)
+	}
+	if !strings.Contains(err.Error(), "upstream HTTP 402") {
+		t.Errorf("post-restart error must replay the upstream status, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "used=") {
+		t.Errorf("post-restart error must report used=… (the day's call count), got %v", err)
 	}
 }
 

@@ -294,6 +294,13 @@ func isFinMindSecretKey(key string) bool {
 	return false
 }
 
+// finmindUpstreamQuotaReason renders the reason stored with the upstream quota
+// latch: status + sanitized body, so the persisted reason (and every error that
+// replays it) says WHICH signal fired.
+func finmindUpstreamQuotaReason(status int, body string) string {
+	return fmt.Sprintf("upstream HTTP %d: %s", status, body)
+}
+
 // finmindQuotaBody reports whether upstream text is the DAILY-quota verdict
 // ("Requests reach the upper limit", the string FinMind sends with 402) as
 // opposed to a per-request throttle or a free-tier notice. Only this text may
@@ -638,9 +645,15 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		// and a restart re-opened the flood. The same latch fires for a
 		// 2xx-with-"upper limit" envelope reached below.
 		if resp.StatusCode == http.StatusPaymentRequired || finmindQuotaBody(safeBody) {
-			c.markDailyQuotaExhausted(safeBody)
+			// The latch reason carries the upstream STATUS as well as the body
+			// (finmindUpstreamQuotaReason): it is persisted and replayed in
+			// every later error, so an operator reading a channel-health
+			// record after a restart must be able to tell "FinMind answered
+			// 402" from "we hit our own local ceiling" without re-reading the
+			// body — the two have different remedies.
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(resp.StatusCode, safeBody))
 			c.breakerRecordSuccess()
-			return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, safeBody)
+			return nil, fmt.Errorf("finmind: %w (upstream HTTP %d): %s", ErrQuotaExhausted, resp.StatusCode, safeBody)
 		}
 		// 403 "ip banned" is FinMind's per-IP rate-limit signal — a
 		// throttling condition that self-heals after retry_after, NOT an
@@ -702,7 +715,7 @@ func (c *FinMindClient) fetchDataset(ctx context.Context, dataset string, dataId
 		// claiming the whole day is spent, so a single empty dataset cannot
 		// disable the channel until midnight.
 		if finmindQuotaBody(safeMsg) {
-			c.markDailyQuotaExhausted(safeMsg)
+			c.markDailyQuotaExhausted(finmindUpstreamQuotaReason(finmindResp.Status, safeMsg))
 		}
 		return nil, fmt.Errorf("finmind: %w: %s", ErrQuotaExhausted, safeMsg)
 	}
