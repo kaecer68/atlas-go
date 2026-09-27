@@ -1960,6 +1960,20 @@
 - **生產部署狀態（2026-09-27 03:24Z，a2a-dev 執行、root 複查）**：binary = **`b1a1ee7d`**（含 #2052–#2065）；規則載入 **40 條／12 組**；新指標族皆在（`atlas_universe_last_run_*` 20 條、`atlas_universe_next_run_*` 1 條、`atlas_replay_*` 3 條）；**三條舊 Universe 警報已不再 firing**（新規則在「尚未跑」時保持沉默 —— 正是設計意圖）。
 - **決定性驗收（2026-09-29 06:00Z，週二 daily；root 執行）**：以 **`universe_snapshot.json` 輸出為真值**（計數器會說謊），並核對 `last_run_valid{stage="daily"}=1`、`last_run_symbols_ranked{stage="daily"}=150`、`last_run_ranked_trustworthy=1`、counters 有增量、三條舊警報維持沉默；**若 `CounterEmissionMissing` 反而 firing ⇒ 是發射面又壞（非評分問題）**。`stage="weekly"` 仍會沉默（下次 10-05）。
 
+---
+
+### FU-20260926-33 — 第四批（最終）同步：**E12/E22 更新 ＋ 新增 E34–E39**（本 session 修復的完整收斂）
+
+- **狀態**：`open`（E36/E37 的部署後驗收、E39 的文件補行、以及各列列出的低優先殘項待處理）
+- **記錄日期**：2026-09-27
+- **對應**：`docs/operations/remediation-manifest.md` §3（E12/E22 更新 ＋ E34–E39 新增）、§6
+- **本批納入的 PR（皆已併）**：**#2072**（E34 N-U4）、**#2074**（E38 負向證明規則層斷言）、**#2075**（E22 修復）、**#2076**（E36 校準改標的＋drift 偵測）、**#2077**（E37 Batch A）、**#2078**（E12 annotate→Router）、**#2079＋#2081**（E35 `auto_backfill` 解耦＋補測）、**#2082**（registry 收斂）
+- **本 session 的兩項流程修正（已寫進各列）**：
+  1. **重工事故與協定**（E35）：我的 child #2073 與 a2a-dev 的 #2079 是同項重複實作（相差 12 分鐘）⇒ 保留驗證較強者、撤回我的；建立「**指名實作者** ＋ 派工前三查（open PR／manifest owner／直接問對方）」協定，並在後續 **#2081／#2083** 上實際驗證協定有效。
+  2. **「敘述 → 可執行斷言」的升級模式**（E38/E36/E37）：本 session 三次把「註解/敘述」升級為**會咬人的契約測試**（規則層標記 #2074、閘門↔指標一致性 #2081、`failedCount>0` 不可達的假設守門 #2083）。
+- **本 session 我自己的兩次錯誤（已如實記錄）**：① `.omo/manifests` 最新日期以 **1 層 glob** 誤判（7 週 vs 實際 4 週）② **counter 推理陷阱**：把 legacy 錯標籤系列 `{daily="failed"}` 的 4906 當成真增量（正確形狀 `{stage=…}` 全為 0）。⇒ 紀律：**看到 counter 非零 increase 必須先驗 series 標籤形狀**。
+- **決定性驗收（2026-09-29 06:00Z）**：以 `universe_snapshot.json` **輸出**為真值 ＋ `last_run_*` ＋ counters 增量 ＋ 三條舊告警維持沉默；若 `CounterEmissionMissing` 反而 fire ⇒ **發射面又壞**（非評分問題）。腳本：`session-artifacts/…/verify_0929.sh`。
+
 ## 相關文件
 
 - [universe-scoring-ranked-zero-20260925.md](universe-scoring-ranked-zero-20260925.md)
