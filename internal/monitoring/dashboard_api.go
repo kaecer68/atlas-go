@@ -193,12 +193,19 @@ type DashboardAPI struct {
 	// hand-maintained subset (manifest #G05).
 	RegisteredChannelIDs []string
 	strategiesAnnotator  llm_annotator.Annotator
-	kimiClient           *llm_annotator.KimiClient // concrete handle for cost/health endpoints; nil if strategiesAnnotator is not a KimiClient
-	calibrationTask      *narrative.CalibrationTask
-	crisisModeSetter     func(active bool) // callback: VIX>=35 → optimizer crisis mode
-	correlationSetter    func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
-	crossMarketSvc       *service.CrossMarketService
-	narrativeHandlers    *apinarrative.Handlers
+	// annotatorUsage is the read-only usage source behind
+	// /api/llm_annotator/cost. It is wired explicitly (see
+	// SetAnnotatorUsageSource) and is nil until then → the endpoint answers
+	// 503. Issue #1897: this used to be a *llm_annotator.KimiClient derived
+	// from a type assertion on strategiesAnnotator, which hard-bound the
+	// dashboard to the legacy provider and blocked routing /annotate through
+	// the LLM Router.
+	annotatorUsage    llm_annotator.UsageReporter
+	calibrationTask   *narrative.CalibrationTask
+	crisisModeSetter  func(active bool) // callback: VIX>=35 → optimizer crisis mode
+	correlationSetter func(rho float64) // callback: dynamic SPX-TWSE ρ → optimizer
+	crossMarketSvc    *service.CrossMarketService
+	narrativeHandlers *apinarrative.Handlers
 
 	// Task-liveness (cross-restart heartbeat, Phase 1): late-bound providers
 	// for GET /api/dashboard/task-liveness. Set via SetTaskLivenessProvider /
@@ -1630,14 +1637,37 @@ func (a *DashboardAPI) SetStrategiesHandlers(h *apistrategies.Handlers) {
 	}
 }
 
+// SetStrategiesAnnotator wires the backend for
+// POST /api/strategies/{id}/annotate. Any llm_annotator.Annotator is accepted:
+// production passes the Router-backed annotator (llmAdapters.RouterAnnotator),
+// never a provider client directly (docs/reference/traps.md: "LLM 路由繞過").
+//
+// Issue #1897: this method no longer type-asserts the argument to
+// *llm_annotator.KimiClient. That assertion existed to populate a concrete
+// handle for the cost endpoint, and it made the dashboard depend on the legacy
+// provider — the blocker for routing /annotate through the LLM Router. The
+// cost endpoint now uses its own narrow interface; see SetAnnotatorUsageSource.
 func (a *DashboardAPI) SetStrategiesAnnotator(ann llm_annotator.Annotator) {
 	a.strategiesAnnotator = ann
-	if kc, ok := ann.(*llm_annotator.KimiClient); ok {
-		a.kimiClient = kc
-	}
 	if a.strategyTechniquesHandlers != nil {
 		a.strategyTechniquesHandlers.SetAnnotator(ann)
 	}
+}
+
+// SetAnnotatorUsageSource wires the read-only usage source for
+// GET /api/llm_annotator/cost. Passing nil clears the source and the endpoint
+// answers 503 again.
+//
+// Callers MUST NOT pass a nil *llm_annotator.KimiClient: a typed-nil pointer
+// stored in this interface is not a nil interface, so the endpoint would call
+// CostReport on a nil receiver instead of returning 503. Check the pointer
+// before calling (cmd/atlas does).
+//
+// Deliberately separate from SetStrategiesAnnotator: the annotate backend and
+// the cost source are independent concerns, and conflating them is what forced
+// the concrete-type assertion removed in issue #1897.
+func (a *DashboardAPI) SetAnnotatorUsageSource(rep llm_annotator.UsageReporter) {
+	a.annotatorUsage = rep
 }
 
 // SetStrategiesSummaryHandler wires the LLM strategy summary handler into
@@ -1775,7 +1805,7 @@ func (a *DashboardAPI) RegisterCrossMarketRoutes(mux *http.ServeMux) {
 	dm.SetOnInc(CollectorOnInc(a.metricsCollector))
 	a.crossMarketSvc.SetDegradedMetrics(dm)
 	mux.HandleFunc("/api/degraded", metrics.HandleDegraded(dm))
-	mux.HandleFunc("/api/llm_annotator/cost", metrics.HandleCost(func() *llm_annotator.KimiClient { return a.kimiClient }, 0.001))
+	mux.HandleFunc("/api/llm_annotator/cost", metrics.HandleCost(func() llm_annotator.UsageReporter { return a.annotatorUsage }, 0.001))
 	handlers := &apicrossmarket.Handlers{
 		Svc: a.crossMarketSvc,
 	}
