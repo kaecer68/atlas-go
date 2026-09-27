@@ -53,25 +53,34 @@ func HandleDegraded(dm *DegradedMetrics) http.HandlerFunc {
 	}
 }
 
-// HandleCost returns an HTTP handler that exposes a KimiClient's CostReport
+// HandleCost returns an HTTP handler that exposes a usage source's CostReport
 // as JSON. costPer1kTokens is the USD price per 1,000 tokens (e.g. 0.001
 // = $0.001/1k). Pass 0 to compute token counts without a USD total.
 //
 // getClient is a late-binding getter so the handler always dereferences
 // the latest value — this avoids the nil-closure trap when routes are
-// registered before the KimiClient is injected (see P0-2, 2026-07-26).
-func HandleCost(getClient func() *llm_annotator.KimiClient, costPer1kTokens float64) http.HandlerFunc {
+// registered before the source is injected (see P0-2, 2026-07-26).
+//
+// The source is the narrow llm_annotator.UsageReporter interface rather than
+// the concrete *llm_annotator.KimiClient (issue #1897): the endpoint only
+// needs a cost/usage snapshot, and depending on the concrete type forced the
+// dashboard to hold a typed handle to the legacy provider.
+//
+// A nil interface means "no source wired" and yields 503. Callers MUST NOT
+// pass a nil *KimiClient through this interface: a typed-nil pointer is not a
+// nil interface and would panic inside CostReport (Go interface footgun).
+func HandleCost(getClient func() llm_annotator.UsageReporter, costPer1kTokens float64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		client := getClient()
-		if client == nil {
+		source := getClient()
+		if source == nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "llm annotator cost endpoint unavailable: no KimiClient wired",
+				"error": "llm annotator cost endpoint unavailable: no usage source wired",
 			})
 			return
 		}
-		report := client.CostReport(costPer1kTokens)
+		report := source.CostReport(costPer1kTokens)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(report)
 	}

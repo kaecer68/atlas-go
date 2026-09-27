@@ -92,10 +92,10 @@ func (h *FailureAttributionHandler) Handle(
 		// (llm_annotator.FailureAttributionTemperature) so both entry points
 		// sample identically.
 		//
-		// Caveat: production POST /api/strategies/{id}/annotate currently calls
-		// llm_annotator.KimiClient directly (dashboard.SetStrategiesAnnotator)
-		// rather than this handler; migrating that endpoint to the Router is
-		// tracked in issue #1887.
+		// Both entry points use this request shape: the Router capability path
+		// and production POST /api/strategies/{id}/annotate, which reaches this
+		// handler through llmAdapters.RouterAnnotator (issue #1897). The legacy
+		// llm_annotator.KimiClient no longer serves /annotate.
 		Options: llm.Options{MaxTokens: 2048, Temperature: llm_annotator.FailureAttributionTemperature},
 	}
 

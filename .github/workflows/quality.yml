@@ -571,6 +571,8 @@ jobs:
     #    「非 0」當成「擋下了」⇒ 掃描器被改名（127）或參數寫錯（2）時照樣印 ✅（假綠）。
     #    現在改為**精確斷言 rc==1**；「餵 127/2 必須紅燈」的正反案例由
     #    tests/scripts/test-negative-proofs.sh（下面的 negative-proof-harness job）釘住。
+    #    另加**規則層斷言**：擋下 fixture 的那一行必須同時出現規則 id `[telegram_bot_token]`
+    #    ⇒ 證明「**正確的規則**擋下」，而不是「有東西擋下」（規則壞了、別的規則代擋時仍會假綠）。
     - name: Negative proof — a staged fake credential must be blocked
       run: bash scripts/ci/secret-scan-negative-proof.sh
 
@@ -599,6 +601,8 @@ jobs:
     # 免得本 workflow 自己被 R3（舊樹路徑引用）掃到。
     # 檔名刻意用 `docker-compose.*` 開頭 ⇒ 同時觸發 R2（掛載源落點）與 R3（舊樹引用），
     # 兩條規則都被這一步釘住（實測 R2 + R3 各報一筆）。
+    #    並**逐條**斷言規則 id：擋下 fixture 的那一行必須同時含 `[R2]` 與 `[R3]` ⇒ 證明「正確的
+    #    規則擋下」，而不是「其中一條壞了、另一條代擋」（後者只看 rc 會誤以為兩條都有效）。
     # ⚠️ 實作在 scripts/ci/monitoring-single-source-negative-proof.sh（issue #2011）：理由同
     #    secret-scan 那一步（舊 inline 寫法把 exit 127/2 當成「擋下了」）。改為**精確斷言 rc==1**
     #    —— 本檢查的 exit 2 是**用法錯誤**（`--root` 不存在），永遠不可算「擋下」。
