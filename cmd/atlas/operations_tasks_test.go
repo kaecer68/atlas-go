@@ -1,12 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kaecer68/atlas-go/internal/apigateway"
+	"github.com/kaecer68/atlas-go/internal/config"
 	"github.com/kaecer68/atlas-go/internal/domain"
+	"github.com/kaecer68/atlas-go/internal/importer"
 	"github.com/kaecer68/atlas-go/internal/janus"
 	"github.com/kaecer68/atlas-go/internal/marketdata"
 	"github.com/kaecer68/atlas-go/internal/prism"
@@ -357,4 +364,338 @@ func TestRegisterOperationsTasks_PrismTrainingSkippedWhenPrismMgrNil(t *testing.
 	if _, ok := mgr.Get("prism_training"); ok {
 		t.Fatal("prism_training must NOT be registered when prismMgr is nil")
 	}
+}
+
+// =========================================================================
+// fix/20260927-decouple-csv-to-jsonl-conversion
+//
+// 驗收（owner 裁定方向）：CSV→JSONL 轉檔必須與「有沒有缺口」解耦，並以
+// 「CSV 最新資料日 > JSONL 最新資料日」為閘門。
+//
+// 為什麼要有這些測試（實證缺陷形狀）：
+// 舊碼在 `start.After(end)`（沒有缺口）時直接 `return nil`，而轉檔在該
+// return 之後 ⇒ 沒有缺口的日子結構上永遠不轉檔 ⇒ JSONL 凍結在
+// 2026-08-24 而 CSV 持續前進（生產實測）。同時
+// internal/orchestrator/composition.go 的 buildFactorEngine 只在 JSONL
+// **不存在**時轉檔，所以「已存在但落後」的 JSONL 沒有任何修復路徑。
+//
+// 時鐘注入：runAutoBackfill 收 now 參數（不是內部呼叫 time.Now()），
+// 因此「沒有缺口」可以用 fixture 決定性重現，不必依賴執行當天是星期幾。
+// =========================================================================
+
+// replayFixtureDir 建立一個 replay fixture 目錄，回傳 CSV / JSONL 路徑。
+func replayFixtureDir(t *testing.T) (dir, csvPath, jsonlPath string) {
+	t.Helper()
+	dir = t.TempDir()
+	csvPath = filepath.Join(dir, "tw_extended_90days.csv")
+	jsonlPath = filepath.Join(dir, "tw_extended_90days.jsonl")
+	return dir, csvPath, jsonlPath
+}
+
+// writeReplayCSVFixture 寫入最小可用的 TWSE open-data CSV（欄位與
+// internal/replay.LoadTWSEOpenDataCSV 的 required 清單一致）。
+func writeReplayCSVFixture(t *testing.T, path string, dates ...string) {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("Date,Code,Name,TradeVolume,TradeValue,Open,High,Low,Close,Change,Transaction\n")
+	for _, d := range dates {
+		b.WriteString(d + ",2330,TSMC,32001234,25801234567,790,795,788,792,2,19555\n")
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write CSV fixture %s: %v", path, err)
+	}
+}
+
+// buildJSONLFromDates 用**正式轉檔路徑**（importer.ImportTWOpenDataCSVToJSONL）
+// 產生 JSONL 前置狀態，避免手寫 JSONL 與正式格式漂移。
+func buildJSONLFromDates(t *testing.T, csvPath, jsonlPath string, dates ...string) {
+	t.Helper()
+	writeReplayCSVFixture(t, csvPath, dates...)
+	if err := importer.ImportTWOpenDataCSVToJSONL(csvPath, jsonlPath); err != nil {
+		t.Fatalf("seed JSONL from %v: %v", dates, err)
+	}
+}
+
+// replayLatestDateForTest 讀回檔案最新資料日（測試斷言用；走正式 helper）。
+func replayLatestDateForTest(t *testing.T, path string) string {
+	t.Helper()
+	d, err := replayLatestDate(path)
+	if err != nil {
+		t.Fatalf("replayLatestDate(%s): %v", path, err)
+	}
+	return d.Format(dateLayout)
+}
+
+// taipeiClock 回傳固定時刻（Asia/Taipei 15:30 之後 ⇒ 「今天的結算日 = 今天」）。
+// tzdata 不存在時 skip，與 TestCurrentTaipeiTradingDate 同一慣例。
+func taipeiClock(t *testing.T, y int, mo time.Month, d, h, mi int) time.Time {
+	t.Helper()
+	tz, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		t.Skipf("Asia/Taipei tzdata unavailable: %v", err)
+	}
+	return time.Date(y, mo, d, h, mi, 0, 0, tz)
+}
+
+// captureGatewayLog 攔截 log 輸出（cmd/atlas 測試未使用 t.Parallel，安全）。
+func captureGatewayLog(t *testing.T, fn func()) string {
+	t.Helper()
+	var buf bytes.Buffer
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	t.Cleanup(func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	})
+	fn()
+	return buf.String()
+}
+
+// (a) 無缺口、但 JSONL 落後 ⇒ 轉檔發生、JSONL 追上、CSV 不被改動。
+//
+// fixture 時鐘 2026-03-20（週五）16:00 Taipei：CSV 最新日 = 2026-03-20 ⇒
+// start = 2026-03-23（跳過週末）> end = 2026-03-20 ⇒ **沒有缺口**（舊碼
+// 從這裡 return nil）。JSONL 前置狀態只有 2026-03-19 ⇒ 新閘門必須轉檔。
+// 同一個 fixture 在舊碼上會留下 JSONL = 2026-03-19（本檔案的負向對照）。
+func TestRunAutoBackfill_NoGapJSONLBehind_Converts(t *testing.T) {
+	dir, csvPath, jsonlPath := replayFixtureDir(t)
+	// 前置：JSONL 落後一天（模擬 daily-replay-sync 昨日寫入後、今日 CSV 又前進）。
+	buildJSONLFromDates(t, csvPath, jsonlPath, "2026-03-19")
+	if got := replayLatestDateForTest(t, jsonlPath); got != "2026-03-19" {
+		t.Fatalf("fixture JSONL pre-state = %s, want 2026-03-19", got)
+	}
+	// 今日 CSV 追加一天（模擬 daily-replay-sync 15:30 UTC 的每日寫入）。
+	writeReplayCSVFixture(t, csvPath, "2026-03-19", "2026-03-20")
+	csvBefore, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read CSV pre-state: %v", err)
+	}
+
+	cfg := config.Config{WorkDir: dir, ReplayDataPath: csvPath}
+	now := taipeiClock(t, 2026, time.March, 20, 16, 0)
+
+	var runErr error
+	logs := captureGatewayLog(t, func() {
+		runErr = runAutoBackfill(context.Background(), cfg, now)
+	})
+
+	if runErr != nil {
+		t.Fatalf("runAutoBackfill returned %v, want nil (no gap ⇒ no fetch, conversion is non-fatal)", runErr)
+	}
+	if got := replayLatestDateForTest(t, jsonlPath); got != "2026-03-20" {
+		t.Errorf("JSONL latest date after task = %s, want 2026-03-20 (conversion must run on gap-free days)", got)
+	}
+	csvAfter, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read CSV post-state: %v", err)
+	}
+	if !bytes.Equal(csvBefore, csvAfter) {
+		t.Error("replay CSV was modified by the task; the converter must never write the source file")
+	}
+	if !strings.Contains(logs, "backfill gap: none") {
+		t.Errorf("expected the gap-free branch to be logged, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, "backfill CSV→JSONL conversion: converted") {
+		t.Errorf("expected a 'converted' outcome line, got:\n%s", logs)
+	}
+	if strings.Contains(logs, "backfill gap detected") {
+		t.Errorf("no-gap fixture must not reach the backfill path, got:\n%s", logs)
+	}
+	t.Logf("[evidence a] logs:\n%s", strings.TrimSpace(logs))
+}
+
+// (b) 無缺口、JSONL 已最新 ⇒ 不轉檔、不重寫檔（mtime / size / bytes 三者皆不變）。
+//
+// mtime 先刻意壓到 2020-01-01：即使內容被「原樣重寫」一次，mtime 也會變 ⇒
+// 「沒有寫入」是可證的，不只是「內容一樣」。
+func TestRunAutoBackfill_NoGapJSONLUpToDate_DoesNotRewrite(t *testing.T) {
+	dir, csvPath, jsonlPath := replayFixtureDir(t)
+	dates := []string{"2026-03-19", "2026-03-20"}
+	buildJSONLFromDates(t, csvPath, jsonlPath, dates...)
+	writeReplayCSVFixture(t, csvPath, dates...)
+
+	oldTime := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(jsonlPath, oldTime, oldTime); err != nil {
+		t.Fatalf("seed JSONL mtime: %v", err)
+	}
+	beforeInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatalf("stat JSONL pre-state: %v", err)
+	}
+	beforeBytes, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		t.Fatalf("read JSONL pre-state: %v", err)
+	}
+
+	cfg := config.Config{WorkDir: dir, ReplayDataPath: csvPath}
+	now := taipeiClock(t, 2026, time.March, 20, 16, 0)
+
+	var runErr error
+	logs := captureGatewayLog(t, func() {
+		runErr = runAutoBackfill(context.Background(), cfg, now)
+	})
+	if runErr != nil {
+		t.Fatalf("runAutoBackfill returned %v, want nil", runErr)
+	}
+
+	afterInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatalf("stat JSONL post-state: %v", err)
+	}
+	if !afterInfo.ModTime().Equal(beforeInfo.ModTime()) {
+		t.Errorf("JSONL mtime changed: %v → %v (the file was rewritten although it was already up to date)",
+			beforeInfo.ModTime(), afterInfo.ModTime())
+	}
+	if afterInfo.Size() != beforeInfo.Size() {
+		t.Errorf("JSONL size changed: %d → %d", beforeInfo.Size(), afterInfo.Size())
+	}
+	afterBytes, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		t.Fatalf("read JSONL post-state: %v", err)
+	}
+	if !bytes.Equal(beforeBytes, afterBytes) {
+		t.Error("JSONL content changed although CSV and JSONL had the same latest date")
+	}
+	if !strings.Contains(logs, "backfill CSV→JSONL conversion: skipped (already up to date)") {
+		t.Errorf("expected an 'already up to date' skip line, got:\n%s", logs)
+	}
+	if strings.Contains(logs, "conversion: converted") {
+		t.Errorf("must not report a conversion when nothing was stale, got:\n%s", logs)
+	}
+	t.Logf("[evidence b] logs:\n%s", strings.TrimSpace(logs))
+}
+
+// (e) 轉檔失敗不致命 ⇒ 任務仍回 nil，且日誌明確寫「轉檔失敗」。
+//
+// 注入方式：把 JSONL 目標路徑做成**目錄**（os.Create 必定失敗 EISDIR），
+// 且該路徑對 tail reader 不可讀 ⇒ 閘門判定 needConvert ⇒ 走失敗分支。
+func TestRunAutoBackfill_ConversionFailure_NonFatal(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "tw_extended_90days.csv")
+	jsonlPath := filepath.Join(dir, "tw_extended_90days.jsonl")
+	writeReplayCSVFixture(t, csvPath, "2026-03-19", "2026-03-20")
+	// JSONL 路徑是一個目錄 ⇒ 轉檔（os.Create）必定失敗。
+	if err := os.MkdirAll(jsonlPath, 0o755); err != nil {
+		t.Fatalf("seed JSONL path as directory: %v", err)
+	}
+	csvBefore, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read CSV pre-state: %v", err)
+	}
+
+	cfg := config.Config{WorkDir: dir, ReplayDataPath: csvPath}
+	now := taipeiClock(t, 2026, time.March, 20, 16, 0)
+
+	var runErr error
+	logs := captureGatewayLog(t, func() {
+		runErr = runAutoBackfill(context.Background(), cfg, now)
+	})
+	if runErr != nil {
+		t.Fatalf("runAutoBackfill returned %v, want nil (conversion failure must stay non-fatal)", runErr)
+	}
+	if !strings.Contains(logs, "backfill CSV→JSONL conversion failed (non-fatal)") {
+		t.Errorf("expected a distinguishable 'conversion failed' line, got:\n%s", logs)
+	}
+	if strings.Contains(logs, "conversion: converted") {
+		t.Errorf("must not report success after a failed conversion, got:\n%s", logs)
+	}
+	csvAfter, err := os.ReadFile(csvPath)
+	if err != nil {
+		t.Fatalf("read CSV post-state: %v", err)
+	}
+	if !bytes.Equal(csvBefore, csvAfter) {
+		t.Error("replay CSV was modified by a failed conversion")
+	}
+	info, err := os.Stat(jsonlPath)
+	if err != nil || !info.IsDir() {
+		t.Errorf("injected failure target should still be the untouched directory (err=%v)", err)
+	}
+	t.Logf("[evidence e] logs:\n%s", strings.TrimSpace(logs))
+}
+
+// 閘門語意的單元測試：convert 只發生在「CSV 比 JSONL 新」或「JSONL 讀不到」。
+// 這是把 owner 的判準寫成可執行的表，避免後人把閘門改成「無條件轉檔」。
+func TestCompareReplayCSVToJSONL_ConversionNeeded(t *testing.T) {
+	dir := t.TempDir()
+	csv := filepath.Join(dir, "replay.csv")
+	jsonl := filepath.Join(dir, "replay.jsonl")
+	missing := filepath.Join(dir, "does-not-exist.jsonl")
+
+	writeReplayCSVFixture(t, csv, "2026-03-19", "2026-03-20")
+	if err := importer.ImportTWOpenDataCSVToJSONL(csv, jsonl); err != nil {
+		t.Fatalf("seed JSONL: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		csv   string
+		jsonl string
+		want  bool
+	}{
+		{"CSV 與 JSONL 同步 ⇒ 不轉", csv, jsonl, false},
+		{"JSONL 缺席 ⇒ 轉（自我修復）", csv, missing, true},
+		{"CSV 讀不到 ⇒ 不轉（無來源）", filepath.Join(dir, "no-such.csv"), jsonl, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := compareReplayCSVToJSONL(tc.csv, tc.jsonl).conversionNeeded()
+			if got != tc.want {
+				t.Errorf("conversionNeeded() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// CSV 比 JSONL 新一天 ⇒ 轉（把 CSV 換成多一天的版本）。
+	writeReplayCSVFixture(t, csv, "2026-03-19", "2026-03-20", "2026-03-23")
+	f := compareReplayCSVToJSONL(csv, jsonl)
+	if !f.csvLatest.After(f.jsonlLatest) {
+		t.Fatalf("fixture should have CSV(%s) newer than JSONL(%s)", f.csvLatest, f.jsonlLatest)
+	}
+	if !f.conversionNeeded() {
+		t.Error("CSV newer than JSONL must require a conversion")
+	}
+}
+
+// (R1) 抓取失敗的那一輪，JSONL 仍必須被評估。
+//
+// 對抗式複核（2026-09-27）指出：轉檔若放在「抓取成功之後」的 `return err` 後方，
+// 就等於讓「要不要補資料」再一次決定「要不要轉檔」—— 與本 PR 修掉的缺陷同型，
+// 只是窗口縮小到「抓取失敗的輪次」。本測試用一個必定 exit 3 的假
+// daily-replay-sync 注入抓取失敗，要求：
+//   - 任務仍把抓取錯誤往上報（既有容錯不變）
+//   - 同一輪仍完成 CSV→JSONL 轉檔（JSONL 追上）
+func TestRunAutoBackfill_FetchFailureStillEvaluatesConversion(t *testing.T) {
+	dir, csvPath, jsonlPath := replayFixtureDir(t)
+	// JSONL 落後一天；CSV 已前進 ⇒ 同輪有「缺口」也有「該轉檔」。
+	buildJSONLFromDates(t, csvPath, jsonlPath, "2026-03-18")
+	writeReplayCSVFixture(t, csvPath, "2026-03-18", "2026-03-19")
+
+	// 假 binary：必失敗（exit 3）。runAutoBackfill 會優先使用 WorkDir 下的它。
+	fakeSync := filepath.Join(dir, "daily-replay-sync")
+	if err := os.WriteFile(fakeSync, []byte("#!/bin/sh\nexit 3\n"), 0o755); err != nil {
+		t.Fatalf("write fake daily-replay-sync: %v", err)
+	}
+
+	cfg := config.Config{WorkDir: dir, ReplayDataPath: csvPath}
+	now := taipeiClock(t, 2026, time.March, 24, 16, 0) // start=2026-03-20 <= end=2026-03-24 ⇒ 有缺口
+
+	var runErr error
+	logs := captureGatewayLog(t, func() {
+		runErr = runAutoBackfill(context.Background(), cfg, now)
+	})
+	if runErr == nil {
+		t.Fatal("a failed daily-replay-sync must still surface as a task error")
+	}
+	// 抓取失敗本身走 return value（不是 log）—— 這是既有契約，本測試不改它。
+	if !strings.Contains(runErr.Error(), "backfill failed") {
+		t.Errorf("runErr = %v, want it to carry the fetch failure", runErr)
+	}
+	if !strings.Contains(logs, "backfill CSV→JSONL conversion: converted") {
+		t.Errorf("conversion must not be skipped because the fetch failed, got:\n%s", logs)
+	}
+	if got := replayLatestDateForTest(t, jsonlPath); got != "2026-03-19" {
+		t.Errorf("JSONL latest date = %s, want 2026-03-19 (conversion must run in the same tick as the failed fetch)", got)
+	}
+	t.Logf("[evidence R1] logs:\n%s", strings.TrimSpace(logs))
 }
